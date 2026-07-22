@@ -51,7 +51,14 @@ const REPS = [
   { ownerId: '86100505', name: 'Marco Filho' }
 ];
 
-async function hsSearch(body) {
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+// HubSpot limita quantas chamadas podem chegar POR SEGUNDO. Por isso toda chamada
+// passa por aqui: espera um pouco antes de cada uma, e se mesmo assim tomar 429
+// (rate limit), espera mais e tenta de novo (até 5 vezes).
+async function hsSearch(body, attempt = 1) {
+  await sleep(350); // ~3 chamadas por segundo, bem abaixo do limite do HubSpot
+
   const res = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', {
     method: 'POST',
     headers: {
@@ -60,6 +67,14 @@ async function hsSearch(body) {
     },
     body: JSON.stringify(body)
   });
+
+  if (res.status === 429 && attempt <= 5) {
+    const waitMs = 1000 * attempt;
+    console.log(`Rate limit do HubSpot — esperando ${waitMs}ms e tentando de novo (tentativa ${attempt}/5)...`);
+    await sleep(waitMs);
+    return hsSearch(body, attempt + 1);
+  }
+
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`HubSpot API error ${res.status}: ${text}`);
@@ -121,20 +136,18 @@ async function main() {
   console.log('Buscando dados no HubSpot...');
 
   // ---- Funil geral (donut) ----
-  const [backlog, prospeccao, visita, diagnostico, demoProposta, negociacao, agPagamento, ganho1, ganho2, perdido, reciclagem] =
-    await Promise.all([
-      stageTotal(STAGES.backlog),
-      stageTotal(STAGES.prospeccao),
-      stageTotal(STAGES.visita),
-      stageTotal(STAGES.diagnostico),
-      stageTotal(STAGES.demoProposta),
-      stageTotal(STAGES.negociacao),
-      stageTotal(STAGES.agPagamento),
-      stageTotal(STAGES.ganho1),
-      stageTotal(STAGES.ganho2),
-      stageTotal(STAGES.perdido),
-      stageTotal(STAGES.reciclagem)
-    ]);
+  // Uma chamada de cada vez (não em paralelo) pra não estourar o limite de velocidade do HubSpot
+  const backlog = await stageTotal(STAGES.backlog);
+  const prospeccao = await stageTotal(STAGES.prospeccao);
+  const visita = await stageTotal(STAGES.visita);
+  const diagnostico = await stageTotal(STAGES.diagnostico);
+  const demoProposta = await stageTotal(STAGES.demoProposta);
+  const negociacao = await stageTotal(STAGES.negociacao);
+  const agPagamento = await stageTotal(STAGES.agPagamento);
+  const ganho1 = await stageTotal(STAGES.ganho1);
+  const ganho2 = await stageTotal(STAGES.ganho2);
+  const perdido = await stageTotal(STAGES.perdido);
+  const reciclagem = await stageTotal(STAGES.reciclagem);
 
   const ganho = ganho1 + ganho2;
   const leadsCriados = await createdLast7Days();
