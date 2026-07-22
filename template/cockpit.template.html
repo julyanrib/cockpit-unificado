@@ -148,6 +148,36 @@
 
   .empty-state{background:var(--panel);border:1px dashed var(--hairline);padding:24px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7;}
 
+  /* ---- Semáforo de saúde ---- */
+  .health-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 14px;border:1px solid var(--hairline);font-family:'IBM Plex Mono',monospace;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:16px;}
+  .health-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+  .health-badge.ok{color:var(--teal);border-color:rgba(79,182,168,.4);} .health-badge.ok .health-dot{background:var(--teal);box-shadow:0 0 6px var(--teal);}
+  .health-badge.warn{color:var(--amber);border-color:rgba(232,163,61,.4);} .health-badge.warn .health-dot{background:var(--amber);box-shadow:0 0 6px var(--amber);}
+  .health-badge.crit{color:var(--red);border-color:rgba(226,84,63,.4);} .health-badge.crit .health-dot{background:var(--red);box-shadow:0 0 6px var(--red);}
+  .health-badge .detalhe{color:var(--muted);text-transform:none;letter-spacing:0;margin-left:4px;}
+
+  /* ---- Setas de comparação nos KPIs ---- */
+  .kpi-delta{font-family:'IBM Plex Mono',monospace;font-size:11px;margin-left:6px;font-weight:600;}
+  .kpi-delta.up{color:var(--teal);} .kpi-delta.down{color:var(--red);} .kpi-delta.flat{color:var(--muted);}
+
+  /* ---- Tooltips (etapas do funil, barras) ---- */
+  .tip-wrap{position:relative;}
+  .tip-wrap .tip-bubble{display:none;position:absolute;bottom:calc(100% + 8px);left:0;z-index:20;background:var(--panel-2);border:1px solid var(--hairline);padding:10px 12px;font-size:11.5px;line-height:1.5;color:var(--text);width:230px;box-shadow:0 4px 14px rgba(0,0,0,.4);}
+  .tip-wrap:hover .tip-bubble{display:block;}
+  .tip-bubble b{color:var(--amber);}
+
+  /* ---- Etapas clicáveis no funil ---- */
+  .legend-item.clickable, .bar-row.clickable{cursor:pointer;transition:background .12s ease;}
+  .legend-item.clickable:hover, .bar-row.clickable:hover{background:var(--panel-2);}
+  .legend-item.clickable{padding:3px 4px;margin:-3px -4px;}
+
+  /* ---- Badge de leads travados no card do executivo ---- */
+  .travados-badge{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--red);border:1px solid var(--red);padding:2px 7px;white-space:nowrap;}
+
+  /* ---- Leads com SLA estourado na lista ---- */
+  .lead-row.sla-breach{border-left:3px solid var(--red);}
+  .lead-row.sla-breach .lead-days{color:var(--red);}
+
   @media (max-width:720px){
     body{padding:18px 14px 40px;}
     .topbar h1{font-size:24px;}
@@ -188,6 +218,7 @@
     </div>
   </div>
   <div class="updated" id="updatedLine"></div>
+  <div id="healthBadge"></div>
 
   <div class="tabbar">
     <button class="tab-btn" id="tabBtnCockpit" data-view="viewCockpit">Cockpit</button>
@@ -259,6 +290,19 @@
     </div>
   </div>
 
+  <div class="overlay" id="stageOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <div class="modal-head-info">
+          <h2 id="stageModalName"></h2>
+          <div class="praca" id="stageModalMeta"></div>
+        </div>
+        <button class="modal-close" id="stageModalClose">✕</button>
+      </div>
+      <div class="modal-body" id="stageModalBody"></div>
+    </div>
+  </div>
+
 <script id="cockpit-data" type="application/json">
 {{DATA_JSON}}
 </script>
@@ -280,19 +324,33 @@ function buildConicGradient(values, colors) {
   });
   return `conic-gradient(${stops.join(', ')})`;
 }
-function renderDonut(elId, legendId, labels, values, colors) {
+function renderDonut(elId, legendId, labels, values, colors, stageIds) {
   const el = document.getElementById(elId);
   el.style.background = buildConicGradient(values, colors);
   if (legendId) {
     const legend = document.getElementById(legendId);
     const total = values.reduce((a,b) => a+b, 0) || 1;
-    legend.innerHTML = labels.map((l, i) => `
-      <div class="legend-item">
+    legend.innerHTML = labels.map((l, i) => {
+      const stageId = stageIds ? stageIds[i] : null;
+      const clickable = stageId && DATA.funilLeads[stageId];
+      const sla = stageId ? DATA.stageMeta.slaDays[stageId] : null;
+      const desc = stageId ? DATA.stageMeta.descriptions[stageId] : null;
+      const tip = desc ? `<div class="tip-bubble"><b>${l}</b>${sla ? ` · SLA ${sla}d` : ''}<br>${desc}${clickable ? '<br><br><i>Clique pra ver os leads</i>' : ''}</div>` : '';
+      return `
+      <div class="legend-item tip-wrap ${clickable ? 'clickable' : ''}" ${clickable ? `data-stageid="${stageId}"` : ''}>
+        ${tip}
         <span class="legend-dot" style="background:${colors[i]}"></span>
         <span>${l}</span>
         <span class="legend-val">${values[i]} (${Math.round(values[i]/total*100)}%)</span>
       </div>
-    `).join('');
+    `;
+    }).join('');
+
+    if (stageIds) {
+      legend.querySelectorAll('.legend-item.clickable').forEach(el => {
+        el.addEventListener('click', () => openStageModal(el.dataset.stageid, labels[stageIds.indexOf(el.dataset.stageid)]));
+      });
+    }
   }
 }
 function renderBar(elId, rows, colorFn) {
@@ -317,6 +375,16 @@ const STAGE_COLORS = {
 };
 function hsUrl(id) { return `https://app.hubspot.com/contacts/24373118/record/0-3/${id}`; }
 
+// Seta de comparação simples (diferença absoluta) pros KPIs do topo — só aparece
+// depois da 2ª execução do robô diário, quando já existe um snapshot anterior.
+function kpiDeltaHtml(key) {
+  const d = DATA.kpiDeltas ? DATA.kpiDeltas[key] : null;
+  if (!d) return '';
+  if (d.sinal === 'flat') return `<span class="kpi-delta flat">=</span>`;
+  const arrow = d.sinal === 'up' ? '▲' : '▼';
+  return `<span class="kpi-delta ${d.sinal}">${arrow}${d.valor}</span>`;
+}
+
 // ============ CABEÇALHO / KPIs / BANNER ============
 document.getElementById('updatedLine').textContent =
   `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Expogo: janela ${DATA.expogoJanela} (manual) · Time ativo: ${DATA.reps.length} executivos`;
@@ -324,12 +392,20 @@ document.getElementById('expogoJanela').textContent = DATA.expogoJanela;
 document.getElementById('banner').innerHTML = DATA.banner;
 document.getElementById('footerText').textContent = DATA.footerText;
 
+document.getElementById('healthBadge').innerHTML = `
+  <div class="health-badge ${DATA.saude.nivel}">
+    <span class="health-dot"></span>
+    <span>${DATA.saude.label}</span>
+    <span class="detalhe">${DATA.saude.detalhe}</span>
+  </div>
+`;
+
 document.getElementById('kpiHub').innerHTML = `
-  <div class="kpi"><div class="v">${DATA.kpisHub.leadsCriados}</div><div class="l">Leads criados (7d)</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisHub.ganhos}</div><div class="l">Ganhos</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisHub.perdidos}</div><div class="l">Perdidos</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisHub.emAberto}</div><div class="l">Em aberto (time ativo)</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisHub.emReciclagem}</div><div class="l">Em reciclagem</div></div>
+  <div class="kpi"><div class="v">${DATA.kpisHub.leadsCriados}${kpiDeltaHtml('leadsCriados')}</div><div class="l">Leads criados (7d)</div></div>
+  <div class="kpi"><div class="v">${DATA.kpisHub.ganhos}${kpiDeltaHtml('ganhos')}</div><div class="l">Ganhos</div></div>
+  <div class="kpi"><div class="v">${DATA.kpisHub.perdidos}${kpiDeltaHtml('perdidos')}</div><div class="l">Perdidos</div></div>
+  <div class="kpi"><div class="v">${DATA.kpisHub.emAberto}${kpiDeltaHtml('emAberto')}</div><div class="l">Em aberto (time ativo)</div></div>
+  <div class="kpi"><div class="v">${DATA.kpisHub.emReciclagem}${kpiDeltaHtml('emReciclagem')}</div><div class="l">Em reciclagem</div></div>
 `;
 document.getElementById('kpiExpogo').innerHTML = `
   <div class="kpi"><div class="v">${DATA.kpisExpogo.leadsTocados}</div><div class="l">Leads tocados</div></div>
@@ -397,7 +473,8 @@ if (!DATA.resumoSemanal) {
 }
 
 // ============ FUNIL GERAL (HubSpot) ============
-renderDonut('funnelDonut', 'funnelLegend', DATA.funil.labels, DATA.funil.valores, DATA.funil.cores);
+const FUNIL_STAGE_IDS = [null, "1395880469", "1396005401", "1395880470", "1395880471", "1395880472", "1395880473", null, null, null];
+renderDonut('funnelDonut', 'funnelLegend', DATA.funil.labels, DATA.funil.valores, DATA.funil.cores, FUNIL_STAGE_IDS);
 
 // ============ VOLUME EM ABERTO (HubSpot) ============
 const repsSorted = [...DATA.reps].sort((a,b) => b.open - a.open);
@@ -420,6 +497,7 @@ DATA.reps.forEach((r) => {
     <div class="rep-name-wrap">
       <span class="rep-name">${r.name}</span>
       <span class="rep-tag ${r.tag}">${r.tagLabel}</span>
+      ${r.leadsTravados > 0 ? `<span class="travados-badge">⏱ ${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</span>` : ''}
     </div>
     <div class="rep-right">
       <span><span class="source-tag hub" style="margin-right:4px;">Hub</span><b>${r.open}</b> em aberto</span>
@@ -465,10 +543,10 @@ function openModal(r) {
     <h3 class="block-label">Leads mais críticos (HubSpot) — clique para abrir</h3>
     <div class="leads-box">
       ${r.criticos.map(l => `
-        <a class="lead-row" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+        <a class="lead-row ${l.slaBreach ? 'sla-breach' : ''}" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
           <div class="lead-left">
             <span class="lead-name">${l.name}${l.destaque ? ' ⚠' : ''}</span>
-            <span class="lead-stage">${l.stage}</span>
+            <span class="lead-stage">${l.stage}${l.slaBreach ? ' · SLA estourado' : ''}</span>
           </div>
           <div class="lead-right">
             <span class="lead-days">${l.dias}d parado</span>
@@ -508,6 +586,46 @@ function openModal(r) {
 
 document.getElementById('modalClose').addEventListener('click', () => overlay.classList.remove('show'));
 overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('show'); });
+
+// ============ MODAL DE ETAPA (clique no funil) ============
+const stageOverlay = document.getElementById('stageOverlay');
+const stageModalName = document.getElementById('stageModalName');
+const stageModalMeta = document.getElementById('stageModalMeta');
+const stageModalBody = document.getElementById('stageModalBody');
+
+function openStageModal(stageId, label) {
+  const leads = DATA.funilLeads[stageId] || [];
+  const sla = DATA.stageMeta.slaDays[stageId];
+  const desc = DATA.stageMeta.descriptions[stageId];
+  const travados = leads.filter(l => l.slaBreach).length;
+
+  stageModalName.textContent = label;
+  stageModalMeta.textContent = `${leads.length} leads em aberto nesta etapa · SLA ${sla} dia${sla > 1 ? 's' : ''}`;
+
+  stageModalBody.innerHTML = `
+    <div class="gargalo-box">${desc}${travados > 0 ? ` <b>${travados} lead${travados > 1 ? 's' : ''} com SLA estourado</b> nesta etapa agora.` : ''}</div>
+    <h3 class="block-label">Leads nesta etapa — clique para abrir no HubSpot</h3>
+    <div class="leads-box">
+      ${leads.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead nesta etapa no momento.</div>' : leads.map(l => `
+        <a class="lead-row ${l.slaBreach ? 'sla-breach' : ''}" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+          <div class="lead-left">
+            <span class="lead-name">${l.name}${l.slaBreach ? ' ⚠' : ''}</span>
+            <span class="lead-stage">${l.vendedor}${l.slaBreach ? ' · SLA estourado' : ''}</span>
+          </div>
+          <div class="lead-right">
+            <span class="lead-days">${l.dias}d parado</span>
+            <span class="lead-cta">abrir →</span>
+          </div>
+        </a>
+      `).join('')}
+    </div>
+  `;
+
+  stageOverlay.classList.add('show');
+}
+
+document.getElementById('stageModalClose').addEventListener('click', () => stageOverlay.classList.remove('show'));
+stageOverlay.addEventListener('click', (e) => { if (e.target === stageOverlay) stageOverlay.classList.remove('show'); });
 </script>
 
 </body>
