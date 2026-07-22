@@ -148,6 +148,8 @@
 
   .empty-state{background:var(--panel);border:1px dashed var(--hairline);padding:24px;text-align:center;color:var(--muted);font-size:13px;line-height:1.7;}
 
+  .chart-subtitle{font-size:11px;color:var(--muted);line-height:1.5;margin:-8px 0 14px;}
+
   /* ---- Legenda de cores (crítico/atenção/ok) ---- */
   .bar-legend-caption{display:flex;gap:16px;margin-top:14px;padding-top:12px;border-top:1px dashed var(--hairline);font-size:11px;color:var(--muted);}
   .bar-legend-caption span{display:flex;align-items:center;gap:6px;}
@@ -252,6 +254,7 @@
     </div>
     <div class="chart-card">
       <h3><span class="source-tag hub">HubSpot</span>Volume em aberto por executivo</h3>
+      <div class="chart-subtitle">Soma de todos os negócios em qualquer etapa aberta (Prospecção → Ag. Pagamento). Não indica quem está travado — isso aparece como <span class="travados-badge" style="font-size:9.5px;padding:1px 5px;">⏱ N travados</span> no card do executivo.</div>
       <div class="bar-chart" id="repsBar"></div>
       <div class="bar-legend-caption">
         <span><span class="dot-mini" style="background:#E2543F;"></span>Crítico</span>
@@ -363,11 +366,12 @@ function renderDonut(elId, legendId, labels, values, colors, stageIds) {
     }
   }
 }
-function renderBar(elId, rows, colorFn) {
+function renderBar(elId, rows, colorFn, tipFn) {
   const el = document.getElementById(elId);
   const max = Math.max(...rows.map(r => r.v), 1);
   el.innerHTML = rows.map(r => `
-    <div class="bar-row">
+    <div class="bar-row ${tipFn ? 'tip-wrap' : ''}">
+      ${tipFn ? `<div class="tip-bubble">${tipFn(r)}</div>` : ''}
       <span class="bar-label">${r.n}</span>
       <div class="bar-track"><div class="bar-fill" style="width:${(r.v/max*100).toFixed(0)}%;background:${colorFn(r)}"></div></div>
       <span class="bar-val">${r.v}</span>
@@ -488,8 +492,15 @@ renderDonut('funnelDonut', 'funnelLegend', DATA.funil.labels, DATA.funil.valores
 
 // ============ VOLUME EM ABERTO (HubSpot) ============
 const repsSorted = [...DATA.reps].sort((a,b) => b.open - a.open);
-renderBar('repsBar', repsSorted.map(r => ({n: r.name.split(' (')[0], v: r.open})),
-  r => { const rep = DATA.reps.find(x => x.name.split(' (')[0] === r.n); return rep.tag === 'crit' ? '#E2543F' : rep.tag === 'warn' ? '#E8A33D' : '#4FB6A8'; });
+renderBar('repsBar', repsSorted.map(r => ({n: r.name.split(' (')[0], v: r.open, rep: r})),
+  r => r.rep.tag === 'crit' ? '#E2543F' : r.rep.tag === 'warn' ? '#E8A33D' : '#4FB6A8',
+  r => {
+    const stageEntries = Object.entries(r.rep.stages || {}).sort((a,b) => b[1]-a[1]);
+    if (stageEntries.length === 0) return `<b>${r.n}</b><br>Sem negócios em aberto no momento.`;
+    const rows = stageEntries.map(([sid, count]) => `${STAGE_LABELS[sid] || sid}: <b>${count}</b>`).join('<br>');
+    const travadosLine = r.rep.leadsTravados > 0 ? `<br><br>⏱ <b>${r.rep.leadsTravados}</b> com SLA estourado` : '';
+    return `<b>${r.n}</b> — distribuição por etapa:<br>${rows}${travadosLine}`;
+  });
 
 // ============ MOTIVO DE PERDA (Expogo) ============
 renderDonut('expogoLossDonut', 'expogoLossLegend', DATA.motivoPerda.labels, DATA.motivoPerda.valores, DATA.motivoPerda.cores);
