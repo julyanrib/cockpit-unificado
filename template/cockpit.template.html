@@ -239,7 +239,7 @@
   <div class="kpi-label"><span class="source-tag hub">HubSpot</span>pipeline — últimos 7 dias / snapshot atual</div>
   <div class="kpi-strip" id="kpiHub"></div>
 
-  <div class="kpi-label" style="margin-top:16px;"><span class="source-tag exp">Expogo</span>atividade de campo, janela <span id="expogoJanela"></span></div>
+  <div class="kpi-label" style="margin-top:16px;"><span class="source-tag exp">Expogo</span>atividade de campo, janela <span id="expogoJanela"></span><span id="expogoStale"></span></div>
   <div class="kpi-strip exp" id="kpiExpogo"></div>
 
   <div class="banner" id="banner" style="margin-top:16px;"></div>
@@ -403,6 +403,25 @@ function kpiDeltaHtml(key) {
 document.getElementById('updatedLine').textContent =
   `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Expogo: janela ${DATA.expogoJanela} (manual) · Time ativo: ${DATA.reps.length} executivos`;
 document.getElementById('expogoJanela').textContent = DATA.expogoJanela;
+
+// ---- Aviso de dado do Expogo desatualizado ----
+// Formato esperado da janela: "dd–dd/mm/aaaa" (ex: "15–22/07/2026"). Se o fim dessa
+// janela for há mais de 9 dias, avisa — provável que ninguém subiu um export novo.
+(function checkExpogoStale() {
+  try {
+    const partes = DATA.expogoJanela.split('–');
+    const fimStr = partes[partes.length - 1]; // "22/07/2026"
+    const [dia, mes, ano] = fimStr.split('/').map(Number);
+    const fimJanela = new Date(ano, mes - 1, dia);
+    const diasDesatualizado = Math.floor((Date.now() - fimJanela.getTime()) / (1000 * 60 * 60 * 24));
+    if (diasDesatualizado > 9) {
+      document.getElementById('expogoStale').innerHTML =
+        ` <span style="color:var(--red);font-weight:600;">⚠ dado do Expogo desatualizado há ${diasDesatualizado} dias — pedir novo export</span>`;
+    }
+  } catch (e) {
+    // Se o formato da janela mudar e isso quebrar o parse, só não mostra o aviso — não trava o resto do painel.
+  }
+})();
 document.getElementById('banner').innerHTML = DATA.banner;
 document.getElementById('footerText').textContent = DATA.footerText;
 
@@ -416,8 +435,8 @@ document.getElementById('healthBadge').innerHTML = `
 
 document.getElementById('kpiHub').innerHTML = `
   <div class="kpi"><div class="v">${DATA.kpisHub.leadsCriados}${kpiDeltaHtml('leadsCriados')}</div><div class="l">Leads criados (7d)</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisHub.ganhos}${kpiDeltaHtml('ganhos')}</div><div class="l">Ganhos</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisHub.perdidos}${kpiDeltaHtml('perdidos')}</div><div class="l">Perdidos</div></div>
+  <div class="kpi"><div class="v">${DATA.kpisHub.ganhos}${kpiDeltaHtml('ganhos')}</div><div class="l">Ganhos (7d)</div></div>
+  <div class="kpi"><div class="v">${DATA.kpisHub.perdidos}${kpiDeltaHtml('perdidos')}</div><div class="l">Perdidos (7d)</div></div>
   <div class="kpi"><div class="v">${DATA.kpisHub.emAberto}${kpiDeltaHtml('emAberto')}</div><div class="l">Em aberto (time ativo)</div></div>
   <div class="kpi"><div class="v">${DATA.kpisHub.emReciclagem}${kpiDeltaHtml('emReciclagem')}</div><div class="l">Em reciclagem</div></div>
 `;
@@ -509,26 +528,68 @@ renderDonut('expogoLossDonut', 'expogoLossLegend', DATA.motivoPerda.labels, DATA
 const expogoSorted = [...DATA.reps].sort((a,b) => b.expogoVisitas - a.expogoVisitas);
 renderBar('expogoVisitsBar', expogoSorted.map(r => ({n: r.name.split(' (')[0], v: r.expogoVisitas})), () => '#4FB6A8');
 
+// ============ PERSISTÊNCIA DOS COMPROMISSOS DO PDI (localStorage) ============
+// Guardado no navegador — não sincroniza entre dispositivos/pessoas, mas resolve o
+// problema de "fechei a aba e sumiu tudo". A chave usa a versão da análise
+// (DATA.versaoAnalise) — quando os compromissos mudam (você pede pra atualizar a
+// análise), a chave muda junto e os checkboxes voltam a zero pro compromisso novo.
+function pdiStorageKey(ownerId) {
+  return `cockpit_pdi_v1_${ownerId}_${DATA.versaoAnalise}`;
+}
+function getPdiState(ownerId, total) {
+  try {
+    const raw = localStorage.getItem(pdiStorageKey(ownerId));
+    if (!raw) return { checked: new Array(total).fill(false), data: '' };
+    const parsed = JSON.parse(raw);
+    const checked = Array.isArray(parsed.checked) ? parsed.checked : new Array(total).fill(false);
+    while (checked.length < total) checked.push(false);
+    return { checked, data: parsed.data || '' };
+  } catch (e) {
+    return { checked: new Array(total).fill(false), data: '' };
+  }
+}
+function savePdiState(ownerId, checked, data) {
+  try {
+    localStorage.setItem(pdiStorageKey(ownerId), JSON.stringify({ checked, data }));
+  } catch (e) {
+    // localStorage pode falhar em modo privado/anônimo — nesse caso só não persiste, sem quebrar o painel.
+  }
+}
+
 // ============ LISTA DE EXECUTIVOS ============
 const container = document.getElementById('reps');
-DATA.reps.forEach((r) => {
-  const card = document.createElement('div');
-  card.className = 'rep-card ' + r.tag;
-  card.innerHTML = `
-    <div class="rep-name-wrap">
-      <span class="rep-name">${r.name}</span>
-      <span class="rep-tag ${r.tag}">${r.tagLabel}</span>
-      ${r.leadsTravados > 0 ? `<span class="travados-badge">⏱ ${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</span>` : ''}
-    </div>
-    <div class="rep-right">
-      <span><span class="source-tag hub" style="margin-right:4px;">Hub</span><b>${r.open}</b> em aberto</span>
-      <span><span class="source-tag exp" style="margin-right:4px;">Exp</span><b>${r.expogoVisitas}</b> visitas GPS</span>
-      <span class="arrow"></span>
-    </div>
-  `;
-  card.addEventListener('click', () => openModal(r));
-  container.appendChild(card);
-});
+function renderRepsList() {
+  container.innerHTML = '';
+  DATA.reps.forEach((r) => {
+    const pdi = getPdiState(r.ownerId, r.compromissos.length);
+    const feitos = pdi.checked.filter(Boolean).length;
+    const total = r.compromissos.length;
+    let pdiBadgeClass = 'flat';
+    if (total > 0) {
+      if (feitos === total) pdiBadgeClass = 'up';
+      else if (feitos === 0) pdiBadgeClass = 'down';
+    }
+
+    const card = document.createElement('div');
+    card.className = 'rep-card ' + r.tag;
+    card.innerHTML = `
+      <div class="rep-name-wrap">
+        <span class="rep-name">${r.name}</span>
+        <span class="rep-tag ${r.tag}">${r.tagLabel}</span>
+        ${r.leadsTravados > 0 ? `<span class="travados-badge">⏱ ${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</span>` : ''}
+        ${total > 0 ? `<span class="kpi-delta ${pdiBadgeClass}" style="border:1px solid currentColor;padding:2px 7px;font-size:9.5px;">✓ PDI ${feitos}/${total}</span>` : ''}
+      </div>
+      <div class="rep-right">
+        <span><span class="source-tag hub" style="margin-right:4px;">Hub</span><b>${r.open}</b> em aberto</span>
+        <span><span class="source-tag exp" style="margin-right:4px;">Exp</span><b>${r.expogoVisitas}</b> visitas GPS</span>
+        <span class="arrow"></span>
+      </div>
+    `;
+    card.addEventListener('click', () => openModal(r));
+    container.appendChild(card);
+  });
+}
+renderRepsList();
 
 // ============ MODAL ============
 const overlay = document.getElementById('overlay');
@@ -596,15 +657,33 @@ function openModal(r) {
       `).join('')}
     </ul>
     <div class="sign-row">
-      <span>Combinado no 1:1 de <input type="text" placeholder="dd/mm"></span>
-      <span>✓ ${r.compromissos.length} compromissos</span>
+      <span>Combinado no 1:1 de <input type="text" id="pdiDataInput" placeholder="dd/mm"></span>
+      <span id="pdiCountLabel">✓ ${r.compromissos.length} compromissos</span>
     </div>
   `;
 
   overlay.classList.add('show');
-  modalBody.querySelectorAll('.checkbox').forEach(cb => {
-    cb.addEventListener('click', () => cb.classList.toggle('checked'));
+
+  // Carrega o que já foi marcado antes (persistido no navegador) e religa os cliques
+  const pdi = getPdiState(r.ownerId, r.compromissos.length);
+  const checkboxes = modalBody.querySelectorAll('.checkbox');
+  checkboxes.forEach((cb, i) => {
+    if (pdi.checked[i]) cb.classList.add('checked');
   });
+  document.getElementById('pdiDataInput').value = pdi.data;
+
+  function persistPdi() {
+    const checkedNow = Array.from(checkboxes).map(cb => cb.classList.contains('checked'));
+    const dataNow = document.getElementById('pdiDataInput').value;
+    savePdiState(r.ownerId, checkedNow, dataNow);
+    const feitos = checkedNow.filter(Boolean).length;
+    document.getElementById('pdiCountLabel').textContent = `✓ ${feitos}/${r.compromissos.length} cumpridos`;
+  }
+
+  checkboxes.forEach(cb => {
+    cb.addEventListener('click', () => { cb.classList.toggle('checked'); persistPdi(); });
+  });
+  document.getElementById('pdiDataInput').addEventListener('input', persistPdi);
 
   const labels = stageEntries.map(([s]) => STAGE_LABELS[s]);
   const values = stageEntries.map(([,c]) => c);
@@ -612,8 +691,8 @@ function openModal(r) {
   renderDonut('modalDonut', null, labels, values, colors);
 }
 
-document.getElementById('modalClose').addEventListener('click', () => overlay.classList.remove('show'));
-overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.classList.remove('show'); });
+document.getElementById('modalClose').addEventListener('click', () => { overlay.classList.remove('show'); renderRepsList(); });
+overlay.addEventListener('click', (e) => { if (e.target === overlay) { overlay.classList.remove('show'); renderRepsList(); } });
 
 // ============ MODAL DE ETAPA (clique no funil) ============
 const stageOverlay = document.getElementById('stageOverlay');
