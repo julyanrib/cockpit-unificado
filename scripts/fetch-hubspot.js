@@ -70,7 +70,8 @@ const REPS = [
   { ownerId: '91246573', name: 'José Ricardo (Ricardo)' },
   { ownerId: '89842507', name: 'Wericles Andrade (Whell)' },
   { ownerId: '87069181', name: 'Amanda Pardim' },
-  { ownerId: '86100505', name: 'Marco Filho' }
+  { ownerId: '86100505', name: 'Marco Filho' },
+  { ownerId: '94079973', name: 'Michel Carvalho' }
 ];
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
