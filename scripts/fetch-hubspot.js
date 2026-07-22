@@ -33,7 +33,7 @@ const OPEN_STAGES = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGE
 const STAGE_LABELS = {
   [STAGES.prospeccao]: 'Prospecção',
   [STAGES.visita]: 'Visita',
-  [STAGES.diagnostico]: 'Diagnóstico',
+  [STAGES.diagnostico]: 'Conversa com Decisor',
   [STAGES.demoProposta]: 'Demo/Proposta',
   [STAGES.negociacao]: 'Negociação',
   [STAGES.agPagamento]: 'Ag. Pagamento'
@@ -55,7 +55,7 @@ const SLA_DAYS = {
 const STAGE_DESCRIPTIONS = {
   [STAGES.prospeccao]: 'Primeiro contato feito (PAP). Deveria avançar ou virar decisão em até 3 dias.',
   [STAGES.visita]: 'Visita presencial já ocorreu. Esperado confirmar próximo passo em até 2 dias.',
-  [STAGES.diagnostico]: 'Conversa com decisor em andamento. SLA de 3 dias pra avançar pra demo.',
+  [STAGES.diagnostico]: 'Conversa com o decisor em andamento. SLA de 3 dias pra avançar pra demo.',
   [STAGES.demoProposta]: 'Demonstração feita, proposta em análise. SLA de 3 dias pra negociação.',
   [STAGES.negociacao]: 'Negociação de condições comerciais. SLA de 7 dias pra fechar.',
   [STAGES.agPagamento]: 'Contrato fechado, aguardando pagamento. SLA de 2 dias — gargalo crítico se estourar.'
@@ -232,17 +232,22 @@ async function main() {
 
     const leadsTravados = withDays.filter(l => l.slaBreach).length;
 
+    // Top 5 mais antigos (referência rápida, independente de terem estourado SLA ou não)
     const criticos = withDays.slice(0, 5).map(l => ({
       ...l,
-      // destaque automático: SLA da etapa estourado OU outlier extremo (>60 dias parado)
       destaque: l.slaBreach || l.dias > 60
     }));
+
+    // TODOS os leads com SLA estourado — pra métrica completa no card do executivo,
+    // não só uma amostra de 5. Ordenado do mais travado pro menos travado.
+    const travados = withDays.filter(l => l.slaBreach).map(l => ({ ...l, destaque: true }));
 
     repsData[rep.ownerId] = {
       name: rep.name,
       open: deals.length,
       stages,
       criticos,
+      travados,
       leadsTravados
     };
     emAbertoTime += deals.length;
@@ -261,7 +266,7 @@ async function main() {
       leadsTravados: leadsTravadosTime
     },
     funil: {
-      labels: ['Backlog', 'Prospecção', 'Visita', 'Diagnóstico', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
+      labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
       valores: [backlog, prospeccao, visita, diagnostico, demoProposta, negociacao, agPagamento, ganho, perdido, reciclagem],
       cores: ['#5C6272', '#E8A33D', '#5B8DEF', '#6E7BF2', '#4FB6A8', '#D97BA8', '#E2543F', '#3FA98F', '#B5432F', '#8B92A3']
     },

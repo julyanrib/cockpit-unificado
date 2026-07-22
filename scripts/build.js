@@ -34,7 +34,7 @@ const ownerIds = Object.keys(narrativas.reps);
 
 const reps = ownerIds.map(ownerId => {
   const n = narrativas.reps[ownerId];
-  const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], leadsTravados: 0 };
+  const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0 };
   const e = (expogo.porExecutivo && expogo.porExecutivo[ownerId]) || { visitasGPS: 0 };
 
   return {
@@ -49,6 +49,7 @@ const reps = ownerIds.map(ownerId => {
     open: h.open,
     stages: h.stages,
     criticos: h.criticos,
+    travados: h.travados || [],
     leadsTravados: h.leadsTravados || 0,
     expogoVisitas: e.visitasGPS
   };
