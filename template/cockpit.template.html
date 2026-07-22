@@ -380,7 +380,7 @@ function renderBar(elId, rows, colorFn, tipFn) {
 }
 
 const STAGE_LABELS = {
-  "1395880469": "Prospecção", "1396005401": "Visita", "1395880470": "Diagnóstico",
+  "1395880469": "Prospecção", "1396005401": "Visita", "1395880470": "Conversa com Decisor",
   "1395880471": "Demo/Proposta", "1395880472": "Negociação", "1395880473": "Ag. Pagamento"
 };
 const STAGE_COLORS = {
@@ -542,6 +542,12 @@ function openModal(r) {
   const stageEntries = Object.entries(r.stages);
   const dominant = stageEntries.sort((a,b) => b[1]-a[1])[0];
   const dominantPct = r.open > 0 ? Math.round((dominant[1] / r.open) * 100) : 0;
+  const travados = r.travados || [];
+
+  const leadsSectionTitle = travados.length > 0
+    ? `Leads com SLA estourado (${travados.length}) — clique para abrir`
+    : `Leads mais antigos (nenhum com SLA estourado agora)`;
+  const leadsList = travados.length > 0 ? travados : r.criticos;
 
   modalBody.innerHTML = `
     <div class="modal-grid">
@@ -551,19 +557,20 @@ function openModal(r) {
       <div class="modal-stats">
         <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Total em aberto</span><b>${r.open}</b></div>
         <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Etapa dominante</span><b>${STAGE_LABELS[dominant[0]]} (${dominantPct}%)</b></div>
+        <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Leads com SLA estourado</span><b style="${travados.length > 0 ? 'color:var(--red);' : ''}">${travados.length}</b></div>
         <div class="modal-stat"><span><span class="source-tag exp">Exp</span>Visitas GPS (janela)</span><b>${r.expogoVisitas}</b></div>
       </div>
     </div>
 
-    <h3 class="block-label">Gargalo unificado</h3>
+    <h3 class="block-label">Onde está errando (gargalo unificado)</h3>
     <div class="gargalo-box">${r.gargalo}</div>
 
-    <h3 class="block-label">Boas práticas</h3>
+    <h3 class="block-label">Como ajustar (boas práticas)</h3>
     <ul class="practice-list">${r.boasPraticas.map(b => `<li>${b}</li>`).join('')}</ul>
 
-    <h3 class="block-label">Leads mais críticos (HubSpot) — clique para abrir</h3>
+    <h3 class="block-label">${leadsSectionTitle}</h3>
     <div class="leads-box">
-      ${r.criticos.map(l => `
+      ${leadsList.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead em aberto no momento.</div>' : leadsList.map(l => `
         <a class="lead-row ${l.slaBreach ? 'sla-breach' : ''}" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
           <div class="lead-left">
             <span class="lead-name">${l.name}${l.destaque ? ' ⚠' : ''}</span>
@@ -578,7 +585,7 @@ function openModal(r) {
     </div>
 
     <hr class="pdi-divider">
-    <div class="pdi-eyebrow">PDI da semana · compromisso unificado</div>
+    <div class="pdi-eyebrow">PDI da semana · compromisso firmado</div>
     <div class="pdi-title">Plano da semana — ${r.name}</div>
     <ul class="commit-list">
       ${r.compromissos.map((c, ci) => `
