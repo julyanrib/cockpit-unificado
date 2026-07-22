@@ -88,6 +88,7 @@ const DATA = {
   hubspotUpdatedAtFmt: fmtDate(hubspot.updatedAt),
   expogoJanela: expogo.janela,
   banner: expogo.banner,
+  versaoAnalise: narrativas._atualizado_em || 'v1',
   kpisHub: hubspot.kpis,
   kpisExpogo: expogo.kpis,
   kpiDeltas,

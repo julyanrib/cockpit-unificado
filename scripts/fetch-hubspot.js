@@ -39,13 +39,11 @@ const STAGE_LABELS = {
   [STAGES.agPagamento]: 'Ag. Pagamento'
 };
 
-// SLA (dias máximos esperados) por etapa — usado pra sinalizar leads travados.
-// Negociação (7d) e Ag. Pagamento (2d) confirmados com Julyan; os demais são estimativas
-// operacionais razoáveis (ajustável aqui, sem precisar mexer no resto do código).
+// SLA (dias máximos esperados) por etapa — confirmados com Julyan.
 const SLA_DAYS = {
-  [STAGES.prospeccao]: 3,
-  [STAGES.visita]: 2,
-  [STAGES.diagnostico]: 3,
+  [STAGES.prospeccao]: 5,
+  [STAGES.visita]: 5,
+  [STAGES.diagnostico]: 4,
   [STAGES.demoProposta]: 3,
   [STAGES.negociacao]: 7,
   [STAGES.agPagamento]: 2
@@ -53,9 +51,9 @@ const SLA_DAYS = {
 
 // Descrições curtas de cada etapa, usadas nos tooltips do painel
 const STAGE_DESCRIPTIONS = {
-  [STAGES.prospeccao]: 'Primeiro contato feito (PAP). Deveria avançar ou virar decisão em até 3 dias.',
-  [STAGES.visita]: 'Visita presencial já ocorreu. Esperado confirmar próximo passo em até 2 dias.',
-  [STAGES.diagnostico]: 'Conversa com o decisor em andamento. SLA de 3 dias pra avançar pra demo.',
+  [STAGES.prospeccao]: 'Primeiro contato feito (PAP). Deveria avançar ou virar decisão em até 5 dias.',
+  [STAGES.visita]: 'Visita presencial já ocorreu. Esperado confirmar próximo passo em até 5 dias.',
+  [STAGES.diagnostico]: 'Conversa com o decisor em andamento. SLA de 4 dias pra avançar pra demo.',
   [STAGES.demoProposta]: 'Demonstração feita, proposta em análise. SLA de 3 dias pra negociação.',
   [STAGES.negociacao]: 'Negociação de condições comerciais. SLA de 7 dias pra fechar.',
   [STAGES.agPagamento]: 'Contrato fechado, aguardando pagamento. SLA de 2 dias — gargalo crítico se estourar.'
@@ -134,6 +132,25 @@ async function createdLast7Days() {
   return data.total || 0;
 }
 
+// Conta quantos negócios ENTRARAM numa etapa nos últimos 7 dias (fluxo da semana),
+// em vez do total histórico acumulado parado naquela etapa hoje. Usado pra Ganhos/Perdidos,
+// que fazem mais sentido como "quanto fechamos/perdemos essa semana" do que um número frio acumulado.
+async function stageTotalLast7Days(stageId) {
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const data = await hsSearch({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: stageId },
+        { propertyName: 'hs_lastmodifieddate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
+      ]
+    }],
+    limit: 1
+  });
+  return data.total || 0;
+}
+
 async function repOpenDeals(ownerId) {
   const data = await hsSearch({
     filterGroups: [{
@@ -191,6 +208,13 @@ async function main() {
 
   const ganho = ganho1 + ganho2;
   const leadsCriados = await createdLast7Days();
+
+  // Ganhos/Perdidos como FLUXO da semana (entraram nessa etapa nos últimos 7 dias) —
+  // diferente do "ganho"/"perdido" acima, que é o total histórico acumulado (usado só no funil geral).
+  const ganho1Semana = await stageTotalLast7Days(STAGES.ganho1);
+  const ganho2Semana = await stageTotalLast7Days(STAGES.ganho2);
+  const ganhoSemana = ganho1Semana + ganho2Semana;
+  const perdidoSemana = await stageTotalLast7Days(STAGES.perdido);
 
   // ---- Leads por etapa, time inteiro (pro clique no funil) ----
   const ownerNameById = {};
@@ -259,8 +283,8 @@ async function main() {
     updatedAt: new Date().toISOString(),
     kpis: {
       leadsCriados,
-      ganhos: ganho,
-      perdidos: perdido,
+      ganhos: ganhoSemana,
+      perdidos: perdidoSemana,
       emAberto: emAbertoTime,
       emReciclagem: reciclagem,
       leadsTravados: leadsTravadosTime
