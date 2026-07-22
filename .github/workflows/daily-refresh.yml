@@ -1,0 +1,37 @@
+name: Atualizar cockpit diariamente
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Buscar dados frescos do HubSpot
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: node scripts/fetch-hubspot.js
+
+      - name: Gerar HTML final
+        run: node scripts/build.js
+
+      - name: Commitar e enviar alterações (se houver)
+        run: |
+          git config user.name "cockpit-bot"
+          git config user.email "cockpit-bot@users.noreply.github.com"
+          git add data/hubspot.json public/index.html
+          git diff --staged --quiet && echo "Nada mudou hoje." || git commit -m "Atualização automática diária do cockpit"
+          git push
