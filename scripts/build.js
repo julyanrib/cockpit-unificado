@@ -23,12 +23,6 @@ const hubspotPrevious = fs.existsSync(previousPath)
   ? JSON.parse(fs.readFileSync(previousPath, 'utf8'))
   : null;
 
-// Plano de ação (opcional) — reuniões de liderança/alinhamento, manual
-const planoAcaoPath = path.join(root, 'data', 'plano-acao.json');
-const planoAcao = fs.existsSync(planoAcaoPath)
-  ? JSON.parse(fs.readFileSync(planoAcaoPath, 'utf8'))
-  : null;
-
 function fmtDate(iso) {
   const d = new Date(iso);
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
@@ -115,14 +109,6 @@ const DATA = {
       ...p,
       name: (narrativas.reps[p.ownerId] || {}).name || p.ownerId
     }))
-  } : null,
-  planoAcao: planoAcao ? {
-    versao: planoAcao._atualizado_em,
-    reuniao: planoAcao.reuniao,
-    proximoAlinhamento: planoAcao.proximoAlinhamento,
-    atualizacoes: planoAcao.atualizacoes,
-    problemas: planoAcao.problemas,
-    tarefas: planoAcao.tarefas
   } : null
 };
 
