@@ -152,10 +152,9 @@ async function stageTotalLast7Days(stageId) {
 }
 
 // Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
-// (uma por etapa). É isso que devemos usar pra "dias parado" — createdate mede desde a
-// criação do negócio, não desde que ele chegou na etapa atual, e isso gerava número errado
-// pra negócios antigos que acabaram de avançar.
-const ENTERED_STAGE_PROPS = OPEN_STAGES.map(s => `hs_date_entered_${s}`);
+// (uma por etapa). Confirmado com a API: o nome certo nesta conta é hs_v2_date_entered_<etapa>
+// (não hs_date_entered_<etapa> — essa variante não existe aqui e vinha sempre vazia).
+const ENTERED_STAGE_PROPS = OPEN_STAGES.map(s => `hs_v2_date_entered_${s}`);
 
 async function repOpenDeals(ownerId) {
   const data = await hsSearch({
@@ -166,7 +165,7 @@ async function repOpenDeals(ownerId) {
         { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', ...ENTERED_STAGE_PROPS],
+    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS],
     limit: 200,
     sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
   });
@@ -183,7 +182,7 @@ async function stageDealsTeamWide(stageId) {
         { propertyName: 'dealstage', operator: 'EQ', value: stageId }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', ...ENTERED_STAGE_PROPS],
+    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS],
     limit: 100,
     sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
   });
@@ -196,19 +195,19 @@ function daysSince(dateStr) {
 }
 
 // Dias REALMENTE parado, sem interação nenhuma. Usa a data mais recente entre:
-// (a) quando o negócio entrou na etapa atual, e
-// (b) `notes_last_updated` — atualizada automaticamente pelo HubSpot toda vez que uma
-//     nota, ligação, e-mail, reunião ou tarefa é registrada no negócio (inclui visitas
-//     do Expogo sincronizadas como nota/atividade).
-// Assim, qualquer interação registrada — mesmo sem mudar de etapa — "reseta" o contador,
-// e um lead não aparece mais como travado só porque é antigo ou porque a etapa é antiga.
+// (a) quando o negócio entrou na etapa atual (hs_v2_date_entered_<etapa>),
+// (b) `notes_last_updated` — atualizada quando uma nota/ligação/e-mail/reunião/tarefa é logada,
+// (c) `hs_lastmodifieddate` — atualizada em QUALQUER mudança de propriedade (sempre preenchida,
+//     serve de rede de segurança quando as outras duas vêm vazias nesta conta).
+// Assim, qualquer interação registrada — mesmo sem mudar de etapa — "reseta" o contador.
 function daysInCurrentStage(properties) {
-  const enteredKey = `hs_date_entered_${properties.dealstage}`;
+  const enteredKey = `hs_v2_date_entered_${properties.dealstage}`;
   const enteredDate = properties[enteredKey] ? new Date(properties[enteredKey]).getTime() : null;
   const lastActivity = properties.notes_last_updated ? new Date(properties.notes_last_updated).getTime() : null;
+  const lastModified = properties.hs_lastmodifieddate ? new Date(properties.hs_lastmodifieddate).getTime() : null;
   const createdFallback = new Date(properties.createdate).getTime();
 
-  const candidates = [enteredDate, lastActivity, createdFallback].filter(t => t !== null && !isNaN(t));
+  const candidates = [enteredDate, lastActivity, lastModified, createdFallback].filter(t => t !== null && !isNaN(t));
   const maisRecente = Math.max(...candidates);
   return Math.floor((Date.now() - maisRecente) / (1000 * 60 * 60 * 24));
 }
