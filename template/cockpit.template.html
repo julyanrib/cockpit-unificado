@@ -158,6 +158,43 @@
   .plano-task-resp{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);border:1px solid var(--hairline);padding:2px 7px;white-space:nowrap;margin-left:8px;}
   .plano-progress{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);margin-bottom:10px;}
 
+  /* ---- Daily (compromisso diário) ---- */
+  .daily-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+  .daily-date-nav{display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:12.5px;}
+  .daily-date-nav button{background:var(--panel);border:1px solid var(--hairline);color:var(--text);padding:5px 10px;cursor:pointer;font-family:inherit;}
+  .daily-date-nav button:hover{background:var(--panel-2);}
+  .daily-date-nav .date-label{color:var(--amber);font-weight:600;}
+  .daily-rep-card{background:var(--panel);border:1px solid var(--hairline);margin-bottom:14px;}
+  .daily-rep-head{padding:12px 16px;border-bottom:1px solid var(--hairline);font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center;}
+  .daily-rep-body{display:grid;grid-template-columns:1fr 1fr;gap:0;}
+  .daily-col{padding:14px 16px;}
+  .daily-col + .daily-col{border-left:1px solid var(--hairline);}
+  .daily-col-label{font-family:'IBM Plex Mono',monospace;font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:10px;}
+  .daily-metric-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:12.5px;}
+  .daily-metric-row label{flex:1;color:var(--muted);}
+  .daily-metric-row input[type="number"]{width:56px;background:var(--panel-2);border:1px solid var(--hairline);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12.5px;padding:4px 6px;text-align:center;}
+  .daily-metric-row .meta-hint{color:var(--muted-2);font-size:10px;margin-left:6px;}
+  .daily-clients{margin-top:10px;}
+  .daily-client-add{display:flex;gap:6px;margin-bottom:8px;}
+  .daily-client-add input[type="text"]{flex:1;background:var(--panel-2);border:1px solid var(--hairline);color:var(--text);font-size:12.5px;padding:5px 8px;}
+  .daily-client-add button{background:var(--panel-2);border:1px solid var(--hairline);color:var(--amber);padding:5px 12px;cursor:pointer;font-size:12px;}
+  .daily-client-list{list-style:none;margin:0;padding:0;}
+  .daily-client-item{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;border-bottom:1px dashed var(--hairline);}
+  .daily-client-item:last-child{border-bottom:none;}
+  .daily-client-item .client-name{flex:1;}
+  .daily-client-item .remove-x{color:var(--muted-2);cursor:pointer;font-size:13px;}
+  .daily-empty-yesterday{color:var(--muted);font-size:12px;font-style:italic;padding:6px 0;}
+  .daily-consolidado{background:var(--panel);border:1px solid var(--hairline);padding:16px 18px;margin-bottom:20px;}
+  .daily-consolidado-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--hairline);border:1px solid var(--hairline);margin-top:10px;}
+  .daily-consolidado-kpi{background:var(--panel);padding:12px 14px;text-align:center;}
+  .daily-consolidado-kpi .v{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;}
+  .daily-consolidado-kpi .l{font-size:10px;color:var(--muted);text-transform:uppercase;margin-top:4px;}
+  @media (max-width:720px){
+    .daily-rep-body{grid-template-columns:1fr;}
+    .daily-col + .daily-col{border-left:none;border-top:1px solid var(--hairline);}
+    .daily-consolidado-grid{grid-template-columns:1fr;}
+  }
+
   .chart-subtitle{font-size:11px;color:var(--muted);line-height:1.5;margin:-8px 0 14px;}
 
   /* ---- Legenda de cores (crítico/atenção/ok) ---- */
@@ -240,7 +277,7 @@
   <div class="tabbar">
     <button class="tab-btn" id="tabBtnCockpit" data-view="viewCockpit">Cockpit</button>
     <button class="tab-btn" id="tabBtnResumo" data-view="viewResumo">Resumo Semanal</button>
-    <button class="tab-btn" id="tabBtnPlano" data-view="viewPlano">Plano de Ação</button>
+    <button class="tab-btn" id="tabBtnDaily" data-view="viewDaily">Daily</button>
   </div>
 
   <div class="view" id="viewCockpit">
@@ -299,8 +336,8 @@
     <div id="resumoContent"></div>
   </div>
 
-  <div class="view" id="viewPlano">
-    <div id="planoContent"></div>
+  <div class="view" id="viewDaily">
+    <div id="dailyContent"></div>
   </div>
 
   <footer id="footerText"></footer>
@@ -474,7 +511,7 @@ function activateTab(viewId) {
 }
 document.getElementById('tabBtnCockpit').addEventListener('click', () => activateTab('viewCockpit'));
 document.getElementById('tabBtnResumo').addEventListener('click', () => activateTab('viewResumo'));
-document.getElementById('tabBtnPlano').addEventListener('click', () => activateTab('viewPlano'));
+document.getElementById('tabBtnDaily').addEventListener('click', () => activateTab('viewDaily'));
 // Nas segundas-feiras, abre direto no Resumo Semanal; nos outros dias, abre no Cockpit
 const hojeEhSegunda = new Date().getDay() === 1;
 activateTab((hojeEhSegunda && DATA.resumoSemanal) ? 'viewResumo' : 'viewCockpit');
@@ -570,77 +607,6 @@ function savePdiState(ownerId, checked, data) {
   } catch (e) {
     // localStorage pode falhar em modo privado/anônimo — nesse caso só não persiste, sem quebrar o painel.
   }
-}
-
-// ============ PLANO DE AÇÃO (reuniões de liderança) ============
-function planoStorageKey() {
-  return `cockpit_plano_v1_${DATA.planoAcao ? DATA.planoAcao.versao : 'none'}`;
-}
-function getPlanoState(totalTarefas) {
-  try {
-    const raw = localStorage.getItem(planoStorageKey());
-    if (!raw) return new Array(totalTarefas).fill(false);
-    const parsed = JSON.parse(raw);
-    const checked = Array.isArray(parsed) ? parsed : new Array(totalTarefas).fill(false);
-    while (checked.length < totalTarefas) checked.push(false);
-    return checked;
-  } catch (e) {
-    return new Array(totalTarefas).fill(false);
-  }
-}
-function savePlanoState(checked) {
-  try {
-    localStorage.setItem(planoStorageKey(), JSON.stringify(checked));
-  } catch (e) { /* modo privado — só não persiste */ }
-}
-
-const planoEl = document.getElementById('planoContent');
-if (!DATA.planoAcao) {
-  planoEl.innerHTML = `<div class="empty-state">Nenhum plano de ação registrado ainda. Peça pra Claude adicionar o resumo da próxima reunião de alinhamento.</div>`;
-} else {
-  const pa = DATA.planoAcao;
-  const checked = getPlanoState(pa.tarefas.length);
-  const feitos = checked.filter(Boolean).length;
-
-  planoEl.innerHTML = `
-    <div class="plano-meta">${pa.reuniao} · Próximo alinhamento: ${pa.proximoAlinhamento}</div>
-
-    <div class="plano-section">
-      <h3 class="block-label">Principais atualizações</h3>
-      <ul class="plano-list">${pa.atualizacoes.map(a => `<li>${a}</li>`).join('')}</ul>
-    </div>
-
-    <div class="plano-section">
-      <h3 class="block-label">Problemas</h3>
-      <ul class="plano-list problemas">${pa.problemas.map(p => `<li>${p}</li>`).join('')}</ul>
-    </div>
-
-    <div class="plano-section">
-      <h3 class="block-label">Tarefas com responsável</h3>
-      <div class="plano-progress" id="planoProgress">✓ ${feitos}/${pa.tarefas.length} concluídas</div>
-      <div id="planoTasks">
-        ${pa.tarefas.map((t, i) => `
-          <div class="plano-task">
-            <span class="checkbox ${checked[i] ? 'checked' : ''}" data-idx="${i}" style="margin-top:2px;"></span>
-            <span class="plano-task-text">${t.texto}</span>
-            <span class="plano-task-resp">${t.responsavel}</span>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
-
-  const planoChecked = [...checked];
-  planoEl.querySelectorAll('#planoTasks .checkbox').forEach(cb => {
-    cb.addEventListener('click', () => {
-      cb.classList.toggle('checked');
-      const idx = Number(cb.dataset.idx);
-      planoChecked[idx] = cb.classList.contains('checked');
-      savePlanoState(planoChecked);
-      const doneNow = planoChecked.filter(Boolean).length;
-      document.getElementById('planoProgress').textContent = `✓ ${doneNow}/${pa.tarefas.length} concluídas`;
-    });
-  });
 }
 
 // ============ LISTA DE EXECUTIVOS ============
@@ -820,6 +786,262 @@ function openStageModal(stageId, label) {
 
 document.getElementById('stageModalClose').addEventListener('click', () => stageOverlay.classList.remove('show'));
 stageOverlay.addEventListener('click', (e) => { if (e.target === stageOverlay) stageOverlay.classList.remove('show'); });
+
+// ============ DAILY (compromisso diário por executivo) ============
+function dailyKey(dateISO, ownerId) {
+  return `cockpit_daily_v1_${dateISO}_${ownerId}`;
+}
+function defaultDailyEntry() {
+  return {
+    prometido: { prospeccao: null, referencia: null, reunioes: null, clientes: [] },
+    realizado: { prospeccao: null, referencia: null, reunioes: null, clientesFeitos: [] }
+  };
+}
+function getDailyEntry(dateISO, ownerId) {
+  try {
+    const raw = localStorage.getItem(dailyKey(dateISO, ownerId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const def = defaultDailyEntry();
+    return {
+      prometido: { ...def.prometido, ...parsed.prometido },
+      realizado: { ...def.realizado, ...parsed.realizado }
+    };
+  } catch (e) {
+    return null;
+  }
+}
+function saveDailyEntry(dateISO, ownerId, entry) {
+  try {
+    localStorage.setItem(dailyKey(dateISO, ownerId), JSON.stringify(entry));
+  } catch (e) { /* modo privado — só não persiste */ }
+}
+function isoDate(d) {
+  return d.toISOString().slice(0, 10);
+}
+function addDays(dateISO, n) {
+  const d = new Date(dateISO + 'T12:00:00');
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+}
+function fmtDailyLabel(dateISO) {
+  const d = new Date(dateISO + 'T12:00:00');
+  const dias = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} (${dias[d.getDay()]})`;
+}
+
+let dailyRefDate = isoDate(new Date());
+
+function renderDaily() {
+  const el = document.getElementById('dailyContent');
+  const yesterdayISO = addDays(dailyRefDate, -1);
+
+  let html = `
+    <div class="daily-header">
+      <div class="hint" style="margin:0;">Marque o que aconteceu ontem e firme a promessa de hoje — vira o consolidado da semana no Resumo Semanal.</div>
+      <div class="daily-date-nav">
+        <button id="dailyPrev">← dia anterior</button>
+        <span class="date-label">${fmtDailyLabel(dailyRefDate)}</span>
+        <button id="dailyNext">próximo dia →</button>
+        <button id="dailyToday">hoje</button>
+      </div>
+    </div>
+  `;
+
+  DATA.reps.forEach(r => {
+    const ontem = getDailyEntry(yesterdayISO, r.ownerId);
+    const hoje = getDailyEntry(dailyRefDate, r.ownerId) || defaultDailyEntry();
+
+    const ontemHtml = !ontem ? `<div class="daily-empty-yesterday">Nenhuma promessa registrada em ${fmtDailyLabel(yesterdayISO)}.</div>` : `
+      <div class="daily-metric-row">
+        <label>Visitas de prospecção</label>
+        <input type="number" min="0" class="d-real" data-metric="prospeccao" value="${ontem.realizado.prospeccao ?? ''}" placeholder="${ontem.prometido.prospeccao ?? 0}">
+        <span class="meta-hint">prometido: ${ontem.prometido.prospeccao ?? 0}</span>
+      </div>
+      <div class="daily-metric-row">
+        <label>Visitas cliente referência</label>
+        <input type="number" min="0" class="d-real" data-metric="referencia" value="${ontem.realizado.referencia ?? ''}" placeholder="${ontem.prometido.referencia ?? 0}">
+        <span class="meta-hint">prometido: ${ontem.prometido.referencia ?? 0}</span>
+      </div>
+      <div class="daily-metric-row">
+        <label>Reuniões agendadas</label>
+        <input type="number" min="0" class="d-real" data-metric="reunioes" value="${ontem.realizado.reunioes ?? ''}" placeholder="${ontem.prometido.reunioes ?? 0}">
+        <span class="meta-hint">prometido: ${ontem.prometido.reunioes ?? 0}</span>
+      </div>
+      ${ontem.prometido.clientes.length > 0 ? `
+        <div class="daily-clients">
+          <div class="daily-col-label">Clientes prometidos</div>
+          <ul class="daily-client-list">
+            ${ontem.prometido.clientes.map((c, i) => `
+              <li class="daily-client-item">
+                <span class="checkbox d-client-check" data-idx="${i}" style="${ontem.realizado.clientesFeitos[i] ? 'background:var(--teal);border-color:var(--teal);' : ''}"></span>
+                <span class="client-name">${c}</span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      ` : ''}
+    `;
+
+    const clientesHoje = hoje.prometido.clientes;
+    const hojeHtml = `
+      <div class="daily-metric-row">
+        <label>Visitas de prospecção</label>
+        <input type="number" min="0" class="d-prom" data-metric="prospeccao" value="${hoje.prometido.prospeccao ?? ''}" placeholder="meta: 8">
+      </div>
+      <div class="daily-metric-row">
+        <label>Visitas cliente referência</label>
+        <input type="number" min="0" class="d-prom" data-metric="referencia" value="${hoje.prometido.referencia ?? ''}" placeholder="0">
+      </div>
+      <div class="daily-metric-row">
+        <label>Reuniões agendadas</label>
+        <input type="number" min="0" class="d-prom" data-metric="reunioes" value="${hoje.prometido.reunioes ?? ''}" placeholder="0">
+      </div>
+      <div class="daily-clients">
+        <div class="daily-col-label">Promessa de clientes para hoje</div>
+        <div class="daily-client-add">
+          <input type="text" class="d-client-input" placeholder="Nome do cliente...">
+          <button class="d-client-add">+ add</button>
+        </div>
+        <ul class="daily-client-list d-client-list">
+          ${clientesHoje.map((c, i) => `
+            <li class="daily-client-item">
+              <span class="client-name">${c}</span>
+              <span class="remove-x d-client-remove" data-idx="${i}">✕</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    `;
+
+    html += `
+      <div class="daily-rep-card" data-owner="${r.ownerId}">
+        <div class="daily-rep-head">${r.name}</div>
+        <div class="daily-rep-body">
+          <div class="daily-col">
+            <div class="daily-col-label">Ontem — o que aconteceu</div>
+            ${ontemHtml}
+          </div>
+          <div class="daily-col">
+            <div class="daily-col-label">Hoje — promessa do dia</div>
+            ${hojeHtml}
+          </div>
+        </div>
+      </div>
+    `;
+  });
+
+  el.innerHTML = html;
+
+  document.getElementById('dailyPrev').addEventListener('click', () => { dailyRefDate = addDays(dailyRefDate, -1); renderDaily(); });
+  document.getElementById('dailyNext').addEventListener('click', () => { dailyRefDate = addDays(dailyRefDate, 1); renderDaily(); });
+  document.getElementById('dailyToday').addEventListener('click', () => { dailyRefDate = isoDate(new Date()); renderDaily(); });
+
+  // Wire up each rep card
+  el.querySelectorAll('.daily-rep-card').forEach(card => {
+    const ownerId = card.dataset.owner;
+
+    // "Ontem" — realizado numérico
+    card.querySelectorAll('.d-real').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const entry = getDailyEntry(yesterdayISO, ownerId) || defaultDailyEntry();
+        entry.realizado[inp.dataset.metric] = inp.value === '' ? null : Number(inp.value);
+        saveDailyEntry(yesterdayISO, ownerId, entry);
+      });
+    });
+
+    // "Ontem" — checklist de clientes feitos
+    card.querySelectorAll('.d-client-check').forEach(cb => {
+      cb.addEventListener('click', () => {
+        const entry = getDailyEntry(yesterdayISO, ownerId) || defaultDailyEntry();
+        const idx = Number(cb.dataset.idx);
+        entry.realizado.clientesFeitos[idx] = !entry.realizado.clientesFeitos[idx];
+        saveDailyEntry(yesterdayISO, ownerId, entry);
+        renderDaily();
+      });
+    });
+
+    // "Hoje" — prometido numérico
+    card.querySelectorAll('.d-prom').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const entry = getDailyEntry(dailyRefDate, ownerId) || defaultDailyEntry();
+        entry.prometido[inp.dataset.metric] = inp.value === '' ? null : Number(inp.value);
+        saveDailyEntry(dailyRefDate, ownerId, entry);
+      });
+    });
+
+    // "Hoje" — adicionar cliente prometido
+    const addBtn = card.querySelector('.d-client-add');
+    const addInput = card.querySelector('.d-client-input');
+    function addClient() {
+      const nome = addInput.value.trim();
+      if (!nome) return;
+      const entry = getDailyEntry(dailyRefDate, ownerId) || defaultDailyEntry();
+      entry.prometido.clientes.push(nome);
+      saveDailyEntry(dailyRefDate, ownerId, entry);
+      renderDaily();
+    }
+    addBtn.addEventListener('click', addClient);
+    addInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addClient(); });
+
+    // "Hoje" — remover cliente prometido
+    card.querySelectorAll('.d-client-remove').forEach(x => {
+      x.addEventListener('click', () => {
+        const entry = getDailyEntry(dailyRefDate, ownerId) || defaultDailyEntry();
+        entry.prometido.clientes.splice(Number(x.dataset.idx), 1);
+        saveDailyEntry(dailyRefDate, ownerId, entry);
+        renderDaily();
+      });
+    });
+  });
+}
+renderDaily();
+
+// Consolidado semanal dos compromissos diários (soma prometido x realizado, seg-hoje)
+function renderConsolidadoDiario() {
+  const hostEl = document.getElementById('resumoContent');
+  const hoje = new Date();
+  const diaSemana = hoje.getDay(); // 0=domingo
+  const offsetSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
+  const segundaISO = addDays(isoDate(hoje), -offsetSegunda);
+
+  const totais = { prospeccaoP: 0, prospeccaoR: 0, referenciaP: 0, referenciaR: 0, reunioesP: 0, reunioesR: 0, clientesP: 0, clientesF: 0 };
+  let diasComDado = 0;
+
+  for (let i = 0; i <= offsetSegunda; i++) {
+    const dia = addDays(segundaISO, i);
+    let algumDado = false;
+    DATA.reps.forEach(r => {
+      const entry = getDailyEntry(dia, r.ownerId);
+      if (!entry) return;
+      algumDado = true;
+      totais.prospeccaoP += entry.prometido.prospeccao || 0;
+      totais.prospeccaoR += entry.realizado.prospeccao || 0;
+      totais.referenciaP += entry.prometido.referencia || 0;
+      totais.referenciaR += entry.realizado.referencia || 0;
+      totais.reunioesP += entry.prometido.reunioes || 0;
+      totais.reunioesR += entry.realizado.reunioes || 0;
+      totais.clientesP += entry.prometido.clientes.length;
+      totais.clientesF += entry.realizado.clientesFeitos.filter(Boolean).length;
+    });
+    if (algumDado) diasComDado++;
+  }
+
+  const box = document.createElement('div');
+  box.className = 'daily-consolidado';
+  box.innerHTML = `
+    <h3 class="block-label" style="margin:0 0 4px;">Consolidado dos compromissos diários (segunda até hoje)</h3>
+    <div class="chart-subtitle" style="margin:0;">${diasComDado > 0 ? `${diasComDado} dia(s) com registro nesta semana.` : 'Nenhum registro diário ainda nesta semana — preencha na aba Daily.'}</div>
+    <div class="daily-consolidado-grid">
+      <div class="daily-consolidado-kpi"><div class="v">${totais.prospeccaoR}/${totais.prospeccaoP}</div><div class="l">Visitas prospecção</div></div>
+      <div class="daily-consolidado-kpi"><div class="v">${totais.referenciaR}/${totais.referenciaP}</div><div class="l">Visitas cliente referência</div></div>
+      <div class="daily-consolidado-kpi"><div class="v">${totais.reunioesR}/${totais.reunioesP}</div><div class="l">Reuniões agendadas</div></div>
+    </div>
+    <div class="chart-subtitle" style="margin-top:10px;">Clientes prometidos visitados: <b style="color:var(--text);">${totais.clientesF}/${totais.clientesP}</b></div>
+  `;
+  hostEl.appendChild(box);
+}
+renderConsolidadoDiario();
 </script>
 
 </body>
