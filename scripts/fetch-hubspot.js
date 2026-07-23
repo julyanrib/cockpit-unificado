@@ -151,6 +151,12 @@ async function stageTotalLast7Days(stageId) {
   return data.total || 0;
 }
 
+// Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
+// (uma por etapa). É isso que devemos usar pra "dias parado" — createdate mede desde a
+// criação do negócio, não desde que ele chegou na etapa atual, e isso gerava número errado
+// pra negócios antigos que acabaram de avançar.
+const ENTERED_STAGE_PROPS = OPEN_STAGES.map(s => `hs_date_entered_${s}`);
+
 async function repOpenDeals(ownerId) {
   const data = await hsSearch({
     filterGroups: [{
@@ -160,7 +166,7 @@ async function repOpenDeals(ownerId) {
         { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate'],
+    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', ...ENTERED_STAGE_PROPS],
     limit: 200,
     sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
   });
@@ -177,7 +183,7 @@ async function stageDealsTeamWide(stageId) {
         { propertyName: 'dealstage', operator: 'EQ', value: stageId }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id'],
+    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', ...ENTERED_STAGE_PROPS],
     limit: 100,
     sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
   });
@@ -187,6 +193,24 @@ async function stageDealsTeamWide(stageId) {
 function daysSince(dateStr) {
   const created = new Date(dateStr).getTime();
   return Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24));
+}
+
+// Dias REALMENTE parado, sem interação nenhuma. Usa a data mais recente entre:
+// (a) quando o negócio entrou na etapa atual, e
+// (b) `notes_last_updated` — atualizada automaticamente pelo HubSpot toda vez que uma
+//     nota, ligação, e-mail, reunião ou tarefa é registrada no negócio (inclui visitas
+//     do Expogo sincronizadas como nota/atividade).
+// Assim, qualquer interação registrada — mesmo sem mudar de etapa — "reseta" o contador,
+// e um lead não aparece mais como travado só porque é antigo ou porque a etapa é antiga.
+function daysInCurrentStage(properties) {
+  const enteredKey = `hs_date_entered_${properties.dealstage}`;
+  const enteredDate = properties[enteredKey] ? new Date(properties[enteredKey]).getTime() : null;
+  const lastActivity = properties.notes_last_updated ? new Date(properties.notes_last_updated).getTime() : null;
+  const createdFallback = new Date(properties.createdate).getTime();
+
+  const candidates = [enteredDate, lastActivity, createdFallback].filter(t => t !== null && !isNaN(t));
+  const maisRecente = Math.max(...candidates);
+  return Math.floor((Date.now() - maisRecente) / (1000 * 60 * 60 * 24));
 }
 
 async function main() {
@@ -223,13 +247,16 @@ async function main() {
   const funilLeads = {};
   for (const stageId of OPEN_STAGES) {
     const deals = await stageDealsTeamWide(stageId);
-    funilLeads[stageId] = deals.map(d => ({
-      name: d.properties.dealname,
-      id: d.id,
-      dias: daysSince(d.properties.createdate),
-      slaBreach: daysSince(d.properties.createdate) > (SLA_DAYS[stageId] || 999),
-      vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—'
-    })).sort((a, b) => b.dias - a.dias);
+    funilLeads[stageId] = deals.map(d => {
+      const dias = daysInCurrentStage(d.properties);
+      return {
+        name: d.properties.dealname,
+        id: d.id,
+        dias,
+        slaBreach: dias > (SLA_DAYS[stageId] || 999),
+        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—'
+      };
+    }).sort((a, b) => b.dias - a.dias);
   }
 
   // ---- Por executivo ----
@@ -244,15 +271,18 @@ async function main() {
       stages[s] = (stages[s] || 0) + 1;
     });
 
-    const withDays = deals.map(d => ({
-      name: d.properties.dealname,
-      id: d.id,
-      stage: STAGE_LABELS[d.properties.dealstage] || d.properties.dealstage,
-      stageId: d.properties.dealstage,
-      dias: daysSince(d.properties.createdate),
-      // SLA estourado = dias parado na etapa acima do limite esperado PARA AQUELA ETAPA
-      slaBreach: daysSince(d.properties.createdate) > (SLA_DAYS[d.properties.dealstage] || 999)
-    })).sort((a, b) => b.dias - a.dias);
+    const withDays = deals.map(d => {
+      const dias = daysInCurrentStage(d.properties);
+      return {
+        name: d.properties.dealname,
+        id: d.id,
+        stage: STAGE_LABELS[d.properties.dealstage] || d.properties.dealstage,
+        stageId: d.properties.dealstage,
+        dias,
+        // SLA estourado = dias parado NA ETAPA ATUAL acima do limite esperado pra ela
+        slaBreach: dias > (SLA_DAYS[d.properties.dealstage] || 999)
+      };
+    }).sort((a, b) => b.dias - a.dias);
 
     const leadsTravados = withDays.filter(l => l.slaBreach).length;
 
