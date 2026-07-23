@@ -321,7 +321,7 @@ async function main() {
     funil: {
       labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
       valores: [backlog, prospeccao, visita, diagnostico, demoProposta, negociacao, agPagamento, ganho, perdido, reciclagem],
-      cores: ['#5C6272', '#E8A33D', '#5B8DEF', '#6E7BF2', '#4FB6A8', '#D97BA8', '#E2543F', '#3FA98F', '#B5432F', '#8B92A3']
+      cores: ['#6B7280', '#E8A33D', '#4A7FC7', '#7C6FE0', '#2FA88A', '#D9668F', '#E51A31', '#1FA35C', '#8C1220', '#8B92A3']
     },
     stageMeta: {
       slaDays: SLA_DAYS,
