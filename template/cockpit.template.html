@@ -656,18 +656,34 @@ function buildStageBreakdownHTML(r) {
   const max = Math.max(...stageEntries.map(([, c]) => c), 1);
 
   const linhas = stageEntries.map(([stageId, count]) => {
-    const travadosNestaEtapa = (r.travados || []).filter(t => t.stageId === stageId).length;
+    const travadosNestaEtapa = (r.travados || []).filter(t => t.stageId === stageId).sort((a, b) => b.dias - a.dias);
     const pct = r.open > 0 ? Math.round((count / r.open) * 100) : 0;
     const sla = DATA.stageMeta && DATA.stageMeta.slaDays ? DATA.stageMeta.slaDays[stageId] : null;
     return `
-      <div style="margin-bottom:12px;">
+      <div style="margin-bottom:16px;">
         <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;">
           <span style="font-weight:600;font-size:13.5px;">${STAGE_LABELS[stageId] || stageId}${sla ? ` <span style="font-weight:400;color:var(--muted-2);font-size:11px;">(SLA ${sla}d)</span>` : ''}</span>
-          <span style="font-size:12.5px;color:var(--muted);">${count} lead${count > 1 ? 's' : ''} (${pct}%)${travadosNestaEtapa > 0 ? ` · <b style="color:var(--red);">${travadosNestaEtapa} travado${travadosNestaEtapa > 1 ? 's' : ''}</b>` : ''}</span>
+          <span style="font-size:12.5px;color:var(--muted);">${count} lead${count > 1 ? 's' : ''} (${pct}%)${travadosNestaEtapa.length > 0 ? ` · <b style="color:var(--red);">${travadosNestaEtapa.length} travado${travadosNestaEtapa.length > 1 ? 's' : ''}</b>` : ''}</span>
         </div>
-        <div class="bar-track" style="height:10px;">
-          <div class="bar-fill" style="width:${(count / max * 100).toFixed(0)}%;background:${travadosNestaEtapa > 0 ? 'var(--red)' : STAGE_COLORS[stageId] || 'var(--muted-2)'};"></div>
+        <div class="bar-track" style="height:10px;margin-bottom:${travadosNestaEtapa.length > 0 ? '8px' : '0'};">
+          <div class="bar-fill" style="width:${(count / max * 100).toFixed(0)}%;background:${travadosNestaEtapa.length > 0 ? 'var(--red)' : STAGE_COLORS[stageId] || 'var(--muted-2)'};"></div>
         </div>
+        ${travadosNestaEtapa.length > 0 ? `
+          <div class="leads-box" style="margin-bottom:0;">
+            ${travadosNestaEtapa.map(l => `
+              <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+                <div class="lead-left">
+                  <span class="lead-name">${l.name}</span>
+                  <span class="lead-stage">SLA estourado — precisa de ação hoje</span>
+                </div>
+                <div class="lead-right">
+                  <span class="lead-days">${l.dias}d nesta etapa</span>
+                  <span class="lead-cta">abrir →</span>
+                </div>
+              </a>
+            `).join('')}
+          </div>
+        ` : ''}
       </div>
     `;
   }).join('');
@@ -675,7 +691,7 @@ function buildStageBreakdownHTML(r) {
   return `
     <div class="chart-card" style="margin-bottom:20px;">
       <h3 style="margin-bottom:4px;">Onde seus leads estão concentrados essa semana</h3>
-      <div class="chart-subtitle" style="margin-bottom:16px;">Use isso pra chegar na daily já sabendo onde focar — e pra acompanhar o SLA de cada etapa antes de alguém perguntar.</div>
+      <div class="chart-subtitle" style="margin-bottom:16px;">Isso é pra você chegar na daily já sabendo onde focar. Todo lead com SLA estourado listado já aparece abaixo da etapa — clica pra abrir e agir.</div>
       ${linhas || '<div class="empty-state">Nenhum lead em aberto no momento.</div>'}
     </div>
   `;
@@ -1240,6 +1256,20 @@ function fmtDailyLabel(dateISO) {
 
 let dailyRefDate = nearestBusinessDay(isoDate(new Date()));
 
+function progressBarHTML(realizado, prometido) {
+  if (prometido === null || prometido === undefined || prometido === 0) return '';
+  const r = realizado || 0;
+  const pct = Math.min(100, Math.round((r / prometido) * 100));
+  const cor = pct >= 100 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
+  const medalha = pct >= 100 ? ' 🏆' : pct >= 50 ? ' 💪' : '';
+  return `
+    <div class="bar-track" style="height:7px;margin-top:4px;margin-bottom:2px;">
+      <div class="bar-fill" style="width:${pct}%;background:${cor};"></div>
+    </div>
+    <span style="font-size:10.5px;color:${cor};font-weight:600;">${pct}%${medalha}</span>
+  `;
+}
+
 function renderDaily() {
   const el = document.getElementById('dailyContent');
   const yesterdayISO = addBusinessDays(dailyRefDate, -1);
@@ -1288,20 +1318,26 @@ function renderDaily() {
     ` : '';
 
     const ontemHtml = !ontem ? `<div class="daily-empty-yesterday">Nenhuma promessa registrada em ${fmtDailyLabel(yesterdayISO)}.</div>` : `
-      <div class="daily-metric-row">
-        <label>Visitas de prospecção</label>
-        <input type="number" min="0" class="d-real" data-metric="prospeccao" value="${ontem.realizado.prospeccao ?? ''}" placeholder="${ontem.prometido.prospeccao ?? 0}">
-        <span class="meta-hint">prometido: ${ontem.prometido.prospeccao ?? 0}</span>
+      <div class="daily-metric-row" style="flex-direction:column;align-items:stretch;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label>🚶 Visitas de prospecção <span style="color:var(--muted-2);">(follow-up)</span></label>
+          <input type="number" min="0" class="d-real" data-metric="prospeccao" value="${ontem.realizado.prospeccao ?? ''}" placeholder="${ontem.prometido.prospeccao ?? 0}">
+        </div>
+        ${progressBarHTML(ontem.realizado.prospeccao, ontem.prometido.prospeccao)}
       </div>
-      <div class="daily-metric-row">
-        <label>Visitas cliente referência</label>
-        <input type="number" min="0" class="d-real" data-metric="referencia" value="${ontem.realizado.referencia ?? ''}" placeholder="${ontem.prometido.referencia ?? 0}">
-        <span class="meta-hint">prometido: ${ontem.prometido.referencia ?? 0}</span>
+      <div class="daily-metric-row" style="flex-direction:column;align-items:stretch;margin-top:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label>🤝 Visitas de relacionamento</label>
+          <input type="number" min="0" class="d-real" data-metric="referencia" value="${ontem.realizado.referencia ?? ''}" placeholder="${ontem.prometido.referencia ?? 0}">
+        </div>
+        ${progressBarHTML(ontem.realizado.referencia, ontem.prometido.referencia)}
       </div>
-      <div class="daily-metric-row">
-        <label>Reuniões agendadas</label>
-        <input type="number" min="0" class="d-real" data-metric="reunioes" value="${ontem.realizado.reunioes ?? ''}" placeholder="${ontem.prometido.reunioes ?? 0}">
-        <span class="meta-hint">prometido: ${ontem.prometido.reunioes ?? 0}</span>
+      <div class="daily-metric-row" style="flex-direction:column;align-items:stretch;margin-top:10px;margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <label>📅 Reuniões agendadas</label>
+          <input type="number" min="0" class="d-real" data-metric="reunioes" value="${ontem.realizado.reunioes ?? ''}" placeholder="${ontem.prometido.reunioes ?? 0}">
+        </div>
+        ${progressBarHTML(ontem.realizado.reunioes, ontem.prometido.reunioes)}
       </div>
       ${ontem.prometido.clientes.length > 0 ? `
         <div class="daily-clients">
@@ -1322,15 +1358,15 @@ function renderDaily() {
     const clientesHoje = hoje.prometido.clientes;
     const hojeHtml = `
       <div class="daily-metric-row">
-        <label>Visitas de prospecção</label>
+        <label>🚶 Visitas de prospecção <span style="color:var(--muted-2);">(follow-up)</span></label>
         <input type="number" min="0" class="d-prom" data-metric="prospeccao" value="${hoje.prometido.prospeccao ?? ''}" placeholder="meta: 8">
       </div>
       <div class="daily-metric-row">
-        <label>Visitas cliente referência</label>
+        <label>🤝 Visitas de relacionamento</label>
         <input type="number" min="0" class="d-prom" data-metric="referencia" value="${hoje.prometido.referencia ?? ''}" placeholder="0">
       </div>
       <div class="daily-metric-row">
-        <label>Reuniões agendadas</label>
+        <label>📅 Reuniões agendadas</label>
         <input type="number" min="0" class="d-prom" data-metric="reunioes" value="${hoje.prometido.reunioes ?? ''}" placeholder="0">
       </div>
       <div class="daily-clients">
@@ -1495,7 +1531,7 @@ function renderConsolidadoDiario() {
     <div class="chart-subtitle" style="margin:0;">${diasComDado > 0 ? `${diasComDado} dia(s) com registro nesta semana.` : 'Nenhum registro diário ainda nesta semana — preencha na aba Daily.'}</div>
     <div class="daily-consolidado-grid">
       <div class="daily-consolidado-kpi"><div class="v">${totais.prospeccaoR}/${totais.prospeccaoP}</div><div class="l">Visitas prospecção</div></div>
-      <div class="daily-consolidado-kpi"><div class="v">${totais.referenciaR}/${totais.referenciaP}</div><div class="l">Visitas cliente referência</div></div>
+      <div class="daily-consolidado-kpi"><div class="v">${totais.referenciaR}/${totais.referenciaP}</div><div class="l">Visitas de relacionamento</div></div>
       <div class="daily-consolidado-kpi"><div class="v">${totais.reunioesR}/${totais.reunioesP}</div><div class="l">Reuniões agendadas</div></div>
     </div>
     <div class="chart-subtitle" style="margin-top:10px;">Clientes prometidos visitados: <b style="color:var(--text);">${totais.clientesF}/${totais.clientesP}</b> · Follow-ups prioritários feitos: <b style="color:var(--text);">${totais.followUpsF}/${totais.followUpsP}</b></div>
@@ -1664,8 +1700,9 @@ async function renderPDIs() {
             <label>Título</label>
             <input type="text" class="pdiTitulo" placeholder="ex: PDI semana 28/07" style="flex:2;background:var(--panel-2);border:1px solid var(--hairline);border-radius:8px;padding:6px 10px;">
           </div>
+          <textarea class="pdiCompromissos" placeholder="Compromissos combinados (um por linha) — vira checklist pro executivo..." style="width:100%;min-height:60px;background:var(--panel-2);border:1px solid var(--hairline);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
           <input type="file" class="pdiArquivo" accept=".pdf,.doc,.docx" style="margin-bottom:8px;font-size:12.5px;">
-          <button class="pdiUpload" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:7px 16px;font-weight:700;font-size:12.5px;cursor:pointer;">Anexar documento</button>
+          <button class="pdiUpload" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:7px 16px;font-weight:700;font-size:12.5px;cursor:pointer;">Anexar PDI</button>
           <span class="pdiStatus" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
           <div class="pdiLista" style="margin-top:12px;"><div class="empty-state">Carregando...</div></div>
         </div>
@@ -1702,17 +1739,51 @@ async function renderPDIs() {
       const linhas = await Promise.all(data.map(async (doc) => {
         const { data: signed } = await supa.storage.from('pdi-documentos').createSignedUrl(doc.caminho_arquivo, 3600);
         const url = signed ? signed.signedUrl : '#';
+        const compromissos = doc.compromissos || [];
+        const chaveLocal = `cockpit_pdidoc_v1_${doc.id}`;
+        let feitos = [];
+        try { feitos = JSON.parse(localStorage.getItem(chaveLocal) || '[]'); } catch (e) { feitos = []; }
+
         return `
-          <a class="lead-row" href="${url}" target="_blank" rel="noopener">
-            <div class="lead-left">
-              <span class="lead-name">📎 ${doc.titulo}</span>
-              <span class="lead-stage">${new Date(doc.data + 'T12:00:00').toLocaleDateString('pt-BR')} · ${doc.nome_arquivo}</span>
-            </div>
-            <span class="lead-cta">baixar →</span>
-          </a>
+          <div class="daily-rep-card" style="margin-bottom:10px;">
+            <a class="lead-row" href="${url}" target="_blank" rel="noopener">
+              <div class="lead-left">
+                <span class="lead-name">📎 ${doc.titulo}</span>
+                <span class="lead-stage">${new Date(doc.data + 'T12:00:00').toLocaleDateString('pt-BR')} · ${doc.nome_arquivo}</span>
+              </div>
+              <span class="lead-cta">baixar →</span>
+            </a>
+            ${compromissos.length > 0 ? `
+              <div style="padding:12px 16px;">
+                <div class="daily-col-label" style="margin-bottom:8px;">Compromissos combinados</div>
+                <ul class="commit-list" style="margin:0;">
+                  ${compromissos.map((c, i) => `
+                    <li class="commit-item pdiCompromissoItem" data-doc="${doc.id}" data-idx="${i}">
+                      <span class="checkbox ${feitos[i] ? 'checked' : ''}"></span>
+                      <span class="commit-text">${c}</span>
+                    </li>
+                  `).join('')}
+                </ul>
+              </div>
+            ` : ''}
+          </div>
         `;
       }));
-      listaEl.innerHTML = `<div class="leads-box">${linhas.join('')}</div>`;
+      listaEl.innerHTML = linhas.join('');
+
+      listaEl.querySelectorAll('.pdiCompromissoItem').forEach(item => {
+        const cb = item.querySelector('.checkbox');
+        cb.addEventListener('click', () => {
+          cb.classList.toggle('checked');
+          const docId = item.dataset.doc;
+          const idx = Number(item.dataset.idx);
+          const chave = `cockpit_pdidoc_v1_${docId}`;
+          let feitos = [];
+          try { feitos = JSON.parse(localStorage.getItem(chave) || '[]'); } catch (e) { feitos = []; }
+          feitos[idx] = cb.classList.contains('checked');
+          localStorage.setItem(chave, JSON.stringify(feitos));
+        });
+      });
     }
 
     const uploadBtn = card.querySelector('.pdiUpload');
@@ -1720,9 +1791,12 @@ async function renderPDIs() {
       uploadBtn.addEventListener('click', async () => {
         const tituloInput = card.querySelector('.pdiTitulo');
         const arquivoInput = card.querySelector('.pdiArquivo');
+        const compromissosInput = card.querySelector('.pdiCompromissos');
         const statusEl = card.querySelector('.pdiStatus');
         const titulo = tituloInput.value.trim();
         const arquivo = arquivoInput.files[0];
+        const compromissosTexto = compromissosInput.value.trim();
+        const compromissos = compromissosTexto ? compromissosTexto.split('\n').map(s => s.trim()).filter(Boolean) : [];
 
         if (!titulo || !arquivo) {
           statusEl.textContent = 'Preencha o título e escolha um arquivo.';
@@ -1743,7 +1817,8 @@ async function renderPDIs() {
           titulo,
           caminho_arquivo: caminho,
           nome_arquivo: arquivo.name,
-          autor: sessaoAtual.nome || sessaoAtual.email
+          autor: sessaoAtual.nome || sessaoAtual.email,
+          compromissos
         });
 
         if (erroInsert) {
@@ -1752,6 +1827,7 @@ async function renderPDIs() {
           statusEl.textContent = 'Anexado!';
           tituloInput.value = '';
           arquivoInput.value = '';
+          compromissosInput.value = '';
           renderPDIs();
         }
       });
