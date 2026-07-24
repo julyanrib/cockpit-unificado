@@ -267,11 +267,24 @@
 </head>
 <body>
 
+  <div id="loginGate" style="max-width:420px;margin:80px auto;text-align:center;">
+    <div class="eyebrow" style="margin-bottom:6px;">Field Sales · Cockpit</div>
+    <h1 style="margin:0 0 20px;">Entrar</h1>
+    <div id="loginForm">
+      <input type="email" id="loginEmail" placeholder="seu e-mail (mesmo do HubSpot)" style="width:100%;padding:12px 14px;border-radius:10px;border:1px solid var(--hairline);font-size:14px;margin-bottom:10px;">
+      <button id="loginBtn" style="width:100%;padding:12px;border-radius:999px;border:none;background:var(--red);color:#fff;font-weight:700;font-size:14px;cursor:pointer;">Enviar link de acesso</button>
+    </div>
+    <div id="loginStatus" style="margin-top:14px;font-size:13px;color:var(--muted);"></div>
+  </div>
+
+  <div id="appRoot" style="display:none;">
+
   <div class="topbar">
     <div>
       <div class="eyebrow">HubSpot (Pipeline Field Sales) + Expogo (campo)</div>
       <h1>Cockpit Unificado</h1>
     </div>
+    <div id="userBadge" style="text-align:right;font-size:12px;color:var(--muted);"></div>
   </div>
   <div class="updated" id="updatedLine"></div>
   <div id="healthBadge"></div>
@@ -376,13 +389,101 @@
     </div>
   </div>
 
+  </div>
+
 <script id="cockpit-data" type="application/json">
 {{DATA_JSON}}
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ============ CARREGA DATA INJETADA PELO BUILD ============
 const DATA = JSON.parse(document.getElementById('cockpit-data').textContent);
+
+// ============ LOGIN / AUTENTICAÇÃO (Supabase) ============
+let supa = null;
+let sessaoAtual = null; // { email, role, ownerId, nome }
+
+function encontrarUsuario(email) {
+  if (!email) return null;
+  return DATA.usuarios.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
+}
+
+function mostrarApp() {
+  document.getElementById('loginGate').style.display = 'none';
+  document.getElementById('appRoot').style.display = 'block';
+  aplicarVisaoPorPapel();
+}
+
+function mostrarLogin(mensagem) {
+  document.getElementById('loginGate').style.display = 'block';
+  document.getElementById('appRoot').style.display = 'none';
+  if (mensagem) document.getElementById('loginStatus').textContent = mensagem;
+}
+
+async function iniciarAuth() {
+  if (!DATA.supabase) {
+    // Supabase ainda não configurado — libera acesso direto (comportamento antigo, sem login)
+    sessaoAtual = { email: null, role: 'manager', ownerId: null, nome: null };
+    mostrarApp();
+    return;
+  }
+
+  supa = window.supabase.createClient(DATA.supabase.url, DATA.supabase.anonKey);
+
+  const { data: { session } } = await supa.auth.getSession();
+  if (session && session.user && session.user.email) {
+    aplicarSessao(session.user.email);
+  } else {
+    mostrarLogin('');
+  }
+
+  supa.auth.onAuthStateChange((event, session) => {
+    if (session && session.user && session.user.email) {
+      aplicarSessao(session.user.email);
+    }
+  });
+
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value.trim();
+    if (!email) return;
+    const usuario = encontrarUsuario(email);
+    if (!usuario) {
+      document.getElementById('loginStatus').textContent = 'E-mail não cadastrado. Fale com seu gestor.';
+      return;
+    }
+    document.getElementById('loginStatus').textContent = 'Enviando link...';
+    const { error } = await supa.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+    document.getElementById('loginStatus').textContent = error ? `Erro: ${error.message}` : 'Link enviado! Confira seu e-mail e clique nele.';
+  });
+}
+
+function aplicarSessao(email) {
+  const usuario = encontrarUsuario(email);
+  if (!usuario) {
+    mostrarLogin('E-mail logado não está cadastrado no time. Fale com seu gestor.');
+    return;
+  }
+  sessaoAtual = usuario;
+  mostrarApp();
+}
+
+function aplicarVisaoPorPapel() {
+  const badge = document.getElementById('userBadge');
+  if (sessaoAtual.email) {
+    badge.innerHTML = `${sessaoAtual.nome} <span style="color:var(--muted-2);">(${sessaoAtual.role === 'manager' ? 'gestor' : 'individual'})</span>`;
+  }
+
+  if (sessaoAtual.role === 'rep') {
+    document.getElementById('tabBtnResumo').style.display = 'none';
+    document.querySelector('.section-title').innerHTML = '<h2>Meu Cockpit</h2>';
+  }
+
+  if (typeof renderRepsList === 'function') renderRepsList();
+}
+
+iniciarAuth();
+
 
 // ============ FUNÇÕES DE GRÁFICO ============
 function buildConicGradient(values, colors) {
@@ -650,7 +751,11 @@ function savePdiState(ownerId, checked, data) {
 const container = document.getElementById('reps');
 function renderRepsList() {
   container.innerHTML = '';
-  DATA.reps.forEach((r) => {
+  const repsParaMostrar = (sessaoAtual && sessaoAtual.role === 'rep')
+    ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
+    : DATA.reps;
+
+  repsParaMostrar.forEach((r) => {
     const pdi = getPdiState(r.ownerId, r.compromissos.length);
     const feitos = pdi.checked.filter(Boolean).length;
     const total = r.compromissos.length;
@@ -750,9 +855,32 @@ function openModal(r) {
       <span>Combinado no 1:1 de <input type="text" id="pdiDataInput" placeholder="dd/mm"></span>
       <span id="pdiCountLabel">✓ ${r.compromissos.length} compromissos</span>
     </div>
+
+    <hr class="pdi-divider">
+    <div class="pdi-eyebrow">Histórico de 1:1</div>
+    <div class="pdi-title" style="margin-bottom:10px;">Registros anteriores — ${r.name}</div>
+    ${!DATA.supabase ? '<div class="empty-state">Login/histórico ainda não configurado.</div>' : `
+      ${sessaoAtual && sessaoAtual.role === 'manager' ? `
+        <div class="daily-rep-card" style="margin-bottom:14px;">
+          <div class="daily-col" style="padding:14px 16px;">
+            <div class="daily-col-label">Registrar novo 1:1</div>
+            <div class="daily-metric-row" style="margin-bottom:10px;">
+              <label>Data</label>
+              <input type="date" id="umAUmData" style="width:140px;background:var(--panel-2);border:1px solid var(--hairline);border-radius:8px;padding:5px 8px;">
+            </div>
+            <textarea id="umAUmResumo" placeholder="Resumo da conversa..." style="width:100%;min-height:70px;background:var(--panel-2);border:1px solid var(--hairline);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
+            <textarea id="umAUmCompromissos" placeholder="Compromissos combinados (um por linha)..." style="width:100%;min-height:60px;background:var(--panel-2);border:1px solid var(--hairline);border-radius:8px;padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
+            <button id="umAUmSalvar" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 18px;font-weight:700;font-size:12.5px;cursor:pointer;">Salvar registro</button>
+            <span id="umAUmStatus" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
+          </div>
+        </div>
+      ` : ''}
+      <div id="umAUmHistorico"><div class="empty-state">Carregando...</div></div>
+    `}
   `;
 
   overlay.classList.add('show');
+  if (DATA.supabase && supa) carregarUmAUm(r);
 
   // Carrega o que já foi marcado antes (persistido no navegador) e religa os cliques
   const pdi = getPdiState(r.ownerId, r.compromissos.length);
@@ -1144,6 +1272,72 @@ function renderConsolidadoDiario() {
   hostEl.appendChild(box);
 }
 renderConsolidadoDiario();
+
+// ============ HISTÓRICO DE 1:1 (Supabase) ============
+async function carregarUmAUm(r) {
+  const el = document.getElementById('umAUmHistorico');
+  if (!el) return;
+
+  const { data, error } = await supa
+    .from('um_a_um')
+    .select('*')
+    .eq('owner_id', r.ownerId)
+    .order('data', { ascending: false });
+
+  if (error) {
+    el.innerHTML = `<div class="empty-state">Erro ao carregar: ${error.message}</div>`;
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    el.innerHTML = `<div class="empty-state">Nenhum 1:1 registrado ainda.</div>`;
+  } else {
+    el.innerHTML = data.map(reg => `
+      <div class="daily-rep-card" style="margin-bottom:10px;">
+        <div class="daily-rep-head" style="font-size:13px;">
+          <span>${new Date(reg.data + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+          <span style="color:var(--muted-2);font-size:11px;">${reg.autor || ''}</span>
+        </div>
+        <div style="padding:12px 16px;">
+          ${reg.resumo ? `<div style="font-size:13px;margin-bottom:8px;">${reg.resumo}</div>` : ''}
+          ${(reg.compromissos && reg.compromissos.length > 0) ? `
+            <ul class="practice-list" style="margin:0;">
+              ${reg.compromissos.map(c => `<li>${c}</li>`).join('')}
+            </ul>
+          ` : ''}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  const salvarBtn = document.getElementById('umAUmSalvar');
+  if (salvarBtn) {
+    salvarBtn.addEventListener('click', async () => {
+      const data = document.getElementById('umAUmData').value || new Date().toISOString().slice(0, 10);
+      const resumo = document.getElementById('umAUmResumo').value.trim();
+      const compromissosTexto = document.getElementById('umAUmCompromissos').value.trim();
+      const compromissos = compromissosTexto ? compromissosTexto.split('\n').map(s => s.trim()).filter(Boolean) : [];
+
+      document.getElementById('umAUmStatus').textContent = 'Salvando...';
+      const { error: erroSalvar } = await supa.from('um_a_um').insert({
+        owner_id: r.ownerId,
+        data,
+        autor: sessaoAtual.nome || sessaoAtual.email,
+        resumo,
+        compromissos
+      });
+
+      if (erroSalvar) {
+        document.getElementById('umAUmStatus').textContent = `Erro: ${erroSalvar.message}`;
+      } else {
+        document.getElementById('umAUmStatus').textContent = 'Salvo!';
+        document.getElementById('umAUmResumo').value = '';
+        document.getElementById('umAUmCompromissos').value = '';
+        carregarUmAUm(r);
+      }
+    });
+  }
+}
 </script>
 
 </body>
