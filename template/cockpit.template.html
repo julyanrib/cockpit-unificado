@@ -181,6 +181,9 @@
   .daily-col{padding:16px 18px;}
   .daily-col + .daily-col{border-left:1px solid var(--hairline);}
   .daily-col-label{font-size:11px;letter-spacing:.05em;color:var(--muted);margin-bottom:10px;font-weight:700;}
+  .daily-periodo-label{display:inline-block;font-size:10.5px;letter-spacing:.03em;color:#fff;margin-bottom:12px;font-weight:700;padding:4px 12px;border-radius:20px;}
+  .daily-periodo-label.ontem{background:var(--muted-2);}
+  .daily-periodo-label.hoje{background:var(--red);}
   .daily-metric-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px;font-size:13px;}
   .daily-metric-row label{flex:1;color:var(--muted);}
   .daily-metric-row input[type="number"]{width:58px;background:var(--panel-2);border:1px solid var(--hairline);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:13px;padding:5px 6px;text-align:center;}
@@ -351,7 +354,7 @@
   <div class="topbar">
     <div>
       <div class="eyebrow">HubSpot (Pipeline Field Sales) + Expogo (campo)</div>
-      <h1>Cockpit Unificado</h1>
+      <h1>Cockpit</h1>
     </div>
     <div id="userBadge" style="text-align:right;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:10px;justify-content:flex-end;"></div>
   </div>
@@ -363,8 +366,8 @@
 
   <div class="tabbar">
     <button class="tab-btn" id="tabBtnCockpit" data-view="viewCockpit">Cockpit</button>
-    <button class="tab-btn" id="tabBtnResumo" data-view="viewResumo">Resumo Semanal</button>
     <button class="tab-btn" id="tabBtnDaily" data-view="viewDaily">Daily</button>
+    <button class="tab-btn" id="tabBtnResumo" data-view="viewResumo">Resumo Semanal</button>
     <button class="tab-btn" id="tabBtnMeuPainel" data-view="viewMeuPainel" style="display:none;">Meu Painel</button>
     <button class="tab-btn" id="tabBtnPDIs" data-view="viewPDIs">PDIs</button>
     <button class="tab-btn" id="tabBtnCoaching" data-view="viewCoaching" style="display:none;">Coaching</button>
@@ -1686,11 +1689,11 @@ function renderDaily() {
         <div class="daily-rep-head">${r.name}</div>
         <div class="daily-rep-body">
           <div class="daily-col">
-            <div class="daily-col-label">Ontem — o que aconteceu</div>
+            <div class="daily-periodo-label ontem">📋 Ontem — o que aconteceu</div>
             ${ontemHtml}
           </div>
           <div class="daily-col">
-            <div class="daily-col-label">Hoje — promessa do dia</div>
+            <div class="daily-periodo-label hoje">🎯 Hoje — promessa do dia</div>
             ${hojeHtml}
           </div>
         </div>
@@ -2188,11 +2191,11 @@ async function renderPDIs() {
 function tendenciaBadge(texto) {
   if (!texto) return '';
   const t = texto.toLowerCase();
-  let cor = 'var(--muted-2)', bg = 'var(--panel-2)', icone = '➖';
-  if (t.includes('melhor')) { cor = 'var(--green)'; bg = 'var(--green-soft)'; icone = '📈'; }
-  else if (t.includes('pior')) { cor = 'var(--red)'; bg = 'var(--red-soft)'; icone = '📉'; }
-  else if (t.includes('estável') || t.includes('estavel')) { cor = 'var(--amber)'; bg = 'var(--amber-soft)'; icone = '➡️'; }
-  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:${cor};background:${bg};padding:2px 9px;border-radius:20px;">${icone} ${texto}</span>`;
+  let cor = 'var(--muted-2)', bg = 'var(--panel-2)', icone = '➖', palavra = 'Estável';
+  if (t.includes('melhor')) { cor = 'var(--green)'; bg = 'var(--green-soft)'; icone = '📈'; palavra = 'Melhorando'; }
+  else if (t.includes('pior')) { cor = 'var(--red)'; bg = 'var(--red-soft)'; icone = '📉'; palavra = 'Piorando'; }
+  else if (t.includes('estável') || t.includes('estavel')) { cor = 'var(--amber)'; bg = 'var(--amber-soft)'; icone = '➡️'; palavra = 'Estável'; }
+  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:${cor};background:${bg};padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">${icone} ${palavra}</span>`;
 }
 
 async function renderCoaching() {
@@ -2214,7 +2217,15 @@ async function renderCoaching() {
             </div>
             <span class="coachingTendencia" style="margin-left:auto;"></span>
           </div>
-          <div style="padding:14px 16px;">
+          <div style="padding:14px 16px;display:flex;gap:14px;align-items:center;">
+            <div class="donut" id="coachDonut${r.ownerId}" style="width:64px;height:64px;flex-shrink:0;"></div>
+            <div style="font-size:11px;color:var(--muted);flex:1;">
+              <b style="color:var(--text);font-size:13px;">${r.open}</b> em aberto ·
+              ${r.leadsTravados > 0 ? `<b style="color:var(--red);">${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</b>` : '<span style="color:var(--green);">sem travados</span>'}
+              · 🎯 GPS: ${r.expogoVisitas}
+            </div>
+          </div>
+          <div style="padding:0 16px 14px;">
             <div class="coachingMensal"></div>
             <div class="coachingSemanalResumo" style="font-size:12px;color:var(--muted);"><div class="empty-state" style="padding:10px;">Carregando...</div></div>
             <details style="margin-top:10px;">
@@ -2236,6 +2247,17 @@ async function renderCoaching() {
 
   for (const card of el.querySelectorAll('[data-owner]')) {
     const ownerId = card.dataset.owner;
+    const repData = DATA.reps.find(x => x.ownerId === ownerId);
+
+    if (repData) {
+      const stageEntries = Object.entries(repData.stages || {});
+      if (stageEntries.length > 0) {
+        const labels = stageEntries.map(([s]) => STAGE_LABELS[s]);
+        const values = stageEntries.map(([, c]) => c);
+        const colors = stageEntries.map(([s]) => STAGE_COLORS[s]);
+        renderDonut(`coachDonut${ownerId}`, null, labels, values, colors);
+      }
+    }
 
     const { data: semanas, error: erroSemanas } = await supa
       .from('analise_individual_semanal')
@@ -2290,7 +2312,8 @@ async function renderCoaching() {
       resumoEl.innerHTML = `
         <div style="font-size:11px;color:var(--muted-2);margin-bottom:3px;">Última (${ultima.semana_label})</div>
         <div style="font-size:12.5px;margin-bottom:4px;"><b>Gargalo:</b> ${ultima.gargalo_semana}</div>
-        <div style="font-size:12.5px;"><b>Como agir:</b> ${ultima.como_agir}</div>
+        <div style="font-size:12.5px;margin-bottom:4px;"><b>Como agir:</b> ${ultima.como_agir}</div>
+        ${ultima.tendencia ? `<div style="font-size:12.5px;"><b>Tendência:</b> ${ultima.tendencia}</div>` : ''}
       `;
       historicoEl.innerHTML = semanas.slice(1).map(s => `
         <div style="border-left:3px solid var(--hairline);padding-left:10px;margin-bottom:10px;">
