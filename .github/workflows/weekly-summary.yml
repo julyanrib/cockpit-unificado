@@ -1,0 +1,51 @@
+name: Resumo semanal (segundas-feiras)
+
+on:
+  schedule:
+    # 09:15 em Brasília (12:15 UTC), toda segunda-feira — 15 min depois da atualização diária,
+    # pra garantir que data/hubspot.json já está fresco quando esse job ler o snapshot
+    - cron: '15 12 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  weekly-summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Buscar comparação semana atual x anterior
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: node scripts/fetch-weekly-comparison.js
+
+      - name: Gerar resumo e plano de ação (API da Claude)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/generate-weekly-summary.js
+
+      - name: Gerar análise individual de coaching (só o gestor vê)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/generate-individual-analysis.js
+
+      - name: Gerar HTML final
+        run: node scripts/build.js
+
+      - name: Commitar e enviar alterações
+        run: |
+          git config user.name "cockpit-bot"
+          git config user.email "cockpit-bot@users.noreply.github.com"
+          git add data/weekly-raw.json data/resumo-semanal.json public/index.html
+          git diff --staged --quiet && echo "Nada mudou." || git commit -m "Resumo semanal automático"
+          git push
