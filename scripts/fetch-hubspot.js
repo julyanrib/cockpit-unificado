@@ -49,6 +49,17 @@ const SLA_DAYS = {
   [STAGES.agPagamento]: 2
 };
 
+// Rank de "quão avançado" cada etapa é — usado pra calcular a temperatura do lead
+// (quanto mais avançado + dentro do prazo, mais quente).
+const STAGE_RANK = {
+  [STAGES.prospeccao]: 1,
+  [STAGES.visita]: 2,
+  [STAGES.diagnostico]: 3,
+  [STAGES.demoProposta]: 4,
+  [STAGES.negociacao]: 5,
+  [STAGES.agPagamento]: 6
+};
+
 // Descrições curtas de cada etapa, usadas nos tooltips do painel
 const STAGE_DESCRIPTIONS = {
   [STAGES.prospeccao]: 'Primeiro contato feito (PAP). Deveria avançar ou virar decisão em até 5 dias.',
@@ -177,7 +188,7 @@ async function repOpenDeals(ownerId) {
         { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS],
+    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', ...ENTERED_STAGE_PROPS],
     limit: 200,
     sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
   });
@@ -295,6 +306,8 @@ async function main() {
   // ---- Por executivo ----
   const repsData = {};
   let emAbertoTime = 0;
+  const todosQuentes = [];
+  const todosFrios = [];
 
   for (const rep of REPS) {
     const deals = await repOpenDeals(rep.ownerId);
@@ -306,14 +319,41 @@ async function main() {
 
     const withDays = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
+      const stageId = d.properties.dealstage;
+      const slaBreach = dias > (SLA_DAYS[stageId] || 999);
+      const rank = STAGE_RANK[stageId] || 0;
+
+      // Próxima reunião: prefere o campo automático do HubSpot, cai pro campo customizado
+      const proximaReuniaoRaw = d.properties.hs_next_meeting_start_time || d.properties.data_da_reuniao || null;
+      let proximaReuniao = null;
+      if (proximaReuniaoRaw) {
+        const dt = new Date(proximaReuniaoRaw);
+        if (!isNaN(dt.getTime()) && dt.getTime() > Date.now()) proximaReuniao = dt.toISOString();
+      }
+
+      // % do prazo (SLA) da etapa já consumido — 0 = acabou de entrar, 1 = no limite do SLA, >1 = estourado
+      const slaDaEtapa = SLA_DAYS[stageId] || 999;
+      const slaRatio = dias / slaDaEtapa;
+
+      // Temperatura: SLA estourado = frio/travado (precisa limpar o funil).
+      // Etapa avançada (Demo+) E ainda fresco (usou até metade do prazo) = quente — é isso que fecha.
+      // Um lead em Negociação com 1 dia é quente; o mesmo lead com 9 dias (SLA de 7) já estourou = frio.
+      // Um lead avançado só com mais da metade do prazo consumido (mas ainda dentro do SLA) esfriou pra morno.
+      let temperatura = 'morno';
+      if (slaBreach) temperatura = 'frio';
+      else if (rank >= 4 && slaRatio <= 0.5) temperatura = 'quente';
+
       return {
         name: d.properties.dealname,
         id: d.id,
-        stage: STAGE_LABELS[d.properties.dealstage] || d.properties.dealstage,
-        stageId: d.properties.dealstage,
+        stage: STAGE_LABELS[stageId] || stageId,
+        stageId,
         dias,
-        // SLA estourado = dias parado NA ETAPA ATUAL acima do limite esperado pra ela
-        slaBreach: dias > (SLA_DAYS[d.properties.dealstage] || 999)
+        slaBreach,
+        slaRatio: Math.round(slaRatio * 100),
+        rank,
+        temperatura,
+        proximaReuniao
       };
     }).sort((a, b) => b.dias - a.dias);
 
@@ -328,6 +368,13 @@ async function main() {
     // TODOS os leads com SLA estourado — pra métrica completa no card do executivo,
     // não só uma amostra de 5. Ordenado do mais travado pro menos travado.
     const travados = withDays.filter(l => l.slaBreach).map(l => ({ ...l, destaque: true }));
+
+    // Coleta pros rankings de temperatura do time inteiro (usado no Cockpit geral)
+    withDays.forEach(l => {
+      const comDono = { ...l, vendedor: rep.name };
+      if (l.temperatura === 'quente') todosQuentes.push(comDono);
+      if (l.temperatura === 'frio') todosFrios.push(comDono);
+    });
 
     // Ganhos da semana desse executivo (pro painel "Ganhos por executivo")
     const ganhosSemanaDeals = await stageDealsLast7DaysByOwner(STAGES.ganho1, rep.ownerId);
@@ -347,6 +394,11 @@ async function main() {
 
   const leadsTravadosTime = Object.values(repsData).reduce((sum, r) => sum + r.leadsTravados, 0);
 
+  // Ranking de temperatura do time inteiro — pros cards "Leads Quentes" e "Leads Travados/Frios"
+  // do Cockpit geral. Quentes: etapa avançada (Demo+) e dentro do SLA. Frios: SLA estourado.
+  const leadsQuentes = todosQuentes.sort((a, b) => (b.rank - a.rank) || (a.slaRatio - b.slaRatio)).slice(0, 12);
+  const leadsFrios = todosFrios.sort((a, b) => b.dias - a.dias).slice(0, 12);
+
   const output = {
     updatedAt: new Date().toISOString(),
     kpis: {
@@ -361,6 +413,10 @@ async function main() {
       labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
       valores: [backlog, prospeccao, visita, diagnostico, demoProposta, negociacao, agPagamento, ganho, perdido, reciclagem],
       cores: ['#6B7280', '#E8A33D', '#4A7FC7', '#7C6FE0', '#2FA88A', '#D9668F', '#E51A31', '#1FA35C', '#8C1220', '#8B92A3']
+    },
+    temperatura: {
+      quentes: leadsQuentes,
+      frios: leadsFrios
     },
     stageMeta: {
       slaDays: SLA_DAYS,

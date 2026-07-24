@@ -103,6 +103,7 @@ const DATA = {
   kpiDeltas,
   funil: hubspot.funil,
   funilLeads: hubspot.funilLeads || {},
+  temperatura: hubspot.temperatura || { quentes: [], frios: [] },
   stageMeta: hubspot.stageMeta || { slaDays: {}, descriptions: {}, labels: {} },
   motivoPerda: expogo.motivoPerda,
   saude,
