@@ -132,9 +132,19 @@ async function createdLast7Days() {
   return data.total || 0;
 }
 
-// Conta quantos negócios ENTRARAM numa etapa nos últimos 7 dias (fluxo da semana),
-// em vez do total histórico acumulado parado naquela etapa hoje. Usado pra Ganhos/Perdidos,
-// que fazem mais sentido como "quanto fechamos/perdemos essa semana" do que um número frio acumulado.
+// Negócios de teste/dummy (ex: "Teste", "TESTE_SONY_DIAG", "Coliseu teste") não devem contar
+// em NENHUMA métrica. Detectado em auditoria manual — filtra pelo nome, case-insensitive.
+function isTestDeal(dealname) {
+  if (!dealname) return false;
+  return /teste/i.test(dealname);
+}
+
+// Conta quantos negócios ENTRARAM numa etapa específica nos últimos 7 dias (fluxo da semana),
+// usando `closedate` — o campo padrão do HubSpot pra "quando isso foi fechado de verdade".
+// IMPORTANTE: testamos hs_v2_date_entered_<etapa> primeiro, mas ele deu falso positivo num caso
+// real (negócio "Uau Pizza Unidade Nova", confirmado por Julyan que NÃO fechou essa semana,
+// mesmo com data de entrada na etapa recente — provavelmente resíduo da migração de pipeline
+// que já bagunçou datas de entrada de etapa em lote antes). closedate é o campo certo aqui.
 async function stageTotalLast7Days(stageId) {
   const now = Date.now();
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -143,12 +153,14 @@ async function stageTotalLast7Days(stageId) {
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
         { propertyName: 'dealstage', operator: 'EQ', value: stageId },
-        { propertyName: 'hs_lastmodifieddate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
       ]
     }],
-    limit: 1
+    properties: ['dealname'],
+    limit: 100
   });
-  return data.total || 0;
+  const results = data.results || [];
+  return results.filter(d => !isTestDeal(d.properties.dealname)).length;
 }
 
 // Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
@@ -169,7 +181,7 @@ async function repOpenDeals(ownerId) {
     limit: 200,
     sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
   });
-  return data.results || [];
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
 }
 
 // Busca TODOS os leads abertos de uma etapa (time inteiro) — usado pro clique no funil.
@@ -186,7 +198,7 @@ async function stageDealsTeamWide(stageId) {
     limit: 100,
     sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
   });
-  return data.results || [];
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
 }
 
 function daysSince(dateStr) {
@@ -212,6 +224,28 @@ function daysInCurrentStage(properties) {
   return Math.floor((Date.now() - maisRecente) / (1000 * 60 * 60 * 24));
 }
 
+// Busca os negócios que UM executivo fechou (Negócio Fechado) nos últimos 7 dias,
+// usando closedate — mesmo critério validado pro Ganhos (7d) geral.
+async function stageDealsLast7DaysByOwner(stageId, ownerId) {
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const data = await hsSearch({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: stageId },
+        { propertyName: 'hubspot_owner_id', operator: 'EQ', value: ownerId },
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
+      ]
+    }],
+    properties: ['dealname', 'closedate'],
+    limit: 50
+  });
+  return (data.results || [])
+    .filter(d => !isTestDeal(d.properties.dealname))
+    .map(d => ({ name: d.properties.dealname }));
+}
+
 async function main() {
   console.log('Buscando dados no HubSpot...');
 
@@ -234,9 +268,9 @@ async function main() {
 
   // Ganhos/Perdidos como FLUXO da semana (entraram nessa etapa nos últimos 7 dias) —
   // diferente do "ganho"/"perdido" acima, que é o total histórico acumulado (usado só no funil geral).
-  const ganho1Semana = await stageTotalLast7Days(STAGES.ganho1);
-  const ganho2Semana = await stageTotalLast7Days(STAGES.ganho2);
-  const ganhoSemana = ganho1Semana + ganho2Semana;
+  // Ganhos conta SÓ "Negócio Fechado" (ganho1) — "Enviado Onboarding" (ganho2) é a etapa
+  // seguinte do MESMO negócio, não representa um cliente novo fechando.
+  const ganhoSemana = await stageTotalLast7Days(STAGES.ganho1);
   const perdidoSemana = await stageTotalLast7Days(STAGES.perdido);
 
   // ---- Leads por etapa, time inteiro (pro clique no funil) ----
@@ -295,13 +329,18 @@ async function main() {
     // não só uma amostra de 5. Ordenado do mais travado pro menos travado.
     const travados = withDays.filter(l => l.slaBreach).map(l => ({ ...l, destaque: true }));
 
+    // Ganhos da semana desse executivo (pro painel "Ganhos por executivo")
+    const ganhosSemanaDeals = await stageDealsLast7DaysByOwner(STAGES.ganho1, rep.ownerId);
+
     repsData[rep.ownerId] = {
       name: rep.name,
       open: deals.length,
       stages,
       criticos,
       travados,
-      leadsTravados
+      leadsTravados,
+      ganhosSemana: ganhosSemanaDeals.length,
+      ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name)
     };
     emAbertoTime += deals.length;
   }

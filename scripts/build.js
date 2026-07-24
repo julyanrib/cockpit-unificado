@@ -34,7 +34,7 @@ const ownerIds = Object.keys(narrativas.reps);
 
 const reps = ownerIds.map(ownerId => {
   const n = narrativas.reps[ownerId];
-  const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0 };
+  const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [] };
   const e = (expogo.porExecutivo && expogo.porExecutivo[ownerId]) || { visitasGPS: 0 };
 
   return {
@@ -51,6 +51,8 @@ const reps = ownerIds.map(ownerId => {
     criticos: h.criticos,
     travados: h.travados || [],
     leadsTravados: h.leadsTravados || 0,
+    ganhosSemana: h.ganhosSemana || 0,
+    ganhosSemanaNomes: h.ganhosSemanaNomes || [],
     expogoVisitas: e.visitasGPS
   };
 });
@@ -104,11 +106,7 @@ const DATA = {
     janela: resumoSemanal.janela,
     kpisComparativo: resumoSemanal.kpisComparativo,
     resumoGeral: resumoSemanal.resumoGeral,
-    comoAgir: resumoSemanal.comoAgir,
-    porExecutivo: (resumoSemanal.porExecutivo || []).map(p => ({
-      ...p,
-      name: (narrativas.reps[p.ownerId] || {}).name || p.ownerId
-    }))
+    comoAgir: resumoSemanal.comoAgir
   } : null
 };
 
