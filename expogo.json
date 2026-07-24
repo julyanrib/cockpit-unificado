@@ -1,29 +1,44 @@
-{
-  "_comment": "Camada Expogo (export RPA manual). NÃO é sobrescrita pelo build diário. Substitua este arquivo inteiro quando tiver um novo export, ou peça pra Claude atualizar a partir dos dados novos.",
-  "janela": "15–22/07/2026",
-  "kpis": {
-    "leadsTocados": 394,
-    "tarefasSLA": 296,
-    "visitasGPS": 89,
-    "reunioes": 53,
-    "followUps": 50,
-    "mudancasEtapa": 84,
-    "notasCampo": 112
-  },
-  "motivoPerda": {
-    "labels": ["Não quer mudar de sistema", "Sem retorno", "Funcionalidade", "Preço", "Outros"],
-    "valores": [27, 25, 3, 3, 2],
-    "cores": ["#E2543F", "#E8A33D", "#6E7BF2", "#5B8DEF", "#8B92A3"]
-  },
-  "banner": "⚠ <b>~71% das mudanças de etapa da semana (60 de 84) foram para \"Perdido\"</b> — mesmo padrão da semana anterior: <b>45% \"não quer mudar de sistema\"</b> + <b>42% \"sem retorno\"</b> = 87% das perdas continuam sendo objeção de mudança e cadência, não o sistema em si. <b>Kelly segue com 0 visitas confirmadas por GPS</b> pela segunda semana seguida, apesar de ter leads abertos — checar com o suporte antes de qualquer leitura de performance.",
-  "porExecutivo": {
-    "86100506": { "visitasGPS": 20 },
-    "91246642": { "visitasGPS": 2 },
-    "87569072": { "visitasGPS": 16 },
-    "91477292": { "visitasGPS": 0 },
-    "91246573": { "visitasGPS": 3 },
-    "89842507": { "visitasGPS": 2 },
-    "87069181": { "visitasGPS": 20 },
-    "86100505": { "visitasGPS": 9 }
-  }
-}
+name: Resumo semanal (segundas-feiras)
+
+on:
+  schedule:
+    # 09:15 em Brasília (12:15 UTC), toda segunda-feira — 15 min depois da atualização diária,
+    # pra garantir que data/hubspot.json já está fresco quando esse job ler o snapshot
+    - cron: '15 12 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  weekly-summary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Buscar comparação semana atual x anterior
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: node scripts/fetch-weekly-comparison.js
+
+      - name: Gerar resumo e plano de ação (API da Claude)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/generate-weekly-summary.js
+
+      - name: Gerar HTML final
+        run: node scripts/build.js
+
+      - name: Commitar e enviar alterações
+        run: |
+          git config user.name "cockpit-bot"
+          git config user.email "cockpit-bot@users.noreply.github.com"
+          git add data/weekly-raw.json data/resumo-semanal.json public/index.html
+          git diff --staged --quiet && echo "Nada mudou." || git commit -m "Resumo semanal automático"
+          git push

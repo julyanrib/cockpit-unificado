@@ -1,0 +1,159 @@
+{
+  "_comment": "Camada analítica — NÃO é sobrescrita pelo build diário. Só muda quando Julyan pedir 'atualiza a análise'. Chave = HubSpot owner ID.",
+  "_atualizado_em": "2026-07-23",
+  "reps": {
+    "86100506": {
+      "name": "Bruno Martins",
+      "praca": "—",
+      "tag": "crit",
+      "tagLabel": "concentração em Prospecção",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> 39 negócios abertos, 51% ainda em Prospecção (20 de 39) — mesmo padrão de antes, só que agora com números confirmados e sem erro de data. <b>Expogo:</b> 22 visitas GPS na semana (2º maior volume do time) — a atividade de campo existe, o gargalo é decisão: muita visita, pouco avanço registrado logo em seguida.",
+      "boasPraticas": [
+        "Registrar a decisão (avançar, reciclar ou perder) <b>no mesmo dia da visita</b> — não deixar acumular",
+        "Usar o clique no card dele no painel pra ver, ao vivo, quais leads estouraram o SLA da etapa — não depender de memória",
+        "Fazer o cercadinho (follow-up hiperlocal) nos leads mais antigos antes de abrir novos"
+      ],
+      "compromissos": [
+        "Revisar os leads com SLA estourado (ver painel, aba do executivo) e decidir avançar ou reciclar cada um até quarta",
+        "Fechar o status de cada visita da semana no mesmo dia, sem acumular pendência",
+        "Levar 3 casos concretos de decisão difícil pro 1:1 de quarta"
+      ]
+    },
+    "91246642": {
+      "name": "Gleyson Gabrieli",
+      "praca": "Salvador — Pituba/Rio Vermelho",
+      "tag": "warn",
+      "tagLabel": "funil avançou — checar conversão",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> mudança grande desde a última análise — volume saltou pra 90 negócios abertos, e agora 70% está em Visita (63 de 90), não mais em Prospecção. É sinal de avanço real de funil, mas com volume tão concentrado numa etapa só, o risco agora é gargalo de conversão Visita → Conversa com Decisor, não mais falta de prospecção. <b>Expogo:</b> 9 visitas GPS na semana — bem abaixo do volume que está em etapa Visita no HubSpot, o que sugere que parte dessas 63 pode ter avançado por atualização em lote, não visita nova de campo.",
+      "boasPraticas": [
+        "Confirmar quais dos 63 leads em Visita já tiveram visita de campo real (GPS) — priorizar os que não tiveram",
+        "Filtrar não-decisor logo na Visita antes de avançar pra Conversa com Decisor",
+        "Usar o card dele no painel pra identificar os leads mais antigos em Visita e agir primeiro neles"
+      ],
+      "compromissos": [
+        "Auditar os 63 leads em Visita e separar quem já foi visitado de fato de quem só foi movido no sistema",
+        "Avançar pelo menos 10 leads de Visita pra Conversa com Decisor esta semana",
+        "Reportar no 1:1 o que causou o salto de volume — mudança de processo, correção de dado, ou atividade real"
+      ]
+    },
+    "87569072": {
+      "name": "Sandro Brito",
+      "praca": "—",
+      "tag": "warn",
+      "tagLabel": "volume caiu, concentração persiste",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> volume aberto caiu bastante desde a última análise (de 45 pra 20) — parte disso é o alto volume de perdas da semana (Sandro é um dos que mais visita, e a maioria das perdas do time é \"sem retorno\"). Ainda 70% concentrado em Prospecção. <b>Expogo:</b> maior volume de visitas GPS do time essa semana (26) — segue com atividade de campo alta, mas isso não está convertendo em avanço de etapa.",
+      "boasPraticas": [
+        "Antes de mover pra Reciclagem/Perdido, registrar o motivo específico — \"sem retorno\" genérico demais esconde o problema real",
+        "Usar as 26 visitas da semana pra decidir avançar ou reciclar, não só documentar a visita",
+        "Não deixar lead \"sumir\" — todo lead precisa de próxima ação marcada"
+      ],
+      "compromissos": [
+        "Revisar os leads movidos pra Perdido essa semana e confirmar se o motivo registrado reflete a real situação",
+        "Avançar pelo menos 5 leads de Prospecção pra Visita confirmada com GPS",
+        "Zerar reciclagem sem motivo específico até sexta"
+      ]
+    },
+    "91477292": {
+      "name": "Kelly Travieso Di Domenico",
+      "praca": "Porto Alegre",
+      "tag": "crit",
+      "tagLabel": "0 visitas GPS — 3ª semana seguida",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> 94% do funil concentrado em Prospecção (33 de 35) — segue sendo o gargalo mais extremo do time. <b>Expogo:</b> <b>zero visitas confirmadas por GPS pela 3ª semana seguida.</b> Isso já não é mais hipótese de falha técnica pontual — é um padrão que precisa de conversa direta e escalada, independente da causa (técnica ou de atividade real).",
+      "boasPraticas": [
+        "Prioridade zero: confirmar com o suporte/TI se o app está sincronizando as visitas dela — e se estiver tudo certo tecnicamente, tratar como questão de atividade real",
+        "Usar o script financeiro consultivo em toda demo — não voltar pra explicação técnica de produto",
+        "Fechar com pergunta direta de decisão, não deixar reunião terminar em \"vou pensar\""
+      ],
+      "compromissos": [
+        "Confirmar HOJE com suporte se o GPS está registrando as visitas dela — se confirmado que está ok tecnicamente, tratar isso como prioridade #1 do 1:1",
+        "Avançar pelo menos 5 leads de Prospecção pra Visita com check-in confirmado até sexta",
+        "Presença física acompanhada em pelo menos 1 visita essa semana, se necessário, pra diagnosticar o que está acontecendo"
+      ]
+    },
+    "91246573": {
+      "name": "José Ricardo (Ricardo)",
+      "praca": "Salvador — Centro/Pelourinho",
+      "tag": "warn",
+      "tagLabel": "concentração em Prospecção",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> 83% do funil em Prospecção (45 de 54) — segue sendo o gargalo dominante, mesmo padrão de ciclos anteriores. <b>Expogo:</b> 7 visitas GPS na semana — volume de campo real, mas insuficiente frente ao volume de leads parados em Prospecção.",
+      "boasPraticas": [
+        "Confirmar check-in GPS em toda visita, mesmo as de retorno/follow-up presencial",
+        "Checklist de fechamento obrigatório: status de pagamento + onboarding disparado + app testado",
+        "Bloco fixo de admin no fim do dia pra não deixar follow-up pro dia seguinte"
+      ],
+      "compromissos": [
+        "Avançar pelo menos 8 leads de Prospecção pra Visita confirmada com GPS essa semana",
+        "Aplicar o checklist de fechamento nos leads já em Conversa com Decisor/Demo",
+        "Reportar no 1:1 quantos casos travam por falta de decisor vs. falta de follow-up"
+      ]
+    },
+    "89842507": {
+      "name": "Wericles Andrade (Whell)",
+      "praca": "—",
+      "tag": "ok",
+      "tagLabel": "funil saudável",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> funil bem distribuído — Prospecção 33%, Conversa com Decisor 33%, Visita 13%, Demo 13%, Negociação e Ag. Pagamento 3% cada. É a distribuição mais equilibrada do time, sinal de funil saudável, não só volume concentrado numa etapa. <b>Expogo:</b> volume de visitas GPS baixo (2), mas consistente com o padrão de qualidade sobre volume já observado antes.",
+      "boasPraticas": [
+        "Manter o registro em tempo real no Expogo, mesmo com volume baixo de visitas",
+        "Continuar tomando decisão explícita antes de reciclar qualquer lead",
+        "Servir de case nos roleplays — mostrar como um funil bem distribuído se sustenta"
+      ],
+      "compromissos": [
+        "Manter o ritmo — funil está saudável, sem correção necessária",
+        "Compartilhar no roleplay da semana como decide avançar/reciclar cada lead",
+        "Registrar em tempo real no Expogo mesmo com volume baixo de visitas"
+      ]
+    },
+    "87069181": {
+      "name": "Amanda Pardim",
+      "praca": "—",
+      "tag": "ok",
+      "tagLabel": "funil saudável",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> distribuição saudável — Visita 39%, Conversa com Decisor 28%, Negociação 14%, Demo 11%, Prospecção só 8%. Funil avançado e bem escoado, sem gargalo dominante. <b>Expogo:</b> 21 visitas GPS na semana (3º maior volume), com boa consistência de registro.",
+      "boasPraticas": [
+        "Seguir o playbook padrão: 15 PAPs/dia, 2 demos com decisor por dia, cercadinho de follow-up",
+        "Manter o nível de detalhe das notas — está acima da média do time",
+        "Registrar em tempo real no Expogo"
+      ],
+      "compromissos": [
+        "Fechar pelo menos 3 negociações em Ag. Pagamento essa semana — funil já está maduro pra isso",
+        "Sem ação corretiva — usar o 1:1 pra mapear PDI de aceleração",
+        "Manter o padrão de notas detalhadas — vira referência pro time"
+      ]
+    },
+    "86100505": {
+      "name": "Marco Filho",
+      "praca": "Vila Velha",
+      "tag": "ok",
+      "tagLabel": "funil saudável",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> volume baixo (12 negócios) mas funil limpo — Prospecção 67%, Visita 25%, Ag. Pagamento 8%. Sem excesso de concentração preocupante dado o volume pequeno. <b>Expogo:</b> volume de visitas baixo (8) mas notas de campo historicamente as mais completas do time.",
+      "boasPraticas": [
+        "Manter o padrão de nota completa (pagamento + instalação + próxima ação) — vira referência pro time",
+        "Usar como case de \"como registrar uma visita\" nos roleplays",
+        "Aproveitar a folga no funil pra puxar mais volume de prospecção"
+      ],
+      "compromissos": [
+        "Abrir pelo menos 8 novos leads de prospecção essa semana — funil tem espaço",
+        "Compartilhar o padrão de nota completa pra virar treinamento do time",
+        "Servir de case de fechamento no roleplay da semana"
+      ]
+    },
+    "94079973": {
+      "name": "Michel Carvalho",
+      "praca": "Rio de Janeiro",
+      "tag": "warn",
+      "tagLabel": "2º ciclo — calibrando",
+      "gargalo": "<b>HubSpot (dado ao vivo, 23/07):</b> ainda volume baixo (7 negócios abertos), 86% em Prospecção. Segundo ciclo de dados dele — já dá pra calibrar meta real, mas volume ainda pequeno demais pra tirar conclusão definitiva de padrão. <b>Expogo:</b> 3 visitas GPS na semana, consistente com o início de rampa.",
+      "boasPraticas": [
+        "Registrar toda visita no Expogo em tempo real, com sistema atual do cliente e decisor identificado",
+        "Seguir o playbook padrão: 15 PAPs/dia, 2 demos com decisor por dia, cercadinho de follow-up",
+        "Usar o 1:1 desta semana pra calibrar meta de volume real, já com 2 ciclos de dado"
+      ],
+      "compromissos": [
+        "Dobrar o volume de prospecção ativa até a próxima revisão — de 7 pra pelo menos 14 negócios abertos",
+        "Avançar o primeiro lead de Prospecção pra Visita com GPS confirmado",
+        "Trazer pro 1:1 as dificuldades operacionais do início de rampa"
+      ]
+    }
+  }
+}

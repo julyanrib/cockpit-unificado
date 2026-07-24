@@ -1,0 +1,54 @@
+name: Atualizar cockpit diariamente
+
+on:
+  schedule:
+    # 09:00 em Brasília (12:00 UTC) todos os dias
+    - cron: '0 12 * * *'
+  workflow_dispatch: {} # permite rodar manualmente pelo botão "Run workflow" no GitHub
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Buscar dados frescos do HubSpot
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: node scripts/fetch-hubspot.js
+
+      - name: Gerar HTML final
+        run: node scripts/build.js
+
+      - name: Commitar e enviar alterações (se houver)
+        run: |
+          git config user.name "cockpit-bot"
+          git config user.email "cockpit-bot@users.noreply.github.com"
+          git add data/hubspot.json data/hubspot-previous.json public/index.html
+          git diff --staged --quiet && echo "Nada mudou hoje." || git commit -m "Atualização automática diária do cockpit"
+          git push
+
+      # Se qualquer passo acima falhar (token expirado, HubSpot mudou algo, etc.),
+      # abre um Issue visível no repositório — assim dá pra perceber sem precisar
+      # entrar no site todo dia pra conferir se a data bateu.
+      - name: Avisar sobre falha (abre Issue)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Falha na atualização diária do cockpit — ${new Date().toISOString().slice(0,10)}`,
+              body: `A atualização automática do cockpit falhou.\n\nVeja o log completo aqui: ${context.payload.repository.html_url}/actions/runs/${context.runId}\n\nCausas comuns: token do HubSpot expirado/revogado, mudança de escopo na API, ou limite de requisições.`
+            });
