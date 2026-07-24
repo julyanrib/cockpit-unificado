@@ -830,8 +830,8 @@ function dailyKey(dateISO, ownerId) {
 }
 function defaultDailyEntry() {
   return {
-    prometido: { prospeccao: null, referencia: null, reunioes: null, clientes: [] },
-    realizado: { prospeccao: null, referencia: null, reunioes: null, clientesFeitos: [] }
+    prometido: { prospeccao: null, referencia: null, reunioes: null, clientes: [], followUps: [] },
+    realizado: { prospeccao: null, referencia: null, reunioes: null, clientesFeitos: [], followUpsFeitos: [] }
   };
 }
 function getDailyEntry(dateISO, ownerId) {
@@ -861,25 +861,41 @@ function addDays(dateISO, n) {
   d.setDate(d.getDate() + n);
   return isoDate(d);
 }
+function isWeekend(dateISO) {
+  const dow = new Date(dateISO + 'T12:00:00').getDay();
+  return dow === 0 || dow === 6; // domingo ou sábado
+}
+// Pula fim de semana — usado pra navegação (dia anterior/próximo) e pro cálculo de "ontem",
+// já que o time não trabalha sábado/domingo (segunda-feira "ontem" deve ser sexta, não domingo).
+function addBusinessDays(dateISO, direction) {
+  let d = addDays(dateISO, direction);
+  while (isWeekend(d)) d = addDays(d, direction);
+  return d;
+}
+function nearestBusinessDay(dateISO) {
+  let d = dateISO;
+  while (isWeekend(d)) d = addDays(d, -1);
+  return d;
+}
 function fmtDailyLabel(dateISO) {
   const d = new Date(dateISO + 'T12:00:00');
   const dias = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
   return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} (${dias[d.getDay()]})`;
 }
 
-let dailyRefDate = isoDate(new Date());
+let dailyRefDate = nearestBusinessDay(isoDate(new Date()));
 
 function renderDaily() {
   const el = document.getElementById('dailyContent');
-  const yesterdayISO = addDays(dailyRefDate, -1);
+  const yesterdayISO = addBusinessDays(dailyRefDate, -1);
 
   let html = `
     <div class="daily-header">
-      <div class="hint" style="margin:0;">Marque o que aconteceu ontem e firme a promessa de hoje — vira o consolidado da semana no Resumo Semanal.</div>
+      <div class="hint" style="margin:0;">Marque o que aconteceu ontem e firme a promessa de hoje — vira o consolidado da semana no Resumo Semanal. "Ontem" pula fim de semana automaticamente.</div>
       <div class="daily-date-nav">
-        <button id="dailyPrev">← dia anterior</button>
+        <button id="dailyPrev">← dia útil anterior</button>
         <span class="date-label">${fmtDailyLabel(dailyRefDate)}</span>
-        <button id="dailyNext">próximo dia →</button>
+        <button id="dailyNext">próximo dia útil →</button>
         <button id="dailyToday">hoje</button>
       </div>
     </div>
@@ -887,7 +903,30 @@ function renderDaily() {
 
   DATA.reps.forEach(r => {
     const ontem = getDailyEntry(yesterdayISO, r.ownerId);
-    const hoje = getDailyEntry(dailyRefDate, r.ownerId) || defaultDailyEntry();
+    let hoje = getDailyEntry(dailyRefDate, r.ownerId) || defaultDailyEntry();
+
+    // Auto-popula o follow-up de hoje com os 3 leads mais parados (dado real e ao vivo).
+    // Prioriza quem já estourou SLA; se não tiver nenhum, usa os mais antigos como referência.
+    if (hoje.prometido.followUps.length === 0) {
+      const fonte = r.travados.length > 0 ? r.travados : r.criticos;
+      hoje.prometido.followUps = fonte.slice(0, 3).map(l => ({ id: l.id, name: l.name, stage: l.stage, dias: l.dias }));
+      hoje.realizado.followUpsFeitos = hoje.prometido.followUps.map(() => false);
+      saveDailyEntry(dailyRefDate, r.ownerId, hoje);
+    }
+
+    const followUpsOntemHtml = (ontem && ontem.prometido.followUps.length > 0) ? `
+      <div class="daily-clients">
+        <div class="daily-col-label">🔁 Follow-up (leads mais parados de ontem)</div>
+        <ul class="daily-client-list">
+          ${ontem.prometido.followUps.map((l, i) => `
+            <li class="daily-client-item">
+              <span class="checkbox d-followup-check" data-idx="${i}" style="${ontem.realizado.followUpsFeitos[i] ? 'background:var(--green);border-color:var(--green);' : ''}"></span>
+              <span class="client-name"><a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="color:inherit;">${l.name}</a> <span style="color:var(--muted-2);font-size:10.5px;">— ${l.stage}, ${l.dias}d</span></span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    ` : '';
 
     const ontemHtml = !ontem ? `<div class="daily-empty-yesterday">Nenhuma promessa registrada em ${fmtDailyLabel(yesterdayISO)}.</div>` : `
       <div class="daily-metric-row">
@@ -911,13 +950,14 @@ function renderDaily() {
           <ul class="daily-client-list">
             ${ontem.prometido.clientes.map((c, i) => `
               <li class="daily-client-item">
-                <span class="checkbox d-client-check" data-idx="${i}" style="${ontem.realizado.clientesFeitos[i] ? 'background:var(--teal);border-color:var(--teal);' : ''}"></span>
+                <span class="checkbox d-client-check" data-idx="${i}" style="${ontem.realizado.clientesFeitos[i] ? 'background:var(--green);border-color:var(--green);' : ''}"></span>
                 <span class="client-name">${c}</span>
               </li>
             `).join('')}
           </ul>
         </div>
       ` : ''}
+      ${followUpsOntemHtml}
     `;
 
     const clientesHoje = hoje.prometido.clientes;
@@ -949,6 +989,18 @@ function renderDaily() {
           `).join('')}
         </ul>
       </div>
+      ${hoje.prometido.followUps.length > 0 ? `
+        <div class="daily-clients">
+          <div class="daily-col-label">🔁 Follow-up prioritário (auto, ${hoje.prometido.followUps.length} leads mais parados)</div>
+          <ul class="daily-client-list">
+            ${hoje.prometido.followUps.map(l => `
+              <li class="daily-client-item">
+                <span class="client-name"><a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="color:inherit;">${l.name}</a> <span style="color:var(--muted-2);font-size:10.5px;">— ${l.stage}, ${l.dias}d</span></span>
+              </li>
+            `).join('')}
+          </ul>
+        </div>
+      ` : ''}
     `;
 
     html += `
@@ -970,9 +1022,9 @@ function renderDaily() {
 
   el.innerHTML = html;
 
-  document.getElementById('dailyPrev').addEventListener('click', () => { dailyRefDate = addDays(dailyRefDate, -1); renderDaily(); });
-  document.getElementById('dailyNext').addEventListener('click', () => { dailyRefDate = addDays(dailyRefDate, 1); renderDaily(); });
-  document.getElementById('dailyToday').addEventListener('click', () => { dailyRefDate = isoDate(new Date()); renderDaily(); });
+  document.getElementById('dailyPrev').addEventListener('click', () => { dailyRefDate = addBusinessDays(dailyRefDate, -1); renderDaily(); });
+  document.getElementById('dailyNext').addEventListener('click', () => { dailyRefDate = addBusinessDays(dailyRefDate, 1); renderDaily(); });
+  document.getElementById('dailyToday').addEventListener('click', () => { dailyRefDate = nearestBusinessDay(isoDate(new Date())); renderDaily(); });
 
   // Wire up each rep card
   el.querySelectorAll('.daily-rep-card').forEach(card => {
@@ -993,6 +1045,17 @@ function renderDaily() {
         const entry = getDailyEntry(yesterdayISO, ownerId) || defaultDailyEntry();
         const idx = Number(cb.dataset.idx);
         entry.realizado.clientesFeitos[idx] = !entry.realizado.clientesFeitos[idx];
+        saveDailyEntry(yesterdayISO, ownerId, entry);
+        renderDaily();
+      });
+    });
+
+    // "Ontem" — checklist de follow-up feito (leads mais parados)
+    card.querySelectorAll('.d-followup-check').forEach(cb => {
+      cb.addEventListener('click', () => {
+        const entry = getDailyEntry(yesterdayISO, ownerId) || defaultDailyEntry();
+        const idx = Number(cb.dataset.idx);
+        entry.realizado.followUpsFeitos[idx] = !entry.realizado.followUpsFeitos[idx];
         saveDailyEntry(yesterdayISO, ownerId, entry);
         renderDaily();
       });
@@ -1042,7 +1105,7 @@ function renderConsolidadoDiario() {
   const offsetSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
   const segundaISO = addDays(isoDate(hoje), -offsetSegunda);
 
-  const totais = { prospeccaoP: 0, prospeccaoR: 0, referenciaP: 0, referenciaR: 0, reunioesP: 0, reunioesR: 0, clientesP: 0, clientesF: 0 };
+  const totais = { prospeccaoP: 0, prospeccaoR: 0, referenciaP: 0, referenciaR: 0, reunioesP: 0, reunioesR: 0, clientesP: 0, clientesF: 0, followUpsP: 0, followUpsF: 0 };
   let diasComDado = 0;
 
   for (let i = 0; i <= offsetSegunda; i++) {
@@ -1060,6 +1123,8 @@ function renderConsolidadoDiario() {
       totais.reunioesR += entry.realizado.reunioes || 0;
       totais.clientesP += entry.prometido.clientes.length;
       totais.clientesF += entry.realizado.clientesFeitos.filter(Boolean).length;
+      totais.followUpsP += entry.prometido.followUps.length;
+      totais.followUpsF += entry.realizado.followUpsFeitos.filter(Boolean).length;
     });
     if (algumDado) diasComDado++;
   }
@@ -1074,7 +1139,7 @@ function renderConsolidadoDiario() {
       <div class="daily-consolidado-kpi"><div class="v">${totais.referenciaR}/${totais.referenciaP}</div><div class="l">Visitas cliente referência</div></div>
       <div class="daily-consolidado-kpi"><div class="v">${totais.reunioesR}/${totais.reunioesP}</div><div class="l">Reuniões agendadas</div></div>
     </div>
-    <div class="chart-subtitle" style="margin-top:10px;">Clientes prometidos visitados: <b style="color:var(--text);">${totais.clientesF}/${totais.clientesP}</b></div>
+    <div class="chart-subtitle" style="margin-top:10px;">Clientes prometidos visitados: <b style="color:var(--text);">${totais.clientesF}/${totais.clientesP}</b> · Follow-ups prioritários feitos: <b style="color:var(--text);">${totais.followUpsF}/${totais.followUpsP}</b></div>
   `;
   hostEl.appendChild(box);
 }
