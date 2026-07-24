@@ -212,6 +212,39 @@ async function stageDealsTeamWide(stageId) {
   return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
 }
 
+// Busca as 2 notas/observações mais recentes de um negócio específico.
+// Requer o escopo crm.objects.notes.read no Private App do HubSpot (além do
+// crm.objects.deals.read que já usávamos) — se não tiver, retorna lista vazia sem quebrar nada.
+async function buscarNotasDoLead(dealId, limite = 2) {
+  try {
+    await sleep(350);
+    const assocRes = await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/notes`, {
+      headers: { 'Authorization': `Bearer ${TOKEN}` }
+    });
+    if (!assocRes.ok) return [];
+    const assocData = await assocRes.json();
+    const noteIds = (assocData.results || []).map(r => r.id).slice(0, limite);
+    if (noteIds.length === 0) return [];
+
+    const notas = [];
+    for (const noteId of noteIds) {
+      await sleep(350);
+      const noteRes = await fetch(`https://api.hubapi.com/crm/v3/objects/notes/${noteId}?properties=hs_note_body,hs_timestamp`, {
+        headers: { 'Authorization': `Bearer ${TOKEN}` }
+      });
+      if (!noteRes.ok) continue;
+      const noteData = await noteRes.json();
+      notas.push({
+        texto: (noteData.properties.hs_note_body || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
+        data: noteData.properties.hs_timestamp
+      });
+    }
+    return notas.sort((a, b) => new Date(b.data) - new Date(a.data));
+  } catch (e) {
+    return [];
+  }
+}
+
 function daysSince(dateStr) {
   const created = new Date(dateStr).getTime();
   return Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24));
@@ -398,6 +431,13 @@ async function main() {
   // do Cockpit geral. Quentes: etapa avançada (Demo+) e dentro do SLA. Frios: SLA estourado.
   const leadsQuentes = todosQuentes.sort((a, b) => (b.rank - a.rank) || (a.slaRatio - b.slaRatio)).slice(0, 12);
   const leadsFrios = todosFrios.sort((a, b) => b.dias - a.dias).slice(0, 12);
+
+  // Busca as notas/observações mais recentes só desses ~24 leads em destaque (não o funil
+  // inteiro, pra não pesar). Requer escopo crm.objects.notes.read no Private App do HubSpot.
+  console.log('Buscando notas de campo dos leads em destaque...');
+  for (const lead of [...leadsQuentes, ...leadsFrios]) {
+    lead.notas = await buscarNotasDoLead(lead.id);
+  }
 
   const output = {
     updatedAt: new Date().toISOString(),

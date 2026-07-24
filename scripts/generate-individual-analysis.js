@@ -37,7 +37,7 @@ function infoSemanaDoMes(hoje) {
   let numeroSemana = 0;
   const cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   while (cursor <= hoje) {
-    if (cursor.getDay() === 1) numeroSemana++;
+    if (cursor.getDay() === 5) numeroSemana++;
     cursor.setDate(cursor.getDate() + 1);
   }
   const proximaSegunda = new Date(hoje);
