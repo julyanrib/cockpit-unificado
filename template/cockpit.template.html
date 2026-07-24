@@ -784,6 +784,8 @@ function renderMeuPainel() {
       <span style="color:var(--muted);font-size:12.5px;margin-left:8px;">${r.praca}</span>
     </div>
 
+    <div id="meuPainelSugestoes"></div>
+
     ${buildAcaoImediataHTML(r)}
     ${buildDistribuicaoCompactaHTML(r, 'meuPainel')}
 
@@ -852,6 +854,27 @@ function renderMeuPainel() {
       carregarUmAUm(r, el, 'meuPainel');
     }
   });
+
+  // Sugestões de plano do gestor — mostra em destaque no topo
+  if (DATA.supabase && supa) {
+    supa.from('sugestoes_planos').select('*').eq('owner_id', r.ownerId).order('created_at', { ascending: false }).limit(3)
+      .then(({ data: sugestoes, error }) => {
+        const sugEl = document.getElementById('meuPainelSugestoes');
+        if (!sugEl) return;
+        if (error || !sugestoes || sugestoes.length === 0) { sugEl.innerHTML = ''; return; }
+        sugEl.innerHTML = `
+          <div class="chart-card" style="margin-bottom:20px;border-left:4px solid var(--violet);">
+            <h3 style="margin-bottom:10px;">💬 Recado do seu gestor</h3>
+            ${sugestoes.map((s, i) => `
+              <div style="${i > 0 ? 'margin-top:10px;padding-top:10px;border-top:1px dashed var(--hairline);' : ''}font-size:13.5px;">
+                ${s.texto}
+                <div style="font-size:10.5px;color:var(--muted-2);margin-top:4px;">${new Date(s.created_at).toLocaleDateString('pt-BR')}</div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      });
+  }
 }
 
 iniciarAuth();
@@ -1009,7 +1032,7 @@ document.getElementById('healthBadge').innerHTML = `
 
   el.innerHTML = `
     <div class="charts-row" style="margin-bottom:16px;">
-      <details class="chart-card" style="border-left:4px solid var(--green);padding:0;" open>
+      <details class="chart-card" style="border-left:4px solid var(--green);padding:0;">
         <summary class="card-summary" style="padding:20px 22px;">
           <h3 style="display:inline;margin-bottom:0;">🔥 Leads Quentes (${temp.quentes.length}) — perto de fechar</h3>
           <div class="chart-subtitle" style="margin-top:6px;">Etapa avançada e ainda dentro da metade do prazo. Clica num lead pra ver as notas de campo.</div>
@@ -1020,7 +1043,7 @@ document.getElementById('healthBadge').innerHTML = `
           </div>
         </div>
       </details>
-      <details class="chart-card" style="border-left:4px solid var(--red);padding:0;" open>
+      <details class="chart-card" style="border-left:4px solid var(--red);padding:0;">
         <summary class="card-summary" style="padding:20px 22px;">
           <h3 style="display:inline;margin-bottom:0;">🧊 Leads Travados (${temp.frios.length}) — limpar o funil</h3>
           <div class="chart-subtitle" style="margin-top:6px;">SLA estourado, esfriando. Clica num lead pra ver as notas antes de cobrar decisão.</div>
@@ -1085,21 +1108,67 @@ function deltaHtml(atual, anterior, inverter) {
 
 const resumoEl = document.getElementById('resumoContent');
 if (!DATA.resumoSemanal) {
-  resumoEl.innerHTML = `<div class="empty-state">Resumo semanal ainda não foi gerado. Ele roda automaticamente toda segunda-feira às 9h — depois da primeira execução, esta aba mostra a comparação da semana anterior com a atual e o plano de ação sugerido.</div>`;
+  resumoEl.innerHTML = `<div class="empty-state">Resumo semanal ainda não foi gerado. Ele roda automaticamente toda sexta-feira — depois da primeira execução, esta aba mostra a comparação da semana anterior com a atual e o plano de ação sugerido.</div>`;
 } else {
   const rs = DATA.resumoSemanal;
   const k = rs.kpisComparativo;
+  const medalhas = ['🥇', '🥈', '🥉'];
+
+  const podioHtml = (rs.ranking && rs.ranking.length > 0) ? `
+    <div class="chart-card" style="margin-bottom:18px;">
+      <h3 style="margin-bottom:14px;">🏆 Ranking da semana</h3>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+        ${rs.ranking.map((r, i) => `
+          <div style="flex:1;min-width:160px;background:var(--panel-2);border-radius:12px;padding:14px 16px;text-align:center;">
+            <div style="font-size:28px;">${medalhas[i]}</div>
+            <div style="font-weight:700;font-size:14px;margin-top:4px;">${r.name}</div>
+            <div style="color:var(--muted);font-size:12px;margin-top:2px;">${r.count} venda${r.count > 1 ? 's' : ''}${r.mrrTotal > 0 ? ` · R$ ${r.mrrTotal.toLocaleString('pt-BR')} MRR` : ''}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
+  function cardClicavel(titulo, contagem, delta, corIcone, leads, tipoLista) {
+    const listaHtml = leads.length === 0
+      ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum registro nessa janela.</div>'
+      : `<div class="leads-box leads-box-scroll">${leads.map(l => {
+          if (tipoLista === 'ganho') {
+            return `<div class="lead-row" style="cursor:default;"><div class="lead-left"><span class="lead-name">${l.nome}</span><span class="lead-stage">${l.vendedor || ''}</span></div>${l.mrr > 0 ? `<span class="lead-days">R$ ${l.mrr.toLocaleString('pt-BR')}</span>` : ''}</div>`;
+          }
+          if (tipoLista === 'reuniao') {
+            return `<div class="lead-row" style="cursor:default;"><div class="lead-left"><span class="lead-name">${l.nome}</span><span class="lead-stage">${l.vendedor || ''}</span></div></div>`;
+          }
+          return `<a class="lead-row" href="${hsUrl(l.id)}" target="_blank" rel="noopener"><div class="lead-left"><span class="lead-name">${l.name}</span><span class="lead-stage">${l.vendedor || ''} · ${l.stage || ''}</span></div><span class="lead-cta">abrir →</span></a>`;
+        }).join('')}</div>`;
+    return `
+      <details class="week-kpi" style="padding:0;">
+        <summary class="card-summary" style="padding:16px 18px;">
+          <div class="l">${titulo}</div>
+          <div class="v">${corIcone} ${contagem}${delta}</div>
+        </summary>
+        <div style="padding:0 18px 16px;">${listaHtml}</div>
+      </details>
+    `;
+  }
+
+  const ganhosLeads = (rs.ganhosSemanaDetalhe || []).map(d => ({ ...d, vendedor: (DATA.reps.find(r => r.ownerId === d.ownerId) || {}).name }));
+  const reunioesLeads = (rs.reunioesSemanaDetalhe || []).map(d => ({ ...d, vendedor: (DATA.reps.find(r => r.ownerId === d.ownerId) || {}).name }));
+  const quentesLeads = rs.quentesDemoOuNegociacao || [];
+
   resumoEl.innerHTML = `
     <div class="week-hero">
       <div class="range">Semana atual: ${rs.janela.atual} · Semana anterior: ${rs.janela.anterior} · Gerado em ${rs.geradoEmFmt}</div>
       <div class="resumo">${rs.resumoGeral}</div>
     </div>
 
+    ${podioHtml}
+
     <div class="week-kpis">
-      <div class="week-kpi"><div class="l">Leads criados</div><div class="v">${k.atual.leadsCriados}${deltaHtml(k.atual.leadsCriados, k.anterior.leadsCriados)}</div></div>
-      <div class="week-kpi"><div class="l">Ganhos</div><div class="v">🏆 ${k.atual.ganhos}${deltaHtml(k.atual.ganhos, k.anterior.ganhos)}</div></div>
+      ${cardClicavel('Ganhos', k.atual.ganhos, deltaHtml(k.atual.ganhos, k.anterior.ganhos), '🏆', ganhosLeads, 'ganho')}
+      ${cardClicavel('Reuniões', k.atual.reunioes, deltaHtml(k.atual.reunioes, k.anterior.reunioes), '📅', reunioesLeads, 'reuniao')}
       <div class="week-kpi"><div class="l">Perdidos</div><div class="v">${k.atual.perdidos}${deltaHtml(k.atual.perdidos, k.anterior.perdidos, true)}</div></div>
-      <div class="week-kpi"><div class="l">Reciclagem</div><div class="v">${k.atual.reciclagem}${deltaHtml(k.atual.reciclagem, k.anterior.reciclagem, true)}</div></div>
+      ${cardClicavel('Quentes', quentesLeads.length, '', '🔥', quentesLeads, 'quente')}
     </div>
 
     <h3 class="block-label">Como agir essa semana</h3>
@@ -2116,6 +2185,16 @@ async function renderPDIs() {
 }
 
 // ============ COACHING (análise individual — só o gestor vê) ============
+function tendenciaBadge(texto) {
+  if (!texto) return '';
+  const t = texto.toLowerCase();
+  let cor = 'var(--muted-2)', bg = 'var(--panel-2)', icone = '➖';
+  if (t.includes('melhor')) { cor = 'var(--green)'; bg = 'var(--green-soft)'; icone = '📈'; }
+  else if (t.includes('pior')) { cor = 'var(--red)'; bg = 'var(--red-soft)'; icone = '📉'; }
+  else if (t.includes('estável') || t.includes('estavel')) { cor = 'var(--amber)'; bg = 'var(--amber-soft)'; icone = '➡️'; }
+  return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10.5px;font-weight:600;color:${cor};background:${bg};padding:2px 9px;border-radius:20px;">${icone} ${texto}</span>`;
+}
+
 async function renderCoaching() {
   const el = document.getElementById('coachingContent');
   if (!DATA.supabase || !supa) {
@@ -2123,17 +2202,39 @@ async function renderCoaching() {
     return;
   }
 
-  el.innerHTML = DATA.reps.map(r => `
-    <div class="daily-rep-card" style="margin-bottom:14px;" data-owner="${r.ownerId}">
-      <div class="daily-rep-head">${r.name} <span style="color:var(--muted-2);font-weight:400;font-size:11px;">${r.praca}</span></div>
-      <div style="padding:14px 16px;">
-        <div class="coachingMensal"></div>
-        <div class="coachingSemanal"><div class="empty-state">Carregando...</div></div>
-      </div>
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">
+      ${DATA.reps.map(r => `
+        <div class="chart-card" style="padding:0;" data-owner="${r.ownerId}">
+          <div style="padding:14px 16px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px;">
+            <div style="width:34px;height:34px;border-radius:50%;background:var(--red-soft);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">${r.name.charAt(0)}</div>
+            <div style="min-width:0;">
+              <div style="font-weight:700;font-size:13.5px;">${r.name}</div>
+              <div style="color:var(--muted-2);font-size:10.5px;">${r.praca}</div>
+            </div>
+            <span class="coachingTendencia" style="margin-left:auto;"></span>
+          </div>
+          <div style="padding:14px 16px;">
+            <div class="coachingMensal"></div>
+            <div class="coachingSemanalResumo" style="font-size:12px;color:var(--muted);"><div class="empty-state" style="padding:10px;">Carregando...</div></div>
+            <details style="margin-top:10px;">
+              <summary class="card-summary" style="font-size:11.5px;color:var(--muted);">Ver histórico semanal completo</summary>
+              <div class="coachingHistoricoCompleto" style="margin-top:8px;"></div>
+            </details>
+            <div style="margin-top:14px;border-top:1px dashed var(--hairline);padding-top:12px;">
+              <div class="daily-col-label" style="margin-bottom:6px;">💬 Sugerir plano pra ele ver</div>
+              <textarea class="sugestaoPlanoInput" placeholder="ex: Essa semana, foca em avançar os 5 leads mais antigos de Visita antes de abrir prospecção nova." style="width:100%;min-height:50px;background:var(--panel-2);border:1px solid var(--hairline);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12px;margin-bottom:6px;"></textarea>
+              <button class="sugestaoPlanoBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Enviar</button>
+              <span class="sugestaoPlanoStatus" style="font-size:11px;color:var(--muted);margin-left:8px;"></span>
+              <div class="sugestoesAnteriores" style="margin-top:10px;"></div>
+            </div>
+          </div>
+        </div>
+      `).join('')}
     </div>
-  `).join('');
+  `;
 
-  for (const card of el.querySelectorAll('.daily-rep-card')) {
+  for (const card of el.querySelectorAll('[data-owner]')) {
     const ownerId = card.dataset.owner;
 
     const { data: semanas, error: erroSemanas } = await supa
@@ -2150,15 +2251,27 @@ async function renderCoaching() {
       .order('created_at', { ascending: false })
       .limit(1);
 
+    const { data: sugestoes } = await supa
+      .from('sugestoes_planos')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .order('created_at', { ascending: false })
+      .limit(3);
+
+    // Badge de tendência (usa a mais recente)
+    if (!erroSemanas && semanas && semanas.length > 0) {
+      card.querySelector('.coachingTendencia').innerHTML = tendenciaBadge(semanas[0].tendencia);
+    }
+
     const mensalEl = card.querySelector('.coachingMensal');
     if (!erroMensal && mensais && mensais.length > 0) {
       const m = mensais[0];
       mensalEl.innerHTML = `
-        <div class="gargalo-box" style="margin-bottom:14px;">
-          <div class="daily-col-label" style="margin-bottom:6px;">📅 Fechamento do mês (${m.mes_ano})</div>
-          <div style="font-size:13px;margin-bottom:8px;">${m.resumo_mes}</div>
+        <div class="gargalo-box" style="margin-bottom:12px;padding:10px 12px;">
+          <div class="daily-col-label" style="margin-bottom:4px;">📅 Fechamento do mês (${m.mes_ano})</div>
+          <div style="font-size:12px;margin-bottom:6px;">${m.resumo_mes}</div>
           ${(m.acoes_recomendadas || []).length > 0 ? `
-            <ul class="practice-list" style="margin:0;">
+            <ul class="practice-list" style="margin:0;font-size:12px;">
               ${m.acoes_recomendadas.map(a => `<li>${a}</li>`).join('')}
             </ul>
           ` : ''}
@@ -2166,23 +2279,55 @@ async function renderCoaching() {
       `;
     }
 
-    const semanalEl = card.querySelector('.coachingSemanal');
+    const resumoEl = card.querySelector('.coachingSemanalResumo');
+    const historicoEl = card.querySelector('.coachingHistoricoCompleto');
     if (erroSemanas) {
-      semanalEl.innerHTML = `<div class="empty-state">Erro: ${erroSemanas.message}</div>`;
+      resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Erro: ${erroSemanas.message}</div>`;
     } else if (!semanas || semanas.length === 0) {
-      semanalEl.innerHTML = `<div class="empty-state">Nenhuma análise semanal gerada ainda — roda toda segunda-feira.</div>`;
+      resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Nenhuma análise ainda — roda toda sexta.</div>`;
     } else {
-      semanalEl.innerHTML = `
-        <div class="daily-col-label" style="margin-bottom:8px;">Histórico semanal</div>
-        ${semanas.map(s => `
-          <div style="border-left:3px solid var(--hairline);padding-left:12px;margin-bottom:14px;">
-            <div style="font-size:11px;color:var(--muted-2);margin-bottom:3px;">${s.semana_label} · ${s.tendencia || ''}</div>
-            <div style="font-size:13px;margin-bottom:4px;"><b>Gargalo:</b> ${s.gargalo_semana}</div>
-            <div style="font-size:13px;"><b>Como agir:</b> ${s.como_agir}</div>
-          </div>
-        `).join('')}
+      const ultima = semanas[0];
+      resumoEl.innerHTML = `
+        <div style="font-size:11px;color:var(--muted-2);margin-bottom:3px;">Última (${ultima.semana_label})</div>
+        <div style="font-size:12.5px;margin-bottom:4px;"><b>Gargalo:</b> ${ultima.gargalo_semana}</div>
+        <div style="font-size:12.5px;"><b>Como agir:</b> ${ultima.como_agir}</div>
       `;
+      historicoEl.innerHTML = semanas.slice(1).map(s => `
+        <div style="border-left:3px solid var(--hairline);padding-left:10px;margin-bottom:10px;">
+          <div style="font-size:10.5px;color:var(--muted-2);margin-bottom:2px;">${s.semana_label} ${tendenciaBadge(s.tendencia)}</div>
+          <div style="font-size:12px;"><b>Gargalo:</b> ${s.gargalo_semana}</div>
+          <div style="font-size:12px;"><b>Como agir:</b> ${s.como_agir}</div>
+        </div>
+      `).join('') || '<div style="font-size:11.5px;color:var(--muted);">Sem semanas anteriores ainda.</div>';
     }
+
+    // Sugestões já enviadas
+    const sugestoesEl = card.querySelector('.sugestoesAnteriores');
+    if (sugestoes && sugestoes.length > 0) {
+      sugestoesEl.innerHTML = sugestoes.map(s => `
+        <div style="font-size:11px;color:var(--muted);padding:6px 0;border-top:1px dashed var(--hairline);">
+          <span style="color:var(--muted-2);">${new Date(s.created_at).toLocaleDateString('pt-BR')}:</span> ${s.texto}
+        </div>
+      `).join('');
+    }
+
+    card.querySelector('.sugestaoPlanoBtn').addEventListener('click', async () => {
+      const input = card.querySelector('.sugestaoPlanoInput');
+      const statusEl = card.querySelector('.sugestaoPlanoStatus');
+      const texto = input.value.trim();
+      if (!texto) return;
+      statusEl.textContent = 'Enviando...';
+      const { error } = await supa.from('sugestoes_planos').insert({
+        owner_id: ownerId, texto, autor: sessaoAtual.nome || sessaoAtual.email
+      });
+      if (error) {
+        statusEl.textContent = `Erro: ${error.message}`;
+      } else {
+        statusEl.textContent = 'Enviado!';
+        input.value = '';
+        renderCoaching();
+      }
+    });
   }
 }
 
