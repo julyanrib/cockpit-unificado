@@ -46,13 +46,12 @@ Escreva em português do Brasil, tom direto e prático (nada de generalidades ti
 
 {
   "resumoGeral": "2-4 frases em HTML simples (pode usar <b>) explicando o que mais chamou atenção nos números da semana que passou — comparando com a anterior, citando números concretos.",
-  "comoAgir": ["3 a 4 ações objetivas e priorizadas para a semana atual, cada uma como uma string curta, pode usar <b> para destacar números/nomes"],
-  "porExecutivo": [
-    { "ownerId": "id exato do JSON acima", "foco": "1 frase objetiva dizendo o principal foco dessa pessoa nesta semana, baseado na etapa dominante e volume em aberto" }
-  ]
+  "comoAgir": ["3 a 4 ações objetivas e priorizadas para a semana atual, cada uma como uma string curta, pode usar <b> para destacar números"]
 }
 
-Inclua "porExecutivo" para TODOS os executivos do snapshot, na mesma ordem em que aparecem.`;
+IMPORTANTE: fale só em nível de time/funil agregado. Não cite nome de executivo específico nem avalie
+desempenho individual — essa análise é vista coletivamente por todo o time, e observações sobre uma
+pessoa específica devem ficar reservadas para uma conversa de PDI, não para este resumo coletivo.`;
 
 async function main() {
   console.log('Chamando a API da Claude...');
@@ -92,8 +91,7 @@ async function main() {
     janela: raw.janela,
     kpisComparativo: raw.kpisComparativo,
     resumoGeral: parsed.resumoGeral,
-    comoAgir: parsed.comoAgir,
-    porExecutivo: parsed.porExecutivo
+    comoAgir: parsed.comoAgir
   };
 
   fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), JSON.stringify(output, null, 2));
