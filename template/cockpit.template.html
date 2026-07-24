@@ -244,6 +244,10 @@
   /* ---- Leads com SLA estourado na lista ---- */
   .lead-row.sla-breach{border-left:4px solid var(--red);}
   .lead-row.sla-breach .lead-days{color:var(--red);}
+  .leads-box-scroll{max-height:340px;overflow-y:auto;}
+  .card-summary{cursor:pointer;list-style:none;}
+  .card-summary::-webkit-details-marker{display:none;}
+  .card-summary-toggle{font-size:11.5px;color:var(--red);font-weight:700;text-decoration:underline;}
 
   /* ---- Comunicados (banner de avisos) ---- */
   .comunicado-banner{border-radius:14px;padding:14px 18px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;box-shadow:var(--shadow-sm);}
@@ -709,6 +713,7 @@ function aplicarVisaoPorPapel() {
 
 function buildAcaoImediataHTML(r) {
   const travados = (r.travados || []).slice().sort((a, b) => b.dias - a.dias);
+  const movidosHoje = travados.filter(l => l.dias === 0).length;
   if (travados.length === 0) {
     return `
       <div class="chart-card" style="margin-bottom:20px;border-left:4px solid var(--green);">
@@ -718,24 +723,29 @@ function buildAcaoImediataHTML(r) {
     `;
   }
   return `
-    <div class="chart-card" style="margin-bottom:20px;border-left:4px solid var(--red);">
-      <h3 style="margin-bottom:4px;">🔥 Ação de hoje — ${travados.length} lead${travados.length > 1 ? 's' : ''} com SLA estourado</h3>
-      <div class="chart-subtitle" style="margin-bottom:14px;">Comece por aqui. Clica pra abrir no HubSpot e agir agora.</div>
-      <div class="leads-box">
-        ${travados.map(l => `
-          <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
-            <div class="lead-left">
-              <span class="lead-name">${l.name}</span>
-              <span class="lead-stage">${l.stage}</span>
-            </div>
-            <div class="lead-right">
-              <span class="lead-days">${l.dias}d nesta etapa</span>
-              <span class="lead-cta">abrir →</span>
-            </div>
-          </a>
-        `).join('')}
+    <details class="chart-card" style="margin-bottom:20px;border-left:4px solid var(--red);padding:0;">
+      <summary class="card-summary" style="padding:20px 22px;">
+        <h3 style="display:inline;margin-bottom:0;">🔥 Ação de hoje — ${travados.length} lead${travados.length > 1 ? 's' : ''} com SLA estourado</h3>
+        <span class="card-summary-toggle" style="margin-left:10px;">ver leads</span>
+        <div class="chart-subtitle" style="margin-top:6px;">${movidosHoje > 0 ? `${movidosHoje} já movido${movidosHoje > 1 ? 's' : ''} hoje. ` : ''}Clica pra ver a lista e agir.</div>
+      </summary>
+      <div style="padding:0 22px 20px;">
+        <div class="leads-box leads-box-scroll">
+          ${travados.map(l => `
+            <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+              <div class="lead-left">
+                <span class="lead-name">${l.name}</span>
+                <span class="lead-stage">${l.stage}</span>
+              </div>
+              <div class="lead-right">
+                <span class="lead-days">${l.dias}d nesta etapa</span>
+                <span class="lead-cta">abrir →</span>
+              </div>
+            </a>
+          `).join('')}
+        </div>
       </div>
-    </div>
+    </details>
   `;
 }
 
@@ -973,36 +983,54 @@ document.getElementById('healthBadge').innerHTML = `
     const reuniaoTxt = l.proximaReuniao
       ? ` · próx. reunião ${new Date(l.proximaReuniao).toLocaleDateString('pt-BR')}`
       : (tipo === 'quente' ? ' · sem próxima reunião marcada' : '');
+    const notas = l.notas || [];
     return `
-      <a class="lead-row ${tipo === 'frio' ? 'sla-breach' : ''}" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
-        <div class="lead-left">
-          <span class="lead-name">${tipo === 'quente' ? '🔥' : '🧊'} ${l.name}</span>
-          <span class="lead-stage">${l.vendedor} · ${l.stage}${reuniaoTxt}</span>
+      <details class="lead-row-details">
+        <summary class="lead-row ${tipo === 'frio' ? 'sla-breach' : ''}" style="cursor:pointer;">
+          <div class="lead-left">
+            <span class="lead-name">${tipo === 'quente' ? '🔥' : '🧊'} ${l.name}</span>
+            <span class="lead-stage">${l.vendedor} · ${l.stage}${reuniaoTxt}</span>
+          </div>
+          <div class="lead-right">
+            <span class="lead-days" style="color:${tipo === 'quente' ? 'var(--green)' : 'var(--red)'};">${l.dias}d (${l.slaRatio}% do SLA)</span>
+            <a class="lead-cta" href="${hsUrl(l.id)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">abrir →</a>
+          </div>
+        </summary>
+        <div style="padding:10px 16px 14px;background:var(--panel-2);">
+          <div class="daily-col-label" style="margin-bottom:6px;">Notas de campo</div>
+          ${notas.length === 0
+            ? '<div style="font-size:12.5px;color:var(--muted);">Nenhuma nota registrada neste negócio.</div>'
+            : notas.map(n => `<div style="font-size:12.5px;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--hairline);">${n.texto || '(nota vazia)'}<div style="color:var(--muted-2);font-size:10.5px;margin-top:4px;">${n.data ? new Date(n.data).toLocaleDateString('pt-BR') : ''}</div></div>`).join('')
+          }
         </div>
-        <div class="lead-right">
-          <span class="lead-days" style="color:${tipo === 'quente' ? 'var(--green)' : 'var(--red)'};">${l.dias}d (${l.slaRatio}% do SLA)</span>
-          <span class="lead-cta">abrir →</span>
-        </div>
-      </a>
+      </details>
     `;
   }
 
   el.innerHTML = `
     <div class="charts-row" style="margin-bottom:16px;">
-      <div class="chart-card" style="border-left:4px solid var(--green);">
-        <h3 style="margin-bottom:4px;">🔥 Leads Quentes — perto de fechar</h3>
-        <div class="chart-subtitle" style="margin-bottom:14px;">Etapa avançada (Demo+) e ainda dentro da metade do prazo. São esses que puxam a conversa da daily.</div>
-        <div class="leads-box">
-          ${temp.quentes.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead quente agora — funil precisa avançar.</div>' : temp.quentes.map(l => linhaLead(l, 'quente')).join('')}
+      <details class="chart-card" style="border-left:4px solid var(--green);padding:0;" open>
+        <summary class="card-summary" style="padding:20px 22px;">
+          <h3 style="display:inline;margin-bottom:0;">🔥 Leads Quentes (${temp.quentes.length}) — perto de fechar</h3>
+          <div class="chart-subtitle" style="margin-top:6px;">Etapa avançada e ainda dentro da metade do prazo. Clica num lead pra ver as notas de campo.</div>
+        </summary>
+        <div style="padding:0 22px 20px;">
+          <div class="leads-box leads-box-scroll">
+            ${temp.quentes.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead quente agora — funil precisa avançar.</div>' : temp.quentes.map(l => linhaLead(l, 'quente')).join('')}
+          </div>
         </div>
-      </div>
-      <div class="chart-card" style="border-left:4px solid var(--red);">
-        <h3 style="margin-bottom:4px;">🧊 Leads Travados — limpar o funil</h3>
-        <div class="chart-subtitle" style="margin-bottom:14px;">SLA estourado, esfriando. Cobrar decisão (avançar ou reciclar) hoje.</div>
-        <div class="leads-box">
-          ${temp.frios.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead travado agora — funil saudável.</div>' : temp.frios.map(l => linhaLead(l, 'frio')).join('')}
+      </details>
+      <details class="chart-card" style="border-left:4px solid var(--red);padding:0;" open>
+        <summary class="card-summary" style="padding:20px 22px;">
+          <h3 style="display:inline;margin-bottom:0;">🧊 Leads Travados (${temp.frios.length}) — limpar o funil</h3>
+          <div class="chart-subtitle" style="margin-top:6px;">SLA estourado, esfriando. Clica num lead pra ver as notas antes de cobrar decisão.</div>
+        </summary>
+        <div style="padding:0 22px 20px;">
+          <div class="leads-box leads-box-scroll">
+            ${temp.frios.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead travado agora — funil saudável.</div>' : temp.frios.map(l => linhaLead(l, 'frio')).join('')}
+          </div>
         </div>
-      </div>
+      </details>
     </div>
   `;
 })();
@@ -1756,7 +1784,13 @@ function vistoPor(comunicadoId) {
   return lidosCache.filter(l => l.comunicado_id === comunicadoId).length;
 }
 
-function renderBannerComunicados() {
+async function urlAssinadaComunicado(caminho) {
+  if (!caminho) return null;
+  const { data, error } = await supa.storage.from('comunicados-imagens').createSignedUrl(caminho, 3600);
+  return error ? null : data.signedUrl;
+}
+
+async function renderBannerComunicados() {
   const el = document.getElementById('comunicadosBanner');
   const naoLidos = comunicadosCache.filter(c => !jaLi(c.id));
 
@@ -1772,13 +1806,14 @@ function renderBannerComunicados() {
     `;
   } else {
     const c = naoLidos[0];
+    const imgUrl = await urlAssinadaComunicado(c.imagem_caminho);
     el.innerHTML = `
       <div class="comunicado-banner ${c.tipo}">
         <div style="flex:1;">
           <span class="comunicado-banner-tipo">${labelTipo(c.tipo)}</span>
           <div class="comunicado-banner-titulo">${c.titulo}</div>
           ${c.mensagem ? `<div class="comunicado-banner-msg">${c.mensagem}</div>` : ''}
-          ${c.imagem_url ? `<img src="${c.imagem_url}" class="comunicado-banner-img">` : ''}
+          ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
         </div>
         <div class="comunicado-banner-actions">
           <button id="btnMarcarLido" data-id="${c.id}">Ok, entendi${naoLidos.length > 1 ? ` (+${naoLidos.length - 1})` : ''}</button>
@@ -1803,18 +1838,25 @@ async function marcarComoLido(comunicadoId) {
   await carregarComunicados();
 }
 
-function abrirHistoricoComunicados() {
+async function abrirHistoricoComunicados() {
   const body = document.getElementById('comunicadosModalBody');
+  body.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  document.getElementById('comunicadosOverlay').classList.add('show');
+
   if (comunicadosCache.length === 0) {
     body.innerHTML = `<div class="empty-state">Nenhum comunicado publicado ainda.</div>`;
-  } else {
-    body.innerHTML = comunicadosCache.map(c => `
+    return;
+  }
+
+  const linhas = await Promise.all(comunicadosCache.map(async (c) => {
+    const imgUrl = await urlAssinadaComunicado(c.imagem_caminho);
+    return `
       <div class="comunicado-item" data-id="${c.id}">
         <div class="comunicado-view">
           <span class="comunicado-banner-tipo" style="background:${c.tipo === 'urgente' ? 'var(--red)' : c.tipo === 'atualizacao' ? 'var(--violet)' : 'var(--muted-2)'};color:#fff;">${labelTipo(c.tipo)}</span>
           <div class="comunicado-banner-titulo" style="margin-top:6px;">${c.titulo}</div>
           ${c.mensagem ? `<div class="comunicado-banner-msg">${c.mensagem}</div>` : ''}
-          ${c.imagem_url ? `<img src="${c.imagem_url}" class="comunicado-banner-img">` : ''}
+          ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
           <div class="comunicado-item-meta">${c.autor} · ${new Date(c.created_at).toLocaleDateString('pt-BR')}</div>
           <div class="comunicado-visto-por">Visto por ${vistoPor(c.id)}/${DATA.usuarios.length}</div>
           ${sessaoAtual.role === 'manager' ? `
@@ -1836,7 +1878,9 @@ function abrirHistoricoComunicados() {
           <button class="btnCancelarEdicao" style="background:var(--panel-2);border:1px solid var(--hairline);border-radius:999px;padding:6px 14px;font-size:11.5px;cursor:pointer;">Cancelar</button>
         </div>
       </div>
-    `).join('');
+    `;
+  }));
+  body.innerHTML = linhas.join('');
 
     body.querySelectorAll('.comunicado-item').forEach(item => {
       const id = item.dataset.id;
@@ -1868,8 +1912,6 @@ function abrirHistoricoComunicados() {
         abrirHistoricoComunicados();
       });
     });
-  }
-  document.getElementById('comunicadosOverlay').classList.add('show');
 }
 
 document.getElementById('comunicadosModalClose').addEventListener('click', () => document.getElementById('comunicadosOverlay').classList.remove('show'));
@@ -1891,7 +1933,7 @@ document.getElementById('novoComunicadoPublicar').addEventListener('click', asyn
   }
 
   statusEl.textContent = 'Publicando...';
-  let imagemUrl = null;
+  let imagemCaminho = null;
 
   if (arquivo) {
     const caminho = `${Date.now()}_${arquivo.name}`;
@@ -1900,13 +1942,12 @@ document.getElementById('novoComunicadoPublicar').addEventListener('click', asyn
       statusEl.textContent = `Erro no upload da imagem: ${erroUpload.message}`;
       return;
     }
-    const { data: pub } = supa.storage.from('comunicados-imagens').getPublicUrl(caminho);
-    imagemUrl = pub.publicUrl;
+    imagemCaminho = caminho;
   }
 
   const { error } = await supa.from('comunicados').insert({
     tipo, titulo, mensagem,
-    imagem_url: imagemUrl,
+    imagem_caminho: imagemCaminho,
     autor: sessaoAtual.nome || sessaoAtual.email
   });
 
