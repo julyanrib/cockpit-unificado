@@ -36,6 +36,7 @@ const prompt = `Você é um analista de operações de vendas (sales ops) experi
 Dados da semana atual (${raw.janela.atual}) vs. semana anterior (${raw.janela.anterior}):
 - Leads criados: ${raw.kpisComparativo.atual.leadsCriados} (semana anterior: ${raw.kpisComparativo.anterior.leadsCriados})
 - Ganhos: ${raw.kpisComparativo.atual.ganhos} (semana anterior: ${raw.kpisComparativo.anterior.ganhos})
+- Reuniões (entraram em Demo/Proposta): ${raw.kpisComparativo.atual.reunioes} (semana anterior: ${raw.kpisComparativo.anterior.reunioes})
 - Perdidos: ${raw.kpisComparativo.atual.perdidos} (semana anterior: ${raw.kpisComparativo.anterior.perdidos})
 - Reciclagem: ${raw.kpisComparativo.atual.reciclagem} (semana anterior: ${raw.kpisComparativo.anterior.reciclagem})
 
@@ -91,7 +92,10 @@ async function main() {
     janela: raw.janela,
     kpisComparativo: raw.kpisComparativo,
     resumoGeral: parsed.resumoGeral,
-    comoAgir: parsed.comoAgir
+    comoAgir: parsed.comoAgir,
+    ganhosSemanaDetalhe: raw.ganhosSemanaDetalhe || [],
+    reunioesSemanaDetalhe: raw.reunioesSemanaDetalhe || [],
+    quentesDemoOuNegociacao: raw.quentesDemoOuNegociacao || []
   };
 
   fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), JSON.stringify(output, null, 2));

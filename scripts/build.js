@@ -93,6 +93,30 @@ const kpiDeltas = hubspotPrevious ? {
   emReciclagem: delta(hubspot.kpis.emReciclagem, hubspotPrevious.kpis.emReciclagem)
 } : null;
 
+// Ranking de vendas da semana — 1º/2º/3º lugar por quantidade de negócios fechados,
+// empate resolvido pelo MRR total (maior ganha)
+let rankingSemanal = [];
+if (resumoSemanal && resumoSemanal.ganhosSemanaDetalhe) {
+  const porOwner = {};
+  resumoSemanal.ganhosSemanaDetalhe.forEach(d => {
+    if (!d.ownerId) return;
+    if (!porOwner[d.ownerId]) porOwner[d.ownerId] = { count: 0, mrrTotal: 0, clientes: [] };
+    porOwner[d.ownerId].count += 1;
+    porOwner[d.ownerId].mrrTotal += d.mrr || 0;
+    porOwner[d.ownerId].clientes.push({ nome: d.nome, mrr: d.mrr || 0 });
+  });
+  rankingSemanal = Object.entries(porOwner)
+    .map(([ownerId, v]) => ({
+      ownerId,
+      name: (narrativas.reps[ownerId] || {}).name || ownerId,
+      count: v.count,
+      mrrTotal: v.mrrTotal,
+      clientes: v.clientes
+    }))
+    .sort((a, b) => (b.count - a.count) || (b.mrrTotal - a.mrrTotal))
+    .slice(0, 3);
+}
+
 const DATA = {
   hubspotUpdatedAtFmt: fmtDate(hubspot.updatedAt),
   expogoJanela: expogo.janela,
@@ -114,7 +138,11 @@ const DATA = {
     janela: resumoSemanal.janela,
     kpisComparativo: resumoSemanal.kpisComparativo,
     resumoGeral: resumoSemanal.resumoGeral,
-    comoAgir: resumoSemanal.comoAgir
+    comoAgir: resumoSemanal.comoAgir,
+    ganhosSemanaDetalhe: resumoSemanal.ganhosSemanaDetalhe || [],
+    reunioesSemanaDetalhe: resumoSemanal.reunioesSemanaDetalhe || [],
+    quentesDemoOuNegociacao: resumoSemanal.quentesDemoOuNegociacao || [],
+    ranking: rankingSemanal
   } : null,
   usuarios: usuarios.usuarios,
   supabase: supabaseConfig ? { url: supabaseConfig.url, anonKey: supabaseConfig.anonKey } : null

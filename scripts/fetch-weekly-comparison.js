@@ -1,5 +1,5 @@
 // scripts/fetch-weekly-comparison.js
-// Roda toda SEGUNDA-FEIRA via GitHub Actions. Compara a semana que passou com a anterior
+// Roda toda SEXTA-FEIRA via GitHub Actions. Compara a semana que passou com a anterior
 // e grava data/weekly-raw.json — que o generate-weekly-summary.js usa pra pedir o resumo à Claude.
 
 const fs = require('fs');
@@ -13,13 +13,20 @@ if (!TOKEN) {
 
 const PIPELINE_ID = '916011864';
 const STAGES = {
-  ganho1: '1396006162',
-  ganho2: '1396006163',
+  ganho1: '1396006162',        // Negócio Fechado — o ÚNICO que conta como venda de verdade
+  ganho2: '1396006163',        // Enviado Onboarding — NÃO conta aqui (é a etapa seguinte do mesmo negócio)
   perdido: '1396006164',
-  reciclagem: '1398311191'
+  reciclagem: '1398311191',
+  demoProposta: '1395880471',
+  negociacao: '1395880472'
 };
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+function isTestDeal(dealname) {
+  if (!dealname) return false;
+  return /teste/i.test(dealname);
+}
 
 async function hsSearch(body, attempt = 1) {
   await sleep(350);
@@ -44,24 +51,93 @@ function fmtRange(start, end) {
   return `${f(start)}–${f(end)}/${end.getFullYear()}`;
 }
 
-async function countBy(propertyName, filters) {
+// Conta negócios criados na janela (sem filtro de teste aqui — volume geral só de referência)
+async function leadsCriadosNaJanela(startMs, endMs) {
   const data = await hsSearch({
-    filterGroups: [{ filters: [{ propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID }, ...filters] }],
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'createdate', operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
+      ]
+    }],
     limit: 1
   });
   return data.total || 0;
 }
 
+// Conta negócios que foram FECHADOS DE VERDADE (closedate, não hs_lastmodifieddate) na janela,
+// já filtrando teste — mesma lógica validada no fetch-hubspot.js
+async function ganhosNaJanela(startMs, endMs) {
+  const data = await hsSearch({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: STAGES.ganho1 },
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
+      ]
+    }],
+    properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'closedate'],
+    limit: 100
+  });
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
+}
+
+// Perdidos/reciclagem: usa hs_lastmodifieddate mesmo (não tem um "closedate" equivalente
+// pra essas etapas), mas agora filtrando teste
+async function contagemComFiltro(stageId, startMs, endMs) {
+  const data = await hsSearch({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: stageId },
+        { propertyName: 'hs_lastmodifieddate', operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
+      ]
+    }],
+    properties: ['dealname'],
+    limit: 100
+  });
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname)).length;
+}
+
+// "Reuniões" = negócios que ENTRARAM em Demo/Proposta na janela (fazer uma demo pressupõe reunião)
+async function reunioesNaJanela(startMs, endMs) {
+  const data = await hsSearch({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: STAGES.demoProposta },
+        { propertyName: `hs_v2_date_entered_${STAGES.demoProposta}`, operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
+      ]
+    }],
+    properties: ['dealname', 'hubspot_owner_id'],
+    limit: 100
+  });
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
+}
+
 async function windowCounts(startMs, endMs) {
-  const dateFilter = (prop) => ({ propertyName: prop, operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) });
+  const leadsCriados = await leadsCriadosNaJanela(startMs, endMs);
+  const ganhosDeals = await ganhosNaJanela(startMs, endMs);
+  const perdidos = await contagemComFiltro(STAGES.perdido, startMs, endMs);
+  const reciclagem = await contagemComFiltro(STAGES.reciclagem, startMs, endMs);
+  const reunioesDeals = await reunioesNaJanela(startMs, endMs);
 
-  const leadsCriados = await countBy(null, [dateFilter('createdate')]);
-  const ganho1 = await countBy(null, [{ propertyName: 'dealstage', operator: 'EQ', value: STAGES.ganho1 }, dateFilter('hs_lastmodifieddate')]);
-  const ganho2 = await countBy(null, [{ propertyName: 'dealstage', operator: 'EQ', value: STAGES.ganho2 }, dateFilter('hs_lastmodifieddate')]);
-  const perdidos = await countBy(null, [{ propertyName: 'dealstage', operator: 'EQ', value: STAGES.perdido }, dateFilter('hs_lastmodifieddate')]);
-  const reciclagem = await countBy(null, [{ propertyName: 'dealstage', operator: 'EQ', value: STAGES.reciclagem }, dateFilter('hs_lastmodifieddate')]);
-
-  return { leadsCriados, ganhos: ganho1 + ganho2, perdidos, reciclagem };
+  return {
+    leadsCriados,
+    ganhos: ganhosDeals.length,
+    ganhosDeals: ganhosDeals.map(d => ({
+      nome: d.properties.dealname,
+      ownerId: d.properties.hubspot_owner_id,
+      mrr: parseFloat(d.properties.valor_de_mrr) || 0
+    })),
+    perdidos,
+    reciclagem,
+    reunioes: reunioesDeals.length,
+    reunioesDeals: reunioesDeals.map(d => ({
+      nome: d.properties.dealname,
+      ownerId: d.properties.hubspot_owner_id
+    }))
+  };
 }
 
 async function main() {
@@ -78,9 +154,16 @@ async function main() {
   console.log('Buscando semana anterior...');
   const anterior = await windowCounts(anteriorInicio.getTime(), anteriorFim.getTime());
 
-  // Reaproveita o snapshot de hoje (já buscado pelo job diário) pra dar contexto de gargalo por executivo
+  // Reaproveita o snapshot de hoje (já buscado pelo job diário) — dá contexto de gargalo
+  // por executivo e a lista de "quentes" já calculada (sem precisar buscar de novo)
   const hubspotPath = path.join(__dirname, '..', 'data', 'hubspot.json');
   const hubspotSnapshot = fs.existsSync(hubspotPath) ? JSON.parse(fs.readFileSync(hubspotPath, 'utf8')) : null;
+
+  // "Quentes" pra essa aba: só quem está em Demo/Proposta ou Negociação (a definição
+  // mais ampla, que inclui Ag.Pagamento, fica só no Cockpit geral)
+  const quentesDemoOuNegociacao = hubspotSnapshot && hubspotSnapshot.temperatura
+    ? hubspotSnapshot.temperatura.quentes.filter(l => l.stageId === STAGES.demoProposta || l.stageId === STAGES.negociacao)
+    : [];
 
   const output = {
     geradoEm: now.toISOString(),
@@ -88,7 +171,13 @@ async function main() {
       atual: fmtRange(atualInicio, atualFim),
       anterior: fmtRange(anteriorInicio, anteriorFim)
     },
-    kpisComparativo: { atual, anterior },
+    kpisComparativo: {
+      atual: { leadsCriados: atual.leadsCriados, ganhos: atual.ganhos, perdidos: atual.perdidos, reciclagem: atual.reciclagem, reunioes: atual.reunioes },
+      anterior: { leadsCriados: anterior.leadsCriados, ganhos: anterior.ganhos, perdidos: anterior.perdidos, reciclagem: anterior.reciclagem, reunioes: anterior.reunioes }
+    },
+    ganhosSemanaDetalhe: atual.ganhosDeals,
+    reunioesSemanaDetalhe: atual.reunioesDeals,
+    quentesDemoOuNegociacao,
     snapshotReps: hubspotSnapshot ? hubspotSnapshot.reps : {}
   };
 
