@@ -9,6 +9,13 @@ const root = path.join(__dirname, '..');
 const hubspot = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
 const expogo = JSON.parse(fs.readFileSync(path.join(root, 'data', 'expogo.json'), 'utf8'));
 const narrativas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'narrativas.json'), 'utf8'));
+const usuarios = JSON.parse(fs.readFileSync(path.join(root, 'data', 'usuarios.json'), 'utf8'));
+
+// Config do Supabase (URL + chave pública) — opcional até você configurar; sem isso, o login fica desativado
+const supabaseConfigPath = path.join(root, 'data', 'supabase-config.json');
+const supabaseConfig = fs.existsSync(supabaseConfigPath)
+  ? JSON.parse(fs.readFileSync(supabaseConfigPath, 'utf8'))
+  : null;
 
 // Resumo semanal é opcional — só existe depois que o workflow de segunda-feira rodar pela 1ª vez
 const resumoSemanalPath = path.join(root, 'data', 'resumo-semanal.json');
@@ -107,7 +114,9 @@ const DATA = {
     kpisComparativo: resumoSemanal.kpisComparativo,
     resumoGeral: resumoSemanal.resumoGeral,
     comoAgir: resumoSemanal.comoAgir
-  } : null
+  } : null,
+  usuarios: usuarios.usuarios,
+  supabase: supabaseConfig ? { url: supabaseConfig.url, anonKey: supabaseConfig.anonKey } : null
 };
 
 const template = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
