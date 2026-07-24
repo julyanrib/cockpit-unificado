@@ -363,11 +363,14 @@
     <button class="tab-btn" id="tabBtnDaily" data-view="viewDaily">Daily</button>
     <button class="tab-btn" id="tabBtnMeuPainel" data-view="viewMeuPainel" style="display:none;">Meu Painel</button>
     <button class="tab-btn" id="tabBtnPDIs" data-view="viewPDIs">PDIs</button>
+    <button class="tab-btn" id="tabBtnCoaching" data-view="viewCoaching" style="display:none;">Coaching</button>
   </div>
 
   <div class="view" id="viewCockpit">
 
   <div class="hint">Clique em um executivo — o gargalo, as boas práticas e o PDI já combinam pipeline (HubSpot) com atividade real de campo (Expogo).</div>
+
+  <div id="temperaturaCards"></div>
 
   <div class="kpi-label"><span class="source-tag hub">HubSpot</span>pipeline — últimos 7 dias / snapshot atual</div>
   <div class="kpi-strip" id="kpiHub"></div>
@@ -439,7 +442,13 @@
     <div id="pdisContent"></div>
   </div>
 
+  <div class="view" id="viewCoaching">
+    <div class="hint">Só você vê essa aba — análise semanal (e mensal, na última semana do mês) gerada automaticamente pra te ajudar a conduzir o 1:1 de cada um.</div>
+    <div id="coachingContent"></div>
+  </div>
+
   <footer id="footerText"></footer>
+
 
   <div class="overlay" id="overlay">
     <div class="modal">
@@ -687,6 +696,11 @@ function aplicarVisaoPorPapel() {
     document.getElementById('tabBtnMeuPainel').style.display = 'inline-block';
     document.querySelector('.section-title').innerHTML = '<h2>Meu Painel</h2>';
     renderMeuPainel();
+  }
+
+  if (sessaoAtual.role === 'manager') {
+    document.getElementById('tabBtnCoaching').style.display = 'inline-block';
+    if (typeof renderCoaching === 'function') renderCoaching();
   }
 
   if (typeof renderRepsList === 'function') renderRepsList();
@@ -950,6 +964,49 @@ document.getElementById('healthBadge').innerHTML = `
   </div>
 `;
 
+// ============ TEMPERATURA DOS LEADS (assunto da daily) ============
+(function renderTemperatura() {
+  const el = document.getElementById('temperaturaCards');
+  const temp = DATA.temperatura || { quentes: [], frios: [] };
+
+  function linhaLead(l, tipo) {
+    const reuniaoTxt = l.proximaReuniao
+      ? ` · próx. reunião ${new Date(l.proximaReuniao).toLocaleDateString('pt-BR')}`
+      : (tipo === 'quente' ? ' · sem próxima reunião marcada' : '');
+    return `
+      <a class="lead-row ${tipo === 'frio' ? 'sla-breach' : ''}" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+        <div class="lead-left">
+          <span class="lead-name">${tipo === 'quente' ? '🔥' : '🧊'} ${l.name}</span>
+          <span class="lead-stage">${l.vendedor} · ${l.stage}${reuniaoTxt}</span>
+        </div>
+        <div class="lead-right">
+          <span class="lead-days" style="color:${tipo === 'quente' ? 'var(--green)' : 'var(--red)'};">${l.dias}d (${l.slaRatio}% do SLA)</span>
+          <span class="lead-cta">abrir →</span>
+        </div>
+      </a>
+    `;
+  }
+
+  el.innerHTML = `
+    <div class="charts-row" style="margin-bottom:16px;">
+      <div class="chart-card" style="border-left:4px solid var(--green);">
+        <h3 style="margin-bottom:4px;">🔥 Leads Quentes — perto de fechar</h3>
+        <div class="chart-subtitle" style="margin-bottom:14px;">Etapa avançada (Demo+) e ainda dentro da metade do prazo. São esses que puxam a conversa da daily.</div>
+        <div class="leads-box">
+          ${temp.quentes.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead quente agora — funil precisa avançar.</div>' : temp.quentes.map(l => linhaLead(l, 'quente')).join('')}
+        </div>
+      </div>
+      <div class="chart-card" style="border-left:4px solid var(--red);">
+        <h3 style="margin-bottom:4px;">🧊 Leads Travados — limpar o funil</h3>
+        <div class="chart-subtitle" style="margin-bottom:14px;">SLA estourado, esfriando. Cobrar decisão (avançar ou reciclar) hoje.</div>
+        <div class="leads-box">
+          ${temp.frios.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead travado agora — funil saudável.</div>' : temp.frios.map(l => linhaLead(l, 'frio')).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+})();
+
 document.getElementById('kpiHub').innerHTML = `
   <div class="kpi"><div class="v">${DATA.kpisHub.leadsCriados}${kpiDeltaHtml('leadsCriados')}</div><div class="l">Leads criados (7d)</div></div>
   <div class="kpi"><div class="v">🏆 ${DATA.kpisHub.ganhos}${kpiDeltaHtml('ganhos')}</div><div class="l">Ganhos (7d)</div></div>
@@ -979,6 +1036,7 @@ document.getElementById('tabBtnResumo').addEventListener('click', () => activate
 document.getElementById('tabBtnDaily').addEventListener('click', () => activateTab('viewDaily'));
 document.getElementById('tabBtnMeuPainel').addEventListener('click', () => activateTab('viewMeuPainel'));
 document.getElementById('tabBtnPDIs').addEventListener('click', () => activateTab('viewPDIs'));
+document.getElementById('tabBtnCoaching').addEventListener('click', () => activateTab('viewCoaching'));
 // Nas segundas-feiras, abre direto no Resumo Semanal; nos outros dias, abre no Cockpit
 const hojeEhSegunda = new Date().getDay() === 1;
 activateTab((hojeEhSegunda && DATA.resumoSemanal) ? 'viewResumo' : 'viewCockpit');
@@ -2015,6 +2073,78 @@ async function renderPDIs() {
     }
   });
 }
+
+// ============ COACHING (análise individual — só o gestor vê) ============
+async function renderCoaching() {
+  const el = document.getElementById('coachingContent');
+  if (!DATA.supabase || !supa) {
+    el.innerHTML = `<div class="empty-state">Login ainda não configurado.</div>`;
+    return;
+  }
+
+  el.innerHTML = DATA.reps.map(r => `
+    <div class="daily-rep-card" style="margin-bottom:14px;" data-owner="${r.ownerId}">
+      <div class="daily-rep-head">${r.name} <span style="color:var(--muted-2);font-weight:400;font-size:11px;">${r.praca}</span></div>
+      <div style="padding:14px 16px;">
+        <div class="coachingMensal"></div>
+        <div class="coachingSemanal"><div class="empty-state">Carregando...</div></div>
+      </div>
+    </div>
+  `).join('');
+
+  for (const card of el.querySelectorAll('.daily-rep-card')) {
+    const ownerId = card.dataset.owner;
+
+    const { data: semanas, error: erroSemanas } = await supa
+      .from('analise_individual_semanal')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .order('created_at', { ascending: false })
+      .limit(6);
+
+    const { data: mensais, error: erroMensal } = await supa
+      .from('analise_individual_mensal')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    const mensalEl = card.querySelector('.coachingMensal');
+    if (!erroMensal && mensais && mensais.length > 0) {
+      const m = mensais[0];
+      mensalEl.innerHTML = `
+        <div class="gargalo-box" style="margin-bottom:14px;">
+          <div class="daily-col-label" style="margin-bottom:6px;">📅 Fechamento do mês (${m.mes_ano})</div>
+          <div style="font-size:13px;margin-bottom:8px;">${m.resumo_mes}</div>
+          ${(m.acoes_recomendadas || []).length > 0 ? `
+            <ul class="practice-list" style="margin:0;">
+              ${m.acoes_recomendadas.map(a => `<li>${a}</li>`).join('')}
+            </ul>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    const semanalEl = card.querySelector('.coachingSemanal');
+    if (erroSemanas) {
+      semanalEl.innerHTML = `<div class="empty-state">Erro: ${erroSemanas.message}</div>`;
+    } else if (!semanas || semanas.length === 0) {
+      semanalEl.innerHTML = `<div class="empty-state">Nenhuma análise semanal gerada ainda — roda toda segunda-feira.</div>`;
+    } else {
+      semanalEl.innerHTML = `
+        <div class="daily-col-label" style="margin-bottom:8px;">Histórico semanal</div>
+        ${semanas.map(s => `
+          <div style="border-left:3px solid var(--hairline);padding-left:12px;margin-bottom:14px;">
+            <div style="font-size:11px;color:var(--muted-2);margin-bottom:3px;">${s.semana_label} · ${s.tendencia || ''}</div>
+            <div style="font-size:13px;margin-bottom:4px;"><b>Gargalo:</b> ${s.gargalo_semana}</div>
+            <div style="font-size:13px;"><b>Como agir:</b> ${s.como_agir}</div>
+          </div>
+        `).join('')}
+      `;
+    }
+  }
+}
+
 async function carregarUmAUm(r, root, idPrefix) {
   const el = root.querySelector(`#${idPrefix}UmAUmHistorico`);
   if (!el) return;
