@@ -17,10 +17,18 @@ const supabaseConfig = fs.existsSync(supabaseConfigPath)
   ? JSON.parse(fs.readFileSync(supabaseConfigPath, 'utf8'))
   : null;
 
-// Resumo semanal é opcional — só existe depois que o workflow de segunda-feira rodar pela 1ª vez
+// Resumo semanal (texto da IA) é opcional — só existe depois que o workflow de sexta-feira rodar
 const resumoSemanalPath = path.join(root, 'data', 'resumo-semanal.json');
 const resumoSemanal = fs.existsSync(resumoSemanalPath)
   ? JSON.parse(fs.readFileSync(resumoSemanalPath, 'utf8'))
+  : null;
+
+// weekly-raw.json agora é atualizado TODO DIA (não só sexta) — números de ganhos/ranking/
+// reuniões/quentes ficam sempre frescos, mesmo que o texto interpretado pela IA (acima)
+// só mude na sexta. Se ainda não existir nenhuma versão fresca, cai pro que já tem no resumo.
+const weeklyRawPath = path.join(root, 'data', 'weekly-raw.json');
+const weeklyRaw = fs.existsSync(weeklyRawPath)
+  ? JSON.parse(fs.readFileSync(weeklyRawPath, 'utf8'))
   : null;
 
 // Snapshot anterior (opcional) — só existe depois da 2ª execução do fetch-hubspot.js.
@@ -94,11 +102,13 @@ const kpiDeltas = hubspotPrevious ? {
 } : null;
 
 // Ranking de vendas da semana — 1º/2º/3º lugar por quantidade de negócios fechados,
-// empate resolvido pelo MRR total (maior ganha)
+// empate resolvido pelo MRR total (maior ganha). Usa weekly-raw.json (atualizado todo dia)
+// como fonte primária — só cai pro resumo-semanal.json (sexta) se ainda não existir nenhum.
+const ganhosDetalheFresco = (weeklyRaw && weeklyRaw.ganhosSemanaDetalhe) || (resumoSemanal && resumoSemanal.ganhosSemanaDetalhe) || [];
 let rankingSemanal = [];
-if (resumoSemanal && resumoSemanal.ganhosSemanaDetalhe) {
+if (ganhosDetalheFresco.length > 0) {
   const porOwner = {};
-  resumoSemanal.ganhosSemanaDetalhe.forEach(d => {
+  ganhosDetalheFresco.forEach(d => {
     if (!d.ownerId) return;
     if (!porOwner[d.ownerId]) porOwner[d.ownerId] = { count: 0, mrrTotal: 0, clientes: [] };
     porOwner[d.ownerId].count += 1;
@@ -133,15 +143,16 @@ const DATA = {
   saude,
   reps,
   footerText: `Fontes: HubSpot (pipeline 916011864, auto-atualizado diariamente) + Expogo (export RPA manual, janela ${expogo.janela}) · Leads críticos = mais antigos sem avanço de etapa · Compromissos marcados não são salvos ao recarregar a página.`,
-  resumoSemanal: resumoSemanal ? {
-    geradoEmFmt: fmtDate(resumoSemanal.geradoEm),
-    janela: resumoSemanal.janela,
-    kpisComparativo: resumoSemanal.kpisComparativo,
-    resumoGeral: resumoSemanal.resumoGeral,
-    comoAgir: resumoSemanal.comoAgir,
-    ganhosSemanaDetalhe: resumoSemanal.ganhosSemanaDetalhe || [],
-    reunioesSemanaDetalhe: resumoSemanal.reunioesSemanaDetalhe || [],
-    quentesDemoOuNegociacao: resumoSemanal.quentesDemoOuNegociacao || [],
+  resumoSemanal: (resumoSemanal || weeklyRaw) ? {
+    geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
+    numerosAtualizadosEmFmt: weeklyRaw ? fmtDate(weeklyRaw.geradoEm) : (resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null),
+    janela: (weeklyRaw && weeklyRaw.janela) || (resumoSemanal && resumoSemanal.janela),
+    kpisComparativo: (weeklyRaw && weeklyRaw.kpisComparativo) || (resumoSemanal && resumoSemanal.kpisComparativo),
+    resumoGeral: resumoSemanal ? resumoSemanal.resumoGeral : null,
+    comoAgir: resumoSemanal ? resumoSemanal.comoAgir : [],
+    ganhosSemanaDetalhe: ganhosDetalheFresco,
+    reunioesSemanaDetalhe: (weeklyRaw && weeklyRaw.reunioesSemanaDetalhe) || (resumoSemanal && resumoSemanal.reunioesSemanaDetalhe) || [],
+    quentesDemoOuNegociacao: (weeklyRaw && weeklyRaw.quentesDemoOuNegociacao) || (resumoSemanal && resumoSemanal.quentesDemoOuNegociacao) || [],
     ranking: rankingSemanal
   } : null,
   usuarios: usuarios.usuarios,

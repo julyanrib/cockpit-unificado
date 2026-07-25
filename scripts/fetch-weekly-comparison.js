@@ -65,14 +65,18 @@ async function leadsCriadosNaJanela(startMs, endMs) {
   return data.total || 0;
 }
 
-// Conta negócios que foram FECHADOS DE VERDADE (closedate, não hs_lastmodifieddate) na janela,
-// já filtrando teste — mesma lógica validada no fetch-hubspot.js
+// Conta negócios que foram FECHADOS DE VERDADE (closedate, não hs_lastmodifieddate) na janela.
+// IMPORTANTE: inclui as duas etapas pós-venda (Negócio Fechado E Enviado Onboarding) —
+// a automação de vocês move o negócio pago direto pra Onboarding, então um negócio fechado
+// ontem pode já não estar mais "parado" em Negócio Fechado hoje. closedate é fixo e não muda
+// quando o negócio avança, então cada venda real só é contada 1 vez, não importa em qual das
+// duas etapas ele está agora.
 async function ganhosNaJanela(startMs, endMs) {
   const data = await hsSearch({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
-        { propertyName: 'dealstage', operator: 'EQ', value: STAGES.ganho1 },
+        { propertyName: 'dealstage', operator: 'IN', values: [STAGES.ganho1, STAGES.ganho2] },
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
       ]
     }],
