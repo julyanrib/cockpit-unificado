@@ -359,6 +359,24 @@
     <div id="userBadge" style="text-align:right;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:10px;justify-content:flex-end;"></div>
   </div>
 
+  <div id="perfilOverlay" style="display:none;position:fixed;inset:0;background:rgba(34,30,25,.45);z-index:60;">
+    <div id="perfilDrawer" style="position:absolute;top:0;right:0;height:100%;width:340px;max-width:90vw;background:var(--panel);box-shadow:var(--shadow-lg);padding:24px 22px;overflow-y:auto;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 style="margin:0;font-size:19px;">Meu perfil</h2>
+        <button id="perfilFechar" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
+      </div>
+      <div style="text-align:center;margin-bottom:20px;">
+        <div id="perfilAvatarPreview" style="width:96px;height:96px;border-radius:50%;margin:0 auto 14px;background:var(--red-soft);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:32px;overflow:hidden;"></div>
+        <div style="font-weight:700;font-size:15px;" id="perfilNomeLabel"></div>
+        <div style="color:var(--muted-2);font-size:11.5px;" id="perfilEmailLabel"></div>
+      </div>
+      <label style="font-size:11.5px;color:var(--muted);font-weight:700;display:block;margin-bottom:6px;">Foto de perfil</label>
+      <input type="file" id="perfilFotoInput" accept="image/*" style="width:100%;margin-bottom:10px;font-size:12.5px;">
+      <button id="perfilSalvarBtn" style="width:100%;padding:11px;border-radius:999px;border:none;background:var(--red);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;">Salvar foto</button>
+      <div id="perfilStatus" style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"></div>
+    </div>
+  </div>
+
   <div id="comunicadosBanner"></div>
 
   <div class="updated" id="updatedLine"></div>
@@ -560,7 +578,10 @@ function mostrarApp() {
   document.getElementById('loginGate').style.display = 'none';
   document.getElementById('appRoot').style.display = 'block';
   aplicarVisaoPorPapel();
-  if (DATA.supabase && supa) carregarComunicados();
+  if (DATA.supabase && supa) {
+    carregarComunicados();
+    carregarPerfis();
+  }
 }
 
 function mostrarLogin(mensagem) {
@@ -692,14 +713,16 @@ function aplicarVisaoPorPapel() {
   const badge = document.getElementById('userBadge');
   const toggleBtn = `<button id="themeToggleApp" title="Alternar modo claro/escuro" style="background:var(--panel-2);border:1px solid var(--hairline);border-radius:999px;width:32px;height:32px;cursor:pointer;font-size:14px;">${document.body.getAttribute('data-theme') === 'dark' ? '☀️' : '🌙'}</button>`;
   if (sessaoAtual.email) {
-    badge.innerHTML = `${toggleBtn}<span>${sessaoAtual.nome} <span style="color:var(--muted-2);">(${sessaoAtual.role === 'manager' ? 'gestor' : 'individual'})</span></span>`;
+    badge.innerHTML = `${toggleBtn}<button id="perfilAvatarBadge" style="background:none;border:none;cursor:pointer;padding:0;" title="Editar perfil"></button><span style="cursor:pointer;" id="perfilNomeClicavel">${sessaoAtual.nome} <span style="color:var(--muted-2);">(${sessaoAtual.role === 'manager' ? 'gestor' : 'individual'})</span></span>`;
+    document.getElementById('perfilAvatarBadge').innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 28);
+    document.getElementById('perfilAvatarBadge').addEventListener('click', abrirPerfilDrawer);
+    document.getElementById('perfilNomeClicavel').addEventListener('click', abrirPerfilDrawer);
   } else {
     badge.innerHTML = toggleBtn;
   }
   document.getElementById('themeToggleApp').addEventListener('click', toggleTheme);
 
   if (sessaoAtual.role === 'rep') {
-    document.getElementById('tabBtnResumo').style.display = 'none';
     document.getElementById('tabBtnMeuPainel').style.display = 'inline-block';
     document.querySelector('.section-title').innerHTML = '<h2>Meu Painel</h2>';
     renderMeuPainel();
@@ -782,9 +805,13 @@ function renderMeuPainel() {
   }
 
   el.innerHTML = `
-    <div style="margin-bottom:16px;">
-      <span class="rep-tag ${r.tag}">${r.tagLabel}</span>
-      <span style="color:var(--muted);font-size:12.5px;margin-left:8px;">${r.praca}</span>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+      ${avatarHTML(sessaoAtual.email, r.name, 44)}
+      <div>
+        <div style="font-weight:700;font-size:15px;">${r.name}</div>
+        <span class="rep-tag ${r.tag}">${r.tagLabel}</span>
+        <span style="color:var(--muted);font-size:12.5px;margin-left:6px;">${r.praca}</span>
+      </div>
     </div>
 
     <div id="meuPainelSugestoes"></div>
@@ -1122,9 +1149,12 @@ if (!DATA.resumoSemanal) {
       <h3 style="margin-bottom:14px;">🏆 Ranking da semana</h3>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         ${rs.ranking.map((r, i) => `
-          <div style="flex:1;min-width:160px;background:var(--panel-2);border-radius:12px;padding:14px 16px;text-align:center;">
-            <div style="font-size:28px;">${medalhas[i]}</div>
-            <div style="font-weight:700;font-size:14px;margin-top:4px;">${r.name}</div>
+          <div style="flex:1;min-width:160px;background:var(--panel-2);border-radius:12px;padding:14px 16px;text-align:center;position:relative;">
+            <div style="width:56px;height:56px;margin:0 auto 6px;position:relative;">
+              ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 56)}
+              <div style="position:absolute;bottom:-6px;right:-6px;font-size:20px;">${medalhas[i]}</div>
+            </div>
+            <div style="font-weight:700;font-size:14px;margin-top:8px;">${r.name}</div>
             <div style="color:var(--muted);font-size:12px;margin-top:2px;">${r.count} venda${r.count > 1 ? 's' : ''}${r.mrrTotal > 0 ? ` · R$ ${r.mrrTotal.toLocaleString('pt-BR')} MRR` : ''}</div>
           </div>
         `).join('')}
@@ -1161,8 +1191,8 @@ if (!DATA.resumoSemanal) {
 
   resumoEl.innerHTML = `
     <div class="week-hero">
-      <div class="range">Semana atual: ${rs.janela.atual} · Semana anterior: ${rs.janela.anterior} · Gerado em ${rs.geradoEmFmt}</div>
-      <div class="resumo">${rs.resumoGeral}</div>
+      <div class="range">Semana atual: ${rs.janela.atual} · Semana anterior: ${rs.janela.anterior} · Números atualizados em ${rs.numerosAtualizadosEmFmt}${rs.geradoEmFmt ? ` · Análise escrita em ${rs.geradoEmFmt}` : ''}</div>
+      ${rs.resumoGeral ? `<div class="resumo">${rs.resumoGeral}</div>` : `<div class="resumo" style="color:var(--muted);font-style:italic;">Análise interpretada ainda não gerada — roda toda sexta-feira. Os números abaixo já estão atualizados de hoje.</div>`}
     </div>
 
     ${podioHtml}
@@ -1174,8 +1204,10 @@ if (!DATA.resumoSemanal) {
       ${cardClicavel('Quentes', quentesLeads.length, '', '🔥', quentesLeads, 'quente')}
     </div>
 
-    <h3 class="block-label">Como agir essa semana</h3>
-    <ul class="action-list">${rs.comoAgir.map(a => `<li class="action-item">${a}</li>`).join('')}</ul>
+    ${(rs.comoAgir && rs.comoAgir.length > 0) ? `
+      <h3 class="block-label">Como agir essa semana</h3>
+      <ul class="action-list">${rs.comoAgir.map(a => `<li class="action-item">${a}</li>`).join('')}</ul>
+    ` : ''}
   `;
 }
 
@@ -2035,6 +2067,85 @@ document.getElementById('novoComunicadoPublicar').addEventListener('click', asyn
   }
 });
 
+// ============ PERFIS (foto de cada pessoa) ============
+let perfisCache = {}; // email -> url da foto
+
+async function carregarPerfis() {
+  const { data, error } = await supa.from('perfis').select('*');
+  if (error) return;
+  perfisCache = {};
+  (data || []).forEach(p => {
+    if (p.foto_caminho) {
+      const { data: pub } = supa.storage.from('avatares').getPublicUrl(p.foto_caminho);
+      perfisCache[p.email] = pub.publicUrl;
+    }
+  });
+  // Re-renderiza o que já pode ter sido pintado sem foto
+  if (typeof renderRepsList === 'function') renderRepsList();
+  if (sessaoAtual && sessaoAtual.role === 'rep' && typeof renderMeuPainel === 'function') renderMeuPainel();
+  atualizarAvatarBadge();
+}
+
+function avatarHTML(email, nome, size) {
+  size = size || 34;
+  const foto = perfisCache[email];
+  const inicial = (nome || '?').charAt(0).toUpperCase();
+  if (foto) {
+    return `<img src="${foto}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="${nome}">`;
+  }
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:var(--red-soft);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(size * 0.4)}px;flex-shrink:0;">${inicial}</div>`;
+}
+
+function emailDoOwnerId(ownerId) {
+  const u = DATA.usuarios.find(u => u.ownerId === ownerId);
+  return u ? u.email : null;
+}
+
+function atualizarAvatarBadge() {
+  const btn = document.getElementById('perfilAvatarBadge');
+  if (btn && sessaoAtual && sessaoAtual.email) {
+    btn.innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 28);
+  }
+}
+
+function abrirPerfilDrawer() {
+  document.getElementById('perfilOverlay').style.display = 'block';
+  document.getElementById('perfilNomeLabel').textContent = sessaoAtual.nome || sessaoAtual.email;
+  document.getElementById('perfilEmailLabel').textContent = sessaoAtual.email;
+  document.getElementById('perfilAvatarPreview').innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 96);
+}
+
+document.getElementById('perfilFechar').addEventListener('click', () => {
+  document.getElementById('perfilOverlay').style.display = 'none';
+});
+document.getElementById('perfilOverlay').addEventListener('click', (e) => {
+  if (e.target.id === 'perfilOverlay') e.target.style.display = 'none';
+});
+
+document.getElementById('perfilSalvarBtn').addEventListener('click', async () => {
+  const arquivo = document.getElementById('perfilFotoInput').files[0];
+  const statusEl = document.getElementById('perfilStatus');
+  if (!arquivo) {
+    statusEl.textContent = 'Escolhe uma foto primeiro.';
+    return;
+  }
+  statusEl.textContent = 'Enviando...';
+  const caminho = `${sessaoAtual.email}/avatar.jpg`;
+  const { error: erroUpload } = await supa.storage.from('avatares').upload(caminho, arquivo, { upsert: true });
+  if (erroUpload) {
+    statusEl.textContent = `Erro: ${erroUpload.message}`;
+    return;
+  }
+  const { error: erroUpsert } = await supa.from('perfis').upsert({ email: sessaoAtual.email, foto_caminho: caminho, updated_at: new Date().toISOString() });
+  if (erroUpsert) {
+    statusEl.textContent = `Erro: ${erroUpsert.message}`;
+    return;
+  }
+  statusEl.textContent = 'Foto salva!';
+  await carregarPerfis();
+  document.getElementById('perfilAvatarPreview').innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 96);
+});
+
 // ============ PDIs (documentos anexados) ============
 async function renderPDIs() {
   const el = document.getElementById('pdisContent');
@@ -2210,7 +2321,7 @@ async function renderCoaching() {
       ${DATA.reps.map(r => `
         <div class="chart-card" style="padding:0;" data-owner="${r.ownerId}">
           <div style="padding:14px 16px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px;">
-            <div style="width:34px;height:34px;border-radius:50%;background:var(--red-soft);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0;">${r.name.charAt(0)}</div>
+            ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 34)}
             <div style="min-width:0;">
               <div style="font-weight:700;font-size:13.5px;">${r.name}</div>
               <div style="color:var(--muted-2);font-size:10.5px;">${r.praca}</div>
