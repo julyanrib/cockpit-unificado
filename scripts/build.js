@@ -9,6 +9,10 @@ const root = path.join(__dirname, '..');
 const hubspot = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
 // expogo.json não é mais lido — a métrica de atividade agora vem da Daily (prometido/realizado)
 const narrativas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'narrativas.json'), 'utf8'));
+const leadsRefPath = path.join(root, 'data', 'leads-referencia.json');
+const leadsReferencia = fs.existsSync(leadsRefPath)
+  ? JSON.parse(fs.readFileSync(leadsRefPath, 'utf8'))
+  : { pracas: [] };
 const usuarios = JSON.parse(fs.readFileSync(path.join(root, 'data', 'usuarios.json'), 'utf8'));
 
 // Config do Supabase (URL + chave pública) — opcional até você configurar; sem isso, o login fica desativado
@@ -136,6 +140,7 @@ const DATA = {
   stageMeta: hubspot.stageMeta || { slaDays: {}, descriptions: {}, labels: {} },
   saude,
   reps,
+  leadsReferencia: leadsReferencia.pracas || [],
   footerText: `Fonte: HubSpot (pipeline 916011864, auto-atualizado diariamente) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
   resumoSemanal: (resumoSemanal || weeklyRaw) ? {
     geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
