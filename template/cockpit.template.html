@@ -1176,12 +1176,20 @@ document.getElementById('healthBadge').innerHTML = `
 })();
 
 document.getElementById('kpiHub').innerHTML = `
-  <div class="kpi"><div class="v">${DATA.kpisHub.leadsCriados}${kpiDeltaHtml('leadsCriados')}</div><div class="l">Leads criados (7d)</div></div>
-  <div class="kpi"><div class="v">🏆 ${DATA.kpisHub.ganhos}${kpiDeltaHtml('ganhos')}</div><div class="l">Ganhos (7d)</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisHub.perdidos}${kpiDeltaHtml('perdidos')}</div><div class="l">Perdidos (7d)</div></div>
+  <div class="kpi" id="kpiLeadsCriados" style="cursor:pointer;"><div class="v">${DATA.kpisHub.leadsCriados}${kpiDeltaHtml('leadsCriados')}</div><div class="l">Leads criados (7d)</div></div>
+  <div class="kpi" id="kpiGanhos" style="cursor:pointer;"><div class="v">🏆 ${DATA.kpisHub.ganhos}${kpiDeltaHtml('ganhos')}</div><div class="l">Ganhos (7d)</div></div>
+  <div class="kpi" id="kpiPerdidos" style="cursor:pointer;"><div class="v">${DATA.kpisHub.perdidos}${kpiDeltaHtml('perdidos')}</div><div class="l">Perdidos (7d)</div></div>
   <div class="kpi"><div class="v">${DATA.kpisHub.emAberto}${kpiDeltaHtml('emAberto')}</div><div class="l">Em aberto (time ativo)</div></div>
   <div class="kpi"><div class="v">${DATA.kpisHub.emReciclagem}${kpiDeltaHtml('emReciclagem')}</div><div class="l">Em reciclagem</div></div>
 `;
+
+document.getElementById('kpiLeadsCriados').addEventListener('click', () => openKpiListModal('Leads criados (7d)', DATA.kpiDetalhe.leadsCriados));
+document.getElementById('kpiPerdidos').addEventListener('click', () => openKpiListModal('Perdidos (7d)', DATA.kpiDetalhe.perdidos));
+document.getElementById('kpiGanhos').addEventListener('click', () => {
+  const lista = [];
+  DATA.reps.forEach(r => (r.ganhosSemanaNomes || []).forEach(nome => lista.push({ nome, vendedor: r.name })));
+  openKpiListModal('Ganhos (7d)', lista);
+});
 
 // ============ ABAS (Cockpit / Resumo Semanal) ============
 function activateTab(viewId) {
@@ -1224,17 +1232,15 @@ if (!DATA.resumoSemanal) {
   const medalhas = ['🥇', '🥈', '🥉'];
 
   const podioHtml = (rs.ranking && rs.ranking.length > 0) ? `
-    <div class="chart-card" style="margin-bottom:18px;">
-      <h3 style="margin-bottom:14px;">🏆 Ranking da semana</h3>
-      <div style="display:flex;gap:12px;flex-wrap:wrap;">
+    <div class="chart-card" style="margin-bottom:18px;padding:14px 18px;">
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);">🏆 Ranking</span>
         ${rs.ranking.map((r, i) => `
-          <div style="flex:1;min-width:160px;background:var(--panel-2);border-radius:12px;padding:14px 16px;text-align:center;position:relative;">
-            <div style="width:56px;height:56px;margin:0 auto 6px;position:relative;">
-              ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 56)}
-              <div style="position:absolute;bottom:-6px;right:-6px;font-size:20px;">${medalhas[i]}</div>
-            </div>
-            <div style="font-weight:700;font-size:14px;margin-top:8px;">${r.name}</div>
-            <div style="color:var(--muted);font-size:12px;margin-top:2px;">${r.count} venda${r.count > 1 ? 's' : ''}${r.mrrTotal > 0 ? ` · R$ ${r.mrrTotal.toLocaleString('pt-BR')} MRR` : ''}</div>
+          <div style="display:flex;align-items:center;gap:7px;">
+            <span style="font-size:15px;">${medalhas[i]}</span>
+            ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 24)}
+            <span style="font-size:12.5px;font-weight:600;">${r.name.split(' ')[0]}</span>
+            <span style="font-size:11.5px;color:var(--muted);">${r.count}v</span>
           </div>
         `).join('')}
       </div>
@@ -1595,6 +1601,24 @@ const stageOverlay = document.getElementById('stageOverlay');
 const stageModalName = document.getElementById('stageModalName');
 const stageModalMeta = document.getElementById('stageModalMeta');
 const stageModalBody = document.getElementById('stageModalBody');
+
+function openKpiListModal(titulo, lista) {
+  stageModalName.textContent = titulo;
+  stageModalMeta.textContent = `${lista.length} negócio${lista.length !== 1 ? 's' : ''} nessa janela`;
+  stageModalBody.innerHTML = `
+    <div class="leads-box leads-box-scroll">
+      ${lista.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum registro nessa janela.</div>' : lista.map(l => `
+        <div class="lead-row" style="cursor:default;">
+          <div class="lead-left">
+            <span class="lead-name">${l.nome}</span>
+            <span class="lead-stage">${l.vendedor || '—'}</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+  stageOverlay.classList.add('show');
+}
 
 function openStageModal(stageId, label) {
   const leads = DATA.funilLeads[stageId] || [];
