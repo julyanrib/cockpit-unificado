@@ -844,7 +844,51 @@ function renderMeuPainel() {
     return;
   }
 
+  const metaSemanal = 2;
+  const fechamentos = r.ganhosSemana || 0;
+  const faltam = Math.max(0, metaSemanal - fechamentos);
+  const pctMeta = Math.min(100, Math.round((fechamentos / metaSemanal) * 100));
+
+  const rankingOrdenado = [...DATA.reps].sort((a, b) => (b.ganhosSemana || 0) - (a.ganhosSemana || 0));
+  const minhaPosicao = rankingOrdenado.findIndex(x => x.ownerId === r.ownerId) + 1;
+
+  const travados = (r.travados || []).slice().sort((a, b) => b.dias - a.dias);
+
   el.innerHTML = `
+    <div style="background:var(--red);color:#fff;border-radius:22px;padding:24px 26px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:6px;">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.85;">Sua semana</span>
+        <span style="background:rgba(255,255,255,.2);border-radius:999px;padding:5px 13px;font-size:11.5px;font-weight:700;">${minhaPosicao}º de ${DATA.reps.length} no time</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+        <span style="font-family:'Poppins',sans-serif;font-size:56px;font-weight:800;line-height:1;">${fechamentos}</span>
+        <span style="font-size:14px;opacity:.85;">de ${metaSemanal} fechamentos</span>
+      </div>
+      <div class="bar-track" style="height:10px;background:rgba(255,255,255,.25);margin:12px 0 10px;"><div class="bar-fill" style="width:${pctMeta}%;background:#fff;"></div></div>
+      <div style="font-size:13px;opacity:.92;">${faltam > 0 ? `💪 faltam ${faltam} pra bater a meta da semana` : '🎉 meta da semana batida!'}</div>
+      <div style="display:flex;gap:22px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.22);flex-wrap:wrap;">
+        <div><div style="font-family:'Poppins',sans-serif;font-size:17px;font-weight:700;">${visitasInformadasTexto(r.ownerId)}</div><div style="font-size:10.5px;opacity:.8;">visitas — prometido nas dailies</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-size:17px;font-weight:700;">${r.open}</div><div style="font-size:10.5px;opacity:.8;">negócios em aberto</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-size:17px;font-weight:700;">${r.leadsTravados || 0}</div><div style="font-size:10.5px;opacity:.8;">leads travados</div></div>
+      </div>
+    </div>
+
+    ${travados.length > 0 ? `
+      <div style="background:var(--dark);color:var(--dark-ink);border-radius:22px;padding:20px 22px;margin-bottom:16px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--red);margin-bottom:4px;">🔥 SUA FILA DE HOJE</div>
+        <div style="font-size:13px;color:var(--dark-mut);margin-bottom:14px;">Destravar os mais atrasados primeiro é o que mais rende.</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${travados.slice(0, 5).map(l => `
+            <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;background:var(--dark-fill);border-radius:14px;padding:11px 14px;min-height:44px;color:inherit;">
+              <span style="flex:1;font-size:13.5px;">${l.name}</span>
+              <span style="font-size:11px;color:var(--dark-mut);">${l.stage} · ${l.dias}d parado</span>
+              <span style="background:var(--red);color:#fff;border-radius:999px;padding:2px 9px;font-size:10.5px;font-weight:700;">+${l.dias}d</span>
+            </a>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
       ${avatarHTML(sessaoAtual.email, r.name, 44)}
       <div>
@@ -852,6 +896,21 @@ function renderMeuPainel() {
         <span class="rep-tag ${r.tag}">${r.tagLabel}</span>
         <span style="color:var(--muted);font-size:12.5px;margin-left:6px;">${r.praca}</span>
       </div>
+    </div>
+
+    <div class="chart-card" style="margin-bottom:20px;">
+      <h3 style="margin-bottom:12px;">🏁 Ranking da semana</h3>
+      ${rankingOrdenado.map((x, i) => `
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;${x.ownerId === r.ownerId ? 'background:var(--red-soft);border:1px solid var(--red);' : ''}margin-bottom:4px;">
+          <span style="font-family:'Poppins',sans-serif;font-weight:800;font-size:13px;width:20px;color:${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--muted)'};">${i + 1}º</span>
+          ${avatarHTML(emailDoOwnerId(x.ownerId), x.name, 26)}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13.5px;font-weight:${x.ownerId === r.ownerId ? 700 : 500};color:${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--ink)'};">${x.name}</div>
+            <div style="font-size:11px;color:var(--muted2);">${x.praca}</div>
+          </div>
+          <span style="font-size:14px;font-weight:700;color:${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--ink)'};">${x.ganhosSemana || 0}</span>
+        </div>
+      `).join('')}
     </div>
 
     <div id="meuPainelSugestoes"></div>
