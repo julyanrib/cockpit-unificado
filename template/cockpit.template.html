@@ -784,6 +784,7 @@ function aplicarVisaoPorPapel() {
 
   if (typeof renderRepsList === 'function') renderRepsList();
   if (typeof renderPDIs === 'function') renderPDIs();
+  if (typeof renderDaily === 'function') renderDaily();
 }
 
 function buildAcaoImediataHTML(r) {
@@ -1552,35 +1553,7 @@ function openStageModal(stageId, label) {
 document.getElementById('stageModalClose').addEventListener('click', () => stageOverlay.classList.remove('show'));
 stageOverlay.addEventListener('click', (e) => { if (e.target === stageOverlay) stageOverlay.classList.remove('show'); });
 
-// ============ DAILY (compromisso diário por executivo) ============
-function dailyKey(dateISO, ownerId) {
-  return `cockpit_daily_v1_${dateISO}_${ownerId}`;
-}
-function defaultDailyEntry() {
-  return {
-    prometido: { prospeccao: null, followupVisitas: null, referencia: null, reunioes: null, clientes: [], followUps: [] },
-    realizado: { prospeccao: null, followupVisitas: null, referencia: null, reunioes: null, clientesFeitos: [], followUpsFeitos: [] }
-  };
-}
-function getDailyEntry(dateISO, ownerId) {
-  try {
-    const raw = localStorage.getItem(dailyKey(dateISO, ownerId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    const def = defaultDailyEntry();
-    return {
-      prometido: { ...def.prometido, ...parsed.prometido },
-      realizado: { ...def.realizado, ...parsed.realizado }
-    };
-  } catch (e) {
-    return null;
-  }
-}
-function saveDailyEntry(dateISO, ownerId, entry) {
-  try {
-    localStorage.setItem(dailyKey(dateISO, ownerId), JSON.stringify(entry));
-  } catch (e) { /* modo privado — só não persiste */ }
-}
+// ============ DAILY GAMIFICADA (Supabase, sem localStorage) ============
 function isoDate(d) {
   return d.toISOString().slice(0, 10);
 }
@@ -1591,10 +1564,8 @@ function addDays(dateISO, n) {
 }
 function isWeekend(dateISO) {
   const dow = new Date(dateISO + 'T12:00:00').getDay();
-  return dow === 0 || dow === 6; // domingo ou sábado
+  return dow === 0 || dow === 6;
 }
-// Pula fim de semana — usado pra navegação (dia anterior/próximo) e pro cálculo de "ontem",
-// já que o time não trabalha sábado/domingo (segunda-feira "ontem" deve ser sexta, não domingo).
 function addBusinessDays(dateISO, direction) {
   let d = addDays(dateISO, direction);
   while (isWeekend(d)) d = addDays(d, direction);
@@ -1612,28 +1583,141 @@ function fmtDailyLabel(dateISO) {
 }
 
 let dailyRefDate = nearestBusinessDay(isoDate(new Date()));
+let dailiesCache = {}; // chave "ownerId_data" -> linha da tabela dailies
 
-function progressBarHTML(realizado, prometido) {
-  if (prometido === null || prometido === undefined || prometido === 0) return '';
-  const r = realizado || 0;
-  const pct = Math.min(100, Math.round((r / prometido) * 100));
-  const cor = pct >= 100 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
-  const medalha = pct >= 100 ? ' 🏆' : pct >= 50 ? ' 💪' : '';
-  return `
-    <div class="bar-track" style="height:7px;margin-top:4px;margin-bottom:2px;">
-      <div class="bar-fill" style="width:${pct}%;background:${cor};"></div>
-    </div>
-    <span style="font-size:10.5px;color:${cor};font-weight:600;">${pct}%${medalha}</span>
-  `;
+// Busca as últimas ~6 semanas de todo mundo de uma vez (dá pra calcular sequência/conquistas
+// sem precisar de uma consulta por pessoa por dia)
+async function carregarDailies() {
+  if (!DATA.supabase || !supa) return;
+  const desde = addDays(isoDate(new Date()), -42);
+  const { data, error } = await supa.from('dailies').select('*').gte('data', desde).order('data', { ascending: true });
+  if (error) { console.error('Erro ao carregar dailies:', error.message); return; }
+  dailiesCache = {};
+  (data || []).forEach(row => { dailiesCache[`${row.owner_id}_${row.data}`] = row; });
 }
 
-function renderDaily() {
+function getDaily(ownerId, dataISO) {
+  return dailiesCache[`${ownerId}_${dataISO}`] || null;
+}
+
+async function salvarDaily(ownerId, dataISO, campos) {
+  const existente = getDaily(ownerId, dataISO) || {};
+  const linha = {
+    owner_id: ownerId, data: dataISO,
+    criado_por: sessaoAtual.email,
+    updated_at: new Date().toISOString(),
+    prometido_visitas: existente.prometido_visitas ?? null,
+    prometido_avancos: existente.prometido_avancos ?? null,
+    prometido_propostas: existente.prometido_propostas ?? null,
+    realizado_visitas: existente.realizado_visitas ?? null,
+    realizado_avancos: existente.realizado_avancos ?? null,
+    realizado_propostas: existente.realizado_propostas ?? null,
+    realizado_fechamentos: existente.realizado_fechamentos ?? null,
+    nota_campo: existente.nota_campo ?? null,
+    compromisso_amanha: existente.compromisso_amanha ?? null,
+    ...campos
+  };
+  const { data, error } = await supa.from('dailies').upsert(linha, { onConflict: 'owner_id,data' }).select();
+  if (error) { console.error('Erro ao salvar daily:', error.message); return { error }; }
+  if (data && data[0]) dailiesCache[`${ownerId}_${dataISO}`] = data[0];
+  return { error: null };
+}
+
+// ---- Cálculos derivados (nunca chumbados) ----
+function pontosDoDia(row) {
+  if (!row) return 0;
+  return (row.realizado_visitas || 0) * 10 + (row.realizado_avancos || 0) * 25 + (row.realizado_propostas || 0) * 40 + (row.realizado_fechamentos || 0) * 100;
+}
+function totalPrometido(row) {
+  if (!row) return 0;
+  return (row.prometido_visitas || 0) + (row.prometido_avancos || 0) + (row.prometido_propostas || 0);
+}
+function totalRealizado(row) {
+  if (!row) return 0;
+  return (row.realizado_visitas || 0) + (row.realizado_avancos || 0) + (row.realizado_propostas || 0);
+}
+function bateuPrometido(row) {
+  const prom = totalPrometido(row);
+  if (prom === 0) return false;
+  return totalRealizado(row) >= prom;
+}
+function calcularSequencia(ownerId, ateDataISO) {
+  let seq = 0;
+  let d = ateDataISO;
+  for (let i = 0; i < 60; i++) {
+    if (isWeekend(d)) { d = addDays(d, -1); continue; }
+    const row = getDaily(ownerId, d);
+    if (row && bateuPrometido(row)) { seq++; d = addDays(d, -1); }
+    else break;
+  }
+  return seq;
+}
+function diasUteisDaSemana(ateDataISO) {
+  const dow = new Date(ateDataISO + 'T12:00:00').getDay();
+  const offsetSeg = dow === 0 ? 6 : dow - 1;
+  const segunda = addDays(ateDataISO, -offsetSeg);
+  const dias = [];
+  for (let i = 0; i < 5; i++) dias.push(addDays(segunda, i));
+  return dias;
+}
+function calcularConquistas(ownerId, r) {
+  const hoje = dailyRefDate;
+  const seq = calcularSequencia(ownerId, hoje);
+  const ultimos5uteis = [];
+  let cursor = hoje;
+  while (ultimos5uteis.length < 5) {
+    if (!isWeekend(cursor)) ultimos5uteis.push(cursor);
+    cursor = addDays(cursor, -1);
+  }
+  const todasBatidas = ultimos5uteis.every(d => { const row = getDaily(ownerId, d); return row && bateuPrometido(row); });
+
+  const daily10dias = [];
+  cursor = hoje;
+  while (daily10dias.length < 10) {
+    if (!isWeekend(cursor)) daily10dias.push(cursor);
+    cursor = addDays(cursor, -1);
+  }
+  const preencheuTodos = daily10dias.every(d => getDaily(ownerId, d) !== null);
+
+  const semTravados = (r.leadsTravados || 0) === 0;
+  const metaMes = (r.ganhosSemana || 0) >= 2; // ritmo semanal compatível com meta de 8/mês
+
+  const mesmaPraca = DATA.reps.filter(x => x.praca === r.praca);
+  const topoPraca = mesmaPraca.length > 0 && mesmaPraca.every(x => (x.ganhosSemana || 0) <= (r.ganhosSemana || 0)) && (r.ganhosSemana || 0) > 0;
+
+  return [
+    { icone: '🔥', titulo: 'Sequência de 4', desc: '4 dias seguidos batendo o prometido', desbloqueada: seq >= 4 },
+    { icone: '🎯', titulo: 'Palavra é palavra', desc: 'Bateu o prometido todo dia útil da semana', desbloqueada: todasBatidas },
+    { icone: '⚡', titulo: 'Destravador', desc: 'Zero leads com SLA estourado agora', desbloqueada: semTravados },
+    { icone: '🏆', titulo: 'Meta do mês', desc: 'Ritmo de fechamento compatível com a meta mensal', desbloqueada: metaMes },
+    { icone: '📝', titulo: 'Daily de ferro', desc: 'Preencheu a Daily nos últimos 10 dias úteis, sem falhar', desbloqueada: preencheuTodos },
+    { icone: '🥇', titulo: 'Topo da praça', desc: 'Mais fechamentos da semana entre quem está na sua praça', desbloqueada: topoPraca }
+  ];
+}
+
+function barraGamificada(realizado, prometido, cor) {
+  const r = realizado || 0, p = prometido || 0;
+  const pct = p > 0 ? Math.min(100, Math.round((r / p) * 100)) : 0;
+  return `<div class="bar-track" style="height:9px;"><div class="bar-fill" style="width:${pct}%;background:${cor};"></div></div>`;
+}
+
+async function renderDaily() {
   const el = document.getElementById('dailyContent');
+  el.innerHTML = `<div class="empty-state">Carregando...</div>`;
+  if (!DATA.supabase || !supa) {
+    el.innerHTML = `<div class="empty-state">Login ainda não configurado.</div>`;
+    return;
+  }
+  await carregarDailies();
+
   const yesterdayISO = addBusinessDays(dailyRefDate, -1);
+  const repsDaily = (sessaoAtual && sessaoAtual.role === 'rep')
+    ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
+    : DATA.reps;
 
   let html = `
     <div class="daily-header">
-      <div class="hint" style="margin:0;">Marque o que aconteceu ontem e firme a promessa de hoje — vira o consolidado da semana no Resumo Semanal. "Ontem" pula fim de semana automaticamente.</div>
+      <div class="hint" style="margin:0;">Você contra o que você prometeu — não contra o time.</div>
       <div class="daily-date-nav">
         <button id="dailyPrev">← dia útil anterior</button>
         <span class="date-label">${fmtDailyLabel(dailyRefDate)}</span>
@@ -1643,140 +1727,93 @@ function renderDaily() {
     </div>
   `;
 
-  const repsDaily = (sessaoAtual && sessaoAtual.role === 'rep')
-    ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
-    : DATA.reps;
-
   repsDaily.forEach(r => {
-    const ontem = getDailyEntry(yesterdayISO, r.ownerId);
-    let hoje = getDailyEntry(dailyRefDate, r.ownerId) || defaultDailyEntry();
+    const hoje = getDaily(r.ownerId, dailyRefDate) || {};
+    const seq = calcularSequencia(r.ownerId, dailyRefDate);
+    const pontosHoje = pontosDoDia(hoje);
+    const semana = diasUteisDaSemana(dailyRefDate);
+    const conquistas = calcularConquistas(r.ownerId, r);
 
-    // Auto-popula o follow-up de hoje com os 3 leads mais parados (dado real e ao vivo).
-    // Prioriza quem já estourou SLA; se não tiver nenhum, usa os mais antigos como referência.
-    if (hoje.prometido.followUps.length === 0) {
-      const fonte = r.travados.length > 0 ? r.travados : r.criticos;
-      hoje.prometido.followUps = fonte.slice(0, 3).map(l => ({ id: l.id, name: l.name, stage: l.stage, dias: l.dias }));
-      hoje.realizado.followUpsFeitos = hoje.prometido.followUps.map(() => false);
-      saveDailyEntry(dailyRefDate, r.ownerId, hoje);
-    }
+    const semanaHtml = semana.map(d => {
+      const row = getDaily(r.ownerId, d);
+      const bateu = row && bateuPrometido(row);
+      const ehHoje = d === dailyRefDate;
+      const ehFuturo = d > dailyRefDate;
+      let estilo = 'background:var(--dark-fill);color:var(--dark-mut);';
+      let conteudo = '·';
+      if (bateu) { estilo = 'background:rgba(255,69,87,.16);color:#FF6B78;'; conteudo = '🔥'; }
+      if (ehHoje) estilo += 'border:2px solid var(--red);';
+      if (ehFuturo) conteudo = '·';
+      return `<div style="width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:15px;${estilo}">${conteudo}</div>`;
+    }).join('');
 
-    const followUpsOntemHtml = (ontem && ontem.prometido.followUps.length > 0) ? `
-      <div class="daily-clients">
-        <div class="daily-col-label">🔁 Follow-up (leads mais parados de ontem)</div>
-        <ul class="daily-client-list">
-          ${ontem.prometido.followUps.map((l, i) => `
-            <li class="daily-client-item">
-              <span class="checkbox d-followup-check" data-idx="${i}" style="${ontem.realizado.followUpsFeitos[i] ? 'background:var(--green);border-color:var(--green);' : ''}"></span>
-              <span class="client-name"><a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="color:inherit;">${l.name}</a> <span style="color:var(--muted-2);font-size:10.5px;">— ${l.stage}, ${l.dias}d</span></span>
-            </li>
-          `).join('')}
-        </ul>
-      </div>
-    ` : '';
-
-    const ontemHtml = !ontem ? `<div class="daily-empty-yesterday">Nenhuma promessa registrada em ${fmtDailyLabel(yesterdayISO)}.</div>` : `
-      <div class="daily-metric-row" style="flex-direction:column;align-items:stretch;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <label>🚶 Visitas de prospecção</label>
-          <input type="number" min="0" class="d-real" data-metric="prospeccao" value="${ontem.realizado.prospeccao ?? ''}" placeholder="${ontem.prometido.prospeccao ?? 0}">
+    const linhaMetrica = (label, prometido, realizado, pontosUnit, cor) => {
+      const pontos = (realizado || 0) * pontosUnit;
+      return `
+        <div style="margin-bottom:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+            <span style="font-size:12.5px;color:var(--muted);">${label} — prometeu ${prometido ?? 0}</span>
+            <span style="font-size:12px;font-weight:700;color:${cor};">+${pontos} <span style="color:var(--muted);font-weight:500;">· ${realizado ?? 0}/${prometido ?? 0}</span></span>
+          </div>
+          ${barraGamificada(realizado, prometido, cor)}
         </div>
-        ${progressBarHTML(ontem.realizado.prospeccao, ontem.prometido.prospeccao)}
-      </div>
-      <div class="daily-metric-row" style="flex-direction:column;align-items:stretch;margin-top:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <label>🔁 Visitas de follow-up</label>
-          <input type="number" min="0" class="d-real" data-metric="followupVisitas" value="${ontem.realizado.followupVisitas ?? ''}" placeholder="${ontem.prometido.followupVisitas ?? 0}">
-        </div>
-        ${progressBarHTML(ontem.realizado.followupVisitas, ontem.prometido.followupVisitas)}
-      </div>
-      <div class="daily-metric-row" style="flex-direction:column;align-items:stretch;margin-top:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <label>🤝 Visitas de relacionamento</label>
-          <input type="number" min="0" class="d-real" data-metric="referencia" value="${ontem.realizado.referencia ?? ''}" placeholder="${ontem.prometido.referencia ?? 0}">
-        </div>
-        ${progressBarHTML(ontem.realizado.referencia, ontem.prometido.referencia)}
-      </div>
-      <div class="daily-metric-row" style="flex-direction:column;align-items:stretch;margin-top:10px;margin-bottom:10px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <label>📅 Reuniões agendadas</label>
-          <input type="number" min="0" class="d-real" data-metric="reunioes" value="${ontem.realizado.reunioes ?? ''}" placeholder="${ontem.prometido.reunioes ?? 0}">
-        </div>
-        ${progressBarHTML(ontem.realizado.reunioes, ontem.prometido.reunioes)}
-      </div>
-      ${ontem.prometido.clientes.length > 0 ? `
-        <div class="daily-clients">
-          <div class="daily-col-label">Clientes prometidos</div>
-          <ul class="daily-client-list">
-            ${ontem.prometido.clientes.map((c, i) => `
-              <li class="daily-client-item">
-                <span class="checkbox d-client-check" data-idx="${i}" style="${ontem.realizado.clientesFeitos[i] ? 'background:var(--green);border-color:var(--green);' : ''}"></span>
-                <span class="client-name">${c}</span>
-              </li>
-            `).join('')}
-          </ul>
-        </div>
-      ` : ''}
-      ${followUpsOntemHtml}
-    `;
-
-    const clientesHoje = hoje.prometido.clientes;
-    const hojeHtml = `
-      <div class="daily-metric-row">
-        <label>🚶 Visitas de prospecção</label>
-        <input type="number" min="0" class="d-prom" data-metric="prospeccao" value="${hoje.prometido.prospeccao ?? ''}" placeholder="meta: 8">
-      </div>
-      <div class="daily-metric-row">
-        <label>🔁 Visitas de follow-up</label>
-        <input type="number" min="0" class="d-prom" data-metric="followupVisitas" value="${hoje.prometido.followupVisitas ?? ''}" placeholder="0">
-      </div>
-      <div class="daily-metric-row">
-        <label>🤝 Visitas de relacionamento</label>
-        <input type="number" min="0" class="d-prom" data-metric="referencia" value="${hoje.prometido.referencia ?? ''}" placeholder="0">
-      </div>
-      <div class="daily-metric-row">
-        <label>📅 Reuniões agendadas</label>
-        <input type="number" min="0" class="d-prom" data-metric="reunioes" value="${hoje.prometido.reunioes ?? ''}" placeholder="0">
-      </div>
-      <div class="daily-clients">
-        <div class="daily-col-label">Promessa de clientes para hoje</div>
-        <div class="daily-client-add">
-          <input type="text" class="d-client-input" placeholder="Nome do cliente...">
-          <button class="d-client-add">+ add</button>
-        </div>
-        <ul class="daily-client-list d-client-list">
-          ${clientesHoje.map((c, i) => `
-            <li class="daily-client-item">
-              <span class="client-name">${c}</span>
-              <span class="remove-x d-client-remove" data-idx="${i}">✕</span>
-            </li>
-          `).join('')}
-        </ul>
-      </div>
-      ${hoje.prometido.followUps.length > 0 ? `
-        <div class="daily-clients">
-          <div class="daily-col-label">🔁 Follow-up prioritário (auto, ${hoje.prometido.followUps.length} leads mais parados)</div>
-          <ul class="daily-client-list">
-            ${hoje.prometido.followUps.map(l => `
-              <li class="daily-client-item">
-                <span class="client-name"><a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="color:inherit;">${l.name}</a> <span style="color:var(--muted-2);font-size:10.5px;">— ${l.stage}, ${l.dias}d</span></span>
-              </li>
-            `).join('')}
-          </ul>
-        </div>
-      ` : ''}
-    `;
+      `;
+    };
 
     html += `
-      <div class="daily-rep-card" data-owner="${r.ownerId}">
-        <div class="daily-rep-head">${r.name}</div>
-        <div class="daily-rep-body">
-          <div class="daily-col">
-            <div class="daily-periodo-label ontem">📋 Ontem — o que aconteceu</div>
-            ${ontemHtml}
+      <div class="chart-card" style="margin-bottom:16px;padding:0;overflow:hidden;">
+        <div style="background:var(--dark);color:var(--dark-ink);padding:20px 22px;display:grid;grid-template-columns:auto 1fr auto;gap:26px;align-items:center;">
+          <div>
+            <div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);margin-bottom:2px;">${r.name}</div>
+            <div style="font-family:'Poppins',sans-serif;font-size:32px;font-weight:800;">${seq} <span style="font-size:20px;">🔥</span></div>
+            <div style="font-size:10.5px;color:var(--dark-mut);">dias batendo o prometido</div>
           </div>
-          <div class="daily-col">
-            <div class="daily-periodo-label hoje">🎯 Hoje — promessa do dia</div>
-            ${hojeHtml}
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">${semanaHtml}</div>
+          <div style="text-align:right;">
+            <div style="font-family:'Poppins',sans-serif;font-size:32px;font-weight:800;color:var(--red);">${pontosHoje}</div>
+            <div style="font-size:9.5px;color:var(--dark-mut);">visita 10 · avanço 25<br>proposta 40 · fechamento 100</div>
+          </div>
+        </div>
+
+        <div style="padding:18px 22px;display:grid;grid-template-columns:1fr 1fr;gap:22px;">
+          <div>
+            <div class="daily-periodo-label hoje" style="margin-bottom:10px;">🎯 Hoje — prometido vs. realizado</div>
+            ${linhaMetrica('Visitas', hoje.prometido_visitas, hoje.realizado_visitas, 10, 'var(--green)')}
+            ${linhaMetrica('Avanços de etapa', hoje.prometido_avancos, hoje.realizado_avancos, 25, 'var(--amber)')}
+            ${linhaMetrica('Propostas', hoje.prometido_propostas, hoje.realizado_propostas, 40, 'var(--red)')}
+            <div style="display:flex;justify-content:space-between;align-items:center;font-size:12.5px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);">
+              <span style="color:var(--muted);">Fechamentos hoje</span>
+              <input type="number" min="0" class="d-fechamentos" data-owner="${r.ownerId}" value="${hoje.realizado_fechamentos ?? ''}" style="width:56px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px;text-align:center;">
+            </div>
+          </div>
+          <div>
+            <div class="daily-periodo-label ontem" style="margin-bottom:10px;">📋 Prometer / registrar realizado</div>
+            <div class="daily-metric-row"><label>Visitas prometidas</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_visitas" value="${hoje.prometido_visitas ?? ''}"></div>
+            <div class="daily-metric-row"><label>Visitas realizadas</label><input type="number" min="0" class="d-real" data-owner="${r.ownerId}" data-campo="realizado_visitas" value="${hoje.realizado_visitas ?? ''}"></div>
+            <div class="daily-metric-row"><label>Avanços prometidos</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_avancos" value="${hoje.prometido_avancos ?? ''}"></div>
+            <div class="daily-metric-row"><label>Avanços realizados</label><input type="number" min="0" class="d-real" data-owner="${r.ownerId}" data-campo="realizado_avancos" value="${hoje.realizado_avancos ?? ''}"></div>
+            <div class="daily-metric-row"><label>Propostas prometidas</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_propostas" value="${hoje.prometido_propostas ?? ''}"></div>
+            <div class="daily-metric-row"><label>Propostas realizadas</label><input type="number" min="0" class="d-real" data-owner="${r.ownerId}" data-campo="realizado_propostas" value="${hoje.realizado_propostas ?? ''}"></div>
+          </div>
+        </div>
+
+        <div style="padding:0 22px 18px;">
+          <div class="daily-col-label" style="margin-bottom:6px;">Nota de campo (o que aconteceu hoje)</div>
+          <textarea class="d-nota" data-owner="${r.ownerId}" placeholder="Ex: cliente X pediu desconto, decisor de Y só volta segunda..." style="width:100%;min-height:60px;background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-family:inherit;font-size:12.5px;margin-bottom:10px;">${hoje.nota_campo || ''}</textarea>
+          <button class="d-salvar" data-owner="${r.ownerId}" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:10px 20px;font-weight:700;font-size:13px;cursor:pointer;min-height:44px;">Enviar daily</button>
+          <span class="d-status" data-owner="${r.ownerId}" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
+        </div>
+
+        <div style="padding:0 22px 20px;">
+          <div class="daily-col-label" style="margin-bottom:8px;">🏅 Conquistas</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
+            ${conquistas.map(c => `
+              <div style="border-radius:14px;padding:12px 14px;${c.desbloqueada ? 'background:var(--red-soft);border:1px solid var(--red);' : 'background:var(--panel2);border:1px solid var(--line);opacity:.6;'}">
+                <div style="font-size:20px;margin-bottom:4px;">${c.icone}</div>
+                <div style="font-size:12px;font-weight:700;${c.desbloqueada ? 'color:var(--red);' : 'color:var(--muted2);'}">${c.titulo}</div>
+                <div style="font-size:10.5px;color:var(--muted);margin-top:2px;">${c.desc}</div>
+              </div>
+            `).join('')}
           </div>
         </div>
       </div>
@@ -1789,107 +1826,57 @@ function renderDaily() {
   document.getElementById('dailyNext').addEventListener('click', () => { dailyRefDate = addBusinessDays(dailyRefDate, 1); renderDaily(); });
   document.getElementById('dailyToday').addEventListener('click', () => { dailyRefDate = nearestBusinessDay(isoDate(new Date())); renderDaily(); });
 
-  // Wire up each rep card
-  el.querySelectorAll('.daily-rep-card').forEach(card => {
-    const ownerId = card.dataset.owner;
-
-    // "Ontem" — realizado numérico
-    card.querySelectorAll('.d-real').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const entry = getDailyEntry(yesterdayISO, ownerId) || defaultDailyEntry();
-        entry.realizado[inp.dataset.metric] = inp.value === '' ? null : Number(inp.value);
-        saveDailyEntry(yesterdayISO, ownerId, entry);
-      });
+  el.querySelectorAll('.d-prom, .d-real, .d-fechamentos').forEach(inp => {
+    inp.addEventListener('change', async () => {
+      const ownerId = inp.dataset.owner;
+      const campo = inp.dataset.campo || 'realizado_fechamentos';
+      const valor = inp.value === '' ? null : Number(inp.value);
+      await salvarDaily(ownerId, dailyRefDate, { [campo]: valor });
     });
+  });
 
-    // "Ontem" — checklist de clientes feitos
-    card.querySelectorAll('.d-client-check').forEach(cb => {
-      cb.addEventListener('click', () => {
-        const entry = getDailyEntry(yesterdayISO, ownerId) || defaultDailyEntry();
-        const idx = Number(cb.dataset.idx);
-        entry.realizado.clientesFeitos[idx] = !entry.realizado.clientesFeitos[idx];
-        saveDailyEntry(yesterdayISO, ownerId, entry);
-        renderDaily();
-      });
-    });
-
-    // "Ontem" — checklist de follow-up feito (leads mais parados)
-    card.querySelectorAll('.d-followup-check').forEach(cb => {
-      cb.addEventListener('click', () => {
-        const entry = getDailyEntry(yesterdayISO, ownerId) || defaultDailyEntry();
-        const idx = Number(cb.dataset.idx);
-        entry.realizado.followUpsFeitos[idx] = !entry.realizado.followUpsFeitos[idx];
-        saveDailyEntry(yesterdayISO, ownerId, entry);
-        renderDaily();
-      });
-    });
-
-    // "Hoje" — prometido numérico
-    card.querySelectorAll('.d-prom').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const entry = getDailyEntry(dailyRefDate, ownerId) || defaultDailyEntry();
-        entry.prometido[inp.dataset.metric] = inp.value === '' ? null : Number(inp.value);
-        saveDailyEntry(dailyRefDate, ownerId, entry);
-      });
-    });
-
-    // "Hoje" — adicionar cliente prometido
-    const addBtn = card.querySelector('.d-client-add');
-    const addInput = card.querySelector('.d-client-input');
-    function addClient() {
-      const nome = addInput.value.trim();
-      if (!nome) return;
-      const entry = getDailyEntry(dailyRefDate, ownerId) || defaultDailyEntry();
-      entry.prometido.clientes.push(nome);
-      saveDailyEntry(dailyRefDate, ownerId, entry);
-      renderDaily();
-    }
-    addBtn.addEventListener('click', addClient);
-    addInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') addClient(); });
-
-    // "Hoje" — remover cliente prometido
-    card.querySelectorAll('.d-client-remove').forEach(x => {
-      x.addEventListener('click', () => {
-        const entry = getDailyEntry(dailyRefDate, ownerId) || defaultDailyEntry();
-        entry.prometido.clientes.splice(Number(x.dataset.idx), 1);
-        saveDailyEntry(dailyRefDate, ownerId, entry);
-        renderDaily();
-      });
+  el.querySelectorAll('.d-salvar').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const ownerId = btn.dataset.owner;
+      const statusEl = el.querySelector(`.d-status[data-owner="${ownerId}"]`);
+      const notaEl = el.querySelector(`.d-nota[data-owner="${ownerId}"]`);
+      statusEl.textContent = 'Salvando...';
+      const { error } = await salvarDaily(ownerId, dailyRefDate, { nota_campo: notaEl.value.trim() });
+      statusEl.textContent = error ? `Erro: ${error.message}` : 'Salvo! ✓';
+      if (!error) renderDaily();
     });
   });
 }
-renderDaily();
 
-// Consolidado semanal dos compromissos diários (soma prometido x realizado, seg-hoje)
-function renderConsolidadoDiario() {
+// Consolidado semanal dos compromissos diários (usado no Resumo Semanal)
+async function renderConsolidadoDiario() {
   const hostEl = document.getElementById('resumoContent');
-  const hoje = new Date();
-  const diaSemana = hoje.getDay(); // 0=domingo
-  const offsetSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-  const segundaISO = addDays(isoDate(hoje), -offsetSegunda);
+  if (!hostEl || !DATA.supabase || !supa) return;
 
-  const totais = { prospeccaoP: 0, prospeccaoR: 0, followupVisitasP: 0, followupVisitasR: 0, referenciaP: 0, referenciaR: 0, reunioesP: 0, reunioesR: 0, clientesP: 0, clientesF: 0, followUpsP: 0, followUpsF: 0 };
+  const hoje = isoDate(new Date());
+  const dow = new Date(hoje + 'T12:00:00').getDay();
+  const offsetSeg = dow === 0 ? 6 : dow - 1;
+  const segunda = addDays(hoje, -offsetSeg);
+
+  if (Object.keys(dailiesCache).length === 0) await carregarDailies();
+
+  const totais = { visitasP: 0, visitasR: 0, avancosP: 0, avancosR: 0, propostasP: 0, propostasR: 0, fechamentos: 0 };
   let diasComDado = 0;
 
-  for (let i = 0; i <= offsetSegunda; i++) {
-    const dia = addDays(segundaISO, i);
+  for (let i = 0; i <= offsetSeg; i++) {
+    const dia = addDays(segunda, i);
     let algumDado = false;
     DATA.reps.forEach(r => {
-      const entry = getDailyEntry(dia, r.ownerId);
-      if (!entry) return;
+      const row = getDaily(r.ownerId, dia);
+      if (!row) return;
       algumDado = true;
-      totais.prospeccaoP += entry.prometido.prospeccao || 0;
-      totais.prospeccaoR += entry.realizado.prospeccao || 0;
-      totais.followupVisitasP += entry.prometido.followupVisitas || 0;
-      totais.followupVisitasR += entry.realizado.followupVisitas || 0;
-      totais.referenciaP += entry.prometido.referencia || 0;
-      totais.referenciaR += entry.realizado.referencia || 0;
-      totais.reunioesP += entry.prometido.reunioes || 0;
-      totais.reunioesR += entry.realizado.reunioes || 0;
-      totais.clientesP += entry.prometido.clientes.length;
-      totais.clientesF += entry.realizado.clientesFeitos.filter(Boolean).length;
-      totais.followUpsP += entry.prometido.followUps.length;
-      totais.followUpsF += entry.realizado.followUpsFeitos.filter(Boolean).length;
+      totais.visitasP += row.prometido_visitas || 0;
+      totais.visitasR += row.realizado_visitas || 0;
+      totais.avancosP += row.prometido_avancos || 0;
+      totais.avancosR += row.realizado_avancos || 0;
+      totais.propostasP += row.prometido_propostas || 0;
+      totais.propostasR += row.realizado_propostas || 0;
+      totais.fechamentos += row.realizado_fechamentos || 0;
     });
     if (algumDado) diasComDado++;
   }
@@ -1897,15 +1884,14 @@ function renderConsolidadoDiario() {
   const box = document.createElement('div');
   box.className = 'daily-consolidado';
   box.innerHTML = `
-    <h3 class="block-label" style="margin:0 0 4px;">Consolidado dos compromissos diários (segunda até hoje)</h3>
-    <div class="chart-subtitle" style="margin:0;">${diasComDado > 0 ? `${diasComDado} dia(s) com registro nesta semana.` : 'Nenhum registro diário ainda nesta semana — preencha na aba Daily.'}</div>
+    <h3 class="block-label" style="margin:0 0 4px;">Consolidado da Daily (segunda até hoje)</h3>
+    <div class="chart-subtitle" style="margin:0;">${diasComDado > 0 ? `${diasComDado} dia(s) com registro nesta semana.` : 'Nenhum registro diário ainda nesta semana.'}</div>
     <div class="daily-consolidado-grid">
-      <div class="daily-consolidado-kpi"><div class="v">${totais.prospeccaoR}/${totais.prospeccaoP}</div><div class="l">Visitas prospecção</div></div>
-      <div class="daily-consolidado-kpi"><div class="v">${totais.followupVisitasR}/${totais.followupVisitasP}</div><div class="l">Visitas follow-up</div></div>
-      <div class="daily-consolidado-kpi"><div class="v">${totais.referenciaR}/${totais.referenciaP}</div><div class="l">Visitas de relacionamento</div></div>
-      <div class="daily-consolidado-kpi"><div class="v">${totais.reunioesR}/${totais.reunioesP}</div><div class="l">Reuniões agendadas</div></div>
+      <div class="daily-consolidado-kpi"><div class="v">${totais.visitasR}/${totais.visitasP}</div><div class="l">Visitas</div></div>
+      <div class="daily-consolidado-kpi"><div class="v">${totais.avancosR}/${totais.avancosP}</div><div class="l">Avanços de etapa</div></div>
+      <div class="daily-consolidado-kpi"><div class="v">${totais.propostasR}/${totais.propostasP}</div><div class="l">Propostas</div></div>
+      <div class="daily-consolidado-kpi"><div class="v">${totais.fechamentos}</div><div class="l">Fechamentos</div></div>
     </div>
-    <div class="chart-subtitle" style="margin-top:10px;">Clientes prometidos visitados: <b style="color:var(--text);">${totais.clientesF}/${totais.clientesP}</b> · Follow-ups prioritários feitos: <b style="color:var(--text);">${totais.followUpsF}/${totais.followUpsP}</b></div>
   `;
   hostEl.appendChild(box);
 }
