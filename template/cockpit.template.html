@@ -423,6 +423,7 @@
       <button class="tab-btn" id="tabBtnLeadsPraca" data-view="viewLeadsPraca"><span class="tab-btn-icon">📍</span><span class="tab-btn-label">Leads da praça</span></button>
       <button class="tab-btn" id="tabBtnPDIs" data-view="viewPDIs"><span class="tab-btn-icon">📝</span><span class="tab-btn-label">PDIs</span></button>
       <button class="tab-btn" id="tabBtnCoaching" data-view="viewCoaching" style="display:none;"><span class="tab-btn-icon">🎧</span><span class="tab-btn-label">Coaching</span></button>
+      <button class="tab-btn" id="tabBtnAvisos" data-view="viewAvisos"><span class="tab-btn-icon">📣</span><span class="tab-btn-label">Avisos</span></button>
       <div class="app-sidenav-spacer"></div>
       <div class="app-sidenav-footer">
         <span class="app-sidenav-footer-title">Dados</span>
@@ -508,6 +509,10 @@
 
   <div class="view" id="viewLeadsPraca">
     <div id="leadsPracaContent"></div>
+  </div>
+
+  <div class="view" id="viewAvisos">
+    <div id="avisosContent"></div>
   </div>
 
   <footer id="footerText"></footer>
@@ -1205,6 +1210,7 @@ document.getElementById('tabBtnMeuPainel').addEventListener('click', () => activ
 document.getElementById('tabBtnPDIs').addEventListener('click', () => activateTab('viewPDIs'));
 document.getElementById('tabBtnCoaching').addEventListener('click', () => activateTab('viewCoaching'));
 document.getElementById('tabBtnLeadsPraca').addEventListener('click', () => { activateTab('viewLeadsPraca'); if (typeof renderLeadsPraca === 'function') renderLeadsPraca(); });
+document.getElementById('tabBtnAvisos').addEventListener('click', () => { activateTab('viewAvisos'); if (typeof renderAvisos === 'function') renderAvisos(); });
 // Nas segundas-feiras, abre direto no Resumo Semanal; nos outros dias, abre no Cockpit
 const hojeEhSegunda = new Date().getDay() === 1;
 activateTab((hojeEhSegunda && DATA.resumoSemanal) ? 'viewResumo' : 'viewCockpit');
@@ -2305,6 +2311,33 @@ document.getElementById('perfilSalvarBtn').addEventListener('click', async () =>
 });
 
 // ============ LEADS DA PRAÇA ============
+// ============ AVISOS (página dedicada, estilo do mockup) ============
+function renderAvisos() {
+  const el = document.getElementById('avisosContent');
+  if (!DATA.supabase || !supa) {
+    el.innerHTML = `<div class="empty-state">Login não configurado.</div>`;
+    return;
+  }
+  if (!comunicadosCache || comunicadosCache.length === 0) {
+    el.innerHTML = `<div class="empty-state">Nenhum comunicado publicado ainda.</div>`;
+    return;
+  }
+  const corPorTipo = { urgente: 'var(--red)', atualizacao: 'var(--green)', geral: 'var(--amber)' };
+  const labelPorTipo = { urgente: 'Comercial/Urgente', atualizacao: 'Produto', geral: 'Operação' };
+
+  el.innerHTML = comunicadosCache.map(c => `
+    <div class="chart-card" style="border-left:4px solid ${corPorTipo[c.tipo] || 'var(--muted2)'};margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;flex-wrap:wrap;gap:8px;">
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${corPorTipo[c.tipo] || 'var(--muted2)'};">${labelPorTipo[c.tipo] || c.tipo}</span>
+        <span style="font-size:11px;color:var(--muted2);">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
+      </div>
+      <div style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">${c.titulo}</div>
+      ${c.mensagem ? `<div style="font-size:13.5px;color:var(--muted);line-height:1.55;">${c.mensagem}</div>` : ''}
+      <div style="font-size:11px;color:var(--muted2);margin-top:8px;">${c.autor} · visto por ${vistoPor(c.id)}/${DATA.usuarios.length}</div>
+    </div>
+  `).join('');
+}
+
 function renderLeadsPraca() {
   const el = document.getElementById('leadsPracaContent');
   const todasPracas = DATA.leadsReferencia || [];
