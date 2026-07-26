@@ -583,6 +583,7 @@
 // ============ CARREGA DATA INJETADA PELO BUILD ============
 const DATA = JSON.parse(document.getElementById('cockpit-data').textContent);
 let perfisCache = {}; // email -> url da foto (perfil). Declarado logo cedo pra nunca dar erro de "usado antes de existir".
+let dailiesCache = {}; // "ownerId_data" -> linha da tabela dailies. Mesma razão: declarada bem cedo.
 
 // ============ MODO CLARO/ESCURO (opcional, a pessoa escolhe) ============
 function toggleTheme() {
@@ -1334,38 +1335,55 @@ function savePdiState(ownerId, checked, data) {
 // ============ LISTA DE EXECUTIVOS ============
 const container = document.getElementById('reps');
 function renderRepsList() {
-  container.innerHTML = '';
   const repsParaMostrar = (sessaoAtual && sessaoAtual.role === 'rep')
     ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
     : DATA.reps;
 
-  repsParaMostrar.forEach((r) => {
-    const pdi = getPdiState(r.ownerId, r.compromissos.length);
-    const feitos = pdi.checked.filter(Boolean).length;
-    const total = r.compromissos.length;
-    let pdiBadgeClass = 'flat';
-    if (total > 0) {
-      if (feitos === total) pdiBadgeClass = 'up';
-      else if (feitos === 0) pdiBadgeClass = 'down';
-    }
-
-    const card = document.createElement('div');
-    card.className = 'rep-card ' + r.tag;
-    card.innerHTML = `
-      <div class="rep-name-wrap">
-        <span class="rep-name">${r.name}</span>
-        <span class="rep-tag ${r.tag}">${r.tagLabel}</span>
-        ${r.leadsTravados > 0 ? `<span class="travados-badge">⏱ ${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</span>` : ''}
-        ${total > 0 ? `<span class="kpi-delta ${pdiBadgeClass}" style="border:1px solid currentColor;padding:2px 7px;font-size:9.5px;">✓ PDI ${feitos}/${total}</span>` : ''}
-      </div>
-      <div class="rep-right">
-        <span><span class="source-tag hub" style="margin-right:4px;">Hub</span><b>${r.open}</b> em aberto</span>
-        <span><span class="source-tag hub" style="margin-right:4px;">Daily</span><b>${visitasInformadasTexto(r.ownerId)}</b> visitas informadas</span>
-        <span class="arrow"></span>
+  const linhas = repsParaMostrar.map(r => {
+    const travadosCor = r.leadsTravados >= 7 ? 'var(--red)' : r.leadsTravados >= 4 ? 'var(--amber)' : 'var(--muted)';
+    const metaSemanal = 2; // ritmo compatível com meta de 8 fechamentos/mês
+    const pctMeta = Math.min(100, Math.round(((r.ganhosSemana || 0) / metaSemanal) * 100));
+    const corMeta = pctMeta >= 80 ? 'var(--green)' : pctMeta >= 60 ? 'var(--amber)' : 'var(--red)';
+    return `
+      <div class="rep-row" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;align-items:center;padding:15px 22px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+          <span class="rep-avatar-slot" data-owner="${r.ownerId}"></span>
+          <div style="min-width:0;">
+            <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.name}</div>
+            <div style="font-size:11px;color:var(--muted2);">${r.praca}</div>
+          </div>
+          <span class="rep-tag ${r.tag}" style="margin-left:4px;">${r.tagLabel}</span>
+        </div>
+        <div style="font-size:13.5px;">${r.open}</div>
+        <div style="font-size:13.5px;font-weight:${r.leadsTravados > 0 ? 700 : 400};color:${travadosCor};">${r.leadsTravados}</div>
+        <div>
+          <div style="font-size:13.5px;">${visitasInformadasTexto(r.ownerId)}</div>
+        </div>
+        <div style="font-size:13.5px;">${r.ganhosSemana || 0}</div>
+        <div>
+          <div style="font-size:10.5px;color:var(--muted);margin-bottom:3px;">${r.ganhosSemana || 0}/${metaSemanal} sem.</div>
+          <div class="bar-track" style="height:6px;"><div class="bar-fill" style="width:${pctMeta}%;background:${corMeta};"></div></div>
+        </div>
       </div>
     `;
-    card.addEventListener('click', () => openModal(r));
-    container.appendChild(card);
+  }).join('');
+
+  container.innerHTML = `
+    <div class="chart-card" style="padding:0;overflow:hidden;">
+      <div style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;padding:12px 22px;background:var(--panel2);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);gap:10px;">
+        <div>Executivo</div><div>Abertos</div><div>Travados</div><div>Visitas · Daily</div><div>Fechados</div><div>Meta semanal</div>
+      </div>
+      ${linhas}
+    </div>
+  `;
+
+  container.querySelectorAll('.rep-row').forEach(row => {
+    const r = repsParaMostrar.find(x => x.ownerId === row.dataset.owner);
+    row.addEventListener('click', () => openModal(r));
+    row.addEventListener('mouseenter', () => row.style.background = 'var(--panel2)');
+    row.addEventListener('mouseleave', () => row.style.background = '');
+    const slot = row.querySelector('.rep-avatar-slot');
+    slot.innerHTML = avatarHTML(emailDoOwnerId(r.ownerId), r.name, 32);
   });
 }
 renderRepsList();
@@ -1576,7 +1594,7 @@ function fmtDailyLabel(dateISO) {
 }
 
 let dailyRefDate = nearestBusinessDay(isoDate(new Date()));
-let dailiesCache = {}; // chave "ownerId_data" -> linha da tabela dailies
+// (dailiesCache já declarada no topo do script)
 
 // Busca as últimas ~6 semanas de todo mundo de uma vez (dá pra calcular sequência/conquistas
 // sem precisar de uma consulta por pessoa por dia)
