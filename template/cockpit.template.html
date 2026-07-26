@@ -402,6 +402,13 @@
       <input type="file" id="perfilFotoInput" accept="image/*" style="width:100%;margin-bottom:10px;font-size:12.5px;">
       <button id="perfilSalvarBtn" style="width:100%;padding:11px;border-radius:999px;border:none;background:var(--red);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;">Salvar foto</button>
       <div id="perfilStatus" style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"></div>
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
+          <span>Papel</span><b id="perfilPapelLabel" style="color:var(--ink);"></b>
+        </div>
+        <button id="perfilTemaBtn" style="width:100%;padding:10px;border-radius:999px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);font-weight:600;font-size:13px;cursor:pointer;margin-top:10px;">🌙 Alternar modo claro/escuro</button>
+        <button id="perfilSairBtn" style="width:100%;padding:10px;border-radius:999px;border:1px solid var(--red);background:none;color:var(--red);font-weight:700;font-size:13px;cursor:pointer;margin-top:10px;">Sair da conta</button>
+      </div>
     </div>
   </div>
 
@@ -2233,7 +2240,14 @@ function abrirPerfilDrawer() {
   document.getElementById('perfilNomeLabel').textContent = sessaoAtual.nome || sessaoAtual.email;
   document.getElementById('perfilEmailLabel').textContent = sessaoAtual.email;
   document.getElementById('perfilAvatarPreview').innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 96);
+  document.getElementById('perfilPapelLabel').textContent = sessaoAtual.role === 'manager' ? 'Gestor' : 'Executivo';
 }
+
+document.getElementById('perfilTemaBtn').addEventListener('click', toggleTheme);
+document.getElementById('perfilSairBtn').addEventListener('click', async () => {
+  if (supa) await supa.auth.signOut();
+  location.reload();
+});
 
 document.getElementById('perfilFechar').addEventListener('click', () => {
   document.getElementById('perfilOverlay').style.display = 'none';
@@ -2265,6 +2279,67 @@ document.getElementById('perfilSalvarBtn').addEventListener('click', async () =>
   await carregarPerfis();
   document.getElementById('perfilAvatarPreview').innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 96);
 });
+
+// ============ LEADS DA PRAÇA ============
+function renderLeadsPraca() {
+  const el = document.getElementById('leadsPracaContent');
+  const todasPracas = DATA.leadsReferencia || [];
+
+  const minhaPraca = sessaoAtual && sessaoAtual.role === 'rep'
+    ? (DATA.reps.find(r => r.ownerId === sessaoAtual.ownerId) || {}).praca
+    : null;
+
+  const pracasParaMostrar = minhaPraca
+    ? todasPracas.filter(p => p.nome === minhaPraca)
+    : todasPracas;
+
+  const totalLeads = pracasParaMostrar.reduce((sum, p) => sum + (p.leads || []).length, 0);
+
+  el.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);">Sugestão automática · atualiza toda segunda</div>
+      </div>
+      ${sessaoAtual.role === 'manager' && totalLeads > 0 ? `<button style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:9px 16px;font-size:12.5px;font-weight:700;cursor:pointer;">Enviar todos pro HubSpot ↗</button>` : ''}
+    </div>
+    <div class="chart-card" style="margin-bottom:20px;max-width:80ch;font-size:13px;line-height:1.6;">
+      A lista cruza nota e volume de avaliações públicas (Google/TripAdvisor) com os negócios já abertos no HubSpot — se alguém do time já tocou aquele lead, ele sai da lista.
+    </div>
+    ${pracasParaMostrar.length === 0 ? `<div class="empty-state">Nenhuma praça configurada ainda.</div>` : pracasParaMostrar.map(p => `
+      <div style="margin-bottom:26px;">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+          <span style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;">${p.nome}</span>
+          <span style="font-size:11.5px;color:var(--muted2);">${(p.responsaveis || []).join(', ')}</span>
+        </div>
+        ${(p.leads || []).length === 0 ? `
+          <div class="empty-state">Nenhum lead sugerido ainda pra essa praça.</div>
+        ` : `
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">
+            ${p.leads.map(l => `
+              <div class="chart-card" data-lead="${l.nome}">
+                <div style="font-weight:700;font-size:14.5px;margin-bottom:2px;">${l.nome}</div>
+                <div style="font-size:11.5px;color:var(--muted2);margin-bottom:8px;">${l.tipo || ''} · 📍 ${l.bairro || ''}</div>
+                <span style="display:inline-block;background:var(--green-soft);color:var(--green);border-radius:999px;padding:4px 10px;font-size:11px;font-weight:700;margin-bottom:8px;">★ ${l.nota || '—'} · ${l.avaliacoes || 0} avaliações</span>
+                <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px;">${l.motivo || ''}</div>
+                <div style="display:flex;gap:8px;">
+                  <button class="lp-criar" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;">Criar negócio</button>
+                  <button class="lp-descartar" style="background:none;border:1px solid var(--line);border-radius:999px;padding:7px 14px;font-size:12px;cursor:pointer;color:var(--muted);">Descartar</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `}
+      </div>
+    `).join('')}
+  `;
+
+  el.querySelectorAll('.lp-descartar').forEach(btn => {
+    btn.addEventListener('click', (e) => e.target.closest('[data-lead]').remove());
+  });
+  el.querySelectorAll('.lp-criar').forEach(btn => {
+    btn.addEventListener('click', () => alert('Em breve: isso vai criar o negócio direto no HubSpot. Por enquanto, é só pra visualizar a sugestão.'));
+  });
+}
 
 // ============ PDIs (documentos anexados) ============
 async function renderPDIs() {
@@ -2429,160 +2504,184 @@ function tendenciaBadge(texto) {
   return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:${cor};background:${bg};padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0;">${icone} ${palavra}</span>`;
 }
 
+let coachingSelecionado = null;
+
 async function renderCoaching() {
   const el = document.getElementById('coachingContent');
   if (!DATA.supabase || !supa) {
     el.innerHTML = `<div class="empty-state">Login ainda não configurado.</div>`;
     return;
   }
+  if (!coachingSelecionado) coachingSelecionado = DATA.reps[0].ownerId;
+  const r = DATA.reps.find(x => x.ownerId === coachingSelecionado) || DATA.reps[0];
 
   el.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">
-      ${DATA.reps.map(r => `
-        <div class="chart-card" style="padding:0;" data-owner="${r.ownerId}">
-          <div style="padding:14px 16px;border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:10px;">
-            ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 34)}
-            <div style="min-width:0;">
-              <div style="font-weight:700;font-size:13.5px;">${r.name}</div>
-              <div style="color:var(--muted-2);font-size:10.5px;">${r.praca}</div>
-            </div>
-            <span class="coachingTendencia" style="margin-left:auto;"></span>
-          </div>
-          <div style="padding:14px 16px;display:flex;gap:14px;align-items:center;">
-            <div class="donut" id="coachDonut${r.ownerId}" style="width:64px;height:64px;flex-shrink:0;"></div>
-            <div style="font-size:11px;color:var(--muted);flex:1;">
-              <b style="color:var(--text);font-size:13px;">${r.open}</b> em aberto ·
-              ${r.leadsTravados > 0 ? `<b style="color:var(--red);">${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</b>` : '<span style="color:var(--green);">sem travados</span>'}
-              · 🎯 Visitas: ${visitasInformadasTexto(r.ownerId)}
-            </div>
-          </div>
-          <div style="padding:0 16px 14px;">
-            <div class="coachingMensal"></div>
-            <div class="coachingSemanalResumo" style="font-size:12px;color:var(--muted);"><div class="empty-state" style="padding:10px;">Carregando...</div></div>
-            <details style="margin-top:10px;">
-              <summary class="card-summary" style="font-size:11.5px;color:var(--muted);">Ver histórico semanal completo</summary>
-              <div class="coachingHistoricoCompleto" style="margin-top:8px;"></div>
-            </details>
-            <div style="margin-top:14px;border-top:1px dashed var(--hairline);padding-top:12px;">
-              <div class="daily-col-label" style="margin-bottom:6px;">💬 Sugerir plano pra ele ver</div>
-              <textarea class="sugestaoPlanoInput" placeholder="ex: Essa semana, foca em avançar os 5 leads mais antigos de Visita antes de abrir prospecção nova." style="width:100%;min-height:50px;background:var(--panel-2);border:1px solid var(--hairline);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12px;margin-bottom:6px;"></textarea>
-              <button class="sugestaoPlanoBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Enviar</button>
-              <span class="sugestaoPlanoStatus" style="font-size:11px;color:var(--muted);margin-left:8px;"></span>
-              <div class="sugestoesAnteriores" style="margin-top:10px;"></div>
-            </div>
-          </div>
-        </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
+      ${DATA.reps.map(x => `
+        <button class="coaching-chip" data-owner="${x.ownerId}" style="border:none;cursor:pointer;font-size:12.5px;font-weight:700;border-radius:999px;padding:8px 15px;background:${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--panel2)'};color:${x.ownerId === r.ownerId ? '#fff' : 'var(--muted)'};">${x.name}</button>
       `).join('')}
+    </div>
+
+    <div class="chart-card" style="margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+        ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 44)}
+        <div style="min-width:0;flex:1;">
+          <div style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:700;">${r.name}</div>
+          <div style="color:var(--muted2);font-size:11.5px;">${r.praca}</div>
+        </div>
+        <span class="coachingTendencia"></span>
+      </div>
+
+      <div style="display:flex;gap:14px;align-items:center;margin-bottom:18px;">
+        <div class="donut" id="coachDonut${r.ownerId}" style="width:64px;height:64px;flex-shrink:0;"></div>
+        <div style="font-size:11.5px;color:var(--muted);flex:1;">
+          <b style="color:var(--ink);font-size:13px;">${r.open}</b> em aberto ·
+          ${r.leadsTravados > 0 ? `<b style="color:var(--red);">${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</b>` : '<span style="color:var(--green);">sem travados</span>'}
+          · 🎯 Visitas: ${visitasInformadasTexto(r.ownerId)}
+        </div>
+      </div>
+
+      <div class="coachingMensal"></div>
+      <div class="coachingSemanalResumo" style="font-size:12px;color:var(--muted);margin-bottom:12px;"><div class="empty-state" style="padding:10px;">Carregando...</div></div>
+
+      <div class="daily-col-label" style="margin-bottom:8px;">🎧 Roteiro do 1:1</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:16px;">
+        <div style="background:var(--panel2);border-radius:16px;padding:13px 15px;">
+          <div style="font-size:10.5px;font-weight:700;color:var(--muted2);margin-bottom:4px;">1 · ABRIR PELO QUE FOI BEM</div>
+          <div style="font-size:12.5px;">${r.boasPraticas && r.boasPraticas[0] ? r.boasPraticas[0] : 'Puxe algo concreto da semana antes de ir pro gargalo.'}</div>
+        </div>
+        <div style="background:var(--panel2);border-radius:16px;padding:13px 15px;">
+          <div style="font-size:10.5px;font-weight:700;color:var(--muted2);margin-bottom:4px;">2 · NOMEAR O GARGALO COM DADO</div>
+          <div style="font-size:12.5px;" class="coachingGargaloRoteiro">${r.gargalo || 'Sem gargalo mapeado ainda.'}</div>
+        </div>
+        <div style="background:var(--panel2);border-radius:16px;padding:13px 15px;">
+          <div style="font-size:10.5px;font-weight:700;color:var(--muted2);margin-bottom:4px;">3 · CHECAR A ADERÊNCIA</div>
+          <div style="font-size:12.5px;">Visitas informadas na Daily: <b>${visitasInformadasTexto(r.ownerId)}</b>. Bateu o prometido?</div>
+        </div>
+        <div style="background:var(--red-soft);border-radius:16px;padding:13px 15px;">
+          <div style="font-size:10.5px;font-weight:700;color:var(--red);margin-bottom:4px;">4 · FECHAR COMPROMISSO</div>
+          <div style="font-size:12.5px;">"O que você se compromete a fazer diferente até nosso próximo 1:1?"</div>
+        </div>
+      </div>
+
+      <details style="margin-bottom:14px;">
+        <summary class="card-summary" style="font-size:11.5px;color:var(--muted);">Ver histórico semanal completo</summary>
+        <div class="coachingHistoricoCompleto" style="margin-top:8px;"></div>
+      </details>
+
+      <div style="border-top:1px dashed var(--line);padding-top:12px;">
+        <div class="daily-col-label" style="margin-bottom:6px;">💬 Sugerir plano pra ele ver</div>
+        <textarea class="sugestaoPlanoInput" placeholder="ex: Essa semana, foca em avançar os 5 leads mais antigos de Visita antes de abrir prospecção nova." style="width:100%;min-height:50px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-family:inherit;font-size:12px;margin-bottom:6px;"></textarea>
+        <button class="sugestaoPlanoBtn" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Enviar</button>
+        <span class="sugestaoPlanoStatus" style="font-size:11px;color:var(--muted);margin-left:8px;"></span>
+        <div class="sugestoesAnteriores" style="margin-top:10px;"></div>
+      </div>
     </div>
   `;
 
-  for (const card of el.querySelectorAll('[data-owner]')) {
-    const ownerId = card.dataset.owner;
-    const repData = DATA.reps.find(x => x.ownerId === ownerId);
+  el.querySelectorAll('.coaching-chip').forEach(chip => {
+    chip.addEventListener('click', () => { coachingSelecionado = chip.dataset.owner; renderCoaching(); });
+  });
 
-    if (repData) {
-      const stageEntries = Object.entries(repData.stages || {});
-      if (stageEntries.length > 0) {
-        const labels = stageEntries.map(([s]) => STAGE_LABELS[s]);
-        const values = stageEntries.map(([, c]) => c);
-        const colors = stageEntries.map(([s]) => STAGE_COLORS[s]);
-        renderDonut(`coachDonut${ownerId}`, null, labels, values, colors);
-      }
-    }
-
-    const { data: semanas, error: erroSemanas } = await supa
-      .from('analise_individual_semanal')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .order('created_at', { ascending: false })
-      .limit(6);
-
-    const { data: mensais, error: erroMensal } = await supa
-      .from('analise_individual_mensal')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    const { data: sugestoes } = await supa
-      .from('sugestoes_planos')
-      .select('*')
-      .eq('owner_id', ownerId)
-      .order('created_at', { ascending: false })
-      .limit(3);
-
-    // Badge de tendência (usa a mais recente)
-    if (!erroSemanas && semanas && semanas.length > 0) {
-      card.querySelector('.coachingTendencia').innerHTML = tendenciaBadge(semanas[0].tendencia);
-    }
-
-    const mensalEl = card.querySelector('.coachingMensal');
-    if (!erroMensal && mensais && mensais.length > 0) {
-      const m = mensais[0];
-      mensalEl.innerHTML = `
-        <div class="gargalo-box" style="margin-bottom:12px;padding:10px 12px;">
-          <div class="daily-col-label" style="margin-bottom:4px;">📅 Fechamento do mês (${m.mes_ano})</div>
-          <div style="font-size:12px;margin-bottom:6px;">${m.resumo_mes}</div>
-          ${(m.acoes_recomendadas || []).length > 0 ? `
-            <ul class="practice-list" style="margin:0;font-size:12px;">
-              ${m.acoes_recomendadas.map(a => `<li>${a}</li>`).join('')}
-            </ul>
-          ` : ''}
-        </div>
-      `;
-    }
-
-    const resumoEl = card.querySelector('.coachingSemanalResumo');
-    const historicoEl = card.querySelector('.coachingHistoricoCompleto');
-    if (erroSemanas) {
-      resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Erro: ${erroSemanas.message}</div>`;
-    } else if (!semanas || semanas.length === 0) {
-      resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Nenhuma análise ainda — roda toda sexta.</div>`;
-    } else {
-      const ultima = semanas[0];
-      resumoEl.innerHTML = `
-        <div style="font-size:11px;color:var(--muted-2);margin-bottom:3px;">Última (${ultima.semana_label})</div>
-        <div style="font-size:12.5px;margin-bottom:4px;"><b>Gargalo:</b> ${ultima.gargalo_semana}</div>
-        <div style="font-size:12.5px;margin-bottom:4px;"><b>Como agir:</b> ${ultima.como_agir}</div>
-        ${ultima.tendencia ? `<div style="font-size:12.5px;"><b>Tendência:</b> ${ultima.tendencia}</div>` : ''}
-      `;
-      historicoEl.innerHTML = semanas.slice(1).map(s => `
-        <div style="border-left:3px solid var(--hairline);padding-left:10px;margin-bottom:10px;">
-          <div style="font-size:10.5px;color:var(--muted-2);margin-bottom:2px;">${s.semana_label} ${tendenciaBadge(s.tendencia)}</div>
-          <div style="font-size:12px;"><b>Gargalo:</b> ${s.gargalo_semana}</div>
-          <div style="font-size:12px;"><b>Como agir:</b> ${s.como_agir}</div>
-        </div>
-      `).join('') || '<div style="font-size:11.5px;color:var(--muted);">Sem semanas anteriores ainda.</div>';
-    }
-
-    // Sugestões já enviadas
-    const sugestoesEl = card.querySelector('.sugestoesAnteriores');
-    if (sugestoes && sugestoes.length > 0) {
-      sugestoesEl.innerHTML = sugestoes.map(s => `
-        <div style="font-size:11px;color:var(--muted);padding:6px 0;border-top:1px dashed var(--hairline);">
-          <span style="color:var(--muted-2);">${new Date(s.created_at).toLocaleDateString('pt-BR')}:</span> ${s.texto}
-        </div>
-      `).join('');
-    }
-
-    card.querySelector('.sugestaoPlanoBtn').addEventListener('click', async () => {
-      const input = card.querySelector('.sugestaoPlanoInput');
-      const statusEl = card.querySelector('.sugestaoPlanoStatus');
-      const texto = input.value.trim();
-      if (!texto) return;
-      statusEl.textContent = 'Enviando...';
-      const { error } = await supa.from('sugestoes_planos').insert({
-        owner_id: ownerId, texto, autor: sessaoAtual.nome || sessaoAtual.email
-      });
-      if (error) {
-        statusEl.textContent = `Erro: ${error.message}`;
-      } else {
-        statusEl.textContent = 'Enviado!';
-        input.value = '';
-        renderCoaching();
-      }
-    });
+  const stageEntries = Object.entries(r.stages || {});
+  if (stageEntries.length > 0) {
+    const labels = stageEntries.map(([s]) => STAGE_LABELS[s]);
+    const values = stageEntries.map(([, c]) => c);
+    const colors = stageEntries.map(([s]) => STAGE_COLORS[s]);
+    renderDonut(`coachDonut${r.ownerId}`, null, labels, values, colors);
   }
+
+  const ownerId = r.ownerId;
+  const { data: semanas, error: erroSemanas } = await supa
+    .from('analise_individual_semanal')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: false })
+    .limit(6);
+
+  const { data: mensais, error: erroMensal } = await supa
+    .from('analise_individual_mensal')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const { data: sugestoes } = await supa
+    .from('sugestoes_planos')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .order('created_at', { ascending: false })
+    .limit(3);
+
+  if (!erroSemanas && semanas && semanas.length > 0) {
+    el.querySelector('.coachingTendencia').innerHTML = tendenciaBadge(semanas[0].tendencia);
+    el.querySelector('.coachingGargaloRoteiro').textContent = semanas[0].gargalo_semana || r.gargalo;
+  }
+
+  const mensalEl = el.querySelector('.coachingMensal');
+  if (!erroMensal && mensais && mensais.length > 0) {
+    const m = mensais[0];
+    mensalEl.innerHTML = `
+      <div class="gargalo-box" style="margin-bottom:12px;padding:10px 12px;">
+        <div class="daily-col-label" style="margin-bottom:4px;">📅 Fechamento do mês (${m.mes_ano})</div>
+        <div style="font-size:12px;margin-bottom:6px;">${m.resumo_mes}</div>
+        ${(m.acoes_recomendadas || []).length > 0 ? `
+          <ul class="practice-list" style="margin:0;font-size:12px;">
+            ${m.acoes_recomendadas.map(a => `<li>${a}</li>`).join('')}
+          </ul>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  const resumoEl = el.querySelector('.coachingSemanalResumo');
+  const historicoEl = el.querySelector('.coachingHistoricoCompleto');
+  if (erroSemanas) {
+    resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Erro: ${erroSemanas.message}</div>`;
+  } else if (!semanas || semanas.length === 0) {
+    resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Nenhuma análise ainda — roda toda sexta.</div>`;
+  } else {
+    const ultima = semanas[0];
+    resumoEl.innerHTML = `
+      <div style="font-size:11px;color:var(--muted2);margin-bottom:3px;">Última (${ultima.semana_label})</div>
+      <div style="font-size:12.5px;margin-bottom:4px;"><b>Como agir:</b> ${ultima.como_agir}</div>
+      ${ultima.tendencia ? `<div style="font-size:12.5px;"><b>Tendência:</b> ${ultima.tendencia}</div>` : ''}
+    `;
+    historicoEl.innerHTML = semanas.slice(1).map(s => `
+      <div style="border-left:3px solid var(--line);padding-left:10px;margin-bottom:10px;">
+        <div style="font-size:10.5px;color:var(--muted2);margin-bottom:2px;">${s.semana_label} ${tendenciaBadge(s.tendencia)}</div>
+        <div style="font-size:12px;"><b>Gargalo:</b> ${s.gargalo_semana}</div>
+        <div style="font-size:12px;"><b>Como agir:</b> ${s.como_agir}</div>
+      </div>
+    `).join('') || '<div style="font-size:11.5px;color:var(--muted);">Sem semanas anteriores ainda.</div>';
+  }
+
+  const sugestoesEl = el.querySelector('.sugestoesAnteriores');
+  if (sugestoes && sugestoes.length > 0) {
+    sugestoesEl.innerHTML = sugestoes.map(s => `
+      <div style="font-size:11px;color:var(--muted);padding:6px 0;border-top:1px dashed var(--line);">
+        <span style="color:var(--muted2);">${new Date(s.created_at).toLocaleDateString('pt-BR')}:</span> ${s.texto}
+      </div>
+    `).join('');
+  }
+
+  el.querySelector('.sugestaoPlanoBtn').addEventListener('click', async () => {
+    const input = el.querySelector('.sugestaoPlanoInput');
+    const statusEl = el.querySelector('.sugestaoPlanoStatus');
+    const texto = input.value.trim();
+    if (!texto) return;
+    statusEl.textContent = 'Enviando...';
+    const { error } = await supa.from('sugestoes_planos').insert({
+      owner_id: ownerId, texto, autor: sessaoAtual.nome || sessaoAtual.email
+    });
+    if (error) {
+      statusEl.textContent = `Erro: ${error.message}`;
+    } else {
+      statusEl.textContent = 'Enviado!';
+      input.value = '';
+      renderCoaching();
+    }
+  });
 }
 
 async function carregarUmAUm(r, root, idPrefix) {
