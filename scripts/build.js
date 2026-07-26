@@ -133,6 +133,10 @@ const DATA = {
   hubspotUpdatedAtFmt: fmtDate(hubspot.updatedAt),
   versaoAnalise: narrativas._atualizado_em || 'v1',
   kpisHub: hubspot.kpis,
+  kpiDetalhe: {
+    leadsCriados: (hubspot.kpiDetalhe?.leadsCriados || []).map(d => ({ ...d, vendedor: (narrativas.reps[d.ownerId] || {}).name || '—' })),
+    perdidos: (hubspot.kpiDetalhe?.perdidos || []).map(d => ({ ...d, vendedor: (narrativas.reps[d.ownerId] || {}).name || '—' }))
+  },
   kpiDeltas,
   funil: hubspot.funil,
   funilLeads: hubspot.funilLeads || {},

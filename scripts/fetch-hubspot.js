@@ -138,9 +138,10 @@ async function createdLast7Days() {
         { propertyName: 'createdate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
       ]
     }],
-    limit: 1
+    properties: ['dealname', 'hubspot_owner_id'],
+    limit: 100
   });
-  return data.total || 0;
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
 }
 
 // Negócios de teste/dummy (ex: "Teste", "TESTE_SONY_DIAG", "Coliseu teste") não devem contar
@@ -162,7 +163,7 @@ function isTestDeal(dealname) {
 // de vocês move o negócio pago direto pra Onboarding — um negócio fechado ontem pode já não
 // estar mais parado em "Negócio Fechado" hoje. closedate é fixo e não muda quando o negócio
 // avança, então cada venda real só é contada 1 vez, não importa em qual das duas etapas está agora.
-async function stageTotalLast7Days(stageIdOuLista) {
+async function stageDealsLast7DaysComNomes(stageIdOuLista) {
   const now = Date.now();
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
   const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
@@ -178,11 +179,15 @@ async function stageTotalLast7Days(stageIdOuLista) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
       ]
     }],
-    properties: ['dealname'],
+    properties: ['dealname', 'hubspot_owner_id'],
     limit: 100
   });
   const results = data.results || [];
-  return results.filter(d => !isTestDeal(d.properties.dealname)).length;
+  return results.filter(d => !isTestDeal(d.properties.dealname));
+}
+async function stageTotalLast7Days(stageIdOuLista) {
+  const results = await stageDealsLast7DaysComNomes(stageIdOuLista);
+  return results.length;
 }
 
 // Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
@@ -324,14 +329,16 @@ async function main() {
   const reciclagem = await stageTotal(STAGES.reciclagem);
 
   const ganho = ganho1 + ganho2;
-  const leadsCriados = await createdLast7Days();
+  const leadsCriadosDeals = await createdLast7Days();
+  const leadsCriados = leadsCriadosDeals.length;
 
   // Ganhos/Perdidos como FLUXO da semana (entraram nessa etapa nos últimos 7 dias) —
   // diferente do "ganho"/"perdido" acima, que é o total histórico acumulado (usado só no funil geral).
   // Ganhos conta SÓ "Negócio Fechado" (ganho1) — "Enviado Onboarding" (ganho2) é a etapa
   // seguinte do MESMO negócio, não representa um cliente novo fechando.
   const ganhoSemana = await stageTotalLast7Days([STAGES.ganho1, STAGES.ganho2]);
-  const perdidoSemana = await stageTotalLast7Days(STAGES.perdido);
+  const perdidoSemanaDeals = await stageDealsLast7DaysComNomes(STAGES.perdido);
+  const perdidoSemana = perdidoSemanaDeals.length;
 
   // ---- Leads por etapa, time inteiro (pro clique no funil) ----
   const ownerNameById = {};
@@ -464,6 +471,10 @@ async function main() {
       emAberto: emAbertoTime,
       emReciclagem: reciclagem,
       leadsTravados: leadsTravadosTime
+    },
+    kpiDetalhe: {
+      leadsCriados: leadsCriadosDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id })),
+      perdidos: perdidoSemanaDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id }))
     },
     funil: {
       labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
