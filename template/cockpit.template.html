@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Cockpit Unificado — HubSpot + Expogo</title>
+<title>Cockpit — HubSpot + Daily</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap');
   :root{
@@ -431,15 +431,12 @@
 
   <div class="view" id="viewCockpit">
 
-  <div class="hint">Clique em um executivo — o gargalo, as boas práticas e o PDI já combinam pipeline (HubSpot) com atividade real de campo (Expogo).</div>
+  <div class="hint">Clique em um executivo — o gargalo, as boas práticas e o PDI já combinam pipeline (HubSpot) com a Daily (prometido x realizado).</div>
 
   <div id="temperaturaCards"></div>
 
   <div class="kpi-label"><span class="source-tag hub">HubSpot</span>pipeline — últimos 7 dias / snapshot atual</div>
   <div class="kpi-strip" id="kpiHub"></div>
-
-  <div class="kpi-label" style="margin-top:16px;"><span class="source-tag exp">Expogo</span>atividade de campo, janela <span id="expogoJanela"></span><span id="expogoStale"></span></div>
-  <div class="kpi-strip exp" id="kpiExpogo"></div>
 
   <div class="banner" id="banner" style="margin-top:16px;"></div>
 
@@ -463,18 +460,10 @@
     </div>
   </div>
 
-  <div class="charts-row">
-    <div class="chart-card">
-      <h3><span class="source-tag exp">Expogo</span>Motivo de perda — mudanças de etapa da semana</h3>
-      <div class="donut-wrap">
-        <div class="donut" id="expogoLossDonut"></div>
-        <div class="legend" id="expogoLossLegend"></div>
-      </div>
-    </div>
-    <div class="chart-card">
-      <h3><span class="source-tag exp">Expogo</span>Visitas com check-in GPS por executivo</h3>
-      <div class="bar-chart" id="expogoVisitsBar"></div>
-    </div>
+  <div class="chart-card" style="margin-bottom:20px;">
+    <h3>🎯 Visitas informadas por executivo — o que prometeu na Daily x o que realizou</h3>
+    <div class="chart-subtitle" style="margin-bottom:14px;">Semana atual (segunda até hoje). Aderência = realizadas / prometidas.</div>
+    <div id="visitasInformadasBar"></div>
   </div>
 
   <div class="chart-card" style="margin-bottom:8px;">
@@ -839,7 +828,7 @@ function buildDistribuicaoCompactaHTML(r, idPrefix) {
         <div class="modal-stats">
           <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Total em aberto</span><b>${r.open}</b></div>
           <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Etapa dominante</span><b>${dominant ? STAGE_LABELS[dominant[0]] : '—'} (${dominantPct}%)</b></div>
-          <div class="modal-stat"><span><span class="source-tag exp">Exp</span>Visitas GPS (janela)</span><b>${r.expogoVisitas}</b></div>
+          <div class="modal-stat"><span><span class="source-tag hub">Daily</span>Visitas informadas (semana)</span><b>${visitasInformadasTexto(r.ownerId)}</b></div>
         </div>
       </div>
     </div>
@@ -1045,28 +1034,9 @@ function kpiDeltaHtml(key) {
 
 // ============ CABEÇALHO / KPIs / BANNER ============
 document.getElementById('updatedLine').textContent =
-  `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Expogo: janela ${DATA.expogoJanela} (manual) · Time ativo: ${DATA.reps.length} executivos`;
-document.getElementById('expogoJanela').textContent = DATA.expogoJanela;
+  `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${DATA.reps.length} executivos`;
 
-// ---- Aviso de dado do Expogo desatualizado ----
-// Formato esperado da janela: "dd–dd/mm/aaaa" (ex: "15–22/07/2026"). Se o fim dessa
-// janela for há mais de 9 dias, avisa — provável que ninguém subiu um export novo.
-(function checkExpogoStale() {
-  try {
-    const partes = DATA.expogoJanela.split('–');
-    const fimStr = partes[partes.length - 1]; // "22/07/2026"
-    const [dia, mes, ano] = fimStr.split('/').map(Number);
-    const fimJanela = new Date(ano, mes - 1, dia);
-    const diasDesatualizado = Math.floor((Date.now() - fimJanela.getTime()) / (1000 * 60 * 60 * 24));
-    if (diasDesatualizado > 9) {
-      document.getElementById('expogoStale').innerHTML =
-        ` <span style="color:var(--red);font-weight:600;">⚠ dado do Expogo desatualizado há ${diasDesatualizado} dias — pedir novo export</span>`;
-    }
-  } catch (e) {
-    // Se o formato da janela mudar e isso quebrar o parse, só não mostra o aviso — não trava o resto do painel.
-  }
-})();
-document.getElementById('banner').innerHTML = DATA.banner;
+document.getElementById('banner') && (document.getElementById('banner').innerHTML = DATA.banner || '');
 document.getElementById('footerText').textContent = DATA.footerText;
 
 document.getElementById('healthBadge').innerHTML = `
@@ -1144,15 +1114,6 @@ document.getElementById('kpiHub').innerHTML = `
   <div class="kpi"><div class="v">${DATA.kpisHub.perdidos}${kpiDeltaHtml('perdidos')}</div><div class="l">Perdidos (7d)</div></div>
   <div class="kpi"><div class="v">${DATA.kpisHub.emAberto}${kpiDeltaHtml('emAberto')}</div><div class="l">Em aberto (time ativo)</div></div>
   <div class="kpi"><div class="v">${DATA.kpisHub.emReciclagem}${kpiDeltaHtml('emReciclagem')}</div><div class="l">Em reciclagem</div></div>
-`;
-document.getElementById('kpiExpogo').innerHTML = `
-  <div class="kpi"><div class="v">${DATA.kpisExpogo.leadsTocados}</div><div class="l">Leads tocados</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisExpogo.tarefasSLA}</div><div class="l">Tarefas SLA</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisExpogo.visitasGPS}</div><div class="l">Visitas c/ GPS</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisExpogo.reunioes}</div><div class="l">Reuniões</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisExpogo.followUps}</div><div class="l">Follow-ups</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisExpogo.mudancasEtapa}</div><div class="l">Mudanças etapa</div></div>
-  <div class="kpi"><div class="v">${DATA.kpisExpogo.notasCampo}</div><div class="l">Notas de campo</div></div>
 `;
 
 // ============ ABAS (Cockpit / Resumo Semanal) ============
@@ -1278,12 +1239,44 @@ renderBar('repsBar', repsSorted.map(r => ({n: r.name.split(' (')[0], v: r.open, 
     return `<b>${r.n}</b> — distribuição por etapa:<br>${rows}${travadosLine}`;
   });
 
-// ============ MOTIVO DE PERDA (Expogo) ============
-renderDonut('expogoLossDonut', 'expogoLossLegend', DATA.motivoPerda.labels, DATA.motivoPerda.valores, DATA.motivoPerda.cores);
+// ============ VISITAS INFORMADAS (Daily — prometido x realizado da semana) ============
+async function renderVisitasInformadas() {
+  const el = document.getElementById('visitasInformadasBar');
+  if (!el) return;
+  if (!DATA.supabase || !supa) { el.innerHTML = '<div class="empty-state">Login não configurado.</div>'; return; }
+  if (Object.keys(dailiesCache).length === 0) await carregarDailies();
 
-// ============ VISITAS GPS (Expogo) ============
-const expogoSorted = [...DATA.reps].sort((a,b) => b.expogoVisitas - a.expogoVisitas);
-renderBar('expogoVisitsBar', expogoSorted.map(r => ({n: r.name.split(' (')[0], v: r.expogoVisitas})), () => '#1FA35C');
+  const hoje = isoDate(new Date());
+  const dow = new Date(hoje + 'T12:00:00').getDay();
+  const offsetSeg = dow === 0 ? 6 : dow - 1;
+  const segunda = addDays(hoje, -offsetSeg);
+
+  const linhas = DATA.reps.map(r => {
+    let prom = 0, real = 0;
+    for (let i = 0; i <= offsetSeg; i++) {
+      const dia = addDays(segunda, i);
+      const row = getDaily(r.ownerId, dia);
+      if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
+    }
+    const aderencia = prom > 0 ? Math.round((real / prom) * 100) : null;
+    return { nome: r.name, prom, real, aderencia };
+  }).sort((a, b) => (b.aderencia ?? -1) - (a.aderencia ?? -1));
+
+  el.innerHTML = linhas.map(l => {
+    const cor = l.aderencia === null ? 'var(--muted2)' : l.aderencia >= 90 ? 'var(--green)' : l.aderencia >= 75 ? 'var(--amber)' : 'var(--red)';
+    const pct = l.aderencia === null ? 0 : Math.min(100, l.aderencia);
+    return `
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;">
+          <span>${l.nome}</span>
+          <span style="font-weight:700;color:${cor};">${l.real}/${l.prom}${l.aderencia !== null ? ` · ${l.aderencia}%` : ''}</span>
+        </div>
+        <div class="bar-track" style="height:9px;"><div class="bar-fill" style="width:${pct}%;background:${cor};"></div></div>
+      </div>
+    `;
+  }).join('');
+}
+renderVisitasInformadas();
 
 // ============ GANHOS POR EXECUTIVO (esta semana) ============
 (function renderGanhosPorExecutivo() {
@@ -1367,7 +1360,7 @@ function renderRepsList() {
       </div>
       <div class="rep-right">
         <span><span class="source-tag hub" style="margin-right:4px;">Hub</span><b>${r.open}</b> em aberto</span>
-        <span><span class="source-tag exp" style="margin-right:4px;">Exp</span><b>${r.expogoVisitas}</b> visitas GPS</span>
+        <span><span class="source-tag hub" style="margin-right:4px;">Daily</span><b>${visitasInformadasTexto(r.ownerId)}</b> visitas informadas</span>
         <span class="arrow"></span>
       </div>
     `;
@@ -1397,7 +1390,7 @@ function buildDetailHTML(r, idPrefix, skipLeadsList) {
         <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Total em aberto</span><b>${r.open}</b></div>
         <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Etapa dominante</span><b>${STAGE_LABELS[dominant[0]]} (${dominantPct}%)</b></div>
         <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Leads com SLA estourado</span><b style="${travados.length > 0 ? 'color:var(--red);' : ''}">${travados.length}</b></div>
-        <div class="modal-stat"><span><span class="source-tag exp">Exp</span>Visitas GPS (janela)</span><b>${r.expogoVisitas}</b></div>
+        <div class="modal-stat"><span><span class="source-tag hub">Daily</span>Visitas informadas (semana)</span><b>${visitasInformadasTexto(r.ownerId)}</b></div>
       </div>
     </div>
 
@@ -1624,6 +1617,21 @@ async function salvarDaily(ownerId, dataISO, campos) {
 }
 
 // ---- Cálculos derivados (nunca chumbados) ----
+// Resumo "realizadas/prometidas (semana)" — usado no lugar do antigo "Visitas GPS"
+function visitasInformadasTexto(ownerId) {
+  if (Object.keys(dailiesCache).length === 0) return '—';
+  const hoje = isoDate(new Date());
+  const dow = new Date(hoje + 'T12:00:00').getDay();
+  const offsetSeg = dow === 0 ? 6 : dow - 1;
+  const segunda = addDays(hoje, -offsetSeg);
+  let prom = 0, real = 0;
+  for (let i = 0; i <= offsetSeg; i++) {
+    const row = getDaily(ownerId, addDays(segunda, i));
+    if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
+  }
+  return `${real}/${prom}`;
+}
+
 function pontosDoDia(row) {
   if (!row) return 0;
   return (row.realizado_visitas || 0) * 10 + (row.realizado_avancos || 0) * 25 + (row.realizado_propostas || 0) * 40 + (row.realizado_fechamentos || 0) * 100;
@@ -2368,7 +2376,7 @@ async function renderCoaching() {
             <div style="font-size:11px;color:var(--muted);flex:1;">
               <b style="color:var(--text);font-size:13px;">${r.open}</b> em aberto ·
               ${r.leadsTravados > 0 ? `<b style="color:var(--red);">${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</b>` : '<span style="color:var(--green);">sem travados</span>'}
-              · 🎯 GPS: ${r.expogoVisitas}
+              · 🎯 Visitas: ${visitasInformadasTexto(r.ownerId)}
             </div>
           </div>
           <div style="padding:0 16px 14px;">
