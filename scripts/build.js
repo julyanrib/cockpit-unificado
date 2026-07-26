@@ -7,7 +7,7 @@ const path = require('path');
 
 const root = path.join(__dirname, '..');
 const hubspot = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
-const expogo = JSON.parse(fs.readFileSync(path.join(root, 'data', 'expogo.json'), 'utf8'));
+// expogo.json não é mais lido — a métrica de atividade agora vem da Daily (prometido/realizado)
 const narrativas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'narrativas.json'), 'utf8'));
 const usuarios = JSON.parse(fs.readFileSync(path.join(root, 'data', 'usuarios.json'), 'utf8'));
 
@@ -50,7 +50,6 @@ const ownerIds = Object.keys(narrativas.reps);
 const reps = ownerIds.map(ownerId => {
   const n = narrativas.reps[ownerId];
   const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [] };
-  const e = (expogo.porExecutivo && expogo.porExecutivo[ownerId]) || { visitasGPS: 0 };
 
   return {
     ownerId,
@@ -67,8 +66,7 @@ const reps = ownerIds.map(ownerId => {
     travados: h.travados || [],
     leadsTravados: h.leadsTravados || 0,
     ganhosSemana: h.ganhosSemana || 0,
-    ganhosSemanaNomes: h.ganhosSemanaNomes || [],
-    expogoVisitas: e.visitasGPS
+    ganhosSemanaNomes: h.ganhosSemanaNomes || []
   };
 });
 
@@ -129,20 +127,16 @@ if (ganhosDetalheFresco.length > 0) {
 
 const DATA = {
   hubspotUpdatedAtFmt: fmtDate(hubspot.updatedAt),
-  expogoJanela: expogo.janela,
-  banner: expogo.banner,
   versaoAnalise: narrativas._atualizado_em || 'v1',
   kpisHub: hubspot.kpis,
-  kpisExpogo: expogo.kpis,
   kpiDeltas,
   funil: hubspot.funil,
   funilLeads: hubspot.funilLeads || {},
   temperatura: hubspot.temperatura || { quentes: [], frios: [] },
   stageMeta: hubspot.stageMeta || { slaDays: {}, descriptions: {}, labels: {} },
-  motivoPerda: expogo.motivoPerda,
   saude,
   reps,
-  footerText: `Fontes: HubSpot (pipeline 916011864, auto-atualizado diariamente) + Expogo (export RPA manual, janela ${expogo.janela}) · Leads críticos = mais antigos sem avanço de etapa · Compromissos marcados não são salvos ao recarregar a página.`,
+  footerText: `Fonte: HubSpot (pipeline 916011864, auto-atualizado diariamente) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
   resumoSemanal: (resumoSemanal || weeklyRaw) ? {
     geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
     numerosAtualizadosEmFmt: weeklyRaw ? fmtDate(weeklyRaw.geradoEm) : (resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null),
