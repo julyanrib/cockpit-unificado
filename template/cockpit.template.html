@@ -53,6 +53,12 @@
   .kpi{background:var(--panel);padding:16px 18px;border-radius:14px;box-shadow:var(--shadow-sm);border:1px solid var(--hairline);}
   .kpi .v{font-size:26px;font-weight:700;font-family:'Poppins',sans-serif;color:var(--text);}
   .kpi .l{color:var(--muted);font-size:10.5px;margin-top:5px;letter-spacing:.03em;font-weight:600;}
+  /* ---- KPI strip principal (redesign 27/07/2026) — faixa escura no topo do Cockpit ---- */
+  .kpi-strip-hero{background:var(--dark);border-radius:22px;padding:22px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:18px;margin-bottom:18px;box-shadow:var(--shadow);}
+  .kpi-hero .l{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);margin-bottom:6px;}
+  .kpi-hero .v{font-family:'Poppins',sans-serif;font-size:34px;font-weight:800;letter-spacing:-.02em;color:var(--dark-ink);font-variant-numeric:tabular-nums;}
+  .kpi-hero .hint{font-size:11.5px;color:var(--dark-mut);margin-top:5px;line-height:1.4;}
+  .kpi-hero .kpi-delta{font-family:'DM Sans',sans-serif;}
   .kpi-label{margin:0 0 10px;color:var(--muted);font-size:11.5px;letter-spacing:.04em;font-weight:600;}
 
   .section-title{display:flex;align-items:baseline;gap:10px;margin:28px 0 14px;}
@@ -307,6 +313,8 @@
     .kpi-strip, .kpi-strip.exp{grid-template-columns:repeat(2,1fr);}
     .kpi{padding:12px 12px;}
     .kpi .v{font-size:21px;}
+    .kpi-strip-hero{grid-template-columns:repeat(2,1fr);padding:18px 16px;gap:14px;}
+    .kpi-hero .v{font-size:24px;}
     .charts-row{grid-template-columns:1fr;gap:14px;margin-bottom:18px;}
     .donut{width:120px;height:120px;}
     .donut-wrap{gap:14px;}
@@ -327,6 +335,8 @@
   @media (max-width:420px){
     .kpi-strip, .kpi-strip.exp{grid-template-columns:1fr 1fr;}
     .kpi .v{font-size:19px;}
+    .kpi-strip-hero{grid-template-columns:1fr 1fr;}
+    .kpi-hero .v{font-size:21px;}
   }
 </style>
 </head>
@@ -443,7 +453,9 @@
 
   <div id="temperaturaCards"></div>
 
-  <div class="kpi-label"><span class="source-tag hub">HubSpot</span>pipeline — últimos 7 dias / snapshot atual</div>
+  <div class="kpi-strip-hero" id="kpiStripHero"></div>
+
+  <div class="kpi-label"><span class="source-tag hub">HubSpot</span>detalhamento (últimos 7 dias)</div>
   <div class="kpi-strip" id="kpiHub"></div>
 
   <div class="banner" id="banner" style="margin-top:16px;"></div>
@@ -1192,6 +1204,78 @@ document.getElementById('healthBadge').innerHTML = `
     </div>
   `;
 })();
+
+// ============ FAIXA DE KPIs PRINCIPAL (redesign 27/07/2026) ============
+// 4 dos 5 números vêm prontos do build (HubSpot). "Aderência da Daily" é a exceção —
+// depende do Supabase (prometido x realizado da semana, por executivo), então é
+// preenchida à parte por renderAderenciaDailyHero(), de forma assíncrona.
+(function renderKpiStripHero() {
+  const el = document.getElementById('kpiStripHero');
+  if (!el) return;
+  const k = DATA.kpisHub;
+  const fechadosPct = k.metaMensalFechados > 0 ? Math.round((k.fechadosNoMes / k.metaMensalFechados) * 100) : 0;
+
+  el.innerHTML = `
+    <div class="kpi-hero">
+      <div class="l">Negócios em aberto</div>
+      <div class="v">${k.emAberto}${kpiDeltaHtml('emAberto')}</div>
+    </div>
+    <div class="kpi-hero">
+      <div class="l">Fechados no mês</div>
+      <div class="v" style="color:#4FC49E;">${k.fechadosNoMes}${kpiDeltaHtml('fechadosNoMes')}</div>
+      <div class="hint">meta ${k.metaMensalFechados} · ${fechadosPct}% do caminho</div>
+    </div>
+    <div class="kpi-hero">
+      <div class="l">Leads travados</div>
+      <div class="v" style="color:#FF6B78;">${k.leadsTravados}${kpiDeltaHtml('leadsTravados')}</div>
+      <div class="hint">acima do SLA da etapa</div>
+    </div>
+    <div class="kpi-hero" id="kpiHeroAderenciaDaily">
+      <div class="l">Aderência da Daily</div>
+      <div class="v" style="color:#E0A64A;">—</div>
+      <div class="hint">carregando…</div>
+    </div>
+    <div class="kpi-hero">
+      <div class="l">Taxa de avanço</div>
+      <div class="v">${k.taxaAvanco}%${kpiDeltaHtml('taxaAvanco')}</div>
+      <div class="hint">negócios que avançaram de etapa esta semana</div>
+    </div>
+  `;
+})();
+
+// Aderência da Daily do time inteiro (semana atual, segunda até hoje) — mesma lógica de
+// soma usada em renderVisitasInformadas(), só que agregada pro time, não por executivo.
+async function renderAderenciaDailyHero() {
+  const el = document.getElementById('kpiHeroAderenciaDaily');
+  if (!el) return;
+  if (!DATA.supabase || !supa) {
+    el.querySelector('.v').textContent = '—';
+    el.querySelector('.hint').textContent = 'login não configurado';
+    return;
+  }
+  if (Object.keys(dailiesCache).length === 0) await carregarDailies();
+
+  const hoje = isoDate(new Date());
+  const dow = new Date(hoje + 'T12:00:00').getDay();
+  const offsetSeg = dow === 0 ? 6 : dow - 1;
+  const segunda = addDays(hoje, -offsetSeg);
+
+  let prom = 0, real = 0;
+  DATA.reps.forEach(r => {
+    for (let i = 0; i <= offsetSeg; i++) {
+      const dia = addDays(segunda, i);
+      const row = getDaily(r.ownerId, dia);
+      if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
+    }
+  });
+  const aderencia = prom > 0 ? Math.round((real / prom) * 100) : null;
+  const cor = aderencia === null ? 'var(--dark-mut)' : aderencia >= 90 ? '#4FC49E' : aderencia >= 75 ? '#E0A64A' : '#FF6B78';
+
+  el.querySelector('.v').style.color = cor;
+  el.querySelector('.v').textContent = aderencia === null ? '—' : `${aderencia}%`;
+  el.querySelector('.hint').textContent = aderencia === null ? 'sem dailies essa semana ainda' : `${real} informadas de ${prom} prometidas`;
+}
+renderAderenciaDailyHero();
 
 document.getElementById('kpiHub').innerHTML = `
   <div class="kpi" id="kpiLeadsCriados" style="cursor:pointer;"><div class="v">${DATA.kpisHub.leadsCriados}${kpiDeltaHtml('leadsCriados')}</div><div class="l">Leads criados (7d)</div></div>
