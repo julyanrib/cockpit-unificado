@@ -478,14 +478,13 @@
       <div class="chart-subtitle" id="funilInsight" style="margin-top:14px;"></div>
     </div>
     <div class="chart-card">
-      <h3><span class="source-tag hub">HubSpot</span>Volume em aberto por executivo</h3>
-      <div class="chart-subtitle">Todos os negócios em aberto (Prospecção → Ag. Pagamento). O ⏱ no card indica quem está com SLA travado.</div>
-      <div class="bar-chart" id="repsBar"></div>
-      <div class="bar-legend-caption">
-        <span><span class="dot-mini" style="background:#E51A31;"></span>Crítico</span>
-        <span><span class="dot-mini" style="background:#E8A33D;"></span>Atenção</span>
-        <span><span class="dot-mini" style="background:#1FA35C;"></span>Ok</span>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
+        <h3 style="margin-bottom:0;">🔥 Leads quentes</h3>
+        <span id="leadsQuentesCount" style="font-size:11.5px;color:var(--muted2);"></span>
       </div>
+      <div class="chart-subtitle" style="margin-top:6px;">Demo/Proposta ou adiante, ativos nos últimos dias e dentro do SLA.</div>
+      <div id="leadsQuentesLista"></div>
+      <div id="leadsQuentesTotal" style="margin-top:12px;"></div>
     </div>
   </div>
 
@@ -1465,17 +1464,61 @@ function renderFunilBarras() {
 }
 renderFunilBarras();
 
-// ============ VOLUME EM ABERTO (HubSpot) ============
-const repsSorted = [...DATA.reps].sort((a,b) => b.open - a.open);
-renderBar('repsBar', repsSorted.map(r => ({n: r.name.split(' (')[0], v: r.open, rep: r})),
-  r => r.rep.tag === 'crit' ? '#E51A31' : r.rep.tag === 'warn' ? '#E8A33D' : '#1FA35C',
-  r => {
-    const stageEntries = Object.entries(r.rep.stages || {}).sort((a,b) => b[1]-a[1]);
-    if (stageEntries.length === 0) return `<b>${r.n}</b><br>Sem negócios em aberto no momento.`;
-    const rows = stageEntries.map(([sid, count]) => `${STAGE_LABELS[sid] || sid}: <b>${count}</b>`).join('<br>');
-    const travadosLine = r.rep.leadsTravados > 0 ? `<br><br>⏱ <b>${r.rep.leadsTravados}</b> com SLA estourado` : '';
-    return `<b>${r.n}</b> — distribuição por etapa:<br>${rows}${travadosLine}`;
-  });
+// ============ 🔥 LEADS QUENTES (substitui o antigo "Motivo de perda" — dado real,
+// não simulado: vem de DATA.temperatura.quentes, já calculado no fetch-hubspot.js) ============
+(function renderLeadsQuentes() {
+  const listaEl = document.getElementById('leadsQuentesLista');
+  const countEl = document.getElementById('leadsQuentesCount');
+  const totalEl = document.getElementById('leadsQuentesTotal');
+  if (!listaEl) return;
+
+  const STAGE_COLOR = {
+    '1395880471': '#2FA88A', // Demo/Proposta
+    '1395880472': '#D97BA8', // Negociação
+    '1395880473': 'var(--red)' // Ag. Pagamento
+  };
+
+  const top5 = (DATA.temperatura.quentes || []).slice(0, 5);
+  if (countEl) countEl.textContent = `${top5.length} pra fechar essa semana`;
+
+  if (top5.length === 0) {
+    listaEl.innerHTML = '<div class="empty-state" style="padding:14px;">Nenhum lead quente agora — funil precisa avançar etapas.</div>';
+    if (totalEl) totalEl.innerHTML = '';
+    return;
+  }
+
+  listaEl.innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      ${top5.map(l => {
+        const cor = STAGE_COLOR[l.stageId] || 'var(--muted2)';
+        const tag = l.dias <= 1 ? 'entrou hoje' : `há ${l.dias}d na etapa`;
+        return `
+          <div class="tip-wrap" style="display:flex;align-items:center;gap:11px;background:var(--panel-2);border-radius:13px;padding:10px 12px;min-height:44px;cursor:pointer;">
+            <span style="width:7px;height:7px;border-radius:999px;background:${cor};flex:none;"></span>
+            <span style="display:flex;flex-direction:column;gap:2px;min-width:0;flex:1;">
+              <span style="font-size:13px;color:var(--text);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${l.name}</span>
+              <span style="font-size:11.5px;color:var(--muted2);">${l.stage} · ${l.vendedor} · ${l.praca}</span>
+            </span>
+            <span style="font-size:11px;font-weight:800;color:${cor};background:var(--panel-3, var(--panel-2));border-radius:999px;padding:4px 9px;flex:none;">${tag}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  const totalEmFechamento = top5
+    .filter(l => l.stageId === '1395880472' || l.stageId === '1395880473')
+    .reduce((s, l) => s + (l.valor || 0), 0);
+
+  if (totalEl) {
+    if (totalEmFechamento > 0) {
+      const totalFmt = (totalEmFechamento / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+      totalEl.innerHTML = `<div style="font-size:12.5px;color:var(--muted);background:var(--green-soft, var(--panel-2));border-radius:12px;padding:12px 14px;line-height:1.5;">✓ <b style="color:var(--text);">R$ ${totalFmt} mil</b> em negociação/pagamento nesta lista.</div>`;
+    } else {
+      totalEl.innerHTML = '';
+    }
+  }
+})();
 
 // ============ VISITAS INFORMADAS (Daily — prometido x realizado da semana) ============
 async function renderVisitasInformadas() {
@@ -1595,6 +1638,12 @@ function renderRepsList() {
         <div style="font-size:13.5px;font-weight:${r.leadsTravados > 0 ? 700 : 400};color:${travadosCor};">${r.leadsTravados}</div>
         <div>
           <div style="font-size:13.5px;">${visitasInformadasTexto(r.ownerId)}</div>
+          ${(() => {
+            const det = visitasInformadasDetalhe(r.ownerId);
+            if (det.aderencia === null) return '';
+            const cor = det.aderencia >= 90 ? 'var(--green)' : det.aderencia >= 75 ? 'var(--amber)' : 'var(--red)';
+            return `<div style="font-size:10.5px;font-weight:800;color:${cor};">${det.aderencia}%</div>`;
+          })()}
         </div>
         <div style="font-size:13.5px;">${r.ganhosSemana || 0}</div>
         <div>
@@ -1624,6 +1673,12 @@ function renderRepsList() {
   });
 }
 renderRepsList();
+if (DATA.supabase && supa) {
+  (async () => {
+    if (Object.keys(dailiesCache).length === 0) await carregarDailies();
+    renderRepsList();
+  })();
+}
 
 function buildDetailHTML(r, idPrefix, skipLeadsList) {
   const stageEntries = Object.entries(r.stages);
@@ -1903,6 +1958,23 @@ function visitasInformadasTexto(ownerId) {
     if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
   }
   return `${real}/${prom}`;
+}
+
+// Mesma soma de cima, mas devolvendo os números crus + aderência — usado na tabela
+// "Por executivo" pra colorir o número embaixo do real/prom (README: ≥90% verde,
+// ≥75% âmbar, abaixo vermelho).
+function visitasInformadasDetalhe(ownerId) {
+  if (Object.keys(dailiesCache).length === 0) return { real: 0, prom: 0, aderencia: null };
+  const hoje = isoDate(new Date());
+  const dow = new Date(hoje + 'T12:00:00').getDay();
+  const offsetSeg = dow === 0 ? 6 : dow - 1;
+  const segunda = addDays(hoje, -offsetSeg);
+  let prom = 0, real = 0;
+  for (let i = 0; i <= offsetSeg; i++) {
+    const row = getDaily(ownerId, addDays(segunda, i));
+    if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
+  }
+  return { real, prom, aderencia: prom > 0 ? Math.round((real / prom) * 100) : null };
 }
 
 function pontosDoDia(row) {
