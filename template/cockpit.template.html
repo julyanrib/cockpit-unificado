@@ -2252,6 +2252,10 @@ async function carregarComunicados() {
   lidosCache = lidos || [];
 
   renderBannerComunicados();
+  // Sem isso, quem clicasse na aba Avisos ANTES dessa busca terminar (bem comum,
+  // é assíncrono) ficava preso na tela vazia pra sempre — nada mandava recarregar
+  // depois que o dado chegasse. Agora recarrega se a view já estiver montada.
+  if (typeof renderAvisos === 'function' && document.getElementById('avisosContent')) renderAvisos();
 }
 
 function jaLi(comunicadoId) {
@@ -2561,14 +2565,15 @@ function renderLeadsPraca() {
   const meuNome = sessaoAtual && sessaoAtual.role === 'rep'
     ? (DATA.reps.find(r => r.ownerId === sessaoAtual.ownerId) || {}).name
     : null;
-  const minhaPraca = meuNome
-    ? (DATA.reps.find(r => r.ownerId === sessaoAtual.ownerId) || {}).praca
-    : null;
 
-  const pracasParaMostrar = minhaPraca
+  // Filtra direto pelo nome do executivo em cada lead (campo `responsavel`, que é
+  // dado que já existe e não depende de nenhuma outra configuração bater certinho).
+  // Não depende mais do campo `praca` do executivo — isso já quebrou 3 vezes por
+  // desalinhamento de texto entre arquivos, então tirei essa dependência frágil.
+  const pracasParaMostrar = meuNome
     ? todasPracas
-        .filter(p => p.nome === minhaPraca)
-        .map(p => ({ ...p, leads: (p.leads || []).filter(l => !l.responsavel || l.responsavel === meuNome) }))
+        .map(p => ({ ...p, leads: (p.leads || []).filter(l => l.responsavel === meuNome) }))
+        .filter(p => p.leads.length > 0)
     : todasPracas;
 
   const totalLeads = pracasParaMostrar.reduce((sum, p) => sum + (p.leads || []).length, 0);
@@ -2583,7 +2588,7 @@ function renderLeadsPraca() {
     <div class="chart-card" style="margin-bottom:20px;max-width:80ch;font-size:13px;line-height:1.6;">
       A lista cruza nota e volume de avaliações públicas (Google/TripAdvisor) com os negócios já abertos no HubSpot — se alguém do time já tocou aquele lead, ele sai da lista.
     </div>
-    ${pracasParaMostrar.length === 0 ? `<div class="empty-state">Nenhuma praça configurada ainda.</div>` : pracasParaMostrar.map(p => `
+    ${pracasParaMostrar.length === 0 ? `<div class="empty-state">Nenhum lead sugerido pra você ainda essa semana.</div>` : pracasParaMostrar.map(p => `
       <div style="margin-bottom:26px;">
         <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
           <span style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;">${p.nome}</span>
