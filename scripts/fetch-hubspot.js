@@ -315,6 +315,33 @@ function daysInCurrentStage(properties) {
 
 // Busca os negócios que UM executivo fechou (Negócio Fechado) nos últimos 7 dias,
 // usando closedate — mesmo critério validado pro Ganhos (7d) geral.
+// Meta mensal INDIVIDUAL de cada executivo — 10 fechamentos/mês, igual ao design
+// (8 executivos ativos × 10 = 80, bate com a meta do time inteiro combinada com o Julyan).
+const META_MENSAL_POR_EXECUTIVO = 10;
+
+async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
+  const now = new Date();
+  const inicioMes = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3, 0, 0));
+  const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
+  const filtroEtapa = lista.length > 1
+    ? { propertyName: 'dealstage', operator: 'IN', values: lista }
+    : { propertyName: 'dealstage', operator: 'EQ', value: lista[0] };
+
+  const data = await hsSearch({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        filtroEtapa,
+        { propertyName: 'hubspot_owner_id', operator: 'EQ', value: ownerId },
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioMes.getTime()), highValue: String(now.getTime()) }
+      ]
+    }],
+    properties: ['dealname'],
+    limit: 50
+  });
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname)).length;
+}
+
 async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
   const now = Date.now();
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -476,6 +503,8 @@ async function main() {
 
     // Ganhos da semana desse executivo (pro painel "Ganhos por executivo")
     const ganhosSemanaDeals = await stageDealsLast7DaysByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
+    // Fechados no MÊS desse executivo (pra coluna "Meta do mês" da tabela Por executivo)
+    const fechadosNoMesRep = await stageTotalThisMonthByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
 
     repsData[rep.ownerId] = {
       name: rep.name,
@@ -485,7 +514,9 @@ async function main() {
       travados,
       leadsTravados,
       ganhosSemana: ganhosSemanaDeals.length,
-      ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name)
+      ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name),
+      fechadosNoMes: fechadosNoMesRep,
+      metaMensal: META_MENSAL_POR_EXECUTIVO
     };
     emAbertoTime += deals.length;
   }

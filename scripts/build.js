@@ -53,7 +53,7 @@ const ownerIds = Object.keys(narrativas.reps);
 
 const reps = ownerIds.map(ownerId => {
   const n = narrativas.reps[ownerId];
-  const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [] };
+  const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 10 };
 
   return {
     ownerId,
@@ -70,7 +70,9 @@ const reps = ownerIds.map(ownerId => {
     travados: h.travados || [],
     leadsTravados: h.leadsTravados || 0,
     ganhosSemana: h.ganhosSemana || 0,
-    ganhosSemanaNomes: h.ganhosSemanaNomes || []
+    ganhosSemanaNomes: h.ganhosSemanaNomes || [],
+    fechadosNoMes: h.fechadosNoMes || 0,
+    metaMensal: h.metaMensal || 10
   };
 });
 
