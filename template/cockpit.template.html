@@ -830,23 +830,36 @@ function buildAcaoImediataHTML(r) {
 function buildDistribuicaoCompactaHTML(r, idPrefix) {
   const stageEntries = Object.entries(r.stages).sort((a, b) => b[1] - a[1]);
   const dominant = stageEntries[0];
-  const dominantPct = r.open > 0 && dominant ? Math.round((dominant[1] / r.open) * 100) : 0;
+  const max = Math.max(...stageEntries.map(([, c]) => c), 1);
+  const travadosPorEtapa = {};
+  (r.travados || []).forEach(l => { travadosPorEtapa[l.stageId] = (travadosPorEtapa[l.stageId] || 0) + 1; });
+
+  const primeiraAvancada = stageEntries.find(([s]) => (STAGE_RANK_CLIENT[s] || 0) >= 3);
+  const fraseResumo = primeiraAvancada
+    ? `Metade do funil ainda é topo. O caminho mais curto pro 🏆 são os ${primeiraAvancada[1]} em ${STAGE_LABELS[primeiraAvancada[0]].toLowerCase()}${travadosPorEtapa[primeiraAvancada[0]] ? ` — ${travadosPorEtapa[primeiraAvancada[0]]} já passaram do SLA` : ''}.`
+    : 'Sem negócios em aberto pra analisar agora.';
+
   return `
     <div class="chart-card" style="margin-bottom:20px;">
-      <h3 style="margin-bottom:14px;">Distribuição do seu funil</h3>
-      <div class="modal-grid" style="margin-bottom:0;">
-        <div class="modal-donut-wrap">
-          <div class="donut" id="${idPrefix}Donut" style="width:120px;height:120px;"></div>
-        </div>
-        <div class="modal-stats">
-          <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Total em aberto</span><b>${r.open}</b></div>
-          <div class="modal-stat"><span><span class="source-tag hub">Hub</span>Etapa dominante</span><b>${dominant ? STAGE_LABELS[dominant[0]] : '—'} (${dominantPct}%)</b></div>
-          <div class="modal-stat"><span><span class="source-tag hub">Daily</span>Visitas informadas (semana)</span><b>${visitasInformadasTexto(r.ownerId)}</b></div>
-        </div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;">
+        <h3 style="margin:0;">Onde seu funil está preso</h3>
+        <span style="font-size:11.5px;color:var(--muted2);">${r.open} abertos</span>
       </div>
+      ${stageEntries.map(([stageId, count]) => `
+        <div style="margin-bottom:10px;">
+          <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px;">
+            <span>${STAGE_LABELS[stageId]}</span>
+            <span style="font-weight:700;">${count}</span>
+          </div>
+          <div class="bar-track" style="height:8px;"><div class="bar-fill" style="width:${(count / max * 100).toFixed(0)}%;background:${STAGE_COLORS[stageId] || 'var(--muted2)'};"></div></div>
+        </div>
+      `).join('')}
+      <div style="font-size:12px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);">${fraseResumo}</div>
     </div>
   `;
 }
+
+const STAGE_RANK_CLIENT = { '1395880469': 1, '1396005401': 1, '1395880470': 2, '1395880471': 3, '1395880472': 3, '1395880473': 3 };
 
 function renderMeuPainel() {
   const el = document.getElementById('meuPainelContent');
