@@ -86,6 +86,16 @@
   .bar-track{background:var(--panel-2);height:14px;border-radius:8px;position:relative;overflow:hidden;}
   .bar-fill{height:100%;transition:width .3s ease;border-radius:8px;}
   .bar-val{font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--muted);text-align:right;}
+  /* ---- Funil por etapa (barras horizontais com % de conversão, redesign 27/07/2026) ---- */
+  .funil-bar-row{display:grid;grid-template-columns:150px 1fr 58px;align-items:center;gap:10px;margin-bottom:10px;}
+  .funil-bar-row:last-child{margin-bottom:0;}
+  .funil-bar-row.clickable{cursor:pointer;border-radius:8px;transition:background .12s ease;}
+  .funil-bar-row.clickable:hover{background:var(--panel-2);}
+  .funil-bar-label{font-size:12.5px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .funil-bar-track{background:var(--panel-2);height:26px;border-radius:8px;position:relative;overflow:hidden;}
+  .funil-bar-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:flex-end;padding-right:9px;transition:width .3s ease;min-width:30px;}
+  .funil-bar-fill .val{color:#fff;font-family:'Poppins',sans-serif;font-weight:700;font-size:12.5px;}
+  .funil-bar-conv{font-family:'DM Sans',sans-serif;font-size:11.5px;color:var(--muted);text-align:right;white-space:nowrap;}
 
   .reps{display:flex;flex-direction:column;gap:10px;margin-bottom:8px;}
   .rep-card{background:var(--panel);border:1px solid var(--hairline);border-left:4px solid var(--muted-2);border-radius:14px;cursor:pointer;transition:box-shadow .15s ease,transform .15s ease;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;box-shadow:var(--shadow-sm);}
@@ -462,11 +472,10 @@
 
   <div class="charts-row">
     <div class="chart-card">
-      <h3><span class="source-tag hub">HubSpot</span>Funil geral — distribuição por etapa</h3>
-      <div class="donut-wrap">
-        <div class="donut" id="funnelDonut"></div>
-        <div class="legend" id="funnelLegend"></div>
-      </div>
+      <h3><span class="source-tag hub">HubSpot</span>Funil por etapa</h3>
+      <div class="chart-subtitle" id="funilBarrasSubtitle">negócios em aberto · conversão etapa a etapa</div>
+      <div id="funilBarras"></div>
+      <div class="chart-subtitle" id="funilInsight" style="margin-top:14px;"></div>
     </div>
     <div class="chart-card">
       <h3><span class="source-tag hub">HubSpot</span>Volume em aberto por executivo</h3>
@@ -1401,7 +1410,60 @@ if (!DATA.resumoSemanal) {
 
 // ============ FUNIL GERAL (HubSpot) ============
 const FUNIL_STAGE_IDS = [null, "1395880469", "1396005401", "1395880470", "1395880471", "1395880472", "1395880473", null, null, null];
-renderDonut('funnelDonut', 'funnelLegend', DATA.funil.labels, DATA.funil.valores, DATA.funil.cores, FUNIL_STAGE_IDS);
+// Funil por etapa — barras horizontais com conversão etapa-a-etapa (substitui o donut antigo).
+// Índices 1-6 de DATA.funil são as etapas ABERTAS, na ordem certa (Prospecção → Ag. Pagamento);
+// 0=Backlog, 7=Fechado/Onboarding, 8=Perdido, 9=Reciclagem ficam de fora dessa visão.
+function renderFunilBarras() {
+  const el = document.getElementById('funilBarras');
+  if (!el) return;
+  const idxAbertas = [1, 2, 3, 4, 5, 6];
+  const linhas = idxAbertas.map((idx, pos) => {
+    const valorAnterior = pos === 0 ? null : DATA.funil.valores[idxAbertas[pos - 1]];
+    const valor = DATA.funil.valores[idx];
+    return {
+      label: DATA.funil.labels[idx],
+      valor,
+      cor: DATA.funil.cores[idx],
+      stageId: FUNIL_STAGE_IDS[idx],
+      conversao: (valorAnterior && valorAnterior > 0) ? Math.round((valor / valorAnterior) * 100) : null
+    };
+  });
+  const max = Math.max(...linhas.map(l => l.valor), 1);
+  const totalAberto = linhas.reduce((s, l) => s + l.valor, 0);
+
+  const subEl = document.getElementById('funilBarrasSubtitle');
+  if (subEl) subEl.textContent = `${totalAberto} negócios em aberto · conversão etapa a etapa`;
+
+  el.innerHTML = linhas.map(l => {
+    const clickable = l.stageId && DATA.funilLeads[l.stageId];
+    return `
+      <div class="funil-bar-row ${clickable ? 'clickable' : ''}" ${clickable ? `data-stageid="${l.stageId}"` : ''}>
+        <span class="funil-bar-label">${l.label}</span>
+        <div class="funil-bar-track"><div class="funil-bar-fill" style="width:${(l.valor / max * 100).toFixed(0)}%;background:${l.cor};"><span class="val">${l.valor}</span></div></div>
+        <span class="funil-bar-conv">${l.conversao === null ? '—' : `${l.conversao}% →`}</span>
+      </div>
+    `;
+  }).join('');
+
+  el.querySelectorAll('.funil-bar-row.clickable').forEach(row => {
+    row.addEventListener('click', () => {
+      const stageId = row.dataset.stageid;
+      const linha = linhas.find(l => l.stageId === stageId);
+      openStageModal(stageId, linha ? linha.label : '');
+    });
+  });
+
+  // Insight: aponta a pior conversão etapa-a-etapa do momento. Não afirma tendência de
+  // "últimas N semanas" porque só temos o snapshot de agora — não histórico suficiente pra isso.
+  const insightEl = document.getElementById('funilInsight');
+  if (!insightEl) return;
+  const comConversao = linhas.filter(l => l.conversao !== null);
+  if (comConversao.length === 0) { insightEl.innerHTML = ''; return; }
+  const pior = comConversao.reduce((a, b) => (b.conversao < a.conversao ? b : a));
+  const anterior = linhas[linhas.indexOf(pior) - 1];
+  insightEl.innerHTML = `A maior perda está de <b>${anterior.label} → ${pior.label} (${pior.conversao}%)</b>.`;
+}
+renderFunilBarras();
 
 // ============ VOLUME EM ABERTO (HubSpot) ============
 const repsSorted = [...DATA.reps].sort((a,b) => b.open - a.open);
