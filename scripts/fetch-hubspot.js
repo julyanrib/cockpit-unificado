@@ -233,7 +233,7 @@ async function repOpenDeals(ownerId) {
         { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', ...ENTERED_STAGE_PROPS],
+    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', ...ENTERED_STAGE_PROPS],
     limit: 200,
     sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
   });
@@ -444,7 +444,8 @@ async function main() {
         slaRatio: Math.round(slaRatio * 100),
         rank,
         temperatura,
-        proximaReuniao
+        proximaReuniao,
+        valor: Math.round(parseFloat(d.properties.amount) || 0)
       };
     }).sort((a, b) => b.dias - a.dias);
 
@@ -468,7 +469,7 @@ async function main() {
 
     // Coleta pros rankings de temperatura do time inteiro (usado no Cockpit geral)
     withDays.forEach(l => {
-      const comDono = { ...l, vendedor: rep.name };
+      const comDono = { ...l, vendedor: rep.name, ownerId: rep.ownerId };
       if (l.temperatura === 'quente') todosQuentes.push(comDono);
       if (l.temperatura === 'frio') todosFrios.push(comDono);
     });

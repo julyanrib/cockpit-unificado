@@ -131,6 +131,16 @@ if (ganhosDetalheFresco.length > 0) {
     .slice(0, 3);
 }
 
+// Leads quentes/frios já vêm com nome do executivo, mas não com a praça — isso só
+// existe em narrativas.json (não em hubspot.json). Anexa aqui, no build, por ownerId.
+function comPraca(lista) {
+  return (lista || []).map(l => ({ ...l, praca: (narrativas.reps[l.ownerId] || {}).praca || '—' }));
+}
+const temperaturaComPraca = {
+  quentes: comPraca((hubspot.temperatura || {}).quentes),
+  frios: comPraca((hubspot.temperatura || {}).frios)
+};
+
 const DATA = {
   hubspotUpdatedAtFmt: fmtDate(hubspot.updatedAt),
   versaoAnalise: narrativas._atualizado_em || 'v1',
@@ -142,7 +152,7 @@ const DATA = {
   kpiDeltas,
   funil: hubspot.funil,
   funilLeads: hubspot.funilLeads || {},
-  temperatura: hubspot.temperatura || { quentes: [], frios: [] },
+  temperatura: temperaturaComPraca,
   stageMeta: hubspot.stageMeta || { slaDays: {}, descriptions: {}, labels: {} },
   saude,
   reps,
