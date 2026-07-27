@@ -30,6 +30,10 @@ const STAGES = {
 
 const OPEN_STAGES = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGES.demoProposta, STAGES.negociacao, STAGES.agPagamento];
 
+// Meta mensal de negócios fechados do time inteiro — combinada com o Julyan em 27/07/2026.
+// Configurável aqui até existir um lugar melhor pra isso (ex.: data/config.json).
+const META_MENSAL_FECHADOS = 80;
+
 const STAGE_LABELS = {
   [STAGES.prospeccao]: 'Prospecção',
   [STAGES.visita]: 'Visita',
@@ -190,6 +194,31 @@ async function stageTotalLast7Days(stageIdOuLista) {
   return results.length;
 }
 
+// Conta quantos negócios fecharam DESDE O DIA 1º DO MÊS CORRENTE (horário de Brasília),
+// mesmo critério de closedate usado acima — pro KPI "Fechados no mês".
+async function stageTotalThisMonth(stageIdOuLista) {
+  const now = new Date();
+  // Início do mês corrente às 00:00 em America/Sao_Paulo (UTC-3, sem horário de verão hoje em dia).
+  const inicioMes = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3, 0, 0));
+  const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
+  const filtroEtapa = lista.length > 1
+    ? { propertyName: 'dealstage', operator: 'IN', values: lista }
+    : { propertyName: 'dealstage', operator: 'EQ', value: lista[0] };
+
+  const data = await hsSearch({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        filtroEtapa,
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioMes.getTime()), highValue: String(now.getTime()) }
+      ]
+    }],
+    properties: ['dealname'],
+    limit: 100
+  });
+  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname)).length;
+}
+
 // Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
 // (uma por etapa). Confirmado com a API: o nome certo nesta conta é hs_v2_date_entered_<etapa>
 // (não hs_date_entered_<etapa> — essa variante não existe aqui e vinha sempre vazia).
@@ -340,6 +369,11 @@ async function main() {
   const perdidoSemanaDeals = await stageDealsLast7DaysComNomes(STAGES.perdido);
   const perdidoSemana = perdidoSemanaDeals.length;
 
+  // Fechados no mês corrente (pro KPI "Fechados no mês" vs. meta do time) — mesma
+  // lógica de 2 etapas do ganhoSemana (Negócio Fechado + Enviado Onboarding), só que
+  // com janela do mês em vez de 7 dias.
+  const fechadosNoMes = await stageTotalThisMonth([STAGES.ganho1, STAGES.ganho2]);
+
   // ---- Leads por etapa, time inteiro (pro clique no funil) ----
   const ownerNameById = {};
   REPS.forEach(r => { ownerNameById[r.ownerId] = r.name; });
@@ -362,6 +396,7 @@ async function main() {
   // ---- Por executivo ----
   const repsData = {};
   let emAbertoTime = 0;
+  let avancaramSemanaTime = 0;
   const todosQuentes = [];
   const todosFrios = [];
 
@@ -414,6 +449,12 @@ async function main() {
     }).sort((a, b) => b.dias - a.dias);
 
     const leadsTravados = withDays.filter(l => l.slaBreach).length;
+
+    // "Avançou de etapa esta semana" = está numa etapa além de Prospecção E entrou
+    // nessa etapa atual há 7 dias ou menos (usa o mesmo `dias` já calculado acima,
+    // que vem de hs_v2_date_entered_<etapa>). Não é perfeito (não pega quem já nasceu
+    // direto numa etapa mais avançada), mas é o proxy mais simples com o dado que já temos.
+    avancaramSemanaTime += withDays.filter(l => l.stageId !== STAGES.prospeccao && l.dias <= 7).length;
 
     // Top 5 mais antigos (referência rápida, independente de terem estourado SLA ou não)
     const criticos = withDays.slice(0, 5).map(l => ({
@@ -470,7 +511,10 @@ async function main() {
       perdidos: perdidoSemana,
       emAberto: emAbertoTime,
       emReciclagem: reciclagem,
-      leadsTravados: leadsTravadosTime
+      leadsTravados: leadsTravadosTime,
+      fechadosNoMes,
+      metaMensalFechados: META_MENSAL_FECHADOS,
+      taxaAvanco: emAbertoTime > 0 ? Math.round((avancaramSemanaTime / emAbertoTime) * 100) : 0
     },
     kpiDetalhe: {
       leadsCriados: leadsCriadosDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id })),

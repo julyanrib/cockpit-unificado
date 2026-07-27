@@ -100,7 +100,9 @@ const kpiDeltas = hubspotPrevious ? {
   ganhos: delta(hubspot.kpis.ganhos, hubspotPrevious.kpis.ganhos),
   perdidos: delta(hubspot.kpis.perdidos, hubspotPrevious.kpis.perdidos),
   emAberto: delta(hubspot.kpis.emAberto, hubspotPrevious.kpis.emAberto),
-  emReciclagem: delta(hubspot.kpis.emReciclagem, hubspotPrevious.kpis.emReciclagem)
+  emReciclagem: delta(hubspot.kpis.emReciclagem, hubspotPrevious.kpis.emReciclagem),
+  fechadosNoMes: delta(hubspot.kpis.fechadosNoMes, hubspotPrevious.kpis.fechadosNoMes),
+  taxaAvanco: delta(hubspot.kpis.taxaAvanco, hubspotPrevious.kpis.taxaAvanco)
 } : null;
 
 // Ranking de vendas da semana — 1º/2º/3º lugar por quantidade de negócios fechados,
