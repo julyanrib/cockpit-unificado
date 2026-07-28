@@ -118,6 +118,25 @@ async function hsSearch(body, attempt = 1) {
   return res.json();
 }
 
+// Busca TODAS as páginas de uma pesquisa, sem cap de 100/200 — várias contagens
+// do cockpit (leads criados, perdidos, fechados no mês, negócios por executivo)
+// usavam só a 1ª página e ficavam erradas sempre que passavam do limite. Uma
+// semana de 204 leads criados ou 100 perdidos (já aconteceu, é real) já bastava
+// pra dar número errado. Isso resolve pra sempre, independente do volume.
+async function hsSearchAll(body) {
+  let todos = [];
+  let after = undefined;
+  let seguraLoop = 0;
+  while (seguraLoop < 20) { // trava de segurança — nenhuma consulta daqui deveria ter 2000+ resultados
+    seguraLoop++;
+    const data = await hsSearch({ ...body, limit: 100, after });
+    todos = todos.concat(data.results || []);
+    after = data.paging && data.paging.next ? data.paging.next.after : null;
+    if (!after) break;
+  }
+  return todos;
+}
+
 async function stageTotal(stageId, extraFilters = []) {
   const data = await hsSearch({
     filterGroups: [{
@@ -135,17 +154,16 @@ async function stageTotal(stageId, extraFilters = []) {
 async function createdLast7Days() {
   const now = Date.now();
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-  const data = await hsSearch({
+  const results = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
         { propertyName: 'createdate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
       ]
     }],
-    properties: ['dealname', 'hubspot_owner_id'],
-    limit: 100
+    properties: ['dealname', 'hubspot_owner_id']
   });
-  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
+  return results.filter(d => !isTestDeal(d.properties.dealname));
 }
 
 // Negócios de teste/dummy (ex: "Teste", "TESTE_SONY_DIAG", "Coliseu teste") não devem contar
@@ -175,7 +193,7 @@ async function stageDealsLast7DaysComNomes(stageIdOuLista) {
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
     : { propertyName: 'dealstage', operator: 'EQ', value: lista[0] };
 
-  const data = await hsSearch({
+  const results = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
@@ -183,10 +201,8 @@ async function stageDealsLast7DaysComNomes(stageIdOuLista) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
       ]
     }],
-    properties: ['dealname', 'hubspot_owner_id'],
-    limit: 100
+    properties: ['dealname', 'hubspot_owner_id']
   });
-  const results = data.results || [];
   return results.filter(d => !isTestDeal(d.properties.dealname));
 }
 async function stageTotalLast7Days(stageIdOuLista) {
@@ -205,7 +221,7 @@ async function stageTotalThisMonth(stageIdOuLista) {
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
     : { propertyName: 'dealstage', operator: 'EQ', value: lista[0] };
 
-  const data = await hsSearch({
+  const results = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
@@ -213,10 +229,9 @@ async function stageTotalThisMonth(stageIdOuLista) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioMes.getTime()), highValue: String(now.getTime()) }
       ]
     }],
-    properties: ['dealname'],
-    limit: 100
+    properties: ['dealname']
   });
-  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname)).length;
+  return results.filter(d => !isTestDeal(d.properties.dealname)).length;
 }
 
 // Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
@@ -225,7 +240,7 @@ async function stageTotalThisMonth(stageIdOuLista) {
 const ENTERED_STAGE_PROPS = OPEN_STAGES.map(s => `hs_v2_date_entered_${s}`);
 
 async function repOpenDeals(ownerId) {
-  const data = await hsSearch({
+  const results = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
@@ -233,28 +248,29 @@ async function repOpenDeals(ownerId) {
         { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', ...ENTERED_STAGE_PROPS],
-    limit: 200,
-    sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
+    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', ...ENTERED_STAGE_PROPS]
   });
-  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
+  return results.filter(d => !isTestDeal(d.properties.dealname));
 }
 
 // Busca TODOS os leads abertos de uma etapa (time inteiro) — usado pro clique no funil.
 // Precisa do nome do dono pra mostrar quem é o responsável na lista.
+// Busca TODOS os negócios de uma etapa, o time inteiro — sem cap de 100.
+// Antes isso vinha só da 1ª página (limit:100) sem paginar; em etapas com mais de
+// 100 negócios abertos (ex: Prospecção, que passa de 200), o modal mostrava um
+// número MENOR que o real e faltavam leads na lista — por isso agora pagina até
+// trazer tudo, do mesmo jeito que o `total` (usado no Funil por etapa) já é exato.
 async function stageDealsTeamWide(stageId) {
-  const data = await hsSearch({
+  const todos = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
         { propertyName: 'dealstage', operator: 'EQ', value: stageId }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS],
-    limit: 100,
-    sorts: [{ propertyName: 'createdate', direction: 'ASCENDING' }]
+    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS]
   });
-  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
+  return todos.filter(d => !isTestDeal(d.properties.dealname));
 }
 
 // Busca as 2 notas/observações mais recentes de um negócio específico.
@@ -435,6 +451,15 @@ async function main() {
       stages[s] = (stages[s] || 0) + 1;
     });
 
+    // Cross-check barato pro campo "realizado" da Daily (sem chamada extra à API —
+    // já usa o hs_v2_date_entered_visita que a repOpenDeals já buscou): conta quantos
+    // negócios entraram em Visita HOJE, direto do HubSpot.
+    const hojeISO = new Date().toISOString().slice(0, 10);
+    const visitasHubspotHoje = deals.filter(d => {
+      const dt = d.properties.hs_v2_date_entered_1396005401;
+      return dt && dt.slice(0, 10) === hojeISO;
+    }).length;
+
     const withDays = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
       const stageId = d.properties.dealstage;
@@ -516,7 +541,8 @@ async function main() {
       ganhosSemana: ganhosSemanaDeals.length,
       ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name),
       fechadosNoMes: fechadosNoMesRep,
-      metaMensal: META_MENSAL_POR_EXECUTIVO
+      metaMensal: META_MENSAL_POR_EXECUTIVO,
+      visitasHubspotHoje
     };
     emAbertoTime += deals.length;
   }
