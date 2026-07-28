@@ -135,7 +135,7 @@
   .bar-fill{height:100%;transition:width .3s ease;border-radius:8px;}
   .bar-val{font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--muted);text-align:right;}
   /* ---- Funil por etapa (barras horizontais com % de conversão, redesign 27/07/2026) ---- */
-  .funil-bar-row{display:grid;grid-template-columns:150px 1fr 58px;align-items:center;gap:10px;margin-bottom:10px;}
+  .funil-bar-row{display:grid;grid-template-columns:150px 1fr auto 58px;align-items:center;gap:10px;margin-bottom:10px;}
   .funil-bar-row:last-child{margin-bottom:0;}
   .funil-bar-row.clickable{cursor:pointer;border-radius:8px;transition:background .12s ease;}
   .funil-bar-row.clickable:hover{background:var(--panel-2);}
@@ -1486,11 +1486,14 @@ function renderFunilBarras() {
   if (subEl) subEl.textContent = `${totalAberto} negócios em aberto · conversão etapa a etapa`;
 
   el.innerHTML = linhas.map(l => {
-    const clickable = l.stageId && DATA.funilLeads[l.stageId];
+    const leadsDaEtapa = DATA.funilLeads[l.stageId] || [];
+    const clickable = l.stageId && leadsDaEtapa;
+    const estourados = leadsDaEtapa.filter(x => x.slaBreach).length;
     return `
       <div class="funil-bar-row ${clickable ? 'clickable' : ''}" ${clickable ? `data-stageid="${l.stageId}"` : ''}>
         <span class="funil-bar-label">${l.label}</span>
         <div class="funil-bar-track"><div class="funil-bar-fill" style="width:${(l.valor / max * 100).toFixed(0)}%;background:${l.cor};"><span class="val">${l.valor}</span></div></div>
+        ${estourados > 0 ? `<span style="font-size:11px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:999px;padding:2px 8px;white-space:nowrap;">⚠ ${estourados}</span>` : `<span style="width:1px;"></span>`}
         <span class="funil-bar-conv">${l.conversao === null ? '—' : `${l.conversao}% →`}</span>
       </div>
     `;
@@ -1818,20 +1821,25 @@ function openKpiListModal(titulo, lista) {
   stageOverlay.classList.add('show');
 }
 
-function openStageModal(stageId, label) {
-  const leads = DATA.funilLeads[stageId] || [];
-  const sla = DATA.stageMeta.slaDays[stageId];
-  const desc = DATA.stageMeta.descriptions[stageId];
-  const travados = leads.filter(l => l.slaBreach).length;
+let stageModalAtual = null;
+let stageModalFiltro = 'estourado'; // default: é o que importa pra cobrar decisão
 
-  stageModalName.textContent = label;
+function renderStageModalBody() {
+  const { stageId, label, leads, sla, desc } = stageModalAtual;
+  const travados = leads.filter(l => l.slaBreach);
+  const mostrar = stageModalFiltro === 'estourado' ? travados : leads;
+
   stageModalMeta.textContent = `${leads.length} leads em aberto nesta etapa · SLA ${sla} dia${sla > 1 ? 's' : ''}`;
 
   stageModalBody.innerHTML = `
-    <div class="gargalo-box">${desc}${travados > 0 ? ` <b>${travados} lead${travados > 1 ? 's' : ''} com SLA estourado</b> nesta etapa agora.` : ''}</div>
-    <h3 class="block-label">Leads nesta etapa — clique para abrir no HubSpot</h3>
+    <div class="gargalo-box">${desc}${travados.length > 0 ? ` <b>${travados.length} lead${travados.length > 1 ? 's' : ''} com SLA estourado</b> nesta etapa agora.` : ''}</div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="stage-modal-filtro" data-filtro="estourado" style="border:none;cursor:pointer;font-size:12.5px;font-weight:700;border-radius:999px;padding:7px 14px;background:${stageModalFiltro === 'estourado' ? 'var(--red)' : 'var(--panel2)'};color:${stageModalFiltro === 'estourado' ? '#fff' : 'var(--muted)'};">⚠ SLA estourado (${travados.length})</button>
+      <button class="stage-modal-filtro" data-filtro="todos" style="border:none;cursor:pointer;font-size:12.5px;font-weight:700;border-radius:999px;padding:7px 14px;background:${stageModalFiltro === 'todos' ? 'var(--red)' : 'var(--panel2)'};color:${stageModalFiltro === 'todos' ? '#fff' : 'var(--muted)'};">Todos (${leads.length})</button>
+    </div>
+    <h3 class="block-label">${stageModalFiltro === 'estourado' ? 'Leads com SLA estourado' : 'Leads nesta etapa'} — clique para abrir no HubSpot</h3>
     <div class="leads-box">
-      ${leads.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead nesta etapa no momento.</div>' : leads.map(l => `
+      ${mostrar.length === 0 ? `<div style="padding:14px;color:var(--muted);font-size:13px;">${stageModalFiltro === 'estourado' ? 'Nenhum lead com SLA estourado nesta etapa agora.' : 'Nenhum lead nesta etapa no momento.'}</div>` : mostrar.map(l => `
         <a class="lead-row ${l.slaBreach ? 'sla-breach' : ''}" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
           <div class="lead-left">
             <span class="lead-name">${l.name}${l.slaBreach ? ' ⚠' : ''}</span>
@@ -1845,6 +1853,21 @@ function openStageModal(stageId, label) {
       `).join('')}
     </div>
   `;
+
+  stageModalBody.querySelectorAll('.stage-modal-filtro').forEach(btn => {
+    btn.addEventListener('click', () => { stageModalFiltro = btn.dataset.filtro; renderStageModalBody(); });
+  });
+}
+
+function openStageModal(stageId, label) {
+  const leads = DATA.funilLeads[stageId] || [];
+  const sla = DATA.stageMeta.slaDays[stageId];
+  const desc = DATA.stageMeta.descriptions[stageId];
+
+  stageModalName.textContent = label;
+  stageModalAtual = { stageId, label, leads, sla, desc };
+  stageModalFiltro = 'estourado'; // sempre abre focado no que estourou — é o que ele cobra
+  renderStageModalBody();
 
   stageOverlay.classList.add('show');
 }
@@ -2125,7 +2148,7 @@ async function renderDaily() {
           <div>
             <div class="daily-periodo-label ontem" style="margin-bottom:10px;">📋 Prometer / registrar realizado</div>
             <div class="daily-metric-row"><label>Visitas prometidas</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_visitas" value="${hoje.prometido_visitas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
-            <div class="daily-metric-row"><label>Visitas realizadas</label><input type="number" min="0" class="d-real" data-owner="${r.ownerId}" data-campo="realizado_visitas" value="${hoje.realizado_visitas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
+            <div class="daily-metric-row"><label>Visitas realizadas</label><input type="number" min="0" class="d-real" data-owner="${r.ownerId}" data-campo="realizado_visitas" value="${hoje.realizado_visitas ?? ''}" ${disabledAttr} style="${inputStyleExtra}">${dailyRefDate === isoDate(new Date()) ? `<span style="font-size:10.5px;color:var(--muted2);margin-left:8px;" title="Negócios que entraram em Visita hoje, direto do HubSpot">🔗 HubSpot: ${r.visitasHubspotHoje || 0}</span>` : ''}</div>
             <div class="daily-metric-row"><label>Avanços prometidos</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_avancos" value="${hoje.prometido_avancos ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
             <div class="daily-metric-row"><label>Avanços realizados</label><input type="number" min="0" class="d-real" data-owner="${r.ownerId}" data-campo="realizado_avancos" value="${hoje.realizado_avancos ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
             <div class="daily-metric-row"><label>Propostas prometidas</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_propostas" value="${hoje.prometido_propostas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
