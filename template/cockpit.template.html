@@ -1087,7 +1087,7 @@ function buildConicGradient(values, colors) {
   });
   return `conic-gradient(${stops.join(', ')})`;
 }
-function renderDonut(elId, legendId, labels, values, colors, stageIds) {
+function renderDonut(elId, legendId, labels, values, colors, stageIds, ownerId) {
   const el = document.getElementById(elId);
   el.style.background = buildConicGradient(values, colors);
   if (legendId) {
@@ -1111,7 +1111,7 @@ function renderDonut(elId, legendId, labels, values, colors, stageIds) {
 
     if (stageIds) {
       legend.querySelectorAll('.legend-item.clickable').forEach(el => {
-        el.addEventListener('click', () => openStageModal(el.dataset.stageid, labels[stageIds.indexOf(el.dataset.stageid)]));
+        el.addEventListener('click', () => openStageModal(el.dataset.stageid, labels[stageIds.indexOf(el.dataset.stageid)], ownerId));
       });
     }
   }
@@ -1777,7 +1777,7 @@ function wireDetailInteractions(r, root, idPrefix) {
   const values = stageEntries.map(([,c]) => c);
   const colors = stageEntries.map(([s]) => STAGE_COLORS[s]);
   const stageIdsArr2 = stageEntries.map(([s]) => s);
-  renderDonut(`${idPrefix}Donut`, `${idPrefix}Legend`, labels, values, colors, stageIdsArr2);
+  renderDonut(`${idPrefix}Donut`, `${idPrefix}Legend`, labels, values, colors, stageIdsArr2, r.ownerId);
 }
 
 // ============ MODAL ============
@@ -1859,13 +1859,16 @@ function renderStageModalBody() {
   });
 }
 
-function openStageModal(stageId, label) {
-  const leads = DATA.funilLeads[stageId] || [];
+function openStageModal(stageId, label, ownerId) {
+  const todosLeadsDaEtapa = DATA.funilLeads[stageId] || [];
+  // Se veio de um card de um executivo específico (Coaching, dossiê, Meu Painel),
+  // mostra só os negócios daquele executivo — não o time inteiro.
+  const leads = ownerId ? todosLeadsDaEtapa.filter(l => l.ownerId === ownerId) : todosLeadsDaEtapa;
   const sla = DATA.stageMeta.slaDays[stageId];
   const desc = DATA.stageMeta.descriptions[stageId];
 
   stageModalName.textContent = label;
-  stageModalAtual = { stageId, label, leads, sla, desc };
+  stageModalAtual = { stageId, label, leads, sla, desc, ownerId };
   stageModalFiltro = 'estourado'; // sempre abre focado no que estourou — é o que ele cobra
   renderStageModalBody();
 
@@ -2929,7 +2932,7 @@ async function renderCoaching() {
     const values = stageEntries.map(([, c]) => c);
     const colors = stageEntries.map(([s]) => STAGE_COLORS[s]);
     const stageIdsArr = stageEntries.map(([s]) => s);
-    renderDonut(`coachDonut${r.ownerId}`, `coachLegend${r.ownerId}`, labels, values, colors, stageIdsArr);
+    renderDonut(`coachDonut${r.ownerId}`, `coachLegend${r.ownerId}`, labels, values, colors, stageIdsArr, r.ownerId);
   }
 
   const ownerId = r.ownerId;
