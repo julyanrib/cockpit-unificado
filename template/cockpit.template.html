@@ -139,6 +139,8 @@
   .funil-bar-row:last-child{margin-bottom:0;}
   .funil-bar-row.clickable{cursor:pointer;border-radius:8px;transition:background .12s ease;}
   .funil-bar-row.clickable:hover{background:var(--panel-2);}
+  .funil-preso-row.clickable{border-radius:8px;transition:background .12s ease;padding:4px 6px;margin:-4px -6px 6px;}
+  .funil-preso-row.clickable:hover{background:var(--panel-2);}
   .funil-bar-label{font-size:12.5px;color:var(--text);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .funil-bar-track{background:var(--panel-2);height:26px;border-radius:8px;position:relative;overflow:hidden;}
   .funil-bar-fill{height:100%;border-radius:8px;display:flex;align-items:center;justify-content:flex-end;padding-right:9px;transition:width .3s ease;min-width:30px;}
@@ -824,15 +826,29 @@ function aplicarVisaoPorPapel() {
   }
   document.getElementById('themeToggleApp').addEventListener('click', toggleTheme);
 
-  if (sessaoAtual.role === 'rep') {
-    document.getElementById('tabBtnMeuPainel').style.display = 'flex';
+  const souRep = sessaoAtual.role === 'rep';
+  const souGestorSessao = sessaoAtual.role === 'manager';
+
+  // Sempre define os dois estados explicitamente (mostrar E esconder) — nunca só um lado.
+  // Isso evita que uma aba restrita fique "grudada" visível de uma sessão anterior no
+  // mesmo navegador (ex: testou como gestor, depois logou como executivo sem recarregar).
+  document.getElementById('tabBtnMeuPainel').style.display = souRep ? 'flex' : 'none';
+  document.getElementById('tabBtnCoaching').style.display = souGestorSessao ? 'flex' : 'none';
+
+  // Se a aba restrita que sumiu era a ativa no momento da troca de sessão, volta pro Cockpit
+  // em vez de deixar a tela em branco numa view que o papel atual não pode ver.
+  const viewAtivaId = document.querySelector('.view.active')?.id;
+  if ((viewAtivaId === 'viewCoaching' && !souGestorSessao) || (viewAtivaId === 'viewMeuPainel' && !souRep)) {
+    activateTab('viewCockpit');
+  }
+
+  if (souRep) {
     document.querySelector('.section-title').innerHTML = '<h2>Meu Painel</h2>';
     document.getElementById('sidenavTitle').textContent = 'Meu espaço';
     renderMeuPainel();
   }
 
-  if (sessaoAtual.role === 'manager') {
-    document.getElementById('tabBtnCoaching').style.display = 'flex';
+  if (souGestorSessao) {
     document.getElementById('sidenavTitle').textContent = 'Gestor';
     if (typeof renderCoaching === 'function') renderCoaching();
   }
@@ -840,6 +856,7 @@ function aplicarVisaoPorPapel() {
   if (typeof renderRepsList === 'function') renderRepsList();
   if (typeof renderPDIs === 'function') renderPDIs();
   if (typeof renderDaily === 'function') renderDaily();
+  if (typeof renderResumoSemanal === 'function') renderResumoSemanal();
 }
 
 function buildAcaoImediataHTML(r) {
@@ -898,18 +915,37 @@ function buildDistribuicaoCompactaHTML(r, idPrefix) {
         <h3 style="margin:0;">Onde seu funil está preso</h3>
         <span style="font-size:11.5px;color:var(--muted2);">${r.open} abertos</span>
       </div>
-      ${stageEntries.map(([stageId, count]) => `
-        <div style="margin-bottom:10px;">
+      ${stageEntries.map(([stageId, count]) => {
+        // Só é clicável se tiver leads carregados pra essa etapa em DATA.funilLeads —
+        // sem isso, o clique não tinha pra onde ir (era esse o bug: nada acontecia,
+        // sem feedback nenhum de que não tinha ação).
+        const temLeads = DATA.funilLeads && DATA.funilLeads[stageId] && DATA.funilLeads[stageId].length > 0;
+        return `
+        <div class="funil-preso-row ${temLeads ? 'clickable' : ''}" ${temLeads ? `data-stageid="${stageId}" data-label="${STAGE_LABELS[stageId]}"` : ''} style="margin-bottom:10px;${temLeads ? 'cursor:pointer;' : ''}" title="${temLeads ? 'Clique pra ver os leads dessa etapa' : ''}">
           <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:3px;">
             <span>${STAGE_LABELS[stageId]}</span>
             <span style="font-weight:700;">${count}</span>
           </div>
           <div class="bar-track" style="height:8px;"><div class="bar-fill" style="width:${(count / max * 100).toFixed(0)}%;background:${STAGE_COLORS[stageId] || 'var(--muted2)'};"></div></div>
         </div>
-      `).join('')}
+      `;
+      }).join('')}
       <div style="font-size:12px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);">${fraseResumo}</div>
     </div>
   `;
+}
+
+// Religa os cliques do gráfico "Onde seu funil está preso" depois que o HTML acima é
+// inserido no DOM (tem que ser chamado explicitamente — inserir via innerHTML não
+// dispara addEventListener sozinho). Abre o mesmo modal de etapa usado no Cockpit,
+// já filtrado só pros negócios desse executivo (ownerId).
+function religarCliquesDistribuicaoCompacta(containerEl, ownerId) {
+  if (!containerEl) return;
+  containerEl.querySelectorAll('.funil-preso-row.clickable').forEach(rowEl => {
+    rowEl.addEventListener('click', () => {
+      openStageModal(rowEl.dataset.stageid, rowEl.dataset.label, ownerId);
+    });
+  });
 }
 
 const STAGE_RANK_CLIENT = { '1395880469': 1, '1396005401': 1, '1395880470': 2, '1395880471': 3, '1395880472': 3, '1395880473': 3 };
@@ -1029,6 +1065,10 @@ function renderMeuPainel() {
   checkboxes.forEach((cb, i) => { if (pdi.checked[i]) cb.classList.add('checked'); });
   const dataInput = document.getElementById('meuPainelPdiData');
   dataInput.value = pdi.data;
+
+  // Religa os cliques do gráfico "Onde seu funil está preso" — sem isso, clicar numa
+  // etapa não fazia nada (era o bug reportado: clique sem retorno nenhum).
+  religarCliquesDistribuicaoCompacta(el, r.ownerId);
 
   function persistPdi() {
     const checkedNow = Array.from(checkboxes).map(cb => cb.classList.contains('checked'));
@@ -1335,15 +1375,20 @@ function deltaHtml(atual, anterior, inverter) {
   return `<span class="delta ${cls}">${sign}${d}%</span>`;
 }
 
-const resumoEl = document.getElementById('resumoContent');
-if (!DATA.resumoSemanal) {
-  resumoEl.innerHTML = `<div class="empty-state">Resumo semanal ainda não foi gerado. Ele roda automaticamente toda sexta-feira — depois da primeira execução, esta aba mostra a comparação da semana anterior com a atual e o plano de ação sugerido.</div>`;
-} else {
+function renderResumoSemanal() {
+  const resumoEl = document.getElementById('resumoContent');
+  if (!DATA.resumoSemanal) {
+    resumoEl.innerHTML = `<div class="empty-state">Resumo semanal ainda não foi gerado. Ele roda automaticamente toda sexta-feira — depois da primeira execução, esta aba mostra a comparação da semana anterior com a atual e o plano de ação sugerido.</div>`;
+    return;
+  }
   const rs = DATA.resumoSemanal;
   const k = rs.kpisComparativo;
+  const souRepAgora = sessaoAtual && sessaoAtual.role === 'rep';
+  const meuIndividual = souRepAgora ? (rs.porRep || {})[sessaoAtual.ownerId] : null;
   const medalhas = ['🥇', '🥈', '🥉'];
 
-  const podioHtml = (rs.ranking && rs.ranking.length > 0) ? `
+  // Pódio compara nomes entre colegas — visão só do gestor. Executivo não vê ranking dos outros aqui.
+  const podioHtml = (!souRepAgora && rs.ranking && rs.ranking.length > 0) ? `
     <div class="chart-card" style="margin-bottom:18px;padding:14px 18px;">
       <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
         <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);">🏆 Ranking</span>
@@ -1382,26 +1427,50 @@ if (!DATA.resumoSemanal) {
     `;
   }
 
-  const ganhosLeads = (rs.ganhosSemanaDetalhe || []).map(d => ({ ...d, vendedor: (DATA.reps.find(r => r.ownerId === d.ownerId) || {}).name }));
-  const reunioesLeads = (rs.reunioesSemanaDetalhe || []).map(d => ({ ...d, vendedor: (DATA.reps.find(r => r.ownerId === d.ownerId) || {}).name }));
-  const quentesLeads = rs.quentesDemoOuNegociacao || [];
+  const ganhosLeadsTodos = (rs.ganhosSemanaDetalhe || []).map(d => ({ ...d, vendedor: (DATA.reps.find(r => r.ownerId === d.ownerId) || {}).name }));
+  const reunioesLeadsTodos = (rs.reunioesSemanaDetalhe || []).map(d => ({ ...d, vendedor: (DATA.reps.find(r => r.ownerId === d.ownerId) || {}).name }));
+  const quentesLeadsTodos = rs.quentesDemoOuNegociacao || [];
+
+  // Numa sessão de EXECUTIVO, o detalhamento (Ganhos/Reuniões/Quentes) mostra só os negócios
+  // dele — nunca os nomes/negócios dos colegas. O gestor continua vendo o time inteiro.
+  const ganhosLeads = souRepAgora ? ganhosLeadsTodos.filter(d => d.ownerId === sessaoAtual.ownerId) : ganhosLeadsTodos;
+  const reunioesLeads = souRepAgora ? reunioesLeadsTodos.filter(d => d.ownerId === sessaoAtual.ownerId) : reunioesLeadsTodos;
+  const quentesLeads = souRepAgora ? quentesLeadsTodos.filter(d => d.ownerId === sessaoAtual.ownerId) : quentesLeadsTodos;
 
   // Destaques / Pontos de atenção — regra determinística simples em cima de dado real
   // (não é IA, é a mesma lógica transparente já usada no Centro de Decisões do Cockpit).
-  const lider = [...DATA.reps].sort((a, b) => (b.ganhosSemana || 0) - (a.ganhosSemana || 0))[0];
-  const maisTravado = [...DATA.reps].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
-  const destaqueTxt = (lider && lider.ganhosSemana > 0)
-    ? `<b>${lider.name.split(' ')[0]}</b> — ${lider.ganhosSemana} fechamento${lider.ganhosSemana > 1 ? 's' : ''} essa semana, a melhor performance do time.`
-    : 'Nenhum fechamento registrado ainda essa semana.';
-  const atencaoTxt = (maisTravado && maisTravado.leadsTravados >= 3)
-    ? `<b>${maisTravado.name.split(' ')[0]}</b> — ${maisTravado.leadsTravados} leads acima do SLA na praça de ${maisTravado.praca}. Prioridade pro 1:1 da semana.`
-    : 'Nenhuma praça com volume preocupante de SLA estourado essa semana.';
+  // Pra uma sessão de EXECUTIVO, isso nunca deve citar nome de colega — só o próprio dado dele.
+  let destaqueTxt, atencaoTxt;
+  if (souRepAgora) {
+    const meuRep = DATA.reps.find(r => r.ownerId === sessaoAtual.ownerId);
+    destaqueTxt = (meuRep && meuRep.ganhosSemana > 0)
+      ? `Você fechou <b>${meuRep.ganhosSemana}</b> negócio${meuRep.ganhosSemana > 1 ? 's' : ''} essa semana.`
+      : 'Nenhum fechamento seu registrado ainda essa semana.';
+    atencaoTxt = (meuRep && meuRep.leadsTravados >= 3)
+      ? `Você tem <b>${meuRep.leadsTravados}</b> leads acima do SLA em ${meuRep.praca}. Vale revisar antes do 1:1.`
+      : 'Sem volume preocupante de SLA estourado no seu funil essa semana.';
+  } else {
+    const lider = [...DATA.reps].sort((a, b) => (b.ganhosSemana || 0) - (a.ganhosSemana || 0))[0];
+    const maisTravado = [...DATA.reps].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
+    destaqueTxt = (lider && lider.ganhosSemana > 0)
+      ? `<b>${lider.name.split(' ')[0]}</b> — ${lider.ganhosSemana} fechamento${lider.ganhosSemana > 1 ? 's' : ''} essa semana, a melhor performance do time.`
+      : 'Nenhum fechamento registrado ainda essa semana.';
+    atencaoTxt = (maisTravado && maisTravado.leadsTravados >= 3)
+      ? `<b>${maisTravado.name.split(' ')[0]}</b> — ${maisTravado.leadsTravados} leads acima do SLA na praça de ${maisTravado.praca}. Prioridade pro 1:1 da semana.`
+      : 'Nenhuma praça com volume preocupante de SLA estourado essa semana.';
+  }
+
+  // Leitura da semana: individual pro executivo (só a dele), coletiva de time pro gestor.
+  const leituraLabel = souRepAgora ? 'Sua leitura da semana' : 'A leitura da semana';
+  const leituraTexto = souRepAgora
+    ? (meuIndividual ? meuIndividual.resumoIndividual : (rs.resumoGeral || 'Sua análise individual ainda não foi gerada essa semana — roda toda sexta-feira.'))
+    : (rs.resumoGeral || 'Análise interpretada ainda não gerada — roda toda sexta-feira. Os números abaixo já estão atualizados de hoje.');
 
   const heroHtml = `
     <div class="kpi-strip-hero" style="margin-bottom:20px;">
       <div style="grid-column:1/-1;margin-bottom:6px;">
-        <div style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--red);margin-bottom:8px;">A leitura da semana</div>
-        <div style="font-size:16px;color:var(--dark-ink);max-width:74ch;line-height:1.55;">${rs.resumoGeral || 'Análise interpretada ainda não gerada — roda toda sexta-feira. Os números abaixo já estão atualizados de hoje.'}</div>
+        <div style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--red);margin-bottom:8px;">${leituraLabel}</div>
+        <div style="font-size:16px;color:var(--dark-ink);max-width:74ch;line-height:1.55;">${leituraTexto}</div>
       </div>
       <div class="kpi-hero">
         <div class="l">Fechados</div>
@@ -1452,9 +1521,36 @@ if (!DATA.resumoSemanal) {
       ${cardClicavel('Quentes', quentesLeads.length, '', '🔥', quentesLeads, 'quente')}
     </div>
 
-    ${(rs.comoAgir && rs.comoAgir.length > 0) ? `
-      <h3 class="block-label">Como agir essa semana</h3>
-      <ul class="action-list">${rs.comoAgir.map(a => `<li class="action-item">${a}</li>`).join('')}</ul>
+    ${(() => {
+      const listaComoAgir = souRepAgora ? (meuIndividual ? meuIndividual.comoAgirIndividual : rs.comoAgir) : rs.comoAgir;
+      if (!listaComoAgir || listaComoAgir.length === 0) return '';
+      const titulo = souRepAgora ? 'Como agir essa semana (pra você)' : 'Como agir essa semana';
+      return `<h3 class="block-label">${titulo}</h3><ul class="action-list">${listaComoAgir.map(a => `<li class="action-item">${a}</li>`).join('')}</ul>`;
+    })()}
+
+    ${(!souRepAgora && rs.porRep && Object.keys(rs.porRep).length > 0) ? `
+      <details class="chart-card" style="margin-top:20px;padding:0;">
+        <summary style="cursor:pointer;padding:20px 22px;font-weight:700;font-size:14px;">👥 Resumo individual de cada executivo (clique pra ver)</summary>
+        <div style="padding:0 22px 20px;display:flex;flex-direction:column;gap:14px;">
+          ${DATA.reps.map(r => {
+            const ind = rs.porRep[r.ownerId];
+            if (!ind) return '';
+            return `
+              <div style="border-top:1px dashed var(--line);padding-top:14px;">
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+                  ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 28)}
+                  <span style="font-weight:700;font-size:13.5px;">${r.name}</span>
+                  <span style="color:var(--muted2);font-size:11.5px;">${r.praca}</span>
+                </div>
+                <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:8px;">${ind.resumoIndividual}</p>
+                ${(ind.comoAgirIndividual && ind.comoAgirIndividual.length > 0) ? `
+                  <ul class="action-list">${ind.comoAgirIndividual.map(a => `<li class="action-item">${a}</li>`).join('')}</ul>
+                ` : ''}
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </details>
     ` : ''}
   `;
 }
@@ -2850,6 +2946,12 @@ let coachingSelecionado = null;
 
 async function renderCoaching() {
   const el = document.getElementById('coachingContent');
+  // Defesa extra: essa view é só do gestor. Mesmo que a aba esteja escondida no menu,
+  // o conteúdo nunca deve montar dados de coaching de outros executivos pra uma sessão de rep.
+  if (!sessaoAtual || sessaoAtual.role !== 'manager') {
+    el.innerHTML = `<div class="empty-state">Essa área é exclusiva do gestor.</div>`;
+    return;
+  }
   if (!DATA.supabase || !supa) {
     el.innerHTML = `<div class="empty-state">Login ainda não configurado.</div>`;
     return;
