@@ -1,8 +1,10 @@
 // scripts/generate-individual-analysis.js
-// Roda toda SEGUNDA-FEIRA, depois do fetch-hubspot.js e do generate-weekly-summary.js.
-// Gera, PRA CADA executivo, uma análise individual de coaching — visível SÓ pro gestor
-// (diferente do Resumo Semanal coletivo, que o time inteiro vê).
-// Na última segunda-feira do mês, também gera um resumo mensal consolidado.
+// Roda toda SEXTA-FEIRA às 16h (Brasília), depois do fetch-hubspot.js e do
+// generate-weekly-summary.js — ver .github/workflows/weekly-summary.yml (cron '0 19 * * 5').
+// Gera, PRA CADA executivo, uma análise individual de coaching — visível SÓ pro gestor,
+// pra usar no 1:1 (diferente do resumo individual em generate-weekly-summary.js, que é
+// endereçado ao próprio executivo e aparece no Meu Painel dele).
+// Na última sexta-feira do mês, também gera um resumo mensal consolidado.
 //
 // Requer: HUBSPOT_TOKEN (não usado aqui direto, mas hubspot.json já foi gerado antes),
 // ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY (chave de SERVIÇO, não a anon —
@@ -29,20 +31,20 @@ function fmtRange(start, end) {
   return `${f(start)}–${f(end)}/${end.getFullYear()}`;
 }
 
-// Quantas segundas-feiras já passaram neste mês, contando hoje — define a "semana do mês".
-// Se somar 7 dias a partir de hoje cair no mês seguinte, essa é a ÚLTIMA segunda do mês
+// Quantas sextas-feiras já passaram neste mês, contando hoje — define a "semana do mês".
+// Se somar 7 dias a partir de hoje cair no mês seguinte, essa é a ÚLTIMA sexta do mês
 // (dispara o resumo mensal também).
 function infoSemanaDoMes(hoje) {
   const mesAtual = hoje.getMonth();
   let numeroSemana = 0;
   const cursor = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   while (cursor <= hoje) {
-    if (cursor.getDay() === 5) numeroSemana++;
+    if (cursor.getDay() === 5) numeroSemana++; // 5 = sexta-feira
     cursor.setDate(cursor.getDate() + 1);
   }
-  const proximaSegunda = new Date(hoje);
-  proximaSegunda.setDate(proximaSegunda.getDate() + 7);
-  const ehUltimaSemana = proximaSegunda.getMonth() !== mesAtual;
+  const proximaSexta = new Date(hoje);
+  proximaSexta.setDate(proximaSexta.getDate() + 7);
+  const ehUltimaSemana = proximaSexta.getMonth() !== mesAtual;
   const mesAno = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
   return { numeroSemana, ehUltimaSemana, mesAno };
 }
@@ -161,7 +163,7 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 
   // Última semana do mês: gera o resumo mensal consolidado por executivo
   if (ehUltimaSemana) {
-    console.log('Última segunda do mês — gerando resumo mensal por executivo...');
+    console.log('Última sexta do mês — gerando resumo mensal por executivo...');
     for (const ownerId of ownerIds) {
       const n = narrativas.reps[ownerId];
       const semanasDoMes = await supabaseSelect(

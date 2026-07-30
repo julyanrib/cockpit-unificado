@@ -168,6 +168,9 @@ const DATA = {
     kpisComparativo: (weeklyRaw && weeklyRaw.kpisComparativo) || (resumoSemanal && resumoSemanal.kpisComparativo),
     resumoGeral: resumoSemanal ? resumoSemanal.resumoGeral : null,
     comoAgir: resumoSemanal ? resumoSemanal.comoAgir : [],
+    // Resumo individual por executivo (owner_id -> {name, resumoIndividual, comoAgirIndividual}).
+    // Cada rep só vê o seu no Meu Painel; o gestor vê o coletivo acima + a lista completa.
+    porRep: resumoSemanal ? (resumoSemanal.porRep || {}) : {},
     ganhosSemanaDetalhe: ganhosDetalheFresco,
     reunioesSemanaDetalhe: (weeklyRaw && weeklyRaw.reunioesSemanaDetalhe) || (resumoSemanal && resumoSemanal.reunioesSemanaDetalhe) || [],
     quentesDemoOuNegociacao: (weeklyRaw && weeklyRaw.quentesDemoOuNegociacao) || (resumoSemanal && resumoSemanal.quentesDemoOuNegociacao) || [],

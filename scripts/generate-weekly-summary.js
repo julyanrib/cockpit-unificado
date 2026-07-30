@@ -1,6 +1,11 @@
 // scripts/generate-weekly-summary.js
-// Roda toda SEGUNDA-FEIRA, depois do fetch-weekly-comparison.js.
-// Manda os números pra API da Claude e pede um resumo interpretativo em português.
+// Roda toda SEXTA-FEIRA às 16h (Brasília), depois do fetch-weekly-comparison.js — ver
+// .github/workflows/weekly-summary.yml (cron '0 19 * * 5'). O plano fica pronto antes
+// da daily de segunda-feira, mas a GERAÇÃO em si acontece na sexta.
+// Manda os números pra API da Claude e pede: (1) um resumo interpretativo do TIME inteiro
+// (visão de time/funil agregado, sem citar nomes — pro gestor e pra visão coletiva), e
+// (2) um resumo INDIVIDUAL por executivo (endereçado a ele mesmo, "você") — cada um só
+// vê o seu, no Meu Painel. O gestor vê o coletivo + a lista de todos os individuais.
 // Requer variável de ambiente ANTHROPIC_API_KEY (gerada em console.anthropic.com).
 
 const fs = require('fs');
@@ -54,8 +59,7 @@ IMPORTANTE: fale só em nível de time/funil agregado. Não cite nome de executi
 desempenho individual — essa análise é vista coletivamente por todo o time, e observações sobre uma
 pessoa específica devem ficar reservadas para uma conversa de PDI, não para este resumo coletivo.`;
 
-async function main() {
-  console.log('Chamando a API da Claude...');
+async function chamarClaude(promptTexto, maxTokens) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -65,8 +69,8 @@ async function main() {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-5',
-      max_tokens: 2500,
-      messages: [{ role: 'user', content: prompt }]
+      max_tokens: maxTokens || 2500,
+      messages: [{ role: 'user', content: promptTexto }]
     })
   });
 
@@ -79,13 +83,36 @@ async function main() {
   const textBlock = data.content.find(b => b.type === 'text');
   if (!textBlock) throw new Error('Resposta da Claude não trouxe texto.');
 
-  let parsed;
-  try {
-    const clean = textBlock.text.replace(/```json|```/g, '').trim();
-    parsed = JSON.parse(clean);
-  } catch (e) {
-    throw new Error(`Não consegui interpretar o JSON da resposta: ${e.message}\nResposta bruta: ${textBlock.text}`);
-  }
+  const clean = textBlock.text.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
+}
+
+// Monta o prompt do resumo INDIVIDUAL — endereçado direto ao executivo ("você"), pra
+// aparecer no Meu Painel dele. Diferente da análise de coaching (generate-individual-analysis.js),
+// que é privada e só o gestor vê: esse texto aqui é o próprio vendedor quem lê.
+function promptIndividual(ownerId, rc) {
+  const detalheGanhos = (raw.ganhosSemanaDetalhe || []).filter(g => g.ownerId === ownerId);
+  return `Você é um analista de operações de vendas escrevendo DIRETO para ${rc.name}, executivo(a) de Field Sales
+(Outbound) da Takeat, na praça de ${rc.praca}. Esse texto é lido só por ele(a) mesmo(a) — endereça na segunda pessoa
+("você"), tom direto, respeitoso e prático. Nada de elogio vazio tipo "continue assim" sem dado por trás.
+
+Dados da semana atual (${raw.janela.atual}) dele(a):
+- Negócios em aberto: ${rc.open}
+- Etapa onde mais negócios estão concentrados: ${rc.etapaDominante || 'sem dado suficiente'} (${rc.etapaDominanteContagem} negócios)
+- Ganhos fechados essa semana: ${rc.ganhosSemana || 0}${detalheGanhos.length ? ' (' + detalheGanhos.map(g => g.nome).join(', ') + ')' : ''}
+- Fechados no mês corrente: ${rc.fechadosNoMes || 0} de meta ${rc.metaMensal || 10}
+- Leads com SLA estourado: ${rc.leadsTravados || 0}
+
+Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato:
+{
+  "resumoIndividual": "2-3 frases em HTML simples (pode usar <b>) contando pra essa pessoa como foi a semana dela especificamente, com números concretos — reconhecendo o que foi bem e nomeando o que travou, sem rodeio.",
+  "comoAgirIndividual": ["2-3 ações objetivas e específicas pra essa pessoa focar na semana que começa, cada uma como uma string curta, pode usar <b> pra destacar números"]
+}`;
+}
+
+async function main() {
+  console.log('Chamando a API da Claude (resumo do time)...');
+  const parsed = await chamarClaude(prompt, 2500);
 
   const output = {
     geradoEm: new Date().toISOString(),
@@ -95,11 +122,28 @@ async function main() {
     comoAgir: parsed.comoAgir,
     ganhosSemanaDetalhe: raw.ganhosSemanaDetalhe || [],
     reunioesSemanaDetalhe: raw.reunioesSemanaDetalhe || [],
-    quentesDemoOuNegociacao: raw.quentesDemoOuNegociacao || []
+    quentesDemoOuNegociacao: raw.quentesDemoOuNegociacao || [],
+    porRep: {}
   };
 
+  // Um resumo individual por executivo — cada um só vê o seu no Meu Painel; o gestor
+  // vê o coletivo acima (resumoGeral/comoAgir) + a lista de todos os individuais.
+  for (const rc of repsContext) {
+    console.log(`Gerando resumo individual de ${rc.name}...`);
+    try {
+      const individual = await chamarClaude(promptIndividual(rc.ownerId, rc), 800);
+      output.porRep[rc.ownerId] = {
+        name: rc.name,
+        resumoIndividual: individual.resumoIndividual,
+        comoAgirIndividual: individual.comoAgirIndividual || []
+      };
+    } catch (e) {
+      console.error(`Falha ao gerar resumo individual de ${rc.name}: ${e.message} — seguindo sem o dele essa semana.`);
+    }
+  }
+
   fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), JSON.stringify(output, null, 2));
-  console.log('OK — data/resumo-semanal.json gravado.');
+  console.log('OK — data/resumo-semanal.json gravado (coletivo + individuais).');
 }
 
 main().catch(err => {
