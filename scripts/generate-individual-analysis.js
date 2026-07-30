@@ -49,7 +49,9 @@ function infoSemanaDoMes(hoje) {
   return { numeroSemana, ehUltimaSemana, mesAno };
 }
 
-async function chamarClaude(prompt, maxTokens) {
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function chamarClaude(prompt, maxTokens, tentativa = 1) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -63,6 +65,12 @@ async function chamarClaude(prompt, maxTokens) {
       messages: [{ role: 'user', content: prompt }]
     })
   });
+  // Rodando em paralelo, é mais fácil esbarrar no rate limit da API — tenta de novo com
+  // backoff em vez de perder a análise de 1 rep por causa de 1 chamada malsucedida.
+  if (res.status === 429 && tentativa <= 4) {
+    await sleep(1500 * tentativa);
+    return chamarClaude(prompt, maxTokens, tentativa + 1);
+  }
   if (!res.ok) throw new Error(`Anthropic API error ${res.status}: ${await res.text()}`);
   const data = await res.json();
   const textBlock = data.content.find(b => b.type === 'text');
@@ -113,15 +121,17 @@ async function main() {
 
   const ownerIds = Object.keys(narrativas.reps);
 
-  for (const ownerId of ownerIds) {
+  // Antes chamava a API uma vez por rep, esperando terminar pra chamar a próxima —
+  // com 9 reps isso empilhava no workflow inteiro. Agora dispara as 9 chamadas juntas
+  // (o tempo vira ~o da mais lenta, não a soma) e só depois grava no Supabase.
+  console.log(`Gerando ${ownerIds.length} análises de coaching em paralelo...`);
+  const prompts = ownerIds.map(ownerId => {
     const n = narrativas.reps[ownerId];
     const h = hubspot.reps[ownerId] || { open: 0, stages: {}, leadsTravados: 0, ganhosSemana: 0 };
     const stageEntries = Object.entries(h.stages || {});
     const dominante = stageEntries.length ? stageEntries.sort((a, b) => b[1] - a[1])[0] : null;
 
-    console.log(`Gerando análise individual de ${n.name}...`);
-
-    const prompt = `Você é um analista de operações de vendas ajudando um GESTOR de time de Field Sales (não o vendedor).
+    return `Você é um analista de operações de vendas ajudando um GESTOR de time de Field Sales (não o vendedor).
 Essa análise é PRIVADA — só o gestor vê, nunca o vendedor. Seja direto e específico sobre o que o GESTOR deve fazer
 (como conduzir o 1:1, o que cobrar, o que elogiar), não uma mensagem pro vendedor ler.
 
@@ -138,14 +148,20 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
   "comoAgir": "1-2 frases dizendo EXATAMENTE o que o gestor deve fazer no 1:1 ou na daily com essa pessoa esta semana — específico, não genérico",
   "tendencia": "1 frase curta dizendo se essa pessoa está melhorando, piorando ou estável, com base no volume travado e ganhos"
 }`;
+  });
 
-    let analise;
-    try {
-      analise = await chamarClaude(prompt, 600);
-    } catch (e) {
-      console.error(`Falha ao gerar análise de ${n.name}: ${e.message}`);
+  const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 600)));
+
+  for (let i = 0; i < ownerIds.length; i++) {
+    const ownerId = ownerIds[i];
+    const n = narrativas.reps[ownerId];
+    const resultado = resultados[i];
+
+    if (resultado.status === 'rejected') {
+      console.error(`Falha ao gerar análise de ${n.name}: ${resultado.reason?.message || resultado.reason}`);
       continue;
     }
+    const analise = resultado.value;
 
     // Idempotência: remove análise existente pra esse owner+semana antes de inserir de novo
     // (evita duplicar caso o job rode mais de uma vez pra mesma semana).

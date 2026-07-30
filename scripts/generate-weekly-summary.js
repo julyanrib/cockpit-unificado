@@ -59,7 +59,9 @@ IMPORTANTE: fale só em nível de time/funil agregado. Não cite nome de executi
 desempenho individual — essa análise é vista coletivamente por todo o time, e observações sobre uma
 pessoa específica devem ficar reservadas para uma conversa de PDI, não para este resumo coletivo.`;
 
-async function chamarClaude(promptTexto, maxTokens) {
+function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+async function chamarClaude(promptTexto, maxTokens, tentativa = 1) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -73,6 +75,13 @@ async function chamarClaude(promptTexto, maxTokens) {
       messages: [{ role: 'user', content: promptTexto }]
     })
   });
+
+  // Rodando em paralelo, é mais fácil esbarrar no rate limit da API — tenta de novo
+  // com backoff em vez de derrubar o workflow inteiro por causa de 1 chamada.
+  if (res.status === 429 && tentativa <= 4) {
+    await sleep(1500 * tentativa);
+    return chamarClaude(promptTexto, maxTokens, tentativa + 1);
+  }
 
   if (!res.ok) {
     const text = await res.text();
@@ -111,8 +120,22 @@ Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato
 }
 
 async function main() {
-  console.log('Chamando a API da Claude (resumo do time)...');
-  const parsed = await chamarClaude(prompt, 2500);
+  console.log(`Chamando a API da Claude — 1 resumo de time + ${repsContext.length} individuais, em paralelo...`);
+
+  // Antes rodava 1 chamada de time + N individuais uma de cada vez (for...await) — com 9
+  // reps isso empilhava ~10 chamadas sequenciais e esticava o workflow inteiro. Agora todas
+  // saem juntas com Promise.allSettled: o tempo total vira ~o tempo da chamada mais lenta,
+  // não a soma de todas. chamarClaude já tem retry com backoff pra 429, então rodar em
+  // paralelo não devia estourar o rate limit da API pra um volume desse tamanho (10 chamadas).
+  const [resultadoTime, ...resultadosIndividuais] = await Promise.allSettled([
+    chamarClaude(prompt, 2500),
+    ...repsContext.map(rc => chamarClaude(promptIndividual(rc.ownerId, rc), 800))
+  ]);
+
+  if (resultadoTime.status === 'rejected') {
+    throw new Error(`Falha ao gerar o resumo de time: ${resultadoTime.reason?.message || resultadoTime.reason}`);
+  }
+  const parsed = resultadoTime.value;
 
   const output = {
     geradoEm: new Date().toISOString(),
@@ -128,19 +151,18 @@ async function main() {
 
   // Um resumo individual por executivo — cada um só vê o seu no Meu Painel; o gestor
   // vê o coletivo acima (resumoGeral/comoAgir) + a lista de todos os individuais.
-  for (const rc of repsContext) {
-    console.log(`Gerando resumo individual de ${rc.name}...`);
-    try {
-      const individual = await chamarClaude(promptIndividual(rc.ownerId, rc), 800);
+  repsContext.forEach((rc, i) => {
+    const resultado = resultadosIndividuais[i];
+    if (resultado.status === 'fulfilled') {
       output.porRep[rc.ownerId] = {
         name: rc.name,
-        resumoIndividual: individual.resumoIndividual,
-        comoAgirIndividual: individual.comoAgirIndividual || []
+        resumoIndividual: resultado.value.resumoIndividual,
+        comoAgirIndividual: resultado.value.comoAgirIndividual || []
       };
-    } catch (e) {
-      console.error(`Falha ao gerar resumo individual de ${rc.name}: ${e.message} — seguindo sem o dele essa semana.`);
+    } else {
+      console.error(`Falha ao gerar resumo individual de ${rc.name}: ${resultado.reason?.message || resultado.reason} — seguindo sem o dele essa semana.`);
     }
-  }
+  });
 
   fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), JSON.stringify(output, null, 2));
   console.log('OK — data/resumo-semanal.json gravado (coletivo + individuais).');

@@ -260,12 +260,17 @@ async function repOpenDeals(ownerId) {
 // 100 negócios abertos (ex: Prospecção, que passa de 200), o modal mostrava um
 // número MENOR que o real e faltavam leads na lista — por isso agora pagina até
 // trazer tudo, do mesmo jeito que o `total` (usado no Funil por etapa) já é exato.
+// Só usada pras 6 etapas ABERTAS (feed do modal de clique no funil) — por isso já filtra
+// pro time ativo, mesmo escopo do stageTotal(..., filtroTimeAtivo) usado pras barras.
+// Sem isso, a barra mostrava um total (já filtrado) e o modal abria com uma lista maior
+// (incluindo donos fora do time, tipo o achado do "Gabriel Amaral") — inconsistente.
 async function stageDealsTeamWide(stageId) {
   const todos = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
-        { propertyName: 'dealstage', operator: 'EQ', value: stageId }
+        { propertyName: 'dealstage', operator: 'EQ', value: stageId },
+        { propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) }
       ]
     }],
     properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS]
@@ -313,18 +318,23 @@ function daysSince(dateStr) {
 
 // Dias REALMENTE parado, sem interação nenhuma. Usa a data mais recente entre:
 // (a) quando o negócio entrou na etapa atual (hs_v2_date_entered_<etapa>),
-// (b) `notes_last_updated` — atualizada quando uma nota/ligação/e-mail/reunião/tarefa é logada,
-// (c) `hs_lastmodifieddate` — atualizada em QUALQUER mudança de propriedade (sempre preenchida,
-//     serve de rede de segurança quando as outras duas vêm vazias nesta conta).
-// Assim, qualquer interação registrada — mesmo sem mudar de etapa — "reseta" o contador.
+// (b) `notes_last_updated` — atualizada quando uma nota/ligação/e-mail/reunião/tarefa é logada
+//     pelo executivo. Interação real registrada por uma pessoa "reseta" o contador de dias parado.
+//
+// IMPORTANTE — NÃO usar `hs_lastmodifieddate` aqui (removido em 30/07/2026): esse campo muda em
+// QUALQUER alteração de propriedade do negócio, inclusive updates automáticos/de sistema que não
+// têm nada a ver com o executivo trabalhar o lead. Descobrimos que o HubSpot pode tocar esse campo
+// em praticamente TODOS os negócios do portal ao mesmo tempo (ex: reindexação, sync, bulk update) —
+// isso zerava o "dias parado" de todo mundo de uma vez e mascarava o SLA estourado real (achado:
+// negócio parado há 13 dias aparecia como "0 dias" no dashboard). `notes_last_updated` não tem esse
+// problema porque só muda quando uma pessoa de fato loga uma interação.
 function daysInCurrentStage(properties) {
   const enteredKey = `hs_v2_date_entered_${properties.dealstage}`;
   const enteredDate = properties[enteredKey] ? new Date(properties[enteredKey]).getTime() : null;
   const lastActivity = properties.notes_last_updated ? new Date(properties.notes_last_updated).getTime() : null;
-  const lastModified = properties.hs_lastmodifieddate ? new Date(properties.hs_lastmodifieddate).getTime() : null;
   const createdFallback = new Date(properties.createdate).getTime();
 
-  const candidates = [enteredDate, lastActivity, lastModified, createdFallback].filter(t => t !== null && !isNaN(t));
+  const candidates = [enteredDate, lastActivity, createdFallback].filter(t => t !== null && !isNaN(t));
   const maisRecente = Math.max(...candidates);
   return Math.floor((Date.now() - maisRecente) / (1000 * 60 * 60 * 24));
 }
@@ -388,13 +398,22 @@ async function main() {
 
   // ---- Funil geral (donut) ----
   // Uma chamada de cada vez (não em paralelo) pra não estourar o limite de velocidade do HubSpot
+  //
+  // As 6 etapas ABERTAS (Prospecção...Ag.Pagamento) agora filtram por hubspot_owner_id IN
+  // (só o time ativo de 9 reps) — antes contavam QUALQUER dono (inclusive gente fora do time,
+  // ex: um lead achado com owner "Gabriel Amaral", que não é do Field Sales). Isso fazia o
+  // "Funil por etapa" mostrar um total maior (ex: 483) do que o card "Negócios em aberto" (374),
+  // que sempre foi só do time ativo — os dois agora usam o mesmo escopo.
+  // OBS: esse filtro ainda não exclui negócios [TESTE] (stageTotal só lê a contagem da API,
+  // sem baixar o dealname pra filtrar) — se sobrar diferença pequena depois desse fix, é isso.
+  const filtroTimeAtivo = [{ propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) }];
   const backlog = await stageTotal(STAGES.backlog);
-  const prospeccao = await stageTotal(STAGES.prospeccao);
-  const visita = await stageTotal(STAGES.visita);
-  const diagnostico = await stageTotal(STAGES.diagnostico);
-  const demoProposta = await stageTotal(STAGES.demoProposta);
-  const negociacao = await stageTotal(STAGES.negociacao);
-  const agPagamento = await stageTotal(STAGES.agPagamento);
+  const prospeccao = await stageTotal(STAGES.prospeccao, filtroTimeAtivo);
+  const visita = await stageTotal(STAGES.visita, filtroTimeAtivo);
+  const diagnostico = await stageTotal(STAGES.diagnostico, filtroTimeAtivo);
+  const demoProposta = await stageTotal(STAGES.demoProposta, filtroTimeAtivo);
+  const negociacao = await stageTotal(STAGES.negociacao, filtroTimeAtivo);
+  const agPagamento = await stageTotal(STAGES.agPagamento, filtroTimeAtivo);
   const ganho1 = await stageTotal(STAGES.ganho1);
   const ganho2 = await stageTotal(STAGES.ganho2);
   const perdido = await stageTotal(STAGES.perdido);
