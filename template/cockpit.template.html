@@ -861,6 +861,123 @@ function aplicarVisaoPorPapel() {
   if (typeof renderResumoSemanal === 'function') renderResumoSemanal();
 }
 
+function saudacaoDoDia() {
+  const h = new Date().getHours();
+  if (h < 12) return 'Bom dia';
+  if (h < 18) return 'Boa tarde';
+  return 'Boa noite';
+}
+
+function dataHojeExtenso() {
+  return new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' });
+}
+
+// ---- Dados ricos que já vinham do HubSpot mas não apareciam em tela ----// `notas` (as 2 últimas anotações de cada lead) e `slaRatio` (quantas vezes o lead
+// passou do SLA da etapa) eram buscados no fetch diário e descartados. As notas são
+// caras de buscar (uma chamada por nota, com pausa pro rate limit), então jogar fora
+// era desperdício duplo: custo no job e contexto perdido pro executivo.
+
+// Índice id-do-lead -> notas. As notas vêm anexadas na lista de temperatura do time
+// (top quentes/frios) e também nos travados de cada executivo — varre as duas origens
+// pra que o roteiro individual tenha contexto dos leads dele, não só dos do time.
+function construirIndiceNotas() {
+  const mapa = {};
+  const registrar = l => { if (l && l.notas && l.notas.length > 0) mapa[l.id] = l.notas; };
+  (DATA.temperatura.quentes || []).forEach(registrar);
+  (DATA.temperatura.frios || []).forEach(registrar);
+  (DATA.reps || []).forEach(rep => (rep.travados || []).forEach(registrar));
+  return mapa;
+}
+
+// Última anotação registrada no lead — é o "onde eu parei" do executivo, sem
+// precisar abrir o HubSpot pra lembrar.
+function ultimaNotaHTML(leadId, mapaNotas) {
+  const notas = mapaNotas[leadId];
+  if (!notas || notas.length === 0) return '';
+  const nota = notas[0];
+  const textoBruto = (nota.texto || '').trim();
+  if (!textoBruto) return '';
+  const LIMITE = 130;
+  const texto = textoBruto.length > LIMITE ? textoBruto.slice(0, LIMITE) + '…' : textoBruto;
+  const quando = nota.data ? new Date(nota.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+  return `<div style="font-size:11px;color:var(--muted);margin-top:5px;padding-left:9px;border-left:2px solid var(--line);line-height:1.45;"><span style="color:var(--muted2);">última nota${quando ? ' · ' + quando : ''}:</span> ${texto}</div>`;
+}
+
+// Selo de gravidade do SLA: mostra quantas vezes o lead já passou do prazo da etapa.
+// slaRatio vem em % (220 = 2,2x o SLA), então divide por 100 pra virar multiplicador.
+function seloSlaHTML(lead) {
+  const ratio = lead.slaRatio || 0;
+  if (ratio <= 100) return '';
+  const vezes = (ratio / 100);
+  const label = vezes >= 2 ? `${vezes.toFixed(vezes >= 10 ? 0 : 1)}x SLA` : 'passou do SLA';
+  return `<span class="mono" style="flex:none;font-size:10px;font-weight:700;color:var(--red);border:1px solid var(--red);border-radius:5px;padding:2px 6px;white-space:nowrap;" title="Já passou ${vezes.toFixed(1)}x do prazo previsto pra essa etapa">${label}</span>`;
+}
+
+// ---- Roteiro de hoje (executivo) ----
+// Substitui o antigo bloco recolhido de "ação de hoje": em vez de exigir um clique
+// pra descobrir o que fazer, já abre com a lista pronta, separada por MOTIVO —
+// "fechar agora" (etapa avançada, ainda no prazo) x "destravar" (SLA estourado).
+// Isso responde a pergunta das 8:30 ("o que eu faço hoje?") com dado real.
+function buildRoteiroHojeHTML(r) {
+  const mapaNotas = construirIndiceNotas();
+  const meusQuentes = (DATA.temperatura.quentes || [])
+    .filter(l => l.ownerId === r.ownerId)
+    .slice(0, 3);
+  const todosTravados = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0));
+  const travados = todosTravados.slice(0, 5);
+  const restantes = todosTravados.length - travados.length;
+
+  if (meusQuentes.length === 0 && todosTravados.length === 0) {
+    return `
+      <div class="chart-card" style="margin-bottom:18px;border-left:3px solid var(--green);">
+        <h3 style="margin-bottom:4px;">Funil em dia</h3>
+        <div class="chart-subtitle" style="margin:0;">Nenhum lead fora do prazo e nenhum em etapa de fechamento. Dia de abrir prospecção nova.</div>
+      </div>
+    `;
+  }
+
+  const linhaLead = (l, corBorda, motivoHtml) => `
+    <div style="background:var(--panel-2);border-radius:10px;padding:11px 13px;border-left:2px solid ${corBorda};margin-bottom:7px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:600;color:var(--text);">${l.name}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:1px;">${motivoHtml}</div>
+        </div>
+        ${seloSlaHTML(l)}
+        <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="flex:none;font-size:11px;font-weight:700;color:var(--red);text-decoration:none;white-space:nowrap;">abrir ↗</a>
+      </div>
+      ${ultimaNotaHTML(l.id, mapaNotas)}
+    </div>
+  `;
+
+  const blocoQuentes = meusQuentes.length > 0 ? `
+    <div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--green);margin:0 0 8px;">Fechar agora · ${meusQuentes.length}</div>
+    ${meusQuentes.map(l => {
+      const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
+      const restante = slaDias ? slaDias - l.dias : null;
+      const prazo = restante === null ? '' : restante > 0 ? ` · faltam ${restante}d no prazo da etapa` : '';
+      return linhaLead(l, 'var(--green)', `${l.stage} · ${l.dias}d na etapa${prazo}`);
+    }).join('')}
+  ` : '';
+
+  const blocoTravados = travados.length > 0 ? `
+    <div style="font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--red);margin:${meusQuentes.length > 0 ? '16px' : '0'} 0 8px;">Destravar · ${todosTravados.length} fora do prazo</div>
+    ${travados.map(l => linhaLead(l, 'var(--red)', `${l.stage} · parado há ${l.dias}d`)).join('')}
+    ${restantes > 0 ? `<div style="font-size:11px;color:var(--muted2);margin-top:2px;">+ ${restantes} outros fora do prazo — veja a lista completa em "Onde meu funil está preso".</div>` : ''}
+  ` : '';
+
+  return `
+    <div class="chart-card" style="margin-bottom:18px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <h3 style="margin:0;">Seu roteiro de hoje</h3>
+        <span style="font-size:11px;color:var(--muted2);">ordenado por urgência real do funil</span>
+      </div>
+      ${blocoQuentes}
+      ${blocoTravados}
+    </div>
+  `;
+}
+
 function buildAcaoImediataHTML(r) {
   const travados = (r.travados || []).slice().sort((a, b) => b.dias - a.dias);
   const movidosHoje = travados.filter(l => l.dias === 0).length;
@@ -962,100 +1079,73 @@ function renderMeuPainel() {
 
   const metaMensal = r.metaMensal || 10;
   const fechadosMes = r.fechadosNoMes || 0;
-  const pctMeta = Math.min(100, Math.round((fechadosMes / metaMensal) * 100));
-  const faltam = Math.max(0, metaMensal - fechadosMes);
 
   const rankingOrdenado = [...DATA.reps].sort((a, b) => (b.fechadosNoMes || 0) - (a.fechadosNoMes || 0));
   const minhaPosicao = rankingOrdenado.findIndex(x => x.ownerId === r.ownerId) + 1;
 
   // Leads quentes PESSOAIS (mesma lógica do Cockpit, filtrada só pros negócios desse executivo)
-  // Mesma heurística honesta do Cockpit (rank da etapa, não é probabilidade real de fechamento).
-  const PRIORIDADE_ETAPA_PAINEL = { '1395880471': 60, '1395880472': 80, '1395880473': 95 };
-  const meusQuentes = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId).slice(0, 5);
 
   el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
       ${avatarHTML(sessaoAtual.email, r.name, 44)}
-      <div>
-        <div style="font-weight:700;font-size:15px;">${r.name}</div>
-        <span class="rep-tag ${r.tag}">${r.tagLabel}</span>
-        <span style="color:var(--muted);font-size:12.5px;margin-left:6px;">${r.praca}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="disp" style="font-weight:700;font-size:19px;">${saudacaoDoDia()}, ${r.name.split(' ')[0]}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:1px;">${dataHojeExtenso()} · ${r.praca}</div>
+      </div>
+      <div style="text-align:right;flex:none;">
+        <div class="mono" style="font-size:20px;font-weight:700;color:var(--text);">${fechadosMes}<span style="font-size:12px;color:var(--muted2);">/${metaMensal}</span></div>
+        <div style="font-size:10px;color:var(--muted2);">meta do mês · ${minhaPosicao}º no time</div>
       </div>
     </div>
 
-    <div class="comanda-edge" style="background:var(--red);color:#fff;border-radius:16px;padding:26px 26px 22px;margin-bottom:16px;">
-      <span style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.85;">Sua meta do mês</span>
-      <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:6px;">
-        <span style="font-family:'JetBrains Mono',monospace;font-size:52px;font-weight:700;line-height:1;">${fechadosMes}</span>
-        <span style="font-size:14px;opacity:.85;">de ${metaMensal} fechamentos</span>
+    <div id="meuPainelSugestoes"></div>
+
+    ${buildRoteiroHojeHTML(r)}
+
+    <div class="chart-card" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
+      <div style="min-width:0;">
+        <div style="font-size:13px;font-weight:600;color:var(--text);">Sua daily de hoje</div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">Visitas informadas nesta semana: <b class="mono" style="color:var(--text);">${visitasInformadasTexto(r.ownerId)}</b> · ${r.open} negócios em aberto</div>
       </div>
-      <div class="bar-track" style="height:10px;background:rgba(255,255,255,.25);margin:12px 0 10px;"><div class="bar-fill" style="width:${pctMeta}%;background:#fff;"></div></div>
-      <div style="font-size:13px;opacity:.92;">${faltam > 0 ? `💪 faltam ${faltam} pra bater a meta do mês` : '🎉 meta do mês batida!'}</div>
-      <div style="display:flex;gap:22px;margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.22);flex-wrap:wrap;">
-        <div><div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;">${visitasInformadasTexto(r.ownerId)}</div><div style="font-size:10.5px;opacity:.8;">visitas — prometido nas dailies</div></div>
-        <div><div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;">${r.open}</div><div style="font-size:10.5px;opacity:.8;">negócios em aberto</div></div>
-        <div><div style="font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:700;">${r.leadsTravados || 0}</div><div style="font-size:10.5px;opacity:.8;">leads travados</div></div>
-      </div>
+      <button id="meuPainelIrDaily" style="flex:none;background:var(--red);color:#fff;border:none;border-radius:999px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;">Abrir daily</button>
     </div>
 
-    ${buildAcaoImediataHTML(r)}
-
-    <div class="chart-card" style="margin-bottom:20px;">
-      <h3 style="margin-bottom:2px;">🎯 Ação da semana</h3>
-      <div class="chart-subtitle" style="margin-bottom:14px;">O que fazer essa semana pra destravar o funil e chegar na meta.</div>
-
-      ${meusQuentes.length > 0 ? `
-        <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">🔥 Seus leads quentes — priorize esses</div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">
-          ${meusQuentes.map(l => {
-            const prioridade = PRIORIDADE_ETAPA_PAINEL[l.stageId] || 50;
-            const estilo = prioridade >= 90 ? { bg: 'var(--green-soft)', fg: 'var(--green)' } : prioridade >= 70 ? { bg: 'var(--amber-soft)', fg: 'var(--amber)' } : { bg: 'var(--sunk)', fg: 'var(--muted)' };
-            const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
-            const restante = slaDias ? slaDias - l.dias : null;
-            const slaTxt = restante === null ? '' : restante > 0 ? ` · faltam ${restante}d pro SLA` : ` · <span style="color:var(--red);font-weight:700;">SLA estourado</span>`;
-            return `
-              <div class="lead-prio-row">
-                <div style="flex:1;min-width:0;">
-                  <div class="nome">${l.name}</div>
-                  <div class="meta">${l.stage} · ${l.dias}d na etapa${slaTxt}</div>
-                </div>
-                <span class="chance" style="background:${estilo.bg};color:${estilo.fg};" title="Índice de prioridade pela etapa do funil — não é uma previsão calculada de fechamento">${prioridade}</span>
-                <a class="abrir" href="${hsUrl(l.id)}" target="_blank" rel="noopener">abrir →</a>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      ` : `<div style="font-size:12.5px;color:var(--muted);margin-bottom:18px;">Nenhum lead quente agora — foco em avançar os que estão em Prospecção/Visita.</div>`}
-
-      <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">🧊 Rotina de limpeza do funil</div>
-      <ul class="practice-list" style="margin:0 0 18px;">${r.boasPraticas.map(b => `<li>${b}</li>`).join('')}</ul>
-
-      <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">Onde está errando <span style="font-weight:400;text-transform:none;color:var(--muted2);">(análise de ${DATA.versaoAnalise || '—'} — pode estar desatualizada)</span></div>
-      <div class="gargalo-box" style="margin-bottom:18px;">${r.gargalo}</div>
-
-      <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">Compromissos combinados no 1:1</div>
-      <ul class="commit-list" id="meuPainelCommitList">
-        ${r.compromissos.map((c, ci) => `
-          <li class="commit-item">
-            <span class="checkbox" data-item="${ci}"></span>
-            <span class="commit-text">${c}</span>
-          </li>
-        `).join('')}
-      </ul>
-      <div class="sign-row">
-        <span>Combinado no 1:1 de <input type="text" id="meuPainelPdiData" placeholder="dd/mm"></span>
-        <span id="meuPainelPdiCount">✓ ${r.compromissos.length} compromissos</span>
-      </div>
+    <div style="display:flex;align-items:center;gap:8px;margin:24px 0 12px;">
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">Contexto e acordos</span>
+      <span style="flex:1;height:1px;background:var(--line);"></span>
     </div>
 
     ${buildDistribuicaoCompactaHTML(r, 'meuPainel')}
 
-    <div id="meuPainelSugestoes"></div>
+    <details class="chart-card" style="margin-bottom:14px;padding:0;">
+      <summary style="cursor:pointer;padding:18px 22px;font-weight:700;font-size:13.5px;">Compromissos combinados no 1:1 <span style="font-weight:400;color:var(--muted2);font-size:12px;">· ${r.compromissos.length}</span></summary>
+      <div style="padding:0 22px 20px;">
+        <ul class="commit-list" id="meuPainelCommitList">
+          ${r.compromissos.map((c, ci) => `
+            <li class="commit-item">
+              <span class="checkbox" data-item="${ci}"></span>
+              <span class="commit-text">${c}</span>
+            </li>
+          `).join('')}
+        </ul>
+        <div class="sign-row">
+          <span>Combinado no 1:1 de <input type="text" id="meuPainelPdiData" placeholder="dd/mm"></span>
+          <span id="meuPainelPdiCount">✓ ${r.compromissos.length} compromissos</span>
+        </div>
+      </div>
+    </details>
 
-    <div style="text-align:center;font-size:12.5px;color:var(--muted);margin-bottom:20px;">Você está em <b style="color:var(--text);">${minhaPosicao}º lugar</b> de ${DATA.reps.length} no time este mês.</div>
+    <details class="chart-card" style="margin-bottom:14px;padding:0;">
+      <summary style="cursor:pointer;padding:18px 22px;font-weight:700;font-size:13.5px;">Rotina de limpeza do funil e diagnóstico <span style="font-weight:400;color:var(--muted2);font-size:12px;">· análise de ${DATA.versaoAnalise || '—'}</span></summary>
+      <div style="padding:0 22px 20px;">
+        <ul class="practice-list" style="margin:0 0 16px;">${r.boasPraticas.map(b => `<li>${b}</li>`).join('')}</ul>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">Onde está errando <span style="font-weight:400;text-transform:none;">(pode estar desatualizada)</span></div>
+        <div class="gargalo-box">${r.gargalo}</div>
+      </div>
+    </details>
 
     <details class="chart-card" style="margin-bottom:20px;padding:0;">
-      <summary style="cursor:pointer;padding:20px 22px;font-weight:700;font-size:14px;">📋 Histórico de 1:1 (clique pra ver)</summary>
+      <summary style="cursor:pointer;padding:18px 22px;font-weight:700;font-size:13.5px;">Histórico de 1:1</summary>
       <div style="padding:0 22px 20px;">
         <div id="meuPainelUmAUmHistorico"><div class="empty-state">Carregando...</div></div>
       </div>
@@ -1082,15 +1172,27 @@ function renderMeuPainel() {
   checkboxes.forEach(cb => cb.addEventListener('click', () => { cb.classList.toggle('checked'); persistPdi(); }));
   dataInput.addEventListener('input', persistPdi);
 
-  // Histórico de 1:1 — só carrega quando a pessoa abrir o accordion (economiza chamada se ninguém clicar)
-  const detailsEl = el.querySelector('details');
+  // Histórico de 1:1 — só carrega quando a pessoa abrir o accordion (economiza chamada se ninguém clicar).
+  // Busca pelo elemento interno e sobe pro <details> dele: agora existem vários accordions
+  // no painel, então um querySelector('details') genérico pegaria o accordion errado.
+  const detailsEl = el.querySelector('#meuPainelUmAUmHistorico')?.closest('details');
   let historicoCarregado = false;
-  detailsEl.addEventListener('toggle', () => {
-    if (detailsEl.open && !historicoCarregado && DATA.supabase && supa) {
-      historicoCarregado = true;
-      carregarUmAUm(r, el, 'meuPainel');
-    }
-  });
+  if (detailsEl) {
+    detailsEl.addEventListener('toggle', () => {
+      if (detailsEl.open && !historicoCarregado && DATA.supabase && supa) {
+        historicoCarregado = true;
+        carregarUmAUm(r, el, 'meuPainel');
+      }
+    });
+  }
+
+  const btnDaily = document.getElementById('meuPainelIrDaily');
+  if (btnDaily) {
+    btnDaily.addEventListener('click', () => {
+      activateTab('viewDaily');
+      if (typeof renderDaily === 'function') renderDaily();
+    });
+  }
 
   // Sugestões de plano do gestor — mostra em destaque no topo
   if (DATA.supabase && supa) {
@@ -1100,10 +1202,10 @@ function renderMeuPainel() {
         if (!sugEl) return;
         if (error || !sugestoes || sugestoes.length === 0) { sugEl.innerHTML = ''; return; }
         sugEl.innerHTML = `
-          <div class="chart-card" style="margin-bottom:20px;border-left:4px solid var(--violet);">
-            <h3 style="margin-bottom:10px;">💬 Recado do seu gestor</h3>
+          <div style="border-left:3px solid var(--violet);background:var(--panel);border:1px solid var(--hairline);border-left:3px solid var(--violet);border-radius:0 12px 12px 0;padding:14px 16px;margin-bottom:18px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--violet);margin-bottom:6px;">Recado do seu gestor</div>
             ${sugestoes.map((s, i) => `
-              <div style="${i > 0 ? 'margin-top:10px;padding-top:10px;border-top:1px dashed var(--hairline);' : ''}font-size:13.5px;">
+              <div style="${i > 0 ? 'margin-top:10px;padding-top:10px;border-top:1px dashed var(--hairline);' : ''}font-size:13px;line-height:1.55;">
                 ${s.texto}
                 <div style="font-size:10.5px;color:var(--muted-2);margin-top:4px;">${new Date(s.created_at).toLocaleDateString('pt-BR')}</div>
               </div>
@@ -1693,9 +1795,17 @@ function savePdiState(ownerId, checked, data) {
 // ============ LISTA DE EXECUTIVOS ============
 const container = document.getElementById('reps');
 function renderRepsList() {
-  const repsParaMostrar = (sessaoAtual && sessaoAtual.role === 'rep')
-    ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
-    : DATA.reps;
+  const souGestorLista = !(sessaoAtual && sessaoAtual.role === 'rep');
+  const repsBase = souGestorLista
+    ? DATA.reps
+    : DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId);
+
+  // Na visão do gestor, ordena por urgência (quem tem mais lead fora do prazo primeiro),
+  // em vez da ordem fixa do narrativas.json — assim quem precisa de intervenção aparece
+  // no topo, sem o gestor ter que varrer a tabela toda pra descobrir.
+  const repsParaMostrar = souGestorLista
+    ? [...repsBase].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))
+    : repsBase;
 
   const linhas = repsParaMostrar.map(r => {
     const travadosCor = r.leadsTravados >= 7 ? 'var(--red)' : r.leadsTravados >= 4 ? 'var(--amber)' : 'var(--muted)';
@@ -1703,6 +1813,10 @@ function renderRepsList() {
     const fechadosMes = r.fechadosNoMes || 0;
     const pctMeta = Math.min(100, Math.round((fechadosMes / meta) * 100));
     const corMeta = pctMeta >= 80 ? 'var(--green)' : pctMeta >= 60 ? 'var(--amber)' : 'var(--red)';
+    // Pior caso do funil dele: quantas vezes o lead mais atrasado passou do SLA da etapa.
+    // Mostra gravidade, não só volume — 3 leads a 4x o prazo é pior que 8 a 1,1x.
+    const piorRatio = (r.travados || []).reduce((max, l) => Math.max(max, l.slaRatio || 0), 0);
+    const piorVezes = piorRatio > 100 ? (piorRatio / 100) : 0;
     return `
       <div class="rep-row" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;align-items:center;padding:15px 22px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
         <div style="display:flex;align-items:center;gap:10px;min-width:0;">
@@ -1714,7 +1828,10 @@ function renderRepsList() {
           <span class="rep-tag ${r.tag}" style="margin-left:4px;">${r.tagLabel}</span>
         </div>
         <div style="font-size:13.5px;">${r.open}</div>
-        <div style="font-size:13.5px;font-weight:${r.leadsTravados > 0 ? 700 : 400};color:${travadosCor};">${r.leadsTravados}</div>
+        <div>
+          <div style="font-size:13.5px;font-weight:${r.leadsTravados > 0 ? 700 : 400};color:${travadosCor};">${r.leadsTravados}</div>
+          ${piorVezes >= 2 ? `<div class="mono" style="font-size:10px;color:var(--red);" title="O lead mais atrasado dele já passou ${piorVezes.toFixed(1)}x do prazo da etapa">pior: ${piorVezes.toFixed(1)}x</div>` : ''}
+        </div>
         <div>
           <div style="font-size:13.5px;">${visitasInformadasTexto(r.ownerId)}</div>
           ${(() => {
@@ -1736,7 +1853,7 @@ function renderRepsList() {
   container.innerHTML = `
     <div class="chart-card" style="padding:0;overflow:hidden;">
       <div style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;padding:12px 22px;background:var(--panel2);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);gap:10px;">
-        <div>Executivo</div><div>Abertos</div><div>Travados</div><div>Visitas · Daily</div><div>Fechados</div><div>Meta do mês</div>
+        <div>Executivo</div><div>Abertos</div><div>Travados${souGestorLista ? ' ↓' : ''}</div><div>Visitas · Daily</div><div>Fechados</div><div>Meta do mês</div>
       </div>
       ${linhas}
     </div>
