@@ -93,6 +93,17 @@ async function supabaseSelect(tabela, query) {
   return res.json();
 }
 
+async function supabaseDelete(tabela, query) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabela}?${query}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`
+    }
+  });
+  if (!res.ok) throw new Error(`Supabase delete error ${res.status}: ${await res.text()}`);
+}
+
 async function main() {
   const hoje = new Date();
   const semanaAtualLabel = fmtRange(new Date(hoje.getTime() - 6 * 86400000), hoje);
@@ -134,6 +145,9 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
       continue;
     }
 
+    // Idempotência: remove análise existente pra esse owner+semana antes de inserir de novo
+    // (evita duplicar caso o job rode mais de uma vez pra mesma semana).
+    await supabaseDelete('analise_individual_semanal', `owner_id=eq.${ownerId}&semana_label=eq.${encodeURIComponent(semanaAtualLabel)}`);
     await supabaseInsert('analise_individual_semanal', {
       owner_id: ownerId,
       semana_label: semanaAtualLabel,

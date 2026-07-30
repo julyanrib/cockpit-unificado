@@ -431,7 +431,8 @@ async function main() {
         id: d.id,
         dias,
         slaBreach: dias > (SLA_DAYS[stageId] || 999),
-        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—'
+        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
+        ownerId: d.properties.hubspot_owner_id || null
       };
     }).sort((a, b) => b.dias - a.dias);
   }
