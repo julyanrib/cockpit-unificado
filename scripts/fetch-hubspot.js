@@ -574,12 +574,25 @@ async function main() {
   const leadsQuentes = todosQuentes.sort((a, b) => (b.rank - a.rank) || (a.slaRatio - b.slaRatio)).slice(0, 12);
   const leadsFrios = todosFrios.sort((a, b) => b.dias - a.dias).slice(0, 12);
 
-  // Busca as notas/observações mais recentes só desses ~24 leads em destaque (não o funil
-  // inteiro, pra não pesar). Requer escopo crm.objects.notes.read no Private App do HubSpot.
-  console.log('Buscando notas de campo dos leads em destaque...');
-  for (const lead of [...leadsQuentes, ...leadsFrios]) {
-    lead.notas = await buscarNotasDoLead(lead.id);
+  // Busca as notas/observações mais recentes dos leads que realmente aparecem em tela:
+  // os ~24 em destaque do time (quentes/frios) MAIS os 5 travados de cada executivo — que
+  // são os que alimentam o "roteiro de hoje" no painel individual dele. Sem incluir os
+  // travados por executivo, o roteiro ficava sem contexto justamente pros leads dele.
+  // Dedupe por id: um mesmo lead costuma estar em mais de uma lista, e cada busca de nota
+  // custa 3 chamadas com pausa de rate limit — buscar 2x o mesmo lead era desperdício.
+  // Requer escopo crm.objects.notes.read no Private App do HubSpot.
+  const travadosPorRep = Object.values(repsData).flatMap(r => (r.travados || []).slice(0, 5));
+  const leadsQuePrecisamDeNota = [...leadsQuentes, ...leadsFrios, ...travadosPorRep];
+  const idsUnicos = [...new Set(leadsQuePrecisamDeNota.map(l => l.id))];
+
+  console.log(`Buscando notas de campo de ${idsUnicos.length} leads em destaque...`);
+  const notasPorId = {};
+  for (const id of idsUnicos) {
+    notasPorId[id] = await buscarNotasDoLead(id);
   }
+  // Aplica em TODOS os objetos que referenciam aquele lead (o mesmo negócio aparece em
+  // repsData[x].travados e em leadsFrios como objetos separados).
+  leadsQuePrecisamDeNota.forEach(lead => { lead.notas = notasPorId[lead.id] || []; });
 
   const output = {
     updatedAt: new Date().toISOString(),
