@@ -78,13 +78,9 @@
   .rep-row{transition:background .15s var(--ease);}
   .comanda-edge{position:relative;}
   .comanda-edge::before{content:"";position:absolute;top:-1px;left:14px;right:14px;height:11px;background-image:radial-gradient(circle at 11px 0,var(--bg) 6px,transparent 6.5px);background-size:22px 11px;background-repeat:repeat-x;}
-  .hero-premium{position:relative;background:var(--dark);border-radius:var(--r-xl);padding:34px 34px 30px;margin-bottom:20px;box-shadow:var(--shadow);}
-  .hero-premium .greet{font-family:'Poppins',sans-serif;font-weight:800;font-size:30px;color:var(--dark-ink);letter-spacing:-.02em;}
-  .hero-premium .date{font-size:12.5px;color:var(--dark-mut);margin-top:4px;margin-bottom:22px;}
-  .hero-premium .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:24px;}
-  .hero-premium .stat .l{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);margin-bottom:6px;}
-  .hero-premium .stat .v{font-size:30px;font-weight:800;color:var(--dark-ink);letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
-  .hero-premium .stat .stat-hint{font-size:11px;color:var(--dark-mut);margin-top:4px;}
+  .kpi-strip-head{grid-column:1/-1;margin-bottom:2px;}
+  .kpi-strip-head .greet{font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:var(--dark-ink);letter-spacing:-.02em;}
+  .kpi-strip-head .date{font-size:12.5px;color:var(--dark-mut);margin-top:4px;}
   .decisoes-row{display:grid;grid-template-columns:1.6fr 1fr;gap:20px;margin-bottom:20px;align-items:start;}
   .decisao-item{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:var(--r-md);background:var(--panel2);margin-bottom:10px;transition:transform .15s var(--ease),box-shadow .15s var(--ease);}
   .decisao-item:last-child{margin-bottom:0;}
@@ -442,8 +438,7 @@
     .decisoes-row{grid-template-columns:1fr;}
     .podio-row{flex-direction:column;align-items:stretch;}
     .podio-card{max-width:none;}
-    .hero-premium{padding:24px 20px;}
-    .hero-premium .greet{font-size:24px;}
+    .kpi-strip-head .greet{font-size:21px;}
     .app-sidenav{position:fixed;bottom:0;left:0;right:0;width:100%;flex-direction:row;border-right:none;border-top:1px solid var(--line);padding:6px 8px;gap:2px;z-index:30;overflow-x:auto;}
     .app-sidenav-title, .app-sidenav-spacer, .app-sidenav-footer{display:none;}
     .tab-btn{flex-direction:column;gap:3px;padding:8px 6px;min-width:64px;font-size:10.5px;text-align:center;flex:1;}
@@ -646,8 +641,6 @@
   <div id="healthBadge"></div>
 
   <div class="view" id="viewCockpit">
-
-  <div class="hero-premium comanda-edge" id="heroPremium"></div>
 
   <div class="decisoes-row" id="decisoesRow">
     <div id="decisoesBloco">
@@ -1009,7 +1002,7 @@ function aplicarVisaoPorPapel() {
   if (typeof renderPDIs === 'function') renderPDIs();
   if (typeof renderDaily === 'function') renderDaily();
   if (typeof renderResumoSemanal === 'function') renderResumoSemanal();
-  if (typeof renderHeroPremium === 'function') renderHeroPremium();
+  if (typeof renderKpiStripHero === 'function') renderKpiStripHero();
   if (typeof renderMissao === 'function') renderMissao();
   if (typeof renderPodio === 'function') renderPodio();
   // setTimeout(0): renderDecisoes usa FUNIL_STAGE_IDS, uma const declarada mais abaixo no
@@ -1615,44 +1608,6 @@ function renderPodio() {
   }).join('');
 }
 
-// ============ HERO PREMIUM (topo do Cockpit) ============
-// Reaproveita os mesmos números que a faixa de KPIs abaixo já usa (DATA.kpisHub) — não
-// recalcula nada. A aderência da Daily é preenchida à parte por renderAderenciaDailyHero(),
-// que já popula tanto este card quanto o #kpiHeroAderenciaDaily da faixa de KPIs.
-function renderHeroPremium() {
-  const el = document.getElementById('heroPremium');
-  if (!el || !sessaoAtual) return;
-  const k = DATA.kpisHub;
-  const primeiroNome = sessaoAtual.nome ? sessaoAtual.nome.split(' ')[0] : '';
-
-  el.innerHTML = `
-    <div class="greet">${saudacaoDoDia()}${primeiroNome ? ', ' + primeiroNome : ''}</div>
-    <div class="date">${dataHojeExtenso()}</div>
-    <div class="stats">
-      <div class="stat">
-        <div class="l">Negócios em aberto</div>
-        <div class="v">${k.emAberto}</div>
-      </div>
-      <div class="stat">
-        <div class="l">Leads travados</div>
-        <div class="v">${k.leadsTravados}</div>
-        <div class="stat-hint">acima do SLA da etapa</div>
-      </div>
-      <div class="stat" id="heroPremiumAderencia">
-        <div class="l">Aderência da Daily</div>
-        <div class="v">—</div>
-        <div class="stat-hint">carregando…</div>
-      </div>
-    </div>
-  `;
-
-  // O container acima de renderAderenciaDailyHero() já pode ter rodado antes deste
-  // elemento existir (dependendo da ordem login/no-Supabase) — chama de novo aqui pra
-  // garantir que o card recém-criado seja preenchido. dailiesCache já fica em cache,
-  // então essa segunda chamada é barata.
-  if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
-}
-
 // ============ CENTRO DE DECISÕES (topo do Cockpit) ============
 // Deriva de dois critérios que já existem em outro lugar do código — não inventa nada novo:
 // (1) leads com SLA estourado por etapa (mesmo filtro do funil: l.slaBreach) e (2) executivos
@@ -1727,17 +1682,25 @@ async function renderDecisoes() {
   });
 }
 
-// ============ FAIXA DE KPIs PRINCIPAL (redesign 27/07/2026) ============
+// ============ FAIXA DE KPIs PRINCIPAL — ponto de partida do dia (consolidado 31/07/2026) ============
+// Era duas faixas escuras empilhadas (saudação separada dos números) — juntei numa só, porque
+// as duas mostravam basicamente os mesmos números (negócios em aberto, leads travados) e isso
+// ficava redundante e confuso como primeira coisa que a pessoa vê no dia.
 // 4 dos 5 números vêm prontos do build (HubSpot). "Aderência da Daily" é a exceção —
 // depende do Supabase (prometido x realizado da semana, por executivo), então é
 // preenchida à parte por renderAderenciaDailyHero(), de forma assíncrona.
-(function renderKpiStripHero() {
+function renderKpiStripHero() {
   const el = document.getElementById('kpiStripHero');
   if (!el) return;
   const k = DATA.kpisHub;
   const fechadosPct = k.metaMensalFechados > 0 ? Math.round((k.fechadosNoMes / k.metaMensalFechados) * 100) : 0;
+  const primeiroNome = (sessaoAtual && sessaoAtual.nome) ? sessaoAtual.nome.split(' ')[0] : '';
 
   el.innerHTML = `
+    <div class="kpi-strip-head">
+      <div class="greet">${saudacaoDoDia()}${primeiroNome ? ', ' + primeiroNome : ''}</div>
+      <div class="date">${dataHojeExtenso()}</div>
+    </div>
     <div class="kpi-hero">
       <div class="l">Negócios em aberto</div>
       <div class="v">${k.emAberto}${kpiDeltaHtml('emAberto')}</div>
@@ -1747,10 +1710,10 @@ async function renderDecisoes() {
       <div class="v" style="color:#3ECF8E;">${k.fechadosNoMes}${kpiDeltaHtml('fechadosNoMes')}</div>
       <div class="stat-hint">meta ${k.metaMensalFechados} · ${fechadosPct}% do caminho</div>
     </div>
-    <div class="kpi-hero">
+    <div class="kpi-hero" id="kpiHeroLeadsTravados" style="cursor:pointer;">
       <div class="l">Leads travados</div>
       <div class="v" style="color:#FF5A6B;">${k.leadsTravados}${kpiDeltaHtml('leadsTravados')}</div>
-      <div class="stat-hint">acima do SLA da etapa</div>
+      <div class="stat-hint">acima do SLA da etapa · clique pra ver</div>
     </div>
     <div class="kpi-hero" id="kpiHeroAderenciaDaily">
       <div class="l">Aderência da Daily</div>
@@ -1772,7 +1735,10 @@ async function renderDecisoes() {
 
   const hsEl = document.getElementById('kpiHeroHealthScore');
   if (hsEl) hsEl.addEventListener('click', () => hsEl.classList.toggle('click-open'));
-})();
+
+  const travEl = document.getElementById('kpiHeroLeadsTravados');
+  if (travEl) travEl.addEventListener('click', () => { if (typeof abrirTodosTravados === 'function') abrirTodosTravados(); });
+}
 
 // Health Score do time — fórmula simples e transparente: 40% aderência à Daily +
 // 30% taxa de avanço + 30% funil limpo (inverso de % travado). Clicável: mostra o
@@ -1824,15 +1790,12 @@ async function renderHealthScoreHero() {
 renderHealthScoreHero();
 
 // Aderência da Daily do time inteiro (semana atual, segunda até hoje).
-// Preenche tanto o card antigo (#kpiHeroAderenciaDaily, kpi-strip-hero) quanto o novo
-// (#heroPremiumAderencia, hero-premium) — mesmo cálculo, dois alvos no DOM.
 async function renderAderenciaDailyHero() {
   const el = document.getElementById('kpiHeroAderenciaDaily');
-  const elPremium = document.getElementById('heroPremiumAderencia');
-  if (!el && !elPremium) return;
+  if (!el) return;
   if (!DATA.supabase || !supa) {
-    if (el) { el.querySelector('.v').textContent = '—'; el.querySelector('.stat-hint').textContent = 'login não configurado'; }
-    if (elPremium) { elPremium.querySelector('.v').textContent = '—'; elPremium.querySelector('.stat-hint').textContent = 'login não configurado'; }
+    el.querySelector('.v').textContent = '—';
+    el.querySelector('.stat-hint').textContent = 'login não configurado';
     return;
   }
   if (Object.keys(dailiesCache).length === 0) await carregarDailies();
@@ -1852,19 +1815,10 @@ async function renderAderenciaDailyHero() {
   });
   const aderencia = prom > 0 ? Math.round((real / prom) * 100) : null;
   const cor = aderencia === null ? 'var(--dark-mut)' : aderencia >= 90 ? '#3ECF8E' : aderencia >= 75 ? '#F0A83D' : '#FF5A6B';
-  const vTexto = aderencia === null ? '—' : `${aderencia}%`;
-  const hintTexto = aderencia === null ? 'sem dailies essa semana ainda' : `${real} informadas de ${prom} prometidas`;
 
-  if (el) {
-    el.querySelector('.v').style.color = cor;
-    el.querySelector('.v').textContent = vTexto;
-    el.querySelector('.stat-hint').textContent = hintTexto;
-  }
-  if (elPremium) {
-    elPremium.querySelector('.v').style.color = cor;
-    elPremium.querySelector('.v').textContent = vTexto;
-    elPremium.querySelector('.stat-hint').textContent = hintTexto;
-  }
+  el.querySelector('.v').style.color = cor;
+  el.querySelector('.v').textContent = aderencia === null ? '—' : `${aderencia}%`;
+  el.querySelector('.stat-hint').textContent = aderencia === null ? 'sem dailies essa semana ainda' : `${real} informadas de ${prom} prometidas`;
 }
 renderAderenciaDailyHero();
 
@@ -2511,6 +2465,45 @@ function openStageModal(stageId, label, ownerId) {
   stageModalFiltro = 'estourado'; // sempre abre focado no que estourou — é o que ele cobra
   renderStageModalBody();
 
+  stageOverlay.classList.add('show');
+}
+
+// Clique em "Leads travados" na faixa de KPIs do topo — agrega os leads com SLA estourado
+// de TODAS as etapas abertas (diferente de openStageModal, que é etapa única). Numa sessão
+// de executivo, mostra só os leads dele — não expõe quem está travado no time inteiro.
+function abrirTodosTravados() {
+  const souRep = sessaoAtual && sessaoAtual.role === 'rep';
+  const meuOwnerId = sessaoAtual ? sessaoAtual.ownerId : null;
+  const idxAbertas = [1, 2, 3, 4, 5, 6];
+
+  let leads = [];
+  idxAbertas.forEach(idx => {
+    const stageId = FUNIL_STAGE_IDS[idx];
+    if (!stageId) return;
+    const leadsDaEtapa = (DATA.funilLeads[stageId] || []).filter(l => l.slaBreach);
+    leads = leads.concat(leadsDaEtapa.map(l => ({ ...l, stage: DATA.funil.labels[idx] })));
+  });
+  if (souRep) leads = leads.filter(l => l.ownerId === meuOwnerId);
+  leads.sort((a, b) => (b.dias || 0) - (a.dias || 0));
+
+  stageModalName.textContent = 'Leads travados';
+  stageModalMeta.textContent = `${leads.length} lead${leads.length !== 1 ? 's' : ''} acima do SLA da etapa, em todas as etapas abertas`;
+  stageModalBody.innerHTML = `
+    <div class="leads-box leads-box-scroll">
+      ${leads.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead travado agora.</div>' : leads.map(l => `
+        <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+          <div class="lead-left">
+            <span class="lead-name">${l.name} ⚠</span>
+            <span class="lead-stage">${l.vendedor ? l.vendedor + ' · ' : ''}${l.stage} · SLA estourado</span>
+          </div>
+          <div class="lead-right">
+            <span class="lead-days">${l.dias}d nesta etapa</span>
+            <span class="lead-cta">abrir →</span>
+          </div>
+        </a>
+      `).join('')}
+    </div>
+  `;
   stageOverlay.classList.add('show');
 }
 
