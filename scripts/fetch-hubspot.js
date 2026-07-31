@@ -87,6 +87,21 @@ const REPS = [
   { ownerId: '94079973', name: 'Michel Carvalho' }
 ];
 
+// BUG REAL corrigido aqui (30/07): todo cálculo de "hoje"/"mês corrente" abaixo usava
+// now.getUTCFullYear()/Month()/Date() direto — isso é a data em UTC, não em Brasília.
+// Entre ~21h e 23h59 (horário de Brasília), o UTC já virou o dia seguinte (UTC = Brasília+3h).
+// Se o workflow roda nesse intervalo (ex: "Run workflow" manual à noite), o script achava
+// que "hoje" já era amanhã — a janela de busca (meia-noite de "hoje" até agora) ficava
+// invertida (início depois do fim) e a API sempre voltava vazio. Era por isso que visitas/
+// avanços/propostas/fechamentos de hoje sumiam mesmo com o Expogo sincronizado certinho.
+// Corrige convertendo pro horário de Brasília ANTES de extrair ano/mês/dia.
+function agoraBrasilia() {
+  return new Date(Date.now() - 3 * 60 * 60 * 1000);
+}
+function hojeISOBrasilia() {
+  return agoraBrasilia().toISOString().slice(0, 10);
+}
+
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 // HubSpot limita quantas chamadas podem chegar POR SEGUNDO. Por isso toda chamada
@@ -230,8 +245,10 @@ async function stageTotalLast7Days(stageIdOuLista) {
 // mesmo critério de closedate usado acima — pro KPI "Fechados no mês".
 async function stageTotalThisMonth(stageIdOuLista) {
   const now = new Date();
-  // Início do mês corrente às 00:00 em America/Sao_Paulo (UTC-3, sem horário de verão hoje em dia).
-  const inicioMes = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3, 0, 0));
+  // Início do mês corrente às 00:00 em America/Sao_Paulo — usa o horário de Brasília (não UTC)
+  // pra decidir qual é o mês/dia "corrente" (ver agoraBrasilia() no topo do arquivo).
+  const b = agoraBrasilia();
+  const inicioMes = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1, 3, 0, 0));
   const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
   const filtroEtapa = lista.length > 1
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
@@ -363,7 +380,8 @@ const META_MENSAL_POR_EXECUTIVO = 10;
 
 async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
   const now = new Date();
-  const inicioMes = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 3, 0, 0));
+  const b = agoraBrasilia();
+  const inicioMes = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1, 3, 0, 0));
   const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
   const filtroEtapa = lista.length > 1
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
@@ -389,7 +407,8 @@ async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
 // da Daily, sem depender de o executivo digitar (o Expogo já manda isso pro HubSpot sozinho).
 async function stageDealsHojeByOwner(stageIdOuLista, ownerId) {
   const now = new Date();
-  const inicioHoje = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 3, 0, 0));
+  const b = agoraBrasilia();
+  const inicioHoje = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate(), 3, 0, 0));
   const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
   const filtroEtapa = lista.length > 1
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
@@ -519,10 +538,15 @@ async function main() {
     // que a repOpenDeals já buscou (sem chamada extra à API) pra visitas/avanços/propostas;
     // fechamentos precisa de 1 chamada extra porque Ganho não é etapa "aberta" (não vem no
     // `deals` de repOpenDeals).
-    const hojeISO = new Date().toISOString().slice(0, 10);
+    const hojeISO = hojeISOBrasilia();
     const entrouHojeEm = (stageId) => deals.filter(d => {
       const dt = d.properties[`hs_v2_date_entered_${stageId}`];
-      return dt && dt.slice(0, 10) === hojeISO;
+      if (!dt) return false;
+      // Converte o timestamp do negócio (vem em UTC do HubSpot) pro horário de Brasília
+      // ANTES de comparar a data — senão um negócio que entrou na etapa às 22h de Brasília
+      // (já 01h UTC do dia seguinte) seria contado no dia errado.
+      const dtBrasiliaISO = new Date(new Date(dt).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      return dtBrasiliaISO === hojeISO;
     }).length;
 
     const visitasHubspotHoje = entrouHojeEm(STAGES.visita);
