@@ -1247,9 +1247,29 @@ function renderMeuPainel() {
 
   const metaMensal = r.metaMensal || 10;
   const fechadosMes = r.fechadosNoMes || 0;
+  const pctMeta = metaMensal > 0 ? Math.min(100, Math.round((fechadosMes / metaMensal) * 100)) : 0;
 
   const rankingOrdenado = [...DATA.reps].sort((a, b) => (b.fechadosNoMes || 0) - (a.fechadosNoMes || 0));
   const minhaPosicao = rankingOrdenado.findIndex(x => x.ownerId === r.ownerId) + 1;
+
+  // Prévia curta de "pra atacar" — só o topo do topo (1 quente + 1 travado mais crítico).
+  // O roteiro completo, com nota e selo de SLA, mora na Daily; aqui é só o gancho pra lá,
+  // pra não duplicar a mesma lista inteira em duas abas.
+  const meuQuenteTopo = (DATA.temperatura.quentes || []).find(l => l.ownerId === r.ownerId);
+  const meuTravadoTopo = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0))[0];
+  const totalPraAtacar = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId).length + (r.travados || []).length;
+
+  const previaAtacarHTML = () => {
+    if (!meuQuenteTopo && !meuTravadoTopo) {
+      return `<div style="font-size:12.5px;color:var(--muted);">Funil em dia — nenhum lead quente ou travado agora.</div>`;
+    }
+    const item = (l, cor, motivo) => l ? `
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 0;${meuQuenteTopo && meuTravadoTopo ? 'border-bottom:1px solid var(--hairline);' : ''}">
+        <span style="width:6px;height:6px;border-radius:50%;background:${cor};flex:none;"></span>
+        <div style="flex:1;min-width:0;font-size:12.5px;color:var(--text);">${l.name} <span style="color:var(--muted2);">— ${motivo}</span></div>
+      </div>` : '';
+    return `${item(meuQuenteTopo, 'var(--green)', `${meuQuenteTopo?.stage} · pronto pra fechar`)}${item(meuTravadoTopo, 'var(--red)', `parado há ${meuTravadoTopo?.dias}d`)}`;
+  };
 
   // Leads quentes PESSOAIS (mesma lógica do Cockpit, filtrada só pros negócios desse executivo)
 
@@ -1258,11 +1278,11 @@ function renderMeuPainel() {
       <div class="painel-hero-avatar">${avatarHTML(sessaoAtual.email, r.name, 46)}</div>
       <div class="painel-hero-mid">
         <div class="painel-hero-greet">${saudacaoDoDia()}, ${r.name.split(' ')[0]}</div>
-        <div class="painel-hero-date">${dataHojeExtenso()} · ${r.praca}</div>
+        <div class="painel-hero-date">${dataHojeExtenso()} · ${r.praca} · o seu funil, este mês</div>
       </div>
       <div class="painel-hero-meta">
         <div class="v">${fechadosMes}<span>/${metaMensal}</span></div>
-        <div class="l">meta do mês · ${minhaPosicao}º no time</div>
+        <div class="l">meta do mês · ${pctMeta}% · ${minhaPosicao}º no time</div>
       </div>
     </div>
 
@@ -1270,22 +1290,28 @@ function renderMeuPainel() {
 
     ${buildVitoriasHTML(r)}
 
-    ${buildRoteiroHojeHTML(r)}
-
-    <div class="chart-card" style="margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;">
-      <div style="min-width:0;">
-        <div style="font-size:13px;font-weight:600;color:var(--text);">Sua daily de hoje</div>
-        <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">Visitas informadas nesta semana: <b class="mono" style="color:var(--text);">${visitasInformadasTexto(r.ownerId)}</b> · ${r.open} negócios em aberto</div>
+    <div class="chart-card" style="margin-bottom:18px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:2px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;font-weight:700;color:var(--text);">🎯 Pra atacar agora</span>
+          ${totalPraAtacar > 0 ? `<span style="font-size:11px;color:var(--muted2);">${totalPraAtacar} no total</span>` : ''}
+        </div>
+        <button id="meuPainelIrDaily" style="flex:none;background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Ver roteiro completo na Daily →</button>
       </div>
-      <button id="meuPainelIrDaily" style="flex:none;background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;">Abrir daily</button>
+      ${previaAtacarHTML()}
     </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin:24px 0 12px;">
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">Seu funil este mês</span>
+      <span style="flex:1;height:1px;background:var(--line);"></span>
+    </div>
+
+    ${buildDistribuicaoCompactaHTML(r, 'meuPainel')}
 
     <div style="display:flex;align-items:center;gap:8px;margin:24px 0 12px;">
       <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">Contexto e acordos</span>
       <span style="flex:1;height:1px;background:var(--line);"></span>
     </div>
-
-    ${buildDistribuicaoCompactaHTML(r, 'meuPainel')}
 
     <details class="chart-card" style="margin-bottom:14px;padding:0;">
       <summary style="cursor:pointer;padding:18px 22px;font-weight:700;font-size:13.5px;">Compromissos combinados no 1:1 <span style="font-weight:400;color:var(--muted2);font-size:12px;">· ${r.compromissos.length}</span></summary>
