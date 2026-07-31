@@ -384,6 +384,32 @@ async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
   return (data.results || []).filter(d => !isExcludedDeal(d)).length;
 }
 
+// Conta quantos negócios de Ganho (Negócio Fechado + Enviado Onboarding) fecharam HOJE
+// pra um executivo específico — usado pra alimentar automaticamente o "Fechamentos hoje"
+// da Daily, sem depender de o executivo digitar (o Expogo já manda isso pro HubSpot sozinho).
+async function stageDealsHojeByOwner(stageIdOuLista, ownerId) {
+  const now = new Date();
+  const inicioHoje = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 3, 0, 0));
+  const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
+  const filtroEtapa = lista.length > 1
+    ? { propertyName: 'dealstage', operator: 'IN', values: lista }
+    : { propertyName: 'dealstage', operator: 'EQ', value: lista[0] };
+
+  const data = await hsSearch({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        filtroEtapa,
+        { propertyName: 'hubspot_owner_id', operator: 'EQ', value: ownerId },
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioHoje.getTime()), highValue: String(now.getTime()) }
+      ]
+    }],
+    properties: ['dealname'],
+    limit: 50
+  });
+  return (data.results || []).filter(d => !isExcludedDeal(d)).length;
+}
+
 async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
   const now = Date.now();
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
@@ -487,14 +513,26 @@ async function main() {
       stages[s] = (stages[s] || 0) + 1;
     });
 
-    // Cross-check barato pro campo "realizado" da Daily (sem chamada extra à API —
-    // já usa o hs_v2_date_entered_visita que a repOpenDeals já buscou): conta quantos
-    // negócios entraram em Visita HOJE, direto do HubSpot.
+    // Fonte automática do campo "realizado" da Daily — o executivo trabalha pelo Expogo,
+    // que sincroniza direto com o HubSpot, então ele NÃO deve digitar o realizado: o cockpit
+    // lê a ação de verdade que já está no HubSpot. Reaproveita hs_v2_date_entered_<etapa>
+    // que a repOpenDeals já buscou (sem chamada extra à API) pra visitas/avanços/propostas;
+    // fechamentos precisa de 1 chamada extra porque Ganho não é etapa "aberta" (não vem no
+    // `deals` de repOpenDeals).
     const hojeISO = new Date().toISOString().slice(0, 10);
-    const visitasHubspotHoje = deals.filter(d => {
-      const dt = d.properties.hs_v2_date_entered_1396005401;
+    const entrouHojeEm = (stageId) => deals.filter(d => {
+      const dt = d.properties[`hs_v2_date_entered_${stageId}`];
       return dt && dt.slice(0, 10) === hojeISO;
     }).length;
+
+    const visitasHubspotHoje = entrouHojeEm(STAGES.visita);
+    // "Avanço de etapa" = negócio que progrediu pra Diagnóstico, Negociação ou Ag.Pagamento hoje —
+    // NÃO inclui Demo/Proposta aqui, porque isso já vira a métrica separada de "Propostas" logo
+    // abaixo (senão o mesmo negócio contaria pontuação em dobro).
+    const avancosHubspotHoje = [STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]
+      .reduce((soma, stageId) => soma + entrouHojeEm(stageId), 0);
+    const propostasHubspotHoje = entrouHojeEm(STAGES.demoProposta);
+    const fechamentosHubspotHoje = await stageDealsHojeByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
 
     const withDays = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
@@ -578,7 +616,10 @@ async function main() {
       ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name),
       fechadosNoMes: fechadosNoMesRep,
       metaMensal: META_MENSAL_POR_EXECUTIVO,
-      visitasHubspotHoje
+      visitasHubspotHoje,
+      avancosHubspotHoje,
+      propostasHubspotHoje,
+      fechamentosHubspotHoje
     };
     emAbertoTime += deals.length;
   }
