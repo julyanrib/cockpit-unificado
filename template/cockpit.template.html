@@ -395,16 +395,6 @@
   .hoje-hero-top{position:relative;z-index:2;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:18px;}
   .hoje-hero-greet{font-family:'Poppins',sans-serif;font-weight:700;font-size:19px;letter-spacing:-.01em;}
   .hoje-hero-date{font-size:11.5px;color:var(--dark-mut);margin-top:3px;}
-  .hoje-streak-chip{display:flex;align-items:center;gap:6px;background:var(--dark-fill);border-radius:var(--r-pill);padding:6px 12px;font-size:12.5px;font-weight:700;}
-  .hoje-rings{position:relative;z-index:2;display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
-  .hoje-ring-card{background:var(--dark-fill);border-radius:var(--r-md);padding:14px 16px;display:flex;align-items:center;gap:14px;}
-  .hoje-ring-card svg{flex:none;}
-  .hoje-ring-track{fill:none;stroke:rgba(247,243,236,.12);stroke-width:6;}
-  .hoje-ring-fill{fill:none;stroke-width:6;stroke-linecap:round;transform:rotate(-90deg);transform-origin:center;transition:stroke-dasharray .5s cubic-bezier(.4,0,.2,1);}
-  .hoje-ring-num{font-size:14px;font-weight:700;fill:var(--dark-ink);font-variant-numeric:tabular-nums;}
-  .hoje-ring-label{font-size:12px;font-weight:600;color:var(--dark-mut);margin-bottom:2px;}
-  .hoje-ring-detail{font-size:15px;font-weight:700;color:var(--dark-ink);font-variant-numeric:tabular-nums;}
-  .hoje-ring-detail span{font-family:'DM Sans',sans-serif;font-weight:500;font-size:11.5px;color:var(--dark-mut);}
   .hoje-fechamentos-row{position:relative;z-index:2;margin-top:16px;padding-top:16px;border-top:1px dashed var(--dark-fill);display:flex;justify-content:space-between;align-items:center;}
   .hoje-fechamentos-label{font-size:13px;color:var(--dark-mut);}
   .hoje-fechamentos-val{font-size:22px;font-weight:800;color:var(--dark-ink);display:flex;align-items:center;gap:8px;font-variant-numeric:tabular-nums;}
@@ -474,7 +464,7 @@
     .sign-row{flex-direction:column;align-items:flex-start;gap:10px;}
     .sign-row input{width:100%;}
   }
-  @media (max-width:640px){ .hoje-rings{grid-template-columns:1fr;} }
+  @media (max-width:640px){ .hoje-hero-stats{grid-template-columns:1fr!important;gap:16px!important;text-align:left!important;} .hoje-hero-stats > div{align-items:flex-start!important;text-align:left!important;} }
   @media (max-width:420px){
     .kpi-strip, .kpi-strip.exp{grid-template-columns:1fr 1fr;}
     .kpi .v{font-size:19px;}
@@ -2950,8 +2940,14 @@ async function renderDaily() {
     : DATA.reps;
 
   let html = `
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:4px;">
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);">${fmtDailyLabel(dailyRefDate)}</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:27px;font-weight:800;margin:0;letter-spacing:-.015em;">Daily</h1>
+      </div>
+      <span style="font-size:12.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 15px;">Você contra o que você prometeu — não contra o time</span>
+    </div>
     <div class="daily-header">
-      <div class="hint" style="margin:0;">Você contra o que você prometeu — não contra o time.</div>
       <div class="daily-date-nav">
         <button id="dailyPrev">← dia útil anterior</button>
         <span class="date-label">${fmtDailyLabel(dailyRefDate)}</span>
@@ -2975,16 +2971,40 @@ async function renderDaily() {
     const disabledAttr = souGestor ? 'disabled' : '';
     const inputStyleExtra = souGestor ? 'opacity:.65;cursor:not-allowed;' : '';
 
-    const anelSVG = (realizado, prometido, cor, idSuffix) => {
-      const r = 22, c = 2 * Math.PI * r;
-      const pct = prometido > 0 ? Math.min(1, (realizado || 0) / prometido) : (realizado > 0 ? 1 : 0);
-      const offset = c - (pct * c);
+
+
+    // Semana com ícone por dia útil — reaproveita diasUteisDaSemana/bateuPrometido/getDaily,
+    // que já existiam (usados no cálculo de sequência). Dia futuro (sem daily ainda) fica neutro.
+    const diasSemana = diasUteisDaSemana(dailyRefDate);
+    const hojeISO = isoDate(new Date());
+    const semanaIcones = diasSemana.map(d => {
+      const row = getDaily(r.ownerId, d);
+      const label = new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').toUpperCase();
+      if (d > hojeISO) return { icon: '·', bg: 'var(--dark-fill)', border: 'transparent', col: 'var(--dark-mut)', dia: label };
+      if (row && bateuPrometido(row)) return { icon: '🔥', bg: 'rgba(229,35,58,.16)', border: 'var(--red)', col: 'var(--dark-ink)', dia: label };
+      if (row) return { icon: '·', bg: 'var(--dark-fill)', border: 'var(--dark-mut)', col: 'var(--dark-mut)', dia: label };
+      return { icon: '—', bg: 'var(--dark-fill)', border: 'transparent', col: 'var(--dark-mut)', dia: label };
+    });
+
+    // Prometido vs. realizado, com pontos por métrica (mesma tabela de pontos já usada em pontosDoDia)
+    const realVisitas = ehHojeView ? r.visitasHubspotHoje : hoje.realizado_visitas;
+    const realAvancos = ehHojeView ? r.avancosHubspotHoje : hoje.realizado_avancos;
+    const realPropostas = ehHojeView ? r.propostasHubspotHoje : hoje.realizado_propostas;
+    const linhaPromVsReal = (label, real, prom, pontosPorUnidade, cor) => {
+      const realN = real || 0;
+      const promN = prom || 0;
+      const pct = promN > 0 ? Math.min(100, Math.round((realN / promN) * 100)) : (realN > 0 ? 100 : 0);
       return `
-        <svg width="56" height="56" viewBox="0 0 56 56">
-          <circle class="hoje-ring-track" cx="28" cy="28" r="${r}"></circle>
-          <circle class="hoje-ring-fill" cx="28" cy="28" r="${r}" stroke="${cor}" stroke-dasharray="${c}" stroke-dashoffset="${offset}"></circle>
-          <text x="28" y="32" text-anchor="middle" class="hoje-ring-num">${realizado || 0}</text>
-        </svg>
+        <div style="display:flex;flex-direction:column;gap:7px;">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;">
+            <span style="font-size:13px;">${label}</span>
+            <span style="display:flex;align-items:baseline;gap:9px;">
+              <span style="font-size:11px;font-weight:800;color:${cor};background:var(--panel2);border-radius:999px;padding:4px 9px;">+${realN * pontosPorUnidade}</span>
+              <span style="font-size:12.5px;font-weight:700;color:${cor};">${realN}/${promN}</span>
+            </span>
+          </div>
+          <span style="height:9px;border-radius:999px;background:var(--sunk);overflow:hidden;display:block;"><span style="display:block;height:100%;width:${pct}%;background:${cor};border-radius:999px;"></span></span>
+        </div>
       `;
     };
 
@@ -2994,32 +3014,33 @@ async function renderDaily() {
           <div class="hoje-hero-top">
             <div>
               <div class="hoje-hero-greet">${r.name.split(' ')[0]}, hoje é ${fmtDailyLabel(dailyRefDate).toLowerCase()}</div>
-              <div class="hoje-hero-date">${pontosHoje} pontos hoje · visita 10 · avanço 25 · proposta 40 · fechamento 100</div>
+              <div class="hoje-hero-date">visita 10 · avanço 25 · proposta 40 · fechamento 100 pontos</div>
             </div>
-            <div class="hoje-streak-chip">${seq} 🔥 <span style="font-weight:500;color:var(--dark-mut);">dias batendo o prometido</span></div>
           </div>
 
-          <div class="hoje-rings">
-            <div class="hoje-ring-card">
-              ${anelSVG(ehHojeView ? r.visitasHubspotHoje : hoje.realizado_visitas, hoje.prometido_visitas, 'var(--green)')}
-              <div>
-                <div class="hoje-ring-label">Visitas</div>
-                <div class="hoje-ring-detail">${(ehHojeView ? r.visitasHubspotHoje : hoje.realizado_visitas) || 0}<span> / ${hoje.prometido_visitas ?? 0} prometidas</span></div>
+          <div class="hoje-hero-stats" style="display:grid;grid-template-columns:auto 1fr auto;gap:26px;align-items:center;margin-top:16px;">
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--dark-mut);">Sequência</span>
+              <span style="display:flex;align-items:baseline;gap:8px;">
+                <b style="font-family:'Poppins',sans-serif;font-size:38px;font-weight:800;line-height:.9;letter-spacing:-.03em;color:var(--dark-ink);font-variant-numeric:tabular-nums;">${seq}</b>
+                <span style="font-size:22px;line-height:1;">🔥</span>
+              </span>
+              <span style="font-size:11.5px;color:var(--dark-mut);">dias batendo o prometido</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--dark-mut);">Essa semana</span>
+              <div style="display:flex;gap:8px;">
+                ${semanaIcones.map(d => `
+                  <span style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                    <span style="width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:15px;background:${d.bg};border:2px solid ${d.border};">${d.icon}</span>
+                    <span style="font-size:9.5px;font-weight:700;color:${d.col};">${d.dia}</span>
+                  </span>
+                `).join('')}
               </div>
             </div>
-            <div class="hoje-ring-card">
-              ${anelSVG(ehHojeView ? r.avancosHubspotHoje : hoje.realizado_avancos, hoje.prometido_avancos, 'var(--amber)')}
-              <div>
-                <div class="hoje-ring-label">Avanços de etapa</div>
-                <div class="hoje-ring-detail">${(ehHojeView ? r.avancosHubspotHoje : hoje.realizado_avancos) || 0}<span> / ${hoje.prometido_avancos ?? 0} prometidos</span></div>
-              </div>
-            </div>
-            <div class="hoje-ring-card">
-              ${anelSVG(ehHojeView ? r.propostasHubspotHoje : hoje.realizado_propostas, hoje.prometido_propostas, 'var(--red)')}
-              <div>
-                <div class="hoje-ring-label">Propostas</div>
-                <div class="hoje-ring-detail">${(ehHojeView ? r.propostasHubspotHoje : hoje.realizado_propostas) || 0}<span> / ${hoje.prometido_propostas ?? 0} prometidas</span></div>
-              </div>
+            <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;text-align:right;">
+              <span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--red);">Pontos de hoje</span>
+              <b style="font-family:'Poppins',sans-serif;font-size:38px;font-weight:800;line-height:.9;letter-spacing:-.03em;color:var(--dark-ink);font-variant-numeric:tabular-nums;">${pontosHoje}</b>
             </div>
           </div>
 
@@ -3030,7 +3051,15 @@ async function renderDaily() {
         </div>
 
         <div class="hoje-grid" style="padding:16px 22px 4px;">
-          <div style="min-width:0;">${buildRoteiroHojeHTML(r)}</div>
+          <div style="min-width:0;background:var(--panel2);border-radius:var(--r-lg);padding:18px 20px;display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;">
+              <b style="font-family:'Poppins',sans-serif;font-size:14.5px;">Prometido vs. realizado</b>
+              <span style="font-size:11px;color:var(--muted2);">o que você combinou ontem</span>
+            </div>
+            ${linhaPromVsReal('Visitas', realVisitas, hoje.prometido_visitas, 10, 'var(--green)')}
+            ${linhaPromVsReal('Avanços de etapa', realAvancos, hoje.prometido_avancos, 25, 'var(--amber)')}
+            ${linhaPromVsReal('Propostas', realPropostas, hoje.prometido_propostas, 40, 'var(--red)')}
+          </div>
 
           <div class="hoje-panel">
             <div class="hoje-panel-title"><span class="dot"></span>Prometer pra hoje</div>
@@ -3053,6 +3082,8 @@ async function renderDaily() {
           <span class="d-status" data-owner="${r.ownerId}" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>`}
           </div>
         </div>
+
+        <div style="padding:0 22px 20px;">${buildRoteiroHojeHTML(r)}</div>
 
         <div style="padding:0 22px 20px;">
           <div class="daily-col-label" style="margin-bottom:8px;">🏅 Conquistas</div>
