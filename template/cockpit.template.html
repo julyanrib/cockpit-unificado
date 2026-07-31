@@ -2293,8 +2293,16 @@ document.getElementById('stageModalClose').addEventListener('click', () => stage
 stageOverlay.addEventListener('click', (e) => { if (e.target === stageOverlay) stageOverlay.classList.remove('show'); });
 
 // ============ DAILY GAMIFICADA (Supabase, sem localStorage) ============
+// BUG corrigido (30/07): usava d.toISOString().slice(0,10), que é a data em UTC.
+// Entre ~21h e 23h59 no horário do executivo (Brasília), o UTC já virou o dia seguinte,
+// então a Daily abria mostrando "hoje" como amanhã (vazio) pra quem entrasse à noite.
+// Usa os componentes de data LOCAIS do navegador (getFullYear/getMonth/getDate), que já
+// respeitam o fuso horário real de quem está usando, em vez de forçar UTC.
 function isoDate(d) {
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 function addDays(dateISO, n) {
   const d = new Date(dateISO + 'T12:00:00');
