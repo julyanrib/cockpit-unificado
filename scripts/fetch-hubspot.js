@@ -163,7 +163,7 @@ async function createdLast7Days() {
     }],
     properties: ['dealname', 'hubspot_owner_id']
   });
-  return results.filter(d => !isTestDeal(d.properties.dealname));
+  return results.filter(d => !isExcludedDeal(d));
 }
 
 // Negócios de teste/dummy (ex: "Teste", "TESTE_SONY_DIAG", "Coliseu teste") não devem contar
@@ -171,6 +171,22 @@ async function createdLast7Days() {
 function isTestDeal(dealname) {
   if (!dealname) return false;
   return /teste/i.test(dealname);
+}
+
+// Negócios "Ganho" no HubSpot que são exceções conhecidas e NÃO devem contar como fechamento
+// novo do executivo. Auditado com o Julyan em 30/07/2026, comparando com a planilha de julho:
+// - '62640951452' "Bistrô Arena Carioca" (Bruno): duplicata do deal '59997188246'
+//   ("Oportunidade - BISTRO ARENA RESTAURANTE E LANCHONETES LTDA"), mesmo cliente contado 2x.
+//   O deal '59997188246' fica como o registro oficial (mais antigo, mais histórico); este some.
+// - '59186260237' "Pizzaria Tradição" (Sandro): cliente REATIVADO (voltou da Reciclagem,
+//   deal '59183461650', 1 dia antes), não é logo nova — não deve contar em "Novos Clientes".
+// Se algum dia esses IDs forem mesclados/corrigidos direto no HubSpot, essa lista pode ser
+// esvaziada. Até lá, mantém o relatório batendo com a contagem manual real.
+const EXCLUDED_DEAL_IDS = ['62640951452', '59186260237'];
+
+function isExcludedDeal(deal) {
+  if (EXCLUDED_DEAL_IDS.includes(String(deal.id))) return true;
+  return isTestDeal(deal.properties && deal.properties.dealname);
 }
 
 // Conta quantos negócios ENTRARAM numa etapa específica nos últimos 7 dias (fluxo da semana),
@@ -203,7 +219,7 @@ async function stageDealsLast7DaysComNomes(stageIdOuLista) {
     }],
     properties: ['dealname', 'hubspot_owner_id']
   });
-  return results.filter(d => !isTestDeal(d.properties.dealname));
+  return results.filter(d => !isExcludedDeal(d));
 }
 async function stageTotalLast7Days(stageIdOuLista) {
   const results = await stageDealsLast7DaysComNomes(stageIdOuLista);
@@ -231,7 +247,7 @@ async function stageTotalThisMonth(stageIdOuLista) {
     }],
     properties: ['dealname']
   });
-  return results.filter(d => !isTestDeal(d.properties.dealname)).length;
+  return results.filter(d => !isExcludedDeal(d)).length;
 }
 
 // Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
@@ -250,7 +266,7 @@ async function repOpenDeals(ownerId) {
     }],
     properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', ...ENTERED_STAGE_PROPS]
   });
-  return results.filter(d => !isTestDeal(d.properties.dealname));
+  return results.filter(d => !isExcludedDeal(d));
 }
 
 // Busca TODOS os leads abertos de uma etapa (time inteiro) — usado pro clique no funil.
@@ -275,7 +291,7 @@ async function stageDealsTeamWide(stageId) {
     }],
     properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS]
   });
-  return todos.filter(d => !isTestDeal(d.properties.dealname));
+  return todos.filter(d => !isExcludedDeal(d));
 }
 
 // Busca as 2 notas/observações mais recentes de um negócio específico.
@@ -365,7 +381,7 @@ async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
     properties: ['dealname'],
     limit: 50
   });
-  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname)).length;
+  return (data.results || []).filter(d => !isExcludedDeal(d)).length;
 }
 
 async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
@@ -389,7 +405,7 @@ async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
     limit: 50
   });
   return (data.results || [])
-    .filter(d => !isTestDeal(d.properties.dealname))
+    .filter(d => !isExcludedDeal(d))
     .map(d => ({ name: d.properties.dealname }));
 }
 
