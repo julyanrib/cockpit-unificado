@@ -1110,8 +1110,9 @@ function buildRoteiroHojeHTML(r) {
   }
 
   const linhaLead = (l, corBorda, motivoHtml) => `
-    <div style="background:var(--panel2);border-radius:var(--r-sm);padding:11px 13px;border-left:2px solid ${corBorda};margin-bottom:7px;">
+    <div class="roteiro-item" data-lead="${l.id}" style="background:var(--panel2);border-radius:var(--r-sm);padding:11px 13px;border-left:2px solid ${corBorda};margin-bottom:7px;">
       <div style="display:flex;align-items:center;gap:10px;">
+        <span class="checkbox roteiro-check" data-lead="${l.id}" style="width:19px;height:19px;flex:none;"></span>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:600;color:var(--ink);">${l.name}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:1px;">${motivoHtml}</div>
@@ -1140,7 +1141,7 @@ function buildRoteiroHojeHTML(r) {
   ` : '';
 
   return `
-    <div class="chart-card" style="margin-bottom:18px;">
+    <div class="chart-card roteiro-hoje-card" data-owner="${r.ownerId}" style="margin-bottom:18px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
         <h3 style="margin:0;">Seu roteiro de hoje</h3>
         <span style="font-size:11px;color:var(--muted2);">ordenado por urgência real do funil</span>
@@ -1149,6 +1150,29 @@ function buildRoteiroHojeHTML(r) {
       ${blocoTravados}
     </div>
   `;
+}
+
+// Persistência dos checkboxes do roteiro — chave inclui a data de hoje, então reseta
+// sozinho todo dia (o roteiro de ontem não deve continuar marcado hoje). Mesmo padrão
+// de localStorage já usado no PDI (getPdiState/savePdiState), só que por lead em vez
+// de por compromisso.
+function roteiroCheckKey(ownerId, leadId) {
+  return `cockpit_roteiro_v1_${ownerId}_${isoDate(new Date())}_${leadId}`;
+}
+function wireRoteiroChecks(rootEl) {
+  rootEl.querySelectorAll('.roteiro-hoje-card').forEach(card => {
+    const ownerId = card.dataset.owner;
+    card.querySelectorAll('.roteiro-check').forEach(cb => {
+      const leadId = cb.dataset.lead;
+      try {
+        if (localStorage.getItem(roteiroCheckKey(ownerId, leadId)) === '1') cb.classList.add('checked');
+      } catch (e) {}
+      cb.addEventListener('click', () => {
+        cb.classList.toggle('checked');
+        try { localStorage.setItem(roteiroCheckKey(ownerId, leadId), cb.classList.contains('checked') ? '1' : '0'); } catch (e) {}
+      });
+    });
+  });
 }
 
 function buildAcaoImediataHTML(r) {
@@ -1257,25 +1281,6 @@ function renderMeuPainel() {
   const rankingOrdenado = [...DATA.reps].sort((a, b) => (b.fechadosNoMes || 0) - (a.fechadosNoMes || 0));
   const minhaPosicao = rankingOrdenado.findIndex(x => x.ownerId === r.ownerId) + 1;
 
-  // Prévia curta de "pra atacar" — só o topo do topo (1 quente + 1 travado mais crítico).
-  // O roteiro completo, com nota e selo de SLA, mora na Daily; aqui é só o gancho pra lá,
-  // pra não duplicar a mesma lista inteira em duas abas.
-  const meuQuenteTopo = (DATA.temperatura.quentes || []).find(l => l.ownerId === r.ownerId);
-  const meuTravadoTopo = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0))[0];
-  const totalPraAtacar = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId).length + (r.travados || []).length;
-
-  const previaAtacarHTML = () => {
-    if (!meuQuenteTopo && !meuTravadoTopo) {
-      return `<div style="font-size:12.5px;color:var(--muted);">Funil em dia — nenhum lead quente ou travado agora.</div>`;
-    }
-    const item = (l, cor, motivo) => l ? `
-      <div style="display:flex;align-items:center;gap:9px;padding:8px 0;${meuQuenteTopo && meuTravadoTopo ? 'border-bottom:1px solid var(--line);' : ''}">
-        <span style="width:6px;height:6px;border-radius:50%;background:${cor};flex:none;"></span>
-        <div style="flex:1;min-width:0;font-size:12.5px;color:var(--ink);">${l.name} <span style="color:var(--muted2);">— ${motivo}</span></div>
-      </div>` : '';
-    return `${item(meuQuenteTopo, 'var(--green)', `${meuQuenteTopo?.stage} · pronto pra fechar`)}${item(meuTravadoTopo, 'var(--red)', `parado há ${meuTravadoTopo?.dias}d`)}`;
-  };
-
   // Leads quentes PESSOAIS (mesma lógica do Cockpit, filtrada só pros negócios desse executivo)
 
   el.innerHTML = `
@@ -1295,16 +1300,7 @@ function renderMeuPainel() {
 
     ${buildVitoriasHTML(r)}
 
-    <div class="chart-card" style="margin-bottom:18px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:2px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span style="font-size:13px;font-weight:700;color:var(--ink);">🎯 Pra atacar agora</span>
-          ${totalPraAtacar > 0 ? `<span style="font-size:11px;color:var(--muted2);">${totalPraAtacar} no total</span>` : ''}
-        </div>
-        <button id="meuPainelIrDaily" style="flex:none;background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Ver roteiro completo na Daily →</button>
-      </div>
-      ${previaAtacarHTML()}
-    </div>
+    ${buildRoteiroHojeHTML(r)}
 
     <div style="display:flex;align-items:center;gap:8px;margin:24px 0 12px;">
       <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">Seu funil este mês</span>
@@ -1387,13 +1383,7 @@ function renderMeuPainel() {
     });
   }
 
-  const btnDaily = document.getElementById('meuPainelIrDaily');
-  if (btnDaily) {
-    btnDaily.addEventListener('click', () => {
-      activateTab('viewDaily');
-      if (typeof renderDaily === 'function') renderDaily();
-    });
-  }
+  wireRoteiroChecks(el);
 
   // Sugestões de plano do gestor — mostra em destaque no topo
   if (DATA.supabase && supa) {
@@ -2828,6 +2818,7 @@ async function renderDaily() {
   });
 
   el.innerHTML = html;
+  wireRoteiroChecks(el);
 
   document.getElementById('dailyPrev').addEventListener('click', () => { dailyRefDate = addBusinessDays(dailyRefDate, -1); renderDaily(); });
   document.getElementById('dailyNext').addEventListener('click', () => { dailyRefDate = addBusinessDays(dailyRefDate, 1); renderDaily(); });
