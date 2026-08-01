@@ -840,15 +840,16 @@ async function iniciarAuth() {
 
   supa = window.supabase.createClient(DATA.supabase.url, DATA.supabase.anonKey);
 
-  let emRecuperacaoDeSenha = false;
+  // Detecta ANTES de qualquer coisa se essa carga de página veio de um link de
+  // "esqueci minha senha" — o Supabase já injeta o token na URL (hash ou query,
+  // dependendo do fluxo) com "type=recovery". Checar isso de forma síncrona evita
+  // a corrida: sem isso, o getSession() logo abaixo já acha uma sessão válida
+  // (criada pelo próprio link) e loga direto no app antes do evento PASSWORD_RECOVERY
+  // ter chance de ser tratado.
+  let emRecuperacaoDeSenha = /[?&#]type=recovery/.test(window.location.href);
 
-  const { data: { session } } = await supa.auth.getSession();
-  if (session && session.user && session.user.email && !emRecuperacaoDeSenha) {
-    aplicarSessao(session.user.email);
-  } else {
-    mostrarLogin('');
-  }
-
+  // Registra o listener ANTES do getSession() — se o evento PASSWORD_RECOVERY disparar
+  // durante/depois dessa checagem inicial, ele ainda precisa ser pego.
   supa.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
       // Veio de um link de "esqueci minha senha" — mostra o form de nova senha, não entra direto no app
@@ -860,6 +861,17 @@ async function iniciarAuth() {
       aplicarSessao(session.user.email);
     }
   });
+
+  if (emRecuperacaoDeSenha) {
+    mostrarFormulario('novaSenhaForm');
+  } else {
+    const { data: { session } } = await supa.auth.getSession();
+    if (session && session.user && session.user.email) {
+      aplicarSessao(session.user.email);
+    } else {
+      mostrarLogin('');
+    }
+  }
 
   document.getElementById('loginBtn').addEventListener('click', async () => {
     const email = document.getElementById('loginEmail').value.trim();
