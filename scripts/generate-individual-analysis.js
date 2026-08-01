@@ -51,6 +51,24 @@ function infoSemanaDoMes(hoje) {
 
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
+// Tolerante a preâmbulo/cerca de código que a IA às vezes inclui mesmo instruída a não
+// fazer isso — pega do primeiro '{' ao último '}' em vez de confiar que o texto inteiro
+// é só o JSON.
+function extrairJSON(texto) {
+  const semCercas = texto.replace(/```json|```/g, '').trim();
+  const inicio = semCercas.indexOf('{');
+  const fim = semCercas.lastIndexOf('}');
+  if (inicio === -1 || fim === -1 || fim < inicio) return semCercas;
+  return semCercas.slice(inicio, fim + 1);
+}
+
+// Antes, qualquer resposta que não viesse em JSON perfeito (truncada, aspas não
+// escapadas, etc.) derrubava a análise daquela pessoa pro resto da semana — era a causa
+// de várias análises sumirem (ex.: Marco Filho, Amanda Pardim, Wericles, Gleyson na
+// semana de 27/07 a 02/08). Agora: 429 continua com backoff (já existia); resposta sem
+// bloco de texto ou JSON malformado/cortado agora tentam de novo (normalmente é
+// transitório) antes de desistir, e loga a resposta bruta na desistência final pra dar
+// pra investigar sem precisar vasculhar o Actions na mão.
 async function chamarClaude(prompt, maxTokens, tentativa = 1) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -65,17 +83,30 @@ async function chamarClaude(prompt, maxTokens, tentativa = 1) {
       messages: [{ role: 'user', content: prompt }]
     })
   });
-  // Rodando em paralelo, é mais fácil esbarrar no rate limit da API — tenta de novo com
-  // backoff em vez de perder a análise de 1 rep por causa de 1 chamada malsucedida.
+
   if (res.status === 429 && tentativa <= 4) {
     await sleep(1500 * tentativa);
     return chamarClaude(prompt, maxTokens, tentativa + 1);
   }
   if (!res.ok) throw new Error(`Anthropic API error ${res.status}: ${await res.text()}`);
+
   const data = await res.json();
   const textBlock = data.content.find(b => b.type === 'text');
-  const clean = textBlock.text.replace(/```json|```/g, '').trim();
-  return JSON.parse(clean);
+  if (!textBlock) {
+    if (tentativa <= 3) { await sleep(800 * tentativa); return chamarClaude(prompt, maxTokens, tentativa + 1); }
+    throw new Error('Resposta da Claude não trouxe bloco de texto, mesmo após 3 tentativas.');
+  }
+
+  try {
+    return JSON.parse(extrairJSON(textBlock.text));
+  } catch (e) {
+    if (tentativa <= 3) {
+      await sleep(800 * tentativa);
+      return chamarClaude(prompt, maxTokens, tentativa + 1);
+    }
+    console.error(`JSON malformado mesmo após 3 tentativas. Resposta bruta (primeiros 500 caracteres): ${textBlock.text.slice(0, 500)}`);
+    throw e;
+  }
 }
 
 async function supabaseInsert(tabela, linha) {
@@ -114,6 +145,26 @@ async function supabaseDelete(tabela, query) {
   if (!res.ok) throw new Error(`Supabase delete error ${res.status}: ${await res.text()}`);
 }
 
+// Busca o último registro semanal desse executivo que NÃO seja o desta mesma semana —
+// dá continuidade ao gestor: se o gargalo é o mesmo de novo, o texto deve cobrar mais
+// forte em vez de repetir a mesma ação genérica; se foi resolvido, reconhece e segue.
+async function buscarUltimaSemana(ownerId, semanaLabelAtual) {
+  const linhas = await supabaseSelect(
+    'analise_individual_semanal',
+    `owner_id=eq.${ownerId}&order=mes_ano.desc,numero_semana_mes.desc&limit=2`
+  );
+  return linhas.find(l => l.semana_label !== semanaLabelAtual) || null;
+}
+
+// Mesma ideia, só que pro fechamento mensal: pega o mês anterior desse executivo.
+async function buscarMesAnterior(ownerId, mesAnoAtual) {
+  const linhas = await supabaseSelect(
+    'analise_individual_mensal',
+    `owner_id=eq.${ownerId}&order=mes_ano.desc&limit=2`
+  );
+  return linhas.find(l => l.mes_ano !== mesAnoAtual) || null;
+}
+
 async function main() {
   const hoje = new Date();
   const semanaAtualLabel = fmtRange(new Date(hoje.getTime() - 6 * 86400000), hoje);
@@ -134,17 +185,30 @@ async function main() {
 
   const ownerIds = Object.keys(narrativas.reps);
 
-  // Antes chamava a API uma vez por rep, esperando terminar pra chamar a próxima —
-  // com 9 reps isso empilhava no workflow inteiro. Agora dispara as 9 chamadas juntas
-  // (o tempo vira ~o da mais lenta, não a soma) e só depois grava no Supabase.
-  console.log(`Gerando ${ownerIds.length} análises de coaching em paralelo...`);
-  const prompts = ownerIds.map(ownerId => {
-    const n = narrativas.reps[ownerId];
-    const h = hubspot.reps[ownerId] || { open: 0, stages: {}, leadsTravados: 0, ganhosSemana: 0 };
-    const stageEntries = Object.entries(h.stages || {});
-    const dominante = stageEntries.length ? stageEntries.sort((a, b) => b[1] - a[1])[0] : null;
+  if (!FORCE_MONTHLY_MESANO) {
+    // Busca a semana anterior de cada um ANTES de montar os prompts, pra poder dizer
+    // pra IA "isso é repetição, cobre mais forte" ou "isso já foi resolvido, siga em
+    // frente" em vez de gerar sempre a mesma orientação genérica do zero toda semana.
+    const anteriores = {};
+    await Promise.all(ownerIds.map(async ownerId => {
+      anteriores[ownerId] = await buscarUltimaSemana(ownerId, semanaAtualLabel);
+    }));
 
-    return `Você é um analista de operações de vendas ajudando um GESTOR de time de Field Sales (não o vendedor).
+    // Antes chamava a API uma vez por rep, esperando terminar pra chamar a próxima —
+    // com 9 reps isso empilhava no workflow inteiro. Agora dispara as 9 chamadas juntas
+    // (o tempo vira ~o da mais lenta, não a soma) e só depois grava no Supabase.
+    console.log(`Gerando ${ownerIds.length} análises de coaching em paralelo...`);
+    const prompts = ownerIds.map(ownerId => {
+      const n = narrativas.reps[ownerId];
+      const h = hubspot.reps[ownerId] || { open: 0, stages: {}, leadsTravados: 0, ganhosSemana: 0 };
+      const stageEntries = Object.entries(h.stages || {});
+      const dominante = stageEntries.length ? stageEntries.sort((a, b) => b[1] - a[1])[0] : null;
+      const anterior = anteriores[ownerId];
+      const blocoAnterior = anterior
+        ? `\nNa semana passada (${anterior.semana_label}) a orientação pro gestor foi: "${anterior.como_agir}" (gargalo mapeado: "${anterior.gargalo_semana}"). Se esse MESMO gargalo continuar essa semana, diga isso explicitamente e proponha uma ação diferente/mais firme — não repita a mesma frase de novo. Se foi resolvido, reconheça em 1 frase curta e vá direto pro novo ponto de atenção.`
+        : '\nNão há histórico de semana anterior pra essa pessoa ainda (primeira análise dela).';
+
+      return `Você é um analista de operações de vendas ajudando um GESTOR de time de Field Sales (não o vendedor).
 Essa análise é PRIVADA — só o gestor vê, nunca o vendedor. Seja direto e específico sobre o que o GESTOR deve fazer
 (como conduzir o 1:1, o que cobrar, o que elogiar), não uma mensagem pro vendedor ler.
 
@@ -154,28 +218,35 @@ Dados de ${n.name} (${n.praca}) nesta semana (${semanaAtualLabel}):
 - Leads com SLA estourado: ${h.leadsTravados || 0}
 - Ganhos fechados essa semana: ${h.ganhosSemana || 0}
 - Gargalo já mapeado: ${n.gargalo}
+${blocoAnterior}
 
 Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 {
   "gargaloSemana": "1-2 frases sobre o que está acontecendo com essa pessoa essa semana especificamente, baseado nos números acima",
-  "comoAgir": "1-2 frases dizendo EXATAMENTE o que o gestor deve fazer no 1:1 ou na daily com essa pessoa esta semana — específico, não genérico",
+  "comoAgir": "1-2 frases dizendo EXATAMENTE o que o gestor deve fazer no 1:1 ou na daily com essa pessoa esta semana — específico, não genérico, e sem repetir a orientação da semana passada se o gargalo já foi resolvido",
   "tendencia": "1 frase curta dizendo se essa pessoa está melhorando, piorando ou estável, com base no volume travado e ganhos"
 }`;
-  });
+    });
 
-  if (!FORCE_MONTHLY_MESANO) {
-    const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 600)));
+    const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 900)));
 
     for (let i = 0; i < ownerIds.length; i++) {
       const ownerId = ownerIds[i];
       const n = narrativas.reps[ownerId];
       const resultado = resultados[i];
 
+      let analise;
       if (resultado.status === 'rejected') {
-        console.error(`Falha ao gerar análise de ${n.name}: ${resultado.reason?.message || resultado.reason}`);
-        continue;
+        console.error(`Falha ao gerar análise de ${n.name}: ${resultado.reason?.message || resultado.reason} — gravando fallback honesto em vez de deixar a pessoa sem nada.`);
+        const h = hubspot.reps[ownerId] || { open: 0, stages: {}, leadsTravados: 0, ganhosSemana: 0 };
+        analise = {
+          gargaloSemana: `Análise automática indisponível essa semana (falha técnica na geração). Números brutos: ${h.open} negócios em aberto, ${h.leadsTravados || 0} com SLA estourado, ${h.ganhosSemana || 0} ganhos.`,
+          comoAgir: 'Revisar manualmente com o executivo neste 1:1 — a geração automática falhou e será tentada de novo na próxima semana.',
+          tendencia: 'Sem dado — geração falhou essa semana.'
+        };
+      } else {
+        analise = resultado.value;
       }
-      const analise = resultado.value;
 
       // Idempotência: remove análise existente pra esse owner+semana antes de inserir de novo
       // (evita duplicar caso o job rode mais de uma vez pra mesma semana).
@@ -208,24 +279,33 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 
       const contexto = semanasDoMes.map(s => `Semana ${s.numero_semana_mes} (${s.semana_label}): ${s.gargalo_semana} | Tendência: ${s.tendencia}`).join('\n');
 
+      const mesAnterior = await buscarMesAnterior(ownerId, mesAno);
+      const blocoMesAnterior = mesAnterior
+        ? `\nFechamento do mês passado (${mesAnterior.mes_ano}): "${mesAnterior.resumo_mes}" — ações recomendadas na época: ${(mesAnterior.acoes_recomendadas || []).join('; ')}. Se os mesmos pontos continuarem em aberto, diga isso explicitamente em vez de repetir as mesmas ações recomendadas de novo.`
+        : '';
+
       const promptMensal = `Você é um analista de operações de vendas fazendo o FECHAMENTO MENSAL de um vendedor de Field Sales,
 pro gestor dele usar na avaliação do mês. Privado, só o gestor vê.
 
 Histórico das semanas de ${n.name} neste mês:
 ${contexto}
+${blocoMesAnterior}
 
 Responda SOMENTE com JSON válido, sem markdown:
 {
   "resumoMes": "3-4 frases avaliando o mês inteiro dessa pessoa — evolução, consistência, principal ponto de atenção",
-  "acoesRecomendadas": ["2-3 ações concretas e específicas que o gestor deve tomar com essa pessoa no próximo mês"]
+  "acoesRecomendadas": ["2-3 ações concretas e específicas que o gestor deve tomar com essa pessoa no próximo mês, diferentes das do mês passado se aqueles pontos já foram endereçados"]
 }`;
 
       let mensal;
       try {
-        mensal = await chamarClaude(promptMensal, 700);
+        mensal = await chamarClaude(promptMensal, 1000);
       } catch (e) {
-        console.error(`Falha ao gerar resumo mensal de ${n.name}: ${e.message}`);
-        continue;
+        console.error(`Falha ao gerar resumo mensal de ${n.name}: ${e.message} — gravando fallback honesto em vez de deixar sem fechamento.`);
+        mensal = {
+          resumoMes: `Fechamento automático indisponível esse mês (falha técnica na geração). Consulte o histórico semanal de ${n.name} acima para montar a avaliação manualmente.`,
+          acoesRecomendadas: ['Revisar manualmente com base no histórico semanal — a geração automática falhou.']
+        };
       }
 
       // Idempotência: remove fechamento mensal existente pra esse owner+mês antes de
