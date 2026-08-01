@@ -46,8 +46,27 @@ jobs:
           git config user.name "cockpit-bot"
           git config user.email "cockpit-bot@users.noreply.github.com"
           git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json public/index.html
-          git diff --staged --quiet && echo "Nada mudou hoje." || git commit -m "Atualização automática diária do cockpit"
-          git push
+          git diff --staged --quiet && echo "Nada mudou hoje." && exit 0
+
+          git commit -m "Atualização automática diária do cockpit"
+
+          # O checkout deste job foi feito no início do workflow — se alguém commitou
+          # direto no main enquanto o robô rodava (ex.: colando um arquivo no editor do
+          # GitHub), o push simples é rejeitado por não ser mais fast-forward. Busca o
+          # que mudou e reaplica o commit do robô por cima antes de tentar de novo, em
+          # vez de deixar a atualização do dia se perder.
+          for tentativa in 1 2 3; do
+            if git push; then
+              echo "Push OK."
+              exit 0
+            fi
+            echo "Push rejeitado (tentativa $tentativa) — buscando o main mais recente e tentando de novo..."
+            git fetch origin main
+            git rebase origin/main
+          done
+
+          echo "Não consegui enviar mesmo após 3 tentativas — verifique manualmente."
+          exit 1
 
       # Se qualquer passo acima falhar (token expirado, HubSpot mudou algo, etc.),
       # abre um Issue visível no repositório — assim dá pra perceber sem precisar
