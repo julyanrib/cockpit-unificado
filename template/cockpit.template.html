@@ -646,8 +646,8 @@
         <h3 style="margin-bottom:0;">🔥 Leads quentes</h3>
         <span id="leadsQuentesCount" style="font-size:11.5px;color:var(--muted2);"></span>
       </div>
-      <div class="chart-subtitle" style="margin-top:6px;">Os 5 negócios mais avançados no funil essa semana — priorize por aqui.</div>
-      <div id="leadsQuentesLista"></div>
+      <div class="chart-subtitle" style="margin-top:6px;">Os negócios mais avançados no funil, sem SLA estourado — role pra ver todos.</div>
+      <div id="leadsQuentesLista" style="max-height:420px;overflow-y:auto;"></div>
     </div>
   </div>
 
@@ -2328,24 +2328,31 @@ renderFunilBarras();
   // prioridade (sem %), pra não passar a impressão de ser uma previsão calculada por negócio.
   const PRIORIDADE_ETAPA = { '1395880471': 60, '1395880472': 80, '1395880473': 95 };
 
-  const top5 = (DATA.temperatura.quentes || []).slice(0, 5);
-  if (countEl) countEl.textContent = `${top5.length} no radar`;
+  // O backend (fetch-hubspot.js) já só classifica um lead como "quente" se ele NÃO
+  // estourou o SLA (SLA estourado vira "frio" lá, nunca "quente") — mas aqui checamos de
+  // novo, sem confiar cegamente: um lead quente com SLA estourado não entra na lista.
+  // Antes também cortava em 5 fixos; agora mostra todos os que vieram do backend (até
+  // 12, já limitado lá) com rolagem, em vez de esconder os demais.
+  const todosQuentes = (DATA.temperatura.quentes || []).filter(l => {
+    const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
+    const restante = slaDias ? slaDias - l.dias : null;
+    return restante === null || restante > 0;
+  });
+  if (countEl) countEl.textContent = `${todosQuentes.length} no radar`;
 
-  if (top5.length === 0) {
+  if (todosQuentes.length === 0) {
     listaEl.innerHTML = '<div class="empty-state" style="padding:14px;">Nenhum lead prioritário agora — funil precisa avançar etapas.</div>';
     return;
   }
 
-  listaEl.innerHTML = top5.map(l => {
+  listaEl.innerHTML = todosQuentes.map(l => {
     const prioridade = PRIORIDADE_ETAPA[l.stageId] || 50;
     const estilo = prioridade >= 90 ? { bg: 'var(--green-soft)', fg: 'var(--green)' }
       : prioridade >= 70 ? { bg: 'var(--amber-soft)', fg: 'var(--amber)' }
       : { bg: 'var(--sunk)', fg: 'var(--muted)' };
     const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
     const restante = slaDias ? slaDias - l.dias : null;
-    const slaTxt = restante === null ? ''
-      : restante > 0 ? ` · faltam ${restante}d pro SLA`
-      : ` · <span style="color:var(--red);font-weight:700;">SLA estourado</span>`;
+    const slaTxt = restante === null ? '' : ` · faltam ${restante}d pro SLA`;
     return `
       <div class="lead-prio-row">
         <div style="flex:1;min-width:0;">
