@@ -117,7 +117,20 @@ async function supabaseDelete(tabela, query) {
 async function main() {
   const hoje = new Date();
   const semanaAtualLabel = fmtRange(new Date(hoje.getTime() - 6 * 86400000), hoje);
-  const { numeroSemana, ehUltimaSemana, mesAno } = infoSemanaDoMes(hoje);
+  let { numeroSemana, ehUltimaSemana, mesAno } = infoSemanaDoMes(hoje);
+
+  // FORCE_MONTHLY_MESANO: reprocessamento manual do fechamento mensal de um mês
+  // específico (ex: José Ricardo e Gleyson Gabrieli ficaram sem fechamento de julho
+  // porque a geração falhou silenciosamente só pra eles). Quando setada, pula o bloco
+  // semanal (não tem por que regerar a análise da semana atual, que já rodou certo) e
+  // força só o bloco mensal, pro mes_ano indicado. Usar só pontualmente — reverter a
+  // env var depois de confirmar que os dados foram corrigidos.
+  const FORCE_MONTHLY_MESANO = process.env.FORCE_MONTHLY_MESANO;
+  if (FORCE_MONTHLY_MESANO) {
+    console.log(`FORCE_MONTHLY_MESANO=${FORCE_MONTHLY_MESANO} — pulando geração semanal e forçando reprocessamento do fechamento mensal desse mês/ano.`);
+    ehUltimaSemana = true;
+    mesAno = FORCE_MONTHLY_MESANO;
+  }
 
   const ownerIds = Object.keys(narrativas.reps);
 
@@ -150,31 +163,35 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 }`;
   });
 
-  const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 600)));
+  if (!FORCE_MONTHLY_MESANO) {
+    const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 600)));
 
-  for (let i = 0; i < ownerIds.length; i++) {
-    const ownerId = ownerIds[i];
-    const n = narrativas.reps[ownerId];
-    const resultado = resultados[i];
+    for (let i = 0; i < ownerIds.length; i++) {
+      const ownerId = ownerIds[i];
+      const n = narrativas.reps[ownerId];
+      const resultado = resultados[i];
 
-    if (resultado.status === 'rejected') {
-      console.error(`Falha ao gerar análise de ${n.name}: ${resultado.reason?.message || resultado.reason}`);
-      continue;
+      if (resultado.status === 'rejected') {
+        console.error(`Falha ao gerar análise de ${n.name}: ${resultado.reason?.message || resultado.reason}`);
+        continue;
+      }
+      const analise = resultado.value;
+
+      // Idempotência: remove análise existente pra esse owner+semana antes de inserir de novo
+      // (evita duplicar caso o job rode mais de uma vez pra mesma semana).
+      await supabaseDelete('analise_individual_semanal', `owner_id=eq.${ownerId}&semana_label=eq.${encodeURIComponent(semanaAtualLabel)}`);
+      await supabaseInsert('analise_individual_semanal', {
+        owner_id: ownerId,
+        semana_label: semanaAtualLabel,
+        numero_semana_mes: numeroSemana,
+        mes_ano: mesAno,
+        gargalo_semana: analise.gargaloSemana,
+        como_agir: analise.comoAgir,
+        tendencia: analise.tendencia
+      });
     }
-    const analise = resultado.value;
-
-    // Idempotência: remove análise existente pra esse owner+semana antes de inserir de novo
-    // (evita duplicar caso o job rode mais de uma vez pra mesma semana).
-    await supabaseDelete('analise_individual_semanal', `owner_id=eq.${ownerId}&semana_label=eq.${encodeURIComponent(semanaAtualLabel)}`);
-    await supabaseInsert('analise_individual_semanal', {
-      owner_id: ownerId,
-      semana_label: semanaAtualLabel,
-      numero_semana_mes: numeroSemana,
-      mes_ano: mesAno,
-      gargalo_semana: analise.gargaloSemana,
-      como_agir: analise.comoAgir,
-      tendencia: analise.tendencia
-    });
+  } else {
+    console.log('FORCE_MONTHLY_MESANO ativo — bloco semanal pulado de propósito.');
   }
 
   // Última semana do mês: gera o resumo mensal consolidado por executivo
@@ -211,6 +228,10 @@ Responda SOMENTE com JSON válido, sem markdown:
         continue;
       }
 
+      // Idempotência: remove fechamento mensal existente pra esse owner+mês antes de
+      // inserir de novo (evita duplicar linha de quem já tinha o fechamento certo, ex:
+      // Kelly, Marco etc., caso o job rode de novo pra reprocessar só quem falhou).
+      await supabaseDelete('analise_individual_mensal', `owner_id=eq.${ownerId}&mes_ano=eq.${mesAno}`);
       await supabaseInsert('analise_individual_mensal', {
         owner_id: ownerId,
         mes_ano: mesAno,
