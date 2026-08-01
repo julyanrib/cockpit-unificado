@@ -5,7 +5,12 @@ on:
     # 16h em Brasília (19h UTC), toda sexta-feira — assim o plano já está pronto
     # antes da daily de segunda, não gerado em cima da hora
     - cron: '0 19 * * 5'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      force_monthly_mesano:
+        description: 'Reprocessar SÓ o fechamento mensal pra um mês específico (AAAA-MM, ex: 2026-07). Deixe em branco pra rodar normal.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -23,11 +28,13 @@ jobs:
           node-version: '20'
 
       - name: Buscar comparação semana atual x anterior
+        if: ${{ !inputs.force_monthly_mesano }}
         env:
           HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
         run: node scripts/fetch-weekly-comparison.js
 
       - name: Gerar resumo e plano de ação (API da Claude)
+        if: ${{ !inputs.force_monthly_mesano }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node scripts/generate-weekly-summary.js
@@ -37,12 +44,15 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          FORCE_MONTHLY_MESANO: ${{ inputs.force_monthly_mesano }}
         run: node scripts/generate-individual-analysis.js
 
       - name: Gerar HTML final
+        if: ${{ !inputs.force_monthly_mesano }}
         run: node scripts/build.js
 
       - name: Commitar e enviar alterações
+        if: ${{ !inputs.force_monthly_mesano }}
         run: |
           git config user.name "cockpit-bot"
           git config user.email "cockpit-bot@users.noreply.github.com"
