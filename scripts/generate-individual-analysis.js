@@ -31,6 +31,10 @@ function fmtRange(start, end) {
   return `${f(start)}–${f(end)}/${end.getFullYear()}`;
 }
 
+function isoDateHoje(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 // Quantas sextas-feiras já passaram neste mês, contando hoje — define a "semana do mês".
 // Se somar 7 dias a partir de hoje cair no mês seguinte, essa é a ÚLTIMA sexta do mês
 // (dispara o resumo mensal também).
@@ -218,17 +222,21 @@ Dados de ${n.name} (${n.praca}) nesta semana (${semanaAtualLabel}):
 - Leads com SLA estourado: ${h.leadsTravados || 0}
 - Ganhos fechados essa semana: ${h.ganhosSemana || 0}
 - Gargalo já mapeado: ${n.gargalo}
+- Compromissos combinados na semana passada: ${(n.compromissos || []).length ? n.compromissos.join(' | ') : 'nenhum ainda'}
 ${blocoAnterior}
 
 Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 {
   "gargaloSemana": "1-2 frases sobre o que está acontecendo com essa pessoa essa semana especificamente, baseado nos números acima",
   "comoAgir": "1-2 frases dizendo EXATAMENTE o que o gestor deve fazer no 1:1 ou na daily com essa pessoa esta semana — específico, não genérico, e sem repetir a orientação da semana passada se o gargalo já foi resolvido",
-  "tendencia": "1 frase curta dizendo se essa pessoa está melhorando, piorando ou estável, com base no volume travado e ganhos"
+  "tendencia": "1 frase curta dizendo se essa pessoa está melhorando, piorando ou estável, com base no volume travado e ganhos",
+  "compromissos": ["2-3 compromissos concretos e checáveis pro gestor combinar com essa pessoa no 1:1 desta semana — cada um deve ser uma ação específica e verificável (ex: 'Avançar pelo menos 5 leads de Prospecção pra Visita até sexta'), não um objetivo vago. Se os compromissos da semana passada ainda fazem sentido porque não foram cumpridos, pode reforçar o mesmo compromisso — mas deixe isso explícito no texto (ex: 'Repetindo de novo: ...')."]
 }`;
     });
 
-    const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 900)));
+    const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 1100)));
+
+    let compromissosMudaram = false;
 
     for (let i = 0; i < ownerIds.length; i++) {
       const ownerId = ownerIds[i];
@@ -242,7 +250,8 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
         analise = {
           gargaloSemana: `Análise automática indisponível essa semana (falha técnica na geração). Números brutos: ${h.open} negócios em aberto, ${h.leadsTravados || 0} com SLA estourado, ${h.ganhosSemana || 0} ganhos.`,
           comoAgir: 'Revisar manualmente com o executivo neste 1:1 — a geração automática falhou e será tentada de novo na próxima semana.',
-          tendencia: 'Sem dado — geração falhou essa semana.'
+          tendencia: 'Sem dado — geração falhou essa semana.',
+          compromissos: null // null = mantém o compromisso da semana passada, não apaga
         };
       } else {
         analise = resultado.value;
@@ -260,6 +269,25 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
         como_agir: analise.comoAgir,
         tendencia: analise.tendencia
       });
+
+      // Compromissos do PDI agora são automáticos (antes só mudavam quando o Julyan editava
+      // manualmente o narrativas.json depois de um 1:1). Se a IA falhou essa semana, NÃO mexe
+      // no compromisso existente — só atualiza quando tem coisa nova de verdade pra colocar.
+      if (Array.isArray(analise.compromissos) && analise.compromissos.length > 0) {
+        narrativas.reps[ownerId].compromissos = analise.compromissos;
+        compromissosMudaram = true;
+      }
+    }
+
+    // narrativas._atualizado_em é o carimbo que o front-end usa pra saber quando resetar o
+    // check-off de "cumprido" dos compromissos (ver pdiStorageKey() no template) — só avança
+    // UMA vez por rodada semanal (não por pessoa), e só se algum compromisso realmente mudou.
+    // É esperado e correto que isso reset o check-off de todo mundo toda sexta: compromisso
+    // novo da semana, não faz sentido carregar o check da semana passada.
+    if (compromissosMudaram) {
+      narrativas._atualizado_em = isoDateHoje(hoje);
+      fs.writeFileSync(path.join(root, 'data', 'narrativas.json'), JSON.stringify(narrativas, null, 2));
+      console.log(`narrativas.json atualizado — compromissos da semana + versão avançada para ${narrativas._atualizado_em}.`);
     }
   } else {
     console.log('FORCE_MONTHLY_MESANO ativo — bloco semanal pulado de propósito.');
