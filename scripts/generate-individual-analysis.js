@@ -230,8 +230,14 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
   "gargaloSemana": "1-2 frases sobre o que está acontecendo com essa pessoa essa semana especificamente, baseado nos números acima",
   "comoAgir": "1-2 frases dizendo EXATAMENTE o que o gestor deve fazer no 1:1 ou na daily com essa pessoa esta semana — específico, não genérico, e sem repetir a orientação da semana passada se o gargalo já foi resolvido",
   "tendencia": "1 frase curta dizendo se essa pessoa está melhorando, piorando ou estável, com base no volume travado e ganhos",
-  "compromissos": ["2-3 compromissos concretos e checáveis pro gestor combinar com essa pessoa no 1:1 desta semana — cada um deve ser uma ação específica e verificável (ex: 'Avançar pelo menos 5 leads de Prospecção pra Visita até sexta'), não um objetivo vago. Se os compromissos da semana passada ainda fazem sentido porque não foram cumpridos, pode reforçar o mesmo compromisso — mas deixe isso explícito no texto (ex: 'Repetindo de novo: ...')."]
-}`;
+  "compromissos": ["compromisso 1", "compromisso 2", "compromisso 3 (opcional)"]
+}
+
+REGRAS OBRIGATÓRIAS pro campo "compromissos":
+- NUNCA retorne uma lista vazia. Isso é proibido, mesmo que nada tenha mudado.
+- Sempre retorne 2 ou 3 strings, cada uma um compromisso concreto e checável (ex: "Avançar pelo menos 5 leads de Prospecção pra Visita até sexta"), nunca um objetivo vago.
+- Se os compromissos da semana passada ainda fazem sentido porque não foram cumpridos, REPITA-OS quase literalmente, só adicionando "Repetindo de novo:" no início de cada um — não os troque por outra coisa e não os esvazie.
+- Se não havia compromisso na semana passada (primeira vez), crie 2-3 novos do zero com base no gargalo mapeado.`;
     });
 
     const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 1100)));
@@ -275,6 +281,13 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
       // no compromisso existente — só atualiza quando tem coisa nova de verdade pra colocar.
       if (Array.isArray(analise.compromissos) && analise.compromissos.length > 0) {
         narrativas.reps[ownerId].compromissos = analise.compromissos;
+        compromissosMudaram = true;
+      } else if (Array.isArray(n.compromissos) && n.compromissos.length > 0) {
+        // Rede de segurança: mesmo com a instrução explícita, a IA às vezes ainda devolve
+        // lista vazia quando acha que "nada mudou". Em vez de deixar a automação travada pra
+        // sempre nesse caso, reforça o compromisso já existente automaticamente.
+        console.log(`${n.name}: IA não devolveu compromissos novos — reforçando os existentes automaticamente.`);
+        narrativas.reps[ownerId].compromissos = n.compromissos.map(c => c.startsWith('Repetindo') ? c : `Repetindo de novo: ${c}`);
         compromissosMudaram = true;
       }
     }
