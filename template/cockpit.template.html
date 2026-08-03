@@ -3076,8 +3076,6 @@ async function renderDaily() {
 
   repsDaily.forEach(r => {
     const hoje = getDaily(r.ownerId, dailyRefDate) || {};
-    const amanhaISO = addBusinessDays(dailyRefDate, 1);
-    const amanhaRow = getDaily(r.ownerId, amanhaISO) || {};
     // "Realizado" só vem ao vivo do HubSpot quando a data mostrada é hoje de verdade —
     // pra dias passados usa o que já foi salvo (auto-save de quando aquele dia era "hoje").
     const ehHojeView = dailyRefDate === isoDate(new Date());
@@ -3182,22 +3180,10 @@ async function renderDaily() {
 
           <div class="hoje-panel">
             <div class="hoje-panel-title"><span class="dot"></span>Prometer pra hoje</div>
-            ${hoje.compromisso_amanha ? `<div style="font-size:11.5px;color:var(--muted2);background:var(--sunk);border-radius:var(--r-sm);padding:8px 10px;margin-bottom:10px;">📝 Combinado ontem: ${hoje.compromisso_amanha}</div>` : ''}
             <div class="prom-row"><label>Visitas</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_visitas" value="${hoje.prometido_visitas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
             <div class="prom-row"><label>Avanços de etapa</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_avancos" value="${hoje.prometido_avancos ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
             <div class="prom-row"><label>Propostas</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_propostas" value="${hoje.prometido_propostas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
           </div>
-
-          ${ehHojeView ? `
-          <div class="hoje-panel" style="border:1px dashed var(--line);">
-            <div class="hoje-panel-title"><span class="dot" style="background:var(--amber);"></span>🎯 Combine o compromisso de amanhã</div>
-            <div style="font-size:11px;color:var(--muted2);margin-bottom:10px;">O que você combinar aqui já aparece pré-carregado quando você abrir a Daily de amanhã.</div>
-            <div class="prom-row"><label>Visitas</label><input type="number" min="0" class="d-prom-amanha" data-owner="${r.ownerId}" data-campo="prometido_visitas" value="${amanhaRow.prometido_visitas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
-            <div class="prom-row"><label>Avanços de etapa</label><input type="number" min="0" class="d-prom-amanha" data-owner="${r.ownerId}" data-campo="prometido_avancos" value="${amanhaRow.prometido_avancos ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
-            <div class="prom-row"><label>Propostas</label><input type="number" min="0" class="d-prom-amanha" data-owner="${r.ownerId}" data-campo="prometido_propostas" value="${amanhaRow.prometido_propostas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
-            <div class="prom-row"><label>Rota/plano</label><input type="text" class="d-compromisso-amanha" data-owner="${r.ownerId}" placeholder="Ex: Rota Botafogo, focar em fechar X" value="${amanhaRow.compromisso_amanha ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
-          </div>
-          ` : ''}
         </div>
 
 
@@ -3245,26 +3231,6 @@ async function renderDaily() {
       const campo = inp.dataset.campo;
       const valor = inp.value === '' ? null : Number(inp.value);
       await salvarDaily(ownerId, dailyRefDate, { [campo]: valor });
-    });
-  });
-
-  // Painel "Combine o compromisso de amanhã" — grava no dia útil SEGUINTE, não em hoje. É por
-  // isso que pré-carrega sozinho: a Daily de amanhã lê os mesmos campos (prometido_visitas etc)
-  // pra decidir o valor inicial do "Prometer pra hoje" dela.
-  el.querySelectorAll('.d-prom-amanha').forEach(inp => {
-    inp.addEventListener('change', async () => {
-      const ownerId = inp.dataset.owner;
-      const campo = inp.dataset.campo;
-      const valor = inp.value === '' ? null : Number(inp.value);
-      const amanha = addBusinessDays(dailyRefDate, 1);
-      await salvarDaily(ownerId, amanha, { [campo]: valor });
-    });
-  });
-  el.querySelectorAll('.d-compromisso-amanha').forEach(inp => {
-    inp.addEventListener('change', async () => {
-      const ownerId = inp.dataset.owner;
-      const amanha = addBusinessDays(dailyRefDate, 1);
-      await salvarDaily(ownerId, amanha, { compromisso_amanha: inp.value.trim() || null });
     });
   });
 
