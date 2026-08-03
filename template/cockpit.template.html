@@ -2183,19 +2183,48 @@ function renderResumoSemanal() {
 
   const heroHtml = `
     <div style="background:var(--dark);color:var(--dark-ink);border-radius:var(--r-xl);padding:24px 26px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
-      <span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--red);">${leituraLabel}</span>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--red);">${leituraLabel}</span>
+        <span style="font-size:10.5px;color:var(--dark-mut);">escrita ${rs.geradoEmFmt || 'sexta-feira'} — os números abaixo já são de agora</span>
+      </div>
       <span style="font-size:16px;line-height:1.55;max-width:74ch;">${leituraTexto}</span>
     </div>
 
     <div class="charts-row" style="margin-bottom:20px;">
       <div class="chart-card" style="border-left:4px solid var(--green);">
-        <h3 style="margin-bottom:8px;">🏆 Destaques</h3>
+        <h3 style="margin-bottom:8px;">🏆 Destaques <span style="font-weight:400;text-transform:none;color:var(--muted2);font-size:10.5px;">· ao vivo</span></h3>
         <p style="font-size:13px;color:var(--muted);line-height:1.6;">${destaqueTxt}</p>
       </div>
       <div class="chart-card" style="border-left:4px solid var(--amber);">
-        <h3 style="margin-bottom:8px;">⚠ Pontos de atenção</h3>
+        <h3 style="margin-bottom:8px;">⚠ Pontos de atenção <span style="font-weight:400;text-transform:none;color:var(--muted2);font-size:10.5px;">· ao vivo</span></h3>
         <p style="font-size:13px;color:var(--muted);line-height:1.6;">${atencaoTxt}</p>
       </div>
+    </div>
+  `;
+
+  // Executivo: os cards de detalhamento eram do TIME INTEIRO (k.atual.ganhos etc.), mas ao
+  // clicar pra expandir só os negócios dela apareciam — número no topo e lista por baixo
+  // não batiam, e isso foi apontado como parte do "muita coisa, difícil achar o que importa".
+  // Pra sessão de rep, os cards agora mostram só os números dela: ganhos/reuniões contam a
+  // lista já filtrada (mesma fonte da lista que abre), e Perdidos/Taxa de avanço (métricas
+  // só fazem sentido em nível de time) saem, dando lugar a Fechados no mês e SLA estourado
+  // agora — os mesmos dois números que já orientam Destaques/Atenção acima.
+  const meuRepKpi = souRepAgora ? DATA.reps.find(r => r.ownerId === sessaoAtual.ownerId) : null;
+  const kpisDetalheHtml = souRepAgora ? `
+    <div class="week-kpis">
+      ${cardClicavel('Ganhos', ganhosLeads.length, '', '🏆', ganhosLeads, 'ganho')}
+      ${cardClicavel('Reuniões', reunioesLeads.length, '', '📅', reunioesLeads, 'reuniao')}
+      <div class="week-kpi"><div class="l">Fechados no mês</div><div class="v">${(meuRepKpi && meuRepKpi.fechadosNoMes) || 0}/${(meuRepKpi && meuRepKpi.metaMensal) || 10}</div></div>
+      <div class="week-kpi"><div class="l">SLA estourado agora</div><div class="v" style="${(meuRepKpi && meuRepKpi.leadsTravados) > 0 ? 'color:var(--red);' : ''}">${(meuRepKpi && meuRepKpi.leadsTravados) || 0}</div></div>
+      ${quentesLeads.length > 0 ? cardClicavel('Quentes', quentesLeads.length, '', '🔥', quentesLeads, 'quente') : ''}
+    </div>
+  ` : `
+    <div class="week-kpis">
+      ${cardClicavel('Ganhos', k.atual.ganhos, deltaHtml(k.atual.ganhos, k.anterior.ganhos), '🏆', ganhosLeads, 'ganho')}
+      ${cardClicavel('Reuniões', k.atual.reunioes, deltaHtml(k.atual.reunioes, k.anterior.reunioes), '📅', reunioesLeads, 'reuniao')}
+      <div class="week-kpi"><div class="l">Perdidos</div><div class="v">${k.atual.perdidos}${deltaHtml(k.atual.perdidos, k.anterior.perdidos, true)}</div></div>
+      <div class="week-kpi"><div class="l">Taxa de avanço</div><div class="v">${DATA.kpisHub.taxaAvanco}%${kpiDeltaHtml('taxaAvanco')}</div></div>
+      ${cardClicavel('Quentes', quentesLeads.length, '', '🔥', quentesLeads, 'quente')}
     </div>
   `;
 
@@ -2210,14 +2239,8 @@ function renderResumoSemanal() {
 
     ${podioHtml}
 
-    <div class="kpi-label"><span class="source-tag hub">HubSpot</span>detalhamento da semana</div>
-    <div class="week-kpis">
-      ${cardClicavel('Ganhos', k.atual.ganhos, deltaHtml(k.atual.ganhos, k.anterior.ganhos), '🏆', ganhosLeads, 'ganho')}
-      ${cardClicavel('Reuniões', k.atual.reunioes, deltaHtml(k.atual.reunioes, k.anterior.reunioes), '📅', reunioesLeads, 'reuniao')}
-      <div class="week-kpi"><div class="l">Perdidos</div><div class="v">${k.atual.perdidos}${deltaHtml(k.atual.perdidos, k.anterior.perdidos, true)}</div></div>
-      <div class="week-kpi"><div class="l">Taxa de avanço</div><div class="v">${DATA.kpisHub.taxaAvanco}%${kpiDeltaHtml('taxaAvanco')}</div></div>
-      ${cardClicavel('Quentes', quentesLeads.length, '', '🔥', quentesLeads, 'quente')}
-    </div>
+    <div class="kpi-label"><span class="source-tag hub">HubSpot</span>${souRepAgora ? 'seus números da semana' : 'detalhamento da semana'}</div>
+    ${kpisDetalheHtml}
 
     ${(() => {
       const listaComoAgir = souRepAgora ? (meuIndividual ? meuIndividual.comoAgirIndividual : rs.comoAgir) : rs.comoAgir;
@@ -3146,6 +3169,25 @@ async function renderDaily() {
     ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
     : DATA.reps;
 
+  const souRepDaily = sessaoAtual && sessaoAtual.role === 'rep';
+  // Contexto que faltava: o executivo abre a Daily sem lembrar o que ficou combinado no
+  // Resumo Semanal. Puxa a primeira ação individual dela (mesmo dado que já existe em
+  // DATA.resumoSemanal.porRep) e mostra como lembrete — não duplica o texto todo, só a
+  // prioridade nº 1, com um link direto pra aba onde o resto está.
+  const focoSemanaHtml = (() => {
+    if (!souRepDaily || !DATA.resumoSemanal) return '';
+    const meuIndividual = (DATA.resumoSemanal.porRep || {})[sessaoAtual.ownerId];
+    const primeiraAcao = meuIndividual && meuIndividual.comoAgirIndividual && meuIndividual.comoAgirIndividual[0];
+    if (!primeiraAcao) return '';
+    return `
+      <div style="display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:11px 16px;margin-bottom:16px;flex-wrap:wrap;">
+        <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);white-space:nowrap;">🎯 Foco da semana</span>
+        <span style="font-size:13px;line-height:1.5;flex:1;min-width:200px;">${primeiraAcao}</span>
+        <button onclick="activateTab('viewResumo')" style="font-size:11.5px;font-weight:700;color:var(--red);background:transparent;border:1px solid var(--red);border-radius:var(--r-pill);padding:5px 12px;cursor:pointer;white-space:nowrap;">ver Resumo Semanal →</button>
+      </div>
+    `;
+  })();
+
   let html = `
     <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:4px;">
       <div style="display:flex;flex-direction:column;gap:4px;">
@@ -3154,6 +3196,7 @@ async function renderDaily() {
       </div>
       <span style="font-size:12.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 15px;">Você contra o que você prometeu — não contra o time</span>
     </div>
+    ${focoSemanaHtml}
     <div class="daily-header">
       <div class="daily-date-nav">
         <button id="dailyPrev">← dia útil anterior</button>
