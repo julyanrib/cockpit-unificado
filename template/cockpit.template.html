@@ -74,6 +74,10 @@
   .banner b{color:var(--ink);}
 
   .charts-row{display:grid;grid-template-columns:1fr 1.3fr;gap:20px;margin-bottom:8px;}
+  /* Usado só no bloco Leads Quentes / Funil por etapa — inverte a proporção pra dar mais
+     largura ao primeiro card (Leads Quentes), sem mudar o comportamento padrão de
+     .charts-row usado em todos os outros lugares (Resumo Semanal, dossiê, modal). */
+  .charts-row.quentes-primeiro{grid-template-columns:1.3fr 1fr;}
   .chart-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:22px 24px;box-shadow:var(--shadow-sm);transition:box-shadow .18s var(--ease),transform .18s var(--ease);}
   .chart-card:hover{box-shadow:var(--shadow-md);}
   .rep-row{transition:background .15s var(--ease);}
@@ -643,20 +647,20 @@
 
   <div class="banner" id="banner" style="margin-top:16px;"></div>
 
-  <div class="charts-row">
+  <div class="charts-row quentes-primeiro">
+    <div class="chart-card" style="border-top:3px solid var(--red);">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
+        <h3 style="margin-bottom:0;">🔥 Leads quentes</h3>
+        <span id="leadsQuentesCount" style="font-size:11.5px;color:var(--muted2);"></span>
+      </div>
+      <div class="chart-subtitle" style="margin-top:6px;">Avançando de etapa e dentro do prazo — os mais prováveis de fechar agora.</div>
+      <div id="leadsQuentesLista" style="max-height:420px;overflow-y:auto;"></div>
+    </div>
     <div class="chart-card">
       <h3><span class="source-tag hub">HubSpot</span>Funil por etapa</h3>
       <div class="chart-subtitle" id="funilBarrasSubtitle">negócios em aberto · conversão etapa a etapa</div>
       <div id="funilBarras"></div>
       <div class="chart-subtitle" id="funilInsight" style="margin-top:14px;"></div>
-    </div>
-    <div class="chart-card">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px;">
-        <h3 style="margin-bottom:0;">🔥 Leads quentes</h3>
-        <span id="leadsQuentesCount" style="font-size:11.5px;color:var(--muted2);"></span>
-      </div>
-      <div class="chart-subtitle" style="margin-top:6px;">Os negócios mais avançados no funil, sem SLA estourado — role pra ver todos.</div>
-      <div id="leadsQuentesLista" style="max-height:420px;overflow-y:auto;"></div>
     </div>
   </div>
 
@@ -1959,69 +1963,16 @@ function renderKpiStripHero() {
       <div class="v">${k.taxaAvanco}%${kpiDeltaHtml('taxaAvanco')}</div>
       <div class="stat-hint">negócios que avançaram de etapa esta semana</div>
     </div>
-    <div class="kpi-hero tip-wrap" id="kpiHeroHealthScore" style="cursor:pointer;">
-      <div class="tip-bubble" id="healthScoreTip">calculando…</div>
-      <div class="l">Health Score <span style="opacity:.6;">ⓘ</span></div>
-      <div class="v">—</div>
-      <div class="stat-hint">clique pra ver o cálculo</div>
-    </div>
   `;
-
-  const hsEl = document.getElementById('kpiHeroHealthScore');
-  if (hsEl) hsEl.addEventListener('click', () => hsEl.classList.toggle('click-open'));
 
   const travEl = document.getElementById('kpiHeroLeadsTravados');
   if (travEl) travEl.addEventListener('click', () => { if (typeof abrirTodosTravados === 'function') abrirTodosTravados(); });
 }
 
-// Health Score do time — fórmula simples e transparente: 40% aderência à Daily +
-// 30% taxa de avanço + 30% funil limpo (inverso de % travado). Clicável: mostra o
-// breakdown de cada componente, não só o número final.
-async function renderHealthScoreHero() {
-  const el = document.getElementById('kpiHeroHealthScore');
-  if (!el) return;
-  let aderencia = null;
-  if (DATA.supabase && supa) {
-    if (Object.keys(dailiesCache).length === 0) await carregarDailies();
-    const hoje = isoDate(new Date());
-    const dow = new Date(hoje + 'T12:00:00').getDay();
-    const offsetSeg = dow === 0 ? 6 : dow - 1;
-    const segunda = addDays(hoje, -offsetSeg);
-    let prom = 0, real = 0;
-    DATA.reps.forEach(r => {
-      for (let i = 0; i <= offsetSeg; i++) {
-        const row = getDaily(r.ownerId, addDays(segunda, i));
-        if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
-      }
-    });
-    aderencia = prom > 0 ? Math.round((real / prom) * 100) : null;
-  }
-  const k = DATA.kpisHub;
-  const pctTravados = k.emAberto > 0 ? Math.round((k.leadsTravados / k.emAberto) * 100) : 0;
-  const funilLimpo = 100 - pctTravados;
-  let score;
-  if (aderencia === null) {
-    score = Math.round(0.55 * k.taxaAvanco + 0.45 * funilLimpo);
-  } else {
-    score = Math.round(0.4 * aderencia + 0.3 * k.taxaAvanco + 0.3 * funilLimpo);
-  }
-  score = Math.max(0, Math.min(100, score));
-  const cor = score >= 75 ? '#3ECF8E' : score >= 50 ? '#F0A83D' : '#FF5A6B';
-
-  el.querySelector('.v').textContent = score;
-  el.querySelector('.v').style.color = cor;
-
-  const linhaAderencia = aderencia === null
-    ? '<br>Aderência da Daily: sem dado ainda (peso reduzido)'
-    : `<br>Aderência da Daily: <b>${aderencia}%</b> × 40%`;
-  document.getElementById('healthScoreTip').innerHTML = `
-    <b>Como esse ${score} foi calculado:</b>${linhaAderencia}
-    <br>Taxa de avanço: <b>${k.taxaAvanco}%</b> × 30%
-    <br>Funil limpo (inverso de travado): <b>${funilLimpo}%</b> × 30%
-    <br><br>75+ = saudável · 50-74 = atenção · abaixo de 50 = crítico.
-  `;
-}
-renderHealthScoreHero();
+// Health Score foi removido do KPI hero (ninguém olhava, segundo o Julyan) — a fórmula
+// ficava opaca (40/30/30) e a métrica não guiava nenhuma ação prática no dia a dia.
+// Os componentes que a alimentavam (aderência, taxa de avanço, funil limpo) continuam
+// visíveis individualmente na própria fileira de KPIs, só sem o índice agregado.
 
 // Aderência da Daily do time inteiro (semana atual, segunda até hoje).
 async function renderAderenciaDailyHero() {
@@ -2482,7 +2433,58 @@ function renderCockpitDossieInline() {
   const det = (typeof visitasInformadasDetalhe === 'function') ? visitasInformadasDetalhe(r.ownerId) : { aderencia: null, real: 0, prom: 0 };
   const aderenciaTxt = det.aderencia === null ? '—' : `${det.aderencia}%`;
   const pdi = getPdiState(r.ownerId, r.compromissos.length);
-  const travados = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0)).slice(0, 5);
+  // Três recortes do funil dessa pessoa, sem buscar nada novo do HubSpot — só reorganiza
+  // dado que já vem pronto:
+  // - Travados: r.travados (já existia — antes cortava nos 5 piores porque dividia espaço
+  //   com "Plano da semana"; agora que virou aba própria, mostra todos, com scroll)
+  // - Quentes: DATA.temperatura.quentes é o mesmo array usado no card "Leads quentes" da
+  //   home, aqui só filtrado por ownerId
+  // - Todos abertos: DATA.funilLeads é o mesmo dado usado no modal de clique no funil
+  //   (agrupado por etapa, time inteiro) — aqui achatado e filtrado por ownerId
+  const travados = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0));
+  const quentesPessoa = ((DATA.temperatura && DATA.temperatura.quentes) || []).filter(l => l.ownerId === r.ownerId);
+  const abertosPessoa = Object.entries(DATA.funilLeads || {}).flatMap(([stageId, leads]) =>
+    (leads || []).filter(l => l.ownerId === r.ownerId).map(l => ({ ...l, stage: (DATA.stageMeta && DATA.stageMeta.labels && DATA.stageMeta.labels[stageId]) || stageId }))
+  ).sort((a, b) => (b.dias || 0) - (a.dias || 0));
+
+  function linhaLeadTravado(l) {
+    const slaDaEtapa = (DATA.stageMeta && DATA.stageMeta.slaDays && DATA.stageMeta.slaDays[l.stageId]) || 0;
+    const diasExtra = Math.max(0, l.dias - slaDaEtapa);
+    return `
+      <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+        <div class="lead-left"><span class="lead-name">${l.name}</span><span class="lead-stage">${l.stage} · ${l.dias}d parado · SLA ${slaDaEtapa}d</span></div>
+        <span class="sla-chip">+${diasExtra}d</span>
+      </a>`;
+  }
+  function linhaLeadQuente(l) {
+    return `
+      <a class="lead-row" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+        <div class="lead-left"><span class="lead-name">${l.name}</span><span class="lead-stage">${l.stage} · ${l.dias}d na etapa</span></div>
+        <span style="font-size:14px;">🔥</span>
+      </a>`;
+  }
+  function linhaLeadAberto(l) {
+    return `
+      <a class="lead-row" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+        <div class="lead-left"><span class="lead-name">${l.name}</span><span class="lead-stage">${l.stage}${l.dias != null ? ` · ${l.dias}d nesta etapa` : ''}</span></div>
+      </a>`;
+  }
+  const listasLeadsPorTipo = {
+    travados: { itens: travados, vazio: 'Nenhum lead travado agora.', linha: linhaLeadTravado },
+    quentes: { itens: quentesPessoa, vazio: 'Nenhum lead quente agora.', linha: linhaLeadQuente },
+    abertos: { itens: abertosPessoa, vazio: 'Nenhum negócio em aberto.', linha: linhaLeadAberto }
+  };
+  function renderListaLeads(tipo) {
+    const { itens, vazio, linha } = listasLeadsPorTipo[tipo];
+    return itens.length === 0
+      ? `<div style="padding:14px;color:var(--muted);font-size:13px;">${vazio}</div>`
+      : itens.map(linha).join('');
+  }
+  const tabsLeads = [
+    { tipo: 'travados', label: 'Travados', contagem: travados.length },
+    { tipo: 'quentes', label: 'Quentes', contagem: quentesPessoa.length },
+    { tipo: 'abertos', label: 'Todos abertos', contagem: abertosPessoa.length }
+  ];
 
   // Data real do último combinado (não inventada): DATA.versaoAnalise é o mesmo carimbo
   // narrativas._atualizado_em que já existe e decide quando os compromissos avançam.
@@ -2545,22 +2547,34 @@ function renderCockpitDossieInline() {
           <div class="sign-row"><span id="cockpitDossiePdiCount">${rodapePlano}</span></div>
         </div>
         <div>
-          <h3 style="margin-bottom:10px;">Leads travados agora</h3>
-          <div class="leads-box">
-            ${travados.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead travado agora.</div>' : travados.map(l => {
-              const slaDaEtapa = (DATA.stageMeta && DATA.stageMeta.slaDays && DATA.stageMeta.slaDays[l.stageId]) || 0;
-              const diasExtra = Math.max(0, l.dias - slaDaEtapa);
-              return `
-              <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
-                <div class="lead-left"><span class="lead-name">${l.name}</span><span class="lead-stage">${l.stage} · ${l.dias}d parado · SLA ${slaDaEtapa}d</span></div>
-                <span class="sla-chip">+${diasExtra}d</span>
-              </a>`;
-            }).join('')}
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+            <h3 style="margin:0;">Leads de ${r.name.split(' ')[0]}</h3>
+            <div class="dossie-leads-tabs" data-owner="${r.ownerId}" style="display:flex;gap:6px;">
+              ${tabsLeads.map((t, ti) => `
+                <button class="dossie-leads-tab-btn${ti === 0 ? ' active' : ''}" data-tipo="${t.tipo}" style="font-size:11px;font-weight:700;border-radius:var(--r-pill);padding:5px 11px;cursor:pointer;white-space:nowrap;border:1px solid var(--line);background:${ti === 0 ? 'var(--ink)' : 'transparent'};color:${ti === 0 ? 'var(--bg)' : 'var(--muted)'};">${t.label} <span class="mono">${t.contagem}</span></button>
+              `).join('')}
+            </div>
           </div>
+          <div class="leads-box leads-box-scroll" id="cockpitDossieLeadsBox">${renderListaLeads('travados')}</div>
         </div>
       </div>
     </div>
   `;
+
+  el.querySelectorAll('.dossie-leads-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      el.querySelectorAll('.dossie-leads-tab-btn').forEach(b => {
+        b.classList.remove('active');
+        b.style.background = 'transparent';
+        b.style.color = 'var(--muted)';
+      });
+      btn.classList.add('active');
+      btn.style.background = 'var(--ink)';
+      btn.style.color = 'var(--bg)';
+      const box = document.getElementById('cockpitDossieLeadsBox');
+      if (box) box.innerHTML = renderListaLeads(btn.dataset.tipo);
+    });
+  });
 
   const checkboxes = el.querySelectorAll('#cockpitDossiePlanoList .checkbox');
   checkboxes.forEach((cb, i) => { if (pdi.checked[i]) cb.classList.add('checked'); });
