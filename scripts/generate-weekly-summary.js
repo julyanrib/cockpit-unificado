@@ -283,6 +283,18 @@ function promptIndividual(ownerId, rc, comoAgirAnterior) {
     ? `\nO que foi combinado com você na semana passada: ${comoAgirAnterior.join(' | ')}. Se o mesmo ponto continuar em aberto, diga isso direto. Se já resolveu, reconheça em 1 frase e siga pro próximo foco — não repita a mesma recomendação de novo.`
     : '';
 
+  // Achado em produção (03/08/2026): "ganhos essa semana" e "fechados no mês" podem
+  // divergir de verdade quando a janela da semana cruza a virada do mês (ex: semana
+  // 28/07–03/08 conta os ganhos de julho, mas "fechados no mês" já zerou em agosto) — a
+  // IA viu esse gap e inventou "os ganhos não foram formalizados no sistema" / "lance os
+  // fechamentos no sistema", como se existisse uma ação manual de lançar/formalizar
+  // fechamento. NÃO EXISTE: fechamento é automático, puxado do HubSpot quando o negócio
+  // muda de etapa — ninguém "lança" nem "formaliza" nada. A instrução abaixo corta essa
+  // alucinação na raiz, dando a causa real em vez de deixar a IA adivinhar uma.
+  const explicacaoGap = (rc.ganhosSemana || 0) > (rc.fechadosNoMes || 0)
+    ? `\nATENÇÃO — leia antes de escrever: "ganhos essa semana" (${rc.ganhosSemana || 0}) é maior que "fechados no mês" (${rc.fechadosNoMes || 0}). Isso é NORMAL quando a semana cruza a virada do mês — parte dos ganhos aconteceu no mês anterior e não conta pro contador do mês novo, que zerou. NÃO diga que os ganhos "não foram formalizados", "não foram lançados no sistema" ou qualquer variação disso — não existe essa ação manual, fechamento é automático via HubSpot. Se for citar esse gap, explique pela virada do mês, ou simplesmente não comente a diferença.`
+    : '';
+
   return `Você é um analista de operações de vendas escrevendo DIRETO para ${rc.name}, executivo(a) de Field Sales
 (Outbound) da Takeat, na praça de ${rc.praca}. Esse texto é lido só por ele(a) mesmo(a) — endereça na segunda pessoa
 ("você"), tom direto, respeitoso e prático. Nada de elogio vazio tipo "continue assim" sem dado por trás.
@@ -293,6 +305,7 @@ Dados da semana atual (${raw.janela.atual}) dele(a):
 - Ganhos fechados essa semana: ${rc.ganhosSemana || 0}${detalheGanhos.length ? ' (' + detalheGanhos.map(g => g.nome).join(', ') + ')' : ''}
 - Fechados no mês corrente: ${rc.fechadosNoMes || 0} de meta ${rc.metaMensal || 10}
 - Leads com SLA estourado: ${rc.leadsTravados || 0}
+${explicacaoGap}
 ${blocoAnterior}
 
 Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato:
@@ -324,6 +337,12 @@ Fechamento do mês:
 - Leads com SLA estourado agora: ${rc.leadsTravados || 0}
 ${blocoSemanas}
 ${blocoAnterior}
+
+IMPORTANTE: fechamento é automático, puxado do HubSpot quando o negócio muda de etapa —
+não existe "lançar" ou "formalizar" um ganho manualmente. Se "fechados no mês" parecer
+baixo frente ao que a pessoa converteu nas semanas, não invente uma causa administrativa
+("não formalizou", "não lançou no sistema") — ou explique pela janela de datas, ou não
+comente a diferença.
 
 Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato:
 {
