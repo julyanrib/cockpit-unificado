@@ -2586,6 +2586,12 @@ function buildDetailHTML(r, idPrefix, skipLeadsList) {
     : `Leads mais antigos (nenhum com SLA estourado agora)`;
   const leadsList = travados.length > 0 ? travados : r.criticos;
 
+  // Mesmo corte de privacidade da renderCockpitDossieInline: este modal é aberto tanto
+  // pela lista "Por executivo" (linha do próprio rep) quanto pelo Centro de Decisões
+  // (card de aderência baixa), e nenhum dos dois call sites filtrava isso antes de chamar
+  // openModal(). O gate fica aqui dentro, não nos call sites, pelo mesmo motivo do item 6.
+  const souRepSessao = typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.role === 'rep';
+
   return `
     <div class="modal-grid">
       <div class="modal-donut-wrap">
@@ -2600,11 +2606,13 @@ function buildDetailHTML(r, idPrefix, skipLeadsList) {
       </div>
     </div>
 
+    ${souRepSessao ? '' : `
     <h3 class="block-label">Onde está errando <span style="font-weight:400;text-transform:none;color:var(--muted2);">(análise de ${DATA.versaoAnalise || '—'} — pode estar desatualizada)</span></h3>
     <div class="gargalo-box">${r.gargalo}</div>
 
     <h3 class="block-label">Ação a executar</h3>
     <ul class="practice-list">${r.boasPraticas.map(b => `<li>${b}</li>`).join('')}</ul>
+    `}
 
     ${skipLeadsList ? '' : `
     <h3 class="block-label">${leadsSectionTitle}</h3>
