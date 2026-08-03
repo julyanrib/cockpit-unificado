@@ -134,7 +134,7 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 {
   "gargalo": "1 parágrafo HTML (pode usar <b>) começando com '<b>HubSpot (dado ao vivo, ${dataHoje}):</b>' seguido do diagnóstico, no mesmo estilo do exemplo — cite os números reais acima",
   "tag": "crit, warn ou ok — crit se a maior parte do funil está travada numa etapa só sem avançar, warn se há concentração preocupante mas com algum avanço, ok se o funil está razoavelmente distribuído ou avançando bem",
-  "tagLabel": "3-6 palavras curtas resumindo o estado (ex: 'concentração em Prospecção', 'funil avançou — checar conversão', 'volume recuperando, funil equilibrado')"
+  "tagLabel": "NO MÁXIMO 3 palavras resumindo o estado, caixa normal (não maiúsculas), sem repetir o número (isso já está no gargalo completo) — ex: 'SLA estourado', 'Funil travado', 'Travado em Decisor', 'Funil saudável', 'Zero fechamentos'. Se não houver negócio nenhum em aberto, responda exatamente 'Sem dados'."
 }`;
   });
 
