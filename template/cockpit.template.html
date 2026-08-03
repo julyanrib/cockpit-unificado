@@ -459,7 +459,18 @@
     .app-main{padding:18px 14px 88px;}
     .hoje-grid{grid-template-columns:1fr;}
   }
-  @media (max-width:860px){ .login-shell{grid-template-columns:1fr;} .login-art{display:none;} }
+  @media (max-width:860px){
+    .login-shell{grid-template-columns:1fr;}
+    /* No celular a arte não some mais — vira um banner compacto acima do formulário,
+       mantendo a marca e o headline; só a animação de rota e as stats do rodapé saem
+       (não cabem sem empurrar o formulário pra fora da primeira dobra). */
+    .login-art{padding:26px 24px;justify-content:flex-start;gap:10px;min-height:0;}
+    .login-art-headline{font-size:22px;max-width:none;}
+    .login-art-headline br{display:none;}
+    .login-art-sub{display:none;}
+    .login-art-foot{display:none;}
+    .login-art .route-wrap{display:none;}
+  }
   @media (max-width:720px){
     .daily-rep-body{grid-template-columns:1fr;}
     .daily-col + .daily-col{border-left:none;border-top:1px solid var(--line);}
@@ -1743,13 +1754,32 @@ document.getElementById('updatedLine').textContent =
 document.getElementById('banner') && (document.getElementById('banner').innerHTML = DATA.banner || '');
 document.getElementById('footerText').textContent = DATA.footerText;
 
-document.getElementById('healthBadge').innerHTML = `
-  <div class="health-badge ${DATA.saude.nivel}">
-    <span class="health-dot"></span>
-    <span>${DATA.saude.label}</span>
-    <span class="detalhe">${DATA.saude.detalhe}</span>
-  </div>
-`;
+// Badge de saúde: o time inteiro pro gestor (DATA.saude vem pronto do build), mas o
+// FUNIL DELE pro executivo — abrir o app e ver "FUNIL TRAVADO 67%" do time quando o
+// funil dele está saudável (ou vice-versa) confunde a leitura das 8h30.
+(function preencherHealthBadge() {
+  let saude = DATA.saude;
+  if (sessaoAtual && sessaoAtual.role === 'rep') {
+    const r = DATA.reps.find(x => x.ownerId === sessaoAtual.ownerId);
+    if (r && r.open > 0) {
+      const pct = Math.round(((r.leadsTravados || 0) / r.open) * 100);
+      saude = pct >= 50
+        ? { nivel: 'crit', label: 'SEU FUNIL TRAVADO', detalhe: `${pct}% dos seus leads abertos com SLA estourado` }
+        : pct >= 25
+          ? { nivel: 'warn', label: 'SEU FUNIL EM ATENÇÃO', detalhe: `${pct}% dos seus leads abertos com SLA estourado` }
+          : { nivel: 'ok', label: 'SEU FUNIL SAUDÁVEL', detalhe: `${pct}% de SLA estourado — siga avançando etapas` };
+    } else if (r) {
+      saude = { nivel: 'warn', label: 'SEM NEGÓCIOS ABERTOS', detalhe: 'gere pipeline hoje — prospecção é a prioridade' };
+    }
+  }
+  document.getElementById('healthBadge').innerHTML = `
+    <div class="health-badge ${saude.nivel}">
+      <span class="health-dot"></span>
+      <span>${saude.label}</span>
+      <span class="detalhe">${saude.detalhe}</span>
+    </div>
+  `;
+})();
 
 // ============ PÓDIO DA SEMANA + META DO MÊS (cartão consolidado) ============
 // Antes eram 2 blocos separados (Pódio: DATA.resumoSemanal.ranking, já pronto do build.js;
@@ -2000,6 +2030,50 @@ function renderCockpitTitleRow() {
 function renderKpiStripHero() {
   const el = document.getElementById('kpiStripHero');
   if (!el) return;
+
+  // Executivo às 8h30 precisa ver OS NÚMEROS DELE, não os do time — antes essa faixa
+  // mostrava DATA.kpisHub (agregado) pra todo mundo, então a Kelly abria o app e via
+  // "155 em aberto / 104 travados" que não eram dela. Pro rep, tudo aqui vem do próprio
+  // r (mesmos campos da tabela Meu Painel); a Taxa de avanço fica de fora porque só
+  // existe calculada em nível de time (não há recorte individual salvo em lugar nenhum).
+  const souRepKpi = sessaoAtual && sessaoAtual.role === 'rep';
+  if (souRepKpi) {
+    const r = DATA.reps.find(x => x.ownerId === sessaoAtual.ownerId);
+    if (r) {
+      const meta = r.metaMensal || 10;
+      const fechadosPctRep = Math.round(((r.fechadosNoMes || 0) / meta) * 100);
+      el.innerHTML = `
+        <div class="kpi-hero">
+          <div class="l">Seus negócios em aberto</div>
+          <div class="v">${r.open}</div>
+        </div>
+        <div class="kpi-hero">
+          <div class="l">Fechados no mês</div>
+          <div class="v" style="color:#3ECF8E;">${r.fechadosNoMes || 0}</div>
+          <div class="stat-hint">sua meta ${meta} · ${fechadosPctRep}% do caminho</div>
+        </div>
+        <div class="kpi-hero" id="kpiHeroLeadsTravados" style="cursor:pointer;">
+          <div class="l">Seus leads travados</div>
+          <div class="v" style="color:#FF5A6B;">${r.leadsTravados || 0}</div>
+          <div class="stat-hint">acima do SLA da etapa · clique pra ver</div>
+        </div>
+        <div class="kpi-hero" id="kpiHeroAderenciaDaily">
+          <div class="l">Sua aderência da Daily</div>
+          <div class="v" style="color:#F0A83D;">—</div>
+          <div class="stat-hint">carregando…</div>
+        </div>
+        <div class="kpi-hero">
+          <div class="l">Ganhos essa semana</div>
+          <div class="v" style="color:#3ECF8E;">${r.ganhosSemana || 0}</div>
+          <div class="stat-hint">fechamentos seus na semana</div>
+        </div>
+      `;
+      const travElRep = document.getElementById('kpiHeroLeadsTravados');
+      if (travElRep) travElRep.addEventListener('click', () => { if (typeof abrirTodosTravados === 'function') abrirTodosTravados(); });
+      return;
+    }
+  }
+
   const k = DATA.kpisHub;
   const fechadosPct = k.metaMensalFechados > 0 ? Math.round((k.fechadosNoMes / k.metaMensalFechados) * 100) : 0;
 
@@ -2056,7 +2130,12 @@ async function renderAderenciaDailyHero() {
   const segunda = addDays(hoje, -offsetSeg);
 
   let prom = 0, real = 0;
-  DATA.reps.forEach(r => {
+  // Pro executivo, a aderência mostrada é a DELE (o rótulo do tile já diz "Sua aderência");
+  // pro gestor continua sendo a do time inteiro.
+  const repsAderencia = (sessaoAtual && sessaoAtual.role === 'rep')
+    ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
+    : DATA.reps;
+  repsAderencia.forEach(r => {
     for (let i = 0; i <= offsetSeg; i++) {
       const dia = addDays(segunda, i);
       const row = getDaily(r.ownerId, dia);
@@ -2369,7 +2448,11 @@ renderFunilBarras();
   // novo, sem confiar cegamente: um lead quente com SLA estourado não entra na lista.
   // Antes também cortava em 5 fixos; agora mostra todos os que vieram do backend (até
   // 12, já limitado lá) com rolagem, em vez de esconder os demais.
+  const souRepQuentes = sessaoAtual && sessaoAtual.role === 'rep';
   const todosQuentes = (DATA.temperatura.quentes || []).filter(l => {
+    // Executivo vê só os quentes DELE — abrir o app às 8h30 e ver o lead do colega é
+    // ruído, não ação. Gestor continua vendo o time inteiro.
+    if (souRepQuentes && l.ownerId !== sessaoAtual.ownerId) return false;
     const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
     const restante = slaDias ? slaDias - l.dias : null;
     return restante === null || restante > 0;
@@ -2377,7 +2460,7 @@ renderFunilBarras();
   if (countEl) countEl.textContent = `${todosQuentes.length} no radar`;
 
   if (todosQuentes.length === 0) {
-    listaEl.innerHTML = '<div class="empty-state" style="padding:14px;">Nenhum lead prioritário agora — funil precisa avançar etapas.</div>';
+    listaEl.innerHTML = `<div class="empty-state" style="padding:14px;">${souRepQuentes ? 'Nenhum negócio seu em etapa avançada dentro do prazo — avance leads pra Demo/Negociação pra aparecerem aqui.' : 'Nenhum lead prioritário agora — funil precisa avançar etapas.'}</div>`;
     return;
   }
 
@@ -2393,7 +2476,7 @@ renderFunilBarras();
       <div class="lead-prio-row">
         <div style="flex:1;min-width:0;">
           <div class="nome">${l.name}</div>
-          <div class="meta">${l.vendedor} · ${l.dias}d na etapa${slaTxt}</div>
+          <div class="meta">${souRepQuentes ? (l.stage || '') : l.vendedor} · ${l.dias}d na etapa${slaTxt}</div>
         </div>
         <span class="chance" style="background:${estilo.bg};color:${estilo.fg};" title="Índice de prioridade pela etapa do funil — não é uma previsão calculada de fechamento">${prioridade}</span>
         <a class="abrir" href="${hsUrl(l.id)}" target="_blank" rel="noopener">abrir →</a>
@@ -3286,6 +3369,59 @@ async function renderDaily() {
     </div>
   `;
 
+  // ---- PLACAR DA DAILY (só gestor) — o roteiro da reunião das 9h em uma tabela ----
+  // Tudo dado que já existe: getDaily (Supabase, prometido/realizado por dia) e
+  // r.fechamentosHubspotHoje (HubSpot, do build). Ordem de leitura pensada pra reunião:
+  // quem NÃO registrou promessa vem primeiro (é a primeira cobrança do dia), depois os
+  // demais por entrega de ontem (pior → melhor). Clicar numa linha rola até o card da pessoa.
+  if (!souRepDaily) {
+    const ehHojeViewPlacar = dailyRefDate === isoDate(new Date());
+    const linhasPlacar = repsDaily.map(r => {
+      const rowHoje = getDaily(r.ownerId, dailyRefDate) || {};
+      const rowOntem = getDaily(r.ownerId, yesterdayISO) || {};
+      const registrouHoje = [rowHoje.prometido_visitas, rowHoje.prometido_avancos, rowHoje.prometido_propostas]
+        .some(v => v !== null && v !== undefined);
+      const promOntem = rowOntem.prometido_visitas || 0;
+      const realOntem = rowOntem.realizado_visitas || 0;
+      const pctOntem = promOntem > 0 ? Math.round((realOntem / promOntem) * 100) : null;
+      const corOntem = pctOntem === null ? 'var(--muted2)' : pctOntem >= 100 ? 'var(--green)' : pctOntem >= 70 ? 'var(--amber)' : 'var(--red)';
+      const fechouHoje = ehHojeViewPlacar ? (r.fechamentosHubspotHoje || 0) : null;
+      return { r, registrouHoje, promOntem, realOntem, pctOntem, corOntem, rowHoje, fechouHoje };
+    }).sort((a, b) => {
+      if (a.registrouHoje !== b.registrouHoje) return a.registrouHoje ? 1 : -1; // não registrou primeiro
+      return (a.pctOntem ?? 999) - (b.pctOntem ?? 999); // depois: pior entrega de ontem primeiro
+    });
+
+    const semRegistro = linhasPlacar.filter(l => !l.registrouHoje).length;
+    html += `
+      <div class="chart-card" style="margin-bottom:18px;padding:0;overflow:hidden;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:15px 20px;border-bottom:1px solid var(--line);">
+          <h3 style="font-family:'Poppins',sans-serif;font-size:15px;font-weight:700;margin:0;">Placar da Daily</h3>
+          <span style="font-size:11.5px;color:${semRegistro > 0 ? 'var(--red)' : 'var(--muted2)'};font-weight:${semRegistro > 0 ? 700 : 400};">${semRegistro > 0 ? `${semRegistro} sem promessa registrada hoje` : 'todo mundo registrou · clique num nome pra ir ao card'}</span>
+        </div>
+        <div class="reps-table-wrap"><div style="min-width:560px;">
+          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr .7fr;padding:10px 20px;background:var(--panel2);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);gap:10px;">
+            <div>Executivo</div>
+            <div style="text-align:right;">Ontem (visitas)</div>
+            <div style="text-align:right;">Prometeu hoje</div>
+            <div style="text-align:right;">Fechou</div>
+          </div>
+          ${linhasPlacar.map(l => `
+            <div class="rep-row placar-row" data-owner="${l.r.ownerId}" style="display:grid;grid-template-columns:1.5fr 1fr 1fr .7fr;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
+              <div style="min-width:0;">
+                <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${l.r.name}</div>
+                <div style="font-size:10.5px;color:var(--muted2);">${l.r.praca}</div>
+              </div>
+              <div class="mono" style="text-align:right;font-size:13px;font-weight:700;color:${l.corOntem};">${l.pctOntem === null ? '—' : `${l.realOntem}/${l.promOntem}`}</div>
+              <div class="mono" style="text-align:right;font-size:12.5px;${l.registrouHoje ? '' : 'color:var(--red);font-weight:700;'}">${l.registrouHoje ? `${l.rowHoje.prometido_visitas ?? 0}v · ${l.rowHoje.prometido_avancos ?? 0}a · ${l.rowHoje.prometido_propostas ?? 0}p` : 'não registrou'}</div>
+              <div class="mono" style="text-align:right;font-size:13px;font-weight:700;${l.fechouHoje > 0 ? 'color:var(--green);' : 'color:var(--muted2);'}">${l.fechouHoje === null ? '—' : l.fechouHoje}</div>
+            </div>
+          `).join('')}
+        </div></div>
+      </div>
+    `;
+  }
+
   repsDaily.forEach(r => {
     const hoje = getDaily(r.ownerId, dailyRefDate) || {};
     // "Realizado" só vem ao vivo do HubSpot quando a data mostrada é hoje de verdade —
@@ -3338,7 +3474,7 @@ async function renderDaily() {
     };
 
     html += `
-      <div class="chart-card" style="margin-bottom:16px;padding:0;overflow:hidden;">
+      <div class="chart-card" id="dailyCard_${r.ownerId}" style="margin-bottom:16px;padding:0;overflow:hidden;">
         <div class="hoje-hero">
           <div class="hoje-hero-top">
             <div>
@@ -3432,6 +3568,13 @@ async function renderDaily() {
 
   el.innerHTML = html;
   wireRoteiroChecks(el);
+
+  document.querySelectorAll('.placar-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const card = document.getElementById(`dailyCard_${row.dataset.owner}`);
+      if (card && typeof smoothScrollTo === 'function') smoothScrollTo(card);
+    });
+  });
 
   document.getElementById('dailyPrev').addEventListener('click', () => { dailyRefDate = addBusinessDays(dailyRefDate, -1); renderDaily(); });
   document.getElementById('dailyNext').addEventListener('click', () => { dailyRefDate = addBusinessDays(dailyRefDate, 1); renderDaily(); });
