@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       force_monthly_mesano:
-        description: 'Reprocessar SÓ o fechamento mensal pra um mês específico (AAAA-MM, ex: 2026-07). Deixe em branco pra rodar normal.'
+        description: 'Força o FECHAMENTO MENSAL (pro time/executivo em generate-weekly-summary.js, e pro coaching em generate-individual-analysis.js) pra um mês específico (AAAA-MM, ex: 2026-07), sem esperar a última sexta-feira real. Deixe em branco pra rodar normal.'
         required: false
         type: string
 
@@ -28,15 +28,23 @@ jobs:
           node-version: '20'
 
       - name: Buscar comparação semana atual x anterior
+        # Continua pulando esse fetch num teste forçado de mensal: o objetivo do teste é
+        # validar a LÓGICA do fechamento mensal com os dados que já estão no repo, sem
+        # gastar uma chamada real ao HubSpot fora do horário certo. Em produção (cron real
+        # de sexta), isso sempre roda antes, force_monthly_mesano nunca vem setado.
         if: ${{ !inputs.force_monthly_mesano }}
         env:
           HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
         run: node scripts/fetch-weekly-comparison.js
 
       - name: Gerar resumo e plano de ação (API da Claude)
-        if: ${{ !inputs.force_monthly_mesano }}
+        # SEM 'if' aqui: agora este script decide sozinho, internamente, se gera o resumo
+        # semanal normal ou o fechamento mensal (olhando FORCE_MONTHLY_MESANO ou a última
+        # sexta do mês) — precisa rodar nos dois casos, senão o fechamento mensal do
+        # item B nunca é gerado nem em teste nem de verdade.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FORCE_MONTHLY_MESANO: ${{ inputs.force_monthly_mesano }}
         run: node scripts/generate-weekly-summary.js
 
       - name: Gerar análise individual de coaching (só o gestor vê)
@@ -48,15 +56,18 @@ jobs:
         run: node scripts/generate-individual-analysis.js
 
       - name: Gerar HTML final
-        if: ${{ !inputs.force_monthly_mesano }}
+        # SEM 'if': o fechamento mensal escreve em data/resumo-semanal.json igual ao
+        # semanal (mesmo formato) — precisa ser embutido no HTML publicado nos dois casos,
+        # senão o teste forçado roda mas ninguém vê o resultado no site.
         run: node scripts/build.js
 
       - name: Commitar e enviar alterações
-        if: ${{ !inputs.force_monthly_mesano }}
+        # SEM 'if': idem acima — sem isso, um teste com force_monthly_mesano geraria o
+        # fechamento mensal só dentro do runner e nunca chegaria no repo nem no site.
         run: |
           git config user.name "cockpit-bot"
           git config user.email "cockpit-bot@users.noreply.github.com"
-          git add data/weekly-raw.json data/resumo-semanal.json data/narrativas.json public/index.html
+          git add data/weekly-raw.json data/resumo-semanal.json data/narrativas.json data/historico-semanal-mes.json data/historico-mensal-time.json public/index.html
           git diff --staged --quiet && echo "Nada mudou." && exit 0
 
           git commit -m "Resumo semanal automático"
