@@ -2,9 +2,19 @@ name: Atualizar cockpit diariamente
 
 on:
   schedule:
-    # 05:00 em Brasília (08:00 UTC) todos os dias — de madrugada, pra já estar
-    # tudo fresco (incluindo SLA real por interação) antes da Daily das 9h.
+    # 05:00 em Brasília (08:00 UTC) todos os dias — refresh COMPLETO (inclui o
+    # diagnóstico de gargalo por IA), de madrugada, pra já estar tudo fresco antes
+    # da Daily das 9h.
     - cron: '0 8 * * *'
+    # A cada 2h em horário comercial (08h, 10h, 12h, 14h, 16h, 18h, 20h em Brasília =
+    # 11,13,15,17,19,21,23 UTC) — só números do HubSpot, SEM regenerar o texto de
+    # gargalo por IA. Antes, "Realizado" só refletia o que o executivo fez no dia
+    # ANTERIOR (só atualizava 1x, de madrugada) — uma visita feita às 14h só aparecia
+    # no cockpit no dia seguinte. Agora o número sobe ao longo do próprio dia.
+    # Rodar generate-daily-gargalo.js (que chama a API da Claude) nesses horários
+    # também multiplicaria o custo de IA por 7x sem ganho real — o texto de gargalo
+    # não precisa mudar de 2 em 2h, só os números precisam.
+    - cron: '0 11,13,15,17,19,21,23 * * *'
   workflow_dispatch: {} # permite rodar manualmente pelo botão "Run workflow" no GitHub
 
 permissions:
@@ -29,6 +39,10 @@ jobs:
         run: node scripts/fetch-hubspot.js
 
       - name: Gerar diagnóstico de gargalo do dia (IA — só o texto, nunca mexe em compromissos de PDI)
+        # SÓ roda no refresh completo da madrugada (ou manual) — os runs de horário
+        # comercial (a cada 2h) existem só pra deixar os NÚMEROS quase em tempo real;
+        # o texto de gargalo não precisa (nem deveria) ser regerado 7x por dia.
+        if: ${{ github.event.schedule == '0 8 * * *' || github.event_name == 'workflow_dispatch' }}
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node scripts/generate-daily-gargalo.js
@@ -48,7 +62,7 @@ jobs:
           git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json public/index.html
           git diff --staged --quiet && echo "Nada mudou hoje." && exit 0
 
-          git commit -m "Atualização automática diária do cockpit"
+          git commit -m "Atualização automática do cockpit ($(date -u +'%H:%M UTC'))"
 
           # O checkout deste job foi feito no início do workflow — se alguém commitou
           # direto no main enquanto o robô rodava (ex.: colando um arquivo no editor do
