@@ -30,6 +30,19 @@ const root = path.join(__dirname, '..');
 const raw = JSON.parse(fs.readFileSync(path.join(root, 'data', 'weekly-raw.json'), 'utf8'));
 const narrativas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'narrativas.json'), 'utf8'));
 
+// Só pra ter acesso ao stageMeta.labels (mapeia ID bruto da etapa do HubSpot pro nome
+// legível, ex: "1395880470" -> "Conversa com Decisor") — a mesma fonte que o template usa
+// (STAGE_LABELS). Leitura tolerante: se o arquivo não existir por algum motivo, segue com
+// mapa vazio em vez de derrubar o script inteiro (o pior caso é o texto cair pro fallback
+// "etapa <id>", não travar a geração).
+let STAGE_LABELS = {};
+try {
+  const hubspotData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
+  STAGE_LABELS = (hubspotData.stageMeta && hubspotData.stageMeta.labels) || {};
+} catch (e) {
+  console.error(`Não deu pra ler data/hubspot.json pra mapear nomes de etapa (${e.message}) — textos vão usar o ID bruto como fallback.`);
+}
+
 const CAMINHO_HISTORICO_MES = path.join(root, 'data', 'historico-semanal-mes.json');
 const CAMINHO_HISTORICO_MENSAL_TIME = path.join(root, 'data', 'historico-mensal-time.json');
 
@@ -41,6 +54,11 @@ const CAMINHO_HISTORICO_MENSAL_TIME = path.join(root, 'data', 'historico-mensal-
 // campos e caía nos valores-padrão (0, 0, meta 10), fazendo o texto individual de todo
 // mundo dizer sempre "0 ganhos, 0 de 10 fechados" independente do número real. Corrigido
 // carregando os campos de verdade abaixo.
+//
+// BUG encontrado em produção (revisão pré-lançamento): etapaDominante guardava o ID bruto
+// do HubSpot (ex: "1395880470"), e a IA repetia esse número literal no texto ("etapa
+// 1395880470") em vez do nome — apareceu em pelo menos um executivo no resumo real.
+// Corrigido mapeando via STAGE_LABELS antes de virar contexto do prompt.
 const repsContext = Object.entries(raw.snapshotReps || {}).map(([ownerId, r]) => {
   const n = narrativas.reps[ownerId] || {};
   const stageEntries = Object.entries(r.stages || {});
@@ -50,7 +68,7 @@ const repsContext = Object.entries(raw.snapshotReps || {}).map(([ownerId, r]) =>
     name: r.name,
     praca: n.praca || '—',
     open: r.open,
-    etapaDominante: dominant ? dominant[0] : null,
+    etapaDominante: dominant ? (STAGE_LABELS[dominant[0]] || dominant[0]) : null,
     etapaDominanteContagem: dominant ? dominant[1] : 0,
     ganhosSemana: r.ganhosSemana || 0,
     fechadosNoMes: r.fechadosNoMes || 0,

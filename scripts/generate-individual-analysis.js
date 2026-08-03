@@ -207,6 +207,12 @@ async function main() {
       const h = hubspot.reps[ownerId] || { open: 0, stages: {}, leadsTravados: 0, ganhosSemana: 0 };
       const stageEntries = Object.entries(h.stages || {});
       const dominante = stageEntries.length ? stageEntries.sort((a, b) => b[1] - a[1])[0] : null;
+      // BUG encontrado em produção (revisão pré-lançamento): sem isso, dominante[0] é o ID
+      // bruto do HubSpot (ex: "1395880470"), e a IA simplesmente repete esse número no texto
+      // ("etapa 1395880470") em vez do nome da etapa — apareceu nos compromissos de pelo
+      // menos um executivo. hubspot.stageMeta.labels já existe e é a mesma fonte que o
+      // template usa (STAGE_LABELS), então mapeia aqui antes de mandar pro prompt.
+      const dominanteLabel = dominante ? ((hubspot.stageMeta && hubspot.stageMeta.labels && hubspot.stageMeta.labels[dominante[0]]) || dominante[0]) : 'nenhuma';
       const anterior = anteriores[ownerId];
       const blocoAnterior = anterior
         ? `\nNa semana passada (${anterior.semana_label}) a orientação pro gestor foi: "${anterior.como_agir}" (gargalo mapeado: "${anterior.gargalo_semana}"). Se esse MESMO gargalo continuar essa semana, diga isso explicitamente e proponha uma ação diferente/mais firme — não repita a mesma frase de novo. Se foi resolvido, reconheça em 1 frase curta e vá direto pro novo ponto de atenção.`
@@ -218,7 +224,7 @@ Essa análise é PRIVADA — só o gestor vê, nunca o vendedor. Seja direto e e
 
 Dados de ${n.name} (${n.praca}) nesta semana (${semanaAtualLabel}):
 - Negócios em aberto: ${h.open}
-- Etapa dominante: ${dominante ? dominante[0] : 'nenhuma'} (${dominante ? dominante[1] : 0} negócios)
+- Etapa dominante: ${dominanteLabel} (${dominante ? dominante[1] : 0} negócios)
 - Leads com SLA estourado: ${h.leadsTravados || 0}
 - Ganhos fechados essa semana: ${h.ganhosSemana || 0}
 - Gargalo já mapeado: ${n.gargalo}
