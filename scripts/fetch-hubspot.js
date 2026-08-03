@@ -77,10 +77,8 @@ const STAGE_DESCRIPTIONS = {
 // Reps ativos (nome bate com narrativas.json / expogo.json)
 const REPS = [
   { ownerId: '86100506', name: 'Bruno Martins' },
-  { ownerId: '91246642', name: 'Gleyson Gabrieli' },
   { ownerId: '87569072', name: 'Sandro Brito' },
   { ownerId: '91477292', name: 'Kelly Travieso Di Domenico' },
-  { ownerId: '91246573', name: 'José Ricardo (Ricardo)' },
   { ownerId: '89842507', name: 'Wericles Andrade (Whell)' },
   { ownerId: '87069181', name: 'Amanda Pardim' },
   { ownerId: '86100505', name: 'Marco Filho' },
