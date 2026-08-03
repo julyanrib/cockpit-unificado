@@ -575,12 +575,14 @@ async function main() {
       const slaRatio = dias / slaDaEtapa;
 
       // Temperatura: SLA estourado = frio/travado (precisa limpar o funil).
-      // Etapa avançada (Demo+) E ainda fresco (usou até metade do prazo) = quente — é isso que fecha.
-      // Um lead em Negociação com 1 dia é quente; o mesmo lead com 9 dias (SLA de 7) já estourou = frio.
-      // Um lead avançado só com mais da metade do prazo consumido (mas ainda dentro do SLA) esfriou pra morno.
+      // Etapa avançada (Demo+) e dentro do prazo (não estourou) = quente — é isso que fecha.
+      // Antes exigia ter usado até metade do prazo (slaRatio <= 0.5); isso escondia negócio
+      // avançado e saudável só porque já tinha passado da metade do SLA sem estourar — um
+      // negócio em Negociação com 5 de 7 dias é tão prioritário quanto um com 2 de 7, os
+      // dois ainda estão dentro do prazo. Ampliado pra cobrir toda a faixa não estourada.
       let temperatura = 'morno';
       if (slaBreach) temperatura = 'frio';
-      else if (rank >= 4 && slaRatio <= 0.5) temperatura = 'quente';
+      else if (rank >= 4) temperatura = 'quente';
 
       return {
         name: d.properties.dealname,
