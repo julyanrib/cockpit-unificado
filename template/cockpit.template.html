@@ -145,6 +145,15 @@
   .rep-name{font-weight:700;font-size:15.5px;}
   .rep-tag{font-size:10px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);letter-spacing:.03em;text-transform:uppercase;border:1.5px solid currentColor;background:transparent;}
   .rep-tag.crit{color:var(--red);} .rep-tag.warn{color:var(--amber);} .rep-tag.ok{color:var(--green);}
+
+  /* Tabela "Por executivo" / "Meu Painel" — hover com transição suave (120ms) em vez do
+     mouseenter/mouseleave em JS que existia antes; e um wrapper com scroll horizontal pra
+     telas estreitas não estourarem a página (a tabela tem 6 colunas, não colapsa bem). */
+  .reps-table-wrap{overflow-x:auto;}
+  .rep-row{transition:background .12s var(--ease);}
+  .rep-row:hover{background:var(--panel2);}
+  .rep-row:last-child{border-bottom:none!important;}
+  .sla-chip{display:inline-block;font-size:11px;font-weight:700;color:var(--red);background:var(--red-soft);border-radius:var(--r-pill);padding:3px 10px;white-space:nowrap;font-variant-numeric:tabular-nums;}
   .rep-right{display:flex;align-items:center;gap:16px;color:var(--muted);font-size:12.5px;flex-wrap:wrap;}
   .rep-right b{color:var(--ink);font-size:15px;font-family:'Poppins',sans-serif;}
   .arrow{width:8px;height:8px;border-right:2px solid var(--muted2);border-bottom:2px solid var(--muted2);transform:rotate(-45deg);}
@@ -664,8 +673,6 @@
     <div class="podio-row" id="podioRow"></div>
   </div>
 
-  <div class="section-title" style="margin-top:20px;"><h2>Por executivo</h2><span class="sub">Clique em um executivo — o gargalo, as boas práticas e o PDI já combinam pipeline (HubSpot) com a Daily (prometido x realizado).</span></div>
-
   <div class="reps" id="reps"></div>
 
   <div id="cockpitDossieInline" style="margin-top:8px;"></div>
@@ -990,7 +997,6 @@ function aplicarVisaoPorPapel() {
   }
 
   if (souRep) {
-    document.querySelector('.section-title').innerHTML = '<h2>Meu Painel</h2>';
     document.getElementById('sidenavTitle').textContent = 'Meu espaço';
     renderMeuPainel();
   }
@@ -2390,31 +2396,63 @@ function savePdiState(ownerId, checked, data) {
 // ============ DOSSIÊ INLINE (abaixo de "Por executivo", sem precisar abrir modal) ============
 // Mesma informação central que já existe no modal (gargalo, boa prática, aderência,
 // compromissos do PDI, leads travados) — só que sempre visível pra um executivo
-// selecionado, sem precisar clicar. Gestor: clica numa linha da tabela pra trocar quem
-// aparece aqui (padrão default = primeiro da lista ordenada por urgência). Executivo:
-// mostra sempre o próprio, sem seletor (só tem uma linha na tabela dele mesmo).
-let cockpitExecSelecionado = null;
+// selecionado, sem precisar clicar. Um dossiê aberto por vez: clicar numa linha troca quem
+// aparece; clicar na mesma linha de novo fecha.
+//
+// cockpitExecSelecionado tem 3 estados possíveis:
+//   undefined -> ainda não houve nenhum clique nesta carga de página. Só pro GESTOR, isso
+//                auto-seleciona quem está pior (mais leads travados), pra não obrigar a
+//                clicar antes de ver algo — mesmo comportamento que já existia antes.
+//   null      -> fechado EXPLICITAMENTE (usuário clicou na linha já aberta pra fechá-la).
+//                Fica fechado até escolherem outra pessoa, não volta a auto-selecionar.
+//   <ownerId> -> mostra o dossiê dessa pessoa.
+let cockpitExecSelecionado;
+
+// Rolagem suave até o dossiê quando ele abre — sem usar scrollIntoView (que em alguns
+// navegadores pode rolar o contêiner errado ou pular sem easing). Ease-out cúbico simples.
+function smoothScrollTo(el, folgaTopo = 16) {
+  if (!el) return;
+  const startY = window.scrollY;
+  const targetY = el.getBoundingClientRect().top + window.scrollY - folgaTopo;
+  const distancia = targetY - startY;
+  if (Math.abs(distancia) < 2) return;
+  const duracao = 380;
+  const t0 = performance.now();
+  function passo(t) {
+    const p = Math.min(1, (t - t0) / duracao);
+    const eased = 1 - Math.pow(1 - p, 3);
+    window.scrollTo(0, startY + distancia * eased);
+    if (p < 1) requestAnimationFrame(passo);
+  }
+  requestAnimationFrame(passo);
+}
+
+// Link pro HubSpot no nível do executivo (não de um negócio específico como hsUrl(id)).
+// Não existe hoje um padrão de URL confirmado que filtre o board por owner — só arriscar um
+// link quebrado é pior que abrir o board geral do pipeline. Se o Julyan tiver a URL exata
+// filtrada, é só trocar aqui dentro.
+function hsExecutivoUrl() {
+  return `https://app.hubspot.com/contacts/24373118/`;
+}
+
 function renderCockpitDossieInline() {
   const el = document.getElementById('cockpitDossieInline');
   if (!el) return;
-  // Esse dossiê (gargalo, boa prática, plano de compromissos) é escrito em tom de
-  // gestor-pra-gestor pro 1:1 — às vezes crítico, em terceira pessoa ("o executivo não
-  // está..."). NUNCA deve aparecer pro próprio executivo vendo a própria sessão, mesmo
-  // que essa função seja chamada de algum outro lugar do código no futuro — o corte fica
-  // aqui dentro, não só no call site, pra não depender de ninguém lembrar de checar antes
-  // de chamar.
   const souRepSessao = sessaoAtual && sessaoAtual.role === 'rep';
-  if (souRepSessao) { el.innerHTML = ''; return; }
-  const souRep = false;
+
   let r;
-  if (souRep) {
+  if (souRepSessao) {
+    // Executivo só tem a própria linha na tabela — fechado por padrão (undefined/null tratam
+    // igual aqui), abre/fecha ao clicar nela mesma, igual ao toggle do gestor.
+    if (cockpitExecSelecionado == null) { el.innerHTML = ''; return; }
     r = DATA.reps.find(x => x.ownerId === sessaoAtual.ownerId);
   } else {
-    r = DATA.reps.find(x => x.ownerId === cockpitExecSelecionado);
-    if (!r) {
-      r = [...DATA.reps].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
-      cockpitExecSelecionado = r ? r.ownerId : null;
+    if (cockpitExecSelecionado === null) { el.innerHTML = ''; return; }
+    if (cockpitExecSelecionado === undefined) {
+      const pior = [...DATA.reps].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
+      cockpitExecSelecionado = pior ? pior.ownerId : null;
     }
+    r = DATA.reps.find(x => x.ownerId === cockpitExecSelecionado);
   }
   if (!r) { el.innerHTML = ''; return; }
 
@@ -2423,53 +2461,79 @@ function renderCockpitDossieInline() {
   const pdi = getPdiState(r.ownerId, r.compromissos.length);
   const travados = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0)).slice(0, 5);
 
-  el.innerHTML = `
-    <div class="chart-card" style="margin-bottom:18px;">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-        ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 40)}
-        <div>
-          <div style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;">${r.name}</div>
-          <div style="color:var(--muted2);font-size:11.5px;">${r.praca} · dossiê pro 1:1${souRep ? '' : ' · clique em outro executivo na tabela pra trocar'}</div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;">
-        <div style="background:var(--red-soft);border-radius:var(--r-md);padding:13px 15px;">
-          <div style="font-size:10.5px;font-weight:700;color:var(--red);margin-bottom:4px;">GARGALO</div>
-          <div style="font-size:12.5px;line-height:1.5;">${r.gargalo}</div>
-        </div>
-        <div style="background:var(--green-soft);border-radius:var(--r-md);padding:13px 15px;">
-          <div style="font-size:10.5px;font-weight:700;color:var(--green);margin-bottom:4px;">BOA PRÁTICA A REPLICAR</div>
-          <div style="font-size:12.5px;line-height:1.5;">${(r.boasPraticas && r.boasPraticas[0]) || '—'}</div>
-        </div>
-        <div style="background:var(--amber-soft);border-radius:var(--r-md);padding:13px 15px;">
-          <div style="font-size:10.5px;font-weight:700;color:var(--amber);margin-bottom:4px;">ADERÊNCIA À DAILY</div>
-          <div style="font-size:12.5px;line-height:1.5;">${aderenciaTxt}${det.prom ? ` · ${det.real}/${det.prom} visitas` : ''}</div>
-        </div>
-      </div>
-    </div>
+  // Data real do último combinado (não inventada): DATA.versaoAnalise é o mesmo carimbo
+  // narrativas._atualizado_em que já existe e decide quando os compromissos avançam.
+  const dataCombinado = (DATA.versaoAnalise && /^\d{4}-\d{2}-\d{2}$/.test(DATA.versaoAnalise))
+    ? DATA.versaoAnalise.split('-').slice(1).reverse().join('/')
+    : null;
+  const rodapePlano = `${pdi.checked.filter(Boolean).length}/${r.compromissos.length} cumpridos${dataCombinado ? ` · combinado no 1:1 de ${dataCombinado}` : ''}`;
 
-    <div class="charts-row">
-      <div class="chart-card">
-        <h3 style="margin-bottom:10px;">Plano da semana · compromissos</h3>
-        <ul class="commit-list" id="cockpitDossiePlanoList">
-          ${r.compromissos.map((c, ci) => `
-            <li class="commit-item">
-              <span class="checkbox" data-item="${ci}"></span>
-              <span class="commit-text">${c}</span>
-            </li>
-          `).join('')}
-        </ul>
-        <div class="sign-row"><span id="cockpitDossiePdiCount">✓ ${pdi.checked.filter(Boolean).length}/${r.compromissos.length} cumpridos</span></div>
+  const cardAderencia = `
+    <div style="background:var(--amber-soft);border-radius:14px;padding:13px 15px;">
+      <div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--amber);margin-bottom:4px;">ADERÊNCIA À DAILY</div>
+      <div style="font-size:12.5px;line-height:1.55;">${aderenciaTxt}${det.prom ? ` · ${det.real}/${det.prom} visitas` : ''}</div>
+    </div>`;
+
+  // Gargalo e Boa prática são escritos em tom de gestor-pra-gestor pro 1:1 — às vezes
+  // críticos, em terceira pessoa. NUNCA aparecem pro próprio executivo, mesmo que esta
+  // função seja chamada de outro lugar no futuro — o corte fica aqui dentro, não só no call
+  // site. Aderência é só um número calculado ao vivo, sem tom, então é seguro pros dois.
+  const cardsDiagnostico = souRepSessao ? cardAderencia : `
+    <div style="background:var(--red-soft);border-radius:14px;padding:13px 15px;">
+      <div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--red);margin-bottom:4px;">GARGALO</div>
+      <div style="font-size:12.5px;line-height:1.55;">${r.gargalo}</div>
+    </div>
+    <div style="background:var(--green-soft);border-radius:14px;padding:13px 15px;">
+      <div style="font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--green);margin-bottom:4px;">BOA PRÁTICA A REPLICAR</div>
+      <div style="font-size:12.5px;line-height:1.55;">${(r.boasPraticas && r.boasPraticas[0]) || '—'}</div>
+    </div>
+    ${cardAderencia}`;
+
+  el.innerHTML = `
+    <div class="chart-card" style="margin-bottom:18px;border-radius:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:18px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+          ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 40, 'risco')}
+          <div style="min-width:0;">
+            <div style="font-family:'Poppins',sans-serif;font-size:17px;font-weight:700;">${r.name}</div>
+            <div style="color:var(--muted);font-size:12px;">${r.praca} · dossiê para o 1:1</div>
+          </div>
+        </div>
+        <a href="${hsExecutivoUrl()}" target="_blank" rel="noopener" style="flex-shrink:0;font-size:12.5px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:var(--r-pill);padding:8px 16px;text-decoration:none;transition:background .15s var(--ease);" onmouseover="this.style.background='var(--red-soft)'" onmouseout="this.style.background='transparent'">Abrir no HubSpot ↗</a>
       </div>
-      <div class="chart-card">
-        <h3 style="margin-bottom:10px;">Leads travados agora</h3>
-        <div class="leads-box">
-          ${travados.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead travado agora.</div>' : travados.map(l => `
-            <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
-              <div class="lead-left"><span class="lead-name">${l.name}</span><span class="lead-stage">${l.stage} · parado há ${l.dias}d</span></div>
-              <span class="lead-cta">abrir →</span>
-            </a>
-          `).join('')}
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;">
+        ${cardsDiagnostico}
+      </div>
+
+      <div style="border-top:1px solid var(--line);margin:20px 0;"></div>
+
+      <div class="charts-row" style="margin-bottom:0;">
+        <div>
+          <h3 style="margin-bottom:10px;">Plano da semana · compromissos</h3>
+          <ul class="commit-list" id="cockpitDossiePlanoList">
+            ${r.compromissos.map((c, ci) => `
+              <li class="commit-item">
+                <span class="checkbox" data-item="${ci}"></span>
+                <span class="commit-text">${c}</span>
+              </li>
+            `).join('')}
+          </ul>
+          <div class="sign-row"><span id="cockpitDossiePdiCount">${rodapePlano}</span></div>
+        </div>
+        <div>
+          <h3 style="margin-bottom:10px;">Leads travados agora</h3>
+          <div class="leads-box">
+            ${travados.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead travado agora.</div>' : travados.map(l => {
+              const slaDaEtapa = (DATA.stageMeta && DATA.stageMeta.slaDays && DATA.stageMeta.slaDays[l.stageId]) || 0;
+              const diasExtra = Math.max(0, l.dias - slaDaEtapa);
+              return `
+              <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+                <div class="lead-left"><span class="lead-name">${l.name}</span><span class="lead-stage">${l.stage} · ${l.dias}d parado · SLA ${slaDaEtapa}d</span></div>
+                <span class="sla-chip">+${diasExtra}d</span>
+              </a>`;
+            }).join('')}
+          </div>
         </div>
       </div>
     </div>
@@ -2482,7 +2546,7 @@ function renderCockpitDossieInline() {
     const checkedNow = Array.from(checkboxes).map(x => x.classList.contains('checked'));
     savePdiState(r.ownerId, checkedNow, pdi.data);
     const contadorEl = document.getElementById('cockpitDossiePdiCount');
-    if (contadorEl) contadorEl.textContent = `✓ ${checkedNow.filter(Boolean).length}/${r.compromissos.length} cumpridos`;
+    if (contadorEl) contadorEl.textContent = `${checkedNow.filter(Boolean).length}/${r.compromissos.length} cumpridos${dataCombinado ? ` · combinado no 1:1 de ${dataCombinado}` : ''}`;
   }));
 }
 
@@ -2501,6 +2565,12 @@ function renderRepsList() {
     : repsBase;
 
   const linhas = repsParaMostrar.map(r => {
+    // Executivo ainda sem nenhum dado no funil (ex: acabou de entrar, "a começar") — em vez
+    // de mostrar zeros (que parecem números reais ruins), mostra em-dash e barra vazia.
+    // Detecta pela ausência real de pipeline, não pelo texto do tag (que é gerado por IA e
+    // pode variar) — assim continua funcionando mesmo se o tagLabel mudar de redação.
+    const semDados = !r.open && Object.keys(r.stages || {}).length === 0;
+
     const travadosCor = r.leadsTravados >= 7 ? 'var(--red)' : r.leadsTravados >= 4 ? 'var(--amber)' : 'var(--muted)';
     const meta = r.metaMensal || 10;
     const fechadosMes = r.fechadosNoMes || 0;
@@ -2510,34 +2580,40 @@ function renderRepsList() {
     // Mostra gravidade, não só volume — 3 leads a 4x o prazo é pior que 8 a 1,1x.
     const piorRatio = (r.travados || []).reduce((max, l) => Math.max(max, l.slaRatio || 0), 0);
     const piorVezes = piorRatio > 100 ? (piorRatio / 100) : 0;
+
+    const detVisitas = semDados ? null : visitasInformadasDetalhe(r.ownerId);
+    const corAderencia = detVisitas && detVisitas.aderencia !== null
+      ? (detVisitas.aderencia >= 90 ? 'var(--green)' : detVisitas.aderencia >= 75 ? 'var(--amber)' : 'var(--red)')
+      : null;
+
+    // Avatar: "em risco" (tag crit) fica em --red cheio com iniciais brancas; os demais
+    // ficam neutros sobre --sunk. Isso é só visual da tabela — o avatar continua vindo de
+    // avatarHTML(), só passando a variante nova.
+    const variantAvatar = r.tag === 'crit' ? 'risco' : 'neutro';
+
     return `
-      <div class="rep-row" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;align-items:center;padding:15px 22px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
-        <div style="display:flex;align-items:center;gap:10px;min-width:0;">
-          <span class="rep-avatar-slot" data-owner="${r.ownerId}"></span>
+      <div class="rep-row" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;min-width:0;text-align:left;">
+          <span class="rep-avatar-slot" data-owner="${r.ownerId}" data-variant="${variantAvatar}"></span>
           <div style="min-width:0;">
             <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.name}</div>
             <div style="font-size:11px;color:var(--muted2);">${r.praca}</div>
           </div>
           <span class="rep-tag ${r.tag}" style="margin-left:4px;">${r.tagLabel}</span>
         </div>
-        <div style="font-size:13.5px;">${r.open}</div>
-        <div>
-          <div style="font-size:13.5px;font-weight:${r.leadsTravados > 0 ? 700 : 400};color:${travadosCor};">${r.leadsTravados}</div>
-          ${piorVezes >= 2 ? `<div class="mono" style="font-size:10px;color:var(--red);" title="O lead mais atrasado dele já passou ${piorVezes.toFixed(1)}x do prazo da etapa">pior: ${piorVezes.toFixed(1)}x</div>` : ''}
+        <div class="mono" style="font-size:13.5px;text-align:right;${semDados ? 'color:var(--muted2);' : ''}">${semDados ? '—' : r.open}</div>
+        <div style="text-align:right;">
+          <div class="mono" style="font-size:13.5px;font-weight:${!semDados && r.leadsTravados > 0 ? 700 : 400};color:${semDados ? 'var(--muted2)' : travadosCor};">${semDados ? '—' : r.leadsTravados}</div>
+          ${!semDados && piorVezes >= 2 ? `<div class="mono" style="font-size:10px;color:var(--red);" title="O lead mais atrasado dele já passou ${piorVezes.toFixed(1)}x do prazo da etapa">pior: ${piorVezes.toFixed(1)}x</div>` : ''}
         </div>
-        <div>
-          <div style="font-size:13.5px;">${visitasInformadasTexto(r.ownerId)}</div>
-          ${(() => {
-            const det = visitasInformadasDetalhe(r.ownerId);
-            if (det.aderencia === null) return '';
-            const cor = det.aderencia >= 90 ? 'var(--green)' : det.aderencia >= 75 ? 'var(--amber)' : 'var(--red)';
-            return `<div style="font-size:10.5px;font-weight:800;color:${cor};">${det.aderencia}%</div>`;
-          })()}
+        <div style="text-align:right;">
+          <div class="mono" style="font-size:13.5px;${semDados ? 'color:var(--muted2);' : ''}">${semDados ? '—' : visitasInformadasTexto(r.ownerId)}</div>
+          ${corAderencia ? `<div class="mono" style="font-size:10.5px;font-weight:800;color:${corAderencia};">${detVisitas.aderencia}%</div>` : ''}
         </div>
-        <div style="font-size:13.5px;">${fechadosMes}</div>
-        <div>
-          <div style="font-size:10.5px;color:var(--muted);margin-bottom:3px;">${fechadosMes}/${meta}</div>
-          <div class="bar-track" style="height:6px;"><div class="bar-fill" style="width:${pctMeta}%;background:${corMeta};"></div></div>
+        <div class="mono" style="font-size:13.5px;text-align:right;${semDados ? 'color:var(--muted2);' : ''}">${semDados ? '—' : fechadosMes}</div>
+        <div style="text-align:right;">
+          <div class="mono" style="font-size:10.5px;color:var(--muted);margin-bottom:3px;">${semDados ? '' : `${fechadosMes}/${meta}`}</div>
+          <div class="bar-track" style="height:6px;">${semDados ? '' : `<div class="bar-fill" style="width:${pctMeta}%;background:${corMeta};"></div>`}</div>
         </div>
       </div>
     `;
@@ -2545,25 +2621,39 @@ function renderRepsList() {
 
   container.innerHTML = `
     <div class="chart-card" style="padding:0;overflow:hidden;">
-      <div style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;padding:12px 22px;background:var(--panel2);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);gap:10px;">
-        <div>Executivo</div><div>Abertos</div><div>Travados${souGestorLista ? ' ↓' : ''}</div><div>Visitas · Daily</div><div>Fechados</div><div>Meta do mês</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:16px 22px;border-bottom:1px solid var(--line);">
+        <h2 style="font-family:'Poppins',sans-serif;font-size:15px;font-weight:700;margin:0;">${souGestorLista ? 'Por executivo' : 'Meu Painel'}</h2>
+        ${souGestorLista ? `<span style="font-size:11.5px;color:var(--muted2);">clique em um nome — gargalo, PDI e visitas de campo no mesmo lugar</span>` : ''}
       </div>
-      ${linhas}
+      <div class="reps-table-wrap">
+        <div style="min-width:640px;">
+          <div style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;padding:12px 22px;background:var(--panel2);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);gap:10px;">
+            <div style="text-align:left;">Executivo</div>
+            <div style="text-align:right;">Abertos</div>
+            <div style="text-align:right;">Travados${souGestorLista ? ' ↓' : ''}</div>
+            <div style="text-align:right;">Visitas · Daily</div>
+            <div style="text-align:right;">Fechados</div>
+            <div style="text-align:right;">Meta do mês</div>
+          </div>
+          ${linhas}
+        </div>
+      </div>
     </div>
   `;
 
   container.querySelectorAll('.rep-row').forEach(row => {
     const r = repsParaMostrar.find(x => x.ownerId === row.dataset.owner);
     row.addEventListener('click', () => {
-      openModal(r);
-      if (!souGestorLista) return; // sessão de rep só tem a própria linha, dossiê inline já mostra ele sempre
-      cockpitExecSelecionado = r.ownerId;
+      // Toggle: clicar na mesma linha que já está aberta fecha o dossiê; clicar em outra troca.
+      cockpitExecSelecionado = (cockpitExecSelecionado === r.ownerId) ? null : r.ownerId;
       if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
+      if (cockpitExecSelecionado) {
+        const painel = document.getElementById('cockpitDossieInline');
+        if (painel) smoothScrollTo(painel);
+      }
     });
-    row.addEventListener('mouseenter', () => row.style.background = 'var(--panel2)');
-    row.addEventListener('mouseleave', () => row.style.background = '');
     const slot = row.querySelector('.rep-avatar-slot');
-    slot.innerHTML = avatarHTML(emailDoOwnerId(r.ownerId), r.name, 32);
+    slot.innerHTML = avatarHTML(emailDoOwnerId(r.ownerId), r.name, 32, slot.dataset.variant);
   });
 }
 renderRepsList();
@@ -3538,14 +3628,19 @@ async function carregarPerfis() {
   atualizarAvatarBadge();
 }
 
-function avatarHTML(email, nome, size) {
+function avatarHTML(email, nome, size, variant) {
   size = size || 34;
   const foto = perfisCache[email];
   const inicial = (nome || '?').charAt(0).toUpperCase();
   if (foto) {
     return `<img src="${foto}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;flex-shrink:0;" alt="${nome}">`;
   }
-  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:var(--red-soft);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(size * 0.4)}px;flex-shrink:0;">${inicial}</div>`;
+  // variant é só usado na tabela "Por executivo"/"Meu Painel" e no cabeçalho do dossiê —
+  // todo o resto do app continua chamando sem esse 4º parâmetro e mantém o visual de sempre
+  // (fundo --red-soft, texto --red).
+  const bg = variant === 'risco' ? 'var(--red)' : variant === 'neutro' ? 'var(--sunk)' : 'var(--red-soft)';
+  const fg = variant === 'risco' ? '#fff' : variant === 'neutro' ? 'var(--ink)' : 'var(--red)';
+  return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${bg};color:${fg};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:${Math.round(size * 0.4)}px;flex-shrink:0;">${inicial}</div>`;
 }
 
 function emailDoOwnerId(ownerId) {
