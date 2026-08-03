@@ -242,8 +242,9 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 REGRAS OBRIGATÓRIAS pro campo "compromissos":
 - NUNCA retorne uma lista vazia. Isso é proibido, mesmo que nada tenha mudado.
 - Sempre retorne 2 ou 3 strings, cada uma um compromisso concreto e checável (ex: "Avançar pelo menos 5 leads de Prospecção pra Visita até sexta"), nunca um objetivo vago.
-- Se os compromissos da semana passada ainda fazem sentido porque não foram cumpridos, REPITA-OS quase literalmente, só adicionando "Repetindo de novo:" no início de cada um — não os troque por outra coisa e não os esvazie.
-- Se não havia compromisso na semana passada (primeira vez), crie 2-3 novos do zero com base no gargalo mapeado.`;
+- Se os compromissos da semana passada ainda fazem sentido porque não foram cumpridos, repita-os quase literalmente — não os troque por outra coisa e não os esvazie.
+- Se não havia compromisso na semana passada (primeira vez), crie 2-3 novos do zero com base no gargalo mapeado.
+- NUNCA comece um compromisso com um rótulo anunciando o que ele é ("Novo:", "Repetindo de novo:", "Nova ação mais firme:" ou qualquer variação). Escreva direto a ação, tom profissional, sem narrar se é novo ou repetido — o compromisso fala por si.`;
     });
 
     const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 1100)));
@@ -292,8 +293,8 @@ REGRAS OBRIGATÓRIAS pro campo "compromissos":
         // Rede de segurança: mesmo com a instrução explícita, a IA às vezes ainda devolve
         // lista vazia quando acha que "nada mudou". Em vez de deixar a automação travada pra
         // sempre nesse caso, reforça o compromisso já existente automaticamente.
-        console.log(`${n.name}: IA não devolveu compromissos novos — reforçando os existentes automaticamente.`);
-        narrativas.reps[ownerId].compromissos = n.compromissos.map(c => c.startsWith('Repetindo') ? c : `Repetindo de novo: ${c}`);
+        console.log(`${n.name}: IA não devolveu compromissos novos — mantendo os existentes automaticamente.`);
+        narrativas.reps[ownerId].compromissos = n.compromissos;
         compromissosMudaram = true;
       }
     }
