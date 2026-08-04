@@ -5038,8 +5038,8 @@ function renderLeadsPraca() {
           <div class="empty-state">Nenhum lead sugerido ainda pra essa praça.</div>
         ` : `
           <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">
-            ${p.leads.map(l => `
-              <div class="lead-praca-card" data-lead="${l.nome}" style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:17px 18px;display:flex;flex-direction:column;gap:9px;box-shadow:var(--shadow);">
+            ${p.leads.map((l, li) => `
+              <div class="lead-praca-card" data-lead="${l.nome}" data-praca="${p.nome}" data-li="${li}" style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:17px 18px;display:flex;flex-direction:column;gap:9px;box-shadow:var(--shadow);">
                 <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
                   <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
                     <div style="font-weight:700;font-size:14.5px;">${l.nome}</div>
@@ -5049,9 +5049,10 @@ function renderLeadsPraca() {
                 </div>
                 ${sessaoAtual.role === 'manager' && l.responsavel ? `<span style="align-self:flex-start;font-size:10px;font-weight:700;color:var(--muted2);background:var(--panel2);border-radius:var(--r-pill);padding:2px 8px;">${l.responsavel.split(' ')[0]}</span>` : ''}
                 <div style="font-size:12.5px;line-height:1.5;color:var(--muted);">${l.motivo || ''}</div>
-                <div style="display:flex;gap:8px;padding-top:3px;">
+                <div class="lp-acoes" style="display:flex;gap:8px;padding-top:3px;align-items:center;">
                   <button class="lp-criar" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;min-height:38px;display:inline-flex;align-items:center;">Criar negócio</button>
                   <button class="lp-descartar" style="background:none;border:1px solid var(--line);border-radius:var(--r-pill);padding:9px 14px;font-size:12px;cursor:pointer;color:var(--muted);min-height:38px;display:inline-flex;align-items:center;">Descartar</button>
+                  <span class="lp-msg" style="font-size:11.5px;color:var(--muted2);"></span>
                 </div>
               </div>
             `).join('')}
@@ -5061,15 +5062,94 @@ function renderLeadsPraca() {
     `).join('')}
   `;
 
+  // resolve nome do executivo -> ownerId (leads guardam só o nome em `responsavel`)
+  const ownerIdPorNome = {};
+  (DATA.reps || []).forEach(r => { ownerIdPorNome[r.name] = r.ownerId; });
+
+  // troca a URL abaixo pelo domínio real do seu deploy na Vercel, se for diferente
+  const CRIAR_NEGOCIO_URL = '/api/criar-negocio';
+
+  async function tokenDeSessao() {
+    if (!supa) return null;
+    try {
+      const { data } = await supa.auth.getSession();
+      return data && data.session ? data.session.access_token : null;
+    } catch (e) { return null; }
+  }
+
+  async function criarNegocioNoHubspot(lead, cardEl, msgEl, botaoEl) {
+    botaoEl.disabled = true;
+    botaoEl.textContent = 'Criando…';
+    msgEl.textContent = '';
+    msgEl.style.color = 'var(--muted2)';
+    const ownerId = ownerIdPorNome[lead.responsavel];
+    if (!ownerId) {
+      msgEl.textContent = 'Sem ownerId pro responsável — confira usuarios.json.';
+      msgEl.style.color = 'var(--red)';
+      botaoEl.disabled = false; botaoEl.textContent = 'Criar negócio';
+      return false;
+    }
+    const token = await tokenDeSessao();
+    try {
+      const resp = await fetch(CRIAR_NEGOCIO_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify({
+          nome: lead.nome, ownerId, telefone: lead.telefone, endereco: lead.endereco,
+          bairro: lead.bairro, tipo: lead.tipo, nota: lead.nota, avaliacoes: lead.avaliacoes
+        })
+      });
+      const data = await resp.json();
+      if (!resp.ok || !data.ok) {
+        msgEl.textContent = data.erro || 'Falha ao criar.';
+        msgEl.style.color = 'var(--red)';
+        botaoEl.disabled = false; botaoEl.textContent = 'Criar negócio';
+        return false;
+      }
+      msgEl.innerHTML = `<a href="${data.url}" target="_blank" rel="noopener" style="color:var(--green);font-weight:700;">Criado ✓ abrir no HubSpot</a>`;
+      botaoEl.remove();
+      cardEl.querySelector('.lp-descartar')?.remove();
+      return true;
+    } catch (e) {
+      msgEl.textContent = 'Sem conexão com o servidor.';
+      msgEl.style.color = 'var(--red)';
+      botaoEl.disabled = false; botaoEl.textContent = 'Criar negócio';
+      return false;
+    }
+  }
+
   el.querySelectorAll('.lp-descartar').forEach(btn => {
     btn.addEventListener('click', (e) => e.target.closest('[data-lead]').remove());
   });
   el.querySelectorAll('.lp-criar').forEach(btn => {
-    btn.addEventListener('click', () => alert('Em breve: isso vai criar o negócio direto no HubSpot. Por enquanto, é só pra visualizar a sugestão.'));
+    btn.addEventListener('click', () => {
+      const cardEl = btn.closest('[data-lead]');
+      const pracaNome = cardEl.dataset.praca, li = Number(cardEl.dataset.li);
+      const praca = pracasParaMostrar.find(p => p.nome === pracaNome);
+      const lead = praca && praca.leads[li];
+      if (!lead) return;
+      criarNegocioNoHubspot(lead, cardEl, cardEl.querySelector('.lp-msg'), btn);
+    });
   });
   const btnEnviarTodos = document.getElementById('lpEnviarTodos');
   if (btnEnviarTodos) {
-    btnEnviarTodos.addEventListener('click', () => alert('Em breve: isso vai criar todos os negócios da lista direto no HubSpot de uma vez. Por enquanto, é só pra visualizar a sugestão — use "Criar negócio" individualmente quando essa etapa for implementada.'));
+    btnEnviarTodos.addEventListener('click', async () => {
+      const cards = [...el.querySelectorAll('[data-lead]')];
+      if (!cards.length) return;
+      if (!confirm(`Criar ${cards.length} negócios no HubSpot agora, um por um? Isso não tem desfazer em massa.`)) return;
+      btnEnviarTodos.disabled = true;
+      let ok = 0;
+      for (const cardEl of cards) {
+        const pracaNome = cardEl.dataset.praca, li = Number(cardEl.dataset.li);
+        const praca = pracasParaMostrar.find(p => p.nome === pracaNome);
+        const lead = praca && praca.leads[li];
+        const botaoEl = cardEl.querySelector('.lp-criar'), msgEl = cardEl.querySelector('.lp-msg');
+        if (!lead || !botaoEl) continue;
+        const certo = await criarNegocioNoHubspot(lead, cardEl, msgEl, botaoEl);
+        if (certo) ok++;
+      }
+      btnEnviarTodos.textContent = `${ok} de ${cards.length} criados ✓`;
+    });
   }
 }
 
