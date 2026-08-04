@@ -1059,6 +1059,11 @@
 const DATA = JSON.parse(document.getElementById('cockpit-data').textContent);
 let perfisCache = {}; // email -> url da foto (perfil). Declarado logo cedo pra nunca dar erro de "usado antes de existir".
 let dailiesCache = {}; // "ownerId_data" -> linha da tabela dailies. Mesma razão: declarada bem cedo.
+// Nessas métricas, subir é ruim (perdido/reciclagem crescendo = seta vermelha). Declarada
+// aqui em cima porque kpiDeltaHtml roda no fluxo síncrono de login (via renderKpiStripHero),
+// antes do script chegar na região onde ela morava — só estourava quando kpiDeltas existia,
+// ou seja, da 2ª execução do refresh em diante. Mesma família dos outros TDZ corrigidos.
+const METRICAS_INVERTIDAS = ['perdidos', 'emReciclagem'];
 
 // ============ MODO CLARO/ESCURO (opcional, a pessoa escolhe) ============
 function toggleTheme() {
@@ -1970,8 +1975,6 @@ function hsUrl(id) { return `https://app.hubspot.com/contacts/24373118/record/0-
 // depois da 2ª execução do robô diário, quando já existe um snapshot anterior.
 // Métricas onde CAIR é a notícia boa (perdidos, reciclagem) — a seta aponta a direção real,
 // mas a cor (verde/vermelho) precisa inverter pra continuar significando "bom"/"ruim".
-const METRICAS_INVERTIDAS = ['perdidos', 'emReciclagem'];
-
 function kpiDeltaHtml(key) {
   const d = DATA.kpiDeltas ? DATA.kpiDeltas[key] : null;
   if (!d) return '';
@@ -2586,6 +2589,9 @@ function agendaNorm(s) {
   return String(s == null ? '' : s).toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 }
+// O fetch-hubspot.js grava o lead quente com "name" (dealname do HubSpot);
+// versões antigas/manuais usavam "nome". Lê os dois — nunca mais pílula sem nome.
+function agendaLeadNome(l) { return l && (l.name || l.nome) || ''; }
 function agendaQuentes(time) {
   const ids = new Set(time.map(r => String(r.ownerId)));
   const q = (DATA.temperatura && DATA.temperatura.quentes) || [];
@@ -2604,7 +2610,7 @@ function agendaMarcarQuentes(eventos, quentes) {
   eventos.forEach(e => { e.quente = false; });
   const fora = [];
   quentes.forEach(function (l) {
-    const achou = eventos.filter(e => e.ownerId === String(l.ownerId) && agendaMesmoLead(e.cliente, l.nome));
+    const achou = eventos.filter(e => e.ownerId === String(l.ownerId) && agendaMesmoLead(e.cliente, agendaLeadNome(l)));
     if (achou.length) achou.forEach(e => { e.quente = true; });
     else fora.push(l);
   });
@@ -2769,12 +2775,16 @@ function renderAgenda() {
         : 'marcar a reunião no Expogo já coloca ele na sua rota e aqui na agenda') + '</span></div>' +
       '<div class="ag-qstrip-list">' +
       foraDaAgenda.slice(0, 12).map(function (l) {
-        const meta = (souGestor ? agendaEsc(nomes[String(l.ownerId)] || '—') : agendaEsc(l.stage || '')) +
-          (l.dias != null ? ' · ' + l.dias + 'd' : '');
-        const miolo = '<b>' + agendaEsc(l.nome) + '</b><span>' + meta + '</span>';
+        const nomeLead = agendaLeadNome(l) || 'Negócio sem nome';
+        const partes = [];
+        if (souGestor) partes.push(agendaEsc(nomes[String(l.ownerId)] || '—'));
+        if (l.stage) partes.push(agendaEsc(l.stage));
+        if (l.dias != null) partes.push(l.dias + 'd na etapa');
+        const miolo = '<b>' + agendaEsc(nomeLead) + '</b><span>' + partes.join(' · ') + '</span>';
+        const tit = ' title="' + agendaEsc(nomeLead) + (l.valor ? ' · R$ ' + l.valor : '') + '"';
         return l.id
-          ? '<a class="ag-qlead" target="_blank" rel="noopener" href="https://app.hubspot.com/contacts/24373118/record/0-3/' + agendaEsc(String(l.id)) + '">' + miolo + '</a>'
-          : '<span class="ag-qlead">' + miolo + '</span>';
+          ? '<a class="ag-qlead"' + tit + ' target="_blank" rel="noopener" href="https://app.hubspot.com/contacts/24373118/record/0-3/' + agendaEsc(String(l.id)) + '">' + miolo + '</a>'
+          : '<span class="ag-qlead"' + tit + '>' + miolo + '</span>';
       }).join('') +
       (foraDaAgenda.length > 12 ? '<span class="ag-qlead"><b>+ ' + (foraDaAgenda.length - 12) + '</b></span>' : '') +
       '</div></div>';
@@ -2982,7 +2992,7 @@ function agendaQuentesLinhas(fora) {
   (DATA.reps || []).forEach(r => { nomes[String(r.ownerId)] = String(r.name || '').split(' ')[0]; });
   let h = '';
   fora.slice(0, 8).forEach(function (l) {
-    h += '<div class="ag-quente-l"><b>' + agendaEsc(l.nome) + '</b>' +
+    h += '<div class="ag-quente-l"><b>' + agendaEsc(agendaLeadNome(l)) + '</b>' +
       '<span>' + agendaEsc(nomes[String(l.ownerId)] || '—') +
       (l.dias != null ? ' · ' + l.dias + 'd parado' : '') + '</span></div>';
   });
@@ -3002,7 +3012,7 @@ function agendaQuentesFora(fora, quentes, time) {
   const nomes = {};
   (DATA.reps || []).forEach(r => { nomes[String(r.ownerId)] = String(r.name || '').split(' ')[0]; });
   fora.slice(0, 8).forEach(function (l) {
-    h += '<div class="ag-quente-l"><b>' + agendaEsc(l.nome) + '</b>' +
+    h += '<div class="ag-quente-l"><b>' + agendaEsc(agendaLeadNome(l)) + '</b>' +
       '<span>' + agendaEsc(nomes[String(l.ownerId)] || '—') +
       (l.dias != null ? ' · ' + l.dias + 'd' : '') + '</span></div>';
   });
