@@ -5069,10 +5069,31 @@ function renderLeadsPraca() {
   // troca a URL abaixo pelo domínio real do seu deploy na Vercel, se for diferente
   const CRIAR_NEGOCIO_URL = '/api/criar-negocio';
 
+  // Prazo duro: seja qual for a causa de uma resposta lenta (Vercel "acordando" a função,
+  // rede ruim, endpoint ainda não configurado), o botão NUNCA pode travar a tela esperando
+  // para sempre. AbortController pede a chamada de rede pra parar; o Promise.race garante
+  // que o código segue em frente de qualquer jeito, mesmo se algo ignorar o cancelamento.
+  async function comPrazo(promessa, ms, rotulo) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    try {
+      return await Promise.race([
+        promessa(ctrl.signal),
+        new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('timeout ' + rotulo), { name: 'AbortError' })), ms + 200))
+      ]);
+    } finally { clearTimeout(t); }
+  }
+
   async function tokenDeSessao() {
     if (!supa) return null;
     try {
-      const { data } = await supa.auth.getSession();
+      // getSession() do Supabase não aceita AbortSignal — dá um prazo próprio por fora,
+      // sem travar o fluxo se a lib demorar (ex.: refresh de token preso na rede).
+      const resultado = await Promise.race([
+        supa.auth.getSession(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout sessão')), 5000))
+      ]);
+      const { data } = resultado;
       return data && data.session ? data.session.access_token : null;
     } catch (e) { return null; }
   }
@@ -5091,15 +5112,17 @@ function renderLeadsPraca() {
     }
     const token = await tokenDeSessao();
     try {
-      const resp = await fetch(CRIAR_NEGOCIO_URL, {
-        method: 'POST',
+      const resp = await comPrazo(async (signal) => fetch(CRIAR_NEGOCIO_URL, {
+        method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
         body: JSON.stringify({
           nome: lead.nome, ownerId, telefone: lead.telefone, endereco: lead.endereco,
           bairro: lead.bairro, tipo: lead.tipo, nota: lead.nota, avaliacoes: lead.avaliacoes
         })
-      });
-      const data = await resp.json();
+      }), 8000, 'criar-negocio');
+      let data;
+      try { data = await resp.json(); }
+      catch (e) { throw new Error('Resposta do servidor não é o formato esperado (a rota /api/criar-negocio existe mesmo?).'); }
       if (!resp.ok || !data.ok) {
         msgEl.textContent = data.erro || 'Falha ao criar.';
         msgEl.style.color = 'var(--red)';
@@ -5111,7 +5134,9 @@ function renderLeadsPraca() {
       cardEl.querySelector('.lp-descartar')?.remove();
       return true;
     } catch (e) {
-      msgEl.textContent = 'Sem conexão com o servidor.';
+      msgEl.textContent = e && e.name === 'AbortError'
+        ? 'Demorou demais (8s) e foi cancelado. Tenta de novo.'
+        : ('Sem conexão: ' + (e && e.message ? e.message : 'erro desconhecido'));
       msgEl.style.color = 'var(--red)';
       botaoEl.disabled = false; botaoEl.textContent = 'Criar negócio';
       return false;
