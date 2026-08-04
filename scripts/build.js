@@ -179,6 +179,9 @@ const DATA = {
     quentesDemoOuNegociacao: (weeklyRaw && weeklyRaw.quentesDemoOuNegociacao) || (resumoSemanal && resumoSemanal.quentesDemoOuNegociacao) || [],
     ranking: rankingSemanal
   } : null,
+  // Agenda da semana (reuniões + follow-ups do app, via HubSpot). Null enquanto o
+  // fetch não trouxer — aí o template usa o rascunho embutido, com a pílula avisando.
+  agenda: hubspot.agenda || null,
   usuarios: usuarios.usuarios,
   supabase: supabaseConfig ? { url: supabaseConfig.url, anonKey: supabaseConfig.anonKey } : null
 };

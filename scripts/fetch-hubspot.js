@@ -131,6 +131,78 @@ async function hsSearch(body, attempt = 1) {
   return res.json();
 }
 
+// Mesma coisa do hsSearch, mas pra QUALQUER objeto (tasks, meetings...) — o de cima
+// é fixo em /deals/search. Mesmo rate-limit, mesmo retry.
+async function hsSearchTipo(objectType, body, attempt = 1) {
+  await sleep(350);
+  const res = await fetch(`https://api.hubapi.com/crm/v3/objects/${objectType}/search`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (res.status === 429 && attempt <= 5) {
+    const waitMs = 1000 * attempt;
+    console.log(`Rate limit do HubSpot (${objectType}) — esperando ${waitMs}ms (tentativa ${attempt}/5)...`);
+    await sleep(waitMs);
+    return hsSearchTipo(objectType, body, attempt + 1);
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HubSpot API error ${res.status} em ${objectType}: ${text}`);
+  }
+  return res.json();
+}
+async function hsSearchTipoAll(objectType, body) {
+  let todos = [];
+  let after = undefined;
+  let seguraLoop = 0;
+  while (seguraLoop < 20) {
+    seguraLoop++;
+    const data = await hsSearchTipo(objectType, { ...body, limit: 100, after });
+    todos = todos.concat(data.results || []);
+    after = data.paging && data.paging.next ? data.paging.next.after : null;
+    if (!after) break;
+  }
+  return todos;
+}
+
+// ---- Agenda da semana (aba Agenda do cockpit) ----
+// O app de campo grava no HubSpot: reunião vira MEETING e follow-up vira TASK.
+// Busca os dois, dos executivos ativos, de 30 dias atrás até 90 pra frente
+// (a aba navega entre semanas, então precisa de passado e futuro).
+// A normalização (tipo, fuso, prefixo do título) mora no template — aqui vai cru.
+async function fetchAgenda() {
+  const agoraMs = Date.now();
+  const ini = String(agoraMs - 30 * 86400000);
+  const fim = String(agoraMs + 90 * 86400000);
+  const owners = REPS.map(r => r.ownerId);
+  const itens = [];
+
+  const meetings = await hsSearchTipoAll('meetings', {
+    filterGroups: [{ filters: [
+      { propertyName: 'hubspot_owner_id', operator: 'IN', values: owners },
+      { propertyName: 'hs_meeting_start_time', operator: 'BETWEEN', value: ini, highValue: fim }
+    ] }],
+    properties: ['hs_meeting_title', 'hs_meeting_body', 'hs_meeting_start_time', 'hs_meeting_end_time',
+      'hs_meeting_outcome', 'hs_meeting_location', 'hubspot_owner_id', 'hs_createdate'],
+    sorts: [{ propertyName: 'hs_meeting_start_time', direction: 'ASCENDING' }]
+  });
+  meetings.forEach(m => itens.push({ ...m.properties, hs_object_id: m.id }));
+
+  const tasks = await hsSearchTipoAll('tasks', {
+    filterGroups: [{ filters: [
+      { propertyName: 'hubspot_owner_id', operator: 'IN', values: owners },
+      { propertyName: 'hs_timestamp', operator: 'BETWEEN', value: ini, highValue: fim }
+    ] }],
+    properties: ['hs_task_subject', 'hs_task_body', 'hs_task_status', 'hs_task_type',
+      'hs_timestamp', 'hubspot_owner_id', 'hs_createdate'],
+    sorts: [{ propertyName: 'hs_timestamp', direction: 'ASCENDING' }]
+  });
+  tasks.forEach(t => itens.push({ ...t.properties, hs_object_id: t.id }));
+
+  return { geradoEm: new Date().toISOString(), itens };
+}
+
 // Busca TODAS as páginas de uma pesquisa, sem cap de 100/200 — várias contagens
 // do cockpit (leads criados, perdidos, fechados no mês, negócios por executivo)
 // usavam só a 1ª página e ficavam erradas sempre que passavam do limite. Uma
@@ -453,6 +525,18 @@ async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
 }
 
 async function main() {
+  // Agenda primeiro e à prova de falha: se o token não tiver os escopos de
+  // tasks/meetings (crm.objects.tasks.read + crm.objects.meetings.read no Private App),
+  // isso loga o aviso e o refresh segue — o cockpit cai no rascunho, nada quebra.
+  let agenda = null;
+  try {
+    agenda = await fetchAgenda();
+    console.log(`Agenda: ${agenda.itens.length} compromissos (reuniões + tarefas) no período.`);
+  } catch (e) {
+    console.log('Aviso: agenda não veio — ' + String(e.message).slice(0, 160));
+    console.log('Se o erro for 403, adicione os escopos crm.objects.tasks.read e crm.objects.meetings.read no Private App do HubSpot.');
+  }
+
   console.log('Buscando dados no HubSpot...');
 
   // ---- Funil geral (donut) ----
@@ -707,7 +791,8 @@ async function main() {
       labels: STAGE_LABELS
     },
     funilLeads,
-    reps: repsData
+    reps: repsData,
+    agenda
   };
 
   const outPath = path.join(__dirname, '..', 'data', 'hubspot.json');
