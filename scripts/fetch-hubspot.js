@@ -200,7 +200,54 @@ async function fetchAgenda() {
   });
   tasks.forEach(t => itens.push({ ...t.properties, hs_object_id: t.id }));
 
+  // Follow-up do app agora vira OBSERVAÇÃO (nota) no HubSpot, no modelo:
+  //   Follow Up - <restaurante>
+  //   Agendado para: 10/08/2026, 16:00
+  //   <texto do vendedor>
+  //   — Nome do Vendedor (via App Outbound)
+  // Detalhe descoberto no registro real: a nota chega SEM hubspot_owner_id — por isso
+  // aqui NÃO filtra por dono (o template identifica o executivo pelo rodapé). A busca
+  // usa a frase "Agendado para" + corte fino no corpo pra não carregar as notas das
+  // outras automações (panorama de perdas, onboarding etc.).
+  const notas = await hsSearchTipoAll('notes', {
+    filterGroups: [{ filters: [
+      { propertyName: 'hs_timestamp', operator: 'BETWEEN', value: ini, highValue: fim },
+      { propertyName: 'hs_note_body', operator: 'CONTAINS_TOKEN', value: '"Agendado para"' }
+    ] }],
+    properties: ['hs_note_body', 'hs_timestamp', 'hubspot_owner_id', 'hs_createdate'],
+    sorts: [{ propertyName: 'hs_timestamp', direction: 'ASCENDING' }]
+  });
+  notas
+    .filter(nt => /^\s*follow\s*up\s*[-–:]/i.test(
+      String(nt.properties.hs_note_body || '').replace(/<[^>]*>/g, ' ').trim()
+    ))
+    .forEach(nt => itens.push({ ...nt.properties, hs_object_id: nt.id }));
+
   return { geradoEm: new Date().toISOString(), itens };
+}
+
+// Visita/revisita no app agora vira TAREFA no HubSpot — e a Daily conta a TAREFA criada
+// hoje (a ação de registrar a visita), não mais a entrada do negócio na etapa "Visita".
+// Motivo: revisitar um cliente pra falar com o decisor é visita de verdade e não move
+// etapa nenhuma — no modelo antigo ela simplesmente não contava.
+// Conta só tarefa que é visita mesmo: título começando com Visita/Revisita, ou corpo
+// assinado pelo app ("App Outbound"). Tarefa manual de cadência (D1 - Ligação etc.) fica fora.
+async function visitasTarefasHojeByOwner(ownerId) {
+  const agoraBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const inicioDoDiaBRTms = Date.UTC(agoraBRT.getUTCFullYear(), agoraBRT.getUTCMonth(), agoraBRT.getUTCDate(), 3, 0, 0);
+  const data = await hsSearchTipo('tasks', {
+    filterGroups: [{ filters: [
+      { propertyName: 'hubspot_owner_id', operator: 'EQ', value: String(ownerId) },
+      { propertyName: 'hs_createdate', operator: 'GTE', value: String(inicioDoDiaBRTms) }
+    ] }],
+    properties: ['hs_task_subject', 'hs_task_body'],
+    limit: 100
+  });
+  return (data.results || []).filter(t => {
+    const titulo = String(t.properties.hs_task_subject || '');
+    const corpo = String(t.properties.hs_task_body || '');
+    return /^\s*(re)?visita\b/i.test(titulo) || /app\s*outbound/i.test(corpo);
+  }).length;
 }
 
 // Busca TODAS as páginas de uma pesquisa, sem cap de 100/200 — várias contagens
@@ -631,7 +678,9 @@ async function main() {
       return dtBrasiliaISO === hojeISO;
     }).length;
 
-    const visitasHubspotHoje = entrouHojeEm(STAGES.visita);
+    // ANTES: entrouHojeEm(STAGES.visita) — contava mudança de ETAPA, e revisita (que não
+    // move etapa) ficava invisível. AGORA: conta as tarefas de visita criadas hoje pelo app.
+    const visitasHubspotHoje = await visitasTarefasHojeByOwner(rep.ownerId);
     // "Avanço de etapa" = negócio que progrediu pra Diagnóstico, Negociação ou Ag.Pagamento hoje —
     // NÃO inclui Demo/Proposta aqui, porque isso já vira a métrica separada de "Propostas" logo
     // abaixo (senão o mesmo negócio contaria pontuação em dobro).
