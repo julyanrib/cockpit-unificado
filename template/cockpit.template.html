@@ -2500,6 +2500,7 @@ function agendaNormalizar(raw) {
     let e = null;
     if (it.hs_meeting_start_time || it.hs_meeting_title !== undefined) e = agendaDoHubspot(it, i);
     else if (it.hs_task_subject !== undefined) e = agendaDoHubspotTask(it, i);
+    else if (it.hs_note_body !== undefined) e = agendaDoHubspotNota(it, i);
     else e = agendaDoApp(it, i);
     if (e && e.inicio && e.ownerId) out.push(e);
   });
@@ -2507,11 +2508,11 @@ function agendaNormalizar(raw) {
 }
 
 // "Reunião - Marcos - Bar e restaurante dois Amores" -> tipo + contato + empresa
-const AGENDA_RE_TITULO = /^\s*(follow\s*up|reuni[aã]o|rota|visita|interno)\s*[-–:]\s*(.*)$/i;
+const AGENDA_RE_TITULO = /^\s*(follow\s*up|reuni[aã]o|rota|revisita|visita|interno)\s*[-–:]\s*(.*)$/i;
 function agendaTipoDoTexto(t) {
   const s = String(t || '').toLowerCase();
   if (/follow\s*up/.test(s)) return 'follow_up';
-  if (/^rota|^visita/.test(s)) return 'rota';
+  if (/^(rota|revisita|visita)/.test(s)) return 'rota';
   if (/^interno/.test(s)) return 'interno';
   return 'reuniao';
 }
@@ -2545,6 +2546,56 @@ function agendaDoHubspot(it, i) {
     url: it.hs_object_id ? ('https://app.hubspot.com/contacts/24373118/record/0-47/' + it.hs_object_id) : null
   };
 }
+// Follow-up do app agora chega como OBSERVAÇÃO. Formato real observado no HubSpot
+// (difere da spec combinada em 2 detalhes: dois-pontos após "para" e vírgula entre
+// data e hora — o parser aceita com e sem):
+//   Follow Up - <restaurante>
+//   Agendado para: 10/08/2026, 16:00
+//   <texto livre do vendedor>
+//   — Nome do Vendedor (via App Outbound)
+// A nota real veio SEM hubspot_owner_id — quando faltar, o dono sai do rodapé assinado,
+// casado por nome contra DATA.reps.
+function agendaDoHubspotNota(it, i) {
+  const texto = String(it.hs_note_body || '')
+    .replace(/<br\s*\/?\s*>/gi, '\n')
+    .replace(/<[^>]*>/g, ' ');
+  const linhas = texto.split('\n').map(s => s.trim()).filter(Boolean);
+  const m1 = (linhas[0] || '').match(/^follow\s*up\s*[-–:]\s*(.*)$/i);
+  if (!m1) return null; // outras automações também criam notas — só interessa a do app
+
+  const mData = texto.match(/agendado\s+para:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2})[:h](\d{2})/i);
+  if (!mData) return null;
+  // A data/hora do corpo já é horário de Brasília (o app grava local) — monta direto,
+  // SEM o desconto de 3h que os campos UTC do HubSpot levam no agendaParaBRT.
+  const inicio = new Date(Date.UTC(+mData[3], +mData[2] - 1, +mData[1], +mData[4], +mData[5]));
+
+  let ownerId = it.hubspot_owner_id ? String(it.hubspot_owner_id) : null;
+  if (!ownerId) {
+    const mAss = texto.match(/[—–-]\s*([^\n(]+?)\s*\(\s*via\s+app\s+outbound\s*\)/i);
+    if (mAss && Array.isArray(DATA.reps)) {
+      const alvo = agendaNorm(mAss[1]);
+      const rep = DATA.reps.find(function (r) {
+        const nome = agendaNorm(r.name);
+        return nome === alvo || nome.indexOf(alvo) === 0 || alvo.indexOf(nome) === 0;
+      });
+      if (rep) ownerId = String(rep.ownerId);
+    }
+  }
+
+  const obs = linhas.slice(1)
+    .filter(l => !/agendado\s+para/i.test(l) && !/via\s+app\s+outbound/i.test(l))
+    .join(' ');
+
+  return {
+    id: 'hn' + (it.hs_object_id || i), ownerId: ownerId,
+    tipo: 'follow_up', inicio: inicio, criadoEm: agendaParaBRT(it.hs_createdate),
+    dur: 30, cliente: m1[1].trim() || 'Sem nome', contato: '',
+    cidade: '', bairro: '', endereco: '', etapa: '—', temperatura: '—',
+    obs: obs, reag: 0, decisor: null, desfecho: null,
+    url: it.hs_object_id ? ('https://app.hubspot.com/contacts/24373118/record/0-46/' + it.hs_object_id) : null
+  };
+}
+
 function agendaDoHubspotTask(it, i) {
   const assunto = it.hs_task_subject || '';
   const m = assunto.match(AGENDA_RE_TITULO);
