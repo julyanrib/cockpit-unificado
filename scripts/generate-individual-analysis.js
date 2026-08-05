@@ -318,6 +318,7 @@ REGRAS OBRIGATÓRIAS pro campo "compromissos":
     console.log('Última sexta do mês — gerando resumo mensal por executivo...');
     for (const ownerId of ownerIds) {
       const n = narrativas.reps[ownerId];
+      const h = hubspot.reps[ownerId] || { open: 0, stages: {}, leadsTravados: 0, fechadosNoMes: 0, metaMensal: 10 };
       const semanasDoMes = await supabaseSelect(
         'analise_individual_semanal',
         `owner_id=eq.${ownerId}&mes_ano=eq.${mesAno}&order=numero_semana_mes.asc`
@@ -327,6 +328,17 @@ REGRAS OBRIGATÓRIAS pro campo "compromissos":
 
       const contexto = semanasDoMes.map(s => `Semana ${s.numero_semana_mes} (${s.semana_label}): ${s.gargalo_semana} | Tendência: ${s.tendencia}`).join('\n');
 
+      // Números reais do funil e dos ganhos pra fechar o mês — antes o prompt só tinha o
+      // texto de gargalo semana a semana, sem o dado bruto por trás. "Independente do canal
+      // de aquisição" pq fechadosNoMes já é o total de ganhos do pipeline (não filtra por
+      // origem do lead) — reforça isso explicitamente pro texto não inventar um recorte que
+      // o dado não tem.
+      const stageEntriesMes = Object.entries(h.stages || {});
+      const dominanteMes = stageEntriesMes.length ? stageEntriesMes.sort((a, b) => b[1] - a[1])[0] : null;
+      const dominanteMesLabel = dominanteMes ? ((hubspot.stageMeta && hubspot.stageMeta.labels && hubspot.stageMeta.labels[dominanteMes[0]]) || dominanteMes[0]) : 'nenhuma';
+      const pctMeta = h.metaMensal > 0 ? Math.round((h.fechadosNoMes / h.metaMensal) * 100) : 0;
+      const boaPraticaExistente = (n.boasPraticas || [])[0] || null;
+
       const mesAnterior = await buscarMesAnterior(ownerId, mesAno);
       const blocoMesAnterior = mesAnterior
         ? `\nFechamento do mês passado (${mesAnterior.mes_ano}): "${mesAnterior.resumo_mes}" — ações recomendadas na época: ${(mesAnterior.acoes_recomendadas || []).join('; ')}. Se os mesmos pontos continuarem em aberto, diga isso explicitamente em vez de repetir as mesmas ações recomendadas de novo.`
@@ -335,15 +347,29 @@ REGRAS OBRIGATÓRIAS pro campo "compromissos":
       const promptMensal = `Você é um analista de operações de vendas fazendo o FECHAMENTO MENSAL de um vendedor de Field Sales,
 pro gestor dele usar na avaliação do mês. Privado, só o gestor vê.
 
-Histórico das semanas de ${n.name} neste mês:
+DADOS DO FUNIL E DOS GANHOS de ${n.name} (${n.praca}) neste mês (${mesAno}):
+- Negócios em aberto agora: ${h.open}
+- Etapa onde mais negócios estão parados: ${dominanteMesLabel}
+- Leads com SLA estourado agora: ${h.leadsTravados || 0}
+- Ganhos fechados no mês: ${h.fechadosNoMes || 0} de meta ${h.metaMensal || 10} (${pctMeta}% da meta) — total do pipeline, JÁ SOMANDO todos os canais de aquisição, não filtre nem mencione canal específico a menos que o dado diga isso
+- Boa prática já registrada pra essa pessoa: ${boaPraticaExistente ? `"${boaPraticaExistente}"` : 'nenhuma registrada ainda — se o histórico da semana mostrar algo bem feito, nomeie isso como a boa prática do mês'}
+
+Histórico semana a semana desse mês:
 ${contexto}
 ${blocoMesAnterior}
 
 Responda SOMENTE com JSON válido, sem markdown:
 {
-  "resumoMes": "3-4 frases avaliando o mês inteiro dessa pessoa — evolução, consistência, principal ponto de atenção",
-  "acoesRecomendadas": ["2-3 ações concretas e específicas que o gestor deve tomar com essa pessoa no próximo mês, diferentes das do mês passado se aqueles pontos já foram endereçados"]
-}`;
+  "resumoMes": "Avaliação objetiva do mês inteiro, em no máximo 4 frases curtas e diretas — sem enrolação. Precisa cobrir, nesta ordem: (1) o que aconteceu no funil (volume, gargalo dominante, SLA), (2) o resultado de ganhos do mês contra a meta, (3) uma boa prática concreta dessa pessoa pra reforçar. Tom calmo e factual — o gestor precisa terminar de ler e saber exatamente onde as coisas estão, sem alarme desnecessário nem elogio genérico.",
+  "acoesRecomendadas": ["2-3 ações concretas e checáveis que o gestor deve tomar com essa pessoa no próximo mês"]
+}
+
+REGRAS OBRIGATÓRIAS pro campo "acoesRecomendadas" (mesmo padrão do compromisso semanal — isso é o que mais falhava):
+- NUNCA vago ou genérico ("melhorar a prospecção", "focar mais"). Cada ação tem que ser checável: o que fazer, em que volume ou prazo (ex: "Acompanhar em campo os 3 negócios mais antigos em Visita até o dia 10").
+- NUNCA uma lista vazia.
+- Sempre 2 ou 3 itens.
+- Se um ponto do mês passado (acima) ainda não foi resolvido, repita a ação quase literalmente e diga que ela continua em aberto — não troque por outra coisa só pra parecer novo.
+- NUNCA comece um item com rótulo anunciando o que ele é ("Novo:", "Mantido:", etc.) — escreva a ação direto.`;
 
       let mensal;
       try {
