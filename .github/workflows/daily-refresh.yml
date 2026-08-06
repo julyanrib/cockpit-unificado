@@ -41,6 +41,11 @@ jobs:
       - name: Buscar dados frescos do HubSpot
         env:
           HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+          # Também grava o snapshot do dia (realizado_visitas etc.) na tabela dailies —
+          # sem essas duas variáveis o snapshot é pulado em silêncio e o histórico
+          # da Daily volta a depender de alguém abrir a tela antes da meia-noite.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: node scripts/fetch-hubspot.js
 
       - name: Gerar diagnóstico de gargalo do dia (IA — só o texto, nunca mexe em compromissos de PDI)
@@ -51,6 +56,19 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node scripts/generate-daily-gargalo.js
+
+      - name: Atualizar análise de coaching por executivo (IA — todo dia, análise da semana corrente)
+        # Antes isso só rodava na sexta (workflow weekly-summary) — o gestor passava a
+        # semana inteira conduzindo 1:1/PDI com texto velho. Agora regera TODO DIA às 5:00
+        # com os números frescos do fetch acima. É idempotente: apaga e regrava a análise
+        # da semana corrente (owner+semana), então rodar diariamente não duplica nada.
+        # O workflow de sexta continua existindo (fecha a semana às 16h e cuida do mensal).
+        if: ${{ github.event.schedule == '0 8 * * *' || github.event_name == 'workflow_dispatch' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/generate-individual-analysis.js
 
       - name: Atualizar números de ganhos/ranking/reuniões (sem gerar texto de IA)
         env:
