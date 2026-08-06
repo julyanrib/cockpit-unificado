@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 
 const TOKEN = process.env.HUBSPOT_TOKEN;
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
 if (!TOKEN) {
   console.error('ERRO: variável HUBSPOT_TOKEN não encontrada. Configure em GitHub → Settings → Secrets → Actions.');
   process.exit(1);
@@ -164,6 +166,31 @@ async function hsSearchTipoAll(objectType, body) {
     if (!after) break;
   }
   return todos;
+}
+
+// ---- Snapshot diário na tabela `dailies` (Supabase) ----
+// Antes, o número de "Realizado" só era salvo se ALGUÉM abrisse a aba Daily naquele dia —
+// se ninguém abrisse à noite, a última visita/avanço do dia se perdia pra sempre (o número
+// "hoje" do hubspot.json é sempre o instantâneo do momento do refresh, não guarda histórico).
+// Agora o próprio robô grava, em TODO refresh — sem depender de ninguém com a tela aberta.
+// Sem SUPABASE_URL/SERVICE_KEY configurados, pula com aviso e o resto do fetch segue normal.
+async function gravarSnapshotDaily(ownerId, dataISO, campos) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/dailies?on_conflict=owner_id,data`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify([{ owner_id: String(ownerId), data: dataISO, ...campos }])
+    });
+    if (!res.ok) console.log(`Aviso: snapshot diário (${ownerId}/${dataISO}) não salvou — ${res.status} ${await res.text()}`);
+  } catch (e) {
+    console.log(`Aviso: snapshot diário (${ownerId}/${dataISO}) falhou — ${e.message}`);
+  }
 }
 
 // ---- Agenda da semana (aba Agenda do cockpit) ----
@@ -688,6 +715,12 @@ async function main() {
       .reduce((soma, stageId) => soma + entrouHojeEm(stageId), 0);
     const propostasHubspotHoje = entrouHojeEm(STAGES.demoProposta);
     const fechamentosHubspotHoje = await stageDealsHojeByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
+    await gravarSnapshotDaily(rep.ownerId, hojeISO, {
+      realizado_visitas: visitasHubspotHoje,
+      realizado_avancos: avancosHubspotHoje,
+      realizado_propostas: propostasHubspotHoje,
+      realizado_fechamentos: fechamentosHubspotHoje
+    });
 
     const withDays = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
