@@ -217,6 +217,8 @@ async function main() {
       const blocoAnterior = anterior
         ? `\nNa semana passada (${anterior.semana_label}) a orientação pro gestor foi: "${anterior.como_agir}" (gargalo mapeado: "${anterior.gargalo_semana}"). Se esse MESMO gargalo continuar essa semana, diga isso explicitamente e proponha uma ação diferente/mais firme — não repita a mesma frase de novo. Se foi resolvido, reconheça em 1 frase curta e vá direto pro novo ponto de atenção.`
         : '\nNão há histórico de semana anterior pra essa pessoa ainda (primeira análise dela).';
+      const boaPratica = (n.boasPraticas || [])[0] || null;
+      const ganhosNomes = (h.ganhosSemanaNomes || []).slice(0, 3).join(', ');
 
       return `Você é um analista de operações de vendas ajudando um GESTOR de time de Field Sales (não o vendedor).
 Essa análise é PRIVADA — só o gestor vê, nunca o vendedor. Seja direto e específico sobre o que o GESTOR deve fazer
@@ -229,12 +231,17 @@ Dados de ${n.name} (${n.praca}) nesta semana (${semanaAtualLabel}):
 - Ganhos fechados essa semana: ${h.ganhosSemana || 0}
 - Gargalo já mapeado: ${n.gargalo}
 - Compromissos combinados na semana passada: ${(n.compromissos || []).length ? n.compromissos.join(' | ') : 'nenhum ainda'}
+- Boa prática registrada dessa pessoa (o que ela faz BEM e deve manter): ${boaPratica ? `"${boaPratica}"` : 'nenhuma registrada — se os números mostrarem algo bem feito, nomeie'}
+- Ganhos da semana com nome: ${ganhosNomes || 'nenhum ainda'}
 ${blocoAnterior}
+
+IMPORTANTE: esta análise é REGERADA TODO DIA com números frescos — escreva sobre o estado de AGORA,
+não sobre "o que planejar pra semana" como se fosse segunda-feira.
 
 Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 {
   "gargaloSemana": "1-2 frases sobre o que está acontecendo com essa pessoa essa semana especificamente, baseado nos números acima",
-  "comoAgir": "1-2 frases dizendo EXATAMENTE o que o gestor deve fazer no 1:1 ou na daily com essa pessoa esta semana — específico, não genérico, e sem repetir a orientação da semana passada se o gargalo já foi resolvido",
+  "comoAgir": "Roteiro pro gestor conduzir o 1:1, em 2-4 frases curtas e NESTA ORDEM: (1) abrir revisitando a semana anterior — o compromisso combinado foi cumprido ou não, diga qual; (2) o que MANTER — elogiar nominalmente a boa prática ou um ganho concreto da semana (cliente pelo nome, se houver); (3) o que cobrar agora, específico. Sem genérico, sem repetir a orientação da semana passada se o gargalo já foi resolvido.",
   "tendencia": "1 frase curta dizendo se essa pessoa está melhorando, piorando ou estável, com base no volume travado e ganhos",
   "compromissos": ["compromisso 1", "compromisso 2", "compromisso 3 (opcional)"]
 }
@@ -244,7 +251,8 @@ REGRAS OBRIGATÓRIAS pro campo "compromissos":
 - Sempre retorne 2 ou 3 strings, cada uma um compromisso concreto e checável (ex: "Avançar pelo menos 5 leads de Prospecção pra Visita até sexta"), nunca um objetivo vago.
 - Se os compromissos da semana passada ainda fazem sentido porque não foram cumpridos, repita-os quase literalmente — não os troque por outra coisa e não os esvazie.
 - Se não havia compromisso na semana passada (primeira vez), crie 2-3 novos do zero com base no gargalo mapeado.
-- NUNCA comece um compromisso com um rótulo anunciando o que ele é ("Novo:", "Repetindo de novo:", "Nova ação mais firme:" ou qualquer variação). Escreva direto a ação, tom profissional, sem narrar se é novo ou repetido — o compromisso fala por si.`;
+- NUNCA comece um compromisso com um rótulo anunciando o que ele é ("Novo:", "Repetindo de novo:", "Nova ação mais firme:" ou qualquer variação). Escreva direto a ação, tom profissional, sem narrar se é novo ou repetido — o compromisso fala por si.
+- Esta análise roda TODO DIA. Compromisso é combinado pra SEMANA: dentro da mesma semana, mantenha os compromissos atuais estáveis (repita-os) a menos que um já tenha sido claramente cumprido (aí troque só esse) ou o quadro tenha mudado de verdade. Compromisso que muda todo dia vira ruído e o executivo para de levar a sério.`;
     });
 
     const resultados = await Promise.allSettled(prompts.map(p => chamarClaude(p, 1100)));
