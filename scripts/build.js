@@ -137,6 +137,42 @@ if (ganhosDetalheFresco.length > 0) {
     .slice(0, 3);
 }
 
+// ---- Vendas do mês (clientes + MRR por executivo) ----
+// Fonte: hubspot.vendasMes (fechados do mês corrente com valor_de_mrr — mesmo critério
+// de closedate + 2 etapas de ganho do KPI "Fechados no mês", então os números batem).
+// Só entra quem está no time ativo (narrativas.json) — quem saiu (regra de ago/2026:
+// Gleyson, José Ricardo etc.) fica fora da tabela E dos totais, igual ao resto do cockpit.
+// Se hubspot.json ainda não tiver o campo (refresh antigo), vendasMes fica null e o
+// template esconde o quadro sozinho — nada quebra.
+let vendasMes = null;
+if (Array.isArray(hubspot.vendasMes)) {
+  const porOwnerMes = {};
+  hubspot.vendasMes.forEach(d => {
+    if (!d.ownerId || !narrativas.reps[d.ownerId]) return; // dono fora do time ativo
+    if (!porOwnerMes[d.ownerId]) porOwnerMes[d.ownerId] = { count: 0, mrrTotal: 0, clientes: [] };
+    porOwnerMes[d.ownerId].count += 1;
+    porOwnerMes[d.ownerId].mrrTotal += d.mrr || 0;
+    porOwnerMes[d.ownerId].clientes.push({ id: d.id || null, nome: d.nome, mrr: d.mrr || 0, closedate: d.closedate || null });
+  });
+  const porRepMes = Object.entries(porOwnerMes).map(([ownerId, v]) => ({
+    ownerId,
+    name: narrativas.reps[ownerId].name,
+    praca: narrativas.reps[ownerId].praca || '—',
+    count: v.count,
+    mrrTotal: v.mrrTotal,
+    clientes: v.clientes.sort((a, b) => (b.mrr || 0) - (a.mrr || 0))
+  })).sort((a, b) => (b.count - a.count) || (b.mrrTotal - a.mrrTotal));
+
+  const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const agoraBr = new Date(Date.now() - 3 * 60 * 60 * 1000); // horário de Brasília, mesmo ajuste do fetch
+  vendasMes = {
+    mesLabel: `${MESES_PT[agoraBr.getUTCMonth()]}/${agoraBr.getUTCFullYear()}`,
+    totalClientes: porRepMes.reduce((s, r) => s + r.count, 0),
+    totalMrr: porRepMes.reduce((s, r) => s + r.mrrTotal, 0),
+    porRep: porRepMes
+  };
+}
+
 // Leads quentes/frios já vêm com nome do executivo, mas não com a praça — isso só
 // existe em narrativas.json (não em hubspot.json). Anexa aqui, no build, por ownerId.
 function comPraca(lista) {
@@ -158,6 +194,7 @@ const DATA = {
   kpiDeltas,
   funil: hubspot.funil,
   funilLeads: hubspot.funilLeads || {},
+  vendasMes,
   temperatura: temperaturaComPraca,
   stageMeta: hubspot.stageMeta || { slaDays: {}, descriptions: {}, labels: {} },
   saude,

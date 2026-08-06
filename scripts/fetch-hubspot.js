@@ -546,6 +546,34 @@ async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
   return (data.results || []).filter(d => !isExcludedDeal(d)).length;
 }
 
+// Todos os negócios FECHADOS no mês corrente (Negócio Fechado + Enviado Onboarding),
+// com o valor de MRR (propriedade valor_de_mrr, a mesma já usada no fetch-weekly-comparison).
+// Alimenta o quadro "Vendas do mês" do Cockpit — usa exatamente o mesmo critério
+// (closedate + as 2 etapas de ganho + filtro de teste/exceções) do KPI fechadosNoMes,
+// então a contagem daqui bate com o número que já aparece no topo do painel.
+async function vendasDoMesDetalhe() {
+  const now = new Date();
+  const b = agoraBrasilia();
+  const inicioMes = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), 1, 3, 0, 0));
+  const results = await hsSearchAll({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'IN', values: [STAGES.ganho1, STAGES.ganho2] },
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioMes.getTime()), highValue: String(now.getTime()) }
+      ]
+    }],
+    properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'closedate']
+  });
+  return results.filter(d => !isExcludedDeal(d)).map(d => ({
+    id: d.id,
+    nome: d.properties.dealname,
+    ownerId: d.properties.hubspot_owner_id ? String(d.properties.hubspot_owner_id) : null,
+    mrr: Math.round(parseFloat(d.properties.valor_de_mrr) || 0),
+    closedate: d.properties.closedate || null
+  }));
+}
+
 // Conta quantos negócios de Ganho (Negócio Fechado + Enviado Onboarding) fecharam HOJE
 // pra um executivo específico — usado pra alimentar automaticamente o "Fechamentos hoje"
 // da Daily, sem depender de o executivo digitar (o Expogo já manda isso pro HubSpot sozinho).
@@ -652,6 +680,10 @@ async function main() {
   // lógica de 2 etapas do ganhoSemana (Negócio Fechado + Enviado Onboarding), só que
   // com janela do mês em vez de 7 dias.
   const fechadosNoMes = await stageTotalThisMonth([STAGES.ganho1, STAGES.ganho2]);
+
+  // Detalhe dos fechados do mês (nome + dono + MRR) — pro quadro "Vendas do mês".
+  const vendasMes = await vendasDoMesDetalhe();
+  console.log(`Vendas do mês: ${vendasMes.length} negócios fechados no mês corrente (com MRR).`);
 
   // ---- Leads por etapa, time inteiro (pro clique no funil) ----
   const ownerNameById = {};
@@ -873,6 +905,7 @@ async function main() {
       labels: STAGE_LABELS
     },
     funilLeads,
+    vendasMes,
     reps: repsData,
     agenda
   };
