@@ -5003,6 +5003,33 @@ const PlanoSyncExpogo = {
 let planoDiaCache = null; // linha de planos_diarios do dia de hoje do rep logado
 let planoEmEdicao = false; // flag SÓ de UI: reabre os campos de um plano já fechado sem tocar no status do banco
 
+/* ---- Mapa de planejamento (Leaflet + OpenStreetMap, gratuito e sem chave) ----
+   Carregado sob demanda: o Leaflet só é baixado quando a tela Hoje renderiza o
+   mapa, pra não pesar o shell de login. Mapa é FERRAMENTA DE PLANEJAMENTO:
+   mostra as contas-alvo com coordenada real (Outscraper/Google Places) e a
+   interação inclui/tira a conta da rota de hoje — nunca check-in, GPS de
+   execução, registro de visita ou mudança de etapa (isso é papel do Expogo). */
+let leafletCarregando = null;
+let planoMapaInstancia = null;
+let planoMapaFiltro = { mostrarSemFit: false, notaMin: 0 };
+
+function carregarLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (leafletCarregando) return leafletCarregando;
+  leafletCarregando = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = () => resolve();
+    js.onerror = () => { leafletCarregando = null; reject(new Error('Não consegui baixar o Leaflet')); };
+    document.head.appendChild(js);
+  });
+  return leafletCarregando;
+}
+
 async function carregarPlanoDoDia(ownerId, dataISO) {
   if (!DATA.supabase || !supa) return null;
   const { data, error } = await supa.from('planos_diarios').select('*')
@@ -5117,6 +5144,25 @@ async function montarPlanoDoDia(r) {
               </label>`).join('')}</div>`
           : `<div style="font-size:12.5px;color:var(--muted);">Nenhuma conta-alvo marcada pra hoje na Prospecção.</div>`}
       </div>
+    </div>
+
+    <div class="chart-card" style="margin-top:14px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;">
+        <h3 style="margin:0;">🗺️ Mapa de planejamento</h3>
+        <span style="display:flex;gap:10px;align-items:center;font-size:11.5px;color:var(--muted2);flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="planoMapaNota45" ${planoMapaFiltro.notaMin >= 4.5 ? 'checked' : ''}> só nota ≥ 4.5</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="planoMapaSemFit" ${planoMapaFiltro.mostrarSemFit ? 'checked' : ''}> mostrar sem fit</label>
+        </span>
+      </div>
+      <div class="chart-subtitle" style="margin:0 0 10px;">Suas contas-alvo com endereço real no mapa. Clique num pin pra <b>incluir na rota de hoje</b> ou tirar — a execução na rua continua no Expogo.</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:8px;">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#2563EB;vertical-align:-1px;"></span> na rota de hoje</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#1E7A63;vertical-align:-1px;"></span> disponível</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7C3AED;vertical-align:-1px;"></span> já criada no HubSpot</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#9CA3AF;vertical-align:-1px;"></span> sem fit</span>
+      </div>
+      <div id="planoMapa" style="height:380px;border-radius:14px;border:1px solid var(--line);overflow:hidden;"><div class="empty-state" style="padding-top:160px;">Carregando o mapa...</div></div>
+      <div id="planoMapaMsg" style="font-size:11.5px;color:var(--muted2);margin-top:8px;"></div>
     </div>
 
     <div style="display:flex;align-items:center;gap:8px;margin:22px 0 12px;">
@@ -5246,6 +5292,119 @@ async function montarPlanoDoDia(r) {
       montarPlanoDoDia(r);
     });
   }
+
+  // Filtros do mapa (re-renderiza só o mapa, não o plano inteiro)
+  const chkNota = slot.querySelector('#planoMapaNota45');
+  const chkSemFit = slot.querySelector('#planoMapaSemFit');
+  if (chkNota) chkNota.addEventListener('change', () => { planoMapaFiltro.notaMin = chkNota.checked ? 4.5 : 0; montarPlanoMapa(r, hoje, fechado); });
+  if (chkSemFit) chkSemFit.addEventListener('change', () => { planoMapaFiltro.mostrarSemFit = chkSemFit.checked; montarPlanoMapa(r, hoje, fechado); });
+
+  montarPlanoMapa(r, hoje, fechado).catch(e => {
+    console.error('Erro no mapa de planejamento:', e);
+    const box = document.getElementById('planoMapa');
+    if (box) box.innerHTML = '<div class="empty-state" style="padding-top:160px;">Não consegui carregar o mapa agora (sem internet ou CDN bloqueado). O resto do plano segue funcionando.</div>';
+  });
+}
+
+async function montarPlanoMapa(r, hoje, planoFechado) {
+  const box = document.getElementById('planoMapa');
+  const msg = document.getElementById('planoMapaMsg');
+  if (!box || !DATA.supabase || !supa) return;
+
+  // Todas as contas-alvo do rep com coordenada real (Outscraper/Google Places).
+  // Sem coordenada = fora do mapa, e a gente DIZ quantas ficaram de fora.
+  const { data, error } = await supa.from('leads_prospeccao')
+    .select('id,nome,bairro,cidade,lat,lng,status,data_rota,nota,avaliacoes')
+    .eq('responsavel_owner_id', r.ownerId);
+  if (error) { box.innerHTML = `<div class="empty-state" style="padding-top:160px;">Erro ao carregar contas-alvo: ${esc(error.message)}</div>`; return; }
+
+  const todas = data || [];
+  const comCoord = todas.filter(l => l.lat != null && l.lng != null);
+  const semCoord = todas.length - comCoord.length;
+  const visiveis = comCoord.filter(l =>
+    (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
+    (!planoMapaFiltro.notaMin || (l.nota || 0) >= planoMapaFiltro.notaMin)
+  );
+
+  if (visiveis.length === 0) {
+    if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
+    box.innerHTML = `<div class="empty-state" style="padding-top:160px;">Nenhuma conta-alvo com coordenada pra mostrar${planoMapaFiltro.notaMin ? ' com esse filtro de nota' : ''}.</div>`;
+    if (msg) msg.textContent = semCoord > 0 ? `${semCoord} conta(s)-alvo sem coordenada ficaram fora do mapa.` : '';
+    return;
+  }
+
+  await carregarLeaflet();
+
+  if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
+  box.innerHTML = '';
+  const mapa = L.map(box, { scrollWheelZoom: false });
+  planoMapaInstancia = mapa;
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(mapa);
+
+  const corDoStatus = l => {
+    if (l.status === 'na_rota' && l.data_rota === hoje) return '#2563EB'; // azul: na rota de HOJE
+    if (l.status === 'sem_fit') return '#9CA3AF';
+    if (l.status === 'criado_hubspot') return '#7C3AED';
+    return '#1E7A63'; // pendente/atribuido/na_rota de outro dia = disponível
+  };
+
+  const bounds = [];
+  visiveis.forEach(l => {
+    const naRotaHoje = l.status === 'na_rota' && l.data_rota === hoje;
+    const icone = L.divIcon({
+      className: '',
+      html: `<span style="display:block;width:${naRotaHoje ? 16 : 12}px;height:${naRotaHoje ? 16 : 12}px;border-radius:50%;background:${corDoStatus(l)};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);"></span>`,
+      iconSize: [naRotaHoje ? 16 : 12, naRotaHoje ? 16 : 12],
+      iconAnchor: [naRotaHoje ? 8 : 6, naRotaHoje ? 8 : 6]
+    });
+    const marcador = L.marker([l.lat, l.lng], { icon: icone }).addTo(mapa);
+    bounds.push([l.lat, l.lng]);
+
+    const detalhe = [l.bairro, l.cidade].filter(Boolean).join(', ');
+    const notaTxt = l.nota != null ? `⭐ ${l.nota}${l.avaliacoes ? ` (${l.avaliacoes})` : ''}` : '';
+    // Regra do documento: a interação do mapa gera SELEÇÃO pro plano do dia —
+    // nunca execução. Com o plano fechado, nada de mudar seleção por fora:
+    // a pessoa precisa clicar em "Editar plano" primeiro.
+    const acao = planoFechado
+      ? `<div style="font-size:11px;color:#6b7280;margin-top:6px;">Plano de hoje já fechado — use "Editar plano" pra mudar a seleção.</div>`
+      : naRotaHoje
+        ? `<button class="plano-mapa-btn" data-id="${esc(String(l.id))}" data-acao="tirar" style="margin-top:7px;font-size:11.5px;font-weight:700;color:#fff;background:#9CA3AF;border:none;border-radius:999px;padding:6px 12px;cursor:pointer;">✕ Tirar da rota de hoje</button>`
+        : `<button class="plano-mapa-btn" data-id="${esc(String(l.id))}" data-acao="incluir" style="margin-top:7px;font-size:11.5px;font-weight:700;color:#fff;background:#2563EB;border:none;border-radius:999px;padding:6px 12px;cursor:pointer;">➕ Incluir na rota de hoje</button>`;
+    marcador.bindPopup(`
+      <div style="font-family:Inter,sans-serif;font-size:12.5px;min-width:180px;">
+        <b>${esc(l.nome)}</b>
+        ${detalhe ? `<div style="color:#6b7280;">${esc(detalhe)}</div>` : ''}
+        ${notaTxt ? `<div style="margin-top:3px;">${notaTxt}</div>` : ''}
+        ${acao}
+      </div>
+    `);
+  });
+
+  mapa.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+
+  // Delegação: os botões dos popups são criados dinamicamente pelo Leaflet
+  mapa.on('popupopen', ev => {
+    const btn = ev.popup.getElement().querySelector('.plano-mapa-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      const campos = btn.dataset.acao === 'incluir'
+        ? { status: 'na_rota', data_rota: hoje }
+        : { status: 'atribuido', data_rota: null };
+      const { error: e2 } = await supa.from('leads_prospeccao')
+        .update({ ...campos, updated_at: new Date().toISOString() }).eq('id', btn.dataset.id);
+      if (e2) { alert('Não consegui atualizar: ' + e2.message); btn.disabled = false; return; }
+      // Re-renderiza o plano inteiro: as checkboxes de contas-alvo e o mapa
+      // precisam refletir a nova seleção (fonte única: leads_prospeccao).
+      montarPlanoDoDia(r);
+    });
+  });
+
+  if (msg) msg.textContent = `${visiveis.length} conta(s)-alvo no mapa` + (semCoord > 0 ? ` · ${semCoord} sem coordenada ficaram de fora` : '') + '.';
 }
 
 /* ---- ETAPA 6b — VISÃO DO GESTOR: planos do dia do time ----
