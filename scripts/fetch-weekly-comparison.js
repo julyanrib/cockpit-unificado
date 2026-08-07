@@ -144,14 +144,25 @@ async function windowCounts(startMs, endMs) {
   };
 }
 
+// Início da SEMANA CIVIL corrente: segunda-feira 00:00 no horário de Brasília
+// (mesma regra e mesma implementação do fetch-hubspot.js — 00:00 BRT = 03:00 UTC).
+// Correção de consistência 06/08/26: antes a "semana atual" era uma janela rolante
+// (now - 6 dias), diferente do critério oficial e do que a tela chama de "semana".
+function inicioSemanaBrasiliaMs() {
+  const b = new Date(Date.now() - 3 * 60 * 60 * 1000); // deslocado -3h; getUTC* = calendário BRT
+  const diasDesdeSegunda = (b.getUTCDay() + 6) % 7;    // seg=0 ... dom=6
+  return Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate() - diasDesdeSegunda, 3, 0, 0);
+}
+
 async function main() {
   const now = new Date();
   const DAY = 24 * 60 * 60 * 1000;
 
+  // Semana atual: segunda 00:00 BRT → agora. Semana anterior: a segunda anterior → domingo 23:59:59 BRT.
   const atualFim = now;
-  const atualInicio = new Date(now.getTime() - 6 * DAY);
-  const anteriorFim = new Date(atualInicio.getTime() - DAY);
-  const anteriorInicio = new Date(anteriorFim.getTime() - 6 * DAY);
+  const atualInicio = new Date(inicioSemanaBrasiliaMs());
+  const anteriorFim = new Date(atualInicio.getTime() - 1);
+  const anteriorInicio = new Date(atualInicio.getTime() - 7 * DAY);
 
   console.log('Buscando semana atual...');
   const atual = await windowCounts(atualInicio.getTime(), atualFim.getTime());

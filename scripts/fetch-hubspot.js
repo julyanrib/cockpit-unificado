@@ -102,6 +102,19 @@ function hojeISOBrasilia() {
   return agoraBrasilia().toISOString().slice(0, 10);
 }
 
+// Início da SEMANA CIVIL corrente: segunda-feira 00:00 no horário de Brasília.
+// (Correção de consistência 06/08/26: todas as métricas "da semana" — leads criados,
+// ganhos do time e ganhos por executivo — usavam janela ROLANTE de 7 dias (now - 7d),
+// mas a interface chama tudo de "essa semana"/"Pódio da semana". Rolante de 7 dias numa
+// quinta inclui a quinta/sexta da semana PASSADA — número certo pro rótulo errado.
+// Regra oficial agora: semana = segunda 00:00 América/São_Paulo até agora.)
+// 00:00 em Brasília = 03:00 UTC do mesmo dia civil (mesma convenção do inicioMes abaixo).
+function inicioSemanaBrasilia() {
+  const b = agoraBrasilia();                    // deslocado -3h; getUTC* = calendário de Brasília
+  const diasDesdeSegunda = (b.getUTCDay() + 6) % 7; // seg=0, ter=1 ... dom=6
+  return Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate() - diasDesdeSegunda, 3, 0, 0);
+}
+
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 // HubSpot limita quantas chamadas podem chegar POR SEGUNDO. Por isso toda chamada
@@ -311,13 +324,15 @@ async function stageTotal(stageId, extraFilters = []) {
 }
 
 async function createdLast7Days() {
+  // Nome mantido pra não mexer nos chamadores, mas a janela agora é a SEMANA CIVIL
+  // (segunda 00:00 Brasília → agora), não mais 7 dias rolantes — ver inicioSemanaBrasilia().
   const now = Date.now();
-  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const inicioSemana = inicioSemanaBrasilia();
   const results = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
-        { propertyName: 'createdate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
+        { propertyName: 'createdate', operator: 'BETWEEN', value: String(inicioSemana), highValue: String(now) }
       ]
     }],
     properties: ['dealname', 'hubspot_owner_id']
@@ -361,8 +376,10 @@ function isExcludedDeal(deal) {
 // estar mais parado em "Negócio Fechado" hoje. closedate é fixo e não muda quando o negócio
 // avança, então cada venda real só é contada 1 vez, não importa em qual das duas etapas está agora.
 async function stageDealsLast7DaysComNomes(stageIdOuLista) {
+  // Nome mantido pra não mexer nos chamadores, mas a janela agora é a SEMANA CIVIL
+  // (segunda 00:00 Brasília → agora), não mais 7 dias rolantes — ver inicioSemanaBrasilia().
   const now = Date.now();
-  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const inicioSemana = inicioSemanaBrasilia();
   const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
   const filtroEtapa = lista.length > 1
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
@@ -373,7 +390,7 @@ async function stageDealsLast7DaysComNomes(stageIdOuLista) {
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
         filtroEtapa,
-        { propertyName: 'closedate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioSemana), highValue: String(now) }
       ]
     }],
     properties: ['dealname', 'hubspot_owner_id']
@@ -531,7 +548,9 @@ async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
     : { propertyName: 'dealstage', operator: 'EQ', value: lista[0] };
 
-  const data = await hsSearch({
+  // hsSearchAll (paginado) em vez de 1 página de 50 — garante que fechadosNoMes por
+  // executivo nunca trunca e sempre bate com a contagem do Jogo do mês (mesmos filtros).
+  const results = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
@@ -540,10 +559,9 @@ async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioMes.getTime()), highValue: String(now.getTime()) }
       ]
     }],
-    properties: ['dealname'],
-    limit: 50
+    properties: ['dealname']
   });
-  return (data.results || []).filter(d => !isExcludedDeal(d)).length;
+  return results.filter(d => !isExcludedDeal(d)).length;
 }
 
 // Todos os negócios FECHADOS no mês corrente (Negócio Fechado + Enviado Onboarding),
@@ -602,26 +620,28 @@ async function stageDealsHojeByOwner(stageIdOuLista, ownerId) {
 }
 
 async function stageDealsLast7DaysByOwner(stageIdOuLista, ownerId) {
+  // Semana civil (segunda 00:00 Brasília → agora), mesmo critério do time inteiro —
+  // e agora com paginação completa (hsSearchAll) em vez de 1 página de 50, pra
+  // garantir a invariante "nenhuma consulta truncada por limite de paginação".
   const now = Date.now();
-  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const inicioSemana = inicioSemanaBrasilia();
   const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
   const filtroEtapa = lista.length > 1
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
     : { propertyName: 'dealstage', operator: 'EQ', value: lista[0] };
 
-  const data = await hsSearch({
+  const results = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
         filtroEtapa,
         { propertyName: 'hubspot_owner_id', operator: 'EQ', value: ownerId },
-        { propertyName: 'closedate', operator: 'BETWEEN', value: String(sevenDaysAgo), highValue: String(now) }
+        { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioSemana), highValue: String(now) }
       ]
     }],
-    properties: ['dealname', 'closedate'],
-    limit: 50
+    properties: ['dealname', 'closedate']
   });
-  return (data.results || [])
+  return results
     .filter(d => !isExcludedDeal(d))
     .map(d => ({ name: d.properties.dealname }));
 }
