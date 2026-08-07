@@ -1929,6 +1929,8 @@ async function renderMeuPainel() {
       </span>` : ''}
     </div>
 
+    <div id="planoDoDiaSlot"></div>
+
     <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:18px;align-items:start;">
 
       <div style="background:var(--red);border-radius:var(--r-xl);padding:24px 26px;color:#fff;display:flex;flex-direction:column;gap:20px;box-shadow:var(--shadow);">
@@ -2035,6 +2037,12 @@ async function renderMeuPainel() {
   }
 
   wireRoteiroChecks(el);
+
+  // Etapa 6a — card "Fechar meu plano de hoje" (async: consulta planos_diarios
+  // e leads_prospeccao no Supabase; se algo falhar, o resto do painel fica de pé).
+  if (DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
+    montarPlanoDoDia(r).catch(e => console.error('Erro ao montar o plano do dia:', e));
+  }
 
   const btnComecarRota = document.getElementById('meuPainelComecarRota');
   if (btnComecarRota) {
@@ -4927,6 +4935,256 @@ async function salvarDaily(ownerId, dataISO, campos) {
   if (error) { console.error('Erro ao salvar daily:', error.message); return { error }; }
   if (data && data[0]) dailiesCache[`${ownerId}_${dataISO}`] = data[0];
   return { error: null };
+}
+
+/* ========== ETAPA 6a — PLANO DO DIA (planos_diarios) ==========
+   Passagem de bastão Cockpit (desktop, 8h30) -> Expogo (celular, rua).
+   Estados IMPLEMENTADOS DE VERDADE nesta etapa: 'rascunho' e 'plano_fechado'.
+   Os demais estados (aguardando_sincronizacao, sincronizado, recebido_expogo,
+   em_execucao, concluido) existem no CHECK da tabela e no adaptador abaixo,
+   mas NUNCA aparecem na UI enquanto não houver API real do Expogo.
+   Regra do projeto: não declarar sincronização sem backend funcionando. */
+
+// Adaptador de sincronização — interface preparada, integração inexistente.
+// Quando a API do Expogo (ou o PWA) existir, só este objeto muda; o contrato
+// do plano (linha de planos_diarios) permanece o mesmo.
+const PlanoSyncExpogo = {
+  disponivel: false, // vira true somente quando existir backend real
+  async enviar() { throw new Error('Integração com o Expogo ainda não existe — nada de simular sincronização.'); }
+};
+
+let planoDiaCache = null; // linha de planos_diarios do dia de hoje do rep logado
+let planoEmEdicao = false; // flag SÓ de UI: reabre os campos de um plano já fechado sem tocar no status do banco
+
+async function carregarPlanoDoDia(ownerId, dataISO) {
+  if (!DATA.supabase || !supa) return null;
+  const { data, error } = await supa.from('planos_diarios').select('*')
+    .eq('owner_id', ownerId).eq('data', dataISO).maybeSingle();
+  if (error) { console.error('Erro ao carregar plano do dia:', error.message); return null; }
+  planoDiaCache = data || null;
+  return planoDiaCache;
+}
+
+async function salvarPlanoDoDia(ownerId, dataISO, campos) {
+  if (!DATA.supabase || !supa) return { error: { message: 'Supabase indisponível' } };
+  const existente = planoDiaCache || {};
+  const linha = {
+    owner_id: ownerId,
+    data: dataISO,
+    criado_por: sessaoAtual.email,
+    prioridades: existente.prioridades ?? [],
+    contas_alvo: existente.contas_alvo ?? [],
+    agenda_resumo: existente.agenda_resumo ?? [],
+    daily_snapshot: existente.daily_snapshot ?? null,
+    bloqueios: existente.bloqueios ?? null,
+    observacao: existente.observacao ?? null,
+    status: existente.status ?? 'rascunho',
+    fechado_em: existente.fechado_em ?? null,
+    versao: existente.versao ?? 1,
+    atualizado_em: new Date().toISOString(),
+    ...campos
+  };
+  const { data, error } = await supa.from('planos_diarios').upsert(linha, { onConflict: 'owner_id,data' }).select();
+  if (error) { console.error('Erro ao salvar plano do dia:', error.message); return { error }; }
+  if (data && data[0]) planoDiaCache = data[0];
+  return { error: null, plano: planoDiaCache };
+}
+
+// Coleta o que está preenchido no card (sem gravar nada) — fonte única pros
+// dois caminhos: autosave de rascunho e fechamento do plano.
+function coletarPlanoDoCard(root) {
+  const prioridades = [1, 2, 3]
+    .map(i => (root.querySelector('#planoPrioridade' + i) || {}).value || '')
+    .map(v => v.trim());
+  const contas = Array.from(root.querySelectorAll('.plano-conta-check'))
+    .filter(ch => ch.checked)
+    .map(ch => ({ id: ch.dataset.id, nome: ch.dataset.nome }));
+  return {
+    prioridades,
+    contas_alvo: contas,
+    bloqueios: ((root.querySelector('#planoBloqueios') || {}).value || '').trim() || null,
+    observacao: ((root.querySelector('#planoObservacao') || {}).value || '').trim() || null
+  };
+}
+
+async function montarPlanoDoDia(r) {
+  const slot = document.getElementById('planoDoDiaSlot');
+  if (!slot || !DATA.supabase || !supa) return;
+  const hoje = isoDate(new Date());
+  await carregarPlanoDoDia(r.ownerId, hoje);
+
+  // Daily de hoje (leitura) — mesma fonte da aba Daily, nada recalculado
+  const d = getDaily(r.ownerId, hoje) || {};
+  const dailyPreenchida = d.prometido_visitas != null || d.prometido_avancos != null || d.prometido_propostas != null;
+
+  // Agenda de hoje (leitura) — mesmo normalizador da aba Agenda
+  let agendaHoje = [];
+  if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+    // Os Dates da agenda guardam o horário BRT nos campos UTC (mesma convenção de
+    // agendaHhmm, que lê getUTCHours) — então a data "de Brasília" do evento sai
+    // do toISOString, não do isoDate local.
+    agendaHoje = agendaNormalizar(DATA.agenda)
+      .filter(e => e.ownerId === r.ownerId && e.inicio && e.inicio.toISOString().slice(0, 10) === hoje)
+      .sort((a, b) => a.inicio - b.inicio)
+      .map(e => ({ hora: agendaHhmm(e.inicio), tipo: (AGENDA_TIPOS[e.tipo] || {}).rotulo || 'Compromisso', cliente: e.cliente || '' }));
+  }
+
+  // Contas-alvo já na rota de hoje (leads_prospeccao status na_rota + data_rota hoje)
+  let contasHoje = [];
+  {
+    const { data, error } = await supa.from('leads_prospeccao').select('id,nome,bairro,cidade')
+      .eq('responsavel_owner_id', r.ownerId).eq('status', 'na_rota').eq('data_rota', hoje);
+    if (error) console.error('Erro ao carregar contas-alvo do plano:', error.message);
+    contasHoje = data || [];
+  }
+
+  const p = planoDiaCache || {};
+  const fechado = p.status === 'plano_fechado' && !planoEmEdicao;
+  const editandoPlanoFechado = p.status === 'plano_fechado' && planoEmEdicao;
+  const prios = Array.isArray(p.prioridades) ? p.prioridades : [];
+  const contasSalvas = new Set((Array.isArray(p.contas_alvo) ? p.contas_alvo : []).map(c => String(c.id)));
+  const fechadoEmFmt = p.fechado_em ? new Date(p.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+
+  slot.innerHTML = `
+    <div class="chart-card" id="planoDoDiaCard" style="margin:0 0 18px;border-left:3px solid var(--red);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;">
+        <h3 style="margin:0;">🗓️ Seu plano de hoje</h3>
+        <span id="planoStatusPill" style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:5px 12px;${fechado ? 'background:var(--green-soft);color:var(--green);' : 'background:var(--panel2);color:var(--muted2);border:1px solid var(--line);'}">${fechado ? `Plano fechado às ${fechadoEmFmt}${(p.versao || 1) > 1 ? ` · v${p.versao}` : ''}` : 'Rascunho'}</span>
+      </div>
+      <div class="chart-subtitle" style="margin:0 0 14px;">Revise, escolha as três prioridades e feche o plano. Depois é só abrir o Expogo no celular pra executar.</div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px;">
+        <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">📝 Sua Daily de hoje</div>
+          ${dailyPreenchida
+            ? `<div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
+                 <span><b>${d.prometido_visitas ?? '—'}</b> visitas prometidas</span>
+                 <span><b>${d.prometido_avancos ?? '—'}</b> avanços prometidos</span>
+                 <span><b>${d.prometido_propostas ?? '—'}</b> propostas prometidas</span>
+               </div>`
+            : `<div style="font-size:12.5px;color:var(--muted);">Você ainda não preencheu a Daily de hoje.</div>`}
+          <button id="planoRevisarDaily" style="margin-top:10px;font-size:11.5px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:999px;padding:7px 14px;cursor:pointer;">${dailyPreenchida ? 'Revisar minha Daily' : 'Preencher minha Daily'}</button>
+        </div>
+
+        <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">📅 Agenda de hoje</div>
+          ${agendaHoje.length > 0
+            ? `<div style="font-size:12.5px;display:flex;flex-direction:column;gap:5px;">${agendaHoje.map(e => `<span><b>${esc(e.hora)}</b> ${esc(e.tipo)} — ${esc(e.cliente)}</span>`).join('')}</div>`
+            : `<div style="font-size:12.5px;color:var(--amber);">⚠️ Agenda vazia hoje — marcar a reunião no Expogo já coloca ela aqui.</div>`}
+        </div>
+
+        <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">🎯 Contas-alvo na sua rota de hoje</div>
+          ${contasHoje.length > 0
+            ? `<div style="font-size:12.5px;display:flex;flex-direction:column;gap:6px;">${contasHoje.map(c => `
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                  <input type="checkbox" class="plano-conta-check" data-id="${esc(String(c.id))}" data-nome="${esc(c.nome)}" ${(!planoDiaCache || contasSalvas.has(String(c.id))) ? 'checked' : ''} ${fechado ? 'disabled' : ''}>
+                  <span><b>${esc(c.nome)}</b>${c.bairro || c.cidade ? ` <span style="color:var(--muted);">· ${esc([c.bairro, c.cidade].filter(Boolean).join(', '))}</span>` : ''}</span>
+                </label>`).join('')}</div>`
+            : `<div style="font-size:12.5px;color:var(--muted);">Nenhuma conta-alvo marcada pra hoje na Prospecção.</div>`}
+        </div>
+      </div>
+
+      <div style="margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">⭐ Suas três prioridades de hoje</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
+          ${[1, 2, 3].map(i => `<input type="text" id="planoPrioridade${i}" maxlength="140" placeholder="Prioridade ${i}" value="${esc(prios[i - 1] || '')}" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">`).join('')}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-bottom:16px;">
+        <textarea id="planoBloqueios" rows="2" maxlength="500" placeholder="Bloqueio ou pedido de ajuda (opcional)" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;resize:vertical;">${esc(p.bloqueios || '')}</textarea>
+        <textarea id="planoObservacao" rows="2" maxlength="500" placeholder="Observação (opcional)" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;resize:vertical;">${esc(p.observacao || '')}</textarea>
+      </div>
+
+      <div id="planoRodape" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        ${fechado
+          ? `<span style="font-size:13px;font-weight:700;color:var(--green);">✅ Plano do dia salvo. Agora abra o Expogo no celular para executar sua rota.</span>
+             <button id="planoEditar" style="font-size:12px;font-weight:700;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:9px 16px;cursor:pointer;">✏️ Editar plano</button>`
+          : `<button id="planoFechar" style="font-size:13px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:12px 22px;min-height:44px;cursor:pointer;">${editandoPlanoFechado ? 'Salvar alterações do plano (nova versão)' : 'Fechar meu plano de hoje'}</button>
+             ${editandoPlanoFechado ? `<button id="planoCancelarEdicao" style="font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:999px;padding:9px 16px;cursor:pointer;">Cancelar</button>` : ''}
+             <span id="planoAutosaveMsg" style="font-size:11.5px;color:var(--muted2);"></span>`}
+      </div>
+    </div>
+  `;
+
+  const btnDaily = slot.querySelector('#planoRevisarDaily');
+  if (btnDaily) btnDaily.addEventListener('click', () => {
+    activateTab('viewDaily');
+    if (typeof renderDaily === 'function') renderDaily();
+  });
+
+  if (!fechado) {
+    // Autosave de rascunho — grava o que a pessoa digitou, com debounce.
+    // Só roda enquanto o plano NUNCA foi fechado: editar um plano já fechado
+    // exige o clique explícito em "Salvar alterações" (que sobe a versão) —
+    // autosave aqui rebaixaria o status no banco, e isso é proibido.
+    let autosaveTimer = null;
+    if (!editandoPlanoFechado) {
+      const agendarAutosave = () => {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(async () => {
+          const campos = coletarPlanoDoCard(slot);
+          const msg = slot.querySelector('#planoAutosaveMsg');
+          const { error } = await salvarPlanoDoDia(r.ownerId, hoje, { ...campos, status: 'rascunho' });
+          if (msg) msg.textContent = error ? 'Não consegui salvar o rascunho — verifique a conexão.' : 'Rascunho salvo automaticamente.';
+        }, 1200);
+      };
+      slot.querySelectorAll('input[type="text"], textarea, .plano-conta-check').forEach(elm => {
+        elm.addEventListener('input', agendarAutosave);
+        elm.addEventListener('change', agendarAutosave);
+      });
+    }
+
+    const btnFechar = slot.querySelector('#planoFechar');
+    if (btnFechar) btnFechar.addEventListener('click', async () => {
+      const campos = coletarPlanoDoCard(slot);
+      if (!campos.prioridades.some(v => v)) {
+        alert('Escreva pelo menos uma prioridade antes de fechar o plano.');
+        return;
+      }
+      btnFechar.disabled = true;
+      btnFechar.textContent = 'Salvando...';
+      clearTimeout(autosaveTimer);
+      const jaFoiFechado = !!(planoDiaCache && planoDiaCache.fechado_em);
+      const dNow = getDaily(r.ownerId, hoje) || {};
+      const { error } = await salvarPlanoDoDia(r.ownerId, hoje, {
+        ...campos,
+        agenda_resumo: agendaHoje,
+        daily_snapshot: {
+          prometido_visitas: dNow.prometido_visitas ?? null,
+          prometido_avancos: dNow.prometido_avancos ?? null,
+          prometido_propostas: dNow.prometido_propostas ?? null
+        },
+        status: 'plano_fechado',
+        fechado_em: new Date().toISOString(),
+        versao: jaFoiFechado ? ((planoDiaCache.versao || 1) + 1) : 1
+      });
+      if (error) {
+        btnFechar.disabled = false;
+        btnFechar.textContent = editandoPlanoFechado ? 'Salvar alterações do plano (nova versão)' : 'Fechar meu plano de hoje';
+        alert('Não consegui salvar o plano: ' + error.message);
+        return;
+      }
+      planoEmEdicao = false;
+      montarPlanoDoDia(r); // re-renderiza no estado fechado
+    });
+
+    const btnCancelar = slot.querySelector('#planoCancelarEdicao');
+    if (btnCancelar) btnCancelar.addEventListener('click', () => {
+      planoEmEdicao = false;
+      montarPlanoDoDia(r); // volta pro estado fechado, descartando o que não foi salvo
+    });
+  } else {
+    const btnEditar = slot.querySelector('#planoEditar');
+    if (btnEditar) btnEditar.addEventListener('click', () => {
+      // Reabre os campos SEM tocar no status do banco: ao salvar de novo, o
+      // status continua plano_fechado e a versão sobe (regra: alteração
+      // pós-fechamento registra nova versão, nunca some com o horário original).
+      planoEmEdicao = true;
+      montarPlanoDoDia(r);
+    });
+  }
 }
 
 // ---- Cálculos derivados (nunca chumbados) ----
