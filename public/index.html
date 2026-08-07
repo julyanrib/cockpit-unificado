@@ -899,6 +899,8 @@
 
   <div class="banner" id="banner" style="margin-top:16px;"></div>
 
+  <div id="planosDoTimeSlot"></div>
+
   <div class="charts-row">
     <div class="chart-card">
       <h3><span class="source-tag hub">HubSpot</span>Funil por etapa</h3>
@@ -1391,6 +1393,10 @@ function aplicarVisaoPorPapel() {
   if (souGestorSessao) {
     document.getElementById('sidenavTitle').textContent = 'Gestor';
     if (typeof renderCoaching === 'function') renderCoaching();
+    // Etapa 6b — planos do dia do time. setTimeout(0) pelo mesmo motivo do
+    // renderAgenda logo abaixo: usa AGENDA_TIPOS/agendaNormalizar, declaradas
+    // mais adiante no script.
+    if (typeof montarPlanosDoTime === 'function') setTimeout(() => montarPlanosDoTime().catch(e => console.error('Erro nos planos do time:', e)), 0);
   }
 
   if (typeof renderRepsList === 'function') renderRepsList();
@@ -1894,6 +1900,25 @@ async function renderMeuPainel() {
   // visitasInformadasDetalhe, já usado noutro lugar do Meu Painel.
   const aderenciaDaily = typeof visitasInformadasDetalhe === 'function' ? visitasInformadasDetalhe(r.ownerId) : null;
 
+  // Etapa 6c — bloco "Como você chegou": a daily de ONTEM, prometido vs realizado.
+  // Mesma fonte da aba Daily (dailiesCache), nada recalculado nem inventado.
+  const ontemISO = addDays(isoDate(new Date()), -1);
+  const dOntem = getDaily(r.ownerId, ontemISO) || {};
+  const ontemLinhas = [
+    { rotulo: 'Visitas', prom: dOntem.prometido_visitas, real: dOntem.realizado_visitas },
+    { rotulo: 'Avanços', prom: dOntem.prometido_avancos, real: dOntem.realizado_avancos },
+    { rotulo: 'Propostas', prom: dOntem.prometido_propostas, real: dOntem.realizado_propostas }
+  ];
+  const ontemTemDado = ontemLinhas.some(l => l.prom != null || l.real != null);
+
+  // Cabeçalho de seção do fluxo guiado (mesmo estilo do divisor "Contexto e acordos")
+  const secaoHoje = (num, titulo) => `
+    <div style="display:flex;align-items:center;gap:8px;margin:22px 0 12px;">
+      <span style="font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:800;color:#fff;background:var(--red);border-radius:999px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;flex:none;">${num}</span>
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">${titulo}</span>
+      <span style="flex:1;height:1px;background:var(--line);"></span>
+    </div>`;
+
   el.innerHTML = `
     <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:4px;">
       <div style="display:flex;flex-direction:column;gap:4px;">
@@ -1929,9 +1954,9 @@ async function renderMeuPainel() {
       </span>` : ''}
     </div>
 
-    <div id="planoDoDiaSlot"></div>
+    ${secaoHoje(1, 'Como você chegou')}
 
-    <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:18px;align-items:start;">
+    <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:18px;align-items:stretch;">
 
       <div style="background:var(--red);border-radius:var(--r-xl);padding:24px 26px;color:#fff;display:flex;flex-direction:column;gap:20px;box-shadow:var(--shadow);">
         <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -1955,8 +1980,30 @@ async function renderMeuPainel() {
         </div>
       </div>
 
-      ${buildFilaDeHojeHTML(r)}
+      <div class="chart-card" style="margin:0;display:flex;flex-direction:column;">
+        <h3 style="margin-bottom:4px;">Ontem — prometido × realizado</h3>
+        <div class="chart-subtitle" style="margin:0 0 12px;">O que você combinou na Daily de ontem e o que de fato aconteceu.</div>
+        ${ontemTemDado
+          ? `<div style="display:flex;flex-direction:column;gap:10px;">
+              ${ontemLinhas.map(l => {
+                const prom = l.prom, real = l.real;
+                const bateu = prom != null && real != null && real >= prom;
+                const cor = (prom == null || real == null) ? 'var(--muted2)' : bateu ? 'var(--green)' : 'var(--amber)';
+                return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;border-bottom:1px dashed var(--line);padding-bottom:9px;">
+                  <span style="color:var(--muted);">${l.rotulo}</span>
+                  <span style="font-variant-numeric:tabular-nums;"><b style="color:${cor};">${real ?? '—'}</b> <span style="color:var(--muted2);">de ${prom ?? '—'} prometid${l.rotulo === 'Visitas' ? 'as' : 'os'}</span>${(prom != null && real != null) ? (bateu ? ' ✅' : '') : ''}</span>
+                </div>`;
+              }).join('')}
+            </div>`
+          : `<div class="empty-state" style="padding:14px 0;">Sem Daily registrada ontem — sem número pra comparar (nada inventado aqui).</div>`}
+      </div>
     </div>
+
+    ${secaoHoje(2, 'O que precisa da sua atenção')}
+
+    ${buildFilaDeHojeHTML(r)}
+
+    <div id="planoDoDiaSlot"></div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-top:18px;">
       <div style="min-width:0;">${buildDistribuicaoCompactaHTML(r, 'meuPainel')}</div>
@@ -4956,6 +5003,33 @@ const PlanoSyncExpogo = {
 let planoDiaCache = null; // linha de planos_diarios do dia de hoje do rep logado
 let planoEmEdicao = false; // flag SÓ de UI: reabre os campos de um plano já fechado sem tocar no status do banco
 
+/* ---- Mapa de planejamento (Leaflet + OpenStreetMap, gratuito e sem chave) ----
+   Carregado sob demanda: o Leaflet só é baixado quando a tela Hoje renderiza o
+   mapa, pra não pesar o shell de login. Mapa é FERRAMENTA DE PLANEJAMENTO:
+   mostra as contas-alvo com coordenada real (Outscraper/Google Places) e a
+   interação inclui/tira a conta da rota de hoje — nunca check-in, GPS de
+   execução, registro de visita ou mudança de etapa (isso é papel do Expogo). */
+let leafletCarregando = null;
+let planoMapaInstancia = null;
+let planoMapaFiltro = { mostrarSemFit: false, notaMin: 0 };
+
+function carregarLeaflet() {
+  if (window.L) return Promise.resolve();
+  if (leafletCarregando) return leafletCarregando;
+  leafletCarregando = new Promise((resolve, reject) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet';
+    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(css);
+    const js = document.createElement('script');
+    js.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+    js.onload = () => resolve();
+    js.onerror = () => { leafletCarregando = null; reject(new Error('Não consegui baixar o Leaflet')); };
+    document.head.appendChild(js);
+  });
+  return leafletCarregando;
+}
+
 async function carregarPlanoDoDia(ownerId, dataISO) {
   if (!DATA.supabase || !supa) return null;
   const { data, error } = await supa.from('planos_diarios').select('*')
@@ -5046,64 +5120,97 @@ async function montarPlanoDoDia(r) {
   const fechadoEmFmt = p.fechado_em ? new Date(p.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
   slot.innerHTML = `
-    <div class="chart-card" id="planoDoDiaCard" style="margin:0 0 18px;border-left:3px solid var(--red);">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;">
-        <h3 style="margin:0;">🗓️ Seu plano de hoje</h3>
-        <span id="planoStatusPill" style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:5px 12px;${fechado ? 'background:var(--green-soft);color:var(--green);' : 'background:var(--panel2);color:var(--muted2);border:1px solid var(--line);'}">${fechado ? `Plano fechado às ${fechadoEmFmt}${(p.versao || 1) > 1 ? ` · v${p.versao}` : ''}` : 'Rascunho'}</span>
-      </div>
-      <div class="chart-subtitle" style="margin:0 0 14px;">Revise, escolha as três prioridades e feche o plano. Depois é só abrir o Expogo no celular pra executar.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin:22px 0 12px;">
+      <span style="font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:800;color:#fff;background:var(--red);border-radius:999px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;flex:none;">3</span>
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">Onde você vai agir</span>
+      <span style="flex:1;height:1px;background:var(--line);"></span>
+    </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-bottom:14px;">
-        <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">📝 Sua Daily de hoje</div>
-          ${dailyPreenchida
-            ? `<div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
-                 <span><b>${d.prometido_visitas ?? '—'}</b> visitas prometidas</span>
-                 <span><b>${d.prometido_avancos ?? '—'}</b> avanços prometidos</span>
-                 <span><b>${d.prometido_propostas ?? '—'}</b> propostas prometidas</span>
-               </div>`
-            : `<div style="font-size:12.5px;color:var(--muted);">Você ainda não preencheu a Daily de hoje.</div>`}
-          <button id="planoRevisarDaily" style="margin-top:10px;font-size:11.5px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:999px;padding:7px 14px;cursor:pointer;">${dailyPreenchida ? 'Revisar minha Daily' : 'Preencher minha Daily'}</button>
-        </div>
-
-        <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">📅 Agenda de hoje</div>
-          ${agendaHoje.length > 0
-            ? `<div style="font-size:12.5px;display:flex;flex-direction:column;gap:5px;">${agendaHoje.map(e => `<span><b>${esc(e.hora)}</b> ${esc(e.tipo)} — ${esc(e.cliente)}</span>`).join('')}</div>`
-            : `<div style="font-size:12.5px;color:var(--amber);">⚠️ Agenda vazia hoje — marcar a reunião no Expogo já coloca ela aqui.</div>`}
-        </div>
-
-        <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
-          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">🎯 Contas-alvo na sua rota de hoje</div>
-          ${contasHoje.length > 0
-            ? `<div style="font-size:12.5px;display:flex;flex-direction:column;gap:6px;">${contasHoje.map(c => `
-                <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
-                  <input type="checkbox" class="plano-conta-check" data-id="${esc(String(c.id))}" data-nome="${esc(c.nome)}" ${(!planoDiaCache || contasSalvas.has(String(c.id))) ? 'checked' : ''} ${fechado ? 'disabled' : ''}>
-                  <span><b>${esc(c.nome)}</b>${c.bairro || c.cidade ? ` <span style="color:var(--muted);">· ${esc([c.bairro, c.cidade].filter(Boolean).join(', '))}</span>` : ''}</span>
-                </label>`).join('')}</div>`
-            : `<div style="font-size:12.5px;color:var(--muted);">Nenhuma conta-alvo marcada pra hoje na Prospecção.</div>`}
-        </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow-sm);">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">📅 Agenda de hoje</div>
+        ${agendaHoje.length > 0
+          ? `<div style="font-size:12.5px;display:flex;flex-direction:column;gap:5px;">${agendaHoje.map(e => `<span><b>${esc(e.hora)}</b> ${esc(e.tipo)} — ${esc(e.cliente)}</span>`).join('')}</div>`
+          : `<div style="font-size:12.5px;color:var(--amber);">⚠️ Agenda vazia hoje — marcar a reunião no Expogo já coloca ela aqui.</div>`}
       </div>
 
-      <div style="margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">⭐ Suas três prioridades de hoje</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;">
-          ${[1, 2, 3].map(i => `<input type="text" id="planoPrioridade${i}" maxlength="140" placeholder="Prioridade ${i}" value="${esc(prios[i - 1] || '')}" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">`).join('')}
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow-sm);">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">🎯 Contas-alvo na sua rota de hoje</div>
+        ${contasHoje.length > 0
+          ? `<div style="font-size:12.5px;display:flex;flex-direction:column;gap:6px;">${contasHoje.map(c => `
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" class="plano-conta-check" data-id="${esc(String(c.id))}" data-nome="${esc(c.nome)}" ${(!planoDiaCache || contasSalvas.has(String(c.id))) ? 'checked' : ''} ${fechado ? 'disabled' : ''}>
+                <span><b>${esc(c.nome)}</b>${c.bairro || c.cidade ? ` <span style="color:var(--muted);">· ${esc([c.bairro, c.cidade].filter(Boolean).join(', '))}</span>` : ''}</span>
+              </label>`).join('')}</div>`
+          : `<div style="font-size:12.5px;color:var(--muted);">Nenhuma conta-alvo marcada pra hoje na Prospecção.</div>`}
+      </div>
+    </div>
+
+    <div class="chart-card" style="margin-top:14px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;">
+        <h3 style="margin:0;">🗺️ Mapa de planejamento</h3>
+        <span style="display:flex;gap:10px;align-items:center;font-size:11.5px;color:var(--muted2);flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="planoMapaNota45" ${planoMapaFiltro.notaMin >= 4.5 ? 'checked' : ''}> só nota ≥ 4.5</label>
+          <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="planoMapaSemFit" ${planoMapaFiltro.mostrarSemFit ? 'checked' : ''}> mostrar sem fit</label>
+        </span>
+      </div>
+      <div class="chart-subtitle" style="margin:0 0 10px;">Suas contas-alvo com endereço real no mapa. Clique num pin pra <b>incluir na rota de hoje</b> ou tirar — a execução na rua continua no Expogo.</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:8px;">
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#2563EB;vertical-align:-1px;"></span> na rota de hoje</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#1E7A63;vertical-align:-1px;"></span> disponível</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#7C3AED;vertical-align:-1px;"></span> já criada no HubSpot</span>
+        <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#9CA3AF;vertical-align:-1px;"></span> sem fit</span>
+      </div>
+      <div id="planoMapa" style="height:380px;border-radius:14px;border:1px solid var(--line);overflow:hidden;"><div class="empty-state" style="padding-top:160px;">Carregando o mapa...</div></div>
+      <div id="planoMapaMsg" style="font-size:11.5px;color:var(--muted2);margin-top:8px;"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:8px;margin:22px 0 12px;">
+      <span style="font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:800;color:#fff;background:var(--red);border-radius:999px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;flex:none;">4</span>
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">Seu compromisso</span>
+      <span style="flex:1;height:1px;background:var(--line);"></span>
+    </div>
+
+    <div class="chart-card" id="planoDoDiaCard" style="margin:0;border-left:3px solid var(--red);">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;flex:1;min-width:260px;">
+          <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">📝 Sua Daily de hoje</div>
+            ${dailyPreenchida
+              ? `<div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
+                   <span><b>${d.prometido_visitas ?? '—'}</b> visitas prometidas</span>
+                   <span><b>${d.prometido_avancos ?? '—'}</b> avanços prometidos</span>
+                   <span><b>${d.prometido_propostas ?? '—'}</b> propostas prometidas</span>
+                 </div>`
+              : `<div style="font-size:12.5px;color:var(--muted);">Você ainda não preencheu a Daily de hoje.</div>`}
+            <button id="planoRevisarDaily" style="margin-top:10px;font-size:11.5px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:999px;padding:7px 14px;cursor:pointer;">${dailyPreenchida ? 'Revisar minha Daily' : 'Preencher minha Daily'}</button>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">⭐ Suas três prioridades de hoje</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              ${[1, 2, 3].map(i => `<input type="text" id="planoPrioridade${i}" maxlength="140" placeholder="Prioridade ${i}" value="${esc(prios[i - 1] || '')}" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">`).join('')}
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-bottom:16px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;">
         <textarea id="planoBloqueios" rows="2" maxlength="500" placeholder="Bloqueio ou pedido de ajuda (opcional)" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;resize:vertical;">${esc(p.bloqueios || '')}</textarea>
         <textarea id="planoObservacao" rows="2" maxlength="500" placeholder="Observação (opcional)" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;resize:vertical;">${esc(p.observacao || '')}</textarea>
       </div>
+    </div>
 
-      <div id="planoRodape" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        ${fechado
-          ? `<span style="font-size:13px;font-weight:700;color:var(--green);">✅ Plano do dia salvo. Agora abra o Expogo no celular para executar sua rota.</span>
-             <button id="planoEditar" style="font-size:12px;font-weight:700;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:9px 16px;cursor:pointer;">✏️ Editar plano</button>`
-          : `<button id="planoFechar" style="font-size:13px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:12px 22px;min-height:44px;cursor:pointer;">${editandoPlanoFechado ? 'Salvar alterações do plano (nova versão)' : 'Fechar meu plano de hoje'}</button>
-             ${editandoPlanoFechado ? `<button id="planoCancelarEdicao" style="font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:999px;padding:9px 16px;cursor:pointer;">Cancelar</button>` : ''}
-             <span id="planoAutosaveMsg" style="font-size:11.5px;color:var(--muted2);"></span>`}
+    <div class="chart-card" style="margin-top:14px;border-left:3px solid ${fechado ? 'var(--green)' : 'var(--red)'};">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div id="planoRodape" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          ${fechado
+            ? `<span style="font-size:13px;font-weight:700;color:var(--green);">✅ Plano do dia salvo. Agora abra o Expogo no celular para executar sua rota.</span>
+               <button id="planoEditar" style="font-size:12px;font-weight:700;color:var(--ink);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:9px 16px;cursor:pointer;">✏️ Editar plano</button>`
+            : `<button id="planoFechar" style="font-size:13px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:12px 22px;min-height:44px;cursor:pointer;">${editandoPlanoFechado ? 'Salvar alterações do plano (nova versão)' : 'Fechar meu plano de hoje'}</button>
+               ${editandoPlanoFechado ? `<button id="planoCancelarEdicao" style="font-size:12px;font-weight:700;color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:999px;padding:9px 16px;cursor:pointer;">Cancelar</button>` : ''}
+               <span id="planoAutosaveMsg" style="font-size:11.5px;color:var(--muted2);"></span>`}
+        </div>
+        <span id="planoStatusPill" style="font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:5px 12px;${fechado ? 'background:var(--green-soft);color:var(--green);' : 'background:var(--panel2);color:var(--muted2);border:1px solid var(--line);'}">${fechado ? `Plano fechado às ${fechadoEmFmt}${(p.versao || 1) > 1 ? ` · v${p.versao}` : ''}` : 'Rascunho'}</span>
       </div>
     </div>
   `;
@@ -5185,6 +5292,207 @@ async function montarPlanoDoDia(r) {
       montarPlanoDoDia(r);
     });
   }
+
+  // Filtros do mapa (re-renderiza só o mapa, não o plano inteiro)
+  const chkNota = slot.querySelector('#planoMapaNota45');
+  const chkSemFit = slot.querySelector('#planoMapaSemFit');
+  if (chkNota) chkNota.addEventListener('change', () => { planoMapaFiltro.notaMin = chkNota.checked ? 4.5 : 0; montarPlanoMapa(r, hoje, fechado); });
+  if (chkSemFit) chkSemFit.addEventListener('change', () => { planoMapaFiltro.mostrarSemFit = chkSemFit.checked; montarPlanoMapa(r, hoje, fechado); });
+
+  montarPlanoMapa(r, hoje, fechado).catch(e => {
+    console.error('Erro no mapa de planejamento:', e);
+    const box = document.getElementById('planoMapa');
+    if (box) box.innerHTML = '<div class="empty-state" style="padding-top:160px;">Não consegui carregar o mapa agora (sem internet ou CDN bloqueado). O resto do plano segue funcionando.</div>';
+  });
+}
+
+async function montarPlanoMapa(r, hoje, planoFechado) {
+  const box = document.getElementById('planoMapa');
+  const msg = document.getElementById('planoMapaMsg');
+  if (!box || !DATA.supabase || !supa) return;
+
+  // Todas as contas-alvo do rep com coordenada real (Outscraper/Google Places).
+  // Sem coordenada = fora do mapa, e a gente DIZ quantas ficaram de fora.
+  const { data, error } = await supa.from('leads_prospeccao')
+    .select('id,nome,bairro,cidade,lat,lng,status,data_rota,nota,avaliacoes')
+    .eq('responsavel_owner_id', r.ownerId);
+  if (error) { box.innerHTML = `<div class="empty-state" style="padding-top:160px;">Erro ao carregar contas-alvo: ${esc(error.message)}</div>`; return; }
+
+  const todas = data || [];
+  const comCoord = todas.filter(l => l.lat != null && l.lng != null);
+  const semCoord = todas.length - comCoord.length;
+  const visiveis = comCoord.filter(l =>
+    (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
+    (!planoMapaFiltro.notaMin || (l.nota || 0) >= planoMapaFiltro.notaMin)
+  );
+
+  if (visiveis.length === 0) {
+    if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
+    box.innerHTML = `<div class="empty-state" style="padding-top:160px;">Nenhuma conta-alvo com coordenada pra mostrar${planoMapaFiltro.notaMin ? ' com esse filtro de nota' : ''}.</div>`;
+    if (msg) msg.textContent = semCoord > 0 ? `${semCoord} conta(s)-alvo sem coordenada ficaram fora do mapa.` : '';
+    return;
+  }
+
+  await carregarLeaflet();
+
+  if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
+  box.innerHTML = '';
+  const mapa = L.map(box, { scrollWheelZoom: false });
+  planoMapaInstancia = mapa;
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(mapa);
+
+  const corDoStatus = l => {
+    if (l.status === 'na_rota' && l.data_rota === hoje) return '#2563EB'; // azul: na rota de HOJE
+    if (l.status === 'sem_fit') return '#9CA3AF';
+    if (l.status === 'criado_hubspot') return '#7C3AED';
+    return '#1E7A63'; // pendente/atribuido/na_rota de outro dia = disponível
+  };
+
+  const bounds = [];
+  visiveis.forEach(l => {
+    const naRotaHoje = l.status === 'na_rota' && l.data_rota === hoje;
+    const icone = L.divIcon({
+      className: '',
+      html: `<span style="display:block;width:${naRotaHoje ? 16 : 12}px;height:${naRotaHoje ? 16 : 12}px;border-radius:50%;background:${corDoStatus(l)};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);"></span>`,
+      iconSize: [naRotaHoje ? 16 : 12, naRotaHoje ? 16 : 12],
+      iconAnchor: [naRotaHoje ? 8 : 6, naRotaHoje ? 8 : 6]
+    });
+    const marcador = L.marker([l.lat, l.lng], { icon: icone }).addTo(mapa);
+    bounds.push([l.lat, l.lng]);
+
+    const detalhe = [l.bairro, l.cidade].filter(Boolean).join(', ');
+    const notaTxt = l.nota != null ? `⭐ ${l.nota}${l.avaliacoes ? ` (${l.avaliacoes})` : ''}` : '';
+    // Regra do documento: a interação do mapa gera SELEÇÃO pro plano do dia —
+    // nunca execução. Com o plano fechado, nada de mudar seleção por fora:
+    // a pessoa precisa clicar em "Editar plano" primeiro.
+    const acao = planoFechado
+      ? `<div style="font-size:11px;color:#6b7280;margin-top:6px;">Plano de hoje já fechado — use "Editar plano" pra mudar a seleção.</div>`
+      : naRotaHoje
+        ? `<button class="plano-mapa-btn" data-id="${esc(String(l.id))}" data-acao="tirar" style="margin-top:7px;font-size:11.5px;font-weight:700;color:#fff;background:#9CA3AF;border:none;border-radius:999px;padding:6px 12px;cursor:pointer;">✕ Tirar da rota de hoje</button>`
+        : `<button class="plano-mapa-btn" data-id="${esc(String(l.id))}" data-acao="incluir" style="margin-top:7px;font-size:11.5px;font-weight:700;color:#fff;background:#2563EB;border:none;border-radius:999px;padding:6px 12px;cursor:pointer;">➕ Incluir na rota de hoje</button>`;
+    marcador.bindPopup(`
+      <div style="font-family:Inter,sans-serif;font-size:12.5px;min-width:180px;">
+        <b>${esc(l.nome)}</b>
+        ${detalhe ? `<div style="color:#6b7280;">${esc(detalhe)}</div>` : ''}
+        ${notaTxt ? `<div style="margin-top:3px;">${notaTxt}</div>` : ''}
+        ${acao}
+      </div>
+    `);
+  });
+
+  mapa.fitBounds(bounds, { padding: [30, 30], maxZoom: 15 });
+
+  // Delegação: os botões dos popups são criados dinamicamente pelo Leaflet
+  mapa.on('popupopen', ev => {
+    const btn = ev.popup.getElement().querySelector('.plano-mapa-btn');
+    if (!btn) return;
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      const campos = btn.dataset.acao === 'incluir'
+        ? { status: 'na_rota', data_rota: hoje }
+        : { status: 'atribuido', data_rota: null };
+      const { error: e2 } = await supa.from('leads_prospeccao')
+        .update({ ...campos, updated_at: new Date().toISOString() }).eq('id', btn.dataset.id);
+      if (e2) { alert('Não consegui atualizar: ' + e2.message); btn.disabled = false; return; }
+      // Re-renderiza o plano inteiro: as checkboxes de contas-alvo e o mapa
+      // precisam refletir a nova seleção (fonte única: leads_prospeccao).
+      montarPlanoDoDia(r);
+    });
+  });
+
+  if (msg) msg.textContent = `${visiveis.length} conta(s)-alvo no mapa` + (semCoord > 0 ? ` · ${semCoord} sem coordenada ficaram de fora` : '') + '.';
+}
+
+/* ---- ETAPA 6b — VISÃO DO GESTOR: planos do dia do time ----
+   Mostra quem fechou / não fechou o plano, horário, versão, prioridades,
+   agenda vazia e conflitos de horário. NUNCA mostra estado de sincronização
+   com o Expogo — essa confirmação só pode aparecer com backend real. */
+
+async function montarPlanosDoTime() {
+  const slot = document.getElementById('planosDoTimeSlot');
+  if (!slot || !DATA.supabase || !supa) return;
+  if (!sessaoAtual || sessaoAtual.role !== 'manager') { slot.innerHTML = ''; return; }
+  const hoje = isoDate(new Date());
+
+  const { data, error } = await supa.from('planos_diarios').select('*').eq('data', hoje);
+  if (error) {
+    console.error('Erro ao carregar planos do time:', error.message);
+    slot.innerHTML = `<div class="chart-card" style="margin-top:20px;"><div class="empty-state">Não consegui carregar os planos do dia (${esc(error.message)}). Se a tabela planos_diarios ainda não existe, rode a migração no Supabase.</div></div>`;
+    return;
+  }
+  const planosPorOwner = {};
+  (data || []).forEach(p => { planosPorOwner[String(p.owner_id)] = p; });
+
+  // Agenda de hoje por rep — mesma convenção BRT-nos-campos-UTC do resto da agenda
+  const agendaPorOwner = {};
+  if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+    agendaNormalizar(DATA.agenda).forEach(e => {
+      if (!e.inicio || e.inicio.toISOString().slice(0, 10) !== hoje) return;
+      const k = String(e.ownerId);
+      (agendaPorOwner[k] = agendaPorOwner[k] || []).push(e);
+    });
+  }
+
+  const linhas = (DATA.reps || []).map(r => {
+    const p = planosPorOwner[String(r.ownerId)] || null;
+    const eventos = (agendaPorOwner[String(r.ownerId)] || []).sort((a, b) => a.inicio - b.inicio);
+    const agendaVazia = eventos.length === 0;
+    // Conflito honesto e verificável: dois compromissos começando no MESMO horário.
+    const horas = eventos.map(e => agendaHhmm(e.inicio));
+    const conflitos = horas.filter((h, i) => horas.indexOf(h) !== i);
+    const fechado = p && p.status === 'plano_fechado';
+    const rascunho = p && p.status === 'rascunho';
+    return { r, p, fechado, rascunho, agendaVazia, conflitos: [...new Set(conflitos)] };
+  }).sort((a, b) => (a.fechado === b.fechado) ? a.r.name.localeCompare(b.r.name) : (a.fechado ? 1 : -1));
+
+  const fechados = linhas.filter(l => l.fechado).length;
+
+  slot.innerHTML = `
+    <div class="chart-card" id="planosDoTimeCard" style="margin-top:20px;border-left:3px solid var(--red);">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;">
+        <h3 style="margin:0;">🗓️ Planos do dia do time</h3>
+        <span style="font-size:11.5px;color:var(--muted2);"><b>${fechados}</b> de ${linhas.length} fecharam o plano · <button id="planosDoTimeRefresh" style="background:none;border:none;color:var(--blue);font-weight:700;font-size:11.5px;cursor:pointer;font-family:inherit;padding:0;">atualizar ↻</button></span>
+      </div>
+      <div class="chart-subtitle" style="margin:0 0 12px;">Quem já fechou o plano no Cockpit hoje, com horário, prioridades e alertas de agenda. A execução na rua continua no Expogo.</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${linhas.map(({ r, p, fechado, rascunho, agendaVazia, conflitos }) => {
+          const hora = fechado && p.fechado_em ? new Date(p.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+          const prios = (p && Array.isArray(p.prioridades) ? p.prioridades : []).filter(Boolean);
+          const contas = (p && Array.isArray(p.contas_alvo) ? p.contas_alvo : []).length;
+          const statusPill = fechado
+            ? `<span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:4px 11px;background:var(--green-soft);color:var(--green);">Fechado às ${hora}${(p.versao || 1) > 1 ? ` · v${p.versao}` : ''}</span>`
+            : rascunho
+              ? `<span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:4px 11px;background:var(--amber-soft);color:var(--amber);">Rascunho — não fechou</span>`
+              : `<span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:4px 11px;background:var(--panel2);color:var(--muted2);border:1px solid var(--line);">Sem plano hoje</span>`;
+          return `
+            <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:13px 16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <b style="font-size:13.5px;">${esc(r.name)}</b>
+                <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                  ${agendaVazia ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--amber-soft);color:var(--amber);">⚠️ agenda vazia</span>` : ''}
+                  ${conflitos.length > 0 ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--red-soft, var(--amber-soft));color:var(--red);">⛔ 2 compromissos às ${esc(conflitos.join(', '))}</span>` : ''}
+                  ${statusPill}
+                </span>
+              </div>
+              ${prios.length > 0 ? `
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">
+                  ${prios.map((t, i) => `<span style="font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 11px;">${i + 1}. ${esc(t)}</span>`).join('')}
+                  ${contas > 0 ? `<span style="font-size:11.5px;color:var(--muted2);align-self:center;">🎯 ${contas} conta${contas === 1 ? '' : 's'}-alvo confirmada${contas === 1 ? '' : 's'}</span>` : ''}
+                </div>` : ''}
+              ${p && p.bloqueios ? `<div style="font-size:12px;color:var(--red);margin-top:8px;">🚧 <b>Bloqueio:</b> ${esc(p.bloqueios)}</div>` : ''}
+              ${p && p.observacao ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;">💬 ${esc(p.observacao)}</div>` : ''}
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  const btnRefresh = slot.querySelector('#planosDoTimeRefresh');
+  if (btnRefresh) btnRefresh.addEventListener('click', () => montarPlanosDoTime());
 }
 
 // ---- Cálculos derivados (nunca chumbados) ----
