@@ -1091,6 +1091,15 @@ document.getElementById('themeToggleLogin').addEventListener('click', toggleThem
 let supa = null;
 let sessaoAtual = null; // { email, role, ownerId, nome }
 
+// Escape de HTML pra conteúdo que vem de fora do repo (notas do HubSpot, comunicados,
+// sugestões de coaching e anexos do Supabase) antes de ir pra innerHTML — evita que um
+// texto com <script>/<img onerror> vire código executando na sessão de quem lê.
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function encontrarUsuario(email) {
   if (!email) return null;
   return DATA.usuarios.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
@@ -1118,9 +1127,14 @@ function mostrarLogin(mensagem) {
 
 async function iniciarAuth() {
   if (!DATA.supabase) {
-    // Supabase ainda não configurado — libera acesso direto (comportamento antigo, sem login)
-    sessaoAtual = { email: null, role: 'manager', ownerId: null, nome: null };
-    mostrarApp();
+    // FAIL-CLOSED (correção de segurança 06/08/26): antes, sem supabase-config.json no
+    // build, o cockpit liberava acesso direto COMO GESTOR pra qualquer visitante — um
+    // build feito sem o arquivo de config publicava o painel inteiro aberto na internet.
+    // Agora o login falha de forma fechada: tela de login bloqueada, ninguém entra.
+    mostrarLogin('Acesso bloqueado: autenticação não configurada neste build. Fale com o gestor (falta data/supabase-config.json no processo de build).');
+    const btn = document.getElementById('loginBtn');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; btn.style.cursor = 'not-allowed'; }
+    ['loginEmail', 'loginPassword'].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
     return;
   }
 
@@ -1354,7 +1368,7 @@ function ultimaNotaHTML(leadId, mapaNotas) {
   const LIMITE = 130;
   const texto = textoBruto.length > LIMITE ? textoBruto.slice(0, LIMITE) + '…' : textoBruto;
   const quando = nota.data ? new Date(nota.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
-  return `<div style="font-size:11px;color:var(--muted);margin-top:5px;padding-left:9px;border-left:2px solid var(--line);line-height:1.45;"><span style="color:var(--muted2);">última nota${quando ? ' · ' + quando : ''}:</span> ${texto}</div>`;
+  return `<div style="font-size:11px;color:var(--muted);margin-top:5px;padding-left:9px;border-left:2px solid var(--line);line-height:1.45;"><span style="color:var(--muted2);">última nota${quando ? ' · ' + quando : ''}:</span> ${esc(texto)}</div>`;
 }
 
 // Selo de gravidade do SLA: mostra quantas vezes o lead já passou do prazo da etapa.
@@ -1889,7 +1903,7 @@ async function renderMeuPainel() {
             <div style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--violet);margin-bottom:6px;">Recado do seu gestor</div>
             ${sugestoes.map((s, i) => `
               <div style="${i > 0 ? 'margin-top:10px;padding-top:10px;border-top:1px dashed var(--line);' : ''}font-size:13px;line-height:1.55;">
-                ${s.texto}
+                ${esc(s.texto)}
                 <div style="font-size:10.5px;color:var(--muted2);margin-top:4px;">${new Date(s.created_at).toLocaleDateString('pt-BR')}</div>
               </div>
             `).join('')}
@@ -4861,14 +4875,24 @@ async function renderDaily() {
   // "Realizado" não é mais digitado por ninguém — vem automático do HubSpot (Expogo sincroniza
   // direto). Aqui só persistimos o número do dia de hoje no Supabase silenciosamente, pra manter
   // o histórico de sequência/conquistas funcionando nos dias seguintes (quando "hoje" virar passado).
+  // PROTEÇÃO (incidente 06/08/26): este snapshot usa os números EMBUTIDOS no HTML servido — se os
+  // refreshes do GitHub Actions falharem à tarde (aconteceu: instabilidade do GitHub), o site fica
+  // servindo um build da manhã com visitas=0, e abrir a aba Daily REGRAVAVA 0 por cima do realizado
+  // verdadeiro do dia. Regra agora: o cliente só grava quando o valor novo é MAIOR que o já salvo
+  // (o realizado do dia nunca diminui) — quem pode corrigir pra baixo é só o fetch server-side.
   if (dailyRefDate === isoDate(new Date()) && DATA.supabase && supa) {
     repsDaily.forEach(r => {
-      salvarDaily(r.ownerId, dailyRefDate, {
-        realizado_visitas: r.visitasHubspotHoje ?? 0,
-        realizado_avancos: r.avancosHubspotHoje ?? 0,
-        realizado_propostas: r.propostasHubspotHoje ?? 0,
-        realizado_fechamentos: r.fechamentosHubspotHoje ?? 0
+      const atual = getDaily(r.ownerId, dailyRefDate) || {};
+      const campos = {};
+      [['realizado_visitas', r.visitasHubspotHoje ?? 0],
+       ['realizado_avancos', r.avancosHubspotHoje ?? 0],
+       ['realizado_propostas', r.propostasHubspotHoje ?? 0],
+       ['realizado_fechamentos', r.fechamentosHubspotHoje ?? 0]
+      ].forEach(([campo, novo]) => {
+        const existente = atual[campo];
+        if (existente == null || novo > existente) campos[campo] = novo;
       });
+      if (Object.keys(campos).length > 0) salvarDaily(r.ownerId, dailyRefDate, campos);
     });
   }
 
@@ -4992,8 +5016,8 @@ async function renderBannerComunicados() {
       <div class="comunicado-banner ${c.tipo}">
         <div style="flex:1;">
           <span class="comunicado-banner-tipo">${labelTipo(c.tipo)}</span>
-          <div class="comunicado-banner-titulo">${c.titulo}</div>
-          ${c.mensagem ? `<div class="comunicado-banner-msg">${c.mensagem}</div>` : ''}
+          <div class="comunicado-banner-titulo">${esc(c.titulo)}</div>
+          ${c.mensagem ? `<div class="comunicado-banner-msg">${esc(c.mensagem)}</div>` : ''}
           ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
         </div>
         <div class="comunicado-banner-actions">
@@ -5035,10 +5059,10 @@ async function abrirHistoricoComunicados() {
       <div class="comunicado-item" data-id="${c.id}">
         <div class="comunicado-view">
           <span class="comunicado-banner-tipo" style="background:${c.tipo === 'urgente' ? 'var(--red)' : c.tipo === 'atualizacao' ? 'var(--violet)' : 'var(--muted2)'};color:#fff;">${labelTipo(c.tipo)}</span>
-          <div class="comunicado-banner-titulo" style="margin-top:6px;">${c.titulo}</div>
-          ${c.mensagem ? `<div class="comunicado-banner-msg">${c.mensagem}</div>` : ''}
+          <div class="comunicado-banner-titulo" style="margin-top:6px;">${esc(c.titulo)}</div>
+          ${c.mensagem ? `<div class="comunicado-banner-msg">${esc(c.mensagem)}</div>` : ''}
           ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
-          <div class="comunicado-item-meta">${c.autor} · ${new Date(c.created_at).toLocaleDateString('pt-BR')}</div>
+          <div class="comunicado-item-meta">${esc(c.autor)} · ${new Date(c.created_at).toLocaleDateString('pt-BR')}</div>
           <div class="comunicado-visto-por">Visto por ${vistoPor(c.id)}/${DATA.usuarios.length}</div>
           ${sessaoAtual.role === 'manager' ? `
             <div style="margin-top:8px;display:flex;gap:10px;">
@@ -5053,8 +5077,8 @@ async function abrirHistoricoComunicados() {
             <option value="atualizacao" ${c.tipo === 'atualizacao' ? 'selected' : ''}>Atualização de produto</option>
             <option value="urgente" ${c.tipo === 'urgente' ? 'selected' : ''}>Aviso urgente</option>
           </select>
-          <input type="text" class="editTitulo" value="${c.titulo.replace(/"/g, '&quot;')}" style="width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">
-          <textarea class="editMensagem" style="width:100%;min-height:60px;margin-bottom:8px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">${c.mensagem || ''}</textarea>
+          <input type="text" class="editTitulo" value="${esc(c.titulo)}" style="width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">
+          <textarea class="editMensagem" style="width:100%;min-height:60px;margin-bottom:8px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">${esc(c.mensagem || '')}</textarea>
           <button class="btnSalvarEdicao" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Salvar</button>
           <button class="btnCancelarEdicao" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-pill);padding:6px 14px;font-size:11.5px;cursor:pointer;">Cancelar</button>
         </div>
@@ -5265,10 +5289,10 @@ async function renderAvisos() {
             <span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:${corPorTipo[c.tipo] || 'var(--muted2)'};">${labelTipo(c.tipo)}</span>
             <span style="font-size:11px;color:var(--muted2);">${new Date(c.created_at).toLocaleDateString('pt-BR')}</span>
           </div>
-          <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">${c.titulo}</div>
-          ${c.mensagem ? `<div style="font-size:13.5px;color:var(--muted);line-height:1.55;">${c.mensagem}</div>` : ''}
+          <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">${esc(c.titulo)}</div>
+          ${c.mensagem ? `<div style="font-size:13.5px;color:var(--muted);line-height:1.55;">${esc(c.mensagem)}</div>` : ''}
           ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
-          <div style="font-size:11px;color:var(--muted2);margin-top:8px;">${c.autor} · visto por ${vistoPor(c.id)}/${DATA.usuarios.length}</div>
+          <div style="font-size:11px;color:var(--muted2);margin-top:8px;">${esc(c.autor)} · visto por ${vistoPor(c.id)}/${DATA.usuarios.length}</div>
           ${sessaoAtual.role === 'manager' ? `
             <div style="margin-top:8px;display:flex;gap:10px;">
               <a class="btnEditarComunicado" style="font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;">Editar</a>
@@ -5282,8 +5306,8 @@ async function renderAvisos() {
             <option value="atualizacao" ${c.tipo === 'atualizacao' ? 'selected' : ''}>Atualização de produto</option>
             <option value="urgente" ${c.tipo === 'urgente' ? 'selected' : ''}>Aviso urgente</option>
           </select>
-          <input type="text" class="editTitulo" value="${c.titulo.replace(/"/g, '&quot;')}" style="width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">
-          <textarea class="editMensagem" style="width:100%;min-height:60px;margin-bottom:8px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">${c.mensagem || ''}</textarea>
+          <input type="text" class="editTitulo" value="${esc(c.titulo)}" style="width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">
+          <textarea class="editMensagem" style="width:100%;min-height:60px;margin-bottom:8px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">${esc(c.mensagem || '')}</textarea>
           <button class="btnSalvarEdicao" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;min-height:38px;">Salvar</button>
           <button class="btnCancelarEdicao" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-pill);padding:9px 14px;font-size:12px;cursor:pointer;min-height:38px;">Cancelar</button>
         </div>
@@ -5597,8 +5621,8 @@ async function renderPDIs() {
             <div style="display:flex;align-items:center;">
               <a class="lead-row" href="${url}" target="_blank" rel="noopener" style="flex:1;">
                 <div class="lead-left">
-                  <span class="lead-name">📎 ${doc.titulo}</span>
-                  <span class="lead-stage">${new Date(doc.data + 'T12:00:00').toLocaleDateString('pt-BR')} · ${doc.nome_arquivo}</span>
+                  <span class="lead-name">📎 ${esc(doc.titulo)}</span>
+                  <span class="lead-stage">${new Date(doc.data + 'T12:00:00').toLocaleDateString('pt-BR')} · ${esc(doc.nome_arquivo)}</span>
                 </div>
                 <span class="lead-cta">baixar →</span>
               </a>
@@ -5876,7 +5900,7 @@ async function renderCoaching() {
   if (sugestoes && sugestoes.length > 0) {
     sugestoesEl.innerHTML = sugestoes.map(s => `
       <div style="font-size:11px;color:var(--muted);padding:6px 0;border-top:1px dashed var(--line);">
-        <span style="color:var(--muted2);">${new Date(s.created_at).toLocaleDateString('pt-BR')}:</span> ${s.texto}
+        <span style="color:var(--muted2);">${new Date(s.created_at).toLocaleDateString('pt-BR')}:</span> ${esc(s.texto)}
       </div>
     `).join('');
   }
