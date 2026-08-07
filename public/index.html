@@ -6297,6 +6297,15 @@ function vistoPor(comunicadoId) {
   return lidosCache.filter(l => l.comunicado_id === comunicadoId).length;
 }
 
+// O gestor precisa saber quem já viu (acompanhamento do time). O executivo não —
+// "visto por 10/10" é informação de gestão, não algo pra ele acompanhar sobre os
+// colegas. Um único helper pros dois lugares que renderizam comunicado (aba Avisos
+// e o modal do sininho), pra nunca divergir.
+function linhaLeituraComunicado(c) {
+  if (sessaoAtual.role === 'manager') return `visto por ${vistoPor(c.id)}/${DATA.usuarios.length}`;
+  return jaLi(c.id) ? 'lido por você' : 'novo';
+}
+
 async function urlAssinadaComunicado(caminho) {
   if (!caminho) return null;
   const { data, error } = await supa.storage.from('comunicados-imagens').createSignedUrl(caminho, 3600);
@@ -6371,7 +6380,7 @@ async function abrirHistoricoComunicados() {
           ${c.mensagem ? `<div class="comunicado-banner-msg">${esc(c.mensagem)}</div>` : ''}
           ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
           <div class="comunicado-item-meta">${esc(c.autor)} · ${new Date(c.created_at).toLocaleDateString('pt-BR')}</div>
-          <div class="comunicado-visto-por">Visto por ${vistoPor(c.id)}/${DATA.usuarios.length}</div>
+          <div class="comunicado-visto-por">${linhaLeituraComunicado(c)}</div>
           ${sessaoAtual.role === 'manager' ? `
             <div style="margin-top:8px;display:flex;gap:10px;">
               <a class="btnEditarComunicado" style="font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;">Editar</a>
@@ -6418,11 +6427,22 @@ async function abrirHistoricoComunicados() {
       });
 
       const excluirBtn = item.querySelector('.btnExcluirComunicado');
-      if (excluirBtn) excluirBtn.addEventListener('click', async () => {
-        if (!confirm('Excluir esse comunicado pra sempre?')) return;
-        await supa.from('comunicados').delete().eq('id', id);
-        await carregarComunicados();
-        abrirHistoricoComunicados();
+      if (excluirBtn) excluirBtn.addEventListener('click', () => {
+        const comunicado = comunicadosCache.find(x => x.id === id);
+        abrirModalConfirmacao({
+          titulo: 'Excluir comunicado',
+          confirmarLabel: 'Excluir',
+          corpoHTML: `<p style="margin:0;">Excluir <b>"${esc(comunicado ? comunicado.titulo : 'este comunicado')}"</b>? Isso não pode ser desfeito.</p>`,
+          aoConfirmar: async (overlay, fechar) => {
+            const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+            okBtn.disabled = true; okBtn.textContent = 'Excluindo...';
+            const { error } = await supa.from('comunicados').delete().eq('id', id);
+            if (error) { okBtn.disabled = false; okBtn.textContent = 'Excluir'; alert(`Erro ao excluir: ${error.message}`); return; }
+            fechar();
+            await carregarComunicados();
+            abrirHistoricoComunicados();
+          }
+        });
       });
     });
 }
@@ -6600,7 +6620,10 @@ async function renderAvisos() {
           <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">${esc(c.titulo)}</div>
           ${c.mensagem ? `<div style="font-size:13.5px;color:var(--muted);line-height:1.55;">${esc(c.mensagem)}</div>` : ''}
           ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
-          <div style="font-size:11px;color:var(--muted2);margin-top:8px;">${esc(c.autor)} · visto por ${vistoPor(c.id)}/${DATA.usuarios.length}</div>
+          <div style="font-size:11px;color:var(--muted2);margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span>${esc(c.autor)} · ${linhaLeituraComunicado(c)}</span>
+            ${sessaoAtual.role !== 'manager' && !jaLi(c.id) ? '<span style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--red);border-radius:999px;padding:2px 8px;">novo</span>' : ''}
+          </div>
           ${sessaoAtual.role === 'manager' ? `
             <div style="margin-top:8px;display:flex;gap:10px;">
               <a class="btnEditarComunicado" style="font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;">Editar</a>
@@ -6648,12 +6671,21 @@ async function renderAvisos() {
     });
 
     const excluirBtn = item.querySelector('.btnExcluirComunicado');
-    if (excluirBtn) excluirBtn.addEventListener('click', async () => {
-      if (!confirm('Excluir este comunicado? Isso não pode ser desfeito.')) return;
-      excluirBtn.textContent = '…';
-      const { error } = await supa.from('comunicados').delete().eq('id', id);
-      if (error) { alert(`Erro ao excluir: ${error.message}`); excluirBtn.textContent = 'Excluir'; return; }
-      await carregarComunicados();
+    if (excluirBtn) excluirBtn.addEventListener('click', () => {
+      const comunicado = comunicadosCache.find(x => x.id === id);
+      abrirModalConfirmacao({
+        titulo: 'Excluir comunicado',
+        confirmarLabel: 'Excluir',
+        corpoHTML: `<p style="margin:0;">Excluir <b>"${esc(comunicado ? comunicado.titulo : 'este comunicado')}"</b>? Isso não pode ser desfeito.</p>`,
+        aoConfirmar: async (overlay, fechar) => {
+          const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+          okBtn.disabled = true; okBtn.textContent = 'Excluindo...';
+          const { error } = await supa.from('comunicados').delete().eq('id', id);
+          if (error) { okBtn.disabled = false; okBtn.textContent = 'Excluir'; alert(`Erro ao excluir: ${error.message}`); return; }
+          fechar();
+          await carregarComunicados();
+        }
+      });
     });
   });
 }
