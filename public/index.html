@@ -3370,9 +3370,14 @@ async function buildRotaContasAlvoHTML(ownerId, dataISO) {
   const geo = await geolocalizacaoAtual();
   if (geo) {
     ordenadas = ordenarPorProximidade(paradas, geo);
-  } else {
-    origemLabel = 'da 1ª parada (sem GPS disponível agora)';
-    if (paradas.length > 0) ordenadas = ordenarPorProximidade(paradas.slice(1), paradas[0]).map((p, i) => i === 0 ? { ...p } : p);
+  } else if (paradas.length > 0) {
+    // Sem GPS: usa a 1ª parada como origem e ordena o restante a partir dela.
+    // BUG CORRIGIDO (07/08/26): a versão anterior descartava paradas[0] da lista
+    // final — o cabeçalho contava "N com coordenada" mas só N-1 apareciam embaixo.
+    // Agora a origem entra como 1º item de verdade, sem distância (é o ponto de partida).
+    origemLabel = `de "${paradas[0].nome}" (sem GPS disponível agora, 1ª parada usada como partida)`;
+    const resto = ordenarPorProximidade(paradas.slice(1), paradas[0]);
+    ordenadas = [{ ...paradas[0], distanciaDaAnteriorKm: null }, ...resto];
   }
 
   return `
@@ -3381,7 +3386,7 @@ async function buildRotaContasAlvoHTML(ownerId, dataISO) {
         <h3 style="margin:0;">🎯 Contas-alvo perto de você hoje</h3>
         <span style="font-size:11.5px;color:var(--muted2);">${paradas.length} com coordenada</span>
       </div>
-      <div class="chart-subtitle" style="margin:0 0 12px;">Sequência ordenada por distância real (vizinho mais próximo) a partir ${origemLabel === 'sua posição atual' ? 'de sua posição atual' : origemLabel} — a única categoria de visita hoje com endereço de verdade.</div>
+      <div class="chart-subtitle" style="margin:0 0 12px;">Sequência ordenada por distância real (vizinho mais próximo), a partir ${origemLabel === 'sua posição atual' ? 'de sua posição atual' : origemLabel} — a única categoria de visita hoje com endereço de verdade.</div>
       <div style="display:flex;flex-direction:column;gap:10px;">
         ${ordenadas.map((l, i) => `
           <div class="rota-parada" style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
@@ -6704,10 +6709,30 @@ function abrirModalConfirmacao({ titulo, corpoHTML, confirmarLabel, aoConfirmar 
       </div>
     </div>`;
   document.body.appendChild(overlay);
-  const fechar = () => overlay.remove();
+  const fechar = () => {
+    document.removeEventListener('keydown', onKeydown);
+    overlay.remove();
+    if (elementoAntesDoModal && elementoAntesDoModal.focus) elementoAntesDoModal.focus();
+  };
+  const elementoAntesDoModal = document.activeElement;
   overlay.addEventListener('click', ev => { if (ev.target === overlay) fechar(); });
-  overlay.querySelector('#modalConfirmacaoCancelar').addEventListener('click', fechar);
-  overlay.querySelector('#modalConfirmacaoOk').addEventListener('click', () => aoConfirmar(overlay, fechar));
+  const btnCancelar = overlay.querySelector('#modalConfirmacaoCancelar');
+  const btnOk = overlay.querySelector('#modalConfirmacaoOk');
+  btnCancelar.addEventListener('click', fechar);
+  btnOk.addEventListener('click', () => aoConfirmar(overlay, fechar));
+
+  // Acessibilidade: Esc fecha, Tab fica preso dentro do modal (focus trap simples).
+  function onKeydown(ev) {
+    if (ev.key === 'Escape') { fechar(); return; }
+    if (ev.key !== 'Tab') return;
+    const focaveis = overlay.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (focaveis.length === 0) return;
+    const primeiro = focaveis[0], ultimo = focaveis[focaveis.length - 1];
+    if (ev.shiftKey && document.activeElement === primeiro) { ev.preventDefault(); ultimo.focus(); }
+    else if (!ev.shiftKey && document.activeElement === ultimo) { ev.preventDefault(); primeiro.focus(); }
+  }
+  document.addEventListener('keydown', onKeydown);
+  btnCancelar.focus();
   return overlay;
 }
 let prospeccaoFiltro = { cidade: '', bairro: '', notaMin: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '' };
