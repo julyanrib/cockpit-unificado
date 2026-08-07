@@ -3518,7 +3518,7 @@ function renderAgenda() {
 
 
   const souRep = !!(sessaoAtual && sessaoAtual.role === 'rep');
-  if (agendaEstado.modo === null) agendaEstado.modo = souRep ? 'hora' : 'time';
+  if (agendaEstado.modo === null) agendaEstado.modo = souRep ? 'hora' : 'matriz';
 
   // Sem dado do build, cai no rascunho embutido — com tarja, pra ninguém tratar como vivo.
   const usandoRascunho = !DATA.agenda && typeof AGENDA_RASCUNHO !== 'undefined';
@@ -3641,6 +3641,7 @@ function renderAgenda() {
   // ranking de planejamento — premia comportamento, não resultado
 
   h += '<div class="ag-ctrl"><div class="ag-seg" role="group" aria-label="Modo de visualização">' +
+    (time.length > 1 ? '<button data-agmodo="matriz" aria-pressed="' + (agendaEstado.modo === 'matriz') + '">Visão da semana</button>' : '') +
     '<button data-agmodo="time" aria-pressed="' + (agendaEstado.modo === 'time') + '">Time</button>' +
     '<button data-agmodo="hora" aria-pressed="' + (agendaEstado.modo === 'hora') + '">Grade por hora</button></div>' +
     '<div class="ag-seg" role="group" aria-label="Filtro de tipo">' +
@@ -3659,7 +3660,9 @@ function renderAgenda() {
 
   h += (agendaEstado.modo === 'hora'
       ? agendaGradeHora(dias, vis, time, hojeK, mostraSabado, temSabado)
-      : agendaGradeTime(dias, vis, naSemana, doTime, time, hojeK, semNada, mostraSabado, temSabado));
+      : agendaEstado.modo === 'matriz'
+        ? agendaMatrizTime(dias, naSemana, time, hojeK)
+        : agendaGradeTime(dias, vis, naSemana, doTime, time, hojeK, semNada, mostraSabado, temSabado));
 
   h += '<div class="ag-det" id="agDet" data-open="0">' +
     '<button class="agx" id="agDetX" aria-label="Fechar">×</button>' +
@@ -3693,6 +3696,51 @@ function renderAgenda() {
   } else if (!usandoRascunho && pill) {
     pill.remove();
   }
+}
+
+// Matriz da semana (gestor): linhas = executivos, colunas = dias úteis, célula =
+// quantidade de compromissos. Primeiro as exceções (dia vazio grita), o detalhe
+// (grade completa com os blocos) fica a um clique — nada é despejado de cara.
+function agendaMatrizTime(dias, naSemana, time, hojeK) {
+  const porExecDia = {};
+  naSemana.forEach(function (e) {
+    const k = e.ownerId + '_' + agendaChave(e.inicio);
+    (porExecDia[k] = porExecDia[k] || []).push(e);
+  });
+  const rotDia = function (d) {
+    return ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'][d.getUTCDay()] + ' ' + agendaP2(d.getUTCDate());
+  };
+  let h = '<div class="chart-card" style="padding:0;overflow:hidden;margin-bottom:14px;">' +
+    '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);flex-wrap:wrap;">' +
+    '<h3 style="margin:0;font-size:15px;">Semana do time — quem está coberto, quem está vazio</h3>' +
+    '<span style="font-size:11px;color:var(--muted2);">célula = compromissos no dia · clique numa linha pra abrir a grade completa</span></div>' +
+    '<div class="reps-table-wrap"><div style="min-width:' + (170 + dias.length * 74) + 'px;">' +
+    '<div style="display:grid;grid-template-columns:170px repeat(' + dias.length + ',1fr) 64px;gap:6px;padding:10px 14px;background:var(--panel2);font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);">' +
+    '<div>Executivo</div>' + dias.map(function (d) {
+      const ehHoje = agendaChave(d) === hojeK;
+      return '<div style="text-align:center;' + (ehHoje ? 'color:var(--red);' : '') + '">' + rotDia(d) + (ehHoje ? ' · hoje' : '') + '</div>';
+    }).join('') + '<div style="text-align:right;">Total</div></div>';
+
+  const linhas = time.map(function (r) {
+    const cels = dias.map(function (d) {
+      return (porExecDia[String(r.ownerId) + '_' + agendaChave(d)] || []).length;
+    });
+    return { r: r, cels: cels, total: cels.reduce(function (a, b) { return a + b; }, 0) };
+  }).sort(function (a, b) { return a.total - b.total; }); // semana mais vazia primeiro
+
+  linhas.forEach(function (ln) {
+    h += '<button data-agmatriz="' + ln.r.ownerId + '" style="display:grid;grid-template-columns:170px repeat(' + dias.length + ',1fr) 64px;gap:6px;padding:9px 14px;width:100%;background:none;border:none;border-top:1px solid var(--line);cursor:pointer;text-align:left;font-family:inherit;align-items:center;">' +
+      '<b style="font-size:12.5px;color:var(--ink);">' + agendaEsc(String(ln.r.name || '').split(' ').slice(0, 2).join(' ')) + (ln.total === 0 ? ' <span style="font-size:9.5px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:999px;padding:2px 7px;">SEMANA VAZIA</span>' : '') + '</b>' +
+      ln.cels.map(function (n) {
+        const bg = n === 0 ? 'var(--red-soft)' : n === 1 ? 'var(--amber-soft)' : n === 2 ? 'var(--panel2)' : 'var(--green-soft)';
+        const fg = n === 0 ? 'var(--red)' : n === 1 ? 'var(--amber)' : n === 2 ? 'var(--muted)' : 'var(--green)';
+        return '<span style="display:block;text-align:center;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums;border-radius:8px;padding:7px 0;background:' + bg + ';color:' + fg + ';">' + (n === 0 ? '—' : n) + '</span>';
+      }).join('') +
+      '<span style="text-align:right;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;color:' + (ln.total === 0 ? 'var(--red)' : 'var(--ink)') + ';">' + ln.total + '</span></button>';
+  });
+
+  h += '</div></div></div>';
+  return h;
 }
 
 function agendaGradeTime(dias, vis, naSemana, doTime, time, hojeK, semNada, mostraSabado, temSabado) {
@@ -3915,6 +3963,8 @@ document.addEventListener('click', function (ev) {
   if (nav) { const v = +nav.dataset.agnav; agendaEstado.offset = v === 0 ? 0 : agendaEstado.offset + v; renderAgenda(); return; }
   const md = ev.target.closest('[data-agmodo]');
   if (md) { agendaEstado.modo = md.dataset.agmodo; renderAgenda(); return; }
+  const mx = ev.target.closest('[data-agmatriz]');
+  if (mx) { agendaEstado.modo = 'time'; renderAgenda(); return; }
   const f = ev.target.closest('[data-agfiltro]');
   if (f) { agendaEstado.filtro = f.dataset.agfiltro; renderAgenda(); return; }
   if (ev.target.closest('[data-agsab]')) { agendaEstado.sabado = !agendaEstado.sabado; renderAgenda(); return; }
