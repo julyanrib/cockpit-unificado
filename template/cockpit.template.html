@@ -899,6 +899,8 @@
 
   <div class="banner" id="banner" style="margin-top:16px;"></div>
 
+  <div id="planosDoTimeSlot"></div>
+
   <div class="charts-row">
     <div class="chart-card">
       <h3><span class="source-tag hub">HubSpot</span>Funil por etapa</h3>
@@ -1391,6 +1393,10 @@ function aplicarVisaoPorPapel() {
   if (souGestorSessao) {
     document.getElementById('sidenavTitle').textContent = 'Gestor';
     if (typeof renderCoaching === 'function') renderCoaching();
+    // Etapa 6b — planos do dia do time. setTimeout(0) pelo mesmo motivo do
+    // renderAgenda logo abaixo: usa AGENDA_TIPOS/agendaNormalizar, declaradas
+    // mais adiante no script.
+    if (typeof montarPlanosDoTime === 'function') setTimeout(() => montarPlanosDoTime().catch(e => console.error('Erro nos planos do time:', e)), 0);
   }
 
   if (typeof renderRepsList === 'function') renderRepsList();
@@ -5185,6 +5191,94 @@ async function montarPlanoDoDia(r) {
       montarPlanoDoDia(r);
     });
   }
+}
+
+/* ---- ETAPA 6b — VISÃO DO GESTOR: planos do dia do time ----
+   Mostra quem fechou / não fechou o plano, horário, versão, prioridades,
+   agenda vazia e conflitos de horário. NUNCA mostra estado de sincronização
+   com o Expogo — essa confirmação só pode aparecer com backend real. */
+
+async function montarPlanosDoTime() {
+  const slot = document.getElementById('planosDoTimeSlot');
+  if (!slot || !DATA.supabase || !supa) return;
+  if (!sessaoAtual || sessaoAtual.role !== 'manager') { slot.innerHTML = ''; return; }
+  const hoje = isoDate(new Date());
+
+  const { data, error } = await supa.from('planos_diarios').select('*').eq('data', hoje);
+  if (error) {
+    console.error('Erro ao carregar planos do time:', error.message);
+    slot.innerHTML = `<div class="chart-card" style="margin-top:20px;"><div class="empty-state">Não consegui carregar os planos do dia (${esc(error.message)}). Se a tabela planos_diarios ainda não existe, rode a migração no Supabase.</div></div>`;
+    return;
+  }
+  const planosPorOwner = {};
+  (data || []).forEach(p => { planosPorOwner[String(p.owner_id)] = p; });
+
+  // Agenda de hoje por rep — mesma convenção BRT-nos-campos-UTC do resto da agenda
+  const agendaPorOwner = {};
+  if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+    agendaNormalizar(DATA.agenda).forEach(e => {
+      if (!e.inicio || e.inicio.toISOString().slice(0, 10) !== hoje) return;
+      const k = String(e.ownerId);
+      (agendaPorOwner[k] = agendaPorOwner[k] || []).push(e);
+    });
+  }
+
+  const linhas = (DATA.reps || []).map(r => {
+    const p = planosPorOwner[String(r.ownerId)] || null;
+    const eventos = (agendaPorOwner[String(r.ownerId)] || []).sort((a, b) => a.inicio - b.inicio);
+    const agendaVazia = eventos.length === 0;
+    // Conflito honesto e verificável: dois compromissos começando no MESMO horário.
+    const horas = eventos.map(e => agendaHhmm(e.inicio));
+    const conflitos = horas.filter((h, i) => horas.indexOf(h) !== i);
+    const fechado = p && p.status === 'plano_fechado';
+    const rascunho = p && p.status === 'rascunho';
+    return { r, p, fechado, rascunho, agendaVazia, conflitos: [...new Set(conflitos)] };
+  }).sort((a, b) => (a.fechado === b.fechado) ? a.r.name.localeCompare(b.r.name) : (a.fechado ? 1 : -1));
+
+  const fechados = linhas.filter(l => l.fechado).length;
+
+  slot.innerHTML = `
+    <div class="chart-card" id="planosDoTimeCard" style="margin-top:20px;border-left:3px solid var(--red);">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:4px;">
+        <h3 style="margin:0;">🗓️ Planos do dia do time</h3>
+        <span style="font-size:11.5px;color:var(--muted2);"><b>${fechados}</b> de ${linhas.length} fecharam o plano · <button id="planosDoTimeRefresh" style="background:none;border:none;color:var(--blue);font-weight:700;font-size:11.5px;cursor:pointer;font-family:inherit;padding:0;">atualizar ↻</button></span>
+      </div>
+      <div class="chart-subtitle" style="margin:0 0 12px;">Quem já fechou o plano no Cockpit hoje, com horário, prioridades e alertas de agenda. A execução na rua continua no Expogo.</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${linhas.map(({ r, p, fechado, rascunho, agendaVazia, conflitos }) => {
+          const hora = fechado && p.fechado_em ? new Date(p.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
+          const prios = (p && Array.isArray(p.prioridades) ? p.prioridades : []).filter(Boolean);
+          const contas = (p && Array.isArray(p.contas_alvo) ? p.contas_alvo : []).length;
+          const statusPill = fechado
+            ? `<span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:4px 11px;background:var(--green-soft);color:var(--green);">Fechado às ${hora}${(p.versao || 1) > 1 ? ` · v${p.versao}` : ''}</span>`
+            : rascunho
+              ? `<span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:4px 11px;background:var(--amber-soft);color:var(--amber);">Rascunho — não fechou</span>`
+              : `<span style="font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:4px 11px;background:var(--panel2);color:var(--muted2);border:1px solid var(--line);">Sem plano hoje</span>`;
+          return `
+            <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:13px 16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <b style="font-size:13.5px;">${esc(r.name)}</b>
+                <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                  ${agendaVazia ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--amber-soft);color:var(--amber);">⚠️ agenda vazia</span>` : ''}
+                  ${conflitos.length > 0 ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--red-soft, var(--amber-soft));color:var(--red);">⛔ 2 compromissos às ${esc(conflitos.join(', '))}</span>` : ''}
+                  ${statusPill}
+                </span>
+              </div>
+              ${prios.length > 0 ? `
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">
+                  ${prios.map((t, i) => `<span style="font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:5px 11px;">${i + 1}. ${esc(t)}</span>`).join('')}
+                  ${contas > 0 ? `<span style="font-size:11.5px;color:var(--muted2);align-self:center;">🎯 ${contas} conta${contas === 1 ? '' : 's'}-alvo confirmada${contas === 1 ? '' : 's'}</span>` : ''}
+                </div>` : ''}
+              ${p && p.bloqueios ? `<div style="font-size:12px;color:var(--red);margin-top:8px;">🚧 <b>Bloqueio:</b> ${esc(p.bloqueios)}</div>` : ''}
+              ${p && p.observacao ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;">💬 ${esc(p.observacao)}</div>` : ''}
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+
+  const btnRefresh = slot.querySelector('#planosDoTimeRefresh');
+  if (btnRefresh) btnRefresh.addEventListener('click', () => montarPlanosDoTime());
 }
 
 // ---- Cálculos derivados (nunca chumbados) ----
