@@ -863,7 +863,7 @@
         <div style="color:var(--muted2);font-size:11.5px;" id="perfilEmailLabel"></div>
       </div>
       <label style="font-size:11.5px;color:var(--muted);font-weight:700;display:block;margin-bottom:6px;">Foto de perfil</label>
-      <input type="file" id="perfilFotoInput" accept="image/*" style="width:100%;margin-bottom:10px;font-size:12.5px;">
+      <input type="file" id="perfilFotoInput" aria-label="Escolher foto de perfil" accept="image/*" style="width:100%;margin-bottom:10px;font-size:12.5px;">
       <button id="perfilSalvarBtn" style="width:100%;padding:11px;border-radius:var(--r-pill);border:none;background:var(--red);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;">Salvar foto</button>
       <div id="perfilStatus" style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"></div>
       <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
@@ -1055,14 +1055,14 @@
         <button class="modal-close" id="novoComunicadoClose">✕</button>
       </div>
       <div class="modal-body novo-comunicado-form">
-        <select id="novoComunicadoTipo">
+        <select id="novoComunicadoTipo" aria-label="Tipo do comunicado">
           <option value="geral">Comunicado geral</option>
           <option value="atualizacao">Atualização de produto</option>
           <option value="urgente">Aviso urgente</option>
         </select>
-        <input type="text" id="novoComunicadoTitulo" placeholder="Título">
+        <input type="text" id="novoComunicadoTitulo" aria-label="Título do comunicado" placeholder="Título">
         <textarea id="novoComunicadoMensagem" placeholder="Mensagem..."></textarea>
-        <input type="file" id="novoComunicadoImagem" accept="image/*" style="margin-bottom:10px;font-size:12.5px;">
+        <input type="file" id="novoComunicadoImagem" aria-label="Anexar imagem do comunicado (opcional)" accept="image/*" style="margin-bottom:10px;font-size:12.5px;">
         <button id="novoComunicadoPublicar" style="width:100%;padding:11px;border-radius:var(--r-pill);border:none;background:var(--red);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;">Publicar</button>
         <div id="novoComunicadoStatus" style="font-size:12px;color:var(--muted);margin-top:8px;"></div>
       </div>
@@ -1559,7 +1559,7 @@ function buildFilaDeHojeHTML(r) {
         <div style="display:flex;flex-direction:column;gap:8px;">
           ${fila.map(l => `
             <div class="roteiro-item" data-lead="${l.id}" style="display:flex;align-items:center;gap:11px;background:var(--dark-fill);border-radius:14px;padding:12px 13px;min-height:44px;">
-              <span class="checkbox roteiro-check" data-lead="${l.id}" style="width:20px;height:20px;flex:none;"></span>
+              <span class="checkbox roteiro-check" role="checkbox" aria-checked="false" tabindex="0" aria-label="Marcar ${esc(l.name)} como resolvido hoje" data-lead="${l.id}" style="width:20px;height:20px;flex:none;"></span>
               <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;text-decoration:none;color:inherit;">
                 <b style="font-size:13.5px;">${l.name}</b>
                 <span style="font-size:11.5px;color:var(--dark-mut);">${l.stage} · ${l.tipo === 'quente' ? `${l.dias}d na etapa` : `parado há ${l.dias}d`}</span>
@@ -1629,7 +1629,7 @@ function buildRoteiroHojeHTML(r) {
   const linhaLead = (l, corBorda, motivoHtml, extraBadge) => `
     <div class="roteiro-item" data-lead="${l.id}" style="background:var(--panel2);border-radius:var(--r-sm);padding:11px 13px;border-left:2px solid ${corBorda};margin-bottom:7px;">
       <div style="display:flex;align-items:center;gap:10px;">
-        <span class="checkbox roteiro-check" data-lead="${l.id}" style="width:19px;height:19px;flex:none;"></span>
+        <span class="checkbox roteiro-check" role="checkbox" aria-checked="false" tabindex="0" aria-label="Marcar ${esc(l.name)} como resolvido hoje" data-lead="${l.id}" style="width:19px;height:19px;flex:none;"></span>
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;font-weight:600;color:var(--ink);">${l.name}</div>
           <div style="font-size:11px;color:var(--muted);margin-top:1px;">${motivoHtml}</div>
@@ -1689,11 +1689,17 @@ function wireRoteiroChecks(rootEl) {
     card.querySelectorAll('.roteiro-check').forEach(cb => {
       const leadId = cb.dataset.lead;
       try {
-        if (localStorage.getItem(roteiroCheckKey(ownerId, leadId)) === '1') cb.classList.add('checked');
+        if (localStorage.getItem(roteiroCheckKey(ownerId, leadId)) === '1') { cb.classList.add('checked'); cb.setAttribute('aria-checked', 'true'); }
       } catch (e) {}
-      cb.addEventListener('click', () => {
+      const alternar = () => {
         cb.classList.toggle('checked');
+        cb.setAttribute('aria-checked', cb.classList.contains('checked') ? 'true' : 'false');
         try { localStorage.setItem(roteiroCheckKey(ownerId, leadId), cb.classList.contains('checked') ? '1' : '0'); } catch (e) {}
+      };
+      cb.addEventListener('click', alternar);
+      // role="checkbox" custom precisa responder Enter/Espaço pra ser navegável por teclado
+      cb.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alternar(); }
       });
     });
   });
@@ -2040,7 +2046,7 @@ async function renderMeuPainel() {
         </ul>
       </div>
       <div class="sign-row">
-        <span>Combinado no 1:1 de <input type="text" id="meuPainelPdiData" placeholder="dd/mm"></span>
+        <span>Combinado no 1:1 de <input type="text" id="meuPainelPdiData" aria-label="Data combinada no 1:1 (dd/mm)" placeholder="dd/mm"></span>
       </div>
     </div>
 
@@ -2374,7 +2380,7 @@ function vendasMesLinhaCliente(c, podeEditar) {
         ${btnEditar}
       </div>
       <div class="vm-edit" style="display:none;align-items:center;gap:6px;">
-        <input type="number" class="vm-input" min="0" step="1" value="${c.mrr || ''}" placeholder="MRR" style="width:88px;text-align:right;padding:7px 8px;border-radius:var(--r-sm);border:1.5px solid var(--line);font-size:13px;font-weight:700;background:var(--panel);color:var(--ink);font-variant-numeric:tabular-nums;">
+        <input type="number" class="vm-input" aria-label="MRR de ${esc(c.name || c.nome || '')}" min="0" step="1" value="${c.mrr || ''}" placeholder="MRR" style="width:88px;text-align:right;padding:7px 8px;border-radius:var(--r-sm);border:1.5px solid var(--line);font-size:13px;font-weight:700;background:var(--panel);color:var(--ink);font-variant-numeric:tabular-nums;">
         <button class="vm-salvar" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:7px 13px;font-size:11.5px;font-weight:700;cursor:pointer;">Salvar</button>
         <button class="vm-cancelar" style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r-pill);padding:7px 11px;font-size:11.5px;cursor:pointer;color:var(--muted);">✕</button>
       </div>
@@ -3470,7 +3476,7 @@ async function buildRotaDoDiaHTML(ownerId, dataISO) {
                 <button class="rota-btn-checkout" data-evento="${e.id}" ${!c.checkin_em || c.checkout_em ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;color:#fff;background:${c.checkout_em ? 'var(--muted2)' : 'var(--red)'};border:none;border-radius:999px;padding:7px 12px;cursor:${!c.checkin_em || c.checkout_em ? 'default' : 'pointer'};">${c.checkout_em ? '✓ Check-out ' + agendaHhmm(agendaParaBRT(c.checkout_em)) : 'Check-out'}</button>
               </div>
               <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
-                <select class="rota-resultado" data-evento="${e.id}" style="font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+                <select class="rota-resultado" data-evento="${e.id}" aria-label="Resultado da visita" style="font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
                   <option value="">Resultado da visita…</option>
                   <option value="avancou" ${c.resultado === 'avancou' ? 'selected' : ''}>Avançou de etapa</option>
                   <option value="sem_contato" ${c.resultado === 'sem_contato' ? 'selected' : ''}>Sem contato / fechado</option>
@@ -3478,7 +3484,7 @@ async function buildRotaDoDiaHTML(ownerId, dataISO) {
                   <option value="sem_fit" ${c.resultado === 'sem_fit' ? 'selected' : ''}>Sem fit</option>
                   <option value="outro" ${c.resultado === 'outro' ? 'selected' : ''}>Outro</option>
                 </select>
-                <input type="text" class="rota-proxima-acao" data-evento="${e.id}" placeholder="Próxima ação…" value="${(c.proxima_acao || '').replace(/"/g, '&quot;')}" style="flex:1;min-width:140px;font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+                <input type="text" class="rota-proxima-acao" data-evento="${e.id}" aria-label="Próxima ação para este compromisso" placeholder="Próxima ação…" value="${(c.proxima_acao || '').replace(/"/g, '&quot;')}" style="flex:1;min-width:140px;font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
               </div>
             </div>
           `;
@@ -4805,7 +4811,7 @@ function buildDetailHTML(r, idPrefix, skipLeadsList) {
       `).join('')}
     </ul>
     <div class="sign-row">
-      <span>Combinado no 1:1 de <input type="text" id="${idPrefix}PdiData" placeholder="dd/mm"></span>
+      <span>Combinado no 1:1 de <input type="text" id="${idPrefix}PdiData" aria-label="Data combinada no 1:1 (dd/mm)" placeholder="dd/mm"></span>
       <span id="${idPrefix}PdiCount">✓ ${r.compromissos.length} compromissos</span>
     </div>
 
@@ -4819,7 +4825,7 @@ function buildDetailHTML(r, idPrefix, skipLeadsList) {
             <div class="daily-col-label">Registrar novo 1:1</div>
             <div class="daily-metric-row" style="margin-bottom:10px;">
               <label>Data</label>
-              <input type="date" id="${idPrefix}UmAUmData" style="width:140px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 8px;">
+              <input type="date" id="${idPrefix}UmAUmData" aria-label="Data do próximo 1:1" style="width:140px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:5px 8px;">
             </div>
             <textarea id="${idPrefix}UmAUmResumo" placeholder="Resumo da conversa..." style="width:100%;min-height:70px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
             <textarea id="${idPrefix}UmAUmCompromissos" placeholder="Compromissos combinados (um por linha)..." style="width:100%;min-height:60px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
@@ -5280,7 +5286,7 @@ async function montarPlanoDoDia(r) {
         <h3 style="margin:0;">🗺️ Mapa de planejamento</h3>
         <span style="display:flex;gap:10px;align-items:center;font-size:11.5px;color:var(--muted2);flex-wrap:wrap;">
           <label style="display:flex;align-items:center;gap:5px;">avaliações:
-            <select id="planoMapaAvalMin" style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:11.5px;padding:4px 7px;font-family:inherit;">
+            <select id="planoMapaAvalMin" aria-label="Filtrar contas-alvo por volume de avaliações" style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:11.5px;padding:4px 7px;font-family:inherit;">
               ${[[0, 'todas'], [100, '100+'], [300, '300+'], [1000, '1000+']].map(([v, t]) => `<option value="${v}" ${(planoMapaFiltro.avalMin || 0) === v ? 'selected' : ''}>${t}</option>`).join('')}
             </select>
           </label>
@@ -5326,7 +5332,7 @@ async function montarPlanoDoDia(r) {
           <div>
             <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">⭐ Suas três prioridades de hoje</div>
             <div style="display:flex;flex-direction:column;gap:8px;">
-              ${[1, 2, 3].map(i => `<input type="text" id="planoPrioridade${i}" maxlength="140" placeholder="Prioridade ${i}" value="${esc(prios[i - 1] || '')}" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">`).join('')}
+              ${[1, 2, 3].map(i => `<input type="text" id="planoPrioridade${i}" aria-label="Prioridade ${i} de hoje" maxlength="140" placeholder="Prioridade ${i}" value="${esc(prios[i - 1] || '')}" ${fechado ? 'disabled' : ''} style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">`).join('')}
             </div>
           </div>
         </div>
@@ -6144,9 +6150,9 @@ async function renderDaily() {
 
           <div class="hoje-panel">
             <div class="hoje-panel-title"><span class="dot"></span>Prometer pra hoje</div>
-            <div class="prom-row"><label>Visitas</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_visitas" value="${hoje.prometido_visitas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
-            <div class="prom-row"><label>Avanços de etapa</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_avancos" value="${hoje.prometido_avancos ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
-            <div class="prom-row"><label>Propostas</label><input type="number" min="0" class="d-prom" data-owner="${r.ownerId}" data-campo="prometido_propostas" value="${hoje.prometido_propostas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
+            <div class="prom-row"><label>Visitas</label><input type="number" min="0" class="d-prom" aria-label="Visitas prometidas hoje" data-owner="${r.ownerId}" data-campo="prometido_visitas" value="${hoje.prometido_visitas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
+            <div class="prom-row"><label>Avanços de etapa</label><input type="number" min="0" class="d-prom" aria-label="Avanços prometidos hoje" data-owner="${r.ownerId}" data-campo="prometido_avancos" value="${hoje.prometido_avancos ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
+            <div class="prom-row"><label>Propostas</label><input type="number" min="0" class="d-prom" aria-label="Propostas prometidas hoje" data-owner="${r.ownerId}" data-campo="prometido_propostas" value="${hoje.prometido_propostas ?? ''}" ${disabledAttr} style="${inputStyleExtra}"></div>
           </div>
         </div>
 
@@ -6363,7 +6369,7 @@ async function renderBannerComunicados() {
           <span class="comunicado-banner-tipo">${labelTipo(c.tipo)}</span>
           <div class="comunicado-banner-titulo">${esc(c.titulo)}</div>
           ${c.mensagem ? `<div class="comunicado-banner-msg">${esc(c.mensagem)}</div>` : ''}
-          ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
+          ${imgUrl ? `<img src="${imgUrl}" alt="Imagem do comunicado: ${esc(c.titulo)}" class="comunicado-banner-img">` : ''}
         </div>
         <div class="comunicado-banner-actions">
           <button id="btnMarcarLido" data-id="${c.id}">Ok, entendi${naoLidos.length > 1 ? ` (+${naoLidos.length - 1})` : ''}</button>
@@ -6406,7 +6412,7 @@ async function abrirHistoricoComunicados() {
           <span class="comunicado-banner-tipo" style="background:${c.tipo === 'urgente' ? 'var(--red)' : c.tipo === 'atualizacao' ? 'var(--violet)' : 'var(--muted2)'};color:#fff;">${labelTipo(c.tipo)}</span>
           <div class="comunicado-banner-titulo" style="margin-top:6px;">${esc(c.titulo)}</div>
           ${c.mensagem ? `<div class="comunicado-banner-msg">${esc(c.mensagem)}</div>` : ''}
-          ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
+          ${imgUrl ? `<img src="${imgUrl}" alt="Imagem do comunicado: ${esc(c.titulo)}" class="comunicado-banner-img">` : ''}
           <div class="comunicado-item-meta">${esc(c.autor)} · ${new Date(c.created_at).toLocaleDateString('pt-BR')}</div>
           <div class="comunicado-visto-por">${linhaLeituraComunicado(c)}</div>
           ${sessaoAtual.role === 'manager' ? `
@@ -6417,12 +6423,12 @@ async function abrirHistoricoComunicados() {
           ` : ''}
         </div>
         <div class="comunicado-edit-form" style="display:none;margin-top:8px;">
-          <select class="editTipo novo-comunicado-form" style="margin-bottom:6px;">
+          <select class="editTipo novo-comunicado-form" aria-label="Tipo do comunicado" style="margin-bottom:6px;">
             <option value="geral" ${c.tipo === 'geral' ? 'selected' : ''}>Comunicado geral</option>
             <option value="atualizacao" ${c.tipo === 'atualizacao' ? 'selected' : ''}>Atualização de produto</option>
             <option value="urgente" ${c.tipo === 'urgente' ? 'selected' : ''}>Aviso urgente</option>
           </select>
-          <input type="text" class="editTitulo" value="${esc(c.titulo)}" style="width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">
+          <input type="text" class="editTitulo" aria-label="Título do comunicado" value="${esc(c.titulo)}" style="width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">
           <textarea class="editMensagem" style="width:100%;min-height:60px;margin-bottom:8px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">${esc(c.mensagem || '')}</textarea>
           <button class="btnSalvarEdicao" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Salvar</button>
           <button class="btnCancelarEdicao" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-pill);padding:6px 14px;font-size:11.5px;cursor:pointer;">Cancelar</button>
@@ -6647,7 +6653,7 @@ async function renderAvisos() {
           </div>
           <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">${esc(c.titulo)}</div>
           ${c.mensagem ? `<div style="font-size:13.5px;color:var(--muted);line-height:1.55;">${esc(c.mensagem)}</div>` : ''}
-          ${imgUrl ? `<img src="${imgUrl}" class="comunicado-banner-img">` : ''}
+          ${imgUrl ? `<img src="${imgUrl}" alt="Imagem do comunicado: ${esc(c.titulo)}" class="comunicado-banner-img">` : ''}
           <div style="font-size:11px;color:var(--muted2);margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <span>${esc(c.autor)} · ${linhaLeituraComunicado(c)}</span>
             ${sessaoAtual.role !== 'manager' && !jaLi(c.id) ? '<span style="font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#fff;background:var(--red);border-radius:999px;padding:2px 8px;">novo</span>' : ''}
@@ -6660,12 +6666,12 @@ async function renderAvisos() {
           ` : ''}
         </div>
         <div class="comunicado-edit-form" style="display:none;margin-top:8px;">
-          <select class="editTipo novo-comunicado-form" style="margin-bottom:6px;">
+          <select class="editTipo novo-comunicado-form" aria-label="Tipo do comunicado" style="margin-bottom:6px;">
             <option value="geral" ${c.tipo === 'geral' ? 'selected' : ''}>Comunicado geral</option>
             <option value="atualizacao" ${c.tipo === 'atualizacao' ? 'selected' : ''}>Atualização de produto</option>
             <option value="urgente" ${c.tipo === 'urgente' ? 'selected' : ''}>Aviso urgente</option>
           </select>
-          <input type="text" class="editTitulo" value="${esc(c.titulo)}" style="width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">
+          <input type="text" class="editTitulo" aria-label="Título do comunicado" value="${esc(c.titulo)}" style="width:100%;margin-bottom:6px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">
           <textarea class="editMensagem" style="width:100%;min-height:60px;margin-bottom:8px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;">${esc(c.mensagem || '')}</textarea>
           <button class="btnSalvarEdicao" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;min-height:38px;">Salvar</button>
           <button class="btnCancelarEdicao" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-pill);padding:9px 14px;font-size:12px;cursor:pointer;min-height:38px;">Cancelar</button>
@@ -6914,7 +6920,7 @@ function prospeccaoCardHTML(l) {
       ${nomeResponsavel ? `<div style="font-size:11.5px;color:var(--muted);">Responsável: <b>${esc(nomeResponsavel)}</b></div>` : ''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
         ${sessaoAtual.role === 'manager' ? `
-          <select class="prospeccao-atribuir" data-lead="${l.id}" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+          <select class="prospeccao-atribuir" data-lead="${l.id}" aria-label="Atribuir a um executivo" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
             <option value="">Atribuir a…</option>
             ${DATA.reps.map(r => `<option value="${r.ownerId}" ${String(l.responsavel_owner_id) === r.ownerId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
           </select>
@@ -6977,33 +6983,33 @@ async function renderProspeccaoNova() {
         <span style="font-size:11.5px;color:var(--muted2);">mostrando ${filtrados.length === 0 ? 0 : (prospeccaoPagina - 1) * POR_PAGINA + 1}–${Math.min(prospeccaoPagina * POR_PAGINA, filtrados.length)} · pág. ${prospeccaoPagina} de ${totalPaginas}</span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-        <select id="pfCidade" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <select id="pfCidade" aria-label="Filtrar por cidade" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Cidade (todas)</option>
           ${cidades.map(c => `<option ${prospeccaoFiltro.cidade === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
         </select>
-        <select id="pfBairro" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <select id="pfBairro" aria-label="Filtrar por bairro" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Bairro (todos)</option>
           ${bairros.map(b => `<option ${prospeccaoFiltro.bairro === b ? 'selected' : ''}>${esc(b)}</option>`).join('')}
         </select>
-        <select id="pfCategoria" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <select id="pfCategoria" aria-label="Filtrar por categoria" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Categoria (todas)</option>
           ${categorias.map(c => `<option ${prospeccaoFiltro.categoria === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
         </select>
-        <select id="pfFonte" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <select id="pfFonte" aria-label="Filtrar por fonte" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Fonte (todas)</option>
           ${fontes.map(f => `<option value="${f}" ${prospeccaoFiltro.fonte === f ? 'selected' : ''}>${f}</option>`).join('')}
         </select>
-        <select id="pfStatus" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <select id="pfStatus" aria-label="Filtrar por status" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Status (todos)</option>
           ${['pendente', 'atribuido', 'na_rota', 'sem_fit', 'criado_hubspot'].map(s => `<option value="${s}" ${prospeccaoFiltro.status === s ? 'selected' : ''}>${s}</option>`).join('')}
         </select>
-        <select id="pfJaExiste" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <select id="pfJaExiste" aria-label="Filtrar por duplicata no HubSpot" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Já existe no HubSpot? (todos)</option>
           <option value="true" ${prospeccaoFiltro.jaExiste === 'true' ? 'selected' : ''}>Possível duplicata</option>
           <option value="false" ${prospeccaoFiltro.jaExiste === 'false' ? 'selected' : ''}>Sem duplicata aparente</option>
         </select>
-        <input id="pfNotaMin" type="number" step="0.1" placeholder="Nota mín." value="${prospeccaoFiltro.notaMin}" style="width:90px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
-        <input id="pfAvaliacoesMin" type="number" placeholder="Avaliações mín." value="${prospeccaoFiltro.avaliacoesMin}" style="width:120px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <input id="pfNotaMin" type="number" step="0.1" aria-label="Nota mínima" placeholder="Nota mín." value="${prospeccaoFiltro.notaMin}" style="width:90px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <input id="pfAvaliacoesMin" type="number" aria-label="Avaliações mínimas" placeholder="Avaliações mín." value="${prospeccaoFiltro.avaliacoesMin}" style="width:120px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
       </div>
       ${sessaoAtual.role === 'manager' ? `
       <div id="prospeccaoLoteBar" style="display:${nSel > 0 ? 'flex' : 'none'};align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px;">
@@ -7362,10 +7368,10 @@ async function renderPDIs() {
         <div style="padding:14px 16px;">
           <div class="daily-metric-row" style="margin-bottom:8px;">
             <label>Título</label>
-            <input type="text" class="pdiTitulo" placeholder="ex: PDI semana 28/07" style="flex:2;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 10px;">
+            <input type="text" class="pdiTitulo" aria-label="Título do PDI" placeholder="ex: PDI semana 28/07" style="flex:2;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 10px;">
           </div>
           <textarea class="pdiCompromissos" placeholder="Compromissos combinados (um por linha) — vira checklist pro executivo..." style="width:100%;min-height:60px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
-          <input type="file" class="pdiArquivo" accept=".pdf,.doc,.docx" style="margin-bottom:8px;font-size:12.5px;">
+          <input type="file" class="pdiArquivo" aria-label="Selecionar arquivo do PDI (PDF ou Word)" accept=".pdf,.doc,.docx" style="margin-bottom:8px;font-size:12.5px;">
           <button class="pdiUpload" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:9px 16px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px;display:inline-flex;align-items:center;">Anexar PDI</button>
           <span class="pdiStatus" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
           <div class="pdiLista" style="margin-top:12px;"><div class="empty-state">Carregando...</div></div>
@@ -7421,7 +7427,7 @@ async function renderPDIs() {
                 </div>
                 <span class="lead-cta">baixar →</span>
               </a>
-              ${sessaoAtual.role === 'manager' ? `<button class="pdiApagar" data-doc="${doc.id}" title="Apagar este PDI" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:10px 14px;">🗑</button>` : ''}
+              ${sessaoAtual.role === 'manager' ? `<button class="pdiApagar" data-doc="${doc.id}" aria-label="Apagar o PDI ${esc(doc.titulo || '')}" title="Apagar este PDI" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:10px 14px;">🗑</button>` : ''}
             </div>
             ${compromissos.length > 0 ? `
               <div style="padding:12px 16px;">
