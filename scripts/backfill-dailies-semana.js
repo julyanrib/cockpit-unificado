@@ -85,7 +85,12 @@ async function gravarSnapshotDaily(ownerId, dataISO, campos) {
       apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
       'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates'
     },
-    body: JSON.stringify([{ owner_id: String(ownerId), data: dataISO, ...campos }])
+    // criado_por é NOT NULL na tabela — este script roda com a service key (sem sessão de
+    // usuário), então nunca tinha um e-mail pra preencher aqui. Erro só apareceu agora porque
+    // essa era a primeira vez que o script rodava contra uma linha nova (upsert = INSERT quando
+    // o dia/owner ainda não existe). 'sistema-backfill' identifica que a linha (ou a correção)
+    // veio deste script, não de alguém digitando na tela.
+    body: JSON.stringify([{ owner_id: String(ownerId), data: dataISO, criado_por: 'sistema-backfill', ...campos }])
   });
   if (!res.ok) throw new Error(`Supabase recusou upsert (${ownerId}/${dataISO}): ${res.status} ${await res.text()}`);
 }
