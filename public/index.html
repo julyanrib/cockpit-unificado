@@ -872,7 +872,7 @@
       <button class="tab-btn" id="tabBtnCockpit" data-view="viewCockpit"><span class="tab-btn-icon">📊</span><span class="tab-btn-label">Cockpit</span></button>
       <button class="tab-btn" id="tabBtnDaily" data-view="viewDaily"><span class="tab-btn-icon">🎯</span><span class="tab-btn-label">Daily</span></button>
       <button class="tab-btn" id="tabBtnResumo" data-view="viewResumo"><span class="tab-btn-icon">🗓️</span><span class="tab-btn-label">Resumo Semanal</span></button>
-      <button class="tab-btn" id="tabBtnMeuPainel" data-view="viewMeuPainel" style="display:none;"><span class="tab-btn-icon">🏠</span><span class="tab-btn-label">Meu Painel</span></button>
+      <button class="tab-btn" id="tabBtnMeuPainel" data-view="viewMeuPainel" style="display:none;"><span class="tab-btn-icon">🌅</span><span class="tab-btn-label">Hoje</span></button>
       <button class="tab-btn" id="tabBtnLeadsPraca" data-view="viewLeadsPraca"><span class="tab-btn-icon">📍</span><span class="tab-btn-label">Leads da praça</span><span class="tab-btn-badge" id="badgeLeadsPraca"></span></button>
       <button class="tab-btn" id="tabBtnPDIs" data-view="viewPDIs"><span class="tab-btn-icon">📝</span><span class="tab-btn-label">PDIs</span></button>
       <button class="tab-btn" id="tabBtnCoaching" data-view="viewCoaching" style="display:none;"><span class="tab-btn-icon">🎧</span><span class="tab-btn-label">Coaching</span></button>
@@ -1325,9 +1325,10 @@ function reidratarPosLogin() {
       if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
     })();
   }
-  // Regra de segunda-feira (abrir no Resumo Semanal) — no carregamento ela avaliou com
-  // resumoSemanal=null do shell; reavalia com o dado real.
-  if (typeof hojeEhSegunda !== 'undefined' && hojeEhSegunda && DATA.resumoSemanal && typeof activateTab === 'function') {
+  // Regra de segunda-feira (abrir no Resumo Semanal) — SÓ pro gestor. O executivo sempre
+  // abre em "Hoje" (Etapa 2), independente do dia da semana; quem decide isso é o
+  // aplicarVisaoPorPapel logo abaixo, chamado por mostrarApp().
+  if (sessaoAtual && sessaoAtual.role === 'manager' && typeof hojeEhSegunda !== 'undefined' && hojeEhSegunda && DATA.resumoSemanal && typeof activateTab === 'function') {
     activateTab('viewResumo');
   }
 }
@@ -1353,16 +1354,25 @@ function aplicarVisaoPorPapel() {
   // mesmo navegador (ex: testou como gestor, depois logou como executivo sem recarregar).
   document.getElementById('tabBtnMeuPainel').style.display = souRep ? 'flex' : 'none';
   document.getElementById('tabBtnCoaching').style.display = souGestorSessao ? 'flex' : 'none';
+  // ETAPA 2 (07/08/26): Cockpit é EXCLUSIVO do gestor — o executivo abre em "Hoje", nunca
+  // no coletivo. Antes o botão ficava visível pro executivo também (e ele conseguia clicar).
+  document.getElementById('tabBtnCockpit').style.display = souGestorSessao ? 'flex' : 'none';
 
-  // Se a aba restrita que sumiu era a ativa no momento da troca de sessão, volta pro Cockpit
-  // em vez de deixar a tela em branco numa view que o papel atual não pode ver.
+  // Se a aba restrita que sumiu era a ativa no momento da troca de sessão, redireciona pra
+  // HOME de cada papel — gestor -> Cockpit, executivo -> Hoje (nunca o Cockpit coletivo).
   const viewAtivaId = document.querySelector('.view.active')?.id;
-  if ((viewAtivaId === 'viewCoaching' && !souGestorSessao) || (viewAtivaId === 'viewMeuPainel' && !souRep)) {
-    activateTab('viewCockpit');
+  const viewProibidaAgora = (viewAtivaId === 'viewCoaching' && !souGestorSessao)
+    || (viewAtivaId === 'viewMeuPainel' && !souRep)
+    || (viewAtivaId === 'viewCockpit' && !souGestorSessao);
+  if (viewProibidaAgora) {
+    activateTab(souRep ? 'viewMeuPainel' : 'viewCockpit');
   }
 
   if (souRep) {
     document.getElementById('sidenavTitle').textContent = 'Meu espaço';
+    // ETAPA 2: home fixa do executivo é "Hoje" — nunca o Cockpit coletivo, nunca dependendo
+    // do dia da semana (a regra de segunda-feira do Resumo é exclusiva do gestor).
+    activateTab('viewMeuPainel');
     renderMeuPainel();
   }
 
@@ -1839,13 +1849,72 @@ async function renderMeuPainel() {
   const rankingOrdenado = [...DATA.reps].sort((a, b) => (b.fechadosNoMes || 0) - (a.fechadosNoMes || 0));
   const minhaPosicao = rankingOrdenado.findIndex(x => x.ownerId === r.ownerId) + 1;
 
+  // ---- Etapa 2: itens do primeiro viewport que faltavam no antigo Meu Painel ----
+
+  // Próximo compromisso: reaproveita o mesmo normalizador da Agenda (agendaNormalizar),
+  // sem depender do cache global AGENDA_EVENTOS — este só é populado quando a aba Agenda
+  // renderiza, e o Hoje precisa funcionar mesmo que isso ainda não tenha rodado.
+  let proximoCompromisso = null;
+  if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+    const agoraBRTms = Date.now() - 3 * 60 * 60 * 1000;
+    const meusEventos = agendaNormalizar(DATA.agenda)
+      .filter(e => e.ownerId === r.ownerId && e.inicio && e.inicio.getTime() >= agoraBRTms)
+      .sort((a, b) => a.inicio - b.inicio);
+    if (meusEventos.length > 0) {
+      const e = meusEventos[0];
+      const tipoInfo = AGENDA_TIPOS[e.tipo] || { rotulo: 'Compromisso' };
+      proximoCompromisso = { hora: agendaHhmm(e.inicio), rotulo: tipoInfo.rotulo, cliente: e.cliente };
+    }
+  }
+
+  // MRR próprio do mês — mesma fonte da tabela "Vendas do mês" do Cockpit, já filtrada
+  // pelo servidor (Etapa 1b) pra conter só a própria linha quando quem está logado é rep.
+  const meuMrr = (DATA.vendasMes && Array.isArray(DATA.vendasMes.porRep))
+    ? (DATA.vendasMes.porRep.find(x => x.ownerId === r.ownerId) || {}).mrrTotal || 0
+    : null;
+
+  // Leads quentes e leads acima do SLA como números explícitos — já existiam combinados
+  // dentro da "fila de hoje", mas não como KPI isolado no primeiro viewport.
+  const meusQuentesCount = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId).length;
+  const acimaDoSlaCount = (r.travados || []).length;
+
+  // Aderência da Daily (semana civil, segunda até hoje) — mesmo cálculo de
+  // visitasInformadasDetalhe, já usado noutro lugar do Meu Painel.
+  const aderenciaDaily = typeof visitasInformadasDetalhe === 'function' ? visitasInformadasDetalhe(r.ownerId) : null;
+
   el.innerHTML = `
     <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:4px;">
       <div style="display:flex;flex-direction:column;gap:4px;">
         <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);">${dataHojeExtenso()} · ${diasUteisRestantesNoMes()} dias úteis no mês</span>
         <h1 style="font-family:'Space Grotesk',sans-serif;font-size:27px;font-weight:800;margin:0;letter-spacing:-.015em;">${saudacaoDoDia()}, ${r.name.split(' ')[0]} 👋</h1>
       </div>
-      <button id="meuPainelIrDaily" style="font-size:12px;font-weight:700;color:#fff;background:var(--red);border:none;border-radius:999px;padding:10px 16px;min-height:44px;cursor:pointer;">Preencher a Daily 📝</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button id="meuPainelComecarRota" style="font-size:12px;font-weight:700;color:#fff;background:var(--blue);border:none;border-radius:999px;padding:10px 16px;min-height:44px;cursor:pointer;">🧭 Começar rota</button>
+        <button id="meuPainelIrDaily" style="font-size:12px;font-weight:700;color:#fff;background:var(--red);border:none;border-radius:999px;padding:10px 16px;min-height:44px;cursor:pointer;">Preencher a Daily 📝</button>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 18px;">
+      <span style="display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:12.5px;box-shadow:var(--shadow);">
+        <span style="opacity:.7;">📅</span>
+        ${proximoCompromisso
+          ? `<b>${proximoCompromisso.hora}</b> ${proximoCompromisso.rotulo.toLowerCase()} — ${proximoCompromisso.cliente}`
+          : `<span style="color:var(--muted2);">Sem compromisso agendado</span>`}
+      </span>
+      ${meuMrr !== null ? `
+      <span style="display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:12.5px;box-shadow:var(--shadow);">
+        <span style="opacity:.7;">💰</span> <b>${meuMrr.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</b> MRR seu no mês
+      </span>` : ''}
+      <span style="display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:12.5px;box-shadow:var(--shadow);">
+        <span style="opacity:.7;">🔥</span> <b>${meusQuentesCount}</b> lead${meusQuentesCount === 1 ? '' : 's'} quente${meusQuentesCount === 1 ? '' : 's'}
+      </span>
+      <span style="display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:12.5px;box-shadow:var(--shadow);">
+        <span style="opacity:.7;">⏱️</span> <b>${acimaDoSlaCount}</b> acima do SLA
+      </span>
+      ${aderenciaDaily && aderenciaDaily.aderencia !== null ? `
+      <span style="display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:12.5px;box-shadow:var(--shadow);">
+        <span style="opacity:.7;">📝</span> <b>${aderenciaDaily.aderencia}%</b> aderência à Daily
+      </span>` : ''}
     </div>
 
     <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:18px;align-items:start;">
@@ -1954,6 +2023,18 @@ async function renderMeuPainel() {
   }
 
   wireRoteiroChecks(el);
+
+  const btnComecarRota = document.getElementById('meuPainelComecarRota');
+  if (btnComecarRota) {
+    btnComecarRota.addEventListener('click', () => {
+      activateTab('viewAgenda');
+      if (typeof renderAgenda === 'function') renderAgenda();
+      setTimeout(() => {
+        const card = document.getElementById('rotaDoDiaCard');
+        if (card && typeof smoothScrollTo === 'function') smoothScrollTo(card);
+      }, 300); // o painel de rota é injetado async (buildRotaDoDiaHTML aguarda o Supabase)
+    });
+  }
 
   const btnIrDaily = document.getElementById('meuPainelIrDaily');
   if (btnIrDaily) {
@@ -3102,6 +3183,184 @@ function agendaStreak(oid, todos) {
   return n;
 }
 
+/* ========== ETAPA 3 — COMEÇAR ROTA (check-in/check-out por visita) ==========
+   Sem provedor de mapas pago: os links abrem o Maps/Waze já com uma BUSCA por
+   nome+bairro/cidade — não é rota otimizada por distância real, porque o negócio
+   ainda não guarda endereço nenhum vindo do HubSpot hoje (só nome, etapa, dias,
+   dono). "Sugestão de leads próximos" ficaria PENDENTE dessa mesma lacuna de dado
+   — não vou inventar coordenada pra simular isso. O que ESTE bloco grava de
+   verdade (check-in/check-out com geolocalização do celular de quem visita) é a
+   base real da futura análise de mapa de calor (ver ETAPA3-RELATORIO.md). */
+
+function linkMapsBusca(consulta) {
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(consulta);
+}
+function linkWazeBusca(consulta) {
+  return 'https://waze.com/ul?q=' + encodeURIComponent(consulta) + '&navigate=yes';
+}
+// Monta a string de busca com o que existir — nome do cliente é sempre a âncora,
+// endereço/bairro/cidade entram quando o evento tiver (hoje, quase nunca tem).
+function agendaConsultaMapa(e) {
+  const partes = [e.cliente, e.endereco, e.bairro, e.cidade].filter(Boolean);
+  return partes.join(', ');
+}
+
+let checkinsCache = {}; // chave: eventoId -> linha da tabela visitas_checkin
+
+async function carregarCheckinsDoDia(ownerId, dataISO) {
+  if (!DATA.supabase || !supa) return;
+  const { data, error } = await supa.from('visitas_checkin').select('*')
+    .eq('owner_id', ownerId).eq('data', dataISO);
+  if (error) { console.error('Erro ao carregar check-ins:', error.message); return; }
+  checkinsCache = {};
+  (data || []).forEach(row => { checkinsCache[row.evento_id] = row; });
+}
+
+function geolocalizacaoAtual() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => resolve(null), // sem permissão/sem sinal — segue sem coordenada, não trava o fluxo
+      { timeout: 6000 }
+    );
+  });
+}
+
+async function salvarCheckin(ownerId, dataISO, eventoId, campos) {
+  const existente = checkinsCache[eventoId] || {};
+  const linha = {
+    owner_id: ownerId, data: dataISO, evento_id: eventoId,
+    criado_por: sessaoAtual.email, updated_at: new Date().toISOString(),
+    checkin_em: existente.checkin_em ?? null, checkin_lat: existente.checkin_lat ?? null, checkin_lng: existente.checkin_lng ?? null,
+    checkout_em: existente.checkout_em ?? null, checkout_lat: existente.checkout_lat ?? null, checkout_lng: existente.checkout_lng ?? null,
+    resultado: existente.resultado ?? null, proxima_acao: existente.proxima_acao ?? null,
+    ...campos
+  };
+  const { data, error } = await supa.from('visitas_checkin').upsert(linha, { onConflict: 'owner_id,evento_id' }).select();
+  if (error) { console.error('Erro ao salvar check-in:', error.message); return { error }; }
+  if (data && data[0]) checkinsCache[eventoId] = data[0];
+  return { error: null };
+}
+
+// Sequência de visitas do dia — mesma normalização da Agenda (agendaNormalizar),
+// filtrada pro dono + eventos do tipo "visita" (follow-up/rota, ver AGENDA_TIPOS.conta),
+// ordenada por horário. Não reordena por distância (sem dado de endereço pra isso).
+function eventosRotaDoDia(ownerId, dataISO) {
+  if (!DATA.agenda) return [];
+  return agendaNormalizar(DATA.agenda)
+    .filter(e => e.ownerId === ownerId && e.inicio && AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta === 'visita' && agendaChave(e.inicio) === dataISO)
+    .sort((a, b) => a.inicio - b.inicio);
+}
+
+async function buildRotaDoDiaHTML(ownerId, dataISO) {
+  await carregarCheckinsDoDia(ownerId, dataISO);
+  const eventos = eventosRotaDoDia(ownerId, dataISO);
+  const dataLabel = new Date(dataISO + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+
+  if (eventos.length === 0) {
+    return `
+      <div class="chart-card" id="rotaDoDiaCard" style="margin-bottom:18px;border-left:3px solid var(--blue);">
+        <h3 style="margin-bottom:4px;">🧭 Começar rota — ${dataLabel}</h3>
+        <div class="empty-state">Nenhuma visita ou follow-up marcado pra hoje na Agenda ainda.</div>
+      </div>
+    `;
+  }
+
+  const feitas = eventos.filter(e => (checkinsCache[e.id] || {}).checkout_em).length;
+
+  return `
+    <div class="chart-card" id="rotaDoDiaCard" style="margin-bottom:18px;border-left:3px solid var(--blue);">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+        <h3 style="margin:0;">🧭 Começar rota — ${dataLabel}</h3>
+        <span style="font-size:11.5px;color:var(--muted2);">${feitas}/${eventos.length} concluídas</span>
+      </div>
+      <div class="chart-subtitle" style="margin:0 0 12px;">Sequência pelo horário marcado. Links abrem uma busca por nome no Maps/Waze — sem endereço cadastrado no HubSpot ainda, a busca usa o nome do cliente.</div>
+      <div style="display:flex;flex-direction:column;gap:10px;" id="rotaDoDiaLista">
+        ${eventos.map((e, i) => {
+          const c = checkinsCache[e.id] || {};
+          const consulta = agendaConsultaMapa(e);
+          const status = c.checkout_em ? 'concluída' : c.checkin_em ? 'em andamento' : 'pendente';
+          const corStatus = c.checkout_em ? 'var(--green)' : c.checkin_em ? 'var(--amber)' : 'var(--muted2)';
+          return `
+            <div class="rota-parada" data-evento="${e.id}" style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                  <span style="font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:13px;color:var(--muted2);flex:none;">${i + 1}º</span>
+                  <div style="min-width:0;">
+                    <b style="font-size:13.5px;">${esc(e.cliente)}</b>
+                    <div style="font-size:11.5px;color:var(--muted);">${agendaHhmm(e.inicio)} · ${(AGENDA_TIPOS[e.tipo] || {}).rotulo || e.tipo}${e.endereco || e.bairro ? ' · ' + esc([e.bairro, e.endereco].filter(Boolean).join(', ')) : ''}</div>
+                  </div>
+                </div>
+                <span style="font-size:10.5px;font-weight:700;color:${corStatus};white-space:nowrap;">${status}</span>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+                <a href="${linkMapsBusca(consulta)}" target="_blank" rel="noopener" style="font-size:11.5px;font-weight:700;color:var(--blue);text-decoration:none;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 12px;">📍 Maps</a>
+                <a href="${linkWazeBusca(consulta)}" target="_blank" rel="noopener" style="font-size:11.5px;font-weight:700;color:var(--blue);text-decoration:none;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 12px;">🚗 Waze</a>
+                <button class="rota-btn-checkin" data-evento="${e.id}" ${c.checkin_em ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;color:#fff;background:${c.checkin_em ? 'var(--muted2)' : 'var(--green)'};border:none;border-radius:999px;padding:7px 12px;cursor:${c.checkin_em ? 'default' : 'pointer'};">${c.checkin_em ? '✓ Check-in ' + agendaHhmm(agendaParaBRT(c.checkin_em)) : 'Check-in'}</button>
+                <button class="rota-btn-checkout" data-evento="${e.id}" ${!c.checkin_em || c.checkout_em ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;color:#fff;background:${c.checkout_em ? 'var(--muted2)' : 'var(--red)'};border:none;border-radius:999px;padding:7px 12px;cursor:${!c.checkin_em || c.checkout_em ? 'default' : 'pointer'};">${c.checkout_em ? '✓ Check-out ' + agendaHhmm(agendaParaBRT(c.checkout_em)) : 'Check-out'}</button>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;">
+                <select class="rota-resultado" data-evento="${e.id}" style="font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+                  <option value="">Resultado da visita…</option>
+                  <option value="avancou" ${c.resultado === 'avancou' ? 'selected' : ''}>Avançou de etapa</option>
+                  <option value="sem_contato" ${c.resultado === 'sem_contato' ? 'selected' : ''}>Sem contato / fechado</option>
+                  <option value="remarcado" ${c.resultado === 'remarcado' ? 'selected' : ''}>Remarcado</option>
+                  <option value="sem_fit" ${c.resultado === 'sem_fit' ? 'selected' : ''}>Sem fit</option>
+                  <option value="outro" ${c.resultado === 'outro' ? 'selected' : ''}>Outro</option>
+                </select>
+                <input type="text" class="rota-proxima-acao" data-evento="${e.id}" placeholder="Próxima ação…" value="${(c.proxima_acao || '').replace(/"/g, '&quot;')}" style="flex:1;min-width:140px;font-size:11.5px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// Religa os cliques do painel de rota — chamado depois de injetar o HTML acima
+// (na Agenda e no Hoje). idempotente: cada clique salva e re-renderiza só os botões
+// daquele card específico, sem recarregar a semana inteira.
+function religarBotoesRota(container, ownerId, dataISO) {
+  const card = container.querySelector('#rotaDoDiaCard');
+  if (!card) return;
+
+  card.querySelectorAll('.rota-btn-checkin').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = 'Marcando...';
+      const geo = await geolocalizacaoAtual();
+      await salvarCheckin(ownerId, dataISO, btn.dataset.evento, {
+        checkin_em: new Date().toISOString(),
+        checkin_lat: geo ? geo.lat : null, checkin_lng: geo ? geo.lng : null
+      });
+      card.outerHTML = await buildRotaDoDiaHTML(ownerId, dataISO);
+      religarBotoesRota(container, ownerId, dataISO);
+    });
+  });
+
+  card.querySelectorAll('.rota-btn-checkout').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true; btn.textContent = 'Marcando...';
+      const geo = await geolocalizacaoAtual();
+      await salvarCheckin(ownerId, dataISO, btn.dataset.evento, {
+        checkout_em: new Date().toISOString(),
+        checkout_lat: geo ? geo.lat : null, checkout_lng: geo ? geo.lng : null
+      });
+      card.outerHTML = await buildRotaDoDiaHTML(ownerId, dataISO);
+      religarBotoesRota(container, ownerId, dataISO);
+    });
+  });
+
+  function persistirDetalhe(eventoId) {
+    const sel = card.querySelector(`.rota-resultado[data-evento="${eventoId}"]`);
+    const inp = card.querySelector(`.rota-proxima-acao[data-evento="${eventoId}"]`);
+    salvarCheckin(ownerId, dataISO, eventoId, { resultado: sel.value || null, proxima_acao: inp.value || null });
+  }
+  card.querySelectorAll('.rota-resultado').forEach(sel => sel.addEventListener('change', () => persistirDetalhe(sel.dataset.evento)));
+  card.querySelectorAll('.rota-proxima-acao').forEach(inp => inp.addEventListener('blur', () => persistirDetalhe(inp.dataset.evento)));
+}
+
 /* ---------- render ---------- */
 function renderAgenda() {
   const box = document.getElementById('agendaContent');
@@ -3258,6 +3517,17 @@ function renderAgenda() {
     '<a class="aglink" id="agDetA" href="#" target="_blank" rel="noopener">Abrir no HubSpot →</a></div></div>';
 
   box.innerHTML = h;
+
+  // ETAPA 3: painel "Começar rota" do dia — só pro executivo (rota é individual) e só
+  // quando a semana em foco é a atual (não faz sentido "começar rota" de uma semana
+  // passada ou futura). Injetado no topo, acima do placar/grade semanal já existentes.
+  if (souRep && agendaEstado.offset === 0 && DATA.agenda) {
+    const hojeISOStr = isoDate(new Date());
+    buildRotaDoDiaHTML(sessaoAtual.ownerId, hojeISOStr).then(html => {
+      box.insertAdjacentHTML('afterbegin', html);
+      religarBotoesRota(box, sessaoAtual.ownerId, hojeISOStr);
+    });
+  }
 
   // pílula de rascunho ao lado do título da aba (idempotente)
   const heroT = document.querySelector('#viewAgenda .mini-hero-title');
