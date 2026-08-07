@@ -33,35 +33,41 @@ module.exports = async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
 
+  // FAIL-CLOSED (correção de segurança 06/08/26): antes, se SUPABASE_URL/ANON_KEY
+  // faltassem na Vercel, a checagem de sessão era simplesmente PULADA e qualquer
+  // pessoa na internet podia editar MRR chamando esta rota direto. Agora, sem as
+  // três variáveis de ambiente a rota se recusa a operar.
   const token = process.env.HUBSPOT_TOKEN;
   const supaUrl = process.env.SUPABASE_URL;
   const supaAnon = process.env.SUPABASE_ANON_KEY;
-  if (!token) return res.status(500).json({ erro: 'HUBSPOT_TOKEN não configurado na Vercel.' });
-
-  // ---- 1. sessão válida + descobrir QUEM está chamando ----
-  let emailLogado = null;
-  if (supaUrl && supaAnon) {
-    const auth = req.headers.authorization || '';
-    const sessionToken = auth.replace(/^Bearer\s+/i, '');
-    if (!sessionToken) return res.status(401).json({ erro: 'Sem sessão. Faça login no cockpit de novo.' });
-    try {
-      const check = await fetch(`${supaUrl}/auth/v1/user`, {
-        headers: { Authorization: `Bearer ${sessionToken}`, apikey: supaAnon }
-      });
-      if (!check.ok) return res.status(401).json({ erro: 'Sessão inválida ou expirada. Faça login de novo.' });
-      const user = await check.json();
-      emailLogado = (user && user.email) ? String(user.email).toLowerCase() : null;
-    } catch (e) {
-      return res.status(401).json({ erro: 'Não foi possível validar a sessão.' });
-    }
+  if (!token || !supaUrl || !supaAnon) {
+    return res.status(500).json({ erro: 'Servidor sem configuração completa (HUBSPOT_TOKEN, SUPABASE_URL e SUPABASE_ANON_KEY são obrigatórios). Operação bloqueada por segurança.' });
   }
 
+  // ---- 1. sessão válida + descobrir QUEM está chamando (sempre obrigatório) ----
+  let emailLogado = null;
+  const auth = req.headers.authorization || '';
+  const sessionToken = auth.replace(/^Bearer\s+/i, '');
+  if (!sessionToken) return res.status(401).json({ erro: 'Sem sessão. Faça login no cockpit de novo.' });
+  try {
+    const check = await fetch(`${supaUrl}/auth/v1/user`, {
+      headers: { Authorization: `Bearer ${sessionToken}`, apikey: supaAnon }
+    });
+    if (!check.ok) return res.status(401).json({ erro: 'Sessão inválida ou expirada. Faça login de novo.' });
+    const user = await check.json();
+    emailLogado = (user && user.email) ? String(user.email).toLowerCase() : null;
+  } catch (e) {
+    return res.status(401).json({ erro: 'Não foi possível validar a sessão.' });
+  }
+  if (!emailLogado) return res.status(401).json({ erro: 'Sessão sem e-mail associado. Faça login de novo.' });
+
   // ---- 2. papel de quem chamou (usuarios.json é a fonte, igual ao login do cockpit) ----
-  const usuario = emailLogado
-    ? USUARIOS.find(u => String(u.email).toLowerCase() === emailLogado)
-    : null;
-  if (emailLogado && !usuario) {
+  const usuario = USUARIOS.find(u => String(u.email).toLowerCase() === emailLogado);
+  if (!usuario) {
     return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
+  }
+  if (usuario.role !== 'manager' && usuario.role !== 'rep') {
+    return res.status(403).json({ erro: 'Papel de usuário não autorizado a editar MRR.' });
   }
 
   // ---- 3. entrada ----
