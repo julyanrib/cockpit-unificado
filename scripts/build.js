@@ -1,233 +1,54 @@
 // scripts/build.js
-// Junta data/hubspot.json (auto) + data/expogo.json (manual) + data/narrativas.json (manual)
-// e gera public/index.html — o arquivo que o Netlify publica.
+// Gera public/index.html — o arquivo que a Vercel publica.
+//
+// MUDANÇA DE ARQUITETURA (Etapa 1b, 07/08/26): antes, este build embutia o DATA COMPLETO
+// (funil, clientes, notas, tudo) dentro do HTML público — qualquer visitante via o CRM
+// inteiro no "ver código-fonte", sem logar. Agora o HTML publicado carrega só um DATA
+// "casca": a config do Supabase (necessária pro login) + placeholders VAZIOS mas com o
+// tipo certo, pra que o código de carregamento da página rode sem quebrar atrás da tela
+// de login. Os dados reais chegam DEPOIS do login, via api/dados.js, já filtrados por
+// papel no servidor (a montagem vive em scripts/montar-dados.js — fonte única pros dois).
+//
+// Os placeholders precisam existir E ter o tipo certo (array vazio, objeto vazio, null)
+// porque o template tem código top-level síncrono que lê DATA no carregamento — antes do
+// login. Vazio renderiza estado vazio invisível atrás do gate; ausente quebraria o script.
 
 const fs = require('fs');
 const path = require('path');
+const { configSupabase } = require('./montar-dados.js');
 
 const root = path.join(__dirname, '..');
-const hubspot = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
-// expogo.json não é mais lido — a métrica de atividade agora vem da Daily (prometido/realizado)
-const narrativas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'narrativas.json'), 'utf8'));
-const leadsRefPath = path.join(root, 'data', 'leads-referencia.json');
-const leadsReferencia = fs.existsSync(leadsRefPath)
-  ? JSON.parse(fs.readFileSync(leadsRefPath, 'utf8'))
-  : { pracas: [] };
-const usuarios = JSON.parse(fs.readFileSync(path.join(root, 'data', 'usuarios.json'), 'utf8'));
 
-// Config do Supabase (URL + chave pública) — opcional até você configurar; sem isso, o login fica desativado
-const supabaseConfigPath = path.join(root, 'data', 'supabase-config.json');
-const supabaseConfig = fs.existsSync(supabaseConfigPath)
-  ? JSON.parse(fs.readFileSync(supabaseConfigPath, 'utf8'))
-  : null;
+const DATA_PUBLICO = {
+  // Marca de arquitetura: o template usa isso pra saber que precisa hidratar via api/dados.
+  shellProtegido: true,
+  supabase: configSupabase(),
 
-// Resumo semanal (texto da IA) é opcional — só existe depois que o workflow de sexta-feira rodar
-const resumoSemanalPath = path.join(root, 'data', 'resumo-semanal.json');
-const resumoSemanal = fs.existsSync(resumoSemanalPath)
-  ? JSON.parse(fs.readFileSync(resumoSemanalPath, 'utf8'))
-  : null;
-
-// weekly-raw.json agora é atualizado TODO DIA (não só sexta) — números de ganhos/ranking/
-// reuniões/quentes ficam sempre frescos, mesmo que o texto interpretado pela IA (acima)
-// só mude na sexta. Se ainda não existir nenhuma versão fresca, cai pro que já tem no resumo.
-const weeklyRawPath = path.join(root, 'data', 'weekly-raw.json');
-const weeklyRaw = fs.existsSync(weeklyRawPath)
-  ? JSON.parse(fs.readFileSync(weeklyRawPath, 'utf8'))
-  : null;
-
-// Snapshot anterior (opcional) — só existe depois da 2ª execução do fetch-hubspot.js.
-// Usado pras setinhas de comparação ("vs. última atualização") nos KPIs do topo.
-const previousPath = path.join(root, 'data', 'hubspot-previous.json');
-const hubspotPrevious = fs.existsSync(previousPath)
-  ? JSON.parse(fs.readFileSync(previousPath, 'utf8'))
-  : null;
-
-function fmtDate(iso) {
-  const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
-    ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
-}
-
-// Ordem de exibição = ordem em que aparecem no narrativas.json
-const ownerIds = Object.keys(narrativas.reps);
-
-const reps = ownerIds.map(ownerId => {
-  const n = narrativas.reps[ownerId];
-  const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 10, visitasHubspotHoje: 0, avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0 };
-
-  return {
-    ownerId,
-    name: n.name,
-    praca: n.praca,
-    tag: n.tag,
-    tagLabel: n.tagLabel,
-    gargalo: n.gargalo,
-    boasPraticas: n.boasPraticas,
-    compromissos: n.compromissos,
-    open: h.open,
-    stages: h.stages,
-    criticos: h.criticos,
-    travados: h.travados || [],
-    leadsTravados: h.leadsTravados || 0,
-    ganhosSemana: h.ganhosSemana || 0,
-    ganhosSemanaNomes: h.ganhosSemanaNomes || [],
-    fechadosNoMes: h.fechadosNoMes || 0,
-    metaMensal: h.metaMensal || 10,
-    visitasHubspotHoje: h.visitasHubspotHoje || 0,
-    avancosHubspotHoje: h.avancosHubspotHoje || 0,
-    propostasHubspotHoje: h.propostasHubspotHoje || 0,
-    fechamentosHubspotHoje: h.fechamentosHubspotHoje || 0
-  };
-});
-
-// ---- Semáforo de saúde geral do funil ----
-// Verde: poucos leads travados em relação ao total aberto. Amarelo: moderado. Vermelho: alto.
-const totalAberto = hubspot.kpis.emAberto || 0;
-const totalTravados = hubspot.kpis.leadsTravados || 0;
-const pctTravados = totalAberto > 0 ? (totalTravados / totalAberto) * 100 : 0;
-let saude;
-if (pctTravados < 15) {
-  saude = { nivel: 'ok', label: 'Funil saudável', detalhe: `${Math.round(pctTravados)}% dos leads abertos com SLA estourado` };
-} else if (pctTravados < 35) {
-  saude = { nivel: 'warn', label: 'Atenção', detalhe: `${Math.round(pctTravados)}% dos leads abertos com SLA estourado` };
-} else {
-  saude = { nivel: 'crit', label: 'Funil travado', detalhe: `${Math.round(pctTravados)}% dos leads abertos com SLA estourado` };
-}
-
-// ---- Deltas vs. última atualização (opcional, só existe da 2ª execução em diante) ----
-function delta(atual, anterior) {
-  if (anterior === undefined || anterior === null) return null;
-  const diff = atual - anterior;
-  if (diff === 0) return { sinal: 'flat', valor: 0 };
-  return { sinal: diff > 0 ? 'up' : 'down', valor: Math.abs(diff) };
-}
-const kpiDeltas = hubspotPrevious ? {
-  leadsCriados: delta(hubspot.kpis.leadsCriados, hubspotPrevious.kpis.leadsCriados),
-  ganhos: delta(hubspot.kpis.ganhos, hubspotPrevious.kpis.ganhos),
-  perdidos: delta(hubspot.kpis.perdidos, hubspotPrevious.kpis.perdidos),
-  emAberto: delta(hubspot.kpis.emAberto, hubspotPrevious.kpis.emAberto),
-  emReciclagem: delta(hubspot.kpis.emReciclagem, hubspotPrevious.kpis.emReciclagem),
-  fechadosNoMes: delta(hubspot.kpis.fechadosNoMes, hubspotPrevious.kpis.fechadosNoMes),
-  taxaAvanco: delta(hubspot.kpis.taxaAvanco, hubspotPrevious.kpis.taxaAvanco)
-} : null;
-
-// Ranking de vendas da semana — 1º/2º/3º lugar por quantidade de negócios fechados,
-// empate resolvido pelo MRR total (maior ganha). Usa weekly-raw.json (atualizado todo dia)
-// como fonte primária — só cai pro resumo-semanal.json (sexta) se ainda não existir nenhum.
-const ganhosDetalheFresco = (weeklyRaw && weeklyRaw.ganhosSemanaDetalhe) || (resumoSemanal && resumoSemanal.ganhosSemanaDetalhe) || [];
-let rankingSemanal = [];
-if (ganhosDetalheFresco.length > 0) {
-  const porOwner = {};
-  ganhosDetalheFresco.forEach(d => {
-    if (!d.ownerId) return;
-    if (!porOwner[d.ownerId]) porOwner[d.ownerId] = { count: 0, mrrTotal: 0, clientes: [] };
-    porOwner[d.ownerId].count += 1;
-    porOwner[d.ownerId].mrrTotal += d.mrr || 0;
-    porOwner[d.ownerId].clientes.push({ nome: d.nome, mrr: d.mrr || 0 });
-  });
-  rankingSemanal = Object.entries(porOwner)
-    .map(([ownerId, v]) => ({
-      ownerId,
-      name: (narrativas.reps[ownerId] || {}).name || ownerId,
-      count: v.count,
-      mrrTotal: v.mrrTotal,
-      clientes: v.clientes
-    }))
-    .sort((a, b) => (b.count - a.count) || (b.mrrTotal - a.mrrTotal))
-    .slice(0, 3);
-}
-
-// ---- Vendas do mês (clientes + MRR por executivo) ----
-// Fonte: hubspot.vendasMes (fechados do mês corrente com valor_de_mrr — mesmo critério
-// de closedate + 2 etapas de ganho do KPI "Fechados no mês", então os números batem).
-// Só entra quem está no time ativo (narrativas.json) — quem saiu (regra de ago/2026:
-// Gleyson, José Ricardo etc.) fica fora da tabela E dos totais, igual ao resto do cockpit.
-// Se hubspot.json ainda não tiver o campo (refresh antigo), vendasMes fica null e o
-// template esconde o quadro sozinho — nada quebra.
-let vendasMes = null;
-if (Array.isArray(hubspot.vendasMes)) {
-  const porOwnerMes = {};
-  hubspot.vendasMes.forEach(d => {
-    if (!d.ownerId || !narrativas.reps[d.ownerId]) return; // dono fora do time ativo
-    if (!porOwnerMes[d.ownerId]) porOwnerMes[d.ownerId] = { count: 0, mrrTotal: 0, clientes: [] };
-    porOwnerMes[d.ownerId].count += 1;
-    porOwnerMes[d.ownerId].mrrTotal += d.mrr || 0;
-    porOwnerMes[d.ownerId].clientes.push({ id: d.id || null, nome: d.nome, mrr: d.mrr || 0, closedate: d.closedate || null });
-  });
-  const porRepMes = Object.entries(porOwnerMes).map(([ownerId, v]) => ({
-    ownerId,
-    name: narrativas.reps[ownerId].name,
-    praca: narrativas.reps[ownerId].praca || '—',
-    count: v.count,
-    mrrTotal: v.mrrTotal,
-    clientes: v.clientes.sort((a, b) => (b.mrr || 0) - (a.mrr || 0))
-  })).sort((a, b) => (b.count - a.count) || (b.mrrTotal - a.mrrTotal));
-
-  const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-  const agoraBr = new Date(Date.now() - 3 * 60 * 60 * 1000); // horário de Brasília, mesmo ajuste do fetch
-  vendasMes = {
-    mesLabel: `${MESES_PT[agoraBr.getUTCMonth()]}/${agoraBr.getUTCFullYear()}`,
-    totalClientes: porRepMes.reduce((s, r) => s + r.count, 0),
-    totalMrr: porRepMes.reduce((s, r) => s + r.mrrTotal, 0),
-    porRep: porRepMes
-  };
-}
-
-// Leads quentes/frios já vêm com nome do executivo, mas não com a praça — isso só
-// existe em narrativas.json (não em hubspot.json). Anexa aqui, no build, por ownerId.
-function comPraca(lista) {
-  return (lista || []).map(l => ({ ...l, praca: (narrativas.reps[l.ownerId] || {}).praca || '—' }));
-}
-const temperaturaComPraca = {
-  quentes: comPraca((hubspot.temperatura || {}).quentes),
-  frios: comPraca((hubspot.temperatura || {}).frios)
-};
-
-const DATA = {
-  hubspotUpdatedAtFmt: fmtDate(hubspot.updatedAt),
-  versaoAnalise: narrativas._atualizado_em || 'v1',
-  kpisHub: hubspot.kpis,
-  kpiDetalhe: {
-    leadsCriados: (hubspot.kpiDetalhe?.leadsCriados || []).map(d => ({ ...d, vendedor: (narrativas.reps[d.ownerId] || {}).name || '—' })),
-    perdidos: (hubspot.kpiDetalhe?.perdidos || []).map(d => ({ ...d, vendedor: (narrativas.reps[d.ownerId] || {}).name || '—' }))
-  },
-  kpiDeltas,
-  funil: hubspot.funil,
-  funilLeads: hubspot.funilLeads || {},
-  vendasMes,
-  temperatura: temperaturaComPraca,
-  stageMeta: hubspot.stageMeta || { slaDays: {}, descriptions: {}, labels: {} },
-  saude,
-  reps,
-  leadsReferencia: leadsReferencia.pracas || [],
-  footerText: `Fonte: HubSpot (pipeline 916011864, auto-atualizado diariamente) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
-  resumoSemanal: (resumoSemanal || weeklyRaw) ? {
-    geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
-    numerosAtualizadosEmFmt: weeklyRaw ? fmtDate(weeklyRaw.geradoEm) : (resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null),
-    janela: (weeklyRaw && weeklyRaw.janela) || (resumoSemanal && resumoSemanal.janela),
-    kpisComparativo: (weeklyRaw && weeklyRaw.kpisComparativo) || (resumoSemanal && resumoSemanal.kpisComparativo),
-    resumoGeral: resumoSemanal ? resumoSemanal.resumoGeral : null,
-    comoAgir: resumoSemanal ? resumoSemanal.comoAgir : [],
-    // Resumo individual por executivo (owner_id -> {name, resumoIndividual, comoAgirIndividual}).
-    // Cada rep só vê o seu no Meu Painel; o gestor vê o coletivo acima + a lista completa.
-    porRep: resumoSemanal ? (resumoSemanal.porRep || {}) : {},
-    ganhosSemanaDetalhe: ganhosDetalheFresco,
-    reunioesSemanaDetalhe: (weeklyRaw && weeklyRaw.reunioesSemanaDetalhe) || (resumoSemanal && resumoSemanal.reunioesSemanaDetalhe) || [],
-    quentesDemoOuNegociacao: (weeklyRaw && weeklyRaw.quentesDemoOuNegociacao) || (resumoSemanal && resumoSemanal.quentesDemoOuNegociacao) || [],
-    ranking: rankingSemanal
-  } : null,
-  // Agenda da semana (reuniões + follow-ups do app, via HubSpot). Null enquanto o
-  // fetch não trouxer — aí o template usa o rascunho embutido, com a pílula avisando.
-  agenda: hubspot.agenda || null,
-  usuarios: usuarios.usuarios,
-  supabase: supabaseConfig ? { url: supabaseConfig.url, anonKey: supabaseConfig.anonKey } : null
+  // ---- placeholders vazios, um por chave do DATA real (mesmos tipos) ----
+  hubspotUpdatedAtFmt: '',
+  versaoAnalise: 'v1',
+  kpisHub: {},
+  kpiDetalhe: { leadsCriados: [], perdidos: [] },
+  kpiDeltas: null,
+  funil: { labels: [], valores: [], cores: [] },
+  funilLeads: {},
+  vendasMes: null,
+  temperatura: { quentes: [], frios: [] },
+  stageMeta: { slaDays: {}, descriptions: {}, labels: {} },
+  saude: null,
+  reps: [],
+  leadsReferencia: [],
+  footerText: '',
+  resumoSemanal: null,
+  agenda: null,
+  usuarios: []
 };
 
 const template = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
-const output = template.replace('{{DATA_JSON}}', JSON.stringify(DATA));
+const output = template.replace('{{DATA_JSON}}', JSON.stringify(DATA_PUBLICO));
 
 const publicDir = path.join(root, 'public');
 if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
 fs.writeFileSync(path.join(publicDir, 'index.html'), output);
 
-console.log('OK — public/index.html gerado com sucesso.');
+console.log('OK — public/index.html gerado com sucesso (shell protegido, sem dados do CRM).');
