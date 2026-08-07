@@ -32,6 +32,9 @@
     --nav-width:220px; --nav-width-compact:72px;
   }
   :focus-visible{ outline:none; box-shadow:var(--focus-ring); border-radius:var(--r-sm); }
+  /* Foco movido por script (troca de aba) — precisa aparecer mesmo quando o navegador
+     não classificaria como :focus-visible (accessibility real > estética). */
+  [tabindex="-1"]:focus{ outline:none; box-shadow:var(--focus-ring); border-radius:var(--r-sm); }
   body[data-theme="dark"]{
     --bg:#141110; --panel:#1E1A18; --panel2:#242020; --sunk:#191614;
     --ink:#F5F0E6; --muted:#A99E8D; --muted2:#7D7365; --line:#332C28;
@@ -3998,9 +4001,26 @@ document.addEventListener('keydown', function (ev) {
 // ============ ABAS (Cockpit / Resumo Semanal) ============
 function activateTab(viewId) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.getElementById(viewId).classList.add('active');
-  document.querySelector(`.tab-btn[data-view="${viewId}"]`).classList.add('active');
+  document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.removeAttribute('aria-current'); });
+  const view = document.getElementById(viewId);
+  view.classList.add('active');
+  const btn = document.querySelector(`.tab-btn[data-view="${viewId}"]`);
+  btn.classList.add('active');
+  btn.setAttribute('aria-current', 'page'); // semântica de navegação — leitor de tela anuncia a aba atual
+
+  // Acessibilidade na troca de aba: rola pro topo e move o foco pro título da tela
+  // nova (nem toda view tem título estático — Cockpit/Daily/Hoje montam o <h1> via
+  // JS — por isso tenta agora e de novo em dois frames, sem travar se não achar nada).
+  window.scrollTo(0, 0);
+  focarTituloDaView(view);
+  requestAnimationFrame(() => requestAnimationFrame(() => focarTituloDaView(view)));
+}
+
+function focarTituloDaView(view) {
+  if (!view) return;
+  const alvo = view.querySelector('.mini-hero-title, h1') || view;
+  if (!alvo.hasAttribute('tabindex')) alvo.setAttribute('tabindex', '-1');
+  alvo.focus({ preventScroll: true });
 }
 document.getElementById('tabBtnCockpit').addEventListener('click', () => activateTab('viewCockpit'));
 document.getElementById('tabBtnResumo').addEventListener('click', () => activateTab('viewResumo'));
