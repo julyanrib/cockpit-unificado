@@ -1181,7 +1181,9 @@ async function iniciarAuth() {
       return;
     }
     const usuario = encontrarUsuario(email);
-    if (!usuario) {
+    if (!usuario && !DATA.shellProtegido) {
+      // No shell protegido a lista de usuários não existe no navegador antes do login —
+      // a validação de cadastro é feita pelo servidor (api/dados.js) depois da senha.
       document.getElementById('loginStatus').textContent = 'E-mail não cadastrado. Fale com seu gestor.';
       return;
     }
@@ -1214,7 +1216,7 @@ async function iniciarAuth() {
     const email = document.getElementById('resetEmail').value.trim();
     if (!email) return;
     const usuario = encontrarUsuario(email);
-    if (!usuario) {
+    if (!usuario && !DATA.shellProtegido) {
       document.getElementById('loginStatus').textContent = 'E-mail não cadastrado. Fale com seu gestor.';
       return;
     }
@@ -1250,7 +1252,52 @@ function mostrarFormulario(idParaMostrar) {
   });
 }
 
-function aplicarSessao(email) {
+// E-mail da sessão já hidratada — o onAuthStateChange do Supabase dispara mais de uma vez
+// (SIGNED_IN, TOKEN_REFRESHED...); sem esta trava, cada evento refaria o fetch de dados.
+let hidratadoPara = null;
+
+async function aplicarSessao(email) {
+  if (hidratadoPara && sessaoAtual && hidratadoPara.toLowerCase() === String(email).toLowerCase()) {
+    mostrarApp();
+    return;
+  }
+
+  if (DATA.shellProtegido) {
+    // ETAPA 1b: o HTML público não carrega mais nenhum dado do CRM. Depois que o Supabase
+    // confirma o login, buscamos os dados no servidor (api/dados.js), que valida a sessão
+    // de novo e devolve o DATA já FILTRADO pelo papel — executivo nunca recebe os clientes
+    // dos colegas nem no payload, não só na tela.
+    const st = document.getElementById('loginStatus');
+    if (st) st.textContent = 'Entrando... carregando seus dados.';
+    let corpo = null;
+    try {
+      const { data } = await supa.auth.getSession();
+      const token = data && data.session ? data.session.access_token : null;
+      if (!token) { mostrarLogin('Sessão não encontrada. Tente entrar de novo.'); return; }
+      const resp = await fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } });
+      corpo = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        if (resp.status === 403 && supa) await supa.auth.signOut().catch(() => {});
+        mostrarLogin(corpo.erro || 'Não foi possível carregar seus dados. Tente entrar de novo.');
+        return;
+      }
+    } catch (e) {
+      mostrarLogin('Falha ao carregar os dados (' + String(e && e.message || e) + '). Verifique a conexão e tente entrar de novo.');
+      return;
+    }
+    // Fora do try de propósito: um erro de RENDERIZAÇÃO aqui é bug de tela (vai pro
+    // console, como sempre foi) — não pode ser confundido com falha de login e jogar
+    // o usuário de volta pro gate com os dados já carregados.
+    Object.assign(DATA, corpo.dados);
+    sessaoAtual = corpo.sessao;
+    hidratadoPara = email;
+    reidratarPosLogin();
+    mostrarApp();
+    return;
+  }
+
+  // Modo antigo (build com dados embutidos) — mantido pra compatibilidade com um
+  // public/index.html gerado por uma versão anterior do build.js.
   const usuario = encontrarUsuario(email);
   if (!usuario) {
     mostrarLogin('E-mail logado não está cadastrado no time. Fale com seu gestor.');
@@ -1258,6 +1305,31 @@ function aplicarSessao(email) {
   }
   sessaoAtual = usuario;
   mostrarApp();
+}
+
+// Reexecuta os pedaços da interface que rodam no CARREGAMENTO da página (antes do login,
+// com o DATA-casca vazio) e que não são cobertos pelo aplicarVisaoPorPapel do mostrarApp.
+// Chamado uma vez, logo depois do Object.assign(DATA, ...) da hidratação.
+function reidratarPosLogin() {
+  if (typeof preencherCabecalhoRodape === 'function') preencherCabecalhoRodape();
+  if (typeof renderFunilBarras === 'function') renderFunilBarras();
+  if (typeof renderConsolidadoDiario === 'function') renderConsolidadoDiario();
+  // Dailies: recarrega do Supabase agora que existe sessão (a tentativa pré-login volta
+  // vazia) e re-renderiza a lista de executivos e o dossiê que dependem dela.
+  if (DATA.supabase && supa && typeof carregarDailies === 'function') {
+    (async () => {
+      await carregarDailies();
+      if (typeof renderRepsList === 'function') renderRepsList();
+      if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
+      if (typeof renderDaily === 'function') renderDaily();
+      if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
+    })();
+  }
+  // Regra de segunda-feira (abrir no Resumo Semanal) — no carregamento ela avaliou com
+  // resumoSemanal=null do shell; reavalia com o dado real.
+  if (typeof hojeEhSegunda !== 'undefined' && hojeEhSegunda && DATA.resumoSemanal && typeof activateTab === 'function') {
+    activateTab('viewResumo');
+  }
 }
 
 function aplicarVisaoPorPapel() {
@@ -2010,21 +2082,26 @@ function kpiDeltaHtml(key) {
 }
 
 // ============ CABEÇALHO / KPIs / BANNER ============
-document.getElementById('updatedLine').textContent =
-  `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${DATA.reps.length} executivos`;
+// Em função nomeada (não mais solto no top-level) porque no shell protegido isso roda
+// DUAS vezes: no carregamento (com o DATA-casca vazio, atrás do login) e de novo na
+// hidratação pós-login (reidratarPosLogin), quando os dados reais chegam do api/dados.
+function preencherCabecalhoRodape() {
+  document.getElementById('updatedLine').textContent =
+    `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${DATA.reps.length} executivos`;
 
-// Rodapé da sidebar — mesma data/hora que já vem pronta em DATA.hubspotUpdatedAtFmt
-// ("DD/MM/AAAA às HH:MM"), só reformatada mais curta pra caber no rodapé estreito.
-(function preencherRodapeSidenav() {
+  // Rodapé da sidebar — mesma data/hora que já vem pronta em DATA.hubspotUpdatedAtFmt
+  // ("DD/MM/AAAA às HH:MM"), só reformatada mais curta pra caber no rodapé estreito.
   const el = document.getElementById('sidenavFooterInfo');
-  if (!el) return;
-  const m = (DATA.hubspotUpdatedAtFmt || '').match(/(\d{2})\/(\d{2})\/\d{4}\s*às\s*(\d{2}):(\d{2})/);
-  const curto = m ? `${m[1]}/${m[2]} · ${m[3]}h${m[4]}` : DATA.hubspotUpdatedAtFmt;
-  el.innerHTML = `HubSpot + Daily<br>sincronizado ${curto}`;
-})();
+  if (el) {
+    const m = (DATA.hubspotUpdatedAtFmt || '').match(/(\d{2})\/(\d{2})\/\d{4}\s*às\s*(\d{2}):(\d{2})/);
+    const curto = m ? `${m[1]}/${m[2]} · ${m[3]}h${m[4]}` : DATA.hubspotUpdatedAtFmt;
+    el.innerHTML = `HubSpot + Daily<br>sincronizado ${curto}`;
+  }
 
-document.getElementById('banner') && (document.getElementById('banner').innerHTML = DATA.banner || '');
-document.getElementById('footerText').textContent = DATA.footerText;
+  document.getElementById('banner') && (document.getElementById('banner').innerHTML = DATA.banner || '');
+  document.getElementById('footerText').textContent = DATA.footerText;
+}
+preencherCabecalhoRodape();
 
 // Badge de saúde: o time inteiro pro gestor (DATA.saude vem pronto do build), mas o
 // FUNIL DELE pro executivo — abrir o app e ver "FUNIL TRAVADO 67%" do time quando o
@@ -2044,7 +2121,14 @@ function preencherHealthBadge() {
       saude = { nivel: 'warn', label: 'SEM NEGÓCIOS ABERTOS', detalhe: 'gere pipeline hoje — prospecção é a prioridade' };
     }
   }
-  document.getElementById('healthBadge').innerHTML = `
+  const elBadge = document.getElementById('healthBadge');
+  if (!elBadge) return;
+  // Shell protegido pré-login (ou rep ainda sem dados hidratados): sem saude calculada —
+  // esconde o badge e sai, em vez de quebrar o script inteiro no carregamento. O
+  // aplicarVisaoPorPapel chama esta função de novo pós-login e reexibe com o dado real.
+  if (!saude) { elBadge.style.display = 'none'; return; }
+  elBadge.style.display = '';
+  elBadge.innerHTML = `
     <div class="health-badge ${saude.nivel}">
       <span class="health-dot"></span>
       <span>${saude.label}</span>
