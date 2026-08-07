@@ -5365,7 +5365,7 @@ async function montarPlanoDoDia(r) {
     if (btnFechar) btnFechar.addEventListener('click', async () => {
       const campos = coletarPlanoDoCard(slot);
       if (!campos.prioridades.some(v => v)) {
-        alert('Escreva pelo menos uma prioridade antes de fechar o plano.');
+        mostrarToast('Escreva pelo menos uma prioridade antes de fechar o plano.', 'atencao');
         return;
       }
       btnFechar.disabled = true;
@@ -5388,7 +5388,7 @@ async function montarPlanoDoDia(r) {
       if (error) {
         btnFechar.disabled = false;
         btnFechar.textContent = editandoPlanoFechado ? 'Salvar alterações do plano (nova versão)' : 'Fechar meu plano de hoje';
-        alert('Não consegui salvar o plano: ' + error.message);
+        mostrarToast('Não consegui salvar o plano. Tente de novo em instantes.', 'erro');
         return;
       }
       planoEmEdicao = false;
@@ -5514,7 +5514,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       : { status: 'na_rota', data_rota: hoje };
     const { error: e2 } = await supa.from('leads_prospeccao')
       .update({ ...campos, updated_at: new Date().toISOString() }).eq('id', l.id);
-    if (e2) { alert('Não consegui atualizar: ' + e2.message); if (botao) { botao.disabled = false; } return; }
+    if (e2) { mostrarToast('Não consegui atualizar essa conta-alvo. Tente de novo.', 'erro'); if (botao) { botao.disabled = false; } return; }
     // Re-renderiza o plano inteiro: checkboxes de contas-alvo e mapa precisam
     // refletir a nova seleção (fonte única: leads_prospeccao).
     montarPlanoDoDia(r);
@@ -6445,7 +6445,7 @@ async function abrirHistoricoComunicados() {
             const okBtn = overlay.querySelector('#modalConfirmacaoOk');
             okBtn.disabled = true; okBtn.textContent = 'Excluindo...';
             const { error } = await supa.from('comunicados').delete().eq('id', id);
-            if (error) { okBtn.disabled = false; okBtn.textContent = 'Excluir'; alert(`Erro ao excluir: ${error.message}`); return; }
+            if (error) { okBtn.disabled = false; okBtn.textContent = 'Excluir'; mostrarToast('Não consegui excluir. Tente de novo.', 'erro'); return; }
             fechar();
             await carregarComunicados();
             abrirHistoricoComunicados();
@@ -6674,7 +6674,7 @@ async function renderAvisos() {
       if (!titulo) return;
       salvarBtn.textContent = 'Salvando...';
       const { error } = await supa.from('comunicados').update({ tipo, titulo, mensagem }).eq('id', id);
-      if (error) { alert(`Erro ao salvar: ${error.message}`); salvarBtn.textContent = 'Salvar'; return; }
+      if (error) { mostrarToast('Não consegui salvar o comunicado. Tente de novo.', 'erro'); salvarBtn.textContent = 'Salvar'; return; }
       await carregarComunicados();
     });
 
@@ -6689,7 +6689,7 @@ async function renderAvisos() {
           const okBtn = overlay.querySelector('#modalConfirmacaoOk');
           okBtn.disabled = true; okBtn.textContent = 'Excluindo...';
           const { error } = await supa.from('comunicados').delete().eq('id', id);
-          if (error) { okBtn.disabled = false; okBtn.textContent = 'Excluir'; alert(`Erro ao excluir: ${error.message}`); return; }
+          if (error) { okBtn.disabled = false; okBtn.textContent = 'Excluir'; mostrarToast('Não consegui excluir. Tente de novo.', 'erro'); return; }
           fechar();
           await carregarComunicados();
         }
@@ -6732,7 +6732,36 @@ let prospeccaoCache = [];
 let prospeccaoPagina = 1;
 const prospeccaoSelecao = new Set(); // ids selecionados pro lote (persiste entre páginas)
 
-// Modal de confirmação próprio (substitui confirm() nativo nos fluxos de lote)
+// Toast leve — substitui o alerta nativo do navegador para erro/sucesso. Empilha até 3, some sozinho,
+// não trava a tela nem exige clique pra fechar. role="status" pra leitor de tela
+// avisar sem precisar de foco.
+function mostrarToast(mensagem, tipo) {
+  tipo = tipo || 'erro';
+  let host = document.getElementById('toastHost');
+  if (!host) {
+    host = document.createElement('div');
+    host.id = 'toastHost';
+    host.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9500;display:flex;flex-direction:column;gap:8px;max-width:360px;';
+    document.body.appendChild(host);
+  }
+  const cor = tipo === 'sucesso' ? 'var(--green)' : tipo === 'atencao' ? 'var(--amber)' : 'var(--red)';
+  const bg = tipo === 'sucesso' ? 'var(--green-soft)' : tipo === 'atencao' ? 'var(--amber-soft)' : 'var(--red-soft)';
+  const toast = document.createElement('div');
+  toast.setAttribute('role', 'status');
+  toast.style.cssText = `background:${bg};border:1px solid ${cor};color:var(--ink);border-radius:12px;padding:12px 16px;font-size:12.5px;line-height:1.5;box-shadow:var(--shadow-md);display:flex;align-items:flex-start;gap:10px;animation:toastIn .2s var(--ease);`;
+  toast.innerHTML = `<span style="flex:1;">${mensagem}</span><button aria-label="Fechar aviso" style="background:none;border:none;color:${cor};font-weight:800;cursor:pointer;font-size:14px;line-height:1;flex:none;">×</button>`;
+  toast.querySelector('button').addEventListener('click', () => toast.remove());
+  host.appendChild(toast);
+  setTimeout(() => { if (toast.isConnected) toast.remove(); }, 6000);
+}
+if (!document.getElementById('toastKeyframes')) {
+  const styleEl = document.createElement('style');
+  styleEl.id = 'toastKeyframes';
+  styleEl.textContent = '@keyframes toastIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}';
+  document.head.appendChild(styleEl);
+}
+
+// Modal de confirmação próprio (substitui o dialogo nativo do navegador nos fluxos de lote)
 function abrirModalConfirmacao({ titulo, corpoHTML, confirmarLabel, aoConfirmar }) {
   const antigo = document.getElementById('modalConfirmacao');
   if (antigo) antigo.remove();
@@ -7051,18 +7080,33 @@ async function renderProspeccaoNova() {
     });
   });
   el.querySelectorAll('.prospeccao-btn-semfit').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      if (!confirm('Marcar este lead como "sem fit"? Ele sai da rota e da lista de pendentes.')) return;
-      await atualizarLeadProspeccao(btn.dataset.lead, { status: 'sem_fit' });
-      renderProspeccaoNova();
+    btn.addEventListener('click', () => {
+      const lead = prospeccaoCache.find(l => l.id === btn.dataset.lead);
+      abrirModalConfirmacao({
+        titulo: 'Marcar como "sem fit"',
+        confirmarLabel: 'Marcar sem fit',
+        corpoHTML: `<p style="margin:0;">Marcar <b>"${esc(lead ? lead.nome : 'este lead')}"</b> como sem fit? Ele sai da rota e da lista de pendentes.</p>`,
+        aoConfirmar: async (overlay, fechar) => {
+          await atualizarLeadProspeccao(btn.dataset.lead, { status: 'sem_fit' });
+          fechar();
+          renderProspeccaoNova();
+        }
+      });
     });
   });
   el.querySelectorAll('.prospeccao-btn-criar').forEach(btn => {
     btn.addEventListener('click', () => {
       const lead = prospeccaoCache.find(l => l.id === btn.dataset.lead);
-      if (!confirm(`Criar empresa "${lead.nome}" no HubSpot? Isso cria só a EMPRESA — o negócio (Deal) você cria depois, manualmente, quando houver interesse real.`)) return;
-      const msgEl = el.querySelector(`.prospeccao-msg[data-lead="${btn.dataset.lead}"]`);
-      criarEmpresaProspeccao(btn.dataset.lead, btn, msgEl);
+      abrirModalConfirmacao({
+        titulo: 'Criar empresa no HubSpot',
+        confirmarLabel: 'Criar empresa',
+        corpoHTML: `<p style="margin:0;">Criar empresa <b>"${esc(lead ? lead.nome : '')}"</b> no HubSpot? Isso cria só a <b>EMPRESA</b> — o negócio (Deal) você cria depois, manualmente, quando houver interesse real.</p>`,
+        aoConfirmar: (overlay, fechar) => {
+          fechar();
+          const msgEl = el.querySelector(`.prospeccao-msg[data-lead="${btn.dataset.lead}"]`);
+          criarEmpresaProspeccao(btn.dataset.lead, btn, msgEl);
+        }
+      });
     });
   });
 }
@@ -7378,17 +7422,25 @@ async function renderPDIs() {
       listaEl.innerHTML = linhas.join('');
 
       listaEl.querySelectorAll('.pdiApagar').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
+        btn.addEventListener('click', (e) => {
           e.preventDefault();
-          if (!confirm('Apagar este PDI? Isso não pode ser desfeito.')) return;
           const card = btn.closest('[data-doc-id]');
-          const docId = card.dataset.docId;
-          const caminho = card.dataset.docCaminho;
-          btn.textContent = '…';
-          await supa.storage.from('pdi-documentos').remove([caminho]);
-          const { error } = await supa.from('pdi_documentos').delete().eq('id', docId);
-          if (error) { alert(`Erro ao apagar: ${error.message}`); btn.textContent = '🗑'; return; }
-          card.remove();
+          abrirModalConfirmacao({
+            titulo: 'Apagar PDI',
+            confirmarLabel: 'Apagar',
+            corpoHTML: '<p style="margin:0;">Apagar este PDI? Isso não pode ser desfeito.</p>',
+            aoConfirmar: async (overlay, fechar) => {
+              const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+              okBtn.disabled = true; okBtn.textContent = 'Apagando...';
+              const docId = card.dataset.docId;
+              const caminho = card.dataset.docCaminho;
+              await supa.storage.from('pdi-documentos').remove([caminho]);
+              const { error } = await supa.from('pdi_documentos').delete().eq('id', docId);
+              if (error) { okBtn.disabled = false; okBtn.textContent = 'Apagar'; mostrarToast('Não consegui apagar o documento. Tente de novo.', 'erro'); return; }
+              fechar();
+              card.remove();
+            }
+          });
         });
       });
 
