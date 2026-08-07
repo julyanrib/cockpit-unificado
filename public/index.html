@@ -1328,10 +1328,12 @@ function reidratarPosLogin() {
   if (DATA.supabase && supa && typeof carregarDailies === 'function') {
     (async () => {
       await carregarDailies();
+      if (typeof carregarPdiCompromissos === 'function') await carregarPdiCompromissos();
       if (typeof renderRepsList === 'function') renderRepsList();
       if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
       if (typeof renderDaily === 'function') renderDaily();
       if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
+      if (souRep && typeof renderMeuPainel === 'function') renderMeuPainel(); // atualiza os checks do PDI já com o cache real (a 1ª chamada acima do rep rodou antes do fetch)
     })();
   }
   // Regra de segunda-feira (abrir no Resumo Semanal) — SÓ pro gestor. O executivo sempre
@@ -1855,6 +1857,7 @@ async function renderMeuPainel() {
     return;
   }
   if (DATA.supabase && supa && Object.keys(dailiesCache).length === 0) await carregarDailies();
+  if (DATA.supabase && supa && Object.keys(pdiCache).length === 0) await carregarPdiCompromissos();
 
   const metaMensal = r.metaMensal || 10;
   const fechadosMes = r.fechadosNoMes || 0;
@@ -3698,9 +3701,6 @@ function renderAgenda() {
   }
 }
 
-// Matriz da semana (gestor): linhas = executivos, colunas = dias úteis, célula =
-// quantidade de compromissos. Primeiro as exceções (dia vazio grita), o detalhe
-// (grade completa com os blocos) fica a um clique — nada é despejado de cara.
 function agendaMatrizTime(dias, naSemana, time, hojeK) {
   const porExecDia = {};
   naSemana.forEach(function (e) {
@@ -3726,7 +3726,7 @@ function agendaMatrizTime(dias, naSemana, time, hojeK) {
       return (porExecDia[String(r.ownerId) + '_' + agendaChave(d)] || []).length;
     });
     return { r: r, cels: cels, total: cels.reduce(function (a, b) { return a + b; }, 0) };
-  }).sort(function (a, b) { return a.total - b.total; }); // semana mais vazia primeiro
+  }).sort(function (a, b) { return a.total - b.total; });
 
   linhas.forEach(function (ln) {
     h += '<button data-agmatriz="' + ln.r.ownerId + '" style="display:grid;grid-template-columns:170px repeat(' + dias.length + ',1fr) 64px;gap:6px;padding:9px 14px;width:100%;background:none;border:none;border-top:1px solid var(--line);cursor:pointer;text-align:left;font-family:inherit;align-items:center;">' +
@@ -4322,32 +4322,40 @@ function renderLeadsPrioritarios() {
 renderLeadsPrioritarios();
 
 
-// ============ PERSISTÊNCIA DOS COMPROMISSOS DO PDI (localStorage) ============
-// Guardado no navegador — não sincroniza entre dispositivos/pessoas, mas resolve o
-// problema de "fechei a aba e sumiu tudo". A chave usa a versão da análise
-// (DATA.versaoAnalise) — quando os compromissos mudam (você pede pra atualizar a
-// análise), a chave muda junto e os checkboxes voltam a zero pro compromisso novo.
+// ============ PERSISTÊNCIA DOS COMPROMISSOS DO PDI (Supabase, tabela pdi_compromissos) ============
+// Antes ficava só no localStorage do navegador — progresso sumia trocando de computador
+// e o gestor não enxergava o que o executivo já marcou. Agora vive no banco, mesmo padrão
+// de dailiesCache: carrega uma vez por sessão, leitura segue síncrona (as telas montam a
+// contagem "✓ X/Y" inline no innerHTML), escrita atualiza o cache na hora e sobe ao banco
+// em paralelo — a UI nunca espera round-trip de rede pra reagir ao clique.
+let pdiCache = {}; // ownerId_versaoAnalise -> { checked, data }
+async function carregarPdiCompromissos() {
+  if (!DATA.supabase || !supa) return;
+  const { data, error } = await supa.from('pdi_compromissos').select('*');
+  if (error) { console.error('Erro ao carregar PDI:', error.message); return; }
+  pdiCache = {};
+  (data || []).forEach(row => { pdiCache[`${row.owner_id}_${row.versao_analise}`] = { checked: row.checked || [], data: row.data_um_a_um || '' }; });
+}
 function pdiStorageKey(ownerId) {
-  return `cockpit_pdi_v1_${ownerId}_${DATA.versaoAnalise}`;
+  return `${ownerId}_${DATA.versaoAnalise}`;
 }
 function getPdiState(ownerId, total) {
-  try {
-    const raw = localStorage.getItem(pdiStorageKey(ownerId));
-    if (!raw) return { checked: new Array(total).fill(false), data: '' };
-    const parsed = JSON.parse(raw);
-    const checked = Array.isArray(parsed.checked) ? parsed.checked : new Array(total).fill(false);
-    while (checked.length < total) checked.push(false);
-    return { checked, data: parsed.data || '' };
-  } catch (e) {
-    return { checked: new Array(total).fill(false), data: '' };
-  }
+  const salvo = pdiCache[pdiStorageKey(ownerId)];
+  const checked = Array.isArray(salvo && salvo.checked) ? [...salvo.checked] : new Array(total).fill(false);
+  while (checked.length < total) checked.push(false);
+  return { checked, data: (salvo && salvo.data) || '' };
 }
 function savePdiState(ownerId, checked, data) {
-  try {
-    localStorage.setItem(pdiStorageKey(ownerId), JSON.stringify({ checked, data }));
-  } catch (e) {
-    // localStorage pode falhar em modo privado/anônimo — nesse caso só não persiste, sem quebrar o painel.
-  }
+  pdiCache[pdiStorageKey(ownerId)] = { checked, data }; // otimista: UI já reflete antes do round-trip
+  if (!DATA.supabase || !supa) return;
+  supa.from('pdi_compromissos').upsert({
+    owner_id: ownerId, versao_analise: DATA.versaoAnalise,
+    checked, data_um_a_um: data,
+    atualizado_por: (sessaoAtual && sessaoAtual.email) || null,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'owner_id,versao_analise' }).then(({ error }) => {
+    if (error) console.error('Erro ao salvar PDI no Supabase:', error.message);
+  });
 }
 
 // ============ LISTA DE EXECUTIVOS ============
@@ -4416,6 +4424,11 @@ function renderCockpitDossieInline() {
 
   const det = (typeof visitasInformadasDetalhe === 'function') ? visitasInformadasDetalhe(r.ownerId) : { aderencia: null, real: 0, prom: 0 };
   const aderenciaTxt = det.aderencia === null ? '—' : `${det.aderencia}%`;
+  // Defesa contra corrida: se o cache do PDI ainda não chegou (clique muito rápido após
+  // o login), busca em segundo plano e re-renderiza — sem travar o dossiê por causa disso.
+  if (DATA.supabase && supa && Object.keys(pdiCache).length === 0) {
+    carregarPdiCompromissos().then(() => renderCockpitDossieInline());
+  }
   const pdi = getPdiState(r.ownerId, r.compromissos.length);
   // Três recortes do funil dessa pessoa, sem buscar nada novo do HubSpot — só reorganiza
   // dado que já vem pronto:
