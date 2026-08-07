@@ -5829,6 +5829,7 @@ async function renderDaily() {
     : DATA.reps;
 
   const souRepDaily = sessaoAtual && sessaoAtual.role === 'rep';
+  let repsParaFichas = repsDaily; // gestor: reordenado abaixo pela ordem do placar (atenção primeiro)
   // Contexto que faltava: o executivo abre a Daily sem lembrar o que ficou combinado no
   // Resumo Semanal. Puxa a primeira ação individual dela (mesmo dado que já existe em
   // DATA.resumoSemanal.porRep) e mostra como lembrete — não duplica o texto todo, só a
@@ -5889,6 +5890,7 @@ async function renderDaily() {
       return (a.pctOntem ?? 999) - (b.pctOntem ?? 999); // depois: pior entrega de ontem primeiro
     });
 
+    repsParaFichas = linhasPlacar.map(l => l.r); // mesma ordem do placar: quem precisa de atenção primeiro
     const semRegistro = linhasPlacar.filter(l => !l.registrouHoje).length;
     html += `
       <div class="chart-card" style="margin-bottom:18px;padding:0;overflow:hidden;">
@@ -5919,7 +5921,7 @@ async function renderDaily() {
     `;
   }
 
-  repsDaily.forEach(r => {
+  repsParaFichas.forEach(r => {
     const hoje = getDaily(r.ownerId, dailyRefDate) || {};
     // "Realizado" só vem ao vivo do HubSpot quando a data mostrada é hoje de verdade —
     // pra dias passados usa o que já foi salvo (auto-save de quando aquele dia era "hoje").
@@ -5970,7 +5972,28 @@ async function renderDaily() {
       `;
     };
 
+    // Linha-resumo do acordeão (gestor): tudo dado que já está calculado aqui em cima.
+    const registrouResumo = [hoje.prometido_visitas, hoje.prometido_avancos, hoje.prometido_propostas].some(v => v != null);
+    const promResumo = registrouResumo ? `${hoje.prometido_visitas ?? 0}v · ${hoje.prometido_avancos ?? 0}a · ${hoje.prometido_propostas ?? 0}p` : null;
+    const chipsResumo = [
+      registrouResumo
+        ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--green-soft);color:var(--green);">prometeu ${promResumo}</span>`
+        : `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--red-soft);color:var(--red);">sem promessa</span>`,
+      ehHojeView ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);">${hoje.realizado_visitas ?? 0} visitas feitas</span>` : '',
+      pontosHoje > 0 ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--panel2);border:1px solid var(--line);color:var(--muted);">${pontosHoje} pts</span>` : '',
+      seq > 0 ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:3px 10px;background:var(--amber-soft);color:var(--amber);">🔥 ${seq}d</span>` : ''
+    ].filter(Boolean).join('');
+    const inicioAcc = souGestor ? `
+      <details class="daily-acc" id="dailyAcc_${r.ownerId}" style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:10px;overflow:hidden;">
+        <summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 18px;flex-wrap:wrap;">
+          <b style="font-size:13.5px;">${r.name}</b>
+          <span style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">${chipsResumo}<span style="font-size:11px;color:var(--muted2);">ver ficha ▾</span></span>
+        </summary>
+        <div style="padding:0 10px 10px;">` : '';
+    const fimAcc = souGestor ? `</div></details>` : '';
+
     html += `
+      ${inicioAcc}
       <div class="chart-card" id="dailyCard_${r.ownerId}" style="margin-bottom:16px;padding:0;overflow:hidden;">
         <div class="hoje-hero">
           <div class="hoje-hero-top">
@@ -6060,6 +6083,7 @@ async function renderDaily() {
           </div>
         </div>
       </div>
+      ${fimAcc}
     `;
   });
 
@@ -6068,8 +6092,10 @@ async function renderDaily() {
 
   document.querySelectorAll('.placar-row').forEach(row => {
     row.addEventListener('click', () => {
+      const acc = document.getElementById(`dailyAcc_${row.dataset.owner}`);
+      if (acc) acc.open = true;
       const card = document.getElementById(`dailyCard_${row.dataset.owner}`);
-      if (card && typeof smoothScrollTo === 'function') smoothScrollTo(card);
+      if (card && typeof smoothScrollTo === 'function') smoothScrollTo(acc || card);
     });
   });
 
