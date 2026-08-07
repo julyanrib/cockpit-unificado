@@ -27,6 +27,28 @@ function normalizarTelefone(tel) {
   return digitos.length >= 8 ? digitos : null;
 }
 
+// ---- Roteamento por território (mesma regra do time de campo) ----
+// Lead entra no staging JÁ com o executivo certo. Cidade/bairro fora do mapa
+// de território fica 'pendente' sem dono — o gestor decide, nada de chute.
+// Porto Alegre: rotação Kelly/Ricardo fica pra quando o Ricardo tiver owner ID
+// no HubSpot; até lá, POA e Canoas vão pra Kelly.
+function semAcento(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+const TERRITORIOS = [
+  { owner: '86100505', nome: 'Marco Filho', teste: t => t.includes('vila velha') },
+  { owner: '87069181', nome: 'Amanda Pardim', teste: t => t.includes('vitoria') },
+  { owner: '87569072', nome: 'Sandro Linhares', teste: t => t.includes('tijuca') },
+  { owner: '94079973', nome: 'Michel Andrade', teste: t => t.includes('nova iguacu') || t.includes('campo grande') },
+  { owner: '89842507', nome: 'Wericles Andrade', teste: t => t.includes('sao paulo') },
+  { owner: '91477292', nome: 'Kelly Travieso', teste: t => t.includes('canoas') || t.includes('porto alegre') }
+];
+function rotearTerritorio(cidade, bairro) {
+  const chave = semAcento(cidade) + ' ' + semAcento(bairro);
+  const acerto = TERRITORIOS.find(x => x.teste(chave));
+  return acerto ? acerto.owner : null;
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -86,14 +108,27 @@ module.exports = async function handler(req, res) {
     (completo.temperatura.frios || []).forEach(l => l.name && nomesNoHubspot.add(l.name.toLowerCase().trim()));
   } catch (e) { /* dedup best-effort */ }
 
-  const linhas = leads.map(l => ({
+  // Filtro de qualidade (regra do playbook: nota >= 4.2 E >= 100 avaliações).
+  // Pode ser afrouxado por importação via body.qualidade, mas nunca silenciosamente:
+  // o resultado reporta quantos foram descartados e por quê.
+  const qualidade = {
+    notaMin: (req.body.qualidade && req.body.qualidade.notaMin != null) ? Number(req.body.qualidade.notaMin) : 4.2,
+    avaliacoesMin: (req.body.qualidade && req.body.qualidade.avaliacoesMin != null) ? Number(req.body.qualidade.avaliacoesMin) : 100
+  };
+
+  const linhasTodas = leads.map(l => {
+    const cidade = l.cidade || l.city || '';
+    const bairro = l.bairro || null;
+    // Dono: explícito no lead (l.responsavel_owner_id) vence; senão, roteia por território.
+    const dono = l.responsavel_owner_id ? String(l.responsavel_owner_id) : rotearTerritorio(cidade, bairro);
+    return {
     place_id: l.place_id || null,
     fonte,
     nome: String(l.nome || l.name || '').trim(),
     categoria: l.categoria || null,
     endereco: l.endereco || l.address || null,
-    bairro: l.bairro || null,
-    cidade: l.cidade || l.city || '',
+    bairro,
+    cidade,
     estado: l.estado || l.state || null,
     telefone: l.telefone || l.phone_number || null,
     telefone_normalizado: normalizarTelefone(l.telefone || l.phone_number),
@@ -105,8 +140,17 @@ module.exports = async function handler(req, res) {
     delivery: !!l.delivery,
     horario_funcionamento: Array.isArray(l.weekday_hours) ? l.weekday_hours.join(' | ') : (l.horario_funcionamento || null),
     ja_existe_hubspot: nomesNoHubspot.has(String(l.nome || l.name || '').toLowerCase().trim()),
+    responsavel_owner_id: dono,
+    status: dono ? 'atribuido' : 'pendente',
     criado_por: criadoPor
-  })).filter(l => l.nome && l.cidade);
+    };
+  }).filter(l => l.nome && l.cidade);
+
+  const reprovadosQualidade = linhasTodas.filter(l =>
+    (l.nota != null && l.nota < qualidade.notaMin) ||
+    (l.avaliacoes != null && l.avaliacoes < qualidade.avaliacoesMin)
+  );
+  const linhas = linhasTodas.filter(l => !reprovadosQualidade.includes(l));
 
   if (linhas.length === 0) {
     return res.status(400).json({ erro: 'Nenhum lead válido no lote (precisa de nome e cidade).' });
@@ -126,7 +170,12 @@ module.exports = async function handler(req, res) {
   await carregarExistentes('telefone_normalizado', telefones);
 
   const novas = [];
-  const resultado = { inseridos: 0, duplicados: 0, erros: [] };
+  const resultado = {
+    inseridos: 0, duplicados: 0, erros: [],
+    reprovados_qualidade: reprovadosQualidade.length,
+    regra_qualidade: `nota >= ${qualidade.notaMin} e avaliações >= ${qualidade.avaliacoesMin}`,
+    reprovados_exemplos: reprovadosQualidade.slice(0, 10).map(l => `${l.nome} (nota ${l.nota ?? '?'} · ${l.avaliacoes ?? '?'} avaliações)`)
+  };
   linhas.forEach(l => {
     const jaTem = (l.place_id && existentes.place_id.has(l.place_id)) ||
       (l.telefone_normalizado && existentes.telefone_normalizado.has(l.telefone_normalizado));
@@ -148,6 +197,12 @@ module.exports = async function handler(req, res) {
         return res.status(502).json({ erro: 'Supabase recusou a importação: ' + texto.slice(0, 300), parcial: resultado });
       }
       resultado.inseridos = novas.length;
+      // Distribuição por executivo — pra conferir o roteamento de território no ato
+      resultado.distribuicao = {};
+      novas.forEach(l => {
+        const chave = l.responsavel_owner_id || 'pendente_sem_dono';
+        resultado.distribuicao[chave] = (resultado.distribuicao[chave] || 0) + 1;
+      });
     } catch (e) {
       return res.status(500).json({ erro: 'Falha ao gravar no Supabase: ' + String(e.message || e), parcial: resultado });
     }
