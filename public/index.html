@@ -873,8 +873,8 @@
       <button class="tab-btn" id="tabBtnDaily" data-view="viewDaily"><span class="tab-btn-icon">🎯</span><span class="tab-btn-label">Daily</span></button>
       <button class="tab-btn" id="tabBtnResumo" data-view="viewResumo"><span class="tab-btn-icon">🗓️</span><span class="tab-btn-label">Resumo Semanal</span></button>
       <button class="tab-btn" id="tabBtnMeuPainel" data-view="viewMeuPainel" style="display:none;"><span class="tab-btn-icon">🌅</span><span class="tab-btn-label">Hoje</span></button>
-      <button class="tab-btn" id="tabBtnLeadsPraca" data-view="viewLeadsPraca"><span class="tab-btn-icon">📍</span><span class="tab-btn-label">Leads da praça</span><span class="tab-btn-badge" id="badgeLeadsPraca"></span></button>
-      <button class="tab-btn" id="tabBtnPDIs" data-view="viewPDIs"><span class="tab-btn-icon">📝</span><span class="tab-btn-label">PDIs</span></button>
+      <button class="tab-btn" id="tabBtnLeadsPraca" data-view="viewLeadsPraca"><span class="tab-btn-icon">🎯</span><span class="tab-btn-label">Prospecção</span><span class="tab-btn-badge" id="badgeLeadsPraca"></span></button>
+      <button class="tab-btn" id="tabBtnPDIs" data-view="viewPDIs"><span class="tab-btn-icon">🌱</span><span class="tab-btn-label">Desenvolvimento</span></button>
       <button class="tab-btn" id="tabBtnCoaching" data-view="viewCoaching" style="display:none;"><span class="tab-btn-icon">🎧</span><span class="tab-btn-label">Coaching</span></button>
       <button class="tab-btn" id="tabBtnAvisos" data-view="viewAvisos"><span class="tab-btn-icon">📣</span><span class="tab-btn-label">Avisos</span></button>
       <button class="tab-btn" id="tabBtnAgenda" data-view="viewAgenda"><span class="tab-btn-icon">📆</span><span class="tab-btn-label">Agenda</span></button>
@@ -956,17 +956,24 @@
   </div>
 
   <div class="view" id="viewPDIs">
-    <div class="mini-hero"><div class="mini-hero-title">🪴 PDIs</div><div class="mini-hero-sub">Planos de desenvolvimento individual combinados no 1:1</div></div>
+    <div class="mini-hero"><div class="mini-hero-title">🌱 Desenvolvimento</div><div class="mini-hero-sub">PDI combinado no 1:1 e, pro gestor, o roteiro de Coaching do time — tudo no mesmo lugar</div></div>
     <div id="pdisContent"></div>
-  </div>
-
-  <div class="view" id="viewCoaching">
-    <div class="mini-hero"><div class="mini-hero-title">🎧 Coaching</div><div class="mini-hero-sub">Privado · só o gestor vê — roteiro do 1:1 gerado automaticamente (semanal, e mensal na última semana do mês)</div></div>
-    <div id="coachingContent"></div>
+    <div id="coachingEmbutido" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;margin:28px 0 12px;">
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">🎧 Coaching — privado, só o gestor vê</span>
+        <span style="flex:1;height:1px;background:var(--line);"></span>
+      </div>
+      <div id="coachingContent"></div>
+    </div>
   </div>
 
   <div class="view" id="viewLeadsPraca">
-    <div class="mini-hero"><div class="mini-hero-title">📍 Leads da praça</div><div class="mini-hero-sub">Contas-alvo por território, prontas pra virar visita no Expogo</div></div>
+    <div class="mini-hero"><div class="mini-hero-title">🎯 Prospecção</div><div class="mini-hero-sub">Contas-alvo importadas (Outscraper/Google Places) + o backlog mensal por praça</div></div>
+    <div id="prospeccaoNovaContent"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin:24px 0 12px;">
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">Backlog mensal por praça</span>
+      <span style="flex:1;height:1px;background:var(--line);"></span>
+    </div>
     <div id="leadsPracaContent"></div>
   </div>
 
@@ -1353,7 +1360,12 @@ function aplicarVisaoPorPapel() {
   // Isso evita que uma aba restrita fique "grudada" visível de uma sessão anterior no
   // mesmo navegador (ex: testou como gestor, depois logou como executivo sem recarregar).
   document.getElementById('tabBtnMeuPainel').style.display = souRep ? 'flex' : 'none';
-  document.getElementById('tabBtnCoaching').style.display = souGestorSessao ? 'flex' : 'none';
+  // ETAPA 5 (07/08/26): Coaching deixou de ser uma aba própria — virou seção dentro de
+  // Desenvolvimento (união de navegação, dado intocado). tabBtnCoaching fica sempre
+  // oculta (não tem mais view própria pra ativar); quem liga/desliga é a seção embutida.
+  document.getElementById('tabBtnCoaching').style.display = 'none';
+  const coachingEmbutidoEl = document.getElementById('coachingEmbutido');
+  if (coachingEmbutidoEl) coachingEmbutidoEl.style.display = souGestorSessao ? 'block' : 'none';
   // ETAPA 2 (07/08/26): Cockpit é EXCLUSIVO do gestor — o executivo abre em "Hoje", nunca
   // no coletivo. Antes o botão ficava visível pro executivo também (e ele conseguia clicar).
   document.getElementById('tabBtnCockpit').style.display = souGestorSessao ? 'flex' : 'none';
@@ -3253,6 +3265,89 @@ function eventosRotaDoDia(ownerId, dataISO) {
     .sort((a, b) => a.inicio - b.inicio);
 }
 
+// Distância real em KM entre duas coordenadas (fórmula de Haversine) — usada pra
+// ordenar as contas-alvo da Prospecção por proximidade de verdade, já que essas (ao
+// contrário dos negócios do HubSpot, que não têm endereço nenhum hoje) TÊM coordenada
+// real vinda da fonte de prospecção (Outscraper/Google Places).
+function distanciaKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const toRad = d => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Vizinho mais próximo: heurística simples e honesta (não é o ótimo global — isso seria
+// um problema NP-difícil — mas dá uma sequência muito melhor que ordem aleatória/por nome,
+// sem precisar de nenhum serviço de rotas pago). Parte da posição atual (ou da 1ª parada)
+// e sempre pula pra parada não visitada mais próxima da atual.
+function ordenarPorProximidade(paradas, origem) {
+  const restantes = [...paradas];
+  const ordenadas = [];
+  let atual = origem;
+  while (restantes.length > 0) {
+    let melhorIdx = 0, melhorDist = Infinity;
+    restantes.forEach((p, i) => {
+      const d = distanciaKm(atual.lat, atual.lng, p.lat, p.lng);
+      if (d < melhorDist) { melhorDist = d; melhorIdx = i; }
+    });
+    const proxima = restantes.splice(melhorIdx, 1)[0];
+    ordenadas.push({ ...proxima, distanciaDaAnteriorKm: melhorDist });
+    atual = proxima;
+  }
+  return ordenadas;
+}
+
+async function buildRotaContasAlvoHTML(ownerId, dataISO) {
+  if (!DATA.supabase || !supa) return '';
+  const { data, error } = await supa.from('leads_prospeccao').select('*')
+    .eq('responsavel_owner_id', ownerId).eq('status', 'na_rota').eq('data_rota', dataISO);
+  if (error) { console.error('Erro ao carregar rota de contas-alvo:', error.message); return ''; }
+  const paradas = (data || []).filter(l => l.lat != null && l.lng != null);
+  const semCoordenada = (data || []).filter(l => l.lat == null || l.lng == null);
+  if (paradas.length === 0 && semCoordenada.length === 0) return '';
+
+  let ordenadas = paradas;
+  let origemLabel = 'sua posição atual';
+  const geo = await geolocalizacaoAtual();
+  if (geo) {
+    ordenadas = ordenarPorProximidade(paradas, geo);
+  } else {
+    origemLabel = 'sem GPS disponível — ordenado a partir da 1ª parada';
+    if (paradas.length > 0) ordenadas = ordenarPorProximidade(paradas.slice(1), paradas[0]).map((p, i) => i === 0 ? { ...p } : p);
+  }
+
+  return `
+    <div class="chart-card" id="rotaContasAlvoCard" style="margin-bottom:18px;border-left:3px solid var(--green);">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:4px;">
+        <h3 style="margin:0;">🎯 Contas-alvo perto de você hoje</h3>
+        <span style="font-size:11.5px;color:var(--muted2);">${paradas.length} com coordenada</span>
+      </div>
+      <div class="chart-subtitle" style="margin:0 0 12px;">Sequência ordenada por distância real (vizinho mais próximo) a partir de ${origemLabel} — a única categoria de visita hoje com endereço de verdade.</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        ${ordenadas.map((l, i) => `
+          <div class="rota-parada" style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+              <div style="display:flex;align-items:center;gap:10px;min-width:0;">
+                <span style="font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:13px;color:var(--muted2);flex:none;">${i + 1}º</span>
+                <div style="min-width:0;">
+                  <b style="font-size:13.5px;">${esc(l.nome)}</b>
+                  <div style="font-size:11.5px;color:var(--muted);">${esc([l.bairro, l.cidade].filter(Boolean).join(', '))}${l.distanciaDaAnteriorKm != null ? ` · ${l.distanciaDaAnteriorKm.toFixed(1)} km da parada anterior` : ''}</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+              <a href="https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lng}" target="_blank" rel="noopener" style="font-size:11.5px;font-weight:700;color:var(--blue);text-decoration:none;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 12px;">📍 Maps (coordenada real)</a>
+              <a href="https://waze.com/ul?ll=${l.lat},${l.lng}&navigate=yes" target="_blank" rel="noopener" style="font-size:11.5px;font-weight:700;color:var(--blue);text-decoration:none;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:7px 12px;">🚗 Waze (coordenada real)</a>
+            </div>
+          </div>
+        `).join('')}
+        ${semCoordenada.length > 0 ? `<div style="font-size:11px;color:var(--muted2);">+ ${semCoordenada.length} na rota de hoje sem coordenada cadastrada (fonte não trouxe endereço).</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
 async function buildRotaDoDiaHTML(ownerId, dataISO) {
   await carregarCheckinsDoDia(ownerId, dataISO);
   const eventos = eventosRotaDoDia(ownerId, dataISO);
@@ -3523,9 +3618,10 @@ function renderAgenda() {
   // passada ou futura). Injetado no topo, acima do placar/grade semanal já existentes.
   if (souRep && agendaEstado.offset === 0 && DATA.agenda) {
     const hojeISOStr = isoDate(new Date());
-    buildRotaDoDiaHTML(sessaoAtual.ownerId, hojeISOStr).then(html => {
-      box.insertAdjacentHTML('afterbegin', html);
+    Promise.all([buildRotaContasAlvoHTML(sessaoAtual.ownerId, hojeISOStr), buildRotaDoDiaHTML(sessaoAtual.ownerId, hojeISOStr)]).then(([htmlContasAlvo, htmlAgenda]) => {
+      box.insertAdjacentHTML('afterbegin', htmlAgenda);
       religarBotoesRota(box, sessaoAtual.ownerId, hojeISOStr);
+      if (htmlContasAlvo) box.insertAdjacentHTML('afterbegin', htmlContasAlvo);
     });
   }
 
@@ -3768,7 +3864,9 @@ document.addEventListener('click', function (ev) {
   if (f) { agendaEstado.filtro = f.dataset.agfiltro; renderAgenda(); return; }
   if (ev.target.closest('[data-agsab]')) { agendaEstado.sabado = !agendaEstado.sabado; renderAgenda(); return; }
   if (ev.target.closest('[data-agcoaching]')) {
-    if (typeof activateTab === 'function') activateTab('viewCoaching');
+    // Etapa 5: Coaching virou seção dentro de Desenvolvimento — o atalho agora abre
+    // essa aba (o roteiro do 1:1 já vem renderizado ali, seção "Coaching" mais abaixo).
+    if (typeof activateTab === 'function') activateTab('viewPDIs');
     return;
   }
   const chip = ev.target.closest('[data-agev]');
@@ -3791,8 +3889,8 @@ document.getElementById('tabBtnResumo').addEventListener('click', () => activate
 document.getElementById('tabBtnDaily').addEventListener('click', () => activateTab('viewDaily'));
 document.getElementById('tabBtnMeuPainel').addEventListener('click', () => activateTab('viewMeuPainel'));
 document.getElementById('tabBtnPDIs').addEventListener('click', () => activateTab('viewPDIs'));
-document.getElementById('tabBtnCoaching').addEventListener('click', () => activateTab('viewCoaching'));
-document.getElementById('tabBtnLeadsPraca').addEventListener('click', () => { activateTab('viewLeadsPraca'); if (typeof renderLeadsPraca === 'function') renderLeadsPraca(); });
+document.getElementById('tabBtnCoaching').addEventListener('click', () => { if (document.getElementById('viewCoaching')) activateTab('viewCoaching'); }); // Etapa 5: Coaching virou seção dentro de Desenvolvimento — esta aba fica sempre oculta (ver aplicarVisaoPorPapel); handler mantido só por segurança, nunca deve disparar.
+document.getElementById('tabBtnLeadsPraca').addEventListener('click', () => { activateTab('viewLeadsPraca'); if (typeof renderLeadsPraca === 'function') renderLeadsPraca(); if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova(); });
 document.getElementById('tabBtnAvisos').addEventListener('click', () => { activateTab('viewAvisos'); if (typeof renderAvisos === 'function') renderAvisos(); });
 document.getElementById('tabBtnAgenda').addEventListener('click', () => { activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda(); });
 // Nas segundas-feiras, abre direto no Resumo Semanal; nos outros dias, abre no Cockpit
@@ -5703,6 +5801,244 @@ async function renderAvisos() {
     });
   });
 }
+
+/* ========== ETAPA 4 — PROSPECÇÃO (leads_prospeccao) ==========
+   Staging antes de virar Company no HubSpot. Nunca cria Deal automaticamente — regra
+   comercial: prospecção fria cria Company; Deal só quando há interesse/visita real
+   (fluxo manual já existente em criarNegocioNoHubspot, mais abaixo). */
+
+// Mesmo padrão de prazo-duro e token de sessão que renderLeadsPraca usa mais abaixo —
+// aquelas são funções locais (escopo de dentro de renderLeadsPraca), então este módulo
+// precisa da própria cópia em escopo global. Lógica idêntica, só duplicada por escopo.
+async function comPrazoGlobal(promessa, ms, rotulo) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await Promise.race([
+      promessa(ctrl.signal),
+      new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('timeout ' + rotulo), { name: 'AbortError' })), ms + 200))
+    ]);
+  } finally { clearTimeout(t); }
+}
+async function tokenDeSessaoGlobal() {
+  if (!supa) return null;
+  try {
+    const resultado = await Promise.race([
+      supa.auth.getSession(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('timeout sessão')), 5000))
+    ]);
+    const { data } = resultado;
+    return data && data.session ? data.session.access_token : null;
+  } catch (e) { return null; }
+}
+
+let prospeccaoCache = [];
+let prospeccaoFiltro = { cidade: '', bairro: '', notaMin: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '' };
+
+async function carregarProspeccao() {
+  if (!DATA.supabase || !supa) { prospeccaoCache = []; return; }
+  let query = supa.from('leads_prospeccao').select('*').order('created_at', { ascending: false });
+  if (sessaoAtual && sessaoAtual.role === 'rep') query = query.eq('responsavel_owner_id', sessaoAtual.ownerId);
+  const { data, error } = await query;
+  if (error) { console.error('Erro ao carregar prospecção:', error.message); prospeccaoCache = []; return; }
+  prospeccaoCache = data || [];
+}
+
+function prospeccaoAplicarFiltros(lista) {
+  const f = prospeccaoFiltro;
+  return lista.filter(l =>
+    (!f.cidade || l.cidade === f.cidade) &&
+    (!f.bairro || l.bairro === f.bairro) &&
+    (!f.notaMin || (l.nota || 0) >= Number(f.notaMin)) &&
+    (!f.avaliacoesMin || (l.avaliacoes || 0) >= Number(f.avaliacoesMin)) &&
+    (!f.categoria || l.categoria === f.categoria) &&
+    (!f.fonte || l.fonte === f.fonte) &&
+    (!f.responsavel || String(l.responsavel_owner_id) === f.responsavel) &&
+    (!f.status || l.status === f.status) &&
+    (f.jaExiste === '' || String(l.ja_existe_hubspot) === f.jaExiste)
+  );
+}
+
+async function atualizarLeadProspeccao(id, campos) {
+  const { error } = await supa.from('leads_prospeccao').update({ ...campos, updated_at: new Date().toISOString() }).eq('id', id);
+  if (error) { console.error('Erro ao atualizar lead de prospecção:', error.message); return false; }
+  const idx = prospeccaoCache.findIndex(l => l.id === id);
+  if (idx >= 0) prospeccaoCache[idx] = { ...prospeccaoCache[idx], ...campos };
+  return true;
+}
+
+async function criarEmpresaProspeccao(leadId, botaoEl, msgEl) {
+  botaoEl.disabled = true; botaoEl.textContent = 'Criando…';
+  const token = await tokenDeSessaoGlobal();
+  try {
+    const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-empresa-prospeccao', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: JSON.stringify({ leadId })
+    }), 8000, 'criar-empresa-prospeccao');
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      msgEl.textContent = data.erro || 'Falha ao criar.';
+      msgEl.style.color = 'var(--red)';
+      botaoEl.disabled = false; botaoEl.textContent = 'Criar empresa no HubSpot';
+      return;
+    }
+    msgEl.textContent = '✓ Empresa criada no HubSpot.';
+    msgEl.style.color = 'var(--green)';
+    botaoEl.textContent = '✓ Criada';
+    const idx = prospeccaoCache.findIndex(l => l.id === leadId);
+    if (idx >= 0) prospeccaoCache[idx].status = 'criado_hubspot';
+  } catch (e) {
+    msgEl.textContent = 'Erro: ' + String(e.message || e);
+    msgEl.style.color = 'var(--red)';
+    botaoEl.disabled = false; botaoEl.textContent = 'Criar empresa no HubSpot';
+  }
+}
+
+function prospeccaoCardHTML(l) {
+  const podeAgir = sessaoAtual.role === 'manager' || String(l.responsavel_owner_id) === String(sessaoAtual.ownerId);
+  const nomeResponsavel = l.responsavel_owner_id ? ((DATA.reps.find(r => r.ownerId === String(l.responsavel_owner_id)) || {}).name || l.responsavel_owner_id) : null;
+  const badges = [
+    l.ja_existe_hubspot ? '<span style="font-size:10px;font-weight:700;color:var(--red);background:rgba(229,26,49,.1);border-radius:999px;padding:3px 8px;">possível duplicata no HubSpot</span>' : '',
+    l.lat != null && l.lng != null ? '<span style="font-size:10px;font-weight:700;color:var(--green);background:rgba(31,163,92,.1);border-radius:999px;padding:3px 8px;">📍 com coordenada</span>' : ''
+  ].filter(Boolean).join(' ');
+
+  const statusLabel = { pendente: 'Pendente', atribuido: 'Atribuído', na_rota: 'Na rota', sem_fit: 'Sem fit', criado_hubspot: 'Criado no HubSpot' }[l.status] || l.status;
+
+  return `
+    <div class="prospeccao-card" data-lead="${l.id}" style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div style="min-width:0;">
+          <b style="font-size:14px;">${esc(l.nome)}</b>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc([l.categoria, l.bairro, l.cidade].filter(Boolean).join(' · '))}</div>
+          ${l.nota != null ? `<div style="font-size:11.5px;color:var(--muted2);margin-top:2px;">⭐ ${l.nota} · ${l.avaliacoes || 0} avaliações · fonte: ${l.fonte}</div>` : ''}
+        </div>
+        <span style="font-size:10.5px;font-weight:700;color:var(--muted2);white-space:nowrap;">${statusLabel}</span>
+      </div>
+      ${badges ? `<div style="display:flex;gap:6px;flex-wrap:wrap;">${badges}</div>` : ''}
+      ${nomeResponsavel ? `<div style="font-size:11.5px;color:var(--muted);">Responsável: <b>${esc(nomeResponsavel)}</b></div>` : ''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        ${sessaoAtual.role === 'manager' ? `
+          <select class="prospeccao-atribuir" data-lead="${l.id}" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+            <option value="">Atribuir a…</option>
+            ${DATA.reps.map(r => `<option value="${r.ownerId}" ${String(l.responsavel_owner_id) === r.ownerId ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}
+          </select>
+        ` : ''}
+        ${podeAgir && l.responsavel_owner_id && l.status !== 'criado_hubspot' && l.status !== 'sem_fit' ? `
+          <button class="prospeccao-btn-rota" data-lead="${l.id}" style="font-size:11px;font-weight:700;color:#fff;background:${l.status === 'na_rota' ? 'var(--muted2)' : 'var(--blue)'};border:none;border-radius:999px;padding:6px 11px;cursor:pointer;">${l.status === 'na_rota' ? '✓ Na rota de hoje' : 'Incluir na rota de hoje'}</button>
+        ` : ''}
+        ${podeAgir && l.status !== 'sem_fit' && l.status !== 'criado_hubspot' ? `
+          <button class="prospeccao-btn-semfit" data-lead="${l.id}" style="font-size:11px;font-weight:700;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 11px;cursor:pointer;">Sem fit</button>
+        ` : ''}
+        ${podeAgir && l.status !== 'criado_hubspot' ? `
+          <button class="prospeccao-btn-criar" data-lead="${l.id}" style="font-size:11px;font-weight:700;color:var(--red);background:none;border:1px solid var(--red);border-radius:999px;padding:6px 11px;cursor:pointer;">Criar empresa no HubSpot</button>
+        ` : ''}
+        <span class="prospeccao-msg" data-lead="${l.id}" style="font-size:11px;"></span>
+      </div>
+    </div>
+  `;
+}
+
+async function renderProspeccaoNova() {
+  const el = document.getElementById('prospeccaoNovaContent');
+  if (!el) return;
+  el.innerHTML = '<div class="empty-state">Carregando…</div>';
+  await carregarProspeccao();
+
+  if (prospeccaoCache.length === 0) {
+    el.innerHTML = `
+      <div class="chart-card" style="border-left:3px solid var(--blue);">
+        <h3 style="margin-bottom:4px;">🎯 Prospecção</h3>
+        <div class="empty-state">Nenhum lead importado ainda. Peça pro gestor rodar uma importação (Outscraper, Google Places ou outra fonte) — os leads aparecem aqui pra conferência antes de virar empresa no HubSpot.</div>
+      </div>
+    `;
+    return;
+  }
+
+  const cidades = [...new Set(prospeccaoCache.map(l => l.cidade).filter(Boolean))].sort();
+  const bairros = [...new Set(prospeccaoCache.map(l => l.bairro).filter(Boolean))].sort();
+  const categorias = [...new Set(prospeccaoCache.map(l => l.categoria).filter(Boolean))].sort();
+  const fontes = [...new Set(prospeccaoCache.map(l => l.fonte).filter(Boolean))].sort();
+
+  const filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
+
+  el.innerHTML = `
+    <div class="chart-card" style="border-left:3px solid var(--blue);margin-bottom:14px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;">
+        <h3 style="margin:0;">🎯 Prospecção — ${filtrados.length} de ${prospeccaoCache.length}</h3>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        <select id="pfCidade" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+          <option value="">Cidade (todas)</option>
+          ${cidades.map(c => `<option ${prospeccaoFiltro.cidade === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+        </select>
+        <select id="pfBairro" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+          <option value="">Bairro (todos)</option>
+          ${bairros.map(b => `<option ${prospeccaoFiltro.bairro === b ? 'selected' : ''}>${esc(b)}</option>`).join('')}
+        </select>
+        <select id="pfCategoria" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+          <option value="">Categoria (todas)</option>
+          ${categorias.map(c => `<option ${prospeccaoFiltro.categoria === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+        </select>
+        <select id="pfFonte" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+          <option value="">Fonte (todas)</option>
+          ${fontes.map(f => `<option value="${f}" ${prospeccaoFiltro.fonte === f ? 'selected' : ''}>${f}</option>`).join('')}
+        </select>
+        <select id="pfStatus" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+          <option value="">Status (todos)</option>
+          ${['pendente', 'atribuido', 'na_rota', 'sem_fit', 'criado_hubspot'].map(s => `<option value="${s}" ${prospeccaoFiltro.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+        <select id="pfJaExiste" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+          <option value="">Já existe no HubSpot? (todos)</option>
+          <option value="true" ${prospeccaoFiltro.jaExiste === 'true' ? 'selected' : ''}>Possível duplicata</option>
+          <option value="false" ${prospeccaoFiltro.jaExiste === 'false' ? 'selected' : ''}>Sem duplicata aparente</option>
+        </select>
+        <input id="pfNotaMin" type="number" step="0.1" placeholder="Nota mín." value="${prospeccaoFiltro.notaMin}" style="width:90px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+        <input id="pfAvaliacoesMin" type="number" placeholder="Avaliações mín." value="${prospeccaoFiltro.avaliacoesMin}" style="width:120px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
+        ${filtrados.length === 0 ? '<div class="empty-state">Nenhum lead bate com esses filtros.</div>' : filtrados.map(prospeccaoCardHTML).join('')}
+      </div>
+    </div>
+  `;
+
+  ['pfCidade', 'pfBairro', 'pfCategoria', 'pfFonte', 'pfStatus', 'pfJaExiste', 'pfNotaMin', 'pfAvaliacoesMin'].forEach(id => {
+    const campo = { pfCidade: 'cidade', pfBairro: 'bairro', pfCategoria: 'categoria', pfFonte: 'fonte', pfStatus: 'status', pfJaExiste: 'jaExiste', pfNotaMin: 'notaMin', pfAvaliacoesMin: 'avaliacoesMin' }[id];
+    const elInput = document.getElementById(id);
+    if (elInput) elInput.addEventListener('change', () => { prospeccaoFiltro[campo] = elInput.value; renderProspeccaoNova(); });
+  });
+
+  el.querySelectorAll('.prospeccao-atribuir').forEach(sel => {
+    sel.addEventListener('change', async () => {
+      const ownerId = sel.value || null;
+      await atualizarLeadProspeccao(sel.dataset.lead, { responsavel_owner_id: ownerId, status: ownerId ? 'atribuido' : 'pendente' });
+      renderProspeccaoNova();
+    });
+  });
+  el.querySelectorAll('.prospeccao-btn-rota').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const hojeISOStr = isoDate(new Date());
+      await atualizarLeadProspeccao(btn.dataset.lead, { status: 'na_rota', data_rota: hojeISOStr });
+      renderProspeccaoNova();
+    });
+  });
+  el.querySelectorAll('.prospeccao-btn-semfit').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Marcar este lead como "sem fit"? Ele sai da rota e da lista de pendentes.')) return;
+      await atualizarLeadProspeccao(btn.dataset.lead, { status: 'sem_fit' });
+      renderProspeccaoNova();
+    });
+  });
+  el.querySelectorAll('.prospeccao-btn-criar').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lead = prospeccaoCache.find(l => l.id === btn.dataset.lead);
+      if (!confirm(`Criar empresa "${lead.nome}" no HubSpot? Isso cria só a EMPRESA — o negócio (Deal) você cria depois, manualmente, quando houver interesse real.`)) return;
+      const msgEl = el.querySelector(`.prospeccao-msg[data-lead="${btn.dataset.lead}"]`);
+      criarEmpresaProspeccao(btn.dataset.lead, btn, msgEl);
+    });
+  });
+}
+
 
 function renderLeadsPraca() {
   const el = document.getElementById('leadsPracaContent');
