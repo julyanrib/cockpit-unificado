@@ -6621,6 +6621,32 @@ async function tokenDeSessaoGlobal() {
 }
 
 let prospeccaoCache = [];
+let prospeccaoPagina = 1;
+const prospeccaoSelecao = new Set(); // ids selecionados pro lote (persiste entre páginas)
+
+// Modal de confirmação próprio (substitui confirm() nativo nos fluxos de lote)
+function abrirModalConfirmacao({ titulo, corpoHTML, confirmarLabel, aoConfirmar }) {
+  const antigo = document.getElementById('modalConfirmacao');
+  if (antigo) antigo.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'modalConfirmacao';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(24,21,19,.45);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px;';
+  overlay.innerHTML = `
+    <div role="dialog" aria-modal="true" style="background:var(--panel);border:1px solid var(--line);border-radius:18px;max-width:520px;width:100%;max-height:80vh;overflow-y:auto;padding:22px 24px;box-shadow:0 12px 40px rgba(0,0,0,.25);">
+      <h3 style="margin:0 0 10px;font-family:'Space Grotesk',sans-serif;font-size:16.5px;">${titulo}</h3>
+      <div id="modalConfirmacaoCorpo" style="font-size:13px;line-height:1.55;">${corpoHTML}</div>
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
+        <button id="modalConfirmacaoCancelar" style="font-size:12.5px;font-weight:700;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:9px 16px;cursor:pointer;">Cancelar</button>
+        <button id="modalConfirmacaoOk" style="font-size:12.5px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:9px 18px;cursor:pointer;">${confirmarLabel}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const fechar = () => overlay.remove();
+  overlay.addEventListener('click', ev => { if (ev.target === overlay) fechar(); });
+  overlay.querySelector('#modalConfirmacaoCancelar').addEventListener('click', fechar);
+  overlay.querySelector('#modalConfirmacaoOk').addEventListener('click', () => aoConfirmar(overlay, fechar));
+  return overlay;
+}
 let prospeccaoFiltro = { cidade: '', bairro: '', notaMin: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '' };
 
 async function carregarProspeccao() {
@@ -6697,9 +6723,10 @@ function prospeccaoCardHTML(l) {
   const statusLabel = { pendente: 'Pendente', atribuido: 'Atribuído', na_rota: 'Na rota', sem_fit: 'Sem fit', criado_hubspot: 'Criado no HubSpot' }[l.status] || l.status;
 
   return `
-    <div class="prospeccao-card" data-lead="${l.id}" style="background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px 18px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px;">
+    <div class="prospeccao-card" data-lead="${l.id}" style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 14px;display:flex;flex-direction:column;gap:7px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-        <div style="min-width:0;">
+        ${sessaoAtual.role === 'manager' && l.status !== 'criado_hubspot' ? `<input type="checkbox" class="prospeccao-sel" data-lead="${l.id}" ${prospeccaoSelecao.has(l.id) ? 'checked' : ''} aria-label="Selecionar ${esc(l.nome)} pro lote" style="margin-top:3px;flex:none;width:16px;height:16px;cursor:pointer;">` : ''}
+        <div style="min-width:0;flex:1;">
           <b style="font-size:14px;">${esc(l.nome)}</b>
           <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc([l.categoria, l.bairro, l.cidade].filter(Boolean).join(' · '))}</div>
           ${l.nota != null ? `<div style="font-size:11.5px;color:var(--muted2);margin-top:2px;">⭐ ${l.nota} · ${l.avaliacoes || 0} avaliações · fonte: ${l.fonte}</div>` : ''}
@@ -6753,10 +6780,24 @@ async function renderProspeccaoNova() {
 
   const filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
 
+  // Paginação: 20 por página — a tela não monta mais centenas de cards de uma vez.
+  const POR_PAGINA = 20;
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA));
+  if (prospeccaoPagina > totalPaginas) prospeccaoPagina = totalPaginas;
+  if (prospeccaoPagina < 1) prospeccaoPagina = 1;
+  const pagina = filtrados.slice((prospeccaoPagina - 1) * POR_PAGINA, prospeccaoPagina * POR_PAGINA);
+  // seleção só vale pra quem ainda existe no cache e não foi criado
+  prospeccaoSelecao.forEach(id => {
+    const l = prospeccaoCache.find(x => x.id === id);
+    if (!l || l.status === 'criado_hubspot') prospeccaoSelecao.delete(id);
+  });
+  const nSel = prospeccaoSelecao.size;
+
   el.innerHTML = `
     <div class="chart-card" style="border-left:3px solid var(--blue);margin-bottom:14px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;">
         <h3 style="margin:0;">🎯 Prospecção — ${filtrados.length} de ${prospeccaoCache.length}</h3>
+        <span style="font-size:11.5px;color:var(--muted2);">mostrando ${filtrados.length === 0 ? 0 : (prospeccaoPagina - 1) * POR_PAGINA + 1}–${Math.min(prospeccaoPagina * POR_PAGINA, filtrados.length)} · pág. ${prospeccaoPagina} de ${totalPaginas}</span>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
         <select id="pfCidade" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
@@ -6787,16 +6828,84 @@ async function renderProspeccaoNova() {
         <input id="pfNotaMin" type="number" step="0.1" placeholder="Nota mín." value="${prospeccaoFiltro.notaMin}" style="width:90px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
         <input id="pfAvaliacoesMin" type="number" placeholder="Avaliações mín." value="${prospeccaoFiltro.avaliacoesMin}" style="width:120px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;">
-        ${filtrados.length === 0 ? '<div class="empty-state">Nenhum lead bate com esses filtros.</div>' : filtrados.map(prospeccaoCardHTML).join('')}
+      ${sessaoAtual.role === 'manager' ? `
+      <div id="prospeccaoLoteBar" style="display:${nSel > 0 ? 'flex' : 'none'};align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px;">
+        <b style="font-size:12.5px;"><span id="prospeccaoSelCount">${nSel}</span> selecionada(s)</b>
+        <button id="prospeccaoCriarLote" style="font-size:12px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:8px 16px;cursor:pointer;">Criar no HubSpot… (revisar lote)</button>
+        <button id="prospeccaoLimparSel" style="font-size:12px;font-weight:700;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;">Limpar seleção</button>
+      </div>` : ''}
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${pagina.length === 0 ? '<div class="empty-state">Nenhum lead bate com esses filtros.</div>' : pagina.map(prospeccaoCardHTML).join('')}
       </div>
+      ${totalPaginas > 1 ? `
+      <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;">
+        <button id="prospeccaoPgAnt" ${prospeccaoPagina <= 1 ? 'disabled' : ''} style="font-size:12px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer;${prospeccaoPagina <= 1 ? 'opacity:.4;cursor:default;' : ''}">← anterior</button>
+        <span style="font-size:12px;color:var(--muted2);">página ${prospeccaoPagina} de ${totalPaginas}</span>
+        <button id="prospeccaoPgProx" ${prospeccaoPagina >= totalPaginas ? 'disabled' : ''} style="font-size:12px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer;${prospeccaoPagina >= totalPaginas ? 'opacity:.4;cursor:default;' : ''}">próxima →</button>
+      </div>` : ''}
     </div>
   `;
+
+  const pgAnt = document.getElementById('prospeccaoPgAnt');
+  const pgProx = document.getElementById('prospeccaoPgProx');
+  if (pgAnt) pgAnt.addEventListener('click', () => { prospeccaoPagina--; renderProspeccaoNova(); });
+  if (pgProx) pgProx.addEventListener('click', () => { prospeccaoPagina++; renderProspeccaoNova(); });
+
+  el.querySelectorAll('.prospeccao-sel').forEach(chk => {
+    chk.addEventListener('change', () => {
+      if (chk.checked) prospeccaoSelecao.add(chk.dataset.lead); else prospeccaoSelecao.delete(chk.dataset.lead);
+      const bar = document.getElementById('prospeccaoLoteBar');
+      const cnt = document.getElementById('prospeccaoSelCount');
+      if (cnt) cnt.textContent = prospeccaoSelecao.size;
+      if (bar) bar.style.display = prospeccaoSelecao.size > 0 ? 'flex' : 'none';
+    });
+  });
+  const btnLimparSel = document.getElementById('prospeccaoLimparSel');
+  if (btnLimparSel) btnLimparSel.addEventListener('click', () => { prospeccaoSelecao.clear(); renderProspeccaoNova(); });
+
+  const btnLote = document.getElementById('prospeccaoCriarLote');
+  if (btnLote) btnLote.addEventListener('click', () => {
+    const itens = [...prospeccaoSelecao].map(id => prospeccaoCache.find(l => l.id === id)).filter(Boolean);
+    if (itens.length === 0) return;
+    const dups = itens.filter(l => l.ja_existe_hubspot);
+    abrirModalConfirmacao({
+      titulo: `Revisar lote — ${itens.length} empresa(s) pro HubSpot`,
+      confirmarLabel: `Confirmar criação`,
+      corpoHTML: `
+        <p style="margin:0 0 8px;">Vão ser criadas <b>${itens.length}</b> empresa(s) no HubSpot, uma por uma. Isso não tem desfazer em massa.</p>
+        ${dups.length > 0 ? `
+          <p style="margin:0 0 6px;color:var(--red);font-weight:700;">⚠️ ${dups.length} com possível duplicata no HubSpot:</p>
+          <ul style="margin:0 0 8px;padding-left:18px;color:var(--red);">${dups.slice(0, 10).map(l => `<li>${esc(l.nome)}</li>`).join('')}${dups.length > 10 ? `<li>… e mais ${dups.length - 10}</li>` : ''}</ul>
+          <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;margin-bottom:6px;cursor:pointer;"><input type="checkbox" id="modalPularDups" checked> Pular as possíveis duplicatas (recomendado)</label>
+        ` : '<p style="margin:0 0 6px;color:var(--green);">Nenhuma duplicata aparente no lote. ✓</p>'}
+        <div id="modalLoteProgresso" style="font-size:12px;color:var(--muted2);margin-top:6px;"></div>`,
+      aoConfirmar: async (overlay, fechar) => {
+        const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+        okBtn.disabled = true;
+        const pular = overlay.querySelector('#modalPularDups');
+        const fila = itens.filter(l => !(pular && pular.checked && l.ja_existe_hubspot));
+        const prog = overlay.querySelector('#modalLoteProgresso');
+        let feitos = 0, falhas = 0;
+        for (const l of fila) {
+          prog.textContent = `Criando ${feitos + falhas + 1} de ${fila.length}: ${l.nome}…`;
+          const fakeBtn = { disabled: false, textContent: '' };
+          const fakeMsg = { textContent: '', style: {} };
+          await criarEmpresaProspeccao(l.id, fakeBtn, fakeMsg);
+          const criou = prospeccaoCache.find(x => x.id === l.id)?.status === 'criado_hubspot';
+          if (criou) { feitos++; prospeccaoSelecao.delete(l.id); } else falhas++;
+        }
+        prog.innerHTML = `<b style="color:var(--green);">${feitos} criada(s)</b>${falhas > 0 ? ` · <b style="color:var(--red);">${falhas} falharam</b> (ficam na lista pra tentar de novo)` : ''}${(itens.length - fila.length) > 0 ? ` · ${itens.length - fila.length} duplicata(s) pulada(s)` : ''}.`;
+        okBtn.textContent = 'Fechar';
+        okBtn.disabled = false;
+        okBtn.onclick = () => { fechar(); renderProspeccaoNova(); };
+      }
+    });
+  });
 
   ['pfCidade', 'pfBairro', 'pfCategoria', 'pfFonte', 'pfStatus', 'pfJaExiste', 'pfNotaMin', 'pfAvaliacoesMin'].forEach(id => {
     const campo = { pfCidade: 'cidade', pfBairro: 'bairro', pfCategoria: 'categoria', pfFonte: 'fonte', pfStatus: 'status', pfJaExiste: 'jaExiste', pfNotaMin: 'notaMin', pfAvaliacoesMin: 'avaliacoesMin' }[id];
     const elInput = document.getElementById(id);
-    if (elInput) elInput.addEventListener('change', () => { prospeccaoFiltro[campo] = elInput.value; renderProspeccaoNova(); });
+    if (elInput) elInput.addEventListener('change', () => { prospeccaoFiltro[campo] = elInput.value; prospeccaoPagina = 1; renderProspeccaoNova(); });
   });
 
   el.querySelectorAll('.prospeccao-atribuir').forEach(sel => {
@@ -7007,19 +7116,32 @@ function renderLeadsPraca() {
     btnEnviarTodos.addEventListener('click', async () => {
       const cards = [...el.querySelectorAll('[data-lead]')];
       if (!cards.length) return;
-      if (!confirm(`Criar ${cards.length} negócios no HubSpot agora, um por um? Isso não tem desfazer em massa.`)) return;
-      btnEnviarTodos.disabled = true;
-      let ok = 0;
-      for (const cardEl of cards) {
-        const pracaNome = cardEl.dataset.praca, li = Number(cardEl.dataset.li);
-        const praca = pracasParaMostrar.find(p => p.nome === pracaNome);
-        const lead = praca && praca.leads[li];
-        const botaoEl = cardEl.querySelector('.lp-criar'), msgEl = cardEl.querySelector('.lp-msg');
-        if (!lead || !botaoEl) continue;
-        const certo = await criarNegocioNoHubspot(lead, cardEl, msgEl, botaoEl);
-        if (certo) ok++;
-      }
-      btnEnviarTodos.textContent = `${ok} de ${cards.length} criados ✓`;
+      abrirModalConfirmacao({
+        titulo: `Revisar lote — ${cards.length} negócio(s) pro HubSpot`,
+        confirmarLabel: 'Confirmar criação',
+        corpoHTML: `<p style="margin:0 0 8px;">Vão ser criados <b>${cards.length}</b> negócio(s) no HubSpot, um por um. Isso não tem desfazer em massa.</p><div id="modalLoteProgresso" style="font-size:12px;color:var(--muted2);"></div>`,
+        aoConfirmar: async (overlay, fechar) => {
+          const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+          okBtn.disabled = true;
+          btnEnviarTodos.disabled = true;
+          const prog = overlay.querySelector('#modalLoteProgresso');
+          let ok = 0;
+          for (let i = 0; i < cards.length; i++) {
+            const cardEl = cards[i];
+            const pracaNome = cardEl.dataset.praca, li = Number(cardEl.dataset.li);
+            const praca = pracasParaMostrar.find(p => p.nome === pracaNome);
+            const lead = praca && praca.leads[li];
+            const botaoEl = cardEl.querySelector('.lp-criar'), msgEl = cardEl.querySelector('.lp-msg');
+            if (!lead || !botaoEl) continue;
+            prog.textContent = `Criando ${i + 1} de ${cards.length}: ${lead.nome}…`;
+            const certo = await criarNegocioNoHubspot(lead, cardEl, msgEl, botaoEl);
+            if (certo) ok++;
+          }
+          prog.innerHTML = `<b style="color:var(--green);">${ok} de ${cards.length} criados ✓</b>`;
+          btnEnviarTodos.textContent = `${ok} de ${cards.length} criados ✓`;
+          okBtn.textContent = 'Fechar'; okBtn.disabled = false; okBtn.onclick = fechar;
+        }
+      });
     });
   }
 }
