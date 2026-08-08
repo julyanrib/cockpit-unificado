@@ -4448,10 +4448,18 @@ function renderResumoSemanal() {
   `;
 
   resumoEl.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:4px;">
-      <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);">Semana atual: ${rs.janela.atual} · Semana anterior: ${rs.janela.anterior}</span>
-      <h1 style="font-family:'Poppins',sans-serif;font-size:27px;font-weight:800;margin:0;letter-spacing:-.015em;">Resumo semanal</h1>
-      <span class="updated" style="margin:2px 0 6px;">Números atualizados em ${rs.numerosAtualizadosEmFmt}${rs.geradoEmFmt ? ` · Análise escrita em ${rs.geradoEmFmt}` : ''}</span>
+    <div class="cockpit-hero-combo" style="align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Semana · ${rs.janela.atual}</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">O que mudou e o que eu faço?</h1>
+      </div>
+      <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
+      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${k.atual.ganhos}</div><div style="font-size:11px;color:var(--dark-mut);">ganhos na semana</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${k.atual.reunioes < k.anterior.reunioes ? '#FF6B78' : 'var(--dark-ink)'};">${k.anterior.reunioes}→${k.atual.reunioes}</div><div style="font-size:11px;color:var(--dark-mut);">reuniões marcadas</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${k.atual.perdidos}</div><div style="font-size:11px;color:var(--dark-mut);">perdidos na semana</div></div>
+      </div>
+      <span style="margin-left:auto;font-size:11px;color:var(--dark-mut);">Números atualizados em ${rs.numerosAtualizadosEmFmt}${rs.geradoEmFmt ? ` · Análise escrita em ${rs.geradoEmFmt}` : ''}</span>
     </div>
 
     ${heroHtml}
@@ -7781,7 +7789,39 @@ async function renderPDIs() {
   if (sessaoAtual.role === 'manager') {
     if (!pdiSelecionado) pdiSelecionado = DATA.reps[0].ownerId;
     const r = DATA.reps.find(x => x.ownerId === pdiSelecionado) || DATA.reps[0];
+
+    // Banner "Pessoas" (Claude Design item 4): data_um_a_um é <input type="date"> (ISO),
+    // então comparar com hoje é seguro. "Sem plano ativo" = nenhum compromisso ainda ou
+    // 100% cumprido sem próxima data marcada. Nada aqui é estimado.
+    const hojeISO = isoDate(new Date());
+    const inicioMes = hojeISO.slice(0, 7);
+    let pdisVencidos = 0, semPlanoAtivo = 0, feitosNoMes = 0;
+    DATA.reps.forEach(x => {
+      const estado = getPdiState(x.ownerId, x.compromissos.length);
+      const temCompromisso = x.compromissos.length > 0;
+      const tudoFeito = temCompromisso && estado.checked.filter(Boolean).length === x.compromissos.length;
+      if (!temCompromisso || tudoFeito) semPlanoAtivo++;
+      if (estado.data) {
+        if (estado.data < hojeISO && !tudoFeito) pdisVencidos++;
+        if (estado.data.slice(0, 7) === inicioMes && estado.data <= hojeISO) feitosNoMes++;
+      }
+    });
+    const bannerPessoas = `
+      <div class="cockpit-hero-combo" style="align-items:center;">
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Pessoas · Desenvolvimento + Coaching</span>
+          <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">Quem precisa de mim no 1:1?</h1>
+        </div>
+        <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
+        <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${pdisVencidos > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${pdisVencidos}</div><div style="font-size:11px;color:var(--dark-mut);">PDIs vencidos</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${semPlanoAtivo > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${semPlanoAtivo}</div><div style="font-size:11px;color:var(--dark-mut);">1:1 sem plano ativo</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${feitosNoMes}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${DATA.reps.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">1:1 feitos no mês</div></div>
+        </div>
+      </div>`;
+
     el.innerHTML = `
+      ${bannerPessoas}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
         ${DATA.reps.map(x => `
           <button class="pdi-chip" data-owner="${x.ownerId}" style="cursor:pointer;font-size:12.5px;font-weight:700;border-radius:var(--r-pill);padding:10px 15px;min-height:40px;display:inline-flex;align-items:center;background:${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--panel)'};color:${x.ownerId === r.ownerId ? '#fff' : 'var(--muted)'};border:1px solid ${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--line)'};">${x.name}</button>
@@ -7800,6 +7840,7 @@ async function renderPDIs() {
           <span class="pdiStatus" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
           <div class="pdiLista" style="margin-top:12px;"><div class="empty-state">Carregando...</div></div>
         </div>
+
       </div>
     `;
     el.querySelectorAll('.pdi-chip').forEach(chip => {
