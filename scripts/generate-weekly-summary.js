@@ -512,7 +512,7 @@ async function main() {
 
   // Diagnóstico sem precisar abrir o log do Actions: toda falha de chamada fica
   // registrada no próprio arquivo (o incidente de 04-08/08 ficou 4 dias invisível).
-  if (FALHAS_IA.length) output._falhasIA = { em: now.toISOString(), erros: FALHAS_IA };
+  if (FALHAS_IA.length) output._falhasIA = { em: output.geradoEm, erros: FALHAS_IA };
   fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), JSON.stringify(output, null, 2));
   console.log(`OK — data/resumo-semanal.json gravado (${rodarComoFechamentoMensal ? 'FECHAMENTO MENSAL' : 'semanal'}).`);
 
