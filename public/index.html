@@ -3998,7 +3998,7 @@ function renderAgenda() {
 
 
   const souRep = !!(sessaoAtual && sessaoAtual.role === 'rep');
-  if (agendaEstado.modo === null) agendaEstado.modo = souRep ? 'hora' : 'matriz';
+  agendaEstado.modo = 'hora'; // um modo só: o calendário
 
   // Sem dado do build, cai no rascunho embutido — com tarja, pra ninguém tratar como vivo.
   const usandoRascunho = !DATA.agenda && typeof AGENDA_RASCUNHO !== 'undefined';
@@ -4060,6 +4060,26 @@ function renderAgenda() {
   // tem essa Agenda embutida em Daily & Ritmo. "Dias sem compromisso" conta os dias
   // úteis da semana atual (seg-sex, +sáb se aplicável) sem NENHUM evento do próprio
   // executivo — mesmo dado de naSemana já filtrado, nada novo buscado.
+  // Banner preto padrão também pro GESTOR (Julyan, 08/08): mesma faixa das outras abas,
+  // com a pergunta e os 3 números que importam da semana do time.
+  const bannerAgendaGestor = !souRep ? (() => {
+    const semNadaCount = time.filter(r => !naSemana.some(e => e.ownerId === String(r.ownerId))).length;
+    const quentesFora = agendaMarcarQuentes(naSemana, quentes).length;
+    return `
+    <div class="cockpit-hero-combo" style="align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:4px;flex:none;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Agenda do time · ${rotulo}</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">A semana do time está coberta?</h1>
+      </div>
+      <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
+      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;flex:1;min-width:0;flex-wrap:wrap;">
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${naSemana.length}</div><div style="font-size:11px;color:var(--dark-mut);">compromissos na semana</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${semNadaCount > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${semNadaCount}</div><div style="font-size:11px;color:var(--dark-mut);">executivos sem nada</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${quentesFora > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${quentesFora}</div><div style="font-size:11px;color:var(--dark-mut);">quentes sem compromisso</div></div>
+      </div>
+    </div>`;
+  })() : '';
+
   const bannerAgendaExec = souRep ? (() => {
     const diasComEvento = new Set(naSemana.map(e => agendaChave(e.inicio)));
     const diasSemCompromisso = dias.filter(d => !diasComEvento.has(agendaChave(d))).length;
@@ -4105,7 +4125,7 @@ function renderAgenda() {
     </div>`;
   })() : '';
 
-  let h = bannerAgendaExec +
+  let h = bannerAgendaGestor + bannerAgendaExec +
     (souRep ? '<div class="ag-exec-cols">' + buracosCardExec + '<div class="ag-exec-main">' : '') +
     '<div class="ag-wrap">' +
     '<div class="ag-placar">' +
@@ -4165,28 +4185,37 @@ function renderAgenda() {
 
   // ranking de planejamento — premia comportamento, não resultado
 
-  h += '<div class="ag-ctrl"><div class="ag-seg" role="group" aria-label="Modo de visualização">' +
-    (time.length > 1 ? '<button data-agmodo="matriz" aria-pressed="' + (agendaEstado.modo === 'matriz') + '">Visão da semana</button>' : '') +
-    '<button data-agmodo="hora" aria-pressed="' + (agendaEstado.modo === 'hora') + '">Calendário</button></div>' +
+  // Otimização 08/08 (Julyan): agenda de UM modo só — o calendário estilo Notion.
+  // A matriz e o modo Time morreram; a legenda de 6 cores também (a cor está no próprio
+  // evento e o rótulo na ficha). Sobram: filtro de tipo, executivos (gestor) e sábado.
+  const ehGestorAg = time.length > 1;
+  h += '<div class="ag-ctrl">' +
     '<div class="ag-seg" role="group" aria-label="Filtro de tipo">' +
     '<button data-agfiltro="tudo" aria-pressed="' + (agendaEstado.filtro === 'tudo') + '">Tudo</button>' +
     '<button data-agfiltro="reuniao" aria-pressed="' + (agendaEstado.filtro === 'reuniao') + '">Reuniões</button>' +
-    '<button data-agfiltro="follow_up" aria-pressed="' + (agendaEstado.filtro === 'follow_up') + '">Follow-ups</button></div>' +
-    '<div class="ag-key">';
-  Object.keys(AGENDA_TIPOS).forEach(function (t) {
-    h += '<span><i style="background:' + AGENDA_TIPOS[t].cor + '"></i>' + AGENDA_TIPOS[t].rotulo + '</span>';
-  });
-  h += '<span><i style="background:var(--amber)"></i>Janela nobre</span>' +
-    '<span><i style="background:var(--red)"></i>Remarcado</span>' +
+    '<button data-agfiltro="follow_up" aria-pressed="' + (agendaEstado.filtro === 'follow_up') + '">Follow-ups</button>' +
+    '<button data-agfiltro="rota" aria-pressed="' + (agendaEstado.filtro === 'rota') + '">Visitas</button></div>' +
+    (ehGestorAg ? '<div class="ag-seg" role="group" aria-label="Executivo">' +
+      '<button data-agrep="" aria-pressed="' + (!agendaEstado.repSel) + '">Time todo</button>' +
+      time.map(function (r) {
+        const oid = String(r.ownerId);
+        return '<button data-agrep="' + oid + '" aria-pressed="' + (String(agendaEstado.repSel || '') === oid) + '">' + agendaEsc(String(r.name || '').split(' ')[0]) + '</button>';
+      }).join('') + '</div>' : '') +
+    '<div class="ag-key">' +
     (!temSabado ? '<button class="ag-sab-link" data-agsab>' +
       (mostraSabado ? 'ocultar sábado' : 'mostrar sábado') + '</button>' : '') +
     '</div></div>';
 
-  h += (agendaEstado.modo === 'hora'
-      ? (agendaEstado.repSel && time.length > 1
-          ? '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;"><span style="font-size:12px;color:var(--muted);">Mostrando só</span><b style="font-size:12.5px;">' + agendaEsc(((DATA.reps || []).find(r => String(r.ownerId) === String(agendaEstado.repSel)) || {}).name || '') + '</b><button data-agreptodos style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-pill);padding:4px 12px;font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;">ver o time todo ×</button></div>'
-          : '') + '<div id="agFullCal"></div>'
-      : agendaMatrizTime(dias, naSemana, time, hojeK));
+  // gestor: quem está com a semana em branco vira UMA linha acima do calendário
+  // (o papel que a matriz cumpria, sem uma tela inteira pra isso).
+  if (ehGestorAg && semNada.length > 0 && !agendaEstado.repSel) {
+    h += '<div style="display:flex;align-items:flex-start;gap:9px;background:var(--red-soft);border:1px solid rgba(229,26,49,.25);border-radius:var(--r-md);padding:10px 14px;margin-bottom:12px;font-size:12.5px;line-height:1.6;">' +
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="var(--red)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex:none;margin-top:3px;"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg>' +
+      '<span><b>' + agendaPlural(semNada.length, 'executivo') + ' com a semana em branco:</b> ' +
+      semNada.map(function (r) { return '<button data-agrep="' + String(r.ownerId) + '" style="background:none;border:none;padding:0;color:var(--red);font-weight:700;cursor:pointer;font-family:inherit;font-size:12.5px;border-bottom:1px dotted var(--red);">' + agendaEsc(String(r.name || '').split(' ')[0]) + '</button>'; }).join(', ') +
+      ' — cobrar na daily.</span></div>';
+  }
+  h += '<div id="agFullCal"></div>';
 
   h += '<div class="ag-det" id="agDet" data-open="0">' +
     '<button class="agx" id="agDetX" aria-label="Fechar">×</button>' +
@@ -4509,8 +4538,8 @@ document.addEventListener('click', function (ev) {
   const md = ev.target.closest('[data-agmodo]');
   if (md) { agendaEstado.modo = md.dataset.agmodo; agendaEstado.repSel = null; renderAgenda(); return; }
   const mx = ev.target.closest('[data-agmatriz]');
-  if (mx) { agendaEstado.repSel = mx.dataset.agmatriz; agendaEstado.modo = 'hora'; renderAgenda(); return; }
-  if (ev.target.closest('[data-agreptodos]')) { agendaEstado.repSel = null; renderAgenda(); return; }
+  const rp = ev.target.closest('[data-agrep]');
+  if (rp) { agendaEstado.repSel = rp.dataset.agrep || null; renderAgenda(); return; }
   const f = ev.target.closest('[data-agfiltro]');
   if (f) { agendaEstado.filtro = f.dataset.agfiltro; renderAgenda(); return; }
   if (ev.target.closest('[data-agsab]')) { agendaEstado.sabado = !agendaEstado.sabado; renderAgenda(); return; }
@@ -7317,13 +7346,21 @@ async function renderBannerComunicados() {
   const linkHistorico = `<a id="linkHistoricoComunicados">Ver todos os comunicados (${comunicadosCache.length})</a>`;
 
   if (naoLidos.length === 0) {
-    el.innerHTML = `
-      <div style="display:flex;justify-content:flex-end;gap:12px;align-items:center;margin-bottom:10px;">
-        ${linkHistorico}
-        ${botaoNovo}
-      </div>
-    `;
+    // Otimização 08/08: sem comunicado novo, nada de faixa própria flutuando no topo —
+    // o link e o botão entram discretos no FIM da linha do "HubSpot atualizado em...".
+    el.innerHTML = '';
+    const linhaUpdated = document.getElementById('updatedLine') ? document.getElementById('updatedLine').parentElement : null;
+    const antigo = document.getElementById('comunicadosInline');
+    if (antigo) antigo.remove();
+    if (linhaUpdated) {
+      linhaUpdated.insertAdjacentHTML('beforeend',
+        `<span id="comunicadosInline" style="margin-left:auto;display:inline-flex;gap:12px;align-items:center;">${linkHistorico}${botaoNovo}</span>`);
+    } else {
+      el.innerHTML = `<div style="display:flex;justify-content:flex-end;gap:12px;align-items:center;margin-bottom:10px;">${linkHistorico}${botaoNovo}</div>`;
+    }
   } else {
+    const antigoInline = document.getElementById('comunicadosInline');
+    if (antigoInline) antigoInline.remove();
     const c = naoLidos[0];
     const imgUrl = await urlAssinadaComunicado(c.imagem_caminho);
     el.innerHTML = `
@@ -7346,7 +7383,8 @@ async function renderBannerComunicados() {
   const btnLido = document.getElementById('btnMarcarLido');
   if (btnLido) btnLido.addEventListener('click', () => marcarComoLido(btnLido.dataset.id));
 
-  document.getElementById('linkHistoricoComunicados').addEventListener('click', abrirHistoricoComunicados);
+  const linkHist = document.getElementById('linkHistoricoComunicados');
+  if (linkHist) linkHist.addEventListener('click', abrirHistoricoComunicados);
 
   const btnNovo = document.getElementById('btnNovoComunicado');
   if (btnNovo) btnNovo.addEventListener('click', () => document.getElementById('novoComunicadoOverlay').classList.add('show'));
