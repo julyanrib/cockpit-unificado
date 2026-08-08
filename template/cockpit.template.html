@@ -7903,21 +7903,33 @@ async function renderProspeccaoNova() {
     </div>`;
   }).join('');
 
-  // Backlog aprovado (Claude Design): aprovadas = já viraram empresa no HubSpot;
-  // visitadas = dessas, quantas já aparecem com negócio ativo no funil real
-  // (match por nome, normalizado, contra TODOS os donos — não é estimativa, é
-  // olhar se o negócio já saiu da conta-alvo crua e virou trabalho de verdade).
+  // Backlog aprovado — "visitadas" pelo sinal REAL do Expogo (combinado com o Julyan):
+  //   Follow up  -> vira OBSERVAÇÃO no HubSpot
+  //   Reunião    -> vira REUNIÃO no HubSpot
+  //   Visita/revisita -> vira TAREFA no HubSpot  <- este é o sinal de "visitada"
+  // Antes usava um proxy (lead aprovado que aparece no funil) — que errava nos dois
+  // sentidos: negócio pode entrar no funil sem ninguém ter ido lá, e revisita não move
+  // etapa nenhuma. Agora é a mesma regra da Daily: existe tarefa de visita com o nome
+  // do restaurante = o time foi lá. Janela do fetch: últimos 60 dias (ciclo mensal coberto).
   let backlogAprovadoHTML = '';
   if (souGestorProsp) {
-    const normNomeProsp = s => String(s || '').toLowerCase().trim();
-    const nomesNoFunil = new Set();
-    Object.values(DATA.funilLeads || {}).forEach(lista => (lista || []).forEach(d => { if (d.name) nomesNoFunil.add(normNomeProsp(d.name)); }));
+    // normalização dos dois lados do match: minúsculas, sem acento, espaços colapsados —
+    // "Planeta Açaí" (Outscraper) tem que bater com "Planeta Acai" (título da tarefa).
+    const normNomeProsp = s => String(s || '').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/\s+/g, ' ').trim();
+    const nomesVisitados = new Set();
+    if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+      agendaNormalizar(DATA.agenda)
+        .filter(e => e.tipo === 'rota') // tarefa Visita/Revisita do Expogo (interno/reunião/follow-up não contam)
+        .forEach(e => { if (e.cliente) nomesVisitados.add(normNomeProsp(e.cliente)); });
+    }
     const porCidadeBacklog = {};
     prospeccaoCache.forEach(l => {
       if (l.status !== 'criado_hubspot' || !l.cidade) return;
       const c = (porCidadeBacklog[l.cidade] = porCidadeBacklog[l.cidade] || { aprovadas: 0, visitadas: 0 });
       c.aprovadas++;
-      if (nomesNoFunil.has(normNomeProsp(l.nome))) c.visitadas++;
+      if (nomesVisitados.has(normNomeProsp(l.nome))) c.visitadas++;
     });
     const cidadesBacklog = Object.keys(porCidadeBacklog).sort((a, b) => porCidadeBacklog[b].aprovadas - porCidadeBacklog[a].aprovadas);
     if (cidadesBacklog.length > 0) {
@@ -7926,7 +7938,7 @@ async function renderProspeccaoNova() {
         <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--green)" stroke-width="1.75" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
           <h3 style="margin:0;">Backlog aprovado · ${prospeccaoCache.filter(l => l.status === 'criado_hubspot').length}</h3>
-          <span style="font-size:11px;color:var(--muted2);">vira visita obrigatória no Expogo</span>
+          <span style="font-size:11px;color:var(--muted2);" title="Visitada = existe tarefa de Visita/Revisita no HubSpot (marcada pelo executivo no Expogo) com o nome do restaurante. Janela: últimos 60 dias.">vira visita obrigatória no Expogo · visitada = tarefa de visita no Hub</span>
         </div>
         <div style="display:grid;gap:9px;margin-top:12px;font-variant-numeric:tabular-nums;">
           ${cidadesBacklog.map(cid => {
