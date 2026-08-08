@@ -550,6 +550,23 @@
   /* ======================= AGENDA DA SEMANA ======================= */
   /* Usa só tokens do :root */
   .ag-wrap{--ag-reu:var(--green);--ag-fup:var(--violet);--ag-rota:var(--blue);}
+  /* Frente 2 — FullCalendar tematizado nos tokens do cockpit */
+  #agFullCal{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px;box-shadow:var(--shadow-sm);}
+  .fc{--fc-border-color:var(--line);--fc-page-bg-color:transparent;--fc-today-bg-color:rgba(224,166,74,.10);--fc-now-indicator-color:var(--red);font-size:12px;font-family:'DM Sans',sans-serif;}
+  .fc .fc-toolbar-title{font-family:'Poppins',sans-serif;font-size:15px;font-weight:800;color:var(--ink);letter-spacing:-.01em;}
+  .fc .fc-toolbar.fc-header-toolbar{margin-bottom:12px;}
+  .fc .fc-button{background:var(--panel2);border:1px solid var(--line);color:var(--muted);border-radius:var(--r-pill);padding:5px 13px;font-size:11.5px;font-weight:700;box-shadow:none !important;text-transform:none;}
+  .fc .fc-button:hover{background:var(--sunk);color:var(--ink);}
+  .fc .fc-button-primary:not(:disabled).fc-button-active,.fc .fc-button-primary:not(:disabled):active{background:var(--ink);color:var(--panel);border-color:var(--ink);}
+  .fc .fc-col-header-cell-cushion{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);text-decoration:none;padding:9px 4px;}
+  .fc .fc-timegrid-slot-label-cushion,.fc .fc-list-day-side-text,.fc .fc-list-day-text{font-size:10.5px;color:var(--muted2);font-weight:700;text-decoration:none;}
+  .fc .fc-timegrid-slot{height:26px;}
+  .fc .fc-event{border:none;border-radius:8px;padding:2px 6px;font-size:11px;font-weight:700;cursor:pointer;box-shadow:0 1px 3px rgba(26,22,19,.14);}
+  .fc .fc-event:hover{filter:brightness(1.06);}
+  .fc .fc-event .fc-event-time{font-weight:600;opacity:.85;}
+  .fc .fc-list-event:hover td{background:var(--panel2);}
+  .fc .fc-list-empty{background:var(--panel2);color:var(--muted);font-size:12.5px;}
+  .fc a{color:inherit;}
   /* Correção v3 1.1 — Rota & Agenda do executivo: Buracos da semana à esquerda, grade à direita */
   .ag-exec-cols{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start;margin-top:16px;}
   .ag-exec-main{min-width:0;}
@@ -1216,6 +1233,9 @@
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- FullCalendar 6 (licença MIT, gratuito) — calendário da aba Rota & Agenda.
+     Se o CDN falhar, o modo calendário cai num aviso e a Visão da semana/Time seguem funcionando. -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
 <script>
 // ============ CARREGA DATA INJETADA PELO BUILD ============
 const DATA = JSON.parse(document.getElementById('cockpit-data').textContent);
@@ -4096,7 +4116,7 @@ function renderAgenda() {
   // conta reps sem nada nesta semana — alimenta o alerta e o agrupamento da grade
   const semNada = time.filter(r => !naSemana.some(e => e.ownerId === String(r.ownerId)));
 
-  if (horiz.size < 6) {
+  if (horiz.size < 6 && !souRep) { // v3/Frente2: pro executivo o card Buracos da semana já cobre — dois avisos da mesma coisa era poluição
     const podeCoaching = time.length > 1 && typeof activateTab === 'function' && document.getElementById('tabBtnCoaching');
     h += '<div class="ag-alerta-faixa"><span class="pt"></span><div class="ag-af-c">' +
       '<b>A agenda para frente está quase vazia</b>' +
@@ -4141,7 +4161,7 @@ function renderAgenda() {
   h += '<div class="ag-ctrl"><div class="ag-seg" role="group" aria-label="Modo de visualização">' +
     (time.length > 1 ? '<button data-agmodo="matriz" aria-pressed="' + (agendaEstado.modo === 'matriz') + '">Visão da semana</button>' : '') +
     '<button data-agmodo="time" aria-pressed="' + (agendaEstado.modo === 'time') + '">Time</button>' +
-    '<button data-agmodo="hora" aria-pressed="' + (agendaEstado.modo === 'hora') + '">Grade por hora</button></div>' +
+    '<button data-agmodo="hora" aria-pressed="' + (agendaEstado.modo === 'hora') + '">Calendário</button></div>' +
     '<div class="ag-seg" role="group" aria-label="Filtro de tipo">' +
     '<button data-agfiltro="tudo" aria-pressed="' + (agendaEstado.filtro === 'tudo') + '">Tudo</button>' +
     '<button data-agfiltro="reuniao" aria-pressed="' + (agendaEstado.filtro === 'reuniao') + '">Reuniões</button>' +
@@ -4157,7 +4177,7 @@ function renderAgenda() {
     '</div></div>';
 
   h += (agendaEstado.modo === 'hora'
-      ? agendaGradeHora(dias, vis, time, hojeK, mostraSabado, temSabado)
+      ? '<div id="agFullCal"></div>'
       : agendaEstado.modo === 'matriz'
         ? agendaMatrizTime(dias, naSemana, time, hojeK)
         : agendaGradeTime(dias, vis, naSemana, doTime, time, hojeK, semNada, mostraSabado, temSabado));
@@ -4168,7 +4188,12 @@ function renderAgenda() {
     '<a class="aglink" id="agDetA" href="#" target="_blank" rel="noopener">Abrir no HubSpot →</a></div></div>' +
     (souRep ? '</div></div>' : '');
 
+  // guarda pro montarFullCalendar (chamado depois do innerHTML, mais abaixo)
+  agendaEstado._fcDados = { dias, vis, souRep };
+
   box.innerHTML = h;
+
+  if (agendaEstado.modo === 'hora') montarFullCalendar();
 
   // ETAPA 3: painel "Começar rota" do dia — só pro executivo (rota é individual) e só
   // quando a semana em foco é a atual (não faz sentido "começar rota" de uma semana
@@ -4500,7 +4525,7 @@ document.addEventListener('click', function (ev) {
     agendaEstado.modo = 'hora';
     renderAgenda();
     setTimeout(() => {
-      const grade = document.querySelector('.ag-grade');
+      const grade = document.getElementById('agFullCal') || document.querySelector('.ag-grade');
       if (grade) grade.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 60);
     return;
@@ -5388,6 +5413,155 @@ function wireDetailInteractions(r, root, idPrefix) {
     cb.addEventListener('click', () => { cb.classList.toggle('checked'); persistPdi(); });
   });
   dataInput.addEventListener('input', persistPdi);
+}
+
+
+// ============ Frente 2 — CALENDÁRIO (FullCalendar) + FICHA DO COMPROMISSO ============
+// O calendário substitui a grade por hora artesanal. Clique num compromisso abre a
+// ficha no drawer: TEMPERATURA do lead em destaque (é a pergunta nº1 do Julyan antes
+// de sair pra rua), situação no funil, e a CADÊNCIA — a trilha de compromissos do
+// mesmo cliente, com alerta quando um quente está sem próximo passo marcado.
+let agFullCalInstancia = null;
+
+function montarFullCalendar() {
+  const el = document.getElementById('agFullCal');
+  if (!el) return;
+  if (typeof FullCalendar === 'undefined') {
+    // CDN fora do ar: aviso honesto, e os modos Visão da semana/Time seguem servindo.
+    el.innerHTML = '<div class="empty-state">O calendário não carregou (biblioteca externa indisponível). Use a Visão da semana enquanto isso.</div>';
+    return;
+  }
+  const d = agendaEstado._fcDados || {};
+  const dias = d.dias || [];
+  const eventos = (d.vis || []).map(e => {
+    const tipoDef = AGENDA_TIPOS[e.tipo] || AGENDA_TIPOS.reuniao;
+    const repObj = !d.souRep ? (DATA.reps || []).find(r => String(r.ownerId) === String(e.ownerId)) : null;
+    const rep = repObj ? String(repObj.name || '').split(' ')[0] + ' · ' : '';
+    return {
+      id: e.id,
+      title: rep + (e.cliente || 'Sem nome'),
+      start: e.inicio,
+      end: e.inicio ? new Date(e.inicio.getTime() + (e.dur || 30) * 60000) : null,
+      backgroundColor: tipoDef.cor,
+      borderColor: 'transparent',
+      textColor: '#FDFBF0',
+      extendedProps: { __ev: e }
+    };
+  });
+  if (agFullCalInstancia) { try { agFullCalInstancia.destroy(); } catch (_) {} agFullCalInstancia = null; }
+  agFullCalInstancia = new FullCalendar.Calendar(el, {
+    initialView: 'timeGridWeek',
+    initialDate: dias[0] ? new Date(dias[0]) : new Date(),
+    // navegação de semana continua nos NOSSOS botões ←/→ (sincronizados com KPIs e
+    // Buracos via agendaEstado.offset) — por isso o toolbar do FC não tem prev/next.
+    headerToolbar: { left: '', center: 'title', right: 'timeGridWeek,timeGridDay,listWeek' },
+    buttonText: { week: 'Semana', day: 'Dia', list: 'Lista' },
+    titleFormat: { day: '2-digit', month: 'short' },
+    dayHeaderContent: arg => {
+      const dd = new Date(arg.date);
+      const wd = (dd.getDay() + 6) % 7; // seg=0 ... dom=6
+      return (wd === 6 ? 'DOM' : AGENDA_DIAS[wd].toUpperCase()) + ' ' + agendaP2(dd.getDate());
+    },
+    firstDay: 1,
+    hiddenDays: agendaEstado.sabado === true ? [0] : [0, 6], // domingo nunca; sábado pelo toggle existente
+    slotMinTime: '07:00:00',
+    slotMaxTime: '21:00:00',
+    slotLabelFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+    eventTimeFormat: { hour: '2-digit', minute: '2-digit', hour12: false },
+    allDaySlot: false,
+    nowIndicator: true,
+    height: 'auto',
+    expandRows: true,
+    locale: 'pt-br',
+    noEventsContent: 'Nenhum compromisso nesta semana ainda — marcou no Expogo, aparece aqui.',
+    events: eventos,
+    eventClick: info => { info.jsEvent.preventDefault(); abrirFichaCompromisso(info.event.extendedProps.__ev); }
+  });
+  agFullCalInstancia.render();
+}
+
+// Situação do lead no HubSpot pelo nome do cliente do compromisso: 1º nas listas de
+// temperatura (quente/frio, que já vêm com rank/dias/SLA), depois no funil completo.
+// Match por nome normalizado — mesmo critério do Backlog aprovado. Se não achar,
+// a ficha diz isso com todas as letras (nunca inventar situação de funil).
+function situacaoDoLeadPorNome(nomeCliente) {
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+  const alvo = norm(nomeCliente);
+  if (!alvo) return null;
+  const temp = DATA.temperatura || {};
+  for (const [rot, lista] of [['quente', temp.quentes], ['frio', temp.frios]]) {
+    const hit = (lista || []).find(l => norm(l.name) === alvo);
+    if (hit) return { ...hit, temperatura: rot };
+  }
+  for (const [stageId, lista] of Object.entries(DATA.funilLeads || {})) {
+    const hit = (lista || []).find(l => norm(l.name) === alvo);
+    if (hit) return { ...hit, stageId: hit.stageId || stageId, temperatura: 'funil' };
+  }
+  return null;
+}
+
+function abrirFichaCompromisso(e) {
+  if (!e) return;
+  const tipoDef = AGENDA_TIPOS[e.tipo] || AGENDA_TIPOS.reuniao;
+  const lead = situacaoDoLeadPorNome(e.cliente);
+  const stageNome = lead ? (lead.stage || (DATA.stageMeta && DATA.stageMeta[lead.stageId] && DATA.stageMeta[lead.stageId].label) || '—') : null;
+  const quandoTxt = e.inicio
+    ? AGENDA_DIAS[(e.inicio.getDay() + 6) % 7] + ', ' + agendaP2(e.inicio.getDate()) + '/' + agendaP2(e.inicio.getMonth() + 1) + ' · ' + agendaP2(e.inicio.getHours()) + ':' + agendaP2(e.inicio.getMinutes())
+    : 'sem horário';
+  const repObjFicha = (!(sessaoAtual && sessaoAtual.role === 'rep')) ? (DATA.reps || []).find(r => String(r.ownerId) === String(e.ownerId)) : null;
+  const repNome = repObjFicha ? repObjFicha.name : null;
+
+  // Bloco 1 — temperatura em destaque (a informação nº1)
+  let tempHTML;
+  if (lead && lead.temperatura === 'quente') {
+    tempHTML = '<div style="background:var(--red);color:#FDFBF0;border-radius:var(--r-md);padding:16px 18px;display:flex;align-items:center;gap:14px;">' +
+      '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" style="flex:none;"><path d="M12 2c1 3 4 4.5 4 8a4 4 0 01-8 0c0-1 .3-1.8.8-2.6C9.5 8.6 10.5 10 12 10c-.6-2.4-.4-5 0-8z"/><path d="M12 22a7 7 0 007-7c0-2-.8-3.8-2-5.2"/><path d="M5 15a7 7 0 007 7"/></svg>' +
+      '<div><div style="font-family:\'Poppins\',sans-serif;font-weight:800;font-size:18px;">LEAD QUENTE' + (lead.rank ? ' · nº' + lead.rank + ' do funil' : '') + '</div>' +
+      '<div style="font-size:12px;opacity:.9;">' + esc(stageNome) + ' · ' + (lead.dias != null ? lead.dias + 'd na etapa' : '') + (lead.slaBreach ? ' · <b>SLA ESTOURADO</b>' : ' · dentro do SLA') + '</div></div></div>';
+  } else if (lead && lead.temperatura === 'frio') {
+    tempHTML = '<div style="background:var(--sunk);color:var(--muted);border-radius:var(--r-md);padding:14px 18px;">' +
+      '<div style="font-family:\'Poppins\',sans-serif;font-weight:800;font-size:15px;color:var(--ink);">Lead frio</div>' +
+      '<div style="font-size:12px;">' + esc(stageNome) + ' · ' + (lead.dias != null ? lead.dias + 'd na etapa' : '') + (lead.slaBreach ? ' · <b style="color:var(--red);">SLA estourado</b>' : '') + ' — reaquecer ou decidir.</div></div>';
+  } else if (lead) {
+    tempHTML = '<div style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:14px 18px;">' +
+      '<div style="font-family:\'Poppins\',sans-serif;font-weight:800;font-size:15px;">No funil · ' + esc(stageNome) + '</div>' +
+      '<div style="font-size:12px;color:var(--muted);">' + (lead.dias != null ? lead.dias + 'd na etapa' : '') + (lead.slaBreach ? ' · <b style="color:var(--red);">SLA estourado</b>' : ' · dentro do SLA') + '</div></div>';
+  } else {
+    tempHTML = '<div style="background:var(--panel2);border:1px dashed var(--line);border-radius:var(--r-md);padding:14px 18px;font-size:12.5px;color:var(--muted);">Não encontrei este nome no funil do HubSpot — pode ser um lead novo de rua, um interno, ou o nome está escrito diferente no negócio.</div>';
+  }
+
+  // Bloco 2 — cadência: a trilha de compromissos deste cliente (passado ✓ e futuro)
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+  const doCliente = (DATA.agenda ? agendaNormalizar(DATA.agenda) : [])
+    .filter(x => norm(x.cliente) === norm(e.cliente) && x.inicio)
+    .sort((a, b) => a.inicio - b.inicio);
+  const agora = new Date();
+  const temFuturo = doCliente.some(x => x.inicio > agora && x.id !== e.id) || (e.inicio && e.inicio > agora);
+  const cadenciaHTML = doCliente.length === 0 ? '' : '<div style="margin-top:16px;">' +
+    '<div style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);white-space:nowrap;margin-bottom:9px;">Cadência deste cliente</div>' +
+    doCliente.map(x => {
+      const passado = x.inicio <= agora;
+      const esteMesmo = x.id === e.id;
+      const td = AGENDA_TIPOS[x.tipo] || AGENDA_TIPOS.reuniao;
+      return '<div style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;margin-bottom:4px;' + (esteMesmo ? 'background:var(--panel2);border:1px solid var(--line);' : '') + '">' +
+        '<span style="width:9px;height:9px;border-radius:50%;flex:none;background:' + (passado ? 'var(--green)' : td.cor) + ';"></span>' +
+        '<span style="font-size:12px;flex:1;">' + td.rotulo + (passado ? ' <span style="color:var(--green);font-weight:700;">✓</span>' : '') + '</span>' +
+        '<span style="font-size:11px;color:var(--muted2);font-variant-numeric:tabular-nums;">' + agendaP2(x.inicio.getDate()) + '/' + agendaP2(x.inicio.getMonth() + 1) + ' ' + agendaP2(x.inicio.getHours()) + ':' + agendaP2(x.inicio.getMinutes()) + '</span></div>';
+    }).join('') +
+    (!temFuturo && lead && lead.temperatura === 'quente'
+      ? '<div style="display:flex;align-items:center;gap:8px;background:var(--red-soft);border:1px solid var(--red);border-radius:var(--r-md);padding:10px 13px;margin-top:8px;font-size:12px;font-weight:700;color:var(--red);">Quente SEM próximo passo marcado — a cadência morre aqui. Marque a revisita ou reunião no Expogo agora.</div>'
+      : (!temFuturo ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:6px;">Sem próximo compromisso marcado depois deste.</div>' : '')) +
+    '</div>';
+
+  const hubUrl = lead && lead.id ? ('https://app.hubspot.com/contacts/24373118/record/0-3/' + lead.id) : (e.url || null);
+
+  stageModalVoltarPara = null;
+  stageModalName.textContent = e.cliente || 'Compromisso';
+  stageModalMeta.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:' + tipoDef.cor + ';"></span>' + tipoDef.rotulo + '</span> · ' + quandoTxt + (repNome ? ' · ' + esc(repNome) : '') + (e.contato ? ' · contato: ' + esc(e.contato) : '');
+  stageModalBody.innerHTML = tempHTML + cadenciaHTML +
+    (e.obs ? '<div style="margin-top:14px;font-size:12.5px;color:var(--muted);line-height:1.55;background:var(--panel2);border-radius:var(--r-md);padding:11px 14px;"><b style="color:var(--ink);">Observações:</b> ' + esc(e.obs) + '</div>' : '') +
+    (hubUrl ? '<a href="' + hubUrl + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:16px;background:var(--red);color:#fff;border-radius:var(--r-pill);padding:10px 18px;font-size:12.5px;font-weight:700;text-decoration:none;">Abrir no HubSpot →</a>' : '');
+  stageOverlay.classList.add('show');
 }
 
 // ============ MODAL ============
