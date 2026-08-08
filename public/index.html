@@ -6549,6 +6549,97 @@ async function renderDaily() {
     </div>
   `;
 
+  // "Minha Daily" (Claude Design item 4 + minha-daily-executivo.html) — só pro
+  // executivo. Todo número aqui já existia no sistema (pontosDoDia, calcularSequencia,
+  // calcularConquistas, getDaily) — só nunca tinha sido mostrado nesta tela pra ele
+  // mesmo, só aparecia dentro do acordeão que o GESTOR vê.
+  if (souRepDaily && repsDaily[0]) {
+    const rMinhaDaily = repsDaily[0];
+    const hojeRow = getDaily(rMinhaDaily.ownerId, dailyRefDate) || {};
+    const linhasHoje = [
+      { rotulo: 'Visitas', prom: hojeRow.prometido_visitas, real: hojeRow.realizado_visitas },
+      { rotulo: 'Avanços de etapa', prom: hojeRow.prometido_avancos, real: hojeRow.realizado_avancos },
+      { rotulo: 'Propostas', prom: hojeRow.prometido_propostas, real: hojeRow.realizado_propostas },
+    ];
+    const seqAtual = calcularSequencia(rMinhaDaily.ownerId, dailyRefDate);
+    const pontosAtual = pontosDoDia(hojeRow);
+    const rankingPontosHoje = DATA.reps.map(x => ({ nome: x.name, pts: pontosDoDia(getDaily(x.ownerId, dailyRefDate)), eu: x.ownerId === rMinhaDaily.ownerId }))
+      .sort((a, b) => b.pts - a.pts);
+    const minhaPosPontos = rankingPontosHoje.findIndex(x => x.eu) + 1;
+
+    const diasSemana = diasUteisDaSemana(dailyRefDate);
+    const hojeISOreal = isoDate(new Date());
+    const semanaLinhas = diasSemana.map(d => {
+      const row = getDaily(rMinhaDaily.ownerId, d);
+      const ehFuturo = d > hojeISOreal;
+      const ehHojeCel = d === hojeISOreal;
+      let estado;
+      if (ehFuturo) estado = { txt: '—', cor: 'var(--muted2)', bg: 'var(--panel2)' };
+      else if (ehHojeCel) estado = { txt: 'em curso', cor: 'var(--amber)', bg: 'var(--amber-soft)' };
+      else if (!row) estado = { txt: 'sem daily', cor: 'var(--muted2)', bg: 'var(--panel2)' };
+      else if (bateuPrometido(row)) estado = { txt: 'cumpriu', cor: 'var(--green)', bg: 'var(--green-soft)' };
+      else estado = { txt: 'parcial', cor: 'var(--amber)', bg: 'var(--amber-soft)' };
+      const diaSemanaAbrev = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'][new Date(d + 'T12:00:00').getDay()];
+      return { diaSemanaAbrev, estado, ehHojeCel };
+    });
+
+    const conquistasDesbloqueadas = calcularConquistas(rMinhaDaily.ownerId, rMinhaDaily).filter(c => c.desbloqueada);
+
+    html += `
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;">
+        <div class="chart-card" style="border:1.5px solid var(--red);box-shadow:0 4px 16px rgba(229,26,49,.1);">
+          <h3 style="margin-bottom:4px;color:var(--red);">Hoje — você contra o que você prometeu</h3>
+          <div style="display:grid;gap:15px;margin-top:15px;font-size:13px;font-variant-numeric:tabular-nums;">
+            ${linhasHoje.map(l => {
+              const prom = l.prom, real = l.real;
+              const pct = prom ? Math.min(100, Math.round((real || 0) / prom * 100)) : 0;
+              const cor = !prom ? 'var(--muted2)' : (real || 0) >= prom ? 'var(--green)' : pct > 0 ? 'var(--amber)' : 'var(--red)';
+              return `<div><div style="display:flex;justify-content:space-between;"><span><b>${l.rotulo}</b>${prom ? ` · prometi ${prom}` : ''}</span><b style="font-family:'Poppins',sans-serif;color:${cor};">${real ?? 0}/${prom ?? '—'}</b></div><div style="height:10px;background:var(--sunk);border-radius:5px;margin-top:7px;"><div style="height:10px;width:${pct}%;background:${cor};border-radius:5px;"></div></div></div>`;
+            }).join('')}
+          </div>
+          <div style="margin-top:15px;background:var(--panel2);border-radius:12px;padding:11px 14px;font-size:12px;color:var(--muted);">Visitas e avanços chegam sozinhos do HubSpot/Expogo — ao fechar o dia você só confirma e comenta o que travou.</div>
+        </div>
+
+        <div class="chart-card">
+          <div style="display:flex;align-items:center;gap:9px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+            <b style="font-family:'Poppins',sans-serif;font-size:14px;">Sua sequência e pontos</b>
+          </div>
+          <div style="display:flex;gap:38px;margin-top:16px;font-variant-numeric:tabular-nums;">
+            <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;">🔥 ${seqAtual}d</div><div style="font-size:11px;color:var(--muted2);margin-top:1px;">sequência</div></div>
+            <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;">${pontosAtual}</div><div style="font-size:11px;color:var(--muted2);margin-top:1px;">pontos hoje</div></div>
+            <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--amber);">${minhaPosPontos}º</div><div style="font-size:11px;color:var(--muted2);margin-top:1px;">no pódio de hoje</div></div>
+          </div>
+          ${conquistasDesbloqueadas.length > 0 ? `<div style="margin-top:15px;display:flex;gap:6px;flex-wrap:wrap;">${conquistasDesbloqueadas.map(c => `<span title="${esc(c.desc)}" style="background:var(--panel2);border-radius:999px;padding:5px 12px;font-size:11.5px;font-weight:700;">${c.icone} ${esc(c.titulo)}</span>`).join('')}</div>` : `<div style="margin-top:15px;font-size:11.5px;color:var(--muted2);">Bata o prometido hoje pra desbloquear a primeira conquista.</div>`}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-top:18px;">
+        <div class="chart-card">
+          <div style="display:flex;align-items:center;gap:9px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+            <b style="font-family:'Poppins',sans-serif;font-size:14px;">Sua semana</b>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:13px;font-size:11px;text-align:center;">
+            ${semanaLinhas.map(s => `
+              <div style="background:${s.estado.bg};border-radius:12px;padding:12px 6px;${s.ehHojeCel ? 'border:1.5px dashed var(--amber);' : ''}"><b style="color:${s.estado.cor};">${s.diaSemanaAbrev}</b><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:16px;margin-top:3px;color:${s.estado.cor};">${s.estado.txt === 'cumpriu' ? '✓' : s.estado.txt === 'parcial' ? '◐' : s.estado.txt === 'em curso' ? '·' : '—'}</div><div style="color:var(--muted);margin-top:2px;">${s.estado.txt}</div></div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div style="display:flex;align-items:center;gap:9px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M8 21h8M12 17v4M6 3h12v6a6 6 0 01-12 0V3z"/><path d="M18 5h3a1 1 0 011 1c0 2-1.5 4-4 4M6 5H3a1 1 0 00-1 1c0 2 1.5 4 4 4"/></svg>
+            <b style="font-family:'Poppins',sans-serif;font-size:14px;">Pódio de hoje</b>
+          </div>
+          <div style="display:grid;gap:5px;margin-top:12px;font-size:12px;font-variant-numeric:tabular-nums;">
+            ${rankingPontosHoje.slice(0, 5).map((x, i) => `<div style="display:grid;grid-template-columns:24px 1fr 60px;gap:8px;padding:6px 10px;border-radius:9px;${x.eu ? 'background:var(--red-soft);' : ''}"><b style="font-family:'Poppins',sans-serif;color:${i === 0 ? 'var(--amber)' : x.eu ? 'var(--red)' : 'var(--muted2)'};">${i + 1}º</b><b style="${x.eu ? 'color:var(--red);' : ''}">${x.eu ? 'Você' : esc(x.nome.split(' ')[0])}</b><b style="text-align:right;${x.eu ? 'color:var(--red);' : 'color:var(--muted);'}">${x.pts} pts</b></div>`).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   // ---- PLACAR DA DAILY (só gestor) — o roteiro da reunião das 9h em uma tabela ----
   // Tudo dado que já existe: getDaily (Supabase, prometido/realizado por dia) e
   // r.fechamentosHubspotHoje (HubSpot, do build). Ordem de leitura pensada pra reunião:
