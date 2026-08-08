@@ -4753,16 +4753,23 @@ function renderLeadsPrioritarios() {
     const restante = slaDias ? slaDias - l.dias : null;
     const slaTxt = restante === null ? '' : ` · faltam ${restante}d pro SLA`;
     return `
-      <div class="lead-prio-row">
+      <div class="lead-prio-row" data-lead-id="${l.id}" style="cursor:pointer;">
         <div style="flex:1;min-width:0;">
           <div class="nome">${l.name}</div>
           <div class="meta">${souRepQuentes ? (l.stage || '') : l.vendedor} · ${l.dias}d na etapa${slaTxt}</div>
         </div>
         <span class="chance" style="background:${estilo.bg};color:${estilo.fg};" title="Índice de prioridade pela etapa do funil — não é uma previsão calculada de fechamento">${prioridade}</span>
-        <a class="abrir" href="${hsUrl(l.id)}" target="_blank" rel="noopener">abrir →</a>
+        <span class="abrir">ver ficha →</span>
       </div>
     `;
   }).join('');
+
+  listaEl.querySelectorAll('[data-lead-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const l = todosQuentes.find(x => x.id === row.dataset.leadId);
+      if (l) abrirFichaLeadFunilDrawer(l, null);
+    });
+  });
 }
 renderLeadsPrioritarios();
 
@@ -5307,6 +5314,46 @@ function openKpiListModal(titulo, lista) {
 
 let stageModalAtual = null;
 let stageModalFiltro = 'estourado'; // default: é o que importa pra cobrar decisão
+let stageModalVoltarPara = null; // função pra "← voltar" quando a ficha abriu de dentro de uma lista
+
+// Ficha do lead (Claude Design item 6) — versão pra leads do funil HubSpot (quentes,
+// travados, etapa). Diferente da ficha de Prospecção: aqui só mostramos o que
+// REALMENTE sincronizamos (nome, etapa, dias, SLA) — telefone/endereço/última nota
+// vivem só no HubSpot e não têm campo espelhado aqui, então não fingimos que têm.
+// A trilha do funil é real (STAGE_LABELS na ordem, etapa atual destacada).
+const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
+function fichaLeadFunilBodyHTML(l) {
+  const idxAtual = ORDEM_FUNIL_FICHA.indexOf(l.stageId);
+  const slaDias = (l.stageId && DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
+  return `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <span style="background:${l.slaBreach ? 'var(--red-soft)' : 'var(--panel2)'};color:${l.slaBreach ? 'var(--red)' : 'var(--muted)'};border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">${esc(l.stage || l.label || '')}${slaDias ? ` · SLA ${slaDias}d` : ''}</span>
+      <span style="background:${l.slaBreach ? 'var(--red-soft)' : 'var(--panel2)'};color:${l.slaBreach ? 'var(--red)' : 'var(--muted)'};border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">${l.dias}d na etapa${l.slaBreach ? ' · SLA estourado' : ''}</span>
+      ${l.vendedor ? `<span style="background:var(--panel2);color:var(--muted2);border-radius:999px;padding:4px 12px;font-size:11.5px;">${esc(l.vendedor)}</span>` : ''}
+    </div>
+    ${idxAtual >= 0 ? `
+    <div style="display:grid;grid-template-columns:repeat(${ORDEM_FUNIL_FICHA.length},1fr);gap:4px;font-size:9.5px;text-align:center;color:var(--muted2);margin-bottom:16px;">
+      ${ORDEM_FUNIL_FICHA.map((sid, i) => `
+        <span><span style="display:block;height:5px;background:${i < idxAtual ? 'var(--green)' : i === idxAtual ? (l.slaBreach ? 'var(--red)' : stageColor(sid)) : 'var(--sunk)'};border-radius:3px;margin-bottom:3px;"></span>${i === idxAtual ? `<b style="color:${l.slaBreach ? 'var(--red)' : 'var(--ink)'};">${(STAGE_LABELS[sid] || '').split('/')[0].split(' ')[0]}</b>` : (STAGE_LABELS[sid] || '').split('/')[0].split(' ')[0]}</span>
+      `).join('')}
+    </div>` : ''}
+    <div style="background:var(--panel2);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--muted);margin-bottom:16px;">
+      Telefone, endereço e histórico de contato ficam no HubSpot — não replicamos esse dado aqui pra evitar informação desatualizada.
+    </div>
+    <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:var(--red);color:#fff;border-radius:999px;padding:9px 18px;font-size:12.5px;font-weight:700;">Abrir no HubSpot ↗</a>
+  `;
+}
+function abrirFichaLeadFunilDrawer(l, voltarPara) {
+  stageModalVoltarPara = voltarPara || null;
+  stageModalName.textContent = l.name;
+  stageModalMeta.innerHTML = stageModalVoltarPara
+    ? `<button id="stageFichaVoltar" style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;padding:0;">← voltar pra lista</button>`
+    : '';
+  stageModalBody.innerHTML = fichaLeadFunilBodyHTML(l);
+  stageOverlay.classList.add('show');
+  const btnVoltar = document.getElementById('stageFichaVoltar');
+  if (btnVoltar) btnVoltar.addEventListener('click', () => { if (stageModalVoltarPara) stageModalVoltarPara(); });
+}
 
 function renderStageModalBody() {
   const { stageId, label, leads, sla, desc } = stageModalAtual;
@@ -5324,19 +5371,26 @@ function renderStageModalBody() {
     <h3 class="block-label">${stageModalFiltro === 'estourado' ? 'Leads com SLA estourado' : 'Leads nesta etapa'} — clique para abrir no HubSpot</h3>
     <div class="leads-box">
       ${mostrar.length === 0 ? `<div style="padding:14px;color:var(--muted);font-size:13px;">${stageModalFiltro === 'estourado' ? 'Nenhum lead com SLA estourado nesta etapa agora.' : 'Nenhum lead nesta etapa no momento.'}</div>` : mostrar.map(l => `
-        <a class="lead-row ${l.slaBreach ? 'sla-breach' : ''}" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+        <div class="lead-row ${l.slaBreach ? 'sla-breach' : ''}" data-lead-id="${l.id}" style="cursor:pointer;">
           <div class="lead-left">
             <span class="lead-name">${l.name}${l.slaBreach ? ' ⚠' : ''}</span>
             <span class="lead-stage">${l.vendedor}${l.slaBreach ? ' · SLA estourado' : ''}</span>
           </div>
           <div class="lead-right">
             <span class="lead-days">${l.dias}d nesta etapa</span>
-            <span class="lead-cta">abrir →</span>
+            <span class="lead-cta">ver ficha →</span>
           </div>
-        </a>
+        </div>
       `).join('')}
     </div>
   `;
+
+  stageModalBody.querySelectorAll('[data-lead-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const l = mostrar.find(x => x.id === row.dataset.leadId);
+      if (l) abrirFichaLeadFunilDrawer({ ...l, stageId: l.stageId || stageModalAtual.stageId }, () => renderStageModalBody());
+    });
+  });
 
   stageModalBody.querySelectorAll('.stage-modal-filtro').forEach(btn => {
     btn.addEventListener('click', () => { stageModalFiltro = btn.dataset.filtro; renderStageModalBody(); });
@@ -5382,19 +5436,25 @@ function abrirTodosTravados() {
   stageModalBody.innerHTML = `
     <div class="leads-box leads-box-scroll">
       ${leads.length === 0 ? '<div style="padding:14px;color:var(--muted);font-size:13px;">Nenhum lead travado agora.</div>' : leads.map(l => `
-        <a class="lead-row sla-breach" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+        <div class="lead-row sla-breach" data-lead-id="${l.id}" style="cursor:pointer;">
           <div class="lead-left">
             <span class="lead-name">${l.name} ⚠</span>
             <span class="lead-stage">${l.vendedor ? l.vendedor + ' · ' : ''}${l.stage} · SLA estourado</span>
           </div>
           <div class="lead-right">
             <span class="lead-days">${l.dias}d nesta etapa</span>
-            <span class="lead-cta">abrir →</span>
+            <span class="lead-cta">ver ficha →</span>
           </div>
-        </a>
+        </div>
       `).join('')}
     </div>
   `;
+  stageModalBody.querySelectorAll('[data-lead-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      const l = leads.find(x => x.id === row.dataset.leadId);
+      if (l) abrirFichaLeadFunilDrawer(l, () => abrirTodosTravados());
+    });
+  });
   stageOverlay.classList.add('show');
 }
 
