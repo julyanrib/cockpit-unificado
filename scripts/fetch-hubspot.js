@@ -213,7 +213,11 @@ async function gravarSnapshotDaily(ownerId, dataISO, campos) {
 // A normalização (tipo, fuso, prefixo do título) mora no template — aqui vai cru.
 async function fetchAgenda() {
   const agoraMs = Date.now();
-  const ini = String(agoraMs - 30 * 86400000);
+  // 60 dias pra trás (era 30): o "Backlog aprovado" da Prospecção agora conta "visitada"
+  // pela TAREFA de visita do Expogo — com 30 dias, uma visita do começo do ciclo mensal
+  // sumia da conta e o restaurante voltava a aparecer como não-visitado. A grade da
+  // Agenda não muda (filtra por semana); só o payload das tasks cresce um pouco.
+  const ini = String(agoraMs - 60 * 86400000);
   const fim = String(agoraMs + 90 * 86400000);
   const owners = REPS.map(r => r.ownerId);
   const itens = [];
