@@ -3469,6 +3469,7 @@ const AGENDA_TIPOS = {
   interno:   { cor: 'var(--muted2)', rotulo: 'Interno',    conta: null      }
 };
 
+const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
 const AGENDA_DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const AGENDA_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -5340,8 +5341,16 @@ if (DATA.supabase && supa) {
 }
 
 function buildDetailHTML(r, idPrefix, skipLeadsList) {
-  const stageEntries = Object.entries(r.stages);
-  const dominant = stageEntries.sort((a,b) => b[1]-a[1])[0];
+  // Correção 08/08 (Julyan, aba Pessoas): Object.entries(r.stages) sem ordenar segue a
+  // ordem NUMÉRICA das chaves — e o ID da Visita (1396005401) é numericamente MAIOR que o
+  // de Ag.Pagamento (1395880473), então Visita aparecia por último no funil, quebrando a
+  // leitura visual do funil (Prospecção→Visita→Decisor→Demo→Negociação→AgPagamento).
+  // ORDEM_ETAPAS_FUNIL é a mesma ordem canônica já usada no Cockpit ("Meu funil por etapa").
+  const stageEntriesOrdenado = ORDEM_ETAPAS_FUNIL
+    .filter(sid => r.stages[sid] > 0)
+    .map(sid => [sid, r.stages[sid]]);
+  const stageEntries = stageEntriesOrdenado.length > 0 ? stageEntriesOrdenado : Object.entries(r.stages);
+  const dominant = Object.entries(r.stages).sort((a,b) => b[1]-a[1])[0];
   const dominantPct = r.open > 0 ? Math.round((dominant[1] / r.open) * 100) : 0;
   const travados = r.travados || [];
 
@@ -8703,7 +8712,7 @@ function renderLeadsPraca() {
 }
 
 // ============ PDIs (documentos anexados) ============
-let pdiSelecionado = null;
+let pessoaSelecionadaId = null; // única fonte de verdade — antes eram DUAS variáveis (pdiSelecionado/coachingSelecionado) sem sincronia entre si: clicar um nome de um lado podia deixar o outro lado mostrando outra pessoa. Essa era a raiz do "está tudo errado".
 
 async function renderPDIs() {
   const el = document.getElementById('pdisContent');
@@ -8713,8 +8722,8 @@ async function renderPDIs() {
   }
 
   if (sessaoAtual.role === 'manager') {
-    if (!pdiSelecionado) pdiSelecionado = DATA.reps[0].ownerId;
-    const r = DATA.reps.find(x => x.ownerId === pdiSelecionado) || DATA.reps[0];
+    if (!pessoaSelecionadaId) pessoaSelecionadaId = DATA.reps[0].ownerId;
+    const r = DATA.reps.find(x => x.ownerId === pessoaSelecionadaId) || DATA.reps[0];
 
     // Banner "Pessoas" (Claude Design item 4): data_um_a_um é <input type="date"> (ISO),
     // então comparar com hoje é seguro. "Sem plano ativo" = nenhum compromisso ainda ou
@@ -8777,7 +8786,7 @@ async function renderPDIs() {
           ${urgentes.map(c => `
             <div class="pessoas-card-urgente" data-owner="${c.x.ownerId}" style="border:1.5px solid var(--red);border-radius:15px;padding:14px 16px;font-size:12px;background:var(--red-soft);cursor:pointer;">
               <div style="display:flex;align-items:center;gap:9px;"><span style="width:30px;height:30px;border-radius:99px;background:var(--red);color:#fff;font-family:'Poppins',sans-serif;font-weight:800;font-size:11px;display:grid;place-items:center;">${esc(c.x.name.split(' ').map(p => p[0]).slice(0, 2).join(''))}</span><span><b style="font-size:13px;">${esc(c.x.name)}</b><span style="display:block;font-size:10.5px;color:var(--muted2);">${esc(c.x.praca || '')}</span></span></div>
-              ${c.x.gargalo ? `<div style="margin-top:9px;color:var(--muted);">Gargalo: <b style="color:var(--ink);">${esc(c.x.gargalo)}</b></div>` : ''}
+              <div style="margin-top:9px;color:var(--muted);font-variant-numeric:tabular-nums;"><b style="color:var(--ink);">${c.x.open}</b> aberto${c.x.leadsTravados > 0 ? ` · <b style="color:var(--red);">${c.x.leadsTravados} travado${c.x.leadsTravados === 1 ? '' : 's'}</b>` : ''} · <b style="color:var(--ink);">${visitasInformadasTexto(c.x.ownerId)}</b> visitas</div>
               <div style="margin-top:4px;font-size:11px;color:var(--red);font-weight:700;">${[c.pdiVencido ? 'PDI vencido' : '', c.travadosAlto ? `${c.x.leadsTravados} travados` : ''].filter(Boolean).join(' · ')}</div>
               <span class="pessoas-btn-preparar" data-owner="${c.x.ownerId}" style="display:inline-block;margin-top:10px;background:var(--red);color:#fff;border-radius:999px;padding:4px 13px;font-size:11px;font-weight:700;">Preparar 1:1 →</span>
             </div>
@@ -8797,37 +8806,45 @@ async function renderPDIs() {
     el.innerHTML = `
       ${bannerPessoas}
       ${oTimeHTML}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
-        ${DATA.reps.map(x => `
-          <button class="pdi-chip" data-owner="${x.ownerId}" style="cursor:pointer;font-size:12.5px;font-weight:700;border-radius:var(--r-pill);padding:10px 15px;min-height:40px;display:inline-flex;align-items:center;background:${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--panel)'};color:${x.ownerId === r.ownerId ? '#fff' : 'var(--muted)'};border:1px solid ${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--line)'};">${x.name}</button>
-        `).join('')}
-      </div>
-      <div class="daily-rep-card" data-owner="${r.ownerId}">
-        <div class="daily-rep-head">${r.name}</div>
-        <div style="padding:14px 16px;">
-          <div class="daily-metric-row" style="margin-bottom:8px;">
-            <label>Título</label>
-            <input type="text" class="pdiTitulo" aria-label="Título do PDI" placeholder="ex: PDI semana 28/07" style="flex:2;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 10px;">
+      <!-- Otimização 08/08 (Julyan): a fileira de pills do PDI foi removida — o grid "O
+           time" acima já lista e seleciona TODO MUNDO (urgentes + em dia). Essa 2ª forma
+           de escolher a mesma pessoa, com estado PRÓPRIO e dessincronizado da fileira
+           gêmea do Coaching, era exatamente a causa de "cada lado mostrando alguém
+           diferente". O formulário de PDI virou um details discreto — é tarefa
+           administrativa ocasional (anexar 1 arquivo), não o conteúdo principal da aba;
+           o Coaching (abaixo, no DOM) é que é o motivo de alguém abrir "Pessoas". -->
+      <details class="chart-card" style="margin-bottom:0;">
+        <summary class="card-summary" style="font-size:12.5px;font-weight:700;color:var(--muted);cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+          Anexar documento de PDI para ${esc(r.name.split(' ')[0])}
+        </summary>
+        <div style="padding-top:14px;">
+          <div class="daily-rep-card" data-owner="${r.ownerId}">
+            <div style="padding:0;">
+              <div class="daily-metric-row" style="margin-bottom:8px;">
+                <label>Título</label>
+                <input type="text" class="pdiTitulo" aria-label="Título do PDI" placeholder="ex: PDI semana 28/07" style="flex:2;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:6px 10px;">
+              </div>
+              <textarea class="pdiCompromissos" placeholder="Compromissos combinados (um por linha) — vira checklist pro executivo..." style="width:100%;min-height:60px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
+              <input type="file" class="pdiArquivo" aria-label="Selecionar arquivo do PDI (PDF ou Word)" accept=".pdf,.doc,.docx" style="margin-bottom:8px;font-size:12.5px;">
+              <button class="pdiUpload" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:9px 16px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px;display:inline-flex;align-items:center;">Anexar PDI</button>
+              <span class="pdiStatus" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
+              <div class="pdiLista" style="margin-top:12px;"><div class="empty-state">Carregando...</div></div>
+            </div>
           </div>
-          <textarea class="pdiCompromissos" placeholder="Compromissos combinados (um por linha) — vira checklist pro executivo..." style="width:100%;min-height:60px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
-          <input type="file" class="pdiArquivo" aria-label="Selecionar arquivo do PDI (PDF ou Word)" accept=".pdf,.doc,.docx" style="margin-bottom:8px;font-size:12.5px;">
-          <button class="pdiUpload" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:9px 16px;font-weight:700;font-size:12.5px;cursor:pointer;min-height:38px;display:inline-flex;align-items:center;">Anexar PDI</button>
-          <span class="pdiStatus" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
-          <div class="pdiLista" style="margin-top:12px;"><div class="empty-state">Carregando...</div></div>
         </div>
-
-      </div>
+      </details>
     `;
-    el.querySelectorAll('.pdi-chip').forEach(chip => {
-      chip.addEventListener('click', () => { pdiSelecionado = chip.dataset.owner; renderPDIs(); });
-    });
     el.querySelectorAll('.pessoas-card-urgente, .pessoas-card-dia, .pessoas-btn-preparar').forEach(item => {
       item.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        pdiSelecionado = item.dataset.owner;
+        pessoaSelecionadaId = item.dataset.owner;
         renderPDIs();
+        renderCoaching();
         setTimeout(() => {
-          const card = document.querySelector('.daily-rep-card');
+          // O motivo de clicar aqui é ver o Coaching (bars + gargalo + roteiro do 1:1),
+          // não o formulário de PDI (que agora fica colapsado) — rola até ele.
+          const card = document.querySelector('#coachingContent .chart-card');
           if (card && typeof smoothScrollTo === 'function') smoothScrollTo(card);
         }, 50);
       });
@@ -8996,7 +9013,6 @@ function tendenciaBadge(texto) {
   return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:700;color:${cor};background:${bg};padding:3px 10px;border-radius:var(--r-lg);white-space:nowrap;flex-shrink:0;">${icone} ${palavra}</span>`;
 }
 
-let coachingSelecionado = null;
 
 async function renderCoaching() {
   const el = document.getElementById('coachingContent');
@@ -9010,16 +9026,10 @@ async function renderCoaching() {
     el.innerHTML = `<div class="empty-state">Nenhuma nota de coaching ainda.</div>`;
     return;
   }
-  if (!coachingSelecionado) coachingSelecionado = DATA.reps[0].ownerId;
-  const r = DATA.reps.find(x => x.ownerId === coachingSelecionado) || DATA.reps[0];
+  if (!pessoaSelecionadaId) pessoaSelecionadaId = DATA.reps[0].ownerId;
+  const r = DATA.reps.find(x => x.ownerId === pessoaSelecionadaId) || DATA.reps[0];
 
   el.innerHTML = `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
-      ${DATA.reps.map(x => `
-        <button class="coaching-chip" data-owner="${x.ownerId}" style="cursor:pointer;font-size:12.5px;font-weight:700;border-radius:var(--r-pill);padding:10px 15px;min-height:40px;display:inline-flex;align-items:center;background:${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--panel)'};color:${x.ownerId === r.ownerId ? '#fff' : 'var(--muted)'};border:1px solid ${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--line)'};">${x.name}</button>
-      `).join('')}
-    </div>
-
     <div class="chart-card" style="margin-bottom:18px;border-radius:var(--r-xl);padding:24px 26px;box-shadow:var(--shadow);">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
         ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 44)}
@@ -9031,14 +9041,21 @@ async function renderCoaching() {
       </div>
 
       <div id="coachFunilMini${r.ownerId}" style="margin-bottom:18px;"></div>
-      <div style="font-size:11.5px;color:var(--muted);margin-bottom:18px;">
+      <div style="font-size:11.5px;color:var(--muted);margin-bottom:16px;">
         <b style="color:var(--ink);font-size:13px;">${r.open}</b> em aberto ·
         ${r.leadsTravados > 0 ? `<b style="color:var(--red);">${r.leadsTravados} travado${r.leadsTravados > 1 ? 's' : ''}</b>` : '<span style="color:var(--green);">sem travados</span>'}
         · 🎯 Visitas: ${visitasInformadasTexto(r.ownerId)}
       </div>
 
-      <div class="coachingMensal"></div>
-      <div class="coachingSemanalResumo" style="font-size:12px;color:var(--muted);margin-bottom:12px;"><div class="empty-state" style="padding:10px;">Carregando...</div></div>
+      <!-- Otimização 08/08 (Julyan): "Como agir" (semanal) + "Tendência" (repetia o badge
+           do topo) + "Fechamento do mês" competiam por atenção com o Roteiro do 1:1 (que é
+           o conteúdo acionável de verdade). Agora viram UM box "Diagnóstico" rotulado e
+           datado, e o mês passado fica arquivado/colapsado — não é o que importa hoje. -->
+      <div class="coachingSemanalResumo gargalo-box" style="font-size:12.5px;margin-bottom:14px;"><div class="empty-state" style="padding:10px;">Carregando...</div></div>
+      <details class="coachingMensalWrap" style="margin-bottom:16px;display:none;">
+        <summary class="card-summary" style="font-size:11.5px;color:var(--muted2);cursor:pointer;">📅 Ver fechamento do mês passado (arquivado)</summary>
+        <div class="coachingMensal" style="margin-top:8px;"></div>
+      </details>
 
       <div class="daily-col-label" style="margin-bottom:8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d="M3 14v-2a9 9 0 0118 0v2"/><rect x="1" y="14" width="6" height="7" rx="2"/><rect x="17" y="14" width="6" height="7" rx="2"/></svg>Roteiro do 1:1</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:16px;">
@@ -9075,11 +9092,12 @@ async function renderCoaching() {
     </div>
   `;
 
-  el.querySelectorAll('.coaching-chip').forEach(chip => {
-    chip.addEventListener('click', () => { coachingSelecionado = chip.dataset.owner; renderCoaching(); });
-  });
-
-  const stageEntries = Object.entries(r.stages || {});
+  // Correção 08/08 (Julyan, aba Pessoas): aqui é onde a barra de etapas da tela Pessoas
+  // é de fato desenhada — mesma causa da nota em buildDetailHTML (ordem numérica das
+  // chaves quebra a leitura do funil). Ordem canônica.
+  const stageEntriesBrutos = Object.entries(r.stages || {});
+  const stageEntries = ORDEM_ETAPAS_FUNIL.filter(sid => (r.stages || {})[sid] > 0).map(sid => [sid, r.stages[sid]]);
+  if (stageEntries.length === 0) stageEntries.push(...stageEntriesBrutos);
   const funilMiniEl = document.getElementById(`coachFunilMini${r.ownerId}`);
   if (funilMiniEl && stageEntries.length > 0) {
     const maxV = Math.max(...stageEntries.map(([, c]) => c), 1);
@@ -9119,11 +9137,13 @@ async function renderCoaching() {
   }
 
   const mensalEl = el.querySelector('.coachingMensal');
+  const mensalWrapEl = el.querySelector('.coachingMensalWrap');
   if (!erroMensal && mensais && mensais.length > 0) {
     const m = mensais[0];
+    if (mensalWrapEl) mensalWrapEl.style.display = 'block';
     mensalEl.innerHTML = `
-      <div class="gargalo-box" style="margin-bottom:12px;padding:10px 12px;">
-        <div class="daily-col-label" style="margin-bottom:4px;">📅 Fechamento do mês (${m.mes_ano})</div>
+      <div class="gargalo-box" style="margin-bottom:0;padding:10px 12px;">
+        <div class="daily-col-label" style="margin-bottom:4px;">Fechamento de ${m.mes_ano}</div>
         <div style="font-size:12px;margin-bottom:6px;">${m.resumo_mes}</div>
         ${(m.acoes_recomendadas || []).length > 0 ? `
           <ul class="practice-list" style="margin:0;font-size:12px;">
@@ -9142,10 +9162,12 @@ async function renderCoaching() {
     resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Nenhuma análise ainda — roda toda sexta.</div>`;
   } else {
     const ultima = semanas[0];
+    // Otimização 08/08: a "Tendência" já vira o badge colorido ao lado do nome
+    // (coachingTendencia, preenchido abaixo) — repetir em frase aqui era a mesma
+    // informação duas vezes. Este box fica só com o "Como agir" da semana, datado.
     resumoEl.innerHTML = `
-      <div style="font-size:11px;color:var(--muted2);margin-bottom:3px;">Última (${ultima.semana_label})</div>
-      <div style="font-size:12.5px;margin-bottom:4px;"><b>Como agir:</b> ${ultima.como_agir}</div>
-      ${ultima.tendencia ? `<div style="font-size:12.5px;"><b>Tendência:</b> ${ultima.tendencia}</div>` : ''}
+      <div class="daily-col-label" style="margin-bottom:4px;">Diagnóstico da semana <span style="font-weight:400;text-transform:none;color:var(--muted2);">(${ultima.semana_label})</span></div>
+      <div style="font-size:12.5px;color:var(--ink);">${ultima.como_agir}</div>
     `;
     historicoEl.innerHTML = semanas.slice(1).map(s => `
       <div style="border-left:3px solid var(--line);padding-left:10px;margin-bottom:10px;">
