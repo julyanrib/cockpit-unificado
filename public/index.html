@@ -6306,14 +6306,39 @@ async function renderDaily() {
     `;
   })();
 
-  let html = `
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:4px;">
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);">${fmtDailyLabel(dailyRefDate)}</span>
-        <h1 style="font-family:'Poppins',sans-serif;font-size:27px;font-weight:800;margin:0;letter-spacing:-.015em;">Daily</h1>
+  // Banner escuro padrão (Claude Design item 4): mesma pergunta certa por papel, KPIs
+  // reais tirados do getDaily de cada rep — nada recalculado, é o mesmo dado do placar
+  // logo abaixo, só resumido em 3 números pra quem abre a tela sem rolar.
+  const promessasHoje = repsDaily.map(r => getDaily(r.ownerId, dailyRefDate)).filter(d => d && (d.prometido_visitas != null || d.prometido_avancos != null || d.prometido_propostas != null));
+  const semPromessa = repsDaily.length - promessasHoje.length;
+  const fechadosHojeTotal = repsDaily.reduce((s, r) => s + (r.fechamentosHubspotHoje || 0), 0);
+  const bannerDaily = souRepDaily ? `
+    <div class="cockpit-hero-combo" style="align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Minha Daily · ${fmtDailyLabel(dailyRefDate)}</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">Cumpri o que prometi?</h1>
       </div>
-      <span style="font-size:12.5px;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 15px;">Você contra o que você prometeu — não contra o time</span>
-    </div>
+      <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
+      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${promessasHoje.length > 0 ? 'sim' : '—'}</div><div style="font-size:11px;color:var(--dark-mut);">promessa registrada hoje</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados hoje</div></div>
+      </div>
+    </div>` : `
+    <div class="cockpit-hero-combo" style="align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Daily & Ritmo · ${fmtDailyLabel(dailyRefDate)}</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">Quem prometeu, quem cumpriu, quem está vazio?</h1>
+      </div>
+      <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
+      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${promessasHoje.length}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">prometeram hoje</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${semPromessa > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${semPromessa}</div><div style="font-size:11px;color:var(--dark-mut);">sem promessa hoje</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados hoje</div></div>
+      </div>
+    </div>`;
+
+  let html = `
+    ${bannerDaily}
     ${focoSemanaHtml}
     <div class="daily-header">
       <div class="daily-date-nav">
