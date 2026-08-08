@@ -7246,7 +7246,41 @@ async function renderProspeccaoNova() {
   });
   const nSel = prospeccaoSelecao.size;
 
+  // Cards por praça (mockup prospeccao-gestor): visão de aprovação por cidade —
+  // quantos leads ainda não viraram empresa/rota por praça e quem atende cada uma.
+  // Só pro gestor: o executivo já chega com a lista filtrada no território dele.
+  // Clique no card filtra a fila pela cidade (clique de novo limpa o filtro).
+  const souGestorProsp = !!(sessaoAtual && sessaoAtual.role === 'manager');
+  let cardsPraca = '';
+  if (souGestorProsp) {
+    const porCidade = {};
+    prospeccaoCache.forEach(l => {
+      if (!l.cidade) return;
+      const c = (porCidade[l.cidade] = porCidade[l.cidade] || { pend: 0, reps: new Set() });
+      if (l.status !== 'criado_hubspot' && l.status !== 'sem_fit') c.pend++;
+      if (l.responsavel_owner_id) {
+        const rep = (DATA.reps || []).find(r => String(r.ownerId) === String(l.responsavel_owner_id));
+        if (rep) c.reps.add(String(rep.name || '').split(' ')[0]);
+      }
+    });
+    const cidadesOrd = Object.keys(porCidade).sort((a, b) => porCidade[b].pend - porCidade[a].pend);
+    if (cidadesOrd.length > 0) {
+      cardsPraca = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:14px;">` +
+        cidadesOrd.map(cid => {
+          const d = porCidade[cid];
+          const ativa = prospeccaoFiltro.cidade === cid;
+          const emDia = d.pend === 0;
+          return `<button data-pracacard="${esc(cid)}" aria-pressed="${ativa}" style="text-align:left;background:var(--panel);border:1px solid ${ativa ? 'var(--ink)' : 'var(--line)'};border-radius:14px;padding:12px 15px;font-size:12px;cursor:pointer;box-shadow:0 1px 3px rgba(26,22,19,.05);font-family:inherit;color:var(--ink);">
+            <b>${esc(cid)}</b>
+            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:21px;margin-top:3px;${emDia ? 'color:var(--green);' : ''}">${d.pend} <span style="font-size:11px;font-weight:700;${emDia ? '' : 'color:var(--amber);'}">${emDia ? 'em dia ✓' : 'pendentes'}</span></div>
+            <div style="font-size:10.5px;color:var(--muted2);margin-top:2px;">${[...d.reps].slice(0, 3).join(' · ') || 'sem responsável'}</div>
+          </button>`;
+        }).join('') + `</div>`;
+    }
+  }
+
   el.innerHTML = `
+    ${cardsPraca}
     <div class="chart-card" style="border-left:3px solid var(--blue);margin-bottom:14px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;">
         <h3 style="margin:0;">🎯 Prospecção — ${filtrados.length} de ${prospeccaoCache.length}</h3>
@@ -7359,6 +7393,16 @@ async function renderProspeccaoNova() {
     const campo = { pfCidade: 'cidade', pfBairro: 'bairro', pfCategoria: 'categoria', pfFonte: 'fonte', pfStatus: 'status', pfJaExiste: 'jaExiste', pfNotaMin: 'notaMin', pfAvaliacoesMin: 'avaliacoesMin' }[id];
     const elInput = document.getElementById(id);
     if (elInput) elInput.addEventListener('change', () => { prospeccaoFiltro[campo] = elInput.value; prospeccaoPagina = 1; renderProspeccaoNova(); });
+  });
+
+  // Cards por praça: clique filtra a fila pela cidade; clicar de novo limpa o filtro.
+  el.querySelectorAll('[data-pracacard]').forEach(card => {
+    card.addEventListener('click', () => {
+      const cid = card.dataset.pracacard;
+      prospeccaoFiltro.cidade = prospeccaoFiltro.cidade === cid ? '' : cid;
+      prospeccaoPagina = 1;
+      renderProspeccaoNova();
+    });
   });
 
   el.querySelectorAll('.prospeccao-atribuir').forEach(sel => {
