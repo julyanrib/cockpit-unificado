@@ -596,6 +596,10 @@
   .ag-exec-main{min-width:0;}
   @media (max-width:980px){ .ag-exec-cols{grid-template-columns:1fr;} }
   @media (max-width:980px){ .mes-grid{grid-template-columns:1fr !important;} }
+  /* Scoreboard da Daily do gestor: sem marcador nativo, caret girando, mobile em 2 linhas */
+  .daily-acc summary::-webkit-details-marker{display:none;}
+  .daily-acc[open] summary span:last-child{transform:rotate(180deg);display:inline-block;}
+  @media (max-width:860px){ .daily-acc summary{grid-template-columns:1fr auto !important;grid-auto-flow:row;row-gap:8px;} .daily-acc summary > span:nth-child(3){grid-column:1 / -1;} }
 
   .ag-placar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px 26px;
     align-items:start;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
@@ -6984,35 +6988,9 @@ async function renderDaily() {
       return (a.pctOntem ?? 999) - (b.pctOntem ?? 999); // depois: pior entrega de ontem primeiro
     });
 
-    repsParaFichas = linhasPlacar.map(l => l.r); // mesma ordem do placar: quem precisa de atenção primeiro
-    const semRegistro = linhasPlacar.filter(l => !l.registrouHoje).length;
-    html += `
-      <div class="chart-card" style="margin-bottom:18px;padding:0;overflow:hidden;">
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:15px 20px;border-bottom:1px solid var(--line);">
-          <h3 style="font-family:'Poppins',sans-serif;font-size:15px;font-weight:700;margin:0;">Placar da Daily</h3>
-          <span style="font-size:11.5px;color:${semRegistro > 0 ? 'var(--red)' : 'var(--muted2)'};font-weight:${semRegistro > 0 ? 700 : 400};">${semRegistro > 0 ? `${semRegistro} sem promessa registrada hoje` : 'todo mundo registrou · clique num nome pra ir ao card'}</span>
-        </div>
-        <div class="reps-table-wrap"><div style="min-width:560px;">
-          <div style="display:grid;grid-template-columns:1.5fr 1fr 1fr .7fr;padding:10px 20px;background:var(--panel2);font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);gap:10px;">
-            <div>Executivo</div>
-            <div style="text-align:right;">Ontem (visitas)</div>
-            <div style="text-align:right;">Prometeu hoje</div>
-            <div style="text-align:right;">Fechou</div>
-          </div>
-          ${linhasPlacar.map(l => `
-            <div class="rep-row placar-row" data-owner="${l.r.ownerId}" style="display:grid;grid-template-columns:1.5fr 1fr 1fr .7fr;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
-              <div style="min-width:0;">
-                <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${l.r.name}</div>
-                <div style="font-size:10.5px;color:var(--muted2);">${l.r.praca}</div>
-              </div>
-              <div class="mono" style="text-align:right;font-size:13px;font-weight:700;color:${l.corOntem};">${l.pctOntem === null ? '—' : `${l.realOntem}/${l.promOntem}`}</div>
-              <div class="mono" style="text-align:right;font-size:12.5px;${l.registrouHoje ? '' : 'color:var(--red);font-weight:700;'}">${l.registrouHoje ? `${l.rowHoje.prometido_visitas ?? 0}v · ${l.rowHoje.prometido_avancos ?? 0}a · ${l.rowHoje.prometido_propostas ?? 0}p` : 'não registrou'}</div>
-              <div class="mono" style="text-align:right;font-size:13px;font-weight:700;${l.fechouHoje > 0 ? 'color:var(--green);' : 'color:var(--muted2);'}">${l.fechouHoje === null ? '—' : l.fechouHoje}</div>
-            </div>
-          `).join('')}
-        </div></div>
-      </div>
-    `;
+    repsParaFichas = linhasPlacar.map(l => l.r); // ordem de reunião: quem precisa de atenção primeiro
+    // Otimização 08/08 (Julyan): a TABELA do Placar morreu — os próprios cards pretos
+    // gamificados (abaixo) são o placar agora, um por executivo, na mesma ordem.
   }
 
   repsParaFichas.forEach(r => {
@@ -7093,32 +7071,67 @@ async function renderDaily() {
     // daqui: eram a mesma informação duas vezes, e 8x isso é o que estava afogando a tela.
     // O executivo continua vendo a ficha completa e gamificada na própria Minha Daily.
     const fechamentosHoje = r.fechamentosHubspotHoje ?? 0;
+    // Card do gestor (08/08, do jeito que o Julyan gosta): o banner PRETO gamificado —
+    // sequência, semana, pontos, fechamentos — em versão compacta, com o prometido ×
+    // realizado (que sobe sozinho a cada refresh de 2h do HubSpot) na faixa clara
+    // embaixo. Sem inputs (quem preenche é o executivo), sem lista de funil (Cockpit),
+    // sem conquistas (Minha Daily dele). Um card por pessoa, e ele É o placar.
+    // Painel de gestão field sales (08/08, padrão scoreboard dos melhores sales floors):
+    // FECHADO = uma linha-panorama por executivo relacionando PROMESSA → EXECUÇÃO → RESULTADO
+    // (visitas real/prometido ao vivo do HubSpot a cada 2h). ABERTO = o banner preto
+    // gamificado + as 3 barras de promessa + nota. Exceção grita primeiro: "sem promessa"
+    // em vermelho, e a ordenação já põe esses no topo.
+    const promV = hoje.prometido_visitas ?? 0;
+    const realVN = realVisitas || 0;
+    const pctVis = promV > 0 ? Math.min(100, Math.round((realVN / promV) * 100)) : 0;
+    const corExec = !registrouResumo ? 'var(--red)' : (promV > 0 && realVN >= promV) ? 'var(--green)' : 'var(--amber)';
+    const chipPromessa = registrouResumo
+      ? `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--green-soft);color:var(--green);white-space:nowrap;">prometeu ${promResumo}</span>`
+      : `<span style="font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 11px;background:var(--red-soft);color:var(--red);white-space:nowrap;">sem promessa hoje</span>`;
     const fichaGestorCompacta = `
-      <div class="chart-card" id="dailyCard_${r.ownerId}" style="margin-bottom:16px;padding:0;overflow:hidden;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;">
-          <div style="display:flex;align-items:baseline;gap:8px;">
-            <b style="font-family:'Poppins',sans-serif;font-size:14.5px;">${r.name.split(' ')[0]}</b>
-            <span style="font-size:11.5px;color:var(--muted2);">hoje é ${fmtDailyLabel(dailyRefDate).toLowerCase()}${fechamentosHoje > 0 ? ` · <b style="color:var(--green);">${fechamentosHoje} fechamento${fechamentosHoje === 1 ? '' : 's'} hoje</b>` : ''}</span>
+      <details class="daily-acc" id="dailyAcc_${r.ownerId}" style="background:var(--panel);border:1px solid var(--line);border-left:3px solid ${corExec};border-radius:var(--r-lg);margin-bottom:8px;overflow:hidden;">
+        <summary style="cursor:pointer;list-style:none;display:grid;grid-template-columns:150px minmax(140px,1fr) minmax(150px,1.1fr) 90px 64px 20px;align-items:center;gap:14px;padding:12px 18px;">
+          <b style="font-family:'Poppins',sans-serif;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.name.split(' ').slice(0, 2).join(' ')}</b>
+          <span>${chipPromessa}</span>
+          <span style="display:flex;align-items:center;gap:9px;min-width:0;">
+            <span style="flex:1;height:7px;border-radius:999px;background:var(--sunk);overflow:hidden;"><span style="display:block;height:100%;width:${pctVis}%;background:${corExec};border-radius:999px;"></span></span>
+            <span class="mono" style="font-size:12px;font-weight:800;color:${corExec};white-space:nowrap;">${realVN}/${promV} vis</span>
+          </span>
+          <span class="mono" style="font-size:12px;font-weight:800;text-align:right;color:${fechamentosHoje > 0 ? 'var(--green)' : 'var(--muted2)'};white-space:nowrap;">${fechamentosHoje} fechou</span>
+          <span class="mono" style="font-size:12px;font-weight:700;text-align:right;color:${seq > 0 ? 'var(--amber)' : 'var(--muted2)'};white-space:nowrap;">🔥 ${seq}d</span>
+          <span style="font-size:11px;color:var(--muted2);text-align:right;">▾</span>
+        </summary>
+        <div class="hoje-hero" style="border-radius:0;padding:16px 22px 14px;">
+          <div style="position:relative;z-index:2;display:flex;align-items:center;gap:30px;flex-wrap:wrap;">
+            <span style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--dark-mut);">Sequência</span>
+              <b style="font-family:'Poppins',sans-serif;font-size:24px;font-weight:800;color:var(--dark-ink);font-variant-numeric:tabular-nums;">${seq}</b><span style="font-size:16px;">🔥</span>
+            </span>
+            <span style="display:flex;align-items:center;gap:10px;">
+              <span style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--dark-mut);">Essa semana</span>
+              <span style="display:flex;gap:6px;">
+                ${semanaIcones.map(d => `<span style="display:flex;flex-direction:column;align-items:center;gap:3px;"><span style="width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:12px;background:${d.bg};border:1.5px solid ${d.border};">${d.icon}</span><span style="font-size:8.5px;font-weight:700;color:${d.col};">${d.dia}</span></span>`).join('')}
+              </span>
+            </span>
+            <span style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+              <span style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--red);">Pontos de hoje</span>
+              <b style="font-family:'Poppins',sans-serif;font-size:24px;font-weight:800;color:var(--dark-ink);font-variant-numeric:tabular-nums;">${pontosHoje}</b>
+            </span>
           </div>
-          <button data-verfunil="${r.ownerId}" style="background:none;border:none;color:var(--red);font-weight:700;font-size:11.5px;cursor:pointer;padding:0;">Ver funil completo →</button>
         </div>
-        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
+        <div style="padding:16px 22px 14px;display:flex;flex-direction:column;gap:12px;">
           ${linhaPromVsReal('Visitas', realVisitas, hoje.prometido_visitas, 10, 'var(--green)')}
           ${linhaPromVsReal('Avanços de etapa', realAvancos, hoje.prometido_avancos, 25, 'var(--amber)')}
           ${linhaPromVsReal('Propostas', realPropostas, hoje.prometido_propostas, 40, 'var(--red)')}
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            ${hoje.nota_campo ? `<span style="font-size:11.5px;color:var(--muted);line-height:1.5;flex:1;min-width:0;"><b style="color:var(--ink);">Nota:</b> ${esc(hoje.nota_campo)}</span>` : '<span style="flex:1;"></span>'}
+            <button data-verfunil="${r.ownerId}" style="background:none;border:none;color:var(--red);font-weight:700;font-size:11.5px;cursor:pointer;padding:0;white-space:nowrap;">Ver funil completo →</button>
+          </div>
         </div>
-        ${hoje.nota_campo ? `
-        <div style="padding:0 20px 16px;">
-          <div style="background:var(--panel2);border-radius:var(--r-md);padding:10px 14px;font-size:12px;color:var(--muted);line-height:1.5;"><b style="color:var(--ink);">Nota de campo:</b> ${esc(hoje.nota_campo)}</div>
-        </div>` : ''}
-      </div>
+      </details>
     `;
 
-    html += souGestor ? `
-      ${inicioAcc}
-      ${fichaGestorCompacta}
-      ${fimAcc}
-    ` : `
+    html += souGestor ? fichaGestorCompacta : `
       ${inicioAcc}
       <div class="chart-card" id="dailyCard_${r.ownerId}" style="margin-bottom:16px;padding:0;overflow:hidden;">
         <div class="hoje-hero">
@@ -7215,15 +7228,6 @@ async function renderDaily() {
 
   el.innerHTML = html;
   wireRoteiroChecks(el);
-
-  document.querySelectorAll('.placar-row').forEach(row => {
-    row.addEventListener('click', () => {
-      const acc = document.getElementById(`dailyAcc_${row.dataset.owner}`);
-      if (acc) acc.open = true;
-      const card = document.getElementById(`dailyCard_${row.dataset.owner}`);
-      if (card && typeof smoothScrollTo === 'function') smoothScrollTo(acc || card);
-    });
-  });
 
   // "Ver funil completo →": a ficha compacta do gestor não duplica quentes/travados —
   // manda pro dossiê da pessoa, que já é a fonte única disso (mesmo usado em "Por executivo").
