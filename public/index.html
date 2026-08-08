@@ -8358,8 +8358,57 @@ async function renderPDIs() {
         </div>
       </div>`;
 
+    // "O time" (Claude Design item pessoas-gestor.html) — card por executivo, urgente
+    // primeiro. Urgência real, não estimada: PDI vencido (calculado acima) OU gargalo
+    // preenchido pela análise automática OU 4+ leads travados. Card urgente ganha borda
+    // vermelha + CTA "Preparar 1:1"; os demais viram chip compacto "em dia"/"plano ativo".
+    const dataHojeISO2 = hojeISO;
+    const cardsTime = DATA.reps.map(x => {
+      const estado = getPdiState(x.ownerId, x.compromissos.length);
+      const temCompromisso = x.compromissos.length > 0;
+      const feitosCount = estado.checked.filter(Boolean).length;
+      const tudoFeito = temCompromisso && feitosCount === x.compromissos.length;
+      const pdiVencido = estado.data && estado.data < dataHojeISO2 && !tudoFeito;
+      const semPlano = !temCompromisso || tudoFeito;
+      const travadosAlto = (x.leadsTravados || 0) >= 4;
+      const urgente = pdiVencido || (x.gargalo && travadosAlto);
+      return { x, estado, temCompromisso, feitosCount, tudoFeito, pdiVencido, semPlano, travadosAlto, urgente };
+    }).sort((a, b) => (b.urgente - a.urgente) || (b.x.leadsTravados || 0) - (a.x.leadsTravados || 0));
+
+    const urgentes = cardsTime.filter(c => c.urgente);
+    const emDia = cardsTime.filter(c => !c.urgente);
+
+    const oTimeHTML = `
+      <div class="chart-card" style="margin-bottom:20px;">
+        <div style="display:flex;align-items:center;gap:9px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="9" cy="7" r="4"/><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          <b style="font-family:'Poppins',sans-serif;font-size:14px;">O time</b><span style="font-size:11px;color:var(--muted2);">ordenado por urgência do coaching</span>
+        </div>
+        ${urgentes.length > 0 ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:15px;">
+          ${urgentes.map(c => `
+            <div class="pessoas-card-urgente" data-owner="${c.x.ownerId}" style="border:1.5px solid var(--red);border-radius:15px;padding:14px 16px;font-size:12px;background:var(--red-soft);cursor:pointer;">
+              <div style="display:flex;align-items:center;gap:9px;"><span style="width:30px;height:30px;border-radius:99px;background:var(--red);color:#fff;font-family:'Poppins',sans-serif;font-weight:800;font-size:11px;display:grid;place-items:center;">${esc(c.x.name.split(' ').map(p => p[0]).slice(0, 2).join(''))}</span><span><b style="font-size:13px;">${esc(c.x.name)}</b><span style="display:block;font-size:10.5px;color:var(--muted2);">${esc(c.x.praca || '')}</span></span></div>
+              ${c.x.gargalo ? `<div style="margin-top:9px;color:var(--muted);">Gargalo: <b style="color:var(--ink);">${esc(c.x.gargalo)}</b></div>` : ''}
+              <div style="margin-top:4px;font-size:11px;color:var(--red);font-weight:700;">${[c.pdiVencido ? 'PDI vencido' : '', c.travadosAlto ? `${c.x.leadsTravados} travados` : ''].filter(Boolean).join(' · ')}</div>
+              <span class="pessoas-btn-preparar" data-owner="${c.x.ownerId}" style="display:inline-block;margin-top:10px;background:var(--red);color:#fff;border-radius:999px;padding:4px 13px;font-size:11px;font-weight:700;">Preparar 1:1 →</span>
+            </div>
+          `).join('')}
+        </div>` : `<div class="empty-state" style="margin-top:12px;">Ninguém com PDI vencido ou funil muito travado agora — time em dia.</div>`}
+        ${emDia.length > 0 ? `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;">
+          ${emDia.map(c => `
+            <div class="pessoas-card-dia" data-owner="${c.x.ownerId}" style="border:1px solid var(--line);border-radius:15px;padding:11px 14px;font-size:12px;display:flex;align-items:center;gap:9px;cursor:pointer;">
+              <span style="width:26px;height:26px;border-radius:99px;background:var(--panel2);color:var(--muted);font-family:'Poppins',sans-serif;font-weight:800;font-size:10px;display:grid;place-items:center;flex:none;">${esc(c.x.name.split(' ').map(p => p[0]).slice(0, 2).join(''))}</span>
+              <span><b>${esc(c.x.name.split(' ')[0])}</b> · ${c.temCompromisso ? `plano ativo ${c.feitosCount}/${c.x.compromissos.length}${c.tudoFeito ? ' ✓' : ''}` : 'sem plano ativo'}</span>
+            </div>
+          `).join('')}
+        </div>` : ''}
+      </div>`;
+
     el.innerHTML = `
       ${bannerPessoas}
+      ${oTimeHTML}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
         ${DATA.reps.map(x => `
           <button class="pdi-chip" data-owner="${x.ownerId}" style="cursor:pointer;font-size:12.5px;font-weight:700;border-radius:var(--r-pill);padding:10px 15px;min-height:40px;display:inline-flex;align-items:center;background:${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--panel)'};color:${x.ownerId === r.ownerId ? '#fff' : 'var(--muted)'};border:1px solid ${x.ownerId === r.ownerId ? 'var(--red)' : 'var(--line)'};">${x.name}</button>
@@ -8383,6 +8432,17 @@ async function renderPDIs() {
     `;
     el.querySelectorAll('.pdi-chip').forEach(chip => {
       chip.addEventListener('click', () => { pdiSelecionado = chip.dataset.owner; renderPDIs(); });
+    });
+    el.querySelectorAll('.pessoas-card-urgente, .pessoas-card-dia, .pessoas-btn-preparar').forEach(item => {
+      item.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        pdiSelecionado = item.dataset.owner;
+        renderPDIs();
+        setTimeout(() => {
+          const card = document.querySelector('.daily-rep-card');
+          if (card && typeof smoothScrollTo === 'function') smoothScrollTo(card);
+        }, 50);
+      });
     });
   } else {
     const r = DATA.reps.find(x => x.ownerId === sessaoAtual.ownerId);
