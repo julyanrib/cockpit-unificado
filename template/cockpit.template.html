@@ -600,6 +600,9 @@
   .daily-acc summary::-webkit-details-marker{display:none;}
   .daily-acc[open] summary span:last-child{transform:rotate(180deg);display:inline-block;}
   @media (max-width:860px){ .daily-acc summary{grid-template-columns:1fr auto !important;grid-auto-flow:row;row-gap:8px;} .daily-acc summary > span:nth-child(3){grid-column:1 / -1;} }
+  /* Pessoas: barra de etapa clicável (abre os leads daquela etapa pro executivo) */
+  .coach-funil-etapa:hover span:last-child{box-shadow:inset 0 0 0 1.5px var(--ink);}
+  .coach-funil-etapa:hover span:first-child{color:var(--ink);font-weight:700;}
 
   .ag-placar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px 26px;
     align-items:start;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
@@ -1570,6 +1573,9 @@ function aplicarVisaoPorPapel() {
   if (lblAgenda) lblAgenda.textContent = souRep ? 'Rota & Agenda' : 'Agenda';
   const lblResumo = document.querySelector('#tabBtnResumo .tab-btn-label');
   if (lblResumo) lblResumo.textContent = 'Semana';
+  // Julyan (08/08): "Semana" sai do menu do executivo — a análise semanal dele agora é
+  // trabalhada no 1:1 pelo gestor (aba Pessoas), não é mais autoatendimento no cockpit.
+  document.getElementById('tabBtnResumo').style.display = souGestorSessao ? 'flex' : 'none';
   const lblPDIs = document.querySelector('#tabBtnPDIs .tab-btn-label');
   if (lblPDIs) lblPDIs.textContent = souGestorSessao ? 'Pessoas' : 'Desenvolvimento';
 
@@ -2278,11 +2284,14 @@ async function renderMeuPainel() {
       </span>` : ''}
     </div>
 
-    <div style="display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:18px;align-items:stretch;" class="hoje-l1-grid">
+    <!-- Julyan (08/08): align-items:stretch fazia os cards de Ações/Ontem esticarem até
+         a altura da coluna mais alta, sobrando espaço em branco enorme embaixo — bug
+         real, visto ao vivo. align-items:start deixa cada card na sua altura natural. -->
+    <div style="display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:18px;align-items:start;" class="hoje-l1-grid">
 
       ${buildAcoesHojeHTML(r, agendaVaziaHoje)}
 
-      <div class="chart-card" style="margin:0;display:flex;flex-direction:column;">
+      <div class="chart-card" style="margin:0;">
         <h3 style="margin-bottom:4px;">Ontem — prometido × realizado</h3>
         <div class="chart-subtitle" style="margin:0 0 12px;">O que você combinou na Daily de ontem e o que de fato aconteceu.</div>
         ${ontemTemDado
@@ -2300,23 +2309,7 @@ async function renderMeuPainel() {
           : `<div class="empty-state" style="padding:14px 0;">Sem Daily registrada ontem — sem número pra comparar (nada inventado aqui).</div>`}
       </div>
 
-      <div style="display:grid;gap:16px;align-content:start;">
-        ${buildFilaDeHojeHTML(r)}
-        <div class="chart-card" style="margin:0;">
-          <div style="display:flex;align-items:center;gap:9px;">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0114 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
-            <b style="font-family:'Poppins',sans-serif;font-size:14px;">Começar a rota</b>
-          </div>
-          <div style="margin-top:11px;display:flex;gap:10px;font-size:11.5px;color:var(--muted);">
-            <span style="flex:1;background:var(--panel2);border-radius:10px;padding:8px 11px;"><b style="color:var(--ink);">${DATA.agenda ? (agendaNormalizar(DATA.agenda).filter(e => e.ownerId === r.ownerId && e.inicio && isoDate(e.inicio) === isoDate(new Date())).length) : 0}</b> na rota de hoje</span>
-            <span style="flex:1;background:var(--panel2);border-radius:10px;padding:8px 11px;"><b style="color:var(--ink);">${meusQuentesCount + acimaDoSlaCount}</b> sugestões perto</span>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
-            <button id="meuPainelComecarRota" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;">Montar rota →</button>
-            <span style="font-size:10.5px;color:var(--muted2);">a rua continua no Expogo</span>
-          </div>
-        </div>
-      </div>
+      ${buildFilaDeHojeHTML(r)}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:18px;" class="hoje-l2-grid">
@@ -2358,8 +2351,6 @@ async function renderMeuPainel() {
         </div>
       </div>
     </div>
-
-    <div id="planoDoDiaSlot" style="margin-top:18px;"></div>
 
     <div style="margin-top:18px;">${buildDistribuicaoCompactaHTML(r, 'meuPainel')}</div>
 
@@ -2432,11 +2423,9 @@ async function renderMeuPainel() {
 
   wireRoteiroChecks(el);
 
-  // Etapa 6a — card "Fechar meu plano de hoje" (async: consulta planos_diarios
-  // e leads_prospeccao no Supabase; se algo falhar, o resto do painel fica de pé).
-  if (DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
-    montarPlanoDoDia(r).catch(e => console.error('Erro ao montar o plano do dia:', e));
-  }
+  // Julyan (08/08): "Onde você vai agir" (agenda de hoje + contas-alvo + mapa da
+  // microrrota) saiu da Hoje e virou parte da aba Rota & Agenda — chamado agora em
+  // renderAgenda(), não aqui. Hoje ficou só com a triagem do dia (ações/quentes/ontem).
 
   const btnIrDaily = document.getElementById('meuPainelIrDaily');
   if (btnIrDaily) {
@@ -4104,7 +4093,12 @@ function renderAgenda() {
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#E0A64A;">${naRotaHoje}</div><div style="font-size:11px;color:var(--dark-mut);">na rota de hoje</div></div>
       </div>
       <button data-agrota style="flex:none;background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:11px 22px;font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;">Planejar minha rota →</button>
-    </div>`;
+    </div>
+    <!-- Julyan (08/08): "Onde você vai agir" (agenda de hoje + contas-alvo + mapa da
+         microrrota) mudou de casa — antes vivia na Hoje, agora mora aqui, junto com o
+         resto de rota/agenda. Adicionar uma conta-alvo aqui também cria a tarefa de
+         Visita no HubSpot automaticamente (ver alternarRota → api/criar-tarefa-rota). -->
+    <div id="planoDoDiaSlot"></div>`;
   })() : '';
 
   // Buracos da semana (design v3): dias úteis da semana em foco sem NENHUM compromisso.
@@ -4235,6 +4229,13 @@ function renderAgenda() {
 
   if (agendaEstado.modo === 'hora') montarFullCalendar();
 
+  // Julyan (08/08): "Onde você vai agir" mudou de casa (era da Hoje) — populamos o
+  // slot aqui agora. Mesma condição de sempre (Supabase configurado, papel = rep).
+  if (souRep && DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
+    const meuRep = (DATA.reps || []).find(x => x.ownerId === sessaoAtual.ownerId);
+    if (meuRep) montarPlanoDoDia(meuRep).catch(e => console.error('Erro ao montar o plano do dia:', e));
+  }
+
   // ETAPA 3: painel "Começar rota" do dia — só pro executivo (rota é individual) e só
   // quando a semana em foco é a atual (não faz sentido "começar rota" de uma semana
   // passada ou futura). Injetado no topo, acima do placar/grade semanal já existentes.
@@ -4243,10 +4244,13 @@ function renderAgenda() {
     Promise.all([buildRotaContasAlvoHTML(sessaoAtual.ownerId, hojeISOStr), buildRotaDoDiaHTML(sessaoAtual.ownerId, hojeISOStr)]).then(([htmlContasAlvo, htmlAgenda]) => {
       // Visto ao vivo 08/08: injetado com afterbegin no box, o painel ficava ACIMA da
       // faixa escura — a faixa é o cabeçalho da aba e tem que ser a primeira coisa.
-      // Os painéis de rota entram logo DEPOIS dela (contas-alvo primeiro, depois o dia).
+      // Os painéis de rota entram DEPOIS do plano do dia (planejamento), não direto
+      // depois do hero: ordem final é hero -> plano do dia -> contas-alvo sequenciadas
+      // (execução) -> começar rota (compromissos agendados) -> resto da agenda.
       const heroAg = box.querySelector('.cockpit-hero-combo');
-      const alvoIns = heroAg || box;
-      const modoIns = heroAg ? 'afterend' : 'afterbegin';
+      const planoSlot = document.getElementById('planoDoDiaSlot');
+      const alvoIns = planoSlot || heroAg || box;
+      const modoIns = (planoSlot || heroAg) ? 'afterend' : 'afterbegin';
       alvoIns.insertAdjacentHTML(modoIns, htmlAgenda);
       religarBotoesRota(box, sessaoAtual.ownerId, hojeISOStr);
       if (htmlContasAlvo) alvoIns.insertAdjacentHTML(modoIns, htmlContasAlvo);
@@ -6054,9 +6058,9 @@ async function montarPlanoDoDia(r) {
   const fechadoEmFmt = p.fechado_em ? new Date(p.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
 
   slot.innerHTML = `
-    <div style="display:flex;align-items:center;gap:8px;margin:22px 0 12px;">
-      <span style="font-family:'Poppins',sans-serif;font-size:12px;font-weight:800;color:#fff;background:var(--red);border-radius:999px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;flex:none;">3</span>
-      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);white-space:nowrap;">Onde você vai agir</span>
+    <div style="display:flex;align-items:center;gap:8px;margin:0 0 12px;">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="color:var(--muted2);flex:none;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>
+      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);white-space:nowrap;">Monte a rota de hoje</span>
       <span style="flex:1;height:1px;background:var(--line);"></span>
     </div>
 
@@ -6385,12 +6389,26 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // execução. Com plano fechado, a seleção fica travada até "Editar plano".
   async function alternarRota(l, botao) {
     if (botao) { botao.disabled = true; botao.textContent = 'Salvando...'; }
-    const campos = naRotaHojeFn(l)
+    const estavaNaRota = naRotaHojeFn(l);
+    const campos = estavaNaRota
       ? { status: 'atribuido', data_rota: null }
       : { status: 'na_rota', data_rota: hoje };
     const { error: e2 } = await supa.from('leads_prospeccao')
       .update({ ...campos, updated_at: new Date().toISOString() }).eq('id', l.id);
     if (e2) { mostrarToast('Não consegui atualizar essa conta-alvo. Tente de novo.', 'erro'); if (botao) { botao.disabled = false; } return; }
+
+    // Julyan (08/08): adicionar à rota agora joga automaticamente uma tarefa de
+    // Visita no HubSpot — a visita aparece na Agenda/Daily sem depender de também
+    // marcar no Expogo. Horário espaçado por ordem de entrada (9h + 45min por parada
+    // já na rota) só pra não empilhar tudo na mesma hora do calendário; é um ponto de
+    // partida editável, não um compromisso de horário real com o cliente.
+    if (!estavaNaRota) {
+      const ordemHoje = naRotaBase.length; // quantas já estavam na rota antes desta
+      const minutosBase = Math.min(9 * 60 + ordemHoje * 45, 17 * 60); // trava em 17h
+      const horaPrevista = String(Math.floor(minutosBase / 60)).padStart(2, '0') + ':' + String(minutosBase % 60).padStart(2, '0');
+      criarTarefaVisitaNoHubspot(l, r.ownerId, horaPrevista).catch(e => console.error('Falha ao criar tarefa de visita no HubSpot:', e));
+    }
+
     // Re-renderiza o plano inteiro: checkboxes de contas-alvo e mapa precisam
     // refletir a nova seleção (fonte única: leads_prospeccao).
     montarPlanoDoDia(r);
@@ -6842,19 +6860,11 @@ async function renderDaily() {
   // Resumo Semanal. Puxa a primeira ação individual dela (mesmo dado que já existe em
   // DATA.resumoSemanal.porRep) e mostra como lembrete — não duplica o texto todo, só a
   // prioridade nº 1, com um link direto pra aba onde o resto está.
-  const focoSemanaHtml = (() => {
-    if (!souRepDaily || !DATA.resumoSemanal) return '';
-    const meuIndividual = (DATA.resumoSemanal.porRep || {})[sessaoAtual.ownerId];
-    const primeiraAcao = meuIndividual && meuIndividual.comoAgirIndividual && meuIndividual.comoAgirIndividual[0];
-    if (!primeiraAcao) return '';
-    return `
-      <div style="display:flex;align-items:center;gap:10px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:11px 16px;margin-bottom:16px;flex-wrap:wrap;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);white-space:nowrap;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;width:13px;height:13px;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>Foco da semana</span>
-        <span style="font-size:13px;line-height:1.5;flex:1;min-width:200px;">${primeiraAcao}</span>
-        <button onclick="activateTab('viewResumo')" style="font-size:11.5px;font-weight:700;color:var(--red);background:transparent;border:1px solid var(--red);border-radius:var(--r-pill);padding:5px 12px;cursor:pointer;white-space:nowrap;">ver Resumo Semanal →</button>
-      </div>
-    `;
-  })();
+  // Julyan (08/08): "Foco da semana" apontava pra "ver Resumo Semanal →" — aba que
+  // acabou de sair do menu do executivo (agora é trabalhada por ele no 1:1, não mais
+  // autoatendimento). Deixar o lembrete sem link morto é pior que remover; a análise
+  // completa segue existindo, só que o gestor traz ela pro 1:1 em vez do rep buscar aqui.
+  const focoSemanaHtml = '';
 
   // Banner escuro padrão (Claude Design item 4): mesma pergunta certa por papel, KPIs
   // reais tirados do getDaily de cada rep — nada recalculado, é o mesmo dado do placar
@@ -7828,6 +7838,31 @@ async function tokenDeSessaoGlobal() {
     const { data } = resultado;
     return data && data.session ? data.session.access_token : null;
   } catch (e) { return null; }
+}
+
+// Julyan (08/08): adicionar uma conta-alvo à rota do dia (Rota & Agenda) cria essa
+// tarefa no HubSpot automaticamente — "best effort": se falhar (rede, CDN, servidor),
+// a seleção da rota já foi salva no Supabase e o resto do plano segue de pé; só avisa
+// discretamente, nunca trava a tela. Reaproveita 100% do reconhecimento que já existe
+// pra "Visita - <nome>" (fetch-hubspot.js, Agenda, contagem da Daily) — zero lógica
+// nova de leitura, só a escrita via api/criar-tarefa-rota.js (nunca expõe o token).
+async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista) {
+  const token = await tokenDeSessaoGlobal();
+  try {
+    const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-tarefa-rota', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: JSON.stringify({ nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista })
+    }), 8000, 'criar-tarefa-rota');
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      mostrarToast(`Adicionado à rota, mas não consegui criar a tarefa no HubSpot (${(data && data.erro) || 'erro desconhecido'}).`, 'erro');
+      return;
+    }
+    mostrarToast(`"${lead.nome}" adicionado à rota — tarefa de visita criada no HubSpot às ${horaPrevista}.`, 'sucesso');
+  } catch (e) {
+    mostrarToast('Adicionado à rota, mas não consegui falar com o HubSpot agora (rede ou servidor fora). Tente confirmar depois.', 'erro');
+  }
 }
 
 let prospeccaoCache = [];
@@ -9101,12 +9136,17 @@ async function renderCoaching() {
   const funilMiniEl = document.getElementById(`coachFunilMini${r.ownerId}`);
   if (funilMiniEl && stageEntries.length > 0) {
     const maxV = Math.max(...stageEntries.map(([, c]) => c), 1);
+    // Julyan (08/08): clicar na etapa abre os leads daquela etapa SÓ desse executivo,
+    // pra conversar no 1:1 com nome e SLA na mão — mesmo drawer usado no resto do cockpit.
     funilMiniEl.innerHTML = stageEntries.map(([sid, c]) => `
-      <div style="display:grid;grid-template-columns:88px 1fr;align-items:center;gap:8px;margin-bottom:4px;">
+      <button type="button" class="coach-funil-etapa" data-stageid="${sid}" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:88px 1fr;align-items:center;gap:8px;margin-bottom:4px;width:100%;background:none;border:none;padding:0;cursor:pointer;font-family:inherit;text-align:left;">
         <span style="font-size:10.5px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${STAGE_LABELS[sid]}</span>
         <span style="height:14px;background:var(--sunk);border-radius:5px;overflow:hidden;"><span style="display:block;height:14px;width:${Math.max(8, c / maxV * 100).toFixed(0)}%;background:${stageColor(sid)};border-radius:5px;color:#fff;font-size:9.5px;font-weight:700;text-align:right;padding-right:5px;line-height:14px;box-sizing:border-box;">${c}</span></span>
-      </div>
+      </button>
     `).join('');
+    funilMiniEl.querySelectorAll('.coach-funil-etapa').forEach(btn => {
+      btn.addEventListener('click', () => openStageModal(btn.dataset.stageid, STAGE_LABELS[btn.dataset.stageid], btn.dataset.owner));
+    });
   }
 
   const ownerId = r.ownerId;
