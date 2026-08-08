@@ -7254,7 +7254,7 @@ function abrirModalConfirmacao({ titulo, corpoHTML, confirmarLabel, aoConfirmar 
   btnCancelar.focus();
   return overlay;
 }
-let prospeccaoFiltro = { cidade: '', bairro: '', notaMin: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '' };
+let prospeccaoFiltro = { cidade: '', bairro: '', notaMin: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false };
 
 async function carregarProspeccao() {
   if (!DATA.supabase || !supa) { prospeccaoCache = []; return; }
@@ -7279,7 +7279,8 @@ function prospeccaoAplicarFiltros(lista) {
     (!f.fonte || l.fonte === f.fonte) &&
     (!f.responsavel || String(l.responsavel_owner_id) === f.responsavel) &&
     (!f.status || l.status === f.status) &&
-    (f.jaExiste === '' || String(l.ja_existe_hubspot) === f.jaExiste)
+    (f.jaExiste === '' || String(l.ja_existe_hubspot) === f.jaExiste) &&
+    (!f.semTelefone || !l.telefone)
   );
 }
 
@@ -7466,15 +7467,28 @@ async function renderProspeccaoNova() {
     }
   }
 
-  el.innerHTML = `
-    ${bannerProspeccao}
-    ${cardsPraca}
-    <div class="chart-card" style="border-left:3px solid var(--blue);margin-bottom:14px;">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;">
-        <h3 style="margin:0;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>Prospecção — ${filtrados.length} de ${prospeccaoCache.length}</h3>
-        <span style="font-size:11.5px;color:var(--muted2);">mostrando ${filtrados.length === 0 ? 0 : (prospeccaoPagina - 1) * POR_PAGINA + 1}–${Math.min(prospeccaoPagina * POR_PAGINA, filtrados.length)} · pág. ${prospeccaoPagina} de ${totalPaginas}</span>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+  // Pílulas de filtro rápido (Claude Design): Todas / cidade com mais pendentes /
+  // Nota ≥ 4,5 / Sem telefone — cada uma só liga/desliga um campo de
+  // prospeccaoFiltro que já existe. Os filtros avançados (bairro, categoria, fonte,
+  // status, duplicata, mínimos numéricos) continuam por baixo, num "mais filtros"
+  // recolhido — nada de capacidade foi perdida, só reorganizada.
+  const cidadeTopo = [...new Set(prospeccaoCache.map(l => l.cidade).filter(Boolean))]
+    .map(cid => ({ cid, n: prospeccaoCache.filter(l => l.cidade === cid).length }))
+    .sort((a, b) => b.n - a.n)[0];
+  const pillAtiva = (cond) => cond ? 'background:var(--ink);color:var(--panel);border-color:var(--ink);' : 'background:none;color:var(--muted);border-color:var(--line-btn);';
+  const semFiltroAlgum = !prospeccaoFiltro.cidade && !prospeccaoFiltro.notaMin && !prospeccaoFiltro.semTelefone;
+  const pills = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <button data-pill="todas" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(semFiltroAlgum)}">Todas ${prospeccaoCache.length}</button>
+      ${cidadeTopo ? `<button data-pill="cidadeTopo" data-cid="${esc(cidadeTopo.cid)}" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.cidade === cidadeTopo.cid)}">${esc(cidadeTopo.cid)} ${cidadeTopo.n}</button>` : ''}
+      <button data-pill="nota45" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(Number(prospeccaoFiltro.notaMin) === 4.5)}">Nota ≥ 4,5</button>
+      <button data-pill="semtel" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.semTelefone)}">Sem telefone</button>
+    </div>`;
+
+  const maisFiltros = `
+    <details style="margin-bottom:14px;">
+      <summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--muted2);">mais filtros ▾</summary>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
         <select id="pfCidade" aria-label="Filtrar por cidade" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Cidade (todas)</option>
           ${cidades.map(c => `<option ${prospeccaoFiltro.cidade === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
@@ -7503,21 +7517,106 @@ async function renderProspeccaoNova() {
         <input id="pfNotaMin" type="number" step="0.1" aria-label="Nota mínima" placeholder="Nota mín." value="${prospeccaoFiltro.notaMin}" style="width:90px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
         <input id="pfAvaliacoesMin" type="number" aria-label="Avaliações mínimas" placeholder="Avaliações mín." value="${prospeccaoFiltro.avaliacoesMin}" style="width:120px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
       </div>
-      ${sessaoAtual.role === 'manager' ? `
-      <div id="prospeccaoLoteBar" style="display:${nSel > 0 ? 'flex' : 'none'};align-items:center;gap:12px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:12px;">
-        <b style="font-size:12.5px;"><span id="prospeccaoSelCount">${nSel}</span> selecionada(s)</b>
-        <button id="prospeccaoCriarLote" style="font-size:12px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:8px 16px;cursor:pointer;">Criar no HubSpot… (revisar lote)</button>
-        <button id="prospeccaoLimparSel" style="font-size:12px;font-weight:700;color:var(--muted);background:none;border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;">Limpar seleção</button>
-      </div>` : ''}
-      <div style="display:flex;flex-direction:column;gap:8px;">
-        ${pagina.length === 0 ? '<div class="empty-state">Nenhum lead bate com esses filtros.</div>' : pagina.map(prospeccaoCardHTML).join('')}
+    </details>`;
+
+  // Tabela (Claude Design): checkbox · restaurante · praça · nota · avaliações ·
+  // executivo · origem — clique na linha abre a ficha no drawer.
+  const podeAgirLinha = l => sessaoAtual.role === 'manager' || String(l.responsavel_owner_id) === String(sessaoAtual.ownerId);
+  const linhasTabela = pagina.map(l => {
+    const nomeResp = l.responsavel_owner_id ? ((DATA.reps.find(r => r.ownerId === String(l.responsavel_owner_id)) || {}).name || '').split(' ')[0] : '—';
+    const podeSelecionar = sessaoAtual.role === 'manager' && l.status !== 'criado_hubspot';
+    return `<div class="prospeccao-linha" data-lead="${l.id}" style="display:grid;grid-template-columns:36px 1.7fr .9fr .5fr .8fr 1fr .9fr;padding:10px 22px;font-size:12.5px;border-bottom:1px solid var(--line-soft);align-items:center;cursor:pointer;font-variant-numeric:tabular-nums;">
+      <span>${podeSelecionar ? `<input type="checkbox" class="prospeccao-sel" data-lead="${l.id}" ${prospeccaoSelecao.has(l.id) ? 'checked' : ''} aria-label="Selecionar ${esc(l.nome)} pro lote" style="width:16px;height:16px;cursor:pointer;" onclick="event.stopPropagation();">` : ''}</span>
+      <span><b>${esc(l.nome)}</b>${!l.telefone ? ' <span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:700;">sem telefone</span>' : ''}</span>
+      <span>${esc(l.cidade || '—')}</span>
+      <b style="text-align:right;">${l.nota != null ? l.nota.toFixed(1).replace('.', ',') : '—'}</b>
+      <span style="text-align:right;color:var(--muted);">${l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') : '—'}</span>
+      <span>${esc(nomeResp)}</span>
+      <span style="text-align:right;font-size:10.5px;color:var(--muted2);">${esc(l.fonte || '—')}</span>
+    </div>`;
+  }).join('');
+
+  // Backlog aprovado (Claude Design): aprovadas = já viraram empresa no HubSpot;
+  // visitadas = dessas, quantas já aparecem com negócio ativo no funil real
+  // (match por nome, normalizado, contra TODOS os donos — não é estimativa, é
+  // olhar se o negócio já saiu da conta-alvo crua e virou trabalho de verdade).
+  let backlogAprovadoHTML = '';
+  if (souGestorProsp) {
+    const normNomeProsp = s => String(s || '').toLowerCase().trim();
+    const nomesNoFunil = new Set();
+    Object.values(DATA.funilLeads || {}).forEach(lista => (lista || []).forEach(d => { if (d.name) nomesNoFunil.add(normNomeProsp(d.name)); }));
+    const porCidadeBacklog = {};
+    prospeccaoCache.forEach(l => {
+      if (l.status !== 'criado_hubspot' || !l.cidade) return;
+      const c = (porCidadeBacklog[l.cidade] = porCidadeBacklog[l.cidade] || { aprovadas: 0, visitadas: 0 });
+      c.aprovadas++;
+      if (nomesNoFunil.has(normNomeProsp(l.nome))) c.visitadas++;
+    });
+    const cidadesBacklog = Object.keys(porCidadeBacklog).sort((a, b) => porCidadeBacklog[b].aprovadas - porCidadeBacklog[a].aprovadas);
+    if (cidadesBacklog.length > 0) {
+      backlogAprovadoHTML = `
+      <div class="chart-card" style="margin-bottom:14px;">
+        <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--green)" stroke-width="1.75" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
+          <h3 style="margin:0;">Backlog aprovado · ${prospeccaoCache.filter(l => l.status === 'criado_hubspot').length}</h3>
+          <span style="font-size:11px;color:var(--muted2);">vira visita obrigatória no Expogo</span>
+        </div>
+        <div style="display:grid;gap:9px;margin-top:12px;font-variant-numeric:tabular-nums;">
+          ${cidadesBacklog.map(cid => {
+            const d = porCidadeBacklog[cid];
+            const pct = d.aprovadas > 0 ? Math.round(d.visitadas / d.aprovadas * 100) : 0;
+            const cor = pct >= 50 ? 'var(--green)' : 'var(--red)';
+            return `<div>
+              <div style="display:flex;justify-content:space-between;font-size:12px;"><span>${esc(cid)}</span><span style="color:${pct < 50 ? 'var(--red);font-weight:700;' : 'var(--muted);'}">${d.visitadas}/${d.aprovadas} visitadas</span></div>
+              <div style="height:6px;background:var(--sunk);border-radius:3px;margin-top:4px;"><div style="height:6px;width:${Math.max(3, pct)}%;background:${cor};border-radius:3px;"></div></div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+  }
+
+  el.innerHTML = `
+    ${bannerProspeccao}
+    ${cardsPraca}
+    <div class="chart-card" style="padding:0;overflow:hidden;margin-bottom:14px;">
+      <div style="padding:18px 22px 0;">
+        <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:14px;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/></svg>
+          <h3 style="margin:0;">Fila de aprovação</h3>
+        </div>
+        ${pills}
+        ${maisFiltros}
       </div>
-      ${totalPaginas > 1 ? `
-      <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px;">
-        <button id="prospeccaoPgAnt" ${prospeccaoPagina <= 1 ? 'disabled' : ''} style="font-size:12px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer;${prospeccaoPagina <= 1 ? 'opacity:.4;cursor:default;' : ''}">← anterior</button>
-        <span style="font-size:12px;color:var(--muted2);">página ${prospeccaoPagina} de ${totalPaginas}</span>
-        <button id="prospeccaoPgProx" ${prospeccaoPagina >= totalPaginas ? 'disabled' : ''} style="font-size:12px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 16px;cursor:pointer;${prospeccaoPagina >= totalPaginas ? 'opacity:.4;cursor:default;' : ''}">próxima →</button>
-      </div>` : ''}
+      <div style="display:grid;grid-template-columns:36px 1.7fr .9fr .5fr .8fr 1fr .9fr;background:var(--panel2);padding:8px 22px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted2);align-items:center;">
+        <span>${sessaoAtual.role === 'manager' ? `<input type="checkbox" id="prospeccaoSelAll" aria-label="Selecionar todos os leads desta página" style="width:15px;height:15px;cursor:pointer;">` : ''}</span>
+        <span>RESTAURANTE</span><span>PRAÇA</span><span style="text-align:right;">NOTA</span><span style="text-align:right;">AVALIAÇÕES</span><span>EXECUTIVO</span><span style="text-align:right;">ORIGEM</span>
+      </div>
+      <div id="prospeccaoTabelaCorpo">
+        ${pagina.length === 0 ? '<div class="empty-state" style="padding:20px 22px;">Nenhum lead bate com esses filtros.</div>' : linhasTabela}
+      </div>
+      <div style="padding:14px 22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--muted2);">+${Math.max(0, filtrados.length - pagina.length)} linhas · paginação de ${POR_PAGINA} · clique abre a ficha no drawer</span>
+        ${totalPaginas > 1 ? `
+        <button id="prospeccaoPgAnt" ${prospeccaoPagina <= 1 ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;${prospeccaoPagina <= 1 ? 'opacity:.4;cursor:default;' : ''}">← anterior</button>
+        <span style="font-size:11.5px;color:var(--muted2);">página ${prospeccaoPagina} de ${totalPaginas}</span>
+        <button id="prospeccaoPgProx" ${prospeccaoPagina >= totalPaginas ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;${prospeccaoPagina >= totalPaginas ? 'opacity:.4;cursor:default;' : ''}">próxima →</button>` : ''}
+        ${sessaoAtual.role === 'manager' ? `
+        <span style="margin-left:auto;display:flex;gap:8px;">
+          <button id="prospeccaoCriarLote" ${nSel === 0 ? 'disabled' : ''} style="font-size:12px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:9px 18px;cursor:pointer;${nSel === 0 ? 'opacity:.4;cursor:default;' : ''}">Aprovar seleção (${nSel})</button>
+          <button id="prospeccaoDevolver" ${nSel === 0 ? 'disabled' : ''} style="font-size:12px;font-weight:700;color:var(--ink);background:none;border:1px solid var(--line-btn);border-radius:999px;padding:9px 18px;cursor:pointer;${nSel === 0 ? 'opacity:.4;cursor:default;' : ''}">Devolver p/ revisão</button>
+        </span>` : ''}
+      </div>
+    </div>
+
+    ${backlogAprovadoHTML}
+
+    <div class="chart-card">
+      <div style="display:flex;align-items:center;gap:9px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        <b style="font-family:'Poppins',sans-serif;font-size:13.5px;">Ficha da conta · drawer</b>
+      </div>
+      <div style="margin-top:12px;color:var(--muted);font-size:12.5px;line-height:1.6;">Nota, avaliações, endereço, telefone, categoria, origem e histórico de contato. As ações repetidas saíram das linhas — aprovar/devolver é em lote, o detalhe vive aqui.</div>
     </div>
   `;
 
@@ -7526,17 +7625,62 @@ async function renderProspeccaoNova() {
   if (pgAnt) pgAnt.addEventListener('click', () => { prospeccaoPagina--; renderProspeccaoNova(); });
   if (pgProx) pgProx.addEventListener('click', () => { prospeccaoPagina++; renderProspeccaoNova(); });
 
+  // Pílulas de filtro rápido
+  el.querySelectorAll('[data-pill]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tipo = btn.dataset.pill;
+      if (tipo === 'todas') { prospeccaoFiltro.cidade = ''; prospeccaoFiltro.notaMin = ''; prospeccaoFiltro.semTelefone = false; }
+      if (tipo === 'cidadeTopo') prospeccaoFiltro.cidade = prospeccaoFiltro.cidade === btn.dataset.cid ? '' : btn.dataset.cid;
+      if (tipo === 'nota45') prospeccaoFiltro.notaMin = Number(prospeccaoFiltro.notaMin) === 4.5 ? '' : 4.5;
+      if (tipo === 'semtel') prospeccaoFiltro.semTelefone = !prospeccaoFiltro.semTelefone;
+      prospeccaoPagina = 1;
+      renderProspeccaoNova();
+    });
+  });
+
+  // Linha da tabela: clique abre a ficha da conta no drawer (checkbox tem stopPropagation)
+  el.querySelectorAll('.prospeccao-linha').forEach(linha => {
+    linha.addEventListener('click', () => {
+      const lead = prospeccaoCache.find(l => l.id === linha.dataset.lead);
+      if (lead) abrirFichaProspeccaoDrawer(lead);
+    });
+  });
+
+  const selAll = document.getElementById('prospeccaoSelAll');
+  if (selAll) {
+    const idsPagina = pagina.filter(l => l.status !== 'criado_hubspot').map(l => l.id);
+    selAll.checked = idsPagina.length > 0 && idsPagina.every(id => prospeccaoSelecao.has(id));
+    selAll.addEventListener('change', () => {
+      idsPagina.forEach(id => { if (selAll.checked) prospeccaoSelecao.add(id); else prospeccaoSelecao.delete(id); });
+      renderProspeccaoNova();
+    });
+  }
+
   el.querySelectorAll('.prospeccao-sel').forEach(chk => {
     chk.addEventListener('change', () => {
       if (chk.checked) prospeccaoSelecao.add(chk.dataset.lead); else prospeccaoSelecao.delete(chk.dataset.lead);
-      const bar = document.getElementById('prospeccaoLoteBar');
-      const cnt = document.getElementById('prospeccaoSelCount');
-      if (cnt) cnt.textContent = prospeccaoSelecao.size;
-      if (bar) bar.style.display = prospeccaoSelecao.size > 0 ? 'flex' : 'none';
+      renderProspeccaoNova();
     });
   });
-  const btnLimparSel = document.getElementById('prospeccaoLimparSel');
-  if (btnLimparSel) btnLimparSel.addEventListener('click', () => { prospeccaoSelecao.clear(); renderProspeccaoNova(); });
+
+  const btnDevolver = document.getElementById('prospeccaoDevolver');
+  if (btnDevolver) btnDevolver.addEventListener('click', () => {
+    const itens = [...prospeccaoSelecao];
+    if (itens.length === 0) return;
+    abrirModalConfirmacao({
+      titulo: 'Devolver para revisão',
+      confirmarLabel: 'Devolver',
+      corpoHTML: `<p style="margin:0;">Devolver <b>${itens.length}</b> lead(s) pra fila de pendentes? Isso tira o responsável atual e volta o status pra "pendente".</p>`,
+      aoConfirmar: async (overlay, fechar) => {
+        const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+        okBtn.disabled = true; okBtn.textContent = 'Devolvendo...';
+        for (const id of itens) await atualizarLeadProspeccao(id, { responsavel_owner_id: null, status: 'pendente' });
+        prospeccaoSelecao.clear();
+        fechar();
+        renderProspeccaoNova();
+      }
+    });
+  });
 
   const btnLote = document.getElementById('prospeccaoCriarLote');
   if (btnLote) btnLote.addEventListener('click', () => {
@@ -7639,6 +7783,63 @@ async function renderProspeccaoNova() {
   });
 }
 
+
+// Ficha da conta (Claude Design item 6) — reaproveita o MESMO drawer 480px já usado
+// pra etapa do funil (#stageOverlay), já que os dois nunca abrem ao mesmo tempo
+// (telas diferentes). Zero HTML novo de overlay, zero risco de duplicar drawer.
+function abrirFichaProspeccaoDrawer(l) {
+  const nomeResp = l.responsavel_owner_id ? ((DATA.reps.find(r => r.ownerId === String(l.responsavel_owner_id)) || {}).name || '—') : 'sem responsável';
+  const podeAgir = sessaoAtual.role === 'manager' || String(l.responsavel_owner_id) === String(sessaoAtual.ownerId);
+  document.getElementById('stageModalName').textContent = l.nome;
+  document.getElementById('stageModalMeta').textContent = [l.categoria, l.bairro, l.cidade].filter(Boolean).join(' · ');
+  document.getElementById('stageModalBody').innerHTML = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      ${l.nota != null ? `<span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">★ ${l.nota}${l.avaliacoes != null ? ` · ${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações` : ''}</span>` : ''}
+      ${l.ja_existe_hubspot ? '<span style="background:var(--red-soft);color:var(--red);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">possível duplicata no HubSpot</span>' : ''}
+      <span style="background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:11.5px;color:var(--muted2);">fonte: ${esc(l.fonte || '—')}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:14px;">
+      <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">TELEFONE</b><div style="margin-top:2px;">${esc(l.telefone || 'não informado')}</div></div>
+      <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">ENDEREÇO</b><div style="margin-top:2px;">${esc(l.endereco || 'não informado')}</div></div>
+      <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">EXECUTIVO</b><div style="margin-top:2px;">${esc(nomeResp)}</div></div>
+      <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">STATUS</b><div style="margin-top:2px;">${esc({ pendente: 'Pendente', atribuido: 'Atribuído', na_rota: 'Na rota', sem_fit: 'Sem fit', criado_hubspot: 'Criado no HubSpot' }[l.status] || l.status)}</div></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${podeAgir && l.status !== 'sem_fit' && l.status !== 'criado_hubspot' ? `<button id="fichaProspBtnSemFit" data-lead="${l.id}" style="font-size:12px;font-weight:700;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;">Sem fit</button>` : ''}
+      ${podeAgir && l.status !== 'criado_hubspot' ? `<button id="fichaProspBtnCriar" data-lead="${l.id}" style="font-size:12px;font-weight:700;color:var(--red);background:none;border:1px solid var(--red);border-radius:999px;padding:8px 14px;cursor:pointer;">Criar empresa no HubSpot</button>` : ''}
+    </div>
+  `;
+  document.getElementById('stageOverlay').classList.add('show');
+
+  const btnSemFit = document.getElementById('fichaProspBtnSemFit');
+  if (btnSemFit) btnSemFit.addEventListener('click', () => {
+    abrirModalConfirmacao({
+      titulo: 'Marcar como "sem fit"',
+      confirmarLabel: 'Marcar sem fit',
+      corpoHTML: `<p style="margin:0;">Marcar <b>"${esc(l.nome)}"</b> como sem fit?</p>`,
+      aoConfirmar: async (overlay, fechar) => {
+        await atualizarLeadProspeccao(l.id, { status: 'sem_fit' });
+        fechar();
+        document.getElementById('stageOverlay').classList.remove('show');
+        renderProspeccaoNova();
+      }
+    });
+  });
+  const btnCriar = document.getElementById('fichaProspBtnCriar');
+  if (btnCriar) btnCriar.addEventListener('click', () => {
+    abrirModalConfirmacao({
+      titulo: 'Criar empresa no HubSpot',
+      confirmarLabel: 'Criar empresa',
+      corpoHTML: `<p style="margin:0;">Criar empresa <b>"${esc(l.nome)}"</b> no HubSpot? Isso cria só a <b>EMPRESA</b> — o negócio (Deal) você cria depois, manualmente.</p>`,
+      aoConfirmar: (overlay, fechar) => {
+        fechar();
+        document.getElementById('stageOverlay').classList.remove('show');
+        const fakeMsg = { textContent: '', style: {} };
+        criarEmpresaProspeccao(l.id, btnCriar, fakeMsg).then(() => renderProspeccaoNova());
+      }
+    });
+  });
+}
 
 function renderLeadsPraca() {
   const el = document.getElementById('leadsPracaContent');
