@@ -7371,7 +7371,16 @@ async function renderProspeccaoNova() {
   await carregarProspeccao();
 
   if (prospeccaoCache.length === 0) {
+    const souGestorProspVazio = !!(sessaoAtual && sessaoAtual.role === 'manager');
+    const bannerVazio = souGestorProspVazio ? `
+      <div class="cockpit-hero-combo" style="align-items:center;">
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Prospecção · Contas-alvo do mês</span>
+          <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">O que eu aprovo hoje?</h1>
+        </div>
+      </div>` : '';
     el.innerHTML = `
+      ${bannerVazio}
       <div class="chart-card" style="border-left:3px solid var(--blue);">
         <h3 style="margin-bottom:4px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>Prospecção</h3>
         <div class="empty-state">Nenhum lead importado ainda. Peça pro gestor rodar uma importação (Outscraper, Google Places ou outra fonte) — os leads aparecem aqui pra conferência antes de virar empresa no HubSpot.</div>
@@ -7399,6 +7408,30 @@ async function renderProspeccaoNova() {
     if (!l || l.status === 'criado_hubspot') prospeccaoSelecao.delete(id);
   });
   const nSel = prospeccaoSelecao.size;
+
+  // Banner "Prospecção" (Claude Design item 4) — só pro gestor; o executivo já
+  // chega com o território filtrado, sem essa visão de aprovação em massa.
+  const souGestorProspBanner = !!(sessaoAtual && sessaoAtual.role === 'manager');
+  let bannerProspeccao = '';
+  if (souGestorProspBanner) {
+    const pendentesTotal = prospeccaoCache.filter(l => l.status !== 'criado_hubspot' && l.status !== 'sem_fit').length;
+    const cidadesComPendente = new Set(prospeccaoCache.filter(l => l.cidade && l.status !== 'criado_hubspot' && l.status !== 'sem_fit').map(l => l.cidade)).size;
+    const inicioMes = isoDate(new Date()).slice(0, 7);
+    const aprovadasNoMes = prospeccaoCache.filter(l => l.status === 'criado_hubspot' && l.updated_at && l.updated_at.slice(0, 7) === inicioMes).length;
+    bannerProspeccao = `
+      <div class="cockpit-hero-combo" style="align-items:center;">
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Prospecção · Contas-alvo do mês</span>
+          <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">O que eu aprovo hoje?</h1>
+        </div>
+        <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
+        <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${pendentesTotal > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${pendentesTotal}</div><div style="font-size:11px;color:var(--dark-mut);">aguardando aprovação</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${cidadesComPendente}</div><div style="font-size:11px;color:var(--dark-mut);">praças com lista pendente</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${aprovadasNoMes}</div><div style="font-size:11px;color:var(--dark-mut);">aprovadas no mês</div></div>
+        </div>
+      </div>`;
+  }
 
   // Cards por praça (mockup prospeccao-gestor): visão de aprovação por cidade —
   // quantos leads ainda não viraram empresa/rota por praça e quem atende cada uma.
@@ -7434,6 +7467,7 @@ async function renderProspeccaoNova() {
   }
 
   el.innerHTML = `
+    ${bannerProspeccao}
     ${cardsPraca}
     <div class="chart-card" style="border-left:3px solid var(--blue);margin-bottom:14px;">
       <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:10px;">
