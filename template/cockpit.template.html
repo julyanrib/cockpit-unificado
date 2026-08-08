@@ -1667,6 +1667,82 @@ function interacaoStatusHTML(l, mapaNotas) {
 // no Meu Painel — mesmos dados (quentes + travados), lista única em vez de duas seções,
 // e reaproveita o mesmo checkbox com persistência semanal (roteiro-check/wireRoteiroChecks)
 // pra marcar como feito. Clicar no nome abre o HubSpot, igual ao resto do cockpit.
+// "Suas 3 ações de hoje" (Claude Design item 4, hoje-executivo-hi-fi.html) — nada
+// inventado: as 3 vagas vêm, em ordem de prioridade, dos mesmos sinais que já
+// existem em outros lugares (r.travados, quentes em Negociação, agenda vazia).
+// Menos de 3 sinais reais = menos de 3 ações, nunca preenche com placeholder.
+// Estado do checkbox persiste só no dia de hoje (localStorage), some à meia-noite.
+function acaoHojeKey(ownerId, id) {
+  return `cockpit_acaohoje_${ownerId}_${isoDate(new Date())}_${id}`;
+}
+function buildAcoesHojeHTML(r, agendaVazia) {
+  const travados = (r.travados || []).slice().sort((a, b) => (b.dias || 0) - (a.dias || 0));
+  const quentes = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId);
+  const quenteEmNegociacao = quentes.find(l => l.stage && l.stage.toLowerCase().includes('negocia'));
+
+  const acoes = [];
+  if (travados.length > 0) {
+    const top2 = travados.slice(0, 2).map(l => l.name).join(' e ');
+    acoes.push({ id: 'sla', titulo: `Destravar ${travados.length === 1 ? `o lead ${top2}` : `seus ${travados.length > 2 ? travados.length : 2} leads acima do SLA`}`, sub: `${top2}${travados.length > 2 ? ` e mais ${travados.length - 2}` : ''} — avançar ou registrar o porquê` });
+  }
+  if (quenteEmNegociacao) {
+    acoes.push({ id: 'quente', titulo: `Levar a proposta de ${quenteEmNegociacao.name}`, sub: 'seu quente em Negociação' });
+  }
+  if (agendaVazia) {
+    acoes.push({ id: 'agenda', titulo: 'Marcar compromissos — sua agenda está vazia', sub: 'escolha na rota ao lado e agende ainda de manhã' });
+  }
+  const tresAcoes = acoes.slice(0, 3);
+
+  const feitas = tresAcoes.filter(a => { try { return localStorage.getItem(acaoHojeKey(r.ownerId, a.id)) === '1'; } catch (e) { return false; } }).length;
+
+  return `
+    <div class="chart-card" style="border:1.5px solid var(--red);box-shadow:0 4px 16px rgba(229,26,49,.1);height:100%;">
+      <div style="display:flex;align-items:center;gap:9px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--red)" stroke-width="1.75" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="var(--red)"/></svg>
+        <b style="font-family:'Poppins',sans-serif;font-size:14px;color:var(--red);">Suas ${tresAcoes.length} ações de hoje</b>
+        ${tresAcoes.length > 0 ? `<span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--muted);">${feitas}/${tresAcoes.length}</span>` : ''}
+      </div>
+      ${tresAcoes.length === 0
+        ? `<div class="empty-state" style="padding:16px 0;">Funil em dia, agenda marcada — nenhuma ação urgente agora. 🎉</div>`
+        : `<div style="display:grid;gap:9px;margin-top:14px;">
+            ${tresAcoes.map(a => `
+              <div class="acao-hoje-item" data-acao="${a.id}" data-owner="${r.ownerId}" style="background:var(--panel2);border-radius:13px;padding:13px 15px;cursor:pointer;border:1px solid transparent;">
+                <div style="display:flex;gap:11px;align-items:flex-start;">
+                  <span class="checkbox acao-hoje-check" role="checkbox" aria-checked="false" tabindex="0" aria-label="Marcar ação concluída: ${esc(a.titulo)}" style="width:20px;height:20px;flex:none;margin-top:1px;"></span>
+                  <span><b class="acao-hoje-titulo" style="font-size:12.5px;">${esc(a.titulo)}</b><span style="display:block;font-size:11px;color:var(--muted);margin-top:3px;">${esc(a.sub)}</span></span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="margin-top:12px;display:flex;gap:7px;align-items:center;font-size:11px;color:var(--muted2);">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="var(--muted2)" stroke-width="1.75" stroke-linecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            marcar aqui não muda o CRM — é só o seu check pessoal do dia
+          </div>`}
+    </div>`;
+}
+function wireAcoesHojeChecks(rootEl) {
+  rootEl.querySelectorAll('.acao-hoje-item').forEach(item => {
+    const cb = item.querySelector('.acao-hoje-check');
+    const titulo = item.querySelector('.acao-hoje-titulo');
+    const ownerId = item.dataset.owner, acaoId = item.dataset.acao;
+    const key = acaoHojeKey(ownerId, acaoId);
+    try { if (localStorage.getItem(key) === '1') { cb.classList.add('checked'); cb.setAttribute('aria-checked', 'true'); titulo.style.textDecoration = 'line-through'; titulo.style.color = 'var(--muted)'; } } catch (e) {}
+    const alternar = () => {
+      cb.classList.toggle('checked');
+      const marcado = cb.classList.contains('checked');
+      cb.setAttribute('aria-checked', marcado ? 'true' : 'false');
+      titulo.style.textDecoration = marcado ? 'line-through' : 'none';
+      titulo.style.color = marcado ? 'var(--muted)' : 'var(--ink)';
+      try { localStorage.setItem(key, marcado ? '1' : '0'); } catch (e) {}
+      const badge = item.closest('.chart-card').querySelector('b + span');
+      if (badge) badge.textContent = `${rootEl.querySelectorAll('.acao-hoje-check.checked').length}/${rootEl.querySelectorAll('.acao-hoje-check').length}`;
+    };
+    item.addEventListener('click', (ev) => { if (ev.target !== cb) alternar(); });
+    cb.addEventListener('click', (ev) => { ev.stopPropagation(); alternar(); });
+    cb.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alternar(); } });
+  });
+}
+
 function buildFilaDeHojeHTML(r) {
   const meusQuentes = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId);
   const todosTravados = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0));
@@ -2115,31 +2191,9 @@ async function renderMeuPainel() {
       </span>` : ''}
     </div>
 
-    ${secaoHoje(1, 'Como você chegou')}
+    <div style="display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:18px;align-items:stretch;" class="hoje-l1-grid">
 
-    <div style="display:grid;grid-template-columns:1.15fr 1fr;gap:18px;align-items:stretch;">
-
-      <div style="background:var(--red);border-radius:var(--r-xl);padding:24px 26px;color:#fff;display:flex;flex-direction:column;gap:20px;box-shadow:var(--shadow);">
-        <div style="display:flex;align-items:center;justify-content:space-between;">
-          <span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.82;">Seu mês</span>
-          <span style="font-size:11.5px;font-weight:700;background:rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;">${minhaPosicao}º de ${DATA.reps.length} no time</span>
-        </div>
-        <div style="display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap;">
-          <div style="display:flex;flex-direction:column;">
-            <span style="font-family:'Poppins',sans-serif;font-size:56px;font-weight:800;line-height:.85;letter-spacing:-.03em;font-variant-numeric:tabular-nums;">${fechadosMes}</span>
-            <span style="font-size:12.5px;opacity:.85;margin-top:7px;">de ${metaMensal} fechamentos</span>
-          </div>
-          <div style="flex:1;min-width:160px;display:flex;flex-direction:column;gap:8px;padding-bottom:6px;">
-            <span style="height:10px;border-radius:999px;background:rgba(255,255,255,.25);overflow:hidden;display:block;"><span style="display:block;height:100%;width:${pctMeta}%;background:#fff;border-radius:999px;"></span></span>
-            <span style="font-size:12.5px;opacity:.9;">${faltam > 0 ? `💪 faltam <b>${faltam}</b>` : '🎉 meta batida'}${propostasEmNegociacao > 0 ? ` — e você tem <b>${propostasEmNegociacao} proposta${propostasEmNegociacao === 1 ? '' : 's'}</b> em negociação` : ''}</span>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;border-top:1px solid rgba(255,255,255,.22);padding-top:16px;">
-          <span style="display:flex;flex-direction:column;gap:3px;"><b style="font-family:'Poppins',sans-serif;font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;">${visitasInformadasTexto(r.ownerId)}</b><span style="font-size:11px;opacity:.82;">visitas · o que você prometeu nas dailies</span></span>
-          <span style="display:flex;flex-direction:column;gap:3px;"><b style="font-family:'Poppins',sans-serif;font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;">${r.leadsTravados || 0}</b><span style="font-size:11px;opacity:.82;">leads travados</span></span>
-          <span style="display:flex;flex-direction:column;gap:3px;"><b style="font-family:'Poppins',sans-serif;font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;">${r.open || 0}</b><span style="font-size:11px;opacity:.82;">negócios em aberto</span></span>
-        </div>
-      </div>
+      ${buildAcoesHojeHTML(r, agendaVaziaHoje)}
 
       <div class="chart-card" style="margin:0;display:flex;flex-direction:column;">
         <h3 style="margin-bottom:4px;">Ontem — prometido × realizado</h3>
@@ -2158,26 +2212,53 @@ async function renderMeuPainel() {
             </div>`
           : `<div class="empty-state" style="padding:14px 0;">Sem Daily registrada ontem — sem número pra comparar (nada inventado aqui).</div>`}
       </div>
-    </div>
 
-    ${secaoHoje(2, 'O que precisa da sua atenção')}
-
-    ${buildFilaDeHojeHTML(r)}
-
-    <div id="planoDoDiaSlot"></div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-top:18px;">
-      <div style="min-width:0;">${buildDistribuicaoCompactaHTML(r, 'meuPainel')}</div>
-      ${buildRankingSemanaHTML(r, rankingOrdenado, minhaPosicao)}
-    </div>
-
-    <div class="chart-card" style="margin-top:18px;">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;">
-        <b style="font-family:'Poppins',sans-serif;font-size:15.5px;">Seu plano com o gestor</b>
-        <span id="meuPainelPdiCount" style="font-size:11.5px;color:var(--muted2);">✓ ${getPdiState(r.ownerId, r.compromissos.length).checked.filter(Boolean).length}/${r.compromissos.length} cumpridos</span>
+      <div style="display:grid;gap:16px;align-content:start;">
+        ${buildFilaDeHojeHTML(r)}
+        <div class="chart-card" style="margin:0;">
+          <div style="display:flex;align-items:center;gap:9px;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M12 21s-7-5.5-7-11a7 7 0 0114 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            <b style="font-family:'Poppins',sans-serif;font-size:14px;">Começar a rota</b>
+          </div>
+          <div style="margin-top:11px;display:flex;gap:10px;font-size:11.5px;color:var(--muted);">
+            <span style="flex:1;background:var(--panel2);border-radius:10px;padding:8px 11px;"><b style="color:var(--ink);">${DATA.agenda ? (agendaNormalizar(DATA.agenda).filter(e => e.ownerId === r.ownerId && e.inicio && isoDate(e.inicio) === isoDate(new Date())).length) : 0}</b> na rota de hoje</span>
+            <span style="flex:1;background:var(--panel2);border-radius:10px;padding:8px 11px;"><b style="color:var(--ink);">${meusQuentesCount + acimaDoSlaCount}</b> sugestões perto</span>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+            <button id="meuPainelComecarRota" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:9px 18px;font-size:12px;font-weight:700;cursor:pointer;">Montar rota →</button>
+            <span style="font-size:10.5px;color:var(--muted2);">a rua continua no Expogo</span>
+          </div>
+        </div>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">
-        <ul class="commit-list" id="meuPainelCommitList" style="grid-column:1/-1;margin:0;">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:18px;" class="hoje-l2-grid">
+
+      <div style="background:var(--red);border-radius:var(--r-xl);padding:24px 26px;color:#fff;display:flex;flex-direction:column;gap:20px;box-shadow:var(--shadow);">
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;opacity:.82;">Seu mês</span>
+          <span style="font-size:11.5px;font-weight:700;background:rgba(255,255,255,.18);border-radius:999px;padding:5px 11px;">${minhaPosicao}º de ${DATA.reps.length} no time</span>
+        </div>
+        <div style="display:flex;align-items:flex-end;gap:26px;flex-wrap:wrap;">
+          <div style="display:flex;flex-direction:column;">
+            <span style="font-family:'Poppins',sans-serif;font-size:42px;font-weight:800;line-height:.85;letter-spacing:-.03em;font-variant-numeric:tabular-nums;">${fechadosMes}</span>
+            <span style="font-size:12.5px;opacity:.85;margin-top:7px;">de ${metaMensal} fechamentos${meuMrr ? ` · ${meuMrr.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })} MRR` : ''}</span>
+          </div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+          <span style="height:8px;border-radius:999px;background:rgba(255,255,255,.25);overflow:hidden;display:block;"><span style="display:block;height:100%;width:${pctMeta}%;background:#fff;border-radius:999px;"></span></span>
+          <span style="font-size:11.5px;opacity:.9;">${faltam > 0 ? `faltam <b>${faltam}</b> pra meta` : '🎉 meta batida'}${propostasEmNegociacao > 0 ? ` — seu quente em Negociação é o próximo` : ''}</span>
+        </div>
+      </div>
+
+      ${buildRankingSemanaHTML(r, rankingOrdenado, minhaPosicao)}
+
+      <div class="chart-card" style="margin:0;">
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;">
+          <b style="font-family:'Poppins',sans-serif;font-size:13.5px;">Seu plano com o gestor</b>
+          <span id="meuPainelPdiCount" style="font-size:11.5px;color:var(--muted2);">✓ ${getPdiState(r.ownerId, r.compromissos.length).checked.filter(Boolean).length}/${r.compromissos.length} cumpridos</span>
+        </div>
+        <ul class="commit-list" id="meuPainelCommitList" style="margin:0;">
           ${r.compromissos.map((c, ci) => `
             <li class="commit-item">
               <span class="checkbox" data-item="${ci}"></span>
@@ -2185,11 +2266,15 @@ async function renderMeuPainel() {
             </li>
           `).join('')}
         </ul>
-      </div>
-      <div class="sign-row">
-        <span>Combinado no 1:1 de <input type="text" id="meuPainelPdiData" aria-label="Data combinada no 1:1 (dd/mm)" placeholder="dd/mm"></span>
+        <div class="sign-row">
+          <span>Combinado no 1:1 de <input type="text" id="meuPainelPdiData" aria-label="Data combinada no 1:1 (dd/mm)" placeholder="dd/mm"></span>
+        </div>
       </div>
     </div>
+
+    <div id="planoDoDiaSlot" style="margin-top:18px;"></div>
+
+    <div style="margin-top:18px;">${buildDistribuicaoCompactaHTML(r, 'meuPainel')}</div>
 
     <div id="meuPainelSugestoes"></div>
 
@@ -2209,6 +2294,20 @@ async function renderMeuPainel() {
       </div>
     </details>
   `;
+
+  wireAcoesHojeChecks(el);
+
+  const btnComecarRota = document.getElementById('meuPainelComecarRota');
+  if (btnComecarRota) {
+    btnComecarRota.addEventListener('click', () => {
+      activateTab('viewAgenda');
+      if (typeof renderAgenda === 'function') renderAgenda();
+      setTimeout(() => {
+        const card = document.getElementById('rotaDoDiaCard');
+        if (card && typeof smoothScrollTo === 'function') smoothScrollTo(card);
+      }, 300);
+    });
+  }
 
   // PDI: carrega estado salvo e religa cliques
   const pdi = getPdiState(r.ownerId, r.compromissos.length);
@@ -2250,18 +2349,6 @@ async function renderMeuPainel() {
   // e leads_prospeccao no Supabase; se algo falhar, o resto do painel fica de pé).
   if (DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
     montarPlanoDoDia(r).catch(e => console.error('Erro ao montar o plano do dia:', e));
-  }
-
-  const btnComecarRota = document.getElementById('meuPainelComecarRota');
-  if (btnComecarRota) {
-    btnComecarRota.addEventListener('click', () => {
-      activateTab('viewAgenda');
-      if (typeof renderAgenda === 'function') renderAgenda();
-      setTimeout(() => {
-        const card = document.getElementById('rotaDoDiaCard');
-        if (card && typeof smoothScrollTo === 'function') smoothScrollTo(card);
-      }, 300); // o painel de rota é injetado async (buildRotaDoDiaHTML aguarda o Supabase)
-    });
   }
 
   const btnIrDaily = document.getElementById('meuPainelIrDaily');
