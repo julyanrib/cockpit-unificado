@@ -230,6 +230,10 @@ function extrairJSON(texto) {
 // malformado/cortado tentam de novo (normalmente é transitório) antes de desistir, e
 // loga a resposta bruta na desistência final pra dar pra investigar sem vasculhar o
 // Actions na mão.
+// Coletor de falhas de IA do run — vai gravado no JSON de saída (_falhasIA) pra
+// diagnóstico sem abrir o log do Actions (o incidente de 04-08/08 ficou 4 dias invisível).
+const FALHAS_IA = [];
+
 async function chamarClaude(promptTexto, maxTokens, tentativa = 1) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -239,13 +243,19 @@ async function chamarClaude(promptTexto, maxTokens, tentativa = 1) {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-5',
+      // Correção 08/08/26: 'claude-sonnet-5' NÃO é um model string válido da API — toda
+      // chamada passou a falhar em 04/08 (gargalo congelado em 03/08, resumo semanal
+      // reciclando o texto da semana anterior, 7/7 análises individuais em fallback).
+      // 'claude-sonnet-4-6' é o identificador documentado e estável.
+      model: 'claude-sonnet-4-6',
       max_tokens: maxTokens || 2500,
       messages: [{ role: 'user', content: promptTexto }]
     })
   });
 
-  if (res.status === 429 && tentativa <= 4) {
+  // 529 (overloaded) e 5xx também merecem retry — só erro de request (4xx tipo
+  // modelo inválido/key errada) falha direto, porque repetir não muda nada.
+  if ((res.status === 429 || res.status === 529 || res.status >= 500) && tentativa <= 4) {
     await sleep(1500 * tentativa);
     return chamarClaude(promptTexto, maxTokens, tentativa + 1);
   }
@@ -389,8 +399,15 @@ async function main() {
     // anterior (se existir) em vez de deixar o gestor sem nada na tela de segunda.
     if (resultadoTime.status === 'rejected') {
       console.error(`Falha ao gerar o resumo de time: ${resultadoTime.reason?.message || resultadoTime.reason} — mantendo o texto da semana passada em vez de travar tudo.`);
+      FALHAS_IA.push(String(resultadoTime.reason?.message || resultadoTime.reason).slice(0, 220));
+      // Correção 08/08/26: o texto reciclado era servido SEM AVISO — parecia fresco e
+      // contradizia os KPIs novos (dizia "125 pra 79" enquanto os números mostravam 566).
+      // Reciclado tem que se declarar reciclado, com a data da geração original.
+      const dataAnterior = anterior?.geradoEm ? new Date(anterior.geradoEm).toLocaleDateString('pt-BR') : null;
       parsedTime = {
-        resumoGeral: anterior?.resumoGeral || 'Resumo de time indisponível essa semana (falha técnica na geração). Consulte os números brutos no dashboard.',
+        resumoGeral: anterior?.resumoGeral
+          ? `<b>⚠ A geração desta semana falhou — texto abaixo é da semana anterior${dataAnterior ? ' (' + dataAnterior + ')' : ''}; os números do painel são os atuais.</b><br>` + anterior.resumoGeral
+          : 'Resumo de time indisponível essa semana (falha técnica na geração). Consulte os números brutos no dashboard.',
         comoAgir: anterior?.comoAgir || ['Revisar manualmente os números da semana — a geração automática falhou.']
       };
     } else {
@@ -412,6 +429,7 @@ async function main() {
         };
       } else {
         console.error(`Falha ao gerar resumo individual de ${rc.name}: ${resultado.reason?.message || resultado.reason} — gravando fallback honesto.`);
+      FALHAS_IA.push(String(resultado.reason?.message || resultado.reason).slice(0, 220));
         porRep[rc.ownerId] = {
           name: rc.name,
           resumoIndividual: `Análise indisponível essa semana (falha técnica na geração). Números atuais: <b>${rc.open}</b> negócios em aberto, etapa dominante <b>${rc.etapaDominante || 'sem dado'}</b>, <b>${rc.ganhosSemana || 0}</b> ganhos fechados.`,
@@ -451,6 +469,7 @@ async function main() {
 
     if (resultadoTime.status === 'rejected') {
       console.error(`Falha ao gerar o fechamento mensal de time: ${resultadoTime.reason?.message || resultadoTime.reason} — mantendo o texto da última semana em vez de travar tudo.`);
+      FALHAS_IA.push(String(resultadoTime.reason?.message || resultadoTime.reason).slice(0, 220));
       parsedTime = {
         resumoGeral: anterior?.resumoGeral || `Fechamento do mês indisponível (falha técnica na geração). Totais brutos de ${mesAtualStr}: ${kpisMes.ganhos} ganhos, ${kpisMes.leadsCriados} leads criados.`,
         comoAgir: anterior?.comoAgir || ['Revisar manualmente os números do mês — a geração automática do fechamento mensal falhou.']
@@ -469,6 +488,7 @@ async function main() {
         };
       } else {
         console.error(`Falha ao gerar fechamento mensal individual de ${rc.name}: ${resultado.reason?.message || resultado.reason} — gravando fallback honesto.`);
+      FALHAS_IA.push(String(resultado.reason?.message || resultado.reason).slice(0, 220));
         porRep[rc.ownerId] = {
           name: rc.name,
           resumoIndividual: `Fechamento do mês indisponível (falha técnica na geração). Números atuais: <b>${rc.fechadosNoMes || 0}</b> fechados de meta <b>${rc.metaMensal || 10}</b>, <b>${rc.open}</b> negócios em aberto.`,
@@ -490,6 +510,9 @@ async function main() {
     porRep
   };
 
+  // Diagnóstico sem precisar abrir o log do Actions: toda falha de chamada fica
+  // registrada no próprio arquivo (o incidente de 04-08/08 ficou 4 dias invisível).
+  if (FALHAS_IA.length) output._falhasIA = { em: now.toISOString(), erros: FALHAS_IA };
   fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), JSON.stringify(output, null, 2));
   console.log(`OK — data/resumo-semanal.json gravado (${rodarComoFechamentoMensal ? 'FECHAMENTO MENSAL' : 'semanal'}).`);
 

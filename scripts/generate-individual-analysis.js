@@ -82,13 +82,19 @@ async function chamarClaude(prompt, maxTokens, tentativa = 1) {
       'content-type': 'application/json'
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-5',
+      // Correção 08/08/26: 'claude-sonnet-5' NÃO é um model string válido da API — toda
+      // chamada passou a falhar em 04/08 (gargalo congelado em 03/08, resumo semanal
+      // reciclando o texto da semana anterior, 7/7 análises individuais em fallback).
+      // 'claude-sonnet-4-6' é o identificador documentado e estável.
+      model: 'claude-sonnet-4-6',
       max_tokens: maxTokens || 1000,
       messages: [{ role: 'user', content: prompt }]
     })
   });
 
-  if (res.status === 429 && tentativa <= 4) {
+  // 529 (overloaded) e 5xx também merecem retry — só erro de request (4xx tipo
+  // modelo inválido/key errada) falha direto, porque repetir não muda nada.
+  if ((res.status === 429 || res.status === 529 || res.status >= 500) && tentativa <= 4) {
     await sleep(1500 * tentativa);
     return chamarClaude(prompt, maxTokens, tentativa + 1);
   }

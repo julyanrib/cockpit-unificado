@@ -47,8 +47,12 @@ async function hsSearch(body, attempt = 1) {
 }
 
 function fmtRange(start, end) {
-  const f = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-  return `${f(start)}–${f(end)}/${end.getFullYear()}`;
+  // Formata no CALENDÁRIO DE BRASÍLIA: o runner do Actions roda em UTC, e "sexta
+  // 23:59 BRT" é "sábado 02:59 UTC" — o toLocaleDateString sem timezone mostrava a
+  // janela terminando um dia depois (o famoso "27/07–03/08" que invadia a semana atual).
+  const f = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+  const ano = new Date(end.getTime() - 3 * 60 * 60 * 1000).getUTCFullYear();
+  return `${f(start)}–${f(end)}/${ano}`;
 }
 
 // Conta negócios criados na janela (sem filtro de teste aqui — volume geral só de referência)
@@ -158,11 +162,17 @@ async function main() {
   const now = new Date();
   const DAY = 24 * 60 * 60 * 1000;
 
-  // Semana atual: segunda 00:00 BRT → agora. Semana anterior: a segunda anterior → domingo 23:59:59 BRT.
-  const atualFim = now;
+  // Semana atual: segunda 00:00 BRT → agora (o cron roda sexta, então é seg–sex na prática).
+  // Semana anterior: segunda → SEXTA 23:59:59 BRT da semana passada. Era segunda→domingo,
+  // o que comparava 5 dias úteis contra 7 corridos — lead criado ou fechamento de sábado
+  // inflava a semana anterior e a comparação nascia torta. Field sales é seg–sex; o
+  // resultado semanal compara útil com útil (decisão do Julyan, 08/08/26).
   const atualInicio = new Date(inicioSemanaBrasiliaMs());
-  const anteriorFim = new Date(atualInicio.getTime() - 1);
+  // atualFim capado na SEXTA 23:59:59 BRT: rodando manual num sábado, a janela ia até
+  // "agora" e a tela mostrava "03/08–08/08" — resultado semanal é seg–sex, sempre.
+  const atualFim = new Date(Math.min(now.getTime(), atualInicio.getTime() + 5 * DAY - 1));
   const anteriorInicio = new Date(atualInicio.getTime() - 7 * DAY);
+  const anteriorFim = new Date(anteriorInicio.getTime() + 5 * DAY - 1); // sexta 23:59:59.999 BRT
 
   console.log('Buscando semana atual...');
   const atual = await windowCounts(atualInicio.getTime(), atualFim.getTime());
