@@ -7086,7 +7086,39 @@ async function renderDaily() {
         <div style="padding:0 10px 10px;">` : '';
     const fimAcc = souGestor ? `</div></details>` : '';
 
-    html += `
+    // Otimização 08/08 (Julyan): pro GESTOR, a ficha por executivo virou compacta —
+    // só o que é "compromisso do dia" (prometido × realizado, atualiza a cada 2h com o
+    // HubSpot) + nota de campo se houver. Gamificação (sequência/pontos/semana/conquistas)
+    // e "Suas prioridades da semana" (quentes/travados — funil, já vive no Cockpit) saíram
+    // daqui: eram a mesma informação duas vezes, e 8x isso é o que estava afogando a tela.
+    // O executivo continua vendo a ficha completa e gamificada na própria Minha Daily.
+    const fechamentosHoje = r.fechamentosHubspotHoje ?? 0;
+    const fichaGestorCompacta = `
+      <div class="chart-card" id="dailyCard_${r.ownerId}" style="margin-bottom:16px;padding:0;overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 20px;border-bottom:1px solid var(--line);flex-wrap:wrap;">
+          <div style="display:flex;align-items:baseline;gap:8px;">
+            <b style="font-family:'Poppins',sans-serif;font-size:14.5px;">${r.name.split(' ')[0]}</b>
+            <span style="font-size:11.5px;color:var(--muted2);">hoje é ${fmtDailyLabel(dailyRefDate).toLowerCase()}${fechamentosHoje > 0 ? ` · <b style="color:var(--green);">${fechamentosHoje} fechamento${fechamentosHoje === 1 ? '' : 's'} hoje</b>` : ''}</span>
+          </div>
+          <button data-verfunil="${r.ownerId}" style="background:none;border:none;color:var(--red);font-weight:700;font-size:11.5px;cursor:pointer;padding:0;">Ver funil completo →</button>
+        </div>
+        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:14px;">
+          ${linhaPromVsReal('Visitas', realVisitas, hoje.prometido_visitas, 10, 'var(--green)')}
+          ${linhaPromVsReal('Avanços de etapa', realAvancos, hoje.prometido_avancos, 25, 'var(--amber)')}
+          ${linhaPromVsReal('Propostas', realPropostas, hoje.prometido_propostas, 40, 'var(--red)')}
+        </div>
+        ${hoje.nota_campo ? `
+        <div style="padding:0 20px 16px;">
+          <div style="background:var(--panel2);border-radius:var(--r-md);padding:10px 14px;font-size:12px;color:var(--muted);line-height:1.5;"><b style="color:var(--ink);">Nota de campo:</b> ${esc(hoje.nota_campo)}</div>
+        </div>` : ''}
+      </div>
+    `;
+
+    html += souGestor ? `
+      ${inicioAcc}
+      ${fichaGestorCompacta}
+      ${fimAcc}
+    ` : `
       ${inicioAcc}
       <div class="chart-card" id="dailyCard_${r.ownerId}" style="margin-bottom:16px;padding:0;overflow:hidden;">
         <div class="hoje-hero">
@@ -7190,6 +7222,16 @@ async function renderDaily() {
       if (acc) acc.open = true;
       const card = document.getElementById(`dailyCard_${row.dataset.owner}`);
       if (card && typeof smoothScrollTo === 'function') smoothScrollTo(acc || card);
+    });
+  });
+
+  // "Ver funil completo →": a ficha compacta do gestor não duplica quentes/travados —
+  // manda pro dossiê da pessoa, que já é a fonte única disso (mesmo usado em "Por executivo").
+  el.querySelectorAll('[data-verfunil]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const r = (DATA.reps || []).find(x => String(x.ownerId) === btn.dataset.verfunil);
+      if (r && typeof openModal === 'function') openModal(r);
     });
   });
 
