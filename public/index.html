@@ -1064,6 +1064,12 @@
 
   <div class="view" id="viewDaily">
     <div id="dailyContent"></div>
+    <div id="agendaEmbutidaNaDaily" style="display:none;">
+      <div style="display:flex;align-items:center;gap:8px;margin:28px 0 12px;">
+        <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">📆 Agenda da semana</span>
+        <span style="flex:1;height:1px;background:var(--line);"></span>
+      </div>
+    </div>
   </div>
 
   <div class="view" id="viewMeuPainel">
@@ -1507,14 +1513,37 @@ function aplicarVisaoPorPapel() {
   const lblPDIs = document.querySelector('#tabBtnPDIs .tab-btn-label');
   if (lblPDIs) lblPDIs.textContent = souGestorSessao ? 'Pessoas' : 'Desenvolvimento';
 
+  // ETAPA 7 (Claude Design): pro gestor, Agenda deixa de ser aba própria e vira seção
+  // dentro de "Daily & Ritmo" — igual ao PDI/Coaching virou uma coisa só. Não duplica
+  // #agendaContent nem reescreve a lógica da agenda: MOVE o próprio nó (mini-hero +
+  // conteúdo) entre os dois lugares, preservando filtros/matriz/wiring intocados —
+  // exatamente porque essa view tem interação rica demais pra arriscar reescrever.
+  document.getElementById('tabBtnAgenda').style.display = souGestorSessao ? 'none' : 'flex';
+  const agendaMiniHero = document.querySelector('#viewAgenda .mini-hero');
+  const agendaContentDiv = document.getElementById('agendaContent');
+  const agendaSlotNaDaily = document.getElementById('agendaEmbutidaNaDaily');
+  const viewAgendaEl = document.getElementById('viewAgenda');
+  if (agendaMiniHero && agendaContentDiv && agendaSlotNaDaily && viewAgendaEl) {
+    if (souGestorSessao) {
+      agendaSlotNaDaily.appendChild(agendaMiniHero);
+      agendaSlotNaDaily.appendChild(agendaContentDiv);
+      agendaSlotNaDaily.style.display = 'block';
+    } else {
+      viewAgendaEl.insertBefore(agendaMiniHero, viewAgendaEl.firstChild);
+      viewAgendaEl.appendChild(agendaContentDiv);
+      agendaSlotNaDaily.style.display = 'none';
+    }
+  }
+
   // Se a aba restrita que sumiu era a ativa no momento da troca de sessão, redireciona pra
   // HOME de cada papel — gestor -> Cockpit, executivo -> Hoje (nunca o Cockpit coletivo).
   const viewAtivaId = document.querySelector('.view.active')?.id;
   const viewProibidaAgora = (viewAtivaId === 'viewCoaching' && !souGestorSessao)
     || (viewAtivaId === 'viewMeuPainel' && !souRep)
-    || (viewAtivaId === 'viewCockpit' && !souGestorSessao);
+    || (viewAtivaId === 'viewCockpit' && !souGestorSessao)
+    || (viewAtivaId === 'viewAgenda' && souGestorSessao);
   if (viewProibidaAgora) {
-    activateTab(souRep ? 'viewMeuPainel' : 'viewCockpit');
+    activateTab(souRep ? 'viewMeuPainel' : (viewAtivaId === 'viewAgenda' ? 'viewDaily' : 'viewCockpit'));
   }
 
   if (souRep) {
@@ -1528,6 +1557,9 @@ function aplicarVisaoPorPapel() {
   if (souGestorSessao) {
     document.getElementById('sidenavTitle').textContent = 'Gestor';
     if (typeof renderCoaching === 'function') renderCoaching();
+    // Agenda embutida em Daily & Ritmo — mesmo setTimeout(0) do motivo de sempre:
+    // AGENDA_TIPOS/agendaNormalizar são declaradas mais adiante no script.
+    if (typeof renderAgenda === 'function') setTimeout(() => renderAgenda(), 0);
     // Etapa 6b — planos do dia do time. setTimeout(0) pelo mesmo motivo do
     // renderAgenda logo abaixo: usa AGENDA_TIPOS/agendaNormalizar, declaradas
     // mais adiante no script.
