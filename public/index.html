@@ -3861,7 +3861,29 @@ function renderAgenda() {
   const rotulo = agendaP2(dias[0].getUTCDate()) + ' ' + AGENDA_MESES[dias[0].getUTCMonth()] +
     ' — ' + agendaP2(diaFim.getUTCDate()) + ' ' + AGENDA_MESES[diaFim.getUTCMonth()];
 
-  let h = '<div class="ag-wrap">' +
+  // Banner "Rota & Agenda" (Claude Design item 4) — só pro executivo, já que o gestor
+  // tem essa Agenda embutida em Daily & Ritmo. "Dias sem compromisso" conta os dias
+  // úteis da semana atual (seg-sex, +sáb se aplicável) sem NENHUM evento do próprio
+  // executivo — mesmo dado de naSemana já filtrado, nada novo buscado.
+  const bannerAgendaExec = souRep ? (() => {
+    const diasComEvento = new Set(naSemana.map(e => agendaChave(e.inicio)));
+    const diasSemCompromisso = dias.filter(d => !diasComEvento.has(agendaChave(d))).length;
+    return `
+    <div class="cockpit-hero-combo" style="align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Rota & Agenda · ${rotulo}</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">Minha semana está planejada?</h1>
+      </div>
+      <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
+      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${diasSemCompromisso > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${diasSemCompromisso}</div><div style="font-size:11px;color:var(--dark-mut);">dias sem compromisso</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${visitas}</div><div style="font-size:11px;color:var(--dark-mut);">visitas na semana</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${reunioes}</div><div style="font-size:11px;color:var(--dark-mut);">reuniões na semana</div></div>
+      </div>
+    </div>`;
+  })() : '';
+
+  let h = bannerAgendaExec + '<div class="ag-wrap">' +
     '<div class="ag-placar">' +
     '<div class="ag-placar-i"><div class="ag-placar-v" style="color:' + corPct + '">' + pct + '<i>%</i></div>' +
     '<div class="ag-placar-l"><b>Semana planejada</b><br>meta: ' + AGENDA_META.visitasDia + ' visitas + ' +
@@ -7017,8 +7039,27 @@ async function renderAvisos() {
     el.innerHTML = `<div class="empty-state">Login não configurado.</div>`;
     return;
   }
+  const souGestorAvisos = sessaoAtual.role === 'manager';
+  const naoLidosCount = souGestorAvisos ? 0 : comunicadosCache.filter(c => !jaLi(c.id)).length;
+  const bannerAvisos = souGestorAvisos ? `
+    <div class="cockpit-hero-combo" style="align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Avisos · Comunicados do time</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">Quem ainda não leu o quê?</h1>
+      </div>
+      <span style="margin-left:auto;"><button id="btnNovoComunicadoBanner" style="background:var(--red);color:#fff;border:none;padding:10px 18px;border-radius:var(--r-pill);font-size:12.5px;font-weight:700;cursor:pointer;">+ Novo comunicado</button></span>
+    </div>` : `
+    <div class="cockpit-hero-combo" style="align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Avisos · Sua caixa de entrada</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">${naoLidosCount > 0 ? `${naoLidosCount} não lido${naoLidosCount > 1 ? 's' : ''} — confirme antes da Daily` : 'Tudo em dia — nenhum aviso pendente'}</h1>
+      </div>
+    </div>`;
+
   if (!comunicadosCache || comunicadosCache.length === 0) {
-    el.innerHTML = `<div class="empty-state">Nenhum comunicado publicado ainda.</div>`;
+    el.innerHTML = `${bannerAvisos}<div class="empty-state">Nenhum comunicado publicado ainda.</div>`;
+    const btnBanner0 = document.getElementById('btnNovoComunicadoBanner');
+    if (btnBanner0) btnBanner0.addEventListener('click', () => document.getElementById('novoComunicadoOverlay').classList.add('show'));
     return;
   }
   const corPorTipo = { urgente: 'var(--red)', atualizacao: 'var(--violet)', geral: 'var(--muted2)' };
@@ -7060,7 +7101,9 @@ async function renderAvisos() {
       </div>
     `;
   }));
-  el.innerHTML = linhas.join('');
+  el.innerHTML = bannerAvisos + linhas.join('');
+  const btnNovoBanner = document.getElementById('btnNovoComunicadoBanner');
+  if (btnNovoBanner) btnNovoBanner.addEventListener('click', () => document.getElementById('novoComunicadoOverlay').classList.add('show'));
 
   el.querySelectorAll('.comunicado-item').forEach(item => {
     const id = item.dataset.id;
