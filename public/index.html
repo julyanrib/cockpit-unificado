@@ -2065,19 +2065,34 @@ async function renderMeuPainel() {
       <span style="flex:1;height:1px;background:var(--line);"></span>
     </div>`;
 
+  // Diagnóstico de 1 frase (Claude Design item 4): agenda vazia + leads acima do SLA —
+  // os dois sinais mais acionáveis que já calculamos aqui mesmo, sem inventar nada novo.
+  const agendaVaziaHoje = !proximoCompromisso;
+  const diagnosticoPartes = [];
+  if (agendaVaziaHoje) diagnosticoPartes.push('Agenda vazia');
+  if (acimaDoSlaCount > 0) diagnosticoPartes.push(`${acimaDoSlaCount} lead${acimaDoSlaCount === 1 ? '' : 's'} acima do SLA`);
+  const diagnosticoFrase = diagnosticoPartes.length > 0
+    ? `${diagnosticoPartes.join(' e ')} — seu dia começa por ${diagnosticoPartes.length > 1 || acimaDoSlaCount > 0 ? 'eles' : 'ela'}.`
+    : 'Agenda em dia e funil sob controle — bom dia pra avançar o que já está andando.';
+  const pctSlaHoje = (r.open || 0) > 0 ? Math.round(acimaDoSlaCount / r.open * 100) : 0;
+  const saudeHoje = pctSlaHoje < 20 ? { cor: '#57C29A', txt: `Funil saudável — ${pctSlaHoje}% de SLA estourado` }
+    : pctSlaHoje < 40 ? { cor: 'var(--amber)', txt: `Atenção — ${pctSlaHoje}% do funil acima do SLA` }
+    : { cor: 'var(--red)', txt: `Funil travado — ${pctSlaHoje}% acima do SLA` };
+
   el.innerHTML = `
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:4px;">
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);">${dataHojeExtenso()} · ${diasUteisRestantesNoMes()} dias úteis no mês</span>
-        <h1 style="font-family:'Poppins',sans-serif;font-size:27px;font-weight:800;margin:0;letter-spacing:-.015em;">${saudacaoDoDia()}, ${r.name.split(' ')[0]} 👋</h1>
+    <div class="cockpit-hero-combo" style="align-items:center;">
+      <div style="flex:1;min-width:220px;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">${dataHojeExtenso()} · ${diasUteisRestantesNoMes()} dias úteis no mês</span>
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:22px;margin-top:3px;letter-spacing:-.01em;color:var(--dark-ink);">${saudacaoDoDia()}, ${r.name.split(' ')[0]} 👋</div>
+        <div style="font-size:13px;color:var(--dark-mut);margin-top:5px;">${diagnosticoFrase}</div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button id="meuPainelComecarRota" style="font-size:12px;font-weight:700;color:#fff;background:var(--blue);border:none;border-radius:999px;padding:10px 16px;min-height:44px;cursor:pointer;">🧭 Começar rota</button>
-        <button id="meuPainelIrDaily" style="font-size:12px;font-weight:700;color:#fff;background:var(--red);border:none;border-radius:999px;padding:10px 16px;min-height:44px;cursor:pointer;">Preencher a Daily 📝</button>
-      </div>
+      <span style="display:inline-flex;align-items:center;gap:7px;background:${saudeHoje.cor}1a;border:1px solid ${saudeHoje.cor};border-radius:999px;padding:5px 13px;font-size:11.5px;font-weight:700;color:${saudeHoje.cor};flex:none;">
+        <span style="width:7px;height:7px;border-radius:99px;background:${saudeHoje.cor};"></span>${saudeHoje.txt}
+      </span>
+      <button id="meuPainelIrPlano" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;flex:none;">Fechar meu plano do dia →</button>
     </div>
 
-    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:14px 0 18px;">
+    <div style="display:flex;flex-wrap:wrap;gap:10px;margin:0 0 18px;">
       <span style="display:flex;align-items:center;gap:7px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:9px 14px;font-size:12.5px;box-shadow:var(--shadow);">
         <span style="opacity:.7;">📅</span>
         ${proximoCompromisso
@@ -2254,6 +2269,18 @@ async function renderMeuPainel() {
     btnIrDaily.addEventListener('click', () => {
       activateTab('viewDaily');
       if (typeof renderDaily === 'function') renderDaily();
+    });
+  }
+
+  // CTA do banner (Claude Design): "Fechar meu plano do dia" rola até o card real
+  // de fechamento (Etapa 6a) — não duplica a lógica de fechar plano, só leva até ela.
+  const btnIrPlano = document.getElementById('meuPainelIrPlano');
+  if (btnIrPlano) {
+    btnIrPlano.addEventListener('click', () => {
+      setTimeout(() => {
+        const slot = document.getElementById('planoDoDiaSlot');
+        if (slot && typeof smoothScrollTo === 'function') smoothScrollTo(slot);
+      }, 50);
     });
   }
 
