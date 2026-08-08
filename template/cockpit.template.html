@@ -53,6 +53,11 @@
   .kpi .v{font-size:26px;font-weight:700;color:var(--ink);}
   .kpi .l{color:var(--muted);font-size:10.5px;margin-top:5px;letter-spacing:.03em;font-weight:600;}
   /* ---- KPI strip principal (redesign 27/07/2026) — faixa escura no topo do Cockpit ---- */
+  /* Correção v3 1.2: activateTab foca o título da view com tabindex=-1 (acessibilidade) —
+     o browser pintava um anel azul default em TODOS os títulos escuros, parecendo campo
+     editável. tabindex=-1 nunca é alcançável por teclado, então suprimir o outline aqui
+     não prejudica navegação por teclado (o :focus-visible dos elementos interativos fica). */
+  [tabindex="-1"]:focus{outline:none;}
   .cockpit-hero-combo{position:relative;background:var(--dark);border-radius:var(--r-xl);padding:22px 26px;margin-bottom:20px;box-shadow:var(--shadow);display:flex;align-items:center;gap:30px;flex-wrap:wrap;}
   .cockpit-hero-combo .kpi-strip-hero{background:none;box-shadow:none;padding:0;margin-bottom:0;border-radius:0;flex:1;min-width:0;}
   .meu-funil-grid{}
@@ -521,6 +526,10 @@
   /* ======================= AGENDA DA SEMANA ======================= */
   /* Usa só tokens do :root */
   .ag-wrap{--ag-reu:var(--green);--ag-fup:var(--violet);--ag-rota:var(--blue);}
+  /* Correção v3 1.1 — Rota & Agenda do executivo: Buracos da semana à esquerda, grade à direita */
+  .ag-exec-cols{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;align-items:start;margin-top:16px;}
+  .ag-exec-main{min-width:0;}
+  @media (max-width:980px){ .ag-exec-cols{grid-template-columns:1fr;} }
 
   .ag-placar{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px 26px;
     align-items:start;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
@@ -1098,7 +1107,7 @@
   </div>
 
   <div class="view" id="viewAgenda">
-    <div class="mini-hero"><div class="mini-hero-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Agenda da semana</div><div class="mini-hero-sub">O que cada um vai fazer — puxado das reuniões e follow-ups do app</div></div>
+    <div class="mini-hero" id="agendaMiniHero"><div class="mini-hero-title"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Agenda da semana</div><div class="mini-hero-sub">O que cada um vai fazer — puxado das reuniões e follow-ups do app</div></div>
     <div id="agendaContent"></div>
   </div>
 
@@ -1429,7 +1438,9 @@ function reidratarPosLogin() {
       if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
       if (typeof renderDaily === 'function') renderDaily();
       if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
-      if (souRep && typeof renderMeuPainel === 'function') renderMeuPainel(); // atualiza os checks do PDI já com o cache real (a 1ª chamada acima do rep rodou antes do fetch)
+      // Correção v3: `souRep` não existia neste escopo (ReferenceError silencioso que
+      // matava esta cadeia async no meio) — ler direto da sessão atual.
+      if (sessaoAtual && sessaoAtual.role === 'rep' && typeof renderMeuPainel === 'function') renderMeuPainel(); // atualiza os checks do PDI já com o cache real (a 1ª chamada acima do rep rodou antes do fetch)
     })();
   }
   // Regra de segunda-feira (abrir no Resumo Semanal) — SÓ pro gestor. O executivo sempre
@@ -1490,7 +1501,11 @@ function aplicarVisaoPorPapel() {
   // conteúdo) entre os dois lugares, preservando filtros/matriz/wiring intocados —
   // exatamente porque essa view tem interação rica demais pra arriscar reescrever.
   document.getElementById('tabBtnAgenda').style.display = souGestorSessao ? 'none' : 'flex';
-  const agendaMiniHero = document.querySelector('#viewAgenda .mini-hero');
+  // Correção v3 1.1: buscar por ID, nunca por '#viewAgenda .mini-hero' — se os nós já
+  // tiverem sido movidos pro slot da Daily numa sessão anterior de gestor, o seletor por
+  // ancestral retorna null, o bloco inteiro era pulado e a aba do executivo ficava VAZIA
+  // (com a grade presa dentro da Minha Daily). Por ID o nó é achado onde quer que esteja.
+  const agendaMiniHero = document.getElementById('agendaMiniHero');
   const agendaContentDiv = document.getElementById('agendaContent');
   const agendaSlotNaDaily = document.getElementById('agendaEmbutidaNaDaily');
   const viewAgendaEl = document.getElementById('viewAgenda');
@@ -1499,10 +1514,14 @@ function aplicarVisaoPorPapel() {
       agendaSlotNaDaily.appendChild(agendaMiniHero);
       agendaSlotNaDaily.appendChild(agendaContentDiv);
       agendaSlotNaDaily.style.display = 'block';
+      agendaMiniHero.style.display = '';
     } else {
       viewAgendaEl.insertBefore(agendaMiniHero, viewAgendaEl.firstChild);
       viewAgendaEl.appendChild(agendaContentDiv);
       agendaSlotNaDaily.style.display = 'none';
+      // Design v3: a Rota & Agenda do executivo tem a própria faixa escura —
+      // o banner genérico "Agenda da semana" é coisa do slot do gestor.
+      agendaMiniHero.style.display = 'none';
     }
   }
 
@@ -2630,6 +2649,12 @@ function preencherCabecalhoRodape() {
 
   document.getElementById('banner') && (document.getElementById('banner').innerHTML = DATA.banner || '');
   document.getElementById('footerText').textContent = DATA.footerText;
+  // Correção v3 1.4: se o Supabase não estiver configurado, o aviso de infra aparece
+  // UMA vez, discreto, aqui no rodapé — os empty states das seções falam só de conteúdo.
+  if (!DATA.supabase) {
+    const f = document.getElementById('footerText');
+    f.textContent = (f.textContent ? f.textContent + ' · ' : '') + 'Recursos de login/histórico indisponíveis nesta build.';
+  }
 }
 preencherCabecalhoRodape();
 
@@ -3202,9 +3227,9 @@ function renderCockpitTitleRow() {
   const hoje = new Date();
   const diaSemanaCap = hoje.toLocaleDateString('pt-BR', { weekday: 'long' });
   el.innerHTML = `
-    <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
-      <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dark-mut);">${diaSemanaCap}, ${dataHojeExtenso().split(', ')[1] || dataHojeExtenso()} · Semana ${numeroDaSemanaISO(hoje)}</span>
-      <h1 style="font-family:'Poppins',sans-serif;font-size:24px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">${saudacaoDoDia()}${primeiroNome ? ', ' + primeiroNome : ''}</h1>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:none;">
+      <span style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">${diaSemanaCap}, ${dataHojeExtenso().split(', ')[1] || dataHojeExtenso()} · Semana ${numeroDaSemanaISO(hoje)}</span>
+      <h1 style="font-family:'Poppins',sans-serif;font-size:24px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">${saudacaoDoDia()}${primeiroNome ? ', ' + primeiroNome : ''}</h1>
     </div>
   `;
 }
@@ -3301,7 +3326,7 @@ async function renderAderenciaDailyHero() {
   if (!el) return;
   if (!DATA.supabase || !supa) {
     el.querySelector('.v').textContent = '—';
-    el.querySelector('.stat-hint').textContent = 'login não configurado';
+    el.querySelector('.stat-hint').textContent = 'sem registros de daily esta semana';
     return;
   }
   if (Object.keys(dailiesCache).length === 0) await carregarDailies();
@@ -3983,22 +4008,51 @@ function renderAgenda() {
   const bannerAgendaExec = souRep ? (() => {
     const diasComEvento = new Set(naSemana.map(e => agendaChave(e.inicio)));
     const diasSemCompromisso = dias.filter(d => !diasComEvento.has(agendaChave(d))).length;
+    // "Na rota de hoje": compromissos de HOJE do próprio executivo (visita/reunião/rota;
+    // interno não conta como rua) — de doTime, pra valer mesmo navegando outra semana.
+    const naRotaHoje = doTime.filter(e => agendaChave(e.inicio) === hojeK && AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta).length;
     return `
     <div class="cockpit-hero-combo" style="align-items:center;">
-      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
-        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);">Rota & Agenda · ${rotulo}</span>
-        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);">Minha semana está planejada?</h1>
+      <div style="display:flex;flex-direction:column;gap:4px;flex:none;">
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Rota & Agenda · ${rotulo}</span>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Minha semana está planejada?</h1>
       </div>
       <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
-      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
+      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;flex:1;min-width:0;flex-wrap:wrap;">
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${diasSemCompromisso > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${diasSemCompromisso}</div><div style="font-size:11px;color:var(--dark-mut);">dias sem compromisso</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${visitas}</div><div style="font-size:11px;color:var(--dark-mut);">visitas na semana</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${reunioes}</div><div style="font-size:11px;color:var(--dark-mut);">reuniões na semana</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#E0A64A;">${naRotaHoje}</div><div style="font-size:11px;color:var(--dark-mut);">na rota de hoje</div></div>
       </div>
+      <button data-agrota style="flex:none;background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:11px 22px;font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;">Planejar minha rota →</button>
     </div>`;
   })() : '';
 
-  let h = bannerAgendaExec + '<div class="ag-wrap">' +
+  // Buracos da semana (design v3): dias úteis da semana em foco sem NENHUM compromisso.
+  // Só dias que ainda dá pra preencher (>= hoje na semana atual; todos numa semana futura;
+  // nenhum em semana passada — buraco de semana encerrada não é acionável).
+  const buracosCardExec = souRep ? (() => {
+    if (agendaEstado.offset < 0) return '';
+    const diasComEvento = new Set(naSemana.map(e => agendaChave(e.inicio)));
+    const preenchiveis = dias.filter(d => !diasComEvento.has(agendaChave(d)) && (agendaEstado.offset > 0 || agendaChave(d) >= hojeK));
+    const rotDiaCurto = d => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d.getUTCDay()] + ', ' + agendaP2(d.getUTCDate()) + '/' + agendaP2(d.getUTCMonth() + 1);
+    return `
+    <div class="chart-card" style="border:1.5px solid var(--red);">
+      <h3 style="margin-bottom:4px;">Buracos da semana</h3>
+      <div class="chart-subtitle" style="margin:0 0 12px;">dias sem nenhum compromisso marcado</div>
+      ${preenchiveis.length === 0
+        ? '<div class="empty-state" style="padding:14px 0;">Nenhum buraco pela frente — todos os dias têm compromisso.</div>'
+        : preenchiveis.map(d => `
+          <div style="background:var(--red-soft);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
+            <b style="font-size:13px;">${rotDiaCurto(d)}</b>
+            <button data-agpreencher style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;padding:0;">Preencher →</button>
+          </div>`).join('')}
+      <div style="font-size:11.5px;color:var(--muted2);margin-top:10px;line-height:1.5;">O planejamento é feito aqui no Cockpit — a execução da rota continua no Expogo do seu celular. Marcou a reunião lá, ela aparece aqui.</div>
+    </div>`;
+  })() : '';
+
+  let h = bannerAgendaExec +
+    (souRep ? '<div class="ag-exec-cols">' + buracosCardExec + '<div class="ag-exec-main">' : '') +
+    '<div class="ag-wrap">' +
     '<div class="ag-placar">' +
     '<div class="ag-placar-i"><div class="ag-placar-v" style="color:' + corPct + '">' + pct + '<i>%</i></div>' +
     '<div class="ag-placar-l"><b>Semana planejada</b><br>meta: ' + AGENDA_META.visitasDia + ' visitas + ' +
@@ -4089,7 +4143,8 @@ function renderAgenda() {
   h += '<div class="ag-det" id="agDet" data-open="0">' +
     '<button class="agx" id="agDetX" aria-label="Fechar">×</button>' +
     '<div class="agsb" id="agDetSb"></div><h4 id="agDetT"></h4><dl id="agDetDl"></dl>' +
-    '<a class="aglink" id="agDetA" href="#" target="_blank" rel="noopener">Abrir no HubSpot →</a></div></div>';
+    '<a class="aglink" id="agDetA" href="#" target="_blank" rel="noopener">Abrir no HubSpot →</a></div></div>' +
+    (souRep ? '</div></div>' : '');
 
   box.innerHTML = h;
 
@@ -4387,6 +4442,29 @@ document.addEventListener('click', function (ev) {
   const f = ev.target.closest('[data-agfiltro]');
   if (f) { agendaEstado.filtro = f.dataset.agfiltro; renderAgenda(); return; }
   if (ev.target.closest('[data-agsab]')) { agendaEstado.sabado = !agendaEstado.sabado; renderAgenda(); return; }
+  // Correção v3 1.1 — CTA "Planejar minha rota": leva ao painel real do dia (Começar rota,
+  // injetado async no topo da aba). A exportação automática pro Expogo ainda não existe
+  // (PlanoSyncExpogo.enviar lança de propósito) — o combinado é: planeja aqui, executa lá.
+  if (ev.target.closest('[data-agrota]')) {
+    agendaEstado.offset = 0;
+    renderAgenda();
+    setTimeout(() => {
+      const alvo = document.getElementById('rotaDoDiaCard') || document.querySelector('.ag-wrap');
+      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 450);
+    return;
+  }
+  // "Preencher →" de um buraco: abre a grade por hora da mesma semana e rola até ela —
+  // a marcação em si continua no Expogo (nada de compromisso fake criado daqui).
+  if (ev.target.closest('[data-agpreencher]')) {
+    agendaEstado.modo = 'hora';
+    renderAgenda();
+    setTimeout(() => {
+      const grade = document.querySelector('.ag-grade');
+      if (grade) grade.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+    return;
+  }
   if (ev.target.closest('[data-agcoaching]')) {
     // Etapa 5: Coaching virou seção dentro de Desenvolvimento — o atalho agora abre
     // essa aba (o roteiro do 1:1 já vem renderizado ali, seção "Coaching" mais abaixo).
@@ -5225,7 +5303,7 @@ function buildDetailHTML(r, idPrefix, skipLeadsList) {
     <hr class="pdi-divider">
     <div class="pdi-eyebrow">Histórico de 1:1</div>
     <div class="pdi-title" style="margin-bottom:10px;">Registros anteriores — ${r.name}</div>
-    ${!DATA.supabase ? '<div class="empty-state">Login/histórico ainda não configurado.</div>' : `
+    ${!DATA.supabase ? '<div class="empty-state">Nenhum registro de 1:1 ainda — combine no próximo encontro.</div>' : `
       ${sessaoAtual && sessaoAtual.role === 'manager' ? `
         <div class="daily-rep-card" style="margin-bottom:14px;">
           <div class="daily-col" style="padding:14px 16px;">
@@ -6475,7 +6553,7 @@ async function renderDaily() {
   const el = document.getElementById('dailyContent');
   el.innerHTML = `<div class="empty-state">Carregando...</div>`;
   if (!DATA.supabase || !supa) {
-    el.innerHTML = `<div class="empty-state">Login ainda não configurado.</div>`;
+    el.innerHTML = `<div class="empty-state">Nenhuma daily registrada hoje ainda.</div>`;
     return;
   }
   await carregarDailies();
@@ -6567,21 +6645,8 @@ async function renderDaily() {
       .sort((a, b) => b.pts - a.pts);
     const minhaPosPontos = rankingPontosHoje.findIndex(x => x.eu) + 1;
 
-    const diasSemana = diasUteisDaSemana(dailyRefDate);
-    const hojeISOreal = isoDate(new Date());
-    const semanaLinhas = diasSemana.map(d => {
-      const row = getDaily(rMinhaDaily.ownerId, d);
-      const ehFuturo = d > hojeISOreal;
-      const ehHojeCel = d === hojeISOreal;
-      let estado;
-      if (ehFuturo) estado = { txt: '—', cor: 'var(--muted2)', bg: 'var(--panel2)' };
-      else if (ehHojeCel) estado = { txt: 'em curso', cor: 'var(--amber)', bg: 'var(--amber-soft)' };
-      else if (!row) estado = { txt: 'sem daily', cor: 'var(--muted2)', bg: 'var(--panel2)' };
-      else if (bateuPrometido(row)) estado = { txt: 'cumpriu', cor: 'var(--green)', bg: 'var(--green-soft)' };
-      else estado = { txt: 'parcial', cor: 'var(--amber)', bg: 'var(--amber-soft)' };
-      const diaSemanaAbrev = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'][new Date(d + 'T12:00:00').getDay()];
-      return { diaSemanaAbrev, estado, ehHojeCel };
-    });
+    // (Correção v3 1.1: o cálculo de semanaLinhas saiu junto com a grade "Sua semana" —
+    // a visão da semana agora é responsabilidade exclusiva da Rota & Agenda.)
 
     const conquistasDesbloqueadas = calcularConquistas(rMinhaDaily.ownerId, rMinhaDaily).filter(c => c.desbloqueada);
 
@@ -6614,19 +6679,10 @@ async function renderDaily() {
         </div>
       </div>
 
+      <!-- Correção v3 1.1: a grade "Sua semana" saiu da Minha Daily — semana é assunto
+           da Rota & Agenda ("uma aba = um trabalho"). Fica só o Pódio de hoje, que é
+           parte do ritual diário (gamificação do dia, não visão de semana). -->
       <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-top:18px;">
-        <div class="chart-card">
-          <div style="display:flex;align-items:center;gap:9px;">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            <b style="font-family:'Poppins',sans-serif;font-size:14px;">Sua semana</b>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:9px;margin-top:13px;font-size:11px;text-align:center;">
-            ${semanaLinhas.map(s => `
-              <div style="background:${s.estado.bg};border-radius:12px;padding:12px 6px;${s.ehHojeCel ? 'border:1.5px dashed var(--amber);' : ''}"><b style="color:${s.estado.cor};">${s.diaSemanaAbrev}</b><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:16px;margin-top:3px;color:${s.estado.cor};">${s.estado.txt === 'cumpriu' ? '✓' : s.estado.txt === 'parcial' ? '◐' : s.estado.txt === 'em curso' ? '·' : '—'}</div><div style="color:var(--muted);margin-top:2px;">${s.estado.txt}</div></div>
-            `).join('')}
-          </div>
-        </div>
-
         <div class="chart-card">
           <div style="display:flex;align-items:center;gap:9px;">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M8 21h8M12 17v4M6 3h12v6a6 6 0 01-12 0V3z"/><path d="M18 5h3a1 1 0 011 1c0 2-1.5 4-4 4M6 5H3a1 1 0 00-1 1c0 2 1.5 4 4 4"/></svg>
@@ -6635,6 +6691,11 @@ async function renderDaily() {
           <div style="display:grid;gap:5px;margin-top:12px;font-size:12px;font-variant-numeric:tabular-nums;">
             ${rankingPontosHoje.slice(0, 5).map((x, i) => `<div style="display:grid;grid-template-columns:24px 1fr 60px;gap:8px;padding:6px 10px;border-radius:9px;${x.eu ? 'background:var(--red-soft);' : ''}"><b style="font-family:'Poppins',sans-serif;color:${i === 0 ? 'var(--amber)' : x.eu ? 'var(--red)' : 'var(--muted2)'};">${i + 1}º</b><b style="${x.eu ? 'color:var(--red);' : ''}">${x.eu ? 'Você' : esc(x.nome.split(' ')[0])}</b><b style="text-align:right;${x.eu ? 'color:var(--red);' : 'color:var(--muted);'}">${x.pts} pts</b></div>`).join('')}
           </div>
+        </div>
+        <div class="chart-card" style="display:flex;flex-direction:column;justify-content:center;gap:8px;">
+          <b style="font-family:'Poppins',sans-serif;font-size:14px;">Como está minha semana?</b>
+          <span style="font-size:12px;color:var(--muted);line-height:1.55;">A visão da semana inteira — compromissos, buracos e a grade por hora — mora na Rota & Agenda.</span>
+          <button onclick="activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda();" style="align-self:flex-start;background:none;border:1px solid var(--red);color:var(--red);border-radius:var(--r-pill);padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Abrir Rota & Agenda →</button>
         </div>
       </div>
     `;
@@ -7303,7 +7364,7 @@ document.getElementById('perfilSalvarBtn').addEventListener('click', async () =>
 async function renderAvisos() {
   const el = document.getElementById('avisosContent');
   if (!DATA.supabase || !supa) {
-    el.innerHTML = `<div class="empty-state">Login não configurado.</div>`;
+    el.innerHTML = `<div class="empty-state">Nenhum comunicado publicado.</div>`;
     return;
   }
   const souGestorAvisos = sessaoAtual.role === 'manager';
@@ -8320,7 +8381,7 @@ let pdiSelecionado = null;
 async function renderPDIs() {
   const el = document.getElementById('pdisContent');
   if (!DATA.supabase || !supa) {
-    el.innerHTML = `<div class="empty-state">Login ainda não configurado.</div>`;
+    el.innerHTML = `<div class="empty-state">Nenhum PDI registrado — combine no próximo 1:1.</div>`;
     return;
   }
 
@@ -8619,7 +8680,7 @@ async function renderCoaching() {
     return;
   }
   if (!DATA.supabase || !supa) {
-    el.innerHTML = `<div class="empty-state">Login ainda não configurado.</div>`;
+    el.innerHTML = `<div class="empty-state">Nenhuma nota de coaching ainda.</div>`;
     return;
   }
   if (!coachingSelecionado) coachingSelecionado = DATA.reps[0].ownerId;
