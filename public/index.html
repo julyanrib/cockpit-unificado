@@ -76,12 +76,12 @@
   /* Prospecção: uma fila única, legível no desktop e acionável no celular. */
   .prospeccao-table-grid{
     display:grid;
-    grid-template-columns:36px minmax(230px,1.7fr) minmax(90px,.8fr) 72px minmax(100px,.75fr) minmax(100px,.8fr) minmax(88px,.7fr);
+    grid-template-columns:36px minmax(260px,1.9fr) minmax(120px,.9fr) minmax(112px,.75fr) minmax(110px,.8fr) minmax(96px,.7fr);
     column-gap:12px;
     align-items:center;
   }
   .prospeccao-table-grid.is-rep{
-    grid-template-columns:minmax(250px,1.7fr) minmax(120px,.85fr) 72px minmax(105px,.75fr) minmax(115px,.8fr) 112px;
+    grid-template-columns:minmax(280px,1.9fr) minmax(130px,.9fr) minmax(112px,.75fr) minmax(120px,.8fr) 112px;
   }
   .prospeccao-linha{transition:background .14s var(--ease);}
   .prospeccao-linha:hover{background:var(--panel2);}
@@ -129,7 +129,6 @@
     .prospeccao-linha.is-rep .prospeccao-col-name{grid-column:1;}
     .prospeccao-linha.is-rep .prospeccao-col-reviews{grid-column:2;}
     .prospeccao-linha.is-rep .prospeccao-col-place{grid-column:1;}
-    .prospeccao-linha.is-rep .prospeccao-col-rating{grid-column:2;}
     .prospeccao-linha.is-rep .prospeccao-col-owner{grid-column:1;}
     .prospeccao-linha.is-rep .prospeccao-col-source{grid-column:2;}
     .prospeccao-col-check{grid-column:1;grid-row:1 / span 3;}
@@ -137,7 +136,6 @@
     .prospeccao-col-name b{display:block;white-space:normal;overflow-wrap:anywhere;}
     .prospeccao-col-reviews{grid-column:3;grid-row:1;}
     .prospeccao-col-place{grid-column:2;grid-row:2;color:var(--muted);font-size:11.5px;}
-    .prospeccao-col-rating{grid-column:3;grid-row:2;text-align:right !important;font-size:11.5px;}
     .prospeccao-col-owner{grid-column:2;grid-row:3;color:var(--muted2);font-size:10.5px;}
     .prospeccao-col-source{grid-column:3;grid-row:3;text-align:right !important;font-size:9.5px !important;max-width:100px;overflow:hidden;text-overflow:ellipsis;}
     .prospeccao-mobile-meta{display:inline;}
@@ -1263,7 +1261,17 @@
 
   <div class="banner" id="banner" style="margin-top:16px;"></div>
 
+  <!-- O plano do time é a primeira alavanca do gestor no dia, antes dos diagnósticos. -->
+  <div id="planosDoTimeSlot"></div>
+
   <div class="charts-row charts-row-3col">
+    <div class="chart-card" id="decisoesBloco" style="height:100%;order:-1;border-left:3px solid var(--red);">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;">
+        <h3 style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;margin:0;">Onde agir hoje</h3>
+        <span id="decisoesContagem" style="font-size:11.5px;color:var(--muted2);"></span>
+      </div>
+      <div id="decisoesLista"></div>
+    </div>
     <div class="chart-card">
       <h3><span class="source-tag hub">HubSpot</span>Funil por etapa</h3>
       <div class="chart-subtitle" id="funilBarrasSubtitle">negócios em aberto · relação entre etapas (estoque atual, não conversão histórica)</div>
@@ -1278,16 +1286,7 @@
       <div class="chart-subtitle" style="margin-top:6px;">Avançando de etapa e dentro do prazo — os mais prováveis de fechar agora.</div>
       <div id="leadsQuentesLista" style="max-height:420px;overflow-y:auto;"></div>
     </div>
-    <div class="chart-card" id="decisoesBloco" style="height:100%;">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;">
-        <h3 style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;margin:0;">Onde agir hoje</h3>
-        <span id="decisoesContagem" style="font-size:11.5px;color:var(--muted2);"></span>
-      </div>
-      <div id="decisoesLista"></div>
-    </div>
   </div>
-
-  <div id="planosDoTimeSlot"></div>
 
   <!-- Otimização 08/08: "o mês" é UM assunto — Vendas do mês e Pódio+Meta agora dividem
        a mesma dobra num grid, em vez de dois cartões empilhados contando a meta 2x. -->
@@ -4717,7 +4716,12 @@ function renderAgenda() {
       ' — cobrar na daily.</span></div>';
   }
   if (mostrarSemana) {
-    hSemana += '<div id="agFullCal"></div>';
+    // No "Time todo", um calendário com dezenas de blocos simultâneos é ruído, não
+    // gestão. O gestor vê primeiro a matriz de cobertura e abre a agenda de uma pessoa
+    // pelo filtro. O executivo continua com o calendário semanal normal.
+    hSemana += (!souRep && !agendaEstado.repSel)
+      ? agendaMatrizTime(dias, naSemana, time, hojeK)
+      : '<div id="agFullCal"></div>';
     hSemana += '<div class="ag-det" id="agDet" data-open="0">' +
       '<button class="agx" id="agDetX" aria-label="Fechar">×</button>' +
       '<div class="agsb" id="agDetSb"></div><h4 id="agDetT"></h4><dl id="agDetDl"></dl>' +
@@ -4731,7 +4735,7 @@ function renderAgenda() {
 
   box.innerHTML = h;
 
-  if (agendaEstado.modo === 'hora') montarFullCalendar();
+  if (agendaEstado.modo === 'hora' && (souRep || agendaEstado.repSel)) montarFullCalendar();
 
   // Julyan (08/08): "Onde você vai agir" mudou de casa (era da Hoje) — populamos o
   // slot aqui agora. Mesma condição de sempre (Supabase configurado, papel = rep).
@@ -5063,6 +5067,7 @@ document.addEventListener('click', function (ev) {
   const md = ev.target.closest('[data-agmodo]');
   if (md) { agendaEstado.modo = md.dataset.agmodo; agendaEstado.repSel = null; renderAgenda(); return; }
   const mx = ev.target.closest('[data-agmatriz]');
+  if (mx) { agendaEstado.repSel = mx.dataset.agmatriz || null; renderAgenda(); return; }
   const rp = ev.target.closest('[data-agrep]');
   if (rp) { agendaEstado.repSel = rp.dataset.agrep || null; renderAgenda(); return; }
   const f = ev.target.closest('[data-agfiltro]');
@@ -5169,22 +5174,19 @@ function renderResumoSemanal() {
   // Correção v3 2.4: numerais em pill no lugar das medalhas-emoji (1º = pill escura).
   const pillRank = i => `<span style="flex:none;width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-size:11px;font-weight:800;${i === 0 ? 'background:var(--ink);color:var(--panel);' : 'background:var(--sunk);color:var(--muted);'}">${i + 1}</span>`;
 
-  // Pódio compara nomes entre colegas — visão só do gestor. Executivo não vê ranking dos outros aqui.
-  const podioHtml = (!souRepAgora && rs.ranking && rs.ranking.length > 0) ? `
-    <div class="chart-card" style="margin-bottom:18px;padding:14px 18px;">
-      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;width:13px;height:13px;"><path d="M8 21h8M12 17v4M6 3h12v6a6 6 0 01-12 0V3z"/><path d="M18 5h3a1 1 0 011 1c0 2-1.5 4-4 4M6 5H3a1 1 0 00-1 1c0 2 1.5 4 4 4"/></svg>Ranking</span>
-        ${rs.ranking.map((r, i) => `
-          <div style="display:flex;align-items:center;gap:7px;">
-            ${pillRank(i)}
-            ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 24)}
-            <span style="font-size:12.5px;font-weight:600;">${r.name.split(' ')[0]}</span>
-            <span style="font-size:11.5px;color:var(--muted);">${r.count}v</span>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  ` : '';
+  // O ranking já vive no Cockpit. Repeti-lo aqui desviava a Semana de sua função:
+  // entender mudança, risco e correção de rota.
+  const podioHtml = '';
+
+  // "leads criados" no dado semanal são DEALS criados no pipeline do HubSpot
+  // (createdate), não contas-alvo da Prospecção. Corrige o vocabulário na camada de
+  // apresentação para o gestor não comparar 566 negócios com as 260 contas da base.
+  function textoSemanalPreciso(valor) {
+    return String(valor || '')
+      .replace(/geração de leads/gi, 'criação de negócios no pipeline')
+      .replace(/leads criados/gi, 'negócios criados no pipeline')
+      .replace(/\bleads\b/gi, 'negócios');
+  }
 
   function cardClicavel(titulo, contagem, delta, corIcone, leads, tipoLista) {
     const listaHtml = leads.length === 0
@@ -5246,7 +5248,7 @@ function renderResumoSemanal() {
   const leituraLabel = souRepAgora ? 'Sua leitura da semana' : 'A leitura da semana';
   const leituraTexto = souRepAgora
     ? (meuIndividual ? meuIndividual.resumoIndividual : (rs.resumoGeral || 'Sua análise individual ainda não foi gerada essa semana — roda toda sexta-feira.'))
-    : (rs.resumoGeral || 'Análise interpretada ainda não gerada — roda toda sexta-feira. Os números abaixo já estão atualizados de hoje.');
+    : textoSemanalPreciso(rs.resumoGeral || 'Análise interpretada ainda não gerada — roda toda sexta-feira. Os números abaixo já estão atualizados de hoje.');
 
   const heroHtml = `
     <div style="background:var(--dark);color:var(--dark-ink);border-radius:var(--r-xl);padding:24px 26px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;">
@@ -5321,7 +5323,7 @@ function renderResumoSemanal() {
       const listaComoAgir = souRepAgora ? (meuIndividual ? meuIndividual.comoAgirIndividual : rs.comoAgir) : rs.comoAgir;
       if (!listaComoAgir || listaComoAgir.length === 0) return '';
       const titulo = souRepAgora ? 'Como agir essa semana (pra você)' : 'Como agir essa semana';
-      return `<h3 class="block-label">${titulo}</h3><ul class="action-list">${listaComoAgir.map(a => `<li class="action-item">${a}</li>`).join('')}</ul>`;
+      return `<h3 class="block-label">${titulo}</h3><ul class="action-list">${listaComoAgir.map(a => `<li class="action-item">${souRepAgora ? a : textoSemanalPreciso(a)}</li>`).join('')}</ul>`;
     })()}
 
     ${(!souRepAgora && rs.porRep && Object.keys(rs.porRep).length > 0) ? `
@@ -5338,9 +5340,9 @@ function renderResumoSemanal() {
                   <span style="font-weight:700;font-size:13.5px;">${r.name}</span>
                   <span style="color:var(--muted2);font-size:11.5px;">${r.praca}</span>
                 </div>
-                <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:8px;">${ind.resumoIndividual}</p>
+                <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:8px;">${textoSemanalPreciso(ind.resumoIndividual)}</p>
                 ${(ind.comoAgirIndividual && ind.comoAgirIndividual.length > 0) ? `
-                  <ul class="action-list">${ind.comoAgirIndividual.map(a => `<li class="action-item">${a}</li>`).join('')}</ul>
+                  <ul class="action-list">${ind.comoAgirIndividual.map(a => `<li class="action-item">${textoSemanalPreciso(a)}</li>`).join('')}</ul>
                 ` : ''}
               </div>
             `;
@@ -6029,8 +6031,8 @@ function montarFullCalendar() {
     titleFormat: { day: '2-digit', month: 'short' },
     dayHeaderContent: arg => {
       const dd = new Date(arg.date);
-      const wd = (dd.getDay() + 6) % 7; // seg=0 ... dom=6
-      return { html: '<span class="agdh"><span class="agdh-w">' + (wd === 6 ? 'DOM' : AGENDA_DIAS[wd].toUpperCase()) + '</span><span class="agdh-n">' + dd.getDate() + '</span></span>' };
+      const wd = (dd.getUTCDay() + 6) % 7; // seg=0 ... dom=6; calendário opera em UTC
+      return { html: '<span class="agdh"><span class="agdh-w">' + (wd === 6 ? 'DOM' : AGENDA_DIAS[wd].toUpperCase()) + '</span><span class="agdh-n">' + dd.getUTCDate() + '</span></span>' };
     },
     firstDay: 1,
     hiddenDays: agendaEstado.sabado === true ? [0] : [0, 6], // domingo nunca; sábado pelo toggle existente
@@ -6449,7 +6451,7 @@ let planoEmEdicao = false; // flag SÓ de UI: reabre os campos de um plano já f
 let mapLibreCarregando = null;
 let planoMapaInstancia = null;
 let planoMapaMarcadores = {}; // id do lead -> { marker, popup, lead }
-let planoMapaFiltro = { mostrarSemFit: false, notaMin: 0, avalMin: 0, verTodas: false };
+let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false };
 let planoMapaPopupAtual = null;
 let planoMapaOrigemAtual = null;
 let planoMapaRenderAtual = null;
@@ -6699,7 +6701,6 @@ async function montarPlanoDoDia(r) {
           <div id="planoMapa"><div class="empty-state" style="padding-top:220px;">Carregando o mapa...</div></div>
           <div class="plano-map-toolbar">
             <div class="plano-map-filterbar" aria-label="Filtros do mapa">
-              <button type="button" class="plano-map-filter ${planoMapaFiltro.notaMin >= 4.5 ? 'is-active' : ''}" id="planoMapaNota45" aria-pressed="${planoMapaFiltro.notaMin >= 4.5}">★ 4,5+</button>
               <label class="plano-map-filter">Avaliações
                 <select id="planoMapaAvalMin" aria-label="Filtrar por volume mínimo de avaliações">
                   ${[[0, 'todas'], [100, '100+'], [300, '300+'], [1000, '1 mil+']].map(([v, t]) => `<option value="${v}" ${(planoMapaFiltro.avalMin || 0) === v ? 'selected' : ''}>${t}</option>`).join('')}
@@ -6882,14 +6883,7 @@ async function montarPlanoDoDia(r) {
   }
 
   // Filtros do mapa (re-renderiza só o mapa, não o plano inteiro)
-  const chkNota = slot.querySelector('#planoMapaNota45');
   const chkSemFit = slot.querySelector('#planoMapaSemFit');
-  if (chkNota) chkNota.addEventListener('click', () => {
-    planoMapaFiltro.notaMin = planoMapaFiltro.notaMin >= 4.5 ? 0 : 4.5;
-    chkNota.classList.toggle('is-active', planoMapaFiltro.notaMin >= 4.5);
-    chkNota.setAttribute('aria-pressed', String(planoMapaFiltro.notaMin >= 4.5));
-    montarPlanoMapa(r, hoje, fechado);
-  });
   if (chkSemFit) chkSemFit.addEventListener('click', () => {
     planoMapaFiltro.mostrarSemFit = !planoMapaFiltro.mostrarSemFit;
     chkSemFit.classList.toggle('is-active', planoMapaFiltro.mostrarSemFit);
@@ -6916,7 +6910,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // Todas as contas-alvo do rep com coordenada real (Outscraper/Google Places).
   // Sem coordenada = fora do mapa, e a gente DIZ quantas ficaram de fora.
   const { data, error } = await supa.from('leads_prospeccao')
-    .select('id,nome,bairro,cidade,lat,lng,status,data_rota,nota,avaliacoes')
+    .select('id,nome,categoria,bairro,cidade,lat,lng,status,data_rota,avaliacoes')
     .eq('responsavel_owner_id', r.ownerId);
   if (error) { box.innerHTML = `<div class="empty-state" style="padding-top:190px;">Erro ao carregar contas-alvo: ${esc(error.message)}</div>`; return; }
 
@@ -6953,8 +6947,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const semCoord = todas.length - comCoord.length;
   const visiveis = comCoord.filter(l =>
     l._pipelineQuente || (
+      prospeccaoFazSentido(l) &&
       (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
-      (!planoMapaFiltro.notaMin || (l.nota || 0) >= planoMapaFiltro.notaMin) &&
       (!planoMapaFiltro.avalMin || (l.avaliacoes || 0) >= planoMapaFiltro.avalMin)
     )
   );
@@ -6963,7 +6957,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
     planoMapaMarcadores = {};
     lista.innerHTML = pipelineSemLocal.length ? `<div class="plano-map-section-label">Pipeline quente · localização pendente</div>${pipelineSemLocal.map(d => `<div class="plano-lista-item"><span class="plano-lista-index" style="color:var(--red);">!</span><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')} · sem coordenada</span></span>${d.id ? `<a href="${hsUrl(d.id)}" target="_blank" rel="noopener" class="plano-lista-btn" style="text-decoration:none;">↗</a>` : ''}</div>`).join('')}` : '';
-    box.innerHTML = `<div class="empty-state" style="padding-top:190px;">Nenhuma conta-alvo com coordenada pra mostrar${planoMapaFiltro.notaMin ? ' com esse filtro de nota' : ''}.</div>`;
+    box.innerHTML = `<div class="empty-state" style="padding-top:190px;">Nenhuma conta-alvo com coordenada atende ao volume de avaliações escolhido.</div>`;
     const countEl = document.getElementById('planoMapaRotaCount');
     if (countEl) countEl.textContent = '0 paradas';
     const gameEl = document.getElementById('planoMapaGame');
@@ -7088,7 +7082,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         <span class="plano-lista-index" ${naRota ? '' : `style="color:${corDoStatus(l)};"`}>${simbolo}</span>
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
-          <span class="plano-lista-meta">${l.nota != null ? `<span class="plano-lista-rating">★ ${l.nota}</span>` : ''}${l.avaliacoes != null ? `<span>· ${Number(l.avaliacoes).toLocaleString('pt-BR')} av.</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
+          <span class="plano-lista-meta">${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
           ${etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
@@ -7136,7 +7130,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     const naRota = naRotaHojeFn(l);
     const pin = document.createElement('button');
     pin.className = 'plano-marker' + (naRota ? ' pulso' : '');
-    pin.title = `${l.nome}${l.nota != null ? ` · ⭐ ${l.nota}` : ''}${l.avaliacoes != null ? ` · ${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações` : ''} · ${rotuloStatus(l)}`;
+    pin.title = `${l.nome}${l.avaliacoes != null ? ` · ${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações` : ''} · ${rotuloStatus(l)}`;
     pin.innerHTML = naRota
       ? `<span class="plano-marker-body"><span>${indiceRota.get(String(l.id)) || ''}</span></span>`
       : `<span class="plano-marker-body" style="width:24px;height:24px;border-radius:50%;transform:none;background:${corDoStatus(l)};"><span style="transform:none;font-size:0;">.</span></span>`;
@@ -7149,7 +7143,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       <div class="plano-popup-kicker" style="color:${corDoStatus(l)};">${esc(rotuloStatus(l))}</div>
       <div class="plano-popup-title">${esc(l.nome)}</div>
       ${detalhe ? `<div class="plano-popup-meta">${esc(detalhe)}</div>` : ''}
-      ${l.nota != null ? `<div class="plano-popup-rating">★ ${l.nota}${l.avaliacoes ? ` · ${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações` : ''}</div>` : ''}
+      ${l.avaliacoes != null ? `<div class="plano-popup-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</div>` : ''}
       <div class="plano-popup-actions">
         ${botaoAcaoHTML(l)}
         <a class="plano-popup-nav" href="${navUrl}" target="_blank" rel="noopener">Navegar ↗</a>
@@ -7560,8 +7554,33 @@ async function renderDaily() {
       </div>
     </div>`;
 
+  // Ritual do gestor: a Daily precisa terminar em compromisso, não em leitura de placar.
+  const abaixoDeOntem = repsDaily.filter(r => {
+    const d = getDaily(r.ownerId, yesterdayISO) || {};
+    const prometeu = Number(d.prometido_visitas) || 0;
+    return prometeu > 0 && ((Number(d.realizado_visitas) || 0) / prometeu) < .7;
+  });
+  const objetivoDaily = semPromessa > 0
+    ? `Fechar o plano de ${semPromessa} executivo${semPromessa > 1 ? 's' : ''} antes da saída para o campo.`
+    : abaixoDeOntem.length > 0
+      ? `Recuperar o ritmo de ${abaixoDeOntem.length} executivo${abaixoDeOntem.length > 1 ? 's' : ''} abaixo de 70% ontem.`
+      : 'Proteger a execução prometida e remover um bloqueio por pessoa.';
+  const ritualGestorDaily = !souRepDaily ? `
+    <section class="chart-card" style="padding:15px 18px;margin:-4px 0 16px;border-left:3px solid var(--ink);">
+      <div style="display:grid;grid-template-columns:minmax(260px,1.35fr) repeat(3,minmax(180px,1fr));gap:12px;align-items:stretch;">
+        <div style="padding:4px 10px 4px 0;">
+          <div style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--red);">Objetivo da Daily</div>
+          <div style="font-family:'Poppins',sans-serif;font-size:15px;font-weight:750;line-height:1.45;margin-top:4px;">${objetivoDaily}</div>
+        </div>
+        <div style="background:var(--panel2);border-radius:12px;padding:10px 12px;"><b style="font-size:11px;">1 · Abrir · 2 min</b><div style="font-size:11.5px;color:var(--muted);margin-top:3px;">Meta do dia e uma vitória objetiva.</div></div>
+        <div style="background:var(--panel2);border-radius:12px;padding:10px 12px;"><b style="font-size:11px;">2 · Exceções · 10 min</b><div style="font-size:11.5px;color:var(--muted);margin-top:3px;">Sem promessa e pior aderência primeiro.</div></div>
+        <div style="background:var(--red-soft);border-radius:12px;padding:10px 12px;"><b style="font-size:11px;color:var(--red);">3 · Fechar · 3 min</b><div style="font-size:11.5px;color:var(--muted);margin-top:3px;">Uma ação, um horário e um dono.</div></div>
+      </div>
+    </section>` : '';
+
   let html = `
     ${bannerDaily}
+    ${ritualGestorDaily}
     ${focoSemanaHtml}
     <div class="daily-header">
       <div class="daily-date-nav">
@@ -7786,7 +7805,7 @@ async function renderDaily() {
             <span class="mono" style="font-size:12px;font-weight:800;color:${corExec};white-space:nowrap;">${realVN}/${promV} vis</span>
           </span>
           <span class="mono" style="font-size:12px;font-weight:800;text-align:right;color:${fechamentosHoje > 0 ? 'var(--green)' : 'var(--muted2)'};white-space:nowrap;">${fechamentosHoje} fechou</span>
-          <span class="mono" style="font-size:12px;font-weight:700;text-align:right;color:${seq > 0 ? 'var(--amber)' : 'var(--muted2)'};white-space:nowrap;">🔥 ${seq}d</span>
+          <span class="mono" style="font-size:12px;font-weight:700;text-align:right;color:${seq > 0 ? 'var(--amber)' : 'var(--muted2)'};white-space:nowrap;">${seq > 0 ? ('🔥 ' + seq + 'd') : '—'}</span>
           <span style="font-size:11px;color:var(--muted2);text-align:right;">▾</span>
         </summary>
         <div class="hoje-hero" style="border-radius:0;padding:16px 22px 14px;">
@@ -8376,7 +8395,6 @@ async function renderAvisos() {
         <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Avisos · Comunicados do time</span>
         <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Quem ainda não leu o quê?</h1>
       </div>
-      <span style="margin-left:auto;"><button id="btnNovoComunicadoBanner" style="background:var(--red);color:#fff;border:none;padding:10px 18px;border-radius:var(--r-pill);font-size:12.5px;font-weight:700;cursor:pointer;">+ Novo comunicado</button></span>
     </div>` : `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
@@ -8387,8 +8405,6 @@ async function renderAvisos() {
 
   if (!comunicadosCache || comunicadosCache.length === 0) {
     el.innerHTML = `${bannerAvisos}<div class="empty-state">Nenhum comunicado publicado ainda.</div>`;
-    const btnBanner0 = document.getElementById('btnNovoComunicadoBanner');
-    if (btnBanner0) btnBanner0.addEventListener('click', () => document.getElementById('novoComunicadoOverlay').classList.add('show'));
     return;
   }
   const corPorTipo = { urgente: 'var(--red)', atualizacao: 'var(--violet)', geral: 'var(--muted2)' };
@@ -8444,9 +8460,6 @@ async function renderAvisos() {
           </details>` : ''}`;
       })();
   el.innerHTML = bannerAvisos + avisosCorpo;
-  const btnNovoBanner = document.getElementById('btnNovoComunicadoBanner');
-  if (btnNovoBanner) btnNovoBanner.addEventListener('click', () => document.getElementById('novoComunicadoOverlay').classList.add('show'));
-
   el.querySelectorAll('.comunicado-item').forEach(item => {
     const id = item.dataset.id;
     const viewDiv = item.querySelector('.comunicado-view');
@@ -8621,7 +8634,7 @@ function abrirModalConfirmacao({ titulo, corpoHTML, confirmarLabel, aoConfirmar 
   btnCancelar.focus();
   return overlay;
 }
-let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', notaMin: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false };
+let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false };
 
 function prospeccaoNormalizarTexto(valor) {
   return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -8640,7 +8653,8 @@ function prospeccaoRotuloCategoria(valor) {
     'buffet restaurant': 'Bufê', 'breakfast restaurant': 'Café da manhã',
     bakery: 'Padaria', cafe: 'Café', cafeteria: 'Cafeteria', 'coffee shop': 'Cafeteria',
     bar: 'Bar', pub: 'Pub', bistro: 'Bistrô', brewery: 'Cervejaria', 'beer hall': 'Cervejaria',
-    'shopping mall': 'Shopping', hostel: 'Hostel'
+    confectionery: 'Confeitaria', 'ice cream shop': 'Sorveteria', 'dessert shop': 'Sobremesas',
+    steakhouse: 'Churrascaria', pizzeria: 'Pizzaria'
   };
   if (traducoes[chave]) return traducoes[chave];
   return chave ? chave.charAt(0).toUpperCase() + chave.slice(1) : 'Categoria não informada';
@@ -8669,6 +8683,18 @@ function prospeccaoAtiva(l) {
   return l.status !== 'sem_fit' && l.status !== 'criado_hubspot';
 }
 
+// A base histórica é preservada, mas a fila operacional só mostra foodservice.
+// Isso tira hostel, monumento, shopping e afins da decisão diária sem apagar dados.
+const PROSPECCAO_FORA_FOODSERVICE = new Set([
+  'hostel', 'hotel', 'lodging', 'monument', 'museum', 'park', 'tourist attraction',
+  'shopping', 'shopping mall', 'store', 'supermarket', 'grocery store', 'pharmacy',
+  'school', 'university', 'hospital', 'gym'
+]);
+function prospeccaoFazSentido(l) {
+  const categoria = prospeccaoNormalizarTexto(l && l.categoria);
+  return !categoria || !PROSPECCAO_FORA_FOODSERVICE.has(categoria);
+}
+
 function prospeccaoRotuloStatus(status) {
   return {
     pendente: 'Pendente', atribuido: 'Disponível', na_rota: 'Na rota',
@@ -8686,20 +8712,19 @@ function prospeccaoStatusNoDia(l) {
 
 async function carregarProspeccao() {
   if (!DATA.supabase || !supa) { prospeccaoCache = []; return; }
-  // Prioridade comercial: volume de avaliações primeiro (nota desempata no front) —
-  // restaurante consolidado com milhares de avaliações vale mais visita que nota
-  // alta com meia dúzia. nullsFirst:false joga quem não tem o dado pro fim.
+  // Prioridade comercial oficial: somente volume de avaliações. A nota continua
+  // disponível como contexto na ficha, mas nunca filtra, ordena ou desempata a fila.
   let query = supa.from('leads_prospeccao').select('*').order('avaliacoes', { ascending: false, nullsFirst: false });
   if (sessaoAtual && sessaoAtual.role === 'rep') query = query.eq('responsavel_owner_id', sessaoAtual.ownerId);
   const { data, error } = await query;
   if (error) { console.error('Erro ao carregar prospecção:', error.message); prospeccaoCache = []; return; }
   prospeccaoCache = (data || []).sort((a, b) =>
     (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0) ||
-    (Number(b.nota) || 0) - (Number(a.nota) || 0)
+    String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
   );
   const badge = document.getElementById('badgeLeadsPraca');
   if (badge) {
-    const acionaveis = prospeccaoCache.filter(prospeccaoAtiva).length;
+    const acionaveis = prospeccaoCache.filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l)).length;
     badge.textContent = acionaveis > 0 ? String(acionaveis) : '';
   }
 }
@@ -8708,16 +8733,16 @@ function prospeccaoAplicarFiltros(lista) {
   const f = prospeccaoFiltro;
   const termo = prospeccaoNormalizarTexto(f.busca);
   return lista.filter(l =>
-    (f.visao !== 'ativas' || prospeccaoAtiva(l)) &&
-    (f.visao !== 'sem_dono' || (prospeccaoAtiva(l) && !l.responsavel_owner_id)) &&
-    (f.visao !== 'na_rota' || (l.status === 'na_rota' && l.data_rota === isoDate(new Date()))) &&
+    (f.visao !== 'ativas' || (prospeccaoAtiva(l) && prospeccaoFazSentido(l))) &&
+    (f.visao !== 'sem_dono' || (prospeccaoAtiva(l) && prospeccaoFazSentido(l) && !l.responsavel_owner_id)) &&
+    (f.visao !== 'na_rota' || (prospeccaoFazSentido(l) && l.status === 'na_rota' && l.data_rota === isoDate(new Date()))) &&
     (f.visao !== 'historico' || l.status === 'sem_fit' || l.status === 'criado_hubspot') &&
+    (f.visao !== 'revisar_escopo' || (prospeccaoAtiva(l) && !prospeccaoFazSentido(l))) &&
     (!termo || prospeccaoNormalizarTexto([l.nome, l.categoria, l.bairro, l.cidade, l.endereco, l.telefone].filter(Boolean).join(' ')).includes(termo)) &&
     (!f.cidade || l.cidade === f.cidade) &&
     (!f.bairro || l.bairro === f.bairro) &&
-    (!f.notaMin || (l.nota || 0) >= Number(f.notaMin)) &&
     (!f.avaliacoesMin || (l.avaliacoes || 0) >= Number(f.avaliacoesMin)) &&
-    (!f.categoria || l.categoria === f.categoria) &&
+    (!f.categoria || prospeccaoRotuloCategoria(l.categoria) === f.categoria) &&
     (!f.fonte || String(l.fonte || '').split('+').map(x => x.trim()).includes(f.fonte)) &&
     (!f.responsavel || String(l.responsavel_owner_id) === f.responsavel) &&
     (!f.status || l.status === f.status) &&
@@ -8812,7 +8837,7 @@ function prospeccaoCardHTML(l) {
         <div style="min-width:0;flex:1;">
           <b style="font-size:14px;">${esc(l.nome)}</b>
           <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc([l.categoria, l.bairro, l.cidade].filter(Boolean).join(' · '))}</div>
-          ${l.nota != null ? `<div style="font-size:11.5px;color:var(--muted2);margin-top:2px;">⭐ ${l.nota} · ${l.avaliacoes || 0} avaliações · fonte: ${l.fonte}</div>` : ''}
+          <div style="font-size:11.5px;color:var(--muted2);margin-top:2px;"><b>${Number(l.avaliacoes || 0).toLocaleString('pt-BR')} avaliações</b> · fonte: ${esc(prospeccaoRotuloFonte(l.fonte))}</div>
         </div>
         <span style="font-size:10.5px;font-weight:700;color:var(--muted2);white-space:nowrap;">${statusLabel}</span>
       </div>
@@ -8872,9 +8897,10 @@ async function renderProspeccaoNova() {
     planoHojeProsp = await carregarPlanoDoDia(sessaoAtual.ownerId, hojeProsp);
   }
 
-  const cidades = [...new Set(prospeccaoCache.map(l => l.cidade).filter(Boolean))].sort();
-  const bairros = [...new Set(prospeccaoCache.map(l => l.bairro).filter(prospeccaoBairroValido))].sort();
-  const categorias = [...new Set(prospeccaoCache.map(l => l.categoria).filter(Boolean))].sort();
+  const baseOperacional = prospeccaoCache.filter(prospeccaoFazSentido);
+  const cidades = [...new Set(baseOperacional.map(l => l.cidade).filter(Boolean))].sort();
+  const bairros = [...new Set(baseOperacional.map(l => l.bairro).filter(prospeccaoBairroValido))].sort();
+  const categorias = [...new Set(baseOperacional.map(l => prospeccaoRotuloCategoria(l.categoria)).filter(Boolean))].sort();
   const fontes = [...new Set(prospeccaoCache.flatMap(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean)))].sort();
 
   const filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
@@ -8897,11 +8923,11 @@ async function renderProspeccaoNova() {
   const souGestorProspBanner = !!(sessaoAtual && sessaoAtual.role === 'manager');
   let bannerProspeccao = '';
   if (souGestorProspBanner) {
-    const pendentesTotal = prospeccaoCache.filter(prospeccaoAtiva).length;
-    const semResponsavel = prospeccaoCache.filter(l => prospeccaoAtiva(l) && !l.responsavel_owner_id).length;
-    const naRotaHoje = prospeccaoCache.filter(l => l.status === 'na_rota' && l.data_rota === isoDate(new Date())).length;
+    const pendentesTotal = baseOperacional.filter(prospeccaoAtiva).length;
+    const semResponsavel = baseOperacional.filter(l => prospeccaoAtiva(l) && !l.responsavel_owner_id).length;
+    const naRotaHoje = baseOperacional.filter(l => l.status === 'na_rota' && l.data_rota === isoDate(new Date())).length;
     const inicioMes = isoDate(new Date()).slice(0, 7);
-    const empresasNoMes = prospeccaoCache.filter(l => l.hubspot_company_id && l.updated_at && l.updated_at.slice(0, 7) === inicioMes).length;
+    const empresasNoMes = baseOperacional.filter(l => l.hubspot_company_id && l.updated_at && l.updated_at.slice(0, 7) === inicioMes).length;
     bannerProspeccao = `
       <div class="cockpit-hero-combo" style="align-items:center;">
         <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
@@ -8917,8 +8943,8 @@ async function renderProspeccaoNova() {
         </div>
       </div>`;
   } else {
-    const ativasExec = prospeccaoCache.filter(prospeccaoAtiva);
-    const rotaHojeExec = prospeccaoCache.filter(l => l.status === 'na_rota' && l.data_rota === hojeProsp);
+    const ativasExec = baseOperacional.filter(prospeccaoAtiva);
+    const rotaHojeExec = baseOperacional.filter(l => l.status === 'na_rota' && l.data_rota === hojeProsp);
     const metaDia = 6;
     const pctRota = Math.min(100, Math.round(rotaHojeExec.length / metaDia * 100));
     const maiorImpacto = ativasExec.reduce((max, l) => Math.max(max, Number(l.avaliacoes) || 0), 0);
@@ -8954,6 +8980,25 @@ async function renderProspeccaoNova() {
       '</section>';
   }
 
+  // Mostra a saúde da mistura de fontes sem fingir que uma integração ainda não
+  // carregada já está ativa. Cada número é de contas canônicas, não soma de planilhas.
+  const fontesPlanejadas = [
+    { chave: 'outscraper', rotulo: 'Outscraper' },
+    { chave: 'google places', rotulo: 'Google Places' },
+    { chave: 'tripadvisor', rotulo: 'Tripadvisor' },
+    { chave: 'ifood', rotulo: 'iFood' }
+  ];
+  const baseAtivaFonte = baseOperacional.filter(prospeccaoAtiva);
+  const fontesStatus = fontesPlanejadas.map(item => {
+    const total = baseAtivaFonte.filter(l => String(l.fonte || '').split('+').some(f => prospeccaoNormalizarTexto(f) === item.chave)).length;
+    return { ...item, total };
+  });
+  const integridadeFontes = souGestorProspBanner ? `
+    <div class="chart-card" style="padding:13px 17px;margin-bottom:14px;display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-left:3px solid var(--blue);">
+      <div style="min-width:190px;flex:1;"><b style="font-size:12.5px;">Base canônica, sem duplicar fontes</b><div style="font-size:11px;color:var(--muted2);margin-top:2px;">O mesmo restaurante é mesclado por Place ID, telefone ou nome + localização.</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">${fontesStatus.map(f => `<span style="border:1px solid var(--line);background:${f.total ? 'var(--panel2)' : 'transparent'};border-radius:999px;padding:6px 10px;font-size:10.5px;color:${f.total ? 'var(--ink)' : 'var(--muted2)'};"><b>${f.rotulo}</b> · ${f.total ? f.total.toLocaleString('pt-BR') : 'aguardando carga'}</span>`).join('')}</div>
+    </div>` : '';
+
   // Cards por praça (mockup prospeccao-gestor): visão de aprovação por cidade —
   // quantos leads ainda não viraram empresa/rota por praça e quem atende cada uma.
   // Só pro gestor: o executivo já chega com a lista filtrada no território dele.
@@ -8962,7 +9007,7 @@ async function renderProspeccaoNova() {
   let cardsPraca = '';
   if (souGestorProsp) {
     const porCidade = {};
-    prospeccaoCache.forEach(l => {
+    baseOperacional.forEach(l => {
       if (!l.cidade) return;
       const c = (porCidade[l.cidade] = porCidade[l.cidade] || { pend: 0, reps: new Set() });
       if (l.status !== 'criado_hubspot' && l.status !== 'sem_fit') c.pend++;
@@ -8989,16 +9034,18 @@ async function renderProspeccaoNova() {
 
   // Pílulas orientadas à decisão. A ordenação interna sempre começa pelo volume
   // de avaliações: é o indicador transparente de potencial de impacto da conta.
-  const totalAtivas = prospeccaoCache.filter(prospeccaoAtiva).length;
-  const totalSemDono = prospeccaoCache.filter(l => prospeccaoAtiva(l) && !l.responsavel_owner_id).length;
-  const totalNaRota = prospeccaoCache.filter(l => l.status === 'na_rota' && l.data_rota === isoDate(new Date())).length;
+  const totalAtivas = baseOperacional.filter(prospeccaoAtiva).length;
+  const totalSemDono = baseOperacional.filter(l => prospeccaoAtiva(l) && !l.responsavel_owner_id).length;
+  const totalNaRota = baseOperacional.filter(l => l.status === 'na_rota' && l.data_rota === isoDate(new Date())).length;
   const totalHistorico = prospeccaoCache.filter(l => l.status === 'sem_fit' || l.status === 'criado_hubspot').length;
+  const totalRevisarEscopo = prospeccaoCache.filter(l => prospeccaoAtiva(l) && !prospeccaoFazSentido(l)).length;
   const pillAtiva = (cond) => cond ? 'background:var(--ink);color:var(--panel);border-color:var(--ink);' : 'background:none;color:var(--muted);border-color:var(--line-btn);';
   const pills = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
       <button data-pill="ativas" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'ativas')}">${souGestorProsp ? 'Prioridade' : 'Recomendadas'} ${totalAtivas}</button>
       ${souGestorProsp ? `<button data-pill="sem_dono" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'sem_dono')}">Sem responsável ${totalSemDono}</button>` : ''}
       <button data-pill="na_rota" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'na_rota')}">Na rota hoje ${totalNaRota}</button>
+      ${souGestorProsp && totalRevisarEscopo > 0 ? `<button data-pill="revisar_escopo" title="Registros preservados, mas fora de foodservice" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'revisar_escopo')}">Revisar escopo ${totalRevisarEscopo}</button>` : ''}
       <button data-pill="historico" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'historico')}">Histórico ${totalHistorico}</button>
     </div>`;
 
@@ -9017,7 +9064,7 @@ async function renderProspeccaoNova() {
         </select>
         <select id="pfCategoria" aria-label="Filtrar por categoria" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Categoria (todas)</option>
-          ${categorias.map(c => `<option value="${esc(c)}" ${prospeccaoFiltro.categoria === c ? 'selected' : ''}>${esc(prospeccaoRotuloCategoria(c))}</option>`).join('')}
+          ${categorias.map(c => `<option value="${esc(c)}" ${prospeccaoFiltro.categoria === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
         </select>
         <select id="pfFonte" aria-label="Filtrar por fonte" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Fonte (todas)</option>
@@ -9032,13 +9079,12 @@ async function renderProspeccaoNova() {
           <option value="true" ${prospeccaoFiltro.jaExiste === 'true' ? 'selected' : ''}>Possível duplicata</option>
           <option value="false" ${prospeccaoFiltro.jaExiste === 'false' ? 'selected' : ''}>Sem duplicata aparente</option>
         </select>
-        <input id="pfNotaMin" type="number" step="0.1" aria-label="Nota mínima" placeholder="Nota mín." value="${prospeccaoFiltro.notaMin}" style="width:90px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
         <input id="pfAvaliacoesMin" type="number" aria-label="Avaliações mínimas" placeholder="Avaliações mín." value="${prospeccaoFiltro.avaliacoesMin}" style="width:120px;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
       </div>
     </details>`;
 
-  // Tabela (Claude Design): checkbox · restaurante · praça · nota · avaliações ·
-  // executivo · origem — clique na linha abre a ficha no drawer.
+  // Tabela decisória: avaliação é o único sinal de prioridade. A nota não ocupa
+  // coluna, filtro ou desempate; fica apenas como contexto secundário na ficha.
   const linhasTabela = pagina.map(l => {
     const nomeResp = l.responsavel_owner_id ? ((DATA.reps.find(r => r.ownerId === String(l.responsavel_owner_id)) || {}).name || '').split(' ')[0] : '—';
     const podeSelecionar = sessaoAtual.role === 'manager' && prospeccaoAtiva(l);
@@ -9051,7 +9097,6 @@ async function renderProspeccaoNova() {
       ${souGestorProsp ? `<span class="prospeccao-col-check">${podeSelecionar ? `<input type="checkbox" class="prospeccao-sel" data-lead="${l.id}" ${prospeccaoSelecao.has(l.id) ? 'checked' : ''} aria-label="Selecionar ${esc(l.nome)} pro lote" style="width:16px;height:16px;cursor:pointer;" onclick="event.stopPropagation();">` : ''}</span>` : ''}
       <span class="prospeccao-col-name"><b>${esc(l.nome)}</b>${!l.telefone ? ' <span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:1px 7px;font-size:9.5px;font-weight:700;">sem telefone</span>' : ''}<small class="prospeccao-mobile-meta" style="color:var(--muted2);margin-top:3px;">${esc(prospeccaoRotuloCategoria(l.categoria))} · ${esc(statusLabel)}${souExecProsp ? ' · ' + esc(prospeccaoRotuloFonte(l.fonte)) : ''}</small></span>
       <span class="prospeccao-col-place">${esc(prospeccaoPraca(l))}</span>
-      <b class="prospeccao-col-rating" style="text-align:right;">★ ${l.nota != null ? Number(l.nota).toFixed(1).replace('.', ',') : '—'}</b>
       <span class="prospeccao-col-reviews prospeccao-impacto" style="text-align:right;color:var(--ink);"><b>${l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') : '—'}</b><small>avaliações</small></span>
       <span class="prospeccao-col-owner">${sessaoAtual.role === 'rep' ? esc(statusLabel) : esc(nomeResp)}</span>
       ${acaoExec}
@@ -9112,6 +9157,7 @@ async function renderProspeccaoNova() {
 
   el.innerHTML = `
     ${bannerProspeccao}
+    ${integridadeFontes}
     ${cardsPraca}
     <div class="chart-card" style="padding:0;overflow:hidden;margin-bottom:14px;">
       <div class="prospeccao-toolbar" style="padding:18px 22px 0;">
@@ -9127,7 +9173,7 @@ async function renderProspeccaoNova() {
       </div>
       <div class="prospeccao-table-grid prospeccao-table-head ${souExecProsp ? 'is-rep' : ''}" style="background:var(--panel2);padding:8px 22px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted2);">
         ${souGestorProsp ? `<span><input type="checkbox" id="prospeccaoSelAll" aria-label="Selecionar todos os leads desta página" style="width:15px;height:15px;cursor:pointer;"></span>` : ''}
-        <span>RESTAURANTE</span><span>PRAÇA</span><span style="text-align:right;">NOTA</span><span style="text-align:right;">AVALIAÇÕES</span><span>${souGestorProsp ? 'EXECUTIVO' : 'STATUS'}</span><span style="text-align:right;">${souGestorProsp ? 'FONTES' : 'AÇÃO'}</span>
+        <span>RESTAURANTE</span><span>PRAÇA</span><span style="text-align:right;">AVALIAÇÕES</span><span>${souGestorProsp ? 'EXECUTIVO' : 'STATUS'}</span><span style="text-align:right;">${souGestorProsp ? 'FONTES' : 'AÇÃO'}</span>
       </div>
       <div id="prospeccaoTabelaCorpo">
         ${pagina.length === 0 ? '<div class="empty-state" style="padding:20px 22px;">Nenhum lead bate com esses filtros.</div>' : linhasTabela}
@@ -9291,8 +9337,8 @@ async function renderProspeccaoNova() {
     });
   });
 
-  ['pfCidade', 'pfBairro', 'pfCategoria', 'pfFonte', 'pfStatus', 'pfJaExiste', 'pfNotaMin', 'pfAvaliacoesMin'].forEach(id => {
-    const campo = { pfCidade: 'cidade', pfBairro: 'bairro', pfCategoria: 'categoria', pfFonte: 'fonte', pfStatus: 'status', pfJaExiste: 'jaExiste', pfNotaMin: 'notaMin', pfAvaliacoesMin: 'avaliacoesMin' }[id];
+  ['pfCidade', 'pfBairro', 'pfCategoria', 'pfFonte', 'pfStatus', 'pfJaExiste', 'pfAvaliacoesMin'].forEach(id => {
+    const campo = { pfCidade: 'cidade', pfBairro: 'bairro', pfCategoria: 'categoria', pfFonte: 'fonte', pfStatus: 'status', pfJaExiste: 'jaExiste', pfAvaliacoesMin: 'avaliacoesMin' }[id];
     const elInput = document.getElementById(id);
     if (elInput) elInput.addEventListener('change', () => { prospeccaoFiltro[campo] = elInput.value; prospeccaoPagina = 1; renderProspeccaoNova(); });
   });
@@ -9365,7 +9411,8 @@ function abrirFichaProspeccaoDrawer(l) {
   document.getElementById('stageModalMeta').textContent = [prospeccaoRotuloCategoria(l.categoria), prospeccaoBairroValido(l.bairro) ? l.bairro : null, l.cidade].filter(Boolean).join(' · ');
   document.getElementById('stageModalBody').innerHTML = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-      ${l.nota != null ? `<span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">★ ${l.nota}${l.avaliacoes != null ? ` · ${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações` : ''}</span>` : ''}
+      <span style="background:rgba(37,99,235,.10);color:var(--blue);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:800;">${Number(l.avaliacoes || 0).toLocaleString('pt-BR')} avaliações</span>
+      ${l.nota != null ? `<span title="A nota não influencia a prioridade" style="background:var(--panel2);color:var(--muted2);border-radius:999px;padding:4px 12px;font-size:11px;">nota pública ${Number(l.nota).toFixed(1).replace('.', ',')} · apenas contexto</span>` : ''}
       ${l.ja_existe_hubspot ? '<span style="background:var(--red-soft);color:var(--red);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">possível duplicata no HubSpot</span>' : ''}
       <span style="background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:11.5px;color:var(--muted2);">fontes: ${esc(prospeccaoRotuloFonte(l.fonte))}</span>
       ${l.hubspot_company_id ? '<span style="background:var(--green-soft);color:var(--green);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">Company no HubSpot ✓</span>' : ''}
@@ -9455,14 +9502,13 @@ function renderLeadsPraca() {
         .filter(p => p.leads.length > 0)
     : todasPracas;
 
-  // Ordena por relevância dentro de cada praça: nota primeiro, volume de avaliações
-  // como desempate — os dois sinais que a própria lista já promete cruzar (ver texto
-  // logo abaixo). Cria array novo (não ordena in-place) pra não mutar DATA.leadsReferencia.
+  // Ordena por relevância dentro de cada praça usando somente o volume de avaliações.
+  // Cria array novo (não ordena in-place) pra não mutar DATA.leadsReferencia.
   const pracasParaMostrar = pracasFiltradas.map(p => ({
     ...p,
     leads: [...(p.leads || [])].sort((a, b) =>
-      (Number(b.nota) || 0) - (Number(a.nota) || 0) ||
-      (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0)
+      (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0) ||
+      String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
     )
   }));
 
@@ -9478,7 +9524,7 @@ function renderLeadsPraca() {
       ${sessaoAtual.role === 'manager' && totalLeads > 0 ? `<button id="lpEnviarTodos" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 16px;font-size:12.5px;font-weight:700;cursor:pointer;">Enviar todos pro HubSpot ↗</button>` : ''}
     </div>
     <div class="chart-card" style="margin-bottom:20px;max-width:80ch;font-size:13px;line-height:1.6;">
-      A lista cruza nota e volume de avaliações públicas (Google/TripAdvisor) com os negócios já abertos no HubSpot — se alguém do time já tocou aquele lead, ele sai da lista.
+      A lista prioriza somente o volume de avaliações públicas e cruza as fontes com os negócios já abertos no HubSpot — se alguém do time já tocou aquela conta, ela sai da fila.
     </div>
     ${pracasParaMostrar.length === 0 ? `<div class="empty-state">Nenhum lead de referência pra sua praça ainda.</div>` : pracasParaMostrar.map(p => `
       <div style="margin-bottom:26px;">
@@ -9497,7 +9543,7 @@ function renderLeadsPraca() {
                     <div style="font-weight:700;font-size:14.5px;">${l.nome}</div>
                     <div style="font-size:11.5px;color:var(--muted2);">${l.tipo || ''} · 📍 ${l.bairro || ''}</div>
                   </div>
-                  <span class="num" style="font-size:11px;font-weight:700;color:var(--green);background:var(--green-soft);border-radius:var(--r-pill);padding:5px 10px;white-space:nowrap;flex-shrink:0;">★ ${l.nota || '—'} · ${l.avaliacoes || 0}</span>
+                  <span class="num" style="font-size:11px;font-weight:700;color:var(--green);background:var(--green-soft);border-radius:var(--r-pill);padding:5px 10px;white-space:nowrap;flex-shrink:0;">${Number(l.avaliacoes || 0).toLocaleString('pt-BR')} avaliações</span>
                 </div>
                 ${sessaoAtual.role === 'manager' && l.responsavel ? `<span style="align-self:flex-start;font-size:10px;font-weight:700;color:var(--muted2);background:var(--panel2);border-radius:var(--r-pill);padding:2px 8px;">${l.responsavel.split(' ')[0]}</span>` : ''}
                 <div style="font-size:12.5px;line-height:1.5;color:var(--muted);">${l.motivo || ''}</div>
@@ -9654,7 +9700,10 @@ async function renderPDIs() {
   }
 
   if (sessaoAtual.role === 'manager') {
-    if (!pessoaSelecionadaId) pessoaSelecionadaId = DATA.reps[0].ownerId;
+    if (!pessoaSelecionadaId) {
+      const maisUrgente = [...DATA.reps].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
+      pessoaSelecionadaId = maisUrgente ? maisUrgente.ownerId : DATA.reps[0].ownerId;
+    }
     const r = DATA.reps.find(x => x.ownerId === pessoaSelecionadaId) || DATA.reps[0];
 
     // Banner "Pessoas" (Claude Design item 4): data_um_a_um é <input type="date"> (ISO),
@@ -9700,18 +9749,21 @@ async function renderPDIs() {
       const pdiVencido = estado.data && estado.data < dataHojeISO2 && !tudoFeito;
       const semPlano = !temCompromisso || tudoFeito;
       const travadosAlto = (x.leadsTravados || 0) >= 4;
-      const urgente = pdiVencido || (x.gargalo && travadosAlto);
+      // Vermelho é exceção: PDI vencido ou 8+ negócios acima do SLA. Com 4–7,
+      // o executivo segue na fila de monitoramento, sem parecer que todo o time está crítico.
+      const urgente = pdiVencido || (x.leadsTravados || 0) >= 8;
       return { x, estado, temCompromisso, feitosCount, tudoFeito, pdiVencido, semPlano, travadosAlto, urgente };
     }).sort((a, b) => (b.urgente - a.urgente) || (b.x.leadsTravados || 0) - (a.x.leadsTravados || 0));
 
-    const urgentes = cardsTime.filter(c => c.urgente);
-    const emDia = cardsTime.filter(c => !c.urgente);
+    const urgentes = cardsTime.filter(c => c.urgente).slice(0, 3);
+    const idsUrgentes = new Set(urgentes.map(c => c.x.ownerId));
+    const emDia = cardsTime.filter(c => !idsUrgentes.has(c.x.ownerId));
 
     const oTimeHTML = `
       <div class="chart-card" style="margin-bottom:20px;">
         <div style="display:flex;align-items:center;gap:9px;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="9" cy="7" r="4"/><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
-          <b style="font-family:'Poppins',sans-serif;font-size:14px;">O time</b><span style="font-size:11px;color:var(--muted2);">ordenado por urgência do coaching</span>
+          <b style="font-family:'Poppins',sans-serif;font-size:14px;">Fila de 1:1</b><span style="font-size:11px;color:var(--muted2);">prioridades críticas primeiro · restante em monitoramento</span>
         </div>
         ${urgentes.length > 0 ? `
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px;margin-top:15px;">
@@ -9727,9 +9779,9 @@ async function renderPDIs() {
         ${emDia.length > 0 ? `
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-top:14px;">
           ${emDia.map(c => `
-            <div class="pessoas-card-dia" data-owner="${c.x.ownerId}" style="border:1px solid var(--line);border-radius:15px;padding:11px 14px;font-size:12px;display:flex;align-items:center;gap:9px;cursor:pointer;">
+            <div class="pessoas-card-dia" data-owner="${c.x.ownerId}" style="border:1px solid ${c.travadosAlto ? 'rgba(176,120,42,.35)' : 'var(--line)'};background:${c.travadosAlto ? 'var(--amber-soft)' : 'transparent'};border-radius:15px;padding:11px 14px;font-size:12px;display:flex;align-items:center;gap:9px;cursor:pointer;">
               <span style="width:26px;height:26px;border-radius:99px;background:var(--panel2);color:var(--muted);font-family:'Poppins',sans-serif;font-weight:800;font-size:10px;display:grid;place-items:center;flex:none;">${esc(c.x.name.split(' ').map(p => p[0]).slice(0, 2).join(''))}</span>
-              <span><b>${esc(c.x.name.split(' ')[0])}</b> · ${c.temCompromisso ? `plano ativo ${c.feitosCount}/${c.x.compromissos.length}${c.tudoFeito ? ' ✓' : ''}` : 'sem plano ativo'}</span>
+              <span><b>${esc(c.x.name.split(' ')[0])}</b> · ${c.x.leadsTravados || 0} travado${c.x.leadsTravados === 1 ? '' : 's'} · ${c.temCompromisso ? `plano ${c.feitosCount}/${c.x.compromissos.length}${c.tudoFeito ? ' ✓' : ''}` : 'sem plano ativo'}</span>
             </div>
           `).join('')}
         </div>` : ''}
@@ -10026,9 +10078,9 @@ async function renderCoaching() {
       </details>
 
       <div style="border-top:1px dashed var(--line);padding-top:12px;">
-        <div class="daily-col-label" style="margin-bottom:6px;">💬 Sugerir plano pra ele ver</div>
-        <textarea class="sugestaoPlanoInput" placeholder="ex: Essa semana, foca em avançar os 5 leads mais antigos de Visita antes de abrir prospecção nova." style="width:100%;min-height:50px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 9px;font-family:inherit;font-size:12px;margin-bottom:6px;"></textarea>
-        <button class="sugestaoPlanoBtn" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Enviar</button>
+        <div class="daily-col-label" style="margin-bottom:6px;">Fechar o 1:1 com um compromisso visível</div>
+        <textarea class="sugestaoPlanoInput" placeholder="Ex.: até quarta, avançar os 5 negócios mais antigos de Visita e registrar o próximo passo datado." style="width:100%;min-height:50px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:7px 9px;font-family:inherit;font-size:12px;margin-bottom:6px;"></textarea>
+        <button class="sugestaoPlanoBtn" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:6px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Enviar compromisso</button>
         <span class="sugestaoPlanoStatus" style="font-size:11px;color:var(--muted);margin-left:8px;"></span>
         <div class="sugestoesAnteriores" style="margin-top:10px;"></div>
       </div>
