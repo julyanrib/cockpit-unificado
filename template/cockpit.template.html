@@ -5927,10 +5927,19 @@ let planoMapaOrigemAtual = null;
 let planoMapaRenderAtual = null;
 
 function estiloPlanoMapa() {
-  // Positron (OpenFreeMap): visual limpo, cinza-claro, minimalista — o mais
-  // próximo do estilo Apple Maps entre as opções gratuitas sem chave.
-  // 'dark' segue igual: é o único vetorial escuro oficial do OpenFreeMap.
-  return document.body.getAttribute('data-theme') === 'dark'
+  const escuro = document.body.getAttribute('data-theme') === 'dark';
+  // MapTiler "Base": visual limpo, verde suave + água azul clara, sem poluição —
+  // o mais próximo de Apple Maps entre as opções pesquisadas (confirmado ao vivo
+  // no dashboard do Julyan). Chave é pública por natureza (o navegador busca os
+  // tiles direto), protegida por restrição de domínio no painel do MapTiler, não
+  // por sigilo — mesma lógica da anonKey do Supabase.
+  // Sem DATA.maptiler (env var MAPTILER_KEY ainda não setada na Vercel): cai pro
+  // OpenFreeMap Positron, gratuito e sem chave, pra nunca deixar o mapa quebrado.
+  if (DATA.maptiler) {
+    const estilo = escuro ? 'base-v4-dark' : 'base-v4';
+    return `https://api.maptiler.com/maps/${estilo}/style.json?key=${DATA.maptiler}`;
+  }
+  return escuro
     ? 'https://tiles.openfreemap.org/styles/dark'
     : 'https://tiles.openfreemap.org/styles/positron';
 }
