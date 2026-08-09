@@ -3844,6 +3844,33 @@ async function localizarQuentesSemCompromisso(foraDaAgenda, ownerId) {
   });
 }
 
+// Bloco 2b-iii: junta local_atuacao (geocodificado no Bloco 2b-i) com as coordenadas
+// dos quentes (Bloco 2b-ii) e escreve a distância direto nos spans já reservados no
+// card (data-quente-fora-dist) — atualização pontual, não re-renderiza o card, então
+// não briga com o autosave do Plano do Dia rodando em paralelo.
+async function enriquecerQuentesForaComDistancia(foraDaAgenda, ownerId) {
+  const hoje = isoDate(new Date());
+  const plano = await carregarPlanoDoDia(ownerId, hoje);
+  const origem = plano && plano.local_atuacao_lat != null && plano.local_atuacao_lng != null
+    ? { lat: plano.local_atuacao_lat, lng: plano.local_atuacao_lng }
+    : null;
+
+  const enriquecidos = await localizarQuentesSemCompromisso(foraDaAgenda, ownerId);
+
+  enriquecidos.forEach(lead => {
+    const chave = String(lead.id || agendaLeadNome(lead));
+    const span = document.querySelector(`[data-quente-fora-dist="${CSS.escape(chave)}"]`);
+    if (!span) return; // card pode ter sido substituído por uma navegação de semana nesse meio tempo
+    if (!origem) return; // sem "onde vai atuar hoje" preenchido — nada pra comparar, fica em silêncio
+    if (lead.lat == null || lead.lng == null) {
+      span.textContent = '· local desconhecido';
+      return;
+    }
+    const km = distanciaKm(origem.lat, origem.lng, lead.lat, lead.lng);
+    span.textContent = `· 📍 ${km < 1 ? Math.round(km * 1000) + 'm' : km.toFixed(1) + 'km'} de onde você vai atuar`;
+  });
+}
+
 async function buildRotaContasAlvoHTML(ownerId, dataISO) {
   if (!DATA.supabase || !supa) return '';
   const { data, error } = await supa.from('leads_prospeccao').select('*')
@@ -4157,16 +4184,20 @@ function renderAgenda() {
   const quentesForaCardExec = (souRep && foraDaAgenda.length) ? (() => {
     const links = foraDaAgenda.slice(0, 8).map(l => {
       const nomeLead = agendaLeadNome(l) || 'Sem nome';
-      return `<div style="background:var(--amber-soft);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
+      const chaveLead = agendaEsc(String(l.id || nomeLead));
+      return `<div data-quente-fora="${chaveLead}" style="background:var(--amber-soft);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
           <b style="font-size:13px;">${agendaEsc(nomeLead)}</b>
           ${l.id ? `<a href="https://app.hubspot.com/contacts/24373118/record/0-3/${agendaEsc(String(l.id))}" target="_blank" rel="noopener" style="color:var(--amber);font-weight:700;font-size:12px;text-decoration:none;white-space:nowrap;">Abrir →</a>` : ''}
         </div>
-        ${l.dias != null ? `<div style="font-size:11px;color:var(--muted2);margin-top:2px;">${l.dias}d parado</div>` : ''}
+        <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+          ${l.dias != null ? `<span style="font-size:11px;color:var(--muted2);">${l.dias}d parado</span>` : ''}
+          <span data-quente-fora-dist="${chaveLead}" style="font-size:11px;color:var(--muted2);"></span>
+        </div>
       </div>`;
     }).join('');
     return `
-    <div class="chart-card" style="border:1.5px solid var(--amber);margin-top:16px;">
+    <div class="chart-card" id="quentesForaCard" style="border:1.5px solid var(--amber);margin-top:16px;">
       <h3 style="margin-bottom:4px;">Quentes sem compromisso</h3>
       <div class="chart-subtitle" style="margin:0 0 12px;">em fechamento, sem reunião ou follow-up marcado</div>
       ${links}
@@ -4289,6 +4320,14 @@ function renderAgenda() {
   if (souRep && DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
     const meuRep = (DATA.reps || []).find(x => x.ownerId === sessaoAtual.ownerId);
     if (meuRep) montarPlanoDoDia(meuRep).catch(e => console.error('Erro ao montar o plano do dia:', e));
+  }
+
+  // Bloco 2b-iii (09/08): distância de cada quente-sem-compromisso até onde o
+  // executivo disse que vai atuar hoje. Só faz sentido pra semana atual (offset 0)
+  // — "distância de hoje" numa semana passada/futura não tem referência real.
+  if (souRep && DATA.supabase && supa && agendaEstado.offset === 0 && foraDaAgenda.length) {
+    enriquecerQuentesForaComDistancia(foraDaAgenda, sessaoAtual.ownerId)
+      .catch(e => console.error('Erro ao localizar quentes sem compromisso:', e));
   }
 
   // ETAPA 3: painel "Começar rota" do dia — só pro executivo (rota é individual) e só
