@@ -183,7 +183,7 @@ function montarDadosCompletos() {
     saude,
     reps,
     leadsReferencia: leadsReferencia.pracas || [],
-    footerText: `Fonte: HubSpot (pipeline 916011864, auto-atualizado diariamente) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
+    footerText: `Fonte: HubSpot (pipeline 916011864, atualizado a cada 2h em horário comercial) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
     resumoSemanal: (resumoSemanal || weeklyRaw) ? {
       geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
       numerosAtualizadosEmFmt: weeklyRaw ? fmtDate(weeklyRaw.geradoEm) : (resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null),
