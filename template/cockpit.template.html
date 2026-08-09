@@ -8654,7 +8654,14 @@ function prospeccaoRotuloCategoria(valor) {
     bakery: 'Padaria', cafe: 'Café', cafeteria: 'Cafeteria', 'coffee shop': 'Cafeteria',
     bar: 'Bar', pub: 'Pub', bistro: 'Bistrô', brewery: 'Cervejaria', 'beer hall': 'Cervejaria',
     confectionery: 'Confeitaria', 'ice cream shop': 'Sorveteria', 'dessert shop': 'Sobremesas',
-    steakhouse: 'Churrascaria', pizzeria: 'Pizzaria'
+    steakhouse: 'Churrascaria', 'steak house': 'Churrascaria', pizzeria: 'Pizzaria',
+    'chicken restaurant': 'Restaurante de frango', 'chinese restaurant': 'Restaurante chinês',
+    'cocktail bar': 'Bar de coquetéis', 'espresso bar': 'Cafeteria',
+    'german restaurant': 'Restaurante alemão', 'hawker stall': 'Comida de rua',
+    'health food restaurant': 'Alimentação saudável', 'irish pub': 'Pub',
+    'live music bar': 'Bar com música', 'meat dish restaurant': 'Restaurante de carnes',
+    'mediterranean restaurant': 'Restaurante mediterrâneo', 'portuguese restaurant': 'Restaurante português',
+    'snack bar': 'Lanchonete'
   };
   if (traducoes[chave]) return traducoes[chave];
   return chave ? chave.charAt(0).toUpperCase() + chave.slice(1) : 'Categoria não informada';
@@ -8674,8 +8681,15 @@ function prospeccaoBairroValido(valor) {
   return !/^(av|avenida|r|rua|rodovia|loja|lojas|lj|bloco|bl)\b/.test(v);
 }
 
+function prospeccaoBairroExibicao(valor) {
+  if (!prospeccaoBairroValido(valor)) return null;
+  const partes = String(valor).split(/\s+-\s+/).map(x => x.trim()).filter(Boolean);
+  const candidato = partes.length > 1 ? partes[partes.length - 1] : String(valor).trim();
+  return prospeccaoBairroValido(candidato) ? candidato : null;
+}
+
 function prospeccaoPraca(l) {
-  const bairro = prospeccaoBairroValido(l && l.bairro) ? l.bairro : null;
+  const bairro = prospeccaoBairroExibicao(l && l.bairro);
   return [bairro, l && l.cidade].filter(Boolean).join(' · ') || 'Praça não informada';
 }
 
@@ -8692,6 +8706,9 @@ const PROSPECCAO_FORA_FOODSERVICE = new Set([
 ]);
 function prospeccaoFazSentido(l) {
   const categoria = prospeccaoNormalizarTexto(l && l.categoria);
+  const nome = prospeccaoNormalizarTexto(l && l.nome);
+  const nomeEvidenciaFoodservice = /\b(restaurante|restaurant|cafe|cafeteria|bar|pub|bistro|burger|hamburg|pizza|pizzaria|churrasc|lanch|doceria|padaria|confeitaria|cozinha|cantina|choperia|grill|comida|food|sushi|temakeria|sorvet|acai)\b/.test(nome);
+  if (nomeEvidenciaFoodservice) return true;
   return !categoria || !PROSPECCAO_FORA_FOODSERVICE.has(categoria);
 }
 
@@ -8740,7 +8757,7 @@ function prospeccaoAplicarFiltros(lista) {
     (f.visao !== 'revisar_escopo' || (prospeccaoAtiva(l) && !prospeccaoFazSentido(l))) &&
     (!termo || prospeccaoNormalizarTexto([l.nome, l.categoria, l.bairro, l.cidade, l.endereco, l.telefone].filter(Boolean).join(' ')).includes(termo)) &&
     (!f.cidade || l.cidade === f.cidade) &&
-    (!f.bairro || l.bairro === f.bairro) &&
+    (!f.bairro || prospeccaoBairroExibicao(l.bairro) === f.bairro) &&
     (!f.avaliacoesMin || (l.avaliacoes || 0) >= Number(f.avaliacoesMin)) &&
     (!f.categoria || prospeccaoRotuloCategoria(l.categoria) === f.categoria) &&
     (!f.fonte || String(l.fonte || '').split('+').map(x => x.trim()).includes(f.fonte)) &&
@@ -8899,7 +8916,7 @@ async function renderProspeccaoNova() {
 
   const baseOperacional = prospeccaoCache.filter(prospeccaoFazSentido);
   const cidades = [...new Set(baseOperacional.map(l => l.cidade).filter(Boolean))].sort();
-  const bairros = [...new Set(baseOperacional.map(l => l.bairro).filter(prospeccaoBairroValido))].sort();
+  const bairros = [...new Set(baseOperacional.map(l => prospeccaoBairroExibicao(l.bairro)).filter(Boolean))].sort();
   const categorias = [...new Set(baseOperacional.map(l => prospeccaoRotuloCategoria(l.categoria)).filter(Boolean))].sort();
   const fontes = [...new Set(prospeccaoCache.flatMap(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean)))].sort();
 
@@ -9408,7 +9425,7 @@ function abrirFichaProspeccaoDrawer(l) {
   const podeAgir = sessaoAtual.role === 'manager' || String(l.responsavel_owner_id) === String(sessaoAtual.ownerId);
   const naRotaHoje = l.status === 'na_rota' && l.data_rota === isoDate(new Date());
   document.getElementById('stageModalName').textContent = l.nome;
-  document.getElementById('stageModalMeta').textContent = [prospeccaoRotuloCategoria(l.categoria), prospeccaoBairroValido(l.bairro) ? l.bairro : null, l.cidade].filter(Boolean).join(' · ');
+  document.getElementById('stageModalMeta').textContent = [prospeccaoRotuloCategoria(l.categoria), prospeccaoBairroExibicao(l.bairro), l.cidade].filter(Boolean).join(' · ');
   document.getElementById('stageModalBody').innerHTML = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
       <span style="background:rgba(37,99,235,.10);color:var(--blue);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:800;">${Number(l.avaliacoes || 0).toLocaleString('pt-BR')} avaliações</span>
