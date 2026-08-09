@@ -3641,6 +3641,7 @@ const AGENDA_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 's
 
 let agendaEstado = { offset: 0, filtro: 'tudo', modo: null, sabado: false, subview: 'hoje' };
 let AGENDA_EVENTOS = [];
+let agendaRenderVersao = 0;
 
 /* ---------- tempo ---------- */
 // Tudo que chega é UTC. Sem converter, 13:20Z apareceria como 13:20 em vez de 10:20.
@@ -4361,6 +4362,7 @@ function religarBotoesRota(container, ownerId, dataISO) {
 function renderAgenda() {
   const box = document.getElementById('agendaContent');
   if (!box) return;
+  const renderVersao = ++agendaRenderVersao;
 
 
   const souRep = !!(sessaoAtual && sessaoAtual.role === 'rep');
@@ -4700,6 +4702,9 @@ function renderAgenda() {
   if (mostrarHoje && souRep && agendaEstado.offset === 0 && DATA.agenda) {
     const hojeISOStr = isoDate(new Date());
     buildRotaDoDiaHTML(sessaoAtual.ownerId, hojeISOStr).then(htmlExecucao => {
+      // Se o usuário trocou Hoje/Semana durante a consulta, esta resposta pertence
+      // a uma tela antiga e não pode reaparecer por cima da agenda nova.
+      if (renderVersao !== agendaRenderVersao || agendaEstado.subview === 'semana') return;
       // Visto ao vivo 08/08: injetado com afterbegin no box, o painel ficava ACIMA da
       // faixa escura — a faixa é o cabeçalho da aba e tem que ser a primeira coisa.
       // Os painéis de rota entram DEPOIS do plano do dia (planejamento), não direto
