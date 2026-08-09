@@ -28,7 +28,10 @@ try {
 
 function normalizarTelefone(tel) {
   if (!tel) return null;
-  const digitos = String(tel).replace(/\D/g, '');
+  let digitos = String(tel).replace(/\D/g, '');
+  // A mesma linha costuma vir como +55 27... no Tripadvisor e 27... no iFood.
+  // Normaliza o DDI brasileiro para que fontes diferentes não virem duas contas.
+  if (digitos.startsWith('55') && (digitos.length === 12 || digitos.length === 13)) digitos = digitos.slice(2);
   return digitos.length >= 8 ? digitos : null;
 }
 
@@ -49,12 +52,16 @@ function distanciaKm(a, b) {
 
 function mesmoRestaurante(a, b) {
   if (a.place_id && b.place_id && String(a.place_id) === String(b.place_id)) return true;
-  if (a.telefone_normalizado && b.telefone_normalizado && a.telefone_normalizado === b.telefone_normalizado) return true;
+  const telA = normalizarTelefone(a.telefone_normalizado || a.telefone);
+  const telB = normalizarTelefone(b.telefone_normalizado || b.telefone);
+  if (telA && telB && telA === telB) return true;
   const mesmoNomeCidade = normalizarTexto(a.nome) && normalizarTexto(a.nome) === normalizarTexto(b.nome) &&
     normalizarTexto(a.cidade) === normalizarTexto(b.cidade);
   if (!mesmoNomeCidade) return false;
   const endA = normalizarTexto(a.endereco), endB = normalizarTexto(b.endereco);
   if (endA && endB && endA === endB) return true;
+  const bairroA = normalizarTexto(a.bairro), bairroB = normalizarTexto(b.bairro);
+  if (bairroA && bairroB && bairroA === bairroB) return true;
   return distanciaKm(a, b) <= 0.15;
 }
 
