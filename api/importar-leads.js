@@ -40,6 +40,20 @@ function normalizarTexto(valor) {
     .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+// A nota não define fit comercial. O único corte de potencial é volume de avaliações.
+// Ainda assim, uma categoria explicitamente fora de foodservice não pode entrar na fila
+// só por ter muitas avaliações (ex.: monumento, hostel ou shopping). Fontes verticais
+// como iFood/Tripadvisor podem vir sem categoria e continuam válidas.
+const CATEGORIAS_FORA_FOODSERVICE = new Set([
+  'hostel', 'hotel', 'lodging', 'monument', 'museum', 'park', 'tourist attraction',
+  'shopping', 'shopping mall', 'store', 'supermarket', 'grocery store', 'pharmacy',
+  'school', 'university', 'hospital', 'gym'
+]);
+function fazSentidoFoodservice(lead) {
+  const categoria = normalizarTexto(lead.categoria);
+  return !categoria || !CATEGORIAS_FORA_FOODSERVICE.has(categoria);
+}
+
 function distanciaKm(a, b) {
   if (a.lat == null || a.lng == null || b.lat == null || b.lng == null) return Infinity;
   const rad = x => Number(x) * Math.PI / 180;
@@ -177,11 +191,9 @@ module.exports = async function handler(req, res) {
     (completo.temperatura.frios || []).forEach(l => l.name && nomesNoHubspot.add(l.name.toLowerCase().trim()));
   } catch (e) { /* dedup best-effort */ }
 
-  // Filtro de qualidade (regra do playbook: nota >= 4.2 E >= 100 avaliações).
-  // Pode ser afrouxado por importação via body.qualidade, mas nunca silenciosamente:
-  // o resultado reporta quantos foram descartados e por quê.
+  // Régua oficial: somente volume de avaliações. Nota é contexto, nunca corte nem
+  // desempate. O mínimo pode ser ajustado por lote, sempre com relatório explícito.
   const qualidade = {
-    notaMin: (req.body.qualidade && req.body.qualidade.notaMin != null) ? Number(req.body.qualidade.notaMin) : 4.2,
     avaliacoesMin: (req.body.qualidade && req.body.qualidade.avaliacoesMin != null) ? Number(req.body.qualidade.avaliacoesMin) : 100
   };
 
@@ -216,18 +228,21 @@ module.exports = async function handler(req, res) {
   }).filter(l => l.nome && l.cidade);
 
   const reprovadosQualidade = linhasTodas.filter(l =>
-    l.nota == null || Number(l.nota) < qualidade.notaMin ||
     l.avaliacoes == null || Number(l.avaliacoes) < qualidade.avaliacoesMin
   );
-  const linhas = linhasTodas.filter(l => !reprovadosQualidade.includes(l));
+  const reprovadosFit = linhasTodas.filter(l => !fazSentidoFoodservice(l));
+  const linhas = linhasTodas.filter(l =>
+    !reprovadosQualidade.includes(l) && !reprovadosFit.includes(l)
+  );
 
   if (linhas.length === 0) {
     const soQualidade = linhasTodas.length > 0 && reprovadosQualidade.length === linhasTodas.length;
     return res.status(400).json({
       erro: soQualidade
-        ? `Nenhuma conta passou pela régua de qualidade (nota >= ${qualidade.notaMin} e avaliações >= ${qualidade.avaliacoesMin}).`
-        : 'Nenhum lead válido no lote (precisa de nome e cidade).',
-      reprovados_qualidade: reprovadosQualidade.length
+        ? `Nenhuma conta passou pela régua de impacto (avaliações >= ${qualidade.avaliacoesMin}; a nota não influencia).`
+        : 'Nenhum restaurante válido no lote (precisa de nome, cidade, avaliações mínimas e categoria compatível com foodservice).',
+      reprovados_qualidade: reprovadosQualidade.length,
+      reprovados_fit: reprovadosFit.length
     });
   }
 
@@ -256,8 +271,10 @@ module.exports = async function handler(req, res) {
   const resultado = {
     inseridos: 0, duplicados: 0, mesclados: 0, erros: [], duplicados_exemplos: [],
     reprovados_qualidade: reprovadosQualidade.length,
-    regra_qualidade: `nota >= ${qualidade.notaMin} e avaliações >= ${qualidade.avaliacoesMin}`,
-    reprovados_exemplos: reprovadosQualidade.slice(0, 10).map(l => `${l.nome} (nota ${l.nota ?? '?'} · ${l.avaliacoes ?? '?'} avaliações)`)
+    reprovados_fit: reprovadosFit.length,
+    regra_qualidade: `avaliações >= ${qualidade.avaliacoesMin}; nota não influencia`,
+    reprovados_exemplos: reprovadosQualidade.slice(0, 10).map(l => `${l.nome} (${l.avaliacoes ?? '?'} avaliações)`),
+    reprovados_fit_exemplos: reprovadosFit.slice(0, 10).map(l => `${l.nome} (${l.categoria || 'sem categoria'})`)
   };
   linhas.forEach(l => {
     const existente = existentes.find(x => mesmoRestaurante(x, l));
@@ -320,3 +337,4 @@ module.exports = async function handler(req, res) {
 
   return res.status(200).json(resultado);
 };
+
