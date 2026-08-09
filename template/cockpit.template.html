@@ -4533,12 +4533,38 @@ function renderAgenda() {
   // planeja rota própria, então continua vendo tudo junto (visão agregada do time).
   const mostrarHoje = souRep && agendaEstado.subview !== 'semana';
   const mostrarSemana = !souRep || agendaEstado.subview === 'semana';
+  const resumoSemanaHojeExec = mostrarHoje ? (() => {
+    const meusEventos = naSemana
+      .filter(e => e.ownerId === String(sessaoAtual.ownerId))
+      .sort((a, b) => a.inicio - b.inicio);
+    const proximos14 = doTime
+      .filter(e => e.ownerId === String(sessaoAtual.ownerId) && e.inicio >= agendaAgora() && e.inicio < teto)
+      .sort((a, b) => a.inicio - b.inicio);
+    const destaques = (proximos14.length ? proximos14 : meusEventos).slice(0, 4);
+    const rotEvento = e => {
+      const dia = e.inicio.toLocaleDateString('pt-BR', { weekday:'short', day:'2-digit', month:'2-digit', timeZone:'UTC' }).replace('.', '');
+      return `<span style="display:flex;align-items:center;gap:7px;min-width:0;"><b style="color:var(--ink);white-space:nowrap;">${agendaEsc(dia)} · ${agendaEsc(agendaHhmm(e.inicio))}</b><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${agendaEsc(e.cliente || (AGENDA_TIPOS[e.tipo] || {}).rotulo || 'Compromisso')}</span>${e.quente ? '<i style="width:7px;height:7px;border-radius:50%;background:var(--red);flex:none;" title="Pipeline quente"></i>' : ''}</span>`;
+    };
+    return `<div class="chart-card" style="margin:0 0 14px;padding:14px 18px;border-left:3px solid var(--ink);">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap;">
+        <div style="min-width:210px;">
+          <div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);">Sua agenda não sumiu</div>
+          <div style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:800;margin-top:3px;">${meusEventos.length} compromissos nesta semana · ${naAgenda}/${quentes.length || 0} quentes cobertos</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:3px;">O mapa abaixo combina o que já está marcado com as melhores oportunidades perto de onde você vai atuar.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(180px,1fr));gap:6px 18px;flex:1;min-width:380px;font-size:11.5px;color:var(--muted);">
+          ${destaques.length ? destaques.map(rotEvento).join('') : '<span style="color:var(--amber);font-weight:700;">Nenhum próximo compromisso encontrado. Use as oportunidades do mapa para abrir a semana.</span>'}
+        </div>
+        <button type="button" data-agsub="semana" style="background:var(--ink);color:#fff;border:none;border-radius:999px;padding:9px 15px;font:700 11.5px inherit;cursor:pointer;white-space:nowrap;">Abrir agenda semanal →</button>
+      </div>
+    </div>`;
+  })() : '';
   const segSubviewExec = souRep ?
     '<div class="ag-seg" role="group" aria-label="Ver" style="margin:18px 0 20px;">' +
     '<button data-agsub="hoje" aria-pressed="' + mostrarHoje + '">📍 Hoje</button>' +
     '<button data-agsub="semana" aria-pressed="' + mostrarSemana + '">🗓️ Semana</button></div>' : '';
 
-  let h = bannerAgendaGestor + bannerAgendaExec + segSubviewExec +
+  let h = bannerAgendaGestor + bannerAgendaExec + segSubviewExec + resumoSemanaHojeExec +
     (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '');
 
   let hSemana = '';
@@ -6547,6 +6573,11 @@ async function montarPlanoDoDia(r) {
   }
 
   const p = planoDiaCache || {};
+  // A região digitada é a origem oficial do planejamento. Ao reabrir a aba, o mapa
+  // deve nascer centrado nela — não voltar silenciosamente para a primeira conta.
+  planoMapaOrigemAtual = p.local_atuacao_lat != null && p.local_atuacao_lng != null
+    ? { lat: Number(p.local_atuacao_lat), lng: Number(p.local_atuacao_lng) }
+    : null;
   const fechado = p.status === 'plano_fechado' && !planoEmEdicao;
   const editandoPlanoFechado = p.status === 'plano_fechado' && planoEmEdicao;
   const prios = Array.isArray(p.prioridades) ? p.prioridades : [];
@@ -6564,7 +6595,7 @@ async function montarPlanoDoDia(r) {
       <label for="planoLocalAtuacao" style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);display:block;margin-bottom:8px;">📍 Onde você vai atuar hoje?</label>
       <input type="text" id="planoLocalAtuacao" maxlength="120" placeholder="Bairro, cidade — ex: Praia do Canto, Vitória" value="${esc(p.local_atuacao || '')}" ${fechado ? 'disabled' : ''}
         style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">
-      <div style="font-size:11px;color:var(--muted2);margin-top:6px;line-height:1.5;">Não é a mesma coisa de onde você fez a Daily — é pra onde a rota e as sugestões de hoje devem olhar.</div>
+      <div id="planoLocalMapaEstado" style="font-size:11px;color:${p.local_atuacao_lat != null ? 'var(--green)' : 'var(--muted2)'};margin-top:6px;line-height:1.5;">${p.local_atuacao_lat != null ? '✓ Região localizada — o mapa está priorizando oportunidades próximas.' : 'Não é a mesma coisa de onde você fez a Daily — digite bairro e cidade para reorganizar o mapa.'}</div>
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
@@ -6710,13 +6741,30 @@ async function montarPlanoDoDia(r) {
         autosaveTimer = setTimeout(async () => {
           const campos = coletarPlanoDoCard(slot);
           const msg = slot.querySelector('#planoAutosaveMsg');
+          const localAntes = planoDiaCache ? (planoDiaCache.local_atuacao || null) : null;
+          const localMudou = campos.local_atuacao !== localAntes;
           const { error, plano } = await salvarPlanoDoDia(r.ownerId, hoje, { ...campos, status: 'rascunho' });
           if (!msg) return;
           if (error) { msg.textContent = 'Não consegui salvar o rascunho — verifique a conexão.'; return; }
           if (plano && plano.local_atuacao && !plano.local_atuacao_lat) {
             msg.textContent = 'Rascunho salvo — não localizei esse lugar no mapa, tenta ser mais específico (bairro, cidade).';
           } else {
-            msg.textContent = 'Rascunho salvo automaticamente.';
+            msg.textContent = localMudou && plano && plano.local_atuacao_lat != null
+              ? 'Região localizada — mapa e prioridades reorganizados.'
+              : 'Rascunho salvo automaticamente.';
+          }
+          if (localMudou) {
+            planoMapaOrigemAtual = plano && plano.local_atuacao_lat != null && plano.local_atuacao_lng != null
+              ? { lat: Number(plano.local_atuacao_lat), lng: Number(plano.local_atuacao_lng) }
+              : null;
+            const estadoLocal = slot.querySelector('#planoLocalMapaEstado');
+            if (estadoLocal) {
+              estadoLocal.style.color = planoMapaOrigemAtual ? 'var(--green)' : 'var(--amber)';
+              estadoLocal.textContent = planoMapaOrigemAtual
+                ? '✓ Região localizada — o mapa está priorizando oportunidades próximas.'
+                : 'Não localizei essa região. Tente “bairro, cidade” para aumentar a precisão.';
+            }
+            await montarPlanoMapa(r, hoje, fechado);
           }
         }, 1200);
       };
@@ -6816,18 +6864,48 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   if (error) { box.innerHTML = `<div class="empty-state" style="padding-top:190px;">Erro ao carregar contas-alvo: ${esc(error.message)}</div>`; return; }
 
   const todas = data || [];
-  const comCoord = todas.filter(l => l.lat != null && l.lng != null);
+
+  // Fonte única do pipeline quente: negócios do próprio owner em Demo/Proposta,
+  // Negociação ou Ag. Pagamento, somados à classificação quente já calculada no build.
+  // O cruzamento com a prospecção só serve para localizar — nunca cria coordenada.
+  const normNome = s => agendaNorm(s);
+  const pipelinePorNome = new Map();
+  const registrarPipeline = d => {
+    if (!d || String(d.ownerId) !== String(r.ownerId)) return;
+    const nome = agendaLeadNome(d);
+    const chave = normNome(nome);
+    if (!chave) return;
+    const atual = pipelinePorNome.get(chave) || {};
+    pipelinePorNome.set(chave, { ...atual, ...d, name: nome, stage: d.stage || atual.stage || 'Pipeline quente' });
+  };
+  ((((DATA.temperatura || {}).quentes) || [])).forEach(registrarPipeline);
+  if (DATA.funilLeads && DATA.stageMeta) {
+    Object.entries(DATA.funilLeads).forEach(([stageId, listaFunil]) => {
+      const stage = ((DATA.stageMeta.labels || {})[stageId] || 'No funil');
+      if (!/(demo|proposta|negocia|pagamento)/i.test(agendaNorm(stage))) return;
+      (listaFunil || []).forEach(d => registrarPipeline({ ...d, stage, stageId }));
+    });
+  }
+  const pipelineQuente = Array.from(pipelinePorNome.values());
+  const matchPipeline = lead => pipelineQuente.find(d => agendaMesmoLead(lead.nome, agendaLeadNome(d)));
+  const comCoord = todas.filter(l => l.lat != null && l.lng != null).map(l => {
+    const deal = matchPipeline(l);
+    return deal ? { ...l, _pipelineQuente:true, _hubspotId:deal.id || null, _stage:deal.stage || 'Pipeline quente' } : l;
+  });
+  const pipelineSemLocal = pipelineQuente.filter(d => !todas.some(l => l.lat != null && l.lng != null && agendaMesmoLead(l.nome, agendaLeadNome(d))));
   const semCoord = todas.length - comCoord.length;
   const visiveis = comCoord.filter(l =>
-    (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
-    (!planoMapaFiltro.notaMin || (l.nota || 0) >= planoMapaFiltro.notaMin) &&
-    (!planoMapaFiltro.avalMin || (l.avaliacoes || 0) >= planoMapaFiltro.avalMin)
+    l._pipelineQuente || (
+      (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
+      (!planoMapaFiltro.notaMin || (l.nota || 0) >= planoMapaFiltro.notaMin) &&
+      (!planoMapaFiltro.avalMin || (l.avaliacoes || 0) >= planoMapaFiltro.avalMin)
+    )
   );
 
   if (visiveis.length === 0) {
     if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
     planoMapaMarcadores = {};
-    lista.innerHTML = '';
+    lista.innerHTML = pipelineSemLocal.length ? `<div class="plano-map-section-label">Pipeline quente · localização pendente</div>${pipelineSemLocal.map(d => `<div class="plano-lista-item"><span class="plano-lista-index" style="color:var(--red);">!</span><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')} · sem coordenada</span></span>${d.id ? `<a href="${hsUrl(d.id)}" target="_blank" rel="noopener" class="plano-lista-btn" style="text-decoration:none;">↗</a>` : ''}</div>`).join('')}` : '';
     box.innerHTML = `<div class="empty-state" style="padding-top:190px;">Nenhuma conta-alvo com coordenada pra mostrar${planoMapaFiltro.notaMin ? ' com esse filtro de nota' : ''}.</div>`;
     const countEl = document.getElementById('planoMapaRotaCount');
     if (countEl) countEl.textContent = '0 paradas';
@@ -6835,7 +6913,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     if (gameEl) gameEl.innerHTML = `<div class="plano-map-progress-copy"><span>Nenhuma conta atende aos filtros atuais.</span><b>0/6 paradas</b></div><div class="plano-map-progress-track"><div class="plano-map-progress-bar" style="width:0%;"></div></div>`;
     const rotaEl = document.getElementById('planoMapaAbrirRota');
     if (rotaEl) { rotaEl.disabled = true; rotaEl.textContent = 'Escolha uma parada'; }
-    if (msg) msg.innerHTML = `<span>${semCoord > 0 ? `${semCoord} conta(s)-alvo sem coordenada ficaram fora do mapa.` : 'Ajuste os filtros para ver oportunidades.'}</span>`;
+    if (msg) msg.innerHTML = `<span>${pipelineSemLocal.length ? `${pipelineSemLocal.length} negócio(s) quente(s) seguem visíveis na lista, mas precisam de localização para entrar no mapa.` : semCoord > 0 ? `${semCoord} conta(s)-alvo sem coordenada ficaram fora do mapa.` : 'Ajuste os filtros para ver oportunidades.'}</span>`;
     return;
   }
 
@@ -6844,7 +6922,6 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // Match honesto com o funil HubSpot do PRÓPRIO rep (DATA já vem filtrado por
   // papel no servidor): negócio aberto com o mesmo nome => o pin mostra a etapa
   // real do funil. Sem match, sem invenção.
-  const normNome = s => String(s || '').toLowerCase().trim();
   const etapaPorNome = {};
   const quentesNomes = new Set((((DATA.temperatura || {}).quentes) || [])
     .filter(d => String(d.ownerId) === String(r.ownerId))
@@ -6852,13 +6929,13 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   if (DATA.funilLeads && DATA.stageMeta) {
     Object.entries(DATA.funilLeads).forEach(([stageId, listaFunil]) => {
       (listaFunil || []).forEach(d => {
-        if (d.ownerId === r.ownerId && d.name) etapaPorNome[normNome(d.name)] = (DATA.stageMeta.labels || {})[stageId] || 'No funil';
+        if (String(d.ownerId) === String(r.ownerId) && d.name) etapaPorNome[normNome(d.name)] = (DATA.stageMeta.labels || {})[stageId] || 'No funil';
       });
     });
   }
-  const etapaHub = l => (l.status === 'criado_hubspot' || etapaPorNome[normNome(l.nome)]) ? (etapaPorNome[normNome(l.nome)] || null) : null;
+  const etapaHub = l => l._stage || ((l.status === 'criado_hubspot' || etapaPorNome[normNome(l.nome)]) ? (etapaPorNome[normNome(l.nome)] || null) : null);
   const noHubspot = l => l.status === 'criado_hubspot' || !!etapaPorNome[normNome(l.nome)];
-  const quenteHub = l => quentesNomes.has(normNome(l.nome));
+  const quenteHub = l => !!l._pipelineQuente || quentesNomes.has(normNome(l.nome));
 
   const naRotaHojeFn = l => l.status === 'na_rota' && l.data_rota === hoje;
   const corDoStatus = l => {
@@ -6874,13 +6951,19 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     : noHubspot(l) ? (etapaHub(l) ? `No funil: ${etapaHub(l)}` : 'Já criada no HubSpot')
     : 'Disponível';
 
-  // Ordena: na rota de hoje primeiro, depois por VOLUME de avaliações
-  // (nota como desempate) — 4.7 com 3.000 avaliações vale mais que 4.9 com 40.
+  // Salesforce Maps aplicado ao cockpit: compromissos assumidos primeiro; depois
+  // pipeline quente; dentro da mesma prioridade, proximidade da região digitada;
+  // volume de avaliações fica como impacto/desempate.
   const ordenadasTodas = [...visiveis].sort((a, b) => {
     const ra = naRotaHojeFn(a) ? 0 : 1, rb = naRotaHojeFn(b) ? 0 : 1;
     if (ra !== rb) return ra - rb;
     const qa = quenteHub(a) ? 0 : 1, qb = quenteHub(b) ? 0 : 1;
     if (qa !== qb) return qa - qb;
+    if (planoMapaOrigemAtual) {
+      const da = distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(a.lat), Number(a.lng));
+      const db = distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(b.lat), Number(b.lng));
+      if (Math.abs(da - db) > .15) return da - db;
+    }
     const va = (b.avaliacoes || 0) - (a.avaliacoes || 0);
     return va !== 0 ? va : (b.nota || 0) - (a.nota || 0);
   });
@@ -6942,14 +7025,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     const detalhe = prospeccaoPraca(l);
     const naRota = naRotaHojeFn(l);
     const posicao = indiceRota.get(String(l.id));
-    const simbolo = naRota ? posicao : noHubspot(l) ? 'H' : l.status === 'sem_fit' ? '×' : '★';
+    const simbolo = naRota ? posicao : quenteHub(l) ? '!' : noHubspot(l) ? 'H' : l.status === 'sem_fit' ? '×' : '★';
     return `
       <div class="plano-lista-item ${naRota ? 'is-route' : ''}" data-id="${esc(String(l.id))}">
         <span class="plano-lista-index" ${naRota ? '' : `style="color:${corDoStatus(l)};"`}>${simbolo}</span>
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
           <span class="plano-lista-meta">${l.nota != null ? `<span class="plano-lista-rating">★ ${l.nota}</span>` : ''}${l.avaliacoes != null ? `<span>· ${Number(l.avaliacoes).toLocaleString('pt-BR')} av.</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
-          ${etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}</span>` : ''}
+          ${etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
       </div>`;
@@ -6958,7 +7041,9 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const itensSugestao = ordenadas.filter(l => !naRotaHojeFn(l));
   lista.innerHTML = `
     ${itensRota.length ? `<div class="plano-map-section-label">Paradas de hoje</div>${itensRota.map(itemListaHTML).join('')}` : `<div class="empty-state" style="padding:18px 8px 12px;font-size:12px;">Sua rota está vazia. Escolha as melhores oportunidades abaixo.</div>`}
-    ${itensSugestao.length ? `<div class="plano-map-section-label">Boas oportunidades</div>${itensSugestao.map(itemListaHTML).join('')}` : ''}
+    ${itensSugestao.filter(quenteHub).length ? `<div class="plano-map-section-label">Pipeline quente perto da rota</div>${itensSugestao.filter(quenteHub).map(itemListaHTML).join('')}` : ''}
+    ${itensSugestao.filter(l => !quenteHub(l)).length ? `<div class="plano-map-section-label">Boas oportunidades</div>${itensSugestao.filter(l => !quenteHub(l)).map(itemListaHTML).join('')}` : ''}
+    ${pipelineSemLocal.length ? `<div class="plano-map-section-label">Pipeline quente · localização pendente</div>${pipelineSemLocal.map(d => `<div class="plano-lista-item"><span class="plano-lista-index" style="color:var(--red);">!</span><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')} · precisa de endereço</span></span>${d.id ? `<a href="${hsUrl(d.id)}" target="_blank" rel="noopener" class="plano-lista-btn" title="Abrir no HubSpot" style="text-decoration:none;">↗</a>` : ''}</div>`).join('')}` : ''}
   `;
   const countEl = document.getElementById('planoMapaRotaCount');
   if (countEl) countEl.textContent = `${naRotaTodas.length} ${naRotaTodas.length === 1 ? 'parada' : 'paradas'}`;
