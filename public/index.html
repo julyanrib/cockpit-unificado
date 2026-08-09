@@ -3822,6 +3822,28 @@ function ordenarPorProximidade(paradas, origem) {
   return ordenadas;
 }
 
+// Bloco 2b-ii (09/08): quentes sem compromisso não têm coordenada no HubSpot — só
+// existe coordenada de verdade na leads_prospeccao (Outscraper). Cruza por nome
+// (mesmo match seguro já usado pra bater agenda x lead quente) e SÓ preenche lat/lng
+// pra quem realmente bate; o resto fica sem, honestamente — nunca inventa posição.
+// Escopo por owner_id: além de mais rápido, evita casar "Bar do Zé" de uma praça com
+// outro "Bar do Zé" em praça diferente.
+async function localizarQuentesSemCompromisso(foraDaAgenda, ownerId) {
+  if (!DATA.supabase || !supa || !foraDaAgenda.length) return foraDaAgenda.map(l => ({ ...l }));
+  const { data, error } = await supa.from('leads_prospeccao')
+    .select('nome,lat,lng,bairro,cidade')
+    .eq('responsavel_owner_id', ownerId);
+  if (error) { console.error('Erro ao buscar coordenadas de contas-alvo:', error.message); return foraDaAgenda.map(l => ({ ...l })); }
+  const candidatos = (data || []).filter(c => c.lat != null && c.lng != null);
+  return foraDaAgenda.map(lead => {
+    const nomeLead = agendaLeadNome(lead);
+    const match = candidatos.find(c => agendaMesmoLead(nomeLead, c.nome));
+    return match
+      ? { ...lead, lat: match.lat, lng: match.lng, bairro: match.bairro, cidade: match.cidade, localConhecido: true }
+      : { ...lead, localConhecido: false };
+  });
+}
+
 async function buildRotaContasAlvoHTML(ownerId, dataISO) {
   if (!DATA.supabase || !supa) return '';
   const { data, error } = await supa.from('leads_prospeccao').select('*')
@@ -6030,9 +6052,42 @@ async function carregarPlanoDoDia(ownerId, dataISO) {
   return planoDiaCache;
 }
 
+// Bloco 2b (09/08): transforma "Praia do Canto, Vitória" (texto livre) numa coordenada,
+// usando a API de geocoding da MapTiler — mesma chave do mapa, sem cadastro novo.
+// Nunca inventa coordenada: se a API não achar nada ou falhar (rede, chave ausente),
+// retorna null e quem chamou decide o que fazer (aqui: salva o texto igual, sem lat/lng).
+async function geocodificarLocalAtuacao(texto) {
+  if (!texto || !DATA.maptiler) return null;
+  try {
+    const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(texto)}.json?key=${DATA.maptiler}&country=br&language=pt`;
+    const resp = await fetch(url);
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const top = (json.features || [])[0];
+    if (!top || !Array.isArray(top.center)) return null;
+    const [lng, lat] = top.center;
+    return { lat, lng, nomeResolvido: top.place_name || texto };
+  } catch (e) {
+    console.error('Erro ao geocodificar local de atuação:', e.message);
+    return null;
+  }
+}
+
 async function salvarPlanoDoDia(ownerId, dataISO, campos) {
   if (!DATA.supabase || !supa) return { error: { message: 'Supabase indisponível' } };
   const existente = planoDiaCache || {};
+
+  // Só geocodifica de novo se o texto do local mudou — autosave dispara a cada
+  // pausa de digitação, geocodificar em toda tecla gastaria cota à toa.
+  let localLat = existente.local_atuacao_lat ?? null;
+  let localLng = existente.local_atuacao_lng ?? null;
+  const localMudou = 'local_atuacao' in campos && campos.local_atuacao !== (existente.local_atuacao ?? null);
+  if (localMudou) {
+    const geo = await geocodificarLocalAtuacao(campos.local_atuacao);
+    localLat = geo ? geo.lat : null;
+    localLng = geo ? geo.lng : null;
+  }
+
   const linha = {
     owner_id: ownerId,
     data: dataISO,
@@ -6042,6 +6097,8 @@ async function salvarPlanoDoDia(ownerId, dataISO, campos) {
     agenda_resumo: existente.agenda_resumo ?? [],
     daily_snapshot: existente.daily_snapshot ?? null,
     local_atuacao: existente.local_atuacao ?? null,
+    local_atuacao_lat: localLat,
+    local_atuacao_lng: localLng,
     bloqueios: existente.bloqueios ?? null,
     observacao: existente.observacao ?? null,
     status: existente.status ?? 'rascunho',
@@ -6268,8 +6325,14 @@ async function montarPlanoDoDia(r) {
         autosaveTimer = setTimeout(async () => {
           const campos = coletarPlanoDoCard(slot);
           const msg = slot.querySelector('#planoAutosaveMsg');
-          const { error } = await salvarPlanoDoDia(r.ownerId, hoje, { ...campos, status: 'rascunho' });
-          if (msg) msg.textContent = error ? 'Não consegui salvar o rascunho — verifique a conexão.' : 'Rascunho salvo automaticamente.';
+          const { error, plano } = await salvarPlanoDoDia(r.ownerId, hoje, { ...campos, status: 'rascunho' });
+          if (!msg) return;
+          if (error) { msg.textContent = 'Não consegui salvar o rascunho — verifique a conexão.'; return; }
+          if (plano && plano.local_atuacao && !plano.local_atuacao_lat) {
+            msg.textContent = 'Rascunho salvo — não localizei esse lugar no mapa, tenta ser mais específico (bairro, cidade).';
+          } else {
+            msg.textContent = 'Rascunho salvo automaticamente.';
+          }
         }, 1200);
       };
       slot.querySelectorAll('input[type="text"], textarea, .plano-conta-check').forEach(elm => {
