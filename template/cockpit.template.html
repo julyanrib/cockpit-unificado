@@ -3822,6 +3822,28 @@ function ordenarPorProximidade(paradas, origem) {
   return ordenadas;
 }
 
+// Bloco 2b-ii (09/08): quentes sem compromisso não têm coordenada no HubSpot — só
+// existe coordenada de verdade na leads_prospeccao (Outscraper). Cruza por nome
+// (mesmo match seguro já usado pra bater agenda x lead quente) e SÓ preenche lat/lng
+// pra quem realmente bate; o resto fica sem, honestamente — nunca inventa posição.
+// Escopo por owner_id: além de mais rápido, evita casar "Bar do Zé" de uma praça com
+// outro "Bar do Zé" em praça diferente.
+async function localizarQuentesSemCompromisso(foraDaAgenda, ownerId) {
+  if (!DATA.supabase || !supa || !foraDaAgenda.length) return foraDaAgenda.map(l => ({ ...l }));
+  const { data, error } = await supa.from('leads_prospeccao')
+    .select('nome,lat,lng,bairro,cidade')
+    .eq('responsavel_owner_id', ownerId);
+  if (error) { console.error('Erro ao buscar coordenadas de contas-alvo:', error.message); return foraDaAgenda.map(l => ({ ...l })); }
+  const candidatos = (data || []).filter(c => c.lat != null && c.lng != null);
+  return foraDaAgenda.map(lead => {
+    const nomeLead = agendaLeadNome(lead);
+    const match = candidatos.find(c => agendaMesmoLead(nomeLead, c.nome));
+    return match
+      ? { ...lead, lat: match.lat, lng: match.lng, bairro: match.bairro, cidade: match.cidade, localConhecido: true }
+      : { ...lead, localConhecido: false };
+  });
+}
+
 async function buildRotaContasAlvoHTML(ownerId, dataISO) {
   if (!DATA.supabase || !supa) return '';
   const { data, error } = await supa.from('leads_prospeccao').select('*')
