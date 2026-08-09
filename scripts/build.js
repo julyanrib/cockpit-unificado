@@ -15,7 +15,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { configSupabase } = require('./montar-dados.js');
+const { configSupabase, configMaptiler } = require('./montar-dados.js');
 
 const root = path.join(__dirname, '..');
 
@@ -23,6 +23,7 @@ const DATA_PUBLICO = {
   // Marca de arquitetura: o template usa isso pra saber que precisa hidratar via api/dados.
   shellProtegido: true,
   supabase: configSupabase(),
+  maptiler: configMaptiler(),
 
   // ---- placeholders vazios, um por chave do DATA real (mesmos tipos) ----
   hubspotUpdatedAtFmt: '',

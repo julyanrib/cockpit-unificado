@@ -298,4 +298,14 @@ function configSupabase() {
   return supabaseConfig ? { url: supabaseConfig.url, anonKey: supabaseConfig.anonKey } : null;
 }
 
-module.exports = { montarDadosCompletos, filtrarParaPapel, configSupabase, USUARIOS };
+// Chave do MapTiler (mapa de planejamento de rota) — assim como a anonKey do Supabase,
+// é uma chave PÚBLICA por natureza: o navegador precisa dela pra buscar os tiles
+// diretamente, não tem como esconder. Proteção correta é restrição de domínio (HTTP
+// referrer) no próprio painel do MapTiler, não sigilo no código. Se a env var não
+// existir ainda, retorna null — o template cai pro OpenFreeMap (gratuito, já testado)
+// sem quebrar o mapa.
+function configMaptiler() {
+  return process.env.MAPTILER_KEY || null;
+}
+
+module.exports = { montarDadosCompletos, filtrarParaPapel, configSupabase, configMaptiler, USUARIOS };
