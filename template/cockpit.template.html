@@ -2756,10 +2756,27 @@ function renderMeuFunil() {
   const maxEtapa = Math.max(...etapasComDado.map(sid => r.stages[sid]), 1);
 
   // Todos os meus leads (achatado de funilLeads, filtrado por dono — padrão do dossiê)
+  const contextoPorId = new Map([...(DATA.temperatura?.quentes || []), ...(r.quentes || [])].map(l => [String(l.id), l]));
   const meusLeads = Object.entries(DATA.funilLeads || {}).flatMap(([sid, leads]) =>
-    (leads || []).filter(l => String(l.ownerId) === String(r.ownerId)).map(l => ({ ...l, stageId: l.stageId || sid }))
-  ).sort((a, b) => (b.dias || 0) - (a.dias || 0));
+    (leads || []).filter(l => String(l.ownerId) === String(r.ownerId)).map(l => {
+      const contexto = contextoPorId.get(String(l.id)) || {};
+      return { ...contexto, ...l, stageId: l.stageId || sid, proximaAtividade: l.proximaAtividade || contexto.proximaAtividade || contexto.proximaReuniao || null };
+    })
+  ).sort((a, b) => {
+    const fechamentoA = ['1395880471', '1395880472', '1395880473'].includes(a.stageId) ? 1 : 0;
+    const fechamentoB = ['1395880471', '1395880472', '1395880473'].includes(b.stageId) ? 1 : 0;
+    return (fechamentoB - fechamentoA) || ((a.proximaAtividade ? 1 : 0) - (b.proximaAtividade ? 1 : 0)) || ((b.dias || 0) - (a.dias || 0));
+  });
   const leadsFiltrados = meuFunilFiltroEtapa ? meusLeads.filter(l => l.stageId === meuFunilFiltroEtapa) : meusLeads;
+  const fechamentoEmJogo = meusLeads.filter(l => ['1395880471', '1395880472', '1395880473'].includes(l.stageId));
+  const fechamentoSemPasso = fechamentoEmJogo.filter(l => !l.proximaAtividade);
+  const proximaAcaoHTML = l => {
+    if (!l.proximaAtividade) return `<span style="color:${['1395880471', '1395880472', '1395880473'].includes(l.stageId) ? 'var(--red)' : 'var(--muted2)'};font-weight:700;">Sem próxima ação</span>`;
+    const dt = new Date(l.proximaAtividade);
+    if (isNaN(dt.getTime())) return '<span style="color:var(--muted2);">—</span>';
+    const texto = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' · ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    return `<span style="color:var(--green);font-weight:700;">${texto}</span>`;
+  };
 
   // Ranking da semana (ganhos por executivo, você destacado)
   const ranking = (DATA.reps || []).map(x => ({ nome: String(x.name || '').split(' ')[0], ganhos: x.ganhosSemana || 0, eu: String(x.ownerId) === String(r.ownerId) }))
@@ -2777,6 +2794,7 @@ function renderMeuFunil() {
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:var(--dark-ink);">${r.open || 0}</div><div style="font-size:11px;color:var(--dark-mut);">em aberto</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:${travados.length > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${travados.length}</div><div style="font-size:11px;color:var(--dark-mut);">acima do SLA</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:#57C29A;">${r.fechadosNoMes || 0}<span style="font-size:14px;color:var(--dark-mut);font-weight:700;">/${r.metaMensal || 10}</span></div><div style="font-size:11px;color:var(--dark-mut);">fechados no mês</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:${fechamentoSemPasso.length ? '#FF6B78' : '#57C29A'};">${fechamentoSemPasso.length}</div><div style="font-size:11px;color:var(--dark-mut);">quentes sem próximo passo</div></div>
       </div>
       <span style="margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:1px solid ${saude.cor};border-radius:999px;padding:5px 13px;font-size:11.5px;font-weight:700;color:${saude.cor};">
         <span style="width:7px;height:7px;border-radius:99px;background:${saude.cor};"></span>${saude.txt}
@@ -2811,7 +2829,7 @@ function renderMeuFunil() {
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1.5fr 1fr;gap:18px;margin-top:18px;" class="meu-funil-grid">
+    <div style="display:grid;grid-template-columns:1fr;gap:18px;margin-top:18px;" class="meu-funil-grid">
       <div class="chart-card" style="padding:0;overflow:hidden;">
         <div style="display:flex;align-items:center;gap:9px;padding:16px 22px 12px;flex-wrap:wrap;">
           <h3 style="margin:0;font-size:14.5px;">Todos os meus leads · ${meusLeads.length}</h3>
@@ -2820,20 +2838,21 @@ function renderMeuFunil() {
             ${etapasComDado.map(sid => `<button data-mfetapa="${sid}" aria-pressed="${meuFunilFiltroEtapa === sid}" style="background:${meuFunilFiltroEtapa === sid ? 'var(--ink)' : 'none'};color:${meuFunilFiltroEtapa === sid ? 'var(--panel)' : 'var(--muted)'};border:1px solid ${meuFunilFiltroEtapa === sid ? 'var(--ink)' : 'var(--line)'};border-radius:999px;padding:3px 11px;cursor:pointer;font-family:inherit;font-weight:700;">${STAGE_LABELS[sid].split(' ')[0]} ${r.stages[sid]}</button>`).join('')}
           </span>
         </div>
-        <div style="display:grid;grid-template-columns:1.6fr 1fr .8fr .6fr;background:var(--panel2);padding:8px 22px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);"><span>Lead</span><span>Etapa</span><span style="text-align:right;">Dias na etapa</span><span style="text-align:right;">Abrir</span></div>
+        <div style="display:grid;grid-template-columns:1.5fr 1fr 1.15fr .65fr .5fr;background:var(--panel2);padding:8px 22px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);"><span>Lead</span><span>Etapa</span><span>Próxima ação</span><span style="text-align:right;">Na etapa</span><span style="text-align:right;">CRM</span></div>
         ${leadsFiltrados.length === 0 ? '<div class="empty-state" style="padding:18px 22px;">Nenhum lead nessa etapa.</div>' : leadsFiltrados.slice(0, 30).map(l => {
           const sla = slaDe(l.stageId);
           const estourou = sla && (l.dias || 0) > sla;
-          return `<div style="display:grid;grid-template-columns:1.6fr 1fr .8fr .6fr;padding:10px 22px;font-size:12.5px;border-bottom:1px solid var(--line);align-items:center;font-variant-numeric:tabular-nums;">
+          return `<div style="display:grid;grid-template-columns:1.5fr 1fr 1.15fr .65fr .5fr;gap:8px;padding:10px 22px;font-size:12.5px;border-bottom:1px solid var(--line);align-items:center;font-variant-numeric:tabular-nums;">
             <b>${esc(l.name)}</b>
             <span>${STAGE_LABELS[l.stageId] || ''}</span>
+            <span style="font-size:11.5px;">${proximaAcaoHTML(l)}</span>
             <span style="text-align:right;${estourou ? 'color:var(--red);font-weight:700;' : ''}">${l.dias != null ? l.dias + 'd' : '—'}</span>
             <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="text-align:right;font-size:11px;font-weight:700;">abrir ↗</a>
           </div>`;
         }).join('') + (leadsFiltrados.length > 30 ? `<div style="padding:10px 22px;font-size:11px;color:var(--muted2);">+${leadsFiltrados.length - 30} — filtre por etapa pra reduzir a lista</div>` : '')}
       </div>
 
-      <div class="chart-card" style="align-self:start;">
+      <div class="chart-card" style="display:none;align-self:start;">
         <h3 style="margin:0 0 12px;font-size:14px;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d="M8 21h8M12 17v4M6 3h12v6a6 6 0 01-12 0V3z"/><path d="M18 5h3a1 1 0 011 1c0 2-1.5 4-4 4M6 5H3a1 1 0 00-1 1c0 2 1.5 4 4 4"/></svg>Ranking da semana</h3>
         <div style="display:grid;gap:5px;font-size:12px;font-variant-numeric:tabular-nums;">
           ${ranking.map((x, i) => `<div style="display:grid;grid-template-columns:26px 1fr 70px;gap:8px;padding:6px 10px;border-radius:9px;${x.eu ? 'background:var(--red-soft);' : ''}">
@@ -3847,6 +3866,8 @@ function agendaQuentes(time) {
     unicos.set(chave, l);
   };
   ((DATA.temperatura && DATA.temperatura.quentes) || []).forEach(registrar);
+  // Carteira completa por executivo; o ranking global continua compacto.
+  (DATA.reps || []).forEach(r => (r.quentes || []).forEach(l => registrar({ ...l, ownerId: l.ownerId || r.ownerId })));
 
   // Regra comercial do planejamento: Demo/Proposta, Negociação e Ag. Pagamento
   // também são quentes, mesmo quando o score de temperatura ainda não os trouxe.

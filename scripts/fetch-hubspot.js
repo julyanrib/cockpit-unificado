@@ -446,7 +446,7 @@ async function repOpenDeals(ownerId) {
         { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', ...ENTERED_STAGE_PROPS]
+    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'notes_next_activity_date', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', ...ENTERED_STAGE_PROPS]
   });
   return results.filter(d => !isExcludedDeal(d));
 }
@@ -471,7 +471,7 @@ async function stageDealsTeamWide(stageId) {
         { propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS]
+    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'notes_next_activity_date', 'amount', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS]
   });
   return todos.filter(d => !isExcludedDeal(d));
 }
@@ -723,6 +723,9 @@ async function main() {
         id: d.id,
         dias,
         slaBreach: dias > (SLA_DAYS[stageId] || 999),
+        proximaAtividade: d.properties.notes_next_activity_date || null,
+        ultimaInteracao: d.properties.notes_last_updated || null,
+        valor: Math.round(parseFloat(d.properties.amount) || 0),
         vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
         ownerId: d.properties.hubspot_owner_id || null
       };
@@ -792,6 +795,15 @@ async function main() {
         if (!isNaN(dt.getTime()) && dt.getTime() > Date.now()) proximaReuniao = dt.toISOString();
       }
 
+      // Próxima atividade considera qualquer ação futura registrada no HubSpot
+      // (ligação, e-mail, tarefa ou reunião), não apenas reuniões.
+      const proximaAtividadeRaw = d.properties.notes_next_activity_date || null;
+      let proximaAtividade = null;
+      if (proximaAtividadeRaw) {
+        const dt = new Date(proximaAtividadeRaw);
+        if (!isNaN(dt.getTime()) && dt.getTime() > Date.now()) proximaAtividade = dt.toISOString();
+      }
+
       // % do prazo (SLA) da etapa já consumido — 0 = acabou de entrar, 1 = no limite do SLA, >1 = estourado
       const slaDaEtapa = SLA_DAYS[stageId] || 999;
       const slaRatio = dias / slaDaEtapa;
@@ -817,6 +829,8 @@ async function main() {
         rank,
         temperatura,
         proximaReuniao,
+        proximaAtividade,
+        ultimaInteracao: d.properties.notes_last_updated || null,
         valor: Math.round(parseFloat(d.properties.amount) || 0)
       };
     }).sort((a, b) => b.dias - a.dias);
@@ -857,6 +871,7 @@ async function main() {
       stages,
       criticos,
       travados,
+      quentes: withDays.filter(l => l.temperatura === 'quente'),
       leadsTravados,
       ganhosSemana: ganhosSemanaDeals.length,
       ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name),
