@@ -24,6 +24,7 @@ function requireOpcional(fn) {
 }
 const leadsReferencia = requireOpcional(() => require('../data/leads-referencia.json')) || { pracas: [] };
 const supabaseConfig = requireOpcional(() => require('../data/supabase-config.json'));
+const maptilerConfig = requireOpcional(() => require('../data/maptiler-config.json'));
 const resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
 const weeklyRaw = requireOpcional(() => require('../data/weekly-raw.json'));
 const hubspotPrevious = requireOpcional(() => require('../data/hubspot-previous.json'));
@@ -298,14 +299,14 @@ function configSupabase() {
   return supabaseConfig ? { url: supabaseConfig.url, anonKey: supabaseConfig.anonKey } : null;
 }
 
-// Chave do MapTiler (mapa de planejamento de rota) — assim como a anonKey do Supabase,
-// é uma chave PÚBLICA por natureza: o navegador precisa dela pra buscar os tiles
-// diretamente, não tem como esconder. Proteção correta é restrição de domínio (HTTP
-// referrer) no próprio painel do MapTiler, não sigilo no código. Se a env var não
-// existir ainda, retorna null — o template cai pro OpenFreeMap (gratuito, já testado)
-// sem quebrar o mapa.
+// Chave do MapTiler (mapa de planejamento de rota) — vem de um arquivo no repo,
+// igual ao supabase-config.json, e NÃO de env var da Vercel: esse projeto não tem
+// build rodando lá (deploy é estático, arquivos manuais), então uma env var no
+// painel da Vercel nunca seria lida por nada. É uma chave PÚBLICA por natureza
+// (o navegador precisa dela pra buscar os tiles direto) — protegida por
+// restrição de domínio no próprio painel do MapTiler, não por sigilo no código.
 function configMaptiler() {
-  return process.env.MAPTILER_KEY || null;
+  return maptilerConfig ? maptilerConfig.key : null;
 }
 
 module.exports = { montarDadosCompletos, filtrarParaPapel, configSupabase, configMaptiler, USUARIOS };
