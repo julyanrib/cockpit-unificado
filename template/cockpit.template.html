@@ -73,6 +73,41 @@
   @media (max-width:900px){ .meu-funil-grid{grid-template-columns:1fr !important;} }
   @media (max-width:760px){ .cockpit-hero-combo{flex-direction:column;align-items:stretch;} }
 
+  /* Prospecção: uma fila única, legível no desktop e acionável no celular. */
+  .prospeccao-table-grid{
+    display:grid;
+    grid-template-columns:36px minmax(230px,1.7fr) minmax(90px,.8fr) 72px minmax(100px,.75fr) minmax(100px,.8fr) minmax(88px,.7fr);
+    column-gap:12px;
+    align-items:center;
+  }
+  .prospeccao-linha{transition:background .14s var(--ease);}
+  .prospeccao-linha:hover{background:var(--panel2);}
+  .prospeccao-impacto{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;}
+  .prospeccao-impacto b{font-family:'Poppins',sans-serif;font-size:13px;}
+  .prospeccao-impacto small{font-size:9.5px;color:var(--muted2);font-weight:600;}
+  .prospeccao-mobile-meta{display:none;}
+  @media (max-width:760px){
+    .prospeccao-table-head{display:none !important;}
+    .prospeccao-table-grid.prospeccao-linha{
+      grid-template-columns:22px minmax(0,1fr) auto !important;
+      column-gap:10px;
+      row-gap:5px;
+      padding:13px 14px !important;
+      align-items:start;
+    }
+    .prospeccao-col-check{grid-column:1;grid-row:1 / span 3;}
+    .prospeccao-col-name{grid-column:2;grid-row:1;min-width:0;}
+    .prospeccao-col-name b{display:block;white-space:normal;overflow-wrap:anywhere;}
+    .prospeccao-col-reviews{grid-column:3;grid-row:1;}
+    .prospeccao-col-place{grid-column:2;grid-row:2;color:var(--muted);font-size:11.5px;}
+    .prospeccao-col-rating{grid-column:3;grid-row:2;text-align:right !important;font-size:11.5px;}
+    .prospeccao-col-owner{grid-column:2;grid-row:3;color:var(--muted2);font-size:10.5px;}
+    .prospeccao-col-source{grid-column:3;grid-row:3;text-align:right !important;font-size:9.5px !important;max-width:100px;overflow:hidden;text-overflow:ellipsis;}
+    .prospeccao-mobile-meta{display:inline;}
+    .prospeccao-toolbar{padding:16px 14px 0 !important;}
+    .prospeccao-footer{padding:12px 14px !important;}
+  }
+
   .kpi-strip-hero{position:relative;background:var(--dark);border-radius:var(--r-xl);padding:26px 26px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:20px;margin-bottom:20px;box-shadow:var(--shadow);}
   .kpi-hero{transition:transform .18s var(--ease);position:relative;}
   .kpi-hero:not(:last-child)::after{content:"";position:absolute;top:2px;bottom:2px;right:-10px;width:1px;background:var(--dark-fill);}
@@ -1171,11 +1206,9 @@
   <div class="view" id="viewLeadsPraca">
     <!-- Correção v3 2.2: banner-título genérico removido — a faixa escura da própria aba é o único cabeçalho. -->
     <div id="prospeccaoNovaContent"></div>
-    <div style="display:flex;align-items:center;gap:8px;margin:24px 0 12px;">
-      <span style="font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);white-space:nowrap;">Backlog mensal por praça</span>
-      <span style="flex:1;height:1px;background:var(--line);"></span>
-    </div>
-    <div id="leadsPracaContent"></div>
+    <!-- Legado preservado no código/dados, mas não renderizado: todas as fontes passam
+         a convergir na fila única de leads_prospeccao, sem duas jornadas concorrentes. -->
+    <div id="leadsPracaContent" hidden></div>
   </div>
 
   <div class="view" id="viewAvisos">
@@ -1646,7 +1679,9 @@ function aplicarVisaoPorPapel() {
   // Vendas do mês também depende do papel (gestor = tabela do time; rep = só os dele) —
   // por isso é chamada aqui, depois do login, e não no fluxo solto do carregamento.
   if (typeof renderVendasMes === 'function') renderVendasMes();
-  if (typeof renderLeadsPraca === 'function') renderLeadsPraca();
+  // Prospecção agora é uma fila única em leads_prospeccao. O backlog estático
+  // permanece preservado no código, mas não compete mais com a jornada ativa.
+  if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova();
   // setTimeout(0): renderDecisoes usa FUNIL_STAGE_IDS, uma const declarada mais abaixo no
   // script. No caminho sem Supabase configurado, aplicarVisaoPorPapel roda em sequência
   // síncrona a partir de iniciarAuth() — antes dessa const existir. Adiar pro próximo tick
@@ -4727,7 +4762,7 @@ document.getElementById('tabBtnDaily').addEventListener('click', () => activateT
 document.getElementById('tabBtnMeuPainel').addEventListener('click', () => activateTab('viewMeuPainel'));
 document.getElementById('tabBtnPDIs').addEventListener('click', () => activateTab('viewPDIs'));
 document.getElementById('tabBtnCoaching').addEventListener('click', () => { if (document.getElementById('viewCoaching')) activateTab('viewCoaching'); }); // Etapa 5: Coaching virou seção dentro de Desenvolvimento — esta aba fica sempre oculta (ver aplicarVisaoPorPapel); handler mantido só por segurança, nunca deve disparar.
-document.getElementById('tabBtnLeadsPraca').addEventListener('click', () => { activateTab('viewLeadsPraca'); if (typeof renderLeadsPraca === 'function') renderLeadsPraca(); if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova(); });
+document.getElementById('tabBtnLeadsPraca').addEventListener('click', () => { activateTab('viewLeadsPraca'); if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova(); });
 document.getElementById('tabBtnAvisos').addEventListener('click', () => { activateTab('viewAvisos'); if (typeof renderAvisos === 'function') renderAvisos(); });
 document.getElementById('tabBtnAgenda').addEventListener('click', () => { activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda(); });
 // Nas segundas-feiras, abre direto no Resumo Semanal; nos outros dias, abre no Cockpit
@@ -8125,7 +8160,47 @@ function abrirModalConfirmacao({ titulo, corpoHTML, confirmarLabel, aoConfirmar 
   btnCancelar.focus();
   return overlay;
 }
-let prospeccaoFiltro = { cidade: '', bairro: '', notaMin: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false };
+let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', notaMin: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false };
+
+function prospeccaoNormalizarTexto(valor) {
+  return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function prospeccaoRotuloCategoria(valor) {
+  const chave = prospeccaoNormalizarTexto(valor);
+  const traducoes = {
+    restaurant: 'Restaurante', 'brazilian restaurant': 'Restaurante brasileiro',
+    'argentinian restaurant': 'Restaurante argentino', 'italian restaurant': 'Restaurante italiano',
+    'seafood restaurant': 'Frutos do mar', 'barbecue restaurant': 'Churrascaria',
+    'hamburger restaurant': 'Hamburgueria', 'vegetarian restaurant': 'Restaurante vegetariano',
+    'vegan restaurant': 'Restaurante vegano', 'pizza restaurant': 'Pizzaria',
+    'fine dining restaurant': 'Alta gastronomia', 'fast food restaurant': 'Fast-food',
+    'japanese restaurant': 'Restaurante japonês', 'mexican restaurant': 'Restaurante mexicano',
+    'buffet restaurant': 'Bufê', 'breakfast restaurant': 'Café da manhã',
+    bakery: 'Padaria', cafe: 'Café', cafeteria: 'Cafeteria', 'coffee shop': 'Cafeteria',
+    bar: 'Bar', pub: 'Pub', bistro: 'Bistrô', brewery: 'Cervejaria', 'beer hall': 'Cervejaria',
+    'shopping mall': 'Shopping', hostel: 'Hostel'
+  };
+  if (traducoes[chave]) return traducoes[chave];
+  return chave ? chave.charAt(0).toUpperCase() + chave.slice(1) : 'Categoria não informada';
+}
+
+function prospeccaoBairroValido(valor) {
+  const v = prospeccaoNormalizarTexto(valor);
+  if (!v || /^\d/.test(v)) return false;
+  return !/^(av|avenida|r|rua|rodovia|loja|lj|bloco|bl)\b/.test(v);
+}
+
+function prospeccaoAtiva(l) {
+  return l.status !== 'sem_fit' && l.status !== 'criado_hubspot';
+}
+
+function prospeccaoRotuloStatus(status) {
+  return {
+    pendente: 'Pendente', atribuido: 'Disponível', na_rota: 'Na rota',
+    sem_fit: 'Sem fit', criado_hubspot: 'Empresa criada'
+  }[status] || status || 'Não informado';
+}
 
 async function carregarProspeccao() {
   if (!DATA.supabase || !supa) { prospeccaoCache = []; return; }
@@ -8136,18 +8211,32 @@ async function carregarProspeccao() {
   if (sessaoAtual && sessaoAtual.role === 'rep') query = query.eq('responsavel_owner_id', sessaoAtual.ownerId);
   const { data, error } = await query;
   if (error) { console.error('Erro ao carregar prospecção:', error.message); prospeccaoCache = []; return; }
-  prospeccaoCache = data || [];
+  prospeccaoCache = (data || []).sort((a, b) =>
+    (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0) ||
+    (Number(b.nota) || 0) - (Number(a.nota) || 0)
+  );
+  const badge = document.getElementById('badgeLeadsPraca');
+  if (badge) {
+    const acionaveis = prospeccaoCache.filter(prospeccaoAtiva).length;
+    badge.textContent = acionaveis > 0 ? String(acionaveis) : '';
+  }
 }
 
 function prospeccaoAplicarFiltros(lista) {
   const f = prospeccaoFiltro;
+  const termo = prospeccaoNormalizarTexto(f.busca);
   return lista.filter(l =>
+    (f.visao !== 'ativas' || prospeccaoAtiva(l)) &&
+    (f.visao !== 'sem_dono' || (prospeccaoAtiva(l) && !l.responsavel_owner_id)) &&
+    (f.visao !== 'na_rota' || (l.status === 'na_rota' && l.data_rota === isoDate(new Date()))) &&
+    (f.visao !== 'historico' || l.status === 'sem_fit' || l.status === 'criado_hubspot') &&
+    (!termo || prospeccaoNormalizarTexto([l.nome, l.categoria, l.bairro, l.cidade, l.endereco, l.telefone].filter(Boolean).join(' ')).includes(termo)) &&
     (!f.cidade || l.cidade === f.cidade) &&
     (!f.bairro || l.bairro === f.bairro) &&
     (!f.notaMin || (l.nota || 0) >= Number(f.notaMin)) &&
     (!f.avaliacoesMin || (l.avaliacoes || 0) >= Number(f.avaliacoesMin)) &&
     (!f.categoria || l.categoria === f.categoria) &&
-    (!f.fonte || l.fonte === f.fonte) &&
+    (!f.fonte || String(l.fonte || '').split('+').map(x => x.trim()).includes(f.fonte)) &&
     (!f.responsavel || String(l.responsavel_owner_id) === f.responsavel) &&
     (!f.status || l.status === f.status) &&
     (f.jaExiste === '' || String(l.ja_existe_hubspot) === f.jaExiste) &&
@@ -8177,18 +8266,51 @@ async function criarEmpresaProspeccao(leadId, botaoEl, msgEl) {
       msgEl.textContent = data.erro || 'Falha ao criar.';
       msgEl.style.color = 'var(--red)';
       botaoEl.disabled = false; botaoEl.textContent = 'Criar empresa no HubSpot';
-      return;
+      return null;
     }
     msgEl.textContent = '✓ Empresa criada no HubSpot.';
     msgEl.style.color = 'var(--green)';
     botaoEl.textContent = '✓ Criada';
     const idx = prospeccaoCache.findIndex(l => l.id === leadId);
-    if (idx >= 0) prospeccaoCache[idx].status = 'criado_hubspot';
+    if (idx >= 0) prospeccaoCache[idx] = { ...prospeccaoCache[idx], status: 'criado_hubspot', hubspot_company_id: String(data.hubspotCompanyId || '') };
+    return data;
   } catch (e) {
     msgEl.textContent = 'Erro: ' + String(e.message || e);
     msgEl.style.color = 'var(--red)';
     botaoEl.disabled = false; botaoEl.textContent = 'Criar empresa no HubSpot';
+    return null;
   }
+}
+
+// A rota é planejada e persistida no próprio Cockpit. Ao entrar na rota, a conta
+// também ganha uma Company no HubSpot (quando ainda não existe e não há alerta de
+// duplicidade), mas nenhum envio direto ao Expogo acontece neste fluxo.
+async function adicionarProspeccaoNaRota(lead, botaoEl, msgEl) {
+  if (!lead || !lead.responsavel_owner_id) {
+    if (msgEl) { msgEl.textContent = 'Defina o executivo antes de adicionar à rota.'; msgEl.style.color = 'var(--red)'; }
+    return false;
+  }
+  if (botaoEl) { botaoEl.disabled = true; botaoEl.textContent = 'Adicionando…'; }
+  let empresaOk = !!lead.hubspot_company_id || lead.status === 'criado_hubspot';
+  if (!empresaOk && !lead.ja_existe_hubspot) {
+    const fakeMsg = msgEl || { textContent: '', style: {} };
+    const resultado = await criarEmpresaProspeccao(lead.id, botaoEl || { disabled: false, textContent: '' }, fakeMsg);
+    empresaOk = !!resultado;
+  }
+  const hoje = isoDate(new Date());
+  const rotaOk = await atualizarLeadProspeccao(lead.id, { status: 'na_rota', data_rota: hoje });
+  if (!rotaOk) {
+    if (botaoEl) { botaoEl.disabled = false; botaoEl.textContent = 'Adicionar à rota'; }
+    return false;
+  }
+  if (msgEl) {
+    msgEl.textContent = lead.ja_existe_hubspot && !lead.hubspot_company_id
+      ? '✓ Na rota. Possível duplicata: confira a Company no HubSpot.'
+      : empresaOk ? '✓ Empresa criada e conta adicionada à rota.' : '✓ Na rota; a Company precisa ser criada depois.';
+    msgEl.style.color = empresaOk ? 'var(--green)' : 'var(--amber)';
+  }
+  if (botaoEl) { botaoEl.disabled = true; botaoEl.textContent = '✓ Na rota de hoje'; }
+  return true;
 }
 
 function prospeccaoCardHTML(l) {
@@ -8262,9 +8384,9 @@ async function renderProspeccaoNova() {
   }
 
   const cidades = [...new Set(prospeccaoCache.map(l => l.cidade).filter(Boolean))].sort();
-  const bairros = [...new Set(prospeccaoCache.map(l => l.bairro).filter(Boolean))].sort();
+  const bairros = [...new Set(prospeccaoCache.map(l => l.bairro).filter(prospeccaoBairroValido))].sort();
   const categorias = [...new Set(prospeccaoCache.map(l => l.categoria).filter(Boolean))].sort();
-  const fontes = [...new Set(prospeccaoCache.map(l => l.fonte).filter(Boolean))].sort();
+  const fontes = [...new Set(prospeccaoCache.flatMap(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean)))].sort();
 
   const filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
 
@@ -8274,10 +8396,10 @@ async function renderProspeccaoNova() {
   if (prospeccaoPagina > totalPaginas) prospeccaoPagina = totalPaginas;
   if (prospeccaoPagina < 1) prospeccaoPagina = 1;
   const pagina = filtrados.slice((prospeccaoPagina - 1) * POR_PAGINA, prospeccaoPagina * POR_PAGINA);
-  // seleção só vale pra quem ainda existe no cache e não foi criado
+  // Seleção em lote só vale para contas ativas; histórico nunca entra por acidente.
   prospeccaoSelecao.forEach(id => {
     const l = prospeccaoCache.find(x => x.id === id);
-    if (!l || l.status === 'criado_hubspot') prospeccaoSelecao.delete(id);
+    if (!l || !prospeccaoAtiva(l)) prospeccaoSelecao.delete(id);
   });
   const nSel = prospeccaoSelecao.size;
 
@@ -8286,21 +8408,23 @@ async function renderProspeccaoNova() {
   const souGestorProspBanner = !!(sessaoAtual && sessaoAtual.role === 'manager');
   let bannerProspeccao = '';
   if (souGestorProspBanner) {
-    const pendentesTotal = prospeccaoCache.filter(l => l.status !== 'criado_hubspot' && l.status !== 'sem_fit').length;
-    const cidadesComPendente = new Set(prospeccaoCache.filter(l => l.cidade && l.status !== 'criado_hubspot' && l.status !== 'sem_fit').map(l => l.cidade)).size;
+    const pendentesTotal = prospeccaoCache.filter(prospeccaoAtiva).length;
+    const semResponsavel = prospeccaoCache.filter(l => prospeccaoAtiva(l) && !l.responsavel_owner_id).length;
+    const naRotaHoje = prospeccaoCache.filter(l => l.status === 'na_rota' && l.data_rota === isoDate(new Date())).length;
     const inicioMes = isoDate(new Date()).slice(0, 7);
-    const aprovadasNoMes = prospeccaoCache.filter(l => l.status === 'criado_hubspot' && l.updated_at && l.updated_at.slice(0, 7) === inicioMes).length;
+    const empresasNoMes = prospeccaoCache.filter(l => l.hubspot_company_id && l.updated_at && l.updated_at.slice(0, 7) === inicioMes).length;
     bannerProspeccao = `
       <div class="cockpit-hero-combo" style="align-items:center;">
         <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
-          <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Prospecção · Contas-alvo do mês</span>
-          <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">O que eu aprovo hoje?</h1>
+          <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Prospecção · Base unificada</span>
+          <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Onde gerar mais impacto?</h1>
         </div>
         <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
         <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
-          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${pendentesTotal > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${pendentesTotal}</div><div style="font-size:11px;color:var(--dark-mut);">aguardando aprovação</div></div>
-          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${cidadesComPendente}</div><div style="font-size:11px;color:var(--dark-mut);">praças com lista pendente</div></div>
-          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${aprovadasNoMes}</div><div style="font-size:11px;color:var(--dark-mut);">aprovadas no mês</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${pendentesTotal > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${pendentesTotal}</div><div style="font-size:11px;color:var(--dark-mut);">contas ativas</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${semResponsavel > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${semResponsavel}</div><div style="font-size:11px;color:var(--dark-mut);">sem responsável</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#78A7FF;">${naRotaHoje}</div><div style="font-size:11px;color:var(--dark-mut);">na rota hoje</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${empresasNoMes}</div><div style="font-size:11px;color:var(--dark-mut);">empresas no mês</div></div>
         </div>
       </div>`;
   }
@@ -8338,28 +8462,26 @@ async function renderProspeccaoNova() {
     }
   }
 
-  // Pílulas de filtro rápido (Claude Design): Todas / cidade com mais pendentes /
-  // Nota ≥ 4,5 / Sem telefone — cada uma só liga/desliga um campo de
-  // prospeccaoFiltro que já existe. Os filtros avançados (bairro, categoria, fonte,
-  // status, duplicata, mínimos numéricos) continuam por baixo, num "mais filtros"
-  // recolhido — nada de capacidade foi perdida, só reorganizada.
-  const cidadeTopo = [...new Set(prospeccaoCache.map(l => l.cidade).filter(Boolean))]
-    .map(cid => ({ cid, n: prospeccaoCache.filter(l => l.cidade === cid).length }))
-    .sort((a, b) => b.n - a.n)[0];
+  // Pílulas orientadas à decisão. A ordenação interna sempre começa pelo volume
+  // de avaliações: é o indicador transparente de potencial de impacto da conta.
+  const totalAtivas = prospeccaoCache.filter(prospeccaoAtiva).length;
+  const totalSemDono = prospeccaoCache.filter(l => prospeccaoAtiva(l) && !l.responsavel_owner_id).length;
+  const totalNaRota = prospeccaoCache.filter(l => l.status === 'na_rota' && l.data_rota === isoDate(new Date())).length;
+  const totalHistorico = prospeccaoCache.filter(l => l.status === 'sem_fit' || l.status === 'criado_hubspot').length;
   const pillAtiva = (cond) => cond ? 'background:var(--ink);color:var(--panel);border-color:var(--ink);' : 'background:none;color:var(--muted);border-color:var(--line-btn);';
-  const semFiltroAlgum = !prospeccaoFiltro.cidade && !prospeccaoFiltro.notaMin && !prospeccaoFiltro.semTelefone;
   const pills = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
-      <button data-pill="todas" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(semFiltroAlgum)}">Todas ${prospeccaoCache.length}</button>
-      ${cidadeTopo ? `<button data-pill="cidadeTopo" data-cid="${esc(cidadeTopo.cid)}" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.cidade === cidadeTopo.cid)}">${esc(cidadeTopo.cid)} ${cidadeTopo.n}</button>` : ''}
-      <button data-pill="nota45" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(Number(prospeccaoFiltro.notaMin) === 4.5)}">Nota ≥ 4,5</button>
-      <button data-pill="semtel" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.semTelefone)}">Sem telefone</button>
+      <button data-pill="ativas" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'ativas')}">Prioridade ${totalAtivas}</button>
+      ${souGestorProsp ? `<button data-pill="sem_dono" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'sem_dono')}">Sem responsável ${totalSemDono}</button>` : ''}
+      <button data-pill="na_rota" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'na_rota')}">Na rota hoje ${totalNaRota}</button>
+      <button data-pill="historico" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'historico')}">Histórico ${totalHistorico}</button>
     </div>`;
 
   const maisFiltros = `
     <details style="margin-bottom:14px;">
       <summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--muted2);">mais filtros ▾</summary>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+        <input id="pfBusca" type="search" aria-label="Buscar restaurante" placeholder="Buscar restaurante, bairro ou telefone" value="${esc(prospeccaoFiltro.busca)}" style="min-width:260px;flex:1;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;">
         <select id="pfCidade" aria-label="Filtrar por cidade" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Cidade (todas)</option>
           ${cidades.map(c => `<option ${prospeccaoFiltro.cidade === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
@@ -8370,7 +8492,7 @@ async function renderProspeccaoNova() {
         </select>
         <select id="pfCategoria" aria-label="Filtrar por categoria" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Categoria (todas)</option>
-          ${categorias.map(c => `<option ${prospeccaoFiltro.categoria === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+          ${categorias.map(c => `<option value="${esc(c)}" ${prospeccaoFiltro.categoria === c ? 'selected' : ''}>${esc(prospeccaoRotuloCategoria(c))}</option>`).join('')}
         </select>
         <select id="pfFonte" aria-label="Filtrar por fonte" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Fonte (todas)</option>
@@ -8378,7 +8500,7 @@ async function renderProspeccaoNova() {
         </select>
         <select id="pfStatus" aria-label="Filtrar por status" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Status (todos)</option>
-          ${['pendente', 'atribuido', 'na_rota', 'sem_fit', 'criado_hubspot'].map(s => `<option value="${s}" ${prospeccaoFiltro.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+          ${['pendente', 'atribuido', 'na_rota', 'sem_fit', 'criado_hubspot'].map(s => `<option value="${s}" ${prospeccaoFiltro.status === s ? 'selected' : ''}>${esc(prospeccaoRotuloStatus(s))}</option>`).join('')}
         </select>
         <select id="pfJaExiste" aria-label="Filtrar por duplicata no HubSpot" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Já existe no HubSpot? (todos)</option>
@@ -8395,15 +8517,16 @@ async function renderProspeccaoNova() {
   const podeAgirLinha = l => sessaoAtual.role === 'manager' || String(l.responsavel_owner_id) === String(sessaoAtual.ownerId);
   const linhasTabela = pagina.map(l => {
     const nomeResp = l.responsavel_owner_id ? ((DATA.reps.find(r => r.ownerId === String(l.responsavel_owner_id)) || {}).name || '').split(' ')[0] : '—';
-    const podeSelecionar = sessaoAtual.role === 'manager' && l.status !== 'criado_hubspot';
-    return `<div class="prospeccao-linha" data-lead="${l.id}" style="display:grid;grid-template-columns:36px 1.7fr .9fr .5fr .8fr 1fr .9fr;padding:10px 22px;font-size:12.5px;border-bottom:1px solid var(--line-soft);align-items:center;cursor:pointer;font-variant-numeric:tabular-nums;">
-      <span>${podeSelecionar ? `<input type="checkbox" class="prospeccao-sel" data-lead="${l.id}" ${prospeccaoSelecao.has(l.id) ? 'checked' : ''} aria-label="Selecionar ${esc(l.nome)} pro lote" style="width:16px;height:16px;cursor:pointer;" onclick="event.stopPropagation();">` : ''}</span>
-      <span><b>${esc(l.nome)}</b>${!l.telefone ? ' <span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:1px 8px;font-size:10px;font-weight:700;">sem telefone</span>' : ''}</span>
-      <span>${esc(l.cidade || '—')}</span>
-      <b style="text-align:right;">${l.nota != null ? l.nota.toFixed(1).replace('.', ',') : '—'}</b>
-      <span style="text-align:right;color:var(--muted);">${l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') : '—'}</span>
-      <span>${esc(nomeResp)}</span>
-      <span style="text-align:right;font-size:10.5px;color:var(--muted2);">${esc(l.fonte || '—')}</span>
+    const podeSelecionar = sessaoAtual.role === 'manager' && prospeccaoAtiva(l);
+    const statusLabel = l.status === 'na_rota' && l.data_rota === isoDate(new Date()) ? 'Na rota hoje' : prospeccaoRotuloStatus(l.status);
+    return `<div class="prospeccao-table-grid prospeccao-linha" data-lead="${l.id}" style="padding:10px 22px;font-size:12.5px;border-bottom:1px solid var(--line-soft);cursor:pointer;font-variant-numeric:tabular-nums;">
+      <span class="prospeccao-col-check">${podeSelecionar ? `<input type="checkbox" class="prospeccao-sel" data-lead="${l.id}" ${prospeccaoSelecao.has(l.id) ? 'checked' : ''} aria-label="Selecionar ${esc(l.nome)} pro lote" style="width:16px;height:16px;cursor:pointer;" onclick="event.stopPropagation();">` : ''}</span>
+      <span class="prospeccao-col-name"><b>${esc(l.nome)}</b>${!l.telefone ? ' <span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:1px 7px;font-size:9.5px;font-weight:700;">sem telefone</span>' : ''}<small class="prospeccao-mobile-meta" style="color:var(--muted2);margin-top:3px;">${esc(prospeccaoRotuloCategoria(l.categoria))} · ${esc(statusLabel)}</small></span>
+      <span class="prospeccao-col-place">${esc([l.bairro, l.cidade].filter(Boolean).join(' · ') || '—')}</span>
+      <b class="prospeccao-col-rating" style="text-align:right;">★ ${l.nota != null ? Number(l.nota).toFixed(1).replace('.', ',') : '—'}</b>
+      <span class="prospeccao-col-reviews prospeccao-impacto" style="text-align:right;color:var(--ink);"><b>${l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') : '—'}</b><small>avaliações</small></span>
+      <span class="prospeccao-col-owner">${sessaoAtual.role === 'rep' ? esc(statusLabel) : esc(nomeResp)}</span>
+      <span class="prospeccao-col-source" style="text-align:right;font-size:10.5px;color:var(--muted2);">${esc(l.fonte || '—')}</span>
     </div>`;
   }).join('');
 
@@ -8430,7 +8553,7 @@ async function renderProspeccaoNova() {
     }
     const porCidadeBacklog = {};
     prospeccaoCache.forEach(l => {
-      if (l.status !== 'criado_hubspot' || !l.cidade) return;
+      if (!l.hubspot_company_id || !l.cidade) return;
       const c = (porCidadeBacklog[l.cidade] = porCidadeBacklog[l.cidade] || { aprovadas: 0, visitadas: 0 });
       c.aprovadas++;
       if (nomesVisitados.has(normNomeProsp(l.nome))) c.visitadas++;
@@ -8441,8 +8564,8 @@ async function renderProspeccaoNova() {
       <div class="chart-card" style="margin-bottom:14px;">
         <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:4px;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--green)" stroke-width="1.75" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg>
-          <h3 style="margin:0;">Backlog aprovado · ${prospeccaoCache.filter(l => l.status === 'criado_hubspot').length}</h3>
-          <span style="font-size:11px;color:var(--muted2);" title="Visitada = existe tarefa de Visita/Revisita no HubSpot (marcada pelo executivo no Expogo) com o nome do restaurante. Janela: últimos 60 dias.">vira visita obrigatória no Expogo · visitada = tarefa de visita no Hub</span>
+          <h3 style="margin:0;">Empresas criadas · ${prospeccaoCache.filter(l => l.hubspot_company_id).length}</h3>
+          <span style="font-size:11px;color:var(--muted2);" title="Visitada = existe registro de Visita/Revisita no HubSpot com o nome do restaurante. Janela: últimos 60 dias.">acompanhamento da execução registrada no HubSpot</span>
         </div>
         <div style="display:grid;gap:9px;margin-top:12px;font-variant-numeric:tabular-nums;">
           ${cidadesBacklog.map(cid => {
@@ -8463,44 +8586,39 @@ async function renderProspeccaoNova() {
     ${bannerProspeccao}
     ${cardsPraca}
     <div class="chart-card" style="padding:0;overflow:hidden;margin-bottom:14px;">
-      <div style="padding:18px 22px 0;">
-        <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:14px;">
+      <div class="prospeccao-toolbar" style="padding:18px 22px 0;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px;flex-wrap:wrap;">
+          <div style="display:flex;align-items:baseline;gap:9px;">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/></svg>
-          <h3 style="margin:0;">Fila de aprovação</h3>
+          <div><h3 style="margin:0;">${souGestorProsp ? 'Contas-alvo para distribuir' : 'Próximas contas para prospectar'}</h3><div style="font-size:11.5px;color:var(--muted2);margin-top:3px;">Ordenadas pelo potencial de impacto: maior volume de avaliações primeiro.</div></div>
+          </div>
+          <input id="pfBuscaRapida" type="search" aria-label="Buscar restaurante" placeholder="Buscar restaurante" value="${esc(prospeccaoFiltro.busca)}" style="min-width:220px;font-size:12px;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 13px;">
         </div>
         ${pills}
         ${maisFiltros}
       </div>
-      <div style="display:grid;grid-template-columns:36px 1.7fr .9fr .5fr .8fr 1fr .9fr;background:var(--panel2);padding:8px 22px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted2);align-items:center;">
+      <div class="prospeccao-table-grid prospeccao-table-head" style="background:var(--panel2);padding:8px 22px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted2);">
         <span>${sessaoAtual.role === 'manager' ? `<input type="checkbox" id="prospeccaoSelAll" aria-label="Selecionar todos os leads desta página" style="width:15px;height:15px;cursor:pointer;">` : ''}</span>
-        <span>RESTAURANTE</span><span>PRAÇA</span><span style="text-align:right;">NOTA</span><span style="text-align:right;">AVALIAÇÕES</span><span>EXECUTIVO</span><span style="text-align:right;">ORIGEM</span>
+        <span>RESTAURANTE</span><span>PRAÇA</span><span style="text-align:right;">NOTA</span><span style="text-align:right;">IMPACTO</span><span>${sessaoAtual.role === 'manager' ? 'EXECUTIVO' : 'STATUS'}</span><span style="text-align:right;">FONTES</span>
       </div>
       <div id="prospeccaoTabelaCorpo">
         ${pagina.length === 0 ? '<div class="empty-state" style="padding:20px 22px;">Nenhum lead bate com esses filtros.</div>' : linhasTabela}
       </div>
-      <div style="padding:14px 22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-        <span style="font-size:11px;color:var(--muted2);">+${Math.max(0, filtrados.length - pagina.length)} linhas · paginação de ${POR_PAGINA} · clique abre a ficha no drawer</span>
+      <div class="prospeccao-footer" style="padding:14px 22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--muted2);">${filtrados.length} conta(s) · ${Math.max(0, filtrados.length - pagina.length)} fora desta página · clique para ver e agir</span>
         ${totalPaginas > 1 ? `
         <button id="prospeccaoPgAnt" ${prospeccaoPagina <= 1 ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;${prospeccaoPagina <= 1 ? 'opacity:.4;cursor:default;' : ''}">← anterior</button>
         <span style="font-size:11.5px;color:var(--muted2);">página ${prospeccaoPagina} de ${totalPaginas}</span>
         <button id="prospeccaoPgProx" ${prospeccaoPagina >= totalPaginas ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;${prospeccaoPagina >= totalPaginas ? 'opacity:.4;cursor:default;' : ''}">próxima →</button>` : ''}
         ${sessaoAtual.role === 'manager' ? `
         <span style="margin-left:auto;display:flex;gap:8px;">
-          <button id="prospeccaoCriarLote" ${nSel === 0 ? 'disabled' : ''} style="font-size:12px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:9px 18px;cursor:pointer;${nSel === 0 ? 'opacity:.4;cursor:default;' : ''}">Aprovar seleção (${nSel})</button>
+          <button id="prospeccaoCriarLote" ${nSel === 0 ? 'disabled' : ''} style="font-size:12px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:9px 18px;cursor:pointer;${nSel === 0 ? 'opacity:.4;cursor:default;' : ''}">Adicionar à rota (${nSel})</button>
           <button id="prospeccaoDevolver" ${nSel === 0 ? 'disabled' : ''} style="font-size:12px;font-weight:700;color:var(--ink);background:none;border:1px solid var(--line-btn);border-radius:999px;padding:9px 18px;cursor:pointer;${nSel === 0 ? 'opacity:.4;cursor:default;' : ''}">Devolver p/ revisão</button>
         </span>` : ''}
       </div>
     </div>
 
     ${backlogAprovadoHTML}
-
-    <div class="chart-card">
-      <div style="display:flex;align-items:center;gap:9px;">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
-        <b style="font-family:'Poppins',sans-serif;font-size:13.5px;">Ficha da conta · drawer</b>
-      </div>
-      <div style="margin-top:12px;color:var(--muted);font-size:12.5px;line-height:1.6;">Nota, avaliações, endereço, telefone, categoria, origem e histórico de contato. As ações repetidas saíram das linhas — aprovar/devolver é em lote, o detalhe vive aqui.</div>
-    </div>
   `;
 
   const pgAnt = document.getElementById('prospeccaoPgAnt');
@@ -8511,13 +8629,24 @@ async function renderProspeccaoNova() {
   // Pílulas de filtro rápido
   el.querySelectorAll('[data-pill]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const tipo = btn.dataset.pill;
-      if (tipo === 'todas') { prospeccaoFiltro.cidade = ''; prospeccaoFiltro.notaMin = ''; prospeccaoFiltro.semTelefone = false; }
-      if (tipo === 'cidadeTopo') prospeccaoFiltro.cidade = prospeccaoFiltro.cidade === btn.dataset.cid ? '' : btn.dataset.cid;
-      if (tipo === 'nota45') prospeccaoFiltro.notaMin = Number(prospeccaoFiltro.notaMin) === 4.5 ? '' : 4.5;
-      if (tipo === 'semtel') prospeccaoFiltro.semTelefone = !prospeccaoFiltro.semTelefone;
+      prospeccaoFiltro.visao = btn.dataset.pill;
+      prospeccaoFiltro.status = '';
       prospeccaoPagina = 1;
       renderProspeccaoNova();
+    });
+  });
+
+  let timerBuscaProsp = null;
+  ['pfBuscaRapida', 'pfBusca'].forEach(id => {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.addEventListener('input', () => {
+      clearTimeout(timerBuscaProsp);
+      timerBuscaProsp = setTimeout(() => {
+        prospeccaoFiltro.busca = input.value;
+        prospeccaoPagina = 1;
+        renderProspeccaoNova();
+      }, 220);
     });
   });
 
@@ -8531,7 +8660,7 @@ async function renderProspeccaoNova() {
 
   const selAll = document.getElementById('prospeccaoSelAll');
   if (selAll) {
-    const idsPagina = pagina.filter(l => l.status !== 'criado_hubspot').map(l => l.id);
+    const idsPagina = pagina.filter(prospeccaoAtiva).map(l => l.id);
     selAll.checked = idsPagina.length > 0 && idsPagina.every(id => prospeccaoSelecao.has(id));
     selAll.addEventListener('change', () => {
       idsPagina.forEach(id => { if (selAll.checked) prospeccaoSelecao.add(id); else prospeccaoSelecao.delete(id); });
@@ -8570,33 +8699,33 @@ async function renderProspeccaoNova() {
     const itens = [...prospeccaoSelecao].map(id => prospeccaoCache.find(l => l.id === id)).filter(Boolean);
     if (itens.length === 0) return;
     const dups = itens.filter(l => l.ja_existe_hubspot);
+    const semDono = itens.filter(l => !l.responsavel_owner_id);
     abrirModalConfirmacao({
-      titulo: `Revisar lote — ${itens.length} empresa(s) pro HubSpot`,
-      confirmarLabel: `Confirmar criação`,
+      titulo: `Adicionar ${itens.length} conta(s) à rota`,
+      confirmarLabel: `Confirmar rota`,
       corpoHTML: `
-        <p style="margin:0 0 8px;">Vão ser criadas <b>${itens.length}</b> empresa(s) no HubSpot, uma por uma. Isso não tem desfazer em massa.</p>
+        <p style="margin:0 0 8px;">Cada conta com responsável vai para a rota de hoje no Cockpit. Quando não existir duplicidade, a Company também será criada no HubSpot.</p>
+        ${semDono.length > 0 ? `<p style="margin:0 0 8px;color:var(--amber);font-weight:700;">${semDono.length} conta(s) ainda estão sem executivo e serão ignoradas.</p>` : ''}
         ${dups.length > 0 ? `
           <p style="margin:0 0 6px;color:var(--red);font-weight:700;">⚠️ ${dups.length} com possível duplicata no HubSpot:</p>
           <ul style="margin:0 0 8px;padding-left:18px;color:var(--red);">${dups.slice(0, 10).map(l => `<li>${esc(l.nome)}</li>`).join('')}${dups.length > 10 ? `<li>… e mais ${dups.length - 10}</li>` : ''}</ul>
-          <label style="display:flex;align-items:center;gap:7px;font-size:12.5px;margin-bottom:6px;cursor:pointer;"><input type="checkbox" id="modalPularDups" checked> Pular as possíveis duplicatas (recomendado)</label>
+          <p style="margin:0 0 6px;font-size:12px;">Elas entram na rota, mas nenhuma nova Company será criada automaticamente até a conferência.</p>
         ` : '<p style="margin:0 0 6px;color:var(--green);">Nenhuma duplicata aparente no lote. ✓</p>'}
         <div id="modalLoteProgresso" style="font-size:12px;color:var(--muted2);margin-top:6px;"></div>`,
       aoConfirmar: async (overlay, fechar) => {
         const okBtn = overlay.querySelector('#modalConfirmacaoOk');
         okBtn.disabled = true;
-        const pular = overlay.querySelector('#modalPularDups');
-        const fila = itens.filter(l => !(pular && pular.checked && l.ja_existe_hubspot));
+        const fila = itens.filter(l => l.responsavel_owner_id);
         const prog = overlay.querySelector('#modalLoteProgresso');
         let feitos = 0, falhas = 0;
         for (const l of fila) {
-          prog.textContent = `Criando ${feitos + falhas + 1} de ${fila.length}: ${l.nome}…`;
+          prog.textContent = `Adicionando ${feitos + falhas + 1} de ${fila.length}: ${l.nome}…`;
           const fakeBtn = { disabled: false, textContent: '' };
           const fakeMsg = { textContent: '', style: {} };
-          await criarEmpresaProspeccao(l.id, fakeBtn, fakeMsg);
-          const criou = prospeccaoCache.find(x => x.id === l.id)?.status === 'criado_hubspot';
-          if (criou) { feitos++; prospeccaoSelecao.delete(l.id); } else falhas++;
+          const adicionou = await adicionarProspeccaoNaRota(l, fakeBtn, fakeMsg);
+          if (adicionou) { feitos++; prospeccaoSelecao.delete(l.id); } else falhas++;
         }
-        prog.innerHTML = `<b style="color:var(--green);">${feitos} criada(s)</b>${falhas > 0 ? ` · <b style="color:var(--red);">${falhas} falharam</b> (ficam na lista pra tentar de novo)` : ''}${(itens.length - fila.length) > 0 ? ` · ${itens.length - fila.length} duplicata(s) pulada(s)` : ''}.`;
+        prog.innerHTML = `<b style="color:var(--green);">${feitos} adicionada(s) à rota</b>${falhas > 0 ? ` · <b style="color:var(--red);">${falhas} falharam</b>` : ''}${semDono.length > 0 ? ` · ${semDono.length} sem responsável` : ''}.`;
         okBtn.textContent = 'Fechar';
         okBtn.disabled = false;
         okBtn.onclick = () => { fechar(); renderProspeccaoNova(); };
@@ -8673,26 +8802,52 @@ async function renderProspeccaoNova() {
 function abrirFichaProspeccaoDrawer(l) {
   const nomeResp = l.responsavel_owner_id ? ((DATA.reps.find(r => r.ownerId === String(l.responsavel_owner_id)) || {}).name || '—') : 'sem responsável';
   const podeAgir = sessaoAtual.role === 'manager' || String(l.responsavel_owner_id) === String(sessaoAtual.ownerId);
+  const naRotaHoje = l.status === 'na_rota' && l.data_rota === isoDate(new Date());
   document.getElementById('stageModalName').textContent = l.nome;
-  document.getElementById('stageModalMeta').textContent = [l.categoria, l.bairro, l.cidade].filter(Boolean).join(' · ');
+  document.getElementById('stageModalMeta').textContent = [prospeccaoRotuloCategoria(l.categoria), prospeccaoBairroValido(l.bairro) ? l.bairro : null, l.cidade].filter(Boolean).join(' · ');
   document.getElementById('stageModalBody').innerHTML = `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
       ${l.nota != null ? `<span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">★ ${l.nota}${l.avaliacoes != null ? ` · ${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações` : ''}</span>` : ''}
       ${l.ja_existe_hubspot ? '<span style="background:var(--red-soft);color:var(--red);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">possível duplicata no HubSpot</span>' : ''}
-      <span style="background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:11.5px;color:var(--muted2);">fonte: ${esc(l.fonte || '—')}</span>
+      <span style="background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:11.5px;color:var(--muted2);">fontes: ${esc(l.fonte || '—')}</span>
+      ${l.hubspot_company_id ? '<span style="background:var(--green-soft);color:var(--green);border-radius:999px;padding:4px 12px;font-size:11.5px;font-weight:700;">Company no HubSpot ✓</span>' : ''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;margin-bottom:14px;">
       <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">TELEFONE</b><div style="margin-top:2px;">${esc(l.telefone || 'não informado')}</div></div>
       <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">ENDEREÇO</b><div style="margin-top:2px;">${esc(l.endereco || 'não informado')}</div></div>
-      <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">EXECUTIVO</b><div style="margin-top:2px;">${esc(nomeResp)}</div></div>
-      <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">STATUS</b><div style="margin-top:2px;">${esc({ pendente: 'Pendente', atribuido: 'Atribuído', na_rota: 'Na rota', sem_fit: 'Sem fit', criado_hubspot: 'Criado no HubSpot' }[l.status] || l.status)}</div></div>
+      <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">EXECUTIVO</b><div style="margin-top:2px;">${sessaoAtual.role === 'manager' ? `<select id="fichaProspAtribuir" aria-label="Executivo responsável" style="width:100%;font:inherit;background:transparent;border:0;color:var(--ink);font-weight:700;"><option value="">Sem responsável</option>${DATA.reps.map(r => `<option value="${r.ownerId}" ${String(l.responsavel_owner_id) === String(r.ownerId) ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` : esc(nomeResp)}</div></div>
+      <div style="background:var(--panel2);border-radius:10px;padding:9px 12px;"><b style="font-size:10.5px;color:var(--muted2);">STATUS</b><div style="margin-top:2px;">${esc({ pendente: 'Pendente', atribuido: 'Disponível', na_rota: naRotaHoje ? 'Na rota hoje' : 'Na rota', sem_fit: 'Sem fit', criado_hubspot: 'Empresa criada' }[l.status] || l.status)}</div></div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      ${podeAgir && prospeccaoAtiva(l) && l.responsavel_owner_id && !naRotaHoje ? `<button id="fichaProspBtnRota" data-lead="${l.id}" style="font-size:12px;font-weight:800;color:#fff;background:var(--blue);border:none;border-radius:999px;padding:9px 15px;cursor:pointer;">Adicionar à rota de hoje</button>` : ''}
+      ${naRotaHoje ? '<span style="font-size:12px;font-weight:800;color:var(--blue);background:rgba(37,99,235,.10);border-radius:999px;padding:9px 15px;">✓ Na rota de hoje</span>' : ''}
       ${podeAgir && l.status !== 'sem_fit' && l.status !== 'criado_hubspot' ? `<button id="fichaProspBtnSemFit" data-lead="${l.id}" style="font-size:12px;font-weight:700;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:8px 14px;cursor:pointer;">Sem fit</button>` : ''}
-      ${podeAgir && l.status !== 'criado_hubspot' ? `<button id="fichaProspBtnCriar" data-lead="${l.id}" style="font-size:12px;font-weight:700;color:var(--red);background:none;border:1px solid var(--red);border-radius:999px;padding:8px 14px;cursor:pointer;">Criar empresa no HubSpot</button>` : ''}
+      ${podeAgir && l.status !== 'sem_fit' && !l.hubspot_company_id && l.status !== 'criado_hubspot' ? `<button id="fichaProspBtnCriar" data-lead="${l.id}" style="font-size:12px;font-weight:700;color:var(--red);background:none;border:1px solid var(--red);border-radius:999px;padding:8px 14px;cursor:pointer;">Criar empresa no HubSpot</button>` : ''}
+      <span id="fichaProspMsg" style="font-size:11.5px;align-self:center;"></span>
     </div>
   `;
   document.getElementById('stageOverlay').classList.add('show');
+
+  const selAtribuir = document.getElementById('fichaProspAtribuir');
+  if (selAtribuir) selAtribuir.addEventListener('change', async () => {
+    const ownerId = selAtribuir.value || null;
+    const ok = await atualizarLeadProspeccao(l.id, { responsavel_owner_id: ownerId, status: ownerId ? 'atribuido' : 'pendente' });
+    if (!ok) return;
+    const atualizado = prospeccaoCache.find(x => x.id === l.id);
+    renderProspeccaoNova();
+    if (atualizado) abrirFichaProspeccaoDrawer(atualizado);
+  });
+
+  const btnRota = document.getElementById('fichaProspBtnRota');
+  if (btnRota) btnRota.addEventListener('click', async () => {
+    const msg = document.getElementById('fichaProspMsg');
+    const ok = await adicionarProspeccaoNaRota(l, btnRota, msg);
+    if (ok) {
+      const atualizado = prospeccaoCache.find(x => x.id === l.id);
+      renderProspeccaoNova();
+      if (atualizado) abrirFichaProspeccaoDrawer(atualizado);
+    }
+  });
 
   const btnSemFit = document.getElementById('fichaProspBtnSemFit');
   if (btnSemFit) btnSemFit.addEventListener('click', () => {

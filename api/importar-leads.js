@@ -15,6 +15,11 @@
 
 const { montarDadosCompletos } = require('../scripts/montar-dados.js');
 
+const FONTES_ROTULO = {
+  outscraper: 'Outscraper', google_places: 'Google Places',
+  tripadvisor: 'Tripadvisor', ifood: 'iFood', manual: 'Manual'
+};
+
 let USUARIOS = [];
 try {
   const raw = require('../data/usuarios.json');
@@ -25,6 +30,63 @@ function normalizarTelefone(tel) {
   if (!tel) return null;
   const digitos = String(tel).replace(/\D/g, '');
   return digitos.length >= 8 ? digitos : null;
+}
+
+function normalizarTexto(valor) {
+  return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function distanciaKm(a, b) {
+  if (a.lat == null || a.lng == null || b.lat == null || b.lng == null) return Infinity;
+  const rad = x => Number(x) * Math.PI / 180;
+  const dLat = rad(Number(b.lat) - Number(a.lat));
+  const dLng = rad(Number(b.lng) - Number(a.lng));
+  const lat1 = rad(a.lat), lat2 = rad(b.lat);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function mesmoRestaurante(a, b) {
+  if (a.place_id && b.place_id && String(a.place_id) === String(b.place_id)) return true;
+  if (a.telefone_normalizado && b.telefone_normalizado && a.telefone_normalizado === b.telefone_normalizado) return true;
+  const mesmoNomeCidade = normalizarTexto(a.nome) && normalizarTexto(a.nome) === normalizarTexto(b.nome) &&
+    normalizarTexto(a.cidade) === normalizarTexto(b.cidade);
+  if (!mesmoNomeCidade) return false;
+  const endA = normalizarTexto(a.endereco), endB = normalizarTexto(b.endereco);
+  if (endA && endB && endA === endB) return true;
+  return distanciaKm(a, b) <= 0.15;
+}
+
+function juntarFontes(a, b) {
+  const fontes = [...String(a || '').split('+'), ...String(b || '').split('+')]
+    .map(x => x.trim()).filter(Boolean);
+  return [...new Set(fontes)].join(' + ');
+}
+
+// Não soma avaliações de plataformas: Outscraper pode representar o mesmo Google
+// Places. Mantém o maior volume confiável e a nota ligada a esse volume.
+function mesclarRestaurante(base, novo) {
+  const novoTemMaisImpacto = (Number(novo.avaliacoes) || 0) > (Number(base.avaliacoes) || 0);
+  return {
+    fonte: juntarFontes(base.fonte, novo.fonte),
+    place_id: base.place_id || novo.place_id || null,
+    categoria: base.categoria || novo.categoria || null,
+    endereco: base.endereco || novo.endereco || null,
+    bairro: base.bairro || novo.bairro || null,
+    estado: base.estado || novo.estado || null,
+    telefone: base.telefone || novo.telefone || null,
+    telefone_normalizado: base.telefone_normalizado || novo.telefone_normalizado || null,
+    nota: novoTemMaisImpacto ? novo.nota : base.nota,
+    avaliacoes: novoTemMaisImpacto ? novo.avaliacoes : base.avaliacoes,
+    lat: base.lat != null ? base.lat : novo.lat,
+    lng: base.lng != null ? base.lng : novo.lng,
+    presencial: base.presencial !== false || novo.presencial !== false,
+    delivery: !!base.delivery || !!novo.delivery,
+    horario_funcionamento: base.horario_funcionamento || novo.horario_funcionamento || null,
+    ja_existe_hubspot: !!base.ja_existe_hubspot || !!novo.ja_existe_hubspot,
+    updated_at: new Date().toISOString()
+  };
 }
 
 // ---- Roteamento por território (mesma regra do time de campo) ----
@@ -123,7 +185,7 @@ module.exports = async function handler(req, res) {
     const dono = l.responsavel_owner_id ? String(l.responsavel_owner_id) : rotearTerritorio(cidade, bairro);
     return {
     place_id: l.place_id || null,
-    fonte,
+    fonte: FONTES_ROTULO[fonte],
     nome: String(l.nome || l.name || '').trim(),
     categoria: l.categoria || null,
     endereco: l.endereco || l.address || null,
@@ -147,40 +209,81 @@ module.exports = async function handler(req, res) {
   }).filter(l => l.nome && l.cidade);
 
   const reprovadosQualidade = linhasTodas.filter(l =>
-    (l.nota != null && l.nota < qualidade.notaMin) ||
-    (l.avaliacoes != null && l.avaliacoes < qualidade.avaliacoesMin)
+    l.nota == null || Number(l.nota) < qualidade.notaMin ||
+    l.avaliacoes == null || Number(l.avaliacoes) < qualidade.avaliacoesMin
   );
   const linhas = linhasTodas.filter(l => !reprovadosQualidade.includes(l));
 
   if (linhas.length === 0) {
-    return res.status(400).json({ erro: 'Nenhum lead válido no lote (precisa de nome e cidade).' });
+    const soQualidade = linhasTodas.length > 0 && reprovadosQualidade.length === linhasTodas.length;
+    return res.status(400).json({
+      erro: soQualidade
+        ? `Nenhuma conta passou pela régua de qualidade (nota >= ${qualidade.notaMin} e avaliações >= ${qualidade.avaliacoesMin}).`
+        : 'Nenhum lead válido no lote (precisa de nome e cidade).',
+      reprovados_qualidade: reprovadosQualidade.length
+    });
   }
 
-  const placeIds = linhas.map(l => l.place_id).filter(Boolean);
-  const telefones = linhas.map(l => l.telefone_normalizado).filter(Boolean);
-  const existentes = { place_id: new Set(), telefone_normalizado: new Set() };
-  async function carregarExistentes(campo, valores) {
-    if (valores.length === 0) return;
-    const resp = await fetch(`${supaUrl}/rest/v1/leads_prospeccao?select=${campo}&${campo}=in.(${valores.map(v => encodeURIComponent(v)).join(',')})`, {
-      headers: { apikey: supaService, Authorization: `Bearer ${supaService}` }
-    });
-    if (resp.ok) (await resp.json()).forEach(r => existentes[campo].add(r[campo]));
+  // Carrega a base canônica para deduplicar também entre fontes diferentes. Falha
+  // fechada: se não der para conferir a base, não importa e não arrisca duplicar.
+  let existentes = [];
+  try {
+    // Pagina toda a base: o limite padrão do PostgREST não pode transformar uma
+    // conta antiga em "nova" só porque ela ficou fora da primeira página.
+    const tamanhoPagina = 1000;
+    for (let offset = 0; ; offset += tamanhoPagina) {
+      const respExistentes = await fetch(`${supaUrl}/rest/v1/leads_prospeccao?select=id,place_id,fonte,nome,categoria,endereco,bairro,cidade,estado,telefone,telefone_normalizado,nota,avaliacoes,lat,lng,presencial,delivery,horario_funcionamento,ja_existe_hubspot&limit=${tamanhoPagina}&offset=${offset}`, {
+        headers: { apikey: supaService, Authorization: `Bearer ${supaService}` }
+      });
+      if (!respExistentes.ok) throw new Error((await respExistentes.text()).slice(0, 200));
+      const pagina = await respExistentes.json();
+      existentes.push(...pagina);
+      if (pagina.length < tamanhoPagina) break;
+    }
+  } catch (e) {
+    return res.status(502).json({ erro: 'Não foi possível conferir duplicidades antes da importação. Nada foi gravado: ' + String(e.message || e) });
   }
-  await carregarExistentes('place_id', placeIds);
-  await carregarExistentes('telefone_normalizado', telefones);
 
   const novas = [];
+  const mesclas = new Map();
   const resultado = {
-    inseridos: 0, duplicados: 0, erros: [],
+    inseridos: 0, duplicados: 0, mesclados: 0, erros: [], duplicados_exemplos: [],
     reprovados_qualidade: reprovadosQualidade.length,
     regra_qualidade: `nota >= ${qualidade.notaMin} e avaliações >= ${qualidade.avaliacoesMin}`,
     reprovados_exemplos: reprovadosQualidade.slice(0, 10).map(l => `${l.nome} (nota ${l.nota ?? '?'} · ${l.avaliacoes ?? '?'} avaliações)`)
   };
   linhas.forEach(l => {
-    const jaTem = (l.place_id && existentes.place_id.has(l.place_id)) ||
-      (l.telefone_normalizado && existentes.telefone_normalizado.has(l.telefone_normalizado));
-    if (jaTem) resultado.duplicados++; else novas.push(l);
+    const existente = existentes.find(x => mesmoRestaurante(x, l));
+    if (existente) {
+      resultado.duplicados++;
+      if (resultado.duplicados_exemplos.length < 10) resultado.duplicados_exemplos.push(`${l.nome} (${l.fonte} → ${existente.fonte})`);
+      const camposMesclados = mesclarRestaurante(existente, l);
+      Object.assign(existente, camposMesclados);
+      mesclas.set(existente.id, camposMesclados);
+      return;
+    }
+    const indiceNoLote = novas.findIndex(x => mesmoRestaurante(x, l));
+    if (indiceNoLote >= 0) {
+      resultado.duplicados++;
+      if (resultado.duplicados_exemplos.length < 10) resultado.duplicados_exemplos.push(`${l.nome} (repetido no próprio lote)`);
+      novas[indiceNoLote] = { ...novas[indiceNoLote], ...mesclarRestaurante(novas[indiceNoLote], l) };
+      return;
+    }
+    novas.push(l);
   });
+
+  // Enriquece o registro já existente com a nova fonte e com os melhores dados,
+  // preservando owner, status e histórico comercial.
+  const pendentesMescla = [...mesclas.entries()];
+  for (let i = 0; i < pendentesMescla.length; i += 20) {
+    const loteMescla = pendentesMescla.slice(i, i + 20);
+    const respostas = await Promise.all(loteMescla.map(([id, campos]) => fetch(`${supaUrl}/rest/v1/leads_prospeccao?id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { apikey: supaService, Authorization: `Bearer ${supaService}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(campos)
+    })));
+    respostas.forEach(resp => { if (resp.ok) resultado.mesclados++; else resultado.erros.push('Falha ao enriquecer um registro existente.'); });
+  }
 
   if (novas.length > 0) {
     try {
