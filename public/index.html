@@ -1947,7 +1947,7 @@ function acaoHojeKey(ownerId, id) {
 }
 function buildAcoesHojeHTML(r, agendaVazia) {
   const travados = (r.travados || []).slice().sort((a, b) => (b.dias || 0) - (a.dias || 0));
-  const quentes = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId);
+  const quentes = agendaQuentes([r]);
   const quenteEmNegociacao = quentes.find(l => l.stage && l.stage.toLowerCase().includes('negocia'));
 
   const acoes = [];
@@ -2014,7 +2014,7 @@ function wireAcoesHojeChecks(rootEl) {
 }
 
 function buildFilaDeHojeHTML(r) {
-  const meusQuentes = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId);
+  const meusQuentes = agendaQuentes([r]);
   const todosTravados = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0));
   const fila = [...meusQuentes.map(l => ({ ...l, tipo: 'quente' })), ...todosTravados.map(l => ({ ...l, tipo: 'travado' }))].slice(0, 4);
   const totalFila = meusQuentes.length + todosTravados.length;
@@ -2082,8 +2082,7 @@ function buildRankingSemanaHTML(r, rankingOrdenado, minhaPosicao) {
 
 function buildRoteiroHojeHTML(r) {
   const mapaNotas = construirIndiceNotas();
-  const meusQuentes = (DATA.temperatura.quentes || [])
-    .filter(l => l.ownerId === r.ownerId)
+  const meusQuentes = agendaQuentes([r])
     .slice(0, 3);
   const todosTravados = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0));
   const travados = todosTravados.slice(0, 5);
@@ -2385,7 +2384,10 @@ async function renderMeuPainel() {
 
   // Leads quentes e leads acima do SLA como números explícitos — já existiam combinados
   // dentro da "fila de hoje", mas não como KPI isolado no primeiro viewport.
-  const meusQuentesCount = (DATA.temperatura.quentes || []).filter(l => l.ownerId === r.ownerId).length;
+  // Mesma regra de Rota & Agenda: todo deal em Demo/Proposta, Negociação ou
+  // Ag. Pagamento é carteira quente. Evita o painel mostrar menos quentes porque
+  // o snapshot global de temperatura é limitado aos 12 primeiros do time.
+  const meusQuentesCount = agendaQuentes([r]).length;
   const acimaDoSlaCount = (r.travados || []).length;
 
   // Aderência da Daily (semana civil, segunda até hoje) — mesmo cálculo de
@@ -2394,8 +2396,16 @@ async function renderMeuPainel() {
 
   // Etapa 6c — bloco "Como você chegou": a daily de ONTEM, prometido vs realizado.
   // Mesma fonte da aba Daily (dailiesCache), nada recalculado nem inventado.
-  const ontemISO = addDays(isoDate(new Date()), -1);
-  const dOntem = getDaily(r.ownerId, ontemISO) || {};
+  // Em segunda-feira, domingo ou quando um dia ficou sem registro, "ontem" vazio
+  // não ajuda a decidir nada. Procura o compromisso anterior mais recente (até
+  // dez dias úteis) e mantém a comparação fiel ao que foi realmente salvo.
+  let ontemISO = addBusinessDays(isoDate(new Date()), -1);
+  let dOntem = getDaily(r.ownerId, ontemISO) || {};
+  for (let i = 0; i < 9 && !Object.keys(dOntem).length; i++) {
+    ontemISO = addBusinessDays(ontemISO, -1);
+    dOntem = getDaily(r.ownerId, ontemISO) || {};
+  }
+  const ontemLabel = new Date(ontemISO + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '');
   const ontemLinhas = [
     { rotulo: 'Visitas', prom: dOntem.prometido_visitas, real: dOntem.realizado_visitas },
     { rotulo: 'Avanços', prom: dOntem.prometido_avancos, real: dOntem.realizado_avancos },
@@ -2469,8 +2479,8 @@ async function renderMeuPainel() {
       ${buildAcoesHojeHTML(r, agendaVaziaHoje)}
 
       <div class="chart-card" style="margin:0;">
-        <h3 style="margin-bottom:4px;">Ontem — prometido × realizado</h3>
-        <div class="chart-subtitle" style="margin:0 0 12px;">O que você combinou na Daily de ontem e o que de fato aconteceu.</div>
+        <h3 style="margin-bottom:4px;">Último compromisso · ${ontemLabel}</h3>
+        <div class="chart-subtitle" style="margin:0 0 12px;">O prometido na última Daily registrada contra o realizado.</div>
         ${ontemTemDado
           ? `<div style="display:flex;flex-direction:column;gap:10px;">
               ${ontemLinhas.map(l => {
@@ -2483,13 +2493,13 @@ async function renderMeuPainel() {
                 </div>`;
               }).join('')}
             </div>`
-          : `<div class="empty-state" style="padding:14px 0;">Sem Daily registrada ontem — sem número pra comparar (nada inventado aqui).</div>`}
+          : `<div class="empty-state" style="padding:14px 0;">Nenhuma Daily anterior encontrada para comparar.</div>`}
       </div>
 
       ${buildFilaDeHojeHTML(r)}
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:18px;margin-top:18px;" class="hoje-l2-grid">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:18px;" class="hoje-l2-grid">
 
       <div style="background:var(--red);border-radius:var(--r-xl);padding:24px 26px;color:#fff;display:flex;flex-direction:column;gap:20px;box-shadow:var(--shadow);">
         <div style="display:flex;align-items:center;justify-content:space-between;">
@@ -2507,8 +2517,6 @@ async function renderMeuPainel() {
           <span style="font-size:11.5px;opacity:.9;">${faltam > 0 ? `faltam <b>${faltam}</b> pra meta` : '🎉 meta batida'}${propostasEmNegociacao > 0 ? ` — seu quente em Negociação é o próximo` : ''}</span>
         </div>
       </div>
-
-      ${buildRankingSemanaHTML(r, rankingOrdenado, minhaPosicao)}
 
       <div class="chart-card" style="margin:0;">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;">
@@ -2612,15 +2620,17 @@ async function renderMeuPainel() {
     });
   }
 
-  // CTA do banner (Claude Design): "Fechar meu plano do dia" rola até o card real
-  // de fechamento (Etapa 6a) — não duplica a lógica de fechar plano, só leva até ela.
+  // O plano do dia mora em Rota & Agenda. Navega primeiro e só então rola até o
+  // bloco real; antes este botão procurava um elemento que já não existia na aba Hoje.
   const btnIrPlano = document.getElementById('meuPainelIrPlano');
   if (btnIrPlano) {
     btnIrPlano.addEventListener('click', () => {
+      activateTab('viewAgenda');
+      if (typeof renderAgenda === 'function') renderAgenda();
       setTimeout(() => {
         const slot = document.getElementById('planoDoDiaSlot');
         if (slot && typeof smoothScrollTo === 'function') smoothScrollTo(slot);
-      }, 50);
+      }, 350);
     });
   }
 
@@ -7498,7 +7508,10 @@ async function renderDaily() {
   // logo abaixo, só resumido em 3 números pra quem abre a tela sem rolar.
   const promessasHoje = repsDaily.map(r => getDaily(r.ownerId, dailyRefDate)).filter(d => d && (d.prometido_visitas != null || d.prometido_avancos != null || d.prometido_propostas != null));
   const semPromessa = repsDaily.length - promessasHoje.length;
-  const fechadosHojeTotal = repsDaily.reduce((s, r) => s + (r.fechamentosHubspotHoje || 0), 0);
+  const ehHojeDaily = dailyRefDate === isoDate(new Date());
+  const fechadosHojeTotal = repsDaily.reduce((s, r) => s + (ehHojeDaily
+    ? (r.fechamentosHubspotHoje || 0)
+    : ((getDaily(r.ownerId, dailyRefDate) || {}).realizado_fechamentos || 0)), 0);
   const bannerDaily = souRepDaily ? `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
@@ -7508,7 +7521,7 @@ async function renderDaily() {
       <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
       <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:22px;color:var(--dark-ink);">${promessasHoje.length > 0 ? 'registrada' : '—'}</div><div style="font-size:11px;color:var(--dark-mut);">promessa de hoje</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados hoje</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
       </div>
     </div>` : `
     <div class="cockpit-hero-combo" style="align-items:center;">
@@ -7520,7 +7533,7 @@ async function renderDaily() {
       <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${promessasHoje.length}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">prometeram hoje</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${semPromessa > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${semPromessa}</div><div style="font-size:11px;color:var(--dark-mut);">sem promessa hoje</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados hoje</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
       </div>
     </div>`;
 
@@ -7561,7 +7574,7 @@ async function renderDaily() {
     const conquistasDesbloqueadas = calcularConquistas(rMinhaDaily.ownerId, rMinhaDaily).filter(c => c.desbloqueada);
 
     html += `
-      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;">
+      <div style="display:grid;grid-template-columns:1fr;gap:18px;">
         <div class="chart-card" style="border:1.5px solid var(--red);box-shadow:0 4px 16px rgba(229,26,49,.1);">
           <h3 style="margin-bottom:4px;color:var(--red);">Hoje — você contra o que você prometeu</h3>
           <div style="display:grid;gap:15px;margin-top:15px;font-size:13px;font-variant-numeric:tabular-nums;">
@@ -7573,9 +7586,15 @@ async function renderDaily() {
             }).join('')}
           </div>
           <div style="margin-top:15px;background:var(--panel2);border-radius:12px;padding:11px 14px;font-size:12px;color:var(--muted);">Visitas e avanços chegam do HubSpot e dos registros de campo do Cockpit — ao fechar o dia você só confirma e comenta o que travou.</div>
+          <div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted);">
+            <span><b style="color:var(--ink);">🔥 ${seqAtual}d</b> de sequência</span>
+            <span><b style="color:var(--ink);">${pontosAtual}</b> pontos hoje</span>
+            <span><b style="color:var(--amber);">${minhaPosPontos}º</b> no time hoje</span>
+            ${conquistasDesbloqueadas.length > 0 ? `<span style="margin-left:auto;">${conquistasDesbloqueadas.slice(0, 2).map(c => `${c.icone} ${esc(c.titulo)}`).join(' · ')}</span>` : ''}
+          </div>
         </div>
 
-        <div class="chart-card">
+        <div class="chart-card" style="display:none;">
           <div style="display:flex;align-items:center;gap:9px;">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
             <b style="font-family:'Poppins',sans-serif;font-size:14px;">Sua sequência e pontos</b>
@@ -7592,8 +7611,8 @@ async function renderDaily() {
       <!-- Correção v3 1.1: a grade "Sua semana" saiu da Minha Daily — semana é assunto
            da Rota & Agenda ("uma aba = um trabalho"). Fica só o Pódio de hoje, que é
            parte do ritual diário (gamificação do dia, não visão de semana). -->
-      <div style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px;margin-top:18px;">
-        <div class="chart-card">
+      <div style="display:grid;grid-template-columns:1fr;gap:18px;margin-top:18px;">
+        <div class="chart-card" style="display:none;">
           <div style="display:flex;align-items:center;gap:9px;">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M8 21h8M12 17v4M6 3h12v6a6 6 0 01-12 0V3z"/><path d="M18 5h3a1 1 0 011 1c0 2-1.5 4-4 4M6 5H3a1 1 0 00-1 1c0 2 1.5 4 4 4"/></svg>
             <b style="font-family:'Poppins',sans-serif;font-size:14px;">Pódio de hoje</b>
@@ -7602,9 +7621,9 @@ async function renderDaily() {
             ${rankingPontosHoje.slice(0, 5).map((x, i) => `<div style="display:grid;grid-template-columns:24px 1fr 60px;gap:8px;padding:6px 10px;border-radius:9px;${x.eu ? 'background:var(--red-soft);' : ''}"><b style="font-family:'Poppins',sans-serif;color:${i === 0 ? 'var(--amber)' : x.eu ? 'var(--red)' : 'var(--muted2)'};">${i + 1}º</b><b style="${x.eu ? 'color:var(--red);' : ''}">${x.eu ? 'Você' : esc(x.nome.split(' ')[0])}</b><b style="text-align:right;${x.eu ? 'color:var(--red);' : 'color:var(--muted);'}">${x.pts} pts</b></div>`).join('')}
           </div>
         </div>
-        <div class="chart-card" style="display:flex;flex-direction:column;justify-content:center;gap:8px;">
+        <div class="chart-card" style="display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:18px;padding:15px 18px;">
           <b style="font-family:'Poppins',sans-serif;font-size:14px;">Como está minha semana?</b>
-          <span style="font-size:12px;color:var(--muted);line-height:1.55;">A visão da semana inteira — compromissos, buracos e a grade por hora — mora na Rota & Agenda.</span>
+          <span style="font-size:12px;color:var(--muted);line-height:1.55;flex:1;">Compromissos, buracos e oportunidades quentes da semana ficam na Rota & Agenda.</span>
           <button onclick="activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda();" style="align-self:flex-start;background:none;border:1px solid var(--red);color:var(--red);border-radius:var(--r-pill);padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Abrir Rota & Agenda →</button>
         </div>
       </div>
@@ -7853,9 +7872,7 @@ async function renderDaily() {
           </div>
         </div>
 
-        <div style="padding:0 22px 20px;">${buildRoteiroHojeHTML(r)}</div>
-
-        <div style="padding:0 22px 20px;">
+        <div style="display:none;padding:0 22px 20px;">
           <div class="daily-col-label" style="margin-bottom:8px;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;width:13px;height:13px;"><circle cx="12" cy="9" r="5"/><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"/></svg>Conquistas</div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;">
             ${conquistas.map(c => `
