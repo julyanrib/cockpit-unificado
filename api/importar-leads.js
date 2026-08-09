@@ -51,6 +51,9 @@ const CATEGORIAS_FORA_FOODSERVICE = new Set([
 ]);
 function fazSentidoFoodservice(lead) {
   const categoria = normalizarTexto(lead.categoria);
+  const nome = normalizarTexto(lead.nome);
+  const nomeEvidenciaFoodservice = /\b(restaurante|restaurant|cafe|cafeteria|bar|pub|bistro|burger|hamburg|pizza|pizzaria|churrasc|lanch|doceria|padaria|confeitaria|cozinha|cantina|choperia|grill|comida|food|sushi|temakeria|sorvet|acai)\b/.test(nome);
+  if (nomeEvidenciaFoodservice) return true;
   return !categoria || !CATEGORIAS_FORA_FOODSERVICE.has(categoria);
 }
 
