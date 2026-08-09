@@ -8428,7 +8428,20 @@ async function renderAvisos() {
       </div>
     `;
   }));
-  el.innerHTML = bannerAvisos + `<div class="avisos-grid">${linhas.join('')}</div>`;
+  // Para o executivo, a caixa de entrada mostra primeiro só o que exige leitura.
+  // Comunicados já lidos continuam acessíveis, mas recolhidos como histórico.
+  const avisosCorpo = souGestorAvisos
+    ? `<div class="avisos-grid">${linhas.join('')}</div>`
+    : (() => {
+        const pendentes = linhas.filter((_, i) => !jaLi(comunicadosCache[i].id));
+        const lidos = linhas.filter((_, i) => jaLi(comunicadosCache[i].id));
+        return `${pendentes.length ? `<div class="avisos-grid">${pendentes.join('')}</div>` : ''}
+          ${lidos.length ? `<details class="chart-card" style="padding:0;margin-top:${pendentes.length ? '14px' : '0'};">
+            <summary style="cursor:pointer;padding:15px 19px;font-size:12.5px;font-weight:700;color:var(--muted);">Histórico · ${lidos.length} comunicado${lidos.length === 1 ? '' : 's'} lido${lidos.length === 1 ? '' : 's'}</summary>
+            <div class="avisos-grid" style="padding:0 14px 14px;">${lidos.join('')}</div>
+          </details>` : ''}`;
+      })();
+  el.innerHTML = bannerAvisos + avisosCorpo;
   const btnNovoBanner = document.getElementById('btnNovoComunicadoBanner');
   if (btnNovoBanner) btnNovoBanner.addEventListener('click', () => document.getElementById('novoComunicadoOverlay').classList.add('show'));
 

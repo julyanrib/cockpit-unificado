@@ -60,6 +60,7 @@ function montarDadosCompletos() {
       stages: h.stages,
       criticos: h.criticos,
       travados: h.travados || [],
+      quentes: h.quentes || [],
       leadsTravados: h.leadsTravados || 0,
       ganhosSemana: h.ganhosSemana || 0,
       ganhosSemanaNomes: h.ganhosSemanaNomes || [],
@@ -219,7 +220,7 @@ function resumoDeColega(r) {
     ganhosSemana: r.ganhosSemana,
     // Estruturas vazias mas bem-tipadas: o template varre .criticos/.travados/.stages de
     // todos os reps em alguns pontos — vazio renderiza estado vazio, undefined quebraria.
-    open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0,
+    open: 0, stages: {}, criticos: [], travados: [], quentes: [], leadsTravados: 0,
     ganhosSemanaNomes: [], gargalo: null, boasPraticas: [], compromissos: [],
     tag: null, tagLabel: null,
     visitasHubspotHoje: 0, avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0
