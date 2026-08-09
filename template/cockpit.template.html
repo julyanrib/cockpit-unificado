@@ -3828,8 +3828,27 @@ function agendaNorm(s) {
 function agendaLeadNome(l) { return l && (l.name || l.nome) || ''; }
 function agendaQuentes(time) {
   const ids = new Set(time.map(r => String(r.ownerId)));
-  const q = (DATA.temperatura && DATA.temperatura.quentes) || [];
-  return q.filter(l => ids.has(String(l.ownerId)));
+  const unicos = new Map();
+  const registrar = l => {
+    if (!l || !ids.has(String(l.ownerId))) return;
+    const nome = agendaLeadNome(l);
+    const chave = String(l.ownerId) + '|' + agendaNorm(nome);
+    if (!nome || unicos.has(chave)) return;
+    unicos.set(chave, l);
+  };
+  ((DATA.temperatura && DATA.temperatura.quentes) || []).forEach(registrar);
+
+  // Regra comercial do planejamento: Demo/Proposta, Negociação e Ag. Pagamento
+  // também são quentes, mesmo quando o score de temperatura ainda não os trouxe.
+  // Assim agenda e mapa cobram a mesma carteira de fechamento.
+  if (DATA.funilLeads && DATA.stageMeta) {
+    Object.entries(DATA.funilLeads).forEach(([stageId, leads]) => {
+      const stage = ((DATA.stageMeta.labels || {})[stageId] || '');
+      if (!/(demo|proposta|negocia|pagamento)/i.test(agendaNorm(stage))) return;
+      (leads || []).forEach(l => registrar({ ...l, stage: l.stage || stage, stageId }));
+    });
+  }
+  return Array.from(unicos.values());
 }
 // Casa por nome normalizado. Um lado contido no outro basta, com guarda de tamanho
 // pra "Bar" não casar com "Bar do Momo".
