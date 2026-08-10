@@ -6,32 +6,34 @@
 // Pedido do Julyan (10/08): a microrrota sugerida precisa saber quais clientes ativos
 // existem na região que o executivo vai atuar hoje — não só leads novos.
 //
-// Pedido do Julyan (10/08, 2ª rodada): puxar TAMBÉM os ganhos do pipeline de Inside
-// Sales (não só Field Sales), e cruzar com os pipelines de Onboarding e Sucesso pra
-// saber quem de fato "pegou" no produto — um negócio ganho que nunca saiu do
-// Onboarding ou que morreu no Sucesso (perdido/cancelado) não é o mesmo tipo de
-// cliente ativo que um que já está com sucesso confirmado. status reflete isso:
-//   'ativo'      -> tem negócio em Sucesso (87367429) que não está fechado/perdido
-//   'onboarding' -> ganho, mas ainda não apareceu no pipeline de Sucesso
-//   'encerrado'  -> teve passagem por Sucesso mas fechou como perdido (churn) —
-//                   entra no arquivo pra transparência, mas o front-end não deve
-//                   sugerir como parada (ver flag `sugerirVisita`).
+// CORREÇÃO DE ARQUITETURA (10/08, 4ª rodada) — a 1ª versão deste script buscava a
+// empresa a partir do negócio GANHO no Field Sales/Inside Sales, e sempre dava vazio.
+// Motivo real, confirmado testando várias amostras: um negócio recém-ganho SÓ tem
+// contato vinculado — a Empresa (Company) só passa a existir e ser associada quando a
+// conta entra de verdade no pipeline de Sucesso (87367429). Ou seja, ir de
+// "ganho → empresa" bate numa porta vazia sempre; o caminho certo é o contrário:
+// partir do pipeline de SUCESSO (onde a empresa já existe de verdade) e usar isso
+// como fonte única de "cliente ativo". Consequência aceita: não dá pra saber se o
+// cliente veio do Field Sales ou do Inside Sales (esse vínculo se perde — o negócio
+// de Sucesso não carrega o negócio de venda original), então `origemPipeline` saiu
+// do arquivo. A régua de "de quem é esse cliente" também mudou: como não existe
+// vínculo confiável com um executivo de campo, todo cliente ativo é atribuído por
+// CIDADE (praça), não por dono do negócio — ver montar-dados.js.
 //
-// IDs confirmados via HubSpot (10/08/26):
-//   Field Sales   = 916011864  (ganho: 1396006162, 1396006163)
-//   Inside Sales  = default     (ganho: 94669416)
-//   Onboarding    = 87106112
-//   Sucesso       = 87367429
+// status:
+//   'ativo'     -> tem negócio em Sucesso que não está fechado como perdido
+//   'encerrado' -> todos os negócios de Sucesso da empresa estão perdidos (churn) —
+//                  entra no arquivo pra transparência, mas sugerirVisita fica falso
 //
-// RESOLVIDO (10/08, 3ª rodada) — "comandas" é `pedidos_entregues`, campo numérico de
-// deals, populado nos negócios do pipeline de Sucesso (87367429). Achado via busca de
-// propriedades por palavra-chave (search_properties) — o nome não tinha "comanda" nem
-// "pedido" óbvio de bater com as tentativas anteriores. Só ~30 negócios no portal têm
-// esse campo preenchido hoje (dado ainda não é universal), então nem todo cliente
-// ativo vai ter um número aqui — `comandas: null` continua acontecendo pra quem não
-// tem o campo preenchido, e isso é esperado, não um bug. Clientes com mais de 500
-// comandas ganham destaque (`altoVolume: true`) — ver campo no resultado.
-const LIMITE_ALTO_VOLUME = 500;
+// "comandas" = propriedade `pedidos_entregues` (achada via busca de propriedades por
+// palavra-chave), populada nos negócios de Sucesso. Cliente com mais de 500 comandas
+// ganha `altoVolume: true` e é destacado primeiro na lista (pedido do Julyan, 10/08).
+//
+// PERFORMANCE — o pipeline de Sucesso tem ~5.200 negócios (muitos por empresa, ciclo
+// recorrente de acompanhamento), então este script usa as APIs em LOTE da HubSpot
+// (batch de associações e batch de leitura de empresas, até 100 por chamada) em vez
+// de uma chamada por negócio — a versão anterior fazia isso um por um e ficava lenta
+// à toa mesmo quando funcionava.
 //
 // Geocodifica com a MESMA chave MapTiler do resto do cockpit (data/maptiler-config.json).
 // Cacheia por company_id: só geocodifica de novo se o endereço mudou desde a última
@@ -57,29 +59,8 @@ try {
   console.warn('Aviso: data/maptiler-config.json não encontrado — clientes ativos serão salvos SEM coordenada.');
 }
 
-const PIPELINE_FIELD_SALES = '916011864';
-const GANHO_FIELD_SALES = ['1396006162', '1396006163'];
-
-const PIPELINE_INSIDE_SALES = 'default';
-const GANHO_INSIDE_SALES = ['94669416'];
-
-const PIPELINE_ONBOARDING = '87106112';
 const PIPELINE_SUCESSO = '87367429';
-
-// Mesma lista de owners ativos do fetch-hubspot.js — mantida aqui separadamente de
-// propósito: este script não deve quebrar se a lista de reps mudar antes de eu
-// lembrar de sincronizar os dois arquivos, então falha graciosamente pra quem não
-// bate (não descarta silenciosamente — ver aviso no fim).
-const REPS = [
-  { ownerId: '86100506', name: 'Bruno Martins' },
-  { ownerId: '87569072', name: 'Sandro Brito' },
-  { ownerId: '91477292', name: 'Kelly Travieso Di Domenico' },
-  { ownerId: '89842507', name: 'Wericles Andrade (Whell)' },
-  { ownerId: '87069181', name: 'Amanda Pardim' },
-  { ownerId: '86100505', name: 'Marco Filho' },
-  { ownerId: '94079973', name: 'Michel Carvalho' }
-];
-const OWNER_IDS = REPS.map(r => r.ownerId);
+const LIMITE_ALTO_VOLUME = 500;
 
 function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
 
@@ -107,7 +88,7 @@ async function hsSearchTipoAll(objectType, body) {
   let todos = [];
   let after = undefined;
   let seguraLoop = 0;
-  while (seguraLoop < 60) {
+  while (seguraLoop < 80) {
     seguraLoop++;
     const data = await hsSearchTipo(objectType, { ...body, limit: 100, after });
     todos = todos.concat(data.results || []);
@@ -117,50 +98,59 @@ async function hsSearchTipoAll(objectType, body) {
   return todos;
 }
 
-async function hsAssociacoes(objectType, objectId, toType) {
-  await sleep(350);
-  const res = await fetch(`https://api.hubapi.com/crm/v3/objects/${objectType}/${objectId}/associations/${toType}`, {
-    headers: { 'Authorization': `Bearer ${TOKEN}` }
-  });
-  if (!res.ok) return [];
-  const json = await res.json();
-  return (json.results || []).map(r => r.id || r.toObjectId);
+function chunk(arr, tam) {
+  const partes = [];
+  for (let i = 0; i < arr.length; i += tam) partes.push(arr.slice(i, i + tam));
+  return partes;
 }
 
-async function hsGetCompany(companyId, attempt = 1) {
+// Associações em lote (até 100 IDs por chamada) — dealId -> [companyId, ...].
+// Muito mais rápido que uma chamada por negócio (o pipeline de Sucesso tem milhares).
+async function hsAssociacoesEmLote(fromType, toType, ids, attempt = 1) {
+  if (!ids.length) return {};
   await sleep(350);
-  const props = 'name,address,city,zip,phone';
-  const res = await fetch(`https://api.hubapi.com/crm/v3/objects/companies/${companyId}?properties=${props}`, {
-    headers: { 'Authorization': `Bearer ${TOKEN}` }
+  const res = await fetch(`https://api.hubapi.com/crm/v4/associations/${fromType}/${toType}/batch/read`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inputs: ids.map(id => ({ id: String(id) })) })
   });
   if (res.status === 429 && attempt <= 5) {
     await sleep(1000 * attempt);
-    return hsGetCompany(companyId, attempt + 1);
+    return hsAssociacoesEmLote(fromType, toType, ids, attempt + 1);
   }
-  if (!res.ok) return null;
-  return res.json();
+  if (!res.ok) {
+    console.error(`Aviso: falha ao buscar associações ${fromType}->${toType} em lote (${res.status}) — esse lote fica sem empresa.`);
+    return {};
+  }
+  const json = await res.json();
+  const mapa = {};
+  (json.results || []).forEach(r => {
+    const fromId = r.from && r.from.id;
+    if (!fromId) return;
+    mapa[fromId] = (r.to || []).map(t => t.toObjectId);
+  });
+  return mapa;
 }
 
-// Todos os negócios (qualquer etapa) que essa empresa tem no pipeline informado —
-// usado pra descobrir a situação em Onboarding/Sucesso, não só se ganhou ou não.
-async function hsDealsDaCompanyNoPipeline(companyId, pipelineId) {
-  const dealIds = await hsAssociacoes('companies', companyId, 'deals');
-  if (!dealIds.length) return [];
+// Leitura em lote de propriedades de objetos (até 100 por chamada).
+async function hsBatchRead(objectType, ids, properties, attempt = 1) {
+  if (!ids.length) return [];
   await sleep(350);
-  const res = await fetch(`https://api.hubapi.com/crm/v3/objects/deals/batch/read`, {
+  const res = await fetch(`https://api.hubapi.com/crm/v3/objects/${objectType}/batch/read`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      // pedidos_entregues (10/08, achado via search_properties): é o campo real de
-      // "comandas" — número de pedidos entregues, populado no pipeline de Sucesso.
-      // Confirmado com o Julyan que é o dado certo de volume de uso do produto.
-      properties: ['pipeline', 'dealstage', 'hs_is_closed_won', 'hs_is_closed_lost', 'closedate', 'pedidos_entregues'],
-      inputs: dealIds.map(id => ({ id }))
-    })
+    body: JSON.stringify({ properties, inputs: ids.map(id => ({ id: String(id) })) })
   });
-  if (!res.ok) return [];
+  if (res.status === 429 && attempt <= 5) {
+    await sleep(1000 * attempt);
+    return hsBatchRead(objectType, ids, properties, attempt + 1);
+  }
+  if (!res.ok) {
+    console.error(`Aviso: falha na leitura em lote de ${objectType} (${res.status}) — esse lote fica de fora.`);
+    return [];
+  }
   const json = await res.json();
-  return (json.results || []).filter(d => d.properties.pipeline === pipelineId);
+  return json.results || [];
 }
 
 async function geocodificar(endereco) {
@@ -180,53 +170,49 @@ async function geocodificar(endereco) {
   }
 }
 
-// Status real do cliente cruzando Onboarding + Sucesso, e volume de comandas (pedidos
-// entregues) — pedido do Julyan (10/08): destacar quem tem mais de 500 comandas.
-async function statusCicloDeVida(companyId) {
-  const dealsSucesso = await hsDealsDaCompanyNoPipeline(companyId, PIPELINE_SUCESSO);
-  // Maior valor de pedidos_entregues entre os negócios de Sucesso dessa empresa —
-  // se houver mais de um (raro), usa o mais alto em vez de somar, porque não temos
-  // garantia de que sejam períodos diferentes (podem ser o mesmo total duplicado).
-  const comandas = dealsSucesso.reduce((max, d) => {
-    const v = Number(d.properties.pedidos_entregues);
-    return Number.isFinite(v) && v > max ? v : max;
-  }, 0) || null;
-
-  if (dealsSucesso.length > 0) {
-    const algumAtivo = dealsSucesso.some(d => d.properties.hs_is_closed_lost !== 'true');
-    if (algumAtivo) return { status: 'ativo', sugerirVisita: true, comandas };
-    return { status: 'encerrado', sugerirVisita: false, comandas };
-  }
-  const dealsOnboarding = await hsDealsDaCompanyNoPipeline(companyId, PIPELINE_ONBOARDING);
-  if (dealsOnboarding.length > 0) return { status: 'onboarding', sugerirVisita: true, comandas: null };
-  return { status: 'desconhecido', sugerirVisita: true, comandas: null };
-}
-
 async function main() {
-  console.log('Buscando negócios GANHOS do Field Sales e do Inside Sales para montar a lista de clientes ativos...');
+  console.log('Buscando negócios do pipeline de Sucesso (fonte real de "cliente ativo")...');
 
-  const dealsFieldSales = await hsSearchTipoAll('deals', {
-    filterGroups: [{
-      filters: [
-        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_FIELD_SALES },
-        { propertyName: 'dealstage', operator: 'IN', values: GANHO_FIELD_SALES },
-        { propertyName: 'hubspot_owner_id', operator: 'IN', values: OWNER_IDS }
-      ]
-    }],
-    properties: ['dealname', 'hubspot_owner_id', 'closedate', 'amount_in_home_currency']
+  const dealsSucesso = await hsSearchTipoAll('deals', {
+    filterGroups: [{ filters: [{ propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_SUCESSO }] }],
+    properties: ['dealstage', 'hs_is_closed_lost', 'pedidos_entregues', 'closedate']
   });
-  console.log(`${dealsFieldSales.length} negócios ganhos no Field Sales.`);
+  console.log(`${dealsSucesso.length} negócios encontrados no pipeline de Sucesso.`);
 
-  const dealsInsideSales = await hsSearchTipoAll('deals', {
-    filterGroups: [{
-      filters: [
-        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_INSIDE_SALES },
-        { propertyName: 'dealstage', operator: 'IN', values: GANHO_INSIDE_SALES }
-      ]
-    }],
-    properties: ['dealname', 'hubspot_owner_id', 'closedate', 'amount_in_home_currency']
+  // Associação em lote deal -> company (v4, até 100 por chamada)
+  const dealIds = dealsSucesso.map(d => d.id);
+  let assocMap = {};
+  for (const lote of chunk(dealIds, 100)) {
+    const parcial = await hsAssociacoesEmLote('deals', 'companies', lote);
+    Object.assign(assocMap, parcial);
+  }
+
+  // Agrega por empresa: mais de um negócio de Sucesso pode existir pra mesma empresa
+  // (acompanhamento recorrente) — junta o maior pedidos_entregues visto e marca ativo
+  // se PELO MENOS UM desses negócios não estiver perdido.
+  const porCompany = new Map(); // companyId -> { comandas, algumAtivo }
+  dealsSucesso.forEach(d => {
+    const companyIds = assocMap[d.id] || [];
+    if (!companyIds.length) return;
+    const comandasDoDeal = Number(d.properties.pedidos_entregues);
+    const ativo = d.properties.hs_is_closed_lost !== 'true';
+    companyIds.forEach(cid => {
+      const atual = porCompany.get(cid) || { comandas: null, algumAtivo: false };
+      const comandas = Number.isFinite(comandasDoDeal) && (atual.comandas == null || comandasDoDeal > atual.comandas)
+        ? comandasDoDeal : atual.comandas;
+      porCompany.set(cid, { comandas, algumAtivo: atual.algumAtivo || ativo });
+    });
   });
-  console.log(`${dealsInsideSales.length} negócios ganhos no Inside Sales.`);
+  const totalAtivas = Array.from(porCompany.values()).filter(c => c.algumAtivo).length;
+  console.log(`${porCompany.size} empresas únicas encontradas via Sucesso (${totalAtivas} ativas).`);
+
+  // Leitura em lote dos dados da empresa (nome/endereço/cidade/telefone)
+  const companyIds = Array.from(porCompany.keys());
+  let empresas = [];
+  for (const lote of chunk(companyIds, 100)) {
+    const parcial = await hsBatchRead('companies', lote, ['name', 'address', 'city', 'zip', 'phone']);
+    empresas = empresas.concat(parcial);
+  }
 
   // cache anterior — reaproveita coordenada se o endereço não mudou, poupando cota da MapTiler
   let cacheAnterior = {};
@@ -235,37 +221,13 @@ async function main() {
     (Array.isArray(anterior) ? anterior : []).forEach(c => { cacheAnterior[c.id] = c; });
   } catch (e) { /* primeira execução, sem cache — segue normal */ }
 
-  // companyId -> { ownerId, dealId, closedate, valor, origem: 'field_sales'|'inside_sales' }
-  // Field Sales entra DEPOIS de Inside Sales de propósito: se a mesma empresa tiver
-  // ganho nos dois pipelines (upsell trabalhado pelo Field Sales depois da venda
-  // original do Inside Sales), o registro do Field Sales prevalece — é o dono real
-  // do relacionamento de campo hoje, o que importa pra rota.
-  const porCompany = new Map();
-  async function registrarGanhos(deals, origem) {
-    for (const deal of deals) {
-      const companyIds = await hsAssociacoes('deals', deal.id, 'companies');
-      const ownerId = deal.properties.hubspot_owner_id;
-      const valor = Number(deal.properties.amount_in_home_currency) || 0;
-      companyIds.forEach(cid => {
-        const existente = porCompany.get(cid);
-        const maisRecente = !existente || new Date(deal.properties.closedate) > new Date(existente.closedate);
-        if (maisRecente || (origem === 'field_sales' && existente.origem === 'inside_sales')) {
-          porCompany.set(cid, { ownerId, dealId: deal.id, closedate: deal.properties.closedate, valor, origem });
-        }
-      });
-    }
-  }
-  await registrarGanhos(dealsInsideSales, 'inside_sales');
-  await registrarGanhos(dealsFieldSales, 'field_sales');
-  console.log(`${porCompany.size} empresas únicas com negócio ganho (Field Sales + Inside Sales).`);
-
   const resultado = [];
-  const contagemStatus = { ativo: 0, onboarding: 0, encerrado: 0, desconhecido: 0 };
   let geocodificados = 0, reaproveitados = 0, semEndereco = 0, semCoordenada = 0;
 
-  for (const [companyId, meta] of porCompany.entries()) {
-    const company = await hsGetCompany(companyId);
-    if (!company) continue;
+  for (const company of empresas) {
+    const companyId = company.id;
+    const meta = porCompany.get(companyId);
+    if (!meta) continue;
     const p = company.properties || {};
     const nome = p.name || 'Sem nome';
     const endereco = [p.address, p.city].filter(Boolean).join(', ');
@@ -283,43 +245,29 @@ async function main() {
       else semCoordenada++;
     }
 
-    const ciclo = await statusCicloDeVida(companyId);
-    contagemStatus[ciclo.status] = (contagemStatus[ciclo.status] || 0) + 1;
-
+    const status = meta.algumAtivo ? 'ativo' : 'encerrado';
     resultado.push({
       id: companyId,
       nome,
       endereco: p.address || null,
       cidade: p.city || null,
       telefone: p.phone || null,
-      // ownerId só é um Field Sales real quando origem === 'field_sales' — pra clientes
-      // que só passaram pelo Inside Sales, esse ownerId é do INSIDE SALES, e a scoping
-      // por executivo de campo (montar-dados.js) trata isso combinando com a cidade,
-      // nunca por igualdade direta de ownerId. Ver comentário lá.
-      ownerId: meta.ownerId,
-      origemPipeline: meta.origem,
-      dealId: meta.dealId,
-      fechadoEm: meta.closedate,
-      valorFechamento: meta.valor,
-      status: ciclo.status,
-      sugerirVisita: ciclo.sugerirVisita,
-      // Pedidos entregues (comandas) do negócio de Sucesso — null quando o campo
-      // não está preenchido pra essa empresa (comum, ver comentário no topo).
-      comandas: ciclo.comandas,
-      altoVolume: ciclo.comandas != null && ciclo.comandas > LIMITE_ALTO_VOLUME,
+      status,
+      sugerirVisita: meta.algumAtivo,
+      comandas: meta.comandas,
+      altoVolume: meta.comandas != null && meta.comandas > LIMITE_ALTO_VOLUME,
       lat, lng,
       _enderecoOrigem: endereco || null // só pro cache da próxima execução, não é exibido
     });
   }
 
-  // Cliente de alto volume primeiro — é quem mais justifica uma parada de
-  // relacionamento hoje. Dentro do mesmo patamar, mantém a ordem de descoberta.
   resultado.sort((a, b) => (b.altoVolume - a.altoVolume) || ((b.comandas || 0) - (a.comandas || 0)));
 
   fs.writeFileSync(OUT_PATH, JSON.stringify(resultado, null, 2));
+  const ativos = resultado.filter(c => c.status === 'ativo').length;
   const altoVolumeCount = resultado.filter(c => c.altoVolume).length;
-  console.log(`OK — data/clientes-ativos.json gerado com ${resultado.length} clientes.`);
-  console.log(`  status: ${JSON.stringify(contagemStatus)} · alto volume (>${LIMITE_ALTO_VOLUME} comandas): ${altoVolumeCount}`);
+  console.log(`OK — data/clientes-ativos.json gerado com ${resultado.length} clientes (${ativos} ativos, ${resultado.length - ativos} encerrados).`);
+  console.log(`  alto volume (>${LIMITE_ALTO_VOLUME} comandas): ${altoVolumeCount}`);
   console.log(`  geocodificados agora: ${geocodificados} · reaproveitados do cache: ${reaproveitados} · sem endereço: ${semEndereco} · endereço não localizado: ${semCoordenada}`);
 }
 
@@ -327,4 +275,3 @@ main().catch(e => {
   console.error('Falha ao gerar clientes-ativos.json:', e);
   process.exit(1);
 });
-

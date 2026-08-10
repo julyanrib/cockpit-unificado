@@ -281,16 +281,14 @@ function filtrarParaPapel(dados, usuario) {
     (Array.isArray(p.responsaveis) && p.responsaveis.includes(meuNome)) || p.nome === (meuRep && meuRep.praca)
   );
 
-  // Clientes ativos: os fechados pelo próprio Field Sales (origemPipeline ===
-  // 'field_sales') são só da carteira do dono. Os que vieram do Inside Sales não têm
-  // um Field Sales dono de verdade — o ownerId ali é do Inside Sales, então a régua
-  // certa é a cidade bater com a praça do executivo (mesmo critério de leadsReferencia
-  // acima). Pedido do Julyan (10/08): ganhos do Inside Sales entram na rota de quem
-  // atua naquela praça, não ficam órfãos.
+  // Clientes ativos: não existe vínculo confiável entre a empresa (que só nasce no
+  // pipeline de Sucesso) e o executivo de campo que vendeu originalmente — ver
+  // comentário no topo de fetch-clientes-ativos.js. A régua que sobra, e que ainda
+  // faz sentido pra rota, é a cidade bater com a praça do executivo (mesmo critério
+  // de leadsReferencia acima).
   const normTxt = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   const minhaPraca = normTxt(meuRep && meuRep.praca);
   const clientesAtivos = (dados.clientesAtivos || []).filter(c => {
-    if (c.origemPipeline === 'field_sales') return String(c.ownerId) === meuId;
     const cidadeCliente = normTxt(c.cidade);
     return !!cidadeCliente && !!minhaPraca && (minhaPraca.includes(cidadeCliente) || cidadeCliente.includes(minhaPraca));
   });
