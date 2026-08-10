@@ -2,7 +2,7 @@
 // Recebe um lote de leads já raspados (Outscraper, Google Places, Firecrawl/iFood,
 // Firecrawl/TripAdvisor — qualquer fonte no mesmo formato normalizado) e grava na área
 // de staging (tabela leads_prospeccao). NUNCA cria Company/Deal aqui — isso só acontece
-// depois, quando alguém confirma manualmente em api/criar-empresa-prospeccao.js.
+// depois, quando algém confirma manualmente em api/criar-empresa-prospeccao.js.
 //
 // Dois jeitos de chamar esta rota, os dois seguros (nenhum token de fonte externa
 // aparece no navegador):
@@ -45,7 +45,7 @@ function normalizarTexto(valor) {
 // só por ter muitas avaliações (ex.: monumento, hostel ou shopping). Fontes verticais
 // como iFood/Tripadvisor podem vir sem categoria e continuam válidas.
 const CATEGORIAS_FORA_FOODSERVICE = new Set([
-  'hostel', 'hotel', 'lodging', 'monument', 'museum', 'park', 'tourist attraction',
+  'hostel', 'hotel', 'lodging', 'monument', 'museu', 'park', 'tourist attraction',
   'shopping', 'shopping mall', 'store', 'supermarket', 'grocery store', 'pharmacy',
   'school', 'university', 'hospital', 'gym'
 ]);
@@ -132,7 +132,7 @@ const TERRITORIOS = [
   { owner: '87069181', nome: 'Amanda Pardim', teste: t => t.includes('vitoria') },
   { owner: '87569072', nome: 'Sandro Linhares', teste: t => t.includes('tijuca') },
   { owner: '86100506', nome: 'Bruno Martins', teste: t => t.includes('taquara') || t.includes('jacarepagua') || (t.includes('rio de janeiro') && /\banil\b/.test(t)) },
-  { owner: '94079973', nome: 'Michel Andrade', teste: t => t.includes('campo grande') && !t.includes('campo grande - ms') },
+  { owner: '94079973', nome: 'Michel Carvalho', teste: t => t.includes('campo grande') && !t.includes('campo grande - ms') },
   { owner: '89842507', nome: 'Wericles Andrade', teste: t => t.includes('sao paulo') },
   { owner: '91477292', nome: 'Kelly Travieso', teste: t => t.includes('canoas') || t.includes('porto alegre') }
 ];
@@ -257,7 +257,7 @@ module.exports = async function handler(req, res) {
   }
 
   // Carrega a base canônica para deduplicar também entre fontes diferentes. Falha
-  // fechada: se não der para conferir a base, não importa e não arrisca duplicar.
+  // fechada: se n�>s dar para conferir a base, não importa e não arrisca duplicar.
   let existentes = [];
   try {
     // Pagina toda a base: o limite padrão do PostgREST não pode transformar uma
