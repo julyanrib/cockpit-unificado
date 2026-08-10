@@ -1129,8 +1129,16 @@
   .plano-map-progress-copy b{color:var(--ink);}
   .plano-map-progress-track{height:7px;border-radius:999px;background:var(--sunk);overflow:hidden;}
   .plano-map-progress-bar{height:100%;border-radius:inherit;background:linear-gradient(90deg,#2563EB,#4F8EF7);transition:width .35s var(--ease);}
-  .plano-map-layout{display:grid;grid-template-columns:minmax(0,1fr) 348px;min-height:540px;background:var(--panel);}
+  .plano-map-layout{display:grid;grid-template-columns:minmax(0,1fr) 348px;background:var(--panel);}
   .plano-map-stage{position:relative;min-height:540px;background:#E9EDF3;overflow:hidden;}
+  /* BLOCO 1 (10/08/26, Julyan): quando o mapa não carrega (CDN bloqueado) ou não há
+     nada pra plotar, o palco parava de pé com 540px de retângulo azul vazio — era a
+     "listra azul" dos prints. Com .is-sem-mapa ele encolhe pro tamanho da mensagem e
+     perde o fundo, então a tela termina onde o conteúdo termina. */
+  .plano-map-stage.is-sem-mapa{min-height:0;background:var(--panel);}
+  .plano-map-stage.is-sem-mapa #planoMapa{position:static;}
+  .plano-map-stage.is-sem-mapa .plano-map-toolbar,
+  .plano-map-stage.is-sem-mapa .plano-map-legend{display:none;}
   #planoMapa{position:absolute;inset:0;}
   .plano-map-toolbar{position:absolute;z-index:4;top:14px;left:14px;right:14px;display:flex;align-items:flex-start;justify-content:space-between;gap:10px;pointer-events:none;}
   .plano-map-filterbar{pointer-events:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:6px;background:color-mix(in srgb,var(--panel) 94%,transparent);border:1px solid color-mix(in srgb,var(--line) 80%,transparent);border-radius:15px;box-shadow:0 10px 30px -16px rgba(26,22,19,.45);backdrop-filter:blur(12px);}
@@ -1947,13 +1955,18 @@ function reidratarPosLogin() {
     (async () => {
       await carregarDailies();
       if (typeof carregarPdiCompromissos === 'function') await carregarPdiCompromissos();
-      if (typeof renderRepsList === 'function') renderRepsList();
-      if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
-      if (typeof renderDaily === 'function') renderDaily();
-      if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
-      // Correção v3: `souRep` não existia neste escopo (ReferenceError silencioso que
-      // matava esta cadeia async no meio) — ler direto da sessão atual.
-      if (sessaoAtual && sessaoAtual.role === 'rep' && typeof renderMeuPainel === 'function') renderMeuPainel(); // atualiza os checks do PDI já com o cache real (a 1ª chamada acima do rep rodou antes do fetch)
+      // BLOCO 2 (10/08/26): antes daqui saía um redesenho de Cockpit + Daily + Meu Painel
+      // de uma vez, mesmo pra quem só ia olhar a aba "Hoje" — as abas invisíveis eram
+      // remontadas por nada. Agora só a aba ABERTA é reaplicada com o cache já quente;
+      // as outras se desenham sozinhas no primeiro clique.
+      const viewAberta = (document.querySelector('.view.active') || {}).id;
+      if (viewAberta === 'viewMeuPainel' && typeof renderMeuPainel === 'function') renderMeuPainel();
+      if (viewAberta === 'viewDaily' && typeof renderDaily === 'function') renderDaily();
+      if (viewAberta === 'viewCockpit') {
+        if (typeof renderRepsList === 'function') renderRepsList();
+        if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
+        if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
+      }
     })();
   }
   // Regra de segunda-feira (abrir no Resumo Semanal) — SÓ pro gestor. O executivo sempre
@@ -2049,11 +2062,19 @@ function aplicarVisaoPorPapel() {
     // do dia da semana (a regra de segunda-feira do Resumo é exclusiva do gestor).
     activateTab('viewMeuPainel');
     renderMeuPainel();
+    viewsDesenhadas.add('viewMeuPainel');
   }
 
   if (souGestorSessao) {
     document.getElementById('sidenavTitle').textContent = 'Gestor';
-    if (typeof renderCoaching === 'function') renderCoaching();
+    // A home do gestor é o Cockpit/Time — desenha agora e marca como pronta.
+    if (typeof renderCockpitTitleRow === 'function') renderCockpitTitleRow();
+    if (typeof renderKpiStripHero === 'function') renderKpiStripHero();
+    if (typeof renderFunilBarras === 'function') renderFunilBarras();
+    if (typeof renderLeadsPrioritarios === 'function') renderLeadsPrioritarios();
+    if (typeof renderVendasMes === 'function') renderVendasMes();
+    if (typeof renderRepsList === 'function') renderRepsList();
+    viewsDesenhadas.add('viewCockpit');
     // BLOCO 1 (10/08): aqui havia um segundo setTimeout(renderAgenda) — o bloco geral
     // logo abaixo já chama renderAgenda pros dois papéis, então a agenda inteira era
     // montada DUAS vezes no login do gestor, no momento mais pesado da sessão. Removido.
@@ -2077,28 +2098,34 @@ function aplicarVisaoPorPapel() {
     if (typeof renderVendasMes === 'function') renderVendasMes();
     if (typeof renderPodioMeta === 'function') renderPodioMeta();
   }
-  if (typeof renderPDIs === 'function') renderPDIs();
-  if (typeof renderDaily === 'function') renderDaily();
-  // Badge de saúde e aderência também dependem do papel da sessão — re-renderiza depois
-  // do login pelo mesmo motivo dos dois acima (no load, sessaoAtual ainda é null).
+  // BLOCO 2 (10/08/26, Julyan — "a tela tá demorando a abrir, principalmente a aba
+  // Hoje"): só o que é BARATO e aparece fora das abas roda agora.
   if (typeof atualizarSinoAvisos === 'function') atualizarSinoAvisos();
   if (typeof preencherHealthBadge === 'function') preencherHealthBadge();
-  if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
-  // Prospecção agora é uma fila única em leads_prospeccao. O backlog estático
-  // permanece preservado no código, mas não compete mais com a jornada ativa.
-  if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova();
-  // setTimeout(0): renderDecisoes usa FUNIL_STAGE_IDS, uma const declarada mais abaixo no
-  // script. No caminho sem Supabase configurado, aplicarVisaoPorPapel roda em sequência
-  // síncrona a partir de iniciarAuth() — antes dessa const existir. Adiar pro próximo tick
-  // garante que o script inteiro já rodou uma vez antes de chamar a função.
-  if (typeof renderDecisoes === 'function') setTimeout(renderDecisoes, 0);
-  // Mesmo motivo: renderAgenda usa várias consts (AGENDA_TIPOS, AGENDA_RE_TITULO...)
-  // declaradas mais abaixo no bloco da Agenda.
-  if (typeof renderAgenda === 'function') setTimeout(renderAgenda, 0);
-  // Mesmo motivo: renderCockpitDossieInline usa cockpitExecSelecionado (let, declarada
-  // mais abaixo). Bug pré-existente que ficava mascarado pelo crash do "container" acima —
-  // com aquele corrigido, a execução chegava até aqui e escancarava este.
-  if (!souRep && typeof renderCockpitDossieInline === 'function') setTimeout(renderCockpitDossieInline, 0);
+
+  // O resto sai do caminho crítico. Cada aba se desenha no primeiro clique
+  // (ver os handlers de tab, logo abaixo de activateTab) — e o que só existe pra
+  // alimentar badge/contador roda em tempo ocioso, depois da primeira pintura.
+  const prefetchOcioso = () => {
+    if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova(); // badge "103" da aba
+    if (!souRep) {
+      if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
+      if (typeof renderDecisoes === 'function') renderDecisoes();
+      if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
+    }
+  };
+  if (typeof window.requestIdleCallback === 'function') requestIdleCallback(prefetchOcioso, { timeout: 2500 });
+  else setTimeout(prefetchOcioso, 1200);
+}
+
+// BLOCO 2: marca quais abas já foram desenhadas nesta sessão, pra decidir entre
+// "primeira abertura" (precisa desenhar) e "reabertura" (já tem conteúdo na tela).
+const viewsDesenhadas = new Set();
+function desenharViewSeNecessario(viewId, desenhar, sempre) {
+  if (sempre || !viewsDesenhadas.has(viewId)) {
+    viewsDesenhadas.add(viewId);
+    try { desenhar(); } catch (e) { console.error('Falha ao desenhar ' + viewId, e); }
+  }
 }
 
 function saudacaoDoDia() {
@@ -4783,11 +4810,46 @@ function focarTituloDaView(view) {
   if (!alvo.hasAttribute('tabindex')) alvo.setAttribute('tabindex', '-1');
   alvo.focus({ preventScroll: true });
 }
-document.getElementById('tabBtnCockpit').addEventListener('click', () => activateTab('viewCockpit'));
-document.getElementById('tabBtnResumo').addEventListener('click', () => activateTab('viewResumo'));
-document.getElementById('tabBtnDaily').addEventListener('click', () => activateTab('viewDaily'));
-document.getElementById('tabBtnMeuPainel').addEventListener('click', () => activateTab('viewMeuPainel'));
-document.getElementById('tabBtnPDIs').addEventListener('click', () => activateTab('viewPDIs'));
+document.getElementById('tabBtnCockpit').addEventListener('click', () => {
+  activateTab('viewCockpit');
+  desenharViewSeNecessario('viewCockpit', () => {
+    if (typeof renderCockpitTitleRow === 'function') renderCockpitTitleRow();
+    if (typeof renderKpiStripHero === 'function') renderKpiStripHero();
+    if (typeof renderFunilBarras === 'function') renderFunilBarras();
+    if (typeof renderLeadsPrioritarios === 'function') renderLeadsPrioritarios();
+    if (typeof renderVendasMes === 'function') renderVendasMes();
+    if (typeof renderRepsList === 'function') renderRepsList();
+    if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
+    if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
+  });
+});
+document.getElementById('tabBtnResumo').addEventListener('click', () => {
+  activateTab('viewResumo');
+  desenharViewSeNecessario('viewResumo', () => {
+    if (typeof renderResumoSemanal === 'function') renderResumoSemanal();
+    if (typeof renderPodioMeta === 'function') renderPodioMeta();
+  });
+});
+document.getElementById('tabBtnDaily').addEventListener('click', () => {
+  activateTab('viewDaily');
+  // sempre=true: a Daily é a tela do dia corrente e tem promessa/realizado que muda
+  // durante o expediente — reabrir tem que trazer o número de agora, não o do login.
+  desenharViewSeNecessario('viewDaily', () => {
+    if (typeof renderDaily === 'function') renderDaily();
+    if (typeof renderDecisoes === 'function') setTimeout(renderDecisoes, 0);
+  }, true);
+});
+document.getElementById('tabBtnMeuPainel').addEventListener('click', () => {
+  activateTab('viewMeuPainel');
+  desenharViewSeNecessario('viewMeuPainel', () => { if (typeof renderMeuPainel === 'function') renderMeuPainel(); });
+});
+document.getElementById('tabBtnPDIs').addEventListener('click', () => {
+  activateTab('viewPDIs');
+  desenharViewSeNecessario('viewPDIs', () => {
+    if (typeof renderPDIs === 'function') renderPDIs();
+    if (typeof renderCoaching === 'function' && sessaoAtual && sessaoAtual.role === 'manager') renderCoaching();
+  });
+});
 document.getElementById('tabBtnLeadsPraca').addEventListener('click', () => { activateTab('viewLeadsPraca'); if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova(); });
 document.getElementById('tabBtnAgenda').addEventListener('click', () => { activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda(); });
 
@@ -6429,7 +6491,6 @@ async function montarPlanoDoDia(r) {
             <span><i style="background:#1E7A63;"></i> Disponível</span>
             <span><i style="background:#7C3AED;"></i> HubSpot</span>
             <span><i style="background:#9CA3AF;"></i> Sem fit</span>
-            <span><i style="background:#B0782A;"></i> Cliente ativo</span>
             <span><i style="background:#1E7A63;border:2px solid #D4A017;"></i> TOP avaliações</span>
           </div>
         </div>
@@ -6617,7 +6678,11 @@ async function montarPlanoDoDia(r) {
   montarPlanoMapa(r, hoje, fechado).catch(e => {
     console.error('Erro no mapa de planejamento:', e);
     const box = document.getElementById('planoMapa');
-    if (box) box.innerHTML = '<div class="empty-state" style="padding-top:160px;">Não consegui carregar o mapa agora (sem internet ou CDN bloqueado). O resto do plano segue funcionando.</div>';
+    if (box) {
+      box.innerHTML = '<div class="empty-state" style="padding:26px 20px;">Não consegui carregar o mapa agora (sem internet ou CDN bloqueado). O resto do plano segue funcionando — a lista de paradas ao lado continua valendo.</div>';
+      const palco = box.closest('.plano-map-stage');
+      if (palco) palco.classList.add('is-sem-mapa'); // BLOCO 1: mata o retângulo azul de 540px
+    }
   });
 }
 
@@ -6702,8 +6767,12 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // Clientes Takeat já ativos (fechados pelo próprio Field Sales), pra sugerir parada
   // de relacionamento/upsell na mesma microrrota (pedido do Julyan, 10/08). DATA já
   // vem filtrado pro próprio executivo no servidor — nada de cliente de colega aqui.
-  const clientesDoRep = (DATA.clientesAtivos || []).filter(c => c.lat != null && c.lng != null);
-  const clientesSemCoord = (DATA.clientesAtivos || []).length - clientesDoRep.length;
+  // BLOCO 1 (10/08/26, Julyan): "não quero NADA de lead importado do pipe de Sucesso".
+  // Cortado na origem — o mapa e a lista de paradas passam a ser só contas-alvo da
+  // Prospecção + pipeline quente do próprio funil. data/clientes-ativos.json deixa de
+  // ser lido pela tela (o arquivo já vinha vazio: o token não tem escopo de Companies).
+  const clientesDoRep = [];
+  const clientesSemCoord = 0;
   const clienteSelecionado = c => planoClientesSelecionados.has(String(c.id));
   // Objeto único pra cliente ativo — usado tanto na sequência da rota quanto na
   // lista/mapa, selecionado ou não. status/data_rota espelham o formato de lead
@@ -7662,9 +7731,17 @@ async function renderDaily() {
       const ownerId = btn.dataset.owner;
       const statusEl = el.querySelector(`.d-status[data-owner="${ownerId}"]`);
       const notaEl = el.querySelector(`.d-nota[data-owner="${ownerId}"]`);
-      statusEl.textContent = 'Salvando...';
+      // BLOCO 3 (10/08/26): a tela pode estar se redesenhando no instante do clique —
+      // nesse caso estes dois nós não existem mais. Antes isso virava TypeError e o
+      // compromisso simplesmente não era salvo, sem aviso nenhum pro executivo.
+      if (!notaEl) { if (statusEl) statusEl.textContent = 'Recarregando... clique de novo.'; return; }
+      if (btn.dataset.salvando === '1') return; // trava clique duplo
+      btn.dataset.salvando = '1';
+      if (statusEl) statusEl.textContent = 'Salvando...';
       const { error } = await salvarDaily(ownerId, dailyRefDate, { nota_campo: notaEl.value.trim() });
-      statusEl.textContent = error ? `Erro: ${error.message}` : 'Salvo! ✓';
+      btn.dataset.salvando = '';
+      const statusAgora = el.querySelector(`.d-status[data-owner="${ownerId}"]`);
+      if (statusAgora) statusAgora.textContent = error ? `Erro: ${error.message}` : 'Salvo! ✓';
       if (!error) renderDaily();
     });
   });
