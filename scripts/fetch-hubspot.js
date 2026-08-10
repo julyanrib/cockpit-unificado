@@ -276,13 +276,20 @@ async function fetchAgenda() {
 // etapa nenhuma — no modelo antigo ela simplesmente não contava.
 // Conta só tarefa que é visita mesmo: título começando com Visita/Revisita, ou corpo
 // assinado pelo app ("App Outbound"). Tarefa manual de cadência (D1 - Ligação etc.) fica fora.
-async function visitasTarefasHojeByOwner(ownerId) {
-  const agoraBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const inicioDoDiaBRTms = Date.UTC(agoraBRT.getUTCFullYear(), agoraBRT.getUTCMonth(), agoraBRT.getUTCDate(), 3, 0, 0);
+// diaISO opcional (YYYY-MM-DD, Brasília). Sem ele, conta o dia corrente — mesmo
+// comportamento de antes. Com ele, conta a JANELA FECHADA daquele dia (00h–24h BRT),
+// que é o que permite gravar o realizado de ontem já consolidado.
+async function visitasTarefasHojeByOwner(ownerId, diaISO) {
+  const base = diaISO ? new Date(diaISO + 'T12:00:00Z') : new Date(Date.now() - 3 * 60 * 60 * 1000);
+  const inicioDoDiaBRTms = Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 3, 0, 0);
+  const fimDoDiaBRTms = inicioDoDiaBRTms + 86400000;
+  const filtrosData = diaISO
+    ? [{ propertyName: 'hs_createdate', operator: 'BETWEEN', value: String(inicioDoDiaBRTms), highValue: String(fimDoDiaBRTms) }]
+    : [{ propertyName: 'hs_createdate', operator: 'GTE', value: String(inicioDoDiaBRTms) }];
   const data = await hsSearchTipo('tasks', {
     filterGroups: [{ filters: [
       { propertyName: 'hubspot_owner_id', operator: 'EQ', value: String(ownerId) },
-      { propertyName: 'hs_createdate', operator: 'GTE', value: String(inicioDoDiaBRTms) }
+      ...filtrosData
     ] }],
     properties: ['hs_task_subject', 'hs_task_body'],
     limit: 100
@@ -621,10 +628,11 @@ async function vendasDoMesDetalhe() {
 // Conta quantos negócios de Ganho (Negócio Fechado + Enviado Onboarding) fecharam HOJE
 // pra um executivo específico — usado pra alimentar automaticamente o "Fechamentos hoje"
 // da Daily, sem depender de o executivo digitar (o Expogo já manda isso pro HubSpot sozinho).
-async function stageDealsHojeByOwner(stageIdOuLista, ownerId) {
-  const now = new Date();
-  const b = agoraBrasilia();
+async function stageDealsHojeByOwner(stageIdOuLista, ownerId, diaISO) {
+  const b = diaISO ? new Date(diaISO + 'T12:00:00Z') : agoraBrasilia();
   const inicioHoje = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate(), 3, 0, 0));
+  // Dia fechado (ontem) usa a janela inteira; dia corrente vai até agora.
+  const now = diaISO ? new Date(inicioHoje.getTime() + 86400000) : new Date();
   const lista = Array.isArray(stageIdOuLista) ? stageIdOuLista : [stageIdOuLista];
   const filtroEtapa = lista.length > 1
     ? { propertyName: 'dealstage', operator: 'IN', values: lista }
@@ -783,6 +791,14 @@ async function main() {
     // fechamentos precisa de 1 chamada extra porque Ganho não é etapa "aberta" (não vem no
     // `deals` de repOpenDeals).
     const hojeISO = hojeISOBrasilia();
+    // Ontem em Brasília — é o dia que já está fechado quando o robô roda às 5h.
+    const ontemISO = new Date(new Date(hojeISO + 'T12:00:00Z').getTime() - 86400000).toISOString().slice(0, 10);
+    const entrouNoDia = (stageId, diaISO) => deals.filter(d => {
+      const dt = d.properties[`hs_v2_date_entered_${stageId}`];
+      if (!dt) return false;
+      const dtBrasiliaISO = new Date(new Date(dt).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      return dtBrasiliaISO === diaISO;
+    }).length;
     const entrouHojeEm = (stageId) => deals.filter(d => {
       const dt = d.properties[`hs_v2_date_entered_${stageId}`];
       if (!dt) return false;
@@ -808,6 +824,23 @@ async function main() {
       realizado_avancos: avancosHubspotHoje,
       realizado_propostas: propostasHubspotHoje,
       realizado_fechamentos: fechamentosHubspotHoje
+    });
+
+    // ---- ITEM 4 (10/08/26): fecha o dia de ONTEM ----
+    // Este é o número que a Daily das 9h usa pra dizer "prometeu X, fez Y". Antes ele
+    // dependia de o navegador de alguém ter ficado com a aba aberta ontem; agora o
+    // robô grava direto do HubSpot, com o dia já consolidado. Sem isso, quem trabalhou
+    // e não abriu o cockpit aparecia como zero na reunião.
+    const visitasOntem = await visitasTarefasHojeByOwner(rep.ownerId, ontemISO);
+    const avancosOntem = [STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]
+      .reduce((soma, stageId) => soma + entrouNoDia(stageId, ontemISO), 0);
+    const propostasOntem = entrouNoDia(STAGES.demoProposta, ontemISO);
+    const fechamentosOntem = await stageDealsHojeByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId, ontemISO);
+    await gravarSnapshotDaily(rep.ownerId, ontemISO, {
+      realizado_visitas: visitasOntem,
+      realizado_avancos: avancosOntem,
+      realizado_propostas: propostasOntem,
+      realizado_fechamentos: fechamentosOntem
     });
 
     const withDays = deals.map(d => {

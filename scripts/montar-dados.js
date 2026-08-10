@@ -169,6 +169,10 @@ function montarDadosCompletos() {
 
   return {
     hubspotUpdatedAtFmt: fmtDate(hubspot.updatedAt),
+    // ITEM 4 (10/08/26): o timestamp CRU vai junto do formatado. A tela precisa dele
+    // pra calcular a idade do dado e avisar em vermelho quando o robô das 5h falhou —
+    // apresentar número velho na Daily sem saber que é velho era o risco real.
+    hubspotUpdatedAtISO: hubspot.updatedAt || null,
     versaoAnalise: narrativas._atualizado_em || 'v1',
     kpisHub: hubspot.kpis,
     kpiDetalhe: {

@@ -27,6 +27,7 @@ const DATA_PUBLICO = {
 
   // ---- placeholders vazios, um por chave do DATA real (mesmos tipos) ----
   hubspotUpdatedAtFmt: '',
+  hubspotUpdatedAtISO: null,
   versaoAnalise: 'v1',
   kpisHub: {},
   kpiDetalhe: { leadsCriados: [], perdidos: [] },
