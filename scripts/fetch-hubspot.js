@@ -446,7 +446,7 @@ async function repOpenDeals(ownerId) {
         { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'notes_next_activity_date', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', ...ENTERED_STAGE_PROPS]
+    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'notes_next_activity_date', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', 'latitude', 'longitude', ...ENTERED_STAGE_PROPS]
   });
   return results.filter(d => !isExcludedDeal(d));
 }
@@ -471,7 +471,7 @@ async function stageDealsTeamWide(stageId) {
         { propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'notes_next_activity_date', 'amount', 'hs_lastmodifieddate', ...ENTERED_STAGE_PROPS]
+    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'notes_next_activity_date', 'amount', 'hs_lastmodifieddate', 'latitude', 'longitude', ...ENTERED_STAGE_PROPS]
   });
   return todos.filter(d => !isExcludedDeal(d));
 }
@@ -740,6 +740,11 @@ async function main() {
     const deals = await stageDealsTeamWide(stageId);
     funilLeads[stageId] = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
+      // Coordenada real do check-in via Expogo (Julyan, 10/08: "eles marcam no Expogo
+      // e tem coordenadas que enviam para o HubSpot" — direto na propriedade do negócio,
+      // não precisa mais casar por nome com a base de prospecção pra achar isso).
+      const lat = d.properties.latitude != null ? Number(d.properties.latitude) : null;
+      const lng = d.properties.longitude != null ? Number(d.properties.longitude) : null;
       return {
         name: d.properties.dealname,
         id: d.id,
@@ -749,7 +754,9 @@ async function main() {
         ultimaInteracao: d.properties.notes_last_updated || null,
         valor: Math.round(parseFloat(d.properties.amount) || 0),
         vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
-        ownerId: d.properties.hubspot_owner_id || null
+        ownerId: d.properties.hubspot_owner_id || null,
+        lat: (lat != null && !isNaN(lat)) ? lat : null,
+        lng: (lng != null && !isNaN(lng)) ? lng : null
       };
     }).sort((a, b) => b.dias - a.dias);
   }
@@ -840,6 +847,10 @@ async function main() {
       if (slaBreach) temperatura = 'frio';
       else if (rank >= 4) temperatura = 'quente';
 
+      // Mesma coordenada real do check-in via Expogo — ver comentário em funilLeads acima.
+      const lat = d.properties.latitude != null ? Number(d.properties.latitude) : null;
+      const lng = d.properties.longitude != null ? Number(d.properties.longitude) : null;
+
       return {
         name: d.properties.dealname,
         id: d.id,
@@ -853,7 +864,9 @@ async function main() {
         proximaReuniao,
         proximaAtividade,
         ultimaInteracao: d.properties.notes_last_updated || null,
-        valor: Math.round(parseFloat(d.properties.amount) || 0)
+        valor: Math.round(parseFloat(d.properties.amount) || 0),
+        lat: (lat != null && !isNaN(lat)) ? lat : null,
+        lng: (lng != null && !isNaN(lng)) ? lng : null
       };
     }).sort((a, b) => b.dias - a.dias);
 
