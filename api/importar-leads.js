@@ -121,11 +121,18 @@ function mesclarRestaurante(base, novo) {
 function semAcento(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
+// Rotas oficiais passadas pelo Julyan em 10/08/2026:
+//   Marco→Vila Velha · Amanda→Vitória · Whell→Zona Sul de SP · Michel→Campo Grande/RJ
+//   Bruno→Taquara/Jacarepaguá · Sandro→Tijuca · Kelly→POA+Canoas · Ricardo→POA.
+// Nova Iguaçu saiu do mapa do Michel nesta rodada. O split POA Kelly/Ricardo entra
+// quando o Ricardo tiver owner ID real no HubSpot (hoje: 'pendente_ricardo2') —
+// até lá POA inteira roteia pra Kelly, e o gestor reatribui na ficha se quiser.
 const TERRITORIOS = [
   { owner: '86100505', nome: 'Marco Filho', teste: t => t.includes('vila velha') },
   { owner: '87069181', nome: 'Amanda Pardim', teste: t => t.includes('vitoria') },
   { owner: '87569072', nome: 'Sandro Linhares', teste: t => t.includes('tijuca') },
-  { owner: '94079973', nome: 'Michel Andrade', teste: t => t.includes('nova iguacu') || t.includes('campo grande') },
+  { owner: '86100506', nome: 'Bruno Martins', teste: t => t.includes('taquara') || t.includes('jacarepagua') || (t.includes('rio de janeiro') && /\banil\b/.test(t)) },
+  { owner: '94079973', nome: 'Michel Andrade', teste: t => t.includes('campo grande') && !t.includes('campo grande - ms') },
   { owner: '89842507', nome: 'Wericles Andrade', teste: t => t.includes('sao paulo') },
   { owner: '91477292', nome: 'Kelly Travieso', teste: t => t.includes('canoas') || t.includes('porto alegre') }
 ];
