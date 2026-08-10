@@ -3639,6 +3639,7 @@ async function renderDecisoes() {
     const quemConcentra = souRep ? '' : nomesQueConcentramSla(estourados);
     return {
       ordem: estourados.length,
+      tipo: 'sla',
       principal: `${estourados.length} lead${estourados.length > 1 ? 's' : ''} com SLA estourado em ${label}`,
       impacto: souRep ? 'acima do prazo da etapa' : (quemConcentra ? `Concentrado em ${quemConcentra}` : 'acima do prazo da etapa'),
       onClick: () => openStageModal(stageId, label, souRep ? meuOwnerId : undefined)
@@ -3652,6 +3653,7 @@ async function renderDecisoes() {
     if (deltaTaxa && deltaTaxa.sinal === 'down' && deltaTaxa.valor > 0) {
       itensConversao.push({
         ordem: deltaTaxa.valor * 3, // pontos percentuais pesam mais que 1 lead na comparação
+        tipo: 'conversao',
         principal: `Taxa de avanço do time caiu ${deltaTaxa.valor}pp`,
         impacto: `Foi para ${DATA.kpisHub.taxaAvanco}% desde a última atualização`,
         onClick: () => activateTab('viewResumo')
@@ -3668,6 +3670,7 @@ async function renderDecisoes() {
     if (det.aderencia !== null && det.aderencia < 75) {
       itensAderencia.push({
         ordem: 75 - det.aderencia,
+        tipo: 'aderencia',
         principal: souRep ? 'Sua aderência à Daily está baixa essa semana' : `${r.name.split(' ')[0]} está com aderência baixa na Daily`,
         impacto: `${det.aderencia}% do prometido essa semana (${det.real}/${det.prom})`,
         onClick: () => openModal(r)
@@ -3683,8 +3686,28 @@ async function renderDecisoes() {
   }
   bloco.style.display = '';
 
-  const visiveis = todosItens.slice(0, 3);
-  const resto = todosItens.slice(3);
+  // Diversidade no top 3: no máximo 2 decisões do mesmo tipo de sinal (sla/conversao/aderencia)
+  // aparecem nas 3 primeiras. Sem essa régua, quando 6+ pessoas estão com aderência baixa ao
+  // mesmo tempo (ex.: segunda de manhã cedo), o card vira só "fulano com aderência baixa" x3 e
+  // esconde um SLA estourado ou uma queda de conversão que estejam mais abaixo na lista bruta —
+  // sinais de tipos diferentes custam pouco pra mostrar e evitam ponto cego no gestor.
+  const TETO_POR_TIPO_NO_TOP3 = 2;
+  const visiveis = [];
+  const contagemPorTipo = {};
+  const restantes = [];
+  todosItens.forEach(it => {
+    if (visiveis.length < 3 && (contagemPorTipo[it.tipo] || 0) < TETO_POR_TIPO_NO_TOP3) {
+      visiveis.push(it);
+      contagemPorTipo[it.tipo] = (contagemPorTipo[it.tipo] || 0) + 1;
+    } else {
+      restantes.push(it);
+    }
+  });
+  restantes.sort((a, b) => b.ordem - a.ordem);
+  while (visiveis.length < 3 && restantes.length > 0) {
+    visiveis.push(restantes.shift());
+  }
+  const resto = restantes;
   if (contagemEl) contagemEl.textContent = `${visiveis.length} decis${visiveis.length > 1 ? 'ões' : 'ão'}, em ordem de impacto`;
 
   function linhaHtml(it, rank) {
