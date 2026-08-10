@@ -75,6 +75,15 @@ jobs:
           HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
         run: node scripts/fetch-weekly-comparison.js
 
+      - name: Atualizar lista de clientes Takeat ativos (pra sugestão de microrrota)
+        # Só no refresh completo da madrugada — não muda de hora em hora (clientes
+        # fechados não aparecem/somem no meio do dia) e evita gastar cota da MapTiler
+        # geocodificando de novo sem necessidade.
+        if: ${{ github.event.schedule == '0 8 * * *' || github.event_name == 'workflow_dispatch' }}
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: node scripts/fetch-clientes-ativos.js
+
       - name: Gerar HTML final
         run: node scripts/build.js
 
@@ -82,7 +91,7 @@ jobs:
         run: |
           git config user.name "cockpit-bot"
           git config user.email "cockpit-bot@users.noreply.github.com"
-          git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json public/index.html
+          git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json data/clientes-ativos.json public/index.html
           git diff --staged --quiet && echo "Nada mudou hoje." && exit 0
 
           git commit -m "Atualização automática do cockpit ($(date -u +'%H:%M UTC'))"
