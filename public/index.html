@@ -8711,6 +8711,80 @@ function abrirModalConfirmacao({ titulo, corpoHTML, confirmarLabel, aoConfirmar 
   btnCancelar.focus();
   return overlay;
 }
+// Importação de contas direto do cockpit (só gestor). Aceita colar o JSON do lote
+// ({fonte, leads:[...]} ou só o array de leads) ou anexar o arquivo .json — mesmo
+// formato que o Make/Outscraper mandam pra /api/importar-leads. A rota valida a
+// sessão, aplica a régua (avaliações >= 100, nota não influencia), deduplica por
+// place_id/telefone/endereço e já roteia o executivo pelo território.
+function abrirImportacaoProspeccao() {
+  const corpo = `
+    <p style="margin:0 0 12px;color:var(--muted2);">Cole o lote no formato <code>{"fonte":"google_places","leads":[...]}</code> ou anexe o arquivo .json. A fila continua ordenada por volume de avaliações — a nota nunca corta nem desempata.</p>
+    <label style="display:block;font-size:11px;font-weight:700;color:var(--muted2);margin-bottom:4px;">Fonte do lote</label>
+    <select id="importFonte" style="width:100%;font-size:12.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:10px;">
+      <option value="google_places">Google Places</option>
+      <option value="tripadvisor">Tripadvisor</option>
+      <option value="ifood">iFood</option>
+      <option value="outscraper">Outscraper</option>
+      <option value="manual">Manual</option>
+    </select>
+    <input type="file" id="importArquivo" accept=".json,application/json" style="font-size:11.5px;margin-bottom:8px;">
+    <textarea id="importTexto" rows="7" placeholder='[{"nome":"...","cidade":"...","avaliacoes":1234,...}]' style="width:100%;box-sizing:border-box;font-size:11px;font-family:ui-monospace,monospace;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;"></textarea>
+    <div id="importStatus" style="font-size:12px;margin-top:8px;min-height:16px;"></div>`;
+  const overlay = abrirModalConfirmacao({
+    titulo: 'Importar contas para a fila',
+    corpoHTML: corpo,
+    confirmarLabel: 'Importar lote',
+    aoConfirmar: async (ov, fechar) => {
+      const status = ov.querySelector('#importStatus');
+      const btnOk = ov.querySelector('#modalConfirmacaoOk');
+      let bruto = ov.querySelector('#importTexto').value.trim();
+      if (!bruto) { status.textContent = 'Cole o JSON do lote ou anexe o arquivo.'; status.style.color = 'var(--red)'; return; }
+      let corpoReq;
+      try {
+        const parseado = JSON.parse(bruto);
+        const leads = Array.isArray(parseado) ? parseado : parseado.leads;
+        if (!Array.isArray(leads) || leads.length === 0) throw new Error('sem leads');
+        const fonte = (!Array.isArray(parseado) && parseado.fonte) ? parseado.fonte : ov.querySelector('#importFonte').value;
+        corpoReq = { fonte, leads };
+        if (!Array.isArray(parseado) && parseado.qualidade) corpoReq.qualidade = parseado.qualidade;
+      } catch (e) {
+        status.textContent = 'JSON inválido — confira o formato do lote.'; status.style.color = 'var(--red)'; return;
+      }
+      btnOk.disabled = true; btnOk.textContent = 'Importando…';
+      status.textContent = `Enviando ${corpoReq.leads.length} conta(s)…`; status.style.color = 'var(--muted2)';
+      try {
+        const token = await tokenDeSessaoGlobal();
+        const resp = await comPrazoGlobal(async (signal) => fetch('/api/importar-leads', {
+          method: 'POST', signal,
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+          body: JSON.stringify(corpoReq)
+        }), 30000, 'importar-leads');
+        const data = await resp.json();
+        if (!resp.ok) {
+          status.innerHTML = `<b style="color:var(--red);">${esc(data.erro || 'Falha na importação.')}</b>`;
+          btnOk.disabled = false; btnOk.textContent = 'Importar lote';
+          return;
+        }
+        mostrarToast(`Lote importado: ${data.inseridos || 0} nova(s), ${data.mesclados || 0} mesclada(s), ${data.duplicados || 0} já existente(s), ${(data.reprovados_qualidade || 0) + (data.reprovados_fit || 0)} fora da régua.`, 'sucesso');
+        fechar();
+        renderProspeccaoNova();
+      } catch (e) {
+        status.innerHTML = `<b style="color:var(--red);">Erro de rede/servidor: ${esc(String(e.message || e))}</b>`;
+        btnOk.disabled = false; btnOk.textContent = 'Importar lote';
+      }
+    }
+  });
+  // Anexar arquivo joga o conteúdo direto no textarea — um único caminho de validação.
+  const inputArquivo = overlay.querySelector('#importArquivo');
+  inputArquivo.addEventListener('change', () => {
+    const arq = inputArquivo.files && inputArquivo.files[0];
+    if (!arq) return;
+    const leitor = new FileReader();
+    leitor.onload = () => { overlay.querySelector('#importTexto').value = String(leitor.result || ''); };
+    leitor.readAsText(arq);
+  });
+}
+
 let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false };
 
 function prospeccaoNormalizarTexto(valor) {
@@ -8979,9 +9053,14 @@ async function renderProspeccaoNova() {
       ${bannerVazio}
       <div class="chart-card" style="border-left:3px solid var(--blue);">
         <h3 style="margin-bottom:4px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>Prospecção</h3>
-        <div class="empty-state">Nenhum lead importado ainda. Peça pro gestor rodar uma importação (Outscraper, Google Places ou outra fonte) — os leads aparecem aqui pra conferência antes de virar empresa no HubSpot.</div>
+        <div class="empty-state">${souGestorProspVazio
+          ? 'Nenhuma conta na fila ainda. Importe o primeiro lote (Google Places, Tripadvisor, iFood, Outscraper ou manual) — as contas aparecem aqui pra conferência antes de virar empresa no HubSpot.'
+          : 'Nenhum lead importado ainda. Peça pro gestor rodar uma importação — os leads aparecem aqui pra conferência antes de virar empresa no HubSpot.'}</div>
+        ${souGestorProspVazio ? '<button type="button" id="prospeccaoImportarVazio" style="margin-top:12px;font-size:12px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:10px 20px;cursor:pointer;">⬆ Importar contas</button>' : ''}
       </div>
     `;
+    const btnImportarVazio = document.getElementById('prospeccaoImportarVazio');
+    if (btnImportarVazio) btnImportarVazio.addEventListener('click', abrirImportacaoProspeccao);
     return;
   }
 
@@ -9265,7 +9344,10 @@ async function renderProspeccaoNova() {
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/></svg>
           <div><h3 style="margin:0;">${souGestorProsp ? 'Contas-alvo para distribuir' : 'Escolha suas próximas paradas'}</h3><div style="font-size:11.5px;color:var(--muted2);margin-top:3px;">${souGestorProsp ? 'Ordenadas pelo potencial de impacto: maior volume de avaliações primeiro.' : 'Comece pelas contas de maior impacto e adicione à rota sem perder o contexto.'}</div></div>
           </div>
-          <label class="prospeccao-search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="pfBuscaRapida" type="search" aria-label="Buscar restaurante" placeholder="Buscar restaurante, bairro ou telefone" value="${esc(prospeccaoFiltro.busca)}" style="font-size:12px;"></label>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            ${souGestorProsp ? `<button type="button" id="prospeccaoImportar" style="font-size:12px;font-weight:800;color:var(--ink);background:var(--panel);border:1px solid var(--line-btn);border-radius:999px;padding:8px 16px;cursor:pointer;display:inline-flex;align-items:center;gap:7px;box-shadow:var(--shadow-sm);"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg>Importar contas</button>` : ''}
+            <label class="prospeccao-search"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="pfBuscaRapida" type="search" aria-label="Buscar restaurante" placeholder="Buscar restaurante, bairro ou telefone" value="${esc(prospeccaoFiltro.busca)}" style="font-size:12px;"></label>
+          </div>
         </div>
         ${pills}
         ${maisFiltros}
@@ -9306,6 +9388,9 @@ async function renderProspeccaoNova() {
   };
   const btnAbrirRota = document.getElementById('prospeccaoAbrirRota');
   if (btnAbrirRota) btnAbrirRota.addEventListener('click', abrirRotaHoje);
+
+  const btnImportar = document.getElementById('prospeccaoImportar');
+  if (btnImportar) btnImportar.addEventListener('click', abrirImportacaoProspeccao);
 
   el.querySelectorAll('[data-rota-quick]').forEach(btn => {
     btn.addEventListener('click', async ev => {
