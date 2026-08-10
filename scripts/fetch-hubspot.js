@@ -509,9 +509,29 @@ async function buscarNotasDoLead(dealId, limite = 2) {
   }
 }
 
+// Dias ÚTEIS entre duas datas (exclui sábado e domingo) — pedido do Julyan (10/08):
+// final de semana não pode contar como "dia parado" pro lead, porque ninguém do time
+// trabalha rua/CRM nesses dias. Conta quantos dias de seg-sex existem entre startMs
+// (exclusive) e agora (inclusive), andando dia a dia em UTC pra não escorregar com
+// fuso/horário de verão. Ex.: sexta 18h → segunda 9h = 1 dia útil, não 3.
+function diasUteisEntre(startMs, endMs) {
+  if (!(startMs < endMs)) return 0;
+  const cursor = new Date(startMs);
+  cursor.setUTCHours(0, 0, 0, 0);
+  const fim = new Date(endMs);
+  fim.setUTCHours(0, 0, 0, 0);
+  let count = 0;
+  while (cursor < fim) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const dow = cursor.getUTCDay(); // 0=domingo, 6=sábado
+    if (dow !== 0 && dow !== 6) count++;
+  }
+  return count;
+}
+
 function daysSince(dateStr) {
   const created = new Date(dateStr).getTime();
-  return Math.floor((Date.now() - created) / (1000 * 60 * 60 * 24));
+  return diasUteisEntre(created, Date.now());
 }
 
 // Dias REALMENTE parado, sem interação nenhuma. Usa a data mais recente entre:
@@ -534,7 +554,9 @@ function daysInCurrentStage(properties) {
 
   const candidates = [enteredDate, lastActivity, createdFallback].filter(t => t !== null && !isNaN(t));
   const maisRecente = Math.max(...candidates);
-  return Math.floor((Date.now() - maisRecente) / (1000 * 60 * 60 * 24));
+  // 10/08 (Julyan): conta só dias úteis — sábado e domingo não empurram o lead pra
+  // "SLA estourado" nem inflam o "Xd parado", já que ninguém trabalha o funil nesses dias.
+  return diasUteisEntre(maisRecente, Date.now());
 }
 
 // Busca os negócios que UM executivo fechou (Negócio Fechado) nos últimos 7 dias,
