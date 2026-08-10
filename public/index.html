@@ -1702,7 +1702,7 @@
   </div>
 
 <script id="cockpit-data" type="application/json">
-{"shellProtegido":true,"supabase":{"url":"https://xitmahwxncpdzopmdook.supabase.co","anonKey":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpdG1haHd4bmNwZHpvcG1kb29rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5MDM5ODksImV4cCI6MjEwMDQ3OTk4OX0.gbYOpSbej7Pd_3JHLrp0vQFux5Z-Cep_21tnHB8e5Mk"},"maptiler":"cLN2yn0R4MZg5nQ7wabE","hubspotUpdatedAtFmt":"","versaoAnalise":"v1","kpisHub":{},"kpiDetalhe":{"leadsCriados":[],"perdidos":[]},"kpiDeltas":null,"funil":{"labels":[],"valores":[],"cores":[]},"funilLeads":{},"vendasMes":null,"temperatura":{"quentes":[],"frios":[]},"stageMeta":{"slaDays":{},"descriptions":{},"labels":{}},"saude":null,"reps":[],"leadsReferencia":[],"footerText":"","resumoSemanal":null,"agenda":null,"usuarios":[]}
+{"shellProtegido":true,"supabase":{"url":"https://xitmahwxncpdzopmdook.supabase.co","anonKey":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpdG1haHd4bmNwZHpvcG1kb29rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5MDM5ODksImV4cCI6MjEwMDQ3OTk4OX0.gbYOpSbej7Pd_3JHLrp0vQFux5Z-Cep_21tnHB8e5Mk"},"maptiler":"cLN2yn0R4MZg5nQ7wabE","hubspotUpdatedAtFmt":"","versaoAnalise":"v1","kpisHub":{},"kpiDetalhe":{"leadsCriados":[],"perdidos":[]},"kpiDeltas":null,"funil":{"labels":[],"valores":[],"cores":[]},"funilLeads":{},"vendasMes":null,"temperatura":{"quentes":[],"frios":[]},"stageMeta":{"slaDays":{},"descriptions":{},"labels":{}},"saude":null,"reps":[],"leadsReferencia":[],"clientesAtivos":[],"footerText":"","resumoSemanal":null,"agenda":null,"usuarios":[]}
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -6755,6 +6755,16 @@ let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false };
 let planoMapaPopupAtual = null;
 let planoMapaOrigemAtual = null;
 let planoMapaRenderAtual = null;
+// Pedido do Julyan (10/08): a rota (sequência numerada + linha no mapa) só deve
+// existir quando ele pedir de propósito — não recalcular sozinha a cada lead
+// incluído/tirado. Esse flag começa falso a cada troca de dia/sessão e volta a
+// falso toda vez que a seleção muda (ver alternarRota) — só um clique explícito
+// em "Gerar rota" (gerarRotaPlanoMapa) liga de novo.
+let planoRotaGerada = false;
+// Clientes ativos escolhidos como parada de relacionamento na rota de hoje — só em
+// memória (não é um lead de prospecção, não precisa virar linha no Supabase).
+// Reseta ao trocar de dia/sessão, igual planoRotaGerada.
+let planoClientesSelecionados = new Set();
 
 function estiloPlanoMapa() {
   const escuro = document.body.getAttribute('data-theme') === 'dark';
@@ -6989,6 +6999,10 @@ async function montarPlanoDoDia(r) {
           </div>
         </div>
         <div class="plano-map-head-actions">
+          <button id="planoGerarRota" class="plano-route-button" type="button" style="background:var(--ink);" disabled>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 20l-5.5 2L9 4l6 16 5.5-2L15 4"/></svg>
+            Gerar rota
+          </button>
           <button id="planoMapaAbrirRota" class="plano-route-button" type="button" disabled>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             Abrir próxima no Maps
@@ -7018,6 +7032,7 @@ async function montarPlanoDoDia(r) {
             <span><i style="background:#1E7A63;"></i> Disponível</span>
             <span><i style="background:#7C3AED;"></i> HubSpot</span>
             <span><i style="background:#9CA3AF;"></i> Sem fit</span>
+            <span><i style="background:#B0782A;"></i> Cliente ativo</span>
           </div>
         </div>
         <aside class="plano-map-sidebar" aria-label="Paradas e oportunidades">
@@ -7200,6 +7215,13 @@ async function montarPlanoDoDia(r) {
   });
 }
 
+// Liga o flag e força o redesenho — é o ÚNICO lugar que liga planoRotaGerada.
+// Pedido do Julyan (10/08): rota só nasce de um clique explícito, nunca sozinha.
+function gerarRotaPlanoMapa(r, hoje, planoFechado) {
+  planoRotaGerada = true;
+  montarPlanoMapa(r, hoje, planoFechado);
+}
+
 async function montarPlanoMapa(r, hoje, planoFechado) {
   const box = document.getElementById('planoMapa');
   const lista = document.getElementById('planoMapaLista');
@@ -7253,7 +7275,23 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     )
   );
 
-  if (visiveis.length === 0) {
+  // Clientes Takeat já ativos (fechados pelo próprio Field Sales), pra sugerir parada
+  // de relacionamento/upsell na mesma microrrota (pedido do Julyan, 10/08). DATA já
+  // vem filtrado pro próprio executivo no servidor — nada de cliente de colega aqui.
+  const clientesDoRep = (DATA.clientesAtivos || []).filter(c => c.lat != null && c.lng != null);
+  const clientesSemCoord = (DATA.clientesAtivos || []).length - clientesDoRep.length;
+  const clienteSelecionado = c => planoClientesSelecionados.has(String(c.id));
+  // Objeto único pra cliente ativo — usado tanto na sequência da rota quanto na
+  // lista/mapa, selecionado ou não. status/data_rota espelham o formato de lead
+  // pra reaproveitar naRotaHojeFn/itemListaHTML sem duplicar lógica de exibição.
+  const clientesExibicao = clientesDoRep.map(c => ({
+    ...c, id: 'cliente-' + c.id, _clienteAtivo: true, avaliacoes: null,
+    cicloStatus: c.status, // preserva 'ativo'/'onboarding' antes do status abaixo sobrescrever
+    status: clienteSelecionado(c) ? 'na_rota' : 'disponivel_cliente',
+    data_rota: clienteSelecionado(c) ? hoje : null
+  }));
+
+  if (visiveis.length === 0 && clientesDoRep.length === 0) {
     if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
     planoMapaMarcadores = {};
     lista.innerHTML = pipelineSemLocal.length ? `<div class="plano-map-section-label">Pipeline quente · localização pendente</div>${pipelineSemLocal.map(d => `<div class="plano-lista-item"><span class="plano-lista-index" style="color:var(--red);">!</span><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')} · sem coordenada</span></span>${d.id ? `<a href="${hsUrl(d.id)}" target="_blank" rel="noopener" class="plano-lista-btn" style="text-decoration:none;">↗</a>` : ''}</div>`).join('')}` : '';
@@ -7264,6 +7302,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     if (gameEl) gameEl.innerHTML = `<div class="plano-map-progress-copy"><span>Nenhuma conta atende aos filtros atuais.</span><b>0/6 paradas</b></div><div class="plano-map-progress-track"><div class="plano-map-progress-bar" style="width:0%;"></div></div>`;
     const rotaEl = document.getElementById('planoMapaAbrirRota');
     if (rotaEl) { rotaEl.disabled = true; rotaEl.textContent = 'Escolha uma parada'; }
+    const gerarEl = document.getElementById('planoGerarRota');
+    if (gerarEl) { gerarEl.disabled = true; gerarEl.textContent = 'Gerar rota'; }
     if (msg) msg.innerHTML = `<span>${pipelineSemLocal.length ? `${pipelineSemLocal.length} negócio(s) quente(s) seguem visíveis na lista, mas precisam de localização para entrar no mapa.` : semCoord > 0 ? `${semCoord} conta(s)-alvo sem coordenada ficaram fora do mapa.` : 'Ajuste os filtros para ver oportunidades.'}</span>`;
     return;
   }
@@ -7291,12 +7331,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const naRotaHojeFn = l => l.status === 'na_rota' && l.data_rota === hoje;
   const corDoStatus = l => {
     if (naRotaHojeFn(l)) return '#2563EB';           // azul: na rota de HOJE
+    if (l._clienteAtivo) return '#B0782A';           // dourado: cliente ativo (relacionamento)
     if (l.status === 'sem_fit') return '#9CA3AF';    // cinza
     if (quenteHub(l)) return '#E51A31';              // vermelho: pipeline quente
     if (noHubspot(l)) return '#7C3AED';              // roxo: virou negócio no HubSpot
     return '#1E7A63';                                 // verde: disponível
   };
   const rotuloStatus = l => naRotaHojeFn(l) ? 'Na rota de hoje'
+    : l._clienteAtivo ? 'Cliente ativo — sugestão de relacionamento'
     : l.status === 'sem_fit' ? 'Sem fit'
     : quenteHub(l) ? `Pipeline quente${etapaHub(l) ? ': ' + etapaHub(l) : ''}`
     : noHubspot(l) ? (etapaHub(l) ? `No funil: ${etapaHub(l)}` : 'Já criada no HubSpot')
@@ -7323,18 +7365,25 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // (recomendação transparente: volume de avaliações). O universo completo fica
   // a um clique em "Explorar todas" — nada some, só não despeja 100+ pins de cara.
   const LIMITE_RECOMENDADAS = 10;
-  const naRotaBase = ordenadasTodas.filter(naRotaHojeFn);
-  const naRotaTodas = planoMapaOrigemAtual
+  // Cliente ativo selecionado vira uma "parada" no mesmo formato de lead, só pra
+  // entrar na mesma sequência/numeração — nunca é gravado em leads_prospeccao.
+  const clientesComoParada = clientesExibicao.filter(naRotaHojeFn);
+  const naRotaBase = [...ordenadasTodas.filter(naRotaHojeFn), ...clientesComoParada];
+  // Pedido do Julyan (10/08): "gerar rota só quando pedir" — enquanto não clicar em
+  // "Gerar rota", a seleção aparece na ordem em que foi escolhida, sem numeração nem
+  // linha no mapa (isso é o que recalculava sozinho a cada clique). Só depois do
+  // clique explícito é que reordena por proximidade e desenha a sequência.
+  const naRotaTodas = !planoRotaGerada ? naRotaBase : (planoMapaOrigemAtual
     ? ordenarPorProximidade(naRotaBase, planoMapaOrigemAtual)
     : naRotaBase.length > 1
       ? [{ ...naRotaBase[0], distanciaDaAnteriorKm: null }, ...ordenarPorProximidade(naRotaBase.slice(1), naRotaBase[0])]
-      : naRotaBase;
+      : naRotaBase);
   const recomendadas = ordenadasTodas.filter(l => !naRotaHojeFn(l)).slice(0, LIMITE_RECOMENDADAS);
   const ordenadas = planoMapaFiltro.verTodas
     ? [...naRotaTodas, ...ordenadasTodas.filter(l => !naRotaHojeFn(l))]
     : [...naRotaTodas, ...recomendadas];
   const ocultas = ordenadasTodas.length - ordenadas.length;
-  const indiceRota = new Map(naRotaTodas.map((l, i) => [String(l.id), i + 1]));
+  const indiceRota = planoRotaGerada ? new Map(naRotaTodas.map((l, i) => [String(l.id), i + 1])) : new Map();
 
   // Ação única (lista e popup usam a mesma): incluir/tirar da rota de hoje.
   // Regra do documento: interação do mapa = SELEÇÃO pro plano do dia, nunca
@@ -7371,39 +7420,79 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     // pelo mesmo redesenho leve já usado pelos outros filtros do mapa (avaliação
     // mínima, incluir sem fit): só a lista+mapa mudam, o resto do painel fica parado.
     if (botao) { botao.disabled = false; }
+    // Mudou a seleção -> a rota antiga não vale mais. Não recalcula sozinho:
+    // some a sequência/linha até o próximo "Gerar rota" (pedido do Julyan, 10/08).
+    planoRotaGerada = false;
     montarPlanoMapa(r, hoje, planoFechado);
   }
+
+  // Cliente ativo sugerido como parada de relacionamento/upsell: nunca grava em
+  // leads_prospeccao (não é uma conta-alvo de prospecção) — só entra/sai da
+  // seleção em memória da rota de hoje. Pedido do Julyan (10/08).
+  function alternarClienteNaRota(c) {
+    const chave = String(c.id.replace(/^cliente-/, ''));
+    if (planoClientesSelecionados.has(chave)) planoClientesSelecionados.delete(chave);
+    else planoClientesSelecionados.add(chave);
+    planoRotaGerada = false;
+    montarPlanoMapa(r, hoje, planoFechado);
+  }
+
   const botaoAcaoHTML = l => planoFechado
     ? `<div class="plano-popup-meta" style="margin-top:9px;">Plano fechado — use “Editar plano” para mudar a seleção.</div>`
-    : naRotaHojeFn(l)
-      ? `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">Tirar da rota</button>`
-      : `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">+ Incluir na rota</button>`;
+    : l._clienteAtivo
+      ? `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">Remover da rota</button>`
+      : naRotaHojeFn(l)
+        ? `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">Tirar da rota</button>`
+        : `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">+ Incluir na rota</button>`;
 
   // ---- Lista lateral sincronizada ----
   const itemListaHTML = l => {
     const detalhe = prospeccaoPraca(l);
     const naRota = naRotaHojeFn(l);
     const posicao = indiceRota.get(String(l.id));
-    const simbolo = naRota ? posicao : quenteHub(l) ? '!' : noHubspot(l) ? 'H' : l.status === 'sem_fit' ? '×' : '★';
+    // Sem rota gerada ainda, mostra "✓ selecionado" em vez de um número que ainda
+    // não existe — a numeração só nasce depois do clique em "Gerar rota".
+    const simbolo = naRota ? (planoRotaGerada ? posicao : '✓') : quenteHub(l) ? '!' : noHubspot(l) ? 'H' : l.status === 'sem_fit' ? '×' : '★';
     return `
       <div class="plano-lista-item ${naRota ? 'is-route' : ''}" data-id="${esc(String(l.id))}">
         <span class="plano-lista-index" ${naRota ? '' : `style="color:${corDoStatus(l)};"`}>${simbolo}</span>
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
           <span class="plano-lista-meta">${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
-          ${etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
+          ${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
       </div>`;
   };
   const itensRota = ordenadas.filter(naRotaHojeFn);
-  const itensSugestao = ordenadas.filter(l => !naRotaHojeFn(l));
+  // "Leads fáceis pra hoje" (pedido do Julyan, 10/08): já eram duas seções separadas
+  // (quentes / por impacto) — juntei numa só, porque a régua é a mesma: quente do
+  // funil primeiro, depois quem tem mais avaliações (Outscraper/Tripadvisor/iFood),
+  // não precisa ser nota mais alta. ordenadasTodas já vem nessa ordem (ver sort acima).
+  const itensSugestao = ordenadas.filter(l => !naRotaHojeFn(l) && !l._clienteAtivo);
+  // Clientes ativos ainda não escolhidos pra rota de hoje — sempre visíveis como
+  // sugestão de relacionamento/upsell, à parte dos leads novos.
+  // Alto volume primeiro — mais de 500 comandas é quem mais justifica a parada
+  // de relacionamento hoje (pedido do Julyan, 10/08).
+  const clientesSugestao = clientesExibicao.filter(c => !naRotaHojeFn(c))
+    .sort((a, b) => (b.altoVolume - a.altoVolume) || ((b.comandas || 0) - (a.comandas || 0)));
+
+  const rotaTituloHtml = planoRotaGerada
+    ? `1 · Rota gerada (${itensRota.length} ${itensRota.length === 1 ? 'parada' : 'paradas'})`
+    : `1 · Selecionados para hoje (${itensRota.length})`;
+  const gerarRotaInlineHtml = (!planoFechado && itensRota.length > 0 && !planoRotaGerada)
+    ? `<button type="button" id="planoGerarRotaInline" class="plano-route-button" style="margin:2px 0 12px;width:100%;justify-content:center;">Gerar rota com ${itensRota.length} ${itensRota.length === 1 ? 'parada' : 'paradas'} →</button>`
+    : '';
+
   lista.innerHTML = `
-    ${itensRota.length ? `<div class="plano-map-section-label">1 · Rota confirmada</div>${itensRota.map(itemListaHTML).join('')}` : `<div class="empty-state" style="padding:18px 8px 12px;font-size:12px;">Sua rota está vazia. Comece pelos quentes e pelas contas de maior impacto.</div>`}
-    ${itensSugestao.filter(quenteHub).length ? `<div class="plano-map-section-label">2 · Quentes para encaixar</div>${itensSugestao.filter(quenteHub).map(itemListaHTML).join('')}` : ''}
-    ${itensSugestao.filter(l => !quenteHub(l)).length ? `<div class="plano-map-section-label">3 · Contas por impacto</div>${itensSugestao.filter(l => !quenteHub(l)).map(itemListaHTML).join('')}` : ''}
+    ${itensRota.length ? `<div class="plano-map-section-label">${rotaTituloHtml}</div>${itensRota.map(itemListaHTML).join('')}${gerarRotaInlineHtml}` : `<div class="empty-state" style="padding:18px 8px 12px;font-size:12px;">Sua rota está vazia. Comece pelos leads fáceis ou pelos clientes ativos da região.</div>`}
+    ${itensSugestao.length ? `<div class="plano-map-section-label">2 · Leads fáceis pra hoje (funil + mais avaliados)</div>${itensSugestao.map(itemListaHTML).join('')}` : ''}
+    ${clientesSugestao.length ? `<div class="plano-map-section-label">3 · Clientes Takeat na região${clientesSugestao.filter(c => c.altoVolume).length ? ` · ${clientesSugestao.filter(c => c.altoVolume).length} de alto volume` : ''}</div>${clientesSugestao.map(itemListaHTML).join('')}` : ''}
     ${pipelineSemLocal.length ? `<div class="plano-map-section-label">Quentes sem localização</div>${pipelineSemLocal.map(d => `<div class="plano-lista-item"><span class="plano-lista-index" style="color:var(--red);">!</span><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')} · precisa de endereço</span></span>${d.id ? `<a href="${hsUrl(d.id)}" target="_blank" rel="noopener" class="plano-lista-btn" title="Abrir no HubSpot" style="text-decoration:none;">↗</a>` : ''}</div>`).join('')}` : ''}
+    ${clientesSemCoord > 0 ? `<div style="font-size:11px;color:var(--muted2);padding:8px 6px 0;">${clientesSemCoord} cliente(s) ativo(s) sem endereço geocodificado — não aparecem no mapa.</div>` : ''}
   `;
+  const btnGerarInline = document.getElementById('planoGerarRotaInline');
+  if (btnGerarInline) btnGerarInline.addEventListener('click', () => gerarRotaPlanoMapa(r, hoje, planoFechado));
   const countEl = document.getElementById('planoMapaRotaCount');
   if (countEl) countEl.textContent = `${naRotaTodas.length} ${naRotaTodas.length === 1 ? 'parada' : 'paradas'}`;
 
@@ -7411,10 +7500,11 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
   planoMapaMarcadores = {};
   box.innerHTML = '';
+  const pontoCentral = ordenadas[0] || clientesSugestao[0];
   const mapa = new maplibregl.Map({
     container: box,
     style: estiloPlanoMapa(),
-    center: [ordenadas[0].lng, ordenadas[0].lat],
+    center: [pontoCentral.lng, pontoCentral.lat],
     zoom: 12,
     attributionControl: { compact: true }
   });
@@ -7434,13 +7524,15 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const bounds = new maplibregl.LngLatBounds();
   // Pins de rota são numerados; oportunidades ficam menores para o mapa respirar.
   // O volume de avaliações continua visível na lista e no popup, sem distorcer o mapa.
-  ordenadas.forEach(l => {
+  // Clientes ativos ainda não escolhidos entram aqui também (fora de "ordenadas"),
+  // senão o botão "+" deles no popup/lista não acha marcador pra reagir ao clique.
+  [...ordenadas, ...clientesSugestao].forEach(l => {
     const naRota = naRotaHojeFn(l);
     const pin = document.createElement('button');
     pin.className = 'plano-marker' + (naRota ? ' pulso' : '');
     pin.title = `${l.nome}${l.avaliacoes != null ? ` · ${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações` : ''} · ${rotuloStatus(l)}`;
     pin.innerHTML = naRota
-      ? `<span class="plano-marker-body"><span>${indiceRota.get(String(l.id)) || ''}</span></span>`
+      ? `<span class="plano-marker-body" style="${l._clienteAtivo ? 'background:#B0782A;' : ''}"><span>${l._clienteAtivo && !planoRotaGerada ? '♦' : (indiceRota.get(String(l.id)) || '')}</span></span>`
       : `<span class="plano-marker-body" style="width:24px;height:24px;border-radius:50%;transform:none;background:${corDoStatus(l)};"><span style="transform:none;font-size:0;">.</span></span>`;
 
     const popupEl = document.createElement('div');
@@ -7458,7 +7550,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       </div>
     `;
     const btnPopup = popupEl.querySelector('.plano-mapa-btn');
-    if (btnPopup) btnPopup.addEventListener('click', () => alternarRota(l, btnPopup));
+    if (btnPopup) btnPopup.addEventListener('click', () => l._clienteAtivo ? alternarClienteNaRota(l) : alternarRota(l, btnPopup));
 
     const popup = new maplibregl.Popup({ offset: [0, -34], className: 'plano-mapa-popup', closeButton: true })
       .setDOMContent(popupEl);
@@ -7476,10 +7568,12 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
 
   // Prévia visual da sequência. É uma linha de planejamento entre as paradas;
   // a rota viária final, com ruas e trânsito, continua sendo calculada pelo Maps.
-  const coordsRota = [
+  // Só desenha depois de "Gerar rota" (pedido do Julyan, 10/08) — antes disso
+  // naRotaTodas está na ordem de seleção, sem sequência real pra desenhar.
+  const coordsRota = planoRotaGerada ? [
     ...(planoMapaOrigemAtual ? [[planoMapaOrigemAtual.lng, planoMapaOrigemAtual.lat]] : []),
     ...naRotaTodas.map(l => [l.lng, l.lat])
-  ];
+  ] : [];
   mapa.on('load', () => {
     if (coordsRota.length > 1) {
       mapa.addSource('plano-rota', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: coordsRota } } });
@@ -7497,7 +7591,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   });
 
   if (planoMapaOrigemAtual) bounds.extend([planoMapaOrigemAtual.lng, planoMapaOrigemAtual.lat]);
-  if (ordenadas.length > 1) mapa.fitBounds(bounds, { padding: { top: 86, right: 56, bottom: 64, left: 56 }, maxZoom: 15 });
+  if (ordenadas.length + clientesSugestao.length > 1) mapa.fitBounds(bounds, { padding: { top: 86, right: 56, bottom: 64, left: 56 }, maxZoom: 15 });
   else mapa.setZoom(14);
 
   const btnLocalizar = document.getElementById('planoMapaMinhaPosicao');
@@ -7513,13 +7607,23 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     montarPlanoMapa(r, hoje, planoFechado);
   };
 
+  const btnGerarRota = document.getElementById('planoGerarRota');
+  if (btnGerarRota) {
+    const podeGerar = !planoFechado && itensRota.length > 0 && !planoRotaGerada;
+    btnGerarRota.disabled = !podeGerar;
+    btnGerarRota.textContent = planoRotaGerada ? 'Rota gerada ✓' : `Gerar rota (${itensRota.length})`;
+    btnGerarRota.onclick = podeGerar ? () => gerarRotaPlanoMapa(r, hoje, planoFechado) : null;
+  }
+
   const btnAbrirRota = document.getElementById('planoMapaAbrirRota');
   if (btnAbrirRota) {
-    const proxima = naRotaTodas[0];
+    // Só faz sentido "abrir a próxima parada" depois que a sequência existe de
+    // verdade — antes de gerar, não há ordem pra abrir "a próxima" coisa nenhuma.
+    const proxima = planoRotaGerada ? naRotaTodas[0] : null;
     btnAbrirRota.disabled = !proxima;
     btnAbrirRota.innerHTML = proxima
       ? `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg> Abrir 1ª parada no Maps`
-      : 'Escolha uma parada';
+      : planoRotaGerada ? 'Escolha uma parada' : 'Gere a rota primeiro';
     btnAbrirRota.onclick = proxima ? () => {
       const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${proxima.lat},${proxima.lng}`)}&travelmode=driving&dir_action=navigate`;
       window.open(url, '_blank', 'noopener');
@@ -7531,7 +7635,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     btn.addEventListener('click', ev => {
       ev.stopPropagation(); // clique no botão não deve também voar o mapa
       const m = planoMapaMarcadores[btn.dataset.id];
-      if (m) alternarRota(m.lead, btn);
+      if (m) (m.lead._clienteAtivo ? alternarClienteNaRota(m.lead) : alternarRota(m.lead, btn));
     });
   });
   lista.querySelectorAll('.plano-lista-item').forEach(item => {
@@ -7572,7 +7676,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   }
 
   if (msg) {
-    const resumoMapa = `<span>${ordenadas.length} de ${ordenadasTodas.length} contas no mapa${semCoord > 0 ? ` · ${semCoord} sem coordenada` : ''} · sequência por proximidade geográfica</span>`;
+    const resumoMapa = `<span>${ordenadas.length} de ${ordenadasTodas.length} contas no mapa${semCoord > 0 ? ` · ${semCoord} sem coordenada` : ''}${planoRotaGerada ? ' · sequência por proximidade geográfica' : ' · clique em "Gerar rota" para ordenar por proximidade'}</span>`;
     const acaoMapa = ocultas > 0
       ? `<button id="planoMapaVerTodas">Explorar todas as ${ordenadasTodas.length} contas →</button>`
       : planoMapaFiltro.verTodas && ordenadasTodas.length > naRotaTodas.length + LIMITE_RECOMENDADAS
