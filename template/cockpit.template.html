@@ -7361,9 +7361,17 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       criarTarefaVisitaNoHubspot(l, r.ownerId, horaPrevista).catch(e => console.error('Falha ao criar tarefa de visita no HubSpot:', e));
     }
 
-    // Re-renderiza o plano inteiro: checkboxes de contas-alvo e mapa precisam
-    // refletir a nova seleção (fonte única: leads_prospeccao).
-    montarPlanoDoDia(r);
+    // Correção 10/08 (Julyan — "clica e sai da aba"/"tira o lead e desatualiza"):
+    // isso chamava montarPlanoDoDia(r) inteiro — que refaz TUDO (Daily, Agenda,
+    // checkboxes de "Paradas já escolhidas", busca as contas de novo no Supabase,
+    // destrói e recria o mapa do zero, com "Carregando..." no meio). A cada
+    // incluir/tirar da rota, a tela inteira piscava e podia perder o zoom/posição
+    // do mapa — em cliques em sequência, dois desses reloads concorrentes podiam
+    // terminar fora de ordem e mostrar um estado velho (o "desatualiza"). Trocado
+    // pelo mesmo redesenho leve já usado pelos outros filtros do mapa (avaliação
+    // mínima, incluir sem fit): só a lista+mapa mudam, o resto do painel fica parado.
+    if (botao) { botao.disabled = false; }
+    montarPlanoMapa(r, hoje, planoFechado);
   }
   const botaoAcaoHTML = l => planoFechado
     ? `<div class="plano-popup-meta" style="margin-top:9px;">Plano fechado — use “Editar plano” para mudar a seleção.</div>`
