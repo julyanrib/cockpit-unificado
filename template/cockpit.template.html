@@ -9179,11 +9179,24 @@ function prospeccaoCardHTML(l) {
   `;
 }
 
-async function renderProspeccaoNova() {
+async function renderProspeccaoNova(soReaplicarFiltro) {
   const el = document.getElementById('prospeccaoNovaContent');
   if (!el) return;
-  el.innerHTML = '<div class="empty-state">Carregando…</div>';
-  await carregarProspeccao();
+  // Correção 10/08 (Julyan — "muito bug clicável... quando pesquisa, na aba
+  // Prospecção"): busca, pílulas de filtro, dropdowns e o "selecionar todos" chamavam
+  // esta função inteira, que sempre apagava a tela pra "Carregando..." e buscava os
+  // 100+ leads de novo no Supabase — mesmo quando NADA mudou no servidor, só o filtro
+  // local. Isso derrubava o foco do campo de busca a cada letra digitada (o innerHTML
+  // era destruído e recriado do zero) e piscava a tela inteira a cada clique de pílula.
+  // Agora quem só está refiltrando (soReaplicarFiltro=true) reaproveita o
+  // prospeccaoCache já carregado — sem tela de carregando, sem ida ao servidor.
+  // Ações que de fato mudam dado no HubSpot/Supabase (atribuir, criar empresa, marcar
+  // sem fit, incluir na rota, importar) continuam chamando sem esse parâmetro —
+  // aquelas precisam mesmo buscar de novo, porque o dado do servidor mudou.
+  if (!soReaplicarFiltro) {
+    el.innerHTML = '<div class="empty-state">Carregando…</div>';
+    await carregarProspeccao();
+  }
 
   if (prospeccaoCache.length === 0) {
     const souGestorProspVazio = !!(sessaoAtual && sessaoAtual.role === 'manager');
@@ -9523,8 +9536,8 @@ async function renderProspeccaoNova() {
 
   const pgAnt = document.getElementById('prospeccaoPgAnt');
   const pgProx = document.getElementById('prospeccaoPgProx');
-  if (pgAnt) pgAnt.addEventListener('click', () => { prospeccaoPagina--; renderProspeccaoNova(); });
-  if (pgProx) pgProx.addEventListener('click', () => { prospeccaoPagina++; renderProspeccaoNova(); });
+  if (pgAnt) pgAnt.addEventListener('click', () => { prospeccaoPagina--; renderProspeccaoNova(true); });
+  if (pgProx) pgProx.addEventListener('click', () => { prospeccaoPagina++; renderProspeccaoNova(true); });
 
   const abrirRotaHoje = () => {
     if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'hoje';
@@ -9565,7 +9578,7 @@ async function renderProspeccaoNova() {
       prospeccaoFiltro.visao = btn.dataset.pill;
       prospeccaoFiltro.status = '';
       prospeccaoPagina = 1;
-      renderProspeccaoNova();
+      renderProspeccaoNova(true);
     });
   });
 
@@ -9578,7 +9591,7 @@ async function renderProspeccaoNova() {
       timerBuscaProsp = setTimeout(() => {
         prospeccaoFiltro.busca = input.value;
         prospeccaoPagina = 1;
-        renderProspeccaoNova();
+        renderProspeccaoNova(true);
       }, 220);
     });
   });
@@ -9597,14 +9610,14 @@ async function renderProspeccaoNova() {
     selAll.checked = idsPagina.length > 0 && idsPagina.every(id => prospeccaoSelecao.has(id));
     selAll.addEventListener('change', () => {
       idsPagina.forEach(id => { if (selAll.checked) prospeccaoSelecao.add(id); else prospeccaoSelecao.delete(id); });
-      renderProspeccaoNova();
+      renderProspeccaoNova(true);
     });
   }
 
   el.querySelectorAll('.prospeccao-sel').forEach(chk => {
     chk.addEventListener('change', () => {
       if (chk.checked) prospeccaoSelecao.add(chk.dataset.lead); else prospeccaoSelecao.delete(chk.dataset.lead);
-      renderProspeccaoNova();
+      renderProspeccaoNova(true);
     });
   });
 
@@ -9669,7 +9682,7 @@ async function renderProspeccaoNova() {
   ['pfCidade', 'pfBairro', 'pfCategoria', 'pfFonte', 'pfStatus', 'pfJaExiste', 'pfAvaliacoesMin'].forEach(id => {
     const campo = { pfCidade: 'cidade', pfBairro: 'bairro', pfCategoria: 'categoria', pfFonte: 'fonte', pfStatus: 'status', pfJaExiste: 'jaExiste', pfAvaliacoesMin: 'avaliacoesMin' }[id];
     const elInput = document.getElementById(id);
-    if (elInput) elInput.addEventListener('change', () => { prospeccaoFiltro[campo] = elInput.value; prospeccaoPagina = 1; renderProspeccaoNova(); });
+    if (elInput) elInput.addEventListener('change', () => { prospeccaoFiltro[campo] = elInput.value; prospeccaoPagina = 1; renderProspeccaoNova(true); });
   });
 
   // Cards por praça: clique filtra a fila pela cidade; clicar de novo limpa o filtro.
@@ -9678,7 +9691,7 @@ async function renderProspeccaoNova() {
       const cid = card.dataset.pracacard;
       prospeccaoFiltro.cidade = prospeccaoFiltro.cidade === cid ? '' : cid;
       prospeccaoPagina = 1;
-      renderProspeccaoNova();
+      renderProspeccaoNova(true);
     });
   });
 
