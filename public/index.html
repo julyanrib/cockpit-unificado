@@ -5600,30 +5600,40 @@ function renderResumoSemanal() {
     })()}
 
     ${(!souRepAgora && rs.porRep && Object.keys(rs.porRep).length > 0) ? `
-      <details class="chart-card" style="margin-top:20px;padding:0;">
-        <summary style="cursor:pointer;padding:20px 22px;font-weight:700;font-size:14px;">👥 Resumo individual de cada executivo (clique pra ver)</summary>
-        <div style="padding:0 22px 20px;display:flex;flex-direction:column;gap:14px;">
+      <div class="chart-card" style="margin-top:20px;">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:2px;">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"><circle cx="9" cy="7" r="4"/><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/></svg>
+          <b style="font-family:'Poppins',sans-serif;font-size:13.5px;">Leitura individual de cada executivo</b>
+          <span style="font-size:11px;color:var(--muted2);">leia e prepare o 1:1 na aba Pessoas</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin-top:12px;">
           ${DATA.reps.map(r => {
             const ind = rs.porRep[r.ownerId];
             if (!ind) return '';
             return `
-              <div style="border-top:1px dashed var(--line);padding-top:14px;">
-                <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
-                  ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 28)}
-                  <span style="font-weight:700;font-size:13.5px;">${r.name}</span>
-                  <span style="color:var(--muted2);font-size:11.5px;">${r.praca}</span>
-                </div>
-                <p style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:8px;">${textoSemanalPreciso(ind.resumoIndividual)}</p>
-                ${(ind.comoAgirIndividual && ind.comoAgirIndividual.length > 0) ? `
-                  <ul class="action-list">${ind.comoAgirIndividual.map(a => `<li class="action-item">${textoSemanalPreciso(a)}</li>`).join('')}</ul>
-                ` : ''}
-              </div>
+              <button type="button" class="semana-ir-pessoa" data-owner="${r.ownerId}" style="display:flex;align-items:center;gap:9px;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:10px 12px;cursor:pointer;font-family:inherit;">
+                ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 26)}
+                <span style="min-width:0;"><b style="font-size:12.5px;display:block;">${esc(r.name)}</b><span style="font-size:10.5px;color:var(--muted2);">${esc(r.praca || '')} · ver leitura →</span></span>
+              </button>
             `;
           }).join('')}
         </div>
-      </details>
+      </div>
     ` : ''}
   `;
+
+  document.querySelectorAll('.semana-ir-pessoa').forEach(btn => {
+    btn.addEventListener('click', () => {
+      pessoaSelecionadaId = btn.dataset.owner;
+      activateTab('viewPDIs');
+      if (typeof renderPDIs === 'function') renderPDIs();
+      if (typeof renderCoaching === 'function') renderCoaching();
+      setTimeout(() => {
+        const card = document.querySelector('#coachingContent .chart-card');
+        if (card && typeof smoothScrollTo === 'function') smoothScrollTo(card);
+      }, 60);
+    });
+  });
 }
 
 // ============ FUNIL GERAL (HubSpot) ============
@@ -10363,19 +10373,36 @@ async function renderCoaching() {
 
   const resumoEl = el.querySelector('.coachingSemanalResumo');
   const historicoEl = el.querySelector('.coachingHistoricoCompleto');
-  if (erroSemanas) {
+  // Consolidação 10/08 (Julyan): a leitura individual da semana (parágrafo + "como agir")
+  // morava duplicada em dois lugares — aqui como uma linha só (vinda da análise de coaching
+  // no Supabase) e, por completo, num details escondido na aba Semana ("Resumo individual de
+  // cada executivo"). Mesma pessoa, mesma semana, dois textos gerados por IA cobrindo o mesmo
+  // gargalo. Agora a versão completa (DATA.resumoSemanal.porRep) mora só aqui, dentro do
+  // card da pessoa — é aqui que faz sentido ler antes do 1:1, não numa aba geral de time.
+  const individualSemana = (DATA.resumoSemanal && DATA.resumoSemanal.porRep && DATA.resumoSemanal.porRep[ownerId]) || null;
+  if (individualSemana && individualSemana.resumoIndividual) {
+    resumoEl.innerHTML = `
+      <div class="daily-col-label" style="margin-bottom:4px;">Leitura da semana <span style="font-weight:400;text-transform:none;color:var(--muted2);">(${(DATA.resumoSemanal.janela && DATA.resumoSemanal.janela.atual) || 'semana atual'})</span></div>
+      <div style="font-size:12.5px;color:var(--ink);line-height:1.55;margin-bottom:${(individualSemana.comoAgirIndividual || []).length > 0 ? '10px' : '0'};">${individualSemana.resumoIndividual}</div>
+      ${(individualSemana.comoAgirIndividual && individualSemana.comoAgirIndividual.length > 0) ? `
+        <ul class="practice-list" style="margin:0;font-size:12px;">
+          ${individualSemana.comoAgirIndividual.map(a => `<li>${a}</li>`).join('')}
+        </ul>
+      ` : ''}
+    `;
+  } else if (erroSemanas) {
     resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Erro: ${erroSemanas.message}</div>`;
   } else if (!semanas || semanas.length === 0) {
     resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Nenhuma análise ainda — roda toda sexta.</div>`;
   } else {
     const ultima = semanas[0];
-    // Otimização 08/08: a "Tendência" já vira o badge colorido ao lado do nome
-    // (coachingTendencia, preenchido abaixo) — repetir em frase aqui era a mesma
-    // informação duas vezes. Este box fica só com o "Como agir" da semana, datado.
     resumoEl.innerHTML = `
       <div class="daily-col-label" style="margin-bottom:4px;">Diagnóstico da semana <span style="font-weight:400;text-transform:none;color:var(--muted2);">(${ultima.semana_label})</span></div>
       <div style="font-size:12.5px;color:var(--ink);">${ultima.como_agir}</div>
     `;
+  }
+  if (!erroSemanas && semanas && semanas.length > 0) {
+    const ultima = semanas[0];
     historicoEl.innerHTML = semanas.slice(1).map(s => `
       <div style="border-left:3px solid var(--line);padding-left:10px;margin-bottom:10px;">
         <div style="font-size:10.5px;color:var(--muted2);margin-bottom:2px;">${s.semana_label} ${tendenciaBadge(s.tendencia)}</div>
