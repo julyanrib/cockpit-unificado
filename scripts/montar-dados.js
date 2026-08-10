@@ -23,6 +23,7 @@ function requireOpcional(fn) {
   try { return fn(); } catch (e) { return null; }
 }
 const leadsReferencia = requireOpcional(() => require('../data/leads-referencia.json')) || { pracas: [] };
+const clientesAtivos = requireOpcional(() => require('../data/clientes-ativos.json')) || [];
 const supabaseConfig = requireOpcional(() => require('../data/supabase-config.json'));
 const maptilerConfig = requireOpcional(() => require('../data/maptiler-config.json'));
 const resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
@@ -183,6 +184,13 @@ function montarDadosCompletos() {
     saude,
     reps,
     leadsReferencia: leadsReferencia.pracas || [],
+    // Clientes Takeat já ativos, fechados pelo próprio Field Sales — usados na Rota &
+    // Agenda pra sugerir parada de relacionamento/upsell perto de onde o executivo vai
+    // atuar (pedido do Julyan, 10/08). Só os com coordenada aparecem no mapa; os demais
+    // seguem na lista mesmo assim (sem pin), pra não esconder informação. Filtra fora
+    // quem já "encerrou" (churn confirmado no pipeline de Sucesso) — sugerir visita de
+    // relacionamento pra quem cancelou não faz sentido nenhum.
+    clientesAtivos: (clientesAtivos || []).filter(c => c.sugerirVisita !== false),
     footerText: `Fonte: HubSpot (pipeline 916011864, atualizado a cada 2h em horário comercial) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
     resumoSemanal: (resumoSemanal || weeklyRaw) ? {
       geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
@@ -273,6 +281,20 @@ function filtrarParaPapel(dados, usuario) {
     (Array.isArray(p.responsaveis) && p.responsaveis.includes(meuNome)) || p.nome === (meuRep && meuRep.praca)
   );
 
+  // Clientes ativos: os fechados pelo próprio Field Sales (origemPipeline ===
+  // 'field_sales') são só da carteira do dono. Os que vieram do Inside Sales não têm
+  // um Field Sales dono de verdade — o ownerId ali é do Inside Sales, então a régua
+  // certa é a cidade bater com a praça do executivo (mesmo critério de leadsReferencia
+  // acima). Pedido do Julyan (10/08): ganhos do Inside Sales entram na rota de quem
+  // atua naquela praça, não ficam órfãos.
+  const normTxt = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  const minhaPraca = normTxt(meuRep && meuRep.praca);
+  const clientesAtivos = (dados.clientesAtivos || []).filter(c => {
+    if (c.origemPipeline === 'field_sales') return String(c.ownerId) === meuId;
+    const cidadeCliente = normTxt(c.cidade);
+    return !!cidadeCliente && !!minhaPraca && (minhaPraca.includes(cidadeCliente) || cidadeCliente.includes(minhaPraca));
+  });
+
   return {
     ...dados,
     reps,
@@ -288,7 +310,8 @@ function filtrarParaPapel(dados, usuario) {
     vendasMes,
     resumoSemanal: resumoSemanalFiltrado,
     agenda,
-    leadsReferencia
+    leadsReferencia,
+    clientesAtivos
     // kpisHub, kpiDeltas, saude, funil (contagens agregadas do time), stageMeta,
     // hubspotUpdatedAtFmt, usuarios (nomes/e-mails do próprio time) permanecem — são
     // agregados sem detalhe de cliente, necessários pra meta coletiva e pro Pódio.
