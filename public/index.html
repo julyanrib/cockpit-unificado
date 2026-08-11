@@ -10686,7 +10686,25 @@ const PROSPECCAO_FORA_FOODSERVICE = new Set([
   'shopping', 'shopping mall', 'store', 'supermarket', 'grocery store', 'pharmacy',
   'school', 'university', 'hospital', 'gym'
 ]);
+// Grandes redes / key accounts que a Takeat não atende (Julyan, 11/08). Vem de
+// data/redes-excluidas.json via DATA.redesExcluidas — é dado editável, não código.
+// Medido na base real: 7 das 270 contas-alvo batem (Coco Bambu, Outback, Madero,
+// Burger King, Bob's). Poucas, mas são as que fazem o executivo perder um dia inteiro
+// numa visita que nunca ia fechar.
+function prospeccaoEhRedeGrande(l) {
+  const lista = (DATA && Array.isArray(DATA.redesExcluidas)) ? DATA.redesExcluidas : [];
+  if (!lista.length) return false;
+  // Pontuação fora além do acento: "Bob's Burger" precisa casar com "bobs burger".
+  const limpar = x => prospeccaoNormalizarTexto(x).replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  const nome = limpar(l && l.nome);
+  if (!nome) return false;
+  return lista.some(r => nome.includes(limpar(r)));
+}
+
 function prospeccaoFazSentido(l) {
+  // Rede grande cai em "Revisar escopo" pelo mesmo caminho de quem está fora do ICP —
+  // não some da base, só sai da fila recomendada.
+  if (prospeccaoEhRedeGrande(l)) return false;
   const categoria = prospeccaoNormalizarTexto(l && l.categoria);
   const nome = prospeccaoNormalizarTexto(l && l.nome);
   const nomeEvidenciaFoodservice = /\b(restaurante|restaurant|cafe|cafeteria|bar|pub|bistro|burger|hamburg|pizza|pizzaria|churrasc|lanch|doceria|padaria|confeitaria|cozinha|cantina|choperia|grill|comida|food|sushi|temakeria|sorvet|acai)\b/.test(nome);
