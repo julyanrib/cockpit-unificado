@@ -4470,10 +4470,16 @@ function renderAgenda() {
                     <b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.nome || '')}</b>
                     <span style="color:var(--muted2);font-size:11px;">${esc(prospeccaoPraca(l) || 'praça não informada')}${l.avaliacoes != null ? ' · ' + Number(l.avaliacoes).toLocaleString('pt-BR') + ' aval.' : ''}</span>
                   </span>
-                  <button class="ag-sugerir-btn" data-agagendar="${esc(String(l.id))}" data-agdata="${iso}" data-aghora="${HORARIOS_SUGERIDOS[i] || HORARIOS_SUGERIDOS[0]}"
-                    style="flex:none;background:var(--ink);color:var(--panel);border:none;border-radius:99px;padding:4px 11px;font:800 11px inherit;cursor:pointer;">
-                    ${HORARIOS_SUGERIDOS[i] || HORARIOS_SUGERIDOS[0]}
-                  </button>
+                  <span style="flex:none;display:flex;align-items:center;gap:5px;">
+                    <input type="time" class="ag-hora-sug" data-parabotao="sug-${iso}-${esc(String(l.id))}"
+                      value="${HORARIOS_SUGERIDOS[i] || HORARIOS_SUGERIDOS[0]}"
+                      aria-label="Horário da visita a ${esc(l.nome)}"
+                      style="border:1px solid var(--line);border-radius:7px;padding:1px 4px;font:800 11px inherit;background:var(--panel);width:64px;cursor:pointer;">
+                    <button class="ag-sugerir-btn" id="sug-${iso}-${esc(String(l.id))}" data-agagendar="${esc(String(l.id))}" data-agdata="${iso}" data-aghora="${HORARIOS_SUGERIDOS[i] || HORARIOS_SUGERIDOS[0]}"
+                      style="background:var(--ink);color:var(--panel);border:none;border-radius:99px;padding:4px 11px;font:800 11px inherit;cursor:pointer;">
+                      Agendar
+                    </button>
+                  </span>
                 </div>`).join('')}
             ` : ''}
           </div>`; }).join('')}
@@ -5007,6 +5013,9 @@ document.addEventListener('click', function (ev) {
   // Agendar uma sugestão num buraco da semana (Bloco N). Vem antes dos outros cliques
   // porque o botão vive dentro do card de buracos e um closest() mais genérico poderia
   // engolir o evento.
+  // Clicar no seletor de horário não pode acionar nada mais da agenda. O VALOR não é
+  // lido aqui: no clique ele ainda é o antigo — quem lê é o listener de 'change' abaixo.
+  if (ev.target.closest('.ag-hora-sug')) return;
   const ag = ev.target.closest('[data-agagendar]');
   if (ag) {
     ev.preventDefault();
@@ -5083,6 +5092,10 @@ document.addEventListener('keydown', function (ev) {
 // dados" e nada mais inicializava. Toda variável que activateTab lê precisa nascer
 // ACIMA dela. Não mover isso para perto do resto do estado do mapa.
 let planoAbaJaMontada = false;
+// Horários que o executivo digitou à mão, por id de lead. O horário calculado é
+// SUGESTÃO — quem conhece o cliente e o trânsito é ele. Vive só na sessão: some quando
+// ele sai da aba, junto com o território.
+let horariosManuais = {};
 
 function activateTab(viewId) {
   // Zera o território a cada clique de aba (Julyan, 11/08: "tem q zerar ao clicar na
@@ -5181,6 +5194,16 @@ document.addEventListener('keydown', (ev) => {
   const ov = document.getElementById('rotaOverlay');
   if (ev.key === 'Escape' && ov && ov.style.display === 'block') fecharRotaDrawer();
 });
+// Horário editado numa sugestão de buraco da semana. Precisa ser 'change' e não 'click':
+// o delegador da agenda escuta clique, e no clique o campo ainda tem o valor anterior —
+// gravaria sempre o horário velho, silenciosamente.
+document.addEventListener('change', function (ev) {
+  const inp = ev.target.closest && ev.target.closest('.ag-hora-sug');
+  if (!inp) return;
+  const alvo = document.getElementById(inp.dataset.parabotao || '');
+  if (alvo && /^\d{2}:\d{2}$/.test(inp.value)) alvo.dataset.aghora = inp.value;
+});
+
 document.getElementById('tabBtnAgenda').addEventListener('click', () => {
   // "Rota" sempre volta pro território do dia. Se ele estava na Prospecção e clica em
   // Rota, quer a rota — não a fila onde parou.
@@ -7427,6 +7450,7 @@ async function montarPlanoDoDia(r) {
   // rota) preservam o que ele acabou de digitar.
   if (!planoAbaJaMontada) {
     planoAbaJaMontada = true;
+    horariosManuais = {};
     planoMapaOrigemAtual = null;
     localEscolhido = null;
     mapaPoisCache = { chave: null, itens: [] };
@@ -8362,7 +8386,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         <span class="plano-lista-index" ${naRota ? '' : `style="color:${corDoStatus(l)};"`}>${simbolo}</span>
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
-          <span class="plano-lista-meta">${blocoDele ? `<b style="color:var(--blue);">${blocoDele.hora}</b> · ` : ''}${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
+          <span class="plano-lista-meta">${blocoDele ? `<input type="time" class="plano-hora-input" data-horalead="${esc(String(l.id))}" value="${blocoDele.hora}" aria-label="Horário da visita a ${esc(l.nome)}" style="border:1px solid var(--line);border-radius:7px;padding:1px 5px;font:800 11px inherit;color:var(--blue);background:var(--panel);width:66px;margin-right:5px;cursor:pointer;"> ` : ''}${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
           ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>${l.telefone ? `<span class="plano-etapa-hub" style="color:var(--violet);">📞 ${esc(l.telefone)}</span>` : ''}` : ''}
           ${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
@@ -8444,7 +8468,9 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         lead: l,
         // Se o dia estiver tão cheio que não sobra buraco pra todas, as últimas ficam
         // sem horário sugerido em vez de receber um que colide.
-        hora: horariosLivres[i] != null ? hhmm(horariosLivres[i]) : null
+        // Manual vence o calculado — sempre. Se ele digitou 15:30, é 15:30, mesmo que
+        // caia em cima de outra coisa: ele sabe algo que a agenda não sabe.
+        hora: horariosManuais[String(l.id)] || (horariosLivres[i] != null ? hhmm(horariosLivres[i]) : null)
       })).filter(b => b.hora)
     : [];
   const paradasSemHorario = planoRotaGerada ? itensRota.length - blocosHorario.length : 0;
@@ -8471,6 +8497,24 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // gerar rota é exploratório (ele pode gerar, tirar uma parada, gerar de novo) e cada
   // geração escrevendo no CRM encheria o HubSpot de reagendamento a cada experimento.
   // Ele decide quando o dia está fechado.
+  // Edição de horário. Não redesenha a tela de propósito: remontar o mapa a cada tecla
+  // (155 marcadores) travaria, e ele perderia o foco do campo no meio da digitação.
+  lista.querySelectorAll('.plano-hora-input').forEach(inp => {
+    inp.addEventListener('click', ev => ev.stopPropagation());   // não voa o mapa
+    inp.addEventListener('change', () => {
+      const id = String(inp.dataset.horalead || '');
+      if (/^\d{2}:\d{2}$/.test(inp.value)) horariosManuais[id] = inp.value;
+      else delete horariosManuais[id];                            // limpou: volta pra sugestão
+      const alvo = blocosHorario.find(b => String(b.lead.id) === id);
+      if (alvo) alvo.hora = horariosManuais[id] || alvo.hora;
+      const btn = document.getElementById('planoEnviarAgenda');
+      if (btn && btn.dataset.enviando !== '1' && blocosHorario.length) {
+        const horas = blocosHorario.map(b => b.hora).sort();
+        btn.textContent = `🗓️ Enviar ${blocosHorario.length} ${blocosHorario.length === 1 ? 'parada' : 'paradas'} pra agenda (${horas[0]}–${horas[horas.length - 1]})`;
+      }
+    });
+  });
+
   const btnEnviarAgenda = document.getElementById('planoEnviarAgenda');
   if (btnEnviarAgenda) btnEnviarAgenda.addEventListener('click', async () => {
     if (btnEnviarAgenda.dataset.enviando === '1') return;   // clique duplo não duplica envio
@@ -8482,9 +8526,11 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     // das paradas ficaria sem horário, sem ninguém perceber.
     for (let i = 0; i < total; i++) {
       const b = blocosHorario[i];
+      // Lê o manual AGORA: ele pode ter editado depois que a lista foi desenhada.
+      const horaFinal = horariosManuais[String(b.lead.id)] || b.hora;
       btnEnviarAgenda.textContent = `Enviando ${i + 1} de ${total}…`;
       try {
-        await criarTarefaVisitaNoHubspot(b.lead, r.ownerId, b.hora, { silencioso: true });
+        await criarTarefaVisitaNoHubspot(b.lead, r.ownerId, horaFinal, { silencioso: true });
         ok++;
       } catch (e) { falhou++; console.error('Falha ao agendar ' + b.lead.nome + ':', e); }
     }
