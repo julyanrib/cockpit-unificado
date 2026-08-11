@@ -8374,8 +8374,30 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   });
 
   if (planoMapaOrigemAtual) bounds.extend([planoMapaOrigemAtual.lng, planoMapaOrigemAtual.lat]);
-  if (ordenadas.length + clientesSugestao.length > 1) mapa.fitBounds(bounds, { padding: { top: 86, right: 56, bottom: 64, left: 56 }, maxZoom: 15 });
-  else mapa.setZoom(14);
+
+  // ENQUADRAMENTO (corrigido 11/08): o mapa abria tentando caber TODOS os pinos — e
+  // contas-alvo espalhadas pela região metropolitana (uma a 8km, quente em Canoas)
+  // forçavam um zoom tão afastado que as ~100 portas dentro dos 3km do território
+  // viravam um borrão único, impossível de clicar. O executivo perdia justamente o
+  // detalhe da rua onde ele vai andar hoje.
+  //
+  // Agora o mapa abre no TERRITÓRIO declarado (origem + raio da busca). O que está
+  // fora continua plotado e a um zoom-out de distância — só não manda mais no
+  // enquadramento inicial. É a régua do Salesforce Maps: a tela abre no seu território.
+  const padrao = { padding: { top: 86, right: 56, bottom: 64, left: 56 }, maxZoom: 15 };
+  if (planoMapaOrigemAtual) {
+    const gLat = MAPA_RAIO_KM / 111;
+    const gLng = MAPA_RAIO_KM / (111 * Math.max(0.2, Math.cos(planoMapaOrigemAtual.lat * Math.PI / 180)));
+    const territorio = new maplibregl.LngLatBounds();
+    territorio.extend([planoMapaOrigemAtual.lng - gLng, planoMapaOrigemAtual.lat - gLat]);
+    territorio.extend([planoMapaOrigemAtual.lng + gLng, planoMapaOrigemAtual.lat + gLat]);
+    mapa.fitBounds(territorio, padrao);
+  } else if (ordenadas.length + clientesSugestao.length > 1) {
+    // Sem território declarado não existe "perto daqui": aí sim enquadra o que houver.
+    mapa.fitBounds(bounds, padrao);
+  } else {
+    mapa.setZoom(14);
+  }
 
   const btnLocalizar = document.getElementById('planoMapaMinhaPosicao');
   if (btnLocalizar) btnLocalizar.onclick = async () => {
