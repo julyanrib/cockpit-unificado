@@ -5429,6 +5429,102 @@ function renderResumoSemanal() {
     </div>
   `;
 
+
+  /* ===== ONDE ATACAR ESTA SEMANA — visão por praça (Julyan, 11/08) =====
+     A Semana dizia O QUE aconteceu (ganhos, perdidos, reuniões) mas nunca ONDE agir.
+     Gestor de campo não decide por executivo isolado: decide por praça — é onde ele
+     manda reforço, marca rota junto, ou muda a régua.
+
+     A régua de prioridade combina três sinais que já existem no snapshot, sem chamada
+     nova ao HubSpot. Nenhum sozinho decide:
+       50% travamento     — funil parado é o sintoma mais caro e o mais reversível
+       30% distância da meta — praça longe da meta precisa de intervenção, não de torcida
+       20% quente sem próximo passo — é o que dá pra destravar HOJE, no 1:1
+
+     Praça vem do executivo, não do negócio: o CRM não tem campo de praça confiável, mas
+     território de executivo é estável e é como o time realmente se organiza. */
+  const PRACA_POR_OWNER = {
+    '87069181': 'Vitória/ES',
+    '86100505': 'Vila Velha/ES',
+    '89842507': 'São Paulo/SP',
+    '91477292': 'Porto Alegre/RS',
+    '94079973': 'Rio de Janeiro/RJ',
+    '86100506': 'Rio de Janeiro/RJ',
+    '87569072': 'Rio de Janeiro/RJ'
+  };
+
+  const pracasHtml = (() => {
+    const snap = rs.snapshotReps || {};
+    if (!Object.keys(snap).length) return '';
+
+    const ag = {};
+    Object.entries(snap).forEach(([ownerId, r]) => {
+      // Executivo sem praça mapeada não é descartado: vira "Sem praça definida" e
+      // aparece na tela. Sumir com gente do relatório do gestor é o pior erro possível.
+      const nome = PRACA_POR_OWNER[ownerId] || 'Sem praça definida';
+      const a = ag[nome] || (ag[nome] = { praca: nome, reps: [], open: 0, trav: 0, quentes: 0, semPasso: 0, mes: 0, meta: 0, pior: null });
+      a.reps.push(String(r.name || '').split(' ')[0]);
+      a.open += Number(r.open) || 0;
+      a.mes += Number(r.fechadosNoMes) || 0;
+      a.meta += Number(r.metaMensal) || 0;
+      const travados = Array.isArray(r.travados) ? r.travados : [];
+      const quentes = Array.isArray(r.quentes) ? r.quentes : [];
+      a.trav += travados.length;
+      a.quentes += quentes.length;
+      a.semPasso += quentes.filter(q => !q.proximaAtividade && !q.proximaReuniao).length;
+      // Guarda o negócio mais parado da praça: dá nome à ação, em vez de só um número.
+      travados.forEach(t => { if (!a.pior || (Number(t.dias) || 0) > (Number(a.pior.dias) || 0)) a.pior = { ...t, rep: String(r.name || '').split(' ')[0] }; });
+    });
+
+    const linhas = Object.values(ag).map(a => {
+      const pctTrav = a.open ? (100 * a.trav / a.open) : 0;
+      const pctMeta = a.meta ? (100 * a.mes / a.meta) : 0;
+      const pctSemPasso = a.quentes ? (100 * a.semPasso / a.quentes) : 0;
+      return { ...a, pctTrav, pctMeta, indice: Math.round(pctTrav * 0.5 + (100 - Math.min(100, pctMeta)) * 0.3 + pctSemPasso * 0.2) };
+    }).sort((x, y) => y.indice - x.indice);
+
+    if (!linhas.length) return '';
+    const maiorIndice = linhas[0].indice || 1;
+
+    // A ação sugerida sai do sinal que MAIS pesa naquela praça — não é texto genérico.
+    const acaoDe = l => {
+      if (l.pctTrav >= 40) return `Funil parado: <b>${l.trav} de ${l.open}</b> negócios travados. Faça auditoria lead a lead com ${l.reps.join(' e ')} — avançar ou descartar com justificativa.`;
+      if (l.meta && l.pctMeta < 20) return `Meta em risco: <b>${l.mes} de ${l.meta}</b> no mês. Marque rota presencial com ${l.reps.join(' e ')} nesta semana.`;
+      if (l.semPasso) return `<b>${l.semPasso} ${l.semPasso === 1 ? 'quente' : 'quentes'}</b> sem próximo passo marcado. É o destravável de hoje — cobre no 1:1.`;
+      return `Praça equilibrada. Use o tempo aqui para subir o ticket, não para apagar incêndio.`;
+    };
+
+    return `
+    <div class="chart-card" style="margin-top:18px;">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:4px;flex-wrap:wrap;">
+        <h3 style="margin:0;">Onde atacar esta semana</h3>
+        <span style="font-size:11px;color:var(--muted2);">travamento · distância da meta · quente sem próximo passo</span>
+      </div>
+      <div class="chart-subtitle" style="margin:0 0 14px;">Praças ordenadas por necessidade de intervenção. A primeira é onde sua semana rende mais.</div>
+      ${linhas.map((l, i) => `
+        <div style="border-top:1px solid var(--line);padding:13px 0;${i === 0 ? 'border-top:0;' : ''}">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            ${pillRank(i)}
+            <b style="font-size:14px;font-family:'Poppins',sans-serif;">${esc(l.praca)}</b>
+            <span style="font-size:11.5px;color:var(--muted2);">${esc(l.reps.join(', '))}</span>
+            <span style="flex:1;"></span>
+            <span style="font-size:11px;color:var(--muted2);">índice <b style="color:${l.indice >= 70 ? 'var(--red)' : l.indice >= 55 ? 'var(--amber)' : 'var(--green)'};">${l.indice}</b></span>
+          </div>
+          <div style="height:5px;border-radius:99px;background:var(--sunk);margin:8px 0 9px;overflow:hidden;">
+            <div style="height:100%;width:${Math.max(4, Math.round(100 * l.indice / maiorIndice))}%;border-radius:99px;background:${l.indice >= 70 ? 'var(--red)' : l.indice >= 55 ? 'var(--amber)' : 'var(--green)'};"></div>
+          </div>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-bottom:6px;">
+            <span><b style="color:var(--ink);">${l.open}</b> em aberto</span>
+            <span><b style="color:${l.pctTrav >= 40 ? 'var(--red)' : 'var(--ink)'};">${l.trav}</b> travados (${l.pctTrav.toFixed(0)}%)</span>
+            <span><b style="color:var(--ink);">${l.quentes}</b> quentes${l.semPasso ? ` · <b style="color:var(--amber);">${l.semPasso}</b> sem próximo passo` : ''}</span>
+            ${l.meta ? `<span><b style="color:${l.pctMeta < 20 ? 'var(--red)' : 'var(--ink)'};">${l.mes}/${l.meta}</b> no mês</span>` : ''}
+          </div>
+          <div style="font-size:12px;line-height:1.55;color:var(--ink);">${acaoDe(l)}</div>
+          ${l.pior ? `<div style="font-size:11px;color:var(--muted2);margin-top:4px;">Mais parado: <b>${esc(l.pior.name || '')}</b> · ${esc(l.pior.stage || '')} · ${Number(l.pior.dias) || 0}d com ${esc(l.pior.rep || '')}</div>` : ''}
+        </div>`).join('')}
+    </div>`;
+  })();
+
   resumoEl.innerHTML = `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
@@ -5458,6 +5554,7 @@ function renderResumoSemanal() {
       return `<h3 class="block-label">${titulo}</h3><ul class="action-list">${listaComoAgir.map(a => `<li class="action-item">${souRepAgora ? a : textoSemanalPreciso(a)}</li>`).join('')}</ul>`;
     })()}
 
+    ${pracasHtml}
   `;
 
 }
