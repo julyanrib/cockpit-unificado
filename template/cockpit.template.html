@@ -3932,8 +3932,13 @@ function agendaEsc(s) {
 }
 
 /* ---------- adaptadores ---------- */
+// Compromissos que existem no HubSpot mas o cockpit não conseguiu atribuir a ninguém.
+// Preenchido a cada agendaNormalizar e exibido na aba Agenda (nunca descartado calado).
+let agendaOrfaos = [];
+
 function agendaNormalizar(raw) {
   const itens = (raw && raw.itens) || [];
+  agendaOrfaos = [];
   const out = [];
   itens.forEach(function (it, i) {
     let e = null;
@@ -3942,6 +3947,16 @@ function agendaNormalizar(raw) {
     else if (it.hs_note_body !== undefined) e = agendaDoHubspotNota(it, i);
     else e = agendaDoApp(it, i);
     if (e && e.inicio && e.ownerId) out.push(e);
+    else if (e && e.inicio) {
+      // Tem data e hora, mas não deu pra saber de quem é. Não pode sumir: é um
+      // compromisso real com cliente real marcado por alguém do time.
+      agendaOrfaos.push({
+        titulo: e.cliente || e.titulo || 'Compromisso sem título',
+        inicio: e.inicio,
+        tipo: e.tipo || 'follow_up',
+        origem: it.hs_note_body !== undefined ? 'nota (follow-up do app)' : it.hs_task_subject !== undefined ? 'tarefa' : 'reunião'
+      });
+    }
   });
   return out;
 }
@@ -4211,6 +4226,40 @@ function renderAgenda() {
     return;
   }
   AGENDA_EVENTOS = agendaNormalizar(fonte);
+
+  // Compromissos sem dono identificado: aparecem em vez de desaparecer. Só o gestor vê —
+  // é ele que cobra a assinatura no app. Renderizado num nó próprio, ANTES da grade, pra
+  // não ser apagado pelos innerHTML do calendário mais abaixo.
+  (function mostrarOrfaos() {
+    const hostAntigo = document.getElementById('agendaOrfaosBox');
+    if (hostAntigo) hostAntigo.remove();
+    const souGestor = !!(sessaoAtual && sessaoAtual.role === 'manager');
+    if (!souGestor || !agendaOrfaos.length) return;
+    const viewEl = document.getElementById('viewAgenda');
+    if (!viewEl) return;
+    const div = document.createElement('div');
+    div.id = 'agendaOrfaosBox';
+    div.className = 'chart-card';
+    div.style.cssText = 'border-left:3px solid var(--amber);margin-bottom:16px;';
+    div.innerHTML =
+      '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;">' +
+        '<h3 style="margin:0;">⚠ ' + agendaOrfaos.length + ' compromisso' + (agendaOrfaos.length === 1 ? '' : 's') + ' sem dono</h3>' +
+        '<span style="font-size:11px;color:var(--muted2);">não aparecem na agenda de ninguém</span>' +
+      '</div>' +
+      '<div class="chart-subtitle" style="margin:4px 0 12px;">Follow-up do Expogo vira nota no HubSpot e a nota não carrega o dono — o cockpit identifica pela assinatura "— Nome (via App Outbound)". Sem assinatura, não dá pra saber de quem é. Peça pro time assinar; até lá, estes ficam de fora da grade.</div>' +
+      agendaOrfaos
+        .slice()
+        .sort((a, b) => a.inicio - b.inicio)
+        .map(o =>
+          '<div style="display:flex;align-items:baseline;gap:10px;padding:8px 0;border-top:1px dashed var(--line);font-size:12.5px;">' +
+            '<b style="min-width:98px;flex:none;font-variant-numeric:tabular-nums;">' + o.inicio.toISOString().slice(8, 10) + '/' + o.inicio.toISOString().slice(5, 7) + ' ' + agendaHhmm(o.inicio) + '</b>' +
+            '<span style="flex:1;min-width:0;">' + esc(o.titulo) + '</span>' +
+            '<span style="font-size:10.5px;color:var(--muted2);flex:none;">' + esc(o.origem) + '</span>' +
+          '</div>')
+        .join('');
+    viewEl.insertBefore(div, viewEl.firstChild);
+  })();
+
   const time = agendaTime();
   if (!time.length) {
     const fora = souRep && AGENDA_EXCLUIR.has(String(sessaoAtual.ownerId));
