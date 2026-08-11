@@ -9923,8 +9923,21 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, d
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
       if (silencioso) throw new Error((data && data.erro) || 'HubSpot recusou');
-      mostrarToast(`Adicionado à rota, mas não consegui criar a tarefa no HubSpot (${(data && data.erro) || 'erro desconhecido'}).`, 'erro');
+      // Mostra a ETAPA que falhou: sem isso, "não consegui criar a tarefa" cobre três
+      // chamadas diferentes (busca de duplicata, reagendamento, criação) e não dá pra
+      // saber qual escopo do HubSpot está faltando.
+      const etapa = (data && data.etapa) === 'reagendamento' ? 'reagendar a tarefa existente'
+                  : (data && data.etapa) === 'criacao' ? 'criar a tarefa'
+                  : 'falar com o HubSpot';
+      console.error('[criar-tarefa-rota] falhou em:', (data && data.etapa) || '?', '| HTTP HubSpot:', (data && data.httpHubspot) || '?', '| busca:', (data && data.buscaFalhou) || 'ok', '|', (data && data.erro) || '');
+      mostrarToast(`Adicionado à rota, mas não consegui ${etapa} no HubSpot. Etapa: ${(data && data.etapa) || 'desconhecida'}. ${(data && data.erro) || ''}`, 'erro');
       return;
+    }
+    // Busca quebrada + criação OK = a tarefa entrou, mas reenviar a rota vai DUPLICAR.
+    // Isso precisa aparecer, não ficar só no console.
+    if (data && data.buscaFalhou) {
+      console.warn('[criar-tarefa-rota] busca de duplicata falhou:', data.buscaFalhou);
+      if (!silencioso) mostrarToast(`Tarefa criada, mas não consegui checar duplicata (${data.buscaFalhou}). Reenviar a rota pode criar tarefa repetida.`, 'erro');
     }
     if (silencioso) return data;
     mostrarToast(`"${lead.nome}" adicionado à rota — tarefa de visita ${data.reagendada ? 'reagendada' : 'criada'} no HubSpot às ${horaPrevista}.`, 'sucesso');
