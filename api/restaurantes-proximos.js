@@ -30,14 +30,21 @@ try {
   USUARIOS = Array.isArray(raw) ? raw : (raw.usuarios || []);
 } catch (e) { USUARIOS = []; }
 
-// Espelhos em ordem de preferência. O principal vive sobrecarregado; os outros servem a
-// mesma base. Tenta em sequência e para no primeiro que responder.
+// Espelhos em ordem de preferência — REORDENADO em 11/08 com base em medição real:
+// na sessão de validação, os 3 espelhos "clássicos" falharam em sequência e o
+// maps.mail.ru respondeu (Campo Grande/RJ, 65 itens). Custo da ordem antiga: 62s de
+// espera — a 1ms do limite de 60s da Vercel. Agora o que respondeu vai primeiro e o
+// timeout caiu de 22s -> 8s por espelho: caso comum ~3s, pior caso ~32s (4 x 8s).
 const ESPELHOS = [
-  'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
   'https://overpass.private.coffee/api/interpreter',
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://overpass-api.de/api/interpreter'
 ];
+
+// Timeout por espelho, em ms. 8s: espelho saudável responde raio de 3km em 1-4s;
+// se passou de 8s ele está sobrecarregado e insistir só queima o orçamento de 60s.
+const TIMEOUT_ESPELHO_MS = 8000;
 
 // ICP de food service. `amenity` cobre restaurante/bar/café; `shop` cobre padaria e
 // confeitaria, que no Brasil é cliente Takeat tanto quanto restaurante.
@@ -47,7 +54,10 @@ function montarConsulta(lat, lng, raioMetros) {
   const volta = '(around:' + raioMetros + ',' + lat + ',' + lng + ')';
   // "out center tags" devolve coordenada mesmo para way/relation (polígono do prédio),
   // que é como muitos restaurantes maiores estão mapeados no OSM.
-  return '[out:json][timeout:25];(nwr' + A + volta + ';nwr' + S + volta + ';);out center tags;';
+  // [timeout:8] fala pro PRÓPRIO servidor Overpass desistir em 8s — alinhado com o
+  // abort do nosso lado. Sem isso, o espelho seguiria processando uma consulta que
+  // ninguém vai mais ler.
+  return '[out:json][timeout:8];(nwr' + A + volta + ';nwr' + S + volta + ';);out center tags;';
 }
 
 function distanciaKm(lat1, lng1, lat2, lng2) {
@@ -106,7 +116,7 @@ async function consultarOverpass(consulta) {
   const erros = [];
   for (const url of ESPELHOS) {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 22000);
+    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_ESPELHO_MS);
     try {
       const resp = await fetch(url, {
         method: 'POST',
@@ -127,7 +137,7 @@ async function consultarOverpass(consulta) {
       return { elements: json.elements, espelho: host, erros };
     } catch (e) {
       clearTimeout(timer);
-      erros.push(url.split('/')[2] + ' -> ' + (e.name === 'AbortError' ? 'timeout 22s' : String(e.message || e).slice(0, 60)));
+      erros.push(url.split('/')[2] + ' -> ' + (e.name === 'AbortError' ? 'timeout ' + (TIMEOUT_ESPELHO_MS / 1000) + 's' : String(e.message || e).slice(0, 60)));
     }
   }
   return { elements: null, espelho: null, erros };
