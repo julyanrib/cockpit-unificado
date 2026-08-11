@@ -211,6 +211,111 @@ async function gravarSnapshotDaily(ownerId, dataISO, campos) {
 // Busca os dois, dos executivos ativos, de 30 dias atrás até 90 pra frente
 // (a aba navega entre semanas, então precisa de passado e futuro).
 // A normalização (tipo, fuso, prefixo do título) mora no template — aqui vai cru.
+// ---- Associação atividade -> negócio (11/08/26) ----
+// Lê em lote quais negócios estão associados a cada tarefa/nota. A API v4 de
+// associações aceita 100 ids por chamada, então o custo é baixo mesmo com centenas
+// de atividades na janela da agenda.
+async function hsAssociacoesEmLote(deObjeto, paraObjeto, ids, attempt = 1) {
+  if (!ids.length) return {};
+  await sleep(350);
+  const res = await fetch(`https://api.hubapi.com/crm/v4/associations/${deObjeto}/${paraObjeto}/batch/read`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inputs: ids.map(id => ({ id: String(id) })) })
+  });
+  if (res.status === 429 && attempt <= 5) {
+    await sleep(1000 * attempt);
+    return hsAssociacoesEmLote(deObjeto, paraObjeto, ids, attempt + 1);
+  }
+  if (!res.ok) {
+    // Associação é enriquecimento: se falhar, a agenda continua funcionando com o
+    // título cru. Não vale derrubar o build noturno inteiro por causa disso.
+    console.log(`Aviso: associações ${deObjeto}->${paraObjeto} falharam (${res.status}) — segue sem enriquecer.`);
+    return {};
+  }
+  const data = await res.json();
+  const mapa = {};
+  (data.results || []).forEach(r => {
+    const de = r.from && r.from.id;
+    const primeiro = (r.to || [])[0];
+    if (de && primeiro && primeiro.toObjectId) mapa[String(de)] = String(primeiro.toObjectId);
+  });
+  return mapa;
+}
+
+// Lê nome e dono de vários negócios de uma vez.
+async function hsNegociosEmLote(ids, attempt = 1) {
+  if (!ids.length) return {};
+  await sleep(350);
+  const res = await fetch('https://api.hubapi.com/crm/v3/objects/deals/batch/read', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ properties: ['dealname', 'hubspot_owner_id', 'pipeline'], inputs: ids.map(id => ({ id: String(id) })) })
+  });
+  if (res.status === 429 && attempt <= 5) {
+    await sleep(1000 * attempt);
+    return hsNegociosEmLote(ids, attempt + 1);
+  }
+  if (!res.ok) {
+    console.log(`Aviso: leitura em lote de negócios falhou (${res.status}) — segue sem enriquecer.`);
+    return {};
+  }
+  const data = await res.json();
+  const mapa = {};
+  (data.results || []).forEach(d => {
+    mapa[String(d.id)] = {
+      nome: (d.properties || {}).dealname || null,
+      ownerId: (d.properties || {}).hubspot_owner_id || null,
+      pipeline: (d.properties || {}).pipeline || null
+    };
+  });
+  return mapa;
+}
+
+// Enriquece os itens da agenda com o negócio associado: nome do lead (autoritativo) e
+// dono (resolve a nota do Expogo que chega sem hubspot_owner_id).
+async function enriquecerAgendaComNegocio(itens) {
+  const porTipo = { tasks: [], notes: [], meetings: [] };
+  itens.forEach(it => {
+    if (!it.hs_object_id) return;
+    if (it.hs_task_subject !== undefined) porTipo.tasks.push(it.hs_object_id);
+    else if (it.hs_note_body !== undefined) porTipo.notes.push(it.hs_object_id);
+    else if (it.hs_meeting_title !== undefined) porTipo.meetings.push(it.hs_object_id);
+  });
+
+  const assoc = {};
+  for (const tipo of ['tasks', 'notes', 'meetings']) {
+    const ids = porTipo[tipo];
+    for (let i = 0; i < ids.length; i += 100) {
+      const fatia = ids.slice(i, i + 100);
+      const m = await hsAssociacoesEmLote(tipo, 'deals', fatia);
+      Object.entries(m).forEach(([atividadeId, dealId]) => { assoc[atividadeId] = dealId; });
+    }
+  }
+
+  const dealIds = [...new Set(Object.values(assoc))];
+  const negocios = {};
+  for (let i = 0; i < dealIds.length; i += 100) {
+    const m = await hsNegociosEmLote(dealIds.slice(i, i + 100));
+    Object.assign(negocios, m);
+  }
+
+  let comNome = 0, donoResolvido = 0;
+  itens.forEach(it => {
+    const dealId = assoc[String(it.hs_object_id)];
+    if (!dealId) return;
+    const neg = negocios[dealId];
+    if (!neg) return;
+    it.lead_nome = neg.nome || null;                 // nome do lead, direto do negócio
+    it.lead_deal_id = dealId;
+    it.lead_owner_id = neg.ownerId || null;
+    if (neg.nome) comNome++;
+    if (!it.hubspot_owner_id && neg.ownerId) donoResolvido++;
+  });
+  console.log(`Agenda: ${comNome} de ${itens.length} itens ganharam nome do lead pela associação; ${donoResolvido} tiveram o dono resolvido pelo negócio.`);
+  return itens;
+}
+
 async function fetchAgenda() {
   const agoraMs = Date.now();
   // 60 dias pra trás (era 30): o "Backlog aprovado" da Prospecção agora conta "visitada"
@@ -267,6 +372,7 @@ async function fetchAgenda() {
     ))
     .forEach(nt => itens.push({ ...nt.properties, hs_object_id: nt.id }));
 
+  await enriquecerAgendaComNegocio(itens);
   return { geradoEm: new Date().toISOString(), itens };
 }
 
