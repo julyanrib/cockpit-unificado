@@ -6914,7 +6914,7 @@ async function renderRotas() {
     return pb - pa || String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR');
   });
 
-  el.innerHTML = '<div class="rotas-grid">' + ordenados.map(r => {
+  const cardDoRep = r => {
     const info = rotasCache.porOwner[String(r.ownerId)] || { paradas: [], plano: null };
     const n = info.paradas.length;
     const plano = info.plano;
@@ -6939,7 +6939,124 @@ async function renderRotas() {
           : '') +
         '<div class="rota-card-foot">' + (n === 0 ? 'Abrir e montar a rota dele →' : 'Ver rota no mapa →') + '</div>' +
       '</button>';
-  }).join('') + '</div>';
+  };
+
+  // ===== AGRUPAMENTO POR PRAÇA (Julyan, 11/08) =====
+  // A lista era plana: 8 cards em grade, sem geografia. O gestor de campo não pensa em
+  // "8 executivos" — pensa em "como está o Rio", "quem cobre POA". Sem praça ele
+  // reconstruía esse mapa de cabeça toda vez que abria a tela.
+  //
+  // A praça também é a unidade de decisão: reforço, rota conjunta e mudança de régua
+  // acontecem por região, não por pessoa isolada. Rio soma três executivos e só faz
+  // sentido lido junto.
+  const PRACA_DO_OWNER = {
+    // Ricardo Antunes ainda não tem ownerId do HubSpot (está como 'pendente_ricardo2'
+    // em usuarios.json, em onboarding). Mapeado pelo id provisório para já aparecer em
+    // Porto Alegre; quando o HubSpot emitir o id definitivo, troque a chave aqui.
+    '91477292': 'Porto Alegre', 'pendente_ricardo2': 'Porto Alegre',
+    '94079973': 'Rio de Janeiro', '86100506': 'Rio de Janeiro', '87569072': 'Rio de Janeiro',
+    '89842507': 'São Paulo',
+    '87069181': 'Espírito Santo', '86100505': 'Espírito Santo'
+  };
+  const ORDEM_PRACA = ['Porto Alegre', 'Rio de Janeiro', 'São Paulo', 'Espírito Santo'];
+
+  const porPraca = {};
+  ordenados.forEach(r => {
+    // Executivo novo, ainda sem praça mapeada, NÃO some da tela do gestor: cai em
+    // "Sem praça definida" e continua visível. Sumir com gente é o pior erro aqui.
+    const nome = PRACA_DO_OWNER[String(r.ownerId)] || 'Sem praça definida';
+    (porPraca[nome] = porPraca[nome] || []).push(r);
+  });
+
+  const snapRotas = (DATA.resumoSemanal && DATA.resumoSemanal.snapshotReps) || {};
+
+  // O cabeçalho da praça responde três perguntas antes de abrir qualquer card:
+  // quantos estão em campo hoje, quantas paradas a praça tem, e qual o gargalo dela.
+  const cabecalhoPraca = (nome, lista) => {
+    const comRotaAqui = lista.filter(r => (rotasCache.porOwner[String(r.ownerId)] || { paradas: [] }).paradas.length > 0).length;
+    const paradasAqui = lista.reduce((soma, r) => soma + (rotasCache.porOwner[String(r.ownerId)] || { paradas: [] }).paradas.length, 0);
+    const semRotaAqui = lista.length - comRotaAqui;
+
+    let aberto = 0, trav = 0, mes = 0, meta = 0;
+    lista.forEach(r => {
+      const sn = snapRotas[String(r.ownerId)];
+      if (!sn) return;
+      aberto += Number(sn.open) || 0;
+      trav += (Array.isArray(sn.travados) ? sn.travados : []).length;
+      mes += Number(sn.fechadosNoMes) || 0;
+      meta += Number(sn.metaMensal) || 0;
+    });
+    const pctTrav = aberto ? (100 * trav / aberto) : 0;
+
+    // "Sem rota montada" NÃO é "sem trabalho" — corrigido em 11/08 depois que o Julyan
+    // apontou o falso alarme em São Paulo. O cockpit conta como "parada" apenas a
+    // conta-alvo que o executivo puxou pra rota. Quem está rodando o PRÓPRIO funil
+    // (caso do Wericles, sem conta-alvo de propósito porque precisa dar vazão) aparecia
+    // como "ninguém em campo" — e a tela acusava de ausência exatamente quem estava
+    // fazendo o combinado.
+    //
+    // O sinal de que existe trabalho plotável é o negócio aberto COM coordenada: é o
+    // que o Expogo grava quando o executivo registra na rua.
+    // Usa `plotaveis` — TODOS os abertos com coordenada. A versão anterior somava
+    // travados+quentes+criticos, que são recortes dos piores casos: mostrava 46 de 126
+    // e subestimava o território de cada praça em dois terços.
+    const plotaveisAqui = lista.reduce((soma, r) => {
+      const sn = snapRotas[String(r.ownerId)];
+      const arr = sn && Array.isArray(sn.plotaveis) ? sn.plotaveis : null;
+      if (arr) return soma + arr.length;
+      // Fallback pro snapshot antigo, enquanto o robô não roda com o campo novo.
+      if (!sn) return soma;
+      const todos = [].concat(
+        Array.isArray(sn.travados) ? sn.travados : [],
+        Array.isArray(sn.quentes) ? sn.quentes : [],
+        Array.isArray(sn.criticos) ? sn.criticos : []
+      );
+      return soma + new Set(todos.filter(x => x.lat != null && x.lng != null).map(x => x.id)).size;
+    }, 0);
+
+    // Um gargalo só, o que mais dói. Três avisos na mesma linha viram nenhum.
+    let gargalo = null;
+    if (semRotaAqui === lista.length && lista.length && !plotaveisAqui) {
+      gargalo = { cor: 'var(--red)', txt: `Praça inteira sem rota hoje e sem negócio com endereço — não há por onde começar.` };
+    } else if (semRotaAqui === lista.length && lista.length) {
+      gargalo = { cor: 'var(--amber)', txt: `Sem conta-alvo na rota, mas ${aberto} em aberto e ${plotaveisAqui} com endereço — está rodando o próprio funil.` };
+    } else if (pctTrav >= 40) {
+      gargalo = { cor: 'var(--red)', txt: `${trav} de ${aberto} negócios travados (${pctTrav.toFixed(0)}%) — auditoria antes de abrir conta nova.` };
+    } else if (semRotaAqui) {
+      gargalo = { cor: 'var(--amber)', txt: `${semRotaAqui} sem rota montada hoje.` };
+    } else if (meta && (100 * mes / meta) < 30) {
+      gargalo = { cor: 'var(--amber)', txt: `${mes}/${meta} no mês — ritmo abaixo do necessário.` };
+    } else {
+      gargalo = { cor: 'var(--green)', txt: `Praça em campo e girando.` };
+    }
+
+    return `
+      <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:22px 0 10px;">
+        <h3 style="margin:0;font-family:'Poppins',sans-serif;font-size:16px;">${esc(nome)}</h3>
+        <span style="font-size:11.5px;color:var(--muted2);">${comRotaAqui}/${lista.length} com rota montada · ${paradasAqui} ${paradasAqui === 1 ? 'parada' : 'paradas'}${aberto ? ` · ${aberto} em aberto` : ''}${plotaveisAqui ? ` · ${plotaveisAqui} com endereço` : ''}</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:11.5px;font-weight:700;color:${gargalo.cor};">${gargalo.txt}</span>
+      </div>`;
+  };
+
+  // Praça com problema aparece primeiro; entre iguais, mantém a ordem geográfica fixa —
+  // ordem que dança a cada refresh faz o gestor perder a referência do dia anterior.
+  const prioridade = nome => {
+    const lista = porPraca[nome];
+    const semRota = lista.filter(r => (rotasCache.porOwner[String(r.ownerId)] || { paradas: [] }).paradas.length === 0).length;
+    return semRota === lista.length ? 0 : (semRota ? 1 : 2);
+  };
+  const pracasOrd = Object.keys(porPraca).sort((a, b) => {
+    const d = prioridade(a) - prioridade(b);
+    if (d !== 0) return d;
+    const ia = ORDEM_PRACA.indexOf(a), ib = ORDEM_PRACA.indexOf(b);
+    return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+  });
+
+  el.innerHTML = pracasOrd.map(nome =>
+    cabecalhoPraca(nome, porPraca[nome]) +
+    '<div class="rotas-grid">' + porPraca[nome].map(cardDoRep).join('') + '</div>'
+  ).join('');
 
   el.querySelectorAll('[data-rotaowner]').forEach(b => {
     b.addEventListener('click', () => abrirRotaDrawer(b.dataset.rotaowner));
@@ -7139,6 +7256,34 @@ async function montarMapaRota(seq, origem) {
     rotaMapaMarcadores.push(m);
     bounds.extend([Number(p.lng), Number(p.lat)]);
   });
+  // ===== FUNIL DO EXECUTIVO NO MAPA (Julyan, 11/08) =====
+  // O mapa só mostrava as paradas da rota do dia. Mas 88% dos negócios em ABERTO têm
+  // coordenada (126 de 143, medido no HubSpot) — e nenhum deles aparecia aqui. O gestor
+  // abria a rota de alguém e via 5 pontos numa praça que tem 25 negócios vivos, sem
+  // enxergar o que está em volta nem o que ficou pra trás.
+  //
+  // Vazado e menor que o pino da rota, de propósito: a rota é a decisão do dia e não
+  // pode competir visualmente com o pano de fundo. Quente é vermelho, travado é âmbar,
+  // o resto cinza — a mesma régua de cor do resto do cockpit.
+  const snapDono = ((DATA.resumoSemanal || {}).snapshotReps || {})[String(rotaDrawerOwner)];
+  const plotaveis = (snapDono && Array.isArray(snapDono.plotaveis)) ? snapDono.plotaveis : [];
+  // Não repete quem já é parada da rota: dois pinos no mesmo ponto confundem mais que ajudam.
+  const idsNaRota = new Set((comCoord || []).map(p => String(p.id)));
+  plotaveis.filter(d => !idsNaRota.has(String(d.id)) && d.lat != null && d.lng != null).forEach(d => {
+    const cor = d.temperatura === 'quente' ? 'var(--red)' : (d.slaBreach ? 'var(--amber)' : 'var(--muted2)');
+    const el = document.createElement('div');
+    el.innerHTML = '<span style="display:block;width:13px;height:13px;border-radius:99px;background:#fff;border:2.5px solid ' + cor + ';box-shadow:0 1px 4px rgba(0,0,0,.25);"></span>';
+    const m = new maplibregl.Marker({ element: el })
+      .setLngLat([Number(d.lng), Number(d.lat)])
+      .setPopup(new maplibregl.Popup().setHTML(
+        '<b>' + esc(d.name || '') + '</b><br><span style="font-size:11px;">' +
+        esc(d.stage || '') + (d.dias != null ? ' · ' + d.dias + 'd na etapa' : '') +
+        (d.slaBreach ? ' · <b style="color:#E51A31;">SLA estourado</b>' : '') + '</span>'))
+      .addTo(rotaMapaInstancia);
+    rotaMapaMarcadores.push(m);
+    bounds.extend([Number(d.lng), Number(d.lat)]);
+  });
+
   if (!bounds.isEmpty()) rotaMapaInstancia.fitBounds(bounds, { padding: 55, maxZoom: 15 });
 }
 
@@ -8321,6 +8466,29 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       (listaFunil || []).forEach(d => registrarPipeline({ ...d, stage, stageId }));
     });
   }
+  // FUNIL INTEIRO NO MAPA DELE (Julyan, 11/08: "todos os leads têm coordenadas, tem que
+  // aparecer como quentes e sugerir na rota").
+  //
+  // O laço acima só registra etapas que casam com demo/proposta/negociação/pagamento —
+  // o FUNDO do funil. Prospecção, Visita e Conversa com Decisor ficavam de fora, e é
+  // exatamente onde vive a maioria dos negócios com coordenada (126 de 143 abertos do
+  // time têm endereço, medido no HubSpot). Na prática o executivo abria a rota e não
+  // via os próprios negócios em andamento — só conta-alvo e porta do OSM.
+  //
+  // Entra pela MESMA porta (registrarPipeline) de propósito: assim herda pino no mapa,
+  // item na lista, seleção pra rota e o não-grava-em-leads_prospeccao que já existem
+  // para o quente avulso. Zero fiação nova.
+  const meuSnapshot = ((DATA.resumoSemanal || {}).snapshotReps || {})[String(r.ownerId)];
+  if (meuSnapshot && Array.isArray(meuSnapshot.plotaveis)) {
+    meuSnapshot.plotaveis.forEach(d => registrarPipeline({
+      ...d,
+      ownerId: r.ownerId,
+      stage: d.stage || 'No funil',
+      // slaBreach vira "travado" na tela: é o que faz o executivo priorizar sem ler número.
+      _travado: !!d.slaBreach
+    }));
+  }
+
   const pipelineQuente = Array.from(pipelinePorNome.values());
   const matchPipeline = lead => pipelineQuente.find(d => agendaMesmoLead(lead.nome, agendaLeadNome(d)));
   const comCoord = todas.filter(l => l.lat != null && l.lng != null).map(l => {
@@ -8343,7 +8511,10 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       avaliacoes: null, cidade: null, bairro: null,
       status: planoQuentesAvulsosSelecionados.has(String(d.id)) ? 'na_rota' : 'disponivel_quente',
       data_rota: planoQuentesAvulsosSelecionados.has(String(d.id)) ? hoje : null,
-      _pipelineQuente: true, _quenteAvulso: true, _hubspotId: d.id, _stage: d.stage || 'Pipeline quente'
+      _pipelineQuente: true, _quenteAvulso: true, _hubspotId: d.id, _stage: d.stage || 'Pipeline quente',
+      // Dias na etapa e SLA vêm junto: sem isso o negócio parado há 21 dias fica com a
+      // mesma cara do que entrou ontem, e a rota do dia deixa de ter critério.
+      _travado: !!(d._travado || d.slaBreach), _dias: d.dias != null ? Number(d.dias) : null
     }));
   const pipelineSemLocal = pipelineQuente.filter(d => !temCoordProprio(d) && !todas.some(l => l.lat != null && l.lng != null && agendaMesmoLead(l.nome, agendaLeadNome(d))));
   const semCoord = todas.length - comCoord.length;
@@ -8590,7 +8761,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
           <b>${esc(l.nome)}</b>
           <span class="plano-lista-meta">${blocoDele ? `<input type="time" class="plano-hora-input" data-horalead="${esc(String(l.id))}" value="${blocoDele.hora}" aria-label="Horário da visita a ${esc(l.nome)}"> ` : ''}${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
           ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>${l.telefone ? `<span class="plano-etapa-hub" style="color:var(--violet);">📞 ${esc(l.telefone)}</span>` : ''}` : ''}
-          ${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
+          ${l._quenteAvulso && (l._travado || l._dias != null) ? `<span class="plano-etapa-hub" style="color:${l._travado ? 'var(--red)' : 'var(--muted2)'};">${l._travado ? '⚠ travado · ' : ''}${l._dias != null ? l._dias + 'd na etapa' : ''}</span>` : ''}${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
       </div>`;
