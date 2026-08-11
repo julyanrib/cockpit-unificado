@@ -59,7 +59,7 @@ module.exports = async function handler(req, res) {
   if (!usuario) return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
 
   // ---- 3. dados da conta-alvo ----
-  const { nome, ownerId, bairro, cidade, horaPrevista } = req.body || {};
+  const { nome, ownerId, bairro, cidade, horaPrevista, data } = req.body || {};
   if (!nome || !ownerId) return res.status(400).json({ erro: 'Faltam campos obrigatórios: nome e ownerId.' });
 
   // Escopo por papel: executivo só cria tarefa pra si mesmo; gestor pode criar pra
@@ -71,8 +71,23 @@ module.exports = async function handler(req, res) {
   // hs_timestamp em horário de Brasília: usa a hora prevista se veio (ex.: "14:30"),
   // senão 09:00 — mesma convenção de "compromisso do dia" usada no resto do cockpit.
   const agoraBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
+  // `data` (YYYY-MM-DD) permite agendar num dia FUTURO — é o que faz o preenchimento de
+  // buraco da semana funcionar. Sem ela, tudo cairia em hoje e o executivo veria a
+  // quarta-feira continuar vazia depois de agendar nela.
+  // Validação estrita: formato errado vira "hoje" em silêncio, e um dia inteiro de
+  // planejamento iria pro lugar errado sem ninguém perceber.
+  let alvoAno = agoraBRT.getUTCFullYear(), alvoMes = agoraBRT.getUTCMonth(), alvoDia = agoraBRT.getUTCDate();
+  if (data != null) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(data).trim());
+    if (!m) return res.status(400).json({ erro: 'Campo "data" deve estar no formato AAAA-MM-DD.' });
+    alvoAno = Number(m[1]); alvoMes = Number(m[2]) - 1; alvoDia = Number(m[3]);
+    const teste = new Date(Date.UTC(alvoAno, alvoMes, alvoDia));
+    if (teste.getUTCFullYear() !== alvoAno || teste.getUTCMonth() !== alvoMes || teste.getUTCDate() !== alvoDia) {
+      return res.status(400).json({ erro: 'Data inválida.' });
+    }
+  }
   const [hh, mm] = (horaPrevista || '09:00').split(':').map(Number);
-  const dataTarefaMs = Date.UTC(agoraBRT.getUTCFullYear(), agoraBRT.getUTCMonth(), agoraBRT.getUTCDate(), (hh || 9) + 3, mm || 0, 0);
+  const dataTarefaMs = Date.UTC(alvoAno, alvoMes, alvoDia, (hh || 9) + 3, mm || 0, 0);
 
   const corpo = [
     (bairro || cidade) ? `Endereço: ${[bairro, cidade].filter(Boolean).join(', ')}` : null,
@@ -89,7 +104,7 @@ module.exports = async function handler(req, res) {
   // A busca filtra por dono + janela do dia + status, e o assunto é comparado aqui no
   // servidor em vez de virar filtro: `hs_task_subject` nem sempre é pesquisável por
   // igualdade dependendo do portal, e falhar essa busca faria voltar a duplicar.
-  const inicioDiaMs = Date.UTC(agoraBRT.getUTCFullYear(), agoraBRT.getUTCMonth(), agoraBRT.getUTCDate(), 3, 0, 0);
+  const inicioDiaMs = Date.UTC(alvoAno, alvoMes, alvoDia, 3, 0, 0);
   const fimDiaMs = inicioDiaMs + 24 * 60 * 60 * 1000;
   const assunto = `Visita - ${nome}`;
   let idExistente = null;
