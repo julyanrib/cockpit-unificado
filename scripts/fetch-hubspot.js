@@ -791,7 +791,9 @@ async function main() {
     // fechamentos precisa de 1 chamada extra porque Ganho não é etapa "aberta" (não vem no
     // `deals` de repOpenDeals).
     const hojeISO = hojeISOBrasilia();
-    // Ontem em Brasília — é o dia que já está fechado quando o robô roda às 5h.
+    // Ontem em Brasília. Com as DUAS rodadas diárias (23:59 e 08:59, 11/08), "ontem"
+    // quase sempre já está fechado nos dois horários — às 23:59 o dia de hoje está
+    // terminando, às 08:59 o dia de ontem virou definitivamente passado à meia-noite.
     const ontemISO = new Date(new Date(hojeISO + 'T12:00:00Z').getTime() - 86400000).toISOString().slice(0, 10);
     const entrouNoDia = (stageId, diaISO) => deals.filter(d => {
       const dt = d.properties[`hs_v2_date_entered_${stageId}`];
@@ -826,11 +828,15 @@ async function main() {
       realizado_fechamentos: fechamentosHubspotHoje
     });
 
-    // ---- ITEM 4 (10/08/26): fecha o dia de ONTEM ----
-    // Este é o número que a Daily das 9h usa pra dizer "prometeu X, fez Y". Antes ele
-    // dependia de o navegador de alguém ter ficado com a aba aberta ontem; agora o
-    // robô grava direto do HubSpot, com o dia já consolidado. Sem isso, quem trabalhou
-    // e não abriu o cockpit aparecia como zero na reunião.
+    // ---- fecha o dia de ONTEM (todo dia útil, direto do HubSpot) ----
+    // Este é o número que a Daily das 9h usa pra dizer "prometeu X, fez Y". Antes
+    // dependia de o navegador de alguém ter ficado com a aba aberta no dia anterior;
+    // agora o robô grava direto do HubSpot, sem depender de ninguém ter aberto tela.
+    // Com as DUAS rodadas diárias (11/08): a de 23:59 já fecha "ontem" quase completo
+    // (o dia está acabando); a de 08:59 refaz o mesmo fechamento como segurança, caso
+    // a das 23:59 tenha falhado (token expirado, GitHub Actions fora do ar, etc.).
+    // gravarSnapshotDaily faz upsert — rodar duas vezes no mesmo dia não duplica nem
+    // distorce o número, só confirma o mesmo valor (ou corrige, se algo mudou).
     const visitasOntem = await visitasTarefasHojeByOwner(rep.ownerId, ontemISO);
     const avancosOntem = [STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]
       .reduce((soma, stageId) => soma + entrouNoDia(stageId, ontemISO), 0);
