@@ -195,7 +195,7 @@ function montarDadosCompletos() {
     // quem já "encerrou" (churn confirmado no pipeline de Sucesso) — sugerir visita de
     // relacionamento pra quem cancelou não faz sentido nenhum.
     clientesAtivos: (clientesAtivos || []).filter(c => c.sugerirVisita !== false),
-    footerText: `Fonte: HubSpot (pipeline 916011864, atualizado a cada 2h em horário comercial) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
+    footerText: `Fonte: HubSpot (pipeline 916011864, atualizado 23:59 e 08:59) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
     resumoSemanal: (resumoSemanal || weeklyRaw) ? {
       geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
       numerosAtualizadosEmFmt: weeklyRaw ? fmtDate(weeklyRaw.geradoEm) : (resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null),
