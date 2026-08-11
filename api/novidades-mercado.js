@@ -103,8 +103,15 @@ function normalizar(e) {
   };
 }
 
+// VERSÃO DOS FILTROS na chave do cache. Bug real, pego em 11/08: depois de acrescentar
+// os filtros de MEI/contabilidade/rede, Vitória continuou devolvendo 100 resultados —
+// era a linha antiga, gravada quando não havia filtro nenhum. Cache não sabe que a regra
+// mudou; a chave precisa dizer. Suba este número sempre que mexer no corpo da consulta
+// ou nos descartes, senão o filtro novo demora até 7 dias pra valer.
+const VERSAO_FILTROS = 2;
+
 function chaveCache(municipio, uf, dias) {
-  return String(municipio || '').toLowerCase().trim() + '|' + String(uf || '').toUpperCase().trim() + '|' + dias;
+  return 'v' + VERSAO_FILTROS + '|' + String(municipio || '').toLowerCase().trim() + '|' + String(uf || '').toUpperCase().trim() + '|' + dias;
 }
 
 async function lerCache(supaUrl, serviceKey, chave, validadeHoras) {
@@ -292,12 +299,33 @@ module.exports = async function handler(req, res) {
 
     // Rede grande fora também aqui: o filtro de MEI e o de contabilidade acontecem na
     // API, mas nome de rede só dá pra avaliar depois que o registro chega.
-    let descartadasRede = 0;
+    // EMPRESÁRIO INDIVIDUAL PELO CPF NO NOME — medido antes de decidir o corte.
+    // Em Porto Alegre, 15 dos 30 resultados vinham sem nome fantasia. A tentação era
+    // cortar os 15; só que 12 deles têm LTDA/EIRELI na razão social — são empresas de
+    // verdade com cadastro incompleto, e cortá-las jogaria fora lead bom.
+    // Os outros 3 começam com dígito: é o CPF virando razão social, padrão do
+    // empresário individual sem estabelecimento. Esses saem.
+    // Precisão importa: "4 Estações Restaurante LTDA" também começa com dígito e é
+    // cliente legítimo. O padrão do empresário individual é o CPF INTEIRO no início —
+    // 11 dígitos, com ou sem pontuação — seguido do nome da pessoa. E se houver marca
+    // societária (LTDA/EIRELI/S.A./ME), é empresa: não corta em nenhuma hipótese.
+    const ehPessoaFisica = i => {
+      const t = String(i.razaoSocial || i.nome || '').trim();
+      if (/\b(ltda|eireli|s\/?a\b|me\b|mei\b|epp\b)/i.test(t)) return false;
+      const inicio = t.split(/\s+/)[0] || '';
+      // >= 8 dígitos: o caso real da base ("68.524.312 ...") é a RAIZ DO CNPJ virando
+      // razão social, com 8 dígitos — não CPF com 11, como eu supus primeiro. Oito é o
+      // piso seguro: nenhum nome comercial começa com um número de 8 dígitos
+      // ("24 Horas", "360 Graus", "4 Estações" têm 2 ou 3).
+      return /^\d[\d.\-\/]*$/.test(inicio) && inicio.replace(/\D/g, '').length >= 8;
+    };
+    let descartadasRede = 0, descartadasPF = 0;
     const itens = cru.map(normalizar).filter(Boolean)
       .filter(i => {
         const rede = ehRedeGrande(i.nome) || ehRedeGrande(i.razaoSocial);
-        if (rede) descartadasRede++;
-        return !rede;
+        if (rede) { descartadasRede++; return false; }
+        if (ehPessoaFisica(i)) { descartadasPF++; return false; }
+        return true;
       })
       // Mais novo primeiro: a janela de oportunidade encolhe a cada dia que passa.
       .sort((a, b) => String(b.dataAbertura || '').localeCompare(String(a.dataAbertura || '')));
@@ -311,6 +339,7 @@ module.exports = async function handler(req, res) {
       // Número que encolhe sem explicação é número em que ninguém confia.
       recebidasDaApi: cru.length,
       descartadasRede: descartadasRede,
+      descartadasPessoaFisica: descartadasPF,
       total: itens.length, itens: itens
     });
   } catch (e) {
