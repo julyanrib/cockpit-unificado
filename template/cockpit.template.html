@@ -6898,7 +6898,11 @@ let planoEmEdicao = false; // flag SÓ de UI: reabre os campos de um plano já f
 let mapLibreCarregando = null;
 let planoMapaInstancia = null;
 let planoMapaMarcadores = {}; // id do lead -> { marker, popup, lead }
-let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false, soClientes: false };
+let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false, soClientes: false,
+  // Filtros que valem só para os pinos ◇ do OSM (11/08). O filtro de avaliações não
+  // serve pra eles — OSM não tem nota — então precisavam de régua própria:
+  tipoMapa: '',           // 'Padaria', 'Bar'... vazio = todos
+  soComTelefone: false }; // porta com telefone dá pra ligar antes de bater
 let planoMapaPopupAtual = null;
 let planoMapaOrigemAtual = null;
 let planoMapaRenderAtual = null;
@@ -7335,6 +7339,11 @@ async function montarPlanoDoDia(r) {
                 </select>
               </label>
               <button type="button" class="plano-map-filter ${planoMapaFiltro.mostrarSemFit ? 'is-active' : ''}" id="planoMapaSemFit" aria-pressed="${planoMapaFiltro.mostrarSemFit}">Incluir sem fit</button>
+              <label class="plano-map-filter" id="planoMapaTipoWrap" style="display:none;">Tipo
+                <select id="planoMapaTipo" aria-label="Filtrar pinos do mapa por tipo de estabelecimento"></select>
+              </label>
+              <button type="button" class="plano-map-filter ${planoMapaFiltro.soComTelefone ? 'is-active' : ''}" id="planoMapaComTel" aria-pressed="${planoMapaFiltro.soComTelefone}" title="Só estabelecimentos com telefone no OpenStreetMap">📞 Com telefone</button>
+              <button type="button" class="plano-map-filter" id="planoMapaAddManual" title="Adicionar um estabelecimento que não está no mapa, por endereço ou CEP">＋ Por endereço/CEP</button>
             </div>
             <button type="button" class="plano-map-location" id="planoMapaMinhaPosicao" title="Ir para minha posição" aria-label="Ir para minha posição">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
@@ -7522,6 +7531,17 @@ async function montarPlanoDoDia(r) {
   const selAval = slot.querySelector('#planoMapaAvalMin');
   if (typeof ligarBuscaLocal === 'function') ligarBuscaLocal();
   if (selAval) selAval.addEventListener('change', () => { planoMapaFiltro.avalMin = Number(selAval.value) || 0; montarPlanoMapa(r, hoje, fechado); });
+  const selTipo = slot.querySelector('#planoMapaTipo');
+  if (selTipo) selTipo.addEventListener('change', () => { planoMapaFiltro.tipoMapa = selTipo.value || ''; montarPlanoMapa(r, hoje, fechado); });
+  const btnTel = slot.querySelector('#planoMapaComTel');
+  if (btnTel) btnTel.addEventListener('click', () => {
+    planoMapaFiltro.soComTelefone = !planoMapaFiltro.soComTelefone;
+    btnTel.classList.toggle('is-active', planoMapaFiltro.soComTelefone);
+    btnTel.setAttribute('aria-pressed', String(planoMapaFiltro.soComTelefone));
+    montarPlanoMapa(r, hoje, fechado);
+  });
+  const btnAdd = slot.querySelector('#planoMapaAddManual');
+  if (btnAdd) btnAdd.addEventListener('click', () => abrirAdicionarManual(r, hoje, fechado));
   // "Aba" de clientes ativos no mapa (pedido do Julyan, 10/08) — isola só os clientes
   // Takeat já ativos, escondendo os leads novos até desligar de novo. Não mexe na
   // seleção de ninguém, só no que aparece na tela.
@@ -7555,6 +7575,140 @@ function gerarRotaPlanoMapa(r, hoje, planoFechado) {
   montarPlanoMapa(r, hoje, planoFechado);
 }
 
+
+// ---- Filtros dos pinos ◇ e inclusão manual (11/08) ----
+// Preenche o select de tipo com o que REALMENTE veio na praça, com contagem. Um filtro
+// que oferece "Sorveteria" onde não existe sorveteria nenhuma só gasta o tempo dele.
+function sincronizarFiltrosDoMapa(poisDoMapa) {
+  const wrap = document.getElementById('planoMapaTipoWrap');
+  const sel = document.getElementById('planoMapaTipo');
+  if (!wrap || !sel) return;
+
+  // Conta por tipo ANTES do filtro de tipo (senão o select se esvazia depois do 1º uso),
+  // mas DEPOIS do filtro de telefone, pra contagem casar com o que ele vai ver.
+  const base = (poisDoMapa || []).filter(p => !planoMapaFiltro.soComTelefone || !!p.telefone);
+  const contagem = new Map();
+  base.forEach(p => {
+    const t = p.categoria || 'Outros';
+    contagem.set(t, (contagem.get(t) || 0) + 1);
+  });
+
+  if (!contagem.size) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  const ordenados = [...contagem.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'));
+  // Se o tipo selecionado sumiu da praça atual, volta pra "todos" em vez de mostrar vazio.
+  if (planoMapaFiltro.tipoMapa && !contagem.has(planoMapaFiltro.tipoMapa)) planoMapaFiltro.tipoMapa = '';
+
+  sel.innerHTML = `<option value="">todos (${base.length})</option>` + ordenados
+    .map(([t, n]) => `<option value="${esc(t)}" ${planoMapaFiltro.tipoMapa === t ? 'selected' : ''}>${esc(t)} (${n})</option>`)
+    .join('');
+}
+
+// Adicionar manualmente por endereço ou CEP. Existe porque o OSM é colaborativo e tem
+// buraco: o executivo passa na frente de um restaurante que não está no mapa e precisa
+// conseguir colocá-lo na rota na hora, sem esperar ninguém mapear. Reaproveita o
+// autocomplete da MapTiler que já está na tela (buscarLocais) — zero dependência nova.
+function abrirAdicionarManual(r, hoje, planoFechado) {
+  if (document.getElementById('planoAddManualPainel')) return;
+  const stage = document.querySelector('.plano-map-stage');
+  if (!stage) return;
+
+  const painel = document.createElement('div');
+  painel.id = 'planoAddManualPainel';
+  painel.style.cssText = 'position:absolute;z-index:40;top:58px;left:12px;right:12px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 40px rgba(15,23,42,.18);padding:14px;';
+  painel.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
+      <b style="font-family:'Poppins',sans-serif;font-size:13px;">Adicionar por endereço ou CEP</b>
+      <button type="button" id="planoAddManualFechar" aria-label="Fechar" style="border:0;background:transparent;cursor:pointer;font-size:18px;line-height:1;color:var(--muted);">×</button>
+    </div>
+    <input id="planoAddManualNome" type="text" placeholder="Nome do estabelecimento" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:10px;font-size:13px;margin-bottom:7px;">
+    <input id="planoAddManualEnd" type="text" placeholder="Rua, número, bairro ou CEP" autocomplete="off"
+      style="width:100%;box-sizing:border-box;padding:9px 11px;border:1px solid var(--line);border-radius:10px;font-size:13px;">
+    <div id="planoAddManualSug" style="max-height:168px;overflow:auto;margin-top:6px;"></div>
+    <div id="planoAddManualMsg" style="font-size:11px;color:var(--muted);margin-top:7px;line-height:1.45;">
+      Escolha um endereço da lista — é dele que sai a coordenada do pino.
+    </div>
+    <button type="button" id="planoAddManualSalvar" disabled
+      style="width:100%;margin-top:9px;padding:10px;border:0;border-radius:10px;background:var(--ink);color:var(--panel);font-weight:800;font-size:12.5px;cursor:pointer;opacity:.45;">
+      Adicionar à rota de hoje
+    </button>`;
+  stage.appendChild(painel);
+
+  const inNome = painel.querySelector('#planoAddManualNome');
+  const inEnd = painel.querySelector('#planoAddManualEnd');
+  const boxSug = painel.querySelector('#planoAddManualSug');
+  const msg = painel.querySelector('#planoAddManualMsg');
+  const btnSalvar = painel.querySelector('#planoAddManualSalvar');
+  let escolhido = null;
+  let debounce = null;
+
+  const fechar = () => painel.remove();
+  painel.querySelector('#planoAddManualFechar').addEventListener('click', fechar);
+
+  const atualizarBotao = () => {
+    const ok = !!escolhido && inNome.value.trim().length >= 2;
+    btnSalvar.disabled = !ok;
+    btnSalvar.style.opacity = ok ? '1' : '.45';
+  };
+  inNome.addEventListener('input', atualizarBotao);
+
+  inEnd.addEventListener('input', () => {
+    escolhido = null; atualizarBotao();
+    clearTimeout(debounce);
+    // 350ms: sem isso cada tecla queimaria uma chamada da cota da MapTiler.
+    debounce = setTimeout(async () => {
+      const locais = await buscarLocais(inEnd.value);
+      if (!locais.length) { boxSug.innerHTML = ''; return; }
+      boxSug.innerHTML = locais.map((l, i) => `
+        <button type="button" data-i="${i}" style="display:block;width:100%;text-align:left;border:0;background:transparent;padding:7px 8px;border-radius:8px;cursor:pointer;font-size:12px;line-height:1.35;color:var(--ink);">
+          ${esc(l.nome || l.place_name || '')}
+        </button>`).join('');
+      boxSug.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+        escolhido = locais[Number(b.dataset.i)];
+        inEnd.value = escolhido.nome || escolhido.place_name || inEnd.value;
+        boxSug.innerHTML = '';
+        msg.textContent = 'Endereço confirmado. Confira o nome e adicione.';
+        atualizarBotao();
+      }));
+    }, 350);
+  });
+
+  btnSalvar.addEventListener('click', async () => {
+    if (!escolhido) return;
+    btnSalvar.disabled = true; btnSalvar.textContent = 'Adicionando...';
+    const coord = escolhido.center || escolhido;
+    const lat = Array.isArray(coord) ? coord[1] : (coord.lat != null ? coord.lat : escolhido.lat);
+    const lng = Array.isArray(coord) ? coord[0] : (coord.lng != null ? coord.lng : escolhido.lng);
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+      msg.textContent = 'Não consegui a coordenada desse endereço. Tente outro formato.';
+      btnSalvar.disabled = false; btnSalvar.textContent = 'Adicionar à rota de hoje';
+      return;
+    }
+    // fonte 'manual' e não 'mapa': dá pra saber depois quantas portas o time achou na rua
+    // que o OSM não tinha — isso justifica (ou não) pagar por sourcing ranqueado.
+    const { lead, error } = await materializarLeadDoMapa({
+      nome: inNome.value.trim(),
+      categoria: null,
+      bairro: null,
+      cidade: null,
+      endereco: escolhido.nome || escolhido.place_name || null,
+      telefone: null,
+      lat: Number(lat), lng: Number(lng)
+    }, r.ownerId, 'manual');
+    if (error || !lead) {
+      msg.textContent = 'Não consegui salvar agora. Tente de novo em instantes.';
+      btnSalvar.disabled = false; btnSalvar.textContent = 'Adicionar à rota de hoje';
+      return;
+    }
+    mostrarToast(`"${lead.nome}" adicionado à rota de hoje.`, 'sucesso');
+    fechar();
+    montarPlanoMapa(r, hoje, planoFechado);
+  });
+
+  inNome.focus();
+}
 
 /* ---- Estabelecimentos do mapa (pinos ◇) ----
    Julyan: "o executivo tem que olhar o mapa e as opções que já tem que ir automático
@@ -7679,7 +7833,7 @@ async function buscarRestaurantesNoMapa(lat, lng) {
 
 // No momento em que ele escolhe visitar, o POI do mapa vira conta-alvo de verdade.
 // Antes disso não gravamos nada — mapa cheio de lead fantasma é pior que mapa vazio.
-async function materializarLeadDoMapa(poi, ownerId) {
+async function materializarLeadDoMapa(poi, ownerId, fonte) {
   const linha = {
     nome: poi.nome,
     categoria: poi.categoria || null,
@@ -7692,7 +7846,7 @@ async function materializarLeadDoMapa(poi, ownerId) {
     lat: poi.lat,
     lng: poi.lng,
     avaliacoes: null,
-    fonte: 'mapa',                 // rastreável: veio do mapa, não do ranking mensal
+    fonte: fonte || 'mapa',        // rastreável: 'mapa' (OSM), 'manual' (achou na rua) ou ranking mensal
     responsavel_owner_id: String(ownerId),
     status: 'na_rota',
     data_rota: isoDate(new Date()),
@@ -7726,6 +7880,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   let poisDoMapa = [];
   if (planoMapaOrigemAtual && planoMapaOrigemAtual.lat != null) {
     poisDoMapa = await buscarRestaurantesNoMapa(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng);
+    sincronizarFiltrosDoMapa(poisDoMapa);
     // Não repete o que já é conta-alvo dele: mesmo nome + praticamente mesma coordenada.
     poisDoMapa = poisDoMapa.filter(p => !todas.some(l =>
       agendaMesmoLead(l.nome, p.nome) ||
@@ -7780,12 +7935,17 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     }));
   const pipelineSemLocal = pipelineQuente.filter(d => !temCoordProprio(d) && !todas.some(l => l.lat != null && l.lng != null && agendaMesmoLead(l.nome, agendaLeadNome(d))));
   const semCoord = todas.length - comCoord.length;
+  // Pino ◇ tem régua própria: o filtro de avaliações não se aplica (OSM não tem nota),
+  // mas tipo e "tem telefone" sim — é o que muda a decisão de quem visitar hoje.
+  const poiPassaFiltro = l =>
+    (!planoMapaFiltro.tipoMapa || l.categoria === planoMapaFiltro.tipoMapa) &&
+    (!planoMapaFiltro.soComTelefone || !!l.telefone);
   const visiveis = [...comCoord, ...quentesAvulsos, ...poisDoMapa].filter(l =>
-    l._doMapa || l._pipelineQuente || (
+    l._doMapa ? poiPassaFiltro(l) : (l._pipelineQuente || (
       prospeccaoFazSentido(l) &&
       (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
       (!planoMapaFiltro.avalMin || (l.avaliacoes || 0) >= planoMapaFiltro.avalMin)
-    )
+    ))
   );
 
   // Clientes Takeat já ativos (fechados pelo próprio Field Sales), pra sugerir parada
