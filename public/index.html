@@ -476,6 +476,15 @@
   .rota-add-btn{margin-left:auto;flex:none;background:var(--red);color:#fff;border:none;border-radius:999px;padding:6px 13px;font:700 11.5px 'DM Sans',sans-serif;cursor:pointer;min-height:32px;}
   .rota-add-btn:disabled{opacity:.55;cursor:default;}
   @media(max-width:760px){.rota-drawer{width:100%;}.rota-mapa-palco{height:240px;}}
+  /* Busca de território do dia (11/08/26) */
+  .local-busca{position:relative;}
+  .local-sug{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px -22px rgba(26,22,19,.55);overflow:hidden;max-height:270px;overflow-y:auto;}
+  .local-sug button{display:block;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--line);padding:10px 13px;cursor:pointer;font-family:inherit;color:var(--ink);}
+  .local-sug button:last-child{border-bottom:none;}
+  .local-sug button:hover,.local-sug button.sel{background:var(--red-soft);}
+  .local-sug b{display:block;font-size:12.5px;font-weight:700;}
+  .local-sug span{display:block;font-size:11px;color:var(--muted2);margin-top:2px;}
+  .local-sug-tipo{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:99px;padding:1px 6px;margin-left:6px;background:var(--sunk);color:var(--muted2);vertical-align:1px;}
   .view{display:none;}
   .view.active{display:block;}
 
@@ -6997,6 +7006,137 @@ async function carregarPlanoDoDia(ownerId, dataISO) {
 // usando a API de geocoding da MapTiler — mesma chave do mapa, sem cadastro novo.
 // Nunca inventa coordenada: se a API não achar nada ou falhar (rede, chave ausente),
 // retorna null e quem chamou decide o que fazer (aqui: salva o texto igual, sem lat/lng).
+
+/* ---- Busca com sugestão para o território do dia (11/08/26) ---- */
+let localSugTimer = null;
+let localSugItens = [];
+let localSugIdx = -1;
+// Ponto escolhido explicitamente pelo executivo. Quando existe, salvarPlanoDoDia usa
+// estas coordenadas em vez de geocodificar o texto de novo (que poderia cair em outro
+// resultado e mover o mapa sem ele pedir).
+let localEscolhido = null;
+
+// Busca lugares na MapTiler: bairro, endereço completo e POI (nome de restaurante).
+async function buscarLocais(texto) {
+  if (!texto || texto.trim().length < 3 || !DATA.maptiler) return [];
+  try {
+    const url = 'https://api.maptiler.com/geocoding/' + encodeURIComponent(texto.trim()) + '.json'
+      + '?key=' + DATA.maptiler + '&country=br&language=pt&limit=6'
+      + '&types=poi,address,street,neighbourhood,municipality';
+    const resp = await fetch(url);
+    if (!resp.ok) return [];
+    const json = await resp.json();
+    return (json.features || [])
+      .filter(f => Array.isArray(f.center))
+      .map(f => {
+        const ctx = (f.context || []).map(c => c.text).filter(Boolean);
+        const t = (f.place_type || [])[0] || '';
+        return {
+          nome: f.text || f.place_name || texto,
+          detalhe: f.place_name || ctx.join(', '),
+          contexto: ctx.slice(0, 3).join(', '),
+          tipo: t === 'poi' ? 'estabelecimento' : t === 'address' ? 'endereço'
+              : t === 'street' ? 'rua' : t === 'neighbourhood' ? 'bairro'
+              : t === 'municipality' ? 'cidade' : t,
+          lat: f.center[1],
+          lng: f.center[0]
+        };
+      });
+  } catch (e) {
+    console.error('Erro ao buscar locais:', e.message);
+    return [];
+  }
+}
+
+function fecharSugestoesLocal() {
+  const box = document.getElementById('planoLocalSug');
+  const inp = document.getElementById('planoLocalAtuacao');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  if (inp) inp.setAttribute('aria-expanded', 'false');
+  localSugItens = []; localSugIdx = -1;
+}
+
+function pintarSugestoesLocal() {
+  const box = document.getElementById('planoLocalSug');
+  if (!box) return;
+  [...box.querySelectorAll('button')].forEach((b, i) => b.classList.toggle('sel', i === localSugIdx));
+}
+
+function escolherLocal(i) {
+  const s = localSugItens[i];
+  if (!s) return;
+  const inp = document.getElementById('planoLocalAtuacao');
+  const estado = document.getElementById('planoLocalMapaEstado');
+  // Guarda o ponto exato escolhido — nada de re-geocodificar e cair em outro lugar.
+  localEscolhido = { texto: s.nome + (s.contexto ? ', ' + s.contexto : ''), lat: s.lat, lng: s.lng };
+  if (inp) inp.value = localEscolhido.texto;
+  if (estado) {
+    estado.style.color = 'var(--green)';
+    estado.textContent = '\u2713 ' + s.nome + (s.contexto ? ' \u00b7 ' + s.contexto : '')
+      + ' \u2014 o mapa vai priorizar oportunidades perto daqui.';
+  }
+  fecharSugestoesLocal();
+  // Dispara o autosave do plano, que grava o local e redesenha o mapa na nova origem.
+  // BUG pego no teste: sem a flag 'escolhendo', este dispatch reentra no handler de
+  // input abaixo, que zera localEscolhido e reabre a lista — aí o salvamento caía na
+  // geocodificação automática e ignorava justamente o lugar que ele escolheu.
+  if (inp) {
+    inp.dataset.escolhendo = '1';
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    setTimeout(() => { inp.dataset.escolhendo = ''; }, 80);
+  }
+}
+
+function ligarBuscaLocal() {
+  const inp = document.getElementById('planoLocalAtuacao');
+  const box = document.getElementById('planoLocalSug');
+  if (!inp || !box || inp.disabled || inp.dataset.buscaLigada === '1') return;
+  inp.dataset.buscaLigada = '1';
+
+  inp.addEventListener('input', () => {
+    if (inp.dataset.escolhendo === '1') return; // veio do escolherLocal, não re-buscar
+    localEscolhido = null;                      // digitou de novo: escolha anterior caiu
+    const termo = inp.value;
+    clearTimeout(localSugTimer);
+    if (termo.trim().length < 3) { fecharSugestoesLocal(); return; }
+    // 350ms de pausa: sem isso cada tecla queimaria uma chamada da cota da MapTiler.
+    localSugTimer = setTimeout(async () => {
+      const itens = await buscarLocais(termo);
+      localSugItens = itens; localSugIdx = -1;
+      if (!itens.length) {
+        box.innerHTML = '<div style="padding:11px 13px;font-size:12px;color:var(--muted2);">'
+          + 'Nada encontrado. Tente bairro + cidade, ou o nome do restaurante com a cidade.</div>';
+        box.style.display = 'block';
+        inp.setAttribute('aria-expanded', 'true');
+        return;
+      }
+      box.innerHTML = itens.map((s, i) =>
+        '<button type="button" role="option" data-sug="' + i + '">'
+        + '<b>' + esc(s.nome) + '<span class="local-sug-tipo">' + esc(s.tipo) + '</span></b>'
+        + '<span>' + esc(s.contexto || s.detalhe) + '</span>'
+        + '</button>').join('');
+      box.style.display = 'block';
+      inp.setAttribute('aria-expanded', 'true');
+      box.querySelectorAll('[data-sug]').forEach(b => {
+        b.addEventListener('click', () => escolherLocal(Number(b.dataset.sug)));
+      });
+    }, 350);
+  });
+
+  // Teclado: setas + Enter, pra quem preenche sem soltar o teclado.
+  inp.addEventListener('keydown', (ev) => {
+    if (!localSugItens.length) return;
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); localSugIdx = Math.min(localSugIdx + 1, localSugItens.length - 1); pintarSugestoesLocal(); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); localSugIdx = Math.max(localSugIdx - 1, 0); pintarSugestoesLocal(); }
+    else if (ev.key === 'Enter' && localSugIdx >= 0) { ev.preventDefault(); escolherLocal(localSugIdx); }
+    else if (ev.key === 'Escape') { fecharSugestoesLocal(); }
+  });
+
+  document.addEventListener('click', (ev) => {
+    if (!ev.target.closest('.local-busca')) fecharSugestoesLocal();
+  });
+}
+
 async function geocodificarLocalAtuacao(texto) {
   if (!texto || !DATA.maptiler) return null;
   try {
@@ -7024,9 +7164,17 @@ async function salvarPlanoDoDia(ownerId, dataISO, campos) {
   let localLng = existente.local_atuacao_lng ?? null;
   const localMudou = 'local_atuacao' in campos && campos.local_atuacao !== (existente.local_atuacao ?? null);
   if (localMudou) {
-    const geo = await geocodificarLocalAtuacao(campos.local_atuacao);
-    localLat = geo ? geo.lat : null;
-    localLng = geo ? geo.lng : null;
+    // Se ele escolheu na lista de sugestões, usa a coordenada daquela escolha. Só cai
+    // na geocodificação automática quando o texto foi digitado sem escolher nada.
+    if (typeof localEscolhido !== 'undefined' && localEscolhido
+        && String(localEscolhido.texto).trim() === String(campos.local_atuacao || '').trim()) {
+      localLat = localEscolhido.lat;
+      localLng = localEscolhido.lng;
+    } else {
+      const geo = await geocodificarLocalAtuacao(campos.local_atuacao);
+      localLat = geo ? geo.lat : null;
+      localLng = geo ? geo.lng : null;
+    }
   }
 
   const linha = {
@@ -7124,9 +7272,13 @@ async function montarPlanoDoDia(r) {
 
     <div class="plano-origin-card">
       <label for="planoLocalAtuacao" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:block;margin-bottom:8px;">1 · Defina seu território de hoje</label>
-      <input type="text" id="planoLocalAtuacao" maxlength="120" placeholder="Bairro, cidade — ex: Praia do Canto, Vitória" value="${esc(p.local_atuacao || '')}" ${fechado ? 'disabled' : ''}
-        style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">
-      <div id="planoLocalMapaEstado" style="font-size:11px;color:${p.local_atuacao_lat != null ? 'var(--green)' : 'var(--muted2)'};margin-top:6px;line-height:1.5;">${p.local_atuacao_lat != null ? '✓ Região localizada — o mapa está priorizando oportunidades próximas.' : 'Não é a mesma coisa de onde você fez a Daily — digite bairro e cidade para reorganizar o mapa.'}</div>
+      <div class="local-busca">
+        <input type="text" id="planoLocalAtuacao" maxlength="120" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
+          placeholder="Bairro, endereço ou nome do restaurante — ex: Coco Bambu Vitória" value="${esc(p.local_atuacao || '')}" ${fechado ? 'disabled' : ''}
+          style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">
+        <div id="planoLocalSug" class="local-sug" style="display:none;" role="listbox" aria-label="Sugestões de local"></div>
+      </div>
+      <div id="planoLocalMapaEstado" style="font-size:11px;color:${p.local_atuacao_lat != null ? 'var(--green)' : 'var(--muted2)'};margin-top:6px;line-height:1.5;">${p.local_atuacao_lat != null ? '✓ Região localizada — o mapa está priorizando oportunidades próximas.' : 'Digite bairro, endereço ou o nome do restaurante e <b>escolha na lista</b> — o mapa se reorganiza em volta do ponto que você escolher.'}</div>
     </div>
 
     <div class="plano-context-grid">
@@ -7368,6 +7520,7 @@ async function montarPlanoDoDia(r) {
     montarPlanoMapa(r, hoje, fechado);
   });
   const selAval = slot.querySelector('#planoMapaAvalMin');
+  if (typeof ligarBuscaLocal === 'function') ligarBuscaLocal();
   if (selAval) selAval.addEventListener('change', () => { planoMapaFiltro.avalMin = Number(selAval.value) || 0; montarPlanoMapa(r, hoje, fechado); });
   // "Aba" de clientes ativos no mapa (pedido do Julyan, 10/08) — isola só os clientes
   // Takeat já ativos, escondendo os leads novos até desligar de novo. Não mexe na
@@ -7402,6 +7555,107 @@ function gerarRotaPlanoMapa(r, hoje, planoFechado) {
   montarPlanoMapa(r, hoje, planoFechado);
 }
 
+
+/* ---- Restaurantes do mapa (12/08/26) ----
+   Julyan: "o executivo tem que olhar o mapa e as opções que já tem que ir automático
+   pro mapa, eu não preciso ficar importando".
+
+   Por que isso existe: a base de contas-alvo cobre só 4 cidades (Vitória 111, Rio 89,
+   Porto Alegre 56, Vila Velha 14). São Paulo tem ZERO, e Bruno/Michel têm 6 cada no
+   Rio. Medido em 12/08. Resultado prático: executivo abre a Rota & Agenda, o mapa está
+   vazio e ele não tem de onde montar plano nenhum.
+
+   O que faz: varre categorias do ICP em volta do ponto que ele escolheu e plota os
+   estabelecimentos como pinos "do mapa". Automático — nada de importação prévia.
+
+   LIMITE, e ele aparece na tela: esse dado é OpenStreetMap via MapTiler. Tem nome,
+   categoria, endereço e coordenada. NÃO tem nota nem número de avaliações. Então não
+   pode ser misturado com a conta-alvo ranqueada, que é escolhida justamente por volume
+   de avaliações — são naturezas diferentes e a tela diz qual é qual.
+
+   Só vira registro em leads_prospeccao no momento em que ele coloca na rota. Antes
+   disso é sugestão de mapa, não lead. */
+
+const MAPA_CATEGORIAS_ICP = ['restaurante','pizzaria','lanchonete','hamburgueria','bar',
+  'churrascaria','padaria','açaí','sushi','cafeteria','pastelaria','espetinho'];
+const MAPA_RAIO_KM = 5;      // 5km: em Campo Grande/RJ isso deu 12 opções — rota de um dia
+const MAPA_MAX_PINOS = 25;   // teto pra não afogar o mapa nem a lista
+
+// Cache por coordenada de origem: a varredura são 12 chamadas: refazer a cada redesenho
+// do mapa (filtro, incluir/tirar da rota) queimaria a cota da MapTiler sem necessidade.
+let mapaPoisCache = { chave: null, itens: [] };
+
+async function buscarRestaurantesNoMapa(lat, lng) {
+  if (lat == null || lng == null || !DATA.maptiler) return [];
+  const chave = Number(lat).toFixed(3) + ',' + Number(lng).toFixed(3);
+  if (mapaPoisCache.chave === chave) return mapaPoisCache.itens;
+
+  const vistos = new Map();
+  for (const termo of MAPA_CATEGORIAS_ICP) {
+    try {
+      const url = 'https://api.maptiler.com/geocoding/' + encodeURIComponent(termo) + '.json'
+        + '?key=' + DATA.maptiler + '&proximity=' + lng + ',' + lat
+        + '&country=br&language=pt&limit=10&types=poi';
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const json = await resp.json();
+      (json.features || []).forEach(f => {
+        if (!Array.isArray(f.center)) return;
+        const km = distanciaKm(lat, lng, f.center[1], f.center[0]);
+        if (!Number.isFinite(km) || km > MAPA_RAIO_KM) return;
+        const cats = (f.properties || {}).categories || [];
+        // Filtra o que não é do ICP: a MapTiler devolve hotel, posto, mercado junto.
+        if (cats.length && !cats.some(c => /restaurant|fast food|cafe|bakery|bar|pub|ice cream|food|pizza|sushi|barbecue|deli/i.test(c))) return;
+        const chaveItem = agendaNorm(f.text || '') + '|' + f.center.map(n => n.toFixed(4)).join(',');
+        if (vistos.has(chaveItem)) return;
+        const ctx = (f.context || []).map(c => c.text).filter(Boolean);
+        vistos.set(chaveItem, {
+          id: 'mapa-' + chaveItem.replace(/[^a-z0-9]/gi, '').slice(0, 40),
+          nome: f.text || 'Sem nome',
+          categoria: cats[0] || termo,
+          bairro: ctx[0] || null,
+          cidade: ctx.find(t => /[A-Za-zÀ-ú]{3,}/.test(t) && t !== ctx[0]) || null,
+          endereco: f.place_name || null,
+          lat: f.center[1],
+          lng: f.center[0],
+          avaliacoes: null,          // OSM não tem: fica explícito na tela
+          status: 'disponivel_mapa',
+          data_rota: null,
+          _doMapa: true,
+          _km: km
+        });
+      });
+    } catch (e) { /* uma categoria falhar não invalida a varredura */ }
+  }
+  const itens = [...vistos.values()].sort((a, b) => a._km - b._km).slice(0, MAPA_MAX_PINOS);
+  mapaPoisCache = { chave, itens };
+  return itens;
+}
+
+// No momento em que ele escolhe visitar, o POI do mapa vira conta-alvo de verdade.
+// Antes disso não gravamos nada — mapa cheio de lead fantasma é pior que mapa vazio.
+async function materializarLeadDoMapa(poi, ownerId) {
+  const linha = {
+    nome: poi.nome,
+    categoria: poi.categoria || null,
+    bairro: poi.bairro || null,
+    cidade: poi.cidade || null,
+    endereco: poi.endereco || null,
+    lat: poi.lat,
+    lng: poi.lng,
+    avaliacoes: null,
+    fonte: 'mapa',                 // rastreável: veio do mapa, não do ranking mensal
+    responsavel_owner_id: String(ownerId),
+    status: 'na_rota',
+    data_rota: isoDate(new Date()),
+    updated_at: new Date().toISOString()
+  };
+  const { data, error } = await supa.from('leads_prospeccao').insert(linha).select();
+  if (error) { console.error('Erro ao criar conta-alvo do mapa:', error.message); return { error }; }
+  mapaPoisCache = { chave: null, itens: [] };   // já é lead: sai da lista de sugestões
+  return { lead: (data || [])[0] || null };
+}
+
 async function montarPlanoMapa(r, hoje, planoFechado) {
   const box = document.getElementById('planoMapa');
   const lista = document.getElementById('planoMapaLista');
@@ -7417,6 +7671,19 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   if (error) { box.innerHTML = `<div class="empty-state" style="padding-top:190px;">Erro ao carregar contas-alvo: ${esc(error.message)}</div>`; return; }
 
   const todas = data || [];
+
+  // AUTOMÁTICO (12/08): sem depender de importação, o mapa já traz estabelecimentos
+  // em volta do ponto de atuação. Só roda quando ele definiu o ponto — sem origem não
+  // existe "perto daqui". Cache por coordenada evita refazer a varredura a cada filtro.
+  let poisDoMapa = [];
+  if (planoMapaOrigemAtual && planoMapaOrigemAtual.lat != null) {
+    poisDoMapa = await buscarRestaurantesNoMapa(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng);
+    // Não repete o que já é conta-alvo dele: mesmo nome + praticamente mesma coordenada.
+    poisDoMapa = poisDoMapa.filter(p => !todas.some(l =>
+      agendaMesmoLead(l.nome, p.nome) ||
+      (l.lat != null && Math.abs(Number(l.lat) - p.lat) < 0.0005 && Math.abs(Number(l.lng) - p.lng) < 0.0005)
+    ));
+  }
 
   // Fonte única do pipeline quente: negócios do próprio owner em Demo/Proposta,
   // Negociação ou Ag. Pagamento, somados à classificação quente já calculada no build.
@@ -7465,8 +7732,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     }));
   const pipelineSemLocal = pipelineQuente.filter(d => !temCoordProprio(d) && !todas.some(l => l.lat != null && l.lng != null && agendaMesmoLead(l.nome, agendaLeadNome(d))));
   const semCoord = todas.length - comCoord.length;
-  const visiveis = [...comCoord, ...quentesAvulsos].filter(l =>
-    l._pipelineQuente || (
+  const visiveis = [...comCoord, ...quentesAvulsos, ...poisDoMapa].filter(l =>
+    l._doMapa || l._pipelineQuente || (
       prospeccaoFazSentido(l) &&
       (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
       (!planoMapaFiltro.avalMin || (l.avaliacoes || 0) >= planoMapaFiltro.avalMin)
@@ -7592,6 +7859,27 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // execução. Com plano fechado, a seleção fica travada até "Editar plano".
   async function alternarRota(l, botao) {
     if (botao) { botao.disabled = true; botao.textContent = 'Salvando...'; }
+
+    // POI do mapa ainda não existe em leads_prospeccao. Colocar na rota é o momento em
+    // que ele deixa de ser sugestão e passa a ser conta-alvo (fonte='mapa').
+    if (l._doMapa) {
+      const { lead, error: eIns } = await materializarLeadDoMapa(l, r.ownerId);
+      if (eIns || !lead) {
+        mostrarToast('Não consegui salvar esse estabelecimento como conta-alvo. Tente de novo.', 'erro');
+        if (botao) { botao.disabled = false; botao.textContent = 'Incluir na rota'; }
+        return;
+      }
+      const ordemMapa = ordenadasTodas.filter(naRotaHojeFn).length;
+      const minMapa = Math.min(9 * 60 + ordemMapa * 45, 17 * 60);
+      const horaMapa = String(Math.floor(minMapa / 60)).padStart(2, '0') + ':' + String(minMapa % 60).padStart(2, '0');
+      criarTarefaVisitaNoHubspot({ nome: lead.nome, bairro: lead.bairro, cidade: lead.cidade }, r.ownerId, horaMapa)
+        .catch(e => console.error('Falha ao criar tarefa de visita (lead do mapa):', e));
+      mostrarToast('"' + lead.nome + '" entrou na sua rota e virou conta-alvo.', 'sucesso');
+      planoRotaGerada = false;
+      montarPlanoMapa(r, hoje, planoFechado);
+      return;
+    }
+
     const estavaNaRota = naRotaHojeFn(l);
     const campos = estavaNaRota
       ? { status: 'atribuido', data_rota: null }
@@ -7667,13 +7955,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     const posicao = indiceRota.get(String(l.id));
     // Sem rota gerada ainda, mostra "✓ selecionado" em vez de um número que ainda
     // não existe — a numeração só nasce depois do clique em "Gerar rota".
-    const simbolo = naRota ? (planoRotaGerada ? posicao : '✓') : quenteHub(l) ? '!' : noHubspot(l) ? 'H' : l.status === 'sem_fit' ? '×' : '★';
+    const simbolo = naRota ? (planoRotaGerada ? posicao : '✓') : l._doMapa ? '◇' : quenteHub(l) ? '!' : noHubspot(l) ? 'H' : l.status === 'sem_fit' ? '×' : '★';
     return `
       <div class="plano-lista-item ${naRota ? 'is-route' : ''}" data-id="${esc(String(l.id))}">
         <span class="plano-lista-index" ${naRota ? '' : `style="color:${corDoStatus(l)};"`}>${simbolo}</span>
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
           <span class="plano-lista-meta">${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
+          ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>` : ''}
           ${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
