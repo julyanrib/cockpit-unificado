@@ -4951,6 +4951,10 @@ document.addEventListener('keydown', function (ev) {
 
 // ============ ABAS (Cockpit / Resumo Semanal) ============
 function activateTab(viewId) {
+  // Sair da Rota & Agenda rearma o zeramento do território (Julyan, 11/08): na próxima
+  // vez que ele entrar, o campo nasce vazio de novo e ele declara onde vai atuar HOJE,
+  // em vez de herdar em silêncio a última região digitada.
+  if (viewId !== 'viewRotas') planoAbaJaMontada = false;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.removeAttribute('aria-current'); });
   const view = document.getElementById(viewId);
@@ -6905,6 +6909,9 @@ let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false, soCli
   soComTelefone: false }; // porta com telefone dá pra ligar antes de bater
 let planoMapaPopupAtual = null;
 let planoMapaOrigemAtual = null;
+// Vira true na 1ª montagem da aba e volta a false ao sair dela — é o que faz o
+// território do dia nascer vazio a cada entrada, sem zerar a cada redesenho interno.
+let planoAbaJaMontada = false;
 let planoMapaRenderAtual = null;
 // Pedido do Julyan (10/08): a rota (sequência numerada + linha no mapa) só deve
 // existir quando ele pedir de propósito — não recalcular sozinha a cada lead
@@ -7256,11 +7263,32 @@ async function montarPlanoDoDia(r) {
   }
 
   const p = planoDiaCache || {};
-  // A região digitada é a origem oficial do planejamento. Ao reabrir a aba, o mapa
-  // deve nascer centrado nela — não voltar silenciosamente para a primeira conta.
-  planoMapaOrigemAtual = p.local_atuacao_lat != null && p.local_atuacao_lng != null
-    ? { lat: Number(p.local_atuacao_lat), lng: Number(p.local_atuacao_lng) }
-    : null;
+  // MUDANÇA (Julyan, 11/08): o território NÃO repopula sozinho ao reabrir a aba.
+  // Antes, reabrir a Rota & Agenda trazia de volta o último local digitado e o mapa
+  // nascia mostrando oportunidades de um lugar onde ele talvez não esteja mais hoje —
+  // plano velho com cara de plano novo. Agora ele declara onde vai atuar toda vez que
+  // entra: o campo nasce vazio e o mapa só prioriza depois da declaração.
+  // Só zera na PRIMEIRA montagem da aba; redesenhos internos (filtro, incluir/tirar da
+  // rota) preservam o que ele acabou de digitar.
+  if (!planoAbaJaMontada) {
+    planoAbaJaMontada = true;
+    planoMapaOrigemAtual = null;
+    localEscolhido = null;
+    mapaPoisCache = { chave: null, itens: [] };
+    if (p.local_atuacao || p.local_atuacao_lat != null) {
+      // Limpa também no banco: o gestor não pode ver "região informada" de uma
+      // declaração que o executivo não fez hoje.
+      supa.from('planos_diarios')
+        .update({ local_atuacao: null, local_atuacao_lat: null, local_atuacao_lng: null })
+        .eq('owner_id', r.ownerId).eq('data', hoje)
+        .then(() => { if (planoDiaCache) { planoDiaCache.local_atuacao = null; planoDiaCache.local_atuacao_lat = null; planoDiaCache.local_atuacao_lng = null; } });
+      p.local_atuacao = null; p.local_atuacao_lat = null; p.local_atuacao_lng = null;
+    }
+  } else {
+    planoMapaOrigemAtual = p.local_atuacao_lat != null && p.local_atuacao_lng != null
+      ? { lat: Number(p.local_atuacao_lat), lng: Number(p.local_atuacao_lng) }
+      : null;
+  }
   const fechado = p.status === 'plano_fechado' && !planoEmEdicao;
   const editandoPlanoFechado = p.status === 'plano_fechado' && planoEmEdicao;
   const prios = Array.isArray(p.prioridades) ? p.prioridades : [];
@@ -7600,7 +7628,9 @@ function sincronizarFiltrosDoMapa(poisDoMapa) {
   // Se o tipo selecionado sumiu da praça atual, volta pra "todos" em vez de mostrar vazio.
   if (planoMapaFiltro.tipoMapa && !contagem.has(planoMapaFiltro.tipoMapa)) planoMapaFiltro.tipoMapa = '';
 
-  sel.innerHTML = `<option value="">todos (${base.length})</option>` + ordenados
+  // Honestidade no rótulo: se bateu no teto, o número não é "todos", é o corte.
+  const noTeto = base.length >= MAPA_MAX_PINOS;
+  sel.innerHTML = `<option value="">${noTeto ? `os ${base.length} mais próximos` : `todos (${base.length})`}</option>` + ordenados
     .map(([t, n]) => `<option value="${esc(t)}" ${planoMapaFiltro.tipoMapa === t ? 'selected' : ''}>${esc(t)} (${n})</option>`)
     .join('');
 }
@@ -8170,7 +8200,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
           <span class="plano-lista-meta">${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
-          ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}${l.telefone ? ' · 📞 tem telefone' : ''}</span>` : ''}
+          ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>${l.telefone ? `<span class="plano-etapa-hub" style="color:var(--violet);">📞 ${esc(l.telefone)}</span>` : ''}` : ''}
           ${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
@@ -8250,9 +8280,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // senão o botão "+" deles no popup/lista não acha marcador pra reagir ao clique.
   // Com o filtro "Clientes ativos" ligado, some com os leads ainda não escolhidos —
   // só os já confirmados na rota (de qualquer tipo) e todos os clientes ficam visíveis.
+  // BUG CORRIGIDO (11/08): o mapa usava `ordenadas`, que já vem fatiada em
+  // LIMITE_RECOMENDADAS (10). Resultado: o endpoint entregava 120 estabelecimentos, o
+  // filtro contava 120 e o mapa plotava 10. Mapa e lista têm propósitos diferentes —
+  // a LISTA é uma short list pra ler (10 cabem na tela), o MAPA é o território inteiro
+  // pra enxergar de onde vem o dia. Agora cada um tem seu próprio limite.
   const paraExibirNoMapa = planoMapaFiltro.soClientes
-    ? [...ordenadas.filter(naRotaHojeFn), ...clientesSugestao]
-    : [...ordenadas, ...clientesSugestao];
+    ? [...visiveis.filter(naRotaHojeFn), ...clientesSugestao]
+    : [...visiveis, ...clientesSugestao];
   paraExibirNoMapa.forEach(l => {
     const naRota = naRotaHojeFn(l);
     const posicaoTop = posicaoTopMapa.get(String(l.id));
