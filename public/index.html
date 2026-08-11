@@ -4950,6 +4950,16 @@ document.addEventListener('keydown', function (ev) {
 });
 
 // ============ ABAS (Cockpit / Resumo Semanal) ============
+
+// ATENÇÃO À POSIÇÃO DESTA LINHA (bug de produção em 11/08, corrigido):
+// activateTab() é chamada no TOPO do script, durante a execução síncrona inicial.
+// Esta flag estava declarada lá embaixo, junto do estado do mapa — `let` em temporal
+// dead zone fazia activateTab estourar "Cannot access before initialization", e a
+// exceção abortava o resto do script inteiro: o login travava em "carregando seus
+// dados" e nada mais inicializava. Toda variável que activateTab lê precisa nascer
+// ACIMA dela. Não mover isso para perto do resto do estado do mapa.
+let planoAbaJaMontada = false;
+
 function activateTab(viewId) {
   // Sair da Rota & Agenda rearma o zeramento do território (Julyan, 11/08): na próxima
   // vez que ele entrar, o campo nasce vazio de novo e ele declara onde vai atuar HOJE,
@@ -6909,9 +6919,6 @@ let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false, soCli
   soComTelefone: false }; // porta com telefone dá pra ligar antes de bater
 let planoMapaPopupAtual = null;
 let planoMapaOrigemAtual = null;
-// Vira true na 1ª montagem da aba e volta a false ao sair dela — é o que faz o
-// território do dia nascer vazio a cada entrada, sem zerar a cada redesenho interno.
-let planoAbaJaMontada = false;
 let planoMapaRenderAtual = null;
 // Pedido do Julyan (10/08): a rota (sequência numerada + linha no mapa) só deve
 // existir quando ele pedir de propósito — não recalcular sozinha a cada lead
