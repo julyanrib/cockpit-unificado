@@ -3947,6 +3947,14 @@ function agendaNormalizar(raw) {
     else if (it.hs_task_subject !== undefined) e = agendaDoHubspotTask(it, i);
     else if (it.hs_note_body !== undefined) e = agendaDoHubspotNota(it, i);
     else e = agendaDoApp(it, i);
+    // Associação do HubSpot manda: dealname é o nome real do lead, e o dono do negócio
+    // resolve a nota do Expogo que chega sem hubspot_owner_id (era o que fazia
+    // compromisso sumir da agenda de todo mundo).
+    if (e) {
+      if (it.lead_nome) { e.cliente = it.lead_nome; e.leadDoNegocio = true; }
+      if (!e.ownerId && it.lead_owner_id) { e.ownerId = String(it.lead_owner_id); e.donoDoNegocio = true; }
+      if (it.lead_deal_id) e.dealId = String(it.lead_deal_id);
+    }
     if (e && e.inicio && e.ownerId) out.push(e);
     else if (e && e.inicio) {
       // Tem data e hora, mas não deu pra saber de quem é. Não pode sumir: é um
@@ -8284,8 +8292,8 @@ async function renderDaily() {
         .sort((a, b) => a.inicio - b.inicio)
         .map(ev => ({
           hora: agendaHhmm(ev.inicio),
-          lead: agendaNomeDoLead(ev.cliente || ev.titulo),
-          motivo: agendaMotivoSemLead(ev.cliente || ev.titulo),
+          lead: ev.leadDoNegocio ? (ev.cliente || null) : agendaNomeDoLead(ev.cliente || ev.titulo),
+          motivo: ev.leadDoNegocio ? 'ok' : agendaMotivoSemLead(ev.cliente || ev.titulo),
           tipo: ev.tipo
         }));
     })();
