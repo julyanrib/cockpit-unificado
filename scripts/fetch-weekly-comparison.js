@@ -55,13 +55,29 @@ function fmtRange(start, end) {
   return `${f(start)}–${f(end)}/${ano}`;
 }
 
-// Conta negócios criados na janela (sem filtro de teste aqui — volume geral só de referência)
+// Etapa "Conta Alvo": lista que o Julyan sobe MANUALMENTE em lote, antes de qualquer
+// trabalho de campo. Não é atividade de executivo.
+const STAGE_CONTA_ALVO = '1413529973';
+
+// Conta negócios criados na janela — EXCLUINDO Conta Alvo.
+//
+// POR QUE (Julyan, 11/08: "contas alvo não precisam contar ali, só a partir de
+// prospecção"). Medido no dia: em agosto foram criados 597 negócios no pipeline, dos
+// quais 456 (76%) eram Conta Alvo. A análise semanal leu isso como "a criação de
+// negócios explodiu de 102 para 566 — o maior volume registrado" e tratou um upload de
+// planilha como performance do time. Número inflado é pior que número ausente: ele
+// desloca a leitura da semana inteira e some com o sinal real, que era 72.
+//
+// O filtro é pela etapa ATUAL, e isso é proposital: conta-alvo que o executivo pegou e
+// levou pra Prospecção já saiu de "Conta Alvo" e volta a contar — que é exatamente a
+// régua pedida, "só a partir de prospecção".
 async function leadsCriadosNaJanela(startMs, endMs) {
   const data = await hsSearch({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
-        { propertyName: 'createdate', operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
+        { propertyName: 'createdate', operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) },
+        { propertyName: 'dealstage', operator: 'NEQ', value: STAGE_CONTA_ALVO }
       ]
     }],
     limit: 1
