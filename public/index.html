@@ -1344,8 +1344,19 @@
   .ag-action-foot{margin-top:10px;color:var(--muted2);font-size:10.5px;line-height:1.45;}
 
   /* Plano do executivo: o destino abre o fluxo e o mapa se lê em três camadas. */
-  .plano-origin-card{position:relative;overflow:hidden;background:var(--dark);color:var(--dark-ink);border:0;border-radius:var(--r-xl);padding:20px 22px;box-shadow:var(--shadow);margin-bottom:14px;}
+  /* CORRIGIDO 11/08: este card tinha overflow:hidden, e a lista de sugestões do
+     território (position:absolute dentro dele) era CORTADA na borda — aparecia só o
+     primeiro resultado e meia linha do segundo. O overflow existia só pra conter o
+     círculo decorativo do ::after, então o recorte foi movido pra ele: o brilho
+     continua contido e a lista pode transbordar o card, que é o certo pra dropdown. */
+  .plano-origin-card{position:relative;background:var(--dark);color:var(--dark-ink);border:0;border-radius:var(--r-xl);padding:20px 22px;box-shadow:var(--shadow);margin-bottom:14px;}
   .plano-origin-card::after{content:"";position:absolute;width:280px;height:280px;right:-120px;top:-190px;border-radius:50%;background:radial-gradient(circle,rgba(229,26,49,.26),transparent 68%);pointer-events:none;}
+  /* O recorte do brilho agora mora num wrapper interno, que não envolve o dropdown. */
+  .plano-origin-card{isolation:isolate;}
+  .plano-origin-card > *{position:relative;z-index:1;}
+  .plano-origin-card::after{clip-path:inset(190px 120px 0 0 round 0);}
+  /* A lista precisa vencer o empilhamento do card e de quem vier depois. */
+  .local-busca{z-index:40;}
   .plano-origin-card label{color:var(--dark-mut)!important;}
   .plano-origin-card input{position:relative;z-index:1;min-height:46px;background:rgba(255,255,255,.07)!important;border-color:rgba(255,255,255,.14)!important;color:#fff!important;font-size:14px!important;}
   .plano-origin-card input::placeholder{color:rgba(255,255,255,.35);}
@@ -4685,17 +4696,25 @@ function renderAgenda() {
     if (meuRep) montarPlanoDoDia(meuRep).catch(e => console.error('Erro ao montar o plano do dia:', e));
   }
 
-  // Sub-aba Prospecção: MOVE o nó real de #prospeccaoNovaContent para dentro da Rota,
-  // em vez de criar um segundo elemento com o mesmo id. Duplicar id faria
-  // getElementById devolver sempre o primeiro do documento e a fila renderizaria numa
-  // tela invisível — bug silencioso e chato de achar. Movendo, renderProspeccaoNova
-  // continua intocada: ela procura o mesmo id de sempre, que agora mora aqui.
+  // Sub-aba Prospecção — CORRIGIDO em 11/08.
+  //
+  // A versão anterior MOVIA o nó #prospeccaoNovaContent (que mora na view do gestor)
+  // para dentro da Rota, pra não duplicar id. Só que renderAgenda reescreve o innerHTML
+  // da view inteira a cada redesenho — e declarar o território é um redesenho. O nó
+  // movido ia junto e sumia do documento PARA SEMPRE: o clique seguinte na Prospecção
+  // não achava container nenhum e a aba abria vazia, sem erro no console (não havia
+  // exceção — simplesmente não havia onde desenhar).
+  //
+  // Agora a Rota tem container PRÓPRIO, criado e destruído com ela, e o do gestor fica
+  // intocado. Quem decide onde desenhar é prospeccaoContainer().
   if (mostrarProspeccao) {
     const destino = document.getElementById('prospeccaoSlotRota');
-    const conteudo = document.getElementById('prospeccaoNovaContent');
-    if (destino && conteudo) {
-      if (conteudo.parentElement !== destino) destino.appendChild(conteudo);
-      conteudo.hidden = false;
+    if (destino) {
+      if (!destino.firstElementChild) {
+        const novo = document.createElement('div');
+        novo.id = 'prospeccaoNovaRota';
+        destino.appendChild(novo);
+      }
       if (typeof renderProspeccaoNova === 'function') {
         Promise.resolve(renderProspeccaoNova()).catch(e => console.error('Erro ao montar a prospecção na rota:', e));
       }
@@ -10507,7 +10526,9 @@ function prospeccaoCardHTML(l) {
 }
 
 async function renderProspeccaoNova(soReaplicarFiltro) {
-  const el = document.getElementById('prospeccaoNovaContent');
+  // Dois lugares podem hospedar a fila: a sub-aba da Rota (executivo) e a aba de topo
+  // (gestor). Prefere o da Rota quando ele está montado — é a tela ativa naquele momento.
+  const el = document.getElementById('prospeccaoNovaRota') || document.getElementById('prospeccaoNovaContent');
   if (!el) return;
   // Correção 10/08 (Julyan — "muito bug clicável... quando pesquisa, na aba
   // Prospecção"): busca, pílulas de filtro, dropdowns e o "selecionar todos" chamavam
