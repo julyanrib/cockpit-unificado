@@ -2086,6 +2086,20 @@ function aplicarVisaoPorPapel() {
   const btnRotas = document.getElementById('tabBtnRotas');
   if (btnRotas) btnRotas.style.display = souGestorSessao ? 'flex' : 'none';
 
+  // Prospecção (Julyan, 11/08): para o EXECUTIVO ela virou sub-aba da Rota & Agenda —
+  // "rota e prospecção andam lado a lado", ele monta o dia sem trocar de tela, e o
+  // badge de 56 virou contador na própria sub-aba. Para o GESTOR continua aba de topo,
+  // porque ver a fila do time inteiro é papel dele e ele não usa a Rota do executivo.
+  const btnProsp = document.getElementById('tabBtnLeadsPraca');
+  if (btnProsp) btnProsp.style.display = souRep ? 'none' : 'flex';
+  // Se o executivo estava na Prospecção quando a aba sumiu, leva ele pra Rota & Agenda
+  // já na sub-aba certa — em vez de deixar a tela ativa num botão que não existe mais.
+  if (souRep && document.querySelector('.view.active')?.id === 'viewLeadsPraca') {
+    if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'prospeccao';
+    activateTab('viewAgenda');
+    if (typeof renderAgenda === 'function') renderAgenda();
+  }
+
   // Nomenclatura do design final (Claude Design): o rótulo muda por papel, a view por
   // trás continua a mesma — "Daily" e "Agenda" já existiam, só o texto era genérico.
   // "Resumo Semanal" e "Desenvolvimento" seguem com o nome do gestor pros dois papéis
@@ -4495,13 +4509,26 @@ function renderAgenda() {
       </div>
     </div>`;
   })() : '';
+  // PROSPECÇÃO DENTRO DA ROTA (Julyan, 11/08): "as rota e prospecção andam lado a lado".
+  // Era aba separada no topo, com badge de 56. Virou sub-aba aqui, e o badge virou
+  // contador na própria aba — o executivo monta o dia sem trocar de tela.
+  // Continua existindo como aba de topo para o GESTOR, que precisa ver a fila do time.
+  const mostrarProspeccao = souRep && agendaEstado.subview === 'prospeccao';
+  const filaProspeccao = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache))
+    ? prospeccaoCache.filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l)).length
+    : 0;
   const segSubviewExec = souRep ?
     '<div class="ag-seg" role="group" aria-label="Ver" style="margin:18px 0 20px;">' +
     '<button data-agsub="hoje" aria-pressed="' + mostrarHoje + '">📍 Hoje</button>' +
-    '<button data-agsub="semana" aria-pressed="' + mostrarSemana + '">🗓️ Semana</button></div>' : '';
+    '<button data-agsub="semana" aria-pressed="' + mostrarSemana + '">🗓️ Semana</button>' +
+    '<button data-agsub="prospeccao" aria-pressed="' + mostrarProspeccao + '">🎯 Prospecção' +
+    (filaProspeccao ? '<span style="margin-left:6px;background:var(--red);color:#fff;border-radius:999px;padding:1px 7px;font-size:10.5px;font-weight:800;">' + filaProspeccao + '</span>' : '') +
+    '</button></div>' : '';
 
-  let h = bannerAgendaGestor + bannerAgendaExec + segSubviewExec + resumoSemanaHojeExec +
-    (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '');
+  let h = bannerAgendaGestor + bannerAgendaExec + segSubviewExec +
+    (mostrarProspeccao ? '' : resumoSemanaHojeExec) +
+    (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '') +
+    (mostrarProspeccao ? '<div id="prospeccaoSlotRota"></div>' : '');
 
   // Centro de ação do gestor: uma fonte visual para os dois riscos que exigem
   // cobrança na daily — executivo sem cobertura e oportunidade quente sem próximo passo.
@@ -4599,6 +4626,23 @@ function renderAgenda() {
   if (souRep && DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
     const meuRep = (DATA.reps || []).find(x => x.ownerId === sessaoAtual.ownerId);
     if (meuRep) montarPlanoDoDia(meuRep).catch(e => console.error('Erro ao montar o plano do dia:', e));
+  }
+
+  // Sub-aba Prospecção: MOVE o nó real de #prospeccaoNovaContent para dentro da Rota,
+  // em vez de criar um segundo elemento com o mesmo id. Duplicar id faria
+  // getElementById devolver sempre o primeiro do documento e a fila renderizaria numa
+  // tela invisível — bug silencioso e chato de achar. Movendo, renderProspeccaoNova
+  // continua intocada: ela procura o mesmo id de sempre, que agora mora aqui.
+  if (mostrarProspeccao) {
+    const destino = document.getElementById('prospeccaoSlotRota');
+    const conteudo = document.getElementById('prospeccaoNovaContent');
+    if (destino && conteudo) {
+      if (conteudo.parentElement !== destino) destino.appendChild(conteudo);
+      conteudo.hidden = false;
+      if (typeof renderProspeccaoNova === 'function') {
+        Promise.resolve(renderProspeccaoNova()).catch(e => console.error('Erro ao montar a prospecção na rota:', e));
+      }
+    }
   }
 
   // Bloco 2b-iii (09/08): distância de cada quente-sem-compromisso até onde o
@@ -4961,10 +5005,14 @@ document.addEventListener('keydown', function (ev) {
 let planoAbaJaMontada = false;
 
 function activateTab(viewId) {
-  // Sair da Rota & Agenda rearma o zeramento do território (Julyan, 11/08): na próxima
-  // vez que ele entrar, o campo nasce vazio de novo e ele declara onde vai atuar HOJE,
-  // em vez de herdar em silêncio a última região digitada.
-  if (viewId !== 'viewRotas') planoAbaJaMontada = false;
+  // Zera o território a cada clique de aba (Julyan, 11/08: "tem q zerar ao clicar na
+  // aba"). Assim ele declara onde vai atuar HOJE toda vez, em vez de herdar em silêncio
+  // a última região digitada.
+  // CORRIGIDO 11/08: a versão anterior testava 'viewRotas', que é a aba ROTAS DO GESTOR.
+  // A Rota & Agenda do executivo é 'viewAgenda' (o rótulo muda por papel, ver
+  // aplicarVisaoPorPapel). Funcionava por coincidência; agora zera sempre, que é
+  // exatamente o pedido, e não depende de acertar o nome da view.
+  planoAbaJaMontada = false;
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => { b.classList.remove('active'); b.removeAttribute('aria-current'); });
   const view = document.getElementById(viewId);
