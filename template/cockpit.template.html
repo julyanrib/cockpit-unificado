@@ -7556,80 +7556,125 @@ function gerarRotaPlanoMapa(r, hoje, planoFechado) {
 }
 
 
-/* ---- Restaurantes do mapa (12/08/26) ----
+/* ---- Estabelecimentos do mapa (pinos ◇) ----
    Julyan: "o executivo tem que olhar o mapa e as opções que já tem que ir automático
    pro mapa, eu não preciso ficar importando".
 
-   Por que isso existe: a base de contas-alvo cobre só 4 cidades (Vitória 111, Rio 89,
-   Porto Alegre 56, Vila Velha 14). São Paulo tem ZERO, e Bruno/Michel têm 6 cada no
-   Rio. Medido em 12/08. Resultado prático: executivo abre a Rota & Agenda, o mapa está
-   vazio e ele não tem de onde montar plano nenhum.
+   MOTOR TROCADO em 11/08 (era 12 chamadas de geocoding da MapTiler).
 
-   O que faz: varre categorias do ICP em volta do ponto que ele escolheu e plota os
-   estabelecimentos como pinos "do mapa". Automático — nada de importação prévia.
+   POR QUE A VARREDURA ANTIGA MORREU:
+   Ela chutava 12 palavras ('restaurante','pizzaria','lanchonete'...) no geocoding da
+   MapTiler e juntava o que voltava. Três problemas medidos, não supostos:
+     - 12 chamadas HTTP por ponto de atuação, queimando cota da MapTiler à toa;
+     - geocoding é busca por NOME, não por categoria: dependia do estabelecimento ter a
+       palavra no nome, então "Cantina do Zé" (restaurante) não aparecia em 'restaurante';
+     - em Campo Grande/RJ devolvia 12 opções. O endpoint, no mesmo ponto, devolve 65 —
+       com telefone e CEP, que o geocoding não dá.
 
-   LIMITE, e ele aparece na tela: esse dado é OpenStreetMap via MapTiler. Tem nome,
-   categoria, endereço e coordenada. NÃO tem nota nem número de avaliações. Então não
-   pode ser misturado com a conta-alvo ranqueada, que é escolhida justamente por volume
-   de avaliações — são naturezas diferentes e a tela diz qual é qual.
+   AGORA: 1 chamada a api/restaurantes-proximos, que consulta o OpenStreetMap por
+   CATEGORIA de verdade (amenity/shop) e responde do cache pré-aquecido pelo robô das
+   23:59. Praça aquecida = ~500ms. Praça fora da lista = ~3s (consulta ao vivo).
 
-   Só vira registro em leads_prospeccao no momento em que ele coloca na rota. Antes
-   disso é sugestão de mapa, não lead. */
+   LIMITE, e ele aparece na tela: OSM não tem nota nem número de avaliações. Por isso o
+   pino ◇ ("porta pra bater") é visualmente separado da conta-alvo ★ ranqueada, que é
+   escolhida justamente por volume de avaliações. São naturezas diferentes e a tela diz
+   qual é qual — de propósito.
 
-const MAPA_CATEGORIAS_ICP = ['restaurante','pizzaria','lanchonete','hamburgueria','bar',
-  'churrascaria','padaria','açaí','sushi','cafeteria','pastelaria','espetinho'];
-const MAPA_RAIO_KM = 5;      // 5km: em Campo Grande/RJ isso deu 12 opções — rota de um dia
-const MAPA_MAX_PINOS = 25;   // teto pra não afogar o mapa nem a lista
+   Só vira registro em leads_prospeccao no momento em que ele coloca na rota. Antes disso
+   é sugestão de mapa, não lead. */
 
-// Cache por coordenada de origem: a varredura são 12 chamadas: refazer a cada redesenho
-// do mapa (filtro, incluir/tirar da rota) queimaria a cota da MapTiler sem necessidade.
+const MAPA_RAIO_KM = 3;      // igual ao raio padrão do endpoint: cai direto no cache quente
+const MAPA_MAX_PINOS = 120;  // 65 em Campo Grande/RJ couberam folgados; teto só pra não afogar
+
+// O endpoint pode responder do cache (rápido) ou consultar ao vivo (alguns segundos). A
+// tela mostra qual dos dois foi, porque "demorou" com explicação é diferente de "travou".
+let mapaPoisMeta = { origem: null, buscadoEm: null, total: 0, erro: null, aviso: null };
+
+// Cache em memória por coordenada: redesenhar o mapa (filtro, incluir/tirar da rota) não
+// pode refazer a chamada. O cache de verdade, entre sessões, vive no Supabase.
 let mapaPoisCache = { chave: null, itens: [] };
 
+// Dobra CEP dentro do endereço: leads_prospeccao não tem coluna cep, e perder o CEP seria
+// perder justamente o que o geocoding antigo nunca deu.
+function mapaEnderecoCompleto(it) {
+  const partes = [];
+  if (it.endereco) partes.push(it.endereco);
+  if (it.bairro) partes.push(it.bairro);
+  if (it.cidade) partes.push(it.cidade);
+  if (it.cep) partes.push('CEP ' + it.cep);
+  return partes.length ? partes.join(' · ') : null;
+}
+
 async function buscarRestaurantesNoMapa(lat, lng) {
-  if (lat == null || lng == null || !DATA.maptiler) return [];
+  if (lat == null || lng == null) return [];
   const chave = Number(lat).toFixed(3) + ',' + Number(lng).toFixed(3);
   if (mapaPoisCache.chave === chave) return mapaPoisCache.itens;
 
-  const vistos = new Map();
-  for (const termo of MAPA_CATEGORIAS_ICP) {
-    try {
-      const url = 'https://api.maptiler.com/geocoding/' + encodeURIComponent(termo) + '.json'
-        + '?key=' + DATA.maptiler + '&proximity=' + lng + ',' + lat
-        + '&country=br&language=pt&limit=10&types=poi';
-      const resp = await fetch(url);
-      if (!resp.ok) continue;
-      const json = await resp.json();
-      (json.features || []).forEach(f => {
-        if (!Array.isArray(f.center)) return;
-        const km = distanciaKm(lat, lng, f.center[1], f.center[0]);
-        if (!Number.isFinite(km) || km > MAPA_RAIO_KM) return;
-        const cats = (f.properties || {}).categories || [];
-        // Filtra o que não é do ICP: a MapTiler devolve hotel, posto, mercado junto.
-        if (cats.length && !cats.some(c => /restaurant|fast food|cafe|bakery|bar|pub|ice cream|food|pizza|sushi|barbecue|deli/i.test(c))) return;
-        const chaveItem = agendaNorm(f.text || '') + '|' + f.center.map(n => n.toFixed(4)).join(',');
-        if (vistos.has(chaveItem)) return;
-        const ctx = (f.context || []).map(c => c.text).filter(Boolean);
-        vistos.set(chaveItem, {
-          id: 'mapa-' + chaveItem.replace(/[^a-z0-9]/gi, '').slice(0, 40),
-          nome: f.text || 'Sem nome',
-          categoria: cats[0] || termo,
-          bairro: ctx[0] || null,
-          cidade: ctx.find(t => /[A-Za-zÀ-ú]{3,}/.test(t) && t !== ctx[0]) || null,
-          endereco: f.place_name || null,
-          lat: f.center[1],
-          lng: f.center[0],
-          avaliacoes: null,          // OSM não tem: fica explícito na tela
-          status: 'disponivel_mapa',
-          data_rota: null,
-          _doMapa: true,
-          _km: km
-        });
-      });
-    } catch (e) { /* uma categoria falhar não invalida a varredura */ }
+  // A rota é fail-closed no servidor: sem sessão válida ela recusa. Falhar aqui em
+  // silêncio deixaria o mapa vazio sem explicação, então registra o motivo.
+  const token = await tokenDeSessaoGlobal();
+  if (!token) {
+    mapaPoisMeta = { origem: null, buscadoEm: null, total: 0, aviso: null,
+      erro: 'Sessão expirada — recarregue a página e entre de novo.' };
+    return [];
   }
-  const itens = [...vistos.values()].sort((a, b) => a._km - b._km).slice(0, MAPA_MAX_PINOS);
-  mapaPoisCache = { chave, itens };
-  return itens;
+
+  const t0 = Date.now();
+  try {
+    // 35s de teto: o pior caso real do endpoint é ~32s (4 espelhos da Overpass fora do ar
+    // em sequência). Cortar em 8s transformaria "espelho lento" em "mapa vazio".
+    const resp = await comPrazoGlobal(async (signal) => fetch('/api/restaurantes-proximos', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ lat: lat, lng: lng, raioKm: MAPA_RAIO_KM })
+    }), 35000, 'restaurantes-proximos');
+
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok || !json.ok) {
+      mapaPoisMeta = { origem: null, buscadoEm: null, total: 0, aviso: null,
+        erro: (json && json.erro) || 'Não consegui buscar estabelecimentos agora.' };
+      return [];
+    }
+
+    const itens = (json.itens || []).slice(0, MAPA_MAX_PINOS).map(it => ({
+      // Mesmo formato que a tela já consome — o resto do plano não muda de nada.
+      id: 'mapa-' + String(it.osm_id || (it.nome + it.lat)).replace(/[^a-z0-9]/gi, '').slice(0, 40),
+      nome: it.nome || 'Sem nome',
+      categoria: it.tipo || null,
+      bairro: it.bairro || null,
+      cidade: it.cidade || null,
+      endereco: mapaEnderecoCompleto(it),
+      lat: Number(it.lat),
+      lng: Number(it.lng),
+      avaliacoes: null,            // OSM não tem: fica explícito na tela
+      status: 'disponivel_mapa',
+      data_rota: null,
+      _doMapa: true,
+      _km: Number(it.km),
+      // Campos que o geocoding antigo não entregava e que servem em campo: dá pra ligar
+      // antes de bater na porta e conferir se está aberto.
+      telefone: it.telefone || null,
+      _cep: it.cep || null,
+      _horario: it.horario || null,
+      _site: it.site || null,
+      _cozinha: it.cozinha || null
+    }));
+
+    mapaPoisMeta = {
+      origem: json.origem || null,        // 'cache' | 'cache-regiao' | 'overpass'
+      buscadoEm: json.buscadoEm || null,
+      total: itens.length,
+      aviso: json.aviso || null,
+      erro: null,
+      segundos: Math.round((Date.now() - t0) / 100) / 10
+    };
+    mapaPoisCache = { chave: chave, itens: itens };
+    return itens;
+  } catch (e) {
+    mapaPoisMeta = { origem: null, buscadoEm: null, total: 0, aviso: null,
+      erro: 'Busca de estabelecimentos demorou demais ou a rede caiu. Tente de novo.' };
+    return [];
+  }
 }
 
 // No momento em que ele escolhe visitar, o POI do mapa vira conta-alvo de verdade.
@@ -7641,6 +7686,9 @@ async function materializarLeadDoMapa(poi, ownerId) {
     bairro: poi.bairro || null,
     cidade: poi.cidade || null,
     endereco: poi.endereco || null,
+    // O telefone vem do OSM e a coluna já existe: perder ele aqui obrigaria o executivo
+    // a caçar o número na rua, tendo tido ele na tela um clique antes.
+    telefone: poi.telefone || null,
     lat: poi.lat,
     lng: poi.lng,
     avaliacoes: null,
@@ -7962,7 +8010,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
           <span class="plano-lista-meta">${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
-          ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>` : ''}
+          ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}${l.telefone ? ' · 📞 tem telefone' : ''}</span>` : ''}
           ${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
@@ -8066,6 +8114,10 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       <div class="plano-popup-title">${esc(l.nome)}</div>
       ${detalhe ? `<div class="plano-popup-meta">${esc(detalhe)}</div>` : ''}
       ${l.avaliacoes != null ? `<div class="plano-popup-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</div>` : ''}
+      ${l._doMapa && l._cozinha ? `<div class="plano-popup-meta" style="color:var(--violet);">${esc(l._cozinha)}</div>` : ''}
+      ${l._doMapa && l.endereco ? `<div class="plano-popup-meta" style="font-size:11px;line-height:1.45;">${esc(l.endereco)}</div>` : ''}
+      ${l._doMapa && l._horario ? `<div class="plano-popup-meta" style="font-size:11px;">🕒 ${esc(l._horario)}</div>` : ''}
+      ${l.telefone ? `<a class="plano-popup-meta" href="tel:${esc(String(l.telefone).replace(/[^+0-9]/g, ''))}" style="display:block;font-weight:700;color:var(--blue);text-decoration:none;font-size:12px;margin-top:3px;">📞 ${esc(l.telefone)}</a>` : ''}
       <div class="plano-popup-actions">
         ${botaoAcaoHTML(l)}
         <a class="plano-popup-nav" href="${navUrl}" target="_blank" rel="noopener">Navegar ↗</a>
