@@ -7391,6 +7391,7 @@ async function montarPlanoDoDia(r) {
             <span><i style="background:#7C3AED;"></i> HubSpot</span>
             <span><i style="background:#9CA3AF;"></i> Sem fit</span>
             <span><i style="background:#1E7A63;border:2px solid #D4A017;"></i> TOP avaliações</span>
+            <span><i style="background:#fff;border:2px solid #7C5CD6;"></i> ◇ Porta do mapa (sem avaliação)</span>
           </div>
         </div>
         <aside class="plano-map-sidebar" aria-label="Paradas e oportunidades">
@@ -8049,6 +8050,10 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     if (l.status === 'sem_fit') return '#9CA3AF';    // cinza
     if (quenteHub(l)) return '#E51A31';              // vermelho: pipeline quente
     if (noHubspot(l)) return '#7C3AED';              // roxo: virou negócio no HubSpot
+    // BUG CORRIGIDO (11/08): porta do OSM saía VERDE, idêntica à conta-alvo ranqueada.
+    // A lista distinguia (◇ vs ★) e o mapa não — justamente onde ele decide a rota.
+    // Violeta = "porta pra bater, sem avaliação"; verde = conta-alvo com avaliação.
+    if (l._doMapa) return '#7C5CD6';
     return '#1E7A63';                                 // verde: disponível
   };
   const rotuloStatus = l => naRotaHojeFn(l) ? 'Na rota de hoje'
@@ -8305,6 +8310,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       ? `<span class="plano-marker-body" style="${l._clienteAtivo ? 'background:#B0782A;' : ''}"><span>${l._clienteAtivo && !planoRotaGerada ? '♦' : (indiceRota.get(String(l.id)) || '')}</span></span>`
       : posicaoTop
         ? `<span class="plano-marker-body" style="width:26px;height:26px;border-radius:50%;transform:none;background:${corDoStatus(l)};border:3px solid #D4A017;box-shadow:0 0 0 2px #fff;"><span style="transform:none;font-size:10px;font-weight:800;color:#fff;">${posicaoTop}</span></span>`
+        : l._doMapa
+        ? `<span class="plano-marker-body" style="width:18px;height:18px;border-radius:50%;transform:none;background:#fff;border:3px solid ${corDoStatus(l)};box-shadow:0 2px 6px rgba(30,41,59,.25);"><span style="transform:none;font-size:0;">.</span></span>`
         : `<span class="plano-marker-body" style="width:24px;height:24px;border-radius:50%;transform:none;background:${corDoStatus(l)};"><span style="transform:none;font-size:0;">.</span></span>`;
 
     const popupEl = document.createElement('div');
@@ -8452,7 +8459,11 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   }
 
   if (msg) {
-    const resumoMapa = `<span>${ordenadas.length} de ${ordenadasTodas.length} contas no mapa${semCoord > 0 ? ` · ${semCoord} sem coordenada` : ''}${planoRotaGerada ? ' · sequência por proximidade geográfica' : ' · clique em "Gerar rota" para ordenar por proximidade'}</span>`;
+    // O contador tem que descrever o MAPA, não a lista — depois que os dois passaram a
+    // ter limites próprios (Bloco D), "10 de 155" virou mentira: o mapa plota tudo.
+    const plotadosOsm = paraExibirNoMapa.filter(l => l._doMapa).length;
+    const plotadosAlvo = paraExibirNoMapa.length - plotadosOsm;
+    const resumoMapa = `<span>${paraExibirNoMapa.length} pinos no mapa · ${plotadosAlvo} contas-alvo ★${plotadosOsm ? ` · ${plotadosOsm} portas do OSM ◇` : ''}${semCoord > 0 ? ` · ${semCoord} sem coordenada` : ''}${planoRotaGerada ? ' · sequência por proximidade geográfica' : ' · clique em "Gerar rota" para ordenar por proximidade'}</span>`;
     const acaoMapa = ocultas > 0
       ? `<button id="planoMapaVerTodas">Explorar todas as ${ordenadasTodas.length} contas →</button>`
       : planoMapaFiltro.verTodas && ordenadasTodas.length > naRotaTodas.length + LIMITE_RECOMENDADAS
