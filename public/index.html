@@ -10227,7 +10227,29 @@ function abrirImportacaoProspeccao() {
   });
 }
 
-let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false };
+let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false, pertoDeMim: false };
+
+// BLOCO Q (Julyan, 11/08): "rota e prospecção andam lado a lado".
+// A fila mostrava bairro e avaliações, mas não sabia ONDE ele vai atuar hoje — ele
+// escolhia às cegas e só descobria a distância depois, já no mapa. Estas duas funções
+// ligam a fila ao território declarado na Rota.
+function prospeccaoDistanciaKm(l) {
+  if (typeof planoMapaOrigemAtual === 'undefined' || !planoMapaOrigemAtual) return null;
+  if (l.lat == null || l.lng == null) return null;
+  const d = distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng));
+  return Number.isFinite(d) ? d : null;
+}
+// Ordena por distância quando o filtro está ligado. Conta SEM coordenada vai pro fim em
+// vez de sumir: ela ainda é visitável, só não dá pra medir — esconder seria pior.
+function prospeccaoOrdenarPorDistancia(lista) {
+  return lista.slice().sort((a, b) => {
+    const da = prospeccaoDistanciaKm(a), db = prospeccaoDistanciaKm(b);
+    if (da == null && db == null) return 0;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return da - db;
+  });
+}
 
 function prospeccaoNormalizarTexto(valor) {
   return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
@@ -10449,6 +10471,14 @@ function prospeccaoCardHTML(l) {
           <b style="font-size:14px;">${esc(l.nome)}</b>
           <div style="font-size:11.5px;color:var(--muted);margin-top:2px;">${esc([l.categoria, l.bairro, l.cidade].filter(Boolean).join(' · '))}</div>
           <div style="font-size:11.5px;color:var(--muted2);margin-top:2px;"><b>${Number(l.avaliacoes || 0).toLocaleString('pt-BR')} avaliações</b> · fonte: ${esc(prospeccaoRotuloFonte(l.fonte))}</div>
+          ${(() => {
+            const km = prospeccaoDistanciaKm(l);
+            if (km == null) return '';
+            // Perto/longe muda a decisão mais que o número cru: até 3km cabe na rota de
+            // hoje sem desviar; acima disso é escolha consciente de deslocamento.
+            const perto = km <= 3;
+            return `<div style="font-size:11.5px;font-weight:800;margin-top:3px;color:${perto ? 'var(--green)' : 'var(--amber)'};">${perto ? '📍' : '🚗'} ${km.toFixed(1)} km de onde você vai atuar hoje</div>`;
+          })()}
         </div>
         <span style="font-size:10.5px;font-weight:700;color:var(--muted2);white-space:nowrap;">${statusLabel}</span>
       </div>
@@ -10532,7 +10562,8 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   const categorias = [...new Set(baseOperacional.map(l => prospeccaoRotuloCategoria(l.categoria)).filter(Boolean))].sort();
   const fontes = [...new Set(prospeccaoCache.flatMap(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean)))].sort();
 
-  const filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
+  let filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
+  if (prospeccaoFiltro.pertoDeMim) filtrados = prospeccaoOrdenarPorDistancia(filtrados);
 
   // Paginação: 20 por página — a tela não monta mais centenas de cards de uma vez.
   const POR_PAGINA = 20;
@@ -10677,6 +10708,9 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       <button data-pill="na_rota" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'na_rota')}">Na rota hoje ${totalNaRota}</button>
       ${souGestorProsp && totalRevisarEscopo > 0 ? `<button data-pill="revisar_escopo" title="Registros preservados, mas fora de foodservice" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'revisar_escopo')}">Revisar escopo ${totalRevisarEscopo}</button>` : ''}
       <button data-pill="historico" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'historico')}">Histórico ${totalHistorico}</button>
+      ${(typeof planoMapaOrigemAtual !== 'undefined' && planoMapaOrigemAtual)
+        ? `<button data-pertodemim title="Ordenar pela distância até o território que você declarou na Rota" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.pertoDeMim)}">📍 Perto de mim</button>`
+        : `<span title="Defina o território na aba Rota para ver distâncias aqui" style="font-size:11.5px;color:var(--muted2);align-self:center;padding-left:4px;line-height:1.4;">Defina seu território na <b>Rota</b> para ver a distância de cada conta.</span>`}
     </div>`;
 
   const maisFiltros = `
@@ -10875,6 +10909,17 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       prospeccaoFiltro.visao = btn.dataset.pill;
       prospeccaoFiltro.status = '';
       prospeccaoPagina = 1;
+      renderProspeccaoNova(true);
+    });
+  });
+
+  // "Perto de mim": ordena pela distância até o território declarado na Rota. Fica fora
+  // do grupo data-pill de propósito — aquelas trocam a VISÃO (quais contas aparecem) e
+  // esta muda só a ORDEM. Misturar faria uma cancelar a outra.
+  el.querySelectorAll('[data-pertodemim]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      prospeccaoFiltro.pertoDeMim = !prospeccaoFiltro.pertoDeMim;
+      prospeccaoPagina = 1;   // reordenou: a página 3 da ordem antiga não faz sentido
       renderProspeccaoNova(true);
     });
   });
