@@ -66,6 +66,22 @@ jobs:
           HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
         run: node scripts/fetch-clientes-ativos.js
 
+      # Enche o cache de estabelecimentos OSM das praças fixas de cada executivo, pra que
+      # de dia a Rota & Agenda responda em ~500ms em vez dos 62s medidos na 1ª consulta ao
+      # vivo. Âncora com cache fresco (< 21 dias) é pulado sem gastar consulta, então esta
+      # etapa é praticamente gratuita na rodada das 08:59 e serve de 2ª tentativa pra
+      # qualquer praça que tenha falhado às 23:59.
+      #
+      # continue-on-error: a Overpass é um serviço público mantido por voluntários e cai
+      # sozinha às vezes. Se cair, o executivo só volta a esperar alguns segundos na
+      # primeira consulta — não é motivo pra deixar o cockpit inteiro sem atualizar.
+      - name: Pré-aquecer cache de estabelecimentos OSM das praças de campo
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/prewarm-osm.js
+
       - name: Gerar HTML final
         run: node scripts/build.js
 
