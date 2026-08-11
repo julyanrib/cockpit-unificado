@@ -8330,15 +8330,62 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // para trás — a agenda passava a contradizer a rota que ele acabou de montar.
   // Agora o horário sai da SEQUÊNCIA real: 9h + 45min por parada, teto 17h (mesma
   // convenção de antes, só que aplicada na ordem certa).
-  const horaDoBloco = i => {
-    const min = Math.min(9 * 60 + i * 45, 17 * 60);
-    return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
-  };
-  const blocosHorario = planoRotaGerada ? itensRota.map((l, i) => ({ lead: l, hora: horaDoBloco(i) })) : [];
+  //
+  // CORRIGIDO (Julyan, 11/08): "os horários tem que bater com o que ele agendou, ou
+  // sugerido nos horários que estão em branco". A versão anterior empilhava 9h, 9h45,
+  // 10h30... como se o dia estivesse sempre vazio — se ele já tinha reunião marcada às
+  // 10h, a rota mandava uma visita pra cima dela. Agora os blocos são encaixados nos
+  // BURACOS reais da agenda dele.
+  const hhmm = min => String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+  const ABERTURA = 9 * 60, FECHAMENTO = 18 * 60, DURACAO = 45;
+
+  // Compromissos já marcados hoje. Horas em UTC porque é assim que a agenda inteira
+  // trabalha (ver agendaHhmm / FullCalendar com timeZone UTC) — misturar fuso aqui
+  // deslocaria tudo em 3 horas sem erro nenhum aparecer.
+  const ocupadosHoje = (() => {
+    if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
+    let eventos;
+    try { eventos = agendaNormalizar(DATA.agenda); } catch (e) { return []; }
+    // Uma parada que JÁ está nesta rota não conta como ocupação: senão a visita dela
+    // mesma bloquearia o próprio horário e cada reenvio empurraria a rota pra frente.
+    const naRotaAgora = new Set(itensRota.map(l => agendaNorm(String(l.nome || ''))));
+    return eventos
+      .filter(ev => String(ev.ownerId) === String(r.ownerId) && ev.inicio
+        && ev.inicio.toISOString().slice(0, 10) === hoje)
+      .filter(ev => {
+        const nome = (typeof agendaNomeDoLead === 'function')
+          ? agendaNomeDoLead(ev.cliente || ev.titulo) : (ev.cliente || ev.titulo);
+        return !nome || !naRotaAgora.has(agendaNorm(String(nome)));
+      })
+      .map(ev => {
+        const ini = ev.inicio.getUTCHours() * 60 + ev.inicio.getUTCMinutes();
+        // Evento não traz hora de fim; 1h é a duração típica de reunião e é o
+        // conservador certo aqui — errar pra mais só afasta a visita, errar pra menos
+        // marcaria visita em cima de compromisso real.
+        return { ini: ini, fim: ini + 60 };
+      });
+  })();
+
+  const livreEm = t => t + DURACAO <= FECHAMENTO && !ocupadosHoje.some(o => t < o.fim && t + DURACAO > o.ini);
+  const horariosLivres = [];
+  for (let t = ABERTURA; t + DURACAO <= FECHAMENTO && horariosLivres.length < itensRota.length; t += 15) {
+    if (!livreEm(t)) continue;
+    if (horariosLivres.length && t < horariosLivres[horariosLivres.length - 1] + DURACAO) continue;
+    horariosLivres.push(t);
+  }
+  const blocosHorario = planoRotaGerada
+    ? itensRota.map((l, i) => ({
+        lead: l,
+        // Se o dia estiver tão cheio que não sobra buraco pra todas, as últimas ficam
+        // sem horário sugerido em vez de receber um que colide.
+        hora: horariosLivres[i] != null ? hhmm(horariosLivres[i]) : null
+      })).filter(b => b.hora)
+    : [];
+  const paradasSemHorario = planoRotaGerada ? itensRota.length - blocosHorario.length : 0;
   const enviarAgendaHtml = (planoRotaGerada && !planoFechado && blocosHorario.length)
     ? `<button type="button" id="planoEnviarAgenda" class="plano-route-button" style="margin:2px 0 12px;width:100%;justify-content:center;">
          🗓️ Enviar ${blocosHorario.length} ${blocosHorario.length === 1 ? 'parada' : 'paradas'} pra agenda (${blocosHorario[0].hora}–${blocosHorario[blocosHorario.length - 1].hora})
-       </button>`
+       </button>${paradasSemHorario ? `<div style="font-size:11px;color:var(--amber);margin:-8px 0 10px;line-height:1.45;">Sua agenda de hoje não tem buraco livre para ${paradasSemHorario} ${paradasSemHorario === 1 ? 'parada' : 'paradas'} — ${paradasSemHorario === 1 ? 'ela fica' : 'elas ficam'} na rota, mas sem horário sugerido.</div>` : ''}`
     : '';
   const gerarRotaInlineHtml = (!planoFechado && itensRota.length > 0 && !planoRotaGerada)
     ? `<button type="button" id="planoGerarRotaInline" class="plano-route-button" style="margin:2px 0 12px;width:100%;justify-content:center;">Gerar rota com ${itensRota.length} ${itensRota.length === 1 ? 'parada' : 'paradas'} →</button>`
