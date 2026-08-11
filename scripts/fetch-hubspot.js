@@ -1052,6 +1052,24 @@ async function main() {
       criticos,
       travados,
       quentes: withDays.filter(l => l.temperatura === 'quente'),
+      // TODOS os negócios em aberto que dá pra plotar (Julyan, 11/08: "todos os leads
+      // têm coordenadas, adicione no mapa").
+      //
+      // Medido no dia: 126 dos 143 negócios abertos do time (88%) têm latitude — o
+      // Expogo grava quando o executivo registra na rua. Mas o snapshot só expunha
+      // `criticos`/`travados`/`quentes`, que são recortes dos piores casos: 46 no total.
+      // Os outros 80 existiam no CRM, tinham endereço, e simplesmente não chegavam ao
+      // mapa do gestor. Ele olhava a rota de um executivo e via um terço do território.
+      //
+      // Campos enxutos de propósito: este objeto vai inteiro pro navegador de todo
+      // gestor, e mandar o negócio completo x143 incharia o payload sem necessidade.
+      plotaveis: withDays
+        .filter(l => l.lat != null && l.lng != null)
+        .map(l => ({
+          id: l.id, name: l.name, stage: l.stage, stageId: l.stageId,
+          dias: l.dias, slaBreach: !!l.slaBreach, temperatura: l.temperatura,
+          lat: l.lat, lng: l.lng
+        })),
       leadsTravados,
       ganhosSemana: ganhosSemanaDeals.length,
       ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name),
