@@ -108,6 +108,10 @@ module.exports = async function handler(req, res) {
   const fimDiaMs = inicioDiaMs + 24 * 60 * 60 * 1000;
   const assunto = `Visita - ${nome}`;
   let idExistente = null;
+  // DIAGNÓSTICO (11/08): a busca falhando em silêncio esconde duas coisas — que o
+  // reagendamento não vai funcionar, e que reenviar a rota vai DUPLICAR tarefa. Agora
+  // ela reporta, mesmo quando a criação dá certo.
+  let buscaFalhou = null;
   try {
     const busca = await fetch('https://api.hubapi.com/crm/v3/objects/tasks/search', {
       method: 'POST',
@@ -122,13 +126,17 @@ module.exports = async function handler(req, res) {
         limit: 100
       })
     });
+    if (!busca.ok) {
+      const det = await busca.json().catch(() => ({}));
+      buscaFalhou = 'HTTP ' + busca.status + (det && det.message ? ' — ' + String(det.message).slice(0, 140) : '');
+    }
     if (busca.ok) {
       const achados = await busca.json();
       const igual = (achados.results || []).find(t =>
         String((t.properties || {}).hs_task_subject || '').trim().toLowerCase() === assunto.trim().toLowerCase());
       if (igual) idExistente = igual.id;
     }
-  } catch (e) { /* busca é otimização: se falhar, segue para criação normal */ }
+  } catch (e) { buscaFalhou = 'excecao: ' + String(e.message || e).slice(0, 80); }
 
   if (idExistente) {
     try {
@@ -139,14 +147,17 @@ module.exports = async function handler(req, res) {
       });
       const data = await resp.json();
       if (!resp.ok) {
-        return res.status(resp.status).json({ erro: data.message || 'HubSpot recusou o reagendamento.', detalhe: data });
+        return res.status(resp.status).json({
+          etapa: 'reagendamento', httpHubspot: resp.status,
+          erro: 'Reagendamento recusado pelo HubSpot: ' + (data.message || 'sem mensagem'), detalhe: data
+        });
       }
       return res.status(200).json({
-        ok: true, id: idExistente, reagendada: true,
+        ok: true, id: idExistente, reagendada: true, buscaFalhou: buscaFalhou,
         url: `https://app.hubspot.com/contacts/24373118/record/0-27/${idExistente}`
       });
     } catch (e) {
-      return res.status(500).json({ erro: 'Falha ao reagendar no HubSpot: ' + String(e.message || e) });
+      return res.status(500).json({ etapa: 'reagendamento', erro: 'Falha ao reagendar no HubSpot: ' + String(e.message || e) });
     }
   }
 
@@ -167,9 +178,13 @@ module.exports = async function handler(req, res) {
     });
     const data = await resp.json();
     if (!resp.ok) {
-      return res.status(resp.status).json({ erro: data.message || 'HubSpot recusou a criação da tarefa.', detalhe: data });
+      return res.status(resp.status).json({
+        etapa: 'criacao', httpHubspot: resp.status,
+        erro: 'Criação recusada pelo HubSpot: ' + (data.message || 'sem mensagem'),
+        buscaFalhou: buscaFalhou, detalhe: data
+      });
     }
-    return res.status(200).json({ ok: true, id: data.id, reagendada: false, url: `https://app.hubspot.com/contacts/24373118/record/0-27/${data.id}` });
+    return res.status(200).json({ ok: true, id: data.id, reagendada: false, buscaFalhou: buscaFalhou, url: `https://app.hubspot.com/contacts/24373118/record/0-27/${data.id}` });
   } catch (e) {
     return res.status(500).json({ erro: 'Falha ao falar com o HubSpot: ' + String(e.message || e) });
   }
