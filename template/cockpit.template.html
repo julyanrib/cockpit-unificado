@@ -7911,6 +7911,7 @@ async function montarPlanoDoDia(r) {
             <span><i style="background:#9CA3AF;"></i> Sem fit</span>
             <span><i style="background:#1E7A63;border:2px solid #D4A017;"></i> TOP avaliações</span>
             <span><i style="background:#fff;border:2px solid #7C5CD6;"></i> ◇ Porta do mapa (sem avaliação)</span>
+            <span><i style="background:#0E9F9F;"></i> 🆕 Abriu nos últimos 60 dias</span>
           </div>
         </div>
         <aside class="plano-map-sidebar" aria-label="Paradas e oportunidades">
@@ -8301,6 +8302,59 @@ const MAPA_MAX_PINOS = 120;  // 65 em Campo Grande/RJ couberam folgados; teto s�
 // tela mostra qual dos dois foi, porque "demorou" com explicação é diferente de "travou".
 let mapaPoisMeta = { origem: null, buscadoEm: null, total: 0, erro: null, aviso: null };
 
+/* ---- NOVIDADES DE MERCADO (Casa dos Dados) ----
+   Empresa de foodservice ABERTA nos últimos 60 dias na praça do executivo. É o único
+   dado do cockpit que vem de fora do HubSpot/Supabase, e o de melhor janela: quem
+   acabou de abrir ainda não escolheu PDV nem assinou com concorrente.
+
+   Filtros já aplicados no servidor: MEI fora, contabilidade fora, redes grandes fora,
+   empresário individual por documento fora, teto de 30 por praça, cache semanal.
+   A coordenada vem do IBGE na própria resposta — plota sem geocodificar. */
+const PRACA_DO_EXECUTIVO = {
+  '87069181': { municipio: 'Vitória', uf: 'ES' },
+  '86100505': { municipio: 'Vila Velha', uf: 'ES' },
+  '89842507': { municipio: 'São Paulo', uf: 'SP' },
+  '91477292': { municipio: 'Porto Alegre', uf: 'RS' },
+  'pendente_ricardo2': { municipio: 'Porto Alegre', uf: 'RS' },
+  '94079973': { municipio: 'Rio de Janeiro', uf: 'RJ' },
+  '86100506': { municipio: 'Rio de Janeiro', uf: 'RJ' },
+  '87569072': { municipio: 'Rio de Janeiro', uf: 'RJ' }
+};
+
+let novidadesCache = { chave: null, itens: [] };
+
+async function buscarNovidadesMercado(ownerId) {
+  const praca = PRACA_DO_EXECUTIVO[String(ownerId)];
+  if (!praca) return [];
+  const chave = praca.municipio + '|' + praca.uf;
+  if (novidadesCache.chave === chave) return novidadesCache.itens;
+  const token = await tokenDeSessaoGlobal();
+  if (!token) return [];
+  try {
+    const resp = await comPrazoGlobal(async (signal) => fetch('/api/novidades-mercado', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ municipio: praca.municipio, uf: praca.uf, dias: 60 })
+    }), 25000, 'novidades-mercado');
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok || !json.ok) return [];
+    const itens = (json.itens || []).filter(n => n.lat != null && n.lng != null);
+    novidadesCache = { chave: chave, itens: itens };
+    return itens;
+  } catch (e) {
+    // Novidade é bônus: se a Casa dos Dados falhar, a rota do dia continua inteira.
+    console.error('Novidades de mercado indisponíveis:', e && e.message);
+    return [];
+  }
+}
+
+function diasDesde(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return Math.max(0, Math.round((Date.now() - d.getTime()) / 86400000));
+}
+
 // Cache em memória por coordenada: redesenhar o mapa (filtro, incluir/tirar da rota) não
 // pode refazer a chamada. O cache de verdade, entre sessões, vive no Supabase.
 let mapaPoisCache = { chave: null, itens: [] };
@@ -8437,6 +8491,34 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   let poisDoMapa = [];
   if (planoMapaOrigemAtual && planoMapaOrigemAtual.lat != null) {
     poisDoMapa = await buscarRestaurantesNoMapa(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng);
+
+    // Novidades entram no MESMO array dos pinos do mapa: herdam pino, item de lista,
+    // seleção pra rota e a materialização em leads_prospeccao. Zero fiação nova.
+    const novidades = await buscarNovidadesMercado(r.ownerId);
+    const jaNoMapa = new Set(poisDoMapa.map(p => agendaNorm(String(p.nome || ''))));
+    novidades.forEach(n => {
+      const chaveNome = agendaNorm(String(n.nome || ''));
+      if (!chaveNome || jaNoMapa.has(chaveNome)) return;
+      const km = distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(n.lat), Number(n.lng));
+      // Fora do raio de trabalho do dia não entra: novidade a 12km não é oportunidade,
+      // é desvio. Ela volta quando ele declarar um território mais perto.
+      if (!Number.isFinite(km) || km > MAPA_RAIO_KM) return;
+      poisDoMapa.push({
+        id: 'novo-' + String(n.cnpj || chaveNome).replace(/\D/g, '').slice(0, 20),
+        nome: n.nome,
+        categoria: 'Abriu agora',
+        bairro: n.bairro || null,
+        cidade: n.municipio || null,
+        endereco: [n.endereco, n.bairro, n.cep ? 'CEP ' + n.cep : null].filter(Boolean).join(' · ') || null,
+        lat: Number(n.lat), lng: Number(n.lng),
+        avaliacoes: null, status: 'disponivel_mapa', data_rota: null,
+        telefone: null,
+        _doMapa: true, _novidade: true, _km: km,
+        _cnpj: n.cnpj, _dias: diasDesde(n.dataAbertura), _porte: n.porte || null
+      });
+    });
+    // Recém-aberto primeiro dentro das novidades; o resto segue por distância.
+    poisDoMapa.sort((a, b) => (b._novidade ? 1 : 0) - (a._novidade ? 1 : 0) || a._km - b._km);
     sincronizarFiltrosDoMapa(poisDoMapa);
     // Não repete o que já é conta-alvo dele: mesmo nome + praticamente mesma coordenada.
     poisDoMapa = poisDoMapa.filter(p => !todas.some(l =>
@@ -8598,6 +8680,9 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     // BUG CORRIGIDO (11/08): porta do OSM saía VERDE, idêntica à conta-alvo ranqueada.
     // A lista distinguia (◇ vs ★) e o mapa não — justamente onde ele decide a rota.
     // Violeta = "porta pra bater, sem avaliação"; verde = conta-alvo com avaliação.
+    // Novidade tem cor própria: verde-água. Se saísse violeta como a porta comum do
+    // OSM, o dado mais perecível da tela ficaria indistinguível do mais estável.
+    if (l._novidade) return '#0E9F9F';
     if (l._doMapa) return '#7C5CD6';
     return '#1E7A63';                                 // verde: disponível
   };
@@ -8760,7 +8845,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
           <span class="plano-lista-meta">${blocoDele ? `<input type="time" class="plano-hora-input" data-horalead="${esc(String(l.id))}" value="${blocoDele.hora}" aria-label="Horário da visita a ${esc(l.nome)}"> ` : ''}${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
-          ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>${l.telefone ? `<span class="plano-etapa-hub" style="color:var(--violet);">📞 ${esc(l.telefone)}</span>` : ''}` : ''}
+          ${l._novidade ? `<span class="plano-etapa-hub" style="color:#0E9F9F;font-weight:800;">🆕 Abriu ${l._dias === 0 ? 'hoje' : 'há ' + l._dias + ' dias'}${l._porte ? ' · ' + esc(l._porte) : ''}${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>` : ''}${(l._doMapa && !l._novidade) ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>${l.telefone ? `<span class="plano-etapa-hub" style="color:var(--violet);">📞 ${esc(l.telefone)}</span>` : ''}` : ''}
           ${l._quenteAvulso && (l._travado || l._dias != null) ? `<span class="plano-etapa-hub" style="color:${l._travado ? 'var(--red)' : 'var(--muted2)'};">${l._travado ? '⚠ travado · ' : ''}${l._dias != null ? l._dias + 'd na etapa' : ''}</span>` : ''}${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
@@ -9017,12 +9102,49 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       ${l._doMapa && l._cozinha ? `<div class="plano-popup-meta" style="color:var(--violet);">${esc(l._cozinha)}</div>` : ''}
       ${l._doMapa && l.endereco ? `<div class="plano-popup-meta" style="font-size:11px;line-height:1.45;">${esc(l.endereco)}</div>` : ''}
       ${l._doMapa && l._horario ? `<div class="plano-popup-meta" style="font-size:11px;">🕒 ${esc(l._horario)}</div>` : ''}
+      ${l._novidade ? `<div class="plano-popup-meta" style="color:#0E9F9F;font-weight:800;font-size:11.5px;">🆕 Abriu ${l._dias === 0 ? 'hoje' : 'há ' + l._dias + ' dias'}${l._porte ? ' · ' + esc(l._porte) : ''}</div>` : ''}
       ${l.telefone ? `<a class="plano-popup-meta" href="tel:${esc(String(l.telefone).replace(/[^+0-9]/g, ''))}" style="display:block;font-weight:700;color:var(--blue);text-decoration:none;font-size:12px;margin-top:3px;">📞 ${esc(l.telefone)}</a>` : ''}
+      ${(l._novidade && !l.telefone) ? `<button type="button" class="plano-buscar-contato" data-cnpj="${esc(String(l._cnpj || ''))}" style="margin-top:5px;background:none;border:1px solid #0E9F9F;color:#0E9F9F;border-radius:99px;padding:3px 10px;font:800 11px inherit;cursor:pointer;">Buscar telefone</button>` : ''}
       <div class="plano-popup-actions">
         ${botaoAcaoHTML(l)}
         <a class="plano-popup-nav" href="${navUrl}" target="_blank" rel="noopener">Navegar ↗</a>
       </div>
     `;
+    // Contato sob demanda: a Pesquisa Avançada não devolve telefone, e buscar os 30 de
+    // cada praça custaria 150 créditos por semana. Aqui é 1 crédito, na empresa em que
+    // ele decidiu agir. O resultado fica no lead em memória, então não repete a consulta.
+    const btnContato = popupEl.querySelector('.plano-buscar-contato');
+    if (btnContato) btnContato.addEventListener('click', async () => {
+      if (btnContato.dataset.buscando === '1') return;
+      btnContato.dataset.buscando = '1';
+      btnContato.textContent = 'Buscando…';
+      try {
+        const token = await tokenDeSessaoGlobal();
+        const resp = await fetch('/api/novidades-mercado', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ cnpj: btnContato.dataset.cnpj })
+        });
+        const j = await resp.json().catch(() => ({}));
+        const tel = j && j.contato && j.contato.telefone;
+        if (!resp.ok || !tel) {
+          btnContato.textContent = 'Sem telefone no cadastro';
+          btnContato.disabled = true;
+          return;
+        }
+        l.telefone = tel;   // guarda no lead: vai junto se ele puser na rota
+        const link = document.createElement('a');
+        link.href = 'tel:' + String(tel).replace(/[^+0-9]/g, '');
+        link.className = 'plano-popup-meta';
+        link.style.cssText = 'display:block;font-weight:700;color:var(--blue);text-decoration:none;font-size:12px;margin-top:3px;';
+        link.textContent = '📞 ' + tel;
+        btnContato.replaceWith(link);
+      } catch (e) {
+        btnContato.dataset.buscando = '0';
+        btnContato.textContent = 'Tentar de novo';
+      }
+    });
+
     const btnPopup = popupEl.querySelector('.plano-mapa-btn');
     if (btnPopup) btnPopup.addEventListener('click', () => l._clienteAtivo ? alternarClienteNaRota(l) : l._quenteAvulso ? alternarQuenteAvulso(l) : alternarRota(l, btnPopup));
 
@@ -11163,6 +11285,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
               const v = vereditoPraca(cid, d.pend);
               return v ? `<div style="font-size:10.5px;line-height:1.45;margin-top:6px;padding-top:6px;border-top:1px solid var(--line);color:${v.cor};font-weight:700;text-align:left;">${v.txt}</div>` : '';
             })()}
+            <div class="praca-novidades" data-novidades="${esc(cid)}" style="font-size:10.5px;line-height:1.45;margin-top:5px;color:#0E9F9F;font-weight:700;text-align:left;"></div>
           </button>`;
         }).join('') + `</div>`;
     }
@@ -11378,6 +11501,34 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       }
     });
   });
+
+  // NOVIDADES POR PRAÇA (gestor). Preenchidas DEPOIS do render, uma praça por vez:
+  // são 5 chamadas e travar a Prospecção esperando a Casa dos Dados seria péssimo
+  // negócio — a tela já é útil sem elas. Cache semanal no servidor deixa isso barato.
+  if (souGestorProsp) {
+    const UF_DA_PRACA = { 'Vitória': 'ES', 'Vila Velha': 'ES', 'São Paulo': 'SP', 'Porto Alegre': 'RS', 'Rio de Janeiro': 'RJ' };
+    (async () => {
+      const token = await tokenDeSessaoGlobal();
+      if (!token) return;
+      for (const alvo of el.querySelectorAll('[data-novidades]')) {
+        const cid = alvo.dataset.novidades;
+        const uf = UF_DA_PRACA[cid];
+        if (!uf) continue;
+        try {
+          const resp = await fetch('/api/novidades-mercado', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+            body: JSON.stringify({ municipio: cid, uf: uf, dias: 60 })
+          });
+          const j = await resp.json().catch(() => ({}));
+          if (!resp.ok || !j.ok || !j.total) continue;
+          const recente = (j.itens || [])[0];
+          alvo.innerHTML = '🆕 ' + j.total + ' abriram em 60 dias'
+            + (recente ? '<span style="display:block;color:var(--muted2);font-weight:600;">mais nova: ' + esc(String(recente.nome).slice(0, 34)) + (recente.bairro ? ' · ' + esc(recente.bairro) : '') + '</span>' : '');
+        } catch (e) { /* novidade é bônus: falhar não estraga o card */ }
+      }
+    })();
+  }
 
   // Pílulas de filtro rápido
   el.querySelectorAll('[data-pill]').forEach(btn => {
