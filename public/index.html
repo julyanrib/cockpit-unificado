@@ -8254,7 +8254,29 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
   planoMapaMarcadores = {};
   box.innerHTML = '';
-  const pontoCentral = ordenadas[0] || clientesSugestao[0];
+  // CENTRO DO MAPA — corrigido em 11/08. Dois problemas na linha antiga
+  // (`ordenadas[0] || clientesSugestao[0]`):
+  //
+  // 1) QUEBRAVA PARA EXECUTIVO SEM BASE. Quem não tem conta-alvo nem cliente ativo e
+  //    ainda não declarou território caía em `undefined.lng` -> TypeError, e a aba
+  //    inteira morria. Não é hipótese: São Paulo tem ZERO contas-alvo, então era o que
+  //    o Wericles via ao abrir a Rota & Agenda, e é o que todo executivo novo veria no
+  //    primeiro dia. Justamente quem mais precisa da tela era quem não conseguia usá-la.
+  //
+  // 2) CENTRAVA NO LUGAR ERRADO. Mesmo com território declarado, o mapa nascia em cima
+  //    de uma conta qualquer da lista e só depois o fitBounds corrigia — piscava.
+  //
+  // Agora: o território declarado manda; sem ele, a primeira conta; sem nada, a tela
+  // pede o território em vez de estourar.
+  const pontoCentral = planoMapaOrigemAtual || ordenadas[0] || clientesSugestao[0];
+  if (!pontoCentral || pontoCentral.lng == null || pontoCentral.lat == null) {
+    box.innerHTML = `<div class="empty-state" style="padding:150px 24px 0;text-align:center;line-height:1.6;">
+      <b style="display:block;font-size:14px;margin-bottom:6px;">Diga onde você vai atuar hoje</b>
+      Escreva o bairro no campo <b>1 · Defina seu território de hoje</b>, logo acima.<br>
+      O mapa carrega na hora os estabelecimentos em volta — mesmo sem conta-alvo cadastrada na sua praça.
+    </div>`;
+    return;
+  }
   const mapa = new maplibregl.Map({
     container: box,
     style: estiloPlanoMapa(),
