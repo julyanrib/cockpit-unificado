@@ -4429,6 +4429,9 @@ function renderAgenda() {
   // Buracos da semana (design v3): dias úteis da semana em foco sem NENHUM compromisso.
   // Só dias que ainda dá pra preencher (>= hoje na semana atual; todos numa semana futura;
   // nenhum em semana passada — buraco de semana encerrada não é acionável).
+  // Horários oferecidos ao preencher um buraco. Começam às 10h porque 9h–10h é a daily
+  // do time (Julyan, 11/08) — oferecer 9h agendaria visita em cima dela todo dia.
+  const HORARIOS_SUGERIDOS = ['10:00', '11:30', '14:00'];
   const buracosCardExec = souRep ? (() => {
     if (agendaEstado.offset < 0) return '';
     const diasComEvento = new Set(naSemana.map(e => agendaChave(e.inicio)));
@@ -4440,11 +4443,40 @@ function renderAgenda() {
       <div class="chart-subtitle" style="margin:0 0 12px;">dias sem nenhum compromisso marcado</div>
       ${preenchiveis.length === 0
         ? '<div class="empty-state" style="padding:14px 0;">Nenhum buraco pela frente — todos os dias têm compromisso.</div>'
-        : preenchiveis.map(d => `
-          <div style="background:var(--red-soft);border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;">
-            <b style="font-size:13px;">${rotDiaCurto(d)}</b>
-            <button data-agpreencher style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;padding:0;">Preencher →</button>
-          </div>`).join('')}
+        : preenchiveis.map((d, iDia) => {
+            // BLOCO N (Julyan, 11/08): "a agenda do executivo às vezes em buracos tem q
+            // preencher com os pins da rota". Antes o card só dizia QUE o dia estava
+            // vazio e mandava pra grade — ele ainda tinha que descobrir sozinho quem
+            // visitar. Agora o buraco já vem com nome, praça e botão que agenda.
+            // Sugestões saem da mesma fila da Prospecção (conta-alvo ativa que faz
+            // sentido), ordenada por volume de avaliações — a régua que o cockpit já usa.
+            // Cada dia recebe um trio DIFERENTE, pra semana não virar a mesma visita
+            // repetida de segunda a sexta.
+            const fila = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache))
+              ? prospeccaoCache.filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l)) : [];
+            const sugestoes = fila.slice(iDia * 3, iDia * 3 + 3);
+            const iso = d.toISOString().slice(0, 10);
+            return `
+          <div style="background:var(--red-soft);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <b style="font-size:13px;">${rotDiaCurto(d)}</b>
+              <button data-agpreencher style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;padding:0;">Abrir grade →</button>
+            </div>
+            ${sugestoes.length ? `
+              <div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin:9px 0 5px;">Comece por estas</div>
+              ${sugestoes.map((l, i) => `
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;">
+                  <span style="font-size:12px;line-height:1.35;min-width:0;">
+                    <b style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.nome || '')}</b>
+                    <span style="color:var(--muted2);font-size:11px;">${esc(prospeccaoPraca(l) || 'praça não informada')}${l.avaliacoes != null ? ' · ' + Number(l.avaliacoes).toLocaleString('pt-BR') + ' aval.' : ''}</span>
+                  </span>
+                  <button class="ag-sugerir-btn" data-agagendar="${esc(String(l.id))}" data-agdata="${iso}" data-aghora="${HORARIOS_SUGERIDOS[i] || HORARIOS_SUGERIDOS[0]}"
+                    style="flex:none;background:var(--ink);color:var(--panel);border:none;border-radius:99px;padding:4px 11px;font:800 11px inherit;cursor:pointer;">
+                    ${HORARIOS_SUGERIDOS[i] || HORARIOS_SUGERIDOS[0]}
+                  </button>
+                </div>`).join('')}
+            ` : ''}
+          </div>`; }).join('')}
       <div style="font-size:11.5px;color:var(--muted2);margin-top:10px;line-height:1.5;">O Cockpit planeja a semana; o registro da visita é no Expogo.</div>
     </div>`;
   })() : '';
@@ -4972,6 +5004,35 @@ document.addEventListener('click', function (ev) {
   if (mx) { agendaEstado.repSel = mx.dataset.agmatriz || null; renderAgenda(); return; }
   const rp = ev.target.closest('[data-agrep]');
   if (rp) { agendaEstado.repSel = rp.dataset.agrep || null; renderAgenda(); return; }
+  // Agendar uma sugestão num buraco da semana (Bloco N). Vem antes dos outros cliques
+  // porque o botão vive dentro do card de buracos e um closest() mais genérico poderia
+  // engolir o evento.
+  const ag = ev.target.closest('[data-agagendar]');
+  if (ag) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (ag.dataset.enviando === '1') return;
+    const lead = (typeof prospeccaoCache !== 'undefined' ? prospeccaoCache : [])
+      .find(l => String(l.id) === String(ag.dataset.agagendar));
+    if (!lead) { mostrarToast('Não encontrei essa conta na sua fila — recarregue a página.', 'erro'); return; }
+    const meuRep = (DATA.reps || []).find(x => x.ownerId === sessaoAtual.ownerId);
+    if (!meuRep) return;
+    ag.dataset.enviando = '1';
+    const rotulo = ag.textContent;
+    ag.textContent = '...';
+    criarTarefaVisitaNoHubspot(lead, meuRep.ownerId, ag.dataset.aghora, { silencioso: true }, ag.dataset.agdata)
+      .then(() => {
+        ag.textContent = '✓';
+        mostrarToast(`"${lead.nome}" agendado para ${ag.dataset.agdata.split('-').reverse().slice(0, 2).join('/')} às ${ag.dataset.aghora}.`, 'sucesso');
+      })
+      .catch(e => {
+        ag.dataset.enviando = '0';
+        ag.textContent = rotulo;
+        mostrarToast('Não consegui agendar agora (rede ou HubSpot). Tente de novo em instantes.', 'erro');
+        console.error('Falha ao agendar sugestão do buraco:', e);
+      });
+    return;
+  }
   const f = ev.target.closest('[data-agfiltro]');
   if (f) { agendaEstado.filtro = f.dataset.agfiltro; renderAgenda(); return; }
   if (ev.target.closest('[data-agsab]')) { agendaEstado.sabado = !agendaEstado.sabado; renderAgenda(); return; }
@@ -8338,6 +8399,10 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // BURACOS reais da agenda dele.
   const hhmm = min => String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
   const ABERTURA = 9 * 60, FECHAMENTO = 18 * 60, DURACAO = 45;
+  // DAILY FIXA (Julyan, 11/08): 9h–10h é a daily do time, todo dia. Não é compromisso
+  // de HubSpot — não aparece na agenda — então precisa ser bloqueada aqui na mão,
+  // senão a rota agenda a primeira visita às 9h em cima dela toda vez.
+  const DAILY = { ini: 9 * 60, fim: 10 * 60 };
 
   // Compromissos já marcados hoje. Horas em UTC porque é assim que a agenda inteira
   // trabalha (ver agendaHhmm / FullCalendar com timeZone UTC) — misturar fuso aqui
@@ -8366,7 +8431,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       });
   })();
 
-  const livreEm = t => t + DURACAO <= FECHAMENTO && !ocupadosHoje.some(o => t < o.fim && t + DURACAO > o.ini);
+  const bloqueios = [DAILY, ...ocupadosHoje];
+  const livreEm = t => t + DURACAO <= FECHAMENTO && !bloqueios.some(o => t < o.fim && t + DURACAO > o.ini);
   const horariosLivres = [];
   for (let t = ABERTURA; t + DURACAO <= FECHAMENTO && horariosLivres.length < itensRota.length; t += 15) {
     if (!livreEm(t)) continue;
@@ -9841,7 +9907,7 @@ async function tokenDeSessaoGlobal() {
 // discretamente, nunca trava a tela. Reaproveita 100% do reconhecimento que já existe
 // pra "Visita - <nome>" (fetch-hubspot.js, Agenda, contagem da Daily) — zero lógica
 // nova de leitura, só a escrita via api/criar-tarefa-rota.js (nunca expõe o token).
-async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes) {
+async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, dataISO) {
   // opcoes.silencioso: usado pelo envio em lote da rota, que mostra um resumo único no
   // fim. Sem isso, 6 paradas renderiam 6 toasts empilhados na cara do executivo.
   const silencioso = !!(opcoes && opcoes.silencioso);
@@ -9850,7 +9916,9 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes) {
     const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-tarefa-rota', {
       method: 'POST', signal,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-      body: JSON.stringify({ nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista })
+      // dataISO só vai quando o alvo NÃO é hoje (preenchimento de buraco da semana);
+      // sem ela o servidor mantém a convenção antiga de gravar no dia corrente.
+      body: JSON.stringify({ nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista, ...(dataISO ? { data: dataISO } : {}) })
     }), 8000, 'criar-tarefa-rota');
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
