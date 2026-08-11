@@ -1,18 +1,18 @@
 // api/restaurantes-proximos.js
 // Função serverless da Vercel — mesma arquitetura de segurança do criar-tarefa-rota.js.
 //
-// POR QUE ESTA ROTA EXISTE (Julyan, 12/08/26):
-// A base de contas-alvo cobre 4 cidades (medido em 12/08: Vitória 111, Rio 89, Porto
-// Alegre 56, Vila Velha 14). São Paulo tem ZERO; Bruno e Michel têm 6 cada no Rio.
-// Resultado prático: o executivo abre a Rota & Agenda, o mapa está vazio, e não tem de
-// onde montar plano. Isso resolve sem depender do sourcing pago mensal.
+// POR QUE ESTA ROTA EXISTE (Julyan, 11/08):
+// A base de contas-alvo cobre 4 cidades (Vitória 111, Rio 89, Porto Alegre 56, Vila
+// Velha 14). São Paulo tem ZERO; Bruno e Michel têm 6 cada no Rio. Resultado prático: o
+// executivo abre a Rota & Agenda, o mapa está vazio, e não tem de onde montar plano.
+// Isso resolve sem depender do sourcing pago mensal.
 //
-// POR QUE NO SERVIDOR E NÃO NO NAVEGADOR (testado em 12/08, não suposto):
+// POR QUE NO SERVIDOR E NÃO NO NAVEGADOR (testado, não suposto):
 //   fetch para overpass-api.de  -> "Failed to fetch" em 756ms (CORS bloqueado)
 //   navegação direta na URL     -> 406 Not Acceptable (Apache recusa o Accept do Chrome)
 //   espelho kumi.systems        -> travou o renderer do Chrome
-// Do servidor não há CORS e dá pra mandar User-Agent/Accept adequados — que é o que
-// faltava. De brinde, o resultado fica cacheado para o time todo.
+// Do servidor não há CORS e dá pra mandar User-Agent/Accept adequados. De brinde, o
+// resultado fica cacheado para o time todo.
 //
 // LIMITE HONESTO (a tela precisa dizer isso ao executivo):
 // OpenStreetMap NÃO tem nota nem número de avaliações. Tem nome, categoria, telefone
@@ -24,157 +24,83 @@
 //   SUPABASE_URL, SUPABASE_ANON_KEY   -> validação de sessão (obrigatórias)
 //   SUPABASE_SERVICE_KEY              -> cache (opcional; sem ela funciona sem cache)
 
+const osm = require('../lib/osm.js');
+
 let USUARIOS = [];
 try {
   const raw = require('../data/usuarios.json');
   USUARIOS = Array.isArray(raw) ? raw : (raw.usuarios || []);
 } catch (e) { USUARIOS = []; }
 
-// Espelhos em ordem de preferência — REORDENADO em 11/08 com base em medição real:
-// na sessão de validação, os 3 espelhos "clássicos" falharam em sequência e o
-// maps.mail.ru respondeu (Campo Grande/RJ, 65 itens). Custo da ordem antiga: 62s de
-// espera — a 1ms do limite de 60s da Vercel. Agora o que respondeu vai primeiro e o
-// timeout caiu de 22s -> 8s por espelho: caso comum ~3s, pior caso ~32s (4 x 8s).
-const ESPELHOS = [
-  'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-  'https://overpass.private.coffee/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass-api.de/api/interpreter'
-];
+// Cache aceito por até 30 dias: OSM muda devagar, e o robô renova aos 21 dias, então na
+// prática nenhuma praça pré-aquecida chega perto de vencer.
+const VALIDADE_DIAS = 30;
 
-// Timeout por espelho, em ms. 8s: espelho saudável responde raio de 3km em 1-4s;
-// se passou de 8s ele está sobrecarregado e insistir só queima o orçamento de 60s.
-const TIMEOUT_ESPELHO_MS = 8000;
-
-// ICP de food service. `amenity` cobre restaurante/bar/café; `shop` cobre padaria e
-// confeitaria, que no Brasil é cliente Takeat tanto quanto restaurante.
-function montarConsulta(lat, lng, raioMetros) {
-  const A = '["amenity"~"^(restaurant|fast_food|cafe|bar|pub|ice_cream|food_court|biergarten)$"]';
-  const S = '["shop"~"^(bakery|pastry|confectionery|deli|butcher)$"]';
-  const volta = '(around:' + raioMetros + ',' + lat + ',' + lng + ')';
-  // "out center tags" devolve coordenada mesmo para way/relation (polígono do prédio),
-  // que é como muitos restaurantes maiores estão mapeados no OSM.
-  // [timeout:8] fala pro PRÓPRIO servidor Overpass desistir em 8s — alinhado com o
-  // abort do nosso lado. Sem isso, o espelho seguiria processando uma consulta que
-  // ninguém vai mais ler.
-  return '[out:json][timeout:8];(nwr' + A + volta + ';nwr' + S + volta + ';);out center tags;';
-}
-
-function distanciaKm(lat1, lng1, lat2, lng2) {
-  const R = 6371, rad = g => g * Math.PI / 180;
-  const dLat = rad(lat2 - lat1), dLng = rad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
-}
-
-const ROTULO_TIPO = {
-  restaurant: 'Restaurante', fast_food: 'Lanchonete', cafe: 'Cafeteria', bar: 'Bar',
-  pub: 'Bar', ice_cream: 'Sorveteria/Açaí', food_court: 'Praça de alimentação',
-  biergarten: 'Bar', bakery: 'Padaria', pastry: 'Confeitaria',
-  confectionery: 'Doceria', deli: 'Empório', butcher: 'Casa de carnes'
-};
-
-// Normaliza o elemento cru do OSM no formato que o cockpit já usa para conta-alvo.
-function normalizar(el, lat, lng) {
-  const t = (el && el.tags) || {};
-  const coord = el.type === 'node' ? { lat: el.lat, lon: el.lon } : (el.center || {});
-  if (coord.lat == null || coord.lon == null) return null;
-  if (!t.name) return null; // sem nome não dá pra visitar: não entra
-  const tipoBruto = t.amenity || t.shop || '';
-  return {
-    osm_id: el.type + '/' + el.id,
-    nome: String(t.name).slice(0, 160),
-    tipo: ROTULO_TIPO[tipoBruto] || tipoBruto || 'Food service',
-    tipo_osm: tipoBruto,
-    cozinha: t.cuisine ? String(t.cuisine).replace(/[;_]/g, ', ') : null,
-    telefone: t.phone || t['contact:phone'] || t['contact:mobile'] || null,
-    endereco: [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(', ') || null,
-    bairro: t['addr:suburb'] || t['addr:neighbourhood'] || null,
-    cidade: t['addr:city'] || null,
-    cep: t['addr:postcode'] || null,
-    site: t.website || t['contact:website'] || null,
-    horario: t.opening_hours || null,
-    lat: Number(coord.lat),
-    lng: Number(coord.lon),
-    km: Math.round(distanciaKm(lat, lng, Number(coord.lat), Number(coord.lon)) * 100) / 100
-  };
-}
-
-// Dedup: o OSM às vezes tem o node E o polígono do mesmo estabelecimento, o que viraria
-// dois pinos em cima do outro.
-function dedup(itens) {
-  const vistos = new Set();
-  return itens.filter(i => {
-    const k = i.nome.toLowerCase().replace(/[^a-z0-9]/g, '') + '|' + i.lat.toFixed(4) + ',' + i.lng.toFixed(4);
-    if (vistos.has(k)) return false;
-    vistos.add(k);
-    return true;
-  });
-}
-
-async function consultarOverpass(consulta) {
-  const erros = [];
-  for (const url of ESPELHOS) {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), TIMEOUT_ESPELHO_MS);
-    try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        signal: ctrl.signal,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          // Sem User-Agent identificável a Overpass devolve 429/406 — é regra deles.
-          'User-Agent': 'CockpitTakeatFieldSales/1.0 (julyan@takeat.com.br)',
-          'Accept': 'application/json'
-        },
-        body: 'data=' + encodeURIComponent(consulta)
-      });
-      clearTimeout(timer);
-      const host = url.split('/')[2];
-      if (!resp.ok) { erros.push(host + ' -> HTTP ' + resp.status); continue; }
-      const json = await resp.json();
-      if (!json || !Array.isArray(json.elements)) { erros.push(host + ' -> resposta sem elements'); continue; }
-      return { elements: json.elements, espelho: host, erros };
-    } catch (e) {
-      clearTimeout(timer);
-      erros.push(url.split('/')[2] + ' -> ' + (e.name === 'AbortError' ? 'timeout ' + (TIMEOUT_ESPELHO_MS / 1000) + 's' : String(e.message || e).slice(0, 60)));
-    }
-  }
-  return { elements: null, espelho: null, erros };
-}
-
-// Chave do cache = célula geográfica arredondada (3 casas ≈ 110m) + raio. Dois
-// executivos atuando no mesmo bairro reaproveitam a mesma consulta.
-function celulaCache(lat, lng, raio) {
-  return Number(lat).toFixed(3) + ',' + Number(lng).toFixed(3) + ',' + raio;
-}
-
-async function lerCache(supaUrl, serviceKey, chave, validadeDias) {
+// ---------------------------------------------------------------------------
+// CAMADA 1 — cache pela chave exata (mesmo ponto, mesmo raio).
+// ---------------------------------------------------------------------------
+async function lerCacheExato(supaUrl, serviceKey, chave) {
   if (!serviceKey) return null;
   try {
-    const limite = new Date(Date.now() - validadeDias * 86400000).toISOString();
+    const limite = new Date(Date.now() - VALIDADE_DIAS * 86400000).toISOString();
     const url = supaUrl + '/rest/v1/restaurantes_osm?chave=eq.' + encodeURIComponent(chave)
       + '&buscado_em=gte.' + encodeURIComponent(limite) + '&select=itens,buscado_em&limit=1';
     const r = await fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } });
     if (!r.ok) return null;
-    const rows = await r.json();
-    const row = (rows || [])[0];
+    const row = (await r.json() || [])[0];
     return row && Array.isArray(row.itens) ? { itens: row.itens, buscadoEm: row.buscado_em } : null;
   } catch (e) { return null; }
 }
 
-async function gravarCache(supaUrl, serviceKey, chave, lat, lng, raio, itens) {
-  if (!serviceKey) return;
+// ---------------------------------------------------------------------------
+// CAMADA 2 — cache por COBERTURA. Esta é a peça que faz o pré-aquecimento valer.
+//
+// O PROBLEMA: a chave do cache é a célula de ~110m. O executivo digita um endereço no
+// autocomplete e cai numa coordenada qualquer do bairro — quase nunca na MESMA célula
+// que o robô aqueceu. Só com a Camada 1, o cache pré-aquecido praticamente nunca seria
+// encontrado e o robô das 23:59 seria trabalho jogado fora.
+//
+// A CONTA: uma busca já feita no centro C com raio R contém todo ponto a até R de C.
+// Logo, o pedido do executivo (ponto P, raio r) está inteiramente coberto quando
+//     dist(P, C) + r <= R
+// Se está coberto, é matematicamente o mesmo resultado — só falta recortar para o raio
+// pedido e recalcular o "km" a partir de P (senão a distância na tela sai errada).
+// O robô aquece com R=6km e o pedido padrão é r=3km: 3km de folga em volta do âncora.
+// ---------------------------------------------------------------------------
+async function lerCachePorCobertura(supaUrl, serviceKey, lat, lng, raio) {
+  if (!serviceKey) return null;
   try {
-    await fetch(supaUrl + '/rest/v1/restaurantes_osm?on_conflict=chave', {
-      method: 'POST',
-      headers: {
-        apikey: serviceKey, Authorization: 'Bearer ' + serviceKey,
-        'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify([{ chave: chave, lat: lat, lng: lng, raio_m: raio, itens: itens, buscado_em: new Date().toISOString() }])
+    const limite = new Date(Date.now() - VALIDADE_DIAS * 86400000).toISOString();
+    // Caixa de busca grosseira só pra não varrer a tabela: o raio máximo aceito é 8km,
+    // então nenhum centro que possa cobrir este ponto está a mais de 8km daqui. A conta
+    // de contenção de verdade é feita abaixo, em JS.
+    const grauLat = 8 / 111;
+    const grauLng = 8 / (111 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+    const url = supaUrl + '/rest/v1/restaurantes_osm'
+      + '?lat=gte.' + (lat - grauLat) + '&lat=lte.' + (lat + grauLat)
+      + '&lng=gte.' + (lng - grauLng) + '&lng=lte.' + (lng + grauLng)
+      + '&raio_m=gte.' + raio // um cache menor que o pedido não pode cobri-lo
+      + '&buscado_em=gte.' + encodeURIComponent(limite)
+      + '&select=itens,buscado_em,lat,lng,raio_m&order=buscado_em.desc&limit=20';
+    const r = await fetch(url, { headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey } });
+    if (!r.ok) return null;
+    const rows = await r.json();
+    if (!Array.isArray(rows) || !rows.length) return null;
+
+    const cobre = rows.find(row => {
+      if (!Array.isArray(row.itens)) return false;
+      const d = osm.distanciaKm(lat, lng, Number(row.lat), Number(row.lng)) * 1000;
+      return d + raio <= Number(row.raio_m);
     });
-  } catch (e) { /* cache é otimização: falhar aqui não invalida a resposta */ }
+    if (!cobre) return null;
+
+    return {
+      itens: osm.recortarPara(cobre.itens, lat, lng, raio),
+      buscadoEm: cobre.buscado_em,
+      centroKm: Math.round(osm.distanciaKm(lat, lng, Number(cobre.lat), Number(cobre.lng)) * 100) / 100,
+      raioOrigemKm: Number(cobre.raio_m) / 1000
+    };
+  } catch (e) { return null; }
 }
 
 module.exports = async function handler(req, res) {
@@ -224,20 +150,34 @@ module.exports = async function handler(req, res) {
   }
   // Teto de 8km: acima disso a Overpass fica lenta e deixa de ser rota de um dia.
   const raio = Math.round(Math.min(Math.max(Number(body.raioKm) || 3, 0.5), 8) * 1000);
-  const chave = celulaCache(nLat, nLng, raio);
+  const chave = osm.celulaCache(nLat, nLng, raio);
+  const AVISO = 'Dado do OpenStreetMap: sem nota e sem número de avaliações.';
 
-  // ---- 3. cache primeiro (OSM muda devagar: 30 dias é conservador) ----
-  const doCache = await lerCache(supaUrl, serviceKey, chave, 30);
-  if (doCache) {
+  // ---- 3. cache exato ----
+  const exato = await lerCacheExato(supaUrl, serviceKey, chave);
+  if (exato) {
     return res.status(200).json({
-      ok: true, origem: 'cache', buscadoEm: doCache.buscadoEm,
-      total: doCache.itens.length, itens: doCache.itens,
-      aviso: 'Dado do OpenStreetMap: sem nota e sem número de avaliações.'
+      ok: true, origem: 'cache', buscadoEm: exato.buscadoEm,
+      total: exato.itens.length, itens: exato.itens, aviso: AVISO
     });
   }
 
-  // ---- 4. Overpass ----
-  const r = await consultarOverpass(montarConsulta(nLat, nLng, raio));
+  // ---- 4. cache por cobertura (praça pré-aquecida pelo robô das 23:59) ----
+  const coberto = await lerCachePorCobertura(supaUrl, serviceKey, nLat, nLng, raio);
+  if (coberto) {
+    return res.status(200).json({
+      ok: true, origem: 'cache-regiao', buscadoEm: coberto.buscadoEm,
+      total: coberto.itens.length, itens: coberto.itens, aviso: AVISO,
+      // Diagnóstico: dá pra ver na resposta que veio de praça aquecida e de qual raio.
+      reaproveitado: { distanciaDoCentroKm: coberto.centroKm, raioOrigemKm: coberto.raioOrigemKm }
+    });
+  }
+
+  // ---- 5. Overpass ao vivo (praça fora das pré-aquecidas, ou raio maior que o do robô) ----
+  const r = await osm.consultarOverpass(
+    osm.montarConsulta(nLat, nLng, raio, 8),
+    osm.TIMEOUT_AO_VIVO_MS
+  );
   if (!r.elements) {
     return res.status(502).json({
       erro: 'Nenhum espelho da Overpass respondeu agora. Tente de novo em alguns minutos.',
@@ -245,16 +185,15 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  const itens = dedup(
-    r.elements.map(el => normalizar(el, nLat, nLng)).filter(Boolean)
+  const itens = osm.dedup(
+    r.elements.map(el => osm.normalizar(el, nLat, nLng)).filter(Boolean)
   ).sort((a, b) => a.km - b.km);
 
-  await gravarCache(supaUrl, serviceKey, chave, nLat, nLng, raio, itens);
+  await osm.gravarCache(supaUrl, serviceKey, chave, nLat, nLng, raio, itens);
 
   return res.status(200).json({
     ok: true, origem: 'overpass', espelho: r.espelho,
-    total: itens.length, itens: itens,
-    aviso: 'Dado do OpenStreetMap: sem nota e sem número de avaliações.',
+    total: itens.length, itens: itens, aviso: AVISO,
     cacheAtivo: !!serviceKey
   });
 };
