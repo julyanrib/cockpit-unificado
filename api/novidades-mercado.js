@@ -16,6 +16,23 @@
 //   SUPABASE_SERVICE_KEY              -> cache (opcional; sem ela funciona sem cache)
 //   CASADOSDADOS_TOKEN                -> chave da API (obrigatória para esta rota)
 
+// Grandes redes / key accounts que a Takeat não atende. Mesmo arquivo que a tela usa,
+// pra fila e novidade não discordarem sobre o que é lead válido.
+let REDES_EXCLUIDAS = [];
+try {
+  const raw = require('../data/redes-excluidas.json');
+  REDES_EXCLUIDAS = (raw && Array.isArray(raw.redes)) ? raw.redes : [];
+} catch (e) { REDES_EXCLUIDAS = []; }
+
+// Tira acento E pontuação: sem o segundo passo, "Bob's Burger" não casava com a entrada
+// "bobs burger" — e esse caso existe de verdade na base ("Bob's Burger - General Rocca").
+const semAcento = t => String(t || '').toLowerCase().normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+function ehRedeGrande(nome) {
+  const n = semAcento(nome);
+  return !!n && REDES_EXCLUIDAS.some(r => n.includes(semAcento(r)));
+}
+
 let USUARIOS = [];
 try {
   const raw = require('../data/usuarios.json');
@@ -39,6 +56,12 @@ const CNAE_FOODSERVICE = [
 // no site e voltava a página de desafio do Cloudflare ("Just a moment"), com 403 e corpo
 // HTML. Parecia problema de chave; era caminho errado.
 // tipo_resultado=completo é obrigatório pra vir endereço, telefone e coordenada IBGE.
+// TETO POR PRAÇA (Julyan, 11/08). Não é economia de crédito — é higiene de funil.
+// A fila de contas-alvo já tem 267 registros. Somar 100 CNPJs novos por praça por
+// semana transformaria a Prospecção numa lista que ninguém lê. 30 é o que um executivo
+// consegue tocar de verdade numa semana, junto do resto do trabalho dele.
+const LIMITE_POR_PRACA = 30;
+
 const CASA_URL = 'https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultado=completo';
 
 function isoDiasAtras(dias) {
@@ -72,7 +95,11 @@ function normalizar(e) {
     cep: end.cep || null,
     lat: temCoord ? lat : null,
     lng: temCoord ? lng : null,
-    capital: e.capital_social != null ? Number(e.capital_social) : null
+    capital: e.capital_social != null ? Number(e.capital_social) : null,
+    // Sem nome fantasia costuma ser empresário individual usando o próprio nome —
+    // sinal fraco de estabelecimento com salão. Não descarta (pode ser cadastro
+    // incompleto de um restaurante real), mas a tela avisa antes de ele ir até lá.
+    semNomeFantasia: !(e.nome_fantasia && String(e.nome_fantasia).trim())
   };
 }
 
@@ -157,8 +184,11 @@ module.exports = async function handler(req, res) {
   const dias = Math.min(Math.max(Number(body.dias) || 60, 7), 180);
   const chave = chaveCache(municipio, uf, dias);
 
-  // ---- 3. cache (12h: CNPJ novo não aparece de hora em hora, e cada consulta gasta crédito) ----
-  const doCache = await lerCache(supaUrl, serviceKey, chave, 12);
+  // ---- 3. cache SEMANAL ----
+  // 7 dias, não 12h (Julyan: "uma vez por semana"). Duas razões que apontam pro mesmo
+  // número: cada consulta gasta crédito, e uma lista que muda todo dia impede o
+  // executivo de terminar a da semana passada. Estabilidade aqui é feature.
+  const doCache = await lerCache(supaUrl, serviceKey, chave, 24 * 7);
   if (doCache) {
     return res.status(200).json({
       ok: true, origem: 'cache', buscadoEm: doCache.buscadoEm,
@@ -194,8 +224,19 @@ module.exports = async function handler(req, res) {
       // normaliza — mandar "Vitória" e receber zero seria o pior tipo de falha: silenciosa.
       municipio: [municipio.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')],
       data_abertura: { inicio: isoDiasAtras(dias), fim: isoDiasAtras(0) },
-      mais_filtros: { com_telefone: true },
-      limite: 100,
+      // MEI FORA (Julyan, 11/08: "a ideia é não sujar o funil da galera").
+      // A primeira consulta real a Vitória voltou 100 empresas e a primeira era
+      // "68.524.312 KEVEN BRAVO FERREIRA" — MEI, razão social com CPF, sem nome
+      // fantasia. MEI de foodservice é quase sempre cozinha de casa ou ambulante:
+      // não tem salão, não tem comanda, não é cliente de PDV. Entram em volume e
+      // afogam o restaurante de verdade que a busca deveria achar.
+      mei: { excluir_optante: true },
+      // Sem telefone o executivo não tem por onde começar a abordagem.
+      // excluir_email_contab: sem isso o contato que vem é o escritório de contabilidade
+      // que abriu o CNPJ, não o dono do restaurante. O executivo liga, fala com quem não
+      // decide nada, e marca o lead como "sem interesse" — perdendo um lead que era bom.
+      mais_filtros: { com_telefone: true, excluir_email_contab: true },
+      limite: LIMITE_POR_PRACA,
       pagina: 1
     });
 
@@ -249,7 +290,15 @@ module.exports = async function handler(req, res) {
       });
     }
 
+    // Rede grande fora também aqui: o filtro de MEI e o de contabilidade acontecem na
+    // API, mas nome de rede só dá pra avaliar depois que o registro chega.
+    let descartadasRede = 0;
     const itens = cru.map(normalizar).filter(Boolean)
+      .filter(i => {
+        const rede = ehRedeGrande(i.nome) || ehRedeGrande(i.razaoSocial);
+        if (rede) descartadasRede++;
+        return !rede;
+      })
       // Mais novo primeiro: a janela de oportunidade encolhe a cada dia que passa.
       .sort((a, b) => String(b.dataAbertura || '').localeCompare(String(a.dataAbertura || '')));
 
@@ -258,6 +307,10 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       ok: true, origem: 'casadosdados', municipio: municipio, uf: uf, dias: dias,
       autenticacaoQueFuncionou: usada,
+      // Transparência do funil: quantas vieram e quantas foram cortadas, e por quê.
+      // Número que encolhe sem explicação é número em que ninguém confia.
+      recebidasDaApi: cru.length,
+      descartadasRede: descartadasRede,
       total: itens.length, itens: itens
     });
   } catch (e) {
