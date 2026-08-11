@@ -5465,7 +5465,7 @@ function renderResumoSemanal() {
       // Executivo sem praça mapeada não é descartado: vira "Sem praça definida" e
       // aparece na tela. Sumir com gente do relatório do gestor é o pior erro possível.
       const nome = PRACA_POR_OWNER[ownerId] || 'Sem praça definida';
-      const a = ag[nome] || (ag[nome] = { praca: nome, reps: [], open: 0, trav: 0, quentes: 0, semPasso: 0, mes: 0, meta: 0, pior: null });
+      const a = ag[nome] || (ag[nome] = { praca: nome, reps: [], open: 0, trav: 0, quentes: 0, semPasso: 0, mes: 0, meta: 0, piores: [], quentesSemPasso: [] });
       a.reps.push(String(r.name || '').split(' ')[0]);
       a.open += Number(r.open) || 0;
       a.mes += Number(r.fechadosNoMes) || 0;
@@ -5475,8 +5475,18 @@ function renderResumoSemanal() {
       a.trav += travados.length;
       a.quentes += quentes.length;
       a.semPasso += quentes.filter(q => !q.proximaAtividade && !q.proximaReuniao).length;
-      // Guarda o negócio mais parado da praça: dá nome à ação, em vez de só um número.
-      travados.forEach(t => { if (!a.pior || (Number(t.dias) || 0) > (Number(a.pior.dias) || 0)) a.pior = { ...t, rep: String(r.name || '').split(' ')[0] }; });
+      // Guarda os negócios que dão NOME à ação. Ação sem nome vira intenção: o gestor
+      // lê "auditar 9 travados" e não sabe por onde começar na segunda de manhã.
+      const rep1 = String(r.name || '').split(' ')[0];
+      travados.forEach(t => a.piores.push({ ...t, rep: rep1 }));
+      quentes.filter(q => !q.proximaAtividade && !q.proximaReuniao)
+             .forEach(q => a.quentesSemPasso.push({ ...q, rep: rep1 }));
+    });
+
+    // Mais parado primeiro: é a ordem em que o gestor deve atacar dentro da praça.
+    Object.values(ag).forEach(a => {
+      a.piores.sort((x, y) => (Number(y.dias) || 0) - (Number(x.dias) || 0));
+      a.quentesSemPasso.sort((x, y) => (Number(y.dias) || 0) - (Number(x.dias) || 0));
     });
 
     const linhas = Object.values(ag).map(a => {
@@ -5489,12 +5499,67 @@ function renderResumoSemanal() {
     if (!linhas.length) return '';
     const maiorIndice = linhas[0].indice || 1;
 
-    // A ação sugerida sai do sinal que MAIS pesa naquela praça — não é texto genérico.
-    const acaoDe = l => {
-      if (l.pctTrav >= 40) return `Funil parado: <b>${l.trav} de ${l.open}</b> negócios travados. Faça auditoria lead a lead com ${l.reps.join(' e ')} — avançar ou descartar com justificativa.`;
-      if (l.meta && l.pctMeta < 20) return `Meta em risco: <b>${l.mes} de ${l.meta}</b> no mês. Marque rota presencial com ${l.reps.join(' e ')} nesta semana.`;
-      if (l.semPasso) return `<b>${l.semPasso} ${l.semPasso === 1 ? 'quente' : 'quentes'}</b> sem próximo passo marcado. É o destravável de hoje — cobre no 1:1.`;
-      return `Praça equilibrada. Use o tempo aqui para subir o ticket, não para apagar incêndio.`;
+    // AÇÕES POR PRAÇA (Julyan, 11/08: "mescla atacar e agir, com as ações pra eu tomar
+    // em cada praça"). Antes eram duas coisas separadas e nenhuma fechava o ciclo: o
+    // ranking dizia ONDE, a lista genérica dizia O QUE — mas sem dono, sem nome de
+    // negócio e sem prazo. O gestor tinha que cruzar as duas de cabeça.
+    //
+    // Cada ação aqui nasce de um sinal MEDIDO daquela praça e nomeia o que fazer, com
+    // quem e em quais negócios. Nenhuma frase genérica: se não há sinal, não há ação.
+    const acoesDe = l => {
+      const acoes = [];
+      const nomes = arr => arr.slice(0, 3).map(x => esc(String(x.name || '').trim())).join(' · ');
+
+      if (l.pctTrav >= 40) {
+        acoes.push({
+          urg: 'alta',
+          titulo: `Auditar ${l.trav} travados com ${esc(l.reps.join(' e '))}`,
+          detalhe: `Metade do funil da praça está parado (${l.trav} de ${l.open}). Régua do 1:1: cada um avança com próximo passo datado ou vai pra Reciclagem com motivo escrito. Promessa não conta.`,
+          alvo: l.piores.length ? `Começa por: ${nomes(l.piores)}` : ''
+        });
+      } else if (l.trav) {
+        acoes.push({
+          urg: 'media',
+          titulo: `Destravar ${l.trav} ${l.trav === 1 ? 'negócio' : 'negócios'} parados`,
+          detalhe: `${l.pctTrav.toFixed(0)}% do funil da praça. Ainda dá pra resolver no 1:1 desta semana, sem virar mutirão.`,
+          alvo: l.piores.length ? `Começa por: ${nomes(l.piores)}` : ''
+        });
+      }
+
+      if (l.semPasso) {
+        acoes.push({
+          urg: l.semPasso >= 3 ? 'alta' : 'media',
+          titulo: `Marcar próximo passo em ${l.semPasso} ${l.semPasso === 1 ? 'quente' : 'quentes'}`,
+          detalhe: `Negócio quente sem data marcada esfria sozinho — é o que dá pra resolver hoje, numa ligação. Peça data e hora no CRM, não "vou falar com ele".`,
+          alvo: l.quentesSemPasso.length ? `Sem data: ${nomes(l.quentesSemPasso)}` : ''
+        });
+      }
+
+      if (l.meta && l.pctMeta < 20) {
+        acoes.push({
+          urg: 'alta',
+          titulo: `Rota presencial com ${esc(l.reps.join(' e '))}`,
+          detalhe: `${l.mes} de ${l.meta} no mês (${l.pctMeta.toFixed(0)}%). Nesse patamar, cobrança remota não vira número — bloqueie um dia de campo junto nesta semana.`,
+          alvo: ''
+        });
+      } else if (l.meta && l.pctMeta < 50) {
+        acoes.push({
+          urg: 'media',
+          titulo: `Acelerar fechamento: ${l.mes}/${l.meta} no mês`,
+          detalhe: `Dá pra virar sem rota extra, mas exige foco no fundo do funil. Priorize os quentes acima de abrir lead novo.`,
+          alvo: ''
+        });
+      }
+
+      if (!acoes.length) {
+        acoes.push({
+          urg: 'baixa',
+          titulo: `Praça saudável — use pra subir o ticket`,
+          detalhe: `Sem travamento relevante e meta no ritmo. É a praça onde vale testar upsell e conta maior, em vez de apagar incêndio.`,
+          alvo: ''
+        });
+      }
+      return acoes;
     };
 
     return `
@@ -5522,8 +5587,16 @@ function renderResumoSemanal() {
             <span><b style="color:var(--ink);">${l.quentes}</b> quentes${l.semPasso ? ` · <b style="color:var(--amber);">${l.semPasso}</b> sem próximo passo` : ''}</span>
             ${l.meta ? `<span><b style="color:${l.pctMeta < 20 ? 'var(--red)' : 'var(--ink)'};">${l.mes}/${l.meta}</b> no mês</span>` : ''}
           </div>
-          <div style="font-size:12px;line-height:1.55;color:var(--ink);">${acaoDe(l)}</div>
-          ${l.pior ? `<div style="font-size:11px;color:var(--muted2);margin-top:4px;">Mais parado: <b>${esc(l.pior.name || '')}</b> · ${esc(l.pior.stage || '')} · ${Number(l.pior.dias) || 0}d com ${esc(l.pior.rep || '')}</div>` : ''}
+          ${acoesDe(l).map(a => `
+            <div style="display:flex;gap:9px;align-items:flex-start;margin-top:9px;padding:9px 11px;border-radius:10px;background:${a.urg === 'alta' ? 'var(--red-soft)' : a.urg === 'media' ? 'var(--amber-soft)' : 'var(--sunk)'};">
+              <span style="flex:none;width:6px;height:6px;border-radius:50%;margin-top:6px;background:${a.urg === 'alta' ? 'var(--red)' : a.urg === 'media' ? 'var(--amber)' : 'var(--green)'};"></span>
+              <div style="min-width:0;">
+                <b style="font-size:12.5px;display:block;line-height:1.4;">${a.titulo}</b>
+                <div style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:2px;">${a.detalhe}</div>
+                ${a.alvo ? `<div style="font-size:11px;color:var(--muted2);margin-top:4px;">${a.alvo}</div>` : ''}
+              </div>
+            </div>`).join('')}
+          ${l.piores.length ? `<div style="font-size:11px;color:var(--muted2);margin-top:7px;">Mais parado da praça: <b>${esc(String(l.piores[0].name || '').trim())}</b> · ${esc(l.piores[0].stage || '')} · ${Number(l.piores[0].dias) || 0}d com ${esc(l.piores[0].rep || '')}</div>` : ''}
         </div>`).join('')}
     </div>`;
   })();
@@ -5550,14 +5623,17 @@ function renderResumoSemanal() {
     <div class="kpi-label"><span class="source-tag hub">HubSpot</span>${souRepAgora ? 'seus números da semana' : 'detalhamento da semana'}</div>
     ${kpisDetalheHtml}
 
+    ${pracasHtml}
+
     ${(() => {
       const listaComoAgir = souRepAgora ? (meuIndividual ? meuIndividual.comoAgirIndividual : rs.comoAgir) : rs.comoAgir;
       if (!listaComoAgir || listaComoAgir.length === 0) return '';
-      const titulo = souRepAgora ? 'Como agir essa semana (pra você)' : 'Como agir essa semana';
+      // Para o GESTOR esta lista passou a ser o pano de fundo: a ação com dono e nome
+      // vive no card de praças. Mantê-la em primeiro lugar competiria com ele e o gestor
+      // leria duas listas de ação concorrentes. Vira "leitura do time" e desce.
+      const titulo = souRepAgora ? 'Como agir essa semana (pra você)' : 'Leitura geral do time';
       return `<h3 class="block-label">${titulo}</h3><ul class="action-list">${listaComoAgir.map(a => `<li class="action-item">${souRepAgora ? a : textoSemanalPreciso(a)}</li>`).join('')}</ul>`;
     })()}
-
-    ${pracasHtml}
   `;
 
 }
