@@ -182,6 +182,53 @@ module.exports = async function handler(req, res) {
     return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
   }
 
+  // ---- 2a. CONTATO SOB DEMANDA (uma empresa por vez) ----
+  //
+  // O schema da Pesquisa Avançada (CNPJPesquisaResposta) NÃO tem telefone nem e-mail —
+  // conferido na documentação. O filtro `com_telefone` apenas seleciona quem possui
+  // telefone; não devolve o número. Para obter contato é preciso a Consulta CNPJ (v4),
+  // que cobra crédito POR EMPRESA.
+  //
+  // Por isso não se busca contato das 30 de uma vez: seriam 150 créditos por semana
+  // (5 praças) para telefones que ninguém pediu. Aqui o executivo pede o contato da
+  // empresa em que vai agir — 1 crédito, no momento em que vale a pena. O cache é
+  // longo porque telefone de CNPJ não muda.
+  if (req.body && req.body.cnpj) {
+    const cnpjLimpo = String(req.body.cnpj).replace(/\D/g, '');
+    if (cnpjLimpo.length !== 14) return res.status(400).json({ erro: 'CNPJ deve ter 14 dígitos.' });
+    const chaveContato = 'contato|v' + VERSAO_FILTROS + '|' + cnpjLimpo;
+
+    const doCacheContato = await lerCache(supaUrl, serviceKey, chaveContato, 24 * 90);
+    if (doCacheContato) {
+      return res.status(200).json({ ok: true, origem: 'cache', contato: doCacheContato.itens[0] || null });
+    }
+    try {
+      const r = await fetch('https://api.casadosdados.com.br/v4/cnpj/' + cnpjLimpo, {
+        method: 'GET', headers: { 'api-key': casaToken }
+      });
+      const txt = await r.text();
+      let j = null; try { j = JSON.parse(txt); } catch (e) { j = null; }
+      if (!r.ok || !j) {
+        return res.status(r.status || 502).json({
+          etapa: 'consulta-cnpj', httpCasa: r.status,
+          erro: (j && (j.message || j.erro)) || 'Casa dos Dados recusou a consulta de CNPJ.'
+        });
+      }
+      // A v4 aninha o registro em .cnpj em algumas versões; aceita os dois.
+      const d = j.cnpj || j.data || j;
+      const contato = {
+        cnpj: cnpjLimpo,
+        telefone: d.telefone_1 || d.telefone || (Array.isArray(d.telefones) ? (d.telefones[0] && (d.telefones[0].numero || d.telefones[0])) : null) || null,
+        telefone2: d.telefone_2 || null,
+        email: d.email || null
+      };
+      await gravarCache(supaUrl, serviceKey, chaveContato, [contato]);
+      return res.status(200).json({ ok: true, origem: 'casadosdados', contato: contato });
+    } catch (e) {
+      return res.status(500).json({ etapa: 'consulta-cnpj', erro: 'Falha ao consultar o CNPJ: ' + String(e.message || e) });
+    }
+  }
+
   // ---- 2. parâmetros ----
   const body = req.body || {};
   const municipio = String(body.municipio || '').trim();
