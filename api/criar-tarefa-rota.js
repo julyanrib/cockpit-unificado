@@ -79,6 +79,62 @@ module.exports = async function handler(req, res) {
     'Origem: conta-alvo adicionada à rota do dia pelo Cockpit (Rota & Agenda).'
   ].filter(Boolean).join('\n');
 
+  // REAGENDAMENTO SEM DUPLICAR (Bloco L, 11/08):
+  // Quando o executivo clica em "Gerar rota", as paradas são reordenadas por
+  // proximidade — e o horário que a tarefa recebeu na ordem de CLIQUE deixa de valer.
+  // Reenviar sem checar criaria uma segunda "Visita - Fulano" no mesmo dia, e o HubSpot
+  // dele viraria lixo em uma semana. Então: procura uma tarefa em aberto com o mesmo
+  // assunto, do mesmo dono, HOJE. Se existe, só move o horário (PATCH). Se não, cria.
+  //
+  // A busca filtra por dono + janela do dia + status, e o assunto é comparado aqui no
+  // servidor em vez de virar filtro: `hs_task_subject` nem sempre é pesquisável por
+  // igualdade dependendo do portal, e falhar essa busca faria voltar a duplicar.
+  const inicioDiaMs = Date.UTC(agoraBRT.getUTCFullYear(), agoraBRT.getUTCMonth(), agoraBRT.getUTCDate(), 3, 0, 0);
+  const fimDiaMs = inicioDiaMs + 24 * 60 * 60 * 1000;
+  const assunto = `Visita - ${nome}`;
+  let idExistente = null;
+  try {
+    const busca = await fetch('https://api.hubapi.com/crm/v3/objects/tasks/search', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        filterGroups: [{ filters: [
+          { propertyName: 'hubspot_owner_id', operator: 'EQ', value: String(ownerId) },
+          { propertyName: 'hs_task_status', operator: 'EQ', value: 'NOT_STARTED' },
+          { propertyName: 'hs_timestamp', operator: 'BETWEEN', value: String(inicioDiaMs), highValue: String(fimDiaMs) }
+        ] }],
+        properties: ['hs_task_subject', 'hs_timestamp'],
+        limit: 100
+      })
+    });
+    if (busca.ok) {
+      const achados = await busca.json();
+      const igual = (achados.results || []).find(t =>
+        String((t.properties || {}).hs_task_subject || '').trim().toLowerCase() === assunto.trim().toLowerCase());
+      if (igual) idExistente = igual.id;
+    }
+  } catch (e) { /* busca é otimização: se falhar, segue para criação normal */ }
+
+  if (idExistente) {
+    try {
+      const resp = await fetch(`https://api.hubapi.com/crm/v3/objects/tasks/${idExistente}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ properties: { hs_timestamp: String(dataTarefaMs) } })
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        return res.status(resp.status).json({ erro: data.message || 'HubSpot recusou o reagendamento.', detalhe: data });
+      }
+      return res.status(200).json({
+        ok: true, id: idExistente, reagendada: true,
+        url: `https://app.hubspot.com/contacts/24373118/record/0-27/${idExistente}`
+      });
+    } catch (e) {
+      return res.status(500).json({ erro: 'Falha ao reagendar no HubSpot: ' + String(e.message || e) });
+    }
+  }
+
   try {
     const resp = await fetch('https://api.hubapi.com/crm/v3/objects/tasks', {
       method: 'POST',
@@ -98,7 +154,7 @@ module.exports = async function handler(req, res) {
     if (!resp.ok) {
       return res.status(resp.status).json({ erro: data.message || 'HubSpot recusou a criação da tarefa.', detalhe: data });
     }
-    return res.status(200).json({ ok: true, id: data.id, url: `https://app.hubspot.com/contacts/24373118/record/0-27/${data.id}` });
+    return res.status(200).json({ ok: true, id: data.id, reagendada: false, url: `https://app.hubspot.com/contacts/24373118/record/0-27/${data.id}` });
   } catch (e) {
     return res.status(500).json({ erro: 'Falha ao falar com o HubSpot: ' + String(e.message || e) });
   }
