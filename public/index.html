@@ -1492,6 +1492,7 @@
       <button class="tab-btn" id="tabBtnDaily" data-view="viewDaily"><span class="tab-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span><span class="tab-btn-label">Daily</span></button>
       <button class="tab-btn" id="tabBtnResumo" data-view="viewResumo"><span class="tab-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span><span class="tab-btn-label">Resumo Semanal</span></button>
       <button class="tab-btn" id="tabBtnAgenda" data-view="viewAgenda"><span class="tab-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M8 14h2M14 14h2M8 17h2"/></svg></span><span class="tab-btn-label">Agenda</span></button>
+      <button class="tab-btn" id="tabBtnAgendaSemana" data-view="viewAgenda" style="display:none;"><span class="tab-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M7 13h4M7 17h7"/></svg></span><span class="tab-btn-label">Agenda</span></button>
       <button class="tab-btn" id="tabBtnMeuFunil" data-view="viewMeuFunil" style="display:none;"><span class="tab-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/></svg></span><span class="tab-btn-label">Meu funil</span></button>
       <button class="tab-btn" id="tabBtnRotas" data-view="viewRotas"><span class="tab-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19c0-3 4-3 4-6s-4-3-4-6"/><circle cx="18" cy="6" r="2.5"/><circle cx="10" cy="18" r="2.5"/><path d="M12.5 18H16a3 3 0 000-6h-1"/></svg></span><span class="tab-btn-label">Rotas</span><span class="tab-btn-badge" id="badgeRotas"></span></button>
       <button class="tab-btn" id="tabBtnLeadsPraca" data-view="viewLeadsPraca"><span class="tab-btn-icon" aria-hidden="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/></svg></span><span class="tab-btn-label">Prospecção</span><span class="tab-btn-badge" id="badgeLeadsPraca"></span></button>
@@ -2108,7 +2109,14 @@ function aplicarVisaoPorPapel() {
   const lblDaily = document.querySelector('#tabBtnDaily .tab-btn-label');
   if (lblDaily) lblDaily.textContent = souRep ? 'Minha Daily' : 'Daily & Ritmo';
   const lblAgenda = document.querySelector('#tabBtnAgenda .tab-btn-label');
-  if (lblAgenda) lblAgenda.textContent = souRep ? 'Rota & Agenda' : 'Agenda';
+  if (lblAgenda) lblAgenda.textContent = souRep ? 'Rota' : 'Agenda';
+  // AGENDA COMO ABA PRÓPRIA (Julyan, 11/08). Ela apontar para a MESMA view é de
+  // propósito: renderAgenda já sabe desenhar semana × hoje pelo subview, e quebrá-la em
+  // duas funções seria uma refatoração grande num arquivo de 11 mil linhas — risco alto
+  // pra resolver um problema que é de NAVEGAÇÃO, não de renderização. O executivo vê
+  // duas abas separadas; por trás, uma view só que muda de modo.
+  const btnAgSemana = document.getElementById('tabBtnAgendaSemana');
+  if (btnAgSemana) btnAgSemana.style.display = souRep ? 'flex' : 'none';
   const lblResumo = document.querySelector('#tabBtnResumo .tab-btn-label');
   if (lblResumo) lblResumo.textContent = 'Semana';
   // Julyan (08/08): "Semana" sai do menu do executivo — a análise semanal dele agora é
@@ -4522,10 +4530,9 @@ function renderAgenda() {
   const filaProspeccao = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache))
     ? prospeccaoCache.filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l)).length
     : 0;
-  const segSubviewExec = souRep ?
+  const segSubviewExec = (souRep && !mostrarSemana) ?
     '<div class="ag-seg" role="group" aria-label="Ver" style="margin:18px 0 20px;">' +
     '<button data-agsub="hoje" aria-pressed="' + mostrarHoje + '">📍 Hoje</button>' +
-    '<button data-agsub="semana" aria-pressed="' + mostrarSemana + '">🗓️ Semana</button>' +
     '<button data-agsub="prospeccao" aria-pressed="' + mostrarProspeccao + '">🎯 Prospecção' +
     (filaProspeccao ? '<span style="margin-left:6px;background:var(--red);color:#fff;border-radius:999px;padding:1px 7px;font-size:10.5px;font-weight:800;">' + filaProspeccao + '</span>' : '') +
     '</button></div>' : '';
@@ -4949,7 +4956,14 @@ function agendaAbrirDetalhe(id) {
 
 document.addEventListener('click', function (ev) {
   const sub = ev.target.closest('[data-agsub]');
-  if (sub) { agendaEstado.subview = sub.dataset.agsub; renderAgenda(); return; }
+  if (sub) {
+    agendaEstado.subview = sub.dataset.agsub;
+    // Rota e Agenda são abas separadas no topo agora: trocar de modo por atalho precisa
+    // reacender a aba correspondente, senão a semana abre com "Rota" ainda destacada.
+    if (typeof activateTab === 'function') activateTab('viewAgenda');
+    renderAgenda();
+    return;
+  }
   const nav = ev.target.closest('[data-agnav]');
   if (nav) { const v = +nav.dataset.agnav; agendaEstado.offset = v === 0 ? 0 : agendaEstado.offset + v; renderAgenda(); return; }
   const md = ev.target.closest('[data-agmodo]');
@@ -5025,7 +5039,15 @@ function activateTab(viewId) {
   // BLOCO 4 (10/08/26): nem toda view tem botão no menu (Avisos virou drawer, Coaching
   // virou seção de Pessoas). Sem esse guarda, uma chamada antiga a activateTab quebrava
   // o script inteiro num TypeError.
-  const btn = document.querySelector(`.tab-btn[data-view="${viewId}"]`);
+  // Rota e Agenda apontam para a MESMA view, então o seletor por data-view acharia
+  // sempre a primeira das duas e o destaque ficaria preso na Rota. Quando é a viewAgenda,
+  // quem decide qual das duas acende é o modo atual (semana = Agenda).
+  let btn = document.querySelector(`.tab-btn[data-view="${viewId}"]`);
+  if (viewId === 'viewAgenda' && typeof agendaEstado !== 'undefined') {
+    const alvo = agendaEstado.subview === 'semana' ? 'tabBtnAgendaSemana' : 'tabBtnAgenda';
+    const especifico = document.getElementById(alvo);
+    if (especifico && especifico.style.display !== 'none') btn = especifico;
+  }
   if (btn) {
     btn.classList.add('active');
     btn.setAttribute('aria-current', 'page'); // semântica de navegação — leitor de tela anuncia a aba atual
@@ -5098,7 +5120,19 @@ document.addEventListener('keydown', (ev) => {
   const ov = document.getElementById('rotaOverlay');
   if (ev.key === 'Escape' && ov && ov.style.display === 'block') fecharRotaDrawer();
 });
-document.getElementById('tabBtnAgenda').addEventListener('click', () => { activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda(); });
+document.getElementById('tabBtnAgenda').addEventListener('click', () => {
+  // "Rota" sempre volta pro território do dia. Se ele estava na Prospecção e clica em
+  // Rota, quer a rota — não a fila onde parou.
+  if (typeof agendaEstado !== 'undefined' && agendaEstado.subview === 'semana') agendaEstado.subview = 'hoje';
+  activateTab('viewAgenda');
+  if (typeof renderAgenda === 'function') renderAgenda();
+});
+const btnAgendaSemanaTopo = document.getElementById('tabBtnAgendaSemana');
+if (btnAgendaSemanaTopo) btnAgendaSemanaTopo.addEventListener('click', () => {
+  if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'semana';
+  activateTab('viewAgenda');
+  if (typeof renderAgenda === 'function') renderAgenda();
+});
 
 // ---- BLOCO 4 (10/08/26): sino de avisos no topbar ----
 // O contador só faz sentido pro executivo (o gestor é quem publica, não tem "não lido").
