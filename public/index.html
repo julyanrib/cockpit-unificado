@@ -10862,6 +10862,38 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   // Só pro gestor: o executivo já chega com a lista filtrada no território dele.
   // Clique no card filtra a fila pela cidade (clique de novo limpa o filtro).
   const souGestorProsp = !!(sessaoAtual && sessaoAtual.role === 'manager');
+  // FREIO DO EXECUTIVO (Julyan, 11/08: "o executivo pode abrir essa tela e incluir").
+  // O veredito de abastecer é do gestor, mas quem puxa conta pra rota é o executivo —
+  // então o sinal precisa existir também no momento da escolha, com a régua DELE.
+  //
+  // AVISA, NÃO BLOQUEIA. Ele pode ter motivo que o número não sabe (cliente pediu visita,
+  // já está na rua ao lado). Travar a tela transformaria um dado útil em obstáculo, e ele
+  // aprenderia a ignorar o aviso. O objetivo é que ele decida sabendo, não que obedeça.
+  //
+  // Usa só o snapshot DELE — é o único que o servidor manda pro papel de executivo.
+  let freioExec = '';
+  if (!souGestorProsp && sessaoAtual && sessaoAtual.ownerId) {
+    const meu = ((DATA.resumoSemanal || {}).snapshotReps || {})[String(sessaoAtual.ownerId)];
+    const trav = meu && Array.isArray(meu.travados) ? meu.travados.length : 0;
+    const aberto = meu ? (Number(meu.open) || 0) : 0;
+    const pct = aberto ? (100 * trav / aberto) : 0;
+    if (trav >= 3 && pct >= 40) {
+      const piores = meu.travados.slice()
+        .sort((a, b) => (Number(b.dias) || 0) - (Number(a.dias) || 0)).slice(0, 3);
+      freioExec = `
+        <div style="border:1.5px solid var(--amber);background:var(--amber-soft);border-radius:12px;padding:12px 15px;margin-bottom:14px;">
+          <b style="font-size:13px;display:block;">Antes de pegar conta nova: você tem ${trav} negócios parados</b>
+          <div style="font-size:12px;color:var(--muted);line-height:1.55;margin-top:3px;">
+            São ${trav} de ${aberto} em aberto (${pct.toFixed(0)}%). Cada conta nova que entra na rota disputa o mesmo dia
+            com um negócio que já está aberto — e o que já andou está mais perto de fechar.
+          </div>
+          <div style="font-size:11.5px;color:var(--muted2);margin-top:6px;">
+            Mais parados: ${piores.map(t => `<b>${esc(String(t.name || '').trim())}</b> (${Number(t.dias) || 0}d)`).join(' · ')}
+          </div>
+        </div>`;
+    }
+  }
+
   let cardsPraca = '';
   if (souGestorProsp) {
     const porCidade = {};
@@ -10874,6 +10906,59 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
         if (rep) c.reps.add(String(rep.name || '').split(' ')[0]);
       }
     });
+    // DIAGNÓSTICO DE DISTRIBUIÇÃO (Julyan, 11/08) — cruza a fila de contas-alvo com a
+    // saúde do funil da mesma praça (snapshotReps, o mesmo dado do "Onde atacar").
+    //
+    // POR QUE: o card mostrava só ESTOQUE ("108 pendentes") e estoque alto parecia bom.
+    // Mas Vitória tem 108 pendentes E 50% do funil travado — mandar mais lead pra lá
+    // afoga quem já não dá conta. E São Paulo, com 1/10 da meta, nem aparecia na lista
+    // por ter zero pendentes. O gestor decidia distribuição olhando metade da conta.
+    const saudePorPraca = (() => {
+      const snap = (DATA.resumoSemanal && DATA.resumoSemanal.snapshotReps) || {};
+      const PRACA_DO_OWNER = {
+        '87069181': 'Vitória', '86100505': 'Vila Velha', '89842507': 'São Paulo',
+        '91477292': 'Porto Alegre', '94079973': 'Rio de Janeiro',
+        '86100506': 'Rio de Janeiro', '87569072': 'Rio de Janeiro'
+      };
+      const out = {};
+      Object.entries(snap).forEach(([id, r]) => {
+        const nome = PRACA_DO_OWNER[id];
+        if (!nome) return;
+        const o = out[nome] || (out[nome] = { open: 0, trav: 0, mes: 0, meta: 0, reps: [] });
+        o.open += Number(r.open) || 0;
+        o.trav += (Array.isArray(r.travados) ? r.travados : []).length;
+        o.mes += Number(r.fechadosNoMes) || 0;
+        o.meta += Number(r.metaMensal) || 0;
+        o.reps.push(String(r.name || '').split(' ')[0]);
+      });
+      Object.values(out).forEach(o => {
+        o.pctTrav = o.open ? (100 * o.trav / o.open) : 0;
+        o.pctMeta = o.meta ? (100 * o.mes / o.meta) : 0;
+      });
+      return out;
+    })();
+
+    // O veredito é sobre ABASTECER ou NÃO — que é a decisão real do gestor nesta tela.
+    const vereditoPraca = (cid, pend) => {
+      const h = saudePorPraca[cid];
+      if (!h) return null;
+      if (h.pctTrav >= 40 && pend > 0) {
+        return { cor: 'var(--red)', txt: `Não abastecer: ${h.pctTrav.toFixed(0)}% do funil travado. Destravar primeiro.` };
+      }
+      if (pend === 0 && h.meta && h.pctMeta < 50) {
+        return { cor: 'var(--red)', txt: `Sem fila e ${h.mes}/${h.meta} no mês — ${h.reps.join(' e ')} está sem munição.` };
+      }
+      if (pend === 0) return { cor: 'var(--amber)', txt: 'Fila zerada — próxima carga vai pra cá.' };
+      if (h.pctTrav >= 25) return { cor: 'var(--amber)', txt: `${h.pctTrav.toFixed(0)}% travado — abastecer só depois da auditoria.` };
+      return { cor: 'var(--green)', txt: 'Pode abastecer: funil girando.' };
+    };
+
+    // Praça com fila ZERADA precisa aparecer, e a antiga só listava quem tinha conta —
+    // era exatamente o caso de São Paulo, invisível justamente por estar sem munição.
+    Object.keys(saudePorPraca).forEach(cid => {
+      if (!porCidade[cid]) porCidade[cid] = { pend: 0, reps: new Set(saudePorPraca[cid].reps) };
+    });
+
     const cidadesOrd = Object.keys(porCidade).sort((a, b) => porCidade[b].pend - porCidade[a].pend);
     if (cidadesOrd.length > 0) {
       cardsPraca = `<div class="prospeccao-territories">` +
@@ -10885,6 +10970,10 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
             <span class="prospeccao-territory-head"><b>${esc(cid)}</b><span>ver território →</span></span>
             <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:21px;margin-top:3px;${emDia ? 'color:var(--green);' : ''}">${d.pend} <span style="font-size:11px;font-weight:700;${emDia ? '' : 'color:var(--amber);'}">${emDia ? 'em dia ✓' : 'pendentes'}</span></div>
             <div style="font-size:10.5px;color:var(--muted2);margin-top:2px;">${[...d.reps].slice(0, 3).join(' · ') || 'sem responsável'}</div>
+            ${(() => {
+              const v = vereditoPraca(cid, d.pend);
+              return v ? `<div style="font-size:10.5px;line-height:1.45;margin-top:6px;padding-top:6px;border-top:1px solid var(--line);color:${v.cor};font-weight:700;text-align:left;">${v.txt}</div>` : '';
+            })()}
           </button>`;
         }).join('') + `</div>`;
     }
@@ -11022,6 +11111,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   el.innerHTML = `
     ${bannerProspeccao}
     ${integridadeFontes}
+    ${freioExec}
     ${cardsPraca}
     <div class="chart-card prospeccao-table-card" style="padding:0;overflow:hidden;margin-bottom:14px;">
       <div class="prospeccao-toolbar" style="padding:18px 22px 0;">
