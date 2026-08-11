@@ -8293,12 +8293,15 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     // Sem rota gerada ainda, mostra "✓ selecionado" em vez de um número que ainda
     // não existe — a numeração só nasce depois do clique em "Gerar rota".
     const simbolo = naRota ? (planoRotaGerada ? posicao : '✓') : l._doMapa ? '◇' : quenteHub(l) ? '!' : noHubspot(l) ? 'H' : l.status === 'sem_fit' ? '×' : '★';
+    // Horário do bloco: só existe depois de gerar a rota, e só para quem está nela.
+    const blocoDele = naRota && planoRotaGerada
+      ? (blocosHorario.find(b => String(b.lead.id) === String(l.id)) || null) : null;
     return `
       <div class="plano-lista-item ${naRota ? 'is-route' : ''}" data-id="${esc(String(l.id))}">
         <span class="plano-lista-index" ${naRota ? '' : `style="color:${corDoStatus(l)};"`}>${simbolo}</span>
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
-          <span class="plano-lista-meta">${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
+          <span class="plano-lista-meta">${blocoDele ? `<b style="color:var(--blue);">${blocoDele.hora}</b> · ` : ''}${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
           ${l._doMapa ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>${l.telefone ? `<span class="plano-etapa-hub" style="color:var(--violet);">📞 ${esc(l.telefone)}</span>` : ''}` : ''}
           ${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
         </span>
@@ -8321,12 +8324,28 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const rotaTituloHtml = planoRotaGerada
     ? `1 · Rota gerada (${itensRota.length} ${itensRota.length === 1 ? 'parada' : 'paradas'})`
     : `1 · Selecionados para hoje (${itensRota.length})`;
+  // BLOCO L (11/08) — a rota gerada vira blocos de horário.
+  // O bug que isso corrige: a tarefa no HubSpot nascia com "9h + ordem de CLIQUE × 45min".
+  // Depois "Gerar rota" reordenava as paradas por proximidade e os horários ficavam
+  // para trás — a agenda passava a contradizer a rota que ele acabou de montar.
+  // Agora o horário sai da SEQUÊNCIA real: 9h + 45min por parada, teto 17h (mesma
+  // convenção de antes, só que aplicada na ordem certa).
+  const horaDoBloco = i => {
+    const min = Math.min(9 * 60 + i * 45, 17 * 60);
+    return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+  };
+  const blocosHorario = planoRotaGerada ? itensRota.map((l, i) => ({ lead: l, hora: horaDoBloco(i) })) : [];
+  const enviarAgendaHtml = (planoRotaGerada && !planoFechado && blocosHorario.length)
+    ? `<button type="button" id="planoEnviarAgenda" class="plano-route-button" style="margin:2px 0 12px;width:100%;justify-content:center;">
+         🗓️ Enviar ${blocosHorario.length} ${blocosHorario.length === 1 ? 'parada' : 'paradas'} pra agenda (${blocosHorario[0].hora}–${blocosHorario[blocosHorario.length - 1].hora})
+       </button>`
+    : '';
   const gerarRotaInlineHtml = (!planoFechado && itensRota.length > 0 && !planoRotaGerada)
     ? `<button type="button" id="planoGerarRotaInline" class="plano-route-button" style="margin:2px 0 12px;width:100%;justify-content:center;">Gerar rota com ${itensRota.length} ${itensRota.length === 1 ? 'parada' : 'paradas'} →</button>`
     : '';
 
   lista.innerHTML = `
-    ${itensRota.length ? `<div class="plano-map-section-label">${rotaTituloHtml}</div>${itensRota.map(itemListaHTML).join('')}${gerarRotaInlineHtml}` : `<div class="empty-state" style="padding:18px 8px 12px;font-size:12px;">Sua rota está vazia. Comece pelos leads fáceis ou pelos clientes ativos da região.</div>`}
+    ${itensRota.length ? `<div class="plano-map-section-label">${rotaTituloHtml}</div>${itensRota.map(itemListaHTML).join('')}${gerarRotaInlineHtml}${enviarAgendaHtml}` : `<div class="empty-state" style="padding:18px 8px 12px;font-size:12px;">Sua rota está vazia. Comece pelos leads fáceis ou pelos clientes ativos da região.</div>`}
     ${itensSugestao.length ? `<div class="plano-map-section-label">2 · Leads fáceis pra hoje (funil + mais avaliados)</div>${itensSugestao.map(itemListaHTML).join('')}` : ''}
     ${clientesSugestao.length ? `<div class="plano-map-section-label">3 · Clientes Takeat na região${clientesSugestao.filter(c => c.altoVolume).length ? ` · ${clientesSugestao.filter(c => c.altoVolume).length} de alto volume` : ''}</div>${clientesSugestao.map(itemListaHTML).join('')}` : ''}
     ${pipelineSemLocal.length ? `<div class="plano-map-section-label">Quentes sem localização</div>${pipelineSemLocal.map(d => `<div class="plano-lista-item"><span class="plano-lista-index" style="color:var(--red);">!</span><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')} · precisa de endereço</span></span>${d.id ? `<a href="${hsUrl(d.id)}" target="_blank" rel="noopener" class="plano-lista-btn" title="Abrir no HubSpot" style="text-decoration:none;">↗</a>` : ''}</div>`).join('')}` : ''}
@@ -8334,6 +8353,37 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   `;
   const btnGerarInline = document.getElementById('planoGerarRotaInline');
   if (btnGerarInline) btnGerarInline.addEventListener('click', () => gerarRotaPlanoMapa(r, hoje, planoFechado));
+
+  // Envio dos blocos pro HubSpot. É um clique EXPLÍCITO, não automático ao gerar a rota:
+  // gerar rota é exploratório (ele pode gerar, tirar uma parada, gerar de novo) e cada
+  // geração escrevendo no CRM encheria o HubSpot de reagendamento a cada experimento.
+  // Ele decide quando o dia está fechado.
+  const btnEnviarAgenda = document.getElementById('planoEnviarAgenda');
+  if (btnEnviarAgenda) btnEnviarAgenda.addEventListener('click', async () => {
+    if (btnEnviarAgenda.dataset.enviando === '1') return;   // clique duplo não duplica envio
+    btnEnviarAgenda.dataset.enviando = '1';
+    btnEnviarAgenda.disabled = true;
+    const total = blocosHorario.length;
+    let ok = 0, falhou = 0;
+    // SEQUENCIAL de propósito: 6 chamadas simultâneas ao HubSpot rendem 429 e metade
+    // das paradas ficaria sem horário, sem ninguém perceber.
+    for (let i = 0; i < total; i++) {
+      const b = blocosHorario[i];
+      btnEnviarAgenda.textContent = `Enviando ${i + 1} de ${total}…`;
+      try {
+        await criarTarefaVisitaNoHubspot(b.lead, r.ownerId, b.hora, { silencioso: true });
+        ok++;
+      } catch (e) { falhou++; console.error('Falha ao agendar ' + b.lead.nome + ':', e); }
+    }
+    btnEnviarAgenda.textContent = falhou
+      ? `${ok} de ${total} na agenda — ${falhou} falhou`
+      : `✓ ${ok} ${ok === 1 ? 'parada' : 'paradas'} na agenda`;
+    mostrarToast(falhou
+      ? `${ok} de ${total} paradas foram pra agenda. ${falhou} não consegui — tente de novo em instantes.`
+      : `Rota na agenda: ${ok} ${ok === 1 ? 'visita' : 'visitas'} de ${blocosHorario[0].hora} às ${blocosHorario[total - 1].hora}.`,
+      falhou ? 'erro' : 'sucesso');
+    btnEnviarAgenda.dataset.enviando = '0';
+  });
   const countEl = document.getElementById('planoMapaRotaCount');
   if (countEl) countEl.textContent = `${naRotaTodas.length} ${naRotaTodas.length === 1 ? 'parada' : 'paradas'}`;
 
@@ -9744,7 +9794,10 @@ async function tokenDeSessaoGlobal() {
 // discretamente, nunca trava a tela. Reaproveita 100% do reconhecimento que já existe
 // pra "Visita - <nome>" (fetch-hubspot.js, Agenda, contagem da Daily) — zero lógica
 // nova de leitura, só a escrita via api/criar-tarefa-rota.js (nunca expõe o token).
-async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista) {
+async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes) {
+  // opcoes.silencioso: usado pelo envio em lote da rota, que mostra um resumo único no
+  // fim. Sem isso, 6 paradas renderiam 6 toasts empilhados na cara do executivo.
+  const silencioso = !!(opcoes && opcoes.silencioso);
   const token = await tokenDeSessaoGlobal();
   try {
     const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-tarefa-rota', {
@@ -9754,11 +9807,14 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista) {
     }), 8000, 'criar-tarefa-rota');
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
+      if (silencioso) throw new Error((data && data.erro) || 'HubSpot recusou');
       mostrarToast(`Adicionado à rota, mas não consegui criar a tarefa no HubSpot (${(data && data.erro) || 'erro desconhecido'}).`, 'erro');
       return;
     }
-    mostrarToast(`"${lead.nome}" adicionado à rota — tarefa de visita criada no HubSpot às ${horaPrevista}.`, 'sucesso');
+    if (silencioso) return data;
+    mostrarToast(`"${lead.nome}" adicionado à rota — tarefa de visita ${data.reagendada ? 'reagendada' : 'criada'} no HubSpot às ${horaPrevista}.`, 'sucesso');
   } catch (e) {
+    if (silencioso) throw e;
     mostrarToast('Adicionado à rota, mas não consegui falar com o HubSpot agora (rede ou servidor fora). Tente confirmar depois.', 'erro');
   }
 }
