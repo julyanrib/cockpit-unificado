@@ -6312,6 +6312,7 @@ let rotaMapaInstancia = null;
 let rotaMapaMarcadores = [];
 let rotaSeqGerada = false;      // microrrota só aparece quando o gestor pede
 let rotaAddAberto = false;
+let rotaIncluirSugestoes = false;  // sugestão top-avaliada entra na microrrota só se o gestor pedir
 
 function rotasRepsVisiveis() {
   // Mesma lista da Daily/Cockpit — já vem sem os excluídos do relatório.
@@ -6341,10 +6342,52 @@ async function carregarRotasDoTime() {
     const chave = String(p.responsavel_owner_id);
     if (porOwner[chave]) porOwner[chave].paradas.push(p);
   });
+
+  // BLOCO 2 (11/08): pipeline quente por executivo. Vem do HubSpot via DATA (já filtrado
+  // por papel no servidor) e JÁ traz lat/lng — conferido no dado real: 9 de 12 quentes de
+  // hoje têm coordenada. Os sem coordenada não são escondidos, são listados à parte.
+  const quentesTodos = ((DATA.temperatura || {}).quentes) || [];
+  quentesTodos.forEach(d => {
+    const chave = String(d.ownerId);
+    if (!porOwner[chave]) return;
+    porOwner[chave].quentes = porOwner[chave].quentes || [];
+    porOwner[chave].quentes.push({
+      id: 'quente-' + d.id,
+      hubspotId: d.id,
+      nome: d.name,
+      bairro: null,
+      cidade: d.praca || null,
+      lat: d.lat, lng: d.lng,
+      etapa: d.stage,
+      dias: d.dias,
+      valor: d.valor,
+      _quente: true
+    });
+  });
   (planos || []).forEach(p => {
     const chave = String(p.owner_id);
     if (porOwner[chave]) porOwner[chave].plano = p;
   });
+  // BLOCO 3: oportunidade NOVA — conta-alvo da carteira dele, ainda não na rota,
+  // ordenada por volume de avaliações (o critério comercial oficial do playbook).
+  // Buscada de uma vez para o time inteiro, não uma consulta por pessoa.
+  const { data: carteira, error: e3 } = await supa.from('leads_prospeccao')
+    .select('id,nome,bairro,cidade,lat,lng,avaliacoes,fonte,status,data_rota,responsavel_owner_id')
+    .in('status', ['atribuido', 'na_rota']);
+  if (e3) console.error('Rotas: erro ao carregar carteira —', e3.message);
+  (carteira || []).forEach(l => {
+    const chave = String(l.responsavel_owner_id);
+    if (!porOwner[chave]) return;
+    const jaNaRotaHoje = l.status === 'na_rota' && l.data_rota === hoje;
+    if (jaNaRotaHoje) return;
+    porOwner[chave].sugestoes = porOwner[chave].sugestoes || [];
+    porOwner[chave].sugestoes.push(l);
+  });
+  Object.values(porOwner).forEach(info => {
+    info.quentes = info.quentes || [];
+    info.sugestoes = (info.sugestoes || []).sort((a, b) => (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0));
+  });
+
   rotasCache = { porOwner, carregadoEm: Date.now() };
 }
 
@@ -6406,6 +6449,9 @@ async function renderRotas() {
         '</div>' +
         '<div style="margin-bottom:9px;">' + pill + '</div>' +
         '<div class="rota-card-local"><span aria-hidden="true">📍</span><span style="min-width:0;">' + local + '</span></div>' +
+        ((info.quentes || []).length
+          ? '<div style="margin-top:8px;font-size:12px;color:var(--red);font-weight:700;">🔥 ' + info.quentes.length + ' quente' + (info.quentes.length === 1 ? '' : 's') + ' no pipeline dele</div>'
+          : '') +
         '<div class="rota-card-foot">' + (n === 0 ? 'Abrir e montar a rota dele →' : 'Ver rota no mapa →') + '</div>' +
       '</button>';
   }).join('') + '</div>';
@@ -6424,12 +6470,14 @@ function fecharRotaDrawer() {
   rotaDrawerOwner = null;
   rotaSeqGerada = false;
   rotaAddAberto = false;
+  rotaIncluirSugestoes = false;
 }
 
 async function abrirRotaDrawer(ownerId) {
   rotaDrawerOwner = String(ownerId);
   rotaSeqGerada = false;
   rotaAddAberto = false;
+  rotaIncluirSugestoes = false;
   const ov = document.getElementById('rotaOverlay');
   const titulo = document.getElementById('rotaDrawerTitulo');
   const rep = rotasRepsVisiveis().find(r => String(r.ownerId) === rotaDrawerOwner);
@@ -6441,13 +6489,28 @@ async function abrirRotaDrawer(ownerId) {
 
 // Sequência exibida: sem microrrota, é a ordem em que ele escolheu (ordem do banco).
 // Com microrrota pedida, é vizinho-mais-próximo a partir da região que ele digitou.
-function rotaSequenciaAtual(info) {
+// Quantas sugestões novas entram na microrrota. 3 porque o playbook pede 2 demos de
+// alto ticket por dia — encher a rota de sugestão afogaria o compromisso já assumido.
+const ROTA_MAX_SUGESTOES = 3;
+
+// O que entra na sequência, por prioridade. Quente sempre entra (é dinheiro perto de
+// fechar); conta-alvo escolhida entra; sugestão nova entra só se rotaIncluirSugestoes.
+function rotaParadasParaSequenciar(info) {
+  const quentes = (info.quentes || []).filter(q => q.lat != null && q.lng != null);
   const paradas = info.paradas || [];
-  if (!rotaSeqGerada) return paradas.map(p => ({ ...p, distanciaDaAnteriorKm: null }));
+  const sugestoes = rotaIncluirSugestoes
+    ? (info.sugestoes || []).filter(s => s.lat != null && s.lng != null).slice(0, ROTA_MAX_SUGESTOES).map(s => ({ ...s, _sugestao: true }))
+    : [];
+  return [...quentes, ...paradas, ...sugestoes];
+}
+
+function rotaSequenciaAtual(info) {
+  const base = rotaParadasParaSequenciar(info);
+  if (!rotaSeqGerada) return base.map(p => ({ ...p, distanciaDaAnteriorKm: null }));
   const origem = rotaOrigemDoPlano(info.plano);
-  if (origem) return ordenarPorProximidade(paradas, origem);
-  if (paradas.length > 1) return [{ ...paradas[0], distanciaDaAnteriorKm: null }, ...ordenarPorProximidade(paradas.slice(1), paradas[0])];
-  return paradas.map(p => ({ ...p, distanciaDaAnteriorKm: null }));
+  if (origem) return ordenarPorProximidade(base, origem);
+  if (base.length > 1) return [{ ...base[0], distanciaDaAnteriorKm: null }, ...ordenarPorProximidade(base.slice(1), base[0])];
+  return base.map(p => ({ ...p, distanciaDaAnteriorKm: null }));
 }
 
 async function desenharRotaDrawer() {
@@ -6470,12 +6533,22 @@ async function desenharRotaDrawer() {
       '<span style="font-size:12px;color:var(--muted);">📍 ' + (plano && plano.local_atuacao ? esc(plano.local_atuacao) : 'sem região informada') + '</span>' +
       '<span style="font-size:12px;color:var(--muted2);margin-left:auto;">' + seq.length + ' parada' + (seq.length === 1 ? '' : 's') + '</span>' +
     '</div>' +
+    // BLOCO 2/3: o que existe de oportunidade na praça dele hoje, antes do mapa.
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">' +
+      '<span style="flex:1;min-width:110px;background:var(--red-soft);border-radius:12px;padding:9px 12px;"><b style="display:block;font-family:\'Poppins\',sans-serif;font-size:19px;color:var(--red);">' + (info.quentes || []).length + '</b><span style="font-size:10.5px;color:var(--muted);">quentes no pipeline</span></span>' +
+      '<span style="flex:1;min-width:110px;background:var(--panel2);border-radius:12px;padding:9px 12px;"><b style="display:block;font-family:\'Poppins\',sans-serif;font-size:19px;">' + (info.paradas || []).length + '</b><span style="font-size:10.5px;color:var(--muted);">contas-alvo na rota</span></span>' +
+      '<span style="flex:1;min-width:110px;background:var(--panel2);border-radius:12px;padding:9px 12px;"><b style="display:block;font-family:\'Poppins\',sans-serif;font-size:19px;">' + (info.sugestoes || []).length + '</b><span style="font-size:10.5px;color:var(--muted);">livres na carteira</span></span>' +
+    '</div>' +
     '<div class="rota-mapa-palco" id="rotaMapaPalco"><div id="rotaMapa"></div></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">' +
       '<button class="push" id="rotaBtnMicro" ' + (seq.length < 2 ? 'disabled' : '') + ' style="background:' + (rotaSeqGerada ? 'var(--sunk)' : 'var(--red)') + ';color:' + (rotaSeqGerada ? 'var(--muted)' : '#fff') + ';border:none;border-radius:999px;padding:9px 16px;font:700 12px \'DM Sans\',sans-serif;cursor:pointer;min-height:38px;">' +
         (rotaSeqGerada ? '↺ Refazer sugestão' : '🧭 Sugerir microrrota') + '</button>' +
       '<button class="push" id="rotaBtnAdd" style="background:none;border:1.5px solid var(--line);border-radius:999px;padding:9px 16px;font:700 12px \'DM Sans\',sans-serif;cursor:pointer;min-height:38px;color:var(--ink);">' +
         (rotaAddAberto ? '✕ Fechar lista' : '+ Adicionar conta à rota') + '</button>' +
+      ((info.sugestoes || []).filter(s => s.lat != null).length
+        ? '<button class="push" id="rotaBtnSug" style="background:' + (rotaIncluirSugestoes ? 'var(--amber-soft)' : 'none') + ';border:1.5px solid ' + (rotaIncluirSugestoes ? 'var(--amber)' : 'var(--line)') + ';border-radius:999px;padding:9px 16px;font:700 12px \'DM Sans\',sans-serif;cursor:pointer;min-height:38px;color:' + (rotaIncluirSugestoes ? 'var(--amber)' : 'var(--ink)') + ';">' +
+          (rotaIncluirSugestoes ? '★ Sugestões incluídas' : '★ Incluir top-avaliadas') + '</button>'
+        : '') +
     '</div>' +
     (rotaSeqGerada && seq.length > 1
       ? '<div style="font-size:11.5px;color:var(--muted);margin-top:9px;line-height:1.5;">Sequência <b>sugerida</b> por proximidade' + (origem ? ' a partir de ' + esc(plano.local_atuacao) : ' a partir da 1ª parada') + ' — <b>' + totalPercursoKm(seq).toFixed(1) + ' km</b> no total. É distância em linha reta, não de rua: serve pra ordenar, não pra cronometrar.</div>'
@@ -6484,19 +6557,37 @@ async function desenharRotaDrawer() {
     (seq.length
       ? '<ul class="rota-seq">' + seq.map((p, i) =>
           '<li><span class="rota-seq-num">' + (i + 1) + '</span>' +
-          '<span class="rota-seq-corpo"><b class="rota-seq-nome">' + esc(p.nome || '') + '</b>' +
+          '<span class="rota-seq-corpo"><b class="rota-seq-nome">' + esc(p.nome || '') +
+          (p._quente ? ' <span style="font-size:10px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:99px;padding:2px 7px;vertical-align:1px;">🔥 ' + esc(p.etapa || 'quente') + '</span>' : '') +
+          (p._sugestao ? ' <span style="font-size:10px;font-weight:800;color:var(--amber);background:var(--amber-soft);border-radius:99px;padding:2px 7px;vertical-align:1px;">★ sugestão</span>' : '') +
+          '</b>' +
           '<span class="rota-seq-meta">' + esc([p.bairro, p.cidade].filter(Boolean).join(' · ') || 'sem endereço') +
             (p.avaliacoes != null ? ' · ' + Number(p.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : '') +
             (Number.isFinite(p.distanciaDaAnteriorKm) ? ' · ' + p.distanciaDaAnteriorKm.toFixed(1) + ' km ' + (i === 0 ? 'do ponto de partida' : 'da anterior') : '') +
             ((p.lat == null || p.lng == null) ? ' · <span style="color:var(--amber);">sem coordenada</span>' : '') +
           '</span></span>' +
-          '<button class="rota-seq-tirar" data-tirar="' + esc(String(p.id)) + '" title="Tirar da rota de hoje">tirar</button></li>'
+          (p._quente || p._sugestao
+            ? '<span style="font-size:10px;color:var(--muted2);flex:none;align-self:center;">' + (p._quente ? 'do funil' : 'sugestão') + '</span>'
+            : '<button class="rota-seq-tirar" data-tirar="' + esc(String(p.id)) + '" title="Tirar da rota de hoje">tirar</button>') + '</li>'
         ).join('') + '</ul>'
       : '<div class="empty-state" style="padding:26px 12px;">' + esc(String(rep.name || 'Ele').split(' ')[0]) + ' ainda não montou rota hoje. Use "Adicionar conta à rota" para empurrar as primeiras.</div>') +
-    (semCoord > 0 ? '<div style="font-size:11.5px;color:var(--amber);margin-top:8px;">' + semCoord + ' parada(s) sem coordenada ficaram fora do mapa (aparecem na lista).</div>' : '');
+    (semCoord > 0 ? '<div style="font-size:11.5px;color:var(--amber);margin-top:8px;">' + semCoord + ' parada(s) sem coordenada ficaram fora do mapa (aparecem na lista).</div>' : '') +
+    // BLOCO 2: quente sem coordenada não some — vira lista nomeada, pra ele ligar/encaixar
+    // à mão. Some em silêncio era o que fazia parecer que "lead quente não tem localização".
+    ((info.quentes || []).filter(q => q.lat == null || q.lng == null).length
+      ? '<div style="margin-top:16px;padding:13px 14px;background:var(--amber-soft);border-radius:var(--r-md);">' +
+        '<div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--amber);margin-bottom:7px;">Quentes sem endereço no CRM</div>' +
+        '<div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:8px;">Não dá pra plotar nem sequenciar sem coordenada. Peça pra ele preencher o endereço no HubSpot — aí entram na rota automaticamente.</div>' +
+        (info.quentes || []).filter(q => q.lat == null || q.lng == null).map(q =>
+          '<div style="font-size:12.5px;padding:5px 0;"><b>' + esc(q.nome || '') + '</b> <span style="color:var(--muted2);">· ' + esc(q.etapa || '') + (q.dias != null ? ' · ' + q.dias + 'd na etapa' : '') + '</span></div>'
+        ).join('') +
+        '</div>'
+      : '');
 
   const btnMicro = document.getElementById('rotaBtnMicro');
   if (btnMicro) btnMicro.addEventListener('click', () => { rotaSeqGerada = true; desenharRotaDrawer(); });
+  const btnSug = document.getElementById('rotaBtnSug');
+  if (btnSug) btnSug.addEventListener('click', () => { rotaIncluirSugestoes = !rotaIncluirSugestoes; rotaSeqGerada = false; desenharRotaDrawer(); });
   const btnAdd = document.getElementById('rotaBtnAdd');
   if (btnAdd) btnAdd.addEventListener('click', () => { rotaAddAberto = !rotaAddAberto; desenharRotaDrawer(); });
   box.querySelectorAll('[data-tirar]').forEach(b => {
@@ -7953,7 +8044,7 @@ async function renderDaily() {
       <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${promessasHoje.length}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">prometeram hoje</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${semPromessa > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${semPromessa}</div><div style="font-size:11px;color:var(--dark-mut);">sem promessa hoje</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${planosFechadosTotal < repsDaily.length ? '#E0A64A' : 'var(--dark-ink)'};">${planosFechadosTotal}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">fecharam o plano</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${planosFechadosTotal < repsDaily.length ? '#E0A64A' : 'var(--dark-ink)'};">${planosFechadosTotal}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">fecharam o plano do dia</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
       </div>
     </div>`;
@@ -8106,11 +8197,19 @@ async function renderDaily() {
       ? new Date(planoPessoa.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
     const planoPrioridades = (planoPessoa && Array.isArray(planoPessoa.prioridades) ? planoPessoa.prioridades : []).filter(Boolean);
     const planoContas = (planoPessoa && Array.isArray(planoPessoa.contas_alvo) ? planoPessoa.contas_alvo : []).length;
-    const planoResumoLinha = !planoPessoa ? 'Sem plano hoje · ' + acaoGestor
-      : planoFechado ? `Plano fechado ${planoHora}${planoPrioridades.length ? ' · ' + planoPrioridades.length + ' prioridade' + (planoPrioridades.length > 1 ? 's' : '') : ''}`
-      : 'Plano em rascunho · ' + acaoGestor;
+    // A promessa vem primeiro e SEMPRE aparece quando existe: é o compromisso que o
+    // executivo assumiu e o que o gestor cobra na Daily. O plano do dia é o segundo
+    // dado, nunca o que apaga o primeiro.
+    const resumoPromessa = registrouResumo
+      ? 'Prometeu ' + metricasCompromisso.filter(m => Number(m.prom) > 0)
+          .map(m => m.prom + ' ' + m.label.toLowerCase()).join(' · ')
+      : 'Sem promessa hoje';
+    const resumoPlano = !planoPessoa ? 'plano do dia não aberto'
+      : planoFechado ? 'plano fechado ' + planoHora + (planoPrioridades.length ? ' (' + planoPrioridades.length + ' prioridade' + (planoPrioridades.length > 1 ? 's' : '') + ')' : '')
+      : 'plano em rascunho';
+    const planoResumoLinha = (registrouResumo && !metasPositivas.length ? 'Promessa zerada' : resumoPromessa) + ' · ' + resumoPlano;
     const planoPill = !planoPessoa
-      ? '<span style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--panel2);color:var(--muted2);border:1px solid var(--line);white-space:nowrap;">sem plano</span>'
+      ? '<span style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--panel2);color:var(--muted2);border:1px solid var(--line);white-space:nowrap;">s/ plano do dia</span>'
       : planoFechado
         ? `<span style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--green-soft);color:var(--green);white-space:nowrap;">plano ${esc(planoHora)}</span>`
         : '<span style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--amber-soft);color:var(--amber);white-space:nowrap;">rascunho</span>';
