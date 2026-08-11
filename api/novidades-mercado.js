@@ -166,14 +166,25 @@ module.exports = async function handler(req, res) {
 
   // ---- 4. Casa dos Dados ----
   // Consulta paga por crédito: 1 chamada por praça a cada 12h, nunca por tecla digitada.
+  //
+  // AUTENTICAÇÃO EM CASCATA (11/08): a primeira tentativa com o header `api-key` voltou
+  // 403 com corpo VAZIO — sintoma de formato de autenticação recusado, não de crédito
+  // acabado (que traz mensagem). A documentação da Casa dos Dados já mudou de formato
+  // entre versões, então em vez de chutar uma variação por deploy, tenta as conhecidas
+  // em sequência e RELATA qual passou. Para no primeiro 2xx.
+  //
+  // O custo disso é zero em crédito: 401/403 não consomem consulta. Assim que soubermos
+  // qual vale, dá pra fixar só ela — o campo `autenticacaoQueFuncionou` na resposta é
+  // exatamente esse recado.
+  const variantes = [
+    { nome: 'header api-key', headers: { 'api-key': casaToken } },
+    { nome: 'header api_key', headers: { 'api_key': casaToken } },
+    { nome: 'header Authorization Bearer', headers: { Authorization: 'Bearer ' + casaToken } },
+    { nome: 'header x-api-key', headers: { 'x-api-key': casaToken } }
+  ];
+
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 20000);
-    const resp = await fetch(CASA_URL, {
-      method: 'POST',
-      signal: ctrl.signal,
-      headers: { 'Content-Type': 'application/json', 'api-key': casaToken },
-      body: JSON.stringify({
+    const corpoConsulta = JSON.stringify({
         query: {
           termo: [],
           atividade_principal: CNAE_FOODSERVICE,
@@ -187,19 +198,44 @@ module.exports = async function handler(req, res) {
         extras: { somente_mei: false, excluir_mei: false, com_telefone: false },
         page: 1,
         limit: 100
-      })
-    });
-    clearTimeout(timer);
+      });
 
-    const json = await resp.json().catch(() => ({}));
-    if (!resp.ok) {
-      // Diagnóstico explícito: crédito acabado, chave inválida e formato recusado dão
-      // sintomas diferentes, e "não consegui buscar" não distingue nenhum deles.
-      return res.status(resp.status).json({
+    let resp = null, json = null, usada = null;
+    const tentativas = [];
+    for (const v of variantes) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 20000);
+      try {
+        const r = await fetch(CASA_URL, {
+          method: 'POST',
+          signal: ctrl.signal,
+          headers: Object.assign({ 'Content-Type': 'application/json' }, v.headers),
+          body: corpoConsulta
+        });
+        clearTimeout(timer);
+        // Lê como TEXTO primeiro: a resposta de erro deles às vezes vem em HTML, e
+        // .json() engoliria a única pista útil que existe.
+        const texto = await r.text();
+        let j = null;
+        try { j = JSON.parse(texto); } catch (e) { j = null; }
+        tentativas.push({
+          via: v.nome, http: r.status,
+          corpo: (j && (j.message || j.erro || j.detail || j.error)) || (texto ? texto.slice(0, 220) : '(vazio)')
+        });
+        if (r.ok) { resp = r; json = j || {}; usada = v.nome; break; }
+      } catch (e) {
+        clearTimeout(timer);
+        tentativas.push({ via: v.nome, http: null, corpo: String(e.message || e).slice(0, 120) });
+      }
+    }
+
+    if (!resp) {
+      return res.status(502).json({
         etapa: 'casadosdados',
-        httpCasa: resp.status,
-        erro: (json && (json.message || json.erro || json.detail)) || 'Casa dos Dados recusou a consulta.',
-        detalhe: json
+        erro: 'Nenhum formato de autenticação foi aceito pela Casa dos Dados.',
+        // Cada linha diz o que aquele formato respondeu — é o que permite corrigir
+        // sem mais um ciclo de tentativa e erro.
+        tentativas: tentativas
       });
     }
 
@@ -224,6 +260,7 @@ module.exports = async function handler(req, res) {
 
     return res.status(200).json({
       ok: true, origem: 'casadosdados', municipio: municipio, uf: uf, dias: dias,
+      autenticacaoQueFuncionou: usada,
       total: itens.length, itens: itens
     });
   } catch (e) {
