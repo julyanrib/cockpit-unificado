@@ -34,7 +34,12 @@ const CNAE_FOODSERVICE = [
   '1091102'  // Padaria e confeitaria com predominância de produção própria
 ];
 
-const CASA_URL = 'https://api.casadosdados.com.br/v2/public/cnpj/search';
+// Endpoint e header conferidos na documentação oficial (v5). A versão anterior usava
+// /v2/public/..., que NÃO EXISTE — só há v4 e v5. Requisição a caminho inexistente caía
+// no site e voltava a página de desafio do Cloudflare ("Just a moment"), com 403 e corpo
+// HTML. Parecia problema de chave; era caminho errado.
+// tipo_resultado=completo é obrigatório pra vir endereço, telefone e coordenada IBGE.
+const CASA_URL = 'https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultado=completo';
 
 function isoDiasAtras(dias) {
   const d = new Date(Date.now() - dias * 86400000);
@@ -45,32 +50,29 @@ function isoDiasAtras(dias) {
 // Os nomes de campo variam conforme a versão da API, então cada um tem alternativas —
 // preferir undefined a inventar valor: campo vazio na tela é honesto, campo errado não.
 function normalizar(e) {
-  const pega = (...chaves) => {
-    for (const k of chaves) {
-      const v = k.split('.').reduce((o, p) => (o == null ? o : o[p]), e);
-      if (v != null && String(v).trim() !== '') return String(v).trim();
-    }
-    return null;
-  };
-  const cnpj = pega('cnpj', 'cnpj_completo', 'cnpj_raiz');
-  if (!cnpj) return null;
-  const nome = pega('nome_fantasia', 'razao_social') || 'Sem nome';
-  const logradouro = pega('logradouro', 'endereco.logradouro');
-  const numero = pega('numero', 'endereco.numero');
+  if (!e || !e.cnpj) return null;
+  const end = e.endereco || {};
+  const ibge = end.ibge || {};
+  const nome = (e.nome_fantasia && String(e.nome_fantasia).trim()) || (e.razao_social && String(e.razao_social).trim()) || 'Sem nome';
+  const logradouro = [end.tipo_logradouro, end.logradouro].filter(Boolean).join(' ').trim();
+  // Coordenada vem do IBGE na própria resposta — é o que faz a empresa nova cair direto
+  // no mapa, sem geocodificação extra e sem gastar cota da MapTiler.
+  const lat = Number(ibge.latitude), lng = Number(ibge.longitude);
+  const temCoord = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
   return {
-    cnpj: cnpj,
+    cnpj: String(e.cnpj),
     nome: nome.slice(0, 160),
-    razaoSocial: pega('razao_social'),
-    dataAbertura: pega('data_abertura', 'data_inicio_atividade'),
-    cnae: pega('cnae_fiscal', 'atividade_principal.codigo', 'cnae_principal'),
-    atividade: pega('cnae_fiscal_descricao', 'atividade_principal.descricao'),
-    endereco: [logradouro, numero].filter(Boolean).join(', ') || null,
-    bairro: pega('bairro', 'endereco.bairro'),
-    municipio: pega('municipio', 'endereco.municipio', 'cidade'),
-    uf: pega('uf', 'endereco.uf'),
-    cep: pega('cep', 'endereco.cep'),
-    telefone: pega('telefone_1', 'telefone', 'ddd_telefone_1'),
-    capital: pega('capital_social')
+    razaoSocial: e.razao_social || null,
+    dataAbertura: e.data_abertura || null,
+    porte: (e.porte_empresa && e.porte_empresa.descricao) || null,
+    endereco: [logradouro, end.numero].filter(Boolean).join(', ') || null,
+    bairro: end.bairro || null,
+    municipio: end.municipio || null,
+    uf: end.uf || null,
+    cep: end.cep || null,
+    lat: temCoord ? lat : null,
+    lng: temCoord ? lng : null,
+    capital: e.capital_social != null ? Number(e.capital_social) : null
   };
 }
 
@@ -185,20 +187,17 @@ module.exports = async function handler(req, res) {
 
   try {
     const corpoConsulta = JSON.stringify({
-        query: {
-          termo: [],
-          atividade_principal: CNAE_FOODSERVICE,
-          municipio: [municipio],
-          uf: [uf],
-          situacao_cadastral: 'ATIVA',
-          data_abertura_inicio: isoDiasAtras(dias),
-          data_abertura_fim: isoDiasAtras(0)
-        },
-        range_query: {},
-        extras: { somente_mei: false, excluir_mei: false, com_telefone: false },
-        page: 1,
-        limit: 100
-      });
+      codigo_atividade_principal: CNAE_FOODSERVICE,
+      situacao_cadastral: ['ATIVA'],
+      uf: [uf.toLowerCase()],
+      // A doc exemplifica município em minúsculas e sem acento ("sao paulo"), então
+      // normaliza — mandar "Vitória" e receber zero seria o pior tipo de falha: silenciosa.
+      municipio: [municipio.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')],
+      data_abertura: { inicio: isoDiasAtras(dias), fim: isoDiasAtras(0) },
+      mais_filtros: { com_telefone: true },
+      limite: 100,
+      pagina: 1
+    });
 
     let resp = null, json = null, usada = null;
     const tentativas = [];
@@ -239,11 +238,9 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    // A resposta pode vir em .data.cnpj, .cnpj ou .data — cada versão da API muda isso.
-    const cru = (json && (
-      (json.data && (json.data.cnpj || json.data.cnpjs || json.data.results)) ||
-      json.cnpj || json.results || (Array.isArray(json.data) ? json.data : null)
-    )) || [];
+    // Formato documentado: { total, cnpjs: [...] }. Mantidas alternativas como rede de
+    // segurança — a doc tem "modificado há aproximadamente 1 ano" e formato muda.
+    const cru = (json && (json.cnpjs || json.results || (Array.isArray(json.data) ? json.data : null))) || [];
     if (!Array.isArray(cru)) {
       return res.status(502).json({
         etapa: 'formato',
