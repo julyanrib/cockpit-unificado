@@ -207,6 +207,10 @@ function montarDadosCompletos() {
       ganhosSemanaDetalhe: ganhosDetalheFresco,
       reunioesSemanaDetalhe: (weeklyRaw && weeklyRaw.reunioesSemanaDetalhe) || (resumoSemanal && resumoSemanal.reunioesSemanaDetalhe) || [],
       quentesDemoOuNegociacao: (weeklyRaw && weeklyRaw.quentesDemoOuNegociacao) || (resumoSemanal && resumoSemanal.quentesDemoOuNegociacao) || [],
+      // snapshotReps alimenta o card "Onde atacar esta semana" (visão por praça).
+      // Ele só existe no weekly-raw.json — o resumo-semanal.json (texto da IA) não tem.
+      // Sem esta linha o card lia undefined e sumia da tela em silêncio, sem erro.
+      snapshotReps: (weeklyRaw && weeklyRaw.snapshotReps) || {},
       ranking: rankingSemanal
     } : null,
     agenda: hubspot.agenda || null,
@@ -266,7 +270,13 @@ function filtrarParaPapel(dados, usuario) {
     quentesDemoOuNegociacao: soMeu(rs.quentesDemoOuNegociacao),
     ranking: (rs.ranking || []).map(r =>
       String(r.ownerId) === meuId ? r : { ...r, clientes: [] }
-    )
+    ),
+    // PRIVACIDADE: snapshotReps traz funil, travados, quentes e meta de TODO o time.
+    // O spread acima o deixaria passar inteiro pro executivo — vazamento silencioso,
+    // do mesmo tipo que o corte de 07/08 fechou para clientes/funil/notas. O executivo
+    // recebe só o próprio; a visão por praça é do gestor.
+    snapshotReps: (rs.snapshotReps && rs.snapshotReps[meuId])
+      ? { [meuId]: rs.snapshotReps[meuId] } : {}
   } : null;
 
   const funilLeads = {};
