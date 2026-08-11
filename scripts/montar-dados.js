@@ -28,6 +28,9 @@ const supabaseConfig = requireOpcional(() => require('../data/supabase-config.js
 const maptilerConfig = requireOpcional(() => require('../data/maptiler-config.json'));
 const resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
 const weeklyRaw = requireOpcional(() => require('../data/weekly-raw.json'));
+// Grandes redes que a Takeat não atende — usado pela Prospecção para tirar da fila
+// recomendada (vai pra "Revisar escopo", não some). Dado editável em data/.
+const redesExcluidas = requireOpcional(() => require('../data/redes-excluidas.json'));
 const hubspotPrevious = requireOpcional(() => require('../data/hubspot-previous.json'));
 
 const USUARIOS = Array.isArray(usuariosRaw) ? usuariosRaw : (usuariosRaw.usuarios || []);
@@ -214,6 +217,7 @@ function montarDadosCompletos() {
       ranking: rankingSemanal
     } : null,
     agenda: hubspot.agenda || null,
+    redesExcluidas: (redesExcluidas && Array.isArray(redesExcluidas.redes)) ? redesExcluidas.redes : [],
     usuarios: USUARIOS
   };
 }
