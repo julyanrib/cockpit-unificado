@@ -17,8 +17,21 @@ const { montarDadosCompletos } = require('../scripts/montar-dados.js');
 
 const FONTES_ROTULO = {
   outscraper: 'Outscraper', google_places: 'Google Places',
-  tripadvisor: 'Tripadvisor', ifood: 'iFood', manual: 'Manual'
+  tripadvisor: 'Tripadvisor', ifood: 'iFood', manual: 'Manual',
+  // BLOCO 14 (12/08/26): a Casa dos Dados vira fonte de primeira classe. Antes so dava
+  // pra importar como "manual", o que apagava a origem e, pior, caia no corte de
+  // qualidade padrao -- ver FONTES_SEM_AVALIACAO logo abaixo.
+  casa_dos_dados: 'Casa dos Dados'
 };
+
+// Fontes cujo lead NAO PODE ter avaliacao, por definicao. Uma empresa que abriu ha dez
+// dias nao tem 100 avaliacoes no Google -- nao e lead ruim, e lead novo, e e exatamente
+// o que queremos atacar: restaurante recem-aberto ainda nao escolheu sistema. Aplicar o
+// corte de volume aqui reprovaria 100% da Casa dos Dados, e foi por isso que nada dela
+// chegou na fila de Prospeccao. O corte continua valendo integralmente para Outscraper,
+// Google Places, TripAdvisor e iFood, onde a ausencia de avaliacao indica de fato
+// estabelecimento fraco ou cadastro sujo.
+const FONTES_SEM_AVALIACAO = new Set(['casa_dos_dados']);
 
 let USUARIOS = [];
 try {
@@ -203,8 +216,11 @@ module.exports = async function handler(req, res) {
 
   // Régua oficial: somente volume de avaliações. Nota é contexto, nunca corte nem
   // desempate. O mínimo pode ser ajustado por lote, sempre com relatório explícito.
+  const semCorteDeAvaliacao = FONTES_SEM_AVALIACAO.has(fonte);
   const qualidade = {
-    avaliacoesMin: (req.body.qualidade && req.body.qualidade.avaliacoesMin != null) ? Number(req.body.qualidade.avaliacoesMin) : 100
+    avaliacoesMin: (req.body.qualidade && req.body.qualidade.avaliacoesMin != null)
+      ? Number(req.body.qualidade.avaliacoesMin)
+      : (semCorteDeAvaliacao ? 0 : 100)
   };
 
   const linhasTodas = leads.map(l => {
@@ -237,8 +253,13 @@ module.exports = async function handler(req, res) {
     };
   }).filter(l => l.nome && l.cidade);
 
+  // Atencao ao `== null`: para as fontes normais, avaliacao ausente E reprovacao (o
+  // lead veio sem o dado que define o corte). Para a Casa dos Dados a ausencia e o
+  // estado esperado, entao so reprova se vier um numero abaixo do minimo.
   const reprovadosQualidade = linhasTodas.filter(l =>
-    l.avaliacoes == null || Number(l.avaliacoes) < qualidade.avaliacoesMin
+    semCorteDeAvaliacao
+      ? (l.avaliacoes != null && Number(l.avaliacoes) < qualidade.avaliacoesMin)
+      : (l.avaliacoes == null || Number(l.avaliacoes) < qualidade.avaliacoesMin)
   );
   const reprovadosFit = linhasTodas.filter(l => !fazSentidoFoodservice(l));
   const linhas = linhasTodas.filter(l =>
