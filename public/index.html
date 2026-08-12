@@ -425,7 +425,13 @@
   .avisos-sino:hover{background:var(--sunk);color:var(--ink);}
   .avisos-sino-badge{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;padding:0 4px;border-radius:99px;background:var(--red);color:#fff;font-size:10px;font-weight:800;font-variant-numeric:tabular-nums;display:none;place-items:center;box-sizing:border-box;}
   .avisos-overlay{position:fixed;inset:0;background:rgba(34,30,25,.45);z-index:70;}
-  .avisos-drawer{position:absolute;top:0;right:0;height:100%;width:560px;max-width:94vw;background:var(--bg);box-shadow:var(--shadow-lg);overflow-y:auto;padding:22px 24px 40px;box-sizing:border-box;}
+  .avisos-drawer{position:absolute;top:0;right:0;height:100%;width:660px;max-width:94vw;background:var(--bg);box-shadow:var(--shadow-lg);overflow-y:auto;padding:22px 24px 40px;box-sizing:border-box;}
+  /* Pílulas do topo (Bloco 12): mesmo peso visual, sem vermelho sólido. */
+  .com-topo-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--line-btn);background:var(--panel);color:var(--muted);font:700 11.5px 'DM Sans',sans-serif;cursor:pointer;text-decoration:none;white-space:nowrap;transition:border-color .12s var(--ease),color .12s var(--ease),background .12s var(--ease);}
+  .com-topo-btn:hover{border-color:var(--ink);color:var(--ink);background:var(--panel2);}
+  .com-topo-btn b{font-weight:800;color:var(--ink);}
+  .com-topo-novo{border-color:var(--red);color:var(--red);}
+  .com-topo-novo:hover{background:var(--red-soft);border-color:var(--red);color:var(--red);}
   .avisos-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;}
   .avisos-drawer-head h2{font-family:'Poppins',sans-serif;font-size:19px;font-weight:800;margin:0;}
   .avisos-drawer-head button{background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1;}
@@ -1784,7 +1790,7 @@
   </header>
 
   <div id="perfilOverlay" style="display:none;position:fixed;inset:0;background:rgba(34,30,25,.45);z-index:60;">
-    <div id="perfilDrawer" style="position:absolute;top:0;right:0;height:100%;width:340px;max-width:90vw;background:var(--panel);box-shadow:var(--shadow-lg);padding:24px 22px;overflow-y:auto;">
+    <div id="perfilDrawer" style="position:absolute;top:0;right:0;height:100%;width:420px;max-width:94vw;background:var(--panel);box-shadow:var(--shadow-lg);padding:24px 22px;overflow-y:auto;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
         <h2 style="margin:0;font-size:19px;">Meu perfil</h2>
         <button id="perfilFechar" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
@@ -1794,9 +1800,12 @@
         <div style="font-weight:700;font-size:15px;" id="perfilNomeLabel"></div>
         <div style="color:var(--muted2);font-size:11.5px;" id="perfilEmailLabel"></div>
       </div>
-      <label style="font-size:11.5px;color:var(--muted);font-weight:700;display:block;margin-bottom:6px;">Foto de perfil</label>
-      <input type="file" id="perfilFotoInput" aria-label="Escolher foto de perfil" accept="image/*" style="width:100%;margin-bottom:10px;font-size:12.5px;">
-      <button id="perfilSalvarBtn" style="width:100%;padding:11px;border-radius:var(--r-pill);border:none;background:var(--red);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;">Salvar foto</button>
+      <div id="perfilProgressoSlot"></div>
+      <details style="margin-top:18px;">
+        <summary style="list-style:none;cursor:pointer;font-size:11.5px;color:var(--muted);font-weight:700;">Trocar foto de perfil ▾</summary>
+        <input type="file" id="perfilFotoInput" aria-label="Escolher foto de perfil" accept="image/*" style="width:100%;margin:10px 0;font-size:12.5px;">
+        <button id="perfilSalvarBtn" style="width:100%;padding:11px;border-radius:var(--r-pill);border:none;background:var(--red);color:#fff;font-weight:700;font-size:13.5px;cursor:pointer;">Salvar foto</button>
+      </details>
       <div id="perfilStatus" style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"></div>
       <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
@@ -11243,8 +11252,14 @@ async function renderBannerComunicados() {
   const el = document.getElementById('comunicadosBanner');
   const naoLidos = comunicadosCache.filter(c => !jaLi(c.id));
 
-  const botaoNovo = sessaoAtual.role === 'manager' ? `<button id="btnNovoComunicado" style="background:var(--red);color:#fff;border:none;padding:6px 14px;border-radius:var(--r-pill);font-size:11.5px;font-weight:700;cursor:pointer;">+ Novo comunicado</button>` : '';
-  const linkHistorico = `<a id="linkHistoricoComunicados">Ver todos os comunicados (${comunicadosCache.length})</a>`;
+  // BLOCO 12 (12/08/26, Julyan: "corrigir essa tela de ver comunicados, horrorosa").
+  // O par no topo era um link sublinhado colado num botão VERMELHO SÓLIDO — o vermelho
+  // é a cor de urgência do cockpit inteiro (SLA estourado, lead travado, ação de alta
+  // prioridade), e gastá-lo num "+ Novo comunicado" que fica na tela o dia todo roubava
+  // atenção do que realmente é urgente. Agora são duas pílulas do mesmo peso visual,
+  // discretas, alinhadas na mesma altura. O vermelho volta a significar urgência.
+  const botaoNovo = sessaoAtual.role === 'manager' ? `<button id="btnNovoComunicado" class="com-topo-btn com-topo-novo">+ Novo comunicado</button>` : '';
+  const linkHistorico = `<a id="linkHistoricoComunicados" class="com-topo-btn" role="button" tabindex="0">Comunicados <b>${comunicadosCache.length}</b></a>`;
 
   if (naoLidos.length === 0) {
     // Otimização 08/08: sem comunicado novo, nada de faixa própria flutuando no topo —
@@ -11488,12 +11503,109 @@ function atualizarAvatarBadge() {
   }
 }
 
+/* BLOCO 12 (12/08/26) — Julyan: "deixar o perfil ali mais bonito e gamificado, com
+   medalhas, progresso no mês, semana, algo interativo, tanto pro gestor qto pro executivo".
+   Regra que eu não quebro aqui: NENHUM número inventado. Toda barra e toda medalha sai
+   de dado que o cockpit já calcula em outra tela — meta do mês (reps/snapshotReps),
+   visitas registradas (agenda do Expogo), sequência de Dailies (calcularSequencia),
+   travados e quentes sem próximo passo. Medalha que não dá pra provar não existe.
+   Gestor vê o time somado; executivo vê o dele. */
+function perfilBarraHTML(rotulo, feito, meta, cor, sufixo) {
+  const pct = meta > 0 ? Math.min(100, Math.round(100 * feito / meta)) : 0;
+  return '<div style="margin-bottom:13px;">' +
+    '<div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;color:var(--muted);margin-bottom:5px;">' +
+      '<span>' + rotulo + '</span>' +
+      '<b style="font-family:\'Poppins\',sans-serif;font-size:14px;color:var(--ink);">' + feito + (meta > 0 ? '<span style="color:var(--muted2);font-size:11.5px;font-weight:600;">/' + meta + '</span>' : '') + (sufixo || '') + '</b>' +
+    '</div>' +
+    '<div style="height:8px;border-radius:99px;background:var(--sunk);overflow:hidden;">' +
+      '<div style="height:100%;width:' + Math.max(pct > 0 ? 4 : 0, pct) + '%;border-radius:99px;background:' + cor + ';transition:width .5s var(--ease);"></div>' +
+    '</div>' +
+    '<div style="font-size:10.5px;color:var(--ter);margin-top:3px;">' + pct + '% da régua</div>' +
+  '</div>';
+}
+
+function montarPerfilProgresso() {
+  const slot = document.getElementById('perfilProgressoSlot');
+  if (!slot || !sessaoAtual) return;
+  const gestor = sessaoAtual.role === 'manager';
+  const hoje = isoDate(new Date());
+
+  // ---- números do mês ----
+  const reps = Array.isArray(DATA.reps) ? DATA.reps : [];
+  const meus = gestor ? reps : reps.filter(r => String(r.ownerId) === String(sessaoAtual.ownerId));
+  const fechados = meus.reduce((s, r) => s + (Number(r.fechadosNoMes) || 0), 0);
+  const metaMes = meus.reduce((s, r) => s + (Number(r.metaMensal) || 0), 0);
+
+  // ---- visitas registradas nesta semana (seg–sex), da mesma fonte da Agenda ----
+  let visitasSemana = 0, diasComVisita = new Set();
+  if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+    const dow = new Date(hoje + 'T12:00:00').getDay();
+    const segunda = addDays(hoje, -(dow === 0 ? 6 : dow - 1));
+    const sexta = addDays(segunda, 4);
+    try {
+      agendaNormalizar(DATA.agenda).forEach(e => {
+        if (!e.inicio) return;
+        if (!AGENDA_TIPOS[e.tipo] || !AGENDA_TIPOS[e.tipo].conta) return;
+        if (!gestor && String(e.ownerId) !== String(sessaoAtual.ownerId)) return;
+        const k = agendaChave(e.inicio);
+        if (k < segunda || k > sexta) return;
+        visitasSemana++;
+        diasComVisita.add(k);
+      });
+    } catch (e) { /* agenda indisponível: a barra some, o resto do perfil fica */ }
+  }
+  // Régua oficial do playbook: 6 visitas por dia útil. Para o gestor, × nº de executivos.
+  const diasUteisAteHoje = (() => { let n = 0, d = hoje; const dow = new Date(hoje + 'T12:00:00').getDay(); const seg = addDays(hoje, -(dow === 0 ? 6 : dow - 1)); d = seg; for (let i = 0; i < 5; i++) { if (d <= hoje) n++; d = addDays(d, 1); } return Math.max(1, n); })();
+  const metaSemana = 6 * diasUteisAteHoje * (gestor ? Math.max(1, reps.length) : 1);
+
+  // ---- sinais de qualidade ----
+  const travados = meus.reduce((s, r) => s + ((r.travados || []).length || Number(r.leadsTravados) || 0), 0);
+  const quentesTodos = gestor ? (((DATA.temperatura || {}).quentes) || []) : (((DATA.temperatura || {}).quentes) || []).filter(q => String(q.ownerId) === String(sessaoAtual.ownerId));
+  const quentesSemPasso = quentesTodos.filter(q => !q.proximaAtividade && !q.proximaReuniao).length;
+  const sequencia = (!gestor && typeof calcularSequencia === 'function') ? calcularSequencia(sessaoAtual.ownerId, hoje) : 0;
+
+  // ---- medalhas: cada uma com a prova do lado ----
+  const medalhas = [
+    { icone: '🎯', nome: 'Meta do mês', ganha: metaMes > 0 && fechados >= metaMes, prova: fechados + ' de ' + (metaMes || '—') + ' fechamentos' },
+    { icone: '🛡️', nome: 'Pipeline protegido', ganha: quentesTodos.length > 0 && quentesSemPasso === 0, prova: quentesTodos.length === 0 ? 'sem quente no funil ainda' : (quentesSemPasso === 0 ? 'todo quente com próximo passo' : quentesSemPasso + ' quente(s) sem passo') },
+    { icone: '⏱️', nome: 'SLA limpo', ganha: travados === 0, prova: travados === 0 ? 'nenhum lead travado' : travados + ' travado(s)' },
+    { icone: '🗺️', nome: 'Rua cheia', ganha: visitasSemana >= metaSemana, prova: visitasSemana + ' de ' + metaSemana + ' visitas na semana' }
+  ];
+  if (!gestor) medalhas.push({ icone: '🔥', nome: 'Sequência', ganha: sequencia >= 3, prova: sequencia > 0 ? sequencia + ' dia(s) batendo o prometido' : 'sem sequência ativa' });
+  if (gestor) medalhas.push({ icone: '👥', nome: 'Time coberto', ganha: reps.length > 0 && meus.every(r => (Number(r.fechadosNoMes) || 0) > 0), prova: meus.filter(r => (Number(r.fechadosNoMes) || 0) > 0).length + ' de ' + meus.length + ' com venda no mês' });
+
+  const ganhas = medalhas.filter(m => m.ganha).length;
+
+  slot.innerHTML =
+    '<div style="margin-top:4px;padding-top:16px;border-top:1px solid var(--line);">' +
+      '<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:11px;">' +
+        '<span style="font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);">' + (gestor ? 'Progresso do time' : 'Seu progresso') + '</span>' +
+        '<span style="font-size:11px;color:var(--muted2);">' + ganhas + ' de ' + medalhas.length + ' medalhas</span>' +
+      '</div>' +
+      perfilBarraHTML('Fechamentos no mês', fechados, metaMes, fechados >= metaMes && metaMes > 0 ? 'var(--green)' : 'var(--red)') +
+      perfilBarraHTML('Visitas registradas na semana', visitasSemana, metaSemana, visitasSemana >= metaSemana ? 'var(--green)' : 'var(--amber)') +
+      (!gestor && sequencia > 0
+        ? '<div style="display:flex;align-items:center;gap:8px;background:var(--amber-soft);border-radius:12px;padding:9px 12px;margin-bottom:13px;"><span style="font-size:18px;">🔥</span><span style="font-size:12px;color:var(--muted);"><b style="color:var(--ink);font-size:14px;">' + sequencia + ' dia' + (sequencia === 1 ? '' : 's') + '</b> seguidos batendo o que prometeu na Daily</span></div>'
+        : '') +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:8px;margin-top:4px;">' +
+        medalhas.map(m =>
+          '<div title="' + esc(m.prova) + '" style="text-align:center;padding:11px 8px;border-radius:12px;border:1px solid ' + (m.ganha ? 'var(--green)' : 'var(--line)') + ';background:' + (m.ganha ? 'var(--green-soft)' : 'var(--panel2)') + ';' + (m.ganha ? '' : 'opacity:.62;') + '">' +
+            '<div style="font-size:21px;line-height:1;' + (m.ganha ? '' : 'filter:grayscale(1);') + '">' + m.icone + '</div>' +
+            '<div style="font-size:11px;font-weight:800;margin-top:5px;color:' + (m.ganha ? 'var(--green)' : 'var(--muted2)') + ';">' + m.nome + '</div>' +
+            '<div style="font-size:9.5px;color:var(--ter);margin-top:2px;line-height:1.35;">' + esc(m.prova) + '</div>' +
+          '</div>').join('') +
+      '</div>' +
+    '</div>';
+}
+
 function abrirPerfilDrawer() {
   document.getElementById('perfilOverlay').style.display = 'block';
   document.getElementById('perfilNomeLabel').textContent = sessaoAtual.nome || sessaoAtual.email;
   document.getElementById('perfilEmailLabel').textContent = sessaoAtual.email;
   document.getElementById('perfilAvatarPreview').innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 96);
   document.getElementById('perfilPapelLabel').textContent = sessaoAtual.role === 'manager' ? 'Gestor' : 'Executivo';
+  try { montarPerfilProgresso(); }
+  catch (e) { console.error('Perfil: não consegui montar o progresso —', e && e.message); }
 }
 
 document.getElementById('perfilSairBtn').addEventListener('click', async () => {
