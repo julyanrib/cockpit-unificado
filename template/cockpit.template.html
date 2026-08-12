@@ -11042,6 +11042,65 @@ async function renderDaily() {
     })();
     const comLead = compromissosHoje.filter(c => c.lead);
 
+    // BLOCO 15 (12/08/26) — Julyan: "seria legal eu saber quem eles visitaram, avançaram
+    // de etapa e deixaram proposta, para eu cobrar na daily".
+    // VISITAS saem daqui mesmo, do front: a tarefa "Visita – {nome}" que o Expogo grava
+    // traz o lead associado, e o Bloco 3 já sabe separar registro (feito) de compromisso
+    // (marcado). Então o nome de quem ele visitou já está na mão.
+    // AVANÇOS e PROPOSTAS não dá pra derivar aqui, e eu tentei: usei o campo `dias` do
+    // funil achando que dias===0 fosse "entrou na etapa hoje". Está errado por dois
+    // motivos que só apareceram medindo — `dias` nunca é 0 (mínimo 1 na base inteira), e
+    // daysInCurrentStage mede o tempo desde a ATIVIDADE mais recente, não desde a entrada
+    // na etapa: negócio parado há 20 dias que recebeu uma nota ontem aparece com dias=1.
+    // Os nomes passam a vir do fetch-hubspot (avancosHojeNomes/propostasHojeNomes), que é
+    // quem tem hs_v2_date_entered_<stage>. Enquanto o cron não roda, a linha mostra a
+    // contagem e diz que os nomes chegam na próxima rodada — nunca inventa nome.
+    const visitasFeitas = (() => {
+      if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
+      let eventos;
+      try { eventos = agendaNormalizar(DATA.agenda); } catch (e) { return []; }
+      return eventos
+        .filter(ev => String(ev.ownerId) === String(r.ownerId) && ev.inicio
+          && ev.inicio.toISOString().slice(0, 10) === dailyRefDate
+          && AGENDA_TIPOS[ev.tipo] && AGENDA_TIPOS[ev.tipo].conta
+          && (ev.desfecho === 'COMPLETED' || ev.registro))
+        .map(ev => agendaNomeDoLead(ev.cliente) || ev.cliente)
+        .filter(Boolean);
+    })();
+    const avancosNomes = Array.isArray(r.avancosHojeNomes) ? r.avancosHojeNomes : [];
+    const propostasNomes = Array.isArray(r.propostasHojeNomes) ? r.propostasHojeNomes : [];
+
+    const linhaExecucao = (() => {
+      const partes = [];
+      const bloco = (rotulo, cor, nomes, contagem) => {
+        const n = nomes.length || Number(contagem) || 0;
+        if (!n) return '';
+        // Dois NEGÓCIOS distintos com o mesmo nome são duplicata no CRM — problema real e
+        // já conhecido no time. Em vez de listar "Bar do Zé · Bar do Zé", agrupo e mostro
+        // "Bar do Zé ×2": a informação continua lá e a duplicata fica visível em vez de
+        // parecer erro da tela.
+        const contagemPorNome = new Map();
+        nomes.forEach(x => { const k = String(x).trim(); contagemPorNome.set(k, (contagemPorNome.get(k) || 0) + 1); });
+        const rotulados = [...contagemPorNome.entries()].map(([nome, qtd]) =>
+          esc(nome) + (qtd > 1 ? '<span title="' + qtd + ' negócios diferentes com o mesmo nome — provável duplicata no CRM" style="color:var(--amber);font-weight:700;"> ×' + qtd + '</span>' : ''));
+        return '<div style="margin-top:7px;">' +
+          '<span style="font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:' + cor + ';">' + rotulo + ' · ' + n + '</span>' +
+          '<div style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:2px;">' +
+            (rotulados.length
+              ? rotulados.slice(0, 6).join(' · ') + (rotulados.length > 6 ? ' · +' + (rotulados.length - 6) : '')
+              : '<span style="color:var(--ter);">nomes chegam na próxima rodada do HubSpot</span>') +
+          '</div></div>';
+      };
+      partes.push(bloco('Visitou', 'var(--green)', visitasFeitas, realVisitas));
+      partes.push(bloco('Avançou de etapa', 'var(--amber)', avancosNomes, realAvancos));
+      partes.push(bloco('Deixou proposta', 'var(--red)', propostasNomes, realPropostas));
+      const corpo = partes.filter(Boolean).join('');
+      if (!corpo) return '<div class="daily-exec-feito" style="border-top:1px solid var(--line-soft);margin-top:10px;padding-top:9px;font-size:11.5px;color:var(--ter);">Nada registrado ainda ' + (ehHojeView ? 'hoje' : 'nesse dia') + ' — é o que cobrar na Daily.</div>';
+      return '<div class="daily-exec-feito" style="border-top:1px solid var(--line-soft);margin-top:10px;padding-top:6px;">' +
+        '<div style="font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);">O que ele fez ' + (ehHojeView ? 'hoje' : 'nesse dia') + '</div>' +
+        corpo + '</div>';
+    })();
+
   const planoFechado = planoPessoa && planoPessoa.status === 'plano_fechado';
     const planoRascunho = planoPessoa && planoPessoa.status === 'rascunho';
     const planoHora = planoFechado && planoPessoa.fechado_em
@@ -11113,6 +11172,7 @@ async function renderDaily() {
                 </div>`).join('')}
             </div>` : ''}
           ${planoDetalheHtml}
+          ${linhaExecucao}
           <div class="daily-detail-proof"><span><b>🔥 ${seq}d</b> de sequência</span><span><b>${pontosHoje}</b> pontos hoje</span><span>Semana ${semanaIcones.map(d => d.icon).join(' ')}</span><span class="push"><b>${fechamentosHoje}</b> fechamento${fechamentosHoje === 1 ? '' : 's'}</span></div>
         </div>
       </details>`;
