@@ -1007,6 +1007,18 @@
   .agw-times span{position:absolute;right:9px;transform:translateY(-50%);font-size:10px;font-weight:700;color:var(--ter);font-variant-numeric:tabular-nums;}
   .agw-col{position:relative;border-left:1px solid var(--line-soft);background-image:repeating-linear-gradient(to bottom,var(--line-soft) 0 1px,transparent 1px var(--agw-px));}
   .agw-col[data-hoje="1"]{background-color:rgba(224,166,74,.07);}
+  .agw-col-livre{cursor:copy;}
+  .agw-col-livre:hover{background-color:rgba(37,99,235,.045);}
+  /* Agendador rápido (Bloco 18) — abre no clique do slot, some no Esc ou fora. */
+  .agw-novo{position:fixed;z-index:60;width:290px;max-width:92vw;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:14px 15px;}
+  .agw-novo h4{margin:0 0 2px;font-size:13.5px;}
+  .agw-novo .sub{font-size:11px;color:var(--muted2);margin-bottom:10px;}
+  .agw-novo label{display:block;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin:9px 0 4px;}
+  .agw-novo select,.agw-novo input{width:100%;box-sizing:border-box;font-family:inherit;font-size:12.5px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:7px 9px;}
+  .agw-novo .acoes{display:flex;gap:8px;margin-top:12px;}
+  .agw-novo .acoes button{flex:1;border:none;border-radius:99px;padding:8px 10px;font:800 12px 'DM Sans',sans-serif;cursor:pointer;}
+  .agw-novo .ok{background:var(--red);color:#fff;}
+  .agw-novo .cancel{background:var(--panel2);border:1px solid var(--line-btn);color:var(--muted);}
   .agw-daily{position:absolute;left:3px;right:3px;border-radius:8px;background:repeating-linear-gradient(135deg,var(--sunk) 0 5px,var(--panel2) 5px 10px);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);pointer-events:none;}
   /* BLOCO 16 (12/08/26, Julyan: "sem cortar nada dos eventos, tanto do gestor quanto
      executivo"). O bloco tinha altura proporcional à duração: visita de 30 min virava
@@ -4294,6 +4306,11 @@ let agendaEstado = { offset: 0, filtro: 'tudo', modo: null, sabado: false, subvi
    evento, marcados com recemAgendado pra desenharem tracejado — existem no HubSpot, só
    ainda não vieram no snapshot. Some sozinho no próximo build, quando o dado real chega. */
 let agendaAgendadosLocal = [];
+// Declarado aqui em cima junto do resto do estado da agenda, e não ao lado da função
+// que o usa: `let` lido antes da própria declaração é ReferenceError, e o handler de
+// clique da grade referencia isto. Hoje o handler só roda depois da carga, mas a regra
+// que derrubou a produção uma vez não depende de sorte de ordem de execução.
+let agwNovoAberto = null;
 function registrarAgendamentoLocal(lead, dataISO, hora, ownerId) {
   const jaTem = agendaAgendadosLocal.some(a => String(a.leadId) === String(lead.id) && a.dataISO === dataISO);
   if (jaTem) return;
@@ -5607,6 +5624,21 @@ document.addEventListener('click', function (ev) {
         mostrarToast('Não consegui agendar agora (rede ou HubSpot). Tente de novo em instantes.', 'erro');
         console.error('Falha ao agendar sugestão do buraco:', e);
       });
+    return;
+  }
+  // BLOCO 18 — clique num espaço livre da grade abre o agendador rápido, no estilo de
+  // um calendário: a hora sai da posição vertical do clique, arredondada pra 15 min.
+  // Vem ANTES do handler de evento porque a coluna é ancestral dos blocos; se o clique
+  // caiu num compromisso existente, o closest de [data-agev] abaixo é quem responde.
+  const colNova = ev.target.closest('[data-agnovo]');
+  if (colNova && !ev.target.closest('[data-agev]') && !ev.target.closest('[data-agburaco]')) {
+    const H0 = Number(colNova.dataset.h0) || 8;
+    const PX = Number(colNova.dataset.px) || 46;
+    const caixa = colNova.getBoundingClientRect();
+    const y = Math.max(0, ev.clientY - caixa.top);
+    const minutosBrutos = H0 * 60 + (y / PX) * 60;
+    const minutos = Math.round(minutosBrutos / 15) * 15;
+    abrirAgendadorRapido(colNova.dataset.agnovo, minutos, ev.clientX, ev.clientY);
     return;
   }
   // --- grade própria ---
@@ -7238,7 +7270,14 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
       if (min >= H0 * 60 && min <= H1 * 60) now = '<div class="agw-now" style="top:' + Math.round((min - H0 * 60) / 60 * PX) + 'px;"></div>';
     }
 
-    corpo += '<div class="agw-col" data-hoje="' + (ehHoje ? 1 : 0) + '">' + daily + vazio + blocos + now + '</div>';
+    // BLOCO 18 (12/08/26, Julyan: "ele nao consegue selecionar na agenda e colocar algo
+    // no estilo calendar google"). A coluna do dia vira área clicável: o clique num
+    // espaço vazio abre o agendador já com a data e a hora daquele ponto. Só pro
+    // executivo e só em dia que ainda dá pra preencher — clicar no passado não agenda
+    // nada, e deixar clicável ali só geraria erro na cara dele.
+    const colClicavel = (souRep && podeMarcar(k)) ? ' agw-col-livre" data-agnovo="' + k + '" title="Clique num espaço livre para marcar uma visita' : '';
+    corpo += '<div class="agw-col' + colClicavel + '" data-hoje="' + (ehHoje ? 1 : 0) +
+      '" data-h0="' + H0 + '" data-px="' + PX + '">' + daily + vazio + blocos + now + '</div>';
 
     // Faixa de registros: largura inteira da coluna, um nome por linha, sem disputa de
     // espaço com hora nenhuma. É a correção do "corta os nomes, fica pequeno".
@@ -7384,6 +7423,106 @@ function situacaoDoLeadPorNome(nomeCliente) {
   }
   return null;
 }
+
+/* BLOCO 18 (12/08/26) — agendador rápido da grade.
+   Julyan: "ele nao consegue selecionar na agenda e colocar algo no estilo calendar
+   google". Antes só dava pra marcar visita por dois caminhos indiretos: o card de
+   Buracos (que só existe em dia 100% vazio) e a Rota. Num dia que já tinha um
+   compromisso, não havia como adicionar outro pela agenda — e é exatamente o dia que
+   ele precisa completar até as 6 visitas.
+   Agora: clique no espaço livre → escolhe a conta → agenda. Reusa o mesmo caminho de
+   escrita da rota (criarTarefaVisitaNoHubspot) e o mesmo estado local do Bloco 16, então
+   o compromisso aparece na hora sem esperar o próximo build. */
+function fecharAgendadorRapido() {
+  if (agwNovoAberto) { agwNovoAberto.remove(); agwNovoAberto = null; }
+}
+function abrirAgendadorRapido(dataISO, minutos, x, y) {
+  fecharAgendadorRapido();
+  const hh = String(Math.floor(minutos / 60)).padStart(2, '0');
+  const mm = String(minutos % 60).padStart(2, '0');
+  const meuRep = (DATA.reps || []).find(v => String(v.ownerId) === String(sessaoAtual.ownerId));
+  if (!meuRep) return;
+
+  // Candidatos: pipeline quente do próprio funil primeiro (é o que protege receita),
+  // depois a fila de conta-alvo. Mesma régua de prioridade do resto do cockpit.
+  const quentes = (typeof agendaQuentes === 'function' ? agendaQuentes([{ ownerId: sessaoAtual.ownerId }]) : [])
+    .map(q => ({ id: q.id, nome: q.name || q.nome, grupo: 'Pipeline quente', bairro: q.bairro || null, cidade: q.cidade || null, lat: q.lat, lng: q.lng }));
+  const alvos = ((typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache)) ? prospeccaoCache : [])
+    .filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l))
+    .slice(0, 60)
+    .map(l => ({ id: l.id, nome: l.nome, grupo: 'Contas-alvo', bairro: l.bairro || null, cidade: l.cidade || null, lat: l.lat, lng: l.lng }));
+  const opcoes = [...quentes, ...alvos];
+
+  const cx = document.createElement('div');
+  cx.className = 'agw-novo';
+  const dataBR = dataISO.split('-').reverse().join('/');
+  cx.innerHTML =
+    '<h4>Marcar visita</h4>' +
+    '<div class="sub">' + dataBR + ' · horário do ponto em que você clicou</div>' +
+    (opcoes.length
+      ? '<label>Conta</label><select id="agwNovoLead">' +
+          ['Pipeline quente', 'Contas-alvo'].map(g => {
+            const doGrupo = opcoes.filter(o => o.grupo === g);
+            if (!doGrupo.length) return '';
+            return '<optgroup label="' + g + '">' + doGrupo.map(o => '<option value="' + agendaEsc(String(o.id)) + '">' + agendaEsc(o.nome || '') + '</option>').join('') + '</optgroup>';
+          }).join('') +
+        '</select>'
+      : '<div style="font-size:11.5px;color:var(--amber);">Sua fila de contas está vazia nesta sessão. Abra a Prospecção uma vez e volte — aí a lista carrega.</div>') +
+    '<label>Horário</label><input type="time" id="agwNovoHora" value="' + hh + ':' + mm + '">' +
+    '<div class="acoes">' +
+      '<button class="cancel" id="agwNovoCancel">Cancelar</button>' +
+      (opcoes.length ? '<button class="ok" id="agwNovoOk">Agendar</button>' : '') +
+    '</div>' +
+    '<div id="agwNovoMsg" style="font-size:11px;color:var(--muted2);margin-top:8px;"></div>';
+  document.body.appendChild(cx);
+  agwNovoAberto = cx;
+
+  // Posiciona junto do clique sem sair da tela.
+  const larg = 290, alt = cx.getBoundingClientRect().height || 260;
+  cx.style.left = Math.max(8, Math.min(window.innerWidth - larg - 8, x - larg / 2)) + 'px';
+  cx.style.top = Math.max(8, Math.min(window.innerHeight - alt - 8, y - 12)) + 'px';
+
+  cx.addEventListener('click', e => e.stopPropagation());
+  const cancelar = document.getElementById('agwNovoCancel');
+  if (cancelar) cancelar.addEventListener('click', fecharAgendadorRapido);
+
+  const ok = document.getElementById('agwNovoOk');
+  if (ok) ok.addEventListener('click', () => {
+    const sel = document.getElementById('agwNovoLead');
+    const hora = (document.getElementById('agwNovoHora') || {}).value || (hh + ':' + mm);
+    const escolhido = opcoes.find(o => String(o.id) === String(sel && sel.value));
+    if (!escolhido) return;
+    // 9h–10h é a daily do time — a grade já mostra a faixa, mas o agendador precisa
+    // barrar também, senão o clique dentro dela marcaria visita em cima da reunião.
+    const min = Number(hora.split(':')[0]) * 60 + Number(hora.split(':')[1]);
+    if (min >= 9 * 60 && min < 10 * 60) {
+      document.getElementById('agwNovoMsg').innerHTML = '<span style="color:var(--red);font-weight:700;">9h–10h é a Daily. Escolha outro horário.</span>';
+      return;
+    }
+    ok.disabled = true; ok.textContent = 'Agendando…';
+    criarTarefaVisitaNoHubspot(escolhido, sessaoAtual.ownerId, hora, { silencioso: true }, dataISO)
+      .then(() => {
+        registrarAgendamentoLocal(escolhido, dataISO, hora, sessaoAtual.ownerId);
+        mostrarToast('"' + escolhido.nome + '" agendado para ' + dataBR + ' às ' + hora + '.', 'sucesso');
+        fecharAgendadorRapido();
+        renderAgenda();
+      })
+      .catch(e => {
+        ok.disabled = false; ok.textContent = 'Agendar';
+        document.getElementById('agwNovoMsg').innerHTML = '<span style="color:var(--red);">Não consegui agendar agora. Tente de novo.</span>';
+        console.error('Agendador rápido:', e);
+      });
+  });
+}
+// O clique que ABRE o popover continua propagando até o document. Sem esta guarda, o
+// fechamento "ao clicar fora" comia o próprio evento de abertura e nada aparecia na
+// tela — o popover nascia e morria no mesmo clique. Ignora cliques que vieram da
+// grade clicável ou de dentro do próprio popover.
+document.addEventListener('click', e => {
+  if (e.target.closest && (e.target.closest('.agw-novo') || e.target.closest('[data-agnovo]'))) return;
+  fecharAgendadorRapido();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharAgendadorRapido(); });
 
 function abrirFichaCompromisso(e) {
   if (!e) return;
@@ -8769,7 +8908,13 @@ let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false, soCli
   // Filtros que valem só para os pinos ◇ do OSM (11/08). O filtro de avaliações não
   // serve pra eles — OSM não tem nota — então precisavam de régua própria:
   tipoMapa: '',           // 'Padaria', 'Bar'... vazio = todos
-  soComTelefone: false }; // porta com telefone dá pra ligar antes de bater
+  soComTelefone: false,   // porta com telefone dá pra ligar antes de bater
+  // BLOCO 17 (12/08/26, Julyan: "quando ele quiser so os leads proximo a rota dele, a
+  // lista lateral dos leads tem que atualizar junto ao filtro"). Não existia filtro de
+  // proximidade nenhum na Rota — só avaliações, fit, tipo e telefone. O "Perto de mim"
+  // existia na Prospecção e nunca aqui. Como o raio entra no MESMO `visiveis` que
+  // alimenta os pinos e a lista, os dois se movem juntos por construção.
+  raioKm: 0 };            // 0 = sem limite
 let planoMapaPopupAtual = null;
 let planoMapaOrigemAtual = null;
 let planoMapaRenderAtual = null;
@@ -9250,6 +9395,11 @@ async function montarPlanoDoDia(r) {
                 <select id="planoMapaTipo" aria-label="Filtrar pinos do mapa por tipo de estabelecimento"></select>
               </label>
               <button type="button" class="plano-map-filter ${planoMapaFiltro.soComTelefone ? 'is-active' : ''}" id="planoMapaComTel" aria-pressed="${planoMapaFiltro.soComTelefone}" title="Só estabelecimentos com telefone no OpenStreetMap">📞 Com telefone</button>
+              <label class="plano-map-filter" title="Só contas dentro do raio a partir do território que você declarou acima">📍 Raio
+                <select id="planoMapaRaio" aria-label="Filtrar por distância do território declarado">
+                  ${[[0, 'sem limite'], [1, '1 km'], [2, '2 km'], [5, '5 km'], [10, '10 km']].map(([v, t]) => `<option value="${v}" ${(planoMapaFiltro.raioKm || 0) === v ? 'selected' : ''}>${t}</option>`).join('')}
+                </select>
+              </label>
               <button type="button" class="plano-map-filter" id="planoMapaAddManual" title="Adicionar um estabelecimento que não está no mapa, por endereço ou CEP">＋ Por endereço/CEP</button>
             </div>
             <button type="button" class="plano-map-location" id="planoMapaMinhaPosicao" title="Ir para minha posição" aria-label="Ir para minha posição">
@@ -9448,6 +9598,8 @@ async function montarPlanoDoDia(r) {
   const selAval = slot.querySelector('#planoMapaAvalMin');
   if (typeof ligarBuscaLocal === 'function') ligarBuscaLocal();
   if (selAval) selAval.addEventListener('change', () => { planoMapaFiltro.avalMin = Number(selAval.value) || 0; montarPlanoMapa(r, hoje, fechado); });
+  const selRaio = slot.querySelector('#planoMapaRaio');
+  if (selRaio) selRaio.addEventListener('change', () => { planoMapaFiltro.raioKm = Number(selRaio.value) || 0; montarPlanoMapa(r, hoje, fechado); });
   const selTipo = slot.querySelector('#planoMapaTipo');
   if (selTipo) selTipo.addEventListener('change', () => { planoMapaFiltro.tipoMapa = selTipo.value || ''; montarPlanoMapa(r, hoje, fechado); });
   const btnTel = slot.querySelector('#planoMapaComTel');
@@ -10011,12 +10163,22 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const poiPassaFiltro = l =>
     (!planoMapaFiltro.tipoMapa || l.categoria === planoMapaFiltro.tipoMapa) &&
     (!planoMapaFiltro.soComTelefone || !!l.telefone);
+  // O raio vale para TODOS os tipos de pino, inclusive pipeline quente e portas do OSM:
+  // se ele pediu "só o que está perto", mostrar um quente a 30 km quebra a promessa do
+  // filtro. Sem território declarado o raio não tem de onde medir e fica inativo — a
+  // seleção continua na tela, e o aviso abaixo do mapa explica por quê.
+  const origemRaio = planoMapaOrigemAtual;
+  const dentroDoRaio = l => {
+    if (!planoMapaFiltro.raioKm || !origemRaio) return true;
+    if (l.lat == null || l.lng == null) return false;
+    return distanciaKm(origemRaio.lat, origemRaio.lng, Number(l.lat), Number(l.lng)) <= planoMapaFiltro.raioKm;
+  };
   const visiveis = [...comCoord, ...quentesAvulsos, ...poisDoMapa].filter(l =>
-    l._doMapa ? poiPassaFiltro(l) : (l._pipelineQuente || (
+    dentroDoRaio(l) && (l._doMapa ? poiPassaFiltro(l) : (l._pipelineQuente || (
       prospeccaoFazSentido(l) &&
       (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
       (!planoMapaFiltro.avalMin || (l.avaliacoes || 0) >= planoMapaFiltro.avalMin)
-    ))
+    )))
   );
 
   // Clientes Takeat já ativos (fechados pelo próprio Field Sales), pra sugerir parada
@@ -10784,7 +10946,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     // ter limites próprios (Bloco D), "10 de 155" virou mentira: o mapa plota tudo.
     const plotadosOsm = paraExibirNoMapa.filter(l => l._doMapa).length;
     const plotadosAlvo = paraExibirNoMapa.length - plotadosOsm;
-    const resumoMapa = `<span>${paraExibirNoMapa.length} pinos no mapa · ${plotadosAlvo} contas-alvo ★${plotadosOsm ? ` · ${plotadosOsm} portas do OSM ◇` : ''}${semCoord > 0 ? ` · ${semCoord} sem coordenada` : ''}${planoRotaGerada ? ' · sequência por proximidade geográfica' : ' · clique em "Gerar rota" para ordenar por proximidade'}</span>`;
+    // BLOCO 17: o raio precisa se explicar. Ativo, diz de onde mede; escolhido sem
+    // território declarado, avisa que está inativo em vez de o executivo achar que
+    // filtrou e continuar vendo conta longe.
+    const avisoRaio = !planoMapaFiltro.raioKm ? ''
+      : origemRaio
+        ? `<span style="color:var(--blue);font-weight:700;"> · 📍 só até ${planoMapaFiltro.raioKm} km do território declarado</span>`
+        : `<span style="color:var(--amber);font-weight:700;"> · ⚠️ raio de ${planoMapaFiltro.raioKm} km inativo: declare o território no passo 1 pra ter de onde medir</span>`;
+    const resumoMapa = `<span>${paraExibirNoMapa.length} pinos no mapa · ${plotadosAlvo} contas-alvo ★${plotadosOsm ? ` · ${plotadosOsm} portas do OSM ◇` : ''}${semCoord > 0 ? ` · ${semCoord} sem coordenada` : ''}${planoRotaGerada ? ' · sequência por proximidade geográfica' : ' · clique em "Gerar rota" para ordenar por proximidade'}${avisoRaio}</span>`;
     const acaoMapa = ocultas > 0
       ? `<button id="planoMapaVerTodas">Explorar todas as ${ordenadasTodas.length} contas →</button>`
       : planoMapaFiltro.verTodas && ordenadasTodas.length > naRotaTodas.length + LIMITE_RECOMENDADAS
@@ -11199,12 +11368,45 @@ async function renderDaily() {
         .map(ev => agendaNomeDoLead(ev.cliente) || ev.cliente)
         .filter(Boolean);
     })();
+    // Marcadas mas ainda não realizadas — separadas das feitas, senão viram "realizado"
+    // e o gestor cobra entrega de visita que ainda vai acontecer (ver correção no cron).
+    const visitasMarcadas = (() => {
+      if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
+      let eventos;
+      try { eventos = agendaNormalizar(DATA.agenda); } catch (e) { return []; }
+      return eventos
+        .filter(ev => String(ev.ownerId) === String(r.ownerId) && ev.inicio
+          && ev.inicio.toISOString().slice(0, 10) === dailyRefDate
+          && AGENDA_TIPOS[ev.tipo] && AGENDA_TIPOS[ev.tipo].conta
+          && ev.desfecho !== 'COMPLETED' && !ev.registro)
+        .map(ev => agendaHhmm(ev.inicio) + ' ' + (agendaNomeDoLead(ev.cliente) || ev.cliente || ''))
+        .filter(Boolean);
+    })();
     const avancosNomes = Array.isArray(r.avancosHojeNomes) ? r.avancosHojeNomes : [];
     const propostasNomes = Array.isArray(r.propostasHojeNomes) ? r.propostasHojeNomes : [];
 
+    // BLOCO 17 (12/08/26, Julyan: "quando eu clicar no dia que eles fizeram e registraram
+    // eu quero ver aonde foram, se foram em leads quentes, cadências e etc").
+    // Cruza o nome da visita com o funil do próprio executivo: devolve a etapa, se é
+    // quente e há quantos dias está parado. Visita em conta que não está no funil é
+    // prospecção nova — e isso também é informação, não erro.
+    const contextoDoLead = (nome) => {
+      const alvo = prospeccaoNormalizarTexto(nome);
+      if (!alvo) return null;
+      let achado = null;
+      Object.entries(DATA.funilLeads || {}).forEach(([stageId, lista]) => {
+        if (achado) return;
+        const l = (lista || []).find(x => String(x.ownerId) === String(r.ownerId) && prospeccaoNormalizarTexto(x.name) === alvo);
+        if (l) achado = { etapa: (DATA.stageMeta || {})[stageId] || '', dias: l.dias, travado: !!l.slaBreach };
+      });
+      if (achado) return achado;
+      return { etapa: null, novo: true };
+    };
+    const QUENTES_ETAPA = /demo|proposta|negocia|pagamento/i;
+
     const linhaExecucao = (() => {
       const partes = [];
-      const bloco = (rotulo, cor, nomes, contagem) => {
+      const bloco = (rotulo, cor, nomes, contagem, semNomes) => {
         const n = nomes.length || Number(contagem) || 0;
         if (!n) return '';
         // Dois NEGÓCIOS distintos com o mesmo nome são duplicata no CRM — problema real e
@@ -11220,14 +11422,49 @@ async function renderDaily() {
           '<div style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:2px;">' +
             (rotulados.length
               ? rotulados.slice(0, 6).join(' · ') + (rotulados.length > 6 ? ' · +' + (rotulados.length - 6) : '')
-              : '<span style="color:var(--ter);">nomes chegam na próxima rodada do HubSpot</span>') +
+              : '<span style="color:var(--ter);">' + (semNomes || 'nomes chegam na próxima rodada do HubSpot') + '</span>') +
           '</div></div>';
       };
-      partes.push(bloco('Visitou', 'var(--green)', visitasFeitas, realVisitas));
+      // Cada visita ganha a etapa em que o lead estava — é o "onde foram" do pedido.
+      const visitasComContexto = visitasFeitas.map(nome => {
+        const ctx = contextoDoLead(nome);
+        if (!ctx) return String(nome);
+        if (ctx.novo) return String(nome) + ' ⟨prospecção nova⟩';
+        const quente = QUENTES_ETAPA.test(ctx.etapa || '');
+        return String(nome) + ' ⟨' + (quente ? '🔥 ' : '') + (ctx.etapa || 'no funil') +
+          (ctx.dias != null ? ', ' + ctx.dias + 'd' : '') + (ctx.travado ? ', SLA estourado' : '') + '⟩';
+      });
+      // Visita usa a contagem derivada AQUI, não a do cron: aqui eu vejo o status de cada
+      // tarefa e sei separar feita de marcada. O número do cron entra só como conferência.
+      partes.push(bloco('Visitou', 'var(--green)', visitasComContexto, visitasComContexto.length,
+        'sem nome de lead associado à tarefa'));
+      if (visitasMarcadas.length) {
+        partes.push(bloco('Marcou pra fazer (ainda não registrou)', 'var(--muted2)', visitasMarcadas, visitasMarcadas.length,
+          'sem nome de lead associado'));
+      }
       partes.push(bloco('Avançou de etapa', 'var(--amber)', avancosNomes, realAvancos));
       partes.push(bloco('Deixou proposta', 'var(--red)', propostasNomes, realPropostas));
       const corpo = partes.filter(Boolean).join('');
-      if (!corpo) return '<div class="daily-exec-feito" style="border-top:1px solid var(--line-soft);margin-top:10px;padding-top:9px;font-size:11.5px;color:var(--ter);">Nada registrado ainda ' + (ehHojeView ? 'hoje' : 'nesse dia') + ' — é o que cobrar na Daily.</div>';
+      if (!corpo) {
+        // BLOCO 17 — Julyan: "wericles e outros executivos estão registrando visitas e
+        // não estão aparecendo no cockpit" / "não posso tocar daily com dado incorreto".
+        // Conferido no HubSpot: em 11/08 existem 28 tarefas "Visita –" no CRM, de Kelly,
+        // Bruno, Sandro, Amanda e Marco. NENHUMA do Wericles — enquanto o Expogo dele
+        // listava 6 visitas. Ou seja, o cockpit não perdeu o dado: o dado nunca chegou
+        // do app ao HubSpot, que é a única fonte que o cockpit lê.
+        // O risco disso é cobrar alguém que trabalhou. Então zero NUNCA mais se apresenta
+        // como "não fez": quando não há registro nenhum no dia, a tela diz que não sabe.
+        const temOutroSinal = comLead.length > 0 || visitasMarcadas.length > 0 || registrouResumo || !!planoPessoa;
+        return '<div class="daily-exec-feito" style="border-top:1px solid var(--line-soft);margin-top:10px;padding-top:9px;">' +
+          (temOutroSinal
+            ? '<div style="font-size:11.5px;color:var(--amber);background:var(--amber-soft);border-radius:10px;padding:9px 11px;line-height:1.5;">' +
+                '<b>Sem registro de visita no app ' + (ehHojeView ? 'hoje' : 'nesse dia') + '.</b><br>' +
+                'Há outros sinais de atividade dele (' +
+                [comLead.length ? comLead.length + ' compromisso(s) marcado(s)' : '', registrouResumo ? 'promessa registrada' : '', planoPessoa ? 'plano do dia aberto' : ''].filter(Boolean).join(' · ') +
+                '), mas nenhuma visita chegou ao HubSpot. Antes de cobrar, confirme se ele registrou no Expogo — já aconteceu de a visita ficar no app e não subir pro CRM.</div>'
+            : '<div style="font-size:11.5px;color:var(--ter);">Nada registrado ' + (ehHojeView ? 'hoje' : 'nesse dia') + ' e nenhum outro sinal de atividade — é o que cobrar na Daily.</div>') +
+        '</div>';
+      }
       return '<div class="daily-exec-feito" style="border-top:1px solid var(--line-soft);margin-top:10px;padding-top:6px;">' +
         '<div style="font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);">O que ele fez ' + (ehHojeView ? 'hoje' : 'nesse dia') + '</div>' +
         corpo + '</div>';
