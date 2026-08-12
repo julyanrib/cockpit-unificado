@@ -2865,16 +2865,50 @@ async function renderMeuPainel() {
   // sem depender do cache global AGENDA_EVENTOS — este só é populado quando a aba Agenda
   // renderiza, e o Hoje precisa funcionar mesmo que isso ainda não tenha rodado.
   let proximoCompromisso = null;
+  // BLOCO 2 (11/08/26, pedido do Julyan: "'sem compromisso agendado' tem que bater com o
+  // da agenda semanal"). O filtro antigo só olhava pra FRENTE, então um dia com 5 visitas
+  // já registradas às 18h virava "Sem compromisso agendado" às 19h — e o hero ainda dizia
+  // "Agenda vazia" e mandava marcar compromisso. A Agenda, na mesma hora, mostrava "5 na
+  // rota de hoje". Os dois estavam certos sob definições diferentes, e é isso que lia
+  // como número errado.
+  //
+  // Agora o Hoje conta o DIA INTEIRO e separa três estados, porque "não tem nada agendado"
+  // e "tem, mas o horário já passou e ninguém fechou" são problemas opostos:
+  //   feitas    = tarefa de hoje já concluída no HubSpot
+  //   pendentes = tarefa de hoje ainda aberta (o horário ter passado NÃO a apaga —
+  //               era isso que sumia da tela e deixava visita atrasada invisível)
+  // A Agenda mostra a mesma quebra, da mesma fonte.
+  let hojeConta = { total: 0, feitas: 0, pendentes: 0 };
   if (typeof agendaNormalizar === 'function' && DATA.agenda) {
-    const agoraBRTms = Date.now() - 3 * 60 * 60 * 1000;
-    const meusEventos = agendaNormalizar(DATA.agenda)
-      .filter(e => e.ownerId === r.ownerId && e.inicio && e.inicio.getTime() >= agoraBRTms)
+    const agora = agendaAgora();
+    const hojeK = agendaChave(agora);
+    const meusDeRua = agendaNormalizar(DATA.agenda)
+      .filter(e => e.ownerId === r.ownerId && e.inicio)
+      // "interno" (daily, 1:1, treinamento) não é compromisso de rua e nunca contou aqui.
+      .filter(e => AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta);
+    const deHoje = meusDeRua.filter(e => agendaChave(e.inicio) === hojeK);
+    const feitas = deHoje.filter(e => e.desfecho === 'COMPLETED').length;
+    hojeConta = { total: deHoje.length, feitas, pendentes: deHoje.length - feitas };
+
+    // Próximo compromisso = o próximo que ainda VAI acontecer e ainda não foi fechado.
+    // Pode cair num dia à frente — nesse caso o rótulo leva o dia junto, senão "08:00"
+    // sozinho parece de hoje e contradiz o "nada hoje" ao lado.
+    const futuros = meusDeRua
+      .filter(e => e.inicio.getTime() >= agora.getTime() && e.desfecho !== 'COMPLETED')
       .sort((a, b) => a.inicio - b.inicio);
-    if (meusEventos.length > 0) {
-      const e = meusEventos[0];
+    if (futuros.length > 0) {
+      const e = futuros[0];
       const tipoInfo = AGENDA_TIPOS[e.tipo] || { rotulo: 'Compromisso' };
-      // Só o nome do lead — antes vinha o título cru do HubSpot ("OPORTUNIDADE 4 - LIGAÇÃO - X").
-      proximoCompromisso = { hora: agendaHhmm(e.inicio), rotulo: tipoInfo.rotulo, cliente: agendaNomeDoLead(e.cliente) || e.cliente };
+      const ehHoje = agendaChave(e.inicio) === hojeK;
+      const diaCurto = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][e.inicio.getUTCDay()];
+      proximoCompromisso = {
+        hora: agendaHhmm(e.inicio),
+        quando: ehHoje ? agendaHhmm(e.inicio) : `${diaCurto} ${agendaHhmm(e.inicio)}`,
+        ehHoje,
+        rotulo: tipoInfo.rotulo,
+        // Só o nome do lead — antes vinha o título cru do HubSpot ("OPORTUNIDADE 4 - LIGAÇÃO - X").
+        cliente: agendaNomeDoLead(e.cliente) || e.cliente
+      };
     }
   }
 
@@ -2925,13 +2959,22 @@ async function renderMeuPainel() {
 
   // Diagnóstico de 1 frase (Claude Design item 4): agenda vazia + leads acima do SLA —
   // os dois sinais mais acionáveis que já calculamos aqui mesmo, sem inventar nada novo.
-  const agendaVaziaHoje = !proximoCompromisso;
+  // Agenda vazia = o dia inteiro sem NENHUM compromisso de rua, não "sem nada daqui pra
+  // frente". Quem já fez 5 visitas hoje não tem agenda vazia — e não pode receber a ação
+  // "marcar compromissos, sua agenda está vazia" às 19h.
+  const agendaVaziaHoje = hojeConta.total === 0;
+  const pendenteAtrasada = hojeConta.pendentes > 0 && !(proximoCompromisso && proximoCompromisso.ehHoje);
   const diagnosticoPartes = [];
   if (agendaVaziaHoje) diagnosticoPartes.push('Agenda vazia');
+  // Visita marcada cujo horário passou e ninguém fechou no HubSpot: some da leitura de
+  // "próximo compromisso" e por isso ficava invisível — é o oposto de agenda vazia.
+  else if (pendenteAtrasada) diagnosticoPartes.push(`${hojeConta.pendentes} visita${hojeConta.pendentes === 1 ? '' : 's'} de hoje sem fechamento`);
   if (acimaDoSlaCount > 0) diagnosticoPartes.push(`${acimaDoSlaCount} lead${acimaDoSlaCount === 1 ? '' : 's'} acima do SLA`);
   const diagnosticoFrase = diagnosticoPartes.length > 0
     ? `${diagnosticoPartes.join(' e ')} — seu dia começa por ${diagnosticoPartes.length > 1 || acimaDoSlaCount > 0 ? 'eles' : 'ela'}.`
-    : 'Agenda em dia e funil sob controle — bom dia pra avançar o que já está andando.';
+    : hojeConta.feitas > 0
+      ? `${hojeConta.feitas} visita${hojeConta.feitas === 1 ? '' : 's'} registrada${hojeConta.feitas === 1 ? '' : 's'} e funil sob controle — dia fechado.`
+      : 'Agenda em dia e funil sob controle — bom dia pra avançar o que já está andando.';
   // BLOCO 3 exec (10/08/26): o chip de saúde do funil saiu daqui — era a MESMA fórmula
   // e o MESMO texto do chip de "Meu funil", calculado duas vezes em duas abas. Quem é
   // dono da saúde do funil agora é a aba Meu funil; o Hoje fica com a triagem do dia.
@@ -2947,11 +2990,17 @@ async function renderMeuPainel() {
     </div>
 
     <div class="meu-hoje-signal-strip">
-      <span class="meu-hoje-signal ${!proximoCompromisso ? 'is-alert' : ''}">
+      <span class="meu-hoje-signal ${(hojeConta.total === 0 || (hojeConta.pendentes > 0 && !(proximoCompromisso && proximoCompromisso.ehHoje))) ? 'is-alert' : ''}">
         <span style="opacity:.7;display:inline-flex;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;width:14px;height:14px;margin-right:0;vertical-align:middle;"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg></span>
-        ${proximoCompromisso
+        ${proximoCompromisso && proximoCompromisso.ehHoje
           ? `<b>${proximoCompromisso.hora}</b> ${proximoCompromisso.rotulo.toLowerCase()} — ${proximoCompromisso.cliente}`
-          : `<span style="color:var(--muted2);">Sem compromisso agendado</span>`}
+          : hojeConta.pendentes > 0
+            ? `<b>${hojeConta.pendentes}</b> ${hojeConta.pendentes === 1 ? 'visita pendente' : 'visitas pendentes'} de hoje <span style="color:var(--muted2);">· horário já passou</span>`
+            : hojeConta.feitas > 0
+              ? `<b>${hojeConta.feitas}</b> ${hojeConta.feitas === 1 ? 'visita registrada' : 'visitas registradas'} hoje <span style="color:var(--muted2);">· nada mais agendado</span>`
+              : proximoCompromisso
+                ? `<span style="color:var(--muted2);">Nada hoje · próximo</span> <b>${proximoCompromisso.quando}</b> — ${proximoCompromisso.cliente}`
+                : `<span style="color:var(--muted2);">Sem compromisso agendado</span>`}
       </span>
       ${meuMrr !== null ? `
       <span class="meu-hoje-signal">
@@ -4304,6 +4353,14 @@ function agendaDoHubspot(it, i) {
     if (corte > 0) { contato = resto.slice(0, corte).trim(); empresa = resto.slice(corte + 3).trim(); }
     else empresa = resto.trim();
   }
+  // A daily (09h–10h), 1:1, treinamento e alinhamento NÃO são compromisso de rua. O
+  // AGENDA_INTERNOS já existia e já era usado pra não procurar nome de lead nesses
+  // títulos, mas o TIPO continuava caindo no default 'reuniao' — então "DAILY OUTBOUND"
+  // entrava na conta de visitas. Só apareceu quando o Bloco 2 (11/08) passou a separar
+  // feito × pendente: reunião não tem hs_meeting_outcome, então a daily de todo dia
+  // virava "1 visita pendente" no Hoje do executivo. Agora casa com a regra de sempre:
+  // 9h–10h é daily, não é visita.
+  if (AGENDA_INTERNOS.test(titulo.trim())) tipo = 'interno';
   // corpo: "Lead: X\nEmpresa: Y\n\nObservações: Z"
   const corpo = String(it.hs_meeting_body || '').replace(/<[^>]*>/g, ' ');
   const gL = corpo.match(/Lead:\s*(.*)/), gE = corpo.match(/Empresa:\s*(.*)/), gO = corpo.match(/Observa[çc][õo]es:\s*([\s\S]*)/);
@@ -4377,9 +4434,13 @@ function agendaDoHubspotTask(it, i) {
   const assunto = it.hs_task_subject || '';
   const m = assunto.match(AGENDA_RE_TITULO);
   const corpo = String(it.hs_task_body || '').replace(/<[^>]*>/g, ' ').trim();
+  // Mesma regra da reunião: tarefa de daily/1:1/treinamento não é visita de rua.
+  const tipoTarefa = AGENDA_INTERNOS.test(assunto.trim())
+    ? 'interno'
+    : (m ? agendaTipoDoTexto(m[1]) : 'follow_up');
   return {
     id: 'ht' + (it.hs_object_id || i), ownerId: it.hubspot_owner_id ? String(it.hubspot_owner_id) : null,
-    tipo: m ? agendaTipoDoTexto(m[1]) : 'follow_up',
+    tipo: tipoTarefa,
     inicio: agendaParaBRT(it.hs_timestamp), criadoEm: agendaParaBRT(it.hs_createdate),
     dur: 30, cliente: (m && m[2] ? m[2] : assunto).trim() || 'Sem nome', contato: '',
     cidade: '', bairro: '', endereco: '', etapa: '—', temperatura: '—',
@@ -4738,7 +4799,18 @@ function renderAgenda() {
     const diasSemCompromisso = dias.filter(d => !diasComEvento.has(agendaChave(d))).length;
     // "Na rota de hoje": compromissos de HOJE do próprio executivo (visita/reunião/rota;
     // interno não conta como rua) — de doTime, pra valer mesmo navegando outra semana.
-    const naRotaHoje = doTime.filter(e => agendaChave(e.inicio) === hojeK && AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta).length;
+    // BLOCO 2 (11/08/26): o número sozinho não dizia se o dia foi FEITO ou se ainda tem
+    // rua pela frente — e a aba Hoje, olhando só pra frente, chamava o mesmo dia de
+    // "sem compromisso agendado". Agora as duas telas leem a mesma fonte e mostram a
+    // mesma quebra: quanto já foi registrado e quanto ainda está de pé.
+    const doHoje = doTime.filter(e => agendaChave(e.inicio) === hojeK && AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta);
+    const naRotaHoje = doHoje.length;
+    const feitasHoje = doHoje.filter(e => e.desfecho === 'COMPLETED').length;
+    const pendentesHoje = naRotaHoje - feitasHoje;
+    const quebraHoje = naRotaHoje === 0 ? ''
+      : pendentesHoje === 0 ? `todas registradas`
+      : feitasHoje === 0 ? `${pendentesHoje} ${pendentesHoje === 1 ? 'pendente' : 'pendentes'}`
+      : `${feitasHoje} ${feitasHoje === 1 ? 'registrada' : 'registradas'} · ${pendentesHoje} ${pendentesHoje === 1 ? 'pendente' : 'pendentes'}`;
     return `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;flex:none;">
@@ -4750,7 +4822,7 @@ function renderAgenda() {
       <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;flex:1;min-width:0;flex-wrap:wrap;">
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${diasSemCompromisso > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${diasSemCompromisso}</div><div style="font-size:11px;color:var(--dark-mut);">dias sem compromisso</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${visitas}</div><div style="font-size:11px;color:var(--dark-mut);">visitas na semana</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#E0A64A;">${naRotaHoje}</div><div style="font-size:11px;color:var(--dark-mut);">na rota de hoje</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${pendentesHoje > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${naRotaHoje}</div><div style="font-size:11px;color:var(--dark-mut);">na rota de hoje${quebraHoje ? `<br><span style="font-size:10px;opacity:.8;">${quebraHoje}</span>` : ''}</div></div>
       </div>
       <button data-agrota style="flex:none;background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:11px 22px;font-family:'Poppins',sans-serif;font-weight:700;font-size:13px;cursor:pointer;white-space:nowrap;">Planejar minha rota →</button>
     </div>`;
