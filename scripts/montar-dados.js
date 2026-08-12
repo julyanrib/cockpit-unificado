@@ -288,9 +288,28 @@ function filtrarParaPapel(dados, usuario) {
     funilLeads[stage] = soMeu(leads);
   });
 
+  // BLOCO 4 (11/08/26) — corte por papel na agenda.
+  // Nota do Expogo e tarefa criada por automação chegam do HubSpot SEM
+  // hubspot_owner_id; quem diz de quem é o compromisso é o dono do NEGÓCIO associado
+  // (lead_owner_id). O cliente já sabia disso — agendaNormalizar resolve por
+  // lead_owner_id justamente porque "era o que fazia compromisso sumir da agenda de
+  // todo mundo". Só que este filtro roda ANTES, no servidor, e cortava o item pelo
+  // campo vazio: o executivo nunca recebia o registro, então não tinha o que resolver.
+  // O gestor recebia tudo e via o compromisso na agenda da pessoa — os dois olhando a
+  // mesma semana e vendo agendas diferentes.
+  // Medido na base: 20 itens sem hubspot_owner_id, 17 deles pertencendo a alguém do
+  // time (Amanda 8, Sandro 5, Bruno 4). Os outros 3 são de owner fora do time e
+  // continuam fora, como devem.
+  // O corte de privacidade não afrouxa: o item só passa se o dono do negócio for
+  // EXATAMENTE quem está logado. Sem dono em nenhum dos dois campos, não passa.
+  const meuCompromisso = it => {
+    const dono = String(it.hubspot_owner_id || it.ownerId || '');
+    if (dono) return dono === meuId;
+    return String(it.lead_owner_id || '') === meuId;
+  };
   const agenda = dados.agenda ? {
     ...dados.agenda,
-    itens: (dados.agenda.itens || []).filter(it => String(it.hubspot_owner_id || it.ownerId || '') === meuId)
+    itens: (dados.agenda.itens || []).filter(meuCompromisso)
   } : null;
 
   // Leads da praça: só as praças onde o executivo é responsável (por nome) ou cuja praça
