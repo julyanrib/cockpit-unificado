@@ -1436,6 +1436,8 @@
   /* Faixa da semana (Bloco 21) — cinco botões de mesmo peso; o dia-alvo é o único
      preenchido, o dia livre ganha filete âmbar. Nada de vermelho: dia sem visita é
      oportunidade, não urgência. */
+  .ponto-novo-card{position:fixed;z-index:70;right:24px;bottom:24px;width:290px;max-width:92vw;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:14px 15px;}
+  @media(max-width:640px){.ponto-novo-card{right:12px;left:12px;width:auto;bottom:12px;}}
   .plano-sem-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;}
   .plano-sem-dia{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px 11px;border:1px solid var(--line-btn);border-radius:12px;background:var(--panel2);font-family:inherit;cursor:pointer;text-align:left;transition:border-color .12s var(--ease),background .12s var(--ease),transform .12s var(--ease);}
   .plano-sem-dia:hover:not(:disabled){border-color:var(--ink);transform:translateY(-1px);}
@@ -8594,7 +8596,7 @@ async function desenharRotaDrawer() {
       slotM.insertAdjacentHTML('beforeend',
         '<div style="margin-top:12px;padding:13px 15px;border:1px solid var(--line);border-left:3px solid #0E9F9F;border-radius:var(--r-md);background:var(--panel2);">' +
           '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:3px;">' +
-            '<b style="font-size:12.5px;">🆕 Abriu nos últimos 60 dias dentro da região dela · ' + novidades.length + '</b>' +
+            '<b style="font-size:12.5px;">🆕 Abriu nos últimos 90 dias dentro da região dela · ' + novidades.length + '</b>' +
           '</div>' +
           '<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:9px;">Casa dos Dados · CNPJ de foodservice. Restaurante recém-aberto ainda não escolheu sistema — é a janela mais barata de entrada. Pinos verde-água no mapa.</div>' +
           novidades.slice(0, 8).map(n =>
@@ -8612,7 +8614,7 @@ async function desenharRotaDrawer() {
         '</div>');
     } else if (mancha && !mancha.disperso) {
       slotM.insertAdjacentHTML('beforeend',
-        '<div style="margin-top:12px;font-size:11.5px;color:var(--muted2);">Nenhuma abertura nova da Casa dos Dados dentro da região dela nos últimos 60 dias.</div>');
+        '<div style="margin-top:12px;font-size:11.5px;color:var(--muted2);">Nenhuma abertura nova da Casa dos Dados dentro da região dela nos últimos 90 dias.</div>');
     }
 
     slotM.querySelectorAll('[data-addlead]').forEach(b => {
@@ -9545,6 +9547,13 @@ async function montarPlanoDoDia(r) {
                 </select>
               </label>
               <button type="button" class="plano-map-filter" id="planoMapaAddManual" title="Adicionar um estabelecimento que não está no mapa, por endereço ou CEP">＋ Por endereço/CEP</button>
+              <!-- BLOCO 22 (Julyan: "Criar uma coordenada nova e o executivo conseguir
+                   colocar na agenda"). Ponte até o app virar PWA: na rua ele acha
+                   restaurante que não existe em base nenhuma — nem OSM, nem Google, nem
+                   CNPJ. Antes só dava pra cadastrar por endereço/CEP, e em rua sem número
+                   ou praça de alimentação isso não resolve. Agora ele marca no mapa onde
+                   está, arrasta pra ajustar, dá o nome e manda pra agenda. -->
+              <button type="button" class="plano-map-filter" id="planoMapaNovoPonto" title="Marcar no mapa um lugar que não está em base nenhuma">📌 Marcar no mapa</button>
             </div>
             <button type="button" class="plano-map-location" id="planoMapaMinhaPosicao" title="Ir para minha posição" aria-label="Ir para minha posição">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
@@ -9561,7 +9570,7 @@ async function montarPlanoDoDia(r) {
               <span><i style="background:#1E7A63;"></i> Conta-alvo</span>
               <span><i style="background:#1E7A63;border:2px solid #D4A017;"></i> TOP avaliações</span>
               <span><i style="background:#fff;border:2px solid #7C5CD6;"></i> Porta do mapa · sem avaliação</span>
-              <span><i style="background:#0E9F9F;"></i> Abriu em 60 dias</span>
+              <span><i style="background:#0E9F9F;"></i> Abriu em 90 dias</span>
               <span><i style="background:#9CA3AF;"></i> Sem fit</span>
             </div>
           </div>
@@ -9757,6 +9766,33 @@ async function montarPlanoDoDia(r) {
     btnTel.setAttribute('aria-pressed', String(planoMapaFiltro.soComTelefone));
     montarPlanoMapa(r, hoje, fechado);
   });
+  /* BLOCO 22 — "Marcar no mapa": cria coordenada onde não existe base nenhuma.
+     Fluxo, pensado pra ser usado com uma mão na rua:
+       1. clica no botão → o mapa entra em modo mira (cursor de cruz);
+       2. clica no ponto → nasce um pino ARRASTÁVEL, pra corrigir sem recomeçar;
+       3. digita o nome → grava em leads_prospeccao como conta-alvo dele (fonte manual,
+          com a coordenada exata) e já oferece agendar no dia escolhido na faixa da semana.
+     Grava antes de agendar de propósito: a rota só aceita lead que existe na base, e é
+     esse registro que faz o ponto sobreviver ao refresh — senão sumiria no F5. */
+  const btnNovoPonto = slot.querySelector('#planoMapaNovoPonto');
+  if (btnNovoPonto) btnNovoPonto.addEventListener('click', () => {
+    if (!planoMapaInstancia) return;
+    const ativo = btnNovoPonto.classList.toggle('is-active');
+    const canvas = planoMapaInstancia.getCanvas ? planoMapaInstancia.getCanvas() : null;
+    if (canvas) canvas.style.cursor = ativo ? 'crosshair' : '';
+    if (!ativo) return;
+    const aoClicar = (ev) => {
+      planoMapaInstancia.off('click', aoClicar);
+      btnNovoPonto.classList.remove('is-active');
+      if (canvas) canvas.style.cursor = '';
+      const lngLat = ev && ev.lngLat;
+      if (!lngLat) return;
+      criarPontoNoMapa(Number(lngLat.lat), Number(lngLat.lng), r);
+    };
+    planoMapaInstancia.on('click', aoClicar);
+    if (typeof mostrarToast === 'function') mostrarToast('Toque no mapa onde fica o lugar. Dá pra arrastar o pino depois.', 'info');
+  });
+
   const btnAdd = slot.querySelector('#planoMapaAddManual');
   if (btnAdd) btnAdd.addEventListener('click', () => abrirAdicionarManual(r, hoje, fechado));
   // "Aba" de clientes ativos no mapa (pedido do Julyan, 10/08) — isola só os clientes
@@ -9995,7 +10031,7 @@ async function buscarNovidadesPraca(municipio, uf) {
     const resp = await comPrazoGlobal(async (signal) => fetch('/api/novidades-mercado', {
       method: 'POST', signal,
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ municipio: municipio, uf: uf, dias: 60 })
+      body: JSON.stringify({ municipio: municipio, uf: uf, dias: 90 })  // BLOCO 22: 3 meses, igual à Rota — o gestor e o executivo têm que ver a mesma janela
     }), 25000, 'novidades-praca');
     const json = await resp.json().catch(() => ({}));
     // CUIDADO (corrigido 12/08 antes de subir): a primeira versão gravava [] no cache
@@ -10033,7 +10069,11 @@ async function buscarNovidadesMercado(ownerId) {
     const resp = await comPrazoGlobal(async (signal) => fetch('/api/novidades-mercado', {
       method: 'POST', signal,
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ municipio: praca.municipio, uf: praca.uf, dias: 60 })
+      // BLOCO 22 (12/08/26) — Julyan: "Eu gosto de pelo menos 3 meses abertas, renovando
+      // esses leads a cada 3 meses". Janela de 90 dias, não 60: restaurante que abriu há
+      // dois meses ainda não fechou sistema e continua sendo janela de entrada, e o ciclo
+      // de renovação dele é trimestral. O endpoint aceita até 180.
+      body: JSON.stringify({ municipio: praca.municipio, uf: praca.uf, dias: 90 })
     }), 25000, 'novidades-mercado');
     const json = await resp.json().catch(() => ({}));
     if (!resp.ok || !json.ok) return [];
@@ -10267,6 +10307,98 @@ function renderFaixaSemana(r, eventosSemana) {
   });
 }
 
+/* BLOCO 22 (12/08/26) — ponto criado no mapa pelo executivo.
+   Julyan: "Criar uma coordenada nova e o executivo conseguir colocar na agenda. Isso
+   vamos fazer até o nosso app sair do expogo e virar a PWA".
+   Existe por um motivo concreto: na rua ele encontra restaurante que não está em base
+   nenhuma — nem OSM, nem Google, nem CNPJ recente. Hoje esse lugar simplesmente não
+   entrava no cockpit, e ele voltava com o nome num papel.
+   O pino nasce ARRASTÁVEL porque toque em mapa erra por 20–30 metros, e recomeçar o
+   fluxo por causa disso é o tipo de atrito que faz o executivo desistir da ferramenta. */
+let pontoNovoMarcador = null;
+function fecharPontoNovo() {
+  const cx = document.getElementById('pontoNovoCard');
+  if (cx) cx.remove();
+  if (pontoNovoMarcador) { try { pontoNovoMarcador.remove(); } catch (e) {} pontoNovoMarcador = null; }
+}
+function criarPontoNoMapa(lat, lng, r) {
+  fecharPontoNovo();
+  const el = document.createElement('div');
+  el.innerHTML = '<span style="display:block;width:20px;height:20px;border-radius:99px;background:#2563EB;border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);"></span>';
+  try {
+    pontoNovoMarcador = new maplibregl.Marker({ element: el, draggable: true })
+      .setLngLat([lng, lat]).addTo(planoMapaInstancia);
+    pontoNovoMarcador.on('dragend', () => {
+      const ll = pontoNovoMarcador.getLngLat();
+      const c = document.getElementById('pontoNovoCoord');
+      if (c) c.textContent = Number(ll.lat).toFixed(5) + ', ' + Number(ll.lng).toFixed(5);
+    });
+  } catch (e) { console.error('Não consegui criar o pino:', e && e.message); }
+
+  const box = document.createElement('div');
+  box.id = 'pontoNovoCard';
+  box.className = 'ponto-novo-card';
+  box.innerHTML =
+    '<b style="font-size:13px;">Novo ponto no mapa</b>' +
+    '<div style="font-size:11px;color:var(--muted2);margin:2px 0 9px;">Arraste o pino azul pra ajustar. Coordenada: <span id="pontoNovoCoord">' + lat.toFixed(5) + ', ' + lng.toFixed(5) + '</span></div>' +
+    '<input type="text" id="pontoNovoNome" maxlength="120" placeholder="Nome do lugar (ex: Bar do Zé)" style="width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:inherit;font-size:12.5px;">' +
+    '<input type="text" id="pontoNovoRef" maxlength="120" placeholder="Referência ou rua (opcional)" style="width:100%;box-sizing:border-box;margin-top:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:inherit;font-size:12.5px;">' +
+    '<label style="display:flex;align-items:center;gap:7px;margin-top:9px;font-size:11.5px;color:var(--muted);cursor:pointer;">' +
+      '<input type="checkbox" id="pontoNovoAgendar" checked> Agendar visita' + (planoDiaAlvo ? ' em <b>' + planoDiaAlvo.split('-').reverse().slice(0, 2).join('/') + '</b>' : ' hoje') +
+    '</label>' +
+    '<div style="display:flex;gap:8px;margin-top:11px;">' +
+      '<button id="pontoNovoCancel" style="flex:1;background:var(--panel2);border:1px solid var(--line-btn);color:var(--muted);border-radius:99px;padding:8px;font:800 12px inherit;cursor:pointer;">Cancelar</button>' +
+      '<button id="pontoNovoOk" style="flex:2;background:#2563EB;color:#fff;border:none;border-radius:99px;padding:8px;font:800 12px inherit;cursor:pointer;">Salvar ponto</button>' +
+    '</div>' +
+    '<div id="pontoNovoMsg" style="font-size:11px;color:var(--muted2);margin-top:8px;"></div>';
+  document.body.appendChild(box);
+  const nomeInput = document.getElementById('pontoNovoNome');
+  if (nomeInput) nomeInput.focus();
+  document.getElementById('pontoNovoCancel').addEventListener('click', fecharPontoNovo);
+
+  document.getElementById('pontoNovoOk').addEventListener('click', async () => {
+    const nome = String((document.getElementById('pontoNovoNome') || {}).value || '').trim();
+    const msg = document.getElementById('pontoNovoMsg');
+    if (!nome) { if (msg) msg.innerHTML = '<span style="color:var(--red);">Dê um nome pro lugar — é assim que ele vai aparecer na sua rota.</span>'; return; }
+    const ll = pontoNovoMarcador ? pontoNovoMarcador.getLngLat() : { lat: lat, lng: lng };
+    const ref = String((document.getElementById('pontoNovoRef') || {}).value || '').trim();
+    const agendar = !!(document.getElementById('pontoNovoAgendar') || {}).checked;
+    const ok = document.getElementById('pontoNovoOk');
+    ok.disabled = true; ok.textContent = 'Salvando…';
+    const praca = territorioDe(r.ownerId) || PRACA_DO_EXECUTIVO[String(r.ownerId)] || {};
+    try {
+      const { data, error } = await supa.from('leads_prospeccao').insert({
+        nome: nome,
+        // Categoria explícita: quem olhar essa conta depois precisa saber que a
+        // coordenada veio do dedo do executivo, não de uma base.
+        categoria: 'Marcado no mapa',
+        bairro: ref || praca.bairro || null,
+        cidade: praca.municipio || null,
+        estado: praca.uf || null,
+        lat: Number(ll.lat), lng: Number(ll.lng),
+        fonte: 'manual',
+        status: 'atribuido',
+        responsavel_owner_id: String(r.ownerId)
+      }).select('id,nome,bairro,cidade,lat,lng').single();
+      if (error) throw error;
+      if (agendar) {
+        const hora = '10:00';
+        const dia = planoDiaAlvo || isoDate(new Date());
+        await criarTarefaVisitaNoHubspot(data, r.ownerId, hora, { silencioso: true }, dia);
+        registrarAgendamentoLocal(data, dia, hora, r.ownerId);
+      }
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('"' + nome + '" criado no mapa' + (agendar ? ' e agendado.' : '.'), 'sucesso');
+      }
+      fecharPontoNovo();
+      if (planoMapaRenderAtual) montarPlanoMapa(planoMapaRenderAtual.r, planoMapaRenderAtual.hoje, planoMapaRenderAtual.planoFechado);
+    } catch (e) {
+      ok.disabled = false; ok.textContent = 'Salvar ponto';
+      if (msg) msg.innerHTML = '<span style="color:var(--red);">Não consegui salvar: ' + esc((e && e.message) || 'erro') + '</span>';
+    }
+  });
+}
+
 async function montarPlanoMapa(r, hoje, planoFechado) {
   const box = document.getElementById('planoMapa');
   const lista = document.getElementById('planoMapaLista');
@@ -10298,9 +10430,12 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       const chaveNome = agendaNorm(String(n.nome || ''));
       if (!chaveNome || jaNoMapa.has(chaveNome)) return;
       const km = distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(n.lat), Number(n.lng));
-      // Fora do raio de trabalho do dia não entra: novidade a 12km não é oportunidade,
-      // é desvio. Ela volta quando ele declarar um território mais perto.
-      if (!Number.isFinite(km) || km > MAPA_RAIO_KM) return;
+      // BLOCO 22 — o raio das novidades passa a seguir o FILTRO que o executivo escolheu
+      // ("📍 Raio" na barra do mapa), com 3 km de piso quando ele não escolheu nada.
+      // Antes era 3 km fixo: ele podia pedir 10 km e as aberturas novas continuavam
+      // cortadas em 3, sem nenhuma indicação de que existiam. É o "puxar direto da tela".
+      const raioNovidades = Math.max(MAPA_RAIO_KM, Number(planoMapaFiltro.raioKm) || 0);
+      if (!Number.isFinite(km) || km > raioNovidades) return;
       poisDoMapa.push({
         id: 'novo-' + String(n.cnpj || chaveNome).replace(/\D/g, '').slice(0, 20),
         nome: n.nome,
@@ -13333,14 +13468,14 @@ async function montarNovidadesPracas() {
   alvo.innerHTML =
     '<div class="chart-card" style="margin-top:14px;border-left:3px solid #0E9F9F;">' +
       '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:3px;">' +
-        '<h3 style="margin:0;">🆕 Abriu nos últimos 60 dias · ' + total + '</h3>' +
+        '<h3 style="margin:0;">🆕 Abriu nos últimos 90 dias · ' + total + '</h3>' +
         '<span style="font-size:11px;color:var(--muted2);">Casa dos Dados · CNPJ de foodservice por praça</span>' +
       '</div>' +
       '<div class="chart-subtitle" style="margin:0 0 12px;">Restaurante que acabou de abrir ainda não escolheu sistema. É a janela mais barata de entrada — e nenhuma delas está na fila abaixo até ser importada.</div>' +
       (total === 0
         ? '<div class="empty-state" style="padding:18px 12px;">' + (comFalha === pracas.length
             ? 'Não consegui consultar a Casa dos Dados agora (sessão expirada ou fonte fora do ar). Recarregue a página e tente de novo — nada foi perdido.'
-            : 'Nenhuma abertura nova nas praças do time nos últimos 60 dias.') + '</div>'
+            : 'Nenhuma abertura nova nas praças do time nos últimos 90 dias.') + '</div>'
         : resultados.filter(r => r.itens.length).map(r =>
           '<details style="border-top:1px solid var(--line-soft);">' +
             '<summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 0;">' +
@@ -14071,12 +14206,12 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           const resp = await fetch('/api/novidades-mercado', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-            body: JSON.stringify({ municipio: cid, uf: uf, dias: 60 })
+            body: JSON.stringify({ municipio: cid, uf: uf, dias: 90 })  // BLOCO 22: mesma janela de 3 meses
           });
           const j = await resp.json().catch(() => ({}));
           if (!resp.ok || !j.ok || !j.total) continue;
           const recente = (j.itens || [])[0];
-          alvo.innerHTML = '🆕 ' + j.total + ' abriram em 60 dias'
+          alvo.innerHTML = '🆕 ' + j.total + ' abriram em 90 dias'
             + (recente ? '<span style="display:block;color:var(--muted2);font-weight:600;">mais nova: ' + esc(String(recente.nome).slice(0, 34)) + (recente.bairro ? ' · ' + esc(recente.bairro) : '') + '</span>' : '');
         } catch (e) { /* novidade é bônus: falhar não estraga o card */ }
       }
