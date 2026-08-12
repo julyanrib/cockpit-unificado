@@ -404,7 +404,10 @@
      que o Julyan viu — "Meu funil 26" e "Contas-alvo 96" com o número cortado ao meio).
      Classe própria, sem sticky, sem margem negativa. */
   .deck-planohead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px 0;}
-  .deck-tabs{display:flex;gap:5px;padding:11px 13px 0;}
+  .deck-tabs{display:flex;gap:5px;padding:11px 13px 0;flex-wrap:wrap;}
+  .dtab-perto{flex:none;border:1px solid var(--line-btn);background:var(--panel);border-radius:999px;padding:6px 12px;font:700 11px 'DM Sans',sans-serif;color:var(--muted);cursor:pointer;white-space:nowrap;}
+  .dtab-perto:hover{border-color:var(--ink);color:var(--ink);}
+  .dtab-perto.on{background:#2563EB;border-color:#2563EB;color:#fff;}
   .dtab{flex:1;border:none;background:none;border-radius:var(--r-sm);padding:8px 6px;font:700 11.5px 'DM Sans',sans-serif;color:var(--muted2);cursor:pointer;}
   .dtab.on{background:var(--sunk);color:var(--ink);}
   .dtab small{display:block;font-size:10px;font-weight:700;color:var(--ter);}
@@ -1817,6 +1820,15 @@
   .plano-map-sidebar-count{font-size:10.5px;font-weight:800;color:#2563EB;background:rgba(37,99,235,.1);border-radius:999px;padding:4px 8px;}
   .plano-map-section-label{display:flex;align-items:center;gap:8px;margin:12px 4px 8px;color:var(--muted2);font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;}
   .plano-map-section-label::after{content:'';height:1px;background:var(--line);flex:1;}
+  /* BLOCO 29 (12/08/26) — popup do cluster do mapa: mesma linguagem visual do
+     .plano-lista-item, só que dentro de um popup do MapLibre (que tem casca própria,
+     por isso o :global via .maplibregl-popup-content mais abaixo). */
+  .cluster-popup{width:280px;max-width:78vw;}
+  .cluster-popup-head{padding:2px 2px 9px;border-bottom:1px solid var(--line-soft);margin-bottom:9px;}
+  .cluster-popup-head b{display:block;font-size:13px;font-family:'Poppins',sans-serif;}
+  .cluster-popup-head span{display:block;font-size:10.5px;color:var(--muted2);margin-top:2px;}
+  .cluster-popup-body{max-height:280px;overflow-y:auto;padding-right:2px;}
+  .maplibregl-popup-content:has(.cluster-popup){padding:12px 13px;border-radius:14px;}
   .plano-lista-item{display:grid;grid-template-columns:32px minmax(0,1fr) auto;align-items:center;gap:10px;padding:11px;border:1px solid var(--line);border-radius:14px;background:var(--panel2);cursor:pointer;transition:border-color .15s var(--ease),transform .15s var(--ease),box-shadow .15s var(--ease);margin-bottom:8px;}
   .plano-lista-item:hover,.plano-lista-item.is-focused{border-color:color-mix(in srgb,#2563EB 55%,var(--line));transform:translateY(-1px);box-shadow:var(--shadow-sm);}
   .plano-lista-index{width:32px;height:32px;border-radius:11px;display:grid;place-items:center;background:var(--sunk);color:var(--muted);font-family:'Poppins',sans-serif;font-size:11px;font-weight:800;}
@@ -9746,6 +9758,13 @@ let planoMapaInstancia = null;
 let planoMapaMarcadores = {}; // id do lead -> { marker, popup, lead }
 // Aba ativa do deck de candidatos (Bloco 25): 'sugeridos' | 'funil' | 'alvo'.
 let deckAbaAtiva = 'sugeridos';
+// BLOCO 29 (12/08/26) — Julyan: "inspire-se em grandes gestões como salesforce maps...
+// tem q aparecer leads pra eles, onde ele escolher a rota, os mais pertos, pra economizar
+// tempo e esforço". A distância já aparecia em cada card, mas nunca foi o CRITÉRIO de
+// ordenação — o padrão sempre foi prioridade do funil primeiro. Este toggle inverte isso
+// quando ligado: pura proximidade, sem julgar quente ou frio — é o modo "economizar
+// deslocamento" que o Salesforce Maps chama de nearest-first.
+let deckOrdemProximidade = false;
 let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false, soClientes: false,
   // Filtros que valem só para os pinos ◇ do OSM (11/08). O filtro de avaliações não
   // serve pra eles — OSM não tem nota — então precisavam de régua própria:
@@ -11817,6 +11836,15 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     : deckAbaAtiva === 'alvo' ? ordenadasTodas.filter(l => !naRotaHojeFn(l) && !l._clienteAtivo && !l._pipelineQuente)
     : ordenadas.filter(l => !naRotaHojeFn(l) && !l._clienteAtivo)
   );
+  // Modo "mais perto primeiro" (Salesforce Maps): reordena o que JÁ passou pelo filtro
+  // de aba acima — não muda QUEM aparece, só a ORDEM. Sem território declarado não tem
+  // origem pra medir distância nenhuma, então o toggle fica sem efeito (a lista já
+  // avisa isso no rótulo do botão, não falha calada).
+  const itensSugestaoOrdenados = (deckOrdemProximidade && planoMapaOrigemAtual)
+    ? itensSugestao.slice().sort((a, b) =>
+        distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(a.lat), Number(a.lng)) -
+        distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(b.lat), Number(b.lng)))
+    : itensSugestao;
   // Clientes ativos ainda não escolhidos pra rota de hoje — sempre visíveis como
   // sugestão de relacionamento/upsell, à parte dos leads novos.
   // Alto volume primeiro — mais de 500 comandas é quem mais justifica a parada
@@ -11906,7 +11934,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
 
   lista.innerHTML = `
     ${itensRota.length ? `<div class="plano-map-section-label">${rotaTituloHtml}</div>${itensRota.map(itemListaHTML).join('')}${gerarRotaInlineHtml}${enviarAgendaHtml}` : `<div class="empty-state" style="padding:18px 8px 12px;font-size:12px;">Sua rota está vazia. Comece pelos leads fáceis ou pelos clientes ativos da região.</div>`}
-    ${itensSugestao.length ? `<div class="plano-map-section-label">Leads fáceis pra hoje · funil + mais avaliados</div>${itensSugestao.map(itemListaHTML).join('')}` : ''}
+    ${itensSugestao.length ? `<div class="plano-map-section-label">Leads fáceis pra hoje · funil + mais avaliados</div>${itensSugestaoOrdenados.map(itemListaHTML).join('')}` : ''}
     ${clientesSugestao.length ? `<div class="plano-map-section-label">Clientes Takeat na região${clientesSugestao.filter(c => c.altoVolume).length ? ` · ${clientesSugestao.filter(c => c.altoVolume).length} de alto volume` : ''}</div>${clientesSugestao.map(itemListaHTML).join('')}` : ''}
     ${pipelineSemLocal.length ? (() => {
       // BLOCO 19 — Julyan: "a maioria dos quentes tem localização".
@@ -12165,27 +12193,51 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     el.type = 'button';
     el.className = 'plano-cluster';
     const temAlvo = c.membros.some(m => !m._doMapa);
-    el.title = c.membros.length + ' locais aqui — clique pra abrir';
+    el.title = c.membros.length + ' locais aqui — clique pra abrir a lista';
     el.innerHTML = '<span>' + c.membros.length + '</span>';
     if (!temAlvo) el.classList.add('is-osm');
+    // BLOCO 29 (12/08/26) — Julyan de novo: "clico neles e nao aparece nada".
+    // A correção anterior (Bloco 26) trocou flyTo por jumpTo pra garantir que a CÂMERA
+    // se movesse — e o teste isolado provou que ela se move. O que eu não tinha
+    // verificado: mover a câmera não faz o cluster SE ABRIR. montarPlanoMapa destrói e
+    // recria o mapa inteiro a cada chamada (`.remove()` + `new maplibregl.Map(...)`),
+    // reenquadrando pelo território declarado — chamá-lo de novo depois do jumpTo
+    // jogaria a câmera de volta pro enquadramento inicial, cancelando o zoom. Ou seja:
+    // sem reescrever como o mapa inteiro remonta, animar o zoom nunca ia "abrir" nada.
+    // Troquei a abordagem: clique no cluster mostra a LISTA de quem está ali dentro,
+    // mais perto primeiro, cada um com o mesmo cartão da barra lateral (mesmo botão de
+    // adicionar, mesmo popup de dia/hora) — é literalmente o padrão do Salesforce Maps
+    // pra pino agrupado, e não depende de nenhuma animação de câmera pra funcionar.
     el.addEventListener('click', (ev) => {
       ev.stopPropagation();
       try {
-        // Zoom suficiente pra separar o grupo: cada nível divide a distância em pixels
-        // por 2, então subir ~2 níveis já descola o que estava a 34px.
-        const z = Math.min(18, (planoMapaInstancia.getZoom ? planoMapaInstancia.getZoom() : 12) + 2.2);
-        // BUG PEGO NO TESTE (12/08 à noite, ao vivo no navegador do Bruno): flyTo()
-        // depende do loop de animação da própria lib rodando frame a frame; quando o
-        // carregamento dos tiles trava (rede lenta, MapTiler fora do ar por um
-        // instante), esse loop nunca avança e o clique parece "não fazer nada" — sem
-        // erro nenhum no console. Testei os dois lado a lado no mesmo mapa: jumpTo()
-        // aplicou na hora, flyTo() ficou parado. jumpTo não é tão bonito (sem a
-        // suavidade do voo), mas o pino TEM que responder ao clique sempre — é a
-        // reclamação direta do Julyan. Trocado aqui e não nos outros usos de flyTo
-        // (clique na lista, "ver no mapa") porque aquele é o caminho mais crítico:
-        // é o único jeito de abrir um grupo de 24 pinos empilhados.
-        planoMapaInstancia.jumpTo({ center: [c.lng, c.lat], zoom: z });
-      } catch (e) { console.error('Cluster não expandiu:', e && e.message); }
+        const origemCluster = planoMapaOrigemAtual || { lat: c.lat, lng: c.lng };
+        const membrosComDist = c.membros
+          .map(m => ({ ...m, _distDoClusterKm: distanciaKm(origemCluster.lat, origemCluster.lng, Number(m.lat), Number(m.lng)) }))
+          .sort((a, b) => a._distDoClusterKm - b._distDoClusterKm);
+        const popupEl = document.createElement('div');
+        popupEl.className = 'cluster-popup';
+        popupEl.innerHTML =
+          '<div class="cluster-popup-head"><b>' + membrosComDist.length + ' locais aqui perto</b><span>mais perto de você primeiro</span></div>' +
+          '<div class="cluster-popup-body">' + membrosComDist.map(itemListaHTML).join('') + '</div>';
+        const popup = new maplibregl.Popup({ closeButton: true, maxWidth: '300px', offset: 14 })
+          .setLngLat([c.lng, c.lat])
+          .setDOMContent(popupEl)
+          .addTo(planoMapaInstancia);
+        // Os cartões de itemListaHTML esperam um botão .plano-lista-btn ligado ao
+        // "incluir/tirar da rota" — mas o dicionário planoMapaMarcadores só tem entrada
+        // pra quem ganhou pino INDIVIDUAL. Membro de cluster nunca teve uma, então o
+        // caminho normal (usado pela lista lateral) ficaria mudo aqui. Liga direto
+        // contra os próprios objetos de membrosComDist, sem depender do dicionário.
+        popupEl.querySelectorAll('.plano-lista-btn').forEach(btn => {
+          btn.addEventListener('click', ev => {
+            ev.stopPropagation();
+            const lead = membrosComDist.find(m => String(m.id) === String(btn.dataset.id));
+            if (!lead) return;
+            (lead._clienteAtivo ? alternarClienteNaRota(lead) : lead._quenteAvulso ? alternarQuenteAvulso(lead) : alternarRota(lead, btn));
+          });
+        });
+      } catch (e) { console.error('Cluster não abriu a lista:', e && e.message); }
     });
     try {
       const m = new maplibregl.Marker({ element: el }).setLngLat([c.lng, c.lat]).addTo(planoMapaInstancia);
@@ -12466,11 +12518,18 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       { id: 'funil', nome: 'Meu funil', n: nFunil },
       { id: 'alvo', nome: 'Contas-alvo', n: nAlvo }
     ];
-    tabsEl.innerHTML = abas.map(a => `<button class="dtab ${deckAbaAtiva === a.id ? 'on' : ''}" data-deckaba="${a.id}">${a.nome}<small>${a.n}</small></button>`).join('');
+    tabsEl.innerHTML = abas.map(a => `<button class="dtab ${deckAbaAtiva === a.id ? 'on' : ''}" data-deckaba="${a.id}">${a.nome}<small>${a.n}</small></button>`).join('') +
+      `<button class="dtab-perto ${deckOrdemProximidade ? 'on' : ''}" id="deckPertoBtn" title="${planoMapaOrigemAtual ? 'Reordenar a lista pelos mais perto do seu ponto de partida' : 'Declare seu território no passo 1 pra ordenar por distância'}">📍 Mais perto</button>`;
     tabsEl.querySelectorAll('[data-deckaba]').forEach(b => b.addEventListener('click', () => {
       deckAbaAtiva = b.dataset.deckaba;
       montarPlanoMapa(r, hoje, planoFechado);
     }));
+    const btnPerto = document.getElementById('deckPertoBtn');
+    if (btnPerto) btnPerto.addEventListener('click', () => {
+      if (!planoMapaOrigemAtual) { mostrarToast('Declare onde você vai atuar hoje (passo 1) pra ordenar por distância.', 'atencao'); return; }
+      deckOrdemProximidade = !deckOrdemProximidade;
+      montarPlanoMapa(r, hoje, planoFechado);
+    });
   })();
 
   // ---- Sincronia lista <-> mapa ----
