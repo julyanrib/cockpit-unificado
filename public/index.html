@@ -8024,6 +8024,7 @@ async function desenharRotaDrawer() {
     (rotaSeqGerada && seq.length > 1
       ? '<div style="font-size:11.5px;color:var(--muted);margin-top:9px;line-height:1.5;">Sequência <b>sugerida</b> por proximidade' + (origem ? ' a partir de ' + esc(plano.local_atuacao) : ' a partir da 1ª parada') + ' — <b>' + totalPercursoKm(seq).toFixed(1) + ' km</b> no total. É distância em linha reta, não de rua: serve pra ordenar, não pra cronometrar.</div>'
       : '') +
+    '<div id="rotaManchaSlot"></div>' +
     '<div id="rotaAddSlot"></div>' +
     (seq.length
       ? '<ul class="rota-seq">' + seq.map((p, i) =>
@@ -8066,7 +8067,52 @@ async function desenharRotaDrawer() {
   });
 
   if (rotaAddAberto) montarListaAdicionar();
-  montarMapaRota(seq, origem).catch(e => {
+  montarMapaRota(seq, origem).then(mancha => {
+    // Bloco 9: com a região calculada, a pergunta "quem eu empurro pra ela?" vira uma
+    // lista curta e defensável — conta-alvo DENTRO da mancha, por volume de avaliações.
+    // Fora da mancha não some da tela, só sai da recomendação: empurrar uma conta a
+    // 40 km da região dela não é sugestão, é desvio de rota.
+    const slotM = document.getElementById('rotaManchaSlot');
+    if (!slotM) return;
+    const primeiroNome = esc(String(rep.name || 'ele').split(' ')[0]);
+    if (!mancha) {
+      slotM.innerHTML = '<div style="font-size:11.5px;color:var(--muted2);padding:10px 0;">Poucos negócios com coordenada pra calcular a região onde ' + primeiroNome + ' mais atua (mínimo 3).</div>';
+      return;
+    }
+    if (mancha.disperso) {
+      slotM.innerHTML = '<div style="margin-top:16px;padding:13px 15px;border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:var(--r-md);background:var(--amber-soft);">' +
+        '<b style="font-size:12.5px;color:var(--amber);">Carteira dispersa — sem região definida</b>' +
+        '<div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:4px;">Os ' + mancha.total + ' negócios de ' + primeiroNome + ' estão espalhados demais pra existir uma “região onde ele mais atua”: o maior agrupamento cobre só ' + mancha.dentro + ' deles. Vale checar no 1:1 se isso é praça grande ou rota sem foco.</div></div>';
+      return;
+    }
+    const candidatas = (info.sugestoes || []).filter(s => s.lat != null && s.lng != null)
+      .map(s => ({ ...s, _km: distanciaKm(mancha.lat, mancha.lng, Number(s.lat), Number(s.lng)) }));
+    const dentro = candidatas.filter(s => s._km <= mancha.raioKm)
+      .sort((a, b) => (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0));
+    const fora = candidatas.length - dentro.length;
+    slotM.innerHTML =
+      '<div style="margin-top:16px;padding:13px 15px;border:1px solid var(--line);border-left:3px solid #2563EB;border-radius:var(--r-md);background:var(--panel2);">' +
+        '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:3px;">' +
+          '<b style="font-size:12.5px;">Onde ' + esc(String(rep.name || 'ele').split(' ')[0]) + ' mais atua</b>' +
+          '<span style="font-size:11px;color:var(--muted2);">raio de <b>' + mancha.raioKm.toFixed(1) + ' km</b> · cobre ' + mancha.dentro + ' dos ' + mancha.total + ' negócios' + (mancha.fora ? ' · ' + mancha.fora + ' fora da região' : '') + '</span>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:' + (dentro.length ? '10px' : '0') + ';">A área azul tracejada no mapa. Calculada da posição real dos negócios dele, não do território que ele digitou.</div>' +
+        (dentro.length
+          ? '<div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Contas-alvo dentro da região · ' + dentro.length + '</div>' +
+            dentro.slice(0, 5).map(s =>
+              '<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid var(--line-soft);">' +
+                '<span style="min-width:0;flex:1;"><b style="font-size:12.5px;">' + esc(s.nome || '') + '</b>' +
+                '<span style="display:block;font-size:11px;color:var(--muted2);">' + esc([s.bairro, s.cidade].filter(Boolean).join(' · ') || 'sem endereço') +
+                (s.avaliacoes != null ? ' · ' + Number(s.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : '') +
+                ' · ' + s._km.toFixed(1) + ' km do centro da região</span></span>' +
+                '<button class="rota-add-btn" data-addlead="' + esc(String(s.id)) + '" data-addnome="' + esc(String(s.nome || '')) + '" data-addbairro="' + esc(String(s.bairro || '')) + '" data-addcidade="' + esc(String(s.cidade || '')) + '" style="flex:none;background:var(--blue);">+ rota</button>' +
+              '</div>').join('') +
+            (fora ? '<div style="font-size:11px;color:var(--muted2);margin-top:8px;">' + fora + ' conta(s) da carteira ficaram fora da região — continuam em "Adicionar conta à rota".</div>' : '')
+          : '<div style="font-size:11.5px;color:var(--amber);margin-top:8px;">Nenhuma conta-alvo livre dentro da região dele' + (fora ? ' — as ' + fora + ' disponíveis estão fora do raio.' : '. Vale abastecer esta praça na Prospecção.') + '</div>');
+    slotM.querySelectorAll('[data-addlead]').forEach(b => {
+      b.addEventListener('click', () => adicionarNaRotaDoRep(b.dataset.addlead, b.dataset.addnome, b, b.dataset.addbairro, b.dataset.addcidade));
+    });
+  }).catch(e => {
     console.error('Erro no mapa da rota:', e);
     const palco = document.getElementById('rotaMapaPalco');
     const mapa = document.getElementById('rotaMapa');
@@ -8078,6 +8124,54 @@ async function desenharRotaDrawer() {
                     : 'O mapa falhou por um erro interno do cockpit. A sequência abaixo continua valendo.') + '</div>';
     }
   });
+}
+
+/* ---------- MANCHA DE ATUAÇÃO (Bloco 9, 11/08/26) ----------
+   Julyan: "preciso ter a rota q ela mais faz pra eu adicionar".
+   O cockpit já sabia onde cada negócio está (lat/lng do check-in do Expogo, no
+   snapshotReps.plotaveis), mas nunca respondia ONDE a pessoa de fato trabalha — o
+   gestor via 25 pinos espalhados e tinha que inferir a região no olho.
+   A mancha é mediana + raio do percentil 80 das distâncias:
+     · mediana, e não média, porque um único negócio a 90 km (o caso real do Caldeira
+       Restaurante, na carteira da Kelly) puxaria o centro pra fora da praça;
+     · p80, e não o máximo, pela mesma razão — cobre o miolo do trabalho e deixa o
+       excêntrico de fora, sem escondê-lo do mapa.
+   Piso de 1,5 km pra não virar um ponto quando a carteira é muito concentrada; teto de
+   15 km porque acima disso não é mais "a região dela", é a praça inteira. */
+function manchaDeAtuacao(pontos) {
+  const pts = (pontos || [])
+    .map(p => ({ lat: Number(p.lat), lng: Number(p.lng) }))
+    .filter(p => Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  if (pts.length < 3) return null; // com 1 ou 2 pontos não existe "região", existe ponto
+  const mediana = arr => { const a = arr.slice().sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
+  const lat = mediana(pts.map(p => p.lat));
+  const lng = mediana(pts.map(p => p.lng));
+  const dists = pts.map(p => distanciaKm(lat, lng, p.lat, p.lng)).sort((a, b) => a - b);
+  const p80 = dists[Math.min(dists.length - 1, Math.floor(dists.length * 0.8))];
+  const raioKm = Math.max(1.5, Math.min(15, p80));
+  const dentro = dists.filter(d => d <= raioKm).length;
+  // Se o teto de 15 km cortou tanto que o círculo cobre menos da metade dos negócios,
+  // não existe "região onde ela mais atua" — existe carteira espalhada. Desenhar o
+  // círculo assim mentiria: diria "é aqui" apontando pra um quarto do trabalho dela.
+  // Melhor não desenhar e dizer isso em texto. (Testado: carteira concentrada num
+  // quarteirão dá 1,5 km/100%; bairro com um outlier a 90 km dá 15 km/75%; carteira
+  // espalhada por 4 cidades cairia em 15 km/25% e é justamente esta que é barrada.)
+  if (dentro / pts.length < 0.5) return { disperso: true, total: pts.length, dentro: dentro };
+  return { lat, lng, raioKm, dentro, total: pts.length, fora: pts.length - dentro };
+}
+
+// Círculo geodésico como polígono — o MapLibre não desenha círculo em km, só em pixel,
+// e um raio em pixel mudaria de tamanho a cada zoom (mentindo sobre a distância).
+function circuloGeoJSON(lat, lng, raioKm, lados) {
+  const n = lados || 64;
+  const coords = [];
+  const dLat = raioKm / 111;
+  const dLng = raioKm / (111 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
+  for (let i = 0; i <= n; i++) {
+    const t = (i / n) * 2 * Math.PI;
+    coords.push([lng + dLng * Math.cos(t), lat + dLat * Math.sin(t)]);
+  }
+  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: {} };
 }
 
 async function montarMapaRota(seq, origem) {
@@ -8153,7 +8247,36 @@ async function montarMapaRota(seq, origem) {
     bounds.extend([Number(d.lng), Number(d.lat)]);
   });
 
+  // A mancha entra por ÚLTIMO no cálculo mas por BAIXO no desenho (addLayer antes de
+  // qualquer símbolo já existente não é possível aqui, então usa preenchimento fraco e
+  // sem interação — pino nenhum perde clique por causa dela).
+  const mancha = manchaDeAtuacao([...(comCoord || []), ...plotaveis]);
+  if (mancha && !mancha.disperso) {
+    const desenhar = () => {
+      if (!rotaMapaInstancia || rotaMapaInstancia.getSource('manchaAtuacao')) return;
+      try {
+        rotaMapaInstancia.addSource('manchaAtuacao', { type: 'geojson', data: circuloGeoJSON(mancha.lat, mancha.lng, mancha.raioKm) });
+        rotaMapaInstancia.addLayer({
+          id: 'manchaAtuacaoFill', type: 'fill', source: 'manchaAtuacao',
+          paint: { 'fill-color': '#2563EB', 'fill-opacity': 0.07 }
+        });
+        rotaMapaInstancia.addLayer({
+          id: 'manchaAtuacaoLine', type: 'line', source: 'manchaAtuacao',
+          paint: { 'line-color': '#2563EB', 'line-width': 1.5, 'line-dasharray': [3, 2], 'line-opacity': 0.55 }
+        });
+      } catch (e) { /* estilo trocou pro reserva no meio do caminho: sem mancha, sem drama */ }
+    };
+    if (rotaMapaInstancia.isStyleLoaded && rotaMapaInstancia.isStyleLoaded()) desenhar();
+    else rotaMapaInstancia.on('load', desenhar);
+    // A mancha nunca encolhe o enquadramento, mas garante que ela caiba inteira.
+    const dLat = mancha.raioKm / 111;
+    const dLng = mancha.raioKm / (111 * Math.max(0.2, Math.cos(mancha.lat * Math.PI / 180)));
+    bounds.extend([mancha.lng - dLng, mancha.lat - dLat]);
+    bounds.extend([mancha.lng + dLng, mancha.lat + dLat]);
+  }
+
   if (!bounds.isEmpty()) rotaMapaInstancia.fitBounds(bounds, { padding: 55, maxZoom: 15 });
+  return mancha;
 }
 
 /* ---------- Empurrar conta-alvo pra rota do executivo ---------- */
