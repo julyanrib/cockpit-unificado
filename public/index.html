@@ -1008,12 +1008,25 @@
   .agw-col{position:relative;border-left:1px solid var(--line-soft);background-image:repeating-linear-gradient(to bottom,var(--line-soft) 0 1px,transparent 1px var(--agw-px));}
   .agw-col[data-hoje="1"]{background-color:rgba(224,166,74,.07);}
   .agw-daily{position:absolute;left:3px;right:3px;border-radius:8px;background:repeating-linear-gradient(135deg,var(--sunk) 0 5px,var(--panel2) 5px 10px);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);pointer-events:none;}
+  /* BLOCO 16 (12/08/26, Julyan: "sem cortar nada dos eventos, tanto do gestor quanto
+     executivo"). O bloco tinha altura proporcional à duração: visita de 30 min virava
+     ~21px, e com 21px não cabe hora + nome. O nome era cortado por altura, não por
+     largura — por isso aumentar a fonte ou o padding nunca resolveu.
+     Agora: altura mínima que comporta hora + duas linhas de nome, o nome quebra em vez
+     de sumir, e no hover o bloco cresce sobre os vizinhos pra mostrar o nome inteiro.
+     Todo bloco leva title com o texto completo, então o nome está sempre acessível. */
   .agw-ev{--c:var(--green);position:absolute;overflow:hidden;text-align:left;background:color-mix(in srgb,var(--c) 18%,var(--panel));border:none;border-left:3px solid var(--c);border-radius:9px;padding:3px 8px;font-family:inherit;cursor:pointer;box-shadow:0 1px 3px rgba(26,22,19,.10);transition:background .12s var(--ease),box-shadow .12s var(--ease);z-index:2;}
-  .agw-ev:hover{background:color-mix(in srgb,var(--c) 30%,var(--panel));box-shadow:0 4px 12px rgba(26,22,19,.18);z-index:6;}
+  .agw-ev:hover{background:color-mix(in srgb,var(--c) 30%,var(--panel));box-shadow:0 4px 12px rgba(26,22,19,.18);z-index:6;height:auto!important;min-height:var(--alt,44px);overflow:visible;}
   .agw-ev b{display:block;font-size:10px;font-weight:800;color:var(--c);font-variant-numeric:tabular-nums;line-height:1.3;}
-  .agw-ev span{display:block;font-size:11px;font-weight:700;color:var(--ink);line-height:1.25;overflow:hidden;text-overflow:ellipsis;}
+  .agw-ev span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:11px;font-weight:700;color:var(--ink);line-height:1.22;overflow:hidden;overflow-wrap:anywhere;}
+  .agw-ev:hover span{-webkit-line-clamp:4;}
   .agw-ev.min{padding:2px 8px;display:flex;align-items:center;gap:5px;}
-  .agw-ev.min b,.agw-ev.min span{display:inline;font-size:10px;white-space:nowrap;}
+  .agw-ev.min b{display:inline;font-size:10px;white-space:nowrap;}
+  .agw-ev.min span{display:inline;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  /* Recém-agendado nesta sessão: existe no HubSpot mas ainda não veio no snapshot. */
+  .ag-atalho{background:none;border:1px solid var(--line-btn);border-radius:99px;padding:4px 10px;font:700 10.5px 'DM Sans',sans-serif;color:var(--muted);cursor:pointer;white-space:nowrap;}
+  .ag-atalho:hover{border-color:var(--ink);color:var(--ink);}
+  .agw-ev.is-novo{border:1.5px dashed var(--c);border-left-width:3px;}
   .agw-ev i.q{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--red);}
   .agw-ev.agtp-reuniao{--c:var(--green);} .agw-ev.agtp-follow_up{--c:var(--violet);}
   .agw-ev.agtp-rota{--c:var(--blue);} .agw-ev.agtp-interno{--c:var(--muted2);}
@@ -4270,6 +4283,29 @@ const AGENDA_DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const AGENDA_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 let agendaEstado = { offset: 0, filtro: 'tudo', modo: null, sabado: false, subview: 'hoje', vista: 'semana', diaSel: null };
+
+/* BLOCO 16 (12/08/26) — Julyan: "ele pode conseguir editar os buracos preenchidos [...]
+   p ele sair planejado".
+   O problema: ao agendar do card de Buracos, a tarefa entrava no HubSpot na hora, mas o
+   DATA.agenda da tela é um SNAPSHOT do último build. Resultado: o botão virava "✓", o dia
+   continuava listado como buraco e o compromisso não aparecia na grade — parecia que não
+   tinha funcionado, e dava vontade de clicar de novo (criando duplicata).
+   Estes são os agendamentos feitos NESTA sessão. Entram na agenda como qualquer outro
+   evento, marcados com recemAgendado pra desenharem tracejado — existem no HubSpot, só
+   ainda não vieram no snapshot. Some sozinho no próximo build, quando o dado real chega. */
+let agendaAgendadosLocal = [];
+function registrarAgendamentoLocal(lead, dataISO, hora, ownerId) {
+  const jaTem = agendaAgendadosLocal.some(a => String(a.leadId) === String(lead.id) && a.dataISO === dataISO);
+  if (jaTem) return;
+  agendaAgendadosLocal.push({
+    leadId: lead.id, nome: lead.nome, bairro: lead.bairro || null, cidade: lead.cidade || null,
+    lat: lead.lat != null ? Number(lead.lat) : null, lng: lead.lng != null ? Number(lead.lng) : null,
+    dataISO: dataISO, hora: hora, ownerId: String(ownerId)
+  });
+}
+function agendadoLocalDe(leadId, dataISO) {
+  return agendaAgendadosLocal.find(a => String(a.leadId) === String(leadId) && a.dataISO === dataISO) || null;
+}
 let AGENDA_EVENTOS = [];
 let agendaRenderVersao = 0;
 
@@ -4314,6 +4350,18 @@ function agendaNormalizar(raw) {
   const itens = (raw && raw.itens) || [];
   agendaOrfaos = [];
   const out = [];
+  // Agendado nesta sessão entra ANTES: se o próximo build já tiver trazido a mesma
+  // tarefa, o dedup por nome+dia lá embaixo descarta a versão local e fica a real.
+  agendaAgendadosLocal.forEach(function (a, i) {
+    const d = new Date(a.dataISO + 'T' + a.hora + ':00Z');
+    if (isNaN(d)) return;
+    out.push({
+      id: 'local-' + a.leadId + '-' + a.dataISO, ownerId: String(a.ownerId), tipo: 'rota',
+      inicio: d, dur: 30, cliente: a.nome, titulo: 'Visita - ' + a.nome,
+      desfecho: null, registro: false, recemAgendado: true,
+      lat: a.lat, lng: a.lng, bairro: a.bairro, cidade: a.cidade
+    });
+  });
   itens.forEach(function (it, i) {
     let e = null;
     if (it.hs_meeting_start_time || it.hs_meeting_title !== undefined) e = agendaDoHubspot(it, i);
@@ -4350,7 +4398,12 @@ function agendaNormalizar(raw) {
       });
     }
   });
-  return out;
+  // Dedup dos agendamentos locais: assim que o build seguinte trouxer a tarefa real do
+  // HubSpot, a versão local vira duplicata na tela. Some pela chave dono+dia+nome do
+  // lead. Sem isso o executivo veria a mesma visita duas vezes por um dia inteiro.
+  const chaveDedup = e => String(e.ownerId) + '|' + agendaChave(e.inicio) + '|' + prospeccaoNormalizarTexto(agendaNomeDoLead(e.cliente) || e.cliente || '');
+  const reaisPorChave = new Set(out.filter(e => !e.recemAgendado && e.inicio).map(chaveDedup));
+  return out.filter(e => !(e.recemAgendado && reaisPorChave.has(chaveDedup(e))));
 }
 
 // Rótulos de ação/cadência que aparecem ANTES do nome do lead nos títulos do HubSpot
@@ -4887,8 +4940,15 @@ function renderAgenda() {
   const HORARIOS_SUGERIDOS = ['10:00', '11:30', '14:00'];
   const buracosCardExec = souRep ? (() => {
     if (agendaEstado.offset < 0) return '';
-    const diasComEvento = new Set(naSemana.map(e => agendaChave(e.inicio)));
-    const preenchiveis = dias.filter(d => !diasComEvento.has(agendaChave(d)) && (agendaEstado.offset > 0 || agendaChave(d) >= hojeK));
+    // Dia com compromisso que veio do HubSpot sai da lista: já estava resolvido antes.
+    // Dia que só tem o que ele acabou de agendar CONTINUA aqui, marcado como em
+    // construção — a régua é 6 visitas por dia, e some do card na primeira agendada ele
+    // não teria como completar o dia. É o "editar os buracos preenchidos" do pedido.
+    const diasComEventoReal = new Set(naSemana.filter(e => !e.recemAgendado).map(e => agendaChave(e.inicio)));
+    const agendadosPorDia = agendaAgendadosLocal.reduce((acc, a) => {
+      (acc[a.dataISO] = acc[a.dataISO] || []).push(a); return acc;
+    }, {});
+    const preenchiveis = dias.filter(d => !diasComEventoReal.has(agendaChave(d)) && (agendaEstado.offset > 0 || agendaChave(d) >= hojeK));
     const rotDiaCurto = d => ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d.getUTCDay()] + ', ' + agendaP2(d.getUTCDate()) + '/' + agendaP2(d.getUTCMonth() + 1);
     return `
     <div class="chart-card" id="buracosCard" style="border:1.5px solid var(--red);">
@@ -4907,21 +4967,47 @@ function renderAgenda() {
             // repetida de segunda a sexta.
             const fila = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache))
               ? prospeccaoCache.filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l)) : [];
-            const sugestoes = fila.slice(iDia * 3, iDia * 3 + 3);
             const iso = d.toISOString().slice(0, 10);
+            const jaAgendados = agendadosPorDia[iso] || [];
+            // Não reoferece quem ele já marcou pra esse dia.
+            const idsAgendados = new Set(jaAgendados.map(a => String(a.leadId)));
+            const filaDoDia = fila.filter(l => !idsAgendados.has(String(l.id)));
+            const sugestoes = filaDoDia.slice(iDia * 3, iDia * 3 + 3);
             return `
           <div style="background:var(--red-soft);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-              <b style="font-size:13px;">${rotDiaCurto(d)}</b>
+              <b style="font-size:13px;">${rotDiaCurto(d)}${jaAgendados.length ? `<span style="font-size:10.5px;font-weight:800;color:var(--green);margin-left:7px;">${jaAgendados.length}/6 marcadas</span>` : ''}</b>
               <button data-agdia="${iso}" style="background:none;border:none;color:var(--red);font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap;padding:0;">Abrir o dia →</button>
             </div>
+            ${jaAgendados.length ? `
+              <div style="margin-top:8px;padding:8px 10px;border-radius:10px;background:var(--green-soft);">
+                <div style="font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--green);margin-bottom:4px;">Você já marcou</div>
+                ${jaAgendados.sort((a, b) => a.hora.localeCompare(b.hora)).map(a => `
+                  <div style="display:flex;align-items:baseline;gap:7px;font-size:12px;padding:2px 0;">
+                    <b style="font-variant-numeric:tabular-nums;color:var(--green);">${esc(a.hora)}</b>
+                    <span style="overflow-wrap:anywhere;">${esc(a.nome)}</span>
+                  </div>`).join('')}
+                <div style="font-size:10.5px;color:var(--muted2);margin-top:5px;">Para mudar horário ou desmarcar, abra a tarefa no HubSpot — daqui o Cockpit só cria.</div>
+              </div>` : ''}
             ${sugestoes.length ? `
               <div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin:9px 0 5px;">Comece por estas</div>
               ${sugestoes.map((l, i) => `
                 <div style="padding:7px 0;border-top:1px dashed rgba(199,20,42,.18);">
-                    <b style="display:block;font-size:12.5px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.nome || '')}</b>
-                    <span style="display:block;color:var(--muted2);font-size:11px;margin-top:2px;">${esc(prospeccaoPraca(l) || 'praça não informada')}${l.avaliacoes != null ? ' · ' + Number(l.avaliacoes).toLocaleString('pt-BR') + ' aval.' : ''}</span>
-                  <span style="display:flex;align-items:center;gap:6px;margin-top:7px;">
+                    <b style="display:block;font-size:12.5px;line-height:1.35;overflow-wrap:anywhere;">${esc(l.nome || '')}</b>
+                    <span style="display:block;color:var(--muted2);font-size:11px;margin-top:2px;">${esc([l.bairro, prospeccaoPraca(l)].filter(Boolean).join(' · ') || 'praça não informada')}${l.avaliacoes != null ? ' · ' + Number(l.avaliacoes).toLocaleString('pt-BR') + ' aval.' : ''}</span>
+                  ${(() => {
+                    // BLOCO 16 — se ele já agendou esta conta neste dia nesta sessão, a
+                    // linha vira confirmação em vez de continuar oferecendo "Agendar".
+                    // Era isso que fazia parecer que o clique não pegou e convidava a
+                    // clicar de novo, criando tarefa duplicada no HubSpot.
+                    const feito = agendadoLocalDe(l.id, iso);
+                    if (feito) return `
+                      <span style="display:flex;align-items:center;gap:8px;margin-top:7px;flex-wrap:wrap;">
+                        <span style="font-size:11.5px;font-weight:800;color:var(--green);">✓ agendado ${esc(feito.hora)}</span>
+                        <span style="font-size:10.5px;color:var(--muted2);">já aparece na grade ao lado</span>
+                      </span>`;
+                    return `
+                  <span style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap;">
                     <input type="time" class="ag-hora-sug" data-parabotao="sug-${iso}-${esc(String(l.id))}"
                       value="${HORARIOS_SUGERIDOS[i] || HORARIOS_SUGERIDOS[0]}"
                       aria-label="Horário da visita a ${esc(l.nome)}"
@@ -4930,7 +5016,10 @@ function renderAgenda() {
                       style="background:var(--ink);color:var(--panel);border:none;border-radius:99px;padding:4px 11px;font:800 11px inherit;cursor:pointer;">
                       Agendar
                     </button>
-                  </span>
+                    ${l.lat != null && l.lng != null ? `<button class="ag-atalho" data-agmapa="${esc(String(l.id))}" title="Abrir na Rota, com o mapa centrado nesta conta">📍 mapa</button>` : ''}
+                    <button class="ag-atalho" data-agprosp="${esc(String(l.nome || ''))}" title="Abrir na Prospecção já filtrado por este nome">🔎 ficha</button>
+                  </span>`;
+                  })()}
                 </div>`).join('')}
             ` : ''}
           </div>`; }).join('')}
@@ -5505,8 +5594,12 @@ document.addEventListener('click', function (ev) {
     ag.textContent = '...';
     criarTarefaVisitaNoHubspot(lead, meuRep.ownerId, ag.dataset.aghora, { silencioso: true }, ag.dataset.agdata)
       .then(() => {
-        ag.textContent = '✓';
+        // BLOCO 16: registra localmente e REDESENHA. Sem isso a tarefa nascia no HubSpot
+        // mas a tela não mudava — o dia seguia listado como buraco e o compromisso não
+        // entrava na grade, porque DATA.agenda é o snapshot do último build.
+        registrarAgendamentoLocal(lead, ag.dataset.agdata, ag.dataset.aghora, meuRep.ownerId);
         mostrarToast(`"${lead.nome}" agendado para ${ag.dataset.agdata.split('-').reverse().slice(0, 2).join('/')} às ${ag.dataset.aghora}.`, 'sucesso');
+        renderAgenda();
       })
       .catch(e => {
         ag.dataset.enviando = '0';
@@ -5538,6 +5631,38 @@ document.addEventListener('click', function (ev) {
     return;
   }
   // Dia vazio na grade: o buraco leva ao cartão que já sugere conta-alvo e agenda.
+  // BLOCO 16 — atalhos da sugestão: levar a conta pro mapa da Rota ou pra ficha na
+  // Prospecção. Ficam ANTES do handler de dia/buraco porque vivem dentro do mesmo card
+  // e um closest() mais genérico engoliria o clique.
+  const atMapa = ev.target.closest('[data-agmapa]');
+  if (atMapa) {
+    ev.preventDefault(); ev.stopPropagation();
+    const l = (typeof prospeccaoCache !== 'undefined' ? prospeccaoCache : []).find(x => String(x.id) === String(atMapa.dataset.agmapa));
+    if (!l) { mostrarToast('Não encontrei essa conta na sua fila — recarregue a página.', 'erro'); return; }
+    agendaEstado.subview = 'hoje';   // a Rota do executivo é a subview "hoje" da Agenda
+    renderAgenda();
+    // O mapa só existe depois do render; o foco vai no fim da fila de tarefas.
+    setTimeout(() => {
+      try {
+        if (planoMapaInstancia && l.lat != null && l.lng != null) {
+          planoMapaInstancia.flyTo({ center: [Number(l.lng), Number(l.lat)], zoom: 15.5, speed: 1.6 });
+        }
+        const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
+        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (e) { console.error('Atalho pro mapa falhou:', e && e.message); }
+    }, 700);
+    return;
+  }
+  const atProsp = ev.target.closest('[data-agprosp]');
+  if (atProsp) {
+    ev.preventDefault(); ev.stopPropagation();
+    prospeccaoFiltro.busca = atProsp.dataset.agprosp || '';
+    prospeccaoFiltro.visao = 'ativas';
+    prospeccaoPagina = 1;
+    activateTab('viewLeadsPraca');
+    if (typeof renderProspeccaoNova === 'function') renderProspeccaoNova(true);
+    return;
+  }
   const bur = ev.target.closest('[data-agburaco]');
   if (bur) {
     const card = document.getElementById('buracosCard');
@@ -7077,12 +7202,19 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
     let blocos = '';
     agendaGradeColunas(doDia).forEach(function (it) {
       const top = Math.max(0, (it.ini - H0 * 60) / 60 * PX);
-      const altura = Math.max(22, Math.min(alt - top, (it.fim - it.ini) / 60 * PX - 2));
+      // Piso de 44px: é o que comporta a linha da hora + duas linhas de nome. Antes eram
+      // 22px, e nenhum nome cabia. O bloco pode passar do fim da grade em até uma linha
+      // — melhor invadir 20px do rodapé do que cortar o nome do cliente.
+      const ALTURA_MINIMA = 44;
+      const altura = Math.max(ALTURA_MINIMA, Math.min(Math.max(alt - top, ALTURA_MINIMA), (it.fim - it.ini) / 60 * PX - 2));
       const larg = 100 / it.total, esq = larg * it.col;
       const e = it.e;
-      blocos += '<button class="agw-ev agtp-' + (e.tipo || 'reuniao') + (altura < 36 ? ' min' : '') + '" data-agev="' + it.i + '" ' +
-        'style="top:' + Math.round(top) + 'px;height:' + Math.round(altura) + 'px;left:calc(' + esq.toFixed(3) + '% + 2px);width:calc(' + larg.toFixed(3) + '% - 4px);">' +
-        '<b>' + agendaHhmm(e.inicio) + '</b><span>' + agendaEsc(e.cliente || (AGENDA_TIPOS[e.tipo] || {}).rotulo || 'Compromisso') + '</span>' +
+      const rotuloEv = agendaEsc(e.cliente || (AGENDA_TIPOS[e.tipo] || {}).rotulo || 'Compromisso');
+      const tituloEv = agendaHhmm(e.inicio) + ' · ' + ((AGENDA_TIPOS[e.tipo] || {}).rotulo || 'Compromisso') + ' — ' + (e.cliente || '');
+      blocos += '<button class="agw-ev agtp-' + (e.tipo || 'reuniao') + (altura < 36 ? ' min' : '') + (e.recemAgendado ? ' is-novo' : '') + '" data-agev="' + it.i + '" ' +
+        'title="' + agendaEsc(tituloEv) + '" ' +
+        'style="--alt:' + Math.round(altura) + 'px;top:' + Math.round(top) + 'px;height:' + Math.round(altura) + 'px;left:calc(' + esq.toFixed(3) + '% + 2px);width:calc(' + larg.toFixed(3) + '% - 4px);">' +
+        '<b>' + agendaHhmm(e.inicio) + '</b><span>' + rotuloEv + '</span>' +
         (e.quente ? '<i class="q"></i>' : '') + '</button>';
     });
 
