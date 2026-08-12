@@ -71,6 +71,11 @@ function montarDadosCompletos() {
       fechadosNoMes: h.fechadosNoMes || 0,
       metaMensal: h.metaMensal || 10,
       visitasHubspotHoje: h.visitasHubspotHoje || 0,
+      // BLOCO 15: nomes de quem avancou de etapa e de quem recebeu proposta hoje, pra
+      // Daily & Ritmo. Vem do fetch-hubspot; enquanto o cron nao roda, chega vazio e a
+      // tela mostra so a contagem, avisando que os nomes vem na proxima rodada.
+      avancosHojeNomes: Array.isArray(h.avancosHojeNomes) ? h.avancosHojeNomes : [],
+      propostasHojeNomes: Array.isArray(h.propostasHojeNomes) ? h.propostasHojeNomes : [],
       avancosHubspotHoje: h.avancosHubspotHoje || 0,
       propostasHubspotHoje: h.propostasHubspotHoje || 0,
       fechamentosHubspotHoje: h.fechamentosHubspotHoje || 0

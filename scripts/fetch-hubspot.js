@@ -907,7 +907,14 @@ async function main() {
       const dtBrasiliaISO = new Date(new Date(dt).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
       return dtBrasiliaISO === diaISO;
     }).length;
-    const entrouHojeEm = (stageId) => deals.filter(d => {
+    // BLOCO 15 (12/08/26) — Julyan: "seria legal eu saber quem eles visitaram, avancaram
+    // de etapa e deixaram proposta, para eu cobrar na daily". A contagem ja existia; o
+    // NOME era descartado aqui mesmo, logo depois do filtro. Agora a funcao devolve os
+    // negocios e quem chama decide se quer o total ou a lista.
+    // Nao da pra derivar isso no front: o unico campo que diz quando o negocio entrou na
+    // etapa e o hs_v2_date_entered_<stage>, e ele so existe aqui. O campo `dias` que vai
+    // pro front mede tempo desde a ultima ATIVIDADE, nao desde a entrada na etapa.
+    const negociosQueEntraramHojeEm = (stageId) => deals.filter(d => {
       const dt = d.properties[`hs_v2_date_entered_${stageId}`];
       if (!dt) return false;
       // Converte o timestamp do negócio (vem em UTC do HubSpot) pro horário de Brasília
@@ -915,7 +922,21 @@ async function main() {
       // (já 01h UTC do dia seguinte) seria contado no dia errado.
       const dtBrasiliaISO = new Date(new Date(dt).getTime() - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
       return dtBrasiliaISO === hojeISO;
-    }).length;
+    });
+    const entrouHojeEm = (stageId) => negociosQueEntraramHojeEm(stageId).length;
+    const nomesQueEntraramHojeEm = (stageIds) => {
+      const vistos = new Set();
+      const nomes = [];
+      stageIds.forEach(id => negociosQueEntraramHojeEm(id).forEach(d => {
+        const nome = String((d.properties && d.properties.dealname) || '').trim();
+        // Dedup por id: o mesmo negocio pode aparecer em dois stageIds da lista se pulou
+        // etapas no mesmo dia, e o gestor nao pode ver o nome repetido na Daily.
+        if (!nome || vistos.has(d.id)) return;
+        vistos.add(d.id);
+        nomes.push(nome);
+      }));
+      return nomes;
+    };
 
     // ANTES: entrouHojeEm(STAGES.visita) — contava mudança de ETAPA, e revisita (que não
     // move etapa) ficava invisível. AGORA: conta as tarefas de visita criadas hoje pelo app.
@@ -926,6 +947,10 @@ async function main() {
     const avancosHubspotHoje = [STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]
       .reduce((soma, stageId) => soma + entrouHojeEm(stageId), 0);
     const propostasHubspotHoje = entrouHojeEm(STAGES.demoProposta);
+    // Mesmas etapas das contagens acima — se uma mudar, a outra tem que mudar junto,
+    // senao o nome deixa de bater com o numero ao lado dele na tela.
+    const avancosHojeNomes = nomesQueEntraramHojeEm([STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]);
+    const propostasHojeNomes = nomesQueEntraramHojeEm([STAGES.demoProposta]);
     const fechamentosHubspotHoje = await stageDealsHojeByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
     await gravarSnapshotDaily(rep.ownerId, hojeISO, {
       realizado_visitas: visitasHubspotHoje,
@@ -1073,6 +1098,10 @@ async function main() {
       leadsTravados,
       ganhosSemana: ganhosSemanaDeals.length,
       ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name),
+      // BLOCO 15: os nomes ao lado das contagens do dia. Teto de 12 pelo mesmo motivo
+      // de plotaveis: este objeto vai inteiro pro navegador de todo gestor.
+      avancosHojeNomes: avancosHojeNomes.slice(0, 12),
+      propostasHojeNomes: propostasHojeNomes.slice(0, 12),
       fechadosNoMes: fechadosNoMesRep,
       metaMensal: META_MENSAL_POR_EXECUTIVO,
       visitasHubspotHoje,
