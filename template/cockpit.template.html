@@ -9372,7 +9372,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const matchPipeline = lead => pipelineQuente.find(d => agendaMesmoLead(lead.nome, agendaLeadNome(d)));
   const comCoord = todas.filter(l => l.lat != null && l.lng != null).map(l => {
     const deal = matchPipeline(l);
-    return deal ? { ...l, _pipelineQuente:true, _hubspotId:deal.id || null, _stage:deal.stage || 'Pipeline quente' } : l;
+    return deal ? {
+      ...l, _pipelineQuente: true, _hubspotId: deal.id || null, _stage: deal.stage || 'Pipeline quente',
+      // Dias na etapa e SLA também aqui (o quente avulso já carregava): sem isso metade
+      // dos negócios do funil entrava na ordenação sem idade nem alerta, e o desempate
+      // por "quem está parado há mais tempo" só funcionava pela outra metade.
+      _travado: !!(deal._travado || deal.slaBreach),
+      _dias: deal.dias != null ? Number(deal.dias) : (deal._dias != null ? Number(deal._dias) : null)
+    } : l;
   });
   // Correção 10/08 (Julyan): quente com coordenada PRÓPRIA (check-in do Expogo, ver
   // fetch-hubspot.js) que não bate com nenhuma linha da prospecção não pode mais
@@ -9490,14 +9497,43 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     : noHubspot(l) ? (etapaHub(l) ? `No funil: ${etapaHub(l)}` : 'Já criada no HubSpot')
     : 'Disponível';
 
-  // Salesforce Maps aplicado ao cockpit: compromissos assumidos primeiro; depois
-  // pipeline quente; dentro da mesma prioridade, proximidade da região digitada;
-  // volume de avaliações fica como impacto/desempate. Nota nunca entra na ordem.
+  // BLOCO 5 (11/08/26) — "cadê os leads quentes sendo sugeridos no plano de campo".
+  // Eles ESTAVAM na lista. Medido na tela da Kelly: 76 contas, e os dois quentes de
+  // verdade — Mada Restaurante (Negociação) e The chefs hamburgueria (Demo/Proposta) —
+  // apareciam nas posições 12 e 20, fora do corte de 10 que a tela mostra.
+  // A lista saía em ordem ALFABÉTICA (Açaí, Acai, Bambu, Boteco, Brie...). Por quê:
+  //   1. quenteHub() é verdadeiro para TODO negócio do funil — snapshotReps.plotaveis
+  //      injeta o funil inteiro, não só Demo/Proposta em diante. O desempate "quente
+  //      primeiro" não separava nada porque todos eram "quentes".
+  //   2. sem território declarado, planoMapaOrigemAtual é null e a distância não entra.
+  //   3. quente avulso nasce com avaliacoes = null, então o desempate por volume empata
+  //      em zero e cai no localeCompare — o NOME decidia a rota do dia.
+  // Agora quem decide é a ETAPA: mais perto de fechar primeiro, depois o que está
+  // travado no SLA, depois o que está parado há mais dias. Nome só como último critério,
+  // pra ordem ser estável entre renders.
+  const PESO_ETAPA = l => {
+    const s = agendaNorm(etapaHub(l) || '');
+    if (!s) return 9;                      // conta-alvo / porta do mapa: não é negócio ainda
+    if (/pagamento/.test(s)) return 0;
+    if (/negocia/.test(s)) return 1;
+    if (/demo|proposta/.test(s)) return 2;
+    if (/decisor/.test(s)) return 3;
+    if (/visita/.test(s)) return 4;
+    if (/prospec/.test(s)) return 5;
+    return 6;
+  };
+  // Salesforce Maps aplicado ao cockpit: compromissos assumidos primeiro; depois o
+  // funil por proximidade do fechamento; dentro da mesma etapa, proximidade da região
+  // digitada; volume de avaliações fica como impacto/desempate. Nota nunca entra na ordem.
   const ordenadasTodas = [...visiveis].sort((a, b) => {
     const ra = naRotaHojeFn(a) ? 0 : 1, rb = naRotaHojeFn(b) ? 0 : 1;
     if (ra !== rb) return ra - rb;
-    const qa = quenteHub(a) ? 0 : 1, qb = quenteHub(b) ? 0 : 1;
-    if (qa !== qb) return qa - qb;
+    const pa = PESO_ETAPA(a), pb = PESO_ETAPA(b);
+    if (pa !== pb) return pa - pb;
+    const ta = a._travado ? 0 : 1, tb = b._travado ? 0 : 1;
+    if (ta !== tb) return ta - tb;
+    const dia = a._dias != null ? a._dias : -1, dib = b._dias != null ? b._dias : -1;
+    if (dia !== dib) return dib - dia;
     if (planoMapaOrigemAtual) {
       const da = distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(a.lat), Number(a.lng));
       const db = distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(b.lat), Number(b.lng));
@@ -9510,7 +9546,24 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // Carga inicial enxuta: a rota de hoje inteira + as 10 mais fortes da praça
   // (recomendação transparente: volume de avaliações). O universo completo fica
   // a um clique em "Explorar todas" — nada some, só não despeja 100+ pins de cara.
+  // A carga inicial é 10. Com a ordenação por etapa acima, o funil inteiro passa a vir
+  // antes das contas-alvo — e num executivo com 20 negócios abertos as contas-alvo
+  // sumiriam da vista padrão (a Kelly tem 20 no funil e 56 contas-alvo). O rótulo da
+  // seção é "funil + mais avaliados", então a carga inicial reserva vaga pros dois:
+  // 6 do funil (já ordenados por proximidade do fechamento) + 4 contas-alvo de maior
+  // volume de avaliações. Se um lado tiver menos, o outro ocupa a sobra — nunca some
+  // linha à toa. "Explorar todas" continua abrindo o universo inteiro.
   const LIMITE_RECOMENDADAS = 10;
+  const COTA_FUNIL = 6;
+  const disponiveis = ordenadasTodas.filter(l => !naRotaHojeFn(l));
+  const doFunil = disponiveis.filter(l => PESO_ETAPA(l) < 9);
+  const deProspeccao = disponiveis.filter(l => PESO_ETAPA(l) === 9);
+  const vagasFunil = Math.min(COTA_FUNIL, doFunil.length);
+  const vagasProsp = Math.min(LIMITE_RECOMENDADAS - vagasFunil, deProspeccao.length);
+  const escolhidas = new Set([
+    ...doFunil.slice(0, vagasFunil + Math.max(0, LIMITE_RECOMENDADAS - vagasFunil - vagasProsp)),
+    ...deProspeccao.slice(0, vagasProsp)
+  ]);
   // Cliente ativo selecionado vira uma "parada" no mesmo formato de lead, só pra
   // entrar na mesma sequência/numeração — nunca é gravado em leads_prospeccao.
   const clientesComoParada = clientesExibicao.filter(naRotaHojeFn);
@@ -9524,7 +9577,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     : naRotaBase.length > 1
       ? [{ ...naRotaBase[0], distanciaDaAnteriorKm: null }, ...ordenarPorProximidade(naRotaBase.slice(1), naRotaBase[0])]
       : naRotaBase);
-  const recomendadas = ordenadasTodas.filter(l => !naRotaHojeFn(l)).slice(0, LIMITE_RECOMENDADAS);
+  // Mantém a ordem global (funil antes, conta-alvo depois) — a cota só decide QUEM entra.
+  const recomendadas = disponiveis.filter(l => escolhidas.has(l));
   const ordenadas = planoMapaFiltro.verTodas
     ? [...naRotaTodas, ...ordenadasTodas.filter(l => !naRotaHojeFn(l))]
     : [...naRotaTodas, ...recomendadas];
