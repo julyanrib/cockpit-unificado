@@ -8562,14 +8562,29 @@ async function montarPlanoDoDia(r) {
 
   // Agenda de hoje (leitura) — mesmo normalizador da aba Agenda
   let agendaHoje = [];
+  let agendaHojeFeitas = [];
   if (typeof agendaNormalizar === 'function' && DATA.agenda) {
     // Os Dates da agenda guardam o horário BRT nos campos UTC (mesma convenção de
     // agendaHhmm, que lê getUTCHours) — então a data "de Brasília" do evento sai
     // do toISOString, não do isoDate local.
-    agendaHoje = agendaNormalizar(DATA.agenda)
+    const doDia = agendaNormalizar(DATA.agenda)
       .filter(e => e.ownerId === r.ownerId && e.inicio && e.inicio.toISOString().slice(0, 10) === hoje)
       .sort((a, b) => a.inicio - b.inicio)
-      .map(e => ({ hora: agendaHhmm(e.inicio), tipo: (AGENDA_TIPOS[e.tipo] || {}).rotulo || 'Compromisso', cliente: e.cliente || '' }));
+      .map(e => ({
+        hora: agendaHhmm(e.inicio),
+        tipo: (AGENDA_TIPOS[e.tipo] || {}).rotulo || 'Compromisso',
+        cliente: e.cliente || '',
+        // BLOCO 6 (11/08/26, Julyan: "compromissos a cumprir tem q ser o que não foram
+        // cumpridos"). "Compromissos já assumidos" listava TUDO do dia, inclusive as
+        // visitas que o Expogo já registrou como feitas — a Kelly abria o planejador às
+        // 19h e via 5 compromissos a cumprir que ela já tinha cumprido. É o mesmo erro
+        // que o Bloco 2 corrigiu na aba Hoje, sobrevivendo aqui. Mesma régua dos dois:
+        // tarefa concluída no HubSpot, ou registro do Expogo (timestamp = criação), já
+        // aconteceu e não é compromisso a cumprir.
+        feito: e.desfecho === 'COMPLETED' || !!e.registro
+      }));
+    agendaHoje = doDia.filter(e => !e.feito);
+    agendaHojeFeitas = doDia.filter(e => e.feito);
   }
 
   // Contas-alvo já na rota de hoje (leads_prospeccao status na_rota + data_rota hoje)
@@ -8635,10 +8650,15 @@ async function montarPlanoDoDia(r) {
 
     <div class="plano-context-grid">
       <div class="plano-context-card">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">Compromissos já assumidos</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">Compromissos a cumprir hoje</div>
         ${agendaHoje.length > 0
           ? `<div style="font-size:12.5px;display:flex;flex-direction:column;gap:5px;">${agendaHoje.map(e => `<span><b>${esc(e.hora)}</b> ${esc(e.tipo)} — ${esc(agendaNomeDoLead(e.cliente) || e.cliente)}</span>`).join('')}</div>`
-          : `<div style="font-size:12.5px;color:var(--amber);">⚠️ Agenda vazia hoje — use as contas-alvo abaixo para construir um dia forte de campo.</div>`}
+          : agendaHojeFeitas.length > 0
+            ? `<div style="font-size:12.5px;color:var(--green);">✓ Tudo o que estava marcado pra hoje já foi registrado. As contas-alvo abaixo montam o resto do dia.</div>`
+            : `<div style="font-size:12.5px;color:var(--amber);">⚠️ Agenda vazia hoje — use as contas-alvo abaixo para construir um dia forte de campo.</div>`}
+        ${agendaHojeFeitas.length > 0
+          ? `<div style="font-size:11.5px;color:var(--muted2);margin-top:9px;padding-top:8px;border-top:1px solid var(--line-soft);">✓ ${agendaHojeFeitas.length} ${agendaHojeFeitas.length === 1 ? 'já registrada' : 'já registradas'} hoje: ${agendaHojeFeitas.slice(0, 4).map(e => esc(agendaNomeDoLead(e.cliente) || e.cliente)).join(' · ')}${agendaHojeFeitas.length > 4 ? ' · +' + (agendaHojeFeitas.length - 4) : ''}</div>`
+          : ''}
       </div>
 
       <div class="plano-context-card">
@@ -8837,7 +8857,10 @@ async function montarPlanoDoDia(r) {
       const dNow = getDaily(r.ownerId, hoje) || {};
       const { error } = await salvarPlanoDoDia(r.ownerId, hoje, {
         ...campos,
-        agenda_resumo: agendaHoje,
+        // O registro do plano guarda o DIA INTEIRO (pendente + já feito), não só o que
+        // ainda falta: é um retrato do que estava marcado quando ele fechou o plano, e
+        // ficaria menor a cada visita registrada se guardasse só os pendentes.
+        agenda_resumo: [...agendaHoje, ...agendaHojeFeitas].sort((a, b) => String(a.hora).localeCompare(String(b.hora))),
         daily_snapshot: {
           prometido_visitas: dNow.prometido_visitas ?? null,
           prometido_avancos: dNow.prometido_avancos ?? null,
@@ -9874,9 +9897,33 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // 2) CENTRAVA NO LUGAR ERRADO. Mesmo com território declarado, o mapa nascia em cima
   //    de uma conta qualquer da lista e só depois o fitBounds corrigia — piscava.
   //
-  // Agora: o território declarado manda; sem ele, a primeira conta; sem nada, a tela
-  // pede o território em vez de estourar.
-  const pontoCentral = planoMapaOrigemAtual || ordenadas[0] || clientesSugestao[0];
+  // BLOCO 6 (11/08/26, Julyan: "faça essa correção do mapa, coloque eles direto na rota
+  // deles"). Sem território declarado, o enquadramento era o fitBounds de TUDO que está
+  // plotado — e um único ponto longe sequestrava a tela. Medido na carteira da Kelly:
+  // "Caldeira Restaurante" fica a 90,1 km da mediana dos pontos dela (Bento Gonçalves);
+  // os outros 38 de 40 estão dentro de 30 km. O mapa abria em Bento Gonçalves/Caxias
+  // todo dia, com um pino solitário — era o primeiro contato dela com a tela.
+  // Agora o centro é a MEDIANA dos pontos (resistente a outlier, ao contrário da média)
+  // e o enquadramento usa só o que está dentro do raio de trabalho. O que está fora
+  // continua plotado e a um zoom-out de distância — mesma régua já usada quando existe
+  // território declarado.
+  const RAIO_ENQUADRAMENTO_KM = 30;
+  const pontosDoRep = [...ordenadas, ...clientesSugestao]
+    .filter(l => l && l.lat != null && l.lng != null && !isNaN(Number(l.lat)) && !isNaN(Number(l.lng)));
+  let nucleoRep = null;
+  if (pontosDoRep.length) {
+    const mediana = arr => { const a = arr.slice().sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; };
+    const cLat = mediana(pontosDoRep.map(l => Number(l.lat)));
+    const cLng = mediana(pontosDoRep.map(l => Number(l.lng)));
+    const perto = pontosDoRep.filter(l => distanciaKm(cLat, cLng, Number(l.lat), Number(l.lng)) <= RAIO_ENQUADRAMENTO_KM);
+    // Se o corte deixaria quase nada de pé (carteira genuinamente espalhada), usa tudo:
+    // enquadrar largo é ruim, mas enquadrar um ponto só e esconder o resto é pior.
+    nucleoRep = { lat: cLat, lng: cLng, pontos: perto.length >= 2 ? perto : pontosDoRep };
+  }
+
+  // Agora: o território declarado manda; sem ele, o núcleo da carteira dele; sem nada,
+  // a tela pede o território em vez de estourar.
+  const pontoCentral = planoMapaOrigemAtual || nucleoRep || ordenadas[0] || clientesSugestao[0];
   if (!pontoCentral || pontoCentral.lng == null || pontoCentral.lat == null) {
     box.innerHTML = `<div class="plano-mapa-convite">
       <span class="plano-mapa-convite-seta" aria-hidden="true">↑</span>
@@ -10060,8 +10107,13 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     territorio.extend([planoMapaOrigemAtual.lng - gLng, planoMapaOrigemAtual.lat - gLat]);
     territorio.extend([planoMapaOrigemAtual.lng + gLng, planoMapaOrigemAtual.lat + gLat]);
     mapa.fitBounds(territorio, padrao);
+  } else if (nucleoRep && nucleoRep.pontos.length > 1) {
+    // Sem território declarado não existe "perto daqui": enquadra o núcleo da carteira
+    // dele (mediana + raio), não o retângulo que engole o outlier.
+    const nucleo = new maplibregl.LngLatBounds();
+    nucleoRep.pontos.forEach(l => nucleo.extend([Number(l.lng), Number(l.lat)]));
+    if (!nucleo.isEmpty()) mapa.fitBounds(nucleo, padrao); else mapa.setZoom(14);
   } else if (ordenadas.length + clientesSugestao.length > 1) {
-    // Sem território declarado não existe "perto daqui": aí sim enquadra o que houver.
     mapa.fitBounds(bounds, padrao);
   } else {
     mapa.setZoom(14);
