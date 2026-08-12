@@ -1569,6 +1569,17 @@
   .plano-popup-meta{font-size:11px;color:#64748B;margin-top:4px;line-height:1.45;}
   .plano-popup-rating{display:inline-flex;align-items:center;gap:4px;margin-top:9px;padding:4px 8px;border-radius:999px;background:#FFF7E6;color:#8A5A12;font-size:10.5px;font-weight:800;}
   .plano-popup-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px;}
+  /* Bloco 23 — seletor de dia+hora dentro do popup do pino. Cabe no popup do MapLibre
+     (que tem largura fixa em torno de 260-280px), então as pílulas de dia quebram linha
+     em vez de forçar rolagem horizontal. */
+  .plano-popup-agendar{width:100%;margin-top:9px;}
+  .plano-popup-dias{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:7px;}
+  .plano-popup-dia-btn{border:1px solid var(--line-btn);background:var(--panel2);color:var(--muted);border-radius:999px;padding:4px 9px;font:700 10px 'DM Sans',sans-serif;cursor:pointer;white-space:nowrap;}
+  .plano-popup-dia-btn.is-sel{background:#2563EB;border-color:#2563EB;color:#fff;}
+  .plano-popup-hora-row{display:flex;gap:6px;align-items:center;}
+  .plano-popup-hora-input{width:78px;flex:none;font:inherit;font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:5px 6px;}
+  .plano-popup-agendar .plano-popup-route{flex:1;white-space:nowrap;}
+  .plano-popup-agendar-msg{font-size:10.5px;margin-top:5px;}
   .plano-popup-route,.plano-popup-nav{min-height:34px;border-radius:999px;padding:0 11px;font:700 10.5px/1 'DM Sans',sans-serif;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;justify-content:center;}
   .plano-popup-route{border:0;background:#2563EB;color:#fff;}
   .plano-popup-nav{border:1px solid #E2E8F0;background:#fff;color:#334155;}
@@ -9573,6 +9584,15 @@ async function montarPlanoDoDia(r) {
               <span><i style="background:#0E9F9F;"></i> Abriu em 90 dias</span>
               <span><i style="background:#9CA3AF;"></i> Sem fit</span>
             </div>
+            <div class="plano-legend-row">
+              <!-- BLOCO 23 (12/08/26, Julyan: "o que são esses pins ai com numeros?").
+                   Os círculos cinza com número são o AGRUPAMENTO do Bloco 20: quando
+                   muitos candidatos ficam empilhados no mesmo quarteirão, o mapa junta
+                   num só pino pra não virar uma mancha ilegível — número = quantos ali
+                   dentro. O bug de verdade não era a lógica, era não ter explicação
+                   nenhuma na tela: parecia dado quebrado, era funcionalidade sem legenda. -->
+              <span><i style="background:var(--dark);border-radius:50%;color:#fff;font-size:8px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;">N</i> Vários locais agrupados — clique pra abrir</span>
+            </div>
           </div>
         </div>
         <aside class="plano-map-sidebar" aria-label="Paradas e oportunidades">
@@ -10219,6 +10239,38 @@ async function materializarLeadDoMapa(poi, ownerId, fonte) {
         — dois quilômetros e meio a pé/carro entre contas ainda é rua; acima disso virou
         deslocamento e come o turno.
    O resultado é uma sequência, não um punhado: a ordem em que ele deve andar. */
+// BLOCO 23 (12/08/26) — dias úteis da semana atual, compartilhado pela faixa de semana
+// (Bloco 21) e pelo seletor de dia dentro do popup do pino (este bloco). Extraído pra
+// função porque as duas telas precisam da MESMA lista de dias — duplicar o cálculo seria
+// a receita pra elas divergirem um dia por causa de fuso ou arredondamento.
+function diasUteisSemanaAtual() {
+  const hojeK = isoDate(new Date());
+  const dow = new Date(hojeK + 'T12:00:00').getDay();
+  const segunda = addDays(hojeK, -(dow === 0 ? 6 : dow - 1));
+  const rot = ['SEG', 'TER', 'QUA', 'QUI', 'SEX'];
+  return [0, 1, 2, 3, 4].map(i => {
+    const iso = addDays(segunda, i);
+    return { iso: iso, rotulo: rot[i] + ' ' + agendaP2(new Date(iso + 'T12:00:00').getDate()) + '/' + agendaP2(new Date(iso + 'T12:00:00').getMonth() + 1), ehHoje: iso === hojeK, passou: iso < hojeK };
+  });
+}
+
+// Próximo horário livre pra um dia: conta o que já está de pé nesse dia (agenda real +
+// o que ele acabou de marcar nesta sessão) e degrau de 45min a partir das 10h — mesma
+// régua do agendador rápido (Bloco 18) e da microrota (Bloco 21), pra não existir uma
+// terceira convenção de horário no mesmo cockpit.
+function proximoHorarioParaDia(diaISO, ownerId) {
+  let ocupados = agendaAgendadosLocal.filter(a => a.dataISO === diaISO && String(a.ownerId) === String(ownerId)).length;
+  if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+    try {
+      ocupados += agendaNormalizar(DATA.agenda).filter(e =>
+        String(e.ownerId) === String(ownerId) && e.inicio && agendaChave(e.inicio) === diaISO &&
+        AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta && !e.recemAgendado).length;
+    } catch (e) { /* segue só com o que já sabemos localmente */ }
+  }
+  const minutos = Math.min(17 * 60, 10 * 60 + ocupados * 45);
+  return agendaP2(Math.floor(minutos / 60)) + ':' + agendaP2(minutos % 60);
+}
+
 let planoDiaAlvo = null;   // dia (ISO) que a microrota vai preencher; null = hoje
 const MICRO_SALTO_MAX_KM = 2.5;
 const MICRO_PARADAS = 6;
@@ -10254,10 +10306,9 @@ function renderFaixaSemana(r, eventosSemana) {
   const slot = document.getElementById('planoSemanaFaixa');
   if (!slot) return;
   const hojeK = isoDate(new Date());
-  const dow = new Date(hojeK + 'T12:00:00').getDay();
-  const segunda = addDays(hojeK, -(dow === 0 ? 6 : dow - 1));
-  const dias = [0, 1, 2, 3, 4].map(i => addDays(segunda, i));
-  const rot = ['SEG', 'TER', 'QUA', 'QUI', 'SEX'];
+  const diasInfo = diasUteisSemanaAtual();
+  const dias = diasInfo.map(d => d.iso);
+  const rot = diasInfo.map(d => d.rotulo.split(' ')[0]);
 
   const porDia = {};
   (eventosSemana || []).forEach(e => {
@@ -10737,6 +10788,43 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // Ação única (lista e popup usam a mesma): incluir/tirar da rota de hoje.
   // Regra do documento: interação do mapa = SELEÇÃO pro plano do dia, nunca
   // execução. Com plano fechado, a seleção fica travada até "Editar plano".
+  // BLOCO 23 — escrita única do popup, pra "hoje" e pra qualquer outro dia da semana.
+  //   hoje    : mantém o comportamento de sempre — leads_prospeccao vira status='na_rota'
+  //             (pino azul, entra em "Paradas de hoje", participa de Gerar rota).
+  //   outro dia: NÃO mexe no status de hoje (a conta continua disponível pra hoje também
+  //             se ele quiser) — só cria a tarefa de visita pro dia escolhido e guarda o
+  //             registro local (Bloco 16), a mesma mecânica do agendador rápido da Agenda
+  //             e da microrota. É a diferença entre "isto é minha rota de hoje" e
+  //             "isto está marcado pra quinta" — duas coisas reais e diferentes.
+  async function incluirNaRotaComData(l, diaISO, hora, botao, painel) {
+    const msg = painel ? painel.querySelector('.plano-popup-agendar-msg') : null;
+    if (botao) { botao.disabled = true; botao.textContent = 'Salvando…'; }
+    try {
+      if (diaISO === hoje) {
+        await alternarRota(l, botao);
+        return;
+      }
+      let leadParaAgenda = l;
+      if (l._doMapa) {
+        const { lead, error } = await materializarLeadDoMapa(l, r.ownerId);
+        if (error || !lead) throw new Error('não consegui salvar essa conta-alvo');
+        leadParaAgenda = lead;
+      }
+      await criarTarefaVisitaNoHubspot(leadParaAgenda, r.ownerId, hora, {}, diaISO);
+      registrarAgendamentoLocal(leadParaAgenda, diaISO, hora, r.ownerId);
+      const diaBR = diaISO.split('-').reverse().slice(0, 2).join('/');
+      mostrarToast('"' + (leadParaAgenda.nome || l.nome) + '" agendado para ' + diaBR + ' às ' + hora + '.', 'sucesso');
+      if (painel) painel.outerHTML = '<div class="plano-popup-meta" style="color:var(--green);font-weight:700;">✓ Agendado pra ' + esc(diaBR) + ' às ' + esc(hora) + '</div>';
+      // Se o dia escolhido é o dia-alvo da faixa da semana, o contador de vagas
+      // precisa refletir na hora — senão ele agenda 6 e a faixa ainda mostra "6 vagas".
+      if (planoMapaRenderAtual && diaISO === planoDiaAlvo) montarPlanoMapa(planoMapaRenderAtual.r, planoMapaRenderAtual.hoje, planoMapaRenderAtual.planoFechado);
+    } catch (e) {
+      if (botao) { botao.disabled = false; botao.textContent = '+ Incluir e agendar'; }
+      if (msg) msg.innerHTML = '<span style="color:var(--red);">Não consegui agendar: ' + esc((e && e.message) || 'tente de novo') + '</span>';
+      console.error('Incluir na rota com data:', e);
+    }
+  }
+
   async function alternarRota(l, botao) {
     if (botao) { botao.disabled = true; botao.textContent = 'Salvando...'; }
 
@@ -10818,15 +10906,48 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     montarPlanoMapa(r, hoje, planoFechado);
   }
 
-  const botaoAcaoHTML = l => planoFechado
-    ? `<div class="plano-popup-meta" style="margin-top:9px;">Plano fechado — use “Editar plano” para mudar a seleção.</div>`
-    : l._clienteAtivo
-      ? `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">Remover da rota</button>`
-      : l._quenteAvulso
-        ? `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">${naRotaHojeFn(l) ? 'Tirar da rota' : '+ Incluir na rota'}</button>`
-        : naRotaHojeFn(l)
-          ? `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">Tirar da rota</button>`
-          : `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">+ Incluir na rota</button>`;
+  /* BLOCO 23 (12/08/26, Julyan: "ele tem que clicar no pin poder adicionar na rota e já
+     adicionar horário e dia que vai lá, otimizar tudo em uma tela só").
+     Antes: clicar no pino incluía na rota de HOJE com um horário AUTOMÁTICO (9h + 45min
+     por ordem de clique) — sem perguntar nada, e ignorando qualquer dia que ele tivesse
+     escolhido na faixa da semana (Bloco 21). Pra mudar de dia ou de hora ele tinha que
+     sair do popup e editar em outro lugar. Agora o popup já pergunta: mostra os 5 dias
+     da semana como pílulas (o dia da faixa vem pré-selecionado) e o próximo horário livre
+     daquele dia, editável — um clique e está feito.
+     "Tirar da rota" continua simples: sair da rota de hoje não precisa de dia nem hora. */
+  const jaAgendadoLocal = l => agendaAgendadosLocal.find(a => String(a.leadId) === String(l.id) || (String(a.leadId) === String(l.id).replace(/^(cliente|quente)-/, '')));
+
+  const seletorDiaHoraHTML = l => {
+    const dias = diasUteisSemanaAtual().filter(d => !d.passou);
+    const diaPreSel = (planoDiaAlvo && dias.some(d => d.iso === planoDiaAlvo)) ? planoDiaAlvo : hoje;
+    const hora = proximoHorarioParaDia(diaPreSel, r.ownerId);
+    return `
+      <div class="plano-popup-agendar" data-leadid="${esc(String(l.id))}">
+        <div class="plano-popup-dias">
+          ${dias.map(d => `<button type="button" class="plano-popup-dia-btn${d.iso === diaPreSel ? ' is-sel' : ''}" data-dia="${d.iso}">${esc(d.rotulo.split(' ')[0])}${d.ehHoje ? ' · hoje' : ''}</button>`).join('')}
+        </div>
+        <div class="plano-popup-hora-row">
+          <input type="time" class="plano-popup-hora-input" value="${hora}" aria-label="Horário da visita">
+          <button type="button" class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">+ Incluir e agendar</button>
+        </div>
+        <div class="plano-popup-agendar-msg"></div>
+      </div>`;
+  };
+
+  const botaoAcaoHTML = l => {
+    if (planoFechado) return `<div class="plano-popup-meta" style="margin-top:9px;">Plano fechado — use “Editar plano” para mudar a seleção.</div>`;
+    if (l._clienteAtivo) return `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">Remover da rota</button>`;
+    if (l._quenteAvulso) return naRotaHojeFn(l)
+      ? `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">Tirar da rota</button>`
+      : seletorDiaHoraHTML(l);
+    if (naRotaHojeFn(l)) return `<button class="plano-mapa-btn plano-popup-route" data-id="${esc(String(l.id))}">Tirar da rota de hoje</button>`;
+    const agLocal = jaAgendadoLocal(l);
+    if (agLocal) {
+      const diaBR = agLocal.dataISO.split('-').reverse().slice(0, 2).join('/');
+      return `<div class="plano-popup-meta" style="color:var(--green);font-weight:700;">✓ Agendado pra ${esc(diaBR)} às ${esc(agLocal.hora)}</div>`;
+    }
+    return seletorDiaHoraHTML(l);
+  };
 
   // ---- Lista lateral sincronizada ----
   const itemListaHTML = l => {
@@ -11292,8 +11413,29 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       }
     });
 
+    // Pílulas de dia dentro do popup: só trocam qual botão fica marcado e o horário
+    // sugerido no input — não escrevem nada até o clique em "Incluir e agendar".
+    const painelAgendar = popupEl.querySelector('.plano-popup-agendar');
+    if (painelAgendar) {
+      painelAgendar.querySelectorAll('.plano-popup-dia-btn').forEach(pill => {
+        pill.addEventListener('click', () => {
+          painelAgendar.querySelectorAll('.plano-popup-dia-btn').forEach(p => p.classList.remove('is-sel'));
+          pill.classList.add('is-sel');
+          const inp = painelAgendar.querySelector('.plano-popup-hora-input');
+          if (inp) inp.value = proximoHorarioParaDia(pill.dataset.dia, r.ownerId);
+        });
+      });
+    }
+
     const btnPopup = popupEl.querySelector('.plano-mapa-btn');
-    if (btnPopup) btnPopup.addEventListener('click', () => l._clienteAtivo ? alternarClienteNaRota(l) : l._quenteAvulso ? alternarQuenteAvulso(l) : alternarRota(l, btnPopup));
+    if (btnPopup) btnPopup.addEventListener('click', () => {
+      if (l._clienteAtivo) return alternarClienteNaRota(l);
+      if (!painelAgendar) return l._quenteAvulso ? alternarQuenteAvulso(l) : alternarRota(l, btnPopup);
+      const pillSel = painelAgendar.querySelector('.plano-popup-dia-btn.is-sel');
+      const diaEscolhido = (pillSel && pillSel.dataset.dia) || hoje;
+      const horaEscolhida = (painelAgendar.querySelector('.plano-popup-hora-input') || {}).value || proximoHorarioParaDia(diaEscolhido, r.ownerId);
+      incluirNaRotaComData(l, diaEscolhido, horaEscolhida, btnPopup, painelAgendar);
+    });
 
     const popup = new maplibregl.Popup({ offset: [0, -34], className: 'plano-mapa-popup', closeButton: true })
       .setDOMContent(popupEl);
