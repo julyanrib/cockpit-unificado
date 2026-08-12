@@ -1795,10 +1795,13 @@
         <h2 style="margin:0;font-size:19px;">Meu perfil</h2>
         <button id="perfilFechar" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">✕</button>
       </div>
-      <div style="text-align:center;margin-bottom:20px;">
-        <div id="perfilAvatarPreview" style="width:96px;height:96px;border-radius:50%;margin:0 auto 14px;background:var(--red-soft);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:32px;overflow:hidden;"></div>
-        <div style="font-weight:700;font-size:15px;" id="perfilNomeLabel"></div>
-        <div style="color:var(--muted2);font-size:11.5px;" id="perfilEmailLabel"></div>
+      <!-- BLOCO 13: cartão escuro, a mesma linguagem dos heros do cockpit. Antes era
+           avatar solto sobre fundo claro, sem hierarquia — parecia formulário, não perfil. -->
+      <div style="background:var(--dark);border-radius:18px;padding:22px 18px 18px;text-align:center;margin-bottom:18px;">
+        <div id="perfilAvatarPreview" style="width:88px;height:88px;border-radius:50%;margin:0 auto 12px;background:var(--red-soft);color:var(--red);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:30px;overflow:hidden;border:3px solid rgba(255,255,255,.14);"></div>
+        <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:17px;color:var(--dark-ink);letter-spacing:-.01em;" id="perfilNomeLabel"></div>
+        <div style="color:var(--dark-mut);font-size:11.5px;margin-top:2px;" id="perfilEmailLabel"></div>
+        <div style="margin-top:10px;"><span id="perfilPapelPill" style="display:inline-block;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dark-ink);background:rgba(255,255,255,.13);border-radius:999px;padding:5px 13px;"></span></div>
       </div>
       <div id="perfilProgressoSlot"></div>
       <details style="margin-top:18px;">
@@ -1808,9 +1811,7 @@
       </details>
       <div id="perfilStatus" style="font-size:12px;color:var(--muted);margin-top:8px;text-align:center;"></div>
       <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--line);">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px;">
-          <span>Papel</span><b id="perfilPapelLabel" style="color:var(--ink);"></b>
-        </div>
+        <span id="perfilPapelLabel" style="display:none;"></span>
         <button id="perfilSairBtn" style="width:100%;padding:10px;border-radius:var(--r-pill);border:1px solid var(--red);background:none;color:var(--red);font-weight:700;font-size:13px;cursor:pointer;margin-top:10px;">Sair da conta</button>
       </div>
     </div>
@@ -1836,6 +1837,7 @@
     <div id="avisosDrawer" class="avisos-drawer" role="dialog" aria-modal="true" aria-label="Avisos e comunicados">
       <div class="avisos-drawer-head">
         <h2 id="avisosDrawerTitulo" tabindex="-1">Avisos</h2>
+        <span id="avisosDrawerAcoes" style="margin-left:auto;display:inline-flex;gap:10px;align-items:center;"></span>
         <button id="avisosDrawerFechar" aria-label="Fechar avisos">✕</button>
       </div>
       <div id="avisosContent"></div>
@@ -5744,6 +5746,21 @@ function abrirAvisosDrawer() {
   const ov = document.getElementById('avisosOverlay');
   if (!ov) return;
   ov.style.display = 'block';
+  // BLOCO 13: publicar comunicado sai do topo da tela e passa a viver aqui, junto do que
+  // já está publicado — que é onde a ação faz sentido.
+  const acoes = document.getElementById('avisosDrawerAcoes');
+  if (acoes) {
+    acoes.innerHTML = (sessaoAtual && sessaoAtual.role === 'manager')
+      ? '<button id="btnNovoComunicadoDrawer" class="com-topo-btn com-topo-novo">+ Novo comunicado</button>'
+      : '';
+    const b = document.getElementById('btnNovoComunicadoDrawer');
+    if (b) b.addEventListener('click', () => {
+      // Mesma abertura do botão original: a classe .show, não display inline — o overlay
+      // tem transição amarrada nela e display:flex deixaria o modal invisível.
+      const ovNovo = document.getElementById('novoComunicadoOverlay');
+      if (ovNovo) ovNovo.classList.add('show');
+    });
+  }
   if (typeof renderAvisos === 'function') renderAvisos();
   const titulo = document.getElementById('avisosDrawerTitulo');
   if (titulo) titulo.focus({ preventScroll: true });
@@ -7653,6 +7670,45 @@ function rotasRepsVisiveis() {
   return (DATA.reps || []).filter(r => r && r.ownerId);
 }
 
+/* Declarado AQUI, e não junto do resto da configuração de prospecção, por causa da
+   regra que já derrubou a produção uma vez: activateTab() roda no topo do script e
+   um `const` lido antes da própria declaração lança ReferenceError, que aborta o
+   script inteiro e trava o login em "carregando seus dados" sem erro na tela.
+   TERRITORIO_DO_EXECUTIVO é lido por renderRotas e pelo drawer da rota, ambos
+   abaixo daqui. Hoje esses caminhos não rodam na carga síncrona — mas basta alguém
+   tornar Rotas a aba inicial pra que rodem. Fica acima de quem lê. */
+/* BLOCO 13 (12/08/26) — Julyan: "hoje já sabemos onde cada um ataca".
+   Até aqui o cockpit só sabia a CIDADE de cada executivo, e a região vinha do território
+   que ele digitava na Rota — que nasce vazio todo dia de propósito. Resultado, medido no
+   print da aba Rotas: 7 dos 8 apareciam como "sem território declarado" às 23h, e o
+   gestor não tinha de onde partir pra ajudar.
+   Agora o território base é conhecido e fixo. Ele NÃO substitui o que o executivo
+   declara — o declarado sempre vence, porque ele pode estar cobrindo outra região hoje.
+   Isto é o ponto de partida quando ele ainda não declarou nada.
+   As coordenadas são o centro aproximado do bairro/cidade e servem pra centrar o mapa e
+   filtrar sugestões; a região REAL de trabalho continua sendo medida pela mancha
+   (mediana dos negócios dele), que é dado e não palpite.
+   raioKm é o alcance da sugestão: bairro fechado usa raio curto, cidade inteira usa largo. */
+const TERRITORIO_DO_EXECUTIVO = {
+  '86100505': { rotulo: 'Vila Velha (cidade inteira)', bairro: null, municipio: 'Vila Velha', uf: 'ES', lat: -20.3297, lng: -40.2925, raioKm: 9 },
+  '87069181': { rotulo: 'Vitória (cidade inteira)', bairro: null, municipio: 'Vitória', uf: 'ES', lat: -20.3155, lng: -40.3128, raioKm: 8 },
+  '86100506': { rotulo: 'Taquara, Jacarepaguá', bairro: 'Taquara', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9260, lng: -43.3760, raioKm: 5 },
+  '87569072': { rotulo: 'Tijuca', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9245, lng: -43.2320, raioKm: 4 },
+  '94079973': { rotulo: 'Campo Grande', bairro: 'Campo Grande', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9020, lng: -43.5580, raioKm: 6 },
+  '91477292': { rotulo: 'Auxiliadora / Moinhos de Vento', bairro: 'Moinhos de Vento', municipio: 'Porto Alegre', uf: 'RS', lat: -30.0245, lng: -51.2050, raioKm: 4 },
+  '89842507': { rotulo: 'Santo Amaro', bairro: 'Santo Amaro', municipio: 'São Paulo', uf: 'SP', lat: -23.6520, lng: -46.7080, raioKm: 5 },
+  // Ricardo segue com ownerId provisório: território da praça, sem bairro fechado ainda.
+  'pendente_ricardo2': { rotulo: 'Porto Alegre (a definir)', bairro: null, municipio: 'Porto Alegre', uf: 'RS', lat: -30.0346, lng: -51.2177, raioKm: 8 }
+};
+function territorioDe(ownerId) { return TERRITORIO_DO_EXECUTIVO[String(ownerId)] || null; }
+
+// PRACA_DO_EXECUTIVO continua existindo porque a Casa dos Dados consulta por município,
+// e vários pontos do cockpit já dependem dele. Deriva do território pra não haver duas
+// verdades sobre a mesma pessoa.
+const PRACA_DO_EXECUTIVO = Object.fromEntries(
+  Object.entries(TERRITORIO_DO_EXECUTIVO).map(([id, t]) => [id, { municipio: t.municipio, uf: t.uf }])
+);
+
 async function carregarRotasDoTime() {
   if (!DATA.supabase || !supa) { rotasCache = { porOwner: {} }; return; }
   const hoje = isoDate(new Date());
@@ -7797,7 +7853,16 @@ async function renderRotas() {
 
     const linhaTerritorio = territorio
       ? '<div class="rota-card-local"><span aria-hidden="true">📍</span><b>' + esc(territorio) + '</b></div>'
-      : '<div class="rota-card-local"><span aria-hidden="true">📍</span><span style="color:var(--muted2);">território de hoje ainda não declarado</span></div>';
+      // BLOCO 13: sem território declarado, mostra o território BASE dele (conhecido e
+      // fixo) em vez de só avisar que falta. O gestor precisa saber onde a pessoa atua,
+      // não só que ela não digitou nada. Fica marcado como "base" pra não passar por
+      // declaração — a diferença importa: base é o de sempre, declarado é o de hoje.
+      : (function () {
+          const t = territorioDe(r.ownerId);
+          return t
+            ? '<div class="rota-card-local"><span aria-hidden="true">📍</span><span style="color:var(--muted2);">' + esc(t.rotulo) + ' <span style="color:var(--ter);">· território base, não declarou hoje</span></span></div>'
+            : '<div class="rota-card-local"><span aria-hidden="true">📍</span><span style="color:var(--muted2);">território de hoje ainda não declarado</span></div>';
+        })();
 
     if (n > 0) {
       const mostra = info.paradas.slice(0, 3);
@@ -8014,7 +8079,11 @@ async function desenharRotaDrawer() {
             ? '<span class="rota-pill on">plano fechado</span>'
             : '<span class="rota-pill rascunho">plano em rascunho</span>')
         : '<span class="rota-pill off">sem plano hoje</span>') +
-      '<span style="font-size:12px;color:var(--muted);">📍 ' + (plano && plano.local_atuacao ? esc(plano.local_atuacao) : 'sem região informada') + '</span>' +
+      '<span style="font-size:12px;color:var(--muted);">📍 ' + (plano && plano.local_atuacao
+        ? esc(plano.local_atuacao)
+        : (territorioDe(rotaDrawerOwner)
+            ? esc(territorioDe(rotaDrawerOwner).rotulo) + ' <span style="color:var(--ter);">· base</span>'
+            : 'sem região informada')) + '</span>' +
       '<span style="font-size:12px;color:var(--muted2);margin-left:auto;">' + seq.length + ' parada' + (seq.length === 1 ? '' : 's') + '</span>' +
     '</div>' +
     // BLOCO 2/3: o que existe de oportunidade na praça dele hoje, antes do mapa.
@@ -8136,9 +8205,31 @@ async function desenharRotaDrawer() {
       '<div style="margin-top:16px;padding:13px 15px;border:1px solid var(--line);border-left:3px solid #2563EB;border-radius:var(--r-md);background:var(--panel2);">' +
         '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:3px;">' +
           '<b style="font-size:12.5px;">Onde ' + esc(String(rep.name || 'ele').split(' ')[0]) + ' mais atua</b>' +
-          '<span style="font-size:11px;color:var(--muted2);">raio de <b>' + mancha.raioKm.toFixed(1) + ' km</b> · cobre ' + mancha.dentro + ' dos ' + mancha.total + ' negócios' + (mancha.fora ? ' · ' + mancha.fora + ' fora da região' : '') + '</span>' +
+          (mancha.doTerritorioBase
+            ? '<span style="font-size:11px;color:var(--muted2);">território base · raio de <b>' + mancha.raioKm.toFixed(1) + ' km</b></span>'
+            : '<span style="font-size:11px;color:var(--muted2);">raio de <b>' + mancha.raioKm.toFixed(1) + ' km</b> · cobre ' + mancha.dentro + ' dos ' + mancha.total + ' negócios' + (mancha.fora ? ' · ' + mancha.fora + ' fora da região' : '') + '</span>') +
         '</div>' +
-        '<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:' + (dentro.length ? '10px' : '0') + ';">A área azul tracejada no mapa. Calculada da posição real dos negócios dele, não do território que ele digitou.</div>' +
+        // Deixo explícito de onde vem o círculo: medido da carteira dele, ou o território
+        // base atribuído. São confiabilidades diferentes e o gestor tem que saber qual está vendo.
+        '<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:' + (dentro.length ? '10px' : '0') + ';">' +
+          (mancha.doTerritorioBase
+            ? 'Ainda não dá pra medir a região pela carteira dele — o círculo é o <b>território base</b> atribuído. Assim que houver negócio com endereço, ele passa a ser calculado do campo.'
+            : 'A área azul tracejada no mapa. Calculada da posição real dos negócios dele, não do território que ele digitou.') + '</div>' +
+        // BLOCO 13 — território ATRIBUÍDO contra região MEDIDA. Rodei o cruzamento nos 7
+        // executivos: Marco (2,5 km), Amanda (3,2), Wericles (2,9) e Michel (1,3) estão
+        // trabalhando dentro do bairro atribuído; Sandro (5,2), Bruno (11,5) e Kelly
+        // (11,6) estão fora. Não é erro de dado nem de coordenada — é a carteira deles
+        // morando em outro lugar, e é conversa de 1:1. A tela mostra, não julga.
+        ((() => {
+          const T = territorioDe(rotaDrawerOwner);
+          if (!T || mancha.doTerritorioBase) return '';
+          const desvio = distanciaKm(T.lat, T.lng, mancha.lat, mancha.lng);
+          if (desvio <= T.raioKm) {
+            return '<div style="font-size:11px;color:var(--green);margin-bottom:10px;">✓ Batendo com o território atribuído (' + esc(T.rotulo) + ') — a ' + desvio.toFixed(1) + ' km do centro dele.</div>';
+          }
+          return '<div style="font-size:11.5px;color:var(--amber);background:var(--amber-soft);border-radius:10px;padding:9px 11px;margin-bottom:10px;line-height:1.5;">' +
+            '<b>A carteira dele está fora do território atribuído.</b><br>Território: ' + esc(T.rotulo) + '. A região onde ele de fato tem negócios fica a <b>' + desvio.toFixed(1) + ' km</b> daí. Ou o território mudou na prática, ou a rota saiu do combinado — vale checar no 1:1.</div>';
+        })()) +
         (dentro.length
           ? '<div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Contas-alvo dentro da região · ' + dentro.length + '</div>' +
             dentro.slice(0, 5).map(s =>
@@ -8310,7 +8401,15 @@ async function montarMapaRota(seq, origem) {
   // da Kelly abria mostrando Caxias do Sul, Gramado e Torres — o bounds engolia o
   // Caldeira Restaurante, que fica a 90 km. Mesma correção que o Bloco 6 fez no mapa do
   // executivo, que faltou aqui no drawer do gestor.
-  const mancha = manchaDeAtuacao([...(comCoord || []), ...plotaveis]);
+  // BLOCO 13: a mancha medida continua mandando — ela é o que ele REALMENTE faz.
+  // Mas quando não dá pra medir (menos de 3 negócios com coordenada, ou carteira
+  // dispersa), o território base entra no lugar em vez de a tela ficar sem região.
+  // O Ricardo, que está começando e não tem carteira, era o caso que ficava sem nada.
+  const territorioBase = territorioDe(rotaDrawerOwner);
+  let mancha = manchaDeAtuacao([...(comCoord || []), ...plotaveis]);
+  if ((!mancha || mancha.disperso) && territorioBase) {
+    mancha = { lat: territorioBase.lat, lng: territorioBase.lng, raioKm: territorioBase.raioKm, dentro: 0, total: (plotaveis || []).length, fora: 0, doTerritorioBase: true };
+  }
   const dentroDaMancha = (lat, lng) => !mancha || mancha.disperso
     || distanciaKm(mancha.lat, mancha.lng, Number(lat), Number(lng)) <= mancha.raioKm * 1.35;
   // Não repete quem já é parada da rota: dois pinos no mesmo ponto confundem mais que ajudam.
@@ -9433,16 +9532,7 @@ let mapaPoisMeta = { origem: null, buscadoEm: null, total: 0, erro: null, aviso:
    Filtros já aplicados no servidor: MEI fora, contabilidade fora, redes grandes fora,
    empresário individual por documento fora, teto de 30 por praça, cache semanal.
    A coordenada vem do IBGE na própria resposta — plota sem geocodificar. */
-const PRACA_DO_EXECUTIVO = {
-  '87069181': { municipio: 'Vitória', uf: 'ES' },
-  '86100505': { municipio: 'Vila Velha', uf: 'ES' },
-  '89842507': { municipio: 'São Paulo', uf: 'SP' },
-  '91477292': { municipio: 'Porto Alegre', uf: 'RS' },
-  'pendente_ricardo2': { municipio: 'Porto Alegre', uf: 'RS' },
-  '94079973': { municipio: 'Rio de Janeiro', uf: 'RJ' },
-  '86100506': { municipio: 'Rio de Janeiro', uf: 'RJ' },
-  '87569072': { municipio: 'Rio de Janeiro', uf: 'RJ' }
-};
+
 
 let novidadesCache = { chave: null, itens: [] };
 
@@ -11264,16 +11354,14 @@ async function renderBannerComunicados() {
   if (naoLidos.length === 0) {
     // Otimização 08/08: sem comunicado novo, nada de faixa própria flutuando no topo —
     // o link e o botão entram discretos no FIM da linha do "HubSpot atualizado em...".
+    // BLOCO 13 (12/08/26, Julyan: "pode tirar os comunicados dali"). Sem comunicado
+    // pendente, a linha do topo fica limpa. Conferi antes de remover que ninguém fica
+    // sem caminho: o SINO do topbar (#avisosSinoBtn) abre o mesmo drawer, e o botão de
+    // publicar foi pro cabeçalho do drawer — se eu só apagasse daqui, o gestor perderia
+    // a única forma de criar comunicado no sistema.
     el.innerHTML = '';
-    const linhaUpdated = document.getElementById('updatedLine') ? document.getElementById('updatedLine').parentElement : null;
     const antigo = document.getElementById('comunicadosInline');
     if (antigo) antigo.remove();
-    if (linhaUpdated) {
-      linhaUpdated.insertAdjacentHTML('beforeend',
-        `<span id="comunicadosInline" style="margin-left:auto;display:inline-flex;gap:12px;align-items:center;">${linkHistorico}${botaoNovo}</span>`);
-    } else {
-      el.innerHTML = `<div style="display:flex;justify-content:flex-end;gap:12px;align-items:center;margin-bottom:10px;">${linkHistorico}${botaoNovo}</div>`;
-    }
   } else {
     const antigoInline = document.getElementById('comunicadosInline');
     if (antigoInline) antigoInline.remove();
@@ -11603,7 +11691,9 @@ function abrirPerfilDrawer() {
   document.getElementById('perfilNomeLabel').textContent = sessaoAtual.nome || sessaoAtual.email;
   document.getElementById('perfilEmailLabel').textContent = sessaoAtual.email;
   document.getElementById('perfilAvatarPreview').innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 96);
-  document.getElementById('perfilPapelLabel').textContent = sessaoAtual.role === 'manager' ? 'Gestor' : 'Executivo';
+  const papel = sessaoAtual.role === 'manager' ? 'Gestor' : 'Executivo';
+  document.getElementById('perfilPapelLabel').textContent = papel;
+  document.getElementById('perfilPapelPill').textContent = papel;
   try { montarPerfilProgresso(); }
   catch (e) { console.error('Perfil: não consegui montar o progresso —', e && e.message); }
 }
