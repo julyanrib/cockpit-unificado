@@ -1433,6 +1433,22 @@
      O mapa usa a mesma linguagem do cockpit: superfícies quentes, tipografia
      editorial e vermelho Takeat como ação. O azul fica reservado à rota para
      manter a leitura geográfica familiar sem disputar com a marca. */
+  /* Faixa da semana (Bloco 21) — cinco botões de mesmo peso; o dia-alvo é o único
+     preenchido, o dia livre ganha filete âmbar. Nada de vermelho: dia sem visita é
+     oportunidade, não urgência. */
+  .plano-sem-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;}
+  .plano-sem-dia{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:10px 11px;border:1px solid var(--line-btn);border-radius:12px;background:var(--panel2);font-family:inherit;cursor:pointer;text-align:left;transition:border-color .12s var(--ease),background .12s var(--ease),transform .12s var(--ease);}
+  .plano-sem-dia:hover:not(:disabled){border-color:var(--ink);transform:translateY(-1px);}
+  .plano-sem-dia:disabled{opacity:.45;cursor:default;}
+  .plano-sem-dia .d{font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);}
+  .plano-sem-dia .n{font-family:'Poppins',sans-serif;font-size:19px;font-weight:800;line-height:1.05;color:var(--ink);}
+  .plano-sem-dia .s{font-size:11px;color:var(--muted);}
+  .plano-sem-dia .f{font-size:10px;font-weight:700;color:var(--ter);}
+  .plano-sem-dia.is-vazio{border-left:3px solid var(--amber);}
+  .plano-sem-dia.is-sel{background:var(--dark);border-color:var(--dark);}
+  .plano-sem-dia.is-sel .d,.plano-sem-dia.is-sel .s,.plano-sem-dia.is-sel .f{color:var(--dark-mut);}
+  .plano-sem-dia.is-sel .n{color:var(--dark-ink);}
+  @media(max-width:720px){.plano-sem-grid{grid-template-columns:repeat(3,minmax(0,1fr));}}
   .plano-map-card{padding:0;overflow:hidden;isolation:isolate;}
   .plano-map-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:22px 24px 18px;border-bottom:1px solid var(--line);background:linear-gradient(135deg,var(--panel) 0%,var(--panel2) 100%);}
   .plano-map-title-wrap{display:flex;gap:13px;align-items:flex-start;min-width:0;}
@@ -1496,7 +1512,12 @@
   .plano-mapa-convite>span:not(.plano-mapa-convite-seta){font-size:12.5px;color:var(--muted);line-height:1.55;max-width:44ch;}
   .plano-mapa-convite-p{color:var(--muted2) !important;font-size:11.5px !important;}
   .plano-map-legend i{width:8px;height:8px;border-radius:50%;display:block;}
-  .plano-map-sidebar{border-left:1px solid var(--line);background:var(--panel);padding:14px;max-height:540px;overflow-y:auto;scrollbar-width:thin;}
+  /* BLOCO 21 (Julyan: "A barra lateral tem que ser fluida e não travada").
+     Medido na tela dele: a lista tinha 972px de conteúdo preso num contêiner de
+     max-height:540px — a altura do mapa. Rolava, mas dentro de uma caixinha, e o fim da
+     lista ficava sempre escondido. Agora ela acompanha o mapa como piso e cresce até
+     80vh, com rolagem suave e a barra sempre visível pra ele saber que há mais abaixo. */
+  .plano-map-sidebar{border-left:1px solid var(--line);background:var(--panel);padding:14px;min-height:540px;max-height:80vh;overflow-y:auto;overscroll-behavior:contain;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-gutter:stable;}
   .plano-map-sidebar-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 4px 12px;}
   .plano-map-sidebar-title{font-family:'Poppins',sans-serif;font-size:14px;font-weight:800;white-space:nowrap;}
   .plano-map-sidebar-count{font-size:10.5px;font-weight:800;color:#2563EB;background:rgba(37,99,235,.1);border-radius:999px;padding:4px 8px;}
@@ -9411,6 +9432,15 @@ async function montarPlanoDoDia(r) {
       ? { lat: Number(p.local_atuacao_lat), lng: Number(p.local_atuacao_lng) }
       : null;
   }
+  // BLOCO 21 (Julyan: "No mapa é ideal aparecer a região dele, que já te passei a de
+  // todos"). O território nasce vazio de propósito — o executivo declara onde vai atuar
+  // HOJE, e isso não se herda de ontem. Mas nascer vazio não precisa significar mapa sem
+  // referência: sem declaração, a origem cai no território BASE dele (Bloco 13), que é
+  // conhecido e fixo. Ele continua livre pra digitar outro lugar; só não começa perdido.
+  const territorioBaseRota = territorioDe(r.ownerId);
+  if (!planoMapaOrigemAtual && territorioBaseRota) {
+    planoMapaOrigemAtual = { lat: territorioBaseRota.lat, lng: territorioBaseRota.lng, base: true };
+  }
   const fechado = p.status === 'plano_fechado' && !planoEmEdicao;
   const editandoPlanoFechado = p.status === 'plano_fechado' && planoEmEdicao;
   const prios = Array.isArray(p.prioridades) ? p.prioridades : [];
@@ -9432,7 +9462,11 @@ async function montarPlanoDoDia(r) {
           style="width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:10px;color:var(--ink);font-size:13px;padding:10px 12px;font-family:inherit;">
         <div id="planoLocalSug" class="local-sug" style="display:none;" role="listbox" aria-label="Sugestões de local"></div>
       </div>
-      <div id="planoLocalMapaEstado" style="font-size:11px;color:${p.local_atuacao_lat != null ? 'var(--dark-green)' : 'var(--dark-mut)'};margin-top:6px;line-height:1.5;">${p.local_atuacao_lat != null ? '✓ Região localizada — o mapa está priorizando oportunidades próximas.' : 'Digite bairro, endereço ou o nome do restaurante e <b>escolha na lista</b> — o mapa se reorganiza em volta do ponto que você escolher.'}</div>
+      <div id="planoLocalMapaEstado" style="font-size:11px;color:${p.local_atuacao_lat != null ? 'var(--dark-green)' : 'var(--dark-mut)'};margin-top:6px;line-height:1.5;">${p.local_atuacao_lat != null
+        ? '✓ Região localizada — o mapa está priorizando oportunidades próximas.'
+        : (territorioBaseRota
+            ? `O mapa já abriu no seu território base — <b>${esc(territorioBaseRota.rotulo)}</b>. Vai atuar em outro lugar hoje? Digite e <b>escolha na lista</b>.`
+            : 'Digite bairro, endereço ou o nome do restaurante e <b>escolha na lista</b> — o mapa se reorganiza em volta do ponto que você escolher.')}</div>
     </div>
 
     <div class="plano-context-grid">
@@ -9459,6 +9493,15 @@ async function montarPlanoDoDia(r) {
           : `<div style="font-size:12.5px;color:var(--muted);">Nenhuma conta-alvo marcada pra hoje na Prospecção.</div>`}
       </div>
     </div>
+
+    <!-- BLOCO 21 — planejamento da SEMANA no lugar da Daily.
+         Julyan: "Saber os dias já preenchidos com reuniões e usar o mapa para PREENCHER
+         os buracos da agenda com microrotas". A tela era 100% "hoje": ele via o mapa sem
+         saber quais dias da semana já estavam cobertos, e não tinha como montar rota pra
+         quinta olhando o mapa de hoje. Agora a semana inteira fica acima do mapa: cada
+         dia mostra quantas visitas tem, o buraco aparece em âmbar, e clicar no dia define
+         pra QUEM a microrota vai ser montada. -->
+    <div id="planoSemanaFaixa"></div>
 
     <div class="chart-card plano-map-card" style="margin-top:14px;">
       <div class="plano-map-head">
@@ -9543,17 +9586,11 @@ async function montarPlanoDoDia(r) {
     <div class="chart-card" id="planoDoDiaCard" style="margin:0;border-left:3px solid var(--red);">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;flex:1;min-width:260px;">
-          <div style="background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:14px 16px;">
-            <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">📝 Sua Daily de hoje</div>
-            ${dailyPreenchida
-              ? `<div style="font-size:13px;display:flex;flex-direction:column;gap:4px;">
-                   <span><b>${d.prometido_visitas ?? '—'}</b> visitas prometidas</span>
-                   <span><b>${d.prometido_avancos ?? '—'}</b> avanços prometidos</span>
-                   <span><b>${d.prometido_propostas ?? '—'}</b> propostas prometidas</span>
-                 </div>`
-              : `<div style="font-size:12.5px;color:var(--muted);">Você ainda não preencheu a Daily de hoje.</div>`}
-            <button id="planoRevisarDaily" style="margin-top:10px;font-size:11.5px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:999px;padding:7px 14px;cursor:pointer;">${dailyPreenchida ? 'Revisar minha Daily' : 'Preencher minha Daily'}</button>
-          </div>
+          <!-- BLOCO 21 (12/08/26, Julyan: "Não preciso da parte de daily nesta tela e sim o
+               planejamento da SEMANA"). O resumo da Daily saiu daqui: ele já existe
+               inteiro na aba Minha Daily, e nesta tela ocupava 269px acima do dobro da
+               página sem responder à pergunta desta aba, que é "onde eu vou e quando".
+               O lugar liberado foi pra faixa de semana, no topo do mapa. -->
           <div>
             <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">⭐ Suas três prioridades de hoje</div>
             <div style="display:flex;flex-direction:column;gap:8px;">
@@ -9583,12 +9620,6 @@ async function montarPlanoDoDia(r) {
       </div>
     </div>
   `;
-
-  const btnDaily = slot.querySelector('#planoRevisarDaily');
-  if (btnDaily) btnDaily.addEventListener('click', () => {
-    activateTab('viewDaily');
-    if (typeof renderDaily === 'function') renderDaily();
-  });
 
   if (!fechado) {
     // Autosave de rascunho — grava o que a pessoa digitou, com debounce.
@@ -9696,6 +9727,22 @@ async function montarPlanoDoDia(r) {
     chkSemFit.setAttribute('aria-pressed', String(planoMapaFiltro.mostrarSemFit));
     montarPlanoMapa(r, hoje, fechado);
   });
+  // BLOCO 21 — desenha a faixa da semana com os compromissos reais da agenda.
+  // Mesma fonte da aba Agenda (agendaNormalizar), pra não existirem duas verdades sobre
+  // quantas visitas ele tem na quinta.
+  (() => {
+    let eventosSemana = [];
+    if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+      try {
+        eventosSemana = agendaNormalizar(DATA.agenda).filter(e =>
+          String(e.ownerId) === String(r.ownerId) && e.inicio &&
+          AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta);
+      } catch (e) { console.error('Faixa da semana:', e && e.message); }
+    }
+    try { renderFaixaSemana(r, eventosSemana); }
+    catch (e) { console.error('Não consegui montar a faixa da semana:', e && e.message); }
+  })();
+
   const selAval = slot.querySelector('#planoMapaAvalMin');
   if (typeof ligarBuscaLocal === 'function') ligarBuscaLocal();
   if (selAval) selAval.addEventListener('change', () => { planoMapaFiltro.avalMin = Number(selAval.value) || 0; montarPlanoMapa(r, hoje, fechado); });
@@ -10121,6 +10168,105 @@ async function materializarLeadDoMapa(poi, ownerId, fonte) {
   return { lead: (data || [])[0] || null };
 }
 
+/* BLOCO 21 (12/08/26) — semana + microrota na aba Rota do executivo.
+   Julyan: "A gente tem que já sugerir esses leads baseados em microrotas".
+   Microrota aqui tem definição operacional, não é rótulo: é o maior conjunto de contas
+   que cabe num turno andando pouco. Monto assim, e é a lógica que o Salesforce Maps usa
+   em "optimize route" simplificada pro que o cockpit sabe:
+     1. semente = a conta de maior prioridade do dia (funil mais quente primeiro);
+     2. cresce por vizinho mais próximo, sempre a partir do último ponto adicionado;
+     3. para em 6 paradas (a régua do playbook) ou quando o próximo salto passa de 2,5 km
+        — dois quilômetros e meio a pé/carro entre contas ainda é rua; acima disso virou
+        deslocamento e come o turno.
+   O resultado é uma sequência, não um punhado: a ordem em que ele deve andar. */
+let planoDiaAlvo = null;   // dia (ISO) que a microrota vai preencher; null = hoje
+const MICRO_SALTO_MAX_KM = 2.5;
+const MICRO_PARADAS = 6;
+
+function montarMicrorota(candidatas, origem) {
+  const pontos = (candidatas || []).filter(l => l && l.lat != null && l.lng != null
+    && Number.isFinite(Number(l.lat)) && Number.isFinite(Number(l.lng)));
+  if (!pontos.length) return [];
+  // Semente: prioridade do funil (PESO_ETAPA já ordena `ordenadas`), então a primeira
+  // da lista filtrada é a mais importante — ou a mais perto da origem, se ele declarou.
+  let atual = origem
+    ? pontos.slice().sort((a, b) =>
+        distanciaKm(origem.lat, origem.lng, Number(a.lat), Number(a.lng)) -
+        distanciaKm(origem.lat, origem.lng, Number(b.lat), Number(b.lng)))[0]
+    : pontos[0];
+  const rota = [atual];
+  const restantes = pontos.filter(p => p !== atual);
+  while (rota.length < MICRO_PARADAS && restantes.length) {
+    let melhor = null, melhorD = Infinity;
+    restantes.forEach(p => {
+      const d = distanciaKm(Number(atual.lat), Number(atual.lng), Number(p.lat), Number(p.lng));
+      if (d < melhorD) { melhorD = d; melhor = p; }
+    });
+    if (!melhor || melhorD > MICRO_SALTO_MAX_KM) break;
+    rota.push(melhor);
+    restantes.splice(restantes.indexOf(melhor), 1);
+    atual = melhor;
+  }
+  return rota;
+}
+
+function renderFaixaSemana(r, eventosSemana) {
+  const slot = document.getElementById('planoSemanaFaixa');
+  if (!slot) return;
+  const hojeK = isoDate(new Date());
+  const dow = new Date(hojeK + 'T12:00:00').getDay();
+  const segunda = addDays(hojeK, -(dow === 0 ? 6 : dow - 1));
+  const dias = [0, 1, 2, 3, 4].map(i => addDays(segunda, i));
+  const rot = ['SEG', 'TER', 'QUA', 'QUI', 'SEX'];
+
+  const porDia = {};
+  (eventosSemana || []).forEach(e => {
+    if (!e.inicio) return;
+    const k = agendaChave(e.inicio);
+    (porDia[k] = porDia[k] || []).push(e);
+  });
+  if (!planoDiaAlvo || dias.indexOf(planoDiaAlvo) < 0) {
+    // Abre no primeiro dia da semana que ainda dá pra preencher e está mais vazio —
+    // que é onde o planejamento dele rende mais.
+    const candidatos = dias.filter(d => d >= hojeK);
+    planoDiaAlvo = candidatos.sort((a, b) => (porDia[a] || []).length - (porDia[b] || []).length)[0] || hojeK;
+  }
+
+  slot.innerHTML =
+    '<div class="chart-card" style="margin-top:14px;padding:14px 16px;">' +
+      '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px;">' +
+        '<b style="font-size:13.5px;font-family:\'Poppins\',sans-serif;">Sua semana</b>' +
+        '<span style="font-size:11px;color:var(--muted2);">clique no dia que você quer preencher — o mapa e a microrota passam a montar pra ele</span>' +
+      '</div>' +
+      '<div class="plano-sem-grid">' +
+        dias.map((k, i) => {
+          const evs = porDia[k] || [];
+          const n = evs.length;
+          const passou = k < hojeK;
+          const ehHoje = k === hojeK;
+          const sel = k === planoDiaAlvo;
+          const vazio = n === 0;
+          return '<button type="button" class="plano-sem-dia' + (sel ? ' is-sel' : '') + (vazio && !passou ? ' is-vazio' : '') + '"' +
+            (passou ? ' disabled title="dia já passou"' : ' data-diaalvo="' + k + '"') + '>' +
+            '<span class="d">' + rot[i] + (ehHoje ? ' · hoje' : '') + '</span>' +
+            '<span class="n">' + agendaP2(new Date(k + 'T12:00:00').getDate()) + '</span>' +
+            '<span class="s">' + (passou ? (n ? n + ' feitas' : '—') : n === 0 ? 'livre' : n + (n === 1 ? ' visita' : ' visitas')) + '</span>' +
+            (!passou && n < 6 ? '<span class="f">' + (6 - n) + ' vagas</span>' : '') +
+          '</button>';
+        }).join('') +
+      '</div>' +
+      '<div id="planoMicroSlot" style="margin-top:12px;"></div>' +
+    '</div>';
+
+  slot.querySelectorAll('[data-diaalvo]').forEach(b => {
+    b.addEventListener('click', () => {
+      planoDiaAlvo = b.dataset.diaalvo;
+      renderFaixaSemana(r, eventosSemana);
+      if (planoMapaRenderAtual) montarPlanoMapa(planoMapaRenderAtual.r, planoMapaRenderAtual.hoje, planoMapaRenderAtual.planoFechado);
+    });
+  });
+}
+
 async function montarPlanoMapa(r, hoje, planoFechado) {
   const box = document.getElementById('planoMapa');
   const lista = document.getElementById('planoMapaLista');
@@ -10418,8 +10564,11 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // 6 do funil (já ordenados por proximidade do fechamento) + 4 contas-alvo de maior
   // volume de avaliações. Se um lado tiver menos, o outro ocupa a sobra — nunca some
   // linha à toa. "Explorar todas" continua abrindo o universo inteiro.
-  const LIMITE_RECOMENDADAS = 10;
-  const COTA_FUNIL = 6;
+  // BLOCO 21: com a barra lateral fluida (rola até 80vh em vez de ficar presa em 540px),
+  // 10 é pouco — ele filtrava por raio e via só os 10 primeiros de 40. 18 preenche a
+  // coluna sem virar rolagem infinita, e "Explorar todas" continua abrindo o universo.
+  const LIMITE_RECOMENDADAS = 18;
+  const COTA_FUNIL = 10;
   const disponiveis = ordenadasTodas.filter(l => !naRotaHojeFn(l));
   const doFunil = disponiveis.filter(l => PESO_ETAPA(l) < 9);
   const deProspeccao = disponiveis.filter(l => PESO_ETAPA(l) === 9);
@@ -11169,6 +11318,61 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     // BLOCO 17: o raio precisa se explicar. Ativo, diz de onde mede; escolhido sem
     // território declarado, avisa que está inativo em vez de o executivo achar que
     // filtrou e continuar vendo conta longe.
+    // BLOCO 21 — microrota do dia escolhido na faixa da semana.
+    // Candidatas: o que está VISÍVEL no mapa agora (respeita todos os filtros dele) e
+    // ainda não é parada da rota. Assim o que ele vê é o que entra — se filtrou por
+    // 5 km e "com telefone", a microrota nasce dentro disso.
+    (() => {
+      const micro = document.getElementById('planoMicroSlot');
+      if (!micro) return;
+      const candidatas = ordenadas.filter(l => !naRotaHojeFn(l));
+      const seq = montarMicrorota(candidatas, planoMapaOrigemAtual);
+      const diaBR = planoDiaAlvo ? planoDiaAlvo.split('-').reverse().slice(0, 2).join('/') : '';
+      if (seq.length < 2) {
+        micro.innerHTML = '<div style="font-size:11.5px;color:var(--muted2);">Não há contas suficientes agrupadas pra montar uma microrota com os filtros atuais. Amplie o raio ou inclua contas sem fit.</div>';
+        return;
+      }
+      let total = 0;
+      for (let i = 1; i < seq.length; i++) total += distanciaKm(Number(seq[i - 1].lat), Number(seq[i - 1].lng), Number(seq[i].lat), Number(seq[i].lng));
+      micro.innerHTML =
+        '<div style="border:1px solid var(--line);border-left:3px solid #2563EB;border-radius:12px;padding:11px 13px;background:var(--panel2);">' +
+          '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:6px;">' +
+            '<b style="font-size:12.5px;">Microrota sugerida para ' + esc(diaBR) + '</b>' +
+            '<span style="font-size:11px;color:var(--muted2);">' + seq.length + ' paradas · ' + total.toFixed(1) + ' km entre elas · ordem por proximidade</span>' +
+          '</div>' +
+          '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px;">' +
+            seq.map((l, i) => '<span style="display:inline-flex;align-items:center;gap:5px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:11.5px;">' +
+              '<b style="color:#2563EB;">' + (i + 1) + '</b>' + esc(l.nome || '') +
+              (l.bairro ? '<span style="color:var(--muted2);">· ' + esc(l.bairro) + '</span>' : '') + '</span>').join('') +
+          '</div>' +
+          '<button id="planoMicroAgendar" style="background:#2563EB;color:#fff;border:none;border-radius:999px;padding:8px 16px;font:800 12px \'DM Sans\',sans-serif;cursor:pointer;">Agendar as ' + seq.length + ' no dia ' + esc(diaBR) + '</button>' +
+          '<span id="planoMicroMsg" style="font-size:11px;color:var(--muted2);margin-left:9px;"></span>' +
+        '</div>';
+      const btn = document.getElementById('planoMicroAgendar');
+      if (btn) btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const msg = document.getElementById('planoMicroMsg');
+        // Horários a partir das 10h, de 45 em 45 min, pulando a daily — mesma régua do
+        // agendador da grade. Ele ajusta depois na Agenda se precisar.
+        let minutos = 10 * 60;
+        let ok = 0;
+        for (const l of seq) {
+          const hora = agendaP2(Math.floor(minutos / 60)) + ':' + agendaP2(minutos % 60);
+          try {
+            await criarTarefaVisitaNoHubspot(l, r.ownerId, hora, { silencioso: true }, planoDiaAlvo);
+            registrarAgendamentoLocal(l, planoDiaAlvo, hora, r.ownerId);
+            ok++;
+          } catch (e) { console.error('Microrota, parada não agendada:', l.nome, e && e.message); }
+          minutos += 45;
+          if (msg) msg.textContent = ok + ' de ' + seq.length + ' agendadas…';
+        }
+        if (msg) msg.innerHTML = ok === seq.length
+          ? '<span style="color:var(--green);font-weight:700;">✓ ' + ok + ' visitas agendadas em ' + esc(diaBR) + '. Confira na Agenda.</span>'
+          : '<span style="color:var(--amber);">' + ok + ' de ' + seq.length + ' agendadas — as que falharam continuam disponíveis.</span>';
+        if (typeof mostrarToast === 'function') mostrarToast(ok + ' visitas agendadas para ' + diaBR + '.', ok ? 'sucesso' : 'erro');
+      });
+    })();
+
     const avisoRaio = !planoMapaFiltro.raioKm ? ''
       : origemRaio
         ? `<span style="color:var(--blue);font-weight:700;"> · 📍 só até ${planoMapaFiltro.raioKm} km do território declarado</span>`
@@ -12904,7 +13108,18 @@ function prospeccaoBairroExibicao(valor) {
 
 function prospeccaoPraca(l) {
   const bairro = prospeccaoBairroExibicao(l && l.bairro);
-  return [bairro, l && l.cidade].filter(Boolean).join(' · ') || 'Praça não informada';
+  const base = [bairro, l && l.cidade].filter(Boolean).join(' · ');
+  if (base) return base;
+  // BLOCO 21 (Julyan: "sempre com endereço registrado"). Medido na tela dele: TODA linha
+  // da lista lateral dizia "Praça não informada", porque o negócio do funil chega sem
+  // bairro/cidade — o cron nem pedia esses campos até o Bloco 20. Enquanto o CRM não é
+  // preenchido, uso o que existe: logradouro do CRM, endereço do OSM, ou o CEP. Só cai
+  // pro aviso quando realmente não há nada — e aí o aviso é acionável, não decorativo.
+  const doCRM = [l && l.logradouro, l && l.numero].filter(Boolean).join(', ');
+  if (doCRM) return doCRM;
+  if (l && l.endereco) return String(l.endereco);
+  if (l && l.cep) return 'CEP ' + String(l.cep);
+  return 'sem endereço no CRM';
 }
 
 function prospeccaoAtiva(l) {
