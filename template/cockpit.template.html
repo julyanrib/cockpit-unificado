@@ -4455,6 +4455,84 @@ function agendaMesmoLead(a, b) {
   const menor = x.length < y.length ? x : y;
   return menor.length >= 6 && (x.indexOf(y) >= 0 || y.indexOf(x) >= 0);
 }
+// RESTAURADO EM 11/08/26 — estas duas funções foram apagadas por engano no commit
+// a3b56f2 (10/08), mas a chamada em renderAgenda ficou. Resultado: todo executivo com
+// pelo menos um lead quente levava `ReferenceError: enriquecerQuentesForaComDistancia
+// is not defined` ao abrir a Agenda. A exceção abortava o fim de renderAgenda, então os
+// links do card "Pipeline quente para encaixar na semana" ficavam presos em
+// "Localizando…" pra sempre e a faixa de rascunho nunca aparecia — sem nenhum erro
+// visível na tela, só no console. Verificado em produção nos 8 executivos: quebrava
+// pra Kelly, Amanda, Bruno, Wericles e Marco; os outros três escapavam só por não ter
+// quente nenhum. Se um dia forem removidas de novo, remova TAMBÉM a chamada em
+// renderAgenda e os spans data-quente-fora-dist / data-quente-fora-map do card.
+
+// Descobre onde cada quente-sem-compromisso fica. A coordenada boa é a do próprio
+// negócio (o executivo marca no Expogo e o check-in sobe pro HubSpot; fetch-hubspot.js
+// traz lat/lng desde 10/08). Cruzar por NOME com a base de prospecção é só plano B,
+// pra quem ainda não tem check-in — foi usar isso como fonte principal que fazia
+// "sem localização" aparecer pra quem tinha coordenada de sobra.
+async function localizarQuentesSemCompromisso(foraDaAgenda, ownerId) {
+  if (!foraDaAgenda.length) return [];
+  const jaTemCoordenada = l => l.lat != null && l.lng != null && !isNaN(Number(l.lat)) && !isNaN(Number(l.lng));
+  const comCoordenadaPropria = foraDaAgenda.filter(jaTemCoordenada)
+    .map(l => ({ ...l, lat: Number(l.lat), lng: Number(l.lng), localConhecido: true }));
+  const semCoordenadaAinda = foraDaAgenda.filter(l => !jaTemCoordenada(l));
+  if (!semCoordenadaAinda.length) return comCoordenadaPropria;
+
+  if (!DATA.supabase || !supa) return [...comCoordenadaPropria, ...semCoordenadaAinda.map(l => ({ ...l, localConhecido: false }))];
+  const { data, error } = await supa.from('leads_prospeccao')
+    .select('nome,lat,lng,bairro,cidade')
+    .eq('responsavel_owner_id', ownerId);
+  if (error) {
+    console.error('Erro ao buscar coordenadas de contas-alvo:', error.message);
+    return [...comCoordenadaPropria, ...semCoordenadaAinda.map(l => ({ ...l, localConhecido: false }))];
+  }
+  const candidatos = (data || []).filter(c => c.lat != null && c.lng != null);
+  const viaProspeccao = semCoordenadaAinda.map(lead => {
+    const nomeLead = agendaLeadNome(lead);
+    const match = candidatos.find(c => agendaMesmoLead(nomeLead, c.nome));
+    return match
+      ? { ...lead, lat: match.lat, lng: match.lng, bairro: match.bairro, cidade: match.cidade, localConhecido: true }
+      : { ...lead, localConhecido: false };
+  });
+  return [...comCoordenadaPropria, ...viaProspeccao];
+}
+
+// Junta o local_atuacao do Plano do Dia (onde o executivo DECLAROU que vai atuar) com a
+// coordenada de cada quente e escreve a distância direto nos spans já reservados no card
+// — atualização pontual, sem re-renderizar, pra não brigar com o autosave do Plano do
+// Dia rodando em paralelo. Sem território declarado, cai pra "localização encontrada":
+// o link do mapa serve mesmo sem ponto de partida.
+async function enriquecerQuentesForaComDistancia(foraDaAgenda, ownerId) {
+  const hoje = isoDate(new Date());
+  const plano = await carregarPlanoDoDia(ownerId, hoje);
+  const origem = plano && plano.local_atuacao_lat != null && plano.local_atuacao_lng != null
+    ? { lat: plano.local_atuacao_lat, lng: plano.local_atuacao_lng }
+    : null;
+
+  const enriquecidos = await localizarQuentesSemCompromisso(foraDaAgenda, ownerId);
+
+  enriquecidos.forEach(lead => {
+    const chave = String(lead.id || agendaLeadNome(lead));
+    const span = document.querySelector(`[data-quente-fora-dist="${CSS.escape(chave)}"]`);
+    const mapLink = document.querySelector(`[data-quente-fora-map="${CSS.escape(chave)}"]`);
+    if (!span) return; // card pode ter sido substituído por uma navegação de semana nesse meio tempo
+    if (lead.lat == null || lead.lng == null) {
+      span.textContent = '· local desconhecido';
+      if (mapLink) { mapLink.textContent = 'Sem localização'; mapLink.style.opacity = '.65'; }
+      return;
+    }
+    if (mapLink) {
+      mapLink.href = `https://www.google.com/maps/dir/?api=1&destination=${lead.lat},${lead.lng}&travelmode=driving&dir_action=navigate`;
+      mapLink.target = '_blank'; mapLink.rel = 'noopener'; mapLink.style.pointerEvents = 'auto';
+      mapLink.textContent = 'Ver no mapa →';
+    }
+    if (!origem) { span.textContent = '· localização encontrada'; return; }
+    const km = distanciaKm(origem.lat, origem.lng, lead.lat, lead.lng);
+    span.textContent = `· 📍 ${km < 1 ? Math.round(km * 1000) + 'm' : km.toFixed(1) + 'km'} de onde você vai atuar`;
+  });
+}
+
 function agendaMarcarQuentes(eventos, quentes) {
   eventos.forEach(e => { e.quente = false; });
   const fora = [];
