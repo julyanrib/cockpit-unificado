@@ -1003,10 +1003,21 @@
   .agw-ev.agtp-rota{--c:var(--blue);} .agw-ev.agtp-interno{--c:var(--muted2);}
   .agw-now{position:absolute;left:0;right:0;height:0;border-top:1.5px solid var(--red);z-index:7;pointer-events:none;}
   .agw-now::before{content:"";position:absolute;left:-3px;top:-4px;width:7px;height:7px;border-radius:50%;background:var(--red);}
-  .agw-vazio{position:absolute;left:6px;right:6px;top:16%;bottom:22%;border:1.5px dashed var(--line-btn);border-radius:12px;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted2);font-family:inherit;cursor:pointer;z-index:1;}
+  .agw-vazio{position:absolute;left:8px;right:8px;top:calc(var(--agw-px) * 1.15);height:auto;bottom:auto;padding:11px 8px;border:1.5px dashed var(--line-btn);border-radius:12px;background:var(--panel2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted2);font-family:inherit;cursor:pointer;z-index:1;transition:border-color .12s var(--ease),background .12s var(--ease),color .12s var(--ease);}
   .agw-vazio:hover{border-color:var(--red);background:var(--red-soft);color:var(--red);}
   .agw-vazio b{font-size:11.5px;font-weight:800;}
   .agw-vazio span{font-size:10.5px;}
+  /* Faixa de visitas registradas (Bloco 3): fora da grade de horas, largura inteira da
+     coluna do dia — é o que devolve o nome do cliente legível. */
+  .agw-regs{display:grid;grid-template-columns:54px repeat(var(--agw-nd),minmax(0,1fr));border-top:1px solid var(--line);background:var(--panel2);}
+  .agw-regl{display:flex;align-items:center;justify-content:flex-end;padding:9px 9px 9px 4px;font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ter);text-align:right;line-height:1.2;}
+  .agw-regc{display:flex;flex-direction:column;align-items:stretch;gap:3px;padding:8px 6px;border-left:1px solid var(--line-soft);min-width:0;}
+  .agw-regc[data-hoje="1"]{background-color:rgba(224,166,74,.07);}
+  .agw-regn{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--green);margin-bottom:1px;}
+  .agw-regi{display:block;width:100%;text-align:left;background:var(--green-soft);border:none;border-left:3px solid var(--green);border-radius:8px;padding:5px 8px;font-family:inherit;font-size:11px;font-weight:700;color:var(--ink);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:background .12s var(--ease);}
+  .agw-regi:hover{background:color-mix(in srgb,var(--green) 22%,var(--panel));}
+  .agw-regmais{background:none;border:none;padding:2px 8px;font-family:inherit;font-size:10.5px;font-weight:700;color:var(--muted2);cursor:pointer;text-align:left;}
+  .agw-regmais:hover{color:var(--red);}
   .agw-lista-dia{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:11px 16px;border-top:1px solid var(--line-soft);}
   .agw-lista-dia:first-child{border-top:none;}
   .agw-lista-dia>b{font:800 12.5px 'Poppins',sans-serif;color:var(--ink);}
@@ -4283,6 +4294,16 @@ function agendaNormalizar(raw) {
     // resolve a nota do Expogo que chega sem hubspot_owner_id (era o que fazia
     // compromisso sumir da agenda de todo mundo).
     if (e) {
+      // BLOCO 3 (11/08/26) — a distinção que estava faltando na Agenda.
+      // Medido na base: 107 das 133 tarefas têm hs_timestamp IGUAL ao createdate (menos
+      // de 1 segundo de diferença). Não são horário marcado: é o Expogo gravando a visita
+      // no instante em que ela aconteceu. Só 26 são compromisso de verdade (hora redonda,
+      // criado com antecedência). Plotar os dois na mesma grade de horas era o que
+      // espremia os blocos: 5 registros numa janela de 45 min viravam 5 colunas de 20%
+      // de largura, ~44px, e o nome do cliente sumia. Agora registro sai da grade e vai
+      // pra faixa própria embaixo do dia, onde tem largura inteira pro nome.
+      // 90s de folga porque a gravação e a criação do registro não são atômicas.
+      e.registro = !!(e.inicio && e.criadoEm && Math.abs(e.inicio - e.criadoEm) < 90000);
       if (it.lead_nome) { e.cliente = it.lead_nome; e.leadDoNegocio = true; }
       if (!e.ownerId && it.lead_owner_id) { e.ownerId = String(it.lead_owner_id); e.donoDoNegocio = true; }
       if (it.lead_deal_id) e.dealId = String(it.lead_deal_id);
@@ -6865,13 +6886,38 @@ function agendaGradeColunas(itens) {
 }
 
 function agendaGradeHoras(dias, hojeK, souRep, vista) {
-  const H0 = 7, H1 = 20;
-  const PX = vista === 'dia' ? 58 : 46;
-  const alt = (H1 - H0) * PX;
   const lista = agendaEstado._gradeEv || [];
   const agora = agendaAgora();
   const podeMarcar = function (k) { return agendaEstado.offset > 0 || k >= hojeK; };
   const rotSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+  const chavesVista = dias.map(agendaChave);
+
+  // BLOCO 3: a grade de horas passa a mostrar SÓ o que tem hora de verdade. Visita
+  // registrada (Expogo) desce pra faixa própria — ver comentário em agendaNormalizar.
+  const ehRegistro = function (e) { return !!e.registro; };
+
+  // Faixa de horas dinâmica. Antes era fixo 07:00–20:00: com os registros fora da grade,
+  // a maioria dos dias tem 0 ou 1 compromisso e sobravam 13 linhas vazias — era metade
+  // do "dia livre feio". Agora a grade cobre só as horas com conteúdo, sempre incluindo
+  // a daily das 9h e com um mínimo de 6 horas pra não virar uma tira fina.
+  const minutosPlanejados = [];
+  lista.forEach(function (e) {
+    if (!e.inicio || ehRegistro(e)) return;
+    if (chavesVista.indexOf(agendaChave(e.inicio)) < 0) return;
+    const ini = e.inicio.getUTCHours() * 60 + e.inicio.getUTCMinutes();
+    minutosPlanejados.push(ini, ini + Math.max(30, Number(e.dur) || 30));
+  });
+  let H0 = 8, H1 = 14;
+  if (minutosPlanejados.length) {
+    H0 = Math.floor(Math.min.apply(null, minutosPlanejados) / 60);
+    H1 = Math.ceil(Math.max.apply(null, minutosPlanejados) / 60);
+  }
+  if (souRep) { H0 = Math.min(H0, 9); H1 = Math.max(H1, 10); } // a daily precisa caber
+  H0 = Math.max(6, Math.min(H0, 12));
+  H1 = Math.min(22, Math.max(H1, H0 + 6));
+
+  const PX = vista === 'dia' ? 58 : 46;
+  const alt = (H1 - H0) * PX;
 
   let cab = '<div class="agw-head"><span></span>';
   let corpo = '<div class="agw-body" style="height:' + alt + 'px;"><div class="agw-times">';
@@ -6882,19 +6928,40 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
   }
   corpo += '</div>';
 
+  let temRegistro = false;
+  let faixaReg = '<div class="agw-regs"><span class="agw-regl">Registradas</span>';
+
   dias.forEach(function (d) {
     const k = agendaChave(d), ehHoje = k === hojeK;
-    const doDia = [];
+    const doDia = [], registros = [];
+    // A faixa hachurada "Daily" já ocupa 9h–10h. Desenhar por cima dela o bloco da
+    // própria daily (que existe como reunião no HubSpot) era duas coisas dizendo o
+    // mesmo — a hachura sumia atrás do bloco. O bloco interno só aparece se cair fora
+    // dessa faixa (1:1, treinamento à tarde etc.), aí ele carrega informação nova.
+    const cobertoPelaDaily = function (e) {
+      if (e.tipo !== 'interno' || !souRep || H0 > 9 || H1 < 10) return false;
+      const m = e.inicio.getUTCHours() * 60 + e.inicio.getUTCMinutes();
+      return m >= 9 * 60 && m < 10 * 60;
+    };
     lista.forEach(function (e, i) {
       if (!e.inicio || agendaChave(e.inicio) !== k) return;
+      if (ehRegistro(e)) { registros.push({ i: i, e: e }); return; }
+      if (cobertoPelaDaily(e)) return;
       const ini = e.inicio.getUTCHours() * 60 + e.inicio.getUTCMinutes();
       doDia.push({ i: i, e: e, ini: ini, fim: ini + Math.max(30, Number(e.dur) || 30) });
     });
+    if (registros.length) temRegistro = true;
 
-    cab += '<button class="agw-dh" data-agdia="' + k + '" data-hoje="' + (ehHoje ? 1 : 0) + '" data-vazio="' + (doDia.length ? 0 : 1) + '">' +
+    const totalDia = doDia.length + registros.length;
+    const resumoDia = totalDia === 0 ? 'vazio'
+      : doDia.length && registros.length ? doDia.length + ' marcado' + (doDia.length === 1 ? '' : 's') + ' · ' + registros.length + ' feita' + (registros.length === 1 ? '' : 's')
+      : registros.length ? registros.length + ' feita' + (registros.length === 1 ? '' : 's')
+      : doDia.length + ' marcado' + (doDia.length === 1 ? '' : 's');
+
+    cab += '<button class="agw-dh" data-agdia="' + k + '" data-hoje="' + (ehHoje ? 1 : 0) + '" data-vazio="' + (totalDia ? 0 : 1) + '">' +
       '<span class="w">' + rotSemana[d.getUTCDay()] + '</span>' +
       '<span class="n">' + agendaP2(d.getUTCDate()) + '</span>' +
-      '<span class="s">' + (doDia.length ? doDia.length + (doDia.length === 1 ? ' compromisso' : ' compromissos') : 'vazio') + '</span></button>';
+      '<span class="s">' + resumoDia + '</span></button>';
 
     let blocos = '';
     agendaGradeColunas(doDia).forEach(function (it) {
@@ -6910,12 +6977,16 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
 
     // A daily das 9h existe no código (nenhuma visita é sugerida nessa faixa) mas era
     // invisível na grade — desenhada, o executivo entende por que a manhã começa às 10h.
-    const daily = souRep
+    const daily = (souRep && H0 <= 9 && H1 >= 10)
       ? '<div class="agw-daily" style="top:' + ((9 - H0) * PX) + 'px;height:' + (PX - 3) + 'px;">Daily</div>'
       : '';
 
-    const vazio = (souRep && !doDia.length && podeMarcar(k))
-      ? '<button class="agw-vazio" data-agburaco="' + k + '"><b>Dia livre</b><span>preencher →</span></button>'
+    // "Dia livre" só quando o dia está mesmo vazio — antes bastava não ter nada NA GRADE,
+    // então um dia com 7 visitas registradas aparecia como livre depois que os registros
+    // saíram da grade. Também deixa de ser um retângulo tracejado gigante: vira cartão
+    // compacto na faixa da manhã, que é onde o executivo vai encaixar a visita.
+    const vazio = (souRep && !totalDia && podeMarcar(k))
+      ? '<button class="agw-vazio" data-agburaco="' + k + '"><b>Dia livre</b><span>escolher contas →</span></button>'
       : '';
 
     let now = '';
@@ -6925,11 +6996,31 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
     }
 
     corpo += '<div class="agw-col" data-hoje="' + (ehHoje ? 1 : 0) + '">' + daily + vazio + blocos + now + '</div>';
+
+    // Faixa de registros: largura inteira da coluna, um nome por linha, sem disputa de
+    // espaço com hora nenhuma. É a correção do "corta os nomes, fica pequeno".
+    if (!registros.length) {
+      faixaReg += '<div class="agw-regc" data-hoje="' + (ehHoje ? 1 : 0) + '"></div>';
+    } else {
+      const chips = registros.slice(0, 4).map(function (r) {
+        return '<button class="agw-regi" data-agev="' + r.i + '" title="' + agendaEsc(r.e.cliente || '') + '">' +
+          agendaEsc(agendaNomeDoLead(r.e.cliente) || r.e.cliente || 'Sem nome') + '</button>';
+      }).join('');
+      const resto = registros.length > 4
+        ? '<button class="agw-regmais" data-agdia="' + k + '">+' + (registros.length - 4) + ' no dia →</button>'
+        : '';
+      faixaReg += '<div class="agw-regc" data-hoje="' + (ehHoje ? 1 : 0) + '">' +
+        '<span class="agw-regn">' + registros.length + ' ' + (registros.length === 1 ? 'visita' : 'visitas') + '</span>' +
+        chips + resto + '</div>';
+    }
   });
 
   cab += '</div>';
   corpo += '</div>';
-  return '<div class="agw-scroll"><div class="agw-grid" style="--agw-nd:' + dias.length + ';--agw-px:' + PX + 'px;">' + cab + corpo + '</div></div>';
+  faixaReg += '</div>';
+
+  return '<div class="agw-scroll"><div class="agw-grid" style="--agw-nd:' + dias.length + ';--agw-px:' + PX + 'px;">' +
+    cab + corpo + (temRegistro ? faixaReg : '') + '</div></div>';
 }
 
 function agendaGradeLista(dias, hojeK) {
