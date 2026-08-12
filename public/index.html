@@ -6369,18 +6369,42 @@ document.addEventListener('click', function (ev) {
   // BLOCO 16 — atalhos da sugestão: levar a conta pro mapa da Rota ou pra ficha na
   // Prospecção. Ficam ANTES do handler de dia/buraco porque vivem dentro do mesmo card
   // e um closest() mais genérico engoliria o clique.
+  // BUG PEGO NO TESTE — mesmo caso do comentário acima: chega aqui com data-aglat/lng
+  // (caminho novo, confiável) ou com data-agmapa=NOME (caminho antigo, só pra quando o
+  // lead não tinha coordenada resolvida — a busca agora usa agendaMesmoLead, não mais
+  // um id que nunca existiu pra comparar).
+  const atMapaCoord = ev.target.closest('[data-aglat]');
+  if (atMapaCoord) {
+    ev.preventDefault(); ev.stopPropagation();
+    const lat = Number(atMapaCoord.dataset.aglat), lng = Number(atMapaCoord.dataset.aglng);
+    agendaEstado.subview = 'hoje';
+    renderAgenda();
+    setTimeout(() => {
+      try {
+        // jumpTo, não flyTo: testado ao vivo que flyTo pode ficar parado se o
+        // carregamento dos tiles travar (mesmo problema já corrigido no cluster do mapa).
+        if (planoMapaInstancia && Number.isFinite(lat) && Number.isFinite(lng)) {
+          planoMapaInstancia.jumpTo({ center: [lng, lat], zoom: 15.5 });
+        }
+        const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
+        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } catch (e) { console.error('Atalho pro mapa (coordenada) falhou:', e && e.message); }
+    }, 700);
+    return;
+  }
   const atMapa = ev.target.closest('[data-agmapa]');
   if (atMapa) {
     ev.preventDefault(); ev.stopPropagation();
-    const l = (typeof prospeccaoCache !== 'undefined' ? prospeccaoCache : []).find(x => String(x.id) === String(atMapa.dataset.agmapa));
-    if (!l) { mostrarToast('Não encontrei essa conta na sua fila — recarregue a página.', 'erro'); return; }
+    const nomeAlvo = atMapa.dataset.agmapa;
+    const l = (typeof prospeccaoCache !== 'undefined' ? prospeccaoCache : []).find(x => agendaMesmoLead(x.nome, nomeAlvo));
+    if (!l) { mostrarToast('Não encontrei coordenada pra "' + nomeAlvo + '" — abra a Prospecção ou confirme o endereço no HubSpot.', 'erro'); return; }
     agendaEstado.subview = 'hoje';   // a Rota do executivo é a subview "hoje" da Agenda
     renderAgenda();
     // O mapa só existe depois do render; o foco vai no fim da fila de tarefas.
     setTimeout(() => {
       try {
         if (planoMapaInstancia && l.lat != null && l.lng != null) {
-          planoMapaInstancia.flyTo({ center: [Number(l.lng), Number(l.lat)], zoom: 15.5, speed: 1.6 });
+          planoMapaInstancia.jumpTo({ center: [Number(l.lng), Number(l.lat)], zoom: 15.5 });
         }
         const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
         if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -8251,8 +8275,16 @@ function abrirFichaCompromisso(e) {
   const tipoDef = AGENDA_TIPOS[e.tipo] || AGENDA_TIPOS.reuniao;
   const lead = situacaoDoLeadPorNome(e.cliente);
   const stageNome = lead ? (lead.stage || (DATA.stageMeta && DATA.stageMeta[lead.stageId] && DATA.stageMeta[lead.stageId].label) || '—') : null;
+  // BUG PEGO NO TESTE AO VIVO (12/08, Bruno, timezone America/Sao_Paulo): esta função
+  // usava .getDate()/.getHours()/.getMinutes()/.getDay() — getters LOCAIS — enquanto
+  // TODO o resto do arquivo trata os campos UTC do Date como se já fossem horário de
+  // Brasília (regra documentada logo ali em cima de agendaHhmm/agendaP2). Resultado
+  // visível: a grade mostrava "08:00" e o popup do mesmo compromisso, ao clicar,
+  // mostrava "05:00" — os 180 minutos exatos do fuso do navegador (America/Sao_Paulo,
+  // UTC-3). Confirmado comparando via Intl.DateTimeFormat().resolvedOptions().timeZone
+  // no navegador do próprio Bruno. Trocado para getUTC*, igual a todo o resto da tela.
   const quandoTxt = e.inicio
-    ? AGENDA_DIAS[(e.inicio.getDay() + 6) % 7] + ', ' + agendaP2(e.inicio.getDate()) + '/' + agendaP2(e.inicio.getMonth() + 1) + ' · ' + agendaP2(e.inicio.getHours()) + ':' + agendaP2(e.inicio.getMinutes())
+    ? AGENDA_DIAS[(e.inicio.getUTCDay() + 6) % 7] + ', ' + agendaP2(e.inicio.getUTCDate()) + '/' + agendaP2(e.inicio.getUTCMonth() + 1) + ' · ' + agendaP2(e.inicio.getUTCHours()) + ':' + agendaP2(e.inicio.getUTCMinutes())
     : 'sem horário';
   const repObjFicha = (!(sessaoAtual && sessaoAtual.role === 'rep')) ? (DATA.reps || []).find(r => String(r.ownerId) === String(e.ownerId)) : null;
   const repNome = repObjFicha ? repObjFicha.name : null;
@@ -8292,7 +8324,7 @@ function abrirFichaCompromisso(e) {
       return '<div style="display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:9px;margin-bottom:4px;' + (esteMesmo ? 'background:var(--panel2);border:1px solid var(--line);' : '') + '">' +
         '<span style="width:9px;height:9px;border-radius:50%;flex:none;background:' + (passado ? 'var(--green)' : td.cor) + ';"></span>' +
         '<span style="font-size:12px;flex:1;">' + td.rotulo + (passado ? ' <span style="color:var(--green);font-weight:700;">✓</span>' : '') + '</span>' +
-        '<span style="font-size:11px;color:var(--muted2);font-variant-numeric:tabular-nums;">' + agendaP2(x.inicio.getDate()) + '/' + agendaP2(x.inicio.getMonth() + 1) + ' ' + agendaP2(x.inicio.getHours()) + ':' + agendaP2(x.inicio.getMinutes()) + '</span></div>';
+        '<span style="font-size:11px;color:var(--muted2);font-variant-numeric:tabular-nums;">' + agendaP2(x.inicio.getUTCDate()) + '/' + agendaP2(x.inicio.getUTCMonth() + 1) + ' ' + agendaP2(x.inicio.getUTCHours()) + ':' + agendaP2(x.inicio.getUTCMinutes()) + '</span></div>';
     }).join('') +
     (!temFuturo && lead && lead.temperatura === 'quente'
       ? '<div style="display:flex;align-items:center;gap:8px;background:var(--red-soft);border:1px solid var(--red);border-radius:var(--r-md);padding:10px 13px;margin-top:8px;font-size:12px;font-weight:700;color:var(--red);">Quente SEM próximo passo marcado — a cadência morre aqui. Defina a revisita ou reunião na Agenda agora.</div>'
@@ -8308,7 +8340,16 @@ function abrirFichaCompromisso(e) {
     (e.obs ? '<div style="margin-top:14px;font-size:12.5px;color:var(--muted);line-height:1.55;background:var(--panel2);border-radius:var(--r-md);padding:11px 14px;"><b style="color:var(--ink);">Observações:</b> ' + esc(e.obs) + '</div>' : '') +
     '<div style="display:flex;flex-wrap:wrap;gap:9px;margin-top:16px;">' +
     ((sessaoAtual && sessaoAtual.role === 'rep' && e.cliente)
-      ? '<button type="button" data-agmapa="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;">Ver no mapa da rota →</button>'
+      // BUG PEGO NO TESTE AO VIVO: o botão passava o NOME do cliente em data-agmapa, e o
+      // clique comparava isso contra `l.id` (um id, não um nome) só dentro de
+      // prospeccaoCache — nunca batia, e o clique sempre caía no toast de erro "não
+      // encontrei essa conta". Pior: mesmo corrigindo a comparação, prospeccaoCache só
+      // tem conta-alvo — um follow-up de negócio já aberto (o caso mais comum) nunca
+      // estaria lá. `lead` alguns parágrafos acima já resolveu isso certo, buscando em
+      // DATA.temperatura E DATA.funilLeads — reusa a MESMA coordenada, sem segunda busca.
+      ? (lead && lead.lat != null && lead.lng != null
+          ? '<button type="button" data-aglat="' + lead.lat + '" data-aglng="' + lead.lng + '" data-agnomelead="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;">Ver no mapa da rota →</button>'
+          : '<button type="button" data-agmapa="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;">Ver no mapa da rota →</button>')
       : '') +
     (hubUrl ? '<a href="' + hubUrl + '" target="_blank" rel="noopener" style="display:inline-block;background:var(--red);color:#fff;border-radius:var(--r-pill);padding:10px 18px;font-size:12.5px;font-weight:700;text-decoration:none;">Abrir no HubSpot →</a>' : '') +
     '</div>';
