@@ -1129,13 +1129,17 @@
      vermelho em nada. Agora: célula pequena de intensidade (quanto mais compromisso,
      mais verde), dia sem nada no passado é neutro, dia livre no futuro é hachurado
      (é o que dá pra preencher), e o alarme aparece UMA vez por linha, no fim. */
-  .agm-card{width:max-content;max-width:100%;}
-  .agm-card .reps-table-wrap{overflow:visible;}
+  /* BLOCO 7 (11/08/26): a matriz nascia com width:max-content e colunas de dia fixas em
+     86px — dava 870px numa página de 1461px ("ela está pela metade"). Agora ocupa a
+     largura toda e são as colunas de dia que esticam; a rolagem horizontal só entra
+     quando o mínimo de 86px não couber (celular, ou semana com sábado). */
+  .agm-card{width:100%;max-width:100%;}
+  .agm-card .reps-table-wrap{overflow-x:auto;}
   .agm-cab{display:flex;flex-direction:column;gap:3px;padding:14px 18px;border-bottom:1px solid var(--line);}
   .agm-cab h3{margin:0;font-size:15px;}
   .agm-cab span{font-size:11px;color:var(--muted2);}
   @media (max-width:900px){ .agm-card{width:100%;} .agm-card .reps-table-wrap{overflow-x:auto;} }
-  .agm-head,.agm-row{display:grid;grid-template-columns:minmax(140px,190px) repeat(var(--agm-nd),86px) 180px;align-items:center;gap:6px;}
+  .agm-head,.agm-row{display:grid;grid-template-columns:minmax(150px,220px) repeat(var(--agm-nd),minmax(86px,1fr)) minmax(180px,220px);align-items:center;gap:6px;}
   .agm-head{padding:9px 16px 10px;background:var(--panel2);font-size:9.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);}
   .agm-head .d{display:flex;flex-direction:column;align-items:center;gap:1px;}
   .agm-head .d em{font:800 14px/1.1 'Poppins',sans-serif;font-style:normal;color:var(--ink);}
@@ -5061,12 +5065,22 @@ function renderAgenda() {
     '</div></div>';
 
   if (mostrarSemana) {
-    // No "Time todo", um calendário com dezenas de blocos simultâneos é ruído, não
-    // gestão. O gestor vê primeiro a matriz de cobertura e abre a agenda de uma pessoa
-    // pelo filtro. O executivo continua com o calendário semanal normal.
-    hSemana += (!souRep && !agendaEstado.repSel)
-      ? agendaMatrizTime(dias, naSemana, time, hojeK)
-      : agendaGradeCard(dias, (agendaEstado.repSel ? vis.filter(function (e) { return String(e.ownerId) === String(agendaEstado.repSel); }) : vis), hojeK, souRep, rotulo);
+    // BLOCO 7 (11/08/26, Julyan: "quero só a agenda que aparece do time todo, coloque ela
+    // na visualização qdo eu clico no executivo individualmente").
+    // Antes era um OU exclusivo: escolher um executivo TROCAVA a matriz pelo calendário,
+    // e o gestor perdia a leitura do time inteiro no instante em que ia olhar uma pessoa
+    // — justo quando ele precisa comparar "essa agenda contra a dos outros".
+    // Agora a matriz é permanente e o calendário da pessoa entra ABAIXO dela.
+    // No "Time todo" segue só a matriz: um calendário com dezenas de blocos
+    // simultâneos é ruído, não gestão.
+    if (!souRep) {
+      hSemana += agendaMatrizTime(dias, naSemana, time, hojeK);
+      if (agendaEstado.repSel) {
+        hSemana += agendaGradeCard(dias, vis.filter(function (e) { return String(e.ownerId) === String(agendaEstado.repSel); }), hojeK, souRep, rotulo);
+      }
+    } else {
+      hSemana += agendaGradeCard(dias, vis, hojeK, souRep, rotulo);
+    }
     hSemana += '<div class="ag-det" id="agDet" data-open="0">' +
       '<button class="agx" id="agDetX" aria-label="Fechar">×</button>' +
       '<div class="agsb" id="agDetSb"></div><h4 id="agDetT"></h4><dl id="agDetDl"></dl>' +
