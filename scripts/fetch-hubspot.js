@@ -569,7 +569,17 @@ async function repOpenDeals(ownerId) {
         { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'notes_next_activity_date', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', 'latitude', 'longitude', ...ENTERED_STAGE_PROPS]
+    properties: ['dealname', 'dealstage', 'createdate', 'notes_last_updated', 'notes_next_activity_date', 'hs_lastmodifieddate', 'hs_next_meeting_start_time', 'data_da_reuniao', 'reuniao_agendada', 'amount', 'latitude', 'longitude',
+      // BLOCO 20 (12/08/26) — Julyan: "corrija de uma vez so esse erro de localizacao dos
+      // quentes". Estes cinco campos EXISTEM no HubSpot (conferido via get_properties:
+      // cep, bairro, cidade, logradouro, numero) e o cron nunca os pediu. Sem eles o
+      // cockpit so tinha latitude/longitude, que o Expogo grava no check-in -- ou seja,
+      // negocio nunca visitado nao tinha como aparecer no mapa, nem com endereco
+      // preenchido no CRM. Agora vem tudo, e o front geocodifica o que faltar.
+      // Medido hoje: a maioria desses campos ainda esta VAZIA no CRM (dos quentes sem
+      // coordenada, so o UAU UNIDADE PENHA tinha CEP). Pedir custa zero e o pino passa a
+      // aparecer sozinho conforme o time preenche.
+      'cep', 'bairro', 'cidade', 'logradouro', 'numero', ...ENTERED_STAGE_PROPS]
   });
   return results.filter(d => !isExcludedDeal(d));
 }
@@ -594,7 +604,17 @@ async function stageDealsTeamWide(stageId) {
         { propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) }
       ]
     }],
-    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'notes_next_activity_date', 'amount', 'hs_lastmodifieddate', 'latitude', 'longitude', ...ENTERED_STAGE_PROPS]
+    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'notes_next_activity_date', 'amount', 'hs_lastmodifieddate', 'latitude', 'longitude',
+      // BLOCO 20 (12/08/26) — Julyan: "corrija de uma vez so esse erro de localizacao dos
+      // quentes". Estes cinco campos EXISTEM no HubSpot (conferido via get_properties:
+      // cep, bairro, cidade, logradouro, numero) e o cron nunca os pediu. Sem eles o
+      // cockpit so tinha latitude/longitude, que o Expogo grava no check-in -- ou seja,
+      // negocio nunca visitado nao tinha como aparecer no mapa, nem com endereco
+      // preenchido no CRM. Agora vem tudo, e o front geocodifica o que faltar.
+      // Medido hoje: a maioria desses campos ainda esta VAZIA no CRM (dos quentes sem
+      // coordenada, so o UAU UNIDADE PENHA tinha CEP). Pedir custa zero e o pino passa a
+      // aparecer sozinho conforme o time preenche.
+      'cep', 'bairro', 'cidade', 'logradouro', 'numero', ...ENTERED_STAGE_PROPS]
   });
   return todos.filter(d => !isExcludedDeal(d));
 }
@@ -880,6 +900,13 @@ async function main() {
         vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
         ownerId: d.properties.hubspot_owner_id || null,
         lat: (lat != null && !isNaN(lat)) ? lat : null,
+        // Endereço textual segue junto: é o que permite ao front geocodificar quem não
+        // tem coordenada, em vez de sumir do mapa.
+        cep: d.properties.cep || null,
+        bairro: d.properties.bairro || null,
+        cidade: d.properties.cidade || null,
+        logradouro: d.properties.logradouro || null,
+        numero: d.properties.numero || null,
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };
     }).sort((a, b) => b.dias - a.dias);
@@ -1046,6 +1073,13 @@ async function main() {
         ultimaInteracao: d.properties.notes_last_updated || null,
         valor: Math.round(parseFloat(d.properties.amount) || 0),
         lat: (lat != null && !isNaN(lat)) ? lat : null,
+        // Endereço textual segue junto: é o que permite ao front geocodificar quem não
+        // tem coordenada, em vez de sumir do mapa.
+        cep: d.properties.cep || null,
+        bairro: d.properties.bairro || null,
+        cidade: d.properties.cidade || null,
+        logradouro: d.properties.logradouro || null,
+        numero: d.properties.numero || null,
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };
     }).sort((a, b) => b.dias - a.dias);
