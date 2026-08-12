@@ -1135,6 +1135,11 @@
      quando o mínimo de 86px não couber (celular, ou semana com sábado). */
   .agm-card{width:100%;max-width:100%;}
   .agm-card .reps-table-wrap{overflow-x:auto;}
+  /* Acordeões da aba Semana (Bloco 8): praça e contexto abrem/fecham sem marcador nativo. */
+  .praca-acc>summary::-webkit-details-marker,.contexto-acc>summary::-webkit-details-marker{display:none;}
+  .praca-acc>summary::marker,.contexto-acc>summary::marker{content:"";}
+  .praca-acc>summary:hover{background:var(--panel2);}
+  .praca-acc[open] .praca-acc-chev,.contexto-acc[open] .contexto-acc-chev{transform:rotate(180deg);display:inline-block;}
   .agm-cab{display:flex;flex-direction:column;gap:3px;padding:14px 18px;border-bottom:1px solid var(--line);}
   .agm-cab h3{margin:0;font-size:15px;}
   .agm-cab span{font-size:11px;color:var(--muted2);}
@@ -5956,6 +5961,15 @@ function renderResumoSemanal() {
     '87569072': 'Rio de Janeiro/RJ'
   };
 
+  // BLOCO 8 (11/08/26, Julyan: "como vou planejar minhas ações ali? tem muita coisa,
+  // se inspire no Salesforce"). Medido na tela: a Semana tinha 3.630px de altura —
+  // 5,2 telas de rolagem — e só o bloco "Onde atacar" ocupava 1.766px, com as 5 praças
+  // abertas uma embaixo da outra. As ações concretas existiam, mas estavam enterradas
+  // na terceira e na quarta tela, uma por praça, sem nunca aparecerem juntas.
+  // Régua do Salesforce: primeiro a decisão, depois o detalhe a um clique.
+  // acoesTopoHtml é montado dentro do mesmo IIFE das praças (é lá que os sinais são
+  // calculados) e renderizado ANTES delas.
+  let acoesTopoHtml = '';
   const pracasHtml = (() => {
     // Visão de GESTÃO: o executivo não decide praça, e o servidor só manda o snapshot
     // dele mesmo — um card de "onde atacar" com uma linha só seria ruído na tela dele.
@@ -6065,27 +6079,61 @@ function renderResumoSemanal() {
       return acoes;
     };
 
+    // As ações de TODAS as praças, juntas e ordenadas — é a lista que responde
+    // "o que eu faço nesta semana". Alta urgência primeiro; dentro da urgência, a praça
+    // de maior índice. Teto de 6: acima disso deixa de ser plano e vira backlog.
+    const PESO_URG = { alta: 0, media: 1, baixa: 2 };
+    const todasAcoes = [];
+    linhas.forEach((l, i) => acoesDe(l).forEach(a => todasAcoes.push({ ...a, praca: l.praca, reps: l.reps, rank: i })));
+    todasAcoes.sort((a, b) => (PESO_URG[a.urg] - PESO_URG[b.urg]) || (a.rank - b.rank));
+    const topo = todasAcoes.slice(0, 6);
+    if (topo.length) {
+      const corUrg = u => u === 'alta' ? 'var(--red)' : u === 'media' ? 'var(--amber)' : 'var(--green)';
+      acoesTopoHtml = `
+      <div class="chart-card" id="acoesSemanaCard" style="border:1.5px solid var(--red);box-shadow:0 4px 16px rgba(229,26,49,.10);">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:3px;">
+          <h3 style="margin:0;">Suas ações desta semana</h3>
+          <span style="font-size:11px;color:var(--muted2);">${topo.length} de ${todasAcoes.length} · cada uma nasce de um sinal medido, com praça, pessoa e negócios</span>
+        </div>
+        <div class="chart-subtitle" style="margin:0 0 12px;">Feche estas antes de descer pro detalhe. O ranking completo de praças está logo abaixo.</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          ${topo.map(a => `
+            <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;border-left:3px solid ${corUrg(a.urg)};background:${a.urg === 'alta' ? 'var(--red-soft)' : 'var(--panel2)'};">
+              <span style="flex:none;width:6px;height:6px;border-radius:50%;margin-top:7px;background:${corUrg(a.urg)};"></span>
+              <div style="min-width:0;flex:1;">
+                <b style="font-size:12.5px;display:block;line-height:1.4;">${a.titulo}</b>
+                <div style="font-size:11px;color:var(--muted2);margin-top:3px;">${esc(a.praca)}${a.alvo ? ' · ' + a.alvo : ''}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }
+
     return `
     <div class="chart-card">
       <div class="chart-subtitle" style="margin:0 0 14px;">Índice de intervenção = 50% travamento · 30% distância da meta · 20% quente sem próximo passo. A primeira praça é onde sua semana rende mais.</div>
       ${linhas.map((l, i) => `
-        <div style="border-top:1px solid var(--line);padding:13px 0;${i === 0 ? 'border-top:0;' : ''}">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            ${pillRank(i)}
-            <b style="font-size:14px;font-family:'Poppins',sans-serif;">${esc(l.praca)}</b>
-            <span style="font-size:11.5px;color:var(--muted2);">${esc(l.reps.join(', '))}</span>
-            <span style="flex:1;"></span>
-            <span style="font-size:11px;color:var(--muted2);">índice <b style="color:${l.indice >= 70 ? 'var(--red)' : l.indice >= 55 ? 'var(--amber)' : 'var(--green)'};">${l.indice}</b></span>
-          </div>
-          <div style="height:5px;border-radius:99px;background:var(--sunk);margin:8px 0 9px;overflow:hidden;">
-            <div style="height:100%;width:${Math.max(4, Math.round(100 * l.indice / maiorIndice))}%;border-radius:99px;background:${l.indice >= 70 ? 'var(--red)' : l.indice >= 55 ? 'var(--amber)' : 'var(--green)'};"></div>
-          </div>
-          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-bottom:6px;">
-            <span><b style="color:var(--ink);">${l.open}</b> em aberto</span>
-            <span><b style="color:${l.pctTrav >= 40 ? 'var(--red)' : 'var(--ink)'};">${l.trav}</b> travados (${l.pctTrav.toFixed(0)}%)</span>
-            <span><b style="color:var(--ink);">${l.quentes}</b> quentes${l.semPasso ? ` · <b style="color:var(--amber);">${l.semPasso}</b> sem próximo passo` : ''}</span>
-            ${l.meta ? `<span><b style="color:${l.pctMeta < 20 ? 'var(--red)' : 'var(--ink)'};">${l.mes}/${l.meta}</b> no mês</span>` : ''}
-          </div>
+        <details class="praca-acc"${i === 0 ? ' open' : ''} style="border-top:1px solid var(--line);${i === 0 ? 'border-top:0;' : ''}">
+          <summary style="list-style:none;cursor:pointer;padding:13px 0;">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+              ${pillRank(i)}
+              <b style="font-size:14px;font-family:'Poppins',sans-serif;">${esc(l.praca)}</b>
+              <span style="font-size:11.5px;color:var(--muted2);">${esc(l.reps.join(', '))}</span>
+              <span style="flex:1;"></span>
+              <span style="font-size:11px;color:var(--muted2);">índice <b style="color:${l.indice >= 70 ? 'var(--red)' : l.indice >= 55 ? 'var(--amber)' : 'var(--green)'};">${l.indice}</b></span>
+              <span class="praca-acc-chev" aria-hidden="true" style="font-size:11px;color:var(--muted2);">▾</span>
+            </div>
+            <div style="height:5px;border-radius:99px;background:var(--sunk);margin:8px 0 9px;overflow:hidden;">
+              <div style="height:100%;width:${Math.max(4, Math.round(100 * l.indice / maiorIndice))}%;border-radius:99px;background:${l.indice >= 70 ? 'var(--red)' : l.indice >= 55 ? 'var(--amber)' : 'var(--green)'};"></div>
+            </div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);">
+              <span><b style="color:var(--ink);">${l.open}</b> em aberto</span>
+              <span><b style="color:${l.pctTrav >= 40 ? 'var(--red)' : 'var(--ink)'};">${l.trav}</b> travados (${l.pctTrav.toFixed(0)}%)</span>
+              <span><b style="color:var(--ink);">${l.quentes}</b> quentes${l.semPasso ? ` · <b style="color:var(--amber);">${l.semPasso}</b> sem próximo passo` : ''}</span>
+              ${l.meta ? `<span><b style="color:${l.pctMeta < 20 ? 'var(--red)' : 'var(--ink)'};">${l.mes}/${l.meta}</b> no mês</span>` : ''}
+            </div>
+          </summary>
+          <div style="padding-bottom:13px;">
           ${acoesDe(l).map(a => `
             <div style="display:flex;gap:9px;align-items:flex-start;margin-top:9px;padding:9px 11px;border-radius:10px;border-left:3px solid ${a.urg === 'alta' ? 'var(--red)' : a.urg === 'media' ? 'var(--amber)' : 'var(--green)'};background:${a.urg === 'alta' ? 'var(--red-soft)' : 'var(--panel2)'};max-width:104ch;">
               <span style="flex:none;width:6px;height:6px;border-radius:50%;margin-top:6px;background:${a.urg === 'alta' ? 'var(--red)' : a.urg === 'media' ? 'var(--amber)' : 'var(--green)'};"></span>
@@ -6096,7 +6144,8 @@ function renderResumoSemanal() {
               </div>
             </div>`).join('')}
           ${l.piores.length ? `<div style="font-size:11px;color:var(--muted2);margin-top:7px;">Mais parado da praça: <b>${esc(String(l.piores[0].name || '').trim())}</b> · ${esc(l.piores[0].stage || '')} · ${Number(l.piores[0].dias) || 0}d com ${esc(l.piores[0].rep || '')}</div>` : ''}
-        </div>`).join('')}
+          </div>
+        </details>`).join('')}
     </div>`;
   })();
 
@@ -6185,15 +6234,27 @@ function renderResumoSemanal() {
   ` : `
     ${heroTopo}
     ${sinaisHtml}
+    ${acoesTopoHtml}
     ${secao(1, 'O que a semana entregou', 'comparado com a semana anterior · clique em Ganhos, Reuniões ou Quentes pra ver os negócios')}
     ${placarGestorHtml}
-    ${secao(2, 'Onde atacar esta semana', 'praças ordenadas por necessidade de intervenção')}
+    ${secao(2, 'Onde atacar esta semana', 'praças ordenadas por necessidade de intervenção · abra a praça pra ver as ações dela')}
     ${pracasHtml || '<div class="empty-state">O snapshot por executivo ainda não chegou nesta build — sem ele não dá pra ranquear as praças.</div>'}
     ${secao(3, 'Roteiro do 1:1', 'ordenado por funil mais travado · abra a linha pra ver a leitura da pessoa')}
     ${timeHtml || '<div class="empty-state">Sem snapshot por executivo nesta build.</div>'}
-    ${secao(4, 'Por trás dos números', 'a leitura escrita na sexta, como contexto')}
-    ${leituraHtml}
-    ${leituraGeralHtml}
+    ${(leituraHtml || leituraGeralHtml) ? `
+      <details class="contexto-acc" style="margin-top:18px;">
+        <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:9px;padding:11px 14px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel2);">
+          <span style="font-family:'Poppins',sans-serif;font-size:12px;font-weight:800;color:#fff;background:var(--ter);border-radius:999px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;flex:none;">4</span>
+          <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">Por trás dos números</span>
+          <span style="font-size:11px;color:var(--ter);">a leitura escrita na sexta, como contexto — abrir</span>
+          <span style="flex:1;"></span>
+          <span class="contexto-acc-chev" aria-hidden="true" style="font-size:11px;color:var(--muted2);">▾</span>
+        </summary>
+        <div style="padding-top:14px;">
+          ${leituraHtml}
+          ${leituraGeralHtml}
+        </div>
+      </details>` : ''}
   `;
 
 }
