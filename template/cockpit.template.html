@@ -9341,6 +9341,50 @@ const PRACA_DO_EXECUTIVO = {
 
 let novidadesCache = { chave: null, itens: [] };
 
+/* BLOCO 10 (12/08/26) — Julyan: "até agora não achei nada da casa dos dados".
+   A fonte NUNCA esteve quebrada. Conferido chamando o endpoint com a sessão dele:
+   Porto Alegre devolveu 200 OK com 27 empresas abertas nos últimos 60 dias, todas com
+   coordenada. O motivo de nunca aparecer nada eram dois portões:
+     · na Rota do executivo, as novidades só entram DEPOIS que ele declara o território,
+       e ainda são cortadas pelo raio de 3 km (MAPA_RAIO_KM);
+     · na Prospecção do gestor não existia caminho nenhum até elas.
+   O endpoint recebe município + UF — não precisa de território. Então aqui é por praça.
+   Cache por praça (o novidadesCache antigo guarda uma só, que basta pro executivo mas
+   não pro gestor, que olha as cinco de uma vez). */
+let novidadesPorPraca = {};
+async function buscarNovidadesPraca(municipio, uf) {
+  const chave = municipio + '|' + uf;
+  if (novidadesPorPraca[chave]) return novidadesPorPraca[chave];
+  const token = await tokenDeSessaoGlobal();
+  if (!token) return [];
+  try {
+    const resp = await comPrazoGlobal(async (signal) => fetch('/api/novidades-mercado', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ municipio: municipio, uf: uf, dias: 60 })
+    }), 25000, 'novidades-praca');
+    const json = await resp.json().catch(() => ({}));
+    if (!resp.ok || !json.ok) { novidadesPorPraca[chave] = []; return []; }
+    const itens = (json.itens || []).filter(n => n.lat != null && n.lng != null);
+    novidadesPorPraca[chave] = itens;
+    return itens;
+  } catch (e) {
+    // Novidade é bônus: se a Casa dos Dados cair, a Prospecção continua inteira.
+    console.error('Novidades da praça indisponíveis (' + municipio + '):', e && e.message);
+    novidadesPorPraca[chave] = [];
+    return [];
+  }
+}
+
+// Praças distintas do time, na ordem em que aparecem no mapa de executivos.
+function pracasDoTime() {
+  const vistas = [];
+  Object.values(PRACA_DO_EXECUTIVO).forEach(p => {
+    if (!vistas.some(x => x.municipio === p.municipio && x.uf === p.uf)) vistas.push(p);
+  });
+  return vistas;
+}
+
 async function buscarNovidadesMercado(ownerId) {
   const praca = PRACA_DO_EXECUTIVO[String(ownerId)];
   if (!praca) return [];
@@ -11820,7 +11864,11 @@ function abrirImportacaoProspeccao() {
   });
 }
 
-let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false, pertoDeMim: false };
+let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false, pertoDeMim: false, topAvaliadas: false, nuncaVisitada: false };
+// Nomes que já receberam visita/revisita registrada (tarefa do Expogo). Preenchido no
+// render da Prospecção e lido pelo filtro "nunca visitada" — Set pra o filtro rodar em
+// O(1) por linha em vez de varrer a agenda a cada uma das 280 contas.
+let prospeccaoVisitados = new Set();
 
 // BLOCO Q (Julyan, 11/08): "rota e prospecção andam lado a lado".
 // A fila mostrava bairro e avaliações, mas não sabia ONDE ele vai atuar hoje — ele
@@ -11991,8 +12039,70 @@ function prospeccaoAplicarFiltros(lista) {
     (!f.responsavel || String(l.responsavel_owner_id) === f.responsavel) &&
     (!f.status || l.status === f.status) &&
     (f.jaExiste === '' || String(l.ja_existe_hubspot) === f.jaExiste) &&
-    (!f.semTelefone || !l.telefone)
+    (!f.semTelefone || !l.telefone) &&
+    // BLOCO 10: dois recortes que o gestor pedia e não existiam.
+    // "1.000+ avaliações" é o corte de peso comercial do playbook (volume, não nota).
+    // "Nunca visitada" cruza com a mesma fonte do card de execução: existe tarefa de
+    // Visita/Revisita com o nome do restaurante? Se não, ninguém foi lá ainda.
+    (!f.topAvaliadas || (Number(l.avaliacoes) || 0) >= 1000) &&
+    (!f.nuncaVisitada || !prospeccaoVisitados.has(prospeccaoNormalizarTexto(l.nome)))
   );
+}
+
+// BLOCO 10 (12/08/26) — o card que faltava: empresas de foodservice abertas nos últimos
+// 60 dias, por praça, direto da Casa dos Dados. Uma praça por linha, aberta a um clique.
+// Não cria nada no HubSpot daqui: é leitura pro gestor decidir para quem mandar. Quem
+// materializa continua sendo a importação, com a conferência que já existe.
+async function montarNovidadesPracas() {
+  const slot = document.getElementById('novidadesPracasSlot');
+  if (!slot) return;
+  const pracas = pracasDoTime();
+  slot.innerHTML = '<div class="chart-card" style="margin-top:14px;border-left:3px solid #0E9F9F;"><div style="font-size:12px;color:var(--muted);">Consultando a Casa dos Dados nas ' + pracas.length + ' praças…</div></div>';
+
+  const resultados = await Promise.all(pracas.map(async p => ({ praca: p, itens: await buscarNovidadesPraca(p.municipio, p.uf) })));
+  const alvo = document.getElementById('novidadesPracasSlot');
+  if (!alvo) return; // trocou de aba enquanto buscava
+  const total = resultados.reduce((s, r) => s + r.itens.length, 0);
+  const comFalha = resultados.filter(r => !r.itens.length).length;
+
+  const dias = iso => {
+    const d = new Date(iso);
+    if (isNaN(d)) return null;
+    return Math.max(0, Math.round((Date.now() - d.getTime()) / 86400000));
+  };
+
+  alvo.innerHTML =
+    '<div class="chart-card" style="margin-top:14px;border-left:3px solid #0E9F9F;">' +
+      '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:3px;">' +
+        '<h3 style="margin:0;">🆕 Abriu nos últimos 60 dias · ' + total + '</h3>' +
+        '<span style="font-size:11px;color:var(--muted2);">Casa dos Dados · CNPJ de foodservice por praça</span>' +
+      '</div>' +
+      '<div class="chart-subtitle" style="margin:0 0 12px;">Restaurante que acabou de abrir ainda não escolheu sistema. É a janela mais barata de entrada — e nenhuma delas está na fila abaixo até ser importada.</div>' +
+      (total === 0
+        ? '<div class="empty-state" style="padding:18px 12px;">Nenhuma abertura nova nas praças do time' + (comFalha === pracas.length ? ' — ou a Casa dos Dados não respondeu agora. Tente de novo em alguns minutos.' : ' nos últimos 60 dias.') + '</div>'
+        : resultados.filter(r => r.itens.length).map(r =>
+          '<details style="border-top:1px solid var(--line-soft);">' +
+            '<summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 0;">' +
+              '<b style="font-size:13px;font-family:\'Poppins\',sans-serif;">' + esc(r.praca.municipio) + '/' + esc(r.praca.uf) + '</b>' +
+              '<span style="font-size:11.5px;font-weight:800;color:#0E9F9F;background:color-mix(in srgb,#0E9F9F 14%,var(--panel));border-radius:999px;padding:3px 10px;">' + r.itens.length + ' nova' + (r.itens.length === 1 ? '' : 's') + '</span>' +
+              '<span style="flex:1;"></span>' +
+              '<span style="font-size:11px;color:var(--muted2);">abrir ▾</span>' +
+            '</summary>' +
+            '<div style="padding:0 0 12px;">' +
+            r.itens.slice(0, 12).map(n => {
+              const d = dias(n.dataAbertura);
+              return '<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;font-size:12.5px;">' +
+                '<b style="min-width:0;">' + esc(n.nome || '') + '</b>' +
+                '<span style="font-size:11px;color:var(--muted2);">' + esc(n.bairro || 'bairro não informado') +
+                (n.porte ? ' · ' + esc(n.porte) : '') +
+                (d != null ? ' · abriu ' + (d === 0 ? 'hoje' : 'há ' + d + ' dia' + (d === 1 ? '' : 's')) : '') + '</span>' +
+              '</div>';
+            }).join('') +
+            (r.itens.length > 12 ? '<div style="font-size:11px;color:var(--muted2);margin-top:6px;">+ ' + (r.itens.length - 12) + ' na praça — entram todas na próxima importação.</div>' : '') +
+            '</div>' +
+          '</details>').join('')) +
+      (total > 0 && comFalha ? '<div style="font-size:11px;color:var(--amber);margin-top:9px;">' + comFalha + ' praça(s) sem retorno da Casa dos Dados nesta consulta.</div>' : '') +
+    '</div>';
 }
 
 async function atualizarLeadProspeccao(id, campos) {
@@ -12278,6 +12388,18 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   // Só pro gestor: o executivo já chega com a lista filtrada no território dele.
   // Clique no card filtra a fila pela cidade (clique de novo limpa o filtro).
   const souGestorProsp = !!(sessaoAtual && sessaoAtual.role === 'manager');
+  // BLOCO 10: quem já recebeu visita. Mesma fonte do card "Empresas criadas" (tarefa
+  // Visita/Revisita do Expogo), calculada UMA vez por render e guardada num Set — o
+  // filtro "nunca visitada" roda em O(1) por linha, em vez de varrer a agenda inteira
+  // para cada uma das contas da fila.
+  prospeccaoVisitados = new Set();
+  if (typeof agendaNormalizar === 'function' && DATA.agenda) {
+    try {
+      agendaNormalizar(DATA.agenda)
+        .filter(e => e.tipo === 'rota')
+        .forEach(e => { if (e.cliente) prospeccaoVisitados.add(prospeccaoNormalizarTexto(e.cliente)); });
+    } catch (e) { console.error('Prospecção: não consegui ler as visitas registradas —', e && e.message); }
+  }
   // FREIO DO EXECUTIVO (Julyan, 11/08: "o executivo pode abrir essa tela e incluir").
   // O veredito de abastecer é do gestor, mas quem puxa conta pra rota é o executivo —
   // então o sinal precisa existir também no momento da escolha, com a régua DELE.
@@ -12404,6 +12526,10 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   const totalHistorico = prospeccaoCache.filter(l => l.status === 'sem_fit' || l.status === 'criado_hubspot').length;
   const totalRevisarEscopo = prospeccaoCache.filter(l => prospeccaoAtiva(l) && !prospeccaoFazSentido(l)).length;
   const pillAtiva = (cond) => cond ? 'background:var(--ink);color:var(--panel);border-color:var(--ink);' : 'background:none;color:var(--muted);border-color:var(--line-btn);';
+  // BLOCO 10 — recortes objetivos. Cada pílula mostra o próprio número: "Top avaliadas"
+  // sem contagem é um botão que o gestor clica no escuro.
+  const totalTop = baseOperacional.filter(l => prospeccaoAtiva(l) && (Number(l.avaliacoes) || 0) >= 1000).length;
+  const totalNuncaVis = baseOperacional.filter(l => prospeccaoAtiva(l) && !prospeccaoVisitados.has(prospeccaoNormalizarTexto(l.nome))).length;
   const pills = `
     <div class="prospeccao-pills">
       <button data-pill="ativas" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'ativas')}">${souGestorProsp ? 'Prioridade' : 'Recomendadas'} ${totalAtivas}</button>
@@ -12411,6 +12537,8 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       <button data-pill="na_rota" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'na_rota')}">Na rota hoje ${totalNaRota}</button>
       ${souGestorProsp && totalRevisarEscopo > 0 ? `<button data-pill="revisar_escopo" title="Registros preservados, mas fora de foodservice" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'revisar_escopo')}">Revisar escopo ${totalRevisarEscopo}</button>` : ''}
       <button data-pill="historico" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.visao === 'historico')}">Histórico ${totalHistorico}</button>
+      <button data-toppill title="Volume de avaliações — peso comercial, não nota" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.topAvaliadas)}">★ 1.000+ avaliações ${totalTop}</button>
+      <button data-nuncavis title="Sem nenhuma tarefa de Visita/Revisita registrada no HubSpot com esse nome" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.nuncaVisitada)}">Nunca visitada ${totalNuncaVis}</button>
       ${(typeof planoMapaOrigemAtual !== 'undefined' && planoMapaOrigemAtual)
         ? `<button data-pertodemim title="Ordenar pela distância até o território que você declarou na Rota" style="font-size:12px;font-weight:700;border-radius:999px;padding:7px 15px;cursor:pointer;font-family:inherit;border:1px solid;${pillAtiva(prospeccaoFiltro.pertoDeMim)}">📍 Perto de mim</button>`
         : `<span title="Defina o território na aba Rota para ver distâncias aqui" style="font-size:11.5px;color:var(--muted2);align-self:center;padding-left:4px;line-height:1.4;">Defina seu território na <b>Rota</b> para ver a distância de cada conta.</span>`}
@@ -12566,8 +12694,14 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       </div>
     </div>
 
+    ${souGestorProsp ? '<div id="novidadesPracasSlot"></div>' : ''}
     ${backlogAprovadoHTML}
   `;
+
+  // BLOCO 10 — Casa dos Dados na Prospecção do gestor. Assíncrono e depois do render:
+  // são 5 chamadas externas e a fila não pode ficar esperando por elas. Se a fonte cair,
+  // o card diz isso e o resto da tela continua igual.
+  if (souGestorProsp) montarNovidadesPracas().catch(e => console.error('Novidades por praça:', e && e.message));
 
   const pgAnt = document.getElementById('prospeccaoPgAnt');
   const pgProx = document.getElementById('prospeccaoPgProx');
@@ -12652,6 +12786,24 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
     btn.addEventListener('click', () => {
       prospeccaoFiltro.pertoDeMim = !prospeccaoFiltro.pertoDeMim;
       prospeccaoPagina = 1;   // reordenou: a página 3 da ordem antiga não faz sentido
+      renderProspeccaoNova(true);
+    });
+  });
+
+  // As duas pílulas novas do Bloco 10 são RECORTES, não visões: somam-se à visão ativa
+  // (ex.: "Prioridade" + "nunca visitada") em vez de trocá-la. Por isso ficam fora do
+  // grupo data-pill, que é excludente.
+  el.querySelectorAll('[data-toppill]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      prospeccaoFiltro.topAvaliadas = !prospeccaoFiltro.topAvaliadas;
+      prospeccaoPagina = 1;
+      renderProspeccaoNova(true);
+    });
+  });
+  el.querySelectorAll('[data-nuncavis]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      prospeccaoFiltro.nuncaVisitada = !prospeccaoFiltro.nuncaVisitada;
+      prospeccaoPagina = 1;
       renderProspeccaoNova(true);
     });
   });
