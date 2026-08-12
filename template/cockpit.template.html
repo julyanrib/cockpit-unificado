@@ -483,8 +483,11 @@
   .rota-card-nada{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5;}
   .rota-card-nada b{color:var(--ink);font-weight:700;}
 
-  .rota-drawer{width:720px;}
-  .rota-mapa-palco{position:relative;height:320px;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line);background:var(--panel2);}
+  /* BLOCO 11 (12/08/26, Julyan: "pode abrir a ficha completa com a tela maior, para
+     realmente termos a noção geográfica"). O drawer da rota é a mesa de estudo de campo
+     do gestor — 720px com um mapa de 320px não dava pra ler bairro nenhum. */
+  .rota-drawer{width:1120px;}
+  .rota-mapa-palco{position:relative;height:460px;border-radius:var(--r-md);overflow:hidden;border:1px solid var(--line);background:var(--panel2);}
   .rota-mapa-palco.is-sem-mapa{height:auto;min-height:0;}
   #rotaMapa{position:absolute;inset:0;}
   .rota-mapa-palco.is-sem-mapa #rotaMapa{position:static;}
@@ -503,7 +506,8 @@
   .rota-add-item span{font-size:11px;color:var(--muted2);}
   .rota-add-btn{margin-left:auto;flex:none;background:var(--red);color:#fff;border:none;border-radius:999px;padding:6px 13px;font:700 11.5px 'DM Sans',sans-serif;cursor:pointer;min-height:32px;}
   .rota-add-btn:disabled{opacity:.55;cursor:default;}
-  @media(max-width:760px){.rota-drawer{width:100%;}.rota-mapa-palco{height:240px;}}
+  @media(max-width:1180px){.rota-drawer{width:96vw;}}
+  @media(max-width:760px){.rota-drawer{width:100%;}.rota-mapa-palco{height:260px;}}
   /* Busca de território do dia (11/08/26) */
   .local-busca{position:relative;}
   .local-sug{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 18px 40px -22px rgba(26,22,19,.55);overflow:hidden;max-height:270px;overflow-y:auto;}
@@ -8010,6 +8014,33 @@ async function desenharRotaDrawer() {
       '<span style="flex:1;min-width:110px;background:var(--panel2);border-radius:12px;padding:9px 12px;"><b style="display:block;font-family:\'Poppins\',sans-serif;font-size:19px;">' + (info.paradas || []).length + '</b><span style="font-size:10.5px;color:var(--muted);">contas-alvo na rota</span></span>' +
       '<span style="flex:1;min-width:110px;background:var(--panel2);border-radius:12px;padding:9px 12px;"><b style="display:block;font-family:\'Poppins\',sans-serif;font-size:19px;">' + (info.sugestoes || []).length + '</b><span style="font-size:10.5px;color:var(--muted);">livres na carteira</span></span>' +
     '</div>' +
+    // BLOCO 11 (12/08/26, Julyan: "preciso dessa tela igual a do salesforce maps com o
+    // que devo fazer, é a tela de como o gestor consegue ajudar ela a organizar a rota").
+    // Antes o drawer entregava números e um mapa e deixava a conclusão por conta dele.
+    // Aqui cada linha é uma pendência REAL daquele executivo hoje, na ordem em que
+    // trava o dia dele: sem território → sem rota → quente sem parada → rota curta.
+    // Sem pendência, não inventa linha: diz que está pronto.
+    (() => {
+      const pend = [];
+      const quentesComCoord = (info.quentes || []).filter(q => q.lat != null && q.lng != null);
+      const primeiro = esc(String(rep.name || 'Ele').split(' ')[0]);
+      if (!(plano && plano.local_atuacao)) pend.push({ u: 'alta', t: primeiro + ' não declarou onde vai atuar hoje', d: 'Sem território, o mapa dele abre sem foco e a rota não tem ponto de partida. É a primeira coisa a cobrar.' });
+      if (seq.length === 0) pend.push({ u: 'alta', t: 'Nenhuma parada montada pra hoje', d: 'Use “Adicionar conta à rota” ou as sugestões abaixo — a conta entra na rota dele e vira tarefa de visita no HubSpot na hora.' });
+      else if (seq.length < 6) pend.push({ u: 'media', t: 'Rota com ' + seq.length + ' parada' + (seq.length === 1 ? '' : 's') + ' — a régua do playbook é 6', d: 'Faltam ' + (6 - seq.length) + ' pra fechar o dia no ritmo combinado.' });
+      const quentesForaDaRota = quentesComCoord.filter(q => !seq.some(p => agendaMesmoLead(p.nome, q.nome)));
+      if (quentesForaDaRota.length) pend.push({ u: 'alta', t: quentesForaDaRota.length + ' quente' + (quentesForaDaRota.length === 1 ? '' : 's') + ' do pipeline fora da rota de hoje', d: 'Começa por: ' + quentesForaDaRota.slice(0, 3).map(q => esc(q.nome || '')).join(' · ') });
+      if (!pend.length) pend.push({ u: 'ok', t: 'Dia de campo montado', d: 'Território declarado, rota no ritmo e os quentes cobertos. Aqui você só confere.' });
+      const cor = u => u === 'alta' ? 'var(--red)' : u === 'media' ? 'var(--amber)' : 'var(--green)';
+      return '<div style="border:1.5px solid var(--line);border-radius:var(--r-md);padding:12px 14px;margin-bottom:12px;">' +
+        '<div style="font-size:10.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:8px;">Como você ajuda ' + primeiro + ' agora</div>' +
+        pend.map(a =>
+          '<div style="display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line-soft);">' +
+            '<span style="flex:none;width:6px;height:6px;border-radius:50%;margin-top:6px;background:' + cor(a.u) + ';"></span>' +
+            '<div style="min-width:0;"><b style="font-size:12.5px;display:block;line-height:1.4;">' + a.t + '</b>' +
+            '<div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:2px;">' + a.d + '</div></div>' +
+          '</div>').join('') +
+      '</div>';
+    })() +
     '<div class="rota-mapa-palco" id="rotaMapaPalco"><div id="rotaMapa"></div></div>' +
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">' +
       '<button class="push" id="rotaBtnMicro" ' + (seq.length < 2 ? 'disabled' : '') + ' style="background:' + (rotaSeqGerada ? 'var(--sunk)' : 'var(--red)') + ';color:' + (rotaSeqGerada ? 'var(--muted)' : '#fff') + ';border:none;border-radius:999px;padding:9px 16px;font:700 12px \'DM Sans\',sans-serif;cursor:pointer;min-height:38px;">' +
@@ -8067,7 +8098,9 @@ async function desenharRotaDrawer() {
   });
 
   if (rotaAddAberto) montarListaAdicionar();
-  montarMapaRota(seq, origem).then(mancha => {
+  montarMapaRota(seq, origem).then(res => {
+    const mancha = res && res.mancha;
+    const novidades = res ? res.novidades : [];
     // Bloco 9: com a região calculada, a pergunta "quem eu empurro pra ela?" vira uma
     // lista curta e defensável — conta-alvo DENTRO da mancha, por volume de avaliações.
     // Fora da mancha não some da tela, só sai da recomendação: empurrar uma conta a
@@ -8109,6 +8142,39 @@ async function desenharRotaDrawer() {
               '</div>').join('') +
             (fora ? '<div style="font-size:11px;color:var(--muted2);margin-top:8px;">' + fora + ' conta(s) da carteira ficaram fora da região — continuam em "Adicionar conta à rota".</div>' : '')
           : '<div style="font-size:11.5px;color:var(--amber);margin-top:8px;">Nenhuma conta-alvo livre dentro da região dele' + (fora ? ' — as ' + fora + ' disponíveis estão fora do raio.' : '. Vale abastecer esta praça na Prospecção.') + '</div>');
+    // BLOCO 11 — Casa dos Dados dentro da região dela. Julyan: "qdo eu abro isso eu tenho
+    // que ter os leads pra adcionar la, da casa dos dados, com bairro, endereço".
+    // Leitura por enquanto (é decisão do gestor, não escrita): quem materializa continua
+    // sendo a importação. Cada uma traz endereço, bairro, porte, idade e a distância do
+    // centro da região — e um link que abre a navegação, pra virar parada de verdade.
+    if (novidades === null) {
+      slotM.insertAdjacentHTML('beforeend',
+        '<div style="margin-top:12px;font-size:11.5px;color:var(--amber);">Não consegui consultar a Casa dos Dados agora — recarregue a página pra tentar de novo. Não é ausência de novidade, é falta de resposta.</div>');
+    } else if (novidades.length) {
+      slotM.insertAdjacentHTML('beforeend',
+        '<div style="margin-top:12px;padding:13px 15px;border:1px solid var(--line);border-left:3px solid #0E9F9F;border-radius:var(--r-md);background:var(--panel2);">' +
+          '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:3px;">' +
+            '<b style="font-size:12.5px;">🆕 Abriu nos últimos 60 dias dentro da região dela · ' + novidades.length + '</b>' +
+          '</div>' +
+          '<div style="font-size:11px;color:var(--muted2);line-height:1.5;margin-bottom:9px;">Casa dos Dados · CNPJ de foodservice. Restaurante recém-aberto ainda não escolheu sistema — é a janela mais barata de entrada. Pinos verde-água no mapa.</div>' +
+          novidades.slice(0, 8).map(n =>
+            '<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid var(--line-soft);">' +
+              '<span style="min-width:0;flex:1;"><b style="font-size:12.5px;">' + esc(n.nome || '') + '</b>' +
+              '<span style="display:block;font-size:11px;color:var(--muted2);">' +
+                esc([n.endereco, n.bairro].filter(Boolean).join(' · ') || 'endereço não informado') +
+                (n.cep ? ' · CEP ' + esc(n.cep) : '') +
+                (n.porte ? ' · ' + esc(n.porte) : '') +
+                (n._dias != null ? ' · abriu ' + (n._dias === 0 ? 'hoje' : 'há ' + n._dias + 'd') : '') +
+                ' · ' + n._km.toFixed(1) + ' km do centro da região</span></span>' +
+              '<a href="https://www.google.com/maps/dir/?api=1&destination=' + Number(n.lat) + ',' + Number(n.lng) + '&travelmode=driving" target="_blank" rel="noopener" style="flex:none;font-size:11px;font-weight:700;color:#2563EB;text-decoration:none;white-space:nowrap;">rota →</a>' +
+            '</div>').join('') +
+          (novidades.length > 8 ? '<div style="font-size:11px;color:var(--muted2);margin-top:7px;">+ ' + (novidades.length - 8) + ' dentro da região — todas na Prospecção.</div>' : '') +
+        '</div>');
+    } else if (mancha && !mancha.disperso) {
+      slotM.insertAdjacentHTML('beforeend',
+        '<div style="margin-top:12px;font-size:11.5px;color:var(--muted2);">Nenhuma abertura nova da Casa dos Dados dentro da região dela nos últimos 60 dias.</div>');
+    }
+
     slotM.querySelectorAll('[data-addlead]').forEach(b => {
       b.addEventListener('click', () => adicionarNaRotaDoRep(b.dataset.addlead, b.dataset.addnome, b, b.dataset.addbairro, b.dataset.addcidade));
     });
@@ -8230,6 +8296,14 @@ async function montarMapaRota(seq, origem) {
   // o resto cinza — a mesma régua de cor do resto do cockpit.
   const snapDono = ((DATA.resumoSemanal || {}).snapshotReps || {})[String(rotaDrawerOwner)];
   const plotaveis = (snapDono && Array.isArray(snapDono.plotaveis)) ? snapDono.plotaveis : [];
+  // BLOCO 11: a mancha sai calculada ANTES dos pinos de fundo porque agora ela também
+  // decide o enquadramento. Sintoma que isso corrige (visto no print do Julyan): a rota
+  // da Kelly abria mostrando Caxias do Sul, Gramado e Torres — o bounds engolia o
+  // Caldeira Restaurante, que fica a 90 km. Mesma correção que o Bloco 6 fez no mapa do
+  // executivo, que faltou aqui no drawer do gestor.
+  const mancha = manchaDeAtuacao([...(comCoord || []), ...plotaveis]);
+  const dentroDaMancha = (lat, lng) => !mancha || mancha.disperso
+    || distanciaKm(mancha.lat, mancha.lng, Number(lat), Number(lng)) <= mancha.raioKm * 1.35;
   // Não repete quem já é parada da rota: dois pinos no mesmo ponto confundem mais que ajudam.
   const idsNaRota = new Set((comCoord || []).map(p => String(p.id)));
   plotaveis.filter(d => !idsNaRota.has(String(d.id)) && d.lat != null && d.lng != null).forEach(d => {
@@ -8244,13 +8318,35 @@ async function montarMapaRota(seq, origem) {
         (d.slaBreach ? ' · <b style="color:#E51A31;">SLA estourado</b>' : '') + '</span>'))
       .addTo(rotaMapaInstancia);
     rotaMapaMarcadores.push(m);
-    bounds.extend([Number(d.lng), Number(d.lat)]);
+    // O pino do negócio distante continua no mapa — só não manda no enquadramento.
+    if (dentroDaMancha(d.lat, d.lng)) bounds.extend([Number(d.lng), Number(d.lat)]);
   });
 
-  // A mancha entra por ÚLTIMO no cálculo mas por BAIXO no desenho (addLayer antes de
-  // qualquer símbolo já existente não é possível aqui, então usa preenchimento fraco e
-  // sem interação — pino nenhum perde clique por causa dela).
-  const mancha = manchaDeAtuacao([...(comCoord || []), ...plotaveis]);
+  // Novidades da Casa dos Dados no mapa do drawer (Bloco 11): empresa que abriu nos
+  // últimos 60 dias na praça dele, dentro da região onde ele atua. Verde-água vazado,
+  // a mesma cor que a legenda do cockpit já usa pra "abriu em 60 dias".
+  let novidadesPerto = [];
+  const pracaDele = PRACA_DO_EXECUTIVO[String(rotaDrawerOwner)];
+  if (pracaDele && mancha && !mancha.disperso) {
+    const todas = await buscarNovidadesPraca(pracaDele.municipio, pracaDele.uf);
+    if (todas === null) novidadesPerto = null;
+    else novidadesPerto = todas
+      .map(n => ({ ...n, _km: distanciaKm(mancha.lat, mancha.lng, Number(n.lat), Number(n.lng)), _dias: diasDesde(n.dataAbertura) }))
+      .filter(n => n._km <= mancha.raioKm)
+      .sort((a, b) => a._km - b._km);
+    (novidadesPerto || []).forEach(n => {
+      const el = document.createElement('div');
+      el.innerHTML = '<span style="display:block;width:14px;height:14px;border-radius:99px;background:#fff;border:3px solid #0E9F9F;box-shadow:0 1px 4px rgba(0,0,0,.25);"></span>';
+      const m = new maplibregl.Marker({ element: el })
+        .setLngLat([Number(n.lng), Number(n.lat)])
+        .setPopup(new maplibregl.Popup().setHTML(
+          '<b>' + esc(n.nome || '') + '</b><br><span style="font-size:11px;">🆕 abriu há ' + (n._dias != null ? n._dias : '?') + ' dias<br>' +
+          esc([n.endereco, n.bairro].filter(Boolean).join(' · ') || 'sem endereço') + '</span>'))
+        .addTo(rotaMapaInstancia);
+      rotaMapaMarcadores.push(m);
+    });
+  }
+
   if (mancha && !mancha.disperso) {
     const desenhar = () => {
       if (!rotaMapaInstancia || rotaMapaInstancia.getSource('manchaAtuacao')) return;
@@ -8276,7 +8372,7 @@ async function montarMapaRota(seq, origem) {
   }
 
   if (!bounds.isEmpty()) rotaMapaInstancia.fitBounds(bounds, { padding: 55, maxZoom: 15 });
-  return mancha;
+  return { mancha: mancha, novidades: novidadesPerto };
 }
 
 /* ---------- Empurrar conta-alvo pra rota do executivo ---------- */
@@ -9356,7 +9452,7 @@ async function buscarNovidadesPraca(municipio, uf) {
   const chave = municipio + '|' + uf;
   if (novidadesPorPraca[chave]) return novidadesPorPraca[chave];
   const token = await tokenDeSessaoGlobal();
-  if (!token) return [];
+  if (!token) return null;
   try {
     const resp = await comPrazoGlobal(async (signal) => fetch('/api/novidades-mercado', {
       method: 'POST', signal,
@@ -9364,15 +9460,18 @@ async function buscarNovidadesPraca(municipio, uf) {
       body: JSON.stringify({ municipio: municipio, uf: uf, dias: 60 })
     }), 25000, 'novidades-praca');
     const json = await resp.json().catch(() => ({}));
-    if (!resp.ok || !json.ok) { novidadesPorPraca[chave] = []; return []; }
+    // CUIDADO (corrigido 12/08 antes de subir): a primeira versão gravava [] no cache
+    // quando a chamada falhava. Um 401 de token expirado — que aconteceu comigo testando
+    // — congelava "nenhuma novidade" pro resto da sessão, e a tela mentia dizendo que
+    // não há aberturas novas quando na verdade nem chegou a perguntar. Falha NUNCA entra
+    // no cache; devolve null, e quem chamou diz "não consegui consultar" em vez de "zero".
+    if (!resp.ok || !json.ok) return null;
     const itens = (json.itens || []).filter(n => n.lat != null && n.lng != null);
     novidadesPorPraca[chave] = itens;
     return itens;
   } catch (e) {
-    // Novidade é bônus: se a Casa dos Dados cair, a Prospecção continua inteira.
     console.error('Novidades da praça indisponíveis (' + municipio + '):', e && e.message);
-    novidadesPorPraca[chave] = [];
-    return [];
+    return null;
   }
 }
 
@@ -12059,11 +12158,14 @@ async function montarNovidadesPracas() {
   const pracas = pracasDoTime();
   slot.innerHTML = '<div class="chart-card" style="margin-top:14px;border-left:3px solid #0E9F9F;"><div style="font-size:12px;color:var(--muted);">Consultando a Casa dos Dados nas ' + pracas.length + ' praças…</div></div>';
 
-  const resultados = await Promise.all(pracas.map(async p => ({ praca: p, itens: await buscarNovidadesPraca(p.municipio, p.uf) })));
+  const brutos = await Promise.all(pracas.map(async p => ({ praca: p, itens: await buscarNovidadesPraca(p.municipio, p.uf) })));
   const alvo = document.getElementById('novidadesPracasSlot');
   if (!alvo) return; // trocou de aba enquanto buscava
+  // null = a consulta falhou; [] = a praça respondeu e não tem abertura nova. São coisas
+  // diferentes e a tela precisa dizer qual das duas — ver comentário em buscarNovidadesPraca.
+  const comFalha = brutos.filter(r => r.itens === null).length;
+  const resultados = brutos.filter(r => Array.isArray(r.itens));
   const total = resultados.reduce((s, r) => s + r.itens.length, 0);
-  const comFalha = resultados.filter(r => !r.itens.length).length;
 
   const dias = iso => {
     const d = new Date(iso);
@@ -12079,7 +12181,9 @@ async function montarNovidadesPracas() {
       '</div>' +
       '<div class="chart-subtitle" style="margin:0 0 12px;">Restaurante que acabou de abrir ainda não escolheu sistema. É a janela mais barata de entrada — e nenhuma delas está na fila abaixo até ser importada.</div>' +
       (total === 0
-        ? '<div class="empty-state" style="padding:18px 12px;">Nenhuma abertura nova nas praças do time' + (comFalha === pracas.length ? ' — ou a Casa dos Dados não respondeu agora. Tente de novo em alguns minutos.' : ' nos últimos 60 dias.') + '</div>'
+        ? '<div class="empty-state" style="padding:18px 12px;">' + (comFalha === pracas.length
+            ? 'Não consegui consultar a Casa dos Dados agora (sessão expirada ou fonte fora do ar). Recarregue a página e tente de novo — nada foi perdido.'
+            : 'Nenhuma abertura nova nas praças do time nos últimos 60 dias.') + '</div>'
         : resultados.filter(r => r.itens.length).map(r =>
           '<details style="border-top:1px solid var(--line-soft);">' +
             '<summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 0;">' +
@@ -12101,7 +12205,7 @@ async function montarNovidadesPracas() {
             (r.itens.length > 12 ? '<div style="font-size:11px;color:var(--muted2);margin-top:6px;">+ ' + (r.itens.length - 12) + ' na praça — entram todas na próxima importação.</div>' : '') +
             '</div>' +
           '</details>').join('')) +
-      (total > 0 && comFalha ? '<div style="font-size:11px;color:var(--amber);margin-top:9px;">' + comFalha + ' praça(s) sem retorno da Casa dos Dados nesta consulta.</div>' : '') +
+      (comFalha && comFalha < pracas.length ? '<div style="font-size:11px;color:var(--amber);margin-top:9px;">' + comFalha + ' praça(s) não responderam nesta consulta — o número acima está incompleto.</div>' : '') +
     '</div>';
 }
 
