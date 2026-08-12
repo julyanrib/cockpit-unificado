@@ -397,13 +397,23 @@ async function visitasTarefasHojeByOwner(ownerId, diaISO) {
       { propertyName: 'hubspot_owner_id', operator: 'EQ', value: String(ownerId) },
       ...filtrosData
     ] }],
-    properties: ['hs_task_subject', 'hs_task_body'],
+    properties: ['hs_task_subject', 'hs_task_body', 'hs_task_status'],
     limit: 100
   });
+  // BLOCO 17 (12/08/26) — CORRECAO DE DADO. Antes contava toda tarefa de visita CRIADA
+  // no dia, sem olhar o status. Só que a rota do cockpit cria tarefa NOT_STARTED no
+  // momento em que o executivo monta o dia: a visita que ele ainda VAI fazer entrava
+  // como visita FEITA. Flagrado na Kelly em 12/08 — o cockpit dizia "2 realizado" às
+  // 09h e as duas tarefas eram compromissos das 10:00 e 10:45, ainda não realizados.
+  // Isso é exatamente o dado errado que não pode chegar na Daily: cobrar entrega de
+  // quem ainda nem saiu, ou dar por feito o que não foi.
+  // Visita registrada pelo Expogo nasce COMPLETED; a marcada pela rota nasce
+  // NOT_STARTED e vira COMPLETED quando o executivo registra. Então realizado = COMPLETED.
   return (data.results || []).filter(t => {
     const titulo = String(t.properties.hs_task_subject || '');
     const corpo = String(t.properties.hs_task_body || '');
-    return /^\s*(re)?visita\b/i.test(titulo) || /app\s*outbound/i.test(corpo);
+    const ehVisita = /^\s*(re)?visita\b/i.test(titulo) || /app\s*outbound/i.test(corpo);
+    return ehVisita && String(t.properties.hs_task_status || '') === 'COMPLETED';
   }).length;
 }
 
