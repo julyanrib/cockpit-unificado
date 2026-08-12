@@ -427,6 +427,12 @@
   .avisos-overlay{position:fixed;inset:0;background:rgba(34,30,25,.45);z-index:70;}
   .avisos-drawer{position:absolute;top:0;right:0;height:100%;width:660px;max-width:94vw;background:var(--bg);box-shadow:var(--shadow-lg);overflow-y:auto;padding:22px 24px 40px;box-sizing:border-box;}
   /* Pílulas do topo (Bloco 12): mesmo peso visual, sem vermelho sólido. */
+  /* Botões das novidades da Casa dos Dados (Bloco 14) — pequenos, sem competir com o vermelho. */
+  .nov-btn{white-space:nowrap;background:var(--panel);border:1px solid var(--line-btn);border-radius:999px;padding:5px 11px;font:700 10.5px 'DM Sans',sans-serif;color:var(--muted);cursor:pointer;transition:border-color .12s var(--ease),color .12s var(--ease);}
+  .nov-btn:hover:not(:disabled){border-color:var(--ink);color:var(--ink);}
+  .nov-btn:disabled{opacity:.6;cursor:default;}
+  .nov-add{border-color:#0E9F9F;color:#0E9F9F;}
+  .nov-add:hover:not(:disabled){background:color-mix(in srgb,#0E9F9F 12%,var(--panel));border-color:#0E9F9F;color:#0E9F9F;}
   .com-topo-btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 14px;border-radius:var(--r-pill);border:1px solid var(--line-btn);background:var(--panel);color:var(--muted);font:700 11.5px 'DM Sans',sans-serif;cursor:pointer;text-decoration:none;white-space:nowrap;transition:border-color .12s var(--ease),color .12s var(--ease),background .12s var(--ease);}
   .com-topo-btn:hover{border-color:var(--ink);color:var(--ink);background:var(--panel2);}
   .com-topo-btn b{font-weight:800;color:var(--ink);}
@@ -7695,7 +7701,8 @@ const TERRITORIO_DO_EXECUTIVO = {
   '86100506': { rotulo: 'Taquara, Jacarepaguá', bairro: 'Taquara', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9260, lng: -43.3760, raioKm: 5 },
   '87569072': { rotulo: 'Tijuca', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9245, lng: -43.2320, raioKm: 4 },
   '94079973': { rotulo: 'Campo Grande', bairro: 'Campo Grande', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9020, lng: -43.5580, raioKm: 6 },
-  '91477292': { rotulo: 'Auxiliadora / Moinhos de Vento', bairro: 'Moinhos de Vento', municipio: 'Porto Alegre', uf: 'RS', lat: -30.0245, lng: -51.2050, raioKm: 4 },
+  // bairro aceita lista: a Kelly cobre dois, e a Casa dos Dados devolve um por empresa.
+  '91477292': { rotulo: 'Auxiliadora / Moinhos de Vento', bairro: ['Moinhos de Vento', 'Auxiliadora'], municipio: 'Porto Alegre', uf: 'RS', lat: -30.0245, lng: -51.2050, raioKm: 4 },
   '89842507': { rotulo: 'Santo Amaro', bairro: 'Santo Amaro', municipio: 'São Paulo', uf: 'SP', lat: -23.6520, lng: -46.7080, raioKm: 5 },
   // Ricardo segue com ownerId provisório: território da praça, sem bairro fechado ainda.
   'pendente_ricardo2': { rotulo: 'Porto Alegre (a definir)', bairro: null, municipio: 'Porto Alegre', uf: 'RS', lat: -30.0346, lng: -51.2177, raioKm: 8 }
@@ -12354,6 +12361,90 @@ function prospeccaoAplicarFiltros(lista) {
 // 60 dias, por praça, direto da Casa dos Dados. Uma praça por linha, aberta a um clique.
 // Não cria nada no HubSpot daqui: é leitura pro gestor decidir para quem mandar. Quem
 // materializa continua sendo a importação, com a conferência que já existe.
+// BLOCO 14 — de quem é o bairro. Usa o TERRITORIO_DO_EXECUTIVO já existente: bairro
+// fechado ganha do território de cidade inteira, porque é mais específico. Sem dono,
+// a empresa entra na fila geral e o gestor atribui na Prospecção como sempre fez.
+// Comparação de bairro precisa ignorar as preposições: a Casa dos Dados devolve
+// "Moinhos Vento" e o território diz "Moinhos de Vento". Sem tirar o "de", o casamento
+// falhava e a empresa caía na fila geral — peguei isso testando com os bairros reais que
+// vieram das 5 praças, não em teoria.
+function chaveBairro(s) {
+  return prospeccaoNormalizarTexto(s || '').replace(/\b(de|do|da|dos|das|d)\b/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function donoDoTerritorio(bairro, municipio) {
+  const norm = s => prospeccaoNormalizarTexto(s || '');
+  const b = chaveBairro(bairro), m = norm(municipio);
+  if (!m) return null;
+  const candidatos = Object.entries(TERRITORIO_DO_EXECUTIVO)
+    .filter(([id, t]) => norm(t.municipio) === m && !String(id).startsWith('pendente_'));
+  const porBairro = candidatos.find(([, t]) => {
+    if (!t.bairro || !b) return false;
+    const lista = Array.isArray(t.bairro) ? t.bairro : [t.bairro];
+    return lista.some(x => { const k = chaveBairro(x); return k && (k === b || b.includes(k) || k.includes(b)); });
+  });
+  if (porBairro) return porBairro[0];
+  // Território de cidade inteira só pega o que sobrou — bairro fechado é mais específico
+  // e vence sempre, senão Marco levaria empresa da Praia da Costa que já é dele por bairro.
+  const cidadeInteira = candidatos.find(([, t]) => !t.bairro);
+  return cidadeInteira ? cidadeInteira[0] : null;
+}
+function primeiroNomeDoOwner(ownerId) {
+  const r = (DATA.reps || []).find(x => String(x.ownerId) === String(ownerId));
+  return r ? String(r.name || '').split(' ')[0] : 'alguém';
+}
+
+// Importa UMA empresa da Casa dos Dados para leads_prospeccao já atribuída ao dono do
+// território. Depois disso ela existe como conta-alvo e segue o caminho normal: aparece
+// na fila, no mapa do executivo e pode virar parada de rota. Sem essa etapa não há como
+// "colocar na rota" — a rota só aceita lead que existe na base.
+async function importarNovidade(dados, botao) {
+  if (botao.dataset.enviando === '1') return;
+  botao.dataset.enviando = '1';
+  const rotuloOriginal = botao.textContent;
+  botao.textContent = 'Importando…';
+  botao.disabled = true;
+  try {
+    const token = await tokenDeSessaoGlobal();
+    const resp = await fetch('/api/importar-leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({
+        fonte: 'casa_dos_dados',
+        leads: [{
+          nome: dados.nome, endereco: dados.endereco, bairro: dados.bairro,
+          cidade: dados.cidade, estado: dados.estado, lat: dados.lat, lng: dados.lng,
+          telefone: dados.telefone || null, categoria: 'Recém-aberto (CNPJ)',
+          responsavel_owner_id: dados.dono || null
+        }]
+      })
+    });
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      botao.textContent = (j && j.erro) ? 'Recusado' : 'Falhou';
+      botao.title = (j && j.erro) || 'Erro na importação';
+      botao.dataset.enviando = '0';
+      return;
+    }
+    botao.textContent = dados.dono ? '✓ na fila de ' + primeiroNomeDoOwner(dados.dono) : '✓ na fila geral';
+    botao.style.background = 'var(--green-soft)';
+    botao.style.borderColor = 'var(--green)';
+    botao.style.color = 'var(--green)';
+    // Recarrega o cache e re-renderiza a fila pra ela já aparecer abaixo, sem F5.
+    // carregarProspeccao() não recebe argumento e não redesenha sozinha — as duas
+    // chamadas são necessárias, e foi conferindo a assinatura que eu vi isso.
+    if (typeof carregarProspeccao === 'function') {
+      try {
+        await carregarProspeccao();
+        if (typeof renderProspeccaoNova === 'function') await renderProspeccaoNova(true);
+      } catch (e) { /* a fila atualiza no próximo render; a importação já foi gravada */ }
+    }
+  } catch (e) {
+    botao.textContent = 'Tentar de novo';
+    botao.disabled = false;
+    botao.dataset.enviando = '0';
+  }
+}
+
 async function montarNovidadesPracas() {
   const slot = document.getElementById('novidadesPracasSlot');
   if (!slot) return;
@@ -12397,18 +12488,71 @@ async function montarNovidadesPracas() {
             '<div style="padding:0 0 12px;">' +
             r.itens.slice(0, 12).map(n => {
               const d = dias(n.dataAbertura);
-              return '<div style="display:flex;gap:10px;align-items:baseline;padding:5px 0;font-size:12.5px;">' +
-                '<b style="min-width:0;">' + esc(n.nome || '') + '</b>' +
-                '<span style="font-size:11px;color:var(--muted2);">' + esc(n.bairro || 'bairro não informado') +
-                (n.porte ? ' · ' + esc(n.porte) : '') +
-                (d != null ? ' · abriu ' + (d === 0 ? 'hoje' : 'há ' + d + ' dia' + (d === 1 ? '' : 's')) : '') + '</span>' +
+              // BLOCO 14 — Julyan: "como coloco esses da casa dos dados na rota deles e no
+              // mapa? e tem q ter nome, telefone, endereço". Nome, endereço, bairro, CEP,
+              // porte e idade vêm juntos da consulta. Telefone NÃO vem: a Pesquisa
+              // Avançada não devolve número, só a Consulta CNPJ devolve, e ela custa
+              // crédito por empresa. Por isso o telefone é sob demanda, uma de cada vez,
+              // na empresa em que o gestor decidiu agir — mesma regra que já vale na Rota
+              // do executivo. Buscar os 137 de uma vez seriam 137 créditos por consulta.
+              const dono = donoDoTerritorio(n.bairro, r.praca.municipio);
+              return '<div class="nov-linha" style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--line-soft);">' +
+                '<div style="min-width:0;flex:1;">' +
+                  '<b style="font-size:12.5px;">' + esc(n.nome || '') + '</b>' +
+                  (n.semNomeFantasia ? '<span title="Sem nome fantasia no CNPJ — pode ser empresário individual, confira antes de mandar alguém" style="font-size:9.5px;font-weight:800;color:var(--amber);background:var(--amber-soft);border-radius:999px;padding:2px 7px;margin-left:6px;">conferir</span>' : '') +
+                  '<div style="font-size:11px;color:var(--muted2);margin-top:2px;line-height:1.5;">' +
+                    esc([n.endereco, n.bairro].filter(Boolean).join(', ') || 'endereço não informado') +
+                    (n.cep ? ' · CEP ' + esc(n.cep) : '') +
+                    (n.porte ? ' · ' + esc(n.porte) : '') +
+                    (d != null ? ' · abriu ' + (d === 0 ? 'hoje' : 'há ' + d + ' dia' + (d === 1 ? '' : 's')) : '') +
+                  '</div>' +
+                  '<div class="nov-tel" style="font-size:11.5px;color:var(--muted2);margin-top:3px;"></div>' +
+                '</div>' +
+                '<div style="flex:none;display:flex;flex-direction:column;gap:5px;align-items:flex-end;">' +
+                  (n.cnpj ? '<button class="nov-btn nov-tel-btn" data-cnpj="' + esc(String(n.cnpj)) + '">📞 buscar telefone</button>' : '') +
+                  '<button class="nov-btn nov-add" data-nov=\'' + esc(JSON.stringify({ nome: n.nome, endereco: n.endereco, bairro: n.bairro, cidade: r.praca.municipio, estado: r.praca.uf, lat: n.lat, lng: n.lng, cnpj: n.cnpj, dono: dono })) + '\'>' +
+                    (dono ? '+ rota de ' + esc(primeiroNomeDoOwner(dono)) : '+ mandar pra fila') + '</button>' +
+                '</div>' +
               '</div>';
             }).join('') +
-            (r.itens.length > 12 ? '<div style="font-size:11px;color:var(--muted2);margin-top:6px;">+ ' + (r.itens.length - 12) + ' na praça — entram todas na próxima importação.</div>' : '') +
+            (r.itens.length > 12 ? '<div style="font-size:11px;color:var(--muted2);margin-top:6px;">+ ' + (r.itens.length - 12) + ' na praça — abra a Prospecção depois de importar pra ver todas.</div>' : '') +
             '</div>' +
           '</details>').join('')) +
       (comFalha && comFalha < pracas.length ? '<div style="font-size:11px;color:var(--amber);margin-top:9px;">' + comFalha + ' praça(s) não responderam nesta consulta — o número acima está incompleto.</div>' : '') +
     '</div>';
+
+  // Handlers depois do innerHTML: telefone sob demanda (1 crédito) e importar pra fila.
+  alvo.querySelectorAll('.nov-tel-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (btn.dataset.buscando === '1') return;
+      btn.dataset.buscando = '1';
+      btn.textContent = 'buscando…';
+      try {
+        const token = await tokenDeSessaoGlobal();
+        const resp = await fetch('/api/novidades-mercado', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ cnpj: btn.dataset.cnpj })
+        });
+        const j = await resp.json().catch(() => ({}));
+        const tel = j && j.contato && j.contato.telefone;
+        const linha = btn.closest('.nov-linha');
+        if (!resp.ok || !tel) { btn.textContent = 'sem telefone'; btn.disabled = true; return; }
+        linha.querySelector('.nov-tel').innerHTML = '<a href="tel:' + String(tel).replace(/[^+0-9]/g, '') + '" style="color:var(--blue);font-weight:700;text-decoration:none;">📞 ' + esc(tel) + '</a>';
+        // O telefone encontrado vai junto se ele importar em seguida.
+        const add = linha.querySelector('.nov-add');
+        if (add) { const d = JSON.parse(add.dataset.nov); d.telefone = tel; add.dataset.nov = JSON.stringify(d); }
+        btn.remove();
+      } catch (e) { btn.dataset.buscando = '0'; btn.textContent = 'tentar de novo'; }
+    });
+  });
+  alvo.querySelectorAll('.nov-add').forEach(btn => {
+    btn.addEventListener('click', () => {
+      let d = null;
+      try { d = JSON.parse(btn.dataset.nov); } catch (e) { return; }
+      importarNovidade(d, btn);
+    });
+  });
 }
 
 async function atualizarLeadProspeccao(id, campos) {
