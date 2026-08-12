@@ -396,6 +396,14 @@
   .deck-head{padding:15px 17px 12px;border-bottom:1px solid var(--line-soft);}
   .deck-head h3{font-size:14px;font-weight:700;margin-bottom:3px;font-family:'Poppins',sans-serif;}
   .deck-head p{margin:0;font-size:11.5px;color:var(--muted2);line-height:1.45;}
+  /* BUG PEGO NO TESTE AO VIVO (12/08, com o Bruno logado): esse cabeçalho reaproveitava
+     .plano-map-sidebar-head, que tem UMA SEGUNDA definição mais abaixo no arquivo com
+     position:sticky + margin:-14px -14px 4px — pensada pra quando esse cabeçalho era o
+     PRIMEIRO filho do painel, sem nada acima. Aqui ele vem depois das abas do deck, e a
+     margem negativa puxava ele 14px pra cima, por cima do número de cada aba (o "corte"
+     que o Julyan viu — "Meu funil 26" e "Contas-alvo 96" com o número cortado ao meio).
+     Classe própria, sem sticky, sem margem negativa. */
+  .deck-planohead{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px 0;}
   .deck-tabs{display:flex;gap:5px;padding:11px 13px 0;}
   .dtab{flex:1;border:none;background:none;border-radius:var(--r-sm);padding:8px 6px;font:700 11.5px 'DM Sans',sans-serif;color:var(--muted2);cursor:pointer;}
   .dtab.on{background:var(--sunk);color:var(--ink);}
@@ -5590,6 +5598,15 @@ function renderAgenda() {
   })() : '';
 
   const bannerAgendaExec = souRep ? (() => {
+    // BUG PEGO NO TESTE AO VIVO (12/08, com o Bruno logado): este hero antigo
+    // ("Meu dia de campo está pronto?", 3 números, "Planejar minha rota") e o `.brief`
+    // novo do Bloco 25 (dentro de #planoDoDiaSlot, mais abaixo) respondem à MESMA
+    // pergunta — mas o antigo nunca foi removido quando o novo entrou. O resultado era
+    // duas telas empilhadas na aba Rota, uma em cima da outra, cada uma com seu próprio
+    // "hoje está pronto?". Este hero segue existindo só pra aba AGENDA de verdade
+    // (subview 'semana', com o cabeçalho "Minha semana está planejada?") — é o único
+    // caso onde não há duplicata, porque o Bloco 25 não cobre a visão semanal.
+    if (agendaEstado.subview !== 'semana') return '';
     const diasComEvento = new Set(naSemana.map(e => agendaChave(e.inicio)));
     const diasSemCompromisso = dias.filter(d => !diasComEvento.has(agendaChave(d))).length;
     // "Na rota de hoje": compromissos de HOJE do próprio executivo (visita/reunião/rota;
@@ -5771,7 +5788,13 @@ function renderAgenda() {
   // Agora a Hoje é o padrão apenas quando não é nenhuma das outras.
   const mostrarHoje = souRep && agendaEstado.subview !== 'semana' && agendaEstado.subview !== 'prospeccao';
   const mostrarSemana = !souRep || agendaEstado.subview === 'semana';
-  const resumoSemanaHojeExec = mostrarHoje ? (() => {
+  // BLOCO 25, correção ao vivo (12/08) — este card ("Sua semana, sempre à vista" +
+  // preview de 4 compromissos + botão "Abrir agenda semanal") ficava entre as pílulas
+  // e o `.brief` novo, empilhando um TERCEIRO cabeçalho na mesma rolagem. A Agenda
+  // semanal de verdade continua a um clique, na aba "Agenda" do menu — não perdeu
+  // função nenhuma, só parou de se repetir aqui. `false &&` no lugar de apagar o
+  // código: se um dia quiser de volta em outro ponto da tela, a lógica já está pronta.
+  const resumoSemanaHojeExec = false && mostrarHoje ? (() => {
     const meusEventos = naSemana
       .filter(e => e.ownerId === String(sessaoAtual.ownerId))
       .sort((a, b) => a.inicio - b.inicio);
@@ -10278,8 +10301,8 @@ async function montarPlanoDoDia(r) {
             <p>Ordenados pelo que mais move seu mês: travado primeiro, depois conta-alvo por volume de avaliações.</p>
           </div>
           <div class="deck-tabs" id="deckTabs"></div>
-          <div class="plano-map-sidebar-head" style="padding:9px 13px 0;">
-            <span class="plano-map-sidebar-title" style="font-size:11px;">Plano de campo</span>
+          <div class="deck-planohead">
+            <span class="plano-map-sidebar-title">Plano de campo</span>
             <span class="plano-map-sidebar-count" id="planoMapaRotaCount">0 paradas</span>
           </div>
           <div id="planoMapaLista" class="deck-body"></div>
@@ -12019,7 +12042,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
 
   const { individuais: pinosIndividuais, clusters: pinosAgrupados } = agruparParaOMapa(paraExibirNoMapa);
 
-  pinosAgrupados.forEach(c => {
+  pinosAgrupados.forEach((c, idx) => {
     const el = document.createElement('button');
     el.type = 'button';
     el.className = 'plano-cluster';
@@ -12033,13 +12056,28 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         // Zoom suficiente pra separar o grupo: cada nível divide a distância em pixels
         // por 2, então subir ~2 níveis já descola o que estava a 34px.
         const z = Math.min(18, (planoMapaInstancia.getZoom ? planoMapaInstancia.getZoom() : 12) + 2.2);
-        planoMapaInstancia.flyTo({ center: [c.lng, c.lat], zoom: z, speed: 1.3 });
-      } catch (e) { /* mapa em estado ruim: o clique só não faz nada */ }
+        // BUG PEGO NO TESTE (12/08 à noite, ao vivo no navegador do Bruno): flyTo()
+        // depende do loop de animação da própria lib rodando frame a frame; quando o
+        // carregamento dos tiles trava (rede lenta, MapTiler fora do ar por um
+        // instante), esse loop nunca avança e o clique parece "não fazer nada" — sem
+        // erro nenhum no console. Testei os dois lado a lado no mesmo mapa: jumpTo()
+        // aplicou na hora, flyTo() ficou parado. jumpTo não é tão bonito (sem a
+        // suavidade do voo), mas o pino TEM que responder ao clique sempre — é a
+        // reclamação direta do Julyan. Trocado aqui e não nos outros usos de flyTo
+        // (clique na lista, "ver no mapa") porque aquele é o caminho mais crítico:
+        // é o único jeito de abrir um grupo de 24 pinos empilhados.
+        planoMapaInstancia.jumpTo({ center: [c.lng, c.lat], zoom: z });
+      } catch (e) { console.error('Cluster não expandiu:', e && e.message); }
     });
     try {
       const m = new maplibregl.Marker({ element: el }).setLngLat([c.lng, c.lat]).addTo(planoMapaInstancia);
-      planoMapaMarcadores.push(m);
-    } catch (e) { /* ignora: pino agrupado é conforto, não função crítica */ }
+      // BUG PEGO NO TESTE: era `.push(m)`, tratando isto como array. Em todo o resto
+      // do arquivo planoMapaMarcadores é um DICIONÁRIO por id (`obj[id] = {...}`) —
+      // .push() num objeto comum lança TypeError, e o catch abaixo engolia isso calado.
+      // A mancha final é pequena (cluster não entrava no dicionário de hover/lista),
+      // mas era uma exceção real acontecendo em silêncio a cada pino agrupado do mapa.
+      planoMapaMarcadores['cluster-' + idx] = { marker: m, popup: null, lead: null };
+    } catch (e) { console.error('Cluster não desenhou:', e && e.message); }
   });
 
   pinosIndividuais.forEach(l => {
