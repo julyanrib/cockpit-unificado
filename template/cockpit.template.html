@@ -2787,7 +2787,9 @@ function aplicarVisaoPorPapel() {
   // Se o executivo estava na Prospecção quando a aba sumiu, leva ele pra Rota & Agenda
   // já na sub-aba certa — em vez de deixar a tela ativa num botão que não existe mais.
   if (souRep && document.querySelector('.view.active')?.id === 'viewLeadsPraca') {
-    if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'prospeccao';
+    // BLOCO 33 — a sub-aba Prospecção do executivo não existe mais: a fila dele agora é o
+    // deck ao lado do mapa, então o destino certo é a Rota padrão ("hoje").
+    if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'hoje';
     activateTab('viewAgenda');
     if (typeof renderAgenda === 'function') renderAgenda();
   }
@@ -5886,7 +5888,17 @@ function renderAgenda() {
   // também passava neste teste — as duas pílulas ficavam acesas e a tela montava o mapa
   // com 155 marcadores JUNTO com a fila de prospecção, o que travava o navegador.
   // Agora a Hoje é o padrão apenas quando não é nenhuma das outras.
-  const mostrarHoje = souRep && agendaEstado.subview !== 'semana' && agendaEstado.subview !== 'prospeccao';
+  // BLOCO 33 (13/08/26) — Opção A decidida pelo Julyan: "estou usando mais para gestão,
+  // então pode ser a opção A" (o time ainda não planeja pelo cockpit). A sub-aba
+  // Prospecção do EXECUTIVO foi aposentada: existiam duas filas concorrentes — o deck
+  // ao lado do mapa ("Candidatos perto de você", que já unifica contas-alvo + portas do
+  // OSM + funil quente) e a tabela em tela cheia — respondendo à mesma pergunta com
+  // números diferentes. Agora a fila do executivo é UMA: o deck, estilo Salesforce Maps
+  // (mapa grande + coluna fina), com busca e distância em cada card. A tabela completa
+  // segue viva na aba de topo do GESTOR, que precisa da visão do time inteiro.
+  // Valores antigos de subview 'prospeccao' (salvos em sessão ou vindos de código legado)
+  // caem no padrão "hoje" por este mesmo teste — sem case especial.
+  const mostrarHoje = souRep && agendaEstado.subview !== 'semana';
   const mostrarSemana = !souRep || agendaEstado.subview === 'semana';
   // BLOCO 25, correção ao vivo (12/08) — este card ("Sua semana, sempre à vista" +
   // preview de 4 compromissos + botão "Abrir agenda semanal") ficava entre as pílulas
@@ -5920,25 +5932,12 @@ function renderAgenda() {
       </div>
     </div>`;
   })() : '';
-  // PROSPECÇÃO DENTRO DA ROTA (Julyan, 11/08): "as rota e prospecção andam lado a lado".
-  // Era aba separada no topo, com badge de 56. Virou sub-aba aqui, e o badge virou
-  // contador na própria aba — o executivo monta o dia sem trocar de tela.
-  // Continua existindo como aba de topo para o GESTOR, que precisa ver a fila do time.
-  const mostrarProspeccao = souRep && agendaEstado.subview === 'prospeccao';
-  const filaProspeccao = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache))
-    ? prospeccaoCache.filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l)).length
-    : 0;
-  const segSubviewExec = (souRep && !mostrarSemana) ?
-    '<div class="ag-seg" role="group" aria-label="Ver" style="margin:18px 0 20px;">' +
-    '<button data-agsub="hoje" aria-pressed="' + mostrarHoje + '">📍 Hoje</button>' +
-    '<button data-agsub="prospeccao" aria-pressed="' + mostrarProspeccao + '">🎯 Prospecção' +
-    (filaProspeccao ? '<span style="margin-left:6px;background:var(--red);color:#fff;border-radius:999px;padding:1px 7px;font-size:10.5px;font-weight:800;">' + filaProspeccao + '</span>' : '') +
-    '</button></div>' : '';
-
-  let h = bannerAgendaGestor + bannerAgendaExec + segSubviewExec +
-    (mostrarProspeccao ? '' : resumoSemanaHojeExec) +
-    (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '') +
-    (mostrarProspeccao ? '<div id="prospeccaoSlotRota"></div>' : '');
+  // BLOCO 33 — a barra de pílulas 📍 Hoje / 🎯 Prospecção morreu junto com a sub-aba:
+  // com uma opção só, era um grupo de rádio de um botão. "Semana" continua acessível
+  // pela aba Agenda do topo e pelo botão "Abrir agenda semanal" do card de resumo.
+  let h = bannerAgendaGestor + bannerAgendaExec +
+    resumoSemanaHojeExec +
+    (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '');
 
   // Centro de ação do gestor: uma fonte visual para os dois riscos que exigem
   // cobrança na daily — executivo sem cobertura e oportunidade quente sem próximo passo.
@@ -6047,20 +6046,6 @@ function renderAgenda() {
   //
   // Agora a Rota tem container PRÓPRIO, criado e destruído com ela, e o do gestor fica
   // intocado. Quem decide onde desenhar é prospeccaoContainer().
-  if (mostrarProspeccao) {
-    const destino = document.getElementById('prospeccaoSlotRota');
-    if (destino) {
-      if (!destino.firstElementChild) {
-        const novo = document.createElement('div');
-        novo.id = 'prospeccaoNovaRota';
-        destino.appendChild(novo);
-      }
-      if (typeof renderProspeccaoNova === 'function') {
-        Promise.resolve(renderProspeccaoNova()).catch(e => console.error('Erro ao montar a prospecção na rota:', e));
-      }
-    }
-  }
-
   // Bloco 2b-iii (09/08): distância de cada quente-sem-compromisso até onde o
   // executivo disse que vai atuar hoje. Só faz sentido pra semana atual (offset 0)
   // — "distância de hoje" numa semana passada/futura não tem referência real.
@@ -6670,10 +6655,10 @@ function restaurarPosicaoDeNavegacao() {
   if (pos.view === 'viewAgenda' && pos.subview === 'semana') BOTAO_DA_VIEW.viewAgenda = 'tabBtnAgendaSemana';
   const btn = document.getElementById(BOTAO_DA_VIEW[pos.view] || '');
   if (!btn || btn.style.display === 'none') return; // view não existe pro papel: fica na home
+  // BLOCO 33 — 'prospeccao' deixou de existir como subview; posição salva por uma sessão
+  // anterior ao corte cai na Rota padrão em vez de quebrar a restauração.
   if (pos.view === 'viewAgenda' && ['hoje', 'prospeccao'].includes(pos.subview)
-      && typeof agendaEstado !== 'undefined') agendaEstado.subview = pos.subview;
-  // O listener do tabBtnAgenda zera 'semana'->'hoje' de propósito e PRESERVA 'prospeccao'
-  // (comentário na própria linha) — clicar nele com subview já ajustada respeita as duas regras.
+      && typeof agendaEstado !== 'undefined') agendaEstado.subview = 'hoje';
   try { btn.click(); } catch (e) { /* restauração é conforto, nunca pode quebrar o login */ }
 }
 let posicaoNavRestaurada = false;
@@ -9943,6 +9928,7 @@ let planoMapaInstancia = null;
 let planoMapaMarcadores = {}; // id do lead -> { marker, popup, lead }
 // Aba ativa do deck de candidatos (Bloco 25): 'sugeridos' | 'funil' | 'alvo'.
 let deckAbaAtiva = 'sugeridos';
+let deckBuscaTermo = ''; // BLOCO 33 — termo da busca do deck sobrevive aos re-renders da lista
 // BLOCO 29 (12/08/26) — Julyan: "inspire-se em grandes gestões como salesforce maps...
 // tem q aparecer leads pra eles, onde ele escolher a rota, os mais pertos, pra economizar
 // tempo e esforço". A distância já aparecia em cada card, mas nunca foi o CRITÉRIO de
@@ -10703,6 +10689,10 @@ async function montarPlanoDoDia(r) {
             <p>Ordenados pelo que mais move seu mês: travado primeiro, depois conta-alvo por volume de avaliações.</p>
           </div>
           <div class="deck-tabs" id="deckTabs"></div>
+          <!-- BLOCO 33 — busca rápida do deck. Filtro 100%% no DOM (esconde/mostra os cards
+               já desenhados): digitar NÃO re-renderiza nada, então não derruba o foco (bug
+               já corrigido uma vez na tabela, 10/08) e não recria o mapa. -->
+          <input id="deckBusca" type="search" placeholder="Buscar nome, bairro ou telefone…" aria-label="Buscar na fila de candidatos" autocomplete="off" style="width:100%;margin:0 0 10px;font:600 12px 'DM Sans',sans-serif;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 12px;color:var(--ink);">
           <div class="deck-planohead">
             <span class="plano-map-sidebar-title">Plano de campo</span>
             <span class="plano-map-sidebar-count" id="planoMapaRotaCount">0 paradas</span>
@@ -12065,6 +12055,17 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     return seletorDiaHoraHTML(l);
   };
 
+  // BLOCO 33 (item 7 do documento) — "todo lead na lista lateral precisa mostrar a
+  // distância até o executivo de forma pequena e discreta, mas sempre visível — é o dado
+  // que permite montar microrota de verdade". Uma função só, em TODO card, no mesmo
+  // formato: nada de km aparecendo só em chip de novidade/porta como era antes.
+  const kmDoCard = l => {
+    if (!planoMapaOrigemAtual || l.lat == null || l.lng == null) return '';
+    const d = distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng));
+    if (!Number.isFinite(d)) return '';
+    return `<span class="plano-lista-km">· ${d < 10 ? d.toFixed(1) : Math.round(d)} km</span>`;
+  };
+
   // ---- Lista lateral sincronizada ----
   const itemListaHTML = l => {
     const detalhe = prospeccaoPraca(l);
@@ -12081,9 +12082,9 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         <span class="plano-lista-index" ${naRota ? '' : `style="color:${corDoStatus(l)};"`}>${simbolo}</span>
         <span class="plano-lista-copy">
           <b>${esc(l.nome)}</b>
-          <span class="plano-lista-meta">${blocoDele ? `<input type="time" class="plano-hora-input" data-horalead="${esc(String(l.id))}" value="${blocoDele.hora}" aria-label="Horário da visita a ${esc(l.nome)}"> ` : ''}${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}</span>
-          ${l._novidade ? `<span class="plano-etapa-hub" style="color:#0E9F9F;font-weight:800;">🆕 Abriu ${l._dias === 0 ? 'hoje' : 'há ' + l._dias + ' dias'}${l._porte ? ' · ' + esc(l._porte) : ''}${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>` : ''}${(l._doMapa && !l._novidade) ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação${l._km != null ? ' · ' + l._km.toFixed(1) + ' km' : ''}</span>${l.telefone ? `<span class="plano-etapa-hub" style="color:var(--violet);">📞 ${esc(l.telefone)}</span>` : ''}` : ''}
-          ${l._quenteAvulso && (l._travado || l._dias != null) ? `<span class="plano-etapa-hub" style="color:${l._travado ? 'var(--red)' : 'var(--muted2)'};">${l._travado ? '⚠ travado · ' : ''}${l._dias != null ? l._dias + 'd na etapa' : ''}</span>` : ''}${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}${planoMapaOrigemAtual ? ` · ${distanciaKm(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng, Number(l.lat), Number(l.lng)).toFixed(1)} km` : ''}</span>` : ''}
+          <span class="plano-lista-meta">${blocoDele ? `<input type="time" class="plano-hora-input" data-horalead="${esc(String(l.id))}" value="${blocoDele.hora}" aria-label="Horário da visita a ${esc(l.nome)}"> ` : ''}${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}${kmDoCard(l)}</span>
+          ${l._novidade ? `<span class="plano-etapa-hub" style="color:#0E9F9F;font-weight:800;">🆕 Abriu ${l._dias === 0 ? 'hoje' : 'há ' + l._dias + ' dias'}${l._porte ? ' · ' + esc(l._porte) : ''}</span>` : ''}${(l._doMapa && !l._novidade) ? `<span class="plano-etapa-hub" style="color:var(--violet);">◇ do mapa · sem avaliação</span>${l.telefone ? `<span class="plano-etapa-hub" style="color:var(--violet);">📞 ${esc(l.telefone)}</span>` : ''}` : ''}
+          ${l._quenteAvulso && (l._travado || l._dias != null) ? `<span class="plano-etapa-hub" style="color:${l._travado ? 'var(--red)' : 'var(--muted2)'};">${l._travado ? '⚠ travado · ' : ''}${l._dias != null ? l._dias + 'd na etapa' : ''}</span>` : ''}${l._clienteAtivo ? `<span class="plano-etapa-hub" style="color:#B0782A;">${l.altoVolume ? '🔥 Alto volume' : 'Cliente ativo'}${l.cicloStatus === 'onboarding' ? ' · em onboarding' : ''}${l.comandas != null ? ` · ${Number(l.comandas).toLocaleString('pt-BR')} comandas` : ''} · relacionamento</span>` : etapaHub(l) ? `<span class="plano-etapa-hub">${esc(etapaHub(l))}</span>` : ''}
         </span>
         ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
       </div>`;
@@ -12773,6 +12774,34 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       deckOrdemProximidade = !deckOrdemProximidade;
       montarPlanoMapa(r, hoje, planoFechado);
     });
+  })();
+
+  // BLOCO 33 — busca do deck. Reaplica o termo guardado após cada re-render (trocar de
+  // aba, incluir na rota etc. redesenham a lista e sem isso a busca "sumia" do resultado).
+  (() => {
+    const campo = document.getElementById('deckBusca');
+    if (!campo) return;
+    const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const aplicar = () => {
+      const termo = norm(deckBuscaTermo).trim();
+      let visiveis = 0;
+      lista.querySelectorAll('.plano-lista-item').forEach(item => {
+        const bate = !termo || norm(item.textContent).includes(termo);
+        item.style.display = bate ? '' : 'none';
+        if (bate) visiveis++;
+      });
+      let aviso = document.getElementById('deckBuscaVazia');
+      if (!aviso) {
+        aviso = document.createElement('div');
+        aviso.id = 'deckBuscaVazia';
+        aviso.style.cssText = 'font-size:11.5px;color:var(--muted2);padding:10px 4px;';
+        lista.appendChild(aviso);
+      }
+      aviso.textContent = (termo && !visiveis) ? 'Nada com esse termo na fila atual — tente outra aba do deck.' : '';
+    };
+    campo.value = deckBuscaTermo;
+    campo.addEventListener('input', () => { deckBuscaTermo = campo.value; aplicar(); });
+    if (deckBuscaTermo) aplicar();
   })();
 
   // ---- Sincronia lista <-> mapa ----
@@ -14760,62 +14789,11 @@ function abrirImportacaoProspeccao() {
 
 let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false, pertoDeMim: false, topAvaliadas: false, nuncaVisitada: false };
 
-/* BLOCO 32 (13/08/26) — Julyan: "um lead que aparece como 'perto de mim' no mapa deveria
-   aparecer também na lista da aba Prospecção — hoje as duas fontes não conversam".
-   Medido ao vivo (Rota do Sandro): o mapa anunciava 185 pinos = 124 contas-alvo + 61
-   portas do OSM, e o prospeccaoCache tinha 110 leads, TODOS de outscraper/Google Places —
-   zero do OSM. Não eram duas queries desalinhadas: as portas do OSM simplesmente não
-   existem em leads_prospeccao (por decisão de design — "mapa cheio de lead fantasma é
-   pior que mapa vazio", ver materializarLeadDoMapa).
-   Decisão do Julyan (13/08): opção B — as portas aparecem na lista do EXECUTIVO vindas da
-   MESMA fonte em memória do mapa (mapaPoisCache), e o "+ Rota" nelas cria a linha de
-   verdade pelo MESMO caminho que o pino do mapa já usa (materializarLeadDoMapa,
-   fonte='mapa') — inclusive a tarefa de visita no HubSpot, igual ao fluxo do mapa. */
-let prospeccaoPortasVisiveis = [];
-let prospeccaoPortasBuscando = false;
-
-// Fonte única com o mapa: os MESMOS itens que viram pino ◇. Recalcula quando o cache do
-// mapa tem conteúdo; quando ele foi invalidado (materializar limpa o cache inteiro de
-// propósito), preserva a lista atual pra tabela não piscar vazia entre um clique e outro.
-function prospeccaoPortasDoMapa() {
-  const doMapa = (typeof mapaPoisCache !== 'undefined' && mapaPoisCache && Array.isArray(mapaPoisCache.itens)) ? mapaPoisCache.itens : [];
-  if (doMapa.length) {
-    // Dedup contra a base real: mesma porta já materializada (ou conta do Outscraper no
-    // mesmo endereço) não pode aparecer duas vezes. Nome normalizado igual + menos de
-    // 150m = mesmo lugar; sem coordenada de um dos lados, o nome igual decide sozinho —
-    // errar pra menos (esconder uma porta) é mais barato que errar pra mais (duplicar).
-    const base = prospeccaoCache.map(l => ({ nome: prospeccaoNormalizarTexto(l.nome), lat: l.lat, lng: l.lng }));
-    prospeccaoPortasVisiveis = doMapa
-      .filter(p => {
-        const nome = prospeccaoNormalizarTexto(p.nome);
-        return !base.some(b => b.nome === nome &&
-          (b.lat == null || p.lat == null || distanciaKm(b.lat, b.lng, p.lat, p.lng) < 0.15));
-      })
-      // fonte='mapa' já aqui, em memória: é o que a linha VAI ter quando materializar —
-      // a tabela mostra desde o início o rótulo que vale ("Mapa (OSM)").
-      .map(p => ({ ...p, fonte: 'mapa' }));
-  }
-  return prospeccaoPortasVisiveis;
-}
-
-// A lista pode abrir antes de o mapa ter rodado (cache frio). Busca em segundo plano —
-// mesmo endpoint, mesmo cache de servidor — e SÓ re-renderiza se ninguém está digitando
-// num campo da Prospecção (re-render derruba o foco; já foi bug corrigido em 10/08).
-function prospeccaoBuscarPortasEmFundo() {
-  if (prospeccaoPortasBuscando) return;
-  if (typeof planoMapaOrigemAtual === 'undefined' || !planoMapaOrigemAtual) return; // sem território declarado não há "perto de mim"
-  if (typeof buscarRestaurantesNoMapa !== 'function') return;
-  prospeccaoPortasBuscando = true;
-  buscarRestaurantesNoMapa(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng).then(itens => {
-    prospeccaoPortasBuscando = false;
-    if (!itens || !itens.length) return;
-    const slot = document.getElementById('prospeccaoNovaRota');
-    if (!slot) return; // já saiu da tela
-    const foco = document.activeElement;
-    if (foco && slot.contains(foco) && /^(INPUT|SELECT|TEXTAREA)$/.test(foco.tagName)) return;
-    renderProspeccaoNova(true);
-  }).catch(() => { prospeccaoPortasBuscando = false; });
-}
+/* BLOCO 32 (13/08/26) apos BLOCO 33: o merge de portas do OSM na TABELA foi removido —
+   com a sub-aba Prospecção do executivo aposentada (Opção A), a tabela virou ferramenta
+   exclusiva do gestor, e portas são do território de quem está logado: não fazem sentido
+   na fila do time. A fila do executivo (o deck da Rota) já traz as portas nativamente
+   via buscarRestaurantesNoMapa/_doMapa, com o mesmo materializarLeadDoMapa no clique. */
 // Nomes que já receberam visita/revisita registrada (tarefa do Expogo). Preenchido no
 // render da Prospecção e lido pelo filtro "nunca visitada" — Set pra o filtro rodar em
 // O(1) por linha em vez de varrer a agenda a cada uma das 280 contas.
@@ -15279,44 +15257,6 @@ async function adicionarProspeccaoNaRota(lead, botaoEl, msgEl) {
   return true;
 }
 
-// BLOCO 32 — "+ Rota" numa porta do OSM vinda da lista. Espelho fiel do que alternarRota
-// já faz quando a MESMA porta é clicada no mapa: materializarLeadDoMapa (fonte='mapa',
-// status='na_rota') + tarefa de visita no HubSpot com o mesmo cálculo de horário (9h +
-// 45min por parada já na rota, teto 17h) + o mesmo toast. Uma porta, um comportamento —
-// não importa por qual tela ela entrou.
-async function materializarPortaDaLista(porta, botaoEl) {
-  const ownerId = sessaoAtual && sessaoAtual.ownerId;
-  if (!ownerId) {
-    if (typeof mostrarToast === 'function') mostrarToast('Sessão sem executivo definido — recarregue e entre de novo.', 'erro');
-    return;
-  }
-  if (botaoEl) { botaoEl.disabled = true; botaoEl.textContent = 'Adicionando…'; }
-  const hojeISO = isoDate(new Date());
-  // Ordem calculada ANTES do insert, igual ao fluxo do mapa (que conta a rota pré-existente).
-  const ordem = prospeccaoCache.filter(l => l.status === 'na_rota' && l.data_rota === hojeISO).length;
-  const { lead, error } = await materializarLeadDoMapa(porta, ownerId, 'mapa');
-  if (error || !lead) {
-    if (botaoEl) { botaoEl.disabled = false; botaoEl.textContent = '+ Rota'; }
-    if (typeof mostrarToast === 'function') mostrarToast('Não consegui salvar esse estabelecimento como conta-alvo. Tente de novo.', 'erro');
-    return;
-  }
-  // Sai da lista em memória (materializar já invalidou o cache do mapa) e entra na base
-  // real mantendo a ordem oficial — avaliações desc, e a porta (sem avaliações) vai pro fim.
-  prospeccaoPortasVisiveis = prospeccaoPortasVisiveis.filter(p => String(p.id) !== String(porta.id));
-  prospeccaoCache.push(lead);
-  prospeccaoCache.sort((a, b) =>
-    (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0) ||
-    String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
-  const minutos = Math.min(9 * 60 + ordem * 45, 17 * 60);
-  const hora = String(Math.floor(minutos / 60)).padStart(2, '0') + ':' + String(minutos % 60).padStart(2, '0');
-  if (typeof criarTarefaVisitaNoHubspot === 'function') {
-    criarTarefaVisitaNoHubspot({ nome: lead.nome, bairro: lead.bairro, cidade: lead.cidade }, ownerId, hora)
-      .catch(e => console.error('Falha ao criar tarefa de visita (porta do OSM via lista):', e));
-  }
-  if (typeof mostrarToast === 'function') mostrarToast('"' + lead.nome + '" entrou na sua rota e virou conta-alvo.', 'sucesso');
-  if (typeof planoRotaGerada !== 'undefined') planoRotaGerada = false; // rota desenhada ficou velha
-  renderProspeccaoNova(true);
-}
 
 function prospeccaoCardHTML(l) {
   const podeAgir = sessaoAtual.role === 'manager' || String(l.responsavel_owner_id) === String(sessaoAtual.ownerId);
@@ -15374,7 +15314,9 @@ function prospeccaoCardHTML(l) {
 async function renderProspeccaoNova(soReaplicarFiltro) {
   // Dois lugares podem hospedar a fila: a sub-aba da Rota (executivo) e a aba de topo
   // (gestor). Prefere o da Rota quando ele está montado — é a tela ativa naquele momento.
-  const el = document.getElementById('prospeccaoNovaRota') || document.getElementById('prospeccaoNovaContent');
+  // BLOCO 33 — o host da Rota (prospeccaoNovaRota) morreu com a sub-aba do executivo;
+  // esta tela agora desenha só no container do gestor.
+  const el = document.getElementById('prospeccaoNovaContent');
   if (!el) return;
   // Correção 10/08 (Julyan — "muito bug clicável... quando pesquisa, na aba
   // Prospecção"): busca, pílulas de filtro, dropdowns e o "selecionar todos" chamavam
@@ -15430,18 +15372,6 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   const fontes = [...new Set(prospeccaoCache.flatMap(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean)))].sort();
 
   let filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
-  // BLOCO 32 — portas do OSM entram na fila do executivo, na visão recomendada, passando
-  // pelos MESMOS filtros (busca, bairro, telefone, nunca visitada...). Como não têm
-  // avaliações, ficam depois de toda conta ranqueada na ordem padrão — a prioridade
-  // oficial continua sendo volume de avaliações — e com "Perto de mim" ligado entram na
-  // ordenação por distância como qualquer outra. Gestor não vê portas: a fila dele é do
-  // time inteiro e as portas são do território de quem está logado.
-  if (souExecProsp && prospeccaoFiltro.visao === 'ativas') {
-    const portasBrutas = prospeccaoPortasDoMapa();
-    if (!portasBrutas.length) prospeccaoBuscarPortasEmFundo();
-    const portas = prospeccaoAplicarFiltros(portasBrutas);
-    if (portas.length) filtrados = filtrados.concat(portas);
-  }
   if (prospeccaoFiltro.pertoDeMim) filtrados = prospeccaoOrdenarPorDistancia(filtrados);
 
   // Paginação: 20 por página — a tela não monta mais centenas de cards de uma vez.
@@ -15676,10 +15606,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
 
   // Pílulas orientadas à decisão. A ordenação interna sempre começa pelo volume
   // de avaliações: é o indicador transparente de potencial de impacto da conta.
-  const totalAtivas = baseOperacional.filter(prospeccaoAtiva).length
-    // BLOCO 32 — a pílula "Recomendadas" tem que bater com o total de linhas da tabela,
-    // senão o executivo vê "107" e conta mais que isso.
-    + ((souExecProsp && prospeccaoFiltro.visao === 'ativas') ? prospeccaoAplicarFiltros(prospeccaoPortasVisiveis).length : 0);
+  const totalAtivas = baseOperacional.filter(prospeccaoAtiva).length;
   const totalSemDono = baseOperacional.filter(l => prospeccaoAtiva(l) && !l.responsavel_owner_id).length;
   const totalNaRota = baseOperacional.filter(l => l.status === 'na_rota' && l.data_rota === isoDate(new Date())).length;
   const totalHistorico = prospeccaoCache.filter(l => l.status === 'sem_fit' || l.status === 'criado_hubspot').length;
@@ -15881,12 +15808,8 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   el.querySelectorAll('[data-rota-quick]').forEach(btn => {
     btn.addEventListener('click', async ev => {
       ev.stopPropagation();
-      const lead = prospeccaoCache.find(x => String(x.id) === String(btn.dataset.rotaQuick))
-        || prospeccaoPortasVisiveis.find(x => String(x.id) === String(btn.dataset.rotaQuick));
+      const lead = prospeccaoCache.find(x => String(x.id) === String(btn.dataset.rotaQuick));
       if (!lead) return;
-      // BLOCO 32 — porta do OSM ainda não existe no banco: materializa pelo MESMO caminho
-      // do pino do mapa e sai daqui (o fluxo de lead comum abaixo pressupõe linha real).
-      if (lead._doMapa) { await materializarPortaDaLista(lead, btn); return; }
       if (lead.status === 'na_rota' && lead.data_rota === hojeProsp) {
         abrirRotaHoje();
         return;
