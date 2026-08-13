@@ -9607,6 +9607,11 @@ async function montarMapaRota(seq, origem) {
     attributionControl: false
   });
   rotaMapaInstancia.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+  // 'style.load' e não 'load': dispara também depois de setStyle (troca de tema claro/escuro
+  // e queda pro raster reserva), senão a poda valeria só no primeiro desenho. E poda
+  // ev.target, não a variável de módulo: esta instância é destruída e recriada logo acima
+  // (rotaMapaInstancia.remove()), então a variável pode já apontar pra outro mapa.
+  rotaMapaInstancia.on('style.load', function (ev) { podarCamadasDoBasemap(ev.target); });
 
   const bounds = new maplibregl.LngLatBounds();
   if (origem) {
@@ -9927,6 +9932,75 @@ function estiloPlanoMapa() {
   return escuro
     ? 'https://tiles.openfreemap.org/styles/dark'
     : 'https://tiles.openfreemap.org/styles/positron';
+}
+
+// BLOCO 31 (13/08/26) — Julyan: "o mapa está PESADO ... sempre com o Salesforce Maps como
+// referência: rico em informação mas nunca pesado". A medição ao vivo (Rota do Sandro,
+// Tijuca) desmentiu a hipótese óbvia: os pinos NÃO são o gargalo. Os 185 leads viram só 44
+// marcadores no DOM (o resto colapsa em cluster) e um pan sintético de 12 passos criou 0
+// marcador novo e removeu 0 — o MapLibre só reposiciona por transform CSS.
+//
+// O peso está no basemap. O MapTiler streets-v4 traz 160 camadas, 59 delas do tipo symbol,
+// e o MapLibre recalcula colisão de rótulo em toda a viewport a cada movimento. Pior pro
+// item 6 (o pino tem que comunicar à primeira vista): uma dessas camadas é "Food" — o
+// MapTiler desenhava ícone de restaurante DEBAIXO dos nossos próprios pinos de restaurante.
+//
+// Poda em vez de troca de estilo: o dataviz-light cortaria pra 42 camadas, mas é exatamente
+// o flat design que o Julyan já rejeitou quando trocou de "Base" pra "Streets" pedindo cor
+// e realismo. Aqui o basemap continua o mesmo — rodovia laranja/amarela, parque verde, água
+// azul, nome de rua e de bairro intactos.
+//
+// CRITÉRIO DA LISTA: só entra camada que está ATIVA no zoom de campo (12–16). Rótulo de
+// país/estado/continente/oceano é zoom-gated — no zoom 13 ele não entra no cálculo de
+// colisão, então removê-lo não economizaria nada, e na visão do GESTOR (mapa aberto em
+// ES/RJ/SP/POA ao mesmo tempo) é justamente ele que dá orientação. Por isso fica.
+function podarCamadasDoBasemap(mapa) {
+  // Listas declaradas DENTRO da função de propósito: nada de const novo no topo do arquivo,
+  // pra não repetir o bug de temporal dead zone que derrubou a produção no Bloco 30.
+  const PODAR = [
+    // POI comercial e de serviço — competem visualmente com o pino do lead, no mesmo zoom
+    'Food', 'Shopping', 'Mall', 'Accommodation', 'Tourism', 'Sport', 'Culture',
+    'Healthcare', 'Education', 'Public', 'Religion', 'Transport', 'Parking special',
+    // Microdetalhe de rua — ruído puro na escala de roteirização
+    'Bus stop', 'Street furniture', 'Tree', 'Tree name', 'Roller coaster labels',
+    'Zebra crossing', 'Traffic light', 'Oneway', 'Building number',
+    'Pathway labels', 'Cycleway labels',
+    // Estações e terminais — o executivo vai de carro, e ninguém do time vende em aeroporto
+    'Subway station', 'Railway station', 'Ferry terminal', 'Ferry labels',
+    'Aerialway station', 'Airport gate labels', 'Airport terminal', 'Airport labels',
+    'Military label',
+    // Linhas que não existem no território de ninguém do time
+    'Ferry line', 'Aeroway', 'Aerialway'
+  ];
+  const stats = { podadas: 0, naoEncontradas: [], extrusao: 0, antes: 0, depois: 0 };
+  try {
+    const estilo = mapa && mapa.getStyle && mapa.getStyle();
+    const camadas = (estilo && estilo.layers) || [];
+    stats.antes = camadas.length;
+    // Estilo raster reserva (CARTO) tem 1 camada só: nada a podar, e não é erro.
+    if (camadas.length <= 8) { stats.depois = camadas.length; return stats; }
+    PODAR.forEach(function (id) {
+      if (mapa.getLayer(id)) { mapa.removeLayer(id); stats.podadas++; }
+      else stats.naoEncontradas.push(id);
+    });
+    // Prédio 3D: removido por TIPO, não por nome, porque o nome é o mais provável de mudar.
+    camadas.filter(function (l) { return l.type === 'fill-extrusion'; }).forEach(function (l) {
+      if (mapa.getLayer(l.id)) { mapa.removeLayer(l.id); stats.extrusao++; }
+    });
+    stats.depois = (mapa.getStyle().layers || []).length;
+    // Guarda contra quebra silenciosa: se a MapTiler renomear as camadas numa atualização de
+    // estilo, a poda para de funcionar sem erro nenhum e o mapa volta a ficar pesado sem
+    // explicação. Um aviso no console é a única forma de isso aparecer.
+    if (stats.podadas < PODAR.length * 0.6) {
+      console.warn('[basemap] Poda encontrou só ' + stats.podadas + ' de ' + PODAR.length +
+        ' camadas — a MapTiler provavelmente renomeou o estilo. Ausentes: ' +
+        stats.naoEncontradas.join(', '));
+    }
+  } catch (e) {
+    // Mapa pesado é problema; mapa quebrado é pior. Falha na poda nunca derruba o mapa.
+    console.warn('[basemap] Não consegui podar as camadas:', e && e.message);
+  }
+  return stats;
 }
 
 function carregarMapLibre() {
@@ -12229,6 +12303,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   });
   planoMapaInstancia = mapa;
   mapa.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+  mapa.on('style.load', function (ev) { podarCamadasDoBasemap(ev.target); });
   // Se o estilo vetorial do OpenFreeMap não carregar, cai pro raster reserva —
   // o mapa nunca fica em branco por causa de CDN fora do ar.
   let caiuProReserva = false;
