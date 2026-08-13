@@ -3381,8 +3381,12 @@ async function renderMeuPainel() {
     dOntem = getDaily(r.ownerId, ontemISO) || {};
   }
   const ontemLabel = new Date(ontemISO + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '');
+  // BLOCO 31 — mesma correção do card do gestor: prefere a contagem derivada de
+  // DATA.agenda.itens sobre o campo gravado, que pode ter ficado pra trás se a escrita
+  // da noite falhar.
+  const ontemVisitasDerivado = visitasReaisDoOwnerNoDia(r.ownerId, ontemISO);
   const ontemLinhas = [
-    { rotulo: 'Visitas', prom: dOntem.prometido_visitas, real: dOntem.realizado_visitas },
+    { rotulo: 'Visitas', prom: dOntem.prometido_visitas, real: ontemVisitasDerivado != null ? ontemVisitasDerivado : dOntem.realizado_visitas },
     { rotulo: 'Avanços', prom: dOntem.prometido_avancos, real: dOntem.realizado_avancos },
     { rotulo: 'Propostas', prom: dOntem.prometido_propostas, real: dOntem.realizado_propostas }
   ];
@@ -4990,7 +4994,11 @@ async function renderAderenciaDailyHero() {
     for (let i = 0; i <= offsetSeg; i++) {
       const dia = addDays(segunda, i);
       const row = getDaily(r.ownerId, dia);
-      if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
+      if (!row) continue;
+      prom += row.prometido_visitas || 0;
+      // BLOCO 31 — mesma correção: prefere a contagem derivada de DATA.agenda.itens.
+      const derivado = visitasReaisDoOwnerNoDia(r.ownerId, dia);
+      real += derivado != null ? derivado : (row.realizado_visitas || 0);
     }
   });
   const aderencia = prom > 0 ? Math.round((real / prom) * 100) : null;
@@ -12870,8 +12878,13 @@ function visitasInformadasTexto(ownerId) {
   const segunda = addDays(hoje, -offsetSeg);
   let prom = 0, real = 0;
   for (let i = 0; i <= offsetSeg; i++) {
-    const row = getDaily(ownerId, addDays(segunda, i));
-    if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
+    const dia = addDays(segunda, i);
+    const row = getDaily(ownerId, dia);
+    if (!row) continue;
+    prom += row.prometido_visitas || 0;
+    // BLOCO 31 — mesma correção: prefere a contagem derivada de DATA.agenda.itens.
+    const derivado = visitasReaisDoOwnerNoDia(ownerId, dia);
+    real += derivado != null ? derivado : (row.realizado_visitas || 0);
   }
   return `${real}/${prom}`;
 }
@@ -12879,6 +12892,35 @@ function visitasInformadasTexto(ownerId) {
 // Mesma soma de cima, mas devolvendo os números crus + aderência — usado na tabela
 // "Por executivo" pra colorir o número embaixo do real/prom (README: ≥90% verde,
 // ≥75% âmbar, abaixo vermelho).
+// BLOCO 31 (13/08/26) — Julyan: "nao está atualizando, de novo esse erro... o pq de nao
+// está subindo as visitas realizadas". Investiguei no HubSpot direto: o Bruno tem 7
+// visitas COMPLETED em 12/08 (Jiló na manteiga, Vem pra k, Bank Burguer, Seu bastião,
+// Kiko delícia, Cantinho do torresmo + mais 1), corretamente presentes em
+// DATA.agenda.itens (o snapshot principal, atualizado com sucesso às 08:04 de hoje).
+// Mas dailies.realizado_visitas pra ele em 12/08 ficou em 0 — a linha existe (o
+// prometido foi salvo às 08:11 quando ele fechou o plano), só que NINGUÉM nunca
+// atualizou o campo realizado depois disso: updated_at da linha parou em 08:11,
+// nenhuma das visitas das 15h em diante chegou a ser gravada ali. A escrita específica
+// de "realizado" (feita pelo robô à noite, script separado da geração do snapshot
+// principal) falhou silenciosamente naquela madrugada — e ninguém percebeu, porque a
+// tela confiava cegamente nesse número.
+// Em vez de consertar só aquela escrita (que pode falhar de novo por qualquer motivo —
+// token, rede, GitHub Actions fora do ar), a CONTAGEM DE VISITAS agora é recalculada
+// aqui, direto de DATA.agenda.itens — a mesma fonte que já é reconferida a cada carga
+// da tela e que PROVEI estar correta. Não depende de nenhuma escrita separada acontecer
+// com sucesso pra mostrar o número certo.
+function visitasReaisDoOwnerNoDia(ownerId, dataISO) {
+  if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return null; // sem dado — não é o mesmo que zero
+  let eventos;
+  try { eventos = agendaNormalizar(DATA.agenda); } catch (e) { return null; }
+  return eventos.filter(e =>
+    String(e.ownerId) === String(ownerId) && e.inicio &&
+    agendaChave(e.inicio) === dataISO &&
+    AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta &&
+    (e.desfecho === 'COMPLETED' || e.registro)
+  ).length;
+}
+
 function visitasInformadasDetalhe(ownerId) {
   if (Object.keys(dailiesCache).length === 0) return { real: 0, prom: 0, aderencia: null };
   const hoje = isoDate(new Date());
@@ -12887,15 +12929,30 @@ function visitasInformadasDetalhe(ownerId) {
   const segunda = addDays(hoje, -offsetSeg);
   let prom = 0, real = 0;
   for (let i = 0; i <= offsetSeg; i++) {
-    const row = getDaily(ownerId, addDays(segunda, i));
-    if (row) { prom += row.prometido_visitas || 0; real += row.realizado_visitas || 0; }
+    const dia = addDays(segunda, i);
+    const row = getDaily(ownerId, dia);
+    if (!row) continue;
+    prom += row.prometido_visitas || 0;
+    // Prioriza a contagem derivada da agenda (confiável); só cai pro valor gravado
+    // se a agenda genuinamente não tiver dado pra calcular aquele dia (fora da janela
+    // que o snapshot carrega, por exemplo).
+    const derivado = visitasReaisDoOwnerNoDia(ownerId, dia);
+    real += derivado != null ? derivado : (row.realizado_visitas || 0);
   }
   return { real, prom, aderencia: prom > 0 ? Math.round((real / prom) * 100) : null };
 }
 
+// Visitas do row, preferindo a contagem derivada da agenda (confiável) sobre o que foi
+// gravado por escrita separada — mesma razão do Bloco 31 acima. Cai pro valor salvo só
+// quando a agenda não tem dado pra aquele dia/dono (fora da janela do snapshot).
+function visitasDoRow(row) {
+  if (!row) return 0;
+  const derivado = row.owner_id && row.data ? visitasReaisDoOwnerNoDia(row.owner_id, row.data) : null;
+  return derivado != null ? derivado : (row.realizado_visitas || 0);
+}
 function pontosDoDia(row) {
   if (!row) return 0;
-  return (row.realizado_visitas || 0) * 10 + (row.realizado_avancos || 0) * 25 + (row.realizado_propostas || 0) * 40 + (row.realizado_fechamentos || 0) * 100;
+  return visitasDoRow(row) * 10 + (row.realizado_avancos || 0) * 25 + (row.realizado_propostas || 0) * 40 + (row.realizado_fechamentos || 0) * 100;
 }
 function totalPrometido(row) {
   if (!row) return 0;
@@ -12903,7 +12960,7 @@ function totalPrometido(row) {
 }
 function totalRealizado(row) {
   if (!row) return 0;
-  return (row.realizado_visitas || 0) + (row.realizado_avancos || 0) + (row.realizado_propostas || 0);
+  return visitasDoRow(row) + (row.realizado_avancos || 0) + (row.realizado_propostas || 0);
 }
 function bateuPrometido(row) {
   const prom = totalPrometido(row);
@@ -12957,7 +13014,11 @@ function calcularConquistas(ownerId, r) {
   // Conquistas novas (ago/2026) — mesmo princípio das outras: só desbloqueia com dado real
   // do Supabase/HubSpot, nunca fabricado.
   const hojeRow = getDaily(ownerId, hoje) || {};
-  const bateuVisitas = (hojeRow.prometido_visitas || 0) > 0 && (hojeRow.realizado_visitas || 0) >= hojeRow.prometido_visitas;
+  // BLOCO 31 — mesma correção: as conquistas ("dia perfeito" etc.) não podem ficar presas
+  // atrás de uma escrita que falhou à noite.
+  const visitasHojeDerivado = visitasReaisDoOwnerNoDia(ownerId, hoje);
+  const realVisitasHoje = visitasHojeDerivado != null ? visitasHojeDerivado : (hojeRow.realizado_visitas || 0);
+  const bateuVisitas = (hojeRow.prometido_visitas || 0) > 0 && realVisitasHoje >= hojeRow.prometido_visitas;
   const bateuAvancosHoje = (hojeRow.prometido_avancos || 0) > 0 && (hojeRow.realizado_avancos || 0) >= hojeRow.prometido_avancos;
   const bateuPropostasHoje = (hojeRow.prometido_propostas || 0) > 0 && (hojeRow.realizado_propostas || 0) >= hojeRow.prometido_propostas;
   const diaPerfeito = bateuVisitas && bateuAvancosHoje && bateuPropostasHoje;
@@ -13069,10 +13130,16 @@ async function renderDaily() {
     </div>`;
 
   // Ritual do gestor: a Daily precisa terminar em compromisso, não em leitura de placar.
+  // BLOCO 31 — mesma correção: esta lista alimenta a frase "Objetivo de hoje" no topo da
+  // tela ("Recuperar o ritmo de N executivos abaixo de 70% ontem"). Lendo o campo
+  // gravado direto, um executivo que visitou tudo mas cuja escrita da noite falhou
+  // entraria nessa lista por engano — cobrando ritmo de quem já cumpriu.
   const abaixoDeOntem = repsDaily.filter(r => {
     const d = getDaily(r.ownerId, yesterdayISO) || {};
     const prometeu = Number(d.prometido_visitas) || 0;
-    return prometeu > 0 && ((Number(d.realizado_visitas) || 0) / prometeu) < .7;
+    const realDerivado = visitasReaisDoOwnerNoDia(r.ownerId, yesterdayISO);
+    const real = realDerivado != null ? realDerivado : (Number(d.realizado_visitas) || 0);
+    return prometeu > 0 && (real / prometeu) < .7;
   });
   const objetivoDaily = semPromessa > 0
     ? `Fechar o plano de ${semPromessa} executivo${semPromessa > 1 ? 's' : ''} antes da saída para o campo.`
@@ -13125,12 +13192,20 @@ async function renderDaily() {
       const registrouHoje = [rowHoje.prometido_visitas, rowHoje.prometido_avancos, rowHoje.prometido_propostas]
         .some(v => v !== null && v !== undefined);
       const promOntem = rowOntem.prometido_visitas || 0;
-      const realOntem = rowOntem.realizado_visitas || 0;
+      // BLOCO 31 — mesma correção: prefere a contagem derivada de DATA.agenda.itens
+      // (sempre fresca) sobre o campo gravado por uma escrita separada que pode falhar
+      // (foi exatamente o caso do Bruno em 12/08 — 7 visitas reais, 0 gravado).
+      const realOntemDerivado = visitasReaisDoOwnerNoDia(r.ownerId, yesterdayISO);
+      const realOntem = realOntemDerivado != null ? realOntemDerivado : (rowOntem.realizado_visitas || 0);
       const pctOntem = promOntem > 0 ? Math.round((realOntem / promOntem) * 100) : null;
       const corOntem = pctOntem === null ? 'var(--muted2)' : pctOntem >= 100 ? 'var(--green)' : pctOntem >= 70 ? 'var(--amber)' : 'var(--red)';
       const fechouHoje = ehHojeViewPlacar ? (r.fechamentosHubspotHoje || 0) : null;
+      const visitasRealHoje = ehHojeViewPlacar ? r.visitasHubspotHoje : (() => {
+        const d = visitasReaisDoOwnerNoDia(r.ownerId, dailyRefDate);
+        return d != null ? d : rowHoje.realizado_visitas;
+      })();
       const metricasHoje = [
-        [rowHoje.prometido_visitas, ehHojeViewPlacar ? r.visitasHubspotHoje : rowHoje.realizado_visitas],
+        [rowHoje.prometido_visitas, visitasRealHoje],
         [rowHoje.prometido_avancos, ehHojeViewPlacar ? r.avancosHubspotHoje : rowHoje.realizado_avancos],
         [rowHoje.prometido_propostas, ehHojeViewPlacar ? r.propostasHubspotHoje : rowHoje.realizado_propostas]
       ].filter(([prom]) => Number(prom) > 0);
@@ -13176,14 +13251,28 @@ async function renderDaily() {
       return { icon: '—', bg: 'var(--dark-fill)', border: 'transparent', col: 'var(--dark-mut)', dia: label };
     });
 
-    const realVisitas = ehHojeView ? r.visitasHubspotHoje : hoje.realizado_visitas;
+    // BLOCO 31 (13/08/26) — esta é a linha exata do print do Julyan: card individual de
+    // cada executivo mostrando "0 realizado" em Visitas mesmo com visita de verdade
+    // registrada. `hoje.realizado_visitas` vem de uma escrita separada (o robô da
+    // noite) que PODE falhar sem avisar ninguém — foi o caso do Bruno em 12/08 (7
+    // visitas reais no HubSpot, 0 gravado ali). Prefere sempre a contagem derivada de
+    // DATA.agenda.itens, que é reconferida a cada carga da tela e já provei correta.
+    const realVisitasDerivado = visitasReaisDoOwnerNoDia(r.ownerId, dailyRefDate);
+    const realVisitas = ehHojeView ? r.visitasHubspotHoje : (realVisitasDerivado != null ? realVisitasDerivado : hoje.realizado_visitas);
     const realAvancos = ehHojeView ? r.avancosHubspotHoje : hoje.realizado_avancos;
     const realPropostas = ehHojeView ? r.propostasHubspotHoje : hoje.realizado_propostas;
+    // Avanços e propostas NÃO têm como ser recalculados aqui (dependem de
+    // hs_v2_date_entered_<etapa>, que só existe durante a execução do robô — ver Bloco
+    // 15). Quando a contagem de visitas gravada diverge da derivada (a mesma escrita
+    // da noite que grava as três), é sinal forte de que aquela rodada específica falhou
+    // — sinaliza em vez de apresentar avanços/propostas como fato quando podem estar
+    // igualmente errados por não terem sido atualizados.
+    const escritaDaNoiteSuspeita = !ehHojeView && realVisitasDerivado != null && realVisitasDerivado !== (hoje.realizado_visitas || 0);
 
     const metricasCompromisso = [
       { label: 'Visitas', campo: 'prometido_visitas', prom: hoje.prometido_visitas, real: Number(realVisitas) || 0, cls: 'green' },
-      { label: 'Avanços', campo: 'prometido_avancos', prom: hoje.prometido_avancos, real: Number(realAvancos) || 0, cls: 'amber' },
-      { label: 'Propostas', campo: 'prometido_propostas', prom: hoje.prometido_propostas, real: Number(realPropostas) || 0, cls: 'red' }
+      { label: 'Avanços', campo: 'prometido_avancos', prom: hoje.prometido_avancos, real: Number(realAvancos) || 0, cls: 'amber', suspeito: escritaDaNoiteSuspeita },
+      { label: 'Propostas', campo: 'prometido_propostas', prom: hoje.prometido_propostas, real: Number(realPropostas) || 0, cls: 'red', suspeito: escritaDaNoiteSuspeita }
     ];
     const registrouResumo = metricasCompromisso.some(m => m.prom != null);
     const metasPositivas = metricasCompromisso.filter(m => Number(m.prom) > 0);
@@ -13197,13 +13286,13 @@ async function renderDaily() {
     const pctMetrica = m => Number(m.prom) > 0 ? Math.min(100, Math.round((m.real / Number(m.prom)) * 100)) : 0;
     const metricaTime = m => `
       <span class="daily-team-metric ${m.cls}">
-        <span class="daily-team-metric-top"><span>${m.label}</span><b>${m.prom ?? '—'} <em>${m.prom == null ? 'sem meta' : 'prometido'}</em></b></span>
+        <span class="daily-team-metric-top"><span>${m.label}${m.suspeito ? ' <span title="A sincronização da noite pode ter falhado — confira no HubSpot antes de cobrar este número." style="cursor:help;">⚠️</span>' : ''}</span><b>${m.prom ?? '—'} <em>${m.prom == null ? 'sem meta' : 'prometido'}</em></b></span>
         <span class="daily-progress"><span style="width:${pctMetrica(m)}%;"></span></span>
-        <span style="display:block;font-size:9px;color:var(--muted);margin-top:4px;">${m.real} realizado</span>
+        <span style="display:block;font-size:9px;color:var(--muted);margin-top:4px;">${m.real} realizado${m.suspeito ? ' · sync a confirmar' : ''}</span>
       </span>`;
     const metricaGestorAberta = m => `
       <div class="daily-promise-metric ${m.cls}">
-        <div class="daily-promise-metric-head"><span>${m.label}</span><span>promessa do dia</span></div>
+        <div class="daily-promise-metric-head"><span>${m.label}${m.suspeito ? ' ⚠️' : ''}</span><span>${m.suspeito ? 'sync da noite a confirmar' : 'promessa do dia'}</span></div>
         <div class="daily-promise-input-row"><b style="font:800 28px/1 'Poppins',sans-serif;">${m.prom ?? '—'}</b><span class="daily-promise-actual"><b>${m.real}</b>realizado</span></div>
         <div class="daily-progress"><span style="width:${pctMetrica(m)}%;"></span></div>
       </div>`;
@@ -13584,7 +13673,9 @@ async function renderConsolidadoDiario() {
       if (!row) return;
       algumDado = true;
       totais.visitasP += row.prometido_visitas || 0;
-      totais.visitasR += row.realizado_visitas || 0;
+      // BLOCO 31 — mesma correção: prefere a contagem derivada de DATA.agenda.itens.
+      const derivado = visitasReaisDoOwnerNoDia(r.ownerId, dia);
+      totais.visitasR += derivado != null ? derivado : (row.realizado_visitas || 0);
       totais.avancosP += row.prometido_avancos || 0;
       totais.avancosR += row.realizado_avancos || 0;
       totais.propostasP += row.prometido_propostas || 0;
