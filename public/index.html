@@ -10168,6 +10168,11 @@ let deckBuscaTermo = ''; // BLOCO 33 — termo da busca do deck sobrevive aos re
 // parâmetro correndo por agendaGradeCard → agendaGradeHoras → agendaGradeColunas:
 // menos superfície pra quebrar assinatura de função num arquivo de 17 mil linhas.
 let agendaOwnerAlvo = null;
+// BLOCO 36 — cidade líder da Casa dos Dados nesta sessão (mais aberturas em 90d).
+// Preenchida pelo loop assíncrono da Prospecção; null até a primeira resposta chegar.
+// Variável de módulo pelo mesmo motivo de agendaOwnerAlvo: um re-render precisa achar
+// o valor pronto sem precisar re-buscar a Casa dos Dados de novo.
+let cddLiderCidade = null;
 // BLOCO 29 (12/08/26) — Julyan: "inspire-se em grandes gestões como salesforce maps...
 // tem q aparecer leads pra eles, onde ele escolher a rota, os mais pertos, pra economizar
 // tempo e esforço". A distância já aparecia em cada card, mas nunca foi o CRITÉRIO de
@@ -15635,6 +15640,24 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   // Banner "Prospecção" (Claude Design item 4) — só pro gestor; o executivo já
   // chega com o território filtrado, sem essa visão de aprovação em massa.
   const souGestorProspBanner = !!(sessaoAtual && sessaoAtual.role === 'manager');
+  // BLOCO 36 — movido pra ANTES de bannerProspeccao (que agora usa integridadeFontes
+  // dentro do próprio template). Ordem original tinha isso depois — funcionava porque
+  // nada lia integridadeFontes cedo; passou a ser TDZ real assim que o hero passou a
+  // referenciá-lo. Resolvido por reordenação, não por adiar a leitura.
+  const fontesPlanejadas = [
+    { chave: 'outscraper', rotulo: 'Outscraper' },
+    { chave: 'google places', rotulo: 'Google Places' },
+    { chave: 'tripadvisor', rotulo: 'Tripadvisor' },
+    { chave: 'ifood', rotulo: 'iFood' }
+  ];
+  const baseAtivaFonte = baseOperacional.filter(prospeccaoAtiva);
+  const fontesStatus = fontesPlanejadas.map(item => {
+    const total = baseAtivaFonte.filter(l => String(l.fonte || '').split('+').some(f => prospeccaoNormalizarTexto(f) === item.chave)).length;
+    return { ...item, total };
+  });
+  const integridadeFontes = souGestorProspBanner
+    ? fontesStatus.map(f => `<span title="${f.total ? f.total.toLocaleString('pt-BR') + ' contas ativas desta fonte' : 'Ainda sem carga desta fonte'}">${f.rotulo} <b style="${f.total ? '' : 'opacity:.5;'}">${f.total ? f.total.toLocaleString('pt-BR') : '—'}</b></span>`).join('<span style="opacity:.35;"> · </span>')
+    : '';
   let bannerProspeccao = '';
   if (souGestorProspBanner) {
     const pendentesTotal = baseOperacional.filter(prospeccaoAtiva).length;
@@ -15656,7 +15679,9 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           <div class="prospeccao-manager-kpi"><b style="color:#78A7FF;">${naRotaHoje}</b><span>na rota hoje</span></div>
           <div class="prospeccao-manager-kpi"><b style="color:#57C29A;">${empresasNoMes}</b><span>empresas no mês</span></div>
         </div>
-      </div>`;
+      </div>
+      <div id="cddInsight" style="display:none;font-size:11.5px;color:#0E9F9F;padding:9px 24px 0;font-weight:700;"></div>
+      ${integridadeFontes ? `<div style="font-size:10.5px;color:var(--dark-mut);padding:9px 24px 14px;border-top:1px solid rgba(255,255,255,.08);margin-top:2px;">Fontes: ${integridadeFontes}</div>` : ''}`;
   } else {
     const ativasExec = baseOperacional.filter(prospeccaoAtiva);
     const rotaHojeExec = baseOperacional.filter(l => l.status === 'na_rota' && l.data_rota === hojeProsp);
@@ -15697,22 +15722,6 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
 
   // Mostra a saúde da mistura de fontes sem fingir que uma integração ainda não
   // carregada já está ativa. Cada número é de contas canônicas, não soma de planilhas.
-  const fontesPlanejadas = [
-    { chave: 'outscraper', rotulo: 'Outscraper' },
-    { chave: 'google places', rotulo: 'Google Places' },
-    { chave: 'tripadvisor', rotulo: 'Tripadvisor' },
-    { chave: 'ifood', rotulo: 'iFood' }
-  ];
-  const baseAtivaFonte = baseOperacional.filter(prospeccaoAtiva);
-  const fontesStatus = fontesPlanejadas.map(item => {
-    const total = baseAtivaFonte.filter(l => String(l.fonte || '').split('+').some(f => prospeccaoNormalizarTexto(f) === item.chave)).length;
-    return { ...item, total };
-  });
-  const integridadeFontes = souGestorProspBanner ? `
-    <div class="chart-card prospeccao-source-rail">
-      <div class="prospeccao-source-copy"><span class="prospeccao-source-icon">≋</span><div><b style="font-size:12.5px;">Uma conta, todas as fontes</b><div style="font-size:11px;color:var(--muted2);margin-top:2px;">Place ID, telefone e localização evitam duplicidade antes da distribuição.</div></div></div>
-      <div class="prospeccao-source-list">${fontesStatus.map(f => `<span class="prospeccao-source-chip ${f.total ? 'is-live' : ''}"><b>${f.rotulo}</b> · ${f.total ? f.total.toLocaleString('pt-BR') : 'aguardando carga'}</span>`).join('')}</div>
-    </div>` : '';
 
   // Cards por praça (mockup prospeccao-gestor): visão de aprovação por cidade —
   // quantos leads ainda não viraram empresa/rota por praça e quem atende cada uma.
@@ -15904,6 +15913,15 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
     };
     const cidadesOrd = Object.keys(porCidade).sort((a, b) => urgencia(a) - urgencia(b) || porCidade[b].pend - porCidade[a].pend);
     if (cidadesOrd.length > 0) {
+      // BLOCO 36 (13/08/26) — Julyan, ao vivo: "tela muito poluída... preciso ver e
+      // sentir tesão ao trabalhar". Cada card tinha 7 elementos empilhados (título,
+      // número, reps, 4 chips, veredito, novidade) competindo por atenção igual — e a
+      // "novidade" repetia o MESMO número que a faixa Casa dos Dados já mostra acima,
+      // duas vezes na tela. Redesenho: UMA frase decisiva por card (o veredito, maior
+      // e mais forte — é a resposta a "o que eu faço com isso"), o resto vira UMA
+      // linha de metadado discreto embaixo (cor única, sem chips de fundo colorido
+      // competindo entre si). O selo 🔥 substitui a repetição do número da CDD.
+      const liderCdd = cddLiderCidade; // definido pelo loop assíncrono; null até chegar
       cardsPraca = `<div class="prospeccao-territories">` +
         cidadesOrd.map(cid => {
           const d = porCidade[cid];
@@ -15911,34 +15929,21 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           const emDia = d.pend === 0;
           const perf = perfilPorPraca[cid];
           const run = runwayDaPraca(cid, d.pend);
+          const v = vereditoPraca(cid, d.pend);
+          const metadados = [
+            perf && perf.medianaAval ? `★ mediana ${Number(perf.medianaAval).toLocaleString('pt-BR')}` : null,
+            perf && perf.topCat ? esc(perf.topCat) : null,
+            perf ? `${perf.bairros.size} bairro${perf.bairros.size === 1 ? '' : 's'}` : null,
+            perf && perf.pctSemTel >= 15 ? `${perf.pctSemTel}% sem telefone` : null,
+            perf && perf.empresas90 ? `${perf.empresas90} ${perf.empresas90 === 1 ? 'virou' : 'viraram'} empresa · 90d` : null
+          ].filter(Boolean).join(' · ');
           return `<button class="prospeccao-territory-card" data-pracacard="${esc(cid)}" aria-pressed="${ativa}">
-            <span class="prospeccao-territory-head"><b>${esc(cid)}</b><span>ver território →</span></span>
+            <span class="prospeccao-territory-head"><b>${esc(cid)}${cid === liderCdd ? ' <span title="Mercado mais quente da Casa dos Dados agora — mais aberturas em 90 dias" style=\'font-size:11px;\'>🔥</span>' : ''}</b><span>ver território →</span></span>
             <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:21px;margin-top:3px;${emDia ? 'color:var(--green);' : ''}">${d.pend} <span style="font-size:11px;font-weight:700;${emDia ? '' : 'color:var(--amber);'}">${emDia ? 'em dia ✓' : 'pendentes'}</span>${run ? `<span style="font-size:11px;font-weight:800;margin-left:8px;color:${run.cor};">· ${run.txt}</span>` : ''}</div>
-            <div style="font-size:10.5px;color:var(--muted2);margin-top:2px;">${[...d.reps].slice(0, 3).join(' · ') || 'sem responsável'}</div>
-            ${perf ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;">
-              ${perf.medianaAval ? `<span style="font-size:10px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;">★ mediana ${Number(perf.medianaAval).toLocaleString('pt-BR')}</span>` : ''}
-              ${perf.topCat ? `<span style="font-size:10px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;">${esc(perf.topCat)}</span>` : ''}
-              <span style="font-size:10px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;">${perf.bairros.size} bairro${perf.bairros.size === 1 ? '' : 's'}</span>
-              ${perf.pctSemTel ? `<span style="font-size:10px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:${perf.pctSemTel >= 20 ? 'var(--amber)' : 'inherit'};">${perf.pctSemTel}% sem tel.</span>` : ''}
-              ${perf.empresas90 ? `<span style="font-size:10px;font-weight:800;background:var(--green-soft,#EAF7EF);border:1px solid var(--green);color:var(--green);border-radius:99px;padding:2px 8px;">${perf.empresas90} viraram empresa · 90d</span>` : ''}
-            </div>` : ''}
-            ${(() => {
-              const v = vereditoPraca(cid, d.pend);
-              return v ? `<div style="font-size:10.5px;line-height:1.45;margin-top:6px;padding-top:6px;border-top:1px solid var(--line);color:${v.cor};font-weight:700;text-align:left;">${v.txt}</div>` : '';
-            })()}
-            <div class="praca-novidades" data-novidades="${esc(cid)}" style="font-size:10.5px;line-height:1.45;margin-top:5px;color:#0E9F9F;font-weight:700;text-align:left;"></div>
+            ${v ? `<div style="font-size:12px;line-height:1.4;margin-top:7px;color:${v.cor};font-weight:800;text-align:left;">${v.txt}</div>` : ''}
+            <div style="font-size:10.5px;color:var(--muted2);margin-top:7px;padding-top:7px;border-top:1px solid var(--line-soft);text-align:left;">${[...d.reps].slice(0, 3).join(' · ') || 'sem responsável'}${metadados ? ' · ' + metadados : ''}</div>
           </button>`;
         }).join('') + `</div>`;
-
-      // BLOCO 35 — destaque Casa dos Dados (Julyan: "gastamos tokens com eles, vamos
-      // deixar ele também sugerindo em qual praça atuar"). Faixa própria acima dos
-      // cards: preenchida pelo MESMO loop assíncrono das novidades (zero chamada a
-      // mais — o dado já vem por praça), que ao terminar ranqueia as praças por
-      // aberturas em 90 dias e transforma em recomendação de onde extrair.
-      cardsPraca = `<div id="cddFaixa" style="display:none;background:linear-gradient(135deg,#0E9F9F0F,transparent);border:1.5px solid #0E9F9F;border-radius:14px;padding:12px 16px;margin-bottom:12px;">
-        <div style="font-size:11px;font-weight:800;color:#0E9F9F;letter-spacing:.04em;text-transform:uppercase;">🆕 Casa dos Dados · onde a cidade está abrindo portas</div>
-        <div id="cddFaixaCorpo" style="font-size:12.5px;line-height:1.55;margin-top:5px;"></div>
-      </div>` + cardsPraca;
     }
   }
 
@@ -16079,7 +16084,6 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
 
   el.innerHTML = `
     ${bannerProspeccao}
-    ${integridadeFontes}
     ${freioExec}
     ${cardsPraca}
     <div class="chart-card prospeccao-table-card" style="padding:0;overflow:hidden;margin-bottom:14px;">
@@ -16110,10 +16114,12 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
         <button id="prospeccaoPgAnt" ${prospeccaoPagina <= 1 ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;${prospeccaoPagina <= 1 ? 'opacity:.4;cursor:default;' : ''}">← anterior</button>
         <span style="font-size:11.5px;color:var(--muted2);">página ${prospeccaoPagina} de ${totalPaginas}</span>
         <button id="prospeccaoPgProx" ${prospeccaoPagina >= totalPaginas ? 'disabled' : ''} style="font-size:11.5px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:6px 13px;cursor:pointer;${prospeccaoPagina >= totalPaginas ? 'opacity:.4;cursor:default;' : ''}">próxima →</button>` : ''}
-        ${sessaoAtual.role === 'manager' ? `
-        <span style="margin-left:auto;display:flex;gap:8px;">
-          <button id="prospeccaoCriarLote" ${nSel === 0 ? 'disabled' : ''} style="font-size:12px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:9px 18px;cursor:pointer;${nSel === 0 ? 'opacity:.4;cursor:default;' : ''}">Adicionar à rota (${nSel})</button>
-          <button id="prospeccaoDevolver" ${nSel === 0 ? 'disabled' : ''} style="font-size:12px;font-weight:700;color:var(--ink);background:none;border:1px solid var(--line-btn);border-radius:999px;padding:9px 18px;cursor:pointer;${nSel === 0 ? 'opacity:.4;cursor:default;' : ''}">Devolver p/ revisão</button>
+        ${sessaoAtual.role === 'manager' && nSel > 0 ? `
+        <span style="margin-left:auto;display:flex;gap:8px;align-items:center;">
+          <b style="font-size:11.5px;color:var(--muted2);margin-right:2px;">${nSel} selecionada${nSel > 1 ? 's' : ''}</b>
+          <button id="prospeccaoCriarLote" style="font-size:12px;font-weight:800;color:#fff;background:var(--red);border:none;border-radius:999px;padding:9px 18px;cursor:pointer;">Adicionar à rota</button>
+          <button id="prospeccaoSemFitLote" style="font-size:12px;font-weight:700;color:var(--muted);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:9px 18px;cursor:pointer;">Sem fit</button>
+          <button id="prospeccaoDevolver" style="font-size:12px;font-weight:700;color:var(--ink);background:none;border:1px solid var(--line-btn);border-radius:999px;padding:9px 18px;cursor:pointer;">Devolver p/ revisão</button>
         </span>` : ''}
       </div>
     </div>
@@ -16179,9 +16185,13 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
     (async () => {
       const token = await tokenDeSessaoGlobal();
       if (!token) return;
-      const totaisCdd = []; // BLOCO 35 — acumula pro ranking da faixa Casa dos Dados
-      for (const alvo of el.querySelectorAll('[data-novidades]')) {
-        const cid = alvo.dataset.novidades;
+      const totaisCdd = []; // BLOCO 35/36 — acumula pro ranking do insight + selo 🔥
+      // BLOCO 36 — antes iterava `el.querySelectorAll('[data-novidades]')`, mas esse
+      // nó morreu junto com o texto de novidade por card (cortado do redesenho —
+      // duplicava o mesmo número que aparece aqui embaixo). Itera direto pelas praças
+      // conhecidas (mesma fonte que já existia, UF_DA_PRACA, sem tocar em DOM nem
+      // depender de `cidadesOrd`, que vive em outro bloco/escopo).
+      for (const cid of Object.keys(UF_DA_PRACA)) {
         const uf = UF_DA_PRACA[cid];
         if (!uf) continue;
         try {
@@ -16192,24 +16202,26 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           });
           const j = await resp.json().catch(() => ({}));
           if (!resp.ok || !j.ok || !j.total) continue;
-          const recente = (j.itens || [])[0];
-          alvo.innerHTML = '🆕 ' + j.total + ' abriram em 90 dias'
-            + (recente ? '<span style="display:block;color:var(--muted2);font-weight:600;">mais nova: ' + esc(String(recente.nome).slice(0, 34)) + (recente.bairro ? ' · ' + esc(recente.bairro) : '') + '</span>' : '');
           totaisCdd.push({ cid, total: j.total });
-        } catch (e) { /* novidade é bônus: falhar não estraga o card */ }
+        } catch (e) { /* novidade é bônus: falhar não estraga o insight */ }
       }
-      // BLOCO 35 — com todas as praças respondidas, a faixa vira recomendação: ranking
-      // de aberturas + a sugestão de extração. É o retorno visível do token pago na
-      // Casa dos Dados: não só "quantas abriram", mas "onde isso manda você agir".
-      const faixa = document.getElementById('cddFaixa');
-      const corpo = document.getElementById('cddFaixaCorpo');
-      if (faixa && corpo && totaisCdd.length) {
+      if (totaisCdd.length) {
         totaisCdd.sort((a, b) => b.total - a.total);
         const lider = totaisCdd[0];
-        corpo.innerHTML = totaisCdd.map((t, i) =>
-          `<b style="${i === 0 ? 'color:#0E9F9F;' : ''}">${esc(t.cid)} ${t.total}</b>`).join('<span style="color:var(--muted2);"> · </span>')
-          + `<span style="display:block;margin-top:4px;color:var(--muted);font-size:11.5px;">Mercado mais quente: <b>${esc(lider.cid)}</b> — priorize a próxima extração e as visitas de porta nova por lá. Restaurante recém-aberto decide fornecedor nos primeiros 90 dias.</span>`;
-        faixa.style.display = '';
+        cddLiderCidade = lider.cid;
+        // BLOCO 36 — patch cirúrgico no DOM em vez de re-render completo: a Prospecção
+        // pode ter 292 linhas na tela e um re-render inteiro só pra pintar o 🔥
+        // perderia scroll e filtro abertos à toa. Só a linha de insight + o selo no
+        // card líder mudam.
+        const insight = document.getElementById('cddInsight');
+        if (insight) {
+          insight.innerHTML = `🆕 Casa dos Dados: mercado mais quente é <b>${esc(lider.cid)}</b> (${lider.total} aberturas em 90d) — priorize a próxima extração e as visitas de porta nova por lá.`;
+          insight.style.display = '';
+        }
+        const tituloLider = el.querySelector(`[data-pracacard="${lider.cid}"] .prospeccao-territory-head b`);
+        if (tituloLider && !tituloLider.querySelector('.cdd-flame')) {
+          tituloLider.insertAdjacentHTML('beforeend', ` <span class="cdd-flame" title="Mercado mais quente da Casa dos Dados agora — mais aberturas em 90 dias" style="font-size:11px;">🔥</span>`);
+        }
       }
     })();
   }
@@ -16305,6 +16317,36 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
         okBtn.disabled = true; okBtn.textContent = 'Devolvendo...';
         for (const id of itens) await atualizarLeadProspeccao(id, { responsavel_owner_id: null, status: 'pendente' });
         prospeccaoSelecao.clear();
+        fechar();
+        renderProspeccaoNova();
+      }
+    });
+  });
+
+  // BLOCO 36 (13/08/26) — Julyan: "essas contas alvo vão sempre ficar na lista?...
+  // tem que ter como eu marcar já usei/visitado e sair de lá". A ação por lead JÁ
+  // existia (botão "Sem fit" na ficha, um de cada vez) — o que faltava era o
+  // equivalente em LOTE, ao lado de "Adicionar à rota" e "Devolver", pra sair de 292
+  // linhas em conjunto, não uma a uma. Mesmo padrão de confirmação e mesma chamada
+  // (atualizarLeadProspeccao) que o botão individual já usa — nenhuma lógica nova de
+  // escrita, só a operação em lote que faltava na tela.
+  const btnSemFitLote = document.getElementById('prospeccaoSemFitLote');
+  if (btnSemFitLote) btnSemFitLote.addEventListener('click', () => {
+    const itens = [...prospeccaoSelecao].map(id => prospeccaoCache.find(l => l.id === id)).filter(Boolean);
+    if (itens.length === 0) return;
+    abrirModalConfirmacao({
+      titulo: 'Marcar como "sem fit"',
+      confirmarLabel: `Marcar ${itens.length} sem fit`,
+      corpoHTML: `<p style="margin:0;">Marcar <b>${itens.length}</b> conta(s) como sem fit? Elas saem da fila ativa e da rota — ficam só no Histórico, pra nunca mais ocupar espaço aqui.</p>`,
+      aoConfirmar: async (overlay, fechar) => {
+        const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+        okBtn.disabled = true;
+        let feitos = 0;
+        for (const l of itens) {
+          okBtn.textContent = `Marcando ${feitos + 1} de ${itens.length}…`;
+          const ok = await atualizarLeadProspeccao(l.id, { status: 'sem_fit' });
+          if (ok) { feitos++; prospeccaoSelecao.delete(l.id); }
+        }
         fechar();
         renderProspeccaoNova();
       }
