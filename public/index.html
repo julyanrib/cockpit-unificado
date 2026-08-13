@@ -2852,11 +2852,18 @@ function aplicarVisaoPorPapel() {
     document.getElementById('sidenavTitle').textContent = 'Meu espaço';
     // ETAPA 2: home fixa do executivo é "Hoje" — nunca o Cockpit coletivo, nunca dependendo
     // do dia da semana (a regra de segunda-feira do Resumo é exclusiva do gestor).
-    activateTab('viewMeuPainel');
+    // BLOCO 32b (13/08/26) — bug pego AO VIVO na primeira verificação: o onAuthStateChange
+    // do Supabase dispara mais de uma vez (o comentário em aplicarSessao já avisava), e
+    // cada disparo repassa por mostrarApp() -> aplicarVisaoPorPapel(). Na segunda passada,
+    // o activateTab('viewMeuPainel') incondicional daqui atropelava a posição recém-
+    // restaurada E a regravava por cima no sessionStorage (foi exatamente o rastro achado:
+    // flag de restauração true + posição salva sobrescrita pra viewMeuPainel). Regra:
+    // depois que a restauração desta sessão já decidiu a tela, a home vira só fallback.
+    if (!posicaoNavRestaurada) activateTab('viewMeuPainel');
     renderMeuPainel();
     viewsDesenhadas.add('viewMeuPainel');
-    // BLOCO 32 — a home continua sendo desenhada primeiro (custo já pago hoje; vira
-    // fallback pronto); depois, se havia posição salva nesta sessão, volta pra ela.
+    // A home continua sendo desenhada primeiro (custo já pago hoje; vira fallback
+    // pronto); depois, se havia posição salva nesta sessão, volta pra ela.
     if (typeof restaurarPosicaoDeNavegacao === 'function') restaurarPosicaoDeNavegacao();
   }
 
@@ -6631,6 +6638,14 @@ function salvarPosicaoDeNavegacao(viewId) {
   try {
     const chave = chaveDePosicaoNav();
     if (!chave) return;
+    // BLOCO 32b — snapshot ANTES da primeira gravação da sessão. O boot chama
+    // activateTab('viewMeuPainel') incondicionalmente, e sem este snapshot a home
+    // sobrescrevia a posição salva antes de a restauração conseguir lê-la (rastro pego
+    // ao vivo em 13/08: flag de restauração true + storage já regravado pra home).
+    if (posicaoNavPendente === undefined) {
+      try { posicaoNavPendente = JSON.parse(sessionStorage.getItem(chave) || 'null'); }
+      catch (e2) { posicaoNavPendente = null; }
+    }
     const subview = (typeof agendaEstado !== 'undefined' && agendaEstado) ? agendaEstado.subview : null;
     sessionStorage.setItem(chave, JSON.stringify({ view: viewId, subview: subview }));
   } catch (e) { /* sessionStorage cheio/bloqueado nunca pode derrubar a navegação */ }
@@ -6641,8 +6656,13 @@ function restaurarPosicaoDeNavegacao() {
   if (posicaoNavRestaurada) return;
   posicaoNavRestaurada = true;
   if (!sessaoAtual || sessaoAtual.role !== 'rep') return;
-  let pos = null;
-  try { pos = JSON.parse(sessionStorage.getItem(chaveDePosicaoNav()) || 'null'); } catch (e) { return; }
+  // Lê do snapshot (a posição de ANTES deste boot), nunca do storage direto — o storage
+  // já pode ter sido regravado pelo activateTab da home. Se nenhum activateTab logado
+  // rodou ainda (snapshot vazio), lê do storage como fallback.
+  let pos = posicaoNavPendente;
+  if (pos === undefined) {
+    try { pos = JSON.parse(sessionStorage.getItem(chaveDePosicaoNav()) || 'null'); } catch (e) { return; }
+  }
   if (!pos || !pos.view || pos.view === 'viewMeuPainel') return;
   // Restaura CLICANDO no botão real da aba — os listeners já sabem qual render chamar
   // pra cada view; duplicar isso aqui seria convite pra divergir na próxima mudança.
@@ -6657,6 +6677,7 @@ function restaurarPosicaoDeNavegacao() {
   try { btn.click(); } catch (e) { /* restauração é conforto, nunca pode quebrar o login */ }
 }
 let posicaoNavRestaurada = false;
+let posicaoNavPendente;  // undefined = snapshot ainda não capturado nesta sessão
 
 function activateTab(viewId) {
   salvarPosicaoDeNavegacao(viewId);
