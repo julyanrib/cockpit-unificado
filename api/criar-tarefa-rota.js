@@ -68,6 +68,30 @@ module.exports = async function handler(req, res) {
     return res.status(403).json({ erro: 'Executivo só pode adicionar visita à própria rota — peça ao gestor para atribuir a outro dono.' });
   }
 
+  // BLOCO 34 (13/08/26) — Julyan: "a agenda do executivo sempre tem que estar
+  // preenchida, com follows e reuniões" + "o gestor pode adicionar leads nessa agenda".
+  // Duas peças novas, sem mexer no contrato existente (tipo e sugeridoPorGestor são
+  // opcionais; quem já chama esta rota sem eles continua recebendo "Visita - X" normal):
+  //
+  // 1) `tipo`: 'visita' (padrão, mantém "Visita - X") ou 'reuniao' ("Reunião - X").
+  //    O prefixo é tudo que o resto do cockpit precisa — agendaTipoDoTexto já classifica
+  //    por esse padrão (nenhuma lógica nova de leitura, só a escrita, mesma régua do
+  //    comentário no topo deste arquivo).
+  //
+  // 2) `sugeridoPorGestor`: só tem efeito quando quem chama é o PRÓPRIO gestor (nunca
+  //    confie em flag mandada pelo navegador sozinha — settei's aceitas aqui vêm do
+  //    `usuario.role` já validado acima, não do body). Grava um marcador de MÁQUINA na
+  //    primeira linha do corpo da tarefa: "SUGESTAO_GESTOR:<nome do gestor>:PENDENTE".
+  //    Corpo, não assunto — o assunto "Reunião - X"/"Visita - X" tem que continuar
+  //    batendo com AGENDA_RE_TITULO/agendaTipoDoTexto sem alteração nenhuma; o próprio
+  //    comentário acima já avisa: mexer no PREFIXO do assunto quebra esse parsing em
+  //    cadeia (agendaNomeDoLead, contagem da Daily, tudo). O corpo é lido à parte
+  //    (campo `obs` do evento) e nunca participa dessas regras.
+  const TIPOS_VALIDOS = { visita: 'Visita', reuniao: 'Reunião' };
+  const tipoPedido = TIPOS_VALIDOS[String(req.body && req.body.tipo || 'visita')] ? String(req.body.tipo) : 'visita';
+  const prefixoAssunto = TIPOS_VALIDOS[tipoPedido];
+  const sugeridoPorGestor = !!(req.body && req.body.sugeridoPorGestor) && usuario.role === 'manager';
+
   // hs_timestamp em horário de Brasília: usa a hora prevista se veio (ex.: "14:30"),
   // senão 09:00 — mesma convenção de "compromisso do dia" usada no resto do cockpit.
   const agoraBRT = new Date(Date.now() - 3 * 60 * 60 * 1000);
@@ -90,8 +114,15 @@ module.exports = async function handler(req, res) {
   const dataTarefaMs = Date.UTC(alvoAno, alvoMes, alvoDia, (hh || 9) + 3, mm || 0, 0);
 
   const corpo = [
+    // Marcador de máquina SEMPRE na primeira linha, quando existe — confirmar-sugestao-
+    // gestor.js e o front (extrairSugestaoGestor) leem só a linha 0, nunca fazem regex
+    // no corpo inteiro. `usuario.nome` é o nome de quem está logado (o gestor real, não
+    // o texto que o navegador mandou), então não dá pra forjar "sugestão de outro gestor".
+    sugeridoPorGestor ? `SUGESTAO_GESTOR:${usuario.nome || 'Gestor'}:PENDENTE` : null,
     (bairro || cidade) ? `Endereço: ${[bairro, cidade].filter(Boolean).join(', ')}` : null,
-    'Origem: conta-alvo adicionada à rota do dia pelo Cockpit (Rota & Agenda).'
+    sugeridoPorGestor
+      ? `Origem: ${prefixoAssunto.toLowerCase()} sugerida por ${usuario.nome || 'seu gestor'} pelo Cockpit — aguardando sua confirmação.`
+      : `Origem: conta-alvo adicionada à rota do dia pelo Cockpit (Rota & Agenda).`
   ].filter(Boolean).join('\n');
 
   // REAGENDAMENTO SEM DUPLICAR (Bloco L, 11/08):
@@ -106,7 +137,10 @@ module.exports = async function handler(req, res) {
   // igualdade dependendo do portal, e falhar essa busca faria voltar a duplicar.
   const inicioDiaMs = Date.UTC(alvoAno, alvoMes, alvoDia, 3, 0, 0);
   const fimDiaMs = inicioDiaMs + 24 * 60 * 60 * 1000;
-  const assunto = `Visita - ${nome}`;
+  // BLOCO 34 — dedup por assunto continua funcionando igual: "Reunião - X" nunca
+  // colide com "Visita - X" da mesma conta, então marcar as duas cotas (visita do dia +
+  // reunião do dia) no mesmo lead não gera falso reagendamento de uma virando a outra.
+  const assunto = `${prefixoAssunto} - ${nome}`;
   let idExistente = null;
   // DIAGNÓSTICO (11/08): a busca falhando em silêncio esconde duas coisas — que o
   // reagendamento não vai funcionar, e que reenviar a rota vai DUPLICAR tarefa. Agora
@@ -167,7 +201,7 @@ module.exports = async function handler(req, res) {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         properties: {
-          hs_task_subject: `Visita - ${nome}`,
+          hs_task_subject: assunto,
           hs_task_body: corpo,
           hs_task_status: 'NOT_STARTED',
           hs_task_type: 'TODO',
