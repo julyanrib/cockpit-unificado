@@ -2855,6 +2855,9 @@ function aplicarVisaoPorPapel() {
     activateTab('viewMeuPainel');
     renderMeuPainel();
     viewsDesenhadas.add('viewMeuPainel');
+    // BLOCO 32 — a home continua sendo desenhada primeiro (custo já pago hoje; vira
+    // fallback pronto); depois, se havia posição salva nesta sessão, volta pra ela.
+    if (typeof restaurarPosicaoDeNavegacao === 'function') restaurarPosicaoDeNavegacao();
   }
 
   if (souGestorSessao) {
@@ -6613,7 +6616,50 @@ let planoAbaJaMontada = false;
 // ele sai da aba, junto com o território.
 let horariosManuais = {};
 
+// BLOCO 32 (13/08/26) — Julyan: "Voltar pro navegador sempre reabre na sub-aba Hoje".
+// Confirmado ao vivo: não existia persistência NENHUMA — a home era hard-coded em
+// aplicarVisaoPorPapel e localStorage/URL não guardavam view nem subview.
+// sessionStorage de propósito (e não localStorage): cobre recarregar a página e voltar
+// de outro site na MESMA aba — o caso real do executivo em campo — sem o risco de abrir
+// a segunda-feira dentro da Prospecção de sexta. A chave inclui o ownerId pra sessão de
+// teste do gestor no mesmo navegador nunca herdar a posição do executivo.
+function chaveDePosicaoNav() {
+  if (typeof sessaoAtual === 'undefined' || !sessaoAtual || !sessaoAtual.email) return null;
+  return 'cockpit_navpos_v1_' + (sessaoAtual.ownerId || sessaoAtual.email);
+}
+function salvarPosicaoDeNavegacao(viewId) {
+  try {
+    const chave = chaveDePosicaoNav();
+    if (!chave) return;
+    const subview = (typeof agendaEstado !== 'undefined' && agendaEstado) ? agendaEstado.subview : null;
+    sessionStorage.setItem(chave, JSON.stringify({ view: viewId, subview: subview }));
+  } catch (e) { /* sessionStorage cheio/bloqueado nunca pode derrubar a navegação */ }
+}
+function restaurarPosicaoDeNavegacao() {
+  // Só executivo (o bug é dele) e só UMA vez por sessão — se aplicarVisaoPorPapel rodar
+  // de novo no meio do uso, restaurar de novo arrancaria o usuário da tela atual.
+  if (posicaoNavRestaurada) return;
+  posicaoNavRestaurada = true;
+  if (!sessaoAtual || sessaoAtual.role !== 'rep') return;
+  let pos = null;
+  try { pos = JSON.parse(sessionStorage.getItem(chaveDePosicaoNav()) || 'null'); } catch (e) { return; }
+  if (!pos || !pos.view || pos.view === 'viewMeuPainel') return;
+  // Restaura CLICANDO no botão real da aba — os listeners já sabem qual render chamar
+  // pra cada view; duplicar isso aqui seria convite pra divergir na próxima mudança.
+  const BOTAO_DA_VIEW = { viewDaily: 'tabBtnDaily', viewAgenda: 'tabBtnAgenda', viewMeuFunil: 'tabBtnMeuFunil', viewPDIs: 'tabBtnPDIs' };
+  if (pos.view === 'viewAgenda' && pos.subview === 'semana') BOTAO_DA_VIEW.viewAgenda = 'tabBtnAgendaSemana';
+  const btn = document.getElementById(BOTAO_DA_VIEW[pos.view] || '');
+  if (!btn || btn.style.display === 'none') return; // view não existe pro papel: fica na home
+  if (pos.view === 'viewAgenda' && ['hoje', 'prospeccao'].includes(pos.subview)
+      && typeof agendaEstado !== 'undefined') agendaEstado.subview = pos.subview;
+  // O listener do tabBtnAgenda zera 'semana'->'hoje' de propósito e PRESERVA 'prospeccao'
+  // (comentário na própria linha) — clicar nele com subview já ajustada respeita as duas regras.
+  try { btn.click(); } catch (e) { /* restauração é conforto, nunca pode quebrar o login */ }
+}
+let posicaoNavRestaurada = false;
+
 function activateTab(viewId) {
+  salvarPosicaoDeNavegacao(viewId);
   // Zera o território a cada clique de aba (Julyan, 11/08: "tem q zerar ao clicar na
   // aba"). Assim ele declara onde vai atuar HOJE toda vez, em vez de herdar em silêncio
   // a última região digitada.
@@ -14692,6 +14738,63 @@ function abrirImportacaoProspeccao() {
 }
 
 let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false, pertoDeMim: false, topAvaliadas: false, nuncaVisitada: false };
+
+/* BLOCO 32 (13/08/26) — Julyan: "um lead que aparece como 'perto de mim' no mapa deveria
+   aparecer também na lista da aba Prospecção — hoje as duas fontes não conversam".
+   Medido ao vivo (Rota do Sandro): o mapa anunciava 185 pinos = 124 contas-alvo + 61
+   portas do OSM, e o prospeccaoCache tinha 110 leads, TODOS de outscraper/Google Places —
+   zero do OSM. Não eram duas queries desalinhadas: as portas do OSM simplesmente não
+   existem em leads_prospeccao (por decisão de design — "mapa cheio de lead fantasma é
+   pior que mapa vazio", ver materializarLeadDoMapa).
+   Decisão do Julyan (13/08): opção B — as portas aparecem na lista do EXECUTIVO vindas da
+   MESMA fonte em memória do mapa (mapaPoisCache), e o "+ Rota" nelas cria a linha de
+   verdade pelo MESMO caminho que o pino do mapa já usa (materializarLeadDoMapa,
+   fonte='mapa') — inclusive a tarefa de visita no HubSpot, igual ao fluxo do mapa. */
+let prospeccaoPortasVisiveis = [];
+let prospeccaoPortasBuscando = false;
+
+// Fonte única com o mapa: os MESMOS itens que viram pino ◇. Recalcula quando o cache do
+// mapa tem conteúdo; quando ele foi invalidado (materializar limpa o cache inteiro de
+// propósito), preserva a lista atual pra tabela não piscar vazia entre um clique e outro.
+function prospeccaoPortasDoMapa() {
+  const doMapa = (typeof mapaPoisCache !== 'undefined' && mapaPoisCache && Array.isArray(mapaPoisCache.itens)) ? mapaPoisCache.itens : [];
+  if (doMapa.length) {
+    // Dedup contra a base real: mesma porta já materializada (ou conta do Outscraper no
+    // mesmo endereço) não pode aparecer duas vezes. Nome normalizado igual + menos de
+    // 150m = mesmo lugar; sem coordenada de um dos lados, o nome igual decide sozinho —
+    // errar pra menos (esconder uma porta) é mais barato que errar pra mais (duplicar).
+    const base = prospeccaoCache.map(l => ({ nome: prospeccaoNormalizarTexto(l.nome), lat: l.lat, lng: l.lng }));
+    prospeccaoPortasVisiveis = doMapa
+      .filter(p => {
+        const nome = prospeccaoNormalizarTexto(p.nome);
+        return !base.some(b => b.nome === nome &&
+          (b.lat == null || p.lat == null || distanciaKm(b.lat, b.lng, p.lat, p.lng) < 0.15));
+      })
+      // fonte='mapa' já aqui, em memória: é o que a linha VAI ter quando materializar —
+      // a tabela mostra desde o início o rótulo que vale ("Mapa (OSM)").
+      .map(p => ({ ...p, fonte: 'mapa' }));
+  }
+  return prospeccaoPortasVisiveis;
+}
+
+// A lista pode abrir antes de o mapa ter rodado (cache frio). Busca em segundo plano —
+// mesmo endpoint, mesmo cache de servidor — e SÓ re-renderiza se ninguém está digitando
+// num campo da Prospecção (re-render derruba o foco; já foi bug corrigido em 10/08).
+function prospeccaoBuscarPortasEmFundo() {
+  if (prospeccaoPortasBuscando) return;
+  if (typeof planoMapaOrigemAtual === 'undefined' || !planoMapaOrigemAtual) return; // sem território declarado não há "perto de mim"
+  if (typeof buscarRestaurantesNoMapa !== 'function') return;
+  prospeccaoPortasBuscando = true;
+  buscarRestaurantesNoMapa(planoMapaOrigemAtual.lat, planoMapaOrigemAtual.lng).then(itens => {
+    prospeccaoPortasBuscando = false;
+    if (!itens || !itens.length) return;
+    const slot = document.getElementById('prospeccaoNovaRota');
+    if (!slot) return; // já saiu da tela
+    const foco = document.activeElement;
+    if (foco && slot.contains(foco) && /^(INPUT|SELECT|TEXTAREA)$/.test(foco.tagName)) return;
+    renderProspeccaoNova(true);
+  }).catch(() => { prospeccaoPortasBuscando = false; });
+}
 // Nomes que já receberam visita/revisita registrada (tarefa do Expogo). Preenchido no
 // render da Prospecção e lido pelo filtro "nunca visitada" — Set pra o filtro rodar em
 // O(1) por linha em vez de varrer a agenda a cada uma das 280 contas.
@@ -14752,7 +14855,7 @@ function prospeccaoRotuloCategoria(valor) {
 }
 
 function prospeccaoRotuloFonte(valor) {
-  const rotulos = { outscraper: 'Outscraper', google_places: 'Google Places', tripadvisor: 'Tripadvisor', ifood: 'iFood', manual: 'Manual' };
+  const rotulos = { outscraper: 'Outscraper', google_places: 'Google Places', tripadvisor: 'Tripadvisor', ifood: 'iFood', manual: 'Manual', mapa: 'Mapa (OSM)' };
   return String(valor || '').split('+').map(fonte => {
     const limpa = fonte.trim();
     return rotulos[limpa.toLowerCase()] || limpa;
@@ -14828,7 +14931,8 @@ function prospeccaoFazSentido(l) {
 function prospeccaoRotuloStatus(status) {
   return {
     pendente: 'Pendente', atribuido: 'Disponível', na_rota: 'Na rota',
-    sem_fit: 'Sem fit', criado_hubspot: 'Empresa criada'
+    sem_fit: 'Sem fit', criado_hubspot: 'Empresa criada',
+    disponivel_mapa: 'Porta do OSM ◇' // BLOCO 32 — mesma linguagem do rodapé do mapa
   }[status] || status || 'Não informado';
 }
 
@@ -15154,6 +15258,45 @@ async function adicionarProspeccaoNaRota(lead, botaoEl, msgEl) {
   return true;
 }
 
+// BLOCO 32 — "+ Rota" numa porta do OSM vinda da lista. Espelho fiel do que alternarRota
+// já faz quando a MESMA porta é clicada no mapa: materializarLeadDoMapa (fonte='mapa',
+// status='na_rota') + tarefa de visita no HubSpot com o mesmo cálculo de horário (9h +
+// 45min por parada já na rota, teto 17h) + o mesmo toast. Uma porta, um comportamento —
+// não importa por qual tela ela entrou.
+async function materializarPortaDaLista(porta, botaoEl) {
+  const ownerId = sessaoAtual && sessaoAtual.ownerId;
+  if (!ownerId) {
+    if (typeof mostrarToast === 'function') mostrarToast('Sessão sem executivo definido — recarregue e entre de novo.', 'erro');
+    return;
+  }
+  if (botaoEl) { botaoEl.disabled = true; botaoEl.textContent = 'Adicionando…'; }
+  const hojeISO = isoDate(new Date());
+  // Ordem calculada ANTES do insert, igual ao fluxo do mapa (que conta a rota pré-existente).
+  const ordem = prospeccaoCache.filter(l => l.status === 'na_rota' && l.data_rota === hojeISO).length;
+  const { lead, error } = await materializarLeadDoMapa(porta, ownerId, 'mapa');
+  if (error || !lead) {
+    if (botaoEl) { botaoEl.disabled = false; botaoEl.textContent = '+ Rota'; }
+    if (typeof mostrarToast === 'function') mostrarToast('Não consegui salvar esse estabelecimento como conta-alvo. Tente de novo.', 'erro');
+    return;
+  }
+  // Sai da lista em memória (materializar já invalidou o cache do mapa) e entra na base
+  // real mantendo a ordem oficial — avaliações desc, e a porta (sem avaliações) vai pro fim.
+  prospeccaoPortasVisiveis = prospeccaoPortasVisiveis.filter(p => String(p.id) !== String(porta.id));
+  prospeccaoCache.push(lead);
+  prospeccaoCache.sort((a, b) =>
+    (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0) ||
+    String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR'));
+  const minutos = Math.min(9 * 60 + ordem * 45, 17 * 60);
+  const hora = String(Math.floor(minutos / 60)).padStart(2, '0') + ':' + String(minutos % 60).padStart(2, '0');
+  if (typeof criarTarefaVisitaNoHubspot === 'function') {
+    criarTarefaVisitaNoHubspot({ nome: lead.nome, bairro: lead.bairro, cidade: lead.cidade }, ownerId, hora)
+      .catch(e => console.error('Falha ao criar tarefa de visita (porta do OSM via lista):', e));
+  }
+  if (typeof mostrarToast === 'function') mostrarToast('"' + lead.nome + '" entrou na sua rota e virou conta-alvo.', 'sucesso');
+  if (typeof planoRotaGerada !== 'undefined') planoRotaGerada = false; // rota desenhada ficou velha
+  renderProspeccaoNova(true);
+}
+
 function prospeccaoCardHTML(l) {
   const podeAgir = sessaoAtual.role === 'manager' || String(l.responsavel_owner_id) === String(sessaoAtual.ownerId);
   const nomeResponsavel = l.responsavel_owner_id ? ((DATA.reps.find(r => r.ownerId === String(l.responsavel_owner_id)) || {}).name || l.responsavel_owner_id) : null;
@@ -15266,6 +15409,18 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   const fontes = [...new Set(prospeccaoCache.flatMap(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean)))].sort();
 
   let filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
+  // BLOCO 32 — portas do OSM entram na fila do executivo, na visão recomendada, passando
+  // pelos MESMOS filtros (busca, bairro, telefone, nunca visitada...). Como não têm
+  // avaliações, ficam depois de toda conta ranqueada na ordem padrão — a prioridade
+  // oficial continua sendo volume de avaliações — e com "Perto de mim" ligado entram na
+  // ordenação por distância como qualquer outra. Gestor não vê portas: a fila dele é do
+  // time inteiro e as portas são do território de quem está logado.
+  if (souExecProsp && prospeccaoFiltro.visao === 'ativas') {
+    const portasBrutas = prospeccaoPortasDoMapa();
+    if (!portasBrutas.length) prospeccaoBuscarPortasEmFundo();
+    const portas = prospeccaoAplicarFiltros(portasBrutas);
+    if (portas.length) filtrados = filtrados.concat(portas);
+  }
   if (prospeccaoFiltro.pertoDeMim) filtrados = prospeccaoOrdenarPorDistancia(filtrados);
 
   // Paginação: 20 por página — a tela não monta mais centenas de cards de uma vez.
@@ -15500,7 +15655,10 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
 
   // Pílulas orientadas à decisão. A ordenação interna sempre começa pelo volume
   // de avaliações: é o indicador transparente de potencial de impacto da conta.
-  const totalAtivas = baseOperacional.filter(prospeccaoAtiva).length;
+  const totalAtivas = baseOperacional.filter(prospeccaoAtiva).length
+    // BLOCO 32 — a pílula "Recomendadas" tem que bater com o total de linhas da tabela,
+    // senão o executivo vê "107" e conta mais que isso.
+    + ((souExecProsp && prospeccaoFiltro.visao === 'ativas') ? prospeccaoAplicarFiltros(prospeccaoPortasVisiveis).length : 0);
   const totalSemDono = baseOperacional.filter(l => prospeccaoAtiva(l) && !l.responsavel_owner_id).length;
   const totalNaRota = baseOperacional.filter(l => l.status === 'na_rota' && l.data_rota === isoDate(new Date())).length;
   const totalHistorico = prospeccaoCache.filter(l => l.status === 'sem_fit' || l.status === 'criado_hubspot').length;
@@ -15702,8 +15860,12 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   el.querySelectorAll('[data-rota-quick]').forEach(btn => {
     btn.addEventListener('click', async ev => {
       ev.stopPropagation();
-      const lead = prospeccaoCache.find(x => String(x.id) === String(btn.dataset.rotaQuick));
+      const lead = prospeccaoCache.find(x => String(x.id) === String(btn.dataset.rotaQuick))
+        || prospeccaoPortasVisiveis.find(x => String(x.id) === String(btn.dataset.rotaQuick));
       if (!lead) return;
+      // BLOCO 32 — porta do OSM ainda não existe no banco: materializa pelo MESMO caminho
+      // do pino do mapa e sai daqui (o fluxo de lead comum abaixo pressupõe linha real).
+      if (lead._doMapa) { await materializarPortaDaLista(lead, btn); return; }
       if (lead.status === 'na_rota' && lead.data_rota === hojeProsp) {
         abrirRotaHoje();
         return;
@@ -15712,7 +15874,13 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       const ok = await adicionarProspeccaoNaRota(lead, btn, msg);
       if (ok) {
         if (typeof mostrarToast === 'function') mostrarToast(lead.nome + ' entrou na rota de hoje.', 'sucesso');
-        renderProspeccaoNova();
+        // BLOCO 32 (13/08/26) — bug do "dá uma volta sinistra": este era o único clique da
+        // tabela que recarregava TUDO (innerHTML vira "Carregando…" + ida ao Supabase).
+        // Medido ao vivo: a página caía de 1958px pra 639px de altura por ~2,5s a cada
+        // clique — o documento inteiro colapsava e voltava. O reload era desnecessário:
+        // atualizarLeadProspeccao e criarEmpresaProspeccao já espelham a escrita no
+        // prospeccaoCache (linhas ~15090 e ~15115), então refiltrar o cache basta.
+        renderProspeccaoNova(true);
       } else {
         btn.disabled = false;
         btn.textContent = '+ Rota';
@@ -15997,7 +16165,7 @@ function abrirFichaProspeccaoDrawer(l) {
     const ok = await adicionarProspeccaoNaRota(l, btnRota, msg);
     if (ok) {
       const atualizado = prospeccaoCache.find(x => x.id === l.id);
-      renderProspeccaoNova();
+      renderProspeccaoNova(true); // BLOCO 32 — mesmo colapso do botão rápido; cache já está espelhado
       if (atualizado) abrirFichaProspeccaoDrawer(atualizado);
     }
   });
