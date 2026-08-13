@@ -13156,6 +13156,27 @@ async function renderDaily() {
       <span style="font-family:'Poppins',sans-serif;font-size:14px;font-weight:700;line-height:1.4;">${objetivoDaily}</span>
     </div>` : '';
 
+  // AUTOMAÇÃO 3 (13/08/26) — "quero segurança nos dados e veracidade". Antes, uma
+  // escrita da Daily falhando à noite não deixava rastro nenhum visível — só descobria
+  // quem prestasse atenção comparando com o HubSpot na mão (foi assim que achei o caso
+  // do Bruno em 12/08). Agora DATA.syncStatus (gravado pelo próprio robô a cada rodada)
+  // aparece aqui: quantas falhas, de quem, e quando foi a última rodada.
+  const alertaSyncDaily = (() => {
+    const st = DATA.syncStatus;
+    if (souRepDaily || !st) return '';
+    const falhas = st.falhas || [];
+    if (!falhas.length) return '';
+    const nomes = [...new Set(falhas.map(f => f.nome || f.ownerId))];
+    return `
+    <div style="display:flex;align-items:flex-start;gap:10px;margin:0 0 12px;padding:11px 16px;background:var(--amber-soft);border:1px solid rgba(184,121,14,.3);border-radius:var(--r-lg);">
+      <span style="font-size:15px;flex:none;">⚠️</span>
+      <div>
+        <b style="font-size:12.5px;color:var(--amber-ink);">A sincronização automática da Daily teve ${falhas.length} falha${falhas.length === 1 ? '' : 's'} na última rodada (${new Date(st.ultimaExecucao).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})</b>
+        <div style="font-size:11.5px;color:var(--amber-ink);margin-top:3px;line-height:1.5;">Antes de cobrar número de <b>${esc(nomes.join(', '))}</b>, confira no HubSpot — pode estar desatualizado, não necessariamente errado.</div>
+      </div>
+    </div>`;
+  })();
+
   // BLOCO 2 (10/08/26): slots pros dois blocos que vieram do Cockpit. Só existem na
   // sessão do gestor — a Daily do executivo continua sendo só o contrato dele.
   const slotsMigradosDaily = souRepDaily ? '' : '<div id="dailySlotDecisoes"></div>';
@@ -13163,6 +13184,7 @@ async function renderDaily() {
   let html = `
     ${bannerDaily}
     ${ritualGestorDaily}
+    ${alertaSyncDaily}
     ${slotsMigradosDaily}
     ${focoSemanaHtml}
     <div class="daily-header">
