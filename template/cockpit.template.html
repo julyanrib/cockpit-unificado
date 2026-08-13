@@ -15828,17 +15828,100 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       if (!porCidade[cid]) porCidade[cid] = { pend: 0, reps: new Set(saudePorPraca[cid].reps) };
     });
 
-    const cidadesOrd = Object.keys(porCidade).sort((a, b) => porCidade[b].pend - porCidade[a].pend);
+    // BLOCO 35 (13/08/26) — Julyan: "preciso saber qual praça precisa de mais leads,
+    // perfil de cada praça... inteligência, dados reais, como o top performer do
+    // Salesforce faz". Sondagem ao vivo (13/08) mostrou o que faltava: o card dizia
+    // ESTOQUE e veredito, mas não PERFIL (Vila Velha tinha a fila mais rica — mediana
+    // 3.9k avaliações — e mais rasa: 14 leads em 4 bairros; POA estava dominada por
+    // cafeteria, fora do perfil G/GG; e nada disso aparecia). Três réguas novas, todas
+    // calculadas do prospeccaoCache que já está na memória — zero chamada extra:
+    //
+    // MUNIÇÃO EM SEMANAS (runway): estoque ÷ consumo médio semanal (leads que saíram
+    //   de "disponível" nos últimos 28 dias — na_rota/sem_fit/criado_hubspot com
+    //   updated_at recente). "118 pendentes" parece muito; "6 semanas de fila" é uma
+    //   informação de decisão. Consumo zero = fila parada (∞), que também é um dado.
+    //
+    // RENDIMENTO: quantos leads da praça viraram empresa no HubSpot nos últimos 90
+    //   dias. IMPORTANTE (bug de dado achado na sondagem): linhas criado_hubspot
+    //   antigas podem estar sem cidade — o rendimento por praça só conta as que têm.
+    //   O número real pode ser um pouco maior; melhor um piso honesto que um zero
+    //   falso ou um chute.
+    //
+    // PERFIL: mediana de avaliações (mediana, não média — uma Ilha do Caranguejo de
+    //   17k avaliações não pode maquiar a fila inteira), categoria dominante, % sem
+    //   telefone e bairros cobertos. É o que diz SE vale abastecer e COM QUÊ
+    //   (a extração de POA precisa mirar restaurante, não mais café).
+    const DIA_MS = 24 * 60 * 60 * 1000;
+    const agoraMs = Date.now();
+    const perfilPorPraca = (() => {
+      const out = {};
+      prospeccaoCache.forEach(l => {
+        const cid = l.cidade || null;
+        if (!cid) return; // sem cidade não há praça — ver nota do rendimento acima
+        const p = out[cid] || (out[cid] = { avals: [], cats: {}, semTel: 0, comTel: 0, bairros: new Set(), consumo28: 0, empresas90: 0 });
+        if (prospeccaoAtiva(l)) {
+          if (l.avaliacoes != null) p.avals.push(Number(l.avaliacoes) || 0);
+          const cat = String(l.categoria || '').toLowerCase().trim();
+          if (cat) p.cats[cat] = (p.cats[cat] || 0) + 1;
+          if (l.telefone) p.comTel++; else p.semTel++;
+          if (l.bairro) p.bairros.add(String(l.bairro).toLowerCase().trim());
+        }
+        const upd = l.updated_at ? Date.parse(l.updated_at) : NaN;
+        if (['na_rota', 'sem_fit', 'criado_hubspot'].includes(l.status) && Number.isFinite(upd) && (agoraMs - upd) <= 28 * DIA_MS) p.consumo28++;
+        if (l.status === 'criado_hubspot' && Number.isFinite(upd) && (agoraMs - upd) <= 90 * DIA_MS) p.empresas90++;
+      });
+      Object.values(out).forEach(p => {
+        p.avals.sort((a, b) => a - b);
+        p.medianaAval = p.avals.length ? p.avals[Math.floor(p.avals.length / 2)] : 0;
+        p.topCat = (Object.entries(p.cats).sort((a, b) => b[1] - a[1])[0] || [null])[0];
+        p.pctSemTel = (p.semTel + p.comTel) ? Math.round(100 * p.semTel / (p.semTel + p.comTel)) : 0;
+        p.consumoSemana = p.consumo28 / 4;
+      });
+      return out;
+    })();
+
+    const runwayDaPraca = (cid, pend) => {
+      const p = perfilPorPraca[cid];
+      if (!p || !p.consumoSemana) return pend > 0 ? { txt: 'fila parada', cor: 'var(--muted2)', sem: Infinity } : null;
+      const sem = pend / p.consumoSemana;
+      return {
+        sem,
+        txt: sem < 1 ? '< 1 semana de fila' : Math.round(sem) + ' semana' + (Math.round(sem) > 1 ? 's' : '') + ' de fila',
+        cor: sem <= 2 ? 'var(--red)' : sem <= 4 ? 'var(--amber)' : 'var(--green)'
+      };
+    };
+
+    // Ordenação por URGÊNCIA de decisão, não por estoque: quem está sem munição (ou
+    // perto disso) vem primeiro — era exatamente a praça que a ordenação por volume
+    // empurrava pro fim da lista.
+    const urgencia = cid => {
+      const pend = porCidade[cid].pend;
+      const r = runwayDaPraca(cid, pend);
+      if (pend === 0) return 0;
+      if (r && r.sem <= 2) return 1;
+      if (r && r.sem <= 4) return 2;
+      return 3 + (1 / (pend + 1));
+    };
+    const cidadesOrd = Object.keys(porCidade).sort((a, b) => urgencia(a) - urgencia(b) || porCidade[b].pend - porCidade[a].pend);
     if (cidadesOrd.length > 0) {
       cardsPraca = `<div class="prospeccao-territories">` +
         cidadesOrd.map(cid => {
           const d = porCidade[cid];
           const ativa = prospeccaoFiltro.cidade === cid;
           const emDia = d.pend === 0;
+          const perf = perfilPorPraca[cid];
+          const run = runwayDaPraca(cid, d.pend);
           return `<button class="prospeccao-territory-card" data-pracacard="${esc(cid)}" aria-pressed="${ativa}">
             <span class="prospeccao-territory-head"><b>${esc(cid)}</b><span>ver território →</span></span>
-            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:21px;margin-top:3px;${emDia ? 'color:var(--green);' : ''}">${d.pend} <span style="font-size:11px;font-weight:700;${emDia ? '' : 'color:var(--amber);'}">${emDia ? 'em dia ✓' : 'pendentes'}</span></div>
+            <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:21px;margin-top:3px;${emDia ? 'color:var(--green);' : ''}">${d.pend} <span style="font-size:11px;font-weight:700;${emDia ? '' : 'color:var(--amber);'}">${emDia ? 'em dia ✓' : 'pendentes'}</span>${run ? `<span style="font-size:11px;font-weight:800;margin-left:8px;color:${run.cor};">· ${run.txt}</span>` : ''}</div>
             <div style="font-size:10.5px;color:var(--muted2);margin-top:2px;">${[...d.reps].slice(0, 3).join(' · ') || 'sem responsável'}</div>
+            ${perf ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px;">
+              ${perf.medianaAval ? `<span style="font-size:10px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;">★ mediana ${Number(perf.medianaAval).toLocaleString('pt-BR')}</span>` : ''}
+              ${perf.topCat ? `<span style="font-size:10px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;">${esc(perf.topCat)}</span>` : ''}
+              <span style="font-size:10px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;">${perf.bairros.size} bairro${perf.bairros.size === 1 ? '' : 's'}</span>
+              ${perf.pctSemTel ? `<span style="font-size:10px;font-weight:700;background:var(--panel2);border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:${perf.pctSemTel >= 20 ? 'var(--amber)' : 'inherit'};">${perf.pctSemTel}% sem tel.</span>` : ''}
+              ${perf.empresas90 ? `<span style="font-size:10px;font-weight:800;background:var(--green-soft,#EAF7EF);border:1px solid var(--green);color:var(--green);border-radius:99px;padding:2px 8px;">${perf.empresas90} viraram empresa · 90d</span>` : ''}
+            </div>` : ''}
             ${(() => {
               const v = vereditoPraca(cid, d.pend);
               return v ? `<div style="font-size:10.5px;line-height:1.45;margin-top:6px;padding-top:6px;border-top:1px solid var(--line);color:${v.cor};font-weight:700;text-align:left;">${v.txt}</div>` : '';
@@ -15846,6 +15929,16 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
             <div class="praca-novidades" data-novidades="${esc(cid)}" style="font-size:10.5px;line-height:1.45;margin-top:5px;color:#0E9F9F;font-weight:700;text-align:left;"></div>
           </button>`;
         }).join('') + `</div>`;
+
+      // BLOCO 35 — destaque Casa dos Dados (Julyan: "gastamos tokens com eles, vamos
+      // deixar ele também sugerindo em qual praça atuar"). Faixa própria acima dos
+      // cards: preenchida pelo MESMO loop assíncrono das novidades (zero chamada a
+      // mais — o dado já vem por praça), que ao terminar ranqueia as praças por
+      // aberturas em 90 dias e transforma em recomendação de onde extrair.
+      cardsPraca = `<div id="cddFaixa" style="display:none;background:linear-gradient(135deg,#0E9F9F0F,transparent);border:1.5px solid #0E9F9F;border-radius:14px;padding:12px 16px;margin-bottom:12px;">
+        <div style="font-size:11px;font-weight:800;color:#0E9F9F;letter-spacing:.04em;text-transform:uppercase;">🆕 Casa dos Dados · onde a cidade está abrindo portas</div>
+        <div id="cddFaixaCorpo" style="font-size:12.5px;line-height:1.55;margin-top:5px;"></div>
+      </div>` + cardsPraca;
     }
   }
 
@@ -16086,6 +16179,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
     (async () => {
       const token = await tokenDeSessaoGlobal();
       if (!token) return;
+      const totaisCdd = []; // BLOCO 35 — acumula pro ranking da faixa Casa dos Dados
       for (const alvo of el.querySelectorAll('[data-novidades]')) {
         const cid = alvo.dataset.novidades;
         const uf = UF_DA_PRACA[cid];
@@ -16101,7 +16195,21 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           const recente = (j.itens || [])[0];
           alvo.innerHTML = '🆕 ' + j.total + ' abriram em 90 dias'
             + (recente ? '<span style="display:block;color:var(--muted2);font-weight:600;">mais nova: ' + esc(String(recente.nome).slice(0, 34)) + (recente.bairro ? ' · ' + esc(recente.bairro) : '') + '</span>' : '');
+          totaisCdd.push({ cid, total: j.total });
         } catch (e) { /* novidade é bônus: falhar não estraga o card */ }
+      }
+      // BLOCO 35 — com todas as praças respondidas, a faixa vira recomendação: ranking
+      // de aberturas + a sugestão de extração. É o retorno visível do token pago na
+      // Casa dos Dados: não só "quantas abriram", mas "onde isso manda você agir".
+      const faixa = document.getElementById('cddFaixa');
+      const corpo = document.getElementById('cddFaixaCorpo');
+      if (faixa && corpo && totaisCdd.length) {
+        totaisCdd.sort((a, b) => b.total - a.total);
+        const lider = totaisCdd[0];
+        corpo.innerHTML = totaisCdd.map((t, i) =>
+          `<b style="${i === 0 ? 'color:#0E9F9F;' : ''}">${esc(t.cid)} ${t.total}</b>`).join('<span style="color:var(--muted2);"> · </span>')
+          + `<span style="display:block;margin-top:4px;color:var(--muted);font-size:11.5px;">Mercado mais quente: <b>${esc(lider.cid)}</b> — priorize a próxima extração e as visitas de porta nova por lá. Restaurante recém-aberto decide fornecedor nos primeiros 90 dias.</span>`;
+        faixa.style.display = '';
       }
     })();
   }
