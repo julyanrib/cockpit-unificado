@@ -8930,7 +8930,12 @@ const TERRITORIO_DO_EXECUTIVO = {
   '86100505': { rotulo: 'Vila Velha (cidade inteira)', bairro: null, municipio: 'Vila Velha', uf: 'ES', lat: -20.3297, lng: -40.2925, raioKm: 9 },
   '87069181': { rotulo: 'Vitória (cidade inteira)', bairro: null, municipio: 'Vitória', uf: 'ES', lat: -20.3155, lng: -40.3128, raioKm: 8 },
   '86100506': { rotulo: 'Taquara, Jacarepaguá', bairro: 'Taquara', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9260, lng: -43.3760, raioKm: 5 },
-  '87569072': { rotulo: 'Tijuca', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9245, lng: -43.2320, raioKm: 4 },
+  // BLOCO 32 (13/08/26) — Julyan, depois do PDI do Sandro: "rota dele vai ser tijuca,
+  // ele tem q garantir presença lá" — não é mais sugestão de partida (que ele podia
+  // sobrescrever digitando outro lugar), é território FIXO. `fixo:true` faz o passo 1
+  // do ritual nascer sempre cumprido e trava o campo de "onde vai atuar hoje" — ver uso
+  // logo abaixo, nas duas únicas leituras que precisavam mudar pra isso funcionar.
+  '87569072': { rotulo: 'Tijuca', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9245, lng: -43.2320, raioKm: 4, fixo: true },
   '94079973': { rotulo: 'Campo Grande', bairro: 'Campo Grande', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9020, lng: -43.5580, raioKm: 6 },
   // bairro aceita lista: a Kelly cobre dois, e a Casa dos Dados devolve um por empresa.
   '91477292': { rotulo: 'Auxiliadora / Moinhos de Vento', bairro: ['Moinhos de Vento', 'Auxiliadora'], municipio: 'Porto Alegre', uf: 'RS', lat: -30.0245, lng: -51.2050, raioKm: 4 },
@@ -10389,7 +10394,14 @@ async function montarPlanoDoDia(r) {
   // conhecido e fixo. Ele continua livre pra digitar outro lugar; só não começa perdido.
   const territorioBaseRota = territorioDe(r.ownerId);
   if (!planoMapaOrigemAtual && territorioBaseRota) {
-    planoMapaOrigemAtual = { lat: territorioBaseRota.lat, lng: territorioBaseRota.lng, base: true };
+    // BUG DE ESCOPO EVITADO: `base:true` é o sinal que passo1Feito/manchete usam pra
+    // saber "ele ainda não decidiu onde vai atuar" — pra um território FIXO isso nunca
+    // foi verdade, ele decidiu isso uma vez e vale todo dia. Marcando fixo:true aqui e
+    // NÃO base:true, o resto do ritual/manchete trata isso como declaração de verdade,
+    // sem precisar duplicar a condição em cada lugar que já lê origemBrief.base.
+    planoMapaOrigemAtual = territorioBaseRota.fixo
+      ? { lat: territorioBaseRota.lat, lng: territorioBaseRota.lng, fixo: true }
+      : { lat: territorioBaseRota.lat, lng: territorioBaseRota.lng, base: true };
   }
   const fechado = p.status === 'plano_fechado' && !planoEmEdicao;
   const editandoPlanoFechado = p.status === 'plano_fechado' && planoEmEdicao;
@@ -10433,7 +10445,7 @@ async function montarPlanoDoDia(r) {
   const passo2Feito = contasHojeNum > 0;
   const passo3Feito = fechado;
   const ritualPassos = [
-    { titulo: 'Território definido', sub: origemBrief && !origemBrief.base ? esc(p.local_atuacao || 'Região declarada') : 'ainda não declarado', feito: passo1Feito },
+    { titulo: 'Território definido', sub: origemBrief && !origemBrief.base ? esc(p.local_atuacao || (territorioBaseRota && territorioBaseRota.fixo ? territorioBaseRota.rotulo + ' · fixo' : 'Região declarada')) : 'ainda não declarado', feito: passo1Feito },
     { titulo: 'Montar a rota', sub: `${contasHojeNum} parada${contasHojeNum === 1 ? '' : 's'} escolhida${contasHojeNum === 1 ? '' : 's'}`, feito: passo2Feito },
     { titulo: 'Fechar o compromisso', sub: `${prios.filter(Boolean).length}/3 prioridades`, feito: passo3Feito }
   ];
@@ -10477,15 +10489,19 @@ async function montarPlanoDoDia(r) {
           <label for="planoLocalAtuacao" style="display:block;"></label>
           <div class="local-busca">
             <input type="text" id="planoLocalAtuacao" maxlength="120" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list"
-              placeholder="Bairro, endereço ou nome do restaurante — ex: Coco Bambu Vitória" value="${esc(p.local_atuacao || '')}" ${fechado ? 'disabled' : ''}
-              style="width:100%;background:var(--panel2);border:1.5px solid ${passo1Feito ? 'var(--green)' : 'var(--line)'};border-radius:10px;color:var(--ink);font-size:13.5px;padding:12px 15px;font-family:inherit;">
+              placeholder="Bairro, endereço ou nome do restaurante — ex: Coco Bambu Vitória" value="${esc(p.local_atuacao || (territorioBaseRota && territorioBaseRota.fixo ? territorioBaseRota.rotulo : ''))}" ${(fechado || (territorioBaseRota && territorioBaseRota.fixo)) ? 'disabled' : ''}
+              style="width:100%;background:var(--panel2);border:1.5px solid ${passo1Feito ? 'var(--green)' : 'var(--line)'};border-radius:10px;color:var(--ink);font-size:13.5px;padding:12px 15px;font-family:inherit;${(territorioBaseRota && territorioBaseRota.fixo) ? 'cursor:not-allowed;opacity:.85;' : ''}">
             <div id="planoLocalSug" class="local-sug" style="display:none;" role="listbox" aria-label="Sugestões de local"></div>
           </div>
-          <p class="terr-conf" id="planoLocalMapaEstado" style="color:${p.local_atuacao_lat != null ? 'var(--green)' : 'var(--muted2)'};">${p.local_atuacao_lat != null
-            ? '✓ Região localizada — o mapa está priorizando oportunidades próximas.'
-            : (territorioBaseRota
-                ? `O mapa já abriu no seu território base — <b>${esc(territorioBaseRota.rotulo)}</b>. Vai atuar em outro lugar hoje? Digite e escolha na lista.`
-                : 'Digite bairro, endereço ou o nome do restaurante e escolha na lista.')}</p>
+          <p class="terr-conf" id="planoLocalMapaEstado" style="color:${(territorioBaseRota && territorioBaseRota.fixo) ? 'var(--green)' : (p.local_atuacao_lat != null ? 'var(--green)' : 'var(--muted2)')};">${
+            (territorioBaseRota && territorioBaseRota.fixo)
+              ? `✓ Sua rota é fixa em <b>${esc(territorioBaseRota.rotulo)}</b> — combinado no seu PDI. O mapa carrega direto aqui, todo dia, sem precisar declarar nada.`
+              : (p.local_atuacao_lat != null
+                  ? '✓ Região localizada — o mapa está priorizando oportunidades próximas.'
+                  : (territorioBaseRota
+                      ? `O mapa já abriu no seu território base — <b>${esc(territorioBaseRota.rotulo)}</b>. Vai atuar em outro lugar hoje? Digite e escolha na lista.`
+                      : 'Digite bairro, endereço ou o nome do restaurante e escolha na lista.'))
+          }</p>
           <div class="chips" id="planoChipsTerritorio"></div>
         </div>
         <div class="card terr-side">
