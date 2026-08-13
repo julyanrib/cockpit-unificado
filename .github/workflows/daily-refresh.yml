@@ -2,7 +2,8 @@ name: Atualizar cockpit diariamente
 
 on:
   schedule:
-    # Duas rodadas por dia (pedido do Julyan, 11/08):
+    # Três rodadas por dia (a 3ª é pedido do Julyan, 13/08 — reduzir a janela entre uma
+    # visita acontecer e aparecer certa na Daily):
     #
     # 1) 23:59 em Brasília (02:59 UTC do dia seguinte) — FECHA O DIA. A essa hora o
     #    expediente já acabou; captura o realizado (visitas/avanços/propostas/
@@ -13,6 +14,10 @@ on:
     #    entrar na Daily. fetch-hubspot.js grava "hoje" E "ontem" a cada execução — essa
     #    rodada também refecha o dia anterior, como segurança caso a das 23:59 falhe.
     - cron: '59 11 * * *'
+    # 3) 15:00 em Brasília (18:00 UTC), dias úteis — meio da tarde, quando a maior parte
+    #    das visitas da manhã já foi registrada mas ainda dá tempo de agir no resto do
+    #    dia. Só de segunda a sexta (sem sentido rodar fim de semana, ninguém em campo).
+    - cron: '0 18 * * 1-5'
   workflow_dispatch: {} # permite rodar manualmente pelo botão "Run workflow" no GitHub
 
 permissions:
@@ -89,7 +94,7 @@ jobs:
         run: |
           git config user.name "cockpit-bot"
           git config user.email "cockpit-bot@users.noreply.github.com"
-          git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json data/clientes-ativos.json public/index.html
+          git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json data/clientes-ativos.json data/sync-status.json public/index.html
           git diff --staged --quiet && echo "Nada mudou hoje." && exit 0
 
           git commit -m "Atualização automática do cockpit ($(date -u +'%H:%M UTC'))"
