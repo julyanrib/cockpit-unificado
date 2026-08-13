@@ -5095,13 +5095,19 @@ let agendaAgendadosLocal = [];
 // clique da grade referencia isto. Hoje o handler só roda depois da carga, mas a regra
 // que derrubou a produção uma vez não depende de sorte de ordem de execução.
 let agwNovoAberto = null;
-function registrarAgendamentoLocal(lead, dataISO, hora, ownerId) {
+// BLOCO 34 — parâmetro `tipo` novo (chave de AGENDA_TIPOS: 'rota'|'reuniao'), default
+// 'rota' pra não mudar nenhuma das chamadas já existentes (buraco da semana, drop-a-
+// pin do mapa, agendador rápido de visita). Sem isso, uma reunião marcada por aqui
+// aparecia na tela como "Visita" até o próximo build puxar do HubSpot — exatamente a
+// métrica que este bloco existe pra corrigir (cadência de reunião), sabotada pelo
+// próprio cache otimista que deveria só antecipar a tela.
+function registrarAgendamentoLocal(lead, dataISO, hora, ownerId, tipo) {
   const jaTem = agendaAgendadosLocal.some(a => String(a.leadId) === String(lead.id) && a.dataISO === dataISO);
   if (jaTem) return;
   agendaAgendadosLocal.push({
     leadId: lead.id, nome: lead.nome, bairro: lead.bairro || null, cidade: lead.cidade || null,
     lat: lead.lat != null ? Number(lead.lat) : null, lng: lead.lng != null ? Number(lead.lng) : null,
-    dataISO: dataISO, hora: hora, ownerId: String(ownerId)
+    dataISO: dataISO, hora: hora, ownerId: String(ownerId), tipo: tipo === 'reuniao' ? 'reuniao' : 'rota'
   });
 }
 function agendadoLocalDe(leadId, dataISO) {
@@ -5157,8 +5163,8 @@ function agendaNormalizar(raw) {
     const d = new Date(a.dataISO + 'T' + a.hora + ':00Z');
     if (isNaN(d)) return;
     out.push({
-      id: 'local-' + a.leadId + '-' + a.dataISO, ownerId: String(a.ownerId), tipo: 'rota',
-      inicio: d, dur: 30, cliente: a.nome, titulo: 'Visita - ' + a.nome,
+      id: 'local-' + a.leadId + '-' + a.dataISO, ownerId: String(a.ownerId), tipo: a.tipo || 'rota',
+      inicio: d, dur: 30, cliente: a.nome, titulo: (a.tipo === 'reuniao' ? 'Reunião' : 'Visita') + ' - ' + a.nome,
       desfecho: null, registro: false, recemAgendado: true,
       lat: a.lat, lng: a.lng, bairro: a.bairro, cidade: a.cidade
     });
@@ -5213,6 +5219,22 @@ function agendaNormalizar(raw) {
 const AGENDA_ROTULOS = /^((follow\s*up|revisita|visita|rota|ligar|liga[çc][ãa]o|oportunidade\s*\d*|perdido|ganho|d\s*\d+|retorno|contato|cobran[çc]a|cobrar|proposta|whats(app)?|e-?mail|reuni[ãa]o|interno|tarefa)|(cobrar|enviar|mandar|fazer|refazer|retomar|agendar)\s+\S+)$/i;
 // Títulos que são compromisso interno do time, não visita a cliente.
 const AGENDA_INTERNOS = /^(daily|reuni[ãa]o\s*interna|interno|treinamento|roleplay|1:1|feedback|alinhamento)\b/i;
+
+// BLOCO 34 (13/08/26) — "sugestão do gestor, pendente até o executivo confirmar"
+// (decisão do Julyan). O marcador vive na 1ª linha do corpo da tarefa no HubSpot —
+// nunca no assunto, pra não quebrar AGENDA_RE_TITULO/agendaTipoDoTexto, que dependem
+// do assunto começar EXATAMENTE por "Visita"/"Reunião"/etc (ver api/criar-tarefa-rota.js
+// pro porquê). Espelho do RE_MARCADOR do servidor — os dois precisam mudar juntos.
+const AGENDA_RE_MARCADOR_GESTOR = /^SUGESTAO_GESTOR:([^:\n]*):PENDENTE\n?/;
+function agendaSugestaoGestor(obs) {
+  const m = AGENDA_RE_MARCADOR_GESTOR.exec(String(obs || ''));
+  return m ? { pendente: true, gestorNome: m[1] || 'seu gestor' } : null;
+}
+// Pra exibir a nota sem o marcador de máquina no meio — mesma régua do "[Reagendada]"
+// que a ficha do compromisso já esconde.
+function agendaObsSemMarcador(obs) {
+  return String(obs || '').replace(AGENDA_RE_MARCADOR_GESTOR, '').trim();
+}
 
 // Devolve SÓ o nome do lead, ou null quando o título não carrega nome nenhum.
 // Por que o compromisso não tem nome de lead: 'interno' (é reunião do time, normal) ou
@@ -5351,7 +5373,11 @@ function agendaDoHubspotTask(it, i) {
     cidade: '', bairro: '', endereco: '', etapa: '—', temperatura: '—',
     obs: corpo, reag: 0, decisor: agendaDecisor(it),
     desfecho: it.hs_task_status === 'COMPLETED' ? 'COMPLETED' : null,
-    url: it.hs_object_id ? ('https://app.hubspot.com/tasks/24373118/view/all/task/' + it.hs_object_id) : null
+    url: it.hs_object_id ? ('https://app.hubspot.com/tasks/24373118/view/all/task/' + it.hs_object_id) : null,
+    // BLOCO 34 — id NUMÉRICO cru da tarefa, sem passar pela URL. Confirmar/recusar
+    // sugestão do gestor chama a API por id; extrair de dentro de uma URL formatada
+    // seria frágil à toa quando o próprio hs_object_id já está aqui.
+    hsTaskId: it.hs_object_id || null
   };
 }
 function agendaDoApp(it, i) {
@@ -5851,30 +5877,104 @@ function renderAgenda() {
   // Ação de abrir no HubSpot já existe hoje; "ver no mapa"/sugestão de horário fica
   // pro Bloco 2 (motor de microrrota), que também vai precisar saber onde o executivo
   // vai atuar hoje — combinado com o Julyan que isso NÃO é a localização da Daily.
-  const quentesForaCardExec = (souRep && foraDaAgenda.length) ? (() => {
-    const links = foraDaAgenda.slice(0, 8).map(l => {
-      const nomeLead = agendaLeadNome(l) || 'Sem nome';
-      const chaveLead = agendaEsc(String(l.id || nomeLead));
-      return `<div data-quente-fora="${chaveLead}" style="background:var(--amber-soft);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-          <div><b style="font-size:13px;">${agendaEsc(nomeLead)}</b>${l.stage ? `<div style="font-size:10.5px;color:var(--amber);font-weight:700;margin-top:2px;">${agendaEsc(l.stage)}</div>` : ''}</div>
-          <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;">
-            <a data-quente-fora-map="${chaveLead}" style="color:#2563EB;font-weight:700;font-size:11px;text-decoration:none;white-space:nowrap;pointer-events:none;">Localizando…</a>
-            ${l.id ? `<a href="https://app.hubspot.com/contacts/24373118/record/0-3/${agendaEsc(String(l.id))}" target="_blank" rel="noopener" style="color:var(--amber);font-weight:700;font-size:11px;text-decoration:none;white-space:nowrap;">HubSpot →</a>` : ''}
-          </div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
-          ${l.dias != null ? `<span style="font-size:11px;color:var(--muted2);">${l.dias}d parado</span>` : ''}
-          <span data-quente-fora-dist="${chaveLead}" style="font-size:11px;color:var(--muted2);"></span>
-        </div>
+  // BLOCO 34 (13/08/26) — Julyan: "a agenda sempre tem que estar preenchida, com os
+  // follows e reuniões... quando tiver horário livre, sugerir contas alvo pra sempre
+  // deixar preenchida". Medido ao vivo (Amanda, 13/08): 16/30 visitas mas 0/10
+  // reuniões — a cota de VISITA já tinha motor de preenchimento (o card de "Buracos da
+  // semana" logo acima), a de REUNIÃO não tinha nenhum. Este card já existia e já
+  // listava exatamente quem precisa de reunião (quente sem compromisso), só faltava o
+  // botão de agendar — o mesmo padrão "horário sugerido + Agendar" do card de cima,
+  // só que criando tarefa tipo='reuniao' em vez de 'visita'.
+  //
+  // Prioridade decidida com o Julyan: quente primeiro (é reunião de verdade, sobre
+  // negócio em andamento); se a fila de quentes estiver vazia, cai pra top conta-alvo
+  // avaliada — reunião de PRIMEIRA apresentação, pra a cota nunca ficar zerada só por
+  // falta de pipeline naquele momento.
+  const agendaSlotReuniao = (ownerId) => {
+    // Primeiro horário livre entre hoje e o fim da semana que não colide com nada que
+    // o executivo já tem marcado (mesma lista de bloqueios do resto do cockpit: DAILY
+    // 9h–10h + qualquer evento real do dia) — sem isso a sugestão podia cair em cima
+    // de um compromisso que ele mesmo já criou.
+    const DAILY_INI = 9 * 60, DAILY_FIM = 10 * 60;
+    const candidatosDia = dias6.slice(0, 5).filter(d => agendaChave(d) >= hojeK);
+    for (const d of candidatosDia) {
+      const iso = agendaChave(d);
+      const ocupados = naSemana.filter(e => e.ownerId === String(ownerId) && agendaChave(e.inicio) === iso)
+        .map(e => { const ini = e.inicio.getUTCHours() * 60 + e.inicio.getUTCMinutes(); return [ini, ini + (e.dur || 30)]; });
+      ocupados.push([DAILY_INI, DAILY_FIM]);
+      for (const hhmm of HORARIOS_SUGERIDOS) {
+        const [h, m] = hhmm.split(':').map(Number);
+        const ini = h * 60 + m, fim = ini + 45;
+        if (!ocupados.some(([oi, of_]) => ini < of_ && fim > oi)) return { iso, hora: hhmm };
+      }
+    }
+    return null;
+  };
+
+  const quentesForaCardExec = souRep ? (() => {
+    const temQuentes = foraDaAgenda.length > 0;
+    // Fallback: sem NENHUM quente sem compromisso, oferece a conta-alvo de maior
+    // volume de avaliações que ainda não está na rota de hoje nem já tem reunião
+    // marcada nesta sessão — reunião de apresentação, pra cota nunca zerar à toa.
+    const candidatosFallback = temQuentes ? [] : (
+      (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
+        .filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l) && l.status !== 'na_rota')
+        .sort((a, b) => (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0))
+        .slice(0, 1)
+    );
+    if (!temQuentes && !candidatosFallback.length) return '';
+
+    const linhaDeAgendar = (id, nome, ownerId, bairro, cidade) => {
+      const slot = agendaSlotReuniao(ownerId);
+      const chave = agendaEsc(String(id));
+      if (!slot) return `<div style="font-size:10.5px;color:var(--muted2);margin-top:6px;">Semana sem horário livre pra encaixar — revise com ele no 1:1.</div>`;
+      const jaFeito = agendadoLocalDe(id, slot.iso);
+      if (jaFeito) return `<div style="font-size:11px;font-weight:800;color:var(--green);margin-top:6px;">✓ reunião marcada ${agendaEsc(jaFeito.hora)}</div>`;
+      // Nome/bairro/cidade viajam no próprio dataset do botão (não fazem lookup em
+      // prospeccaoCache): um "quente" pode não estar nessa lista — vem de
+      // DATA.temperatura/funilLeads, outra fonte — então o botão precisa carregar
+      // tudo que o handler for usar, igual o resto do cockpit já faz em casos assim.
+      return `<div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap;">
+        <input type="time" class="ag-hora-sug" data-parabotao="reu-${chave}" value="${slot.hora}" aria-label="Horário da reunião com ${agendaEsc(nome)}">
+        <button class="ag-sugerir-reuniao-btn" id="reu-${chave}" data-agreuniao="${chave}" data-agreuniaodata="${slot.iso}" data-agreuniaohora="${slot.hora}"
+          data-agreuniaonome="${agendaEsc(nome)}" data-agreuniaobairro="${agendaEsc(bairro || '')}" data-agreuniaocidade="${agendaEsc(cidade || '')}"
+          style="background:var(--ink);color:var(--panel);border:none;border-radius:99px;padding:4px 11px;font:800 11px inherit;cursor:pointer;">
+          Agendar reunião
+        </button>
       </div>`;
-    }).join('');
+    };
+
+    const linhas = temQuentes
+      ? foraDaAgenda.slice(0, 8).map(l => {
+          const nomeLead = agendaLeadNome(l) || 'Sem nome';
+          const chaveLead = agendaEsc(String(l.id || nomeLead));
+          return `<div data-quente-fora="${chaveLead}" style="background:var(--amber-soft);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+              <div><b style="font-size:13px;">${agendaEsc(nomeLead)}</b>${l.stage ? `<div style="font-size:10.5px;color:var(--amber);font-weight:700;margin-top:2px;">${agendaEsc(l.stage)}</div>` : ''}</div>
+              <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;">
+                <a data-quente-fora-map="${chaveLead}" style="color:#2563EB;font-weight:700;font-size:11px;text-decoration:none;white-space:nowrap;pointer-events:none;">Localizando…</a>
+                ${l.id ? `<a href="https://app.hubspot.com/contacts/24373118/record/0-3/${agendaEsc(String(l.id))}" target="_blank" rel="noopener" style="color:var(--amber);font-weight:700;font-size:11px;text-decoration:none;white-space:nowrap;">HubSpot →</a>` : ''}
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+              ${l.dias != null ? `<span style="font-size:11px;color:var(--muted2);">${l.dias}d parado</span>` : ''}
+              <span data-quente-fora-dist="${chaveLead}" style="font-size:11px;color:var(--muted2);"></span>
+            </div>
+            ${linhaDeAgendar(l.id || nomeLead, nomeLead, sessaoAtual.ownerId, l.bairro, l.cidade)}
+          </div>`;
+        }).join('')
+      : candidatosFallback.map(l => `<div data-quente-fora="${agendaEsc(String(l.id))}" style="background:var(--amber-soft);border-radius:12px;padding:10px 14px;margin-bottom:8px;">
+          <b style="font-size:13px;">${agendaEsc(l.nome)}</b>
+          <div style="font-size:10.5px;color:var(--amber);font-weight:700;margin-top:2px;">Reunião de apresentação · ${l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') + ' aval.' : 'sem pipeline quente esta semana'}</div>
+          ${linhaDeAgendar(l.id, l.nome, sessaoAtual.ownerId, l.bairro, l.cidade)}
+        </div>`).join('');
+
     return `
     <div class="chart-card" id="quentesForaCard" style="border:1.5px solid var(--amber);margin-top:16px;">
       <h3 style="margin-bottom:4px;">Pipeline quente para encaixar na semana</h3>
-      <div class="chart-subtitle" style="margin:0 0 12px;">Demo/Proposta em diante, ainda sem visita ou reunião marcada. Com localização real, também aparece como prioridade no mapa.</div>
-      ${links}
-      ${foraDaAgenda.length > 8 ? `<div style="font-size:11.5px;color:var(--muted2);margin-top:4px;">+ ${foraDaAgenda.length - 8} outros</div>` : ''}
+      <div class="chart-subtitle" style="margin:0 0 12px;">${temQuentes ? 'Demo/Proposta em diante, ainda sem visita ou reunião marcada. Com localização real, também aparece como prioridade no mapa.' : 'Sem quente parado esta semana — sugestão de reunião de apresentação pra cota não ficar zerada.'}</div>
+      ${linhas}
+      ${temQuentes && foraDaAgenda.length > 8 ? `<div style="font-size:11.5px;color:var(--muted2);margin-top:4px;">+ ${foraDaAgenda.length - 8} outros</div>` : ''}
       <div style="font-size:11.5px;color:var(--muted2);margin-top:10px;line-height:1.5;">Esta fila faz parte da agenda semanal até cada quente ganhar um compromisso real.</div>
     </div>`;
   })() : '';
@@ -6010,9 +6110,18 @@ function renderAgenda() {
     if (!souRep) {
       hSemana += agendaMatrizTime(dias, naSemana, time, hojeK);
       if (agendaEstado.repSel) {
+        // BLOCO 34 — Julyan: "o gestor pode adicionar leads nessa agenda dele". Ao
+        // escolher um executivo no drilldown, a grade dele vira clicável pro GESTOR
+        // agendar em nome dele — a sugestão nasce marcada como pendente (ver
+        // agendaSugestaoGestor) até o dono confirmar. "Time todo" (repSel vazio)
+        // continua só leitura: não existe "agendar pra todo mundo de uma vez".
+        agendaOwnerAlvo = agendaEstado.repSel;
         hSemana += agendaGradeCard(dias, vis.filter(function (e) { return String(e.ownerId) === String(agendaEstado.repSel); }), hojeK, souRep, rotulo);
+      } else {
+        agendaOwnerAlvo = null;
       }
     } else {
+      agendaOwnerAlvo = sessaoAtual ? sessaoAtual.ownerId : null;
       hSemana += agendaGradeCard(dias, vis, hojeK, souRep, rotulo);
     }
     hSemana += '<div class="ag-det" id="agDet" data-open="0">' +
@@ -6245,11 +6354,17 @@ function agendaGradeHora(dias, vis, time, hojeK, mostraSabado, temSabado) {
 
 function agendaChip(e, trocaCidade) {
   const t = AGENDA_TIPOS[e.tipo];
-  const rodape = e.quente ? ('Quente' + (e.etapa && e.etapa !== '—' ? ' · ' + e.etapa : ''))
+  // BLOCO 34 — sugestão do gestor ainda pendente ganha um rodapé próprio, que pisca à
+  // frente de "Quente"/bairro/tipo: é a pergunta que mais importa olhando a grade por
+  // cima (confirmado ou só sugerido?), então tem prioridade visual sobre o resto.
+  const sugestao = agendaSugestaoGestor(e.obs);
+  const rodape = sugestao ? ('💡 sugestão de ' + sugestao.gestorNome + ' · toque para decidir')
+    : e.quente ? ('Quente' + (e.etapa && e.etapa !== '—' ? ' · ' + e.etapa : ''))
     : (e.bairro || e.cidade || t.rotulo);
   return '<button class="ag-chip" data-agev="' + e.id + '" data-reag="' + (e.reag ? 1 : 0) + '"' +
-    (e.quente ? ' data-quente="1"' : '') + ' title="' + agendaEsc(agendaNomeDoLead(e.cliente) || e.cliente) + '" ' +
-    'style="--c:' + t.cor + '">' +
+    (e.quente ? ' data-quente="1"' : '') + (sugestao ? ' data-sugestao-gestor="1"' : '') +
+    ' title="' + agendaEsc(agendaNomeDoLead(e.cliente) || e.cliente) + '" ' +
+    'style="--c:' + (sugestao ? 'var(--amber)' : t.cor) + '">' +
     '<span class="ch">' + agendaHhmm(e.inicio) + (agendaEhPrime(e.inicio) ? '<em>●</em>' : '') + '</span>' +
     '<span class="ct">' + agendaEsc(agendaNomeDoLead(e.cliente) || e.cliente) + '</span>' +
     '<span class="cm">' + agendaEsc(rodape) + '</span>' +
@@ -6345,12 +6460,63 @@ function agendaAbrirDetalhe(id) {
   if (e.decisor === false) L.push(['Decisor', 'não confirmado']);
   if (e.desfecho) L.push(['Desfecho', e.desfecho]);
   if (e.reag) L.push(['Remarcado', e.reag + '×']);
-  const nota = String(e.obs || '').replace(/\[Reagendada[^\]]*\]/g, '').trim();
+  const nota = agendaObsSemMarcador(e.obs).replace(/\[Reagendada[^\]]*\]/g, '').trim();
   if (nota) L.push(['Nota', nota]);
   document.getElementById('agDetDl').innerHTML =
     L.map(l => '<dt>' + l[0] + '</dt><dd>' + agendaEsc(String(l[1])) + '</dd>').join('');
   const a = document.getElementById('agDetA');
   if (e.url) { a.href = e.url; a.style.display = 'inline-block'; } else a.style.display = 'none';
+
+  // BLOCO 34 — banner de sugestão do gestor + Confirmar/Recusar. Confirmar só aparece
+  // pro DONO da tarefa (é ele que decide se aceita na própria agenda); Recusar aparece
+  // pro dono OU pra quem sugeriu, pelas mesmas regras que a API confirmar-sugestao-
+  // gestor.js já aplica no servidor — aqui é só não oferecer o botão que ia dar 403.
+  const sugestao = agendaSugestaoGestor(e.obs);
+  const painelSugestao = document.getElementById('agDetSugestao');
+  if (painelSugestao) painelSugestao.remove();
+  if (sugestao && e.hsTaskId) {
+    const souDonoDoEvento = sessaoAtual && sessaoAtual.role !== 'manager' && String(sessaoAtual.ownerId) === String(e.ownerId);
+    const souGestorLogado = sessaoAtual && sessaoAtual.role === 'manager';
+    const div = document.createElement('div');
+    div.id = 'agDetSugestao';
+    div.style.cssText = 'margin-top:14px;padding:12px 14px;border-radius:12px;background:var(--amber-soft);border:1px solid var(--amber);';
+    div.innerHTML =
+      '<div style="font-size:11.5px;font-weight:800;color:var(--amber);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">💡 Sugestão de ' + agendaEsc(sugestao.gestorNome) + ' — aguardando confirmação</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      (souDonoDoEvento ? '<button id="agDetConfirmarSugestao" style="background:var(--ink);color:var(--panel);border:none;border-radius:99px;padding:7px 14px;font:800 12px inherit;cursor:pointer;">Confirmar na minha agenda</button>' : '') +
+      ((souDonoDoEvento || souGestorLogado) ? '<button id="agDetRecusarSugestao" style="background:none;color:var(--red);border:1px solid var(--red);border-radius:99px;padding:7px 14px;font:700 12px inherit;cursor:pointer;">Recusar</button>' : '') +
+      '</div><div id="agDetSugestaoMsg" style="font-size:11px;color:var(--muted2);margin-top:7px;"></div>';
+    document.getElementById('agDetDl').insertAdjacentElement('afterend', div);
+
+    const msg = t => { const el = document.getElementById('agDetSugestaoMsg'); if (el) el.textContent = t; };
+    const chamarApi = async (acao, botao) => {
+      botao.disabled = true;
+      const textoOriginal = botao.textContent;
+      botao.textContent = acao === 'confirmar' ? 'Confirmando…' : 'Recusando…';
+      const token = await tokenDeSessaoGlobal();
+      try {
+        const resp = await comPrazoGlobal(async signal => fetch('/api/confirmar-sugestao-gestor', {
+          method: 'POST', signal,
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+          body: JSON.stringify({ taskId: e.hsTaskId, acao })
+        }), 8000, 'confirmar-sugestao-gestor');
+        const json = await resp.json().catch(() => ({}));
+        if (!resp.ok || !json.ok) { throw new Error((json && json.erro) || 'HubSpot recusou'); }
+        mostrarToast(acao === 'confirmar' ? 'Compromisso confirmado na sua agenda.' : 'Sugestão recusada.', 'sucesso');
+        d.dataset.open = '0';
+        renderAgenda();
+      } catch (err) {
+        botao.disabled = false; botao.textContent = textoOriginal;
+        msg('Não consegui ' + (acao === 'confirmar' ? 'confirmar' : 'recusar') + ' agora — tente de novo em instantes.');
+        console.error('[confirmar-sugestao-gestor]', acao, err && err.message);
+      }
+    };
+    const btnConfirmar = document.getElementById('agDetConfirmarSugestao');
+    if (btnConfirmar) btnConfirmar.addEventListener('click', () => chamarApi('confirmar', btnConfirmar));
+    const btnRecusar = document.getElementById('agDetRecusarSugestao');
+    if (btnRecusar) btnRecusar.addEventListener('click', () => chamarApi('recusar', btnRecusar));
+  }
+
   d.dataset.open = '1';
 }
 
@@ -6414,6 +6580,35 @@ document.addEventListener('click', function (ev) {
       });
     return;
   }
+  // BLOCO 34 — botão "Agendar reunião" do card "Pipeline quente para encaixar". Nome/
+  // bairro/cidade vêm do próprio dataset do botão (ver comentário em linhaDeAgendar) —
+  // sempre a agenda do PRÓPRIO executivo logado, então tipo='reuniao' sem
+  // sugeridoPorGestor (isso é auto-agendamento, não sugestão de terceiro).
+  const btnReu = ev.target.closest('[data-agreuniao]');
+  if (btnReu) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (btnReu.dataset.enviando === '1') return;
+    if (!sessaoAtual || sessaoAtual.role !== 'rep') return;
+    const leadReuniao = { nome: btnReu.dataset.agreuniaonome, bairro: btnReu.dataset.agreuniaobairro || null, cidade: btnReu.dataset.agreuniaocidade || null };
+    btnReu.dataset.enviando = '1';
+    const rotuloOriginal = btnReu.textContent;
+    btnReu.textContent = '…';
+    const idParaCache = btnReu.dataset.agreuniao;
+    criarTarefaVisitaNoHubspot(leadReuniao, sessaoAtual.ownerId, btnReu.dataset.agreuniaohora, { silencioso: true, tipo: 'reuniao' }, btnReu.dataset.agreuniaodata)
+      .then(() => {
+        registrarAgendamentoLocal({ id: idParaCache, nome: leadReuniao.nome }, btnReu.dataset.agreuniaodata, btnReu.dataset.agreuniaohora, sessaoAtual.ownerId, 'reuniao');
+        mostrarToast(`Reunião com "${leadReuniao.nome}" marcada para ${btnReu.dataset.agreuniaodata.split('-').reverse().slice(0, 2).join('/')} às ${btnReu.dataset.agreuniaohora}.`, 'sucesso');
+        renderAgenda();
+      })
+      .catch(e => {
+        btnReu.dataset.enviando = '0';
+        btnReu.textContent = rotuloOriginal;
+        mostrarToast('Não consegui agendar a reunião agora (rede ou HubSpot). Tente de novo em instantes.', 'erro');
+        console.error('Falha ao agendar reunião do pipeline quente:', e);
+      });
+    return;
+  }
   // BLOCO 18 — clique num espaço livre da grade abre o agendador rápido, no estilo de
   // um calendário: a hora sai da posição vertical do clique, arredondada pra 15 min.
   // Vem ANTES do handler de evento porque a coluna é ancestral dos blocos; se o clique
@@ -6426,7 +6621,13 @@ document.addEventListener('click', function (ev) {
     const y = Math.max(0, ev.clientY - caixa.top);
     const minutosBrutos = H0 * 60 + (y / PX) * 60;
     const minutos = Math.round(minutosBrutos / 15) * 15;
-    abrirAgendadorRapido(colNova.dataset.agnovo, minutos, ev.clientX, ev.clientY);
+    // BLOCO 34 — dono da agenda em tela vem do próprio dataset (gravado no render, ver
+    // agendaGradeHoras), não mais presumido como "quem está logado": permite o gestor
+    // clicar na grade de um executivo escolhido no drilldown. `souGestorClicando`
+    // decide se a tarefa nasce como sugestão pendente ou como compromisso normal.
+    const ownerIdAlvo = colNova.dataset.agnovoOwner || (sessaoAtual && sessaoAtual.ownerId);
+    const souGestorClicando = sessaoAtual && sessaoAtual.role === 'manager';
+    abrirAgendadorRapido(colNova.dataset.agnovo, minutos, ev.clientX, ev.clientY, ownerIdAlvo, souGestorClicando);
     return;
   }
   // --- grade própria ---
@@ -8174,6 +8375,10 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
     // então um dia com 7 visitas registradas aparecia como livre depois que os registros
     // saíram da grade. Também deixa de ser um retângulo tracejado gigante: vira cartão
     // compacto na faixa da manhã, que é onde o executivo vai encaixar a visita.
+    // BLOCO 34 — "Dia livre → escolher contas" segue exclusivo do próprio executivo
+    // por ora (usa outro fluxo, o escolhedor em massa de contas — ver data-agburaco
+    // mais abaixo); estender pro gestor fica pro próximo bloco. O que muda aqui é só
+    // o clique-num-ponto-exato (colClicavel), que já cobre o pedido de hoje.
     const vazio = (souRep && !totalDia && podeMarcar(k))
       ? '<button class="agw-vazio" data-agburaco="' + k + '"><b>Dia livre</b><span>escolher contas →</span></button>'
       : '';
@@ -8186,10 +8391,15 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
 
     // BLOCO 18 (12/08/26, Julyan: "ele nao consegue selecionar na agenda e colocar algo
     // no estilo calendar google"). A coluna do dia vira área clicável: o clique num
-    // espaço vazio abre o agendador já com a data e a hora daquele ponto. Só pro
-    // executivo e só em dia que ainda dá pra preencher — clicar no passado não agenda
-    // nada, e deixar clicável ali só geraria erro na cara dele.
-    const colClicavel = (souRep && podeMarcar(k)) ? ' agw-col-livre" data-agnovo="' + k + '" title="Clique num espaço livre para marcar uma visita' : '';
+    // espaço vazio abre o agendador já com a data e a hora daquele ponto.
+    // BLOCO 34 — deixou de ser "só pro executivo" (era `souRep`, o papel de QUEM ESTÁ
+    // LOGADO) e passou a ser "clicável quando existe um dono definido pra agenda em
+    // tela" (`agendaOwnerAlvo`, calculado no call-site — ver comentário lá): o próprio
+    // executivo vendo a rota dele, OU o gestor com um executivo escolhido no drilldown.
+    // "Time todo" do gestor não tem dono nenhum definido, então continua só leitura.
+    const colClicavel = (agendaOwnerAlvo && podeMarcar(k))
+      ? ' agw-col-livre" data-agnovo="' + k + '" data-agnovo-owner="' + agendaEsc(String(agendaOwnerAlvo)) + '" title="Clique num espaço livre para marcar'
+      : '';
     corpo += '<div class="agw-col' + colClicavel + '" data-hoje="' + (ehHoje ? 1 : 0) +
       '" data-h0="' + H0 + '" data-px="' + PX + '">' + daily + vazio + blocos + now + '</div>';
 
@@ -8431,19 +8641,27 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharPainel
 function fecharAgendadorRapido() {
   if (agwNovoAberto) { agwNovoAberto.remove(); agwNovoAberto = null; }
 }
-function abrirAgendadorRapido(dataISO, minutos, x, y) {
+// BLOCO 34 — ownerIdAlvo (dono da tarefa) e sugeridoPorGestor são novos parâmetros
+// opcionais: chamadas antigas sem eles continuam funcionando exatamente como antes
+// (ownerIdAlvo cai pro próprio sessaoAtual.ownerId, sugeridoPorGestor fica false).
+function abrirAgendadorRapido(dataISO, minutos, x, y, ownerIdAlvo, sugeridoPorGestor) {
   fecharAgendadorRapido();
   const hh = String(Math.floor(minutos / 60)).padStart(2, '0');
   const mm = String(minutos % 60).padStart(2, '0');
-  const meuRep = (DATA.reps || []).find(v => String(v.ownerId) === String(sessaoAtual.ownerId));
-  if (!meuRep) return;
+  const donoId = ownerIdAlvo != null ? String(ownerIdAlvo) : (sessaoAtual && sessaoAtual.ownerId);
+  const repAlvo = (DATA.reps || []).find(v => String(v.ownerId) === donoId);
+  if (!repAlvo) return;
+  const ehSugestao = !!sugeridoPorGestor;
 
-  // Candidatos: pipeline quente do próprio funil primeiro (é o que protege receita),
-  // depois a fila de conta-alvo. Mesma régua de prioridade do resto do cockpit.
-  const quentes = (typeof agendaQuentes === 'function' ? agendaQuentes([{ ownerId: sessaoAtual.ownerId }]) : [])
+  // Candidatos: pipeline quente do PRÓPRIO FUNIL DO DONO primeiro (é o que protege
+  // receita), depois a fila de conta-alvo. Mesma régua de prioridade do resto do
+  // cockpit. Antes disto sempre lia sessaoAtual.ownerId — precisava trocar pra donoId,
+  // senão o gestor via a PRÓPRIA fila (vazia, ele não tem pipeline) em vez da do
+  // executivo que está tentando ajudar.
+  const quentes = (typeof agendaQuentes === 'function' ? agendaQuentes([{ ownerId: donoId }]) : [])
     .map(q => ({ id: q.id, nome: q.name || q.nome, grupo: 'Pipeline quente', bairro: q.bairro || null, cidade: q.cidade || null, lat: q.lat, lng: q.lng }));
   const alvos = ((typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache)) ? prospeccaoCache : [])
-    .filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l))
+    .filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l) && (!ehSugestao || String(l.responsavel_owner_id || '') === donoId))
     .slice(0, 60)
     .map(l => ({ id: l.id, nome: l.nome, grupo: 'Contas-alvo', bairro: l.bairro || null, cidade: l.cidade || null, lat: l.lat, lng: l.lng }));
   const opcoes = [...quentes, ...alvos];
@@ -8451,9 +8669,11 @@ function abrirAgendadorRapido(dataISO, minutos, x, y) {
   const cx = document.createElement('div');
   cx.className = 'agw-novo';
   const dataBR = dataISO.split('-').reverse().join('/');
+  const primeiroNome = String(repAlvo.name || '').split(' ')[0];
   cx.innerHTML =
-    '<h4>Marcar visita</h4>' +
-    '<div class="sub">' + dataBR + ' · horário do ponto em que você clicou</div>' +
+    '<h4>' + (ehSugestao ? 'Sugerir a ' + agendaEsc(primeiroNome) : 'Marcar visita') + '</h4>' +
+    '<div class="sub">' + dataBR + ' · horário do ponto em que você clicou' +
+      (ehSugestao ? '<br>Fica pendente até ' + agendaEsc(primeiroNome) + ' confirmar.' : '') + '</div>' +
     (opcoes.length
       ? '<label>Conta</label><select id="agwNovoLead">' +
           ['Pipeline quente', 'Contas-alvo'].map(g => {
@@ -8462,11 +8682,16 @@ function abrirAgendadorRapido(dataISO, minutos, x, y) {
             return '<optgroup label="' + g + '">' + doGrupo.map(o => '<option value="' + agendaEsc(String(o.id)) + '">' + agendaEsc(o.nome || '') + '</option>').join('') + '</optgroup>';
           }).join('') +
         '</select>'
-      : '<div style="font-size:11.5px;color:var(--amber);">Sua fila de contas está vazia nesta sessão. Abra a Prospecção uma vez e volte — aí a lista carrega.</div>') +
+      : '<div style="font-size:11.5px;color:var(--amber);">' + (ehSugestao ? 'A fila de contas de ' + agendaEsc(primeiroNome) + ' está vazia nesta sessão.' : 'Sua fila de contas está vazia nesta sessão. Abra a Prospecção uma vez e volte — aí a lista carrega.') + '</div>') +
+    // Tipo só aparece pro gestor sugerindo: o executivo agendando pra si mesmo neste
+    // popover sempre quer visita (é o clique na coluna da rota) — reunião dele passa
+    // pelo motor do card "Pipeline quente", não por aqui. Oferecer os dois tipos só
+    // quando faz sentido evita uma decisão extra em quem já tem o fluxo simples.
+    (ehSugestao ? '<label>Tipo</label><select id="agwNovoTipo"><option value="visita">Visita</option><option value="reuniao">Reunião</option></select>' : '') +
     '<label>Horário</label><input type="time" id="agwNovoHora" value="' + hh + ':' + mm + '">' +
     '<div class="acoes">' +
       '<button class="cancel" id="agwNovoCancel">Cancelar</button>' +
-      (opcoes.length ? '<button class="ok" id="agwNovoOk">Agendar</button>' : '') +
+      (opcoes.length ? '<button class="ok" id="agwNovoOk">' + (ehSugestao ? 'Sugerir' : 'Agendar') + '</button>' : '') +
     '</div>' +
     '<div id="agwNovoMsg" style="font-size:11px;color:var(--muted2);margin-top:8px;"></div>';
   document.body.appendChild(cx);
@@ -8484,6 +8709,7 @@ function abrirAgendadorRapido(dataISO, minutos, x, y) {
   const ok = document.getElementById('agwNovoOk');
   if (ok) ok.addEventListener('click', () => {
     const sel = document.getElementById('agwNovoLead');
+    const tipoSel = document.getElementById('agwNovoTipo');
     const hora = (document.getElementById('agwNovoHora') || {}).value || (hh + ':' + mm);
     const escolhido = opcoes.find(o => String(o.id) === String(sel && sel.value));
     if (!escolhido) return;
@@ -8494,17 +8720,23 @@ function abrirAgendadorRapido(dataISO, minutos, x, y) {
       document.getElementById('agwNovoMsg').innerHTML = '<span style="color:var(--red);font-weight:700;">9h–10h é a Daily. Escolha outro horário.</span>';
       return;
     }
-    ok.disabled = true; ok.textContent = 'Agendando…';
-    criarTarefaVisitaNoHubspot(escolhido, sessaoAtual.ownerId, hora, { silencioso: true }, dataISO)
+    ok.disabled = true; ok.textContent = ehSugestao ? 'Enviando…' : 'Agendando…';
+    criarTarefaVisitaNoHubspot(escolhido, donoId, hora, { silencioso: true, tipo: tipoSel ? tipoSel.value : 'visita', sugeridoPorGestor: ehSugestao }, dataISO)
       .then(() => {
-        registrarAgendamentoLocal(escolhido, dataISO, hora, sessaoAtual.ownerId);
-        mostrarToast('"' + escolhido.nome + '" agendado para ' + dataBR + ' às ' + hora + '.', 'sucesso');
+        // Sugestão do gestor não entra no cache local "agendadoLocalDe" do EXECUTIVO —
+        // essa sessão é do gestor, e o cache local é só um atalho anti-duplicata pra
+        // quem está montando a própria rota. Sem esse registro, "renderAgenda()" abaixo
+        // busca certo do HubSpot na próxima vez; não precisa de espelho otimista aqui.
+        if (!ehSugestao) registrarAgendamentoLocal(escolhido, dataISO, hora, donoId, (tipoSel && tipoSel.value === 'reuniao') ? 'reuniao' : 'rota');
+        mostrarToast(ehSugestao
+          ? '"' + escolhido.nome + '" sugerido a ' + primeiroNome + ' para ' + dataBR + ' às ' + hora + '.'
+          : '"' + escolhido.nome + '" agendado para ' + dataBR + ' às ' + hora + '.', 'sucesso');
         fecharAgendadorRapido();
         renderAgenda();
       })
       .catch(e => {
-        ok.disabled = false; ok.textContent = 'Agendar';
-        document.getElementById('agwNovoMsg').innerHTML = '<span style="color:var(--red);">Não consegui agendar agora. Tente de novo.</span>';
+        ok.disabled = false; ok.textContent = ehSugestao ? 'Sugerir' : 'Agendar';
+        document.getElementById('agwNovoMsg').innerHTML = '<span style="color:var(--red);">Não consegui ' + (ehSugestao ? 'enviar a sugestão' : 'agendar') + ' agora. Tente de novo.</span>';
         console.error('Agendador rápido:', e);
       });
   });
@@ -9929,6 +10161,13 @@ let planoMapaMarcadores = {}; // id do lead -> { marker, popup, lead }
 // Aba ativa do deck de candidatos (Bloco 25): 'sugeridos' | 'funil' | 'alvo'.
 let deckAbaAtiva = 'sugeridos';
 let deckBuscaTermo = ''; // BLOCO 33 — termo da busca do deck sobrevive aos re-renders da lista
+// BLOCO 34 — ownerId de QUEM a grade da Agenda está clicável pra agendar agora: o
+// próprio executivo vendo a rota dele, ou o rep selecionado no drilldown do gestor.
+// null = grade só de leitura (visão "Time todo" do gestor, sem ninguém escolhido).
+// Variável de módulo (como planoMapaOrigemAtual, deckBuscaTermo) em vez de mais um
+// parâmetro correndo por agendaGradeCard → agendaGradeHoras → agendaGradeColunas:
+// menos superfície pra quebrar assinatura de função num arquivo de 17 mil linhas.
+let agendaOwnerAlvo = null;
 // BLOCO 29 (12/08/26) — Julyan: "inspire-se em grandes gestões como salesforce maps...
 // tem q aparecer leads pra eles, onde ele escolher a rota, os mais pertos, pra economizar
 // tempo e esforço". A distância já aparecia em cada card, mas nunca foi o CRITÉRIO de
@@ -14531,7 +14770,13 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, d
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
       // dataISO só vai quando o alvo NÃO é hoje (preenchimento de buraco da semana);
       // sem ela o servidor mantém a convenção antiga de gravar no dia corrente.
-      body: JSON.stringify({ nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista, ...(dataISO ? { data: dataISO } : {}) })
+      // BLOCO 34 — tipo ('visita'|'reuniao') e sugeridoPorGestor viajam até aqui via
+      // `opcoes` (mesmo parâmetro que já carregava `silencioso`); omitidos, o servidor
+      // já assume 'visita' + false — chamadas antigas não mudam de comportamento.
+      body: JSON.stringify({ nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista,
+        ...(opcoes && opcoes.tipo ? { tipo: opcoes.tipo } : {}),
+        ...(opcoes && opcoes.sugeridoPorGestor ? { sugeridoPorGestor: true } : {}),
+        ...(dataISO ? { data: dataISO } : {}) })
     }), 8000, 'criar-tarefa-rota');
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) {
