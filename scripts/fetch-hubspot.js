@@ -206,6 +206,49 @@ async function gravarSnapshotDaily(ownerId, dataISO, campos) {
   }
 }
 
+// AUTOMAÇÃO 3 (13/08/26) — "quero segurança nos dados e veracidade". Escrever com
+// sucesso (HTTP 200) não é a mesma coisa que o dado estar realmente correto no banco —
+// um POST pode retornar OK e o merge-duplicates fazer algo inesperado, ou uma corrida
+// entre a rodada de "hoje" e a de "ontem" pode se sobrepor. Depois de gravar, LÊ DE
+// VOLTA e confere se o que está no banco bate byte a byte com o que mandamos. Se não
+// bater, é registrado como falha de sincronização — não fica só um "parece que deu
+// certo", vira um fato conferido.
+async function gravarSnapshotDailyVerificado(ownerId, nomeRep, dataISO, campos) {
+  await gravarSnapshotDaily(ownerId, dataISO, campos);
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/dailies?owner_id=eq.${encodeURIComponent(String(ownerId))}&data=eq.${dataISO}&select=realizado_visitas,realizado_avancos,realizado_propostas,realizado_fechamentos`,
+      { headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` } }
+    );
+    const linhas = res.ok ? await res.json() : null;
+    const linha = linhas && linhas[0];
+    const bateu = linha
+      && Number(linha.realizado_visitas || 0) === Number(campos.realizado_visitas || 0)
+      && Number(linha.realizado_avancos || 0) === Number(campos.realizado_avancos || 0)
+      && Number(linha.realizado_propostas || 0) === Number(campos.realizado_propostas || 0)
+      && Number(linha.realizado_fechamentos || 0) === Number(campos.realizado_fechamentos || 0);
+    if (!bateu) {
+      registrarFalhaSync(ownerId, nomeRep, dataISO, 'verificação pós-escrita',
+        new Error(linha ? `banco tem ${JSON.stringify(linha)}, devia ter ${JSON.stringify(campos)}` : 'linha não encontrada depois de gravar'));
+    }
+  } catch (e) {
+    registrarFalhaSync(ownerId, nomeRep, dataISO, 'verificação pós-escrita', e);
+  }
+}
+
+// AUTOMAÇÃO 2/3 — coletor de falhas desta execução. Isolado num array de módulo (não
+// um arquivo à parte) porque só precisa viver durante esta rodada: no fim do script,
+// vira data/sync-status.json (ver final do arquivo), que o cockpit lê como
+// DATA.syncStatus e mostra um aviso pro gestor — sem precisar de tabela nova no
+// Supabase nem de acesso a log do GitHub Actions pra descobrir que algo falhou.
+const falhasSyncDaily = [];
+function registrarFalhaSync(ownerId, nomeRep, dataISO, etapa, erro) {
+  const msg = (erro && erro.message) || String(erro);
+  console.log(`AVISO DE SYNC — ${nomeRep || ownerId} (${dataISO}, ${etapa}): ${msg}`);
+  falhasSyncDaily.push({ ownerId: String(ownerId), nome: nomeRep || null, data: dataISO, etapa, erro: msg, em: new Date().toISOString() });
+}
+
 // ---- Agenda da semana (aba Agenda do cockpit) ----
 // O app de campo grava no HubSpot: reunião vira MEETING e follow-up vira TASK.
 // Busca os dois, dos executivos ativos, de 30 dias atrás até 90 pra frente
@@ -975,47 +1018,69 @@ async function main() {
       return nomes;
     };
 
-    // ANTES: entrouHojeEm(STAGES.visita) — contava mudança de ETAPA, e revisita (que não
-    // move etapa) ficava invisível. AGORA: conta as tarefas de visita criadas hoje pelo app.
-    const visitasHubspotHoje = await visitasTarefasHojeByOwner(rep.ownerId);
-    // "Avanço de etapa" = negócio que progrediu pra Diagnóstico, Negociação ou Ag.Pagamento hoje —
-    // NÃO inclui Demo/Proposta aqui, porque isso já vira a métrica separada de "Propostas" logo
-    // abaixo (senão o mesmo negócio contaria pontuação em dobro).
-    const avancosHubspotHoje = [STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]
-      .reduce((soma, stageId) => soma + entrouHojeEm(stageId), 0);
-    const propostasHubspotHoje = entrouHojeEm(STAGES.demoProposta);
-    // Mesmas etapas das contagens acima — se uma mudar, a outra tem que mudar junto,
-    // senao o nome deixa de bater com o numero ao lado dele na tela.
-    const avancosHojeNomes = nomesQueEntraramHojeEm([STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]);
-    const propostasHojeNomes = nomesQueEntraramHojeEm([STAGES.demoProposta]);
-    const fechamentosHubspotHoje = await stageDealsHojeByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
-    await gravarSnapshotDaily(rep.ownerId, hojeISO, {
-      realizado_visitas: visitasHubspotHoje,
-      realizado_avancos: avancosHubspotHoje,
-      realizado_propostas: propostasHubspotHoje,
-      realizado_fechamentos: fechamentosHubspotHoje
-    });
+    // AUTOMAÇÃO 2 (13/08/26) — Julyan: "quero segurança nos dados e veracidade", depois
+    // de descobrir que o Bruno teve realizado_visitas travado em 0 por dois dias
+    // seguidos. Causa raiz encontrada: este for-loop não tinha NENHUM isolamento —
+    // uma exceção em QUALQUER chamada (rate limit passageiro do HubSpot, timeout de
+    // rede) na escrita da Daily de UM executivo abortava o loop inteiro, deixando todo
+    // mundo DEPOIS dele no array REPS sem gravar naquela rodada, em silêncio total
+    // (o job podia até terminar com sucesso aparente). Isso bate exatamente com o
+    // sintoma: o resto dos dados do Bruno (funil, negócios) sempre esteve correto —
+    // só a escrita da Daily, que fica right aqui, ficou pra trás.
+    // Agora: falha na Daily de UM executivo fica CONTIDA aqui — é registrada e o loop
+    // segue pro próximo. O resto do processamento do PRÓPRIO executivo (funil, mapa,
+    // etc., mais abaixo) roda de qualquer jeito, porque não depende deste bloco.
+    let visitasHubspotHoje = 0, avancosHubspotHoje = 0, propostasHubspotHoje = 0, fechamentosHubspotHoje = 0;
+    let avancosHojeNomes = [], propostasHojeNomes = [];
+    try {
+      // ANTES: entrouHojeEm(STAGES.visita) — contava mudança de ETAPA, e revisita (que não
+      // move etapa) ficava invisível. AGORA: conta as tarefas de visita criadas hoje pelo app.
+      visitasHubspotHoje = await visitasTarefasHojeByOwner(rep.ownerId);
+      // "Avanço de etapa" = negócio que progrediu pra Diagnóstico, Negociação ou Ag.Pagamento hoje —
+      // NÃO inclui Demo/Proposta aqui, porque isso já vira a métrica separada de "Propostas" logo
+      // abaixo (senão o mesmo negócio contaria pontuação em dobro).
+      avancosHubspotHoje = [STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]
+        .reduce((soma, stageId) => soma + entrouHojeEm(stageId), 0);
+      propostasHubspotHoje = entrouHojeEm(STAGES.demoProposta);
+      // Mesmas etapas das contagens acima — se uma mudar, a outra tem que mudar junto,
+      // senao o nome deixa de bater com o numero ao lado dele na tela.
+      avancosHojeNomes = nomesQueEntraramHojeEm([STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]);
+      propostasHojeNomes = nomesQueEntraramHojeEm([STAGES.demoProposta]);
+      fechamentosHubspotHoje = await stageDealsHojeByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId);
+      await gravarSnapshotDailyVerificado(rep.ownerId, rep.name, hojeISO, {
+        realizado_visitas: visitasHubspotHoje,
+        realizado_avancos: avancosHubspotHoje,
+        realizado_propostas: propostasHubspotHoje,
+        realizado_fechamentos: fechamentosHubspotHoje
+      });
+    } catch (e) {
+      registrarFalhaSync(rep.ownerId, rep.name, hojeISO, 'hoje', e);
+    }
 
     // ---- fecha o dia de ONTEM (todo dia útil, direto do HubSpot) ----
     // Este é o número que a Daily das 9h usa pra dizer "prometeu X, fez Y". Antes
     // dependia de o navegador de alguém ter ficado com a aba aberta no dia anterior;
     // agora o robô grava direto do HubSpot, sem depender de ninguém ter aberto tela.
-    // Com as DUAS rodadas diárias (11/08): a de 23:59 já fecha "ontem" quase completo
-    // (o dia está acabando); a de 08:59 refaz o mesmo fechamento como segurança, caso
-    // a das 23:59 tenha falhado (token expirado, GitHub Actions fora do ar, etc.).
-    // gravarSnapshotDaily faz upsert — rodar duas vezes no mesmo dia não duplica nem
+    // Com as DUAS (agora TRÊS, ver Automação 1) rodadas diárias: a de 23:59 já fecha
+    // "ontem" quase completo (o dia está acabando); as seguintes refazem o mesmo
+    // fechamento como segurança, caso alguma rodada anterior tenha falhado.
+    // gravarSnapshotDaily faz upsert — rodar várias vezes no mesmo dia não duplica nem
     // distorce o número, só confirma o mesmo valor (ou corrige, se algo mudou).
-    const visitasOntem = await visitasTarefasHojeByOwner(rep.ownerId, ontemISO);
-    const avancosOntem = [STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]
-      .reduce((soma, stageId) => soma + entrouNoDia(stageId, ontemISO), 0);
-    const propostasOntem = entrouNoDia(STAGES.demoProposta, ontemISO);
-    const fechamentosOntem = await stageDealsHojeByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId, ontemISO);
-    await gravarSnapshotDaily(rep.ownerId, ontemISO, {
-      realizado_visitas: visitasOntem,
-      realizado_avancos: avancosOntem,
-      realizado_propostas: propostasOntem,
-      realizado_fechamentos: fechamentosOntem
-    });
+    try {
+      const visitasOntem = await visitasTarefasHojeByOwner(rep.ownerId, ontemISO);
+      const avancosOntem = [STAGES.diagnostico, STAGES.negociacao, STAGES.agPagamento]
+        .reduce((soma, stageId) => soma + entrouNoDia(stageId, ontemISO), 0);
+      const propostasOntem = entrouNoDia(STAGES.demoProposta, ontemISO);
+      const fechamentosOntem = await stageDealsHojeByOwner([STAGES.ganho1, STAGES.ganho2], rep.ownerId, ontemISO);
+      await gravarSnapshotDailyVerificado(rep.ownerId, rep.name, ontemISO, {
+        realizado_visitas: visitasOntem,
+        realizado_avancos: avancosOntem,
+        realizado_propostas: propostasOntem,
+        realizado_fechamentos: fechamentosOntem
+      });
+    } catch (e) {
+      registrarFalhaSync(rep.ownerId, rep.name, ontemISO, 'ontem', e);
+    }
 
     const withDays = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
@@ -1237,6 +1302,20 @@ async function main() {
 
   fs.writeFileSync(outPath, JSON.stringify(output, null, 2));
   console.log(`OK — dados gravados em ${outPath}`);
+
+  // AUTOMAÇÃO 3 (13/08/26) — grava o resultado desta rodada (mesmo quando está tudo
+  // limpo) em data/sync-status.json. Sem tabela nova no Supabase, sem precisar de
+  // acesso a log do GitHub Actions: o próprio site lê este arquivo (via montar-dados.js)
+  // e mostra um aviso pro gestor se alguma escrita da Daily falhou ou não bateu na
+  // conferência pós-escrita. "0 falhas" também é informação — confirma que a rodada
+  // rodou limpa, em vez de o gestor só descobrir um problema quando alguém reclama.
+  const statusPath = path.join(__dirname, '..', 'data', 'sync-status.json');
+  fs.writeFileSync(statusPath, JSON.stringify({
+    ultimaExecucao: new Date().toISOString(),
+    totalExecutivos: REPS.length,
+    falhas: falhasSyncDaily
+  }, null, 2));
+  console.log(`OK — status de sincronização gravado (${falhasSyncDaily.length} falha(s) nesta rodada)`);
 }
 
 main().catch(err => {
