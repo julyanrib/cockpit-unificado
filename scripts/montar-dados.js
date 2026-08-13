@@ -28,6 +28,10 @@ const supabaseConfig = requireOpcional(() => require('../data/supabase-config.js
 const maptilerConfig = requireOpcional(() => require('../data/maptiler-config.json'));
 const resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
 const weeklyRaw = requireOpcional(() => require('../data/weekly-raw.json'));
+// AUTOMAÇÃO 3 (13/08/26) — status da última rodada do robô da Daily: falhas de
+// sincronização de realizado_visitas/avancos/propostas, se houver. Opcional porque só
+// passa a existir depois da PRIMEIRA execução do fetch-hubspot.js com esta automação.
+const syncStatus = requireOpcional(() => require('../data/sync-status.json'));
 // Grandes redes que a Takeat não atende — usado pela Prospecção para tirar da fila
 // recomendada (vai pra "Revisar escopo", não some). Dado editável em data/.
 const redesExcluidas = requireOpcional(() => require('../data/redes-excluidas.json'));
@@ -203,7 +207,11 @@ function montarDadosCompletos() {
     // quem já "encerrou" (churn confirmado no pipeline de Sucesso) — sugerir visita de
     // relacionamento pra quem cancelou não faz sentido nenhum.
     clientesAtivos: (clientesAtivos || []).filter(c => c.sugerirVisita !== false),
-    footerText: `Fonte: HubSpot (pipeline 916011864, atualizado 23:59 e 08:59) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
+    footerText: `Fonte: HubSpot (pipeline 916011864, atualizado 23:59, 08:59 e 15:00) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
+    // AUTOMAÇÃO 3 (13/08/26) — status da última rodada do robô: se alguma escrita de
+    // realizado_visitas/avancos/propostas falhou ou não bateu na conferência pós-escrita.
+    // Opcional: undefined até a primeira rodada rodar com esta automação.
+    syncStatus: syncStatus || null,
     resumoSemanal: (resumoSemanal || weeklyRaw) ? {
       geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
       numerosAtualizadosEmFmt: weeklyRaw ? fmtDate(weeklyRaw.geradoEm) : (resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null),
@@ -351,7 +359,10 @@ function filtrarParaPapel(dados, usuario) {
     resumoSemanal: resumoSemanalFiltrado,
     agenda,
     leadsReferencia,
-    clientesAtivos
+    clientesAtivos,
+    // AUTOMAÇÃO 3 — status de sincronização é informação operacional do gestor
+    // (falha de robô, verificação de escrita), não faz sentido pro executivo ver.
+    syncStatus: null
     // kpisHub, kpiDeltas, saude, funil (contagens agregadas do time), stageMeta,
     // hubspotUpdatedAtFmt, usuarios (nomes/e-mails do próprio time) permanecem — são
     // agregados sem detalhe de cliente, necessários pra meta coletiva e pro Pódio.
