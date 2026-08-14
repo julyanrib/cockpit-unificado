@@ -247,11 +247,18 @@
   .acao h3{font-size:15.5px;font-weight:700;line-height:1.3;margin:0 0 6px;font-family:'Poppins',sans-serif;}
   .acao-why{font-size:12px;color:var(--muted);line-height:1.5;margin:0 0 13px;}
   .acao-list{display:flex;flex-direction:column;gap:1px;margin-bottom:13px;}
-  .acao-item{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:var(--r-sm);background:var(--panel2);font-size:12.5px;}
-  .acao-item:hover{background:var(--sunk);}
+  .acao-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-sm);background:var(--panel2);font-size:12.5px;cursor:pointer;border:1px solid transparent;transition:background .15s var(--ease),border-color .15s var(--ease),transform .15s var(--ease);}
+  .acao-item:hover{background:var(--hover,var(--sunk));border-color:var(--line);transform:translateX(2px);}
+  .acao-item:hover .acao-go{opacity:1;transform:none;}
   .acao-item b{font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);}
   .acao-item .meta{font-size:11px;color:var(--muted2);white-space:nowrap;}
   .acao-item .flag{font-size:10.5px;font-weight:800;color:var(--tone-ink);background:var(--tone-soft);border-radius:var(--r-pill);padding:2px 8px;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .acao-go{opacity:0;transform:translateX(-3px);transition:all .15s var(--ease);font-weight:800;color:var(--tone-ink);font-size:12px;flex:none;}
+  /* BLOCO 50 — "mover ▸" só aparece no hover da linha, pra lista não competir com o
+     resto da UI o tempo todo (mesmo princípio de .kb-setas). */
+  .trow-mover{opacity:0;transition:opacity .13s var(--ease);}
+  .trow:hover .trow-mover{opacity:1;}
+  .trow-mover:hover{border-color:var(--ink) !important;}
   .acao-foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:12px;border-top:1px dashed var(--line);}
   .acao-cta{display:inline-flex;align-items:center;gap:6px;background:var(--tone);color:#fff;border:none;border-radius:var(--r-pill);padding:8px 15px;font:700 12px 'DM Sans',sans-serif;cursor:pointer;transition:filter .15s var(--ease);}
   .acao-cta:hover{filter:brightness(1.08);}
@@ -4014,42 +4021,52 @@ function hsUrl(id) { return `https://app.hubspot.com/contacts/24373118/record/0-
    `false` só pergunta. Todo `prop` abaixo existe de verdade no portal (conferido via
    get_properties: celular, cep, bairro, cidade, logradouro, numero, amount, valor_de_mrr,
    data_da_reuniao, reuniao_agendada, description) — não inventei campo nenhum.        */
+// BLOCO 50 (14/08/26) — Julyan revisou a tabela (handoff HANDOFF-MEU-FUNIL.md,
+// §7 "Exigências ao ENTRAR em cada etapa"). Esta é a versão final, substituindo
+// o rascunho do Bloco 49.
 const CAMPOS_POR_ETAPA = {
-  // Prospecção — a conta entrou no funil: o mínimo é saber com quem falar e onde é.
-  '1395880469': [
-    { prop: 'celular',   label: 'Telefone de contato', tipo: 'tel',   obrigatorio: true,  dica: 'Sem telefone o lead não sustenta cadência.' },
-    { prop: 'bairro',    label: 'Bairro',              tipo: 'texto', obrigatorio: false },
-    { prop: 'cidade',    label: 'Cidade',              tipo: 'texto', obrigatorio: false }
-  ],
+  // Prospecção — nada. A conta entra no funil sem exigência; ela é o próprio começo.
+  '1395880469': [],
   // Visita — só faz sentido dizer "visitei" se existe endereço de onde a visita foi.
   '1396005401': [
-    { prop: 'logradouro', label: 'Rua',    tipo: 'texto', obrigatorio: true, dica: 'É o endereço que vira parada de rota.' },
-    { prop: 'numero',     label: 'Número', tipo: 'texto', obrigatorio: false },
-    { prop: 'bairro',     label: 'Bairro', tipo: 'texto', obrigatorio: true },
-    { prop: 'cidade',     label: 'Cidade', tipo: 'texto', obrigatorio: false }
+    { prop: 'logradouro', label: 'Rua e número', tipo: 'texto', obrigatorio: true,  dica: 'É o endereço que vira parada de rota.' },
+    { prop: 'bairro',     label: 'Bairro',       tipo: 'texto', obrigatorio: true },
+    { prop: 'cidade',     label: 'Cidade',       tipo: 'texto', obrigatorio: true }
   ],
-  // Conversa com decisor — a etapa É o decisor. Sem nome dele, a etapa é chute.
+  // Conversa com decisor — sem o telefone de quem decide, a conversa não continua.
   '1395880470': [
-    { prop: 'description', label: 'Quem é o decisor e o que ficou combinado', tipo: 'texto_longo', obrigatorio: true, dica: 'Nome, cargo e o próximo passo acordado.' },
-    { prop: 'celular',     label: 'Telefone do decisor',                      tipo: 'tel',         obrigatorio: false }
+    { prop: 'celular', label: 'Celular do decisor', tipo: 'tel', obrigatorio: true, dica: 'É o número que a proposta vai cobrar depois — sem ele a conversa morre.' }
   ],
-  // Demo/Proposta — a partir daqui o negócio tem preço. Piso de R$349 é regra do time.
+  // Demo/Proposta — a partir daqui o negócio tem preço e reunião marcada.
   '1395880471': [
-    { prop: 'amount',           label: 'Valor da proposta (R$)', tipo: 'numero',  obrigatorio: true,  min: 349, dica: 'Piso de R$349/mês — abaixo disso não é proposta nossa.' },
-    { prop: 'reuniao_agendada', label: 'Reunião agendada?',      tipo: 'sim_nao', obrigatorio: false },
+    { prop: 'amount',           label: 'Valor da proposta (R$)', tipo: 'numero',  obrigatorio: true, min: 349, dica: 'Piso de R$349/mês — abaixo disso não é proposta nossa.' },
+    { prop: 'reuniao_agendada', label: 'Reunião agendada?',      tipo: 'sim_nao', obrigatorio: true },
     { prop: 'data_da_reuniao',  label: 'Data da reunião',        tipo: 'data',    obrigatorio: false }
   ],
-  // Negociação — o valor pode ter mudado no meio do caminho; reconfirma.
+  // Negociação — o valor pode ter mudado, e o gestor precisa saber o que falta pra fechar.
   '1395880472': [
-    { prop: 'amount',          label: 'Valor em negociação (R$)', tipo: 'numero', obrigatorio: true, min: 349 },
-    { prop: 'data_da_reuniao', label: 'Data do próximo contato',  tipo: 'data',   obrigatorio: false }
+    { prop: 'amount',      label: 'Valor em negociação (R$)',   tipo: 'numero',      obrigatorio: true, min: 349 },
+    { prop: 'description', label: 'O que falta pra fechar',     tipo: 'texto_longo', obrigatorio: true, dica: 'Vira a descrição do negócio no HubSpot — é o que o gestor lê no 1:1.' }
   ],
-  // Pagamento — é o número que vira MRR no fechamento; entra travado.
+  // Ag. Pagamento — é o número que vira MRR no fechamento; entra travado.
   '1395880473': [
-    { prop: 'valor_de_mrr', label: 'MRR do contrato (R$)', tipo: 'numero', obrigatorio: true, min: 349, dica: 'É este valor que aparece no seu MRR do mês.' },
-    { prop: 'amount',       label: 'Valor do negócio (R$)', tipo: 'numero', obrigatorio: false }
+    { prop: 'valor_de_mrr', label: 'MRR fechado (R$)', tipo: 'numero', obrigatorio: true, min: 349, dica: 'É este valor que entra no placar do mês.' }
   ]
 };
+
+// BLOCO 50 — quais propriedades aparecem NA FICHA (fora do fluxo de mover), e a partir
+// de qual etapa (índice em ORDEM_ETAPAS_FUNIL) — ou antes, se já tiver valor preenchido.
+// Todas editáveis inline. Espelha o §6 do handoff ("Propriedades por etapa").
+const PROPS_FICHA = [
+  { prop: 'celular',    label: 'Celular',   tipo: 'tel',   desde: 0 },
+  { prop: 'cidade',     label: 'Cidade',    tipo: 'texto', desde: 0 },
+  { prop: 'logradouro', label: 'Endereço',  tipo: 'texto', desde: 0, largo: true,
+    extra: l => [l.bairro, l.cep ? `CEP ${l.cep}` : null].filter(Boolean).join(' · ') },
+  { prop: 'amount',           label: 'Valor da proposta', tipo: 'numero',  desde: 3, prefixo: 'R$ ', sufixo: '/mês' },
+  { prop: 'reuniao_agendada', label: 'Reunião marcada',   tipo: 'sim_nao', desde: 3 },
+  { prop: 'description',      label: 'O que falta pra fechar', tipo: 'texto_longo', desde: 4, largo: true },
+  { prop: 'valor_de_mrr',     label: 'MRR fechado', tipo: 'numero', desde: 5, prefixo: 'R$ ', sufixo: '/mês' }
+];
 
 // Espelho do que a rota /api/mudar-etapa-negocio aceita. Manter os dois em sincronia:
 // o servidor rejeita qualquer prop fora da lista dele, então um campo novo aqui sem o
@@ -4388,7 +4405,7 @@ async function renderMeuFunil() {
           <span>${STAGE_LABELS[l.stageId] || ''}</span>
           <span style="font-size:11.5px;">${proximaAcaoHTML(l)}</span>
           <span class="r" style="${estourou ? 'color:var(--red-dk);font-weight:700;' : ''}">${l.dias != null ? l.dias + 'd' : '—'}</span>
-          <span class="r" style="color:var(--red-dk);font-weight:700;">ver ficha →</span>
+          <span class="r"><button type="button" class="trow-mover" data-lead-id="${l.id}" style="border:1px solid var(--line-btn);background:var(--panel);color:var(--body,var(--ink));font:700 10.5px 'DM Sans',sans-serif;border-radius:999px;padding:4px 10px;cursor:pointer;">mover ▸</button></span>
         </div>`;
       }).join('') + (leadsFiltrados.length > 30 ? `<div class="todos-foot">+${leadsFiltrados.length - 30} — filtre por etapa pra reduzir a lista</div>` : '')}
     </details>
@@ -4418,6 +4435,18 @@ async function renderMeuFunil() {
         ownerId: r.ownerId,
         vendedor: primeiroNome
       }, () => renderMeuFunil());
+    });
+  });
+
+  // BLOCO 50 — "mover ▸" da lista (§5/§7 do handoff): abre direto a Vista A (escolher
+  // destino), sem passar pela ficha inteira. stopPropagation pra não abrir a ficha
+  // por baixo (o botão mora dentro da linha inteira, que também é clicável).
+  el.querySelectorAll('.trow-mover[data-lead-id]').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const completo = buscarLeadFunilPorId(btn.dataset.leadId);
+      if (!completo) return;
+      abrirEscolhaDeEtapa({ ...completo, ownerId: r.ownerId }, () => renderMeuFunil());
     });
   });
 
@@ -4670,7 +4699,7 @@ function montarAcoesMeuFunil(r, dados) {
       tone: 'red', tag: 'Urgente', qtd: `${top3.length} de ${dados.cardTravados.length} travados`,
       titulo: 'Destravar quem passou de 2× o prazo da etapa',
       why: 'São negócios que já foram trabalhados e pararam. Avançar ou marcar como perdido — os dois liberam o funil.',
-      itens: top3.map(l => ({ id: l.id, nome: l.name, meta: STAGE_LABELS[l.stageId] || '', flag: `+${Math.max(0, (l.dias || 0) - ((DATA.stageMeta && DATA.stageMeta.slaDays && DATA.stageMeta.slaDays[l.stageId]) || l.dias || 0))}d` })),
+      itens: top3.map(l => ({ tipo: 'lead', id: l.id, nome: l.name, meta: STAGE_LABELS[l.stageId] || '', flag: `+${Math.max(0, (l.dias || 0) - ((DATA.stageMeta && DATA.stageMeta.slaDays && DATA.stageMeta.slaDays[l.stageId]) || l.dias || 0))}d`, raw: l })),
       cta: { texto: 'Abrir o primeiro no CRM ↗', href: hsUrl(top3[0].id) },
       sec: dados.cardTravados.length > 3 ? `ver os ${dados.cardTravados.length}` : null
     });
@@ -4681,7 +4710,7 @@ function montarAcoesMeuFunil(r, dados) {
       tone: 'amber', tag: 'Hoje', qtd: `${dados.cardSemPasso.length} sem data`,
       titulo: 'Marcar próximo passo nos quentes sem agenda',
       why: 'Negócio em Demo/Proposta, Negociação ou Ag. Pagamento sem data marcada esfria rápido. Uma tarefa resolve.',
-      itens: top3.map(l => ({ id: l.id, nome: l.name, meta: STAGE_LABELS[l.stageId] || '', flag: l.dias != null ? `${l.dias}d` : '' })),
+      itens: top3.map(l => ({ tipo: 'lead', id: l.id, nome: l.name, meta: STAGE_LABELS[l.stageId] || '', flag: l.dias != null ? `${l.dias}d` : '', raw: l })),
       cta: { texto: `Agendar os ${dados.cardSemPasso.length}`, href: hsUrl(top3[0].id) },
       sec: 'ver na agenda', secTab: 'viewAgenda'
     });
@@ -4693,7 +4722,7 @@ function montarAcoesMeuFunil(r, dados) {
       tone: 'green', tag: 'Esta semana', qtd: `${dados.contasAlvo.length} na carteira`,
       titulo: `Abrir ${Math.min(3, dados.contasAlvo.length)} contas-alvo na praça`,
       why: `Você fecha ${fechados} de ${meta} da meta. Sem conta nova agora, a virada do mês fica sem lastro.`,
-      itens: top3.map(c => ({ nome: c.nome, meta: c.bairro || c.cidade || '', flag: c.avaliacoes != null ? `${Number(c.avaliacoes).toLocaleString('pt-BR')} ★` : '' })),
+      itens: top3.map(c => ({ tipo: 'alvo', nome: c.nome, meta: c.bairro || c.cidade || '', flag: c.avaliacoes != null ? `${Number(c.avaliacoes).toLocaleString('pt-BR')} ★` : '', raw: c })),
       cta: { texto: 'Levar pra rota de hoje', tab: 'viewRotas' },
       sec: dados.contasAlvo.length > 3 ? `ver as ${dados.contasAlvo.length}` : null, secTab: 'viewLeadsPraca'
     });
@@ -4706,14 +4735,18 @@ function montarAcoesMeuFunil(r, dados) {
     return;
   }
   const TONES = { red: ['var(--red)', 'var(--red-dk)', 'var(--red-soft)'], amber: ['var(--amber)', 'var(--amber-ink)', 'var(--amber-soft)'], green: ['var(--green)', 'var(--green)', 'var(--green-soft)'] };
-  slot.innerHTML = `<div class="acoes" style="grid-template-columns:repeat(${cards.length},1fr);">` + cards.map(c => {
+  slot.innerHTML = `<div class="acoes" style="grid-template-columns:repeat(${cards.length},1fr);">` + cards.map((c, ci) => {
     const [tone, toneInk, toneSoft] = TONES[c.tone];
     return `<article class="acao" style="--tone:${tone};--tone-ink:${toneInk};--tone-soft:${toneSoft};">
       <div class="acao-top"><span class="acao-tag">${esc(c.tag)}</span><span class="acao-qtd">${esc(c.qtd)}</span></div>
       <h3>${esc(c.titulo)}</h3>
       <p class="acao-why">${esc(c.why)}</p>
       <div class="acao-list">
-        ${c.itens.map(it => `<div class="acao-item"><b>${esc(it.nome || '')}</b><span class="meta">${esc(it.meta || '')}</span>${it.flag ? `<span class="flag">${esc(it.flag)}</span>` : ''}</div>`).join('')}
+        <!-- BLOCO 50 — "todo lead é clicável" (handoff §1). data-cardidx/itemidx aponta
+             de volta pro objeto "raw" guardado em "cards", então o clique abre a MESMA
+             ficha rica (com propriedades editáveis) que o kanban e a lista abrem —
+             nenhuma cópia parcial de lead reconstruída aqui. -->
+        ${c.itens.map((it, ii) => `<div class="acao-item" data-cardidx="${ci}" data-itemidx="${ii}"><b>${esc(it.nome || '')}</b><span class="meta">${esc(it.meta || '')}</span>${it.flag ? `<span class="flag">${esc(it.flag)}</span>` : ''}<span class="acao-go">→</span></div>`).join('')}
       </div>
       <div class="acao-foot">
         ${c.cta.href ? `<a class="acao-cta" href="${c.cta.href}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;">${esc(c.cta.texto)}</a>` : `<button class="acao-cta" data-acaocta="${esc(c.cta.tab || '')}">${esc(c.cta.texto)}</button>`}
@@ -4733,6 +4766,22 @@ function montarAcoesMeuFunil(r, dados) {
     const tab = span.dataset.acaosec;
     if (tab) { activateTab(tab); if (tab === 'viewLeadsPraca' && typeof renderProspeccaoNova === 'function') renderProspeccaoNova(true); }
   }));
+
+  // BLOCO 50 (14/08/26) — clique no item abre a ficha. Lead (travado/sem passo) abre a
+  // ficha rica do funil; conta-alvo abre a ficha de prospecção com as duas ações grandes
+  // (criar negócio em Prospecção / levar pra rota) — mesma ficha que a aba Prospecção usa.
+  slot.querySelectorAll('.acao-item[data-cardidx]').forEach(item => {
+    item.addEventListener('click', () => {
+      const it = (cards[Number(item.dataset.cardidx)] || {}).itens[Number(item.dataset.itemidx)];
+      if (!it || !it.raw) return;
+      if (it.tipo === 'lead') {
+        const completo = buscarLeadFunilPorId(it.raw.id) || it.raw;
+        abrirFichaLeadFunilDrawer(completo, () => renderMeuFunil());
+      } else if (it.tipo === 'alvo') {
+        abrirFichaProspeccaoDrawer({ ...it.raw, responsavel_owner_id: r.ownerId });
+      }
+    });
+  });
 }
 document.getElementById('tabBtnMeuFunil').addEventListener('click', () => { activateTab('viewMeuFunil'); renderMeuFunil(); });
 
@@ -9254,6 +9303,143 @@ let stageModalVoltarPara = null; // função pra "← voltar" quando a ficha abr
 // vivem só no HubSpot e não têm campo espelhado aqui, então não fingimos que têm.
 // A trilha do funil é real (STAGE_LABELS na ordem, etapa atual destacada).
 const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
+
+// BLOCO 50 (14/08/26) — validação de UM campo isolado, usada pela edição inline da
+// ficha (§6 do handoff). Mesmas regras de tipo de coletarCamposPassagem, mas sem
+// exigir um formulário inteiro em volta — a ficha edita propriedade por propriedade.
+function validarValorCampoUnico(tipo, bruto, min) {
+  const valor = (bruto == null ? '' : String(bruto)).trim();
+  if (!valor) return { ok: true, vazio: true, valor: null };
+  if (tipo === 'numero') {
+    const n = Number(valor.replace(',', '.'));
+    if (!isFinite(n) || n <= 0) return { ok: false, erro: 'Valor inválido.' };
+    if (min != null && n < min) return { ok: false, erro: `Mínimo de R$${min}.` };
+    return { ok: true, valor: String(n) };
+  }
+  if (tipo === 'data') {
+    const d = new Date(valor + 'T00:00:00Z');
+    if (isNaN(d.getTime())) return { ok: false, erro: 'Data inválida.' };
+    return { ok: true, valor: String(d.getTime()) };
+  }
+  if (tipo === 'sim_nao') {
+    if (valor !== 'true' && valor !== 'false') return { ok: false, erro: 'Selecione Sim ou Não.' };
+    return { ok: true, valor };
+  }
+  return { ok: true, valor };
+}
+
+// Formata o valor exibido (modo leitura) de uma propriedade da ficha.
+function formatarValorFicha(campo, lead) {
+  const bruto = lead[campo.prop];
+  if (bruto == null || bruto === '') return null;
+  if (campo.tipo === 'numero') {
+    const n = Number(bruto);
+    if (!isFinite(n) || n <= 0) return null;
+    return `${campo.prefixo || ''}${n.toLocaleString('pt-BR')}${campo.sufixo || ''}`;
+  }
+  if (campo.tipo === 'sim_nao') return String(bruto) === 'true' ? 'Sim' : String(bruto) === 'false' ? 'Não' : null;
+  if (campo.tipo === 'data') {
+    const cru = String(bruto).trim();
+    const d = new Date(/^\d+$/.test(cru) ? Number(cru) : bruto);
+    return isNaN(d.getTime()) ? null : d.toLocaleDateString('pt-BR');
+  }
+  return esc(bruto) + (campo.extra ? (() => { const e = campo.extra(lead); return e ? ` · ${esc(e)}` : ''; })() : '');
+}
+
+// Grade de propriedades editáveis da ficha — progressiva por etapa (§6 do handoff):
+// o campo só aparece a partir da etapa em que faz sentido, ou antes se já tiver valor
+// (negócio que pulou etapa registrando fora de ordem não perde o dado).
+function propsFichaHTML(lead, idxAtual) {
+  const visiveis = PROPS_FICHA.filter(c => idxAtual >= c.desde || (lead[c.prop] != null && lead[c.prop] !== ''));
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+    ${visiveis.map(c => {
+      const mostrado = formatarValorFicha(c, lead);
+      return `<div class="ficha-prop${c.largo ? '' : ''}" data-prop="${c.prop}" data-tipo="${c.tipo}" data-min="${c.min || ''}" data-prefixo="${esc(c.prefixo || '')}" data-sufixo="${esc(c.sufixo || '')}"
+        style="grid-column:${c.largo ? '1/-1' : 'auto'};background:var(--panel2);border:1px solid var(--line-soft);border-radius:11px;padding:9px 12px;cursor:pointer;transition:background .13s var(--ease),border-color .13s var(--ease);">
+        <label style="display:block;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);margin-bottom:3px;">${esc(c.label)}</label>
+        <span class="ficha-prop-valor">${mostrado ? `<b style="font-size:12.5px;font-weight:700;line-height:1.35;">${mostrado}</b>` : '<span style="color:var(--amber-ink);font-weight:700;font-size:11.5px;">— não preenchido · toque pra preencher</span>'}</span>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// Vira o card num input na hora do toque — sem re-renderizar a ficha inteira (perderia
+// o foco/scroll). Enter ou o botão ✓ salva; Esc cancela sem gravar nada.
+function ligarPropsFichaEditaveis(container, lead) {
+  container.querySelectorAll('.ficha-prop').forEach(card => {
+    card.addEventListener('click', function aoClicar() {
+      if (card.querySelector('input,textarea,select')) return; // já em edição
+      const propNome = card.dataset.prop;
+      const tipo = card.dataset.tipo;
+      const min = card.dataset.min ? Number(card.dataset.min) : null;
+      const config = PROPS_FICHA.find(c => c.prop === propNome);
+      const atual = lead[propNome];
+      let curVal = '';
+      if (tipo === 'data' && atual) {
+        const cru = String(atual).trim();
+        const d = new Date(/^\d+$/.test(cru) ? Number(cru) : atual);
+        curVal = isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+      } else if (atual != null) curVal = String(atual);
+
+      let controle;
+      if (tipo === 'texto_longo') controle = `<textarea rows="2" style="flex:1;width:100%;box-sizing:border-box;background:var(--panel);border:1px solid var(--line-btn);border-radius:10px;padding:9px 12px;font:500 12.5px 'DM Sans',sans-serif;color:var(--ink);resize:vertical;">${esc(curVal)}</textarea>`;
+      else if (tipo === 'sim_nao') controle = `<select style="flex:1;background:var(--panel);border:1px solid var(--line-btn);border-radius:10px;padding:9px 12px;font:500 12.5px 'DM Sans',sans-serif;color:var(--ink);"><option value="">—</option><option value="true" ${curVal === 'true' ? 'selected' : ''}>Sim</option><option value="false" ${curVal === 'false' ? 'selected' : ''}>Não</option></select>`;
+      else {
+        const tipoInput = tipo === 'numero' ? 'number' : tipo === 'data' ? 'date' : tipo === 'tel' ? 'tel' : 'text';
+        controle = `<input type="${tipoInput}"${tipo === 'numero' && min != null ? ` min="${min}" placeholder="${min} ou mais"` : ''} value="${esc(curVal)}" style="flex:1;box-sizing:border-box;background:var(--panel);border:1px solid var(--line-btn);border-radius:10px;padding:9px 12px;font:500 12.5px 'DM Sans',sans-serif;color:var(--ink);">`;
+      }
+      card.innerHTML = `<label style="display:block;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);margin-bottom:5px;">${esc(config.label)}</label>
+        <div style="display:flex;gap:6px;align-items:flex-start;">${controle}<button type="button" class="ficha-prop-salvar" style="flex:none;background:var(--ink);color:var(--panel);border:none;border-radius:9px;padding:0 12px;min-height:36px;cursor:pointer;font-weight:800;">✓</button></div>
+        ${tipo === 'numero' && min != null ? `<div style="margin-top:4px;font-size:10.5px;color:var(--ter);">piso de R$${min}/mês</div>` : ''}`;
+      card.onclick = ev2 => ev2.stopPropagation();
+      const campoEl = card.querySelector('input,textarea,select');
+      campoEl.focus();
+
+      const salvar = async () => {
+        const bruto = campoEl.value;
+        const v = validarValorCampoUnico(tipo, bruto, min);
+        if (!v.ok) { campoEl.style.borderColor = 'var(--red)'; mostrarToast(v.erro, 'erro'); return; }
+        const btn = card.querySelector('.ficha-prop-salvar');
+        btn.disabled = true; btn.textContent = '…';
+        try {
+          const token = await tokenDeSessaoGlobal();
+          const resp = await comPrazoGlobal(async (signal) => fetch('/api/mudar-etapa-negocio', {
+            method: 'POST', signal,
+            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+            body: JSON.stringify({ dealId: lead.id, ownerId: lead.ownerId || null, novaEtapa: lead.stageId, propriedades: { [propNome]: v.valor } })
+          }), 8000, 'mudar-etapa-negocio');
+          const data = await resp.json().catch(() => ({}));
+          if (!resp.ok || !data.ok) {
+            mostrarToast((data && data.erro) || 'Não consegui gravar essa propriedade.', 'erro');
+            btn.disabled = false; btn.textContent = '✓';
+            return;
+          }
+          lead[propNome] = v.valor;
+          const idxAtual = ORDEM_FUNIL_FICHA.indexOf(lead.stageId);
+          const grade = card.parentElement;
+          grade.outerHTML = propsFichaHTML(lead, idxAtual);
+          ligarPropsFichaEditaveis(container, lead);
+          mostrarToast(`${config.label} gravado no HubSpot ✓`, 'sucesso');
+        } catch (e) {
+          mostrarToast('Falha ao falar com o HubSpot: ' + String((e && e.message) || e), 'erro');
+          btn.disabled = false; btn.textContent = '✓';
+        }
+      };
+      card.querySelector('.ficha-prop-salvar').addEventListener('click', (ev2) => { ev2.stopPropagation(); salvar(); });
+      campoEl.addEventListener('keydown', (ev2) => {
+        if (ev2.key === 'Enter' && tipo !== 'texto_longo') { ev2.preventDefault(); salvar(); }
+        if (ev2.key === 'Escape') {
+          ev2.stopPropagation();
+          const idxAtual = ORDEM_FUNIL_FICHA.indexOf(lead.stageId);
+          const grade = card.parentElement;
+          grade.outerHTML = propsFichaHTML(lead, idxAtual);
+          ligarPropsFichaEditaveis(container, lead);
+        }
+      });
+    });
+  });
+}
+
 function fichaLeadFunilBodyHTML(l) {
   const idxAtual = ORDEM_FUNIL_FICHA.indexOf(l.stageId);
   const slaDias = (l.stageId && DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
@@ -9275,23 +9461,16 @@ function fichaLeadFunilBodyHTML(l) {
         </button>
       `).join('')}
     </div>` : ''}
+    <!-- BLOCO 50 (14/08/26) — handoff HANDOFF-MEU-FUNIL.md §6: propriedades reais do
+         negócio, editáveis inline (toque no campo → vira input → ✓ ou Enter grava no
+         HubSpot). Aparecem progressivamente por etapa (PROPS_FICHA), nunca some um
+         valor que já existe mesmo que o negócio tenha pulado etapa fora de ordem. -->
+    <div style="font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ter);margin:0 0 8px;">Dados do negócio · HubSpot <span style="font-weight:600;letter-spacing:0;text-transform:none;color:var(--muted2);">— toque num campo pra editar</span></div>
+    <div class="ficha-props-grade">${propsFichaHTML(l, idxAtual)}</div>
     ${(() => {
-      // BLOCO 44 (14/08/26) — "ver tudo... telefone e endereço" + "tarefas/compromissos
-      // já agendados" (Julyan). Vem direto de propriedades do próprio negócio (celular,
-      // cep/bairro/cidade/logradouro/numero) e de tarefas HubSpot já associadas a ele —
-      // nada inventado, e nada que a nota completa do CRM precise duplicar aqui (isso
-      // ficou fora de propósito). Substitui o aviso antigo de "fica só no HubSpot".
-      const endereco = [l.logradouro, l.numero, l.bairro, l.cidade].filter(Boolean).join(', ');
-      const temContato = l.celular || endereco;
       const tarefas = Array.isArray(l.tarefas) ? l.tarefas : [];
-      return `
-    ${temContato ? `
-    <div style="display:flex;flex-direction:column;gap:6px;background:var(--panel2);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--muted);">
-      ${l.celular ? `<div>📞 <a href="tel:${esc(String(l.celular).replace(/[^\d+]/g, ''))}" style="color:var(--ink);font-weight:700;text-decoration:none;">${esc(l.celular)}</a></div>` : ''}
-      ${endereco ? `<div>📍 ${esc(endereco)}${l.cep ? ` · CEP ${esc(l.cep)}` : ''}</div>` : ''}
-    </div>` : ''}
-    ${tarefas.length ? `
-    <div style="margin-bottom:16px;">
+      return tarefas.length ? `
+    <div style="margin:16px 0;">
       <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Tarefas agendadas no HubSpot</label>
       <div style="display:flex;flex-direction:column;gap:6px;">
         ${tarefas.map(t => {
@@ -9303,10 +9482,15 @@ function fichaLeadFunilBodyHTML(l) {
           </div>`;
         }).join('')}
       </div>
-    </div>` : ''}
-    <div style="background:var(--panel2);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--muted);margin-bottom:16px;">
-      Histórico completo de notas e interações fica no HubSpot — aqui você vê o essencial pra decidir sem trocar de tela.
-    </div>`;
+    </div>` : '';
+    })()}
+    <div style="margin:16px 0 8px;font-size:9.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--ter);">Última nota</div>
+    ${(() => {
+      const notas = Array.isArray(l.notas) ? l.notas : null;
+      const textoBruto = notas && notas[0] ? (notas[0].texto || '').trim() : '';
+      if (!textoBruto) return `<div style="background:var(--amber-soft);border-left:3px solid var(--amber);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--amber-ink);font-weight:600;line-height:1.5;">Nenhuma nota registrada — este lead está "sem interação" no CRM.</div>`;
+      const quando = notas[0].data ? new Date(notas[0].data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+      return `<div style="background:var(--panel2);border-left:3px solid var(--line-btn);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--body,var(--ink));line-height:1.55;">${esc(textoBruto)}<span style="display:block;margin-top:6px;font-size:10.5px;color:var(--ter);">— ${esc(l.vendedor || 'você')}${quando ? ' · ' + quando : ''} (via Cockpit)</span></div>`;
     })()}
 
     <!-- BLOCO 42 (14/08/26) — editar direto do Cockpit: nota e próximo passo escrevem
@@ -9336,7 +9520,10 @@ function fichaLeadFunilBodyHTML(l) {
       </div>
     </div>
 
-    <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:var(--red);color:#fff;border-radius:999px;padding:9px 18px;font-size:12.5px;font-weight:700;">Abrir no HubSpot ↗</a>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:6px;">
+      <button type="button" class="ficha-mover-abrir" data-lead-id="${l.id}" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(229,26,49,.35);">Mover de etapa ▸</button>
+      <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:none;color:var(--body,var(--ink));border:1px solid var(--line-btn);border-radius:999px;padding:9px 18px;font-size:12.5px;font-weight:700;text-decoration:none;">HubSpot ↗</a>
+    </div>
   `;
 }
 // BLOCO 44 (14/08/26) — busca o lead completo (com celular/endereço/tarefas, que só
@@ -9720,6 +9907,35 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
 // Três portas usam esta mesma função (seta do card, arrasto do kanban, trilha da ficha).
 let passagemVoltarPara = null;
 
+
+// BLOCO 50 — Vista A do handoff (§7): "escolher destino". Usada pelo botão "Mover de
+// etapa ▸" do rodapé da ficha e pelo "mover ▸" da lista. Mostra os 6 alvos grandes;
+// a etapa atual fica esmaecida e não clicável. Escolher um leva pra Vista B (o drawer
+// de confirmação que já existe, abrirPassagemDeEtapa).
+function abrirEscolhaDeEtapa(lead, aoConcluir) {
+  stageModalName.textContent = lead.name || 'Negócio';
+  stageModalMeta.innerHTML = '<span style="font-size:12px;color:var(--muted2);">Escolha a etapa de destino</span>';
+  stageModalBody.innerHTML = `<div style="display:flex;flex-direction:column;gap:6px;">
+    ${ORDEM_ETAPAS_FUNIL.map(sid => {
+      const atual = sid === lead.stageId;
+      const campos = CAMPOS_POR_ETAPA[sid] || [];
+      const exige = campos.filter(c => c.obrigatorio).length;
+      const cor = stageColor(sid);
+      const sla = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[sid] : null;
+      return `<button type="button" class="ficha-escolha-etapa" data-etapa-id="${sid}" ${atual ? 'disabled' : ''}
+        style="display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:11px 14px;cursor:${atual ? 'default' : 'pointer'};text-align:left;font:inherit;opacity:${atual ? '.45' : '1'};transition:border-color .13s var(--ease),background .13s var(--ease);">
+        <span style="width:9px;height:9px;border-radius:99px;background:${cor};flex:none;"></span>
+        <b style="font-size:12.5px;flex:1;">${esc(STAGE_LABELS[sid])}</b>
+        <span style="font-size:10.5px;color:var(--ter);">${atual ? 'etapa atual' : `${sla ? 'SLA ' + sla + 'd' : ''}${exige ? ` · exige ${exige} campo${exige === 1 ? '' : 's'}` : ''}`}</span>
+      </button>`;
+    }).join('')}
+  </div>`;
+  stageOverlay.classList.add('show');
+  stageModalBody.querySelectorAll('.ficha-escolha-etapa:not([disabled])').forEach(btn => {
+    btn.addEventListener('click', () => abrirPassagemDeEtapa(lead, btn.dataset.etapaId, aoConcluir));
+  });
+}
+
 function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   const de = lead.stageId || null;
   const para = String(novaEtapaId);
@@ -9889,6 +10105,16 @@ function wireFichaLeadFunilEdicao(container, l) {
       });
     });
   });
+
+  // BLOCO 50 (14/08/26) — botão "Mover de etapa ▸" do rodapé (§7, Vista A do handoff):
+  // abre a escolha de destino com os 6 alvos grandes, em vez de forçar o clique preciso
+  // num segmento fino da trilha. Mesmo drawer de passagem no final das contas.
+  container.querySelectorAll('.ficha-mover-abrir').forEach(btn => {
+    btn.addEventListener('click', () => abrirEscolhaDeEtapa({ ...l, ownerId }, () => abrirFichaLeadFunilDrawer(l, stageModalVoltarPara)));
+  });
+
+  // BLOCO 50 — propriedades do negócio, editáveis inline (toque → input → grava).
+  ligarPropsFichaEditaveis(container, l);
 
   // ---- 2. adicionar nota ----
   const btnNota = container.querySelector('.ficha-nota-salvar');
