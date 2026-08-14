@@ -9024,14 +9024,48 @@ function fichaLeadFunilBodyHTML(l) {
       ${l.vendedor ? `<span style="background:var(--panel2);color:var(--muted2);border-radius:999px;padding:4px 12px;font-size:11.5px;">${esc(l.vendedor)}</span>` : ''}
     </div>
     ${idxAtual >= 0 ? `
-    <div style="display:grid;grid-template-columns:repeat(${ORDEM_FUNIL_FICHA.length},1fr);gap:4px;font-size:9.5px;text-align:center;color:var(--muted2);margin-bottom:16px;">
+    <!-- BLOCO 42 (14/08/26) — a trilha era só visual; virou clicável. Cada segmento
+         chama mudarEtapaNegocio, que escreve no HubSpot de verdade (api/mudar-etapa-
+         negocio.js). Continua mostrando o progresso do jeito que já mostrava — só
+         ganhou data-etapa-idx pra saber em qual etapa o clique caiu. -->
+    <div class="ficha-trilha" data-lead-id="${l.id}" data-owner-id="${l.ownerId || ''}" style="display:grid;grid-template-columns:repeat(${ORDEM_FUNIL_FICHA.length},1fr);gap:4px;font-size:9.5px;text-align:center;color:var(--muted2);margin-bottom:16px;">
       ${ORDEM_FUNIL_FICHA.map((sid, i) => `
-        <span><span style="display:block;height:5px;background:${i < idxAtual ? 'var(--green)' : i === idxAtual ? (l.slaBreach ? 'var(--red)' : stageColor(sid)) : 'var(--sunk)'};border-radius:3px;margin-bottom:3px;"></span>${i === idxAtual ? `<b style="color:${l.slaBreach ? 'var(--red)' : 'var(--ink)'};">${(STAGE_LABELS[sid] || '').split('/')[0].split(' ')[0]}</b>` : (STAGE_LABELS[sid] || '').split('/')[0].split(' ')[0]}</span>
+        <button type="button" class="ficha-trilha-seg" data-etapa-idx="${i}" data-etapa-id="${sid}" title="Mover pra ${esc(STAGE_LABELS[sid] || '')}" style="background:none;border:none;padding:0;cursor:pointer;font:inherit;color:inherit;">
+          <span style="display:block;height:5px;background:${i < idxAtual ? 'var(--green)' : i === idxAtual ? (l.slaBreach ? 'var(--red)' : stageColor(sid)) : 'var(--sunk)'};border-radius:3px;margin-bottom:3px;"></span>${i === idxAtual ? `<b style="color:${l.slaBreach ? 'var(--red)' : 'var(--ink)'};">${(STAGE_LABELS[sid] || '').split('/')[0].split(' ')[0]}</b>` : (STAGE_LABELS[sid] || '').split('/')[0].split(' ')[0]}
+        </button>
       `).join('')}
     </div>` : ''}
     <div style="background:var(--panel2);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--muted);margin-bottom:16px;">
       Telefone, endereço e histórico de contato ficam no HubSpot — não replicamos esse dado aqui pra evitar informação desatualizada.
     </div>
+
+    <!-- BLOCO 42 (14/08/26) — editar direto do Cockpit: nota e próximo passo escrevem
+         de verdade no HubSpot (associados a este negócio). O que muda aqui NÃO aparece
+         sozinho no Cockpit até a próxima atualização automática (23:59/08:59/15h) — só
+         no HubSpot é imediato. Isso é dito explicitamente no aviso de sucesso, não só
+         aqui, porque "achei que tinha atualizado" já causou confusão neste projeto antes. -->
+    <div class="ficha-editar" data-lead-id="${l.id}" data-owner-id="${l.ownerId || ''}" style="border-top:1px solid var(--line);padding-top:16px;margin-bottom:16px;display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Adicionar nota</label>
+        <textarea class="ficha-nota-texto" rows="3" placeholder="Ex.: falei com o decisor, ele pediu proposta por e-mail até quinta." style="width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:inherit;font-size:12.5px;resize:vertical;"></textarea>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:7px;">
+          <button type="button" class="ficha-nota-salvar" style="background:var(--ink);color:var(--panel);border:none;border-radius:999px;padding:8px 16px;font:700 12px inherit;cursor:pointer;">Salvar nota no HubSpot</button>
+          <span class="ficha-nota-status" style="font-size:11.5px;color:var(--muted2);"></span>
+        </div>
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Planejar próximo passo</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input type="text" class="ficha-passo-texto" placeholder="Ex.: ligar cobrando a proposta" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;">
+          <input type="date" class="ficha-passo-data" style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:7px;">
+          <button type="button" class="ficha-passo-salvar" style="background:var(--ink);color:var(--panel);border:none;border-radius:999px;padding:8px 16px;font:700 12px inherit;cursor:pointer;">Salvar próximo passo no HubSpot</button>
+          <span class="ficha-passo-status" style="font-size:11.5px;color:var(--muted2);"></span>
+        </div>
+      </div>
+    </div>
+
     <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:var(--red);color:#fff;border-radius:999px;padding:9px 18px;font-size:12.5px;font-weight:700;">Abrir no HubSpot ↗</a>
   `;
 }
@@ -9045,7 +9079,147 @@ function abrirFichaLeadFunilDrawer(l, voltarPara) {
   stageOverlay.classList.add('show');
   const btnVoltar = document.getElementById('stageFichaVoltar');
   if (btnVoltar) btnVoltar.addEventListener('click', () => { if (stageModalVoltarPara) stageModalVoltarPara(); });
+  wireFichaLeadFunilEdicao(stageModalBody, l);
 }
+
+// ===== BLOCO 42 (14/08/26) — "o executivo tem que poder limpar o lead, adicionar
+// nota, fazer o planejamento pelo cockpit, e ele registrar automaticamente no
+// hubspot" (Julyan). Três ações, três endpoints (mesma arquitetura de
+// api/criar-tarefa-rota.js — token do HubSpot nunca sai do servidor):
+//   1. clicar num segmento da trilha  → api/mudar-etapa-negocio.js (dealstage)
+//   2. "Salvar nota"                  → api/criar-nota-negocio.js (Note associada)
+//   3. "Salvar próximo passo"         → api/criar-proximo-passo.js (Task associada)
+// IMPORTANTE: sucesso aqui é IMEDIATO no HubSpot, mas o Cockpit só reflete essa
+// mudança na próxima atualização automática (23:59/08:59/15h) — os três avisos de
+// sucesso dizem isso explicitamente, porque "achei que tinha atualizado sozinho"
+// já causou confusão de diagnóstico neste projeto antes (DATA.agenda é a mesma lição).
+function wireFichaLeadFunilEdicao(container, l) {
+  const dealId = l.id, ownerId = l.ownerId || null;
+
+  // ---- 1. mudar etapa ----
+  container.querySelectorAll('.ficha-trilha-seg').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const novaEtapa = btn.dataset.etapaId;
+      if (novaEtapa === l.stageId) return; // clicou na etapa atual — nada a fazer
+      const trilha = container.querySelector('.ficha-trilha');
+      const label = (STAGE_LABELS[novaEtapa] || novaEtapa);
+      btn.disabled = true;
+      trilha.style.opacity = '.6';
+      try {
+        const token = await tokenDeSessaoGlobal();
+        const resp = await comPrazoGlobal(async (signal) => fetch('/api/mudar-etapa-negocio', {
+          method: 'POST', signal,
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+          body: JSON.stringify({ dealId, ownerId, novaEtapa })
+        }), 8000, 'mudar-etapa-negocio');
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok || !data.ok) {
+          mostrarToast(`Não consegui mover "${l.name}" pra ${label} no HubSpot. ${(data && data.erro) || ''}`, 'erro');
+          trilha.style.opacity = '';
+          btn.disabled = false;
+          return;
+        }
+        l.stageId = novaEtapa;
+        l.stage = label;
+        stageModalBody.innerHTML = fichaLeadFunilBodyHTML(l);
+        wireFichaLeadFunilEdicao(stageModalBody, l);
+        mostrarToast(`"${l.name}" movido pra ${label} no HubSpot. O Cockpit atualiza isso na próxima rodada automática (23:59/08:59/15h) — no HubSpot já está lá agora.`, 'sucesso');
+      } catch (e) {
+        mostrarToast(`Falha ao falar com o HubSpot: ${String((e && e.message) || e)}`, 'erro');
+        trilha.style.opacity = '';
+        btn.disabled = false;
+      }
+    });
+  });
+
+  // ---- 2. adicionar nota ----
+  const btnNota = container.querySelector('.ficha-nota-salvar');
+  if (btnNota) btnNota.addEventListener('click', async () => {
+    const campo = container.querySelector('.ficha-nota-texto');
+    const statusEl = container.querySelector('.ficha-nota-status');
+    const texto = (campo.value || '').trim();
+    if (!texto) { statusEl.textContent = 'Escreva a nota antes de salvar.'; statusEl.style.color = 'var(--red)'; return; }
+    btnNota.disabled = true;
+    statusEl.style.color = 'var(--muted2)';
+    statusEl.textContent = 'Salvando no HubSpot...';
+    try {
+      const token = await tokenDeSessaoGlobal();
+      const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
+        method: 'POST', signal,
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify({ dealId, ownerId, texto })
+      }), 8000, 'criar-nota-negocio');
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok || !data.ok) {
+        statusEl.textContent = (data && data.erro) || 'Não consegui salvar a nota.';
+        statusEl.style.color = 'var(--red)';
+        btnNota.disabled = false;
+        return;
+      }
+      campo.value = '';
+      if (data.aviso) {
+        statusEl.textContent = data.aviso;
+        statusEl.style.color = 'var(--amber-ink)';
+        mostrarToast(data.aviso, 'atencao');
+      } else {
+        statusEl.textContent = 'Nota salva no HubSpot.';
+        statusEl.style.color = 'var(--green)';
+        mostrarToast(`Nota adicionada a "${l.name}" no HubSpot.`, 'sucesso');
+      }
+      btnNota.disabled = false;
+    } catch (e) {
+      statusEl.textContent = 'Falha ao falar com o HubSpot: ' + String((e && e.message) || e);
+      statusEl.style.color = 'var(--red)';
+      btnNota.disabled = false;
+    }
+  });
+
+  // ---- 3. planejar próximo passo ----
+  const btnPasso = container.querySelector('.ficha-passo-salvar');
+  if (btnPasso) btnPasso.addEventListener('click', async () => {
+    const campoTexto = container.querySelector('.ficha-passo-texto');
+    const campoData = container.querySelector('.ficha-passo-data');
+    const statusEl = container.querySelector('.ficha-passo-status');
+    const texto = (campoTexto.value || '').trim();
+    const data = campoData.value || '';
+    if (!texto || !data) { statusEl.textContent = 'Preencha o texto e a data antes de salvar.'; statusEl.style.color = 'var(--red)'; return; }
+    btnPasso.disabled = true;
+    statusEl.style.color = 'var(--muted2)';
+    statusEl.textContent = 'Salvando no HubSpot...';
+    try {
+      const token = await tokenDeSessaoGlobal();
+      const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-proximo-passo', {
+        method: 'POST', signal,
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+        body: JSON.stringify({ dealId, ownerId, texto, data })
+      }), 8000, 'criar-proximo-passo');
+      const respData = await resp.json().catch(() => ({}));
+      if (!resp.ok || !respData.ok) {
+        statusEl.textContent = (respData && respData.erro) || 'Não consegui salvar o próximo passo.';
+        statusEl.style.color = 'var(--red)';
+        btnPasso.disabled = false;
+        return;
+      }
+      campoTexto.value = '';
+      campoData.value = '';
+      if (respData.aviso) {
+        statusEl.textContent = respData.aviso;
+        statusEl.style.color = 'var(--amber-ink)';
+        mostrarToast(respData.aviso, 'atencao');
+      } else {
+        statusEl.textContent = 'Próximo passo salvo no HubSpot.';
+        statusEl.style.color = 'var(--green)';
+        mostrarToast(`Próximo passo planejado pra "${l.name}" no HubSpot.`, 'sucesso');
+      }
+      btnPasso.disabled = false;
+    } catch (e) {
+      statusEl.textContent = 'Falha ao falar com o HubSpot: ' + String((e && e.message) || e);
+      statusEl.style.color = 'var(--red)';
+      btnPasso.disabled = false;
+    }
+  });
+}
+
 
 function renderStageModalBody() {
   const { stageId, label, leads, sla, desc } = stageModalAtual;
