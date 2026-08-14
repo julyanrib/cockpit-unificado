@@ -2000,7 +2000,7 @@
     scrollbar-color:var(--line-btn) transparent;scroll-snap-type:x proximity;}
   .kb-board::-webkit-scrollbar{height:8px;}
   .kb-board::-webkit-scrollbar-thumb{background:var(--line-btn);border-radius:99px;}
-  .kb-col{flex:0 0 268px;display:flex;flex-direction:column;min-height:120px;scroll-snap-align:start;
+  .kb-col{flex:0 0 240px;display:flex;flex-direction:column;min-height:120px;scroll-snap-align:start;
     background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
     transition:border-color .16s var(--ease),background .16s var(--ease);}
   .kb-col.is-alvo{border-color:var(--ink);background:var(--panel);box-shadow:0 12px 30px -18px rgba(26,22,19,.5);}
@@ -2013,7 +2013,7 @@
     border-radius:var(--r-pill);padding:2px 9px;font-variant-numeric:tabular-nums;flex:none;}
   .kb-col-sla{display:block;margin-top:4px;font-size:10px;font-weight:700;letter-spacing:.06em;
     text-transform:uppercase;color:var(--muted2);}
-  .kb-col-body{padding:10px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;max-height:56vh;
+  .kb-col-body{padding:10px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;max-height:44vh;
     scrollbar-width:thin;scrollbar-color:var(--line-btn) transparent;}
   .kb-col-body::-webkit-scrollbar{width:6px;}
   .kb-col-body::-webkit-scrollbar-thumb{background:var(--line-btn);border-radius:99px;}
@@ -2077,18 +2077,27 @@
   .pe-campo small{display:block;margin-top:4px;font-size:10.5px;color:var(--muted2);line-height:1.45;}
   .pe-campo small.erro{color:var(--red);font-weight:700;}
   .pe-acoes{display:flex;gap:9px;align-items:center;}
-  .pe-confirmar{flex:1;min-height:44px;border:0;border-radius:var(--r-pill);background:var(--red);color:#fff;
-    font:800 13.5px 'DM Sans',sans-serif;cursor:pointer;box-shadow:0 16px 34px -20px rgba(229,26,49,1);
+  /* AJUSTE (14/08/26, Julyan: "nao quero nada gigante na tela") — 44px de altura
+     era maior que qualquer botão do resto do cockpit (o "Salvar nota no HubSpot",
+     padrão do app, sai de padding:8px 16px sem min-height forçado, ~30px). 38px
+     ainda é confortável pra clicar mas para de destoar do resto da interface. */
+  .pe-confirmar{flex:1;min-height:38px;border:0;border-radius:var(--r-pill);background:var(--red);color:#fff;
+    font:800 12.5px 'DM Sans',sans-serif;cursor:pointer;box-shadow:0 12px 26px -18px rgba(229,26,49,1);
     transition:transform .14s var(--ease),opacity .14s var(--ease);}
   .pe-confirmar:hover:not(:disabled){transform:translateY(-1px);}
   .pe-confirmar:disabled{opacity:.5;cursor:default;box-shadow:none;}
-  .pe-cancelar{min-height:44px;padding:0 18px;border:1px solid var(--line-btn);background:transparent;
-    color:var(--muted);border-radius:var(--r-pill);font:700 12.5px 'DM Sans',sans-serif;cursor:pointer;}
+  .pe-cancelar{min-height:38px;padding:0 16px;border:1px solid var(--line-btn);background:transparent;
+    color:var(--muted);border-radius:var(--r-pill);font:700 12px 'DM Sans',sans-serif;cursor:pointer;}
   .pe-cancelar:hover{color:var(--ink);border-color:var(--ink);}
   .pe-status{font-size:11.5px;line-height:1.5;margin-top:10px;color:var(--muted2);}
 
   @media (hover:none){ .kb-setas{opacity:1;} }
-  @media (max-width:860px){ .kb-col{flex:0 0 82vw;} .kb-dica{display:none;} }
+  /* AJUSTE (14/08/26, Julyan: "nao quero nada gigante na tela") — 82vw fazia uma
+     única coluna do kanban tomar quase a tela inteira num celular; a pessoa via 1
+     card por vez e achava que o app tinha travado. 210px é compacto (perto do
+     tamanho do card no desktop) e sempre deixa uma fatia da próxima coluna visível,
+     sinalizando que dá pra arrastar a lista pros lados. */
+  @media (max-width:860px){ .kb-col{flex:0 0 210px;} .kb-dica{display:none;} }
   /* =================== FIM BLOCO 49 — KANBAN DE ETAPAS =================== */
 
   /* ===================== MAPA DE PLANEJAMENTO =====================
@@ -9490,7 +9499,16 @@ function fichaLeadFunilBodyHTML(l) {
       const textoBruto = notas && notas[0] ? (notas[0].texto || '').trim() : '';
       if (!textoBruto) return `<div style="background:var(--amber-soft);border-left:3px solid var(--amber);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--amber-ink);font-weight:600;line-height:1.5;">Nenhuma nota registrada — este lead está "sem interação" no CRM.</div>`;
       const quando = notas[0].data ? new Date(notas[0].data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
-      return `<div style="background:var(--panel2);border-left:3px solid var(--line-btn);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--body,var(--ink));line-height:1.55;">${esc(textoBruto)}<span style="display:block;margin-top:6px;font-size:10.5px;color:var(--ter);">— ${esc(l.vendedor || 'você')}${quando ? ' · ' + quando : ''} (via Cockpit)</span></div>`;
+      // BUG PEGO EM PRODUÇÃO (14/08/26): esta linha dizia "(via Cockpit)" pra TODA
+      // nota, sem exceção — inclusive as que vieram de outro canal (o texto de uma
+      // nota real chegou a conter literalmente "via App Outbound" e a assinatura
+      // ainda assim escrevia "via Cockpit" embaixo, contradizendo o próprio conteúdo).
+      // O HubSpot não devolve canal/origem da nota (só texto e data — conferido em
+      // scripts/fetch-hubspot.js), e o botão "Salvar nota" desta ficha não atualiza
+      // l.notas localmente (só reflete depois do próximo sync) — ou seja, a nota
+      // exibida aqui NUNCA é a que acabou de ser salva por aqui. Não tem como saber
+      // o canal de verdade, então a assinatura para de inventar um.
+      return `<div style="background:var(--panel2);border-left:3px solid var(--line-btn);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--body,var(--ink));line-height:1.55;">${esc(textoBruto)}<span style="display:block;margin-top:6px;font-size:10.5px;color:var(--ter);">— ${esc(l.vendedor || 'você')}${quando ? ' · ' + quando : ''}</span></div>`;
     })()}
 
     <!-- BLOCO 42 (14/08/26) — editar direto do Cockpit: nota e próximo passo escrevem
