@@ -13,6 +13,44 @@
 const PIPELINE_FIELD_SALES = '916011864';
 const STAGE_BACKLOG = '1396007427'; // "Backlog" — mesma etapa onde o RPA já cria os testes
 
+// BLOCO 49 (14/08/26) — Julyan: "o executivo tem que conseguir adicionar no hub na
+// etapa prospecção as contas alvo". Antes TODA criação caía em Backlog e alguém tinha
+// que mover à mão depois (na prática, ninguém movia — o Backlog virou depósito). Agora
+// o cliente diz em qual etapa nasce; Backlog segue sendo o padrão pra quem não disser,
+// então o RPA e qualquer chamada antiga continuam funcionando igual.
+const ETAPAS_DE_ENTRADA = ['1396007427', '1395880469']; // Backlog, Prospecção
+
+// Mesma fronteira da rota mudar-etapa-negocio: só estas props podem ser escritas daqui.
+const PROPS_PERMITIDAS = ['celular', 'cep', 'bairro', 'cidade', 'logradouro', 'numero',
+  'amount', 'valor_de_mrr', 'data_da_reuniao', 'reuniao_agendada'];
+const PISO_VALOR = 349;
+const PROPS_COM_PISO = ['amount', 'valor_de_mrr'];
+
+function limparPropriedades(bruto) {
+  if (!bruto || typeof bruto !== 'object') return { propriedades: {}, erro: null };
+  const propriedades = {};
+  for (const [chave, valor] of Object.entries(bruto)) {
+    if (!PROPS_PERMITIDAS.includes(chave)) {
+      return { propriedades: null, erro: `Propriedade não permitida por esta rota: "${chave}".` };
+    }
+    if (valor == null || String(valor).trim() === '') continue;
+    const texto = String(valor).trim();
+    if (PROPS_COM_PISO.includes(chave)) {
+      const n = Number(texto);
+      if (!isFinite(n) || n <= 0) return { propriedades: null, erro: `Valor inválido em "${chave}".` };
+      if (n < PISO_VALOR) return { propriedades: null, erro: `"${chave}" abaixo do piso de R$${PISO_VALOR}.` };
+      propriedades[chave] = String(n);
+      continue;
+    }
+    if (chave === 'reuniao_agendada' && texto !== 'true' && texto !== 'false') {
+      return { propriedades: null, erro: 'reuniao_agendada só aceita true ou false.' };
+    }
+    if (texto.length > 2000) return { propriedades: null, erro: `"${chave}" é longo demais.` };
+    propriedades[chave] = texto;
+  }
+  return { propriedades, erro: null };
+}
+
 // usuarios.json vai junto no deploy (require com caminho estático é empacotado pela Vercel).
 // Formato real do arquivo: { _comment, usuarios: [...] } — não é um array direto.
 let USUARIOS = [];
@@ -65,10 +103,16 @@ module.exports = async function handler(req, res) {
   }
 
   // ---- 3. dados do lead, validados ----
-  const { nome, ownerId, telefone, endereco, bairro, cidade, tipo, nota, avaliacoes } = req.body || {};
+  const { nome, ownerId, telefone, endereco, bairro, cidade, tipo, nota, avaliacoes, etapa, propriedades } = req.body || {};
   if (!nome || !ownerId) {
     return res.status(400).json({ erro: 'Faltam campos obrigatórios: nome e ownerId.' });
   }
+  const etapaEntrada = etapa ? String(etapa) : STAGE_BACKLOG;
+  if (!ETAPAS_DE_ENTRADA.includes(etapaEntrada)) {
+    return res.status(400).json({ erro: 'Etapa de entrada inválida — um negócio novo só pode nascer em Backlog ou Prospecção.' });
+  }
+  const limpeza = limparPropriedades(propriedades);
+  if (limpeza.erro) return res.status(400).json({ erro: limpeza.erro });
 
   // Escopo por papel: executivo só cria negócio atribuído A ELE MESMO; gestor pode
   // atribuir a qualquer executivo. (Antes qualquer sessão podia criar em nome de qualquer um.)
@@ -83,7 +127,7 @@ module.exports = async function handler(req, res) {
     (endereco || bairro || cidade) ? `Endereço: ${[endereco, bairro, cidade].filter(Boolean).join(' — ')}` : null,
     tipo ? `Tipo: ${tipo}` : null,
     (nota != null && avaliacoes != null) ? `Google: ${nota} · ${avaliacoes} avaliações` : null,
-    'Origem: conta-alvo (Leads da praça) — criado pelo cockpit.'
+    `Origem: conta-alvo — criado pelo cockpit direto em ${etapaEntrada === STAGE_BACKLOG ? 'Backlog' : 'Prospecção'}.`
   ].filter(Boolean);
 
   try {
@@ -92,9 +136,10 @@ module.exports = async function handler(req, res) {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         properties: {
+          ...limpeza.propriedades,
           dealname: nome,
           pipeline: PIPELINE_FIELD_SALES,
-          dealstage: STAGE_BACKLOG,
+          dealstage: etapaEntrada,
           hubspot_owner_id: String(ownerId),
           description: linhas.join('\n')
         }
@@ -104,7 +149,11 @@ module.exports = async function handler(req, res) {
     if (!resp.ok) {
       return res.status(resp.status).json({ erro: data.message || 'HubSpot recusou a criação.', detalhe: data });
     }
-    return res.status(200).json({ ok: true, id: data.id, url: `https://app.hubspot.com/contacts/24373118/record/0-3/${data.id}` });
+    return res.status(200).json({
+      ok: true, id: data.id, etapa: etapaEntrada,
+      propriedadesGravadas: Object.keys(limpeza.propriedades),
+      url: `https://app.hubspot.com/contacts/24373118/record/0-3/${data.id}`
+    });
   } catch (e) {
     return res.status(500).json({ erro: 'Falha ao falar com o HubSpot: ' + String(e.message || e) });
   }
