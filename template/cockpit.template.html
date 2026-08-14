@@ -254,6 +254,14 @@
   .acao-item .meta{font-size:11px;color:var(--muted2);white-space:nowrap;}
   .acao-item .flag{font-size:10.5px;font-weight:800;color:var(--tone-ink);background:var(--tone-soft);border-radius:var(--r-pill);padding:2px 8px;white-space:nowrap;font-variant-numeric:tabular-nums;}
   .acao-go{opacity:0;transform:translateX(-3px);transition:all .15s var(--ease);font-weight:800;color:var(--tone-ink);font-size:12px;flex:none;}
+  /* BLOCO 51 — "agendar" por lead nos cards do Faça isso hoje: só aparece no hover
+     da linha (mesmo princípio do mover ▸ da lista), abre a ficha com foco no passo. */
+  .acao-agendar{opacity:0;flex:none;border:1px solid var(--line-btn);background:var(--panel);color:var(--muted);
+    font:700 10px 'DM Sans',sans-serif;border-radius:999px;padding:3px 9px;cursor:pointer;
+    transition:opacity .13s var(--ease),border-color .13s var(--ease),color .13s var(--ease);}
+  .acao-item:hover .acao-agendar{opacity:1;}
+  .acao-agendar:hover{border-color:var(--ink);color:var(--ink);}
+  @media (hover:none){ .acao-agendar{opacity:1;} }
   /* BLOCO 50 — "mover ▸" só aparece no hover da linha, pra lista não competir com o
      resto da UI o tempo todo (mesmo princípio de .kb-setas). */
   .trow-mover{opacity:0;transition:opacity .13s var(--ease);}
@@ -2023,8 +2031,14 @@
      etapa"), nome em Poppins, metadados em DM Sans, e as setas só aparecem no hover
      pra não poluir — no toque, elas ficam sempre visíveis (regra no fim do arquivo). */
   .kb-card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);
-    padding:11px 12px 10px 15px;cursor:grab;text-align:left;width:100%;font:inherit;color:inherit;display:block;
+    padding:11px 26px 10px 15px;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit;display:block;
     transition:transform .16s var(--ease),box-shadow .16s var(--ease),border-color .16s var(--ease);}
+  /* BLOCO 51 — alça de arrasto: só ela é draggable, o card vira clique puro. */
+  .kb-arrasto{position:absolute;top:6px;right:6px;width:20px;height:20px;display:grid;place-items:center;
+    color:var(--ter);font-size:13px;cursor:grab;border-radius:6px;user-select:none;
+    transition:background .14s var(--ease),color .14s var(--ease);}
+  .kb-arrasto:hover{background:var(--sunk);color:var(--ink);}
+  .kb-arrasto:active{cursor:grabbing;}
   .kb-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:var(--r-md) 0 0 var(--r-md);background:var(--kb-cor,var(--line-btn));}
   .kb-card:hover{transform:translateY(-2px);box-shadow:0 14px 28px -18px rgba(26,22,19,.55);border-color:var(--line-btn);}
   .kb-card:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
@@ -4301,7 +4315,7 @@ async function renderMeuFunil() {
               const temData = dt && !isNaN(dt.getTime());
               const chip = temData
                 ? `<span class="lead-chip chip-green">${dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>`
-                : `<span class="lead-chip chip-red">agir</span>`;
+                : `<span class="lead-chip chip-red" data-chip-agendar title="Agendar próximo passo">agendar</span>`;
               return `<button type="button" class="lead" data-lead-id="${l.id}" data-stage-id="${l.stageId || ''}" data-stage="${esc(STAGE_LABELS[l.stageId] || '')}" data-dias="${l.dias != null ? l.dias : ''}" data-sla-breach="${l.slaBreach ? '1' : ''}" style="text-align:left;background:none;border:none;font:inherit;color:inherit;cursor:pointer;">
                 <span class="lead-nome">${esc(l.name)}</span>
                 <span class="lead-sub"><span class="stage-tag" style="background:${stageColor(l.stageId)};">${esc(STAGE_LABELS[l.stageId] || '')}</span><span class="sep">·</span>${l.dias != null ? l.dias + 'd na etapa' : '—'}<span class="sep">·</span>${temData ? (dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' · ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })) : 'sem próxima ação'}</span>
@@ -4327,7 +4341,7 @@ async function renderMeuFunil() {
               </button>`;
             }).join('')}
           </div>
-          <div class="grupo-foot"><span>${cardTravados.length} já passaram de 2× o prazo</span><span class="link-fake" data-abretodos style="font-weight:700;cursor:pointer;color:var(--red-dk);">abrir lista no CRM ↗</span></div>
+          <div class="grupo-foot"><span>${cardTravados.length} já passaram de 2× o prazo</span><span class="link-fake" data-verkanban style="font-weight:700;cursor:pointer;color:var(--red-dk);">ver no kanban →</span></div>
         </div>
 
         <div class="grupo" id="mfGrupoAlvo" style="--tone:var(--green);--tone-ink:var(--green);--tone-soft:var(--green-soft);">
@@ -4432,7 +4446,10 @@ async function renderMeuFunil() {
   // em vez de remontar um objeto parcial só com os data-* do card; os data-* seguem
   // como fallback pro caso raro do id não ser mais encontrado em DATA nesta sessão.
   el.querySelectorAll('.grupo-body button.lead[data-lead-id], .trow[data-lead-id]').forEach(elLead => {
-    elLead.addEventListener('click', () => {
+    elLead.addEventListener('click', (ev) => {
+      // BLOCO 51 — clicar no chip "agendar" (Quentes sem próxima ação) abre a MESMA
+      // ficha, mas já rolada e focada no campo de próximo passo.
+      const foco = ev.target && ev.target.closest && ev.target.closest('[data-chip-agendar]') ? 'passo' : null;
       const completo = buscarLeadFunilPorId(elLead.dataset.leadId);
       abrirFichaLeadFunilDrawer(completo || {
         id: elLead.dataset.leadId,
@@ -4443,7 +4460,7 @@ async function renderMeuFunil() {
         slaBreach: elLead.dataset.slaBreach === '1',
         ownerId: r.ownerId,
         vendedor: primeiroNome
-      }, () => renderMeuFunil());
+      }, () => renderMeuFunil(), foco);
     });
   });
 
@@ -4499,8 +4516,15 @@ async function renderMeuFunil() {
       if (tab) { activateTab(tab); if (tab === 'viewAgenda' && typeof renderAgenda === 'function') renderAgenda(); }
     });
   });
-  const abreTodos = el.querySelector('[data-abretodos]');
-  if (abreTodos) abreTodos.addEventListener('click', () => window.open('https://app.hubspot.com/contacts/24373118/objects/0-3/views/all/board', '_blank', 'noopener'));
+  // BLOCO 51 — "o crm agora é o cockpit" (Julyan): o rodapé do grupo Travados mandava
+  // pro board do HubSpot; agora ativa o kanban daqui e rola até ele. O caminho de
+  // depuração pro HubSpot continua existindo, mas dentro da ficha, discreto.
+  const verKanban = el.querySelector('[data-verkanban]');
+  if (verKanban) verKanban.addEventListener('click', () => {
+    meuFunilModo = 'kanban';
+    renderMeuFunil();
+    setTimeout(() => { const b = document.getElementById('kbBoard'); if (b) b.scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 120);
+  });
 
   // ---------- Carga assíncrona: contas-alvo (Supabase) ----------
   // Roda depois do primeiro paint de propósito — é uma consulta externa, e o resto da
@@ -4512,7 +4536,11 @@ async function renderMeuFunil() {
     const semanaAtras = addDays(hojeISO, -7);
     const [{ data: carteira, error: eCarteira }, { data: planoAmanha }] = await Promise.all([
       supa.from('leads_prospeccao')
-        .select('id,nome,bairro,cidade,avaliacoes,status,data_rota,created_at')
+        // BLOCO 51 — telefone/endereço/categoria/fonte/nota/company entram no select
+        // porque a conta-alvo agora abre a MESMA ficha da aba Prospecção ao clicar
+        // (antes era só leitura). Colunas confirmadas: a própria Prospecção carrega
+        // essa tabela com select('*') e a ficha lê todas elas em produção.
+        .select('id,nome,bairro,cidade,avaliacoes,status,data_rota,created_at,telefone,endereco,categoria,fonte,nota,hubspot_company_id')
         .eq('responsavel_owner_id', r.ownerId),
       supa.from('planos_diarios').select('data').eq('owner_id', r.ownerId).eq('data', addDays(hojeISO, 1)).limit(1)
     ]);
@@ -4534,15 +4562,21 @@ async function renderMeuFunil() {
       if (corpo) {
         corpo.innerHTML = semNegocioOrdenadas.length === 0
           ? '<div class="empty-state" style="padding:14px;">Sua carteira de prospecção está sem contas livres agora — hora de abastecer.</div>'
-          : semNegocioOrdenadas.slice(0, 12).map(c => {
+          : semNegocioOrdenadas.slice(0, 12).map((c, idx) => {
               const rotulo = naRota(c) ? 'na rota' : (c.status === 'na_rota' ? '2ª visita' : 'livre');
               const chipCls = naRota(c) ? 'chip-green' : (c.status === 'na_rota' ? 'chip-amber' : 'chip-mute');
-              return `<div class="lead">
+              // BLOCO 51 — a conta-alvo virou clicável: abre a ficha de prospecção
+              // (mesma da aba Prospecção), com "abrir negócio" e "levar pra rota".
+              return `<button type="button" class="lead" data-alvoidx="${idx}" style="text-align:left;background:none;border:none;font:inherit;color:inherit;cursor:pointer;width:100%;">
                 <span class="lead-nome">${esc(c.nome || '')}</span>
                 <span class="lead-sub">${esc(c.bairro || c.cidade || '')}${c.avaliacoes != null ? `<span class="sep">·</span>${Number(c.avaliacoes).toLocaleString('pt-BR')} avaliações` : ''}</span>
                 <span class="lead-chip ${chipCls}">${rotulo}</span>
-              </div>`;
+              </button>`;
             }).join('');
+        corpo.querySelectorAll('[data-alvoidx]').forEach(btn => btn.addEventListener('click', () => {
+          const c = semNegocioOrdenadas[Number(btn.dataset.alvoidx)];
+          if (c) abrirFichaProspeccaoDrawer({ ...c, responsavel_owner_id: r.ownerId });
+        }));
       }
       if (rodapeSpan) {
         const jaNaRota = semNegocioOrdenadas.filter(naRota).length;
@@ -4709,8 +4743,11 @@ function montarAcoesMeuFunil(r, dados) {
       titulo: 'Destravar quem passou de 2× o prazo da etapa',
       why: 'São negócios que já foram trabalhados e pararam. Avançar ou marcar como perdido — os dois liberam o funil.',
       itens: top3.map(l => ({ tipo: 'lead', id: l.id, nome: l.name, meta: STAGE_LABELS[l.stageId] || '', flag: `+${Math.max(0, (l.dias || 0) - ((DATA.stageMeta && DATA.stageMeta.slaDays && DATA.stageMeta.slaDays[l.stageId]) || l.dias || 0))}d`, raw: l })),
-      cta: { texto: 'Abrir o primeiro no CRM ↗', href: hsUrl(top3[0].id) },
-      sec: dados.cardTravados.length > 3 ? `ver os ${dados.cardTravados.length}` : null
+      // BLOCO 51 — "o crm agora é o cockpit, nao quero esses botoes de abrir no crm"
+      // (Julyan). O CTA abre a FICHA do primeiro travado aqui dentro — destravar é
+      // mover de etapa ou marcar o próximo passo, e os dois vivem na ficha.
+      cta: { texto: 'Destravar o primeiro', leadId: top3[0].id },
+      sec: dados.cardTravados.length > 3 ? `ver os ${dados.cardTravados.length} na lista` : null, secLista: true
     });
   }
   if (dados.cardSemPasso && dados.cardSemPasso.length) {
@@ -4720,7 +4757,11 @@ function montarAcoesMeuFunil(r, dados) {
       titulo: 'Marcar próximo passo nos quentes sem agenda',
       why: 'Negócio em Demo/Proposta, Negociação ou Ag. Pagamento sem data marcada esfria rápido. Uma tarefa resolve.',
       itens: top3.map(l => ({ tipo: 'lead', id: l.id, nome: l.name, meta: STAGE_LABELS[l.stageId] || '', flag: l.dias != null ? `${l.dias}d` : '', raw: l })),
-      cta: { texto: `Agendar os ${dados.cardSemPasso.length}`, href: hsUrl(top3[0].id) },
+      // BLOCO 51 — o botão dizia "Agendar" mas mandava pro HubSpot. Agora abre a
+      // ficha do primeiro com o cursor já no campo de próximo passo (foco='passo');
+      // salvou um, a ficha volta pra lista e ele segue pro próximo. "ver na agenda"
+      // continua levando pra Agenda — o Julyan gosta desse caminho.
+      cta: { texto: `Agendar o primeiro dos ${dados.cardSemPasso.length}`, leadId: top3[0].id, foco: 'passo' },
       sec: 'ver na agenda', secTab: 'viewAgenda'
     });
   }
@@ -4755,15 +4796,25 @@ function montarAcoesMeuFunil(r, dados) {
              de volta pro objeto "raw" guardado em "cards", então o clique abre a MESMA
              ficha rica (com propriedades editáveis) que o kanban e a lista abrem —
              nenhuma cópia parcial de lead reconstruída aqui. -->
-        ${c.itens.map((it, ii) => `<div class="acao-item" data-cardidx="${ci}" data-itemidx="${ii}"><b>${esc(it.nome || '')}</b><span class="meta">${esc(it.meta || '')}</span>${it.flag ? `<span class="flag">${esc(it.flag)}</span>` : ''}<span class="acao-go">→</span></div>`).join('')}
+        ${c.itens.map((it, ii) => `<div class="acao-item" data-cardidx="${ci}" data-itemidx="${ii}"><b>${esc(it.nome || '')}</b><span class="meta">${esc(it.meta || '')}</span>${it.flag ? `<span class="flag">${esc(it.flag)}</span>` : ''}${it.tipo === 'lead' ? `<button type="button" class="acao-agendar" data-agcardidx="${ci}" data-agitemidx="${ii}" title="Agendar próximo passo">agendar</button>` : ''}<span class="acao-go">→</span></div>`).join('')}
       </div>
       <div class="acao-foot">
-        ${c.cta.href ? `<a class="acao-cta" href="${c.cta.href}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;">${esc(c.cta.texto)}</a>` : `<button class="acao-cta" data-acaocta="${esc(c.cta.tab || '')}">${esc(c.cta.texto)}</button>`}
-        ${c.sec ? `<span class="acao-sec" data-acaosec="${esc(c.secTab || '')}">${esc(c.sec)}</span>` : ''}
+        ${c.cta.leadId ? `<button class="acao-cta" data-acaoctalead="${esc(String(c.cta.leadId))}" data-acaoctafoco="${esc(c.cta.foco || '')}">${esc(c.cta.texto)}</button>` : c.cta.href ? `<a class="acao-cta" href="${c.cta.href}" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;">${esc(c.cta.texto)}</a>` : `<button class="acao-cta" data-acaocta="${esc(c.cta.tab || '')}">${esc(c.cta.texto)}</button>`}
+        ${c.sec ? `<span class="acao-sec" ${c.secLista ? 'data-acaolista="1"' : `data-acaosec="${esc(c.secTab || '')}"`}>${esc(c.sec)}</span>` : ''}
       </div>
     </article>`;
   }).join('') + '</div>';
 
+  // BLOCO 51 — "ver os N na lista" (card Urgente): o link existia sem destino; agora
+  // abre a lista completa logo abaixo e rola até ela.
+  slot.querySelectorAll('[data-acaolista]').forEach(span => span.addEventListener('click', () => {
+    const det = document.querySelector('#meuFunilContent .todos');
+    if (det) { det.open = true; det.scrollIntoView({ block: 'start', behavior: 'smooth' }); }
+  }));
+  slot.querySelectorAll('[data-acaoctalead]').forEach(btn => btn.addEventListener('click', () => {
+    const completo = buscarLeadFunilPorId(btn.dataset.acaoctalead);
+    if (completo) abrirFichaLeadFunilDrawer(completo, () => renderMeuFunil(), btn.dataset.acaoctafoco || null);
+  }));
   slot.querySelectorAll('[data-acaocta]').forEach(btn => btn.addEventListener('click', () => {
     const tab = btn.dataset.acaocta;
     if (!tab) return;
@@ -4789,6 +4840,17 @@ function montarAcoesMeuFunil(r, dados) {
       } else if (it.tipo === 'alvo') {
         abrirFichaProspeccaoDrawer({ ...it.raw, responsavel_owner_id: r.ownerId });
       }
+    });
+  });
+  // BLOCO 51 — atalho "agendar" por lead nos itens: abre a ficha já com o cursor no
+  // próximo passo, com os tipos Follow-up/Visita/Reunião/Demo prontos pra marcar.
+  slot.querySelectorAll('.acao-agendar').forEach(btn => {
+    btn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const it = (cards[Number(btn.dataset.agcardidx)] || {}).itens[Number(btn.dataset.agitemidx)];
+      if (!it || !it.raw) return;
+      const completo = buscarLeadFunilPorId(it.raw.id) || it.raw;
+      abrirFichaLeadFunilDrawer(completo, () => renderMeuFunil(), 'passo');
     });
   });
 }
@@ -9525,8 +9587,16 @@ function fichaLeadFunilBodyHTML(l) {
           <span class="ficha-nota-status" style="font-size:11.5px;color:var(--muted2);"></span>
         </div>
       </div>
-      <div>
+      <div class="ficha-passo-sec">
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Planejar próximo passo</label>
+        <!-- BLOCO 51 (14/08/26) — Julyan: "dá pra colocar no card de cada lead, se é
+             follow, visita, reunião". O tipo escolhido vira o prefixo do título da
+             tarefa no HubSpot ("Visita — falar com o sócio"), então a Agenda e a Rota,
+             que já leem as tarefas, passam a saber QUE TIPO de compromisso é sem
+             nenhum campo novo no CRM. Pills opcionais: sem escolher, salva como antes. -->
+        <div class="ficha-passo-tipos" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          ${['Follow-up', 'Visita', 'Reunião', 'Demo'].map(t => `<button type="button" class="ficha-passo-tipo" data-tipo="${t}" style="border:1px solid var(--line-btn);background:var(--panel);color:var(--muted);border-radius:999px;padding:5px 12px;font:700 11px 'DM Sans',sans-serif;cursor:pointer;">${t}</button>`).join('')}
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <input type="text" class="ficha-passo-texto" placeholder="Ex.: ligar cobrando a proposta" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;">
           <input type="date" class="ficha-passo-data" style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;">
@@ -9538,9 +9608,13 @@ function fichaLeadFunilBodyHTML(l) {
       </div>
     </div>
 
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding-top:6px;">
-      <button type="button" class="ficha-mover-abrir" data-lead-id="${l.id}" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:10px 18px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(229,26,49,.35);">Mover de etapa ▸</button>
-      <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:none;color:var(--body,var(--ink));border:1px solid var(--line-btn);border-radius:999px;padding:9px 18px;font-size:12.5px;font-weight:700;text-decoration:none;">HubSpot ↗</a>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-top:6px;">
+      <button type="button" class="ficha-mover-abrir" data-lead-id="${l.id}" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:9px 18px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 4px 14px rgba(229,26,49,.35);">Mover de etapa ▸</button>
+      <!-- BLOCO 51 — "o crm agora é o cockpit... pode até ter, mas nao explicito assim"
+           (Julyan). O acesso ao HubSpot continua existindo pra depuração, mas como
+           link discreto de rodapé, não mais como botão do mesmo peso da ação principal. -->
+      <span style="flex:1;"></span>
+      <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="font-size:11px;font-weight:700;color:var(--ter);text-decoration:none;">registro no HubSpot ↗</a>
     </div>
   `;
 }
@@ -9585,9 +9659,16 @@ function kanbanCardHTML(l, slaDias) {
     proximaTxt = isNaN(d.getTime()) ? 'Próxima ação marcada'
       : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' · ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   }
-  return `<div class="kb-card${estourou ? ' is-estourado' : ''}" draggable="true" tabindex="0" role="button"
+  // BLOCO 51 (14/08/26) — BUG relatado pelo Julyan: "quando o executivo clica no
+  // lead... tá arrastando pro kanban... tem que abrir igual abre no do gestor". O
+  // card INTEIRO era draggable com cursor de agarrar: qualquer clique com 2-3px de
+  // movimento (o clique normal de qualquer mão) virava dragstart e o click morria —
+  // a ficha nunca abria. Agora o card é clique puro (abre a ficha) e o arrasto vive
+  // só na alça ⠿ do canto; as setas ← → continuam movendo sem arrastar nada.
+  return `<div class="kb-card${estourou ? ' is-estourado' : ''}" tabindex="0" role="button"
       data-kb-id="${esc(String(l.id))}" data-kb-etapa="${esc(String(l.stageId || ''))}"
       style="--kb-cor:${stageColor(l.stageId)};" aria-label="${esc(l.name || '')} — ${esc(STAGE_LABELS[l.stageId] || '')}">
+    <span class="kb-arrasto" draggable="true" title="Arraste pra mover de etapa" aria-hidden="true">⠿</span>
     <span class="kb-card-nome">${esc(l.name || 'Sem nome')}</span>
     <div class="kb-card-linha">
       <span class="kb-chip ${estourou ? 'quente' : 'ok'}">${dias != null ? dias + 'd na etapa' : 'sem data'}</span>
@@ -9600,7 +9681,7 @@ function kanbanCardHTML(l, slaDias) {
     ${slaDias ? `<div class="kb-sla"><i style="width:${Math.max(4, pct)}%;background:${corSla};"></i></div>` : ''}
     <div class="kb-setas">
       <button type="button" class="kb-seta" data-kb-mover="tras" ${idx <= 0 ? 'disabled' : ''} title="Voltar uma etapa">←</button>
-      <button type="button" class="kb-seta" data-kb-ficha title="Abrir ficha">ficha</button>
+      <button type="button" class="kb-seta" data-kb-agendar title="Agendar próximo passo">agendar</button>
       <button type="button" class="kb-seta" data-kb-mover="frente" ${idx < 0 || idx >= ORDEM_ETAPAS_FUNIL.length - 1 ? 'disabled' : ''} title="Avançar uma etapa">→</button>
     </div>
   </div>`;
@@ -9650,16 +9731,22 @@ function ligarKanban(raiz, leads, redesenhar) {
   raiz.querySelectorAll('.kb-card').forEach(card => {
     const lead = porId.get(String(card.dataset.kbId));
 
-    card.addEventListener('dragstart', (ev) => {
-      kanbanArrastando = String(card.dataset.kbId);
-      card.classList.add('is-arrastando');
-      try { ev.dataTransfer.setData('text/plain', kanbanArrastando); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {}
-    });
-    card.addEventListener('dragend', () => {
-      card.classList.remove('is-arrastando');
-      kanbanArrastando = null;
-      raiz.querySelectorAll('.kb-col.is-alvo').forEach(c => c.classList.remove('is-alvo'));
-    });
+    // BLOCO 51 — dragstart mudou do card pra alça ⠿ (ver comentário no kanbanCardHTML):
+    // o card virou clique puro pra ficha abrir sempre, como no gestor.
+    const alca = card.querySelector('.kb-arrasto');
+    if (alca) {
+      alca.addEventListener('dragstart', (ev) => {
+        kanbanArrastando = String(card.dataset.kbId);
+        card.classList.add('is-arrastando');
+        try { ev.dataTransfer.setData('text/plain', kanbanArrastando); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {}
+      });
+      alca.addEventListener('dragend', () => {
+        card.classList.remove('is-arrastando');
+        kanbanArrastando = null;
+        raiz.querySelectorAll('.kb-col.is-alvo').forEach(c => c.classList.remove('is-alvo'));
+      });
+      alca.addEventListener('click', (ev) => ev.stopPropagation());
+    }
 
     // Teclado: o card é focável, então ← → movem e Enter abre a ficha. Sem isso o
     // kanban seria a única parte do cockpit que exige mouse.
@@ -9679,13 +9766,13 @@ function ligarKanban(raiz, leads, redesenhar) {
         mover(lead, destino);
       });
     });
-    const btnFicha = card.querySelector('[data-kb-ficha]');
-    if (btnFicha) btnFicha.addEventListener('click', (ev) => {
+    const btnAgendar = card.querySelector('[data-kb-agendar]');
+    if (btnAgendar) btnAgendar.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      if (lead) abrirFichaLeadFunilDrawer(lead, redesenhar);
+      if (lead) abrirFichaLeadFunilDrawer(lead, redesenhar, 'passo');
     });
     card.addEventListener('click', (ev) => {
-      if (ev.target.closest('.kb-seta')) return;
+      if (ev.target.closest('.kb-seta') || ev.target.closest('.kb-arrasto')) return;
       if (lead) abrirFichaLeadFunilDrawer(lead, redesenhar);
     });
   });
@@ -10080,7 +10167,7 @@ function aplicarEtapaNoDataLocal(leadId, novaEtapa, propriedades) {
   });
 }
 
-function abrirFichaLeadFunilDrawer(l, voltarPara) {
+function abrirFichaLeadFunilDrawer(l, voltarPara, foco) {
   stageModalVoltarPara = voltarPara || null;
   stageModalName.textContent = l.name;
   stageModalMeta.innerHTML = stageModalVoltarPara
@@ -10091,6 +10178,17 @@ function abrirFichaLeadFunilDrawer(l, voltarPara) {
   const btnVoltar = document.getElementById('stageFichaVoltar');
   if (btnVoltar) btnVoltar.addEventListener('click', () => { if (stageModalVoltarPara) stageModalVoltarPara(); });
   wireFichaLeadFunilEdicao(stageModalBody, l);
+  // BLOCO 51 — foco='passo': os atalhos de "agendar" (card do kanban, itens do Faça
+  // isso hoje, chip "agendar" dos Quentes) abrem a ficha já rolada e com o cursor no
+  // campo de próximo passo — um toque a menos entre "vi o lead parado" e "agendei".
+  if (foco === 'passo') {
+    const sec = stageModalBody.querySelector('.ficha-passo-sec');
+    if (sec) {
+      sec.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      const campo = sec.querySelector('.ficha-passo-texto');
+      if (campo) setTimeout(() => { try { campo.focus(); } catch (e) {} }, 250);
+    }
+  }
 }
 
 // ===== BLOCO 42 (14/08/26) — "o executivo tem que poder limpar o lead, adicionar
@@ -10177,12 +10275,28 @@ function wireFichaLeadFunilEdicao(container, l) {
   });
 
   // ---- 3. planejar próximo passo ----
+  // BLOCO 51 — pills de tipo (Follow-up/Visita/Reunião/Demo). Clique marca/desmarca;
+  // no salvamento, o tipo prefixa o título da tarefa ("Visita — {texto}").
+  let passoTipoAtivo = null;
+  container.querySelectorAll('.ficha-passo-tipo').forEach(pill => {
+    pill.addEventListener('click', () => {
+      const liga = passoTipoAtivo !== pill.dataset.tipo;
+      passoTipoAtivo = liga ? pill.dataset.tipo : null;
+      container.querySelectorAll('.ficha-passo-tipo').forEach(p2 => {
+        const on = p2.dataset.tipo === passoTipoAtivo;
+        p2.style.background = on ? 'var(--ink)' : 'var(--panel)';
+        p2.style.color = on ? 'var(--panel)' : 'var(--muted)';
+        p2.style.borderColor = on ? 'var(--ink)' : 'var(--line-btn)';
+      });
+    });
+  });
   const btnPasso = container.querySelector('.ficha-passo-salvar');
   if (btnPasso) btnPasso.addEventListener('click', async () => {
     const campoTexto = container.querySelector('.ficha-passo-texto');
     const campoData = container.querySelector('.ficha-passo-data');
     const statusEl = container.querySelector('.ficha-passo-status');
-    const texto = (campoTexto.value || '').trim();
+    const textoCru = (campoTexto.value || '').trim();
+    const texto = textoCru && passoTipoAtivo ? `${passoTipoAtivo} — ${textoCru}` : textoCru;
     const data = campoData.value || '';
     if (!texto || !data) { statusEl.textContent = 'Preencha o texto e a data antes de salvar.'; statusEl.style.color = 'var(--red)'; return; }
     btnPasso.disabled = true;
