@@ -3405,12 +3405,14 @@ function wireRoteiroChecks(rootEl) {
       });
     });
     // BLOCO 43 (14/08/26) — clicar no nome abre a ficha do Cockpit (Bloco 42: trilha de
-    // etapa, nota, próximo passo), não mais o HubSpot direto. Os data-* do card já
-    // carregam o suficiente pra montar o objeto que fichaLeadFunilBodyHTML espera —
-    // sem isso ser um novo tipo de lead, é o mesmo formato usado em toda ficha existente.
+    // etapa, nota, próximo passo), não mais o HubSpot direto.
+    // BLOCO 44 — busca o lead completo por id (com celular/endereço/tarefas) em vez de
+    // remontar um objeto parcial só com os data-* do card; os data-* seguem como
+    // fallback pro caso raro do id não ser mais encontrado em DATA nesta sessão.
     card.querySelectorAll('.roteiro-abre-ficha').forEach(span => {
       span.addEventListener('click', () => {
-        abrirFichaLeadFunilDrawer({
+        const completo = buscarLeadFunilPorId(span.dataset.leadId);
+        abrirFichaLeadFunilDrawer(completo || {
           id: span.dataset.leadId,
           name: span.querySelector('b') ? span.querySelector('b').textContent : '',
           stageId: span.dataset.stageId || null,
@@ -4100,9 +4102,13 @@ async function renderMeuFunil() {
   // pro HubSpot; agora abrem a ficha do Cockpit (Bloco 42: trilha de etapa clicável,
   // nota, próximo passo) primeiro — o link pro HubSpot continua existindo dentro da
   // própria ficha ("Abrir no HubSpot ↗"), só deixou de ser a única porta de entrada.
+  // BLOCO 44 (14/08/26) — busca o lead completo por id (com celular/endereço/tarefas)
+  // em vez de remontar um objeto parcial só com os data-* do card; os data-* seguem
+  // como fallback pro caso raro do id não ser mais encontrado em DATA nesta sessão.
   el.querySelectorAll('.grupo-body button.lead[data-lead-id], .trow[data-lead-id]').forEach(elLead => {
     elLead.addEventListener('click', () => {
-      abrirFichaLeadFunilDrawer({
+      const completo = buscarLeadFunilPorId(elLead.dataset.leadId);
+      abrirFichaLeadFunilDrawer(completo || {
         id: elLead.dataset.leadId,
         name: (elLead.querySelector('.lead-nome') || elLead.querySelector('b') || {}).textContent || '',
         stageId: elLead.dataset.stageId || null,
@@ -9077,9 +9083,39 @@ function fichaLeadFunilBodyHTML(l) {
         </button>
       `).join('')}
     </div>` : ''}
+    ${(() => {
+      // BLOCO 44 (14/08/26) — "ver tudo... telefone e endereço" + "tarefas/compromissos
+      // já agendados" (Julyan). Vem direto de propriedades do próprio negócio (celular,
+      // cep/bairro/cidade/logradouro/numero) e de tarefas HubSpot já associadas a ele —
+      // nada inventado, e nada que a nota completa do CRM precise duplicar aqui (isso
+      // ficou fora de propósito). Substitui o aviso antigo de "fica só no HubSpot".
+      const endereco = [l.logradouro, l.numero, l.bairro, l.cidade].filter(Boolean).join(', ');
+      const temContato = l.celular || endereco;
+      const tarefas = Array.isArray(l.tarefas) ? l.tarefas : [];
+      return `
+    ${temContato ? `
+    <div style="display:flex;flex-direction:column;gap:6px;background:var(--panel2);border-radius:12px;padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--muted);">
+      ${l.celular ? `<div>📞 <a href="tel:${esc(String(l.celular).replace(/[^\d+]/g, ''))}" style="color:var(--ink);font-weight:700;text-decoration:none;">${esc(l.celular)}</a></div>` : ''}
+      ${endereco ? `<div>📍 ${esc(endereco)}${l.cep ? ` · CEP ${esc(l.cep)}` : ''}</div>` : ''}
+    </div>` : ''}
+    ${tarefas.length ? `
+    <div style="margin-bottom:16px;">
+      <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Tarefas agendadas no HubSpot</label>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${tarefas.map(t => {
+          const dt = t.timestamp ? new Date(Number(t.timestamp)) : null;
+          const temData = dt && !isNaN(dt.getTime());
+          return `<div style="display:flex;justify-content:space-between;gap:10px;background:var(--panel2);border-radius:10px;padding:8px 12px;font-size:12px;">
+            <span style="color:var(--ink);">${esc(t.subject)}</span>
+            <span style="color:var(--muted2);white-space:nowrap;">${temData ? dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
     <div style="background:var(--panel2);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--muted);margin-bottom:16px;">
-      Telefone, endereço e histórico de contato ficam no HubSpot — não replicamos esse dado aqui pra evitar informação desatualizada.
-    </div>
+      Histórico completo de notas e interações fica no HubSpot — aqui você vê o essencial pra decidir sem trocar de tela.
+    </div>`;
+    })()}
 
     <!-- BLOCO 42 (14/08/26) — editar direto do Cockpit: nota e próximo passo escrevem
          de verdade no HubSpot (associados a este negócio). O que muda aqui NÃO aparece
@@ -9110,6 +9146,25 @@ function fichaLeadFunilBodyHTML(l) {
 
     <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;background:var(--red);color:#fff;border-radius:999px;padding:9px 18px;font-size:12.5px;font-weight:700;">Abrir no HubSpot ↗</a>
   `;
+}
+// BLOCO 44 (14/08/26) — busca o lead completo (com celular/endereço/tarefas, que só
+// vêm de DATA) a partir só do id. Os 3 pontos de entrada da ficha (fila de hoje, Meu
+// Funil por temperatura, tabela "Todos os meus leads") tinham cada um sua própria cópia
+// PARCIAL do lead — trocar por isto evita reconstruir o objeto na mão em cada lugar
+// (e esquecer um campo novo sempre que a ficha ganhar mais um dado, como aconteceu agora).
+function buscarLeadFunilPorId(leadId) {
+  const r = (DATA.reps || []).find(x => sessaoAtual && String(x.ownerId) === String(sessaoAtual.ownerId));
+  if (r) {
+    const doRep = [...(r.travados || []), ...(r.quentes || [])].find(l => String(l.id) === String(leadId));
+    if (doRep) return { ...doRep, vendedor: doRep.vendedor || String(r.name || '').split(' ')[0] };
+  }
+  if (DATA.funilLeads) {
+    for (const sid of Object.keys(DATA.funilLeads)) {
+      const achado = (DATA.funilLeads[sid] || []).find(l => String(l.id) === String(leadId));
+      if (achado) return { ...achado, stageId: achado.stageId || sid, stage: achado.stage || (STAGE_LABELS[sid] || '') };
+    }
+  }
+  return null;
 }
 function abrirFichaLeadFunilDrawer(l, voltarPara) {
   stageModalVoltarPara = voltarPara || null;
