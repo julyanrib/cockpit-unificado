@@ -6751,19 +6751,12 @@ document.addEventListener('click', function (ev) {
   const atMapaCoord = ev.target.closest('[data-aglat]');
   if (atMapaCoord) {
     ev.preventDefault(); ev.stopPropagation();
-    const lat = Number(atMapaCoord.dataset.aglat), lng = Number(atMapaCoord.dataset.aglng);
     agendaEstado.subview = 'hoje';
     renderAgenda();
     setTimeout(() => {
-      try {
-        // jumpTo, não flyTo: testado ao vivo que flyTo pode ficar parado se o
-        // carregamento dos tiles travar (mesmo problema já corrigido no cluster do mapa).
-        if (planoMapaInstancia && Number.isFinite(lat) && Number.isFinite(lng)) {
-          planoMapaInstancia.jumpTo({ center: [lng, lat], zoom: 15.5 });
-        }
-        const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
-        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } catch (e) { console.error('Atalho pro mapa (coordenada) falhou:', e && e.message); }
+      // BLOCO 45 (limpeza, 14/08/26) — sem mapa, o atalho só navega e rola até a lista.
+      const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
+      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 700);
     return;
   }
@@ -6781,15 +6774,10 @@ document.addEventListener('click', function (ev) {
     if (!l) { mostrarToast('Não encontrei essa conta na sua fila — recarregue a página.', 'erro'); return; }
     agendaEstado.subview = 'hoje';   // a Rota do executivo é a subview "hoje" da Agenda
     renderAgenda();
-    // O mapa só existe depois do render; o foco vai no fim da fila de tarefas.
+    // BLOCO 45 (limpeza, 14/08/26) — sem mapa, o atalho só navega e rola até a lista.
     setTimeout(() => {
-      try {
-        if (planoMapaInstancia && l.lat != null && l.lng != null) {
-          planoMapaInstancia.jumpTo({ center: [Number(l.lng), Number(l.lat)], zoom: 15.5 });
-        }
-        const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
-        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } catch (e) { console.error('Atalho pro mapa (id) falhou:', e && e.message); }
+      const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
+      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 700);
     return;
   }
@@ -6801,15 +6789,10 @@ document.addEventListener('click', function (ev) {
     if (!l) { mostrarToast('Não encontrei coordenada pra "' + nomeAlvo + '" — abra a Prospecção ou confirme o endereço no HubSpot.', 'erro'); return; }
     agendaEstado.subview = 'hoje';   // a Rota do executivo é a subview "hoje" da Agenda
     renderAgenda();
-    // O mapa só existe depois do render; o foco vai no fim da fila de tarefas.
+    // BLOCO 45 (limpeza, 14/08/26) — sem mapa, o atalho só navega e rola até a lista.
     setTimeout(() => {
-      try {
-        if (planoMapaInstancia && l.lat != null && l.lng != null) {
-          planoMapaInstancia.jumpTo({ center: [Number(l.lng), Number(l.lat)], zoom: 15.5 });
-        }
-        const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
-        if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      } catch (e) { console.error('Atalho pro mapa falhou:', e && e.message); }
+      const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
+      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }, 700);
     return;
   }
@@ -10324,9 +10307,9 @@ let planoEmEdicao = false; // flag SÓ de UI: reabre os campos de um plano já f
    coordenada real (Outscraper/Google Places) e a interação inclui/tira a conta
    da rota de hoje — nunca check-in, GPS de execução, registro de visita ou
    mudança de etapa (isso é papel do Expogo). */
-// BLOCO 45 (limpeza, 14/08/26) — mapLibreCarregando removida junto com carregarMapLibre.
-let planoMapaInstancia = null;
-let planoMapaMarcadores = {}; // id do lead -> { marker, popup, lead }
+// BLOCO 45 (limpeza, 14/08/26) — planoMapaInstancia/planoMapaMarcadores/
+// planoMapaPopupAtual removidas: eram o estado do mapa visual (instância MapLibre,
+// marcadores por id, popup aberto) — sem mapa, sem estado de mapa.
 // Aba ativa do deck de candidatos (Bloco 25): 'sugeridos' | 'funil' | 'alvo'.
 let deckAbaAtiva = 'sugeridos';
 let deckBuscaTermo = ''; // BLOCO 33 — termo da busca do deck sobrevive aos re-renders da lista
@@ -10360,7 +10343,6 @@ let planoMapaFiltro = { mostrarSemFit: false, avalMin: 0, verTodas: false, soCli
   // existia na Prospecção e nunca aqui. Como o raio entra no MESMO `visiveis` que
   // alimenta os pinos e a lista, os dois se movem juntos por construção.
   raioKm: 0 };            // 0 = sem limite
-let planoMapaPopupAtual = null;
 let planoMapaOrigemAtual = null;
 let planoMapaRenderAtual = null;
 // Pedido do Julyan (10/08): a rota (sequência numerada + linha no mapa) só deve
@@ -11935,8 +11917,6 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   }));
 
   if (visiveis.length === 0 && clientesDoRep.length === 0) {
-    if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
-    planoMapaMarcadores = {};
     lista.innerHTML = pipelineSemLocal.length ? `<div class="plano-map-section-label">Pipeline quente · localização pendente</div>${pipelineSemLocal.map(d => `<div class="plano-lista-item"><span class="plano-lista-index" style="color:var(--red);">!</span><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')} · sem coordenada</span></span>${d.id ? `<a href="${hsUrl(d.id)}" target="_blank" rel="noopener" class="plano-lista-btn" style="text-decoration:none;">↗</a>` : ''}</div>`).join('')}` : '';
     box.innerHTML = `<div class="empty-state" style="padding-top:190px;">Nenhuma conta-alvo com coordenada atende ao volume de avaliações escolhido.</div>`;
     const countEl = document.getElementById('planoMapaRotaCount');
@@ -12498,11 +12478,6 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const countEl = document.getElementById('planoMapaRotaCount');
   if (countEl) countEl.textContent = `${naRotaTodas.length} ${naRotaTodas.length === 1 ? 'parada' : 'paradas'}`;
 
-  // BLOCO 45 (14/08/26) — mapa removido: só a limpeza de estado (nunca havia instância
-  // pra remover mesmo, mas o guard fica por segurança se algum código antigo ainda
-  // setar planoMapaInstancia em algum outro fluxo que eu não tenha visto).
-  if (planoMapaInstancia) { planoMapaInstancia.remove(); planoMapaInstancia = null; }
-  planoMapaMarcadores = {};
   // BLOCO 45 — o aviso "mapa agora vive no app de campo" mora no HTML estático do
   // deck-head (visível de verdade), não aqui — #planoMapa ficou oculto (display:none),
   // então escrever nele seria uma mensagem que ninguém nunca veria.
