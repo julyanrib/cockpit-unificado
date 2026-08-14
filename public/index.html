@@ -1949,7 +1949,7 @@
     color:var(--muted2);padding-top:3px;}
   .ag-det dd{margin:0;color:var(--ink);line-height:1.5;word-break:break-word;}
   .ag-det .aglink{display:inline-block;margin-top:15px;font-size:11.5px;font-weight:700;color:var(--red);
-    text-decoration:none;border-bottom:1px solid currentColor;padding-bottom:1px;}
+    background:none;border:0;border-bottom:1px solid currentColor;padding:0 0 1px;cursor:pointer;font-family:inherit;}
 
   /* BLOCO 41 (limpeza, 14/08/26) — a media query de .ag-cols (@media max-width:1280px)
      saiu: a classe já não existe (era o layout 2 colunas + sidebar da Agenda antiga). */
@@ -2936,6 +2936,12 @@ async function iniciarAuth() {
       // Veio de um link de "esqueci minha senha" — mostra o form de nova senha, não entra direto no app
       emRecuperacaoDeSenha = true;
       mostrarFormulario('novaSenhaForm');
+      return;
+    }
+    if (event === 'SIGNED_OUT' || (!session && event !== 'PASSWORD_RECOVERY')) {
+      sessaoAtual = null;
+      hidratadoPara = null;
+      mostrarLogin('Sua sessão terminou. Entre novamente.');
       return;
     }
     if (session && session.user && session.user.email && !emRecuperacaoDeSenha) {
@@ -4419,7 +4425,7 @@ async function renderMeuFunil() {
         <button class="filtro${meuFunilFiltroEtapa === '' ? ' on' : ''}" data-mfetapa="">Todos</button>
         ${etapasComDado.map(sid => `<button class="filtro${meuFunilFiltroEtapa === sid ? ' on' : ''}" data-mfetapa="${sid}">${STAGE_LABELS[sid].split(' ')[0]} ${r.stages[sid]}</button>`).join('')}
       </div>
-      <div class="thead"><span>Lead</span><span>Etapa</span><span>Próxima ação</span><span class="r">Na etapa</span><span class="r">CRM</span></div>
+      <div class="thead"><span>Lead</span><span>Etapa</span><span>Próxima ação</span><span class="r">Na etapa</span><span class="r">Ação</span></div>
       ${leadsFiltrados.length === 0 ? '<div class="empty-state" style="padding:18px 22px;">Nenhum lead nessa etapa.</div>' : leadsFiltrados.slice(0, 30).map(l => {
         const sla = slaDe(l.stageId);
         const estourou = sla != null && (l.dias || 0) > sla;
@@ -5812,7 +5818,7 @@ function agendaNormalizar(raw) {
         titulo: e.cliente || e.titulo || 'Compromisso sem título',
         inicio: e.inicio,
         tipo: e.tipo || 'follow_up',
-        origem: it.hs_note_body !== undefined ? 'nota (follow-up do app)' : it.hs_task_subject !== undefined ? 'tarefa' : 'reunião'
+        origem: it.hs_note_body !== undefined ? 'nota' : it.hs_task_subject !== undefined ? 'tarefa' : 'reunião'
       });
     }
   });
@@ -5872,7 +5878,7 @@ function agendaNomeDoLead(texto) {
 }
 
 // "Reunião - Marcos - Bar e restaurante dois Amores" -> tipo + contato + empresa
-const AGENDA_RE_TITULO = /^\s*(follow\s*up|reuni[aã]o|rota|revisita|visita|interno)\s*[-–:]\s*(.*)$/i;
+const AGENDA_RE_TITULO = /^\s*(follow\s*up|reuni[aã]o|demo|rota|revisita|visita|interno)\s*[-–—:]\s*(.*)$/i;
 function agendaTipoDoTexto(t) {
   const s = String(t || '').toLowerCase();
   if (/follow\s*up/.test(s)) return 'follow_up';
@@ -6440,7 +6446,7 @@ function renderAgenda() {
                     <b style="font-variant-numeric:tabular-nums;color:var(--green);">${esc(a.hora)}</b>
                     <span style="overflow-wrap:anywhere;">${esc(a.nome)}</span>
                   </div>`).join('')}
-                <div style="font-size:10.5px;color:var(--muted2);margin-top:5px;">Para mudar horário ou desmarcar, abra a tarefa no HubSpot — daqui o Cockpit só cria.</div>
+                <div style="font-size:10.5px;color:var(--muted2);margin-top:5px;">Para mudar o contexto comercial, abra a ficha do lead no Cockpit.</div>
               </div>` : ''}
             ${sugestoes.length ? `
               <div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin:9px 0 5px;">Comece por estas</div>
@@ -6564,7 +6570,7 @@ function renderAgenda() {
               <div><b style="font-size:13px;">${agendaEsc(nomeLead)}</b>${l.stage ? `<div style="font-size:10.5px;color:var(--amber);font-weight:700;margin-top:2px;">${agendaEsc(l.stage)}</div>` : ''}</div>
               <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;justify-content:flex-end;">
                 <a data-quente-fora-map="${chaveLead}" style="color:#2563EB;font-weight:700;font-size:11px;text-decoration:none;white-space:nowrap;pointer-events:none;">Localizando…</a>
-                ${l.id ? `<a href="https://app.hubspot.com/contacts/24373118/record/0-3/${agendaEsc(String(l.id))}" target="_blank" rel="noopener" style="color:var(--amber);font-weight:700;font-size:11px;text-decoration:none;white-space:nowrap;">HubSpot →</a>` : ''}
+                ${l.id ? `<button type="button" data-agficha="${agendaEsc(String(l.id))}" style="background:none;border:none;color:var(--amber);font-weight:700;font-size:11px;cursor:pointer;padding:0;white-space:nowrap;">ver ficha →</button>` : ''}
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
@@ -6738,7 +6744,7 @@ function renderAgenda() {
     hSemana += '<div class="ag-det" id="agDet" data-open="0">' +
       '<button class="agx" id="agDetX" aria-label="Fechar">×</button>' +
       '<div class="agsb" id="agDetSb"></div><h4 id="agDetT"></h4><dl id="agDetDl"></dl>' +
-      '<a class="aglink" id="agDetA" href="#" target="_blank" rel="noopener">Abrir no HubSpot →</a></div></div>' +
+      '<button type="button" class="aglink" id="agDetA">Abrir ficha do lead →</button></div></div>' +
       (souRep ? '</div></div>' : '');
     h += hSemana;
   }
@@ -6981,7 +6987,14 @@ function agendaAbrirDetalhe(id) {
   document.getElementById('agDetDl').innerHTML =
     L.map(l => '<dt>' + l[0] + '</dt><dd>' + agendaEsc(String(l[1])) + '</dd>').join('');
   const a = document.getElementById('agDetA');
-  if (e.url) { a.href = e.url; a.style.display = 'inline-block'; } else a.style.display = 'none';
+  const leadDaAgenda = e.dealId ? buscarLeadFunilPorId(e.dealId) : null;
+  if (leadDaAgenda) {
+    a.style.display = 'inline-block';
+    a.onclick = () => abrirFichaLeadFunilDrawer(leadDaAgenda, () => agendaAbrirDetalhe(id));
+  } else {
+    a.style.display = 'none';
+    a.onclick = null;
+  }
 
   // BLOCO 34 — banner de sugestão do gestor + Confirmar/Recusar. Confirmar só aparece
   // pro DONO da tarefa (é ele que decide se aceita na própria agenda); Recusar aparece
@@ -7037,6 +7050,12 @@ function agendaAbrirDetalhe(id) {
 }
 
 document.addEventListener('click', function (ev) {
+  const fichaAgenda = ev.target.closest('[data-agficha]');
+  if (fichaAgenda) {
+    const lead = buscarLeadFunilPorId(fichaAgenda.dataset.agficha);
+    if (lead) abrirFichaLeadFunilDrawer(lead, () => renderAgenda());
+    return;
+  }
   const sub = ev.target.closest('[data-agsub]');
   if (sub) {
     agendaEstado.subview = sub.dataset.agsub;
@@ -9310,8 +9329,6 @@ function abrirFichaCompromisso(e) {
       : (!temFuturo ? '<div style="font-size:11.5px;color:var(--muted2);margin-top:6px;">Sem próximo compromisso marcado depois deste.</div>' : '')) +
     '</div>';
 
-  const hubUrl = lead && lead.id ? ('https://app.hubspot.com/contacts/24373118/record/0-3/' + lead.id) : (e.url || null);
-
   stageModalVoltarPara = null;
   stageModalName.textContent = e.cliente || 'Compromisso';
   stageModalMeta.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:' + tipoDef.cor + ';"></span>' + tipoDef.rotulo + '</span> · ' + quandoTxt + (repNome ? ' · ' + esc(repNome) : '') + (e.contato ? ' · contato: ' + esc(e.contato) : '');
@@ -9330,9 +9347,11 @@ function abrirFichaCompromisso(e) {
           ? '<button type="button" data-aglat="' + lead.lat + '" data-aglng="' + lead.lng + '" data-agnomelead="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;">Ver na rota →</button>'
           : '<button type="button" data-agmapa="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;">Ver na rota →</button>')
       : '') +
-    (hubUrl ? '<a href="' + hubUrl + '" target="_blank" rel="noopener" style="display:inline-block;background:var(--red);color:#fff;border-radius:var(--r-pill);padding:10px 18px;font-size:12.5px;font-weight:700;text-decoration:none;">Abrir no HubSpot →</a>' : '') +
+    (lead && lead.id ? '<button type="button" data-agficha-drawer="' + agendaEsc(String(lead.id)) + '" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font-size:12.5px;font-weight:700;cursor:pointer;">Abrir ficha do lead →</button>' : '') +
     '</div>';
   stageOverlay.classList.add('show');
+  const fichaBtn = stageModalBody.querySelector('[data-agficha-drawer]');
+  if (fichaBtn) fichaBtn.addEventListener('click', () => abrirFichaLeadFunilDrawer(lead));
 }
 
 // ============ MODAL ============
@@ -9380,7 +9399,7 @@ const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471
 // exigir um formulário inteiro em volta — a ficha edita propriedade por propriedade.
 function validarValorCampoUnico(tipo, bruto, min) {
   const valor = (bruto == null ? '' : String(bruto)).trim();
-  if (!valor) return { ok: true, vazio: true, valor: null };
+  if (!valor) return { ok: true, vazio: true, valor: '' };
   if (tipo === 'numero') {
     const n = Number(valor.replace(',', '.'));
     if (!isFinite(n) || n <= 0) return { ok: false, erro: 'Valor inválido.' };
@@ -9477,7 +9496,7 @@ function ligarPropsFichaEditaveis(container, lead) {
           const resp = await comPrazoGlobal(async (signal) => fetch('/api/mudar-etapa-negocio', {
             method: 'POST', signal,
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-            body: JSON.stringify({ dealId: lead.id, ownerId: lead.ownerId || null, novaEtapa: lead.stageId, propriedades: { [propNome]: v.valor } })
+            body: JSON.stringify({ dealId: lead.id, novaEtapa: lead.stageId, propriedades: { [propNome]: v.valor } })
           }), 8000, 'mudar-etapa-negocio');
           const data = await resp.json().catch(() => ({}));
           if (!resp.ok || !data.ok) {
@@ -9486,6 +9505,7 @@ function ligarPropsFichaEditaveis(container, lead) {
             return;
           }
           lead[propNome] = v.valor;
+          aplicarEtapaNoDataLocal(lead.id, lead.stageId, { [propNome]: v.valor });
           const idxAtual = ORDEM_FUNIL_FICHA.indexOf(lead.stageId);
           const grade = card.parentElement;
           grade.outerHTML = propsFichaHTML(lead, idxAtual);
@@ -9570,7 +9590,7 @@ function fichaLeadFunilBodyHTML(l) {
       // l.notas localmente (só reflete depois do próximo sync) — ou seja, a nota
       // exibida aqui NUNCA é a que acabou de ser salva por aqui. Não tem como saber
       // o canal de verdade, então a assinatura para de inventar um.
-      return `<div style="background:var(--panel2);border-left:3px solid var(--line-btn);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--body,var(--ink));line-height:1.55;">${esc(textoBruto)}<span style="display:block;margin-top:6px;font-size:10.5px;color:var(--ter);">— ${esc(l.vendedor || 'você')}${quando ? ' · ' + quando : ''}</span></div>`;
+      return `<div style="background:var(--panel2);border-left:3px solid var(--line-btn);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--body,var(--ink));line-height:1.55;">${esc(textoBruto)}${quando ? `<span style="display:block;margin-top:6px;font-size:10.5px;color:var(--ter);">${quando}</span>` : ''}</div>`;
     })()}
 
     <!-- BLOCO 42 (14/08/26) — editar direto do Cockpit: nota e próximo passo escrevem
@@ -9583,7 +9603,7 @@ function fichaLeadFunilBodyHTML(l) {
         <label style="display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted2);margin-bottom:6px;">Adicionar nota</label>
         <textarea class="ficha-nota-texto" rows="3" placeholder="Ex.: falei com o decisor, ele pediu proposta por e-mail até quinta." style="width:100%;box-sizing:border-box;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 11px;font:inherit;font-size:12.5px;resize:vertical;"></textarea>
         <div style="display:flex;align-items:center;gap:10px;margin-top:7px;">
-          <button type="button" class="ficha-nota-salvar" style="background:var(--ink);color:var(--panel);border:none;border-radius:999px;padding:8px 16px;font:700 12px inherit;cursor:pointer;">Salvar nota no HubSpot</button>
+          <button type="button" class="ficha-nota-salvar" style="background:var(--ink);color:var(--panel);border:none;border-radius:999px;padding:8px 16px;font:700 12px inherit;cursor:pointer;">Salvar nota</button>
           <span class="ficha-nota-status" style="font-size:11.5px;color:var(--muted2);"></span>
         </div>
       </div>
@@ -9593,16 +9613,16 @@ function fichaLeadFunilBodyHTML(l) {
              follow, visita, reunião". O tipo escolhido vira o prefixo do título da
              tarefa no HubSpot ("Visita — falar com o sócio"), então a Agenda e a Rota,
              que já leem as tarefas, passam a saber QUE TIPO de compromisso é sem
-             nenhum campo novo no CRM. Pills opcionais: sem escolher, salva como antes. -->
+             nenhum campo novo no CRM. Follow-up começa selecionado por padrão. -->
         <div class="ficha-passo-tipos" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
-          ${['Follow-up', 'Visita', 'Reunião', 'Demo'].map(t => `<button type="button" class="ficha-passo-tipo" data-tipo="${t}" style="border:1px solid var(--line-btn);background:var(--panel);color:var(--muted);border-radius:999px;padding:5px 12px;font:700 11px 'DM Sans',sans-serif;cursor:pointer;">${t}</button>`).join('')}
+          ${['Follow-up', 'Visita', 'Reunião', 'Demo'].map(t => `<button type="button" class="ficha-passo-tipo" data-tipo="${t}" aria-pressed="${t === 'Follow-up'}" style="border:1px solid ${t === 'Follow-up' ? 'var(--ink)' : 'var(--line-btn)'};background:${t === 'Follow-up' ? 'var(--ink)' : 'var(--panel)'};color:${t === 'Follow-up' ? 'var(--panel)' : 'var(--muted)'};border-radius:999px;padding:5px 12px;font:700 11px 'DM Sans',sans-serif;cursor:pointer;">${t}</button>`).join('')}
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <input type="text" class="ficha-passo-texto" placeholder="Ex.: ligar cobrando a proposta" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;">
           <input type="date" class="ficha-passo-data" style="background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;">
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:7px;">
-          <button type="button" class="ficha-passo-salvar" style="background:var(--ink);color:var(--panel);border:none;border-radius:999px;padding:8px 16px;font:700 12px inherit;cursor:pointer;">Salvar próximo passo no HubSpot</button>
+          <button type="button" class="ficha-passo-salvar" style="background:var(--ink);color:var(--panel);border:none;border-radius:999px;padding:8px 16px;font:700 12px inherit;cursor:pointer;">Salvar próximo passo</button>
           <span class="ficha-passo-status" style="font-size:11.5px;color:var(--muted2);"></span>
         </div>
       </div>
@@ -10098,7 +10118,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       const resp = await comPrazoGlobal(async (signal) => fetch('/api/mudar-etapa-negocio', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId: lead.id, ownerId: lead.ownerId || null, novaEtapa: para, propriedades: coleta.propriedades })
+        body: JSON.stringify({ dealId: lead.id, novaEtapa: para, propriedades: coleta.propriedades })
       }), 10000, 'mudar-etapa-negocio');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data.ok) {
@@ -10117,7 +10137,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       fechar();
       const quantos = Object.keys(coleta.propriedades).length;
       mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'} gravada${quantos === 1 ? '' : 's'}` : ''}. O Cockpit reconcilia na próxima rodada automática (23:59/08:59/15h).`, 'sucesso');
-      if (typeof passagemVoltarPara === 'function') passagemVoltarPara();
+      if (typeof passagemVoltarPara === 'function') passagemVoltarPara(lead);
     } catch (e) {
       status.style.color = 'var(--red)';
       status.textContent = 'Falha ao falar com o HubSpot: ' + String((e && e.message) || e);
@@ -10161,7 +10181,7 @@ function aplicarEtapaNoDataLocal(leadId, novaEtapa, propriedades) {
     }
     ['travados', 'quentes'].forEach(chave => {
       (r[chave] || []).forEach(l => {
-        if (String(l.id) === alvo) { l.stageId = novaEtapa; l.stage = STAGE_LABELS[novaEtapa] || ''; l.dias = 0; }
+        if (String(l.id) === alvo) Object.assign(l, propriedades || {}, { stageId: novaEtapa, stage: STAGE_LABELS[novaEtapa] || '', dias: 0 });
       });
     });
   });
@@ -10214,10 +10234,10 @@ function wireFichaLeadFunilEdicao(container, l) {
     btn.addEventListener('click', () => {
       const novaEtapa = btn.dataset.etapaId;
       if (novaEtapa === l.stageId) return; // clicou na etapa atual — nada a fazer
-      abrirPassagemDeEtapa({ ...l, ownerId: ownerId }, novaEtapa, () => {
+      abrirPassagemDeEtapa({ ...l, ownerId: ownerId }, novaEtapa, leadAtualizado => {
         // Volta pra ficha já na etapa nova, em vez de deixar o drawer fechado: o
         // executivo quase sempre quer registrar a nota logo depois de mover.
-        abrirFichaLeadFunilDrawer({ ...l, stageId: novaEtapa, stage: STAGE_LABELS[novaEtapa] || '', dias: 0 }, stageModalVoltarPara);
+        abrirFichaLeadFunilDrawer(leadAtualizado, stageModalVoltarPara);
       });
     });
   });
@@ -10226,7 +10246,7 @@ function wireFichaLeadFunilEdicao(container, l) {
   // abre a escolha de destino com os 6 alvos grandes, em vez de forçar o clique preciso
   // num segmento fino da trilha. Mesmo drawer de passagem no final das contas.
   container.querySelectorAll('.ficha-mover-abrir').forEach(btn => {
-    btn.addEventListener('click', () => abrirEscolhaDeEtapa({ ...l, ownerId }, () => abrirFichaLeadFunilDrawer(l, stageModalVoltarPara)));
+    btn.addEventListener('click', () => abrirEscolhaDeEtapa({ ...l, ownerId }, leadAtualizado => abrirFichaLeadFunilDrawer(leadAtualizado, stageModalVoltarPara)));
   });
 
   // BLOCO 50 — propriedades do negócio, editáveis inline (toque → input → grava).
@@ -10247,7 +10267,7 @@ function wireFichaLeadFunilEdicao(container, l) {
       const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId, ownerId, texto })
+        body: JSON.stringify({ dealId, texto })
       }), 8000, 'criar-nota-negocio');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data.ok) {
@@ -10275,15 +10295,15 @@ function wireFichaLeadFunilEdicao(container, l) {
   });
 
   // ---- 3. planejar próximo passo ----
-  // BLOCO 51 — pills de tipo (Follow-up/Visita/Reunião/Demo). Clique marca/desmarca;
-  // no salvamento, o tipo prefixa o título da tarefa ("Visita — {texto}").
-  let passoTipoAtivo = null;
+  // BLOCO 51 — pills de tipo (Follow-up/Visita/Reunião/Demo). Há sempre um tipo ativo;
+  // o servidor usa esse valor para compor o título canônico da tarefa.
+  let passoTipoAtivo = 'Follow-up';
   container.querySelectorAll('.ficha-passo-tipo').forEach(pill => {
     pill.addEventListener('click', () => {
-      const liga = passoTipoAtivo !== pill.dataset.tipo;
-      passoTipoAtivo = liga ? pill.dataset.tipo : null;
+      passoTipoAtivo = pill.dataset.tipo;
       container.querySelectorAll('.ficha-passo-tipo').forEach(p2 => {
         const on = p2.dataset.tipo === passoTipoAtivo;
+        p2.setAttribute('aria-pressed', String(on));
         p2.style.background = on ? 'var(--ink)' : 'var(--panel)';
         p2.style.color = on ? 'var(--panel)' : 'var(--muted)';
         p2.style.borderColor = on ? 'var(--ink)' : 'var(--line-btn)';
@@ -10296,7 +10316,7 @@ function wireFichaLeadFunilEdicao(container, l) {
     const campoData = container.querySelector('.ficha-passo-data');
     const statusEl = container.querySelector('.ficha-passo-status');
     const textoCru = (campoTexto.value || '').trim();
-    const texto = textoCru && passoTipoAtivo ? `${passoTipoAtivo} — ${textoCru}` : textoCru;
+    const texto = textoCru;
     const data = campoData.value || '';
     if (!texto || !data) { statusEl.textContent = 'Preencha o texto e a data antes de salvar.'; statusEl.style.color = 'var(--red)'; return; }
     btnPasso.disabled = true;
@@ -10307,7 +10327,7 @@ function wireFichaLeadFunilEdicao(container, l) {
       const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-proximo-passo', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId, ownerId, texto, data })
+        body: JSON.stringify({ dealId, texto, data, tipo: passoTipoAtivo })
       }), 8000, 'criar-proximo-passo');
       const respData = await resp.json().catch(() => ({}));
       if (!resp.ok || !respData.ok) {
@@ -10350,7 +10370,7 @@ function renderStageModalBody() {
       <button class="stage-modal-filtro" data-filtro="estourado" style="border:none;cursor:pointer;font-size:12.5px;font-weight:700;border-radius:var(--r-pill);padding:7px 14px;background:${stageModalFiltro === 'estourado' ? 'var(--red)' : 'var(--panel2)'};color:${stageModalFiltro === 'estourado' ? '#fff' : 'var(--muted)'};">⚠ SLA estourado (${travados.length})</button>
       <button class="stage-modal-filtro" data-filtro="todos" style="border:none;cursor:pointer;font-size:12.5px;font-weight:700;border-radius:var(--r-pill);padding:7px 14px;background:${stageModalFiltro === 'todos' ? 'var(--red)' : 'var(--panel2)'};color:${stageModalFiltro === 'todos' ? '#fff' : 'var(--muted)'};">Todos (${leads.length})</button>
     </div>
-    <h3 class="block-label">${stageModalFiltro === 'estourado' ? 'Leads com SLA estourado' : 'Leads nesta etapa'} — clique para abrir no HubSpot</h3>
+    <h3 class="block-label">${stageModalFiltro === 'estourado' ? 'Leads com SLA estourado' : 'Leads nesta etapa'} — clique para abrir a ficha</h3>
     <div class="leads-box">
       ${mostrar.length === 0 ? `<div style="padding:14px;color:var(--muted);font-size:13px;">${stageModalFiltro === 'estourado' ? 'Nenhum lead com SLA estourado nesta etapa agora.' : 'Nenhum lead nesta etapa no momento.'}</div>` : mostrar.map(l => `
         <div class="lead-row ${l.slaBreach ? 'sla-breach' : ''}" data-lead-id="${l.id}" style="cursor:pointer;">
@@ -13529,14 +13549,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
           <span style="color:var(--amber);font-weight:700;">· ${pipelineSemLocal.length} sem endereço</span>
           <span style="flex:1;"></span><span style="color:var(--muted2);">ver ▾</span>
         </summary>
-        <div style="padding-top:6px;">${pipelineSemLocal.map(d => `<div class="plano-lista-item" data-semloc="${esc(String(d.id || ''))}"><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')}${enderecoDoCRM(d) ? ' · ' + esc(enderecoDoCRM(d)) : d.cep ? ' · CEP ' + esc(d.cep) : ' · sem endereço no CRM'}</span><span class="semloc-msg" style="display:block;font-size:10.5px;color:var(--muted2);margin-top:2px;"></span></span><button class="plano-lista-btn semloc-btn" data-loc="${esc(String(d.id || ''))}" title="Tentar localizar a partir do endereço, CEP ou nome" style="width:auto;padding:0 9px;font-size:10.5px;">📍</button>${d.id ? `<a href="${hsUrl(d.id)}" target="_blank" rel="noopener" class="plano-lista-btn" title="Abrir no HubSpot pra preencher o endereço" style="text-decoration:none;">↗</a>` : ''}</div>`).join('')}</div>
+        <div style="padding-top:6px;">${pipelineSemLocal.map(d => `<div class="plano-lista-item" data-semloc="${esc(String(d.id || ''))}"><span class="plano-lista-copy"><b>${esc(agendaLeadNome(d) || 'Sem nome')}</b><span class="plano-etapa-hub">${esc(d.stage || 'Pipeline quente')}${enderecoDoCRM(d) ? ' · ' + esc(enderecoDoCRM(d)) : d.cep ? ' · CEP ' + esc(d.cep) : ' · sem endereço no CRM'}</span><span class="semloc-msg" style="display:block;font-size:10.5px;color:var(--muted2);margin-top:2px;"></span></span><button class="plano-lista-btn semloc-btn" data-loc="${esc(String(d.id || ''))}" title="Tentar localizar a partir do endereço, CEP ou nome" style="width:auto;padding:0 9px;font-size:10.5px;">📍</button>${d.id ? `<button type="button" class="plano-lista-btn semloc-ficha-btn" data-ficha="${esc(String(d.id))}" title="Abrir ficha e preencher o endereço">→</button>` : ''}</div>`).join('')}</div>
       </details>`;
     })() : ''}
     ${clientesSemCoord > 0 ? `<div style="font-size:11px;color:var(--muted2);padding:8px 6px 0;">${clientesSemCoord} cliente(s) ativo(s) sem endereço geocodificado — não entram na ordenação por proximidade.</div>` : ''}
   `;
   // BLOCO 20 — botão 📍 do quente sem coordenada. Geocodifica, plota como ESTIMADO
   // (pino vazado tracejado) e voa até ele pro executivo confirmar com os próprios olhos.
-  // Não grava nada no HubSpot: quem confirma o endereço é ele, no link ↗ ao lado.
+  // Não grava a estimativa no HubSpot: quem confirma o endereço abre a ficha ao lado.
   lista.querySelectorAll('.semloc-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const linha = btn.closest('[data-semloc]');
@@ -13546,7 +13566,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       btn.disabled = true; btn.textContent = '…';
       const res = await geocodificarQuente(alvo, r.ownerId);
       btn.disabled = false; btn.textContent = '📍';
-      if (!res) { if (msg) msg.innerHTML = '<span style="color:var(--amber);">Não achei esse endereço. Preencha no HubSpot (↗) e ele entra na lista sozinho.</span>'; return; }
+      if (!res) { if (msg) msg.innerHTML = '<span style="color:var(--amber);">Não achei esse endereço. Abra a ficha (→), preencha e ele entra na lista sozinho.</span>'; return; }
       if (res.erro === 'fora_da_praca') {
         if (msg) msg.innerHTML = '<span style="color:var(--amber);">O que achei fica fora da sua praça (provável homônimo em outra cidade). Não plotei pra não errar a rota.</span>';
         return;
@@ -13554,7 +13574,13 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       if (msg) msg.innerHTML = '<span style="color:#2563EB;">📍 ' + esc(res.rotulo || '') + ' · <b>estimado</b> por ' + esc(res.origem) + (res.confianca === 'baixa' ? ' — confira antes de sair' : '') + '</span>';
       // BLOCO 45 (14/08/26) — antes disso plotava um pino tracejado no mapa e voava até
       // ele; sem mapa, a confirmação em texto acima já é o suficiente (endereço estimado
-      // + origem + confiança) — quem decide se está certo é o link ↗ pro HubSpot ao lado.
+      // + origem + confiança) — quem decide se está certo abre a ficha ao lado.
+    });
+  });
+  lista.querySelectorAll('.semloc-ficha-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const lead = buscarLeadFunilPorId(btn.dataset.ficha);
+      if (lead) abrirFichaLeadFunilDrawer(lead, () => renderAgenda());
     });
   });
 

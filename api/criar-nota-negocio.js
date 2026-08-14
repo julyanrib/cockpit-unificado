@@ -19,6 +19,8 @@ try {
   USUARIOS = Array.isArray(raw) ? raw : (raw.usuarios || []);
 } catch (e) { USUARIOS = []; }
 
+const { buscarDealAutorizado, removerObjetoHubSpot } = require('../lib/hubspot-deal-guard');
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -55,12 +57,11 @@ module.exports = async function handler(req, res) {
   if (!usuario) return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
 
   // ---- 3. dados do pedido ----
-  const { dealId, ownerId, texto } = req.body || {};
+  const { dealId, texto } = req.body || {};
   if (!dealId || !texto || !String(texto).trim()) return res.status(400).json({ erro: 'Faltam campos obrigatórios: dealId e texto.' });
 
-  if (usuario.role !== 'manager' && ownerId != null && String(ownerId) !== String(usuario.ownerId)) {
-    return res.status(403).json({ erro: 'Você só pode adicionar nota nos seus próprios negócios.' });
-  }
+  const guard = await buscarDealAutorizado({ token, dealId, usuario });
+  if (guard.erro) return res.status(guard.erro.status).json({ erro: guard.erro.mensagem });
 
   // Assina a nota com quem escreveu — o HubSpot não faz isso sozinho quando a nota
   // entra via API com o token da integração (apareceria como se ninguém tivesse escrito).
@@ -75,7 +76,7 @@ module.exports = async function handler(req, res) {
         properties: {
           hs_note_body: corpo,
           hs_timestamp: String(Date.now()),
-          hubspot_owner_id: ownerId != null ? String(ownerId) : undefined
+          hubspot_owner_id: guard.ownerId || undefined
         }
       })
     });
@@ -95,15 +96,19 @@ module.exports = async function handler(req, res) {
     });
     if (!assoc.ok) {
       const det = await assoc.json().catch(() => ({}));
-      // A nota EXISTE no HubSpot mesmo se a associação falhar — melhor avisar que ficou
-      // solta do que fingir sucesso completo. Quem ler isso sabe ir arrumar manualmente.
-      return res.status(200).json({
-        ok: true, id: notaId, associada: false,
-        aviso: 'Nota criada, mas não consegui associá-la ao negócio automaticamente: ' + (det.message || 'HubSpot recusou a associação') + '. Associe manualmente no HubSpot.'
+      const removida = await removerObjetoHubSpot(token, 'notes', notaId);
+      return res.status(502).json({
+        ok: false, etapa: 'associacao',
+        erro: 'O HubSpot não associou a nota ao negócio; a operação foi cancelada' + (removida ? ' e a nota solta foi removida.' : ', mas não foi possível remover a nota solta automaticamente.'),
+        detalhe: det
       });
     }
   } catch (e) {
-    return res.status(200).json({ ok: true, id: notaId, associada: false, aviso: 'Nota criada, mas a associação falhou: ' + String(e.message || e) });
+    const removida = await removerObjetoHubSpot(token, 'notes', notaId);
+    return res.status(502).json({
+      ok: false, etapa: 'associacao',
+      erro: 'Falha ao associar a nota ao negócio' + (removida ? '; a nota solta foi removida.' : '; não foi possível remover a nota solta automaticamente.')
+    });
   }
 
   return res.status(200).json({ ok: true, id: notaId, associada: true });

@@ -4,8 +4,8 @@
 // executivo escreve pra um negócio específico do funil), não o padrão fixo
 // "Visita - <nome>" que api/criar-tarefa-rota.js usa pra reconhecimento pela Agenda.
 //
-// Por isso esta rota NÃO participa do parsing por prefixo de assunto (agendaTipoDoTexto
-// etc.) — ela só cria uma tarefa TODO comum, associada ao negócio pela associação
+// O tipo chega separado do texto e esta rota compõe o prefixo canônico que Agenda e
+// Rota reconhecem. Ela cria uma tarefa TODO comum, associada ao negócio pela associação
 // PADRÃO do HubSpot (mesmo motivo do criar-nota-negocio.js: "default" em vez de um ID
 // de tipo de associação chutado). O HubSpot, ao ver uma tarefa aberta associada com
 // data futura, atualiza sozinho a propriedade `notes_next_activity_date` do negócio —
@@ -19,6 +19,16 @@ try {
   const raw = require('../data/usuarios.json');
   USUARIOS = Array.isArray(raw) ? raw : (raw.usuarios || []);
 } catch (e) { USUARIOS = []; }
+
+const { buscarDealAutorizado, removerObjetoHubSpot } = require('../lib/hubspot-deal-guard');
+
+const TIPOS_PASSO = {
+  'follow-up': 'Follow-up',
+  visita: 'Visita',
+  reuniao: 'Reunião',
+  reunião: 'Reunião',
+  demo: 'Demo'
+};
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -56,7 +66,7 @@ module.exports = async function handler(req, res) {
   if (!usuario) return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
 
   // ---- 3. dados do pedido ----
-  const { dealId, ownerId, texto, data } = req.body || {};
+  const { dealId, texto, data, tipo } = req.body || {};
   if (!dealId || !texto || !String(texto).trim() || !data) {
     return res.status(400).json({ erro: 'Faltam campos obrigatórios: dealId, texto e data.' });
   }
@@ -68,9 +78,17 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ erro: 'Data inválida.' });
   }
 
-  if (usuario.role !== 'manager' && ownerId != null && String(ownerId) !== String(usuario.ownerId)) {
-    return res.status(403).json({ erro: 'Você só pode planejar próximo passo nos seus próprios negócios.' });
+  const guard = await buscarDealAutorizado({ token, dealId, usuario });
+  if (guard.erro) return res.status(guard.erro.status).json({ erro: guard.erro.mensagem });
+
+  const tipoNormalizado = tipo == null ? null : TIPOS_PASSO[String(tipo).trim().toLowerCase()];
+  if (tipo != null && !tipoNormalizado) {
+    return res.status(400).json({ erro: 'Tipo de próximo passo inválido.' });
   }
+  const assuntoLivre = String(texto).trim();
+  // Clientes novos mandam o tipo separado e o servidor compõe o assunto canônico.
+  // Chamadas antigas continuam aceitas para não quebrar um deploy em transição.
+  const assunto = tipoNormalizado ? `${tipoNormalizado} - ${assuntoLivre}` : assuntoLivre;
 
   // 09:00 Brasília = 12:00 UTC — mesma convenção de "compromisso do dia" do resto do
   // cockpit quando não há hora específica (o próximo passo aqui é só data, sem hora).
@@ -83,11 +101,11 @@ module.exports = async function handler(req, res) {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         properties: {
-          hs_task_subject: String(texto).trim().slice(0, 200),
+          hs_task_subject: assunto.slice(0, 200),
           hs_task_status: 'NOT_STARTED',
           hs_task_type: 'TODO',
           hs_timestamp: String(dataTarefaMs),
-          hubspot_owner_id: ownerId != null ? String(ownerId) : undefined
+          hubspot_owner_id: guard.ownerId || undefined
         }
       })
     });
@@ -107,13 +125,19 @@ module.exports = async function handler(req, res) {
     });
     if (!assoc.ok) {
       const det = await assoc.json().catch(() => ({}));
-      return res.status(200).json({
-        ok: true, id: taskId, associada: false,
-        aviso: 'Tarefa criada, mas não consegui associá-la ao negócio automaticamente: ' + (det.message || 'HubSpot recusou a associação') + '. Associe manualmente no HubSpot — sem essa associação, o negócio não vai mostrar "próximo passo" marcado.'
+      const removida = await removerObjetoHubSpot(token, 'tasks', taskId);
+      return res.status(502).json({
+        ok: false, etapa: 'associacao',
+        erro: 'O HubSpot não associou a tarefa ao negócio; a operação foi cancelada' + (removida ? ' e a tarefa solta foi removida.' : ', mas não foi possível remover a tarefa solta automaticamente.'),
+        detalhe: det
       });
     }
   } catch (e) {
-    return res.status(200).json({ ok: true, id: taskId, associada: false, aviso: 'Tarefa criada, mas a associação falhou: ' + String(e.message || e) });
+    const removida = await removerObjetoHubSpot(token, 'tasks', taskId);
+    return res.status(502).json({
+      ok: false, etapa: 'associacao',
+      erro: 'Falha ao associar a tarefa ao negócio' + (removida ? '; a tarefa solta foi removida.' : '; não foi possível remover a tarefa solta automaticamente.')
+    });
   }
 
   return res.status(200).json({ ok: true, id: taskId, associada: true, url: `https://app.hubspot.com/contacts/24373118/record/0-27/${taskId}` });

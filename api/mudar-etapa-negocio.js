@@ -18,6 +18,8 @@ try {
   USUARIOS = Array.isArray(raw) ? raw : (raw.usuarios || []);
 } catch (e) { USUARIOS = []; }
 
+const { buscarDealAutorizado } = require('../lib/hubspot-deal-guard');
+
 // Mesma ordem canônica usada em todo o resto do cockpit (ORDEM_ETAPAS_FUNIL /
 // ORDEM_FUNIL_FICHA no template) — repetida aqui só pra VALIDAR que a etapa pedida é
 // uma das 6 abertas; nunca decide nada sozinha, é apenas a lista de permitidas.
@@ -33,6 +35,17 @@ const ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470', '1395880471', 
 const PROPS_PERMITIDAS = ['celular', 'cep', 'bairro', 'cidade', 'logradouro', 'numero',
   'amount', 'valor_de_mrr', 'data_da_reuniao', 'reuniao_agendada', 'description'];
 
+// Exigências para ENTRAR em cada etapa. Este mapa é a barreira de integridade do
+// servidor; o mapa equivalente no template existe só para orientar a interface.
+const PROPS_OBRIGATORIAS_POR_ETAPA = {
+  '1395880469': [],
+  '1396005401': ['logradouro', 'bairro', 'cidade'],
+  '1395880470': ['celular'],
+  '1395880471': ['amount', 'reuniao_agendada'],
+  '1395880472': ['amount', 'description'],
+  '1395880473': ['valor_de_mrr']
+};
+
 // Piso comercial do time (R$349/mês, regra do Julyan) validado TAMBÉM no servidor: a
 // checagem do navegador é conveniência, esta é a que vale.
 const PISO_VALOR = 349;
@@ -45,7 +58,12 @@ function limparPropriedades(bruto) {
     if (!PROPS_PERMITIDAS.includes(chave)) {
       return { propriedades: null, erro: `Propriedade não permitida por esta rota: "${chave}".` };
     }
-    if (valor == null || String(valor).trim() === '') continue;
+    // String vazia é uma escrita válida no HubSpot: significa limpar a propriedade.
+    // Antes ela era descartada, mas a API respondia sucesso e o valor antigo reaparecia.
+    if (valor == null || String(valor).trim() === '') {
+      propriedades[chave] = '';
+      continue;
+    }
     const texto = String(valor).trim();
     if (PROPS_COM_PISO.includes(chave)) {
       const n = Number(texto);
@@ -61,6 +79,26 @@ function limparPropriedades(bruto) {
     propriedades[chave] = texto;
   }
   return { propriedades, erro: null };
+}
+
+function campoPreenchido(valor) {
+  return valor != null && String(valor).trim() !== '';
+}
+
+function validarExigenciasEtapa(deal, novaEtapa, propriedades) {
+  const atuais = deal.properties || {};
+  const finais = { ...atuais, ...propriedades };
+  const obrigatorias = PROPS_OBRIGATORIAS_POR_ETAPA[novaEtapa] || [];
+  const movendo = String(atuais.dealstage || '') !== String(novaEtapa);
+
+  // Ao mover, a etapa precisa ficar integralmente válida. Numa edição inline da etapa
+  // atual, não bloqueamos saneamento de dados legados, mas impedimos apagar um campo
+  // que é obrigatório naquela etapa.
+  const faltantes = movendo
+    ? obrigatorias.filter(prop => !campoPreenchido(finais[prop]))
+    : obrigatorias.filter(prop => Object.prototype.hasOwnProperty.call(propriedades, prop) && !campoPreenchido(finais[prop]));
+  if (!faltantes.length) return null;
+  return `A etapa de destino exige: ${faltantes.join(', ')}.`;
 }
 
 module.exports = async function handler(req, res) {
@@ -99,23 +137,25 @@ module.exports = async function handler(req, res) {
   if (!usuario) return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
 
   // ---- 3. dados do pedido ----
-  const { dealId, ownerId, novaEtapa, propriedades } = req.body || {};
+  const { dealId, novaEtapa, propriedades } = req.body || {};
   if (!dealId || !novaEtapa) return res.status(400).json({ erro: 'Faltam campos obrigatórios: dealId e novaEtapa.' });
   if (!ETAPAS_ABERTAS.includes(String(novaEtapa))) {
     return res.status(400).json({ erro: 'Etapa inválida — só é possível mover entre as etapas abertas do funil por aqui.' });
-  }
-
-  // Escopo por papel: executivo só edita negócio que é dele; gestor edita qualquer um.
-  // ownerId vem do próprio negócio (mandado pelo cliente pra permitir a checagem sem
-  // uma consulta extra ao HubSpot) — não é usado pra decidir NADA além de permissão.
-  if (usuario.role !== 'manager' && ownerId != null && String(ownerId) !== String(usuario.ownerId)) {
-    return res.status(403).json({ erro: 'Você só pode mudar a etapa dos seus próprios negócios.' });
   }
 
   const limpeza = limparPropriedades(propriedades);
   if (limpeza.erro) return res.status(400).json({ erro: limpeza.erro });
 
   try {
+    // Nunca confia em owner/pipeline/etapa enviados pelo navegador. O HubSpot é a
+    // fonte de verdade e é consultado imediatamente antes de qualquer escrita.
+    const guard = await buscarDealAutorizado({
+      token, dealId, usuario, propriedades: PROPS_PERMITIDAS
+    });
+    if (guard.erro) return res.status(guard.erro.status).json({ erro: guard.erro.mensagem });
+    const erroExigencias = validarExigenciasEtapa(guard.deal, String(novaEtapa), limpeza.propriedades);
+    if (erroExigencias) return res.status(400).json({ erro: erroExigencias });
+
     // Etapa e propriedades no MESMO PATCH de propósito: se fossem duas chamadas e a
     // segunda falhasse, o negócio ficaria na etapa nova sem os dados que a etapa exige
     // — exatamente o buraco que este bloco existe pra fechar. Uma escrita, tudo ou nada.
