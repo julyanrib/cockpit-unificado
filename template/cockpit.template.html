@@ -792,7 +792,8 @@
   .sem-sec-h{font-size:11.5px;color:var(--muted2);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .sem-sec-r{flex:1;height:1px;background:var(--line);}
   .sem-sinais{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:4px;}
-  .sem-sinal{display:flex;gap:10px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--tone);border-radius:var(--r-lg);padding:12px 15px;box-shadow:var(--shadow-sm);}
+  /* BLOCO 38 — sinais sem caixa: eram mais 2 cards com borda competindo por atenção; o filete de cor basta. */
+  .sem-sinal{display:flex;gap:10px;align-items:flex-start;background:none;border:0;border-left:3px solid var(--tone);padding:3px 0 3px 13px;}
   /* o texto do destaque vem com <b> dentro (nomes, números): o rótulo precisa de
      classe própria, senão o negrito da frase vira caixa-alta âmbar. */
   .sem-sinal-t{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--tone);display:block;margin-bottom:3px;}
@@ -818,6 +819,11 @@
   .sem-m-bar u>i{display:block;height:100%;border-radius:99px;background:var(--line-btn);}
   .sem-m-bar.atu u>i{background:var(--ink);}
   .sem-m-bar.atu{color:var(--muted);}
+  /* BLOCO 38 — placar com âncora: Ganhos é a resposta da semana (2 colunas, numeral maior);
+     antes os 6 KPIs competiam com o mesmo peso e nenhum respondia nada. */
+  .sem-m-hero{grid-column:span 2;}
+  .sem-m-hero .sem-m-v b{font-size:36px;}
+  @media (max-width:760px){.sem-m-hero{grid-column:auto;}}
   .sem-rep{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);margin-bottom:8px;box-shadow:var(--shadow-sm);overflow:hidden;}
   .sem-rep>summary{list-style:none;cursor:pointer;display:grid;grid-template-columns:minmax(150px,1.5fr) repeat(4,minmax(58px,.8fr)) minmax(130px,1.1fr) 16px;align-items:center;gap:12px;padding:11px 15px;}
   .sem-rep>summary::-webkit-details-marker{display:none;}
@@ -7185,8 +7191,9 @@ function renderResumoSemanal() {
           '<div class="sem-m-bar atu"><span>agora</span><u><i style="width:' + Math.round(100 * atual / maior) + '%"></i></u><span>' + atual + '</span></div>' +
           '<div class="sem-m-bar"><span>antes</span><u><i style="width:' + Math.round(100 * anterior / maior) + '%"></i></u><span>' + anterior + '</span></div>' +
         '</div>');
-    if (!o.lista || !o.lista.length) return '<div class="sem-m">' + corpo + '</div>';
-    return '<details class="sem-m"><summary>' + corpo + '</summary><div style="padding:0 15px 14px;">' + listaLeadsHtml(o.lista, o.tipoLista) + '</div></details>';
+    const clsM = 'sem-m' + (o.destaque ? ' sem-m-hero' : ''); // BLOCO 38 — KPI-âncora
+    if (!o.lista || !o.lista.length) return '<div class="' + clsM + '">' + corpo + '</div>';
+    return '<details class="' + clsM + '"><summary>' + corpo + '</summary><div style="padding:0 15px 14px;">' + listaLeadsHtml(o.lista, o.tipoLista) + '</div></details>';
   };
 
   function listaLeadsHtml(leads, tipoLista) {
@@ -7200,7 +7207,7 @@ function renderResumoSemanal() {
 
   const placarGestorHtml = `
     <div class="sem-placar">
-      ${metricaHtml('Ganhos', k.atual.ganhos, k.anterior.ganhos, { lista: ganhosLeads, tipoLista: 'ganho' })}
+      ${metricaHtml('Ganhos', k.atual.ganhos, k.anterior.ganhos, { lista: ganhosLeads, tipoLista: 'ganho', destaque: true })}
       ${metricaHtml('Reuniões marcadas', k.atual.reunioes, k.anterior.reunioes, { lista: reunioesLeads, tipoLista: 'reuniao' })}
       ${metricaHtml('Negócios criados', k.atual.leadsCriados, k.anterior.leadsCriados, {})}
       ${metricaHtml('Perdidos', k.atual.perdidos, k.anterior.perdidos, { invertido: true })}
@@ -7318,14 +7325,14 @@ function renderResumoSemanal() {
 
       if (l.pctTrav >= 40) {
         acoes.push({
-          urg: 'alta',
+          urg: 'alta', tipo: 'travados',
           titulo: `Auditar ${l.trav} travados com ${esc(l.reps.join(' e '))}`,
           detalhe: `Metade do funil da praça está parado (${l.trav} de ${l.open}). Régua do 1:1: cada um avança com próximo passo datado ou vai pra Reciclagem com motivo escrito. Promessa não conta.`,
           alvo: l.piores.length ? `Começa por: ${nomes(l.piores)}` : ''
         });
       } else if (l.trav) {
         acoes.push({
-          urg: 'media',
+          urg: 'media', tipo: 'travados',
           titulo: `Destravar ${l.trav} ${l.trav === 1 ? 'negócio' : 'negócios'} parados`,
           detalhe: `${l.pctTrav.toFixed(0)}% do funil da praça. Ainda dá pra resolver no 1:1 desta semana, sem virar mutirão.`,
           alvo: l.piores.length ? `Começa por: ${nomes(l.piores)}` : ''
@@ -7334,7 +7341,7 @@ function renderResumoSemanal() {
 
       if (l.semPasso) {
         acoes.push({
-          urg: l.semPasso >= 3 ? 'alta' : 'media',
+          urg: l.semPasso >= 3 ? 'alta' : 'media', tipo: 'passo',
           titulo: `Marcar próximo passo em ${l.semPasso} ${l.semPasso === 1 ? 'quente' : 'quentes'}`,
           detalhe: `Negócio quente sem data marcada esfria sozinho — é o que dá pra resolver hoje, numa ligação. Peça data e hora no CRM, não "vou falar com ele".`,
           alvo: l.quentesSemPasso.length ? `Sem data: ${nomes(l.quentesSemPasso)}` : ''
@@ -7343,14 +7350,14 @@ function renderResumoSemanal() {
 
       if (l.meta && l.pctMeta < 20) {
         acoes.push({
-          urg: 'alta',
+          urg: 'alta', tipo: 'meta',
           titulo: `Rota presencial com ${esc(l.reps.join(' e '))}`,
           detalhe: `${l.mes} de ${l.meta} no mês (${l.pctMeta.toFixed(0)}%). Nesse patamar, cobrança remota não vira número — bloqueie um dia de campo junto nesta semana.`,
           alvo: ''
         });
       } else if (l.meta && l.pctMeta < 50) {
         acoes.push({
-          urg: 'media',
+          urg: 'media', tipo: 'meta',
           titulo: `Acelerar fechamento: ${l.mes}/${l.meta} no mês`,
           detalhe: `Dá pra virar sem rota extra, mas exige foco no fundo do funil. Priorize os quentes acima de abrir lead novo.`,
           alvo: ''
@@ -7359,7 +7366,7 @@ function renderResumoSemanal() {
 
       if (!acoes.length) {
         acoes.push({
-          urg: 'baixa',
+          urg: 'baixa', tipo: 'saudavel',
           titulo: `Praça saudável — use pra subir o ticket`,
           detalhe: `Sem travamento relevante e meta no ritmo. É a praça onde vale testar upsell e conta maior, em vez de apagar incêndio.`,
           alvo: ''
@@ -7374,25 +7381,27 @@ function renderResumoSemanal() {
     const PESO_URG = { alta: 0, media: 1, baixa: 2 };
     const todasAcoes = [];
     linhas.forEach((l, i) => acoesDe(l).forEach(a => todasAcoes.push({ ...a, praca: l.praca, reps: l.reps, rank: i })));
-    todasAcoes.sort((a, b) => (PESO_URG[a.urg] - PESO_URG[b.urg]) || (a.rank - b.rank));
+    // BLOCO 38 — mesmo tipo de ação fica adjacente: a repetição vira alinhamento de tabela, não parede.
+    todasAcoes.sort((a, b) => (PESO_URG[a.urg] - PESO_URG[b.urg]) || String(a.tipo).localeCompare(String(b.tipo)) || (a.rank - b.rank));
     const topo = todasAcoes.slice(0, 6);
     if (topo.length) {
       const corUrg = u => u === 'alta' ? 'var(--red)' : u === 'media' ? 'var(--amber)' : 'var(--green)';
+      // BLOCO 38 — eram 6 cards idênticos empilhados (ponto + negrito + cinza), 3 deles com o
+      // mesmo texto-padrão: o padrão repetido parou de comunicar hierarquia. Virou lista tabular
+      // com colunas alinhadas (urgência · praça · ação — alvos); o vermelho sobrevive apenas na
+      // urgência alta, o resto fica neutro pra que 'urgente' volte a significar algo.
       acoesTopoHtml = `
-      <div class="chart-card" id="acoesSemanaCard" style="border:1.5px solid var(--red);box-shadow:0 4px 16px rgba(229,26,49,.10);">
-        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:3px;">
+      <div class="chart-card" id="acoesSemanaCard" style="border-left:3px solid var(--red);">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
           <h3 style="margin:0;">Suas ações desta semana</h3>
-          <span style="font-size:11px;color:var(--muted2);">${topo.length} de ${todasAcoes.length} · cada uma nasce de um sinal medido, com praça, pessoa e negócios</span>
+          <span style="font-size:11px;color:var(--muted2);">${topo.length} de ${todasAcoes.length} · cada uma nasce de um sinal medido — o detalhe por praça está logo abaixo</span>
         </div>
-        <div class="chart-subtitle" style="margin:0 0 12px;">Feche estas antes de descer pro detalhe. O ranking completo de praças está logo abaixo.</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          ${topo.map(a => `
-            <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:10px;border-left:3px solid ${corUrg(a.urg)};background:${a.urg === 'alta' ? 'var(--red-soft)' : 'var(--panel2)'};">
-              <span style="flex:none;width:6px;height:6px;border-radius:50%;margin-top:7px;background:${corUrg(a.urg)};"></span>
-              <div style="min-width:0;flex:1;">
-                <b style="font-size:12.5px;display:block;line-height:1.4;">${a.titulo}</b>
-                <div style="font-size:11px;color:var(--muted2);margin-top:3px;">${esc(a.praca)}${a.alvo ? ' · ' + a.alvo : ''}</div>
-              </div>
+        <div style="margin-top:6px;">
+          ${topo.map((a, i) => `
+            <div style="display:grid;grid-template-columns:13px 132px 1fr;gap:10px;align-items:baseline;padding:9px 0;${i ? 'border-top:1px solid var(--line-soft);' : ''}">
+              <span title="urgência ${a.urg}" style="width:7px;height:7px;border-radius:50%;align-self:center;background:${a.urg === 'alta' ? 'var(--red)' : 'var(--line-btn)'};"></span>
+              <b style="font-size:11.5px;font-family:'Poppins',sans-serif;font-weight:700;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.praca)}</b>
+              <span style="min-width:0;font-size:12.5px;line-height:1.5;"><b style="color:${a.urg === 'alta' ? 'var(--red-dk)' : 'var(--ink)'};">${a.titulo}</b>${a.alvo ? `<span style="color:var(--muted2);font-size:11.5px;"> — ${a.alvo}</span>` : ''}</span>
             </div>`).join('')}
         </div>
       </div>`;
@@ -7401,7 +7410,15 @@ function renderResumoSemanal() {
     return `
     <div class="chart-card">
       <div class="chart-subtitle" style="margin:0 0 14px;">Índice de intervenção = 50% travamento · 30% distância da meta · 20% quente sem próximo passo. A primeira praça é onde sua semana rende mais.</div>
-      ${linhas.map((l, i) => `
+      ${linhas.map((l, i) => {
+        // BLOCO 38 — colapsada, a praça precisa dizer O QUE FAZER sem abrir: o número cru
+        // ('índice 58') virou selo rotulado com a escala explicada no title, e a ação nº1
+        // aparece na própria linha. A barra de 5px saiu — repetia o índice e estava
+        // 'quase invisível' (diagnóstico ao vivo de 13/08). Ações expandidas viram linhas
+        // com divisor fino, não cards com borda: só a urgência alta carrega cor.
+        const acs = acoesDe(l);
+        const banda = l.indice >= 70 ? { rot: 'intervir já', cor: 'var(--red-dk)', bg: 'var(--red-soft)' } : l.indice >= 55 ? { rot: 'atenção', cor: 'var(--amber-ink)', bg: 'var(--amber-soft)' } : { rot: 'no ritmo', cor: 'var(--green)', bg: 'var(--green-soft)' };
+        return `
         <details class="praca-acc"${i === 0 ? ' open' : ''} style="border-top:1px solid var(--line);${i === 0 ? 'border-top:0;' : ''}">
           <summary style="list-style:none;cursor:pointer;padding:13px 0;">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -7409,23 +7426,21 @@ function renderResumoSemanal() {
               <b style="font-size:14px;font-family:'Poppins',sans-serif;">${esc(l.praca)}</b>
               <span style="font-size:11.5px;color:var(--muted2);">${esc(l.reps.join(', '))}</span>
               <span style="flex:1;"></span>
-              <span style="font-size:11px;color:var(--muted2);">índice <b style="color:${l.indice >= 70 ? 'var(--red)' : l.indice >= 55 ? 'var(--amber)' : 'var(--green)'};">${l.indice}</b></span>
+              <span title="Índice de intervenção ${l.indice} — 50% travamento · 30% distância da meta · 20% quente sem próximo passo" style="font-size:10px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;border-radius:999px;padding:3px 10px;color:${banda.cor};background:${banda.bg};">${banda.rot} · ${l.indice}</span>
               <span class="praca-acc-chev" aria-hidden="true" style="font-size:11px;color:var(--muted2);">▾</span>
             </div>
-            <div style="height:5px;border-radius:99px;background:var(--sunk);margin:8px 0 9px;overflow:hidden;">
-              <div style="height:100%;width:${Math.max(4, Math.round(100 * l.indice / maiorIndice))}%;border-radius:99px;background:${l.indice >= 70 ? 'var(--red)' : l.indice >= 55 ? 'var(--amber)' : 'var(--green)'};"></div>
-            </div>
-            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);">
+            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:11.5px;color:var(--muted);margin-top:8px;">
               <span><b style="color:var(--ink);">${l.open}</b> em aberto</span>
               <span><b style="color:${l.pctTrav >= 40 ? 'var(--red)' : 'var(--ink)'};">${l.trav}</b> travados (${l.pctTrav.toFixed(0)}%)</span>
               <span><b style="color:var(--ink);">${l.quentes}</b> quentes${l.semPasso ? ` · <b style="color:var(--amber);">${l.semPasso}</b> sem próximo passo` : ''}</span>
               ${l.meta ? `<span><b style="color:${l.pctMeta < 20 ? 'var(--red)' : 'var(--ink)'};">${l.mes}/${l.meta}</b> no mês</span>` : ''}
             </div>
+            ${acs.length ? `<div style="font-size:12px;margin-top:7px;font-weight:700;color:${acs[0].urg === 'alta' ? 'var(--red-dk)' : 'var(--muted)'};">→ ${acs[0].titulo}</div>` : ''}
           </summary>
           <div style="padding-bottom:13px;">
-          ${acoesDe(l).map(a => `
-            <div style="display:flex;gap:9px;align-items:flex-start;margin-top:9px;padding:9px 11px;border-radius:10px;border-left:3px solid ${a.urg === 'alta' ? 'var(--red)' : a.urg === 'media' ? 'var(--amber)' : 'var(--green)'};background:${a.urg === 'alta' ? 'var(--red-soft)' : 'var(--panel2)'};max-width:104ch;">
-              <span style="flex:none;width:6px;height:6px;border-radius:50%;margin-top:6px;background:${a.urg === 'alta' ? 'var(--red)' : a.urg === 'media' ? 'var(--amber)' : 'var(--green)'};"></span>
+          ${acs.map(a => `
+            <div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px solid var(--line-soft);max-width:104ch;">
+              <span style="flex:none;width:7px;height:7px;border-radius:50%;margin-top:6px;background:${a.urg === 'alta' ? 'var(--red)' : 'var(--line-btn)'};"></span>
               <div style="min-width:0;">
                 <b style="font-size:12.5px;display:block;line-height:1.4;">${a.titulo}</b>
                 <div style="font-size:11.5px;color:var(--muted);line-height:1.55;margin-top:2px;">${a.detalhe}</div>
@@ -7434,7 +7449,8 @@ function renderResumoSemanal() {
             </div>`).join('')}
           ${l.piores.length ? `<div style="font-size:11px;color:var(--muted2);margin-top:7px;">Mais parado da praça: <b>${esc(String(l.piores[0].name || '').trim())}</b> · ${esc(l.piores[0].stage || '')} · ${Number(l.piores[0].dias) || 0}d com ${esc(l.piores[0].rep || '')}</div>` : ''}
           </div>
-        </details>`).join('')}
+        </details>`;
+      }).join('')}
     </div>`;
   })();
 
