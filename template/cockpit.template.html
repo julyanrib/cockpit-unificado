@@ -16970,26 +16970,126 @@ async function renderPDIs() {
         <div class="chart-subtitle" style="margin:0;">Sua análise individual ainda não foi gerada — ela roda toda madrugada e a leitura da semana fecha na sexta. Assim que sair, aparece aqui.</div>
       </div>`;
 
-    el.innerHTML = `
-      <section class="exec-support-hero" aria-labelledby="desenvolvimentoExecTitulo">
-        <div style="position:relative;z-index:1;">
-          <div class="exec-support-kicker">Meu desenvolvimento · seu plano de evolução</div>
-          <h1 class="exec-support-title" id="desenvolvimentoExecTitulo">Como eu melhoro?</h1>
-          <div class="exec-support-sub">Seu gargalo, sua leitura da semana e seus acordos de 1:1 no mesmo lugar — pra você chegar no 1:1 já sabendo do que se trata.</div>
-        </div>
-        <div class="exec-support-signal"><b>Plano vivo</b><span>revise, execute e leve evidências ao próximo 1:1</span></div>
-      </section>
-      ${blocoDiagnostico}
-      <div class="daily-rep-card" data-owner="${r ? r.ownerId : ''}" style="overflow:hidden;">
-        <div class="daily-rep-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
-          <span>Meu plano de desenvolvimento</span>
-          <span style="font-size:10.5px;font-weight:600;color:var(--muted2);">acordos mais recentes primeiro</span>
-        </div>
-        <div style="padding:14px 16px 16px;">
-          <div class="pdiLista"><div class="empty-state">Carregando seu plano...</div></div>
+    // BLOCO 37 (13/08/26) — Julyan: "quero a aba Desenvolvimento do executivo EXATAMENTE
+    // ASSIM com essas cores e tudo e identidade visual", apontando pro redesenho do
+    // "Meu Funil" (Bloco 24/25). Transplante de GRAMÁTICA visual, não de conteúdo: as
+    // classes .sec/.sec-num/.acao/.grupos/.grupo/.lead são as MESMAS já definidas pro
+    // Meu Funil — zero CSS novo, zero risco de inconsistência entre as duas telas.
+    // O dado é 100% o mesmo de antes (r.gargalo, indSemana, boasPraticasIA, docs do
+    // Supabase) — só a moldura mudou. O card de PDIs anexados (.daily-rep-card /
+    // .pdiLista) foi preservado byte a byte por dentro: o loader assíncrono de baixo
+    // (linha ~16996) faz querySelectorAll('.daily-rep-card') igual pro gestor e pro
+    // executivo, e o clique nos checkboxes de compromisso depende de
+    // .pdiCompromissoItem/.checkbox exatamente como estão — só a casca ganhou o
+    // container .card do Meu Funil por fora.
+    const tagFoco = temGargalo ? 'GARGALO DA SEMANA' : 'FOCO DA SEMANA';
+    const toneFoco = temGargalo ? 'var(--red)' : 'var(--green)';
+    const toneFocoInk = temGargalo ? 'var(--red-dk)' : 'var(--green)';
+    const toneFocoSoft = temGargalo ? 'var(--red-soft)' : 'var(--green-soft)';
+    const tituloFoco = temGargalo ? r.gargalo : 'Sem gargalo identificado esta semana';
+
+    const secaoFoco = (temGargalo || acoesSemana.length) ? `
+    <section class="sec" style="margin-top:22px;">
+      <div class="sec-head">
+        <span class="sec-num">1</span>
+        <h2>Faça isso hoje</h2>
+        <p>O mesmo texto que seu gestor lê antes do 1:1 — nada aqui é escolhido à mão.</p>
+      </div>
+      <div class="acoes" style="grid-template-columns:1fr;">
+        <div class="acao" style="--tone:${toneFoco};--tone-ink:${toneFocoInk};--tone-soft:${toneFocoSoft};">
+          <div class="acao-top"><span class="acao-tag">${tagFoco}</span>${acoesSemana.length ? `<span class="acao-qtd">${acoesSemana.length} ação${acoesSemana.length === 1 ? '' : 'ões'}</span>` : ''}</div>
+          <h3>${esc(tituloFoco)}</h3>
+          ${indSemana && indSemana.resumoIndividual ? `<p class="acao-why">${esc(indSemana.resumoIndividual)}</p>` : ''}
+          ${acoesSemana.length ? `<div class="acao-list">${acoesSemana.map(a => `<div class="acao-item"><b>${esc(a)}</b></div>`).join('')}</div>` : ''}
+          <div class="acao-foot">
+            <span style="font-size:11px;color:var(--muted2);">análise ${esc(DATA.versaoAnalise || '—')}${(DATA.resumoSemanal && DATA.resumoSemanal.geradoEmFmt) ? ' · ' + esc(DATA.resumoSemanal.geradoEmFmt) : ''}</span>
+            <span class="acao-sec" data-scrollpdi>ver meus PDIs ↓</span>
+          </div>
         </div>
       </div>
+    </section>` : '';
+
+    const secaoPlano = `
+    <section class="sec">
+      <div class="sec-head">
+        <span class="sec-num">${secaoFoco ? '2' : '1'}</span>
+        <h2>Seu plano, em 3 partes</h2>
+        <p>Leitura da semana, boas práticas pro seu caso, e os acordos do seu último 1:1.</p>
+      </div>
+      <div class="grupos">
+        <div class="grupo" style="--tone:var(--blue);--tone-ink:var(--blue);--tone-soft:var(--blue-soft,var(--panel2));">
+          <div class="grupo-head"><span class="grupo-dot"></span><h3>Leitura da semana</h3></div>
+          <div class="grupo-body" style="padding:13px 17px 15px;">
+            ${indSemana && indSemana.resumoIndividual
+              ? `<p style="margin:0;font-size:12.5px;line-height:1.6;color:var(--muted);">${esc(indSemana.resumoIndividual)}</p>`
+              : `<div class="empty-state" style="padding:0;">Sua leitura da semana ainda não saiu — fecha toda sexta.</div>`}
+          </div>
+        </div>
+        <div class="grupo" style="--tone:var(--green);--tone-ink:var(--green);--tone-soft:var(--green-soft);">
+          <div class="grupo-head"><span class="grupo-dot"></span><h3>Boas práticas pra você</h3><span class="grupo-count">${boasPraticasIA.length}</span></div>
+          <div class="grupo-body">
+            ${boasPraticasIA.length === 0 ? '<div class="empty-state" style="padding:14px;">Nenhuma ainda — aparece quando a análise achar um padrão que funciona com você.</div>'
+              : boasPraticasIA.map(b => `<div class="lead" style="cursor:default;grid-template-columns:1fr;"><span class="lead-nome" style="white-space:normal;font-weight:600;font-size:12.5px;">${b}</span></div>`).join('')}
+          </div>
+        </div>
+        <div class="grupo" style="--tone:var(--amber);--tone-ink:var(--amber-ink);--tone-soft:var(--amber-soft);">
+          <div class="grupo-head"><span class="grupo-dot"></span><h3>Seu 1:1</h3></div>
+          <div class="grupo-body" style="padding:13px 17px 15px;">
+            <p style="margin:0 0 10px;font-size:12.5px;line-height:1.55;color:var(--muted);">Seus compromissos combinados com o gestor, pra marcar como feito antes do próximo encontro.</p>
+          </div>
+          <div class="grupo-foot"><span>&nbsp;</span><span class="link-fake" data-scrollpdi style="font-weight:700;cursor:pointer;color:var(--amber-ink);">ver e marcar ↓</span></div>
+        </div>
+      </div>
+    </section>`;
+
+    el.innerHTML = `
+      <div class="cockpit-hero-combo" style="align-items:center;">
+        <div style="display:flex;flex-direction:column;gap:4px;min-width:200px;flex:none;">
+          <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Meu desenvolvimento · ${esc(String(r && r.name || '').split(' ')[0])}</span>
+          <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Como eu melhoro?</h1>
+        </div>
+        <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
+        <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:var(--dark-ink);">${acoesSemana.length}</div><div style="font-size:11px;color:var(--dark-mut);">ações desta semana</div></div>
+          <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:var(--dark-green);">${boasPraticasIA.length}</div><div style="font-size:11px;color:var(--dark-mut);">boas práticas</div></div>
+          <div><div id="devPdiCountHero" style="font-family:'Poppins',sans-serif;font-weight:800;font-size:26px;color:var(--dark-ink);">…</div><div style="font-size:11px;color:var(--dark-mut);">PDIs anexados</div></div>
+        </div>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:7px;border:1px solid ${temGargalo ? 'var(--red)' : 'var(--green)'};border-radius:999px;padding:5px 13px;font-size:11.5px;font-weight:700;color:${temGargalo ? 'var(--red)' : 'var(--green)'};">
+          <span style="width:7px;height:7px;border-radius:99px;background:${temGargalo ? 'var(--red)' : 'var(--green)'};"></span>${temGargalo ? 'Com gargalo pra destravar' : 'Sem gargalo — funil girando'}
+        </span>
+      </div>
+
+      ${secaoFoco}
+      ${secaoPlano}
+
+      <section class="sec" id="devSecaoPdis">
+        <div class="sec-head">
+          <span class="sec-num">${secaoFoco ? '3' : '2'}</span>
+          <h2>Meus PDIs anexados</h2>
+          <p>Histórico completo dos acordos com seu gestor — mais recente primeiro.</p>
+        </div>
+        <div class="base" style="grid-template-columns:1fr;">
+          <div class="card" style="padding:0;overflow:hidden;">
+            <div class="daily-rep-card" data-owner="${r ? r.ownerId : ''}" style="overflow:hidden;border:none;border-radius:0;box-shadow:none;">
+              <div class="daily-rep-head" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                <span>Meu plano de desenvolvimento</span>
+                <span style="font-size:10.5px;font-weight:600;color:var(--muted2);">acordos mais recentes primeiro</span>
+              </div>
+              <div style="padding:14px 16px 16px;">
+                <div class="pdiLista"><div class="empty-state">Carregando seu plano...</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     `;
+    el.querySelectorAll('[data-scrollpdi]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const alvo = document.getElementById('devSecaoPdis');
+        if (alvo && typeof smoothScrollTo === 'function') smoothScrollTo(alvo);
+        else if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
   }
 
   // Carrega a lista de cada card e religa o upload (se manager)
@@ -17005,8 +17105,11 @@ async function renderPDIs() {
 
     if (error) {
       listaEl.innerHTML = `<div class="empty-state">Erro: ${error.message}</div>`;
+      // BLOCO 37 — placeholder do hero não pode ficar em "…" pra sempre num erro real.
+      const heroErro = document.getElementById('devPdiCountHero'); if (heroErro) heroErro.textContent = '—';
     } else if (!data || data.length === 0) {
       listaEl.innerHTML = `<div class="empty-state">Nenhum PDI anexado ainda.</div>`;
+      const heroVazio = document.getElementById('devPdiCountHero'); if (heroVazio) heroVazio.textContent = '0';
     } else {
       const linhas = await Promise.all(data.map(async (doc) => {
         const { data: signed } = await supa.storage.from('pdi-documentos').createSignedUrl(doc.caminho_arquivo, 3600);
@@ -17045,6 +17148,12 @@ async function renderPDIs() {
         `;
       }));
       listaEl.innerHTML = linhas.join('');
+      // BLOCO 37 — o hero da aba Desenvolvimento do executivo mostra "PDIs anexados"
+      // como placeholder ("…") até este mesmo loader (que já buscava a lista pro card
+      // de baixo) resolver — mesmo padrão assíncrono do grupo "Contas-alvo" do Meu
+      // Funil. Não busca nada de novo: só espelha a contagem que já chegou.
+      const heroCount = document.getElementById('devPdiCountHero');
+      if (heroCount) heroCount.textContent = String(data.length);
 
       listaEl.querySelectorAll('.pdiApagar').forEach(btn => {
         btn.addEventListener('click', (e) => {
