@@ -286,6 +286,73 @@ async function hsAssociacoesEmLote(deObjeto, paraObjeto, ids, attempt = 1) {
   return mapa;
 }
 
+// BLOCO 44 (14/08/26) — "ver tudo... tarefas/compromissos já agendados" (Julyan). Lê
+// TODAS as tarefas em aberto associadas a uma lista de negócios, não só a primeira
+// (diferente de hsAssociacoesEmLote, que guarda só r.to[0] — aqui cada negócio pode ter
+// mais de um follow-up marcado, e a ficha precisa da lista completa, não de uma única).
+// Confirmado com a conta real (query_crm_data) que o app de campo já associa tarefa
+// a negócio nesta pipeline — não é um dado vazio que eu estaria construindo do nada.
+async function hsTarefasAbertasDosNegocios(dealIds) {
+  if (!dealIds.length) return {};
+  // Batch/read da API v4 de associações aceita até 100 ids por chamada — igual ao
+  // hsAssociacoesEmLote acima. Prospecção sozinha já passa de 200 negócios (comentário
+  // de stageDealsTeamWide), então isso PRECISA paginar, não é só teórico.
+  const taskIdsPorDeal = {};
+  const todosTaskIds = [];
+  for (let i = 0; i < dealIds.length; i += 100) {
+    const lote = dealIds.slice(i, i + 100);
+    let assoc = null;
+    for (let tentativa = 1; tentativa <= 5; tentativa++) {
+      await sleep(350);
+      const res = await fetch('https://api.hubapi.com/crm/v4/associations/deals/tasks/batch/read', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inputs: lote.map(id => ({ id: String(id) })) })
+      });
+      if (res.status === 429) { await sleep(1000 * tentativa); continue; }
+      if (!res.ok) { console.log(`Aviso: associações deals->tasks falharam (${res.status}) — ficha segue sem tarefas agendadas para este lote.`); break; }
+      assoc = await res.json();
+      break;
+    }
+    if (!assoc) continue;
+    (assoc.results || []).forEach(r => {
+      const dealId = r.from && r.from.id;
+      const taskIds = (r.to || []).map(t => t.toObjectId).filter(Boolean).map(String);
+      if (dealId && taskIds.length) { taskIdsPorDeal[String(dealId)] = taskIds; todosTaskIds.push(...taskIds); }
+    });
+  }
+  if (!todosTaskIds.length) return {};
+
+  // Lê as propriedades das tarefas em lotes de 100 (limite da API de batch/read).
+  const props = {};
+  for (let i = 0; i < todosTaskIds.length; i += 100) {
+    const lote = todosTaskIds.slice(i, i + 100);
+    await sleep(350);
+    const resTask = await fetch('https://api.hubapi.com/crm/v3/objects/tasks/batch/read', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ properties: ['hs_task_subject', 'hs_timestamp', 'hs_task_status'], inputs: lote.map(id => ({ id })) })
+    });
+    if (!resTask.ok) { console.log(`Aviso: leitura em lote de tarefas falhou (${resTask.status}) — ficha segue sem tarefas agendadas.`); continue; }
+    const dataTask = await resTask.json();
+    (dataTask.results || []).forEach(t => { props[String(t.id)] = t.properties || {}; });
+  }
+
+  // Monta o mapa final: só tarefas EM ABERTO (NOT_STARTED), ordenadas pela data mais
+  // próxima, no máximo 3 por negócio — a ficha é um resumo, não a lista completa do CRM.
+  const mapaFinal = {};
+  Object.entries(taskIdsPorDeal).forEach(([dealId, taskIds]) => {
+    const abertas = taskIds
+      .map(tid => props[tid])
+      .filter(p => p && p.hs_task_status === 'NOT_STARTED' && p.hs_task_subject)
+      .map(p => ({ subject: p.hs_task_subject, timestamp: p.hs_timestamp || null }))
+      .sort((a, b) => (a.timestamp || '9999') < (b.timestamp || '9999') ? -1 : 1)
+      .slice(0, 3);
+    if (abertas.length) mapaFinal[dealId] = abertas;
+  });
+  return mapaFinal;
+}
+
 // Lê nome e dono de vários negócios de uma vez.
 async function hsNegociosEmLote(ids, attempt = 1) {
   if (!ids.length) return {};
@@ -622,7 +689,7 @@ async function repOpenDeals(ownerId) {
       // Medido hoje: a maioria desses campos ainda esta VAZIA no CRM (dos quentes sem
       // coordenada, so o UAU UNIDADE PENHA tinha CEP). Pedir custa zero e o pino passa a
       // aparecer sozinho conforme o time preenche.
-      'cep', 'bairro', 'cidade', 'logradouro', 'numero', ...ENTERED_STAGE_PROPS]
+      'cep', 'bairro', 'cidade', 'logradouro', 'numero', 'celular', ...ENTERED_STAGE_PROPS]
   });
   return results.filter(d => !isExcludedDeal(d));
 }
@@ -657,7 +724,7 @@ async function stageDealsTeamWide(stageId) {
       // Medido hoje: a maioria desses campos ainda esta VAZIA no CRM (dos quentes sem
       // coordenada, so o UAU UNIDADE PENHA tinha CEP). Pedir custa zero e o pino passa a
       // aparecer sozinho conforme o time preenche.
-      'cep', 'bairro', 'cidade', 'logradouro', 'numero', ...ENTERED_STAGE_PROPS]
+      'cep', 'bairro', 'cidade', 'logradouro', 'numero', 'celular', ...ENTERED_STAGE_PROPS]
   });
   return todos.filter(d => !isExcludedDeal(d));
 }
@@ -925,6 +992,9 @@ async function main() {
   const funilLeads = {};
   for (const stageId of OPEN_STAGES) {
     const deals = await stageDealsTeamWide(stageId);
+    // BLOCO 44 — tarefas em aberto associadas, uma chamada em lote por etapa (não por
+    // negócio) — mesmo motivo de custo de qualquer outra chamada em lote deste arquivo.
+    const tarefasPorDeal = await hsTarefasAbertasDosNegocios(deals.map(d => d.id));
     funilLeads[stageId] = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
       // Coordenada real do check-in via Expogo (Julyan, 10/08: "eles marcam no Expogo
@@ -950,6 +1020,8 @@ async function main() {
         cidade: d.properties.cidade || null,
         logradouro: d.properties.logradouro || null,
         numero: d.properties.numero || null,
+        celular: d.properties.celular || null,
+        tarefas: tarefasPorDeal[d.id] || [],
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };
     }).sort((a, b) => b.dias - a.dias);
@@ -1082,6 +1154,9 @@ async function main() {
       registrarFalhaSync(rep.ownerId, rep.name, ontemISO, 'ontem', e);
     }
 
+    // BLOCO 44 — tarefas em aberto associadas ao negócio, uma chamada em lote por
+    // executivo (mesmo padrão do laço de funilLeads acima).
+    const tarefasPorDealDoRep = await hsTarefasAbertasDosNegocios(deals.map(d => d.id));
     const withDays = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
       const stageId = d.properties.dealstage;
@@ -1145,6 +1220,8 @@ async function main() {
         cidade: d.properties.cidade || null,
         logradouro: d.properties.logradouro || null,
         numero: d.properties.numero || null,
+        celular: d.properties.celular || null,
+        tarefas: tarefasPorDealDoRep[d.id] || [],
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };
     }).sort((a, b) => b.dias - a.dias);
