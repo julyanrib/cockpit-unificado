@@ -498,6 +498,34 @@ async function main() {
     });
   }
 
+  // ===== BLOCO 40 (14/08/26) — snapshot por executivo, pra viabilizar delta
+  // semana-a-semana na aba Desenvolvimento do executivo.
+  //
+  // O que existia antes: comparativo de TIME (raw.kpisComparativo) e "vs. última
+  // atualização" (data/hubspot-previous.json, que é o pull de 8h atrás — não a semana
+  // passada). Nenhum dos dois responde "quantos negócios ELE tinha em Visita semana
+  // passada", então a coluna "Leitura da semana" só podia mostrar valor absoluto.
+  //
+  // Grava o snapshot desta semana no histórico do mês e injeta em porRep o snapshot da
+  // ÚLTIMA semana já registrada. O front só LÊ `indSemana.anterior` — não calcula, não
+  // deduz e não mostra seta nenhuma enquanto isso for null (o que é o caso até a primeira
+  // sexta rodar com este bloco, e também na 1ª semana de cada mês, porque o acumulador
+  // reseta na virada — nesses casos a tela mostra só o número de hoje, de propósito).
+  const snapDaSemana = Object.fromEntries(Object.entries(raw.snapshotReps || {}).map(([id, s]) => [id, {
+    open: s.open || 0,
+    stages: s.stages || {},
+    leadsTravados: s.leadsTravados || 0,
+    ganhosSemana: s.ganhosSemana || 0,
+    fechadosNoMes: s.fechadosNoMes || 0
+  }]));
+  const semanaAnteriorSnap = (historicoMes.semanas || [])
+    .filter(s => s.numeroSemana < numeroSemana && s.porRep)
+    .sort((a, b) => b.numeroSemana - a.numeroSemana)[0] || null;
+  Object.keys(porRep).forEach(id => {
+    porRep[id].snap = snapDaSemana[id] || null;
+    porRep[id].anterior = (semanaAnteriorSnap && semanaAnteriorSnap.porRep[id] && semanaAnteriorSnap.porRep[id].snap) || null;
+  });
+
   const output = {
     geradoEm: new Date().toISOString(),
     janela: raw.janela,
@@ -527,7 +555,8 @@ async function main() {
       kpisSemana: raw.kpisComparativo.atual,
       resumoGeral: output.resumoGeral,
       comoAgir: output.comoAgir,
-      porRep: Object.fromEntries(Object.entries(porRep).map(([id, r]) => [id, { comoAgirIndividual: r.comoAgirIndividual }]))
+      // BLOCO 40 — o snap entra junto: é ele que vira o `anterior` da semana que vem.
+      porRep: Object.fromEntries(Object.entries(porRep).map(([id, r]) => [id, { comoAgirIndividual: r.comoAgirIndividual, snap: r.snap || null }]))
     });
     fs.writeFileSync(CAMINHO_HISTORICO_MES, JSON.stringify(historicoMes, null, 2));
     console.log(`historico-semanal-mes.json atualizado (semana ${numeroSemana} de ${mesAno}).`);
