@@ -80,9 +80,23 @@ async function leadsCriadosNaJanela(startMs, endMs) {
         { propertyName: 'dealstage', operator: 'NEQ', value: STAGE_CONTA_ALVO }
       ]
     }],
-    limit: 1
+    // BLOCO 41 (14/08/26) — antes só o total (limit:1) bastava pro KPI de time. O board
+    // por executivo da Semana (gestor) precisa de "negócios criados" POR PESSOA, e não
+    // existia essa quebra em lugar nenhum — só ganhos/reuniões já vinham com
+    // hubspot_owner_id. Mesmo padrão dos dois: busca os negócios de verdade (até 100,
+    // igual ganhosNaJanela/reunioesNaJanela — nenhuma semana do time bate isso hoje) e
+    // devolve com dono. O total do time (leadsCriados) continua vindo de data.total,
+    // que é exato mesmo se a paginação de results algum dia cortar em 100.
+    properties: ['dealname', 'hubspot_owner_id'],
+    limit: 100
   });
-  return data.total || 0;
+  return {
+    total: data.total || 0,
+    deals: (data.results || []).filter(d => !isTestDeal(d.properties.dealname)).map(d => ({
+      nome: d.properties.dealname,
+      ownerId: d.properties.hubspot_owner_id
+    }))
+  };
 }
 
 // Conta negócios que foram FECHADOS DE VERDADE (closedate, não hs_lastmodifieddate) na janela.
@@ -140,14 +154,17 @@ async function reunioesNaJanela(startMs, endMs) {
 }
 
 async function windowCounts(startMs, endMs) {
-  const leadsCriados = await leadsCriadosNaJanela(startMs, endMs);
+  const leadsCriadosResultado = await leadsCriadosNaJanela(startMs, endMs);
   const ganhosDeals = await ganhosNaJanela(startMs, endMs);
   const perdidos = await contagemComFiltro(STAGES.perdido, startMs, endMs);
   const reciclagem = await contagemComFiltro(STAGES.reciclagem, startMs, endMs);
   const reunioesDeals = await reunioesNaJanela(startMs, endMs);
 
   return {
-    leadsCriados,
+    leadsCriados: leadsCriadosResultado.total,
+    // BLOCO 41 — só a janela ATUAL importa por pessoa (o board da Semana não compara
+    // "criados" contra a semana anterior por executivo, só o time todo já compara).
+    leadsCriadosDeals: leadsCriadosResultado.deals,
     ganhos: ganhosDeals.length,
     ganhosDeals: ganhosDeals.map(d => ({
       nome: d.properties.dealname,
@@ -218,6 +235,8 @@ async function main() {
     },
     ganhosSemanaDetalhe: atual.ganhosDeals,
     reunioesSemanaDetalhe: atual.reunioesDeals,
+    // BLOCO 41 — "criados" por pessoa na semana atual (board da Semana do gestor).
+    leadsCriadosSemanaDetalhe: atual.leadsCriadosDeals,
     quentesDemoOuNegociacao,
     snapshotReps: hubspotSnapshot ? hubspotSnapshot.reps : {}
   };

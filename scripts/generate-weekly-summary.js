@@ -526,14 +526,35 @@ async function main() {
     porRep[id].anterior = (semanaAnteriorSnap && semanaAnteriorSnap.porRep[id] && semanaAnteriorSnap.porRep[id].snap) || null;
   });
 
+  // ===== BLOCO 41 (14/08/26) — faísca de 5 semanas pros KPIs de time da aba Semana
+  // (gestor). Antes disto, NENHUM histórico de time chegava ao cliente — só o snapshot
+  // de agora (kpisComparativo.atual/anterior). historico-semanal-mes.json já guarda
+  // kpisSemana por semana (é o que alimenta "contexto de semanas anteriores" no prompt),
+  // só nunca tinha saído do processo de geração. Pega as últimas 4 semanas já fechadas
+  // + a atual (ainda não está no acumulador — só entra nele mais abaixo, depois deste
+  // ponto) = até 5 pontos. Com menos de 5 semanas de histórico acumulado (é o caso agora,
+  // só há 2), a série vem mais curta — o front deve desenhar só as barras que existem,
+  // nunca inventar as que faltam (mesmo princípio do snapshot do Bloco 40). =====
+  const ultimasSemanasFechadas = (historicoMes.semanas || [])
+    .slice().sort((a, b) => a.numeroSemana - b.numeroSemana).slice(-4);
+  const serieSemanal = {
+    janelas: [...ultimasSemanasFechadas.map(s => s.janela.atual), raw.janela.atual],
+    fechamentos: [...ultimasSemanasFechadas.map(s => s.kpisSemana.ganhos), raw.kpisComparativo.atual.ganhos],
+    reunioes: [...ultimasSemanasFechadas.map(s => s.kpisSemana.reunioes), raw.kpisComparativo.atual.reunioes],
+    criados: [...ultimasSemanasFechadas.map(s => s.kpisSemana.leadsCriados), raw.kpisComparativo.atual.leadsCriados]
+  };
+
   const output = {
     geradoEm: new Date().toISOString(),
+    serieSemanal,
     janela: raw.janela,
     kpisComparativo: raw.kpisComparativo,
     resumoGeral: parsedTime.resumoGeral,
     comoAgir: parsedTime.comoAgir,
     ganhosSemanaDetalhe: raw.ganhosSemanaDetalhe || [],
     reunioesSemanaDetalhe: raw.reunioesSemanaDetalhe || [],
+    // BLOCO 41 — "criados" por pessoa na semana atual (board da Semana do gestor).
+    leadsCriadosSemanaDetalhe: raw.leadsCriadosSemanaDetalhe || [],
     quentesDemoOuNegociacao: raw.quentesDemoOuNegociacao || [],
     porRep
   };

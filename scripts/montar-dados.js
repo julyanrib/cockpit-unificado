@@ -219,9 +219,15 @@ function montarDadosCompletos() {
       kpisComparativo: (weeklyRaw && weeklyRaw.kpisComparativo) || (resumoSemanal && resumoSemanal.kpisComparativo),
       resumoGeral: resumoSemanal ? resumoSemanal.resumoGeral : null,
       comoAgir: resumoSemanal ? resumoSemanal.comoAgir : [],
+      // BLOCO 41 — faísca de 5 semanas (fechamentos/reuniões/criados) pros KPIs de time
+      // da aba Semana do gestor. Só existe a partir desta build; resumo-semanal.json de
+      // builds antigas não tem o campo, daí o fallback pra null (a tela desenha 1 barra só).
+      serieSemanal: resumoSemanal ? (resumoSemanal.serieSemanal || null) : null,
       porRep: resumoSemanal ? (resumoSemanal.porRep || {}) : {},
       ganhosSemanaDetalhe: ganhosDetalheFresco,
       reunioesSemanaDetalhe: (weeklyRaw && weeklyRaw.reunioesSemanaDetalhe) || (resumoSemanal && resumoSemanal.reunioesSemanaDetalhe) || [],
+      // BLOCO 41 — "criados" por pessoa na semana (board da Semana do gestor).
+      leadsCriadosSemanaDetalhe: (weeklyRaw && weeklyRaw.leadsCriadosSemanaDetalhe) || (resumoSemanal && resumoSemanal.leadsCriadosSemanaDetalhe) || [],
       quentesDemoOuNegociacao: (weeklyRaw && weeklyRaw.quentesDemoOuNegociacao) || (resumoSemanal && resumoSemanal.quentesDemoOuNegociacao) || [],
       // snapshotReps alimenta o card "Onde atacar esta semana" (visão por praça).
       // Ele só existe no weekly-raw.json — o resumo-semanal.json (texto da IA) não tem.
@@ -284,6 +290,9 @@ function filtrarParaPapel(dados, usuario) {
     porRep: meuId in (rs.porRep || {}) ? { [meuId]: rs.porRep[meuId] } : {},
     ganhosSemanaDetalhe: soMeu(rs.ganhosSemanaDetalhe),
     reunioesSemanaDetalhe: soMeu(rs.reunioesSemanaDetalhe),
+    // BLOCO 41 — mesmo corte de privacidade dos outros dois: o executivo só vê os
+    // negócios criados que são dele, nunca os dos colegas.
+    leadsCriadosSemanaDetalhe: soMeu(rs.leadsCriadosSemanaDetalhe),
     quentesDemoOuNegociacao: soMeu(rs.quentesDemoOuNegociacao),
     ranking: (rs.ranking || []).map(r =>
       String(r.ownerId) === meuId ? r : { ...r, clientes: [] }
