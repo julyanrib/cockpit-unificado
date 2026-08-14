@@ -3252,7 +3252,11 @@ function interacaoStatusHTML(l, mapaNotas) {
 // Versão escura e compacta do roteiro, pro card "Sua fila de hoje" ao lado do "Seu mês"
 // no Meu Painel — mesmos dados (quentes + travados), lista única em vez de duas seções,
 // e reaproveita o mesmo checkbox com persistência semanal (roteiro-check/wireRoteiroChecks)
-// pra marcar como feito. Clicar no nome abre o HubSpot, igual ao resto do cockpit.
+// pra marcar como feito.
+// BLOCO 43 (14/08/26) — "não faz sentido ele ter que ir pro HubSpot limpar isso" (Julyan).
+// Clicar no nome agora abre a FICHA do Cockpit (trilha de etapa clicável, nota, próximo
+// passo — Bloco 42), não mais direto o HubSpot. O link pro HubSpot continua existindo,
+// só que dentro da própria ficha ("Abrir no HubSpot ↗"), não como único caminho de entrada.
 // "Suas 3 ações de hoje" (Claude Design item 4, hoje-executivo-hi-fi.html) — nada
 // inventado: as 3 vagas vêm, em ordem de prioridade, dos mesmos sinais que já
 // existem em outros lugares (r.travados, quentes em Negociação, agenda vazia).
@@ -3351,10 +3355,10 @@ function buildFilaDeHojeHTML(r) {
             <div class="roteiro-item" data-lead="${l.id}" style="background:var(--dark-fill);border-radius:14px;padding:12px 13px;">
               <div style="display:flex;align-items:center;gap:11px;min-height:22px;">
                 <span class="checkbox roteiro-check" role="checkbox" aria-checked="false" tabindex="0" aria-label="Marcar ${esc(l.name)} como resolvido hoje" data-lead="${l.id}" style="width:20px;height:20px;flex:none;"></span>
-                <a href="${hsUrl(l.id)}" target="_blank" rel="noopener" style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;text-decoration:none;color:inherit;">
+                <span class="roteiro-abre-ficha" data-lead-id="${l.id}" data-stage-id="${l.stageId || ''}" data-stage="${esc(l.stage || '')}" data-owner-id="${l.ownerId || ''}" data-dias="${l.dias != null ? l.dias : ''}" data-sla-breach="${l.slaBreach ? '1' : ''}" data-vendedor="${esc(l.vendedor || '')}" style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;cursor:pointer;">
                   <b style="font-size:13.5px;">${l.name}</b>
                   <span style="font-size:11.5px;color:var(--dark-mut);">${l.stage} · ${l.tipo === 'quente' ? `${l.dias}d na etapa` : `parado há ${l.dias}d`}</span>
-                </a>
+                </span>
                 ${interacaoStatusHTML(l, mapaNotas)}
                 ${l.tipo === 'travado' ? seloSlaHTML(l) : ''}
                 <span style="font-size:11px;font-weight:800;color:${l.tipo === 'quente' ? 'var(--green)' : 'var(--red)'};background:rgba(255,255,255,.1);border-radius:999px;padding:5px 9px;white-space:nowrap;">${l.tipo === 'quente' ? 'fechar' : 'travado'}</span>
@@ -3398,6 +3402,24 @@ function wireRoteiroChecks(rootEl) {
       // role="checkbox" custom precisa responder Enter/Espaço pra ser navegável por teclado
       cb.addEventListener('keydown', (ev) => {
         if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alternar(); }
+      });
+    });
+    // BLOCO 43 (14/08/26) — clicar no nome abre a ficha do Cockpit (Bloco 42: trilha de
+    // etapa, nota, próximo passo), não mais o HubSpot direto. Os data-* do card já
+    // carregam o suficiente pra montar o objeto que fichaLeadFunilBodyHTML espera —
+    // sem isso ser um novo tipo de lead, é o mesmo formato usado em toda ficha existente.
+    card.querySelectorAll('.roteiro-abre-ficha').forEach(span => {
+      span.addEventListener('click', () => {
+        abrirFichaLeadFunilDrawer({
+          id: span.dataset.leadId,
+          name: span.querySelector('b') ? span.querySelector('b').textContent : '',
+          stageId: span.dataset.stageId || null,
+          stage: span.dataset.stage || '',
+          dias: span.dataset.dias !== '' ? Number(span.dataset.dias) : null,
+          slaBreach: span.dataset.slaBreach === '1',
+          ownerId: span.dataset.ownerId || ownerId || null,
+          vendedor: span.dataset.vendedor || ''
+        }, null);
       });
     });
   });
@@ -3972,11 +3994,11 @@ async function renderMeuFunil() {
               const chip = temData
                 ? `<span class="lead-chip chip-green">${dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>`
                 : `<span class="lead-chip chip-red">agir</span>`;
-              return `<a class="lead" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+              return `<button type="button" class="lead" data-lead-id="${l.id}" data-stage-id="${l.stageId || ''}" data-stage="${esc(STAGE_LABELS[l.stageId] || '')}" data-dias="${l.dias != null ? l.dias : ''}" data-sla-breach="${l.slaBreach ? '1' : ''}" style="text-align:left;background:none;border:none;font:inherit;color:inherit;cursor:pointer;">
                 <span class="lead-nome">${esc(l.name)}</span>
                 <span class="lead-sub"><span class="stage-tag" style="background:${stageColor(l.stageId)};">${esc(STAGE_LABELS[l.stageId] || '')}</span><span class="sep">·</span>${l.dias != null ? l.dias + 'd na etapa' : '—'}<span class="sep">·</span>${temData ? (dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' · ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })) : 'sem próxima ação'}</span>
                 ${chip}
-              </a>`;
+              </button>`;
             }).join('')}
           </div>
           <div class="grupo-foot"><span>${fechamentoSemPasso.length} d${fechamentoSemPasso.length === 1 ? 'o' : 'os'} ${quentesColuna.length} sem próximo passo marcado</span><span class="link-fake" data-acaosec="viewAgenda" style="font-weight:700;cursor:pointer;color:var(--red-dk);">agendar todos ↗</span></div>
@@ -3990,11 +4012,11 @@ async function renderMeuFunil() {
               const sla = slaDe(l.stageId);
               const extra = sla != null ? Math.max(0, (l.dias || 0) - sla) : null;
               const dobro = dobroSla(l);
-              return `<a class="lead" href="${hsUrl(l.id)}" target="_blank" rel="noopener">
+              return `<button type="button" class="lead" data-lead-id="${l.id}" data-stage-id="${l.stageId || ''}" data-stage="${esc(STAGE_LABELS[l.stageId] || l.stage || '')}" data-dias="${l.dias != null ? l.dias : ''}" data-sla-breach="1" style="text-align:left;background:none;border:none;font:inherit;color:inherit;cursor:pointer;">
                 <span class="lead-nome">${esc(l.name)}</span>
                 <span class="lead-sub">${esc(STAGE_LABELS[l.stageId] || l.stage || '')}<span class="sep">·</span>${l.dias}d parado<span class="sep">·</span>${sla != null ? 'SLA ' + sla + 'd' : 'sem SLA definido'}</span>
                 ${extra != null ? `<span class="lead-chip ${dobro ? 'chip-red' : 'chip-amber'}">+${extra}d</span>` : ''}
-              </a>`;
+              </button>`;
             }).join('')}
           </div>
           <div class="grupo-foot"><span>${cardTravados.length} já passaram de 2× o prazo</span><span class="link-fake" data-abretodos style="font-weight:700;cursor:pointer;color:var(--red-dk);">abrir lista no CRM ↗</span></div>
@@ -4059,12 +4081,12 @@ async function renderMeuFunil() {
       ${leadsFiltrados.length === 0 ? '<div class="empty-state" style="padding:18px 22px;">Nenhum lead nessa etapa.</div>' : leadsFiltrados.slice(0, 30).map(l => {
         const sla = slaDe(l.stageId);
         const estourou = sla != null && (l.dias || 0) > sla;
-        return `<div class="trow">
+        return `<div class="trow" data-lead-id="${l.id}" data-stage-id="${l.stageId || ''}" data-stage="${esc(STAGE_LABELS[l.stageId] || '')}" data-dias="${l.dias != null ? l.dias : ''}" data-sla-breach="${estourou ? '1' : ''}" style="cursor:pointer;">
           <b>${esc(l.name)}</b>
           <span>${STAGE_LABELS[l.stageId] || ''}</span>
           <span style="font-size:11.5px;">${proximaAcaoHTML(l)}</span>
           <span class="r" style="${estourou ? 'color:var(--red-dk);font-weight:700;' : ''}">${l.dias != null ? l.dias + 'd' : '—'}</span>
-          <a class="r" href="${hsUrl(l.id)}" target="_blank" rel="noopener">abrir ↗</a>
+          <span class="r" style="color:var(--red-dk);font-weight:700;">ver ficha →</span>
         </div>`;
       }).join('') + (leadsFiltrados.length > 30 ? `<div class="todos-foot">+${leadsFiltrados.length - 30} — filtre por etapa pra reduzir a lista</div>` : '')}
     </details>
@@ -4073,6 +4095,26 @@ async function renderMeuFunil() {
   // Clique em etapa (barra ou pílula) filtra/desfiltra a lista, e ABRE o <details> junto
   // — critério de aceite do handoff nº 6: sem isso, filtrar por uma barra "não faz nada"
   // aos olhos de quem não sabe que a tabela está fechada logo abaixo.
+  // BLOCO 43 (14/08/26) — "não faz sentido ele ter que ir pro HubSpot limpar isso"
+  // (Julyan). Os cards de Quentes/Travados e a tabela "Todos os meus leads" iam direto
+  // pro HubSpot; agora abrem a ficha do Cockpit (Bloco 42: trilha de etapa clicável,
+  // nota, próximo passo) primeiro — o link pro HubSpot continua existindo dentro da
+  // própria ficha ("Abrir no HubSpot ↗"), só deixou de ser a única porta de entrada.
+  el.querySelectorAll('.grupo-body button.lead[data-lead-id], .trow[data-lead-id]').forEach(elLead => {
+    elLead.addEventListener('click', () => {
+      abrirFichaLeadFunilDrawer({
+        id: elLead.dataset.leadId,
+        name: (elLead.querySelector('.lead-nome') || elLead.querySelector('b') || {}).textContent || '',
+        stageId: elLead.dataset.stageId || null,
+        stage: elLead.dataset.stage || '',
+        dias: elLead.dataset.dias !== '' ? Number(elLead.dataset.dias) : null,
+        slaBreach: elLead.dataset.slaBreach === '1',
+        ownerId: r.ownerId,
+        vendedor: primeiroNome
+      }, () => renderMeuFunil());
+    });
+  });
+
   el.querySelectorAll('[data-mfetapa]').forEach(btn => {
     btn.addEventListener('click', () => {
       const sid = btn.dataset.mfetapa;
