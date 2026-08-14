@@ -94,6 +94,11 @@ jobs:
         run: |
           git config user.name "cockpit-bot"
           git config user.email "cockpit-bot@users.noreply.github.com"
+          # git rebase --continue abre um editor por padrão pra confirmar a mensagem do
+          # commit — num runner sem terminal interativo isso trava o job (reproduzido
+          # ao vivo no sandbox: sem isto, o job fica pendurado esperando o editor em vez
+          # de terminar). "true" como editor aceita a mensagem como está e segue.
+          export GIT_EDITOR=true
           git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json data/clientes-ativos.json data/sync-status.json public/index.html
           git diff --staged --quiet && echo "Nada mudou hoje." && exit 0
 
@@ -101,9 +106,27 @@ jobs:
 
           # O checkout deste job foi feito no início do workflow — se alguém commitou
           # direto no main enquanto o robô rodava (ex.: colando um arquivo no editor do
-          # GitHub), o push simples é rejeitado por não ser mais fast-forward. Busca o
-          # que mudou e reaplica o commit do robô por cima antes de tentar de novo, em
-          # vez de deixar a atualização do dia se perder.
+          # GitHub, ou uma 2ª execução do workflow rodando em paralelo), o push simples
+          # é rejeitado por não ser mais fast-forward. Busca o que mudou e reaplica o
+          # commit do robô por cima antes de tentar de novo, em vez de deixar a
+          # atualização do dia se perder.
+          #
+          # CORREÇÃO (14/08/26) — incidente real: duas execuções deste workflow
+          # rodaram próximas uma da outra (agendada + disparo manual) e regeneraram
+          # data/narrativas.json e data/weekly-raw.json com conteúdo diferente ao
+          # mesmo tempo (a IA nunca escreve o mesmo texto duas vezes). O `git rebase`
+          # tentou mesclar os dois JSONs linha a linha, não conseguiu (são strings de
+          # IA divergentes na mesma chave, não uma edição humana pra revisar) e o job
+          # morreu com "CONFLICT (content)" sem nada ser enviado.
+          #
+          # Esses arquivos são 100% derivados (fetch-hubspot.js/generate-weekly-summary.js
+          # os regeram do zero nesta mesma execução) — não existe "mesclar" duas versões
+          # geradas por IA em momentos diferentes, e a versão MAIS FRESCA (a que este
+          # job acabou de gerar, com o HubSpot mais atual) é sempre a certa a manter.
+          # Em caso de conflito de rebase, resolve automaticamente ficando com a nossa
+          # versão recém-gerada desses arquivos específicos e segue o rebase — só
+          # aborta e pede intervenção manual se o conflito for em outro lugar
+          # (ex.: alguém editou um data/*.json à mão, o que não deveria acontecer).
           for tentativa in 1 2 3; do
             if git push; then
               echo "Push OK."
@@ -111,7 +134,21 @@ jobs:
             fi
             echo "Push rejeitado (tentativa $tentativa) — buscando o main mais recente e tentando de novo..."
             git fetch origin main
-            git rebase origin/main
+            if ! git rebase origin/main; then
+              CONFLITOS=$(git diff --name-only --diff-filter=U)
+              INESPERADOS=$(echo "$CONFLITOS" | grep -v -E '^data/(hubspot|hubspot-previous|weekly-raw|narrativas|clientes-ativos|sync-status)\.json$|^public/index\.html$' || true)
+              if [ -n "$INESPERADOS" ]; then
+                echo "Conflito em arquivo que não é gerado por este job — abortando pra revisão manual:"
+                echo "$INESPERADOS"
+                git rebase --abort
+                exit 1
+              fi
+              echo "Conflito só nos arquivos gerados por este job — ficando com a versão recém-gerada (mais fresca) e continuando o rebase:"
+              echo "$CONFLITOS"
+              echo "$CONFLITOS" | xargs -r git checkout --theirs --
+              echo "$CONFLITOS" | xargs -r git add
+              git rebase --continue
+            fi
           done
 
           echo "Não consegui enviar mesmo após 3 tentativas — verifique manualmente."
