@@ -22,8 +22,18 @@ const { buscarDealAutorizado } = require('../lib/hubspot-deal-guard');
 
 // Mesma ordem canônica usada em todo o resto do cockpit (ORDEM_ETAPAS_FUNIL /
 // ORDEM_FUNIL_FICHA no template) — repetida aqui só pra VALIDAR que a etapa pedida é
-// uma das 6 abertas; nunca decide nada sozinha, é apenas a lista de permitidas.
-const ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
+// uma das permitidas; nunca decide nada sozinha, é apenas a lista de permitidas.
+// ATUALIZAÇÃO (15/08/26, Julyan): "ele pode enviar pra onboarding... ele pode
+// movimentar pelo cockpit, faça isso" — 1396006163 (Enviado Onboarding) adicionada
+// como 7ª etapa alcançável, na sequência natural logo depois de Ag. Pagamento. Isso
+// NÃO altera a automação dessa etapa (troca de pipeline + grupo de WhatsApp) — é o
+// MESMO PATCH genérico de dealstage que qualquer outra transição já usa; do lado do
+// HubSpot, não existe diferença entre "moveu pelo Cockpit" e "moveu na tela do
+// HubSpot". "Ganho" (1396006162) FICA DE FORA de propósito: Julyan confirmou que essa
+// etapa só é alcançada automaticamente pelo próprio ASAAS quando o pagamento
+// confirma — nenhum humano move negócio pra lá manualmente, então não faz sentido
+// como destino aqui.
+const ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163'];
 
 // BLOCO 54 (14/08/26) — espelho das propriedades condicionais obrigatórias vistas
 // diretamente no pipeline Field Sales do HubSpot. Esta allowlist é a fronteira de
@@ -46,7 +56,11 @@ const PROPS_OBRIGATORIAS_POR_ETAPA = {
   '1395880473': ['dealname', 'email', 'cnpj_cpf', 'celular', 'cep', 'numero',
     'pacote_contratado', 'adicional', 'tipo_de_pagamento', 'periodo_contratado',
     'amount', 'mrr', 'deseja_criar_perfil_no_asaas_', 'qual_maior_desafio_',
-    'informacoes_sobre_o_maior_desafio']
+    'informacoes_sobre_o_maior_desafio'],
+  // Enviado Onboarding não pede NADA de novo — o contrato inteiro (plano, adicional,
+  // MRR, telefone, etc.) já foi coletado quando o negócio entrou em Ag. Pagamento.
+  // Esta etapa é confirmação de pagamento, não coleta de dado.
+  '1396006163': []
 };
 
 const VALORES_PERMITIDOS = {
