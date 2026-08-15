@@ -71,11 +71,21 @@ module.exports = async function handler(req, res) {
   }
 
   // ---- 3. entrada ----
-  const { dealId, mrr } = req.body || {};
+  const { dealId, mrr, zerar } = req.body || {};
   const mrrNum = Number(mrr);
   if (!dealId) return res.status(400).json({ erro: 'Falta o dealId.' });
   if (!Number.isFinite(mrrNum) || mrrNum < 0 || mrrNum > 1000000) {
     return res.status(400).json({ erro: 'MRR inválido — mande um número entre 0 e 1.000.000.' });
+  }
+  // CORREÇÃO (15/08/26, Julyan): a tentativa anterior de bloquear MRR abaixo de R$349
+  // aqui estava ERRADA — R$349 é a META que a Takeat quer pra ficar saudável, NUNCA uma
+  // trava comercial. Quem decide o valor é o executivo negociando com o cliente; a rota
+  // não pode recusar um valor só por estar abaixo da meta. Removido o bloqueio de piso.
+  // Mantido só o resguardo de "zerar exige ação explícita" — isso é segurança de UX
+  // (evitar apagar um MRR real por engano digitando "0"), não regra comercial, e não
+  // impede nenhum valor negociado > 0 de ser salvo normalmente.
+  if (mrrNum === 0 && !zerar) {
+    return res.status(400).json({ erro: `Pra zerar o MRR, use a ação "Zerar MRR" (é uma ação separada, não a edição normal).` });
   }
 
   try {

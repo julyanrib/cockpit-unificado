@@ -27,8 +27,12 @@ const ETAPAS_DE_ENTRADA = ['1396007427', '1395880469']; // Backlog, Prospecção
 const PROPS_PERMITIDAS = ['celular', 'cep', 'bairro', 'cidade', 'logradouro', 'numero',
   'amount', 'valor_de_mrr', 'data_da_reuniao', 'reuniao_agendada', 'origem_do_lead'];
 const ORIGENS_LEAD = ['Rua', 'Indicação', 'Casa dos Dados', 'Instagram', 'Ads', 'GoogleMaps', 'Familia', 'Eventos'];
-const PISO_VALOR = 349;
-const PROPS_COM_PISO = ['amount', 'valor_de_mrr'];
+// CORREÇÃO (15/08/26, Julyan): existia um piso de R$349 aqui bloqueando a criação do
+// negócio abaixo desse valor — ERRADO. R$349 é a META que a Takeat persegue pra ficar
+// saudável, nunca uma trava comercial: quem decide o valor real é o executivo
+// negociando com o cliente. PROPS_COM_PISO/PISO_VALOR removidos; mantém validação
+// básica (número finito e positivo), sem impor piso nenhum.
+const PROPS_VALOR = ['amount', 'valor_de_mrr'];
 
 function limparPropriedades(bruto) {
   if (!bruto || typeof bruto !== 'object') return { propriedades: {}, erro: null };
@@ -39,10 +43,9 @@ function limparPropriedades(bruto) {
     }
     if (valor == null || String(valor).trim() === '') continue;
     const texto = String(valor).trim();
-    if (PROPS_COM_PISO.includes(chave)) {
+    if (PROPS_VALOR.includes(chave)) {
       const n = Number(texto);
-      if (!isFinite(n) || n <= 0) return { propriedades: null, erro: `Valor inválido em "${chave}".` };
-      if (n < PISO_VALOR) return { propriedades: null, erro: `"${chave}" abaixo do piso de R$${PISO_VALOR}.` };
+      if (!isFinite(n) || n < 0) return { propriedades: null, erro: `Valor inválido em "${chave}".` };
       propriedades[chave] = String(n);
       continue;
     }
