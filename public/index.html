@@ -16017,7 +16017,14 @@ async function renderDaily() {
   const semPromessa = repsDaily.length - promessasHoje.length;
   const planosFechadosTotal = repsDaily.filter(r => (planosPorOwner[String(r.ownerId)] || {}).status === 'plano_fechado').length;
   const ehHojeDaily = dailyRefDate === isoDate(new Date());
-  const promessaExec = promessasHoje[0] || {};
+  const promessaExec = souRepDaily
+    // CORREÇÃO (16/08/26) — bug real encontrado por acaso testando a Daily: o banner
+    // do executivo ("Meu compromisso de hoje") mostrava promessasHoje[0], ou seja, os
+    // números de QUALQUER UM que tivesse registrado promessa primeiro na lista — nunca
+    // necessariamente os do próprio executivo logado. Amanda via "51 demo/proposta"
+    // que era de outro colega. Agora busca a linha certa pelo ownerId da sessão.
+    ? (getDaily(sessaoAtual.ownerId, dailyRefDate) || {})
+    : (promessasHoje[0] || {});
   const fechadosHojeTotal = repsDaily.reduce((s, r) => s + (ehHojeDaily
     ? (r.fechamentosHubspotHoje || 0)
     : ((getDaily(r.ownerId, dailyRefDate) || {}).realizado_fechamentos || 0)), 0);
