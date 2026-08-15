@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const { configSupabase, configMaptiler } = require('./montar-dados.js');
+const { buildPlaybook } = require('./build-playbook.js');
 
 const root = path.join(__dirname, '..');
 
@@ -53,5 +54,6 @@ const output = template.replace('{{DATA_JSON}}', JSON.stringify(DATA_PUBLICO));
 const publicDir = path.join(root, 'public');
 if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
 fs.writeFileSync(path.join(publicDir, 'index.html'), output);
+buildPlaybook(root);
 
 console.log('OK — public/index.html gerado com sucesso (shell protegido, sem dados do CRM).');
