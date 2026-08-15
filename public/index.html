@@ -20040,7 +20040,7 @@ async function renderCoaching() {
             <div class="coach-leitura-teaser">${primeiraFrase}</div>
             ${temMais || acoesInd.length ? `
               <details class="coach-leitura-expandir">
-                <summary>Ver leitura completa${acoesInd.length ? ` e ${acoesInd.length} ação${acoesInd.length > 1 ? 'ões' : ''}` : ''}</summary>
+                <summary>Ver leitura completa${acoesInd.length ? ` e ${acoesInd.length} ${acoesInd.length > 1 ? 'ações' : 'ação'}` : ''}</summary>
                 <div class="coach-leitura-full">${textoCompleto}</div>
                 ${acoesInd.length ? `<div class="coach-leitura-acoes">${acoesInd.map((a, i) => `<div class="coach-acao-chip"><b>${i + 1}</b><span>${a}</span></div>`).join('')}</div>` : ''}
               </details>` : ''}
@@ -20171,28 +20171,27 @@ async function renderCoaching() {
 
   const resumoEl = el.querySelector('.coachingSemanalResumo');
   const historicoEl = el.querySelector('.coachingHistoricoCompleto');
-  // Consolidação 10/08 (Julyan): a leitura individual da semana (parágrafo + "como agir")
-  // morava duplicada em dois lugares — aqui como uma linha só (vinda da análise de coaching
-  // no Supabase) e, por completo, num details escondido na aba Semana ("Resumo individual de
-  // cada executivo"). Mesma pessoa, mesma semana, dois textos gerados por IA cobrindo o mesmo
-  // gargalo. Agora a versão completa (DATA.resumoSemanal.porRep) mora só aqui, dentro do
-  // card da pessoa — é aqui que faz sentido ler antes do 1:1, não numa aba geral de time.
+  // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): esta caixa ("Diagnóstico") e o novo
+  // card .coach-leitura-card (mais acima, resumido com expansão) mostravam a MESMA
+  // fonte de dado — DATA.resumoSemanal.porRep[ownerId].resumoIndividual — duas vezes
+  // no mesmo card, uma delas sempre com o texto inteiro sem tratamento. O comentário
+  // original (10/08) já dizia que essa duplicação devia ter sido eliminada; ficou pra
+  // trás. Agora esta caixa serve só pro fallback legítimo — a análise semanal mais
+  // antiga (analise_individual_semanal, tabela separada) — quando a leitura nova
+  // ainda não existe pra essa semana.
   const individualSemana = (DATA.resumoSemanal && DATA.resumoSemanal.porRep && DATA.resumoSemanal.porRep[ownerId]) || null;
-  if (individualSemana && individualSemana.resumoIndividual) {
-    resumoEl.innerHTML = `
-      <div class="daily-col-label" style="margin-bottom:4px;">Leitura da semana <span style="font-weight:400;text-transform:none;color:var(--muted2);">(${(DATA.resumoSemanal.janela && DATA.resumoSemanal.janela.atual) || 'semana atual'})</span></div>
-      <div style="font-size:12.5px;color:var(--ink);line-height:1.55;margin-bottom:${(individualSemana.comoAgirIndividual || []).length > 0 ? '10px' : '0'};">${individualSemana.resumoIndividual}</div>
-      ${(individualSemana.comoAgirIndividual && individualSemana.comoAgirIndividual.length > 0) ? `
-        <ul class="practice-list" style="margin:0;font-size:12px;">
-          ${individualSemana.comoAgirIndividual.map(a => `<li>${a}</li>`).join('')}
-        </ul>
-      ` : ''}
-    `;
+  const jaMostradoNoCard = !!(individualSemana && individualSemana.resumoIndividual);
+  if (jaMostradoNoCard) {
+    resumoEl.innerHTML = '';
+    resumoEl.style.display = 'none';
   } else if (erroSemanas) {
+    resumoEl.style.display = '';
     resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Erro: ${erroSemanas.message}</div>`;
   } else if (!semanas || semanas.length === 0) {
+    resumoEl.style.display = '';
     resumoEl.innerHTML = `<div class="empty-state" style="padding:10px;">Nenhuma análise ainda — roda toda sexta.</div>`;
   } else {
+    resumoEl.style.display = '';
     const ultima = semanas[0];
     resumoEl.innerHTML = `
       <div class="daily-col-label" style="margin-bottom:4px;">Diagnóstico da semana <span style="font-weight:400;text-transform:none;color:var(--muted2);">(${ultima.semana_label})</span></div>
