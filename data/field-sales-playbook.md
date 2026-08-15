@@ -380,6 +380,9 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 |                      |                        |                                                   |
 | -------------------- | ---------------------- | ------------------------------------------------- |
 | **Etapa**            | **SLA**                | **Se estourar**                                   |
+| Prospecção           | 5 dias                 | Reforçar abordagem ou marcar sem fit               |
+| Visita               | 5 dias                 | Agendar visita ou devolver pra fila                |
+| Conversa com Decisor | 4 dias                 | Fechar diagnóstico ou reagendar com decisor        |
 | Demo/Proposta        | Cadência D+1, D+3, D+7 | D+7 sem resposta → Reciclagem                     |
 | Negociação           | 7 dias                 | Decisão obrigatória: avança ou Reciclagem/Perdido |
 | Aguardando Pagamento | 2 dias                 | Escalar para o gestor                             |
