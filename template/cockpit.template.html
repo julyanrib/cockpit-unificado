@@ -15688,12 +15688,28 @@ async function renderDaily() {
     const falhas = st.falhas || [];
     if (!falhas.length) return '';
     const nomes = [...new Set(falhas.map(f => f.nome || f.ownerId))];
+    // ITEM 5 (Prioridade Zero, 15/08/26): antes o alerta só contava falhas e listava
+    // nomes — escondia exatamente o que o gestor precisa pra agir (o quê falhou, quando,
+    // e o motivo real do Supabase). Agora cada linha mostra executivo + tipo de
+    // divergência (etapa) + horário + o erro relatado pelo próprio robô, sem resumir
+    // nem suavizar o texto.
+    const linhasFalha = falhas.map(f => {
+      const hora = f.em ? new Date(f.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+      return `<div style="font-size:11px;color:var(--amber-ink);margin-top:5px;padding-top:5px;border-top:1px solid rgba(184,121,14,.25);">
+        <b>${esc(f.nome || f.ownerId)}</b> · ${esc(f.data || '')} · ${esc(f.etapa || '—')} · ${hora}
+        <div style="opacity:.85;margin-top:1px;">${esc(f.erro || 'sem detalhe')}</div>
+      </div>`;
+    }).join('');
     return `
     <div style="display:flex;align-items:flex-start;gap:10px;margin:0 0 12px;padding:11px 16px;background:var(--amber-soft);border:1px solid rgba(184,121,14,.3);border-radius:var(--r-lg);">
       <span style="font-size:15px;flex:none;">⚠️</span>
-      <div>
+      <div style="flex:1;min-width:0;">
         <b style="font-size:12.5px;color:var(--amber-ink);">A sincronização automática da Daily teve ${falhas.length} falha${falhas.length === 1 ? '' : 's'} na última rodada (${new Date(st.ultimaExecucao).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })})</b>
         <div style="font-size:11.5px;color:var(--amber-ink);margin-top:3px;line-height:1.5;">Antes de cobrar número de <b>${esc(nomes.join(', '))}</b>, confira no HubSpot — pode estar desatualizado, não necessariamente errado.</div>
+        <details style="margin-top:6px;">
+          <summary style="cursor:pointer;font-size:11px;color:var(--amber-ink);font-weight:700;">Ver detalhe por executivo</summary>
+          ${linhasFalha}
+        </details>
       </div>
     </div>`;
   })();
