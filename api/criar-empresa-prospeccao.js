@@ -67,12 +67,33 @@ module.exports = async function handler(req, res) {
                   headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                             filterGroups: [{ filters: [{ propertyName: 'name', operator: 'EQ', value: lead.nome }] }],
-                            properties: ['name'], limit: 1
+                            properties: ['name', 'city'], limit: 1
                   })
           });
           const buscaData = await buscaResp.json();
           if (buscaResp.ok && buscaData.results && buscaData.results.length > 0) {
-                  return res.status(409).json({ erro: 'Ja existe uma empresa chamada "' + lead.nome + '" no HubSpot (id ' + buscaData.results[0].id + '). Confira antes de criar de novo.' });
+                  // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): quando já existia uma Company
+                  // com o mesmo nome, a rota só devolvia 409 e parava — o lead ficava pra
+                  // sempre sem hubspot_company_id no Supabase (status nunca virava
+                  // 'criado_hubspot'). Regra do prompt: "quando a Company já existir e a
+                  // correspondência for válida, retornar e persistir o ID existente; não
+                  // encerrar somente com 409." Mas nome igual sozinho não confirma que é a
+                  // MESMA empresa (rede com unidades em cidades diferentes, nome genérico) —
+                  // só reaproveita automaticamente quando a cidade também bate; senão, mantém
+                  // o 409 pra revisão manual em vez de arriscar juntar duas empresas distintas.
+                  const achado = buscaData.results[0];
+                  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+                  const cidadeBate = !norm(achado.properties && achado.properties.city) || !norm(lead.cidade)
+                        || norm(achado.properties && achado.properties.city) === norm(lead.cidade);
+                  if (cidadeBate) {
+                        await fetch(supaUrl + '/rest/v1/leads_prospeccao?id=eq.' + encodeURIComponent(leadId), {
+                                method: 'PATCH',
+                                headers: { apikey: supaService, Authorization: 'Bearer ' + supaService, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+                                body: JSON.stringify({ status: 'criado_hubspot', hubspot_company_id: String(achado.id), updated_at: new Date().toISOString() })
+                        });
+                        return res.status(200).json({ ok: true, hubspotCompanyId: achado.id, jaExistia: true, url: 'https://app.hubspot.com/contacts/24373118/company/' + achado.id });
+                  }
+                  return res.status(409).json({ erro: 'Existe uma empresa chamada "' + lead.nome + '" no HubSpot (id ' + achado.id + '), mas em cidade diferente — confira manualmente antes de criar ou vincular.' });
           }
     } catch (e) { }
 
@@ -94,7 +115,12 @@ module.exports = async function handler(req, res) {
                                         city: lead.cidade || '',
                                         state: lead.estado || '',
                                         phone: lead.telefone || '',
-                                        description: linhasDesc.join('\n')
+                                        description: linhasDesc.join('\n'),
+                                        // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): a Company nascia sem
+                                        // hubspot_owner_id — apontado explicitamente no prompt de revisão.
+                                        // lead.responsavel_owner_id já é validado acima (é o mesmo campo
+                                        // usado pra checar se o lead pertence a quem está logado).
+                                        hubspot_owner_id: lead.responsavel_owner_id ? String(lead.responsavel_owner_id) : ''
                             }
                   })
           });

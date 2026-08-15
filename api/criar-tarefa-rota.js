@@ -194,6 +194,20 @@ module.exports = async function handler(req, res) {
     }
   }
 
+  // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): quando a busca de duplicidade falhava
+  // (buscaFalhou setado), a remoção já bloqueava corretamente (linha acima), mas a
+  // CRIAÇÃO seguia em frente mesmo assim — idExistente ficava null (porque a busca
+  // nem rodou), caía direto no ramo de criação e duplicava a tarefa no HubSpot toda
+  // vez que a Search API falhasse. Regra do prompt: "se a consulta de duplicidade
+  // falhar, não criar uma nova tarefa" — agora aplicada nos dois caminhos, não só na
+  // remoção.
+  if (buscaFalhou) {
+    return res.status(502).json({
+      etapa: 'busca_duplicata', buscaFalhou,
+      erro: 'Não foi possível confirmar no HubSpot se já existe uma tarefa igual hoje: ' + buscaFalhou + '. Não criei para evitar duplicidade — tente de novo.'
+    });
+  }
+
   if (idExistente) {
     try {
       const resp = await fetch(`https://api.hubapi.com/crm/v3/objects/tasks/${idExistente}`, {

@@ -9,6 +9,9 @@
 //   HUBSPOT_TOKEN        = mesmo valor já usado no secret do GitHub Actions
 //   SUPABASE_URL         = mesma URL do data/supabase-config.json
 //   SUPABASE_ANON_KEY    = mesma anonKey do data/supabase-config.json
+//   SUPABASE_SERVICE_KEY = opcional (mesma já usada por criar-empresa-prospeccao.js);
+//                          sem ela, o Deal ainda é criado normalmente, só não associa
+//                          à Company existente (ver comentário no corpo da função).
 
 const PIPELINE_FIELD_SALES = '916011864';
 const STAGE_BACKLOG = '1396007427'; // "Backlog" — mesma etapa onde o RPA já cria os testes
@@ -77,6 +80,7 @@ module.exports = async function handler(req, res) {
   const token = process.env.HUBSPOT_TOKEN;
   const supaUrl = process.env.SUPABASE_URL;
   const supaAnon = process.env.SUPABASE_ANON_KEY;
+  const supaService = process.env.SUPABASE_SERVICE_KEY;
   if (!token || !supaUrl || !supaAnon) {
     return res.status(500).json({ erro: 'Servidor sem configuração completa (HUBSPOT_TOKEN, SUPABASE_URL e SUPABASE_ANON_KEY são obrigatórios). Operação bloqueada por segurança.' });
   }
@@ -107,9 +111,36 @@ module.exports = async function handler(req, res) {
   }
 
   // ---- 3. dados do lead, validados ----
-  const { nome, ownerId, telefone, endereco, bairro, cidade, tipo, nota, avaliacoes, etapa, propriedades } = req.body || {};
+  const { nome, ownerId, telefone, endereco, bairro, cidade, tipo, nota, avaliacoes, etapa, propriedades, leadId } = req.body || {};
   if (!nome || !ownerId) {
     return res.status(400).json({ erro: 'Faltam campos obrigatórios: nome e ownerId.' });
+  }
+
+  // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): esta rota criava o Deal sempre
+  // desconectado de qualquer Company — "não criar Deal desconectado da Company" era
+  // um requisito explícito da revisão. Quando o front manda `leadId` (id da linha em
+  // leads_prospeccao — mesmo campo que api/criar-empresa-prospeccao.js já preenche com
+  // hubspot_company_id quando a Company foi criada antes), busca esse id aqui e associa
+  // o Deal a ela logo depois de criado. Sem leadId (ex.: fluxo antigo de conta-alvo fria
+  // que ainaind não passa por leads_prospeccao), segue sem associação — não há Company
+  // conhecida pra associar, e criar uma às cegas aqui duplicaria o fluxo que já existe
+  // em api/criar-empresa-prospeccao.js.
+  let companyIdParaAssociar = null;
+  if (leadId && supaService) {
+    try {
+      const leadResp = await fetch(`${supaUrl}/rest/v1/leads_prospeccao?id=eq.${encodeURIComponent(leadId)}&select=hubspot_company_id,responsavel_owner_id`, {
+        headers: { apikey: supaService, Authorization: `Bearer ${supaService}` }
+      });
+      if (leadResp.ok) {
+        const linhas = await leadResp.json();
+        const linha = linhas && linhas[0];
+        // Só reaproveita a Company se o lead pertencer ao MESMO dono que está sendo
+        // usado para o Deal — nunca confia em leadId sozinho pra decidir associação.
+        if (linha && linha.hubspot_company_id && String(linha.responsavel_owner_id) === String(ownerId)) {
+          companyIdParaAssociar = String(linha.hubspot_company_id);
+        }
+      }
+    } catch (e) { /* segue sem associação — a criação do Deal não pode travar por isso */ }
   }
   const etapaEntrada = etapa ? String(etapa) : STAGE_BACKLOG;
   if (!ETAPAS_DE_ENTRADA.includes(etapaEntrada)) {
@@ -156,9 +187,28 @@ module.exports = async function handler(req, res) {
     if (!resp.ok) {
       return res.status(resp.status).json({ erro: data.message || 'HubSpot recusou a criação.', detalhe: data });
     }
+
+    // Associação best-effort: o Deal já existe e é válido mesmo se isto falhar — mas a
+    // falha precisa aparecer, nunca ficar escondida (regra do prompt: nenhuma ação some
+    // silenciosamente). `deal_to_company` é o tipo padrão documentado do HubSpot pra essa
+    // associação básica v3 — não um ID numérico arriscado sem confirmação.
+    let associacaoFalhou = null;
+    if (companyIdParaAssociar) {
+      try {
+        const assoc = await fetch(
+          `https://api.hubapi.com/crm/v3/objects/deals/${data.id}/associations/companies/${companyIdParaAssociar}/deal_to_company`,
+          { method: 'PUT', headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!assoc.ok) associacaoFalhou = 'HTTP ' + assoc.status + ' ao associar à Company ' + companyIdParaAssociar;
+      } catch (e) {
+        associacaoFalhou = 'exceção ao associar: ' + String(e.message || e);
+      }
+    }
+
     return res.status(200).json({
       ok: true, id: data.id, etapa: etapaEntrada,
       propriedadesGravadas: Object.keys(limpeza.propriedades),
+      companyIdAssociado: companyIdParaAssociar, associacaoFalhou,
       url: `https://app.hubspot.com/contacts/24373118/record/0-3/${data.id}`
     });
   } catch (e) {
