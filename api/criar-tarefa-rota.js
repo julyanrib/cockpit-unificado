@@ -59,8 +59,10 @@ module.exports = async function handler(req, res) {
   if (!usuario) return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
 
   // ---- 3. dados da conta-alvo ----
-  const { nome, ownerId, bairro, cidade, horaPrevista, data } = req.body || {};
+  const { nome, ownerId, bairro, cidade, horaPrevista, data, acao } = req.body || {};
   if (!nome || !ownerId) return res.status(400).json({ erro: 'Faltam campos obrigatórios: nome e ownerId.' });
+  const acaoNormalizada = String(acao || 'criar');
+  if (!['criar', 'remover'].includes(acaoNormalizada)) return res.status(400).json({ erro: 'Ação inválida.' });
 
   // Escopo por papel: executivo só cria tarefa pra si mesmo; gestor pode criar pra
   // qualquer um do time (ex.: montando a rota de alguém junto no 1:1).
@@ -171,6 +173,26 @@ module.exports = async function handler(req, res) {
       if (igual) idExistente = igual.id;
     }
   } catch (e) { buscaFalhou = 'excecao: ' + String(e.message || e).slice(0, 80); }
+
+  // Tirar do plano no Cockpit precisa tirar a tarefa aberta correspondente do
+  // HubSpot também. Tarefa concluída não entra na busca acima e nunca é apagada:
+  // realizado é histórico, não seleção de rota.
+  if (acaoNormalizada === 'remover') {
+    if (buscaFalhou) return res.status(502).json({ etapa: 'busca_remocao', erro: 'Não foi possível confirmar no HubSpot qual tarefa deve ser removida: ' + buscaFalhou });
+    if (!idExistente) return res.status(200).json({ ok: true, removida: false, inexistente: true, buscaFalhou });
+    try {
+      const del = await fetch(`https://api.hubapi.com/crm/v3/objects/tasks/${idExistente}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!del.ok) {
+        const det = await del.json().catch(() => ({}));
+        return res.status(del.status).json({ etapa: 'remocao', erro: 'HubSpot recusou remover a tarefa: ' + (det.message || 'sem mensagem'), detalhe: det });
+      }
+      return res.status(200).json({ ok: true, removida: true, id: idExistente, buscaFalhou });
+    } catch (e) {
+      return res.status(500).json({ etapa: 'remocao', erro: 'Falha ao remover a tarefa no HubSpot: ' + String(e.message || e) });
+    }
+  }
 
   if (idExistente) {
     try {
