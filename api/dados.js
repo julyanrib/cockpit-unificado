@@ -12,6 +12,7 @@
 // Variáveis de ambiente na Vercel (as mesmas das outras rotas): SUPABASE_URL, SUPABASE_ANON_KEY.
 
 const { montarDadosCompletos, filtrarParaPapel, USUARIOS } = require('../scripts/montar-dados.js');
+const PLAYBOOK = require('../data/field-sales-playbook.compiled.json');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -50,6 +51,12 @@ module.exports = async function handler(req, res) {
   const usuario = USUARIOS.find(u => String(u.email).toLowerCase() === emailLogado);
   if (!usuario) {
     return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time. Fale com seu gestor.' });
+  }
+
+  // Biblioteca interna sob demanda. Reutiliza esta rota autenticada para não criar uma
+  // 13ª Function (limite do plano Vercel Hobby) nem adicionar 400 KB ao login normal.
+  if (req.query && req.query.recurso === 'playbook') {
+    return res.status(200).json({ ok: true, playbook: PLAYBOOK });
   }
 
   // ---- 3. monta e filtra ----
