@@ -6,7 +6,8 @@
 //
 // Dois jeitos de chamar esta rota, os dois seguros (nenhum token de fonte externa
 // aparece no navegador):
-//   1. Sessão do gestor logado no cockpit (Authorization: Bearer <token supabase>).
+//   1. Sessão do gestor; o executivo só pode materializar uma sugestão da Casa dos
+//      Dados já atribuída ao próprio owner (Authorization: Bearer <token supabase>).
 //   2. Um webhook/automação server-to-server (ex.: Make.com) com o header
 //      x-import-secret == process.env.IMPORT_SECRET — pensado pra quando o Outscraper
 //      (ou um cenário do Make) empurrar dados direto, sem passar pelo navegador de ninguém.
@@ -171,6 +172,7 @@ module.exports = async function handler(req, res) {
   }
 
   let criadoPor = null;
+  let usuarioSessao = null;
   const secretRecebido = req.headers['x-import-secret'];
   if (importSecret && secretRecebido && secretRecebido === importSecret) {
     criadoPor = 'automacao-importacao';
@@ -185,25 +187,37 @@ module.exports = async function handler(req, res) {
       if (!check.ok) return res.status(401).json({ erro: 'Sessão inválida ou expirada.' });
       const user = await check.json();
       const email = (user && user.email) ? String(user.email).toLowerCase() : null;
-      const usuario = email ? USUARIOS.find(u => String(u.email).toLowerCase() === email) : null;
-      if (!usuario || usuario.role !== 'manager') {
-        return res.status(403).json({ erro: 'Só o gestor pode importar leads pela sessão do cockpit.' });
+      usuarioSessao = email ? USUARIOS.find(u => String(u.email).toLowerCase() === email) : null;
+      const repImportandoCasa = usuarioSessao && usuarioSessao.role === 'rep' && req.body && req.body.fonte === 'casa_dos_dados';
+      if (!usuarioSessao || (usuarioSessao.role !== 'manager' && !repImportandoCasa)) {
+        return res.status(403).json({ erro: 'Executivos só podem adicionar empresas sugeridas pela Casa dos Dados no próprio território.' });
       }
-      criadoPor = usuario.email;
+      criadoPor = usuarioSessao.email;
     } catch (e) {
       return res.status(401).json({ erro: 'Não foi possível validar a sessão.' });
     }
   }
 
   const { fonte, leads } = req.body || {};
-  if (!fonte || !['outscraper', 'google_places', 'tripadvisor', 'ifood', 'manual'].includes(fonte)) {
-    return res.status(400).json({ erro: 'Campo "fonte" inválido — use outscraper, google_places, tripadvisor, ifood ou manual.' });
+  if (!fonte || !['outscraper', 'google_places', 'tripadvisor', 'ifood', 'manual', 'casa_dos_dados'].includes(fonte)) {
+    return res.status(400).json({ erro: 'Campo "fonte" inválido — use outscraper, google_places, tripadvisor, ifood, manual ou casa_dos_dados.' });
   }
   if (!Array.isArray(leads) || leads.length === 0) {
     return res.status(400).json({ erro: 'Envie "leads" como array com pelo menos 1 item.' });
   }
   if (leads.length > 500) {
     return res.status(400).json({ erro: 'Máximo 500 leads por importação — divida em lotes menores.' });
+  }
+  // Executivo só materializa a recomendação territorial que a própria Agenda mostrou.
+  // Owner ausente ou diferente falha fechado; importações genéricas e redistribuição
+  // de carteira continuam exclusivas do gestor.
+  if (usuarioSessao && usuarioSessao.role === 'rep') {
+    const ownerDaSessao = String(usuarioSessao.ownerId || '');
+    const foraDoProprioTerritorio = fonte !== 'casa_dos_dados' || !ownerDaSessao ||
+      leads.some(l => String(l.responsavel_owner_id || '') !== ownerDaSessao);
+    if (foraDoProprioTerritorio) {
+      return res.status(403).json({ erro: 'Você só pode adicionar uma sugestão da Casa dos Dados atribuída ao seu próprio território.' });
+    }
   }
 
   let nomesNoHubspot = new Set();
@@ -278,7 +292,7 @@ module.exports = async function handler(req, res) {
   }
 
   // Carrega a base canônica para deduplicar também entre fontes diferentes. Falha
-  // fechada: se n�>s dar para conferir a base, não importa e não arrisca duplicar.
+  // fechada: se não der para conferir a base, não importa e não arrisca duplicar.
   let existentes = [];
   try {
     // Pagina toda a base: o limite padrão do PostgREST não pode transformar uma
