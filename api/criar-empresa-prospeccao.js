@@ -45,7 +45,7 @@ module.exports = async function handler(req, res) {
     const usuario = USUARIOS.find(u => String(u.email).toLowerCase() === emailLogado);
     if (!usuario) return res.status(403).json({ erro: 'E-mail logado nao esta cadastrado no time.' });
 
-    const { leadId } = req.body || {};
+    const { leadId, acao, novoOwnerId } = req.body || {};
     if (!leadId) return res.status(400).json({ erro: 'Falta o leadId.' });
 
     const getResp = await fetch(supaUrl + '/rest/v1/leads_prospeccao?id=eq.' + encodeURIComponent(leadId) + '&select=*', {
@@ -55,6 +55,45 @@ module.exports = async function handler(req, res) {
     const linhas = await getResp.json();
     const lead = linhas[0];
     if (!lead) return res.status(404).json({ erro: 'Lead nao encontrado.' });
+
+    // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — item 3 da revisão: "ao trocar o
+    // responsável de uma conta já existente no HubSpot: atualizar o owner no HubSpot;
+    // confirmar a gravação; somente depois refletir no Supabase". Antes, reatribuir
+    // executivo era escrita PURA no Supabase (ver atualizarLeadProspeccao no front) —
+    // quando o lead já tinha uma Company real criada, o HubSpot ficava com o owner
+    // antigo pra sempre, sem ninguém perceber. Esta ação é NOVA nesta rota (não cria
+    // função serverless nova — já são 12 na Vercel, no limite do plano Hobby) e roda
+    // ANTES da checagem "já criado" abaixo, porque reatribuir é permitido mesmo depois
+    // de criado_hubspot — é exatamente esse o caso que precisa sincronizar.
+    if (acao === 'atualizar_owner') {
+      if (usuario.role !== 'manager') return res.status(403).json({ erro: 'Só o gestor pode reatribuir executivo.' });
+      const ownerLimpo = novoOwnerId ? String(novoOwnerId) : '';
+      if (lead.hubspot_company_id) {
+        try {
+          const patchResp = await fetch('https://api.hubapi.com/crm/v3/objects/companies/' + encodeURIComponent(lead.hubspot_company_id), {
+            method: 'PATCH',
+            headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ properties: { hubspot_owner_id: ownerLimpo } })
+          });
+          if (!patchResp.ok) {
+            const det = await patchResp.json().catch(() => ({}));
+            return res.status(patchResp.status).json({ erro: 'HubSpot recusou atualizar o dono da empresa: ' + (det.message || 'sem mensagem'), detalhe: det });
+          }
+        } catch (e) {
+          return res.status(500).json({ erro: 'Falha ao falar com o HubSpot: ' + String(e.message || e) });
+        }
+      }
+      // Só grava no Supabase DEPOIS de confirmar no HubSpot (ou quando não há Company
+      // ainda pra sincronizar — nada a confirmar além do próprio Supabase).
+      const patchSupa = await fetch(supaUrl + '/rest/v1/leads_prospeccao?id=eq.' + encodeURIComponent(leadId), {
+        method: 'PATCH',
+        headers: { apikey: supaService, Authorization: 'Bearer ' + supaService, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+        body: JSON.stringify({ responsavel_owner_id: ownerLimpo || null, status: ownerLimpo ? 'atribuido' : 'pendente', updated_at: new Date().toISOString() })
+      });
+      if (!patchSupa.ok) return res.status(502).json({ erro: 'HubSpot confirmou, mas o Supabase recusou salvar. Recarregue e confira.' });
+      return res.status(200).json({ ok: true, sincronizadoNoHubspot: !!lead.hubspot_company_id });
+    }
+
     if (lead.status === 'criado_hubspot') return res.status(409).json({ erro: 'Esse lead ja foi criado no HubSpot.', hubspotCompanyId: lead.hubspot_company_id });
 
     if (usuario.role !== 'manager' && String(lead.responsavel_owner_id) !== String(usuario.ownerId)) {
