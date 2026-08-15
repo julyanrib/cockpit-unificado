@@ -11318,6 +11318,10 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
           telefone: lead.telefone || null, endereco: lead.endereco || null,
           bairro: lead.bairro || null, cidade: lead.cidade || null,
           tipo: lead.tipo || null, nota: lead.nota, avaliacoes: lead.avaliacoes,
+          // BLOCO — leadId permite ao servidor achar hubspot_company_id já gravado
+          // (por api/criar-empresa-prospeccao.js) e associar o Deal à Company certa,
+          // em vez de nascer desconectado (ver comentário em api/criar-negocio.js).
+          leadId: lead.id || null,
           propriedades: coleta.propriedades
         })
       }), 10000, 'criar-negocio');
@@ -11334,7 +11338,16 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
       // silêncio no console e o botão só reaparece — nada quebra na tela.
       await atualizarLeadProspeccao(lead.id, { hubspot_deal_id: String(data.id) });
       stageOverlay.classList.remove('show');
-      mostrarToast(`"${lead.nome}" entrou no funil em Prospecção. O Cockpit reconcilia na próxima rodada automática.`, 'sucesso');
+      // A criação do Deal em si deu certo mesmo se a associação à Company falhar —
+      // mas a falha não pode ficar só no console (regra do prompt: nada some em
+      // silêncio). Mostra as duas coisas separadas: sucesso da criação + aviso da
+      // associação, se for o caso.
+      if (data.associacaoFalhou) {
+        console.warn('[criar-negocio] associação à Company falhou:', data.associacaoFalhou);
+        mostrarToast(`"${lead.nome}" entrou no funil, mas não consegui vincular à empresa no HubSpot (${data.associacaoFalhou}). Confira manualmente.`, 'erro');
+      } else {
+        mostrarToast(`"${lead.nome}" entrou no funil em Prospecção. O Cockpit reconcilia na próxima rodada automática.`, 'sucesso');
+      }
       if (typeof aoConcluir === 'function') aoConcluir();
     } catch (e) {
       status.style.color = 'var(--red)';
