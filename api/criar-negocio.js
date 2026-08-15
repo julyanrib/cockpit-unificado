@@ -22,7 +22,8 @@ const ETAPAS_DE_ENTRADA = ['1396007427', '1395880469']; // Backlog, Prospecção
 
 // Mesma fronteira da rota mudar-etapa-negocio: só estas props podem ser escritas daqui.
 const PROPS_PERMITIDAS = ['celular', 'cep', 'bairro', 'cidade', 'logradouro', 'numero',
-  'amount', 'valor_de_mrr', 'data_da_reuniao', 'reuniao_agendada'];
+  'amount', 'valor_de_mrr', 'data_da_reuniao', 'reuniao_agendada', 'origem_do_lead'];
+const ORIGENS_LEAD = ['Rua', 'Indicação', 'Casa dos Dados', 'Instagram', 'Ads', 'GoogleMaps', 'Familia', 'Eventos'];
 const PISO_VALOR = 349;
 const PROPS_COM_PISO = ['amount', 'valor_de_mrr'];
 
@@ -44,6 +45,9 @@ function limparPropriedades(bruto) {
     }
     if (chave === 'reuniao_agendada' && texto !== 'true' && texto !== 'false') {
       return { propriedades: null, erro: 'reuniao_agendada só aceita true ou false.' };
+    }
+    if (chave === 'origem_do_lead' && !ORIGENS_LEAD.includes(texto)) {
+      return { propriedades: null, erro: 'Origem do Lead inválida.' };
     }
     if (texto.length > 2000) return { propriedades: null, erro: `"${chave}" é longo demais.` };
     propriedades[chave] = texto;
@@ -113,6 +117,9 @@ module.exports = async function handler(req, res) {
   }
   const limpeza = limparPropriedades(propriedades);
   if (limpeza.erro) return res.status(400).json({ erro: limpeza.erro });
+  if (etapaEntrada === '1395880469' && !limpeza.propriedades.origem_do_lead) {
+    return res.status(400).json({ erro: 'Prospecção exige a propriedade Origem do Lead.' });
+  }
 
   // Escopo por papel: executivo só cria negócio atribuído A ELE MESMO; gestor pode
   // atribuir a qualquer executivo. (Antes qualquer sessão podia criar em nome de qualquer um.)

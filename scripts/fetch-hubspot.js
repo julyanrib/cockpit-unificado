@@ -669,6 +669,14 @@ async function stageTotalThisMonth(stageIdOuLista) {
 // (uma por etapa). Confirmado com a API: o nome certo nesta conta é hs_v2_date_entered_<etapa>
 // (não hs_date_entered_<etapa> — essa variante não existe aqui e vinha sempre vazia).
 const ENTERED_STAGE_PROPS = OPEN_STAGES.map(s => `hs_v2_date_entered_${s}`);
+// BLOCO 54 — propriedades condicionais obrigatórias do pipeline Field Sales,
+// conferidas no HubSpot em 14/08/26. Precisam viajar no shell para pré-preencher o
+// drawer; sem isso um valor já existente aparece vazio e o executivo sobrescreve à toa.
+const FIELD_SALES_STAGE_PROPS = ['origem_do_lead', 'gargalo_operacional', 'nome_do_sistema',
+  'plano_apresentado', 'valor_de_mrr', 'amount', 'email', 'cnpj_cpf', 'pacote_contratado',
+  'adicional', 'tipo_de_pagamento', 'periodo_contratado', 'mrr',
+  'deseja_criar_perfil_no_asaas_', 'qual_maior_desafio_',
+  'informacoes_sobre_o_maior_desafio', 'data_da_reuniao', 'reuniao_agendada', 'description'];
 
 async function repOpenDeals(ownerId) {
   const results = await hsSearchAll({
@@ -689,7 +697,7 @@ async function repOpenDeals(ownerId) {
       // Medido hoje: a maioria desses campos ainda esta VAZIA no CRM (dos quentes sem
       // coordenada, so o UAU UNIDADE PENHA tinha CEP). Pedir custa zero e o pino passa a
       // aparecer sozinho conforme o time preenche.
-      'cep', 'bairro', 'cidade', 'logradouro', 'numero', 'celular', ...ENTERED_STAGE_PROPS]
+      'cep', 'bairro', 'cidade', 'logradouro', 'numero', 'celular', ...FIELD_SALES_STAGE_PROPS, ...ENTERED_STAGE_PROPS]
   });
   return results.filter(d => !isExcludedDeal(d));
 }
@@ -724,7 +732,7 @@ async function stageDealsTeamWide(stageId) {
       // Medido hoje: a maioria desses campos ainda esta VAZIA no CRM (dos quentes sem
       // coordenada, so o UAU UNIDADE PENHA tinha CEP). Pedir custa zero e o pino passa a
       // aparecer sozinho conforme o time preenche.
-      'cep', 'bairro', 'cidade', 'logradouro', 'numero', 'celular', ...ENTERED_STAGE_PROPS]
+      'cep', 'bairro', 'cidade', 'logradouro', 'numero', 'celular', ...FIELD_SALES_STAGE_PROPS, ...ENTERED_STAGE_PROPS]
   });
   return todos.filter(d => !isExcludedDeal(d));
 }
@@ -1004,6 +1012,7 @@ async function main() {
       const lng = d.properties.longitude != null ? Number(d.properties.longitude) : null;
       return {
         name: d.properties.dealname,
+        dealname: d.properties.dealname,
         id: d.id,
         dias,
         slaBreach: dias > (SLA_DAYS[stageId] || 999),
@@ -1021,6 +1030,7 @@ async function main() {
         logradouro: d.properties.logradouro || null,
         numero: d.properties.numero || null,
         celular: d.properties.celular || null,
+        ...Object.fromEntries(FIELD_SALES_STAGE_PROPS.map(prop => [prop, d.properties[prop] || null])),
         tarefas: tarefasPorDeal[d.id] || [],
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };
@@ -1200,6 +1210,7 @@ async function main() {
 
       return {
         name: d.properties.dealname,
+        dealname: d.properties.dealname,
         id: d.id,
         stage: STAGE_LABELS[stageId] || stageId,
         stageId,
@@ -1221,6 +1232,7 @@ async function main() {
         logradouro: d.properties.logradouro || null,
         numero: d.properties.numero || null,
         celular: d.properties.celular || null,
+        ...Object.fromEntries(FIELD_SALES_STAGE_PROPS.map(prop => [prop, d.properties[prop] || null])),
         tarefas: tarefasPorDealDoRep[d.id] || [],
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };

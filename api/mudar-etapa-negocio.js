@@ -25,31 +25,48 @@ const { buscarDealAutorizado } = require('../lib/hubspot-deal-guard');
 // uma das 6 abertas; nunca decide nada sozinha, é apenas a lista de permitidas.
 const ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
 
-// BLOCO 49 (14/08/26) — Julyan: "as propriedades de cada etapa tem que ser mantida".
-// O HubSpot só exige propriedade de etapa DENTRO da tela dele; pela API o dealstage
-// muda sem pedir nada — que é como o cockpit e o PWA escrevem. Por isso o funil tinha
-// negócio em Pagamento sem MRR. Agora o cockpit manda as propriedades junto com a
-// etapa, e esta lista é a fronteira: qualquer prop fora dela é RECUSADA, pra que uma
-// tela comprometida não consiga escrever em campo arbitrário do CRM.
-// Espelho de PROPS_GRAVAVEIS no template — mudou lá, muda aqui.
-const PROPS_PERMITIDAS = ['celular', 'cep', 'bairro', 'cidade', 'logradouro', 'numero',
-  'amount', 'valor_de_mrr', 'data_da_reuniao', 'reuniao_agendada', 'description'];
+// BLOCO 54 (14/08/26) — espelho das propriedades condicionais obrigatórias vistas
+// diretamente no pipeline Field Sales do HubSpot. Esta allowlist é a fronteira de
+// escrita; um navegador comprometido não pode escolher outras propriedades do CRM.
+const PROPS_PERMITIDAS = ['dealname', 'email', 'cnpj_cpf', 'celular', 'cep', 'bairro', 'cidade', 'logradouro', 'numero',
+  'origem_do_lead', 'gargalo_operacional', 'nome_do_sistema', 'plano_apresentado',
+  'valor_de_mrr', 'pacote_contratado', 'adicional', 'tipo_de_pagamento',
+  'periodo_contratado', 'amount', 'mrr', 'deseja_criar_perfil_no_asaas_',
+  'qual_maior_desafio_', 'informacoes_sobre_o_maior_desafio', 'data_da_reuniao',
+  'reuniao_agendada', 'description'];
 
 // Exigências para ENTRAR em cada etapa. Este mapa é a barreira de integridade do
 // servidor; o mapa equivalente no template existe só para orientar a interface.
 const PROPS_OBRIGATORIAS_POR_ETAPA = {
-  '1395880469': [],
-  '1396005401': ['logradouro', 'bairro', 'cidade'],
-  '1395880470': ['celular'],
-  '1395880471': ['amount', 'reuniao_agendada'],
-  '1395880472': ['amount', 'description'],
-  '1395880473': ['valor_de_mrr']
+  '1395880469': ['origem_do_lead'],
+  '1396005401': [],
+  '1395880470': ['gargalo_operacional', 'nome_do_sistema'],
+  '1395880471': [],
+  '1395880472': ['plano_apresentado', 'valor_de_mrr'],
+  '1395880473': ['dealname', 'email', 'cnpj_cpf', 'celular', 'cep', 'numero',
+    'pacote_contratado', 'adicional', 'tipo_de_pagamento', 'periodo_contratado',
+    'amount', 'mrr', 'deseja_criar_perfil_no_asaas_', 'qual_maior_desafio_',
+    'informacoes_sobre_o_maior_desafio']
+};
+
+const VALORES_PERMITIDOS = {
+  origem_do_lead: ['Rua', 'Indicação', 'Casa dos Dados', 'Instagram', 'Ads', 'GoogleMaps', 'Familia', 'Eventos'],
+  gargalo_operacional: ['Fila', 'Falta de Garçom', 'Falta de Gestão', 'Sem fidelização', 'Demora na divisão de contas', 'Estoque'],
+  plano_apresentado: ['Básico (PDV + delivery)', 'Básico (PDV + mesa + delivery)', 'Inovação', 'Pro', 'Enterprise'],
+  pacote_contratado: ['Básico', 'Básico (delivery e balcão)', 'Inovação', 'Inovação (delivery e balcão)', 'Profissional', 'Profissional (delivery e balcão)', 'Enterprise', 'Enterprise (delivery e balcão)', 'Upsell', 'Produtos Personalizados', 'Básico (Delivery)', 'Básico (PDV Balcão)', 'Básico (Delivery + PDV Balcão)', 'Intermediário (Delivery + PDV Balcão + PDV Mesa)', 'Apenas Cardapio'],
+  adicional: ['Sem adicionais', 'Fiscal SN', 'Maquininha POS', 'Cashback', 'Tablet', 'IA Conversacional (TEKA)', 'Totem de Autoatendimento', 'Robô de Whatsapp', 'Multilojas', 'Campanhas Personalizadas', 'Fiscal LP / LR', 'IA de Fechamento', 'TEF', 'Precificação Dinâmica', 'Display ou Comandas', 'Dark Kitchen', 'Conciliação Bancária', 'Rota Inteligente'],
+  tipo_de_pagamento: ['À Vista', 'Crédito'],
+  periodo_contratado: ['Mensal', 'Trimestral', 'Semestral', 'Anual'],
+  deseja_criar_perfil_no_asaas_: ['true', 'false'],
+  reuniao_agendada: ['true', 'false'],
+  qual_maior_desafio_: ['Problemas com Atendimento', 'Gestão Financeira', 'Problemas de Gestão', 'Problemas em Fidelizar o Cliente', 'Gerenciar várias lojas', 'Controle fiscal', 'Operação', 'Suporte do sistema']
 };
 
 // Piso comercial do time (R$349/mês, regra do Julyan) validado TAMBÉM no servidor: a
 // checagem do navegador é conveniência, esta é a que vale.
 const PISO_VALOR = 349;
 const PROPS_COM_PISO = ['amount', 'valor_de_mrr'];
+const PROPS_NUMERICAS = ['amount', 'valor_de_mrr', 'mrr'];
 
 function limparPropriedades(bruto) {
   if (!bruto || typeof bruto !== 'object') return { propriedades: {}, erro: null };
@@ -65,15 +82,23 @@ function limparPropriedades(bruto) {
       continue;
     }
     const texto = String(valor).trim();
-    if (PROPS_COM_PISO.includes(chave)) {
+    if (PROPS_NUMERICAS.includes(chave)) {
       const n = Number(texto);
       if (!isFinite(n) || n <= 0) return { propriedades: null, erro: `Valor inválido em "${chave}".` };
-      if (n < PISO_VALOR) return { propriedades: null, erro: `"${chave}" abaixo do piso de R$${PISO_VALOR}.` };
+      if (PROPS_COM_PISO.includes(chave) && n < PISO_VALOR) return { propriedades: null, erro: `"${chave}" abaixo do piso de R$${PISO_VALOR}.` };
       propriedades[chave] = String(n);
       continue;
     }
-    if (chave === 'reuniao_agendada' && texto !== 'true' && texto !== 'false') {
-      return { propriedades: null, erro: 'reuniao_agendada só aceita true ou false.' };
+    if (VALORES_PERMITIDOS[chave]) {
+      const valores = chave === 'adicional' ? texto.split(';').map(v => v.trim()).filter(Boolean) : [texto];
+      const invalidos = valores.filter(v => !VALORES_PERMITIDOS[chave].includes(v));
+      if (invalidos.length) return { propriedades: null, erro: `Valor inválido em "${chave}".` };
+      if (chave === 'adicional' && valores.includes('Sem adicionais') && valores.length > 1) {
+        return { propriedades: null, erro: '"Sem adicionais" não pode ser combinado com outro adicional.' };
+      }
+    }
+    if (chave === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(texto)) {
+      return { propriedades: null, erro: 'E-mail inválido.' };
     }
     if (texto.length > 2000) return { propriedades: null, erro: `"${chave}" é longo demais.` };
     propriedades[chave] = texto;
@@ -99,6 +124,16 @@ function validarExigenciasEtapa(deal, novaEtapa, propriedades) {
     : obrigatorias.filter(prop => Object.prototype.hasOwnProperty.call(propriedades, prop) && !campoPreenchido(finais[prop]));
   if (!faltantes.length) return null;
   return `A etapa de destino exige: ${faltantes.join(', ')}.`;
+}
+
+function validarMovimentoEtapa(deal, novaEtapa) {
+  const atual = String((deal.properties || {}).dealstage || '');
+  const iAtual = ETAPAS_ABERTAS.indexOf(atual);
+  const iNova = ETAPAS_ABERTAS.indexOf(String(novaEtapa));
+  if (iAtual >= 0 && iNova > iAtual + 1) {
+    return 'O pipeline Field Sales não permite pular fases. Conclua a próxima etapa antes de avançar.';
+  }
+  return null;
 }
 
 module.exports = async function handler(req, res) {
@@ -153,6 +188,8 @@ module.exports = async function handler(req, res) {
       token, dealId, usuario, propriedades: PROPS_PERMITIDAS
     });
     if (guard.erro) return res.status(guard.erro.status).json({ erro: guard.erro.mensagem });
+    const erroMovimento = validarMovimentoEtapa(guard.deal, String(novaEtapa));
+    if (erroMovimento) return res.status(400).json({ erro: erroMovimento });
     const erroExigencias = validarExigenciasEtapa(guard.deal, String(novaEtapa), limpeza.propriedades);
     if (erroExigencias) return res.status(400).json({ erro: erroExigencias });
 
