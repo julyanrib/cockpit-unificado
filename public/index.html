@@ -5965,7 +5965,7 @@ async function tokenDeSessaoVendas() {
   } catch (e) { return null; }
 }
 
-async function salvarMrrNoHubspot(dealId, mrr) {
+async function salvarMrrNoHubspot(dealId, mrr, zerar) {
   const token = await tokenDeSessaoVendas();
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 8000);
@@ -5973,7 +5973,7 @@ async function salvarMrrNoHubspot(dealId, mrr) {
     const resp = await fetch(ATUALIZAR_MRR_URL, {
       method: 'POST', signal: ctrl.signal,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-      body: JSON.stringify({ dealId, mrr })
+      body: JSON.stringify({ dealId, mrr, ...(zerar ? { zerar: true } : {}) })
     });
     let data;
     try { data = await resp.json(); }
@@ -6008,6 +6008,7 @@ function vendasMesLinhaCliente(c, podeEditar) {
         <input type="number" class="vm-input" aria-label="MRR de ${esc(c.name || c.nome || '')}" min="0" step="1" value="${c.mrr || ''}" placeholder="MRR" style="width:88px;text-align:right;padding:7px 8px;border-radius:var(--r-sm);border:1.5px solid var(--line);font-size:13px;font-weight:700;background:var(--panel);color:var(--ink);font-variant-numeric:tabular-nums;">
         <button class="vm-salvar" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:7px 13px;font-size:11.5px;font-weight:700;cursor:pointer;">Salvar</button>
         <button class="vm-cancelar" style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r-pill);padding:7px 11px;font-size:11.5px;cursor:pointer;color:var(--muted);">✕</button>
+        ${c.mrr > 0 ? `<button class="vm-zerar" title="Zerar o MRR é uma ação separada da edição normal — exige confirmação" style="background:var(--amber-soft);border:1px solid var(--amber);color:var(--amber);border-radius:var(--r-pill);padding:7px 11px;font-size:10.5px;font-weight:700;cursor:pointer;white-space:nowrap;">Zerar MRR</button>` : ''}
       </div>
       <span class="vm-msg" style="display:none;font-size:11px;white-space:nowrap;"></span>
     </div>
@@ -6085,6 +6086,38 @@ function wireVendasMesEdicao(containerEl) {
     input.addEventListener('keydown', (ev) => {
       if (ev.key === 'Enter') { ev.preventDefault(); salvar(); }
       if (ev.key === 'Escape') fecharEdicao();
+    });
+
+    // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — item 8 da revisão: zerar o MRR
+    // agora é uma ação EXPLÍCITA e separada, com confirmação — não basta digitar "0"
+    // no campo normal (o servidor recusa isso desde agora, ver api/atualizar-mrr.js).
+    const btnZerar = edit.querySelector('.vm-zerar');
+    if (btnZerar) btnZerar.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      abrirModalConfirmacao({
+        titulo: 'Zerar MRR',
+        confirmarLabel: 'Zerar MRR',
+        corpoHTML: `<p style="margin:0;">Zerar o MRR deste cliente? Isso é diferente de uma correção normal de valor — use só se o contrato realmente não tem mais recorrência.</p>`,
+        aoConfirmar: async (overlay, fechar) => {
+          const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+          okBtn.disabled = true; okBtn.textContent = 'Zerando…';
+          const r = await salvarMrrNoHubspot(dealId, 0, true);
+          if (!r.ok) {
+            okBtn.disabled = false; okBtn.textContent = 'Zerar MRR';
+            msgEl.textContent = r.erro; msgEl.style.color = 'var(--red)'; msgEl.style.display = 'inline';
+            return;
+          }
+          (DATA.vendasMes.porRep || []).forEach(rep => {
+            const c = (rep.clientes || []).find(x => String(x.id) === String(dealId));
+            if (!c) return;
+            c.mrr = r.mrr;
+            rep.mrrTotal = rep.clientes.reduce((s, x) => s + (x.mrr || 0), 0);
+          });
+          DATA.vendasMes.totalMrr = (DATA.vendasMes.porRep || []).reduce((s, rep) => s + rep.mrrTotal, 0);
+          fechar();
+          renderVendasMes();
+        }
+      });
     });
   });
 }
@@ -6822,7 +6855,7 @@ function agendaNormalizar(raw) {
 // Rótulos de ação/cadência que aparecem ANTES do nome do lead nos títulos do HubSpot
 // e do Expogo. Usados só para descartar segmentos da esquerda — nunca para cortar por
 // posição, porque nome de lead com hífen é comum na base.
-const AGENDA_ROTULOS = /^((follow\s*up|revisita|visita|rota|ligar|liga[çc][ãa]o|oportunidade\s*\d*|perdido|ganho|d\s*\d+|retorno|contato|cobran[çc]a|cobrar|proposta|whats(app)?|e-?mail|reuni[ãa]o|interno|tarefa)|(cobrar|enviar|mandar|fazer|refazer|retomar|agendar)\s+\S+)$/i;
+const AGENDA_ROTULOS = /^((follow[\s-]*up|revisita|visita|rota|ligar|liga[çc][ãa]o|oportunidade\s*\d*|perdido|ganho|d\s*\d+|retorno|contato|cobran[çc]a|cobrar|proposta|whats(app)?|e-?mail|reuni[ãa]o|interno|tarefa)|(cobrar|enviar|mandar|fazer|refazer|retomar|agendar)\s+\S+)$/i;
 // Títulos que são compromisso interno do time, não visita a cliente.
 const AGENDA_INTERNOS = /^(daily|reuni[ãa]o\s*interna|interno|treinamento|roleplay|1:1|feedback|alinhamento)\b/i;
 
@@ -6867,10 +6900,10 @@ function agendaNomeDoLead(texto) {
 }
 
 // "Reunião - Marcos - Bar e restaurante dois Amores" -> tipo + contato + empresa
-const AGENDA_RE_TITULO = /^\s*(follow\s*up|reuni[aã]o|demo|rota|revisita|visita|interno)\s*[-–—:]\s*(.*)$/i;
+const AGENDA_RE_TITULO = /^\s*(follow[\s-]*up|reuni[aã]o|demo|rota|revisita|visita|interno)\s*[-–—:]\s*(.*)$/i;
 function agendaTipoDoTexto(t) {
   const s = String(t || '').toLowerCase();
-  if (/follow\s*up/.test(s)) return 'follow_up';
+  if (/follow[\s-]*up/.test(s)) return 'follow_up';
   if (/^(rota|revisita|visita)/.test(s)) return 'rota';
   if (/^interno/.test(s)) return 'interno';
   return 'reuniao';
@@ -6927,7 +6960,12 @@ function agendaDoHubspotNota(it, i) {
     .replace(/<br\s*\/?\s*>/gi, '\n')
     .replace(/<[^>]*>/g, ' ');
   const linhas = texto.split('\n').map(s => s.trim()).filter(Boolean);
-  const m1 = (linhas[0] || '').match(/^follow\s*up\s*[-–:]\s*(.*)$/i);
+  // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — item 7 da revisão: "Aceitar: Follow-up,
+  // Follow up, Followup, variações equivalentes". Testado empiricamente (não só lido):
+  // \s* só casa espaço, nunca hífen — "Follow-up" (com hífen) falhava nos 4 lugares que
+  // reconhecem esse rótulo em toda a Agenda (aqui e nas 3 constantes acima), sendo
+  // tratado como reunião comum em vez de follow-up. [\s-]* aceita espaço, hífen ou nada.
+  const m1 = (linhas[0] || '').match(/^follow[\s-]*up\s*[-–:]\s*(.*)$/i);
   if (!m1) return null; // outras automações também criam notas — só interessa a do app
 
   const mData = texto.match(/agendado\s+para:?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})[,\s]+(\d{1,2})[:h](\d{2})/i);
