@@ -7147,16 +7147,12 @@ function agendaContasAlvoHTML(ownerId, dias, naSemana) {
     .filter(l => !nomesMarcados.has(prospeccaoNormalizarTexto(l.nome)))
     .sort((a, b) => distanciaBase(a) - distanciaBase(b) || (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0))
     .slice(0, 2);
-  // Os dois primeiros encaixes ficam reservados para o funil quente, que tem
-  // precedência. Assim os cards nunca sugerem quatro contas para o mesmo horário.
-  const slots = agendaSlotsLivres(ownerId, dias, naSemana).slice(2);
   if (!contas.length) return '<div class="ag-rail-empty">Sua carteira não tem outra conta-alvo livre nesta região. As recém-abertas abaixo podem abastecer a próxima semana.</div>';
-  return contas.map((l, i) => {
-    const slot = slots[i] || null;
+  return contas.map(l => {
     const km = distanciaBase(l);
     const naRota = l.status === 'na_rota' && l.data_rota === isoDate(new Date());
     const meta = [prospeccaoBairroExibicao(l.bairro) || l.cidade, Number.isFinite(km) ? km.toFixed(1).replace('.', ',') + ' km da região-base' : null, l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : null].filter(Boolean).join(' · ');
-    return `<div class="ag-rail-lead tone-green is-clickable" data-agleadalvo="${agendaEsc(String(l.id))}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(l.nome)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(l.nome)}">${agendaEsc(l.nome)}</b><span>${agendaEsc(meta || prospeccaoPraca(l))}</span><span class="ag-rail-source">${agendaEsc(prospeccaoRotuloFonte(l.fonte))} · conta-alvo</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn rota" data-agrotaquick="${agendaEsc(String(l.id))}">${naRota ? 'Na rota ✓' : '+ Rota'}</button>${slot ? `<button type="button" class="ag-rail-cta" data-agagendar="${agendaEsc(String(l.id))}" data-agdata="${slot.dataISO}" data-aghora="${slot.hora}" title="Agendar visita para ${slot.dataISO.split('-').reverse().slice(0,2).join('/')} às ${slot.hora}">Agenda · ${slot.dia} ${slot.hora}</button>` : '<span class="ag-rail-place">sem encaixe</span>'}</div></div>`;
+    return `<div class="ag-rail-lead tone-green is-clickable" data-agleadalvo="${agendaEsc(String(l.id))}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(l.nome)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(l.nome)}">${agendaEsc(l.nome)}</b><span>${agendaEsc(meta || prospeccaoPraca(l))}</span><span class="ag-rail-source">${agendaEsc(prospeccaoRotuloFonte(l.fonte))} · conta-alvo${naRota ? ' · na rota hoje' : ''}</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn" data-agficha-alvo="${agendaEsc(String(l.id))}">Ver ficha →</button></div></div>`;
   }).join('');
 }
 
@@ -7169,14 +7165,19 @@ function agendaNovidadesHTML(ownerId, itens, dias, naSemana) {
   } else if (territorio) {
     filtrados = filtrados.filter(n => prospeccaoNormalizarTexto(n.municipio || territorio.municipio) === prospeccaoNormalizarTexto(territorio.municipio));
   }
-  agendaNovidadesAtuais = filtrados.slice(0, 2).map(n => ({ ...n, dono: String(ownerId), cidade: n.municipio || (territorio && territorio.municipio), estado: n.uf || (territorio && territorio.uf) }));
   const slots = agendaSlotsLivres(ownerId, dias, naSemana).slice(4);
+  agendaNovidadesAtuais = filtrados.slice(0, 2).map((n, i) => ({
+    ...n,
+    dono: String(ownerId),
+    cidade: n.municipio || (territorio && territorio.municipio),
+    estado: n.uf || (territorio && territorio.uf),
+    _agendaSlot: slots[i] || null
+  }));
   if (!agendaNovidadesAtuais.length) return '<div class="ag-rail-empty">Nenhum CNPJ novo de foodservice encontrado nos últimos 90 dias dentro da sua região. A carteira acima continua disponível.</div>';
   return agendaNovidadesAtuais.map((n, i) => {
     const idade = diasDesde(n.dataAbertura);
-    const slot = slots[i] || agendaSlotsLivres(ownerId, dias, naSemana).slice(4)[i] || null;
     const meta = [n.bairro, idade != null ? 'abriu há ' + idade + 'd' : 'abertura recente'].filter(Boolean).join(' · ');
-    return `<div class="ag-rail-lead tone-green is-clickable" data-agcasadefault="${i}" role="button" tabindex="0" aria-label="Adicionar ${agendaEsc(n.nome)} à agenda"><div class="ag-rail-lead-main"><b title="${agendaEsc(n.nome)}">${agendaEsc(n.nome)}</b><span>${agendaEsc(meta)}</span><span class="ag-rail-source casa">Casa dos Dados · CNPJ ativo</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn rota" data-agcasarota="${i}">+ Rota</button>${slot ? `<button type="button" class="ag-rail-cta casa" data-agcasaagenda="${i}" data-agdata="${slot.dataISO}" data-aghora="${slot.hora}">Agenda · ${slot.dia} ${slot.hora}</button>` : `<button type="button" class="ag-rail-cta casa" data-agcasa="${i}">Adicionar</button>`}</div></div>`;
+    return `<div class="ag-rail-lead tone-green is-clickable" data-agcasadefault="${i}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(n.nome)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(n.nome)}">${agendaEsc(n.nome)}</b><span>${agendaEsc(meta)}</span><span class="ag-rail-source casa">Casa dos Dados · CNPJ ativo</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn" data-agcasaficha="${i}">Ver ficha →</button></div></div>`;
   }).join('');
 }
 
@@ -7543,9 +7544,9 @@ function renderAgenda() {
       ? foraDaAgenda.slice(0, 2).map((l, indice) => {
           const nomeLead = agendaLeadNome(l) || 'Sem nome';
           const chaveLead = agendaEsc(String(l.id || nomeLead));
-          return `<div class="ag-rail-lead tone-amber is-clickable" data-quente-fora="${chaveLead}" data-agleadfunil="${chaveLead}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(nomeLead)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(nomeLead)}">${agendaEsc(nomeLead)}</b><span>${l.dias != null ? l.dias + 'd parado' : 'prioridade de fechamento'}<span data-quente-fora-dist="${chaveLead}" style="display:inline;margin-left:5px;"></span></span><span class="ag-rail-source">Funil · ${agendaEsc(l.stage || 'quente')}</span></div><div class="ag-plan-actions"><a class="ag-plan-btn rota" data-quente-fora-map="${chaveLead}" style="pointer-events:none;opacity:.65;">Localizando…</a>${l.id ? `<button type="button" class="ag-plan-btn" data-agficha="${agendaEsc(String(l.id))}">Ficha</button>` : ''}${linhaDeAgendar(l.id || nomeLead, nomeLead, sessaoAtual.ownerId, l.bairro, l.cidade, indice)}</div></div>`;
+          return `<div class="ag-rail-lead tone-amber is-clickable" data-quente-fora="${chaveLead}" data-agleadfunil="${chaveLead}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(nomeLead)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(nomeLead)}">${agendaEsc(nomeLead)}</b><span>${l.dias != null ? l.dias + 'd parado' : 'prioridade de fechamento'}<span data-quente-fora-dist="${chaveLead}" style="display:inline;margin-left:5px;"></span></span><span class="ag-rail-source">Funil · ${agendaEsc(l.stage || 'quente')}</span></div><div class="ag-plan-actions">${l.id ? `<button type="button" class="ag-plan-btn" data-agficha="${agendaEsc(String(l.id))}">Ver ficha →</button>` : ''}</div></div>`;
         }).join('')
-      : candidatosFallback.map((l, indice) => `<div class="ag-rail-lead tone-amber is-clickable" data-agleadalvo="${agendaEsc(String(l.id))}" role="button" tabindex="0"><div class="ag-rail-lead-main"><b>${agendaEsc(l.nome)}</b><span>Reunião de apresentação · ${l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : 'melhor conta-alvo disponível'}</span><span class="ag-rail-source">Conta-alvo · oportunidade</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn rota" data-agrotaquick="${agendaEsc(String(l.id))}">+ Rota</button>${linhaDeAgendar(l.id, l.nome, sessaoAtual.ownerId, l.bairro, l.cidade, indice)}</div></div>`).join('');
+      : candidatosFallback.map(l => `<div class="ag-rail-lead tone-amber is-clickable" data-agleadalvo="${agendaEsc(String(l.id))}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(l.nome)}"><div class="ag-rail-lead-main"><b>${agendaEsc(l.nome)}</b><span>Reunião de apresentação · ${l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : 'melhor conta-alvo disponível'}</span><span class="ag-rail-source">Conta-alvo · oportunidade</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn" data-agficha-alvo="${agendaEsc(String(l.id))}">Ver ficha →</button></div></div>`).join('');
 
     return `
     <div class="chart-card" id="quentesForaCard" style="border:1.5px solid var(--amber);margin-top:16px;">
@@ -8020,6 +8021,43 @@ function agendaAbrirDetalhe(id) {
   d.dataset.open = '1';
 }
 
+function abrirFichaNovidadeAgenda(index) {
+  const novidade = agendaNovidadesAtuais[Number(index)];
+  if (!novidade) { mostrarToast('Essa novidade saiu da lista. Reabra a Agenda para atualizar.', 'atencao'); return; }
+  const idade = diasDesde(novidade.dataAbertura);
+  const slot = novidade._agendaSlot || null;
+  const local = [novidade.endereco, novidade.bairro, novidade.cidade, novidade.estado].filter(Boolean).join(' · ');
+  const abertura = novidade.dataAbertura
+    ? new Date(novidade.dataAbertura + (String(novidade.dataAbertura).length === 10 ? 'T12:00:00' : '')).toLocaleDateString('pt-BR')
+    : 'não informada';
+  stageModalName.textContent = novidade.nome || 'Empresa recém-aberta';
+  stageModalMeta.textContent = [novidade.bairro, novidade.cidade, idade != null ? 'abriu há ' + idade + ' dias' : 'abertura recente'].filter(Boolean).join(' · ');
+  stageModalBody.innerHTML = `
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px;">
+      <span style="background:var(--green-soft);color:var(--green);border-radius:var(--r-pill);padding:5px 10px;font-size:10.5px;font-weight:800;">Casa dos Dados · CNPJ ativo</span>
+      <span style="background:var(--panel2);color:var(--muted2);border:1px solid var(--line);border-radius:var(--r-pill);padding:5px 10px;font-size:10.5px;font-weight:700;">Ainda não está na carteira</span>
+    </div>
+    <div style="border:1px solid var(--line);border-left:4px solid var(--green);border-radius:var(--r-md);background:var(--panel2);padding:13px 14px;margin-bottom:14px;">
+      <b style="display:block;font:800 12.5px 'Poppins',sans-serif;color:var(--ink);">Avalie antes de planejar</b>
+      <span style="display:block;margin-top:4px;font-size:11.5px;line-height:1.55;color:var(--muted);">Confira praça, endereço e tempo de abertura. Nada será criado ou enviado ao HubSpot até você escolher uma ação abaixo.</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:15px;">
+      <div style="background:var(--panel2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;"><b style="font-size:9.5px;letter-spacing:.06em;color:var(--muted2);">ABERTURA</b><div style="margin-top:4px;font-size:12px;font-weight:700;">${agendaEsc(abertura)}</div></div>
+      <div style="background:var(--panel2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;"><b style="font-size:9.5px;letter-spacing:.06em;color:var(--muted2);">CNPJ</b><div style="margin-top:4px;font-size:12px;font-weight:700;">${agendaEsc(novidade.cnpj || 'não informado')}</div></div>
+      <div style="grid-column:1/-1;background:var(--panel2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;"><b style="font-size:9.5px;letter-spacing:.06em;color:var(--muted2);">LOCALIZAÇÃO</b><div style="margin-top:4px;font-size:12px;font-weight:700;line-height:1.45;">${agendaEsc(local || 'endereço não informado')}</div></div>
+      ${novidade.porte ? `<div style="background:var(--panel2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;"><b style="font-size:9.5px;letter-spacing:.06em;color:var(--muted2);">PORTE</b><div style="margin-top:4px;font-size:12px;font-weight:700;">${agendaEsc(novidade.porte)}</div></div>` : ''}
+      ${novidade.categoria ? `<div style="background:var(--panel2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;"><b style="font-size:9.5px;letter-spacing:.06em;color:var(--muted2);">ATIVIDADE</b><div style="margin-top:4px;font-size:12px;font-weight:700;">${agendaEsc(novidade.categoria)}</div></div>` : ''}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+      <button type="button" class="ag-plan-btn rota" data-agcasarota="${Number(index)}" style="font-size:11.5px;padding:9px 14px;">Adicionar à rota de hoje</button>
+      ${slot ? `<button type="button" class="ag-rail-cta casa" data-agcasaagenda="${Number(index)}" data-agdata="${slot.dataISO}" data-aghora="${slot.hora}" style="font-size:11.5px;padding:9px 14px;">Agendar · ${agendaEsc(slot.dia)} ${agendaEsc(slot.hora)}</button>` : ''}
+      <button type="button" class="ag-plan-btn" data-agcasafechar style="font-size:11.5px;padding:9px 14px;">Agora não</button>
+    </div>`;
+  stageOverlay.classList.add('show');
+  const fechar = stageModalBody.querySelector('[data-agcasafechar]');
+  if (fechar) fechar.addEventListener('click', () => stageOverlay.classList.remove('show'));
+}
+
 async function agendaExecutarNovidade(index, botao, destino) {
   const novidade = agendaNovidadesAtuais[Number(index)];
   if (!novidade) { mostrarToast('Essa novidade saiu da lista. Reabra a Agenda para atualizar.', 'atencao'); return; }
@@ -8033,6 +8071,7 @@ async function agendaExecutarNovidade(index, botao, destino) {
     const rotaOk = await adicionarProspeccaoNaRota(lead, botao, msg);
     if (!rotaOk) { mostrarToast(msg.textContent || 'Não consegui adicionar essa conta à rota.', 'erro'); return; }
     mostrarToast(lead.nome + ' entrou na rota de hoje.', 'sucesso');
+    stageOverlay.classList.remove('show');
     renderAgenda();
     return;
   }
@@ -8043,6 +8082,7 @@ async function agendaExecutarNovidade(index, botao, destino) {
     await criarTarefaVisitaNoHubspot(lead, meuRep.ownerId, botao.dataset.aghora, { silencioso: true }, botao.dataset.agdata);
     registrarAgendamentoLocal(lead, botao.dataset.agdata, botao.dataset.aghora, meuRep.ownerId);
     mostrarToast(`"${lead.nome}" entrou na agenda e foi registrado no HubSpot.`, 'sucesso');
+    stageOverlay.classList.remove('show');
     renderAgenda();
   } catch (e) {
     botao.dataset.enviando = '0';
@@ -8051,6 +8091,14 @@ async function agendaExecutarNovidade(index, botao, destino) {
     mostrarToast('A conta entrou na carteira, mas não consegui gravar a agenda no HubSpot.', 'erro');
   }
 }
+
+document.addEventListener('keydown', function (ev) {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  const card = ev.target.closest('[data-agleadfunil],[data-agleadalvo],[data-agcasadefault]');
+  if (!card || ev.target !== card) return;
+  ev.preventDefault();
+  card.click();
+});
 
 document.addEventListener('click', function (ev) {
   const fichaAgenda = ev.target.closest('[data-agficha]');
@@ -8092,6 +8140,21 @@ document.addEventListener('click', function (ev) {
     const destino = casaDestino.hasAttribute('data-agcasarota') ? 'rota' : 'agenda';
     const indice = destino === 'rota' ? casaDestino.dataset.agcasarota : casaDestino.dataset.agcasaagenda;
     agendaExecutarNovidade(indice, casaDestino, destino);
+    return;
+  }
+  const fichaCasa = ev.target.closest('[data-agcasaficha]');
+  if (fichaCasa) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    abrirFichaNovidadeAgenda(fichaCasa.dataset.agcasaficha);
+    return;
+  }
+  const fichaAlvo = ev.target.closest('[data-agficha-alvo]');
+  if (fichaAlvo) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    const lead = (prospeccaoCache || []).find(x => String(x.id) === String(fichaAlvo.dataset.agfichaAlvo));
+    if (lead) abrirFichaProspeccaoDrawer(lead);
     return;
   }
   const casa = ev.target.closest('[data-agcasa]');
@@ -8200,8 +8263,7 @@ document.addEventListener('click', function (ev) {
   }
   const cardCasa = ev.target.closest('[data-agcasadefault]');
   if (cardCasa && !ev.target.closest('button,a,input,select')) {
-    const agendaBtn = cardCasa.querySelector('[data-agcasaagenda],[data-agcasa]');
-    if (agendaBtn) agendaBtn.click();
+    abrirFichaNovidadeAgenda(cardCasa.dataset.agcasadefault);
     return;
   }
   // BLOCO 18 — clique num espaço livre da grade abre o agendador rápido, no estilo de
