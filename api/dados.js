@@ -13,6 +13,7 @@
 
 const { montarDadosCompletos, filtrarParaPapel, USUARIOS } = require('../scripts/montar-dados.js');
 const PLAYBOOK = require('../data/field-sales-playbook.compiled.json');
+const PRECIFICACAO = require('../data/precificacao.json');
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -57,6 +58,9 @@ module.exports = async function handler(req, res) {
   // 13ª Function (limite do plano Vercel Hobby) nem adicionar 400 KB ao login normal.
   if (req.query && req.query.recurso === 'playbook') {
     return res.status(200).json({ ok: true, playbook: PLAYBOOK });
+  }
+  if (req.query && req.query.recurso === 'precificacao') {
+    return res.status(200).json({ ok: true, precificacao: PRECIFICACAO });
   }
 
   // ---- 3. monta e filtra ----

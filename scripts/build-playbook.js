@@ -28,6 +28,7 @@ const PAGINAS = [
   { marker: 'DADOS PARA CADASTRO', id: 'dados-cadastro', categoria: 'Processos internos', icone: '□', titulo: 'Dados para cadastro', resumo: 'Checklist cadastral, cardápio, identidade e dados fiscais.' },
   { marker: 'FAQ', id: 'faq', categoria: 'Processos internos', icone: '?', titulo: 'FAQ de sobrevivência', resumo: 'Política comercial, equipamentos, integrações, Asaas e onboarding.' },
   { marker: 'LINKS ÚTEIS', id: 'links-uteis', categoria: 'Processos internos', icone: '↗', titulo: 'Links úteis', resumo: 'Atalhos oficiais para sistemas, formulários e rotinas do time.' },
+  { arquivo: 'inside-sales-pagamentos-asaas.md', id: 'pagamentos-asaas', categoria: 'Processos internos', icone: '$', titulo: 'Pagamento realizado · Asaas', resumo: 'Como HubSpot, Asaas e Supabase confirmam pagamento — e o que nunca deve ser presumido.' },
   { marker: 'PLANO DE CARREIRA', id: 'plano-carreira', categoria: 'Desenvolvimento', icone: '▲', titulo: 'Plano de carreira', resumo: 'Intraempreendedorismo, oportunidades de liderança e legado na Takeat.' },
   { marker: 'ROTINA', occurrence: 1, id: 'rotina-gestor', categoria: 'Liderança', icone: '♢', titulo: 'Rotina do gestor', resumo: 'Rituais, 1:1, auditoria do funil e cadência que sustenta o canal.' }
 ];
@@ -158,7 +159,14 @@ function montarPlaybook(root) {
       todos.push({ marker: match[1].trim(), index });
     }
   });
+  const arquivosExtras = {};
   const paginas = PAGINAS.map(meta => {
+    if (meta.arquivo) {
+      const markdown = fs.readFileSync(path.join(root, 'data', meta.arquivo), 'utf8').replace(/^\uFEFF/, '').trim();
+      arquivosExtras[meta.arquivo] = markdown;
+      const convertido = markdownToHtml(markdown, meta.id);
+      return { ...meta, html: convertido.html, headings: convertido.headings, busca: textoBusca(`${meta.titulo} ${meta.resumo} ${markdown}`) };
+    }
     const iguais = todos.filter(item => item.marker.toLocaleLowerCase('pt-BR') === meta.marker.toLocaleLowerCase('pt-BR'));
     const inicio = iguais[meta.occurrence || 0];
     if (!inicio) throw new Error(`Página do playbook não encontrada: ${meta.marker} #${meta.occurrence || 0}`);
@@ -171,10 +179,10 @@ function montarPlaybook(root) {
   const payload = {
     titulo: 'Playbook Field Sales',
     fonte: 'Takeat OS',
-    versao: crypto.createHash('sha256').update(raw).digest('hex').slice(0, 12),
+    versao: crypto.createHash('sha256').update(raw + Object.values(arquivosExtras).join('\n')).digest('hex').slice(0, 12),
     paginas,
     categorias: [...new Set(paginas.map(p => p.categoria))],
-    palavras: raw.trim().split(/\s+/).length
+    palavras: (raw + '\n' + Object.values(arquivosExtras).join('\n')).trim().split(/\s+/).length
   };
   return payload;
 }
