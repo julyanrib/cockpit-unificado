@@ -7944,8 +7944,15 @@ function renderAgenda() {
   // BLOCO 33 — a barra de pílulas 📍 Hoje / 🎯 Prospecção morreu junto com a sub-aba:
   // com uma opção só, era um grupo de rádio de um botão. "Semana" continua acessível
   // pela aba Agenda do topo e pelo botão "Abrir agenda semanal" do card de resumo.
+  // CORREÇÃO (16/08/26) — bug real relatado pelo Julyan: "esse sol aí é legal e tal,
+  // mas se você clica nele não acontece nada". Investigado: o clique no card "Dia
+  // livre" (visão Semana) tentava rolar até #buracosCard, mas essa variável
+  // (buracosCardExec, com sugestão de conta por dia e agendamento — a funcionalidade
+  // que o "escolher contas →" do card promete) nunca tinha sido inserida na tela. Só
+  // existia calculada, sem nenhum lugar que a usasse — código morto. Agora entra na
+  // subview "hoje", junto dos outros cards do próprio executivo.
   let h = bannerAgendaGestor + bannerAgendaExec +
-    resumoSemanaHojeExec +
+    resumoSemanaHojeExec + (mostrarHoje ? buracosCardExec : '') +
     (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '');
 
   // Centro de ação do gestor: uma fonte visual para os dois riscos que exigem
@@ -8733,8 +8740,17 @@ document.addEventListener('click', function (ev) {
   }
   const bur = ev.target.closest('[data-agburaco]');
   if (bur) {
-    const card = document.getElementById('buracosCard');
-    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    ev.preventDefault(); ev.stopPropagation();
+    // CORREÇÃO (16/08/26): antes só tentava scrollIntoView num #buracosCard que não
+    // existia na visão Semana (onde este card aparece) — clique silenciosamente não
+    // fazia nada. Agora troca pra subview onde o card mora de verdade, espera
+    // renderizar, e só então rola até ele.
+    agendaEstado.subview = 'hoje';
+    renderAgenda();
+    setTimeout(() => {
+      const card = document.getElementById('buracosCard');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
     return;
   }
   const foco = ev.target.closest('[data-agdxfoco]');
