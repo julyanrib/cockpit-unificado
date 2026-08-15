@@ -8060,6 +8060,22 @@ function agendaAbrirDetalhe(id) {
   if (nota) L.push(['Nota', nota]);
   document.getElementById('agDetDl').innerHTML =
     L.map(l => '<dt>' + l[0] + '</dt><dd>' + agendaEsc(String(l[1])) + '</dd>').join('');
+
+  // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26, investigando o caso "Raiz Brasil
+  // Tapiocaria"): este é o drawer que TODO clique na Agenda abre — e ele não distinguia
+  // um compromisso confirmado pelo HubSpot de um agendado nesta sessão que ainda não
+  // veio no próximo snapshot (e.recemAgendado). Regra do prompt: "só exiba 'confirmado
+  // no HubSpot' quando houver ID confirmado." Sem isso, dava pra um item nunca
+  // efetivamente gravado no HubSpot aparecer com a MESMA cara de um confirmado.
+  const painelSync = document.getElementById('agDetSync');
+  if (painelSync) painelSync.remove();
+  if (e.recemAgendado) {
+    const divSync = document.createElement('div');
+    divSync.id = 'agDetSync';
+    divSync.style.cssText = 'margin-top:14px;padding:10px 14px;border-radius:12px;background:var(--amber-soft);color:var(--amber-ink,var(--amber));font-size:11.5px;font-weight:700;';
+    divSync.textContent = '⏳ Sincronizando com o HubSpot — este compromisso foi marcado agora nesta sessão; ainda não veio confirmado no próximo snapshot automático.';
+    document.getElementById('agDetDl').insertAdjacentElement('afterend', divSync);
+  }
   const a = document.getElementById('agDetA');
   const leadDaAgenda = e.dealId ? buscarLeadFunilPorId(e.dealId) : null;
   if (leadDaAgenda) {
