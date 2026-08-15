@@ -1076,6 +1076,17 @@
   .daily-client-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:750;}
   .daily-client-type{font-size:9px;color:var(--muted2);white-space:nowrap;}
   .daily-client-gap{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 14px;background:var(--amber-soft);color:var(--amber-ink);font-size:11px;line-height:1.45;}
+  /* NOVO (15/08/26) — aviso de leads quentes fora do plano do dia, pedido explícito do
+     Julyan pra forçar o follow-up. Vermelho (não âmbar): lead quente esfriando é mais
+     urgente que uma promessa sem cliente nomeado, que já usa âmbar acima. */
+  .daily-quentes-alerta{margin-top:12px;border:1px solid rgba(229,26,49,.28);background:var(--red-soft);border-radius:var(--r-lg);padding:12px 14px;}
+  .daily-quentes-alerta-head{font-size:12.5px;font-weight:800;color:var(--red);margin-bottom:8px;}
+  .daily-quentes-alerta-lista{display:flex;flex-wrap:wrap;gap:7px;}
+  .daily-quentes-chip{display:flex;flex-direction:column;gap:1px;background:var(--panel);border:1px solid rgba(229,26,49,.2);border-radius:10px;padding:6px 10px;text-decoration:none;color:var(--ink);font-size:11px;line-height:1.3;}
+  .daily-quentes-chip b{font-size:11.5px;font-weight:800;}
+  .daily-quentes-chip span{color:var(--muted2);font-size:9.5px;}
+  .daily-quentes-mais{display:flex;align-items:center;padding:6px 10px;color:var(--red);font-weight:800;font-size:11px;}
+  .daily-quentes-alerta-foot{margin-top:8px;font-size:10.5px;color:var(--red);line-height:1.45;}
   .daily-client-gap button,.daily-client-empty button{border:0;background:none;color:var(--red);padding:0;font:800 11px 'Manrope',sans-serif;cursor:pointer;white-space:nowrap;}
   .daily-client-empty{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px;color:var(--muted);font-size:11.5px;line-height:1.5;}
   @media(max-width:760px){.daily-client-list{grid-template-columns:1fr;}}
@@ -4296,7 +4307,7 @@ async function renderMeuPainel() {
   const ontemLinhas = [
     { rotulo: 'Visitas', prom: dOntem.prometido_visitas, real: ontemVisitasDerivado != null ? ontemVisitasDerivado : dOntem.realizado_visitas },
     { rotulo: 'Avanços', prom: dOntem.prometido_avancos, real: dOntem.realizado_avancos },
-    { rotulo: 'Propostas', prom: dOntem.prometido_propostas, real: dOntem.realizado_propostas }
+    { rotulo: 'Demo/Proposta', prom: dOntem.prometido_propostas, real: dOntem.realizado_propostas }
   ];
   const ontemTemDado = ontemLinhas.some(l => l.prom != null || l.real != null);
 
@@ -15812,7 +15823,7 @@ async function renderDaily() {
       <div style="display:flex;gap:26px;font-variant-numeric:tabular-nums;">
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${promessaExec.prometido_visitas ?? '—'}</div><div style="font-size:11px;color:var(--dark-mut);">visitas prometidas</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${promessaExec.prometido_avancos ?? '—'}</div><div style="font-size:11px;color:var(--dark-mut);">avanços prometidos</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${promessaExec.prometido_propostas ?? '—'}</div><div style="font-size:11px;color:var(--dark-mut);">propostas prometidas</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${promessaExec.prometido_propostas ?? '—'}</div><div style="font-size:11px;color:var(--dark-mut);">demo/proposta prometidas</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
       </div>
     </div>` : `
@@ -16011,7 +16022,7 @@ async function renderDaily() {
     const metricasCompromisso = [
       { label: 'Visitas', campo: 'prometido_visitas', prom: hoje.prometido_visitas, real: Number(realVisitas) || 0, cls: 'green' },
       { label: 'Avanços', campo: 'prometido_avancos', prom: hoje.prometido_avancos, real: Number(realAvancos) || 0, cls: 'amber', suspeito: escritaDaNoiteSuspeita },
-      { label: 'Propostas', campo: 'prometido_propostas', prom: hoje.prometido_propostas, real: Number(realPropostas) || 0, cls: 'red', suspeito: escritaDaNoiteSuspeita }
+      { label: 'Demo/Proposta', campo: 'prometido_propostas', prom: hoje.prometido_propostas, real: Number(realPropostas) || 0, cls: 'red', suspeito: escritaDaNoiteSuspeita }
     ];
     const registrouResumo = metricasCompromisso.some(m => m.prom != null);
     const metasPositivas = metricasCompromisso.filter(m => Number(m.prom) > 0);
@@ -16060,6 +16071,15 @@ async function renderDaily() {
         }));
     })();
     const comLead = compromissosHoje.filter(c => c.lead);
+    // NOVO (15/08/26) — pedido explícito do Julyan: "um aviso dos leads quentes estarem
+    // na daily ou não, pra forçar o follow". Mesmo dado que já alimenta a aba "Quentes"
+    // do dossiê (DATA.temperatura.quentes, filtrado por dono) — comparado contra quem
+    // já está nomeado na agenda de hoje (comLead, pelo dealId). Lead quente que não
+    // está no plano do dia é exatamente o tipo de coisa que devia aparecer sem precisar
+    // procurar.
+    const quentesPessoa = ((DATA.temperatura && DATA.temperatura.quentes) || []).filter(l => String(l.ownerId) === String(r.ownerId));
+    const idsNaDailyHoje = new Set(comLead.map(c => c.dealId).filter(Boolean));
+    const quentesForaDaDaily = quentesPessoa.filter(l => !idsNaDailyHoje.has(String(l.id)));
     const visitasPrometidas = Math.max(0, Number(hoje.prometido_visitas) || 0);
     const clientesNomeados = comLead.length;
     const clientesFaltantes = Math.max(0, visitasPrometidas - clientesNomeados);
@@ -16073,14 +16093,20 @@ async function renderDaily() {
       : (visitasPrometidas > 0 ? 'nenhum cliente nomeado ainda' : 'sem visita prometida hoje');
     const clientesPrometidosHTML = `
       <div class="daily-client-plan">
-        <div class="daily-client-plan-head"><span><b>Clientes prometidos para o dia</b><span>Agenda do Cockpit confirmada no HubSpot — nome, hora e tipo.</span></span><span class="daily-client-count">${clientesNomeados}${visitasPrometidas ? ` de ${visitasPrometidas}` : ''} nomeados</span></div>
+        <div class="daily-client-plan-head"><span><b>Quantos clientes pra hoje?</b><span>Agenda do Cockpit confirmada no HubSpot — nome, hora e tipo.</span></span><span class="daily-client-count">${clientesNomeados}${visitasPrometidas ? ` de ${visitasPrometidas}` : ''} nomeados</span></div>
         ${comLead.length ? `<div class="daily-client-list">${comLead.map(c => {
           const tag = esc((AGENDA_TIPOS[c.tipo] || {}).rotulo || c.tipo || 'Compromisso');
           const conteudo = `<span class="daily-client-time">${esc(c.hora)}</span><span class="daily-client-name">${esc(c.lead)}</span><span class="daily-client-type">${tag}</span>`;
           return c.dealId ? `<button type="button" class="daily-client-item" data-daily-deal="${esc(String(c.dealId))}">${conteudo}</button>` : `<div class="daily-client-item" style="cursor:default;">${conteudo}</div>`;
         }).join('')}</div>` : `<div class="daily-client-empty"><span>Nenhum cliente está nomeado na agenda deste dia. Uma promessa sem cliente ainda não é um plano.</span><button type="button" data-daily-agenda>Planejar clientes →</button></div>`}
         ${clientesFaltantes ? `<div class="daily-client-gap"><span><b>Faltam ${clientesFaltantes} ${clientesFaltantes === 1 ? 'cliente' : 'clientes'}.</b> Você prometeu ${visitasPrometidas} ${visitasPrometidas === 1 ? 'visita' : 'visitas'}, mas só ${clientesNomeados} ${clientesNomeados === 1 ? 'está nomeada' : 'estão nomeadas'} no HubSpot.</span><button type="button" data-daily-agenda>Completar na Agenda →</button></div>` : ''}
-      </div>`;
+      </div>
+      ${quentesForaDaDaily.length ? `
+      <div class="daily-quentes-alerta">
+        <div class="daily-quentes-alerta-head">🔥 <b>${quentesForaDaDaily.length} lead${quentesForaDaDaily.length > 1 ? 's' : ''} quente${quentesForaDaDaily.length > 1 ? 's' : ''} fora do seu dia de hoje</b></div>
+        <div class="daily-quentes-alerta-lista">${quentesForaDaDaily.slice(0, 4).map(l => `<a href="${hsUrl(l.id)}" target="_blank" rel="noopener" class="daily-quentes-chip"><b>${esc(l.name)}</b><span>${esc(l.stage || '')}${l.dias != null ? ` · ${l.dias}d` : ''}</span></a>`).join('')}${quentesForaDaDaily.length > 4 ? `<span class="daily-quentes-mais">+${quentesForaDaDaily.length - 4}</span>` : ''}</div>
+        <div class="daily-quentes-alerta-foot">Esfriam rápido sem follow-up. Nomeie pelo menos um na Agenda antes de sair pro campo.</div>
+      </div>` : ''}`;
 
     // BLOCO 15 (12/08/26) — Julyan: "seria legal eu saber quem eles visitaram, avançaram
     // de etapa e deixaram proposta, para eu cobrar na daily".
@@ -16287,7 +16313,7 @@ async function renderDaily() {
           </div>
           ${clientesPrometidosHTML}
           <div class="daily-promise-actions">
-            <label><span class="daily-col-label" style="display:block;margin-bottom:6px;">Nota de campo · bloqueio ou aprendizado</span><textarea class="d-nota" data-owner="${r.ownerId}" placeholder="Ex: decisor só volta segunda; cliente pediu condição especial..." ${disabledAttr} style="${inputStyleExtra}">${hoje.nota_campo || ''}</textarea></label>
+            <label><span class="daily-col-label" style="display:block;margin-bottom:6px;">Planejamento do dia · bloqueio ou aprendizado</span><textarea class="d-nota" data-owner="${r.ownerId}" placeholder="Ex: hoje foco em fechar Two Guys e revisitar os 3 travados; decisor só volta segunda..." ${disabledAttr} style="${inputStyleExtra}">${hoje.nota_campo || ''}</textarea></label>
             <span><button class="d-salvar daily-submit" data-owner="${r.ownerId}">${registrouResumo ? 'Atualizar compromisso' : 'Assumir compromisso'}</button><span class="d-status" data-owner="${r.ownerId}" style="display:block;font-size:10.5px;color:var(--muted);margin-top:6px;text-align:center;"></span></span>
           </div>
         </div>
@@ -16461,7 +16487,7 @@ async function renderConsolidadoDiario() {
     <div class="daily-consolidado-grid">
       <div class="daily-consolidado-kpi"><div class="v">${totais.visitasR}/${totais.visitasP}</div><div class="l">Visitas</div></div>
       <div class="daily-consolidado-kpi"><div class="v">${totais.avancosR}/${totais.avancosP}</div><div class="l">Avanços de etapa</div></div>
-      <div class="daily-consolidado-kpi"><div class="v">${totais.propostasR}/${totais.propostasP}</div><div class="l">Propostas</div></div>
+      <div class="daily-consolidado-kpi"><div class="v">${totais.propostasR}/${totais.propostasP}</div><div class="l">Demo/Proposta</div></div>
       <div class="daily-consolidado-kpi"><div class="v">${totais.fechamentos}</div><div class="l">Fechamentos</div></div>
     </div>
   `;
