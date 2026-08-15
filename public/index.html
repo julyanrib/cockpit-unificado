@@ -17656,6 +17656,35 @@ async function atualizarLeadProspeccao(id, campos) {
   return true;
 }
 
+// BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — item 3 da revisão: reatribuir executivo
+// era escrita pura no Supabase (atualizarLeadProspeccao acima), então uma conta que já
+// tinha Company criada no HubSpot ficava com o owner desatualizado lá pra sempre, sem
+// ninguém perceber (Cockpit dizia um nome, HubSpot outro). Passa pelo servidor —
+// api/criar-empresa-prospeccao.js — que sincroniza o HubSpot primeiro (quando existe
+// Company) e só reflete no Supabase depois de confirmado. Sem Company ainda, o servidor
+// só grava o Supabase mesmo (nada pra sincronizar).
+async function reatribuirExecutivoProspeccao(leadId, novoOwnerId) {
+  const token = await tokenDeSessaoGlobal();
+  try {
+    const resp = await comPrazoGlobal(async signal => fetch('/api/criar-empresa-prospeccao', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: JSON.stringify({ leadId, acao: 'atualizar_owner', novoOwnerId: novoOwnerId || null })
+    }), 8000, 'reatribuir-executivo');
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      mostrarToast('Não consegui reatribuir: ' + ((data && data.erro) || 'HubSpot ou Supabase recusaram.'), 'erro');
+      return false;
+    }
+    const idx = prospeccaoCache.findIndex(l => l.id === leadId);
+    if (idx >= 0) prospeccaoCache[idx] = { ...prospeccaoCache[idx], responsavel_owner_id: novoOwnerId || null, status: novoOwnerId ? 'atribuido' : 'pendente' };
+    return true;
+  } catch (e) {
+    mostrarToast('Não consegui falar com o servidor pra reatribuir agora.', 'erro');
+    return false;
+  }
+}
+
 async function criarEmpresaProspeccao(leadId, botaoEl, msgEl) {
   botaoEl.disabled = true; botaoEl.textContent = 'Criando…';
   const token = await tokenDeSessaoGlobal();
@@ -18766,11 +18795,26 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       corpoHTML: `<p style="margin:0;">Devolver <b>${itens.length}</b> lead(s) pra fila de pendentes? Isso tira o responsável atual e volta o status pra "pendente".</p>`,
       aoConfirmar: async (overlay, fechar) => {
         const okBtn = overlay.querySelector('#modalConfirmacaoOk');
-        okBtn.disabled = true; okBtn.textContent = 'Devolvendo...';
-        for (const id of itens) await atualizarLeadProspeccao(id, { responsavel_owner_id: null, status: 'pendente' });
-        prospeccaoSelecao.clear();
+        okBtn.disabled = true;
+        // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): antes disparava a escrita pra
+        // cada item sem checar o retorno — falha parcial virava sucesso total na tela
+        // (limpava a seleção inteira e fechava, mesmo se metade não tivesse gravado).
+        // Mesmo padrão já usado no "Sem fit em lote" logo abaixo: rastreia feitos/
+        // falhas e só limpa da seleção quem realmente confirmou.
+        let feitos = 0;
+        const falhas = [];
+        for (const id of itens) {
+          okBtn.textContent = `Devolvendo ${feitos + falhas.length + 1} de ${itens.length}…`;
+          const ok = await atualizarLeadProspeccao(id, { responsavel_owner_id: null, status: 'pendente' });
+          if (ok) { feitos++; prospeccaoSelecao.delete(id); } else { falhas.push(id); }
+        }
         fechar();
         renderProspeccaoNova();
+        if (falhas.length) {
+          mostrarToast(`${feitos} devolvido${feitos === 1 ? '' : 's'}, ${falhas.length} falhou${falhas.length === 1 ? '' : 'ram'} — continuam selecionados pra tentar de novo.`, 'erro');
+        } else {
+          mostrarToast(`${feitos} lead${feitos === 1 ? '' : 's'} devolvido${feitos === 1 ? '' : 's'} pra fila de pendentes.`, 'sucesso');
+        }
       }
     });
   });
@@ -18794,13 +18838,22 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
         const okBtn = overlay.querySelector('#modalConfirmacaoOk');
         okBtn.disabled = true;
         let feitos = 0;
+        const falhas = [];
         for (const l of itens) {
-          okBtn.textContent = `Marcando ${feitos + 1} de ${itens.length}…`;
+          okBtn.textContent = `Marcando ${feitos + falhas.length + 1} de ${itens.length}…`;
           const ok = await atualizarLeadProspeccao(l.id, { status: 'sem_fit' });
-          if (ok) { feitos++; prospeccaoSelecao.delete(l.id); }
+          if (ok) { feitos++; prospeccaoSelecao.delete(l.id); } else { falhas.push(l.id); }
         }
         fechar();
         renderProspeccaoNova();
+        // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): feitos/falhas já eram
+        // rastreados aqui, mas nunca chegavam a aparecer pro usuário — falha parcial
+        // fechava o modal em silêncio, igual sucesso total.
+        if (falhas.length) {
+          mostrarToast(`${feitos} marcado${feitos === 1 ? '' : 's'} sem fit, ${falhas.length} falhou${falhas.length === 1 ? '' : 'ram'} — continuam selecionados pra tentar de novo.`, 'erro');
+        } else {
+          mostrarToast(`${feitos} conta${feitos === 1 ? '' : 's'} marcada${feitos === 1 ? '' : 's'} como sem fit.`, 'sucesso');
+        }
       }
     });
   });
@@ -18860,13 +18913,10 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
     });
   });
 
-  el.querySelectorAll('.prospeccao-atribuir').forEach(sel => {
-    sel.addEventListener('change', async () => {
-      const ownerId = sel.value || null;
-      await atualizarLeadProspeccao(sel.dataset.lead, { responsavel_owner_id: ownerId, status: ownerId ? 'atribuido' : 'pendente' });
-      renderProspeccaoNova();
-    });
-  });
+  // CÓDIGO MORTO REMOVIDO (15/08/26): .prospeccao-atribuir não corresponde a nenhum
+  // elemento renderizado — o botão da tabela é .atribuir (linha ~18388) e só abre a
+  // ficha (abrirFichaProspeccaoDrawer); a reatribuição de verdade acontece só no select
+  // #fichaProspAtribuir dentro da ficha, corrigido logo abaixo.
   el.querySelectorAll('.prospeccao-btn-rota').forEach(btn => {
     btn.addEventListener('click', async () => {
       const hojeISOStr = isoDate(new Date());
@@ -18945,8 +18995,11 @@ function abrirFichaProspeccaoDrawer(l) {
   const selAtribuir = document.getElementById('fichaProspAtribuir');
   if (selAtribuir) selAtribuir.addEventListener('change', async () => {
     const ownerId = selAtribuir.value || null;
-    const ok = await atualizarLeadProspeccao(l.id, { responsavel_owner_id: ownerId, status: ownerId ? 'atribuido' : 'pendente' });
-    if (!ok) return;
+    const anterior = l.responsavel_owner_id;
+    selAtribuir.disabled = true;
+    const ok = await reatribuirExecutivoProspeccao(l.id, ownerId);
+    selAtribuir.disabled = false;
+    if (!ok) { selAtribuir.value = anterior || ''; return; }
     const atualizado = prospeccaoCache.find(x => x.id === l.id);
     renderProspeccaoNova();
     if (atualizado) abrirFichaProspeccaoDrawer(atualizado);
