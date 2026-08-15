@@ -1780,10 +1780,22 @@
   .daily-team-metric-top{display:flex;align-items:baseline;justify-content:space-between;gap:5px;}
   .daily-team-metric-top span{font-size:9px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);white-space:nowrap;}
   .daily-team-metric-top b{font:800 12px/1 'Poppins',sans-serif;color:var(--ink);white-space:nowrap;}
-  .daily-team-metric-top b em{font:600 9px 'DM Sans',sans-serif;color:var(--muted2);font-style:normal;}
+  .daily-team-metric-top b em{font:600 9px 'Manrope',sans-serif;color:var(--muted2);font-style:normal;}
   .daily-team-metric .daily-progress{height:4px;margin-top:6px;}
   .daily-team-metric>span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .daily-team-result{text-align:right;font-variant-numeric:tabular-nums;}.daily-team-result b{font:800 15px/1.1 'Poppins',sans-serif;display:block;}.daily-team-result span{font-size:9.5px;color:var(--muted);}
+  /* REDESIGN Daily & Ritmo (15/08/26) — namespace novo, aditivo: nenhuma classe acima
+     foi tocada. Avatar por iniciais + coluna que empilha métricas e o preview de
+     clientes prometidos do dia (pedido explícito do Julyan: não esconder atrás do
+     clique de expandir). */
+  .daily-team-summary-v2{grid-template-columns:168px minmax(340px,1fr) 92px 66px 18px;}
+  .daily-avatar-row{display:flex;align-items:center;gap:9px;min-width:0;}
+  .daily-avatar{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12px 'Poppins',sans-serif;background:var(--state-soft);color:var(--state);}
+  .daily-team-col-metrics{display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .daily-clientes-chip{font-size:10.5px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:1px;}
+  .daily-clientes-chip b{color:var(--ink);font-weight:700;}
+  .daily-clientes-chip.is-gap{color:var(--amber);}
+  .daily-clientes-chip.is-gap b{color:var(--amber);}
   .daily-team-detail{padding:16px 18px;border-top:1px solid var(--line);background:linear-gradient(180deg,var(--panel2),var(--panel));}
   .daily-team-detail-head{display:flex;justify-content:space-between;gap:14px;align-items:center;margin-bottom:12px;}
   .daily-team-detail-head b{font:800 14px 'Poppins',sans-serif;}.daily-team-detail-head span{font-size:11px;color:var(--muted);}
@@ -1791,6 +1803,11 @@
   .daily-detail-proof b{color:var(--dark-ink);}.daily-detail-proof .push{margin-left:auto;}
   @media(max-width:1050px){.daily-team-summary{grid-template-columns:135px minmax(300px,1fr) 82px 18px}.daily-team-summary>.daily-team-streak{display:none}.daily-promise-signals{gap:14px}.daily-promise-signal{min-width:76px}}
   @media(max-width:760px){.daily-promise-hero,.daily-promise-actions{grid-template-columns:1fr;display:grid}.daily-promise-signals{justify-content:flex-start}.daily-promise-grid,.daily-team-metrics{grid-template-columns:1fr}.daily-team-summary{grid-template-columns:1fr auto}.daily-team-summary>.daily-team-metrics{grid-column:1/-1}.daily-team-result{display:none}.daily-promise-foot .push,.daily-detail-proof .push{margin-left:0}}
+  /* REDESIGN Daily & Ritmo (15/08/26) — DEPOIS das media queries originais de propósito:
+     mesma especificidade (classe única), então ordem de origem decide quem ganha.
+     Ficando por último aqui, o -v2 vence sem precisar de !important nem duplicar regra. */
+  @media(max-width:1050px){.daily-team-summary-v2{grid-template-columns:150px minmax(280px,1fr) 82px 18px}}
+  @media(max-width:760px){.daily-team-summary-v2{grid-template-columns:1fr auto}.daily-team-summary-v2>.daily-team-col-metrics{grid-column:1/-1}}
   /* Acabamento transversal: estado vazio some; blocos irmãos ocupam a grade sem buracos. */
   .banner:empty,#comunicadosBanner:empty{display:none;}
   #podioBloco{display:flex;flex-direction:column;}
@@ -15853,6 +15870,9 @@ async function renderDaily() {
     const promessaZerada = registrouResumo && metasPositivas.length === 0;
     const estadoClasse = !registrouResumo ? 'red' : cumpriuTudo ? 'green' : 'amber';
     const estadoCor = !registrouResumo ? 'var(--red)' : cumpriuTudo ? 'var(--green)' : 'var(--amber)';
+    // REDESIGN Daily & Ritmo (15/08/26) — tint de fundo do novo avatar por iniciais,
+    // mesma régua de 3 estados que já colore a borda esquerda do card (estadoCor).
+    const estadoSoft = !registrouResumo ? 'var(--red-soft)' : cumpriuTudo ? 'var(--green-soft)' : 'var(--amber-soft)';
     const acaoGestor = !registrouResumo ? 'Cobrar promessa' : promessaZerada ? 'Recalibrar promessa' : cumpriuTudo ? 'Reconhecer entrega' : iniciouExecucao ? 'Destravar execução' : 'Começar agora';
     const estadoExec = !registrouResumo ? 'Promessa aberta' : cumpriuTudo ? 'Compromisso cumprido' : iniciouExecucao ? 'Em execução' : 'Promessa registrada';
     const pctMetrica = m => Number(m.prom) > 0 ? Math.min(100, Math.round((m.real / Number(m.prom)) * 100)) : 0;
@@ -15893,6 +15913,14 @@ async function renderDaily() {
     const visitasPrometidas = Math.max(0, Number(hoje.prometido_visitas) || 0);
     const clientesNomeados = comLead.length;
     const clientesFaltantes = Math.max(0, visitasPrometidas - clientesNomeados);
+    // REDESIGN Daily & Ritmo (15/08/26) — pedido do Julyan: o resumo compacto (linha
+    // fechada, antes de expandir) precisava mostrar o(s) cliente(s) prometidos do dia,
+    // não só a contagem. Reaproveita comLead (já filtrado por dia+dono, com nome real
+    // resolvido pela Agenda) — nenhuma lógica nova de dado, só a apresentação.
+    const iniciais = r.name.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+    const clientesPreviewHTML = comLead.length
+      ? `<b>${esc(comLead.slice(0, 2).map(c => c.lead).join(', '))}</b>${comLead.length > 2 ? ` +${comLead.length - 2}` : ''}`
+      : (visitasPrometidas > 0 ? 'nenhum cliente nomeado ainda' : 'sem visita prometida hoje');
     const clientesPrometidosHTML = `
       <div class="daily-client-plan">
         <div class="daily-client-plan-head"><span><b>Clientes prometidos para o dia</b><span>Agenda do Cockpit confirmada no HubSpot — nome, hora e tipo.</span></span><span class="daily-client-count">${clientesNomeados}${visitasPrometidas ? ` de ${visitasPrometidas}` : ''} nomeados</span></div>
@@ -16037,24 +16065,6 @@ async function renderDaily() {
       ? new Date(planoPessoa.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
     const planoPrioridades = (planoPessoa && Array.isArray(planoPessoa.prioridades) ? planoPessoa.prioridades : []).filter(Boolean);
     const planoContas = (planoPessoa && Array.isArray(planoPessoa.contas_alvo) ? planoPessoa.contas_alvo : []).length;
-    // A promessa vem primeiro e SEMPRE aparece quando existe: é o compromisso que o
-    // executivo assumiu e o que o gestor cobra na Daily. O plano do dia é o segundo
-    // dado, nunca o que apaga o primeiro.
-    const resumoPromessa = registrouResumo
-      ? 'Prometeu ' + metricasCompromisso.filter(m => Number(m.prom) > 0)
-          .map(m => m.prom + ' ' + m.label.toLowerCase()).join(' · ')
-      : 'Sem promessa hoje';
-    const resumoPlano = !planoPessoa ? 'plano do dia não aberto'
-      : planoFechado ? 'plano fechado ' + planoHora + (planoPrioridades.length ? ' (' + planoPrioridades.length + ' prioridade' + (planoPrioridades.length > 1 ? 's' : '') + ')' : '')
-      : 'plano em rascunho';
-    // Conta só compromisso COM cliente: reunião interna (Daily, 1:1) não é agenda de campo,
-    // e contá-la como tal daria a impressão de dia cheio pra quem não tem visita marcada.
-    const semLeadReal = compromissosHoje.filter(c => !c.lead && c.motivo === 'sem_nome').length;
-    const resumoAgenda = comLead.length
-      ? comLead.length + ' compromisso' + (comLead.length === 1 ? '' : 's') + ' marcado' + (comLead.length === 1 ? '' : 's')
-        + (semLeadReal ? ' (+' + semLeadReal + ' sem lead)' : '')
-      : semLeadReal ? semLeadReal + ' compromisso(s) sem lead vinculado' : 'agenda vazia';
-    const planoResumoLinha = (registrouResumo && !metasPositivas.length ? 'Promessa zerada' : resumoPromessa) + ' · ' + resumoPlano + ' · ' + resumoAgenda;
     const planoPill = !planoPessoa
       ? '<span style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--panel2);color:var(--muted2);border:1px solid var(--line);white-space:nowrap;">s/ plano do dia</span>'
       : planoFechado
@@ -16074,9 +16084,15 @@ async function renderDaily() {
 
     const fichaGestorCompacta = `
       <details class="daily-acc daily-team-row" id="dailyAcc_${r.ownerId}" style="--state:${estadoCor};">
-        <summary class="daily-team-summary">
-          <span class="daily-person"><b>${r.name.split(' ').slice(0, 2).join(' ')}</b><span>${planoResumoLinha}</span></span>
-          <span class="daily-team-metrics">${metricasCompromisso.map(metricaTime).join('')}</span>
+        <summary class="daily-team-summary daily-team-summary-v2" style="--state-soft:${estadoSoft};">
+          <span class="daily-avatar-row">
+            <span class="daily-avatar">${esc(iniciais)}</span>
+            <span class="daily-person"><b>${r.name.split(' ').slice(0, 2).join(' ')}</b><span>${estadoExec}</span></span>
+          </span>
+          <span class="daily-team-col-metrics">
+            <span class="daily-team-metrics">${metricasCompromisso.map(metricaTime).join('')}</span>
+            <span class="daily-clientes-chip ${clientesFaltantes ? 'is-gap' : ''}">${clientesPreviewHTML}</span>
+          </span>
           <span class="daily-team-result"><b style="color:${fechamentosHoje > 0 ? 'var(--green)' : 'var(--muted2)'};">${fechamentosHoje}</b><span>fechados</span></span>
           <span class="daily-team-streak mono" style="font-size:11px;font-weight:800;color:var(--amber);text-align:right;">${planoPill}${seq > 0 ? (' 🔥' + seq + 'd') : ''}</span>
           <span style="font-size:11px;color:var(--muted2);text-align:right;">▾</span>
