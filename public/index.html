@@ -2784,7 +2784,7 @@
   .prc-selected-plan{margin-top:15px}.prc-selected-plan h2{font-size:21px}.prc-selected-plan p{line-height:1.45}
   .prc-feature-matrix{padding:18px 20px 7px;background:var(--panel)}.prc-feature-title{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:13px}.prc-feature-title b{font-family:'Manrope','Inter',sans-serif;color:var(--ink);font-size:13px}.prc-feature-title span{padding:4px 8px;border-radius:999px;background:var(--sunk);color:var(--muted2);font-size:8px;font-weight:750}
   .prc-feature-section{padding:11px 0;border-top:1px solid var(--line-soft)}.prc-feature-section h3{margin:0 0 8px;color:var(--red);font-family:'Manrope',sans-serif;font-size:8px;letter-spacing:.11em;text-transform:uppercase}.prc-feature-section ul{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin:0;padding:0;list-style:none}.prc-feature-section li{position:relative;padding-left:13px;color:var(--muted);font-size:8.8px;line-height:1.4}.prc-feature-section li::before{content:"✓";position:absolute;left:0;color:var(--green);font-weight:850}
-  .prc-summary{padding:17px 21px 19px;border-top:1px solid var(--line);background:var(--panel2)}.prc-line{color:var(--muted)}.prc-line b{color:var(--ink)}.prc-price{border-color:var(--line)}.prc-price span,.prc-price small{color:var(--muted2)}.prc-price strong{color:var(--ink)}.prc-action.secondary{border-color:var(--line-btn);background:var(--panel);color:var(--ink)}.prc-validity{color:var(--muted2)}
+  .prc-summary{padding:20px 23px 22px;background:var(--dark);border-top:none;}.prc-line{color:var(--dark-mut);}.prc-line b{color:#fff;}.prc-price{border-color:rgba(255,255,255,.14);}.prc-price span{color:var(--dark-mut);}.prc-price strong{color:#fff;font-size:38px;}.prc-price small{color:var(--dark-mut);}.prc-action.secondary{border-color:rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:#fff;}.prc-validity{color:var(--dark-mut);}
   @media(max-width:1120px){.prc-grid{grid-template-columns:1fr}.prc-proposal{position:static}.prc-plans{grid-template-columns:1fr 1fr}}
   @media(max-width:680px){.prc-hero{grid-template-columns:1fr;padding:21px}.prc-source{text-align:left}.prc-fields,.prc-addons{grid-template-columns:1fr}.prc-periods{grid-template-columns:1fr 1fr}.prc-block{padding:14px}.prc-benefits{grid-template-columns:1fr}}
 
@@ -3654,7 +3654,7 @@ function reidratarPosLogin() {
 function aplicarVisaoPorPapel() {
   const badge = document.getElementById('userBadge');
   if (sessaoAtual.email) {
-    badge.innerHTML = `<button id="perfilAvatarBadge" style="background:none;border:none;cursor:pointer;padding:0;" title="Editar perfil"></button><span style="cursor:pointer;" id="perfilNomeClicavel">${sessaoAtual.nome} <span style="color:var(--muted2);">(${sessaoAtual.role === 'manager' ? 'gestor' : 'individual'})</span></span>`;
+    badge.innerHTML = `<button id="perfilAvatarBadge" style="background:none;border:none;cursor:pointer;padding:0;" title="Editar perfil"></button><span style="cursor:pointer;font-weight:700;" id="perfilNomeClicavel">${sessaoAtual.nome}</span>`;
     document.getElementById('perfilAvatarBadge').innerHTML = avatarHTML(sessaoAtual.email, sessaoAtual.nome, 28);
     document.getElementById('perfilAvatarBadge').addEventListener('click', abrirPerfilDrawer);
     document.getElementById('perfilNomeClicavel').addEventListener('click', abrirPerfilDrawer);
@@ -5508,8 +5508,8 @@ async function abrirWhatsappProposta() {
     const arquivo = new File([blob], nomeArquivoProposta(), { type: 'image/png' });
     // No celular, o compartilhamento nativo é o único caminho web que envia o arquivo
     // como mídia de verdade. No desktop, o navegador não permite anexar um arquivo a
-    // wa.me por URL; copiamos o PNG para a área de transferência e abrimos diretamente
-    // o número informado, deixando só o Ctrl+V para o executivo.
+    // wa.me por URL — essa é uma limitação real da própria plataforma do WhatsApp, não
+    // uma falha do Cockpit; não existe workaround que anexe a imagem sozinho.
     const mobileShare = navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })
       && window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
     if (mobileShare) {
@@ -5525,10 +5525,31 @@ async function abrirWhatsappProposta() {
       } catch (e) { copiouImagem = false; }
     }
     if (!copiouImagem) baixarBlobProposta(blob);
-    window.open(`https://wa.me/${telefone}?text=${encodeURIComponent(textoPropostaPrecificacao())}`, '_blank', 'noopener');
-    mostrarToast(copiouImagem
-      ? 'WhatsApp aberto. O PNG está copiado — cole com Ctrl+V na conversa e envie.'
-      : 'WhatsApp aberto e PNG baixado — arraste o arquivo para a conversa.', copiouImagem ? 'sucesso' : 'atencao');
+    // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — pedido do Julyan: "continua indo o
+    // texto para o whatsapp do cliente". Causa raiz: o aviso de "cole com Ctrl+V" era
+    // só um toast passageiro, fácil de não ler — e como o WhatsApp já abre com o texto
+    // PRONTO na caixa de mensagem, dava pra apertar Enviar sem colar a imagem antes,
+    // e o cliente recebia só o texto. Agora é um modal BLOQUEANTE com passo a passo:
+    // o WhatsApp só abre depois que o executivo confirma que leu a ordem certa.
+    if (copiouImagem) {
+      abrirModalConfirmacao({
+        titulo: '📋 Imagem copiada — siga esta ordem',
+        confirmarLabel: 'Entendi, abrir WhatsApp',
+        corpoHTML: `
+          <ol style="margin:0 0 4px;padding-left:20px;line-height:1.7;">
+            <li>O WhatsApp vai abrir com o texto da proposta já escrito.</li>
+            <li><b>Antes de enviar</b>, clique na caixa de mensagem e aperte <b>Ctrl+V</b> — isso troca o texto pela prévia da imagem.</li>
+            <li>Só então clique em enviar. Se enviar sem colar, o cliente recebe só o texto.</li>
+          </ol>`,
+        aoConfirmar: (overlay, fechar) => {
+          fechar();
+          window.open(`https://wa.me/${telefone}?text=${encodeURIComponent(textoPropostaPrecificacao())}`, '_blank', 'noopener');
+        }
+      });
+    } else {
+      window.open(`https://wa.me/${telefone}?text=${encodeURIComponent(textoPropostaPrecificacao())}`, '_blank', 'noopener');
+      mostrarToast('Não consegui copiar a imagem — baixei o PNG. Arraste o arquivo pra conversa antes de enviar.', 'atencao');
+    }
   } catch (e) {
     if (e && e.name !== 'AbortError') mostrarToast('Não consegui preparar o PNG para o WhatsApp.', 'erro');
   } finally {
@@ -7365,7 +7386,7 @@ async function montarAgendaSugestoes(ownerId, dias, naSemana, renderVersao) {
     return;
   }
   const territorio = territorioDe(ownerId);
-  slot.innerHTML = `<div class="ag-rail-card"><div class="ag-rail-head"><div><span>Preencher a semana</span><h3>Sugestões do seu território</h3></div><div class="ag-rail-place">${agendaEsc(territorio ? territorio.rotulo : 'região do executivo')}</div></div><div class="ag-rail-section"><div class="ag-rail-section-title"><b>Contas-alvo</b><span>prontas para agendar</span></div>${agendaContasAlvoHTML(ownerId, dias, naSemana)}</div><div class="ag-rail-section" id="agendaCasaSlot"><div class="ag-rail-section-title"><b>Recém-abertas</b><span>consultando Casa dos Dados…</span></div><div class="ag-rail-loading">Buscando CNPJs novos na sua região.</div></div></div>`;
+  slot.innerHTML = `<div class="ag-rail-card"><div class="ag-rail-head"><div><span>Preencher a semana</span><h3>Sugestões do seu território</h3></div><div style="display:flex;align-items:center;gap:8px;"><button type="button" class="ag-plan-btn" data-agnovaconta="1" style="font-weight:800;">+ Nova conta</button><div class="ag-rail-place">${agendaEsc(territorio ? territorio.rotulo : 'região do executivo')}</div></div></div><div class="ag-rail-section"><div class="ag-rail-section-title"><b>Contas-alvo</b><span>prontas para agendar</span></div>${agendaContasAlvoHTML(ownerId, dias, naSemana)}</div><div class="ag-rail-section" id="agendaCasaSlot"><div class="ag-rail-section-title"><b>Recém-abertas</b><span>consultando Casa dos Dados…</span></div><div class="ag-rail-loading">Buscando CNPJs novos na sua região.</div></div></div>`;
   const novidades = await buscarNovidadesMercado(ownerId);
   if (renderVersao !== agendaRenderVersao) return;
   const casaSlot = document.getElementById('agendaCasaSlot');
@@ -8345,6 +8366,16 @@ document.addEventListener('click', function (ev) {
     ev.stopPropagation();
     const lead = (prospeccaoCache || []).find(x => String(x.id) === String(fichaAlvo.dataset.agfichaAlvo));
     if (lead) abrirFichaProspeccaoDrawer(lead);
+    return;
+  }
+  // Pedido explícito: botão de criar negócio (nome + telefone obrigatórios) direto na
+  // Agenda, caindo já em Prospecção — mesmo fluxo que já existia só no Meu Funil
+  // (abrirNovaContaProspeccao), agora também alcançável daqui.
+  const novaConta = ev.target.closest('[data-agnovaconta]');
+  if (novaConta) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    abrirNovaContaProspeccao(() => { if (typeof renderAgenda === 'function') renderAgenda(); });
     return;
   }
   const casa = ev.target.closest('[data-agcasa]');
@@ -11277,6 +11308,11 @@ function abrirNovaContaProspeccao(aoConcluir) {
         <input id="peNome" type="text" maxlength="140" autocomplete="off" placeholder="Como está na fachada">
         <small class="erro" hidden></small>
       </div>
+      <div class="pe-campo" data-campo="__telefone">
+        <label for="peTelefone">Telefone / celular<i title="obrigatório"> *</i></label>
+        <input id="peTelefone" type="tel" maxlength="20" autocomplete="off" placeholder="(27) 99999-9999">
+        <small class="erro" hidden></small>
+      </div>
       ${campos.map(c => campoPassagemHTML(c, '')).join('')}
       <div class="pe-campo" data-campo="__end">
         <label for="peEnd">Rua e número</label>
@@ -11309,6 +11345,23 @@ function abrirNovaContaProspeccao(aoConcluir) {
       inputNome.focus();
       return;
     }
+    // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — pedido explícito: "criar um negócio
+    // com o nome e número (nº obrigatório)". Este formulário nem tinha campo de
+    // telefone antes — `telefone: coleta.propriedades.celular` sempre mandava null,
+    // porque 'celular' não faz parte de CAMPOS_POR_ETAPA[Prospecção]. Agora valida
+    // como campo obrigatório de verdade, igual ao nome.
+    const inputTelefone = document.getElementById('peTelefone');
+    const divTelefone = stageModalBody.querySelector('.pe-campo[data-campo="__telefone"]');
+    const telefone = (inputTelefone.value || '').trim();
+    divTelefone.classList.remove('erro');
+    if (!telefone) {
+      divTelefone.classList.add('erro');
+      const avisoTel = divTelefone.querySelector('small.erro');
+      avisoTel.textContent = 'Telefone é obrigatório pra criar a conta.';
+      avisoTel.hidden = false;
+      inputTelefone.focus();
+      return;
+    }
     const coleta = coletarCamposPassagem(stageModalBody, campos);
     if (!coleta.ok) {
       status.style.color = 'var(--red)';
@@ -11329,7 +11382,7 @@ function abrirNovaContaProspeccao(aoConcluir) {
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
         body: JSON.stringify({
           nome, ownerId: r.ownerId, etapa: ETAPA_PROSPECCAO,
-          telefone: coleta.propriedades.celular || null,
+          telefone: telefone || null,
           bairro: coleta.propriedades.bairro || null,
           cidade: coleta.propriedades.cidade || null,
           endereco: logradouro || null,
