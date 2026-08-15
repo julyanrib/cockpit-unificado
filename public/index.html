@@ -11714,11 +11714,19 @@ function abrirFichaLeadFunilDrawer(l, voltarPara, foco) {
 
 // ===== BLOCO 42 (14/08/26) — "o executivo tem que poder limpar o lead, adicionar
 // nota, fazer o planejamento pelo cockpit, e ele registrar automaticamente no
-// hubspot" (Julyan). Três ações, três endpoints (mesma arquitetura de
-// api/criar-tarefa-rota.js — token do HubSpot nunca sai do servidor):
+// hubspot" (Julyan). Três ações (mesma arquitetura de api/criar-tarefa-rota.js —
+// token do HubSpot nunca sai do servidor):
 //   1. clicar num segmento da trilha  → api/mudar-etapa-negocio.js (dealstage)
-//   2. "Salvar nota"                  → api/criar-nota-negocio.js (Note associada)
-//   3. "Salvar próximo passo"         → api/criar-proximo-passo.js (Task associada)
+//   2. "Salvar nota"                  → api/criar-nota-negocio.js, tipoAcao:'nota' (Note associada)
+//   3. "Salvar próximo passo"         → api/criar-nota-negocio.js, tipoAcao:'proximo-passo' (Task associada)
+// CONSOLIDAÇÃO (15/08/26): os itens 2 e 3 viraram UM endpoint só (limite de 12 funções
+// serverless do Hobby da Vercel, pra abrir espaço pro api/hubspot-webhook.js) —
+// comportamento de cada um continua idêntico, só mudou pra onde o front aponta.
+// ATUALIZAÇÃO (15/08/26) — webhook do HubSpot: mudança de ETAPA (item 1, dealstage) já
+// dispara o robô de atualização sozinho, em poucos minutos — não depende mais só das
+// rodadas de 23:59/08:59/15h. Nota e próximo-passo (itens 2 e 3) continuam dependendo
+// das rodadas automáticas, porque Task/Note não têm webhook disponível nesta conta do
+// HubSpot (só Negócio, Empresa, Contato, Ticket, Produto, Item de linha e Conversas).
 // IMPORTANTE: sucesso aqui é IMEDIATO no HubSpot, mas o Cockpit só reflete essa
 // mudança na próxima atualização automática (23:59/08:59/15h) — os três avisos de
 // sucesso dizem isso explicitamente, porque "achei que tinha atualizado sozinho"
@@ -11778,7 +11786,7 @@ function wireFichaLeadFunilEdicao(container, l) {
       const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId, texto })
+        body: JSON.stringify({ dealId, texto, tipoAcao: 'nota' })
       }), 8000, 'criar-nota-negocio');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data.ok) {
@@ -11835,11 +11843,11 @@ function wireFichaLeadFunilEdicao(container, l) {
     statusEl.textContent = 'Salvando no HubSpot...';
     try {
       const token = await tokenDeSessaoGlobal();
-      const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-proximo-passo', {
+      const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId, texto, data, tipo: passoTipoAtivo })
-      }), 8000, 'criar-proximo-passo');
+        body: JSON.stringify({ dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo' })
+      }), 8000, 'criar-nota-negocio-proximo-passo');
       const respData = await resp.json().catch(() => ({}));
       if (!resp.ok || !respData.ok) {
         statusEl.textContent = (respData && respData.erro) || 'Não consegui salvar o próximo passo.';
