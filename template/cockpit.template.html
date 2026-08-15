@@ -4563,14 +4563,26 @@ iniciarAuth();
 // O funil por etapa virou barras horizontais dedicadas (renderFunilBarras, mais abaixo)
 // — "substitui o donut antigo", como já dizia o comentário que ficou órfão ali.
 
+// CLONAGEM DE LEITURA (15/08/26) — Julyan: "clonar o pipeline do field sales pro
+// cockpit... contas alvo, reciclagem, enviado onboarding e perdidos". Só rótulo e cor
+// pra essas etapas aparecerem certo em qualquer lista que leia STAGE_LABELS/STAGE_COLORS
+// pelo stageId cru — nada disso entra em ORDEM_ETAPAS_FUNIL, CAMPOS_POR_ETAPA nem em
+// nenhum caminho de escrita/transição. Enviado Onboarding e Ag. Pagamento têm automação
+// real (RPA/ASAAS, grupo de WhatsApp, troca de pipeline) — nunca tocar na lógica de
+// transição delas, só no nome/cor exibidos quando um negócio que já está lá aparece
+// em alguma lista de leitura.
 const STAGE_LABELS = {
   "1395880469": "Prospecção", "1396005401": "Visita", "1395880470": "Conversa com Decisor",
-  "1395880471": "Demo/Proposta", "1395880472": "Negociação", "1395880473": "Ag. Pagamento"
+  "1395880471": "Demo/Proposta", "1395880472": "Negociação", "1395880473": "Ag. Pagamento",
+  "1396006162": "Ganho", "1396006163": "Enviado Onboarding", "1396006164": "Perdido",
+  "1398311191": "Reciclagem", "1396007427": "Backlog", "1413529973": "Conta Alvo"
 };
 // Paleta de cores por etapa — exata dos designs/*.html (item 2 do prompt de correção).
 const STAGE_COLORS = {
   "1395880469": "#E8A33D", "1396005401": "#4A7FC7", "1395880470": "#7C6FE0",
-  "1395880471": "#2FA88A", "1395880472": "#D9668F", "1395880473": "#E51A31"
+  "1395880471": "#2FA88A", "1395880472": "#D9668F", "1395880473": "#E51A31",
+  "1396006162": "#1FA35C", "1396006163": "#1FA35C", "1396006164": "#8C1220",
+  "1398311191": "#8B92A3", "1396007427": "#6B7280", "1413529973": "#9AA1AC"
 };
 function stageColor(stageId) {
   return STAGE_COLORS[stageId] || 'var(--muted2)';
@@ -4635,7 +4647,13 @@ const CAMPOS_POR_ETAPA = {
     { prop: 'deseja_criar_perfil_no_asaas_', label: 'Deseja criar perfil no ASAAS?', tipo: 'sim_nao', obrigatorio: true, largo: true },
     { prop: 'qual_maior_desafio_', label: 'Maior Desafio', tipo: 'selecao', opcoes: OP_MAIOR_DESAFIO, obrigatorio: true, largo: true },
     { prop: 'informacoes_sobre_o_maior_desafio', label: 'Informações sobre o maior desafio', tipo: 'texto_longo', obrigatorio: true, largo: true }
-  ]
+  ],
+  // ATUALIZAÇÃO (15/08/26, Julyan): "ele pode enviar pra onboarding... faça isso".
+  // Vazio de propósito — o contrato inteiro já foi coletado em Ag. Pagamento; esta
+  // etapa é confirmação de pagamento, não coleta de dado nova. A automação real
+  // (troca de pipeline + grupo de WhatsApp) continua intocada — o Cockpit só faz o
+  // mesmo PATCH de dealstage que qualquer outra transição já faz.
+  '1396006163': []
 };
 
 // BLOCO 50 — quais propriedades aparecem NA FICHA (fora do fluxo de mover), e a partir
@@ -6783,7 +6801,12 @@ const AGENDA_TIPOS = {
   interno:   { cor: 'var(--muted2)', rotulo: 'Interno',    conta: null      }
 };
 
-const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
+// ATUALIZAÇÃO (15/08/26, Julyan): "ele pode enviar pra onboarding... ele pode
+// movimentar pelo cockpit, faça isso" — 1396006163 (Enviado Onboarding) adicionada
+// como 7ª etapa alcançável. Espelha exatamente ETAPAS_ABERTAS do servidor
+// (api/mudar-etapa-negocio.js) — "Ganho" (1396006162) fica de fora de propósito,
+// é alcançado só automaticamente pelo ASAAS quando o pagamento confirma.
+const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163'];
 const AGENDA_DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const AGENDA_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -10770,7 +10793,9 @@ let stageModalVoltarPara = null; // função pra "← voltar" quando a ficha abr
 // REALMENTE sincronizamos (nome, etapa, dias, SLA) — telefone/endereço/última nota
 // vivem só no HubSpot e não têm campo espelhado aqui, então não fingimos que têm.
 // A trilha do funil é real (STAGE_LABELS na ordem, etapa atual destacada).
-const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
+// ATUALIZAÇÃO (15/08/26, Julyan): mesma régua de ORDEM_ETAPAS_FUNIL — Enviado
+// Onboarding alcançável, Ganho fora (só automação).
+const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163'];
 
 // BLOCO 50 (14/08/26) — validação de UM campo isolado, usada pela edição inline da
 // ficha (§6 do handoff). Mesmas regras de tipo de coletarCamposPassagem, mas sem
