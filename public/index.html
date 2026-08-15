@@ -944,6 +944,36 @@
   .practice-list li{font-size:13.5px;line-height:1.65;margin-bottom:6px;}
 
   .leads-box{background:var(--panel2);border-radius:var(--r-md);margin-bottom:22px;overflow:hidden;}
+
+  /* REDESIGN Pessoas/Desenvolvimento (15/08/26) — namespace novo, aditivo. Inspirado na
+     identidade do Meu Funil (seções numeradas, hierarquia clara, nada de parede de
+     texto). Duas peças: leitura da semana resumida com expansão, e o roteiro de 1:1
+     como timeline vertical em vez de 4 caixas de tamanhos desiguais. */
+  .coach-leitura-card{background:var(--panel2);border-left:3px solid var(--red);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:16px;}
+  .coach-leitura-head{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--red);margin-bottom:6px;}
+  .coach-leitura-teaser{font-size:12.5px;line-height:1.6;color:var(--ink);}
+  .coach-leitura-expandir{margin-top:8px;}
+  .coach-leitura-expandir summary{font-size:11.5px;font-weight:700;color:var(--red);cursor:pointer;list-style:none;}
+  .coach-leitura-expandir summary::-webkit-details-marker{display:none;}
+  .coach-leitura-expandir summary::before{content:"▸ ";}
+  .coach-leitura-expandir[open] summary::before{content:"▾ ";}
+  .coach-leitura-full{font-size:12.5px;line-height:1.6;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);}
+  .coach-leitura-acoes{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+  .coach-acao-chip{display:flex;align-items:flex-start;gap:9px;background:var(--panel);border-radius:var(--r-md);padding:8px 11px;font-size:12px;line-height:1.5;color:var(--muted);}
+  .coach-acao-chip b{flex:none;width:18px;height:18px;border-radius:50%;background:var(--red);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;margin-top:1px;}
+
+  .coach-timeline{position:relative;margin:0 0 18px;padding-left:26px;}
+  .coach-timeline::before{content:"";position:absolute;left:9px;top:8px;bottom:8px;width:2px;background:var(--line);}
+  .coach-timeline-item{position:relative;padding-bottom:16px;}
+  .coach-timeline-item:last-child{padding-bottom:0;}
+  .coach-timeline-num{position:absolute;left:-26px;top:0;width:20px;height:20px;border-radius:50%;background:var(--panel2);border:2px solid var(--line);color:var(--muted2);font:800 10px 'Manrope',sans-serif;display:flex;align-items:center;justify-content:center;}
+  .coach-timeline-item.is-final .coach-timeline-num{background:var(--red);border-color:var(--red);color:#fff;}
+  .coach-timeline-body{background:var(--panel2);border-radius:var(--r-lg);padding:12px 14px;}
+  .coach-timeline-item.is-final .coach-timeline-body{background:var(--red-soft);}
+  .coach-timeline-label{font-size:11px;font-weight:800;color:var(--muted2);margin-bottom:4px;}
+  .coach-timeline-item.is-final .coach-timeline-label{color:var(--red);}
+  .coach-timeline-sub{font-weight:400;text-transform:none;letter-spacing:0;}
+  .coach-timeline-text{font-size:12.5px;line-height:1.55;color:var(--ink);}
   .lead-row{display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid var(--line);text-decoration:none;color:var(--ink);transition:background .12s var(--ease);}
   .lead-row:last-child{border-bottom:none;}
   .lead-row:hover{background:var(--red-soft);}
@@ -19995,31 +20025,57 @@ async function renderCoaching() {
         const ind = (rsInd && rsInd.porRep) ? rsInd.porRep[r.ownerId] : null;
         if (!ind) return '';
         const acoesInd = (ind.comoAgirIndividual || []).filter(Boolean);
+        const textoCompleto = ind.resumoIndividual || 'Análise individual ainda não gerada nesta semana — roda toda sexta-feira.';
+        // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — item explícito do prompt: "Resuma
+        // a leitura semanal em até cinco linhas, com expansão." Antes o parágrafo inteiro
+        // (gerado pela IA, sem limite de tamanho) sempre aparecia por completo — um dos
+        // maiores causadores da "parede de texto" nesta aba. Agora só a 1ª frase aparece
+        // fechado; o resto (e as ações, que eram uma lista de frases longas) fica atrás
+        // de um <details>.
+        const primeiraFrase = textoCompleto.split(/(?<=[.!?])\s+/)[0] || textoCompleto;
+        const temMais = primeiraFrase.length < textoCompleto.length;
         return `
-          <div style="background:var(--panel2);border-left:3px solid var(--red);border-radius:var(--r-lg);padding:14px 16px;margin-bottom:16px;">
-            <div style="font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--red);margin-bottom:6px;">Leitura da semana ${rsInd.geradoEmFmt ? '· escrita ' + esc(rsInd.geradoEmFmt) : ''}</div>
-            <div style="font-size:12.5px;line-height:1.6;color:var(--muted);">${ind.resumoIndividual || 'Análise individual ainda não gerada nesta semana — roda toda sexta-feira.'}</div>
-            ${acoesInd.length ? `<ul style="margin:10px 0 0;padding-left:18px;font-size:12.5px;line-height:1.65;color:var(--muted);">${acoesInd.map(a => `<li>${a}</li>`).join('')}</ul>` : ''}
+          <div class="coach-leitura-card">
+            <div class="coach-leitura-head">Leitura da semana ${rsInd.geradoEmFmt ? '· escrita ' + esc(rsInd.geradoEmFmt) : ''}</div>
+            <div class="coach-leitura-teaser">${primeiraFrase}</div>
+            ${temMais || acoesInd.length ? `
+              <details class="coach-leitura-expandir">
+                <summary>Ver leitura completa${acoesInd.length ? ` e ${acoesInd.length} ação${acoesInd.length > 1 ? 'ões' : ''}` : ''}</summary>
+                <div class="coach-leitura-full">${textoCompleto}</div>
+                ${acoesInd.length ? `<div class="coach-leitura-acoes">${acoesInd.map((a, i) => `<div class="coach-acao-chip"><b>${i + 1}</b><span>${a}</span></div>`).join('')}</div>` : ''}
+              </details>` : ''}
           </div>`;
       })()}
 
-      <div class="daily-col-label" style="margin-bottom:8px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d="M3 14v-2a9 9 0 0118 0v2"/><rect x="1" y="14" width="6" height="7" rx="2"/><rect x="17" y="14" width="6" height="7" rx="2"/></svg>Roteiro do 1:1</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:16px;">
-        <div style="background:var(--panel2);border-radius:var(--r-lg);padding:13px 15px;">
-          <div style="font-size:10.5px;font-weight:700;color:var(--muted2);margin-bottom:4px;">1 · ABRIR PELO QUE FOI BEM</div>
-          <div style="font-size:12.5px;">${r.boasPraticas && r.boasPraticas[0] ? r.boasPraticas[0] : 'Puxe algo concreto da semana antes de ir pro gargalo.'}</div>
+      <div class="daily-col-label" style="margin-bottom:10px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d="M3 14v-2a9 9 0 0118 0v2"/><rect x="1" y="14" width="6" height="7" rx="2"/><rect x="17" y="14" width="6" height="7" rx="2"/></svg>Roteiro do 1:1</div>
+      <div class="coach-timeline">
+        <div class="coach-timeline-item">
+          <span class="coach-timeline-num">1</span>
+          <div class="coach-timeline-body">
+            <div class="coach-timeline-label">Abrir pelo que foi bem</div>
+            <div class="coach-timeline-text">${r.boasPraticas && r.boasPraticas[0] ? r.boasPraticas[0] : 'Puxe algo concreto da semana antes de ir pro gargalo.'}</div>
+          </div>
         </div>
-        <div style="background:var(--panel2);border-radius:var(--r-lg);padding:13px 15px;">
-          <div style="font-size:10.5px;font-weight:700;color:var(--muted2);margin-bottom:4px;">2 · NOMEAR O GARGALO COM DADO <span style="font-weight:400;">(análise de ${DATA.versaoAnalise || '—'})</span></div>
-          <div style="font-size:12.5px;" class="coachingGargaloRoteiro">${r.gargalo || 'Sem gargalo mapeado ainda.'}</div>
+        <div class="coach-timeline-item">
+          <span class="coach-timeline-num">2</span>
+          <div class="coach-timeline-body">
+            <div class="coach-timeline-label">Nomear o gargalo com dado <span class="coach-timeline-sub">(análise de ${DATA.versaoAnalise || '—'})</span></div>
+            <div class="coach-timeline-text coachingGargaloRoteiro">${r.gargalo || 'Sem gargalo mapeado ainda.'}</div>
+          </div>
         </div>
-        <div style="background:var(--panel2);border-radius:var(--r-lg);padding:13px 15px;">
-          <div style="font-size:10.5px;font-weight:700;color:var(--muted2);margin-bottom:4px;">3 · CHECAR A ADERÊNCIA</div>
-          <div style="font-size:12.5px;">Visitas informadas na Daily: <b>${visitasInformadasTexto(r.ownerId)}</b>. Bateu o prometido?</div>
+        <div class="coach-timeline-item">
+          <span class="coach-timeline-num">3</span>
+          <div class="coach-timeline-body">
+            <div class="coach-timeline-label">Checar a aderência</div>
+            <div class="coach-timeline-text">Visitas informadas na Daily: <b>${visitasInformadasTexto(r.ownerId)}</b>. Bateu o prometido?</div>
+          </div>
         </div>
-        <div style="background:var(--red-soft);border-radius:var(--r-lg);padding:13px 15px;">
-          <div style="font-size:10.5px;font-weight:700;color:var(--red);margin-bottom:4px;">4 · FECHAR COMPROMISSO</div>
-          <div style="font-size:12.5px;">"O que você se compromete a fazer diferente até nosso próximo 1:1?"</div>
+        <div class="coach-timeline-item is-final">
+          <span class="coach-timeline-num">4</span>
+          <div class="coach-timeline-body">
+            <div class="coach-timeline-label">Fechar compromisso</div>
+            <div class="coach-timeline-text">"O que você se compromete a fazer diferente até nosso próximo 1:1?"</div>
+          </div>
         </div>
       </div>
 
@@ -20041,9 +20097,17 @@ async function renderCoaching() {
   // Correção 08/08 (Julyan, aba Pessoas): aqui é onde a barra de etapas da tela Pessoas
   // é de fato desenhada — mesma causa da nota em buildDetailHTML (ordem numérica das
   // chaves quebra a leitura do funil). Ordem canônica.
+  // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — item explícito do prompt de revisão:
+  // "Mostre as seis etapas do pipeline, inclusive etapas zeradas". O filtro abaixo
+  // escondia qualquer etapa com contagem 0 (ex.: Demo/Proposta sumia inteira da tela
+  // quando o executivo não tinha nenhum negócio ali) — informação real de "onde ele
+  // não tem nada" é tão importante quanto onde ele tem. Sempre usa a ordem canônica
+  // completa agora; stageEntriesBrutos vira só um fallback de emergência (dado
+  // desconhecido/malformado), nunca o caminho normal.
   const stageEntriesBrutos = Object.entries(r.stages || {});
-  const stageEntries = ORDEM_ETAPAS_FUNIL.filter(sid => (r.stages || {})[sid] > 0).map(sid => [sid, r.stages[sid]]);
-  if (stageEntries.length === 0) stageEntries.push(...stageEntriesBrutos);
+  const stageEntries = ORDEM_ETAPAS_FUNIL.length
+    ? ORDEM_ETAPAS_FUNIL.map(sid => [sid, (r.stages || {})[sid] || 0])
+    : stageEntriesBrutos;
   const funilMiniEl = document.getElementById(`coachFunilMini${r.ownerId}`);
   if (funilMiniEl && stageEntries.length > 0) {
     const maxV = Math.max(...stageEntries.map(([, c]) => c), 1);
