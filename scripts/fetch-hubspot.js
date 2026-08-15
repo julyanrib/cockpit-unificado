@@ -27,7 +27,8 @@ const STAGES = {
   ganho1: '1396006162',
   ganho2: '1396006163',
   perdido: '1396006164',
-  reciclagem: '1398311191'
+  reciclagem: '1398311191',
+  contaAlvo: '1413529973'
 };
 
 const OPEN_STAGES = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGES.demoProposta, STAGES.negociacao, STAGES.agPagamento];
@@ -36,13 +37,26 @@ const OPEN_STAGES = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGE
 // Configurável aqui até existir um lugar melhor pra isso (ex.: data/config.json).
 const META_MENSAL_FECHADOS = 80;
 
+// CLONAGEM DE LEITURA (15/08/26) — Julyan: "clonar o pipeline do field sales pro
+// cockpit... contas alvo, reciclagem, enviado onboarding e perdidos". Só rótulo e cor
+// pra essas etapas aparecerem certo em QUALQUER lugar que leia stageMeta.labels — nada
+// disso entra em OPEN_STAGES nem em nenhum caminho de escrita/transição. Enviado
+// Onboarding (ganho2) e Ag. Pagamento têm automação real (RPA/ASAAS, grupo de
+// WhatsApp, troca de pipeline) — nunca tocar na lógica de transição delas, só no nome
+// que aparece quando um negócio que já está lá é exibido em alguma lista.
 const STAGE_LABELS = {
+  [STAGES.backlog]: 'Backlog',
   [STAGES.prospeccao]: 'Prospecção',
   [STAGES.visita]: 'Visita',
   [STAGES.diagnostico]: 'Conversa com Decisor',
   [STAGES.demoProposta]: 'Demo/Proposta',
   [STAGES.negociacao]: 'Negociação',
-  [STAGES.agPagamento]: 'Ag. Pagamento'
+  [STAGES.agPagamento]: 'Ag. Pagamento',
+  [STAGES.ganho1]: 'Ganho',
+  [STAGES.ganho2]: 'Enviado Onboarding',
+  [STAGES.perdido]: 'Perdido',
+  [STAGES.reciclagem]: 'Reciclagem',
+  [STAGES.contaAlvo]: 'Conta Alvo'
 };
 
 // SLA (dias máximos esperados) por etapa — confirmados com Julyan.
