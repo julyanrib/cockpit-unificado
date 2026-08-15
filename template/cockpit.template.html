@@ -2168,11 +2168,19 @@
     padding:11px 26px 10px 15px;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit;display:block;
     transition:transform .16s var(--ease),box-shadow .16s var(--ease),border-color .16s var(--ease);}
   /* BLOCO 51 — alça de arrasto: só ela é draggable, o card vira clique puro. */
+  /* MELHORIA (15/08/26): touch-action:none é o que permite o dedo arrastar de verdade
+     — sem isso, o navegador tenta rolar a página assim que o dedo se move, brigando
+     com o Pointer Events e quebrando o gesto de arrastar em celular. */
   .kb-arrasto{position:absolute;top:6px;right:6px;width:20px;height:20px;display:grid;place-items:center;
-    color:var(--ter);font-size:13px;cursor:grab;border-radius:6px;user-select:none;
+    color:var(--ter);font-size:13px;cursor:grab;border-radius:6px;user-select:none;touch-action:none;
     transition:background .14s var(--ease),color .14s var(--ease);}
   .kb-arrasto:hover{background:var(--sunk);color:var(--ink);}
   .kb-arrasto:active{cursor:grabbing;}
+  /* Card-fantasma: cópia visual que segue o dedo/mouse durante o arrasto.
+     pointer-events:none é essencial — sem isso, elementFromPoint acha o próprio
+     fantasma em vez da coluna embaixo dele, e o "soltar" nunca acerta o alvo certo. */
+  .kb-card-fantasma{position:fixed;z-index:9999;pointer-events:none;margin:0;opacity:.92;
+    transform:rotate(-2deg) scale(1.03);box-shadow:0 22px 44px -18px rgba(26,22,19,.55);cursor:grabbing;}
   .kb-card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:var(--r-md) 0 0 var(--r-md);background:var(--kb-cor,var(--line-btn));}
   .kb-card:hover{transform:translateY(-2px);box-shadow:0 14px 28px -18px rgba(26,22,19,.55);border-color:var(--line-btn);}
   .kb-card:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
@@ -11042,7 +11050,9 @@ function buscarLeadFunilPorId(leadId) {
 // (Julyan). As duas coisas: arrasta o card entre colunas OU usa as setas ← → do
 // próprio card. Qualquer um dos dois abre o mesmo drawer de passagem — nada muda de
 // etapa sem passar pelas propriedades da etapa.
-let kanbanArrastando = null;
+// MELHORIA (15/08/26): variável global kanbanArrastando removida — o novo sistema de
+// arrasto por Pointer Events (mouse+touch+caneta, ver ligarKanban) guarda o estado do
+// arrasto na própria closure da função, nada precisa vazar pro escopo global.
 
 // BLOCO 52 — próxima melhor ação por lead. Não chama IA no clique: a recomendação
 // precisa abrir instantaneamente e ser auditável. Usa somente etapa, SLA, agenda e
@@ -11104,7 +11114,7 @@ function kanbanCardHTML(l, slaDias) {
       data-kb-id="${esc(String(l.id))}" data-kb-etapa="${esc(String(l.stageId || ''))}"
       style="--kb-cor:${stageColor(l.stageId)};" aria-label="${esc(l.name || '')} — ${esc(STAGE_LABELS[l.stageId] || '')}">
     <div class="kb-card-head"><span class="kb-card-nome">${esc(l.name || 'Sem nome')}</span>
-      <span class="kb-arrasto" draggable="true" title="Arrastar para outra etapa" aria-hidden="true"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.1"/><circle cx="11" cy="4" r="1.1"/><circle cx="5" cy="8" r="1.1"/><circle cx="11" cy="8" r="1.1"/><circle cx="5" cy="12" r="1.1"/><circle cx="11" cy="12" r="1.1"/></svg></span>
+      <span class="kb-arrasto" title="Arrastar para outra etapa" aria-hidden="true"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.1"/><circle cx="11" cy="4" r="1.1"/><circle cx="5" cy="8" r="1.1"/><circle cx="11" cy="8" r="1.1"/><circle cx="5" cy="12" r="1.1"/><circle cx="11" cy="12" r="1.1"/></svg></span>
     </div>
     <div class="kb-card-contexto">
       <span class="${estourou ? 'is-late' : ''}">${dias != null ? dias + 'd na etapa' : 'entrada recente'}${slaDias ? ` · SLA ${slaDias}d` : ''}</span>
@@ -11207,6 +11217,66 @@ function ligarKanban(raiz, leads, redesenhar) {
     abrirPassagemDeEtapa(lead, destino, redesenhar);
   };
 
+  // MELHORIA (15/08/26) — pedido explícito: "o executivo tem que poder arrastar o
+  // kanban, ter mobilidade e agilidade". O drag nativo do HTML5 (dragstart/dragover/
+  // drop) SÓ funciona com mouse — em touch de celular, que é como o executivo de
+  // campo realmente usa isto, arrastar não fazia nada (o handler nunca dispara com o
+  // dedo). Substituído por Pointer Events, que unifica mouse, caneta e toque num só
+  // caminho — o mesmo código arrasta em qualquer dispositivo. Mantém o botão "Mover
+  // etapa" (abrirEscolhaDeEtapa) como alternativa sem arrastar, e as setas ← →
+  // continuam funcionando pelo teclado.
+  let arrasto = null; // { lead, card, fantasma, offsetX, offsetY, colAlvo }
+  const LIMIAR_PX = 6; // ignora tremor de dedo/mão antes de engatar o arrasto de verdade
+
+  function iniciarArrasto(card, lead, clientX, clientY) {
+    card.classList.add('is-arrastando');
+    const rect = card.getBoundingClientRect();
+    const fantasma = card.cloneNode(true);
+    fantasma.classList.add('kb-card-fantasma');
+    fantasma.style.width = rect.width + 'px';
+    fantasma.style.left = rect.left + 'px';
+    fantasma.style.top = rect.top + 'px';
+    document.body.appendChild(fantasma);
+    arrasto = { lead, card, fantasma, offsetX: clientX - rect.left, offsetY: clientY - rect.top, colAlvo: null };
+  }
+
+  function atualizarArrasto(clientX, clientY) {
+    if (!arrasto) return;
+    arrasto.fantasma.style.left = (clientX - arrasto.offsetX) + 'px';
+    arrasto.fantasma.style.top = (clientY - arrasto.offsetY) + 'px';
+
+    // Autoscroll horizontal perto das bordas: o board rola de lado, e numa tela
+    // estreita de celular nem todas as colunas cabem juntas.
+    const boardRect = board.getBoundingClientRect();
+    const margem = 46;
+    if (clientX < boardRect.left + margem) board.scrollLeft -= 14;
+    else if (clientX > boardRect.right - margem) board.scrollLeft += 14;
+
+    // Esconde o fantasma um instante só pra achar o que está embaixo dele de verdade
+    // (senão elementFromPoint acha o próprio fantasma, não a coluna).
+    arrasto.fantasma.style.visibility = 'hidden';
+    const alvo = document.elementFromPoint(clientX, clientY);
+    arrasto.fantasma.style.visibility = '';
+    const col = alvo ? alvo.closest('.kb-col') : null;
+    if (col !== arrasto.colAlvo) {
+      if (arrasto.colAlvo) arrasto.colAlvo.classList.remove('is-alvo');
+      if (col) col.classList.add('is-alvo');
+      arrasto.colAlvo = col;
+    }
+  }
+
+  function finalizarArrasto() {
+    if (!arrasto) return;
+    const { lead, card, fantasma, colAlvo } = arrasto;
+    card.classList.remove('is-arrastando');
+    fantasma.remove();
+    if (colAlvo) {
+      colAlvo.classList.remove('is-alvo');
+      mover(lead, colAlvo.dataset.kbCol);
+    }
+    arrasto = null;
+  }
+
   raiz.querySelectorAll('.kb-card').forEach(card => {
     const lead = porId.get(String(card.dataset.kbId));
 
@@ -11214,16 +11284,33 @@ function ligarKanban(raiz, leads, redesenhar) {
     // o card virou clique puro pra ficha abrir sempre, como no gestor.
     const alca = card.querySelector('.kb-arrasto');
     if (alca) {
-      alca.addEventListener('dragstart', (ev) => {
-        kanbanArrastando = String(card.dataset.kbId);
-        card.classList.add('is-arrastando');
-        try { ev.dataTransfer.setData('text/plain', kanbanArrastando); ev.dataTransfer.effectAllowed = 'move'; } catch (e) {}
+      let inicioXY = null;
+      let engatado = false;
+      alca.addEventListener('pointerdown', (ev) => {
+        if (ev.button != null && ev.button !== 0) return; // só botão principal do mouse; toque/caneta não têm "button"
+        inicioXY = { x: ev.clientX, y: ev.clientY };
+        engatado = false;
+        try { alca.setPointerCapture(ev.pointerId); } catch (e) {}
       });
-      alca.addEventListener('dragend', () => {
-        card.classList.remove('is-arrastando');
-        kanbanArrastando = null;
-        raiz.querySelectorAll('.kb-col.is-alvo').forEach(c => c.classList.remove('is-alvo'));
+      alca.addEventListener('pointermove', (ev) => {
+        if (!inicioXY) return;
+        if (!engatado) {
+          const dx = ev.clientX - inicioXY.x, dy = ev.clientY - inicioXY.y;
+          if (Math.hypot(dx, dy) < LIMIAR_PX) return;
+          engatado = true;
+          iniciarArrasto(card, lead, ev.clientX, ev.clientY);
+        }
+        ev.preventDefault();
+        atualizarArrasto(ev.clientX, ev.clientY);
       });
+      const soltarPointer = (ev) => {
+        if (engatado) finalizarArrasto();
+        inicioXY = null;
+        engatado = false;
+        try { alca.releasePointerCapture(ev.pointerId); } catch (e) {}
+      };
+      alca.addEventListener('pointerup', soltarPointer);
+      alca.addEventListener('pointercancel', soltarPointer);
       alca.addEventListener('click', (ev) => ev.stopPropagation());
     }
 
@@ -11263,29 +11350,6 @@ function ligarKanban(raiz, leads, redesenhar) {
     card.addEventListener('click', (ev) => {
       if (ev.target.closest('.kb-action') || ev.target.closest('.kb-seta') || ev.target.closest('.kb-arrasto')) return;
       if (lead) abrirFichaLeadFunilDrawer(lead, redesenhar);
-    });
-  });
-
-  raiz.querySelectorAll('.kb-col').forEach(col => {
-    col.addEventListener('dragover', (ev) => {
-      if (!kanbanArrastando) return;
-      ev.preventDefault();
-      try { ev.dataTransfer.dropEffect = 'move'; } catch (e) {}
-      col.classList.add('is-alvo');
-    });
-    col.addEventListener('dragleave', (ev) => {
-      // relatedTarget dentro da própria coluna = ainda está dentro dela (passou por
-      // cima de um card filho); só tira o realce quando sai de verdade.
-      if (ev.relatedTarget && col.contains(ev.relatedTarget)) return;
-      col.classList.remove('is-alvo');
-    });
-    col.addEventListener('drop', (ev) => {
-      ev.preventDefault();
-      col.classList.remove('is-alvo');
-      const id = kanbanArrastando || (ev.dataTransfer ? ev.dataTransfer.getData('text/plain') : '');
-      kanbanArrastando = null;
-      const lead = porId.get(String(id));
-      mover(lead, col.dataset.kbCol);
     });
   });
 
