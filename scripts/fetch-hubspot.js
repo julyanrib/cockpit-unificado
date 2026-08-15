@@ -187,8 +187,18 @@ async function hsSearchTipoAll(objectType, body) {
 // "hoje" do hubspot.json é sempre o instantâneo do momento do refresh, não guarda histórico).
 // Agora o próprio robô grava, em TODO refresh — sem depender de ninguém com a tela aberta.
 // Sem SUPABASE_URL/SERVICE_KEY configurados, pula com aviso e o resto do fetch segue normal.
+// BUG REAL ENCONTRADO E CORRIGIDO (15/08/26): a tabela `dailies` tem `criado_por` como
+// NOT NULL (usado pelas escritas manuais do Cockpit — ver `sessaoAtual.email` no
+// template — e já corrigido antes em scripts/backfill-dailies-semana.js com
+// 'sistema-backfill'). Esta função nunca ganhou o mesmo ajuste: TODO POST daqui vinha
+// sem o campo e o Postgres recusava com 400 "null value in column criado_por violates
+// not-null constraint". Resultado medido: os 3 refreshes diários falhavam a escrita da
+// Daily pros 7 executivos, 100% das vezes, desde que a coluna passou a ser obrigatória —
+// e o sync-status só reportava o sintoma a jusante ("linha não encontrada"), nunca a
+// causa. 'sistema-fetch-hubspot' identifica que a linha veio deste robô, não de alguém
+// digitando na tela nem do backfill manual.
 async function gravarSnapshotDaily(ownerId, dataISO, campos) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return { ok: true, skipped: true };
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/dailies?on_conflict=owner_id,data`, {
       method: 'POST',
@@ -198,11 +208,17 @@ async function gravarSnapshotDaily(ownerId, dataISO, campos) {
         'Content-Type': 'application/json',
         Prefer: 'resolution=merge-duplicates'
       },
-      body: JSON.stringify([{ owner_id: String(ownerId), data: dataISO, ...campos }])
+      body: JSON.stringify([{ owner_id: String(ownerId), data: dataISO, criado_por: 'sistema-fetch-hubspot', ...campos }])
     });
-    if (!res.ok) console.log(`Aviso: snapshot diário (${ownerId}/${dataISO}) não salvou — ${res.status} ${await res.text()}`);
+    if (!res.ok) {
+      const corpo = await res.text();
+      console.log(`Aviso: snapshot diário (${ownerId}/${dataISO}) não salvou — ${res.status} ${corpo}`);
+      return { ok: false, status: res.status, error: corpo };
+    }
+    return { ok: true };
   } catch (e) {
     console.log(`Aviso: snapshot diário (${ownerId}/${dataISO}) falhou — ${e.message}`);
+    return { ok: false, error: e.message };
   }
 }
 
@@ -214,7 +230,18 @@ async function gravarSnapshotDaily(ownerId, dataISO, campos) {
 // bater, é registrado como falha de sincronização — não fica só um "parece que deu
 // certo", vira um fato conferido.
 async function gravarSnapshotDailyVerificado(ownerId, nomeRep, dataISO, campos) {
-  await gravarSnapshotDaily(ownerId, dataISO, campos);
+  const escrita = await gravarSnapshotDaily(ownerId, dataISO, campos);
+  if (escrita.skipped) return;
+  // Se a própria escrita já veio com erro do Postgres/Supabase (ex.: violação de NOT
+  // NULL, tipo errado, RLS), registra a CAUSA real agora — não faz sentido esperar a
+  // verificação pós-escrita pra só reportar "linha não encontrada", escondendo o motivo
+  // verdadeiro do gestor (era exatamente esse o buraco que gerou os 7 avisos genéricos
+  // de 15/08/26; ver comentário em gravarSnapshotDaily).
+  if (!escrita.ok) {
+    registrarFalhaSync(ownerId, nomeRep, dataISO, 'escrita',
+      new Error(`Supabase recusou o upsert (status ${escrita.status || '—'}): ${escrita.error || 'erro desconhecido'}`));
+    return;
+  }
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return;
   try {
     const res = await fetch(
