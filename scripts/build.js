@@ -41,7 +41,6 @@ const DATA_PUBLICO = {
   saude: null,
   reps: [],
   leadsReferencia: [],
-  clientesAtivos: [],
   footerText: '',
   resumoSemanal: null,
   agenda: null,

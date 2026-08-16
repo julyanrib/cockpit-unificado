@@ -23,15 +23,6 @@ function requireOpcional(fn) {
   try { return fn(); } catch (e) { return null; }
 }
 const leadsReferencia = requireOpcional(() => require('../data/leads-referencia.json')) || { pracas: [] };
-// DESATIVADO (16/08/26, pedido explícito do Julyan): "pode tirar, vamos puxar direto
-// da API da Takeat depois". O fetch-clientes-ativos.js (pipeline de Sucesso do
-// HubSpot) parou de rodar no workflow — sem isso, data/clientes-ativos.json nunca
-// mais atualiza e ficaria congelado pra sempre, mesmo já não sendo consumido pelo
-// template (o front-end já tinha essa fonte cortada desde 10/08). Zera aqui também
-// pra não embutir dado velho no payload de ninguém à toa. Reativar é só trocar a
-// linha de volta pra `requireOpcional(() => require('../data/clientes-ativos.json')) || []`
-// quando a integração direta com a API da Takeat estiver pronta.
-const clientesAtivos = [];
 const supabaseConfig = requireOpcional(() => require('../data/supabase-config.json'));
 const maptilerConfig = requireOpcional(() => require('../data/maptiler-config.json'));
 const resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
@@ -208,13 +199,6 @@ function montarDadosCompletos() {
     saude,
     reps,
     leadsReferencia: leadsReferencia.pracas || [],
-    // Clientes Takeat já ativos, fechados pelo próprio Field Sales — usados na Rota &
-    // Agenda pra sugerir parada de relacionamento/upsell perto de onde o executivo vai
-    // atuar (pedido do Julyan, 10/08). Só os com coordenada aparecem no mapa; os demais
-    // seguem na lista mesmo assim (sem pin), pra não esconder informação. Filtra fora
-    // quem já "encerrou" (churn confirmado no pipeline de Sucesso) — sugerir visita de
-    // relacionamento pra quem cancelou não faz sentido nenhum.
-    clientesAtivos: (clientesAtivos || []).filter(c => c.sugerirVisita !== false),
     footerText: `Fonte: HubSpot (pipeline 916011864, atualizado 23:59, 08:59 e 15:00) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
     // AUTOMAÇÃO 3 (13/08/26) — status da última rodada do robô: se alguma escrita de
     // realizado_visitas/avancos/propostas falhou ou não bateu na conferência pós-escrita.
@@ -348,18 +332,6 @@ function filtrarParaPapel(dados, usuario) {
     (Array.isArray(p.responsaveis) && p.responsaveis.includes(meuNome)) || p.nome === (meuRep && meuRep.praca)
   );
 
-  // Clientes ativos: não existe vínculo confiável entre a empresa (que só nasce no
-  // pipeline de Sucesso) e o executivo de campo que vendeu originalmente — ver
-  // comentário no topo de fetch-clientes-ativos.js. A régua que sobra, e que ainda
-  // faz sentido pra rota, é a cidade bater com a praça do executivo (mesmo critério
-  // de leadsReferencia acima).
-  const normTxt = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
-  const minhaPraca = normTxt(meuRep && meuRep.praca);
-  const clientesAtivos = (dados.clientesAtivos || []).filter(c => {
-    const cidadeCliente = normTxt(c.cidade);
-    return !!cidadeCliente && !!minhaPraca && (minhaPraca.includes(cidadeCliente) || cidadeCliente.includes(minhaPraca));
-  });
-
   return {
     ...dados,
     reps,
@@ -376,7 +348,6 @@ function filtrarParaPapel(dados, usuario) {
     resumoSemanal: resumoSemanalFiltrado,
     agenda,
     leadsReferencia,
-    clientesAtivos,
     // AUTOMAÇÃO 3 — status de sincronização é informação operacional do gestor
     // (falha de robô, verificação de escrita), não faz sentido pro executivo ver.
     syncStatus: null
