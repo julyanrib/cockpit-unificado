@@ -114,6 +114,8 @@ function normalizar(e) {
   const temCoord = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
   return {
     place_id: null, // Casa dos Dados não tem place_id do Google — dedup usa telefone/nome+cidade
+    cnpj: String(e.cnpj), // CORREÇÃO (16/08/26, Julyan): ficha da rota pedia isso — o campo já vinha na resposta, só não era salvo
+    data_abertura: e.data_abertura || null, // idem — alimenta o "Aberta há" na ficha (nome snake_case combinando com a coluna do Supabase)
     nome: nome.slice(0, 160),
     razaoSocial: e.razao_social || null,
     categoria: null, // CNAE já garantiu foodservice; categoria textual não vem desta fonte
