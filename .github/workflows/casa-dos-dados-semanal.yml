@@ -1,0 +1,36 @@
+name: Backfill semanal da Casa dos Dados
+
+# Pedido explícito do Julyan (16/08/26): "a gente tem a api da casa dos dados, vamos
+# automatizar isso e colocar lá, de todos". Auditoria real mostrou só 1 conta com essa
+# fonte em toda a base (criada manualmente) e o Wericles (São Paulo) sem NENHUM lead de
+# fonte nenhuma. Este workflow busca o backlog de contas-alvo por cidade toda semana e
+# entrega pro mesmo endpoint que já cuida de roteamento por território, deduplicação e
+# filtro de qualidade (api/importar-leads.js) — nenhuma lógica de negócio nova aqui.
+
+on:
+  schedule:
+    # Domingo às 22h em Brasília (01:00 UTC de segunda) — a fila de Prospecção já
+    # chega renovada quando o executivo abre a tela na segunda de manhã.
+    - cron: '0 1 * * 1'
+  workflow_dispatch: {} # permite rodar manualmente pelo botão "Run workflow"
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Buscar contas-alvo na Casa dos Dados e importar
+        env:
+          CASADOSDADOS_TOKEN: ${{ secrets.CASADOSDADOS_TOKEN }}
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+        run: node scripts/backfill-casa-dos-dados.js
