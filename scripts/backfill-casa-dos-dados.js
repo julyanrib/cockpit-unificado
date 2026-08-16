@@ -215,16 +215,30 @@ async function importarLote(leadsCidade, importSecret) {
   return data;
 }
 
+const fs = require('fs');
+
 async function main() {
   const casaToken = process.env.CASADOSDADOS_TOKEN;
   const importSecret = process.env.IMPORT_SECRET;
-  if (!casaToken || !importSecret) {
-    console.log('[backfill-casa-dos-dados] Faltam CASADOSDADOS_TOKEN e/ou IMPORT_SECRET — nada rodado.');
+  if (!casaToken) {
+    console.log('[backfill-casa-dos-dados] Falta CASADOSDADOS_TOKEN — nada rodado.');
     process.exit(1);
+  }
+  // MODO FALLBACK (16/08/26): enquanto o IMPORT_SECRET não estiver ativo na Vercel
+  // (precisa de redeploy, e o teto de 100 deploys/dia da Vercel travou isso hoje),
+  // o script ainda busca tudo normalmente, mas em vez de chamar /api/importar-leads
+  // (que recusaria sem o segredo), grava um JSON pra importação manual pelo modal
+  // "colar/anexar JSON" do Cockpit (gestor, autenticado pela própria sessão — não
+  // depende do IMPORT_SECRET de jeito nenhum). Assim que o IMPORT_SECRET entrar em
+  // vigor na Vercel, este script volta a importar sozinho automaticamente.
+  const modoManual = !importSecret;
+  if (modoManual) {
+    console.log('[backfill-casa-dos-dados] IMPORT_SECRET ausente — rodando em MODO MANUAL: vai gravar um JSON pra importar pelo modal do Cockpit em vez de importar sozinho.');
   }
 
   let totalInseridos = 0, totalDuplicados = 0;
   const porCidade = {};
+  const todosOsLeads = [];
   for (const cidadeCfg of CIDADES) {
     const { municipio, uf } = cidadeCfg;
     console.log(`[backfill-casa-dos-dados] Buscando ${municipio}/${uf}… (objetivo mínimo: ${cidadeCfg.objetivoMinimo})`);
@@ -236,14 +250,27 @@ async function main() {
         console.log(`[backfill-casa-dos-dados]   ${ok ? '✅' : '⚠️ ABAIXO DA META'} ${m.nome}: ${m.encontrados}/${m.minimo}`);
       });
     }
-    const resultado = await importarLote(leadsCidade, importSecret);
-    porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, inseridos: resultado.inseridos || 0, duplicados: resultado.duplicados || 0, porMeta: porMeta || undefined };
-    totalInseridos += resultado.inseridos || 0;
-    totalDuplicados += resultado.duplicados || 0;
+    if (modoManual) {
+      todosOsLeads.push(...leadsCidade);
+      porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, porMeta: porMeta || undefined };
+    } else {
+      const resultado = await importarLote(leadsCidade, importSecret);
+      porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, inseridos: resultado.inseridos || 0, duplicados: resultado.duplicados || 0, porMeta: porMeta || undefined };
+      totalInseridos += resultado.inseridos || 0;
+      totalDuplicados += resultado.duplicados || 0;
+    }
   }
 
   console.log('[backfill-casa-dos-dados] Resumo final:', JSON.stringify(porCidade, null, 2));
-  console.log(`[backfill-casa-dos-dados] Total: ${totalInseridos} contas novas, ${totalDuplicados} já existentes (mescladas).`);
+
+  if (modoManual) {
+    const saida = { fonte: 'casa_dos_dados', leads: todosOsLeads };
+    fs.mkdirSync('artifacts', { recursive: true });
+    fs.writeFileSync('artifacts/leads-casa-dos-dados.json', JSON.stringify(saida, null, 2));
+    console.log(`[backfill-casa-dos-dados] ${todosOsLeads.length} conta(s) gravadas em artifacts/leads-casa-dos-dados.json — baixe o artifact desta execução e cole o conteúdo no modal "Importar contas" (aba colar/anexar JSON) do Cockpit.`);
+  } else {
+    console.log(`[backfill-casa-dos-dados] Total: ${totalInseridos} contas novas, ${totalDuplicados} já existentes (mescladas).`);
+  }
 }
 
 main().catch(e => {
