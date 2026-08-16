@@ -28,7 +28,6 @@ const PAGINAS = [
   { marker: 'DADOS PARA CADASTRO', id: 'dados-cadastro', categoria: 'Processos internos', icone: '□', titulo: 'Dados para cadastro', resumo: 'Checklist cadastral, cardápio, identidade e dados fiscais.' },
   { marker: 'FAQ', id: 'faq', categoria: 'Processos internos', icone: '?', titulo: 'FAQ de sobrevivência', resumo: 'Política comercial, equipamentos, integrações, Asaas e onboarding.' },
   { marker: 'LINKS ÚTEIS', id: 'links-uteis', categoria: 'Processos internos', icone: '↗', titulo: 'Links úteis', resumo: 'Atalhos oficiais para sistemas, formulários e rotinas do time.' },
-  { arquivo: 'inside-sales-pagamentos-asaas.md', id: 'pagamentos-asaas', categoria: 'Processos internos', icone: '$', titulo: 'Pagamento realizado · Asaas', resumo: 'Como HubSpot, Asaas e Supabase confirmam pagamento — e o que nunca deve ser presumido.' },
   { marker: 'PLANO DE CARREIRA', id: 'plano-carreira', categoria: 'Desenvolvimento', icone: '▲', titulo: 'Plano de carreira', resumo: 'Intraempreendedorismo, oportunidades de liderança e legado na Takeat.' },
   { marker: 'ROTINA', occurrence: 1, id: 'rotina-gestor', categoria: 'Liderança', icone: '♢', titulo: 'Rotina do gestor', resumo: 'Rituais, 1:1, auditoria do funil e cadência que sustenta o canal.' }
 ];
