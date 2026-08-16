@@ -587,8 +587,16 @@ async function hsSearchAll(body) {
   return todos;
 }
 
+// CORREÇÃO (16/08/26) — achado real em produção: o hero mostrava "166 negócios em
+// aberto" mas o funil por etapa somava 167 (39+81+21+6+15+5). A causa: repOpenDeals
+// (usado no total por executivo, que alimenta o hero) já filtra isExcludedDeal —
+// negócios de teste/dummy e duplicatas conhecidas (EXCLUDED_DEAL_IDS) — mas stageTotal
+// (usado no funil geral por etapa) só pegava a contagem crua da API, sem esse filtro.
+// O princípio já estava escrito acima ("não devem contar em NENHUMA métrica") — só não
+// tinha sido aplicado aqui. Agora busca a lista completa (não só a contagem) e filtra
+// igual ao resto do sistema, pra funil e hero baterem sempre.
 async function stageTotal(stageId, extraFilters = []) {
-  const data = await hsSearch({
+  const results = await hsSearchAll({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
@@ -596,9 +604,9 @@ async function stageTotal(stageId, extraFilters = []) {
         ...extraFilters
       ]
     }],
-    limit: 1
+    properties: ['dealname']
   });
-  return data.total || 0;
+  return results.filter(d => !isExcludedDeal(d)).length;
 }
 
 async function createdLast7Days() {
