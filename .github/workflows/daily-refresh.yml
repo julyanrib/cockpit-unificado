@@ -69,10 +69,11 @@ jobs:
       # REMOVIDO (16/08/26, pedido explícito do Julyan): "não quero essa busca também"
       # — scripts/fetch-clientes-ativos.js consultava o pipeline de Sucesso (87367429),
       # que não é o pipeline de Field Sales (916011864). Alimentava a sugestão de
-      # "cliente ativo" na microrrota (visita de relacionamento/upsell); esse dado para
-      # de atualizar a partir de agora. O script continua no repositório (scripts/
-      # fetch-clientes-ativos.js), só não roda mais automaticamente — dá pra reativar
-      # voltando este passo caso a régua mude de novo.
+      # "cliente ativo" na microrrota (visita de relacionamento/upsell). Primeiro só
+      # desativado; na auditoria de otimização (16/08/26, mesmo dia) o script e o dado
+      # (data/clientes-ativos.json) foram removidos de vez do repositório — não tinha
+      # mais nenhum consumidor (nem backend, nem front-end). Se a régua mudar de novo,
+      # é reconstruir o script do zero, não reativar um passo antigo.
 
       # Enche o cache de estabelecimentos OSM das praças fixas de cada executivo, pra que
       # de dia a Rota & Agenda responda em ~500ms em vez dos 62s medidos na 1ª consulta ao
@@ -102,7 +103,7 @@ jobs:
           # ao vivo no sandbox: sem isto, o job fica pendurado esperando o editor em vez
           # de terminar). "true" como editor aceita a mensagem como está e segue.
           export GIT_EDITOR=true
-          git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json data/clientes-ativos.json data/sync-status.json public/index.html
+          git add data/hubspot.json data/hubspot-previous.json data/weekly-raw.json data/narrativas.json data/sync-status.json public/index.html
           git diff --staged --quiet && echo "Nada mudou hoje." && exit 0
 
           git commit -m "Atualização automática do cockpit ($(date -u +'%H:%M UTC'))"
@@ -139,7 +140,7 @@ jobs:
             git fetch origin main
             if ! git rebase origin/main; then
               CONFLITOS=$(git diff --name-only --diff-filter=U)
-              INESPERADOS=$(echo "$CONFLITOS" | grep -v -E '^data/(hubspot|hubspot-previous|weekly-raw|narrativas|clientes-ativos|sync-status)\.json$|^public/index\.html$' || true)
+              INESPERADOS=$(echo "$CONFLITOS" | grep -v -E '^data/(hubspot|hubspot-previous|weekly-raw|narrativas|sync-status)\.json$|^public/index\.html$' || true)
               if [ -n "$INESPERADOS" ]; then
                 echo "Conflito em arquivo que não é gerado por este job — abortando pra revisão manual:"
                 echo "$INESPERADOS"
