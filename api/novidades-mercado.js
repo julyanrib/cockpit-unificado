@@ -75,13 +75,8 @@ function isoDiasAtras(dias) {
 function normalizar(e) {
   if (!e || !e.cnpj) return null;
   const end = e.endereco || {};
-  const ibge = end.ibge || {};
   const nome = (e.nome_fantasia && String(e.nome_fantasia).trim()) || (e.razao_social && String(e.razao_social).trim()) || 'Sem nome';
   const logradouro = [end.tipo_logradouro, end.logradouro].filter(Boolean).join(' ').trim();
-  // Coordenada vem do IBGE na própria resposta — é o que faz a empresa nova cair direto
-  // no mapa, sem geocodificação extra e sem gastar cota da MapTiler.
-  const lat = Number(ibge.latitude), lng = Number(ibge.longitude);
-  const temCoord = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
   return {
     cnpj: String(e.cnpj),
     nome: nome.slice(0, 160),
@@ -93,8 +88,16 @@ function normalizar(e) {
     municipio: end.municipio || null,
     uf: end.uf || null,
     cep: end.cep || null,
-    lat: temCoord ? lat : null,
-    lng: temCoord ? lng : null,
+    // CORREÇÃO CRÍTICA (16/08/26, Julyan: "ainda não funciona" na busca por
+    // proximidade — investigado ao vivo com o Bruno): `end.ibge.latitude/longitude`
+    // NÃO é o endereço do estabelecimento, é o centro geográfico do MUNICÍPIO
+    // INTEIRO — confirmado que todos os leads de uma mesma cidade compartilhavam a
+    // coordenada idêntica até a 13ª casa decimal, fazendo a busca "perto de mim" não
+    // achar nada perto do bairro real, ou mostrar centenas de leads com a mesma
+    // distância falsa. Geocodifica de verdade logo abaixo, em paralelo, onde `itens`
+    // é montado — null aqui é o valor honesto até a geocodificação real acontecer.
+    lat: null,
+    lng: null,
     capital: e.capital_social != null ? Number(e.capital_social) : null,
     // Sem nome fantasia costuma ser empresário individual usando o próprio nome —
     // sinal fraco de estabelecimento com salão. Não descarta (pode ser cadastro
@@ -139,6 +142,28 @@ async function gravarCache(supaUrl, serviceKey, chave, itens) {
       body: JSON.stringify([{ chave: chave, itens: itens, buscado_em: new Date().toISOString() }])
     });
   } catch (e) { /* cache é otimização: falhar aqui não invalida a resposta */ }
+}
+
+// Geocodifica em paralelo (Promise.all) — sequencial estourava fácil o timeout de uma
+// função serverless (30 leads x algumas centenas de ms cada = pode passar dos 10s do
+// plano Hobby). Paralelo, todas as chamadas saem juntas e o tempo total vira o de
+// UMA chamada, não da soma de 30. Falha individual não derruba a lista inteira.
+async function geocodificarLote(itens, maptilerKey) {
+  if (!maptilerKey) return itens;
+  return Promise.all(itens.map(async item => {
+    const texto = [item.endereco, item.bairro, item.municipio, item.uf].filter(Boolean).join(', ');
+    if (!texto) return item;
+    try {
+      const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(texto)}.json?key=${maptilerKey}&country=br&language=pt`;
+      const resp = await fetch(url);
+      if (!resp.ok) return item;
+      const json = await resp.json();
+      const top = (json.features || [])[0];
+      if (!top || !Array.isArray(top.center)) return item;
+      const [lng, lat] = top.center;
+      return { ...item, lat, lng };
+    } catch (e) { return item; }
+  }));
 }
 
 module.exports = async function handler(req, res) {
@@ -377,7 +402,10 @@ module.exports = async function handler(req, res) {
       // Mais novo primeiro: a janela de oportunidade encolhe a cada dia que passa.
       .sort((a, b) => String(b.dataAbertura || '').localeCompare(String(a.dataAbertura || '')));
 
-    await gravarCache(supaUrl, serviceKey, chave, itens);
+    const maptilerKey = (() => { try { return require('../data/maptiler-config.json').key; } catch (e) { return null; } })();
+    const itensComCoordenada = await geocodificarLote(itens, maptilerKey);
+
+    await gravarCache(supaUrl, serviceKey, chave, itensComCoordenada);
 
     return res.status(200).json({
       ok: true, origem: 'casadosdados', municipio: municipio, uf: uf, dias: dias,
@@ -387,7 +415,7 @@ module.exports = async function handler(req, res) {
       recebidasDaApi: cru.length,
       descartadasRede: descartadasRede,
       descartadasPessoaFisica: descartadasPF,
-      total: itens.length, itens: itens
+      total: itensComCoordenada.length, itens: itensComCoordenada
     });
   } catch (e) {
     const abortou = e && e.name === 'AbortError';
