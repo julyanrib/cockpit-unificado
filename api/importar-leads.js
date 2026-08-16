@@ -161,9 +161,9 @@ function semAcento(s) {
 const TERRITORIOS = [
   { owner: '86100505', nome: 'Marco Filho', teste: t => t.includes('vila velha') },
   { owner: '87069181', nome: 'Amanda Pardim', teste: t => t.includes('vitoria') },
-  { owner: '87569072', nome: 'Sandro Linhares', teste: t => t.includes('tijuca') },
-  { owner: '86100506', nome: 'Bruno Martins', teste: t => t.includes('taquara') || t.includes('jacarepagua') || t.includes('freguesia') || (t.includes('rio de janeiro') && /\banil\b/.test(t)) },
-  { owner: '94079973', nome: 'Michel Carvalho', teste: t => t.includes('campo grande') && !t.includes('campo grande - ms') },
+  { owner: '87569072', nome: 'Sandro Linhares', teste: t => t.includes('tijuca') || t.includes('vila isabel') || t.includes('cachambi') || t.includes('meier') || t.includes('sao cristovao') },
+  { owner: '86100506', nome: 'Bruno Martins', teste: t => t.includes('taquara') || t.includes('jacarepagua') || (t.includes('freguesia') && !t.includes('ilha')) || (t.includes('rio de janeiro') && /\banil\b/.test(t)) || t.includes('recreio') || t.includes('barra olimpica') || t.includes('guaratiba') },
+  { owner: '94079973', nome: 'Michel Carvalho', teste: t => (t.includes('campo grande') && !t.includes('campo grande - ms')) || t.includes('bangu') },
   { owner: '89842507', nome: 'Wericles Andrade', teste: t => t.includes('sao paulo') },
   { owner: '91477292', nome: 'Kelly Travieso', teste: t => t.includes('canoas') || t.includes('porto alegre') }
 ];
