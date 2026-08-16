@@ -253,6 +253,12 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
 }
 
 REGRAS OBRIGATÓRIAS pro campo "compromissos":
+- ATENÇÃO: mesmo esta análise sendo pro gestor, o campo "compromissos" é a única parte que o EXECUTIVO lê e marca
+  como feito, na tela dele. Escreva cada compromisso FALANDO COM o executivo (imperativo profissional: "Avance",
+  "Registre", "Feche"), nunca narrando o que o gestor vai fazer com ele. PROIBIDO nesse campo: "o gestor executa",
+  "o gestor encerra", "sem aviso e sem reversão", "não decide" ou qualquer menção a consequência aplicada pelo
+  gestor — isso é ameaça, não compromisso, e não motiva ninguém de alto desempenho. Descreva a AÇÃO e o PRAZO,
+  não a punição.
 - NUNCA retorne uma lista vazia. Isso é proibido, mesmo que nada tenha mudado.
 - Sempre retorne 2 ou 3 strings, cada uma um compromisso concreto e checável (ex: "Avançar pelo menos 5 leads de Prospecção pra Visita até sexta"), nunca um objetivo vago.
 - Se os compromissos da semana passada ainda fazem sentido porque não foram cumpridos, repita-os quase literalmente — não os troque por outra coisa e não os esvazie.
