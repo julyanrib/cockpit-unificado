@@ -3503,9 +3503,6 @@
   <div class="view" id="viewLeadsPraca">
     <!-- Correção v3 2.2: banner-título genérico removido — a faixa escura da própria aba é o único cabeçalho. -->
     <div id="prospeccaoNovaContent"></div>
-    <!-- Legado preservado no código/dados, mas não renderizado: todas as fontes passam
-         a convergir na fila única de leads_prospeccao, sem duas jornadas concorrentes. -->
-    <div id="leadsPracaContent" hidden></div>
   </div>
 
 
@@ -18144,11 +18141,13 @@ async function renderAvisos() {
 /* ========== ETAPA 4 — PROSPECÇÃO (leads_prospeccao) ==========
    Staging antes de virar Company no HubSpot. Nunca cria Deal automaticamente — regra
    comercial: prospecção fria cria Company; Deal só quando há interesse/visita real
-   (fluxo manual já existente em criarNegocioNoHubspot, mais abaixo). */
+   (fluxo manual: botão "→ Prospecção" na linha do executivo, função criarNegocioDaProspeccao). */
 
-// Mesmo padrão de prazo-duro e token de sessão que renderLeadsPraca usa mais abaixo —
-// aquelas são funções locais (escopo de dentro de renderLeadsPraca), então este módulo
-// precisa da própria cópia em escopo global. Lógica idêntica, só duplicada por escopo.
+// LIMPEZA DE CÓDIGO MORTO (16/08/26): estas duas funções eram cópias globais das
+// versões locais que existiam dentro de renderLeadsPraca() (a tela antiga de "lista de
+// leads por praça", nunca mais chamada desde que a Prospecção convergiu pra fila única
+// de leads_prospeccao). renderLeadsPraca() e suas funções locais foram removidas nesta
+// limpeza; estas duas seguem sendo as únicas versões, usadas pela Prospecção atual.
 async function comPrazoGlobal(promessa, ms, rotulo) {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
@@ -20408,213 +20407,6 @@ function abrirFichaProspeccaoDrawer(l) {
   });
 }
 
-function renderLeadsPraca() {
-  const el = document.getElementById('leadsPracaContent');
-  const todasPracas = DATA.leadsReferencia || [];
-
-  const meuNome = sessaoAtual && sessaoAtual.role === 'rep'
-    ? (DATA.reps.find(r => r.ownerId === sessaoAtual.ownerId) || {}).name
-    : null;
-
-  // Filtra direto pelo nome do executivo em cada lead (campo `responsavel`, que é
-  // dado que já existe e não depende de nenhuma outra configuração bater certinho).
-  // Não depende mais do campo `praca` do executivo — isso já quebrou 3 vezes por
-  // desalinhamento de texto entre arquivos, então tirei essa dependência frágil.
-  const pracasFiltradas = meuNome
-    ? todasPracas
-        .map(p => ({ ...p, leads: (p.leads || []).filter(l => l.responsavel === meuNome) }))
-        .filter(p => p.leads.length > 0)
-    : todasPracas;
-
-  // Ordena por relevância dentro de cada praça usando somente o volume de avaliações.
-  // Cria array novo (não ordena in-place) pra não mutar DATA.leadsReferencia.
-  const pracasParaMostrar = pracasFiltradas.map(p => ({
-    ...p,
-    leads: [...(p.leads || [])].sort((a, b) =>
-      (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0) ||
-      String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
-    )
-  }));
-
-  const totalLeads = pracasParaMostrar.reduce((sum, p) => sum + (p.leads || []).length, 0);
-  const badgeEl = document.getElementById('badgeLeadsPraca');
-  if (badgeEl) badgeEl.textContent = totalLeads > 0 ? totalLeads : '';
-
-  el.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px;margin-bottom:14px;">
-      <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);">Lista de contas-alvo · gerada sob demanda</div>
-      </div>
-      ${sessaoAtual.role === 'manager' && totalLeads > 0 ? `<button id="lpEnviarTodos" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 16px;font-size:12.5px;font-weight:700;cursor:pointer;">Enviar todos pro HubSpot ↗</button>` : ''}
-    </div>
-    <div class="chart-card" style="margin-bottom:20px;max-width:80ch;font-size:13px;line-height:1.6;">
-      A lista prioriza somente o volume de avaliações públicas e cruza as fontes com os negócios já abertos no HubSpot — se alguém do time já tocou aquela conta, ela sai da fila.
-    </div>
-    ${pracasParaMostrar.length === 0 ? `<div class="empty-state">Nenhum lead de referência pra sua praça ainda.</div>` : pracasParaMostrar.map(p => `
-      <div style="margin-bottom:26px;">
-        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-          <span style="font-family:'Poppins',sans-serif;font-size:16px;font-weight:700;line-height:1.3;min-width:0;">${p.nome}</span>
-          <span style="font-size:11.5px;color:var(--muted2);">${(p.responsaveis || []).join(', ')}</span>
-        </div>
-        ${(p.leads || []).length === 0 ? `
-          <div class="empty-state">Nenhum lead sugerido ainda pra essa praça.</div>
-        ` : `
-          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">
-            ${p.leads.map((l, li) => `
-              <div class="lead-praca-card" data-lead="${l.nome}" data-praca="${p.nome}" data-li="${li}" style="background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:17px 18px;display:flex;flex-direction:column;gap:9px;box-shadow:var(--shadow);">
-                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;">
-                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0;">
-                    <div style="font-weight:700;font-size:14.5px;">${l.nome}</div>
-                    <div style="font-size:11.5px;color:var(--muted2);">${l.tipo || ''} · 📍 ${l.bairro || ''}</div>
-                  </div>
-                  <span class="num" style="font-size:11px;font-weight:700;color:var(--green);background:var(--green-soft);border-radius:var(--r-pill);padding:5px 10px;white-space:nowrap;flex-shrink:0;">${Number(l.avaliacoes || 0).toLocaleString('pt-BR')} avaliações</span>
-                </div>
-                ${sessaoAtual.role === 'manager' && l.responsavel ? `<span style="align-self:flex-start;font-size:10px;font-weight:700;color:var(--muted2);background:var(--panel2);border-radius:var(--r-pill);padding:2px 8px;">${l.responsavel.split(' ')[0]}</span>` : ''}
-                <div style="font-size:12.5px;line-height:1.5;color:var(--muted);">${l.motivo || ''}</div>
-                <div class="lp-acoes" style="display:flex;gap:8px;padding-top:3px;align-items:center;">
-                  <button class="lp-criar" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:9px 14px;font-size:12px;font-weight:700;cursor:pointer;min-height:38px;display:inline-flex;align-items:center;">Criar negócio</button>
-                  <button class="lp-descartar" style="background:none;border:1px solid var(--line);border-radius:var(--r-pill);padding:9px 14px;font-size:12px;cursor:pointer;color:var(--muted);min-height:38px;display:inline-flex;align-items:center;">Descartar</button>
-                  <span class="lp-msg" style="font-size:11.5px;color:var(--muted2);"></span>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `}
-      </div>
-    `).join('')}
-  `;
-
-  // resolve nome do executivo -> ownerId (leads guardam só o nome em `responsavel`)
-  const ownerIdPorNome = {};
-  (DATA.reps || []).forEach(r => { ownerIdPorNome[r.name] = r.ownerId; });
-
-  // troca a URL abaixo pelo domínio real do seu deploy na Vercel, se for diferente
-  const CRIAR_NEGOCIO_URL = '/api/criar-negocio';
-
-  // Prazo duro: seja qual for a causa de uma resposta lenta (Vercel "acordando" a função,
-  // rede ruim, endpoint ainda não configurado), o botão NUNCA pode travar a tela esperando
-  // para sempre. AbortController pede a chamada de rede pra parar; o Promise.race garante
-  // que o código segue em frente de qualquer jeito, mesmo se algo ignorar o cancelamento.
-  async function comPrazo(promessa, ms, rotulo) {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), ms);
-    try {
-      return await Promise.race([
-        promessa(ctrl.signal),
-        new Promise((_, rej) => setTimeout(() => rej(Object.assign(new Error('timeout ' + rotulo), { name: 'AbortError' })), ms + 200))
-      ]);
-    } finally { clearTimeout(t); }
-  }
-
-  async function tokenDeSessao() {
-    if (!supa) return null;
-    try {
-      // getSession() do Supabase não aceita AbortSignal — dá um prazo próprio por fora,
-      // sem travar o fluxo se a lib demorar (ex.: refresh de token preso na rede).
-      const resultado = await Promise.race([
-        supa.auth.getSession(),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('timeout sessão')), 5000))
-      ]);
-      const { data } = resultado;
-      return data && data.session ? data.session.access_token : null;
-    } catch (e) { return null; }
-  }
-
-  async function criarNegocioNoHubspot(lead, cardEl, msgEl, botaoEl) {
-    botaoEl.disabled = true;
-    botaoEl.textContent = 'Criando…';
-    msgEl.textContent = '';
-    msgEl.style.color = 'var(--muted2)';
-    const ownerId = ownerIdPorNome[lead.responsavel];
-    if (!ownerId) {
-      msgEl.textContent = 'Sem ownerId pro responsável — confira usuarios.json.';
-      msgEl.style.color = 'var(--red)';
-      botaoEl.disabled = false; botaoEl.textContent = 'Criar negócio';
-      return false;
-    }
-    const token = await tokenDeSessao();
-    try {
-      const resp = await comPrazo(async (signal) => fetch(CRIAR_NEGOCIO_URL, {
-        method: 'POST', signal,
-        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({
-          // BLOCO 49 — antes nascia em Backlog e ficava esperando alguém mover à mão.
-          // Julyan: a conta-alvo tem que entrar JÁ na etapa Prospecção.
-          nome: lead.nome, ownerId, etapa: ETAPA_PROSPECCAO,
-          telefone: lead.telefone, endereco: lead.endereco,
-          bairro: lead.bairro, tipo: lead.tipo, nota: lead.nota, avaliacoes: lead.avaliacoes
-        })
-      }), 8000, 'criar-negocio');
-      let data;
-      try { data = await resp.json(); }
-      catch (e) { throw new Error('Resposta do servidor não é o formato esperado (a rota /api/criar-negocio existe mesmo?).'); }
-      if (!resp.ok || !data.ok) {
-        msgEl.textContent = data.erro || 'Falha ao criar.';
-        msgEl.style.color = 'var(--red)';
-        botaoEl.disabled = false; botaoEl.textContent = 'Criar negócio';
-        return false;
-      }
-      msgEl.innerHTML = `<a href="${data.url}" target="_blank" rel="noopener" style="color:var(--green);font-weight:700;">Criado ✓ abrir no HubSpot</a>`;
-      botaoEl.remove();
-      cardEl.querySelector('.lp-descartar')?.remove();
-      return true;
-    } catch (e) {
-      msgEl.textContent = e && e.name === 'AbortError'
-        ? 'Demorou demais (8s) e foi cancelado. Tenta de novo.'
-        : ('Sem conexão: ' + (e && e.message ? e.message : 'erro desconhecido'));
-      msgEl.style.color = 'var(--red)';
-      botaoEl.disabled = false; botaoEl.textContent = 'Criar negócio';
-      return false;
-    }
-  }
-
-  el.querySelectorAll('.lp-descartar').forEach(btn => {
-    btn.addEventListener('click', (e) => e.target.closest('[data-lead]').remove());
-  });
-  el.querySelectorAll('.lp-criar').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const cardEl = btn.closest('[data-lead]');
-      const pracaNome = cardEl.dataset.praca, li = Number(cardEl.dataset.li);
-      const praca = pracasParaMostrar.find(p => p.nome === pracaNome);
-      const lead = praca && praca.leads[li];
-      if (!lead) return;
-      criarNegocioNoHubspot(lead, cardEl, cardEl.querySelector('.lp-msg'), btn);
-    });
-  });
-  const btnEnviarTodos = document.getElementById('lpEnviarTodos');
-  if (btnEnviarTodos) {
-    btnEnviarTodos.addEventListener('click', async () => {
-      const cards = [...el.querySelectorAll('[data-lead]')];
-      if (!cards.length) return;
-      abrirModalConfirmacao({
-        titulo: `Revisar lote — ${cards.length} negócio(s) pro HubSpot`,
-        confirmarLabel: 'Confirmar criação',
-        corpoHTML: `<p style="margin:0 0 8px;">Vão ser criados <b>${cards.length}</b> negócio(s) no HubSpot, um por um. Isso não tem desfazer em massa.</p><div id="modalLoteProgresso" style="font-size:12px;color:var(--muted2);"></div>`,
-        aoConfirmar: async (overlay, fechar) => {
-          const okBtn = overlay.querySelector('#modalConfirmacaoOk');
-          okBtn.disabled = true;
-          btnEnviarTodos.disabled = true;
-          const prog = overlay.querySelector('#modalLoteProgresso');
-          let ok = 0;
-          for (let i = 0; i < cards.length; i++) {
-            const cardEl = cards[i];
-            const pracaNome = cardEl.dataset.praca, li = Number(cardEl.dataset.li);
-            const praca = pracasParaMostrar.find(p => p.nome === pracaNome);
-            const lead = praca && praca.leads[li];
-            const botaoEl = cardEl.querySelector('.lp-criar'), msgEl = cardEl.querySelector('.lp-msg');
-            if (!lead || !botaoEl) continue;
-            prog.textContent = `Criando ${i + 1} de ${cards.length}: ${lead.nome}…`;
-            const certo = await criarNegocioNoHubspot(lead, cardEl, msgEl, botaoEl);
-            if (certo) ok++;
-          }
-          prog.innerHTML = `<b style="color:var(--green);">${ok} de ${cards.length} criados ✓</b>`;
-          btnEnviarTodos.textContent = `${ok} de ${cards.length} criados ✓`;
-          okBtn.textContent = 'Fechar'; okBtn.disabled = false; okBtn.onclick = fechar;
-        }
-      });
-    });
-  }
-}
 
 // ============ PDIs (documentos anexados) ============
 let pessoaSelecionadaId = null; // única fonte de verdade — antes eram DUAS variáveis (pdiSelecionado/coachingSelecionado) sem sincronia entre si: clicar um nome de um lado podia deixar o outro lado mostrando outra pessoa. Essa era a raiz do "está tudo errado".
