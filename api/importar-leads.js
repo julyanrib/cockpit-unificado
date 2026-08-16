@@ -42,8 +42,7 @@ try {
 
 function normalizarTelefone(tel) {
   if (!tel) return null;
-  let digitos = String(tel).replace(/\D/g, '');
-  // A mesma linha costuma vir como +55 27... no Tripadvisor e 27... no iFood.
+  let digitos = String(tel).replace(/\D/g, '');  // A mesma linha costuma vir como +55 27... no Tripadvisor e 27... no iFood.
   // Normaliza o DDI brasileiro para que fontes diferentes não virem duas contas.
   if (digitos.startsWith('55') && (digitos.length === 12 || digitos.length === 13)) digitos = digitos.slice(2);
   return digitos.length >= 8 ? digitos : null;
@@ -52,6 +51,22 @@ function normalizarTelefone(tel) {
 function normalizarTexto(valor) {
   return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+// CORREÇÃO (16/08/26, Julyan): mesma lista/lógica de canonizarCidade() do template —
+// duplicada aqui porque este arquivo roda isolado na função serverless (sem import do
+// template). Evita que fontes que mandam município em CAIXA ALTA sem acento (Casa dos
+// Dados) criem registros com cidade "diferente" de quem já existe na base ("SAO PAULO"
+// vs "São Paulo"), o que duplicava cards de praça no Cockpit.
+const CIDADES_CANONICAS = {
+  'vila velha': 'Vila Velha', 'vitoria': 'Vitória', 'rio de janeiro': 'Rio de Janeiro',
+  'sao paulo': 'São Paulo', 'porto alegre': 'Porto Alegre', 'canoas': 'Canoas'
+};
+function canonizarCidade(cidade) {
+  const bruto = String(cidade || '').trim();
+  if (!bruto) return bruto;
+  const chave = bruto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return CIDADES_CANONICAS[chave] || bruto;
 }
 
 // A nota não define fit comercial. O único corte de potencial é volume de avaliações.
@@ -109,6 +124,8 @@ function mesclarRestaurante(base, novo) {
   return {
     fonte: juntarFontes(base.fonte, novo.fonte),
     place_id: base.place_id || novo.place_id || null,
+    cnpj: base.cnpj || novo.cnpj || null,
+    data_abertura: base.data_abertura || novo.data_abertura || null,
     categoria: base.categoria || novo.categoria || null,
     endereco: base.endereco || novo.endereco || null,
     bairro: base.bairro || novo.bairro || null,
@@ -238,12 +255,14 @@ module.exports = async function handler(req, res) {
   };
 
   const linhasTodas = leads.map(l => {
-    const cidade = l.cidade || l.city || '';
+    const cidade = canonizarCidade(l.cidade || l.city || '');
     const bairro = l.bairro || null;
     // Dono: explícito no lead (l.responsavel_owner_id) vence; senão, roteia por território.
     const dono = l.responsavel_owner_id ? String(l.responsavel_owner_id) : rotearTerritorio(cidade, bairro);
     return {
     place_id: l.place_id || null,
+    cnpj: l.cnpj || null,
+    data_abertura: l.data_abertura || null,
     fonte: FONTES_ROTULO[fonte],
     nome: String(l.nome || l.name || '').trim(),
     categoria: l.categoria || null,
@@ -390,3 +409,4 @@ module.exports = async function handler(req, res) {
 
   return res.status(200).json(resultado);
 };
+
