@@ -14818,6 +14818,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const visiveis = [...comCoord, ...quentesAvulsos, ...poisDoMapa].filter(l =>
     dentroDoRaio(l) && (l._doMapa ? poiPassaFiltro(l) : (l._pipelineQuente || (
       prospeccaoFazSentido(l) &&
+      // CORREÇÃO (16/08/26) — bug real relatado pelo Julyan: "quando o executivo
+      // coloca ele no funil, ele some da lista" não estava acontecendo. Este filtro
+      // só excluía 'sem_fit', nunca 'criado_hubspot' (lead já virado negócio) — a
+      // conta continuava aparecendo na fila de candidatos mesmo depois de já estar
+      // no funil. Agora 'criado_hubspot' fica sempre fora, sem depender do toggle
+      // "mostrar sem fit" (são dois motivos de saída da fila bem diferentes — um é
+      // "não serve", o outro é "já virou negócio", e o toggle é só sobre o primeiro).
+      l.status !== 'criado_hubspot' &&
       (planoMapaFiltro.mostrarSemFit || l.status !== 'sem_fit') &&
       (!planoMapaFiltro.avalMin || (l.avaliacoes || 0) >= planoMapaFiltro.avalMin)
     )))
