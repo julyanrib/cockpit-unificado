@@ -123,11 +123,14 @@ function normalizar(e) {
     bairro: end.bairro || null,
     cidade: end.municipio || null,
     estado: end.uf || null,
-    // NOTA: nem o normalizador original (api/novidades-mercado.js) extrai telefone do
-    // retorno da Casa dos Dados, mesmo filtrando "com_telefone:true" na consulta — é
-    // uma lacuna que já existia lá, não introduzida aqui. Sem acesso à API ao vivo pra
-    // confirmar o nome exato do campo bruto, mantenho null em vez de arriscar um nome
-    // de campo errado (que silenciosamente traria telefone vazio sem avisar ninguém).
+    // CONFIRMADO (16/08/26) na documentação oficial (docs.casadosdados.com.br): o
+    // schema de resposta CNPJPesquisaResposta — tanto na v4 (Consulta CNPJ) quanto na
+    // v5 (Pesquisa Avançada), mesmo com tipo_resultado=completo — NÃO tem campo de
+    // telefone nenhum. `telefone` e `ddd` existem só como FILTRO de busca no corpo da
+    // requisição (e `mais_filtros.com_telefone` filtra só quem tem telefone cadastrado)
+    // — a API deixa buscar por telefone, mas nunca devolve o número de volta. Isso não
+    // é lacuna do nosso código, é limitação real do provedor. Null é o valor correto
+    // e definitivo aqui, não um "ainda não implementado".
     telefone: null,
     nota: null,
     avaliacoes: null, // Casa dos Dados não tem avaliação — api/importar-leads.js já sabe não cortar por isso
