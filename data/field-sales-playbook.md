@@ -1360,121 +1360,117 @@ Traga o cliente para a **Realidade do Lucro**:
 
 ### PIPELINE
 
-O Pipeline da Takeat foi desenhado para ser o motor de crescimento do Field Sales. Ele não é apenas uma lista de nomes, mas um fluxo de valor onde cada etapa exige uma ação clara para garantir que apenas negócios saudáveis avancem.
+O Pipeline de Field Sales no HubSpot (pipeline `916011864` — o único que vale pra dados operacionais) tem 8 etapas na esteira principal, mais 3 etapas de apoio (Conta Alvo, Perdido, Reciclagem). Cada etapa exige uma ação clara pra garantir que só negócio saudável avança — e duas delas têm automação crítica que **nunca deve ser mexida manualmente fora do fluxo normal**.
+
+> ⚠️ **AS DUAS REGRAS MAIS IMPORTANTES DESTA PÁGINA — leia antes de tudo o resto:**
+>
+> 1. **Ag. Pagamento** dispara a automação do Asaas assim que o card entra nessa etapa (gera cobrança de verdade pro cliente). Só mova um card pra cá quando o "de acordo" do lojista for real — mover por engano gera cobrança errada.
+> 2. **Enviado Onboarding** migra o negócio automaticamente pra outro pipeline (o de Implantação) e cria um grupo de WhatsApp com o cliente na hora. Só mova quando o cardápio já estiver anexado e os dados obrigatórios preenchidos — não dá pra "desfazer" com um clique.
+
+***
 
 ### 1. 🎯 Prospecção
 
-**Racional:** A boca do funil. O foco é volume e identificação geográfica. Aqui entram leads de PAP (Porta a Porta), indicações ou leads de indicação.
+**Racional:** A boca do funil orgânica. Aqui entram leads que o próprio executivo encontrou na rua (porta a porta), por indicação, ou que qualificou manualmente a partir de uma conta-alvo.
 
-* **Indicador de Entrada:** Identificação de um CNPJ ativo ou estabelecimento físico no perfil (ICP).
+* **Indicador de Entrada:** Primeiro contato feito com o estabelecimento (visita não agendada, abordagem de porta) ou card criado manualmente pelo executivo a partir de uma sugestão da Prospecção.
+* **Indicador de Saída:** Card criado no HubSpot com **Origem do Lead** preenchida e uma primeira visita/reunião agendada.
 
-* **Indicador de Saída:** Primeiro contato realizado e card criado no HubSpot com a **Origem do Lead** preenchida.
+### 2. 🚪 Visita
 
-### 2. 🔍 Qualificação
+**Racional:** A etapa de presença física — o executivo está indo (ou já foi) até o estabelecimento pela primeira vez. Ainda não é diagnóstico formal, é o primeiro contato de verdade com o dono/gerente.
 
-**Racional:** Separar "curiosos" de "compradores". É a etapa mais importante para não perder tempo com quem não pode pagar ou não tem o problema que resolvemos.
+* **Indicador de Entrada:** Visita agendada ou realizada (registrada no HubSpot/Cockpit via tarefa de Visita).
+* **Indicador de Saída:** Conversa com quem toma decisão (dono/gerente) confirmada — mesmo que só o agendamento dela.
 
-* **Indicador de Entrada:** Lead aceitou conversar e demonstrou abertura para diagnóstico.
+### 3. 🔍 Conversa com Decisor (Diagnóstico)
 
-* **Indicador de Saída:** Mapeamento do **Gargalo Operacional** e do **Software Atual**. Se não houver dor clara, o lead não avança.
+**Racional:** Separar "curioso" de "comprador". A etapa mais importante pra não perder tempo com quem não pode pagar ou não tem a dor que a Takeat resolve.
 
-### 3. 💡 Demonstração e Proposta
+* **Indicador de Entrada:** Decisor real (dono ou gerente com poder de compra) confirmado na conversa — não vale conversar só com garçom/staff.
+* **Indicador de Saída:** Mapeamento do **Gargalo Operacional** e do **Software Atual** (Solução Atual). Sem dor clara identificada, o lead não avança — volta pra Reciclagem ou é perdido.
 
-**Racional:** O momento da verdade. Apresentação do ecossistema Takeat focado na dor descoberta na etapa anterior.
+### 4. 💡 Demo/Proposta
 
-* **Indicador de Entrada:** Agendamento ou realização de demonstração técnica/comercial.
+**Racional:** O momento da verdade. Apresentação do ecossistema Takeat focada na dor descoberta na etapa anterior — nunca o discurso genérico de "ecossistema completo" (ver ECOSSISTEMA TAKEAT, Parte 3).
 
-* **Indicador de Saída:** **Plano Apresentado** definido e **MRR preenchido manualmente**. O envio da proposta formal marca a conclusão desta etapa.
+* **Indicador de Entrada:** Demonstração técnica/comercial agendada ou realizada.
+* **Indicador de Saída:** **Plano Apresentado** definido e **MRR preenchido manualmente** no card. Proposta formal enviada marca a conclusão desta etapa.
 
-### 4. 🤝 Negociação
+### 5. 🤝 Negociação
 
-**Racional:** Alinhamento de expectativas, quebra de objeções e ajustes contratuais/financeiros.
+**Racional:** Alinhamento de expectativas, quebra de objeções (ver QUEBRA DE OBJEÇÕES) e ajustes contratuais/financeiros.
 
-* **Indicador de Entrada:** Proposta aceita em princípio, iniciando discussão sobre prazos ou condições.
+* **Indicador de Entrada:** Proposta recebida pelo lojista, iniciando discussão sobre prazo, condições ou desconto.
+* **Indicador de Saída:** Acordo verbal final — o "de acordo" real do lojista pra emissão de cobrança (não confundir com "vou pensar").
 
-* **Indicador de Saída:** Acordo verbal final ou "de acordo" do lojista para emissão de cobrança.
+### 6. ⏳ Ag. Pagamento 🔴
 
-### 5. ⏳ Aguardando Pagamento
+**Racional:** Etapa de controle financeiro — o vendedor age como facilitador pra burocracia não travar a venda. **Automação crítica:** mover um card pra cá com o campo "Criar Asaas" = SIM dispara a geração do link de cobrança real pro cliente.
 
-**Racional:** Etapa de controle financeiro. O vendedor aqui atua como facilitador para garantir que a burocracia não barre a venda.
+* **Indicador de Entrada:** Acordo verbal confirmado + campo **"Criar Asaas"** marcado como SIM no card.
+* **Indicador de Saída:** Confirmação de pagamento (Pix/Cartão instantâneo, ou boleto após compensação de 1-3 dias úteis) via automação — o próprio sistema move o card pra **Ganho**, não é manual.
+* 🔴 **Nunca** mova um card pra cá "pra testar" ou sem o de-acordo real — isso gera cobrança de verdade.
 
-* **Indicador de Entrada:** Faturamento gerado no Asaas.
+### 7. 🏆 Ganho
 
-* **Indicador de Saída:** Confirmação de pagamento via automação, movendo o card para **Win**.
+**Racional:** A venda terminou na assinatura, mas o sucesso começa na ativação. Esta etapa exige rigor técnico pro time de Onboarding receber o bastão sem ruído.
 
-### 6. 🏆 Negócio Fechado (Win!) & Passagem para Onboarding
+* **Indicador de Entrada:** Pagamento confirmado pela automação do Asaas.
+* **Indicador de Saída:** Todos os **Campos Obrigatórios de Cadastro** e **Detalhes da Operação** preenchidos (ver DADOS PARA CADASTRO) — sem isso, o Onboarding não pode começar depois.
 
-**Racional:** A venda termina na assinatura, mas o sucesso começa na ativação. Esta etapa exige rigor técnico para que o time de Onboarding receba o bastão sem "ruídos".
+### 8. 🤝 Enviado Onboarding 🔴
 
-* **Indicador de Entrada:** Pagamento confirmado.
+**Racional:** O "pedágio" técnico da Takeat — eliminar o *gap* entre a venda e o uso real. Diretriz clara: **sem cardápio, não há Onboarding.** **Automação crítica:** mover um card pra cá migra o negócio automaticamente pra outro pipeline (Implantação) e cria um grupo de WhatsApp com o cliente na hora — não dá pra desfazer com um clique.
 
-* **Indicador de Saída:** Todos os **Campos Obrigatórios de Cadastro** e **Detalhes da Operação** preenchidos. Sem isso, o Onboarding não inicia.
-
-### 🤝 ETAPA: ENVIADO PARA ONBOARDING
-
-**O Racional:** Esta etapa é o "pedágio" técnico da Takeat. O objetivo é eliminar o *gap* entre a venda e o uso real. A diretriz é clara: **Sem cardápio, não há Onboarding.** O vendedor deve sair do estabelecimento com o menu em mãos (seja em PDF, foto, link ou planilha), garantindo que o time de implementação possa configurar o sistema imediatamente.
-
-* **Indicador de Entrada:**
-
-  * Pagamento confirmado no Asaas.
-
-  * Card movido para a fase de transição.
-
-* **Ação Crítica (O Diferencial):**
-
-  * **Coleta e Anexo do Cardápio:** O executivo deve anexar ao card o arquivo ou as fotos nítidas de todo o cardápio (itens, descrições, preços e adicionais).
-
-  * **Definição da Estratégia:** Marcar no campo "Estratégia de Cardápio" se o cliente irá montar do zero, se vamos clonar de uma unidade existente (Multilojas) ou se o time de Onboarding fará a carga inicial.
-
-* **Indicador de Saída (Aprovação para Implementação):**
-
-  * **Arquivo de Cardápio anexado ao Card no HubSpot.**
-
+* **Indicador de Entrada:** Pagamento confirmado + card movido pra fase de transição.
+* **Ação crítica antes de mover:**
+  * **Coleta e anexo do cardápio** — arquivo, fotos nítidas ou link de todo o cardápio (itens, descrições, preços, adicionais).
+  * **Definição da estratégia de cardápio** — montar do zero, clonar de unidade existente (Multilojas), ou o time de Onboarding monta a carga inicial.
+* **Indicador de Saída (aprovação pra implementação):**
+  * Arquivo de cardápio anexado ao card.
   * Campos de **Dados Tributários** (Regime, CSC, Certificado) validados.
-
-  * **Grupo de WhatsApp** com o cliente criado e o time de Onboarding adicionado.
-
-***
-
-## 🔄 Etapas Estratégicas e Fluxos de Recuperação
-
-Além do fluxo linear, o Field Sales conta com quatro etapas de suporte que garantem o aproveitamento de 100% da base:
-
-### ♻️ Reciclagem 90 Dias
-
-* **Racional:** Manter no radar leads que tinham fit, mas não tinham o "timing" ideal.
-
-* **Entrada:** Negócios perdidos por motivo de "Timing" ou "Contrato com Concorrente" há 3 meses.
-
-* **Saída:** Retomada do contato inicial (volta para Prospecção) ou descarte definitivo.
-
-### 📢 ADS
-
-* **Racional:** Leads quentes vindos de campanhas de Marketing.
-
-* **Entrada:** Lead preenche formulário de anúncio.
-
-* **Saída:** Primeiro contato (Tentativa de Qualificação) em até 2 horas (SLA de Field Sales).
-
-### 🔄 Segunda Chance (Inside -> Field)
-
-* **Racional:** Recuperar leads que o Inside Sales não conseguiu fechar por falta de contato presencial ou necessidade de "olho no olho".
-
-* **Entrada:** Automação baseada no motivo de perda "Necessita visita presencial" ou "Lead regionalizado".
-
-* **Saída:** Visita realizada e reinício do fluxo de Qualificação.
-
-### 🏠 Casa dos Dados (Empresas Abertas)
-
-* **Racional:** Prospecção ativa de "Primeira Mão". Abordar novos lojistas antes da concorrência.
-
-* **Entrada:** Automação de novos CNPJs do setor gastronômico na região do executivo.
-
-* **Saída:** Filtro de fit (se o local existe/está em obra) e avanço para Prospecção.
+  * Grupo de WhatsApp com o cliente criado, time de Onboarding adicionado.
+* 🔴 **Nunca** mova um card pra cá sem o cardápio anexado — o time de Onboarding recebe o grupo de WhatsApp criado automaticamente e não tem como configurar nada sem o menu.
 
 ***
 
-> 💡 **Dica de Gestão:** O uso do **HubSpot Mobile** não é opcional, é parte da cultura Field. Atualizar o pipeline em tempo real evita o esquecimento de detalhes cruciais das **Observações de Campo**, que são o que realmente diferenciam o atendimento da Takeat.
+## 🗂️ Etapas de apoio (fora da esteira principal)
+
+### 🎯 Conta Alvo
+
+**Racional:** Estoque de contas sugeridas por importação em lote (Casa dos Dados, TripAdvisor, iFood, Google Places) — ainda não trabalhadas por nenhum executivo. **Nunca conta como atividade** — é só a fila de matéria-prima esperando virar Prospecção de verdade.
+
+* **Indicador de Entrada:** Lote importado (manual ou automático) cai aqui direto, com ou sem executivo já atribuído por território.
+* **Indicador de Saída:** Executivo materializa a sugestão — vira Company no HubSpot e o card sai de Conta Alvo pra entrar em **Prospecção** (ou é marcado "sem fit" e sai da fila sem virar negócio).
+
+### ❌ Perdido
+
+**Racional:** Negócio que não fechou — motivo sempre registrado, nunca "sumiu" sem explicação.
+
+* **Indicador de Entrada:** Qualquer etapa da esteira principal pode cair aqui, com o motivo de perda preenchido (preço, concorrente, timing, sem fit, etc.).
+* **Indicador de Saída:** Ou fica arquivado (motivo definitivo, ex: fechou o restaurante), ou entra em **Reciclagem** se o motivo for reversível (timing, contrato com concorrente perto de vencer).
+
+### ♻️ Reciclagem
+
+**Racional:** Manter no radar leads que tinham fit real, mas não tinham o "timing" certo — sem virar ruído misturado com a fila fria de Prospecção.
+
+* **Indicador de Entrada:** Negócios perdidos por "Timing" ou "Contrato com Concorrente", tipicamente reavaliados perto de 90 dias depois.
+* **Indicador de Saída:** Retomada do contato (volta pra **Prospecção** ou direto pra **Conversa com Decisor**, se o relacionamento já existia) ou descarte definitivo.
+
+***
+
+## 📡 Fontes que alimentam Prospecção e Conta Alvo
+
+Não são etapas do pipeline — são de onde o lead nasce antes de entrar na esteira:
+
+* **📢 ADS:** leads quentes de campanha de marketing. Preencheu formulário → SLA de 2h pro primeiro contato.
+* **🔄 Segunda Chance (Inside → Field):** o Inside Sales não conseguiu fechar por falta de presença física ("necessita visita presencial", "lead regionalizado") — o Field retoma com visita real.
+* **🏠 Casa dos Dados:** CNPJs de foodservice recém-abertos ou já maduros na região do executivo, importados em lote direto pra **Conta Alvo** (ver PROSPECÇÃO INTELIGENTE).
+
+***
+
+> 💡 **Dica de gestão:** o uso do **HubSpot Mobile** não é opcional, é parte da cultura Field. Atualizar o pipeline em tempo real evita esquecer detalhes cruciais das **Observações de Campo** — o que realmente diferencia o atendimento da Takeat.
 
 
 ### DADOS PARA CADASTRO
