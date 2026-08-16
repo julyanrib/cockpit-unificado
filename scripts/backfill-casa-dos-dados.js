@@ -107,11 +107,8 @@ function isoDiasAtras(dias) {
 function normalizar(e) {
   if (!e || !e.cnpj) return null;
   const end = e.endereco || {};
-  const ibge = end.ibge || {};
   const nome = (e.nome_fantasia && String(e.nome_fantasia).trim()) || (e.razao_social && String(e.razao_social).trim()) || 'Sem nome';
   const logradouro = [end.tipo_logradouro, end.logradouro].filter(Boolean).join(' ').trim();
-  const lat = Number(ibge.latitude), lng = Number(ibge.longitude);
-  const temCoord = Number.isFinite(lat) && Number.isFinite(lng) && lat !== 0 && lng !== 0;
   return {
     place_id: null, // Casa dos Dados não tem place_id do Google — dedup usa telefone/nome+cidade
     cnpj: String(e.cnpj), // CORREÇÃO (16/08/26, Julyan): ficha da rota pedia isso — o campo já vinha na resposta, só não era salvo
@@ -134,9 +131,43 @@ function normalizar(e) {
     telefone: null,
     nota: null,
     avaliacoes: null, // Casa dos Dados não tem avaliação — api/importar-leads.js já sabe não cortar por isso
-    lat: temCoord ? lat : null,
-    lng: temCoord ? lng : null
+    // CORREÇÃO CRÍTICA (16/08/26, Julyan: "ainda não funciona" na busca por proximidade
+    // — investigado ao vivo): `end.ibge.latitude/longitude` NÃO é o endereço do
+    // estabelecimento, é o centro geográfico do MUNICÍPIO INTEIRO — confirmado que
+    // TODOS os leads de uma mesma cidade compartilhavam a coordenada idêntica até a
+    // 13ª casa decimal. Isso fazia a busca "perto de mim" nunca achar nada perto do
+    // bairro real do executivo (o ponto genérico podia estar a mais de 10km de
+    // distância de onde o lead de fato fica) e, quando achava, mostrava a MESMA
+    // distância pra centenas de leads diferentes ao mesmo tempo. Corrigido geocodificando
+    // o endereço real (rua + bairro + cidade) via MapTiler logo abaixo, em buscarCidade —
+    // não aqui, porque normalizar() é síncrona e geocodificar precisa de await.
+    lat: null,
+    lng: null
   };
+}
+
+// Geocodifica o endereço real de cada lead via MapTiler — substitui a coordenada
+// genérica do município (ver comentário em normalizar()). Roda uma vez por lead
+// recém-importado, não a cada carregamento de tela. `country=br&language=pt` sem
+// viés de proximidade aqui é seguro porque o endereço já tem cidade explícita —
+// diferente da busca por texto solto do executivo (ver geocodificarLocalAtuacao no
+// template, que precisa de viés porque o texto digitado não tem cidade junto).
+async function geocodificarEnderecoReal(item, maptilerKey) {
+  if (!maptilerKey) return item;
+  const texto = [item.endereco, item.bairro, item.cidade, item.estado].filter(Boolean).join(', ');
+  if (!texto) return item;
+  try {
+    const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(texto)}.json?key=${maptilerKey}&country=br&language=pt`;
+    const resp = await fetch(url);
+    if (!resp.ok) return item;
+    const json = await resp.json();
+    const top = (json.features || [])[0];
+    if (!top || !Array.isArray(top.center)) return item;
+    const [lng, lat] = top.center;
+    return { ...item, lat, lng };
+  } catch (e) {
+    return item; // geocode é bônus (melhora a ordenação por distância) — falhar não pode derrubar a importação
+  }
 }
 
 async function autenticarECconsultar(corpoConsulta, casaToken) {
@@ -217,7 +248,15 @@ async function buscarCidade(cidadeCfg, casaToken) {
     if (cru.length < TAMANHO_PAGINA_API) break; // última página da Casa dos Dados pra essa cidade
     pagina++;
   }
-  return { leads: leadsCidade.slice(0, tetoMaximo), porMeta: contagemPorMeta() };
+  const leadsFinais = leadsCidade.slice(0, tetoMaximo);
+  // Geocodifica em série (não em paralelo) pra não estourar rate-limit da MapTiler —
+  // uma cidade tem no máximo `tetoMaximo` leads (150-400), então isso soma no máximo
+  // alguns minutos a mais na rodada semanal, tempo que sobra de sabra no cron.
+  const maptilerKey = (() => { try { return require('../data/maptiler-config.json').key; } catch (e) { return null; } })();
+  for (let i = 0; i < leadsFinais.length; i++) {
+    leadsFinais[i] = await geocodificarEnderecoReal(leadsFinais[i], maptilerKey);
+  }
+  return { leads: leadsFinais, porMeta: contagemPorMeta() };
 }
 
 async function importarLote(leadsCidade, importSecret) {
