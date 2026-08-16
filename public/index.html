@@ -1838,7 +1838,7 @@
      foi tocada. Avatar por iniciais + coluna que empilha métricas e o preview de
      clientes prometidos do dia (pedido explícito do Julyan: não esconder atrás do
      clique de expandir). */
-  .daily-team-summary-v2{grid-template-columns:168px minmax(340px,1fr) 92px 66px 18px;}
+  .daily-team-summary-v2{grid-template-columns:220px minmax(340px,1fr) 92px 66px 118px;}
   .daily-avatar-row{display:flex;align-items:center;gap:9px;min-width:0;}
   .daily-avatar{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12px 'Poppins',sans-serif;background:var(--state-soft);color:var(--state);}
   .daily-team-col-metrics{display:flex;flex-direction:column;gap:6px;min-width:0;}
@@ -1856,7 +1856,7 @@
   /* REDESIGN Daily & Ritmo (15/08/26) — DEPOIS das media queries originais de propósito:
      mesma especificidade (classe única), então ordem de origem decide quem ganha.
      Ficando por último aqui, o -v2 vence sem precisar de !important nem duplicar regra. */
-  @media(max-width:1050px){.daily-team-summary-v2{grid-template-columns:150px minmax(280px,1fr) 82px 18px}}
+  @media(max-width:1050px){.daily-team-summary-v2{grid-template-columns:150px minmax(280px,1fr) 82px 108px}}
   @media(max-width:760px){.daily-team-summary-v2{grid-template-columns:1fr auto}.daily-team-summary-v2>.daily-team-col-metrics{grid-column:1/-1}}
   /* Acabamento transversal: estado vazio some; blocos irmãos ocupam a grade sem buracos. */
   .banner:empty,#comunicadosBanner:empty{display:none;}
@@ -3260,6 +3260,33 @@
   .sem-podio-col{border-left:1px solid var(--line-soft);padding-left:22px;display:flex;flex-direction:column;gap:6px;}
   .sem-podio-col h3{font-size:12.5px;font-weight:800;margin-bottom:0;}
   @media(max-width:1000px){.sem-leitura{grid-template-columns:1fr;}.sem-podio-col{border-left:none;padding-left:0;border-top:1px solid var(--line-soft);padding-top:14px;margin-top:4px;}}
+
+  /* ═══ REPAGINADA "DAILY & RITMO" (gestor, 16/08/26 — handoff daily-ritmo-gestor.html) ═══ */
+  .daily-visitas-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;}
+  .daily-vchip{display:inline-flex;align-items:center;gap:3px;background:var(--green-soft);color:var(--green);border-radius:999px;padding:2px 8px 2px 6px;font-size:9px;font-weight:700;white-space:nowrap;animation:dailyChegou .5s var(--ease);}
+  @keyframes dailyChegou{from{transform:scale(.6);opacity:0;}to{transform:scale(1);opacity:1;}}
+  .daily-visitas-vazio{font-size:9px;font-style:italic;color:var(--muted2);margin-top:6px;}
+  .daily-team-cta{font-size:11px;font-weight:800;color:var(--red-dk,var(--red));text-align:right;white-space:nowrap;}
+  .daily-team-cta.cobrar{color:#fff;background:var(--red);border-radius:999px;padding:6px 12px;animation:dailyCobrarPulse 1.8s infinite;}
+  @keyframes dailyCobrarPulse{0%,100%{box-shadow:0 0 0 0 rgba(229,26,49,.35);}50%{box-shadow:0 0 0 6px rgba(229,26,49,0);}}
+  .rit-cols{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+  @media(max-width:900px){.rit-cols{grid-template-columns:1fr;}}
+  .rit-grade{display:grid;grid-template-columns:96px repeat(5,1fr);gap:5px;font-size:11px;font-variant-numeric:tabular-nums;}
+  .rit-dh{text-align:center;color:var(--ter);font-weight:700;font-size:10px;letter-spacing:.06em;}
+  .rit-dh.hj{color:var(--red);}
+  .rit-nome{align-self:center;font-weight:700;font-size:11.5px;}
+  .rit-cel{aspect-ratio:1;border-radius:8px;background:var(--sunk);display:grid;place-items:center;font-weight:800;color:var(--muted2);}
+  .rit-cel.c1{background:var(--red-soft);color:var(--red-dk);}
+  .rit-cel.c2{background:var(--red);color:#fff;}
+  .rit-celeb{margin-top:14px;padding:10px 13px;border-radius:12px;background:var(--amber-soft);color:var(--amber-ink);font-size:12px;line-height:1.5;}
+
+  /* ═══ MODO TV (handoff "Daily & Ritmo", Seção 3) ═══ */
+  body.tv .app-main{max-width:1880px;}
+  body.tv .revbar{display:none;}
+  body.tv .daily-ritmo-secao{display:none;}
+  body.tv .cockpit-hero-combo [style*="font-size:28px"]{font-size:36px !important;}
+  body.tv .daily-team-metrics .daily-team-metric-top b{font-size:16px;}
+  body.tv .daily-promise-input-row b{font-size:34px !important;}
 
 </style>
 </head>
@@ -16993,6 +17020,21 @@ function visitasReaisDoOwnerNoDia(ownerId, dataISO) {
   ).length;
 }
 
+// CORREÇÃO (16/08/26, handoff "Daily & Ritmo" — Seção 2): "visitas realizadas viram
+// chips verdes com o nome do restaurante". Mesmo filtro de visitasReaisDoOwnerNoDia,
+// mas devolvendo os NOMES em vez da contagem — pra render dos chips no card do gestor.
+function visitasNomesDoOwnerNoDia(ownerId, dataISO) {
+  if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
+  let eventos;
+  try { eventos = agendaNormalizar(DATA.agenda); } catch (e) { return []; }
+  return eventos.filter(e =>
+    String(e.ownerId) === String(ownerId) && e.inicio &&
+    agendaChave(e.inicio) === dataISO &&
+    AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta &&
+    (e.desfecho === 'COMPLETED' || e.registro)
+  ).map(e => agendaNomeDoLead(e.cliente) || e.cliente).filter(Boolean);
+}
+
 function visitasInformadasDetalhe(ownerId) {
   if (Object.keys(dailiesCache).length === 0) return { real: 0, prom: 0, aderencia: null };
   const hoje = isoDate(new Date());
@@ -17166,7 +17208,8 @@ async function renderDaily() {
   // acabou de sair do menu do executivo (agora é trabalhada por ele no 1:1, não mais
   // autoatendimento). Deixar o lembrete sem link morto é pior que remover; a análise
   // completa segue existindo, só que o gestor traz ela pro 1:1 em vez do rep buscar aqui.
-  const focoSemanaHtml = '';
+  // CORREÇÃO (16/08/26): focoSemanaHtml tinha virado string vazia sem nenhum
+  // consumidor — removida.
 
   // Banner escuro padrão (Claude Design item 4): mesma pergunta certa por papel, KPIs
   // reais tirados do getDaily de cada rep — nada recalculado, é o mesmo dado do placar
@@ -17212,6 +17255,7 @@ async function renderDaily() {
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${planosFechadosTotal < repsDaily.length ? '#E0A64A' : 'var(--dark-ink)'};">${planosFechadosTotal}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">fecharam o plano do dia</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
       </div>
+      <button type="button" class="btn-ol" id="dailyTvToggle" style="margin-left:auto;flex:none;" aria-pressed="false">📺 Modo TV</button>
     </div>`;
 
   // Ritual do gestor: a Daily precisa terminar em compromisso, não em leitura de placar.
@@ -17280,14 +17324,15 @@ async function renderDaily() {
 
   // BLOCO 2 (10/08/26): slots pros dois blocos que vieram do Cockpit. Só existem na
   // sessão do gestor — a Daily do executivo continua sendo só o contrato dele.
+  // CORREÇÃO (16/08/26, handoff "Daily & Ritmo" — Seção 1, pedido explícito): "Onde
+  // agir hoje" desce pra DEPOIS dos cards dos executivos — antes vinha logo no topo,
+  // acima até da navegação de dia. Mesmo conteúdo/derivação, só a posição mudou.
   const slotsMigradosDaily = souRepDaily ? '' : '<div id="dailySlotDecisoes"></div>';
 
   let html = `
     ${bannerDaily}
     ${ritualGestorDaily}
     ${alertaSyncDaily}
-    ${slotsMigradosDaily}
-    ${focoSemanaHtml}
     <div class="daily-header">
       <div class="daily-date-nav">
         <button id="dailyPrev">← dia útil anterior</button>
@@ -17345,6 +17390,62 @@ async function renderDaily() {
     // gamificados (abaixo) são o placar agora, um por executivo, na mesma ordem.
   }
 
+  // ---- Ritmo da semana (handoff "Daily & Ritmo", Seção 1 — nível 2, fim da página):
+  // grade de densidade de visitas por dia + pódio da semana por pontos. Tudo dado que
+  // já existia (diasUteisDaSemana, visitasReaisDoOwnerNoDia, pontosDoDia,
+  // calcularSequencia, bateuPrometido) — nada novo foi criado, só reunido numa seção.
+  let ritmoSemanaHtml = '';
+  if (!souRepDaily) {
+    const diasSemanaRitmo = diasUteisDaSemana(dailyRefDate);
+    const hojeISORitmo = isoDate(new Date());
+    const rotuloDiaCurto = d => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '').toUpperCase();
+    const gradeLinhas = repsDaily.map(r => {
+      const celulas = diasSemanaRitmo.map(d => {
+        if (d > hojeISORitmo) return '<span class="rit-cel"></span>';
+        const v = visitasReaisDoOwnerNoDia(r.ownerId, d);
+        const n = v || 0;
+        return `<span class="rit-cel${n >= 3 ? ' c2' : n > 0 ? ' c1' : ''} num">${n || ''}</span>`;
+      }).join('');
+      return `<span class="rit-nome">${esc(r.name.split(' ')[0])}</span>${celulas}`;
+    }).join('');
+    const gradeHtml = `
+      <div class="rit-grade">
+        <span></span>${diasSemanaRitmo.map(d => `<span class="rit-dh${d === hojeISORitmo ? ' hj' : ''}">${rotuloDiaCurto(d)}${d === hojeISORitmo ? ' · hoje' : ''}</span>`).join('')}
+        ${gradeLinhas}
+      </div>`;
+
+    const diasPassadosRitmo = diasSemanaRitmo.filter(d => d <= hojeISORitmo);
+    const podioSemana = repsDaily.map(r => ({
+      r, pts: diasPassadosRitmo.reduce((s, d) => s + pontosDoDia(getDaily(r.ownerId, d)), 0),
+      seq: calcularSequencia(r.ownerId, dailyRefDate)
+    })).filter(x => x.pts > 0).sort((a, b) => b.pts - a.pts).slice(0, 3);
+    const podioHtml = podioSemana.length ? podioSemana.map((x, i) => `
+      <div class="pod${i === 0 ? ' p1' : ''}"><span class="pod-pos">${i + 1}</span><div style="flex:1;"><b>${esc(x.r.name.split(' ')[0])}</b>${x.seq > 0 ? ` · ${x.seq}d de sequência 🔥` : ''}</div><span class="n">${x.pts} pts</span></div>`).join('')
+      : '<div class="empty-state">Sem pontos registrados nesta semana ainda.</div>';
+
+    const semanaCheiaRep = diasPassadosRitmo.length >= 5
+      ? repsDaily.find(r => diasPassadosRitmo.every(d => bateuPrometido(getDaily(r.ownerId, d))))
+      : null;
+
+    ritmoSemanaHtml = `
+      <div class="daily-ritmo-secao">
+        <div class="sec-k"><b>Ritmo da semana</b><span>densidade de visitas · pódio por pontos</span></div>
+        <div class="rit-cols">
+          <div class="chart-card">
+            <h3 style="margin-bottom:2px;">Grade da semana</h3>
+            <div class="chart-subtitle" style="margin-bottom:12px;">densidade de visitas · célula = visitas naquele dia</div>
+            ${gradeHtml}
+          </div>
+          <div class="chart-card">
+            <h3 style="margin-bottom:2px;">Pódio da Daily</h3>
+            <div class="chart-subtitle" style="margin-bottom:12px;">semana atual · pontos (visita +10, avanço +25, proposta +40, fechamento +100)</div>
+            <div class="podio">${podioHtml}</div>
+            ${semanaCheiaRep ? `<div class="rit-celeb">🎉 <b>${esc(semanaCheiaRep.name.split(' ')[0])}</b> completou "semana cheia" — bateu o prometido em todos os dias úteis já passados.</div>` : ''}
+          </div>
+        </div>
+      </div>`;
+  }
+
   repsParaFichas.forEach(r => {
     const hoje = getDaily(r.ownerId, dailyRefDate) || {};
     // "Realizado" só vem ao vivo do HubSpot quando a data mostrada é hoje de verdade —
@@ -17398,7 +17499,7 @@ async function renderDaily() {
     // resto do cockpit — realizado_fechamentos/fechamentosHubspotHoje já existiam e já
     // eram corretos, só nunca tinham vindo com o lado prometido.
     const metricasCompromisso = [
-      { label: 'Visitas', campo: 'prometido_visitas', prom: hoje.prometido_visitas, real: Number(realVisitas) || 0, cls: 'green' },
+      { label: 'Visitas', campo: 'prometido_visitas', prom: hoje.prometido_visitas, real: Number(realVisitas) || 0, cls: 'green', chips: visitasNomesDoOwnerNoDia(r.ownerId, dailyRefDate) },
       { label: 'Demo/Proposta', campo: 'prometido_propostas', prom: hoje.prometido_propostas, real: Number(realPropostas) || 0, cls: 'red', suspeito: escritaDaNoiteSuspeita },
       { label: 'Novos Clientes', campo: 'prometido_fechamentos', prom: hoje.prometido_fechamentos, real: Number(realFechamentos) || 0, cls: 'amber', suspeito: escritaDaNoiteSuspeita }
     ];
@@ -17420,6 +17521,9 @@ async function renderDaily() {
         <span class="daily-team-metric-top"><span>${m.label}${m.suspeito ? ' <span title="A sincronização da noite pode ter falhado — confira no HubSpot antes de cobrar este número." style="cursor:help;">⚠️</span>' : ''}</span><b>${m.prom ?? '—'} <em>${m.prom == null ? 'sem meta' : 'prometido'}</em></b></span>
         <span class="daily-progress"><span style="width:${pctMetrica(m)}%;"></span></span>
         <span style="display:block;font-size:9px;color:var(--muted);margin-top:4px;">${m.real} realizado${m.suspeito ? ' · sync a confirmar' : ''}</span>
+        ${m.chips ? (m.chips.length
+          ? `<div class="daily-visitas-chips">${m.chips.map(c => `<span class="daily-vchip">✓ ${esc(c)}</span>`).join('')}</div>`
+          : `<div class="daily-visitas-vazio">nenhuma visita registrada ainda</div>`) : ''}
       </span>`;
     const metricaGestorAberta = m => `
       <div class="daily-promise-metric ${m.cls}">
@@ -17658,7 +17762,7 @@ async function renderDaily() {
           </span>
           <span class="daily-team-result"><b style="color:${fechamentosHoje > 0 ? 'var(--green)' : 'var(--muted2)'};">${fechamentosHoje}</b><span>fechados</span></span>
           <span class="daily-team-streak mono" style="font-size:11px;font-weight:800;color:var(--amber);text-align:right;">${planoPill}${seq > 0 ? (' 🔥' + seq + 'd') : ''}</span>
-          <span style="font-size:11px;color:var(--muted2);text-align:right;">▾</span>
+          <span class="daily-team-cta${!registrouResumo ? ' cobrar' : ''}">${!registrouResumo ? 'Cobrar plano →' : 'Plano do dia →'}</span>
         </summary>
         <div class="daily-team-detail">
           <div class="daily-team-detail-head"><span><b>Promessa do dia</b><span style="display:block;margin-top:3px;">O combinado, a execução automática e o ponto de intervenção.</span></span><span class="daily-state ${estadoClasse}">${acaoGestor}</span></div>
@@ -17739,6 +17843,9 @@ async function renderDaily() {
     html += souGestor ? fichaGestorCompacta : fichaExecutivo;
   });
 
+  html += slotsMigradosDaily;
+  html += ritmoSemanaHtml;
+
   el.innerHTML = html;
 
   // Devolve os blocos migrados pros slots. Movimentação de nó, não recriação de HTML —
@@ -17748,6 +17855,27 @@ async function renderDaily() {
     if (slotDecisoes && blocoDecisoes) slotDecisoes.appendChild(blocoDecisoes);
   }
   wireRoteiroChecks(el);
+
+  // ---- Modo TV (handoff "Daily & Ritmo", Seção 3) — pra projetar na reunião das 9h.
+  // Persiste em localStorage; sai com o mesmo botão ou Esc (listener global, ver logo
+  // depois desta função, só precisa existir uma vez).
+  if (!souRepDaily) {
+    const btnTv = document.getElementById('dailyTvToggle');
+    let tvAtivo = false;
+    try { tvAtivo = localStorage.getItem('cockpit_daily_tv_v1') === '1'; } catch (e) {}
+    document.body.classList.toggle('tv', tvAtivo);
+    if (btnTv) {
+      btnTv.setAttribute('aria-pressed', String(tvAtivo));
+      btnTv.textContent = tvAtivo ? '📺 Sair do Modo TV' : '📺 Modo TV';
+      btnTv.addEventListener('click', () => {
+        const ligar = !document.body.classList.contains('tv');
+        document.body.classList.toggle('tv', ligar);
+        btnTv.setAttribute('aria-pressed', String(ligar));
+        btnTv.textContent = ligar ? '📺 Sair do Modo TV' : '📺 Modo TV';
+        try { localStorage.setItem('cockpit_daily_tv_v1', ligar ? '1' : '0'); } catch (e) {}
+      });
+    }
+  }
 
   // "Ver funil completo →": a ficha compacta do gestor não duplica quentes/travados —
   // manda pro dossiê da pessoa, que já é a fonte única disso (mesmo usado em "Por executivo").
@@ -17830,6 +17958,16 @@ async function renderDaily() {
     });
   });
 }
+
+// Modo TV (Daily & Ritmo) — Esc sai a qualquer momento, de qualquer lugar da tela.
+// Listener global, registrado uma vez só (não a cada render, senão empilharia).
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Escape' || !document.body.classList.contains('tv')) return;
+  document.body.classList.remove('tv');
+  try { localStorage.setItem('cockpit_daily_tv_v1', '0'); } catch (e) {}
+  const btnTv = document.getElementById('dailyTvToggle');
+  if (btnTv) { btnTv.setAttribute('aria-pressed', 'false'); btnTv.textContent = '📺 Modo TV'; }
+});
 
 // Consolidado semanal dos compromissos diários (usado no Resumo Semanal)
 async function renderConsolidadoDiario() {
