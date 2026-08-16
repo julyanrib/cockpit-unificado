@@ -30,11 +30,10 @@ const MAX_PAGINAS_POR_CIDADE = 30; // trava de segurança — nunca deixa uma ci
 // que é o filtro do endpoint da Agenda) — 8 anos captura o estabelecimento maduro
 // que ainda pode não ter sistema de PDV, sem se limitar a CNPJ recém-nascido.
 const JANELA_DIAS = 365 * 8;
-// CORREÇÃO (16/08/26, Julyan): "pode contar os que abriram há pelo menos 60 dias" —
-// CNPJ com menos de 2 meses de vida ainda pode ter cadastro incompleto ou fechar antes
-// de virar lead de verdade. A janela agora vai de 8 anos atrás até 60 dias atrás,
-// nunca incluindo os mais recentes que isso.
-const DIAS_MINIMO_ABERTURA = 60;
+// CORREÇÃO (16/08/26, Julyan, 2ª rodada): "não posso sujar o funil do gestor" — subiu
+// de 60 pra 90 dias mínimos de abertura, mais margem de segurança contra CNPJ que
+// ainda pode fechar ou estar com cadastro incompleto.
+const DIAS_MINIMO_ABERTURA = 90;
 
 // Uma linha por CIDADE que api/importar-leads.js sabe rotear (a função rotearTerritorio
 // de lá decide o dono certo por cidade+bairro). Rio de Janeiro sozinho cobre 3 executivos
@@ -81,6 +80,21 @@ function ehPessoaFisica(i) {
   if (/\b(ltda|eireli|s\/?a\b|me\b|mei\b|epp\b)/i.test(t)) return false;
   const inicio = t.split(/\s+/)[0] || '';
   return /^\d[\d.\-\/]*$/.test(inicio) && inicio.replace(/\D/g, '').length >= 8;
+}
+
+// CORREÇÃO (16/08/26, Julyan, 2ª rodada): "filtra o que não for de food" — o CNAE de
+// foodservice às vezes classifica errado (ex: mercearia/tabacaria/distribuidora
+// registradas sob um CNAE de restaurante). Corta pelo NOME quando bate um desses
+// padrões de varejo/serviço não-alimentício, mesmo já tendo passado pelo CNAE.
+const PADROES_FORA_DE_FOODSERVICE = [
+  /\bconveniencia\b/, /\bdistribuidora\b/, /\badega(s)?\b/,
+  /\bhortifruti\b/, /\bfarmacia\b/, /\bdrogaria\b/, /\bpapelaria\b/, /\batacad/,
+  /\bsupermercado\b/, /\bmercadinho\b/, /\bpet\b/, /\bmaterial\b/, /\bconstru/,
+  /\blavanderia\b/, /\bbarbearia\b/, /\botica\b/, /\bconfec/
+];
+function ehForaDeFoodservice(nome) {
+  const n = semAcento(nome);
+  return PADROES_FORA_DE_FOODSERVICE.some(re => re.test(n));
 }
 
 function isoDiasAtras(dias) {
@@ -191,6 +205,7 @@ async function buscarCidade(cidadeCfg, casaToken) {
       if (!item) return;
       if (ehRedeGrande(item.nome) || ehRedeGrande(item.razaoSocial)) return;
       if (ehPessoaFisica(item)) return;
+      if (ehForaDeFoodservice(item.nome)) return;
       leadsCidade.push(item);
     });
 
