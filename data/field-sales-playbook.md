@@ -34,7 +34,7 @@ Isso é sobre o que a ferramenta **faz**, não sobre como o time vende.
 **⚠️ ÚNICA EXCEÇÃO — Totem de Autoatendimento: **o discurso de "hardware livre" vale para 18 dos 19 módulos. O Totem tem regra comercial própria e obrigatória (vigência jun/2026): a venda está condicionada à ativação do TEF Fiserv, com adicional de R$ 299,00/mês (Totem + licença TEF) e hardware na especificação homologada. Não use o punch de "use o totem que quiser" numa negociação de Totem — ali o correto é vender a solução homologada. Detalhes na página EQUIPAMENTOS.
 
 | #  | Módulo                         | O que resolve                                                                                                                                                                                      | Pilar principal           |
-| -- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| --- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
 | 1  | **PDV Balcão**                 | Ponto de venda tradicional no caixa — abre comanda, lança item, fecha conta, emite nota fiscal.                                                                                                    | Experiência               |
 | 2  | **Ferramenta de Garçom**       | App do garçom pra lançar pedido direto na mesa, sem voltar ao balcão.                                                                                                                              | Experiência + Vendas      |
 | 3  | **Garçom Digital**             | Autoatendimento via QR Code na mesa — cliente pede sem depender do garçom.                                                                                                                         | Experiência + Tempo Livre |
@@ -339,9 +339,8 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 
 ## 🎯 Cadência diária do executivo (campo pleno)
 
-|                      |                                |                                                                                                                  |
-| -------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **Indicador**        | **Meta oficial**               | **Observação**                                                                                                   |
+| Indicador            | Meta oficial                   | Observação                                                                                                        |
+| -------------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | Visitas qualificadas | 6 por dia                      | Qualidade acima de quantidade: decisor identificado, hipótese preparada e registro no CRM na saída de cada porta |
 | Demos de alto nível  | 2 por dia                      | Só conta com o decisor final sentado à mesa                                                                      |
 | Dias de rua          | Mínimo 4 por semana            | Auditado via CRM                                                                                                 |
@@ -351,9 +350,8 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 
 ## 📊 Funil matemático oficial (20 dias úteis)
 
-|                       |         |         |                |
+| Etapa                 | Dia     | Mês     | Conversão      |
 | --------------------- | ------- | ------- | -------------- |
-| **Etapa**             | **Dia** | **Mês** | **Conversão**  |
 | Visitas qualificadas  | 6       | 120     | 100% (entrada) |
 | Conversas com decisor | 3       | 60      | 50%            |
 | Demos                 | 2       | 40      | 66%            |
@@ -380,9 +378,8 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 
 ## ⏱️ SLA por etapa do pipeline
 
-|                      |                        |                                                   |
-| -------------------- | ---------------------- | ------------------------------------------------- |
-| **Etapa**            | **SLA**                | **Se estourar**                                   |
+| Etapa                | SLA                    | Se estourar                                        |
+| -------------------- | ---------------------- | --------------------------------------------------- |
 | Prospecção           | 5 dias                 | Reforçar abordagem ou marcar sem fit               |
 | Visita               | 5 dias                 | Agendar visita ou devolver pra fila                |
 | Conversa com Decisor | 4 dias                 | Fechar diagnóstico ou reagendar com decisor        |
@@ -620,7 +617,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 ### GUIA PROSPECÇÃO 2/2
 
-## PROSPECÇÃO INTELIGENTE – CASA DOS DOS, GOOGLE MAPS E REDES SOCIAIS
+## PROSPECÇÃO INTELIGENTE – CASA DOS DADOS, GOOGLE MAPS E REDES SOCIAIS
 
 ## 🎯 A Mentalidade do "Sniper" de Vendas
 
@@ -660,7 +657,7 @@ O Google Maps é a melhor ferramenta gratuita para desenhar rotas de campo intel
 
 1. **Pesquise por Nichos Específicos:** Em vez de buscar apenas "restaurantes", busque por nichos de ICP alto (*"Pizzarias em Vila Velha"*, *"Churrascarias em Vitória"*).
 
-2. **Avalie o Volume de Avaliações:** Um restaurante com mais de 200 ou 300 avaliações no Google indica alto fluxo de caixa e salão cheio no pico — perfil perfeito para o plano de $R\$ 349+$.
+2. **Avalie o Volume de Avaliações:** Um restaurante com mais de 200 ou 300 avaliações no Google indica alto fluxo de caixa e salão cheio no pico — perfil perfeito para o plano de R$ 349+.
 
 3. **Procure o "Gargalo Crítico" nos Comentários Negativos:** Filtre as avaliações por "Mais recentes" ou "Mais baixas". Procure por palavras-chave como: *"demora no atendimento"*, *"pedido veio errado"*, *"garçom demorou para trazer a conta"*.
 
@@ -691,11 +688,11 @@ O Instagram é a fachada digital do restaurante. Nós usamos a rede social para 
 
 Para que a prospecção digital tenha alta conversão, o executivo deve seguir o fluxo de tração:
 
-1. **Abra o Card no HubSpot:** Assim que identificar o lead na Casa dos Dados ou Google Maps, jogue no CRM com a tag correspondente (`Origem: Casa dos Dados` ou `Origem: Google Maps`).
+1. **Abra o Card no HubSpot:** Assim que identificar o lead na Casa dos Dados ou Google Maps, jogue no CRM com a **Origem do Lead** correspondente (`Casa dos Dados` ou `GoogleMaps` — são os valores exatos que o sistema aceita nesse campo).
 
 2. **Mapeie o Instagram da Casa:** Insira o link do perfil do restaurante dentro das notas do HubSpot para que você possa consultar a cara do salão e o cardápio atual antes da reunião.
 
-3. **Transacione para o Contato Direto:** O objetivo do Direct ou da pesquisa de dados é conseguir o número do decisor. Assim que conseguir o WhatsApp, mova o card para "Demo Agendada" e parta para a apresentação do ecossistema.
+3. **Transacione para o Contato Direto:** O objetivo do Direct ou da pesquisa de dados é conseguir o número do decisor. Assim que conseguir o WhatsApp, mova o card para **Demo/Proposta** (ver PIPELINE) e parta para a apresentação do ecossistema.
 
 
 ### COMO ACHAR O TD
@@ -1865,7 +1862,7 @@ A Takeat vai continuar dobrando de tamanho e dominando o Brasil. As portas estã
 
 Você já construiu o playbook mais completo que esse canal já teve. O que falta não é mais processo pro executivo — é a **rotina do gestor** que transforma esse processo em resultado sustentado. Isso não é dashboard passivo; é uma cadência ativa, tão obrigatória pra você quanto as 6 visitas/dia com qualidade são pro time.
 
-> 📅 **Este módulo tem uma agenda exportável.** O arquivo `rotina_gestor_field_sales.ics` contém os 8 eventos abaixo já configurados como recorrentes (semanais e mensais), prontos para importar no Google Agenda. Veja o passo a passo de importação ao final deste documento.
+> 📅 **Este módulo tem uma agenda de referência.** A tabela no fim desta página lista os 10 eventos da rotina (semanais e mensais) com dia e horário sugeridos — use-a como checklist pra montar os eventos recorrentes na sua própria agenda (Google Agenda ou similar).
 
 ***
 
@@ -1973,7 +1970,7 @@ O executivo de elite gasta a sola do sapato. O gestor de elite gasta a régua de
 
 ***
 
-Os 9 eventos entram direto na agenda do canal, visíveis pra quem mais tiver acesso a ela — o que é bom, porque parte da graça de colocar isso na agenda do canal (e não na sua pessoal) é dar visibilidade da rotina pro time, não só pra você.
+Os 10 eventos entram direto na agenda do canal, visíveis pra quem mais tiver acesso a ela — o que é bom, porque parte da graça de colocar isso na agenda do canal (e não na sua pessoal) é dar visibilidade da rotina pro time, não só pra você.
 
 | Evento                           | Frequência        | Horário (Brasília) |
 | -------------------------------- | ----------------- | ------------------ |
