@@ -8124,7 +8124,8 @@ function prosp2LigarEventos(universo, ownerId) {
   const aplicarBusca = async (texto) => {
     if (!texto || !texto.trim()) return;
     locGo.disabled = true; locGo.textContent = 'Buscando…';
-    const resultado = await geocodificarLocalAtuacao(texto.trim());
+    const terrVies = territorioDe(ownerId);
+    const resultado = await geocodificarLocalAtuacao(texto.trim(), terrVies && terrVies.lat, terrVies && terrVies.lng);
     locGo.disabled = false; locGo.textContent = 'Buscar aqui';
     if (!resultado) { prosp2Toast('Não consegui localizar esse endereço — tente outro texto.'); return; }
     prosp2Estado.local = { lat: resultado.lat, lng: resultado.lng, rotulo: resultado.nomeResolvido, custom: true };
@@ -13214,14 +13215,14 @@ function rotasRepsVisiveis() {
 const TERRITORIO_DO_EXECUTIVO = {
   '86100505': { rotulo: 'Vila Velha (cidade inteira)', bairro: null, municipio: 'Vila Velha', uf: 'ES', lat: -20.3297, lng: -40.2925, raioKm: 9 },
   '87069181': { rotulo: 'Vitória (cidade inteira)', bairro: null, municipio: 'Vitória', uf: 'ES', lat: -20.3155, lng: -40.3128, raioKm: 8 },
-  '86100506': { rotulo: 'Taquara, Jacarepaguá', bairro: 'Taquara', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9260, lng: -43.3760, raioKm: 5 },
+  '86100506': { rotulo: 'Taquara, Jacarepaguá, Recreio, Barra Olímpica, Guaratiba', bairro: 'Taquara', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9260, lng: -43.3760, raioKm: 10 },
   // BLOCO 32 (13/08/26) — Julyan, depois do PDI do Sandro: "rota dele vai ser tijuca,
   // ele tem q garantir presença lá" — não é mais sugestão de partida (que ele podia
   // sobrescrever digitando outro lugar), é território FIXO. `fixo:true` faz o passo 1
   // do ritual nascer sempre cumprido e trava o campo de "onde vai atuar hoje" — ver uso
   // logo abaixo, nas duas únicas leituras que precisavam mudar pra isso funcionar.
-  '87569072': { rotulo: 'Tijuca', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9245, lng: -43.2320, raioKm: 4, fixo: true },
-  '94079973': { rotulo: 'Campo Grande', bairro: 'Campo Grande', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9020, lng: -43.5580, raioKm: 6 },
+  '87569072': { rotulo: 'Tijuca, Vila Isabel, Cachambi, Méier, São Cristóvão', bairro: 'Tijuca', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9245, lng: -43.2320, raioKm: 6, fixo: true },
+  '94079973': { rotulo: 'Campo Grande, Bangu', bairro: 'Campo Grande', municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9020, lng: -43.5580, raioKm: 8 },
   // bairro aceita lista: a Kelly cobre dois, e a Casa dos Dados devolve um por empresa.
   '91477292': { rotulo: 'Auxiliadora / Moinhos de Vento', bairro: ['Moinhos de Vento', 'Auxiliadora'], municipio: 'Porto Alegre', uf: 'RS', lat: -30.0245, lng: -51.2050, raioKm: 4 },
   '89842507': { rotulo: 'Santo Amaro', bairro: 'Santo Amaro', municipio: 'São Paulo', uf: 'SP', lat: -23.6520, lng: -46.7080, raioKm: 5 },
@@ -14359,10 +14360,18 @@ function ligarBuscaLocal() {
   });
 }
 
-async function geocodificarLocalAtuacao(texto) {
+// CORREÇÃO (16/08/26, Julyan: "digitei taquara não reconheceu nada") — a causa raiz
+// era ambiguidade geográfica, não bug de rede: "Taquara" sem contexto resolve pra
+// cidade de Taquara/RS (mais famosa) como 1º resultado da MapTiler, não pro bairro
+// de Taquara/RJ que o Bruno queria. Testado ao vivo: "Pilares" funcionava só porque
+// não tem homônimo famoso em outro estado. `proximity` (lng,lat) dá viés de distância
+// pro território do executivo, sem restringir a busca só àquela área — ver teste que
+// confirmou "Taquara" virando "Taquara, Rio de Janeiro" com o viés aplicado.
+async function geocodificarLocalAtuacao(texto, viesLat, viesLng) {
   if (!texto || !DATA.maptiler) return null;
   try {
-    const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(texto)}.json?key=${DATA.maptiler}&country=br&language=pt`;
+    const proximidade = (Number.isFinite(viesLat) && Number.isFinite(viesLng)) ? `&proximity=${viesLng},${viesLat}` : '';
+    const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(texto)}.json?key=${DATA.maptiler}&country=br&language=pt${proximidade}`;
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const json = await resp.json();
@@ -14393,7 +14402,8 @@ async function salvarPlanoDoDia(ownerId, dataISO, campos) {
       localLat = localEscolhido.lat;
       localLng = localEscolhido.lng;
     } else {
-      const geo = await geocodificarLocalAtuacao(campos.local_atuacao);
+      const terrViesPlano = territorioDe(ownerId);
+      const geo = await geocodificarLocalAtuacao(campos.local_atuacao, terrViesPlano && terrViesPlano.lat, terrViesPlano && terrViesPlano.lng);
       localLat = geo ? geo.lat : null;
       localLng = geo ? geo.lng : null;
     }
