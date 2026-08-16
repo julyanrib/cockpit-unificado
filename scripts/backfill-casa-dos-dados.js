@@ -20,11 +20,12 @@
 const CASA_URL = 'https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultado=completo';
 const COCKPIT_URL = process.env.COCKPIT_URL || 'https://fieldsalestakeat.vercel.app';
 
-// Backlog de verdade, não só novidade da semana — mas com teto: 120 por cidade é o
-// que dá pra um executivo digerir num mês de prospecção sem a fila virar lista que
-// ninguém lê (mesma preocupação do Julyan: "sem deixar muito cheio, que assusta eles").
-const LIMITE_POR_CIDADE = 120;
-const TAMANHO_PAGINA_API = 40; // a Casa dos Dados pagina; busca em blocos até o limite acima
+// CORREÇÃO (16/08/26, Julyan): "quero mais leads pra todos, pelo menos 30 por executivo".
+// Cada cidade agora carrega um objetivoMinimo (soma dos executivos que ela atende) e um
+// tetoMaximo de segurança (pra não virar fila que ninguém lê — mesma preocupação de antes).
+// Continua sendo backlog de verdade, não só "abriu essa semana".
+const TAMANHO_PAGINA_API = 40; // a Casa dos Dados pagina; busca em blocos até o teto de cada cidade
+const MAX_PAGINAS_POR_CIDADE = 30; // trava de segurança — nunca deixa uma cidade paginar pra sempre
 // Janela ampla o bastante pra cobrir o mercado ativo (não só "abriu esta semana",
 // que é o filtro do endpoint da Agenda) — 8 anos captura o estabelecimento maduro
 // que ainda pode não ter sistema de PDV, sem se limitar a CNPJ recém-nascido.
@@ -36,15 +37,25 @@ const JANELA_DIAS = 365 * 8;
 const DIAS_MINIMO_ABERTURA = 60;
 
 // Uma linha por CIDADE que api/importar-leads.js sabe rotear (a função rotearTerritorio
-// de lá decide o dono certo por cidade+bairro — Rio de Janeiro sozinho cobre Bruno,
-// Sandro e Michel, cada um no seu bairro). Isso cobre os 7 executivos ativos.
+// de lá decide o dono certo por cidade+bairro). Rio de Janeiro sozinho cobre 3 executivos
+// (Bruno, Sandro, Michel) — por isso carrega metaBairros: sub-cotas de 30 leads por bairro
+// de cada um, testadas com o MESMO critério de bairro que rotearTerritorio usa lá no
+// endpoint (mantido em sincronia manual — se mudar um lado, mudar o outro).
+// Cidades de executivo único (1 rep por município) só precisam do objetivoMinimo geral.
 const CIDADES = [
-  { municipio: 'Vila Velha', uf: 'ES' },
-  { municipio: 'Vitória', uf: 'ES' },
-  { municipio: 'Rio de Janeiro', uf: 'RJ' },
-  { municipio: 'São Paulo', uf: 'SP' },
-  { municipio: 'Porto Alegre', uf: 'RS' },
-  { municipio: 'Canoas', uf: 'RS' }
+  { municipio: 'Vila Velha', uf: 'ES', objetivoMinimo: 30, tetoMaximo: 150 }, // Marco Filho
+  { municipio: 'Vitória', uf: 'ES', objetivoMinimo: 30, tetoMaximo: 150 }, // Amanda Pardim
+  {
+    municipio: 'Rio de Janeiro', uf: 'RJ', objetivoMinimo: 90, tetoMaximo: 400,
+    metaBairros: [
+      { nome: 'Bruno Martins (Taquara/Jacarepaguá/Freguesia/Anil)', minimo: 30, teste: b => /taquara|jacarepagua|freguesia|\banil\b/.test(b) },
+      { nome: 'Sandro Linhares (Tijuca)', minimo: 30, teste: b => /tijuca/.test(b) },
+      { nome: 'Michel Carvalho (Campo Grande)', minimo: 30, teste: b => /campo grande/.test(b) }
+    ]
+  },
+  { municipio: 'São Paulo', uf: 'SP', objetivoMinimo: 30, tetoMaximo: 150 }, // Wericles Andrade (Santo Amaro/Morumbi)
+  { municipio: 'Porto Alegre', uf: 'RS', objetivoMinimo: 30, tetoMaximo: 150 }, // Kelly Travieso (Moinhos de Vento/Auxiliadora/Cidade Baixa)
+  { municipio: 'Canoas', uf: 'RS', objetivoMinimo: 30, tetoMaximo: 150 } // também roteia pra Kelly
 ];
 
 const CNAE_FOODSERVICE = [
@@ -135,10 +146,27 @@ async function autenticarECconsultar(corpoConsulta, casaToken) {
   return { ok: false };
 }
 
-async function buscarCidade(municipio, uf, casaToken) {
+// Retorna também o detalhe por metaBairro (quando a cidade tiver), pra main() poder
+// avisar se algum executivo específico não bateu os 30 mesmo esticando o teto.
+async function buscarCidade(cidadeCfg, casaToken) {
+  const { municipio, uf, objetivoMinimo, tetoMaximo, metaBairros } = cidadeCfg;
   const leadsCidade = [];
   let pagina = 1;
-  while (leadsCidade.length < LIMITE_POR_CIDADE) {
+
+  function contagemPorMeta() {
+    if (!metaBairros) return null;
+    return metaBairros.map(m => ({
+      nome: m.nome,
+      minimo: m.minimo,
+      encontrados: leadsCidade.filter(l => m.teste(semAcento(l.bairro))).length
+    }));
+  }
+  function metasBatidas() {
+    if (!metaBairros) return leadsCidade.length >= objetivoMinimo;
+    return contagemPorMeta().every(m => m.encontrados >= m.minimo);
+  }
+
+  while (leadsCidade.length < tetoMaximo && pagina <= MAX_PAGINAS_POR_CIDADE && !metasBatidas()) {
     const corpoConsulta = JSON.stringify({
       codigo_atividade_principal: CNAE_FOODSERVICE,
       situacao_cadastral: ['ATIVA'],
@@ -169,7 +197,7 @@ async function buscarCidade(municipio, uf, casaToken) {
     if (cru.length < TAMANHO_PAGINA_API) break; // última página da Casa dos Dados pra essa cidade
     pagina++;
   }
-  return leadsCidade.slice(0, LIMITE_POR_CIDADE);
+  return { leads: leadsCidade.slice(0, tetoMaximo), porMeta: contagemPorMeta() };
 }
 
 async function importarLote(leadsCidade, importSecret) {
@@ -197,12 +225,19 @@ async function main() {
 
   let totalInseridos = 0, totalDuplicados = 0;
   const porCidade = {};
-  for (const { municipio, uf } of CIDADES) {
-    console.log(`[backfill-casa-dos-dados] Buscando ${municipio}/${uf}…`);
-    const leadsCidade = await buscarCidade(municipio, uf, casaToken);
+  for (const cidadeCfg of CIDADES) {
+    const { municipio, uf } = cidadeCfg;
+    console.log(`[backfill-casa-dos-dados] Buscando ${municipio}/${uf}… (objetivo mínimo: ${cidadeCfg.objetivoMinimo})`);
+    const { leads: leadsCidade, porMeta } = await buscarCidade(cidadeCfg, casaToken);
     console.log(`[backfill-casa-dos-dados] ${municipio}/${uf}: ${leadsCidade.length} contas após filtro (rede grande e pessoa física fora).`);
+    if (porMeta) {
+      porMeta.forEach(m => {
+        const ok = m.encontrados >= m.minimo;
+        console.log(`[backfill-casa-dos-dados]   ${ok ? '✅' : '⚠️ ABAIXO DA META'} ${m.nome}: ${m.encontrados}/${m.minimo}`);
+      });
+    }
     const resultado = await importarLote(leadsCidade, importSecret);
-    porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, inseridos: resultado.inseridos || 0, duplicados: resultado.duplicados || 0 };
+    porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, inseridos: resultado.inseridos || 0, duplicados: resultado.duplicados || 0, porMeta: porMeta || undefined };
     totalInseridos += resultado.inseridos || 0;
     totalDuplicados += resultado.duplicados || 0;
   }
