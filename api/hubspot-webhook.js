@@ -26,6 +26,17 @@ const crypto = require('crypto');
 const GITHUB_OWNER = 'julyanrib';
 const GITHUB_REPO = 'cockpit-unificado';
 const WORKFLOW_FILE = 'daily-refresh.yml';
+// CORREÇÃO (16/08/26, Julyan — auditoria pós-teto de deploy da Vercel): a única trava
+// que existia era "não disparar se já tem uma rodando/na fila" — isso evita duplicar um
+// disparo simultâneo, mas NÃO limita frequência. O HubSpot manda um aviso pra cada
+// propriedade que muda, e com 7 executivos mexendo no funil o dia todo, isso disparava
+// o robô (e um deploy novo na Vercel) a cada 10-20 minutos, sem parar, durante todo o
+// expediente — 70+ vezes num único dia, batendo sozinho no teto de 100 deploys/dia do
+// plano Hobby, antes mesmo de somar qualquer upload manual. Esta janela de descanso
+// (cooldown) limita a no máximo 1 disparo a cada 15 minutos — os 3 horários fixos do
+// dia (scripts/... via daily-refresh.yml) continuam garantindo atualização mesmo sem
+// nenhum evento do HubSpot; o webhook só acelera entre eles, sem virar uma rajada.
+const COOLDOWN_MINUTOS = 15;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
@@ -76,7 +87,39 @@ module.exports = async function handler(req, res) {
     return res.status(401).json({ erro: 'Assinatura não confere — aviso recusado.' });
   }
 
-  // ---- 3. evita disparar a Action de novo se já tem uma rodando/na fila ----
+  // ---- 3. intervalo mínimo entre disparos (cooldown) — a proteção que faltava ----
+  // Olha a ÚLTIMA execução desta Action, seja qual for o status dela, e recusa disparar
+  // de novo se ainda não passou COOLDOWN_MINUTOS desde que ela começou. Isso é o que
+  // realmente limita a frequência — a checagem de "em andamento/na fila" logo abaixo
+  // continua existindo, mas sozinha só evitava disparo duplicado no mesmo instante.
+  try {
+    const headersGitHub = {
+      Authorization: `Bearer ${githubPat}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    };
+    const ultimaExecucao = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=1`,
+      { headers: headersGitHub }
+    );
+    const dadosUltima = ultimaExecucao.ok ? await ultimaExecucao.json() : { workflow_runs: [] };
+    const execucaoMaisRecente = (dadosUltima.workflow_runs || [])[0];
+    if (execucaoMaisRecente) {
+      const idadeMinutos = (Date.now() - new Date(execucaoMaisRecente.created_at).getTime()) / 60000;
+      if (idadeMinutos < COOLDOWN_MINUTOS) {
+        return res.status(200).json({
+          ok: true, disparado: false,
+          motivo: `cooldown ativo — última rodada começou há ${idadeMinutos.toFixed(1)} min (mínimo ${COOLDOWN_MINUTOS} min entre disparos)`
+        });
+      }
+    }
+  } catch (e) {
+    // Falha ao checar o cooldown não pode travar o webhook pra sempre — segue pro
+    // disparo normal (a checagem de in_progress/queued abaixo ainda protege duplicata).
+    console.log('[hubspot-webhook] Falha ao checar cooldown (seguindo mesmo assim):', e.message);
+  }
+
+  // ---- 4. evita disparar a Action de novo se já tem uma rodando/na fila ----
   // O HubSpot manda um aviso PRA CADA propriedade que mudou — mover uma etapa e
   // preencher 3 campos no mesmo clique vira 4 avisos quase simultâneos. Sem essa
   // checagem, isso disparava 4 execuções da Action ao mesmo tempo, à toa.
@@ -104,7 +147,7 @@ module.exports = async function handler(req, res) {
       return res.status(200).json({ ok: true, disparado: false, motivo: 'já havia uma rodada em andamento/na fila' });
     }
 
-    // ---- 4. dispara a mesma Action que já roda 3x por dia, agora sob demanda ----
+    // ---- 5. dispara a mesma Action que já roda 3x por dia, agora sob demanda ----
     const disparo = await fetch(
       `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
       { method: 'POST', headers: { ...headersGitHub, 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main' }) }
