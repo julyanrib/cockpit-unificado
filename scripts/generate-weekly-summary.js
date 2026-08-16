@@ -321,7 +321,7 @@ ${blocoAnterior}
 Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato:
 {
   "resumoIndividual": "2-3 frases em HTML simples (pode usar <b>) contando pra essa pessoa como foi a semana dela especificamente, com números concretos — reconhecendo o que foi bem e nomeando o que travou, sem rodeio.",
-  "comoAgirIndividual": ["2-3 ações objetivas e específicas pra essa pessoa focar na semana que começa, cada uma como uma string curta, pode usar <b> pra destacar números, diferentes das da semana passada se já foram resolvidas"]
+  "comoAgirIndividual": ["2-3 ações objetivas e específicas pra essa pessoa focar na semana que começa, cada uma como uma string curta, pode usar <b> pra destacar números, diferentes das da semana passada se já foram resolvidas. PROIBIDO pedir 'enviar print do HubSpot' (por WhatsApp ou qualquer canal) como forma de mostrar progresso — a evidência tem que ser uma ação que já fica registrada sozinha no HubSpot: nota, próximo passo com data, etapa alterada, negócio descartado/reciclado."]
 }`;
 }
 
@@ -357,7 +357,7 @@ comente a diferença.
 Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato:
 {
   "resumoIndividual": "3-4 frases em HTML simples (pode usar <b>), começando com '<b>Fechamento do mês:</b>', avaliando o MÊS INTEIRO dela(e) — consistência ao longo das semanas, o que foi bem, o que travou, com números concretos.",
-  "comoAgirIndividual": ["2-3 ações objetivas pro PRÓXIMO mês, diferentes das já resolvidas"]
+  "comoAgirIndividual": ["2-3 ações objetivas pro PRÓXIMO mês, diferentes das já resolvidas. PROIBIDO pedir 'enviar print do HubSpot' como evidência — a evidência tem que ser uma ação registrada sozinha no próprio HubSpot."]
 }`;
 }
 
