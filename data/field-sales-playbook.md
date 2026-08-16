@@ -1396,16 +1396,20 @@ O Pipeline de Field Sales no HubSpot (pipeline `916011864` — o único que vale
 
 ### 5. 🤝 Negociação
 
-**Racional:** Alinhamento de expectativas, quebra de objeções (ver QUEBRA DE OBJEÇÕES) e ajustes contratuais/financeiros.
+**Racional:** Alinhamento de expectativas, quebra de objeções (ver QUEBRA DE OBJEÇÕES) e ajustes contratuais/financeiros. É aqui que todo o cadastro do cliente e os detalhes comerciais do fechamento são coletados — Ag. Pagamento não abre sem isso.
 
 * **Indicador de Entrada:** Proposta recebida pelo lojista, iniciando discussão sobre prazo, condições ou desconto.
-* **Indicador de Saída:** Acordo verbal final — o "de acordo" real do lojista pra emissão de cobrança (não confundir com "vou pensar").
+* **Indicador de Saída — o card não avança pra Ag. Pagamento sem TODOS estes campos preenchidos no HubSpot:**
+  * Dados cadastrais: **e-mail, CNPJ/CPF, celular, CEP, número do endereço**
+  * Comercial: **pacote contratado, adicional(is), tipo de pagamento (À Vista/Crédito), período contratado (Mensal/Trimestral/Semestral/Anual), valor (amount) e MRR**
+  * Diagnóstico: **maior desafio do cliente** + descrição livre desse desafio
+  * O de-acordo real do lojista pra emissão de cobrança (não confundir com "vou pensar")
 
 ### 6. ⏳ Ag. Pagamento 🔴
 
 **Racional:** Etapa de controle financeiro — o vendedor age como facilitador pra burocracia não travar a venda. **Automação crítica:** mover um card pra cá com o campo "Criar Asaas" = SIM dispara a geração do link de cobrança real pro cliente.
 
-* **Indicador de Entrada:** Acordo verbal confirmado + campo **"Criar Asaas"** marcado como SIM no card.
+* **Indicador de Entrada:** Todos os campos da Negociação preenchidos (ver acima) **+** campo **"Deseja criar perfil no Asaas"** marcado como **SIM**. Sem isso o Cockpit recusa o avanço — não é burocracia, é o que garante que o Asaas tenha o que precisa pra gerar a cobrança certa.
 * **Indicador de Saída:** Confirmação de pagamento (Pix/Cartão instantâneo, ou boleto após compensação de 1-3 dias úteis) via automação — o próprio sistema move o card pra **Ganho**, não é manual.
 * 🔴 **Nunca** mova um card pra cá "pra testar" ou sem o de-acordo real — isso gera cobrança de verdade.
 
