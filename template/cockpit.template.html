@@ -4532,7 +4532,7 @@ async function renderMeuPainel() {
         <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:22px;margin-top:3px;letter-spacing:-.01em;color:var(--dark-ink);line-height:1.25;">${saudacaoDoDia()}, ${r.name.split(' ')[0]}</div>
         <div style="font-size:13px;color:var(--dark-mut);margin-top:5px;">${diagnosticoFrase}</div>
       </div>
-      <button id="meuPainelIrPlano" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;flex:none;">Ver minhas ações de hoje →</button>
+      <button id="meuPainelIrPlano" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;flex:none;">Fechar meu plano do dia →</button>
     </div>
 
     <div class="meu-hoje-signal-strip">
@@ -4700,16 +4700,17 @@ async function renderMeuPainel() {
     });
   }
 
-  // CORREÇÃO (16/08/26) — bug real achado na revisão completa: este botão navegava
-  // pra viewAgenda e tentava rolar até #planoDoDiaSlot, que não existe mais desde que a
-  // Prospecção substituiu inteiramente a antiga subview "hoje" (o "assine o dia" saiu
-  // de propósito, per handoff). O clique levava pra tela errada e não fazia nada depois
-  // — agora rola direto pro que já existe e faz sentido nesta mesma tela.
+  // O plano do dia mora em Rota & Agenda. Navega primeiro e só então rola até o
+  // bloco real; antes este botão procurava um elemento que já não existia na aba Hoje.
   const btnIrPlano = document.getElementById('meuPainelIrPlano');
   if (btnIrPlano) {
     btnIrPlano.addEventListener('click', () => {
-      const alvo = document.querySelector('.hoje-priority-stack');
-      if (alvo && typeof smoothScrollTo === 'function') smoothScrollTo(alvo);
+      activateTab('viewAgenda');
+      if (typeof renderAgenda === 'function') renderAgenda();
+      setTimeout(() => {
+        const slot = document.getElementById('planoDoDiaSlot');
+        if (slot && typeof smoothScrollTo === 'function') smoothScrollTo(slot);
+      }, 350);
     });
   }
 
@@ -5672,23 +5673,61 @@ function carregarImagemProposta(src) {
 // 2ª desenha a versão final, já no tamanho exato medido. Isso elimina qualquer chute
 // de altura — a "proporção perfeita" pedida não depende de estimativa, é medida.
 function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
-  ctx.fillStyle = '#171310'; ctx.fillRect(0, 0, larguraCanvas, 252);
-  if (logo) { const larguraLogo = 192; ctx.drawImage(logo, 72, 47, larguraLogo, logo.height * larguraLogo / logo.width); }
-  else { ctx.fillStyle = '#e51a31'; ctx.font = '800 42px Arial'; ctx.fillText('Takeat', 72, 88); }
-  ctx.fillStyle = '#ff5368'; ctx.font = '800 15px Arial'; ctx.fillText('PROPOSTA COMERCIAL', 72, 148);
-  // "toda em negrito" — pedido explícito: nenhum texto de corpo fica em peso 400 daqui
-  // pra baixo; só os rótulos pequenos (já eram 700/800) continuam como estavam.
-  ctx.fillStyle = '#bdb5ad'; ctx.font = '700 18px Arial'; ctx.fillText(`Válida até ${prcDataValidade()} · Takeat 2026`, 72, 190);
-  ctx.fillStyle = '#302b27'; ctx.fillRect(770, 46, 358, 158); ctx.fillStyle = '#bdb5ad'; ctx.font = '700 14px Arial'; ctx.fillText('INVESTIMENTO MENSAL', 800, 82); ctx.fillStyle = '#fff'; ctx.font = '800 38px Arial'; ctx.fillText(prcMoeda(c.mensal), 800, 132); ctx.fillStyle = '#65d9ad'; ctx.font = '800 15px Arial'; ctx.fillText(c.periodo.nome, 800, 170);
-  let y = 322; ctx.fillStyle = '#756a60'; ctx.font = '800 14px Arial'; ctx.fillText('PREPARADA PARA', 72, y); y += 42; ctx.fillStyle = '#171310'; ctx.font = '800 38px Arial'; y = prcCanvasWrap(ctx, precificacaoEstado.cliente.trim() || 'Seu próximo cliente', 72, y, 1020, 45, 2); y += 22;
-  ctx.fillStyle = '#e51a31'; ctx.font = '800 16px Arial'; ctx.fillText('UMA OPERAÇÃO MAIS RÁPIDA, CONTROLADA E PRONTA PARA CRESCER', 72, y); y += 34;
-  ctx.fillStyle = '#5a5049'; ctx.font = '700 17px Arial'; y = prcCanvasWrap(ctx, 'Atendimento, gestão e relacionamento conectados em uma única plataforma para o restaurante vender melhor todos os dias.', 72, y, 1020, 25, 2); y += 25;
-  ctx.fillStyle = '#fff'; ctx.fillRect(54, y, 1092, 175); ctx.strokeStyle = '#e4d9ca'; ctx.strokeRect(54, y, 1092, 175); ctx.fillStyle = '#e51a31'; ctx.font = '800 14px Arial'; ctx.fillText(`${tipo.nome.toUpperCase()} · ${c.periodo.nome.toUpperCase()}`, 82, y + 42); ctx.fillStyle = '#171310'; ctx.font = '800 32px Arial'; ctx.fillText(`Plano ${c.plano.nome}`, 82, y + 86); ctx.fillStyle = '#5a5049'; ctx.font = '700 17px Arial'; prcCanvasWrap(ctx, c.plano.chamada, 82, y + 120, 970, 25, 2); y += 220;
-  ctx.fillStyle = '#171310'; ctx.font = '800 18px Arial'; const totalFuncionalidades = Object.values(c.plano.secoes).flat().length; ctx.fillText(`O QUE ESTÁ INCLUÍDO · ${totalFuncionalidades} FUNCIONALIDADES`, 72, y); y += 34;
+  // REFORMULAÇÃO COMPLETA (16/08/26) — pedido explícito: "quero que reformule tudo
+  // nessa parte... a imagem toda preta destacando tudo... é uma das partes mais
+  // importantes, onde o cliente vê pra assinar conosco". Antes só a seção de
+  // funcionalidades tinha virado escura — o card do plano e o de adicionais ainda
+  // eram brancos, quebrando a identidade visual no meio do documento. Agora é escuro
+  // do topo ao rodapé, sem nenhuma quebra, com cards elevados (não brancos) pra dar
+  // profundidade sem sair do tema.
+  const PRC_BG = '#14110F';        // fundo base, mais escuro que o header de antes
+  const PRC_CARD = '#211C18';      // card elevado (plano, adicionais) — mais claro que o fundo, nunca branco
+  const PRC_LINE = 'rgba(255,255,255,.09)';
+  const PRC_INK = '#FDFBF0';       // texto principal, quase branco
+  const PRC_MUT = '#9C9284';       // texto secundário
+  const PRC_RED = '#FF4757';       // vermelho mais vivo que o normal — "impactante" sobre fundo escuro
+  const PRC_GREEN = '#5CE0AE';
+
+  // Fundo escuro cobrindo o documento inteiro, do primeiro ao último pixel.
+  ctx.fillStyle = PRC_BG; ctx.fillRect(0, 0, larguraCanvas, ctx.canvas.height || 4000);
+  // Glow decorativo no topo — mesmo recurso visual usado nos heroes escuros do resto
+  // do cockpit, dá profundidade sem poluir.
+  const glow = ctx.createRadialGradient(larguraCanvas - 120, 40, 20, larguraCanvas - 120, 40, 420);
+  glow.addColorStop(0, 'rgba(255,71,87,.20)'); glow.addColorStop(1, 'rgba(255,71,87,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 0, larguraCanvas, 460);
+
+  if (logo) { const larguraLogo = 192; ctx.drawImage(logo, 72, 50, larguraLogo, logo.height * larguraLogo / logo.width); }
+  else { ctx.fillStyle = PRC_RED; ctx.font = '800 42px Arial'; ctx.fillText('Takeat', 72, 91); }
+  ctx.fillStyle = PRC_RED; ctx.font = '800 15px Arial'; ctx.fillText('PROPOSTA COMERCIAL', 72, 151);
+  ctx.fillStyle = PRC_MUT; ctx.font = '700 18px Arial'; ctx.fillText(`Válida até ${prcDataValidade()} · Takeat 2026`, 72, 193);
+
+  // Caixa de investimento no topo direito — agora com borda sutil pra se destacar do
+  // fundo (antes era só um retângulo mais claro flutuando sem contorno).
+  ctx.fillStyle = PRC_CARD; ctx.fillRect(770, 46, 358, 158); ctx.strokeStyle = 'rgba(255,71,87,.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(770, 46, 358, 158);
+  ctx.fillStyle = PRC_MUT; ctx.font = '700 14px Arial'; ctx.fillText('INVESTIMENTO MENSAL', 800, 82);
+  ctx.fillStyle = PRC_INK; ctx.font = '800 40px Arial'; ctx.fillText(prcMoeda(c.mensal), 800, 133);
+  ctx.fillStyle = PRC_GREEN; ctx.font = '800 15px Arial'; ctx.fillText(c.periodo.nome, 800, 171);
+
+  let y = 322;
+  ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText('PREPARADA PARA', 72, y); y += 42;
+  ctx.fillStyle = PRC_INK; ctx.font = '800 40px Arial'; y = prcCanvasWrap(ctx, precificacaoEstado.cliente.trim() || 'Seu próximo cliente', 72, y, 1020, 47, 2); y += 24;
+  ctx.fillStyle = PRC_RED; ctx.font = '800 16px Arial'; ctx.fillText('UMA OPERAÇÃO MAIS RÁPIDA, CONTROLADA E PRONTA PARA CRESCER', 72, y); y += 34;
+  ctx.fillStyle = PRC_MUT; ctx.font = '700 17px Arial'; y = prcCanvasWrap(ctx, 'Atendimento, gestão e relacionamento conectados em uma única plataforma para o restaurante vender melhor todos os dias.', 72, y, 1020, 25, 2); y += 30;
+
+  // Card do plano — era um retângulo branco quebrando o tema; agora é um card
+  // elevado (mais claro que o fundo, nunca branco) com acento vermelho lateral,
+  // igual ao padrão de card usado no resto do cockpit.
+  ctx.fillStyle = PRC_CARD; ctx.fillRect(54, y, 1092, 175);
+  ctx.fillStyle = PRC_RED; ctx.fillRect(54, y, 5, 175); // acento lateral
+  ctx.strokeStyle = PRC_LINE; ctx.lineWidth = 1; ctx.strokeRect(54, y, 1092, 175);
+  ctx.fillStyle = PRC_RED; ctx.font = '800 14px Arial'; ctx.fillText(`${tipo.nome.toUpperCase()} · ${c.periodo.nome.toUpperCase()}`, 86, y + 42);
+  ctx.fillStyle = PRC_INK; ctx.font = '800 32px Arial'; ctx.fillText(`Plano ${c.plano.nome}`, 86, y + 86);
+  ctx.fillStyle = PRC_MUT; ctx.font = '700 17px Arial'; prcCanvasWrap(ctx, c.plano.chamada, 86, y + 120, 970, 25, 2);
+  y += 220;
+
+  const totalFuncionalidades = Object.values(c.plano.secoes).flat().length;
+  ctx.fillStyle = PRC_INK; ctx.font = '800 18px Arial'; ctx.fillText(`O QUE ESTÁ INCLUÍDO · ${totalFuncionalidades} FUNCIONALIDADES`, 72, y); y += 34;
   const funcionalidades = Object.entries(c.plano.secoes).flatMap(([secao, itens]) => itens.map(item => ({ secao, item })));
-  // 3 colunas (era 2): o mesmo conteúdo ocupa bem menos altura, o que já ajuda demais
-  // a proporção — pedido explícito: "as funcionalidades também têm que chamar a
-  // atenção, visto o tanto de coisas que temos".
   const porColuna = Math.ceil(funcionalidades.length / 3);
   const colunas = [0, 1, 2].map(i => funcionalidades.slice(i * porColuna, (i + 1) * porColuna));
   const larguraColuna = 338; const gapColuna = 20;
@@ -5696,15 +5735,33 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   colunas.forEach((coluna, indice) => {
     const x = 72 + indice * (larguraColuna + gapColuna); let cy = inicioColunas; let secaoAnterior = '';
     coluna.forEach(({ secao, item }) => {
-      if (secao !== secaoAnterior) { if (secaoAnterior) cy += 9; ctx.fillStyle = '#e51a31'; ctx.font = '800 12px Arial'; ctx.fillText(secao.toUpperCase(), x, cy); cy += 24; secaoAnterior = secao; }
-      // Funcionalidades "chamam mais atenção" agora: check maior e mais verde, texto
-      // em negrito de verdade (era 400, virou 700).
-      ctx.fillStyle = '#1e8f68'; ctx.font = '800 16px Arial'; ctx.fillText('✓', x + 1, cy); ctx.fillStyle = '#2b2521'; ctx.font = '700 14px Arial'; cy = prcCanvasWrap(ctx, item, x + 22, cy, larguraColuna - 22, 19, 2); cy += 7;
+      if (secao !== secaoAnterior) { if (secaoAnterior) cy += 9; ctx.fillStyle = PRC_RED; ctx.font = '800 12px Arial'; ctx.fillText(secao.toUpperCase(), x, cy); cy += 24; secaoAnterior = secao; }
+      ctx.fillStyle = PRC_GREEN; ctx.font = '800 16px Arial'; ctx.fillText('✓', x + 1, cy); ctx.fillStyle = PRC_INK; ctx.font = '700 14px Arial'; cy = prcCanvasWrap(ctx, item, x + 22, cy, larguraColuna - 22, 19, 2); cy += 7;
     });
     maiorY = Math.max(maiorY, cy);
   });
-  y = maiorY + 28; ctx.fillStyle = '#fff'; ctx.fillRect(54, y, 1092, 98); ctx.strokeStyle = '#e4d9ca'; ctx.strokeRect(54, y, 1092, 98); ctx.fillStyle = '#171310'; ctx.font = '800 15px Arial'; ctx.fillText('ADICIONAIS', 82, y + 31); ctx.fillStyle = '#5a5049'; ctx.font = '700 15px Arial'; prcCanvasWrap(ctx, prcResumoAdicionais(c), 82, y + 60, 1000, 21, 2); y += 128;
-  const resumoY = y; ctx.fillStyle = '#171310'; ctx.fillRect(54, resumoY, 1092, 204); ctx.fillStyle = '#bdb5ad'; ctx.font = '800 14px Arial'; ctx.fillText(`${c.periodo.nome.toUpperCase()} · ${c.periodo.observacao.toUpperCase()}`, 86, resumoY + 44); ctx.fillStyle = '#fff'; ctx.font = '800 43px Arial'; ctx.fillText(`${prcMoeda(c.mensal)} / MÊS`, 86, resumoY + 101); ctx.fillStyle = '#cfc7bd'; ctx.font = '700 16px Arial'; ctx.fillText(c.periodo.meses > 1 ? `Total do período: ${prcMoeda(c.total)}${c.economia ? ` · economia de ${prcMoeda(c.economia)}` : ''}` : 'Cobrança mensal', 86, resumoY + 141); ctx.fillText(`Tabela oficial conferida em ${precificacaoCache.conferidoEm.split('-').reverse().join('/')}`, 86, resumoY + 174);
+  y = maiorY + 28;
+
+  // Card de adicionais — mesmo tratamento elevado, sem branco.
+  ctx.fillStyle = PRC_CARD; ctx.fillRect(54, y, 1092, 98); ctx.strokeStyle = PRC_LINE; ctx.lineWidth = 1; ctx.strokeRect(54, y, 1092, 98);
+  ctx.fillStyle = PRC_INK; ctx.font = '800 15px Arial'; ctx.fillText('ADICIONAIS', 86, y + 31);
+  ctx.fillStyle = PRC_MUT; ctx.font = '700 15px Arial'; prcCanvasWrap(ctx, prcResumoAdicionais(c), 86, y + 60, 1000, 21, 2);
+  y += 128;
+
+  // Rodapé de preço — o elemento mais importante do documento (é o que fecha a
+  // venda), agora com glow vermelho e número ainda maior pra ser impossível de não
+  // ver primeiro.
+  const resumoY = y;
+  const glowPreco = ctx.createRadialGradient(86, resumoY + 90, 10, 86, resumoY + 90, 340);
+  glowPreco.addColorStop(0, 'rgba(255,71,87,.16)'); glowPreco.addColorStop(1, 'rgba(255,71,87,0)');
+  ctx.fillStyle = PRC_CARD; ctx.fillRect(54, resumoY, 1092, 204);
+  ctx.fillStyle = glowPreco; ctx.fillRect(54, resumoY, 1092, 204);
+  ctx.strokeStyle = 'rgba(255,71,87,.3)'; ctx.lineWidth = 1.5; ctx.strokeRect(54, resumoY, 1092, 204);
+  ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText(`${c.periodo.nome.toUpperCase()} · ${c.periodo.observacao.toUpperCase()}`, 86, resumoY + 44);
+  ctx.fillStyle = PRC_INK; ctx.font = '800 46px Arial'; ctx.fillText(`${prcMoeda(c.mensal)} / MÊS`, 86, resumoY + 103);
+  ctx.fillStyle = '#CFC7BD'; ctx.font = '700 16px Arial';
+  ctx.fillText(c.periodo.meses > 1 ? `Total do período: ${prcMoeda(c.total)}${c.economia ? ` · economia de ${prcMoeda(c.economia)}` : ''}` : 'Cobrança mensal', 86, resumoY + 143);
+  ctx.fillText(`Tabela oficial conferida em ${precificacaoCache.conferidoEm.split('-').reverse().join('/')}`, 86, resumoY + 176);
   return resumoY + 204 + 40; // + margem de respiro no rodapé
 }
 
@@ -5723,11 +5780,11 @@ async function gerarBlobPropostaPrecificacao() {
   const alturaReal = desenharProposta(rascunho.getContext('2d'), larguraCanvas, tipo, c, logo);
 
   // Passada 2: desenha de novo, agora no canvas com a altura EXATA medida.
+  // O fundo escuro (e o glow decorativo) agora são pintados dentro de desenharProposta
+  // — não precisa de preenchimento prévio aqui, seria coberto de qualquer forma.
   const canvas = document.createElement('canvas');
   canvas.width = larguraCanvas; canvas.height = alturaReal;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#f6f0e5'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = '#e51a31'; ctx.fillRect(0, 0, 13, canvas.height);
   desenharProposta(ctx, larguraCanvas, tipo, c, logo);
 
   return await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Falha ao gerar o PNG.')), 'image/png'));
@@ -8348,7 +8405,7 @@ function renderAgenda() {
     return `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;flex:none;">
-        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Agenda · ${rotulo} · <span style="color:#8FB5FF;">planejamento</span></span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Rota & Agenda · ${rotulo} · <span style="color:#8FB5FF;">planejamento</span></span>
         <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">${agendaEstado.subview === 'semana' ? 'Minha semana está planejada?' : 'Meu dia de campo está pronto?'}</h1>
         <span style="font-size:10.5px;color:var(--dark-mut);margin-top:2px;">Próximos passos do funil, compromissos e novas contas da sua região no mesmo plano.</span>
       </div>
@@ -8452,7 +8509,7 @@ function renderAgenda() {
                       style="background:var(--ink);color:var(--panel);border:none;border-radius:99px;padding:4px 11px;font:800 11px inherit;cursor:pointer;">
                       Agendar
                     </button>
-                    ${l.lat != null && l.lng != null ? `<button class="ag-atalho" data-agmapaid="${esc(String(l.id))}" title="Abrir na Prospecção, com esta conta destacada na lista">📍 na rota</button>` : ''}
+                    ${l.lat != null && l.lng != null ? `<button class="ag-atalho" data-agmapaid="${esc(String(l.id))}" title="Abrir na Rota, com esta conta destacada na lista">📍 na rota</button>` : ''}
                     <button class="ag-atalho" data-agprosp="${esc(String(l.nome || ''))}" title="Abrir na Prospecção já filtrado por este nome">🔎 ficha</button>
                   </span>`;
                   })()}
@@ -10999,7 +11056,7 @@ function agendaGradeCard(dias, eventos, hojeK, souRep, rotulo) {
   return '<div class="agw" id="agGrade">' +
     '<div class="agw-top"><div><h4>' + agendaEsc(rotulo) + '</h4>' +
     '<div class="agw-sub">' + (souRep
-      ? 'Clique num compromisso para ver a temperatura do lead e achar a conta na Prospecção · 9h–10h é a daily'
+      ? 'Clique num compromisso para ver a temperatura do lead e achar a conta na lista da Rota · 9h–10h é a daily'
       : 'Clique num compromisso para abrir a ficha do lead') + '</div></div>' + seg + '</div>' + corpo + '</div>';
 }
 
@@ -17272,7 +17329,7 @@ async function renderDaily() {
             <span><button class="d-salvar daily-submit" data-owner="${r.ownerId}">${registrouResumo ? 'Atualizar compromisso' : 'Assumir compromisso'}</button><span class="d-status" data-owner="${r.ownerId}" style="display:block;font-size:10.5px;color:var(--muted);margin-top:6px;text-align:center;"></span></span>
           </div>
         </div>
-        <div class="daily-promise-foot"><span><b>${pontosHoje}</b> pontos hoje</span><span><b>${posicaoPontos}º</b> no time hoje</span><span><b>🔥 ${seq}d</b> de sequência</span><button class="push" onclick="activateTab('viewAgenda'); agendaEstado.subview='semana'; if (typeof renderAgenda === 'function') renderAgenda();" style="background:none;border:none;color:var(--red);font:800 11px 'Manrope',sans-serif;cursor:pointer;padding:0;">Conferir Agenda →</button></div>
+        <div class="daily-promise-foot"><span><b>${pontosHoje}</b> pontos hoje</span><span><b>${posicaoPontos}º</b> no time hoje</span><span><b>🔥 ${seq}d</b> de sequência</span><button class="push" onclick="activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda();" style="background:none;border:none;color:var(--red);font:800 11px 'Manrope',sans-serif;cursor:pointer;padding:0;">Conferir Rota & Agenda →</button></div>
       </section>
       ${(() => {
         // BLOCO 2 exec (10/08/26): as 10 conquistas, desbloqueadas E bloqueadas. Ver o que
@@ -17334,11 +17391,6 @@ async function renderDaily() {
   });
   el.querySelectorAll('[data-daily-agenda]').forEach(btn => {
     btn.addEventListener('click', () => {
-      // CORREÇÃO (16/08/26) — mesmo achado da revisão completa: sem fixar a subview,
-      // "Planejar clientes"/"Completar na Agenda" caíam na Prospecção (subview padrão
-      // "hoje") em vez do calendário semanal, que é onde os compromissos nomeados
-      // realmente ficam.
-      if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'semana';
       activateTab('viewAgenda');
       if (typeof renderAgenda === 'function') renderAgenda();
     });
@@ -19194,7 +19246,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           '</div>' +
         '</div>' +
         '<div class="prospeccao-exec-actions">' +
-          '<span class="prospeccao-exec-place">📍 ' + esc(localAtuacao || 'Defina sua praça na Prospecção') + '</span>' +
+          '<span class="prospeccao-exec-place">📍 ' + esc(localAtuacao || 'Defina sua praça na Rota & Agenda') + '</span>' +
           '<button type="button" class="prospeccao-exec-cta" id="prospeccaoAbrirRota">' + (rotaHojeExec.length ? 'Revisar a rota de hoje →' : 'Abrir a Rota e começar →') + '</button>' +
         '</div>' +
       '</section>';
@@ -19424,8 +19476,8 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       <button data-pill="historico" class="filtro${prospeccaoFiltro.visao === 'historico' ? ' on' : ''}">Histórico<small>${totalHistorico}</small></button>
       <button data-nuncavis title="Sem nenhuma tarefa de Visita/Revisita registrada no HubSpot com esse nome" class="filtro${prospeccaoFiltro.nuncaVisitada ? ' on' : ''}">Nunca visitada<small>${totalNuncaVis}</small></button>
       ${(typeof planoMapaOrigemAtual !== 'undefined' && planoMapaOrigemAtual)
-        ? `<button data-pertodemim title="Ordenar pela distância até o território que você declarou na Prospecção" class="filtro${prospeccaoFiltro.pertoDeMim ? ' on' : ''}" style="margin-left:auto;">📍 Perto de mim</button>`
-        : `<span title="Defina o território na aba Prospecção para ver distâncias aqui" style="font-size:11.5px;color:var(--muted2);align-self:center;padding-left:4px;line-height:1.4;margin-left:auto;">Defina seu território na <b>Prospecção</b> para ver a distância de cada conta.</span>`}
+        ? `<button data-pertodemim title="Ordenar pela distância até o território que você declarou na Rota" class="filtro${prospeccaoFiltro.pertoDeMim ? ' on' : ''}" style="margin-left:auto;">📍 Perto de mim</button>`
+        : `<span title="Defina o território na aba Rota para ver distâncias aqui" style="font-size:11.5px;color:var(--muted2);align-self:center;padding-left:4px;line-height:1.4;margin-left:auto;">Defina seu território na <b>Rota</b> para ver a distância de cada conta.</span>`}
     </div>`;
 
   const maisFiltros = `
