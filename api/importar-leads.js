@@ -335,7 +335,15 @@ module.exports = async function handler(req, res) {
     if (indiceNoLote >= 0) {
       resultado.duplicados++;
       if (resultado.duplicados_exemplos.length < 10) resultado.duplicados_exemplos.push(`${l.nome} (repetido no próprio lote)`);
-      novas[indiceNoLote] = { ...novas[indiceNoLote], ...mesclarRestaurante(novas[indiceNoLote], l) };
+      // CORREÇÃO (16/08/26): mesclarRestaurante() inclui updated_at, que só faz
+      // sentido pro PATCH de um registro que já existe no Supabase (caminho de
+      // `mesclas`, logo abaixo). Aqui é fusão de dois itens NOVOS dentro do mesmo
+      // lote — se updated_at vazasse pro objeto, esse registro ficava com uma
+      // coluna a mais que os outros de `novas`, e o insert em lote no Postgrest
+      // recusa tudo com "PGRST102: All object keys must match".
+      const mesclado = mesclarRestaurante(novas[indiceNoLote], l);
+      delete mesclado.updated_at;
+      novas[indiceNoLote] = { ...novas[indiceNoLote], ...mesclado };
       return;
     }
     novas.push(l);
@@ -382,4 +390,3 @@ module.exports = async function handler(req, res) {
 
   return res.status(200).json(resultado);
 };
-
