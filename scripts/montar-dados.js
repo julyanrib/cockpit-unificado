@@ -23,7 +23,15 @@ function requireOpcional(fn) {
   try { return fn(); } catch (e) { return null; }
 }
 const leadsReferencia = requireOpcional(() => require('../data/leads-referencia.json')) || { pracas: [] };
-const clientesAtivos = requireOpcional(() => require('../data/clientes-ativos.json')) || [];
+// DESATIVADO (16/08/26, pedido explícito do Julyan): "pode tirar, vamos puxar direto
+// da API da Takeat depois". O fetch-clientes-ativos.js (pipeline de Sucesso do
+// HubSpot) parou de rodar no workflow — sem isso, data/clientes-ativos.json nunca
+// mais atualiza e ficaria congelado pra sempre, mesmo já não sendo consumido pelo
+// template (o front-end já tinha essa fonte cortada desde 10/08). Zera aqui também
+// pra não embutir dado velho no payload de ninguém à toa. Reativar é só trocar a
+// linha de volta pra `requireOpcional(() => require('../data/clientes-ativos.json')) || []`
+// quando a integração direta com a API da Takeat estiver pronta.
+const clientesAtivos = [];
 const supabaseConfig = requireOpcional(() => require('../data/supabase-config.json'));
 const maptilerConfig = requireOpcional(() => require('../data/maptiler-config.json'));
 const resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
