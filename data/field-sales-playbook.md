@@ -29,9 +29,9 @@ Antes de qualquer módulo, isso é o que organiza a venda inteira. Toda soluçã
 
 Isso é sobre o que a ferramenta **faz**, não sobre como o time vende.
 
-> 🔑 **Princípio fundamental, vale para as 16 frentes abaixo:** a Takeat **não fornece hardware nenhum** — nem tablet, nem totem, nem maquininha própria. Entrega 100% tecnologia, incluindo **integração direta com as maiores adquirentes do mercado** (a maquininha física é de terceiro; a inteligência que processa o pagamento e conecta com o resto da operação é da Takeat). Isso é posicionamento, não limitação: o restaurante fica livre para negociar equipamento com quem quiser, e paga a Takeat só pelo que ela realmente entrega.
+> 🔑 **Princípio fundamental, vale para as 19 frentes abaixo:** a Takeat **não fornece hardware nenhum** — nem tablet, nem totem, nem maquininha própria. Entrega 100% tecnologia, incluindo **integração direta com as maiores adquirentes do mercado** (a maquininha física é de terceiro; a inteligência que processa o pagamento e conecta com o resto da operação é da Takeat). Isso é posicionamento, não limitação: o restaurante fica livre para negociar equipamento com quem quiser, e paga a Takeat só pelo que ela realmente entrega.
 
-**⚠️ ÚNICA EXCEÇÃO — Totem de Autoatendimento:&#x20;**&#x6F; discurso de "hardware livre" vale para 15 dos 16 módulos. O Totem tem regra comercial própria e obrigatória (vigência jun/2026): a venda está condicionada à ativação do TEF Fiserv, com adicional de R$ 299,00/mês (Totem + licença TEF) e hardware na especificação homologada. Não use o punch de "use o totem que quiser" numa negociação de Totem — ali o correto é vender a solução homologada. Detalhes na página EQUIPAMENTOS.
+**⚠️ ÚNICA EXCEÇÃO — Totem de Autoatendimento: **o discurso de "hardware livre" vale para 18 dos 19 módulos. O Totem tem regra comercial própria e obrigatória (vigência jun/2026): a venda está condicionada à ativação do TEF Fiserv, com adicional de R$ 299,00/mês (Totem + licença TEF) e hardware na especificação homologada. Não use o punch de "use o totem que quiser" numa negociação de Totem — ali o correto é vender a solução homologada. Detalhes na página EQUIPAMENTOS.
 
 | #  | Módulo                         | O que resolve                                                                                                                                                                                      | Pilar principal           |
 | -- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
@@ -40,17 +40,20 @@ Isso é sobre o que a ferramenta **faz**, não sobre como o time vende.
 | 3  | **Garçom Digital**             | Autoatendimento via QR Code na mesa — cliente pede sem depender do garçom.                                                                                                                         | Experiência + Tempo Livre |
 | 4  | **Tablet**                     | Autoatendimento — o próprio cliente faz o pedido direto no tablet, sem depender do garçom. Takeat fornece a **tecnologia**, não o hardware.                                                        | Experiência + Custos      |
 | 5  | **Totem**                      | Mesma lógica do Tablet, em formato de quiosque fixo: o cliente faz o próprio pedido sozinho, do início ao fim. **Software** de autoatendimento — o equipamento físico é do cliente ou de terceiro. | Experiência + Custos      |
-| 6  | **Delivery Próprio**           | Canal de entrega gerido pelo próprio restaurante — reduz comissão de marketplace.                                                                                                                  | Custos + Vendas           |
-| 7  | **Teka (IA de Atendimento)**   | Inteligência artificial que responde o cliente do delivery automaticamente, sem precisar de humano dedicado a isso.                                                                                | **Custos + Tempo Livre**  |
-| 8  | **Integração com Adquirentes** | Conexão direta com as maiores adquirentes — pagamento processado já entra na conciliação.                                                                                                          | Tempo Livre               |
-| 9  | **Fidelidade**                 | Cashback nativo e retenção — traz o cliente de volta sem depender de desconto.                                                                                                                     | Vendas                    |
-| 10 | **Gestão Financeira**          | Controle de caixa, conciliação, DRE automático.                                                                                                                                                    | Tempo Livre               |
-| 11 | **Gestão de Estoque**          | Controle de insumo integrado — saída automática a cada venda.                                                                                                                                      | Custos + Tempo Livre      |
-| 12 | **Controle de CMV**            | Custo de Mercadoria Vendida calculado automaticamente.                                                                                                                                             | Custos                    |
-| 13 | **Ficha Técnica**              | Cadastro de receita/composição de cada prato.                                                                                                                                                      | Custos                    |
-| 14 | **Precificação Dinâmica**      | CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado.                                                                                                     | Custos                    |
-| 15 | **Recorrência**                | Motor de assinatura/recompra.                                                                                                                                                                      | Vendas                    |
-| 16 | **CRM**                        | Gestão de relacionamento com o cliente final — base, histórico, segmentação.                                                                                                                       | Vendas + Experiência      |
+| 6  | **Painel KDS**                 | Tela digital na cozinha que substitui a comanda de papel — pedido chega, some da tela quando pronto. Atualização em tempo real por estação, corta erro de preparo e mede tempo real de cada prato. | Experiência + Tempo Livre |
+| 7  | **Delivery Próprio**           | Canal de entrega gerido pelo próprio restaurante — reduz comissão de marketplace. Integra também iFood, 99Food e Keeta num painel único, então o marketplace vira canal a mais, não um sistema à parte. | Custos + Vendas       |
+| 8  | **Roteirização Inteligente**   | *(adicional pago, R$ 109/mês — ver FAQ)* Agrupa até 9 pedidos prontos por região numa rota só, calcula a melhor ordem de entrega e manda o roteiro pro WhatsApp do motoboy — em vez de um motoboy por pedido. | Custos + Tempo Livre |
+| 9  | **Teka (IA de Atendimento)**   | *(adicional pago, R$ 99/mês — ver FAQ)* Inteligência artificial que responde o cliente do delivery automaticamente, sem precisar de humano dedicado a isso.                                       | **Custos + Tempo Livre**  |
+| 10 | **Integração com Adquirentes** | Conexão direta com as maiores adquirentes — pagamento processado já entra na conciliação.                                                                                                          | Tempo Livre               |
+| 11 | **Fidelidade**                 | Cashback nativo e retenção — traz o cliente de volta sem depender de desconto.                                                                                                                     | Vendas                    |
+| 12 | **Reservas de Mesa**           | Link público onde o cliente escolhe dia/horário e reserva sozinho — a mesa fica bloqueada pelo período todo, WhatsApp cuida da confirmação e do lembrete, e a comanda já abre sozinha quando a recepção confirma a chegada. | Experiência + Vendas |
+| 13 | **Gestão Financeira**          | Controle de caixa, conciliação bancária automática (Open Finance), DRE automático.                                                                                                                 | Tempo Livre               |
+| 14 | **Gestão de Estoque**          | Controle de insumo integrado — saída automática a cada venda.                                                                                                                                      | Custos + Tempo Livre      |
+| 15 | **Controle de CMV**            | Custo de Mercadoria Vendida calculado automaticamente.                                                                                                                                             | Custos                    |
+| 16 | **Ficha Técnica**              | Cadastro de receita/composição de cada prato.                                                                                                                                                      | Custos                    |
+| 17 | **Precificação Dinâmica**      | *(exclusivo Plano Inovação — ver FAQ)* CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado.                                                              | Custos                    |
+| 18 | **Recorrência**                | Motor de assinatura/recompra.                                                                                                                                                                      | Vendas                    |
+| 19 | **CRM**                        | Gestão de relacionamento com o cliente final — base, histórico, segmentação.                                                                                                                       | Vendas + Experiência      |
 
 ***
 
@@ -63,13 +66,13 @@ Antes de entrar na guerra módulo por módulo, isso precisa estar gravado como a
 > **Script de reforço do ecossistema (usar em qualquer objeção de "eu já tenho sistema X para isso"):**\
 > *"Seu [Nome], o senhor pode até ter um sistema bom pra [função específica que o concorrente cobre]. A pergunta não é se aquele pedaço funciona — é quantos sistemas diferentes o senhor precisa abrir hoje pra entender o negócio inteiro. Na Takeat, o pedido que entra no salão já é o mesmo dado que baixa o estoque, calcula o CMV pela ficha técnica em tempo real e alimenta o CRM do cliente. E olha que a gente nem vende aparelho: rodamos por cima da maquininha que o senhor já usa, com integração direta na adquirente. É um lugar só, sem prender o senhor a hardware nenhum. Quantos logins o senhor usa hoje pra fazer isso que eu acabei de descrever em uma frase?"*
 
-Isso vale pra qualquer um dos 16 módulos: a força de venda não está no módulo isolado ser melhor (embora seja) — está em **nenhum concorrente oferecer os 16 conectados ao mesmo tempo, sem prender o cliente a hardware nenhum**.
+Isso vale pra qualquer um dos 19 módulos: a força de venda não está no módulo isolado ser melhor (embora seja) — está em **nenhum concorrente oferecer os 19 conectados ao mesmo tempo, sem prender o cliente a hardware nenhum**.
 
 ***
 
 ## ⚔️ PARTE 2 — Estudo Comparativo Módulo por Módulo vs. Concorrência
 
-Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, organizados por **onde a briga realmente acontece** — porque nem todo concorrente compete em todos os 16 módulos ao mesmo tempo. Saber isso evita que o executivo tente vender "ecossistema completo" pra quem só precisa ouvir sobre o ponto exato onde o concorrente atual dói.
+Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, organizados por **onde a briga realmente acontece** — porque nem todo concorrente compete em todos os 19 módulos ao mesmo tempo. Saber isso evita que o executivo tente vender "ecossistema completo" pra quem só precisa ouvir sobre o ponto exato onde o concorrente atual dói.
 
 ### 🤖 Teka — IA de Atendimento (A Guerra do Robô de Delivery)
 
@@ -116,7 +119,7 @@ O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que pr
 
 ### 🛵 Delivery Próprio (A Guerra da Taxa Abusiva de Marketplace)
 
-**Posicionamento oficial — canal complementar, não substituto.&#x20;**&#x4F; restaurante pode continuar no marketplace para ser descoberto por cliente novo. O Delivery Próprio existe para fazer duas coisas que o marketplace nunca vai fazer: **(1) tirar o cliente recorrente das taxas abusivas** — quem já conhece a casa passa a pedir pelo canal direto, sem comissão por pedido; e **(2) registrar os dados de quem pede** — nome, telefone, histórico e frequência ficam com o restaurante, alimentando o CRM, o Cashback e a Recorrência. No marketplace, esse cliente é da plataforma; no Delivery Próprio, ele é do dono.
+**Posicionamento oficial — canal complementar, não substituto. **O restaurante pode continuar no marketplace para ser descoberto por cliente novo. O Delivery Próprio existe para fazer duas coisas que o marketplace nunca vai fazer: **(1) tirar o cliente recorrente das taxas abusivas** — quem já conhece a casa passa a pedir pelo canal direto, sem comissão por pedido; e **(2) registrar os dados de quem pede** — nome, telefone, histórico e frequência ficam com o restaurante, alimentando o CRM, o Cashback e a Recorrência. No marketplace, esse cliente é da plataforma; no Delivery Próprio, ele é do dono.
 
 > *"Seu [Nome], me responde uma coisa: o senhor sabe o nome e o telefone do cliente que pediu do seu restaurante no marketplace ontem? Não sabe — porque aquele cliente não é seu, é da plataforma. E além de não te entregar o dado, ela fica com uma fatia da venda em cada pedido. Com o Delivery Próprio da Takeat, quem já conhece a sua casa pede direto no seu canal: o senhor não paga comissão e passa a ter o cadastro de quem pede, o que ele pede e de quanto em quanto tempo. Aí esse cliente entra no seu Cashback e volta sozinho. O senhor continua no marketplace pra ser descoberto por gente nova — mas para de pagar pedágio em cima do cliente que já era seu."*
 
@@ -221,9 +224,9 @@ Você deve agir, falar e se posicionar como a maior autoridade em gestão e oper
 
 # 🚀 ONBOARDING & RAMPAGEM — PROGRAMA OFICIAL
 
-**Decisão de gestão:&#x20;**&#x6E;ão contratamos vendedores para "aprenderem sozinhos". O programa entrega autonomia comercial com padrão — e diz, **com números**, quando o executivo está pronto e quando não está.
+**Decisão de gestão: **não contratamos vendedores para "aprenderem sozinhos". O programa entrega autonomia comercial com padrão — e diz, **com números**, quando o executivo está pronto e quando não está.
 
-**Tese central:&#x20;**&#x74;eoria cria familiaridade; **volume de apresentações reais cria competência**. Quanto mais o executivo apresenta — primeiro assistindo às reuniões do Inside Sales, depois conduzindo as próprias — mais rápido domina o produto e mais curta é a rampa. Por isso cada fase tem volumes mínimos, e nenhum gate avança sem volume **e** qualidade.
+**Tese central: **teoria cria familiaridade; **volume de apresentações reais cria competência**. Quanto mais o executivo apresenta — primeiro assistindo às reuniões do Inside Sales, depois conduzindo as próprias — mais rápido domina o produto e mais curta é a rampa. Por isso cada fase tem volumes mínimos, e nenhum gate avança sem volume **e** qualidade.
 
 ## 🗺️ A Jornada: Rampa (dias 1–30) + Consolidação (dias 31–60)
 
@@ -289,7 +292,7 @@ Prospecção externa com coaching, escalando a cadência até a meta plena do pl
 
 * **Registro:** toda decisão de gate registrada com data, evidências e responsável — no Cockpit e no PDI
 
-**Por que existe ponto de corte:&#x20;**&#x65;stender indefinidamente uma rampa que não converge custa salário, praça parada e energia de gestão. O corte no dia 45 não é punição — é o compromisso de que cada praça terá, no menor tempo possível, um executivo em condição real de performar.
+**Por que existe ponto de corte: **estender indefinidamente uma rampa que não converge custa salário, praça parada e energia de gestão. O corte no dia 45 não é punição — é o compromisso de que cada praça terá, no menor tempo possível, um executivo em condição real de performar.
 
 ## 🛠️ Ferramentas e Rituais (a rampa roda na rotina existente)
 
@@ -319,7 +322,7 @@ Prospecção externa com coaching, escalando a cadência até a meta plena do pl
 
 * **Autonomia:** sabe quando agir e quando pedir ajuda
 
-**Pergunta de coaching:&#x20;**"Qual hipótese você tinha, que evidência encontrou e o que mudará na sua próxima interação?" Feedback existe para gerar uma ação melhor, não apenas uma avaliação.
+**Pergunta de coaching: **"Qual hipótese você tinha, que evidência encontrou e o que mudará na sua próxima interação?" Feedback existe para gerar uma ação melhor, não apenas uma avaliação.
 
 ## 🏁 Resultado Esperado
 
@@ -332,7 +335,7 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 
 # 📏 METAS & CADÊNCIA OFICIAL — FONTE ÚNICA
 
-**Esta é a única fonte de verdade dos números do Field Sales.&#x20;**&#x53;e qualquer outra página do playbook mostrar um número diferente, vale o que está aqui. Todo o playbook foi recalibrado para este padrão em agosto/2026.
+**Esta é a única fonte de verdade dos números do Field Sales. **Se qualquer outra página do playbook mostrar um número diferente, vale o que está aqui. Todo o playbook foi recalibrado para este padrão em agosto/2026.
 
 ## 🎯 Cadência diária do executivo (campo pleno)
 
@@ -357,23 +360,23 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 | Propostas             | 2       | 40      | 100%           |
 | Contratos fechados    | 1       | 20      | 50%            |
 
-**Conversão final: 16,7%&#x20;**— a cada 6 visitas qualificadas, 1 contrato. Resultado previsível: 20 clientes/mês. Mesmo resultado do modelo antigo de 8 visitas frias, com menos porta e mais profundidade por porta.
+**Conversão final: 16,7% **— a cada 6 visitas qualificadas, 1 contrato. Resultado previsível: 20 clientes/mês. Mesmo resultado do modelo antigo de 8 visitas frias, com menos porta e mais profundidade por porta.
 
 ## 💰 Régua de preço e MRR
 
-* **R$ 349 —&#x20;**&#x70;lano padrão mínimo. Piso inegociável na recorrência mensal.
+* **R$ 349 — **plano padrão mínimo. Piso inegociável na recorrência mensal.
 
-* **R$ 400+ —&#x20;**&#x74;icket-alvo do ICP prioritário (casa estruturada com módulos). É meta de MRR, não outra tabela.
+* **R$ 400+ — **ticket-alvo do ICP prioritário (casa estruturada com módulos). É meta de MRR, não outra tabela.
 
-* **R$ 299/mês —&#x20;**&#x61;dicional Totem + licença TEF Fiserv (venda condicionada — ver EQUIPAMENTOS).
+* **R$ 299/mês — **adicional Totem + licença TEF Fiserv (venda condicionada — ver EQUIPAMENTOS).
 
-* **Teka (IA de atendimento) —&#x20;**&#x52;$ 99/mês, adicional fora do plano padrão.
+* **Teka (IA de atendimento) — **R$ 99/mês, adicional fora do plano padrão.
 
-* **Roteirização Inteligente —&#x20;**&#x52;$ 109/mês, adicional. Otimiza rotas do Delivery Próprio — venda principalmente para quem tem motoboy próprio (frota própria, não terceirizada).
+* **Roteirização Inteligente — **R$ 109/mês, adicional. Otimiza rotas do Delivery Próprio — venda principalmente para quem tem motoboy próprio (frota própria, não terceirizada).
 
-* **Plano Inovação —&#x20;**&#x64;estrava a Precificação Dinâmica (CMV recalculado em tempo real, item por item). No plano padrão o cliente só tem CMV e Ficha Técnica estáticos.
+* **Plano Inovação — **destrava a Precificação Dinâmica (CMV recalculado em tempo real, item por item). No plano padrão o cliente só tem CMV e Ficha Técnica estáticos.
 
-* **Desconto —&#x20;**&#x73;omente via prazo (trimestral/semestral/anual). Plano longo parcelado só no cartão de crédito.
+* **Desconto — **somente via prazo (trimestral/semestral/anual). Plano longo parcelado só no cartão de crédito.
 
 ## ⏱️ SLA por etapa do pipeline
 
@@ -390,25 +393,25 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 
 ## 🚀 Cadência durante a rampagem (executivo novo)
 
-* **Fase 1 (semana 1):&#x20;**&#x38;–10 shadowings de Inside Sales + 3 role-plays aprovados
+* **Fase 1 (semana 1): **8–10 shadowings de Inside Sales + 3 role-plays aprovados
 
-* **Fase 2 (semanas 2–3):&#x20;**&#x31;5–20 demos + 20 ligações/dia + 1 demo certificada pelo gestor
+* **Fase 2 (semanas 2–3): **15–20 demos + 20 ligações/dia + 1 demo certificada pelo gestor
 
-* **Fase 3 (semana 4):&#x20;**&#x31;2–15 visitas à base ativa + 3 casos documentados
+* **Fase 3 (semana 4): **12–15 visitas à base ativa + 3 casos documentados
 
-* **Fase 4 (dias 31–60):&#x20;**&#x33; visitas/dia na semana 5 → 4–5 nas semanas 6–7 → 6/dia da semana 8 em diante
+* **Fase 4 (dias 31–60): **3 visitas/dia na semana 5 → 4–5 nas semanas 6–7 → 6/dia da semana 8 em diante
 
 Detalhe completo na página ONBOARDING DE NOVOS EXECUTIVOS.
 
 ## ⚠️ O que NUNCA prometer em campo
 
-* **PDV 100% offline —&#x20;**&#x6D;ódulo em desenvolvimento. A contingência vendável hoje é 4G/5G nas Maquininhas Smart + 50mb de fibra dedicados.
+* **PDV 100% offline — **módulo em desenvolvimento. A contingência vendável hoje é 4G/5G nas Maquininhas Smart + 50mb de fibra dedicados.
 
-* **Integrações ou customizações sob medida —&#x20;**&#x6F; produto é padronizado e escalável.
+* **Integrações ou customizações sob medida — **o produto é padronizado e escalável.
 
-* **Cortesias, desconto fora de tabela ou alteração de escopo —&#x20;**&#x73;ó com aprovação prévia do gestor e de Operações.
+* **Cortesias, desconto fora de tabela ou alteração de escopo — **só com aprovação prévia do gestor e de Operações.
 
-* **"Use o totem que quiser" —&#x20;**&#x6F; Totem tem regra própria com TEF Fiserv obrigatório; o discurso de hardware livre vale para os outros módulos.
+* **"Use o totem que quiser" — **o Totem tem regra própria com TEF Fiserv obrigatório; o discurso de hardware livre vale para os outros módulos.
 
 Versão 1.0 · Agosto 2026 · Responsável: Gestor de Field Sales. Qualquer alteração de meta passa por esta página primeiro, e depois nas páginas que a referenciam.
 
@@ -501,7 +504,7 @@ O nosso modelo é movido a taxas de conversão claras. Para garantir previsibili
 | **4. Propostas na Mesa**     | **2** Propostas             | **40** Propostas             | **100%** (Avanço)     | Envio de proposta comercial e alinhamento de termos técnicos.                                           |
 | **5. Contratos Fechados**    | **1** Fechamento            | **20** Clientes              | 50% (de Demos)        | **Sucesso Total.** Assinatura e link do Asaas enviado.                                                  |
 
-**Nota de Conversão Geral:&#x20;**&#x6F; modelo opera com uma taxa de conversão final de **16,7%** (a cada 6 visitas qualificadas na rua, 1 se transforma em contrato fechado). Se o executivo mantiver a consistência de 6 visitas diárias com qualidade, ele constrói um resultado previsível de 1 novo cliente por dia — exatamente o mesmo resultado do modelo antigo de 8 visitas frias.
+**Nota de Conversão Geral: **o modelo opera com uma taxa de conversão final de **16,7%** (a cada 6 visitas qualificadas na rua, 1 se transforma em contrato fechado). Se o executivo mantiver a consistência de 6 visitas diárias com qualidade, ele constrói um resultado previsível de 1 novo cliente por dia — exatamente o mesmo resultado do modelo antigo de 8 visitas frias.
 
 > ⚠️ **O que a matemática do funil não mostra sozinha:** 6 visitas de qualidade batidas em 3 quarteirões valem mais que 15 visitas espalhadas em 3 bairros diferentes. É exatamente isso que a seção seguinte resolve.
 
@@ -604,7 +607,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 ### 🏆 6. A Mentalidade do Top Performer — O Que Separa os 20% de Cima
 
-1. **Ele mede qualidade E densidade, não só volume.&#x20;**&#x36; visitas em microrrota com decisor mapeado valem mais que 15 visitas espalhadas e superficiais — é justamente por isso que o padrão oficial baixou o número e subiu a régua.
+1. **Ele mede qualidade E densidade, não só volume. **6 visitas em microrrota com decisor mapeado valem mais que 15 visitas espalhadas e superficiais — é justamente por isso que o padrão oficial baixou o número e subiu a régua.
 
 2. **Ele trata "não" como dado, não como rejeição pessoal.** Cada porta fechada é uma etapa estatística esperada dentro dos 16,7% de conversão — não motivo pra desacelerar o ritmo do dia.
 
@@ -828,87 +831,24 @@ Use quando o decisor sinaliza "estou bem como estou" — o objetivo é fazer ele
 
 ### CONCORRÊNCIA
 
-**📌 VERSÃO DE ARQUIVO — leia primeiro o ECOSSISTEMA TAKEAT.&#x20;**&#x45;sta página é o estudo comparativo na versão de 13 módulos. A versão oficial e atualizada está na pasta ECOSSISTEMA → ECOSSISTEMA TAKEAT, com 16 módulos, os 4 Pilares, a Teka (IA de atendimento), a Precificação Dinâmica e o Delivery Próprio já confirmado como briga contra a comissão de marketplace. Use esta página apenas como consulta histórica dos battlecards por concorrente — em caso de divergência, vale o ECOSSISTEMA TAKEAT.
+O estudo comparativo completo — os 19 módulos, os 4 Pilares, a Teka (IA de atendimento), a Precificação Dinâmica e o Delivery Próprio como resposta à comissão de marketplace — vive na página **ECOSSISTEMA TAKEAT**, incluindo o battlecard módulo por módulo contra cada concorrente mapeado. Esta página existia como uma versão paralela de 13 módulos — foi consolidada na Ecossistema Takeat pra não ter duas fontes divergentes sobre a mesma coisa.
 
-## 🏰 O QUE A TAKEAT ENTREGA — Catálogo Completo de Soluções
+**Referência rápida — onde cada concorrente compete:**
 
-### E o Estudo Comparativo Contra a Concorrência do Foodservice, Módulo por Módulo
+| Concorrente | Onde compete | Onde a Takeat ataca |
+| --- | --- | --- |
+| **Yooga / PDVLegal** | Nota fiscal e cupom rápido no balcão | CMV automático puxado da ficha técnica real, não estimativa |
+| **Totvs (Chef)** | PDV robusto, mas pesado | PDV enxuto focado no que gera margem |
+| **Consumer / GrandChef** | PDV simples pra operação pequena | Estabilidade + CMV rigoroso mesmo em alto volume |
+| **Saipos** | Garçom básico / salão sem fidelização | Neurovendas no garçom digital + Cashback nativo + CRM |
+| **FRest** | App de garçom, curva de aprendizado alta | UX de 15 min de treino, sem fricção operacional |
+| **Anota AI / Mesa Delivery** | Robô de WhatsApp pra delivery — script fixo, não IA de verdade | Teka é IA real de ponta a ponta; Garçom Digital cobre o presencial |
+| **Goomer / Abrahão / Tagme** | Totens/tablets de marca própria | Hardware livre — mesmo benefício, sem pedágio de equipamento |
+| **Cardápio Web / OlaClick** | Só vitrine de cardápio | CRM de cliente final: histórico, segmentação, recompra |
+| **Colibri (NCR) / Zucchetti** | Financeiro antigo, desconectado do operacional | DRE automático do próprio fluxo operacional |
+| **Linx / Degust** | Financeiro robusto, mas engessado | Financeiro em tempo real, ajustável pelo dono |
 
-***
-
-## 📦 PARTE 1 — O Ecossistema Takeat (Produto, Não Processo Comercial)
-
-Isso é sobre o que a ferramenta **faz**, não sobre como o time vende. 13 frentes de solução:
-
-| #  | Módulo                   | O que resolve                                                                                                                                                                                                      |
-| -- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1  | **PDV Balcão**           | Ponto de venda tradicional no caixa — abre comanda, lança item, fecha conta, emite nota fiscal. É a espinha dorsal operacional que qualquer restaurante precisa ter funcionando sem travar.                        |
-| 2  | **Ferramenta de Garçom** | App/dispositivo do garçom pra lançar pedido direto na mesa, sem precisar voltar ao balcão — elimina viagem física e atraso na cozinha.                                                                             |
-| 3  | **Garçom Digital**       | Autoatendimento do próprio cliente via QR Code na mesa — o cliente pede sem depender do garçom estar disponível, reduzindo gargalo de atendimento no pico.                                                         |
-| 4  | **Tablet**               | Hardware de operação (para garçom ou balcão) rodando o ecossistema Takeat — parte da estratégia de "hardware livre", funciona em equipamento de terceiros, sem obrigar compra de aparelho proprietário.            |
-| 5  | **Totem**                | Autoatendimento fixo (self-service), geralmente usado em modelos de fluxo rápido/fast-casual, onde o cliente faz o próprio pedido num quiosque físico antes de ir à mesa ou retirar no balcão.                     |
-| 6  | **Delivery Próprio**     | Canal de vendas para entrega gerido pela própria Takeat/pelo próprio restaurante — reduz dependência de marketplaces terceiros (e das comissões que eles cobram).                                                  |
-| 7  | **Fidelidade**           | Programa de retenção de cliente (inclui o Cashback nativo já confirmado) — o objetivo é trazer o cliente de volta sem depender de desconto ou marketing pago recorrente.                                           |
-| 8  | **Gestão Financeira**    | Controle de caixa, conciliação, DRE automático — visão de saúde financeira do negócio sem depender de planilha paralela.                                                                                           |
-| 9  | **Gestão de Estoque**    | Controle de insumo/inventário integrado à operação — saída de estoque automática a cada venda, sem contagem manual constante.                                                                                      |
-| 10 | **Controle de CMV**      | Custo de Mercadoria Vendida calculado automaticamente a partir do estoque e da ficha técnica — mostra a margem real por prato, não só o faturamento bruto.                                                         |
-| 11 | **Ficha Técnica**        | Cadastro de receita/composição de cada prato (quanto de cada insumo entra em cada item do cardápio) — é o dado que alimenta o CMV e evita "achismo de margem".                                                     |
-| 12 | **Recorrência**          | Motor de assinatura/recompra — pode incluir clubes de assinatura, pedidos programados, ou apenas a lógica de retenção via fidelidade recorrente.                                                                   |
-| 13 | **CRM**                  | Gestão de relacionamento com o cliente final do restaurante (base de clientes, histórico de consumo, segmentação para campanhas) — diferente do CRM de vendas B2B (HubSpot) que o time comercial usa internamente. |
-
-***
-
-## ⚔️ PARTE 2 — Estudo Comparativo Módulo por Módulo vs. Concorrência
-
-Aqui cruzo cada frente de produto com os concorrentes que você já mapeou no playbook, organizados por **onde a briga realmente acontece** — porque nem todo concorrente compete em todos os 13 módulos ao mesmo tempo. Saber isso evita que o executivo tente vender "ecossistema completo" pra quem só precisa ouvir sobre o ponto exato onde o concorrente atual dói.
-
-### 🖥️ PDV Balcão + Ficha Técnica + CMV (A Guerra da Retaguarda)
-
-| Concorrente              | Onde ele compete                                         | Onde ele falha                                                                     | Ataque Takeat                                               |
-| ------------------------ | -------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------- |
-| **Yooga / PDVLegal**     | Forte em emissão de nota fiscal e cupom rápido no balcão | Não conecta PDV com ficha técnica/CMV — sabe quanto vendeu, não sabe quanto lucrou | CMV automático puxado da ficha técnica real, não estimativa |
-| **Totvs (Chef)**         | PDV robusto, mas pesado                                  | Complexidade excessiva pra restaurante médio — paga por função que não usa         | PDV enxuto focado no que gera margem, não canivete suíço    |
-| **Consumer / GrandChef** | PDV simples, bom pra operação pequena                    | Engasga no pico — estoque falha, ficha técnica não escala                          | Estabilidade + CMV rigoroso mesmo em alto volume            |
-
-### 📱 Ferramenta de Garçom + Garçom Digital (A Guerra do Salão)
-
-| Concorrente                  | Onde ele compete                                    | Onde ele falha                                                                      | Ataque Takeat                                                             |
-| ---------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **Saipos**                   | Ferramenta de garçom básica pra "anotar" pedido     | Passivo — não sugere upsell, não tem inteligência de venda                          | Garçom digital com neurovendas: sugestão automática de adicional/bebida   |
-| **FRest**                    | App de garçom existe, mas curva de aprendizado alta | Erros de digitação, suporte lento quando trava                                      | UX de 15 minutos de treino, sem fricção operacional                       |
-| **Anota AI / Mesa Delivery** | Bom em automatizar pedido via robô de WhatsApp      | Não tem inteligência de mesa real — só resolve delivery, esquece o salão presencial | Garçom Digital cobre o presencial de ponta a ponta, não só o canal remoto |
-
-### 🖲️ Tablet + Totem (A Guerra do Hardware)
-
-| Concorrente                  | Onde ele compete                                 | Onde ele falha                                               | Ataque Takeat                                                                    |
-| ---------------------------- | ------------------------------------------------ | ------------------------------------------------------------ | -------------------------------------------------------------------------------- |
-| **Goomer / Abrahão / Tagme** | Totens e tablets de marca própria, visual bonito | Refém do hardware — aluguel caro, se quebra a operação trava | Hardware livre: roda em qualquer tablet/totem de mercado, sem "pedágio de ferro" |
-
-### 🛵 Delivery Próprio (A Guerra do Canal de Entrega)
-
-**Posicionamento oficial — canal complementar, não substituto.&#x20;**&#x4F; restaurante pode continuar no marketplace para ser descoberto por cliente novo. O Delivery Próprio existe para fazer duas coisas que o marketplace nunca vai fazer: **(1) tirar o cliente recorrente das taxas abusivas** — quem já conhece a casa passa a pedir pelo canal direto, sem comissão por pedido; e **(2) registrar os dados de quem pede** — nome, telefone, histórico e frequência ficam com o restaurante, alimentando o CRM, o Cashback e a Recorrência. No marketplace, esse cliente é da plataforma; no Delivery Próprio, ele é do dono.
-
-> *"Seu [Nome], me responde uma coisa: o senhor sabe o nome e o telefone do cliente que pediu do seu restaurante no marketplace ontem? Não sabe — porque aquele cliente não é seu, é da plataforma. E além de não te entregar o dado, ela fica com uma fatia da venda em cada pedido. Com o Delivery Próprio da Takeat, quem já conhece a sua casa pede direto no seu canal: o senhor não paga comissão e passa a ter o cadastro de quem pede, o que ele pede e de quanto em quanto tempo. Aí esse cliente entra no seu Cashback e volta sozinho. O senhor continua no marketplace pra ser descoberto por gente nova — mas para de pagar pedágio em cima do cliente que já era seu."*
-
-### 🎁 Fidelidade + Recorrência + CRM (A Guerra da Retenção)
-
-| Concorrente                 | Onde ele compete                           | Onde ele falha                                                                 | Ataque Takeat                                                     |
-| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| **Saipos**                  | Sistema de salão sem módulo de fidelização | Não tem Cashback nem CRM de cliente final — cada venda é isolada, sem retenção | Cashback nativo + CRM integrado: cada venda alimenta a próxima    |
-| **Cardápio Web / OlaClick** | Só vitrine de cardápio                     | Não tem inteligência de dados sobre quem é o cliente que compra                | CRM de cliente final: histórico de consumo, segmentação, recompra |
-
-### 💰 Gestão Financeira (A Guerra do Controle Gerencial)
-
-| Concorrente                   | Onde ele compete                       | Onde ele falha                                                                     | Ataque Takeat                                                                   |
-| ----------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| **Colibri (NCR) / Zucchetti** | Sistemas antigos com módulo financeiro | Financeiro desconectado do operacional — exige revenda cara pra qualquer ajuste    | DRE automático gerado do próprio fluxo operacional, sem intervenção de terceiro |
-| **Linx / Degust**             | Financeiro robusto, mas engessado      | Processo lento pra qualquer mudança — feito pra franquia grande, não pro dono ágil | Gestão financeira em tempo real, ajustável pelo próprio dono                    |
-
-***
-
-## 🎯 PARTE 3 — Como Usar Esse Cruzamento em Campo
-
-A regra prática pro executivo: **primeiro descubra qual módulo dói mais** (usando o Scanner de 30 Segundos e a Solução Atual mapeada), **depois** puxe o ataque específico daquela linha — não o discurso genérico de "ecossistema completo". Um dono de restaurante que só sofre com PDV travando não quer ouvir sobre Totem; ele quer ouvir que o CMV dele vai parar de ser um mistério.
+Pra usar cada um desses em campo — o discurso completo, os punches prontos e os scripts de objeção — vá na página **ECOSSISTEMA TAKEAT**.
 
 ***
 
@@ -1150,9 +1090,9 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **A Resposta Direta:**
 
-> *"Essa é a preocupação de todo grande gestor, seu [Nome]. Vou te responder com transparência total: a Takeat roda em nuvem, e a nossa contingência hoje é por&#x20;****dados móveis nas Maquininhas Smart****&#x20;— se o Wi-Fi da casa oscilar, a operação segue no 4G/5G e o pedido continua subindo pra cozinha. É por isso que eu recomendo 50mb de fibra dedicados pra operação: a conexão nunca pode ser o gargalo do seu salão. O módulo&#x20;****100% offline já está em desenvolvimento pleno****&#x20;e entra no seu sistema sem custo adicional quando sair. Agora, vamos olhar para o papel: se o seu garçom rasgar uma comanda ou esquecer de lançar uma bebida na correria, o senhor perde o dinheiro e nem fica sabendo — e isso acontece todo sábado, sem depender de internet nenhuma. Vamos assinar o termo de adesão e rodar o Pix do setup para travar sua data?"*
+> *"Essa é a preocupação de todo grande gestor, seu [Nome]. Vou te responder com transparência total: a Takeat roda em nuvem, e a nossa contingência hoje é por **dados móveis nas Maquininhas Smart** — se o Wi-Fi da casa oscilar, a operação segue no 4G/5G e o pedido continua subindo pra cozinha. É por isso que eu recomendo 50mb de fibra dedicados pra operação: a conexão nunca pode ser o gargalo do seu salão. O módulo **100% offline já está em desenvolvimento pleno** e entra no seu sistema sem custo adicional quando sair. Agora, vamos olhar para o papel: se o seu garçom rasgar uma comanda ou esquecer de lançar uma bebida na correria, o senhor perde o dinheiro e nem fica sabendo — e isso acontece todo sábado, sem depender de internet nenhuma. Vamos assinar o termo de adesão e rodar o Pix do setup para travar sua data?"*
 
-**⚠️ REGRA DE HONESTIDADE COMERCIAL:&#x20;**&#x6E;unca prometa "PDV offline" hoje — o módulo está em desenvolvimento (ver FAQ). Prometer offline fecha contrato e gera churn na primeira queda de internet, além de queimar a sua credibilidade na praça. A contingência real e vendável é 4G/5G nas Maquininhas Smart + internet estável de 50mb.
+**⚠️ REGRA DE HONESTIDADE COMERCIAL: **nunca prometa "PDV offline" hoje — o módulo está em desenvolvimento (ver FAQ). Prometer offline fecha contrato e gera churn na primeira queda de internet, além de queimar a sua credibilidade na praça. A contingência real e vendável é 4G/5G nas Maquininhas Smart + internet estável de 50mb.
 
 ### ⚖️ 2. A Técnica Suprema: O Fechamento por Contraste (O Xeque-Mate)
 
@@ -1393,7 +1333,7 @@ Se o cliente sinalizar que quer sair ou que o concorrente é mais barato: **Não
 
 2. **Venda a "Custo de Troca":** Relembre o cliente do trabalho que dá trocar de sistema e o risco de perder dados. *"Vale a pena arriscar sua operação rodando liso por uma diferença que não paga um jantar na sua casa?"*
 
-3. **O Trunfo da Linha de Frente:** *"Nós temos um time de Suporte e Sucesso (CS) dedicado, mas&#x20;****eu estou aqui na rua, na sua frente agora****. Eu antecipo qualquer problema antes mesmo de chegar no suporte. Se o sistema do concorrente travar numa sexta-feira à noite, quem vai sentar aqui com você para resolver? Eu estou no bairro, eles são apenas um 0800."*
+3. **O Trunfo da Linha de Frente:** *"Nós temos um time de Suporte e Sucesso (CS) dedicado, mas **eu estou aqui na rua, na sua frente agora**. Eu antecipo qualquer problema antes mesmo de chegar no suporte. Se o sistema do concorrente travar numa sexta-feira à noite, quem vai sentar aqui com você para resolver? Eu estou no bairro, eles são apenas um 0800."*
 
 ### C) O Papel do Executivo vs. Suporte (CS)
 
@@ -1407,7 +1347,7 @@ Embora a Takeat tenha uma estrutura robusta de Sucesso do Cliente (CS) e Suporte
 
 Traga o cliente para a **Realidade do Lucro**:
 
-* **Argumento Matador:** *"Fulano, a Takeat custa R$ 400 porque nós garantimos que você não perca pedidos. Se você perder apenas&#x20;****um pedido de R$ 50 por semana****&#x20;por falha do sistema barato, no final do mês o 'barato' saiu mais caro que a Takeat. Você quer economia de centavos ou quer lucro de verdade?"*
+* **Argumento Matador:** *"Fulano, a Takeat custa R$ 400 porque nós garantimos que você não perca pedidos. Se você perder apenas **um pedido de R$ 50 por semana** por falha do sistema barato, no final do mês o 'barato' saiu mais caro que a Takeat. Você quer economia de centavos ou quer lucro de verdade?"*
 
 ***
 
@@ -1577,7 +1517,7 @@ Assim que recebermos, nosso time de engenharia já começa a desenhar a intelig�
 
 ### 🛡️ 3. Módulo Fiscal (Se Contratado)
 
-* **Certificado Digital:** *(Arquivo com extensão&#x20;*`.pfx`*&#x20;ou&#x20;*`.p12`*)*
+* **Certificado Digital:** *(Arquivo com extensão *`.pfx`* ou *`.p12`*)*
 
 * **Senha do Certificado:**
 
@@ -1682,7 +1622,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ## 💰 1. POLÍTICA COMERCIAL, PREÇOS E CONDIÇÕES
 
-**💰 RÉGUA OFICIAL DE PREÇO (leia antes de qualquer negociação):&#x20;**&#x52;$ 349 = plano padrão mínimo, piso inegociável na recorrência mensal. R$ 400+ = ticket-alvo do ICP prioritário (casa estruturada, com módulos adicionais) — é a meta de MRR do executivo, não um preço diferente de tabela. Plano Inovação = plano que destrava a Precificação Dinâmica (ver FAQ técnico). Adicionais fora do plano padrão: Teka R$ 99/mês, Roteirização Inteligente R$ 109/mês, Totem + TEF Fiserv R$ 299/mês. Quando o playbook fala de "ICP de R$ 400", está falando de alvo de MRR; quando fala de R$ 349, está falando do piso de tabela. Desconto só via prazo (trimestral/semestral/anual).
+**💰 RÉGUA OFICIAL DE PREÇO (leia antes de qualquer negociação): **R$ 349 = plano padrão mínimo, piso inegociável na recorrência mensal. R$ 400+ = ticket-alvo do ICP prioritário (casa estruturada, com módulos adicionais) — é a meta de MRR do executivo, não um preço diferente de tabela. Plano Inovação = plano que destrava a Precificação Dinâmica (ver FAQ técnico). Adicionais fora do plano padrão: Teka R$ 99/mês, Roteirização Inteligente R$ 109/mês, Totem + TEF Fiserv R$ 299/mês. Quando o playbook fala de "ICP de R$ 400", está falando de alvo de MRR; quando fala de R$ 349, está falando do piso de tabela. Desconto só via prazo (trimestral/semestral/anual).
 
 ### ❓ Posso dar desconto na mensalidade padrão?
 
@@ -1728,17 +1668,17 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 > ⚖️ Homologada e integrada diretamente: **PRIX 3 FIT (Toledo)**. Se o cliente tiver outro modelo, consulte o time de produto antes de garantir a venda.
 
-## ❓ A Teka (IA de atendimento) está inclusa no plano padrão ou é adicional?
+### ❓ A Teka (IA de atendimento) está inclusa no plano padrão ou é adicional?
 
-> ***🤖 A Teka é um módulo ADICIONAL de R$ 99/mês, não vem no plano padrão de R$ 349.&#x20;****Ela é a IA que responde o cliente do delivery de ponta a ponta, sem depender de humano de plantão — diferente dos robôs de fluxo fixo dos concorrentes (Anota AI, Mesa Delivery), que travam fora do roteiro. Ao apresentar, deixe claro que é um upsell de eficiência: o ganho é eliminar o custo de ter alguém preso respondendo delivery o dia inteiro.*
+> 🤖 **A Teka é um módulo ADICIONAL de R$ 99/mês, não vem no plano padrão de R$ 349.** Ela é a IA que responde o cliente do delivery de ponta a ponta, sem depender de humano de plantão — diferente dos robôs de fluxo fixo dos concorrentes (Anota AI, Mesa Delivery), que travam fora do roteiro. Ao apresentar, deixe claro que é um upsell de eficiência: o ganho é eliminar o custo de ter alguém preso respondendo delivery o dia inteiro.
 
-## ❓ O que é a Roteirização Inteligente e quando vender esse adicional?
+### ❓ O que é a Roteirização Inteligente e quando vender esse adicional?
 
-> **🛵 Adicional de R$ 109/mês.&#x20;**&#x4F;timiza automaticamente as rotas de entrega do Delivery Próprio — o gatilho de venda mais forte é o restaurante que tem motoboy próprio (frota própria, não terceirizado por app): a rota mal desenhada custa tempo de entrega, combustível e cliente reclamando de demora. Pergunta de diagnóstico: "Seu [Nome], seu motoboy sai daqui sabendo qual é o melhor caminho ou decide na hora?" Se a casa não tem moto própria e usa só motoboy de marketplace, esse adicional não se aplica — não force a venda fora do perfil certo.
+> 🛵 **Adicional de R$ 109/mês.** Otimiza automaticamente as rotas de entrega do Delivery Próprio — o gatilho de venda mais forte é o restaurante que tem motoboy próprio (frota própria, não terceirizado por app): a rota mal desenhada custa tempo de entrega, combustível e cliente reclamando de demora. Pergunta de diagnóstico: "Seu [Nome], seu motoboy sai daqui sabendo qual é o melhor caminho ou decide na hora?" Se a casa não tem moto própria e usa só motoboy de marketplace, esse adicional não se aplica — não force a venda fora do perfil certo.
 
-## ❓ A Precificação Dinâmica (CMV em tempo real) vem em qualquer plano?
+### ❓ A Precificação Dinâmica (CMV em tempo real) vem em qualquer plano?
 
-> 📊 NÃO. A Precificação Dinâmica — CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado — só entra a partir do **Plano Inovação***. No plano padrão (R$ 349) o cliente tem Controle de CMV e Ficha Técnica, mas sem o recálculo em tempo real por item. Se o dono perguntar "eu sei se meu prato mais vendido dá lucro ou prejuízo hoje?" e a dor for forte, é gatilho para subir o cliente para o Plano Inovação — não tente entregar essa funcionalidade fora dele.*
+> 📊 NÃO. A Precificação Dinâmica — CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado — só entra a partir do **Plano Inovação**. No plano padrão (R$ 349) o cliente tem Controle de CMV e Ficha Técnica, mas sem o recálculo em tempo real por item. Se o dono perguntar "eu sei se meu prato mais vendido dá lucro ou prejuízo hoje?" e a dor for forte, é gatilho para subir o cliente para o Plano Inovação — não tente entregar essa funcionalidade fora dele.
 
 ## ⚙️ 3. PROCESSO INTERNO: HUBSPOT, ASAAS E ONBOARDING
 
@@ -1790,7 +1730,7 @@ MATERIAL COMERCIAL\
 <https://drive.google.com/drive/folders/1BDEPtbTW3ws2EviO1mHnNtOevHp5j6O1?hl=pt-br>
 
 VÍDEOS AULAS FUNCIONALIDADES DO SISTEMA\
-<https://drive.google.com/drive/folders/1yzMZiZJF4-QJEbGf_ej9o_FQo844YvOm>v
+<https://drive.google.com/drive/folders/1yzMZiZJF4-QJEbGf_ej9o_FQo844YvOm>
 
 PLAYBOOK COMERCIAL - (SPICED, SOLUCOES e PERSONAS)\
 <https://docs.google.com/spreadsheets/d/1B1zzkZ2FERqtvXg8v6eAWmb7cGedZmRu/edit?gid=1176329124#gid=1176329124>
@@ -1866,146 +1806,6 @@ Não trate o display apenas como um "acessório". Ele é uma ferramenta de venda
 
 > **Dica de Ouro:** Durante a implementação, certifique-se de que os displays estão visíveis e limpos. Material de mesa bem cuidado reflete a qualidade do sistema que você vendeu.
 
-
-# ECOSSISTEMA
-
-### ECOSSISTEMA TAKEAT
-
-# 🏰 O QUE A TAKEAT ENTREGA — Catálogo Completo de Soluções
-
-### E o Estudo Comparativo Contra a Concorrência do Foodservice, Módulo por Módulo
-
-***
-
-## 🧭 Os 4 Pilares da Takeat — A Moldura de Tudo
-
-Antes de qualquer módulo, isso é o que organiza a venda inteira. Toda solução da Takeat existe para servir pelo menos um destes 4 pilares — e a habilidade do executivo de elite é identificar **qual pilar dói mais** naquele restaurante específico, e liderar a conversa por ali:
-
-| Pilar                                    | O que significa na prática                                                                                                             |
-| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| 📈 **Aumentar Vendas**                   | Upsell automático, neurovendas no cardápio digital, giro de mesa mais rápido, recorrência de cliente                                   |
-| 💰 **Reduzir Custos**                    | CMV controlado, precificação dinâmica, menos gente pra cobrir função repetitiva (ex: atendimento de delivery), sem pedágio de hardware |
-| 😊 **Melhorar a Experiência do Cliente** | Autoatendimento fluido (Garçom Digital, Totem), pagamento rápido, cardápio bonito, fidelidade que recompensa                           |
-| ⏱️ **Aumentar o Tempo Livre**            | Automação do que hoje consome a hora do dono/gerente — desde DRE automático até IA respondendo delivery sem precisar de humano         |
-
-> 🎯 **Uso em campo:** toda pergunta de diagnóstico do playbook (Scanner de 30 Segundos, perguntas cirúrgicas) deveria terminar identificando qual desses 4 pilares é a dor real do decisor — porque é isso que decide qual módulo puxar primeiro na Demo, não a ordem em que os módulos aparecem num catálogo.
-
-***
-
-## 📦 PARTE 1 — O Ecossistema Takeat (Produto, Não Processo Comercial)
-
-Isso é sobre o que a ferramenta **faz**, não sobre como o time vende.
-
-> 🔑 **Princípio fundamental, vale para as 16 frentes abaixo:** a Takeat **não fornece hardware nenhum** — nem tablet, nem totem, nem maquininha própria. Entrega 100% tecnologia, incluindo **integração direta com as maiores adquirentes do mercado** (a maquininha física é de terceiro; a inteligência que processa o pagamento e conecta com o resto da operação é da Takeat). Isso é posicionamento, não limitação: o restaurante fica livre para negociar equipamento com quem quiser, e paga a Takeat só pelo que ela realmente entrega.
-
-**⚠️ ÚNICA EXCEÇÃO — Totem de Autoatendimento:&#x20;**&#x6F; discurso de "hardware livre" vale para 15 dos 16 módulos. O Totem tem regra comercial própria e obrigatória (vigência jun/2026): a venda está condicionada à ativação do TEF Fiserv, com adicional de R$ 299,00/mês (Totem + licença TEF), e o hardware segue a especificação homologada (Mini PC + monitor touch Dell + Pinpad Gertec PPC930). Não use o punch de "use o totem que quiser" numa negociação de Totem — nesse módulo o correto é vender a solução homologada. Detalhes completos na página EQUIPAMENTOS.
-
-| #  | Módulo                         | O que resolve                                                                                                                                                                                      | Pilar principal           |
-| -- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| 1  | **PDV Balcão**                 | Ponto de venda tradicional no caixa — abre comanda, lança item, fecha conta, emite nota fiscal.                                                                                                    | Experiência               |
-| 2  | **Ferramenta de Garçom**       | App do garçom pra lançar pedido direto na mesa, sem voltar ao balcão.                                                                                                                              | Experiência + Vendas      |
-| 3  | **Garçom Digital**             | Autoatendimento via QR Code na mesa — cliente pede sem depender do garçom.                                                                                                                         | Experiência + Tempo Livre |
-| 4  | **Tablet**                     | Autoatendimento — o próprio cliente faz o pedido direto no tablet, sem depender do garçom. Takeat fornece a **tecnologia**, não o hardware.                                                        | Experiência + Custos      |
-| 5  | **Totem**                      | Mesma lógica do Tablet, em formato de quiosque fixo: o cliente faz o próprio pedido sozinho, do início ao fim. **Software** de autoatendimento — o equipamento físico é do cliente ou de terceiro. | Experiência + Custos      |
-| 6  | **Delivery Próprio**           | Canal de entrega gerido pelo próprio restaurante — reduz comissão de marketplace.                                                                                                                  | Custos + Vendas           |
-| 7  | **Teka (IA de Atendimento)**   | Inteligência artificial que responde o cliente do delivery automaticamente, sem precisar de humano dedicado a isso.                                                                                | **Custos + Tempo Livre**  |
-| 8  | **Integração com Adquirentes** | Conexão direta com as maiores adquirentes — pagamento processado já entra na conciliação.                                                                                                          | Tempo Livre               |
-| 9  | **Fidelidade**                 | Cashback nativo e retenção — traz o cliente de volta sem depender de desconto.                                                                                                                     | Vendas                    |
-| 10 | **Gestão Financeira**          | Controle de caixa, conciliação, DRE automático.                                                                                                                                                    | Tempo Livre               |
-| 11 | **Gestão de Estoque**          | Controle de insumo integrado — saída automática a cada venda.                                                                                                                                      | Custos + Tempo Livre      |
-| 12 | **Controle de CMV**            | Custo de Mercadoria Vendida calculado automaticamente.                                                                                                                                             | Custos                    |
-| 13 | **Ficha Técnica**              | Cadastro de receita/composição de cada prato.                                                                                                                                                      | Custos                    |
-| 14 | **Precificação Dinâmica**      | CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado.                                                                                                     | Custos                    |
-| 15 | **Recorrência**                | Motor de assinatura/recompra.                                                                                                                                                                      | Vendas                    |
-| 16 | **CRM**                        | Gestão de relacionamento com o cliente final — base, histórico, segmentação.                                                                                                                       | Vendas + Experiência      |
-
-***
-
-## 🔑 O Fio Condutor de Tudo: Ecossistema Único, Não Módulos Soltos
-
-Antes de entrar na guerra módulo por módulo, isso precisa estar gravado como a mensagem-mãe: **o executivo nunca vende "um sistema de PDV" ou "um cardápio digital" isolado — ele vende o fato de que todas as dores do restaurante se resolvem no mesmo lugar.**
-
-É isso que separa a Takeat de praticamente todo concorrente mapeado nesse estudo: cada um deles resolve **uma fatia** (PDV, ou cardápio, ou fidelidade, ou financeiro) e o dono do restaurante acaba com 3, 4, 5 sistemas diferentes que não conversam entre si — o financeiro não sabe o que o PDV vendeu, o CMV é estimado no olho porque a ficha técnica está em outro lugar, a fidelidade não conversa com o histórico de pedido.
-
-> **Script de reforço do ecossistema (usar em qualquer objeção de "eu já tenho sistema X para isso"):**\
-> *"Seu [Nome], o senhor pode até ter um sistema bom pra [função específica que o concorrente cobre]. A pergunta não é se aquele pedaço funciona — é quantos sistemas diferentes o senhor precisa abrir hoje pra entender o negócio inteiro. Na Takeat, o pedido que entra no salão já é o mesmo dado que baixa o estoque, calcula o CMV pela ficha técnica em tempo real e alimenta o CRM do cliente. E olha que a gente nem vende aparelho: rodamos por cima da maquininha que o senhor já usa, com integração direta na adquirente. É um lugar só, sem prender o senhor a hardware nenhum. Quantos logins o senhor usa hoje pra fazer isso que eu acabei de descrever em uma frase?"*
-
-Isso vale pra qualquer um dos 16 módulos: a força de venda não está no módulo isolado ser melhor (embora seja) — está em **nenhum concorrente oferecer os 16 conectados ao mesmo tempo, sem prender o cliente a hardware nenhum**.
-
-***
-
-## ⚔️ PARTE 2 — Estudo Comparativo Módulo por Módulo vs. Concorrência
-
-Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, organizados por **onde a briga realmente acontece** — porque nem todo concorrente compete em todos os 16 módulos ao mesmo tempo. Saber isso evita que o executivo tente vender "ecossistema completo" pra quem só precisa ouvir sobre o ponto exato onde o concorrente atual dói.
-
-### 🤖 Teka — IA de Atendimento (A Guerra do Robô de Delivery)
-
-| Concorrente                  | Onde ele compete                                                               | Onde ele falha                                                                                                                                     | Ataque Takeat                                                                                                                                                                                  |
-| ---------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Anota AI / Mesa Delivery** | Vende a mesma dor — automação de atendimento via robô de WhatsApp pro delivery | **Confirmado: não é IA de verdade** — é fluxo/script fixo, trava em qualquer pergunta fora do roteiro e ainda exige humano de plantão pra socorrer | Teka é IA real: entende e responde o cliente do delivery de ponta a ponta, sem depender de humano dedicado — reduz custo de operação de verdade, não só "ajuda" o time a responder mais rápido |
-
-> 💎 **Punch travado:** *"Seu [Nome], o robô que vocês usam hoje sabe responder só o que já está no roteiro dele — pergunta diferente, trava, e alguém do seu time tem que entrar pra resolver. A Teka é inteligência artificial de verdade: ela entende a pergunta do seu cliente e responde sozinha, sem precisar de humano de plantão. Isso não é 'ajudar' o atendimento, é eliminar o custo de ter alguém preso nisso o dia inteiro."*
-
-### 🖥️ PDV Balcão + Ficha Técnica + CMV + Precificação Dinâmica (A Guerra da Retaguarda)
-
-| Concorrente                               | Onde ele compete                                                                     | Onde ele falha                                                                     | Ataque Takeat                                                                                                                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Yooga / PDVLegal**                      | Forte em emissão de nota fiscal e cupom rápido no balcão                             | Não conecta PDV com ficha técnica/CMV — sabe quanto vendeu, não sabe quanto lucrou | CMV automático puxado da ficha técnica real, não estimativa                                                                                                                    |
-| **Totvs (Chef)**                          | PDV robusto, mas pesado                                                              | Complexidade excessiva pra restaurante médio — paga por função que não usa         | PDV enxuto focado no que gera margem, não canivete suíço                                                                                                                       |
-| **Consumer / GrandChef**                  | PDV simples, bom pra operação pequena                                                | Engasga no pico — estoque falha, ficha técnica não escala                          | Estabilidade + CMV rigoroso mesmo em alto volume                                                                                                                               |
-| **Todos os anteriores (nenhum tem isso)** | Na melhor das hipóteses, mostram CMV como número estático, revisado de vez em quando | O dono só descobre que um prato dá prejuízo quando já vendeu prejuízo por meses    | **Precificação Dinâmica:** CMV recalculado em tempo real, item por item do cardápio, com alerta de lucro ou prejuízo no preço praticado hoje — não depois do fechamento do mês |
-
-### 📱 Ferramenta de Garçom + Garçom Digital (A Guerra do Salão)
-
-| Concorrente                  | Onde ele compete                                    | Onde ele falha                                                                      | Ataque Takeat                                                             |
-| ---------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **Saipos**                   | Ferramenta de garçom básica pra "anotar" pedido     | Passivo — não sugere upsell, não tem inteligência de venda                          | Garçom digital com neurovendas: sugestão automática de adicional/bebida   |
-| **FRest**                    | App de garçom existe, mas curva de aprendizado alta | Erros de digitação, suporte lento quando trava                                      | UX de 15 minutos de treino, sem fricção operacional                       |
-| **Anota AI / Mesa Delivery** | Bom em automatizar pedido via robô de WhatsApp      | Não tem inteligência de mesa real — só resolve delivery, esquece o salão presencial | Garçom Digital cobre o presencial de ponta a ponta, não só o canal remoto |
-
-### 🖲️ Tablet + Totem (Experiência do Cliente + Redução de Custo — Onde Takeat Nem Entra na Guerra de Hardware)
-
-O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que precisa ficar claro na hora de apresentar:
-
-* **Melhora a Experiência do Cliente:** o próprio cliente faz o pedido no seu tempo, sem esperar o garçom ficar livre, sem errar pedido por telefone quebrado entre cliente-garçom-cozinha.
-
-* **Reduz Custo do Restaurante:** menos dependência de equipe grande pra anotar pedido — a mesma equipe atende mais mesas, porque o autoatendimento absorve parte do volume.
-
-| Concorrente                  | Onde ele compete                                                                  | Onde ele falha                                                                                                      | Ataque Takeat                                                                                                                                                                                                      |
-| ---------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Goomer / Abrahão / Tagme** | Totens e tablets de marca própria, visual bonito, também oferecem autoatendimento | Refém do hardware — aluguel caro, se quebra a operação trava, e o cliente fica presa a UM fornecedor de equipamento | A Takeat entrega o **mesmo benefício de autoatendimento** (experiência + custo), mas **não vende hardware** — o restaurante usa o tablet ou totem que já tem, ou compra de qualquer fornecedor, sem pedágio nenhum |
-
-> 🎯 **A virada de mensagem aqui:** não é só "nosso hardware é melhor que o deles" — é **"o benefício de autoatendimento você tem com a gente igual, mas sem ficar hostage de equipamento de um fornecedor só"**. Enquanto o concorrente lucra vendendo ou alugando aparelho, a Takeat separa completamente tecnologia de equipamento — o dono do restaurante fica livre pra negociar o hardware com quem quiser, e paga a Takeat só pelo que ela realmente entrega: o software que melhora a experiência e corta custo de mão de obra.
-
-> 💎 **Punch pronto:** *"Seu [Nome], o totem ou tablet na mesa faz o seu cliente pedir sozinho, no tempo dele — isso já melhora a experiência. E como sua equipe deixa de gastar tempo anotando pedido básico, ela sobra pra atender mais mesa com o mesmo time — isso é redução de custo direto. A diferença é que, com a Takeat, o senhor não fica preso comprando ou alugando equipamento de marca própria: usa o hardware que já tem ou compra de quem quiser."*
-
-### 🛵 Delivery Próprio (A Guerra da Taxa Abusiva de Marketplace)
-
-**Posicionamento oficial — canal complementar, não substituto.&#x20;**&#x4F; restaurante pode continuar no marketplace para ser descoberto por cliente novo. O Delivery Próprio existe para fazer duas coisas que o marketplace nunca vai fazer: **(1) tirar o cliente recorrente das taxas abusivas** — quem já conhece a casa passa a pedir pelo canal direto, sem comissão por pedido; e **(2) registrar os dados de quem pede** — nome, telefone, histórico e frequência ficam com o restaurante, alimentando o CRM, o Cashback e a Recorrência. No marketplace, esse cliente é da plataforma; no Delivery Próprio, ele é do dono.
-
-> *"Seu [Nome], me responde uma coisa: o senhor sabe o nome e o telefone do cliente que pediu do seu restaurante no marketplace ontem? Não sabe — porque aquele cliente não é seu, é da plataforma. E além de não te entregar o dado, ela fica com uma fatia da venda em cada pedido. Com o Delivery Próprio da Takeat, quem já conhece a sua casa pede direto no seu canal: o senhor não paga comissão e passa a ter o cadastro de quem pede, o que ele pede e de quanto em quanto tempo. Aí esse cliente entra no seu Cashback e volta sozinho. O senhor continua no marketplace pra ser descoberto por gente nova — mas para de pagar pedágio em cima do cliente que já era seu."*
-
-### 🎁 Fidelidade + Recorrência + CRM (A Guerra da Retenção)
-
-| Concorrente                 | Onde ele compete                           | Onde ele falha                                                                 | Ataque Takeat                                                     |
-| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| **Saipos**                  | Sistema de salão sem módulo de fidelização | Não tem Cashback nem CRM de cliente final — cada venda é isolada, sem retenção | Cashback nativo + CRM integrado: cada venda alimenta a próxima    |
-| **Cardápio Web / OlaClick** | Só vitrine de cardápio                     | Não tem inteligência de dados sobre quem é o cliente que compra                | CRM de cliente final: histórico de consumo, segmentação, recompra |
-
-### 💰 Gestão Financeira (A Guerra do Controle Gerencial)
-
-| Concorrente                   | Onde ele compete                       | Onde ele falha                                                                     | Ataque Takeat                                                                   |
-| ----------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| **Colibri (NCR) / Zucchetti** | Sistemas antigos com módulo financeiro | Financeiro desconectado do operacional — exige revenda cara pra qualquer ajuste    | DRE automático gerado do próprio fluxo operacional, sem intervenção de terceiro |
-| **Linx / Degust**             | Financeiro robusto, mas engessado      | Processo lento pra qualquer mudança — feito pra franquia grande, não pro dono ágil | Gestão financeira em tempo real, ajustável pelo próprio dono                    |
-
-***
-
-## 🎯 PARTE 3 — Como Usar Esse Cruzamento em Campo
-
-A regra prática pro executivo: **primeiro descubra qual módulo dói mais** (usando o Scanner de 30 Segundos e a Solução Atual mapeada), **depois** puxe o ataque específico daquela linha — não o discurso genérico de "ecossistema completo". Um dono de restaurante que só sofre com PDV travando não quer ouvir sobre Totem; ele quer ouvir que o CMV dele vai parar de ser um mistério.
-
-***
 
 
 ### PLANO DE CARREIRA
