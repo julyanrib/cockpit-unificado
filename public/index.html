@@ -4532,7 +4532,7 @@ async function renderMeuPainel() {
         <div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:22px;margin-top:3px;letter-spacing:-.01em;color:var(--dark-ink);line-height:1.25;">${saudacaoDoDia()}, ${r.name.split(' ')[0]}</div>
         <div style="font-size:13px;color:var(--dark-mut);margin-top:5px;">${diagnosticoFrase}</div>
       </div>
-      <button id="meuPainelIrPlano" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;flex:none;">Fechar meu plano do dia →</button>
+      <button id="meuPainelIrPlano" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:11px 22px;font-size:13px;font-weight:700;cursor:pointer;flex:none;">Ver minhas ações de hoje →</button>
     </div>
 
     <div class="meu-hoje-signal-strip">
@@ -4700,17 +4700,16 @@ async function renderMeuPainel() {
     });
   }
 
-  // O plano do dia mora em Rota & Agenda. Navega primeiro e só então rola até o
-  // bloco real; antes este botão procurava um elemento que já não existia na aba Hoje.
+  // CORREÇÃO (16/08/26) — bug real achado na revisão completa: este botão navegava
+  // pra viewAgenda e tentava rolar até #planoDoDiaSlot, que não existe mais desde que a
+  // Prospecção substituiu inteiramente a antiga subview "hoje" (o "assine o dia" saiu
+  // de propósito, per handoff). O clique levava pra tela errada e não fazia nada depois
+  // — agora rola direto pro que já existe e faz sentido nesta mesma tela.
   const btnIrPlano = document.getElementById('meuPainelIrPlano');
   if (btnIrPlano) {
     btnIrPlano.addEventListener('click', () => {
-      activateTab('viewAgenda');
-      if (typeof renderAgenda === 'function') renderAgenda();
-      setTimeout(() => {
-        const slot = document.getElementById('planoDoDiaSlot');
-        if (slot && typeof smoothScrollTo === 'function') smoothScrollTo(slot);
-      }, 350);
+      const alvo = document.querySelector('.hoje-priority-stack');
+      if (alvo && typeof smoothScrollTo === 'function') smoothScrollTo(alvo);
     });
   }
 
@@ -8349,7 +8348,7 @@ function renderAgenda() {
     return `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;flex:none;">
-        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Rota & Agenda · ${rotulo} · <span style="color:#8FB5FF;">planejamento</span></span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Agenda · ${rotulo} · <span style="color:#8FB5FF;">planejamento</span></span>
         <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">${agendaEstado.subview === 'semana' ? 'Minha semana está planejada?' : 'Meu dia de campo está pronto?'}</h1>
         <span style="font-size:10.5px;color:var(--dark-mut);margin-top:2px;">Próximos passos do funil, compromissos e novas contas da sua região no mesmo plano.</span>
       </div>
@@ -8453,7 +8452,7 @@ function renderAgenda() {
                       style="background:var(--ink);color:var(--panel);border:none;border-radius:99px;padding:4px 11px;font:800 11px inherit;cursor:pointer;">
                       Agendar
                     </button>
-                    ${l.lat != null && l.lng != null ? `<button class="ag-atalho" data-agmapaid="${esc(String(l.id))}" title="Abrir na Rota, com esta conta destacada na lista">📍 na rota</button>` : ''}
+                    ${l.lat != null && l.lng != null ? `<button class="ag-atalho" data-agmapaid="${esc(String(l.id))}" title="Abrir na Prospecção, com esta conta destacada na lista">📍 na rota</button>` : ''}
                     <button class="ag-atalho" data-agprosp="${esc(String(l.nome || ''))}" title="Abrir na Prospecção já filtrado por este nome">🔎 ficha</button>
                   </span>`;
                   })()}
@@ -11000,7 +10999,7 @@ function agendaGradeCard(dias, eventos, hojeK, souRep, rotulo) {
   return '<div class="agw" id="agGrade">' +
     '<div class="agw-top"><div><h4>' + agendaEsc(rotulo) + '</h4>' +
     '<div class="agw-sub">' + (souRep
-      ? 'Clique num compromisso para ver a temperatura do lead e achar a conta na lista da Rota · 9h–10h é a daily'
+      ? 'Clique num compromisso para ver a temperatura do lead e achar a conta na Prospecção · 9h–10h é a daily'
       : 'Clique num compromisso para abrir a ficha do lead') + '</div></div>' + seg + '</div>' + corpo + '</div>';
 }
 
@@ -17273,7 +17272,7 @@ async function renderDaily() {
             <span><button class="d-salvar daily-submit" data-owner="${r.ownerId}">${registrouResumo ? 'Atualizar compromisso' : 'Assumir compromisso'}</button><span class="d-status" data-owner="${r.ownerId}" style="display:block;font-size:10.5px;color:var(--muted);margin-top:6px;text-align:center;"></span></span>
           </div>
         </div>
-        <div class="daily-promise-foot"><span><b>${pontosHoje}</b> pontos hoje</span><span><b>${posicaoPontos}º</b> no time hoje</span><span><b>🔥 ${seq}d</b> de sequência</span><button class="push" onclick="activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda();" style="background:none;border:none;color:var(--red);font:800 11px 'Manrope',sans-serif;cursor:pointer;padding:0;">Conferir Rota & Agenda →</button></div>
+        <div class="daily-promise-foot"><span><b>${pontosHoje}</b> pontos hoje</span><span><b>${posicaoPontos}º</b> no time hoje</span><span><b>🔥 ${seq}d</b> de sequência</span><button class="push" onclick="activateTab('viewAgenda'); agendaEstado.subview='semana'; if (typeof renderAgenda === 'function') renderAgenda();" style="background:none;border:none;color:var(--red);font:800 11px 'Manrope',sans-serif;cursor:pointer;padding:0;">Conferir Agenda →</button></div>
       </section>
       ${(() => {
         // BLOCO 2 exec (10/08/26): as 10 conquistas, desbloqueadas E bloqueadas. Ver o que
@@ -17335,6 +17334,11 @@ async function renderDaily() {
   });
   el.querySelectorAll('[data-daily-agenda]').forEach(btn => {
     btn.addEventListener('click', () => {
+      // CORREÇÃO (16/08/26) — mesmo achado da revisão completa: sem fixar a subview,
+      // "Planejar clientes"/"Completar na Agenda" caíam na Prospecção (subview padrão
+      // "hoje") em vez do calendário semanal, que é onde os compromissos nomeados
+      // realmente ficam.
+      if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'semana';
       activateTab('viewAgenda');
       if (typeof renderAgenda === 'function') renderAgenda();
     });
@@ -19190,7 +19194,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           '</div>' +
         '</div>' +
         '<div class="prospeccao-exec-actions">' +
-          '<span class="prospeccao-exec-place">📍 ' + esc(localAtuacao || 'Defina sua praça na Rota & Agenda') + '</span>' +
+          '<span class="prospeccao-exec-place">📍 ' + esc(localAtuacao || 'Defina sua praça na Prospecção') + '</span>' +
           '<button type="button" class="prospeccao-exec-cta" id="prospeccaoAbrirRota">' + (rotaHojeExec.length ? 'Revisar a rota de hoje →' : 'Abrir a Rota e começar →') + '</button>' +
         '</div>' +
       '</section>';
@@ -19420,8 +19424,8 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       <button data-pill="historico" class="filtro${prospeccaoFiltro.visao === 'historico' ? ' on' : ''}">Histórico<small>${totalHistorico}</small></button>
       <button data-nuncavis title="Sem nenhuma tarefa de Visita/Revisita registrada no HubSpot com esse nome" class="filtro${prospeccaoFiltro.nuncaVisitada ? ' on' : ''}">Nunca visitada<small>${totalNuncaVis}</small></button>
       ${(typeof planoMapaOrigemAtual !== 'undefined' && planoMapaOrigemAtual)
-        ? `<button data-pertodemim title="Ordenar pela distância até o território que você declarou na Rota" class="filtro${prospeccaoFiltro.pertoDeMim ? ' on' : ''}" style="margin-left:auto;">📍 Perto de mim</button>`
-        : `<span title="Defina o território na aba Rota para ver distâncias aqui" style="font-size:11.5px;color:var(--muted2);align-self:center;padding-left:4px;line-height:1.4;margin-left:auto;">Defina seu território na <b>Rota</b> para ver a distância de cada conta.</span>`}
+        ? `<button data-pertodemim title="Ordenar pela distância até o território que você declarou na Prospecção" class="filtro${prospeccaoFiltro.pertoDeMim ? ' on' : ''}" style="margin-left:auto;">📍 Perto de mim</button>`
+        : `<span title="Defina o território na aba Prospecção para ver distâncias aqui" style="font-size:11.5px;color:var(--muted2);align-self:center;padding-left:4px;line-height:1.4;margin-left:auto;">Defina seu território na <b>Prospecção</b> para ver a distância de cada conta.</span>`}
     </div>`;
 
   const maisFiltros = `
