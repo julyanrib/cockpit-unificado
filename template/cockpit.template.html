@@ -3090,6 +3090,8 @@
   .prosp2-dia.livre{border-style:dashed;}
   .prosp2-dia.sel{background:var(--dark-ink);color:var(--dark);}
   .prosp2-dia.sel small{color:var(--muted2);}
+  .prosp2-dia.conflito{border-color:var(--dark-amber);background:rgba(224,166,74,.16);}
+  .prosp2-dia.conflito::after{content:'⚠';margin-left:4px;}
 
   .prosp2-tray{position:sticky;top:18px;background:var(--dark);border-radius:var(--r-lg);padding:18px 18px 16px;box-shadow:var(--shadow-lg);}
   .prosp2-tray-head{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;}
@@ -5616,19 +5618,20 @@ async function renderPrecificacao() {
 
 function textoPropostaPrecificacao() {
   const tipo = prcTipo(); const c = calcularPrecificacao(); const cliente = precificacaoEstado.cliente.trim();
-  // MELHORIA (16/08/26) — pedido explícito: "da pra colocar também algo mais atrativo
-  // no texto". O texto plano de antes (sem nenhuma quebra visual além de \n) some no
-  // meio de uma conversa de WhatsApp. Emoji como marcador de linha é o padrão que
-  // mensagens comerciais brasileiras já usam e que realmente chama o olho na lista de
-  // conversas — sem exagerar (um emoji por linha, nada de decoração no meio da frase).
+  // CORREÇÃO (16/08/26) — Julyan mandou print: os emojis chegavam como "□" quebrado
+  // no WhatsApp do cliente. Não é bug de codificação daqui (acentuação e travessão
+  // chegam certos) — é falta de fonte de emoji no dispositivo/versão do WhatsApp de
+  // quem recebe, que a gente não controla. Solução robusta: texto sem nenhum emoji,
+  // só negrito nativo do WhatsApp (*texto*) e pontuação comum — renderiza igual em
+  // qualquer aparelho, e ainda fica mais profissional pra uma proposta comercial B2B.
   const economiaTxt = c.periodo.meses > 1 && c.economia ? ` (economia de ${prcMoeda(c.economia)})` : '';
-  return `Olá${cliente ? `, ${cliente}` : ''}! 👋 Preparei sua proposta Takeat — dá uma olhada:\n\n` +
-    `📦 Plano *${c.plano.nome}* · ${tipo.nome}\n` +
-    `💰 Investimento: *${prcMoeda(c.mensal)}/mês*${c.periodo.meses > 1 ? ` · total ${prcMoeda(c.total)} em ${c.periodo.meses} meses${economiaTxt}` : ''}\n` +
-    `📅 ${c.periodo.nome}${c.periodo.desconto ? ` — ${c.periodo.desconto}% de desconto` : ''}\n` +
-    `✅ Adicionais: ${prcResumoAdicionais(c)}\n\n` +
-    `⏳ Proposta válida até ${prcDataValidade()}.\n` +
-    `Bora conversar sobre o próximo passo? 🚀`;
+  return `Olá${cliente ? `, ${cliente}` : ''}! Preparei a proposta comercial da Takeat pro seu restaurante - segue o resumo:\n\n` +
+    `Plano: *${c.plano.nome}* (${tipo.nome})\n` +
+    `Investimento: *${prcMoeda(c.mensal)}/mês*${c.periodo.meses > 1 ? ` - total ${prcMoeda(c.total)} em ${c.periodo.meses} meses${economiaTxt}` : ''}\n` +
+    `Condição: ${c.periodo.nome}${c.periodo.desconto ? ` com ${c.periodo.desconto}% de desconto` : ''}\n` +
+    `Adicionais: ${prcResumoAdicionais(c)}\n\n` +
+    `A proposta completa (com todas as funcionalidades inclusas) está na imagem em anexo. Válida até ${prcDataValidade()}.\n\n` +
+    `Posso te ligar essa semana pra tirar dúvidas e fechar os próximos passos?`;
 }
 
 async function copiarTextoProposta() {
@@ -7751,6 +7754,24 @@ function prosp2DiasUteis() {
   return dias;
 }
 
+// NOVO (16/08/26) — pedido do Julyan: "caso tenha algum horário ocupado, tem que
+// avisar o conflito". Não precisa de tabela nova no Supabase — os compromissos da
+// semana já vêm do HubSpot e já estão em memória (AGENDA_EVENTOS). Conflito = mesmo
+// executivo, mesmo dia, horário dentro da duração do compromisso existente (ou 30min,
+// o que for maior) — a mesma folga usada pra oferecer os horários no popover.
+function prosp2ConflitoHorario(ownerId, diaISO, hora) {
+  if (!hora) return null; // "sem horário — decido depois" nunca conflita
+  const [hh, mm] = hora.split(':').map(Number);
+  const alvoMin = hh * 60 + mm;
+  return AGENDA_EVENTOS.find(e => {
+    if (String(e.ownerId) !== String(ownerId)) return false;
+    if (e.desfecho === 'COMPLETED') return false; // já aconteceu, não compete com data futura
+    if (e.inicio.toISOString().slice(0, 10) !== diaISO) return false;
+    const eMin = e.inicio.getUTCHours() * 60 + e.inicio.getUTCMinutes();
+    return Math.abs(eMin - alvoMin) < Math.max(e.dur || 30, 30);
+  }) || null;
+}
+
 async function renderProspeccaoExecutivo() {
   const box = document.getElementById('agendaContent');
   if (!box) return;
@@ -7767,6 +7788,15 @@ async function renderProspeccaoExecutivo() {
   const ownerId = sessaoAtual.ownerId;
   const terr = territorioDe(ownerId);
   const centro = prosp2Estado.local || (terr ? { lat: terr.lat, lng: terr.lng, rotulo: terr.rotulo, custom: false } : null);
+
+  // NOVO (16/08/26) — pedido do Julyan: avisar quando o horário escolhido pra agendar
+  // já está ocupado. Precisa de AGENDA_EVENTOS (compromissos da semana, vindos do
+  // HubSpot) — a função antiga que carregava isso é bypassada pra reps, então garante
+  // aqui. Idempotente e barato: os dados já estão embutidos em DATA.agenda.
+  if (!AGENDA_EVENTOS.length) {
+    const fonteAgenda = DATA.agenda || (typeof AGENDA_RASCUNHO !== 'undefined' ? AGENDA_RASCUNHO : null);
+    if (fonteAgenda) AGENDA_EVENTOS = agendaNormalizar(fonteAgenda);
+  }
 
   if (!centro) {
     box.innerHTML = '<div class="empty-state">Seu território ainda não foi configurado — peça pro seu gestor declarar sua praça antes de usar a Prospecção.</div>';
@@ -8019,7 +8049,15 @@ function prosp2LigarEventos(universo, ownerId) {
       prosp2Estado.agenda[id] = { dia: pop.dataset.sel, hora: h || null, rotulo: pop.dataset.rot + (h ? ' · ' + h : '') };
       prosp2Estado.popoverAberto = null;
       const l = buscarLead(id);
-      prosp2Toast(`${l ? l.nome : 'Lead'} na sua agenda · ${pop.dataset.rot}${h ? ' · ' + h : ' (definir horário)'}`);
+      // NOVO — avisa o conflito na hora de confirmar, não só visualmente antes. Não
+      // bloqueia (o executivo pode querer mesmo assim, ex.: visitas rápidas seguidas),
+      // mas garante que ele viu o aviso antes de seguir.
+      const conflito = h ? prosp2ConflitoHorario(ownerId, pop.dataset.sel, h) : null;
+      if (conflito) {
+        prosp2Toast(`⚠ ${l ? l.nome : 'Lead'} agendado às ${pop.dataset.rot} ${h} — mas você já tem "${conflito.titulo}" perto desse horário. Confira sua agenda.`);
+      } else {
+        prosp2Toast(`${l ? l.nome : 'Lead'} na sua agenda · ${pop.dataset.rot}${h ? ' · ' + h : ' (definir horário)'}`);
+      }
       renderProspeccaoExecutivo();
       return;
     }
@@ -8029,6 +8067,14 @@ function prosp2LigarEventos(universo, ownerId) {
       pop.dataset.sel = k; pop.dataset.rot = rot;
       pop.querySelectorAll('[data-dia]').forEach(b => b.classList.toggle('sel', b === dia));
       pop.querySelector('.prosp2-horas-sec').style.display = '';
+      // NOVO — marca os horários que já têm compromisso nesse dia, ANTES de escolher,
+      // pra não descobrir o conflito só depois de já ter clicado.
+      pop.querySelectorAll('[data-hora]').forEach(btnHora => {
+        const [, h] = btnHora.dataset.hora.split('|');
+        const conflito = h ? prosp2ConflitoHorario(ownerId, k, h) : null;
+        btnHora.classList.toggle('conflito', !!conflito);
+        btnHora.title = conflito ? `Conflito: você já tem "${conflito.titulo}" perto desse horário` : '';
+      });
       return;
     }
     if (add) {
