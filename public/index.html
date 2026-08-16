@@ -5672,6 +5672,32 @@ function carregarImagemProposta(src) {
 // (varia com o plano — 14 a 40 funcionalidades mudam quanto as 3 colunas crescem); a
 // 2ª desenha a versão final, já no tamanho exato medido. Isso elimina qualquer chute
 // de altura — a "proporção perfeita" pedida não depende de estimativa, é medida.
+// Badge arredondado (pílula) — usado pro desconto e pra economia, que precisam
+// "saltar aos olhos" em vez de ficar em texto corrido (pedido explícito: "tem que ser
+// mais impactante o desconto que damos também, e o investimento dele").
+function prcBadge(ctx, texto, x, y, corFundo, corTexto, fontSize) {
+  ctx.font = `800 ${fontSize}px Arial`;
+  const largura = ctx.measureText(texto).width;
+  const padH = 13, padV = 8;
+  const w = largura + padH * 2, h = fontSize + padV * 2;
+  const r = h / 2;
+  ctx.fillStyle = corFundo;
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = corTexto; ctx.fillText(texto, x + padH, y + h - padV - fontSize * 0.2);
+  return w;
+}
+// Preço riscado (o valor cheio, antes do desconto) — o corte visual entre "de X" e "por
+// Y" é o que faz um desconto parecer real e generoso, em vez de só um número solto.
+function prcRiscado(ctx, texto, x, y, cor, fontSize) {
+  ctx.fillStyle = cor; ctx.font = `700 ${fontSize}px Arial`; ctx.fillText(texto, x, y);
+  const largura = ctx.measureText(texto).width;
+  ctx.strokeStyle = cor; ctx.lineWidth = Math.max(1.4, fontSize * 0.08);
+  ctx.beginPath(); ctx.moveTo(x, y - fontSize * 0.34); ctx.lineTo(x + largura, y - fontSize * 0.34); ctx.stroke();
+  return largura;
+}
+
 function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   // REFORMULAÇÃO COMPLETA (16/08/26) — pedido explícito: "quero que reformule tudo
   // nessa parte... a imagem toda preta destacando tudo... é uma das partes mais
@@ -5701,12 +5727,17 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   ctx.fillStyle = PRC_RED; ctx.font = '800 15px Arial'; ctx.fillText('PROPOSTA COMERCIAL', 72, 151);
   ctx.fillStyle = PRC_MUT; ctx.font = '700 18px Arial'; ctx.fillText(`Válida até ${prcDataValidade()} · Takeat 2026`, 72, 193);
 
-  // Caixa de investimento no topo direito — agora com borda sutil pra se destacar do
-  // fundo (antes era só um retângulo mais claro flutuando sem contorno).
-  ctx.fillStyle = PRC_CARD; ctx.fillRect(770, 46, 358, 158); ctx.strokeStyle = 'rgba(255,71,87,.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(770, 46, 358, 158);
+  // Caixa de investimento no topo direito — agora mostra o desconto de verdade: preço
+  // cheio riscado (quando há desconto) + badge do percentual, não só o nome do período.
+  ctx.fillStyle = PRC_CARD; ctx.fillRect(770, 46, 358, 205); ctx.strokeStyle = 'rgba(255,71,87,.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(770, 46, 358, 205);
   ctx.fillStyle = PRC_MUT; ctx.font = '700 14px Arial'; ctx.fillText('INVESTIMENTO MENSAL', 800, 82);
-  ctx.fillStyle = PRC_INK; ctx.font = '800 40px Arial'; ctx.fillText(prcMoeda(c.mensal), 800, 133);
-  ctx.fillStyle = PRC_GREEN; ctx.font = '800 15px Arial'; ctx.fillText(c.periodo.nome, 800, 171);
+  if (c.periodo.desconto > 0) prcRiscado(ctx, prcMoeda(c.mensalCheio), 800, 112, '#6E6558', 16);
+  ctx.fillStyle = PRC_INK; ctx.font = '800 40px Arial'; ctx.fillText(prcMoeda(c.mensal), 800, 164);
+  ctx.fillStyle = PRC_GREEN; ctx.font = '800 15px Arial'; ctx.fillText(c.periodo.nome, 800, 202);
+  if (c.periodo.desconto > 0) {
+    const larguraNome = ctx.measureText(c.periodo.nome).width;
+    prcBadge(ctx, `-${c.periodo.desconto}% OFF`, 800 + larguraNome + 12, 202 - 19, '#FF4757', '#FFFFFF', 13);
+  }
 
   let y = 322;
   ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText('PREPARADA PARA', 72, y); y += 42;
@@ -5749,20 +5780,23 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   y += 128;
 
   // Rodapé de preço — o elemento mais importante do documento (é o que fecha a
-  // venda), agora com glow vermelho e número ainda maior pra ser impossível de não
-  // ver primeiro.
+  // venda). Economia agora é um badge verde de verdade, não uma frase escondida
+  // no meio de outro texto — pedido explícito: "mais impactante o desconto".
   const resumoY = y;
+  const alturaResumo = 236;
   const glowPreco = ctx.createRadialGradient(86, resumoY + 90, 10, 86, resumoY + 90, 340);
   glowPreco.addColorStop(0, 'rgba(255,71,87,.16)'); glowPreco.addColorStop(1, 'rgba(255,71,87,0)');
-  ctx.fillStyle = PRC_CARD; ctx.fillRect(54, resumoY, 1092, 204);
-  ctx.fillStyle = glowPreco; ctx.fillRect(54, resumoY, 1092, 204);
-  ctx.strokeStyle = 'rgba(255,71,87,.3)'; ctx.lineWidth = 1.5; ctx.strokeRect(54, resumoY, 1092, 204);
-  ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText(`${c.periodo.nome.toUpperCase()} · ${c.periodo.observacao.toUpperCase()}`, 86, resumoY + 44);
-  ctx.fillStyle = PRC_INK; ctx.font = '800 46px Arial'; ctx.fillText(`${prcMoeda(c.mensal)} / MÊS`, 86, resumoY + 103);
+  ctx.fillStyle = PRC_CARD; ctx.fillRect(54, resumoY, 1092, alturaResumo);
+  ctx.fillStyle = glowPreco; ctx.fillRect(54, resumoY, 1092, alturaResumo);
+  ctx.strokeStyle = 'rgba(255,71,87,.3)'; ctx.lineWidth = 1.5; ctx.strokeRect(54, resumoY, 1092, alturaResumo);
+  ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText(`${c.periodo.nome.toUpperCase()} · ${c.periodo.observacao.toUpperCase()}`, 86, resumoY + 40);
+  if (c.periodo.desconto > 0) prcRiscado(ctx, `${prcMoeda(c.mensalCheio)} / mês`, 86, resumoY + 67, '#6E6558', 17);
+  ctx.fillStyle = PRC_INK; ctx.font = '800 46px Arial'; ctx.fillText(`${prcMoeda(c.mensal)} / MÊS`, 86, resumoY + 128);
+  if (c.economia > 0) prcBadge(ctx, `ECONOMIA DE ${prcMoeda(c.economia)}`, 86, resumoY + 143, PRC_GREEN, '#0E2A1F', 16);
   ctx.fillStyle = '#CFC7BD'; ctx.font = '700 16px Arial';
-  ctx.fillText(c.periodo.meses > 1 ? `Total do período: ${prcMoeda(c.total)}${c.economia ? ` · economia de ${prcMoeda(c.economia)}` : ''}` : 'Cobrança mensal', 86, resumoY + 143);
-  ctx.fillText(`Tabela oficial conferida em ${precificacaoCache.conferidoEm.split('-').reverse().join('/')}`, 86, resumoY + 176);
-  return resumoY + 204 + 40; // + margem de respiro no rodapé
+  ctx.fillText(c.periodo.meses > 1 ? `Total do período: ${prcMoeda(c.total)}` : 'Cobrança mensal', 86, resumoY + 200);
+  ctx.fillText(`Tabela oficial conferida em ${precificacaoCache.conferidoEm.split('-').reverse().join('/')}`, 86, resumoY + 222);
+  return resumoY + alturaResumo + 40; // + margem de respiro no rodapé
 }
 
 async function gerarBlobPropostaPrecificacao() {
