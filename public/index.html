@@ -166,6 +166,12 @@
   .prospeccao-rota-quick:hover{background:#1D4ED8;border-color:#1D4ED8;}
   .prospeccao-rota-quick.is-added{background:#EAF1FF;color:#1D4ED8;border-color:#B9CEFF;}
   .prospeccao-rota-quick:disabled{opacity:.55;cursor:wait;}
+  .prospeccao-limpar-quick{border:1px solid var(--line);border-radius:999px;width:24px;height:24px;padding:0;background:var(--panel2);color:var(--muted2);font-size:12px;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;}
+  .prospeccao-limpar-quick:hover{background:var(--amber-soft);color:var(--amber-ink);border-color:var(--amber);}
+  .prospeccao-limpar-quick:disabled{opacity:.5;cursor:wait;}
+  .prospeccao-negocio-quick{border:1px solid var(--green);border-radius:999px;padding:7px 12px;background:var(--green-soft);color:var(--green);font:800 11px 'Manrope',sans-serif;cursor:pointer;white-space:nowrap;}
+  .prospeccao-negocio-quick:hover{background:var(--green);color:#fff;}
+  .prospeccao-negocio-quick:disabled{opacity:.55;cursor:wait;}
   @media (max-width:900px){
     .prospeccao-exec-main{grid-template-columns:1fr;gap:18px;}
     .prospeccao-exec-side{min-width:0;}
@@ -18629,7 +18635,7 @@ async function carregarProspeccao() {
   if (sessaoAtual && sessaoAtual.role === 'rep') query = query.eq('responsavel_owner_id', sessaoAtual.ownerId);
   const { data, error } = await query;
   if (error) { console.error('Erro ao carregar prospecção:', error.message); prospeccaoCache = []; return; }
-  prospeccaoCache = (data || []).sort((a, b) =>
+  prospeccaoCache = (data || []).map(l => ({ ...l, cidade: canonizarCidade(l.cidade) })).sort((a, b) =>
     (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0) ||
     String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
   );
@@ -18868,6 +18874,67 @@ async function montarNovidadesPracas() {
   });
 }
 
+const CRIAR_NEGOCIO_PROSPECCAO_URL = '/api/criar-negocio';
+const ETAPA_PROSPECCAO_QUICK = '1395880469';
+// Mapeamento best-effort fonte → Origem do Lead (enum fixo do HubSpot, definido em
+// api/criar-negocio.js: Rua/Indicação/Casa dos Dados/Instagram/Ads/GoogleMaps/
+// Familia/Eventos). Nem toda fonte interna tem correspondência exata — GoogleMaps é a
+// aproximação mais honesta pra Outscraper/Google Places; TripAdvisor/iFood/Manual
+// caem em Indicação por falta de opção melhor no enum. Ajustável se o Julyan preferir
+// outro mapeamento.
+const ORIGEM_POR_FONTE_QUICK = {
+  casa_dos_dados: 'Casa dos Dados', google_places: 'GoogleMaps', outscraper: 'GoogleMaps',
+  tripadvisor: 'Indicação', ifood: 'Indicação', manual: 'Indicação'
+};
+// CORREÇÃO (16/08/26, Julyan): "ele pode adicionar direto pra prospecção sim" — mudança
+// de regra confirmada: antes só a Company nascia automática (+Rota), o Deal era sempre
+// manual via Meu Funil. Agora o executivo pode criar o Deal já em Prospecção com um
+// clique, direto da fila de contas-alvo — reaproveita 100% o /api/criar-negocio que já
+// existe (mesma validação de dono, mesmo limite de propriedades, mesma associação à
+// Company via leadId).
+async function criarNegocioDaProspeccao(lead, botaoEl) {
+  if (!lead.telefone) {
+    if (typeof mostrarToast === 'function') mostrarToast('Essa conta não tem telefone registrado — adicione antes de criar o negócio.', 'erro');
+    return false;
+  }
+  if (!lead.responsavel_owner_id) {
+    if (typeof mostrarToast === 'function') mostrarToast('Defina o executivo antes de criar o negócio.', 'erro');
+    return false;
+  }
+  botaoEl.disabled = true;
+  botaoEl.textContent = 'Criando…';
+  const token = await tokenDeSessaoGlobal();
+  try {
+    const resp = await comPrazoGlobal(async (signal) => fetch(CRIAR_NEGOCIO_PROSPECCAO_URL, {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: JSON.stringify({
+        nome: lead.nome, ownerId: lead.responsavel_owner_id, leadId: lead.id,
+        telefone: lead.telefone, endereco: lead.endereco, bairro: lead.bairro, cidade: lead.cidade,
+        nota: lead.nota, avaliacoes: lead.avaliacoes,
+        etapa: ETAPA_PROSPECCAO_QUICK,
+        propriedades: {
+          origem_do_lead: ORIGEM_POR_FONTE_QUICK[lead.fonte] || 'Indicação',
+          celular: lead.telefone, bairro: lead.bairro || undefined, cidade: lead.cidade || undefined
+        }
+      })
+    }), 10000, 'criar-negocio-prospeccao');
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      if (typeof mostrarToast === 'function') mostrarToast((data && data.erro) || 'O HubSpot recusou a criação do negócio.', 'erro');
+      botaoEl.disabled = false; botaoEl.textContent = '→ Prospecção';
+      return false;
+    }
+    await atualizarLeadProspeccao(lead.id, { status: 'criado_hubspot', hubspot_company_id: data.companyIdAssociado || lead.hubspot_company_id || null });
+    if (typeof mostrarToast === 'function') mostrarToast(`"${lead.nome}" criado em Prospecção no HubSpot.`, 'sucesso');
+    return true;
+  } catch (e) {
+    if (typeof mostrarToast === 'function') mostrarToast('Não consegui falar com o servidor pra criar o negócio agora.', 'erro');
+    botaoEl.disabled = false; botaoEl.textContent = '→ Prospecção';
+    return false;
+  }
+}
+
 async function atualizarLeadProspeccao(id, campos) {
   const { error } = await supa.from('leads_prospeccao').update({ ...campos, updated_at: new Date().toISOString() }).eq('id', id);
   if (error) { console.error('Erro ao atualizar lead de prospecção:', error.message); return false; }
@@ -19018,6 +19085,32 @@ function corDaPraca(cidade) {
 }
 function iniciaisNome(nome) {
   return String(nome || '').trim().split(/\s+/).map(p => p[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+}
+
+// CORREÇÃO (16/08/26, Julyan): "juntar as contas de prospecção por praça" — o card de
+// Estoque por Praça duplicava (ex.: "Rio de Janeiro" e "RIO DE JANEIRO" viravam 2 cards).
+// Causa raiz: a Casa dos Dados devolve o município em CAIXA ALTA sem acento
+// (scripts/backfill-casa-dos-dados.js usa o valor cru de `end.municipio`), enquanto o
+// resto da base (Outscraper/Google Places) já vinha com acentuação e capitalização
+// normal — e todo agrupamento por cidade (porCidade, corDaPraca, calcularPerfilPorPraca,
+// runwayDaPracaCalc, UF_DA_PRACA) usa a string crua como chave.
+// Corrigido aqui, no ÚNICO lugar onde os dados entram na tela (carregarProspeccao,
+// abaixo) — nenhum UPDATE no Supabase é necessário; o valor cru do banco não muda,
+// só a exibição/agrupamento em memória. O endpoint de importação (api/importar-leads.js)
+// também canoniza na escrita, pra registros NOVOS já nascerem certos.
+const CIDADES_CANONICAS = {
+  'vila velha': 'Vila Velha', 'vitoria': 'Vitória', 'rio de janeiro': 'Rio de Janeiro',
+  'sao paulo': 'São Paulo', 'porto alegre': 'Porto Alegre', 'canoas': 'Canoas'
+};
+function canonizarCidade(cidade) {
+  const bruto = String(cidade || '').trim();
+  if (!bruto) return bruto;
+  const chave = bruto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (CIDADES_CANONICAS[chave]) return CIDADES_CANONICAS[chave];
+  // Cidade fora da lista conhecida: mantém o texto original em vez de arriscar um
+  // Title Case errado (siglas, "de/da/do" no meio do nome, etc.) — só as 6 praças
+  // ativas hoje têm forma canônica garantida.
+  return bruto;
 }
 
 // ===== BLOCO 41 — pend por praça (contas ativas ainda não decididas), extraído do
@@ -19610,9 +19703,13 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       </div>`;
     }
 
+    // CORREÇÃO (16/08/26, Julyan): "preciso deixar um campo pra eles limparem essa
+    // conta (botão pequeno reduzido) pq pode ter erros na lista" — antes só dava pra
+    // marcar Sem fit abrindo a ficha (clique na linha → modal). Agora tem um botão
+    // pequeno direto na lista, ao lado do +Rota, sem precisar abrir nada.
     const acaoExec = !souExecProsp ? `<span class="prospeccao-col-source" style="text-align:right;font-size:10.5px;color:var(--muted2);">${esc(prospeccaoRotuloFonte(l.fonte))}</span>`
       : !prospeccaoAtiva(l) ? '<span class="prospeccao-col-source" style="text-align:right;color:var(--muted2);">—</span>'
-      : `<span class="prospeccao-col-source" style="text-align:right;"><button type="button" class="prospeccao-rota-quick ${naRotaHoje ? 'is-added' : ''}" data-rota-quick="${l.id}">${naRotaHoje ? 'Na rota ✓' : '+ Rota'}</button></span>`;
+      : `<span class="prospeccao-col-source" style="text-align:right;display:inline-flex;gap:6px;align-items:center;"><button type="button" class="prospeccao-rota-quick ${naRotaHoje ? 'is-added' : ''}" data-rota-quick="${l.id}">${naRotaHoje ? 'Na rota ✓' : '+ Rota'}</button><button type="button" class="prospeccao-negocio-quick" data-negocio-quick="${l.id}" title="Cria o negócio já na etapa Prospecção do HubSpot">→ Prospecção</button><button type="button" class="prospeccao-limpar-quick" data-semfit-quick="${l.id}" title="Marcar como sem fit e tirar da minha fila (pode ter entrado errado na lista)">🧹</button></span>`;
     return `<div class="prospeccao-table-grid prospeccao-linha ${souExecProsp ? 'is-rep' : ''} ${destaqueImpacto ? 'is-top-impact' : ''}" data-lead="${l.id}" style="padding:11px 22px;font-size:12.5px;border-bottom:1px solid var(--line-soft);cursor:pointer;font-variant-numeric:tabular-nums;">
       ${souGestorProsp ? `<span class="prospeccao-col-check">${podeSelecionar ? `<input type="checkbox" class="prospeccao-sel" data-lead="${l.id}" ${prospeccaoSelecao.has(l.id) ? 'checked' : ''} aria-label="Selecionar ${esc(l.nome)} pro lote" style="width:16px;height:16px;cursor:pointer;" onclick="event.stopPropagation();">` : ''}</span>` : ''}
       <span class="prospeccao-col-name"><b>${esc(l.nome)}${destaqueImpacto ? `<span class="prospeccao-rank">TOP ${posicaoImpacto}</span>` : ''}</b>${!l.telefone ? ' <span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:1px 7px;font-size:9.5px;font-weight:700;">sem telefone</span>' : ''}<small class="prospeccao-mobile-meta" style="color:var(--muted2);margin-top:3px;">${esc(prospeccaoRotuloCategoria(l.categoria))} · ${esc(statusLabel)}${souExecProsp ? ' · ' + esc(prospeccaoRotuloFonte(l.fonte)) : ''}</small></span>
@@ -19845,6 +19942,33 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
 
   const btnImportar = document.getElementById('prospeccaoImportar');
   if (btnImportar) btnImportar.addEventListener('click', abrirImportacaoProspeccao);
+
+  el.querySelectorAll('[data-negocio-quick]').forEach(btn => {
+    btn.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      const lead = prospeccaoCache.find(x => String(x.id) === String(btn.dataset.negocioQuick));
+      if (!lead) return;
+      const ok = await criarNegocioDaProspeccao(lead, btn);
+      if (ok) renderProspeccaoNova(true);
+    });
+  });
+
+  el.querySelectorAll('[data-semfit-quick]').forEach(btn => {
+    btn.addEventListener('click', async ev => {
+      ev.stopPropagation();
+      const lead = prospeccaoCache.find(x => String(x.id) === String(btn.dataset.semfitQuick));
+      if (!lead) return;
+      btn.disabled = true;
+      const ok = await atualizarLeadProspeccao(lead.id, { status: 'sem_fit' });
+      if (ok) {
+        if (typeof mostrarToast === 'function') mostrarToast(lead.nome + ' marcada como sem fit — saiu da sua fila.', 'sucesso');
+        renderProspeccaoNova(true);
+      } else {
+        btn.disabled = false;
+        if (typeof mostrarToast === 'function') mostrarToast('Não consegui marcar essa conta agora.', 'erro');
+      }
+    });
+  });
 
   el.querySelectorAll('[data-rota-quick]').forEach(btn => {
     btn.addEventListener('click', async ev => {
