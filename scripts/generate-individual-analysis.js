@@ -178,6 +178,12 @@ async function buscarMesAnterior(ownerId, mesAnoAtual) {
 async function main() {
   const hoje = new Date();
   const semanaAtualLabel = fmtRange(new Date(hoje.getTime() - 6 * 86400000), hoje);
+  // CORREÇÃO (16/08/26) — achado real em produção: a IA calculava sozinha qual dia da
+  // semana bate com uma data, e errava (deu "sexta (16/08)" quando 16/08 era domingo).
+  // Calculando aqui em JS (nunca erra) e entregando pronto no prompt, sem a IA ter que
+  // adivinhar dia da semana a partir de uma data isolada.
+  const DIAS_SEMANA_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+  const hojeDiaSemanaLabel = `${DIAS_SEMANA_PT[hoje.getDay()]}, ${hoje.toLocaleDateString('pt-BR')}`;
   let { numeroSemana, ehUltimaSemana, mesAno } = infoSemanaDoMes(hoje);
 
   // FORCE_MONTHLY_MESANO: reprocessamento manual do fechamento mensal de um mês
@@ -230,7 +236,7 @@ async function main() {
 Essa análise é PRIVADA — só o gestor vê, nunca o vendedor. Seja direto e específico sobre o que o GESTOR deve fazer
 (como conduzir o 1:1, o que cobrar, o que elogiar), não uma mensagem pro vendedor ler.
 
-Dados de ${n.name} (${n.praca}) nesta semana (${semanaAtualLabel}):
+Dados de ${n.name} (${n.praca}) nesta semana (${semanaAtualLabel}) — hoje é ${hojeDiaSemanaLabel}:
 - Negócios em aberto: ${h.open}
 - Etapa dominante: ${dominanteLabel} (${dominante ? dominante[1] : 0} negócios)
 - Leads com SLA estourado: ${h.leadsTravados || 0}
@@ -259,6 +265,15 @@ REGRAS OBRIGATÓRIAS pro campo "compromissos":
   "o gestor encerra", "sem aviso e sem reversão", "não decide" ou qualquer menção a consequência aplicada pelo
   gestor — isso é ameaça, não compromisso, e não motiva ninguém de alto desempenho. Descreva a AÇÃO e o PRAZO,
   não a punição.
+- PROIBIDO pedir "enviar print do HubSpot" (por WhatsApp ou qualquer outro canal) como evidência de cumprimento —
+  isso tira a execução de dentro do Cockpit e cria trabalho duplicado sem necessidade. A evidência de todo
+  compromisso tem que ser uma ação que já fica registrada sozinha no próprio CRM: nota criada, tarefa concluída,
+  etapa alterada, próximo passo com data marcado, negócio descartado/reciclado, visita registrada. Se a ideia for
+  "manter o gestor informado", troque por "manter X ações registradas no HubSpot" em vez de "enviar print".
+- Todo prazo tem que ser uma data FUTURA em relação a hoje (${hojeDiaSemanaLabel}) — nunca repita um prazo de uma
+  semana anterior sem atualizar pra frente; um compromisso com prazo já vencido não é um compromisso, é ruído.
+  E o dia da semana escrito tem que bater com a data escrita (ex: não escrever "sexta (16/08)" se 16/08 não é
+  sexta-feira) — use exatamente "hoje é ${hojeDiaSemanaLabel}" acima como âncora pra contar os dias certo.
 - NUNCA retorne uma lista vazia. Isso é proibido, mesmo que nada tenha mudado.
 - Sempre retorne 2 ou 3 strings, cada uma um compromisso concreto e checável (ex: "Avançar pelo menos 5 leads de Prospecção pra Visita até sexta"), nunca um objetivo vago.
 - Se os compromissos da semana passada ainda fazem sentido porque não foram cumpridos, repita-os quase literalmente — não os troque por outra coisa e não os esvazie.
