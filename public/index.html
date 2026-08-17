@@ -8325,6 +8325,7 @@ async function renderProspeccaoExecutivo() {
           <div class="prosp2-dw-kv"><span>Aberta há</span><b id="prosp2DwIdade">—</b></div>
           <div class="prosp2-dw-kv"><span>Categoria</span><b id="prosp2DwCat2">—</b></div>
           <div class="prosp2-dw-kv"><span>Telefone</span><span id="prosp2DwTelWrap"><b id="prosp2DwTel">—</b></span></div>
+          <div class="prosp2-dw-kv"><span>Sócio</span><b id="prosp2DwSocio">—</b></div>
           <div class="prosp2-dw-kv"><span>CNPJ</span><b id="prosp2DwCnpj">—</b></div>
         </div>
         <div class="prosp2-dw-sec">
@@ -8514,11 +8515,13 @@ function prosp2AbrirDrawer(id, universo) {
   // oferece "buscar telefone" sob demanda — só gasta crédito na conta que o executivo
   // realmente for agir, igual já funciona na tela de Novidades (novidadesPorPraca).
   const telWrap = document.getElementById('prosp2DwTelWrap');
+  const socioEl = document.getElementById('prosp2DwSocio');
+  if (socioEl) set('prosp2DwSocio', l.socio || '—');
   if (telWrap) {
     if (l.telefone) {
       telWrap.innerHTML = `<a href="tel:${String(l.telefone).replace(/[^+0-9]/g, '')}" style="color:var(--blue);font-weight:700;text-decoration:none;">📞 ${esc(l.telefone)}</a>`;
     } else if (l.cnpj) {
-      telWrap.innerHTML = `<button type="button" id="prosp2DwBuscarTel" class="prosp2-ver" style="padding:4px 10px;font-size:10.5px;" data-cnpj="${esc(String(l.cnpj))}">📞 buscar telefone</button>`;
+      telWrap.innerHTML = `<button type="button" id="prosp2DwBuscarTel" class="prosp2-ver" style="padding:4px 10px;font-size:10.5px;" data-cnpj="${esc(String(l.cnpj))}">📞 buscar telefone e sócio</button>`;
       const btnTel = document.getElementById('prosp2DwBuscarTel');
       if (btnTel) btnTel.addEventListener('click', async () => {
         if (btnTel.dataset.buscando === '1') return;
@@ -8532,11 +8535,17 @@ function prosp2AbrirDrawer(id, universo) {
           });
           const j = await resp.json().catch(() => ({}));
           const tel = j && j.contato && j.contato.telefone;
-          if (!resp.ok || !tel) { btnTel.textContent = 'sem telefone cadastrado'; btnTel.disabled = true; return; }
-          l.telefone = tel;
-          telWrap.innerHTML = `<a href="tel:${String(tel).replace(/[^+0-9]/g, '')}" style="color:var(--blue);font-weight:700;text-decoration:none;">📞 ${esc(tel)}</a>`;
-          // Também grava no Supabase pra não gastar crédito de novo na próxima vez que abrir essa ficha.
-          atualizarLeadProspeccao(l.id, { telefone: tel }).catch(() => {});
+          const socio = j && j.contato && j.contato.socio;
+          if (!resp.ok || (!tel && !socio)) { btnTel.textContent = 'sem dado cadastrado'; btnTel.disabled = true; return; }
+          if (tel) {
+            l.telefone = tel;
+            telWrap.innerHTML = `<a href="tel:${String(tel).replace(/[^+0-9]/g, '')}" style="color:var(--blue);font-weight:700;text-decoration:none;">📞 ${esc(tel)}</a>`;
+          } else {
+            telWrap.innerHTML = '<span style="color:var(--muted2);">sem telefone cadastrado</span>';
+          }
+          if (socio) { l.socio = socio; set('prosp2DwSocio', socio); }
+          // Grava os dois no Supabase pra não gastar crédito de novo na próxima vez que abrir essa ficha.
+          atualizarLeadProspeccao(l.id, { telefone: tel || null, socio: socio || null }).catch(() => {});
         } catch (e) { btnTel.dataset.buscando = '0'; btnTel.textContent = 'tentar de novo'; }
       });
     } else {
