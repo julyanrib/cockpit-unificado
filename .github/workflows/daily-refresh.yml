@@ -24,6 +24,23 @@ permissions:
   contents: write
   issues: write
 
+# CORREÇÃO (16/08/26, Julyan — deploy "sumindo"): duas rodadas deste workflow rodando
+# próximas uma da outra é exatamente o incidente de 14/08 documentado abaixo (rebase
+# com conflito, resolvido a favor da versão "mais fresca" gerada por ESTA execução).
+# Esse mesmo mecanismo tem um efeito colateral perigoso quando quem fez o push
+# concorrente foi um upload MANUAL (correção de bug, por ex.): se o checkout desta
+# execução aconteceu ANTES do commit manual, "nossa versão mais fresca" na verdade é
+# a mais VELHA, e a correção manual acaba sendo silenciosamente descartada no rebase.
+# concurrency com cancel-in-progress:false enfileira (nunca cancela) uma 2ª execução
+# em vez de deixar as duas rodarem em paralelo e disputar o mesmo commit — não elimina
+# 100% a janela de risco (o checkout ainda pode ficar desatualizado se um push manual
+# acontecer bem no meio da execução), mas corta a maior parte dela. Ver também
+# COOLDOWN_MINUTOS em api/hubspot-webhook.js (15→60min no mesmo ajuste) — menos
+# disparos automáticos por hora = menos chance de qualquer sobreposição.
+concurrency:
+  group: cockpit-refresh
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
