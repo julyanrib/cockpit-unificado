@@ -8306,7 +8306,11 @@ async function renderProspeccaoExecutivo() {
     </div>
 
     <div class="prosp2-cols">
-      <div class="prosp2-grid" id="prosp2Grid">${visiveis.length ? visiveis.map(cardHTML).join('') : `<div class="prosp2-vazio"><b>Nenhum lead com esses filtros por aqui.</b><br>Tente outra fonte ou busque outro bairro.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`}</div>
+      <div class="prosp2-grid" id="prosp2Grid">${visiveis.length ? visiveis.map(cardHTML).join('') : (
+        dentroDoRaio.length === 0
+          ? `<div class="prosp2-vazio"><b>Sem leads importados perto de "${esc(centro.rotulo)}".</b><br>A busca cobre a carteira já trazida pra sua praça (Casa dos Dados, TripAdvisor, iFood, Google Places) — não é uma busca ao vivo no Brasil inteiro.<br>Se essa região deveria estar na sua praça, avisa seu gestor pra rodar a atualização mensal de contas-alvo por lá.<br><br><button class="prosp2-ver" id="prosp2Limpar">Voltar pra minha praça</button></div>`
+          : `<div class="prosp2-vazio"><b>Nenhum lead com esses filtros por aqui.</b><br>Tente outra fonte ou busque outro bairro.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
+      )}</div>
 
       <aside class="prosp2-tray">
         <div class="prosp2-tray-head"><h3>Minha agenda</h3><span class="cnt num" id="prosp2TrayN">${nAgenda}</span></div>
@@ -8389,6 +8393,18 @@ function prosp2LigarEventos(universo, ownerId) {
     locGo.disabled = false; locGo.textContent = 'Buscar aqui';
     if (!resultado) { prosp2Toast('Não consegui localizar esse endereço — tente outro texto.'); return; }
     prosp2Estado.local = { lat: resultado.lat, lng: resultado.lng, rotulo: resultado.nomeResolvido, custom: true };
+    // AVISO (17/08/26, Julyan: "fica travado, não sei se a busca tá indo") — a busca
+    // não é ao vivo no Brasil inteiro: filtra a carteira JÁ IMPORTADA pra praça do
+    // executivo (Casa dos Dados/TripAdvisor/iFood/Google Places rodam mensalmente por
+    // território, não por busca livre). Buscar um endereço longe da praça sempre vai
+    // dar zero — não porque travou, mas porque não tem carteira lá. Avisa na hora do
+    // clique, antes do card vazio, pra ficar claro que funcionou, só não achou nada.
+    if (terrVies && terrVies.lat != null && terrVies.lng != null) {
+      const distDaPraca = distanciaKm(terrVies.lat, terrVies.lng, resultado.lat, resultado.lng);
+      if (distDaPraca > 150) {
+        prosp2Toast(`"${resultado.nomeResolvido}" fica a ${Math.round(distDaPraca)} km da sua praça — a busca só cobre a carteira já importada, pode vir vazia.`);
+      }
+    }
     renderProspeccaoExecutivo();
   };
   if (locGo) locGo.addEventListener('click', () => aplicarBusca(locInput.value));
@@ -8412,7 +8428,7 @@ function prosp2LigarEventos(universo, ownerId) {
   const ordenarEl = document.getElementById('prosp2Ordenar');
   if (ordenarEl) ordenarEl.addEventListener('change', ev => { prosp2Estado.ordenar = ev.target.value; renderProspeccaoExecutivo(); });
   const limparEl = document.getElementById('prosp2Limpar');
-  if (limparEl) limparEl.addEventListener('click', () => { prosp2Estado.fonte = 'todas'; renderProspeccaoExecutivo(); });
+  if (limparEl) limparEl.addEventListener('click', () => { prosp2Estado.fonte = 'todas'; prosp2Estado.local = null; renderProspeccaoExecutivo(); });
 
   // ---- grade de cards: abrir popover de dia/hora, ver ficha, abrir ficha ----
   const grid = document.getElementById('prosp2Grid');
