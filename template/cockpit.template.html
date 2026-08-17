@@ -8370,10 +8370,17 @@ function prosp2TrayListHTML(universo) {
   }).join('');
 }
 
-function prosp2Toast(msg) {
+function prosp2Toast(msg, tipo) {
   const t = document.getElementById('prosp2Toast');
   if (!t) return;
   document.getElementById('prosp2ToastTxt').textContent = msg;
+  const icone = t.querySelector('.ok');
+  if (icone) {
+    const ehAviso = tipo === 'aviso';
+    icone.textContent = ehAviso ? '!' : '✓';
+    icone.style.background = ehAviso ? 'var(--amber)' : '';
+    icone.style.color = ehAviso ? '#fff' : '';
+  }
   t.classList.add('show');
   clearTimeout(t._h);
   t._h = setTimeout(() => t.classList.remove('show'), 2600);
@@ -8391,7 +8398,7 @@ function prosp2LigarEventos(universo, ownerId) {
     const terrVies = territorioDe(ownerId);
     const resultado = await geocodificarLocalAtuacao(texto.trim(), terrVies && terrVies.lat, terrVies && terrVies.lng);
     locGo.disabled = false; locGo.textContent = 'Buscar aqui';
-    if (!resultado) { prosp2Toast('Não consegui localizar esse endereço — tente outro texto.'); return; }
+    if (!resultado) { prosp2Toast('Não consegui localizar esse endereço — tente outro texto.', 'aviso'); return; }
     prosp2Estado.local = { lat: resultado.lat, lng: resultado.lng, rotulo: resultado.nomeResolvido, custom: true };
     // AVISO (17/08/26, Julyan: "fica travado, não sei se a busca tá indo") — a busca
     // não é ao vivo no Brasil inteiro: filtra a carteira JÁ IMPORTADA pra praça do
@@ -8402,7 +8409,7 @@ function prosp2LigarEventos(universo, ownerId) {
     if (terrVies && terrVies.lat != null && terrVies.lng != null) {
       const distDaPraca = distanciaKm(terrVies.lat, terrVies.lng, resultado.lat, resultado.lng);
       if (distDaPraca > 150) {
-        prosp2Toast(`"${resultado.nomeResolvido}" fica a ${Math.round(distDaPraca)} km da sua praça — a busca só cobre a carteira já importada, pode vir vazia.`);
+        prosp2Toast(`"${resultado.nomeResolvido}" fica a ${Math.round(distDaPraca)} km da sua praça — a busca só cobre a carteira já importada, pode vir vazia.`, 'aviso');
       }
     }
     renderProspeccaoExecutivo();
@@ -8444,7 +8451,7 @@ function prosp2LigarEventos(universo, ownerId) {
       const pop = hora.closest('.prosp2-diapop');
       if (!pop.dataset.sel) return;
       if (Object.keys(prosp2Estado.agenda).length >= 15 && !prosp2Estado.agenda[id]) {
-        prosp2Toast('Máximo de 15 visitas por envio — mande esta leva antes de adicionar mais.');
+        prosp2Toast('Máximo de 15 visitas por envio — mande esta leva antes de adicionar mais.', 'aviso');
         pop.classList.remove('open'); prosp2Estado.popoverAberto = null;
         return;
       }
@@ -8456,7 +8463,7 @@ function prosp2LigarEventos(universo, ownerId) {
       // mas garante que ele viu o aviso antes de seguir.
       const conflito = h ? prosp2ConflitoHorario(ownerId, pop.dataset.sel, h) : null;
       if (conflito) {
-        prosp2Toast(`⚠ ${l ? l.nome : 'Lead'} agendado às ${pop.dataset.rot} ${h} — mas você já tem "${conflito.titulo}" perto desse horário. Confira sua agenda.`);
+        prosp2Toast(`${l ? l.nome : 'Lead'} agendado às ${pop.dataset.rot} ${h} — mas você já tem "${conflito.titulo}" perto desse horário. Confira sua agenda.`, 'aviso');
       } else {
         prosp2Toast(`${l ? l.nome : 'Lead'} na sua agenda · ${pop.dataset.rot}${h ? ' · ' + h : ' (definir horário)'}`);
       }
@@ -14710,15 +14717,34 @@ function ligarBuscaLocal() {
 async function geocodificarLocalAtuacao(texto, viesLat, viesLng) {
   if (!texto || !DATA.maptiler) return null;
   try {
+    // CORREÇÃO (17/08/26, bateria de testes do Bruno) — o MapTiler não resolve CEP
+    // brasileiro sozinho: testado com hífen, sem hífen, com "Brasil" e com "CEP" na
+    // frente — nenhuma variação achou o endereço certo (na melhor das vezes devolvia
+    // só "Brasil" o país inteiro, na pior casava uma rua chamada litoralmente "Cep"
+    // em outro estado). CEP tem serviço próprio pra isso — ViaCEP, público, gratuito,
+    // sem necessidade de chave, e liberado por CORS direto do navegador. Detecta o
+    // padrão (5 dígitos, hífen opcional, 3 dígitos) e resolve o bairro/cidade real
+    // ANTES de mandar pro MapTiler — que aí sim já sabe geocodificar bairro+cidade.
+    const matchCep = String(texto).trim().match(/^(\d{5})-?(\d{3})$/);
+    let textoParaGeocodificar = texto;
+    if (matchCep) {
+      try {
+        const respCep = await fetch(`https://viacep.com.br/ws/${matchCep[1]}${matchCep[2]}/json/`);
+        const jCep = await respCep.json();
+        if (jCep && !jCep.erro) {
+          textoParaGeocodificar = [jCep.bairro, jCep.localidade, jCep.uf].filter(Boolean).join(', ');
+        }
+      } catch (e) { console.error('ViaCEP falhou, seguindo com o CEP cru no MapTiler:', e.message); }
+    }
     const proximidade = (Number.isFinite(viesLat) && Number.isFinite(viesLng)) ? `&proximity=${viesLng},${viesLat}` : '';
-    const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(texto)}.json?key=${DATA.maptiler}&country=br&language=pt${proximidade}`;
+    const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(textoParaGeocodificar)}.json?key=${DATA.maptiler}&country=br&language=pt${proximidade}`;
     const resp = await fetch(url);
     if (!resp.ok) return null;
     const json = await resp.json();
     const top = (json.features || [])[0];
     if (!top || !Array.isArray(top.center)) return null;
     const [lng, lat] = top.center;
-    return { lat, lng, nomeResolvido: top.place_name || texto };
+    return { lat, lng, nomeResolvido: top.place_name || textoParaGeocodificar };
   } catch (e) {
     console.error('Erro ao geocodificar local de atuação:', e.message);
     return null;
