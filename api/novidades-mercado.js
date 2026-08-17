@@ -241,11 +241,39 @@ module.exports = async function handler(req, res) {
       }
       // A v4 aninha o registro em .cnpj em algumas versões; aceita os dois.
       const d = j.cnpj || j.data || j;
+      // PEDIDO (17/08/26, Julyan: "puxar endereço, sócio majoritário e telefone") —
+      // endereço já vem na busca em lote (v5); telefone e sócio só saem na Consulta
+      // CNPJ avulsa (v4), que é esta mesma chamada — então sócio "pega carona" no
+      // crédito que já ia ser gasto pelo telefone, sem custo adicional.
+      //
+      // AVISO IMPORTANTE: não testei esta chamada ao vivo (sem acesso ao navegador
+      // no momento em que isso foi escrito) — os nomes de campo abaixo são os mais
+      // comuns entre APIs de CNPJ brasileiras (todas espelham o mesmo dado-base da
+      // Receita Federal), com várias variações como fallback, no mesmo estilo do
+      // telefone acima. Se o primeiro teste real mostrar um campo diferente, é só
+      // me avisar com o que a ficha mostrou (ou abrir o Network do navegador) que eu
+      // ajusto na hora — não é uma reescrita, é trocar o nome de um campo.
+      //
+      // "Sócio majoritário" com percentual de participação não é dado público da
+      // Receita Federal (QSA só traz nome + qualificação, ex.: "49-Sócio-Administrador"),
+      // então mostramos o PRIMEIRO sócio da lista (geralmente o fundador/administrador)
+      // como proxy — rotulado só "Sócio", pra não prometer um dado que não existe.
+      const qsa = d.qsa || d.socios || d.quadro_societario || [];
+      const primeiroSocio = Array.isArray(qsa) && qsa.length
+        ? (qsa[0].nome_socio || qsa[0].nome || qsa[0].nome_representante_legal || null)
+        : (d.socio_administrador || d.nome_socio || null);
+      const end = d.endereco || d;
+      const enderecoCompleto = [
+        [end.tipo_logradouro, end.logradouro || end.rua].filter(Boolean).join(' '),
+        end.numero, end.bairro, end.municipio || end.cidade, end.uf || end.estado
+      ].filter(Boolean).join(', ') || null;
       const contato = {
         cnpj: cnpjLimpo,
         telefone: d.telefone_1 || d.telefone || (Array.isArray(d.telefones) ? (d.telefones[0] && (d.telefones[0].numero || d.telefones[0])) : null) || null,
         telefone2: d.telefone_2 || null,
-        email: d.email || null
+        email: d.email || null,
+        socio: primeiroSocio,
+        endereco: enderecoCompleto
       };
       await gravarCache(supaUrl, serviceKey, chaveContato, [contato]);
       return res.status(200).json({ ok: true, origem: 'casadosdados', contato: contato });
