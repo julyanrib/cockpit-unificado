@@ -33,7 +33,13 @@ const { buscarDealAutorizado } = require('../lib/hubspot-deal-guard');
 // etapa só é alcançada automaticamente pelo próprio ASAAS quando o pagamento
 // confirma — nenhum humano move negócio pra lá manualmente, então não faz sentido
 // como destino aqui.
-const ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163'];
+// PEDIDO (17/08/26, Julyan): "adicionar a etapa reciclagem em nosso funil, como já
+// fez com enviado onboarding" — 1398311191 (Reciclagem) adicionada como etapa
+// alcançável. Sem automação de RPA/ASAAS/WhatsApp amarrada a ela (diferente de
+// Ag.Pagamento/Enviado Onboarding) — resgatar um lead esfriado de volta pro funil
+// é uma ação comercial comum, não precisa de nenhuma trava especial.
+const ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191'];
+const ETAPA_RECICLAGEM = '1398311191';
 
 // BLOCO 54 (14/08/26) — espelho das propriedades condicionais obrigatórias vistas
 // diretamente no pipeline Field Sales do HubSpot. Esta allowlist é a fronteira de
@@ -60,7 +66,12 @@ const PROPS_OBRIGATORIAS_POR_ETAPA = {
   // Enviado Onboarding não pede NADA de novo — o contrato inteiro (plano, adicional,
   // MRR, telefone, etc.) já foi coletado quando o negócio entrou em Ag. Pagamento.
   // Esta etapa é confirmação de pagamento, não coleta de dado.
-  '1396006163': []
+  '1396006163': [],
+  // Reciclagem também não pede nada — resgatar um lead de volta é uma ação de 1
+  // clique, sem fricção. Se no futuro fizer sentido registrar "por que esfriou",
+  // isso entra aqui como campo opcional, nunca obrigatório (senão o resgate vira
+  // trabalho extra e ninguém usa).
+  '1398311191': []
 };
 
 const VALORES_PERMITIDOS = {
@@ -142,6 +153,11 @@ function validarExigenciasEtapa(deal, novaEtapa, propriedades) {
 
 function validarMovimentoEtapa(deal, novaEtapa) {
   const atual = String((deal.properties || {}).dealstage || '');
+  // Reciclagem (resgate) não é um degrau do funil — é um bucket lateral. Um negócio
+  // parado em QUALQUER etapa aberta pode ser resgatado de volta pra lá, e um negócio
+  // resgatado pode voltar a avançar depois. A regra "não pula fase" existe pra
+  // impedir pular Prospecção→Ag.Pagamento direto, não se aplica aqui.
+  if (String(novaEtapa) === ETAPA_RECICLAGEM || atual === ETAPA_RECICLAGEM) return null;
   const iAtual = ETAPAS_ABERTAS.indexOf(atual);
   const iNova = ETAPAS_ABERTAS.indexOf(String(novaEtapa));
   if (iAtual >= 0 && iNova > iAtual + 1) {
