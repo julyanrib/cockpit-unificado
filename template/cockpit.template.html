@@ -4969,7 +4969,10 @@ const CAMPOS_POR_ETAPA = {
   // etapa é confirmação de pagamento, não coleta de dado nova. A automação real
   // (troca de pipeline + grupo de WhatsApp) continua intocada — o Cockpit só faz o
   // mesmo PATCH de dealstage que qualquer outra transição já faz.
-  '1396006163': []
+  '1396006163': [],
+  // ATUALIZAÇÃO (17/08/26, Julyan): Reciclagem — resgate de 1 clique, sem coleta
+  // de dado nova (mesmo raciocínio do Onboarding acima).
+  '1398311191': []
 };
 
 // BLOCO 50 — quais propriedades aparecem NA FICHA (fora do fluxo de mover), e a partir
@@ -7430,7 +7433,12 @@ const AGENDA_TIPOS = {
 // como 7ª etapa alcançável. Espelha exatamente ETAPAS_ABERTAS do servidor
 // (api/mudar-etapa-negocio.js) — "Ganho" (1396006162) fica de fora de propósito,
 // é alcançado só automaticamente pelo ASAAS quando o pagamento confirma.
-const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163'];
+// ATUALIZAÇÃO (17/08/26, Julyan): "adicionar a etapa reciclagem em nosso funil, como
+// já fez com enviado onboarding" — 1398311191 (Reciclagem) adicionada. Espelha
+// ETAPAS_ABERTAS do servidor (api/mudar-etapa-negocio.js) — lá, Reciclagem é isenta
+// da regra de "não pula fase" (é bucket lateral de resgate, alcançável de qualquer
+// etapa aberta, não um degrau sequencial).
+const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191'];
 const AGENDA_DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const AGENDA_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -9007,6 +9015,27 @@ function renderAgenda() {
     </div>`;
   })() : '';
 
+  // PEDIDO (17/08/26, Julyan): "adicionar a etapa reciclagem em nosso funil...
+  // resgatando alguns leads que estão lá há 60 dias e já colocando no cockpit" —
+  // card de resgate, mesmo estilo do quentesForaCardExec acima. Reciclagem some do
+  // funil aberto (nunca contou pro SLA/quentes), então sem isto o executivo nunca
+  // saberia que tem lead esfriado pra reativar — ficava só dentro do HubSpot puro.
+  const reciclagemResgateCardExec = souRep ? (() => {
+    const candidatos = (DATA.leadsReciclagem60 || []).slice(0, 3);
+    if (!candidatos.length) return '';
+    const linhasResgate = candidatos.map(l => `
+      <div class="ag-rail-lead tone-amber is-clickable" data-resgatarreciclagem="${agendaEsc(String(l.id))}" role="button" tabindex="0" aria-label="Resgatar ${agendaEsc(l.name || 'negócio')}">
+        <div class="ag-rail-lead-main"><b title="${agendaEsc(l.name || 'Sem nome')}">${agendaEsc(l.name || 'Sem nome')}</b><span>${l.dias}d em reciclagem${l.cidade ? ' · ' + agendaEsc(l.cidade) : ''}</span><span class="ag-rail-source">Reciclagem · candidato a resgate</span></div>
+        <div class="ag-plan-actions"><button type="button" class="ag-plan-btn" data-resgatarreciclagembtn="${agendaEsc(String(l.id))}">Resgatar →</button></div>
+      </div>`).join('');
+    return `
+    <div class="chart-card" id="reciclagemResgateCard" style="border:1.5px solid var(--dark-mut,#8B92A3);margin-top:16px;">
+      <h3 style="margin-bottom:4px;">Reciclagem — hora de resgatar</h3>
+      <div class="chart-subtitle" style="margin:0 0 12px;">Esfriaram, mas ainda dá pra reativar. ${(DATA.leadsReciclagem60 || []).length > 3 ? `+${(DATA.leadsReciclagem60 || []).length - 3} outros parados 60+ dias.` : ''}</div>
+      ${linhasResgate}
+    </div>`;
+  })() : '';
+
   // Destravar poluição, Bloco B (09/08): duas coisas com propósitos diferentes
   // (planejar HOJE vs planejar a SEMANA) empilhadas na mesma rolagem infinita, sem
   // nenhuma pausa visual entre elas. Só o executivo tem essa escolha — o gestor não
@@ -9163,7 +9192,7 @@ function renderAgenda() {
       '<button class="agx" id="agDetX" aria-label="Fechar">×</button>' +
       '<div class="agsb" id="agDetSb"></div><h4 id="agDetT"></h4><dl id="agDetDl"></dl>' +
       '<button type="button" class="aglink" id="agDetA">Abrir ficha do lead →</button></div></div>' +
-      (souRep ? '</div><aside class="ag-exec-rail" aria-label="Sugestões para preencher a agenda"><div class="ag-section-head ag-prioridades-head"><i>1</i><h2>O que merece entrar na agenda</h2><span>Funil primeiro; território para preencher os espaços livres.</span></div>' + quentesForaCardExec + '<div id="agendaSugestoesSlot"><div class="ag-rail-card"><div class="ag-rail-loading">Carregando contas-alvo e novidades da sua região…</div></div></div></aside></div>' : '');
+      (souRep ? '</div><aside class="ag-exec-rail" aria-label="Sugestões para preencher a agenda"><div class="ag-section-head ag-prioridades-head"><i>1</i><h2>O que merece entrar na agenda</h2><span>Funil primeiro; território para preencher os espaços livres.</span></div>' + quentesForaCardExec + reciclagemResgateCardExec + '<div id="agendaSugestoesSlot"><div class="ag-rail-card"><div class="ag-rail-loading">Carregando contas-alvo e novidades da sua região…</div></div></div></aside></div>' : '');
     h += hSemana;
   }
 
@@ -9578,6 +9607,27 @@ document.addEventListener('click', function (ev) {
   if (fichaAgenda) {
     const lead = buscarLeadFunilPorId(fichaAgenda.dataset.agficha);
     if (lead) abrirFichaLeadFunilDrawer(lead, () => renderAgenda());
+    return;
+  }
+  // PEDIDO (17/08/26, Julyan): resgate de leads em Reciclagem 60+ dias — reaproveita
+  // o MESMO fluxo de mudança de etapa que qualquer outro card do funil já usa
+  // (abrirPassagemDeEtapa → api/mudar-etapa-negocio.js). Destino fixo: Prospecção —
+  // é o reinício mais honesto pra um lead que esfriou (não assume que já tem
+  // decisor identificado ou visita marcada, que é o que a etapa Visita pressupõe).
+  const resgatarBtn = ev.target.closest('[data-resgatarreciclagembtn]');
+  if (resgatarBtn) {
+    const item = (DATA.leadsReciclagem60 || []).find(l => String(l.id) === String(resgatarBtn.dataset.resgatarreciclagembtn));
+    if (item) {
+      abrirPassagemDeEtapa({ id: item.id, name: item.name, stageId: '1398311191' }, '1395880469', () => renderAgenda());
+    }
+    return;
+  }
+  const resgatarCard = ev.target.closest('[data-resgatarreciclagem]');
+  if (resgatarCard && !ev.target.closest('[data-resgatarreciclagembtn]')) {
+    const item = (DATA.leadsReciclagem60 || []).find(l => String(l.id) === String(resgatarCard.dataset.resgatarreciclagem));
+    if (item) {
+      abrirPassagemDeEtapa({ id: item.id, name: item.name, stageId: '1398311191' }, '1395880469', () => renderAgenda());
+    }
     return;
   }
   const sub = ev.target.closest('[data-agsub]');
@@ -12076,7 +12126,9 @@ let stageModalVoltarPara = null; // função pra "← voltar" quando a ficha abr
 // A trilha do funil é real (STAGE_LABELS na ordem, etapa atual destacada).
 // ATUALIZAÇÃO (15/08/26, Julyan): mesma régua de ORDEM_ETAPAS_FUNIL — Enviado
 // Onboarding alcançável, Ganho fora (só automação).
-const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163'];
+// ATUALIZAÇÃO (17/08/26, Julyan): Reciclagem também entrou — mesmo motivo do
+// ORDEM_ETAPAS_FUNIL acima.
+const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191'];
 
 // BLOCO 50 (14/08/26) — validação de UM campo isolado, usada pela edição inline da
 // ficha (§6 do handoff). Mesmas regras de tipo de coletarCamposPassagem, mas sem
@@ -12959,7 +13011,10 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   const campos = CAMPOS_POR_ETAPA[para] || [];
   const iDe = ORDEM_ETAPAS_FUNIL.indexOf(de);
   const iPara = ORDEM_ETAPAS_FUNIL.indexOf(para);
-  if (iDe >= 0 && iPara > iDe + 1) {
+  // Reciclagem é bucket lateral de resgate, não um degrau do funil — isenta da regra
+  // de "não pula fase" nos dois sentidos (mesma isenção do servidor, api/mudar-etapa-negocio.js).
+  const ehReciclagem = para === '1398311191' || de === '1398311191';
+  if (!ehReciclagem && iDe >= 0 && iPara > iDe + 1) {
     mostrarToast('O HubSpot não permite pular fases neste pipeline. Conclua a próxima etapa primeiro.', 'atencao');
     return;
   }
