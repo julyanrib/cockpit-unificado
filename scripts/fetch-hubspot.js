@@ -95,7 +95,7 @@ const REPS = [
   { ownerId: '86100506', name: 'Bruno Martins' },
   { ownerId: '87569072', name: 'Sandro Brito' },
   { ownerId: '91477292', name: 'Kelly Travieso Di Domenico' },
-  { ownerId: '89842507', name: 'Wericles Andrade (Whell)' },
+  { ownerId: '89842507', name: 'Wericles Andrade' },
   { ownerId: '87069181', name: 'Amanda Pardim' },
   { ownerId: '86100505', name: 'Marco Filho' },
   { ownerId: '94079973', name: 'Michel Carvalho' }
