@@ -10124,18 +10124,10 @@ const hojeEhSegunda = new Date().getDay() === 1;
 activateTab((hojeEhSegunda && DATA.resumoSemanal) ? 'viewResumo' : 'viewCockpit');
 
 // ============ RESUMO SEMANAL ============
-function pctDelta(atual, anterior) {
-  if (!anterior) return null;
-  return Math.round(((atual - anterior) / anterior) * 100);
-}
-function deltaHtml(atual, anterior, inverter) {
-  const d = pctDelta(atual, anterior);
-  if (d === null) return '';
-  let cls = d > 0 ? 'up' : d < 0 ? 'down' : 'flat';
-  if (inverter && cls !== 'flat') cls = cls === 'up' ? 'down' : 'up';
-  const sign = d > 0 ? '+' : '';
-  return `<span class="delta ${cls}">${sign}${d}%</span>`;
-}
+// CORREÇÃO (16/08/26) — pctDelta/deltaHtml removidas: só eram usadas pelo ramo morto
+// de kpisDetalheHtml (ver comentário acima da função renderResumoSemanal), que também
+// foi limpo. .delta (a classe CSS que deltaHtml gerava) segue definida e em uso pelos
+// novos tileKpiNovo/kpis da Semana — só esta função-helper específica morreu.
 
 async function renderResumoSemanal() {
   const resumoEl = document.getElementById('resumoContent');
@@ -10245,7 +10237,8 @@ async function renderResumoSemanal() {
     </div>`;
 
   // BLOCO 41 (limpeza, 14/08/26) — helper "secao" (classes .sem-sec*) removido: sem
-  // chamador desde que a Semana do gestor passou a usar secaoNova (.sec-head/.sec-num).
+  // chamador desde que a Semana do gestor passou a usar cabeçalhos de seção próprios
+  // (hoje .sec-k, ver Seção "Como foi a semana" em diante).
 
   // Executivo: os cards de detalhamento eram do TIME INTEIRO (k.atual.ganhos etc.), mas ao
   // clicar pra expandir só os negócios dela apareciam — número no topo e lista por baixo
@@ -10260,6 +10253,10 @@ async function renderResumoSemanal() {
   // mesma pergunta com a moldura do mock. metricaHtml/listaLeadsHtml só existiam pra
   // alimentar esse placar antigo — removidos junto, sem consumidor restante.
 
+  // CORREÇÃO (16/08/26) — o ramo "gestor" deste ternário morreu quando a repaginada
+  // da Semana passou a montar os KPIs do gestor via kpisSemanaHtml (Bloco 41+): esta
+  // variável só é lida no ramo souRepAgora do innerHTML final. Sem chamador restante
+  // pro ramo gestor, ele foi removido — kpisDetalheHtml agora é só o card do executivo.
   const kpisDetalheHtml = souRepAgora ? `
     <div class="week-kpis">
       ${cardClicavel('Ganhos', ganhosLeads.length, '', '🏆', ganhosLeads, 'ganho')}
@@ -10268,15 +10265,7 @@ async function renderResumoSemanal() {
       <div class="week-kpi"><div class="l">SLA estourado agora</div><div class="v" style="${(meuRepKpi && meuRepKpi.leadsTravados) > 0 ? 'color:var(--red);' : ''}">${(meuRepKpi && meuRepKpi.leadsTravados) || 0}</div></div>
       ${quentesLeads.length > 0 ? cardClicavel('Quentes', quentesLeads.length, '', '🔥', quentesLeads, 'quente') : ''}
     </div>
-  ` : `
-    <div class="week-kpis">
-      ${cardClicavel('Ganhos', k.atual.ganhos, deltaHtml(k.atual.ganhos, k.anterior.ganhos), '🏆', ganhosLeads, 'ganho')}
-      ${cardClicavel('Reuniões', k.atual.reunioes, deltaHtml(k.atual.reunioes, k.anterior.reunioes), '📅', reunioesLeads, 'reuniao')}
-      <div class="week-kpi"><div class="l">Perdidos</div><div class="v">${k.atual.perdidos}${deltaHtml(k.atual.perdidos, k.anterior.perdidos, true)}</div></div>
-      <div class="week-kpi"><div class="l">Taxa de avanço</div><div class="v">${DATA.kpisHub.taxaAvanco}%${kpiDeltaHtml('taxaAvanco')}</div></div>
-      ${cardClicavel('Quentes', quentesLeads.length, '', '🔥', quentesLeads, 'quente')}
-    </div>
-  `;
+  ` : '';
 
 
   /* ===== ONDE ATACAR ESTA SEMANA — visão por praça (Julyan, 11/08) =====
@@ -17229,6 +17218,15 @@ async function renderDaily() {
   const fechadosHojeTotal = repsDaily.reduce((s, r) => s + (ehHojeDaily
     ? (r.fechamentosHubspotHoje || 0)
     : ((getDaily(r.ownerId, dailyRefDate) || {}).realizado_fechamentos || 0)), 0);
+  // CORREÇÃO (16/08/26, achado na revisão pré-apresentação): o banner do executivo
+  // ("Meu compromisso de hoje") mostrava fechadosHojeTotal — a soma do TIME INTEIRO —
+  // logo depois de 3 números pessoais (visitas/demo/clientes PROMETIDOS por ele).
+  // Um executivo via, por exemplo, "8 fechados no dia" achando que era dele quando na
+  // real era o time todo. Agora usa só a linha do próprio ownerId da sessão.
+  const meuRepDaily = souRepDaily ? DATA.reps.find(r => String(r.ownerId) === String(sessaoAtual.ownerId)) : null;
+  const fechadosHojeMeu = souRepDaily ? (ehHojeDaily
+    ? ((meuRepDaily && meuRepDaily.fechamentosHubspotHoje) || 0)
+    : (promessaExec.realizado_fechamentos || 0)) : 0;
   const bannerDaily = souRepDaily ? `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
@@ -17240,7 +17238,7 @@ async function renderDaily() {
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${promessaExec.prometido_visitas ?? '—'}</div><div style="font-size:11px;color:var(--dark-mut);">visitas prometidas</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${promessaExec.prometido_propostas ?? '—'}</div><div style="font-size:11px;color:var(--dark-mut);">demo/proposta prometidas</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${promessaExec.prometido_fechamentos ?? '—'}</div><div style="font-size:11px;color:var(--dark-mut);">novos clientes prometidos</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeMeu}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
       </div>
     </div>` : `
     <div class="cockpit-hero-combo" style="align-items:center;">
