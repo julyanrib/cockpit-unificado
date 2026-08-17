@@ -90,7 +90,13 @@ module.exports = async function handler(req, res) {
   //    cadeia (agendaNomeDoLead, contagem da Daily, tudo). O corpo é lido à parte
   //    (campo `obs` do evento) e nunca participa dessas regras.
   const TIPOS_VALIDOS = { visita: 'Visita', reuniao: 'Reunião' };
-  const tipoPedido = TIPOS_VALIDOS[String(req.body && req.body.tipo || 'visita')] ? String(req.body.tipo) : 'visita';
+  // CORREÇÃO (17/08/26, bug real em produção: tarefa criada como "undefined - FARTOS"
+  // no HubSpot, hs_task_subject sujo desde a origem) — a lógica anterior
+  // (`TIPOS_VALIDOS[String(...)] ? ... : 'visita'`) dependia de uma cadeia de
+  // truthy/falsy fácil de escapar. Reescrita como comparação direta e explícita:
+  // só vira 'reuniao' se o body pedir exatamente isso, senão é sempre 'visita'.
+  // Impossível de resultar em undefined — não existe terceiro valor possível.
+  const tipoPedido = (req.body && req.body.tipo === 'reuniao') ? 'reuniao' : 'visita';
   const prefixoAssunto = TIPOS_VALIDOS[tipoPedido];
   const sugeridoPorGestor = !!(req.body && req.body.sugeridoPorGestor) && usuario.role === 'manager';
 
