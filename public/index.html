@@ -11798,11 +11798,33 @@ function abrirAgendadorRapido(dataISO, minutos, x, y, ownerIdAlvo, sugeridoPorGe
   // executivo que está tentando ajudar.
   const quentes = (typeof agendaQuentes === 'function' ? agendaQuentes([{ ownerId: donoId }]) : [])
     .map(q => ({ id: q.id, nome: q.name || q.nome, grupo: 'Pipeline quente', bairro: q.bairro || null, cidade: q.cidade || null, lat: q.lat, lng: q.lng }));
+  // CORREÇÃO (17/08/26, Julyan: "quero que filtre pelas etapas") — agendaQuentes só
+  // traz o subconjunto "quente" (temperatura alta + Demo/Proposta/Negociação/Ag.Pagamento
+  // por regra comercial). Prospecção, Visita e Conversa com Decisor ficavam de fora
+  // sempre que o negócio ainda não tinha esquentado — o executivo não conseguia marcar
+  // visita de retorno pra um lead recém-criado direto por aqui. Agora TODO o funil
+  // aberto do dono entra, agrupado pela etapa real (mesma ordem da esteira oficial),
+  // e o que já apareceu em "Pipeline quente" não se repete no grupo da própria etapa.
+  const ORDEM_ETAPAS_AGENDADOR = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
+  const idsJaEmQuentes = new Set(quentes.map(q => String(q.id)));
+  const porEtapa = [];
+  if (DATA.funilLeads && DATA.stageMeta && DATA.stageMeta.labels) {
+    ORDEM_ETAPAS_AGENDADOR.forEach(stageId => {
+      const nomeEtapa = DATA.stageMeta.labels[stageId];
+      const leadsDaEtapa = (DATA.funilLeads[stageId] || [])
+        .filter(l => String(l.ownerId) === donoId && !idsJaEmQuentes.has(String(l.id)));
+      leadsDaEtapa.forEach(l => {
+        idsJaEmQuentes.add(String(l.id));
+        porEtapa.push({ id: l.id, nome: l.name || l.dealname, grupo: nomeEtapa, bairro: l.bairro || null, cidade: l.cidade || null, lat: l.lat, lng: l.lng });
+      });
+    });
+  }
   const alvos = ((typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache)) ? prospeccaoCache : [])
     .filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l) && (!ehSugestao || String(l.responsavel_owner_id || '') === donoId))
     .slice(0, 60)
     .map(l => ({ id: l.id, nome: l.nome, grupo: 'Contas-alvo', bairro: l.bairro || null, cidade: l.cidade || null, lat: l.lat, lng: l.lng }));
-  const opcoes = [...quentes, ...alvos];
+  const opcoes = [...quentes, ...porEtapa, ...alvos];
+  const GRUPOS_AGENDADOR = ['Pipeline quente', ...ORDEM_ETAPAS_AGENDADOR.map(id => DATA.stageMeta && DATA.stageMeta.labels && DATA.stageMeta.labels[id]).filter(Boolean), 'Contas-alvo'];
 
   const cx = document.createElement('div');
   cx.className = 'agw-novo';
@@ -11814,7 +11836,7 @@ function abrirAgendadorRapido(dataISO, minutos, x, y, ownerIdAlvo, sugeridoPorGe
       (ehSugestao ? '<br>Fica pendente até ' + agendaEsc(primeiroNome) + ' confirmar.' : '') + '</div>' +
     (opcoes.length
       ? '<label>Conta</label><select id="agwNovoLead">' +
-          ['Pipeline quente', 'Contas-alvo'].map(g => {
+          GRUPOS_AGENDADOR.map(g => {
             const doGrupo = opcoes.filter(o => o.grupo === g);
             if (!doGrupo.length) return '';
             return '<optgroup label="' + g + '">' + doGrupo.map(o => '<option value="' + agendaEsc(String(o.id)) + '">' + agendaEsc(o.nome || '') + '</option>').join('') + '</optgroup>';
