@@ -7539,6 +7539,17 @@ function agendaNormalizar(raw) {
     // resolve a nota do Expogo que chega sem hubspot_owner_id (era o que fazia
     // compromisso sumir da agenda de todo mundo).
     if (e) {
+      // CORREÇÃO (17/08/26, achado ao vivo na grade da Agenda: "undefined - ARMAZEM")
+      // — o mesmo problema que já tinha sido corrigido só pra Daily (agendaNomeDoLead,
+      // usado em compromissosHoje) também vaza aqui, porque a Agenda e várias outras
+      // telas usam e.cliente DIRETO, sem passar por aquela função. Em vez de remendar
+      // cada um dos ~10 lugares que leem e.cliente, a limpeza entra na ORIGEM — logo
+      // após os 4 parsers (agendaDoHubspot/Task/Nota/App) montarem o campo, antes de
+      // qualquer tela ler. Escopo estreito de propósito: só tira o prefixo literal
+      // "undefined -"/"null -" (a mesma string JS de campo vazio que o app externo da
+      // Kelly grava no título da tarefa) — não usa a limpeza mais ampla de rótulos
+      // (agendaNomeDoLead) aqui, pra não arriscar mexer num nome de cliente real.
+      if (e.cliente) e.cliente = String(e.cliente).replace(/^(undefined|null)\s*[-–—]\s*/i, '').trim() || e.cliente;
       // BLOCO 3 (11/08/26) — a distinção que estava faltando na Agenda.
       // Medido na base: 107 das 133 tarefas têm hs_timestamp IGUAL ao createdate (menos
       // de 1 segundo de diferença). Não são horário marcado: é o Expogo gravando a visita
