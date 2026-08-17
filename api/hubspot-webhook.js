@@ -33,10 +33,14 @@ const WORKFLOW_FILE = 'daily-refresh.yml';
 // o robô (e um deploy novo na Vercel) a cada 10-20 minutos, sem parar, durante todo o
 // expediente — 70+ vezes num único dia, batendo sozinho no teto de 100 deploys/dia do
 // plano Hobby, antes mesmo de somar qualquer upload manual. Esta janela de descanso
-// (cooldown) limita a no máximo 1 disparo a cada 15 minutos — os 3 horários fixos do
-// dia (scripts/... via daily-refresh.yml) continuam garantindo atualização mesmo sem
+// (cooldown) limita a frequência dos disparos extras — os 3 horários fixos do dia
+// (scripts/... via daily-refresh.yml) continuam garantindo atualização mesmo sem
 // nenhum evento do HubSpot; o webhook só acelera entre eles, sem virar uma rajada.
-const COOLDOWN_MINUTOS = 15;
+// AJUSTE (16/08/26, Julyan): 15→60 min. Motivo real, não só volume de deploy — upload
+// manual de correção e disparo automático (rodando com o código de ANTES da correção)
+// podiam se sobrepor, e o automático, terminando depois, sobrescrevia o commit manual.
+// Menos disparos automáticos por hora reduz a janela onde isso acontece.
+const COOLDOWN_MINUTOS = 60;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
