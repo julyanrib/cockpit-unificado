@@ -1086,6 +1086,30 @@ async function main() {
     }).sort((a, b) => b.dias - a.dias);
   }
 
+  // ---- Leads em Reciclagem parados há 60+ dias, pra resgate (Julyan, 17/08/26:
+  // "resgatando alguns leads que estão lá há 60 dias") ----
+  // Reciclagem fica FORA de OPEN_STAGES de propósito (é bucket lateral, não etapa
+  // sequencial do funil aberto — ver comentário acima de OPEN_STAGES) — por isso
+  // nunca tinha sido buscada. Mesmo padrão de fetch de qualquer outra etapa, só que
+  // filtrando por tempo parado, já que "resgatar" só faz sentido pra quem esfriou
+  // de verdade, não pra quem acabou de cair ali.
+  const reciclagemDealsRaw = await stageDealsTeamWide(STAGES.reciclagem);
+  const leadsReciclagem60 = reciclagemDealsRaw
+    .map(d => ({
+      name: d.properties.dealname,
+      dealname: d.properties.dealname,
+      id: d.id,
+      dias: daysInCurrentStage(d.properties),
+      vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
+      ownerId: d.properties.hubspot_owner_id || null,
+      bairro: d.properties.bairro || null,
+      cidade: d.properties.cidade || null,
+      valor: Math.round(parseFloat(d.properties.amount) || 0)
+    }))
+    .filter(l => l.dias >= 60)
+    .sort((a, b) => b.dias - a.dias);
+  console.log(`Reciclagem: ${reciclagemDealsRaw.length} negócios no total, ${leadsReciclagem60.length} parados há 60+ dias (candidatos a resgate).`);
+
   // ---- Por executivo ----
   const repsData = {};
   let emAbertoTime = 0;
@@ -1418,6 +1442,7 @@ async function main() {
       labels: STAGE_LABELS
     },
     funilLeads,
+    leadsReciclagem60,
     vendasMes,
     reps: repsData,
     agenda

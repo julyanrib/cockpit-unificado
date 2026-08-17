@@ -193,6 +193,7 @@ function montarDadosCompletos() {
     kpiDeltas,
     funil: hubspot.funil,
     funilLeads: hubspot.funilLeads || {},
+    leadsReciclagem60: hubspot.leadsReciclagem60 || [],
     vendasMes,
     temperatura: temperaturaComPraca,
     stageMeta: hubspot.stageMeta || { slaDays: {}, descriptions: {}, labels: {} },
@@ -344,6 +345,7 @@ function filtrarParaPapel(dados, usuario) {
       frios: soMeu(dados.temperatura.frios)
     },
     funilLeads,
+    leadsReciclagem60: soMeu(dados.leadsReciclagem60 || []),
     vendasMes,
     resumoSemanal: resumoSemanalFiltrado,
     agenda,
