@@ -1132,9 +1132,9 @@ async function main() {
     // fechamentos precisa de 1 chamada extra porque Ganho não é etapa "aberta" (não vem no
     // `deals` de repOpenDeals).
     const hojeISO = hojeISOBrasilia();
-    // Ontem em Brasília. Com as DUAS rodadas diárias (23:59 e 08:59, 11/08), "ontem"
-    // quase sempre já está fechado nos dois horários — às 23:59 o dia de hoje está
-    // terminando, às 08:59 o dia de ontem virou definitivamente passado à meia-noite.
+    // Ontem em Brasília. Com as três rodadas diárias (08:56, 13h e 19h, 18/08), "ontem"
+    // já está fechado havia horas em qualquer uma delas — a virada de dia acontece à
+    // meia-noite, bem antes da primeira rodada da manhã.
     const ontemISO = new Date(new Date(hojeISO + 'T12:00:00Z').getTime() - 86400000).toISOString().slice(0, 10);
     const entrouNoDia = (stageId, diaISO) => deals.filter(d => {
       const dt = d.properties[`hs_v2_date_entered_${stageId}`];
@@ -1216,9 +1216,10 @@ async function main() {
     // Este é o número que a Daily das 9h usa pra dizer "prometeu X, fez Y". Antes
     // dependia de o navegador de alguém ter ficado com a aba aberta no dia anterior;
     // agora o robô grava direto do HubSpot, sem depender de ninguém ter aberto tela.
-    // Com as DUAS (agora TRÊS, ver Automação 1) rodadas diárias: a de 23:59 já fecha
-    // "ontem" quase completo (o dia está acabando); as seguintes refazem o mesmo
-    // fechamento como segurança, caso alguma rodada anterior tenha falhado.
+    // Com as três rodadas diárias (08:56/13h/19h, 18/08/26): a das 19h já fecha
+    // "ontem" (quando chega o dia seguinte) quase completo — a tarde inteira já
+    // aconteceu; as seguintes refazem o mesmo fechamento como segurança, caso alguma
+    // rodada anterior tenha falhado.
     // gravarSnapshotDaily faz upsert — rodar várias vezes no mesmo dia não duplica nem
     // distorce o número, só confirma o mesmo valor (ou corrige, se algo mudou).
     try {
