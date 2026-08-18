@@ -27,7 +27,10 @@ const hubspot = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json
 const narrativas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'narrativas.json'), 'utf8'));
 
 function fmtRange(start, end) {
-  const f = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  // CORREÇÃO (18/08/26, mesmo bug achado em montar-dados.js/fmtDate): sem
+  // timeZone, esse script (roda em UTC no GitHub Actions) podia formatar a data
+  // errada perto da virada do dia em Brasília.
+  const f = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
   return `${f(start)}–${f(end)}/${end.getFullYear()}`;
 }
 
@@ -177,13 +180,20 @@ async function buscarMesAnterior(ownerId, mesAnoAtual) {
 
 async function main() {
   const hoje = new Date();
+  // CORREÇÃO (18/08/26, mesmo bug de fuso achado em montar-dados.js) — hoje.getDay()
+  // usa o fuso do PROCESSO (UTC no GitHub Actions), não o de Brasília. Perto da
+  // virada do dia (21h-00h BRT = já é "amanhã" em UTC), isso dava o dia da semana
+  // errado. hojeBRT tem os MESMOS componentes de data/hora que apareceriam num
+  // relógio em Brasília, só que interpretados no fuso local do processo — truque
+  // padrão pra extrair getDay()/getDate() corretos sem depender do fuso do sistema.
+  const hojeBRT = new Date(hoje.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
   const semanaAtualLabel = fmtRange(new Date(hoje.getTime() - 6 * 86400000), hoje);
   // CORREÇÃO (16/08/26) — achado real em produção: a IA calculava sozinha qual dia da
   // semana bate com uma data, e errava (deu "sexta (16/08)" quando 16/08 era domingo).
   // Calculando aqui em JS (nunca erra) e entregando pronto no prompt, sem a IA ter que
   // adivinhar dia da semana a partir de uma data isolada.
   const DIAS_SEMANA_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
-  const hojeDiaSemanaLabel = `${DIAS_SEMANA_PT[hoje.getDay()]}, ${hoje.toLocaleDateString('pt-BR')}`;
+  const hojeDiaSemanaLabel = `${DIAS_SEMANA_PT[hojeBRT.getDay()]}, ${hoje.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
   let { numeroSemana, ehUltimaSemana, mesAno } = infoSemanaDoMes(hoje);
 
   // FORCE_MONTHLY_MESANO: reprocessamento manual do fechamento mensal de um mês

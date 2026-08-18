@@ -403,7 +403,7 @@ async function main() {
       // Correção 08/08/26: o texto reciclado era servido SEM AVISO — parecia fresco e
       // contradizia os KPIs novos (dizia "125 pra 79" enquanto os números mostravam 566).
       // Reciclado tem que se declarar reciclado, com a data da geração original.
-      const dataAnterior = anterior?.geradoEm ? new Date(anterior.geradoEm).toLocaleDateString('pt-BR') : null;
+      const dataAnterior = anterior?.geradoEm ? new Date(anterior.geradoEm).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : null;
       parsedTime = {
         resumoGeral: anterior?.resumoGeral
           ? `<b>⚠ A geração desta semana falhou — texto abaixo é da semana anterior${dataAnterior ? ' (' + dataAnterior + ')' : ''}; os números do painel são os atuais.</b><br>` + anterior.resumoGeral

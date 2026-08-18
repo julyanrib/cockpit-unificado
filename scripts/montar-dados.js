@@ -40,7 +40,12 @@ const USUARIOS = Array.isArray(usuariosRaw) ? usuariosRaw : (usuariosRaw.usuario
 
 function fmtDate(iso) {
   const d = new Date(iso);
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+  // CORREÇÃO (18/08/26, achado na revisão final: "atualizado em 18/08 às 21:46"
+  // exibido numa segunda-feira à noite, horário de Brasília) — a HORA já convertia
+  // pro fuso certo (timeZone abaixo), mas a DATA não tinha o mesmo timeZone e usava
+  // o fuso do SERVIDOR (UTC, no GitHub Actions) — à noite em Brasília (UTC-3), já é
+  // "amanhã" em UTC, então a data mostrava 1 dia à frente do que realmente é aqui.
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' }) +
     ' às ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
 }
 
