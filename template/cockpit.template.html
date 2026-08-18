@@ -521,7 +521,7 @@
   .carteira .filtro.on, .prospeccao-table-card .filtro.on{background:var(--ink);border-color:var(--ink);color:var(--panel);}
   .carteira .filtro small, .prospeccao-table-card .filtro small{font-weight:700;opacity:.65;margin-left:4px;}
   .carteira .thead{display:grid;grid-template-columns:34px minmax(240px,1.7fr) minmax(150px,1fr) minmax(200px,1.2fr) minmax(130px,.9fr) 96px;gap:14px;align-items:center;padding:10px 19px;background:var(--panel2);font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted2);}
-  .conta{display:grid;grid-template-columns:34px minmax(240px,1.7fr) minmax(150px,1fr) minmax(200px,1.2fr) minmax(130px,.9fr) 96px;gap:14px;align-items:center;padding:11px 19px;border-top:1px solid var(--line-soft);transition:background .14s var(--ease);cursor:pointer;}
+  .conta{display:grid;grid-template-columns:34px minmax(240px,1.7fr) minmax(150px,1fr) minmax(200px,1.2fr) minmax(130px,.9fr) 190px;gap:14px;align-items:center;padding:11px 19px;border-top:1px solid var(--line-soft);transition:background .14s var(--ease);cursor:pointer;}
   .conta:hover{background:var(--panel2);}
   .conta.sel{background:#F4F7FF;box-shadow:inset 3px 0 0 var(--blue);}
   .ck{width:17px;height:17px;border:1.5px solid var(--line-btn);border-radius:5px;background:var(--panel);cursor:pointer;appearance:none;-webkit-appearance:none;margin:0;padding:0;position:relative;flex:none;}
@@ -5708,7 +5708,14 @@ function prcDataValidade() {
 
 function prcResumoAdicionais(calculo) {
   const cobrados = calculo.itens.filter(item => !item.incluido);
-  return cobrados.length ? cobrados.map(item => `${item.nome}${item.quantidade > 1 ? ` × ${item.quantidade}` : ''}`).join(', ') : 'Nenhum adicional cobrado';
+  if (!cobrados.length) return 'Nenhum adicional cobrado';
+  // PEDIDO (18/08/26, Julyan): "colocar o nome dos adicionais e preço, pra ficar
+  // evidente o pq do preço" — antes só listava o nome, sem custo, então o cliente
+  // via o total final sem entender de onde vinha a diferença pro preço base do plano.
+  return cobrados.map(item => {
+    const qtd = item.quantidade > 1 ? ` × ${item.quantidade}` : '';
+    return `${item.nome}${qtd} (${prcMoeda(item.preco)}/un.)`;
+  }).join(', ');
 }
 
 function prcPreviewHTML() {
@@ -5784,13 +5791,17 @@ function textoPropostaPrecificacao() {
   // quem recebe, que a gente não controla. Solução robusta: texto sem nenhum emoji,
   // só negrito nativo do WhatsApp (*texto*) e pontuação comum — renderiza igual em
   // qualquer aparelho, e ainda fica mais profissional pra uma proposta comercial B2B.
+  // AJUSTE (18/08/26) — a imagem em anexo mudou de "lista as 32 funcionalidades uma a
+  // uma" pra "card compacto com categorias" (pedido: "um card mesmo, não uma imagem
+  // gigante"), então "com todas as funcionalidades inclusas" ficou impreciso — trocado
+  // por "resumo completo do plano", que descreve certo o que a imagem nova mostra.
   const economiaTxt = c.periodo.meses > 1 && c.economia ? ` (economia de ${prcMoeda(c.economia)})` : '';
   return `Olá${cliente ? `, ${cliente}` : ''}! Preparei a proposta comercial da Takeat pro seu restaurante - segue o resumo:\n\n` +
     `Plano: *${c.plano.nome}* (${tipo.nome})\n` +
     `Investimento: *${prcMoeda(c.mensal)}/mês*${c.periodo.meses > 1 ? ` - total ${prcMoeda(c.total)} em ${c.periodo.meses} meses${economiaTxt}` : ''}\n` +
     `Condição: ${c.periodo.nome}${c.periodo.desconto ? ` com ${c.periodo.desconto}% de desconto` : ''}\n` +
     `Adicionais: ${prcResumoAdicionais(c)}\n\n` +
-    `A proposta completa (com todas as funcionalidades inclusas) está na imagem em anexo. Válida até ${prcDataValidade()}.\n\n` +
+    `O resumo completo do plano está na imagem em anexo. Proposta válida até ${prcDataValidade()}.\n\n` +
     `Posso te ligar essa semana pra tirar dúvidas e fechar os próximos passos?`;
 }
 
@@ -5858,105 +5869,131 @@ function prcRiscado(ctx, texto, x, y, cor, fontSize) {
   return largura;
 }
 
+// Desenha um retângulo com cantos arredondados (helper local, sem depender de
+// ctx.roundRect nativo — nem todo navegador/versão suporta).
+function prcRoundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
 function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
-  // REFORMULAÇÃO COMPLETA (16/08/26) — pedido explícito: "quero que reformule tudo
-  // nessa parte... a imagem toda preta destacando tudo... é uma das partes mais
-  // importantes, onde o cliente vê pra assinar conosco". Antes só a seção de
-  // funcionalidades tinha virado escura — o card do plano e o de adicionais ainda
-  // eram brancos, quebrando a identidade visual no meio do documento. Agora é escuro
-  // do topo ao rodapé, sem nenhuma quebra, com cards elevados (não brancos) pra dar
-  // profundidade sem sair do tema.
-  const PRC_BG = '#14110F';        // fundo base, mais escuro que o header de antes
-  const PRC_CARD = '#211C18';      // card elevado (plano, adicionais) — mais claro que o fundo, nunca branco
-  const PRC_LINE = 'rgba(255,255,255,.09)';
-  const PRC_INK = '#FDFBF0';       // texto principal, quase branco
-  const PRC_MUT = '#9C9284';       // texto secundário
-  const PRC_RED = '#FF4757';       // vermelho mais vivo que o normal — "impactante" sobre fundo escuro
+  // RECONSTRUÇÃO (18/08/26) — Julyan mandou a referência visual exata que quer:
+  // header centralizado (logo → subtítulo → nome do plano), SEM a caixa de
+  // investimento separada no topo, SEM "preparada para" gigante — só o nome do
+  // cliente discreto. Funcionalidades completas em 2 colunas (nunca removidas —
+  // "não é pra tirar a lista, é encaixar o card"). Rodapé de investimento no
+  // formato de parcelas ("3x R$ 439,00"), com ícone de cartão, total e badge de
+  // economia. Documento inteiro com cantos arredondados, como um card de verdade.
+  const PRC_BG = '#1A1815';
+  const PRC_LINE = 'rgba(255,255,255,.10)';
+  const PRC_INK = '#FDFBF0';
+  const PRC_MUT = '#9C9284';
+  const PRC_RED = '#FF4757';
   const PRC_GREEN = '#5CE0AE';
+  const CX = larguraCanvas / 2;
+  const PAD = 60;
 
-  // Fundo escuro cobrindo o documento inteiro, do primeiro ao último pixel.
-  ctx.fillStyle = PRC_BG; ctx.fillRect(0, 0, larguraCanvas, ctx.canvas.height || 4000);
-  // Glow decorativo no topo — mesmo recurso visual usado nos heroes escuros do resto
-  // do cockpit, dá profundidade sem poluir.
-  const glow = ctx.createRadialGradient(larguraCanvas - 120, 40, 20, larguraCanvas - 120, 40, 420);
-  glow.addColorStop(0, 'rgba(255,71,87,.20)'); glow.addColorStop(1, 'rgba(255,71,87,0)');
-  ctx.fillStyle = glow; ctx.fillRect(0, 0, larguraCanvas, 460);
+  // Fundo escuro com cantos arredondados cobrindo o documento inteiro.
+  prcRoundRect(ctx, 0, 0, larguraCanvas, ctx.canvas.height || 4000, 28);
+  ctx.fillStyle = PRC_BG; ctx.fill();
 
-  if (logo) { const larguraLogo = 192; ctx.drawImage(logo, 72, 50, larguraLogo, logo.height * larguraLogo / logo.width); }
-  else { ctx.fillStyle = PRC_RED; ctx.font = '800 42px Arial'; ctx.fillText('Takeat', 72, 91); }
-  ctx.fillStyle = PRC_RED; ctx.font = '800 15px Arial'; ctx.fillText('PROPOSTA COMERCIAL', 72, 151);
-  ctx.fillStyle = PRC_MUT; ctx.font = '700 18px Arial'; ctx.fillText(`Válida até ${prcDataValidade()} · Takeat 2026`, 72, 193);
+  let y = 66;
+  ctx.textAlign = 'center';
+  if (logo) { const larguraLogo = 176; ctx.drawImage(logo, CX - larguraLogo / 2, y, larguraLogo, logo.height * larguraLogo / logo.width); y += logo.height * larguraLogo / logo.width + 34; }
+  else { ctx.fillStyle = PRC_RED; ctx.font = '800 38px Arial'; ctx.fillText('Takeat', CX, y + 32); y += 66; }
 
-  // Caixa de investimento no topo direito — agora mostra o desconto de verdade: preço
-  // cheio riscado (quando há desconto) + badge do percentual, não só o nome do período.
-  ctx.fillStyle = PRC_CARD; ctx.fillRect(770, 46, 358, 205); ctx.strokeStyle = 'rgba(255,71,87,.35)'; ctx.lineWidth = 1.5; ctx.strokeRect(770, 46, 358, 205);
-  ctx.fillStyle = PRC_MUT; ctx.font = '700 14px Arial'; ctx.fillText('INVESTIMENTO MENSAL', 800, 82);
-  if (c.periodo.desconto > 0) prcRiscado(ctx, prcMoeda(c.mensalCheio), 800, 112, '#6E6558', 16);
-  ctx.fillStyle = PRC_INK; ctx.font = '800 40px Arial'; ctx.fillText(prcMoeda(c.mensal), 800, 164);
-  ctx.fillStyle = PRC_GREEN; ctx.font = '800 15px Arial'; ctx.fillText(c.periodo.nome, 800, 202);
-  if (c.periodo.desconto > 0) {
-    const larguraNome = ctx.measureText(c.periodo.nome).width;
-    prcBadge(ctx, `-${c.periodo.desconto}% OFF`, 800 + larguraNome + 12, 202 - 19, '#FF4757', '#FFFFFF', 13);
-  }
+  ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial';
+  ctx.fillText(`${tipo.nome.toUpperCase()} · ${c.periodo.nome.toUpperCase()}${c.periodo.desconto ? ` (-${c.periodo.desconto}%)` : ''}`, CX, y);
+  y += 40;
+  ctx.fillStyle = PRC_INK; ctx.font = '800 42px Arial'; ctx.fillText(c.plano.nome, CX, y);
+  y += 30;
+  // Nome do cliente — pedido explícito: "adicionar o nome do cliente e tal".
+  // Discreto, não domina o header (esse é o papel do nome do plano), mas fica claro
+  // pra quem essa proposta específica foi preparada.
+  ctx.fillStyle = PRC_MUT; ctx.font = '700 16px Arial';
+  ctx.fillText(`Preparada para ${precificacaoEstado.cliente.trim() || 'seu próximo cliente'}`, CX, y);
+  y += 34;
+  ctx.textAlign = 'left';
 
-  let y = 322;
-  ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText('PREPARADA PARA', 72, y); y += 42;
-  ctx.fillStyle = PRC_INK; ctx.font = '800 40px Arial'; y = prcCanvasWrap(ctx, precificacaoEstado.cliente.trim() || 'Seu próximo cliente', 72, y, 1020, 47, 2); y += 24;
-  ctx.fillStyle = PRC_RED; ctx.font = '800 16px Arial'; ctx.fillText('UMA OPERAÇÃO MAIS RÁPIDA, CONTROLADA E PRONTA PARA CRESCER', 72, y); y += 34;
-  ctx.fillStyle = PRC_MUT; ctx.font = '700 17px Arial'; y = prcCanvasWrap(ctx, 'Atendimento, gestão e relacionamento conectados em uma única plataforma para o restaurante vender melhor todos os dias.', 72, y, 1020, 25, 2); y += 30;
+  ctx.strokeStyle = PRC_LINE; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(larguraCanvas, y); ctx.stroke();
+  y += 40;
 
-  // Card do plano — era um retângulo branco quebrando o tema; agora é um card
-  // elevado (mais claro que o fundo, nunca branco) com acento vermelho lateral,
-  // igual ao padrão de card usado no resto do cockpit.
-  ctx.fillStyle = PRC_CARD; ctx.fillRect(54, y, 1092, 175);
-  ctx.fillStyle = PRC_RED; ctx.fillRect(54, y, 5, 175); // acento lateral
-  ctx.strokeStyle = PRC_LINE; ctx.lineWidth = 1; ctx.strokeRect(54, y, 1092, 175);
-  ctx.fillStyle = PRC_RED; ctx.font = '800 14px Arial'; ctx.fillText(`${tipo.nome.toUpperCase()} · ${c.periodo.nome.toUpperCase()}`, 86, y + 42);
-  ctx.fillStyle = PRC_INK; ctx.font = '800 32px Arial'; ctx.fillText(`Plano ${c.plano.nome}`, 86, y + 86);
-  ctx.fillStyle = PRC_MUT; ctx.font = '700 17px Arial'; prcCanvasWrap(ctx, c.plano.chamada, 86, y + 120, 970, 25, 2);
-  y += 220;
-
-  const totalFuncionalidades = Object.values(c.plano.secoes).flat().length;
-  ctx.fillStyle = PRC_INK; ctx.font = '800 18px Arial'; ctx.fillText(`O QUE ESTÁ INCLUÍDO · ${totalFuncionalidades} FUNCIONALIDADES`, 72, y); y += 34;
+  // Lista COMPLETA de funcionalidades, em 2 colunas — nunca removida (pedido
+  // explícito). Mesma organização por categoria (com ✓ verde) da referência.
+  ctx.fillStyle = PRC_MUT; ctx.font = '800 13px Arial'; ctx.fillText('FUNCIONALIDADES', PAD, y); y += 32;
   const funcionalidades = Object.entries(c.plano.secoes).flatMap(([secao, itens]) => itens.map(item => ({ secao, item })));
-  const porColuna = Math.ceil(funcionalidades.length / 3);
-  const colunas = [0, 1, 2].map(i => funcionalidades.slice(i * porColuna, (i + 1) * porColuna));
-  const larguraColuna = 338; const gapColuna = 20;
+  const porColuna = Math.ceil(funcionalidades.length / 2);
+  const colunas = [0, 1].map(i => funcionalidades.slice(i * porColuna, (i + 1) * porColuna));
+  const larguraColuna = (larguraCanvas - PAD * 2 - 40) / 2; const gapColuna = 40;
   const inicioColunas = y; let maiorY = y;
   colunas.forEach((coluna, indice) => {
-    const x = 72 + indice * (larguraColuna + gapColuna); let cy = inicioColunas; let secaoAnterior = '';
+    const x = PAD + indice * (larguraColuna + gapColuna); let cy = inicioColunas; let secaoAnterior = '';
     coluna.forEach(({ secao, item }) => {
-      if (secao !== secaoAnterior) { if (secaoAnterior) cy += 9; ctx.fillStyle = PRC_RED; ctx.font = '800 12px Arial'; ctx.fillText(secao.toUpperCase(), x, cy); cy += 24; secaoAnterior = secao; }
-      ctx.fillStyle = PRC_GREEN; ctx.font = '800 16px Arial'; ctx.fillText('✓', x + 1, cy); ctx.fillStyle = PRC_INK; ctx.font = '700 14px Arial'; cy = prcCanvasWrap(ctx, item, x + 22, cy, larguraColuna - 22, 19, 2); cy += 7;
+      if (secao !== secaoAnterior) { if (secaoAnterior) cy += 10; ctx.fillStyle = PRC_RED; ctx.font = '800 12px Arial'; ctx.fillText(secao.toUpperCase(), x, cy); cy += 23; secaoAnterior = secao; }
+      ctx.fillStyle = PRC_GREEN; ctx.font = '800 15px Arial'; ctx.fillText('✓', x + 1, cy); ctx.fillStyle = PRC_INK; ctx.font = '700 14px Arial'; cy = prcCanvasWrap(ctx, item, x + 22, cy, larguraColuna - 22, 19, 2); cy += 7;
     });
     maiorY = Math.max(maiorY, cy);
   });
-  y = maiorY + 28;
+  y = maiorY + 20;
 
-  // Card de adicionais — mesmo tratamento elevado, sem branco.
-  ctx.fillStyle = PRC_CARD; ctx.fillRect(54, y, 1092, 98); ctx.strokeStyle = PRC_LINE; ctx.lineWidth = 1; ctx.strokeRect(54, y, 1092, 98);
-  ctx.fillStyle = PRC_INK; ctx.font = '800 15px Arial'; ctx.fillText('ADICIONAIS', 86, y + 31);
-  ctx.fillStyle = PRC_MUT; ctx.font = '700 15px Arial'; prcCanvasWrap(ctx, prcResumoAdicionais(c), 86, y + 60, 1000, 21, 2);
-  y += 128;
+  // Adicionais cobrados, com preço — só aparece quando há algum (pedido explícito:
+  // "colocar o nome dos adicionais e preço, pra ficar evidente o pq do preço").
+  const cobrados = c.itens.filter(item => !item.incluido);
+  if (cobrados.length) {
+    ctx.fillStyle = PRC_MUT; ctx.font = '800 13px Arial'; ctx.fillText('ADICIONAIS', PAD, y); y += 26;
+    ctx.fillStyle = PRC_INK; ctx.font = '700 14px Arial';
+    y = prcCanvasWrap(ctx, prcResumoAdicionais(c), PAD, y, larguraCanvas - PAD * 2, 20, 3); y += 14;
+  }
 
-  // Rodapé de preço — o elemento mais importante do documento (é o que fecha a
-  // venda). Economia agora é um badge verde de verdade, não uma frase escondida
-  // no meio de outro texto — pedido explícito: "mais impactante o desconto".
-  const resumoY = y;
-  const alturaResumo = 236;
-  const glowPreco = ctx.createRadialGradient(86, resumoY + 90, 10, 86, resumoY + 90, 340);
-  glowPreco.addColorStop(0, 'rgba(255,71,87,.16)'); glowPreco.addColorStop(1, 'rgba(255,71,87,0)');
-  ctx.fillStyle = PRC_CARD; ctx.fillRect(54, resumoY, 1092, alturaResumo);
-  ctx.fillStyle = glowPreco; ctx.fillRect(54, resumoY, 1092, alturaResumo);
-  ctx.strokeStyle = 'rgba(255,71,87,.3)'; ctx.lineWidth = 1.5; ctx.strokeRect(54, resumoY, 1092, alturaResumo);
-  ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText(`${c.periodo.nome.toUpperCase()} · ${c.periodo.observacao.toUpperCase()}`, 86, resumoY + 40);
-  if (c.periodo.desconto > 0) prcRiscado(ctx, `${prcMoeda(c.mensalCheio)} / mês`, 86, resumoY + 67, '#6E6558', 17);
-  ctx.fillStyle = PRC_INK; ctx.font = '800 46px Arial'; ctx.fillText(`${prcMoeda(c.mensal)} / MÊS`, 86, resumoY + 128);
-  if (c.economia > 0) prcBadge(ctx, `ECONOMIA DE ${prcMoeda(c.economia)}`, 86, resumoY + 143, PRC_GREEN, '#0E2A1F', 16);
-  ctx.fillStyle = '#CFC7BD'; ctx.font = '700 16px Arial';
-  ctx.fillText(c.periodo.meses > 1 ? `Total do período: ${prcMoeda(c.total)}` : 'Cobrança mensal', 86, resumoY + 200);
-  ctx.fillText(`Tabela oficial conferida em ${precificacaoCache.conferidoEm.split('-').reverse().join('/')}`, 86, resumoY + 222);
-  return resumoY + alturaResumo + 40; // + margem de respiro no rodapé
+  ctx.strokeStyle = PRC_LINE; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(larguraCanvas, y); ctx.stroke();
+  y += 46;
+
+  // Rodapé de investimento — formato de parcelas ("3x R$ 439,00"), igual à
+  // referência. Quando o período é mensal (1x), mostra só o valor, sem "1x".
+  ctx.textAlign = 'center';
+  ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText('INVESTIMENTO', CX, y); y += 50;
+  const prefixoParcelas = c.periodo.meses > 1 ? `${c.periodo.meses}x ` : '';
+  ctx.font = '800 46px Arial';
+  const larguraPrefixo = prefixoParcelas ? ctx.measureText(prefixoParcelas).width : 0;
+  const larguraValor = ctx.measureText(prcMoeda(c.mensal)).width;
+  const inicioX = CX - (larguraPrefixo + larguraValor) / 2;
+  ctx.textAlign = 'left';
+  if (prefixoParcelas) { ctx.fillStyle = PRC_INK; ctx.fillText(prefixoParcelas, inicioX, y); }
+  ctx.fillStyle = PRC_RED; ctx.fillText(prcMoeda(c.mensal), inicioX + larguraPrefixo, y);
+  ctx.textAlign = 'center';
+  y += 36;
+  ctx.fillStyle = PRC_MUT; ctx.font = '700 15px Arial';
+  ctx.fillText(c.periodo.meses > 1 ? 'no cartão de crédito' : 'cobrança mensal', CX, y);
+  y += 30;
+  ctx.fillText(`Total: ${prcMoeda(c.total)}`, CX, y);
+  y += 40;
+  if (c.economia > 0) {
+    ctx.font = '800 16px Arial';
+    const texto = `Economia de ${prcMoeda(c.economia)}`;
+    const largura = ctx.measureText(texto).width + 26 * 2;
+    ctx.textAlign = 'left';
+    prcRoundRect(ctx, CX - largura / 2, y - 22, largura, 40, 20);
+    ctx.fillStyle = PRC_GREEN; ctx.fill();
+    ctx.fillStyle = '#0E2A1F'; ctx.textAlign = 'center'; ctx.fillText(texto, CX, y + 5);
+  }
+  y += 56;
+
+  ctx.strokeStyle = PRC_LINE; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(larguraCanvas, y); ctx.stroke();
+  y += 34;
+  ctx.fillStyle = PRC_MUT; ctx.font = '800 13px Arial';
+  ctx.fillText(`PROPOSTA VÁLIDA POR ${precificacaoCache.validadeDias || 2} DIAS · TAKEAT 2026`, CX, y);
+  ctx.textAlign = 'left';
+  y += 40;
+
+  return y;
 }
 
 async function gerarBlobPropostaPrecificacao() {
@@ -20391,7 +20428,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
         <div class="c-dono">${donoOwnerId
           ? `<span class="av" style="background:${corDoExecutivo(donoOwnerId)};">${iniciaisNome(nomeRespCompleto)}</span>${esc(nomeResp)}`
           : `<button type="button" class="atribuir" title="Abre a ficha da conta pra atribuir um executivo">＋ atribuir</button>`}</div>
-        <div class="c-acao">${!prospeccaoAtiva(l) ? '<span style="color:var(--muted2);font-size:11px;">—</span>' : `<button type="button" class="rota-btn ${naRotaHoje ? 'is-added' : ''}" data-rota-quick="${l.id}">${naRotaHoje ? 'Na rota ✓' : '→ rota'}</button>`}</div>
+        <div class="c-acao">${!prospeccaoAtiva(l) ? '<span style="color:var(--muted2);font-size:11px;">—</span>' : `<span style="display:inline-flex;gap:6px;align-items:center;"><button type="button" class="rota-btn ${naRotaHoje ? 'is-added' : ''}" data-rota-quick="${l.id}">${naRotaHoje ? 'Na rota ✓' : '→ rota'}</button>${donoOwnerId ? `<button type="button" class="rota-btn" data-negocio-quick="${l.id}" title="Cria o negócio já na etapa Prospecção do HubSpot, atribuído a ${esc(nomeResp)}">→ Prospecção</button>` : ''}</span>`}</div>
       </div>`;
     }
 
