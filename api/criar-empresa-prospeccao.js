@@ -140,7 +140,7 @@ module.exports = async function handler(req, res) {
           lead.telefone ? 'Telefone: ' + lead.telefone : null,
           lead.horario_funcionamento ? 'Horario: ' + lead.horario_funcionamento : null,
           (lead.nota != null && lead.avaliacoes != null) ? 'Google: ' + lead.nota + ' - ' + lead.avaliacoes + ' avaliacoes' : null,
-          'Fonte: ' + lead.fonte + ' (importado pelo cockpit em ' + new Date(lead.created_at).toLocaleDateString('pt-BR') + ')'
+          'Fonte: ' + lead.fonte + ' (importado pelo cockpit em ' + new Date(lead.created_at).toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }) + ')'
         ].filter(Boolean);
 
     try {
