@@ -995,7 +995,7 @@
   .pdi-title{font-size:21px;font-weight:800;margin:0 0 14px;font-family:'Poppins',sans-serif;letter-spacing:.01em;}
 
   .commit-list{list-style:none;margin:0 0 14px;padding:0;}
-  .commit-item{display:flex;align-items:flex-start;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);}
+  .commit-item{display:flex;align-items:flex-start;gap:10px;padding:11px 0;border-bottom:1px solid var(--line);cursor:pointer;}
   .commit-item:last-child{border-bottom:none;}
   .checkbox{flex-shrink:0;width:19px;height:19px;border:2px solid var(--green);border-radius:var(--r-sm);margin-top:1px;cursor:pointer;position:relative;}
   .checkbox.checked{background:var(--green);}
@@ -4804,7 +4804,15 @@ async function renderMeuPainel() {
     const feitos = checkedNow.filter(Boolean).length;
     document.getElementById('meuPainelPdiCount').textContent = `✓ ${feitos}/${r.compromissos.length} cumpridos`;
   }
-  checkboxes.forEach(cb => cb.addEventListener('click', () => { cb.classList.toggle('checked'); persistPdi(); }));
+  checkboxes.forEach(cb => {
+    cb.addEventListener('click', () => { cb.classList.toggle('checked'); persistPdi(); });
+    // CORREÇÃO (18/08/26, achado na revisão final) — a área clicável era só o
+    // quadradinho de 19x19px; clicar no TEXTO do compromisso (a maior parte da
+    // linha) não fazia nada. Delega o clique da linha inteira pro checkbox,
+    // sem duplicar a lógica (evita clique duplo quando já clicou no quadradinho).
+    const li = cb.closest('.commit-item');
+    if (li) li.addEventListener('click', ev => { if (ev.target !== cb) cb.click(); });
+  });
   dataInput.addEventListener('input', persistPdi);
 
   // Histórico de 1:1 — só carrega quando a pessoa abrir o accordion (economiza chamada se ninguém clicar).
@@ -11242,13 +11250,20 @@ function renderCockpitDossieInline() {
 
   const checkboxes = el.querySelectorAll('#cockpitDossiePlanoList .checkbox');
   checkboxes.forEach((cb, i) => { if (pdi.checked[i]) cb.classList.add('checked'); });
-  checkboxes.forEach(cb => cb.addEventListener('click', () => {
+  const marcarPdi = cb => {
     cb.classList.toggle('checked');
     const checkedNow = Array.from(checkboxes).map(x => x.classList.contains('checked'));
     savePdiState(r.ownerId, checkedNow, pdi.data);
     const contadorEl = document.getElementById('cockpitDossiePdiCount');
     if (contadorEl) contadorEl.textContent = `${checkedNow.filter(Boolean).length}/${r.compromissos.length} cumpridos${dataCombinado ? ` · combinado no 1:1 de ${dataCombinado}` : ''}`;
-  }));
+  };
+  // CORREÇÃO (18/08/26, mesma achada na tela Hoje) — área clicável expandida pra
+  // linha inteira, não só o quadradinho.
+  checkboxes.forEach(cb => {
+    cb.addEventListener('click', () => marcarPdi(cb));
+    const li = cb.closest('.commit-item');
+    if (li) li.addEventListener('click', ev => { if (ev.target !== cb) cb.click(); });
+  });
 }
 
 function renderRepsList() {
@@ -11490,6 +11505,10 @@ function wireDetailInteractions(r, root, idPrefix) {
 
   checkboxes.forEach(cb => {
     cb.addEventListener('click', () => { cb.classList.toggle('checked'); persistPdi(); });
+    // CORREÇÃO (18/08/26, mesma achada nos outros 2 lugares) — área clicável
+    // expandida pra linha inteira, não só o quadradinho de 19x19px.
+    const li = cb.closest('.commit-item');
+    if (li) li.addEventListener('click', ev => { if (ev.target !== cb) cb.click(); });
   });
   dataInput.addEventListener('input', persistPdi);
 }
