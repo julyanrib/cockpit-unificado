@@ -1782,7 +1782,15 @@
   @media (max-width:640px){ .ag-rail-card{grid-template-columns:1fr;} .ag-rail-section+.ag-rail-section{border-left:0;border-top:1px solid var(--line-soft);} }
   /* Scoreboard da Daily do gestor: sem marcador nativo, caret girando, mobile em 2 linhas */
   .daily-acc summary::-webkit-details-marker{display:none;}
-  .daily-acc[open] summary > span:last-child{transform:rotate(180deg);display:inline-block;}
+  /* CORREÇÃO (18/08/26, achado na revisão do gestor) — esta regra girava o ÚLTIMO
+     <span> do summary quando o <details> abre, pra um ícone de seta (▼→▲) que existia
+     numa versão anterior do card do executivo na Daily & Ritmo. O card foi reestruturado
+     e esse ícone não existe mais — mas a regra continuou ativa, e o span que hoje é
+     "o último" é o CTA "Cobrar plano →"/"Plano do dia →". Resultado: o botão girava
+     180° (texto de cabeça pra baixo e invertido) toda vez que o gestor abria o card
+     de alguém. Removida por não ter mais nenhum ícone pra girar — se um chevron for
+     adicionado de volta no futuro, ele precisa de uma CLASSE PRÓPRIA (não ":last-child",
+     que é frágil demais e reencontra esse mesmo bug com qualquer novo span no final). */
   @media (max-width:860px){ .daily-acc summary{grid-template-columns:1fr auto !important;grid-auto-flow:row;row-gap:8px;} .daily-acc summary > span:nth-child(3){grid-column:1 / -1;} }
   /* Daily v4 — a promessa volta a ser o contrato visual do dia. */
   .daily-promise-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-xl);overflow:hidden;box-shadow:var(--shadow-sm);margin-bottom:16px;}
@@ -11072,8 +11080,23 @@ function smoothScrollTo(el, folgaTopo = 76) {
 // Não existe hoje um padrão de URL confirmado que filtre o board por owner — só arriscar um
 // link quebrado é pior que abrir o board geral do pipeline. Se o Julyan tiver a URL exata
 // filtrada, é só trocar aqui dentro.
-function hsExecutivoUrl() {
-  return `https://app.hubspot.com/contacts/24373118/`;
+function hsExecutivoUrl(ownerId) {
+  // CORREÇÃO (18/08/26, achado na revisão do gestor) — antes SEMPRE voltava a home
+  // genérica de contatos (`/contacts/24373118/`), não importa qual executivo estava
+  // aberto no dossiê. O botão promete "abrir no HubSpot" (o contexto DELE), mas não
+  // cumpria — sempre o mesmo link, sem filtro nenhum.
+  //
+  // AVISO: não consegui testar esta URL logado de verdade no HubSpot (sessão
+  // expirou durante a revisão, e não posso preencher login/senha). A sintaxe de
+  // filtro abaixo (`filters=[{"property":"hubspot_owner_id",...}]`) é o padrão
+  // documentado do HubSpot pra views de lista, mas não pude CONFIRMAR visualmente
+  // que abre filtrado de verdade pro portal de vocês. Testa uma vez clicando no
+  // botão — se cair filtrado no funil do executivo certo, perfeito; se cair na
+  // lista geral sem filtro, me avisa que ajusto o formato (é trocar a query string,
+  // não mexe em mais nada).
+  if (!ownerId) return `https://app.hubspot.com/contacts/24373118/`;
+  const filtro = encodeURIComponent(JSON.stringify([{ property: 'hubspot_owner_id', operator: 'EQ', value: String(ownerId) }]));
+  return `https://app.hubspot.com/contacts/24373118/objects/0-3/views/all/list?filters=${filtro}`;
 }
 
 function renderCockpitDossieInline() {
@@ -11196,7 +11219,7 @@ function renderCockpitDossieInline() {
             <div style="color:var(--muted);font-size:12px;">${r.praca} · dossiê para o 1:1</div>
           </div>
         </div>
-        <a href="${hsExecutivoUrl()}" target="_blank" rel="noopener" style="flex-shrink:0;font-size:12.5px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:var(--r-pill);padding:8px 16px;text-decoration:none;transition:background .15s var(--ease);" onmouseover="this.style.background='var(--red-soft)'" onmouseout="this.style.background='transparent'">Abrir no HubSpot ↗</a>
+        <a href="${hsExecutivoUrl(r.ownerId)}" target="_blank" rel="noopener" style="flex-shrink:0;font-size:12.5px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:var(--r-pill);padding:8px 16px;text-decoration:none;transition:background .15s var(--ease);" onmouseover="this.style.background='var(--red-soft)'" onmouseout="this.style.background='transparent'">Abrir no HubSpot ↗</a>
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;">
