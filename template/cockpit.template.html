@@ -19414,7 +19414,7 @@ function prospeccaoAplicarFiltros(lista) {
     (!f.bairro || prospeccaoBairroExibicao(l.bairro) === f.bairro) &&
     (!f.avaliacoesMin || (l.avaliacoes || 0) >= Number(f.avaliacoesMin)) &&
     (!f.categoria || prospeccaoRotuloCategoria(l.categoria) === f.categoria) &&
-    (!f.fonte || String(l.fonte || '').split('+').map(x => x.trim()).includes(f.fonte)) &&
+    (!f.fonte || String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean).map(prospeccaoRotuloFonte).includes(f.fonte)) &&
     (!f.responsavel || String(l.responsavel_owner_id) === f.responsavel) &&
     (!f.status || l.status === f.status) &&
     (f.jaExiste === '' || String(l.ja_existe_hubspot) === f.jaExiste) &&
@@ -20039,7 +20039,14 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   const cidades = [...new Set(baseOperacional.map(l => l.cidade).filter(Boolean))].sort();
   const bairros = [...new Set(baseOperacional.map(l => prospeccaoBairroExibicao(l.bairro)).filter(Boolean))].sort();
   const categorias = [...new Set(baseOperacional.map(l => prospeccaoRotuloCategoria(l.categoria)).filter(Boolean))].sort();
-  const fontes = [...new Set(prospeccaoCache.flatMap(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean)))].sort();
+  // CORREÇÃO (18/08/26, Julyan): "os filtros não batem com o que temos" — o banco
+  // tem "Google Places" e "google_places" como valores BRUTOS diferentes pra mesma
+  // fonte (typos/formatos inconsistentes de quando cada lote foi importado). Antes,
+  // essa lista deduplicava pelo valor bruto — resultado: "Google Places" aparecia
+  // 2x no dropdown, cada opção filtrando só uma fatia (42 ou 15 registros) sem o
+  // usuário saber que a outra existia. Agora deduplica pelo RÓTULO normalizado
+  // (prospeccaoRotuloFonte), então as duas grafias viram uma única opção.
+  const fontes = [...new Set(prospeccaoCache.flatMap(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean).map(prospeccaoRotuloFonte)))].sort();
 
   let filtrados = prospeccaoAplicarFiltros(prospeccaoCache);
   if (prospeccaoFiltro.pertoDeMim) filtrados = prospeccaoOrdenarPorDistancia(filtrados);
@@ -20390,7 +20397,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
         </select>
         <select id="pfFonte" aria-label="Filtrar por fonte" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Fonte (todas)</option>
-          ${fontes.map(f => `<option value="${f}" ${prospeccaoFiltro.fonte === f ? 'selected' : ''}>${esc(prospeccaoRotuloFonte(f))}</option>`).join('')}
+          ${fontes.map(f => `<option value="${esc(f)}" ${prospeccaoFiltro.fonte === f ? 'selected' : ''}>${esc(f)}</option>`).join('')}
         </select>
         <select id="pfStatus" aria-label="Filtrar por status" style="font-size:11.5px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 8px;">
           <option value="">Status (todos)</option>
