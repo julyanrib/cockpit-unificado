@@ -5685,6 +5685,7 @@ function prcPeriodo() { return precificacaoCache.periodicidades.find(p => p.id =
 function prcDisponivel(addon, plano) { return (!addon.somenteMesas || precificacaoEstado.tipo === 'mesas') && addon.disponivelEm.includes(plano.id); }
 function prcIncluido(addon, plano) { return prcDisponivel(addon, plano) && addon.incluidoEm.includes(plano.id); }
 function prcMoeda(valor) { return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }); }
+function prcMoedaCentavos(valor) { return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 function calcularPrecificacao() {
   const plano = prcPlano(); const periodo = prcPeriodo(); const itens = [];
@@ -5882,13 +5883,12 @@ function prcRoundRect(ctx, x, y, w, h, r) {
 }
 
 function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
-  // RECONSTRUÇÃO (18/08/26) — Julyan mandou a referência visual exata que quer:
-  // header centralizado (logo → subtítulo → nome do plano), SEM a caixa de
-  // investimento separada no topo, SEM "preparada para" gigante — só o nome do
-  // cliente discreto. Funcionalidades completas em 2 colunas (nunca removidas —
-  // "não é pra tirar a lista, é encaixar o card"). Rodapé de investimento no
-  // formato de parcelas ("3x R$ 439,00"), com ícone de cartão, total e badge de
-  // economia. Documento inteiro com cantos arredondados, como um card de verdade.
+  // CORREÇÃO (18/08/26) — Julyan comparou lado a lado com a referência original e
+  // achou 3 diferenças reais: (1) cantos com decoração de "dobra" que ele nunca
+  // pediu — trocado por retângulo reto, igual à referência; (2) "Preparada para"
+  // não existe na referência — removido; (3) faltava o ícone de cartão antes de
+  // "no cartão de crédito", o ícone de seta antes de "Economia de", e o valor do
+  // rodapé de investimento precisa mostrar centavos ("R$439,00", não "R$439").
   const PRC_BG = '#1A1815';
   const PRC_LINE = 'rgba(255,255,255,.10)';
   const PRC_INK = '#FDFBF0';
@@ -5898,9 +5898,8 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   const CX = larguraCanvas / 2;
   const PAD = 60;
 
-  // Fundo escuro com cantos arredondados cobrindo o documento inteiro.
-  prcRoundRect(ctx, 0, 0, larguraCanvas, ctx.canvas.height || 4000, 28);
-  ctx.fillStyle = PRC_BG; ctx.fill();
+  // Fundo escuro — retângulo reto, sem decoração de canto.
+  ctx.fillStyle = PRC_BG; ctx.fillRect(0, 0, larguraCanvas, ctx.canvas.height || 4000);
 
   let y = 66;
   ctx.textAlign = 'center';
@@ -5911,12 +5910,6 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   ctx.fillText(`${tipo.nome.toUpperCase()} · ${c.periodo.nome.toUpperCase()}${c.periodo.desconto ? ` (-${c.periodo.desconto}%)` : ''}`, CX, y);
   y += 40;
   ctx.fillStyle = PRC_INK; ctx.font = '800 42px Arial'; ctx.fillText(c.plano.nome, CX, y);
-  y += 30;
-  // Nome do cliente — pedido explícito: "adicionar o nome do cliente e tal".
-  // Discreto, não domina o header (esse é o papel do nome do plano), mas fica claro
-  // pra quem essa proposta específica foi preparada.
-  ctx.fillStyle = PRC_MUT; ctx.font = '700 16px Arial';
-  ctx.fillText(`Preparada para ${precificacaoEstado.cliente.trim() || 'seu próximo cliente'}`, CX, y);
   y += 34;
   ctx.textAlign = 'left';
 
@@ -5955,33 +5948,51 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(larguraCanvas, y); ctx.stroke();
   y += 46;
 
-  // Rodapé de investimento — formato de parcelas ("3x R$ 439,00"), igual à
-  // referência. Quando o período é mensal (1x), mostra só o valor, sem "1x".
+  // Rodapé de investimento — formato de parcelas ("12x R$ 439,00", COM centavos —
+  // prcMoedaCentavos, não prcMoeda). Quando o período é mensal (1x), mostra só o
+  // valor, sem "1x".
   ctx.textAlign = 'center';
   ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial'; ctx.fillText('INVESTIMENTO', CX, y); y += 50;
   const prefixoParcelas = c.periodo.meses > 1 ? `${c.periodo.meses}x ` : '';
   ctx.font = '800 46px Arial';
   const larguraPrefixo = prefixoParcelas ? ctx.measureText(prefixoParcelas).width : 0;
-  const larguraValor = ctx.measureText(prcMoeda(c.mensal)).width;
+  const larguraValor = ctx.measureText(prcMoedaCentavos(c.mensal)).width;
   const inicioX = CX - (larguraPrefixo + larguraValor) / 2;
   ctx.textAlign = 'left';
   if (prefixoParcelas) { ctx.fillStyle = PRC_INK; ctx.fillText(prefixoParcelas, inicioX, y); }
-  ctx.fillStyle = PRC_RED; ctx.fillText(prcMoeda(c.mensal), inicioX + larguraPrefixo, y);
+  ctx.fillStyle = PRC_RED; ctx.fillText(prcMoedaCentavos(c.mensal), inicioX + larguraPrefixo, y);
   ctx.textAlign = 'center';
   y += 36;
-  ctx.fillStyle = PRC_MUT; ctx.font = '700 15px Arial';
-  ctx.fillText(c.periodo.meses > 1 ? 'no cartão de crédito' : 'cobrança mensal', CX, y);
+  // Ícone de cartão de crédito (desenhado, não emoji — emoji não renderiza igual em
+  // todo canvas/plataforma) antes de "no cartão de crédito", igual à referência.
+  if (c.periodo.meses > 1) {
+    ctx.font = '700 15px Arial';
+    const texto = 'no cartão de crédito';
+    const largura = ctx.measureText(texto).width;
+    const iconeW = 20, iconeGap = 7;
+    const inicioTextoX = CX - (largura + iconeW + iconeGap) / 2 + iconeW + iconeGap;
+    const cartaoX = inicioTextoX - iconeW - iconeGap;
+    ctx.strokeStyle = PRC_MUT; ctx.lineWidth = 1.4;
+    ctx.strokeRect(cartaoX, y - 11, iconeW, 14);
+    ctx.fillStyle = PRC_MUT; ctx.fillRect(cartaoX, y - 8, iconeW, 3);
+    ctx.textAlign = 'left'; ctx.fillText(texto, inicioTextoX, y); ctx.textAlign = 'center';
+  } else {
+    ctx.fillStyle = PRC_MUT; ctx.font = '700 15px Arial'; ctx.fillText('cobrança mensal', CX, y);
+  }
   y += 30;
-  ctx.fillText(`Total: ${prcMoeda(c.total)}`, CX, y);
+  ctx.fillStyle = PRC_MUT; ctx.fillText(`Total: ${prcMoedaCentavos(c.total)}`, CX, y);
   y += 40;
   if (c.economia > 0) {
     ctx.font = '800 16px Arial';
-    const texto = `Economia de ${prcMoeda(c.economia)}`;
-    const largura = ctx.measureText(texto).width + 26 * 2;
+    const texto = `Economia de ${prcMoedaCentavos(c.economia)}`;
+    // Ícone de seta ascendente antes do texto — igual à referência ("📈 Economia...").
+    const iconeTxt = '↗ ';
+    const larguraTotal = ctx.measureText(iconeTxt + texto).width;
+    const largura = larguraTotal + 26 * 2;
     ctx.textAlign = 'left';
     prcRoundRect(ctx, CX - largura / 2, y - 22, largura, 40, 20);
     ctx.fillStyle = PRC_GREEN; ctx.fill();
-    ctx.fillStyle = '#0E2A1F'; ctx.textAlign = 'center'; ctx.fillText(texto, CX, y + 5);
+    ctx.fillStyle = '#0E2A1F'; ctx.textAlign = 'center'; ctx.fillText(iconeTxt + texto, CX, y + 5);
   }
   y += 56;
 
@@ -5998,7 +6009,7 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   // layout (achado real: o deploy voltou pra versão antiga entre uma checagem e
   // outra, e sem isso não dava pra saber olhando só a imagem final).
   ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.font = '700 9px Arial'; ctx.textAlign = 'right';
-  ctx.fillText('layout v2 · 18/08', larguraCanvas - 20, y - 12);
+  ctx.fillText('layout v3 · 18/08', larguraCanvas - 20, y - 12);
   ctx.textAlign = 'left';
 
   return y;
