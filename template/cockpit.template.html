@@ -19617,6 +19617,14 @@ async function montarNovidadesPracas() {
                   (n.cnpj ? '<button class="nov-btn nov-tel-btn" data-cnpj="' + esc(String(n.cnpj)) + '">📞 buscar telefone</button>' : '') +
                   '<button class="nov-btn nov-add" data-nov=\'' + esc(JSON.stringify({ nome: n.nome, endereco: n.endereco, bairro: n.bairro, cidade: r.praca.municipio, estado: r.praca.uf, lat: n.lat, lng: n.lng, cnpj: n.cnpj, dono: dono })) + '\'>' +
                     (dono ? '+ rota de ' + esc(primeiroNomeDoOwner(dono)) : '+ mandar pra fila') + '</button>' +
+                  // PEDIDO (19/08/26, Julyan: "eu preciso jogar alguns leads no pipe
+                  // deles") — antes só existia "+rota" (que na real já importa pra
+                  // leads_prospeccao, mas o gestor precisava ir noutra tela pra depois
+                  // materializar o negócio no HubSpot). Este botão faz os dois passos
+                  // de uma vez. Exige dono E telefone — mesma exigência de
+                  // criarNegocioDaProspeccao (negócio sem telefone não faz sentido
+                  // pro executivo ligar depois).
+                  (dono && n.telefone ? '<button class="nov-btn nov-pipe" data-nov=\'' + esc(JSON.stringify({ nome: n.nome, endereco: n.endereco, bairro: n.bairro, cidade: r.praca.municipio, estado: r.praca.uf, lat: n.lat, lng: n.lng, cnpj: n.cnpj, dono: dono, telefone: n.telefone, nota: n.nota, avaliacoes: n.avaliacoes })) + '\' title="Importa e já cria o negócio no HubSpot, na etapa Prospecção">→ Prospecção</button>' : '') +
                 '</div>' +
               '</div>';
             }).join('') +
@@ -19646,7 +19654,20 @@ async function montarNovidadesPracas() {
         linha.querySelector('.nov-tel').innerHTML = '<a href="tel:' + String(tel).replace(/[^+0-9]/g, '') + '" style="color:var(--blue);font-weight:700;text-decoration:none;">📞 ' + esc(tel) + '</a>';
         // O telefone encontrado vai junto se ele importar em seguida.
         const add = linha.querySelector('.nov-add');
-        if (add) { const d = JSON.parse(add.dataset.nov); d.telefone = tel; add.dataset.nov = JSON.stringify(d); }
+        let dadosAtualizados = null;
+        if (add) { const d = JSON.parse(add.dataset.nov); d.telefone = tel; add.dataset.nov = JSON.stringify(d); dadosAtualizados = d; }
+        // Se já tinha dono mas não tinha telefone, o botão "→ Prospecção" não existia
+        // na renderização inicial (a condição exige os dois) — cria ele agora que o
+        // telefone chegou, em vez de obrigar a pessoa a atualizar a página.
+        if (dadosAtualizados && dadosAtualizados.dono && !linha.querySelector('.nov-pipe')) {
+          const botaoPipe = document.createElement('button');
+          botaoPipe.className = 'nov-btn nov-pipe';
+          botaoPipe.dataset.nov = JSON.stringify(dadosAtualizados);
+          botaoPipe.title = 'Importa e já cria o negócio no HubSpot, na etapa Prospecção';
+          botaoPipe.textContent = '→ Prospecção';
+          wireBotaoPipe(botaoPipe);
+          linha.querySelector('.nov-add').insertAdjacentElement('afterend', botaoPipe);
+        }
         btn.remove();
       } catch (e) { btn.dataset.buscando = '0'; btn.textContent = 'tentar de novo'; }
     });
@@ -19658,6 +19679,69 @@ async function montarNovidadesPracas() {
       importarNovidade(d, btn);
     });
   });
+  alvo.querySelectorAll('.nov-pipe').forEach(wireBotaoPipe);
+}
+
+function wireBotaoPipe(btn) {
+  btn.addEventListener('click', () => {
+    let d = null;
+    try { d = JSON.parse(btn.dataset.nov); } catch (e) { return; }
+    importarEJogarNoPipe(d, btn);
+  });
+}
+
+// PEDIDO (19/08/26, Julyan: "eu preciso jogar alguns leads no pipe deles") — faz os
+// dois passos de uma vez: importa pra leads_prospeccao (mesma lógica de
+// importarNovidade) e, com o ID retornado, já cria o negócio no HubSpot em
+// Prospecção (mesma lógica de criarNegocioDaProspeccao) — sem precisar trocar de
+// tela no meio do caminho.
+async function importarEJogarNoPipe(dados, botao) {
+  if (botao.dataset.enviando === '1') return false;
+  botao.dataset.enviando = '1';
+  botao.textContent = 'Importando…';
+  botao.disabled = true;
+  try {
+    const token = await tokenDeSessaoGlobal();
+    const respImportar = await fetch('/api/importar-leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({
+        fonte: 'casa_dos_dados',
+        leads: [{
+          nome: dados.nome, endereco: dados.endereco, bairro: dados.bairro,
+          cidade: dados.cidade, estado: dados.estado, lat: dados.lat, lng: dados.lng,
+          telefone: dados.telefone, categoria: 'Recém-aberto (CNPJ)',
+          responsavel_owner_id: dados.dono
+        }]
+      })
+    });
+    const jImportar = await respImportar.json().catch(() => ({}));
+    if (!respImportar.ok) {
+      botao.textContent = 'Falhou ao importar';
+      botao.title = (jImportar && jImportar.erro) || 'Erro na importação';
+      botao.dataset.enviando = '0'; botao.disabled = false;
+      return false;
+    }
+    const criado = (jImportar.leadsCriados || [])[0];
+    if (!criado || !criado.id) {
+      // Não é erro — pode ter caído como "mesclado" (já existia por nome+cidade
+      // parecidos) em vez de "inserido". Sem ID novo, não dá pra criar o negócio
+      // direto daqui — a pessoa acha ele na Carteira normal e usa "→ Prospecção" de lá.
+      botao.textContent = '✓ na fila — abra na Carteira';
+      botao.style.background = 'var(--green-soft)'; botao.style.borderColor = 'var(--green)'; botao.style.color = 'var(--green)';
+      if (typeof carregarProspeccao === 'function') { try { await carregarProspeccao(); } catch (e) {} }
+      return true;
+    }
+    botao.textContent = 'Criando negócio…';
+    const leadParaNegocio = { id: criado.id, nome: dados.nome, telefone: dados.telefone, responsavel_owner_id: dados.dono, endereco: dados.endereco, bairro: dados.bairro, cidade: dados.cidade, nota: dados.nota, avaliacoes: dados.avaliacoes };
+    const ok = await criarNegocioDaProspeccao(leadParaNegocio, botao);
+    if (typeof carregarProspeccao === 'function') { try { await carregarProspeccao(); } catch (e) {} }
+    return ok;
+  } catch (e) {
+    botao.textContent = 'Falhou';
+    botao.dataset.enviando = '0'; botao.disabled = false;
+    return false;
+  }
 }
 
 const CRIAR_NEGOCIO_PROSPECCAO_URL = '/api/criar-negocio';
@@ -20104,6 +20188,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   // nada lia integridadeFontes cedo; passou a ser TDZ real assim que o hero passou a
   // referenciá-lo. Resolvido por reordenação, não por adiar a leitura.
   const fontesPlanejadas = [
+    { chave: 'casa dos dados', rotulo: 'Casa dos Dados' },
     { chave: 'outscraper', rotulo: 'Outscraper' },
     { chave: 'google places', rotulo: 'Google Places' },
     { chave: 'tripadvisor', rotulo: 'Tripadvisor' },
@@ -20397,6 +20482,17 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   const totalTop = baseOperacional.filter(l => prospeccaoAtiva(l) && (Number(l.avaliacoes) || 0) >= 1000).length;
   const totalTop3k = baseOperacional.filter(l => prospeccaoAtiva(l) && (Number(l.avaliacoes) || 0) >= 3000).length;
   const totalNuncaVis = baseOperacional.filter(l => prospeccaoAtiva(l) && !prospeccaoVisitados.has(prospeccaoNormalizarTexto(l.nome))).length;
+  // PEDIDO (19/08/26, Julyan: "eu quero a casa dos dados nessa lista, e eu poder
+  // filtrar o que quero escolher, preciso dessa tela de prospecção mais otimizada")
+  // — antes, filtrar por fonte exigia abrir "Filtros avançados" e usar um dropdown.
+  // Agora tem um pill por fonte, clicável direto, igual ao padrão de Prioridade/Sem
+  // dono/etc. — e usa o MESMO campo de estado do dropdown (prospeccaoFiltro.fonte),
+  // então clicar aqui ou escolher no dropdown dá o mesmo resultado, sempre em sincronia.
+  const pillsFonteHtml = souGestorProsp ? fontesPlanejadas.map(f => {
+    const total = baseAtivaFonte.filter(l => String(l.fonte || '').split('+').map(x => x.trim()).filter(Boolean).map(prospeccaoRotuloFonte).includes(f.rotulo)).length;
+    if (!total) return '';
+    return `<button data-pillfonte="${esc(f.rotulo)}" class="filtro${prospeccaoFiltro.fonte === f.rotulo ? ' on' : ''}">${esc(f.rotulo)}<small>${total}</small></button>`;
+  }).join('') : '';
   const pills = `
     <div class="filtros">
       <button data-pill="ativas" class="filtro${prospeccaoFiltro.visao === 'ativas' ? ' on' : ''}">${souGestorProsp ? 'Prioridade' : 'Recomendadas'}<small>${totalAtivas}</small></button>
@@ -20406,6 +20502,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       <button data-toppill title="Volume de avaliações — peso comercial, não nota" class="filtro${prospeccaoFiltro.topAvaliadas ? ' on' : ''}">${souGestorProsp ? `3.000+ avaliações<small>${totalTop3k}</small>` : `★ 1.000+ avaliações<small>${totalTop}</small>`}</button>
       <button data-pill="historico" class="filtro${prospeccaoFiltro.visao === 'historico' ? ' on' : ''}">Histórico<small>${totalHistorico}</small></button>
       <button data-nuncavis title="Sem nenhuma tarefa de Visita/Revisita registrada no HubSpot com esse nome" class="filtro${prospeccaoFiltro.nuncaVisitada ? ' on' : ''}">Nunca visitada<small>${totalNuncaVis}</small></button>
+      ${pillsFonteHtml ? `<span style="width:1px;align-self:stretch;background:var(--line-soft);margin:2px 2px;"></span>${pillsFonteHtml}` : ''}
       ${(typeof planoMapaOrigemAtual !== 'undefined' && planoMapaOrigemAtual)
         ? `<button data-pertodemim title="Ordenar pela distância até o território que você declarou na Rota" class="filtro${prospeccaoFiltro.pertoDeMim ? ' on' : ''}" style="margin-left:auto;">📍 Perto de mim</button>`
         : `<span title="Defina o território na aba Rota para ver distâncias aqui" style="font-size:11.5px;color:var(--muted2);align-self:center;padding-left:4px;line-height:1.4;margin-left:auto;">Defina seu território na <b>Rota</b> para ver a distância de cada conta.</span>`}
@@ -20878,6 +20975,14 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   el.querySelectorAll('[data-nuncavis]').forEach(btn => {
     btn.addEventListener('click', () => {
       prospeccaoFiltro.nuncaVisitada = !prospeccaoFiltro.nuncaVisitada;
+      prospeccaoPagina = 1;
+      renderProspeccaoNova(true);
+    });
+  });
+  el.querySelectorAll('[data-pillfonte]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      // Toggle: clicar na fonte já ativa desfiltra (mesmo padrão dos outros pills).
+      prospeccaoFiltro.fonte = prospeccaoFiltro.fonte === btn.dataset.pillfonte ? '' : btn.dataset.pillfonte;
       prospeccaoPagina = 1;
       renderProspeccaoNova(true);
     });
