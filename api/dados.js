@@ -63,10 +63,33 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ ok: true, precificacao: PRECIFICACAO });
   }
 
+// OTIMIZAÇÃO (19/08/26, Julyan: "o site tá cada vez mais pesado, tem algo que
+// conseguimos otimizar sem perder nada do conteúdo") — achado real: em objetos de
+// negócio (críticos, quentes, funil), ~50% dos campos vêm `null` do HubSpot (ex.:
+// `email`, `cnpj_cpf`, `mrr`, `data_da_reuniao` — a maioria dos negócios não passou
+// daquela etapa ainda). Cada `"campo":null` ocupa espaço no JSON sem carregar
+// NENHUMA informação (o front-end já trata campo ausente exatamente igual a `null`
+// — nenhum lugar do código faz `'campo' in objeto`, checado antes desta mudança).
+// Remove essas chaves recursivamente, cortando ~metade do peso das listas grandes
+// sem tirar um único dado que o usuário realmente vê.
+function removerNulosRecursivo(valor) {
+  if (Array.isArray(valor)) return valor.map(removerNulosRecursivo);
+  if (valor && typeof valor === 'object') {
+    const limpo = {};
+    for (const chave in valor) {
+      const v = valor[chave];
+      if (v === null) continue;
+      limpo[chave] = removerNulosRecursivo(v);
+    }
+    return limpo;
+  }
+  return valor;
+}
+
   // ---- 3. monta e filtra ----
   try {
     const completo = montarDadosCompletos();
-    const dados = filtrarParaPapel(completo, usuario);
+    const dados = removerNulosRecursivo(filtrarParaPapel(completo, usuario));
     return res.status(200).json({
       sessao: { email: usuario.email, role: usuario.role, ownerId: usuario.ownerId, nome: usuario.nome },
       dados
