@@ -3590,6 +3590,16 @@
     </div>
   </div>
 
+  <div class="view" id="viewOnboarding">
+    <div style="max-width:640px;margin:60px auto;text-align:center;padding:0 24px;">
+      <div style="font-size:48px;margin-bottom:16px;">👋</div>
+      <h1 style="font:800 28px 'Poppins',sans-serif;color:var(--ink);margin:0 0 12px;" id="onboardingSaudacao">Bem-vindo(a)!</h1>
+      <p style="font-size:16px;color:var(--muted2);line-height:1.6;margin:0 0 8px;">Você está em <b>onboarding</b> — ainda não tem negócios atribuídos no HubSpot, então o funil, a Daily e a Agenda ainda não têm nada pra mostrar.</p>
+      <p style="font-size:16px;color:var(--muted2);line-height:1.6;margin:0 0 32px;">Vamos estudar! Comece pelo Playbook de campo — assim que seu território e sua carteira forem definidos com seu gestor, o resto do cockpit se preenche sozinho.</p>
+      <button type="button" class="push" onclick="activateTab('viewPlaybook'); if (typeof renderPlaybook === 'function') renderPlaybook();" style="background:var(--red);color:#fff;border:none;border-radius:999px;padding:14px 32px;font:800 14px 'Manrope',sans-serif;cursor:pointer;">Ir pro Playbook →</button>
+    </div>
+  </div>
+
   <div class="view" id="viewMeuPainel">
     <div id="meuPainelContent"></div>
   </div>
@@ -4013,13 +4023,21 @@ function aplicarVisaoPorPapel() {
 
   const souRep = sessaoAtual.role === 'rep';
   const souGestorSessao = sessaoAtual.role === 'manager';
+  // PEDIDO (19/08/26, Julyan): "como eles não têm dados ainda do HubSpot, quero que
+  // coloque avisos 'você está em onboarding' melhor do que deixar tudo zerado ou com
+  // erro". Executivo recém-cadastrado (ownerId ainda é um placeholder "pendente_*",
+  // sinalizado por aComecar:true em usuarios.json) não tem NENHUM negócio no funil —
+  // renderizar Meu Funil/Daily/Agenda normalmente pra ele mostraria tudo zerado (ou
+  // pior, algum cálculo quebrando com divisão por zero). Em vez disso: só Hoje
+  // (virando a tela de boas-vindas) e Playbook ficam acessíveis; o resto é escondido
+  // até o gestor atribuir o ownerId de verdade.
+  const emOnboarding = souRep && !!sessaoAtual.aComecar;
 
-  // Sempre define os dois estados explicitamente (mostrar E esconder) — nunca só um lado.
-  // Isso evita que uma aba restrita fique "grudada" visível de uma sessão anterior no
-  // mesmo navegador (ex: testou como gestor, depois logou como executivo sem recarregar).
   document.getElementById('tabBtnMeuPainel').style.display = souRep ? 'flex' : 'none';
+  const lblMeuPainel = document.querySelector('#tabBtnMeuPainel .tab-btn-label');
+  if (lblMeuPainel) lblMeuPainel.textContent = emOnboarding ? 'Onboarding' : 'Hoje';
   const btnMeuFunil = document.getElementById('tabBtnMeuFunil');
-  if (btnMeuFunil) btnMeuFunil.style.display = souRep ? 'flex' : 'none';
+  if (btnMeuFunil) btnMeuFunil.style.display = (souRep && !emOnboarding) ? 'flex' : 'none';
   // ETAPA 5 (07/08/26): Coaching deixou de ser uma aba própria — virou seção dentro de
   // Desenvolvimento (união de navegação, dado intocado). BLOCO 1 (10/08): o botão morto
   // (display:none permanente) foi removido do DOM de vez; quem liga/desliga a seção
@@ -4057,6 +4075,7 @@ function aplicarVisaoPorPapel() {
   // a essas abas, o que é decisão de produto pendente, não renomeação de texto.
   const lblDaily = document.querySelector('#tabBtnDaily .tab-btn-label');
   if (lblDaily) lblDaily.textContent = souRep ? 'Minha Daily' : 'Daily & Ritmo';
+  document.getElementById('tabBtnDaily').style.display = emOnboarding ? 'none' : 'flex';
   const lblAgenda = document.querySelector('#tabBtnAgenda .tab-btn-label');
   if (lblAgenda) lblAgenda.textContent = souRep ? 'Prospecção' : 'Agenda';
   // AGENDA COMO ABA PRÓPRIA (Julyan, 11/08). Ela apontar para a MESMA view é de
@@ -4073,6 +4092,7 @@ function aplicarVisaoPorPapel() {
   document.getElementById('tabBtnResumo').style.display = souGestorSessao ? 'flex' : 'none';
   const lblPDIs = document.querySelector('#tabBtnPDIs .tab-btn-label');
   if (lblPDIs) lblPDIs.textContent = souGestorSessao ? 'Pessoas' : 'Desenvolvimento';
+  if (emOnboarding) { document.getElementById('tabBtnPDIs').style.display = 'none'; document.getElementById('tabBtnPrecificacao').style.display = 'none'; }
 
   // ETAPA 7 (Claude Design): pro gestor, Agenda deixa de ser aba própria e vira seção
   // dentro de "Daily & Ritmo" — igual ao PDI/Coaching virou uma coisa só. Não duplica
@@ -4082,7 +4102,7 @@ function aplicarVisaoPorPapel() {
   // Otimização 08/08 (decisão do Julyan): a agenda embutida na Daily do gestor MORREU —
   // a Daily & Ritmo tinha duas almas (placar + agenda inteira) e ficou impossível de gerir.
   // Agora a Agenda é aba própria pros DOIS papéis, e a Daily faz só o trabalho dela.
-  document.getElementById('tabBtnAgenda').style.display = 'flex';
+  document.getElementById('tabBtnAgenda').style.display = emOnboarding ? 'none' : 'flex';
   const agendaMiniHero = document.getElementById('agendaMiniHero');
   const agendaContentDiv = document.getElementById('agendaContent');
   const agendaSlotNaDaily = document.getElementById('agendaEmbutidaNaDaily');
@@ -4108,21 +4128,32 @@ function aplicarVisaoPorPapel() {
 
   if (souRep) {
     document.getElementById('sidenavTitle').textContent = 'Meu espaço';
-    // ETAPA 2: home fixa do executivo é "Hoje" — nunca o Cockpit coletivo, nunca dependendo
-    // do dia da semana (a regra de segunda-feira do Resumo é exclusiva do gestor).
-    // BLOCO 32b (13/08/26) — bug pego AO VIVO na primeira verificação: o onAuthStateChange
-    // do Supabase dispara mais de uma vez (o comentário em aplicarSessao já avisava), e
-    // cada disparo repassa por mostrarApp() -> aplicarVisaoPorPapel(). Na segunda passada,
-    // o activateTab('viewMeuPainel') incondicional daqui atropelava a posição recém-
-    // restaurada E a regravava por cima no sessionStorage (foi exatamente o rastro achado:
-    // flag de restauração true + posição salva sobrescrita pra viewMeuPainel). Regra:
-    // depois que a restauração desta sessão já decidiu a tela, a home vira só fallback.
-    if (!posicaoNavRestaurada) activateTab('viewMeuPainel');
-    renderMeuPainel();
-    viewsDesenhadas.add('viewMeuPainel');
-    // A home continua sendo desenhada primeiro (custo já pago hoje; vira fallback
-    // pronto); depois, se havia posição salva nesta sessão, volta pra ela.
-    if (typeof restaurarPosicaoDeNavegacao === 'function') restaurarPosicaoDeNavegacao();
+    if (emOnboarding) {
+      // Onboarding: nem tenta renderizar Meu Painel (que espera dados reais do funil,
+      // como visitas/quentes/travados calculados a partir de negócios que ainda não
+      // existem) — vai direto pra tela de boas-vindas, sem risco de erro de cálculo
+      // com lista vazia.
+      const saudacao = document.getElementById('onboardingSaudacao');
+      if (saudacao) saudacao.textContent = `Bem-vindo(a), ${(sessaoAtual.nome || '').split(' ')[0] || ''}!`;
+      activateTab('viewOnboarding');
+      viewsDesenhadas.add('viewOnboarding');
+    } else {
+      // ETAPA 2: home fixa do executivo é "Hoje" — nunca o Cockpit coletivo, nunca dependendo
+      // do dia da semana (a regra de segunda-feira do Resumo é exclusiva do gestor).
+      // BLOCO 32b (13/08/26) — bug pego AO VIVO na primeira verificação: o onAuthStateChange
+      // do Supabase dispara mais de uma vez (o comentário em aplicarSessao já avisava), e
+      // cada disparo repassa por mostrarApp() -> aplicarVisaoPorPapel(). Na segunda passada,
+      // o activateTab('viewMeuPainel') incondicional daqui atropelava a posição recém-
+      // restaurada E a regravava por cima no sessionStorage (foi exatamente o rastro achado:
+      // flag de restauração true + posição salva sobrescrita pra viewMeuPainel). Regra:
+      // depois que a restauração desta sessão já decidiu a tela, a home vira só fallback.
+      if (!posicaoNavRestaurada) activateTab('viewMeuPainel');
+      renderMeuPainel();
+      viewsDesenhadas.add('viewMeuPainel');
+      // A home continua sendo desenhada primeiro (custo já pago hoje; vira fallback
+      // pronto); depois, se havia posição salva nesta sessão, volta pra ela.
+      if (typeof restaurarPosicaoDeNavegacao === 'function') restaurarPosicaoDeNavegacao();
+    }
   }
 
   if (souGestorSessao) {
@@ -10206,6 +10237,7 @@ document.getElementById('tabBtnDaily').addEventListener('click', () => {
   }, true);
 });
 document.getElementById('tabBtnMeuPainel').addEventListener('click', () => {
+  if (sessaoAtual && sessaoAtual.role === 'rep' && sessaoAtual.aComecar) { activateTab('viewOnboarding'); return; }
   activateTab('viewMeuPainel');
   desenharViewSeNecessario('viewMeuPainel', () => { if (typeof renderMeuPainel === 'function') renderMeuPainel(); });
 });
