@@ -91,7 +91,7 @@ function removerNulosRecursivo(valor) {
     const completo = montarDadosCompletos();
     const dados = removerNulosRecursivo(filtrarParaPapel(completo, usuario));
     return res.status(200).json({
-      sessao: { email: usuario.email, role: usuario.role, ownerId: usuario.ownerId, nome: usuario.nome },
+      sessao: { email: usuario.email, role: usuario.role, ownerId: usuario.ownerId, nome: usuario.nome, aComecar: !!usuario.aComecar },
       dados
     });
   } catch (e) {
