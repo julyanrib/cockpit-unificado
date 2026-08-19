@@ -7,13 +7,16 @@
 // GitHub Actions — assim que o HubSpot avisa que algo mudou. Zero lógica de negócio
 // nova, zero risco de duas implementações divergentes do "como calcular o funil".
 //
-// Variáveis de ambiente novas na Vercel (nenhuma delas existia antes):
-//   HUBSPOT_APP_SECRET = o "Client secret" do App Privado no HubSpot (aba Webhooks) —
+// Variáveis de ambiente novas na Vercel:
+//   HUBSPOT_APP_SECRET  = o "Client secret" do App Privado no HubSpot (aba Webhooks) —
 //                        usado só pra confirmar que o aviso realmente veio do HubSpot,
 //                        nunca aparece no navegador de ninguém.
 //   GITHUB_PAT         = um token do GitHub com permissão de "workflow" (explico como
 //                        gerar no passo a passo) — usado só pra apertar o botão
 //                        "Run workflow" da Action automaticamente, no seu lugar.
+//   SUPABASE_URL, SUPABASE_SERVICE_KEY = as mesmas usadas no resto do projeto —
+//                        usadas aqui só pro lock atômico de cooldown (tabela
+//                        webhook_cooldown), não pra ler/gravar nenhum dado de negócio.
 //
 // Segurança: HubSpot assina cada aviso (header X-HubSpot-Signature-v3) com o Client
 // Secret do App Privado. A gente recalcula essa assinatura aqui e só aceita o aviso se
@@ -91,36 +94,55 @@ module.exports = async function handler(req, res) {
     return res.status(401).json({ erro: 'Assinatura não confere — aviso recusado.' });
   }
 
-  // ---- 3. intervalo mínimo entre disparos (cooldown) — a proteção que faltava ----
-  // Olha a ÚLTIMA execução desta Action, seja qual for o status dela, e recusa disparar
-  // de novo se ainda não passou COOLDOWN_MINUTOS desde que ela começou. Isso é o que
-  // realmente limita a frequência — a checagem de "em andamento/na fila" logo abaixo
-  // continua existindo, mas sozinha só evitava disparo duplicado no mesmo instante.
+  const supaUrl = process.env.SUPABASE_URL;
+  const supaService = process.env.SUPABASE_SERVICE_KEY;
+  if (!supaUrl || !supaService) {
+    return res.status(500).json({ erro: 'Servidor sem SUPABASE_URL/SUPABASE_SERVICE_KEY configurados (necessários pro lock de cooldown).' });
+  }
+
+  // ---- 3. intervalo mínimo entre disparos (cooldown) — LOCK ATÔMICO, não checagem ----
+  // CORREÇÃO (19/08/26, achado real: pares de execuções com segundos de diferença,
+  // mesmo com cooldown de 60min) — a versão antiga fazia "consultar API do GitHub →
+  // decidir → disparar" em passos separados (check-then-act). O HubSpot manda 1 aviso
+  // POR PROPRIEDADE alterada — mudar etapa + preencher campos = vários avisos quase
+  // simultâneos. Duas requisições da function podiam consultar a MESMA última
+  // execução (de >60min atrás) ANTES da primeira aparecer na lista do GitHub, e ambas
+  // concluíam "pode disparar". Clássica race condition.
+  //
+  // Agora é um único UPDATE condicional no Postgres — o banco serializa isso, então é
+  // fisicamente impossível duas requisições concorrentes ganharem o lock ao mesmo
+  // tempo. Só quem realmente "vence" a corrida (SET ... WHERE ultimo_disparo_em <
+  // agora-60min RETURNING id) segue pro disparo; quem perde recebe array vazio e para
+  // aqui, sem nunca ter chamado a API do GitHub.
+  const agora = new Date();
+  const limiteMs = agora.getTime() - COOLDOWN_MINUTOS * 60 * 1000;
+  let ganhouLock = false;
   try {
-    const headersGitHub = {
-      Authorization: `Bearer ${githubPat}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28'
-    };
-    const ultimaExecucao = await fetch(
-      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=1`,
-      { headers: headersGitHub }
-    );
-    const dadosUltima = ultimaExecucao.ok ? await ultimaExecucao.json() : { workflow_runs: [] };
-    const execucaoMaisRecente = (dadosUltima.workflow_runs || [])[0];
-    if (execucaoMaisRecente) {
-      const idadeMinutos = (Date.now() - new Date(execucaoMaisRecente.created_at).getTime()) / 60000;
-      if (idadeMinutos < COOLDOWN_MINUTOS) {
-        return res.status(200).json({
-          ok: true, disparado: false,
-          motivo: `cooldown ativo — última rodada começou há ${idadeMinutos.toFixed(1)} min (mínimo ${COOLDOWN_MINUTOS} min entre disparos)`
-        });
+    const respLock = await fetch(
+      `${supaUrl}/rest/v1/webhook_cooldown?id=eq.1&ultimo_disparo_em=lt.${encodeURIComponent(new Date(limiteMs).toISOString())}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${supaService}`,
+          apikey: supaService,
+          'Content-Type': 'application/json',
+          Prefer: 'return=representation'
+        },
+        body: JSON.stringify({ ultimo_disparo_em: agora.toISOString() })
       }
-    }
+    );
+    const linhasAtualizadas = respLock.ok ? await respLock.json() : [];
+    ganhouLock = Array.isArray(linhasAtualizadas) && linhasAtualizadas.length > 0;
   } catch (e) {
-    // Falha ao checar o cooldown não pode travar o webhook pra sempre — segue pro
-    // disparo normal (a checagem de in_progress/queued abaixo ainda protege duplicata).
-    console.log('[hubspot-webhook] Falha ao checar cooldown (seguindo mesmo assim):', e.message);
+    console.log('[hubspot-webhook] Falha ao tentar o lock de cooldown:', e.message);
+    // Falha ao falar com o Supabase não pode travar o webhook pra sempre, mas também
+    // não pode arriscar disparo sem trava — nesse caso específico, prefere NÃO
+    // disparar (mais seguro pedir pro próximo aviso tentar de novo do que arriscar
+    // uma rajada de disparos se o Supabase estiver instável).
+    return res.status(200).json({ ok: true, disparado: false, motivo: 'exceção ao checar lock de cooldown: ' + e.message });
+  }
+  if (!ganhouLock) {
+    return res.status(200).json({ ok: true, disparado: false, motivo: `cooldown ativo ou lock perdido pra outra requisição concorrente (mínimo ${COOLDOWN_MINUTOS} min entre disparos)` });
   }
 
   // ---- 4. evita disparar a Action de novo se já tem uma rodando/na fila ----
