@@ -31,8 +31,7 @@ const REPS = [
   { ownerId: '91477292', name: 'Kelly Travieso Di Domenico' },
   { ownerId: '89842507', name: 'Wericles Andrade' },
   { ownerId: '87069181', name: 'Amanda Pardim' },
-  { ownerId: '86100505', name: 'Marco Filho' },
-  { ownerId: '94079973', name: 'Michel Carvalho' }
+  { ownerId: '86100505', name: 'Marco Filho' }
 ];
 
 // Quantos dias pra trás recuperar (7 = semana corrida, incluindo hoje — hoje o fetch normal

@@ -97,8 +97,7 @@ const REPS = [
   { ownerId: '91477292', name: 'Kelly Travieso Di Domenico' },
   { ownerId: '89842507', name: 'Wericles Andrade' },
   { ownerId: '87069181', name: 'Amanda Pardim' },
-  { ownerId: '86100505', name: 'Marco Filho' },
-  { ownerId: '94079973', name: 'Michel Carvalho' }
+  { ownerId: '86100505', name: 'Marco Filho' }
 ];
 
 // BUG REAL corrigido aqui (30/07): todo cálculo de "hoje"/"mês corrente" abaixo usava

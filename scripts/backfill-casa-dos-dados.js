@@ -36,10 +36,11 @@ const JANELA_DIAS = 365 * 8;
 const DIAS_MINIMO_ABERTURA = 90;
 
 // Uma linha por CIDADE que api/importar-leads.js sabe rotear (a função rotearTerritorio
-// de lá decide o dono certo por cidade+bairro). Rio de Janeiro sozinho cobre 3 executivos
-// (Bruno, Sandro, Michel) — por isso carrega metaBairros: sub-cotas de 30 leads por bairro
-// de cada um, testadas com o MESMO critério de bairro que rotearTerritorio usa lá no
-// endpoint (mantido em sincronia manual — se mudar um lado, mudar o outro).
+// de lá decide o dono certo por cidade+bairro). Rio de Janeiro cobre 2 executivos
+// (Bruno, Sandro — Michel foi desligado em 20/08/26) — por isso carrega metaBairros:
+// sub-cotas de 30 leads por bairro de cada um, testadas com o MESMO critério de bairro
+// que rotearTerritorio usa lá no endpoint (mantido em sincronia manual — se mudar um
+// lado, mudar o outro).
 // Cidades de executivo único (1 rep por município) só precisam do objetivoMinimo geral.
 const CIDADES = [
   { municipio: 'Vila Velha', uf: 'ES', objetivoMinimo: 30, tetoMaximo: 150 }, // Marco Filho
@@ -48,8 +49,9 @@ const CIDADES = [
     municipio: 'Rio de Janeiro', uf: 'RJ', objetivoMinimo: 90, tetoMaximo: 400,
     metaBairros: [
       { nome: 'Bruno Martins (Taquara/Jacarepaguá/Freguesia/Anil)', minimo: 30, teste: b => /taquara|jacarepagua|freguesia|\banil\b/.test(b) },
-      { nome: 'Sandro Linhares (Tijuca)', minimo: 30, teste: b => /tijuca/.test(b) },
-      { nome: 'Michel Carvalho (Campo Grande)', minimo: 30, teste: b => /campo grande/.test(b) }
+      { nome: 'Sandro Linhares (Tijuca)', minimo: 30, teste: b => /tijuca/.test(b) }
+      // Michel Carvalho (Campo Grande) removido em 20/08/26 — desligado. Campo Grande
+      // fica sem sub-cota dedicada até o Julyan reatribuir o território a alguém.
     ]
   },
   { municipio: 'São Paulo', uf: 'SP', objetivoMinimo: 30, tetoMaximo: 150 }, // Wericles Andrade (Santo Amaro/Morumbi)
