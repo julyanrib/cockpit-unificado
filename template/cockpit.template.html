@@ -1468,16 +1468,36 @@
     .app-header{padding-inline:14px;gap:10px;overflow:hidden;}
     #userBadge #perfilNomeClicavel{display:none;}
     #userBadge{margin-left:auto;flex:none;}
-    .app-sidenav{position:fixed;bottom:0;left:0;right:0;width:100%;flex-direction:row;border-right:none;border-top:1px solid var(--line);padding:6px 8px;gap:2px;z-index:30;overflow-x:auto;}
+    .app-sidenav{position:fixed;bottom:0;left:0;right:0;width:100%;flex-direction:row;background:var(--panel);border-right:none;border-top:1px solid var(--line);padding:6px 8px;gap:2px;z-index:30;overflow-x:auto;box-shadow:0 -2px 12px rgba(0,0,0,.06);}
     .app-sidenav-title, .app-sidenav-spacer, .app-sidenav-footer{display:none;}
     .tab-btn{flex-direction:column;gap:3px;padding:8px 6px;min-width:64px;font-size:10.5px;text-align:center;flex:1;}
-    .tab-btn.active::before{left:50%;top:0;transform:translateX(-50%);width:20px;height:3px;border-radius:0 0 3px 3px;}
+    /* CORREÇÃO (20/08/26, achado na revisão mobile) — .tab-btn.active (regra geral,
+       linha ~1040) pinta um fundo escuro sólido usando border-radius:var(--r-pill).
+       Em desktop o botão é uma pílula alongada (retangular), então fica bonito. Em
+       mobile o botão virou quase-quadrado (ícone em cima, texto embaixo) — o MESMO
+       border-radius de pílula, aplicado a um formato quase-quadrado, vira um CÍRCULO
+       preto sólido cobrindo ícone e texto inteiros, ilegível. Correção: remove o
+       fundo em mobile, destaca só com cor (vermelho da marca) no ícone/texto — padrão
+       comum de tab bar mobile (iOS/Android), mantém a barrinha fina já existente.
+    */
+    .tab-btn.active{background:none;color:var(--red);font-weight:700;}
+    .tab-btn.active .tab-btn-icon{color:var(--red);}
+    .tab-btn.active::before{content:'';position:absolute;left:50%;top:0;transform:translateX(-50%);width:20px;height:3px;border-radius:0 0 3px 3px;background:var(--red);}
     .tab-btn .tab-btn-icon{display:inline-flex;align-items:center;justify-content:center;font-size:18px;} .tab-btn .tab-btn-icon svg{width:20px;height:20px;}
-    .app-main{padding:18px 14px 88px;}
+    .app-main{padding:18px 14px 108px;}
     .hoje-grid{grid-template-columns:1fr;}
     .meu-hoje-signal-strip{grid-template-columns:repeat(2,minmax(0,1fr));}
     .meu-hoje-signal:first-child{grid-column:1/-1;}
     .hoje-l1-grid,.hoje-l2-grid{grid-template-columns:1fr!important;}
+    /* CORREÇÃO (20/08/26, achado na revisão mobile) — .rep-tag tem largura fixa
+       (~76px) e não encolhe; num container flex apertado (a 1ª coluna da tabela de
+       executivos fica com só ~148px em mobile), ela "roubava" quase todo o espaço
+       do nome, deixando ele com uns 15px de largura — "Ricardo Antunes" virava "R..".
+       Corrigido: a tag agora QUEBRA pra uma segunda linha quando não cabe ao lado do
+       nome, em vez de espremer o nome até ficar ilegível.
+    */
+    .rep-nometag-wrap{flex-wrap:wrap;row-gap:4px;}
+    .rep-nometag-wrap .rep-tag{margin-left:0!important;}
   }
   @media (max-width:860px){
     .login-shell{grid-template-columns:1fr;}
@@ -7012,7 +7032,7 @@ function renderVendasMes() {
       <div class="rep-row vendas-mes-row" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:1.6fr .7fr 1fr 1.2fr;align-items:center;padding:14px 22px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
         <div style="min-width:0;">
           <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.name}</div>
-          <div style="font-size:11px;color:var(--muted2);">${r.praca}${semMrrRep > 0 ? ` · <span style="color:var(--amber);font-weight:700;">${semMrrRep} sem MRR</span>` : ''}</div>
+          <div style="font-size:11px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.praca}${semMrrRep > 0 ? ` · <span style="color:var(--amber);font-weight:700;">${semMrrRep} sem MRR</span>` : ''}</div>
         </div>
         <div class="mono" style="font-size:14px;font-weight:700;text-align:right;">${r.count}</div>
         <div class="mono" style="font-size:13.5px;font-weight:700;text-align:right;color:var(--green);">${fmtBRL(r.mrrTotal)}</div>
@@ -11436,13 +11456,13 @@ function renderRepsList() {
 
     return `
       <div class="rep-row" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
-        <div style="display:flex;align-items:center;gap:10px;min-width:0;text-align:left;">
+        <div class="rep-nometag-wrap" style="display:flex;align-items:center;gap:10px;min-width:0;text-align:left;flex:1;">
           <span class="rep-avatar-slot" data-owner="${r.ownerId}" data-variant="${variantAvatar}"></span>
-          <div style="min-width:0;">
+          <div style="min-width:0;flex:1 1 auto;">
             <div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.name}</div>
-            <div style="font-size:11px;color:var(--muted2);">${r.praca}</div>
+            <div style="font-size:11px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.praca}</div>
           </div>
-          <span class="rep-tag ${semDados ? 'nodata' : r.tag}" style="margin-left:4px;">${r.tagLabel}</span>
+          <span class="rep-tag ${semDados ? 'nodata' : r.tag}" style="margin-left:4px;flex:none;">${r.tagLabel}</span>
         </div>
         <div class="mono" style="font-size:13.5px;text-align:right;${semDados ? 'color:var(--muted2);' : ''}">${semDados ? '—' : r.open}</div>
         <div style="text-align:right;">
@@ -21955,8 +21975,8 @@ async function renderCoaching() {
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
         ${avatarHTML(emailDoOwnerId(r.ownerId), r.name, 44)}
         <div style="min-width:0;flex:1;">
-          <div style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:700;">${r.name}</div>
-          <div style="color:var(--muted2);font-size:11.5px;">${r.praca}</div>
+          <div style="font-family:'Poppins',sans-serif;font-size:18px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.name}</div>
+          <div style="color:var(--muted2);font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.praca}</div>
         </div>
         <span class="coachingTendencia"></span>
       </div>
