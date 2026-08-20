@@ -153,17 +153,20 @@ function semAcento(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 // Rotas oficiais passadas pelo Julyan em 10/08/2026:
-//   Marco→Vila Velha · Amanda→Vitória · Whell→Zona Sul de SP · Michel→Campo Grande/RJ
+//   Marco→Vila Velha · Amanda→Vitória · Whell→Zona Sul de SP
 //   Bruno→Taquara/Jacarepaguá · Sandro→Tijuca · Kelly→POA+Canoas · Ricardo→POA.
 // Nova Iguaçu saiu do mapa do Michel nesta rodada. O split POA Kelly/Ricardo entra
 // quando o Ricardo tiver owner ID real no HubSpot (hoje: 'pendente_ricardo2') —
 // até lá POA inteira roteia pra Kelly, e o gestor reatribui na ficha se quiser.
+// ATUALIZAÇÃO (20/08/26) — Michel Carvalho foi desligado. Campo Grande/RJ e Bangu
+// (território dele) ficam SEM roteamento automático até o Julyan decidir quem
+// assume — os leads dessas regiões caem sem dono (fila geral), não em nenhum
+// executivo específico, pra não atribuir engano a quem não pediu esse território.
 const TERRITORIOS = [
   { owner: '86100505', nome: 'Marco Filho', teste: t => t.includes('vila velha') },
   { owner: '87069181', nome: 'Amanda Pardim', teste: t => t.includes('vitoria') },
   { owner: '87569072', nome: 'Sandro Linhares', teste: t => t.includes('tijuca') || t.includes('vila isabel') || t.includes('cachambi') || t.includes('meier') || t.includes('sao cristovao') },
   { owner: '86100506', nome: 'Bruno Martins', teste: t => t.includes('taquara') || t.includes('jacarepagua') || (t.includes('freguesia') && !t.includes('ilha')) || (t.includes('rio de janeiro') && /\banil\b/.test(t)) || t.includes('recreio') || t.includes('barra olimpica') || t.includes('guaratiba') },
-  { owner: '94079973', nome: 'Michel Carvalho', teste: t => (t.includes('campo grande') && !t.includes('campo grande - ms')) || t.includes('bangu') },
   { owner: '89842507', nome: 'Wericles Andrade', teste: t => t.includes('sao paulo') },
   { owner: '91477292', nome: 'Kelly Travieso', teste: t => t.includes('canoas') || t.includes('porto alegre') }
 ];
@@ -387,7 +390,7 @@ module.exports = async function handler(req, res) {
         method: 'POST',
         headers: {
           apikey: supaService, Authorization: `Bearer ${supaService}`,
-          'Content-Type': 'application/json', Prefer: 'return=minimal'
+          'Content-Type': 'application/json', Prefer: 'return=representation'
         },
         body: JSON.stringify(novas)
       });
@@ -395,7 +398,12 @@ module.exports = async function handler(req, res) {
         const texto = await resp.text();
         return res.status(502).json({ erro: 'Supabase recusou a importação: ' + texto.slice(0, 300), parcial: resultado });
       }
+      const linhasInseridas = await resp.json().catch(() => []);
       resultado.inseridos = novas.length;
+      // PEDIDO (19/08/26, Julyan: "eu preciso jogar alguns leads no pipe deles") — os
+      // IDs recém-criados voltam na resposta, pra quem importa poder na sequência
+      // materializar o negócio no HubSpot sem precisar de uma segunda tela/busca.
+      resultado.leadsCriados = linhasInseridas.map(l => ({ id: l.id, nome: l.nome, responsavel_owner_id: l.responsavel_owner_id }));
       // Distribuição por executivo — pra conferir o roteamento de território no ato
       resultado.distribuicao = {};
       novas.forEach(l => {
