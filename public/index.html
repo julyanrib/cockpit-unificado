@@ -4787,14 +4787,101 @@ const TP_NOTA_DE_CONTATO = /\b(falei|conversei|liguei|liga(ç|c)[ãa]o|whats|vis
 function tpNotaEhContato(nota) {
   const texto = String((nota && nota.texto) || '');
   if (!texto.trim()) return false;
+  if (tpDesfechoDaNota(texto)) return true;           // registro estruturado de visita
   if (tpOrigemDoTexto(texto) !== 'hubspot') return true; // registro de app de campo
   return TP_NOTA_DE_CONTATO.test(texto);
+}
+
+/* ---------------------------------------------------------------------------
+   LEITURA DO BLOCO DESFECHO_VISITA (lado que faltava)
+   ----------------------------------------------------------------------------
+   DEFEITO CORRIGIDO (27/08/26, achado por auditoria do próprio código): o
+   Cockpit ESCREVIA o bloco estruturado na nota do HubSpot (ver
+   desfechoNotaEstruturada) e nunca o LIA de volta. Consequência: o executivo
+   registrava "falei com o decisor · dor X · objeção Y", a nota subia, voltava na
+   carga seguinte — e o núcleo tratava aquilo como uma "Nota de contato" genérica
+   com `outcome: null`. Ou seja:
+     · a visita continuava aparecendo como "realizada, sem desfecho";
+     · a cadência continuava sendo escolhida pela ETAPA, ignorando o desfecho
+       (decisor ausente não puxava a régua de acesso ao decisor);
+     · decisor_alcancado, dor, objeção e interesse ficavam null mesmo preenchidos;
+     · o indicador "visitas com desfecho estruturado" ficaria em "—" para sempre,
+       inclusive depois do time começar a registrar.
+   O formato é o mesmo que o contrato pede ao PWA, então este parser serve para
+   os dois: o que o Cockpit grava hoje e o que o PWA vai gravar amanhã.
+   --------------------------------------------------------------------------- */
+
+const TP_DESFECHO_RE_CABECALHO = /^\s*DESFECHO_VISITA\s+v(\d+)\s*$/im;
+
+function tpDesfechoDaNota(texto) {
+  const bruto = String(texto || '').replace(/<br\s*\/?\s*>/gi, '\n').replace(/<[^>]*>/g, ' ');
+  const cab = TP_DESFECHO_RE_CABECALHO.exec(bruto);
+  if (!cab) return null;
+  // Versão desconhecida: NÃO reinterpreta em silêncio. Devolve o mínimo e marca,
+  // pra tela poder dizer "registro em formato mais novo" em vez de inventar campo.
+  const versao = Number(cab[1]);
+
+  const campos = {};
+  bruto.split('\n').forEach(linha => {
+    const m = /^\s*([a-z_]+)\s*:\s*(.*)$/i.exec(linha);
+    if (!m) return;
+    const chave = m[1].toLowerCase();
+    const valor = (m[2] || '').trim();
+    if (chave in campos) return; // primeira ocorrência ganha
+    campos[chave] = valor;
+  });
+
+  const desfecho = campos.desfecho && TP_DESFECHOS[campos.desfecho] ? campos.desfecho : null;
+
+  let proximo = null;
+  if (campos.proximo_passo) {
+    const partes = campos.proximo_passo.split('|').map(s => s.trim());
+    if (partes.length >= 3 && /^\d{4}-\d{2}-\d{2}$/.test(partes[1])) {
+      proximo = { canal: TP_CANAIS[partes[0]] ? partes[0] : 'outro', data: partes[1], acao: partes.slice(2).join(' | ') };
+    }
+  }
+
+  let cadencia = null;
+  if (campos.cadencia) {
+    const m = /^([a-z_]+)\s*#(\d+)$/i.exec(campos.cadencia);
+    if (m) cadencia = { nome: m[1], toque: Number(m[2]) };
+  }
+
+  return {
+    versao,
+    versaoConhecida: versao === 1,
+    cliente: campos.cliente || null,
+    ocorridoEm: campos.ocorrido_em || null,
+    canal: TP_CANAIS[campos.canal] ? campos.canal : 'visita',
+    desfecho,
+    desfechoBruto: campos.desfecho || null,
+    pessoa: campos.pessoa || null,
+    papel: campos.papel || null,
+    // Só 'sim' é sim. Ausente ou vazio é DESCONHECIDO (null), não "não" — a
+    // diferença entre os dois é o que separa "não alcancei" de "não sei".
+    decisorAlcancado: campos.decisor_alcancado === 'sim' ? true
+      : campos.decisor_alcancado === 'nao' ? false : null,
+    dor: campos.dor || null,
+    objecao: campos.objecao || null,
+    interesse: campos.interesse || null,
+    observacao: campos.observacao || null,
+    motivoSaida: campos.motivo_saida || null,
+    origem: TP_ORIGENS[campos.origem] ? campos.origem : tpOrigemDoTexto(bruto),
+    proximo,
+    cadencia
+  };
 }
 
 // Eventos de agenda do dono, indexados por negócio/nome — a fonte das VISITAS.
 // Cacheado por render porque agendaNormalizar varre a agenda inteira e as filas
 // chamam isso por lead.
 let _tpAgendaCache = null;
+// Estado derivado por negócio, memoizado junto com os eventos (ver a nota em
+// estadoDoNegocio). Declarado aqui, e não junto da função, porque tpInvalidarCache
+// abaixo o referencia — `let` lido antes da própria declaração é ReferenceError.
+let _estadoCache = new Map();
+// Índice de eventos por negócio/nome (ver a nota em tpIndiceDoDono).
+let _tpIndiceCache = null;
 function tpEventosDoDono(ownerId) {
   if (!DATA.agenda || typeof agendaNormalizar !== 'function') return [];
   if (!_tpAgendaCache) {
@@ -4802,7 +4889,79 @@ function tpEventosDoDono(ownerId) {
   }
   return _tpAgendaCache.filter(e => String(e.ownerId || '') === String(ownerId || ''));
 }
-function tpInvalidarCache() { _tpAgendaCache = null; }
+
+/* ÍNDICE DE EVENTOS POR NEGÓCIO (27/08/26) — otimização com a mesma medição da
+   memoização de estado. touchpointsDoLead varria TODOS os eventos do dono a cada
+   lead, então uma varredura do funil custava O(negócios × eventos). Com o índice,
+   custa O(eventos) uma vez + O(1) por lead na chave forte (dealId) e O(1) na chave
+   por nome normalizado. O casamento por PREFIXO de nome (o caso fraco de
+   tpMesmoCliente) não é indexável, então continua linear — mas só para os leads que
+   não acharam nada nas duas chaves diretas, que é a minoria.
+   O comportamento não muda: as mesmas regras de casamento, na mesma ordem. */
+function tpIndiceDoDono(ownerId) {
+  const chaveDono = String(ownerId || '');
+  if (_tpIndiceCache && _tpIndiceCache.dono === chaveDono) return _tpIndiceCache;
+  const eventos = tpEventosDoDono(ownerId);
+  const porDeal = new Map();
+  const porNome = new Map();
+  const semChave = [];
+  eventos.forEach(e => {
+    let indexado = false;
+    if (e.dealId) {
+      const k = String(e.dealId);
+      if (!porDeal.has(k)) porDeal.set(k, []);
+      porDeal.get(k).push(e);
+      indexado = true;
+    }
+    const nome = tpNomeNormalizado(e.cliente);
+    if (nome) {
+      if (!porNome.has(nome)) porNome.set(nome, []);
+      porNome.get(nome).push(e);
+      indexado = true;
+    }
+    if (!indexado) semChave.push(e);
+  });
+  _tpIndiceCache = { dono: chaveDono, eventos, porDeal, porNome, semChave };
+  return _tpIndiceCache;
+}
+
+function tpNomeNormalizado(nome) {
+  if (!nome) return '';
+  const limpo = typeof agendaNomeDoLead === 'function' ? (agendaNomeDoLead(nome) || nome) : nome;
+  return typeof prospeccaoNormalizarTexto === 'function'
+    ? prospeccaoNormalizarTexto(limpo)
+    : String(limpo).toLowerCase().trim();
+}
+
+// Eventos candidatos a pertencer a este lead, já sem varrer a agenda inteira.
+function tpEventosDoLead(lead, ownerId) {
+  const idx = tpIndiceDoDono(ownerId);
+  const vistos = new Set();
+  const out = [];
+  const juntar = lista => (lista || []).forEach(e => {
+    if (vistos.has(e.id)) return;
+    vistos.add(e.id);
+    out.push(e);
+  });
+  if (lead.id != null) juntar(idx.porDeal.get(String(lead.id)));
+  const nomeLead = tpNomeNormalizado(lead.name);
+  if (nomeLead) juntar(idx.porNome.get(nomeLead));
+  // Casamento fraco (prefixo) só quando as chaves diretas não resolveram — mantém a
+  // regra antiga de tpMesmoCliente sem pagar o custo linear no caso comum.
+  if (out.length === 0 && nomeLead) {
+    idx.porNome.forEach((lista, nome) => {
+      if (nome.indexOf(nomeLead) === 0 || nomeLead.indexOf(nome) === 0) juntar(lista);
+    });
+  }
+  return out;
+}
+function tpInvalidarCache() {
+  _tpAgendaCache = null;
+  _tpIndiceCache = null;
+  // O estado derivado depende dos eventos: invalidar um sem o outro deixaria a tela
+  // lendo estado calculado sobre uma agenda que já mudou.
+  _estadoCache.clear();
+}
 
 function tpMesmoCliente(nomeA, nomeB) {
   if (!nomeA || !nomeB) return false;
@@ -4821,7 +4980,10 @@ function touchpointsDoLead(lead) {
   const ownerId = lead.ownerId || (sessaoAtual && sessaoAtual.ownerId) || null;
 
   // (a) Visitas/reuniões/follow-ups da agenda — HubSpot, Expogo ou PWA.
-  tpEventosDoDono(ownerId).forEach(e => {
+  // tpEventosDoLead já devolve só os candidatos deste lead (índice por dealId e por
+  // nome normalizado); a checagem de casamento fica como rede de segurança, porque a
+  // regra de verdade continua sendo tpMesmoCliente.
+  tpEventosDoLead(lead, ownerId).forEach(e => {
     if (!e.inicio) return;
     const casa = (e.dealId && String(e.dealId) === String(lead.id)) || tpMesmoCliente(e.cliente, lead.name);
     if (!casa) return;
@@ -4875,27 +5037,46 @@ function touchpointsDoLead(lead) {
     });
   });
 
-  // (b) Notas do negócio — só as que carregam sinal de contato.
+  // (b) Notas do negócio — só as que carregam sinal de contato. Nota que carrega o
+  // bloco DESFECHO_VISITA vira um touchpoint COM desfecho estruturado, não uma nota
+  // genérica: é o registro de visita fechado, com dor, objeção e decisor.
   (Array.isArray(lead.notas) ? lead.notas : []).forEach((nota, i) => {
     if (!tpNotaEhContato(nota)) return;
-    const origem = tpOrigemDoTexto(nota.texto);
+    const d = tpDesfechoDaNota(nota.texto);
+    const origem = d ? d.origem : tpOrigemDoTexto(nota.texto);
+    const quando = (d && d.ocorridoEm) || nota.data || null;
     out.push({
       touchpoint_id: 'nota:' + (lead.id || '?') + ':' + i,
       deal_id: lead.id ? String(lead.id) : null,
       company_id: null, contact_id: null,
       owner_id: ownerId ? String(ownerId) : null,
       visit_id: null,
-      occurred_at: nota.data || null,
-      channel: /whats/i.test(nota.texto) ? 'whatsapp' : /liguei|liga(ç|c)[ãa]o/i.test(nota.texto) ? 'ligacao' : /visit|passei/i.test(nota.texto) ? 'visita' : 'outro',
-      type: 'Nota de contato',
-      outcome: null, decision_maker_reached: null,
-      pain: null, objection: null, product_interest: null,
-      notes: nota.texto || null,
+      occurred_at: quando,
+      channel: d ? d.canal
+        : /whats/i.test(nota.texto) ? 'whatsapp' : /liguei|liga(ç|c)[ãa]o/i.test(nota.texto) ? 'ligacao' : /visit|passei/i.test(nota.texto) ? 'visita' : 'outro',
+      type: d ? 'Visita com desfecho' : 'Nota de contato',
+      outcome: d ? d.desfecho : null,
+      decision_maker_reached: d ? d.decisorAlcancado : null,
+      pain: d ? d.dor : null,
+      objection: d ? d.objecao : null,
+      product_interest: d ? d.interesse : null,
+      next_touch_type: d && d.proximo ? d.proximo.acao : null,
+      next_touch_at: d && d.proximo ? d.proximo.data : null,
+      next_touch_channel: d && d.proximo ? d.proximo.canal : null,
+      cadence_name: d && d.cadencia ? d.cadencia.nome : null,
+      cadence_step: d && d.cadencia ? d.cadencia.toque : null,
+      notes: d ? (d.observacao || null) : (nota.texto || null),
       source: origem,
-      sync_status: 'sincronizado',
-      completed_at: nota.data || null,
+      // Formato mais novo do que este parser conhece: o registro existe e está
+      // sincronizado, mas não deve ser lido como se fosse compreendido.
+      sync_status: (d && !d.versaoConhecida) ? 'requer_revisao' : 'sincronizado',
+      completed_at: quando,
       _realizado: true, _agendadoFuturo: false, _semDesfecho: false,
-      _rotulo: 'Nota de contato'
+      _desfechoEstruturado: !!(d && d.desfecho),
+      _pessoa: d ? d.pessoa : null,
+      _papel: d ? d.papel : null,
+      _motivoSaida: d ? d.motivoSaida : null,
+      _rotulo: d && d.desfecho ? (TP_DESFECHOS[d.desfecho] || {}).rotulo || 'Visita com desfecho' : 'Nota de contato'
     });
   });
 
@@ -4955,16 +5136,53 @@ function toquesDoLead(lead, tps) {
    4. ESTADO DO NEGÓCIO — a leitura única que todas as telas usam
    --------------------------------------------------------------------------- */
 
+/* MEMOIZAÇÃO (27/08/26) — medido no preview com a carteira real (18 negócios, 443
+   itens de agenda): um único render da Hoje chamava estadoDoNegocio 58 vezes, e o
+   da Daily 54. São ~3 varreduras completas do funil por tela, porque cada consumidor
+   (gates, ações de agora, fila, indicadores, conquistas, persistência) recalculava
+   tudo do zero. Como touchpointsDoLead filtra a agenda inteira por lead, o custo é
+   O(negócios × eventos) por varredura — 18 × ~180 aqui, mas ~120 × 443 numa carteira
+   grande, três vezes. Este arquivo já tem histórico de "a tela tá demorando a abrir,
+   principalmente a aba Hoje" (Bloco 2, 10/08), e eu estava reintroduzindo o problema.
+
+   O cache é por RENDER, não por sessão: tpInvalidarCache() limpa os dois juntos, e
+   todo render que importa já a chama antes de começar. Escrita no HubSpot (desfecho,
+   próximo passo, etapa) também invalida, então nada fica preso em estado velho. */
+
 function estadoDoNegocio(lead) {
+  if (!lead) return null;
+  const chave = lead.id != null ? String(lead.id) : null;
+  if (chave && _estadoCache.has(chave)) return _estadoCache.get(chave);
+  const calculado = estadoDoNegocioSemCache(lead);
+  if (chave) _estadoCache.set(chave, calculado);
+  return calculado;
+}
+
+function estadoDoNegocioSemCache(lead) {
   const tps = touchpointsDoLead(lead);
   const toques = toquesDoLead(lead, tps);
   const passo = typeof proximoPassoDoLead === 'function' ? proximoPassoDoLead(lead) : null;
+
+  // ÚLTIMO DESFECHO REGISTRADO (27/08/26) — antes esta linha passava `null` fixo, o que
+  // fazia a régua ser escolhida SEMPRE pela etapa, mesmo quando existia desfecho
+  // estruturado gravado. Com o parser do bloco DESFECHO_VISITA no lugar, "decisor
+  // ausente" passa a puxar a régua de acesso ao decisor em vez da régua da etapa —
+  // que é o comportamento que o motor de cadência foi desenhado para ter.
+  const comDesfecho = tps.filter(t => t.outcome && t.occurred_at)
+    .sort((a, b) => new Date(b.occurred_at) - new Date(a.occurred_at));
+  const ultimoDesfecho = comDesfecho.length > 0 ? comDesfecho[0].outcome : null;
+
   // O próximo passo entra no cálculo: tarefa datada no futuro tira a cadência do
   // balde de atrasada (ver a nota em estadoDaCadencia).
-  const cad = estadoDaCadencia(lead, toques, null, passo);
+  const cad = estadoDaCadencia(lead, toques, ultimoDesfecho, passo);
 
   const visitasPassadas = tps.filter(t => t.channel === 'visita' || t.channel === 'reuniao').filter(t => !t._agendadoFuturo && !t._planejado);
-  const visitaSemDesfecho = visitasPassadas.filter(t => t._semDesfecho);
+  // Uma visita deixa de ser "registro incompleto" quando existe desfecho estruturado
+  // no MESMO dia: o desfecho chega como nota separada do compromisso (o HubSpot não
+  // tem campo de desfecho na tarefa), então quem fecha o registro é o par dos dois.
+  const diasComDesfecho = new Set(comDesfecho.map(t => String(t.occurred_at).slice(0, 10)));
+  const visitaSemDesfecho = visitasPassadas.filter(t =>
+    t._semDesfecho && !diasComDesfecho.has(String(t.occurred_at).slice(0, 10)));
   const ultimaVisita = visitasPassadas[0] || null;
   const naoConfirmada = visitasPassadas.filter(t => t._clienteNaoConfirmado);
   const aguardandoSync = tps.filter(t => t.sync_status && !TP_SYNC[t.sync_status].comprova && !t._agendadoFuturo && !t._planejado);
@@ -4992,6 +5210,10 @@ function estadoDoNegocio(lead) {
     abandonadoNoPrimeiroToque,
     aguardandoSincronizacao: aguardandoSync,
     decisorAlcancado: toques.decisorAlcancado,
+    ultimoDesfecho,
+    // Desfechos estruturados conhecidos, do mais recente pro mais antigo — é daqui
+    // que a ficha e os indicadores leem dor, objeção, interesse e quem atendeu.
+    desfechos: comDesfecho,
     slaEstourado,
     slaDias,
     // Proposta/negociação sem data de decisão = proposta que vai morrer.
@@ -5562,13 +5784,20 @@ function indicadoresDoExecutivo(r) {
   // fonte devolve isso hoje, então o indicador fica em "—" com a nota dizendo por
   // quê, e no lugar dele entra o que é acionável agora: visita sem registro.
   const semRegistro = Math.max(0, daSemana.length - realizadas.length);
+  const comDesfechoCount = estados.filter(s => s.desfechos && s.desfechos.length > 0).length;
 
   return [
     { id: 'visitas', rotulo: 'Visitas realizadas', valor: realizadas.length, sufixo: 'na semana', bom: realizadas.length > 0 },
     { id: 'sem_registro', rotulo: 'Visitas sem registro', valor: semRegistro, total: daSemana.length, sufixo: 'na semana', bom: semRegistro === 0,
       nota: 'compromisso cujo horário passou e ninguém fechou no HubSpot' },
-    { id: 'com_desfecho', rotulo: 'Visitas com desfecho estruturado', valor: null, bom: false,
-      nota: 'nenhuma fonte devolve o desfecho da visita ainda — entra quando o PWA passar a mandar (docs/contrato-eventos-rpa.md)' },
+    // Agora é medível: o parser do bloco DESFECHO_VISITA lê o que o Cockpit (e, em
+    // breve, o PWA) grava. Zero registros não é o mesmo que "não dá pra medir", então
+    // o número aparece e a nota explica o que falta pra ele subir.
+    { id: 'com_desfecho', rotulo: 'Visitas com desfecho estruturado', valor: comDesfechoCount, total: leads.length,
+      bom: comDesfechoCount > 0,
+      nota: comDesfechoCount === 0
+        ? 'nenhum registro estruturado ainda — cada visita fechada em "Registrar desfecho" entra aqui'
+        : 'com dor, objeção e decisor registrados' },
     { id: 'com_passo', rotulo: 'Negócios com próximo passo', valor: comProximoPasso, total: leads.length, bom: leads.length === 0 || comProximoPasso === leads.length },
     { id: 'fu_hoje', rotulo: 'Follow-ups para hoje', valor: fila.baldes.hoje.length, bom: true },
     { id: 'fu_atraso', rotulo: 'Follow-ups atrasados', valor: fila.baldes.cadencia.length, bom: fila.baldes.cadencia.length === 0 },
@@ -5577,7 +5806,9 @@ function indicadoresDoExecutivo(r) {
     { id: 'cad_ativas', rotulo: 'Cadências ativas', valor: cadenciasAtivas, bom: true },
     { id: 'cad_quebradas', rotulo: 'Cadências quebradas', valor: cadenciasQuebradas, bom: cadenciasQuebradas === 0 },
     { id: 'decisores', rotulo: 'Decisores alcançados', valor: decisores, total: leads.length, bom: true,
-      nota: 'só conta quando a fonte marca o decisor — campo ainda não preenchido pelo Expogo' },
+      nota: decisores === 0
+        ? 'conta quando o desfecho registra que você falou com quem decide — o Expogo não manda esse campo, o registro de desfecho do Cockpit sim'
+        : 'registrado no desfecho da visita' },
     { id: 'propostas_data', rotulo: 'Propostas com data de decisão', valor: propostasComData, total: propostasTotal, bom: propostasTotal === 0 || propostasComData === propostasTotal },
     { id: 'protegidos', rotulo: 'Negócios protegidos', valor: leads.length - fila.negociosAfetados, total: leads.length, bom: fila.negociosAfetados === 0 },
     // Escopo 12 pede "vendas por número do toque". Não é derivável hoje: negócio
@@ -5601,6 +5832,10 @@ function indicadoresDoExecutivo(r) {
 let planejamentoFocoInicial = null;
 function irParaPlanejamento(bloco) {
   planejamentoFocoInicial = bloco || null;
+  // Limpa o foco da fila: sem isso, quem filtrasse um balde no Meu funil e depois
+  // fosse pro Planejamento encontrava a fila do passo A já filtrada por aquele
+  // balde, sem ter pedido — estado de uma tela vazando na outra.
+  filaFocoInicial = null;
   if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'hoje';
   activateTab('viewAgenda');
   if (typeof renderAgenda === 'function') { try { renderAgenda(); } catch (e) {} }
@@ -5621,6 +5856,20 @@ function irParaFila(balde) {
     const chip = document.querySelector(`[data-fila-balde="${balde}"]`);
     if (chip) chip.click();
   }, 140);
+}
+
+/* Abre o registro de desfecho já com a ÚLTIMA VISITA como referência, pra que a hora
+   venha pré-preenchida com a hora da visita em vez de "agora".
+   Corrigido em 27/08/26: o CTA da fila chamava
+   `abrirRegistroDeDesfecho(lead, st.ultimaVisita ? null : null)` — uma expressão que
+   avalia para null nos dois ramos. Sem evento, o drawer abria com a hora do clique, e
+   quem registrasse às 18h uma visita das 10h gravava `ocorrido_em` errado. */
+function abrirRegistroDeDesfechoDaUltimaVisita(lead, st) {
+  const completo = buscarLeadFunilPorId(lead.id) || lead;
+  const tp = st && st.ultimaVisita;
+  // O drawer espera um evento de agenda ({ inicio }), não um touchpoint.
+  const evento = (tp && tp.occurred_at) ? { id: tp.touchpoint_id, inicio: new Date(tp.occurred_at) } : null;
+  abrirRegistroDeDesfecho(completo, evento);
 }
 
 // Abre o registro de desfecho pelo NOME que veio do compromisso — o caminho que
@@ -5839,6 +6088,13 @@ function wireRegistroDeDesfecho(container, lead, st) {
 
     encerraEl.style.display = (sug && sug.encerra) ? 'block' : 'none';
 
+    // DECISOR VEM DO DESFECHO, E ANTES DO RETURN (corrigido 27/08/26): este bloco
+    // estava depois do `return` do caminho "sem régua configurada", então quem
+    // registrasse "Falei com o decisor" numa carga sem data/cadencias.json gravava
+    // `decisor_alcancado: nao` — o oposto do que aconteceu. Não depende de régua
+    // nenhuma: é propriedade do desfecho.
+    desfechoEstado.decisorAlcancado = d.decisor === true ? true : d.decisor === false ? false : null;
+
     if (!sug || !sug.cadencia) {
       wrapPassos.innerHTML = '';
       sugEl.textContent = sug && sug.encerra
@@ -5871,10 +6127,6 @@ function wireRegistroDeDesfecho(container, lead, st) {
     // Pré-seleciona o primeiro passo: o caminho de menor esforço já é o certo.
     const primeiro = wrapPassos.querySelector('.desf-sug-passo');
     if (primeiro) primeiro.click();
-    // Desfecho que já traz decisor alcançado marca o campo sozinho.
-    if (d.decisor === true) desfechoEstado.decisorAlcancado = true;
-    else if (d.decisor === false) desfechoEstado.decisorAlcancado = false;
-    else desfechoEstado.decisorAlcancado = null;
   }
 
   // ---- salvar ----
@@ -5968,6 +6220,10 @@ function wireRegistroDeDesfecho(container, lead, st) {
         }
       }
 
+      // Espelha a nota no DATA em memória, pelo mesmo motivo de
+      // aplicarProximoPassoNoDataLocal: sem isso o executivo acabava de registrar o
+      // desfecho e a tela seguia dizendo "visita sem desfecho" até a próxima carga.
+      aplicarNotaNoDataLocal(lead.id, { texto: nota, data: ocorridoEm });
       stageOverlay.classList.remove('show');
       tpInvalidarCache();
       if (avisoPasso) {
@@ -10192,7 +10448,7 @@ function ctasDoItemDaFila(it) {
   // Registrar desfecho: só faz sentido quando existe visita passada sem desfecho.
   if (st.visitaSemDesfecho.length > 0 || st.followUpDescoberto) {
     ctas.push({ id: 'desfecho', rotulo: 'Registrar desfecho',
-      acao: () => abrirRegistroDeDesfecho(buscarLeadFunilPorId(lead.id) || lead, st.ultimaVisita ? null : null) });
+      acao: () => abrirRegistroDeDesfechoDaUltimaVisita(lead, st) });
   }
 
   // Canais diretos — só quando o telefone existe de verdade na base.
@@ -15458,6 +15714,29 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   });
 }
 
+/* @nucleo3:inicio — lido por scripts/testar-nucleo.js. Não remover. */
+/* Espelha no DATA em memória a nota recém-criada (desfecho de visita). Mesmo padrão e
+   mesmo motivo de aplicarProximoPassoNoDataLocal, logo abaixo: a escrita no HubSpot é
+   imediata, mas o snapshot da tela só é recarregado nas rodadas de 08:56/13h/19h.
+
+   CUIDADO (caí nisso ao verificar, 27/08/26): estas duas funções mutam os objetos DENTRO
+   de DATA, e meusNegociosAbertos() devolve CÓPIA dos itens de funilLeads (é lá que a
+   etapa é injetada a partir da chave). Então uma referência de lead obtida ANTES da
+   escrita não enxerga a mutação. Depois de escrever: chame tpInvalidarCache() e
+   RE-DERIVE a lista — é o que todo render faz naturalmente. Segurar a referência velha
+   e reconsultar o estado dela devolve o estado anterior, sem erro nenhum aparente. */
+function aplicarNotaNoDataLocal(leadId, nota) {
+  const alvo = String(leadId);
+  const anexar = l => {
+    if (!l || String(l.id) !== alvo) return;
+    const jaTem = (l.notas || []).some(n => n && n.texto === nota.texto);
+    if (!jaTem) l.notas = Array.isArray(l.notas) ? [nota].concat(l.notas) : [nota];
+  };
+  Object.values(DATA.funilLeads || {}).forEach(lista => (lista || []).forEach(anexar));
+  (DATA.reps || []).forEach(r => ['travados', 'criticos', 'quentes'].forEach(k => (r[k] || []).forEach(anexar)));
+  if (DATA.temperatura) { (DATA.temperatura.quentes || []).forEach(anexar); (DATA.temperatura.frios || []).forEach(anexar); }
+}
+
 // Espelha no DATA em memória a tarefa recém-criada. Sem isso, o negócio continuaria
 // aparecendo como "sem próximo passo" na fila e nos gates até a próxima carga — o
 // executivo acabava de criar a tarefa e a tela seguia cobrando por ela. Mesmo motivo
@@ -15473,6 +15752,8 @@ function aplicarProximoPassoNoDataLocal(leadId, tarefa) {
   (DATA.reps || []).forEach(r => ['travados', 'criticos', 'quentes'].forEach(k => (r[k] || []).forEach(anexar)));
   if (DATA.temperatura) { (DATA.temperatura.quentes || []).forEach(anexar); (DATA.temperatura.frios || []).forEach(anexar); }
 }
+
+/* @nucleo3:fim */
 
 // Move o lead de etapa DENTRO do DATA em memória. Sem isso, o kanban voltava o card pra
 // coluna antiga no primeiro redesenho (o DATA ainda dizia a etapa velha) e parecia que a

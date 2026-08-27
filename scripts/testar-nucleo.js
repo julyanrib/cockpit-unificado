@@ -34,7 +34,10 @@ function recortar(iniMarca, fimMarca) {
   return html.slice(a, b);
 }
 const codigoNucleo = recortar('/* @nucleo:inicio', '/* @nucleo:fim */')
-  + '\n' + recortar('/* @nucleo2:inicio', '/* @nucleo2:fim */');
+  + '\n' + recortar('/* @nucleo2:inicio', '/* @nucleo2:fim */')
+  // @nucleo3: as funções que espelham escrita no DATA em memória. Entram porque a
+  // ordem "escreve → invalida → re-deriva" é contrato, e é fácil de quebrar.
+  + '\n' + recortar('/* @nucleo3:inicio', '/* @nucleo3:fim */');
 
 // ---------------------------------------------------------------------------
 // Entorno mínimo. Cada stub reproduz o CONTRATO da função real do template,
@@ -481,6 +484,150 @@ teste('o gate de agenda respeita o alvo da fase de rampagem', () => {
   const g2 = semFase.gatesDoDia(semFase.DATA.reps[0]).gates.find(x => x.id === 'agenda');
   verdade(g2.ok, 'sem fase: 1 compromisso basta');
   verdade(/não definida/.test(g2.detalhe), 'detalhe avisa que não há alvo');
+});
+
+console.log('\n== Desfecho estruturado: escrever E ler (o ciclo fechado) ==');
+
+// Reproduz exatamente o bloco que desfechoNotaEstruturada() grava.
+function notaDesfecho(over) {
+  const d = Object.assign({
+    cliente: 'Bar do Zé', ocorrido_em: diasAtras(1).toISOString(), canal: 'visita',
+    desfecho: 'decisor_ausente', pessoa: 'Marcos', papel: 'Gerente',
+    decisor_alcancado: 'nao', dor: 'taxa de marketplace come a margem',
+    objecao: '', interesse: 'cardápio digital', observacao: 'dono só depois das 19h',
+    proximo_passo: 'ligacao | ' + iso(diasAFrente(1)) + ' | Ligar pedindo o decisor pelo nome',
+    cadencia: 'acesso_decisor #2', origem: 'pwa'
+  }, over || {});
+  const linhas = ['DESFECHO_VISITA v1'];
+  Object.keys(d).forEach(k => { if (k !== '_versao') linhas.push(k + ': ' + d[k]); });
+  return linhas.join('\n');
+}
+
+teste('o bloco DESFECHO_VISITA gravado é lido de volta, campo por campo', () => {
+  const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
+  const d = c.tpDesfechoDaNota(notaDesfecho());
+  verdade(d, 'parseou');
+  igual(d.desfecho, 'decisor_ausente');
+  igual(d.pessoa, 'Marcos');
+  igual(d.papel, 'Gerente');
+  igual(d.decisorAlcancado, false, 'nao = false');
+  igual(d.dor, 'taxa de marketplace come a margem');
+  igual(d.objecao, null, 'campo vazio vira null, não string vazia');
+  igual(d.interesse, 'cardápio digital');
+  igual(d.origem, 'pwa');
+  igual(d.proximo.canal, 'ligacao');
+  igual(d.proximo.acao, 'Ligar pedindo o decisor pelo nome');
+  igual(d.cadencia, { nome: 'acesso_decisor', toque: 2 });
+});
+
+teste('ausência de decisor_alcancado é DESCONHECIDO, não "não"', () => {
+  const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
+  const semCampo = notaDesfecho().split('\n').filter(l => !/^decisor_alcancado/.test(l)).join('\n');
+  igual(c.tpDesfechoDaNota(semCampo).decisorAlcancado, null, 'sem campo = null');
+  igual(c.tpDesfechoDaNota(notaDesfecho({ decisor_alcancado: 'sim' })).decisorAlcancado, true);
+});
+
+teste('nota qualquer não é confundida com desfecho', () => {
+  const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
+  igual(c.tpDesfechoDaNota('Falei com o gerente, pediu proposta'), null);
+  igual(c.tpDesfechoDaNota(''), null);
+});
+
+teste('versão futura do bloco não é reinterpretada em silêncio', () => {
+  const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
+  const v9 = notaDesfecho().replace('DESFECHO_VISITA v1', 'DESFECHO_VISITA v9');
+  const d = c.tpDesfechoDaNota(v9);
+  igual(d.versao, 9);
+  falso(d.versaoConhecida, 'marcado como versão desconhecida');
+  const l = lead({ id: 'V9', name: 'Bar do Zé', notas: [{ texto: v9, data: diasAtras(1).toISOString() }] });
+  const c2 = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const tp = c2.touchpointsDoLead(l)[0];
+  igual(tp.sync_status, 'requer_revisao', 'entra como requer revisão, não como sincronizado');
+});
+
+teste('desfecho registrado passa a MANDAR na cadência (era o bug)', () => {
+  // Negócio em Negociação: pela ETAPA, a régua seria `negociacao`. Com desfecho
+  // "decisor ausente" registrado, tem que virar `acesso_decisor`.
+  const semNota = lead({ id: 'C1', name: 'Bar do Zé', stageId: '1395880472', dias: 3, ultimaInteracao: diasAtras(1).toISOString() });
+  const a = novoContexto(dados({ funilLeads: { '1395880472': [semNota] } }), { ownerId: OWNER, role: 'rep' });
+  igual(a.estadoDoNegocio(semNota).cadencia.nome, 'negociacao', 'sem desfecho: régua da etapa');
+
+  const comNota = { ...semNota, notas: [{ texto: notaDesfecho(), data: diasAtras(1).toISOString() }] };
+  const b = novoContexto(dados({ funilLeads: { '1395880472': [comNota] } }), { ownerId: OWNER, role: 'rep' });
+  const st = b.estadoDoNegocio(comNota);
+  igual(st.ultimoDesfecho, 'decisor_ausente', 'desfecho lido');
+  igual(st.cadencia.nome, 'acesso_decisor', 'desfecho ganha da etapa');
+  igual(st.desfechos.length, 1, 'exposto para a ficha e os indicadores');
+});
+
+teste('decisor alcançado vem do desfecho, não de campo inexistente', () => {
+  const l = lead({ id: 'D1', name: 'Bar do Zé', ultimaInteracao: diasAtras(1).toISOString(),
+    notas: [{ texto: notaDesfecho({ desfecho: 'decisor_falou', decisor_alcancado: 'sim' }), data: diasAtras(1).toISOString() }] });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  verdade(c.estadoDoNegocio(l).decisorAlcancado, 'decisor alcançado');
+});
+
+teste('visita fica completa quando existe desfecho do mesmo dia', () => {
+  const quando = diasAtras(1);
+  const l = lead({ id: 'F1', name: 'Bar do Zé', ultimaInteracao: quando.toISOString() });
+  // Compromisso passado e não fechado: sozinho, é registro incompleto.
+  const ev = { id: 'evf', ownerId: OWNER, dealId: 'F1', tipo: 'rota', inicio: quando, cliente: 'Bar do Zé', desfecho: null, registro: false, obs: '', decisor: null };
+  const sem = novoContexto(dados({ agenda: { eventos: [ev] }, funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  igual(sem.estadoDoNegocio(l).visitaSemDesfecho.length, 1, 'sem desfecho: incompleto');
+
+  const lComNota = { ...l, notas: [{ texto: notaDesfecho({ ocorrido_em: quando.toISOString() }), data: quando.toISOString() }] };
+  const com = novoContexto(dados({ agenda: { eventos: [ev] }, funilLeads: { '1396005401': [lComNota] } }), { ownerId: OWNER, role: 'rep' });
+  igual(com.estadoDoNegocio(lComNota).visitaSemDesfecho.length, 0, 'com desfecho do dia: completo');
+});
+
+teste('escrita local + invalidação + re-derivação fecha o ciclo na mesma sessão', () => {
+  // Contrato das funções aplicar*NoDataLocal: elas mutam os objetos DENTRO de DATA, e
+  // meusNegociosAbertos devolve CÓPIA dos itens de funilLeads. Quem segurar a
+  // referência antiga não vê a mutação — este teste fixa a ordem correta.
+  const base = { id: 'CI1', name: 'Ciclo', ownerId: OWNER, stageId: null, dias: 3, tarefas: [], notas: [], ultimaInteracao: diasAtras(2).toISOString() };
+  const c = novoContexto(dados({ funilLeads: { '1395880471': [base] } }), { ownerId: OWNER, role: 'rep' });
+  const pega = () => c.meusNegociosAbertos(OWNER)[0];
+
+  igual(c.estadoDoNegocio(pega()).ultimoDesfecho, null, 'antes: sem desfecho');
+  igual(c.estadoDoNegocio(pega()).cadencia.nome, 'pos_demo', 'antes: régua da etapa Demo/Proposta');
+
+  c.aplicarNotaNoDataLocal('CI1', { texto: notaDesfecho({ cliente: 'Ciclo' }), data: diasAtras(1).toISOString() });
+  c.tpInvalidarCache();
+
+  const depois = c.estadoDoNegocio(pega());
+  igual(depois.ultimoDesfecho, 'decisor_ausente', 'depois: desfecho lido');
+  igual(depois.cadencia.nome, 'acesso_decisor', 'depois: régua do desfecho');
+  igual(depois.desfechos[0].pain, 'taxa de marketplace come a margem', 'dor disponível pra ficha');
+});
+
+console.log('\n== Memoização e índice (não recalcular o funil 3x por tela) ==');
+
+teste('estadoDoNegocio é memoizado por render e invalidado junto com a agenda', () => {
+  const l = lead({ id: 'M1', ultimaInteracao: diasAtras(2).toISOString() });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const a = c.estadoDoNegocio(l);
+  const b = c.estadoDoNegocio(l);
+  verdade(a === b, 'segunda chamada devolve o MESMO objeto (veio do cache)');
+  c.tpInvalidarCache();
+  const d = c.estadoDoNegocio(l);
+  falso(a === d, 'depois de invalidar, recalcula');
+  igual(d.toques.total, a.toques.total, 'e o resultado continua igual');
+});
+
+teste('o índice de eventos acha o mesmo que a varredura linear achava', () => {
+  const l1 = lead({ id: 'I1', name: 'Bar do Zé' });
+  const l2 = lead({ id: 'I2', name: 'Outro Lugar' });
+  const eventos = [
+    // casa por dealId, com nome diferente (título cru do HubSpot)
+    { id: 'x1', ownerId: OWNER, dealId: 'I1', tipo: 'rota', inicio: diasAtras(2), cliente: 'Visita - Bar do Ze', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null },
+    // casa por nome, sem dealId
+    { id: 'x2', ownerId: OWNER, tipo: 'follow_up', inicio: diasAtras(3), cliente: 'Outro Lugar', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null },
+    // não é de nenhum dos dois
+    { id: 'x3', ownerId: OWNER, dealId: 'ZZ', tipo: 'rota', inicio: diasAtras(1), cliente: 'Terceiro', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }
+  ];
+  const c = novoContexto(dados({ agenda: { eventos }, funilLeads: { '1396005401': [l1, l2] } }), { ownerId: OWNER, role: 'rep' });
+  igual(c.touchpointsDoLead(l1).filter(t => t.touchpoint_id.startsWith('ag:')).map(t => t.touchpoint_id), ['ag:x1'], 'l1 por dealId');
+  igual(c.touchpointsDoLead(l2).filter(t => t.touchpoint_id.startsWith('ag:')).map(t => t.touchpoint_id), ['ag:x2'], 'l2 por nome');
 });
 
 console.log('\n== Transição Expogo → PWA (Escopo 14) ==');

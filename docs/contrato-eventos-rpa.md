@@ -2,10 +2,11 @@
 
 **Público:** time de RPA/integração.
 **Status:** v1, 27/08/2026.
-**Fonte de verdade deste documento no código:** `template/cockpit.template.html`, bloco
-entre os marcadores `/* @nucleo:inicio */` e `/* @nucleo:fim */`. Os objetos
-`TP_CANAIS`, `TP_TIPOS`, `TP_DESFECHOS`, `TP_SYNC` e `TP_ORIGENS` **são** o contrato —
-este arquivo descreve, não define. Se os dois divergirem, o código está certo.
+**Fonte de verdade deste documento no código:** `template/cockpit.template.html`, nos
+blocos delimitados pelos marcadores `@nucleo`, `@nucleo2` e `@nucleo3`. Os objetos
+`TP_CANAIS`, `TP_DESFECHOS`, `TP_SYNC` e `TP_ORIGENS` **são** o contrato, e
+`tpDesfechoDaNota()` é o parser de referência do bloco `DESFECHO_VISITA` (§3) — este
+arquivo descreve, não define. Se os dois divergirem, o código está certo.
 
 ---
 
@@ -229,16 +230,40 @@ Isso bloqueia três coisas que o negócio pediu:
 
 **Pedido:** engagements concluídos por `deal_id`, com `type`, `timestamp` e `outcome`.
 
-### 7.3 Decisor alcançado
-`decisor_confirmado` não é preenchido por nenhuma fonte (`agendaDecisor` devolve `null`
-sempre). "Decisor não alcançado" hoje significa "sem registro de ter alcançado", que é
-diferente — e por isso o balde da fila exige 2+ toques antes de acusar, e o texto diz o
-que mede. **Pedido:** o PWA manda `decision_maker_reached` no desfecho.
+### 7.3 Decisor alcançado — parcialmente resolvido do nosso lado
+`hs_decisor_confirmado` continua sem ser preenchido por nenhuma automação
+(`agendaDecisor` devolve `null` sempre). **Mas** o registro de desfecho do Cockpit grava
+`decisor_alcancado` no bloco estruturado, e o parser (§3) o lê de volta — então o campo
+passa a existir para toda visita fechada pelo Cockpit.
 
-### 7.4 Desfecho estruturado
+Regra do parser, que o PWA precisa respeitar: **só `sim` é sim.** Campo ausente ou vazio
+é `null` (desconhecido), **não** `false`. A diferença entre "não alcancei" e "não sei" é
+a diferença entre um dado e um chute — e é ela que decide se o negócio entra no balde de
+"decisores ainda não alcançados". Esse balde também exige 2+ toques antes de acusar,
+justamente porque a maior parte da base ainda é "não sei".
+
+**Pedido que continua:** o PWA manda `decision_maker_reached` no desfecho, no mesmo
+formato.
+
+### 7.4 Desfecho estruturado — resolvido do nosso lado, pendente no PWA
 `hs_task_status = COMPLETED` diz que a tarefa foi fechada, não **o que aconteceu na
-visita**. Sem `outcome`, o motor de cadência escolhe a régua pela **etapa** do negócio,
-que é uma aproximação. **Pedido:** `outcome` conforme §3.
+visita** — isso não mudou.
+
+O que mudou (27/08/26): o Cockpit **grava e agora também lê** o bloco `DESFECHO_VISITA`.
+Era um defeito nosso — a escrita existia desde o começo e a leitura nunca foi
+implementada, então o desfecho registrado voltava na carga seguinte e era tratado como
+uma nota genérica com `outcome: null`. Consequência do bug, enquanto durou: a visita
+seguia marcada como "sem desfecho", a régua continuava sendo escolhida pela etapa
+(decisor ausente não puxava a régua de acesso ao decisor), e dor/objeção/interesse
+ficavam vazios mesmo preenchidos.
+
+Com o parser no lugar, **o desfecho passa a mandar na cadência**: `padraoPorDesfecho`
+ganha de `padraoPorEtapa`, que é o comportamento que o motor foi desenhado para ter.
+
+**Pedido:** o PWA grava o mesmo bloco, com `origem: pwa`. Ele será lido pelo mesmo
+parser, sem nenhuma mudança do lado do Cockpit. Se o formato precisar mudar, **suba a
+versão** no cabeçalho (`DESFECHO_VISITA v2`): o parser marca versão desconhecida como
+`requer_revisao` em vez de reinterpretar campos em silêncio.
 
 ### 7.5 Marcar negócio como perdido
 `api/mudar-etapa-negocio.js` aceita só as etapas **abertas** do pipeline — "Perdido"
@@ -288,7 +313,7 @@ Toda ação automática precisa poder rodar duas vezes sem efeito dobrado:
 
 ## 10. Como testar sem escrever em negócio real
 
-- `node scripts/testar-nucleo.js` — 39 casos sobre o código de produção recortado do
+- `node scripts/testar-nucleo.js` — 49 casos sobre o código de produção recortado do
   template e avaliado com entorno stub. Cobre cadência, touchpoint, dedup, gates, fila,
   frescor, ordenação e os cenários que quase nunca aparecem juntos na base real
   (visita sem desfecho, cadência completa, recusa explícita, evento do Expogo, evento do
