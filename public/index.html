@@ -236,6 +236,28 @@
      largura ao primeiro card (Leads Quentes), sem mudar o comportamento padrão de
      .charts-row usado em todos os outros lugares (Resumo Semanal, dossiê, modal). */
   .charts-row.quentes-primeiro{grid-template-columns:1.3fr 1fr;}
+  /* Comando de hoje: camada de gestão por exceção. Reaproveita os mesmos tokens do
+     cockpit; não cria uma segunda linguagem visual. */
+  .command-center{margin:16px 0 20px;border-top:3px solid var(--ink);}
+  .command-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:15px;}
+  .command-kpis{display:grid;grid-template-columns:repeat(6,minmax(100px,1fr));gap:9px;margin-bottom:14px;}
+  .command-kpi{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;}
+  .command-kpi b{display:block;font:800 21px/1 'Poppins',sans-serif;font-variant-numeric:tabular-nums;}
+  .command-kpi span{display:block;font-size:9.5px;color:var(--muted2);margin-top:6px;line-height:1.25;}
+  .command-list{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;overflow:hidden;}
+  .command-row{display:grid;grid-template-columns:minmax(160px,1.35fr) repeat(4,minmax(92px,.8fr)) minmax(150px,1.1fr) auto;gap:10px;align-items:center;padding:11px 13px;border-bottom:1px solid var(--line-soft);font-size:11px;}
+  .command-row:last-child{border-bottom:0;}
+  .command-row.is-critical{background:linear-gradient(90deg,var(--red-soft),transparent 42%);}
+  .command-row.is-warning{background:linear-gradient(90deg,var(--amber-soft),transparent 42%);}
+  .command-name b{display:block;font-size:12.5px;}.command-name small{color:var(--muted2);}
+  .command-cell b{display:block;font-size:12px;font-variant-numeric:tabular-nums;}.command-cell small{color:var(--muted2);line-height:1.25;display:block;}
+  .command-action{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 10px;font:700 10.5px 'Manrope',sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap;}
+  .command-action:hover{border-color:var(--ink);transform:translateY(-1px);}
+  .command-note{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:10px;}
+  .ramp-pill{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:9px;font-weight:800;background:var(--amber-soft);color:var(--amber);white-space:nowrap;}
+  .ramp-pill.is-full{background:var(--green-soft);color:var(--green);}
+  @media(max-width:1050px){.command-row{grid-template-columns:minmax(150px,1.2fr) repeat(3,minmax(85px,.7fr)) minmax(140px,1fr) auto}.command-route{display:none}.command-kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:760px){.command-kpis{grid-template-columns:repeat(2,1fr)}.command-row{grid-template-columns:1fr 1fr;gap:8px}.command-name,.command-next{grid-column:1/-1}.command-action{width:100%}.command-head{flex-direction:column}}
   /* ===== BLOCO 24 (12/08/26) — "Meu funil" redesenhado, a partir do mock
      preview/meu-funil-executivo.html. Classes com os mesmos nomes do mock, valores
      copiados 1:1 — ver o handoff da rodada pra contexto de cada bloco. ===== */
@@ -3560,6 +3582,8 @@
 
   <div class="banner" id="banner" style="margin-top:16px;"></div>
 
+  <div id="cockpitExecutionCommand"></div>
+
   <!-- BLOCO 2 (10/08/26, Julyan): "Onde agir hoje" e "Planos do dia do time" saíram
        daqui e viraram o insumo da Daily das 9h (o ritual onde essas duas coisas são
        de fato usadas). O Cockpit vira "Time": estado do funil e das pessoas, sem os
@@ -3577,7 +3601,7 @@
         <h3 style="margin-bottom:0;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d="M12 2c1 3 4 4.5 4 8a4 4 0 01-8 0c0-1 .3-1.8.8-2.6C9.5 8.6 10.5 10 12 10c-.6-2.4-.4-5 0-8z"/><path d="M12 22a7 7 0 007-7c0-2-.8-3.8-2-5.2"/><path d="M5 15a7 7 0 007 7"/></svg>Leads quentes</h3>
         <span id="leadsQuentesCount" style="font-size:11.5px;color:var(--muted2);"></span>
       </div>
-      <div class="chart-subtitle" style="margin-top:6px;">Avançando de etapa e dentro do prazo — os mais prováveis de fechar agora.</div>
+      <div class="chart-subtitle" style="margin-top:6px;">Negócios em etapa avançada e dentro do SLA — primeiro aparecem os que ainda estão sem próximo passo.</div>
       <div id="leadsQuentesLista" style="max-height:420px;overflow-y:auto;"></div>
     </div>
   </div>
@@ -4211,6 +4235,9 @@ function aplicarVisaoPorPapel() {
     if (typeof renderLeadsPrioritarios === 'function') renderLeadsPrioritarios();
     if (typeof renderVendasMes === 'function') renderVendasMes();
     if (typeof renderRepsList === 'function') renderRepsList();
+    // Aguarda o fim da avaliação do script porque o comando cruza Daily, Rotas e Agenda,
+    // declaradas mais abaixo. É o painel de decisão do gestor, não mais um snapshot.
+    if (typeof renderCockpitExecutionCommand === 'function') setTimeout(renderCockpitExecutionCommand, 0);
     viewsDesenhadas.add('viewCockpit');
     // BLOCO 1 (10/08): aqui havia um segundo setTimeout(renderAgenda) — o bloco geral
     // logo abaixo já chama renderAgenda pros dois papéis, então a agenda inteira era
@@ -11089,6 +11116,33 @@ renderFunilBarras();
 // sessão ainda não foi restaurada (sessaoAtual = null), então o filtro "só os quentes do
 // próprio executivo" não tinha como aplicar; sem a re-chamada pós-login, o rep via os
 // leads dos colegas (bug visto ao vivo na sessão da Kelly em 03/08).
+function proximoPassoDoLead(lead) {
+  if (!lead) return null;
+  const agora = new Date();
+  const candidatos = [];
+  if (lead.proximaAtividade) candidatos.push({ data: lead.proximaAtividade, rotulo: 'atividade' });
+  if (lead.proximaReuniao) candidatos.push({ data: lead.proximaReuniao, rotulo: 'reunião' });
+  (Array.isArray(lead.tarefas) ? lead.tarefas : []).forEach(t => {
+    if (t && t.timestamp) candidatos.push({ data: t.timestamp, rotulo: t.subject || 'tarefa' });
+  });
+  return candidatos
+    .map(x => ({ ...x, quando: new Date(x.data) }))
+    .filter(x => !Number.isNaN(x.quando.getTime()) && x.quando >= agora)
+    .sort((a, b) => a.quando - b.quando)[0] || null;
+}
+
+function leadTemProximoPasso(lead) { return !!proximoPassoDoLead(lead); }
+
+function cadenciaSugeridaDoLead(lead) {
+  const ultima = lead && lead.ultimaInteracao ? new Date(lead.ultimaInteracao) : null;
+  if (!ultima || Number.isNaN(ultima.getTime())) return 'Registrar toque e iniciar D+1';
+  const dias = Math.max(0, Math.floor((Date.now() - ultima.getTime()) / 86400000));
+  if (dias <= 1) return 'WhatsApp com valor · D+1';
+  if (dias <= 3) return 'Revisita presencial · D+3';
+  if (dias <= 5) return 'Ligação objetiva · D+5';
+  return 'Decisão ou reciclagem · D+7';
+}
+
 function renderLeadsPrioritarios() {
   const listaEl = document.getElementById('leadsQuentesLista');
   const countEl = document.getElementById('leadsQuentesCount');
@@ -11112,8 +11166,9 @@ function renderLeadsPrioritarios() {
     const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
     const restante = slaDias ? slaDias - l.dias : null;
     return restante === null || restante > 0;
-  });
-  if (countEl) countEl.textContent = `${todosQuentes.length} no radar`;
+  }).sort((a, b) => Number(leadTemProximoPasso(a)) - Number(leadTemProximoPasso(b)) || (PRIORIDADE_ETAPA[b.stageId] || 0) - (PRIORIDADE_ETAPA[a.stageId] || 0));
+  const semPassoCount = todosQuentes.filter(l => !leadTemProximoPasso(l)).length;
+  if (countEl) countEl.textContent = `${todosQuentes.length} no radar · ${semPassoCount} sem próximo passo`;
 
   if (todosQuentes.length === 0) {
     listaEl.innerHTML = `<div class="empty-state" style="padding:14px;">${souRepQuentes ? 'Nenhum negócio seu em etapa avançada dentro do prazo — avance leads pra Demo/Negociação pra aparecerem aqui.' : 'Nenhum lead prioritário agora — funil precisa avançar etapas.'}</div>`;
@@ -11128,11 +11183,14 @@ function renderLeadsPrioritarios() {
     const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
     const restante = slaDias ? slaDias - l.dias : null;
     const slaTxt = restante === null ? '' : ` · faltam ${restante}d pro SLA`;
+    const passo = proximoPassoDoLead(l);
+    const passoTxt = passo ? `${passo.rotulo} · ${passo.quando.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' })}` : `SEM PRÓXIMO PASSO · ${cadenciaSugeridaDoLead(l)}`;
     return `
       <div class="lead-prio-row" data-lead-id="${l.id}" style="cursor:pointer;">
         <div style="flex:1;min-width:0;">
           <div class="nome">${l.name}</div>
           <div class="meta">${souRepQuentes ? (l.stage || '') : l.vendedor} · ${l.dias}d na etapa${slaTxt}</div>
+          <div style="font-size:9.5px;font-weight:800;margin-top:4px;color:${passo ? 'var(--green)' : 'var(--red)'};">${esc(passoTxt)}</div>
         </div>
         <span class="chance" style="background:${estilo.bg};color:${estilo.fg};" title="Índice de prioridade pela etapa do funil — não é uma previsão calculada de fechamento">${prioridade}</span>
         <span class="abrir">ver ficha →</span>
@@ -17383,6 +17441,102 @@ function visitasDoRow(row) {
   const derivado = row.owner_id && row.data ? visitasReaisDoOwnerNoDia(row.owner_id, row.data) : null;
   return derivado != null ? derivado : (row.realizado_visitas || 0);
 }
+
+function rampDoOwner(ownerId) {
+  const u = (DATA.usuarios || []).find(x => String(x.ownerId) === String(ownerId)) || {};
+  const fases = {
+    preparacao: { label: 'Preparação', alvo: 0 },
+    semana_2_3: { label: 'Semanas 2–3', alvo: 0 },
+    semana_4: { label: 'Semana 4', alvo: 0 },
+    semana_5: { label: 'Semana 5', alvo: 3 },
+    semana_6_7: { label: 'Semanas 6–7', alvo: 5 },
+    pleno: { label: 'Pleno', alvo: 6 }
+  };
+  const chave = u.rampStage || (u.aComecar ? 'preparacao' : null);
+  return chave && fases[chave]
+    ? { ...fases[chave], chave, definido: true }
+    : { label: 'Fase não definida', alvo: null, chave: null, definido: false };
+}
+
+async function renderCockpitExecutionCommand() {
+  const el = document.getElementById('cockpitExecutionCommand');
+  if (!el || !sessaoAtual || sessaoAtual.role !== 'manager') return;
+  el.innerHTML = '<div class="chart-card command-center"><div class="empty-state" style="padding:12px;">Consolidando execução de hoje...</div></div>';
+  await Promise.all([
+    Object.keys(dailiesCache || {}).length ? Promise.resolve() : carregarDailies(),
+    rotasCache ? Promise.resolve() : carregarRotasDoTime()
+  ]);
+
+  const dataISO = isoDate(new Date());
+  const reps = (DATA.reps || []).filter(r => r && r.ownerId);
+  const quentes = ((DATA.temperatura || {}).quentes || []);
+  const funilAberto = Object.values(DATA.funilLeads || {}).flat().filter(Boolean);
+  const linhas = reps.map(r => {
+    const daily = getDaily(r.ownerId, dataISO);
+    const rota = ((rotasCache || {}).porOwner || {})[String(r.ownerId)] || { paradas: [], plano: null };
+    const prometido = Number(daily && daily.prometido_visitas) || 0;
+    const realizado = daily ? visitasDoRow(daily) : (visitasReaisDoOwnerNoDia(r.ownerId, dataISO) || 0);
+    const nomes = visitasNomesDoOwnerNoDia(r.ownerId, dataISO);
+    const quentesRep = quentes.filter(l => String(l.ownerId) === String(r.ownerId));
+    const hotSemPasso = quentesRep.filter(l => !leadTemProximoPasso(l)).length;
+    const paradas = (rota.paradas || []).length;
+    const planoFechado = !!(rota.plano && rota.plano.status === 'plano_fechado');
+    const ramp = rampDoOwner(r.ownerId);
+    let proxima = { texto: 'Acompanhar execução', view: 'viewDaily' };
+    if (!daily || prometido === 0 || !planoFechado) proxima = { texto: 'Fechar plano do dia', view: 'viewDaily' };
+    else if (paradas === 0) proxima = { texto: 'Montar rota antes da rua', view: 'viewRotas' };
+    else if (hotSemPasso > 0) proxima = { texto: `Agendar ${hotSemPasso} próximo${hotSemPasso === 1 ? '' : 's'} passo${hotSemPasso === 1 ? '' : 's'}`, view: 'viewCockpit' };
+    else if ((r.leadsTravados || 0) > 0) proxima = { texto: `Destravar ${r.leadsTravados} no SLA`, view: 'viewCockpit' };
+    else if (prometido > 0 && realizado < prometido) proxima = { texto: `Cobrar ${prometido - realizado} visita${prometido - realizado === 1 ? '' : 's'}`, view: 'viewDaily' };
+    const score = (!planoFechado ? 4 : 0) + (paradas === 0 ? 4 : 0) + hotSemPasso * 3 + (r.leadsTravados || 0) + (prometido > realizado ? 2 : 0) + (!ramp.definido ? 2 : 0);
+    return { r, daily, prometido, realizado, nomes, hotSemPasso, paradas, planoFechado, ramp, proxima, score };
+  }).sort((a, b) => b.score - a.score);
+
+  const rotasProntas = linhas.filter(x => x.paradas > 0).length;
+  const planosFechados = linhas.filter(x => x.planoFechado).length;
+  const visitasAuditaveis = linhas.reduce((s, x) => s + x.nomes.length, 0);
+  const hotTotal = quentes.length;
+  const hotProtegidos = quentes.filter(leadTemProximoPasso).length;
+  const funilProtegido = funilAberto.filter(leadTemProximoPasso).length;
+  const slaTotal = linhas.reduce((s, x) => s + (Number(x.r.leadsTravados) || 0), 0);
+  const rampSemDefinir = linhas.filter(x => !x.ramp.definido).length;
+
+  el.innerHTML = `
+    <section class="chart-card command-center" aria-label="Comando de hoje">
+      <div class="command-head"><div><h3 style="margin:0 0 4px;font-family:'Poppins',sans-serif;">Comando de hoje</h3><div class="chart-subtitle">Gestão por exceção: quem precisa de intervenção e qual é a próxima cobrança.</div></div><button type="button" class="command-action" data-command-view="viewDaily">Abrir ritual da Daily →</button></div>
+      <div class="command-kpis">
+        <div class="command-kpi"><b style="color:${rotasProntas === linhas.length ? 'var(--green)' : 'var(--red)'}">${rotasProntas}/${linhas.length}</b><span>rotas com paradas hoje</span></div>
+        <div class="command-kpi"><b style="color:${planosFechados === linhas.length ? 'var(--green)' : 'var(--amber)'}">${planosFechados}/${linhas.length}</b><span>planos do dia fechados</span></div>
+        <div class="command-kpi"><b>${visitasAuditaveis}</b><span>visitas com cliente identificado</span></div>
+        <div class="command-kpi"><b style="color:${hotTotal && hotProtegidos < hotTotal ? 'var(--red)' : 'var(--green)'}">${hotProtegidos}/${hotTotal}</b><span>quentes com próximo passo futuro</span></div>
+        <div class="command-kpi"><b style="color:${funilAberto.length && funilProtegido < funilAberto.length ? 'var(--red)' : 'var(--green)'}">${funilProtegido}/${funilAberto.length}</b><span>funil aberto protegido por tarefa</span></div>
+        <div class="command-kpi"><b style="color:${slaTotal ? 'var(--red)' : 'var(--green)'}">${slaTotal}</b><span>negócios acima do SLA</span></div>
+      </div>
+      <div class="command-list">
+        ${linhas.map(x => `
+          <div class="command-row ${x.score >= 10 ? 'is-critical' : x.score >= 5 ? 'is-warning' : ''}">
+            <div class="command-name"><b>${esc(x.r.name)}</b><small>${esc(x.r.praca || '')}</small><span class="ramp-pill ${x.ramp.chave === 'pleno' ? 'is-full' : ''}" style="margin-top:5px;">${esc(x.ramp.label)}${x.ramp.alvo != null ? ` · alvo ${x.ramp.alvo}/dia` : ''}</span></div>
+            <div class="command-cell command-route"><b>${x.paradas}</b><small>paradas na rota</small></div>
+            <div class="command-cell"><b>${x.realizado}/${x.prometido || '—'}</b><small>visitas real/prom.</small></div>
+            <div class="command-cell"><b style="color:${x.hotSemPasso ? 'var(--red)' : 'var(--green)'}">${x.hotSemPasso}</b><small>quentes sem passo</small></div>
+            <div class="command-cell"><b style="color:${x.r.leadsTravados ? 'var(--red)' : 'var(--green)'}">${x.r.leadsTravados || 0}</b><small>acima do SLA</small></div>
+            <div class="command-cell command-next"><b>${esc(x.proxima.texto)}</b><small>${x.nomes.length < x.realizado ? 'registro de visita não auditável' : (x.planoFechado ? 'plano fechado' : 'plano ainda aberto')}</small></div>
+            <button type="button" class="command-action" data-command-view="${x.proxima.view}" data-command-owner="${esc(String(x.r.ownerId))}">Agir →</button>
+          </div>`).join('')}
+      </div>
+      <div class="command-note">Regra operacional: rota e plano fechados antes da rua; visita só conta para gestão quando está vinculada ao cliente; negócio quente precisa sair de cada toque com próximo passo e data. ${rampSemDefinir ? `<b>${rampSemDefinir} executivo${rampSemDefinir === 1 ? '' : 's'} ainda sem fase de rampagem definida.</b>` : ''}</div>
+    </section>`;
+
+  el.querySelectorAll('[data-command-view]').forEach(btn => btn.addEventListener('click', () => {
+    const ownerId = btn.dataset.commandOwner;
+    if (ownerId && btn.dataset.commandView === 'viewCockpit') {
+      cockpitExecSelecionado = ownerId;
+      renderRepsList();
+      renderCockpitDossieInline();
+    }
+    activateTab(btn.dataset.commandView);
+  }));
+}
 function pontosDoDia(row) {
   if (!row) return 0;
   // realizado_avancos continua pontuando (+25) mesmo não sendo mais uma promessa
@@ -17890,7 +18044,9 @@ async function renderDaily() {
         <span style="display:block;font-size:9px;color:var(--muted);margin-top:4px;">${m.real} realizado${m.suspeito ? ' · sync a confirmar' : ''}</span>
         ${m.chips ? (m.chips.length
           ? `<div class="daily-visitas-chips">${m.chips.map(c => `<span class="daily-vchip">✓ ${esc(c)}</span>`).join('')}</div>`
-          : `<div class="daily-visitas-vazio">nenhuma visita registrada ainda</div>`) : ''}
+          : Number(m.real) > 0
+            ? `<div class="daily-visitas-vazio" style="color:var(--amber);font-weight:700;">${m.real} visita${Number(m.real) === 1 ? '' : 's'} contabilizada${Number(m.real) === 1 ? '' : 's'}, mas sem cliente vinculado — registro não auditável</div>`
+            : `<div class="daily-visitas-vazio">nenhuma visita qualificada vinculada ainda</div>`) : ''}
       </span>`;
     const metricaGestorAberta = m => `
       <div class="daily-promise-metric ${m.cls}">
@@ -21417,6 +21573,23 @@ async function renderPDIs() {
     const idsUrgentes = new Set(urgentes.map(c => c.x.ownerId));
     const emDia = cardsTime.filter(c => !idsUrgentes.has(c.x.ownerId));
 
+    const rampagemTime = DATA.reps.map(x => ({ x, fase: rampDoOwner(x.ownerId), visitas: visitasInformadasDetalhe(x.ownerId) }));
+    const rampagemHTML = `
+      <div class="chart-card" style="margin-bottom:20px;border-top:3px solid var(--amber);">
+        <div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap;">
+          <div><h3 style="margin:0 0 4px;font-family:'Poppins',sans-serif;">Régua de rampagem</h3><div class="chart-subtitle">A meta de campo cresce por fase; ninguém é cobrado como pleno sem passar pelos gates.</div></div>
+          <span class="ramp-pill">Gates: D30 · D45 · D60</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:14px;">
+          ${rampagemTime.map(({ x, fase, visitas }) => `
+            <div style="border:1px solid ${fase.definido ? 'var(--line)' : 'rgba(184,121,14,.35)'};background:${fase.definido ? 'var(--panel)' : 'var(--amber-soft)'};border-radius:13px;padding:11px 13px;">
+              <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="font-size:12.5px;">${esc(x.name)}</b><span class="ramp-pill ${fase.chave === 'pleno' ? 'is-full' : ''}">${esc(fase.label)}</span></div>
+              <div style="font-size:10.5px;color:var(--muted);margin-top:7px;">Semana: <b style="color:var(--ink);">${visitas.real}/${visitas.prom || '—'} visitas</b>${fase.alvo != null ? ` · alvo atual ${fase.alvo}/dia` : ' · defina a fase antes da cobrança'}</div>
+            </div>`).join('')}
+        </div>
+        <details style="margin-top:11px;"><summary class="card-summary" style="font-size:10.5px;color:var(--muted2);cursor:pointer;">Ver critério das fases</summary><div style="font-size:11px;color:var(--muted);line-height:1.65;margin-top:8px;">Semanas 2–3: 15–20 demos acompanhadas + 20 ligações/dia · Semana 4: 12–15 visitas à base ativa · Semana 5: 3 visitas/dia · Semanas 6–7: 4–5 visitas/dia · Semana 8+: 6 visitas qualificadas/dia. A passagem de fase acontece nos checkpoints D30, D45 e D60.</div></details>
+      </div>`;
+
     const oTimeHTML = `
       <div class="chart-card" style="margin-bottom:20px;">
         <div style="display:flex;align-items:center;gap:9px;">
@@ -21447,6 +21620,7 @@ async function renderPDIs() {
 
     el.innerHTML = `
       ${bannerPessoas}
+      ${rampagemHTML}
       ${oTimeHTML}
       <!-- Otimização 08/08 (Julyan): a fileira de pills do PDI foi removida — o grid "O
            time" acima já lista e seleciona TODO MUNDO (urgentes + em dia). Essa 2ª forma
