@@ -5526,10 +5526,19 @@ function indicadoresDoExecutivo(r) {
   const mediaSegundoToque = janelas.length > 0
     ? Math.round((janelas.reduce((a, b) => a + b, 0) / janelas.length) * 10) / 10 : null;
 
+  // "Visitas com desfecho" não pode mostrar o mesmo número de "visitas realizadas":
+  // atividade FECHADA no HubSpot não é a mesma coisa que visita com DESFECHO
+  // estruturado (falei com o decisor / decisor ausente / sem aderência…). Nenhuma
+  // fonte devolve isso hoje, então o indicador fica em "—" com a nota dizendo por
+  // quê, e no lugar dele entra o que é acionável agora: visita sem registro.
+  const semRegistro = Math.max(0, daSemana.length - realizadas.length);
+
   return [
     { id: 'visitas', rotulo: 'Visitas realizadas', valor: realizadas.length, sufixo: 'na semana', bom: realizadas.length > 0 },
-    { id: 'com_desfecho', rotulo: 'Visitas com desfecho', valor: realizadas.length, total: daSemana.length, sufixo: 'na semana', bom: daSemana.length === 0 || realizadas.length === daSemana.length,
-      nota: 'desfecho estruturado ainda não chega de nenhuma fonte — hoje só sabemos se a atividade foi fechada' },
+    { id: 'sem_registro', rotulo: 'Visitas sem registro', valor: semRegistro, total: daSemana.length, sufixo: 'na semana', bom: semRegistro === 0,
+      nota: 'compromisso cujo horário passou e ninguém fechou no HubSpot' },
+    { id: 'com_desfecho', rotulo: 'Visitas com desfecho estruturado', valor: null, bom: false,
+      nota: 'nenhuma fonte devolve o desfecho da visita ainda — entra quando o PWA passar a mandar (docs/contrato-eventos-rpa.md)' },
     { id: 'com_passo', rotulo: 'Negócios com próximo passo', valor: comProximoPasso, total: leads.length, bom: leads.length === 0 || comProximoPasso === leads.length },
     { id: 'fu_hoje', rotulo: 'Follow-ups para hoje', valor: fila.baldes.hoje.length, bom: true },
     { id: 'fu_atraso', rotulo: 'Follow-ups atrasados', valor: fila.baldes.cadencia.length, bom: fila.baldes.cadencia.length === 0 },
@@ -5540,7 +5549,13 @@ function indicadoresDoExecutivo(r) {
     { id: 'decisores', rotulo: 'Decisores alcançados', valor: decisores, total: leads.length, bom: true,
       nota: 'só conta quando a fonte marca o decisor — campo ainda não preenchido pelo Expogo' },
     { id: 'propostas_data', rotulo: 'Propostas com data de decisão', valor: propostasComData, total: propostasTotal, bom: propostasTotal === 0 || propostasComData === propostasTotal },
-    { id: 'protegidos', rotulo: 'Negócios protegidos', valor: leads.length - fila.negociosAfetados, total: leads.length, bom: fila.negociosAfetados === 0 }
+    { id: 'protegidos', rotulo: 'Negócios protegidos', valor: leads.length - fila.negociosAfetados, total: leads.length, bom: fila.negociosAfetados === 0 },
+    // Escopo 12 pede "vendas por número do toque". Não é derivável hoje: negócio
+    // fechado sai do funil aberto e o HubSpot não devolve o histórico de atividades
+    // dele nesta carga, então não há como saber em qual toque a venda aconteceu.
+    // Fica declarado em vez de omitido — é justamente o que o contrato pede ao RPA.
+    { id: 'vendas_por_toque', rotulo: 'Vendas por número do toque', valor: null, bom: false,
+      nota: 'depende do histórico de atividades dos negócios fechados, que a carga atual não traz (docs/contrato-eventos-rpa.md)' }
   ];
 }
 
@@ -6011,6 +6026,83 @@ function buildGatesDoDiaHTML(r, diag) {
 
       <div style="margin-top:12px;">${frescorTarjaHTML()}</div>
     </div>`;
+}
+
+/* ============================================================================
+   RECUPERAÇÃO DURANTE O DIA (Escopo 9) e INDICADORES DO EXECUTIVO (Escopo 12)
+   ----------------------------------------------------------------------------
+   A mesma tela responde perguntas diferentes conforme a hora. Antes das 9h a
+   pergunta é "está montado?"; às 11h30 é "o dia começou de verdade?"; às 16h30
+   é "o que ainda dá pra salvar?"; no fim é "o que ficou comprovado?".
+   Quem decide a janela é janelaDoDia(); o que aparece em cada uma vem de
+   checagensDaJanela(). Nenhuma das duas cobra quando a carga está velha — nesse
+   caso o bloco muda de tom e diz que o snapshot pode estar atrás da rua.
+   ============================================================================ */
+
+function buildRecuperacaoDoDiaHTML(r, diag) {
+  const j = checagensDaJanela(r, diag);
+  const ehEncerramento = j.janela.id === 'encerramento';
+  const cor = !j.cobravel ? 'var(--muted)' : ehEncerramento ? 'var(--green)' : j.itens.length > 0 ? 'var(--amber)' : 'var(--green)';
+  const fundo = !j.cobravel ? 'var(--panel2)' : ehEncerramento ? 'var(--green-soft)' : j.itens.length > 0 ? 'var(--amber-soft)' : 'var(--green-soft)';
+
+  // Ordem das janelas com a atual marcada — deixa explícito que a tela vai voltar
+  // a perguntar mais tarde, e que perder a janela da manhã não encerra o dia.
+  const trilha = JANELAS_DO_DIA.map(x => {
+    const atual = x.id === j.janela.id;
+    return `<span style="font-size:9.5px;font-weight:${atual ? '800' : '600'};color:${atual ? 'var(--ink)' : 'var(--ter)'};background:${atual ? 'var(--panel)' : 'transparent'};border-radius:999px;padding:3px 9px;white-space:nowrap;">${esc(x.rotulo)}</span>`;
+  }).join('<span style="color:var(--ter);font-size:9px;">›</span>');
+
+  return `
+    <div class="chart-card" style="margin:0 0 18px;border-left:3px solid ${cor};">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <h3 style="margin:0;">${esc(j.janela.pergunta)}</h3>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${trilha}</div>
+      </div>
+      <div class="chart-subtitle" style="margin:4px 0 11px;">${j.cobravel
+        ? 'O Cockpit repergunta em cada janela do dia. Perder a janela da manhã não encerra o dia — muda o que dá pra salvar.'
+        : 'A carga do HubSpot está atrasada. Isto é leitura, não cobrança: o que você já fez pode ainda não estar aqui.'}</div>
+      ${j.itens.length === 0
+        ? `<div style="background:${fundo};border-radius:11px;padding:12px 14px;font-size:12.5px;color:var(--body);line-height:1.55;">Nada fora do lugar nesta janela.</div>`
+        : `<ul style="margin:0;padding:0;list-style:none;display:grid;gap:6px;">
+            ${j.itens.map(x => `<li style="background:${fundo};border-radius:11px;padding:10px 13px;font-size:12.5px;color:var(--body);line-height:1.5;">${esc(x)}</li>`).join('')}
+          </ul>`}
+    </div>`;
+}
+
+function buildIndicadoresExecutivoHTML(r) {
+  let ind;
+  try { ind = indicadoresDoExecutivo(r); } catch (e) { return ''; }
+  if (!ind || ind.length === 0) return '';
+
+  const celula = i => {
+    const temTotal = i.total != null;
+    const vazio = i.valor == null;
+    const cor = vazio ? 'var(--muted2)' : i.bom ? 'var(--green)' : 'var(--red)';
+    return `
+      <div style="background:var(--panel2);border:1px solid var(--line-soft);border-radius:11px;padding:11px 13px;">
+        <div style="font-size:9.5px;text-transform:uppercase;letter-spacing:.055em;color:var(--muted);line-height:1.35;min-height:24px;">${esc(i.rotulo)}</div>
+        <div style="margin-top:5px;font-variant-numeric:tabular-nums;">
+          <b style="font:800 22px/1 'Poppins',sans-serif;color:${cor};">${vazio ? '—' : i.valor}</b>
+          ${temTotal ? `<span style="font-size:12px;color:var(--muted2);font-weight:700;">/${i.total}</span>` : ''}
+          ${i.sufixo ? `<span style="font-size:10.5px;color:var(--muted2);margin-left:4px;">${esc(i.sufixo)}</span>` : ''}
+        </div>
+        ${i.nota ? `<div style="font-size:9.5px;color:var(--ter);margin-top:5px;line-height:1.45;">${esc(i.nota)}</div>` : ''}
+      </div>`;
+  };
+
+  return `
+    <details class="chart-card" style="margin:0 0 18px;">
+      <summary style="cursor:pointer;font-weight:700;font-size:13.5px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;">
+        Seus indicadores
+        <span style="font-size:11px;font-weight:600;color:var(--muted2);">o que mede execução, não volume — abre quando você quiser conferir</span>
+      </summary>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:13px;">
+        ${ind.map(celula).join('')}
+      </div>
+      <div style="font-size:10.5px;color:var(--muted2);margin-top:12px;line-height:1.55;">
+        Nenhum indicador de vaidade aqui: não tem "leads no funil" nem "atividades totais". Onde aparece "—", a fonte ainda não devolve o dado — e a nota embaixo diz qual é. Preferimos o traço à estimativa.
+      </div>
+    </details>`;
 }
 
 function buildAcoesDeAgoraHTML(r, diag) {
@@ -6500,16 +6592,22 @@ async function renderMeuPainel() {
       <div class="chart-card" style="margin:0;">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;">
           <b style="font-family:'Poppins',sans-serif;font-size:13.5px;">Seu plano com o gestor</b>
-          <span id="meuPainelPdiCount" style="font-size:11.5px;color:var(--muted2);">✓ ${getPdiState(r.ownerId, r.compromissos.length).checked.filter(Boolean).length}/${r.compromissos.length} cumpridos</span>
+          <!-- Escopo 10: o contador leva os vencidos. "0/3" sozinho não tem idade, e era
+               isso que deixava um acordo de 17/08 vivo em 27/08 como se estivesse em
+               aberto. O checkbox continua aqui de propósito: ele não é check pessoal —
+               grava em pdi_compromissos e é o MESMO estado que o gestor vê na aba
+               Pessoas (é o acordo do 1:1, não uma ação de CRM). -->
+          <span id="meuPainelPdiCount" style="font-size:11.5px;color:var(--muted2);">${compromissosResumoHTML(r) || `✓ 0/${r.compromissos.length} cumpridos`}</span>
         </div>
         <ul class="commit-list" id="meuPainelCommitList" style="margin:0;">
-          ${r.compromissos.map((c, ci) => `
+          ${compromissosComPrazo(r).map(x => `
             <li class="commit-item">
-              <span class="checkbox" data-item="${ci}"></span>
-              <span class="commit-text">${c}</span>
+              <span class="checkbox" data-item="${x.idx}"></span>
+              <span class="commit-text">${x.texto}<span style="display:block;font-size:10px;font-weight:700;color:${x.cor};margin-top:3px;">${esc(x.situacao)}</span></span>
             </li>
           `).join('')}
         </ul>
+        ${compromissosComPrazo(r).some(x => x.vencido) ? `<div style="background:var(--red-soft);border-radius:9px;padding:9px 11px;font-size:11px;color:var(--body);line-height:1.5;margin-top:10px;">Tem acordo vencido. Reprogramar ou encerrar é conversa de 1:1 — não precisa ficar em aberto pra sempre.</div>` : ''}
         <div class="sign-row">
           <span>Combinado no 1:1 de <input type="text" id="meuPainelPdiData" aria-label="Data combinada no 1:1 (dd/mm)" placeholder="dd/mm"></span>
         </div>
@@ -6519,6 +6617,10 @@ async function renderMeuPainel() {
     <!-- BLOCO 3 exec (10/08/26): "Onde seu funil está preso" saiu — a aba Meu funil já
          tem "Meu funil por etapa", com o mesmo dado (r.stages), clicável e com o SLA de
          cada etapa ao lado. Manter os dois era a 5ª e 6ª menção a SLA na mesma tela. -->
+    ${buildRecuperacaoDoDiaHTML(r, diagDia)}
+
+    ${buildIndicadoresExecutivoHTML(r)}
+
     <div id="meuPainelSugestoes"></div>
 
     ${buildVitoriasHTML(r)}
@@ -6552,7 +6654,9 @@ async function renderMeuPainel() {
     const checkedNow = Array.from(checkboxes).map(cb => cb.classList.contains('checked'));
     savePdiState(r.ownerId, checkedNow, dataInput.value);
     const feitos = checkedNow.filter(Boolean).length;
-    document.getElementById('meuPainelPdiCount').textContent = `✓ ${feitos}/${r.compromissos.length} cumpridos`;
+    // Recalcula com os prazos (o resumo leva os vencidos), não só a contagem.
+    const elCount = document.getElementById('meuPainelPdiCount');
+    if (elCount) elCount.innerHTML = compromissosResumoHTML(r) || `✓ ${feitos}/${r.compromissos.length} cumpridos`;
   }
   checkboxes.forEach(cb => {
     cb.addEventListener('click', () => { cb.classList.toggle('checked'); persistPdi(); });
@@ -24043,6 +24147,255 @@ function abrirFichaProspeccaoDrawer(l) {
 // ============ PDIs (documentos anexados) ============
 let pessoaSelecionadaId = null; // única fonte de verdade — antes eram DUAS variáveis (pdiSelecionado/coachingSelecionado) sem sincronia entre si: clicar um nome de um lado podia deixar o outro lado mostrando outra pessoa. Essa era a raiz do "está tudo errado".
 
+/* ============================================================================
+   DESENVOLVIMENTO (Escopo 10) — narrativa com validade, compromisso com prazo
+   ----------------------------------------------------------------------------
+   O PROBLEMA AUDITADO
+   O card de gargalo misturava períodos: o arquivo narrativas.json carimbava
+   `_atualizado_em: 2026-08-27`, mas a prosa dentro dele dizia "HubSpot (dado ao
+   vivo, 16/08): 12 negócios em aberto" enquanto o funil ao vivo tinha 20. Os
+   dois estavam "certos" — a análise foi escrita em 16/08 e o arquivo foi
+   republicado em 27/08 — e o resultado era um texto que descrevia um funil que
+   já não existe, com a autoridade de um texto de hoje. Do lado dos acordos,
+   compromissos com prazo "até segunda (17/08)" seguiam marcados 0/3 dez dias
+   depois, sem nunca virar vencido.
+
+   AS TRÊS REGRAS QUE ESTE BLOCO APLICA
+   1. A narrativa informa a DATA-BASE e a idade dela.
+   2. Divergência material entre o número citado na prosa e o número ao vivo
+      invalida a narrativa — ela não é apagada (é histórico), passa a aparecer
+      recolhida e marcada.
+   3. Compromisso com prazo no texto vira "no prazo", "vence hoje" ou "vencido
+      há N dias". Nada fica 0/3 sem idade.
+
+   O QUE NÃO FAZ: rotular pessoa. Nenhum texto daqui classifica o executivo —
+   o foco é de HABILIDADE, ligado a uma página do Playbook e a um roleplay.
+   ============================================================================ */
+
+// Extrai a data mais antiga citada na prosa (dd/mm) — é ela que denuncia a idade
+// real da análise, não o carimbo do arquivo.
+function narrativaDataNoTexto(texto) {
+  const t = String(texto || '');
+  const achados = [];
+  const re = /(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/g;
+  let m;
+  while ((m = re.exec(t)) !== null) {
+    const dia = Number(m[1]), mes = Number(m[2]);
+    if (dia < 1 || dia > 31 || mes < 1 || mes > 12) continue;
+    const hoje = new Date();
+    let ano = m[3] ? Number(m[3].length === 2 ? '20' + m[3] : m[3]) : hoje.getFullYear();
+    // 12:00 UTC, não 00:00 — meia-noite UTC vira o dia ANTERIOR em Brasília (UTC-3),
+    // e "16/08" no texto aparecia como "15/08" na tela. Mesma convenção de meio-dia
+    // que o resto do template usa ao montar data a partir de string.
+    const d = new Date(Date.UTC(ano, mes - 1, dia, 12, 0, 0));
+    // Data no futuro sem ano explícito é do ano anterior (dezembro lido em janeiro).
+    if (!m[3] && d.getTime() > hoje.getTime() + 86400000) d.setUTCFullYear(ano - 1);
+    achados.push(d);
+  }
+  if (achados.length === 0) return null;
+  return achados.sort((a, b) => a - b)[0];
+}
+
+// Números que a prosa afirma, comparados com o funil ao vivo. Só checa o que dá
+// pra checar sem interpretar a frase: "N negócios em aberto" e "N leads com SLA".
+function narrativaDivergencias(texto, r) {
+  const t = String(texto || '').replace(/<[^>]*>/g, ' ');
+  const out = [];
+  const abertos = t.match(/(\d+)\s+neg[óo]cios?\s+em\s+aberto/i);
+  if (abertos && r.open != null) {
+    const noTexto = Number(abertos[1]);
+    const aoVivo = Number(r.open);
+    if (aoVivo > 0 && Math.abs(noTexto - aoVivo) / aoVivo >= 0.25) {
+      out.push({ campo: 'negócios em aberto', noTexto, aoVivo });
+    }
+  }
+  const sla = t.match(/(\d+)\s+(?:dos?\s+\d+\s+)?leads?\s+com\s+SLA/i);
+  if (sla && Array.isArray(r.travados)) {
+    const noTexto = Number(sla[1]);
+    const aoVivo = r.travados.length;
+    if (aoVivo > 0 && Math.abs(noTexto - aoVivo) / aoVivo >= 0.5) {
+      out.push({ campo: 'leads com SLA estourado', noTexto, aoVivo });
+    }
+  }
+  return out;
+}
+
+// Idade a partir da qual uma leitura semanal deixa de valer como leitura de hoje.
+// 10 dias corridos: mais de uma semana comercial inteira aconteceu no meio.
+const NARRATIVA_VALIDADE_DIAS = 10;
+
+function narrativaSaude(r) {
+  const texto = String((r && r.gargalo) || '');
+  const carimbo = (DATA.versaoAnalise && /^\d{4}-\d{2}-\d{2}$/.test(DATA.versaoAnalise)) ? DATA.versaoAnalise : null;
+  const dataTexto = narrativaDataNoTexto(texto);
+  // Vale a data mais ANTIGA entre carimbo e prosa: é a idade real do conteúdo.
+  const base = dataTexto && carimbo
+    ? (dataTexto < new Date(carimbo + 'T12:00:00Z') ? dataTexto : new Date(carimbo + 'T12:00:00Z'))
+    : (dataTexto || (carimbo ? new Date(carimbo + 'T12:00:00Z') : null));
+  const idadeDias = base ? Math.floor((Date.now() - base.getTime()) / 86400000) : null;
+  const divergencias = narrativaDivergencias(texto, r);
+  return {
+    temTexto: !!texto.trim(),
+    carimbo,
+    dataBase: base,
+    dataBaseFmt: base ? base.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : null,
+    idadeDias,
+    expirada: idadeDias != null && idadeDias > NARRATIVA_VALIDADE_DIAS,
+    divergencias,
+    // Inválida = expirada OU contradiz o funil ao vivo. Continua existindo (é
+    // histórico do que foi conversado), só perde o direito de dirigir o dia.
+    valida: !!texto.trim() && !(idadeDias != null && idadeDias > NARRATIVA_VALIDADE_DIAS) && divergencias.length === 0
+  };
+}
+
+function narrativaAvisoHTML(saude) {
+  if (!saude.temTexto || saude.valida) return '';
+  const partes = [];
+  if (saude.expirada) partes.push(`escrita há ${saude.idadeDias} dias (base ${saude.dataBaseFmt})`);
+  saude.divergencias.forEach(d => partes.push(`diz ${d.noTexto} ${d.campo}, o funil de hoje tem ${d.aoVivo}`));
+  return `
+    <div style="background:var(--amber-soft);border:1px solid rgba(184,121,14,.3);border-radius:12px;padding:11px 14px;font-size:11.5px;color:var(--amber-ink);line-height:1.55;margin-bottom:12px;">
+      <b>Esta leitura não descreve o seu funil de hoje</b> — ${esc(partes.join(' · '))}.
+      Ela fica aqui como registro do que foi conversado, não como plano de hoje. Os números do HubSpot ao lado valem agora.
+    </div>`;
+}
+
+/* ---------------------------------------------------------------------------
+   Compromissos do 1:1 com prazo real
+   O prazo vem escrito no próprio texto do acordo ("até quinta (20/08)"), que é
+   como o gestor já escreve hoje. Em vez de pedir uma coluna nova no Supabase,
+   lê o que existe — e quando não há data no texto, diz "sem prazo no acordo"
+   em vez de fingir que está no prazo.
+   --------------------------------------------------------------------------- */
+function compromissosComPrazo(r) {
+  const lista = (r && Array.isArray(r.compromissos)) ? r.compromissos.filter(Boolean) : [];
+  const estado = getPdiState(r ? r.ownerId : '', lista.length);
+  const hoje = isoDate(new Date());
+  return lista.map((texto, i) => {
+    const d = narrativaDataNoTexto(texto);
+    const prazoISO = d ? isoDate(d) : null;
+    const feito = !!estado.checked[i];
+    let situacao, cor;
+    if (feito) { situacao = 'concluído'; cor = 'var(--green)'; }
+    else if (!prazoISO) { situacao = 'sem prazo no acordo'; cor = 'var(--muted)'; }
+    else if (prazoISO > hoje) { situacao = `vence ${new Date(prazoISO + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`; cor = 'var(--muted)'; }
+    else if (prazoISO === hoje) { situacao = 'vence hoje'; cor = 'var(--amber)'; }
+    else {
+      const dias = Math.floor((new Date(hoje + 'T12:00:00') - new Date(prazoISO + 'T12:00:00')) / 86400000);
+      situacao = `vencido há ${dias}d`; cor = 'var(--red)';
+    }
+    return { texto, idx: i, feito, prazoISO, situacao, cor, vencido: !feito && !!prazoISO && prazoISO < hoje };
+  });
+}
+
+function compromissosResumoHTML(r) {
+  const itens = compromissosComPrazo(r);
+  if (itens.length === 0) return '';
+  const feitos = itens.filter(x => x.feito).length;
+  const vencidos = itens.filter(x => x.vencido).length;
+  return `<span style="font-size:11.5px;color:${vencidos > 0 ? 'var(--red)' : 'var(--muted2)'};">✓ ${feitos}/${itens.length} cumpridos${vencidos > 0 ? ` · ${vencidos} vencido${vencidos === 1 ? '' : 's'}` : ''}</span>`;
+}
+
+/* ---------------------------------------------------------------------------
+   FOCO DE HABILIDADE (Escopo 10) — um só, ligado à cadência e ao Playbook
+   Cada foco é um COMPORTAMENTO observável no dado, com uma página do Playbook
+   que já existe e um roleplay concreto. A ordem é de gravidade; mostra o
+   primeiro que aparecer de verdade no funil da pessoa. Nenhum rótulo é sobre
+   quem ela é.
+   --------------------------------------------------------------------------- */
+const FOCOS_DE_HABILIDADE = [
+  {
+    id: 'registro_crm',
+    titulo: 'Registro objetivo no CRM',
+    playbook: 'dados-cadastro',
+    detecta: (d) => d.fila.baldes.visita_sem_passo.length >= 3,
+    porque: (d) => `${d.fila.baldes.visita_sem_passo.length} visitas suas terminaram sem próximo passo datado. O problema aqui não é esforço — é a visita não terminar dentro do CRM.`,
+    roleplay: 'Pegue a última visita que você fez e escreva o registro completo em 60 segundos: quem atendeu, papel, desfecho, dor, próximo passo com data. Depois compare com o que está no HubSpot hoje.'
+  },
+  {
+    id: 'segundo_toque',
+    titulo: 'Qualidade do segundo toque',
+    playbook: 'follow-up',
+    detecta: (d) => d.fila.baldes.segunda_tentativa.length >= 2,
+    porque: (d) => `${d.fila.baldes.segunda_tentativa.length} negócios seus têm um único toque conhecido e nada marcado. A régua diz que o 2º toque é em D+1, com o contexto da visita.`,
+    roleplay: 'Escolha um desses negócios e escreva o WhatsApp do 2º toque em duas linhas: uma retomando algo específico que você viu no salão, outra pedindo um horário. Sem "passando pra saber se ficou alguma dúvida".'
+  },
+  {
+    id: 'acesso_decisor',
+    titulo: 'Acesso ao decisor',
+    playbook: 'acesso-decisor',
+    detecta: (d) => d.fila.baldes.decisor.length >= 2,
+    porque: (d) => `${d.fila.baldes.decisor.length} negócios com 2+ toques e nenhum registro de conversa com quem decide. Insistir no mesmo interlocutor é o que trava a etapa.`,
+    roleplay: 'Simule a pergunta que descobre o decisor sem soar como triagem: quem bate o martelo em mudança de sistema, e em que horário essa pessoa está na casa.'
+  },
+  {
+    id: 'objecao',
+    titulo: 'Tratamento de objeção',
+    playbook: 'objecoes',
+    detecta: (d) => d.fila.baldes.proposta.length >= 1,
+    porque: (d) => `${d.fila.baldes.proposta.length} proposta(s) sua(s) sem data de decisão. Proposta que fica sem data quase sempre tem uma objeção não nomeada por trás.`,
+    roleplay: 'Escolha uma proposta parada e escreva a objeção real em uma frase (preço, medo de troca, sócio ausente). Depois a resposta em 20 segundos, terminando com uma pergunta.'
+  },
+  {
+    id: 'pedido_proximo_passo',
+    titulo: 'Pedido de próximo passo',
+    playbook: 'fechamento',
+    detecta: (d) => d.contexto.quentesSemPasso.length >= 1,
+    porque: (d) => `${d.contexto.quentesSemPasso.length} quente(s) sem próxima ação marcada. Sair da visita sem data combinada é onde o quente esfria.`,
+    roleplay: 'Treine a frase de saída: recapitular em uma linha, propor duas opções de data e confirmar quem participa. Sem "qualquer coisa me chama".'
+  },
+  {
+    id: 'cadencia',
+    titulo: 'Cadência sem furo',
+    playbook: 'metas-cadencia',
+    detecta: (d) => d.fila.baldes.cadencia.length >= 3,
+    porque: (d) => `${d.fila.baldes.cadencia.length} cadências atrasadas. A régua não é burocracia: é o que faz a venda aparecer no 3º e no 4º toque.`,
+    roleplay: 'Abra os três negócios mais atrasados e marque o próximo toque de cada um agora, com canal e data. Cinco minutos.'
+  }
+];
+
+function focoDeHabilidade(diag) {
+  return FOCOS_DE_HABILIDADE.find(f => { try { return f.detecta(diag); } catch (e) { return false; } }) || null;
+}
+
+function focoDeHabilidadeHTML(r, diag) {
+  const f = focoDeHabilidade(diag);
+  if (!f) {
+    return `
+      <div class="chart-card" style="margin:0 0 18px;border-left:3px solid var(--green);">
+        <h3 style="margin:0 0 4px;">Foco de habilidade</h3>
+        <div class="chart-subtitle" style="margin:0;">Nenhum padrão de comportamento pendente no seu funil agora — visitas saem com próximo passo, quentes protegidos e cadências em dia. Quando um padrão aparecer, ele entra aqui com o roleplay.</div>
+      </div>`;
+  }
+  const pagina = (typeof playbookPagina === 'function') ? playbookPagina(f.playbook) : null;
+  return `
+    <div class="chart-card" style="margin:0 0 18px;border-left:3px solid var(--violet);">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <h3 style="margin:0;">Foco de habilidade · ${esc(f.titulo)}</h3>
+        <span style="font-size:10.5px;color:var(--muted2);">um só por vez — comportamento, não resultado</span>
+      </div>
+      <p style="font-size:12.5px;color:var(--body);line-height:1.6;margin:8px 0 0;">${esc(f.porque(diag))}</p>
+      <div style="background:var(--panel2);border-radius:11px;padding:12px 14px;margin-top:11px;">
+        <div style="font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:5px;">Roleplay de 5 minutos</div>
+        <div style="font-size:12.5px;color:var(--ink);line-height:1.6;">${esc(f.roleplay)}</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;align-items:center;">
+        <button type="button" class="foco-playbook" data-playbook="${esc(f.playbook)}" style="background:var(--panel);border:1px solid var(--line-btn);color:var(--red);border-radius:999px;padding:7px 14px;font-size:11.5px;font-weight:700;cursor:pointer;">Abrir no Playbook: ${esc(pagina ? (pagina.titulo || f.titulo) : f.titulo)} →</button>
+        <span style="font-size:10.5px;color:var(--muted2);">O resultado abre a conversa; o comportamento é o que treina.</span>
+      </div>
+    </div>`;
+}
+
+function wireFocoDeHabilidade(rootEl) {
+  rootEl.querySelectorAll('.foco-playbook').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.playbook;
+      activateTab('viewPlaybook');
+      if (typeof abrirPaginaPlaybook === 'function') { try { abrirPaginaPlaybook(id); } catch (e) {} }
+    });
+  });
+}
+
 async function renderPDIs() {
   const el = document.getElementById('pdisContent');
   if (!DATA.supabase || !supa) {
@@ -24311,12 +24664,24 @@ async function renderPDIs() {
         <div class="dn"><b>${fechadosRep}<span style="font-size:13px;color:var(--muted2);display:inline;margin-top:0;">/${metaRep}</span></b><span>ganhos no mês${fechadosRep < metaRep ? ` — faltam ${metaRep - fechadosRep} até o fechamento` : ' — meta batida'}</span></div>
       </div>`;
 
-    const cardGargalo = temGargalo ? `
+    // NARRATIVA COM VALIDADE (Escopo 10, 27/08/26) — a leitura da semana não pode
+    // dirigir o dia se ela descreve outro funil. Quando expirou ou contradiz o dado ao
+    // vivo, o card vira recolhido e recebe a tarja: continua existindo como registro
+    // do que foi conversado, sem a autoridade de um texto de hoje.
+    const saudeNarrativa = narrativaSaude(r);
+    const cardGargalo = temGargalo && saudeNarrativa.valida ? `
       <div class="diag-card">
         <span class="diag-tag">Gargalo da semana${fonteTag ? ' · HubSpot ' + esc(fonteTag) : ''}</span>
         <h3>${esc(manchete)}</h3>
         <p>${corpoGargalo}</p>
-        <div class="diag-src">${fonteNumeros} · <span class="acao-sec" data-scrollpdi style="display:inline;font-size:10.5px;color:var(--red-dk);">ver meus PDIs ↓</span></div>
+        <div class="diag-src">${fonteNumeros}${saudeNarrativa.dataBaseFmt ? ` · base ${esc(saudeNarrativa.dataBaseFmt)}` : ''} · <span class="acao-sec" data-scrollpdi style="display:inline;font-size:10.5px;color:var(--red-dk);">ver meus PDIs ↓</span></div>
+      </div>` : temGargalo ? `
+      <div class="diag-card" style="border-left-color:var(--amber);">
+        <span class="diag-tag" style="color:var(--amber-ink);background:var(--amber-soft);">Leitura anterior · fora de validade</span>
+        <h3>${esc(manchete)}</h3>
+        ${narrativaAvisoHTML(saudeNarrativa)}
+        <details><summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--muted);">Ler o texto de ${esc(saudeNarrativa.dataBaseFmt || 'então')} de qualquer forma</summary><p style="margin-top:9px;">${corpoGargalo}</p></details>
+        <div class="diag-src">${fonteNumeros}</div>
       </div>` : `
       <div class="diag-card" style="border-left-color:var(--line-btn);">
         <span class="diag-tag" style="color:var(--muted2);background:var(--sunk);">Análise da semana · em preparação</span>
@@ -24363,6 +24728,9 @@ async function renderPDIs() {
     const compromissos1a1 = (r && Array.isArray(r.compromissos)) ? r.compromissos.filter(Boolean) : [];
     const estado1a1 = getPdiState(r ? r.ownerId : '', compromissos1a1.length);
     const feitos1a1 = estado1a1.checked.filter(Boolean).length;
+    // Escopo 10: cada acordo com a idade do próprio prazo. "0/3" sem idade é o que
+    // deixava compromisso de 17/08 vivo em 27/08 como se ainda estivesse em aberto.
+    const prazos1a1 = compromissosComPrazo(r);
     const dataProximo1a1 = estado1a1.data
       ? new Date(estado1a1.data + 'T12:00:00').toLocaleDateString('pt-BR')
       : null;
@@ -24410,16 +24778,17 @@ async function renderPDIs() {
           </div>
         </div>
         <div class="pcard">
-          <div class="pcard-head"><span class="pcard-dot" style="background:var(--amber);"></span><h3>Seu 1:1</h3>${compromissos1a1.length ? `<span class="cnt">${feitos1a1}/${compromissos1a1.length}</span>` : ''}</div>
+          <div class="pcard-head"><span class="pcard-dot" style="background:var(--amber);"></span><h3>Seu 1:1</h3>${compromissos1a1.length ? `<span class="cnt">${feitos1a1}/${compromissos1a1.length}${prazos1a1.filter(x => x.vencido).length ? ` · ${prazos1a1.filter(x => x.vencido).length} vencido${prazos1a1.filter(x => x.vencido).length === 1 ? '' : 's'}` : ''}</span>` : ''}</div>
           <div class="pcard-body">
             ${compromissos1a1.length ? `
               <div class="um">
-                ${compromissos1a1.map((c, k) => `
-                  <div class="um-item${estado1a1.checked[k] ? ' done' : ''}" data-um-idx="${k}" role="button" tabindex="0" aria-pressed="${estado1a1.checked[k] ? 'true' : 'false'}">
-                    <span class="um-check${estado1a1.checked[k] ? ' on' : ''}"></span>
-                    <div><b>${c}</b></div>
+                ${prazos1a1.map((x, k) => `
+                  <div class="um-item${x.feito ? ' done' : ''}" data-um-idx="${k}" role="button" tabindex="0" aria-pressed="${x.feito ? 'true' : 'false'}">
+                    <span class="um-check${x.feito ? ' on' : ''}"></span>
+                    <div><b>${x.texto}</b><span style="display:block;font-size:10.5px;font-weight:700;color:${x.cor};margin-top:4px;">${esc(x.situacao)}</span></div>
                   </div>`).join('')}
-              </div>` : '<div class="empty-state" style="padding:0;">Nenhum acordo combinado ainda — sai no próximo 1:1.</div>'}
+              </div>
+              ${prazos1a1.some(x => x.vencido) ? `<div style="background:var(--red-soft);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--body);line-height:1.55;margin-top:9px;">Acordo vencido não é acordo em aberto. Leve os vencidos pro próximo 1:1 pra reprogramar ou encerrar — deixar como pendente indefinidamente é o que transforma o plano num 0/3 permanente.</div>` : ''}` : '<div class="empty-state" style="padding:0;">Nenhum acordo combinado ainda — sai no próximo 1:1.</div>'}
             <div class="um-next">Próximo 1:1: <b>${dataProximo1a1 ? esc(dataProximo1a1) : 'sem data'}</b></div>
           </div>
         </div>
@@ -24445,6 +24814,12 @@ async function renderPDIs() {
       </div>
 
       ${secaoFoco}
+
+      <!-- FOCO DE HABILIDADE (Escopo 10) — comportamento, não resultado, e ligado
+           a uma página do Playbook que já existe + um roleplay concreto. Entra depois
+           do diagnóstico de propósito: o resultado abre a conversa, o comportamento
+           é o que se treina. -->
+      ${(() => { try { return focoDeHabilidadeHTML(r, gatesDoDia(r)); } catch (e) { return ''; } })()}
       ${secaoPlano}
 
       <section class="sec" id="devSecaoPdis">
@@ -24472,6 +24847,7 @@ async function renderPDIs() {
     if (irFunil) irFunil.addEventListener('click', () => {
       if (typeof activateTab === 'function') activateTab('viewMeuFunil');
     });
+    wireFocoDeHabilidade(el);
     // Marcar acordo do 1:1 grava em pdi_compromissos (Supabase) pela MESMA função que o
     // gestor usa — é o único caminho que faz o check do executivo chegar até a fila de 1:1
     // da aba Pessoas. Otimista: risca na hora, o round-trip vai atrás (savePdiState já
