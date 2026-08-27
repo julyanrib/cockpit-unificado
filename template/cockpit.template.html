@@ -4653,7 +4653,7 @@ function cadenciaMotivosDeSaida() {
 /* Estado da cadência de um negócio.
    Devolve null quando não há régua configurada — a UI então não mostra nada de
    cadência (é diferente de "cadência em dia"). */
-function estadoDaCadencia(lead, toques, ultimoDesfecho) {
+function estadoDaCadencia(lead, toques, ultimoDesfecho, proximoPasso) {
   const regua = cadenciaDoLead(lead, ultimoDesfecho);
   if (!regua) return null;
   const passos = Array.isArray(regua.passos) ? regua.passos : [];
@@ -4680,9 +4680,17 @@ function estadoDaCadencia(lead, toques, ultimoDesfecho) {
     atrasoDias = Math.floor((Date.now() - venc.getTime()) / 86400000);
   }
 
+  // Existe tarefa datada no futuro? Então a régua pode estar mais rápida do que o
+  // plano, mas o negócio NÃO está descoberto: o executivo já comprometeu uma data no
+  // CRM. Chamar isso de "cadência atrasada" jogava todos os 18 negócios no balde e
+  // deixava a fila sem sinal (visto na revisão de 27/08: "Cadências atrasadas 18").
+  // Passo vencido é outro problema, e tem balde próprio ("follow-ups para hoje").
+  const temPlanoFuturo = !!(proximoPasso && proximoPasso.quando && proximoPasso.quando.getTime() > Date.now());
+
   let status;
   if (encerrou) status = 'encerrada';
   else if (!ultimo) status = 'nao_iniciada';
+  else if (temPlanoFuturo) status = 'planejada';
   else if (atrasoDias !== null && atrasoDias >= 3) status = 'quebrada';
   else if (atrasoDias !== null && atrasoDias >= 0) status = 'atrasada';
   else status = 'em_dia';
@@ -4697,7 +4705,7 @@ function estadoDaCadencia(lead, toques, ultimoDesfecho) {
     vencimentoEm,            // Date | null
     atrasoDias,              // n>0 = atrasado n dias; null = sem base de cálculo
     diasDesdeUltimo,
-    status,                  // nao_iniciada | em_dia | atrasada | quebrada | encerrada
+    status,                  // nao_iniciada | planejada | em_dia | atrasada | quebrada | encerrada
     encerramento: regua.encerramento || null
   };
 }
@@ -4921,7 +4929,9 @@ function estadoDoNegocio(lead) {
   const tps = touchpointsDoLead(lead);
   const toques = toquesDoLead(lead, tps);
   const passo = typeof proximoPassoDoLead === 'function' ? proximoPassoDoLead(lead) : null;
-  const cad = estadoDaCadencia(lead, toques, null);
+  // O próximo passo entra no cálculo: tarefa datada no futuro tira a cadência do
+  // balde de atrasada (ver a nota em estadoDaCadencia).
+  const cad = estadoDaCadencia(lead, toques, null, passo);
 
   const visitasPassadas = tps.filter(t => t.channel === 'visita' || t.channel === 'reuniao').filter(t => !t._agendadoFuturo && !t._planejado);
   const visitaSemDesfecho = visitasPassadas.filter(t => t._semDesfecho);
@@ -5153,6 +5163,40 @@ function filaDeFollowUp(ownerId) {
   });
 
   return { baldes, total, ordenada, negociosAfetados: vistos.size };
+}
+
+/* ---------------------------------------------------------------------------
+   6b. ORDENAÇÃO DO MEU FUNIL (Escopo 8)
+   A ordem é uma decisão de produto, não um detalhe de apresentação, então mora
+   aqui (testável) e não dentro do innerHTML da tela. A régua, do pior para o
+   melhor: visita sem follow-up, SLA estourado, quente sem próxima ação, cadência
+   atrasada, proposta sem data de decisão, decisor não alcançado, resto.
+   Empate desfaz por dias na etapa (mais parado primeiro).
+   --------------------------------------------------------------------------- */
+
+const PRIORIDADE_FUNIL = [
+  { id: 'visita_sem_followup', rotulo: 'visita sem follow-up',      teste: s => s.followUpDescoberto },
+  { id: 'sla',                 rotulo: 'SLA estourado',              teste: s => s.slaEstourado },
+  { id: 'quente_sem_acao',     rotulo: 'quente sem próxima ação',    teste: (s, q) => q && !s.temProximoPasso },
+  { id: 'cadencia',            rotulo: 'cadência atrasada',          teste: s => s.cadencia && ['atrasada', 'quebrada'].includes(s.cadencia.status) },
+  { id: 'proposta',            rotulo: 'proposta sem data de decisão', teste: s => s.propostaSemDataDeDecisao },
+  { id: 'decisor',             rotulo: 'decisor não alcançado',      teste: s => !s.decisorAlcancado && s.toques.total >= 2 }
+];
+
+// Recebe os leads e devolve os mesmos objetos com `_prio` (índice na régua acima,
+// 99 = resto) e `_prioRotulo`, já ordenados. Não muda o lead em si.
+function ordenarMeuFunil(leads, quentesIds) {
+  const quentes = quentesIds instanceof Set ? quentesIds : new Set((quentesIds || []).map(String));
+  const comEstado = (leads || []).map(l => {
+    const st = estadoDoNegocio(l);
+    const q = quentes.has(String(l.id));
+    let prio = 99, rotulo = null;
+    for (let i = 0; i < PRIORIDADE_FUNIL.length; i++) {
+      if (PRIORIDADE_FUNIL[i].teste(st, q)) { prio = i; rotulo = PRIORIDADE_FUNIL[i].rotulo; break; }
+    }
+    return Object.assign({}, l, { _prio: prio, _prioRotulo: rotulo, _estado: st });
+  });
+  return comEstado.sort((a, b) => a._prio - b._prio || (b.dias || 0) - (a.dias || 0));
 }
 
 /* ---------------------------------------------------------------------------
@@ -5463,7 +5507,7 @@ function indicadoresDoExecutivo(r) {
   const estados = leads.map(estadoDoNegocio);
 
   const comProximoPasso = estados.filter(s => s.temProximoPasso).length;
-  const cadenciasAtivas = estados.filter(s => s.cadencia && ['em_dia', 'atrasada'].includes(s.cadencia.status)).length;
+  const cadenciasAtivas = estados.filter(s => s.cadencia && ['em_dia', 'planejada', 'atrasada'].includes(s.cadencia.status)).length;
   const cadenciasQuebradas = estados.filter(s => s.cadencia && s.cadencia.status === 'quebrada').length;
   const decisores = estados.filter(s => s.decisorAlcancado).length;
   const propostasComData = estados.filter(s =>
@@ -6853,16 +6897,20 @@ async function renderMeuFunil() {
 
   // Todos os meus leads (achatado de funilLeads, filtrado por dono) — mantido.
   const contextoPorId = new Map([...(DATA.temperatura?.quentes || []), ...(r.quentes || [])].map(l => [String(l.id), l]));
-  const meusLeads = Object.entries(DATA.funilLeads || {}).flatMap(([sid, leads]) =>
+  const meusLeadsBruto = Object.entries(DATA.funilLeads || {}).flatMap(([sid, leads]) =>
     (leads || []).filter(l => String(l.ownerId) === String(r.ownerId)).map(l => {
       const contexto = contextoPorId.get(String(l.id)) || {};
       return { ...contexto, ...l, stageId: l.stageId || sid, proximaAtividade: l.proximaAtividade || contexto.proximaAtividade || contexto.proximaReuniao || null };
     })
-  ).sort((a, b) => {
-    const fechamentoA = ETAPAS_FECHAMENTO.includes(a.stageId) ? 1 : 0;
-    const fechamentoB = ETAPAS_FECHAMENTO.includes(b.stageId) ? 1 : 0;
-    return (fechamentoB - fechamentoA) || ((a.proximaAtividade ? 1 : 0) - (b.proximaAtividade ? 1 : 0)) || ((b.dias || 0) - (a.dias || 0));
-  });
+  );
+  // ORDEM (Escopo 8, 27/08/26) — antes era "etapa de fechamento primeiro, depois quem
+  // não tem próxima atividade, depois mais dias na etapa". Isso colocava um negócio em
+  // Negociação com tarefa marcada acima de uma visita de ontem que ficou sem follow-up
+  // nenhum — ou seja, priorizava o que já estava sendo trabalhado sobre o que estava
+  // sendo abandonado. A régua agora é explícita e testável (ordenarMeuFunil).
+  tpInvalidarCache();
+  const quentesDoRep = new Set((typeof agendaQuentes === 'function' ? agendaQuentes([r]) : []).map(l => String(l.id)));
+  const meusLeads = ordenarMeuFunil(meusLeadsBruto, quentesDoRep);
   const fechamentoEmJogo = meusLeads.filter(l => ETAPAS_FECHAMENTO.includes(l.stageId));
   const fechamentoSemPasso = fechamentoEmJogo.filter(l => !l.proximaAtividade);
 
@@ -6923,6 +6971,18 @@ async function renderMeuFunil() {
     <section class="sec" style="margin-top:16px;">
       <div class="sec-head">
         <span class="sec-num">1</span>
+        <h2>Resolver primeiro</h2>
+        <p>A fila em ordem de gravidade: visita sem follow-up, SLA estourado, quente sem próxima ação, cadência atrasada, proposta sem data de decisão. É a mesma fila do Planejamento — um estado, dois lugares.</p>
+      </div>
+      ${filaDeFollowUpHTML(r, {
+        titulo: 'Onde você está preso',
+        subtitulo: 'Ordenado por gravidade, não por etapa. Um negócio sai daqui quando o HubSpot tem a prova — tarefa datada, desfecho ou etapa movida.'
+      })}
+    </section>
+
+    <section class="sec">
+      <div class="sec-head">
+        <span class="sec-num">2</span>
         <h2>Meu pipeline</h2>
         <p>Trabalhe primeiro o que tem maior chance de virar receita — e sempre saia com um próximo passo.</p>
       </div>
@@ -6944,7 +7004,7 @@ async function renderMeuFunil() {
 
     <section class="sec">
       <div class="sec-head">
-        <span class="sec-num">2</span>
+        <span class="sec-num">3</span>
         <h2>Plano de ataque</h2>
         <p>Três frentes para sair da tela com o dia planejado.</p>
       </div>
@@ -6953,7 +7013,7 @@ async function renderMeuFunil() {
 
     <section class="sec">
       <div class="sec-head">
-        <span class="sec-num">3</span>
+        <span class="sec-num">4</span>
         <h2>Ritmo comercial</h2>
         <p>Abra apenas quando quiser revisar a disciplina do seu funil.</p>
       </div>
@@ -6970,6 +7030,9 @@ async function renderMeuFunil() {
   // completa. Só o clique num lead abre a ficha, sem confundir etapa com negócio.
   if (meuFunilFiltroEtapa) ligarListaEtapa(el, leadsPipeline, () => renderMeuFunil());
   else ligarKanban(el, leadsPipeline, () => renderMeuFunil());
+
+  // Fila de follow-up (seção 1) — mesmo componente do Planejamento.
+  wireFilaDeFollowUp(el, r);
 
   el.querySelectorAll('[data-mfvisao]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -15106,6 +15169,21 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   const voltando = iDe >= 0 && iPara >= 0 && iPara < iDe;
   const corPara = stageColor(para);
 
+  // Sugestão de próximo passo para a etapa de DESTINO, tirada da régua configurada.
+  // Reciclagem cai na régua de reciclagem, que já começa em D+30 — é isso que faz
+  // "reciclar com data" ser reciclagem e não abandono.
+  const passoSugerido = (() => {
+    const regua = cadenciaDoLead({ ...lead, stageId: para }, null);
+    if (!regua || !Array.isArray(regua.passos) || regua.passos.length === 0) return null;
+    const p = regua.passos[0];
+    return {
+      cadenciaRotulo: regua.rotulo,
+      canal: p.canal,
+      acao: p.acao,
+      data: typeof desfechoDataSugerida === 'function' ? desfechoDataSugerida(p.dia) : isoDate(new Date())
+    };
+  })();
+
   passagemVoltarPara = aoConcluir || null;
   stageModalName.textContent = lead.name || 'Negócio';
   stageModalMeta.innerHTML = `<span style="font-size:12px;color:var(--muted2);">${voltando ? 'Voltando etapa' : 'Avançando etapa'} · grava no HubSpot</span>`;
@@ -15121,7 +15199,29 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
     ${campos.length ? `
       <div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted2);margin-bottom:9px;">O que ${esc(STAGE_LABELS[para])} exige</div>
       <div class="pe-campos">${campos.map(c => campoPassagemHTML(c, valorAtualDoCampo(lead, c))).join('')}</div>
-    ` : `<div style="background:var(--panel2);border-radius:var(--r-md);padding:12px 14px;font-size:12.5px;color:var(--muted);margin-bottom:16px;">Esta etapa não exige propriedade nenhuma — é só confirmar.</div>`}
+    ` : `<div style="background:var(--panel2);border-radius:var(--r-md);padding:12px 14px;font-size:12.5px;color:var(--muted);margin-bottom:16px;">Esta etapa não exige propriedade nenhuma — mas exige próximo passo, abaixo.</div>`}
+
+    <!-- PRÓXIMO PASSO OBRIGATÓRIO (Escopo 8, 27/08/26)
+         "Toda movimentação de etapa deve terminar com próxima ação datada. Mover etapa
+         sem evidência ou próximo passo não deve ser tratado como avanço completo."
+         Antes, mover etapa gravava só a etapa: o negócio subia de Visita pra Negociação
+         e ficava lá, sem nada marcado — foi exatamente assim que se chegou a 20 negócios
+         abertos e 20 sem próximo passo. A sugestão já vem pronta da régua da etapa de
+         DESTINO, então o caminho de menor esforço é o certo. -->
+    <div class="pe-passo-sec" style="border:1.5px solid var(--red);border-radius:14px;padding:14px 15px;margin-bottom:16px;background:var(--panel);">
+      <div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--red);margin-bottom:4px;">Próximo passo — obrigatório</div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:10px;">${passoSugerido
+        ? `Régua <b>${esc(passoSugerido.cadenciaRotulo)}</b> sugere: ${esc(passoSugerido.acao)} em ${esc((TP_CANAIS[passoSugerido.canal] || TP_CANAIS.outro).rotulo)}. Ajuste se precisar.`
+        : 'Sem régua configurada para essa etapa — escreva a ação e escolha a data.'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <select class="pe-passo-canal" style="font-size:12.5px;padding:8px 10px;border:1px solid var(--line-btn);border-radius:9px;background:var(--panel);color:var(--ink);">
+          ${Object.entries(TP_CANAIS).map(([k, v]) => `<option value="${k}"${passoSugerido && passoSugerido.canal === k ? ' selected' : ''}>${esc(v.rotulo)}</option>`).join('')}
+        </select>
+        <input type="text" class="pe-passo-acao" placeholder="O que você vai fazer" value="${esc(passoSugerido ? passoSugerido.acao : '')}" style="flex:1;min-width:170px;font-size:12.5px;padding:8px 10px;border:1px solid var(--line-btn);border-radius:9px;background:var(--panel);color:var(--ink);">
+        <input type="date" class="pe-passo-data" value="${esc(passoSugerido ? passoSugerido.data : '')}" style="font-size:12.5px;padding:8px 10px;border:1px solid var(--line-btn);border-radius:9px;background:var(--panel);color:var(--ink);">
+      </div>
+    </div>
+
     <div class="pe-acoes">
       <button type="button" class="pe-confirmar" id="peConfirmar">${voltando ? 'Voltar' : 'Mover'} para ${esc(STAGE_LABELS[para])}</button>
       <button type="button" class="pe-cancelar" id="peCancelar">Cancelar</button>
@@ -15144,6 +15244,15 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       status.style.color = 'var(--red)';
       return;
     }
+    // Escopo 8: sem próxima ação datada não há avanço completo, então não há avanço.
+    const passoCanal = stageModalBody.querySelector('.pe-passo-canal').value || 'ligacao';
+    const passoAcao = (stageModalBody.querySelector('.pe-passo-acao').value || '').trim();
+    const passoData = stageModalBody.querySelector('.pe-passo-data').value || '';
+    if (!passoAcao || !passoData) {
+      status.textContent = 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
+      status.style.color = 'var(--red)';
+      return;
+    }
     btnConfirmar.disabled = true;
     btnConfirmar.textContent = 'Gravando no HubSpot…';
     status.style.color = 'var(--muted2)';
@@ -15163,15 +15272,48 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
         btnConfirmar.textContent = `${voltando ? 'Voltar' : 'Mover'} para ${STAGE_LABELS[para]}`;
         return;
       }
+      // A etapa já mudou no HubSpot. Agora a tarefa datada — a segunda metade do
+      // movimento. Se ela falhar, o avanço NÃO é anunciado como completo: o negócio
+      // fica na etapa nova e sem próximo passo, que é exatamente o estado que esta
+      // seção existe pra impedir, então o aviso é vermelho e nomeia o que fazer.
+      status.textContent = 'Etapa gravada. Criando o próximo passo…';
+      let passoOk = false, erroPasso = null;
+      try {
+        const tipoPasso = passoCanal === 'visita' ? 'Visita'
+          : passoCanal === 'reuniao' ? 'Reunião'
+          : passoCanal === 'demo' ? 'Demo' : 'Follow-up';
+        const rp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
+          method: 'POST', signal,
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+          body: JSON.stringify({ dealId: lead.id, texto: passoAcao, data: passoData, tipo: tipoPasso, tipoAcao: 'proximo-passo' })
+        }), 9000, 'passagem-proximo-passo');
+        const dp = await rp.json().catch(() => ({}));
+        if (rp.ok && dp.ok) passoOk = true;
+        else erroPasso = (dp && dp.erro) || 'o HubSpot recusou a criação da tarefa';
+      } catch (e) {
+        erroPasso = String((e && e.message) || e);
+      }
+
       // Espelha localmente pra tela não mentir até a próxima rodada do cron.
       lead.stageId = para;
       lead.stage = STAGE_LABELS[para];
       lead.dias = 0;
       Object.keys(coleta.propriedades).forEach(k => { lead[k] = coleta.propriedades[k]; });
       aplicarEtapaNoDataLocal(lead.id, para, coleta.propriedades);
+      // Tarefa criada nesta sessão: entra no lead em memória pra que a fila de
+      // follow-up e os gates já reconheçam o próximo passo antes da próxima carga.
+      if (passoOk) {
+        const tarefaLocal = { subject: passoAcao, timestamp: passoData + 'T12:00:00.000Z' };
+        lead.tarefas = Array.isArray(lead.tarefas) ? lead.tarefas.concat([tarefaLocal]) : [tarefaLocal];
+        aplicarProximoPassoNoDataLocal(lead.id, tarefaLocal);
+      }
       fechar();
       const quantos = Object.keys(coleta.propriedades).length;
-      mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'} gravada${quantos === 1 ? '' : 's'}` : ''}. O Cockpit reconcilia na próxima rodada automática (08:56/13h/19h).`, 'sucesso');
+      if (passoOk) {
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''} · próximo passo em ${fmtDailyLabel(passoData)}. O Cockpit reconcilia na próxima rodada automática (08:56/13h/19h).`, 'sucesso');
+      } else {
+        mostrarToast(`"${lead.name}" mudou de etapa, mas o próximo passo NÃO foi criado (${erroPasso}). O negócio está na etapa nova e descoberto — crie a tarefa na ficha antes de sair da tela.`, 'erro');
+      }
       if (typeof passagemVoltarPara === 'function') passagemVoltarPara(lead);
     } catch (e) {
       status.style.color = 'var(--red)';
@@ -15180,6 +15322,22 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       btnConfirmar.textContent = `${voltando ? 'Voltar' : 'Mover'} para ${STAGE_LABELS[para]}`;
     }
   });
+}
+
+// Espelha no DATA em memória a tarefa recém-criada. Sem isso, o negócio continuaria
+// aparecendo como "sem próximo passo" na fila e nos gates até a próxima carga — o
+// executivo acabava de criar a tarefa e a tela seguia cobrando por ela. Mesmo motivo
+// (e mesmo padrão) de aplicarEtapaNoDataLocal, logo abaixo.
+function aplicarProximoPassoNoDataLocal(leadId, tarefa) {
+  const alvo = String(leadId);
+  const anexar = l => {
+    if (!l || String(l.id) !== alvo) return;
+    const jaTem = (l.tarefas || []).some(t => t && t.subject === tarefa.subject && t.timestamp === tarefa.timestamp);
+    if (!jaTem) l.tarefas = Array.isArray(l.tarefas) ? l.tarefas.concat([tarefa]) : [tarefa];
+  };
+  Object.values(DATA.funilLeads || {}).forEach(lista => (lista || []).forEach(anexar));
+  (DATA.reps || []).forEach(r => ['travados', 'criticos', 'quentes'].forEach(k => (r[k] || []).forEach(anexar)));
+  if (DATA.temperatura) { (DATA.temperatura.quentes || []).forEach(anexar); (DATA.temperatura.frios || []).forEach(anexar); }
 }
 
 // Move o lead de etapa DENTRO do DATA em memória. Sem isso, o kanban voltava o card pra

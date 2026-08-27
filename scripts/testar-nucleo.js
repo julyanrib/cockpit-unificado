@@ -348,6 +348,49 @@ teste('próximo passo com data vencida entra em "follow-ups para hoje"', () => {
   igual(c.filaDeFollowUp(OWNER).baldes.hoje.length, 1);
 });
 
+console.log('\n== Ordem do Meu funil (Escopo 8) ==');
+
+teste('visita sem follow-up vem antes de SLA estourado e de quente sem ação', () => {
+  const visitado = lead({ id: 'A', name: 'Visitado sem passo', ultimaInteracao: diasAtras(1).toISOString(), dias: 1 });
+  const estourado = lead({ id: 'B', name: 'SLA estourado', slaBreach: true, dias: 30, ultimaInteracao: diasAtras(30).toISOString() });
+  const quente = lead({ id: 'C', name: 'Quente sem ação', stageId: '1395880472', dias: 2, ultimaInteracao: diasAtras(2).toISOString() });
+  const c = novoContexto(dados({
+    agenda: { eventos: [{ id: 'ev', ownerId: OWNER, dealId: 'A', tipo: 'rota', inicio: diasAtras(1), cliente: 'Visitado sem passo', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }] },
+    funilLeads: { '1396005401': [visitado, estourado], '1395880472': [quente] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const ordenados = c.ordenarMeuFunil([visitado, estourado, quente], ['C']);
+  igual(ordenados.map(l => l.id), ['A', 'B', 'C'], 'ordem por gravidade');
+  igual(ordenados[0]._prioRotulo, 'visita sem follow-up');
+  igual(ordenados[1]._prioRotulo, 'SLA estourado');
+  igual(ordenados[2]._prioRotulo, 'quente sem próxima ação');
+});
+
+teste('negócio em ordem cai no resto e desempata por dias na etapa', () => {
+  // dias abaixo do SLA da etapa (5 em 1396005401), senão o SLA estourado ganha a
+  // prioridade e o desempate nunca é exercitado.
+  const ok1 = lead({ id: 'X', dias: 2, ultimaInteracao: diasAtras(1).toISOString(), tarefas: [{ subject: 'Follow-up', timestamp: diasAFrente(2).toISOString() }] });
+  const ok2 = lead({ id: 'Y', dias: 4, ultimaInteracao: diasAtras(1).toISOString(), tarefas: [{ subject: 'Follow-up', timestamp: diasAFrente(2).toISOString() }] });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [ok1, ok2] } }), { ownerId: OWNER, role: 'rep' });
+  const ordenados = c.ordenarMeuFunil([ok1, ok2], []);
+  igual(ordenados.map(l => l._prio), [99, 99], 'ambos no resto');
+  igual(ordenados.map(l => l.id), ['Y', 'X'], 'mais dias na etapa primeiro');
+});
+
+teste('tarefa datada no futuro tira o negócio do balde de cadência atrasada', () => {
+  // Sem a tarefa, a régua de Visita (acesso_decisor, toque 2 em D+1) considera o
+  // negócio atrasado desde ontem. Com a tarefa marcada, o executivo já comprometeu
+  // uma data — o negócio não está descoberto.
+  const base = { id: 'P1', name: 'Com plano', ownerId: OWNER, stageId: '1396005401', dias: 3, tarefas: [], notas: [], ultimaInteracao: diasAtras(3).toISOString() };
+  const semPlano = novoContexto(dados({ funilLeads: { '1396005401': [base] } }), { ownerId: OWNER, role: 'rep' });
+  igual(semPlano.estadoDoNegocio(base).cadencia.status, 'atrasada', 'sem plano: atrasada');
+  igual(semPlano.filaDeFollowUp(OWNER).baldes.cadencia.length, 1, 'sem plano: entra no balde');
+
+  const comTarefa = { ...base, tarefas: [{ subject: 'Ligar', timestamp: diasAFrente(2).toISOString() }] };
+  const comPlano = novoContexto(dados({ funilLeads: { '1396005401': [comTarefa] } }), { ownerId: OWNER, role: 'rep' });
+  igual(comPlano.estadoDoNegocio(comTarefa).cadencia.status, 'planejada', 'com plano: planejada');
+  igual(comPlano.filaDeFollowUp(OWNER).baldes.cadencia.length, 0, 'com plano: sai do balde');
+});
+
 console.log('\n== Gates do dia e CTA (Escopo 1) ==');
 
 teste('dia vazio: gates abertos e CTA vira "Montar minha rota"', () => {
