@@ -22,14 +22,19 @@ const vm = require('vm');
 const root = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
 
-const INI = '/* @nucleo:inicio';
-const FIM = '/* @nucleo:fim */';
-const a = html.indexOf(INI), b = html.indexOf(FIM);
-if (a < 0 || b < 0) {
-  console.error('FALHA: marcadores @nucleo:inicio / @nucleo:fim não encontrados no template.');
-  process.exit(1);
+// Dois trechos: o núcleo principal e o par de derivações que vive junto do briefing
+// (sequenciaDeExecucao / atividadesComprovadasNoDia) — são domínio, não UI, e por isso
+// entram no teste. Os marcadores existem só para este recorte.
+function recortar(iniMarca, fimMarca) {
+  const a = html.indexOf(iniMarca), b = html.indexOf(fimMarca);
+  if (a < 0 || b < 0 || b < a) {
+    console.error(`FALHA: marcadores ${iniMarca} / ${fimMarca} não encontrados no template.`);
+    process.exit(1);
+  }
+  return html.slice(a, b);
 }
-const codigoNucleo = html.slice(a, b);
+const codigoNucleo = recortar('/* @nucleo:inicio', '/* @nucleo:fim */')
+  + '\n' + recortar('/* @nucleo2:inicio', '/* @nucleo2:fim */');
 
 // ---------------------------------------------------------------------------
 // Entorno mínimo. Cada stub reproduz o CONTRATO da função real do template,
@@ -104,7 +109,12 @@ function novoContexto(DATA, sessao) {
         .filter(x => !isNaN(x.quando) && x.quando >= HOJE)
         .sort((x, y) => x.quando - y.quando)[0] || null;
     },
-    inicioDaSemanaISO: () => '2026-08-24'
+    inicioDaSemanaISO: () => '2026-08-24',
+    // Mesmo contrato do rampDoOwner do template: alvo de visitas/dia útil da fase.
+    // O fixture passa DATA.rampAlvo pra escolher a fase sem precisar de usuarios.json.
+    rampDoOwner: () => DATA.rampAlvo != null
+      ? { label: 'Fase de teste', alvo: DATA.rampAlvo, chave: 'teste', definido: true }
+      : { label: 'Fase não definida', alvo: null, chave: null, definido: false }
   };
   ctx.leadTemProximoPasso = lead => !!ctx.proximoPassoDoLead(lead);
   ctx.globalThis = ctx;
@@ -223,7 +233,9 @@ teste('assinatura de app de campo define a origem', () => {
 
 teste('evento do Expogo e do PWA produzem o MESMO formato de touchpoint', () => {
   const l = lead({ id: 'L1', name: 'Bar do Zé' });
-  const base = { ownerId: OWNER, tipo: 'follow_up', dur: 30, cliente: 'Bar do Zé', desfecho: 'COMPLETED', registro: true, decisor: null };
+  // dealId = associação no HubSpot (lead_deal_id). Sem ele a visita é 'não
+  // confirmada' por regra — há um teste próprio para esse caso mais abaixo.
+  const base = { ownerId: OWNER, dealId: 'L1', tipo: 'follow_up', dur: 30, cliente: 'Bar do Zé', desfecho: 'COMPLETED', registro: true, decisor: null };
   const c = novoContexto(dados({
     agenda: { eventos: [
       { ...base, id: 'e1', inicio: diasAtras(2), obs: 'visita ok — Kelly (via App Outbound)' },
@@ -242,7 +254,7 @@ teste('evento do Expogo e do PWA produzem o MESMO formato de touchpoint', () => 
 teste('visita passada sem fechamento = registro incompleto, não realizada', () => {
   const l = lead({ id: 'L2', name: 'Pizzaria X' });
   const c = novoContexto(dados({
-    agenda: { eventos: [{ id: 'e9', ownerId: OWNER, tipo: 'rota', inicio: diasAtras(1), cliente: 'Pizzaria X', desfecho: null, registro: false, obs: '', decisor: null }] },
+    agenda: { eventos: [{ id: 'e9', ownerId: OWNER, dealId: 'L2', tipo: 'rota', inicio: diasAtras(1), cliente: 'Pizzaria X', desfecho: null, registro: false, obs: '', decisor: null }] },
     funilLeads: { '1396005401': [l] }
   }), { ownerId: OWNER, role: 'rep' });
   const tp = c.touchpointsDoLead(l)[0];
@@ -255,7 +267,7 @@ teste('visita passada sem fechamento = registro incompleto, não realizada', () 
 teste('agendado no futuro não conta como realizado', () => {
   const l = lead({ id: 'L3', name: 'Café Central' });
   const c = novoContexto(dados({
-    agenda: { eventos: [{ id: 'e10', ownerId: OWNER, tipo: 'rota', inicio: diasAFrente(1), cliente: 'Café Central', desfecho: null, registro: false, obs: '', decisor: null }] },
+    agenda: { eventos: [{ id: 'e10', ownerId: OWNER, dealId: 'L3', tipo: 'rota', inicio: diasAFrente(1), cliente: 'Café Central', desfecho: null, registro: false, obs: '', decisor: null }] },
     funilLeads: { '1396005401': [l] }
   }), { ownerId: OWNER, role: 'rep' });
   const tp = c.touchpointsDoLead(l)[0];
@@ -277,7 +289,7 @@ console.log('\n== Estado do negócio (Escopos 4, 8) ==');
 teste('visita realizada sem próximo passo = follow-up descoberto', () => {
   const l = lead({ id: 'L4', name: 'Bistrô Sul', ultimaInteracao: diasAtras(1).toISOString() });
   const c = novoContexto(dados({
-    agenda: { eventos: [{ id: 'e11', ownerId: OWNER, tipo: 'rota', inicio: diasAtras(1), cliente: 'Bistrô Sul', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }] },
+    agenda: { eventos: [{ id: 'e11', ownerId: OWNER, dealId: 'L4', tipo: 'rota', inicio: diasAtras(1), cliente: 'Bistrô Sul', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }] },
     funilLeads: { '1396005401': [l] }
   }), { ownerId: OWNER, role: 'rep' });
   const st = c.estadoDoNegocio(l);
@@ -288,7 +300,7 @@ teste('visita realizada sem próximo passo = follow-up descoberto', () => {
 teste('tarefa datada futura fecha o follow-up descoberto', () => {
   const l = lead({ id: 'L5', name: 'Bistrô Sul', tarefas: [{ subject: 'Follow-up - Bistrô Sul', timestamp: diasAFrente(1).toISOString() }] });
   const c = novoContexto(dados({
-    agenda: { eventos: [{ id: 'e12', ownerId: OWNER, tipo: 'rota', inicio: diasAtras(1), cliente: 'Bistrô Sul', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }] },
+    agenda: { eventos: [{ id: 'e12', ownerId: OWNER, dealId: 'L5', tipo: 'rota', inicio: diasAtras(1), cliente: 'Bistrô Sul', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }] },
     funilLeads: { '1396005401': [l] }
   }), { ownerId: OWNER, role: 'rep' });
   const st = c.estadoDoNegocio(l);
@@ -348,11 +360,11 @@ teste('dia vazio: gates abertos e CTA vira "Montar minha rota"', () => {
 
 teste('visita de hoje sem desfecho leva o CTA para "Registrar resultado de visita"', () => {
   const paradas = [1, 2, 3].map(i => ({
-    id: 'p' + i, ownerId: OWNER, tipo: 'rota', inicio: new Date(HOJE.getTime() - i * 3600000),
+    id: 'p' + i, ownerId: OWNER, dealId: 'g' + (i - 1), tipo: 'rota', inicio: new Date(HOJE.getTime() - i * 3600000),
     cliente: 'Cliente ' + i, desfecho: 'COMPLETED', registro: true, obs: '', decisor: null, lat: -20, lng: -40
   }));
   // a quarta parada é a que ficou sem desfecho
-  paradas.push({ id: 'p4', ownerId: OWNER, tipo: 'rota', inicio: new Date(HOJE.getTime() - 3600000),
+  paradas.push({ id: 'p4', ownerId: OWNER, dealId: 'g3', tipo: 'rota', inicio: new Date(HOJE.getTime() - 3600000),
     cliente: 'Cliente Pendente', desfecho: null, registro: false, obs: '', decisor: null, lat: -20, lng: -40 });
   const leads = paradas.map((p, i) => lead({ id: 'g' + i, name: p.cliente, ultimaInteracao: diasAtras(1).toISOString(),
     tarefas: [{ subject: 'Follow-up', timestamp: diasAFrente(2).toISOString() }] }));
@@ -385,6 +397,89 @@ teste('quente sem próxima ação abre o gate de quentes', () => {
   const c = novoContexto(dados({ funilLeads: { '1395880473': [q] } }), { ownerId: OWNER, role: 'rep' });
   const d = c.gatesDoDia(c.DATA.reps[0]);
   falso(d.gates.find(g => g.id === 'quentes').ok, 'gate de quentes deveria estar aberto');
+});
+
+teste('visita sem associação de negócio no HubSpot é "não confirmada"', () => {
+  const l = lead({ id: 'NC', name: 'Bar Sem Vínculo' });
+  const c = novoContexto(dados({
+    // sem dealId de propósito: é o caso dos 24 itens da carga real que chegam sem
+    // lead_deal_id — o nome bate, a associação não existe.
+    agenda: { eventos: [{ id: 'enc', ownerId: OWNER, tipo: 'rota', inicio: diasAtras(1), cliente: 'Bar Sem Vínculo', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }] },
+    funilLeads: { '1396005401': [l] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const tp = c.touchpointsDoLead(l)[0];
+  verdade(tp._clienteNaoConfirmado, 'marcado como não confirmado');
+  igual(c.rotuloDeRegistroDaVisita(tp).id, 'nao_confirmada', 'não confirmada ganha de qualquer outro estado');
+});
+
+teste('uma parada só não é rota; duas são', () => {
+  const ev = (i, hora) => ({ id: 'r' + i, ownerId: OWNER, dealId: 'x' + i, tipo: 'rota',
+    inicio: new Date(HOJE.getTime() - hora * 3600000), cliente: 'C' + i, desfecho: null, registro: false, obs: '', decisor: null });
+  const um = novoContexto(dados({ agenda: { eventos: [ev(1, 2)] } }), { ownerId: OWNER, role: 'rep' });
+  falso(um.gatesDoDia(um.DATA.reps[0]).gates.find(g => g.id === 'rota').ok, 'uma parada: rota aberta');
+  const dois = novoContexto(dados({ agenda: { eventos: [ev(1, 2), ev(2, 1)] } }), { ownerId: OWNER, role: 'rep' });
+  verdade(dois.gatesDoDia(dois.DATA.reps[0]).gates.find(g => g.id === 'rota').ok, 'duas paradas: rota fechada');
+});
+
+teste('o gate de agenda respeita o alvo da fase de rampagem', () => {
+  const ev = i => ({ id: 'a' + i, ownerId: OWNER, dealId: 'y' + i, tipo: 'rota',
+    inicio: new Date(HOJE.getTime() - i * 3600000), cliente: 'C' + i, desfecho: null, registro: false, obs: '', decisor: null });
+  const tres = [ev(1), ev(2), ev(3)];
+  // Fase com alvo 3: três compromissos fecham o gate.
+  const rampa = novoContexto(dados({ rampAlvo: 3, agenda: { eventos: tres } }), { ownerId: OWNER, role: 'rep' });
+  verdade(rampa.gatesDoDia(rampa.DATA.reps[0]).gates.find(g => g.id === 'agenda').ok, 'alvo 3 com 3 compromissos');
+  // Fase pleno com alvo 6: os mesmos três não bastam — e o texto diz quanto falta.
+  const pleno = novoContexto(dados({ rampAlvo: 6, agenda: { eventos: tres } }), { ownerId: OWNER, role: 'rep' });
+  const g = pleno.gatesDoDia(pleno.DATA.reps[0]).gates.find(x => x.id === 'agenda');
+  falso(g.ok, 'alvo 6 com 3 compromissos');
+  verdade(/3 de 6/.test(g.detalhe), 'detalhe mostra 3 de 6, veio: ' + g.detalhe);
+  // Sem fase definida, o gate não inventa alvo — basta ter 1.
+  const semFase = novoContexto(dados({ agenda: { eventos: [ev(1)] } }), { ownerId: OWNER, role: 'rep' });
+  const g2 = semFase.gatesDoDia(semFase.DATA.reps[0]).gates.find(x => x.id === 'agenda');
+  verdade(g2.ok, 'sem fase: 1 compromisso basta');
+  verdade(/não definida/.test(g2.detalhe), 'detalhe avisa que não há alvo');
+});
+
+console.log('\n== Transição Expogo → PWA (Escopo 14) ==');
+
+teste('mesma visita chegando por dois caminhos conta UMA vez', () => {
+  // Cenário real da carga de 27/08: "Rei dos galetos" no mesmo dia, duas vezes —
+  // uma pela nota do app (sem associação) e uma pela tarefa (com associação).
+  const hojeK = iso(HOJE);
+  const c = novoContexto(dados({ agenda: { eventos: [
+    { id: 'd1', ownerId: OWNER, tipo: 'follow_up', inicio: new Date(HOJE.getTime() - 3 * 3600000), cliente: 'Rei dos Galetos', desfecho: 'COMPLETED', registro: true, obs: '— Kelly (via App Outbound)', decisor: null },
+    { id: 'd2', ownerId: OWNER, dealId: 'RG', tipo: 'rota', inicio: new Date(HOJE.getTime() - 2 * 3600000), cliente: 'Rei dos galetos', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null },
+    { id: 'd3', ownerId: OWNER, dealId: 'OU', tipo: 'rota', inicio: new Date(HOJE.getTime() - 1 * 3600000), cliente: 'Outro Cliente', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }
+  ] } }), { ownerId: OWNER, role: 'rep' });
+  const at = c.atividadesComprovadasNoDia(OWNER, hojeK);
+  igual(at.feitos.length, 2, 'dois clientes distintos');
+  igual(at.duplicadas.length, 1, 'uma duplicata reportada, não descartada em silêncio');
+  // Fica o registro COM associação de negócio.
+  verdade(at.feitos.some(e => e.id === 'd2'), 'mantém o que tem dealId');
+});
+
+teste('clientes diferentes no mesmo dia não são deduplicados', () => {
+  const hojeK = iso(HOJE);
+  const c = novoContexto(dados({ agenda: { eventos: [1, 2, 3].map(i => ({
+    id: 'n' + i, ownerId: OWNER, dealId: 'z' + i, tipo: 'rota',
+    inicio: new Date(HOJE.getTime() - i * 3600000), cliente: 'Cliente ' + i,
+    desfecho: 'COMPLETED', registro: true, obs: '', decisor: null })) } }), { ownerId: OWNER, role: 'rep' });
+  const at = c.atividadesComprovadasNoDia(OWNER, hojeK);
+  igual(at.feitos.length, 3);
+  igual(at.duplicadas.length, 0);
+});
+
+teste('sequência de execução conta visita comprovada, não promessa', () => {
+  const hojeK = iso(HOJE);
+  const c = novoContexto(dados({ agenda: { eventos: [
+    { id: 's1', ownerId: OWNER, dealId: 'a', tipo: 'rota', inicio: new Date(HOJE.getTime() - 3600000), cliente: 'A', desfecho: 'COMPLETED', registro: true, obs: '', decisor: null }
+  ] } }), { ownerId: OWNER, role: 'rep' });
+  // getDaily/visitasReaisDoOwnerNoDia/isWeekend/dailyRefDate são do entorno da Daily;
+  // aqui só validamos que a função existe e não depende de prometido_*.
+  verdade(typeof c.sequenciaDeExecucao === 'function', 'sequenciaDeExecucao existe');
+  const fonte = String(c.sequenciaDeExecucao);
+  falso(/prometido/.test(fonte), 'não lê nenhum campo prometido_*');
+  verdade(/visitasReaisDoOwnerNoDia/.test(fonte), 'usa a contagem derivada de visitas reais');
 });
 
 console.log('\n== Frescor de dados (não acusar com carga velha) ==');
