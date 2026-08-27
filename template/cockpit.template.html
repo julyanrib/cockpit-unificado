@@ -254,10 +254,21 @@
   .command-action{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 10px;font:700 10.5px 'Manrope',sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap;}
   .command-action:hover{border-color:var(--ink);transform:translateY(-1px);}
   .command-note{font-size:10.5px;color:var(--muted);line-height:1.45;margin-top:10px;}
+  .development-hub{margin:0 0 20px;border-top:3px solid var(--green);}
+  .development-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;}
+  .development-private{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:var(--green-soft);color:var(--green);font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;}
+  .development-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+  .development-card{display:flex;flex-direction:column;min-height:172px;padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--panel2);}
+  .development-card-icon{font-size:20px;line-height:1;margin-bottom:11px;}
+  .development-card-kicker{font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted2);}
+  .development-card h4{font:700 13px/1.3 'Poppins',sans-serif;margin:5px 0 7px;color:var(--ink);}
+  .development-card p{font-size:10.5px;line-height:1.45;color:var(--muted);margin:0 0 12px;}
+  .development-card .command-action{margin-top:auto;align-self:flex-start;}
+  .development-principle{margin-top:11px;padding-top:10px;border-top:1px solid var(--line-soft);font-size:10px;line-height:1.45;color:var(--muted2);}
   .ramp-pill{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:9px;font-weight:800;background:var(--amber-soft);color:var(--amber);white-space:nowrap;}
   .ramp-pill.is-full{background:var(--green-soft);color:var(--green);}
-  @media(max-width:1050px){.command-row{grid-template-columns:minmax(150px,1.2fr) repeat(3,minmax(85px,.7fr)) minmax(140px,1fr) auto}.command-route{display:none}.command-kpis{grid-template-columns:repeat(3,1fr)}}
-  @media(max-width:760px){.command-kpis{grid-template-columns:repeat(2,1fr)}.command-row{grid-template-columns:1fr 1fr;gap:8px}.command-name,.command-next{grid-column:1/-1}.command-action{width:100%}.command-head{flex-direction:column}}
+  @media(max-width:1050px){.command-row{grid-template-columns:minmax(150px,1.2fr) repeat(3,minmax(85px,.7fr)) minmax(140px,1fr) auto}.command-route{display:none}.command-kpis{grid-template-columns:repeat(3,1fr)}.development-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:760px){.command-kpis{grid-template-columns:repeat(2,1fr)}.command-row{grid-template-columns:1fr 1fr;gap:8px}.command-name,.command-next{grid-column:1/-1}.command-action{width:100%}.command-head,.development-head{flex-direction:column}.development-grid{grid-template-columns:1fr}.development-card{min-height:0}}
   /* ===== BLOCO 24 (12/08/26) — "Meu funil" redesenhado, a partir do mock
      preview/meu-funil-executivo.html. Classes com os mesmos nomes do mock, valores
      copiados 1:1 — ver o handoff da rodada pra contexto de cada bloco. ===== */
@@ -3583,6 +3594,8 @@
   <div class="banner" id="banner" style="margin-top:16px;"></div>
 
   <div id="cockpitExecutionCommand"></div>
+
+  <div id="cockpitDevelopmentHub"></div>
 
   <!-- BLOCO 2 (10/08/26, Julyan): "Onde agir hoje" e "Planos do dia do time" saíram
        daqui e viraram o insumo da Daily das 9h (o ritual onde essas duas coisas são
@@ -17442,8 +17455,16 @@ function visitasDoRow(row) {
   return derivado != null ? derivado : (row.realizado_visitas || 0);
 }
 
+function usuarioDoOwner(ownerId) {
+  return (DATA.usuarios || []).find(x => String(x.ownerId) === String(ownerId)) || {};
+}
+
+function ownerAtivoNoField(ownerId) {
+  return usuarioDoOwner(ownerId).fieldStatus !== 'transicao_inside';
+}
+
 function rampDoOwner(ownerId) {
-  const u = (DATA.usuarios || []).find(x => String(x.ownerId) === String(ownerId)) || {};
+  const u = usuarioDoOwner(ownerId);
   const fases = {
     preparacao: { label: 'Preparação', alvo: 0 },
     semana_2_3: { label: 'Semanas 2–3', alvo: 0 },
@@ -17468,7 +17489,7 @@ async function renderCockpitExecutionCommand() {
   ]);
 
   const dataISO = isoDate(new Date());
-  const reps = (DATA.reps || []).filter(r => r && r.ownerId);
+  const reps = (DATA.reps || []).filter(r => r && r.ownerId && ownerAtivoNoField(r.ownerId));
   const quentes = ((DATA.temperatura || {}).quentes || []);
   const funilAberto = Object.values(DATA.funilLeads || {}).flat().filter(Boolean);
   const linhas = reps.map(r => {
@@ -17548,6 +17569,106 @@ async function renderCockpitExecutionCommand() {
     const botaoMenu = document.getElementById(botaoDaView[btn.dataset.commandView] || '');
     if (botaoMenu) botaoMenu.click();
     else activateTab(btn.dataset.commandView);
+  }));
+
+  renderCockpitDevelopmentHub();
+}
+
+function renderCockpitDevelopmentHub() {
+  const el = document.getElementById('cockpitDevelopmentHub');
+  if (!el || !sessaoAtual || sessaoAtual.role !== 'manager') return;
+
+  const reps = (DATA.reps || []).filter(r => r && r.ownerId && ownerAtivoNoField(r.ownerId));
+  const historico = (DATA.resumoSemanal && DATA.resumoSemanal.porRep) || {};
+  const quentes = ((DATA.temperatura || {}).quentes || []);
+
+  const leituras = reps.map(r => {
+    const h = historico[String(r.ownerId)] || historico[r.ownerId] || {};
+    const atual = h.snap || {};
+    const anterior = h.anterior || {};
+    const travadosAtual = Number(r.leadsTravados != null ? r.leadsTravados : atual.leadsTravados) || 0;
+    const travadosAnterior = Number(anterior.leadsTravados);
+    const temAnterior = Number.isFinite(travadosAnterior);
+    const reducaoTravados = temAnterior ? travadosAnterior - travadosAtual : 0;
+    const ganhosAtual = Number(r.ganhosSemana != null ? r.ganhosSemana : atual.ganhosSemana) || 0;
+    const ganhosAnterior = Number(anterior.ganhosSemana) || 0;
+    const hotSemPasso = quentes.filter(l => String(l.ownerId) === String(r.ownerId) && !leadTemProximoPasso(l)).length;
+    return { r, travadosAtual, travadosAnterior, temAnterior, reducaoTravados, ganhosAtual, ganhosAnterior, hotSemPasso };
+  });
+
+  // Não é ranking: escolhe uma evidência positiva para virar repertório coletivo.
+  const reconhecer = leituras
+    .filter(x => x.reducaoTravados > 0 || x.ganhosAtual > x.ganhosAnterior || x.ganhosAtual > 0)
+    .sort((a, b) => ((b.reducaoTravados * 2) + b.ganhosAtual) - ((a.reducaoTravados * 2) + a.ganhosAtual))[0] || null;
+
+  // A conversa é privada e baseada em fatos observáveis, nunca em um rótulo sobre a pessoa.
+  const desenvolver = leituras
+    .map(x => ({ ...x, necessidade: x.travadosAtual + (x.hotSemPasso * 3) + (x.reducaoTravados < 0 ? Math.abs(x.reducaoTravados) * 2 : 0) }))
+    .sort((a, b) => b.necessidade - a.necessidade)[0] || null;
+
+  const porEtapa = {};
+  reps.forEach(r => Object.entries(r.stages || {}).forEach(([stageId, total]) => {
+    porEtapa[stageId] = (porEtapa[stageId] || 0) + (Number(total) || 0);
+  }));
+  const etapaDominante = Object.entries(porEtapa).sort((a, b) => b[1] - a[1])[0] || [null, 0];
+  const etapaNome = STAGE_LABELS[etapaDominante[0]] || 'funil';
+  const treinoPorEtapa = {
+    '1395880469': 'abertura com hipótese de dor + cadência do segundo toque',
+    '1396005401': 'discovery na visita e registro do próximo passo',
+    '1395880470': 'acesso ao decisor e pedido de agenda',
+    '1395880471': 'demo curta conectada a impacto financeiro',
+    '1395880472': 'fechamento, objeção e pedido de decisão',
+    '1395880473': 'confirmação de pagamento e passagem sem ruído'
+  };
+  const treino = treinoPorEtapa[etapaDominante[0]] || 'diagnóstico, próximo passo e cadência';
+
+  const entrantes = (DATA.usuarios || []).filter(u => u.role === 'rep' && u.aComecar && u.fieldStatus !== 'transicao_inside');
+  const semFase = (DATA.usuarios || []).filter(u => u.role === 'rep' && u.fieldStatus !== 'transicao_inside' && !u.aComecar && !u.rampStage && reps.some(r => String(r.ownerId) === String(u.ownerId))).length;
+
+  const reconhecerTitulo = reconhecer ? esc(reconhecer.r.name) : 'Escolha uma vitória do dia';
+  const reconhecerFato = reconhecer
+    ? `${reconhecer.reducaoTravados > 0 ? `reduziu negócios acima do SLA em ${reconhecer.reducaoTravados}` : `gerou ${reconhecer.ganhosAtual} ganho${reconhecer.ganhosAtual === 1 ? '' : 's'} na semana`}. Convide a contar em 60 segundos qual comportamento vale repetir.`
+    : 'Use a Daily para reconhecer uma ação concreta: boa pergunta, rota bem feita, follow-up persistente ou ajuda a um colega.';
+
+  const desenvolverTitulo = desenvolver ? `Conversa com ${esc(desenvolver.r.name)}` : 'Escolha uma conversa privada';
+  const desenvolverFato = desenvolver
+    ? `${desenvolver.travadosAtual} acima do SLA${desenvolver.hotSemPasso ? ` e ${desenvolver.hotSemPasso} quente${desenvolver.hotSemPasso === 1 ? '' : 's'} sem próximo passo` : ''}. Pergunte antes de orientar e feche um compromisso observável até a próxima revisão.`
+    : 'Abra um 1:1 com pergunta, dado e um compromisso pequeno o suficiente para ser acompanhado.';
+
+  el.innerHTML = `
+    <section class="chart-card development-hub" aria-label="Ritual de desenvolvimento do gestor">
+      <div class="development-head">
+        <div><h3 style="margin:0 0 4px;font-family:'Poppins',sans-serif;">Ritual de desenvolvimento · 15 min</h3><div class="chart-subtitle">Faça o time querer voltar: reconheça o que funcionou, trate desvios em privado e transforme prática em repertório.</div></div>
+        <span class="development-private">🔒 visão privada do gestor</span>
+      </div>
+      <div class="development-grid">
+        <article class="development-card">
+          <div class="development-card-icon">✨</div><span class="development-card-kicker">Multiplicar</span>
+          <h4>${reconhecerTitulo}</h4><p>${reconhecerFato}</p>
+          <button type="button" class="command-action" data-development-nav="tabBtnDaily">Levar para a Daily →</button>
+        </article>
+        <article class="development-card">
+          <div class="development-card-icon">🤝</div><span class="development-card-kicker">Desenvolver</span>
+          <h4>${desenvolverTitulo}</h4><p>${desenvolverFato}</p>
+          <button type="button" class="command-action" data-development-nav="tabBtnPDIs">Preparar conversa →</button>
+        </article>
+        <article class="development-card">
+          <div class="development-card-icon">🥊</div><span class="development-card-kicker">Treinar juntos</span>
+          <h4>${esc(etapaNome)} · ${etapaDominante[1]} no estoque</h4><p>Faça um roleplay de 10 minutos sobre ${esc(treino)}. O objetivo é sair com uma frase que todos consigam testar hoje.</p>
+          <button type="button" class="command-action" data-development-nav="tabBtnPlaybook">Abrir repertório →</button>
+        </article>
+        <article class="development-card">
+          <div class="development-card-icon">🚀</div><span class="development-card-kicker">Acelerar rampa</span>
+          <h4>${entrantes.length} em preparação · ${semFase} sem fase definida</h4><p>Para cada entrante: uma habilidade da semana, volume compatível com a fase e gate D30/D45/D60. Nunca compare rampa com meta de pleno.</p>
+          <button type="button" class="command-action" data-development-nav="tabBtnPDIs">Abrir régua de rampa →</button>
+        </article>
+      </div>
+      <div class="development-principle"><b>Princípio:</b> resultado abre a conversa; comportamento define o coaching. Reconhecimento pode ser público. Correção, compromisso e contexto ficam no 1:1.</div>
+    </section>`;
+
+  el.querySelectorAll('[data-development-nav]').forEach(btn => btn.addEventListener('click', () => {
+    const destino = document.getElementById(btn.dataset.developmentNav || '');
+    if (destino) destino.click();
   }));
 }
 function pontosDoDia(row) {
