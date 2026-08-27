@@ -525,6 +525,19 @@ teste('indicadores declaram amostra quando não há base de cálculo', () => {
 
 console.log('\n== Papéis (Escopo: não alterar a experiência do gestor) ==');
 
+teste('lead vindo de funilLeads herda a etapa da chave (e com ela a régua certa)', () => {
+  // Regressão do bug de 27/08: funilLeads indexa por etapa, o lead não carrega o
+  // campo. Sem herdar, um negócio em Negociação recebia a régua de primeiro contato.
+  const semEtapa = { id: 'FL1', name: 'Negócio em Negociação', ownerId: OWNER, dias: 3, tarefas: [], notas: [], ultimaInteracao: diasAtras(2).toISOString() };
+  const c = novoContexto(dados({
+    funilLeads: { '1395880472': [semEtapa] },
+    stageMeta: { slaDays: { '1395880472': 7 }, labels: { '1395880472': 'Negociação' } }
+  }), { ownerId: OWNER, role: 'rep' });
+  const l = c.meusNegociosAbertos(OWNER)[0];
+  igual(l.stageId, '1395880472', 'stageId herdado da chave');
+  igual(c.estadoDoNegocio(l).cadencia.nome, 'negociacao', 'régua da etapa, não a de primeiro contato');
+});
+
 teste('o núcleo não lê nada de colega: fila só olha o ownerId pedido', () => {
   const meu = lead({ id: 'meu', ownerId: OWNER, ultimaInteracao: diasAtras(6).toISOString() });
   const colega = lead({ id: 'colega', ownerId: '999', ultimaInteracao: diasAtras(6).toISOString() });
