@@ -1559,7 +1559,22 @@
     .hoje-grid{grid-template-columns:1fr;}
     .meu-hoje-signal-strip{grid-template-columns:repeat(2,minmax(0,1fr));}
     .meu-hoje-signal:first-child{grid-column:1/-1;}
-    .hoje-l1-grid,.hoje-l2-grid{grid-template-columns:1fr!important;}
+    /* minmax(0,1fr) e não 1fr: `1fr` equivale a `minmax(auto,1fr)`, e o `auto` do
+       mínimo é o MIN-CONTENT do item. Medido em 375px: a coluna resolvia para 415.9px
+       porque algum conteúdo dentro tinha min-content maior que a tela, e o grid a
+       respeitava — o body rolava na horizontal mesmo com uma coluna só. Com minmax(0,..)
+       a coluna pode encolher e o conteúdo quebra. */
+    .hoje-l1-grid,.hoje-l2-grid{grid-template-columns:minmax(0,1fr)!important;}
+    /* CORREÇÃO DE MOBILE (27/08/26, medido em 375px) — os cards novos de gates e de
+       ações são flex com pill + botão de CTA (ambos white-space:nowrap). Em 375px a
+       linha inteira virava largura mínima de ~450px e fazia o body rolar na horizontal.
+       Aqui a linha do gate empilha (o CTA cai pra baixo, ocupando a largura) em vez de
+       competir por espaço com o texto. */
+    .hoje-priority-stack,.hoje-actions-card{min-width:0;}
+    .gate-linha{flex-wrap:wrap;}
+    .gate-linha > span:first-child{flex-basis:100%;}
+    .gate-cta{margin-left:auto;}
+    .acao-agora-item > div{min-width:0;}
     /* CORREÇÃO (20/08/26, achado na revisão mobile) — .rep-tag tem largura fixa
        (~76px) e não encolhe; num container flex apertado (a 1ª coluna da tabela de
        executivos fica com só ~148px em mobile), ela "roubava" quase todo o espaço
@@ -3386,6 +3401,21 @@
     .prosp2-cols{grid-template-columns:1fr;}
     .prosp2-tray{position:static;}
     .prosp2-hero-nums{gap:20px;}
+  }
+  /* CORREÇÃO DE MOBILE (27/08/26) — pré-existente, medida em 375px: os 4 números do
+     hero (.prosp2-hero-nums, flex:none + gap 20px) e a caixa de busca
+     (.prosp2-loc-box, min-width:340px + padding) somavam 465px e faziam o BODY inteiro
+     rolar na horizontal. Não era regressão do redesenho, mas esta tela virou o
+     Planejamento e "desktop e mobile passam" é critério de aceite — então entra aqui.
+     Só embaixo de 760px, para não mexer no desktop, que está certo. */
+  @media (max-width:760px){
+    /* flex-basis:100% junto com flex-wrap: sem isso o `flex:none` da regra original
+       mantém a largura em max-content, e um container que não encolhe nunca quebra
+       linha — foi por isso que a primeira tentativa desta correção não surtiu efeito. */
+    .prosp2-hero-nums{flex:1 1 100%;flex-wrap:wrap;gap:14px 22px;}
+    .prosp2-hero-n{min-width:0;}
+    .prosp2-loc-box{min-width:0;flex:1 1 100%;}
+    .prosp2-loc{flex-wrap:wrap;}
   }
   /* =================== FIM PROSPECÇÃO DO EXECUTIVO =================== */
 
@@ -20288,6 +20318,215 @@ function wireBriefingExecutivo(rootEl) {
   });
 }
 
+/* ============================================================================
+   INDICADORES DE CADÊNCIA DO TIME (Escopo 13)
+   ----------------------------------------------------------------------------
+   ADITIVO E RECOLHIDO, DE PROPÓSITO. A instrução do redesenho é explícita: não
+   alterar a experiência do gestor e manter a PR #13 intacta. Então este bloco
+   não toca em nada do que já existe na Daily & Ritmo — ele entra no fim, dentro
+   de um <details> FECHADO. Quem abrir o Cockpit amanhã vê exatamente a mesma
+   tela; quem quiser os números de cadência clica.
+
+   O que ele responde, por executivo, com o mesmo motor do lado do executivo
+   (filaDeFollowUp / estadoDoNegocio) — nenhuma métrica nova inventada aqui:
+     · visitas sem follow-up
+     · % de visitas com próximo passo em até 24h
+     · aderência à cadência
+     · tempo entre 1º e 2º toque
+     · negócios abandonados depois de um único toque
+     · decisores alcançados
+     · propostas sem data de decisão
+     · follow-ups vencidos
+
+   O QUE NÃO FAZ: rótulo. Não existe coluna "bom/ruim", não existe ranking, e a
+   ordenação é por VOLUME DE PENDÊNCIA (onde há mais trabalho descoberto), que é
+   uma leitura de carga, não de pessoa. Onde a fonte não devolve o dado, a célula
+   fica "—" com a nota do motivo (ver docs/contrato-eventos-rpa.md §7).
+   ============================================================================ */
+
+function indicadoresDeCadenciaDoTime() {
+  tpInvalidarCache();
+  const hojeK = isoDate(new Date());
+  return (DATA.reps || [])
+    // Colega sem funil (resumoDeColega, ou executivo em preparação) não entra: as
+    // listas vêm vazias por corte de privacidade, e uma linha de zeros pareceria
+    // alguém que não trabalhou.
+    .filter(r => r && (r.open || 0) > 0)
+    .map(r => {
+      let fila, estados;
+      try {
+        fila = filaDeFollowUp(r.ownerId);
+        estados = meusNegociosAbertos(r.ownerId).map(estadoDoNegocio);
+      } catch (e) {
+        return { r, erro: true };
+      }
+
+      const total = estados.length;
+      const comPasso = estados.filter(s => s.temProximoPasso).length;
+      const cadenciaOk = estados.filter(s => s.cadencia && ['em_dia', 'planejada'].includes(s.cadencia.status)).length;
+      const comCadencia = estados.filter(s => s.cadencia).length;
+      const decisores = estados.filter(s => s.decisorAlcancado).length;
+
+      // Visita com próximo passo em até 24h: só conta os negócios em que conhecemos
+      // a data da última visita E existe tarefa datada — nos outros, não há como
+      // saber se o passo veio em 24h ou em 6 dias.
+      let base24 = 0, ok24 = 0;
+      estados.forEach(s => {
+        if (!s.ultimaVisita || !s.ultimaVisita.occurred_at || !s.proximoPasso) return;
+        base24++;
+        const criadoEm = new Date(s.ultimaVisita.occurred_at).getTime();
+        // Proxy honesto: o que temos é a data ALVO da tarefa, não a de criação.
+        // Tarefa marcada para até 1 dia útil depois da visita é o sinal disponível.
+        if (s.proximoPasso.quando.getTime() - criadoEm <= 2 * 86400000) ok24++;
+      });
+
+      // Tempo entre 1º e 2º toque, sobre quem tem dois toques datados.
+      const janelas = [];
+      estados.forEach(s => {
+        const reais = s.touchpoints.filter(t => t._realizado && t.occurred_at)
+          .sort((a, b) => new Date(a.occurred_at) - new Date(b.occurred_at));
+        if (reais.length >= 2) janelas.push((new Date(reais[1].occurred_at) - new Date(reais[0].occurred_at)) / 86400000);
+      });
+      const media2 = janelas.length ? Math.round((janelas.reduce((a, b) => a + b, 0) / janelas.length) * 10) / 10 : null;
+
+      const vencidos = fila.baldes.hoje.filter(x => x.prazo && x.prazo < hojeK).length + fila.baldes.cadencia.length;
+
+      return {
+        r,
+        total,
+        semFollowUp: fila.baldes.visita_sem_passo.length,
+        pctPasso: total ? Math.round((comPasso / total) * 100) : null,
+        pct24h: base24 ? Math.round((ok24 / base24) * 100) : null,
+        base24,
+        aderenciaCadencia: comCadencia ? Math.round((cadenciaOk / comCadencia) * 100) : null,
+        media2, amostra2: janelas.length,
+        abandonados: fila.baldes.segunda_tentativa.length,
+        decisores,
+        propostasSemData: fila.baldes.proposta.length,
+        vencidos,
+        pendentes: fila.negociosAfetados
+      };
+    })
+    .filter(x => !x.erro)
+    .sort((a, b) => b.pendentes - a.pendentes);
+}
+
+function buildIndicadoresGestorHTML() {
+  let linhas;
+  try { linhas = indicadoresDeCadenciaDoTime(); } catch (e) { return ''; }
+  if (!linhas || linhas.length === 0) return '';
+
+  const fresco = frescorDosDados();
+  const cel = (valor, sufixo, bom) => {
+    if (valor == null) return `<td style="text-align:right;color:var(--muted2);">—</td>`;
+    const cor = bom == null ? 'var(--body)' : bom ? 'var(--green)' : 'var(--red)';
+    return `<td style="text-align:right;font-variant-numeric:tabular-nums;color:${cor};font-weight:700;">${valor}${sufixo || ''}</td>`;
+  };
+
+  const corpo = linhas.map(x => `
+    <tr data-gestor-owner="${esc(String(x.r.ownerId))}" style="border-top:1px solid var(--line-soft);">
+      <td style="padding:9px 8px;">
+        <b style="font-size:12.5px;">${esc(String(x.r.name || '').split(' ').slice(0, 2).join(' '))}</b>
+        <span style="display:block;font-size:10px;color:var(--muted2);">${esc(x.r.praca || '—')} · ${x.total} em aberto</span>
+      </td>
+      ${cel(x.semFollowUp, '', x.semFollowUp === 0)}
+      ${cel(x.pctPasso, '%', x.pctPasso != null && x.pctPasso >= 80)}
+      ${cel(x.pct24h, '%', x.pct24h != null && x.pct24h >= 70)}
+      ${cel(x.aderenciaCadencia, '%', x.aderenciaCadencia != null && x.aderenciaCadencia >= 70)}
+      ${cel(x.media2, 'd', x.media2 != null && x.media2 <= 2)}
+      ${cel(x.abandonados, '', x.abandonados === 0)}
+      ${cel(x.decisores, '', null)}
+      ${cel(x.propostasSemData, '', x.propostasSemData === 0)}
+      ${cel(x.vencidos, '', x.vencidos === 0)}
+      <td style="text-align:right;padding-right:4px;">
+        <button type="button" class="gestor-abrir-fila" data-owner="${esc(String(x.r.ownerId))}" style="background:none;border:none;color:var(--red);font-size:10.5px;font-weight:800;cursor:pointer;white-space:nowrap;padding:0;">ver a fila →</button>
+      </td>
+    </tr>`).join('');
+
+  return `
+    <details class="chart-card" style="margin-top:16px;">
+      <summary style="cursor:pointer;font-weight:700;font-size:13.5px;display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;">
+        Cadência e follow-up do time
+        <span style="font-size:11px;font-weight:600;color:var(--muted2);">o que a Daily não mostra: o que acontece entre uma visita e a próxima</span>
+      </summary>
+
+      <div class="chart-subtitle" style="margin:11px 0 0;">
+        Mesmo motor do painel do executivo — nenhuma métrica nova, a mesma leitura de estado.
+        Ordenado por <b>volume de pendência</b>, que é carga de trabalho descoberto, não julgamento de pessoa.
+      </div>
+
+      <div style="overflow-x:auto;margin-top:12px;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:820px;">
+          <thead>
+            <tr style="text-align:right;color:var(--muted2);font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;">
+              <th style="text-align:left;padding:0 8px 8px;">Executivo</th>
+              <th style="padding-bottom:8px;" title="Visitas realizadas que não saíram com próximo passo datado">visita s/<br>follow-up</th>
+              <th style="padding-bottom:8px;" title="Negócios abertos com tarefa futura no HubSpot">c/ próximo<br>passo</th>
+              <th style="padding-bottom:8px;" title="Dos negócios com visita e passo conhecidos, quantos têm o passo marcado em até ~24h úteis da visita">passo em<br>24h</th>
+              <th style="padding-bottom:8px;" title="Negócios com cadência em dia ou planejada">aderência<br>cadência</th>
+              <th style="padding-bottom:8px;" title="Média de dias entre o 1º e o 2º toque, sobre quem tem dois toques datados">1º→2º<br>toque</th>
+              <th style="padding-bottom:8px;" title="Negócios com um único toque conhecido e nada marcado">abandonados<br>no 1º toque</th>
+              <th style="padding-bottom:8px;" title="Negócios com registro de conversa com o decisor">decisores<br>alcançados</th>
+              <th style="padding-bottom:8px;" title="Demo/Proposta e Negociação sem tarefa futura">propostas s/<br>data</th>
+              <th style="padding-bottom:8px;" title="Follow-ups com prazo vencido + cadências atrasadas">follow-ups<br>vencidos</th>
+              <th style="padding-bottom:8px;"></th>
+            </tr>
+          </thead>
+          <tbody>${corpo}</tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:13px;padding-top:12px;border-top:1px solid var(--line-soft);">
+        <div style="font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:7px;">Sincronização</div>
+        <div style="font-size:11.5px;color:var(--body);line-height:1.6;">
+          HubSpot: <b>${esc(fresco.rotulo)}</b>${fresco.velho ? ' <span style="color:var(--amber);">(atrasado — não cobre número individual antes de conferir)</span>' : ''}.
+          ${fresco.falhaSync ? '<span style="color:var(--red);">A última rodada do robô teve falha — o detalhe por executivo está no aviso do topo desta tela.</span>' : 'Última rodada do robô sem falhas registradas.'}
+          <br>Expogo e PWA Outbound: <b style="color:var(--amber);">sincronização não confirmada</b> — o Cockpit lê o HubSpot, não os apps. Não dá pra distinguir "o app não subiu" de "não aconteceu" até o PWA expor a fila pendente (docs/contrato-eventos-rpa.md §4 e §7.6).
+        </div>
+      </div>
+
+      <div style="font-size:10.5px;color:var(--muted2);margin-top:11px;line-height:1.55;">
+        <b>Não derivável nesta carga, por honestidade declarado em vez de estimado:</b> média de pontos de contato antes da venda, conversão por número de toque e vendas por toque — o HubSpot não devolve o histórico de atividades dos negócios já fechados (contrato §7.2).
+        Comparação da pessoa com ela mesma ao longo do tempo depende de guardar este recorte por semana; hoje o Cockpit tem só o snapshot atual.
+      </div>
+    </details>`;
+}
+
+function wireIndicadoresGestor(rootEl) {
+  rootEl.querySelectorAll('.gestor-abrir-fila').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const oid = btn.dataset.owner;
+      const r = (DATA.reps || []).find(x => String(x.ownerId) === String(oid));
+      if (!r) return;
+      // Abre a fila DESSA pessoa num drawer, com os itens e o link pro negócio —
+      // é o "cobrar follow-up específico" do Escopo 13: nome do cliente, motivo e
+      // caminho pro HubSpot, em vez de "melhore seu follow-up".
+      let fila;
+      try { tpInvalidarCache(); fila = filaDeFollowUp(r.ownerId); } catch (e) { return; }
+      stageModalName.textContent = String(r.name || '');
+      stageModalMeta.innerHTML = `<span style="font-size:12px;color:var(--muted2);">Fila de follow-up · ${fila.negociosAfetados} negócio${fila.negociosAfetados === 1 ? '' : 's'} pedindo ação</span>`;
+      const itens = fila.ordenada.slice(0, 25);
+      stageModalBody.innerHTML = itens.length === 0
+        ? '<div class="empty-state">Nada pendente: toda visita saiu com próximo passo e nenhuma cadência está atrasada.</div>'
+        : `<div style="display:grid;gap:7px;">
+            ${itens.map(it => `
+              <div style="border:1px solid var(--line);border-left:3px solid var(--red);border-radius:0 11px 11px 0;padding:10px 12px;">
+                <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+                  <b style="font-size:12.5px;">${esc(it.lead.name)}</b>
+                  <span style="font-size:10.5px;color:var(--muted);">${esc(it.lead.stage || STAGE_LABELS[it.lead.stageId] || '')}</span>
+                  <span class="mono" style="margin-left:auto;font-size:9.5px;font-weight:800;color:var(--muted2);">≥${it.estado.toques.total || 0} toques</span>
+                </div>
+                <div style="font-size:11px;color:var(--body);margin-top:4px;line-height:1.5;">${esc(it.motivo)}</div>
+                <div style="font-size:10px;color:var(--muted2);margin-top:4px;">${esc(it.baldeRotulo)} · <a href="${esc(hsUrl(it.lead.id))}" target="_blank" rel="noopener" style="color:var(--red);font-weight:700;text-decoration:none;">abrir no HubSpot ↗</a></div>
+              </div>`).join('')}
+            ${fila.negociosAfetados > itens.length ? `<div style="font-size:10.5px;color:var(--muted2);">+${fila.negociosAfetados - itens.length} não listados aqui.</div>` : ''}
+          </div>
+          <div style="font-size:10.5px;color:var(--muted2);margin-top:12px;line-height:1.55;">Leitura, não cobrança automática: cada linha é um cliente com nome e caminho. Se a carga do HubSpot estiver atrasada, o que está aqui pode já ter sido feito.</div>`;
+      stageOverlay.classList.add('show');
+    });
+  });
+}
+
 async function renderDaily() {
   const el = document.getElementById('dailyContent');
   // BLOCO 2 (10/08/26) — ORDEM IMPORTA: os blocos que vieram do Cockpit ("Onde agir hoje"
@@ -21008,6 +21247,9 @@ async function renderDaily() {
   html += slotsMigradosDaily;
   html += followUpsSemConfirmacaoHtml;
   html += ritmoSemanaHtml;
+  // Escopo 13 — bloco ADITIVO e RECOLHIDO, só pro gestor. Ver a nota longa em
+  // buildIndicadoresGestorHTML(): nada do que ele já usa muda de lugar ou de forma.
+  if (!souRepDaily) html += buildIndicadoresGestorHTML();
 
   el.innerHTML = html;
 
@@ -21018,6 +21260,7 @@ async function renderDaily() {
     if (slotDecisoes && blocoDecisoes) slotDecisoes.appendChild(blocoDecisoes);
   }
   wireRoteiroChecks(el);
+  if (!souRepDaily) wireIndicadoresGestor(el);
   // Briefing do executivo: três botões de navegação, nenhum estado (27/08/26).
   if (souRepDaily) wireBriefingExecutivo(el);
 
@@ -24952,6 +25195,15 @@ async function renderPDIs() {
                     </li>
                   `).join('')}
                 </ul>
+                <!-- (27/08/26) Estes itens vêm do PDF anexado e o check deles vive só
+                     neste navegador (cockpit_pdidoc_v1_*). Não existe tabela pra eles,
+                     então o gestor NÃO vê. Em vez de fingir que é acordo compartilhado
+                     — o erro que este redesenho está desfazendo em toda a tela do
+                     executivo — o rótulo diz o que é: marcação de leitura. O acordo
+                     que conta é o do 1:1 (pdi_compromissos), no card "Seu 1:1". -->
+                <div style="font-size:10px;color:var(--muted2);margin-top:9px;line-height:1.5;">
+                  Marcação de leitura deste documento, só no seu navegador — seu gestor não vê. O acordo que os dois acompanham é o do card <b>Seu 1:1</b>.
+                </div>
               </div>
             ` : ''}
           </div>
