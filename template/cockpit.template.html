@@ -249,7 +249,14 @@
   .command-row:last-child{border-bottom:0;}
   .command-row.is-critical{background:linear-gradient(90deg,var(--red-soft),transparent 42%);}
   .command-row.is-warning{background:linear-gradient(90deg,var(--amber-soft),transparent 42%);}
-  .command-name b{display:block;font-size:12.5px;}.command-name small{color:var(--muted2);}
+  /* CORREÇÃO (28/08/26, medida navegando): a pílula de fase ficava COLADA no nome da
+     cidade — "Porto AlegrePleno · alvo 6/dia", nos seis executivos. O <small> da
+     cidade terminava em x=121 e a pílula começava em x=121: zero de folga, porque
+     small é inline, a pílula é inline-flex e não havia nem espaço no HTML nem margem
+     entre as duas. Somava-se um desalinhamento vertical, porque a pílula levava
+     margin-top:5px inline enquanto dividia a linha de texto com a cidade. */
+  .command-name b{display:block;font-size:12.5px;}
+  .command-name small{color:var(--muted2);margin-right:8px;}
   .command-cell b{display:block;font-size:12px;font-variant-numeric:tabular-nums;}.command-cell small{color:var(--muted2);line-height:1.25;display:block;}
   .command-action{border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:7px 10px;font:700 10.5px 'Manrope',sans-serif;color:var(--ink);cursor:pointer;white-space:nowrap;}
   .command-action:hover{border-color:var(--ink);transform:translateY(-1px);}
@@ -262,6 +269,11 @@
   .manager-routine-theme small{display:block;color:var(--dark-mut);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
   .manager-routine-theme b{display:block;font:700 15px/1.35 'Poppins',sans-serif;}
   .manager-routine-theme p{margin:6px 0 0;color:#CFC6B6;font-size:10.5px;line-height:1.45;}
+  /* O foco do dia virou UMA LINHA (28/08/26) — ver a nota no HTML sobre o cartão
+     "Agora" que saiu. Ficou faixa âmbar fina em vez de dois cartões lado a lado. */
+  .manager-routine-focus-linha{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px;padding:9px 14px;border:1px solid rgba(184,121,14,.28);border-radius:12px;background:var(--amber-soft);}
+  .manager-routine-focus-linha small{flex:none;color:var(--amber-ink);font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;}
+  .manager-routine-focus-linha b{min-width:0;font:700 13px/1.35 'Poppins',sans-serif;color:var(--ink);}
   .manager-routine-now{padding:14px 16px;border:1px solid rgba(184,121,14,.28);border-radius:14px;background:var(--amber-soft);}
   .manager-routine-now small{display:block;color:var(--amber);font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;}
   .manager-routine-now b{display:block;font:700 13px/1.35 'Poppins',sans-serif;color:var(--ink);}
@@ -287,6 +299,16 @@
   .development-card p{font-size:10.5px;line-height:1.45;color:var(--muted);margin:0 0 12px;}
   .development-card .command-action{margin-top:auto;align-self:flex-start;}
   .development-principle{margin-top:11px;padding-top:10px;border-top:1px solid var(--line-soft);font-size:10px;line-height:1.45;color:var(--muted2);}
+  /* Resumo da lista por executivo recolhida (28/08/26) — ver a nota no HTML. */
+  .command-list-wrap{margin-top:12px;}
+  .command-list-summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:11px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);}
+  .command-list-summary::-webkit-details-marker{display:none;}
+  .command-list-n{flex:none;font:800 15px/1 'Poppins',sans-serif;color:var(--muted2);font-variant-numeric:tabular-nums;}
+  .command-list-n.is-critical{color:var(--red);}
+  .command-list-n.is-ok{color:var(--green);}
+  .command-list-txt{min-width:0;font-size:12px;color:var(--muted);}
+  .command-list-abrir{margin-left:auto;flex:none;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--red);}
+  .command-list-wrap[open] .command-list-abrir{color:var(--muted2);}
   .ramp-pill{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:9px;font-weight:800;background:var(--amber-soft);color:var(--amber);white-space:nowrap;}
   .ramp-pill.is-full{background:var(--green-soft);color:var(--green);}
   @media(max-width:1050px){.command-row{grid-template-columns:minmax(150px,1.2fr) repeat(3,minmax(85px,.7fr)) minmax(140px,1fr) auto}.command-route{display:none}.command-kpis{grid-template-columns:repeat(3,1fr)}.development-grid{grid-template-columns:repeat(2,1fr)}.manager-routine-timeline{grid-template-columns:repeat(3,1fr)}.manager-routine-focus{grid-template-columns:1fr 1.5fr}}
@@ -20939,17 +20961,31 @@ function renderManagerDailyRoutine(contexto) {
     { hora: '16:30', titulo: diaSemana === 5 ? 'Retro + resgate' : 'Janela de resgate', texto: `${hotSemPasso} quentes sem próximo passo · ${contexto.slaTotal} acima do SLA. Avançar, agendar, reciclar ou perder.` },
     { hora: '17:45', titulo: 'Fechar o dia', texto: `${contexto.visitasAuditaveis} visitas auditáveis até agora. Compare promessa e entrega; registre impedimento e próximo passo.` }
   ];
-  const atual = etapas[indiceAtual];
 
   el.innerHTML = `
     <section class="chart-card manager-routine" aria-label="Ritual do gestor para hoje">
       <div class="manager-routine-head">
-        <div><h3 style="margin:0 0 4px;font-family:'Poppins',sans-serif;">Ritual do gestor · hoje</h3><div class="chart-subtitle">A rotina muda com o dia da semana e transforma cada sinal em uma decisão com responsável e prazo.</div></div>
+        <div><h3 style="margin:0;font-family:'Poppins',sans-serif;">Ritual do gestor · hoje</h3></div>
         <span class="manager-routine-day">${dias[diaSemana]} · ${agora.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}</span>
       </div>
-      <div class="manager-routine-focus">
-        <div class="manager-routine-theme"><small>Foco de ${dias[diaSemana].toLowerCase()}</small><b>${esc(focos[diaSemana].titulo)}</b><p>${esc(focos[diaSemana].detalhe)}</p></div>
-        <div class="manager-routine-now"><small>Agora · ${atual.hora}</small><b>${esc(atual.titulo)}</b><p>${esc(atual.texto)}</p></div>
+      <!-- O CARTÃO "AGORA · <hora>" SAIU (28/08/26).
+
+           Ele renderizava a etapa do indice atual — o MESMO objeto que a linha do tempo
+           logo abaixo já renderiza, com a classe is-now e a pílula "Agora". Não era
+           conteúdo parecido: era hora, título e texto idênticos, duas vezes, a 60px
+           de distância. Medido na tela às 11:30 de 28/08: "Checkpoint de campo" e a
+           frase "Feche pendências, recicle o que não tem aderência e registre o
+           aprendizado da semana." apareciam 2x cada.
+
+           A linha do tempo é a melhor das duas, porque mostra o agora NO CONTEXTO do
+           que veio antes e do que vem depois — que é a pergunta de um ritual.
+
+           O foco do dia continua, agora em uma linha só: o texto de detalhe saiu com o
+           cartão porque era instrução genérica ("Conclua pendências, recicle com
+           critério...") que os cinco passos da linha do tempo já dizem com número. -->
+      <div class="manager-routine-focus-linha">
+        <small>Foco de ${dias[diaSemana].toLowerCase()}</small>
+        <b>${esc(focos[diaSemana].titulo)}</b>
       </div>
       <div class="manager-routine-timeline">
         ${etapas.map((etapa, i) => `<article class="manager-routine-step ${i === indiceAtual ? 'is-now' : ''} ${i < indiceAtual ? 'is-past' : ''}">
@@ -21013,6 +21049,14 @@ async function renderCockpitExecutionCommand() {
   const hotProtegidos = quentes.filter(leadTemProximoPasso).length;
   const funilProtegido = funilAberto.filter(leadTemProximoPasso).length;
   const slaTotal = linhas.reduce((s, x) => s + (Number(x.r.leadsTravados) || 0), 0);
+  /* Para o resumo do <details> da lista por executivo: os mesmos limites de score que
+     já pintam a borda de cada linha (is-critical em 10, is-warning em 5), pra o número
+     do resumo e a cor das linhas nunca discordarem. */
+  const criticos = linhas.filter(x => x.score >= 10).length;
+  const atencao = linhas.filter(x => x.score >= 5 && x.score < 10).length;
+  const nomesEmExcecao = linhas.filter(x => x.score >= 5).slice(0, 3)
+    .map(x => String(x.r.name).split(' ')[0]).join(', ')
+    + ((criticos + atencao) > 3 ? ` +${(criticos + atencao) - 3}` : '');
   const rampSemDefinir = linhas.filter(x => !x.ramp.definido).length;
 
   el.innerHTML = `
@@ -21026,10 +21070,35 @@ async function renderCockpitExecutionCommand() {
         <div class="command-kpi"><b style="color:${funilAberto.length && funilProtegido < funilAberto.length ? 'var(--red)' : 'var(--green)'}">${funilProtegido}/${funilAberto.length}</b><span>funil aberto protegido por tarefa</span></div>
         <div class="command-kpi"><b style="color:${slaTotal ? 'var(--red)' : 'var(--green)'}">${slaTotal}</b><span>negócios acima do SLA</span></div>
       </div>
+      <!-- A LISTA POR EXECUTIVO RECOLHEU (28/08/26).
+
+           Estes seis cartões respondem a MESMA pergunta das sete linhas da aba
+           Daily & Ritmo — quem não fechou o plano e o que cobrar dele. Depois que a
+           Daily passou a caber numa dobra (linha de 315 para 124px), manter a
+           segunda cópia aberta aqui fazia a aba Time gastar 430px repetindo a
+           reunião das 9h, e ainda repetia números do bloco de desenvolvimento logo
+           abaixo (Kelly aparecia com "4 quentes sem passo · 21 acima do SLA" nos
+           dois blocos, a 200px de distância).
+
+           Os SEIS KPIs do time continuam abertos: eles respondem "o time precisa de
+           mim agora?", que é a pergunta desta aba. O detalhe por pessoa responde
+           "de quem?", e fica a um clique — com a contagem de exceções e os nomes no
+           próprio resumo, pra ele saber se vale abrir antes de abrir.
+
+           A ordem de dentro não mudou: a lista já vem ordenada por score, ou seja,
+           quem precisa de intervenção primeiro. -->
+      <details class="command-list-wrap">
+        <summary class="command-list-summary">
+          <span class="command-list-n ${criticos > 0 ? 'is-critical' : criticos === 0 && atencao === 0 ? 'is-ok' : ''}">${criticos + atencao}/${linhas.length}</span>
+          <span class="command-list-txt">${(criticos + atencao) > 0
+            ? `precisam de intervenção hoje · <b>${esc(nomesEmExcecao)}</b>`
+            : 'ninguém em exceção agora — rota e plano fechados no time inteiro'}</span>
+          <span class="command-list-abrir">ver por executivo</span>
+        </summary>
       <div class="command-list">
         ${linhas.map(x => `
           <div class="command-row ${x.score >= 10 ? 'is-critical' : x.score >= 5 ? 'is-warning' : ''}">
-            <div class="command-name"><b>${esc(x.r.name)}</b><small>${esc(x.r.praca || '')}</small><span class="ramp-pill ${x.ramp.chave === 'pleno' ? 'is-full' : ''}" style="margin-top:5px;">${esc(x.ramp.label)}${x.ramp.alvo != null ? ` · alvo ${x.ramp.alvo}/dia` : ''}</span></div>
+            <div class="command-name"><b>${esc(x.r.name)}</b><small>${esc(x.r.praca || '')}</small> <span class="ramp-pill ${x.ramp.chave === 'pleno' ? 'is-full' : ''}" style="vertical-align:middle;">${esc(x.ramp.label)}${x.ramp.alvo != null ? ` · alvo ${x.ramp.alvo}/dia` : ''}</span></div>
             <div class="command-cell command-route"><b>${x.paradas}</b><small>paradas na rota</small></div>
             <div class="command-cell"><b>${x.realizado}/${x.prometido || '—'}</b><small>visitas real/prom.</small></div>
             <div class="command-cell"><b style="color:${x.hotSemPasso ? 'var(--red)' : 'var(--green)'}">${x.hotSemPasso}</b><small>quentes sem passo</small></div>
@@ -21038,6 +21107,7 @@ async function renderCockpitExecutionCommand() {
             <button type="button" class="command-action" data-command-view="${x.proxima.view}" data-command-owner="${esc(String(x.r.ownerId))}">Agir →</button>
           </div>`).join('')}
       </div>
+      </details>
       <div class="command-note">Regra operacional: rota e plano fechados antes da rua; visita só conta para gestão quando está vinculada ao cliente; negócio quente precisa sair de cada toque com próximo passo e data. ${rampSemDefinir ? `<b>${rampSemDefinir} executivo${rampSemDefinir === 1 ? '' : 's'} ainda sem fase de rampagem definida.</b>` : ''}</div>
     </section>`;
 
