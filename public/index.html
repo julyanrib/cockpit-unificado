@@ -23350,9 +23350,44 @@ async function renderDaily() {
   // pessoa, em vez de num cartão separado que repetia o time inteiro logo acima.
   // Uma consulta só, na mesma data que a tela está mostrando.
   let planosPorOwner = {};
+  /* CONTAS NOVAS EM ROTA (28/08/26) — o pedido do Julyan de "quantas prospecções
+     novas eles vão fazer", respondido com um gesto que JÁ EXISTE no produto em vez
+     de indicador novo: marcar uma conta da Prospecção com data_rota é o executivo
+     dizendo "vou nesta conta neste dia". Não há nada para digitar.
+
+     Medido no banco em 28/08, e é por isso que este número entra na tela das 9h:
+     de 970 contas importadas desde 07/08, 45 entraram em rota (4,6%) e 1 virou
+     empresa no HubSpot (0,1%); 671 têm dono e nunca foram tocadas. E o gesto PAROU:
+     o último data_rota é de 20/08, com pico em 11–13/08 (12, 9 e 8 contas). Hoje o
+     número lê 0, e 0 aqui é o alarme — não um vazio.
+
+     Duas contagens porque respondem a coisas diferentes: HOJE é promessa (o que ele
+     disse que vai fazer) e A SEMANA é evidência acumulada. Uma consulta só, com as
+     duas janelas, na mesma ida ao banco dos planos.
+
+     A semana é a semana do dia EM FOCO, não a de hoje: o gestor caminha pelos dias
+     na reunião, e misturar "hoje = dia navegado" com "semana = semana corrente"
+     daria dois números de janelas diferentes na mesma faixa. Mesma conta de
+     inicioDaSemanaISO(), com data recebida em vez do relógio. */
+  let rotaHojePorOwner = {}, rotaSemanaTotal = null, rotaHojeTotal = null;
   if (!souRepDailyPre) {
     const { data: planosData } = await supa.from('planos_diarios').select('*').eq('data', dailyRefDate);
     (planosData || []).forEach(p => { planosPorOwner[String(p.owner_id)] = p; });
+
+    const dowRota = new Date(dailyRefDate + 'T12:00:00').getDay();
+    const inicioSemanaRota = addDays(dailyRefDate, -(dowRota === 0 ? 6 : dowRota - 1));
+    const { data: rotaData, error: rotaErro } = await supa.from('leads_prospeccao')
+      .select('responsavel_owner_id,data_rota').not('data_rota', 'is', null).gte('data_rota', inicioSemanaRota);
+    /* Erro NÃO vira zero. Zero aqui é uma acusação ("ninguém abriu conta nova") e
+       fazer uma consulta que falhou parecer inatividade do time é o pior resultado
+       possível numa reunião. Falhando, os totais ficam null e a faixa mostra "—". */
+    if (!rotaErro && Array.isArray(rotaData)) {
+      rotaSemanaTotal = rotaData.length;
+      const doDia = rotaData.filter(x => String(x.data_rota).slice(0, 10) === dailyRefDate);
+      rotaHojeTotal = doDia.length;
+      doDia.forEach(x => { const k = String(x.responsavel_owner_id);
+        rotaHojePorOwner[k] = (rotaHojePorOwner[k] || 0) + 1; });
+    }
   }
 
   const yesterdayISO = addBusinessDays(dailyRefDate, -1);
@@ -23484,6 +23519,67 @@ async function renderDaily() {
   // "Abrir 2min / Exceções 10min / Fechar 3min" é roteiro que ele já conduz de cabeça,
   // e ocupava uma dobra inteira da tela que ele projeta pro time. Fica só o objetivo,
   // que é o único pedaço que muda todo dia porque é calculado do dado real.
+  /* A FAIXA DO TIME (28/08/26) — dois números que o Julyan pediu explicitamente para
+     a matinal e que só existiam ATRÁS DE CLIQUE, dentro do detalhe de cada executivo
+     (o alerta de quentes vive em clientesPrometidosHTML, que é conteúdo do details).
+
+     Por que faixa do time e não coluna na linha: a linha responde "o que ele
+     prometeu hoje", uma pergunta por pessoa. Quente e conta nova são perguntas de
+     CARTEIRA — o gestor quer saber se sobrou dinheiro na mesa no time inteiro, e
+     depois de quem. Uma faixa de dois números com os nomes resolve isso em uma
+     linha; sete colunas extras custariam a dobra que a compactação recuperou.
+
+     Medido em 28/08: 12 quentes sem próxima ação no time (Marco 4, Kelly 4,
+     Wericles 2, Amanda 1, Sandro 1). É número pequeno e nomeável, que é exatamente
+     o que serve numa reunião de pé.
+
+     Sem amostra, travessão — nunca 0 inventado. */
+  const faixaDoTimeDaily = (() => {
+    if (souRepDaily) return '';
+    const idsDoTime = new Set(repsDaily.map(r => String(r.ownerId)));
+    const nomeCurto = id => { const r = repsDaily.find(x => String(x.ownerId) === String(id));
+      return r ? r.name.split(' ')[0] : 'sem dono'; };
+
+    const quentes = (((DATA.temperatura || {}).quentes) || [])
+      .filter(l => idsDoTime.has(String(l.ownerId)));
+    const porRepQuentes = {};
+    quentes.forEach(l => { const k = String(l.ownerId); porRepQuentes[k] = (porRepQuentes[k] || 0) + 1; });
+    const topQuentes = Object.entries(porRepQuentes).sort((a, b) => b[1] - a[1]);
+    const detalheQuentes = topQuentes.length
+      ? topQuentes.slice(0, 3).map(([id, k]) => `${esc(nomeCurto(id))} ${k}`).join(' · ')
+        + (topQuentes.length > 3 ? ` · +${topQuentes.length - 3}` : '')
+      : 'nenhum quente descoberto — carteira coberta';
+
+    const topRota = Object.entries(rotaHojePorOwner).sort((a, b) => b[1] - a[1]);
+    const detalheRota = rotaHojeTotal == null
+      ? 'não consegui ler a fila de prospecção agora'
+      : rotaHojeTotal > 0
+        ? topRota.slice(0, 3).map(([id, k]) => `${esc(nomeCurto(id))} ${k}`).join(' · ')
+        : (rotaSemanaTotal > 0 ? `${rotaSemanaTotal} na semana, nenhuma neste dia` : 'ninguém abriu conta nova nesta semana');
+
+    const bloco = (ico, cor, num, rotulo, detalhe, view) => `
+      <button type="button" data-faixa-ir="${view}" style="flex:1 1 0;min-width:0;display:flex;align-items:center;gap:11px;padding:10px 14px;background:none;border:none;cursor:pointer;text-align:left;font:inherit;">
+        <span style="font-size:15px;flex:none;">${ico}</span>
+        <span style="min-width:0;">
+          <span style="display:block;font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);">${rotulo}</span>
+          <span style="display:flex;align-items:baseline;gap:7px;min-width:0;">
+            <b style="font:800 19px/1.1 'Poppins',sans-serif;color:${cor};font-variant-numeric:tabular-nums;">${num}</b>
+            <span style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${detalhe}</span>
+          </span>
+        </span>
+      </button>`;
+
+    return `
+    <div style="display:flex;align-items:stretch;flex-wrap:wrap;margin:-6px 0 16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;">
+      ${bloco('🔥', quentes.length > 0 ? 'var(--amber-ink)' : 'var(--muted2)', quentes.length,
+              'Quentes sem próxima ação', detalheQuentes, 'viewCockpit')}
+      <span style="width:1px;align-self:stretch;background:var(--line);flex:none;"></span>
+      ${bloco('🎯', (rotaHojeTotal == null ? 'var(--muted2)' : rotaHojeTotal > 0 ? 'var(--green)' : 'var(--red)'),
+              (rotaHojeTotal == null ? '—' : rotaHojeTotal),
+              'Contas novas em rota neste dia', detalheRota, 'viewLeadsPraca')}
+    </div>`;
+  })();
+
   const ritualGestorDaily = !souRepDaily ? `
     <div style="display:flex;align-items:center;gap:10px;margin:-2px 0 16px;padding:11px 16px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--red);border-radius:var(--r-lg);">
       <span style="font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--red);white-space:nowrap;flex:none;">Objetivo de hoje</span>
@@ -23569,6 +23665,7 @@ async function renderDaily() {
   let html = `
     ${bannerDaily}
     ${ritualGestorDaily}
+    ${faixaDoTimeDaily}
     ${alertaSyncDaily}
     ${navNoTopo}
   `;
@@ -24190,6 +24287,16 @@ async function renderDaily() {
     const slotDecisoes = document.getElementById('dailySlotDecisoes');
     if (slotDecisoes && blocoDecisoes) slotDecisoes.appendChild(blocoDecisoes);
   }
+  /* Os dois botoes da faixa do time CLICAM O BOTAO DE ABA REAL, em vez de chamar
+     activateTab direto. E de proposito: cada aba tem seu proprio render e seu proprio
+     efeito colateral no clique (activateTab zera o territorio, por exemplo), e
+     reproduzir isso a mao aqui criaria um segundo caminho de navegacao que sai de
+     sincronia na primeira mudanca. Clicar o botao garante comportamento identico ao
+     de um clique do gestor. */
+  el.querySelectorAll('[data-faixa-ir]').forEach(b => b.addEventListener('click', () => {
+    const alvo = document.querySelector(`.tab-btn[data-view="${b.dataset.faixaIr}"]`);
+    if (alvo) alvo.click();
+  }));
   wireRoteiroChecks(el);
   if (!souRepDaily) wireIndicadoresGestor(el);
   // Briefing do executivo: três botões de navegação, nenhum estado (27/08/26).
