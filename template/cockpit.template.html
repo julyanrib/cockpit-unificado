@@ -2188,7 +2188,19 @@
   .daily-team-summary-v2{grid-template-columns:220px minmax(300px,1fr) 92px auto 118px;}
   .daily-avatar-row{display:flex;align-items:center;gap:9px;min-width:0;}
   .daily-avatar{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12px 'Poppins',sans-serif;background:var(--state-soft);color:var(--state);}
-  .daily-team-col-metrics{display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .daily-team-col-metrics{display:flex;flex-direction:column;gap:3px;min-width:0;}
+  /* O RESUMO DA PROMESSA NA LINHA FECHADA (28/08/26) — ver a nota longa em
+     promessaResumoHTML. Substitui três caixas com barra de progresso por uma frase.
+     `min-width:0` nos dois porque o nome do cliente é texto livre e precisa poder
+     truncar em vez de empurrar a coluna: é o mesmo alçapão do flex que estourou a
+     topbar em 1024px. */
+  .daily-linha-promessa{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;min-width:0;font-size:12px;color:var(--muted);}
+  .daily-linha-promessa b{font:800 15px/1 'Poppins',sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .daily-linha-promessa em{font-style:normal;font-weight:800;font-size:11.5px;color:var(--muted2);font-variant-numeric:tabular-nums;}
+  .daily-linha-promessa em.is-ok{color:var(--green);}
+  .daily-linha-promessa i{font-style:normal;font-size:9px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--ter);border:1px solid var(--line);border-radius:999px;padding:2px 7px;cursor:help;}
+  .daily-linha-promessa.is-vazia{font-size:12px;font-weight:700;color:var(--red);}
+  .daily-clientes-chip{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .daily-clientes-chip{font-size:10.5px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-left:1px;}
   .daily-clientes-chip b{color:var(--ink);font-weight:700;}
   .daily-clientes-chip.is-gap{color:var(--amber);}
@@ -21889,6 +21901,31 @@ function prospeccaoCompararOrdem(a, b, agoraMs) {
   return String((a && a.nome) || '').localeCompare(String((b && b.nome) || ''), 'pt-BR');
 }
 
+/* ============================================================================
+   NOMES DA PROMESSA DO PLANO DO DIA (28/08/26)
+   ----------------------------------------------------------------------------
+   `planos_diarios.prioridades` guarda cada item como "Nome do cliente — motivo",
+   montado no confirm da Daily do executivo (ver wireCompromissoDoDia). Na linha do
+   gestor entra só o nome: o motivo é leitura de 1:1 e já aparece inteiro ao expandir.
+
+   POR QUE ISTO É UMA FUNÇÃO TESTADA e não um .split() inline: o separador é TRAVESSÃO
+   cercado de espaços (" — ", U+2014), e nome de restaurante usa HÍFEN à vontade.
+   Exemplo real gravado hoje: "Confraria Da Carne - Steaks — Visitas sem próximo
+   passo · ...". Um split em "-" ou em "—" sem os espaços devolveria "Confraria Da
+   Carne" e o gestor leria o nome cortado na tela da matinal. O motivo também contém
+   " · ", então dividir pelo separador errado corta em lugar pior ainda.
+
+   Split no PRIMEIRO " — " apenas: se o nome do cliente contiver um travessão, o que
+   vem depois do primeiro é motivo, não nome.
+   ============================================================================ */
+function nomesDaPromessaDoPlano(prioridades) {
+  if (!Array.isArray(prioridades)) return [];
+  return prioridades
+    .map(t => String(t == null ? '' : t))
+    .map(t => { const i = t.indexOf(' \u2014 '); return (i === -1 ? t : t.slice(0, i)).trim(); })
+    .filter(Boolean);
+}
+
 /* @nucleo2:fim */
 
 /* Conquistas comprovadas (Escopo 11). Cada uma é um FATO verificável no HubSpot.
@@ -23801,6 +23838,13 @@ async function renderDaily() {
     // Mesma leitura de planoDoRep, acima — o nome antigo fica porque o HTML do card e
     // o detalhe do plano já o referenciam em vários pontos.
     const planoPessoa = planoDoRep;
+    /* SUBIU DE POSICAO (28/08/26): as prioridades do plano fechado agora alimentam
+       TAMBEM o resumo da linha fechada (ver a nota em clientesPreviewHTML), e a
+       declaracao estava ~220 linhas abaixo do primeiro uso — const em zona morta
+       temporal, ReferenceError em runtime. Nao e erro de sintaxe, entao check-scripts
+       passa e o defeito so aparece na tela do gestor. Uma fonte, declarada antes do
+       primeiro uso. */
+    const planoPrioridades = (planoPessoa && Array.isArray(planoPessoa.prioridades) ? planoPessoa.prioridades : []).filter(Boolean);
       // BLOCO 2 (11/08): compromissos JÁ MARCADOS para o dia que a Daily está mostrando.
     // Mesmo normalizador da aba Agenda; só o nome do lead e a hora, nada de título cru.
     const compromissosHoje = (() => {
@@ -23837,9 +23881,30 @@ async function renderDaily() {
     // não só a contagem. Reaproveita comLead (já filtrado por dia+dono, com nome real
     // resolvido pela Agenda) — nenhuma lógica nova de dado, só a apresentação.
     const iniciais = r.name.split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
-    const clientesPreviewHTML = comLead.length
-      ? `<b>${esc(comLead.slice(0, 2).map(c => c.lead).join(', '))}</b>${comLead.length > 2 ? ` +${comLead.length - 2}` : ''}`
-      : (visitasPrometidas > 0 ? 'nenhum cliente nomeado ainda' : 'sem visita prometida hoje');
+    /* A FONTE DOS NOMES PROMETIDOS ESTAVA ERRADA (28/08/26).
+
+       Esta linha lia só `comLead` — clientes nomeados na AGENDA DO HUBSPOT do dia.
+       Mas desde 28/08 a promessa que o executivo fecha grava os nomes em
+       `planos_diarios.prioridades` (o compromisso derivado da fila, sem digitação).
+       São duas coisas diferentes: agendar no HubSpot é um gesto, fechar o plano do
+       dia é outro, e o segundo é o que o ritual das 9h pede.
+
+       Medido no banco em 28/08: Wericles fechou plano às 08:36 com 6 prioridades e
+       Kelly às 08:40 com 6 — e a linha dos dois, na tela que o gestor projeta na
+       matinal, dizia "sem visita prometida hoje". O dado estava gravado e a tela
+       olhava para o outro lado.
+
+       Agora a ordem de preferência é: plano fechado (nomes que ELE escolheu hoje) →
+       agenda do HubSpot (nomes com hora marcada) → o que faltar. As prioridades vêm
+       no formato "Nome — motivo"; na linha entra só o nome, porque o motivo é
+       leitura de 1:1 e já aparece inteiro ao expandir. */
+    const nomesDoPlano = nomesDaPromessaDoPlano(planoPrioridades);
+    const nomesDaAgenda = comLead.map(c => c.lead).filter(Boolean);
+    const nomesPrometidos = nomesDoPlano.length ? nomesDoPlano : nomesDaAgenda;
+    const fontePromessa = nomesDoPlano.length ? 'plano' : (nomesDaAgenda.length ? 'agenda' : null);
+    const clientesPreviewHTML = nomesPrometidos.length
+      ? `<b>${esc(nomesPrometidos.slice(0, 2).join(', '))}</b>${nomesPrometidos.length > 2 ? ` +${nomesPrometidos.length - 2}` : ''}`
+      : (visitasPrometidas > 0 ? 'nenhum cliente nomeado ainda' : 'sem cliente nomeado hoje');
     const clientesPrometidosHTML = `
       <div class="daily-client-plan">
         <div class="daily-client-plan-head"><span><b>Quantos clientes pra hoje?</b><span>Agenda do Cockpit confirmada no HubSpot — nome, hora e tipo.</span></span><span class="daily-client-count">${clientesNomeados}${visitasPrometidas ? ` de ${visitasPrometidas}` : ''} nomeados</span></div>
@@ -23997,7 +24062,6 @@ async function renderDaily() {
     const planoRascunho = planoPessoa && planoPessoa.status === 'rascunho';
     const planoHora = planoFechado && planoPessoa.fechado_em
       ? new Date(planoPessoa.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
-    const planoPrioridades = (planoPessoa && Array.isArray(planoPessoa.prioridades) ? planoPessoa.prioridades : []).filter(Boolean);
     const planoContas = (planoPessoa && Array.isArray(planoPessoa.contas_alvo) ? planoPessoa.contas_alvo : []).length;
     const planoPill = !planoPessoa
       ? '<span style="font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;border-radius:999px;padding:3px 9px;background:var(--panel2);color:var(--muted2);border:1px solid var(--line);white-space:nowrap;">s/ plano do dia</span>'
@@ -24012,6 +24076,45 @@ async function renderDaily() {
         ${planoPessoa && planoPessoa.observacao ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;">💬 ${esc(planoPessoa.observacao)}</div>` : ''}
       </div>` : '';
 
+    /* O RESUMO DA PROMESSA, EM UMA LINHA (28/08/26).
+
+       O que saiu da linha fechada: as três caixas `daily-team-metric` (Visitas,
+       Demo/Proposta, Novos Clientes), cada uma com barra de progresso, contagem e
+       uma legenda de rodapé. Medido nesta tela, com os 7 executivos:
+
+         · 315px por executivo, 2.212px só nas sete linhas, 4.574px na aba
+         · 3 executivos por dobra de 900px — pra caminhar pelos sete na matinal o
+           gestor rolava a tela três vezes, em pé, projetando
+         · 52 de 105 linhas de texto (50%) não carregavam informação: "— sem meta",
+           "0 realizado", "nenhuma visita qualificada vinculada ainda"
+
+       As três caixas NÃO foram deletadas: elas já existem, abertas e maiores, dentro
+       do `daily-promise-grid` do detalhe (metricaGestorAberta), junto da lista de
+       clientes com hora e do alerta de leads quentes. O que se perde ao fechar a
+       linha é densidade que o gestor não usa em pé; o que se ganha é o time inteiro
+       numa tela.
+
+       No lugar entra a pergunta da matinal, resolvida em uma frase: quantos ele
+       prometeu, quantos já fez, e de onde vem a promessa. Zero nunca se apresenta
+       como "não fez" — sem promessa e sem registro, a linha diz que não há plano,
+       que é o que se cobra, e não "0", que acusaria. */
+    const promessaTotal = nomesPrometidos.length || visitasPrometidas;
+    const promessaResumoHTML = (() => {
+      const feitas = Number(realVisitas) || 0;
+      if (promessaTotal > 0) {
+        const ok = feitas >= promessaTotal;
+        return `<span class="daily-linha-promessa">
+          <b>${promessaTotal}</b> prometido${promessaTotal === 1 ? '' : 's'}
+          <em class="${ok ? 'is-ok' : ''}">${feitas} feito${feitas === 1 ? '' : 's'}</em>
+          ${fontePromessa === 'plano' ? '<i title="Nomes vindos do plano do dia que ele fechou no Cockpit">plano do dia</i>' : '<i title="Nomes vindos da agenda confirmada no HubSpot">agenda</i>'}
+        </span>`;
+      }
+      if (feitas > 0) {
+        return `<span class="daily-linha-promessa"><em class="is-ok">${feitas} feito${feitas === 1 ? '' : 's'}</em> <i>sem promessa registrada</i></span>`;
+      }
+      return '<span class="daily-linha-promessa is-vazia">sem plano do dia — é o que cobrar</span>';
+    })();
+
     const fechamentosHoje = ehHojeView ? (r.fechamentosHubspotHoje ?? 0) : (hoje.realizado_fechamentos ?? 0);
     const rankingPontos = DATA.reps.map(x => ({ ownerId: x.ownerId, pts: pontosDoDia(getDaily(x.ownerId, dailyRefDate)) })).sort((a,b) => b.pts - a.pts);
     const posicaoPontos = Math.max(1, rankingPontos.findIndex(x => x.ownerId === r.ownerId) + 1);
@@ -24024,7 +24127,7 @@ async function renderDaily() {
             <span class="daily-person"><b>${r.name.split(' ').slice(0, 2).join(' ')}</b><span>${estadoExec}</span></span>
           </span>
           <span class="daily-team-col-metrics">
-            <span class="daily-team-metrics">${metricasCompromisso.map(metricaTime).join('')}</span>
+            ${promessaResumoHTML}
             <span class="daily-clientes-chip ${clientesFaltantes ? 'is-gap' : ''}">${clientesPreviewHTML}</span>
           </span>
           <span class="daily-team-result"><b style="color:${fechamentosHoje > 0 ? 'var(--green)' : 'var(--muted2)'};">${fechamentosHoje}</b><span>fechados</span></span>
