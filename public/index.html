@@ -21771,6 +21771,70 @@ function prospeccaoRotuloCategoria(valor, nome) {
   return inferida ? inferida + ' (pelo nome)' : 'Categoria não informada';
 }
 
+/* ============================================================================
+   ORDEM DA FILA DE PROSPECÇÃO (28/08/26) — decisão do Julyan
+   ----------------------------------------------------------------------------
+   O QUE ERA, e por que trocou. A fila ordenava por `avaliacoes DESC NULLS LAST`,
+   com o comentário "Prioridade comercial oficial: somente volume de avaliações".
+
+   Três problemas, todos medidos na base:
+     · 566 das 869 contas (65%) vinham da Casa dos Dados com `avaliacoes` NULL —
+       iam para o fim da fila em TODO carregamento, permanentemente. O executivo
+       nunca chegava nelas: 597 estavam atribuídas e nunca entraram numa rota.
+     · O topo da fila eram os negócios MAIORES (média 1.656 avaliações, máximo
+       54.499) — que são os mais difíceis de fechar, não os de melhor fit.
+     · E o cabeçalho de api/novidades-mercado.js — a rota que COLHE essas contas —
+       já dizia o contrário: "aqui NÃO se busca mais bem avaliado. Avaliação alta
+       significa estabelecimento maduro, que quase sempre já tem fornecedor. O valor
+       desta fonte é o oposto: quem acabou de abrir." A rota colhia recém-abertos e
+       a tela os enterrava.
+
+   A ORDEM AGORA É EM TRÊS FAIXAS, cada uma ordenada pelo sinal que ela TEM — a
+   mesma lógica do card (ver prospeccaoSinalPrincipal):
+     1. recém-aberta, até 6 meses  -> mais nova primeiro   (325 contas hoje)
+     2. tem avaliação              -> mais avaliada primeiro
+     3. o resto                    -> mais nova primeiro, depois nome
+
+   Por que faixas e não `data_abertura DESC` puro: a base tem abertura de 2018, e
+   "aberta há 7 anos" não é recém-aberta — ordenar tudo por data jogaria um negócio
+   de 2018 acima de um com 7.790 avaliações, o que não ajuda ninguém. E por que a
+   faixa 2 vem antes da 3: conta com avaliação é um negócio que se sabe que existe e
+   tem movimento; sem sinal nenhum é aposta.
+   ============================================================================ */
+const PROSPECCAO_RECENTE_MESES = 6;
+
+function prospeccaoFaixaDeOrdem(l, agoraMs) {
+  const base = agoraMs != null ? agoraMs : (typeof Date.now === 'function' ? Date.now() : 0);
+  const ab = (l && l.data_abertura) ? new Date(l.data_abertura) : null;
+  const temData = ab && !Number.isNaN(ab.getTime());
+  const meses = temData ? (base - ab.getTime()) / (30.44 * 86400000) : null;
+  if (temData && meses <= PROSPECCAO_RECENTE_MESES) return 1;
+  if (l && l.avaliacoes != null && !Number.isNaN(Number(l.avaliacoes))) return 2;
+  return 3;
+}
+
+// Comparador único. Usado no carregamento e em qualquer lista que mostre a fila,
+// pra não existirem duas ordens diferentes da mesma coisa na mesma tela.
+function prospeccaoCompararOrdem(a, b, agoraMs) {
+  const fa = prospeccaoFaixaDeOrdem(a, agoraMs), fb = prospeccaoFaixaDeOrdem(b, agoraMs);
+  if (fa !== fb) return fa - fb;
+  const dataDe = x => {
+    const d = (x && x.data_abertura) ? new Date(x.data_abertura) : null;
+    return (d && !Number.isNaN(d.getTime())) ? d.getTime() : null;
+  };
+  if (fa === 1 || fa === 3) {
+    const da = dataDe(a), db = dataDe(b);
+    if (da != null && db != null && da !== db) return db - da;   // mais nova primeiro
+    if (da != null && db == null) return -1;
+    if (da == null && db != null) return 1;
+  }
+  if (fa === 2) {
+    const va = Number(a.avaliacoes) || 0, vb = Number(b.avaliacoes) || 0;
+    if (va !== vb) return vb - va;
+  }
+  return String((a && a.nome) || '').localeCompare(String((b && b.nome) || ''), 'pt-BR');
+}
+
 /* @nucleo2:fim */
 
 /* Conquistas comprovadas (Escopo 11). Cada uma é um FATO verificável no HubSpot.
@@ -25093,16 +25157,18 @@ function prospeccaoStatusNoDia(l) {
 
 async function carregarProspeccao() {
   if (!DATA.supabase || !supa) { prospeccaoCache = []; return; }
-  // Prioridade comercial oficial: somente volume de avaliações. A nota continua
-  // disponível como contexto na ficha, mas nunca filtra, ordena ou desempata a fila.
-  let query = supa.from('leads_prospeccao').select('*').order('avaliacoes', { ascending: false, nullsFirst: false });
+  /* RECÉM-ABERTA PRIMEIRO (28/08/26) — ver o comentário longo de
+     prospeccaoCompararOrdem. A ordenação no servidor deixa de ser por avaliações:
+     ela era o que enterrava 65% da base (as sem avaliação) no fim da lista em todo
+     carregamento. Aqui pede-se data de abertura decrescente só pra já vir num
+     formato próximo; a ordem final é do comparador, que é a fonte única. */
+  let query = supa.from('leads_prospeccao').select('*').order('data_abertura', { ascending: false, nullsFirst: false });
   if (sessaoAtual && sessaoAtual.role === 'rep') query = query.eq('responsavel_owner_id', sessaoAtual.ownerId);
   const { data, error } = await query;
   if (error) { console.error('Erro ao carregar prospecção:', error.message); prospeccaoCache = []; return; }
-  prospeccaoCache = (data || []).map(l => ({ ...l, cidade: canonizarCidade(l.cidade) })).sort((a, b) =>
-    (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0) ||
-    String(a.nome || '').localeCompare(String(b.nome || ''), 'pt-BR')
-  );
+  const agoraOrdem = Date.now();
+  prospeccaoCache = (data || []).map(l => ({ ...l, cidade: canonizarCidade(l.cidade) }))
+    .sort((a, b) => prospeccaoCompararOrdem(a, b, agoraOrdem));
   const badge = document.getElementById('badgeLeadsPraca');
   if (badge) {
     const acionaveis = prospeccaoCache.filter(l => prospeccaoAtiva(l) && prospeccaoFazSentido(l)).length;

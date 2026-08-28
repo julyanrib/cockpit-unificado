@@ -859,6 +859,55 @@ teste('o rótulo declara que a categoria foi inferida', () => {
   igual(c.prospeccaoRotuloCategoria(null), 'Categoria não informada', 'chamada antiga com 1 argumento segue funcionando');
 });
 
+teste('a fila põe recém-aberta na frente, e cada faixa usa o sinal que tem', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const agora = HOJE.getTime();
+  const mesesAtras = m => new Date(agora - m * 30.44 * 86400000).toISOString();
+
+  const nova2m = { nome: 'Aberta 2 meses', data_abertura: mesesAtras(2) };
+  const nova5m = { nome: 'Aberta 5 meses', data_abertura: mesesAtras(5) };
+  const gigante = { nome: 'Café gigante', avaliacoes: 7790 };
+  const media = { nome: 'Café médio', avaliacoes: 300 };
+  const velha = { nome: 'Aberta 3 anos', data_abertura: mesesAtras(36) };
+  const nada = { nome: 'Zzz sem sinal' };
+
+  const ordenada = [gigante, velha, nada, nova5m, media, nova2m]
+    .sort((a, b) => c.prospeccaoCompararOrdem(a, b, agora))
+    .map(x => x.nome);
+
+  igual(ordenada, [
+    'Aberta 2 meses', 'Aberta 5 meses',   // faixa 1: recém-abertas, mais nova antes
+    'Café gigante', 'Café médio',         // faixa 2: com avaliação, mais avaliada antes
+    'Aberta 3 anos', 'Zzz sem sinal'      // faixa 3: resto, com data antes de sem data
+  ], 'três faixas, cada uma com sua régua');
+});
+
+teste('aberta há 7 anos NÃO passa na frente de quem tem avaliação', () => {
+  // Era o risco de ordenar por data_abertura puro: a base tem abertura de 2018.
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const agora = HOJE.getTime();
+  const antiga = { nome: 'Aberta 2018', data_abertura: new Date(agora - 84 * 30.44 * 86400000).toISOString() };
+  const comAvaliacao = { nome: 'Com avaliação', avaliacoes: 500 };
+  igual([antiga, comAvaliacao].sort((a, b) => c.prospeccaoCompararOrdem(a, b, agora)).map(x => x.nome),
+    ['Com avaliação', 'Aberta 2018'], 'avaliação vence abertura antiga');
+});
+
+teste('o corte de recém-aberta é 6 meses', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const agora = HOJE.getTime();
+  const dentro = { nome: 'dentro', data_abertura: new Date(agora - 5.5 * 30.44 * 86400000).toISOString() };
+  const fora = { nome: 'fora', data_abertura: new Date(agora - 7 * 30.44 * 86400000).toISOString() };
+  igual(c.prospeccaoFaixaDeOrdem(dentro, agora), 1, '5,5 meses é faixa 1');
+  igual(c.prospeccaoFaixaDeOrdem(fora, agora), 3, '7 meses cai pra faixa 3');
+});
+
+teste('data inválida não quebra a ordenação', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const agora = HOJE.getTime();
+  igual(c.prospeccaoFaixaDeOrdem({ nome: 'x', data_abertura: 'nao-e-data' }, agora), 3, 'cai na faixa 3');
+  igual(c.prospeccaoFaixaDeOrdem(null, agora), 3, 'nulo também');
+});
+
 console.log('\n== Promessa derivada (prometido × realizado sem digitação) ==');
 
 teste('o tipo da promessa sai da etapa do negócio', () => {
