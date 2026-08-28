@@ -20976,7 +20976,14 @@ async function renderCockpitExecutionCommand() {
 
   const dataISO = isoDate(new Date());
   const reps = (DATA.reps || []).filter(r => r && r.ownerId && ownerAtivoNoField(r.ownerId));
-  const quentes = ((DATA.temperatura || {}).quentes || []);
+  /* MESMA FONTE DOS OUTROS DOIS LUGARES (28/08/26). Este KPI mostrava "2/12
+     quentes com próximo passo futuro" enquanto a aba Time dizia "11 no radar" e a
+     faixa da Daily "9 sem próximo passo" — três leituras do mesmo dado na mesma
+     sessão. O denominador certo é o RADAR (quente e dentro do prazo da etapa): um
+     quente que já estourou o SLA não é estoque a proteger, é caso de reciclagem, e
+     contá-lo aqui faz o gestor perseguir um número que não fecha nunca.
+     Ver a nota longa de quentesNoRadar. */
+  const quentes = quentesNoRadar(null).radar;
   const funilAberto = Object.values(DATA.funilLeads || {}).flat().filter(Boolean);
   const linhas = reps.map(r => {
     const daily = getDaily(r.ownerId, dataISO);
@@ -21067,7 +21074,12 @@ function renderCockpitDevelopmentHub() {
 
   const reps = (DATA.reps || []).filter(r => r && r.ownerId && ownerAtivoNoField(r.ownerId));
   const historico = (DATA.resumoSemanal && DATA.resumoSemanal.porRep) || {};
-  const quentes = ((DATA.temperatura || {}).quentes || []);
+  /* MESMA FONTE (28/08/26): a frase de coaching desta tela diz "N quentes sem
+     próximo passo" para uma pessoa, e o gestor lê isso em voz alta na conversa de
+     desenvolvimento. Se o número não bater com o que a Daily e a aba Time mostram
+     do mesmo executivo, quem perde credibilidade é ele na frente do time.
+     Ver a nota longa de quentesNoRadar. */
+  const quentes = quentesNoRadar(null).radar;
 
   const leituras = reps.map(r => {
     const h = historico[String(r.ownerId)] || historico[r.ownerId] || {};
@@ -24879,8 +24891,21 @@ function montarPerfilProgresso() {
 
   // ---- sinais de qualidade ----
   const travados = meus.reduce((s, r) => s + ((r.travados || []).length || Number(r.leadsTravados) || 0), 0);
-  const quentesTodos = gestor ? (((DATA.temperatura || {}).quentes) || []) : (((DATA.temperatura || {}).quentes) || []).filter(q => String(q.ownerId) === String(sessaoAtual.ownerId));
-  const quentesSemPasso = quentesTodos.filter(q => !q.proximaAtividade && !q.proximaReuniao).length;
+  /* TERCEIRA DEFINICAO DE "SEM PROXIMO PASSO", CORRIGIDA (28/08/26).
+
+     Esta linha testava apenas `!q.proximaAtividade && !q.proximaReuniao` e IGNORAVA
+     `q.tarefas` — ou seja, um negocio com tarefa datada no futuro, criada pelo proprio
+     Cockpit, contava aqui como "sem proximo passo". E a mesma familia do bug das 09h01:
+     regra de proximo passo reescrita a mao num canto, em vez de chamar
+     proximoPassoDoLead, que e a fonte.
+
+     Consequencia concreta: a medalha e a regua desta tela puniam exatamente o executivo
+     que agenda follow-up pelo Cockpit, porque o Cockpit grava TAREFA. Agora vem de
+     quentesNoRadar, que usa leadTemProximoPasso e aplica a guarda de SLA — mesma conta
+     da aba Time, da faixa da Daily e do Comando de hoje. */
+  const quentesDaRegua = quentesNoRadar(gestor ? null : sessaoAtual.ownerId);
+  const quentesTodos = quentesDaRegua.radar;
+  const quentesSemPasso = quentesDaRegua.semPasso.length;
   const sequencia = (!gestor && typeof calcularSequencia === 'function') ? calcularSequencia(sessaoAtual.ownerId, hoje) : 0;
 
   // ---- medalhas: cada uma com a prova do lado ----
