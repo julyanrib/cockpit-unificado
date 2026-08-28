@@ -2620,6 +2620,15 @@
   .regua-num.is-meio+.regua-barra i{background:var(--amber);opacity:1;}
   .regua-num.is-baixo+.regua-barra i{background:var(--red);opacity:1;}
   .regua-nota{display:block;margin-top:6px;font-size:10px;color:var(--ter);line-height:1.4;}
+
+  /* Sinal de ABERTURA no card da conta-alvo. Recém-aberta é oportunidade, não alarme:
+     verde, não vermelho. E a trilha de impacto (que compara volume de avaliações) fica
+     vazia aqui de propósito — comparar "3 meses" com "7.790 avaliações" na mesma barra
+     seria inventar uma escala que não existe. */
+  .prospeccao-impacto.is-abertura b{font-size:19px;}
+  .prospeccao-impacto.is-recente b{color:var(--green);}
+  .prospeccao-impacto.is-recente small{color:var(--green);font-weight:700;}
+  .prospeccao-impacto.is-abertura .prospeccao-impact-track{opacity:.25;}
   @media (max-width:900px){
     .regua-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
   }
@@ -21630,6 +21639,138 @@ function somaDaPromessa(itens) {
   return soma;
 }
 
+/* ============================================================================
+   SINAL PRINCIPAL DE UMA CONTA-ALVO (28/08/26)
+   ----------------------------------------------------------------------------
+   O QUE ESTAVA ERRADO. A coluna de destaque do card mostrava avaliações, ou "—".
+   Medido na base real: das 869 contas-alvo, **566 (65%) vêm da Casa dos Dados e não
+   têm avaliação nenhuma** — então 65% dos cards exibiam travessão no lugar de nada.
+   Pior: o card lia "sem telefone · Categoria não informada · — avaliações". Três
+   negações seguidas.
+
+   E essas 566 têm o sinal mais valioso da base inteira, que ninguém mais tem:
+   **data de abertura**. 325 delas abriram nos últimos 6 meses. Restaurante recém-
+   aberto é o melhor alvo de field sales que existe — precisa de sistema, ainda não
+   tem fornecedor fixo, e o decisor costuma estar no salão. A tela escondia isso e
+   mostrava o que faltava.
+
+   A regra agora é: **mostre o sinal que a conta TEM.** Avaliação quando existe
+   (mede tamanho/tração), idade de abertura quando não (mede oportunidade). Nunca as
+   duas ao mesmo tempo, porque a coluna é uma e a comparação entre linhas tem que
+   fazer sentido — e nunca "—" quando existe alternativa.
+
+   Não é ordenação: só apresentação. Trocar o CRITÉRIO da fila (hoje avaliações
+   decrescente, que enterra as 566 no fim para sempre) é decisão de produto e está
+   no brief de design.
+   ============================================================================ */
+function prospeccaoSinalPrincipal(l, agoraMs) {
+  const av = l && l.avaliacoes != null ? Number(l.avaliacoes) : null;
+  if (av != null && !Number.isNaN(av)) {
+    return { tipo: 'avaliacoes', valor: av.toLocaleString('pt-BR'), rotulo: 'avaliações', bruto: av, recente: false };
+  }
+  const abertura = l && l.data_abertura ? new Date(l.data_abertura) : null;
+  if (abertura && !Number.isNaN(abertura.getTime())) {
+    const base = agoraMs != null ? agoraMs : (typeof Date.now === 'function' ? Date.now() : 0);
+    const meses = Math.max(0, Math.floor((base - abertura.getTime()) / (30.44 * 86400000)));
+    // Recém-aberta = até 6 meses. É o corte que a própria base sustenta: 325 das 566.
+    const recente = meses <= 6;
+    return {
+      tipo: 'abertura',
+      valor: meses <= 0 ? 'este mês' : String(meses),
+      rotulo: meses <= 0 ? 'recém-aberta' : (meses === 1 ? 'mês de aberta' : 'meses de aberta'),
+      bruto: meses, recente
+    };
+  }
+  return { tipo: 'nenhum', valor: '—', rotulo: 'sem sinal na base', bruto: null, recente: false };
+}
+
+/* ============================================================================
+   CATEGORIA INFERIDA DO NOME (28/08/26)
+   ----------------------------------------------------------------------------
+   564 das 869 contas-alvo não têm `categoria` na base — todas do lote da Casa dos
+   Dados, que traz razão social e CNPJ mas nenhum atributo comercial. O card exibia
+   "Categoria não informada", que é verdade e não serve pra nada.
+
+   Mas a razão social quase sempre entrega o ramo: "AURA ROMANA PIZZARIA",
+   "CHURRAS KELER LTDA", "RAIZ XISERIA E CIA". Medido na base: **207 das 564 (37%)**
+   têm uma palavra reconhecível de ramo alimentar no nome.
+
+   FRONTEIRA DE PALAVRA IMPORTA, e isto foi medido, não suposto. Buscando "bar" como
+   substring dão 42 casos; com fronteira, 38. Os 4 a mais eram BAIRRO:
+   "HAMBURGUERIA BARRA", "CAFE CULTURA BARRA", "BARRA DA TIJUCA". Note que dois
+   deles têm a categoria CERTA em outra palavra — por isso a ordem de teste vai do
+   mais específico para o mais genérico, e "bar" é o último.
+
+   E é declarado como INFERÊNCIA, sempre: o rótulo sai "Pizzaria (pelo nome)". A
+   regra do projeto é não inventar indicador; inferir e avisar que inferiu é honesto,
+   inferir e apresentar como dado da base não seria.
+   ============================================================================ */
+const CATEGORIA_POR_PALAVRA = [
+  // Mais específico primeiro. "bar" fica no fim de propósito (ver comentário acima).
+  { rotulo: 'Hamburgueria', re: /\b(hamburgueria|hamburguer|burguer|burger|smash)\b/i },
+  { rotulo: 'Pizzaria',     re: /\b(pizzaria|pizza)\b/i },
+  { rotulo: 'Churrascaria', re: /\b(churrascaria|churras|espetinho|espeto|parrilla)\b/i },
+  { rotulo: 'Japonês',      re: /\b(sushi|japones|japonesa|temaki|yakisoba)\b/i },
+  { rotulo: 'Padaria',      re: /\b(padaria|panificadora)\b/i },
+  { rotulo: 'Confeitaria',  re: /\b(confeitaria|doceria|bolos|cucas|brigaderia)\b/i },
+  { rotulo: 'Sorveteria',   re: /\b(sorveteria|gelateria|acai|açai|açaí|milkshake)\b/i },
+  { rotulo: 'Lanchonete',   re: /\b(lanchonete|lanches|xis|xiseria|dog|cachorro quente|pastel|pastelaria)\b/i },
+  { rotulo: 'Cafeteria',    re: /\b(cafeteria|cafe|café|coffee)\b/i },
+  { rotulo: 'Restaurante',  re: /\b(restaurante|cozinha|bistro|bistrô|grill|marmita|marmitaria|buffet)\b/i },
+  { rotulo: 'Bar',          re: /\b(bar|boteco|botequim|pub|cervejaria|choperia|chopp)\b/i }
+];
+
+function prospeccaoCategoriaPeloNome(nome) {
+  const txt = String(nome || '');
+  if (!txt.trim()) return null;
+  const achado = CATEGORIA_POR_PALAVRA.find(c => c.re.test(txt));
+  return achado ? achado.rotulo : null;
+}
+
+/* MOVIDAS PARA DENTRO DO @nucleo2 em 28/08/26 — pelo mesmo motivo de
+   proximoPassoDoLead e gargaloDoRep: regra que decide o que aparece na tela precisa
+   ser a que os testes rodam. Aqui o que se testa é a formatação do rótulo, incluindo
+   o aviso "(pelo nome)" que separa dado da base de inferência. Ambas são puras e
+   dependiam só uma da outra; subir a declaração não muda nada em produção (declaração
+   de função sobe para o topo do script). */
+
+function prospeccaoNormalizarTexto(valor) {
+  return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/* `nome` entra como segundo argumento (opcional) para permitir a inferência quando a
+   base não trouxe categoria — 564 das 869 contas. Chamadas antigas com um argumento
+   continuam funcionando: sem nome, o comportamento é exatamente o de antes. */
+function prospeccaoRotuloCategoria(valor, nome) {
+  const chave = prospeccaoNormalizarTexto(valor);
+  const traducoes = {
+    restaurant: 'Restaurante', 'brazilian restaurant': 'Restaurante brasileiro',
+    'argentinian restaurant': 'Restaurante argentino', 'italian restaurant': 'Restaurante italiano',
+    'seafood restaurant': 'Frutos do mar', 'barbecue restaurant': 'Churrascaria',
+    'hamburger restaurant': 'Hamburgueria', 'vegetarian restaurant': 'Restaurante vegetariano',
+    'vegan restaurant': 'Restaurante vegano', 'pizza restaurant': 'Pizzaria',
+    'fine dining restaurant': 'Alta gastronomia', 'fast food restaurant': 'Fast-food',
+    'japanese restaurant': 'Restaurante japonês', 'mexican restaurant': 'Restaurante mexicano',
+    'buffet restaurant': 'Bufê', 'breakfast restaurant': 'Café da manhã',
+    bakery: 'Padaria', cafe: 'Café', cafeteria: 'Cafeteria', 'coffee shop': 'Cafeteria',
+    bar: 'Bar', pub: 'Pub', bistro: 'Bistrô', brewery: 'Cervejaria', 'beer hall': 'Cervejaria',
+    confectionery: 'Confeitaria', 'ice cream shop': 'Sorveteria', 'dessert shop': 'Sobremesas',
+    steakhouse: 'Churrascaria', 'steak house': 'Churrascaria', pizzeria: 'Pizzaria',
+    'chicken restaurant': 'Restaurante de frango', 'chinese restaurant': 'Restaurante chinês',
+    'cocktail bar': 'Bar de coquetéis', 'espresso bar': 'Cafeteria',
+    'german restaurant': 'Restaurante alemão', 'hawker stall': 'Comida de rua',
+    'health food restaurant': 'Alimentação saudável', 'irish pub': 'Pub',
+    'live music bar': 'Bar com música', 'meat dish restaurant': 'Restaurante de carnes',
+    'mediterranean restaurant': 'Restaurante mediterrâneo', 'portuguese restaurant': 'Restaurante português',
+    'snack bar': 'Lanchonete', store: 'Foodservice em mercado',
+    'shopping mall': 'Foodservice em shopping'
+  };
+  if (traducoes[chave]) return traducoes[chave];
+  if (chave) return chave.charAt(0).toUpperCase() + chave.slice(1);
+  const inferida = (typeof prospeccaoCategoriaPeloNome === 'function') ? prospeccaoCategoriaPeloNome(nome) : null;
+  return inferida ? inferida + ' (pelo nome)' : 'Categoria não informada';
+}
+
 /* @nucleo2:fim */
 
 /* Conquistas comprovadas (Escopo 11). Cada uma é um FATO verificável no HubSpot.
@@ -24860,38 +25001,6 @@ function prospeccaoOrdenarPorDistancia(lista) {
   });
 }
 
-function prospeccaoNormalizarTexto(valor) {
-  return String(valor || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
-function prospeccaoRotuloCategoria(valor) {
-  const chave = prospeccaoNormalizarTexto(valor);
-  const traducoes = {
-    restaurant: 'Restaurante', 'brazilian restaurant': 'Restaurante brasileiro',
-    'argentinian restaurant': 'Restaurante argentino', 'italian restaurant': 'Restaurante italiano',
-    'seafood restaurant': 'Frutos do mar', 'barbecue restaurant': 'Churrascaria',
-    'hamburger restaurant': 'Hamburgueria', 'vegetarian restaurant': 'Restaurante vegetariano',
-    'vegan restaurant': 'Restaurante vegano', 'pizza restaurant': 'Pizzaria',
-    'fine dining restaurant': 'Alta gastronomia', 'fast food restaurant': 'Fast-food',
-    'japanese restaurant': 'Restaurante japonês', 'mexican restaurant': 'Restaurante mexicano',
-    'buffet restaurant': 'Bufê', 'breakfast restaurant': 'Café da manhã',
-    bakery: 'Padaria', cafe: 'Café', cafeteria: 'Cafeteria', 'coffee shop': 'Cafeteria',
-    bar: 'Bar', pub: 'Pub', bistro: 'Bistrô', brewery: 'Cervejaria', 'beer hall': 'Cervejaria',
-    confectionery: 'Confeitaria', 'ice cream shop': 'Sorveteria', 'dessert shop': 'Sobremesas',
-    steakhouse: 'Churrascaria', 'steak house': 'Churrascaria', pizzeria: 'Pizzaria',
-    'chicken restaurant': 'Restaurante de frango', 'chinese restaurant': 'Restaurante chinês',
-    'cocktail bar': 'Bar de coquetéis', 'espresso bar': 'Cafeteria',
-    'german restaurant': 'Restaurante alemão', 'hawker stall': 'Comida de rua',
-    'health food restaurant': 'Alimentação saudável', 'irish pub': 'Pub',
-    'live music bar': 'Bar com música', 'meat dish restaurant': 'Restaurante de carnes',
-    'mediterranean restaurant': 'Restaurante mediterrâneo', 'portuguese restaurant': 'Restaurante português',
-    'snack bar': 'Lanchonete', store: 'Foodservice em mercado',
-    'shopping mall': 'Foodservice em shopping'
-  };
-  if (traducoes[chave]) return traducoes[chave];
-  return chave ? chave.charAt(0).toUpperCase() + chave.slice(1) : 'Categoria não informada';
-}
-
 function prospeccaoRotuloFonte(valor) {
   const rotulos = { outscraper: 'Outscraper', google_places: 'Google Places', tripadvisor: 'Tripadvisor', ifood: 'iFood', manual: 'Manual', mapa: 'OSM' };
   return String(valor || '').split('+').map(fonte => {
@@ -26168,11 +26277,19 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
     const acaoExec = !souExecProsp ? `<span class="prospeccao-col-source" style="text-align:right;font-size:10.5px;color:var(--muted2);">${esc(prospeccaoRotuloFonte(l.fonte))}</span>`
       : !prospeccaoAtiva(l) ? '<span class="prospeccao-col-source" style="text-align:right;color:var(--muted2);">—</span>'
       : `<span class="prospeccao-col-source" style="text-align:right;display:inline-flex;gap:6px;align-items:center;"><button type="button" class="prospeccao-rota-quick ${naRotaHoje ? 'is-added' : ''}" data-rota-quick="${l.id}">${naRotaHoje ? 'Na rota ✓' : '+ Rota'}</button><button type="button" class="prospeccao-negocio-quick" data-negocio-quick="${l.id}" title="Cria o negócio já na etapa Prospecção do HubSpot">→ Prospecção</button><button type="button" class="prospeccao-limpar-quick" data-semfit-quick="${l.id}" title="Marcar como sem fit e tirar da minha fila (pode ter entrado errado na lista)">🧹</button></span>`;
+    const sinal = prospeccaoSinalPrincipal(l);
     return `<div class="prospeccao-table-grid prospeccao-linha ${souExecProsp ? 'is-rep' : ''} ${destaqueImpacto ? 'is-top-impact' : ''}" data-lead="${l.id}" style="padding:11px 22px;font-size:12.5px;border-bottom:1px solid var(--line-soft);cursor:pointer;font-variant-numeric:tabular-nums;">
       ${souGestorProsp ? `<span class="prospeccao-col-check">${podeSelecionar ? `<input type="checkbox" class="prospeccao-sel" data-lead="${l.id}" ${prospeccaoSelecao.has(l.id) ? 'checked' : ''} aria-label="Selecionar ${esc(l.nome)} pro lote" style="width:16px;height:16px;cursor:pointer;" onclick="event.stopPropagation();">` : ''}</span>` : ''}
-      <span class="prospeccao-col-name"><b>${esc(l.nome)}${destaqueImpacto ? `<span class="prospeccao-rank">TOP ${posicaoImpacto}</span>` : ''}</b>${!l.telefone ? ' <span style="background:var(--amber-soft);color:var(--amber);border-radius:999px;padding:1px 7px;font-size:9.5px;font-weight:700;">sem telefone</span>' : ''}<small class="prospeccao-mobile-meta" style="color:var(--muted2);margin-top:3px;">${esc(prospeccaoRotuloCategoria(l.categoria))} · ${esc(statusLabel)}${souExecProsp ? ' · ' + esc(prospeccaoRotuloFonte(l.fonte)) : ''}</small></span>
+      <span class="prospeccao-col-name"><b>${esc(l.nome)}${destaqueImpacto ? `<span class="prospeccao-rank">TOP ${posicaoImpacto}</span>` : ''}</b><!-- A etiqueta antiga dizia só "sem telefone" — informação morta, e o executivo
+           não tinha como saber que existe conserto. Quando a conta tem CNPJ, o drawer
+           JÁ tem o botão "buscar telefone e sócio", que consulta a Casa dos Dados (1
+           crédito), preenche e grava de volta no Supabase pra não gastar de novo. A
+           etiqueta agora aponta pra esse caminho em vez de anunciar a falta. -->
+      ${!l.telefone ? (l.cnpj
+        ? ' <span style="background:var(--panel2);color:var(--muted);border:1px solid var(--line-btn);border-radius:999px;padding:1px 7px;font-size:9.5px;font-weight:700;" title="Abra a conta: dá pra buscar telefone e sócio pelo CNPJ na Casa dos Dados">telefone pelo CNPJ</span>'
+        : ' <span style="background:var(--amber-soft);color:var(--amber-ink);border-radius:999px;padding:1px 7px;font-size:9.5px;font-weight:700;">sem telefone</span>') : ''}<small class="prospeccao-mobile-meta" style="color:var(--muted2);margin-top:3px;">${esc(prospeccaoRotuloCategoria(l.categoria, l.nome))} · ${esc(statusLabel)}${souExecProsp ? ' · ' + esc(prospeccaoRotuloFonte(l.fonte)) : ''}</small></span>
       <span class="prospeccao-col-place">${esc(prospeccaoPraca(l))}</span>
-      <span class="prospeccao-col-reviews prospeccao-impacto" style="text-align:right;color:var(--ink);"><b>${l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') : '—'}</b><small>avaliações</small><span class="prospeccao-impact-track"><i style="width:${pctImpacto}%;"></i></span></span>
+      <span class="prospeccao-col-reviews prospeccao-impacto${sinal.tipo === 'abertura' ? ' is-abertura' : ''}${sinal.recente ? ' is-recente' : ''}" style="text-align:right;color:var(--ink);"><b>${esc(sinal.valor)}</b><small>${esc(sinal.rotulo)}</small><span class="prospeccao-impact-track"><i style="width:${sinal.tipo === 'avaliacoes' ? pctImpacto : 0}%;"></i></span></span>
       <span class="prospeccao-col-owner">${sessaoAtual.role === 'rep' ? esc(statusLabel) : esc(nomeResp)}</span>
       ${acaoExec}
     </div>`;
