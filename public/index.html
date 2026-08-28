@@ -22035,9 +22035,21 @@ function buildBriefingExecutivoHTML(r) {
   }
   if (ctx.fresco.falhaMinha) {
     impedimentos.push({ texto: 'A última rodada do robô falhou numa escrita sua', quem: 'não é você: o número na tela pode estar atrás do que já foi feito' });
-  } else if (ctx.fresco.velho) {
-    impedimentos.push({ texto: ctx.fresco.rotulo, quem: 'carga atrasada — confira no HubSpot antes de tirar conclusão' });
   }
+  /* "HubSpot atualizado há 12h23min · carga atrasada" SAIU DAQUI (28/08/26).
+
+     Este bloco se chama "O que travou — leve pro gestor": tudo que entra nele o
+     executivo vai LER EM VOZ ALTA no 1:1. Atraso de carga do robô não é impedimento
+     dele, não é assunto de coaching e não tem gesto que ele possa fazer a respeito —
+     era encanamento do sistema ocupando uma das quatro linhas da pauta, e a lista de
+     4 pontos virava a segunda coisa mais pesada da tela por causa disso.
+
+     `ctx.fresco.falhaMinha` FICA (logo acima): aquele diz "não é você, seu número
+     pode estar atrás do que já foi feito" — é exatamente o tipo de coisa que ele
+     precisa poder levantar antes de ser cobrado por um número velho.
+
+     A frescura do dado continua visível: o cabeçalho do app mostra o horário da
+     última sincronização em toda tela (ver o rótulo montado por ctx.fresco). */
   const travadosGraves = (ctx.travados || []).filter(l => (l.slaRatio || 0) >= 200);
   if (travadosGraves.length > 0) {
     impedimentos.push({ texto: `${travadosGraves.length} negócio(s) acima de 2x o SLA da etapa`, quem: 'decidir avançar, reciclar com data ou perder com motivo — vale levar pro 1:1' });
@@ -22053,14 +22065,51 @@ function buildBriefingExecutivoHTML(r) {
       <!-- Sem hero próprio: o banner escuro da página já carrega a pergunta e os KPIs
            comprovados (ver briefingBanner em renderDaily). Dois heros escuros na mesma
            tela quebrariam a regra de "1 bloco escuro por tela". -->
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:14px;flex-wrap:wrap;padding:16px 20px 0;">
-        <b style="font:800 15px/1.3 'Poppins',sans-serif;">${esc(r.name.split(' ')[0])}, seu dia em cinco leituras</b>
-        <span style="font-size:11px;color:var(--muted2);">${fila.negociosAfetados} negócio${fila.negociosAfetados === 1 ? '' : 's'} pedindo ação · nada para preencher</span>
-      </div>
+      <!-- O CABEÇALHO "seu dia em cinco leituras" SAIU (28/08/26).
+           Dois motivos, os dois verificados na tela:
+
+           (a) Era o TERCEIRO título seguido. O executivo abria a aba e passava por
+               hero preto ("Briefing das 9h · 28/08"), barra de navegação de dia
+               ("28/08 (sexta) · hoje") e este ("Bruno, seu dia em cinco leituras")
+               antes de chegar em "Hoje — o que você promete?", que é a única coisa
+               que ele precisa fazer às 9h. Três cabeçalhos custando uma dobra.
+
+           (b) O número não fechava. Restaram QUATRO blocos depois das remoções desta
+               semana (compromisso, ontem, o que travou, fase e ciclo) — a tela
+               prometia cinco leituras e entregava quatro. Contagem escrita à mão em
+               copy é dívida: some um bloco e a frase mente calada.
+
+           As duas metades dela foram pra onde pertencem, sem perda: a contagem da
+           fila virou o número "pedindo ação" no hero, e "nada para preencher" já é
+           dito dentro do próprio bloco da promessa ("você não digita nada"). -->
 
       <div class="daily-promise-body">
 
-        ${buildCompromissoDoDiaHTML(r)}
+        <!-- A PROMESSA SÓ APARECE QUANDO ELE ESTÁ VENDO HOJE (28/08/26).
+
+             Achado navegando: com a barra de dia útil eu voltei pra 27/08 e o bloco
+             continuou dizendo "Hoje — o que você promete?", com a lista de clientes e
+             o botão Confirmar ativos, dentro de uma página cujo hero dizia "Briefing
+             das 9h · 27/08 (QUINTA)".
+
+             Não era só texto errado. A função que monta este bloco trabalha sempre na
+             data de hoje do relógio — o plano que ele confirmaria ali seria o de HOJE,
+             qualquer que fosse o dia na tela. Alguém revisando a semana e clicando
+             Confirmar sobrescreveria o plano do dia corrente achando que estava
+             mexendo no passado. Promessa é sobre o dia que ainda vai acontecer;
+             passado tem evidência, não compromisso.
+
+             Fora de hoje o bloco dá lugar a uma linha com o caminho de volta. O resto
+             do briefing (ontem, o que travou, fase e ciclo) continua igual, porque
+             esses três já se derivam da data em foco e são justamente o que faz
+             sentido olhar num dia anterior. -->
+        ${(dailyRefDate === isoDate(new Date()))
+          ? buildCompromissoDoDiaHTML(r)
+          : `<div class="briefing-bloco">
+              <div class="briefing-head"><b>Promessa do dia</b><span>só em hoje</span></div>
+              <div class="briefing-vazio">Você está vendo <b>${esc(fmtDailyLabel(dailyRefDate))}</b>, e promessa é sobre dia que ainda vai acontecer — aqui embaixo fica a evidência do que já foi. Para fechar o plano de hoje, volte com o botão <b>hoje</b>.
+                <button type="button" class="briefing-cta" id="briefingVoltarHoje">Ir para hoje →</button></div>
+            </div>`}
 
         <!-- ONTEM, EM UM BLOCO SÓ (28/08/26). Eram dois adjacentes — "o que ficou
              provado" (314px) e "prometido × realizado" (117px) — cada um contando
@@ -22123,23 +22172,33 @@ function buildBriefingExecutivoHTML(r) {
                      <span class="is-green">o foco é aprender o processo, não bater número</span>
                    </div>`
                 : `<div class="briefing-vazio">Fase de rampagem não definida no seu cadastro — sem ela, o Cockpit não tem alvo justo para comparar. Peça ao gestor para definir.</div>`}
-        </div>
 
-        <!-- VAZAMENTO DO CICLO (28/08/26). Aparece SÓ quando há visita avaliada e
-             alguma não fechou. Dizer "1 de 7" é cobrança; dizer QUAL gesto faltou é
-             ofício — e os dois gestos que faltam aqui são os únicos que o executivo
-             controla sozinho, sem depender do cliente responder. -->
-        ${(ciclo.avaliados > 0 && ciclo.fechados.length < ciclo.avaliados) ? `
-        <div style="margin-top:2px;background:var(--amber-soft);border-left:3px solid var(--amber);border-radius:0 11px 11px 0;padding:10px 13px;font-size:11.5px;color:var(--amber-ink);line-height:1.55;">
-          <b>Ciclo aberto em ${ciclo.avaliados - ciclo.fechados.length} de ${ciclo.avaliados} visitas desta semana.</b>
+          <!-- VAZAMENTO DO CICLO — aparece SÓ quando há visita avaliada e alguma não
+               fechou. Dizer "1 de 7" é cobrança; dizer QUAL gesto faltou é ofício, e
+               os dois que faltam aqui são os únicos que o executivo controla sozinho,
+               sem depender de o cliente responder.
+
+               ENTROU PARA DENTRO DESTE BLOCO (28/08/26). Era uma tarja solta depois do
+               fechamento do bloco, sem título nenhum, e o ciclo terminava dito TRÊS VEZES
+               vocabulários na mesma dobra: "Ciclo aberto em 14 de 14" (a tarja),
+               "0/14 ciclo fechado" (rodapé) e "faltaram 6 para o alvo da fase" (a
+               linha acima). Parecia três problemas diferentes; é um.
+
+               Agora mora no bloco cujo título já o nomeia ("Sua fase e o ciclo da
+               semana") e fala na MESMA direção do rodapé — "fechado em X de Y", não
+               "aberto em Y-X de Y". Mesmo dado, uma voz só. -->
+          ${(ciclo.avaliados > 0 && ciclo.fechados.length < ciclo.avaliados) ? `
+          <div style="margin-top:9px;background:var(--amber-soft);border-left:3px solid var(--amber);border-radius:0 11px 11px 0;padding:10px 13px;font-size:11.5px;color:var(--amber-ink);line-height:1.55;">
+            <b>Ciclo fechado em ${ciclo.fechados.length} de ${ciclo.avaliados} visitas desta semana.</b>
           ${(ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) > 0
             ? ` Sem sistema e dor registrados: ${esc((ciclo.faltaAmbos.concat(ciclo.faltaQualificacao)).slice(0, 3).join(', '))}${(ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) > 3 ? ' e mais ' + ((ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) - 3) : ''}.`
             : ''}
           ${(ciclo.faltaAmbos.length + ciclo.faltaPasso.length) > 0
             ? ` Sem próximo passo datado: ${esc((ciclo.faltaAmbos.concat(ciclo.faltaPasso)).slice(0, 3).join(', '))}${(ciclo.faltaAmbos.length + ciclo.faltaPasso.length) > 3 ? ' e mais ' + ((ciclo.faltaAmbos.length + ciclo.faltaPasso.length) - 3) : ''}.`
             : ''}
-          ${ciclo.semDeal > 0 ? ` <span style="opacity:.75;">(${ciclo.semDeal} visita(s) sem negócio associado ficaram fora da conta.)</span>` : ''}
-        </div>` : ''}
+            ${ciclo.semDeal > 0 ? ` <span style="opacity:.75;">(${ciclo.semDeal} visita(s) sem negócio associado ficaram fora da conta.)</span>` : ''}
+          </div>` : ''}
+        </div>
 
       </div>
 
@@ -23299,7 +23358,14 @@ async function renderDaily() {
     const at = atividadesComprovadasNoDia(meu.ownerId, ontemBanner);
     const seqExecBanner = sequenciaDeExecucao(meu.ownerId, dailyRefDate);
     const hojeAt = atividadesComprovadasNoDia(meu.ownerId, dailyRefDate);
-    return { at, seqExecBanner, hojeAt, ontemBanner };
+    /* A SEQUÊNCIA SAIU DO HERO (28/08/26). Ela aparecia aqui como "🔥 0d seguidos na
+       rua" E no rodapé do briefing como "🔥 0d na rua" — o mesmo número, duas vezes,
+       na mesma tela. Regra que passa a valer nesta aba: o HERO responde às perguntas
+       das 9h (o que fechou ontem, o que tem hoje, quanto está pedindo ação, o que
+       fechou no dia) e o RODAPÉ é o placar (pontos, sequência, ciclo, conquistas).
+       `seqExecBanner` continua calculada porque o rodapé a usa. */
+    const pedindoAcao = filaDeFollowUp(meu.ownerId).negociosAfetados;
+    return { at, seqExecBanner, hojeAt, ontemBanner, pedindoAcao };
   })();
 
   const bannerDaily = souRepDaily && briefingBanner ? `
@@ -23312,7 +23378,7 @@ async function renderDaily() {
       <div style="display:flex;gap:26px;font-variant-numeric:tabular-nums;">
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${briefingBanner.at.visitas.length + briefingBanner.at.reunioes.length}</div><div style="font-size:11px;color:var(--dark-mut);">comprovadas ${fmtDailyLabel(briefingBanner.ontemBanner)}</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${briefingBanner.hojeAt.total}</div><div style="font-size:11px;color:var(--dark-mut);">compromissos hoje</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:${briefingBanner.seqExecBanner > 0 ? '#E0A64A' : 'var(--dark-mut)'};">🔥 ${briefingBanner.seqExecBanner}d</div><div style="font-size:11px;color:var(--dark-mut);">seguidos na rua</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:24px;color:${briefingBanner.pedindoAcao > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${briefingBanner.pedindoAcao}</div><div style="font-size:11px;color:var(--dark-mut);">pedindo ação</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeMeu}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
       </div>
     </div>` : souRepDaily ? `
@@ -23409,18 +23475,43 @@ async function renderDaily() {
   // acima até da navegação de dia. Mesmo conteúdo/derivação, só a posição mudou.
   const slotsMigradosDaily = souRepDaily ? '' : '<div id="dailySlotDecisoes"></div>';
 
-  let html = `
-    ${bannerDaily}
-    ${ritualGestorDaily}
-    ${alertaSyncDaily}
-    <div class="daily-header">
+  /* A BARRA DE DATAS SAIU DO CAMINHO DA AÇÃO (28/08/26) — só pro executivo.
+
+     Ela estava entre o hero e a promessa do dia: pra chegar em "Hoje — o que você
+     promete?" ele passava por um seletor de OUTROS dias. Isso inverte a prioridade
+     da tela. Olhar outro dia útil é necessidade secundária às 9h; o normal é abrir,
+     ver a fila que já vem montada e confirmar.
+
+     Quando ele está em OUTRO dia, porém, a barra volta pro topo — aí ela é a saída,
+     e esconder a saída de quem está fora de hoje seria pior que o problema original.
+     Nesse caso vem com um aviso de que não é hoje, porque o hero segue dizendo
+     "Briefing das 9h · <a data que ele escolheu>" e sem o aviso dá pra confundir.
+
+     O GESTOR NÃO MUDA: ele caminha pelos dias durante a reunião das 9h, a barra é
+     ferramenta de trabalho dele e continua no topo, igual. */
+  // `ehHojeDaily` já vem declarada acima, junto de fechadosHojeTotal.
+  const navBotoesDaily = `
       <div class="daily-date-nav">
         <button id="dailyPrev">← dia útil anterior</button>
         <span class="date-label">${fmtDailyLabel(dailyRefDate)}</span>
         <button id="dailyNext">próximo dia útil →</button>
         <button id="dailyToday">hoje</button>
-      </div>
-    </div>
+      </div>`;
+  const navNoTopo = (!souRepDaily || !ehHojeDaily) ? `
+    <div class="daily-header">
+      ${(souRepDaily && !ehHojeDaily) ? `<span style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--amber-ink);background:var(--amber-soft);border-radius:999px;padding:4px 11px;">Você não está vendo hoje</span>` : ''}
+      ${navBotoesDaily}
+    </div>` : '';
+  const navNoPe = (souRepDaily && ehHojeDaily) ? `
+    <div class="daily-header" style="justify-content:flex-end;margin:18px 0 0;opacity:.72;">
+      ${navBotoesDaily}
+    </div>` : '';
+
+  let html = `
+    ${bannerDaily}
+    ${ritualGestorDaily}
+    ${alertaSyncDaily}
+    ${navNoTopo}
   `;
 
   // A Daily do executivo agora é um único quadro de compromisso. A promessa, o realizado,
@@ -23964,6 +24055,7 @@ async function renderDaily() {
   // Escopo 13 — bloco ADITIVO e RECOLHIDO, só pro gestor. Ver a nota longa em
   // buildIndicadoresGestorHTML(): nada do que ele já usa muda de lugar ou de forma.
   if (!souRepDaily) html += buildIndicadoresGestorHTML();
+  html += navNoPe;   // vazio pro gestor e pro executivo fora de hoje — ver navNoTopo
 
   el.innerHTML = html;
 
@@ -23977,6 +24069,13 @@ async function renderDaily() {
   if (!souRepDaily) wireIndicadoresGestor(el);
   // Briefing do executivo: três botões de navegação, nenhum estado (27/08/26).
   if (souRepDaily) wireBriefingExecutivo(el);
+  // Atalho do bloco que substitui a promessa fora de hoje: mesmo caminho do #dailyToday,
+  // sem duplicar a lógica de data (ver o comentário longo em buildBriefingExecutivoHTML).
+  const voltarHoje = el.querySelector('#briefingVoltarHoje');
+  if (voltarHoje) voltarHoje.addEventListener('click', () => {
+    const b = document.getElementById('dailyToday');
+    if (b) b.click();
+  });
   if (souRepDaily) { const meuRep = DATA.reps.find(x => String(x.ownerId) === String(sessaoAtual.ownerId)); if (meuRep) wireCompromissoDoDia(el, meuRep); }
 
   // ---- Modo TV (handoff "Daily & Ritmo", Seção 3) — pra projetar na reunião das 9h.
