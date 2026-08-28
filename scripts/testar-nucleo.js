@@ -43,10 +43,25 @@ const codigoNucleo = recortar('/* @nucleo:inicio', '/* @nucleo:fim */')
 // Entorno mínimo. Cada stub reproduz o CONTRATO da função real do template,
 // não o comportamento inteiro dela — o que o núcleo consome está aqui.
 // ---------------------------------------------------------------------------
-// HOJE = agora de verdade. O núcleo usa Date.now() (é assim que ele roda em
-// produção); congelar o relógio do teste num instante diferente criava um falso
-// negativo no frescor de dados — foi exatamente o que aconteceu na 1ª rodada.
-const HOJE = new Date();
+/* RELÓGIO FIXO (corrigido 28/08/26, à 00:02 UTC, com 5 testes vermelhos na mão).
+   A 1ª versão usava `HOJE = new Date()` — agora de verdade — porque o núcleo chama
+   Date.now() e congelar o relógio do teste num instante DIFERENTE do dele dava falso
+   negativo no frescor de dados. A correção estava certa pela metade: os fixtures
+   posicionam evento "de hoje" em `HOJE - N horas`, e depois da meia-noite UTC isso cai
+   no dia ANTERIOR. Rodando às 00:02, cinco testes acusaram "nenhuma parada montada
+   para hoje" e "veio 0" — não havia regressão nenhuma no código, era a suíte.
+
+   Solução: fixar o relógio DOS DOIS LADOS. AGORA é meio-dia UTC do dia corrente (longe
+   de qualquer borda de meia-noite), e o `Date` injetado no sandbox tem `now()` e
+   `new Date()` sem argumentos devolvendo esse mesmo instante. Assim o teste e o núcleo
+   concordam sobre "agora", e o resultado não depende da hora em que a suíte roda. */
+const _real = new Date();
+const AGORA_MS = Date.UTC(_real.getUTCFullYear(), _real.getUTCMonth(), _real.getUTCDate(), 12, 0, 0);
+class DataFixa extends Date {
+  constructor(...a) { if (a.length === 0) super(AGORA_MS); else super(...a); }
+  static now() { return AGORA_MS; }
+}
+const HOJE = new Date(AGORA_MS);
 const DIA = 86400000;
 function iso(d) { return new Date(d).toISOString().slice(0, 10); }
 function diasAtras(n) { return new Date(HOJE.getTime() - n * DIA); }
@@ -59,7 +74,10 @@ function novoContexto(DATA, sessao) {
     DATA,
     sessaoAtual: sessao,
     console,
-    Date, Math, JSON, Object, Array, Number, String, Boolean, Set, Map, isNaN, parseInt, parseFloat,
+    // Date FIXO: o núcleo chama Date.now() e new Date() lá dentro; os dois têm que
+    // devolver o mesmo instante que os fixtures usaram (ver RELÓGIO FIXO acima).
+    Date: DataFixa,
+    Math, JSON, Object, Array, Number, String, Boolean, Set, Map, isNaN, parseInt, parseFloat,
     esc: v => String(v == null ? '' : v),
     isoDate: d => iso(d || HOJE),
     addDays: (isoStr, n) => iso(new Date(isoStr + 'T12:00:00Z').getTime() + n * DIA),
