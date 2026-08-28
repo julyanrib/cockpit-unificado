@@ -1615,6 +1615,13 @@
     .gate-linha > span:first-child{flex-basis:100%;}
     .gate-cta{margin-left:auto;}
     .acao-agora-item > div{min-width:0;}
+  /* Canais diretos na linha da ação (28/08/26) — ver telefoneDaAcao. Verde do
+     WhatsApp é a cor da marca dele, que o executivo reconhece sem ler. */
+  .acao-canais{flex:none;display:inline-flex;gap:6px;}
+  .acao-canal{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border:1px solid var(--line-btn);border-radius:999px;background:var(--panel);color:var(--ink);font-size:10px;font-weight:800;text-decoration:none;white-space:nowrap;}
+  .acao-canal:hover{border-color:var(--ink);}
+  .acao-canal.is-whats{border-color:#16a085;color:#0f7a68;}
+  .acao-canal.is-whats:hover{background:rgba(22,160,133,.10);}
     /* CORREÇÃO (20/08/26, achado na revisão mobile) — .rep-tag tem largura fixa
        (~76px) e não encolhe; num container flex apertado (a 1ª coluna da tabela de
        executivos fica com só ~148px em mobile), ela "roubava" quase todo o espaço
@@ -6090,6 +6097,43 @@ function ctaDoDia(diag) {
    HubSpot passar a ter a evidência (tarefa criada, desfecho registrado).
    --------------------------------------------------------------------------- */
 
+/* ============================================================================
+   TELEFONE DA AÇÃO (28/08/26)
+   ----------------------------------------------------------------------------
+   POR QUE ISTO EXISTE. Medido na tela do Marco em produção: a lista "O que eu faço
+   agora" dizia "Ligar para Don Aguilar" e "Mandar WhatsApp para Adega 12", e o único
+   botão de cada item era "Abrir e datar". A tela mandava ligar e não dava como ligar.
+
+   E o telefone existe: 19 dos 20 negócios dele (95%) têm celular gravado — vem do
+   registro que o próprio executivo faz na visita e no HubSpot. Os links tel: e wa.me
+   também já existiam no produto (ctasDoItemDaFila), mas medindo a página: 11 links de
+   cada, ZERO visíveis, todos dentro de <details> fechados.
+
+   Ou seja, não faltava dado nem código — faltava o botão estar onde a ordem é dada.
+   Para quem tem seis visitas para fazer, ligar precisa ser um toque, não dois cliques
+   e uma busca.
+
+   O campo do negócio é `celular`; a conta de prospecção usa `telefone`. Aceita os
+   dois porque a mesma ação pode nascer dos dois lados. Sem 10 dígitos devolve null e
+   o botão simplesmente não aparece — prometer ligação sem número seria pior que nada.
+   ============================================================================ */
+function telefoneDaAcao(lead, nomeFallback) {
+  const cru = String((lead && (lead.celular || lead.telefone)) || '').replace(/\D/g, '');
+  if (cru.length >= 10) return cru.length <= 11 ? '55' + cru : cru;
+  /* Sem o negócio em mão (caso do desfecho, que nasce de um evento da agenda), tenta
+     achar o telefone pelo NOME do cliente no funil — mesma normalização que o resto
+     da tela usa para casar nome vindo de fontes diferentes. */
+  if (!nomeFallback) return null;
+  const chave = prospeccaoNormalizarTexto(String(nomeFallback));
+  if (!chave) return null;
+  const achado = Object.values(DATA.funilLeads || {}).flat()
+    .find(l => l && prospeccaoNormalizarTexto(String(l.name || '')) === chave
+      && String(l.celular || '').replace(/\D/g, '').length >= 10);
+  if (!achado) return null;
+  const t = String(achado.celular).replace(/\D/g, '');
+  return t.length <= 11 ? '55' + t : t;
+}
+
 function acoesDeAgora(r, diag) {
   const d = diag || gatesDoDia(r);
   const fila = d.fila;
@@ -6118,6 +6162,8 @@ function acoesDeAgora(r, diag) {
       toque: null,
       ultimaInteracao: agendaHhmm(e.inicio) + ' de hoje',
       ctaLabel: 'Registrar desfecho',
+      /* O TELEFONE VIAJA COM A AÇÃO (28/08/26) — ver a nota longa em telefoneDaAcao. */
+      tel: telefoneDaAcao(e.dealId ? buscarLeadFunilPorId(e.dealId) : null, e.cliente),
       acao: () => abrirRegistroDeDesfechoPorNome(e.cliente, e)
     });
   });
@@ -6169,6 +6215,7 @@ function acoesDeAgora(r, diag) {
         : diasSemToque === 0 ? 'último toque hoje'
         : `último toque há ${diasSemToque}d${st.toques.ultimoCanal ? ' · ' + (TP_CANAIS[st.toques.ultimoCanal] || TP_CANAIS.outro).curto : ''}`,
       ctaLabel: cad && cad.proximo && canalInfo.presencial ? 'Agendar' : 'Abrir e datar',
+      tel: telefoneDaAcao(lead, lead && lead.name),
       acao: () => abrirFichaLeadFunilDrawer(buscarLeadFunilPorId(lead.id) || lead, null, 'passo'),
       leadId: lead.id
     });
@@ -6996,6 +7043,13 @@ function buildAcoesDeAgoraHTML(r, diag) {
                   <b style="flex:1;min-width:140px;font-size:12.5px;color:var(--ink);line-height:1.4;">${esc(a.verbo)} ${esc(a.cliente)}</b>
                   ${a.toque ? `<span class="mono" style="flex:none;font-size:9.5px;font-weight:800;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 6px;" title="Contado sobre o que o HubSpot devolve hoje — é um piso, não um total">${a.toque.parcial ? '≥' : ''}${a.toque.n}º toque</span>` : ''}
                   <span style="flex:none;font-size:10px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:999px;padding:3px 8px;">${esc(a.prazo)}</span>
+                  <!-- LIGAR E WHATSAPP ONDE A ORDEM É DADA (28/08/26) — ver a nota longa
+                       em telefoneDaAcao. Ficam ao lado do prazo, na primeira linha, sem
+                       precisar expandir nada. Só aparecem com telefone de verdade. -->
+                  ${a.tel ? `<span class="acao-canais">
+                    <a class="acao-canal" href="tel:+${a.tel}" title="Ligar para ${esc(a.cliente)} — ${a.tel}" onclick="event.stopPropagation()">Ligar</a>
+                    <a class="acao-canal is-whats" href="https://wa.me/${a.tel}" target="_blank" rel="noopener" title="Abrir WhatsApp de ${esc(a.cliente)}" onclick="event.stopPropagation()">WhatsApp</a>
+                  </span>` : ''}
                 </div>
                 <div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5;">${esc(a.motivo)}</div>
                 <div style="display:flex;gap:9px;align-items:center;justify-content:space-between;margin-top:9px;flex-wrap:wrap;">
