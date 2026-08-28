@@ -329,6 +329,49 @@ async function main() {
     fs.mkdirSync('artifacts', { recursive: true });
     fs.writeFileSync('artifacts/leads-casa-dos-dados.json', JSON.stringify(saida, null, 2));
     console.log(`[backfill-casa-dos-dados] ${todosOsLeads.length} conta(s) gravadas em artifacts/leads-casa-dos-dados.json — baixe o artifact desta execução e cole o conteúdo no modal "Importar contas" (aba colar/anexar JSON) do Cockpit.`);
+
+    /* MODO MANUAL PASSA A FALHAR A EXECUÇÃO (28/08/26).
+       O fallback foi escrito em 16/08 como ponte temporária: "assim que o IMPORT_SECRET
+       entrar em vigor na Vercel, este script volta a importar sozinho". Passaram 12 dias
+       e ninguém configurou — e o Action fechava em VERDE toda semana, porque tinha
+       encontrado as contas e gravado o artefato.
+
+       O que isso produziu, medido: a rodada de 24/08 encontrou 400+ contas no Rio, 39 em
+       Vila Velha, 38 em Vitória, com todas as cotas por executivo batidas — e o banco
+       registra ZERO linhas criadas nos últimos 7 dias. Ninguém baixa artefato. A fila de
+       Prospecção ficou congelada desde 16/08, e o Julyan chegou a dizer "nem eu e os
+       executivos estamos usando" — não havia nada novo para usar.
+
+       Verde escondendo no-op é pior que vermelho: vermelho é visto. O artefato continua
+       sendo publicado (a etapa de upload usa `if: always()`), então nada se perde — só o
+       resultado da execução passa a dizer a verdade.
+
+       Sai daqui sozinho no momento em que o IMPORT_SECRET existir nos dois lados. */
+    const aviso = `${todosOsLeads.length} contas-alvo encontradas e NENHUMA importada: IMPORT_SECRET não está configurado.`;
+    console.log(`::warning title=Prospecção não foi atualizada::${aviso}`);
+    if (process.env.GITHUB_STEP_SUMMARY) {
+      try {
+        fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+          '## ⚠️ A fila de Prospecção NÃO foi atualizada',
+          '',
+          `Encontradas **${todosOsLeads.length} contas-alvo**. Importadas: **0**.`,
+          '',
+          'O script não tem `IMPORT_SECRET`, então não pode chamar `api/importar-leads.js`',
+          'e caiu no modo manual — gravou o JSON como artefato desta execução.',
+          '',
+          '**Para voltar a importar sozinho, os dois lados precisam do mesmo segredo:**',
+          '',
+          '1. GitHub → Settings → Secrets and variables → Actions → `IMPORT_SECRET`',
+          '2. Vercel → Settings → Environment Variables → `IMPORT_SECRET` (e redeploy)',
+          '',
+          'Enquanto isso, dá pra importar à mão: baixe o artefato `leads-casa-dos-dados`',
+          'e cole o conteúdo no modal "Importar contas" do Cockpit (aba colar/anexar JSON).',
+          ''
+        ].join('\n'));
+      } catch (e) { /* resumo é bônus; não pode derrubar o relatório */ }
+    }
+    console.log('[backfill-casa-dos-dados] Encerrando com falha DE PROPÓSITO: a execução não cumpriu o que existe pra fazer.');
+    process.exit(1);
   } else {
     console.log(`[backfill-casa-dos-dados] Total: ${totalInseridos} contas novas, ${totalDuplicados} já existentes (mescladas).`);
   }
