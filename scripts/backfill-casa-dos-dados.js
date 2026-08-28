@@ -271,6 +271,9 @@ async function importarLote(leadsCidade, importSecret) {
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     console.log('[backfill-casa-dos-dados] Importação recusada:', data.erro || resp.status);
+    // Repassa o diagnóstico do endpoint (presença/tamanho/trim do segredo — nunca o
+    // valor). Sem isto, "recusado" não distingue variável ausente de valor diferente.
+    if (data.diagnosticoSegredo) console.log('[backfill-casa-dos-dados] Diagnóstico do segredo:', JSON.stringify(data.diagnosticoSegredo));
     return { inseridos: 0, duplicados: 0, erro: data.erro || String(resp.status) };
   }
   return data;
