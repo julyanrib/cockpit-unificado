@@ -1295,6 +1295,40 @@ teste('gravar espelha no DATA local e a cobrança para na mesma sessão', () => 
   igual(depois.nome_do_sistema, 'Saipos', 'o valor gravado está no DATA');
 });
 
+teste('nomes da promessa: o travessao separa, o hifen do nome sobrevive', () => {
+  // A linha do gestor na matinal mostra os nomes que o executivo prometeu. O separador
+  // gravado por wireCompromissoDoDia e TRAVESSAO cercado de espacos; nome de
+  // restaurante usa hifen a vontade. Os dois primeiros casos sao texto REAL gravado
+  // em planos_diarios em 28/08 (Wericles e Kelly, plano fechado as 08:36 e 08:40).
+  const c = novoContexto(dados(), { ownerId: OWNER, role: 'manager' });
+  const f = c.nomesDaPromessaDoPlano;
+
+  igual(f(['Confraria Da Carne - Steaks — Visitas sem proximo passo · Mandar prova de valor']),
+    ['Confraria Da Carne - Steaks'], 'hifen dentro do nome nao corta');
+  igual(f(['O Artesao - Pizzas frescas — Visitas sem proximo passo · Ligar pedindo o decisor']),
+    ['O Artesao - Pizzas frescas'], 'segundo caso real, mesmo formato');
+  igual(f(['Vino! — Confirmar participantes e quem decide']), ['Vino!'], 'pontuacao no fim do nome');
+
+  // O motivo contem ' · '; dividir por ele cortaria em lugar pior. Fica explicito.
+  igual(f(['Bar · Grill — Quentes sem tarefa · Confirmar cobranca']), ['Bar · Grill'],
+    'ponto-medio no nome nao e separador');
+
+  // Travessao no proprio nome: o PRIMEIRO separa, o resto e motivo.
+  igual(f(['Casa — Velha — motivo aqui']), ['Casa'], 'divide no primeiro travessao');
+
+  // Sem motivo nenhum (plano antigo, texto livre) o nome inteiro passa.
+  igual(f(['Padaria Central']), ['Padaria Central'], 'item sem separador passa inteiro');
+
+  // Entradas que ja apareceram no banco: vazio, espaco, nulo. Nenhuma vira nome.
+  // Item que COMECA no separador nao tem nome: devolver vazio e o certo, porque
+  // mostrar o motivo no lugar do nome do cliente seria pior que nao mostrar nada.
+  igual(f(['', '   ', null, undefined, ' — so motivo']), [],
+    'vazio, nulo e item sem nome somem da linha');
+  igual(f([]), [], 'lista vazia');
+  igual(f(null), [], 'nulo devolve lista vazia, nao explode');
+  igual(f('nao e lista'), [], 'string no lugar de lista devolve vazio');
+});
+
 console.log('');
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);
