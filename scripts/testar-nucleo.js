@@ -857,6 +857,47 @@ teste('o retrato por etapa traz razão mediana/SLA comparável', () => {
   igual(e.acimaDoSla, 2, 'dois acima do SLA');
 });
 
+teste('funil SAUDÁVEL não recebe gargalo falso', () => {
+  // Caso real do Marco em 28/08: Prospecção com 6 negócios, mediana 2d contra SLA 5,
+  // ZERO acima do SLA. gargaloDoRep pontuava por volume e ela ganhava sempre, então a
+  // tela dizia "o degrau que não está sendo subido: Prospecção" — falso. E ⚠ falso
+  // treina a pessoa a ignorar o ⚠ verdadeiro.
+  const presp = [];
+  for (let i = 0; i < 6; i++) presp.push(lead({ id: 'S' + i, stageId: '1395880469', dias: 2, slaBreach: false }));
+  const visita = [lead({ id: 'SV', stageId: '1396005401', dias: 2, slaBreach: false })];
+  const c = novoContexto(dados({
+    funilLeads: { '1395880469': presp, '1396005401': visita },
+    reps: [{ ownerId: OWNER, name: 'Marco Teste', open: 7, travados: [], criticos: [], quentes: [],
+      stages: { '1395880469': 6, '1396005401': 1 } }]
+  }), { ownerId: OWNER, role: 'rep' });
+  const d = c.destravarFunil(OWNER);
+  verdade(d.saudavel, 'reconhece o funil como saudável');
+  igual(d.porEtapa.filter(e => e.ehGargalo).length, 0, 'nenhuma etapa marcada com gargalo');
+});
+
+teste('uma condição que falha já derruba o "saudável"', () => {
+  // Mesmo funil, mas UM negócio acima do SLA na etapa apontada. Volta a ser gargalo.
+  const presp = [];
+  for (let i = 0; i < 6; i++) presp.push(lead({ id: 'T' + i, stageId: '1395880469', dias: 2, slaBreach: i === 0 }));
+  const c = novoContexto(dados({
+    funilLeads: { '1395880469': presp, '1396005401': [lead({ id: 'TV', stageId: '1396005401', dias: 2 })] },
+    reps: [{ ownerId: OWNER, name: 'T', open: 7, travados: [presp[0]], criticos: [], quentes: [],
+      stages: { '1395880469': 6, '1396005401': 1 } }]
+  }), { ownerId: OWNER, role: 'rep' });
+  const d = c.destravarFunil(OWNER);
+  falso(d.saudavel, 'com negócio acima do SLA não é saudável');
+  verdade(d.porEtapa.some(e => e.ehGargalo), 'volta a marcar o gargalo');
+});
+
+teste('saída travada manda mais que qualquer sinal de saúde', () => {
+  // Bruno: 14 em Visita, ZERO no Decisor, e só 1 acima do SLA (mediana 3d / SLA 5 = 0,6x).
+  // Pelas outras duas condições ele "passaria" como saudável. Não pode.
+  const c = novoContexto(dados(funilDoBruno()), { ownerId: OWNER, role: 'rep' });
+  const d = c.destravarFunil(OWNER);
+  igual(d.motivo, 'saida_travada', 'motivo é saída travada');
+  falso(d.saudavel, 'e saída travada nunca é saudável');
+});
+
 teste('funil vazio não inventa gargalo', () => {
   const c = novoContexto(dados({
     reps: [{ ownerId: OWNER, name: 'T', open: 0, travados: [], criticos: [], quentes: [], stages: {} }]
