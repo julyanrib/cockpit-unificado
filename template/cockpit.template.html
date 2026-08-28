@@ -3778,6 +3778,15 @@
   .prosp2-dia.conflito{border-color:var(--dark-amber);background:rgba(224,166,74,.16);}
   .prosp2-dia.conflito::after{content:'⚠';margin-left:4px;}
 
+  /* Botão de jogar a conta-alvo no funil, no pé do drawer do deck (28/08/26).
+     Contorno em vez de preenchido: o preenchido é do "+ Agendar visita", que é a ação
+     mais frequente. Este é a alternativa deliberada, não a principal. */
+  .prosp2-dw-foot{flex-wrap:wrap;}
+  /* Linha propria: 440px de drawer menos padding e gaps deixam 378px, e os tres
+     botoes somam ~380. Medido antes de escrever, para nao empurrar o Fechar pra fora. */
+  .prosp2-funil{flex:1 1 100%;min-width:0;border:1px solid var(--red);border-radius:10px;padding:10px 12px;background:transparent;color:var(--red);font-size:12px;font-weight:800;cursor:pointer;}
+  .prosp2-funil:hover:not(:disabled){background:var(--red-soft);}
+  .prosp2-funil.done,.prosp2-funil:disabled{border-color:var(--line-btn);color:var(--muted2);cursor:default;background:transparent;}
   .prosp2-tray{position:sticky;top:18px;background:var(--dark);border-radius:var(--r-lg);padding:18px 18px 16px;box-shadow:var(--shadow-lg);}
   .prosp2-tray-head{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;}
   .prosp2-tray-head h3{font-size:11.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dark-red);margin:0;}
@@ -11937,8 +11946,30 @@ async function renderProspeccaoExecutivo() {
         </div>
       </div>
       <div class="prosp2-dw-foot">
+        <!-- CONTA-ALVO -> FUNIL, NO DECK DO EXECUTIVO (28/08/26).
+
+             O caminho existia e estava no lugar errado. O comentário do BLOCO 49, no
+             fluxo do gestor, cita o pedido do Julyan com todas as letras: "seja pelo
+             meu funil, seja pela prospecção o executivo tem que conseguir adicionar
+             no hub na etapa prospecção as contas alvo". Foi implementado em
+             abrirFichaProspeccaoDrawer, que é a ficha da aba Prospecção — aba que é
+             ESCONDIDA para o executivo (display:none desde 11/08). A fila dele é este
+             deck, e aqui o pé do drawer só tinha "+ Agendar visita" e "Fechar".
+
+             OS DOIS BOTÕES FAZEM COISAS DIFERENTES e por isso convivem:
+               Agendar visita  -> bandeja -> empresa no HubSpot + VISITA na agenda
+               Criar negócio   -> NEGÓCIO no pipeline, na etapa Prospecção
+             Ele pode querer o negócio sem marcar visita (ligou, houve interesse) ou
+             a visita sem negócio ainda. Forçar um só caminho perderia metade dos
+             casos.
+
+             Reaproveita abrirPassagemContaAlvoProFunil, a MESMA função do gestor —
+             mesmo formulário dos campos que a etapa exige, já semeado com telefone,
+             bairro e cidade que a base de prospecção sabe. Nada de segundo caminho
+             para o mesmo write. -->
         <button class="prosp2-add" id="prosp2DwAdd">+ Agendar visita</button>
         <button class="prosp2-ver" id="prosp2DwFechar">Fechar</button>
+        <button class="prosp2-funil" id="prosp2DwFunil">→ Criar negócio no funil</button>
       </div>
     </aside>
     <div class="prosp2-toast" id="prosp2Toast"><span class="ok">✓</span><span id="prosp2ToastTxt">Adicionado</span></div>
@@ -12164,6 +12195,16 @@ function prosp2LigarEventos(universo, ownerId) {
   if (dwX) dwX.addEventListener('click', fechar);
   if (dwFechar) dwFechar.addEventListener('click', fechar);
   if (scrim) scrim.addEventListener('click', fechar);
+  const dwFunil = document.getElementById('prosp2DwFunil');
+  if (dwFunil) dwFunil.addEventListener('click', () => {
+    const lead = buscarLead(prosp2Estado.drawerId);
+    if (!lead || lead.hubspot_deal_id) return;
+    fechar();
+    /* Ao concluir: recarrega o deck para a conta refletir o novo estado. A própria
+       passagem já espelha o negócio em DATA.funilLeads e grava hubspot_deal_id na
+       conta, então o botão nasce desabilitado na próxima abertura da ficha. */
+    abrirPassagemContaAlvoProFunil(lead, () => { renderProspeccaoExecutivo(); });
+  });
   const dwAdd = document.getElementById('prosp2DwAdd');
   if (dwAdd) dwAdd.addEventListener('click', () => {
     if (prosp2Estado.agenda[prosp2Estado.drawerId]) return;
@@ -12240,6 +12281,23 @@ function prosp2AbrirDrawer(id, universo) {
   const ag = prosp2Estado.agenda[id];
   if (ag) { btn.className = 'prosp2-add done'; btn.textContent = `✓ Na agenda · ${ag.rotulo}`; }
   else { btn.className = 'prosp2-add'; btn.textContent = '+ Agendar visita'; }
+  /* A conta que JÁ virou negócio não oferece o botão de novo. A marca é
+     hubspot_deal_id, gravado por abrirPassagemContaAlvoProFunil — e a coluna passou a
+     existir de verdade em 28/08: até então o update falhava em silêncio e a proteção
+     contra duplicata nunca valeu (o próprio comentário de lá documentava a
+     degradação). Sem ela, o executivo podia criar o mesmo negócio duas vezes. */
+  const btnFunil = document.getElementById('prosp2DwFunil');
+  if (btnFunil) {
+    if (l.hubspot_deal_id) {
+      btnFunil.className = 'prosp2-funil done';
+      btnFunil.textContent = '✓ Já está no funil';
+      btnFunil.disabled = true;
+    } else {
+      btnFunil.className = 'prosp2-funil';
+      btnFunil.textContent = '→ Criar negócio no funil';
+      btnFunil.disabled = false;
+    }
+  }
   document.getElementById('prosp2Drawer').classList.add('open');
   document.getElementById('prosp2Scrim').classList.add('open');
 }
