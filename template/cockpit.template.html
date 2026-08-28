@@ -1071,7 +1071,24 @@
 
   .app-header{position:sticky;top:0;z-index:20;background:var(--panel);border-bottom:1px solid var(--line);padding:0 22px;display:flex;align-items:center;gap:14px;height:56px;flex:none;}
 
-  .app-sidenav{flex:none;display:flex;flex-direction:row;align-items:center;gap:2px;margin-left:8px;overflow-x:auto;scrollbar-width:none;}
+  /* CORREÇÃO (28/08/26, achada navegando em 1024px) — a topbar estourava 241px e a
+     PÁGINA INTEIRA rolava de lado, com o sino de avisos e o nome do usuário fora da
+     tela. Janela do defeito: 901px a ~1250px, ou seja notebook e janela não maximizada
+     — exatamente onde o Cockpit é usado (é ferramenta de PC; a rua é o PWA).
+
+     A causa eram duas propriedades que se anulavam nesta mesma regra: `flex:none` fazia
+     a navegação assumir a largura inteira do conteúdo (828px com 12 abas) e nunca
+     encolher, o que tornava o `overflow-x:auto` dela decorativo — o elemento nunca era
+     comprimido abaixo do conteúdo, então não havia o que rolar, e o excesso empurrava
+     os irmãos para fora do cabeçalho.
+
+     Com `flex:1 1 auto` + `min-width:0` a navegação passa a ceder espaço e a rolar
+     dentro de si. `min-width:0` é obrigatório: sem ele o item flex não encolhe abaixo do
+     min-content e o estouro volta — é o mesmo alçapão do `minmax(0,1fr)` que já morde
+     este arquivo em grid.
+     Em 1440 nada muda de aparência: a navegação cresce até onde já ia, e sino e badge
+     seguem encostados à direita. */
+  .app-sidenav{flex:1 1 auto;min-width:0;display:flex;flex-direction:row;align-items:center;gap:2px;margin-left:8px;overflow-x:auto;scrollbar-width:none;}
   .app-sidenav::-webkit-scrollbar{display:none;}
   .app-sidenav-title{flex:none;font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);border:1px solid var(--line);border-radius:6px;padding:3px 8px;margin-right:12px;}
   .app-sidenav-spacer{display:none;}
@@ -2147,7 +2164,22 @@
      foi tocada. Avatar por iniciais + coluna que empilha métricas e o preview de
      clientes prometidos do dia (pedido explícito do Julyan: não esconder atrás do
      clique de expandir). */
-  .daily-team-summary-v2{grid-template-columns:220px minmax(340px,1fr) 92px 66px 118px;}
+  /* CORREÇÃO (28/08/26, achada navegando na Daily do gestor em 1440px). A 4ª coluna
+     tinha 66px FIXOS e recebe `.daily-team-streak`, que hoje carrega o selo do plano
+     ("S/ PLANO DO DIA" — 107px, com white-space:nowrap) MAIS a sequência ("🔥 3d"). O
+     selo entrou depois que a coluna foi dimensionada, então estourava 41px — nos SETE
+     executivos, na tela que o gestor projeta na matinal das 9h.
+
+     `auto` dimensiona pela largura do conteúdo, então o selo cabe qualquer que seja o
+     texto ("S/ PLANO DO DIA" ou "PLANO FECHADO 09:12"), e a coluna flexível cede a
+     diferença (o mínimo dela caiu de 340 para 300px pra abrir essa folga).
+
+     NOTA DE MANUTENÇÃO: `.daily-team-summary` (regra acima) tem a MESMA 4ª coluna de
+     66px e o mesmo defeito no papel — mas o elemento carrega as duas classes
+     ("daily-team-summary daily-team-summary-v2") e a -v2 vence, então é aqui que o
+     conserto faz efeito. Eu editei a de cima primeiro e não mudou nada; fica dito pra
+     ninguém repetir. */
+  .daily-team-summary-v2{grid-template-columns:220px minmax(300px,1fr) 92px auto 118px;}
   .daily-avatar-row{display:flex;align-items:center;gap:9px;min-width:0;}
   .daily-avatar{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 12px 'Poppins',sans-serif;background:var(--state-soft);color:var(--state);}
   .daily-team-col-metrics{display:flex;flex-direction:column;gap:6px;min-width:0;}
