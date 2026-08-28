@@ -23722,7 +23722,20 @@ async function renderDaily() {
   const clientesPlanejadosTotal = compromissosHoje.reduce((s, x) => s + x.resumo.nomes, 0);
   const semClientesNomeados = compromissosHoje.filter(x => x.resumo.nomes === 0).length;
   const planosFechadosTotal = compromissosHoje.filter(x => x.resumo.fechado).length;
-  const frescorDaily = typeof estadoFrescorDados === 'function' ? estadoFrescorDados() : { confiavel: true, rotulo: '' };
+  /* CORRIGIDO (28/08/26): a chamada era para `estadoFrescorDados`, que NAO EXISTE em
+     nenhum lugar do projeto. A funcao real e `frescorDosDados` — e devolve exatamente
+     esta forma, { confiavel, rotulo }, entao o codigo ao redor estava certo.
+
+     Por que isso passou: a chamada vinha protegida por `typeof === function`, entao o
+     nome errado nao lancava erro — caia no fallback { confiavel: true } para SEMPRE.
+     Consequencia: o aviso de carga atrasada que este bloco adiciona era codigo morto.
+     O hero jurava que a execucao vinha da evidencia do HubSpot mesmo quando a ultima
+     carga tinha 12h, e "fechados no dia" nunca mostrava "—". Ou seja: a guarda que
+     existia para impedir que numero velho passe por numero de hoje estava desligada.
+
+     Guarda com typeof esconde nome errado. Onde a funcao e obrigatoria, chamar direto:
+     se o nome estiver errado, o erro aparece em vez de virar silencio. */
+  const frescorDaily = frescorDosDados();
   const ehHojeDaily = dailyRefDate === isoDate(new Date());
   const promessaExec = souRepDaily
     // CORREÇÃO (16/08/26) — bug real encontrado por acaso testando a Daily: o banner
