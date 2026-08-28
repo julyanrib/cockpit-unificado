@@ -275,8 +275,38 @@ module.exports = async function handler(req, res) {
         socio: primeiroSocio,
         endereco: enderecoCompleto
       };
+
+      /* DIAGNÓSTICO DE CONTRATO (28/08/26).
+         O comentário acima admite que os nomes de campo nunca foram validados contra a
+         resposta real da v4 — foram escolhidos por semelhança com outras APIs de CNPJ. E
+         o banco mostra o resultado disso: `socio` está preenchido em 0 das 869 contas-alvo.
+         Ou o campo tem outro nome, ou ninguém nunca clicou no botão. Sem ver a resposta
+         real não há como saber qual das duas.
+
+         Então a rota passa a se auto-diagnosticar: quando o parse não encontra NEM
+         telefone NEM sócio, ela devolve as chaves que realmente vieram. Nome de chave não
+         é dado sensível e resolve o problema em uma chamada, em vez de exigir tentativa e
+         erro a 1 crédito por tentativa.
+
+         `bruto` só sai com `debug: true` explícito no corpo: é a resposta inteira da
+         Receita para aquele CNPJ, e não deve trafegar por acidente em uso normal.
+         NÃO entra no cache — o cache guarda só `contato`, para não fossilizar um
+         diagnóstico junto do dado. */
+      const achouAlgo = !!(contato.telefone || contato.socio);
+      const diagnostico = achouAlgo ? null : {
+        aviso: 'Parse não achou telefone nem sócio. Abaixo, as chaves que a Casa dos Dados devolveu de fato.',
+        chavesTopo: Object.keys(j || {}),
+        chavesRegistro: Object.keys(d || {}),
+        temQsa: Array.isArray(d.qsa) || Array.isArray(d.socios) || Array.isArray(d.quadro_societario),
+        chavesEndereco: (d.endereco && typeof d.endereco === 'object') ? Object.keys(d.endereco) : null
+      };
+
       await gravarCache(supaUrl, serviceKey, chaveContato, [contato]);
-      return res.status(200).json({ ok: true, origem: 'casadosdados', contato: contato });
+      return res.status(200).json(Object.assign(
+        { ok: true, origem: 'casadosdados', contato: contato },
+        diagnostico ? { diagnostico } : {},
+        (diagnostico && req.body && req.body.debug === true) ? { bruto: d } : {}
+      ));
     } catch (e) {
       return res.status(500).json({ etapa: 'consulta-cnpj', erro: 'Falha ao consultar o CNPJ: ' + String(e.message || e) });
     }
