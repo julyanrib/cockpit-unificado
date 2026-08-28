@@ -20954,6 +20954,145 @@ function wireIndicadoresGestor(rootEl) {
   });
 }
 
+/* ============================================================================
+   FUNIL DA PESSOA DENTRO DA DAILY (28/08/26, pedido do Julyan)
+   ----------------------------------------------------------------------------
+   "eu gosto de ver o funil tbm na daily pra saber, nao faz sentido?"
+   Faz — e era a peça que faltava para a Daily acelerar em vez de só cobrar.
+   Numa daily de 20 minutos com 8 pessoas, o que muda a conversa não é o que a
+   pessoa promete, é ONDE ELA EMPACA. Antes, o único caminho pro funil era o
+   botão "Abrir funil da pessoa →", que TIRA o gestor da reunião.
+
+   Três decisões de forma, para não transformar a daily numa planilha:
+   1. barras por etapa, contagem dentro, na ordem real do pipeline — a etapa
+      inflada salta aos olhos sem precisar ler número;
+   2. UMA frase de gargalo, derivada (etapa com mais negócio parado acima do
+      SLA), porque é isso que o gestor precisa perguntar;
+   3. no máximo 3 negócios nomeados — os mais graves. O resto fica no botão que
+      abre o funil completo, que continua existindo.
+
+   Nada aqui é dado novo: r.stages, r.travados e stageMeta.slaDays já estavam
+   em DATA e já alimentam o Meu Funil do executivo. É a mesma verdade, na tela
+   onde a decisão acontece.
+   ============================================================================ */
+
+function funilDaPessoaNaDailyHTML(r) {
+  const stages = r.stages || {};
+  const ordem = ORDEM_ETAPAS_FUNIL.filter(sid => STAGE_LABELS[sid]);
+  const valores = ordem.map(sid => Number(stages[sid]) || 0);
+  const totalAberto = valores.reduce((a, b) => a + b, 0);
+  if (totalAberto === 0) {
+    return `<div style="margin-top:12px;padding-top:11px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--muted2);line-height:1.5;">
+      Sem negócio aberto no funil desta pessoa nesta carga — se ela está na rua, a conta-alvo ainda não virou negócio no HubSpot.
+    </div>`;
+  }
+  const maxEtapa = Math.max(1, ...valores);
+
+  // Travados por etapa: é o que transforma "5 em Visita" em "5 em Visita, 3 parados".
+  const travados = Array.isArray(r.travados) ? r.travados : [];
+  const travadosPorEtapa = {};
+  travados.forEach(l => {
+    const sid = String(l.stageId || '');
+    if (!sid) return;
+    travadosPorEtapa[sid] = (travadosPorEtapa[sid] || 0) + 1;
+  });
+
+  /* GARGALO — regra corrigida em 28/08/26, validada contra a carteira real do time.
+     A 1ª versão elegia a etapa com mais negócio PARADO (acima do SLA). Rodando nos 7
+     executivos de verdade, ela errou o caso mais importante: para o Bruno, disse
+     "1 negócio parado em Ag. Pagamento" — tecnicamente certo e praticamente irrelevante,
+     porque o problema dele é 14 empilhados em Visita e ZERO em Conversa com Decisor.
+     SLA estourado mede negócio velho; não mede fluxo interrompido.
+
+     A regra agora pontua três coisas por etapa, e a maior ganha:
+       · concentração (quantos negócios estão ali);
+       · saída zerada (a etapa seguinte está vazia = o fluxo para aqui) — peso alto,
+         porque é o que impede a próxima venda, não a venda velha;
+       · negócios acima do SLA (severidade).
+     Empate resolve pela etapa mais cedo no pipeline: destravar o começo destrava o
+     resto, e o contrário não é verdade. */
+  const idxDe = sid => ordem.indexOf(sid);
+  let gargaloSid = null, melhorScore = -1, gargaloMotivo = '';
+  ordem.forEach((sid, i) => {
+    const n = valores[i];
+    if (n === 0) return;
+    const trav = travadosPorEtapa[sid] || 0;
+    // Saída travada = a etapa IMEDIATAMENTE seguinte está vazia. Exigir que TODAS as
+    // seguintes estejam vazias era estrito demais e errou o caso do Bruno na validação
+    // com dado real: ele tem 14 em Visita e 0 em Conversa com Decisor, mas tem negócio
+    // em Demo e Negociação de antes — então "todas vazias" era falso e o gargalo dele
+    // saía como "estoque". O que interessa é o degrau que não está sendo subido agora.
+    const proxima = (i + 1) < valores.length ? valores[i + 1] : null;
+    const saidaZerada = proxima === 0;
+    const pctDoFunil = n / totalAberto;
+    // Concentração pesa; saída zerada vale mais que qualquer coisa; SLA soma severidade.
+    const score = n + (trav * 1.5) + (saidaZerada && pctDoFunil >= 0.25 ? totalAberto : 0);
+    if (score > melhorScore) {
+      melhorScore = score;
+      gargaloSid = sid;
+      gargaloMotivo = (saidaZerada && pctDoFunil >= 0.25) ? 'saida_zerada' : (trav > 0 ? 'parados' : 'estoque');
+    }
+  });
+  const gargaloN = gargaloSid ? valores[idxDe(gargaloSid)] : 0;
+  const gargaloTrav = gargaloSid ? (travadosPorEtapa[gargaloSid] || 0) : 0;
+  const proximaEtapaSid = gargaloSid ? ordem[idxDe(gargaloSid) + 1] : null;
+
+  const frase = !gargaloSid
+    ? 'Funil vazio nesta carga.'
+    : gargaloMotivo === 'saida_zerada'
+      ? `<b>${gargaloN} em ${esc(STAGE_LABELS[gargaloSid])} e nenhum em ${esc(STAGE_LABELS[proximaEtapaSid] || 'nenhuma etapa seguinte')}</b> — o fluxo para aqui. Não é falta de lead, é falta de avanço.`
+      : gargaloMotivo === 'parados'
+        ? `<b>${gargaloTrav} de ${gargaloN} parados em ${esc(STAGE_LABELS[gargaloSid])}</b> — é aqui que o funil dele trava.`
+        : `<b>${gargaloN} em ${esc(STAGE_LABELS[gargaloSid])}</b>, nada acima do SLA — é estoque, não travamento.`;
+
+  // Os três mais graves, por múltiplo do SLA (o mesmo slaRatio do Meu Funil).
+  const piores = travados.slice()
+    .sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0) || (b.dias || 0) - (a.dias || 0))
+    .slice(0, 3);
+
+  return `
+    <div style="margin-top:12px;padding-top:11px;border-top:1px dashed var(--line);">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:9px;">
+        <span style="font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);">Funil dele agora</span>
+        <span style="font-size:10.5px;color:var(--muted2);">${totalAberto} aberto${totalAberto > 1 ? 's' : ''}${travados.length ? ` · <b style="color:var(--red);">${travados.length} acima do SLA</b>` : ' · nenhum acima do SLA'}</span>
+      </div>
+
+      <div style="display:grid;gap:4px;">
+        ${ordem.map((sid, i) => {
+          const n = valores[i];
+          const trav = travadosPorEtapa[sid] || 0;
+          const pct = Math.round((n / maxEtapa) * 100);
+          const ehGargalo = sid === gargaloSid;
+          return `<div style="display:flex;align-items:center;gap:9px;">
+            <span style="flex:none;width:104px;font-size:10.5px;color:${ehGargalo ? 'var(--ink)' : 'var(--muted)'};font-weight:${ehGargalo ? '700' : '400'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(STAGE_LABELS[sid])}</span>
+            <span style="flex:1;height:15px;background:var(--sunk);border-radius:5px;overflow:hidden;position:relative;min-width:40px;">
+              ${n > 0 ? `<span style="display:block;height:100%;width:${Math.max(6, pct)}%;background:${stageColor(sid)};border-radius:5px;"></span>` : ''}
+              ${trav > 0 ? `<span style="position:absolute;inset:0 auto 0 0;height:100%;width:${Math.max(4, Math.round((trav / maxEtapa) * 100))}%;background:repeating-linear-gradient(45deg,rgba(229,26,49,.85) 0 3px,transparent 3px 6px);border-radius:5px;" title="${trav} acima do SLA"></span>` : ''}
+            </span>
+            <span class="mono" style="flex:none;width:22px;text-align:right;font-size:11px;font-weight:800;color:${n > 0 ? 'var(--ink)' : 'var(--ter)'};">${n}</span>
+            <span class="mono" style="flex:none;width:34px;text-align:right;font-size:10px;font-weight:800;color:${trav > 0 ? 'var(--red)' : 'transparent'};">${trav > 0 ? trav + '⚠' : '·'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+
+      <div style="font-size:11.5px;color:var(--body);line-height:1.55;margin-top:10px;background:var(--panel2);border-radius:9px;padding:9px 11px;">${frase}</div>
+
+      ${piores.length ? `
+        <div style="margin-top:9px;">
+          <div style="font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:5px;">Os mais graves — pergunte por estes</div>
+          ${piores.map(l => {
+            const sla = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
+            const vezes = l.slaRatio ? (l.slaRatio / 100) : null;
+            return `<div style="display:flex;align-items:baseline;gap:9px;padding:4px 0;font-size:12px;">
+              <b style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(l.name || '')}</b>
+              <span style="flex:none;font-size:10.5px;color:var(--muted);">${esc(l.stage || STAGE_LABELS[l.stageId] || '')}</span>
+              <span class="mono" style="flex:none;font-size:10px;font-weight:800;color:var(--red);">${l.dias != null ? l.dias + 'd' : '—'}${sla ? ` / SLA ${sla}d` : ''}${vezes && vezes >= 2 ? ` · ${vezes.toFixed(1)}x` : ''}</span>
+            </div>`;
+          }).join('')}
+        </div>` : ''}
+    </div>`;
+}
+
 async function renderDaily() {
   const el = document.getElementById('dailyContent');
   // BLOCO 2 (10/08/26) — ORDEM IMPORTA: os blocos que vieram do Cockpit ("Onde agir hoje"
@@ -21364,12 +21503,41 @@ async function renderDaily() {
     // demais). "Novos Clientes" usa o mesmo dado que já alimenta "fechamentos hoje" no
     // resto do cockpit — realizado_fechamentos/fechamentosHubspotHoje já existiam e já
     // eram corretos, só nunca tinham vindo com o lado prometido.
+    /* REGRESSÃO CORRIGIDA (28/08/26) — a Daily do gestor estava mostrando o time
+       INTEIRO em vermelho, com selo "Promessa aberta" e CTA "Cobrar plano", de forma
+       permanente. Causa: eu removi quem ESCREVIA `prometido_*` (os três inputs do
+       executivo) e deixei quem LÊ intacto. Como nada mais preenche esses campos,
+       `registrouResumo` era false pra todo mundo, pra sempre. O gestor abria a Daily às
+       9h e ela dizia que os 8 estavam devendo plano — artefato do meu corte, não dado.
+
+       A correção não recria o input de número. Ela aponta o card para o compromisso que
+       REALMENTE existe: `planos_diarios` (a mesma consulta `planosPorOwner` que esta
+       função já fazia e não usava aqui) + os clientes nomeados na agenda do dia.
+       O "prometido" deixa de ser um número digitado e passa a ser a CONTAGEM da
+       sequência de clientes com que a pessoa se comprometeu — derivada, não declarada.
+
+       Compromisso ≠ execução: a sequência vive no Supabase e não prova nada por si só
+       (decisão do Julyan em 28/08). Quem prova continua sendo o HubSpot, e é de lá que
+       vem o lado `real` de cada linha. */
+    const planoDoRep = planosPorOwner[String(r.ownerId)] || null;
+    const prioridadesDoRep = (planoDoRep && Array.isArray(planoDoRep.prioridades))
+      ? planoDoRep.prioridades.filter(x => x && String(x).trim()) : [];
+    // planoDoDiaFechado, e não planoFechado: esse nome já existe mais adiante nesta
+    // mesma função (bloco do detalhe do plano) — const duplicado é ReferenceError.
+    const planoDoDiaFechado = !!(planoDoRep && planoDoRep.status === 'plano_fechado');
+    // Contas-alvo marcadas no plano entram na conta de visitas comprometidas: são
+    // cliente nomeado do dia igual às prioridades.
+    const contasDoPlano = (planoDoRep && Array.isArray(planoDoRep.contas_alvo)) ? planoDoRep.contas_alvo.length : 0;
+    const comprometidasHoje = prioridadesDoRep.length + contasDoPlano;
+
     const metricasCompromisso = [
-      { label: 'Visitas', campo: 'prometido_visitas', prom: hoje.prometido_visitas, real: Number(realVisitas) || 0, cls: 'green', chips: visitasNomesDoOwnerNoDia(r.ownerId, dailyRefDate) },
+      { label: 'Visitas', campo: 'prometido_visitas', prom: comprometidasHoje > 0 ? comprometidasHoje : null, real: Number(realVisitas) || 0, cls: 'green', chips: visitasNomesDoOwnerNoDia(r.ownerId, dailyRefDate) },
       { label: 'Demo/Proposta', campo: 'prometido_propostas', prom: hoje.prometido_propostas, real: Number(realPropostas) || 0, cls: 'red', suspeito: escritaDaNoiteSuspeita },
       { label: 'Novos Clientes', campo: 'prometido_fechamentos', prom: hoje.prometido_fechamentos, real: Number(realFechamentos) || 0, cls: 'amber', suspeito: escritaDaNoiteSuspeita }
     ];
-    const registrouResumo = metricasCompromisso.some(m => m.prom != null);
+    // "Registrou" agora quer dizer: fechou o plano do dia OU nomeou pelo menos um
+    // cliente. Não depende mais de um campo que ninguém escreve.
+    const registrouResumo = planoDoDiaFechado || comprometidasHoje > 0;
     const metasPositivas = metricasCompromisso.filter(m => Number(m.prom) > 0);
     const cumpriuTudo = registrouResumo && metasPositivas.length > 0 && metasPositivas.every(m => m.real >= Number(m.prom));
     const iniciouExecucao = metricasCompromisso.some(m => m.real > 0);
@@ -21401,7 +21569,9 @@ async function renderDaily() {
       </div>`;
     // ITEM 2 (10/08/26): plano do dia desta pessoa — o que antes era um cartão
     // separado repetindo o time inteiro. Mesmo dado (planos_diarios), agora na linha.
-    const planoPessoa = planosPorOwner[String(r.ownerId)] || null;
+    // Mesma leitura de planoDoRep, acima — o nome antigo fica porque o HTML do card e
+    // o detalhe do plano já o referenciam em vários pontos.
+    const planoPessoa = planoDoRep;
       // BLOCO 2 (11/08): compromissos JÁ MARCADOS para o dia que a Daily está mostrando.
     // Mesmo normalizador da aba Agenda; só o nome do lead e a hora, nada de título cru.
     const compromissosHoje = (() => {
@@ -21655,6 +21825,7 @@ async function renderDaily() {
             </div>` : ''}
           ${planoDetalheHtml}
           ${linhaExecucao}
+          ${funilDaPessoaNaDailyHTML(r)}
           <div class="daily-detail-proof"><span><b>🔥 ${seq}d</b> de sequência</span><span><b>${pontosHoje}</b> pontos hoje</span><span>Semana ${semanaIcones.map(d => d.icon).join(' ')}</span><span class="push"><b>${fechamentosHoje}</b> fechamento${fechamentosHoje === 1 ? '' : 's'}</span></div>
         </div>
       </details>`;

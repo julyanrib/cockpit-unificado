@@ -36,6 +36,10 @@ const destinoArg = posicionais[1];
 // --sem-supa: não injeta o cliente Supabase falso. Serve pra isolar problema: se a
 // tela quebra com o stub e funciona sem, o problema é o stub, não o template.
 const comSupaFake = !flags.includes('--sem-supa');
+// --manual: prepara sessão e supa mas NÃO chama mostrarApp(). Serve pra encontrar
+// travamento no caminho de carga: com isto a página abre inerte e dá pra chamar cada
+// pedaço à mão (aplicarVisaoPorPapel, renderDaily, ...) e ver qual pendura.
+const manual = flags.includes('--manual');
 
 const completos = montarDadosCompletos();
 
@@ -133,7 +137,8 @@ const bootstrap = `
       DATA.supabase = { url: 'preview-local', anonKey: 'preview-local' };
       supa = supaFake();
     }
-    mostrarApp();
+    if (!${manual ? 'true' : 'false'}) mostrarApp();
+    else { window.__PREVIEW_MANUAL__ = true; console.log('[preview] modo manual: sessão e supa prontos, mostrarApp() NÃO chamado'); }
     var aviso = document.createElement('div');
     aviso.textContent = 'PREVIEW LOCAL · ' + sessao.nome + ' (' + sessao.role + ') · dados reais, sem gravação';
     aviso.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#1A1613;color:#E0A64A;font:700 11px/1 system-ui;padding:7px 12px;text-align:center;letter-spacing:.06em;';
