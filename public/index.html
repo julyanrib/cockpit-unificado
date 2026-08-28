@@ -2576,6 +2576,51 @@
   .mf-funnel-count{font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right;}
   .mf-funnel-conv{font-size:9.5px;font-weight:700;color:var(--muted2);text-align:right;white-space:nowrap;}
   .mf-view-filters{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end;}
+  /* ---- DESTRAVAR O FUNIL (28/08/26) ----
+     Faixa de etapas + candidatos. Tudo em tokens existentes; nenhuma cor nova.
+     A faixa rola no eixo X em telas estreitas em vez de quebrar, porque a ordem das
+     etapas É a informação — quebrar a linha desmonta a leitura do funil. */
+  .destrava-faixa{display:flex;align-items:stretch;gap:4px;overflow-x:auto;padding-bottom:4px;margin-bottom:11px;}
+  .destrava-etapa{flex:none;min-width:96px;background:var(--panel2);border:1px solid var(--line-soft);border-radius:10px;padding:8px 10px;}
+  .destrava-etapa.is-gargalo{border-color:var(--red);background:var(--panel);box-shadow:0 0 0 1px var(--red) inset;}
+  /* Degrau vazio: tracejado e apagado. Ele precisa LER como lacuna, não como card
+     normal com zero dentro — no funil do Bruno o vazio em "Conversa com Decisor" é
+     o diagnóstico inteiro. */
+  .destrava-etapa.is-vazia{border-style:dashed;background:transparent;}
+  .destrava-etapa.is-vazia .destrava-etapa-n{color:var(--ter);}
+  .destrava-etapa-n{display:block;font:800 19px/1 'Poppins',sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .destrava-etapa-lbl{display:block;margin-top:4px;font-size:10px;font-weight:700;color:var(--muted2);line-height:1.3;}
+  .destrava-etapa-razao{display:block;margin-top:3px;font-size:9.5px;font-weight:800;color:var(--muted2);}
+  .destrava-etapa-razao.is-alta{color:var(--red);}
+  .destrava-seta-etapa{flex:none;align-self:center;color:var(--ter);font-size:13px;}
+  .destrava-diag{font-size:12px;color:var(--muted);line-height:1.55;margin-bottom:9px;}
+  .destrava-diag b{color:var(--ink);}
+  .destrava-pergunta{display:block;margin-top:5px;font-size:11.5px;color:var(--muted2);}
+  .destrava-resumo{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:11px;color:var(--muted2);margin-bottom:10px;}
+  .destrava-resumo b{color:var(--ink);font-weight:800;}
+  .destrava-resumo .is-verde b{color:var(--green);}
+  .destrava-lista{display:flex;flex-direction:column;gap:4px;}
+  .destrava-item{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font:inherit;cursor:pointer;
+    border:1px solid var(--line-soft);background:var(--panel);border-radius:9px;padding:8px 11px;transition:border-color .13s var(--ease),background .13s var(--ease);}
+  .destrava-item:hover{border-color:var(--line-btn);background:var(--panel2);}
+  .destrava-sev{flex:none;width:7px;height:7px;border-radius:99px;background:var(--line-btn);}
+  .destrava-sev.is-red{background:var(--red);}
+  .destrava-item b{flex:none;max-width:170px;font:700 12.5px/1.3 'Poppins',sans-serif;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .destrava-dias{flex:none;font-size:10px;font-weight:800;color:var(--muted2);font-variant-numeric:tabular-nums;}
+  .destrava-mov{flex:1;min-width:0;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .destrava-seta{flex:none;color:var(--red);font-weight:800;font-size:12px;}
+  .destrava-mais{margin-top:6px;}
+  .destrava-mais summary{cursor:pointer;font:800 11px 'Manrope',sans-serif;color:var(--red);list-style:none;}
+  .destrava-mais summary::-webkit-details-marker{display:none;}
+  .destrava-mais .destrava-lista{margin-top:6px;}
+  @media (max-width:640px){
+    /* No celular o movimento é a informação que decide a ação, e cortada em uma linha
+       ela vira reticências. Aqui o item empilha e o texto quebra inteiro. */
+    .destrava-item{flex-wrap:wrap;}
+    .destrava-item b{max-width:none;}
+    .destrava-mov{flex-basis:100%;white-space:normal;}
+  }
+
   .mf-view-filter{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;padding:6px 10px;
     font-size:10.5px;font-weight:750;cursor:pointer;transition:.15s var(--ease);}
   .mf-view-filter:hover{border-color:var(--ink);color:var(--ink);}
@@ -6112,6 +6157,13 @@ function proximoPassoDoLead(lead) {
 
 function leadTemProximoPasso(lead) { return !!proximoPassoDoLead(lead); }
 
+// Ordem real do pipeline. MOVIDA para dentro do @nucleo em 28/08/26: gargaloDoRep e
+// destravarFunil dependem dela, e constante de domínio fora dos marcadores obrigaria
+// stub no harness — o mesmo caminho que deixou o bug do "próximo passo às 9h01"
+// passar. Ela vivia ~3.800 linhas abaixo; subir a declaração é seguro (nada que já
+// funcionava passa a ler antes da inicialização).
+const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191'];
+
 /* @nucleo:fim */
 
 /* ============================================================================
@@ -7539,6 +7591,79 @@ let meuFunilFiltroVisao = 'todos'; // todos | sem_passo | sla | quentes
    contas-alvo entra depois, assíncrono — mesmo padrão já usado em montarNovidadesPracas
    e no card por praça do gestor: não trava a pintura da tela por causa de uma consulta
    externa. */
+/* ============================================================================
+   DESTRAVAR O FUNIL — a seção (28/08/26)
+   ----------------------------------------------------------------------------
+   Entra como seção 1 do Meu Funil, ANTES de "Resolver primeiro", porque responde
+   uma pergunta diferente e anterior. "Resolver primeiro" ordena por gravidade: o
+   que pega fogo. Esta ordena por DEGRAU: o que não está subindo. Um funil pode não
+   ter nada pegando fogo e não avançar ninguém (Bruno: 1 de 18 acima do SLA e 14 em
+   Visita com zero no Decisor).
+
+   Densidade: a faixa de etapas é uma linha; os candidatos aparecem em no máximo 6
+   linhas e o resto entra num <details>. Sem card novo, sem bloco escuro — a tela já
+   tem o dela no topo.
+   ============================================================================ */
+function destravarFunilHTML(r) {
+  const d = destravarFunil(r.ownerId);
+  if (!d || !d.etapaTravada || d.porEtapa.length === 0) return '';
+
+  const VISIVEIS = 6;
+  const visiveis = d.candidatos.slice(0, VISIVEIS);
+  const resto = d.candidatos.slice(VISIVEIS);
+
+  const linhaCandidato = c => `
+    <button type="button" class="destrava-item" data-destrava-lead="${esc(String(c.id))}">
+      <span class="destrava-sev ${c.slaEstourado ? 'is-red' : ''}" title="${c.slaEstourado ? 'acima do SLA' : 'no prazo'}"></span>
+      <b>${esc(c.nome)}</b>
+      <span class="destrava-dias">${c.dias}d</span>
+      <span class="destrava-mov">${esc(c.movimento)}</span>
+      <span class="destrava-seta">→</span>
+    </button>`;
+
+  return `
+    <div class="destrava-faixa">
+      ${d.porEtapa.map(e => `
+        <div class="destrava-etapa${e.ehGargalo ? ' is-gargalo' : ''}${e.n === 0 ? ' is-vazia' : ''}" title="${e.n} negócio(s)${e.sla ? ' · SLA ' + e.sla + 'd' : ''}${e.mediana != null ? ' · mediana ' + e.mediana + 'd' : ''}">
+          <span class="destrava-etapa-n">${e.n}</span>
+          <span class="destrava-etapa-lbl">${esc(e.label)}</span>
+          ${e.razao != null ? `<span class="destrava-etapa-razao${e.razao > 1 ? ' is-alta' : ''}">${String(e.razao).replace('.', ',')}x SLA</span>` : ''}
+        </div>`).join('<span class="destrava-seta-etapa">›</span>')}
+    </div>
+
+    <div class="destrava-diag">
+      <b>O degrau que não está sendo subido: ${esc(d.etapaTravadaLabel)}${d.proximaLabel ? ` → ${esc(d.proximaLabel)}` : ''}.</b>
+      ${d.motivo === 'saida_travada'
+        ? ` A etapa seguinte está vazia e esta concentra boa parte do seu funil — não é lentidão, é fluxo interrompido.`
+        : d.motivo === 'parados'
+          ? ` É onde você tem mais negócio acima do SLA.`
+          : ` É onde seu funil concentra estoque.`}
+      ${d.pergunta ? `<span class="destrava-pergunta">A pergunta desta etapa: <i>${esc(d.pergunta)}</i></span>` : ''}
+    </div>
+
+    <div class="destrava-resumo">
+      ${d.faltandoQualificacao > 0 ? `<span><b>${d.faltandoQualificacao}</b> sem sistema e dor</span>` : ''}
+      ${d.faltandoPasso > 0 ? `<span><b>${d.faltandoPasso}</b> sem próximo passo</span>` : ''}
+      ${d.prontosParaSubir > 0 ? `<span class="is-verde"><b>${d.prontosParaSubir}</b> pronto(s) pra subir</span>` : ''}
+    </div>
+
+    <div class="destrava-lista">${visiveis.map(linhaCandidato).join('')}</div>
+    ${resto.length ? `<details class="destrava-mais"><summary>ver os outros ${resto.length}</summary>
+      <div class="destrava-lista">${resto.map(linhaCandidato).join('')}</div></details>` : ''}`;
+}
+
+function wireDestravarFunil(rootEl) {
+  rootEl.querySelectorAll('[data-destrava-lead]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.destravaLead;
+      const lead = buscarLeadFunilPorId(id);
+      // foco="passo" abre a ficha já no campo de próximo passo — e, quando o negócio
+      // está sem qualificação, é lá que o bloco obrigatório aparece. Um clique do
+      // diagnóstico até o gesto.
+      if (lead) abrirFichaLeadFunilDrawer(lead, () => renderMeuFunil(), 'passo');
+    });
+  });
+}
 async function renderMeuFunil() {
   const el = document.getElementById('meuFunilContent');
   if (!el) return;
@@ -7635,6 +7760,15 @@ async function renderMeuFunil() {
     <section class="sec" style="margin-top:16px;">
       <div class="sec-head">
         <span class="sec-num">1</span>
+        <h2>Destravar o funil</h2>
+        <p>Ordenado por DEGRAU, não por gravidade: qual etapa não está sendo subida e quem sobe agora. Um funil sem nada pegando fogo pode não avançar ninguém.</p>
+      </div>
+      ${destravarFunilHTML(r)}
+    </section>
+
+    <section class="sec" style="margin-top:16px;">
+      <div class="sec-head">
+        <span class="sec-num">2</span>
         <h2>Resolver primeiro</h2>
         <p>A fila em ordem de gravidade: visita sem follow-up, SLA estourado, quente sem próxima ação, cadência atrasada, proposta sem data de decisão. É a mesma fila do Planejamento — um estado, dois lugares.</p>
       </div>
@@ -7646,7 +7780,7 @@ async function renderMeuFunil() {
 
     <section class="sec">
       <div class="sec-head">
-        <span class="sec-num">2</span>
+        <span class="sec-num">3</span>
         <h2>Meu pipeline</h2>
         <p>Trabalhe primeiro o que tem maior chance de virar receita — e sempre saia com um próximo passo.</p>
       </div>
@@ -7668,7 +7802,7 @@ async function renderMeuFunil() {
 
     <section class="sec">
       <div class="sec-head">
-        <span class="sec-num">3</span>
+        <span class="sec-num">4</span>
         <h2>Plano de ataque</h2>
         <p>Três frentes para sair da tela com o dia planejado.</p>
       </div>
@@ -7677,7 +7811,7 @@ async function renderMeuFunil() {
 
     <section class="sec">
       <div class="sec-head">
-        <span class="sec-num">4</span>
+        <span class="sec-num">5</span>
         <h2>Ritmo comercial</h2>
         <p>Abra apenas quando quiser revisar a disciplina do seu funil.</p>
       </div>
@@ -7695,7 +7829,10 @@ async function renderMeuFunil() {
   if (meuFunilFiltroEtapa) ligarListaEtapa(el, leadsPipeline, () => renderMeuFunil());
   else ligarKanban(el, leadsPipeline, () => renderMeuFunil());
 
-  // Fila de follow-up (seção 1) — mesmo componente do Planejamento.
+  // Destravar o funil (seção 1) — cada candidato abre a ficha no próximo passo.
+  wireDestravarFunil(el);
+
+  // Fila de follow-up (agora seção 2) — mesmo componente do Planejamento.
   wireFilaDeFollowUp(el, r);
 
   el.querySelectorAll('[data-mfvisao]').forEach(btn => {
@@ -9937,7 +10074,6 @@ const AGENDA_TIPOS = {
 // ETAPAS_ABERTAS do servidor (api/mudar-etapa-negocio.js) — lá, Reciclagem é isenta
 // da regra de "não pula fase" (é bucket lateral de resgate, alcançável de qualquer
 // etapa aberta, não um degrau sequencial).
-const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191'];
 const AGENDA_DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const AGENDA_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -20780,6 +20916,93 @@ function sequenciaDeExecucao(ownerId, ateDataISO) {
   return seq;
 }
 
+/* ============================================================================
+   CICLO FECHADO DA SEMANA (28/08/26)
+   ----------------------------------------------------------------------------
+   POR QUE ESTE NÚMERO EXISTE. A constância já era medida por
+   `sequenciaDeExecucao`: dias úteis consecutivos com visita comprovada. Isso mede
+   QUANTIDADE — "eu saí à rua" — e um executivo pode ter sequência de 10 dias com o
+   funil inteiro parado. Foi exatamente o que os dados mostraram: 51 negócios em
+   Visita, 49 sem qualificação nenhuma, e 123 dos 132 sem próximo passo datado. As
+   visitas aconteciam; o ciclo não fechava.
+
+   Ciclo fechado é a visita que terminou dentro do CRM. Três pernas, todas
+   evidência, nenhuma auto-declarada:
+     1. visita comprovada  — evento fechado (desfecho ou registro), já deduplicado
+     2. qualificada        — sistema que ele usa hoje + a dor (qualificacaoFaltante)
+     3. com próximo passo  — tarefa datada de hoje pra frente no HubSpot
+
+   O valor está no VAZAMENTO, não no total: dizer "visitou 7, fechou 1" é bem menos
+   útil que dizer "5 sem qualificação e 4 sem próximo passo", porque a segunda frase
+   nomeia o gesto que falta. É a diferença entre cobrar esforço e ensinar o ofício.
+
+   O QUE ESTE NÚMERO NÃO MEDE, de propósito: se o próximo passo foi CUMPRIDO no dia
+   prometido. O HubSpot não devolve histórico de atividade concluída (ver
+   docs/contrato-eventos-rpa.md §7), então a 4ª perna do ciclo não é verificável
+   hoje. Preferimos três pernas honestas a quatro com uma chutada.
+
+   Auto-contida de propósito: usa só Date e addDays, sem depender de
+   diasUteisDaSemana/isWeekend, que vivem fora dos marcadores @nucleo e portanto
+   precisariam de stub no harness — e stub de regra de negócio foi exatamente o que
+   deixou o bug do "próximo passo às 9h01" passar.
+   ============================================================================ */
+function cicloFechadoDaSemana(ownerId, ateDataISO) {
+  const fimDeSemana = isoStr => {
+    const dow = new Date(isoStr + 'T12:00:00Z').getUTCDay();
+    return dow === 0 || dow === 6;
+  };
+
+  // Dias úteis da semana corrente até a data de referência (segunda -> hoje).
+  const dias = [];
+  let cursor = ateDataISO;
+  for (let i = 0; i < 7; i++) {
+    if (!fimDeSemana(cursor)) dias.push(cursor);
+    const dow = new Date(cursor + 'T12:00:00Z').getUTCDay();
+    if (dow === 1) break;               // chegou na segunda: semana coberta
+    cursor = addDays(cursor, -1);
+  }
+
+  // Visitas comprovadas da semana, uma linha por NEGÓCIO (o mesmo cliente visitado
+  // duas vezes na semana é um ciclo, não dois).
+  const porDeal = new Map();
+  let semDeal = 0;
+  dias.forEach(d => {
+    const at = atividadesComprovadasNoDia(ownerId, d);
+    (at.visitas || []).forEach(e => {
+      if (e.dealId) porDeal.set(String(e.dealId), e.cliente || null);
+      else semDeal++;   // visita sem negócio associado: não dá pra avaliar o ciclo
+    });
+  });
+
+  const indice = new Map();
+  meusNegociosAbertos(ownerId).forEach(l => indice.set(String(l.id), l));
+
+  const fechados = [], faltaQualificacao = [], faltaPasso = [], faltaAmbos = [];
+  porDeal.forEach((cliente, dealId) => {
+    const lead = indice.get(dealId);
+    if (!lead) return;   // negócio já fechado/perdido: fora do numerador e do denominador
+    const nome = lead.name || cliente || dealId;
+    const semQual = (typeof qualificacaoFaltante === 'function' ? qualificacaoFaltante(lead) : []).length > 0;
+    const semPasso = !(typeof leadTemProximoPasso === 'function' ? leadTemProximoPasso(lead) : false);
+    if (semQual && semPasso) faltaAmbos.push(nome);
+    else if (semQual) faltaQualificacao.push(nome);
+    else if (semPasso) faltaPasso.push(nome);
+    else fechados.push(nome);
+  });
+
+  const avaliados = fechados.length + faltaQualificacao.length + faltaPasso.length + faltaAmbos.length;
+  return {
+    dias,
+    avaliados,
+    fechados,
+    faltaQualificacao,
+    faltaPasso,
+    faltaAmbos,
+    semDeal,
+    pct: avaliados > 0 ? Math.round(fechados.length / avaliados * 100) : null
+  };
+}
+
 /* Atividades comprovadas de um dia: visitas e follow-ups da agenda que foram
    efetivamente fechados. "Agendado" nunca entra.
 
@@ -20822,6 +21045,187 @@ function atividadesComprovadasNoDia(ownerId, dataISO) {
     reunioes: feitos.filter(e => AGENDA_TIPOS[e.tipo].conta === 'reuniao'),
     semDesfecho: evs.filter(e => e.inicio.getTime() < Date.now() && !(e.desfecho === 'COMPLETED' || e.registro)),
     semCliente: evs.filter(e => !(e.cliente || '').trim() || e.cliente === 'Sem nome')
+  };
+}
+
+/* GARGALO DE UM EXECUTIVO — fonte ÚNICA da regra.
+   Escrita uma vez porque três lugares dependem dela e divergir seria pior que não
+   ter: o funil do card da Daily, a pergunta do modo condução e a ordem em que as
+   pessoas entram na condução. Na primeira versão eu duplicei a regra em duas
+   funções — dívida criada e paga no mesmo dia.
+
+   A regra pontua três coisas por etapa e a maior ganha:
+     · concentração (quantos negócios estão ali);
+     · SAÍDA TRAVADA: a etapa imediatamente seguinte está vazia e esta concentra
+       ≥25% do funil. Peso alto, porque é o degrau que não está sendo subido AGORA;
+     · negócios acima do SLA (severidade).
+   Empate resolve pela etapa mais cedo no pipeline — destravar o começo destrava o
+   resto, o contrário não é verdade.
+
+   Por que "saída travada" pesa tanto: SLA estourado mede negócio VELHO; saída
+   travada mede fluxo INTERROMPIDO. O Bruno tem 1 de 18 acima do SLA (parece o mais
+   saudável do time) e 14 em Visita com ZERO em Conversa com Decisor — ele é o caso
+   mais grave, e qualquer régua baseada só em SLA o coloca por último. */
+function gargaloDoRep(r) {
+  const stages = (r && r.stages) || {};
+  const ordem = ORDEM_ETAPAS_FUNIL.filter(sid => STAGE_LABELS[sid]);
+  const valores = ordem.map(sid => Number(stages[sid]) || 0);
+  const total = valores.reduce((a, b) => a + b, 0);
+  const travados = Array.isArray(r && r.travados) ? r.travados : [];
+  const travadosPorEtapa = {};
+  travados.forEach(l => { const sid = String((l && l.stageId) || ''); if (sid) travadosPorEtapa[sid] = (travadosPorEtapa[sid] || 0) + 1; });
+
+  if (total === 0) {
+    return { vazio: true, ordem, valores, total: 0, travados, travadosPorEtapa, sid: null, motivo: 'sem_funil', n: 0, trav: 0, severidade: 0, proximaLabel: null };
+  }
+
+  let sid = null, melhor = -1, motivo = '';
+  ordem.forEach((s, i) => {
+    const n = valores[i];
+    if (n === 0) return;
+    const trav = travadosPorEtapa[s] || 0;
+    const prox = (i + 1) < valores.length ? valores[i + 1] : null;
+    const saidaTravada = prox === 0 && (n / total) >= 0.25;
+    const score = n + trav * 1.5 + (saidaTravada ? total : 0);
+    if (score > melhor) { melhor = score; sid = s; motivo = saidaTravada ? 'saida_travada' : (trav > 0 ? 'parados' : 'estoque'); }
+  });
+
+  const i = ordem.indexOf(sid);
+  return {
+    vazio: false, ordem, valores, total, travados, travadosPorEtapa,
+    sid, motivo, n: valores[i], trav: travadosPorEtapa[sid] || 0,
+    proximaLabel: STAGE_LABELS[ordem[i + 1]] || null,
+    // Severidade normalizada (0–100), usada pela ordem da condução.
+    severidade: Math.round(((melhor / Math.max(1, total)) * 30) + ((travados.length / total) * 70))
+  };
+}
+
+/* ============================================================================
+   DESTRAVAR O FUNIL (28/08/26)
+   ----------------------------------------------------------------------------
+   O PEDIDO, nas palavras do Julyan: "precisamos que os executivos destravem as
+   etapas do funil, temos muitas visitas e poucas conversas com decisor, poucas
+   demo". O estoque do time no dia 28/08 diz a mesma coisa:
+
+     Prospecção 26 · VISITA 51 · Decisor 21 · Demo 11 · Negociação 18 · Ag.Pag 5
+
+   Entram 51 em Visita e chegam 21 ao Decisor — e no Decisor a mediana é 11 dias
+   contra SLA de 4 (2,75x, o pior do funil).
+
+   POR QUE ISTO NÃO É A FILA QUE JÁ EXISTE. `filaDeFollowUp` ordena por URGÊNCIA
+   (SLA estourado, follow-up vencido, cadência atrasada). É a pergunta "o que pega
+   fogo?". Destravar é outra pergunta: "qual DEGRAU não está sendo subido, e quem
+   sobe primeiro?". Um funil pode não ter nada pegando fogo e não avançar ninguém —
+   é literalmente o caso do Bruno: 1 de 18 acima do SLA (parece o mais saudável do
+   time) e 14 em Visita com ZERO no Decisor.
+
+   O QUE ESTA FUNÇÃO NÃO FAZ, de propósito: taxa de conversão entre etapas. O
+   hubspot.json guarda estoque e o avanço DO DIA (avancosHubspotHoje), não
+   histórico de mudança de etapa. Sem série histórica, "conversão de 41%" seria
+   número inventado — e inventar indicador é proibido no projeto. O que dá pra
+   afirmar com honestidade é: quantos estão em cada etapa, há quanto tempo, quantos
+   acima do SLA, e QUEM nomeadamente pode subir o degrau agora.
+
+   O MOVIMENTO de cada candidato sai do que FALTA nele, não de texto genérico:
+     falta qualificação  -> registrar sistema e dor (é o insumo pra pedir o decisor)
+     falta próximo passo -> o gesto da etapa, com data
+     tem os dois         -> executar o passo datado e mover a etapa
+   Essa ordem não é estética: sem saber a dor, "ligar pedindo o decisor" é ligar sem
+   ter o que dizer. É a diferença entre cobrar esforço e ensinar o ofício.
+   ============================================================================ */
+
+// O gesto que sobe CADA degrau. Fica em tabela e não em if espalhado porque é
+// conteúdo de playbook: quem revisa o texto do gesto não deveria precisar ler código.
+const GESTO_DA_ETAPA = {
+  '1395880469': { rotulo: 'Prospecção', gesto: 'Fazer o primeiro contato e agendar a visita', pergunta: 'Você já falou com alguém de dentro?' },
+  '1396005401': { rotulo: 'Visita', gesto: 'Ligar pedindo o decisor pelo nome e datar o retorno', pergunta: 'Quem decide, e quando ele te recebe?' },
+  '1395880470': { rotulo: 'Conversa com Decisor', gesto: 'Marcar a demo com quem decide presente', pergunta: 'A demo tem data com o decisor na sala?' },
+  '1395880471': { rotulo: 'Demo/Proposta', gesto: 'Enviar a proposta e datar a decisão', pergunta: 'Qual o dia da resposta?' },
+  '1395880472': { rotulo: 'Negociação', gesto: 'Confirmar a data da decisão e a condição comercial', pergunta: 'O que falta pra assinar?' },
+  '1395880473': { rotulo: 'Ag. Pagamento', gesto: 'Confirmar o pagamento e liberar o onboarding', pergunta: 'O pagamento entrou?' }
+};
+
+function destravarFunil(ownerId) {
+  const r = (DATA.reps || []).find(x => String(x.ownerId) === String(ownerId));
+  if (!r) return null;
+
+  const g = gargaloDoRep(r);
+  const leads = meusNegociosAbertos(ownerId);
+  const slaDe = sid => (DATA.stageMeta && DATA.stageMeta.slaDays && DATA.stageMeta.slaDays[sid]) || null;
+
+  /* Retrato por etapa: estoque, idade e pressão de SLA.
+     A etapa com ZERO ENTRA na lista, e isso é deliberado. A primeira versão filtrava
+     n===0 e a faixa do Bruno saía "14 Visita › 1 Demo/Proposta" — escondendo justamente
+     "Conversa com Decisor: 0", que é a informação inteira do caso dele. Um degrau vazio
+     no meio do funil é o sintoma mais eloquente que existe; omiti-lo transforma o
+     gráfico num resumo simpático.
+     Só as 6 etapas do caminho principal entram sempre; Reciclagem e Enviado Onboarding
+     aparecem apenas se tiverem negócio, porque não são degraus do fluxo. */
+  const CAMINHO_PRINCIPAL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
+  // Carteira inteiramente vazia (entrante em onboarding): retrato vazio, não uma faixa
+  // de seis zeros. Zero só lê como LACUNA quando existe funil em volta; sem funil, seis
+  // zeros lado a lado é só ruído para quem ainda não tem negócio nenhum.
+  const porEtapa = leads.length === 0 ? [] : ORDEM_ETAPAS_FUNIL.map(sid => {
+    const daEtapa = leads.filter(l => etapaDoLead(l) === sid);
+    if (daEtapa.length === 0 && !CAMINHO_PRINCIPAL.includes(sid)) return null;
+    const dias = daEtapa.map(l => l.dias || 0).sort((a, b) => a - b);
+    // Etapa vazia: mediana é null explícito, não undefined — quem consome testa `!= null`
+    // e undefined passaria pelo teste do mesmo jeito, mas null diz o que se quer dizer.
+    const mediana = dias.length ? dias[Math.floor(dias.length / 2)] : null;
+    const sla = slaDe(sid);
+    return {
+      sid,
+      label: (GESTO_DA_ETAPA[sid] && GESTO_DA_ETAPA[sid].rotulo) || STAGE_LABELS[sid] || sid,
+      n: daEtapa.length,
+      mediana,
+      sla,
+      acimaDoSla: daEtapa.filter(l => l.slaBreach).length,
+      // razão mediana/SLA: acima de 1 a etapa está devolvendo mais devagar do que a
+      // própria régua manda. É comparável entre etapas, ao contrário de "11 dias".
+      razao: (sla && mediana != null) ? Math.round((mediana / sla) * 10) / 10 : null,
+      ehGargalo: sid === g.sid
+    };
+  }).filter(Boolean);
+
+  // Quem sobe o degrau agora, na etapa que está travando.
+  const gesto = GESTO_DA_ETAPA[g.sid] || null;
+  const candidatos = leads.filter(l => etapaDoLead(l) === g.sid).map(l => {
+    const falta = (typeof qualificacaoFaltante === 'function') ? qualificacaoFaltante(l) : [];
+    const temPasso = (typeof leadTemProximoPasso === 'function') ? leadTemProximoPasso(l) : false;
+    let movimento, prioridade;
+    if (falta.length > 0) {
+      movimento = 'Registrar sistema e dor — sem isso o próximo contato é sem argumento';
+      prioridade = 1;
+    } else if (!temPasso) {
+      movimento = gesto ? gesto.gesto : 'Definir o próximo passo com data';
+      prioridade = 2;
+    } else {
+      movimento = 'Passo já datado — executar e mover a etapa';
+      prioridade = 3;
+    }
+    return {
+      id: l.id, nome: l.name, dias: l.dias || 0, slaEstourado: !!l.slaBreach,
+      faltaQualificacao: falta.length > 0, temProximoPasso: temPasso,
+      movimento, prioridade
+    };
+  }).sort((a, b) =>
+    a.prioridade - b.prioridade ||
+    Number(b.slaEstourado) - Number(a.slaEstourado) ||
+    b.dias - a.dias
+  );
+
+  return {
+    etapaTravada: g.sid,
+    etapaTravadaLabel: gesto ? gesto.rotulo : (STAGE_LABELS[g.sid] || null),
+    proximaLabel: g.proximaLabel,
+    motivo: g.motivo,
+    pergunta: gesto ? gesto.pergunta : null,
+    porEtapa,
+    candidatos,
+    // agregados que a tela usa sem recontar
+    prontosParaSubir: candidatos.filter(c => c.prioridade === 3).length,
+    faltandoQualificacao: candidatos.filter(c => c.prioridade === 1).length,
+    faltandoPasso: candidatos.filter(c => c.prioridade === 2).length
   };
 }
 
@@ -20960,6 +21364,12 @@ function buildBriefingExecutivoHTML(r) {
   const ontem = atividadesComprovadasNoDia(r.ownerId, ontemISO);
   const rowOntem = getDaily(r.ownerId, ontemISO) || {};
   const seqExec = sequenciaDeExecucao(r.ownerId, dailyRefDate);
+  /* CICLO FECHADO (28/08/26) — o par de qualidade da sequência.
+     `seqExec` conta dias na rua; sozinho ele deixa passar o caso que os dados
+     mostraram ser a regra: visita acontece, ciclo não fecha (51 em Visita, 49 sem
+     qualificação, 123 de 132 sem próximo passo). Os dois juntos dizem "saí à rua E
+     terminei dentro do CRM", que é a definição de constância que produz venda. */
+  const ciclo = cicloFechadoDaSemana(r.ownerId, dailyRefDate);
   const ramp = typeof rampDoOwner === 'function' ? rampDoOwner(r.ownerId) : { label: '', alvo: null, definido: false };
 
   // 1 · O QUE ACONTECEU — só fato comprovado. Cada número diz de onde veio.
@@ -21106,11 +21516,32 @@ function buildBriefingExecutivoHTML(r) {
                 : `<div class="briefing-vazio">Fase de rampagem não definida no seu cadastro — sem ela, o Cockpit não tem alvo justo para comparar. Peça ao gestor para definir.</div>`}
         </div>
 
+        <!-- VAZAMENTO DO CICLO (28/08/26). Aparece SÓ quando há visita avaliada e
+             alguma não fechou. Dizer "1 de 7" é cobrança; dizer QUAL gesto faltou é
+             ofício — e os dois gestos que faltam aqui são os únicos que o executivo
+             controla sozinho, sem depender do cliente responder. -->
+        ${(ciclo.avaliados > 0 && ciclo.fechados.length < ciclo.avaliados) ? `
+        <div style="margin-top:2px;background:var(--amber-soft);border-left:3px solid var(--amber);border-radius:0 11px 11px 0;padding:10px 13px;font-size:11.5px;color:var(--amber-ink);line-height:1.55;">
+          <b>Ciclo aberto em ${ciclo.avaliados - ciclo.fechados.length} de ${ciclo.avaliados} visitas desta semana.</b>
+          ${(ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) > 0
+            ? ` Sem sistema e dor registrados: ${esc((ciclo.faltaAmbos.concat(ciclo.faltaQualificacao)).slice(0, 3).join(', '))}${(ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) > 3 ? ' e mais ' + ((ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) - 3) : ''}.`
+            : ''}
+          ${(ciclo.faltaAmbos.length + ciclo.faltaPasso.length) > 0
+            ? ` Sem próximo passo datado: ${esc((ciclo.faltaAmbos.concat(ciclo.faltaPasso)).slice(0, 3).join(', '))}${(ciclo.faltaAmbos.length + ciclo.faltaPasso.length) > 3 ? ' e mais ' + ((ciclo.faltaAmbos.length + ciclo.faltaPasso.length) - 3) : ''}.`
+            : ''}
+          ${ciclo.semDeal > 0 ? ` <span style="opacity:.75;">(${ciclo.semDeal} visita(s) sem negócio associado ficaram fora da conta.)</span>` : ''}
+        </div>` : ''}
+
       </div>
 
       <div class="daily-promise-foot">
         <span><b>${pontosDoDia(getDaily(r.ownerId, dailyRefDate) || {})}</b> pontos hoje</span>
         <span><b>🔥 ${seqExec}d</b> na rua</span>
+        <!-- Sem visita comprovada na semana o item SAI, em vez de virar "— ciclo
+             fechado": travessão ao lado de rótulo não informa nada, e 0% mentiria
+             (diria que ele falhou no ciclo, quando ele não teve visita avaliada).
+             Mesma regra que já vale pro prazo da fila e pros indicadores sem amostra. -->
+        ${ciclo.pct == null ? '' : `<span title="Visitas da semana que terminaram qualificadas e com próximo passo datado. Evidência do HubSpot, nada marcado à mão."><b>${ciclo.fechados.length}/${ciclo.avaliados}</b> ciclo fechado</span>`}
         <span><b>${feitas}/${conquistas.length}</b> conquistas</span>
         <button type="button" class="push" data-briefing-ir="hoje" style="background:none;border:none;color:var(--red);font:800 11px 'Manrope',sans-serif;cursor:pointer;padding:0;">O que eu faço agora →</button>
       </div>
@@ -21417,57 +21848,6 @@ function wireIndicadoresGestor(rootEl) {
    onde a decisão acontece.
    ============================================================================ */
 
-/* GARGALO DE UM EXECUTIVO — fonte ÚNICA da regra.
-   Escrita uma vez porque três lugares dependem dela e divergir seria pior que não
-   ter: o funil do card da Daily, a pergunta do modo condução e a ordem em que as
-   pessoas entram na condução. Na primeira versão eu duplicei a regra em duas
-   funções — dívida criada e paga no mesmo dia.
-
-   A regra pontua três coisas por etapa e a maior ganha:
-     · concentração (quantos negócios estão ali);
-     · SAÍDA TRAVADA: a etapa imediatamente seguinte está vazia e esta concentra
-       ≥25% do funil. Peso alto, porque é o degrau que não está sendo subido AGORA;
-     · negócios acima do SLA (severidade).
-   Empate resolve pela etapa mais cedo no pipeline — destravar o começo destrava o
-   resto, o contrário não é verdade.
-
-   Por que "saída travada" pesa tanto: SLA estourado mede negócio VELHO; saída
-   travada mede fluxo INTERROMPIDO. O Bruno tem 1 de 18 acima do SLA (parece o mais
-   saudável do time) e 14 em Visita com ZERO em Conversa com Decisor — ele é o caso
-   mais grave, e qualquer régua baseada só em SLA o coloca por último. */
-function gargaloDoRep(r) {
-  const stages = (r && r.stages) || {};
-  const ordem = ORDEM_ETAPAS_FUNIL.filter(sid => STAGE_LABELS[sid]);
-  const valores = ordem.map(sid => Number(stages[sid]) || 0);
-  const total = valores.reduce((a, b) => a + b, 0);
-  const travados = Array.isArray(r && r.travados) ? r.travados : [];
-  const travadosPorEtapa = {};
-  travados.forEach(l => { const sid = String((l && l.stageId) || ''); if (sid) travadosPorEtapa[sid] = (travadosPorEtapa[sid] || 0) + 1; });
-
-  if (total === 0) {
-    return { vazio: true, ordem, valores, total: 0, travados, travadosPorEtapa, sid: null, motivo: 'sem_funil', n: 0, trav: 0, severidade: 0, proximaLabel: null };
-  }
-
-  let sid = null, melhor = -1, motivo = '';
-  ordem.forEach((s, i) => {
-    const n = valores[i];
-    if (n === 0) return;
-    const trav = travadosPorEtapa[s] || 0;
-    const prox = (i + 1) < valores.length ? valores[i + 1] : null;
-    const saidaTravada = prox === 0 && (n / total) >= 0.25;
-    const score = n + trav * 1.5 + (saidaTravada ? total : 0);
-    if (score > melhor) { melhor = score; sid = s; motivo = saidaTravada ? 'saida_travada' : (trav > 0 ? 'parados' : 'estoque'); }
-  });
-
-  const i = ordem.indexOf(sid);
-  return {
-    vazio: false, ordem, valores, total, travados, travadosPorEtapa,
-    sid, motivo, n: valores[i], trav: travadosPorEtapa[sid] || 0,
-    proximaLabel: STAGE_LABELS[ordem[i + 1]] || null,
-    // Severidade normalizada (0–100), usada pela ordem da condução.
-    severidade: Math.round(((melhor / Math.max(1, total)) * 30) + ((travados.length / total) * 70))
-  };
-}
 
 /* `opts.semCabecalho` — o modo condução já põe o próprio título "Funil dele agora"
    acima do bloco, e sem isto o cabeçalho aparecia DUAS vezes na tela projetada
