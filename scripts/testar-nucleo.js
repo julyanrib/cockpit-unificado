@@ -1329,6 +1329,51 @@ teste('nomes da promessa: o travessao separa, o hifen do nome sobrevive', () => 
   igual(f('nao e lista'), [], 'string no lugar de lista devolve vazio');
 });
 
+teste('quentes no radar: a guarda de SLA e o "sem proximo passo" sao uma fonte so', () => {
+  // Nasceu de um defeito meu: a faixa da Daily do gestor mostrava 12 sob o rotulo
+  // "quentes sem proxima acao" enquanto a aba Time dizia "11 no radar · 9 sem proximo
+  // passo". Duas contagens do mesmo dado, e um rotulo que nao descrevia o proprio
+  // numero. Agora as duas telas chamam quentesNoRadar().
+  const base = dados({
+    stageMeta: { labels: { '1395880473': 'Negociacao' }, slaDays: { '1395880473': 5 } },
+    temperatura: { quentes: [
+      // dentro do prazo (2 de 5 dias) e SEM proximo passo -> conta nos dois
+      { id: 'h1', name: 'Sem passo no prazo', ownerId: OWNER, stageId: '1395880473', dias: 2, tarefas: [], notas: [] },
+      // dentro do prazo e COM tarefa futura -> entra no radar, fica fora do semPasso
+      { id: 'h2', name: 'Com passo no prazo', ownerId: OWNER, stageId: '1395880473', dias: 2,
+        // O campo da tarefa e `timestamp` (nao `data`) — contrato de proximoPassoDoLead.
+        tarefas: [{ subject: 'Ligar', timestamp: diasAtras(-3).toISOString() }], notas: [] },
+      // SLA ESTOURADO (7 de 5 dias): sai do radar, e por isso sai das duas contagens.
+      // E exatamente este caso que produzia 12 aqui e 11 la.
+      { id: 'h3', name: 'Quente com SLA estourado', ownerId: OWNER, stageId: '1395880473', dias: 7, tarefas: [], notas: [] },
+      // de outro dono: o gestor ve, o executivo nao
+      { id: 'h4', name: 'De outro executivo', ownerId: '999', stageId: '1395880473', dias: 1, tarefas: [], notas: [] }
+    ] }
+  });
+  const g = novoContexto(base, { ownerId: null, role: 'manager' });
+  const rg = g.quentesNoRadar(null);
+  igual(rg.radar.map(l => l.id), ['h1', 'h2', 'h4'], 'o de SLA estourado sai do radar');
+  igual(rg.semPasso.map(l => l.id), ['h1', 'h4'], 'semPasso e subconjunto do radar');
+  verdade(rg.semPasso.length < rg.radar.length, 'semPasso nunca e maior que o radar');
+
+  // Filtrado por dono: e o que a aba Time faz quando quem olha e executivo.
+  const r = novoContexto(base, { ownerId: OWNER, role: 'rep' });
+  igual(r.quentesNoRadar(OWNER).radar.map(l => l.id), ['h1', 'h2'], 'executivo nao ve o do colega');
+  igual(r.quentesNoRadar(OWNER).semPasso.map(l => l.id), ['h1'], 'e o semPasso dele tambem filtra');
+
+  // Etapa sem SLA cadastrado NAO derruba o lead do radar: sem regra, nao ha estouro.
+  const semSla = novoContexto(dados({
+    stageMeta: { labels: { 'xx': 'Etapa sem SLA' }, slaDays: {} },
+    temperatura: { quentes: [{ id: 'h5', name: 'Etapa sem SLA', ownerId: OWNER, stageId: 'xx', dias: 99, tarefas: [], notas: [] }] }
+  }), { ownerId: null, role: 'manager' });
+  igual(semSla.quentesNoRadar(null).radar.map(l => l.id), ['h5'], 'sem SLA cadastrado o lead fica no radar');
+
+  // Sem temperatura nenhuma: listas vazias, nao explode.
+  const vazio = novoContexto(dados({ temperatura: {} }), { ownerId: null, role: 'manager' });
+  igual(vazio.quentesNoRadar(null).radar, [], 'temperatura vazia devolve radar vazio');
+  igual(vazio.quentesNoRadar(null).semPasso, [], 'e semPasso vazio');
+});
+
 console.log('');
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);

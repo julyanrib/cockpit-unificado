@@ -14272,16 +14272,17 @@ function renderLeadsPrioritarios() {
   // novo, sem confiar cegamente: um lead quente com SLA estourado não entra na lista.
   // Antes também cortava em 5 fixos; agora mostra todos os que vieram do backend (até
   // 12, já limitado lá) com rolagem, em vez de esconder os demais.
+  // Executivo vê só os quentes DELE — abrir o app às 8h30 e ver o lead do colega é
+  // ruído, não ação. Gestor continua vendo o time inteiro.
+  // A GUARDA DE SLA E A CONTAGEM SAÍRAM DAQUI (28/08/26) para quentesNoRadar(), no
+  // núcleo: a faixa da Daily do gestor precisa do MESMO número, e duplicar o filtro
+  // foi o que produziu "11 no radar" aqui e "12" lá no mesmo dia. A ordenação fica,
+  // porque é desta tela: sem próximo passo primeiro, depois etapa mais avançada.
   const souRepQuentes = sessaoAtual && sessaoAtual.role === 'rep';
-  const todosQuentes = (DATA.temperatura.quentes || []).filter(l => {
-    // Executivo vê só os quentes DELE — abrir o app às 8h30 e ver o lead do colega é
-    // ruído, não ação. Gestor continua vendo o time inteiro.
-    if (souRepQuentes && l.ownerId !== sessaoAtual.ownerId) return false;
-    const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
-    const restante = slaDias ? slaDias - l.dias : null;
-    return restante === null || restante > 0;
-  }).sort((a, b) => Number(leadTemProximoPasso(a)) - Number(leadTemProximoPasso(b)) || (PRIORIDADE_ETAPA[b.stageId] || 0) - (PRIORIDADE_ETAPA[a.stageId] || 0));
-  const semPassoCount = todosQuentes.filter(l => !leadTemProximoPasso(l)).length;
+  const quentesDoRadar = quentesNoRadar(souRepQuentes ? sessaoAtual.ownerId : null);
+  const todosQuentes = quentesDoRadar.radar.slice()
+    .sort((a, b) => Number(leadTemProximoPasso(a)) - Number(leadTemProximoPasso(b)) || (PRIORIDADE_ETAPA[b.stageId] || 0) - (PRIORIDADE_ETAPA[a.stageId] || 0));
+  const semPassoCount = quentesDoRadar.semPasso.length;
   if (countEl) countEl.textContent = `${todosQuentes.length} no radar · ${semPassoCount} sem próximo passo`;
 
   if (todosQuentes.length === 0) {
@@ -21926,6 +21927,37 @@ function nomesDaPromessaDoPlano(prioridades) {
     .filter(Boolean);
 }
 
+/* ============================================================================
+   LEADS QUENTES NO RADAR (28/08/26) — UMA FONTE PARA AS DUAS TELAS
+   ----------------------------------------------------------------------------
+   POR QUE ISTO EXISTE: a aba Time mostrava "11 no radar · 9 sem próximo passo" e a
+   faixa nova da Daily do gestor mostrava "12". Mesmo dia, mesma pergunta, dois
+   números — e o pior era o rótulo: a faixa dizia "quentes sem próxima ação" e contava
+   TODOS os quentes. Rótulo que não descreve o próprio número é pior que número
+   errado, porque não dá pra desconfiar dele olhando.
+
+   A diferença de 12 para 11 é uma SEGUNDA GUARDA DE SLA. `fetch-hubspot.js` já
+   classifica como frio quem estourou o prazo da etapa, mas a aba Time reconferia sem
+   confiar cegamente no backend — e essa desconfiança está certa, então virou regra
+   única aqui em vez de ficar escondida dentro de uma função de render.
+
+   DUAS CONTAGENS, porque respondem a coisas diferentes:
+     radar     = quente e ainda dentro do prazo da etapa  (o estoque com valor)
+     semPasso  = desses, quantos não têm próximo passo    (o que sobrou na mesa)
+   Quem quiser dizer "sem próxima ação" na tela usa semPasso. Só isso.
+   ============================================================================ */
+function quentesNoRadar(ownerId) {
+  const brutos = ((DATA.temperatura || {}).quentes) || [];
+  const radar = brutos.filter(l => {
+    if (ownerId != null && String(l.ownerId) !== String(ownerId)) return false;
+    const slaDias = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
+    const restante = slaDias ? slaDias - l.dias : null;
+    return restante === null || restante > 0;
+  });
+  const semPasso = radar.filter(l => !leadTemProximoPasso(l));
+  return { radar, semPasso };
+}
+
 /* @nucleo2:fim */
 
 /* Conquistas comprovadas (Escopo 11). Cada uma é um FATO verificável no HubSpot.
@@ -23540,7 +23572,11 @@ async function renderDaily() {
     const nomeCurto = id => { const r = repsDaily.find(x => String(x.ownerId) === String(id));
       return r ? r.name.split(' ')[0] : 'sem dono'; };
 
-    const quentes = (((DATA.temperatura || {}).quentes) || [])
+    /* CORRIGIDO no mesmo dia em que nasceu: esta faixa contava TODOS os quentes (12)
+       sob o rótulo "sem próxima ação", enquanto a aba Time dizia "11 no radar · 9 sem
+       próximo passo". O número que o rótulo promete é o semPasso — 9. Ver a nota
+       longa de quentesNoRadar sobre a guarda de SLA que explicava o 12 vs 11. */
+    const quentes = quentesNoRadar(null).semPasso
       .filter(l => idsDoTime.has(String(l.ownerId)));
     const porRepQuentes = {};
     quentes.forEach(l => { const k = String(l.ownerId); porRepQuentes[k] = (porRepQuentes[k] || 0) + 1; });
@@ -23548,7 +23584,7 @@ async function renderDaily() {
     const detalheQuentes = topQuentes.length
       ? topQuentes.slice(0, 3).map(([id, k]) => `${esc(nomeCurto(id))} ${k}`).join(' · ')
         + (topQuentes.length > 3 ? ` · +${topQuentes.length - 3}` : '')
-      : 'nenhum quente descoberto — carteira coberta';
+      : 'todo quente do time tem próximo passo';
 
     const topRota = Object.entries(rotaHojePorOwner).sort((a, b) => b[1] - a[1]);
     const detalheRota = rotaHojeTotal == null
