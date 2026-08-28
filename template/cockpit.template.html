@@ -7475,7 +7475,11 @@ async function renderMeuPainel() {
 
       <div class="chart-card" style="margin:0;">
         <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;">
-          <b style="font-family:'Poppins',sans-serif;font-size:13.5px;">Seu plano com o gestor</b>
+          <!-- O TÍTULO SEGUE O ESTADO (28/08/26). "Seu plano com o gestor" afirma que
+               existe plano. Com tudo vencido, o título passa a dizer a verdade e o card
+               vira registro do 1:1 em vez de tarefa de hoje — ver a nota longa em
+               compromissosResumoHTML. -->
+          <b style="font-family:'Poppins',sans-serif;font-size:13.5px;">${compromissosComPrazo(r).length > 0 && compromissosComPrazo(r).every(x => x.vencido) ? 'Acordos do último 1:1 · vencidos' : 'Seu plano com o gestor'}</b>
           <!-- Escopo 10: o contador leva os vencidos. "0/3" sozinho não tem idade, e era
                isso que deixava um acordo de 17/08 vivo em 27/08 como se estivesse em
                aberto. O checkbox continua aqui de propósito: ele não é check pessoal —
@@ -7483,15 +7487,47 @@ async function renderMeuPainel() {
                Pessoas (é o acordo do 1:1, não uma ação de CRM). -->
           <span id="meuPainelPdiCount" style="font-size:11.5px;color:var(--muted2);">${compromissosResumoHTML(r) || `✓ 0/${r.compromissos.length} cumpridos`}</span>
         </div>
-        <ul class="commit-list" id="meuPainelCommitList" style="margin:0;">
-          ${compromissosComPrazo(r).map(x => `
+        <!-- ORDEM E DOBRA (28/08/26). Duas mudanças, uma regra: o que ainda dá pra
+             cumprir hoje vem primeiro, e o que não dá mais sai do caminho sem sumir.
+
+             O checkbox continua em TODOS, inclusive nos vencidos, de propósito: ele
+             grava em pdi_compromissos e é o MESMO estado que o gestor vê na aba
+             Pessoas. Marcar um vencido como cumprido é exatamente o que acontece
+             quando eles conversam e fecham a pendência no 1:1 — tirar o checkbox de lá
+             impediria de fechar o acordo. -->
+        ${(() => {
+          const itens = compromissosComPrazo(r);
+          const li = x => `
             <li class="commit-item">
               <span class="checkbox" data-item="${x.idx}"></span>
               <span class="commit-text">${x.texto}<span style="display:block;font-size:10px;font-weight:700;color:${x.cor};margin-top:3px;">${esc(x.situacao)}</span></span>
-            </li>
-          `).join('')}
-        </ul>
-        ${compromissosComPrazo(r).some(x => x.vencido) ? `<div style="background:var(--red-soft);border-radius:9px;padding:9px 11px;font-size:11px;color:var(--body);line-height:1.5;margin-top:10px;">Tem acordo vencido. Reprogramar ou encerrar é conversa de 1:1 — não precisa ficar em aberto pra sempre.</div>` : ''}
+            </li>`;
+          const vivos = itens.filter(x => !x.vencido);
+          const mortos = itens.filter(x => x.vencido);
+          const listaVivos = vivos.length
+            ? `<ul class="commit-list" id="meuPainelCommitList" data-pdi-lista style="margin:0;">${vivos.map(li).join('')}</ul>`
+            : '<ul class="commit-list" id="meuPainelCommitList" data-pdi-lista style="margin:0;display:none;"></ul>';
+          if (!mortos.length) return listaVivos;
+          const prazos = mortos.filter(x => x.prazoISO).map(x => x.prazoISO).sort();
+          const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+          const janela = prazos.length ? (prazos[0] === prazos[prazos.length - 1] ? fmt(prazos[0]) : fmt(prazos[0]) + ' a ' + fmt(prazos[prazos.length - 1])) : null;
+          const chamada = vivos.length
+            ? `Reprogramar ou encerrar é conversa de 1:1 — não precisa ficar em aberto pra sempre.`
+            : `Você não tem acordo em aberto para esta semana. O compromisso novo nasce na segunda de manhã, junto da sua análise — e o que ficou destes aqui é pauta do próximo 1:1, não tarefa de hoje.`;
+          return listaVivos + `
+            <div style="background:var(--red-soft);border-radius:9px;padding:10px 12px;font-size:11.5px;color:var(--body);line-height:1.55;margin-top:${vivos.length ? '10px' : '0'};">
+              <!-- Sem vivos, o resumo do cabecalho JA diz "N acordos vencidos · era para
+                   DD/MM–DD/MM". Repetir aqui seria dizer o mesmo fato duas vezes a uma
+                   linha de distancia — o defeito que esta revisao passou o dia tirando das
+                   outras telas. Entao aqui entra so a ACAO. Havendo vivos, o cabecalho
+                   mostra o placar e nao a contagem de vencidos: ai a contagem entra. -->
+              ${vivos.length ? `<b>${mortos.length} acordo${mortos.length === 1 ? '' : 's'} vencido${mortos.length === 1 ? '' : 's'}${janela ? ' (era para ' + janela + ')' : ''}.</b> ` : ''}${chamada}
+            </div>
+            <details style="margin-top:9px;">
+              <summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--muted);">Ver os ${mortos.length} vencido${mortos.length === 1 ? '' : 's'} e marcar no 1:1</summary>
+              <ul class="commit-list" data-pdi-lista style="margin:9px 0 0;">${mortos.map(li).join('')}</ul>
+            </details>`;
+        })()}
         <div class="sign-row">
           <span>Combinado no 1:1 de <input type="text" id="meuPainelPdiData" aria-label="Data combinada no 1:1 (dd/mm)" placeholder="dd/mm"></span>
         </div>
@@ -7533,15 +7569,40 @@ async function renderMeuPainel() {
   wireHojeExecucao(el, r, diagDia);
 
   // PDI: carrega estado salvo e religa cliques
+  /* O ESTADO DO PDI É MAPEADO POR ÍNDICE, NÃO PELA ORDEM DO DOM (28/08/26).
+
+     Antes a leitura e a escrita usavam a posição do checkbox na tela:
+       ler   -> checkboxes.forEach((cb, i) => pdi.checked[i] ...)
+       gravar-> Array.from(checkboxes).map(cb => cb.classList.contains(...))
+
+     Isso só funcionava porque a lista aparecia numa ordem só. Agora os acordos vivos
+     vêm primeiro e os vencidos ficam recolhidos num segundo <ul>, então a posição na
+     tela deixou de corresponder ao índice do compromisso.
+
+     O dano seria SILENCIOSO E EM DADO COMPARTILHADO: `checked` é um array indexado
+     pela posição original, gravado em pdi_compromissos, e é o MESMO registro que o
+     gestor lê na aba Pessoas. Marcar o acordo vivo gravaria "cumprido" no índice do
+     vencido — o executivo veria uma coisa e o gestor outra, sem nenhum erro na tela.
+
+     Cada checkbox já carregava data-item com o índice original. Passou a ser ele a
+     fonte, nos dois sentidos. E a busca pega as DUAS listas (marca data-pdi-lista),
+     porque o checkbox do vencido continua ativo de propósito: fechar a pendência no
+     1:1 é exatamente o gesto que ele existe para registrar. */
   const pdi = getPdiState(r.ownerId, r.compromissos.length);
-  const checkboxes = el.querySelectorAll('#meuPainelCommitList .checkbox');
-  checkboxes.forEach((cb, i) => { if (pdi.checked[i]) cb.classList.add('checked'); });
+  const checkboxes = el.querySelectorAll('[data-pdi-lista] .checkbox');
+  const idxDo = cb => { const i = Number(cb.dataset.item); return Number.isInteger(i) ? i : null; };
+  checkboxes.forEach(cb => { const i = idxDo(cb); if (i != null && pdi.checked[i]) cb.classList.add('checked'); });
   const dataInput = document.getElementById('meuPainelPdiData');
   dataInput.value = pdi.data;
 
 
   function persistPdi() {
-    const checkedNow = Array.from(checkboxes).map(cb => cb.classList.contains('checked'));
+    // Monta o array na ordem dos COMPROMISSOS, não na da tela — ver a nota acima.
+    const checkedNow = new Array(r.compromissos.length).fill(false);
+    checkboxes.forEach(cb => {
+      const i = idxDo(cb);
+      if (i != null && i < checkedNow.length) checkedNow[i] = cb.classList.contains('checked');
+    });
     savePdiState(r.ownerId, checkedNow, dataInput.value);
     const feitos = checkedNow.filter(Boolean).length;
     // Recalcula com os prazos (o resumo leva os vencidos), não só a contagem.
@@ -28001,11 +28062,36 @@ function compromissosComPrazo(r) {
   });
 }
 
+/* ACORDO VENCIDO NÃO É PLACAR DE PROGRESSO (28/08/26).
+
+   Medido na tela do Marco em produção: "Seu plano com o gestor · 0/3 cumpridos ·
+   3 vencidos", com os três combinados para 17 e 21/08 — vencidos há 11 dias, e
+   exibidos todo dia como se fossem o plano da semana.
+
+   Uma fração como "0/3 cumpridos" afirma que existe alvo VIVO: é convite a agir e
+   régua de cobrança. Aplicada a um acordo morto há 11 dias, ela cobra o que não dá
+   mais para cumprir e ocupa o lugar do compromisso desta semana. O executivo abre a
+   tela e a primeira coisa que ela diz sobre o plano dele é um zero de duas semanas
+   atrás.
+
+   Quando NADA está vivo, o resumo passa a declarar o fato em vez de pontuar: quantos
+   venceram, e para quando eram. Havendo qualquer acordo vivo, o placar continua —
+   ali ele mede algo que ainda pode ser cumprido hoje. */
 function compromissosResumoHTML(r) {
   const itens = compromissosComPrazo(r);
   if (itens.length === 0) return '';
   const feitos = itens.filter(x => x.feito).length;
   const vencidos = itens.filter(x => x.vencido).length;
+  const vivos = itens.filter(x => !x.feito && !x.vencido).length;
+
+  if (vivos === 0 && vencidos > 0) {
+    const prazos = itens.filter(x => x.prazoISO).map(x => x.prazoISO).sort();
+    const fmt = iso => new Date(iso + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const janela = prazos.length
+      ? (prazos[0] === prazos[prazos.length - 1] ? fmt(prazos[0]) : fmt(prazos[0]) + '–' + fmt(prazos[prazos.length - 1]))
+      : null;
+    return `<span style="font-size:11.5px;color:var(--red);">${vencidos} acordo${vencidos === 1 ? '' : 's'} vencido${vencidos === 1 ? '' : 's'}${feitos > 0 ? ` · ${feitos} cumprido${feitos === 1 ? '' : 's'}` : ''}${janela ? ` · era para ${janela}` : ''}</span>`;
+  }
   return `<span style="font-size:11.5px;color:${vencidos > 0 ? 'var(--red)' : 'var(--muted2)'};">✓ ${feitos}/${itens.length} cumpridos${vencidos > 0 ? ` · ${vencidos} vencido${vencidos === 1 ? '' : 's'}` : ''}</span>`;
 }
 
