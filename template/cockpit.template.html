@@ -22040,6 +22040,60 @@ function quentesNoRadar(ownerId) {
   return { radar, semPasso };
 }
 
+/* ============================================================================
+   AS TRÊS VISÕES DA FILA DE PROSPECÇÃO (28/08/26)
+   ----------------------------------------------------------------------------
+   O QUE ELAS RESPONDEM, medido nas 970 contas da base hoje:
+
+     recém-aberta (<= 6 meses)     460   melhor sinal comercial que a base tem
+     pronta pra ligar (telefone)   273   dá pra qualificar ANTES de ir
+     dado cruzado (2+ fontes)       11   o perfil mais completo que existe
+
+   ELAS SÃO, NA PRÁTICA, EXCLUDENTES — e isto é o achado que importa, porque a
+   primeira versão deste recorte prometia o contrário. A base são DOIS MUNDOS
+   DISJUNTOS, e a medição é direta:
+
+     fonte                        n     tem abertura   tem telefone   tem avaliações
+     Casa dos Dados             667          541              0               0
+     outscraper + Google        303            2            263             303
+
+   Ou seja: "recém-aberta" só existe na Casa dos Dados (que vem do CNPJ e NÃO traz
+   telefone), e "pronta pra ligar" só existe no Google/Outscraper (que NÃO traz data
+   de abertura). Recém-aberta E com telefone = ZERO contas, das 970. Não é acidente
+   de preenchimento: é a forma das duas fontes.
+
+   CONSEQUÊNCIA DE PRODUTO, e é por isso que cada pílula diz o que lhe FALTA: quem
+   clica em "Recém-abertas" recebe 460 contas que ele não consegue ligar — o gesto
+   delas é buscar o contato pelo CNPJ na ficha (rota que existe: api/novidades-mercado)
+   ou visitar. Prometer "combine as duas" seria mandar o executivo num filtro que
+   sempre volta vazio, e ele concluiria que a tela está quebrada — que é exatamente
+   o risco de uma tela que ninguém está usando.
+
+   O corte por avaliação NÃO foi removido junto (a primeira versão removia). Como
+   ORDENAÇÃO ele era nocivo e já saiu em PR anterior — enterrava as 667 contas sem
+   avaliação no fim da fila em todo carregamento. Como FILTRO opcional é inofensivo:
+   só esconde quando alguém clica, e o gestor pode estar usando.
+   ============================================================================ */
+function prospeccaoEhRecemAberta(l, agoraMs) {
+  return prospeccaoFaixaDeOrdem(l, agoraMs) === 1;
+}
+
+// Telefone GRAVADO. Conta com CNPJ e sem telefone NÃO conta: o telefone dela existe,
+// mas só depois de uma consulta que gasta crédito e que o executivo dispara na ficha.
+// Prometer "pronta pra ligar" antes disso seria mentir sobre o que ele consegue fazer
+// agora. 10 dígitos é o mínimo de um fixo com DDD no Brasil.
+function prospeccaoProntaParaLigar(l) {
+  return String((l && l.telefone) || '').replace(/\D/g, '').length >= 10;
+}
+
+// Fonte cruzada: o campo `fonte` guarda a combinação com "+" (ex.: "outscraper +
+// Google Places"). É assim que a importação registra que o mesmo estabelecimento
+// apareceu em duas coletas e foi mesclado. São as contas com mais campo preenchido
+// da base — 10 das 11 têm telefone E avaliações.
+function prospeccaoDadoCruzado(l) {
+  return String((l && l.fonte) || '').includes('+');
+}
+
 /* @nucleo2:fim */
 
 /* Conquistas comprovadas (Escopo 11). Cada uma é um FATO verificável no HubSpot.
@@ -25525,7 +25579,7 @@ function abrirImportacaoProspeccao() {
   });
 }
 
-let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false, pertoDeMim: false, topAvaliadas: false, nuncaVisitada: false };
+let prospeccaoFiltro = { visao: 'ativas', busca: '', cidade: '', bairro: '', avaliacoesMin: '', categoria: '', fonte: '', responsavel: '', status: '', jaExiste: '', semTelefone: false, pertoDeMim: false, topAvaliadas: false, nuncaVisitada: false, recemAberta: false, prontaLigar: false, dadoCruzado: false };
 
 /* BLOCO 32 (13/08/26) apos BLOCO 33: o merge de portas do OSM na TABELA foi removido —
    com a sub-aba Prospecção do executivo aposentada (Opção A), a tabela virou ferramenta
@@ -25694,7 +25748,13 @@ function prospeccaoAplicarFiltros(lista) {
     // "Nunca visitada" cruza com a mesma fonte do card de execução: existe tarefa de
     // Visita/Revisita com o nome do restaurante? Se não, ninguém foi lá ainda.
     (!f.topAvaliadas || (Number(l.avaliacoes) || 0) >= 1000) &&
-    (!f.nuncaVisitada || !prospeccaoVisitados.has(prospeccaoNormalizarTexto(l.nome)))
+    (!f.nuncaVisitada || !prospeccaoVisitados.has(prospeccaoNormalizarTexto(l.nome))) &&
+    // As três visões (28/08/26). Compõem tecnicamente com todo o resto, mas
+    // recemAberta + prontaLigar volta VAZIO por construção da base — ver o comentário
+    // longo de prospeccaoEhRecemAberta sobre as duas fontes disjuntas.
+    (!f.recemAberta || prospeccaoEhRecemAberta(l)) &&
+    (!f.prontaLigar || prospeccaoProntaParaLigar(l)) &&
+    (!f.dadoCruzado || prospeccaoDadoCruzado(l))
   );
 }
 
@@ -26719,6 +26779,12 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   const totalTop = baseOperacional.filter(l => prospeccaoAtiva(l) && (Number(l.avaliacoes) || 0) >= 1000).length;
   const totalTop3k = baseOperacional.filter(l => prospeccaoAtiva(l) && (Number(l.avaliacoes) || 0) >= 3000).length;
   const totalNuncaVis = baseOperacional.filter(l => prospeccaoAtiva(l) && !prospeccaoVisitados.has(prospeccaoNormalizarTexto(l.nome))).length;
+  // Contagens das três visões. Mesma base e mesmo prospeccaoAtiva das outras pílulas,
+  // pra o número da pílula ser sempre o número que o clique dela entrega.
+  const agoraVisoes = Date.now();
+  const totalRecemAberta = baseOperacional.filter(l => prospeccaoAtiva(l) && prospeccaoEhRecemAberta(l, agoraVisoes)).length;
+  const totalProntaLigar = baseOperacional.filter(l => prospeccaoAtiva(l) && prospeccaoProntaParaLigar(l)).length;
+  const totalDadoCruzado = baseOperacional.filter(l => prospeccaoAtiva(l) && prospeccaoDadoCruzado(l)).length;
   // PEDIDO (19/08/26, Julyan: "eu quero a casa dos dados nessa lista, e eu poder
   // filtrar o que quero escolher, preciso dessa tela de prospecção mais otimizada")
   // — antes, filtrar por fonte exigia abrir "Filtros avançados" e usar um dropdown.
@@ -26730,6 +26796,32 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
     if (!total) return '';
     return `<button data-pillfonte="${esc(f.rotulo)}" class="filtro${prospeccaoFiltro.fonte === f.rotulo ? ' on' : ''}">${esc(f.rotulo)}<small>${total}</small></button>`;
   }).join('') : '';
+  /* O VAZIO QUE EXPLICA A SI MESMO (28/08/26).
+
+     "Recém-abertas" + "Prontas pra ligar" volta ZERO por construção da base, sempre.
+     Medido nas 970 contas: recém-aberta E com telefone = 0. A Casa dos Dados vem do
+     CNPJ e traz data de abertura sem telefone (667 contas, nenhuma com telefone); o
+     Google/Outscraper traz telefone sem data de abertura (303 contas, 2 com data).
+
+     Sem esta mensagem, o executivo liga os dois filtros por curiosidade legítima,
+     recebe "Nenhum lead bate com esses filtros" e conclui que a tela está quebrada.
+     Numa tela que ele já não estava usando, isso é o empurrão final. Então quando o
+     vazio TEM causa conhecida, a tela diz a causa e oferece a saída, em vez de dar
+     de ombros.
+
+     A checagem é do estado dos filtros, não da contagem: se um dia as fontes se
+     cruzarem, o resultado deixa de ser vazio e a mensagem simplesmente não aparece —
+     ela só existe no caminho em que já não havia nada para mostrar. */
+  const vazioExplicado = (prospeccaoFiltro.recemAberta && prospeccaoFiltro.prontaLigar)
+    ? `<div class="empty-state" style="padding:20px 22px;text-align:left;line-height:1.6;">
+        <b>Estes dois recortes não se cruzam na base de hoje.</b><br>
+        <b>Recém-abertas</b> vem da Casa dos Dados, pelo CNPJ: traz data de abertura e <b>nunca telefone</b>.
+        <b>Prontas pra ligar</b> vem do Google e do Outscraper: traz telefone e <b>quase nunca data de abertura</b>.
+        São duas coletas diferentes do mesmo mercado, e hoje elas não se encontram no mesmo registro.
+        <br><br>Para ligar numa recém-aberta, deixe só <b>Recém-abertas</b> ligado e busque o contato pelo CNPJ na ficha dela.
+      </div>`
+    : '<div class="empty-state" style="padding:20px 22px;">Nenhum lead bate com esses filtros.</div>';
+
   const pills = `
     <div class="filtros">
       <button data-pill="ativas" class="filtro${prospeccaoFiltro.visao === 'ativas' ? ' on' : ''}">${souGestorProsp ? 'Prioridade' : 'Recomendadas'}<small>${totalAtivas}</small></button>
@@ -26737,6 +26829,13 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       <button data-pill="na_rota" class="filtro${prospeccaoFiltro.visao === 'na_rota' ? ' on' : ''}">Na rota hoje<small>${totalNaRota}</small></button>
       ${souGestorProsp && totalRevisarEscopo > 0 ? `<button data-pill="revisar_escopo" title="Registros preservados, mas fora de foodservice" class="filtro${prospeccaoFiltro.visao === 'revisar_escopo' ? ' on' : ''}">Revisar escopo<small>${totalRevisarEscopo}</small></button>` : ''}
       <button data-toppill title="Volume de avaliações — peso comercial, não nota" class="filtro${prospeccaoFiltro.topAvaliadas ? ' on' : ''}">${souGestorProsp ? `3.000+ avaliações<small>${totalTop3k}</small>` : `★ 1.000+ avaliações<small>${totalTop}</small>`}</button>
+      <!-- AS TRÊS VISÕES (28/08/26). Cada título vem com o que a visão NÃO tem, porque
+           as duas primeiras saem de fontes disjuntas e combiná-las volta vazio — ver o
+           comentário longo de prospeccaoEhRecemAberta. Dizer isso no título é mais
+           barato que o executivo descobrir clicando e achar que a tela quebrou. -->
+      ${totalRecemAberta > 0 ? `<button data-recemaberta title="Abriu nos últimos 6 meses — precisa de sistema e ainda não tem fornecedor fixo. Vem da Casa dos Dados, pelo CNPJ: estas contas NÃO têm telefone gravado, o gesto delas é buscar o contato na ficha ou visitar." class="filtro${prospeccaoFiltro.recemAberta ? ' on' : ''}">Recém-abertas<small>${totalRecemAberta}</small></button>` : ''}
+      ${totalProntaLigar > 0 ? `<button data-prontaligar title="Tem telefone gravado: dá pra qualificar antes de ir. Vem do Google/Outscraper, que não traz data de abertura — por isso quase nenhuma aparece também em Recém-abertas." class="filtro${prospeccaoFiltro.prontaLigar ? ' on' : ''}">Prontas pra ligar<small>${totalProntaLigar}</small></button>` : ''}
+      ${totalDadoCruzado > 0 ? `<button data-dadocruzado title="Apareceu em duas coletas diferentes e foi mesclada — o perfil mais completo da base, com telefone e avaliações no mesmo registro." class="filtro${prospeccaoFiltro.dadoCruzado ? ' on' : ''}">Dado cruzado<small>${totalDadoCruzado}</small></button>` : ''}
       <button data-pill="historico" class="filtro${prospeccaoFiltro.visao === 'historico' ? ' on' : ''}">Histórico<small>${totalHistorico}</small></button>
       <button data-nuncavis title="Sem nenhuma tarefa de Visita/Revisita registrada no HubSpot com esse nome" class="filtro${prospeccaoFiltro.nuncaVisitada ? ' on' : ''}">Nunca visitada<small>${totalNuncaVis}</small></button>
       ${pillsFonteHtml ? `<span style="width:1px;align-self:stretch;background:var(--line-soft);margin:2px 2px;"></span>${pillsFonteHtml}` : ''}
@@ -26978,7 +27077,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           ${maisFiltros}
           <div class="thead"><span><input type="checkbox" id="prospeccaoSelAll" aria-label="Selecionar todos os leads desta página" class="ck"></span><span>Restaurante</span><span>Praça</span><span>Avaliações</span><span>Dono</span><span style="text-align:right;">Ação</span></div>
           <div id="prospeccaoTabelaCorpo">
-            ${pagina.length === 0 ? '<div class="empty-state" style="padding:20px 22px;">Nenhum lead bate com esses filtros.</div>' : linhasTabela}
+            ${pagina.length === 0 ? vazioExplicado : linhasTabela}
           </div>
           ${nSel > 0 ? `
           <div class="bulk">
@@ -27044,7 +27143,7 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           <span>RESTAURANTE</span><span>PRAÇA</span><span style="text-align:right;">AVALIAÇÕES</span><span>STATUS</span><span style="text-align:right;">AÇÃO</span>
         </div>
         <div id="prospeccaoTabelaCorpo">
-          ${pagina.length === 0 ? '<div class="empty-state" style="padding:20px 22px;">Nenhum lead bate com esses filtros.</div>' : linhasTabela}
+          ${pagina.length === 0 ? vazioExplicado : linhasTabela}
         </div>
         <div class="prospeccao-footer" style="padding:14px 22px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <span style="font-size:11px;color:var(--muted2);">${filtrados.length} conta(s) · ${Math.max(0, filtrados.length - pagina.length)} fora desta página · clique para ver e agir</span>
@@ -27215,6 +27314,25 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
       prospeccaoFiltro.topAvaliadas = !prospeccaoFiltro.topAvaliadas;
       prospeccaoPagina = 1;
       renderProspeccaoNova(true);
+    });
+  });
+  /* AS TRES VISOES (28/08/26) tambem sao RECORTES, nao visoes excludentes: somam-se a
+     visao ativa igual as duas de cima. Uma fiacao por atributo, nao um loop generico,
+     porque cada uma escreve um campo diferente do estado e o nome do campo nao segue o
+     nome do atributo (recemAberta vs data-recemaberta). Loop com derivacao de nome
+     economizaria seis linhas e criaria um acoplamento invisivel. */
+  const visoesDaFila = [
+    ['[data-recemaberta]', 'recemAberta'],
+    ['[data-prontaligar]', 'prontaLigar'],
+    ['[data-dadocruzado]', 'dadoCruzado']
+  ];
+  visoesDaFila.forEach(([seletor, campo]) => {
+    el.querySelectorAll(seletor).forEach(btn => {
+      btn.addEventListener('click', () => {
+        prospeccaoFiltro[campo] = !prospeccaoFiltro[campo];
+        prospeccaoPagina = 1;
+        renderProspeccaoNova(true);
+      });
     });
   });
   el.querySelectorAll('[data-nuncavis]').forEach(btn => {

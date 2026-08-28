@@ -1374,6 +1374,48 @@ teste('quentes no radar: a guarda de SLA e o "sem proximo passo" sao uma fonte s
   igual(vazio.quentesNoRadar(null).semPasso, [], 'e semPasso vazio');
 });
 
+teste('visoes da prospeccao: recem-aberta e pronta-pra-ligar sao mundos disjuntos', () => {
+  // Medido na base de 970 contas em 28/08: recem-aberta E com telefone = ZERO. Nao e
+  // acidente de preenchimento, e a forma das fontes — Casa dos Dados vem do CNPJ e traz
+  // data de abertura sem telefone; Google/Outscraper traz telefone sem data de abertura.
+  // Este teste fixa esse fato, porque e ele que justifica cada pilula dizer o que lhe
+  // falta. Se um dia as fontes se cruzarem, o teste falha e a copy tem que mudar junto.
+  const c = novoContexto(dados(), { ownerId: null, role: 'manager' });
+  const agora = HOJE.getTime();
+
+  const casaDosDados = { nome: 'Aberta ha 2 meses', fonte: 'Casa dos Dados',
+    data_abertura: diasAtras(60).toISOString(), cnpj: '12345678000199', telefone: null, avaliacoes: null };
+  const outscraper = { nome: 'Com telefone', fonte: 'outscraper',
+    data_abertura: null, cnpj: null, telefone: '(21) 98765-4321', avaliacoes: 340 };
+
+  verdade(c.prospeccaoEhRecemAberta(casaDosDados, agora), 'conta do CNPJ com 2 meses e recem-aberta');
+  falso(c.prospeccaoProntaParaLigar(casaDosDados), 'e a MESMA conta nao da pra ligar: sem telefone');
+  verdade(c.prospeccaoProntaParaLigar(outscraper), 'conta do outscraper da pra ligar');
+  falso(c.prospeccaoEhRecemAberta(outscraper, agora), 'e a MESMA conta nao e recem-aberta: sem data');
+
+  // A janela e de 6 meses. 5 meses entra, 8 nao.
+  verdade(c.prospeccaoEhRecemAberta({ data_abertura: diasAtras(150).toISOString() }, agora), '5 meses entra');
+  falso(c.prospeccaoEhRecemAberta({ data_abertura: diasAtras(250).toISOString() }, agora), '8 meses nao entra');
+  falso(c.prospeccaoEhRecemAberta({ data_abertura: null }, agora), 'sem data nao entra');
+  falso(c.prospeccaoEhRecemAberta({ data_abertura: 'nao e data' }, agora), 'data invalida nao entra');
+
+  // Telefone: 10 digitos e o minimo de fixo com DDD. Formatacao nao conta.
+  verdade(c.prospeccaoProntaParaLigar({ telefone: '2133334444' }), 'fixo com DDD, 10 digitos');
+  verdade(c.prospeccaoProntaParaLigar({ telefone: '+55 (21) 98765-4321' }), 'formatado com pais, conta');
+  falso(c.prospeccaoProntaParaLigar({ telefone: '33334444' }), 'sem DDD, 8 digitos, nao conta');
+  falso(c.prospeccaoProntaParaLigar({ telefone: '' }), 'vazio nao conta');
+  falso(c.prospeccaoProntaParaLigar({ telefone: null }), 'nulo nao conta');
+  falso(c.prospeccaoProntaParaLigar({}), 'sem o campo nao conta');
+  falso(c.prospeccaoProntaParaLigar(null), 'lead nulo nao explode');
+
+  // Dado cruzado: o '+' no campo fonte e como a importacao marca a mesclagem.
+  verdade(c.prospeccaoDadoCruzado({ fonte: 'outscraper + Google Places' }), 'duas fontes mescladas');
+  falso(c.prospeccaoDadoCruzado({ fonte: 'outscraper' }), 'fonte unica nao e cruzada');
+  falso(c.prospeccaoDadoCruzado({ fonte: 'Casa dos Dados' }), 'Casa dos Dados sozinha nao e cruzada');
+  falso(c.prospeccaoDadoCruzado({ fonte: null }), 'fonte nula nao explode');
+  falso(c.prospeccaoDadoCruzado(null), 'lead nulo nao explode');
+});
+
 console.log('');
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);
