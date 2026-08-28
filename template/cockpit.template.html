@@ -1922,7 +1922,19 @@
   .ag-rail-lead-main{min-width:0;}
   .ag-rail-lead-main b{display:block;font-size:12.5px;line-height:1.3;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .ag-rail-lead-main span{display:block;margin-top:3px;font-size:10px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .ag-rail-source{display:inline-flex!important;width:max-content;margin-top:5px!important;padding:2px 6px;border-radius:999px;background:var(--sunk);color:var(--muted)!important;font-size:8px!important;font-weight:800;text-transform:uppercase;letter-spacing:.05em;}
+  /* CORREÇÃO (28/08/26, achada navegando com a fila cheia): este rótulo vazava 38px
+     PARA FORA do cartão. A causa é `width:max-content` — ele cresce até o conteúdo e
+     ignora o pai; o `overflow:hidden` que já estava aqui recorta o CONTEÚDO dele, não
+     limita a largura DELE. Com white-space:nowrap por cima, qualquer texto longo saía
+     do cartão.
+
+     O caso concreto era a fonte mesclada: "OUTSCRAPER + GOOGLE PLACES · CONTA-ALVO",
+     39 caracteres, 211,7px num cartão de 173,2px. Só aparece nas contas de duas
+     coletas — 11 na base — e por isso tinha passado por todas as revisões anteriores.
+
+     `max-width:100%` é a guarda que faltava: vale pra QUALQUER rótulo futuro, não só
+     pra este texto. O ellipsis é a degradação honesta se ainda assim não couber. */
+  .ag-rail-source{display:inline-flex!important;width:max-content;max-width:100%;margin-top:5px!important;padding:2px 6px;border-radius:999px;background:var(--sunk);color:var(--muted)!important;font-size:8px!important;font-weight:800;text-transform:uppercase;letter-spacing:.05em;overflow:hidden;text-overflow:ellipsis;}
   .ag-rail-source.casa{background:color-mix(in srgb,var(--green-soft) 78%,var(--panel));color:var(--green)!important;}
   .ag-plan-actions{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex-wrap:wrap;max-width:245px;}
   .ag-plan-btn,.ag-rail-cta{display:inline-flex;align-items:center;justify-content:center;align-self:center;border:1px solid var(--line-btn);border-radius:999px;background:var(--panel);color:var(--ink);padding:7px 10px;font:800 9.5px 'Manrope',sans-serif;text-decoration:none;cursor:pointer;white-space:nowrap;transition:transform .14s var(--ease),background .14s var(--ease),color .14s var(--ease),border-color .14s var(--ease);}
@@ -3687,6 +3699,13 @@
   .prosp2-loc-chip.on{background:var(--dark-ink);color:var(--dark);border-color:var(--dark-ink);font-weight:700;}
 
   .prosp2-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  /* As duas visões do deck (28/08/26) — mesma forma das pílulas de fonte, cor âmbar
+     porque são recorte de oportunidade e não de procedência. */
+  .prosp2-visoes{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .prosp2-visao{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border:1px solid var(--line-btn);border-radius:999px;background:var(--panel);color:var(--muted);font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .prosp2-visao:hover{border-color:var(--amber);color:var(--amber-ink);}
+  .prosp2-visao.on{border-color:var(--amber);background:var(--amber-soft);color:var(--amber-ink);}
+  .prosp2-visao .n{font-weight:800;font-variant-numeric:tabular-nums;}
   .prosp2-fontes{display:flex;gap:6px;flex-wrap:wrap;}
   .prosp2-fonte{display:inline-flex;align-items:center;gap:7px;font:700 11.5px 'DM Sans','Manrope',sans-serif;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:var(--r-pill);padding:7px 14px;cursor:pointer;transition:all .13s var(--ease);}
   .prosp2-fonte .fdot{width:8px;height:8px;border-radius:99px;background:var(--fc,var(--muted));}
@@ -11034,7 +11053,7 @@ function agendaContasAlvoHTML(ownerId, dias, naSemana) {
     const km = distanciaBase(l);
     const naRota = l.status === 'na_rota' && l.data_rota === isoDate(new Date());
     const meta = [prospeccaoBairroExibicao(l.bairro) || l.cidade, Number.isFinite(km) ? km.toFixed(1).replace('.', ',') + ' km da região-base' : null, l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : null].filter(Boolean).join(' · ');
-    return `<div class="ag-rail-lead tone-green is-clickable" data-agleadalvo="${agendaEsc(String(l.id))}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(l.nome)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(l.nome)}">${agendaEsc(l.nome)}</b><span>${agendaEsc(meta || prospeccaoPraca(l))}</span><span class="ag-rail-source">${agendaEsc(prospeccaoRotuloFonte(l.fonte))} · conta-alvo${naRota ? ' · na rota hoje' : ''}</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn" data-agficha-alvo="${agendaEsc(String(l.id))}">Ver ficha →</button></div></div>`;
+    return `<div class="ag-rail-lead tone-green is-clickable" data-agleadalvo="${agendaEsc(String(l.id))}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(l.nome)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(l.nome)}">${agendaEsc(l.nome)}</b><span>${agendaEsc(meta || prospeccaoPraca(l))}</span><span class="ag-rail-source">${agendaEsc(agendaRotuloDeFonte(l.fonte))} · conta-alvo${naRota ? ' · na rota hoje' : ''}</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn" data-agficha-alvo="${agendaEsc(String(l.id))}">Ver ficha →</button></div></div>`;
   }).join('');
 }
 
@@ -11094,7 +11113,7 @@ async function montarAgendaSugestoes(ownerId, dias, naSemana, renderVersao) {
 // padrão era 'score' (nota+recência+distância misturados), que podia empurrar uma
 // conta pertinho pro fim da lista se a nota fosse baixa. Agora abre direto ordenado
 // por proximidade; o executivo ainda pode trocar pra "Melhores primeiro" no seletor.
-let prosp2Estado = { fonte: 'todas', ordenar: 'dist', local: null, agenda: {}, popoverAberto: null, drawerId: null };
+let prosp2Estado = { fonte: 'todas', ordenar: 'dist', local: null, agenda: {}, popoverAberto: null, drawerId: null, recemAberta: false, comTelefone: false };
 const PROSP2_HORAS = ['09:00', '10:30', '13:30', '15:00', '16:30'];
 const PROSP2_FONTES = {
   cdd: { nome: 'Casa dos Dados', cor: '#4C6EF5' },
@@ -11458,9 +11477,10 @@ async function renderProspeccaoExecutivo() {
 
   todosOsMeus.forEach(l => {
     l._distKm = distanciaKm(centro.lat, centro.lng, Number(l.lat), Number(l.lng));
-    // data_abertura ainda não existe na base (pedido em separado pro Julyan adicionar
-    // a coluna) — sem ela, _dias fica null e o badge "Aberta há N dias" simplesmente
-    // não aparece, exatamente como o handoff manda pra lead sem esse dado.
+    /* A coluna de data de abertura JA EXISTE na base — o comentário anterior dizia
+       que não, e estava desatualizado: 543 das 970 contas têm a data, todas vindas da
+       Casa dos Dados. Sem ela, _dias fica null e o badge "Aberta há N dias" não
+       aparece, que é o comportamento certo pra lead sem esse dado. */
     l._dias = l.data_abertura ? Math.floor((Date.now() - new Date(l.data_abertura).getTime()) / 86400000) : null;
     l._fonteBucket = prosp2FonteBucket(l.fonte);
   });
@@ -11481,8 +11501,30 @@ async function renderProspeccaoExecutivo() {
   const contagemFonte = { cdd: 0, trip: 0, ifood: 0, gp: 0 };
   dentroDoRaio.forEach(l => { contagemFonte[l._fonteBucket] = (contagemFonte[l._fonteBucket] || 0) + 1; });
 
+  /* As duas visões (28/08/26) — as MESMAS funções que o gestor usa nas pílulas dele,
+     pra executivo e gestor nunca discordarem sobre o que é "recém-aberta" ou "dá pra
+     ligar". Compõem com a fonte e com a ordenação, como os outros filtros.
+
+     ATENCAO ao combinar as duas: elas voltam vazio juntas, e não é defeito. A base
+     são duas coletas disjuntas — Casa dos Dados traz abertura e nunca telefone,
+     Google/Outscraper traz telefone e quase nunca abertura. Medido: recém-aberta E
+     com telefone = 0 das 970. Por isso o vazio aqui também explica a causa, em vez de
+     deixar o executivo achar que a tela quebrou. */
+  /* DECLARADA AQUI, ANTES DO PRIMEIRO USO (28/08/26). Estava ~30 linhas abaixo, junto
+     do contador nNovos, e o filtro logo abaixo ja a usava: zona morta temporal.
+
+     Este era um defeito LATENTE, o pior tipo: o corpo do filtro so avalia a chamada
+     quando prosp2Estado.recemAberta e true, ou seja o ReferenceError só estourava
+     QUANDO O EXECUTIVO CLICASSE na pilula. Com ela desligada nada acontecia, o render
+     passava, e check-scripts passava tambem — erro de ordem nao e erro de sintaxe.
+     Peguei clicando: a pilula nao ligava e a grade continuava com 10 de 5.
+     Terceira ocorrencia desta classe nesta sessão; e por isso que a revisao tem que
+     ser navegando, nao lendo. */
+  const agoraDeck = Date.now();
   const visiveis = dentroDoRaio
     .filter(l => prosp2Estado.fonte === 'todas' || l._fonteBucket === prosp2Estado.fonte)
+    .filter(l => !prosp2Estado.recemAberta || prospeccaoEhRecemAberta(l, agoraDeck))
+    .filter(l => !prosp2Estado.comTelefone || prospeccaoProntaParaLigar(l))
     .sort((a, b) => {
       if (prosp2Estado.ordenar === 'dist') return a._distKm - b._distKm;
       if (prosp2Estado.ordenar === 'aval') return (Number(b.nota) || 0) - (Number(a.nota) || 0) || (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0);
@@ -11491,7 +11533,26 @@ async function renderProspeccaoExecutivo() {
     });
 
   const nAgenda = Object.keys(prosp2Estado.agenda).length;
-  const nNovos = dentroDoRaio.filter(l => l._dias != null && l._dias <= 60).length;
+  /* "RECEM-ABERTA" PASSA A TER UMA DEFINICAO SO (28/08/26).
+
+     Esta contagem usava 60 dias e o card lia "abertas há ≤ 60 dias". Medido no banco
+     hoje, esse número é ZERO para os SETE executivos — e não por acaso:
+
+       · a conta mais nova de toda a base abriu em 29/05/26, ou seja 91 dias atrás
+       · e isso é regra explícita da importação: DIAS_MINIMO_ABERTURA = 90 em
+         scripts/backfill-casa-dos-dados.js, com o motivo registrado lá — pedido do
+         Julyan em 16/08 ("não posso sujar o funil do gestor"), margem contra CNPJ
+         que ainda pode fechar ou estar com cadastro incompleto.
+
+     Ou seja: uma regra do produto proíbe importar mais novo que 90 dias e outra
+     mostrava um contador dos mais novos que 60. O card era zero por construção, todo
+     dia, para todo mundo — a mesma classe de defeito do muro de zeros da Daily.
+
+     Agora usa prospeccaoEhRecemAberta, a MESMA função das pílulas do gestor (janela
+     de PROSPECCAO_RECENTE_MESES = 6). Com ela os sete têm número de verdade: 65, 52,
+     40, 38, 38, 19 e 4. Uma definição, um rótulo, nas duas telas. */
+  const nNovos = dentroDoRaio.filter(l => prospeccaoEhRecemAberta(l, agoraDeck)).length;
+  const nComTelefone = dentroDoRaio.filter(prospeccaoProntaParaLigar).length;
   const nBem = dentroDoRaio.filter(l => (Number(l.nota) || 0) >= 4.5).length;
 
   const cardHTML = l => {
@@ -11575,7 +11636,7 @@ async function renderProspeccaoExecutivo() {
         </div>
         <div class="prosp2-hero-nums">
           <div class="prosp2-hero-n"><b class="num">${dentroDoRaio.length}</b><span>leads perto de você</span></div>
-          <div class="prosp2-hero-n"><b class="num"><em>${nNovos}</em></b><span>abertas há ≤ 60 dias</span></div>
+          <div class="prosp2-hero-n"><b class="num"><em>${nNovos}</em></b><span>abertas há ≤ 6 meses</span></div>
           <div class="prosp2-hero-n"><b class="num">${nBem}</b><span>com nota ≥ 4,5</span></div>
           <div class="prosp2-hero-n"><b class="num" id="prosp2HnAgenda">${nAgenda}</b><span>na sua agenda</span></div>
         </div>
@@ -11601,6 +11662,13 @@ async function renderProspeccaoExecutivo() {
         <button class="prosp2-fonte ${prosp2Estado.fonte === 'todas' ? 'on' : ''}" data-f="todas">Todas <span class="n num">${dentroDoRaio.length}</span></button>
         ${Object.entries(PROSP2_FONTES).map(([k, F]) => `<button class="prosp2-fonte ${prosp2Estado.fonte === k ? 'on' : ''}" data-f="${k}" style="--fc:${F.cor}"><span class="fdot"></span>${esc(F.nome)} <span class="n num">${contagemFonte[k] || 0}</span></button>`).join('')}
       </div>
+      <!-- AS DUAS VISOES (28/08/26). Ficam ao lado das pílulas de fonte porque são da
+           mesma natureza: recorte que soma, não visão que troca. Cada uma diz no title
+           o que lhe falta, igual às do gestor. Só aparecem quando têm o que mostrar. -->
+      <div class="prosp2-visoes" id="prosp2Visoes">
+        ${nNovos > 0 ? `<button class="prosp2-visao ${prosp2Estado.recemAberta ? 'on' : ''}" data-v="recemAberta" title="Abriu nos últimos 6 meses — precisa de sistema e ainda não tem fornecedor fixo. Vem do CNPJ (Casa dos Dados): estas contas não têm telefone gravado, o gesto delas é buscar o contato na ficha ou visitar.">Recém-abertas <span class="n num">${nNovos}</span></button>` : ''}
+        ${nComTelefone > 0 ? `<button class="prosp2-visao ${prosp2Estado.comTelefone ? 'on' : ''}" data-v="comTelefone" title="Tem telefone gravado: dá pra qualificar por ligação antes de gastar deslocamento. Vem do Google/Outscraper, que não traz data de abertura.">Prontas pra ligar <span class="n num">${nComTelefone}</span></button>` : ''}
+      </div>
       <label class="prosp2-ordenar">Ordenar por
         <select id="prosp2Ordenar">
           <option value="score" ${prosp2Estado.ordenar === 'score' ? 'selected' : ''}>Melhores primeiro (recomendado)</option>
@@ -11621,7 +11689,19 @@ async function renderProspeccaoExecutivo() {
       <div class="prosp2-grid" id="prosp2Grid">${visiveis.length ? visiveis.map(cardHTML).join('') : (
         dentroDoRaio.length === 0
           ? `<div class="prosp2-vazio"><b>Sem leads importados perto de "${esc(centro.rotulo)}".</b><br>A busca cobre a carteira já trazida pra sua praça (Casa dos Dados, TripAdvisor, iFood, Google Places) — não é uma busca ao vivo no Brasil inteiro.<br>Se essa região deveria estar na sua praça, avisa seu gestor pra rodar a atualização mensal de contas-alvo por lá.<br><br><button class="prosp2-ver" id="prosp2Limpar">Voltar pra minha praça</button></div>`
-          : `<div class="prosp2-vazio"><b>Nenhum lead com esses filtros por aqui.</b><br>Tente outra fonte ou busque outro bairro.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
+          : (prosp2Estado.recemAberta && prosp2Estado.comTelefone)
+            /* CAUSA CONHECIDA (28/08/26): estas duas visões não se cruzam na base.
+               Casa dos Dados vem do CNPJ e traz data de abertura sem telefone (667
+               contas, nenhuma com telefone); Google/Outscraper traz telefone e quase
+               nunca data de abertura. Medido: recém-aberta E com telefone = 0 das 970.
+
+               A mensagem genérica ("tente outra fonte ou busque outro bairro") é PIOR
+               que nada aqui, porque manda o executivo tentar duas coisas que não
+               podem funcionar — ele troca de fonte, troca de bairro, continua vazio, e
+               conclui que a tela está quebrada. Quando a causa é conhecida, a tela diz
+               a causa e o caminho que funciona. */
+            ? `<div class="prosp2-vazio" style="text-align:left;"><b>Estes dois recortes não se cruzam na base de hoje.</b><br><b>Recém-abertas</b> vem do CNPJ (Casa dos Dados): traz a data de abertura e <b>nunca o telefone</b>. <b>Prontas pra ligar</b> vem do Google e do Outscraper: traz telefone e <b>quase nunca a data de abertura</b>. São duas coletas diferentes do mesmo mercado, e hoje elas não se encontram no mesmo registro.<br><br>Para ligar numa recém-aberta: deixe só <b>Recém-abertas</b> e busque o contato pelo CNPJ na ficha dela.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
+            : `<div class="prosp2-vazio"><b>Nenhum lead com esses filtros por aqui.</b><br>Tente outra fonte ou busque outro bairro.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
       )}</div>
 
       <aside class="prosp2-tray" data-plan-bloco="rua">
@@ -11781,10 +11861,27 @@ function prosp2LigarEventos(universo, ownerId) {
     prosp2Estado.fonte = b.dataset.f;
     renderProspeccaoExecutivo();
   });
+  /* Mesmo padrão das pílulas de fonte, logo acima: um listener delegado no contêiner,
+     com id próprio. Esta função de fiação não tem a variável do contêiner de render em
+     escopo (ela recebe universo e ownerId, e consulta por getElementById), então
+     seguir o vizinho é mais seguro que introduzir uma segunda forma de alcançar o DOM.
+     O nome do campo vem do data-v, escrito com a MESMA chave de prosp2Estado. */
+  const visoesEl = document.getElementById('prosp2Visoes');
+  if (visoesEl) visoesEl.addEventListener('click', ev => {
+    const b = ev.target.closest('.prosp2-visao');
+    if (!b) return;
+    const campo = b.dataset.v;
+    if (!campo || !(campo in prosp2Estado)) return;
+    prosp2Estado[campo] = !prosp2Estado[campo];
+    renderProspeccaoExecutivo();
+  });
   const ordenarEl = document.getElementById('prosp2Ordenar');
   if (ordenarEl) ordenarEl.addEventListener('change', ev => { prosp2Estado.ordenar = ev.target.value; renderProspeccaoExecutivo(); });
   const limparEl = document.getElementById('prosp2Limpar');
-  if (limparEl) limparEl.addEventListener('click', () => { prosp2Estado.fonte = 'todas'; prosp2Estado.local = null; renderProspeccaoExecutivo(); });
+  /* O "Limpar filtros" do estado vazio limpava só fonte e local. Sem os dois campos
+     novos aqui, o executivo clicaria em limpar, veria a fila continuar cortada e
+     nenhum filtro aparente ligado — pior que o problema original. */
+  if (limparEl) limparEl.addEventListener('click', () => { prosp2Estado.fonte = 'todas'; prosp2Estado.local = null; prosp2Estado.recemAberta = false; prosp2Estado.comTelefone = false; renderProspeccaoExecutivo(); });
 
   // ---- grade de cards: abrir popover de dia/hora, ver ficha, abrir ficha ----
   const grid = document.getElementById('prosp2Grid');
@@ -25619,6 +25716,26 @@ function prospeccaoRotuloFonte(valor) {
     const limpa = fonte.trim();
     return rotulos[limpa.toLowerCase()] || limpa;
   }).filter(Boolean).join(' + ') || 'Fonte não informada';
+}
+
+/* ROTULO DE FONTE PARA O TRILHO DA AGENDA (28/08/26).
+
+   prospeccaoRotuloFonte lista TODAS as fontes mescladas (por exemplo, Outscraper mais
+   Google Places), o que e o certo na tela de Prospeccao: lá a procedencia importa e ha
+   largura pra isso. No trilho da Agenda o mesmo texto virava 39 caracteres num cartao
+   de 173px e vazava 38px pra fora — medido navegando com a fila cheia.
+
+   Aqui a conta de duas coletas vira "Dado cruzado", o MESMO nome que a pilula da
+   Prospeccao passou a usar hoje. Assim o executivo ve o mesmo vocabulario nas duas
+   telas em vez de duas descricoes do mesmo fato. Fonte unica segue com o nome dela,
+   que e curto e informa procedencia.
+
+   A guarda de largura em .ag-rail-source (max-width:100%) continua valendo: ela cobre
+   qualquer rotulo futuro. Esta funcao resolve o caso concreto sem depender dela. */
+function agendaRotuloDeFonte(valor) {
+  const partes = String(valor || '').split('+').map(x => x.trim()).filter(Boolean);
+  if (partes.length > 1) return 'Dado cruzado';
+  return prospeccaoRotuloFonte(valor);
 }
 
 function prospeccaoBairroValido(valor) {

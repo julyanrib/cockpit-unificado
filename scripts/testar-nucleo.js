@@ -1416,6 +1416,47 @@ teste('visoes da prospeccao: recem-aberta e pronta-pra-ligar sao mundos disjunto
   falso(c.prospeccaoDadoCruzado(null), 'lead nulo nao explode');
 });
 
+teste('a janela de recem-aberta na TELA tem que ser maior que o piso da IMPORTACAO', () => {
+  /* Este teste amarra dois arquivos, e existe por causa de um defeito real:
+
+     · scripts/backfill-casa-dos-dados.js tem DIAS_MINIMO_ABERTURA = 90 — a importacao
+       NUNCA traz uma empresa aberta nos ultimos 90 dias. E regra pedida pelo Julyan em
+       16/08 ("nao posso sujar o funil do gestor"), margem contra CNPJ que ainda pode
+       fechar ou estar com cadastro incompleto.
+     · o deck do executivo contava "abertas ha <= 60 dias" e mostrava esse numero num
+       card do topo.
+
+     60 < 90, entao aquele card era ZERO por construcao — todo dia, para os sete
+     executivos. Confirmado no banco: a conta mais nova de toda a base abriu 91 dias
+     atras. Uma regra do produto tornava a outra impossivel, e nada apontava isso.
+
+     A checagem le o piso do proprio script de importacao em vez de repetir o numero
+     aqui: se alguem mudar o piso para 200 dias, este teste falha e obriga a revisar a
+     janela da tela junto. E o inverso tambem: baixar a janela da tela para menos que o
+     piso volta a produzir um indicador morto. */
+  const fonteBackfill = fs.readFileSync(path.join(root, 'scripts', 'backfill-casa-dos-dados.js'), 'utf8');
+  const m = fonteBackfill.match(/DIAS_MINIMO_ABERTURA\s*=\s*(\d+)/);
+  verdade(!!m, 'o piso de abertura ainda esta declarado no script de importacao');
+  const pisoDias = Number(m[1]);
+
+  const c = novoContexto(dados(), { ownerId: null, role: 'manager' });
+  // A janela vem do TEMPLATE, do mesmo jeito que o piso vem do script de importacao:
+  // os dois numeros lidos de onde moram, nenhum repetido aqui. `const` do nucleo nao
+  // vira propriedade do global no vm (so `function` vira), entao ler a fonte e tambem
+  // a unica forma de alcancar a constante.
+  const mMeses = html.match(/PROSPECCAO_RECENTE_MESES\s*=\s*(\d+)/);
+  verdade(!!mMeses, 'a janela de recem-aberta ainda esta declarada no template');
+  const janelaDias = Number(mMeses[1]) * 30.44;
+  verdade(janelaDias > pisoDias,
+    `a janela da tela (${Math.round(janelaDias)}d) tem que ser maior que o piso da importacao (${pisoDias}d)`);
+
+  // E o caso concreto: uma conta aberta exatamente no piso PRECISA entrar na visao,
+  // senao o executivo nunca ve a conta mais nova que o sistema consegue importar.
+  const noPiso = { data_abertura: diasAtras(pisoDias).toISOString() };
+  verdade(c.prospeccaoEhRecemAberta(noPiso, HOJE.getTime()),
+    'a conta mais nova que a importacao permite aparece como recem-aberta');
+});
+
 console.log('');
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);
