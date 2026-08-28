@@ -11074,7 +11074,7 @@ function agendaNovidadesHTML(ownerId, itens, dias, naSemana) {
     estado: n.uf || (territorio && territorio.uf),
     _agendaSlot: slots[i] || null
   }));
-  if (!agendaNovidadesAtuais.length) return '<div class="ag-rail-empty">Nenhum CNPJ novo de foodservice encontrado nos últimos 90 dias dentro da sua região. A carteira acima continua disponível.</div>';
+  if (!agendaNovidadesAtuais.length) return '<div class="ag-rail-empty">Nenhum CNPJ de foodservice aberto nos últimos 90 dias foi encontrado na busca ao vivo da sua região. A carteira de 6 meses acima continua disponível.</div>';
   return agendaNovidadesAtuais.map((n, i) => {
     const idade = diasDesde(n.dataAbertura);
     const meta = [n.bairro, idade != null ? 'abriu há ' + idade + 'd' : 'abertura recente'].filter(Boolean).join(' · ');
@@ -11097,7 +11097,7 @@ async function montarAgendaSugestoes(ownerId, dias, naSemana, renderVersao) {
   if (renderVersao !== agendaRenderVersao) return;
   const casaSlot = document.getElementById('agendaCasaSlot');
   if (!casaSlot) return;
-  casaSlot.innerHTML = `<div class="ag-rail-section-title"><b>Recém-abertas</b><span>janela de 90 dias</span></div>${agendaNovidadesHTML(ownerId, novidades, dias, naSemana)}`;
+  casaSlot.innerHTML = `<div class="ag-rail-section-title"><b>Busca ao vivo de novas empresas</b><span>abertas nos últimos 90 dias</span></div>${agendaNovidadesHTML(ownerId, novidades, dias, naSemana)}`;
 }
 
 /* ========================================================================
@@ -15267,19 +15267,26 @@ function agendaGradeLista(dias, hojeK) {
 function agendaDiagnosticoExec(o) {
   const comEvento = new Set(o.naSemana.map(function (e) { return agendaChave(e.inicio); }));
   const curto = function (d) { return ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d.getUTCDay()] + ' ' + agendaP2(d.getUTCDate()); };
-  const buracos = o.dias.filter(function (d) {
-    return !comEvento.has(agendaChave(d)) && (agendaEstado.offset > 0 || agendaChave(d) >= o.hojeK);
+  // O diagnóstico é fila de ação: mede somente os dias que ainda podem ser
+  // preenchidos. Antes o numerador olhava os dias restantes e o denominador a semana
+  // inteira; na sexta aparecia "0 de 5" mesmo quando três dias passados ficaram vazios,
+  // contradizendo o hero. Agora a janela fica explícita, sem reescrever o histórico.
+  const diasAcionaveis = o.dias.filter(function (d) {
+    return agendaEstado.offset > 0 || agendaChave(d) >= o.hojeK;
+  });
+  const buracos = diasAcionaveis.filter(function (d) {
+    return !comEvento.has(agendaChave(d));
   });
   const fora = o.foraDaAgenda.length;
   const cobertos = o.quentes.length - fora;
   const pct = Math.max(0, Math.min(100, o.pct));
   return '<div class="agdx">' +
     '<button class="agdx-t" data-agdxfoco="buracosCard" data-tone="' + (buracos.length ? 'red' : 'green') + '">' +
-      '<span class="agdx-k">Buracos na semana</span>' +
-      '<span class="agdx-v">' + buracos.length + '<em> de ' + o.dias.length + ' dias</em></span>' +
+      '<span class="agdx-k">Buracos restantes</span>' +
+      '<span class="agdx-v">' + buracos.length + '<em> de ' + diasAcionaveis.length + ' dias úteis restantes</em></span>' +
       '<span class="agdx-s">' + (buracos.length
         ? agendaEsc(buracos.map(curto).join(' · ')) + ' — sem nada marcado'
-        : 'Todo dia útil desta semana tem compromisso.') + '</span></button>' +
+        : (diasAcionaveis.length ? 'Todos os dias úteis restantes têm compromisso.' : 'Semana encerrada — sem buraco acionável.')) + '</span></button>' +
     '<button class="agdx-t" data-agdxfoco="quentesForaCard" data-tone="' + (!o.quentes.length ? '' : fora ? 'amber' : 'green') + '">' +
       '<span class="agdx-k">Quentes sem compromisso</span>' +
       '<span class="agdx-v">' + fora + '<em> de ' + o.quentes.length + '</em></span>' +
@@ -23673,12 +23680,49 @@ async function renderDaily() {
   // CORREÇÃO (16/08/26): focoSemanaHtml tinha virado string vazia sem nenhum
   // consumidor — removida.
 
-  // Banner escuro padrão (Claude Design item 4): mesma pergunta certa por papel, KPIs
-  // reais tirados do getDaily de cada rep — nada recalculado, é o mesmo dado do placar
-  // logo abaixo, só resumido em 3 números pra quem abre a tela sem rolar.
-  const promessasHoje = repsDaily.map(r => getDaily(r.ownerId, dailyRefDate)).filter(d => d && (d.prometido_visitas != null || d.prometido_fechamentos != null || d.prometido_propostas != null));
-  const semPromessa = repsDaily.length - promessasHoje.length;
-  const planosFechadosTotal = repsDaily.filter(r => (planosPorOwner[String(r.ownerId)] || {}).status === 'plano_fechado').length;
+  // Uma fonte para TODA a Daily do gestor: plano diário + clientes nomeados. Os antigos
+  // prometido_* continuam no histórico P×R, mas não podem definir se alguém planejou
+  // hoje — ninguém mais os digita. Antes o hero acusava o time inteiro como "sem
+  // promessa" enquanto os cards logo abaixo reconheciam os planos fechados.
+  const eventosDaDaily = (() => {
+    if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
+    try { return agendaNormalizar(DATA.agenda); } catch (e) { return []; }
+  })();
+  const compromissosAgendaDoOwner = ownerId => eventosDaDaily
+    .filter(ev => String(ev.ownerId) === String(ownerId) && ev.inicio
+      && ev.inicio.toISOString().slice(0, 10) === dailyRefDate)
+    .sort((a, b) => a.inicio - b.inicio)
+    .map(ev => ({
+      hora: agendaHhmm(ev.inicio),
+      lead: ev.leadDoNegocio ? (ev.cliente || null) : agendaNomeDoLead(ev.cliente || ev.titulo),
+      dealId: ev.dealId || null,
+      motivo: ev.leadDoNegocio ? 'ok' : agendaMotivoSemLead(ev.cliente || ev.titulo),
+      tipo: ev.tipo
+    }));
+  const compromissoDoPlano = (plano, ownerId) => {
+    const prioridades = (plano && Array.isArray(plano.prioridades))
+      ? plano.prioridades.filter(Boolean) : [];
+    const nomesPlano = nomesDaPromessaDoPlano(prioridades);
+    const nomesAgenda = compromissosAgendaDoOwner(ownerId).map(c => c.lead).filter(Boolean);
+    const nomesLista = nomesPlano.length ? nomesPlano : nomesAgenda;
+    return {
+      nomes: nomesLista.length,
+      nomesLista,
+      nomesPlano,
+      nomesAgenda,
+      fonte: nomesPlano.length ? 'plano' : (nomesAgenda.length ? 'agenda' : null),
+      fechado: !!(plano && plano.status === 'plano_fechado')
+    };
+  };
+  const compromissosHoje = repsDaily.map(r => ({
+    r,
+    plano: planosPorOwner[String(r.ownerId)] || null,
+    resumo: compromissoDoPlano(planosPorOwner[String(r.ownerId)] || null, r.ownerId)
+  }));
+  const clientesPlanejadosTotal = compromissosHoje.reduce((s, x) => s + x.resumo.nomes, 0);
+  const semClientesNomeados = compromissosHoje.filter(x => x.resumo.nomes === 0).length;
+  const planosFechadosTotal = compromissosHoje.filter(x => x.resumo.fechado).length;
+  const frescorDaily = typeof estadoFrescorDados === 'function' ? estadoFrescorDados() : { confiavel: true, rotulo: '' };
   const ehHojeDaily = dailyRefDate === isoDate(new Date());
   const promessaExec = souRepDaily
     // CORREÇÃO (16/08/26) — bug real encontrado por acaso testando a Daily: o banner
@@ -23687,7 +23731,7 @@ async function renderDaily() {
     // necessariamente os do próprio executivo logado. Amanda via "51 demo/proposta"
     // que era de outro colega. Agora busca a linha certa pelo ownerId da sessão.
     ? (getDaily(sessaoAtual.ownerId, dailyRefDate) || {})
-    : (promessasHoje[0] || {});
+    : {};
   const fechadosHojeTotal = repsDaily.reduce((s, r) => s + (ehHojeDaily
     ? (r.fechamentosHubspotHoje || 0)
     : ((getDaily(r.ownerId, dailyRefDate) || {}).realizado_fechamentos || 0)), 0);
@@ -23750,14 +23794,15 @@ async function renderDaily() {
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
         <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Daily & Ritmo · ${fmtDailyLabel(dailyRefDate)}</span>
-        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Quem prometeu, quem cumpriu, quem está vazio?</h1>
+        <h1 style="font-family:'Poppins',sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Quem planejou clientes, quem executou, quem precisa de ação?</h1>
+        <span style="font-size:10.5px;color:${frescorDaily.confiavel ? 'var(--dark-mut)' : '#FFB0B8'};margin-top:2px;">${frescorDaily.confiavel ? 'Plano vem do Cockpit; execução vem da evidência do HubSpot.' : esc(frescorDaily.rotulo) + ' · não cobre realizado até a próxima carga.'}</span>
       </div>
       <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
       <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${promessasHoje.length}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">prometeram hoje</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${semPromessa > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${semPromessa}</div><div style="font-size:11px;color:var(--dark-mut);">sem promessa hoje</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${clientesPlanejadosTotal}</div><div style="font-size:11px;color:var(--dark-mut);">clientes nomeados hoje</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${semClientesNomeados > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${semClientesNomeados}</div><div style="font-size:11px;color:var(--dark-mut);">executivos sem cliente definido</div></div>
         <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${planosFechadosTotal < repsDaily.length ? '#E0A64A' : 'var(--dark-ink)'};">${planosFechadosTotal}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">fecharam o plano do dia</div></div>
-        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:#57C29A;">${fechadosHojeTotal}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia</div></div>
+        <div><div style="font-family:'Poppins',sans-serif;font-weight:800;font-size:28px;color:${frescorDaily.confiavel ? '#57C29A' : 'var(--dark-mut)'};">${frescorDaily.confiavel ? fechadosHojeTotal : '—'}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia${frescorDaily.confiavel ? '' : ' · carga pendente'}</div></div>
       </div>
       <button type="button" id="dailyConduzir" style="margin-left:auto;flex:none;background:var(--red);color:#fff;border:none;border-radius:999px;padding:11px 20px;font-size:13px;font-weight:700;cursor:pointer;">Conduzir a Daily →</button>
       <button type="button" class="btn-ol" id="dailyTvToggle" style="flex:none;" aria-pressed="false">📺 Modo TV</button>
@@ -23775,8 +23820,8 @@ async function renderDaily() {
     const real = realDerivado != null ? realDerivado : (Number(d.realizado_visitas) || 0);
     return prometeu > 0 && (real / prometeu) < .7;
   });
-  const objetivoDaily = semPromessa > 0
-    ? `Fechar o plano de ${semPromessa} executivo${semPromessa > 1 ? 's' : ''} antes da saída para o campo.`
+  const objetivoDaily = semClientesNomeados > 0
+    ? `Nomear clientes e fechar o plano de ${semClientesNomeados} executivo${semClientesNomeados > 1 ? 's' : ''} antes da saída para o campo.`
     : abaixoDeOntem.length > 0
       ? `Recuperar o ritmo de ${abaixoDeOntem.length} executivo${abaixoDeOntem.length > 1 ? 's' : ''} abaixo de 70% ontem.`
       : 'Proteger a execução prometida e remover um bloqueio por pessoa.';
@@ -23953,8 +23998,11 @@ async function renderDaily() {
     const linhasPlacar = repsDaily.map(r => {
       const rowHoje = getDaily(r.ownerId, dailyRefDate) || {};
       const rowOntem = getDaily(r.ownerId, yesterdayISO) || {};
-      const registrouHoje = [rowHoje.prometido_visitas, rowHoje.prometido_fechamentos, rowHoje.prometido_propostas]
-        .some(v => v !== null && v !== undefined);
+      // Mesma fonte do hero e dos cards: plano do dia com cliente nomeado ou fechado.
+      // Os prometido_* são legado de histórico e não recebem mais escrita manual.
+      const planoHoje = planosPorOwner[String(r.ownerId)] || null;
+      const resumoPlanoHoje = compromissoDoPlano(planoHoje, r.ownerId);
+      const registrouHoje = resumoPlanoHoje.fechado || resumoPlanoHoje.nomes > 0;
       const promOntem = rowOntem.prometido_visitas || 0;
       // BLOCO 31 — mesma correção: prefere a contagem derivada de DATA.agenda.itens
       // (sempre fresca) sobre o campo gravado por uma escrita separada que pode falhar
@@ -23974,7 +24022,7 @@ async function renderDaily() {
         [rowHoje.prometido_propostas, ehHojeViewPlacar ? r.propostasHubspotHoje : rowHoje.realizado_propostas]
       ].filter(([prom]) => Number(prom) > 0);
       const taxaDimensoes = metricasHoje.length ? metricasHoje.filter(([prom, real]) => (Number(real) || 0) >= Number(prom)).length / metricasHoje.length : 0;
-      return { r, registrouHoje, promOntem, realOntem, pctOntem, corOntem, rowHoje, fechouHoje, taxaDimensoes };
+      return { r, registrouHoje, resumoPlanoHoje, promOntem, realOntem, pctOntem, corOntem, rowHoje, fechouHoje, taxaDimensoes };
     }).sort((a, b) => {
       if (a.registrouHoje !== b.registrouHoje) return a.registrouHoje ? 1 : -1; // não registrou primeiro
       if (a.taxaDimensoes !== b.taxaDimensoes) return a.taxaDimensoes - b.taxaDimensoes;
@@ -24157,10 +24205,8 @@ async function renderDaily() {
     // planoDoDiaFechado, e não planoFechado: esse nome já existe mais adiante nesta
     // mesma função (bloco do detalhe do plano) — const duplicado é ReferenceError.
     const planoDoDiaFechado = !!(planoDoRep && planoDoRep.status === 'plano_fechado');
-    // Contas-alvo marcadas no plano entram na conta de visitas comprometidas: são
-    // cliente nomeado do dia igual às prioridades.
-    const contasDoPlano = (planoDoRep && Array.isArray(planoDoRep.contas_alvo)) ? planoDoRep.contas_alvo.length : 0;
-    const comprometidasHoje = prioridadesDoRep.length + contasDoPlano;
+    const resumoCompromissoDoRep = compromissoDoPlano(planoDoRep, r.ownerId);
+    const comprometidasHoje = resumoCompromissoDoRep.nomes;
 
     const metricasCompromisso = [
       { label: 'Visitas', campo: 'prometido_visitas', prom: comprometidasHoje > 0 ? comprometidasHoje : null, real: Number(realVisitas) || 0, cls: 'green', chips: visitasNomesDoOwnerNoDia(r.ownerId, dailyRefDate) },
@@ -24179,12 +24225,12 @@ async function renderDaily() {
     // REDESIGN Daily & Ritmo (15/08/26) — tint de fundo do novo avatar por iniciais,
     // mesma régua de 3 estados que já colore a borda esquerda do card (estadoCor).
     const estadoSoft = !registrouResumo ? 'var(--red-soft)' : cumpriuTudo ? 'var(--green-soft)' : 'var(--amber-soft)';
-    const acaoGestor = !registrouResumo ? 'Cobrar promessa' : promessaZerada ? 'Recalibrar promessa' : cumpriuTudo ? 'Reconhecer entrega' : iniciouExecucao ? 'Destravar execução' : 'Começar agora';
-    const estadoExec = !registrouResumo ? 'Promessa aberta' : cumpriuTudo ? 'Compromisso cumprido' : iniciouExecucao ? 'Em execução' : 'Promessa registrada';
+    const acaoGestor = !registrouResumo ? 'Cobrar plano' : promessaZerada ? 'Recalibrar plano' : cumpriuTudo ? 'Reconhecer entrega' : iniciouExecucao ? 'Destravar execução' : 'Começar agora';
+    const estadoExec = !registrouResumo ? 'Plano aberto' : cumpriuTudo ? 'Plano cumprido' : iniciouExecucao ? 'Em execução' : 'Plano definido';
     const pctMetrica = m => Number(m.prom) > 0 ? Math.min(100, Math.round((m.real / Number(m.prom)) * 100)) : 0;
     const metricaTime = m => `
       <span class="daily-team-metric ${m.cls}">
-        <span class="daily-team-metric-top"><span>${m.label}${m.suspeito ? ' <span title="A sincronização da noite pode ter falhado — confira no HubSpot antes de cobrar este número." style="cursor:help;">⚠️</span>' : ''}</span><b>${m.prom ?? '—'} <em>${m.prom == null ? 'sem meta' : 'prometido'}</em></b></span>
+        <span class="daily-team-metric-top"><span>${m.label}${m.suspeito ? ' <span title="A sincronização da noite pode ter falhado — confira no HubSpot antes de cobrar este número." style="cursor:help;">⚠️</span>' : ''}</span><b>${m.prom ?? '—'} <em>${m.prom == null ? 'sem meta' : 'planejado'}</em></b></span>
         <span class="daily-progress"><span style="width:${pctMetrica(m)}%;"></span></span>
         <span style="display:block;font-size:9px;color:var(--muted);margin-top:4px;">${m.real} realizado${m.suspeito ? ' · sync a confirmar' : ''}</span>
         ${m.chips ? (m.chips.length
@@ -24195,7 +24241,7 @@ async function renderDaily() {
       </span>`;
     const metricaGestorAberta = m => `
       <div class="daily-promise-metric ${m.cls}">
-        <div class="daily-promise-metric-head"><span>${m.label}${m.suspeito ? ' ⚠️' : ''}</span><span>${m.suspeito ? 'sync da noite a confirmar' : 'promessa do dia'}</span></div>
+        <div class="daily-promise-metric-head"><span>${m.label}${m.suspeito ? ' ⚠️' : ''}</span><span>${m.suspeito ? 'sync da noite a confirmar' : 'plano do dia'}</span></div>
         <div class="daily-promise-input-row"><b style="font:800 28px/1 'Poppins',sans-serif;">${m.prom ?? '—'}</b><span class="daily-promise-actual"><b>${m.real}</b>realizado</span></div>
         <div class="daily-progress"><span style="width:${pctMetrica(m)}%;"></span></div>
       </div>`;
@@ -24213,22 +24259,7 @@ async function renderDaily() {
     const planoPrioridades = (planoPessoa && Array.isArray(planoPessoa.prioridades) ? planoPessoa.prioridades : []).filter(Boolean);
       // BLOCO 2 (11/08): compromissos JÁ MARCADOS para o dia que a Daily está mostrando.
     // Mesmo normalizador da aba Agenda; só o nome do lead e a hora, nada de título cru.
-    const compromissosHoje = (() => {
-      if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
-      let eventos;
-      try { eventos = agendaNormalizar(DATA.agenda); } catch (e) { return []; }
-      return eventos
-        .filter(ev => String(ev.ownerId) === String(r.ownerId) && ev.inicio
-          && ev.inicio.toISOString().slice(0, 10) === dailyRefDate)
-        .sort((a, b) => a.inicio - b.inicio)
-        .map(ev => ({
-          hora: agendaHhmm(ev.inicio),
-          lead: ev.leadDoNegocio ? (ev.cliente || null) : agendaNomeDoLead(ev.cliente || ev.titulo),
-          dealId: ev.dealId || null,
-          motivo: ev.leadDoNegocio ? 'ok' : agendaMotivoSemLead(ev.cliente || ev.titulo),
-          tipo: ev.tipo
-        }));
-    })();
+    const compromissosHoje = compromissosAgendaDoOwner(r.ownerId);
     const comLead = compromissosHoje.filter(c => c.lead);
     // NOVO (15/08/26) — pedido explícito do Julyan: "um aviso dos leads quentes estarem
     // na daily ou não, pra forçar o follow". Mesmo dado que já alimenta a aba "Quentes"
@@ -24264,10 +24295,10 @@ async function renderDaily() {
        agenda do HubSpot (nomes com hora marcada) → o que faltar. As prioridades vêm
        no formato "Nome — motivo"; na linha entra só o nome, porque o motivo é
        leitura de 1:1 e já aparece inteiro ao expandir. */
-    const nomesDoPlano = nomesDaPromessaDoPlano(planoPrioridades);
-    const nomesDaAgenda = comLead.map(c => c.lead).filter(Boolean);
-    const nomesPrometidos = nomesDoPlano.length ? nomesDoPlano : nomesDaAgenda;
-    const fontePromessa = nomesDoPlano.length ? 'plano' : (nomesDaAgenda.length ? 'agenda' : null);
+    const nomesDoPlano = resumoCompromissoDoRep.nomesPlano;
+    const nomesDaAgenda = resumoCompromissoDoRep.nomesAgenda;
+    const nomesPrometidos = resumoCompromissoDoRep.nomesLista;
+    const fontePromessa = resumoCompromissoDoRep.fonte;
     const clientesPreviewHTML = nomesPrometidos.length
       ? `<b>${esc(nomesPrometidos.slice(0, 2).join(', '))}</b>${nomesPrometidos.length > 2 ? ` +${nomesPrometidos.length - 2}` : ''}`
       : (visitasPrometidas > 0 ? 'nenhum cliente nomeado ainda' : 'sem cliente nomeado hoje');
@@ -24470,7 +24501,7 @@ async function renderDaily() {
       if (promessaTotal > 0) {
         const ok = feitas >= promessaTotal;
         return `<span class="daily-linha-promessa">
-          <b>${promessaTotal}</b> prometido${promessaTotal === 1 ? '' : 's'}
+          <b>${promessaTotal}</b> planejado${promessaTotal === 1 ? '' : 's'}
           <em class="${ok ? 'is-ok' : ''}">${feitas} feito${feitas === 1 ? '' : 's'}</em>
           ${fontePromessa === 'plano' ? '<i title="Nomes vindos do plano do dia que ele fechou no Cockpit">plano do dia</i>' : '<i title="Nomes vindos da agenda confirmada no HubSpot">agenda</i>'}
         </span>`;
