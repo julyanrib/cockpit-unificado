@@ -3723,6 +3723,10 @@
 
   .prosp2-cols{display:grid;grid-template-columns:1fr 296px;gap:18px;align-items:start;}
   .prosp2-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}
+  /* Rodapé do lote da fila (28/08/26) — ver a nota longa em PROSP2_LOTE. */
+  .prosp2-mais{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding:11px 14px;border:1px dashed var(--line-btn);border-radius:var(--r-lg);background:var(--panel2);font-size:11.5px;color:var(--muted);}
+  .prosp2-mais button{margin-left:auto;flex:none;border:1px solid var(--line-btn);border-radius:999px;padding:7px 14px;background:var(--panel);color:var(--red);font-size:11.5px;font-weight:800;cursor:pointer;white-space:nowrap;}
+  .prosp2-mais button:hover{border-color:var(--red);background:var(--red-soft);}
 
   .prosp2-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:15px 16px 13px;box-shadow:var(--shadow);cursor:pointer;position:relative;display:flex;flex-direction:column;gap:10px;transition:all .16s var(--ease);}
   .prosp2-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);border-color:var(--line-btn);}
@@ -11205,7 +11209,27 @@ async function montarAgendaSugestoes(ownerId, dias, naSemana, renderVersao) {
 // padrão era 'score' (nota+recência+distância misturados), que podia empurrar uma
 // conta pertinho pro fim da lista se a nota fosse baixa. Agora abre direto ordenado
 // por proximidade; o executivo ainda pode trocar pra "Melhores primeiro" no seletor.
-let prosp2Estado = { fonte: 'todas', ordenar: 'dist', local: null, agenda: {}, popoverAberto: null, drawerId: null, recemAberta: false, comTelefone: false };
+/* LOTE INICIAL DA FILA DE CONTAS-ALVO (28/08/26).
+
+   Medido na tela do Marco em produção: a aba Planejamento tinha 13.984px e 627
+   elementos clicáveis. Só a grade de contas eram 11.697px — 59 cards de 186px, em
+   UMA coluna, sem paginação. Cabiam 5 por dobra: para ver a lista inteira ele rolava
+   treze dobras.
+
+   E o alvo da fase dele é SEIS visitas por dia. Ou seja: a tela despejava 59 opções
+   para uma escolha de 6, uma por vez, rolando. Isso não é abundância, é o motivo de
+   ninguém usar a tela — a fila mais longa é a mais fácil de abandonar.
+
+   Dez é o lote inicial porque dá escolha real para as 6 do dia (quase o dobro) sem
+   passar de duas dobras, que é o orçamento dos outros blocos desta tela. O resto não
+   desaparece: a contagem total fica visível e o botão traz mais dez por clique.
+
+   A ORDEM é o que torna o corte defensável: a fila já vem recém-aberta primeiro (ver
+   prospeccaoCompararOrdem), então os dez primeiros são os dez melhores sinais que a
+   base tem, não os dez primeiros alfabéticos. Cortar uma lista mal ordenada seria
+   esconder oportunidade; cortar uma bem ordenada é poupar rolagem. */
+const PROSP2_LOTE = 10;
+let prosp2Estado = { fonte: 'todas', ordenar: 'dist', local: null, agenda: {}, popoverAberto: null, drawerId: null, recemAberta: false, comTelefone: false, mostrar: PROSP2_LOTE };
 const PROSP2_HORAS = ['09:00', '10:30', '13:30', '15:00', '16:30'];
 const PROSP2_FONTES = {
   cdd: { nome: 'Casa dos Dados', cor: '#4C6EF5' },
@@ -11774,11 +11798,13 @@ async function renderProspeccaoExecutivo() {
     <div class="prosp2-result-head">
       <h2>Leads perto de ${esc(centro.rotulo)}</h2>
       <p>ordenados pelo potencial: avaliação, volume e distância</p>
-      <span class="right num">${visiveis.length} lead${visiveis.length === 1 ? '' : 's'}</span>
+      <!-- O cabeçalho passa a dizer LOTE de TOTAL (28/08/26), porque "59 leads" ao lado
+           de uma grade que mostra 10 é número que não corresponde ao que está na tela. -->
+      <span class="right num">${Math.min(prosp2Estado.mostrar, visiveis.length)} de ${visiveis.length} lead${visiveis.length === 1 ? '' : 's'}</span>
     </div>
 
     <div class="prosp2-cols">
-      <div class="prosp2-grid" id="prosp2Grid">${visiveis.length ? visiveis.map(cardHTML).join('') : (
+      <div class="prosp2-grid" id="prosp2Grid">${visiveis.length ? visiveis.slice(0, prosp2Estado.mostrar).map(cardHTML).join('') : (
         dentroDoRaio.length === 0
           ? `<div class="prosp2-vazio"><b>Sem leads importados perto de "${esc(centro.rotulo)}".</b><br>A busca cobre a carteira já trazida pra sua praça (Casa dos Dados, TripAdvisor, iFood, Google Places) — não é uma busca ao vivo no Brasil inteiro.<br>Se essa região deveria estar na sua praça, avisa seu gestor pra rodar a atualização mensal de contas-alvo por lá.<br><br><button class="prosp2-ver" id="prosp2Limpar">Voltar pra minha praça</button></div>`
           : (prosp2Estado.recemAberta && prosp2Estado.comTelefone)
@@ -11794,7 +11820,15 @@ async function renderProspeccaoExecutivo() {
                a causa e o caminho que funciona. */
             ? `<div class="prosp2-vazio" style="text-align:left;"><b>Estes dois recortes não se cruzam na base de hoje.</b><br><b>Recém-abertas</b> vem do CNPJ (Casa dos Dados): traz a data de abertura e <b>nunca o telefone</b>. <b>Prontas pra ligar</b> vem do Google e do Outscraper: traz telefone e <b>quase nunca a data de abertura</b>. São duas coletas diferentes do mesmo mercado, e hoje elas não se encontram no mesmo registro.<br><br>Para ligar numa recém-aberta: deixe só <b>Recém-abertas</b> e busque o contato pelo CNPJ na ficha dela.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
             : `<div class="prosp2-vazio"><b>Nenhum lead com esses filtros por aqui.</b><br>Tente outra fonte ou busque outro bairro.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
-      )}</div>
+      )}${visiveis.length > prosp2Estado.mostrar ? `
+        <div class="prosp2-mais">
+          <span>Mostrando <b>${prosp2Estado.mostrar}</b> de <b>${visiveis.length}</b> — as recém-abertas primeiro, que é o melhor sinal que a base tem.</span>
+          <button type="button" id="prosp2VerMais">Ver mais ${Math.min(PROSP2_LOTE, visiveis.length - prosp2Estado.mostrar)} →</button>
+        </div>` : (visiveis.length > PROSP2_LOTE ? `
+        <div class="prosp2-mais">
+          <span>Fim da fila — <b>${visiveis.length}</b> conta${visiveis.length === 1 ? '' : 's'} nesta busca.</span>
+          <button type="button" id="prosp2VerMenos">Voltar aos ${PROSP2_LOTE} primeiros ↑</button>
+        </div>` : '')}</div>
 
       <aside class="prosp2-tray" data-plan-bloco="rua">
         <!-- O badge do passo fica FORA do <h3> (28/08/26). Dentro dele, o texto do título
@@ -11921,6 +11955,7 @@ function prosp2LigarEventos(universo, ownerId) {
     locGo.disabled = false; locGo.textContent = 'Buscar aqui';
     if (!resultado) { prosp2Toast('Não consegui localizar esse endereço — tente outro texto.', 'aviso'); return; }
     prosp2Estado.local = { lat: resultado.lat, lng: resultado.lng, rotulo: resultado.nomeResolvido, custom: true };
+    prosp2Estado.mostrar = PROSP2_LOTE;   // recorte novo, lote novo — ver a nota em PROSP2_LOTE
     // AVISO (17/08/26, Julyan: "fica travado, não sei se a busca tá indo") — a busca
     // não é ao vivo no Brasil inteiro: filtra a carteira JÁ IMPORTADA pra praça do
     // executivo (Casa dos Dados/TripAdvisor/iFood/Google Places rodam mensalmente por
@@ -11942,7 +11977,7 @@ function prosp2LigarEventos(universo, ownerId) {
     if (typeof abrirNovaContaProspeccao === 'function') abrirNovaContaProspeccao(() => renderProspeccaoExecutivo());
   });
   const locReset = document.getElementById('prosp2LocReset');
-  if (locReset) locReset.addEventListener('click', () => { prosp2Estado.local = null; renderProspeccaoExecutivo(); });
+  if (locReset) locReset.addEventListener('click', () => { prosp2Estado.local = null; prosp2Estado.mostrar = PROSP2_LOTE; renderProspeccaoExecutivo(); });
   document.querySelectorAll('.prosp2-loc-chip').forEach(c => c.addEventListener('click', () => aplicarBusca(c.dataset.loc)));
 
   // ---- filtro de fonte + ordenação ----
@@ -11951,6 +11986,7 @@ function prosp2LigarEventos(universo, ownerId) {
     const b = ev.target.closest('.prosp2-fonte');
     if (!b) return;
     prosp2Estado.fonte = b.dataset.f;
+    prosp2Estado.mostrar = PROSP2_LOTE;
     renderProspeccaoExecutivo();
   });
   /* Mesmo padrão das pílulas de fonte, logo acima: um listener delegado no contêiner,
@@ -11958,6 +11994,16 @@ function prosp2LigarEventos(universo, ownerId) {
      escopo (ela recebe universo e ownerId, e consulta por getElementById), então
      seguir o vizinho é mais seguro que introduzir uma segunda forma de alcançar o DOM.
      O nome do campo vem do data-v, escrito com a MESMA chave de prosp2Estado. */
+  const maisEl = document.getElementById('prosp2VerMais');
+  if (maisEl) maisEl.addEventListener('click', () => {
+    prosp2Estado.mostrar += PROSP2_LOTE;
+    renderProspeccaoExecutivo();
+  });
+  const menosEl = document.getElementById('prosp2VerMenos');
+  if (menosEl) menosEl.addEventListener('click', () => {
+    prosp2Estado.mostrar = PROSP2_LOTE;
+    renderProspeccaoExecutivo();
+  });
   const visoesEl = document.getElementById('prosp2Visoes');
   if (visoesEl) visoesEl.addEventListener('click', ev => {
     const b = ev.target.closest('.prosp2-visao');
@@ -11965,6 +12011,7 @@ function prosp2LigarEventos(universo, ownerId) {
     const campo = b.dataset.v;
     if (!campo || !(campo in prosp2Estado)) return;
     prosp2Estado[campo] = !prosp2Estado[campo];
+    prosp2Estado.mostrar = PROSP2_LOTE;
     renderProspeccaoExecutivo();
   });
   const ordenarEl = document.getElementById('prosp2Ordenar');
@@ -11973,7 +12020,7 @@ function prosp2LigarEventos(universo, ownerId) {
   /* O "Limpar filtros" do estado vazio limpava só fonte e local. Sem os dois campos
      novos aqui, o executivo clicaria em limpar, veria a fila continuar cortada e
      nenhum filtro aparente ligado — pior que o problema original. */
-  if (limparEl) limparEl.addEventListener('click', () => { prosp2Estado.fonte = 'todas'; prosp2Estado.local = null; prosp2Estado.recemAberta = false; prosp2Estado.comTelefone = false; renderProspeccaoExecutivo(); });
+  if (limparEl) limparEl.addEventListener('click', () => { prosp2Estado.fonte = 'todas'; prosp2Estado.local = null; prosp2Estado.recemAberta = false; prosp2Estado.comTelefone = false; prosp2Estado.mostrar = PROSP2_LOTE; renderProspeccaoExecutivo(); });
 
   // ---- grade de cards: abrir popover de dia/hora, ver ficha, abrir ficha ----
   const grid = document.getElementById('prosp2Grid');
