@@ -1026,6 +1026,29 @@ teste('visita sem negócio associado não entra no numerador nem no denominador'
   igual(r.pct, null, 'sem base de cálculo, pct é null e não 0');
 });
 
+teste('conta cada gesto separado, não só o combo (régua da excelência)', () => {
+  // A régua precisa dizer QUAL hábito falta: anotar o sistema e datar o retorno são
+  // treinos diferentes, e um número agregado esconde qual dos dois é o problema.
+  const soSistema = lead({ id: 'G1', name: 'Só sistema', nome_do_sistema: 'Consumer' });
+  const soDor = lead({ id: 'G2', name: 'Só dor', gargalo_operacional: 'Fila' });
+  const soPasso = lead({ id: 'G3', name: 'Só passo',
+    tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
+  const c = novoContexto(dados({
+    funilLeads: { '1396005401': [soSistema, soDor, soPasso] },
+    agenda: { eventos: [
+      eventoVisita('G1', 'Só sistema', iso(HOJE)),
+      eventoVisita('G2', 'Só dor', iso(HOJE)),
+      eventoVisita('G3', 'Só passo', iso(HOJE))
+    ] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
+  igual(r.avaliados, 3, 'três visitas avaliadas');
+  igual(r.comSistema, 1, 'uma com sistema anotado');
+  igual(r.comDor, 1, 'uma com dor registrada');
+  igual(r.comPasso, 1, 'uma com próximo passo datado');
+  igual(r.fechados, [], 'e nenhuma fechou o ciclo — os três gestos são independentes');
+});
+
 teste('sem visita na semana, o número não finge zero', () => {
   const c = novoContexto(dados({ funilLeads: { '1396005401': [lead({ id: 'C6' })] } }), { ownerId: OWNER, role: 'rep' });
   const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));

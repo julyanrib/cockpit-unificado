@@ -2594,6 +2594,35 @@
   .mf-n1-nota b{color:var(--muted);}
   .mf-nivel1 .mf-funnel-bars{padding:0;background:none;}
   .overline-mini{font:800 10px/1 'Manrope',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--ter);}
+
+  /* ---- A RÉGUA DA EXCELÊNCIA (28/08/26) ----
+     Quatro leituras da semana em linha. Grid de 4 colunas iguais em desktop (é uma
+     régua: comparar entre si é o ponto) e 2 colunas em tela estreita. minmax(0,1fr)
+     e não 1fr, pela mesma razão de sempre neste arquivo. */
+  .regua-faixa{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-xl);
+    padding:15px 18px;margin-bottom:14px;}
+  .regua-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+  .regua-sub{font-size:11px;color:var(--muted2);}
+  .regua-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;}
+  .regua-item{min-width:0;}
+  .regua-rot{display:block;font-size:10.5px;font-weight:700;color:var(--muted2);line-height:1.35;}
+  .regua-num{display:block;margin-top:4px;font:800 24px/1 'Poppins',sans-serif;color:var(--ink);
+    font-variant-numeric:tabular-nums;}
+  .regua-num em{font-style:normal;font-weight:700;font-size:13px;color:var(--ter);}
+  /* A cor mora no número, não no fundo: fundo colorido em quatro blocos lado a lado
+     transforma a faixa num semáforo e rouba a atenção do que está na tela acima. */
+  .regua-num.is-ok{color:var(--green);}
+  .regua-num.is-meio{color:var(--amber-ink);}
+  .regua-num.is-baixo{color:var(--red);}
+  .regua-barra{display:block;height:5px;border-radius:999px;background:var(--sunk);margin-top:7px;overflow:hidden;}
+  .regua-barra i{display:block;height:100%;border-radius:999px;background:var(--ink);opacity:.55;}
+  .regua-num.is-ok+.regua-barra i{background:var(--green);opacity:1;}
+  .regua-num.is-meio+.regua-barra i{background:var(--amber);opacity:1;}
+  .regua-num.is-baixo+.regua-barra i{background:var(--red);opacity:1;}
+  .regua-nota{display:block;margin-top:6px;font-size:10px;color:var(--ter);line-height:1.4;}
+  @media (max-width:900px){
+    .regua-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+  }
   .overline-mini.is-red{color:var(--red-dk);}
   .mf-n1-card .destrava-diag{margin-top:9px;}
   /* Diagnóstico saudável: verde e sem alarme. Card sem borda vermelha e rótulo neutro —
@@ -7337,6 +7366,14 @@ async function renderMeuPainel() {
         </div>
       </div>
     </div>
+
+    <!-- A RÉGUA DA EXCELÊNCIA fecha o nível 1 (28/08/26). Em largura cheia de
+         propósito: são quatro números da MESMA semana e comparar um com o outro é a
+         leitura ("saí 6 vezes, registrei a dor em 1"). Em duas colunas isso se perde.
+         Fica DEPOIS do que fazer agora e ANTES do resto: primeiro a ação do dia,
+         depois o espelho da semana. Nunca o contrário — espelho antes de ação vira
+         cobrança sem saída. -->
+    ${reguaDaExcelenciaHTML(r)}
 
     <!-- BLOCO 3 exec (10/08/26): "Onde seu funil está preso" saiu — a aba Meu funil já
          tem "Meu funil por etapa", com o mesmo dado (r.stages), clicável e com o SLA de
@@ -21227,12 +21264,22 @@ function cicloFechadoDaSemana(ownerId, ateDataISO) {
   meusNegociosAbertos(ownerId).forEach(l => indice.set(String(l.id), l));
 
   const fechados = [], faltaQualificacao = [], faltaPasso = [], faltaAmbos = [];
+  /* Contagem POR GESTO, além do combo. O ciclo fechado responde "quantas visitas
+     terminaram completas"; a régua da excelência precisa responder, com o MESMO
+     denominador, quantas tiveram cada gesto isolado — porque é assim que o executivo
+     descobre qual hábito treinar. Um número agregado esconde se o problema é anotar o
+     sistema ou datar o retorno, e são treinos diferentes. */
+  let comSistema = 0, comDor = 0, comPasso = 0;
   porDeal.forEach((cliente, dealId) => {
     const lead = indice.get(dealId);
     if (!lead) return;   // negócio já fechado/perdido: fora do numerador e do denominador
     const nome = lead.name || cliente || dealId;
-    const semQual = (typeof qualificacaoFaltante === 'function' ? qualificacaoFaltante(lead) : []).length > 0;
+    const falta = (typeof qualificacaoFaltante === 'function' ? qualificacaoFaltante(lead) : []);
+    const semQual = falta.length > 0;
     const semPasso = !(typeof leadTemProximoPasso === 'function' ? leadTemProximoPasso(lead) : false);
+    if (!falta.includes('nome_do_sistema')) comSistema++;
+    if (!falta.includes('gargalo_operacional')) comDor++;
+    if (!semPasso) comPasso++;
     if (semQual && semPasso) faltaAmbos.push(nome);
     else if (semQual) faltaQualificacao.push(nome);
     else if (semPasso) faltaPasso.push(nome);
@@ -21248,6 +21295,7 @@ function cicloFechadoDaSemana(ownerId, ateDataISO) {
     faltaPasso,
     faltaAmbos,
     semDeal,
+    comSistema, comDor, comPasso,
     pct: avaliados > 0 ? Math.round(fechados.length / avaliados * 100) : null
   };
 }
@@ -22639,6 +22687,69 @@ function diaUtilAnterior(dataISO) {
 
 /* Devolve só o CORPO (barras + legenda), sem wrapper nem cabeçalho: ele vive dentro
    do bloco "Ontem" da Daily, que já tem título e selo de evidência. */
+/* ============================================================================
+   A RÉGUA DA EXCELÊNCIA (28/08/26)
+   ----------------------------------------------------------------------------
+   Quatro números da semana, todos com denominador, todos de evidência. Nenhum é
+   autodeclarado e nenhum aparece sem base de cálculo.
+
+   POR QUE ESTES QUATRO. São os gestos que separam o executivo que fecha do que só
+   roda a rua, e os quatro estavam invisíveis. Medido no time em 28/08:
+     · 51 negócios em Visita, 49 sem sistema E sem dor registrados;
+     · 123 de 132 sem próximo passo datado;
+     · Kelly: 6 visitas na semana, ZERO que terminou completa.
+
+   O DENOMINADOR É A HONESTIDADE DO BLOCO. "3 dores registradas" não diz nada; "3 de
+   6 visitas" diz. E sem visita avaliada na semana o número é "—", nunca 0 — zero
+   afirmaria que ele falhou, quando ele não teve amostra. Mesma regra dos
+   indicadores e do prometido × realizado.
+
+   O primeiro número tem denominador diferente dos outros três, de propósito: visita
+   se compara ao alvo da FASE dele (rampagem), os gestos se comparam às visitas que
+   ele fez. Comparar gesto com alvo de fase misturaria duas perguntas.
+   ============================================================================ */
+function reguaDaExcelenciaHTML(r) {
+  const ciclo = cicloFechadoDaSemana(r.ownerId, dailyRefDate);
+  const ramp = typeof rampDoOwner === 'function' ? rampDoOwner(r.ownerId) : { alvo: null };
+
+  // Visitas comprovadas da semana e o alvo proporcional aos dias úteis já decorridos.
+  const visitasSemana = ciclo.dias.reduce((soma, d) => soma + (visitasComprovadasNoDia(r.ownerId, d) || 0), 0);
+  const alvoDia = (ramp && ramp.alvo != null) ? Number(ramp.alvo) : null;
+  const alvoSemana = alvoDia != null ? alvoDia * ciclo.dias.length : null;
+
+  const base = ciclo.avaliados;
+  const itens = [
+    {
+      rot: 'Visitas provadas',
+      valor: visitasSemana,
+      de: alvoSemana,
+      nota: alvoSemana == null ? 'fase não definida no seu cadastro' : `alvo da sua fase: ${alvoDia}/dia útil`
+    },
+    { rot: 'Saíram com próximo passo', valor: base ? ciclo.comPasso : null, de: base, nota: 'tarefa datada no HubSpot' },
+    { rot: 'Dor registrada', valor: base ? ciclo.comDor : null, de: base, nota: 'o que ele te contou, no negócio' },
+    { rot: 'Sistema anotado', valor: base ? ciclo.comSistema : null, de: base, nota: 'o PDV que ele usa hoje' }
+  ];
+
+  return `<div class="regua-faixa">
+    <div class="regua-head">
+      <span class="overline-mini">A régua da excelência · esta semana</span>
+      <span class="regua-sub">Evidência do HubSpot. Nada aqui se marca à mão.</span>
+    </div>
+    <div class="regua-grid">
+      ${itens.map(it => {
+        const semBase = it.valor == null || it.de == null || it.de === 0;
+        const pct = semBase ? null : Math.min(100, Math.round(it.valor / it.de * 100));
+        const cor = pct == null ? '' : pct >= 80 ? ' is-ok' : pct >= 40 ? ' is-meio' : ' is-baixo';
+        return `<div class="regua-item">
+          <span class="regua-rot">${esc(it.rot)}</span>
+          <b class="regua-num${cor}">${semBase ? '—' : it.valor}<em>${semBase ? '' : ' / ' + it.de}</em></b>
+          <span class="regua-barra">${pct == null ? '' : `<i style="width:${pct}%;"></i>`}</span>
+          <span class="regua-nota">${semBase ? 'sem visita avaliada nesta semana' : esc(it.nota)}</span>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
 function prometidoVsRealizadoCorpoHTML(r) {
   const ontem = diaUtilAnterior(dailyRefDate);
   const row = getDaily(r.ownerId, ontem) || {};
