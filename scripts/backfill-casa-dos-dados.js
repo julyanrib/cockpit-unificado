@@ -300,6 +300,10 @@ async function main() {
   let totalInseridos = 0, totalDuplicados = 0;
   const porCidade = {};
   const todosOsLeads = [];
+  // Cidades cujo POST foi RECUSADO pelo endpoint (não é o mesmo que "nada novo pra
+  // inserir"). Sem esta lista, recusa em todas as cidades fechava a execução em verde.
+  const recusadas = [];
+  let totalEncontrados = 0;
   for (const cidadeCfg of CIDADES) {
     const { municipio, uf } = cidadeCfg;
     console.log(`[backfill-casa-dos-dados] Buscando ${municipio}/${uf}… (objetivo mínimo: ${cidadeCfg.objetivoMinimo})`);
@@ -316,9 +320,11 @@ async function main() {
       porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, porMeta: porMeta || undefined };
     } else {
       const resultado = await importarLote(leadsCidade, importSecret);
-      porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, inseridos: resultado.inseridos || 0, duplicados: resultado.duplicados || 0, porMeta: porMeta || undefined };
+      porCidade[`${municipio}/${uf}`] = { encontrados: leadsCidade.length, inseridos: resultado.inseridos || 0, duplicados: resultado.duplicados || 0, recusado: resultado.erro || undefined, porMeta: porMeta || undefined };
       totalInseridos += resultado.inseridos || 0;
       totalDuplicados += resultado.duplicados || 0;
+      totalEncontrados += leadsCidade.length;
+      if (resultado.erro) recusadas.push({ cidade: `${municipio}/${uf}`, encontrados: leadsCidade.length, erro: resultado.erro });
     }
   }
 
@@ -374,6 +380,43 @@ async function main() {
     process.exit(1);
   } else {
     console.log(`[backfill-casa-dos-dados] Total: ${totalInseridos} contas novas, ${totalDuplicados} já existentes (mescladas).`);
+
+    /* FALHA QUANDO O ENDPOINT RECUSA (28/08/26 — lacuna do meu próprio conserto).
+       A passagem anterior fez o MODO MANUAL falhar alto, mas deixou passar o caso
+       em que o segredo existe no GitHub, o POST é feito, e o endpoint recusa: a
+       execução somava inseridos=0 em todas as cidades e fechava em VERDE.
+
+       Aconteceu ao vivo na primeira execução com o segredo configurado: as 7 cidades
+       responderam "Sem sessão e sem segredo de importação válido" (segredo ausente ou
+       diferente do lado da Vercel, ou faltando o redeploy) e o Action deu success.
+
+       Recusa é diferente de "nada novo": recusa é 0 inserido E 0 duplicado com contas
+       encontradas. Quando tudo está certo e não há nada novo, `duplicados` sobe. */
+    if (recusadas.length > 0) {
+      const aviso = `${recusadas.length} cidade(s) recusadas pelo endpoint. ${totalEncontrados} contas encontradas, ${totalInseridos} importadas.`;
+      console.log(`::error title=Importação recusada::${aviso}`);
+      console.log('[backfill-casa-dos-dados] Recusas:', JSON.stringify(recusadas, null, 2));
+      if (process.env.GITHUB_STEP_SUMMARY) {
+        try {
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [
+            '## ❌ O endpoint recusou a importação',
+            '',
+            `Encontradas **${totalEncontrados}** contas. Importadas: **${totalInseridos}**.`,
+            '',
+            `Motivo devolvido: \`${recusadas[0].erro}\``,
+            '',
+            'O segredo chegou daqui (o GitHub o injetou no ambiente), então a diferença',
+            'está do outro lado. Confira, na Vercel:',
+            '',
+            '1. `IMPORT_SECRET` existe em Settings → Environment Variables?',
+            '2. O valor é **idêntico** ao do GitHub?',
+            '3. Houve **redeploy** depois de criar a variável? (env var nova só vale no deploy seguinte)',
+            ''
+          ].join('\n'));
+        } catch (e) { /* resumo é bônus */ }
+      }
+      process.exit(1);
+    }
   }
 }
 
