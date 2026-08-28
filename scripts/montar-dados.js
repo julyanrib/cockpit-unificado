@@ -35,6 +35,12 @@ const syncStatus = requireOpcional(() => require('../data/sync-status.json'));
 // recomendada (vai pra "Revisar escopo", não some). Dado editável em data/.
 const redesExcluidas = requireOpcional(() => require('../data/redes-excluidas.json'));
 const hubspotPrevious = requireOpcional(() => require('../data/hubspot-previous.json'));
+// Régua de cadência (data/cadencias.json). É CONFIGURAÇÃO, não código: o template lê
+// DATA.cadencias e nunca hardcoda os passos, então ajustar a régua (dias, canais, quais
+// cadências existem, motivos válidos de saída) é editar esse JSON e rodar o build.
+// Opcional pelo mesmo motivo dos outros: repo recém-clonado pode não ter o arquivo — aí
+// o template cai no fallback mínimo e mostra "régua não configurada" em vez de inventar.
+const cadencias = requireOpcional(() => require('../data/cadencias.json'));
 
 const USUARIOS = Array.isArray(usuariosRaw) ? usuariosRaw : (usuariosRaw.usuarios || []);
 
@@ -235,6 +241,9 @@ function montarDadosCompletos() {
     } : null,
     agenda: hubspot.agenda || null,
     redesExcluidas: (redesExcluidas && Array.isArray(redesExcluidas.redes)) ? redesExcluidas.redes : [],
+    // Configuração da régua de cadência — igual pros dois papéis (é política do canal,
+    // não dado de cliente), por isso passa intacta pelo filtrarParaPapel.
+    cadencias: cadencias || null,
     usuarios: USUARIOS
   };
 }
@@ -355,9 +364,19 @@ function filtrarParaPapel(dados, usuario) {
     resumoSemanal: resumoSemanalFiltrado,
     agenda,
     leadsReferencia,
-    // AUTOMAÇÃO 3 — status de sincronização é informação operacional do gestor
-    // (falha de robô, verificação de escrita), não faz sentido pro executivo ver.
-    syncStatus: null
+    // AUTOMAÇÃO 3 — o relatório BRUTO do robô (falhas por executivo, verificação de
+    // escrita) continua sendo do gestor. Mas o executivo precisa saber se a carga que
+    // está na tela dele é confiável: recomendação em cima de snapshot velho, ou visita
+    // que ficou presa no app e não subiu, muda o que ele faz às 8h30. Então ele recebe
+    // um recorte: quando rodou, se a rodada teve falha, e se ALGUMA falha era dele —
+    // nunca as falhas dos colegas.
+    syncStatus: dados.syncStatus ? {
+      ultimaExecucao: dados.syncStatus.ultimaExecucao || null,
+      houveFalha: Array.isArray(dados.syncStatus.falhas) && dados.syncStatus.falhas.length > 0,
+      falhaMinha: Array.isArray(dados.syncStatus.falhas)
+        ? dados.syncStatus.falhas.some(f => String(f && (f.ownerId || f.owner_id) || '') === meuId)
+        : false
+    } : null
     // kpisHub, kpiDeltas, saude, funil (contagens agregadas do time), stageMeta,
     // hubspotUpdatedAtFmt, usuarios (nomes/e-mails do próprio time) permanecem — são
     // agregados sem detalhe de cliente, necessários pra meta coletiva e pro Pódio.

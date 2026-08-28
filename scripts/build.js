@@ -44,6 +44,11 @@ const DATA_PUBLICO = {
   footerText: '',
   resumoSemanal: null,
   agenda: null,
+  // Régua de cadência: null no shell público. O núcleo operacional do template trata
+  // null como "régua não configurada" e não desenha recomendação de cadência — nunca
+  // cai numa régua inventada em código.
+  cadencias: null,
+  syncStatus: null,
   usuarios: []
 };
 
