@@ -64,6 +64,10 @@ const LIMITE_POR_PRACA = 30;
 
 const CASA_URL = 'https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultado=completo';
 
+// Extração de contato por FORMA do valor, não por nome de campo — ver o comentário
+// grande em lib/contato-cnpj.js e as 31 checagens em scripts/testar-contato-cnpj.js.
+const { extrairContato } = require('../lib/contato-cnpj');
+
 function isoDiasAtras(dias) {
   const d = new Date(Date.now() - dias * 86400000);
   return d.toISOString().slice(0, 10);
@@ -241,40 +245,40 @@ module.exports = async function handler(req, res) {
       }
       // A v4 aninha o registro em .cnpj em algumas versões; aceita os dois.
       const d = j.cnpj || j.data || j;
+
+      /* EXTRAÇÃO POR FORMA, não por nome de campo (28/08/26).
+         O que havia aqui era uma lista de nomes escolhidos por semelhança com outras
+         APIs de CNPJ e — como o comentário original admitia — nunca validada contra a
+         resposta real. O banco mostrou o resultado: `socio` preenchido em 0 das 869
+         contas-alvo.
+
+         A tentação era pegar UMA resposta real e fixar os nomes que ela mostrasse. Isso
+         consertaria hoje e voltaria a quebrar na próxima mudança de contrato — e cada
+         descoberta custa 1 crédito, porque a Consulta CNPJ cobra por empresa.
+
+         Agora a regra vive em lib/contato-cnpj.js, reconhece telefone/e-mail/sócio pela
+         FORMA do valor dentro de chaves que falem daquilo, e tem 31 checagens em
+         scripts/testar-contato-cnpj.js cobrindo os formatos plausíveis — inclusive os
+         casos negativos que importam: CNPJ e CEP não podem virar telefone, e valor com
+         cara de telefone fora de chave de telefone não é pego (trocaria erro visível por
+         errado silencioso). */
       // PEDIDO (17/08/26, Julyan: "puxar endereço, sócio majoritário e telefone") —
       // endereço já vem na busca em lote (v5); telefone e sócio só saem na Consulta
       // CNPJ avulsa (v4), que é esta mesma chamada — então sócio "pega carona" no
       // crédito que já ia ser gasto pelo telefone, sem custo adicional.
       //
-      // AVISO IMPORTANTE: não testei esta chamada ao vivo (sem acesso ao navegador
-      // no momento em que isso foi escrito) — os nomes de campo abaixo são os mais
-      // comuns entre APIs de CNPJ brasileiras (todas espelham o mesmo dado-base da
-      // Receita Federal), com várias variações como fallback, no mesmo estilo do
-      // telefone acima. Se o primeiro teste real mostrar um campo diferente, é só
-      // me avisar com o que a ficha mostrou (ou abrir o Network do navegador) que eu
-      // ajusto na hora — não é uma reescrita, é trocar o nome de um campo.
+      // HISTÓRICO (28/08/26): aqui havia um aviso de que a chamada nunca tinha sido
+      // testada ao vivo e que os nomes de campo eram palpite. O aviso estava certo —
+      // `socio` ficou em 0 de 869 contas-alvo. A extração deixou de depender de nome
+      // de campo (lib/contato-cnpj.js) e passou a ter teste próprio; e quando ela não
+      // acha nada, a resposta traz `diagnostico` com as chaves reais recebidas. Uma
+      // resposta inesperada agora se explica sozinha, sem gastar crédito no escuro.
       //
       // "Sócio majoritário" com percentual de participação não é dado público da
       // Receita Federal (QSA só traz nome + qualificação, ex.: "49-Sócio-Administrador"),
       // então mostramos o PRIMEIRO sócio da lista (geralmente o fundador/administrador)
       // como proxy — rotulado só "Sócio", pra não prometer um dado que não existe.
-      const qsa = d.qsa || d.socios || d.quadro_societario || [];
-      const primeiroSocio = Array.isArray(qsa) && qsa.length
-        ? (qsa[0].nome_socio || qsa[0].nome || qsa[0].nome_representante_legal || null)
-        : (d.socio_administrador || d.nome_socio || null);
-      const end = d.endereco || d;
-      const enderecoCompleto = [
-        [end.tipo_logradouro, end.logradouro || end.rua].filter(Boolean).join(' '),
-        end.numero, end.bairro, end.municipio || end.cidade, end.uf || end.estado
-      ].filter(Boolean).join(', ') || null;
-      const contato = {
-        cnpj: cnpjLimpo,
-        telefone: d.telefone_1 || d.telefone || (Array.isArray(d.telefones) ? (d.telefones[0] && (d.telefones[0].numero || d.telefones[0])) : null) || null,
-        telefone2: d.telefone_2 || null,
-        email: d.email || null,
-        socio: primeiroSocio,
-        endereco: enderecoCompleto
-      };
+      const contato = extrairContato(d, cnpjLimpo);
 
       /* DIAGNÓSTICO DE CONTRATO (28/08/26).
          O comentário acima admite que os nomes de campo nunca foram validados contra a
