@@ -161,7 +161,19 @@ function dados(over) {
     hubspotUpdatedAtISO: new Date(HOJE.getTime() - 30 * 60000).toISOString(),
     syncStatus: { ultimaExecucao: new Date(HOJE.getTime() - 30 * 60000).toISOString(), houveFalha: false, falhaMinha: false },
     cadencias: cadenciasCfg,
-    stageMeta: { slaDays: { '1396005401': 5, '1395880470': 4, '1395880471': 3, '1395880472': 7, '1395880473': 2, '1395880469': 5 }, labels: {} },
+    // labels PREENCHIDO (28/08/26): estava `{}`, e o sandbox monta STAGE_LABELS a
+    // partir daqui. gargaloDoRep faz `ORDEM_ETAPAS_FUNIL.filter(sid => STAGE_LABELS[sid])`
+    // — com labels vazio a ordem ficava vazia e a função devolvia sid null em silêncio.
+    // Em produção STAGE_LABELS é const preenchida no template, então isto era lacuna do
+    // fixture, não bug do código; mas com o fixture mudo nenhum teste de gargalo valia.
+    stageMeta: {
+      slaDays: { '1396005401': 5, '1395880470': 4, '1395880471': 3, '1395880472': 7, '1395880473': 2, '1395880469': 5 },
+      labels: {
+        '1395880469': 'Prospecção', '1396005401': 'Visita', '1395880470': 'Conversa com Decisor',
+        '1395880471': 'Demo/Proposta', '1395880472': 'Negociação', '1395880473': 'Ag. Pagamento',
+        '1398311191': 'Reciclagem'
+      }
+    },
     funilLeads: {}, temperatura: { quentes: [], frios: [] },
     reps: [{ ownerId: OWNER, name: 'Kelly Teste', travados: [], criticos: [], quentes: [], stages: {}, open: 0 }],
     agenda: { eventos: [] },
@@ -768,6 +780,91 @@ teste('o núcleo não lê nada de colega: fila só olha o ownerId pedido', () =>
   const c = novoContexto(dados({ funilLeads: { '1396005401': [meu, colega] } }), { ownerId: OWNER, role: 'rep' });
   const ids = c.meusNegociosAbertos(OWNER).map(l => l.id);
   igual(ids, ['meu'], 'só o próprio negócio');
+});
+
+console.log('\n== Destravar o funil (o degrau que não está sendo subido) ==');
+
+// Fixture do caso real do Bruno em 28/08: 14 em Visita, ZERO em Conversa com Decisor,
+// e só 1 acima do SLA. Qualquer régua baseada em SLA diz que ele é o mais saudável do
+// time; ele é o mais travado. É por isso que "saída travada" pesa mais que SLA.
+function funilDoBruno() {
+  const visita = [];
+  for (let i = 0; i < 14; i++) {
+    visita.push(lead({ id: 'BV' + i, name: 'Visita ' + i, stageId: '1396005401', dias: 3, slaBreach: i === 0 }));
+  }
+  const negociacao = [lead({ id: 'BN1', name: 'Negócio quente', stageId: '1395880472', dias: 4 })];
+  return {
+    funilLeads: { '1396005401': visita, '1395880472': negociacao },
+    reps: [{ ownerId: OWNER, name: 'Bruno Teste', open: 15, travados: [visita[0]], criticos: [], quentes: [],
+      stages: { '1396005401': 14, '1395880470': 0, '1395880472': 1 } }]
+  };
+}
+
+teste('acha o degrau travado: Visita cheia com Decisor vazio', () => {
+  const c = novoContexto(dados(funilDoBruno()), { ownerId: OWNER, role: 'rep' });
+  const d = c.destravarFunil(OWNER);
+  igual(d.etapaTravada, '1396005401', 'a etapa travada é Visita');
+  igual(d.motivo, 'saida_travada', 'e o motivo é saída travada, não estoque');
+  igual(d.proximaLabel, 'Conversa com Decisor', 'nomeia o degrau seguinte');
+  igual(d.candidatos.length, 14, 'os 14 são candidatos a subir');
+});
+
+teste('o movimento sai do que FALTA, e qualificação vem antes de tudo', () => {
+  const semNada = lead({ id: 'D1', name: 'Cego', stageId: '1396005401', dias: 5 });
+  const qualificado = lead({ id: 'D2', name: 'Qualificado', stageId: '1396005401', dias: 5,
+    nome_do_sistema: 'Consumer', gargalo_operacional: 'Fila' });
+  const pronto = lead({ id: 'D3', name: 'Pronto', stageId: '1396005401', dias: 5,
+    nome_do_sistema: 'Saipos', gargalo_operacional: 'Estoque',
+    tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
+  const c = novoContexto(dados({
+    funilLeads: { '1396005401': [semNada, qualificado, pronto] },
+    reps: [{ ownerId: OWNER, name: 'T', open: 3, travados: [], criticos: [], quentes: [], stages: { '1396005401': 3, '1395880470': 0 } }]
+  }), { ownerId: OWNER, role: 'rep' });
+  const d = c.destravarFunil(OWNER);
+  igual(d.candidatos.map(x => x.nome), ['Cego', 'Qualificado', 'Pronto'], 'ordem: falta qualificação, falta passo, pronto');
+  verdade(/sistema e dor/.test(d.candidatos[0].movimento), 'o cego é mandado qualificar primeiro');
+  verdade(/decisor/i.test(d.candidatos[1].movimento), 'o qualificado é mandado pedir o decisor');
+  verdade(/executar/i.test(d.candidatos[2].movimento), 'o pronto é mandado executar e mover');
+  igual([d.faltandoQualificacao, d.faltandoPasso, d.prontosParaSubir], [1, 1, 1], 'agregados coerentes');
+});
+
+teste('o gesto é o da etapa travada, não um texto genérico', () => {
+  // Sandro real: 10 de 10 em Prospecção. O gesto ali é primeiro contato, não decisor.
+  const presp = [];
+  for (let i = 0; i < 5; i++) presp.push(lead({ id: 'P' + i, name: 'Prosp ' + i, stageId: '1395880469', dias: 7,
+    nome_do_sistema: 'x', gargalo_operacional: 'Fila' }));
+  const c = novoContexto(dados({
+    funilLeads: { '1395880469': presp },
+    reps: [{ ownerId: OWNER, name: 'T', open: 5, travados: [], criticos: [], quentes: [], stages: { '1395880469': 5, '1396005401': 0 } }]
+  }), { ownerId: OWNER, role: 'rep' });
+  const d = c.destravarFunil(OWNER);
+  igual(d.etapaTravadaLabel, 'Prospecção', 'travou na Prospecção');
+  verdade(/primeiro contato/i.test(d.candidatos[0].movimento), 'gesto de Prospecção, não de Visita');
+});
+
+teste('o retrato por etapa traz razão mediana/SLA comparável', () => {
+  // Kelly real no Decisor: mediana 19d contra SLA 4 = 4,8x.
+  const dec = [1, 19, 25].map((dd, i) => lead({ id: 'K' + i, name: 'Dec ' + i, stageId: '1395880470', dias: dd, slaBreach: dd > 4 }));
+  const c = novoContexto(dados({
+    funilLeads: { '1395880470': dec },
+    reps: [{ ownerId: OWNER, name: 'T', open: 3, travados: [], criticos: [], quentes: [], stages: { '1395880470': 3 } }]
+  }), { ownerId: OWNER, role: 'rep' });
+  const d = c.destravarFunil(OWNER);
+  const e = d.porEtapa.find(x => x.sid === '1395880470');
+  igual(e.mediana, 19, 'mediana de dias na etapa');
+  igual(e.sla, 4, 'SLA da etapa');
+  igual(e.razao, 4.8, 'razão 19/4 = 4,8x');
+  igual(e.acimaDoSla, 2, 'dois acima do SLA');
+});
+
+teste('funil vazio não inventa gargalo', () => {
+  const c = novoContexto(dados({
+    reps: [{ ownerId: OWNER, name: 'T', open: 0, travados: [], criticos: [], quentes: [], stages: {} }]
+  }), { ownerId: OWNER, role: 'rep' });
+  const d = c.destravarFunil(OWNER);
+  igual(d.etapaTravada, null, 'sem etapa travada');
+  igual(d.candidatos, [], 'sem candidatos');
+  igual(d.porEtapa, [], 'sem retrato');
 });
 
 console.log('\n== Ciclo fechado da semana (constância por qualidade, não só volume) ==');
