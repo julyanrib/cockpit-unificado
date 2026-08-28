@@ -104,18 +104,52 @@ jobs:
             echo "Rodada de ${{ github.event.schedule }} — atualiza número, não regera texto de IA."
             exit 0
           fi
-          # Sábado e domingo ninguém abre a tela: texto novo ali é gasto sem leitor.
+          # O COMPROMISSO É DA SEMANA, então nasce na SEGUNDA (28/08/26).
+          #
+          # O prompt da análise individual manda, com todas as letras: "dentro da
+          # mesma semana, mantenha os compromissos atuais estáveis (repita-os)...
+          # compromisso que muda todo dia vira ruído e o executivo para de levar a
+          # sério". Gerar de novo terça, quarta e quinta é pagar cinco vezes por um
+          # artefato que deve ser um só — e ainda dá cinco chances de ele mudar.
+          #
+          # Segunda de manhã ele nasce com a semana inteira pela frente. Sexta o
+          # workflow weekly-summary fecha a semana e cuida do mensal, à parte.
           DIA=$(TZ=America/Sao_Paulo date +%u)   # 1=segunda ... 7=domingo
-          if [ "$DIA" -ge 6 ]; then
-            echo "gerar=nao" >> "$GITHUB_OUTPUT"
-            echo "Fim de semana em Brasília (dia $DIA) — sem texto novo de IA."
-          else
+          if [ "$DIA" = "1" ]; then
             echo "gerar=sim" >> "$GITHUB_OUTPUT"
-            echo "Rodada da manhã em dia útil — vai gerar texto de IA."
+            echo "Segunda de manhã — compromisso da semana vai ser gerado."
+          else
+            echo "gerar=nao" >> "$GITHUB_OUTPUT"
+            echo "Dia $DIA — compromisso da semana já existe, não regera."
           fi
 
-      - name: Gerar diagnóstico de gargalo do dia (IA — só o texto, nunca mexe em compromissos de PDI)
-        if: steps.portao_ia.outputs.gerar == 'sim'
+      # ------------------------------------------------------------------
+      # O GARGALO EM PROSA SAIU DO CRON (28/08/26). Só roda em disparo manual.
+      #
+      # Ele custava 35 chamadas/semana (7 executivos x 5 dias) para escrever ~570
+      # caracteres de DESCRIÇÃO por pessoa. Medido na tela do Marco em produção,
+      # em 28/08, o texto dele dizia: "HubSpot (dado ao vivo, 16/08): 12 negócios
+      # em aberto, 42% concentrados em Visita" — doze dias velho, e afirmando a
+      # data velha dentro do próprio texto.
+      #
+      # E o produto JÁ REBAIXA esse texto por conta própria: narrativaSaude()
+      # compara a data e os números da prosa com o funil ao vivo e, quando
+      # divergem, narrativaAvisoHTML() estampa "Esta leitura não descreve o seu
+      # funil de hoje... fica aqui como registro do que foi conversado, não como
+      # plano de hoje". Estávamos pagando para gerar prosa que a nossa própria
+      # guarda desqualifica.
+      #
+      # O que fica no lugar não é menos, é mais: gargaloDoRep() e destravarFunil()
+      # calculam a etapa travada do funil AO VIVO, e GESTO_DA_ETAPA dá o gesto que
+      # sobe aquele degrau ("Ligar pedindo o decisor pelo nome e datar o retorno").
+      # Vivo, gratuito, e é AÇÃO em vez de descrição — que é o que o Julyan pediu:
+      # "vamos focar nas vendas dele apenas, ações, planejamento".
+      #
+      # O script continua no repositório e roda por workflow_dispatch, para quando
+      # alguém quiser uma leitura em prosa de propósito.
+      # ------------------------------------------------------------------
+      - name: Gerar diagnóstico de gargalo do dia (IA — só em disparo manual)
+        if: github.event_name == 'workflow_dispatch'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node scripts/generate-daily-gargalo.js
