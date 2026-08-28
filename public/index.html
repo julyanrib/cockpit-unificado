@@ -28382,6 +28382,40 @@ async function renderPDIs() {
     // vivo, o card vira recolhido e recebe a tarja: continua existindo como registro
     // do que foi conversado, sem a autoridade de um texto de hoje.
     const saudeNarrativa = narrativaSaude(r);
+    /* O GESTO VIVO (28/08/26) — o que entra onde a prosa da IA não vale.
+
+       A prosa do gargalo deixou de ser gerada no cron (ver a nota longa no workflow
+       daily-refresh): custava 35 chamadas por semana para escrever descrição, e o
+       texto do Marco em produção estava 12 dias velho afirmando a própria data velha.
+       A guarda narrativaSaude já rebaixava aquilo — mas rebaixar deixava o card
+       gasto numa leitura morta, sem nada em pé no lugar.
+
+       Isto aqui não é substituto de menor qualidade: é MAIS acionável. destravarFunil
+       calcula, do funil ao vivo, qual degrau não está sendo subido, e GESTO_DA_ETAPA
+       diz o gesto que sobe aquele degrau — texto de playbook, revisável sem tocar em
+       código. Sai descrição ("42% concentrados em Visita"), entra ação ("Ligar pedindo
+       o decisor pelo nome e datar o retorno"), sempre do dado de hoje e sem custo. */
+    const gestoVivo = (() => {
+      if (typeof destravarFunil !== 'function') return null;
+      const d = destravarFunil(r.ownerId);
+      if (!d || !d.etapaTravada) return null;
+      const g = (typeof GESTO_DA_ETAPA !== 'undefined' && GESTO_DA_ETAPA[d.etapaTravada]) || null;
+      return { etapa: d.etapaTravadaLabel, proxima: d.proximaLabel, gesto: g ? g.gesto : null,
+        pergunta: d.pergunta, saudavel: d.saudavel,
+        faltaPasso: d.faltandoPasso, faltaQualif: d.faltandoQualificacao, prontos: d.prontosParaSubir };
+    })();
+    const gestoVivoHTML = !gestoVivo ? '' : (gestoVivo.saudavel
+      ? `<p><b>Nenhum degrau travado no seu funil de hoje.</b> Funil sem travamento é hora de encher: as contas-alvo estão no Planejamento.</p>`
+      : `<p><b>Hoje o degrau que não está sendo subido é ${esc(gestoVivo.etapa || '')}${gestoVivo.proxima ? ' → ' + esc(gestoVivo.proxima) : ''}.</b>${
+            gestoVivo.gesto ? ' O gesto que sobe esse degrau: <b>' + esc(gestoVivo.gesto) + '</b>.' : ''}${
+            gestoVivo.pergunta ? ' A pergunta da etapa: <i>' + esc(gestoVivo.pergunta) + '</i>' : ''}</p>${
+            (gestoVivo.prontos + gestoVivo.faltaPasso + gestoVivo.faltaQualif) > 0
+              ? `<p style="font-size:11.5px;color:var(--muted);">${[
+                  gestoVivo.prontos > 0 ? gestoVivo.prontos + ' pronto(s) para subir agora' : '',
+                  gestoVivo.faltaPasso > 0 ? gestoVivo.faltaPasso + ' sem próximo passo datado' : '',
+                  gestoVivo.faltaQualif > 0 ? gestoVivo.faltaQualif + ' sem sistema e dor registrados' : ''
+                ].filter(Boolean).join(' · ')}</p>`
+              : ''}`);
     const cardGargalo = temGargalo && saudeNarrativa.valida ? `
       <div class="diag-card">
         <span class="diag-tag">Gargalo da semana${fonteTag ? ' · HubSpot ' + esc(fonteTag) : ''}</span>
@@ -28390,16 +28424,23 @@ async function renderPDIs() {
         <div class="diag-src">${fonteNumeros}${saudeNarrativa.dataBaseFmt ? ` · base ${esc(saudeNarrativa.dataBaseFmt)}` : ''} · <span class="acao-sec" data-scrollpdi style="display:inline;font-size:10.5px;color:var(--red-dk);">ver meus PDIs ↓</span></div>
       </div>` : temGargalo ? `
       <div class="diag-card" style="border-left-color:var(--amber);">
-        <span class="diag-tag" style="color:var(--amber-ink);background:var(--amber-soft);">Leitura anterior · fora de validade</span>
+        <span class="diag-tag" style="color:var(--amber-ink);background:var(--amber-soft);">Gargalo de hoje · do funil ao vivo</span>
         <h3>${esc(manchete)}</h3>
+        ${gestoVivoHTML}
         ${narrativaAvisoHTML(saudeNarrativa)}
         <details><summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--muted);">Ler o texto de ${esc(saudeNarrativa.dataBaseFmt || 'então')} de qualquer forma</summary><p style="margin-top:9px;">${corpoGargalo}</p></details>
         <div class="diag-src">${fonteNumeros}</div>
       </div>` : `
       <div class="diag-card" style="border-left-color:var(--line-btn);">
-        <span class="diag-tag" style="color:var(--muted2);background:var(--sunk);">Análise da semana · em preparação</span>
+        <span class="diag-tag" style="color:var(--muted2);background:var(--sunk);">Gargalo de hoje · do funil ao vivo</span>
         <h3>${esc(manchete)}</h3>
-        <p>Sua análise escrita ainda não saiu — ela roda toda madrugada e a leitura da semana fecha na sexta. Os números ao lado são do HubSpot e já valem agora.</p>
+        ${gestoVivoHTML}
+        <!-- A frase antiga dizia "ela roda toda madrugada e a leitura da semana fecha na
+             sexta". Deixou de ser verdade em 28/08: a análise escrita nasce na SEGUNDA de
+             manhã (é compromisso de semana) e fecha na sexta. Promessa de cadência em copy
+             precisa acompanhar a cadência real, senão o executivo espera um texto que não
+             vem naquele dia. -->
+        <p style="font-size:11.5px;color:var(--muted);">Sua análise escrita da semana nasce na segunda de manhã e fecha na sexta. O gargalo acima é calculado do HubSpot de agora, não depende dela.</p>
         <div class="diag-src">${fonteNumeros}</div>
       </div>`;
 
