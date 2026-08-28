@@ -353,7 +353,10 @@ teste('próximo passo com data vencida entra em "follow-ups para hoje"', () => {
 
 console.log('\n== Ordem do Meu funil (Escopo 8) ==');
 
-teste('visita sem follow-up vem antes de SLA estourado e de quente sem ação', () => {
+teste('SLA estourado vem antes de quente sem ação e de follow-up vencido', () => {
+  // Ordem da 2ª rodada do briefing: SLA estourado, quente sem próxima ação,
+  // follow-up vencido, sem data de decisão, resto. (A 1ª rodada pedia visita sem
+  // follow-up na frente — a instrução mais recente ganha, ver PRIORIDADE_FUNIL.)
   const visitado = lead({ id: 'A', name: 'Visitado sem passo', ultimaInteracao: diasAtras(1).toISOString(), dias: 1 });
   const estourado = lead({ id: 'B', name: 'SLA estourado', slaBreach: true, dias: 30, ultimaInteracao: diasAtras(30).toISOString() });
   const quente = lead({ id: 'C', name: 'Quente sem ação', stageId: '1395880472', dias: 2, ultimaInteracao: diasAtras(2).toISOString() });
@@ -362,10 +365,10 @@ teste('visita sem follow-up vem antes de SLA estourado e de quente sem ação', 
     funilLeads: { '1396005401': [visitado, estourado], '1395880472': [quente] }
   }), { ownerId: OWNER, role: 'rep' });
   const ordenados = c.ordenarMeuFunil([visitado, estourado, quente], ['C']);
-  igual(ordenados.map(l => l.id), ['A', 'B', 'C'], 'ordem por gravidade');
-  igual(ordenados[0]._prioRotulo, 'visita sem follow-up');
-  igual(ordenados[1]._prioRotulo, 'SLA estourado');
-  igual(ordenados[2]._prioRotulo, 'quente sem próxima ação');
+  igual(ordenados.map(l => l.id), ['B', 'C', 'A'], 'ordem por gravidade');
+  igual(ordenados[0]._prioRotulo, 'SLA estourado');
+  igual(ordenados[1]._prioRotulo, 'quente sem próxima ação');
+  igual(ordenados[2]._prioRotulo, 'follow-up vencido');
 });
 
 teste('negócio em ordem cai no resto e desempata por dias na etapa', () => {
@@ -404,7 +407,7 @@ teste('dia vazio: gates abertos e CTA vira "Montar minha rota"', () => {
   igual(c.ctaDoDia(d).label, 'Montar minha rota', 'CTA da primeira pendência');
 });
 
-teste('visita de hoje sem desfecho leva o CTA para "Registrar resultado de visita"', () => {
+teste('visita de hoje sem desfecho leva o CTA para "Registrar resultado pendente"', () => {
   const paradas = [1, 2, 3].map(i => ({
     id: 'p' + i, ownerId: OWNER, dealId: 'g' + (i - 1), tipo: 'rota', inicio: new Date(HOJE.getTime() - i * 3600000),
     cliente: 'Cliente ' + i, desfecho: 'COMPLETED', registro: true, obs: '', decisor: null, lat: -20, lng: -40
@@ -417,7 +420,7 @@ teste('visita de hoje sem desfecho leva o CTA para "Registrar resultado de visit
   const c = novoContexto(dados({ agenda: { eventos: paradas }, funilLeads: { '1396005401': leads } }), { ownerId: OWNER, role: 'rep' });
   const d = c.gatesDoDia(c.DATA.reps[0]);
   verdade(d.pronto, 'gates fechados: ' + d.pendentes.map(g => g.id + '(' + g.detalhe + ')').join(', '));
-  igual(c.ctaDoDia(d).label, 'Registrar resultado de visita');
+  igual(c.ctaDoDia(d).label, 'Registrar resultado pendente');
   const acoes = c.acoesDeAgora(c.DATA.reps[0], d);
   igual(acoes[0].verbo, 'Registrar desfecho', 'a primeira ação é fechar o registro');
   igual(acoes[0].cliente, 'Cliente Pendente');
@@ -669,7 +672,10 @@ teste('sequência de execução conta visita comprovada, não promessa', () => {
   verdade(typeof c.sequenciaDeExecucao === 'function', 'sequenciaDeExecucao existe');
   const fonte = String(c.sequenciaDeExecucao);
   falso(/prometido/.test(fonte), 'não lê nenhum campo prometido_*');
-  verdade(/visitasReaisDoOwnerNoDia/.test(fonte), 'usa a contagem derivada de visitas reais');
+  // A contagem derivada agora vem de visitasComprovadasNoDia, que encapsula
+  // visitasReaisDoOwnerNoDia + fallback no campo gravado.
+  verdade(/visitasComprovadasNoDia/.test(fonte), 'usa a contagem comprovada, não campo prometido');
+  verdade(/visitasReaisDoOwnerNoDia/.test(String(c.visitasComprovadasNoDia)), 'que por sua vez deriva das visitas reais');
 });
 
 console.log('\n== Frescor de dados (não acusar com carga velha) ==');

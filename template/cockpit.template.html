@@ -5426,13 +5426,25 @@ function filaDeFollowUp(ownerId) {
    Empate desfaz por dias na etapa (mais parado primeiro).
    --------------------------------------------------------------------------- */
 
+/* ORDEM REVISADA (27/08/26, 2ª rodada do briefing).
+   A 1ª rodada pedia "visita sem follow-up" na frente; esta pede SLA estourado
+   primeiro, e a ordem seguinte é: quente sem próxima ação, follow-up vencido,
+   negociação/proposta sem data de decisão, restante. Instrução mais recente ganha.
+   A troca não é cosmética: SLA estourado é prazo de ETAPA vencido (o negócio está
+   parado há mais tempo do que o processo admite), enquanto visita sem follow-up é
+   descuido de registro do dia anterior. Colocar o SLA na frente prioriza o negócio
+   que está morrendo há mais tempo sobre o que acabou de ser tocado.
+
+   "follow-up vencido" agora cobre os dois casos que antes eram linhas separadas:
+   visita realizada sem próximo passo E cadência com toque atrasado. São o mesmo
+   problema visto de dois ângulos — o negócio devia ter recebido um toque e não
+   recebeu — e separá-los empurrava a proposta sem data de decisão para o 5º lugar. */
 const PRIORIDADE_FUNIL = [
-  { id: 'visita_sem_followup', rotulo: 'visita sem follow-up',      teste: s => s.followUpDescoberto },
-  { id: 'sla',                 rotulo: 'SLA estourado',              teste: s => s.slaEstourado },
-  { id: 'quente_sem_acao',     rotulo: 'quente sem próxima ação',    teste: (s, q) => q && !s.temProximoPasso },
-  { id: 'cadencia',            rotulo: 'cadência atrasada',          teste: s => s.cadencia && ['atrasada', 'quebrada'].includes(s.cadencia.status) },
-  { id: 'proposta',            rotulo: 'proposta sem data de decisão', teste: s => s.propostaSemDataDeDecisao },
-  { id: 'decisor',             rotulo: 'decisor não alcançado',      teste: s => !s.decisorAlcancado && s.toques.total >= 2 }
+  { id: 'sla',             rotulo: 'SLA estourado',            teste: s => s.slaEstourado },
+  { id: 'quente_sem_acao', rotulo: 'quente sem próxima ação',  teste: (s, q) => q && !s.temProximoPasso },
+  { id: 'followup',        rotulo: 'follow-up vencido',        teste: s => s.followUpDescoberto || (s.cadencia && ['atrasada', 'quebrada'].includes(s.cadencia.status)) },
+  { id: 'proposta',        rotulo: 'sem data de decisão',      teste: s => s.propostaSemDataDeDecisao },
+  { id: 'decisor',         rotulo: 'decisor não alcançado',    teste: s => !s.decisorAlcancado && s.toques.total >= 2 }
 ];
 
 // Recebe os leads e devolve os mesmos objetos com `_prio` (índice na régua acima,
@@ -5603,7 +5615,7 @@ function ctaDoDia(diag) {
     .filter(e => e.inicio.getTime() < Date.now() && e.desfecho !== 'COMPLETED' && !e.registro);
   if (semDesfecho.length > 0) {
     return {
-      label: 'Registrar resultado de visita',
+      label: 'Registrar resultado pendente',
       acao: () => abrirRegistroDeDesfechoPorNome(semDesfecho[0].cliente, semDesfecho[0]),
       motivo: `${semDesfecho.length} visita${semDesfecho.length === 1 ? '' : 's'} de hoje sem desfecho registrado`
     };
@@ -5720,19 +5732,46 @@ function checagensDaJanela(r, diag) {
     if (ctx.quentesSemPasso.length > 0) itens.push(`${ctx.quentesSemPasso.length} quente(s) sem próxima ação`);
   } else if (janela.id === 'meio_dia') {
     if (feitasHoje.length === 0) itens.push('nenhuma atividade confirmada ainda hoje');
+    // "Rota não iniciada" é diferente de "nenhuma atividade": aqui EXISTE rota
+    // montada e nenhuma parada foi fechada — o dia foi planejado e não começou.
+    if (ctx.deHoje.length >= 2 && feitasHoje.length === 0) {
+      itens.push(`rota de ${ctx.deHoje.length} paradas montada e nenhuma iniciada`);
+    }
     if (semDesfecho.length > 0) itens.push(`${semDesfecho.length} visita(s) de hoje sem registro`);
     if (d.fila.baldes.hoje.length > 0) itens.push(`${d.fila.baldes.hoje.length} follow-up(s) prioritário(s) pendente(s)`);
     if (d.fila.baldes.cadencia.length > 0) itens.push(`cadência do dia não iniciada em ${d.fila.baldes.cadencia.length} negócio(s)`);
   } else if (janela.id === 'tarde') {
+    // RITMO ESPERADO × REALIZADO — comparado com o alvo da FASE da pessoa, não com
+    // um número fixo. Sem fase definida no cadastro não há alvo justo, e a linha
+    // simplesmente não aparece (em vez de comparar entrante com pleno).
+    if (ctx.alvoDia != null) {
+      const falta = ctx.alvoDia - feitasHoje.length;
+      itens.push(falta > 0
+        ? `ritmo: ${feitasHoje.length} de ${ctx.alvoDia} do alvo de ${ctx.ramp.label} — faltam ${falta}`
+        : `ritmo: ${feitasHoje.length} de ${ctx.alvoDia} — alvo de ${ctx.ramp.label} batido`);
+    }
     if (semDesfecho.length > 0) itens.push(`${semDesfecho.length} visita(s) sem desfecho`);
     if (d.fila.baldes.visita_sem_passo.length > 0) itens.push(`${d.fila.baldes.visita_sem_passo.length} próximo(s) passo(s) pendente(s)`);
     if (ctx.quentesSemPasso.length > 0) itens.push(`${ctx.quentesSemPasso.length} quente(s) ainda desprotegido(s)`);
-    if (d.fila.baldes.proposta.length > 0) itens.push(`${d.fila.baldes.proposta.length} proposta(s) sem retorno`);
+    if (d.fila.baldes.proposta.length > 0) itens.push(`${d.fila.baldes.proposta.length} negociação/proposta sem decisão — janela de resgate`);
   } else {
     itens.push(`${feitasHoje.length} atividade(s) comprovada(s) hoje`);
     if (semDesfecho.length > 0) itens.push(`${semDesfecho.length} visita(s) sem registro`);
     if (d.fila.baldes.cadencia.length > 0) itens.push(`${d.fila.baldes.cadencia.length} cadência(s) quebrada(s)`);
     if (d.fila.baldes.hoje.length > 0) itens.push(`${d.fila.baldes.hoje.length} follow-up(s) para amanhã`);
+    // PREPARAÇÃO PARA AMANHÃ — a única linha desta janela que não é retrospectiva.
+    // Sem ela o encerramento vira só um balanço; com ela o dia termina apontando
+    // pro dia seguinte, que é o ciclo que o Cockpit existe pra fechar.
+    const amanha = typeof addBusinessDays === 'function' ? addBusinessDays(isoDate(new Date()), 1) : null;
+    const paradasAmanha = amanha
+      ? tpEventosDoDono(r.ownerId).filter(e => e.inicio && agendaChave(e.inicio) === amanha &&
+          AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta).length
+      : 0;
+    itens.push(paradasAmanha >= 2
+      ? `amanhã: ${paradasAmanha} paradas já montadas`
+      : paradasAmanha === 1
+        ? 'amanhã: 1 parada só — sem rota montada ainda'
+        : 'amanhã: agenda vazia — monte a rota antes de encerrar');
   }
 
   return {
@@ -10429,21 +10468,35 @@ function ctasDoItemDaFila(it) {
 
   const ctas = [];
 
-  // Ação principal = o próximo toque da régua. Sempre termina em tarefa datada.
-  if (it.balde === 'visita_sem_passo' || it.balde === 'hoje' || it.balde === 'cadencia' || it.balde === 'quente_sem_tarefa') {
-    ctas.push({
-      id: 'passo',
-      rotulo: canal === 'visita' ? 'Agendar retorno' : canal === 'demo' ? 'Marcar demonstração' : 'Agendar retorno',
-      primaria: true,
-      acao: () => abrirFichaLeadFunilDrawer(buscarLeadFunilPorId(lead.id) || lead, null, 'passo')
-    });
-  } else if (it.balde === 'proposta') {
-    ctas.push({ id: 'passo', rotulo: 'Confirmar decisão', primaria: true,
-      acao: () => abrirFichaLeadFunilDrawer(buscarLeadFunilPorId(lead.id) || lead, null, 'passo') });
-  } else {
-    ctas.push({ id: 'passo', rotulo: 'Abrir e datar', primaria: true,
-      acao: () => abrirFichaLeadFunilDrawer(buscarLeadFunilPorId(lead.id) || lead, null, 'passo') });
-  }
+  /* AÇÃO PRINCIPAL — texto específico, não genérico (briefing §4: "trocar textos
+     genéricos por ações específicas"). O rótulo antigo "Abrir e datar" dizia o que a
+     TELA faz, não o que o executivo tem que fazer com o cliente; e "Agendar retorno"
+     era usado em quatro situações diferentes. Agora o texto sai da situação real do
+     negócio, na mesma ordem de decisão da régua:
+       decisor não alcançado  → "Ligar para o decisor hoje"
+       visita sem contato     → "Agendar segunda tentativa"
+       proposta/negociação    → "Confirmar data da decisão"
+       cadência encerrada     → "Registrar motivo e reciclar"
+       pós-demo               → "Enviar proposta e criar tarefa de retorno"
+     Todos abrem a ficha no campo de próximo passo, ou seja: terminam em tarefa
+     datada no HubSpot. O rótulo muda; a garantia não. */
+  const rotuloPrincipal = (() => {
+    if (it.balde === 'decisor') return 'Ligar para o decisor hoje';
+    if (it.balde === 'segunda_tentativa') return 'Agendar segunda tentativa';
+    if (it.balde === 'reativacao') return 'Retomar contato com contexto';
+    if (it.balde === 'proposta' || String(lead.stageId) === '1395880472') return 'Confirmar data da decisão';
+    if (cad && cad.status === 'encerrada') return 'Registrar motivo e reciclar';
+    if (String(lead.stageId) === '1395880471') return 'Enviar proposta e criar tarefa de retorno';
+    if (canal === 'demo') return 'Marcar demonstração';
+    if (canal === 'visita') return 'Agendar visita de retorno';
+    if (canal === 'whatsapp') return 'Mandar WhatsApp e datar retorno';
+    if (canal === 'ligacao') return 'Ligar e datar o próximo passo';
+    return 'Definir o próximo passo com data';
+  })();
+  ctas.push({
+    id: 'passo', rotulo: rotuloPrincipal, primaria: true,
+    acao: () => abrirFichaLeadFunilDrawer(buscarLeadFunilPorId(lead.id) || lead, null, 'passo')
+  });
 
   // Registrar desfecho: só faz sentido quando existe visita passada sem desfecho.
   if (st.visitaSemDesfecho.length > 0 || st.followUpDescoberto) {
@@ -20248,11 +20301,22 @@ function diasUteisDaSemana(ateDataISO) {
 // comprovada. Substitui, para o executivo, a sequência de "bater a palavra"
 // (que media promessa contra promessa). Aqui não há nada a declarar: ou a visita
 // existe no HubSpot, ou o dia não conta.
+// Visitas COMPROVADAS num dia — a base de tudo que pontua.
+function visitasComprovadasNoDia(ownerId, dataISO) {
+  const derivado = visitasReaisDoOwnerNoDia(ownerId, dataISO);
+  return derivado != null ? derivado : ((getDaily(ownerId, dataISO) || {}).realizado_visitas || 0);
+}
+
+/* Total de visitas comprovadas na semana que CONTÉM a data dada (seg–sex).
+   Serve para "melhoria contra a própria semana anterior" — a única comparação que o
+   briefing autoriza, porque é a pessoa contra ela mesma. Nunca contra colega, nunca
+   contra média do time: comparar entrante com pleno é exatamente o que não se faz. */
+function visitasDaSemanaDe(ownerId, dataISO) {
+  return diasUteisDaSemana(dataISO).reduce((s, d) => s + visitasComprovadasNoDia(ownerId, d), 0);
+}
+
 function sequenciaDeExecucao(ownerId, ateDataISO) {
-  const visitasEm = d => {
-    const derivado = visitasReaisDoOwnerNoDia(ownerId, d);
-    return derivado != null ? derivado : ((getDaily(ownerId, d) || {}).realizado_visitas || 0);
-  };
+  const visitasEm = d => visitasComprovadasNoDia(ownerId, d);
   let d = ateDataISO;
   // O DIA CORRENTE não zera a sequência. Às 8h30 ninguém visitou ninguém ainda —
   // contar o dia de hoje faria a sequência marcar 0 todas as manhãs e só voltar a
@@ -20341,6 +20405,29 @@ function conquistasComprovadas(r, diag) {
   const maxAnterior = dias10.slice(1).length
     ? Math.max(...dias10.slice(1).map(d => (getDaily(ownerId, d) || {}).realizado_propostas || 0)) : 0;
 
+  // ROTA COMPLETA — todas as paradas de rua de hoje fechadas no HubSpot. Precisa de
+  // pelo menos duas: uma parada só não é rota (mesma régua do gate).
+  const atividadeHoje = atividadesComprovadasNoDia(ownerId, dailyRefDate);
+  const rotaCompleta = atividadeHoje.total >= 2 && atividadeHoje.semDesfecho.length === 0 &&
+    atividadeHoje.feitos.length >= 2;
+
+  // DIAS PLANEJADOS E EXECUTADOS — não é só "teve visita", é "tinha rota montada E a
+  // rua aconteceu". Substitui a sequência de promessa: o que conta é o par
+  // planejamento + execução, os dois comprovados no CRM, nenhum declarado.
+  let diasPlanejadosEExecutados = 0;
+  diasUteisDaSemana(dailyRefDate).forEach(d => {
+    if (d > dailyRefDate) return;
+    const a = atividadesComprovadasNoDia(ownerId, d);
+    if (a.total >= 2 && a.feitos.length >= 1) diasPlanejadosEExecutados++;
+  });
+
+  // MELHORIA CONTRA A PRÓPRIA SEMANA ANTERIOR — a pessoa contra ela mesma. Só vale
+  // como conquista se a semana anterior teve alguma atividade: subir de 0 para 1 não
+  // é melhoria de ritmo, é a primeira visita.
+  const semanaAtual = visitasDaSemanaDe(ownerId, dailyRefDate);
+  const semanaAnterior = visitasDaSemanaDe(ownerId, addDays(inicioDaSemanaISO(), -3));
+  const melhorouNaSemana = semanaAnterior > 0 && semanaAtual > semanaAnterior;
+
   return [
     { icone: '🎯', titulo: 'Nenhuma visita solta', desc: 'Toda visita sua tem próximo passo datado no HubSpot',
       desbloqueada: houveVisitaNaSemana && fila.baldes.visita_sem_passo.length === 0 },
@@ -20352,10 +20439,19 @@ function conquistasComprovadas(r, diag) {
       desbloqueada: cadenciaAvancada > 0 && fila.baldes.cadencia.length === 0 },
     { icone: '📞', titulo: 'Chegou em quem decide', desc: 'Decisor alcançado e registrado em pelo menos um negócio',
       desbloqueada: decisores > 0 },
+    { icone: '🗺️', titulo: 'Rota completa', desc: 'Todas as paradas de rua de hoje fechadas no HubSpot',
+      desbloqueada: rotaCompleta },
     { icone: '🔥', titulo: 'Rua todo dia', desc: `${seqExec} dia(s) úteis seguidos com visita comprovada — precisa de 4`,
       desbloqueada: seqExec >= 4 },
+    { icone: '📆', titulo: 'Planejou e executou', desc: `${diasPlanejadosEExecutados} dia(s) desta semana com rota montada E rua feita — precisa de 3`,
+      desbloqueada: diasPlanejadosEExecutados >= 3 },
     { icone: '📈', titulo: 'Recorde pessoal', desc: 'Mais propostas hoje do que em qualquer um dos últimos 9 dias úteis',
       desbloqueada: (hojeRow.realizado_propostas || 0) > 0 && (hojeRow.realizado_propostas || 0) > maxAnterior },
+    { icone: '📊', titulo: 'Melhor que sua semana passada',
+      desc: semanaAnterior > 0
+        ? `${semanaAtual} visitas nesta semana contra ${semanaAnterior} na anterior`
+        : 'sem semana anterior para comparar ainda',
+      desbloqueada: melhorouNaSemana },
     { icone: '🏆', titulo: 'Meta do mês', desc: 'Ritmo de fechamento compatível com a sua meta',
       desbloqueada: (r.ganhosSemana || 0) >= 2 }
   ];
@@ -20765,6 +20861,30 @@ function buildIndicadoresGestorHTML() {
           <br>Expogo e PWA Outbound: <b style="color:var(--amber);">sincronização não confirmada</b> — o Cockpit lê o HubSpot, não os apps. Não dá pra distinguir "o app não subiu" de "não aconteceu" até o PWA expor a fila pendente (docs/contrato-eventos-rpa.md §4 e §7.6).
         </div>
       </div>
+
+      ${(() => {
+        /* FASE DE RAMPAGEM NÃO DEFINIDA (27/08/26) — achado ao validar o critério de
+           aceite "entrantes recebem metas e orientação de rampa apropriadas".
+           `rampStage` não está preenchido para NENHUM executivo em data/usuarios.json.
+           Consequência concreta: rampDoOwner devolve "fase não definida", e sem fase o
+           Cockpit não tem alvo justo — então o gate de agenda cai no mínimo de 1
+           compromisso, o bloco "Sua fase" do briefing pede pro executivo falar com o
+           gestor, e a leitura de ritmo das 16h30 simplesmente não aparece.
+           Não inventamos fase: cobrar 6 visitas de quem está na semana 2 é pior do que
+           não cobrar nada. O que dá pra fazer é mostrar aqui quem falta, porque quem
+           preenche isso é o gestor. */
+        const semFase = (DATA.reps || []).filter(x => {
+          if (!x || !x.ownerId) return false;
+          const u = typeof usuarioDoOwner === 'function' ? usuarioDoOwner(x.ownerId) : {};
+          return !u.rampStage && !u.aComecar;
+        });
+        if (semFase.length === 0) return '';
+        return `<div style="margin-top:13px;padding:11px 13px;background:var(--amber-soft);border:1px solid rgba(184,121,14,.3);border-radius:11px;font-size:11.5px;color:var(--amber-ink);line-height:1.6;">
+          <b>${semFase.length} executivo(s) sem fase de rampagem definida:</b> ${esc(semFase.map(x => String(x.name || '').split(' ')[0]).join(', '))}.
+          Sem <code>rampStage</code> em <code>data/usuarios.json</code>, o Cockpit não tem alvo justo de visitas/dia para eles — o gate de agenda cai no mínimo e a leitura de ritmo da tarde não aparece.
+          Valores aceitos: <code>preparacao</code>, <code>semana_2_3</code>, <code>semana_4</code>, <code>semana_5</code>, <code>semana_6_7</code>, <code>pleno</code>.
+        </div>`;
+      })()}
 
       <div style="font-size:10.5px;color:var(--muted2);margin-top:11px;line-height:1.55;">
         <b>Não derivável nesta carga, por honestidade declarado em vez de estimado:</b> média de pontos de contato antes da venda, conversão por número de toque e vendas por toque — o HubSpot não devolve o histórico de atividades dos negócios já fechados (contrato §7.2).
