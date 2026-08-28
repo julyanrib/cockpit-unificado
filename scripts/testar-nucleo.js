@@ -1491,6 +1491,58 @@ teste('Agenda separa historico vazio de buraco ainda acionavel', () => {
     'a busca de 90 dias nao se disfarca de carteira de 6 meses');
 });
 
+teste('as tres acoes de agora nao dao duas vagas ao mesmo cliente', () => {
+  /* Defeito visto EM PRODUCAO, na tela do Marco Filho em 28/08:
+       1. Registrar desfecho Bonamassa
+       2. Ligar para Don Aguilar
+       3. Ligar para Bonamassa
+     Dois tercos das vagas no mesmo cliente, com 12 negocios esperando na fila.
+
+     A causa era dupla: a fila era cortada em 3 ANTES de qualquer verificacao (entao
+     tirar um duplicado deixaria a vaga vazia) e nao havia deduplicacao por cliente.
+     Este teste reproduz o arranjo exato: o mesmo cliente com visita de hoje sem
+     desfecho E no topo da fila de follow-up. */
+  const hojeCedo = new Date(HOJE.getTime() - 3 * 3600000);   // ja passou, sem desfecho
+  const bonamassa = lead({ id: 'LB', name: 'Bonamassa', dias: 9, ultimaInteracao: diasAtras(9).toISOString() });
+  const aguilar   = lead({ id: 'LA', name: 'Don Aguilar', dias: 8, ultimaInteracao: diasAtras(8).toISOString() });
+  const terceiro  = lead({ id: 'LT', name: 'Casa do Sul', dias: 7, ultimaInteracao: diasAtras(7).toISOString() });
+  const quarto    = lead({ id: 'LQ', name: 'Bar do Meio', dias: 6, ultimaInteracao: diasAtras(6).toISOString() });
+
+  const c = novoContexto(dados({
+    funilLeads: { '1396005401': [bonamassa, aguilar, terceiro, quarto] },
+    agenda: { eventos: [{ id: 'ev1', ownerId: OWNER, dealId: 'LB', tipo: 'rota',
+      inicio: hojeCedo, cliente: 'Bonamassa', desfecho: null, registro: false, obs: '', decisor: null }] }
+  }), { ownerId: OWNER, role: 'rep' });
+
+  const rep = c.DATA.reps[0];
+  const acoes = c.acoesDeAgora(rep);
+
+  igual(acoes.length, 3, 'continua entregando tres acoes');
+  const nomes = acoes.map(a => a.cliente);
+  igual(new Set(nomes).size, 3, 'tres clientes DIFERENTES: ' + nomes.join(' / '));
+  verdade(nomes.includes('Bonamassa'), 'o cliente da visita de hoje continua na lista');
+  igual(nomes.filter(x => x === 'Bonamassa').length, 1, 'mas uma vez so');
+  // A vaga liberada tem que ser PREENCHIDA pelo proximo da fila, nao ficar vazia:
+  // era a outra metade do defeito (slice(0,3) antes de filtrar).
+  verdade(nomes.includes('Don Aguilar') && nomes.includes('Casa do Sul'),
+    'a vaga liberada foi preenchida pelo proximo da fila: ' + nomes.join(' / '));
+
+  // A acao do cliente com visita de hoje vem PRIMEIRO: registrar o desfecho e o que
+  // produz a informacao de qual proximo passo cabe.
+  igual(acoes[0].cliente, 'Bonamassa', 'a visita de hoje sem desfecho vem na frente');
+  verdade(/desfecho/i.test(acoes[0].verbo + ' ' + acoes[0].motivo), 'e a acao dela e registrar o desfecho');
+
+  // Nome com acento/caixa diferente entre as fontes tambem tem que casar.
+  const c2 = novoContexto(dados({
+    funilLeads: { '1396005401': [lead({ id: 'LX', name: 'CAFÉ  Do Centro', dias: 9, ultimaInteracao: diasAtras(9).toISOString() }), aguilar] },
+    agenda: { eventos: [{ id: 'ev2', ownerId: OWNER, dealId: 'LX', tipo: 'rota',
+      inicio: hojeCedo, cliente: 'cafe do centro', desfecho: null, registro: false, obs: '', decisor: null }] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const nomes2 = c2.acoesDeAgora(c2.DATA.reps[0]).map(a => a.cliente);
+  igual(nomes2.filter(x => /caf/i.test(x)).length, 1,
+    'acento e caixa diferentes contam como o MESMO cliente: ' + nomes2.join(' / '));
+});
+
 console.log('');
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);

@@ -6089,7 +6089,12 @@ function ctaDoDia(diag) {
 function acoesDeAgora(r, diag) {
   const d = diag || gatesDoDia(r);
   const fila = d.fila;
-  const itens = fila.ordenada.slice(0, 3);
+  /* A fila NÃO é mais cortada em 3 aqui (28/08/26). O corte antecipado era metade do
+     defeito da duplicata: se um candidato saísse por já estar na lista, a vaga dele
+     ficava vazia em vez de ser preenchida pelo próximo da fila. Agora a fila inteira
+     é candidata e o corte acontece quando as três vagas estão ocupadas por três
+     clientes DIFERENTES. */
+  const itens = fila.ordenada;
 
   // Visita de hoje sem desfecho entra na frente de tudo: sem desfecho, o resto
   // da cadeia (follow-up, cadência, decisão) não tem de onde partir.
@@ -6113,9 +6118,35 @@ function acoesDeAgora(r, diag) {
     });
   });
 
+  /* UMA VAGA POR CLIENTE (28/08/26) — defeito visto em PRODUÇÃO, na tela do Marco.
+
+     A lista das três mostrava:
+       1. Registrar desfecho Bonamassa
+       2. Ligar para Don Aguilar
+       3. Ligar para Bonamassa
+
+     Dois terços das vagas no mesmo cliente, com 12 negócios esperando na fila. Numa
+     lista cujo valor inteiro é "as três coisas que mais importam agora", isso não é
+     só redundância: é prioridade errada.
+
+     E a segunda ação era PREMATURA, não apenas repetida. Registrar o desfecho da
+     visita de hoje é o que produz a informação de qual próximo passo cabe — fazer as
+     duas coisas na mesma lista pede que ele decida o próximo passo antes de registrar
+     o que aconteceu. Registrado o desfecho, a ação de ligar pode nem ser mais a certa.
+
+     A chave usa prospeccaoNormalizarTexto porque os dois nomes vêm de fontes
+     diferentes — o primeiro do evento da agenda, o segundo do negócio no funil — e
+     podem divergir em acento, caixa ou espaço. Comparar cru deixaria a duplicata
+     passar exatamente nos casos em que ela é mais provável. */
+  const chaveDoCliente = nome => prospeccaoNormalizarTexto(String(nome || ""));
+  const clientesNaLista = new Set(acoes.map(a => chaveDoCliente(a.cliente)).filter(Boolean));
+
   itens.forEach(it => {
     if (acoes.length >= 3) return;
     const st = it.estado, lead = it.lead;
+    const chave = chaveDoCliente(lead && lead.name);
+    if (chave && clientesNaLista.has(chave)) return;   // já tem ação deste cliente
+    if (chave) clientesNaLista.add(chave);
     const cad = st.cadencia;
     const proximoCanal = cad && cad.proximo ? cad.proximo.canal : 'ligacao';
     const canalInfo = TP_CANAIS[proximoCanal] || TP_CANAIS.outro;
