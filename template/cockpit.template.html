@@ -15940,23 +15940,65 @@ function abrirFichaCompromisso(e) {
   stageModalBody.innerHTML = tempHTML + cadenciaHTML +
     (e.obs ? '<div style="margin-top:14px;font-size:12.5px;color:var(--muted);line-height:1.55;background:var(--panel2);border-radius:var(--r-md);padding:11px 14px;"><b style="color:var(--ink);">Observações:</b> ' + esc(e.obs) + '</div>' : '') +
     '<div style="display:flex;flex-wrap:wrap;gap:9px;margin-top:16px;">' +
-    ((sessaoAtual && sessaoAtual.role === 'rep' && e.cliente)
-      // BUG PEGO NO TESTE AO VIVO: o botão passava o NOME do cliente em data-agmapa, e o
-      // clique comparava isso contra `l.id` (um id, não um nome) só dentro de
-      // prospeccaoCache — nunca batia, e o clique sempre caía no toast de erro "não
-      // encontrei essa conta". Pior: mesmo corrigindo a comparação, prospeccaoCache só
-      // tem conta-alvo — um follow-up de negócio já aberto (o caso mais comum) nunca
-      // estaria lá. `lead` alguns parágrafos acima já resolveu isso certo, buscando em
-      // DATA.temperatura E DATA.funilLeads — reusa a MESMA coordenada, sem segunda busca.
-      ? (lead && lead.lat != null && lead.lng != null
-          ? '<button type="button" data-aglat="' + lead.lat + '" data-aglng="' + lead.lng + '" data-agnomelead="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;">Ver na rota →</button>'
-          : '<button type="button" data-agmapa="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;">Ver na rota →</button>')
+    // O RODAPÉ DESTE POPUP (28/08/26). Duas correções, medindo o que o clique fazia:
+    //
+    // 1. "Ver na rota" tinha um ramo de reserva com data-agmapa, que procura a conta em
+    //    prospeccaoCache. O comentário que estava aqui já sabia o desfecho: "um
+    //    follow-up de negócio já aberto (o caso mais comum) nunca estaria lá" — só que
+    //    a correção da época mudou apenas o ramo COM coordenada. O ramo sem coordenada,
+    //    que é justamente o caso comum, continuou caindo no toast "não encontrei
+    //    coordenada pra X". Um botão azul de destaque cuja resposta usual é um erro.
+    //
+    //    E desde o BLOCO 45 não existe mais mapa nesta tela. Sem coordenada não há para
+    //    onde levar, então o botão some — melhor ausente que mentiroso.
+    //
+    // 2. O popup não oferecia telefone. É a ficha do compromisso: a tela que ele abre
+    //    justamente quando vai falar com o cliente. Mesma lacuna já corrigida na lista
+    //    de ações (ver a nota longa em telefoneDaAcao) — a ordem existia, a ferramenta
+    //    não. Reusa a mesma função, que aceita celular do negócio ou telefone da conta
+    //    e devolve null sem número de verdade.
+    ((sessaoAtual && sessaoAtual.role === 'rep' && e.cliente && lead && lead.lat != null && lead.lng != null)
+      ? '<button type="button" data-aglat="' + lead.lat + '" data-aglng="' + lead.lng + '" data-agnomelead="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;">Ver na rota →</button>'
       : '') +
+    ((sessaoAtual && sessaoAtual.role === 'rep') ? (() => {
+      const telPop = (typeof telefoneDaAcao === 'function') ? telefoneDaAcao(lead, e.cliente) : null;
+      if (!telPop) return '';
+      const baseBtn = 'border-radius:var(--r-pill);padding:10px 18px;font:700 12.5px inherit;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;';
+      return '<a href="tel:+' + telPop + '" style="background:var(--panel);border:1px solid var(--line-btn);color:var(--ink);' + baseBtn + '">Ligar</a>'
+        + '<a href="https://wa.me/' + telPop + '" target="_blank" rel="noopener" style="background:var(--panel);border:1px solid #16a085;color:#0f7a68;' + baseBtn + '">WhatsApp</a>';
+    })() : '') +
     (lead && lead.id ? '<button type="button" data-agficha-drawer="' + agendaEsc(String(lead.id)) + '" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font-size:12.5px;font-weight:700;cursor:pointer;">Abrir ficha do lead →</button>' : '') +
+    // BECO SEM SAÍDA MEDIDO CLICANDO (28/08/26). Abri os seis primeiros compromissos da
+    // semana do Marco: em QUATRO deles este rodapé saía vazio — nem ficha, nem
+    // telefone, nem nada. O painel abria, mostrava o horário e não oferecia um único
+    // caminho. Acontece quando situacaoDoLeadPorNome não casa o cliente do compromisso
+    // com nenhum negócio (temperatura ou funil): sem lead não há ficha para abrir, e
+    // sem lead o telefone também não é encontrado.
+    //
+    // É a MESMA raiz da ação nº 1 corrigida hoje ("Registrar desfecho Bueno pizzaria",
+    // que respondia com um aviso): visita registrada no Expogo cria o compromisso, mas
+    // se a conta nunca virou negócio no pipeline não existe nada para abrir. E é
+    // justamente a conta nova, achada na rua — a que mais interessa.
+    //
+    // A saída é a mesma de lá, pelo mesmo motivo: criar o negócio, com o nome já
+    // preenchido. Um clique produz progresso em vez de uma tela sem botão.
+    ((sessaoAtual && sessaoAtual.role === 'rep' && e.cliente && !(lead && lead.id))
+      ? '<button type="button" data-agcriarnegocio="' + agendaEsc(String(e.cliente)) + '" style="background:var(--red);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 18px;font-size:12.5px;font-weight:700;cursor:pointer;">Criar negócio para ' + esc(e.cliente) + ' →</button>'
+      : '') +
     '</div>';
   stageOverlay.classList.add('show');
   const fichaBtn = stageModalBody.querySelector('[data-agficha-drawer]');
   if (fichaBtn) fichaBtn.addEventListener('click', () => abrirFichaLeadFunilDrawer(lead));
+  const criarBtn = stageModalBody.querySelector('[data-agcriarnegocio]');
+  if (criarBtn) criarBtn.addEventListener('click', () => {
+    /* Fecha este painel antes de abrir o de criação: os dois usam o mesmo
+       stageOverlay, e abrir um sobre o outro deixaria o de baixo preso. */
+    if (typeof stageOverlay !== 'undefined' && stageOverlay) stageOverlay.classList.remove('show');
+    abrirNovaContaProspeccao(
+      () => { if (typeof renderAgenda === 'function') renderAgenda(); },
+      { nome: criarBtn.dataset.agcriarnegocio, telefone: '' }
+    );
+  });
 }
 
 // No HubSpot, "Sem adicionais" representa a ausência dos demais itens. Mantê-lo
