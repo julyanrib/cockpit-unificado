@@ -772,6 +772,64 @@ teste('o núcleo não lê nada de colega: fila só olha o ownerId pedido', () =>
   igual(ids, ['meu'], 'só o próprio negócio');
 });
 
+console.log('\n== Qualificação faltante (revisão do cockpit do executivo, 28/08) ==');
+
+teste('em Visita sem sistema e sem dor, falta os dois e o negócio é cego', () => {
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [lead({ id: 'q1' })] } }), { ownerId: OWNER, role: 'rep' });
+  const l = c.meusNegociosAbertos(OWNER)[0];
+  igual(c.qualificacaoFaltante(l), ['nome_do_sistema', 'gargalo_operacional'], 'os dois campos');
+  verdade(c.negocioCego(l), 'cego');
+});
+
+teste('em Prospecção o Cockpit NÃO pede qualificação', () => {
+  // Não é detalhe: 26 negócios estão em Prospecção. Ninguém esteve no salão deles,
+  // então pedir a dor ali seria pedir invenção — e invenção contamina o CRM inteiro.
+  const c = novoContexto(dados({ funilLeads: { '1395880469': [lead({ id: 'q2', stageId: '1395880469', stage: 'Prospecção' })] } }), { ownerId: OWNER, role: 'rep' });
+  const l = c.meusNegociosAbertos(OWNER)[0];
+  igual(c.qualificacaoFaltante(l), [], 'nada é pedido antes da visita');
+  falso(c.negocioCego(l), 'não é cego, é só não visitado');
+});
+
+teste('pede só o que falta: em Decisor com a dor preenchida, cobra apenas o sistema', () => {
+  const c = novoContexto(dados({
+    funilLeads: { '1395880470': [lead({ id: 'q3', gargalo_operacional: 'Fila' })] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const l = c.meusNegociosAbertos(OWNER)[0];
+  igual(c.qualificacaoFaltante(l), ['nome_do_sistema'], 'só o sistema');
+  falso(c.negocioCego(l), 'meio qualificado não é cego');
+});
+
+teste('negócio qualificado não é cobrado de novo', () => {
+  const c = novoContexto(dados({
+    funilLeads: { '1396005401': [lead({ id: 'q4', nome_do_sistema: 'Consumer', gargalo_operacional: 'Estoque' })] }
+  }), { ownerId: OWNER, role: 'rep' });
+  igual(c.qualificacaoFaltante(c.meusNegociosAbertos(OWNER)[0]), [], 'nada falta');
+});
+
+teste('lead SEM stageId ainda é cobrado (a etapa vem da chave de funilLeads)', () => {
+  // Regressão do defeito achado na revisão visual de 28/08: 32 dos negócios da Kelly
+  // vêm de funilLeads sem o campo stageId — a etapa é só a CHAVE. Nesses,
+  // qualificacaoFaltante devolvia [] e a tela não pedia NADA, em silêncio. Silêncio
+  // é o pior resultado possível aqui, porque é indistinguível de "já qualificado".
+  const cru = { id: 'q6', name: 'Sem etapa no objeto', ownerId: OWNER, dias: 11, tarefas: [], notas: [], ultimaInteracao: diasAtras(3).toISOString() };
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [cru] } }), { ownerId: OWNER, role: 'rep' });
+  falso(!!cru.stageId, 'o fixture realmente não tem stageId');
+  igual(c.etapaDoLead(cru), '1396005401', 'a etapa é resolvida pela chave');
+  igual(c.qualificacaoFaltante(cru), ['nome_do_sistema', 'gargalo_operacional'], 'cobra mesmo assim');
+});
+
+teste('gravar espelha no DATA local e a cobrança para na mesma sessão', () => {
+  // Mesmo contrato do ciclo de desfecho: escrever no HubSpot sem espelhar no DATA
+  // deixava a tela pedindo de novo o que já havia sido gravado, até o próximo sync.
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [lead({ id: 'q5' })] } }), { ownerId: OWNER, role: 'rep' });
+  verdade(c.negocioCego(c.meusNegociosAbertos(OWNER)[0]), 'cego antes');
+  c.aplicarQualificacaoNoDataLocal('q5', { nome_do_sistema: 'Saipos', gargalo_operacional: 'Falta de Gestão' });
+  c.tpInvalidarCache();
+  const depois = c.meusNegociosAbertos(OWNER)[0];
+  igual(c.qualificacaoFaltante(depois), [], 'não cobra mais');
+  igual(depois.nome_do_sistema, 'Saipos', 'o valor gravado está no DATA');
+});
+
 console.log('');
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);
