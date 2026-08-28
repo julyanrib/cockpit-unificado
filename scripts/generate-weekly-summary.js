@@ -408,7 +408,35 @@ async function main() {
         resumoGeral: anterior?.resumoGeral
           ? `<b>⚠ A geração desta semana falhou — texto abaixo é da semana anterior${dataAnterior ? ' (' + dataAnterior + ')' : ''}; os números do painel são os atuais.</b><br>` + anterior.resumoGeral
           : 'Resumo de time indisponível essa semana (falha técnica na geração). Consulte os números brutos no dashboard.',
-        comoAgir: anterior?.comoAgir || ['Revisar manualmente os números da semana — a geração automática falhou.']
+        /* O "COMO AGIR" TAMBÉM TEM QUE SE DECLARAR RECICLADO (28/08/26).
+
+           A regra estava escrita no comentário acima e aplicada só ao resumoGeral: o
+           `comoAgir` herdava o texto da semana anterior CRU, sem aviso nenhum. E é o
+           comoAgir que vira COMUNICADO PUBLICADO PRO TIME.
+
+           O caso real: em 27/08 a geração falhou 7 vezes seguidas (crédito da API da
+           Anthropic esgotado — está gravado em _falhasIA). O resumoGeral saiu com a
+           tarja de aviso; o comunicado "Leitura da semana · 24/08–27/08" saiu com os
+           números de 10–14/08 e nenhuma tarja. Publicado, dizia:
+
+             · "a reciclagem caiu de 100 para 19"        (real da semana: 97 -> 84)
+             · "81 negócios criados, queda de 25%"       (real da semana: 51, de 62)
+             · "as 3 reuniões desta semana"              (real da semana: 6, de 3)
+
+           E prescrevia, com base nesses números, que "toda perda registrada sem
+           evidência de contato com o decisor será revertida pelo gestor diretamente no
+           CRM, sem consulta ao executivo". Ou seja: uma diretriz severa ao time,
+           fundamentada em número de duas semanas antes, sem nada avisando.
+
+           Texto reciclado sem etiqueta é pior que texto ausente, porque ninguém tem
+           como desconfiar dele. Agora a etiqueta acompanha os dois campos, e trata as
+           duas formas que o comoAgir assume (string única ou lista de itens). */
+        comoAgir: (() => {
+          const aviso = `⚠ A geração desta semana falhou — texto abaixo é da semana anterior${dataAnterior ? ' (' + dataAnterior + ')' : ''}; NÃO use estes números para cobrar o time, use os do painel.`;
+          if (!anterior?.comoAgir) return ['Revisar manualmente os números da semana — a geração automática falhou.'];
+          if (Array.isArray(anterior.comoAgir)) return [aviso].concat(anterior.comoAgir);
+          return `<b>${aviso}</b><br>` + anterior.comoAgir;
+        })()
       };
     } else {
       parsedTime = resultadoTime.value;
