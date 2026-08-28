@@ -782,6 +782,48 @@ teste('o núcleo não lê nada de colega: fila só olha o ownerId pedido', () =>
   igual(ids, ['meu'], 'só o próprio negócio');
 });
 
+console.log('\n== Promessa derivada (prometido × realizado sem digitação) ==');
+
+teste('o tipo da promessa sai da etapa do negócio', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  igual(c.tipoDaPromessa({ stageId: '1395880469' }), 'visitas', 'Prospecção = visita');
+  igual(c.tipoDaPromessa({ stageId: '1396005401' }), 'visitas', 'Visita = visita');
+  igual(c.tipoDaPromessa({ stageId: '1395880470' }), 'avancos', 'Decisor = avanço');
+  igual(c.tipoDaPromessa({ stageId: '1395880471' }), 'propostas', 'Demo/Proposta = proposta');
+  igual(c.tipoDaPromessa({ stageId: '1395880472' }), 'fechamentos', 'Negociação = fechamento');
+  igual(c.tipoDaPromessa({ stageId: '1395880473' }), 'fechamentos', 'Ag. Pagamento = fechamento');
+});
+
+teste('sem etapa conhecida cai em visitas, nunca em null', () => {
+  // A soma tem de fechar com a contagem de marcados. Um tipo null faria a promessa
+  // perder item no caminho e o executivo veria número diferente do que marcou.
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  igual(c.tipoDaPromessa({ stageId: '1396006164' }), 'visitas', 'etapa fora do mapa');
+  igual(c.tipoDaPromessa({}), 'visitas', 'sem stageId');
+  igual(c.tipoDaPromessa(null), 'visitas', 'lead nulo');
+});
+
+teste('a soma fecha com a quantidade de itens marcados', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const itens = [
+    { tipo: 'visitas' }, { tipo: 'visitas' }, { tipo: 'avancos' },
+    { tipo: 'propostas' }, { tipo: 'fechamentos' }, { tipo: 'coisa_invalida' }
+  ];
+  const som = c.somaDaPromessa(itens);
+  igual(som, { visitas: 3, avancos: 1, propostas: 1, fechamentos: 1 }, 'tipo inválido conta como visita');
+  igual(som.visitas + som.avancos + som.propostas + som.fechamentos, itens.length, 'nenhum item se perde');
+});
+
+// NOTA (28/08/26) — a integração "a sequência do dia carrega o tipo de cada item" NÃO
+// é testada aqui de propósito. `sequenciaSugeridaDoDia` vive fora dos marcadores
+// @nucleo e depende dos helpers de agenda (agendaChave, agendaAgora, agendaHhmm,
+// AGENDA_TIPOS, buscarLeadFunilPorId). Trazê-la para dentro arrastaria todos eles, e
+// stub de regra de negócio no harness foi exatamente o que deixou passar o bug do
+// "próximo passo às 9h01" — o remédio seria pior que a doença.
+// O que decide o resultado (tipoDaPromessa e somaDaPromessa) está coberto acima; a
+// costura foi verificada no preview local com a carteira real de Kelly e Marco, onde
+// dá pra ver o badge de cada item e a soma batendo com o que está marcado.
+
 console.log('\n== Destravar o funil (o degrau que não está sendo subido) ==');
 
 // Fixture do caso real do Bruno em 28/08: 14 em Visita, ZERO em Conversa com Decisor,
