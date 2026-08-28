@@ -13608,13 +13608,9 @@ document.addEventListener('click', function (ev) {
   const atMapaCoord = ev.target.closest('[data-aglat]');
   if (atMapaCoord) {
     ev.preventDefault(); ev.stopPropagation();
-    agendaEstado.subview = 'hoje';
-    renderAgenda();
-    setTimeout(() => {
-      // BLOCO 45 (limpeza, 14/08/26) — sem mapa, o atalho só navega e rola até a lista.
-      const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
-      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 700);
+    /* 28/08: navegava para uma âncora inexistente (ver a nota em agendaIrParaPlanejamento)
+       e deixava a aba do topo dizendo "Agenda". */
+    agendaIrParaPlanejamento();
     return;
   }
   // BUG PEGO NO TESTE (12/08, revisão da Agenda) — este handler e o de baixo
@@ -13629,13 +13625,10 @@ document.addEventListener('click', function (ev) {
     ev.preventDefault(); ev.stopPropagation();
     const l = (typeof prospeccaoCache !== 'undefined' ? prospeccaoCache : []).find(x => String(x.id) === String(atMapaId.dataset.agmapaid));
     if (!l) { mostrarToast('Não encontrei essa conta na sua fila — recarregue a página.', 'erro'); return; }
-    agendaEstado.subview = 'hoje';   // a Rota do executivo é a subview "hoje" da Agenda
-    renderAgenda();
-    // BLOCO 45 (limpeza, 14/08/26) — sem mapa, o atalho só navega e rola até a lista.
-    setTimeout(() => {
-      const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
-      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 700);
+    /* 28/08: a conta era procurada só para validar e depois DESCARTADA — ele clicava no
+       atalho de uma conta específica e chegava numa tela genérica. Agora ela viaja com
+       a navegação e a ficha abre. */
+    agendaIrParaPlanejamento(l.id);
     return;
   }
   const atMapa = ev.target.closest('[data-agmapa]');
@@ -13644,13 +13637,9 @@ document.addEventListener('click', function (ev) {
     const nomeAlvo = atMapa.dataset.agmapa;
     const l = (typeof prospeccaoCache !== 'undefined' ? prospeccaoCache : []).find(x => agendaMesmoLead(x.nome, nomeAlvo));
     if (!l) { mostrarToast('Não encontrei coordenada pra "' + nomeAlvo + '" — abra a Prospecção ou confirme o endereço no HubSpot.', 'erro'); return; }
-    agendaEstado.subview = 'hoje';   // a Rota do executivo é a subview "hoje" da Agenda
-    renderAgenda();
-    // BLOCO 45 (limpeza, 14/08/26) — sem mapa, o atalho só navega e rola até a lista.
-    setTimeout(() => {
-      const alvo = document.getElementById('planoMapaGrid') || document.getElementById('planoDoDiaSlot');
-      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 700);
+    /* 28/08: mesma correção do data-agmapaid acima — a conta clicada viaja com a
+       navegação em vez de ser descartada depois da validação. */
+    agendaIrParaPlanejamento(l.id);
     return;
   }
   const atProsp = ev.target.closest('[data-agprosp]');
@@ -13668,20 +13657,30 @@ document.addEventListener('click', function (ev) {
     ev.preventDefault(); ev.stopPropagation();
     // CORREÇÃO (16/08/26): antes só tentava scrollIntoView num #buracosCard que não
     // existia na visão Semana (onde este card aparece) — clique silenciosamente não
-    // fazia nada. Agora troca pra subview onde o card mora de verdade, espera
-    // renderizar, e só então rola até ele.
-    agendaEstado.subview = 'hoje';
-    renderAgenda();
-    setTimeout(() => {
-      const card = document.getElementById('buracosCard');
-      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 60);
+    // fazia nada. Passou a trocar pra subview onde o card mora. Em 28/08 essa lógica
+    // virou agendaRolarAteCard, compartilhada com data-agdxfoco, que tinha ficado com
+    // a versão antiga e silenciosa do mesmo bug.
+    if (!agendaRolarAteCard('buracosCard')) agendaIrParaPlanejamento();
     return;
   }
   const foco = ev.target.closest('[data-agdxfoco]');
   if (foco) {
-    const alvoCard = document.getElementById(foco.dataset.agdxfoco);
-    if (alvoCard) alvoCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    /* MEDIDO CLICANDO (28/08/26): o botão "BURACOS RESTANTES · 1 de 2 dias" mirava
+       #buracosCard, que NÃO EXISTE para o executivo em subview nenhuma. A causa está
+       na linha do desvio da nova prospecção: souRep && subview !== 'semana' faz
+       renderProspeccaoExecutivo() e RETORNA — antes da inserção do buracosCardExec.
+       Então a correção de 16/08 ("agora entra na subview hoje"), feita no mesmo dia do
+       desvio, nunca chegou a valer para ele: o card voltou a ser código morto, e o
+       clique era silencioso como o "sol" que o Julyan reportou.
+
+       O alvo honesto é o que responde à pergunta "tenho buracos, e agora?": a trilha
+       "O que merece entrar na agenda", que existe de verdade nesta subview e oferece
+       as contas para preencher. Fica na mesma aba — buraco de agenda se resolve
+       escolhendo conta, não trocando de tela. */
+    if (!agendaRolarAteCard(foco.dataset.agdxfoco)) {
+      const trilha = document.querySelector('.ag-exec-rail');
+      if (trilha) trilha.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
     return;
   }
   const mapa1 = ev.target.closest('[data-agmapa]');
@@ -13699,12 +13698,15 @@ document.addEventListener('click', function (ev) {
   // Correção 10/08 (Julyan): não existe mais "Começar rota" (check-in) pra rolar até —
   // o Cockpit é só planejamento agora, então o alvo é direto o mapa/plano do dia.
   if (ev.target.closest('[data-agrota]')) {
+    /* "Planejar rota do dia →" é o botão vermelho primário desta aba e não fazia nada:
+       mirava #planoDoDiaSlot, que não existe para o executivo (ver a nota em
+       data-agdxfoco), e caía no fallback .ag-wrap — o topo da página, que é justamente
+       onde o botão está. Zero pixel de resposta no CTA mais visível da tela.
+
+       Planejar o dia dele É o deck de Planejamento. Agora leva lá, com a aba do topo
+       acompanhando. */
     agendaEstado.offset = 0;
-    renderAgenda();
-    setTimeout(() => {
-      const alvo = document.getElementById('planoDoDiaSlot') || document.querySelector('.ag-wrap');
-      if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 450);
+    agendaIrParaPlanejamento();
     return;
   }
   // "Preencher →" de um buraco: abre a grade por hora da mesma semana e rola até ela —
@@ -15556,6 +15558,70 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
 
   return '<div class="agw-scroll"><div class="agw-grid" style="--agw-nd:' + dias.length + ';--agw-px:' + PX + 'px;">' +
     cab + corpo + (temRegistro ? faixaReg : '') + '</div></div>';
+}
+
+/* ============================================================================
+   ROLAR ATÉ UM CARD QUE PODE MORAR EM OUTRA SUBVIEW (28/08/26)
+   ----------------------------------------------------------------------------
+   ESTE BUG JÁ FOI REPORTADO UMA VEZ. Em 16/08 o Julyan disse: "esse sol aí é legal
+   e tal, mas se você clica nele não acontece nada". Era o card "Dia livre" mirando
+   um #buracosCard que não existia na visão Semana. Foi corrigido — mas só naquele
+   handler (data-agburaco). O irmão dele, data-agdxfoco, ficou com a versão antiga:
+
+     const alvoCard = document.getElementById(...);
+     if (alvoCard) alvoCard.scrollIntoView(...);   // e se não achar, desiste calado
+
+   Medido clicando na aba Agenda em subview semana: o botão "BURACOS RESTANTES ·
+   1 de 2 dias" não move um pixel, porque #buracosCard só é inserido quando
+   mostrarHoje é verdadeiro (agendaEstado.subview !== 'semana', linha ~12814).
+
+   A correção é a mesma que já está escrita para data-agburaco, agora em um lugar só
+   para os dois: se o card não está na tela, troca para a subview onde ele mora,
+   renderiza, e só então rola. O "if (alvoCard)" silencioso é o que transformava um
+   botão em enfeite — a única saída aceitável quando o alvo não existe é ir buscá-lo.
+   ============================================================================ */
+function agendaRolarAteCard(idCard) {
+  const card = document.getElementById(idCard);
+  if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
+  return false;
+}
+
+/* IR PARA O PLANEJAMENTO, COM A BARRA DE ABAS DIZENDO A VERDADE.
+
+   Cinco atalhos da Agenda (data-agrota, data-aglat, data-agmapaid, data-agmapa e o
+   antigo data-agburaco) faziam subview = 'hoje' + renderAgenda() na mão. Isso troca o
+   CONTEÚDO da tela — o executivo sai do calendário e cai no deck de Planejamento —
+   mas não troca a aba acesa no topo, porque as duas abas apontam para a mesma view e
+   quem decide qual acende é o activateTab (ver o comentário dele). Resultado: ele lê
+   "Agenda" na barra e vê o Planejamento. Perder a orientação em um clique é o oposto
+   de acelerar.
+
+   Passa a usar o mesmo caminho do botão da aba: activateTab depois de ajustar a
+   subview, exatamente como o listener de tabBtnAgenda faz. Um caminho só para navegar,
+   em vez de cinco cópias que esqueceram um passo. */
+function agendaIrParaPlanejamento(idConta) {
+  /* SÓ O EXECUTIVO TEM PARA ONDE IR. O deck de Planejamento é o desvio de souRep; para
+     o gestor a subview 'hoje' continua caindo no calendário antigo e ele não tem essa
+     aba no topo — mandá-lo para lá trocaria a visão dele sem motivo. Sem destino, o
+     atalho não faz nada, que é o comportamento honesto (o card que ele clicaria também
+     não existe no papel de gestor). */
+  if (!(sessaoAtual && sessaoAtual.role === 'rep')) return;
+  agendaEstado.subview = 'hoje';
+  if (typeof activateTab === 'function') activateTab('viewAgenda');
+  renderAgenda();
+  if (!idConta) return;
+  /* Focar a conta que ele clicou reusa o caminho real do deck: o clique no card, que
+     já sabe abrir a ficha com o universo correto (variável de closure de
+     renderProspeccaoExecutivo — chamar prosp2AbrirDrawer daqui exigiria duplicar essa
+     lista, e duas fontes para a mesma ficha é como nascem as divergências).
+
+     Se a conta não está entre as visíveis (a fila mostra um lote por vez), não
+     inventa nada: ele chega no deck, que é o lugar onde a conta está. Prometer
+     "abri a ficha" sem abrir seria pior que não prometer. */
+  setTimeout(() => {
+    const card = document.querySelector('.prosp2-card[data-id="' + String(idConta) + '"]');
+    if (card) card.click();
+  }, 260);
 }
 
 function agendaGradeLista(dias, hojeK) {
