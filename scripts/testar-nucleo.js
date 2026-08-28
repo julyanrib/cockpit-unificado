@@ -122,14 +122,12 @@ function novoContexto(DATA, sessao) {
       }));
       return out;
     },
-    proximoPassoDoLead: lead => {
-      const cand = [];
-      if (lead.proximaAtividade) cand.push({ data: lead.proximaAtividade, rotulo: 'atividade' });
-      (lead.tarefas || []).forEach(t => { if (t && t.timestamp) cand.push({ data: t.timestamp, rotulo: t.subject || 'tarefa' }); });
-      return cand.map(x => ({ ...x, quando: new Date(x.data) }))
-        .filter(x => !isNaN(x.quando) && x.quando >= HOJE)
-        .sort((x, y) => x.quando - y.quando)[0] || null;
-    },
+    // proximoPassoDoLead NÃO é stubbado (28/08/26). Ele era, e o stub reescrevia a
+    // regra à mão com `x.quando >= HOJE` — a mesma comparação por instante que estava
+    // errada em produção. Com a regra em duas cópias igualmente erradas, nenhum teste
+    // podia pegar o bug de "tarefa de hoje desaparece às 9h01". A função foi movida
+    // para dentro do @nucleo no template e agora é a real que roda aqui.
+    // Stub serve para I/O, DOM e ambiente. Regra de negócio, nunca.
     inicioDaSemanaISO: () => '2026-08-24',
     // Mesmo contrato do rampDoOwner do template: alvo de visitas/dia útil da fase.
     // O fixture passa DATA.rampAlvo pra escolher a fase sem precisar de usuarios.json.
@@ -770,6 +768,61 @@ teste('o núcleo não lê nada de colega: fila só olha o ownerId pedido', () =>
   const c = novoContexto(dados({ funilLeads: { '1396005401': [meu, colega] } }), { ownerId: OWNER, role: 'rep' });
   const ids = c.meusNegociosAbertos(OWNER).map(l => l.id);
   igual(ids, ['meu'], 'só o próprio negócio');
+});
+
+console.log('\n== Próximo passo de HOJE conta o dia inteiro (bug de produção, 28/08) ==');
+
+// O relógio dos testes é fixo às 12:00 UTC (ver RELÓGIO FIXO no topo), que é
+// exatamente a hora em que o Cockpit grava as tarefas. Uma tarefa de hoje às 12:00Z
+// portanto está "no limite"; as de 09:00Z e 11:00Z já passaram da hora. Era isso que
+// sumia da tela no meio do dia útil.
+const HOJE_ISO = iso(HOJE);
+const tarefaHoje = (h) => [{ subject: 'Follow-up - cobrar', timestamp: `${HOJE_ISO}T${h}:00:00Z` }];
+
+teste('tarefa de hoje cuja HORA já passou continua sendo próximo passo', () => {
+  const l = lead({ id: 'PP1', name: 'Don Aguilar', tarefas: tarefaHoje('09') });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const alvo = c.meusNegociosAbertos(OWNER)[0];
+  const passo = c.proximoPassoDoLead(alvo);
+  verdade(!!passo, 'proximoPasso existe (era null: o bug)');
+  igual(c.isoDate(passo.quando), HOJE_ISO, 'e é a tarefa de hoje');
+  verdade(c.estadoDoNegocio(alvo).temProximoPasso, 'temProximoPasso é true');
+});
+
+teste('esse negócio NÃO é mais "visitada e sem próximo passo"', () => {
+  // O sintoma que apareceu na carteira do Marco: quatro tarefas de hoje às 12:00Z e
+  // os quatro negócios listados como se ele não tivesse marcado nada.
+  const l = lead({ id: 'PP2', ultimaInteracao: diasAtras(2).toISOString(), tarefas: tarefaHoje('09') });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const alvo = c.meusNegociosAbertos(OWNER)[0];
+  falso(c.estadoDoNegocio(alvo).followUpDescoberto, 'não está descoberto');
+  const f = c.filaDeFollowUp(OWNER);
+  igual(f.baldes.visita_sem_passo.length, 0, 'fora do balde de visita sem passo');
+});
+
+teste('"Follow-ups para hoje" recebe a tarefa de hoje (o balde vivia vazio)', () => {
+  const l = lead({ id: 'PP3', ultimaInteracao: diasAtras(2).toISOString(), tarefas: tarefaHoje('09') });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const f = c.filaDeFollowUp(OWNER);
+  igual(f.baldes.hoje.length, 1, 'o balde de prioridade 1 enche');
+  igual(f.baldes.hoje[0].prazo, HOJE_ISO, 'com prazo de hoje');
+});
+
+teste('cadência não vira "atrasada" no meio do dia por causa da hora', () => {
+  const l = lead({ id: 'PP4', ultimaInteracao: diasAtras(6).toISOString(), tarefas: tarefaHoje('09') });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const st = c.estadoDoNegocio(c.meusNegociosAbertos(OWNER)[0]);
+  igual(st.cadencia.status, 'planejada', 'passo de hoje mantém a cadência planejada');
+});
+
+teste('tarefa de dia ANTERIOR continua fora do próximo passo', () => {
+  // A correção é por dia, não "aceita qualquer coisa": passo vencido é outro problema
+  // e não pode ser confundido com passo cumprido.
+  const l = lead({ id: 'PP5', tarefas: [{ subject: 'Follow-up', timestamp: `${iso(new Date(HOJE.getTime() - 3 * DIA))}T12:00:00Z` }] });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const alvo = c.meusNegociosAbertos(OWNER)[0];
+  igual(c.proximoPassoDoLead(alvo), null, 'tarefa de 3 dias atrás não conta');
+  falso(c.estadoDoNegocio(alvo).temProximoPasso, 'e o negócio segue sem próximo passo');
 });
 
 console.log('\n== Qualificação faltante (revisão do cockpit do executivo, 28/08) ==');

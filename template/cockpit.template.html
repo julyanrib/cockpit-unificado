@@ -4833,7 +4833,12 @@ function estadoDaCadencia(lead, toques, ultimoDesfecho, proximoPasso) {
   // CRM. Chamar isso de "cadência atrasada" jogava todos os 18 negócios no balde e
   // deixava a fila sem sinal (visto na revisão de 27/08: "Cadências atrasadas 18").
   // Passo vencido é outro problema, e tem balde próprio ("follow-ups para hoje").
-  const temPlanoFuturo = !!(proximoPasso && proximoPasso.quando && proximoPasso.quando.getTime() > Date.now());
+  // Comparação por DIA, pelo mesmo motivo de proximoPassoDoLead (ver o comentário
+  // longo lá): com `> Date.now()`, um passo marcado para hoje deixava de contar como
+  // plano às 09h01 e a cadência do negócio virava "atrasada" no meio do dia, com a
+  // tarefa de hoje ainda aberta no HubSpot. Passo de hoje é plano até o dia acabar.
+  const temPlanoFuturo = !!(proximoPasso && proximoPasso.quando &&
+    isoDate(proximoPasso.quando) >= isoDate(new Date()));
 
   let status;
   if (encerrou) status = 'encerrada';
@@ -6049,6 +6054,64 @@ function abrirRegistroDeDesfechoPorNome(nomeCliente, evento) {
   }
   abrirRegistroDeDesfecho(candidatos[0], evento);
 }
+/* MOVIDO PARA DENTRO DO @nucleo em 28/08/26 — e o motivo importa.
+
+   Estas duas funções viviam ~7.600 linhas abaixo, fora de qualquer marcador. Como o
+   scripts/testar-nucleo.js só executa o que está entre os marcadores, o harness
+   mantinha um STUB próprio de proximoPassoDoLead, com a regra reescrita à mão.
+
+   O stub tinha `x.quando >= HOJE` — comparação por instante, a mesma versão bugada
+   que estava em produção. Ou seja: a regra existia em duas cópias e as duas estavam
+   erradas do mesmo jeito, então NENHUM teste podia pegar o bug. Foi assim que
+   "tarefa de hoje desaparece às 9h01" sobreviveu.
+
+   Agora existe uma implementação só, e ela é a que os testes rodam. Em produção nada
+   muda de lugar na prática: declaração de função sobe para o topo do script, então
+   quem chamava daqui de cima continua chamando.
+
+   Regra geral que isto sugere: stub no harness serve para o que é I/O, DOM ou
+   ambiente. Regra de negócio, nunca — ou o teste passa a validar a cópia. */
+
+function proximoPassoDoLead(lead) {
+  if (!lead) return null;
+  const agora = new Date();
+  const candidatos = [];
+  if (lead.proximaAtividade) candidatos.push({ data: lead.proximaAtividade, rotulo: 'atividade' });
+  if (lead.proximaReuniao) candidatos.push({ data: lead.proximaReuniao, rotulo: 'reunião' });
+  (Array.isArray(lead.tarefas) ? lead.tarefas : []).forEach(t => {
+    if (t && t.timestamp) candidatos.push({ data: t.timestamp, rotulo: t.subject || 'tarefa' });
+  });
+  /* BUG DE PRODUÇÃO (achado em 28/08/26, corrigido aqui).
+     O filtro era `x.quando >= agora`, ou seja, comparação por INSTANTE. Uma tarefa
+     marcada para HOJE deixava de existir no instante em que a hora dela passava.
+
+     E a hora é sempre a mesma: o Cockpit grava todo próximo passo às 12:00 UTC (09:00
+     de Brasília) — ver `Date.UTC(ano, mes, dia, 12, 0, 0)` em api/criar-nota-negocio.js.
+     Consequência: TODA tarefa criada pelo Cockpit ficava invisível a partir das 09h01
+     do dia em que vencia, ou seja, durante o dia útil inteiro.
+
+     O que isso produzia na tela, medido na carteira do Marco às 10h de 28/08 — quatro
+     tarefas datadas 28/08T12:00:00Z, uma hora antes:
+       proximoPasso        -> null
+       temProximoPasso     -> false
+       balde do negócio    -> "visitada e sem próximo passo"
+       "Follow-ups para hoje" -> 0, com uma reunião de demonstração marcada para hoje
+     Isto é o oposto do propósito do produto: o único executivo que agenda os
+     follow-ups era informado de que não tinha nenhum, e mandado marcar de novo. O
+     balde "Follow-ups para hoje" só podia ter conteúdo entre a meia-noite e as 9h.
+
+     A correção é comparar por DIA: passo marcado para hoje é passo de hoje até o fim
+     do dia, independente da hora. Dias anteriores continuam fora de propósito — passo
+     vencido é outro problema, e o comentário do balde 1 da fila já dizia isso. */
+  const hojeK = isoDate(agora);
+  return candidatos
+    .map(x => ({ ...x, quando: new Date(x.data) }))
+    .filter(x => !Number.isNaN(x.quando.getTime()) && isoDate(x.quando) >= hojeK)
+    .sort((a, b) => a.quando - b.quando)[0] || null;
+}
+
+function leadTemProximoPasso(lead) { return !!proximoPassoDoLead(lead); }
+
 /* @nucleo:fim */
 
 /* ============================================================================
@@ -10728,7 +10791,19 @@ function itemDaFilaHTML(it, idx) {
      navegável por teclado de graça. */
   const primaria = ctas.find(c => c.primaria) || ctas[0];
   const secundarias = ctas.filter(c => c !== primaria);
-  const prazoTxt = it.prazo === isoDate(new Date()) ? 'hoje' : fmtDailyLabel(it.prazo);
+  /* PRAZO só quando ele informa algo (28/08/26).
+     Medido nos 132 negócios abertos: 7 dos 8 baldes gravam `prazo: hoje` fixo, e só o
+     balde de follow-up datado traz data própria. Resultado: apenas 12 negócios do time
+     inteiro podem exibir prazo diferente de "hoje" — 7 deles do Marco, e ZERO dos 32 da
+     Kelly. A coluna repetia "hoje" em 28 linhas seguidas.
+     Coluna 91% constante não é informação, é ruído — e ainda sugeria 28 vencimentos para
+     hoje quando o alvo da fase dela é 6. Agora ela aparece só nos casos em que difere, e
+     aí a data salta justamente por ser exceção.
+     `it.prazo` diferente de hoje é sempre PASSADO: o balde de follow-up só entra com
+     `dia <= hoje`. Por isso o rótulo pode dizer "venceu" sem risco de mentir.
+     .fila-linha é flex (não grid), então omitir o elemento fecha o gap sem desalinhar. */
+  const prazoInforma = it.prazo !== isoDate(new Date());
+  const prazoTxt = prazoInforma ? `venceu ${fmtDailyLabel(it.prazo)}` : null;
 
   return `
     <details class="fila-item" data-fila-idx="${idx}" data-fila-lead="${esc(String(lead.id))}">
@@ -10738,7 +10813,7 @@ function itemDaFilaHTML(it, idx) {
         <span class="fila-etapa">${esc(lead.stage || STAGE_LABELS[lead.stageId] || 'sem etapa')}${st.slaEstourado && lead.dias != null ? ` · ${lead.dias}d` : ''}</span>
         <span class="fila-motivo">${esc(it.motivo)}</span>
         <span class="fila-toque mono" title="Toques conhecidos hoje — piso, não total">≥${st.toques.total || 0}→${(st.toques.total || 0) + 1}º</span>
-        <span class="fila-prazo">${esc(prazoTxt)}</span>
+        ${prazoTxt ? `<span class="fila-prazo">${esc(prazoTxt)}</span>` : ''}
         ${primaria ? (primaria.href
           ? `<a class="fila-cta is-primaria" href="${esc(primaria.href)}" target="_blank" rel="noopener">${esc(primaria.rotulo)}</a>`
           : `<button type="button" class="fila-cta is-primaria" data-fila-cta="${esc(primaria.id)}">${esc(primaria.rotulo)} →</button>`) : ''}
@@ -11031,7 +11106,14 @@ async function renderProspeccaoExecutivo() {
       )}</div>
 
       <aside class="prosp2-tray" data-plan-bloco="rua">
-        <div class="prosp2-tray-head"><h3><span class="plan-passo-num" style="display:inline-block;vertical-align:-5px;margin-right:7px;">C</span>Organizar a rua</h3><span class="cnt num" id="prosp2TrayN">${nAgenda}</span></div>
+        <!-- O badge do passo fica FORA do <h3> (28/08/26). Dentro dele, o texto do título
+             virava "CORGANIZAR A RUA" numa string só: sem separação no conteúdo, o leitor de
+             tela e qualquer extração de texto leem as duas coisas coladas. O margin-right
+             dava o espaço VISUAL e escondia o problema. Agora são irmãos, igual aos passos A
+             e B (.plan-passo-head), e o gap do flex cuida do espaçamento.
+             O estilo do h3 não muda: esta bandeja vive sobre painel escuro e usa os tokens
+             --dark-*, então caixa alta e 11,5px aqui são o contexto escuro, não descuido. -->
+        <div class="prosp2-tray-head"><span class="plan-passo-num" style="flex:none;">C</span><h3>Organizar a rua</h3><span class="cnt num" id="prosp2TrayN">${nAgenda}</span></div>
         <p class="prosp2-tray-sub">Clientes selecionados, horário e sequência. O que você adicionar aqui vira <b style="color:var(--dark-ink)">visita na sua agenda da semana</b> — e entra na sua rota do dia.</p>
         <div id="prosp2TrayList">${prosp2TrayListHTML(todosOsMeus)}</div>
         <button class="prosp2-tray-cta" id="prosp2TrayCta" ${nAgenda ? '' : 'disabled'}>Enviar pra agenda da semana</button>
@@ -13668,23 +13750,6 @@ renderFunilBarras();
 // sessão ainda não foi restaurada (sessaoAtual = null), então o filtro "só os quentes do
 // próprio executivo" não tinha como aplicar; sem a re-chamada pós-login, o rep via os
 // leads dos colegas (bug visto ao vivo na sessão da Kelly em 03/08).
-function proximoPassoDoLead(lead) {
-  if (!lead) return null;
-  const agora = new Date();
-  const candidatos = [];
-  if (lead.proximaAtividade) candidatos.push({ data: lead.proximaAtividade, rotulo: 'atividade' });
-  if (lead.proximaReuniao) candidatos.push({ data: lead.proximaReuniao, rotulo: 'reunião' });
-  (Array.isArray(lead.tarefas) ? lead.tarefas : []).forEach(t => {
-    if (t && t.timestamp) candidatos.push({ data: t.timestamp, rotulo: t.subject || 'tarefa' });
-  });
-  return candidatos
-    .map(x => ({ ...x, quando: new Date(x.data) }))
-    .filter(x => !Number.isNaN(x.quando.getTime()) && x.quando >= agora)
-    .sort((a, b) => a.quando - b.quando)[0] || null;
-}
-
-function leadTemProximoPasso(lead) { return !!proximoPassoDoLead(lead); }
-
 function cadenciaSugeridaDoLead(lead) {
   const ultima = lead && lead.ultimaInteracao ? new Date(lead.ultimaInteracao) : null;
   if (!ultima || Number.isNaN(ultima.getTime())) return 'Registrar toque e iniciar D+1';
