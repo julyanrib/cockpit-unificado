@@ -72,6 +72,25 @@ const DATA_PREVIEW = Object.assign({}, dados, {
   maptiler: null
 });
 
+/* PROPOSTAS E PLAYBOOK NO PREVIEW (28/08/26).
+
+   Essas duas abas abriam com "Sessão não encontrada. Entre novamente." e 122px de
+   altura, em TODA revisão offline — descobri isso auditando as telas: as duas
+   passam por tokenDeSessaoGlobal() e depois buscam /api/dados?recurso=..., e no
+   preview não existe nem sessão do Supabase nem rota de API. Ou seja: as duas abas
+   eram invisíveis pra revisão, o que é justamente o tipo de canto onde defeito
+   sobrevive (foi assim que 122px de "tela vazia" passaram por várias passadas).
+
+   A correção não mexe no produto: o preview pré-popula os caches que os dois
+   carregadores consultam ANTES de pedir token (precificacaoCache e playbookCache),
+   lendo os MESMOS arquivos que api/dados.js serve em produção. Se a fonte mudar de
+   forma, o preview quebra junto — que é o comportamento desejado.
+
+   O playbook compilado é grande; ele já é o mesmo conteúdo que o arquivo gerado
+   carrega, e o aviso de "contém dados reais, não versione" continua valendo. */
+const PLAYBOOK_PREVIEW = require(path.join(root, 'data', 'field-sales-playbook.compiled.json'));
+const PRECIFICACAO_PREVIEW = require(path.join(root, 'data', 'precificacao.json'));
+
 const template = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
 
 // </script> dentro do JSON fecharia o <script id="cockpit-data"> antes da hora.
@@ -137,6 +156,14 @@ const bootstrap = `
       DATA.supabase = { url: 'preview-local', anonKey: 'preview-local' };
       supa = supaFake();
     }
+    /* Antes do mostrarApp(): os carregadores de Propostas e Playbook consultam o
+       cache na primeira linha e só pedem token se ele estiver vazio. Preenchendo-o
+       aqui, as duas abas montam sem rede e sem sessão. Ver a nota longa em
+       PLAYBOOK_PREVIEW, no topo deste arquivo. */
+    try {
+      playbookCache = ${JSON.stringify(PLAYBOOK_PREVIEW).replace(/<\/script>/gi, '<\\/script>')};
+      precificacaoCache = ${JSON.stringify(PRECIFICACAO_PREVIEW).replace(/<\/script>/gi, '<\\/script>')};
+    } catch (e) { console.warn('[preview] nao consegui pre-popular playbook/precificacao:', e); }
     if (!${manual ? 'true' : 'false'}) mostrarApp();
     else { window.__PREVIEW_MANUAL__ = true; console.log('[preview] modo manual: sessão e supa prontos, mostrarApp() NÃO chamado'); }
     var aviso = document.createElement('div');
