@@ -770,6 +770,89 @@ teste('o núcleo não lê nada de colega: fila só olha o ownerId pedido', () =>
   igual(ids, ['meu'], 'só o próprio negócio');
 });
 
+console.log('\n== Ciclo fechado da semana (constância por qualidade, não só volume) ==');
+
+// Uma visita comprovada precisa de evento fechado. O fixture monta o evento do jeito
+// que tpEventosDoDono devolve: tipo que conta como visita, desfecho COMPLETED e dealId.
+// Mesma forma dos eventos usados nos testes de ponto de contato: tipo 'rota' (é o que
+// AGENDA_TIPOS conta como visita), ownerId obrigatório — sem ele tpEventosDoDono não
+// devolve nada, e o teste passaria a medir vazio em silêncio.
+function eventoVisita(dealId, cliente, dataISO) {
+  return {
+    id: 'ev_' + dealId, ownerId: OWNER, dealId: String(dealId), tipo: 'rota', cliente,
+    inicio: new Date(dataISO + 'T14:00:00Z'),
+    desfecho: 'COMPLETED', registro: true, obs: '', decisor: null
+  };
+}
+
+teste('visita qualificada e com próximo passo = ciclo fechado', () => {
+  const l = lead({ id: 'C1', name: 'Pizzaria Fechada', nome_do_sistema: 'Consumer',
+    gargalo_operacional: 'Fila', tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
+  const c = novoContexto(dados({
+    funilLeads: { '1396005401': [l] },
+    agenda: { eventos: [eventoVisita('C1', 'Pizzaria Fechada', iso(HOJE))] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
+  igual(r.avaliados, 1, 'uma visita avaliada');
+  igual(r.fechados, ['Pizzaria Fechada'], 'ciclo fechado');
+  igual(r.pct, 100, '100%');
+});
+
+teste('o vazamento é nomeado: sem qualificação, sem passo, ou os dois', () => {
+  // É esta a parte que ensina o ofício — dizer QUAL gesto faltou, não só o total.
+  const soQual = lead({ id: 'C2', name: 'Só qualificada', nome_do_sistema: 'Saipos', gargalo_operacional: 'Estoque' });
+  const soPasso = lead({ id: 'C3', name: 'Só com passo',
+    tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
+  const nenhum = lead({ id: 'C4', name: 'Nem um nem outro' });
+  const c = novoContexto(dados({
+    funilLeads: { '1396005401': [soQual, soPasso, nenhum] },
+    agenda: { eventos: [
+      eventoVisita('C2', 'Só qualificada', iso(HOJE)),
+      eventoVisita('C3', 'Só com passo', iso(HOJE)),
+      eventoVisita('C4', 'Nem um nem outro', iso(HOJE))
+    ] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
+  igual(r.avaliados, 3, 'três avaliadas');
+  igual(r.fechados, [], 'nenhum ciclo fechado');
+  igual(r.faltaPasso, ['Só qualificada'], 'qualificada mas sem passo');
+  igual(r.faltaQualificacao, ['Só com passo'], 'com passo mas sem qualificação');
+  igual(r.faltaAmbos, ['Nem um nem outro'], 'faltando os dois');
+  igual(r.pct, 0, '0%');
+});
+
+teste('mesmo cliente visitado duas vezes na semana é UM ciclo', () => {
+  const l = lead({ id: 'C5', name: 'Duas visitas', nome_do_sistema: 'Linx', gargalo_operacional: 'Fila',
+    tarefas: [{ subject: 'Follow-up', timestamp: iso(HOJE) + 'T12:00:00Z' }] });
+  const ontem = iso(new Date(HOJE.getTime() - DIA));
+  const c = novoContexto(dados({
+    funilLeads: { '1396005401': [l] },
+    agenda: { eventos: [eventoVisita('C5', 'Duas visitas', iso(HOJE)), eventoVisita('C5', 'Duas visitas', ontem)] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
+  igual(r.avaliados, 1, 'contado uma vez');
+});
+
+teste('visita sem negócio associado não entra no numerador nem no denominador', () => {
+  // Não dá pra avaliar o ciclo de uma visita que não aponta pra negócio nenhum —
+  // e inventar um veredito aqui seria pior que declarar a lacuna.
+  const c = novoContexto(dados({
+    funilLeads: {},
+    agenda: { eventos: [Object.assign(eventoVisita('X', 'Sem negócio', iso(HOJE)), { dealId: null })] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
+  igual(r.avaliados, 0, 'fora da conta');
+  igual(r.semDeal, 1, 'mas declarado em semDeal');
+  igual(r.pct, null, 'sem base de cálculo, pct é null e não 0');
+});
+
+teste('sem visita na semana, o número não finge zero', () => {
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [lead({ id: 'C6' })] } }), { ownerId: OWNER, role: 'rep' });
+  const r = c.cicloFechadoDaSemana(OWNER, iso(HOJE));
+  igual(r.avaliados, 0, 'nada avaliado');
+  igual(r.pct, null, 'pct null — 0% diria que ele falhou, e ele não tentou');
+});
+
 console.log('\n== Próximo passo de HOJE conta o dia inteiro (bug de produção, 28/08) ==');
 
 // O relógio dos testes é fixo às 12:00 UTC (ver RELÓGIO FIXO no topo), que é

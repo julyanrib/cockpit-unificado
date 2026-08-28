@@ -20780,6 +20780,93 @@ function sequenciaDeExecucao(ownerId, ateDataISO) {
   return seq;
 }
 
+/* ============================================================================
+   CICLO FECHADO DA SEMANA (28/08/26)
+   ----------------------------------------------------------------------------
+   POR QUE ESTE NÚMERO EXISTE. A constância já era medida por
+   `sequenciaDeExecucao`: dias úteis consecutivos com visita comprovada. Isso mede
+   QUANTIDADE — "eu saí à rua" — e um executivo pode ter sequência de 10 dias com o
+   funil inteiro parado. Foi exatamente o que os dados mostraram: 51 negócios em
+   Visita, 49 sem qualificação nenhuma, e 123 dos 132 sem próximo passo datado. As
+   visitas aconteciam; o ciclo não fechava.
+
+   Ciclo fechado é a visita que terminou dentro do CRM. Três pernas, todas
+   evidência, nenhuma auto-declarada:
+     1. visita comprovada  — evento fechado (desfecho ou registro), já deduplicado
+     2. qualificada        — sistema que ele usa hoje + a dor (qualificacaoFaltante)
+     3. com próximo passo  — tarefa datada de hoje pra frente no HubSpot
+
+   O valor está no VAZAMENTO, não no total: dizer "visitou 7, fechou 1" é bem menos
+   útil que dizer "5 sem qualificação e 4 sem próximo passo", porque a segunda frase
+   nomeia o gesto que falta. É a diferença entre cobrar esforço e ensinar o ofício.
+
+   O QUE ESTE NÚMERO NÃO MEDE, de propósito: se o próximo passo foi CUMPRIDO no dia
+   prometido. O HubSpot não devolve histórico de atividade concluída (ver
+   docs/contrato-eventos-rpa.md §7), então a 4ª perna do ciclo não é verificável
+   hoje. Preferimos três pernas honestas a quatro com uma chutada.
+
+   Auto-contida de propósito: usa só Date e addDays, sem depender de
+   diasUteisDaSemana/isWeekend, que vivem fora dos marcadores @nucleo e portanto
+   precisariam de stub no harness — e stub de regra de negócio foi exatamente o que
+   deixou o bug do "próximo passo às 9h01" passar.
+   ============================================================================ */
+function cicloFechadoDaSemana(ownerId, ateDataISO) {
+  const fimDeSemana = isoStr => {
+    const dow = new Date(isoStr + 'T12:00:00Z').getUTCDay();
+    return dow === 0 || dow === 6;
+  };
+
+  // Dias úteis da semana corrente até a data de referência (segunda -> hoje).
+  const dias = [];
+  let cursor = ateDataISO;
+  for (let i = 0; i < 7; i++) {
+    if (!fimDeSemana(cursor)) dias.push(cursor);
+    const dow = new Date(cursor + 'T12:00:00Z').getUTCDay();
+    if (dow === 1) break;               // chegou na segunda: semana coberta
+    cursor = addDays(cursor, -1);
+  }
+
+  // Visitas comprovadas da semana, uma linha por NEGÓCIO (o mesmo cliente visitado
+  // duas vezes na semana é um ciclo, não dois).
+  const porDeal = new Map();
+  let semDeal = 0;
+  dias.forEach(d => {
+    const at = atividadesComprovadasNoDia(ownerId, d);
+    (at.visitas || []).forEach(e => {
+      if (e.dealId) porDeal.set(String(e.dealId), e.cliente || null);
+      else semDeal++;   // visita sem negócio associado: não dá pra avaliar o ciclo
+    });
+  });
+
+  const indice = new Map();
+  meusNegociosAbertos(ownerId).forEach(l => indice.set(String(l.id), l));
+
+  const fechados = [], faltaQualificacao = [], faltaPasso = [], faltaAmbos = [];
+  porDeal.forEach((cliente, dealId) => {
+    const lead = indice.get(dealId);
+    if (!lead) return;   // negócio já fechado/perdido: fora do numerador e do denominador
+    const nome = lead.name || cliente || dealId;
+    const semQual = (typeof qualificacaoFaltante === 'function' ? qualificacaoFaltante(lead) : []).length > 0;
+    const semPasso = !(typeof leadTemProximoPasso === 'function' ? leadTemProximoPasso(lead) : false);
+    if (semQual && semPasso) faltaAmbos.push(nome);
+    else if (semQual) faltaQualificacao.push(nome);
+    else if (semPasso) faltaPasso.push(nome);
+    else fechados.push(nome);
+  });
+
+  const avaliados = fechados.length + faltaQualificacao.length + faltaPasso.length + faltaAmbos.length;
+  return {
+    dias,
+    avaliados,
+    fechados,
+    faltaQualificacao,
+    faltaPasso,
+    faltaAmbos,
+    semDeal,
+    pct: avaliados > 0 ? Math.round(fechados.length / avaliados * 100) : null
+  };
+}
+
 /* Atividades comprovadas de um dia: visitas e follow-ups da agenda que foram
    efetivamente fechados. "Agendado" nunca entra.
 
@@ -20960,6 +21047,12 @@ function buildBriefingExecutivoHTML(r) {
   const ontem = atividadesComprovadasNoDia(r.ownerId, ontemISO);
   const rowOntem = getDaily(r.ownerId, ontemISO) || {};
   const seqExec = sequenciaDeExecucao(r.ownerId, dailyRefDate);
+  /* CICLO FECHADO (28/08/26) — o par de qualidade da sequência.
+     `seqExec` conta dias na rua; sozinho ele deixa passar o caso que os dados
+     mostraram ser a regra: visita acontece, ciclo não fecha (51 em Visita, 49 sem
+     qualificação, 123 de 132 sem próximo passo). Os dois juntos dizem "saí à rua E
+     terminei dentro do CRM", que é a definição de constância que produz venda. */
+  const ciclo = cicloFechadoDaSemana(r.ownerId, dailyRefDate);
   const ramp = typeof rampDoOwner === 'function' ? rampDoOwner(r.ownerId) : { label: '', alvo: null, definido: false };
 
   // 1 · O QUE ACONTECEU — só fato comprovado. Cada número diz de onde veio.
@@ -21106,11 +21199,32 @@ function buildBriefingExecutivoHTML(r) {
                 : `<div class="briefing-vazio">Fase de rampagem não definida no seu cadastro — sem ela, o Cockpit não tem alvo justo para comparar. Peça ao gestor para definir.</div>`}
         </div>
 
+        <!-- VAZAMENTO DO CICLO (28/08/26). Aparece SÓ quando há visita avaliada e
+             alguma não fechou. Dizer "1 de 7" é cobrança; dizer QUAL gesto faltou é
+             ofício — e os dois gestos que faltam aqui são os únicos que o executivo
+             controla sozinho, sem depender do cliente responder. -->
+        ${(ciclo.avaliados > 0 && ciclo.fechados.length < ciclo.avaliados) ? `
+        <div style="margin-top:2px;background:var(--amber-soft);border-left:3px solid var(--amber);border-radius:0 11px 11px 0;padding:10px 13px;font-size:11.5px;color:var(--amber-ink);line-height:1.55;">
+          <b>Ciclo aberto em ${ciclo.avaliados - ciclo.fechados.length} de ${ciclo.avaliados} visitas desta semana.</b>
+          ${(ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) > 0
+            ? ` Sem sistema e dor registrados: ${esc((ciclo.faltaAmbos.concat(ciclo.faltaQualificacao)).slice(0, 3).join(', '))}${(ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) > 3 ? ' e mais ' + ((ciclo.faltaAmbos.length + ciclo.faltaQualificacao.length) - 3) : ''}.`
+            : ''}
+          ${(ciclo.faltaAmbos.length + ciclo.faltaPasso.length) > 0
+            ? ` Sem próximo passo datado: ${esc((ciclo.faltaAmbos.concat(ciclo.faltaPasso)).slice(0, 3).join(', '))}${(ciclo.faltaAmbos.length + ciclo.faltaPasso.length) > 3 ? ' e mais ' + ((ciclo.faltaAmbos.length + ciclo.faltaPasso.length) - 3) : ''}.`
+            : ''}
+          ${ciclo.semDeal > 0 ? ` <span style="opacity:.75;">(${ciclo.semDeal} visita(s) sem negócio associado ficaram fora da conta.)</span>` : ''}
+        </div>` : ''}
+
       </div>
 
       <div class="daily-promise-foot">
         <span><b>${pontosDoDia(getDaily(r.ownerId, dailyRefDate) || {})}</b> pontos hoje</span>
         <span><b>🔥 ${seqExec}d</b> na rua</span>
+        <!-- Sem visita comprovada na semana o item SAI, em vez de virar "— ciclo
+             fechado": travessão ao lado de rótulo não informa nada, e 0% mentiria
+             (diria que ele falhou no ciclo, quando ele não teve visita avaliada).
+             Mesma regra que já vale pro prazo da fila e pros indicadores sem amostra. -->
+        ${ciclo.pct == null ? '' : `<span title="Visitas da semana que terminaram qualificadas e com próximo passo datado. Evidência do HubSpot, nada marcado à mão."><b>${ciclo.fechados.length}/${ciclo.avaliados}</b> ciclo fechado</span>`}
         <span><b>${feitas}/${conquistas.length}</b> conquistas</span>
         <button type="button" class="push" data-briefing-ir="hoje" style="background:none;border:none;color:var(--red);font:800 11px 'Manrope',sans-serif;cursor:pointer;padding:0;">O que eu faço agora →</button>
       </div>
