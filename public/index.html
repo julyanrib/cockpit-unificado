@@ -12291,7 +12291,24 @@ function prosp2AbrirDrawer(id, universo) {
   const av = document.getElementById('prosp2DwAvatar');
   av.textContent = prosp2Iniciais(l.nome); av.style.setProperty('--sc', F.cor);
   set('prosp2DwNome', l.nome); set('prosp2DwCat', `${l.categoria || 'Restaurante'} · ${l.bairro || l.cidade || ''}`);
-  set('prosp2DwEnd', l.endereco || 'não informado'); set('prosp2DwDist', `${prosp2Fmt1(l._distKm)} km`);
+  /* O ENDEREÇO VIRA ROTA (28/08/26). A ficha mostrava endereço e distância em km e
+     não dava como chegar — o executivo lia o endereço e digitava no Maps do celular.
+     Desde o BLOCO 45 esta tela não tem mapa próprio, então o Maps do telefone dele é
+     o caminho certo, não um substituto pobre.
+
+     Prefere coordenada quando existe (leva ao ponto exato, sem depender de o Maps
+     acertar o texto) e cai no endereço escrito quando não existe. Sem os dois, nada
+     de link. */
+  const endEl = document.getElementById('prosp2DwEnd');
+  if (endEl) {
+    const alvoMaps = (l.lat != null && l.lng != null)
+      ? `${l.lat},${l.lng}`
+      : [l.endereco, l.bairro, l.cidade].filter(Boolean).join(', ');
+    endEl.innerHTML = alvoMaps
+      ? `${esc(l.endereco || l.bairro || l.cidade || 'endereço não informado')} <a href="https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(alvoMaps)}" target="_blank" rel="noopener" title="Abrir no Google Maps" style="margin-left:7px;color:var(--blue);font-weight:700;text-decoration:none;white-space:nowrap;">Maps ↗</a>`
+      : 'não informado';
+  }
+  set('prosp2DwDist', `${prosp2Fmt1(l._distKm)} km`);
   set('prosp2DwFonte', F.nome); set('prosp2DwAval', l.nota ? `${prosp2Fmt1(l.nota)} ★ · ${Number(l.avaliacoes || 0).toLocaleString('pt-BR')} avaliações` : 'sem avaliações ainda');
   set('prosp2DwIdade', l._dias != null ? `${l._dias} dias (CNPJ)` : '—'); set('prosp2DwCat2', l.categoria || 'Restaurante');
   // CORREÇÃO (16/08/26, Julyan: "pq ainda nao puxa o telefone da casa dos dados") — a
@@ -12305,7 +12322,19 @@ function prosp2AbrirDrawer(id, universo) {
   if (socioEl) set('prosp2DwSocio', l.socio || '—');
   if (telWrap) {
     if (l.telefone) {
-      telWrap.innerHTML = `<a href="tel:${String(l.telefone).replace(/[^+0-9]/g, '')}" style="color:var(--blue);font-weight:700;text-decoration:none;">📞 ${esc(l.telefone)}</a>`;
+      /* WHATSAPP AO LADO DO TELEFONE (28/08/26). Medido abrindo as cinco primeiras
+         fichas do deck em produção: três tinham link de ligar, ZERO tinham WhatsApp.
+         Para conta fria, achada na rua ou na base, a mensagem costuma ser o primeiro
+         toque — menos invasiva que a ligação e a que o dono do restaurante responde
+         entre um almoço e outro. O número é o mesmo; faltava o canal.
+
+         Usa telefoneDaAcao, a mesma função da lista de ações e do popup do
+         compromisso, que aceita celular do negócio ou telefone da conta e devolve
+         null sem dez dígitos. Sem número válido, só o tel: continua (o link de
+         ligar aceita formato solto; o wa.me não). */
+      const telE164 = (typeof telefoneDaAcao === 'function') ? telefoneDaAcao(l, l.nome) : null;
+      telWrap.innerHTML = `<a href="tel:${String(l.telefone).replace(/[^+0-9]/g, '')}" style="color:var(--blue);font-weight:700;text-decoration:none;">📞 ${esc(l.telefone)}</a>`
+        + (telE164 ? `<a href="https://wa.me/${telE164}" target="_blank" rel="noopener" title="Abrir WhatsApp de ${esc(l.nome)}" style="margin-left:9px;color:#0f7a68;font-weight:700;text-decoration:none;">WhatsApp ↗</a>` : '');
     } else if (l.cnpj) {
       telWrap.innerHTML = `<button type="button" id="prosp2DwBuscarTel" class="prosp2-ver" style="padding:4px 10px;font-size:10.5px;" data-cnpj="${esc(String(l.cnpj))}">📞 buscar telefone e sócio</button>`;
       const btnTel = document.getElementById('prosp2DwBuscarTel');
