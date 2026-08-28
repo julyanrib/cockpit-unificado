@@ -227,7 +227,12 @@ module.exports = async function handler(req, res) {
     if (cnpjLimpo.length !== 14) return res.status(400).json({ erro: 'CNPJ deve ter 14 dígitos.' });
     const chaveContato = 'contato|v' + VERSAO_FILTROS + '|' + cnpjLimpo;
 
-    const doCacheContato = await lerCache(supaUrl, serviceKey, chaveContato, 24 * 90);
+    /* `semCache: true` pula a leitura do cache — só para verificar um conserto de parse
+       sem esperar 90 dias nem invalidar o cache de todas as praças subindo
+       VERSAO_FILTROS. Continua GRAVANDO no cache depois, então o crédito gasto na
+       verificação não se perde. */
+    const pularCache = !!(req.body && req.body.semCache === true);
+    const doCacheContato = pularCache ? null : await lerCache(supaUrl, serviceKey, chaveContato, 24 * 90);
     if (doCacheContato) {
       return res.status(200).json({ ok: true, origem: 'cache', contato: doCacheContato.itens[0] || null });
     }
@@ -243,8 +248,20 @@ module.exports = async function handler(req, res) {
           erro: (j && (j.message || j.erro)) || 'Casa dos Dados recusou a consulta de CNPJ.'
         });
       }
-      // A v4 aninha o registro em .cnpj em algumas versões; aceita os dois.
-      const d = j.cnpj || j.data || j;
+      /* BUG RAIZ, achado em 28/08/26 com o diagnóstico ao vivo.
+         Isto era: `const d = j.cnpj || j.data || j;` — pensado para "algumas versões
+         aninham o registro em .cnpj". Só que nesta versão `j.cnpj` é a STRING do próprio
+         CNPJ ("67734243000124"), não um objeto. Então `d` virava a string, e
+         `Object.keys(d)` devolvia ["0","1",...,"13"] — os índices dos caracteres.
+
+         Resultado: TODA busca de campo falhava, sempre. Não era nome de campo errado,
+         como o comentário antigo supunha e como eu também supus — era o desembrulho
+         pegando um valor escalar. Por isso `socio` estava em 0 de 869: a extração nunca
+         teve o registro na mão.
+
+         Agora só desembrulha o que for objeto. */
+      const aninhado = c => (c && typeof c === 'object' && !Array.isArray(c)) ? c : null;
+      const d = aninhado(j.cnpj) || aninhado(j.data) || aninhado(j.empresa) || j;
 
       /* EXTRAÇÃO POR FORMA, não por nome de campo (28/08/26).
          O que havia aqui era uma lista de nomes escolhidos por semelhança com outras

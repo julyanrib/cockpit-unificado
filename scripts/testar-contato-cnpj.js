@@ -104,6 +104,56 @@ igual(rF.socio, 'ANA', 'F · sócio com chave "nome"');
 const G = { inscricao_estadual: '5133927746', qsa: [] };
 igual(extrairContato(G, '1').telefone, null, 'G · não varre valores fora de chave de telefone');
 
+console.log('\n== A FORMA REAL da Casa dos Dados v4 (observada em 28/08/26) ==\n');
+
+/* Estas chaves foram obtidas de uma chamada real, com o diagnóstico da rota ligado —
+   não são palpite. É o formato que importa acertar, e o que o código errava.
+
+   O bug raiz estava fora daqui: a rota fazia `d = j.cnpj || j.data || j` e nesta versão
+   `j.cnpj` é a STRING do CNPJ, não um objeto aninhado. `d` virava a string e
+   Object.keys(d) devolvia ["0".."13"] — os índices dos caracteres. Nenhuma extração
+   tinha chance. Os dois testes abaixo cobrem os dois lados: a forma certa funciona, e a
+   string no lugar do objeto não produz lixo. */
+const REAL = {
+  cnpj: '67734243000124',
+  cnpj_raiz: '67734243',
+  razao_social: 'SUSHI SCHAEBERLE LTDA',
+  nome_fantasia: 'SUSHI SCHAEBERLE',
+  situacao_cadastral: 'ATIVA',
+  endereco: {
+    tipo_logradouro: 'RUA', logradouro: 'DAS PALMEIRAS', numero: '250',
+    bairro: 'VILA MARIANA', municipio: 'SAO PAULO', uf: 'SP', cep: '04101000'
+  },
+  data_abertura: '2026-05-13',
+  capital_social: '20000',
+  quadro_societario: [
+    { nome: 'AKIRA SCHAEBERLE', qualificacao: '49-Sócio-Administrador' },
+    { nome: 'MARINA SCHAEBERLE', qualificacao: '22-Sócio' }
+  ],
+  atividade_principal: { codigo: '5611203', descricao: 'Lanchonetes' },
+  contato_telefonico: '(11) 3456-7890',
+  contato_email: 'contato@sushischaeberle.com.br',
+  mei: false, simples: true, versao: 'v4'
+};
+
+const rReal = extrairContato(REAL, '67734243000124');
+igual(rReal.telefone, '(11) 3456-7890', 'REAL · pega contato_telefonico (a chave verdadeira)');
+igual(rReal.email, 'contato@sushischaeberle.com.br', 'REAL · pega contato_email');
+igual(rReal.socio, 'AKIRA SCHAEBERLE', 'REAL · primeiro do quadro_societario');
+igual(rReal.endereco, 'RUA DAS PALMEIRAS, 250, VILA MARIANA, SAO PAULO, SP', 'REAL · endereço do objeto aninhado');
+igual(rReal.telefone2, null, 'REAL · só um telefone nesta resposta');
+
+// O bug raiz, ao contrário: se alguém voltar a passar a STRING no lugar do registro,
+// a extração tem que devolver nulos — nunca fabricar valor a partir dos caracteres.
+const rString = extrairContato('67734243000124', '67734243000124');
+igual(rString.telefone, null, 'BUG RAIZ · string no lugar do objeto não produz telefone');
+igual(rString.socio, null, 'BUG RAIZ · nem sócio');
+igual(rString.endereco, null, 'BUG RAIZ · nem endereço');
+
+// E a variação legítima: registro REALMENTE aninhado sob .cnpj (objeto, não string).
+const rAninhado = extrairContato({ contato_telefonico: '5133927746', quadro_societario: [{ nome: 'ANA' }] }, '1');
+igual(rAninhado.telefone, '5133927746', 'aninhamento legítimo continua funcionando');
+
 console.log('');
 if (falhou) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} checagens ok.`);
