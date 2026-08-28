@@ -7253,7 +7253,36 @@ const CAMPOS_POR_ETAPA = {
   '1395880469': [
     { prop: 'origem_do_lead', label: 'Origem do Lead', tipo: 'selecao', opcoes: OP_ORIGEM_LEAD, obrigatorio: true }
   ],
-  '1396005401': [],
+  // CORREÇÃO ESTRUTURAL (28/08/26) — O GATE ESTAVA NA ETAPA ERRADA.
+  //
+  // Medido nos 132 negócios da carteira real:
+  //
+  //   etapa                 n    c/ sistema   c/ dor
+  //   Visita               51        0          2      <- não exigia nada
+  //   Conversa c/ Decisor  21        8         21      <- exigia gargalo_operacional
+  //
+  // `gargalo_operacional` está 100% preenchido EXATAMENTE onde o formulário exige, e
+  // em 4% na Visita, onde não exigia nada. O gate funciona; estava só instalado na
+  // etapa errada. E a Visita é o maior bolsão do funil — 51 de 132 (39%), com UMA
+  // tarefa aberta no total. É onde os negócios morrem.
+  //
+  // Por que exigir aqui e não no Decisor: "que sistema ele usa hoje" e "qual a dor"
+  // são aprendidos DENTRO da visita. Pedir no Decisor obriga o executivo a lembrar de
+  // uma visita de dias atrás — então ele não preenche, e sem dor registrada não existe
+  // motivo pra voltar. O negócio para em Visita. Foi assim que se chegou a 51.
+  //
+  // Não trava quem já está lá: o gate roda só na transição de ENTRADA. E continua
+  // exigido no Decisor de propósito — `valorAtualDoCampo` pré-preenche, então para
+  // quem passou pela Visita o campo chega pronto e custa um clique. Rede de segurança
+  // de graça.
+  //
+  // Os dois campos são também a evidência de que a visita aconteceu: quem esteve no
+  // salão viu o PDV no balcão e ouviu a dor. Quem não esteve não tem o que preencher —
+  // e isso é a regra do produto ("uma ação só conta com evidência"), não efeito colateral.
+  '1396005401': [
+    { prop: 'nome_do_sistema', label: 'Sistema que ele usa hoje', tipo: 'texto', obrigatorio: true },
+    { prop: 'gargalo_operacional', label: 'Dor que ele te contou', tipo: 'selecao', opcoes: OP_GARGALO, obrigatorio: true }
+  ],
   '1395880470': [
     { prop: 'gargalo_operacional', label: 'Gargalo Operacional', tipo: 'selecao', opcoes: OP_GARGALO, obrigatorio: true },
     { prop: 'nome_do_sistema', label: 'Nome do Sistema', tipo: 'texto', obrigatorio: true }
@@ -9783,26 +9812,25 @@ renderAderenciaDailyHero();
 // para TASK, só a função agendaDoHubspot() muda.
 
 
-// ---------- RASCUNHO EMBUTIDO (remover quando o build.js preencher DATA.agenda) ----------
-// Export do app de 04/08/2026, itens de 04/08 em diante. Usado SÓ quando o build
-// ainda não manda o campo agenda — no dia que mandar, isto é ignorado sozinho.
-const AGENDA_RASCUNHO = { rotulo: 'export de 04/08', itens: [
-  {tipo:'reuniao',   quando:'2026-08-04T13:20:00+00:00', empresa:'Caravelas café', contato:'Leila', vendedor_id_hubspot:'91246573', cidade:'Salvador', endereco:'Rua Marquês de Caravelas', etapa:'Conversa com decisor', temperatura:'Morno', duracao_minutos:30, meeting_id:'r01', url_hubspot:'https://app.hubspot.com/contacts/24373118/record/0-3/63029442144'},
-  {tipo:'follow_up', quando:'2026-08-04T14:00:00+00:00', empresa:'Tiny Café', contato:'Tiny Café', vendedor_id_hubspot:null, cidade:'Porto Alegre', bairro:'Moinhos de Vento', endereco:'Rua Vinte e Quatro de Outubro, 697', duracao_minutos:60, meeting_id:'r02'},
-  {tipo:'follow_up', quando:'2026-08-04T18:40:00+00:00', empresa:'Herson Sá Barreto Bomfim', contato:'Herson Sá Barreto Bomfim', vendedor_id_hubspot:null, cidade:'Salvador', bairro:'Pau Miúdo', endereco:'Rua Marquês de Maricar, 39', duracao_minutos:30, meeting_id:'r03'},
-  {tipo:'reuniao',   quando:'2026-08-04T20:30:00+00:00', empresa:'Point', contato:'Ivan', vendedor_id_hubspot:'91246642', cidade:'Salvador', bairro:'Pituba', endereco:'Alameda Florença, 77', etapa:'Visita', temperatura:'Frio', duracao_minutos:30, meeting_id:'r04'},
-  {tipo:'follow_up', quando:'2026-08-05T13:00:00+00:00', empresa:'Buteco birra', contato:'Willian', vendedor_id_hubspot:'87569072', cidade:'Rio de Janeiro', endereco:'Rua Uruguai', duracao_minutos:30, meeting_id:'r05', url_hubspot:'https://app.hubspot.com/contacts/24373118/record/0-3/63202858852'},
-  {tipo:'follow_up', quando:'2026-08-05T20:00:00+00:00', empresa:'Pizzaria Itália 90', contato:'Ronaldo', vendedor_id_hubspot:'86100506', cidade:'Rio de Janeiro', endereco:'Rua Dias da Cruz', etapa:'Visita', temperatura:'Frio', duracao_minutos:30, meeting_id:'r06', url_hubspot:'https://app.hubspot.com/contacts/24373118/record/0-3/63313665345'},
-  {tipo:'follow_up', quando:'2026-08-05T21:00:00+00:00', empresa:'Jangadão', contato:'Alberto', vendedor_id_hubspot:'86100506', cidade:'Rio de Janeiro', bairro:'Lins de Vasconcelos', endereco:'Rua Monsenhor Jerônimo, 811', etapa:'Visita', temperatura:'Frio', duracao_minutos:30, meeting_id:'r07', url_hubspot:'https://app.hubspot.com/contacts/24373118/record/0-3/63296975231'},
-  {tipo:'reuniao',   quando:'2026-08-06T22:00:00+00:00', empresa:'Las Comadres', contato:'Susana', vendedor_id_hubspot:'91477292', cidade:'Canoas', endereco:'Rua Mathias Velho, 414', etapa:'Conversa com decisor', temperatura:'Morno', duracao_minutos:60, meeting_id:'r08', url_hubspot:'https://app.hubspot.com/contacts/24373118/record/0-3/62415160421'},
-  {tipo:'follow_up', quando:'2026-08-10T14:00:00+00:00', empresa:'Cabana da merk', contato:'Flavia', vendedor_id_hubspot:'86100506', cidade:'Rio de Janeiro', endereco:'Rua Carlos Palut', duracao_minutos:30, observacoes:'Vale acompanhar no próximo mês', meeting_id:'r09'},
-  {tipo:'reuniao',   quando:'2026-08-10T18:00:00+00:00', empresa:'Na Brasa Prime', contato:'Genilson', vendedor_id_hubspot:'91246642', cidade:'Salvador', endereco:'Rua das Gaivotas', etapa:'Perdido', duracao_minutos:30, meeting_id:'r10'},
-  {tipo:'follow_up', quando:'2026-08-10T18:00:00+00:00', empresa:'Spia Bar e cozinha - Moinhos', contato:'Eduarda', vendedor_id_hubspot:'91477292', cidade:'Porto Alegre', endereco:'Rua Hilário Ribeiro, 299', etapa:'Perdido', duracao_minutos:30, meeting_id:'r11'},
-  {tipo:'follow_up', quando:'2026-08-10T19:30:00+00:00', empresa:'Buteco do Preto', contato:'Alexandre', vendedor_id_hubspot:'91477292', cidade:'Canoas', endereco:'Rua José Maia Filho, 1086', etapa:'Perdido', duracao_minutos:60, meeting_id:'r12'},
-  {tipo:'reuniao',   quando:'2026-09-07T13:00:00+00:00', empresa:'Trevos', contato:'Wilson', vendedor_id_hubspot:'89842507', cidade:'São Paulo', endereco:'Rua Antônio de Oliveira, 633', etapa:'Prospecção', temperatura:'Frio', duracao_minutos:30, meeting_id:'r13'},
-  {tipo:'reuniao',   quando:'2026-11-16T19:00:00+00:00', empresa:'La Taperia', contato:'Jose', vendedor_id_hubspot:'91246642', cidade:'Salvador', endereco:'Rua da Paciência, 251', etapa:'Perdido', duracao_minutos:45, meeting_id:'r14'}
-] };
-// ---------- FIM DO RASCUNHO ----------
+// ---------- RASCUNHO EMBUTIDO: REMOVIDO (28/08/26) ----------
+// Aqui vivia AGENDA_RASCUNHO, um export do app de 04/08/2026 com 15 compromissos
+// HARDCODED no template: nome do restaurante, primeiro nome do contato, endereço,
+// cidade, vendedor_id_hubspot e a URL do registro no HubSpot. Como o template é a
+// fonte do build, isso era publicado em public/index.html — que é o arquivo servido
+// ANTES do login, sem sessão nenhuma. Ou seja: dado de CRM exposto no HTML público,
+// contra o limite explícito do projeto ("não expor CRM no HTML público").
+//
+// Já estava em produção antes desta revisão; não foi introduzido aqui. Foi achado
+// conferindo o public/index.html gerado em busca de nome de cliente.
+//
+// Podia sair porque o motivo dele acabou: o próprio comentário original dizia
+// "remover quando o build.js preencher DATA.agenda", e o build JÁ preenche —
+// medido, 88 itens só na carteira da Kelly. Os quatro pontos que liam a constante
+// eram todos guardados (`typeof AGENDA_RASCUNHO !== 'undefined'` nos três primeiros,
+// e o quarto dentro de `if (usandoRascunho)`), então a ausência dela faz
+// `usandoRascunho` ser sempre false e ninguém quebra. A tarja de "rascunho" também
+// deixa de existir na prática, o que é correto: não há mais rascunho.
+// ------------------------------------------------------------
 
 const AGENDA_EXCLUIR = new Set([
   '91246642', // Gleyson Gabrieli
@@ -15127,6 +15155,36 @@ function fichaLeadFunilBodyHTML(l) {
              tarefa no HubSpot ("Visita — falar com o sócio"), então a Agenda e a Rota,
              que já leem as tarefas, passam a saber QUE TIPO de compromisso é sem
              nenhum campo novo no CRM. Follow-up começa selecionado por padrão. -->
+        <!-- QUALIFICAÇÃO (28/08/26) — aparece SÓ quando falta, e SÓ em etapa pós-visita.
+             Deliberadamente aqui dentro, e não como card novo nem balde novo na fila:
+             os 49 negócios cegos NÃO têm tarefa futura (medido: 49 de 49), então todos
+             já caem em "visita sem próximo passo" e a lista achatada os deduplica pelo
+             balde de maior prioridade — um balde "visita cega" mostraria zero item.
+             Viajando junto do próximo passo, alcança os 49 sem nenhuma linha nova na
+             tela e sem pedir um segundo gesto ao executivo. -->
+        ${(() => {
+          const falta = qualificacaoFaltante(l);
+          if (falta.length === 0) return '';
+          const pedeSistema = falta.includes('nome_do_sistema');
+          const pedeDor = falta.includes('gargalo_operacional');
+          return `
+        <div class="ficha-qualif" style="border:1.5px solid var(--red);border-radius:12px;padding:12px 13px;margin-bottom:10px;background:var(--panel);">
+          <div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--red);margin-bottom:4px;">Qualificação — obrigatória</div>
+          <div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:9px;">
+            ${negocioCego(l)
+              ? `Este negócio está em <b>${esc(STAGE_LABELS[etapaDoLead(l)] || l.stage || 'aberto')}</b> e não tem sistema nem dor registrados. Sem isso o próximo passo é chute — e é exatamente por isso que negócio para nesta etapa.`
+              : `Falta ${pedeSistema ? 'o sistema que ele usa hoje' : 'a dor que ele te contou'} — o resto da qualificação já está no CRM.`}
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            ${pedeSistema ? `<input type="text" class="ficha-qualif-sistema" maxlength="120" placeholder="Sistema que ele usa hoje" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;">` : ''}
+            ${pedeDor ? `<select class="ficha-qualif-gargalo" style="flex:1;min-width:170px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px 11px;font:inherit;font-size:12.5px;color:var(--ink);">
+              <option value="">Dor que ele te contou…</option>
+              ${OP_GARGALO.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join('')}
+            </select>` : ''}
+          </div>
+          <div style="font-size:10.5px;color:var(--muted2);margin-top:8px;line-height:1.5;">Grava no negócio no HubSpot junto com o próximo passo, num clique só.</div>
+        </div>`;
+        })()}
         <div class="ficha-passo-tipos" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
           ${['Follow-up', 'Visita', 'Reunião', 'Demo'].map(t => `<button type="button" class="ficha-passo-tipo" data-tipo="${t}" aria-pressed="${t === 'Follow-up'}" style="border:1px solid ${t === 'Follow-up' ? 'var(--ink)' : 'var(--line-btn)'};background:${t === 'Follow-up' ? 'var(--ink)' : 'var(--panel)'};color:${t === 'Follow-up' ? 'var(--panel)' : 'var(--muted)'};border-radius:999px;padding:5px 12px;font:700 11px 'Manrope',sans-serif;cursor:pointer;">${t}</button>`).join('')}
         </div>
@@ -15990,6 +16048,75 @@ function aplicarProximoPassoNoDataLocal(leadId, tarefa) {
   if (DATA.temperatura) { (DATA.temperatura.quentes || []).forEach(anexar); (DATA.temperatura.frios || []).forEach(anexar); }
 }
 
+/* QUALIFICAÇÃO FALTANTE (28/08/26) — fonte única.
+
+   Medido nos 132 negócios abertos: dos 51 em Visita, 49 não têm NEM o sistema que o
+   restaurante usa hoje NEM a dor. Em Conversa com Decisor a dor está em 21 de 21 —
+   porque CAMPOS_POR_ETAPA exigia lá e não exigia na Visita. O gate de campo funciona;
+   estava na etapa errada, e isso foi corrigido em CAMPOS_POR_ETAPA.
+
+   Só que o gate roda na transição de ENTRADA, então os 49 que já estão em Visita
+   nunca seriam perguntados — a não ser que fossem pro Decisor, que é justamente o
+   movimento que não acontece. Eles estão lá há no máximo 19 dias (mediana 3): o
+   executivo ainda lembra da visita, então dá pra recuperar.
+
+   ESCOPO: só etapas pós-visita. Prospecção e Conta Alvo ficam FORA de propósito —
+   ninguém esteve no salão ainda, e perguntar a dor de quem não foi visitado seria
+   pedir invenção. Reciclagem também fica fora (negócio estacionado).
+
+   Devolve a LISTA do que falta, não um booleano: em Decisor a dor está preenchida e
+   o sistema não, e a tela deve pedir só o que falta.
+*/
+const ETAPAS_POS_VISITA = ['1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
+
+/* Resolve a etapa mesmo quando o lead não carrega stageId.
+   MEDIDO na carteira real da Kelly: 32 dos negócios dela vêm de funilLeads SEM o
+   campo stageId — a etapa existe só como CHAVE do objeto. É o mesmo bug de 27/08 que
+   fazia todo negócio receber a régua de primeiro contato, e ele volta em qualquer
+   função nova que leia lead.stageId direto.
+   Sem isto, qualificacaoFaltante devolvia [] nesses 32 e a tela não pedia NADA, em
+   silêncio — que é justamente o modo de falha que esta correção existe pra acabar.
+   Resolver aqui dentro, e não confiar em quem chama, é o que torna a regra segura:
+   quem chama continua podendo passar o lead cru. */
+function etapaDoLead(lead) {
+  if (!lead) return null;
+  if (lead.stageId) return String(lead.stageId);
+  const alvo = String(lead.id);
+  const mapa = DATA.funilLeads || {};
+  for (const sid of Object.keys(mapa)) {
+    if ((mapa[sid] || []).some(l => String(l.id) === alvo)) return String(sid);
+  }
+  return null;
+}
+
+function qualificacaoFaltante(lead) {
+  if (!lead) return [];
+  if (!ETAPAS_POS_VISITA.includes(etapaDoLead(lead))) return [];
+  const falta = [];
+  if (!String(lead.nome_do_sistema || '').trim()) falta.push('nome_do_sistema');
+  if (!String(lead.gargalo_operacional || '').trim()) falta.push('gargalo_operacional');
+  return falta;
+}
+
+// Negócio "cego": visitado e sem nenhum dos dois. É o caso dos 49.
+function negocioCego(lead) {
+  return qualificacaoFaltante(lead).length === 2;
+}
+
+// Espelha no DATA em memória o que a rota acabou de gravar no HubSpot. Sem isto a
+// ficha continuaria pedindo a qualificação depois de gravada, e a fila seguiria
+// marcando o negócio como cego até o próximo sync (08:56/13h/19h).
+function aplicarQualificacaoNoDataLocal(leadId, props) {
+  const alvo = String(leadId);
+  const aplicar = l => {
+    if (!l || String(l.id) !== alvo) return;
+    Object.assign(l, props || {});
+  };
+  Object.values(DATA.funilLeads || {}).forEach(lista => (lista || []).forEach(aplicar));
+  (DATA.reps || []).forEach(r => ['travados', 'criticos', 'quentes'].forEach(k => (r[k] || []).forEach(aplicar)));
+  if (DATA.temperatura) { (DATA.temperatura.quentes || []).forEach(aplicar); (DATA.temperatura.frios || []).forEach(aplicar); }
+}
+
 /* @nucleo3:fim */
 
 // Move o lead de etapa DENTRO do DATA em memória. Sem isso, o kanban voltava o card pra
@@ -16182,11 +16309,63 @@ function wireFichaLeadFunilEdicao(container, l) {
     const texto = textoCru;
     const data = campoData.value || '';
     if (!texto || !data) { statusEl.textContent = 'Preencha o texto e a data antes de salvar.'; statusEl.style.color = 'var(--red)'; return; }
+
+    /* QUALIFICAÇÃO no MESMO gesto (28/08/26). O bloco .ficha-qualif só existe quando
+       falta sistema/dor e o negócio está em etapa pós-visita. Quando existe, ele é
+       obrigatório: 49 dos 51 negócios em Visita estavam sem os dois, e é esse vazio
+       que faz o próximo passo ser chute. Um clique grava as duas coisas. */
+    const boxQualif = container.querySelector('.ficha-qualif');
+    let qualifPayload = null;
+    if (boxQualif) {
+      const inSistema = boxQualif.querySelector('.ficha-qualif-sistema');
+      const inDor = boxQualif.querySelector('.ficha-qualif-gargalo');
+      const vSistema = inSistema ? (inSistema.value || '').trim() : null;
+      const vDor = inDor ? (inDor.value || '').trim() : null;
+      if (inSistema && !vSistema) {
+        statusEl.textContent = 'Falta o sistema que ele usa hoje — é o que define a conversa.';
+        statusEl.style.color = 'var(--red)';
+        inSistema.focus();
+        return;
+      }
+      if (inDor && !vDor) {
+        statusEl.textContent = 'Falta a dor que ele te contou — sem ela não há motivo pra voltar.';
+        statusEl.style.color = 'var(--red)';
+        inDor.focus();
+        return;
+      }
+      qualifPayload = {};
+      if (vSistema) qualifPayload.nomeDoSistema = vSistema;
+      if (vDor) qualifPayload.gargalo = vDor;
+    }
     btnPasso.disabled = true;
     statusEl.style.color = 'var(--muted2)';
     statusEl.textContent = 'Salvando no HubSpot...';
     try {
       const token = await tokenDeSessaoGlobal();
+
+      // A qualificação vai PRIMEIRO e de propósito: se ela falhar, não quero uma tarefa
+      // datada em cima de um negócio que continua cego — era esse o estado que produziu
+      // os 49. Se ela passa e a tarefa falha, o executivo repete o passo com o bloco de
+      // qualificação já sumido (aplicado no DATA local), então não perde o que digitou.
+      if (qualifPayload) {
+        statusEl.textContent = 'Gravando a qualificação…';
+        const respQ = await comPrazoGlobal(async (signal) => fetch('/api/qualificar-negocio', {
+          method: 'POST', signal,
+          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+          body: JSON.stringify({ dealId, ...qualifPayload })
+        }), 8000, 'qualificar-negocio');
+        const dQ = await respQ.json().catch(() => ({}));
+        if (!respQ.ok || !dQ.ok) {
+          statusEl.textContent = (dQ && dQ.erro) || 'Não consegui gravar a qualificação.';
+          statusEl.style.color = 'var(--red)';
+          btnPasso.disabled = false;
+          return;
+        }
+        aplicarQualificacaoNoDataLocal(dealId, dQ.gravado || {});
+        if (boxQualif) boxQualif.remove();
+      }
+
+      statusEl.textContent = 'Salvando no HubSpot...';
       const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
