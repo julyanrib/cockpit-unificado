@@ -199,7 +199,37 @@ module.exports = async function handler(req, res) {
   } else {
     const auth = req.headers.authorization || '';
     const sessionToken = auth.replace(/^Bearer\s+/i, '');
-    if (!sessionToken) return res.status(401).json({ erro: 'Sem sessão e sem segredo de importação válido.' });
+    if (!sessionToken) {
+      /* DIAGNÓSTICO DE SEGREDO (28/08/26).
+         Contexto: o backfill semanal da Casa dos Dados ficou 12 dias sem importar nada.
+         Primeiro porque faltava IMPORT_SECRET no GitHub; depois, com o segredo
+         configurado nos DOIS lados e produção redeployada, o endpoint continuou
+         recusando — e "recusado" não diz se o servidor não tem a variável, se o valor
+         difere, ou se alguém colou um \n junto.
+
+         Este bloco responde essas três perguntas SEM revelar valor nenhum: presença,
+         tamanhos, e se bateria depois de um trim. Comparação de tamanho e de
+         igualdade-após-trim não permite reconstruir o segredo, e mata em uma tentativa
+         o erro mais comum de copiar e colar.
+
+         Só aparece quando o chamador MANDOU um segredo — ou seja, para quem já tem um
+         candidato. Requisição sem header nenhum recebe a resposta seca de antes. */
+      const diag = secretRecebido ? {
+        servidorTemSegredo: !!importSecret,
+        tamanhoNoServidor: importSecret ? String(importSecret).length : 0,
+        tamanhoRecebido: String(secretRecebido).length,
+        bateriaAposTrim: !!importSecret && String(secretRecebido).trim() === String(importSecret).trim(),
+        dica: !importSecret
+          ? 'A variável IMPORT_SECRET não existe NESTE deployment. Confira o ambiente (Production) e se houve redeploy depois de criá-la.'
+          : (String(secretRecebido).trim() === String(importSecret).trim()
+            ? 'Os valores batem depois de remover espaços/quebras de linha: um dos dois tem espaço em branco sobrando na ponta.'
+            : 'Os valores são diferentes de verdade (não é espaço em branco). Regrave os dois com o mesmo texto.')
+      } : undefined;
+      return res.status(401).json(Object.assign(
+        { erro: 'Sem sessão e sem segredo de importação válido.' },
+        diag ? { diagnosticoSegredo: diag } : {}
+      ));
+    }
     try {
       const check = await fetch(`${supaUrl}/auth/v1/user`, {
         headers: { Authorization: `Bearer ${sessionToken}`, apikey: supaAnon }
