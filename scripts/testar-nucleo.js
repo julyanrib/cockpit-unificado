@@ -507,6 +507,18 @@ teste('o gate de agenda respeita o alvo da fase de rampagem', () => {
   verdade(/não definida/.test(g2.detalhe), 'detalhe avisa que não há alvo');
 });
 
+teste('fase com alvo 0 não é confundida com "fase não definida"', () => {
+  // Regressão: entrante em Semanas 2–3 (alvo 0) com 1 compromisso lia "fase de
+  // rampagem não definida" — a fase dele ESTÁ definida, ela só não cobra rua ainda.
+  const ev = { id: 'z1', ownerId: OWNER, dealId: 'zz', tipo: 'rota', inicio: diasAtras(0.1),
+    cliente: 'C', desfecho: null, registro: false, obs: '', decisor: null };
+  const c = novoContexto(dados({ rampAlvo: 0, agenda: { eventos: [ev] } }), { ownerId: OWNER, role: 'rep' });
+  const g = c.gatesDoDia(c.DATA.reps[0]).gates.find(x => x.id === 'agenda');
+  verdade(g.ok, 'alvo 0: um compromisso basta');
+  falso(/não definida/.test(g.detalhe), 'NÃO deve dizer "não definida", veio: ' + g.detalhe);
+  verdade(/não cobra volume/.test(g.detalhe), 'deve explicar que a fase não cobra volume, veio: ' + g.detalhe);
+});
+
 console.log('\n== Desfecho estruturado: escrever E ler (o ciclo fechado) ==');
 
 // Reproduz exatamente o bloco que desfechoNotaEstruturada() grava.

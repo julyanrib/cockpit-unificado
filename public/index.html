@@ -5558,7 +5558,14 @@ function gatesDoDia(r) {
       // Volume de agenda comparado com o ALVO DA FASE de rampagem, não com um número
       // fixo — cobrar 6 visitas de quem está na semana 2 é cobrar o impossível, e é o
       // tipo de meta que faz a pessoa preencher o Cockpit em vez de trabalhar.
-      // Sem fase definida no cadastro, o gate se contenta com ≥1 e diz que não tem alvo.
+      // TRÊS casos, não dois (corrigido 28/08/26, ao definir as fases de verdade):
+      //   alvo > 0  → cobra o alvo da fase;
+      //   alvo = 0  → fase DEFINIDA que ainda não cobra volume (Preparação, Semanas 2–3,
+      //               Semana 4) ou quem está fora do campo. Basta ter algo marcado;
+      //   sem fase  → basta ≥1 e o texto avisa que falta o cadastro.
+      // A versão anterior tratava "alvo 0" e "sem fase" como a mesma coisa, então um
+      // entrante em Semanas 2–3 com 1 compromisso lia "fase de rampagem não definida" —
+      // a fase dele estava definida, ela só não cobra rua ainda.
       rotulo: alvoDia != null ? `Agenda no ritmo da sua fase (${alvoDia}/dia)` : 'Agenda com visitas ou reuniões',
       ok: alvoDia != null ? deHoje.length >= alvoDia : deHoje.length > 0,
       detalhe: deHoje.length === 0
@@ -5567,7 +5574,9 @@ function gatesDoDia(r) {
           ? (deHoje.length >= alvoDia
               ? `${deHoje.length} compromissos de rua hoje — no alvo de ${esc(ramp.label)}`
               : `${deHoje.length} de ${alvoDia} compromissos do alvo de ${esc(ramp.label)}`)
-          : `${deHoje.length} compromisso${deHoje.length === 1 ? '' : 's'} de rua hoje · fase de rampagem não definida, sem alvo para comparar`,
+          : (ramp && ramp.definido)
+            ? `${deHoje.length} compromisso${deHoje.length === 1 ? '' : 's'} de rua hoje · ${esc(ramp.label)} ainda não cobra volume de rua`
+            : `${deHoje.length} compromisso${deHoje.length === 1 ? '' : 's'} de rua hoje · fase de rampagem não definida, sem alvo para comparar`,
       cta: 'Completar agenda',
       acao: () => irParaPlanejamento('dia')
     },
@@ -19926,6 +19935,15 @@ function rampDoOwner(ownerId) {
     semana_6_7: { label: 'Semanas 6–7', alvo: 5 },
     pleno: { label: 'Pleno', alvo: 6 }
   };
+  // TRANSIÇÃO PRO INSIDE (28/08/26) — quem está saindo do campo não tem fase de
+  // rampagem de rua, e isso não é uma lacuna de cadastro: é a situação real da pessoa.
+  // Antes ela caía em "Fase não definida", o que fazia duas coisas erradas: o briefing
+  // dela pedia pra "falar com o gestor para definir a fase" (não há o que definir) e o
+  // painel do gestor a listava eternamente como cadastro incompleto.
+  // `alvo: null` continua igual — o gate de agenda não cobra volume de rua dela.
+  if (u.fieldStatus === 'transicao_inside') {
+    return { label: 'Transição para Inside', alvo: null, chave: 'transicao_inside', definido: true, foraDoCampo: true };
+  }
   const chave = u.rampStage || (u.aComecar ? 'preparacao' : null);
   return chave && fases[chave]
     ? { ...fases[chave], chave, definido: true }
@@ -20642,7 +20660,15 @@ function buildBriefingExecutivoHTML(r) {
                  <span>Ontem: <b>${ontem.visitas.length}</b> comprovada${ontem.visitas.length === 1 ? '' : 's'}.</span>
                  <span class="${ontem.visitas.length >= ramp.alvo ? 'is-green' : 'is-amber'}">${ontem.visitas.length >= ramp.alvo ? 'no ritmo da fase' : `faltaram ${ramp.alvo - ontem.visitas.length} para o alvo da fase`}</span>
                </div>`
-            : `<div class="briefing-vazio">Fase de rampagem não definida no seu cadastro — sem ela, o Cockpit não tem alvo justo para comparar. Peça ao gestor para definir.</div>`}
+            : ramp.foraDoCampo
+              ? `<div class="briefing-vazio">Você está em <b>transição para o Inside</b>, então o Cockpit não cobra alvo de visitas de rua de você. O que continua valendo é a carteira: quente sem próxima ação e SLA seguem aparecendo nas suas ações de agora.</div>`
+              : ramp.definido && ramp.alvo === 0
+                ? `<div class="briefing-ramp">
+                     <span><b>${esc(ramp.label)}</b>: nesta fase o alvo ainda não é volume de rua.</span>
+                     <span>Ontem: <b>${ontem.visitas.length}</b> comprovada${ontem.visitas.length === 1 ? '' : 's'}.</span>
+                     <span class="is-green">o foco é aprender o processo, não bater número</span>
+                   </div>`
+                : `<div class="briefing-vazio">Fase de rampagem não definida no seu cadastro — sem ela, o Cockpit não tem alvo justo para comparar. Peça ao gestor para definir.</div>`}
         </div>
 
       </div>
