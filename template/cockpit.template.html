@@ -9004,8 +9004,21 @@ function kpiDeltaHtml(key) {
 // DUAS vezes: no carregamento (com o DATA-casca vazio, atrás do login) e de novo na
 // hidratação pós-login (reidratarPosLogin), quando os dados reais chegam do api/dados.
 function preencherCabecalhoRodape() {
-  const emPreparacao = (DATA.usuarios || []).filter(u => u.role === 'rep' && u.aComecar).length;
-  const ativos = Math.max(0, (DATA.reps || []).length - emPreparacao);
+  /* CORREÇÃO (28/08/26) — a contagem misturava duas coleções diferentes.
+     Era: emPreparacao vindo de DATA.usuarios (13 registros: 11 reps + 2 gestores) e
+     ativos = DATA.reps.length - emPreparacao (7 - 5). Subtrair uma contagem de um
+     conjunto da contagem de OUTRO conjunto não produz número nenhum: a tela dizia à
+     Kelly "Time ativo: 2 executivos" quando o canal tem 6 com funil de verdade.
+     Agora as duas contagens saem da MESMA lista (os reps cadastrados), que é a única
+     forma de a soma fechar. Conferido: 6 ativos + 5 em preparação = 11 reps, e 6 é
+     exatamente quantos têm negócio aberto.
+     DATA.reps continua servindo de reserva pro shell protegido, onde DATA.usuarios
+     ainda não chegou — mas aí sem subtração cruzada. */
+  const repsCadastrados = (DATA.usuarios || []).filter(u => u.role === 'rep');
+  const emPreparacao = repsCadastrados.filter(u => u.aComecar).length;
+  const ativos = repsCadastrados.length
+    ? repsCadastrados.length - emPreparacao
+    : (DATA.reps || []).length;
   // ITEM 4 (10/08/26, Julyan): o robô roda 1x por dia, às 5h. Se ele falhar (token do
   // HubSpot expirado, API fora, push rejeitado), a tela continuava mostrando os números
   // de ontem com a mesma cara de sempre — e a Daily das 9h ia ao ar com dado velho sem
