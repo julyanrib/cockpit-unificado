@@ -1543,6 +1543,35 @@ teste('as tres acoes de agora nao dao duas vagas ao mesmo cliente', () => {
     'acento e caixa diferentes contam como o MESMO cliente: ' + nomes2.join(' / '));
 });
 
+teste('telefone da acao: E.164 quando existe, null quando nao da pra ligar', () => {
+  /* A tela do Marco em producao dizia "Ligar para Don Aguilar" e o unico botao era
+     "Abrir e datar". O telefone existia em 19 dos 20 negocios dele. Esta funcao e o que
+     leva o numero ate o botao — e o que garante que o botao NAO aparece sem numero,
+     porque prometer ligacao sem telefone e pior que nao oferecer. */
+  const comCel = lead({ id: 'T1', name: 'Don Aguilar', celular: '+55 21 2264-8484' });
+  const semCel = lead({ id: 'T2', name: 'Sem Numero', celular: null });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [comCel, semCel] } }), { ownerId: OWNER, role: 'rep' });
+  const f = c.telefoneDaAcao;
+
+  igual(f(comCel), '5521226484 84'.replace(/ /g, ''), 'formatado vira E.164 com 55');
+  igual(f({ celular: '2122648484' }), '5521226484 84'.replace(/ /g, ''), '10 digitos ganham o 55');
+  igual(f({ celular: '21998765432' }), '5521998765432', '11 digitos ganham o 55');
+  igual(f({ celular: '5521998765432' }), '5521998765432', 'ja com 55 nao duplica');
+  igual(f({ telefone: '+55 27 3335-1000' }), '5527333510 00'.replace(/ /g, ''), 'conta de prospeccao usa telefone');
+
+  igual(f(semCel), null, 'sem celular devolve null');
+  igual(f({ celular: '33334444' }), null, 'sem DDD (8 digitos) devolve null');
+  igual(f(null, null), null, 'lead nulo nao explode');
+  igual(f({}, null), null, 'objeto vazio devolve null');
+
+  // O caso do DESFECHO: nasce de um evento da agenda, sem o negocio em mao. Acha pelo
+  // NOME no funil, com a mesma normalizacao que o resto da tela usa.
+  igual(f(null, 'don aguilar'), '5521226484 84'.replace(/ /g, ''), 'acha por nome, caixa diferente');
+  igual(f(null, 'DON  AGUILAR'), '5521226484 84'.replace(/ /g, ''), 'espaco duplo e caixa alta tambem');
+  igual(f(null, 'Sem Numero'), null, 'acha o lead mas ele nao tem numero: null');
+  igual(f(null, 'Nao Existe'), null, 'nome que nao esta no funil: null');
+});
+
 console.log('');
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);
