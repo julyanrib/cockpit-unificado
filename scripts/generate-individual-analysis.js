@@ -187,7 +187,38 @@ async function main() {
   // relógio em Brasília, só que interpretados no fuso local do processo — truque
   // padrão pra extrair getDay()/getDate() corretos sem depender do fuso do sistema.
   const hojeBRT = new Date(hoje.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
-  const semanaAtualLabel = fmtRange(new Date(hoje.getTime() - 6 * 86400000), hoje);
+  /* SEMANA CIVIL, NÃO JANELA DESLIZANTE (28/08/26) — este era o defeito que desligava
+     o mecanismo mais importante deste script.
+
+     O rótulo era `hoje-6 … hoje`. Como a análise roda três vezes por dia útil, CADA
+     RODADA criava uma "semana" nova: 22/08–28/08, 21/08–27/08, 20/08–26/08… Medido no
+     banco: 28 rótulos distintos desde 24/07, quando cinco semanas de operação deveriam
+     ter produzido cinco. 217 linhas, 21,7 por executivo.
+
+     As consequências eram três, e todas contra o objetivo do script:
+
+       1. `buscarUltimaSemana` procura a última linha com rótulo DIFERENTE do atual.
+          Com rótulo novo todo dia, a "semana passada" era ONTEM. O prompt pedia
+          "se esse MESMO gargalo continuar essa semana, proponha ação mais firme" —
+          e recebia como referência o texto de ontem.
+       2. O prompt manda, com todas as letras: "dentro da mesma semana, mantenha os
+          compromissos atuais estáveis (repita-os)… Compromisso que muda todo dia vira
+          ruído e o executivo para de levar a sério." Não existia "mesma semana" para
+          se manter estável dentro.
+       3. O delete-e-regrava apagava só as linhas do rótulo do dia, então o comentário
+          do workflow ("é idempotente, rodar diariamente não duplica nada") era falso:
+          duplicava um conjunto novo por dia.
+
+     Agora o rótulo é segunda→domingo da semana corrente em Brasília. Ele não muda
+     dentro da semana, então o delete-e-regrava fica genuinamente idempotente, a
+     "semana passada" volta a ser a semana passada, e a instrução de estabilidade passa
+     a ter onde se apoiar. `numeroSemana`/`mesAno` (infoSemanaDoMes) já eram semanais —
+     é o rótulo que estava fora de compasso com eles. */
+  const diaBRT = hojeBRT.getDay();                       // 0 = domingo
+  const recuoAteSegunda = diaBRT === 0 ? 6 : diaBRT - 1;
+  const segundaDaSemana = new Date(hoje.getTime() - recuoAteSegunda * 86400000);
+  const domingoDaSemana = new Date(segundaDaSemana.getTime() + 6 * 86400000);
+  const semanaAtualLabel = fmtRange(segundaDaSemana, domingoDaSemana);
   // CORREÇÃO (16/08/26) — achado real em produção: a IA calculava sozinha qual dia da
   // semana bate com uma data, e errava (deu "sexta (16/08)" quando 16/08 era domingo).
   // Calculando aqui em JS (nunca erra) e entregando pronto no prompt, sem a IA ter que
