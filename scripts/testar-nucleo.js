@@ -782,6 +782,83 @@ teste('o núcleo não lê nada de colega: fila só olha o ownerId pedido', () =>
   igual(ids, ['meu'], 'só o próprio negócio');
 });
 
+console.log('\n== Sinal da conta-alvo (Prospecção: mostrar o que ela TEM) ==');
+
+teste('com avaliação, o sinal é a avaliação', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const s = c.prospeccaoSinalPrincipal({ avaliacoes: 7790 }, HOJE.getTime());
+  igual(s.tipo, 'avaliacoes', 'tipo');
+  igual(s.valor, (7790).toLocaleString('pt-BR'), 'formatado em pt-BR');
+  igual(s.rotulo, 'avaliações', 'rótulo');
+});
+
+teste('sem avaliação mas com data de abertura, o sinal é a idade', () => {
+  // O caso das 566 da Casa dos Dados: 65% da base. Antes exibiam "—".
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const tresMeses = new Date(HOJE.getTime() - 92 * DIA).toISOString();
+  const s = c.prospeccaoSinalPrincipal({ avaliacoes: null, data_abertura: tresMeses }, HOJE.getTime());
+  igual(s.tipo, 'abertura', 'tipo');
+  igual(s.valor, '3', 'três meses');
+  igual(s.rotulo, 'meses de aberta', 'plural certo');
+  verdade(s.recente, 'até 6 meses é recém-aberta');
+});
+
+teste('recém-aberta tem corte em 6 meses, e o plural de 1 mês é singular', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const umMes = new Date(HOJE.getTime() - 31 * DIA).toISOString();
+  const s1 = c.prospeccaoSinalPrincipal({ data_abertura: umMes }, HOJE.getTime());
+  igual(s1.valor, '1', 'um mês');
+  igual(s1.rotulo, 'mês de aberta', 'singular');
+  verdade(s1.recente, 'é recente');
+
+  const oitoMeses = new Date(HOJE.getTime() - 250 * DIA).toISOString();
+  const s2 = c.prospeccaoSinalPrincipal({ data_abertura: oitoMeses }, HOJE.getTime());
+  falso(s2.recente, 'oito meses não é recém-aberta');
+});
+
+teste('sem avaliação e sem abertura, declara que não há sinal — não finge', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const s = c.prospeccaoSinalPrincipal({ avaliacoes: null, data_abertura: null }, HOJE.getTime());
+  igual(s.tipo, 'nenhum', 'tipo');
+  igual(s.valor, '—', 'travessão só quando realmente não há nada');
+  igual(s.rotulo, 'sem sinal na base', 'e diz por quê');
+});
+
+teste('data de abertura inválida não vira NaN na tela', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const s = c.prospeccaoSinalPrincipal({ data_abertura: 'nao-e-data' }, HOJE.getTime());
+  igual(s.tipo, 'nenhum', 'cai no caso sem sinal');
+  igual(s.valor, '—', 'sem NaN');
+});
+
+teste('categoria inferida do nome, com os falsos positivos reais da base', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const f = c.prospeccaoCategoriaPeloNome;
+  igual(f('AURA ROMANA PIZZARIA'), 'Pizzaria', 'pizzaria');
+  igual(f('CHURRAS KELER LTDA'), 'Churrascaria', 'churrasco');
+  igual(f('RAIZ XISERIA E CIA'), 'Lanchonete', 'xiseria');
+  igual(f('CAFE.'), 'Cafeteria', 'café com ponto');
+  igual(f('TCHE DELICIAS IND E COM DE ALIMENTACAO LTDA'), null, 'sem palavra de ramo: null, não chute');
+  igual(f('E. MARQUES DA SILVA E T. BENELLI DA LUZ DA SILVA LTDA'), null, 'razão social pura');
+
+  // Casos REAIS de falso positivo medidos na base: "barra" é bairro, não bar.
+  // E nos dois primeiros a categoria certa está em OUTRA palavra — por isso a ordem
+  // de teste vai do específico ao genérico e "bar" fica no fim.
+  igual(f('HAMBURGUERIA BARRA'), 'Hamburgueria', 'hamburgueria vence "barra"');
+  igual(f('CAFE CULTURA BARRA LTDA'), 'Cafeteria', 'café vence "barra"');
+  igual(f('LA BOLARIA RIO DE JANEIRO BARRA DA TIJUCA'), null, '"barra" sozinho não é bar');
+  igual(f('FISHBAR PRAIA DO CANTO LTDA'), null, '"fishbar" não é bar por fronteira de palavra');
+});
+
+teste('o rótulo declara que a categoria foi inferida', () => {
+  // Inferir e avisar é honesto; inferir e apresentar como dado da base não seria.
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  igual(c.prospeccaoRotuloCategoria(null, 'AURA ROMANA PIZZARIA'), 'Pizzaria (pelo nome)', 'com aviso');
+  igual(c.prospeccaoRotuloCategoria('coffee shop', 'QUALQUER COISA'), 'Cafeteria', 'categoria da base manda e não leva aviso');
+  igual(c.prospeccaoRotuloCategoria(null, 'ALIMENTOS LTDA'), 'Categoria não informada', 'sem inferência possível');
+  igual(c.prospeccaoRotuloCategoria(null), 'Categoria não informada', 'chamada antiga com 1 argumento segue funcionando');
+});
+
 console.log('\n== Promessa derivada (prometido × realizado sem digitação) ==');
 
 teste('o tipo da promessa sai da etapa do negócio', () => {
