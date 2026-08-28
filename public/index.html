@@ -6161,7 +6161,53 @@ function acoesDeAgora(r, diag) {
 
   const acoes = [];
 
+  /* A AÇÃO Nº 1 TEM QUE SER UMA QUE ELE CONSIGA EXECUTAR (28/08/26).
+
+     Medido clicando, na tela do Bruno: a prioridade 1 do dia era "Registrar desfecho
+     Bueno pizzaria". Ao clicar, a resposta era um aviso:
+
+       "Bueno pizzaria não tem negócio associado no HubSpot — visita não confirmada.
+        Abra a conta no Planejamento e associe antes de registrar o desfecho."
+
+     Ou seja: a tela colocava como PRIMEIRA coisa do dia uma ação impossível, e a
+     resposta ao clique era mandar ele para outra aba fazer outra coisa. Não é botão
+     morto — a recusa é honesta — mas é o oposto de acelerar: ele perde o clique, perde
+     o contexto e tem que descobrir sozinho como desbloquear.
+
+     A causa é legítima e comum: visita registrada no Expogo/PWA cria o compromisso na
+     agenda, mas se a conta nunca virou negócio no pipeline não existe onde gravar o
+     desfecho. Acontece justamente com a conta NOVA, achada na rua — a que mais
+     interessa.
+
+     Agora a ação se adapta ao que é possível: sem negócio, ela É criar o negócio, com
+     o nome já preenchido (a tela sabe o nome, ele não redigita). Criado, o desfecho
+     passa a ter onde ser gravado e a ação seguinte aparece na próxima renderização.
+     Um clique produz progresso em vez de um aviso. */
   semDesfechoHoje.forEach(e => {
+    const negocioDoEvento = e.dealId ? buscarLeadFunilPorId(e.dealId) : null;
+    const temNegocio = !!negocioDoEvento
+      || meusNegociosAbertos(r.ownerId).some(l => tpMesmoCliente(l.name, e.cliente));
+    const telDoEvento = telefoneDaAcao(negocioDoEvento, e.cliente);
+
+    if (!temNegocio) {
+      acoes.push({
+        id: 'criarnegocio:' + e.id,
+        verbo: 'Criar negócio para',
+        cliente: e.cliente,
+        motivo: 'você visitou hoje e esta conta não existe no funil — sem negócio não há onde gravar o desfecho',
+        prazo: 'hoje',
+        toque: null,
+        ultimaInteracao: agendaHhmm(e.inicio) + ' de hoje',
+        ctaLabel: 'Criar negócio',
+        tel: telDoEvento,
+        acao: () => abrirNovaContaProspeccao(
+          () => { if (typeof renderMeuPainel === 'function') renderMeuPainel(); },
+          { nome: e.cliente, telefone: telDoEvento || '' }
+        )
+      });
+      return;
+    }
+
     acoes.push({
       id: 'desfecho:' + e.id,
       verbo: 'Registrar desfecho',
@@ -6171,8 +6217,7 @@ function acoesDeAgora(r, diag) {
       toque: null,
       ultimaInteracao: agendaHhmm(e.inicio) + ' de hoje',
       ctaLabel: 'Registrar desfecho',
-      /* O TELEFONE VIAJA COM A AÇÃO (28/08/26) — ver a nota longa em telefoneDaAcao. */
-      tel: telefoneDaAcao(e.dealId ? buscarLeadFunilPorId(e.dealId) : null, e.cliente),
+      tel: telDoEvento,
       acao: () => abrirRegistroDeDesfechoPorNome(e.cliente, e)
     });
   });
@@ -16520,7 +16565,10 @@ function ligarKanban(raiz, leads, redesenhar) {
 // da conta que ele achou na rua: nasce como negócio no HubSpot JÁ em Prospecção (antes
 // nascia em Backlog e ficava esperando alguém mover), com as propriedades que a etapa
 // Prospecção exige preenchidas no mesmo formulário.
-function abrirNovaContaProspeccao(aoConcluir) {
+/* SEMENTE (28/08/26): o segundo parâmetro pré-preenche nome e telefone. Serve ao caso
+   da visita sem negócio — o executivo já visitou, o nome está na agenda dele, e
+   redigitar o que a tela já sabe é atrito puro. Ver a nota longa em acoesDeAgora. */
+function abrirNovaContaProspeccao(aoConcluir, semente) {
   const r = (DATA.reps || []).find(x => sessaoAtual && String(x.ownerId) === String(sessaoAtual.ownerId));
   if (!r) { mostrarToast('Não identifiquei seu usuário de executivo nesta sessão.', 'erro'); return; }
   const campos = CAMPOS_POR_ETAPA[ETAPA_PROSPECCAO] || [];
@@ -16558,6 +16606,12 @@ function abrirNovaContaProspeccao(aoConcluir) {
     <div class="pe-status" id="peStatus">O negócio nasce atribuído a você, no pipeline Field Sales.</div>
   `;
   stageOverlay.classList.add('show');
+  if (semente) {
+    const elNome = document.getElementById('peNome');
+    const elTel = document.getElementById('peTelefone');
+    if (elNome && semente.nome) elNome.value = semente.nome;
+    if (elTel && semente.telefone) elTel.value = semente.telefone;
+  }
 
   const status = document.getElementById('peStatus');
   const btnCancelar = document.getElementById('peCancelar');
