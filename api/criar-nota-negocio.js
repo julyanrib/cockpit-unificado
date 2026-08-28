@@ -39,6 +39,74 @@ const TIPOS_PASSO = {
   demo: 'Demo'
 };
 
+/* QUALIFICAÇÃO (28/08/26) — terceira coisa que este arquivo cobre, pelo MESMO motivo
+   que ele já cobria duas: o limite de 12 funções serverless do plano Hobby.
+   Eu tinha criado api/qualificar-negocio.js e com isso o projeto foi a 13 funções — o
+   deploy da Vercel passou a falhar, e produção ficou servindo o último deploy que deu
+   certo. O limite já estava documentado no topo deste arquivo desde 15/08 e eu passei
+   por cima dele. A rota separada foi removida e virou este trecho.
+
+   A consolidação saiu melhor que a rota separada, e não pior: a tela já fazia POST
+   aqui para criar a tarefa do próximo passo, então a qualificação viaja no MESMO
+   request. Some a ida e volta extra, e o "grava a dor antes de marcar a tarefa" deixa
+   de depender de duas chamadas em sequência no navegador — vira ordem de execução
+   dentro de um único handler.
+
+   Continua sendo whitelist de DUAS propriedades e mais nada. */
+const ETAPAS_QUALIFICAVEIS = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1398311191'];
+
+/* MESMA lista do OP_GARGALO da tela (template/cockpit.template.html). Duplicada aqui
+   de propósito: o servidor não pode confiar no que o navegador manda, e a propriedade
+   no HubSpot é enumeração — valor fora da lista volta como erro cru da API. Validar
+   aqui devolve mensagem que se entende. Se a lista mudar na tela, muda aqui também. */
+const OP_GARGALO = ['Fila', 'Falta de Garçom', 'Falta de Gestão', 'Sem fidelização', 'Demora na divisão de contas', 'Estoque'];
+
+/* Grava as duas propriedades de qualificação, se vieram. Devolve { erro } para o
+   chamador abortar, ou { props } com o que foi gravado (vazio se nada veio).
+   Roda ANTES de criar a tarefa de propósito: tarefa datada em cima de negócio que
+   segue cego é exatamente o estado que produziu 49 negócios em Visita sem nada
+   registrado. Se a qualificação falha, não existe próximo passo. */
+async function gravarQualificacao({ token, dealId, deal, qualificacao }) {
+  if (!qualificacao || typeof qualificacao !== 'object') return { props: {} };
+
+  const etapa = String((deal && deal.properties && deal.properties.dealstage) || '');
+  if (!ETAPAS_QUALIFICAVEIS.includes(etapa)) {
+    return { erro: { status: 403, mensagem: 'Só dá pra qualificar negócio em etapa aberta do funil.' } };
+  }
+
+  const props = {};
+  const sistema = qualificacao.nomeDoSistema;
+  if (sistema != null && String(sistema).trim() !== '') {
+    const s = String(sistema).trim();
+    if (s.length > 120) return { erro: { status: 400, mensagem: 'Nome do sistema muito longo (máximo 120 caracteres).' } };
+    props.nome_do_sistema = s;
+  }
+  const gargalo = qualificacao.gargalo;
+  if (gargalo != null && String(gargalo).trim() !== '') {
+    const g = String(gargalo).trim();
+    if (!OP_GARGALO.includes(g)) {
+      return { erro: { status: 400, mensagem: `Dor inválida. Use uma destas: ${OP_GARGALO.join(', ')}.` } };
+    }
+    props.gargalo_operacional = g;
+  }
+  if (Object.keys(props).length === 0) return { props: {} };
+
+  try {
+    const patch = await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${encodeURIComponent(String(dealId))}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ properties: props })
+    });
+    if (!patch.ok) {
+      const det = await patch.json().catch(() => ({}));
+      return { erro: { status: patch.status, mensagem: det.message || 'O HubSpot recusou a qualificação.' } };
+    }
+  } catch (e) {
+    return { erro: { status: 502, mensagem: 'Falha ao gravar a qualificação: ' + String(e.message || e) } };
+  }
+  return { props };
+}
+
 async function tratarNota(req, res, usuario, emailLogado, token) {
   const { dealId, texto } = req.body || {};
   if (!dealId || !texto || !String(texto).trim()) return res.status(400).json({ erro: 'Faltam campos obrigatórios: dealId e texto.' });
@@ -113,6 +181,13 @@ async function tratarProximoPasso(req, res, usuario, token) {
   const guard = await buscarDealAutorizado({ token, dealId, usuario });
   if (guard.erro) return res.status(guard.erro.status).json({ erro: guard.erro.mensagem });
 
+  // Qualificação primeiro: se ela falhar, não se cria tarefa nenhuma (ver comentário
+  // em gravarQualificacao). O guard acima já garantiu pipeline e dono deste negócio.
+  const qual = await gravarQualificacao({
+    token, dealId, deal: guard.deal, qualificacao: req.body && req.body.qualificacao
+  });
+  if (qual.erro) return res.status(qual.erro.status).json({ erro: qual.erro.mensagem });
+
   // "tipo" aqui é o TIPO DO PASSO (Follow-up/Visita/Reunião/Demo) — nada a ver com o
   // "tipo" de nível mais alto que escolhe entre nota/próximo-passo nesta rota.
   const tipoNormalizado = tipo == null ? null : TIPOS_PASSO[String(tipo).trim().toLowerCase()];
@@ -172,7 +247,13 @@ async function tratarProximoPasso(req, res, usuario, token) {
     });
   }
 
-  return res.status(200).json({ ok: true, id: taskId, associada: true, url: `https://app.hubspot.com/contacts/24373118/record/0-27/${taskId}` });
+  // `qualificacao` volta pro cliente espelhar no DATA em memória — sem isso a ficha
+  // continuaria cobrando o que acabou de ser gravado, até o próximo sync.
+  return res.status(200).json({
+    ok: true, id: taskId, associada: true,
+    qualificacao: Object.keys(qual.props).length ? qual.props : null,
+    url: `https://app.hubspot.com/contacts/24373118/record/0-27/${taskId}`
+  });
 }
 
 module.exports = async function handler(req, res) {

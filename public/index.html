@@ -16356,33 +16356,18 @@ function wireFichaLeadFunilEdicao(container, l) {
     try {
       const token = await tokenDeSessaoGlobal();
 
-      // A qualificação vai PRIMEIRO e de propósito: se ela falhar, não quero uma tarefa
-      // datada em cima de um negócio que continua cego — era esse o estado que produziu
-      // os 49. Se ela passa e a tarefa falha, o executivo repete o passo com o bloco de
-      // qualificação já sumido (aplicado no DATA local), então não perde o que digitou.
-      if (qualifPayload) {
-        statusEl.textContent = 'Gravando a qualificação…';
-        const respQ = await comPrazoGlobal(async (signal) => fetch('/api/qualificar-negocio', {
-          method: 'POST', signal,
-          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-          body: JSON.stringify({ dealId, ...qualifPayload })
-        }), 8000, 'qualificar-negocio');
-        const dQ = await respQ.json().catch(() => ({}));
-        if (!respQ.ok || !dQ.ok) {
-          statusEl.textContent = (dQ && dQ.erro) || 'Não consegui gravar a qualificação.';
-          statusEl.style.color = 'var(--red)';
-          btnPasso.disabled = false;
-          return;
-        }
-        aplicarQualificacaoNoDataLocal(dealId, dQ.gravado || {});
-        if (boxQualif) boxQualif.remove();
-      }
-
-      statusEl.textContent = 'Salvando no HubSpot...';
+      /* UM request só (28/08/26). A 1ª versão fazia dois POSTs: primeiro
+         /api/qualificar-negocio, depois a tarefa. Essa rota separada levou o projeto a
+         13 funções serverless e QUEBROU o deploy da Vercel — o plano Hobby permite 12, e
+         o limite já estava documentado no topo do api/criar-nota-negocio.js desde 15/08.
+         A qualificação agora viaja no mesmo corpo, e o servidor grava as propriedades
+         ANTES de criar a tarefa: se a qualificação falha, não existe próximo passo. A
+         ordem que antes dependia de duas chamadas no navegador virou ordem de execução
+         dentro de um handler — mais simples e sem estado intermediário possível. */
       const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo' })
+        body: JSON.stringify({ dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo', ...(qualifPayload ? { qualificacao: qualifPayload } : {}) })
       }), 8000, 'criar-nota-negocio-proximo-passo');
       const respData = await resp.json().catch(() => ({}));
       if (!resp.ok || !respData.ok) {
@@ -16390,6 +16375,12 @@ function wireFichaLeadFunilEdicao(container, l) {
         statusEl.style.color = 'var(--red)';
         btnPasso.disabled = false;
         return;
+      }
+      // O servidor devolve o que gravou; espelhar aqui é o que faz a ficha parar de
+      // cobrar a qualificação na mesma sessão (o sync só roda 08:56/13h/19h).
+      if (respData.qualificacao) {
+        aplicarQualificacaoNoDataLocal(dealId, respData.qualificacao);
+        if (boxQualif) boxQualif.remove();
       }
       campoTexto.value = '';
       campoData.value = '';
