@@ -1457,6 +1457,40 @@ teste('a janela de recem-aberta na TELA tem que ser maior que o piso da IMPORTAC
     'a conta mais nova que a importacao permite aparece como recem-aberta');
 });
 
+teste('Daily do gestor usa plano real, nao a promessa manual aposentada', () => {
+  const ini = html.indexOf('async function renderDaily()');
+  const fim = html.indexOf('async function renderConsolidadoDiario()', ini);
+  verdade(ini >= 0 && fim > ini, 'o render da Daily continua localizavel');
+  const daily = html.slice(ini, fim);
+
+  verdade(daily.includes('const compromissoDoPlano = (plano, ownerId) =>'),
+    'existe uma derivacao unica para plano e clientes nomeados');
+  verdade(daily.includes("const nomesLista = nomesPlano.length ? nomesPlano : nomesAgenda"),
+    'agenda confirmada cobre o vazio quando ainda nao existe plano fechado');
+  verdade(daily.includes('clientes nomeados hoje'),
+    'o hero declara a unidade real do compromisso');
+  verdade(daily.includes('executivos sem cliente definido'),
+    'o vazio vira uma cobranca objetiva');
+  falso(daily.includes('const promessasHoje = repsDaily.map'),
+    'o hero nao volta a contar os campos prometido_* aposentados');
+  verdade(daily.includes('const resumoPlanoHoje = compromissoDoPlano(planoHoje, r.ownerId)'),
+    'a ordem da reuniao usa a mesma fonte do hero');
+});
+
+teste('Agenda separa historico vazio de buraco ainda acionavel', () => {
+  const ini = html.indexOf('function agendaDiagnosticoExec(o)');
+  const fim = html.indexOf('function agendaVerNoMapaDaRota', ini);
+  verdade(ini >= 0 && fim > ini, 'o diagnostico da Agenda continua localizavel');
+  const agenda = html.slice(ini, fim);
+
+  verdade(agenda.includes('const diasAcionaveis = o.dias.filter'),
+    'a janela de acao e calculada explicitamente');
+  verdade(html.includes('diasAcionaveis.length') && html.includes('dias úteis restantes'),
+    'numerador e denominador usam a mesma janela');
+  verdade(html.includes('<b>Busca ao vivo de novas empresas</b><span>abertas nos últimos 90 dias</span>'),
+    'a busca de 90 dias nao se disfarca de carteira de 6 meses');
+});
+
 console.log('');
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);
