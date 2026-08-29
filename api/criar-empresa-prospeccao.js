@@ -66,7 +66,26 @@ module.exports = async function handler(req, res) {
     // ANTES da checagem "já criado" abaixo, porque reatribuir é permitido mesmo depois
     // de criado_hubspot — é exatamente esse o caso que precisa sincronizar.
     if (acao === 'atualizar_owner') {
-      if (usuario.role !== 'manager') return res.status(403).json({ erro: 'Só o gestor pode reatribuir executivo.' });
+      /* DEVOLVER A PRÓPRIA CONTA (28/08/26).
+
+         Reatribuir executivo continua sendo poder de gestor. O que se abre aqui é um
+         caso estreito: o executivo LIMPANDO o dono de uma conta que já é dele — ou
+         seja, devolvendo para a fila de pendentes para o gestor redistribuir.
+
+         Vem do desenho do Claude Design ("Devolver as que você não vai visitar"), e a
+         razão de produto é boa: conta atribuída que ele não vai visitar não é neutra,
+         é pilha morta no meio da fila dele, empurrando para baixo a conta que ele
+         visitaria. Devolver é melhor para os dois lados.
+
+         Ele não pode: atribuir para si, atribuir para outro, nem tocar em conta de
+         terceiro. Só soltar a própria. */
+      const querDevolver = !novoOwnerId;
+      const ehDonoDaConta = String(lead.responsavel_owner_id || '') === String(usuario.ownerId || '');
+      if (usuario.role !== 'manager' && !(querDevolver && ehDonoDaConta)) {
+        return res.status(403).json({ erro: querDevolver
+          ? 'Essa conta não está atribuída a você.'
+          : 'Só o gestor pode atribuir executivo. Você pode devolver as suas.' });
+      }
       const ownerLimpo = novoOwnerId ? String(novoOwnerId) : '';
       if (lead.hubspot_company_id) {
         try {

@@ -3822,6 +3822,11 @@
      botoes somam ~380. Medido antes de escrever, para nao empurrar o Fechar pra fora. */
   .prosp2-funil{flex:1 1 100%;min-width:0;border:1px solid var(--red);border-radius:10px;padding:10px 12px;background:transparent;color:var(--red);font-size:12px;font-weight:800;cursor:pointer;}
   .prosp2-funil:hover:not(:disabled){background:var(--red-soft);}
+  /* ESCOPO: global. Botão de devolver no pé da ficha (28/08/26) — ver o comentário no
+     markup. Texto puro, sem caixa: é a saída de menor peso visual do rodapé, abaixo do
+     "Fechar", e não deve competir com "Agendar visita" nem com "Criar negócio". */
+  .prosp2-devolver{flex:1 1 100%;border:none;background:none;color:var(--muted2);font-size:11px;font-weight:700;cursor:pointer;padding:4px 0 0;text-decoration:underline;text-underline-offset:2px;}
+  .prosp2-devolver:hover{color:var(--red-dk);}
   .prosp2-funil.done,.prosp2-funil:disabled{border-color:var(--line-btn);color:var(--muted2);cursor:default;background:transparent;}
   .prosp2-tray{position:sticky;top:18px;background:var(--dark);border-radius:var(--r-lg);padding:18px 18px 16px;box-shadow:var(--shadow-lg);}
   .prosp2-tray-head{display:flex;align-items:baseline;gap:8px;margin-bottom:3px;}
@@ -12199,6 +12204,13 @@ async function renderProspeccaoExecutivo() {
         <button class="prosp2-add" id="prosp2DwAdd">+ Agendar visita</button>
         <button class="prosp2-ver" id="prosp2DwFechar">Fechar</button>
         <button class="prosp2-funil" id="prosp2DwFunil">→ Criar negócio no funil</button>
+        <!-- DEVOLVER (28/08/26) — do desenho do Claude Design. A função já existia e
+             era inalcançável: prospeccaoDevolver vive na aba Prospecção antiga, que é
+             display:none para o executivo desde 11/08. Mesma classe do "conta-alvo ->
+             funil" corrigido no PR #53: escrita pronta, caminho fechado.
+
+             Discreto de propósito: descartar conta é a saída, não o objetivo da tela. -->
+        <button class="prosp2-devolver" id="prosp2DwDevolver">devolver pro gestor</button>
       </div>
     </aside>
     <div class="prosp2-toast" id="prosp2Toast"><span class="ok">✓</span><span id="prosp2ToastTxt">Adicionado</span></div>
@@ -12424,6 +12436,41 @@ function prosp2LigarEventos(universo, ownerId) {
   if (dwX) dwX.addEventListener('click', fechar);
   if (dwFechar) dwFechar.addEventListener('click', fechar);
   if (scrim) scrim.addEventListener('click', fechar);
+  const dwDevolver = document.getElementById('prosp2DwDevolver');
+  if (dwDevolver) dwDevolver.addEventListener('click', () => {
+    const lead = buscarLead(prosp2Estado.drawerId);
+    if (!lead) return;
+    abrirModalConfirmacao({
+      titulo: 'Devolver pro gestor',
+      confirmarLabel: 'Devolver',
+      /* Diz o que acontece com a conta E o que ele ganha — senão parece só perda. */
+      corpoHTML: `<p style="margin:0;">Devolver <b>${esc(lead.nome)}</b> pra fila do gestor redistribuir?</p>        <p style="margin:9px 0 0;color:var(--muted);font-size:12.5px;">Ela sai da sua fila e para de disputar espaço com as contas que você vai visitar. Não apaga nada: o gestor vê na fila de pendentes.</p>`,
+      /* O parametro do modal se chama fecharModal, NAO fechar: o drawer tem um fechar()
+         no escopo de fora e um parametro com o mesmo nome o sombrearia — o modal fecharia
+         duas vezes e o drawer ficaria aberto mostrando uma conta que acabou de sair da
+         fila. Peguei relendo o resultado depois de aplicar, nao antes. */
+      aoConfirmar: async (overlay, fecharModal) => {
+        const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+        okBtn.disabled = true; okBtn.textContent = 'Devolvendo…';
+        const ok = await reatribuirExecutivoProspeccao(lead.id, null);
+        fecharModal();
+        if (!ok) {
+          mostrarToast('Não consegui devolver agora — a conta continua sua. Tente de novo.', 'erro');
+          return;
+        }
+        /* Sai do cache local na hora: o executivo não deve ver na fila algo que ele
+           acabou de devolver, senão parece que o clique não funcionou. */
+        if (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache)) {
+          const i = prospeccaoCache.findIndex(l => String(l.id) === String(lead.id));
+          if (i >= 0) prospeccaoCache.splice(i, 1);
+        }
+        delete prosp2Estado.agenda[lead.id];
+        fechar();
+        renderProspeccaoExecutivo();
+        mostrarToast(`${lead.nome} voltou pra fila do gestor.`, 'sucesso');
+      }
+    });
+  });
   const dwFunil = document.getElementById('prosp2DwFunil');
   if (dwFunil) dwFunil.addEventListener('click', () => {
     const lead = buscarLead(prosp2Estado.drawerId);
@@ -28197,7 +28244,15 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
         const falhas = [];
         for (const id of itens) {
           okBtn.textContent = `Devolvendo ${feitos + falhas.length + 1} de ${itens.length}…`;
-          const ok = await atualizarLeadProspeccao(id, { responsavel_owner_id: null, status: 'pendente' });
+          /* CORRIGIDO (28/08/26): era escrita CRUA no Supabase, exatamente o bug que a
+             nota de 15/08 logo abaixo de atualizarLeadProspeccao diz ter corrigido para
+             a reatribuição — "uma conta que já tinha Company criada no HubSpot ficava
+             com o owner desatualizado lá pra sempre, sem ninguém perceber (Cockpit
+             dizia um nome, HubSpot outro)". Devolver é reatribuir para ninguém: mesmo
+             caso, mesmo estrago. Agora usa o caminho do servidor, que só grava no
+             Supabase depois de o HubSpot confirmar. O status pendente é definido lá.
+             Uma chamada por conta, igual antes — a forma do laço não muda. */
+          const ok = await reatribuirExecutivoProspeccao(id, null);
           if (ok) { feitos++; prospeccaoSelecao.delete(id); } else { falhas.push(id); }
         }
         fechar();
