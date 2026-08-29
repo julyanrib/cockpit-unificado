@@ -56,7 +56,20 @@ const codigoNucleo = recortar('/* @nucleo:inicio', '/* @nucleo:fim */')
    `new Date()` sem argumentos devolvendo esse mesmo instante. Assim o teste e o núcleo
    concordam sobre "agora", e o resultado não depende da hora em que a suíte roda. */
 const _real = new Date();
-const AGORA_MS = Date.UTC(_real.getUTCFullYear(), _real.getUTCMonth(), _real.getUTCDate(), 12, 0, 0);
+/* ...E EM DIA ÚTIL (corrigido 29/08/26, com 4 testes vermelhos na mão).
+   Mesma classe do bug de meia-noite acima, na outra borda. A suíte rodou num sábado e
+   quatro testes do ciclo fechado acusaram 'esperava 1, veio 0'. Não havia regressão:
+   cicloFechadoDaSemana conta apenas DIAS ÚTEIS (a função pula dow 0 e 6, de propósito),
+   e os fixtures posicionam a visita em iso(HOJE). Num sábado, 'hoje' não é dia útil e a
+   visita fica fora da janela — o teste passou a medir o calendário, não o código.
+
+   Ancorar num dia útil também é o mais fiel ao que a suíte existe para verificar: as
+   regras deste produto são de rotina comercial de campo, escritas para segunda a sexta.
+   O relógio continua sendo o de hoje (frescor de dados segue realista) e continua fixo
+   dos dois lados; só recua para a sexta quando cai no fim de semana. */
+const _diaUtil = new Date(Date.UTC(_real.getUTCFullYear(), _real.getUTCMonth(), _real.getUTCDate()));
+while (_diaUtil.getUTCDay() === 0 || _diaUtil.getUTCDay() === 6) _diaUtil.setUTCDate(_diaUtil.getUTCDate() - 1);
+const AGORA_MS = Date.UTC(_diaUtil.getUTCFullYear(), _diaUtil.getUTCMonth(), _diaUtil.getUTCDate(), 12, 0, 0);
 class DataFixa extends Date {
   constructor(...a) { if (a.length === 0) super(AGORA_MS); else super(...a); }
   static now() { return AGORA_MS; }
