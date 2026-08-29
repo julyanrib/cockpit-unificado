@@ -82,6 +82,8 @@ Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, o
 
 > 💎 **Punch travado:** *"Seu [Nome], o robô que vocês usam hoje sabe responder só o que já está no roteiro dele — pergunta diferente, trava, e alguém do seu time tem que entrar pra resolver. A Teka é inteligência artificial de verdade: ela entende a pergunta do seu cliente e responde sozinha, sem precisar de humano de plantão. Isso não é 'ajudar' o atendimento, é eliminar o custo de ter alguém preso nisso o dia inteiro."*
 
+**Dor que isso responde:** [Sem fidelização](playbook:mapa-dor-solucao#mapa-dor-solucao-sem-fidelizacao-a-terca-vazia) — a Teka é o braço que chama a base de volta.
+
 ### 🖥️ PDV Balcão + Ficha Técnica + CMV + Precificação Dinâmica (A Guerra da Retaguarda)
 
 | Concorrente                               | Onde ele compete                                                                     | Onde ele falha                                                                     | Ataque Takeat                                                                                                                                                                  |
@@ -93,6 +95,8 @@ Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, o
 
 > 🎯 **Por que a Precificação Dinâmica é a arma mais forte dessa seção:** nenhum concorrente listado aqui tem esse recálculo em tempo real por item. A pergunta de impacto que abre essa conversa: *"Seu [Nome], o senhor sabe, hoje, sem abrir planilha nenhuma, se o [prato mais vendido do cardápio] está dando lucro ou prejuízo no preço que está cobrando agora?"* — a maioria dos donos não sabe, e esse silêncio já vende a demo.
 
+**Dores que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) e [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado). Para fechar o ciclo do dinheiro que entra: [Conciliação Bancária CFX](playbook:conciliacao-cfx).
+
 ### 📱 Ferramenta de Garçom + Garçom Digital (A Guerra do Salão)
 
 | Concorrente                  | Onde ele compete                                    | Onde ele falha                                                                      | Ataque Takeat                                                             |
@@ -100,6 +104,8 @@ Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, o
 | **Saipos**                   | Ferramenta de garçom básica pra "anotar" pedido     | Passivo — não sugere upsell, não tem inteligência de venda                          | Garçom digital com neurovendas: sugestão automática de adicional/bebida   |
 | **FRest**                    | App de garçom existe, mas curva de aprendizado alta | Erros de digitação, suporte lento quando trava                                      | UX de 15 minutos de treino, sem fricção operacional                       |
 | **Anota AI / Mesa Delivery** | Bom em automatizar pedido via robô de WhatsApp      | Não tem inteligência de mesa real — só resolve delivery, esquece o salão presencial | Garçom Digital cobre o presencial de ponta a ponta, não só o canal remoto |
+
+**Dores que isso responde:** [Falta de Garçom](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-garcom-dinheiro-deixado-na-mesa) e [Demora na divisão de contas](playbook:mapa-dor-solucao#mapa-dor-solucao-demora-na-divisao-de-contas-a-mesa-que-nao-gira).
 
 ### 🖲️ Tablet + Totem (Experiência do Cliente + Redução de Custo — Onde Takeat Nem Entra na Guerra de Hardware)
 
@@ -117,11 +123,15 @@ O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que pr
 
 > 💎 **Punch pronto:** *"Seu [Nome], o totem ou tablet na mesa faz o seu cliente pedir sozinho, no tempo dele — isso já melhora a experiência. E como sua equipe deixa de gastar tempo anotando pedido básico, ela sobra pra atender mais mesa com o mesmo time — isso é redução de custo direto. A diferença é que, com a Takeat, o senhor não fica preso comprando ou alugando equipamento de marca própria: usa o hardware que já tem ou compra de quem quiser."*
 
+**Dor que isso responde:** [Fila](playbook:mapa-dor-solucao#mapa-dor-solucao-fila-gente-desistindo-na-porta) — o totem atende a fila sem contratar ninguém.
+
 ### 🛵 Delivery Próprio (A Guerra da Taxa Abusiva de Marketplace)
 
 **Posicionamento oficial — canal complementar, não substituto. **O restaurante pode continuar no marketplace para ser descoberto por cliente novo. O Delivery Próprio existe para fazer duas coisas que o marketplace nunca vai fazer: **(1) tirar o cliente recorrente das taxas abusivas** — quem já conhece a casa passa a pedir pelo canal direto, sem comissão por pedido; e **(2) registrar os dados de quem pede** — nome, telefone, histórico e frequência ficam com o restaurante, alimentando o CRM, o Cashback e a Recorrência. No marketplace, esse cliente é da plataforma; no Delivery Próprio, ele é do dono.
 
 > *"Seu [Nome], me responde uma coisa: o senhor sabe o nome e o telefone do cliente que pediu do seu restaurante no marketplace ontem? Não sabe — porque aquele cliente não é seu, é da plataforma. E além de não te entregar o dado, ela fica com uma fatia da venda em cada pedido. Com o Delivery Próprio da Takeat, quem já conhece a sua casa pede direto no seu canal: o senhor não paga comissão e passa a ter o cadastro de quem pede, o que ele pede e de quanto em quanto tempo. Aí esse cliente entra no seu Cashback e volta sozinho. O senhor continua no marketplace pra ser descoberto por gente nova — mas para de pagar pedágio em cima do cliente que já era seu."*
+
+**O que completa esta guerra:** [Rota Inteligente](playbook:rota-inteligente) (canal próprio sem logística é meia solução) e [Dark Kitchen](playbook:dark-kitchen) (a mesma cozinha vendendo mais de uma marca).
 
 ### 🎁 Fidelidade + Recorrência + CRM (A Guerra da Retenção)
 
@@ -130,12 +140,16 @@ O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que pr
 | **Saipos**                  | Sistema de salão sem módulo de fidelização | Não tem Cashback nem CRM de cliente final — cada venda é isolada, sem retenção | Cashback nativo + CRM integrado: cada venda alimenta a próxima    |
 | **Cardápio Web / OlaClick** | Só vitrine de cardápio                     | Não tem inteligência de dados sobre quem é o cliente que compra                | CRM de cliente final: histórico de consumo, segmentação, recompra |
 
+**Dor que isso responde:** [Sem fidelização](playbook:mapa-dor-solucao#mapa-dor-solucao-sem-fidelizacao-a-terca-vazia).
+
 ### 💰 Gestão Financeira (A Guerra do Controle Gerencial)
 
 | Concorrente                   | Onde ele compete                       | Onde ele falha                                                                     | Ataque Takeat                                                                   |
 | ----------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | **Colibri (NCR) / Zucchetti** | Sistemas antigos com módulo financeiro | Financeiro desconectado do operacional — exige revenda cara pra qualquer ajuste    | DRE automático gerado do próprio fluxo operacional, sem intervenção de terceiro |
-| **Linx / Degust**             | Financeiro robusto, mas engessado      | Processo lento pra qualquer mudança — feito pra franquia grande, não pro dono ágil | Gestão financeira em tempo real, ajustável pelo próprio dono                    |
+| **Linx / Degust**             | Financeiro robusto, mas engessado      | Processo lento pra qualquer mudança — feito pra franquia grande, não pro dono ágil | Gestão financeira em tempo real, ajustável pelo próprio dono
+
+**Dor que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe). Os dois adicionais que fecham a guerra: [Conciliação Bancária CFX](playbook:conciliacao-cfx) (o dinheiro que já era dele e não chegava) e [Multilojas / Franqueadora](playbook:multilojas) (a segunda unidade sem virar planilha).                    |
 
 ***
 
@@ -846,6 +860,42 @@ O estudo comparativo completo — os 19 módulos, os 4 Pilares, a Teka (IA de at
 | **Linx / Degust** | Financeiro robusto, mas engessado | Financeiro em tempo real, ajustável pelo dono |
 
 Pra usar cada um desses em campo — o discurso completo, os punches prontos e os scripts de objeção — vá na página **ECOSSISTEMA TAKEAT**.
+
+## Os 3 tipos de concorrente — e a pergunta que desarma cada um
+
+A tabela acima lista **nomes**. Na rua você encontra **três tipos**, e o tipo decide a conversa. Reconhecer o tipo em 10 segundos vale mais que decorar os dez nomes.
+
+### 1. O PDV legado — Yooga, PDVLegal, Totvs, Consumer, GrandChef, Colibri, Linx, Degust
+
+**Como ele se apresenta:** já está instalado, o dono pagou por ele, e alguém da casa aprendeu a usar. A objeção que vem daqui é *"já tenho sistema"*.
+
+**Onde ele sempre falha:** ele **registra** a operação e não **explica** a operação. Emite nota, fecha caixa, imprime cupom — e não diz a margem de um prato. O financeiro, quando existe, é desconectado do operacional e depende de revenda para qualquer ajuste.
+
+**A pergunta que desarma:** *"O sistema que o senhor tem hoje te diz a margem do seu prato mais vendido — ou só o quanto entrou no caixa?"*
+
+Quase sempre a resposta é "só o caixa". A partir daí não é mais troca de sistema: é ganhar uma informação que ele nunca teve. Aprofundar: [Falta de Gestão no mapa](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe).
+
+### 2. O marketplace — iFood e afins
+
+**Como ele se apresenta:** não é concorrente de software, é **concorrente de margem e de posse do cliente**. O dono nem pensa nele como sistema; pensa como canal de venda.
+
+**Onde ele sempre falha:** o cliente é da plataforma, não da casa. O dono não sabe nome, telefone nem frequência de quem pediu ontem — e paga comissão sobre o cliente que já era dele.
+
+**A pergunta que desarma:** *"O senhor sabe o nome e o telefone de quem pediu do seu restaurante ontem pelo aplicativo?"*
+
+**Nunca ataque o marketplace de frente.** A posição oficial é **canal complementar, não substituto**: ele continua lá para ser descoberto por cliente novo, e para de pagar pedágio no cliente recorrente. Aprofundar: [Sem fidelização no mapa](playbook:mapa-dor-solucao#mapa-dor-solucao-sem-fidelizacao-a-terca-vazia) · [Rota Inteligente](playbook:rota-inteligente).
+
+### 3. A planilha e o caderno — o concorrente mais forte de todos
+
+**Como ele se apresenta:** *"eu controlo na minha planilha"*, *"está tudo na minha cabeça"*, *"meu restaurante é pequeno"*. É o concorrente **mais comum** e o que mais vendas mata, porque é grátis e o dono confia nele.
+
+**Onde ele sempre falha:** ele depende de uma pessoa e não avisa nada. Planilha não manda alerta quando o insumo vai acabar, não avisa que a taxa da maquininha subiu, não compara duas lojas. E some junto com quem a mantinha.
+
+**A pergunta que desarma:** *"Se o senhor precisar viajar uma semana, quem lê a sua planilha?"*
+
+**Não discuta a planilha — discuta o que ela não faz.** Quem controla no caderno já provou que se importa com controle: é o melhor perfil que existe, não o pior. Aprofundar: [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) · [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado) · [Conciliação Bancária CFX](playbook:conciliacao-cfx).
+
+> **A regra dos três:** o PDV legado se ataca com **margem**, o marketplace com **posse do cliente**, o caderno com **o que ele não avisa**. Trocar o argumento de tipo é o erro mais caro — falar de margem para quem sofre com comissão de marketplace soa a discurso decorado.
 
 ***
 
