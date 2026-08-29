@@ -3758,7 +3758,10 @@
   .prc-add-txt{display:flex;flex-direction:column;gap:1px;min-width:0;}
   .prc-add-txt b{font:800 12.5px "Manrope",system-ui,sans-serif;line-height:1.3;overflow-wrap:break-word;}
   .prc-add-txt small{font-size:10.5px;line-height:1.42;color:var(--muted2);overflow-wrap:break-word;}
-  .prc-add-preco{font-family:"Archivo",system-ui,sans-serif;font-weight:800;font-size:13.5px;letter-spacing:-.02em;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  /* O preço do adicional empilha: cheio riscado em cima, cobrado embaixo. Coluna e não
+     linha porque numa coluna estreita "R$ 299 R$ 239/mês" lado a lado estoura. */
+  .prc-add-preco{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-family:"Archivo",system-ui,sans-serif;font-weight:800;font-size:13.5px;letter-spacing:-.02em;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .prc-add-preco s{font:700 9.5px "Manrope",system-ui,sans-serif;color:var(--ter);text-decoration-thickness:1.5px;letter-spacing:0;}
   .prc-add-preco i{font:700 9px "Manrope",system-ui,sans-serif;font-style:normal;color:var(--muted2);}
   .prc-add-preco em{font:800 8.5px "Archivo",system-ui,sans-serif;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);font-style:normal;}
   .prc-add.is-on{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink) inset;background:var(--panel);}
@@ -9649,6 +9652,32 @@ function prcMoeda(valor) { return Number(valor || 0).toLocaleString('pt-BR', { s
    É o formato que o configurador do Takeat OS usa nesse mesmo lugar. */
 function prcMoedaCentavos(valor) { return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
+/* O DESCONTO CAI EM CADA LINHA, e o total é a SOMA das linhas (29/08/26).
+
+   Pedido do Julyan, textual: "OS VALORES DO ADICIONAL CAEM DE ACORDO COM O DESCONTO
+   SELECIONADO, POR EXEMPLO A POS GANHA 30% DE DESCONTO TBM FICANDO 69".
+
+   Antes o desconto caía sobre a SOMA, e a linha do adicional imprimia o preço cheio.
+   Dois problemas, os dois na frente do dono: (a) ele lia "Maquininha POS R$ 99" e um
+   total já descontado, sem saber que o desconto valia para ela também — ou seja, a nossa
+   tabela parecia mais cara do que é; (b) quando o preço com desconto aparece na linha,
+   ele tem de FECHAR: 439 + 79 + 19 = 537, e o total dizia 538, porque 672 × 0,8 = 537,6
+   arredonda para cima enquanto as parcelas arredondam para baixo. Um real de diferença
+   numa tela que o cliente está conferindo custa a conversa inteira — ele para de somar e
+   começa a duvidar.
+
+   Agora cada linha arredonda sozinha e o mensal é a soma das linhas: o que está escrito
+   fecha, por construção, sem precisar de nota de rodapé.
+
+   CONFERIDO contra o configurador do Takeat OS (print do Julyan, Anual −20%): plano 439,
+   Totem 239, Tablet 19, POS 79, TEF 79, Dark Kitchen 159, Fiscal 55, Multilojas 23, Rota
+   87 — nove valores, nove batidas. E a POS a −30% dá 69, exatamente como ele escreveu.
+   Ou seja: este arredondamento não é escolha minha, é o que a casa já pratica. */
+function prcComDesconto(valor, periodo) {
+  const pct = Number((periodo && periodo.desconto) || 0);
+  return Math.round(Number(valor || 0) * (1 - pct / 100));
+}
+
 function calcularPrecificacao(periodoIdOpcional) {
   const plano = prcPlano(); const periodo = prcPeriodo(periodoIdOpcional); const itens = [];
   precificacaoCache.adicionais.forEach(addon => {
@@ -9656,12 +9685,21 @@ function calcularPrecificacao(periodoIdOpcional) {
     const selecionado = incluido || (disponivel && !!precificacaoEstado.adicionais[addon.id]);
     if (!selecionado) return;
     const quantidade = incluido ? 1 : Math.max(1, Number(precificacaoEstado.quantidades[addon.id] || 1));
-    itens.push({ ...addon, incluido, quantidade, subtotal: incluido ? 0 : addon.preco * quantidade });
+    /* O unitário arredonda ANTES de multiplicar pela quantidade: é o número que aparece
+       na linha, e duas maquininhas têm de custar exatamente o dobro de uma. */
+    const unitario = prcComDesconto(addon.preco, periodo);
+    itens.push({
+      ...addon, incluido, quantidade,
+      unitario, unitarioCheio: addon.preco,
+      subtotal: incluido ? 0 : unitario * quantidade,
+      subtotalCheio: incluido ? 0 : addon.preco * quantidade
+    });
   });
-  const mensalCheio = plano.preco + itens.reduce((soma, item) => soma + item.subtotal, 0);
-  const mensal = Math.round(mensalCheio * (1 - periodo.desconto / 100));
+  const planoMensal = prcComDesconto(plano.preco, periodo);
+  const mensalCheio = plano.preco + itens.reduce((soma, item) => soma + item.subtotalCheio, 0);
+  const mensal = planoMensal + itens.reduce((soma, item) => soma + item.subtotal, 0);
   const total = mensal * periodo.meses;
-  return { plano, periodo, itens, mensalCheio, mensal, total, economia: mensalCheio * periodo.meses - total };
+  return { plano, periodo, itens, planoMensal, mensalCheio, mensal, total, economia: mensalCheio * periodo.meses - total };
 }
 
 function prcDataValidade() {
@@ -9677,7 +9715,9 @@ function prcResumoAdicionais(calculo) {
   // via o total final sem entender de onde vinha a diferença pro preço base do plano.
   return cobrados.map(item => {
     const qtd = item.quantidade > 1 ? ` × ${item.quantidade}` : '';
-    return `${item.nome}${qtd} (${prcMoeda(item.preco)}/un.)`;
+    /* prcMoeda(item.unitario), não item.preco: este texto vai para o documento e para o
+       WhatsApp, e o número ali tem de ser o que ele vai pagar. */
+    return `${item.nome}${qtd} (${prcMoeda(item.unitario)}/un.)`;
   }).join(', ');
 }
 
@@ -10349,11 +10389,15 @@ function prcBlocoAdicionaisHTML() {
         <span class="prc-add-preco"><em>no plano</em></span>
       </div>`;
     }
+    /* O preço NO PERÍODO ESCOLHIDO, com o cheio riscado em cima. O riscado só existe
+       quando há desconto: no mensal não se encena promoção que não há. */
+    const unitario = prcComDesconto(a.preco, prcPeriodo());
+    const baixou = unitario < a.preco;
     return `<div class="prc-add${x.selecionado ? ' is-on' : ''}">
       <button type="button" class="prc-add-btn" data-prc-addon="${a.id}" aria-pressed="${x.selecionado}">
         <span class="prc-add-marca" aria-hidden="true">${x.selecionado ? '✓' : ''}</span>
         <span class="prc-add-txt"><b>${esc(a.nome)}</b><small>${esc(a.descricao || '')}</small></span>
-        <span class="prc-add-preco">${prcMoeda(a.preco)}<i>${unidade}</i></span>
+        <span class="prc-add-preco">${baixou ? `<s>${prcMoeda(a.preco)}</s>` : ''}<span>${prcMoeda(unitario)}<i>${unidade}</i></span></span>
       </button>
       ${a.quantidade && x.selecionado ? `<span class="prc-qty"><button type="button" data-prc-qty="${a.id}" data-delta="-1" aria-label="Menos ${esc(a.nome)}">−</button><b>${qtd}</b><button type="button" data-prc-qty="${a.id}" data-delta="1" aria-label="Mais ${esc(a.nome)}">+</button></span>` : ''}
     </div>`;
@@ -10371,7 +10415,7 @@ function prcBlocoAdicionaisHTML() {
     </div>
     <div class="prc-adds">${lista.map(linha).join('')}</div>
     ${cobrados.length ? `<div class="prc-adds-total">
-      <span>${cobrados.length} ${cobrados.length === 1 ? 'adicional cobrado' : 'adicionais cobrados'}</span>
+      <span>${cobrados.length} ${cobrados.length === 1 ? 'adicional cobrado' : 'adicionais cobrados'}${prcPeriodo().desconto ? ` · já com ${prcPeriodo().desconto}% do ${esc(prcPeriodo().nome.toLowerCase())}` : ''}</span>
       <b>${prcMoeda(somaCobrada)}<i>/mês</i></b>
     </div>` : ''}
   </section>`;
@@ -10401,8 +10445,8 @@ function prcBlocoPlanoHTML() {
       /* O preço do plano no período escolhido. Sem adicional nenhum: aqui a comparação
          é entre PLANOS, e somar adicionais tornaria os quatro incomparáveis. */
       const per = prcPeriodo();
-      const comDesconto = Math.round(item.preco * (1 - per.desconto / 100));
-      const temDesconto = per.desconto > 0 && comDesconto < item.preco;
+      const comDesconto = prcComDesconto(item.preco, per);
+      const temDesconto = comDesconto < item.preco;
       return `<button type="button" class="prc-plan" data-prc-plano="${item.id}" aria-pressed="${item.id === plano.id}">
         <span class="prc-plan-tag">${item.destaque ? 'Popular' : '&nbsp;'}</span>
         <b>${esc(item.nome)}</b>
