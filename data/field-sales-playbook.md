@@ -47,7 +47,7 @@ Isso é sobre o que a ferramenta **faz**, não sobre como o time vende.
 | 10 | **Integração com Adquirentes** | Conexão direta com as maiores adquirentes — pagamento processado já entra na conciliação.                                                                                                          | Tempo Livre               |
 | 11 | **Fidelidade**                 | Cashback nativo e retenção — traz o cliente de volta sem depender de desconto.                                                                                                                     | Vendas                    |
 | 12 | **Reservas de Mesa**           | Link público onde o cliente escolhe dia/horário e reserva sozinho — a mesa fica bloqueada pelo período todo, WhatsApp cuida da confirmação e do lembrete, e a comanda já abre sozinha quando a recepção confirma a chegada. | Experiência + Vendas |
-| 13 | **Gestão Financeira**          | Controle de caixa, conciliação bancária automática (Open Finance), DRE automático.                                                                                                                 | Tempo Livre               |
+| 13 | **Gestão Financeira**          | Controle de caixa, conciliação bancária por importação de OFX (sem credencial bancária no sistema), DRE automático.                                                                                                                 | Tempo Livre               |
 | 14 | **Gestão de Estoque**          | Controle de insumo integrado — saída automática a cada venda.                                                                                                                                      | Custos + Tempo Livre      |
 | 15 | **Controle de CMV**            | Custo de Mercadoria Vendida calculado automaticamente.                                                                                                                                             | Custos                    |
 | 16 | **Ficha Técnica**              | Cadastro de receita/composição de cada prato.                                                                                                                                                      | Custos                    |
@@ -389,6 +389,20 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 * **Plano Inovação — **destrava a Precificação Dinâmica (CMV recalculado em tempo real, item por item). No plano padrão o cliente só tem CMV e Ficha Técnica estáticos.
 
 * **Desconto — **somente via prazo (trimestral/semestral/anual). Plano longo parcelado só no cartão de crédito.
+
+### ⚠️ Quatro divergências ABERTAS entre as nossas próprias fontes
+
+Levantadas em 29/08/2026 comparando a tabela do cockpit, o site público e o configurador do Takeat OS. **Nenhuma delas foi resolvida por conta própria** — resolver preço e política de desconto é decisão do gestor, não de quem escreve a página. Enquanto não houver decisão, o executivo usa a **tabela do cockpit** (é a que a aba Propostas imprime) e escala a dúvida em vez de improvisar na mesa.
+
+**1. Enterprise: R$ 799 aqui, "Consulte valores" no site.** A nossa tabela traz R$ 799/mês (mesas) e R$ 699 (delivery). A página `/planos` não publica valor de Enterprise — diz "Consulte valores". Se o dono comparar com o site, ele vai perguntar por que você tem um número que o site não tem. *Decisão pendente: o número é público ou é sob consulta?*
+
+**2. Profissional: 9 itens na nossa lista, 6 no site.** A página pública do Profissional não lista **CFO IA**, **Reservas** nem **CRM + Segmentação**, que estão na nossa tabela. Ou o site está desatualizado, ou esses três não deveriam estar sendo prometidos. *Não prometa os três até haver confirmação* — e se prometer o que o site não sustenta, o dono descobre no dia seguinte.
+
+**3. Conciliação: OFX aqui, "Open Finance" em duas páginas do site.** Detalhado na página [Conciliação Bancária OFX](playbook:conciliacao-ofx). O que existe hoje é **importação de arquivo OFX**. Duas páginas do nosso site prometem conexão automática com banco. *Divergência de marketing, não de produto — mas quem paga é o executivo na mesa.*
+
+**4. Faixas de desconto que existem no Takeat OS e não na nossa tabela.** O configurador do Takeat OS mostra faixas que a aba Propostas não tem: **Trimestral Parceiros (−30%)**, **Trimestral Eventos (−30%)** e **Trimestral — "deu a louca no gerente" (−50%)**. Não foram adicionadas de propósito: **política de desconto não se inventa**. Se essas faixas valem para Field Sales, quem libera é o gestor — e aí elas entram na tabela, não na conversa.
+
+> **A regra que vale em todas as quatro:** divergência entre fontes não é motivo para travar a venda, é motivo para **não afirmar**. "Vou confirmar isso com o meu time e te respondo hoje" custa uma hora. Afirmar errado custa o contrato — e a confiança do dono na sua palavra sobre tudo o mais que você disse.
 
 ## ⏱️ SLA por etapa do pipeline
 
@@ -799,6 +813,25 @@ Colete o dado, agradeça, e **volte em outro horário** — nunca insista em pé
 
 As táticas do item 3.3 funcionam em qualquer venda de campo. Esta seção é diferente: usa dois ativos que **só a Takeat tem** para furar a barreira — presença validada em restaurantes de referência em todo o Brasil, e o fato de não existir concorrente direto que resolva o setor de food da mesma forma. Isso muda a abordagem de "mais um vendedor de sistema" para "estou trazendo algo que o mercado inteiro já está adotando e ele ainda não tem".
 
+### 📊 Os números que você PODE falar (e que valem mais que "todo o Brasil")
+
+Estes são públicos, estão no nosso site e o dono pode conferir no celular na frente de você. Decorar estes seis é melhor que qualquer adjetivo:
+
+| Número | O que é |
+| --- | --- |
+| **+4.500 restaurantes** | base ativa |
+| **+1.400 cidades** | alcance — serve para "aqui na região ninguém usa" |
+| **4.9 em +130 mil avaliações** | satisfação, e o volume é o que dá peso |
+| **Sem fidelidade** | não tem multa de cancelamento |
+| **Suporte 7 dias por semana** | inclui sábado e domingo, que é quando o restaurante fatura |
+| **Implantação assistida em 7 a 14 dias** | nosso time configura, treina e acompanha até o go-live |
+
+E a peça mais útil de todas para furar barreira: **a demonstração leva 20 minutos.** "Vinte minutos" é um pedido que o decisor consegue conceder no mesmo dia; "uma reunião" ele empurra para semana que vem.
+
+> **Regra:** número exato ganha de adjetivo. Diga "quatro mil e quinhentos restaurantes em mil e quatrocentas cidades", não "muitos restaurantes pelo Brasil". O primeiro é verificável e por isso soa verdadeiro; o segundo é o que todo vendedor fala.
+
+> **O que NÃO transformar em média:** os depoimentos do site trazem números de casos específicos — "reduzimos o tempo de produção em 30%", "o cashback via WhatsApp aumentou nosso faturamento em 3 mil reais". Esses são **de um cliente**, não são média nossa. Atribua sempre ("um cliente nosso relata..."), nunca prometa como resultado esperado.
+
 ### 🎯 Gatilho 1 — Abertura por Escala Nacional (quebra o "mais um vendedor local")
 
 Use isso logo na primeira frase, antes mesmo do staff decidir se vale a pena te escutar. O objetivo é sinalizar que você não representa um sistema qualquer da região — representa algo que já rodou em referências espalhadas pelo país.
@@ -860,6 +893,27 @@ O estudo comparativo completo — os 19 módulos, os 4 Pilares, a Teka (IA de at
 | **Linx / Degust** | Financeiro robusto, mas engessado | Financeiro em tempo real, ajustável pelo dono |
 
 Pra usar cada um desses em campo — o discurso completo, os punches prontos e os scripts de objeção — vá na página **ECOSSISTEMA TAKEAT**.
+
+### 🔍 Os comparativos públicos — e por que você deve conhecê-los antes do cliente
+
+Nós publicamos **oito comparativos lado a lado** em `takeat.app/comparativos`: Saipos, Cardápio Web, Repediu, Yooga, Consumer, Colibri, Anota AI e Goomer. Cada um tem data de revisão e uma matriz de **15 recursos** em quatro blocos (operação, canais de venda, financeiro, suporte e implantação).
+
+Dois motivos para você abrir esses links antes de uma visita:
+
+1. **O cliente já leu.** Quem está avaliando trocar de sistema pesquisa "takeat vs [atual]". Chegar sem saber o que a nossa própria página diz é o pior lugar para estar.
+2. **O enquadramento é honesto, e isso é uma arma.** Cada comparativo tem uma seção **"Nem sempre é Takeat"**, que lista razões reais para escolher o concorrente. No de Saipos, por exemplo: *"sua operação é 90% delivery e o iFood já roda redondo há tempos"* e *"você prefere marca mais antiga e conhecida no segmento de delivery"*.
+
+**Como usar isso na mesa:** apresente a razão contrária **antes** do dono. *"Olha, se você é 90% delivery e o seu sistema atual dá conta, eu te digo com honestidade que a diferença é menor. A conversa muda se você tem salão além do delivery, ou se quer construir base de cliente própria."* Vendedor que nomeia o cenário em que ele não é a melhor escolha compra credibilidade para tudo o que disser depois — e o dono para de procurar a pegadinha.
+
+**A leitura que a matriz entrega:** contamos **15 de 15 recursos nativos (100%)**. No comparativo de Saipos, eles aparecem com **7 nativos e 4 parciais (47%)**. O ponto não é o percentual — é o que "parcial" significa na operação dele: módulo que existe mas não cobre todo o escopo, ou que depende de plugin. Três lugares onde essa diferença aparece com mais frequência nos comparativos:
+
+* **cardápio digital com QR Code na mesa** — nativo aqui, parcial em quem nasceu de delivery;
+* **delivery próprio sem taxa** — o canal no domínio dele, sem comissão por pedido;
+* **gestão multi-unidade / franquia** — painel consolidado, cardápio padronizado e royalties.
+
+E há recursos onde o comparativo marca o concorrente como **"a verificar"** — não foi possível confirmar publicamente. **Não leia isso como "não tem".** Se o dono perguntar, a resposta é: *"não achei confirmação pública disso; se for decisivo pra você, pergunta pra eles e a gente compara com o que der."* Afirmar ausência que não medimos é o tipo de erro que destrói a venda quando o concorrente prova o contrário.
+
+> **Modelo de preço, para a comparação de custo:** os nossos planos incluem os módulos (sem cobrança separada por PDV, cardápio, delivery próprio ou CRM). Vários concorrentes cobram **por módulo**, com valor sob consulta e licença mensal por unidade. Quando o dono compara mensalidade com mensalidade, ele quase sempre está comparando o nosso pacote com o módulo base do outro — desdobre isso item por item antes de discutir desconto.
 
 ## Os 3 tipos de concorrente — e a pergunta que desarma cada um
 
@@ -1682,8 +1736,6 @@ São **duas integrações diferentes**, e elas resolvem problemas diferentes. Sa
 
 **Como isso ajuda o dono:** o produto embalado sai da balança pronto para passar no caixa por leitura de código. Self-service, açougue, rotisseria e freezer de congelados param de depender de alguém lembrar o preço — e o caixa deixa de ser o gargalo do almoço.
 
-> **Prix 3 Plus:** sob consulta / em testes. (Informação que já estava nesta página; mantida porque não foi contrariada pela lista oficial das integrações.)
-
 **Diagnóstico de campo:** pergunte *"vocês vendem alguma coisa por peso?"*. Se a resposta for self-service, açougue, marmita por quilo ou congelado embalado, a balança **não é acessório** — é parte da venda, e sem ela o PDV vira digitação manual no horário mais cheio.
 
 ***
@@ -1751,7 +1803,15 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ### ❓ Quais balanças de automação nós integramos?
 
-> ⚖️ Homologada e integrada diretamente: **PRIX 3 FIT (Toledo)**. Se o cliente tiver outro modelo, consulte o time de produto antes de garantir a venda.
+> ⚖️ **Depende de qual das duas integrações o cliente precisa — e são duas.**
+>
+> **Por peso** (o peso vira valor na venda, direto no sistema): **Toledo Prix 3 Fit**. Uma só.
+>
+> **Etiquetadora** (a balança imprime etiqueta com peso, preço e código de barras): **Toledo Prix 3 Fit + Impressora Elgin L42DT**, **Toledo Prix 4**, **Prix 4 Uno**, **Prix 4 Due**, **Prix 5**, **Prix 5 Plus**, **Filizola Platina**, **Filizola Platina Plus**. Oito.
+>
+> Ou seja: a Prix 3 Fit é a única que faz **peso na venda**, e faz etiqueta se estiver acompanhada da Elgin L42DT. As Prix 4/5 e as Filizola Platina são de **etiqueta**. Confundir as duas é prometer na mesa o que o equipamento do cliente não faz — e voltar atrás depois de vendido é a pior conversa que existe.
+>
+> ⚠️ **O site diz mais que esta lista.** A página de self-service do takeat.app fala em "balança integrada — Toledo, Filizola, Urano, Welmy e outras, via protocolo serial". Se o cliente citar um Urano ou um Welmy porque leu no site, **não confirme na mesa**: a lista homologada é a de cima, e o resto é consulta ao time de produto antes de garantir. Levar essa divergência para o produto resolver é mais útil que improvisar uma resposta.
 
 ### ❓ A Teka (IA de atendimento) está inclusa no plano padrão ou é adicional?
 
