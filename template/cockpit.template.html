@@ -3777,6 +3777,13 @@
   .pb-article hr{height:1px;margin:28px 0;border:0;background:var(--line);}
   .pb-article a{color:var(--red);font-weight:750;text-decoration:none;border-bottom:1px solid color-mix(in srgb,var(--red) 35%,transparent);}
   .pb-article code{padding:2px 5px;border-radius:5px;background:var(--sunk);color:var(--red-dk);font-size:.9em;}
+  /* ESCOPO: artigo do Playbook. Link de uma pagina do playbook para outra — mesma
+     pintura do link externo (.pb-article a) porque para quem le e a mesma coisa.
+     E <button> e nao <a> porque o destino nao e URL: passa por abrirPaginaPlaybook. */
+  .pb-article .pb-ir{display:inline;margin:0;padding:0;border:0;border-bottom:1px solid color-mix(in srgb,var(--red) 35%,transparent);background:none;font:inherit;font-weight:750;color:var(--red);cursor:pointer;text-align:left;}
+  .pb-article .pb-ir:hover{border-bottom-color:var(--red);}
+  /* Destino inexistente: perde o affordance em vez de mentir que da pra clicar. */
+  .pb-article .pb-ir.is-morto{border-bottom-style:dotted;color:var(--muted2);cursor:default;}
   .pb-article pre{overflow:auto;margin:13px 0 18px;padding:14px 16px;border-radius:13px;background:var(--dark);color:var(--dark-ink);font-size:11px;line-height:1.6;white-space:pre-wrap;}
   .pb-article pre code{padding:0;background:none;color:inherit;}
   .pb-article blockquote{position:relative;margin:16px 0 20px;padding:15px 48px 15px 17px;border:1px solid color-mix(in srgb,var(--amber) 30%,var(--line));border-left:4px solid var(--amber);border-radius:0 13px 13px 0;background:var(--amber-soft);color:var(--amber-ink);font-size:12px;line-height:1.65;}
@@ -10063,6 +10070,26 @@ function playbookListaHTML() {
 
 function playbookLigarBotoesPagina(raiz) {
   raiz.querySelectorAll('[data-pb-page]').forEach(btn => btn.addEventListener('click', () => abrirPaginaPlaybook(btn.dataset.pbPage)));
+
+  /* LINK INTERNO ENTRE GUIAS (29/08/26). O markdown do playbook agora escreve
+     [rotulo](playbook:id#ancora), e o compilador gera este botao. Aqui ele ganha
+     comportamento.
+
+     Valida ANTES de ligar: pagina que nao existe (id errado no markdown, pagina
+     renomeada) perde o affordance de clique em vez de virar um botao que nao faz
+     nada — o executivo com o cliente na frente clicando em algo morto e pior que
+     um texto sem link. A ancora e validada tambem, e quando ela nao existe abre a
+     pagina certa no topo, que e melhor que nao ir a lugar nenhum. */
+  raiz.querySelectorAll('[data-pb-ir]').forEach(btn => {
+    const pb = playbookDados();
+    const destino = btn.dataset.pbIr;
+    const pagina = pb && (pb.paginas || []).find(x => x.id === destino);
+    if (!pagina) { btn.classList.add('is-morto'); btn.disabled = true; return; }
+    const querAncora = btn.dataset.pbAncora || '';
+    const anc = querAncora && (pagina.headings || []).some(h => h.id === querAncora) ? querAncora : null;
+    btn.title = 'Abrir: ' + pagina.titulo;
+    btn.addEventListener('click', () => abrirPaginaPlaybook(destino, anc));
+  });
 }
 
 function playbookAtualizarCatalogo() {

@@ -15,12 +15,17 @@ const PAGINAS = [
   { marker: 'COMO ACHAR O TD', id: 'acesso-decisor', categoria: 'Venda na rua', icone: '◇', titulo: 'Acesso ao decisor', resumo: 'Como atravessar o gatekeeper e chegar a quem realmente assina.' },
   { marker: 'FOLLOW UP', id: 'follow-up', categoria: 'Venda na rua', icone: '↻', titulo: 'Follow-up de excelência', resumo: 'SLA, escalonamento e presença continuada sem perseguir o cliente.' },
   { marker: 'RUA x WHATSAPP', id: 'rua-whatsapp', categoria: 'Venda na rua', icone: '↔', titulo: 'Rua × WhatsApp', resumo: 'Como usar mensagem e ligação para impulsionar — não substituir — o asfalto.' },
+  { arquivo: 'playbook-mapa-dor-solucao.md', id: 'mapa-dor-solucao', categoria: 'Converter e fechar', icone: '⊕', titulo: 'Mapa dor → solução', resumo: 'As 6 dores da enumeração oficial traduzidas em módulo, plano e frase de campo.' },
   { marker: 'QUEBRA DE OBJEÇÕES', id: 'objecoes', categoria: 'Converter e fechar', icone: '◈', titulo: 'Quebra de objeções', resumo: 'Respostas de impacto para preço, concorrência, tecnologia e risco.' },
   { marker: 'TÉCNICAS DE FECHAMENTO', id: 'fechamento', categoria: 'Converter e fechar', icone: '✓', titulo: 'Técnicas de fechamento', resumo: 'Transição de valor, pagamento na mesa e checklist de saída.' },
   { marker: 'CLIENTES X MRR', id: 'clientes-mrr', categoria: 'Converter e fechar', icone: '△', titulo: 'Clientes × MRR', resumo: 'Território, volume, MRR alvo e blindagem da receita recorrente.' },
   { marker: 'RELACIONAMENTO', id: 'relacionamento', categoria: 'Carteira e retenção', icone: '∞', titulo: 'Relacionamento de elite', resumo: 'Pós-venda presencial, indicações e domínio sustentável do bairro.' },
   { marker: 'COMO EVITAR CHURN', id: 'evitar-churn', categoria: 'Carteira e retenção', icone: '⊙', titulo: 'Como evitar churn', resumo: 'Radar de risco, recuperação presencial e divisão correta com CS.' },
   { marker: 'ECOSSISTEMA TAKEAT', occurrence: 0, id: 'ecossistema-takeat', categoria: 'Produto e mercado', icone: '⬡', titulo: 'Ecossistema Takeat', resumo: 'Soluções, pilares, diferenciais e como cruzar produto com dor real.' },
+  { arquivo: 'playbook-dark-kitchen.md', id: 'dark-kitchen', categoria: 'Produto e mercado', icone: '◐', titulo: 'Dark Kitchen', resumo: 'Marcas virtuais sobre a mesma cozinha: faturamento novo sobre custo fixo pago.' },
+  { arquivo: 'playbook-rota-inteligente.md', id: 'rota-inteligente', categoria: 'Produto e mercado', icone: '⇉', titulo: 'Rota Inteligente', resumo: 'O elo que falta no delivery próprio: agrupar e sequenciar a rota do entregador.' },
+  { arquivo: 'playbook-conciliacao-cfx.md', id: 'conciliacao-cfx', categoria: 'Produto e mercado', icone: '⊞', titulo: 'Conciliação Bancária CFX', resumo: 'O único adicional que se vende como recuperação: a taxa que a maquininha cobrou errado.' },
+  { arquivo: 'playbook-multilojas.md', id: 'multilojas', categoria: 'Produto e mercado', icone: '⧉', titulo: 'Multilojas / Franqueadora', resumo: 'R$ 29 é preço de decisão automática — e o gancho natural do Enterprise.' },
   { marker: 'CONCORRÊNCIA', id: 'concorrencia', categoria: 'Produto e mercado', icone: '⚑', titulo: 'Concorrência', resumo: 'Onde cada solução compete, onde o concorrente falha e como posicionar a Takeat.' },
   { marker: 'EQUIPAMENTOS', id: 'equipamentos', categoria: 'Produto e mercado', icone: '▣', titulo: 'Equipamentos', resumo: 'Infraestrutura homologada, impressoras, tablets, totem, TEF e balanças.' },
   { marker: 'DISPLAYS/COMANDAS', id: 'displays-comandas', categoria: 'Produto e mercado', icone: '▤', titulo: 'Displays e comandas', resumo: 'Materiais personalizados, processo de solicitação e valor para o restaurante.' },
@@ -61,6 +66,8 @@ function inline(texto) {
   const tokens = [];
   const guardar = html => { const id = tokens.push(html) - 1; return `\u0000${id}\u0000`; };
   s = s.replace(/`([^`]+)`/g, (_, code) => guardar(`<code>${code}</code>`));
+  s = s.replace(/\[([^\]]+)\]\(playbook:([a-z0-9-]+)(?:#([a-z0-9-]+))?\)/gi, (_, label, pagina, ancora) =>
+    guardar(`<button type="button" class="pb-ir" data-pb-ir="${pagina.toLowerCase()}"${ancora ? ` data-pb-ancora="${ancora.toLowerCase()}"` : ''}>${label}<span aria-hidden="true"> →</span></button>`));
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, href) =>
     guardar(`<a href="${href}" target="_blank" rel="noopener">${label}<span aria-hidden="true"> ↗</span></a>`));
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
