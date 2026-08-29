@@ -95,7 +95,7 @@ Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, o
 
 > 🎯 **Por que a Precificação Dinâmica é a arma mais forte dessa seção:** nenhum concorrente listado aqui tem esse recálculo em tempo real por item. A pergunta de impacto que abre essa conversa: *"Seu [Nome], o senhor sabe, hoje, sem abrir planilha nenhuma, se o [prato mais vendido do cardápio] está dando lucro ou prejuízo no preço que está cobrando agora?"* — a maioria dos donos não sabe, e esse silêncio já vende a demo.
 
-**Dores que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) e [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado). Para fechar o ciclo do dinheiro que entra: [Conciliação Bancária CFX](playbook:conciliacao-cfx).
+**Dores que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) e [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado). Para fechar o ciclo do dinheiro que entra: [Conciliação Bancária OFX](playbook:conciliacao-ofx).
 
 ### 📱 Ferramenta de Garçom + Garçom Digital (A Guerra do Salão)
 
@@ -149,7 +149,7 @@ O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que pr
 | **Colibri (NCR) / Zucchetti** | Sistemas antigos com módulo financeiro | Financeiro desconectado do operacional — exige revenda cara pra qualquer ajuste    | DRE automático gerado do próprio fluxo operacional, sem intervenção de terceiro |
 | **Linx / Degust**             | Financeiro robusto, mas engessado      | Processo lento pra qualquer mudança — feito pra franquia grande, não pro dono ágil | Gestão financeira em tempo real, ajustável pelo próprio dono
 
-**Dor que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe). Os dois adicionais que fecham a guerra: [Conciliação Bancária CFX](playbook:conciliacao-cfx) (o dinheiro que já era dele e não chegava) e [Multilojas / Franqueadora](playbook:multilojas) (a segunda unidade sem virar planilha).                    |
+**Dor que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe). Os dois adicionais que fecham a guerra: [Conciliação Bancária OFX](playbook:conciliacao-ofx) (o dinheiro que já era dele e não chegava) e [Multilojas / Franqueadora](playbook:multilojas) (a segunda unidade sem virar planilha).                    |
 
 ***
 
@@ -893,7 +893,7 @@ Quase sempre a resposta é "só o caixa". A partir daí não é mais troca de si
 
 **A pergunta que desarma:** *"Se o senhor precisar viajar uma semana, quem lê a sua planilha?"*
 
-**Não discuta a planilha — discuta o que ela não faz.** Quem controla no caderno já provou que se importa com controle: é o melhor perfil que existe, não o pior. Aprofundar: [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) · [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado) · [Conciliação Bancária CFX](playbook:conciliacao-cfx).
+**Não discuta a planilha — discuta o que ela não faz.** Quem controla no caderno já provou que se importa com controle: é o melhor perfil que existe, não o pior. Aprofundar: [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) · [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado) · [Conciliação Bancária OFX](playbook:conciliacao-ofx).
 
 > **A regra dos três:** o PDV legado se ataca com **margem**, o marketplace com **posse do cliente**, o caderno com **o que ele não avisa**. Trocar o argumento de tipo é o erro mais caro — falar de margem para quem sofre com comissão de marketplace soa a discurso decorado.
 
