@@ -1706,6 +1706,18 @@
   .hoje-yesterday-metric{display:block!important;background:var(--panel2);border:1px solid var(--line-soft)!important;border-radius:10px;padding:9px 11px!important;}
   .hoje-yesterday-metric>span:first-child{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.055em;margin-bottom:5px;}
   .hoje-yesterday-metric>span:last-child{font-size:11.5px;}
+  /* A PASSAGEM PARA O PLANEJAMENTO — fecha a coluna de prioridade. Calma de propósito:
+     é a saída da tela, não mais uma urgência. */
+  .hoje-passagem{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
+    padding:15px 18px;border:1px dashed var(--line-btn);border-radius:var(--r-lg);background:var(--panel2);}
+  .hoje-passagem-txt{display:flex;flex-direction:column;gap:3px;min-width:200px;flex:1;}
+  .hoje-passagem-txt>b{font:800 12.5px 'Archivo',system-ui,sans-serif;color:var(--ink);}
+  .hoje-passagem-txt>span{font-size:11.5px;line-height:1.5;color:var(--muted);}
+  .hoje-passagem-txt b b{color:var(--ink);}
+  .hoje-passagem-cta{flex:none;min-height:40px;padding:10px 16px;border:1px solid var(--ink);border-radius:999px;
+    background:var(--ink);color:var(--dark-ink);font:800 12px 'Archivo',system-ui,sans-serif;cursor:pointer;}
+  .hoje-passagem-cta:hover{opacity:.9;}
+
   .hoje-l1-grid>.roteiro-hoje-card{height:100%;box-sizing:border-box;margin:0;}
   .hoje-month-card{background:linear-gradient(135deg,#fffdfa 0%,#fff5f1 100%);color:var(--ink);border:1.5px solid var(--red);box-shadow:0 5px 18px rgba(229,26,49,.08);}
   .hoje-month-card .hoje-month-rank{background:var(--red-soft)!important;color:var(--red);}
@@ -7875,6 +7887,34 @@ function contasLivresParaSugerir() {
     (typeof prospeccaoAtiva !== 'function' || prospeccaoAtiva(l)) &&
     (typeof prospeccaoFazSentido !== 'function' || prospeccaoFazSentido(l)));
 }
+/* A PASSAGEM PARA O PLANEJAMENTO (29/08/26) — o "e já planejar" do pedido.
+
+   A aba Hoje não tinha saída nenhuma para o Planejamento: ela dizia o que fazer e o que
+   revisar, e terminava. Quem monta o dia e a semana é a outra aba, e o executivo tinha
+   de descobrir isso sozinho na barra de abas.
+
+   Uma linha e um botão, de propósito: a aba já sofre de informação demais, e esta é uma
+   PASSAGEM, não um painel. O número vem da fila que já foi calculada para esta tela
+   (diag.fila) — nenhuma consulta nova, nenhum indicador novo. Sem fila descoberta, o
+   texto muda em vez de mostrar zero: zero aqui significaria "nada a planejar", e o que
+   é verdade é "nada pendente — dá para abrir conta nova".
+
+   Não é vermelho: planejar não é urgência. */
+function buildPassagemPlanejamentoHTML(diag) {
+  const fila = (diag && diag.fila) || {};
+  const descobertos = Number(fila.negociosAfetados || 0);
+  return `
+    <div class="hoje-passagem">
+      <div class="hoje-passagem-txt">
+        <b>E depois: planejar</b>
+        <span>${descobertos > 0
+          ? `Você tem <b>${descobertos}</b> negócio${descobertos === 1 ? '' : 's'} da sua carteira sem próximo passo. O Planejamento é onde eles entram no seu dia e na sua semana.`
+          : 'Sua carteira está coberta. O Planejamento é onde você enche o dia com as contas-alvo do seu território.'}</span>
+      </div>
+      <button type="button" class="hoje-passagem-cta" data-hoje-ir="planejamento">Abrir Planejamento →</button>
+    </div>`;
+}
+
 function buildAcoesDeAgoraHTML(r, diag) {
   const acoes = acoesDeAgora(r, diag, contasLivresParaSugerir());
   const fila = diag.fila;
@@ -7980,6 +8020,17 @@ function wireHojeExecucao(rootEl, r, diag) {
 
   const verFila = rootEl.querySelector('.acao-ver-fila');
   if (verFila) verFila.addEventListener('click', () => irParaFila(null));
+
+  /* A passagem CLICA O BOTÃO DE ABA REAL em vez de chamar activateTab direto — mesma
+     razão anotada na faixa do time da Daily: cada aba tem render e efeito colateral
+     próprios no clique, e reproduzir isso à mão cria um segundo caminho de navegação
+     que sai de sincronia na primeira mudança. */
+  rootEl.querySelectorAll('[data-hoje-ir="planejamento"]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const aba = document.getElementById('tabBtnAgenda');
+      if (aba) aba.click();
+    });
+  });
 
   const ctaBanner = rootEl.querySelector('#meuPainelCtaDia');
   if (ctaBanner) {
@@ -8147,13 +8198,21 @@ function buildInsightsAutomaticosHTML(r) {
   const top = candidatos.slice(0, 3);
 
   return `
-    <div class="chart-card" style="margin-bottom:18px;border-left:3px solid var(--amber);">
-      <h3 style="margin-bottom:4px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d='M9 18h6M10 21h4M12 2a6 6 0 016 6c0 3-2 4.5-2 7H8c0-2.5-2-4-2-7a6 6 0 016-6z'/></svg>Dicas pro seu dia</h3>
-      <div class="chart-subtitle" style="margin:0 0 10px;">Tirado do seu funil de hoje. As boas práticas da sua análise semanal ficam em Meu desenvolvimento.</div>
+    <!-- FECHADO POR PADRÃO (29/08/26). São 277px de leitura no fim de uma aba que o
+         Julyan chamou de "muita informação", e é conteúdo de ler-uma-vez: sai do funil
+         de hoje, não muda durante o expediente e não pede nenhuma ação. O título já diz
+         quantas são, então fechado ele continua avisando que existe. -->
+    <details class="chart-card" style="margin-bottom:18px;border-left:3px solid var(--amber);">
+      <summary style="cursor:pointer;display:flex;align-items:center;gap:7px;min-height:24px;">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d='M9 18h6M10 21h4M12 2a6 6 0 016 6c0 3-2 4.5-2 7H8c0-2.5-2-4-2-7a6 6 0 016-6z'/></svg>
+        <b style="font-family:'Archivo',system-ui,sans-serif;font-size:13.5px;">Dicas pro seu dia</b>
+        <span style="font-size:11px;color:var(--muted2);">${top.length} ${top.length === 1 ? 'leitura' : 'leituras'} do seu funil de hoje</span>
+      </summary>
+      <div class="chart-subtitle" style="margin:11px 0 10px;">As boas práticas da sua análise semanal ficam em Meu desenvolvimento.</div>
       <ul class="practice-list" style="margin:0;">
         ${top.map(c => `<li>${c.texto}</li>`).join('')}
       </ul>
-    </div>
+    </details>
   `;
 }
 
@@ -8371,9 +8430,23 @@ async function renderMeuPainel() {
     <div class="hoje-l1-grid">
       <div class="hoje-priority-stack">
 
+      <!-- A ORDEM DA COLUNA (29/08/26). Pedido do Julyan sobre esta aba: "muita
+           informação, o executivo precisa saber o que ele vai fazer no dia, o que ele
+           tem que revisar e ja planejar".
+
+           São três perguntas, e agora elas estão nesta ordem:
+             FAZER    · "O que eu faço agora" — as ações nomeadas, com cliente e verbo
+             REVISAR  · "Seu dia está pronto para a rua?" — os portões do dia
+             PLANEJAR · a passagem para o Planejamento, onde ele monta dia e semana
+
+           Antes o checklist vinha primeiro: ele abria a aba e a primeira coisa era uma
+           lista de sete pendências de registro, não o nome do cliente para quem ligar.
+           Checklist antes de ação é cobrança antes de saída. -->
+      ${buildAcoesDeAgoraHTML(r, diagDia)}
+
       ${buildGatesDoDiaHTML(r, diagDia)}
 
-      ${buildAcoesDeAgoraHTML(r, diagDia)}
+      ${buildPassagemPlanejamentoHTML(diagDia)}
       </div>
 
       <!-- Coluna direita = "o que aconteceu", em duas escalas: o último dia na rua e o
