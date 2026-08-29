@@ -1586,5 +1586,61 @@ teste('telefone da acao: E.164 quando existe, null quando nao da pra ligar', () 
 });
 
 console.log('');
+teste('sem pendencia, as acoes nomeiam contas livres — e nunca disputam com a carteira', () => {
+  /* Pedido do Julyan: "conseguimos indicar contas se o funil está vazio?". Antes, sem
+     pendencia, o card mostrava um parabens e parava — beco sem saida justamente na hora
+     em que ele deveria abrir conta nova.
+
+     As contas chegam como PARAMETRO porque os filtros de escopo (prospeccaoAtiva,
+     prospeccaoFazSentido, rede grande) vivem fora do bloco @nucleo. Quem filtra e o
+     chamador, que e producao; aqui se testa a regra nova inteira, sem dublar nenhuma
+     regra de negocio. */
+  const contas = [
+    { id: 'k1', nome: 'Cantina Nova',   responsavel_owner_id: OWNER, data_abertura: diasAtras(12).toISOString(), nota: 4.7, avaliacoes: 88, bairro: 'Taquara', telefone: '21 98888-1111' },
+    { id: 'k2', nome: 'Pizzaria Recem', responsavel_owner_id: OWNER, data_abertura: diasAtras(40).toISOString(), bairro: 'Recreio' },
+    { id: 'k3', nome: 'Bar do Fim',     responsavel_owner_id: OWNER, cidade: 'Rio de Janeiro' },
+    { id: 'k4', nome: 'Quarta Conta',   responsavel_owner_id: OWNER, bairro: 'Barra' },
+    { id: 'k5', nome: 'De Outro Dono',  responsavel_owner_id: 'outro-owner', bairro: 'Centro' },
+    { id: 'k6', nome: 'Ja No Funil',    responsavel_owner_id: OWNER, hubspot_deal_id: '999', bairro: 'Centro' }
+  ];
+
+  // 1. carteira VAZIA: a tela nomeia contas em vez de parar num parabens.
+  const vazio = novoContexto(dados({ funilLeads: {} }), { ownerId: OWNER, role: 'rep' });
+  const semContas = vazio.acoesDeAgora(vazio.DATA.reps[0]);
+  igual(semContas.length, 0, 'sem lista de contas, nao inventa acao nenhuma');
+
+  const comContas = vazio.acoesDeAgora(vazio.DATA.reps[0], undefined, contas);
+  igual(comContas.length, 3, 'tres contas sugeridas, o mesmo teto das outras acoes');
+  igual(comContas.map(a => a.cliente), ['Cantina Nova', 'Pizzaria Recem', 'Bar do Fim'],
+    'na ORDEM que chegou (a fila do Planejamento ja vem ordenada), sem quarta vaga');
+  verdade(comContas.every(a => /Abrir negócio com/.test(a.verbo)), 'o verbo diz o que fazer');
+  verdade(/melhores contas livres/.test(comContas[0].motivo), 'o motivo explica por que ela esta ali');
+  verdade(/abriu há 12d/.test(comContas[0].motivo) && /4.7★ \(88\)/.test(comContas[0].motivo)
+    && /Taquara/.test(comContas[0].motivo), 'e carrega as pistas reais da base: ' + comContas[0].motivo);
+  verdade(!/undefined|null|NaN/.test(comContas.map(a => a.motivo + a.ultimaInteracao).join(' ')),
+    'nenhum campo ausente vaza como texto');
+
+  // 2. dono errado e conta que JA virou negocio ficam fora.
+  const nomes = comContas.map(a => a.cliente);
+  verdade(!nomes.includes('De Outro Dono'), 'conta de outro executivo nao entra');
+  verdade(!nomes.includes('Ja No Funil'), 'conta que ja tem negocio no HubSpot nao entra');
+
+  // 3. TELEFONE: quem tem numero na base ganha os canais; quem nao tem, nao promete.
+  igual(comContas[0].tel, '5521988881111', 'telefone da conta vira E.164 pros botoes');
+  igual(comContas[1].tel, null, 'sem telefone na base, nada de botao de ligar');
+
+  // 4. A REGRA QUE MAIS IMPORTA: havendo pendencia, a sugestao NAO rouba a vaga.
+  const comCarteira = novoContexto(dados({
+    funilLeads: { '1396005401': [
+      lead({ id: 'P1', name: 'Don Aguilar',  dias: 9, ultimaInteracao: diasAtras(9).toISOString() }),
+      lead({ id: 'P2', name: 'Casa do Sul',  dias: 8, ultimaInteracao: diasAtras(8).toISOString() })
+    ] }
+  }), { ownerId: OWNER, role: 'rep' });
+  const mistas = comCarteira.acoesDeAgora(comCarteira.DATA.reps[0], undefined, contas);
+  verdade(mistas.length > 0, 'a carteira produz acao');
+  verdade(mistas.every(a => !/^contaalvo:/.test(a.id)),
+    'com negocio dele esperando, NENHUMA conta-alvo aparece: ' + mistas.map(a => a.cliente).join(' / '));
+});
+
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);
