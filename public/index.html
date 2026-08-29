@@ -9634,6 +9634,19 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   if (logo) { const larguraLogo = 176; ctx.drawImage(logo, CX - larguraLogo / 2, y, larguraLogo, logo.height * larguraLogo / logo.width); y += logo.height * larguraLogo / logo.width + 34; }
   else { ctx.fillStyle = PRC_RED; ctx.font = '800 38px Arial'; ctx.fillText('Takeat', CX, y + 32); y += 66; }
 
+  // PARA QUEM E ESTA PROPOSTA (29/08/26). Ver comentario do patch: a peca nao tinha
+  // o nome do cliente. Sem nome, o bloco inteiro nao existe.
+  const nomeDoCliente = String((typeof precificacaoEstado !== 'undefined' && precificacaoEstado.cliente) || '').trim();
+  if (nomeDoCliente) {
+    ctx.fillStyle = PRC_MUT; ctx.font = '800 12px Arial';
+    ctx.fillText('PROPOSTA PREPARADA PARA', CX, y); y += 30;
+    ctx.fillStyle = PRC_INK; ctx.font = '800 30px Arial';
+    // textAlign ainda e 'center' aqui, e prcCanvasWrap respeita o align corrente,
+    // entao cada linha sai centrada em CX. Ate 2 linhas: nome de restaurante longo
+    // ("Restaurante e Pizzaria Dona Benta do Centro") nao pode empurrar a peca.
+    y = prcCanvasWrap(ctx, nomeDoCliente, CX, y, larguraCanvas - PAD * 2, 34, 2);
+    y += 16;
+  }
   ctx.fillStyle = PRC_MUT; ctx.font = '800 14px Arial';
   ctx.fillText(`${tipo.nome.toUpperCase()} · ${c.periodo.nome.toUpperCase()}${c.periodo.desconto ? ` (-${c.periodo.desconto}%)` : ''}`, CX, y);
   y += 40;
@@ -9727,6 +9740,20 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
   ctx.strokeStyle = PRC_LINE; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(larguraCanvas, y); ctx.stroke();
   y += 34;
+  // QUEM PREPAROU (29/08/26). Ver comentario do patch. Nome + email porque telefone
+  // do executivo nao existe no dado — nao invento contato numa peca comercial.
+  const eu = (typeof sessaoAtual !== 'undefined' && sessaoAtual) ? sessaoAtual : null;
+  const meuNome = String((eu && eu.nome) || '').trim();
+  if (meuNome) {
+    const meuEmail = String((eu && eu.email) || '').trim();
+    ctx.fillStyle = PRC_INK; ctx.font = '800 15px Arial';
+    ctx.fillText(meuNome, CX, y); y += 21;
+    if (meuEmail) {
+      ctx.fillStyle = PRC_MUT; ctx.font = '700 13px Arial';
+      ctx.fillText(meuEmail, CX, y);
+    }
+    y += 30;
+  }
   ctx.fillStyle = PRC_MUT; ctx.font = '800 13px Arial';
   ctx.fillText(`PROPOSTA VÁLIDA POR ${precificacaoCache.validadeDias || 2} DIAS · TAKEAT 2026`, CX, y);
   ctx.textAlign = 'left';
