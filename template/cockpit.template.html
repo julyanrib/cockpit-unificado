@@ -14300,18 +14300,26 @@ function prosp2LigarEventos(universo, ownerId) {
     prosp2Estado.mostrar = PROSP2_LOTE;
     renderProspeccaoExecutivo();
   });
-  /* Mesmo padrão das pílulas de fonte, logo acima: um listener delegado no contêiner,
-     com id próprio. Esta função de fiação não tem a variável do contêiner de render em
-     escopo (ela recebe universo e ownerId, e consulta por getElementById), então
-     seguir o vizinho é mais seguro que introduzir uma segunda forma de alcançar o DOM.
-     O nome do campo vem do data-v, escrito com a MESMA chave de prosp2Estado. */
   /* O CLIQUE DO EIXO enche a bandeja com as contas daquele dia. Não grava nada no
      HubSpot: quem grava é o "Enviar pra agenda da semana" da bandeja, que já existe e
      já tem confirmação. Um caminho só para a escrita.
 
      Teto de 4 por clique porque a régua da fase é 6 visitas/dia e o dia já tem
      compromisso — encher de 10 seria prometer um dia que não cabe. */
-  rootEl.querySelectorAll('[data-eixo]').forEach(btn => {
+  /* A CONSULTA AQUI ERA rootEl.querySelectorAll (29/08/26). rootEl não existe nesta
+     função — ela recebe (universo, ownerId) e alcança o DOM por getElementById, como
+     todos os outros blocos daqui. O nome veio por cópia de uma função wire*.
+
+     O ESTRAGO NÃO ERA SÓ O BOTÃO DO EIXO. ReferenceError não avisa: ele estoura, aborta
+     prosp2LigarEventos no meio e derruba TODO O RESTO da fiação — inclusive o
+     wireFilaDeFollowUp da linha seguinte, que liga os 59 CTAs de "Proteger a carteira".
+     Sobravam vivos exatamente os <a href> de Ligar e WhatsApp, que são âncora nativa e
+     não dependem de JS. É o sintoma que o Julyan relatou, palavra por palavra: "NADA
+     FUNCIONA, APENAS O CLIQUE DE LIGAR E WHATSAPP".
+
+     A tela toda montava bonita, com 133 controles desenhados e 68 deles inertes — por
+     isso passou por build, por check-scripts e pelos 100 testes: nenhum deles clica. */
+  document.querySelectorAll('.prosp2-eixos [data-eixo]').forEach(btn => {
     btn.addEventListener('click', () => {
       const dia = btn.dataset.eixo;
       const eixos = eixosDaSemana(isoDate(new Date()), ancorasDaSemanaExec(ownerId), universo);
