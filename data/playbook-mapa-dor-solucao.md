@@ -62,13 +62,13 @@ Aprofundar: [A Guerra do Salão, no Ecossistema](playbook:ecossistema-takeat#eco
 
 **Reenquadramento.** **Não discutimos preço, discutimos margem.** Sem ficha técnica e CMV, todo prato pode ser um prejuízo bem servido — e o mais vendido é o que mais sangra.
 
-**Solução.** **Ficha técnica / CMV + precificação dinâmica + gestão financeira** (já no plano) e **Conciliação Bancária CFX** (R$ 99/mês) para fechar o ciclo do dinheiro que entra.
+**Solução.** **Ficha técnica / CMV + precificação dinâmica + gestão financeira** (já no plano) e **Conciliação Bancária OFX** (R$ 99/mês) para o extrato do banco bater com o controle dele.
 
-**Plano mín. → upgrade.** Inovação → Profissional + CFX.
+**Plano mín. → upgrade.** Inovação → Profissional + OFX (a conciliação já vem no Enterprise).
 
 **No WhatsApp.** *"Sobre o controle que você quer: a ficha técnica te mostra a margem de cada prato desde a primeira semana."*
 
-Aprofundar: [A Guerra da Retaguarda, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-pdv-balcao-ficha-tecnica-cmv-precificacao-dinamica-a-guerra-da-retaguard) · [Conciliação Bancária CFX](playbook:conciliacao-cfx)
+Aprofundar: [A Guerra da Retaguarda, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-pdv-balcao-ficha-tecnica-cmv-precificacao-dinamica-a-guerra-da-retaguard) · [Conciliação Bancária OFX](playbook:conciliacao-ofx)
 
 ---
 

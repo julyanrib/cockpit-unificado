@@ -25,7 +25,7 @@ const PAGINAS = [
   { gerado: 'catalogo', id: 'catalogo-solucoes', categoria: 'Produto e mercado', icone: '▦', titulo: 'Catálogo de soluções', resumo: 'O que cada funcionalidade da tabela faz, como ajuda o dono e em que plano entra.' },
   { arquivo: 'playbook-dark-kitchen.md', id: 'dark-kitchen', categoria: 'Produto e mercado', icone: '◐', titulo: 'Dark Kitchen', resumo: 'Marcas virtuais sobre a mesma cozinha: faturamento novo sobre custo fixo pago.' },
   { arquivo: 'playbook-rota-inteligente.md', id: 'rota-inteligente', categoria: 'Produto e mercado', icone: '⇉', titulo: 'Rota Inteligente', resumo: 'O elo que falta no delivery próprio: agrupar e sequenciar a rota do entregador.' },
-  { arquivo: 'playbook-conciliacao-cfx.md', id: 'conciliacao-cfx', categoria: 'Produto e mercado', icone: '⊞', titulo: 'Conciliação Bancária CFX', resumo: 'O único adicional que se vende como recuperação: a taxa que a maquininha cobrou errado.' },
+  { arquivo: 'playbook-conciliacao-ofx.md', id: 'conciliacao-ofx', categoria: 'Produto e mercado', icone: '⊞', titulo: 'Conciliação Bancária OFX', resumo: 'O extrato do banco conversando com o caixa: o mês deixa de fechar por aproximação.' },
   { arquivo: 'playbook-multilojas.md', id: 'multilojas', categoria: 'Produto e mercado', icone: '⧉', titulo: 'Multilojas / Franqueadora', resumo: 'R$ 29 é preço de decisão automática — e o gancho natural do Enterprise.' },
   { marker: 'CONCORRÊNCIA', id: 'concorrencia', categoria: 'Produto e mercado', icone: '⚑', titulo: 'Concorrência', resumo: 'Onde cada solução compete, onde o concorrente falha e como posicionar a Takeat.' },
   { marker: 'EQUIPAMENTOS', id: 'equipamentos', categoria: 'Produto e mercado', icone: '▣', titulo: 'Equipamentos', resumo: 'Infraestrutura homologada, impressoras, tablets, totem, TEF e balanças.' },
@@ -167,6 +167,13 @@ function montarCatalogo(root) {
     linhas.push('**O que faz.** ' + d.faz);
     linhas.push('');
     linhas.push('**Como ajuda o dono.** ' + d.ajuda);
+    if (Array.isArray(a.incluidoEm) && a.incluidoEm.length) {
+      /* Vender adicional para quem já o tem no plano é o erro mais caro de
+         credibilidade que existe na mesa. O dado sabe; agora a página diz. */
+      const nomes = a.incluidoEm.map(id => nomePlano[id] || id);
+      linhas.push('');
+      linhas.push('**Já vem incluído no ' + nomes.join(' e no ') + '** — não cobre à parte de quem está nesse plano.');
+    }
     if (a.descricao) {
       linhas.push('');
       linhas.push('**Na tabela oficial:** ' + a.descricao);
