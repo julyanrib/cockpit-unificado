@@ -1,43 +1,75 @@
 # 🏦 CONCILIAÇÃO BANCÁRIA OFX — o extrato conversando com o caixa
 
-**R$ 99/mês** como adicional, e **já incluído no Enterprise**. Até 29/08/2026 aparecia 3 vezes em todo o playbook, sem nenhum argumento de campo.
+**R$ 99/mês** como adicional, e **já incluído no Enterprise**.
 
-> **Sobre o nome.** O material oficial de planos traz "CFX"; o produto que existe hoje é **OFX**, confirmado pelo Julyan em 29/08/2026. OFX é o formato de arquivo padrão de extrato bancário — é isso que o módulo lê. Se alguém te mostrar a peça com "CFX", é a mesma coisa.
+> **Sobre o nome.** O material oficial de planos traz "CFX"; o produto que existe hoje é **OFX**, confirmado pelo Julyan em 29/08/2026. OFX é o formato padrão de arquivo de extrato bancário — é isso que o módulo lê.
+
+## ⚠️ Leia isto antes de entrar na mesa: o nosso próprio site se contradiz
+
+Duas páginas nossas dizem coisas diferentes, e o cliente que pesquisou vai te confrontar com a errada.
+
+* A página **`/conciliacao-bancaria`** (a nova, indexada) diz o que é verdade: **você importa o arquivo OFX do Internet Banking, sem integração e sem credencial bancária dentro do sistema**.
+* As páginas **`/solucoes`** e **`/solucoes/controle-financeiro-dre`** dizem "Conciliação bancária automática **(Open Finance)**" e chegam a nomear bancos — "Itaú, Bradesco, Santander, Sicredi e mais… **sem você precisar exportar OFX**". O FAQ dessa mesma página ainda diz "via Open Finance **ou** import OFX".
+
+**O que existe hoje é o OFX.** Se o dono disser *"no site diz que conecta o banco automaticamente"*, a resposta honesta é: **hoje é importação de arquivo OFX, e isso é uma vantagem, não uma limitação** — porque **não pedimos a senha do banco dele**. Nenhuma credencial bancária entra no sistema. Muito dono trava exatamente nesse ponto com os concorrentes de Open Finance.
+
+Não prometa conexão automática. E leve a divergência para o marketing corrigir — é a segunda vez que uma página desatualizada custa credibilidade em campo.
 
 ## A dor do dono
 
 Ele tem um controle financeiro — no sistema, na planilha, ou na cabeça — e tem um extrato bancário. **Os dois nunca se olham.**
 
-O resultado é o mês que "não fecha": o saldo do banco não bate com o que o controle diz que deveria ter, e ninguém sabe onde está a diferença. Aí vem a arqueologia: abrir o extrato, abrir o financeiro, e comparar linha por linha, à mão, procurando o que sobrou ou o que faltou.
+O resultado é o mês que "não fecha": o saldo do banco não bate com o que o controle diz, e ninguém sabe onde está a diferença. Aí vem a arqueologia: abrir o extrato, abrir o financeiro, comparar linha por linha à mão.
 
 Na prática, quase ninguém faz isso. E o que não é conferido não é corrigido.
 
 ## Como funciona
 
-O módulo **importa o extrato bancário em arquivo OFX** — o formato que todo banco exporta — e **cruza automaticamente com os lançamentos do controle financeiro**: contas a pagar e contas a receber.
+O dono **exporta o OFX do Internet Banking** e importa. O módulo **cruza com os lançamentos do controle financeiro** — contas a pagar e a receber — e o cruzamento considera o que é específico de restaurante: **taxa de maquininha, repasse de delivery e prazo do PIX**. É isso que faz o valor do extrato não bater com o valor da venda, e é isso que a planilha não sabe tratar.
 
-O que era comparação manual vira **divergência apontada**:
+Cada linha do extrato cai em **um de três estados**, e vale saber os nomes:
 
-- pagamento que saiu da conta e não está lançado;
-- lançamento que existe no sistema e não saiu da conta;
-- valor que saiu diferente do que foi previsto;
-- recebimento que o controle esperava e o banco não registrou.
+| Estado | O que significa |
+| --- | --- |
+| **Semelhante** | achou o lançamento correspondente — é só confirmar |
+| **Não encontrado** | entrou ou saiu do banco e **não existe no sistema** (etiqueta vermelha) |
+| **Unificar e Conciliar** | vários lançamentos correspondem a um crédito só (o repasse de um dia inteiro, por exemplo) |
 
-Em uma frase para a mesa do dono: **o extrato e o caixa param de ser dois documentos que ninguém compara.**
+O **"Não encontrado" em vermelho é o produto**. É a linha que ninguém teria achado: pagamento em duplicidade, débito automático esquecido, taxa lançada errada, recebimento que não entrou.
+
+## O Calendário Financeiro
+
+Junto vem a visão que o dono mais usa depois: **saldo realizado dia a dia**, com os **pendentes em laranja** e o **saldo previsto**. Ele deixa de perguntar "quanto eu tenho?" e passa a ver "quanto eu vou ter na sexta" — que é a pergunta que decide se ele compra o insumo hoje.
+
+## Os três hábitos que destravam o match
+
+Isto é **conversa de implantação, e dizê-la na venda te protege**. A conciliação só funciona bem se:
+
+1. os **lançamentos estiverem vinculados à conta** certa;
+2. as **contas estiverem ativas e atualizadas**;
+3. os **métodos de recebimento estiverem parametrizados** (maquininha, delivery, PIX).
+
+Se o dono tem hoje um financeiro largado, diga que a primeira conciliação vai apontar muita coisa — **isso é o esperado, não é defeito**. Prometer match perfeito no primeiro mês para uma casa desorganizada é criar um churn.
+
+## A frase que a casa usa
+
+> **"Conciliar não é burocracia. É auditoria."**
+
+Serve bem na mesa com dono que acha que conciliação é coisa de contador: auditoria é o que ele faz no estoque quando desconfia que está faltando. Isto é a mesma coisa, com o dinheiro.
 
 ## O que a concorrência faz
 
-Nos PDVs comuns, o financeiro é uma **ilha**: ele registra o que alguém digita e nunca confere com o banco. A conciliação, quando existe, é responsabilidade do contador — que olha depois do mês fechado, quando já não dá para contestar nada, e olha para fins fiscais, não para gestão.
+Nos PDVs comuns, o financeiro é uma **ilha**: registra o que alguém digita e nunca confere com o banco. A conciliação, quando existe, é do contador — que olha depois do mês fechado, quando já não dá para contestar nada, e olha para fins fiscais, não para gestão.
+
+No comparativo público, **conciliação bancária** aparece como **"a verificar"** na maioria dos concorrentes de delivery — ou seja, não é sequer confirmável publicamente que eles tenham.
 
 A alternativa real do pequeno é **conferir à mão** ou **não conferir**. E a segunda é a mais comum.
 
 ## O número que muda
 
-**O tempo do fechamento, e a confiança no próprio número.**
+**O tempo do fechamento, e a confiança no próprio número.** O dono deixa de fechar o mês por aproximação.
 
-O dono deixa de fechar o mês por aproximação. E é aí que aparece o que estava escondido: pagamento em duplicidade, débito automático que ninguém lembrava, taxa lançada errada, receita que não entrou.
-
-> **Lacuna declarada:** não temos caso medido de quanto isso recupera em reais nem de quantas horas economiza. **Não prometa número.** Pergunte quanto tempo ele leva para fechar o mês hoje, e se o saldo do banco bate com o controle dele — as duas respostas já são o argumento.
+> **O que ainda não temos:** caso medido de quanto isso recupera em reais nem de quantas horas economiza. **Não prometa número.** Pergunte quanto tempo ele leva para fechar o mês hoje, e se o saldo do banco bate com o controle — as duas respostas já são o argumento.
 
 ## Pergunta de campo
 
@@ -45,8 +77,10 @@ O dono deixa de fechar o mês por aproximação. E é aí que aparece o que esta
 
 Se a resposta tiver "mais ou menos", "quase" ou um silêncio, o módulo está vendido. E se ele responder *"quem cuida disso é o contador"*, a pergunta seguinte é: **"ele te avisa no dia 3 ou no dia 30?"**
 
-**Sinal de venda:** dono que tem mais de uma conta bancária, ou que usa conta PJ e pessoal misturadas, tem divergência garantida — e sabe que tem.
+**Sinal de venda:** dono com mais de uma conta bancária, ou que mistura conta PJ e pessoal, tem divergência garantida — e sabe que tem.
 
 **Atenção comercial:** no **Enterprise já vem incluído**. Oferecer como adicional a quem está em Enterprise é cobrar por algo que ele já tem — a aba Propostas marca como "incluído" justamente para isso não acontecer.
+
+*Fonte: página pública `takeat.app/conciliacao-bancaria`, conferida em 29/08/2026. A divergência com `/solucoes` e `/solucoes/controle-financeiro-dre` foi conferida nas mesmas páginas, na mesma data.*
 
 Aprofundar: [Gestão Financeira — a guerra do controle gerencial](playbook:ecossistema-takeat#ecossistema-takeat-gestao-financeira-a-guerra-do-controle-gerencial) · [Catálogo de soluções](playbook:catalogo-solucoes) · [Mapa dor → solução](playbook:mapa-dor-solucao)
