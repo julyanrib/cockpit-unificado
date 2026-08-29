@@ -1642,5 +1642,64 @@ teste('sem pendencia, as acoes nomeiam contas livres — e nunca disputam com a 
     'com negocio dele esperando, NENHUMA conta-alvo aparece: ' + mistas.map(a => a.cliente).join(' / '));
 });
 
+teste('distancia em km rejeita coordenada nula ANTES de converter', () => {
+  /* A correcao de 11/08 que veio junto com a funcao pro nucleo: Number(null) e 0 e
+     Number('') e 0, e 0 passa em Number.isFinite. Validar so o resultado aceitava nulo
+     como se fosse a coordenada 0,0 e devolvia distancia "valida" de milhares de km. */
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  igual(Math.round(c.distanciaKm(-20.2884, -40.2978, -20.2884, -40.2978)), 0, 'mesmo ponto: 0 km');
+  const perto = c.distanciaKm(-20.2884, -40.2978, -20.2950, -40.3010);
+  verdade(perto > 0.5 && perto < 1.2, 'dois pontos vizinhos em Vitoria: ~0,8 km, veio ' + perto.toFixed(2));
+  igual(c.distanciaKm(null, -40.29, -20.28, -40.29), Infinity, 'lat nula -> Infinity, nao 2000 km');
+  igual(c.distanciaKm('', -40.29, -20.28, -40.29), Infinity, 'lat vazia -> Infinity');
+  igual(c.distanciaKm(undefined, -40.29, -20.28, -40.29), Infinity, 'lat ausente -> Infinity');
+  igual(c.distanciaKm('abc', -40.29, -20.28, -40.29), Infinity, 'lat nao numerica -> Infinity');
+});
+
+teste('eixo da semana: so dia futuro, so com coordenada, e ordenado por quem cabe no caminho', () => {
+  /* A ideia veio do desenho do Claude Design ("terca voce ja esta em Jardim Camburi").
+     Foi implementada por COORDENADA e nao por bairro porque o dado manda: bairro existe
+     em 7 dos 121 negocios (6%), coordenada em 89 (74%), e as 970 contas-alvo tem
+     coordenada em 100%. */
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  const HOJE_I = iso(HOJE);
+  const AMANHA = iso(diasAFrente(1));
+  const ONTEM = iso(diasAtras(1));
+
+  const base = { lat: -20.2884, lng: -40.2978 };
+  const ancoras = [
+    { dataISO: AMANHA, cliente: 'Cervejaria Fratelli', lat: base.lat, lng: base.lng },
+    { dataISO: ONTEM, cliente: 'Visita que ja passou', lat: base.lat, lng: base.lng },
+    { dataISO: AMANHA, cliente: 'Sem coordenada', lat: null, lng: null }
+  ];
+  const contas = [
+    { id: 'p1', nome: 'Vizinha 300m', lat: base.lat + 0.0027, lng: base.lng },
+    { id: 'p2', nome: 'Vizinha 1,5km', lat: base.lat + 0.0135, lng: base.lng },
+    { id: 'p3', nome: 'Longe 6km', lat: base.lat + 0.054, lng: base.lng },
+    { id: 'p4', nome: 'Sem coordenada', lat: null, lng: null }
+  ];
+
+  const eixos = c.eixosDaSemana(HOJE_I, ancoras, contas);
+  igual(eixos.length, 1, 'um eixo: so o dia futuro produz');
+  igual(eixos[0].dataISO, AMANHA, 'e e o de amanha');
+  igual(eixos[0].compromissos, 1, 'a ancora sem coordenada nao conta como compromisso do eixo');
+  igual(eixos[0].contas.map(x => x.nome), ['Vizinha 300m', 'Vizinha 1,5km'],
+    'so as que estao dentro do raio, mais perto primeiro');
+  verdade(!eixos[0].contas.some(x => x.nome === 'Longe 6km'), '6 km nao e "no caminho"');
+  verdade(!eixos[0].contas.some(x => x.nome === 'Sem coordenada'), 'sem coordenada nao entra');
+  verdade(eixos[0].kms[0] < eixos[0].kms[1], 'os kms acompanham a ordem');
+  verdade(eixos[0].kms.every(k => k <= 2), 'nenhum km declarado acima do raio: ' + eixos[0].kms.join(', '));
+  igual(eixos[0].ancora.cliente, 'Cervejaria Fratelli', 'a ancora nomeada tem coordenada');
+
+  igual(c.eixosDaSemana(HOJE_I, [], contas).length, 0, 'sem compromisso, sem eixo');
+  igual(c.eixosDaSemana(HOJE_I, ancoras, []).length, 0, 'sem conta-alvo, sem eixo');
+  igual(c.eixosDaSemana(HOJE_I, ancoras, [contas[2]]).length, 0, 'so conta longe: nao inventa eixo');
+  igual(c.eixosDaSemana(HOJE_I, null, contas).length, 0, 'entrada invalida devolve lista vazia');
+
+  const hojeEixo = c.eixosDaSemana(HOJE_I,
+    [{ dataISO: HOJE_I, cliente: 'Hoje mesmo', lat: base.lat, lng: base.lng }], contas);
+  igual(hojeEixo.length, 1, 'o proprio dia de hoje ainda e acionavel');
+});
+
 if (falhou > 0) { console.error(`${falhou} falha(s), ${ok} ok.`); process.exit(1); }
 console.log(`${ok} testes ok.`);

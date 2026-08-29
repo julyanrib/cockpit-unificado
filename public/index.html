@@ -3801,6 +3801,31 @@
   .prosp2-result-head .right{margin-left:auto;font-size:11.5px;color:var(--muted2);}
 
   .prosp2-cols{display:grid;grid-template-columns:1fr 296px;gap:18px;align-items:start;}
+  /* ESCOPO: global. Tira do eixo da semana (28/08/26) — ver eixosDaSemana.
+     Verde porque é o único bloco desta tela que fala de PROVA de agenda: existe
+     compromisso marcado, não é promessa nem urgência. */
+  .prosp2-eixos{margin:0 0 14px;border:1.5px solid var(--green);border-radius:var(--r-lg);background:var(--green-soft);padding:13px 15px 11px;}
+  .prosp2-eixos-cab{display:flex;flex-direction:column;gap:2px;margin-bottom:10px;}
+  .prosp2-eixos-cab b{font:800 12.5px "Archivo",system-ui,sans-serif;color:var(--green);}
+  .prosp2-eixos-cab span{font-size:11px;color:var(--muted);}
+  .prosp2-eixo{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 0;border-top:1px solid rgba(30,122,99,.18);}
+  .prosp2-eixo:first-of-type{border-top:0;}
+  .prosp2-eixo-dia{flex:none;min-width:74px;display:flex;flex-direction:column;line-height:1.25;}
+  .prosp2-eixo-dia b{font:800 12px "Archivo",system-ui,sans-serif;color:var(--ink);text-transform:capitalize;}
+  .prosp2-eixo-dia span{font-size:9.5px;color:var(--muted2);}
+  .prosp2-eixo-txt{flex:1 1 220px;min-width:0;font-size:11.5px;color:var(--ink);line-height:1.5;}
+  .prosp2-eixo-txt em{display:block;font-style:normal;font-size:10.5px;color:var(--muted);margin-top:2px;}
+  .prosp2-eixo-cta{flex:none;border:none;border-radius:var(--r-pill);background:var(--green);color:#fff;padding:8px 15px;font:700 11.5px Manrope,system-ui,sans-serif;cursor:pointer;white-space:nowrap;}
+  .prosp2-eixo-cta:hover{filter:brightness(1.08);}
+  /* ESCOPO: dentro de @media (max-width:720px) — o CTA ganha linha própria e alvo de toque. */
+  @media (max-width:720px){
+    .prosp2-eixo-cta{flex:1 1 100%;min-height:44px;}
+  }
+  /* ESCOPO: global. "devolver" no rodapé do card (28/08/26) — ver devolverContaProGestor. */
+  .prosp2-devolver-card{flex:none;margin-left:auto;border:none;background:none;color:var(--muted2);font:700 10.5px Manrope,system-ui,sans-serif;cursor:pointer;padding:4px 2px;text-decoration:underline;text-underline-offset:2px;}
+  .prosp2-devolver-card:hover{color:var(--red-dk);}
+  /* ESCOPO: dentro de @media (max-width:720px) — alvo de toque. */
+  @media (max-width:720px){ .prosp2-devolver-card{min-height:44px;} }
   .prosp2-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;}
   /* Rodapé do lote da fila (28/08/26) — ver a nota longa em PROSP2_LOTE. */
   .prosp2-mais{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding:11px 14px;border:1px dashed var(--line-btn);border-radius:var(--r-lg);background:var(--panel2);font-size:11.5px;color:var(--muted);}
@@ -7247,6 +7272,42 @@ function buildIndicadoresExecutivoHTML(r) {
 /* CONTAS LIVRES PARA SUGERIR (28/08/26) — ver a nota longa em acoesDeAgora.
    Aqui é o lugar dos filtros de escopo: estão fora do @nucleo e são de produção.
    O cache já vem ordenado por prospeccaoCompararOrdem, então a ordem se preserva. */
+/* ÂNCORAS DA SEMANA (28/08/26) — ver a nota longa em eixosDaSemana.
+
+   Aqui é o lugar de resolver compromisso -> negócio -> coordenada, porque as funções
+   que fazem isso vivem fora do @nucleo2. A regra do eixo fica lá, testável; a busca de
+   dado fica aqui, que é produção.
+
+   O compromisso da agenda NÃO carrega coordenada: vem de reunião do HubSpot, e
+   hs_meeting_location chega nulo. Quem tem lat/lng é o NEGÓCIO associado — daí o
+   caminho pelo dealId, com o nome como reserva quando o evento não trouxe o id. */
+function ancorasDaSemanaExec(ownerId) {
+  if (typeof DATA === 'undefined' || !DATA.agenda) return [];
+  const eventos = (typeof agendaNormalizar === 'function' ? agendaNormalizar(DATA.agenda) : []) || [];
+  const meus = eventos.filter(e => e && String(e.ownerId) === String(ownerId) && e.inicio);
+  const porNome = {};
+  Object.values(DATA.funilLeads || {}).flat().forEach(l => {
+    if (!l || l.lat == null || l.lng == null) return;
+    const k = prospeccaoNormalizarTexto(String(l.name || ''));
+    if (k && !porNome[k]) porNome[k] = l;
+  });
+  const out = [];
+  meus.forEach(e => {
+    let lead = e.dealId && typeof buscarLeadFunilPorId === 'function' ? buscarLeadFunilPorId(e.dealId) : null;
+    if (!lead || lead.lat == null || lead.lng == null) {
+      const k = prospeccaoNormalizarTexto(String(e.cliente || ''));
+      lead = (k && porNome[k]) || null;
+    }
+    if (!lead || lead.lat == null || lead.lng == null) return;   // sem coordenada, sem eixo
+    out.push({
+      dataISO: agendaChave(e.inicio),
+      cliente: e.cliente || lead.name,
+      lat: lead.lat, lng: lead.lng
+    });
+  });
+  return out;
+}
+
 function contasLivresParaSugerir() {
   if (typeof prospeccaoCache === 'undefined' || !Array.isArray(prospeccaoCache)) return [];
   return prospeccaoCache.filter(l =>
@@ -12013,7 +12074,16 @@ async function renderProspeccaoExecutivo() {
         <span class="prosp2-src"><i></i>${esc(F.nome)}</span></div>
       <div class="prosp2-card-mid">${aval}${novo}</div>
       <div class="prosp2-card-end"><span class="pin">◉</span><span>${esc([l.endereco, l.bairro].filter(Boolean).join(' — ') || 'endereço não informado')}</span><span class="dist num">${prosp2Fmt1(l._distKm)} km</span></div>
-      <div class="prosp2-card-foot">${btn}<button class="prosp2-ver" data-ver="${esc(String(l.id))}">Ver ficha</button></div>
+      <!-- DEVOLVER NO PRÓPRIO CARD (28/08/26). Existia só dentro da ficha, e o Julyan
+           foi direto ao ponto: "tem que aparecer". Faz sentido — decidir que uma conta
+           NÃO vale a visita é um julgamento que se faz olhando o card, com o nome, a
+           categoria e o endereço na frente. Obrigar a abrir a ficha para descartar
+           transforma uma decisão de dois segundos em três cliques.
+
+           Texto puro, sem caixa, empurrado para o fim da linha: não disputa com
+           "+ Agendar visita" nem com "Ver ficha". Descartar é a saída, não o objetivo
+           da tela. -->
+      <div class="prosp2-card-foot">${btn}<button class="prosp2-ver" data-ver="${esc(String(l.id))}">Ver ficha</button><button type="button" class="prosp2-devolver-card" data-devolver="${esc(String(l.id))}" title="Devolver ${esc(l.nome)} pra fila do gestor">devolver</button></div>
       <div class="prosp2-diapop" data-pop="${esc(String(l.id))}"><h5>Visitar em qual dia?</h5><div class="prosp2-dias">
         ${dias.map(d => `<button class="prosp2-dia" data-dia="${esc(String(l.id))}|${d.iso}|${d.curto} ${d.data}">${d.curto}<small>${d.data}</small></button>`).join('')}
       </div><div class="prosp2-horas-sec" style="display:none"><h5 style="margin-top:11px">Que horário?</h5><div class="prosp2-dias">
@@ -12131,6 +12201,37 @@ async function renderProspeccaoExecutivo() {
            de uma grade que mostra 10 é número que não corresponde ao que está na tela. -->
       <span class="right num">${Math.min(prosp2Estado.mostrar, visiveis.length)} de ${visiveis.length} lead${visiveis.length === 1 ? '' : 's'}</span>
     </div>
+
+    <!-- EIXO DA SEMANA (28/08/26) — ver a nota longa em eixosDaSemana. Fica ACIMA da
+         grade de propósito: a pergunta "o que cabe no caminho do dia que já tem visita"
+         vem antes de "escolher entre 59". Só aparece quando existe eixo de verdade; sem
+         compromisso futuro com coordenada, não ocupa um pixel. -->
+    ${(() => {
+      const eixos = eixosDaSemana(isoDate(new Date()), ancorasDaSemanaExec(ownerId), visiveis);
+      if (!eixos.length) return "";
+      const rotDia = (isoStr) => {
+        const d = new Date(isoStr + "T12:00:00Z");
+        const nomes = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+        const p2 = (x) => String(x).padStart(2, "0");
+        return nomes[d.getUTCDay()] + " " + p2(d.getUTCDate()) + "/" + p2(d.getUTCMonth() + 1);
+      };
+      return `<div class="prosp2-eixos">
+        <div class="prosp2-eixos-cab">
+          <b>Sua semana já passa perto destas contas</b>
+          <span>compromisso marcado + conta-alvo a menos de ${EIXO_RAIO_KM} km — o desvio é curto</span>
+        </div>
+        ${eixos.slice(0, 3).map(x => `
+          <div class="prosp2-eixo">
+            <div class="prosp2-eixo-dia"><b>${rotDia(x.dataISO)}</b><span>${x.compromissos} compromisso${x.compromissos === 1 ? "" : "s"}</span></div>
+            <div class="prosp2-eixo-txt">
+              você já vai estar em <b>${esc(x.ancora.cliente)}</b> —
+              <b>${x.contas.length}</b> conta${x.contas.length === 1 ? "" : "s"}-alvo no caminho
+              <em>${x.contas.slice(0, 3).map((c, i) => esc(c.nome) + " (" + x.kms[i] + " km)").join(" · ")}${x.contas.length > 3 ? " · +" + (x.contas.length - 3) : ""}</em>
+            </div>
+            <button type="button" class="prosp2-eixo-cta" data-eixo="${x.dataISO}" data-eixorot="${rotDia(x.dataISO)}">+${Math.min(x.contas.length, 4)} na rota de ${rotDia(x.dataISO).slice(0, 3)} →</button>
+          </div>`).join("")}
+      </div>`;
+    })()}
 
     <div class="prosp2-cols">
       <div class="prosp2-grid" id="prosp2Grid">${visiveis.length ? visiveis.slice(0, prosp2Estado.mostrar).map(cardHTML).join('') : (
@@ -12356,6 +12457,34 @@ function prosp2LigarEventos(universo, ownerId) {
      escopo (ela recebe universo e ownerId, e consulta por getElementById), então
      seguir o vizinho é mais seguro que introduzir uma segunda forma de alcançar o DOM.
      O nome do campo vem do data-v, escrito com a MESMA chave de prosp2Estado. */
+  /* O CLIQUE DO EIXO enche a bandeja com as contas daquele dia. Não grava nada no
+     HubSpot: quem grava é o "Enviar pra agenda da semana" da bandeja, que já existe e
+     já tem confirmação. Um caminho só para a escrita.
+
+     Teto de 4 por clique porque a régua da fase é 6 visitas/dia e o dia já tem
+     compromisso — encher de 10 seria prometer um dia que não cabe. */
+  rootEl.querySelectorAll('[data-eixo]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const dia = btn.dataset.eixo;
+      const eixos = eixosDaSemana(isoDate(new Date()), ancorasDaSemanaExec(ownerId), universo);
+      const x = eixos.find(e => e.dataISO === dia);
+      if (!x) {
+        mostrarToast('Esse eixo não existe mais — a semana mudou. Recarregue a fila.', 'erro');
+        return;
+      }
+      let somadas = 0;
+      x.contas.slice(0, 4).forEach(c => {
+        if (prosp2Estado.agenda[c.id]) return;                        // já estava: não duplica
+        if (Object.keys(prosp2Estado.agenda).length >= 15) return;    // mesmo teto do popover
+        prosp2Estado.agenda[c.id] = { dia: dia, hora: null, rotulo: btn.dataset.eixorot || dia };
+        somadas++;
+      });
+      renderProspeccaoExecutivo();
+      mostrarToast(somadas
+        ? somadas + ' conta' + (somadas === 1 ? '' : 's') + ' na bandeja. Confira e envie pra agenda.'
+        : 'Essas contas já estavam na bandeja.', somadas ? 'sucesso' : 'erro');
+    });
+  });
   const maisEl = document.getElementById('prosp2VerMais');
   if (maisEl) maisEl.addEventListener('click', () => {
     prosp2Estado.mostrar += PROSP2_LOTE;
@@ -12448,6 +12577,9 @@ function prosp2LigarEventos(universo, ownerId) {
       return;
     }
     if (ver) { ev.stopPropagation(); prosp2AbrirDrawer(ver.dataset.ver, universo); return; }
+    /* Card e ficha chamam a MESMA função de devolver — nunca duas cópias da escrita. */
+    const dev = ev.target.closest('[data-devolver]');
+    if (dev) { ev.stopPropagation(); devolverContaProGestor(buscarLead(dev.dataset.devolver)); return; }
     if (card && !ev.target.closest('.prosp2-diapop')) prosp2AbrirDrawer(card.dataset.id, universo);
   });
   document.addEventListener('click', ev => {
@@ -12473,39 +12605,11 @@ function prosp2LigarEventos(universo, ownerId) {
   if (dwFechar) dwFechar.addEventListener('click', fechar);
   if (scrim) scrim.addEventListener('click', fechar);
   const dwDevolver = document.getElementById('prosp2DwDevolver');
+  /* 28/08, segunda passada: o corpo deste listener virou devolverContaProGestor quando o
+     mesmo gesto passou a existir também no card. Aqui sobrou a chamada e o fechamento do
+     drawer, que é a única parte específica da ficha. */
   if (dwDevolver) dwDevolver.addEventListener('click', () => {
-    const lead = buscarLead(prosp2Estado.drawerId);
-    if (!lead) return;
-    abrirModalConfirmacao({
-      titulo: 'Devolver pro gestor',
-      confirmarLabel: 'Devolver',
-      /* Diz o que acontece com a conta E o que ele ganha — senão parece só perda. */
-      corpoHTML: `<p style="margin:0;">Devolver <b>${esc(lead.nome)}</b> pra fila do gestor redistribuir?</p>        <p style="margin:9px 0 0;color:var(--muted);font-size:12.5px;">Ela sai da sua fila e para de disputar espaço com as contas que você vai visitar. Não apaga nada: o gestor vê na fila de pendentes.</p>`,
-      /* O parametro do modal se chama fecharModal, NAO fechar: o drawer tem um fechar()
-         no escopo de fora e um parametro com o mesmo nome o sombrearia — o modal fecharia
-         duas vezes e o drawer ficaria aberto mostrando uma conta que acabou de sair da
-         fila. Peguei relendo o resultado depois de aplicar, nao antes. */
-      aoConfirmar: async (overlay, fecharModal) => {
-        const okBtn = overlay.querySelector('#modalConfirmacaoOk');
-        okBtn.disabled = true; okBtn.textContent = 'Devolvendo…';
-        const ok = await reatribuirExecutivoProspeccao(lead.id, null);
-        fecharModal();
-        if (!ok) {
-          mostrarToast('Não consegui devolver agora — a conta continua sua. Tente de novo.', 'erro');
-          return;
-        }
-        /* Sai do cache local na hora: o executivo não deve ver na fila algo que ele
-           acabou de devolver, senão parece que o clique não funcionou. */
-        if (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache)) {
-          const i = prospeccaoCache.findIndex(l => String(l.id) === String(lead.id));
-          if (i >= 0) prospeccaoCache.splice(i, 1);
-        }
-        delete prosp2Estado.agenda[lead.id];
-        fechar();
-        renderProspeccaoExecutivo();
-        mostrarToast(`${lead.nome} voltou pra fila do gestor.`, 'sucesso');
-      }
-    });
+    devolverContaProGestor(buscarLead(prosp2Estado.drawerId), fechar);
   });
   const dwFunil = document.getElementById('prosp2DwFunil');
   if (dwFunil) dwFunil.addEventListener('click', () => {
@@ -12524,6 +12628,41 @@ function prosp2LigarEventos(universo, ownerId) {
     document.querySelectorAll('.prosp2-diapop').forEach(p => { p.classList.remove('open'); p.querySelector('.prosp2-horas-sec').style.display = 'none'; p.querySelectorAll('.prosp2-dia').forEach(b => b.classList.remove('sel')); delete p.dataset.sel; });
     const pop = document.querySelector(`[data-pop="${prosp2Estado.drawerId}"]`);
     if (pop) { pop.classList.add('open'); prosp2Estado.popoverAberto = String(prosp2Estado.drawerId); pop.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+  });
+}
+
+/* DEVOLVER UMA CONTA PRO GESTOR (28/08/26) — chamada do card e da ficha.
+
+   Nasceu dentro do listener da ficha e virou função quando o mesmo gesto passou a
+   existir no card: dois lugares chamando a mesma escrita, nunca duas cópias dela.
+
+   Vai por reatribuirExecutivoProspeccao, que passa pelo servidor e só grava no Supabase
+   depois de o HubSpot confirmar. Escrita crua aqui deixaria o dono defasado na Company
+   — e o comentário de 15/08 em atualizarLeadProspeccao conta essa história inteira. */
+function devolverContaProGestor(lead, aoConcluir) {
+  if (!lead) return;
+  abrirModalConfirmacao({
+    titulo: 'Devolver pro gestor',
+    confirmarLabel: 'Devolver',
+    corpoHTML: `<p style="margin:0;">Devolver <b>${esc(lead.nome)}</b> pra fila do gestor redistribuir?</p>`
+      + `<p style="margin:9px 0 0;color:var(--muted);font-size:12.5px;">Ela sai da sua fila e para de disputar espaço com as contas que você vai visitar. Não apaga nada: o gestor vê na fila de pendentes.</p>`,
+    aoConfirmar: async (overlay, fecharModal) => {
+      const okBtn = overlay.querySelector('#modalConfirmacaoOk');
+      okBtn.disabled = true; okBtn.textContent = 'Devolvendo…';
+      const ok = await reatribuirExecutivoProspeccao(lead.id, null);
+      fecharModal();
+      if (!ok) { mostrarToast('Não consegui devolver agora — a conta continua sua. Tente de novo.', 'erro'); return; }
+      /* Sai do cache local na hora: ver na fila uma conta que acabou de ser devolvida
+         faz o executivo achar que o clique não funcionou. */
+      if (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache)) {
+        const i = prospeccaoCache.findIndex(x => String(x.id) === String(lead.id));
+        if (i >= 0) prospeccaoCache.splice(i, 1);
+      }
+      delete prosp2Estado.agenda[lead.id];
+      if (typeof aoConcluir === 'function') aoConcluir();
+      renderProspeccaoExecutivo();
+      mostrarToast(`${lead.nome} voltou pra fila do gestor.`, 'sucesso');
+    }
   });
 }
 
@@ -18002,23 +18141,6 @@ async function salvarDaily(ownerId, dataISO, campos) {
 // Haversine: distância em linha reta, em km, entre dois pontos. Não é distância
 // de rua (isso exigiria API de rotas paga) — é aproximação boa o suficiente para
 // ORDENAR paradas dentro de um mesmo bairro/praça, que é o uso aqui.
-function distanciaKm(lat1, lng1, lat2, lng2) {
-  // ATENÇÃO (pego no teste, 11/08): Number(null) é 0 e Number('') é 0, e 0 passa em
-  // Number.isFinite — então validar só o resultado do Number() aceitava lat/lng nulos
-  // como se fossem a coordenada 0,0 e devolvia distância "válida" de milhares de km.
-  // A validação tem que rejeitar o valor CRU antes de converter.
-  const cru = [lat1, lng1, lat2, lng2];
-  if (cru.some(v => v === null || v === undefined || v === '')) return Infinity;
-  const n1 = Number(lat1), g1 = Number(lng1), n2 = Number(lat2), g2 = Number(lng2);
-  // Sem coordenada válida a conta não existe: devolve Infinity pra parada cair
-  // pro fim de qualquer ordenação, em vez de virar NaN e bagunçar o sort inteiro.
-  if (![n1, g1, n2, g2].every(v => Number.isFinite(v))) return Infinity;
-  const R = 6371; // raio médio da Terra em km
-  const rad = g => g * Math.PI / 180;
-  const dLat = rad(n2 - n1), dLng = rad(g2 - g1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(n1)) * Math.cos(rad(n2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
-}
 
 // Sequência de visitas por vizinho-mais-próximo, partindo de uma origem.
 // A origem pode ser a região digitada pelo executivo ({lat,lng}) ou a primeira
@@ -22138,6 +22260,103 @@ function diasUteisDaSemana(ateDataISO) {
    ============================================================================ */
 
 /* @nucleo2:inicio — lido por scripts/testar-nucleo.js junto com o bloco @nucleo. Não remover. */
+
+/* distanciaKm MUDOU DE LUGAR (28/08/26): era código solto fora dos blocos testáveis, e
+   carrega uma correção de bug que merece teste — a de 11/08, que rejeita lat/lng nulo
+   ANTES de converter, porque Number(null) é 0 e 0 passa em Number.isFinite. Sem essa
+   guarda a função devolvia distância "válida" de milhares de km a partir da coordenada
+   0,0. Matemática pura, nenhuma dependência: entra no núcleo em vez de ser dublada. */
+function distanciaKm(lat1, lng1, lat2, lng2) {
+  // ATENÇÃO (pego no teste, 11/08): Number(null) é 0 e Number('') é 0, e 0 passa em
+  // Number.isFinite — então validar só o resultado do Number() aceitava lat/lng nulos
+  // como se fossem a coordenada 0,0 e devolvia distância "válida" de milhares de km.
+  // A validação tem que rejeitar o valor CRU antes de converter.
+  const cru = [lat1, lng1, lat2, lng2];
+  if (cru.some(v => v === null || v === undefined || v === '')) return Infinity;
+  const n1 = Number(lat1), g1 = Number(lng1), n2 = Number(lat2), g2 = Number(lng2);
+  // Sem coordenada válida a conta não existe: devolve Infinity pra parada cair
+  // pro fim de qualquer ordenação, em vez de virar NaN e bagunçar o sort inteiro.
+  if (![n1, g1, n2, g2].every(v => Number.isFinite(v))) return Infinity;
+  const R = 6371; // raio médio da Terra em km
+  const rad = g => g * Math.PI / 180;
+  const dLat = rad(n2 - n1), dLng = rad(g2 - g1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(n1)) * Math.cos(rad(n2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
+}
+
+/* ============================================================================
+   O EIXO DA SEMANA (28/08/26)
+   ----------------------------------------------------------------------------
+   A IDEIA, do desenho do Claude Design: "terça você já está em Jardim Camburi — 6
+   recém-abertas no caminho · +6 na rota em 1 clique". É a única coisa do documento que
+   CRIA rota nova a partir de dado que já existe, em vez de reorganizar o que a tela já
+   mostrava. Por isso foi a primeira a ser construída.
+
+   POR QUE POR COORDENADA E NÃO POR BAIRRO, como o desenho propunha. Medido nos 121
+   negócios do time: bairro preenchido em 7 (6%), coordenada em 89 (74%). E do outro
+   lado, as 970 contas-alvo têm coordenada em 970 (100%). Casar por nome de bairro
+   perderia 94% dos compromissos e ainda dependeria de grafia ("Jardim Camburi" x "Jd.
+   Camburi"). Distância resolve os dois problemas e é verificável.
+
+   O RAIO é 2 km. Não é chute: é a distância que se percorre a pé entre duas visitas na
+   mesma região, ou um desvio de carro que não desmonta o dia. Acima disso não é "no
+   caminho", é outra parada — e chamar de eixo o que exige 5 km de desvio seria vender
+   conveniência que não existe.
+
+   AS ÂNCORAS CHEGAM PRONTAS, pelo mesmo motivo de contasLivresParaSugerir: resolver o
+   compromisso -> negócio -> coordenada precisa de funções que vivem fora deste bloco.
+   Quem resolve é o chamador, que é produção; aqui fica só a regra, testável inteira.
+
+   SÓ DIA FUTURO (>= hoje). Eixo de segunda passada não é acionável, e oferecer "+3 na
+   rota" para um dia que já aconteceu seria o tipo de sugestão que faz o executivo
+   perder a confiança na tela.
+   ============================================================================ */
+const EIXO_RAIO_KM = 2;
+
+function eixosDaSemana(hojeISO, ancoras, contas) {
+  if (!Array.isArray(ancoras) || !Array.isArray(contas)) return [];
+  /* Uma âncora só vale com coordenada: sem ela não há como afirmar proximidade. */
+  const validas = ancoras.filter(a => a && a.dataISO && a.dataISO >= hojeISO
+    && a.lat !== null && a.lat !== undefined && a.lat !== ''
+    && a.lng !== null && a.lng !== undefined && a.lng !== '');
+  if (!validas.length) return [];
+
+  const porDia = new Map();
+  validas.forEach(a => {
+    if (!porDia.has(a.dataISO)) porDia.set(a.dataISO, []);
+    porDia.get(a.dataISO).push(a);
+  });
+
+  const eixos = [];
+  [...porDia.keys()].sort().forEach(dataISO => {
+    const doDia = porDia.get(dataISO);
+    const perto = [];
+    contas.forEach(c => {
+      if (!c) return;
+      /* A menor distância até QUALQUER compromisso do dia: ele vai passar por todos,
+         então basta estar perto de um. */
+      let menor = Infinity, ancoraMaisPerto = null;
+      doDia.forEach(a => {
+        const d = distanciaKm(a.lat, a.lng, c.lat, c.lng);
+        if (d < menor) { menor = d; ancoraMaisPerto = a; }
+      });
+      if (menor <= EIXO_RAIO_KM) perto.push({ conta: c, km: menor, ancora: ancoraMaisPerto });
+    });
+    if (!perto.length) return;
+    /* Mais perto primeiro DENTRO do eixo: a ordem da lista que chegou já é a de melhor
+       sinal (prospeccaoCompararOrdem), mas aqui a pergunta é outra — "o que cabe no
+       caminho de terça" — e nela distância manda. */
+    perto.sort((x, y) => x.km - y.km);
+    eixos.push({
+      dataISO: dataISO,
+      compromissos: doDia.length,
+      ancora: perto[0].ancora,
+      contas: perto.map(x => x.conta),
+      kms: perto.map(x => Math.round(x.km * 10) / 10)
+    });
+  });
+  return eixos;
+}
 // Sequência de EXECUÇÃO: dias úteis consecutivos com pelo menos uma visita
 // comprovada. Substitui, para o executivo, a sequência de "bater a palavra"
 // (que media promessa contra promessa). Aqui não há nada a declarar: ou a visita
