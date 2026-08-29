@@ -92,6 +92,49 @@ console.log('Todos os scripts inline e JSONs de dados passaram.');
    se manter é uma checagem que quebra o build. É esta.
    ============================================================================ */
 const ESCALA_BREAKPOINTS = [420, 640, 760, 900, 1050, 1240];
+
+/* ============================================================================
+   GUARD DE VARIÁVEL CSS ÓRFÃ — a terceira vez que este defeito acontece.
+   ----------------------------------------------------------------------------
+   `var(--x)` sem fallback, com --x nunca definida, NÃO dá erro visível: a
+   declaração fica inválida e o navegador cai no valor herdado (em `color`) ou no
+   inicial (em `background`, que é transparent). Nada quebra no build, nada aparece
+   no console, e a tela mente.
+
+   Histórico neste arquivo:
+     · 28/08 — `--body` (21 usos) e `--dark-line` (6): bordas caíram em currentColor,
+       quase brancas no painel escuro.
+     · 29/08 — `--paper` (4 usos, meu): o nome da operação selecionada e o nome do
+       adicional selecionado ficaram tinta-escura-sobre-fundo-escuro, invisíveis; e o
+       fundo da tela cheia virou transparent. O Julyan viu na tela antes de mim.
+
+   As definições são varridas no ARQUIVO INTEIRO, não só nos blocos <style>: o JS monta
+   `style="--stage-color:..."` em vários lugares, e essas variáveis são definidas no
+   elemento. Sem isso o guard acusaria uma dúzia de falsos positivos.
+
+   Só falha quando NÃO HÁ FALLBACK. `var(--talvez, #fff)` é intencional e passa.
+   ============================================================================ */
+function conferirVariaveisCss(arquivo, cru) {
+  /* Comentário não conta, nem como definição nem como uso: o :root deste arquivo
+     explica ESTE defeito escrevendo `var(--x) sem definição`, e a primeira versão do
+     guard acusou o próprio texto. Mesmo erro que já pegou o guard de breakpoint. */
+  const semComentario = t => t.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
+  const estilos = semComentario([...cru.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)].map(m => m[1]).join('\n'));
+  if (!estilos.trim()) return [];
+  const definidas = new Set();
+  for (const m of semComentario(cru).matchAll(/(--[a-zA-Z0-9-]+)\s*:/g)) definidas.add(m[1]);
+  const orfas = new Map();
+  for (const m of estilos.matchAll(/var\((--[a-zA-Z0-9-]+)([^)]*)\)/g)) {
+    const nome = m[1];
+    const temFallback = /^\s*,/.test(m[2]);
+    if (temFallback || definidas.has(nome)) continue;
+    orfas.set(nome, (orfas.get(nome) || 0) + 1);
+  }
+  return [...orfas.entries()].map(([nome, usos]) =>
+    'VARIÁVEL CSS NUNCA DEFINIDA: ' + nome + ' (' + usos + (usos === 1 ? ' uso' : ' usos') + ', sem fallback)' +
+    '\n  Sem fallback a declaração morre em silêncio: em color o texto herda, em background cai para transparent.' +
+    '\n  Defina no :root, ou escreva var(' + nome + ', <valor>) se a intenção é opcional.');
+}
 function checarBreakpoints() {
   const fsb = require('fs');
   const alvo = 'template/cockpit.template.html';
@@ -116,3 +159,12 @@ function checarBreakpoints() {
   return true;
 }
 if (!checarBreakpoints()) process.exit(1);
+
+function checarVariaveisCss() {
+  const alvo = 'template/cockpit.template.html';
+  const problemas = conferirVariaveisCss(alvo, require('fs').readFileSync(alvo, 'utf8'));
+  if (!problemas.length) return true;
+  problemas.forEach(m => console.error(m));
+  return false;
+}
+if (!checarVariaveisCss()) process.exit(1);
