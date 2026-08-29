@@ -12223,10 +12223,27 @@ async function renderProspeccaoExecutivo() {
         ${eixos.slice(0, 3).map(x => `
           <div class="prosp2-eixo">
             <div class="prosp2-eixo-dia"><b>${rotDia(x.dataISO)}</b><span>${x.compromissos} compromisso${x.compromissos === 1 ? "" : "s"}</span></div>
+            <!-- A LEITURA LIDERA COM O QUE ELE VAI AGIR (28/08/26, corrigido ao ver na
+                 tela). A primeira versão dizia "29 contas-alvo no caminho", porque 29
+                 estavam mesmo dentro dos 2 km. Só que 29 não é "no caminho": é uma região
+                 densa. O número era verdadeiro e a leitura era ruim — volume em vez de
+                 escolha, o mesmo atrito que esta revisão vem corrigindo em toda a tela. E
+                 pior: fazia a promessa de "desvio curto" parecer conversa.
+
+                 Agora a manchete é o LOTE que o botão realmente adiciona, com a faixa de
+                 distância real dele; o total fica como nota de rodapé, que é o peso certo
+                 de um número que ele não vai usar hoje. -->
             <div class="prosp2-eixo-txt">
               você já vai estar em <b>${esc(x.ancora.cliente)}</b> —
-              <b>${x.contas.length}</b> conta${x.contas.length === 1 ? "" : "s"}-alvo no caminho
-              <em>${x.contas.slice(0, 3).map((c, i) => esc(c.nome) + " (" + x.kms[i] + " km)").join(" · ")}${x.contas.length > 3 ? " · +" + (x.contas.length - 3) : ""}</em>
+              ${(() => {
+                const lote = Math.min(x.contas.length, 4);
+                const kms = x.kms.slice(0, lote);
+                const faixa = kms.length > 1 && kms[0] !== kms[kms.length - 1]
+                  ? kms[0] + "–" + kms[kms.length - 1] + " km"
+                  : kms[0] + " km";
+                return `as <b>${lote}</b> mais perto estão a <b>${faixa}</b>`;
+              })()}
+              <em>${x.contas.slice(0, 3).map((c, i) => esc(c.nome) + " (" + x.kms[i] + " km)").join(" · ")}${x.contas.length > 4 ? " · e outras " + (x.contas.length - 4) + " dentro dos " + EIXO_RAIO_KM + " km" : ""}</em>
             </div>
             <button type="button" class="prosp2-eixo-cta" data-eixo="${x.dataISO}" data-eixorot="${rotDia(x.dataISO)}">+${Math.min(x.contas.length, 4)} na rota de ${rotDia(x.dataISO).slice(0, 3)} →</button>
           </div>`).join("")}
