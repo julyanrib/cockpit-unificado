@@ -22,6 +22,7 @@ const PAGINAS = [
   { marker: 'RELACIONAMENTO', id: 'relacionamento', categoria: 'Carteira e retenção', icone: '∞', titulo: 'Relacionamento de elite', resumo: 'Pós-venda presencial, indicações e domínio sustentável do bairro.' },
   { marker: 'COMO EVITAR CHURN', id: 'evitar-churn', categoria: 'Carteira e retenção', icone: '⊙', titulo: 'Como evitar churn', resumo: 'Radar de risco, recuperação presencial e divisão correta com CS.' },
   { marker: 'ECOSSISTEMA TAKEAT', occurrence: 0, id: 'ecossistema-takeat', categoria: 'Produto e mercado', icone: '⬡', titulo: 'Ecossistema Takeat', resumo: 'Soluções, pilares, diferenciais e como cruzar produto com dor real.' },
+  { gerado: 'catalogo', id: 'catalogo-solucoes', categoria: 'Produto e mercado', icone: '▦', titulo: 'Catálogo de soluções', resumo: 'O que cada funcionalidade da tabela faz, como ajuda o dono e em que plano entra.' },
   { arquivo: 'playbook-dark-kitchen.md', id: 'dark-kitchen', categoria: 'Produto e mercado', icone: '◐', titulo: 'Dark Kitchen', resumo: 'Marcas virtuais sobre a mesma cozinha: faturamento novo sobre custo fixo pago.' },
   { arquivo: 'playbook-rota-inteligente.md', id: 'rota-inteligente', categoria: 'Produto e mercado', icone: '⇉', titulo: 'Rota Inteligente', resumo: 'O elo que falta no delivery próprio: agrupar e sequenciar a rota do entregador.' },
   { arquivo: 'playbook-conciliacao-cfx.md', id: 'conciliacao-cfx', categoria: 'Produto e mercado', icone: '⊞', titulo: 'Conciliação Bancária CFX', resumo: 'O único adicional que se vende como recuperação: a taxa que a maquininha cobrou errado.' },
@@ -43,6 +44,149 @@ const MARCADORES = ['ECOSSISTEMA TAKEAT', 'GUIA DE EXCELÊNCIA', 'ONBOARDING DE 
   'TÉCNICAS DE FECHAMENTO', 'CLIENTES X MRR', 'RELACIONAMENTO', 'COMO EVITAR CHURN',
   'PIPELINE', 'DADOS PARA CADASTRO', 'EQUIPAMENTOS', 'FAQ', 'LINKS ÚTEIS',
   'DISPLAYS/COMANDAS', 'PLANO DE CARREIRA'];
+
+/* ============================================================================
+   CATÁLOGO DE SOLUÇÕES — PÁGINA GERADA DO DADO (29/08/26)
+   ----------------------------------------------------------------------------
+   Pedido do Julyan: "temos que ter mais do que a takeat faz ali no sistema, ou seja
+   tudo que voce viu que temos de funcionalidade ali nas propostas, tem que estar
+   descrito no playbook, o que fazemos, como ajudamos etc... playbook blinda o gestor de
+   perguntas idiotas e tbm é uma arma completa para o executivo".
+
+   POR QUE GERADA, e não escrita à mão: a tabela oficial tem 40 funcionalidades e 11
+   adicionais, e ela muda. Uma página escrita à mão fica atrás do produto na primeira
+   alteração — e playbook desatualizado é pior que playbook faltando, porque o executivo
+   confia nele na frente do cliente. Aqui o nome, a seção, o preço do adicional e O
+   PLANO MÍNIMO EM QUE CADA COISA ENTRA saem de data/precificacao.json; só a descrição é
+   humana, e vive em data/playbook-catalogo.json.
+
+   E O BUILD FALHA se uma funcionalidade da tabela não tiver descrição. É de propósito,
+   na mesma lógica do guard de breakpoint do check-scripts: quem acrescentar um item ao
+   que a Takeat vende é obrigado a dizer o que ele faz e como ajuda, antes de o cockpit
+   subir. O erro diz exatamente o que falta e onde escrever.
+   ============================================================================ */
+function montarCatalogo(root) {
+  const preco = JSON.parse(fs.readFileSync(path.join(root, 'data', 'precificacao.json'), 'utf8'));
+  const desc = JSON.parse(fs.readFileSync(path.join(root, 'data', 'playbook-catalogo.json'), 'utf8'));
+
+  /* Onde cada funcionalidade aparece: seção + em que planos de cada tipo. Os planos são
+     cumulativos (cada um herda o anterior), então o PLANO MÍNIMO já conta a história. */
+  const ordemPlanos = {};
+  const nomePlano = {};
+  preco.tipos.forEach(t => {
+    ordemPlanos[t.id] = t.planos.map(x => x.id);
+    t.planos.forEach(x => { nomePlano[x.id] = x.nome; });
+  });
+
+  const mapa = new Map(); // nome -> { secao, porTipo: { tipoId: [planoIds] } }
+  const ordemSecoes = [];
+  preco.tipos.forEach(t => t.planos.forEach(pl => {
+    Object.entries(pl.secoes || {}).forEach(([secao, itens]) => {
+      if (!ordemSecoes.includes(secao)) ordemSecoes.push(secao);
+      itens.forEach(nome => {
+        if (!mapa.has(nome)) mapa.set(nome, { secao: secao, porTipo: {} });
+        const reg = mapa.get(nome);
+        reg.porTipo[t.id] = reg.porTipo[t.id] || [];
+        if (!reg.porTipo[t.id].includes(pl.id)) reg.porTipo[t.id].push(pl.id);
+      });
+    });
+  }));
+
+  /* O GUARD. Falta de descrição para a tabela, e descrição órfã (item que saiu da
+     tabela e ficou aqui) — as duas coisas param o build. */
+  const semDescricao = [...mapa.keys()].filter(nome => !desc.funcionalidades[nome]);
+  const addonsSemDescricao = preco.adicionais.map(a => a.nome).filter(nome => !desc.adicionais[nome]);
+  const orfas = Object.keys(desc.funcionalidades).filter(nome => !mapa.has(nome));
+  const addonsOrfaos = Object.keys(desc.adicionais).filter(nome => !preco.adicionais.some(a => a.nome === nome));
+  const erros = [];
+  if (semDescricao.length) erros.push('sem descrição em data/playbook-catalogo.json -> funcionalidades: ' + semDescricao.join(' | '));
+  if (addonsSemDescricao.length) erros.push('sem descrição em data/playbook-catalogo.json -> adicionais: ' + addonsSemDescricao.join(' | '));
+  if (orfas.length) erros.push('descrição órfã (não está mais na tabela) -> funcionalidades: ' + orfas.join(' | '));
+  if (addonsOrfaos.length) erros.push('descrição órfã (não está mais na tabela) -> adicionais: ' + addonsOrfaos.join(' | '));
+  if (erros.length) {
+    throw new Error('CATÁLOGO DO PLAYBOOK INCOMPLETO:' + L2 + '  ' + erros.join(L2 + '  ') + L2 +
+      'O catálogo é gerado da tabela oficial. Item que a Takeat vende sem descrição é gestor respondendo pergunta que o material devia responder — por isso o build para aqui.');
+  }
+
+  const ondeEntra = reg => {
+    const partes = preco.tipos.map(t => {
+      const pls = reg.porTipo[t.id];
+      if (!pls || !pls.length) return null;
+      const idx = ordemPlanos[t.id].map((id, i) => pls.includes(id) ? i : -1).filter(i => i >= 0);
+      const min = Math.min.apply(null, idx);
+      const idMin = ordemPlanos[t.id][min];
+      const ehUltimo = min === ordemPlanos[t.id].length - 1;
+      const rot = t.rotuloOficial || t.nome;
+      return '**' + rot + '**: ' + (ehUltimo ? 'só no ' + nomePlano[idMin] : 'a partir do ' + nomePlano[idMin]);
+    }).filter(Boolean);
+    if (partes.length === 1) partes.push('**' + (preco.tipos.find(t => !reg.porTipo[t.id]).rotuloOficial || '') + '**: não se aplica');
+    return partes.join(' · ');
+  };
+
+  const linhas = [];
+  linhas.push('# 📚 CATÁLOGO DE SOLUÇÕES — o que cada funcionalidade faz, e onde ela entra');
+  linhas.push('');
+  linhas.push('Esta página existe para uma coisa: **ninguém na rua precisar perguntar o que a Takeat faz.** São as **' + mapa.size + ' funcionalidades** da tabela oficial e os **' + preco.adicionais.length + ' adicionais**, cada um com o que faz, como ajuda o dono e em que plano entra.');
+  linhas.push('');
+  linhas.push('> **Ela é gerada da tabela oficial** (`data/precificacao.json`), não escrita à mão. Nome, seção, preço e plano mínimo saem do mesmo dado que a aba Propostas usa — então o que você lê aqui é exatamente o que sai na proposta do cliente. Tabela conferida em ' + (preco.conferidoEm || '').split('-').reverse().join('/') + '.');
+  linhas.push('');
+  linhas.push('**Como usar na mesa:** o *o que faz* é para você entender; o *como ajuda* é a frase que você fala. Descubra a dor primeiro (veja o mapa dor → solução), puxe o item que responde àquela dor, e use a linha de ajuda. Ler o catálogo inteiro para o dono é o jeito mais rápido de perder a venda.');
+  linhas.push('');
+  linhas.push('***');
+
+  ordemSecoes.forEach(secao => {
+    const itens = [...mapa.entries()].filter(([, reg]) => reg.secao === secao);
+    if (!itens.length) return;
+    linhas.push('');
+    linhas.push('## ' + secao + ' — ' + itens.length + (itens.length === 1 ? ' funcionalidade' : ' funcionalidades'));
+    itens.forEach(([nome, reg]) => {
+      const d = desc.funcionalidades[nome];
+      linhas.push('');
+      linhas.push('### ' + nome);
+      linhas.push('');
+      linhas.push('**O que faz.** ' + d.faz);
+      linhas.push('');
+      linhas.push('**Como ajuda o dono.** ' + d.ajuda);
+      linhas.push('');
+      linhas.push('**Onde entra.** ' + ondeEntra(reg));
+    });
+  });
+
+  linhas.push('');
+  linhas.push('***');
+  linhas.push('');
+  linhas.push('# 🧩 OS ' + preco.adicionais.length + ' ADICIONAIS');
+  linhas.push('');
+  linhas.push('Adicional é o que entra por cima do plano. **O desconto do período vale para eles também** — cada adicional que entra na proposta também entra no desconto, e isso é argumento na mesa.');
+  preco.adicionais.forEach(a => {
+    const d = desc.adicionais[a.nome];
+    const unid = a.unidade && a.unidade !== 'mês' ? '/' + a.unidade : '/mês';
+    linhas.push('');
+    linhas.push('### ' + a.nome + ' — R$ ' + a.preco + unid);
+    linhas.push('');
+    linhas.push('**O que faz.** ' + d.faz);
+    linhas.push('');
+    linhas.push('**Como ajuda o dono.** ' + d.ajuda);
+    if (a.descricao) {
+      linhas.push('');
+      linhas.push('**Na tabela oficial:** ' + a.descricao);
+    }
+  });
+
+  linhas.push('');
+  linhas.push('***');
+  linhas.push('');
+  linhas.push('## O que este catálogo NÃO responde');
+  linhas.push('');
+  linhas.push('- **Qual plano oferecer.** Isso sai da dor registrada, não da lista. Veja [Mapa dor → solução](playbook:mapa-dor-solucao).');
+  linhas.push('- **Como atacar o concorrente** em cada módulo. Isso é [Ecossistema Takeat](playbook:ecossistema-takeat) e [Concorrência](playbook:concorrencia).');
+  linhas.push('- **Hardware homologado** (balança, impressora, totem, TEF). Isso é [Equipamentos](playbook:equipamentos).');
+  linhas.push('- **Preço final.** A tabela viva está na aba Propostas, e é ela que gera a peça do cliente.');
+
+  return linhas.join(L2);
+}
+
+const L2 = '\n';
 
 function decodeEntities(texto) {
   return String(texto || '')
@@ -167,6 +311,13 @@ function montarPlaybook(root) {
   });
   const arquivosExtras = {};
   const paginas = PAGINAS.map(meta => {
+    /* Página gerada: o markdown nasce do dado, então não existe arquivo para ler. */
+    if (meta.gerado === 'catalogo') {
+      const markdown = montarCatalogo(root);
+      arquivosExtras['(catalogo gerado)'] = markdown;
+      const convertido = markdownToHtml(markdown, meta.id);
+      return { ...meta, html: convertido.html, headings: convertido.headings, busca: textoBusca(`${meta.titulo} ${meta.resumo} ${markdown}`) };
+    }
     if (meta.arquivo) {
       const markdown = fs.readFileSync(path.join(root, 'data', meta.arquivo), 'utf8').replace(/^\uFEFF/, '').trim();
       arquivosExtras[meta.arquivo] = markdown;

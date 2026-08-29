@@ -1644,9 +1644,47 @@ O garçom acessa o sistema para gerenciar mesas e pedidos através de:
 > **Venda Exclusiva:** O hardware do Totem de Autoatendimento **não é comercializado de forma isolada** ou com outras adquirentes. A venda está condicionada à ativação do TEF da Fiserv.\
 > **Precificação do Adicional:** **R$ 299,00/mês** (Totem + licença TEF Fiserv).
 
-## ⚖️ Balanças Compatíveis (Self-Service)
+## ⚖️ Integrações — Balança
 
-* **Toledo:** Prix 3 Fit (Recomendada) e Prix 3 Plus (Sob consulta/testes).
+São **duas integrações diferentes**, e elas resolvem problemas diferentes. Saber qual é qual na mesa evita prometer o que o modelo do cliente não faz — e evita a pior conversa possível, que é a de voltar atrás depois de vendido.
+
+### 1. Por peso — a balança fala com a venda
+
+**Como funciona:** o operador seleciona o produto por peso na venda, coloca o produto na balança, e **o peso é refletido com o valor no sistema**.
+
+**Modelos:**
+
+* Toledo Prix 3 Fit
+
+**Como isso ajuda o dono:** acaba a digitação de peso e de valor no caixa. Cada digitação é uma chance de errar para baixo (prejuízo silencioso) ou para cima (cliente reclamando no balcão) — e é a diferença que ninguém confere no fim do dia.
+
+### 2. Etiquetadora — a balança imprime a etiqueta
+
+**Como funciona:** o operador coloca o produto sobre a balança, digita o código, e a balança **imprime uma etiqueta com valor, preço, código de barras** e demais dados.
+
+**Modelos:**
+
+* Toledo Prix 3 Fit **+ Impressora Elgin L42DT**
+
+* Toledo Prix 4
+
+* Toledo Prix 4 Uno
+
+* Toledo Prix 4 Due
+
+* Toledo Prix 5
+
+* Toledo Prix 5 Plus
+
+* Filizola Platina
+
+* Filizola Platina Plus
+
+**Como isso ajuda o dono:** o produto embalado sai da balança pronto para passar no caixa por leitura de código. Self-service, açougue, rotisseria e freezer de congelados param de depender de alguém lembrar o preço — e o caixa deixa de ser o gargalo do almoço.
+
+> **Prix 3 Plus:** sob consulta / em testes. (Informação que já estava nesta página; mantida porque não foi contrariada pela lista oficial das integrações.)
+
+**Diagnóstico de campo:** pergunte *"vocês vendem alguma coisa por peso?"*. Se a resposta for self-service, açougue, marmita por quilo ou congelado embalado, a balança **não é acessório** — é parte da venda, e sem ela o PDV vira digitação manual no horário mais cheio.
 
 ***
 
