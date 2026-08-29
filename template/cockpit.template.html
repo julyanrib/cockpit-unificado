@@ -6182,7 +6182,33 @@ function telefoneDaAcao(lead, nomeFallback) {
   return t.length <= 11 ? '55' + t : t;
 }
 
-function acoesDeAgora(r, diag) {
+/* ============================================================================
+   SEM PENDÊNCIA, A TELA NOMEIA CONTAS (28/08/26)
+   ----------------------------------------------------------------------------
+   O PEDIDO, nas palavras do Julyan: "conseguimos indicar contas se o funil está
+   vazio?".
+
+   O que acontecia: quando não sobrava nenhuma pendência, o card "O que eu faço
+   agora" mostrava um parabéns — "Nenhuma pendência aberta: toda visita tem desfecho,
+   todo negócio tocado tem próximo passo datado e nenhuma cadência está atrasada" — e
+   parava ali. Honesto, e um beco sem saída: funil limpo (ou vazio, no caso de quem
+   está começando a praça) é exatamente a hora de abrir conta nova, e a tela já sabe
+   quais contas são.
+
+   As três primeiras da fila de contas-alvo dele, que já vem ordenada por
+   prospeccaoCompararOrdem — recém-aberta primeiro, o melhor sinal que a base tem.
+   Não é uma segunda ordenação inventada aqui: é a mesma lista do Planejamento, nos
+   três primeiros lugares.
+
+   POR QUE A LISTA CHEGA COMO PARÂMETRO. Os filtros de escopo (prospeccaoAtiva,
+   prospeccaoFazSentido, rede grande) vivem fora do bloco @nucleo. Chamá-los daqui
+   deixaria a regra sem teste, ou exigiria dublá-los na suíte — e dublar regra de
+   negócio é proibido neste projeto. Então quem filtra é o chamador, que é código de
+   produção com acesso a eles, e aqui fica só a regra nova: dono certo, sem negócio
+   ainda, no máximo três, e SÓ quando não há mais nada pendente. Essa parte é
+   testável inteira.
+   ============================================================================ */
+function acoesDeAgora(r, diag, contasLivres) {
   const d = diag || gatesDoDia(r);
   const fila = d.fila;
   /* A fila NÃO é mais cortada em 3 aqui (28/08/26). O corte antecipado era metade do
@@ -6313,6 +6339,39 @@ function acoesDeAgora(r, diag) {
       leadId: lead.id
     });
   });
+
+  /* Só entra quando NÃO há pendência. Sugestão de conta nova nunca disputa espaço com
+     um negócio que já é dele e está esperando — a carteira vem antes da rua. */
+  if (!acoes.length) {
+    (Array.isArray(contasLivres) ? contasLivres : [])
+      .filter(l => l && String(l.responsavel_owner_id) === String(r.ownerId) && !l.hubspot_deal_id)
+      .slice(0, 3)
+      .forEach(l => {
+        const dias = l.data_abertura
+          ? Math.floor((Date.now() - new Date(l.data_abertura).getTime()) / 86400000) : null;
+        /* O motivo sai do que a base SABE dessa conta, não de texto genérico: quando
+           abriu, como é avaliada, onde fica. É o que decide se vale a visita. */
+        const pistas = [];
+        if (dias != null) pistas.push(dias === 0 ? 'abriu hoje' : 'abriu há ' + dias + 'd');
+        if (l.nota) pistas.push(l.nota + '★' + (l.avaliacoes ? ' (' + l.avaliacoes + ')' : ''));
+        if (l.bairro || l.cidade) pistas.push(l.bairro || l.cidade);
+        acoes.push({
+          id: 'contaalvo:' + l.id,
+          verbo: 'Abrir negócio com',
+          cliente: l.nome,
+          motivo: 'sua carteira está sem pendência — esta é uma das melhores contas livres da sua praça'
+            + (pistas.length ? ' · ' + pistas.join(' · ') : ''),
+          prazo: 'hoje',
+          toque: null,
+          ultimaInteracao: 'nenhum toque ainda — conta nova',
+          ctaLabel: 'Criar negócio',
+          tel: (typeof telefoneDaAcao === 'function') ? telefoneDaAcao(l, l.nome) : null,
+          /* Reusa a passagem que o deck e o gestor já usam: mesmo formulário dos campos
+             que a etapa Prospecção exige, já semeado com telefone, bairro e cidade. */
+          acao: () => { if (typeof abrirPassagemContaAlvoProFunil === 'function') abrirPassagemContaAlvoProFunil(l, () => { if (typeof renderMeuPainel === 'function') renderMeuPainel(); }); }
+        });
+      });
+  }
 
   return acoes.slice(0, 3);
 }
@@ -7114,8 +7173,17 @@ function buildIndicadoresExecutivoHTML(r) {
     </details>`;
 }
 
+/* CONTAS LIVRES PARA SUGERIR (28/08/26) — ver a nota longa em acoesDeAgora.
+   Aqui é o lugar dos filtros de escopo: estão fora do @nucleo e são de produção.
+   O cache já vem ordenado por prospeccaoCompararOrdem, então a ordem se preserva. */
+function contasLivresParaSugerir() {
+  if (typeof prospeccaoCache === 'undefined' || !Array.isArray(prospeccaoCache)) return [];
+  return prospeccaoCache.filter(l =>
+    (typeof prospeccaoAtiva !== 'function' || prospeccaoAtiva(l)) &&
+    (typeof prospeccaoFazSentido !== 'function' || prospeccaoFazSentido(l)));
+}
 function buildAcoesDeAgoraHTML(r, diag) {
-  const acoes = acoesDeAgora(r, diag);
+  const acoes = acoesDeAgora(r, diag, contasLivresParaSugerir());
   const fila = diag.fila;
 
   return `
@@ -7161,7 +7229,8 @@ function buildAcoesDeAgoraHTML(r, diag) {
 
 // Liga os botões do Hoje. Só botões: nenhum checkbox, nenhum estado local.
 function wireHojeExecucao(rootEl, r, diag) {
-  const acoes = acoesDeAgora(r, diag);
+  /* A MESMA lista do build, senão o índice do botão aponta para outra ação. */
+  const acoes = acoesDeAgora(r, diag, contasLivresParaSugerir());
 
   rootEl.querySelectorAll('.gate-cta').forEach(btn => {
     btn.addEventListener('click', () => {
