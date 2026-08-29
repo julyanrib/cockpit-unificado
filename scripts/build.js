@@ -61,3 +61,31 @@ fs.writeFileSync(path.join(publicDir, 'index.html'), output);
 buildPlaybook(root);
 
 console.log('OK — public/index.html gerado com sucesso (shell protegido, sem dados do CRM).');
+
+/* ============================================================================
+   OS GUARDS RODAM AQUI, PORQUE É AQUI QUE O CI PASSA (29/08/26).
+   ----------------------------------------------------------------------------
+   Descoberto medindo: `scripts/check-scripts.js` NÃO estava em nenhum workflow.
+   Os dois workflows que publicam (daily-refresh.yml e weekly-summary.yml) rodam
+   `node scripts/build.js` e mais nada. Ou seja: a validação de sintaxe dos scripts
+   inline, o guard da escala de breakpoints e o guard de variável CSS órfã só
+   protegiam quem se lembrasse de rodar à mão.
+
+   Eu tinha até escrito que "o guard quebra o build". Quebrava o MEU check, não o
+   build automático. Agora quebra os dois: o build gera o arquivo e imediatamente o
+   valida, na mesma execução. Se um guard reprovar, o processo sai com código != 0 e
+   o deploy não acontece — que é o comportamento que eu já tinha atribuído a ele.
+
+   Roda como processo separado de propósito: check-scripts valida no carregamento do
+   módulo (process.exit dentro dele), então `require` teria efeito colateral. Assim o
+   caminho de código exercitado é exatamente o mesmo de quando se roda à mão.
+   ============================================================================ */
+const { spawnSync } = require('child_process');
+const verificacao = spawnSync(process.execPath, [path.join(__dirname, 'check-scripts.js')], {
+  cwd: root,
+  stdio: 'inherit'
+});
+if (verificacao.status !== 0) {
+  console.error('BUILD REPROVADO pelos guards de check-scripts (acima). public/index.html foi gerado, mas NÃO deve ser publicado.');
+  process.exit(verificacao.status || 1);
+}
