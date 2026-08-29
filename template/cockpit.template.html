@@ -3664,6 +3664,19 @@
   .prc-objecoes-cab b{font:800 12px "Archivo",system-ui,sans-serif;color:var(--amber-ink);}
   .prc-objecoes-cab span{font-size:11px;color:var(--muted);}
   .prc-objecoes-chips{display:flex;flex-wrap:wrap;gap:7px;}
+  /* ESCOPO: fileira "só você vê" da aba Propostas. A dor registrada, o sistema que ele
+     usa hoje e o aviso de cobertura. Sem cor nova: o âmbar do bloco já significa
+     ATENÇÃO, e o chip da dor é um .btn-sec com uma micro-tag em cima. */
+  .prc-dor-linha{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:9px;}
+  .prc-chip-dor{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;font-size:11px;padding:6px 12px;text-align:left;}
+  .prc-chip-dor em{font:800 8px "Archivo",system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--ter);font-style:normal;}
+  .prc-dor-sistema{font-size:11px;color:var(--muted);min-width:0;}
+  .prc-dor-sistema b{color:var(--ink);}
+  .prc-dor-alerta{flex:1 1 100%;min-width:0;font-size:11px;line-height:1.45;color:var(--amber-ink);}
+  .prc-dor-alerta b{text-transform:lowercase;}
+  /* A linha de implicação ocupa o lugar do título institucional no documento escuro:
+     mesma família e peso, um ponto menor porque é frase, não manchete. */
+  .prc-impact h2.prc-impact-dor{font-size:22px;line-height:1.16;}
   .prc-objecoes-chips .btn-sec{font-size:11px;padding:6px 12px;}
 
   /* ESCOPO: dentro de @media (max-width:760px) — no celular o CTA ganha linha propria. */
@@ -9279,7 +9292,9 @@ document.getElementById('tabBtnMeuFunil').addEventListener('click', () => { acti
 // instantaneamente durante a visita; a fonte e a data de conferência viajam no payload.
 let precificacaoCache = null;
 let precificacaoPromise = null;
-const precificacaoEstado = { tipo: 'mesas', plano: 'profissional', periodo: 'mensal', cliente: '', whatsapp: '', adicionais: {}, quantidades: {} };
+/* O campo `conta` (29/08/26): a proposta passou a ter dono — de qual negócio ela é.
+   null = proposta avulsa, digitada à mão, sem vínculo com o funil. */
+const precificacaoEstado = { tipo: 'mesas', plano: 'profissional', periodo: 'mensal', cliente: '', whatsapp: '', adicionais: {}, quantidades: {}, conta: null };
 
 async function carregarPrecificacaoProtegida() {
   if (precificacaoCache) return precificacaoCache;
@@ -9338,12 +9353,42 @@ function prcResumoAdicionais(calculo) {
   }).join(', ');
 }
 
+/* O bloco da dor dentro de "só você vê": o chip que abre o mapa na dor certa, o
+   sistema que ele usa hoje como contexto, e — quando for o caso — o aviso de que o
+   plano na tela NÃO cobre a dor que ele registrou.
+
+   Esse aviso é a peça mais útil daqui. Antes, nada na tela relacionava "a dor que ele
+   me contou" com "o que estou propondo": dava para diagnosticar fila e propor um
+   Básico sem totem, e a proposta saía silenciosamente sem resposta para o problema.
+   Ele diz o plano mínimo que resolve, direto do mapa. */
+function prcBlocoDorHTML() {
+  const dor = prcDor();
+  const conta = precificacaoEstado.conta;
+  const sistema = conta && String(conta.sistema || '').trim();
+  if (!dor && !sistema) return '';
+  const partes = [];
+  if (dor) {
+    const cobre = prcTemRecurso(calcularPrecificacao(), dor.requer);
+    partes.push(`<button type="button" class="btn-sec prc-chip-dor" data-prc-dor="1" title="Abrir o mapa dor → solução na dor registrada">
+      <em>dor registrada</em>${esc(dor.chip)}</button>`);
+    if (!cobre) partes.push(`<span class="prc-dor-alerta">O plano na tela não cobre <b>${esc(dor.nome.toLowerCase())}</b>. Mínimo que resolve: ${esc(dor.minimo)}.</span>`);
+  }
+  if (sistema) partes.push(`<span class="prc-dor-sistema">usa hoje: <b>${esc(sistema)}</b></span>`);
+  return `<div class="prc-dor-linha">${partes.join('')}</div>`;
+}
+
 function prcPreviewHTML() {
   const tipo = prcTipo(); const c = calcularPrecificacao();
   return `<div class="prc-proposal-main">
     <div class="prc-proposal-top"><div class="prc-proposal-brand"><img src="assets/logo-takeat.png" alt="Takeat"></div><span class="prc-proposal-badge">PROPOSTA COMERCIAL</span></div>
     <div class="prc-client">Preparada para<b>${esc(precificacaoEstado.cliente.trim() || 'Seu próximo cliente')}</b></div>
-    <div class="prc-impact"><h2>Mais agilidade na operação. Mais controle para crescer.</h2><p>A Takeat conecta atendimento, gestão e relacionamento para o restaurante vender melhor todos os dias.</p><div class="prc-impact-grid"><span><i>↗</i>Atendimento mais rápido</span><span><i>◎</i>Operação centralizada</span><span><i>♥</i>Cliente mais fiel</span></div></div>
+    <div class="prc-impact">${(() => {
+      /* A dor primeiro, quando ela existe e o plano a resolve: é o número DELE antes do
+         nosso preço. Sem dor coberta, a linha institucional de sempre. */
+      const dor = prcDor();
+      if (dor && prcTemRecurso(c, dor.requer)) return `<h2 class="prc-impact-dor">${esc(dor.documento)}</h2>`;
+      return '<h2>Mais agilidade na operação. Mais controle para crescer.</h2><p>A Takeat conecta atendimento, gestão e relacionamento para o restaurante vender melhor todos os dias.</p>';
+    })()}<div class="prc-impact-grid"><span><i>↗</i>Atendimento mais rápido</span><span><i>◎</i>Operação centralizada</span><span><i>♥</i>Cliente mais fiel</span></div></div>
     <div class="prc-selected-plan"><span>${esc(tipo.nome)} · ${esc(c.periodo.nome)}</span><h3>Plano ${esc(c.plano.nome)}</h3><p>${esc(c.plano.chamada)}</p></div>
   </div><div class="prc-feature-matrix"><div class="prc-feature-title"><b>Funcionalidades</b><span>${Object.values(c.plano.secoes).flat().length} itens incluídos</span></div>${Object.entries(c.plano.secoes).map(([secao, itens]) => `<section class="prc-feature-section"><h3>${esc(secao)}</h3><ul>${itens.map(item => `<li>${esc(item)}</li>`).join('')}</ul></section>`).join('')}</div><div class="prc-summary">
     <div class="prc-line"><span>Plano ${esc(c.plano.nome)}</span><b>${prcMoeda(c.plano.preco)}/mês</b></div>
@@ -9410,6 +9455,139 @@ function prcHerancaTexto(tipo, plano) {
       proposta. Agora as cinco ficam no rodapé da proposta (no lado do executivo, nunca
       no modo cliente) e abrem o Playbook na âncora certa.
    ============================================================================ */
+/* ============================================================================
+   O MAPA DOR -> SOLUÇÃO, DENTRO DA PROPOSTA (29/08/26)
+   ----------------------------------------------------------------------------
+   O cockpit OBRIGA o executivo a registrar `gargalo_operacional` — enumeração de 6
+   opções, a palavra que o dono usou — para avançar o negócio. A proposta não sabia
+   disso: zero ocorrências de `gargalo` nesta aba. O executivo diagnosticava a dor,
+   registrava, e depois montava uma proposta que não mencionava o problema.
+
+   Esta tabela é a mesma do playbook (data/playbook-mapa-dor-solucao.md). Aqui ela
+   alimenta três coisas: o chip que abre o mapa na dor certa, a linha de implicação no
+   alto do documento, e (nas partes seguintes) o 1º marcador da imagem e a linha da
+   dor no texto do WhatsApp. As chaves são EXATAMENTE os valores de OP_GARGALO — se a
+   enumeração mudar na tela, tem que mudar aqui, e o console avisa (ver a conferência
+   logo abaixo da tabela).
+
+   `requer` é o que impede a peça de mentir. Cada dor só é citada se o plano escolhido
+   (ou um adicional selecionado) REALMENTE entrega a solução dela. Medido: o Básico
+   Completo não tem CMV Dinâmico, nem Cashback, nem CRM — uma lista fixa de benefícios
+   colocaria duas afirmações falsas numa proposta de Básico. Com `requer`, quando o
+   plano não cobre a dor registrada, a proposta não promete: em vez disso avisa o
+   EXECUTIVO (nunca o cliente) qual é o plano mínimo que resolve. */
+const PRC_DOR = {
+  'Fila': {
+    chip: 'fila → totem de autoatendimento',
+    documento: 'Cada pessoa que chega, vê a fila e vai embora é um ticket inteiro a zero. A proposta abaixo atende a fila sem contratar ninguém.',
+    bullet: 'Fila atendida pelo totem, sem contratar ninguém',
+    whatsapp: 'Sobre a fila que você me mostrou: o totem atende ela sozinho, sem contratar ninguém.',
+    requer: ['Totem de Autoatendimento + TEF Fiserv'],
+    minimo: 'Básico + adicional Totem (R$ 299/mês)'
+  },
+  'Falta de Garçom': {
+    chip: 'falta de garçom → garçom digital + tablet',
+    documento: 'Copo vazio é consumo perdido em cada mesa, toda noite. A proposta abaixo tira o pedido da mão do garçom e devolve esse consumo.',
+    bullet: 'Cliente pede da própria mesa, sem esperar garçom',
+    whatsapp: 'Sobre a equipe enxuta: com o pedido saindo da própria mesa, seu garçom cobre o dobro do salão.',
+    requer: ['Garçom Digital (autoatendimento QR)', 'Tablet de Mesa'],
+    minimo: 'Básico Completo (já inclui Garçom Digital)'
+  },
+  'Falta de Gestão': {
+    chip: 'falta de gestão → ficha técnica + CMV',
+    documento: 'Sem ficha técnica, todo prato pode ser um prejuízo bem servido — e o mais vendido é o que mais sangra. A proposta abaixo mostra a margem de cada prato.',
+    bullet: 'CMV e margem de cada prato, sem planilha',
+    whatsapp: 'Sobre o controle que você quer: a ficha técnica te mostra a margem de cada prato desde a primeira semana.',
+    requer: ['CMV Dinâmico'],
+    minimo: 'Inovação (é onde o CMV Dinâmico entra)'
+  },
+  'Sem fidelização': {
+    chip: 'sem fidelização → cashback + CRM',
+    documento: 'Cliente novo custa anúncio; cliente que volta custa um cashback. A proposta abaixo põe a sua base no seu nome — e a chama de volta na semana fraca.',
+    bullet: 'Cliente que volta: cashback e CRM da sua base',
+    whatsapp: 'Sobre fazer o cliente voltar: o cashback e o CRM chamam sua base de volta na semana fraca.',
+    requer: ['Programa de Cashback'],
+    minimo: 'Profissional (é onde o Cashback e o CRM entram)'
+  },
+  'Demora na divisão de contas': {
+    chip: 'divisão de contas → POS + comanda individual',
+    documento: 'Cada conta que demora dez minutos para fechar é uma mesa que deixa de girar na sua noite. A proposta abaixo fecha a conta na mesa, na hora.',
+    bullet: 'Conta fechada na mesa, dividida na hora',
+    whatsapp: 'Sobre o fechamento lento: a conta sai dividida na maquininha, na mesa, na hora.',
+    requer: ['Comandas Individuais', 'Maquininha POS', 'TEF Balcão Fiserv'],
+    minimo: 'Básico Completo, ou adicional Maquininha POS (R$ 99/mês)'
+  },
+  'Estoque': {
+    chip: 'estoque → controle + curva ABC',
+    documento: 'Item que acaba no pico é venda recusada com o cliente sentado. A proposta abaixo dá baixa automática por ficha técnica — você sabe antes de acabar.',
+    bullet: 'Estoque com baixa automática e curva ABC',
+    whatsapp: 'Sobre o estoque: a baixa é automática por ficha técnica — você sabe o que vai acabar antes de acabar.',
+    requer: ['Gestão de Estoque + Curva ABC'],
+    minimo: 'Básico (a gestão de estoque já entra)'
+  }
+};
+
+/* CONFERÊNCIA DE ENUMERAÇÃO. As chaves acima têm que cobrir OP_GARGALO inteiro. Se
+   alguém acrescentar uma 7ª dor na tela e esquecer aqui, o chip e a linha de
+   implicação simplesmente não aparecem para ela — falha silenciosa, do tipo que este
+   projeto já pagou caro. O aviso vai no console, não na tela: é erro de manutenção,
+   não algo que o executivo possa resolver. */
+if (typeof OP_GARGALO !== 'undefined') {
+  const semMapa = OP_GARGALO.filter(g => !PRC_DOR[g]);
+  const semEnum = Object.keys(PRC_DOR).filter(g => !OP_GARGALO.includes(g));
+  if (semMapa.length) console.warn('PRC_DOR: dor sem tradução no mapa -> ' + semMapa.join(', '));
+  if (semEnum.length) console.warn('PRC_DOR: tradução para dor que não existe mais em OP_GARGALO -> ' + semEnum.join(', '));
+}
+
+/* O plano escolhido (ou um adicional selecionado) entrega este recurso? Adicional
+   incluído de graça no plano também conta: `c.itens` traz os dois casos. */
+function prcTemRecurso(c, nomes) {
+  const lista = Array.isArray(nomes) ? nomes : [nomes];
+  const doPlano = new Set(Object.values((c.plano && c.plano.secoes) || {}).flat());
+  const dosAdicionais = new Set((c.itens || []).map(i => i.nome));
+  return lista.some(x => doPlano.has(x) || dosAdicionais.has(x));
+}
+
+/* A dor da conta aberta, já traduzida. null quando a proposta é avulsa ou quando o
+   negócio ainda não tem a dor registrada. */
+function prcDor() {
+  const conta = precificacaoEstado.conta;
+  const nome = conta && String(conta.dor || '').trim();
+  return (nome && PRC_DOR[nome]) ? Object.assign({ nome: nome }, PRC_DOR[nome]) : null;
+}
+
+/* Âncora da dor na página do mapa, derivada do CONTEÚDO: procura o título que começa
+   pelo nome da dor. Mesmo mecanismo de prcAncoraObjecao — se a página for reescrita,
+   continua achando; se não achar, abre a página no topo em vez de errar calado. */
+function prcAncoraDor(nomeDaDor) {
+  const pb = (typeof playbookCache !== 'undefined') ? playbookCache : null;
+  const pag = pb && (pb.paginas || []).find(x => x.id === 'mapa-dor-solucao');
+  if (!pag || !Array.isArray(pag.headings)) return null;
+  const alvo = pag.headings.find(h => String(h.titulo || '').trim().startsWith(nomeDaDor));
+  return alvo ? alvo.id : null;
+}
+
+/* ENTRADA PELA CONTA (decisão 6 da prancha). Era a única forma de a proposta saber de
+   quem ela é: antes disso o executivo digitava nome e telefone à mão, com o dono
+   olhando, de dados que o cockpit já tinha. */
+function abrirPropostaDaConta(lead) {
+  if (!lead) return;
+  precificacaoEstado.conta = {
+    id: lead.id,
+    nome: String(lead.name || '').trim(),
+    telefone: String(lead.celular || '').trim(),
+    etapa: (typeof etapaDoLead === 'function') ? etapaDoLead(lead) : '',
+    dor: String(lead.gargalo_operacional || '').trim(),
+    sistema: String(lead.nome_do_sistema || '').trim()
+  };
+  precificacaoEstado.cliente = precificacaoEstado.conta.nome;
+  precificacaoEstado.whatsapp = precificacaoEstado.conta.telefone;
+  prcModoCliente = false;
+  if (typeof stageOverlay !== 'undefined' && stageOverlay) stageOverlay.classList.remove('show');
+  activateTab('viewPrecificacao');
+  renderPrecificacao();
+}
+
 let prcModoCliente = false;
 
 /* A âncora sai do CONTEÚDO, não de um id cravado: procura o título que começa com o
@@ -9458,8 +9636,11 @@ function renderPrecificacaoConfigurador() {
     </div><aside><div class="prc-proposal" id="precificacaoPreview">${prcPreviewHTML()}</div>
     <!-- AS 5 OBJEÇÕES DA MESA DO DONO. Fora do modo cliente, sempre: é ferramenta do
          executivo, e mostrar "objeções" para o cliente seria constrangedor. -->
+    <!-- SÓ VOCÊ VÊ. Fora do modo cliente, sempre: são ferramentas do executivo, e
+         mostrar "objeções" ou "a dor dele" para o próprio dono seria constrangedor. -->
     ${prcModoCliente ? '' : `<div class="prc-objecoes">
-      <div class="prc-objecoes-cab"><b>O cliente disse…</b><span>abre a resposta no Playbook, na objeção certa</span></div>
+      <div class="prc-objecoes-cab"><b>Só você vê</b><span>some quando você virar a tela para o cliente</span></div>
+      ${prcBlocoDorHTML()}
       <div class="prc-objecoes-chips">${PRC_OBJECOES.map(o => `<button type="button" class="btn-sec" data-prc-objecao="${o.n}">“${esc(o.chip)}”</button>`).join('')}</div>
     </div>`}
     <div class="prc-after"><b>Depois do “sim”: confirmação, não suposição.</b><p>Gerar a proposta não confirma pagamento. O backend mantém HubSpot + Asaas como fonte de verdade: registre o <code>asaas_id</code> e aguarde o status confirmado. Guia completo no Playbook: <strong>Pagamento realizado · Asaas</strong>.</p></div></aside></div>
@@ -9475,7 +9656,19 @@ function renderPrecificacaoConfigurador() {
     </div>`}
   </div>`;
 
-  document.getElementById('prcCliente').addEventListener('input', ev => { precificacaoEstado.cliente = ev.target.value; atualizarPreviewPrecificacao(); });
+  document.getElementById('prcCliente').addEventListener('input', ev => {
+    precificacaoEstado.cliente = ev.target.value;
+    /* Trocar o nome à mão DESFAZ o vínculo com a conta: senão a dor registrada de um
+       restaurante apareceria na proposta de outro. Perder o contexto é recuperável
+       (basta reabrir pela ficha); imprimir a dor errada, não. */
+    const conta = precificacaoEstado.conta;
+    if (conta && ev.target.value.trim() !== conta.nome) {
+      precificacaoEstado.conta = null;
+      renderPrecificacaoConfigurador();
+      return;
+    }
+    atualizarPreviewPrecificacao();
+  });
   document.getElementById('prcTelefone').addEventListener('input', ev => { precificacaoEstado.whatsapp = ev.target.value; atualizarPreviewPrecificacao(); });
   /* MODO CLIENTE. Rola para o topo ao entrar: ele vai virar a tela, e o cliente tem que
      ver o começo da proposta, não o meio dela. */
@@ -9493,6 +9686,15 @@ function renderPrecificacaoConfigurador() {
 
   /* OBJEÇÃO -> PLAYBOOK, na âncora. Se a âncora não for encontrada (playbook reescrito),
      abre a página mesmo assim: melhor a página certa sem âncora que nada. */
+  /* Chip da dor -> o mapa, na âncora da dor registrada. */
+  const btnDor = slot.querySelector('[data-prc-dor]');
+  if (btnDor) btnDor.addEventListener('click', () => {
+    const dor = prcDor();
+    if (!dor) return;
+    activateTab('viewPlaybook');
+    abrirPaginaPlaybook('mapa-dor-solucao', prcAncoraDor(dor.nome));
+  });
+
   slot.querySelectorAll('[data-prc-objecao]').forEach(btn => {
     btn.addEventListener('click', () => {
       const anc = prcAncoraObjecao(Number(btn.dataset.prcObjecao));
@@ -17179,6 +17381,10 @@ function fichaLeadFunilBodyHTML(l) {
 
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding-top:6px;">
       <button type="button" class="ficha-mover-abrir btn-prim" data-lead-id="${l.id}" style="padding:9px 18px;">Mover de etapa</button>
+      <!-- ENTRADA DA PROPOSTA PELA CONTA (29/08/26). Nome, telefone, dor registrada e
+           sistema atual vão prontos — o executivo digitava os dois primeiros à mão, com
+           o dono olhando, de dados que o cockpit já tinha. -->
+      <button type="button" class="ficha-gerar-proposta btn-sec" data-lead-id="${l.id}" style="padding:9px 18px;">Gerar proposta</button>
       <!-- BLOCO 51 — "o crm agora é o cockpit... pode até ter, mas nao explicito assim"
            (Julyan). O acesso ao HubSpot continua existindo pra depuração, mas como
            link discreto de rodapé, não mais como botão do mesmo peso da ação principal. -->
@@ -18215,6 +18421,10 @@ function wireFichaLeadFunilEdicao(container, l) {
   // BLOCO 50 (14/08/26) — botão "Mover de etapa ▸" do rodapé (§7, Vista A do handoff):
   // abre a escolha de destino com os 6 alvos grandes, em vez de forçar o clique preciso
   // num segmento fino da trilha. Mesmo drawer de passagem no final das contas.
+  container.querySelectorAll('.ficha-gerar-proposta').forEach(btn => {
+    btn.addEventListener('click', () => abrirPropostaDaConta(l));
+  });
+
   container.querySelectorAll('.ficha-mover-abrir').forEach(btn => {
     btn.addEventListener('click', () => abrirEscolhaDeEtapa({ ...l, ownerId }, leadAtualizado => abrirFichaLeadFunilDrawer(leadAtualizado, stageModalVoltarPara)));
   });
