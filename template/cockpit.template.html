@@ -10239,7 +10239,26 @@ function renderPlaybookInicio(slot, pb) {
   });
 }
 
-function abrirPaginaPlaybook(id) {
+/* CORREÇÃO (29/08/26) — TELA BRANCA NO ATALHO. Medido em produção, logado como
+   executivo: recarregar o cockpit, ir direto para Propostas SEM passar pelo Playbook,
+   e tocar num chip de objeção levava a aba Playbook VAZIA — innerHTML zerado, nenhum
+   texto na tela. O chip trocava de aba e esta função retornava calada, porque
+   `playbookPagina(id)` é null enquanto a biblioteca protegida não foi buscada.
+
+   Eu mesmo introduzi isso na PR #80 e reportei o recurso como funcionando: testei a
+   âncora com a biblioteca já carregada e nunca testei o primeiro uso do dia. É
+   exatamente o caminho real — o executivo abre o cockpit, vai fazer a proposta, e o
+   cliente diz "está caro". A ferramenta que existe para esse segundo entregava branco.
+
+   renderPlaybook() já sabe carregar: mostra "Abrindo a biblioteca protegida…", trata
+   erro e oferece "Tentar novamente". Faltava chamá-la. A página de destino é fixada
+   ANTES do await para a tela abrir já na leitura certa, sem piscar o início. */
+async function abrirPaginaPlaybook(id, ancora) {
+  if (!playbookDados()) {
+    playbookTelaAtual = 'leitura';
+    playbookPaginaAtual = id;
+    await renderPlaybook();
+  }
   if (!playbookPagina(id)) return;
   // Atalhos e navegação anterior/próxima podem apontar para fora do filtro atual.
   // Nesse caso, reabre o catálogo completo para a página nunca ficar "órfã" na lateral.
@@ -10254,7 +10273,6 @@ function abrirPaginaPlaybook(id) {
   /* ÂNCORA (29/08/26): quem chega do rodapé da proposta com uma objeção na mão não pode
      cair no topo de uma página de 6.700 caracteres e ter que procurar. Vai direto no
      trecho. Sem âncora, o topo — que é o comportamento de sempre. */
-  const ancora = arguments.length > 1 ? arguments[1] : null;
   if (ancora) {
     setTimeout(() => {
       const alvo = document.getElementById(ancora);
