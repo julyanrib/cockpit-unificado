@@ -3772,6 +3772,11 @@
      um movimento de fechamento — "acabei de te mandar" vale mais que sair da tela para
      enviar depois. A dica tecnica ("Desktop: o PNG fica copiado...") sai: e instrucao
      para ele, nao para o dono. */
+  /* O registrar ocupa a linha inteira embaixo das duas ações de peça: é de outra
+     natureza (escreve no CRM), e misturá-lo na mesma fileira faria o executivo tocar
+     nele achando que baixa o PNG. */
+  .prc-action-registrar{grid-column:1/-1;}
+  .prc-shell.modo-cliente #prcRegistrar,
   .prc-shell.modo-cliente #prcBaixar,
   .prc-shell.modo-cliente #prcCopiar,
   .prc-shell.modo-cliente .prc-whatsapp-hint{display:none;}
@@ -9640,6 +9645,121 @@ document.addEventListener('keydown', ev => {
   prcSairDoModoCliente();
 });
 
+/* ============================================================================
+   REGISTRAR NO NEGÓCIO (29/08/26) — prancha v3, decisão 9
+   ----------------------------------------------------------------------------
+   A digitação dupla: para avançar o negócio o executivo preenche `plano_apresentado`
+   e `valor_de_mrr` num formulário — e a aba Propostas JÁ SABE os dois (o plano que ele
+   escolheu e `c.mensal`, que é exatamente o MRR). Ele calculava aqui e redigitava lá.
+
+   CORREÇÃO DE UMA SUPOSIÇÃO MINHA: eu escrevi no brief que essas duas propriedades
+   eram da etapa "Proposta". Não são. `1395880472` é NEGOCIAÇÃO; `1395880471` é
+   Demo/Proposta, e essa não exige campo nenhum. A ordem oficial é
+   Prospecção · Visita · Conversa com Decisor · Demo/Proposta · Negociação ·
+   Ag. Pagamento, e o HubSpot NÃO deixa pular etapa (o servidor valida igual).
+
+   Então o botão faz a coisa honesta em cada posição, em vez de tentar sempre a mesma:
+     · em Conversa com Decisor -> Demo/Proposta. É o que acabou de acontecer: ele
+       apresentou a proposta. Essa etapa não pede campo.
+     · em Demo/Proposta -> Negociação, com plano e MRR JÁ PREENCHIDOS.
+     · em Negociação ou depois -> abre a ficha, onde as duas propriedades se editam
+       inline. Mover para trás por causa de um botão de proposta seria errado.
+     · antes de Conversa com Decisor -> diz o que falta, e abre o seletor de etapas.
+       Não invento um pulo que o servidor recusaria.
+   ============================================================================ */
+const PRC_ETAPA_DEMO = '1395880471';        // Demo/Proposta
+const PRC_ETAPA_NEGOCIACAO = '1395880472';  // Negociação
+
+/* O de/para das enumerações. O dado de preço usa basico/inovacao/profissional/
+   enterprise; o HubSpot usa outra lista, e "profissional" lá se chama "Pro". Valor
+   fora da enumeração volta como erro cru da API — por isso a conferência abaixo. */
+function prcPlanoApresentadoHubSpot(tipo, plano) {
+  const mapa = {
+    basico: tipo.id === 'mesas' ? 'Básico (PDV + mesa + delivery)' : 'Básico (PDV + delivery)',
+    inovacao: 'Inovação',
+    profissional: 'Pro',
+    enterprise: 'Enterprise'
+  };
+  const v = mapa[plano.id] || '';
+  if (v && typeof OP_PLANO_APRESENTADO !== 'undefined' && !OP_PLANO_APRESENTADO.includes(v)) {
+    console.warn('plano_apresentado fora da enumeração do HubSpot: ' + v);
+    return '';
+  }
+  return v;
+}
+
+/* O negócio de verdade, dos dados carregados — `precificacaoEstado.conta` é um retrato
+   do momento em que a proposta foi aberta, e a passagem de etapa precisa do lead. */
+function prcLeadDaConta() {
+  const conta = precificacaoEstado.conta;
+  if (!conta || !conta.id || typeof DATA === 'undefined' || !DATA || !DATA.funilLeads) return null;
+  const alvo = String(conta.id);
+  let achado = null;
+  Object.values(DATA.funilLeads).forEach(grupo => (grupo || []).forEach(l => {
+    if (!achado && l && String(l.id) === alvo) achado = l;
+  }));
+  return achado;
+}
+
+/* O que o botão vai fazer nesta posição do funil. Devolvido junto com o rótulo, para o
+   botão dizer a verdade em vez de um "Registrar" genérico. */
+function prcAlvoDoRegistro() {
+  const lead = prcLeadDaConta();
+  if (!lead) return { tipo: 'sem-conta' };
+  const atual = (typeof etapaDoLead === 'function') ? etapaDoLead(lead) : lead.stageId;
+  const i = ORDEM_ETAPAS_FUNIL.indexOf(String(atual));
+  const iDemo = ORDEM_ETAPAS_FUNIL.indexOf(PRC_ETAPA_DEMO);
+  const iNeg = ORDEM_ETAPAS_FUNIL.indexOf(PRC_ETAPA_NEGOCIACAO);
+  if (i < 0) return { tipo: 'etapa-desconhecida', lead: lead, atual: atual };
+  if (i >= iNeg) return { tipo: 'ja-passou', lead: lead, atual: atual };
+  if (i === iDemo) return { tipo: 'negociacao', lead: lead, atual: atual, rotulo: 'Registrar plano e MRR' };
+  if (i === iDemo - 1) return { tipo: 'demo', lead: lead, atual: atual, rotulo: 'Registrar Demo/Proposta' };
+  return { tipo: 'muito-atras', lead: lead, atual: atual };
+}
+
+function prcRegistrarNoNegocio() {
+  const alvo = prcAlvoDoRegistro();
+  const tipo = prcTipo();
+  const c = calcularPrecificacao();
+
+  if (alvo.tipo === 'sem-conta') {
+    mostrarToast('Proposta avulsa não tem negócio no HubSpot. Abra pela ficha, em "Gerar proposta".', 'atencao');
+    return;
+  }
+  if (alvo.tipo === 'etapa-desconhecida') {
+    mostrarToast('Não reconheci a etapa desse negócio. Abra a ficha e mova de etapa por lá.', 'atencao');
+    abrirFichaLeadFunilDrawer(alvo.lead, null);
+    return;
+  }
+  if (alvo.tipo === 'ja-passou') {
+    mostrarToast('Esse negócio já está em ' + STAGE_LABELS[alvo.atual] + '. Plano e MRR se editam na ficha.', 'atencao');
+    abrirFichaLeadFunilDrawer(alvo.lead, null);
+    return;
+  }
+  if (alvo.tipo === 'muito-atras') {
+    mostrarToast('O HubSpot não deixa pular etapa: de ' + STAGE_LABELS[alvo.atual] + ' até Demo/Proposta falta mais de um degrau.', 'atencao');
+    abrirEscolhaDeEtapa(alvo.lead, atualizado => abrirFichaLeadFunilDrawer(atualizado, null));
+    return;
+  }
+
+  /* Demo/Proposta não pede campo; Negociação pede os dois, e eles vão prontos. O
+     formulário lê o valor inicial de `lead[prop]` (ver valorAtualDoCampo), então basta
+     entregar um lead com as duas propriedades postas. */
+  const etapa = alvo.tipo === 'negociacao' ? PRC_ETAPA_NEGOCIACAO : PRC_ETAPA_DEMO;
+  const comPrefill = Object.assign({}, alvo.lead);
+  if (alvo.tipo === 'negociacao') {
+    comPrefill.plano_apresentado = prcPlanoApresentadoHubSpot(tipo, c.plano);
+    comPrefill.valor_de_mrr = c.mensal;
+  }
+  abrirPassagemDeEtapa(comPrefill, etapa, atualizado => {
+    /* A barra da conta passa a mostrar a etapa nova sem o executivo recarregar nada. */
+    if (precificacaoEstado.conta && atualizado) {
+      precificacaoEstado.conta.etapa = (typeof etapaDoLead === 'function') ? etapaDoLead(atualizado) : atualizado.stageId;
+    }
+    renderPrecificacaoConfigurador();
+  });
+}
+
 function prcLigarPeriodos(raiz) {
   raiz.querySelectorAll('[data-prc-periodo]').forEach(btn => btn.addEventListener('click', () => {
     precificacaoEstado.periodo = btn.dataset.prcPeriodo;
@@ -9706,7 +9826,16 @@ function prcPreviewHTML() {
          mesmo data-prc-periodo, então a fiação é a que já existe. -->
     ${prcModoCliente ? prcPeriodosNoDocumentoHTML() : ''}
     ${prcModoCliente ? '' : prcBlocoPassoHTML()}
-    <div class="prc-actions"><button type="button" class="prc-action whatsapp" id="prcWhatsapp" title="Gera o PNG e abre a conversa do cliente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2a9.84 9.84 0 0 0-8.45 14.88L2 22l5.25-1.54A9.94 9.94 0 1 0 12.04 2Zm0 17.88a7.87 7.87 0 0 1-4.02-1.1l-.29-.17-3.12.92.94-3.04-.19-.31a7.85 7.85 0 1 1 6.68 3.7Zm4.31-5.89c-.24-.12-1.4-.69-1.61-.77-.22-.08-.38-.12-.54.12-.16.24-.61.77-.75.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.9-1.17a7.13 7.13 0 0 1-1.31-1.63c-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.73-1.78-.2-.47-.39-.4-.54-.41h-.46a.88.88 0 0 0-.63.3c-.22.24-.83.81-.83 1.98s.85 2.3.97 2.46c.12.16 1.67 2.55 4.05 3.58.57.24 1.01.39 1.35.5.57.18 1.08.15 1.49.09.45-.07 1.4-.57 1.59-1.12.2-.55.2-1.03.14-1.13-.06-.1-.22-.16-.45-.28Z"/></svg>Enviar PNG no WhatsApp</button><div class="prc-whatsapp-hint">Desktop: o PNG fica copiado para colar na conversa. Celular: compartilha o arquivo.</div><button type="button" class="prc-action secondary" id="prcBaixar">Baixar proposta em PNG</button><button type="button" class="prc-action secondary" id="prcCopiar">Copiar texto</button></div>
+    <div class="prc-actions"><button type="button" class="prc-action whatsapp" id="prcWhatsapp" title="Gera o PNG e abre a conversa do cliente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2a9.84 9.84 0 0 0-8.45 14.88L2 22l5.25-1.54A9.94 9.94 0 1 0 12.04 2Zm0 17.88a7.87 7.87 0 0 1-4.02-1.1l-.29-.17-3.12.92.94-3.04-.19-.31a7.85 7.85 0 1 1 6.68 3.7Zm4.31-5.89c-.24-.12-1.4-.69-1.61-.77-.22-.08-.38-.12-.54.12-.16.24-.61.77-.75.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.9-1.17a7.13 7.13 0 0 1-1.31-1.63c-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.73-1.78-.2-.47-.39-.4-.54-.41h-.46a.88.88 0 0 0-.63.3c-.22.24-.83.81-.83 1.98s.85 2.3.97 2.46c.12.16 1.67 2.55 4.05 3.58.57.24 1.01.39 1.35.5.57.18 1.08.15 1.49.09.45-.07 1.4-.57 1.59-1.12.2-.55.2-1.03.14-1.13-.06-.1-.22-.16-.45-.28Z"/></svg>Enviar PNG no WhatsApp</button><div class="prc-whatsapp-hint">Desktop: o PNG fica copiado para colar na conversa. Celular: compartilha o arquivo.</div><button type="button" class="prc-action secondary" id="prcBaixar">Baixar proposta em PNG</button><button type="button" class="prc-action secondary" id="prcCopiar">Copiar texto</button>
+    <!-- REGISTRAR NO NEGÓCIO: o rótulo diz o que vai acontecer nesta posição do funil,
+         em vez de um "Registrar" genérico que às vezes moveria de etapa e às vezes não.
+         Fora do modo cliente, sempre: é ação de CRM. -->
+    ${(() => {
+      if (prcModoCliente) return '';
+      const alvo = prcAlvoDoRegistro();
+      const rotulo = alvo.rotulo || 'Registrar no negócio';
+      return `<button type="button" class="prc-action secondary prc-action-registrar" id="prcRegistrar">${esc(rotulo)}</button>`;
+    })()}</div>
     <!-- ASSINATURA. A peça em PNG já leva nome e contato desde 29/08; faltava no
          documento da tela, que é o que o dono olha quando o notebook vira. Sem nome na
          sessão, o bloco não existe — nunca um "Equipe Takeat" genérico. -->
@@ -9734,6 +9863,8 @@ function atualizarPreviewPrecificacao() {
      respondem. */
   prcLigarPeriodos(slot);
   document.getElementById('prcBaixar').addEventListener('click', baixarPropostaPrecificacao);
+  const btnRegistrar = document.getElementById('prcRegistrar');
+  if (btnRegistrar) btnRegistrar.addEventListener('click', prcRegistrarNoNegocio);
   slot.querySelectorAll('[data-prc-passo]').forEach(btn => btn.addEventListener('click', () => {
     const op = PRC_PASSOS.find(x => x.id === btn.dataset.prcPasso);
     if (!op) return;
