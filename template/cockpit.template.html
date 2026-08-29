@@ -3845,6 +3845,39 @@
     .prosp2-cols{grid-template-columns:1fr;}
     .prosp2-tray{position:static;}
     .prosp2-hero-nums{gap:20px;}
+
+    /* A BANDEJA PRESA NO RODAPÉ QUANDO TEM CONTA SELECIONADA (28/08/26).
+
+       MEDIDO em produção a 1024px, na tela do Marco: com a coluna única, a bandeja
+       fica em y=2049 de uma página de 2466px — 83% para baixo, embaixo de um deck de
+       999px. Ou seja: ele clica "+ Agendar visita" num card e o retorno do que
+       acabou de selecionar, mais o botão "Enviar pra agenda da semana", ficam fora
+       da tela. A bandeja existe justamente para dar esse retorno e disparar essa
+       ação; embaixo de tudo ela não faz nem uma coisa nem outra.
+
+       E 1024–1240px não é caso de borda: é notebook, e é qualquer janela não
+       maximizada em monitor grande.
+
+       Presa embaixo SÓ quando tem item. Vazia, continua no fluxo e não ocupa nada —
+       barra fixa permanente roubaria altura de quem ainda não selecionou ninguém,
+       que é exatamente quem precisa de espaço para ler os cards.
+
+       A explicação longa (.prosp2-tray-sub) some no formato compacto: o rótulo do
+       botão já diz "Enviar pra agenda da semana", que é a mesma promessa em menos
+       linhas. No desktop o texto inteiro continua.
+
+       O :has() cuida de não cobrir o fim do conteúdo. Onde ele não existe, o pior
+       caso é a barra sobrepor as últimas linhas do deck no fim da rolagem — a barra
+       continua alcançável, que é o problema que isto resolve. */
+    .prosp2-tray.tem-itens{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:60;
+      display:flex;flex-direction:column;max-height:52vh;
+      border-radius:16px 16px 0 0;padding:13px 16px 12px;
+      box-shadow:0 -12px 34px rgba(26,22,19,.34);}
+    .prosp2-tray.tem-itens .prosp2-tray-sub{display:none;}
+    .prosp2-tray.tem-itens #prosp2TrayList{flex:1 1 auto;min-height:0;overflow-y:auto;}
+    .prosp2-tray.tem-itens .prosp2-tray-cta,
+    .prosp2-tray.tem-itens .prosp2-tray-foot{flex:none;}
+    .prosp2-cols:has(.prosp2-tray.tem-itens){padding-bottom:calc(52vh + 14px);}
   }
   /* CORREÇÃO DE MOBILE (27/08/26) — pré-existente, medida em 375px: os 4 números do
      hero (.prosp2-hero-nums, flex:none + gap 20px) e a caixa de busca
@@ -11986,7 +12019,11 @@ async function renderProspeccaoExecutivo() {
           <button type="button" id="prosp2VerMenos">Voltar aos ${PROSP2_LOTE} primeiros ↑</button>
         </div>` : '')}</div>
 
-      <aside class="prosp2-tray" data-plan-bloco="rua">
+      <!-- tem-itens (28/08/26): abaixo de 1240px esta bandeja vira barra presa no
+           rodapé. Ver a nota longa no CSS de .prosp2-tray.tem-itens. A classe sai do
+           mesmo nAgenda que já decide o disabled do botão, então não existe estado
+           novo para dessincronizar. -->
+      <aside class="prosp2-tray${nAgenda ? ' tem-itens' : ''}" data-plan-bloco="rua">
         <!-- O badge do passo fica FORA do <h3> (28/08/26). Dentro dele, o texto do título
              virava "CORGANIZAR A RUA" numa string só: sem separação no conteúdo, o leitor de
              tela e qualquer extração de texto leem as duas coisas coladas. O margin-right
