@@ -1595,6 +1595,56 @@
        outline VERMELHO. Trocar vermelho por tinta seria reduzir a visibilidade do foco.
        A proposta assumia que o foco era o default do navegador; não era. */
   a{color:inherit;text-decoration:none;}
+
+  /* ESCOPO: global. BLOCO 4 DA REVISÃO DE IDENTIDADE (28/08/26) — os componentes saem
+     do atributo style="" e passam a ter classe.
+
+     POR QUE. Era o 4º defeito de identidade que eu havia medido: estilo base morando no
+     HTML é o que faz um botão ficar diferente do irmão dele em outra aba, e é o que
+     torna revisão de identidade impossível de manter. Também é a origem dos 55
+     !important — quando o visual base está inline, a classe precisa gritar.
+
+     DUAS RENOMEAÇÕES OBRIGATÓRIAS, achadas conferindo colisão antes de aplicar:
+
+       .btn-ghost JÁ EXISTE aqui como botão de CONTORNO (fundo transparente, borda
+       --line-btn), usado na tela. A proposta chamava de .btn-ghost um botão de TEXTO
+       sublinhado — coisa diferente, mesmo nome. O de texto virou .btn-txt.
+
+       .sec-head JÁ EXISTE aqui como LAYOUT de cabeçalho de seção (flex com h2 e p),
+       usada 11 vezes. A proposta chamava de .sec-head uma overline tipográfica.
+       Aplicar teria quebrado as 11. A overline virou .overline.
+
+     Sobrescrever qualquer uma das duas seria trocar um componente vivo por outro de
+     mesmo nome — o tipo de estrago que não aparece em teste e aparece na tela. */
+  .btn-prim{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--ink);color:var(--dark-ink);border:0;border-radius:var(--r-pill);padding:8px 18px;font:700 12.5px Manrope,system-ui,sans-serif;cursor:pointer;transition:background .15s var(--ease);}
+  .btn-prim:hover{background:#3A332B;}
+  /* Vermelho no primário SÓ quando a ação responde a algo urgente. Vermelho continua
+     significando urgência, inclusive em botão. */
+  .btn-prim.is-urgente{background:var(--red);color:#fff;}
+  .btn-prim.is-urgente:hover{background:var(--red-dk);}
+  .btn-sec{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--panel);color:var(--ink);border:1px solid var(--line-btn);border-radius:var(--r-pill);padding:7px 16px;font:700 12px Manrope,system-ui,sans-serif;cursor:pointer;}
+  .btn-sec:hover{border-color:var(--ink);}
+  .btn-txt{background:none;border:0;color:var(--muted);font:700 12px Manrope,system-ui,sans-serif;text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:4px 2px;}
+  .btn-txt:hover{color:var(--ink);}
+  .pill-prazo{display:inline-block;flex:none;background:var(--sunk);color:var(--muted);border-radius:var(--r-sm);padding:4px 10px;font:800 10px "Archivo",system-ui,sans-serif;letter-spacing:.04em;}
+  .pill-prazo.is-hoje{background:var(--red-soft);color:var(--red-dk);border:1px solid var(--red);}
+  .pill-prazo.is-tarde{background:var(--amber-soft);color:var(--amber-ink);}
+  .badge-etapa{display:inline-block;border:1px solid var(--line);color:var(--muted);border-radius:var(--r-sm);padding:3px 9px;font:800 9.5px "Archivo",system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;}
+  .overline{font:800 10px "Archivo",system-ui,sans-serif;letter-spacing:.14em;color:var(--ter);text-transform:uppercase;}
+  .card-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);}
+  .num-hero{font:900 24px "Archivo",system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
+  .num-hero small{font:900 14px "Archivo",system-ui,sans-serif;color:var(--ter);}
+  .tarja-promessa{border:1.5px dashed var(--amber);border-radius:var(--r-md);background:var(--panel);}
+  .selo-promessa{display:inline-block;background:var(--amber-soft);color:var(--amber-ink);border-radius:var(--r-pill);padding:2px 8px;font:800 8.5px "Archivo",system-ui,sans-serif;letter-spacing:.08em;}
+  .selo-prova{display:inline-block;background:var(--green);color:#fff;border-radius:var(--r-pill);padding:2px 8px;font:800 8.5px "Archivo",system-ui,sans-serif;letter-spacing:.08em;}
+
+  /* ESCOPO: dentro de @media (max-width:720px). BLOCO 5 — alvo de toque.
+     O executivo usa isto de pé, na rua, com uma mão. 44px é o mínimo que a diretriz de
+     acessibilidade pede e o que faz a diferença entre acertar e errar o botão andando. */
+  @media (max-width:720px){
+    .btn-prim,.btn-sec,.btn-txt,.acao-canal,.fila-cta,.gate-cta,.prosp2-add,.tab-btn{min-height:44px;}
+    .acao-canal{flex:1;justify-content:center;border-radius:var(--r-md);}
+  }
   /* Link de texto corrido, quando houver: é o ÚNICO lugar onde --blue pode aparecer. */
   .link-txt{color:var(--blue);text-decoration:underline;text-underline-offset:3px;}
   .link-txt:hover{color:var(--ink);}
@@ -7365,7 +7415,10 @@ function buildAcoesDeAgoraHTML(r, diag) {
                   <span class="mono" style="flex:none;font-size:10px;font-weight:800;color:var(--red);">${i + 1}</span>
                   <b style="flex:1;min-width:140px;font-size:12.5px;color:var(--ink);line-height:1.4;">${esc(a.verbo)} ${esc(a.cliente)}</b>
                   ${a.toque ? `<span class="mono" style="flex:none;font-size:9.5px;font-weight:800;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:2px 6px;" title="Contado sobre o que o HubSpot devolve hoje — é um piso, não um total">${a.toque.parcial ? '≥' : ''}${a.toque.n}º toque</span>` : ''}
-                  <span style="flex:none;font-size:10px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:999px;padding:3px 8px;">${esc(a.prazo)}</span>
+                  <!-- A pílula de prazo vira .pill-prazo (BLOCO 4). Antes era vermelha em
+                       TODAS as ações, inclusive nas de outro dia — vermelho decorativo, que
+                       este projeto proíbe. Agora só a de hoje é vermelha. -->
+                  <span class="pill-prazo${a.prazo === 'hoje' ? ' is-hoje' : ''}">${esc(a.prazo)}</span>
                   <!-- LIGAR E WHATSAPP ONDE A ORDEM É DADA (28/08/26) — ver a nota longa
                        em telefoneDaAcao. Ficam ao lado do prazo, na primeira linha, sem
                        precisar expandir nada. Só aparecem com telefone de verdade. -->
@@ -7377,7 +7430,21 @@ function buildAcoesDeAgoraHTML(r, diag) {
                 <div style="font-size:11px;color:var(--muted);margin-top:5px;line-height:1.5;">${esc(a.motivo)}</div>
                 <div style="display:flex;gap:9px;align-items:center;justify-content:space-between;margin-top:9px;flex-wrap:wrap;">
                   <span style="font-size:10.5px;color:var(--muted2);">${esc(a.ultimaInteracao)}</span>
-                  <button class="acao-agora-cta" data-acao-idx="${i}" style="flex:none;background:var(--red);color:#fff;border:none;border-radius:999px;padding:7px 15px;font-size:11.5px;font-weight:700;cursor:pointer;">${esc(a.ctaLabel)} →</button>
+                  <!-- O CTA vira .btn-prim (28/08/26, BLOCO 4). A classe .acao-agora-cta
+                       FICA porque o JS acha o botão por ela.
+
+                       E ganha uma distinção que não existia: as três ações tinham o MESMO
+                       botão vermelho, então nenhuma ganhava.
+
+                       A PRIMEIRA REGRA QUE ESCREVI ESTAVA ERRADA e a tela mostrou: usei
+                       prazo === "hoje", e medindo deu vermelho nas três. O motivo é que
+                       "hoje" é o valor PADRÃO do campo (ver acoesDeAgora: só follow-up
+                       datado traz data própria), não um sinal de urgência. Eu tinha
+                       recriado o problema com outra fachada.
+
+                       A régua honesta é a que o próprio card anuncia no título: a nº 1 é a
+                       que se faz agora. Uma vermelha, sempre exatamente uma. -->
+                  <button class="acao-agora-cta btn-prim${i === 0 ? ' is-urgente' : ''}" data-acao-idx="${i}" style="flex:none;">${esc(a.ctaLabel)} →</button>
                 </div>
               </div>
             `).join('')}
