@@ -78,3 +78,41 @@ if (falhas > 0) {
   process.exit(1);
 }
 console.log('Todos os scripts inline e JSONs de dados passaram.');
+
+/* ============================================================================
+   BREAKPOINT FORA DA ESCALA (28/08/26, BLOCO 7 da revisão de identidade)
+   ----------------------------------------------------------------------------
+   O arquivo tinha 15 valores de max-width diferentes, cada um nascido de um conserto
+   pontual. Isso não é só desarrumação: é a causa-raiz de duas classes de bug que este
+   projeto já pagou — regra que cai no @media errado (os chips de Ligar/WhatsApp, que
+   ficaram sem estilo no desktop) e sticky desligado num corte que ninguém lembrava (a
+   bandeja indo para 83% da página no notebook).
+
+   @media não aceita var(), então a escala não pode ser um token. A única forma de ela
+   se manter é uma checagem que quebra o build. É esta.
+   ============================================================================ */
+const ESCALA_BREAKPOINTS = [420, 640, 760, 900, 1050, 1240];
+function checarBreakpoints() {
+  const fsb = require('fs');
+  const alvo = 'template/cockpit.template.html';
+  const cru = fsb.readFileSync(alvo, 'utf8');
+  /* Comentario NAO conta. Um comentario deste arquivo documenta a remocao de um
+     "@media max-width:1280px" que nao existe mais, e a primeira versao desta guarda
+     acusou esse texto como regra viva. Mesmo tipo de erro que ja me pegou duas vezes
+     hoje: varredura que le comentario como codigo. */
+  const txt = cru.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
+  const fora = [];
+  for (const m of txt.matchAll(/@media\s*\(?\s*max-width:\s*(\d+)px/g)) {
+    const v = Number(m[1]);
+    if (!ESCALA_BREAKPOINTS.includes(v)) fora.push(v);
+  }
+  if (fora.length) {
+    const unicos = [...new Set(fora)].sort((a, b) => b - a);
+    console.error('BREAKPOINT FORA DA ESCALA: ' + unicos.join('px, ') + 'px');
+    console.error('  A escala é ' + ESCALA_BREAKPOINTS.join(' · ') + '. Use o menor corte que ainda cobre o seu caso.');
+    console.error('  Colapsar mais cedo nunca estoura; colapsar mais tarde estoura.');
+    return false;
+  }
+  return true;
+}
+if (!checarBreakpoints()) process.exit(1);
