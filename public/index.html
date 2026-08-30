@@ -527,8 +527,7 @@
   .bp .txt b b{display:inline;color:var(--green);}
   .bp .txt span{font-size:11px;color:var(--muted2);line-height:1.45;}
   .um{display:flex;flex-direction:column;gap:7px;}
-  .um-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel2);cursor:pointer;}
-  .um-item:hover{background:var(--sunk);}
+  .um-item{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel2);}
   .um-check{width:17px;height:17px;border:1.5px solid var(--line-btn);border-radius:99px;flex:none;margin-top:1px;background:var(--panel);position:relative;}
   .um-check.on{background:var(--green);border-color:var(--green);}
   .um-check.on::after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:800;}
@@ -542,6 +541,7 @@
   .um-next b{font-family:'Archivo',system-ui,sans-serif;}
   .um-next label{font-weight:700;color:var(--muted);}
   .um-next input[type="date"]{min-height:34px;padding:5px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);color:var(--ink);font:inherit;font-weight:700;}
+  .um-next input[type="date"]:disabled{opacity:1;color:var(--muted);background:var(--sunk);cursor:default;}
   .um-next-nota{font-size:10.5px;font-weight:700;color:var(--muted2);}
 
   /* O histórico de 1:1, que também veio da Hoje. Fechado por padrão: é consulta, não
@@ -2389,6 +2389,9 @@
   .comp-seq-btn.is-primaria:hover{background:var(--red-dk);}
   .comp-seq-btn:disabled{opacity:.55;cursor:default;}
   .comp-seq-status{font-size:11.5px;color:var(--muted2);}
+  .comp-seq-item.is-tipo-pendente{border-color:var(--amber);background:var(--amber-soft);cursor:default;}
+  .comp-seq-item.is-tipo-pendente:has(.comp-seq-check:not(:checked)){opacity:1;}
+  .comp-seq-item.is-tipo-pendente .comp-seq-tipo{color:var(--amber-ink);border-color:var(--amber);}
 
   /* Modo condução da Daily (gestor) — uma pessoa por vez, projetável.
      Fundo escuro porque a daily é conduzida com o time olhando: contraste alto e
@@ -21695,6 +21698,12 @@ function getDaily(ownerId, dataISO) {
 }
 
 async function salvarDaily(ownerId, dataISO, campos) {
+  const alteraPromessa = campos && ['prometido_visitas', 'prometido_avancos', 'prometido_propostas', 'prometido_fechamentos']
+    .some(campo => Object.prototype.hasOwnProperty.call(campos, campo));
+  if (alteraPromessa && sessaoAtual && sessaoAtual.role === 'rep'
+      && dataISO === agendaChave(agendaAgora()) && promessaDoDiaTravada()) {
+    return { error: new Error('A promessa de hoje fechou às 9h30 e não pode mais ser alterada.') };
+  }
   const existente = getDaily(ownerId, dataISO) || {};
   const linha = {
     owner_id: ownerId, data: dataISO,
@@ -26421,26 +26430,34 @@ const ROTULO_DA_PROMESSA = {
   fechamentos: { um: 'fechamento', muitos: 'fechamentos' }
 };
 
+const PROMESSA_TRAVA_MINUTOS = 9 * 60 + 30;
+function promessaTravadaNoHorario(agoraBrt) {
+  if (!agoraBrt || typeof agoraBrt.getTime !== 'function' || typeof agoraBrt.getUTCHours !== 'function'
+      || Number.isNaN(agoraBrt.getTime())) return false;
+  return agoraBrt.getUTCHours() * 60 + agoraBrt.getUTCMinutes() >= PROMESSA_TRAVA_MINUTOS;
+}
+
 function rotuloDaPromessa(tipo, quantos) {
   const r = ROTULO_DA_PROMESSA[tipo];
   if (!r) return tipo;
   return quantos === 1 ? r.um : r.muitos;
 }
 
-/* Sem etapa conhecida cai em "visitas": é o compromisso mais provável na rua. Nunca
-   devolve null — a soma tem de fechar com a contagem de itens marcados, ou a promessa
-   perde item no caminho e o executivo vê um número que não é o que ele marcou. */
+/* Sem etapa conhecida não vira visita por aproximação. A promessa é um contrato
+   auditável: classificar automaticamente um negócio desconhecido criaria uma visita
+   que talvez nunca tenha sido combinada. Itens de agenda sem negócio continuam sendo
+   visitas porque ali o próprio tipo do compromisso já é a evidência. */
 function tipoDaPromessa(lead) {
   const sid = (typeof etapaDoLead === 'function') ? etapaDoLead(lead) : (lead && lead.stageId) || null;
-  return TIPO_DA_PROMESSA[String(sid)] || 'visitas';
+  return TIPO_DA_PROMESSA[String(sid)] || null;
 }
 
 // Os quatro números na forma que a tabela dailies espera.
 function somaDaPromessa(itens) {
   const soma = { visitas: 0, avancos: 0, propostas: 0, fechamentos: 0 };
   (itens || []).forEach(i => {
-    const t = (i && i.tipo && soma[i.tipo] !== undefined) ? i.tipo : 'visitas';
-    soma[t]++;
+    const t = i && i.tipo;
+    if (t && soma[t] !== undefined) soma[t]++;
   });
   return soma;
 }
@@ -28463,17 +28480,25 @@ function prometidoVsRealizadoCorpoHTML(r) {
       <span>fonte: atividade fechada no HubSpot — nada aqui se marca à mão</span>
     </div>`;
 }
+function promessaDoDiaTravada() {
+  return promessaTravadaNoHorario(agendaAgora());
+}
+
 function buildCompromissoDoDiaHTML(r) {
   const { seq, alvoTamanho, totalNaFila } = sequenciaSugeridaDoDia(r);
   const plano = planoDiaCache || {};
-  const jaFechado = plano && plano.status === 'plano_fechado' && plano.data === isoDate(new Date());
+  const hojeBrt = agendaChave(agendaAgora());
+  const jaFechado = plano && plano.status === 'plano_fechado' && plano.data === hojeBrt;
+  const travada = promessaDoDiaTravada();
   const jaGravadas = (plano && Array.isArray(plano.prioridades)) ? plano.prioridades.filter(x => x && String(x).trim()) : [];
 
   if (seq.length === 0) {
     return `
       <div class="briefing-bloco" id="compromissoDoDia">
-        <div class="briefing-head"><b>Hoje — o que você promete?</b><span>nada pendente na fila</span></div>
-        <div class="briefing-vazio">Sua fila está limpa: nenhum quente descoberto, nenhum SLA estourado, nenhum follow-up vencido. Se quer encher o dia, o Planejamento tem as contas-alvo do seu território.
+        <div class="briefing-head"><b>Hoje — o que você promete?</b><span>${travada ? 'fechou às 9h30' : 'nada pendente na fila'}</span></div>
+        <div class="briefing-vazio">${travada
+          ? 'A promessa de hoje fechou vazia às 9h30. Você ainda deve planejar e executar o dia, mas o compromisso não pode mais ser reescrito.'
+          : 'Sua fila está limpa: nenhum quente descoberto, nenhum SLA estourado, nenhum follow-up vencido. Se quer encher o dia, o Planejamento tem as contas-alvo do seu território.'}
           <button type="button" class="briefing-cta" data-briefing-ir="planejamento">Abrir Planejamento →</button></div>
       </div>`;
   }
@@ -28504,30 +28529,35 @@ function buildCompromissoDoDiaHTML(r) {
     <div class="briefing-bloco promessa-card" id="compromissoDoDia">
       <div class="briefing-head">
         <b>Hoje — o que você promete?</b>
-        <span class="promessa-badge">promessa · não é prova</span>
+        <span class="promessa-badge">${travada ? '🔒 travada às 9h30' : 'promessa · não é prova'}</span>
       </div>
 
       <div class="comp-seq-intro">
-        ${jaFechado
-          ? `Dia confirmado${plano.fechado_em ? ` às ${new Date(plano.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}. Dá pra refazer se algo mudou.`
+        ${travada
+          ? `A promessa fechou às 9h30 e não se mexe mais hoje. ${jaFechado ? 'O seu gestor continua vendo os clientes confirmados.' : 'O dia ficou sem promessa registrada.'}`
+          : jaFechado
+          ? `Dia confirmado${plano.fechado_em ? ` às ${new Date(plano.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}. Até 9h30, dá pra refazer se algo mudou.`
           : `Já vem na ordem, da sua fila real — <b>você não digita nada</b>. Desmarque o que não vai dar. ${seq.length} de ${totalNaFila} na fila · alvo da sua fase: ${alvoTamanho}.`}
       </div>
 
       <div class="comp-seq">
-        ${seq.map((s, i) => `
-          <label class="comp-seq-item">
-            <input type="checkbox" class="comp-seq-check" data-idx="${i}" data-tipo="${esc(s.tipo)}" checked>
+        ${seq.map((s, i) => {
+          const tipoPendente = !s.tipo;
+          return `
+          <label class="comp-seq-item${tipoPendente ? ' is-tipo-pendente' : ''}">
+            <input type="checkbox" class="comp-seq-check" data-idx="${i}" data-tipo="${esc(s.tipo || '')}" ${tipoPendente ? '' : 'checked'} ${tipoPendente || travada ? 'disabled' : ''}>
             <span class="comp-seq-n">${i + 1}</span>
             <b class="comp-seq-nome">${esc(s.nome)}</b>
-            <span class="comp-seq-tipo is-${esc(s.tipo)}">${esc(rotuloDaPromessa(s.tipo, 1))}</span>
-            <span class="comp-seq-motivo">${esc(s.motivo)}</span>
-          </label>`).join('')}
+            <span class="comp-seq-tipo is-${esc(s.tipo || 'pendente')}">${tipoPendente ? 'ação a confirmar' : esc(rotuloDaPromessa(s.tipo, 1))}</span>
+            <span class="comp-seq-motivo">${tipoPendente ? 'etapa do negócio não reconhecida — corrija no HubSpot antes de prometer' : esc(s.motivo)}</span>
+          </label>`;
+        }).join('')}
       </div>
 
       <div class="comp-seq-acoes">
         <span class="promessa-tally" id="compromissoSoma">Sua promessa: ${linhaSoma(somaTotal)}</span>
         <span style="flex:1;"></span>
-        <button type="button" class="comp-seq-btn is-primaria" id="compromissoFechar">${jaFechado ? 'Refazer' : 'Confirmar →'}</button>
+        <button type="button" class="comp-seq-btn is-primaria" id="compromissoFechar" ${travada ? 'disabled' : ''}>${travada ? 'Travada às 9h30' : jaFechado ? 'Refazer' : 'Confirmar →'}</button>
       </div>
       <span class="comp-seq-status" id="compromissoStatus"></span>
 
@@ -28606,6 +28636,20 @@ function wireCompromissoDoDia(rootEl, r) {
     const marcados = marcadosAgora();
     const status = host.querySelector('#compromissoStatus');
 
+    if (promessaDoDiaTravada()) {
+      status.textContent = 'A promessa de hoje fechou às 9h30. Agora, o que muda é somente o realizado.';
+      status.style.color = 'var(--red)';
+      mostrarToast('A promessa de hoje está travada desde 9h30.', 'atencao');
+      return;
+    }
+
+    const semTipo = seq.filter(item => !item.tipo);
+    if (semTipo.length > 0) {
+      status.textContent = 'Existe negócio sem etapa reconhecida. Corrija a etapa antes de confirmar a promessa.';
+      status.style.color = 'var(--amber-ink)';
+      return;
+    }
+
     if (marcados.length === 0) {
       status.textContent = 'Marque pelo menos um cliente — dia sem cliente nomeado não é plano.';
       status.style.color = 'var(--red)';
@@ -28621,7 +28665,7 @@ function wireCompromissoDoDia(rootEl, r) {
     // A diferença é o conteúdo: nome de cliente derivado da fila, não texto livre.
     const prioridades = marcados.map(m => `${m.nome} — ${m.motivo}`);
     const contas = marcados.filter(m => m.leadId).map(m => ({ id: String(m.leadId), nome: m.nome }));
-    const { error } = await salvarPlanoDoDia(r.ownerId, isoDate(new Date()), {
+    const { error } = await salvarPlanoDoDia(r.ownerId, agendaChave(agendaAgora()), {
       prioridades,
       contas_alvo: contas,
       status: 'plano_fechado',
@@ -28647,7 +28691,7 @@ function wireCompromissoDoDia(rootEl, r) {
 
        realizado_* não se toca: quem escreve é o robô da noite, a partir do HubSpot. */
     const soma = somaDaPromessa(marcados);
-    const respDaily = await salvarDaily(r.ownerId, isoDate(new Date()), {
+    const respDaily = await salvarDaily(r.ownerId, agendaChave(agendaAgora()), {
       prometido_visitas: soma.visitas,
       prometido_avancos: soma.avancos,
       prometido_propostas: soma.propostas,
@@ -34058,18 +34102,19 @@ async function renderPDIs() {
             ${compromissos1a1.length ? `
               <div class="um">
                 ${prazos1a1.map((x, k) => `
-                  <div class="um-item${x.feito ? ' done' : ''}" data-um-idx="${k}" role="button" tabindex="0" aria-pressed="${x.feito ? 'true' : 'false'}">
+                  <div class="um-item${x.feito ? ' done' : ''}" data-um-idx="${k}">
                     <span class="um-check${x.feito ? ' on' : ''}"></span>
                     <div><b>${x.texto}</b><span style="display:block;font-size:10.5px;font-weight:700;color:${x.cor};margin-top:4px;">${esc(x.situacao)}</span></div>
                   </div>`).join('')}
               </div>
+              <div style="background:var(--green-soft);border-radius:10px;padding:9px 12px;font-size:11px;color:var(--body);line-height:1.5;margin-top:9px;">A conclusão é validada pelo seu gestor no 1:1. Assim, o acordo só aparece como cumprido depois da conversa e da evidência combinada.</div>
               ${prazos1a1.some(x => x.vencido) ? `<div style="background:var(--red-soft);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--body);line-height:1.55;margin-top:9px;">Acordo vencido não é acordo em aberto. Leve os vencidos pro próximo 1:1 pra reprogramar ou encerrar — deixar como pendente indefinidamente é o que transforma o plano num 0/3 permanente.</div>` : ''}` : '<div class="empty-state" style="padding:0;">Nenhum acordo combinado ainda — sai no próximo 1:1.</div>'}
             <!-- A DATA E O HISTÓRICO chegaram da aba Hoje (29/08/26): eram os dois únicos
                  controles que existiam lá e em lugar nenhum. O resto do card do 1:1 da
                  Hoje era duplicata do que já estava aqui. -->
             <div class="um-next">
               <label for="devPdiData">Próximo 1:1:</label>
-              <input type="date" id="devPdiData" aria-label="Data do próximo 1:1" value="${data1a1EhISO ? data1a1Bruta : ''}">
+              <input type="date" id="devPdiData" aria-label="Data do próximo 1:1, definida pelo gestor" value="${data1a1EhISO ? data1a1Bruta : ''}" disabled>
               ${dataProximo1a1 && !data1a1EhISO ? `<b>${esc(dataProximo1a1)}</b><span class="um-next-nota">como seu gestor anotou</span>` : ''}
             </div>
             <details class="um-hist">
@@ -34164,45 +34209,9 @@ async function renderPDIs() {
       }).catch(e => console.error('Falha ao abrir a etapa travada no Meu Funil:', e));
     });
     wireFocoDeHabilidade(el);
-    // Marcar acordo do 1:1 grava em pdi_compromissos (Supabase) pela MESMA função que o
-    // gestor usa — é o único caminho que faz o check do executivo chegar até a fila de 1:1
-    // da aba Pessoas. Otimista: risca na hora, o round-trip vai atrás (savePdiState já
-    // atualiza o pdiCache antes de chamar a rede).
-    el.querySelectorAll('.um-item[data-um-idx]').forEach(item => {
-      const alternar = () => {
-        const idx = Number(item.dataset.umIdx);
-        const marca = item.querySelector('.um-check');
-        const agora = !marca.classList.contains('on');
-        marca.classList.toggle('on', agora);
-        item.classList.toggle('done', agora);
-        item.setAttribute('aria-pressed', agora ? 'true' : 'false');
-        const checked = estado1a1.checked.slice();
-        checked[idx] = agora;
-        estado1a1.checked = checked;
-        savePdiState(r.ownerId, checked, estado1a1.data);
-        /* O contador se REFAZ pela mesma função que o desenhou, em vez de receber um
-           "N/M" montado à mão aqui — senão marcar um acordo apagava a idade do prazo
-           ("era para 31/08–02/09") que o cabeçalho acabou de mostrar.
-           E por id, não por .pcard:last-child: aquele seletor apontava para o último
-           cartão da fileira, que deixa de ser o do 1:1 no dia em que alguém acrescentar
-           um cartão depois dele. */
-        const cnt = el.querySelector('#devUmResumo');
-        if (cnt) cnt.innerHTML = compromissosResumoHTML(r) || `${checked.filter(Boolean).length}/${compromissos1a1.length}`;
-      };
-      item.addEventListener('click', alternar);
-      item.addEventListener('keydown', (ev) => {
-        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); alternar(); }
-      });
-    });
-
-    /* A DATA DO PRÓXIMO 1:1 grava na mesma savePdiState — é o mesmo registro que o gestor
-       lê na aba Pessoas. Preserva os checks: passar estado1a1.checked, e não um array
-       novo, senão salvar a data desmarcaria os acordos já cumpridos. */
-    const devData = el.querySelector('#devPdiData');
-    if (devData) devData.addEventListener('change', () => {
-      estado1a1.data = devData.value;
-      savePdiState(r.ownerId, estado1a1.checked, devData.value);
-    });
+    /* Acordo e data do próximo 1:1 são somente leitura para o executivo. A validação
+       continua na visão do gestor, que já grava no mesmo pdi_compromissos. Isso evita
+       transformar autodeclaração em evidência sem criar uma segunda fonte de verdade. */
 
     /* O histórico só bate no Supabase quando alguém abre o accordion. */
     const devHist = el.querySelector('#devUmAUmHistorico')?.closest('details');
