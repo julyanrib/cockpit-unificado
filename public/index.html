@@ -1622,7 +1622,22 @@
   .hoje-panel-title .dot{width:6px;height:6px;border-radius:50%;background:var(--red);}
   /* Meu espaço > Hoje: primeira dobra orientada à execução, sem colunas vazias. */
   .meu-hoje-hero{margin-bottom:14px;padding:24px 26px;background:linear-gradient(112deg,#171412 0%,#211b17 72%,#321d1a 100%);}
-  .meu-hoje-signal-strip{display:grid;grid-template-columns:1.35fr repeat(4,1fr);gap:8px;margin:0 0 16px;}
+  /* ══ A FAIXA DE SINAIS É FLEX, NÃO GRID (30/08/26) ═════════════════════════════════
+
+     O problema: os sinais são CONDICIONAIS (o de próximo passo só existe com negócios;
+     o de MRR saiu hoje), e a faixa tinha repeat(4,1fr) fixo — cada sinal ausente deixava
+     uma COLUNA VAZIA na primeira faixa da tela.
+
+     Minha primeira tentativa foi repeat(auto-fit,minmax(150px,1fr)) depois de 1.35fr, e
+     ela FALHOU CALADA: auto-fit/auto-fill não pode conviver com uma trilha flexível (fr)
+     na mesma lista — a declaração inteira é inválida, o navegador a descarta e o grid cai
+     no padrão de UMA coluna. Medi o computado depois de aplicar e vi "1164.8px": os
+     quatro sinais empilhados, cada um com 1165px de largura. Regra existia, era plausível
+     e não aplicava. Terceira vez nesta revisão que só o computado pegou isso.
+
+     Flex resolve por construção: não há trilha para sobrar. O primeiro sinal (o
+     compromisso de hoje, que carrega nome de cliente e horário) fica com base maior. */
+  .meu-hoje-signal-strip{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 16px;}
   /* flex-wrap:wrap (30/08/26, revisão final). A faixa é uma grade de colunas fixas, e a
      pílula que ganhou o CTA "Datar os N →" passou a pedir 215px numa coluna de 210 —
      5px de estouro que eu mesmo criei ao colocar o botão ali. Medido a 1240px.
@@ -1634,7 +1649,8 @@
 
      Os textos das pílulas seguem com nowrap próprio, então nenhuma delas passa a quebrar
      no meio de uma frase por causa disto. */
-  .meu-hoje-signal{min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:11.5px;box-shadow:var(--shadow-sm);}
+  .meu-hoje-signal{flex:1 1 150px;min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:11.5px;box-shadow:var(--shadow-sm);}
+  .meu-hoje-signal:first-child{flex:1.35 1 220px;}
   .meu-hoje-signal svg{flex:none;color:var(--muted2);}
   .meu-hoje-signal b{font:800 13px/1.2 'Archivo',system-ui,sans-serif;white-space:nowrap;}
   .meu-hoje-signal span:last-child{min-width:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -1867,7 +1883,9 @@
     .prosp2-loc-atual > div{min-width:0;}
     .app-main{padding:18px 14px 108px;}
     .hoje-grid{grid-template-columns:1fr;}
-    .meu-hoje-signal-strip{grid-template-columns:repeat(2,minmax(0,1fr));}
+    /* Base de 150px + gap de 8 já dá dois por fileira em 319px de tela; a regra antiga
+       falava de colunas de grid, que esta faixa não tem mais. */
+    .meu-hoje-signal{flex-basis:140px;}
     .meu-hoje-signal:first-child{grid-column:1/-1;}
     /* minmax(0,1fr) e não 1fr: `1fr` equivale a `minmax(auto,1fr)`, e o `auto` do
        mínimo é o MIN-CONTENT do item. Medido em 375px: a coluna resolvia para 415.9px
@@ -3460,6 +3478,31 @@
   .kb-sla{display:none;}
   .kb-col-more{width:100%;border:0;background:transparent;color:var(--muted);padding:7px 5px 3px;font:700 10.5px 'Manrope',sans-serif;cursor:pointer;text-align:left;}
   .kb-col-more:hover{color:var(--ink);}
+
+  /* ══ 44px NO DEDO — MEU FUNIL (30/08/26) ═══════════════════════════════════════════
+
+     Medido a 375, e esta é a aba onde ele decide o dia:
+       "ver os outros 16" (o resto dos travados) .... 15px
+       "Fila completa (25) na aba Planejamento" ..... 16px
+       "agendar" de cada quente sem data ............ 21px
+       "Abrir ficha" / "Mover etapa" do card ........ 24px
+       "Nova conta da rua" ......................... 38px
+       "Ver todos os 5 no card" .................... 40px
+     Quinze pixels é um terço de dedo. E o "agendar" é o gesto mais barato que existe
+     nesta tela: um toque marca o próximo passo do negócio quente.
+
+     .kb-mover fica fora desta lista de propósito: os 40px dele são o número da prancha
+     (Bloco 5) e estão documentados na regra dele, junto do motivo do font-size. */
+  @media (max-width:760px){
+    .destrava-mais summary,.fila-resumo-link,.acao-agendar,.acao-expandir{min-height:44px;}
+    .acao-agendar,.acao-expandir,.fila-resumo-link{display:inline-flex;align-items:center;}
+    .destrava-mais summary{display:flex;align-items:center;}
+    .kb-novo,.kb-action{min-height:44px;}
+    /* "ver mais N" no pé da coluna do kanban: media 24px, e é ele que revela o resto
+       dos negócios da etapa — sem ele o executivo acha que a coluna tem só quatro. */
+    .kb-col-more{min-height:44px;}
+    .kb-action{padding:2px 10px;}
+  }
 
   .mf-lead-list{padding:14px;background:linear-gradient(180deg,var(--sunk),color-mix(in srgb,var(--sunk) 70%,var(--panel)));}
   .mf-lead-list-head{display:grid;grid-template-columns:minmax(260px,1fr) 116px 178px 28px;gap:12px;padding:0 14px 8px;
@@ -8469,6 +8512,12 @@ function wireRoteiroChecks(rootEl) {
 // por IA em tempo real (o site é estático, gerado à noite). Cada regra vira um "boa prática"
 // só se o padrão dela realmente aparecer no funil da pessoa hoje — senão fica de fora, não
 // preenche com genérico. Ordenado por severidade, mostra só os 3 mais relevantes.
+/* SEM CHAMADOR desde 30/08/26 — o bloco "Dicas pro seu dia" saiu da aba Hoje porque as
+   três leituras que ele gerava já estavam na mesma tela (a pílula de próximo passo com o
+   CTA "Datar os N", a pílula de SLA e o card "Seu mês"). A função fica aqui, intacta e
+   sem uso, pelo mesmo motivo da nota logo acima desta: se voltar a fazer sentido mostrar
+   leituras automáticas em algum lugar, o gerador está pronto — e apagá-lo agora perderia
+   a regra de priorização (candidatos.ordem) que não está escrita em nenhum outro lugar. */
 function buildInsightsAutomaticosHTML(r) {
   const candidatos = [];
 
@@ -8731,10 +8780,11 @@ async function renderMeuPainel() {
                 ? `<span style="color:var(--muted2);">Nada hoje · próximo</span> <b>${proximoCompromisso.quando}</b> — ${proximoCompromisso.cliente}`
                 : `<span style="color:var(--muted2);">Sem compromisso agendado</span>`}
       </span>
-      ${meuMrr !== null ? `
-      <span class="meu-hoje-signal">
-        <span style="opacity:.7;display:inline-flex;"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c0-1.5-1.5-2.5-3-2.5s-3 1-3 2.5 1.5 2 3 2.5 3 1 3 2.5-1.5 2.5-3 2.5-3-1-3-2.5"/></svg></span> <b>${meuMrr.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}</b> MRR seu no mês
-      </span>` : ''}
+      <!-- O MRR SAIU DESTA FAIXA (30/08/26). A faixa é de sinais que pedem ação hoje:
+           compromisso de hoje, quentes, acima do SLA, sem próximo passo — e nesse meio o
+           MRR do mês era o único número que não pede nada. Ele não se perdeu: está no card
+           "Seu mês", 400px abaixo, e lá com o contexto que faz sentido ("8 de 10
+           fechamentos · R$ 3.584 MRR fechado"), em vez de solto entre quatro alertas. -->
       <span class="meu-hoje-signal is-hot">
         <span style="opacity:.7;display:inline-flex;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;width:14px;height:14px;margin-right:0;vertical-align:middle;"><path d="M12 2c1 3 4 4.5 4 8a4 4 0 01-8 0c0-1 .3-1.8.8-2.6C9.5 8.6 10.5 10 12 10c-.6-2.4-.4-5 0-8z"/><path d="M12 22a7 7 0 007-7c0-2-.8-3.8-2-5.2"/><path d="M5 15a7 7 0 007 7"/></svg></span> <b>${meusQuentesCount}</b> lead${meusQuentesCount === 1 ? '' : 's'} quente${meusQuentesCount === 1 ? '' : 's'}
       </span>
@@ -8879,13 +8929,33 @@ async function renderMeuPainel() {
     <!-- BLOCO 3 exec (10/08/26): "Onde seu funil está preso" saiu — a aba Meu funil já
          tem "Meu funil por etapa", com o mesmo dado (r.stages), clicável e com o SLA de
          cada etapa ao lado. Manter os dois era a 5ª e 6ª menção a SLA na mesma tela. -->
-    ${buildIndicadoresExecutivoHTML(r)}
+    <!-- ══ DOIS BLOCOS SAÍRAM DAQUI (30/08/26) — "tire o que não faz sentido" ═════════
+
+         A aba Hoje responde três perguntas: o que eu faço, o que eu reviso, como planejo.
+         Medi a aba inteira antes de cortar: 1.718px de altura. Estes dois não respondiam
+         nenhuma das três.
+
+         "SEUS INDICADORES" (13 números: visitas, cadências, decisores, tempo até o 2º
+         toque, propostas com data...) É AUDITORIA DA SEMANA, não decisão do dia. E na
+         mesma tela, 300px acima, a Régua da Excelência já diz o mesmo em quatro números
+         curados (visitas provadas, saíram com próximo passo, dor registrada, sistema
+         anotado). Ter os dois é medir duas vezes e agir zero. NÃO APAGUEI: o bloco foi
+         para o fim da aba Desenvolvimento, cuja pergunta é exatamente "como eu melhoro?".
+         Nada se perdeu, inclusive os quatro números que só existiam ali (tempo até o 2º
+         toque, cadências ativas/quebradas, decisores alcançados).
+
+         "DICAS PRO SEU DIA" (3 leituras) SAIU DE VEZ, porque as três já estão na tela:
+           · "25 negócios sem próximo passo datado" = a pílula "1/26 com próximo passo"
+             do banner, que ainda por cima tem o CTA "Datar os 24 →";
+           · "1 lead passou de 2x o prazo da etapa"  = a pílula "3 acima do SLA";
+           · "no ritmo atual você fecharia 8"        = o card "Seu mês", 8 de 10.
+         O próprio subtítulo do bloco já mandava o executivo para outra aba ("as boas
+         práticas da sua análise semanal ficam em Meu desenvolvimento") — um bloco que
+         aponta para fora de si mesmo e repete o que está acima não tem função aqui. -->
 
     <div id="meuPainelSugestoes"></div>
 
     ${buildVitoriasHTML(r)}
-
-    ${buildInsightsAutomaticosHTML(r)}
 
 
   `;
@@ -9394,9 +9464,16 @@ async function renderMeuFunil() {
 
   // Saúde do funil: % dos abertos acima do SLA (mesma régua do banner do Hoje) — mantido.
   const pctSla = r.open > 0 ? Math.round(travados.length / r.open * 100) : 0;
-  const saude = pctSla < 20 ? { cor: 'var(--green)', txt: `Funil saudável — ${pctSla}% de SLA estourado` }
-    : pctSla < 40 ? { cor: 'var(--amber)', txt: `Atenção — ${pctSla}% do funil acima do SLA` }
-    : { cor: 'var(--red)', txt: `Funil travado — ${pctSla}% acima do SLA` };
+  /* A PÍLULA DIZ O QUE ELA MEDE (30/08/26). Ela media UMA coisa — % dos abertos acima do
+     SLA — e anunciava um veredito sobre o funil INTEIRO: "Funil saudável". Só que 300px
+     abaixo, na mesma tela, o card Destravar dizia "o degrau que não está sendo subido:
+     Visita → Conversa com Decisor" com 19 negócios parados ali. Duas frases sobre a mesma
+     coisa, uma dizendo saudável e a outra travada, à distância de um olhar.
+     Nenhuma das duas estava errada: elas mediam dimensões diferentes. O conserto é a
+     pílula dizer QUAL dimensão é a dela, em vez de generalizar. */
+  const saude = pctSla < 20 ? { cor: 'var(--green)', txt: `SLA sob controle — ${pctSla}% dos abertos estourados` }
+    : pctSla < 40 ? { cor: 'var(--amber)', txt: `Atenção no SLA — ${pctSla}% dos abertos estourados` }
+    : { cor: 'var(--red)', txt: `SLA travado — ${pctSla}% dos abertos estourados` };
 
   // Funil por etapa na ordem real do pipeline.
   const ordem = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473'];
@@ -9487,8 +9564,15 @@ async function renderMeuFunil() {
       <div class="mf-command-kpis">
         <div class="mf-command-kpi"><b>${r.open || 0}</b><small>em aberto</small></div>
         <div class="mf-command-kpi"><b style="color:${travados.length > 0 ? 'var(--dark-red)' : 'var(--dark-ink)'};">${travados.length}</b><small>acima do SLA</small></div>
-        <div class="mf-command-kpi"><b style="color:var(--dark-green);">${r.fechadosNoMes || 0}<span style="font-size:12px;color:var(--dark-mut);">/${r.metaMensal || 10}</span></b><small>fechados no mês</small></div>
+        <!-- ORDEM = PRIORIDADE (30/08/26). Abaixo de 640 a regra .mf-command-kpi:nth-child(n+4)
+             esconde o QUARTO KPI — e medi a 375 o resultado: "5 quentes sem passo" com largura
+             ZERO, invisível. Ou seja, no celular o funil mostrava o placar do mês e escondia
+             o número que pede ação hoje: negócio em fechamento sem próximo passo marcado.
+             Trocar a ordem resolve sem regra nova: "quentes sem passo" sobe para a terceira
+             posição e o placar do mês vira o descartável do estreito — ele está no card "Seu
+             mês" da aba Hoje, com contexto. No largo continuam os quatro. -->
         <div class="mf-command-kpi"><b style="color:${fechamentoSemPasso.length ? 'var(--dark-red)' : 'var(--dark-green)'};">${fechamentoSemPasso.length}</b><small>quentes sem passo</small></div>
+        <div class="mf-command-kpi"><b style="color:var(--dark-green);">${r.fechadosNoMes || 0}<span style="font-size:12px;color:var(--dark-mut);">/${r.metaMensal || 10}</span></b><small>fechados no mês</small></div>
       </div>
       <span class="mf-command-health" style="color:${saude.cor};">
         <i></i>${saude.txt}
@@ -9557,7 +9641,14 @@ async function renderMeuFunil() {
         <p>Abra quando quiser montar o dia por frente.</p>
       </div>
       <details class="mf-discipline">
-        <summary><b>Três frentes para planejar o dia</b><span>rota, contas-alvo e recuperação</span></summary>
+        <!-- O RÓTULO DESTE SUMMARY É ESCRITO PELO CONTEÚDO, não pelo HTML (30/08/26).
+             Ele dizia, fixo, "Três frentes para planejar o dia · rota, contas-alvo e
+             recuperação" — e estava errado duas vezes: as frentes são destravar, marcar
+             próximo passo e abrir contas-alvo (rota nenhuma), e elas são CONDICIONAIS:
+             medi com o dado real e só UMA existia (5 quentes sem data). Prometer três e
+             abrir uma é o mesmo tipo de desencontro do clique morto.
+             Quem preenche é montarAcoesDoFunil, que sabe quantas frentes existem. -->
+        <summary><b>Plano de ataque</b><span id="mfAcoesResumo">abrindo…</span></summary>
         <div id="mfAcoesSlot"></div>
       </details>
     </section>
@@ -9868,12 +9959,16 @@ function montarAcoesMeuFunil(r, dados) {
     });
   }
 
+  /* O rótulo do summary conta o que tem dentro — ver a nota no markup do summary. */
+  const resumoEl = document.getElementById('mfAcoesResumo');
   if (!cards.length) {
+    if (resumoEl) resumoEl.textContent = 'nada pendente';
     slot.innerHTML = `<div style="background:var(--green-soft);border:1px solid #CFE6DA;border-radius:var(--r-lg);padding:16px 19px;font-size:12.5px;color:var(--green);font-weight:600;">
       ✓ Funil em dia — nada acima do SLA e todo quente com próximo passo.
     </div>`;
     return;
   }
+  if (resumoEl) resumoEl.textContent = cards.length + (cards.length === 1 ? ' frente: ' : ' frentes: ') + cards.map(c => c.qtd).join(' · ');
   const TONES = { red: ['var(--red)', 'var(--red-dk)', 'var(--red-soft)'], amber: ['var(--amber)', 'var(--amber-ink)', 'var(--amber-soft)'], green: ['var(--green)', 'var(--green)', 'var(--green-soft)'] };
   slot.innerHTML = `<div class="mf-actions-grid">` + cards.map((c, ci) => {
     const [tone, toneInk, toneSoft] = TONES[c.tone];
@@ -31995,6 +32090,11 @@ async function renderPDIs() {
           </div>
         </div>
       </section>
+
+      <!-- OS 13 INDICADORES VIERAM DA ABA HOJE (30/08/26). Lá eles eram auditoria da
+           semana no meio da tela do dia; aqui são a resposta da pergunta da aba. Fechado
+           por padrão e no fim, depois dos PDIs: quem abre está querendo se auditar. -->
+      ${buildIndicadoresExecutivoHTML(r)}
     `;
     el.querySelectorAll('[data-scrollpdi]').forEach(btn => {
       btn.addEventListener('click', () => {
