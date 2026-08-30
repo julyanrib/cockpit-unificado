@@ -95,11 +95,19 @@ function montarCatalogo(root) {
   /* O GUARD. Falta de descrição para a tabela, e descrição órfã (item que saiu da
      tabela e ficou aqui) — as duas coisas param o build. */
   const semDescricao = [...mapa.keys()].filter(nome => !desc.funcionalidades[nome]);
+  /* A FALA TAMBEM E OBRIGATORIA (30/08/26). O catalogo virou arma de mesa: cada item tem
+     o que faz (para ele entender), como ajuda (o beneficio) e a FRASE LITERAL que ele diz
+     na frente do dono. Item novo sem frase e executivo improvisando na hora — por isso
+     para o build, na mesma logica do resto do guard. */
+  const semFala = [...mapa.keys()].filter(nome => desc.funcionalidades[nome] && !desc.funcionalidades[nome].fala);
+  const addonsSemFala = preco.adicionais.map(a => a.nome).filter(nome => desc.adicionais[nome] && !desc.adicionais[nome].fala);
   const addonsSemDescricao = preco.adicionais.map(a => a.nome).filter(nome => !desc.adicionais[nome]);
   const orfas = Object.keys(desc.funcionalidades).filter(nome => !mapa.has(nome));
   const addonsOrfaos = Object.keys(desc.adicionais).filter(nome => !preco.adicionais.some(a => a.nome === nome));
   const erros = [];
   if (semDescricao.length) erros.push('sem descrição em data/playbook-catalogo.json -> funcionalidades: ' + semDescricao.join(' | '));
+  if (semFala.length) erros.push('sem a frase literal (campo "fala") -> funcionalidades: ' + semFala.join(' | '));
+  if (addonsSemFala.length) erros.push('sem a frase literal (campo "fala") -> adicionais: ' + addonsSemFala.join(' | '));
   if (addonsSemDescricao.length) erros.push('sem descrição em data/playbook-catalogo.json -> adicionais: ' + addonsSemDescricao.join(' | '));
   if (orfas.length) erros.push('descrição órfã (não está mais na tabela) -> funcionalidades: ' + orfas.join(' | '));
   if (addonsOrfaos.length) erros.push('descrição órfã (não está mais na tabela) -> adicionais: ' + addonsOrfaos.join(' | '));
@@ -130,7 +138,7 @@ function montarCatalogo(root) {
   linhas.push('');
   linhas.push('> **Ela é gerada da tabela oficial** (`data/precificacao.json`), não escrita à mão. Nome, seção, preço e plano mínimo saem do mesmo dado que a aba Propostas usa — então o que você lê aqui é exatamente o que sai na proposta do cliente. Tabela conferida em ' + (preco.conferidoEm || '').split('-').reverse().join('/') + '.');
   linhas.push('');
-  linhas.push('**Como usar na mesa:** o *o que faz* é para você entender; o *como ajuda* é a frase que você fala. Descubra a dor primeiro (veja o mapa dor → solução), puxe o item que responde àquela dor, e use a linha de ajuda. Ler o catálogo inteiro para o dono é o jeito mais rápido de perder a venda.');
+  linhas.push('**Como usar na mesa — três camadas por item:** o **o que faz** é para VOCÊ entender; o **como ajuda o dono** é o benefício que justifica o preço; e a **frase em itálico** é o que sai da sua boca na frente dele, pronta, sem improviso. Descubra a dor primeiro (veja o mapa dor → solução), puxe o item que responde àquela dor e diga a frase. Ler o catálogo inteiro para o dono é o jeito mais rápido de perder a venda.');
   linhas.push('');
   linhas.push('***');
 
@@ -147,6 +155,7 @@ function montarCatalogo(root) {
       linhas.push('**O que faz.** ' + d.faz);
       linhas.push('');
       linhas.push('**Como ajuda o dono.** ' + d.ajuda);
+      if (d.fala) { linhas.push(''); linhas.push('> *"' + d.fala + '"*'); }
       linhas.push('');
       linhas.push('**Onde entra.** ' + ondeEntra(reg));
     });
@@ -167,6 +176,7 @@ function montarCatalogo(root) {
     linhas.push('**O que faz.** ' + d.faz);
     linhas.push('');
     linhas.push('**Como ajuda o dono.** ' + d.ajuda);
+    if (d.fala) { linhas.push(''); linhas.push('> *"' + d.fala + '"*'); }
     if (Array.isArray(a.incluidoEm) && a.incluidoEm.length) {
       /* Vender adicional para quem já o tem no plano é o erro mais caro de
          credibilidade que existe na mesa. O dado sabe; agora a página diz. */
