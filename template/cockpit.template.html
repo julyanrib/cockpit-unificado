@@ -2786,10 +2786,57 @@
     scrollbar-color:var(--line-btn) transparent;scroll-snap-type:x proximity;}
   .kb-board::-webkit-scrollbar{height:8px;}
   .kb-board::-webkit-scrollbar-thumb{background:var(--line-btn);border-radius:99px;}
+  /* TOPO DE 3px NA COR DA ETAPA (30/08/26 — Bloco 9 da prancha e o DE/PARA do Meu funil:
+     "5 colunas com cor própria (topo 3px + ponto)", efeito "etapa identificável de
+     relance (pedido Julyan 28/08)". O PONTO já existia (.kb-col-cor); faltava o topo.
+
+     A COR VEM DE stageColor(), a mesma função que pinta o ponto e as barras do funil —
+     NÃO dos tokens --et-* que a prancha propõe. Criar --et-prosp/--et-visita/... seria uma
+     SEGUNDA tabela de cor de etapa ao lado de STAGE_COLORS, e foi exatamente esse tipo de
+     nome paralelo que eu tirei do arquivo hoje (as quatro classes órfãs do Bloco 4). Uma
+     fonte só: recolorir a etapa recolore o ponto, a barra e o topo juntos.
+
+     --kb-et é setada inline pelo render, com fallback em --line para a coluna sem cor. */
   .kb-col{flex:0 0 240px;display:flex;flex-direction:column;min-height:120px;scroll-snap-align:start;
-    background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;
+    background:var(--panel2);border:1px solid var(--line);border-top:3px solid var(--kb-et,var(--line));
+    border-radius:var(--r-lg);overflow:hidden;
     transition:border-color .16s var(--ease),background .16s var(--ease);}
   .kb-col.is-alvo{border-color:var(--ink);background:var(--panel);box-shadow:0 12px 30px -18px rgba(26,22,19,.5);}
+
+  /* Os dois botões de etapa vizinha, com as medidas do Bloco 9 da prancha. O rótulo
+     trunca com reticências em vez de quebrar a linha do botão — o nome inteiro vive no
+     title, e aqui o que importa é a direção. */
+  /* EMPILHADOS SEMPRE, e não lado a lado como a prancha desenha (30/08/26).
+
+     A prancha põe os dois botões numa linha dentro do card. Medi nas duas larguras e não
+     cabe: a coluna tem 240px, dois botões ficam com ~63px cada, e "‹ Prospecção" pede 71px
+     — 11 dos 22 botões ganhavam reticências a 1240, e 7 a 375. O desenho dela assume nomes
+     de etapa curtos; os nossos incluem Prospecção, Negociação e Enviado Onboarding.
+
+     Neste arquivo NOME NÃO TRUNCA (a mesma regra que tirou "Módulo Fiscal - Lucro
+     Presumi…" dos adicionais): nome pela metade não é nome, e num botão que MOVE ETAPA a
+     metade do nome é a diferença entre avançar e reciclar. Empilhar custa ~46px de altura
+     por card e devolve o nome inteiro em qualquer largura, com 40px de toque. */
+  .kb-mover{display:flex;flex-direction:column;gap:5px;margin-top:6px;}
+  .kb-mover button{flex:1;min-width:0;font:700 9px 'Manrope',system-ui,sans-serif;color:var(--muted);border:1px solid var(--line-btn);background:var(--panel);border-radius:var(--r-pill);padding:4px 6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .kb-mover button:hover:not(:disabled){border-color:var(--ink);color:var(--ink);}
+  .kb-mover button:disabled{opacity:.4;cursor:default;}
+
+  /* O TOQUE DESTES BOTÕES MORA AQUI, e não no bloco de toque lá em cima (30/08/26).
+
+     Eu escrevi esta regra dentro do @media (max-width:760px) do BLOCO 5, que fica na linha
+     1696 — ANTES da regra base, na 2820. Mesma especificidade: quem vem depois ganha, e a
+     base ganhava. Medi o computado a 375 e vi font-size 9px e padding 4px 6px, os valores
+     da base — a regra existia, era válida, e não aplicava. Segunda vez que essa colisão me
+     pega nesta revisão; a lição é medir o COMPUTADO, nunca conferir por leitura.
+
+     Só min-height muda: 40px de toque, que é o que a regra do mobile protege. O font-size
+     NÃO sobe — a prancha põe 10.5px porque ali estes botões são pills de largura livre; no
+     nosso kanban eles dividem um card de 240px, e a 10.5px o rótulo "‹ Prospecção" pede
+     71px numa caixa de 68 e ganha reticências num nome curto. */
+  @media (max-width:760px){
+    .kb-mover button{min-height:40px;}
+  }
   .kb-col-head{padding:12px 14px 10px;border-bottom:1px solid var(--line-soft);background:var(--panel);}
   .kb-col-topo{display:flex;align-items:center;gap:7px;}
   .kb-col-cor{width:9px;height:9px;border-radius:3px;flex:none;}
@@ -3170,7 +3217,9 @@
     .mf-stage-panel .kb-board{min-width:0;}
   }
   .mf-stage-panel .kb-wrap{margin-top:0;}
-  .mf-stage-panel .kb-col{flex:1 1 0;min-width:195px;background:color-mix(in srgb,var(--panel) 48%,transparent);border:1px solid color-mix(in srgb,var(--line) 72%,transparent);border-radius:16px;padding:7px;}
+  /* Esta variante redeclara `border` inteiro e por isso apagaria o topo de 3px — ela vem
+     depois na folha e ganha. Redeclara o topo junto, em vez de eu contar com a ordem. */
+  .mf-stage-panel .kb-col{flex:1 1 0;min-width:195px;background:color-mix(in srgb,var(--panel) 48%,transparent);border:1px solid color-mix(in srgb,var(--line) 72%,transparent);border-top:3px solid var(--kb-et,var(--line));border-radius:16px;padding:7px;}
   .mf-stage-panel .kb-col+.kb-col{border-left:1px solid color-mix(in srgb,var(--line) 72%,transparent);padding-left:7px;}
   .mf-stage-panel .kb-col.is-focus{flex:1 1 100%;}
   .mf-stage-panel .kb-col.is-focus .kb-col-body{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;max-height:560px;overflow-y:auto;}
@@ -8654,6 +8703,19 @@ const STAGE_LABELS = {
   "1396006162": "Ganho", "1396006163": "Enviado Onboarding", "1396006164": "Perdido",
   "1398311191": "Reciclagem", "1396007427": "Backlog", "1413529973": "Conta Alvo"
 };
+/* RÓTULO CURTO DE ETAPA, derivado do oficial — não é uma segunda tabela de nomes. Existe
+   para o botão de mover etapa do card do kanban, onde a coluna tem 240px e "Conversa com
+   Decisor" não cabe ao lado de uma seta. O nome inteiro vai no title, então nada se perde
+   — e derivar em vez de redigitar garante que renomear a etapa renomeie o botão. */
+const STAGE_LABEL_CURTO = {
+  "1395880470": "Decisor",        // Conversa com Decisor
+  "1395880471": "Demo",           // Demo/Proposta
+  "1395880473": "Pagamento",      // Ag. Pagamento
+  "1396006163": "Onboarding"      // Enviado Onboarding
+};
+function etapaCurta(stageId) {
+  return STAGE_LABEL_CURTO[stageId] || STAGE_LABELS[stageId] || '';
+}
 // Paleta de cores por etapa — exata dos designs/*.html (item 2 do prompt de correção).
 const STAGE_COLORS = {
   "1395880469": "#E8A33D", "1396005401": "#4A7FC7", "1395880470": "#7C6FE0",
@@ -18826,6 +18888,32 @@ function kanbanCardHTML(l, slaDias) {
     </div>
     <div class="kb-card-agenda${temProxima ? '' : ' is-empty'}">${temProxima ? 'Próximo passo · ' : ''}${esc(proximaTxt)}</div>
     <div class="kb-next" style="--next-color:${recomendacao.cor};">${esc(recomendacao.curta)}</div>
+    <!-- MOVER PARA A ETAPA VIZINHA EM UM GESTO (30/08/26 — DE/PARA do Meu funil na
+         prancha: "sem drag -> arrastar OU botões '‹ etapa / etapa ›' no card", efeito
+         "mudar etapa em 1 gesto pelo Cockpit; drag e botão chamam o mesmo write HubSpot").
+
+         O HANDLER JÁ EXISTIA E NÃO TINHA BOTÃO. A varredura de [data-kb-mover] no card
+         estava escrito e percorria um conjunto vazio, e o guard de arrasto já excluía
+         [data-kb-mover] de propósito. Era o espelho exato do bug do rootEl: lá o botão
+         existia e a fiação morria; aqui a fiação existe e o botão nunca nasceu.
+
+         Os dois chamam a MESMA mover() do arrasto e do teclado, que passa por
+         abrirPassagemDeEtapa — ou seja, mesma validação e mesmo write. Nada só-local.
+
+         Desabilitados nas pontas, e cada um NOMEIA o destino: a última posição de
+         ORDEM_ETAPAS_FUNIL é Reciclagem, então "avançar" a partir de Enviado Onboarding
+         significa reciclar. Com o nome no botão isso é uma escolha; com uma seta muda
+         seria uma pegadinha. -->
+    ${(() => {
+      const i = ORDEM_ETAPAS_FUNIL.indexOf(String(l.stageId || ''));
+      if (i < 0) return '';
+      const tras = i > 0 ? ORDEM_ETAPAS_FUNIL[i - 1] : null;
+      const frente = i < ORDEM_ETAPAS_FUNIL.length - 1 ? ORDEM_ETAPAS_FUNIL[i + 1] : null;
+      const bt = (sid, lado) => sid
+        ? `<button type="button" data-kb-mover="${lado}" title="Mover ${esc(l.name || '')} para ${esc(STAGE_LABELS[sid] || '')}">${lado === 'tras' ? '‹ ' : ''}${esc(etapaCurta(sid))}${lado === 'frente' ? ' ›' : ''}</button>`
+        : `<button type="button" disabled title="Não há etapa ${lado === 'tras' ? 'anterior' : 'seguinte'}">${lado === 'tras' ? '‹' : '›'}</button>`;
+      return `<div class="kb-mover">${bt(tras, 'tras')}${bt(frente, 'frente')}</div>`;
+    })()}
     <div class="kb-actions">
       <button type="button" class="kb-action is-primary" data-kb-ficha>Abrir ficha</button>
       <button type="button" class="kb-action" data-kb-escolher>Mover etapa</button>
@@ -18851,7 +18939,7 @@ function kanbanHTML(leads, slaDe, etapaAtiva) {
       const sla = slaDe(sid);
       const lista = porEtapa[sid];
       const exibidos = etapaAtiva ? lista : lista.slice(0, 4);
-      return `<section class="kb-col${etapaAtiva ? ' is-focus' : ''}" data-kb-col="${sid}" aria-label="${esc(STAGE_LABELS[sid])}">
+      return `<section class="kb-col${etapaAtiva ? ' is-focus' : ''}" data-kb-col="${sid}" style="--kb-et:${stageColor(sid)};" aria-label="${esc(STAGE_LABELS[sid])}">
         <button type="button" class="kb-col-head" data-mfetapa="${sid}" aria-label="Abrir mural de ${esc(STAGE_LABELS[sid])}">
           <div class="kb-col-topo">
             <span class="kb-col-cor" style="background:${stageColor(sid)};"></span>
