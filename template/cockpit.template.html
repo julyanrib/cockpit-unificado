@@ -2286,7 +2286,14 @@
   .fila-chip{background:var(--panel);border:1px solid var(--line-btn);color:var(--muted);border-radius:999px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
   .fila-chip:hover:not(:disabled){border-color:var(--ink);color:var(--ink);}
   .fila-chip.on{background:var(--ink);border-color:var(--ink);color:var(--panel);}
-  .fila-chip.is-vazio{opacity:.45;cursor:default;}
+  /* BALDE ZERADO FICA, E FICA TRACEJADO (30/08/26 — pedido da prancha: "Decisores 0 /
+     Reativação 0 somem -> ficam, tracejados", com o efeito "vazio como diagnóstico").
+     Era opacity:.45, que faz duas coisas ruins: apaga o rótulo abaixo do contraste de
+     leitura e faz o balde parecer defeito em vez de informação. Zero aqui é diagnóstico
+     — "não tenho decisor pendente" é uma resposta, não uma ausência. Tracejado diz
+     "vazio" sem apagar o texto. */
+  .fila-chip.is-vazio{cursor:default;border-style:dashed;border-color:var(--line-btn);background:none;color:var(--muted2);}
+  .fila-chip.is-vazio .n{color:var(--ter);}
   .fila-chip .n{font-variant-numeric:tabular-nums;font-weight:800;}
   .fila-chip.on .n{color:var(--panel);}
   /* Linha fechada: uma altura de linha, um botão. Detalhe só ao abrir. */
@@ -4350,6 +4357,8 @@
   .prosp2-visao:hover{border-color:var(--amber);color:var(--amber-ink);}
   .prosp2-visao.on{border-color:var(--amber);background:var(--amber-soft);color:var(--amber-ink);}
   .prosp2-visao .n{font-weight:800;font-variant-numeric:tabular-nums;}
+  .prosp2-visoes-nota{margin:7px 0 0;font-size:10.5px;line-height:1.5;color:var(--muted2);}
+  .prosp2-visoes-nota b{color:var(--muted);}
   .prosp2-fontes{display:flex;gap:6px;flex-wrap:wrap;}
   .prosp2-fonte{display:inline-flex;align-items:center;gap:7px;font:700 11.5px 'Manrope',sans-serif;border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:var(--r-pill);padding:7px 14px;cursor:pointer;transition:all .13s var(--ease);}
   .prosp2-fonte .fdot{width:8px;height:8px;border-radius:99px;background:var(--fc,var(--muted));}
@@ -13411,7 +13420,21 @@ async function montarAgendaSugestoes(ownerId, dias, naSemana, renderVersao) {
    base tem, não os dez primeiros alfabéticos. Cortar uma lista mal ordenada seria
    esconder oportunidade; cortar uma bem ordenada é poupar rolagem. */
 const PROSP2_LOTE = 10;
-let prosp2Estado = { fonte: 'todas', ordenar: 'dist', local: null, agenda: {}, popoverAberto: null, drawerId: null, recemAberta: false, comTelefone: false, mostrar: PROSP2_LOTE };
+/* UMA VISÃO, NÃO DOIS RECORTES QUE SOMAM (30/08/26).
+
+   Antes eram dois booleanos independentes (recemAberta, comTelefone) aplicados em AND.
+   O comentário original dizia, sobre eles: "recorte que soma, não visão que troca".
+
+   O problema é que OS DOIS CONJUNTOS SÃO DISJUNTOS POR PROCEDÊNCIA, e os próprios
+   tooltips da tela dizem isso: "recém-abertas" vem do CNPJ na Casa dos Dados, e essas
+   contas NÃO TÊM TELEFONE gravado; "prontas pra ligar" vem do Google/Outscraper, que NÃO
+   TRAZ DATA DE ABERTURA. Marcar as duas pede a interseção de dois conjuntos que não se
+   cruzam — lista vazia, sempre, sem nada na tela explicando por quê.
+
+   A prancha do Claude Design já mandava resolver assim, textualmente: "filtros somáveis
+   -> 3 visões exclusivas + aviso 'recém-aberta E com telefone = 0'", com o efeito
+   declarado "0 combinações que prometem lista vazia (era possível)". Era possível mesmo. */
+let prosp2Estado = { fonte: 'todas', ordenar: 'dist', local: null, agenda: {}, popoverAberto: null, drawerId: null, visao: 'todas', mostrar: PROSP2_LOTE };
 const PROSP2_HORAS = ['09:00', '10:30', '13:30', '15:00', '16:30'];
 const PROSP2_FONTES = {
   cdd: { nome: 'Casa dos Dados', cor: '#4C6EF5' },
@@ -13832,7 +13855,7 @@ async function renderProspeccaoExecutivo() {
      do contador nNovos, e o filtro logo abaixo ja a usava: zona morta temporal.
 
      Este era um defeito LATENTE, o pior tipo: o corpo do filtro so avalia a chamada
-     quando prosp2Estado.recemAberta e true, ou seja o ReferenceError só estourava
+     quando a visao era 'recemAberta' (na epoca, um booleano), ou seja o ReferenceError
      QUANDO O EXECUTIVO CLICASSE na pilula. Com ela desligada nada acontecia, o render
      passava, e check-scripts passava tambem — erro de ordem nao e erro de sintaxe.
      Peguei clicando: a pilula nao ligava e a grade continuava com 10 de 5.
@@ -13841,8 +13864,8 @@ async function renderProspeccaoExecutivo() {
   const agoraDeck = Date.now();
   const visiveis = dentroDoRaio
     .filter(l => prosp2Estado.fonte === 'todas' || l._fonteBucket === prosp2Estado.fonte)
-    .filter(l => !prosp2Estado.recemAberta || prospeccaoEhRecemAberta(l, agoraDeck))
-    .filter(l => !prosp2Estado.comTelefone || prospeccaoProntaParaLigar(l))
+    .filter(l => prosp2Estado.visao !== 'recemAberta' || prospeccaoEhRecemAberta(l, agoraDeck))
+    .filter(l => prosp2Estado.visao !== 'comTelefone' || prospeccaoProntaParaLigar(l))
     .sort((a, b) => {
       if (prosp2Estado.ordenar === 'dist') return a._distKm - b._distKm;
       if (prosp2Estado.ordenar === 'aval') return (Number(b.nota) || 0) - (Number(a.nota) || 0) || (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0);
@@ -13989,13 +14012,17 @@ async function renderProspeccaoExecutivo() {
         <button class="prosp2-fonte ${prosp2Estado.fonte === 'todas' ? 'on' : ''}" data-f="todas">Todas <span class="n num">${dentroDoRaio.length}</span></button>
         ${Object.entries(PROSP2_FONTES).map(([k, F]) => `<button class="prosp2-fonte ${prosp2Estado.fonte === k ? 'on' : ''}" data-f="${k}" style="--fc:${F.cor}"><span class="fdot"></span>${esc(F.nome)} <span class="n num">${contagemFonte[k] || 0}</span></button>`).join('')}
       </div>
-      <!-- AS DUAS VISOES (28/08/26). Ficam ao lado das pílulas de fonte porque são da
-           mesma natureza: recorte que soma, não visão que troca. Cada uma diz no title
-           o que lhe falta, igual às do gestor. Só aparecem quando têm o que mostrar. -->
-      <div class="prosp2-visoes" id="prosp2Visoes">
-        ${nNovos > 0 ? `<button class="prosp2-visao ${prosp2Estado.recemAberta ? 'on' : ''}" data-v="recemAberta" title="Abriu nos últimos 6 meses — precisa de sistema e ainda não tem fornecedor fixo. Vem do CNPJ (Casa dos Dados): estas contas não têm telefone gravado, o gesto delas é buscar o contato na ficha ou visitar.">Recém-abertas <span class="n num">${nNovos}</span></button>` : ''}
-        ${nComTelefone > 0 ? `<button class="prosp2-visao ${prosp2Estado.comTelefone ? 'on' : ''}" data-v="comTelefone" title="Tem telefone gravado: dá pra qualificar por ligação antes de gastar deslocamento. Vem do Google/Outscraper, que não traz data de abertura.">Prontas pra ligar <span class="n num">${nComTelefone}</span></button>` : ''}
+      <!-- AS TRÊS VISÕES, EXCLUSIVAS (30/08/26 — pedido da prancha). Uma por vez, com
+           "Todas" sempre presente para ser a saída. Antes eram duas caixas que somavam,
+           e somá-las pedia a interseção de dois conjuntos que não se cruzam: lista vazia
+           garantida. aria-pressed em todas as três, e role="group" com rótulo, porque
+           agora elas são um seletor e não dois interruptores. -->
+      <div class="prosp2-visoes" id="prosp2Visoes" role="group" aria-label="Visão da lista">
+        <button class="prosp2-visao ${prosp2Estado.visao === 'todas' ? 'on' : ''}" data-v="todas" aria-pressed="${prosp2Estado.visao === 'todas'}" title="Todas as contas-alvo do seu território que atendem aos filtros de fonte e distância.">Todas</button>
+        ${nNovos > 0 ? `<button class="prosp2-visao ${prosp2Estado.visao === 'recemAberta' ? 'on' : ''}" data-v="recemAberta" aria-pressed="${prosp2Estado.visao === 'recemAberta'}" title="Abriu nos últimos 6 meses — precisa de sistema e ainda não tem fornecedor fixo. Vem do CNPJ (Casa dos Dados): estas contas não têm telefone gravado, o gesto delas é buscar o contato na ficha ou visitar.">Recém-abertas <span class="n num">${nNovos}</span></button>` : ''}
+        ${nComTelefone > 0 ? `<button class="prosp2-visao ${prosp2Estado.visao === 'comTelefone' ? 'on' : ''}" data-v="comTelefone" aria-pressed="${prosp2Estado.visao === 'comTelefone'}" title="Tem telefone gravado: dá pra qualificar por ligação antes de gastar deslocamento. Vem do Google/Outscraper, que não traz data de abertura.">Prontas pra ligar <span class="n num">${nComTelefone}</span></button>` : ''}
       </div>
+      ${nNovos > 0 && nComTelefone > 0 ? `<p class="prosp2-visoes-nota">Uma visão por vez: <b>recém-aberta</b> vem do CNPJ e não traz telefone; <b>pronta pra ligar</b> vem do Google e não traz data de abertura. Somar as duas daria lista vazia.</p>` : ''}
       <label class="prosp2-ordenar">Ordenar por
         <select id="prosp2Ordenar">
           <option value="score" ${prosp2Estado.ordenar === 'score' ? 'selected' : ''}>Melhores primeiro (recomendado)</option>
@@ -14066,19 +14093,21 @@ async function renderProspeccaoExecutivo() {
       <div class="prosp2-grid" id="prosp2Grid">${visiveis.length ? visiveis.slice(0, prosp2Estado.mostrar).map(cardHTML).join('') : (
         dentroDoRaio.length === 0
           ? `<div class="prosp2-vazio"><b>Sem leads importados perto de "${esc(centro.rotulo)}".</b><br>A busca cobre a carteira já trazida pra sua praça (Casa dos Dados, TripAdvisor, iFood, Google Places) — não é uma busca ao vivo no Brasil inteiro.<br>Se essa região deveria estar na sua praça, avisa seu gestor pra rodar a atualização mensal de contas-alvo por lá.<br><br><button class="prosp2-ver" id="prosp2Limpar">Voltar pra minha praça</button></div>`
-          : (prosp2Estado.recemAberta && prosp2Estado.comTelefone)
-            /* CAUSA CONHECIDA (28/08/26): estas duas visões não se cruzam na base.
-               Casa dos Dados vem do CNPJ e traz data de abertura sem telefone (667
-               contas, nenhuma com telefone); Google/Outscraper traz telefone e quase
-               nunca data de abertura. Medido: recém-aberta E com telefone = 0 das 970.
+          /* O RAMO DA COMBINAÇÃO IMPOSSÍVEL SAIU (30/08/26), porque a combinação saiu.
 
-               A mensagem genérica ("tente outra fonte ou busque outro bairro") é PIOR
-               que nada aqui, porque manda o executivo tentar duas coisas que não
-               podem funcionar — ele troca de fonte, troca de bairro, continua vazio, e
-               conclui que a tela está quebrada. Quando a causa é conhecida, a tela diz
-               a causa e o caminho que funciona. */
-            ? `<div class="prosp2-vazio" style="text-align:left;"><b>Estes dois recortes não se cruzam na base de hoje.</b><br><b>Recém-abertas</b> vem do CNPJ (Casa dos Dados): traz a data de abertura e <b>nunca o telefone</b>. <b>Prontas pra ligar</b> vem do Google e do Outscraper: traz telefone e <b>quase nunca a data de abertura</b>. São duas coletas diferentes do mesmo mercado, e hoje elas não se encontram no mesmo registro.<br><br>Para ligar numa recém-aberta: deixe só <b>Recém-abertas</b> e busque o contato pelo CNPJ na ficha dela.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
-            : `<div class="prosp2-vazio"><b>Nenhum lead com esses filtros por aqui.</b><br>Tente outra fonte ou busque outro bairro.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
+             Ele existia para EXPLICAR um vazio garantido: as duas visões não se cruzam na
+             base (Casa dos Dados traz data de abertura e nunca telefone — 667 contas,
+             nenhuma com telefone; Google/Outscraper traz telefone e quase nunca data de
+             abertura. Medido em 28/08: recém-aberta E com telefone = 0 das 970).
+
+             Explicar bem um beco sem saída é melhor que deixar o executivo achar que a
+             tela quebrou — e era a coisa certa a fazer enquanto o beco existia. Mas a
+             prancha pedia o passo seguinte: tornar a combinação IMPOSSÍVEL ("3 visões
+             exclusivas", efeito "0 combinações que prometem lista vazia"). Com visão
+             única, este ramo é inalcançável — e ramo inalcançável é pior que código morto,
+             porque quem ler depois vai acreditar que o caso existe. A medição fica aqui,
+             registrada, que é o que tem valor. */
+          : `<div class="prosp2-vazio"><b>Nenhum lead com esses filtros por aqui.</b><br>Tente outra fonte ou busque outro bairro.<br><br><button class="prosp2-ver" id="prosp2Limpar">Limpar filtros</button></div>`
       )}${visiveis.length > prosp2Estado.mostrar ? `
         <div class="prosp2-mais">
           <span>Mostrando <b>${prosp2Estado.mostrar}</b> de <b>${visiveis.length}</b> — as recém-abertas primeiro, que é o melhor sinal que a base tem.</span>
@@ -14336,9 +14365,12 @@ function prosp2LigarEventos(universo, ownerId) {
   if (visoesEl) visoesEl.addEventListener('click', ev => {
     const b = ev.target.closest('.prosp2-visao');
     if (!b) return;
-    const campo = b.dataset.v;
-    if (!campo || !(campo in prosp2Estado)) return;
-    prosp2Estado[campo] = !prosp2Estado[campo];
+    /* Seletor, não interruptor: clicar numa visão TROCA para ela. Clicar na que já está
+       ligada volta para "todas", que é o gesto natural de desmarcar sem procurar o botão
+       "Todas" com o olho. */
+    const alvo = b.dataset.v;
+    if (!alvo) return;
+    prosp2Estado.visao = (prosp2Estado.visao === alvo) ? 'todas' : alvo;
     prosp2Estado.mostrar = PROSP2_LOTE;
     renderProspeccaoExecutivo();
   });
@@ -14348,7 +14380,7 @@ function prosp2LigarEventos(universo, ownerId) {
   /* O "Limpar filtros" do estado vazio limpava só fonte e local. Sem os dois campos
      novos aqui, o executivo clicaria em limpar, veria a fila continuar cortada e
      nenhum filtro aparente ligado — pior que o problema original. */
-  if (limparEl) limparEl.addEventListener('click', () => { prosp2Estado.fonte = 'todas'; prosp2Estado.local = null; prosp2Estado.recemAberta = false; prosp2Estado.comTelefone = false; prosp2Estado.mostrar = PROSP2_LOTE; renderProspeccaoExecutivo(); });
+  if (limparEl) limparEl.addEventListener('click', () => { prosp2Estado.fonte = 'todas'; prosp2Estado.local = null; prosp2Estado.visao = 'todas'; prosp2Estado.mostrar = PROSP2_LOTE; renderProspeccaoExecutivo(); });
 
   // ---- grade de cards: abrir popover de dia/hora, ver ficha, abrir ficha ----
   const grid = document.getElementById('prosp2Grid');
