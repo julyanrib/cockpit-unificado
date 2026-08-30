@@ -164,6 +164,111 @@ window.auditarAba = async function(idAba, idView, orcamentoMs){
      await auditarAba('tabBtnPlaybook',     'viewPlaybook')
    Planejamento e Agenda compartilham #viewAgenda: confirme o conteúdo certo antes de
    confiar no resultado (a Prospecção tem #prosp2Grid, a Agenda não). */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   AUDITORIA SEMÂNTICA DE FILTRO — "mudou" não é "mudou o certo"
+
+   O auditor de cima responde "esse clique faz alguma coisa?". Isso NÃO basta para
+   filtro: um filtro que acende o próprio botão e não filtra a lista produz mutação e
+   passa como vivo. Foi essa a lacuna que o Julyan apontou em 30/08.
+
+   Este responde a pergunta certa: o rótulo declara um número ("Sem próximo passo · 25",
+   "Casa dos Dados 2", "Todos (19)"); depois do clique, a lista tem de ter exatamente
+   esse número de itens. E o conjunto renderizado tem de MUDAR entre as opções — é isso
+   que separa filtrar de pintar de outra cor.
+
+   ARMADILHAS que me deram três falsos alarmes antes de eu acertar:
+     * SELETOR DE ITEM ERRADO devolve zero e parece filtro morto. Confirme a classe
+       real no DOM antes de acreditar (a lista de etapa do Meu funil é .mf-lead-row,
+       não .lead-row).
+     * FILTROS COMPÕEM. Zere os outros antes: o filtro de etapa do Meu funil se soma à
+       visão, e o de tipo da Agenda se soma à vista. Sem zerar, tudo dá zero.
+     * BOTÃO desabilitado (balde com 0) não filtra nada, e está certo: não é morto.
+       NÃO use acento grave neste texto: ele vive dentro de um template literal, e um
+       acento grave solto fecha a string e derruba o arquivo inteiro em silêncio.
+   ═══════════════════════════════════════════════════════════════════════════════════ */
+window.auditarFiltro = async function(nome, seletorBotoes, seletorLista, seletorItem, esperaMs){
+  const linhas = [];
+  const btns = function(){ return Array.from(document.querySelectorAll(seletorBotoes)); };
+  const total = btns().length;
+  for (var i = 0; i < total; i++) {
+    const b = btns()[i];
+    if (!b) continue;
+    const rot = b.textContent.replace(/\\s+/g, ' ').trim();
+    const nums = rot.match(/(\\d+)/g);
+    const declarado = nums ? Number(nums[nums.length - 1]) : null;
+    const desabilitado = !!b.disabled;
+    b.click();
+    await esperar(esperaMs || 700);
+    const lista = document.querySelector(seletorLista);
+    const itens = lista ? Array.from(lista.querySelectorAll(seletorItem)) : [];
+    linhas.push({
+      rotulo: rot, declarado: declarado, desabilitado: desabilitado, renderizados: itens.length,
+      bate: declarado == null ? '—' : (declarado === itens.length ? 'SIM' : 'NAO'),
+      assinatura: itens.map(function(el){ return (el.textContent||'').replace(/\\s+/g,' ').trim().slice(0,40); }).join('|').slice(0,300)
+    });
+  }
+  const distintos = new Set(linhas.filter(function(l){ return !l.desabilitado; }).map(function(l){ return l.assinatura; }));
+  return { filtro: nome, opcoes: linhas.map(function(l){ delete l.assinatura; return l; }),
+    conjuntosDistintos: distintos.size, discrimina: distintos.size > 1 };
+};
+
+/* As nove famílias de filtro do executivo, com o seletor de item JÁ CONFERIDO no DOM.
+     await auditarFiltro('Meu funil · visão',    '[data-mfvisao]',                '#mfKanbanSlot', '.kb-card')
+     await auditarFiltro('Meu funil · etapa',    '[data-mfetapa]',                '#mfKanbanSlot', '.mf-lead-row')
+     await auditarFiltro('Modal de etapa',       '#stageOverlay [data-filtro]',   '#stageOverlay', '.lead-row')
+     await auditarFiltro('Planejamento · balde', '#filaFollowUp [data-fila-balde]','#filaFollowUp', '.fila-item')
+     await auditarFiltro('Planejamento · fonte', '#viewAgenda [data-f]',          '#prosp2Grid',   '.prosp2-card')
+     await auditarFiltro('Planejamento · visão', '#viewAgenda [data-v]',          '#prosp2Grid',   '.prosp2-card')
+     await auditarFiltro('Agenda · tipo',        '#viewAgenda [data-agfiltro]',   '#viewAgenda',   '[data-agev]')
+     await auditarFiltro('Agenda · vista',       '#viewAgenda [data-agvista]',    '#viewAgenda',   '[data-agev]')
+   A busca do Playbook é INPUT e não se testa clicando — digite:
+     const i = document.querySelector('#viewPlaybook input');
+     i.value = 'objecao'; i.dispatchEvent(new Event('input', {bubbles:true}));
+   e confira que .pb-home-result aparece, e que um termo sem match diz
+   "Nenhum guia encontrado". */
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   LEADS DE PRAÇA SINTÉTICOS — sem isto, dois filtros ficam INTESTÁVEIS
+
+   O preview local vem com prospeccaoCache VAZIO (medido: 0), porque as contas-alvo
+   moram no Supabase e o preview é offline. Resultado: as pílulas de fonte e de visão do
+   Planejamento não têm o que filtrar, e foi exatamente aí que os filtros mortos
+   passaram batido — "0 de 0" parece funcionar.
+
+   Cole isto ANTES de auditar o Planejamento. Os seis leads cobrem as quatro
+   combinações que os predicados do produto distinguem.
+   ═══════════════════════════════════════════════════════════════════════════════════ */
+window.semearLeadsDePraca = async function(){
+  const owner = sessaoAtual.ownerId;
+  const terr = territorioDe(owner);
+  const base = { lat: terr ? terr.lat : -20.3155, lng: terr ? terr.lng : -40.3128 };
+  const hoje = Date.now();
+  const iso = function(d){ return new Date(hoje - d * 86400000).toISOString().slice(0, 10); };
+  const mk = function(i, o){
+    return Object.assign({
+      id: 'sint-' + i, nome: 'Restaurante Sintetico ' + i, responsavel_owner_id: owner,
+      status: 'novo', lat: base.lat + i * 0.002, lng: base.lng + i * 0.002,
+      bairro: 'Centro', cidade: 'Teste', categoria: 'restaurante',
+      telefone: null, data_abertura: null, avaliacoes: null, fonte: 'casa dos dados'
+    }, o);
+  };
+  const leads = [
+    mk(1, { data_abertura: iso(30) }),                                                    // recém-aberta, sem telefone
+    mk(2, { data_abertura: iso(60) }),                                                    // recém-aberta, sem telefone
+    mk(3, { fonte: 'Google Places', telefone: '(27) 3333-4444', avaliacoes: 120 }),        // pronta pra ligar
+    mk(4, { fonte: 'outscraper', telefone: '27999998888', avaliacoes: 80 }),               // pronta pra ligar
+    mk(5, { fonte: 'Google Places', telefone: '(27) 3222-1111', data_abertura: iso(20) }), // as duas
+    mk(6, { fonte: 'tripadvisor', avaliacoes: 300 })                                       // nenhuma das duas
+  ];
+  prospeccaoCache.push.apply(prospeccaoCache, leads);
+  agendaProspeccaoPronta = true;
+  prosp2Estado.fonte = 'todas'; prosp2Estado.visao = 'todas'; prosp2Estado.agenda = {};
+  await renderProspeccaoExecutivo();
+  return { semeados: leads.length, noCache: prospeccaoCache.length };
+};
 `;
 
 const entrada = process.argv[2];
