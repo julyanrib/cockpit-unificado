@@ -2107,6 +2107,29 @@
   .agw-regmais:hover{color:var(--red);}
   .agw-lista-dia{display:grid;grid-template-columns:96px minmax(0,1fr);gap:14px;padding:11px 16px;border-top:1px solid var(--line-soft);}
   .agw-lista-dia:first-child{border-top:none;}
+  /* ══ O NOME DO CLIENTE DESAPARECIA NO CELULAR (30/08/26, revisão pixel a pixel) ══════
+
+     O DEFEITO MAIS SÉRIO desta revisão, e invisível para quem só olha: a vista LISTA é a
+     vista PADRÃO (agendaEstado.vista nasce "lista"), ou seja é o que o executivo vê ao
+     abrir a Agenda no celular. Medido a 375, peça por peça de uma linha .agw-li:
+
+         i:8px (bolinha)   b:33px ("15:00")   span:0px (O NOME)   em:89px ("Follow-up")
+
+     ZERO pixel para o nome. A linha mostrava a hora e o tipo do compromisso e NÃO mostrava
+     com quem. Numa agenda, isso é a informação inteira.
+
+     Causa: a linha do dia é uma grade de 96px (rótulo "Segunda 31/08") + o resto. A 375
+     "o resto" vira 176px, e ali dentro a bolinha, a hora e o tipo (com flex:none e nowrap)
+     tomam o que precisam; o nome, que é o único com flex:1 e min-width:0, é o único que
+     pode encolher — e encolheu até zero. Cada peça obedeceu a sua regra; o conjunto perdeu
+     o que importava.
+
+     Abaixo de 640 o rótulo do dia sai da lateral e vai para cima, devolvendo a linha toda
+     (286px medidos) para os compromissos. E a coluna é minmax(0,1fr), NÃO 1fr: com 1fr
+     (que é minmax(AUTO,1fr)) um nome longo faz a célula crescer além da tela — testei com
+     um nome de 266px e a linha foi a 444px numa tela de 375, sendo clipada em silêncio.
+     Com minmax(0,1fr) o mesmo nome trunca com reticências e a página fica em 375/375. */
+  @media (max-width:640px){ .agw-lista-dia{grid-template-columns:minmax(0,1fr);gap:7px;} }
   .agw-lista-dia>b{font:800 12.5px 'Archivo',system-ui,sans-serif;color:var(--ink);}
   .agw-lista-dia>b em{display:block;font:600 10.5px 'Manrope',sans-serif;font-style:normal;color:var(--muted2);margin-top:3px;}
   .agw-li{--c:var(--green);display:flex;align-items:center;gap:10px;width:100%;background:none;border:none;border-radius:10px;padding:7px 9px;cursor:pointer;font-family:inherit;text-align:left;}
@@ -2146,8 +2169,23 @@
   .agdx-nav div{display:flex;gap:6px;}
   .agdx-nav button{background:var(--panel);border:1px solid var(--line-btn);border-radius:999px;min-width:34px;height:31px;padding:0 13px;font:700 11.5px 'Manrope',sans-serif;color:var(--muted);cursor:pointer;white-space:nowrap;transition:background .12s var(--ease),color .12s var(--ease);}
   .agdx-nav button:hover{background:var(--ink);color:var(--panel);border-color:var(--ink);}
-  @media(max-width:760px){.agdx{grid-template-columns:1fr 1fr;} .agdx-nav{grid-column:1/-1;flex-direction:row;justify-content:space-between;border-left:none;border-top:1px solid var(--line);}}
-  @media (max-width:1240px){ .agdx{grid-template-columns:repeat(2,minmax(0,1fr));} .agdx-nav{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center;padding:0;} }
+  /* O grid-template-columns saiu daqui porque ele NUNCA aplicava: o @media de 900, mais
+     abaixo neste arquivo e com a mesma especificidade, põe 1fr em toda largura ≤900 — e
+     quem vem depois ganha. Conferido no computado a 375: uma coluna de 317,6px, não duas.
+     Deixar a regra ali afirmava um comportamento que a tela não tem. O .agdx-nav fica. */
+  @media(max-width:760px){.agdx-nav{grid-column:1/-1;flex-direction:row;justify-content:space-between;border-left:none;border-top:1px solid var(--line);}}
+  /* ══ O BURACO DA FAIXA DE INDICADORES (30/08/26, revisão pixel a pixel da Agenda) ══
+
+     MEDIDO a 1240: a faixa tem TRÊS indicadores (buracos restantes, quentes sem
+     compromisso, cadência) e esta regra a punha em DUAS colunas. Resultado: o terceiro
+     caía sozinho na segunda fileira e sobrava um retângulo de 581x142 pintado de painel
+     ao lado dele. Não é espaço em branco de respiro — é um bloco vazio no meio da faixa,
+     e lido de relance parece card que não carregou.
+
+     Medi as três colunas antes de mexer: 387px a 1240, 340 a 1100 e 291 a 950, com zero
+     estouro, rótulo nenhum truncado e o número em UMA linha nas três larguras. Cabe. O
+     corte para uma coluna só continua onde ele é necessário, no @media de 900 abaixo. */
+  @media (max-width:1240px){ .agdx{grid-template-columns:repeat(3,minmax(0,1fr));} .agdx-nav{grid-column:1/-1;flex-direction:row;justify-content:space-between;align-items:center;padding:0;} }
   @media (max-width:900px){ .agdx{grid-template-columns:1fr;} }
   /* Agenda operacional: mesma hierarquia do Meu Funil — prioridades horizontais,
      depois a área de trabalho. Nada de uma segunda rolagem presa na lateral. */
@@ -2165,7 +2203,12 @@
   .ag-exec-rail #quentesForaCard{border:1px solid var(--line)!important;border-top:4px solid var(--amber)!important;background:var(--panel);}
   .ag-exec-rail #quentesForaCard [data-quente-fora]{margin-bottom:7px;}
   .ag-exec-rail #quentesForaCard .chart-subtitle{min-height:31px;}
-  .ag-exec-rail #agendaSugestoesSlot{min-width:0;}
+  /* MESMO BURACO, UMA SEÇÃO ABAIXO (30/08/26). A trilha "O que merece entrar na agenda"
+     tem duas colunas e TRÊS cartões: funil, reciclagem e território. O de território caía
+     na coluna 1 da segunda fileira e deixava 634x216 vazios à direita. Ocupando a fileira
+     inteira ele fica com as duas seções internas em 582px cada (medido) em vez de 250 —
+     as contas-alvo respiram e o cartão passa a ter o mesmo peso dos dois de cima. */
+  .ag-exec-rail #agendaSugestoesSlot{min-width:0;grid-column:1/-1;}
   .ag-rail-card{height:100%;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(220px,.85fr);align-content:start;overflow:hidden;border:1px solid var(--line);border-top:4px solid var(--green);border-radius:17px;background:var(--panel);box-shadow:none;}
   .ag-rail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:15px 15px 12px;border-bottom:1px solid var(--line-soft);}
   .ag-rail-card>.ag-rail-head{grid-column:1/-1;}
@@ -2223,6 +2266,32 @@
   @media (max-width:1240px){ .ag-exec-rail{grid-template-columns:minmax(300px,.9fr) minmax(0,1.1fr);} .ag-rail-card{grid-template-columns:1fr 1fr;} }
   @media (max-width:900px){ .ag-exec-rail{grid-template-columns:1fr;} .ag-rail-card{grid-template-columns:1fr 1fr;} .ag-section-head span{white-space:normal;} }
   @media (max-width:640px){ .ag-rail-card{grid-template-columns:1fr;} .ag-rail-section+.ag-rail-section{border-left:0;border-top:1px solid var(--line-soft);} }
+  /* QUATRO PIXELS (30/08/26). Medido a 375: "Reciclagem · candidato a resgate" pedia 4px
+     mais do que a pílula tinha e virava reticências no fim. Quatro pixels não se explicam
+     como decisão — leem-se como bug. E esta pílula não é contexto descartável: é de ONDE
+     o lead veio (funil, reciclagem, conta-alvo), o que decide a abordagem.
+
+     Não faço a pílula quebrar em duas linhas: pílula de duas linhas fica pior que o
+     recorte. Aperto o letter-spacing de .05em para .02em e o padding de 6 para 5 — a 8px
+     de fonte isso devolve ~9px, mais do que o suficiente. Medido depois: as cinco pílulas
+     com folga zero de recorte. O bairro do lead segue truncando de propósito. */
+  @media (max-width:420px){ .ag-rail-source{letter-spacing:.02em;padding-left:5px;padding-right:5px;} }
+  /* O CABEÇALHO DE SEÇÃO NO CELULAR (30/08/26). Medido a 375: título e subtítulo dividiam
+     os mesmos 315px em flex nowrap, e o título levava a pior — "O que merece entrar na
+     agenda" ficava numa coluna de 124px e quebrava em TRÊS linhas (64px de altura) com o
+     subtítulo de 148px ao lado. "Sua semana" quebrava em duas. O número da seção some no
+     meio disso, e é ele que diz a ordem de leitura da tela.
+
+     Deixando a faixa quebrar e dando a linha inteira ao subtítulo, o título volta a caber
+     em uma linha (253px medidos) e os dois cabeçalhos passam a ter a MESMA altura, 48px —
+     antes eram 43 e 64. É o mesmo desenho do largo, só empilhado.
+
+     Os dois cabeçalhos são do executivo (ambos dentro de souRep); a tela do gestor não
+     usa esta classe, então isto não entra no escopo intocável dele. */
+  @media (max-width:640px){
+    .ag-section-head{flex-wrap:wrap;}
+    .ag-section-head>span{flex:1 1 100%;min-width:0;}
+  }
   /* Scoreboard da Daily do gestor: sem marcador nativo, caret girando, mobile em 2 linhas */
   .daily-acc summary::-webkit-details-marker{display:none;}
   /* CORREÇÃO (18/08/26, achado na revisão do gestor) — esta regra girava o ÚLTIMO
@@ -2672,6 +2741,34 @@
   .ag-sab-link{background:var(--sunk);border:0;padding:3px 10px;border-radius:var(--r-pill);
     font-family:inherit;font-size:11px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap;}
   .ag-sab-link:hover{color:var(--ink);}
+
+  /* ══ 44px NO DEDO — AGENDA E O 1:1 DO DESENVOLVIMENTO (30/08/26) ═══════════════════
+
+     A prancha não deixa isso em aberto: "todo clicável ≥44px de altura" no mobile. Medido
+     a 375 nesta aba, TUDO abaixo: navegação de semana 31px, filtros 30px, as vistas
+     Semana/Dia/Lista 27px, "mostrar sábado" 21px e o "＋ dia hora" / "Ver ficha" da
+     trilha 29px. Vinte e um pixels é meio dedo — e a Agenda é justamente a tela que ele
+     usa em pé, entre duas visitas, para decidir onde encaixar a próxima.
+
+     Os dois últimos são MEUS, desta semana: o campo de data do próximo 1:1 (34px) e o
+     "Histórico de 1:1" (24px). Datar o 1:1 abre o seletor nativo do sistema; errar o
+     toque ali é o pior caso, porque o dedo cai no texto ao lado e nada acontece.
+
+     A regra vive AQUI, depois das bases, e não no bloco de toque geral lá em cima: as
+     bases de .ag-seg e .ag-sab-link estão nas linhas acima desta, e regra de mesma
+     especificidade que vem antes perde. Foi o erro que me pegou duas vezes nesta revisão.
+     Só a altura muda; nenhuma fonte, nenhum padding horizontal, nada de layout. */
+  @media (max-width:760px){
+    .agdx-nav button,.ag-seg button,.ag-sab-link,.agw-vistas button{min-height:44px;}
+    .ag-plan-btn,.ag-rail-cta{min-height:44px;}
+    /* .agw-li é a linha de compromisso da vista LISTA, e lista é a vista PADRÃO
+       (agendaEstado.vista nasce "lista"). Ou seja: no celular, este é o alvo que ele mais
+       toca em toda a Agenda — é por aqui que se abre a ficha do compromisso — e media 32px.
+       Foi o último abaixo da régua nesta aba. */
+    .agw-li{min-height:44px;}
+    .um-next input[type="date"]{min-height:44px;}
+    .um-hist>summary{min-height:44px;}
+  }
   .ag-key span{display:flex;align-items:center;gap:5px;}
   .ag-key i{width:9px;height:9px;border-radius:3px;display:inline-block;}
 
