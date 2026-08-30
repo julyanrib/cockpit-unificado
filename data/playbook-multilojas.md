@@ -1,4 +1,6 @@
-# MULTILOJAS / FRANQUEADORA — R$ 29 é preço de decisão automática
+# Multilojas e franqueadora: R$ 29 é preço de decisão automática
+
+> *"Quem contrata Multilojas está te dizendo, sem dizer, que vai abrir a segunda unidade. É o melhor gancho de expansão que existe na tabela."*
 
 **R$ 29/mês.** O adicional mais barato da tabela, e o **melhor gancho de expansão que a gente tem** — porque quem compra Multilojas está declarando que vai abrir a segunda unidade.
 
@@ -62,7 +64,7 @@ E para franqueadora: *"como você calcula o royalty hoje?"* — se alguém soma 
 
 *Fonte dos claims e das funcionalidades: página pública `takeat.app/franquias`, conferida em 29/08/2026.*
 
-Aprofundar: [Gestão Financeira — a guerra do controle gerencial](playbook:ecossistema-takeat#ecossistema-takeat-gestao-financeira-a-guerra-do-controle-gerencial) · [Clientes × MRR](playbook:clientes-mrr)
+Aprofundar: [Gestão Financeira — o controle que ele nunca teve](playbook:ecossistema-takeat#ecossistema-takeat-gestao-financeira-o-controle-que-ele-nunca-teve) · [Clientes × MRR](playbook:clientes-mrr)
 
 ***
 

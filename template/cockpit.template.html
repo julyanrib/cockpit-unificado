@@ -4954,6 +4954,12 @@
   .pba h2:not(.oqfa-h)::before{counter-increment:sec;content:counter(sec);color:var(--v6-red);font-size:14px;margin-right:12px;}
   .pba h3{font:800 15.5px 'Archivo',system-ui,sans-serif;color:var(--v6-ink);margin:26px 0 8px;}
   .pba h4{font:800 13px 'Archivo',system-ui,sans-serif;color:var(--v6-muted);margin:20px 0 6px;letter-spacing:.04em;text-transform:uppercase;}
+  /* MEDIDO A 375: `takeat.app/comparativos` dentro de um <li> do cartão âmbar é um token
+     que não quebra — empurrava o cartão a 344px num espaço de 278 e a PÁGINA inteira
+     rolava para o lado (394/375). Numa coluna de texto de celular, endereço e código
+     precisam poder quebrar. */
+  .pba{overflow-wrap:break-word;}
+  .pba code,.pba a{overflow-wrap:anywhere;}
   .pba p{margin:0 0 14px;}
   .pba strong{color:var(--v6-ink);font-weight:800;}
   .pba em{color:var(--v6-ink);}
@@ -4979,8 +4985,11 @@
   .pba .fa-body a,.pba .fa-body strong,.pba .fa-body b{color:var(--v6-dark-ink);}
   .pba .fa-body a{color:var(--v6-amber-claro);border-bottom:1px solid rgba(224,166,74,.45);font-weight:700;}
   .pba .fa-body code{background:rgba(246,243,236,.12);color:var(--v6-amber-claro);}
-  .pba li.cb{list-style:none;margin-left:-22px;padding-left:0;display:flex;gap:10px;}
-  .pba li.cb::before{content:"";flex:none;width:17px;height:17px;border:2px solid var(--v6-amber);border-radius:5px;margin-top:3px;}
+  /* CAIXA DE MARCAR SEM FLEX (medido a 375): com display:flex cada filho inline do <li>
+     virava um item de flex — um <em> no meio da frase saia da linha e vazava 38px para
+     fora do cartao, sem quebrar. Marcador posicionado deixa o texto correr normal. */
+  .pba li.cb{list-style:none;margin-left:-22px;padding-left:27px;position:relative;display:block;}
+  .pba li.cb::before{content:"";position:absolute;left:0;top:6px;width:17px;height:17px;border:2px solid var(--v6-amber);border-radius:5px;}
   .pba .twrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--v6-linha);border-radius:12px;}
   .pba table{width:100%;border-collapse:collapse;font-size:12.5px;line-height:1.6;min-width:560px;}
   .pba th{background:var(--v6-canvas);color:var(--v6-ink);text-align:left;font:800 10px 'Archivo',system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;}
@@ -4989,9 +4998,9 @@
   .pba .oqfa-card{margin:30px 0 0;background:var(--v6-amber-bg);border:1px solid var(--v6-amber-linha);border-radius:14px;padding:20px 24px;}
   .pba .oqfa-card h2{margin:0 0 12px;font-size:12px;letter-spacing:.14em;color:var(--v6-amber);text-transform:uppercase;}
   .pba .oqfa-card ul{margin:0;padding:0;}
-  .pba .oqfa-card li{list-style:none;display:flex;gap:10px;margin:10px 0;font-size:13.5px;}
-  .pba .oqfa-card li::before{content:"";flex:none;width:17px;height:17px;border:2px solid var(--v6-amber);border-radius:5px;margin-top:3px;}
-  .pba .oqfa-card li.cb{margin-left:0;}
+  .pba .oqfa-card li{list-style:none;display:block;position:relative;padding-left:27px;margin:10px 0;font-size:13.5px;}
+  .pba .oqfa-card li::before{content:"";position:absolute;left:0;top:6px;width:17px;height:17px;border:2px solid var(--v6-amber);border-radius:5px;}
+  .pba .oqfa-card li.cb{margin-left:0;padding-left:27px;}
   /* referência cruzada entre páginas: pílula, nunca o cinza do navegador */
   .pba .pb-ir{display:inline-block;margin:0 2px;border:1px solid rgba(229,26,49,.35);border-radius:999px;padding:3px 13px;background:#FFF7F4;color:var(--v6-red);font:700 12px 'Manrope',system-ui,sans-serif;cursor:pointer;}
   .pba .pb-ir:hover{background:var(--v6-red);color:#fff;}
@@ -12493,7 +12502,11 @@ let playbookMomentoAtual = null;
    produz, senão a lateral anuncia 11 e o texto entrega 12. A regra é a dela: a citação que
    vem logo depois do h1 é manifesto (não é frase de campo); as outras, sim. */
 function pbv6TemManifesto(pagina) {
-  return /<h1[^>]*>[\s\S]*?<\/h1>\s*<blockquote/.test(String((pagina && pagina.html) || ''));
+  /* a mesma regra da transformação: citação antes do primeiro h2 é manifesto, não frase */
+  const html = String((pagina && pagina.html) || '');
+  const iH2 = html.search(/<h2[ >]/);
+  const iCit = html.search(/<blockquote/);
+  return iCit >= 0 && (iH2 < 0 || iCit < iH2);
 }
 function pbv6Frases(pagina) {
   const n = (String((pagina && pagina.html) || '').match(/<blockquote/g) || []).length;
@@ -12546,8 +12559,15 @@ function pbv6TransformarArtigo(html) {
     /* citações: a primeira logo depois do h1 é o MANIFESTO da página; as outras são
        ferramenta de campo e ganham cabeçalho FALE ASSIM com botão de copiar. */
     const citacoes = [...raiz.querySelectorAll('blockquote')];
+    /* MANIFESTO = a citação de ABERTURA, e abertura não é "irmã imediata do h1": quase
+       toda página tem uma linha de subtítulo (h3) entre o título e a citação. Medido nas
+       30 páginas: pela regra antiga só 6 ganhavam manifesto, e nas outras a TESE da
+       página aparecia como cartão FALE ASSIM — como se fosse frase para dizer ao dono.
+       A regra certa é "a primeira citação antes da primeira seção". */
+    const primeiroH2 = raiz.querySelector('h2');
+    const antesDasSecoes = el => !primeiroH2 || !!(el.compareDocumentPosition(primeiroH2) & Node.DOCUMENT_POSITION_FOLLOWING);
     citacoes.forEach((bq, i) => {
-      if (i === 0 && bq.previousElementSibling && bq.previousElementSibling.tagName === 'H1') {
+      if (i === 0 && antesDasSecoes(bq)) {
         bq.className = 'manifesto';
         return;
       }

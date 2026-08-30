@@ -32,7 +32,7 @@ A tradução está aqui, escrita uma vez, num lugar só. **Cada dor tem cinco co
 
 **No WhatsApp.** *"Sobre a fila que você me mostrou: o totem atende ela sozinho, sem contratar ninguém."*
 
-Aprofundar: [Tablet + Totem, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-tablet-totem-experiencia-do-cliente-reducao-de-custo-onde-takeat-nem-ent) · [Equipamentos](playbook:equipamentos)
+Aprofundar: [Tablet + Totem, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-tablet-totem-experiencia-do-cliente-e-custo-a-takeat-nao-vende-hardware) · [Equipamentos](playbook:equipamentos)
 
 ---
 
@@ -50,7 +50,7 @@ Aprofundar: [Tablet + Totem, no Ecossistema](playbook:ecossistema-takeat#ecossis
 
 **No WhatsApp.** *"Sobre a equipe enxuta: com o pedido saindo da própria mesa, seu garçom cobre o dobro do salão."*
 
-Aprofundar: [A Guerra do Salão, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-ferramenta-de-garcom-garcom-digital-a-guerra-do-salao)
+Aprofundar: [O domínio do salão, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-ferramenta-de-garcom-garcom-digital-o-dominio-do-salao)
 
 ---
 
@@ -68,7 +68,7 @@ Aprofundar: [A Guerra do Salão, no Ecossistema](playbook:ecossistema-takeat#eco
 
 **No WhatsApp.** *"Sobre o controle que você quer: a ficha técnica te mostra a margem de cada prato desde a primeira semana."*
 
-Aprofundar: [A Guerra da Retaguarda, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-pdv-balcao-ficha-tecnica-cmv-precificacao-dinamica-a-guerra-da-retaguard) · [Conciliação Bancária OFX](playbook:conciliacao-ofx)
+Aprofundar: [A retaguarda do dono, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-pdv-balcao-ficha-tecnica-cmv-precificacao-dinamica-a-retaguarda-do-dono) · [Conciliação Bancária OFX](playbook:conciliacao-ofx)
 
 ---
 
@@ -86,7 +86,7 @@ Aprofundar: [A Guerra da Retaguarda, no Ecossistema](playbook:ecossistema-takeat
 
 **No WhatsApp.** *"Sobre fazer o cliente voltar: o cashback e o CRM chamam sua base de volta na semana fraca."*
 
-Aprofundar: [A Guerra da Retenção, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-fidelidade-recorrencia-crm-a-guerra-da-retencao)
+Aprofundar: [A base que volta, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-fidelidade-recorrencia-crm-a-base-que-volta)
 
 ---
 
@@ -104,7 +104,7 @@ Aprofundar: [A Guerra da Retenção, no Ecossistema](playbook:ecossistema-takeat
 
 **No WhatsApp.** *"Sobre o fechamento lento: a conta sai dividida na maquininha, na mesa, na hora."*
 
-Aprofundar: [A Guerra do Salão, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-ferramenta-de-garcom-garcom-digital-a-guerra-do-salao) · [Equipamentos](playbook:equipamentos)
+Aprofundar: [O domínio do salão, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-ferramenta-de-garcom-garcom-digital-o-dominio-do-salao) · [Equipamentos](playbook:equipamentos)
 
 ---
 
@@ -122,7 +122,7 @@ Aprofundar: [A Guerra do Salão, no Ecossistema](playbook:ecossistema-takeat#eco
 
 **No WhatsApp.** *"Sobre o estoque: a baixa é automática por ficha técnica — você sabe o que vai acabar antes de acabar."*
 
-Aprofundar: [A Guerra da Retaguarda, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-pdv-balcao-ficha-tecnica-cmv-precificacao-dinamica-a-guerra-da-retaguard)
+Aprofundar: [A retaguarda do dono, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-pdv-balcao-ficha-tecnica-cmv-precificacao-dinamica-a-retaguarda-do-dono)
 
 ---
 

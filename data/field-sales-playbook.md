@@ -4,15 +4,17 @@
 
 ### ECOSSISTEMA TAKEAT
 
-# O QUE A TAKEAT ENTREGA — Catálogo Completo de Soluções
+# O ecossistema e o comparativo contra a concorrência
+
+> *"Você não vende um PDV nem um cardápio digital. Você vende o fato de que todas as dores do restaurante se resolvem no mesmo lugar."*
 
 ### E o Estudo Comparativo Contra a Concorrência do Foodservice, Módulo por Módulo
 
 ***
 
-## Os 4 Pilares da Takeat — A Moldura de Tudo
+## Os 4 pilares da Takeat — a moldura de tudo
 
-Antes de qualquer módulo, isso é o que organiza a venda inteira. Toda solução da Takeat existe para servir pelo menos um destes 4 pilares — e a habilidade do executivo de elite é identificar **qual pilar dói mais** naquele restaurante específico, e liderar a conversa por ali:
+Antes de qualquer módulo, isso é o que organiza a venda inteira. Toda solução da Takeat existe para servir pelo menos um destes 4 pilares — e a habilidade do executivo Takeat é identificar **qual pilar dói mais** naquele restaurante específico, e liderar a conversa por ali:
 
 | Pilar                                    | O que significa na prática                                                                                                             |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -25,7 +27,7 @@ Antes de qualquer módulo, isso é o que organiza a venda inteira. Toda soluçã
 
 ***
 
-## O Ecossistema Takeat (Produto, Não Processo Comercial)
+## O ecossistema, módulo por módulo
 
 Isso é sobre o que a ferramenta **faz**, não sobre como o time vende.
 
@@ -111,9 +113,9 @@ O que resolve terça-feira vazia, base de clientes que ninguém usa e desconto c
 
 ***
 
-## O Fio Condutor de Tudo: Ecossistema Único, Não Módulos Soltos
+## O fio condutor: ecossistema único, não módulos soltos
 
-Antes de entrar na guerra módulo por módulo, isso precisa estar gravado como a mensagem-mãe: **o executivo nunca vende "um sistema de PDV" ou "um cardápio digital" isolado — ele vende o fato de que todas as dores do restaurante se resolvem no mesmo lugar.**
+Antes de entrar no módulo por módulo, isso precisa estar gravado como a mensagem-mãe: **o executivo nunca vende "um sistema de PDV" ou "um cardápio digital" isolado — ele vende o fato de que todas as dores do restaurante se resolvem no mesmo lugar.**
 
 É isso que separa a Takeat de praticamente todo concorrente mapeado nesse estudo: cada um deles resolve **uma fatia** (PDV, ou cardápio, ou fidelidade, ou financeiro) e o dono do restaurante acaba com 3, 4, 5 sistemas diferentes que não conversam entre si — o financeiro não sabe o que o PDV vendeu, o CMV é estimado no olho porque a ficha técnica está em outro lugar, a fidelidade não conversa com o histórico de pedido.
 
@@ -124,11 +126,11 @@ Isso vale pra qualquer um dos 19 módulos: a força de venda não está no módu
 
 ***
 
-## Estudo Comparativo Módulo por Módulo vs. Concorrência
+## O comparativo contra a concorrência
 
 Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, organizados por **onde a briga realmente acontece** — porque nem todo concorrente compete em todos os 19 módulos ao mesmo tempo. Saber isso evita que o executivo tente vender "ecossistema completo" pra quem só precisa ouvir sobre o ponto exato onde o concorrente atual dói.
 
-### Teka — IA de Atendimento (A Guerra do Robô de Delivery)
+### Teka — IA de Atendimento (o atendimento que não dorme)
 
 | Concorrente                  | Onde ele compete                                                               | Onde ele falha                                                                                                                                     | Ataque Takeat                                                                                                                                                                                  |
 | ---------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -138,7 +140,7 @@ Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, o
 
 **Dor que isso responde:** [Sem fidelização](playbook:mapa-dor-solucao#mapa-dor-solucao-sem-fidelizacao-a-terca-vazia) — a Teka é o braço que chama a base de volta.
 
-### PDV Balcão + Ficha Técnica + CMV + Precificação Dinâmica (A Guerra da Retaguarda)
+### PDV Balcão + Ficha Técnica + CMV + Precificação Dinâmica (a retaguarda do dono)
 
 | Concorrente                               | Onde ele compete                                                                     | Onde ele falha                                                                     | Ataque Takeat                                                                                                                                                                  |
 | ----------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -151,7 +153,7 @@ Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, o
 
 **Dores que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) e [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado). Para fechar o ciclo do dinheiro que entra: [Conciliação Bancária OFX](playbook:conciliacao-ofx).
 
-### Ferramenta de Garçom + Garçom Digital (A Guerra do Salão)
+### Ferramenta de Garçom + Garçom Digital (o domínio do salão)
 
 | Concorrente                  | Onde ele compete                                    | Onde ele falha                                                                      | Ataque Takeat                                                             |
 | ---------------------------- | --------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
@@ -161,7 +163,7 @@ Aqui cruzamos cada frente de produto com os concorrentes mapeados no playbook, o
 
 **Dores que isso responde:** [Falta de Garçom](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-garcom-dinheiro-deixado-na-mesa) e [Demora na divisão de contas](playbook:mapa-dor-solucao#mapa-dor-solucao-demora-na-divisao-de-contas-a-mesa-que-nao-gira).
 
-### Tablet + Totem (Experiência do Cliente + Redução de Custo — Onde Takeat Nem Entra na Guerra de Hardware)
+### Tablet + Totem (experiência do cliente e custo — a Takeat não vende hardware)
 
 O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que precisa ficar claro na hora de apresentar:
 
@@ -179,15 +181,15 @@ O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que pr
 
 **Dor que isso responde:** [Fila](playbook:mapa-dor-solucao#mapa-dor-solucao-fila-gente-desistindo-na-porta) — o totem atende a fila sem contratar ninguém.
 
-### Delivery Próprio (A Guerra da Taxa Abusiva de Marketplace)
+### Delivery Próprio (A taxa abusiva do marketplace)
 
 **Posicionamento oficial — canal complementar, não substituto. **O restaurante pode continuar no marketplace para ser descoberto por cliente novo. O Delivery Próprio existe para fazer duas coisas que o marketplace nunca vai fazer: **(1) tirar o cliente recorrente das taxas abusivas** — quem já conhece a casa passa a pedir pelo canal direto, sem comissão por pedido; e **(2) registrar os dados de quem pede** — nome, telefone, histórico e frequência ficam com o restaurante, alimentando o CRM, o Cashback e a Recorrência. No marketplace, esse cliente é da plataforma; no Delivery Próprio, ele é do dono.
 
 > *"Seu [Nome], me responde uma coisa: o senhor sabe o nome e o telefone do cliente que pediu do seu restaurante no marketplace ontem? Não sabe — porque aquele cliente não é seu, é da plataforma. E além de não te entregar o dado, ela fica com uma fatia da venda em cada pedido. Com o Delivery Próprio da Takeat, quem já conhece a sua casa pede direto no seu canal: o senhor não paga comissão e passa a ter o cadastro de quem pede, o que ele pede e de quanto em quanto tempo. Aí esse cliente entra no seu Cashback e volta sozinho. O senhor continua no marketplace pra ser descoberto por gente nova — mas para de pagar pedágio em cima do cliente que já era seu."*
 
-**O que completa esta guerra:** [Rota Inteligente](playbook:rota-inteligente) (canal próprio sem logística é meia solução) e [Dark Kitchen](playbook:dark-kitchen) (a mesma cozinha vendendo mais de uma marca).
+**O que completa esta frente:** [Rota Inteligente](playbook:rota-inteligente) (canal próprio sem logística é meia solução) e [Dark Kitchen](playbook:dark-kitchen) (a mesma cozinha vendendo mais de uma marca).
 
-### Fidelidade + Recorrência + CRM (A Guerra da Retenção)
+### Fidelidade + Recorrência + CRM (a base que volta)
 
 | Concorrente                 | Onde ele compete                           | Onde ele falha                                                                 | Ataque Takeat                                                     |
 | --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
@@ -196,18 +198,18 @@ O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que pr
 
 **Dor que isso responde:** [Sem fidelização](playbook:mapa-dor-solucao#mapa-dor-solucao-sem-fidelizacao-a-terca-vazia).
 
-### Gestão Financeira (A Guerra do Controle Gerencial)
+### Gestão Financeira (o controle que ele nunca teve)
 
 | Concorrente                   | Onde ele compete                       | Onde ele falha                                                                     | Ataque Takeat                                                                   |
 | ----------------------------- | -------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | **Colibri (NCR) / Zucchetti** | Sistemas antigos com módulo financeiro | Financeiro desconectado do operacional — exige revenda cara pra qualquer ajuste    | DRE automático gerado do próprio fluxo operacional, sem intervenção de terceiro |
 | **Linx / Degust**             | Financeiro robusto, mas engessado      | Processo lento pra qualquer mudança — feito pra franquia grande, não pro dono ágil | Gestão financeira em tempo real, ajustável pelo próprio dono
 
-**Dor que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe). Os dois adicionais que fecham a guerra: [Conciliação Bancária OFX](playbook:conciliacao-ofx) (o dinheiro que já era dele e não chegava) e [Multilojas / Franqueadora](playbook:multilojas) (a segunda unidade sem virar planilha).                    |
+**Dor que isso responde:** [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe). Os dois adicionais que fecham a frente: [Conciliação Bancária OFX](playbook:conciliacao-ofx) (o dinheiro que já era dele e não chegava) e [Multilojas / Franqueadora](playbook:multilojas) (a segunda unidade sem virar planilha).                    |
 
 ***
 
-## Como Usar Esse Cruzamento em Campo
+## Como usar esse cruzamento em campo
 
 A regra prática pro executivo: **primeiro descubra qual módulo dói mais** (usando o Scanner de 30 Segundos e a Solução Atual mapeada), **depois** puxe o ataque específico daquela linha — não o discurso genérico de "ecossistema completo". Um dono de restaurante que só sofre com PDV travando não quer ouvir sobre Totem; ele quer ouvir que o CMV dele vai parar de ser um mistério.
 
@@ -227,11 +229,11 @@ A regra prática pro executivo: **primeiro descubra qual módulo dói mais** (us
 
 # O padrão de quem domina uma praça
 
-> *"O amador acorda para ver o que a rua vai dar. O executivo Takeat sai de casa sabendo exatamente qual praça vai dominar hoje. Field Sales não é um trabalho de campo; é o domínio estratégico de um território."*
+> *"O amador acorda para ver o que a rua vai dar. O executivo de elite sai de casa sabendo exatamente qual praça vai dominar hoje. Field Sales não é um trabalho de campo; é o domínio estratégico de um território."*
 
 ## Mentalidade de dono
 
-A excelência no Field Sales começa na forma como você enxerga a sua praça. O vendedor comum visita clientes para bater uma meta isolada e ganhar o dia; o Executivo de Elite gerencia seu território como se fosse sua própria empresa e constrói um patrimônio de receita recorrente (MRR).
+A excelência no Field Sales começa na forma como você enxerga a sua praça. O vendedor comum visita clientes para bater uma meta isolada e ganhar o dia; o executivo Takeat gerencia seu território como se fosse sua própria empresa e constrói um patrimônio de receita recorrente (MRR).
 
 * **Inteligência de Campo Analítica:** Antes de dar o primeiro "bom dia" ao entrar em um restaurante, faça uma leitura clínica de 30 segundos do salão. Identifique o gargalo operacional antes de falar com o decisor:
 
@@ -243,7 +245,7 @@ A excelência no Field Sales começa na forma como você enxerga a sua praça. O
 
   * **A Regra de Ouro:** A sua venda nasce da dor real que você enxerga e expõe no balcão, nunca do slide bonito do seu tablet.
 
-* **Responsabilidade Ponta a Ponta:** O contrato assinado e o link do Asaas aprovado na mesa não são o fim da linha, são o nascimento do cliente na sua carteira. Acompanhar a primeira semana de uso e garantir que a implantação rode com perfeição é o que blinda o seu resultado contra o *churn* (cancelamento). O Executivo de Elite vende com tanta qualidade consultiva que nunca precisa vender duas vezes no mesmo endereço.
+* **Responsabilidade Ponta a Ponta:** O contrato assinado e o link do Asaas aprovado na mesa não são o fim da linha, são o nascimento do cliente na sua carteira. Acompanhar a primeira semana de uso e garantir que a implantação rode com perfeição é o que blinda o seu resultado contra o *churn* (cancelamento). O executivo Takeat vende com tanta qualidade consultiva que nunca precisa vender duas vezes no mesmo endereço.
 
 ## O pitch que fala a língua do dono
 
@@ -276,7 +278,7 @@ O mercado de São Paulo e das grandes capitais exige malícia comercial. Se a ab
 
 * **Ancoragem por Dados Reais (Prova Social de Impacto):** Nunca tente convencer um dono de restaurante usando hipóteses. Ande com o seu tablet ou celular munido de fotos reais de operações da região, vídeos do sistema rodando no pico e dados reais de dashboards da Takeat provando que a casa X aumentou o ticket médio em até 20% nas primeiras semanas. Contra lucro comprovado em tela, não existem argumentos.
 
-* **Follow-up de Valor (O Antivendedor Chatice):** Se o lead esfriou ou entrou em vácuo, nunca envie mensagens vazias como *"Olá, olhou a proposta?"*. Em vez disso, mande um insight de mercado, um vídeo curto da operação de um parceiro rodando no final de semana ou uma foto do concorrente dele tracionando forte com a nossa solução. Mostre que você está ali como um parceiro de negócios interessado no faturamento dele, não como um cobrador de contratos.
+* **Follow-up de Valor (O Antivendedor Chatice):** Se o lead esfriou ou entrou em vácuo, nunca envie mensagens vazias como *"Olá, olhou a proposta?"*. Em vez disso, mande uma leitura de mercado, um vídeo curto da operação de um parceiro rodando no final de semana ou uma foto do concorrente dele tracionando forte com a nossa solução. Mostre que você está ali como um parceiro de negócios interessado no faturamento dele, não como um cobrador de contratos.
 
 ## Domínio técnico
 
@@ -414,7 +416,7 @@ Prospecção externa com coaching, escalando a cadência até a meta plena do pl
 
 ## Resultado Esperado
 
-Ao concluir o programa, o executivo conduz apresentações com autonomia, sustenta **6 visitas diárias com qualidade** e representa a Takeat com consistência. Alta performance não nasce de treinamento teórico: nasce de **prática deliberada, acompanhamento próximo, feedback contínuo e exposição gradual ao mercado**. Esta é a filosofia Takeat.
+Ao concluir o programa, o executivo conduz apresentações com autonomia, sustenta **6 visitas diárias com qualidade** e representa a Takeat com consistência. Resultado alto não nasce de treinamento teórico: nasce de **prática deliberada, acompanhamento próximo, feedback contínuo e exposição gradual ao mercado**. Esta é a filosofia Takeat.
 
 Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourguignon Ribeiro) · Aprovação: Diretoria Comercial · Revisão: Nov 2026
 
@@ -431,6 +433,8 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 ### METAS & CADÊNCIA OFICIAL
 
 # Os números que valem — fonte única
+
+> *"Meta não é opinião. Se dois lugares deste playbook mostram números diferentes, o que vale é esta página — e é ela que o seu gestor vai abrir no 1:1."*
 
 **Esta é a única fonte de verdade dos números do Field Sales. **Se qualquer outra página do playbook mostrar um número diferente, vale o que está aqui. Todo o playbook foi recalibrado para este padrão em agosto/2026.
 
@@ -542,13 +546,13 @@ Versão 1.0 · Agosto 2026 · Responsável: Gestor de Field Sales. Qualquer alte
 ## O calendário semanal de corpo presente
 
 A regra é clara, inegociável e auditada via CRM: **Mínimo de 4 dias inteiros por semana em rota externa (asfalto).**\
-O escritório ou a mesa de casa servem apenas para organizar o exército; a guerra se ganha e o território se conquista na calçada do lojista.
+O escritório ou a mesa de casa servem para organizar o dia; a praça se conquista na calçada do lojista.
 
 ## O cronograma integrado
 
 #### 30 às 09:00 | Revisão de Campo: O Dia já está Ganho
 
-> *O amador planeja o dia quando acorda. O Executivo de Elite acorda com a rota pronta.*
+> *O amador planeja o dia quando acorda. O executivo Takeat acorda com a rota pronta.*
 
 Este é o bloco de preparação final. Antes de sair, o executivo precisa estar com o território, o funil e a estratégia do dia totalmente sob controle.
 
@@ -576,7 +580,7 @@ Este é o bloco de preparação final. Antes de sair, o executivo precisa estar 
 
 * **As Demos de Alto Nível (O Coração do KPI):** O seu dia só é considerado bem-sucedido se você realizar, no mínimo, **2 Demonstrações Práticas de alto nível na mesa por dia**. A regra de ouro: *A Demo só acontece se o decisor final (o dono ou o sócio operador) estiver sentado com você.* Não faça apresentação para quem não tem o poder de assinar o contrato.
 
-* **Visitas PAP de Oportunidade (Contaminação de Vizinhança):** Entre as reuniões agendadas, o Executivo de Elite domina o quarteirão. Visite todas as portas abertas da calçada. Use o nome do restaurante vizinho que você acabou de demonstrar ou instalar como alavanca de curiosidade: *"Seu [Nome], acabei de estruturar o fluxo ali do [Vizinho] e notei que o senhor sofre com o mesmo gargalo..."*
+* **Visitas PAP de Oportunidade (Contaminação de Vizinhança):** Entre as reuniões agendadas, o executivo Takeat domina o quarteirão. Visite todas as portas abertas da calçada. Use o nome do restaurante vizinho que você acabou de demonstrar ou instalar como alavanca de curiosidade: *"Seu [Nome], acabei de estruturar o fluxo ali do [Vizinho] e notei que o senhor sofre com o mesmo gargalo..."*
 
 * **Visitas de Relacionamento (Geração de LTV e Indicações Quentes):** Tem um cliente da base da Takeat rodando no mesmo bairro? Entre para tomar um café rápido de 5 minutos com ele. O relacionamento estreito blinda o contrato contra a concorrência e gera o ativo mais valioso de Field Sales: **a indicação qualificada**.
 
@@ -614,7 +618,7 @@ O aplicativo de Field Sales é a sua arma de agilidade. Ele existe para te liber
 
 ## A matemática do funil: previsibilidade
 
-No Field Sales de alta performance, o sucesso não depende da sorte, do humor do mercado ou do talento improvisado; depende estritamente de **processo, consistência e volume controlado**. Entender a matemática do funil dá ao executivo a clareza de que cada "não" recebido na calçada é apenas uma etapa estatística previsível que o aproxima do próximo fechamento.
+No Field Sales que dá resultado, o sucesso não depende da sorte, do humor do mercado ou do talento improvisado; depende estritamente de **processo, consistência e volume controlado**. Entender a matemática do funil dá ao executivo a clareza de que cada "não" recebido na calçada é apenas uma etapa estatística previsível que o aproxima do próximo fechamento.
 
 O nosso modelo é movido a taxas de conversão claras. Para garantir previsibilidade total e alcançar o resultado de 10 a 20 clientes novos no mês, o ritmo diário obrigatório de campo é a métrica oficial de **6 visitas por dia com qualidade** — menos porta, mais profundidade por porta: decisor identificado, hipótese preparada e registro completo em cada uma. É essa qualidade que sustenta a conversão maior por etapa e entrega o mesmo resultado final com menos desgaste de rua.
 
@@ -636,9 +640,9 @@ O nosso modelo é movido a taxas de conversão claras. Para garantir previsibili
 
 ## Microrrotas: como multiplicar o mesmo esforço
 
-> *"O amador escolhe a próxima porta pela conveniência do momento. O top performer já sabia qual seria a 6ª porta do dia antes de bater na 1ª."*
+> *"O amador escolhe a próxima porta pela conveniência do momento. A referência do time já sabia qual seria a 6ª porta do dia antes de bater na 1ª."*
 
-O maior diferencial entre um executivo mediano e um top performer não é quantas portas ele bate — é **quanto tempo ele perde entre uma porta e outra**. Cada minuto andando de um estabelecimento distante para outro é minuto que não vira visita, não vira decisor, não vira contrato.
+O maior diferencial entre um executivo mediano e uma referência do time não é quantas portas ele bate — é **quanto tempo ele perde entre uma porta e outra**. Cada minuto andando de um estabelecimento distante para outro é minuto que não vira visita, não vira decisor, não vira contrato.
 
 #### O Princípio da Microrrota
 
@@ -670,7 +674,7 @@ Vendas só se tornam ciência previsível se os dados forem reais — e capturad
 
   3. **A Maior Dor Mapeada:** o calcanhar de Aquiles do negócio (ex: *"Sofre com perda de pedidos no pico"*, *"Gasta 6 horas por mês cruzando estoque manualmente"*). Este dado é o gatilho mental mais forte que abre a Demonstração.
 
-* **A cadência trabalha por você depois que você registra:** a partir do momento em que o lead é criado, o sistema já passa a cobrar o próximo passo sozinho — se em 3 dias ninguém voltou pra confirmar o decisor, ou se uma proposta ficou 7 dias sem resposta, isso vira tarefa automática, não depende da sua memória. **O seu trabalho no fim da visita é só registrar direito — o sistema garante que ninguém esqueça o que vem depois.** Isso é o que separa um funil de top performer de um funil que vive de boa vontade: a disciplina não depende do seu cansaço no fim do dia.
+* **A cadência trabalha por você depois que você registra:** a partir do momento em que o lead é criado, o sistema já passa a cobrar o próximo passo sozinho — se em 3 dias ninguém voltou pra confirmar o decisor, ou se uma proposta ficou 7 dias sem resposta, isso vira tarefa automática, não depende da sua memória. **O seu trabalho no fim da visita é só registrar direito — o sistema garante que ninguém esqueça o que vem depois.** Isso é o que separa um funil de quem bate meta de um funil que vive de boa vontade: a disciplina não depende do seu cansaço no fim do dia.
 
 ***
 
@@ -737,7 +741,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 3. **Ele registra no calor da ação, nunca à noite de memória.** Dado reconstruído de memória é sempre pior que dado capturado na hora — e o app existe exatamente para eliminar essa perda de qualidade.
 
-4. **Ele confia na cadência do sistema, não na própria lembrança.** Top performer não tenta lembrar sozinho quem precisa de follow-up hoje — ele confia que o sistema vai cobrar, e usa a energia mental pra vender, não pra controlar planilha.
+4. **Ele confia na cadência do sistema, não na própria lembrança.** Quem bate meta não tenta lembrar sozinho quem precisa de follow-up hoje — ele confia que o sistema vai cobrar, e usa a energia mental pra vender, não pra controlar planilha.
 
 5. **Ele já sabe a próxima porta antes de sair da atual.** Rota pensada na noite anterior, nunca decidida em pé na calçada.
 
@@ -755,6 +759,8 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 # Prospecção com dados: escolha a porta antes de sair
 
+> *"Andar muito não é trabalhar muito. O dia rende quando você escolhe o quarteirão antes de calçar o sapato."*
+
 ## Escolher antes de andar
 
 O porta a porta cobre o quarteirão com o pé; a prospecção por dados escolhe **qual** quarteirão merece o seu dia. O objetivo aqui é usar ferramentas estratégicas para mapear o ICP de alto valor (R$349) antes mesmo de pisar no restaurante ou fazer a primeira ligação.
@@ -769,7 +775,7 @@ A inteligência de dados serve para o executivo chegar com o timing perfeito e o
 
 * **O Cenário:** Casas novas estão moldando processos. Muitas vezes sofrem com a falta de braço técnico, não têm um sistema integrado ou estão assustadas com o custo da folha de pagamento de garçons.
 
-* **A Visão de Elite:** O maior erro de um restaurante é desenhar a operação física antes de definir a tecnologia.
+* **A leitura:** O maior erro de um restaurante é desenhar a operação física antes de definir a tecnologia.
 
 * **O Script Consultivo (Gatilho do "Nascimento Certo"):**
 
@@ -806,7 +812,7 @@ O Google Maps é a melhor ferramenta gratuita para desenhar rotas de campo intel
 
 O Instagram é a fachada digital do restaurante. Nós usamos a rede social para encontrar o tom de voz do cliente, descobrir quem é o dono (geralmente marcado nas fotos ou seguindo o perfil) e gerar conexões de alto valor.
 
-### As Boas Práticas do Direct de Elite:
+### As Boas práticas do direct:
 
 * **Nunca mande textão com panfleto digital:** Textões corporativos são ignorados e geram bloqueio instantâneo.
 
@@ -1001,6 +1007,10 @@ Use quando o decisor sinaliza "estou bem como estou" — o objetivo é fazer ele
 
 ### CONCORRÊNCIA
 
+# Concorrência: os três tipos, e onde cada um falha
+
+> *"Na rua não existem dez concorrentes: existem três tipos. Reconhecer o tipo em 10 segundos vale mais que decorar os dez nomes."*
+
 O estudo comparativo completo — os 19 módulos, os 4 Pilares, a Teka (IA de atendimento), a Precificação Dinâmica e o Delivery Próprio como resposta à comissão de marketplace — vive na página **ECOSSISTEMA TAKEAT**, incluindo o battlecard módulo por módulo contra cada concorrente mapeado. Esta página existia como uma versão paralela de 13 módulos — foi consolidada na Ecossistema Takeat pra não ter duas fontes divergentes sobre a mesma coisa.
 
 **Referência rápida — onde cada concorrente compete:**
@@ -1020,7 +1030,48 @@ O estudo comparativo completo — os 19 módulos, os 4 Pilares, a Teka (IA de at
 
 Pra usar cada um desses em campo — o discurso completo, os punches prontos e os scripts de objeção — vá na página **ECOSSISTEMA TAKEAT**.
 
-# Os comparativos públicos — e por que você deve conhecê-los antes do cliente
+
+## Os 3 tipos de concorrente — e a pergunta que desarma cada um
+
+A tabela acima lista **nomes**. Na rua você encontra **três tipos**, e o tipo decide a conversa. Reconhecer o tipo em 10 segundos vale mais que decorar os dez nomes.
+
+### O PDV legado — Yooga, PDVLegal, Totvs, Consumer, GrandChef, Colibri, Linx, Degust
+
+**Como ele se apresenta:** já está instalado, o dono pagou por ele, e alguém da casa aprendeu a usar. A objeção que vem daqui é *"já tenho sistema"*.
+
+**Onde ele sempre falha:** ele **registra** a operação e não **explica** a operação. Emite nota, fecha caixa, imprime cupom — e não diz a margem de um prato. O financeiro, quando existe, é desconectado do operacional e depende de revenda para qualquer ajuste.
+
+**A pergunta que desarma:** *"O sistema que o senhor tem hoje te diz a margem do seu prato mais vendido — ou só o quanto entrou no caixa?"*
+
+Quase sempre a resposta é "só o caixa". A partir daí não é mais troca de sistema: é ganhar uma informação que ele nunca teve. Aprofundar: [Falta de Gestão no mapa](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe).
+
+### O marketplace — iFood e afins
+
+**Como ele se apresenta:** não é concorrente de software, é **concorrente de margem e de posse do cliente**. O dono nem pensa nele como sistema; pensa como canal de venda.
+
+**Onde ele sempre falha:** o cliente é da plataforma, não da casa. O dono não sabe nome, telefone nem frequência de quem pediu ontem — e paga comissão sobre o cliente que já era dele.
+
+**A pergunta que desarma:** *"O senhor sabe o nome e o telefone de quem pediu do seu restaurante ontem pelo aplicativo?"*
+
+**Nunca ataque o marketplace de frente.** A posição oficial é **canal complementar, não substituto**: ele continua lá para ser descoberto por cliente novo, e para de pagar pedágio no cliente recorrente. Aprofundar: [Sem fidelização no mapa](playbook:mapa-dor-solucao#mapa-dor-solucao-sem-fidelizacao-a-terca-vazia) · [Rota Inteligente](playbook:rota-inteligente).
+
+### A planilha e o caderno — o concorrente mais forte de todos
+
+**Como ele se apresenta:** *"eu controlo na minha planilha"*, *"está tudo na minha cabeça"*, *"meu restaurante é pequeno"*. É o concorrente **mais comum** e o que mais vendas mata, porque é grátis e o dono confia nele.
+
+**Onde ele sempre falha:** ele depende de uma pessoa e não avisa nada. Planilha não manda alerta quando o insumo vai acabar, não avisa que a taxa da maquininha subiu, não compara duas lojas. E some junto com quem a mantinha.
+
+**A pergunta que desarma:** *"Se o senhor precisar viajar uma semana, quem lê a sua planilha?"*
+
+**Não discuta a planilha — discuta o que ela não faz.** Quem controla no caderno já provou que se importa com controle: é o melhor perfil que existe, não o pior. Aprofundar: [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) · [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado) · [Conciliação Bancária OFX](playbook:conciliacao-ofx).
+
+> **A regra dos três:** o PDV legado se ataca com **margem**, o marketplace com **posse do cliente**, o caderno com **o que ele não avisa**. Trocar o argumento de tipo é o erro mais caro — falar de margem para quem sofre com comissão de marketplace soa a discurso decorado.
+
+***
+
+***
+
+## Onde está o battlecard completo
 
 Nós publicamos **oito comparativos lado a lado** em `takeat.app/comparativos`: Saipos, Cardápio Web, Repediu, Yooga, Consumer, Colibri, Anota AI e Goomer. Cada um tem data de revisão e uma matriz de **15 recursos** em quatro blocos (operação, canais de venda, financeiro, suporte e implantação).
 
@@ -1041,46 +1092,7 @@ E há recursos onde o comparativo marca o concorrente como **"a verificar"** —
 
 > **Modelo de preço, para a comparação de custo:** os nossos planos incluem os módulos (sem cobrança separada por PDV, cardápio, delivery próprio ou CRM). Vários concorrentes cobram **por módulo**, com valor sob consulta e licença mensal por unidade. Quando o dono compara mensalidade com mensalidade, ele quase sempre está comparando o nosso pacote com o módulo base do outro — desdobre isso item por item antes de discutir desconto.
 
-## Os 3 tipos de concorrente — e a pergunta que desarma cada um
-
-A tabela acima lista **nomes**. Na rua você encontra **três tipos**, e o tipo decide a conversa. Reconhecer o tipo em 10 segundos vale mais que decorar os dez nomes.
-
-### O PDV legado — Yooga, PDVLegal, Totvs, Consumer, GrandChef, Colibri, Linx, Degust
-
-**Como ele se apresenta:** já está instalado, o dono pagou por ele, e alguém da casa aprendeu a usar. A objeção que vem daqui é *"já tenho sistema"*.
-
-**Onde ele sempre falha:** ele **registra** a operação e não **explica** a operação. Emite nota, fecha caixa, imprime cupom — e não diz a margem de um prato. O financeiro, quando existe, é desconectado do operacional e depende de revenda para qualquer ajuste.
-
-**A pergunta que desarma:** *"O sistema que o senhor tem hoje te diz a margem do seu prato mais vendido — ou só o quanto entrou no caixa?"*
-
-Quase sempre a resposta é "só o caixa". A partir daí não é mais troca de sistema: é ganhar uma informação que ele nunca teve. Aprofundar: [Falta de Gestão no mapa](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe).
-
-## O marketplace — iFood e afins
-
-**Como ele se apresenta:** não é concorrente de software, é **concorrente de margem e de posse do cliente**. O dono nem pensa nele como sistema; pensa como canal de venda.
-
-**Onde ele sempre falha:** o cliente é da plataforma, não da casa. O dono não sabe nome, telefone nem frequência de quem pediu ontem — e paga comissão sobre o cliente que já era dele.
-
-**A pergunta que desarma:** *"O senhor sabe o nome e o telefone de quem pediu do seu restaurante ontem pelo aplicativo?"*
-
-**Nunca ataque o marketplace de frente.** A posição oficial é **canal complementar, não substituto**: ele continua lá para ser descoberto por cliente novo, e para de pagar pedágio no cliente recorrente. Aprofundar: [Sem fidelização no mapa](playbook:mapa-dor-solucao#mapa-dor-solucao-sem-fidelizacao-a-terca-vazia) · [Rota Inteligente](playbook:rota-inteligente).
-
-## A planilha e o caderno — o concorrente mais forte de todos
-
-**Como ele se apresenta:** *"eu controlo na minha planilha"*, *"está tudo na minha cabeça"*, *"meu restaurante é pequeno"*. É o concorrente **mais comum** e o que mais vendas mata, porque é grátis e o dono confia nele.
-
-**Onde ele sempre falha:** ele depende de uma pessoa e não avisa nada. Planilha não manda alerta quando o insumo vai acabar, não avisa que a taxa da maquininha subiu, não compara duas lojas. E some junto com quem a mantinha.
-
-**A pergunta que desarma:** *"Se o senhor precisar viajar uma semana, quem lê a sua planilha?"*
-
-**Não discuta a planilha — discuta o que ela não faz.** Quem controla no caderno já provou que se importa com controle: é o melhor perfil que existe, não o pior. Aprofundar: [Falta de Gestão](playbook:mapa-dor-solucao#mapa-dor-solucao-falta-de-gestao-margem-que-ninguem-sabe) · [Estoque](playbook:mapa-dor-solucao#mapa-dor-solucao-estoque-venda-recusada-com-o-cliente-sentado) · [Conciliação Bancária OFX](playbook:conciliacao-ofx).
-
-> **A regra dos três:** o PDV legado se ataca com **margem**, o marketplace com **posse do cliente**, o caderno com **o que ele não avisa**. Trocar o argumento de tipo é o erro mais caro — falar de margem para quem sofre com comissão de marketplace soa a discurso decorado.
-
 ***
-
-***
-
 ## O que fazer agora
 
 - Descubra qual sistema ele usa hoje ANTES de comparar qualquer coisa. Comparação sem alvo é discurso genérico.
@@ -1097,9 +1109,9 @@ Quase sempre a resposta é "só o caixa". A partir daí não é mais troca de si
 
 ***
 
-### A Realidade do Fechamento: Ninguém Fecha de Primeira (e Tudo Bem)
+### Ninguém fecha de primeira, e tudo bem
 
-Quem dera se toda demo terminasse com o Pix na hora. Não termina — e um top performer não trata isso como falha, trata como **a régua real do jogo**. A diferença entre o executivo mediano e o de elite não é fechar mais na primeira visita; é **ter um sistema tão preciso de retorno que o "não fechei hoje" nunca vira "esqueci desse lead"**.
+Quem dera se toda demo terminasse com o Pix na hora. Não termina — e quem bate meta não trata isso como falha, trata como **a régua real do jogo**. A diferença entre o executivo mediano e o Takeat não é fechar mais na primeira visita; é **ter um sistema tão preciso de retorno que o "não fechei hoje" nunca vira "esqueci desse lead"**.
 
 Isso muda a forma de encarar follow-up: não é um plano B pra quando a venda não sai de primeira. É **a maior parte do jogo**, e por isso tem que ser tratado com tanto rigor de processo quanto a própria abordagem de porta. Cada etapa do funil, a partir de agora, tem um prazo máximo — e uma estratégia de campo específica pra cada momento desse prazo.
 
@@ -1193,7 +1205,7 @@ Com o aplicativo de Field Sales ativo, a organização das suas tarefas de acomp
    └── 40% Intervenção de Follow-up (Visitas presenciais a leads a < 5 min de distância)
 ```
 
-* **Custo de Deslocamento Zero:** é terminantemente proibido cruzar a cidade para fazer apenas uma visita de fechamento. O Executivo de Elite "cerca" o perímetro. Se o aplicativo mostra que você tem 3 propostas abertas na região X, a sua missão do dia é bater nessas 3 portas para coletar o dinheiro do setup e abrir mais 5 leads novos nos vizinhos de muro.
+* **Custo de Deslocamento Zero:** é terminantemente proibido cruzar a cidade para fazer apenas uma visita de fechamento. O executivo Takeat "cerca" o perímetro. Se o aplicativo mostra que você tem 3 propostas abertas na região X, a sua missão do dia é bater nessas 3 portas para coletar o dinheiro do setup e abrir mais 5 leads novos nos vizinhos de muro.
 
 * **O app já sabe quem está no prazo crítico:** como as tarefas de cadência são automáticas por etapa, o app aponta sozinho quais leads da sua microrrota de hoje estão prestes a estourar o SLA — você não precisa lembrar, só precisar olhar a rota antes de sair de casa.
 
@@ -1225,7 +1237,7 @@ Com o aplicativo de Field Sales ativo, a organização das suas tarefas de acomp
 
 # WhatsApp conecta, o asfalto converte
 
-### A Mentalidade do Executivo de Elite: O WhatsApp Conecta, o Asfalto Converte
+> *"Mensagem serve para marcar a hora. Quem fecha é o corpo presente, na mesa dele."*
 
 No ecossistema da Takeat, o WhatsApp e as ligações telefônicas **nunca** são canais de fechamento de vendas. O executivo de excelência do Field Sales sabe que o cliente só sente segurança, enxerga valor real e abre o caixa quando você está **presencialmente no balcão dele**.
 
@@ -1239,7 +1251,7 @@ Quando o cliente tentar puxar a negociação para o ambiente digital para econom
 
 * **O Erro Comum:** Mandar o arquivo e ficar rezando por uma resposta no vácuo.
 
-* **A Quebra de Elite:** Use o material como uma isca curta para travar o horário.
+* **A quebra:** Use o material como uma isca curta para travar o horário.
 
 > *"Com certeza, seu [Nome]! Já te mandei o portfólio aí. Mas a verdade é que o papel aceita tudo e o que eu tenho aqui mexe direto com o lucro do seu salão no próximo final de semana. Como estou mapeando a sua região hoje e atendendo um parceiro bem do seu lado, eu faço questão de passar aí 15 minutos para te mostrar no tablet como essa engenharia funciona na prática. O senhor está na casa hoje às 14h ou às 16h fica melhor?"*
 
@@ -1247,7 +1259,7 @@ Quando o cliente tentar puxar a negociação para o ambiente digital para econom
 
 * **O Erro Comum:** Soltar o preço no texto e ver o lead sumir. Preço sem valor percebido presencialmente parece caro.
 
-* **A Quebra de Elite:** Ancore o ganho e empurre para a mesa.
+* **A quebra:** Ancore o ganho e empurre para a mesa.
 
 > *"Seu [Nome], o investimento varia de acordo com o tamanho do seu salão e o número de mesas, mas garanto que a nossa mensalidade custa menos do que o desperdício que o processo manual de comanda causa na sua cozinha em um único sábado de movimento. Como eu preciso calcular o seu ganho de eficiência real, estou passando na sua rua amanhã. O período da manhã ou da tarde é mais tranquilo para tomarmos um café rápido e fazermos essa conta juntos?"*
 
@@ -1255,7 +1267,7 @@ Quando o cliente tentar puxar a negociação para o ambiente digital para econom
 
 * **O Erro Comum:** Responder "tudo bem, quando tiver tempo me avisa".
 
-* **A Quebra de Elite:** Use a falta de tempo como o principal motivo para você entrar pela porta.
+* **A quebra:** Use a falta de tempo como o principal motivo para você entrar pela porta.
 
 > *"Eu entendo perfeitamente, seu [Nome]. Dono de restaurante faturando alto nunca para! Mas é exatamente por isso que a Takeat existe: para tirar o senhor do operacional e te devolver tempo. Como estou exatamente na sua rua agora fazendo uma auditoria, tenho uma brecha de 10 minutos. É o tempo de eu te mostrar como colocar o salão para rodar no automático e parar de apagar incêndio. Estou estacionando aqui na frente, nos vemos em 2 minutos!"*
 
@@ -1285,20 +1297,22 @@ O WhatsApp serve apenas para plantar a curiosidade e alinhar o trajeto. O execut
 
 ### QUEBRA DE OBJEÇÕES
 
-# QUEBRA DE OBJEÇÕES DE IMPACTO: O XEQUE-MATE NO BALCÃO
+# Objeções: a conversa é sobre margem
 
-## A Mentalidade de Elite: Nós Não Discutimos Preço, Nós Discutimos Margem
+> *"Se o dono achou caro, ele não comparou preço: ele não viu margem. Objeção de preço é conta mal feita, e conta se refaz na mesa."*
+
+## Aqui não se discute preço, se discute margem
 
 Um executivo da Takeat não vende "software" ou "QR Code". Nós vendemos **Lucro e Tempo**.\
 Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um custo e não como uma cura. Dono de restaurante só se move por duas coisas: **ganhar dinheiro** ou **parar de perder dinheiro**. A nossa quebra de objeção sempre termina empurrando o cliente para o link de ativação.
 
-## As 5 Objeções Supremas de Campo (Mesa do Dono)
+## As 5 objeções de mesa
 
 #### "O sistema de vocês é caro / Não tenho o valor do setup agora."
 
 * **O Erro do Vendedor:** Tentar dar desconto ou recuar.
 
-* **O Diagnóstico de Elite:** Ele está tratando a Takeat como uma conta a mais, não como um funcionário que se paga.
+* **O diagnóstico:** Ele está tratando a Takeat como uma conta a mais, não como um funcionário que se paga.
 
 * **A Resposta Direta:**
 
@@ -1308,7 +1322,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **O Erro do Vendedor:** Falar mal do concorrente.
 
-* **O Diagnóstico de Elite:** Zona de conforto. O cliente confunde "tirar pedido" com "gerar lucro".
+* **O diagnóstico:** Zona de conforto. O cliente confunde "tirar pedido" com "gerar lucro".
 
 * **A Resposta Direta:**
 
@@ -1318,17 +1332,17 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **O Erro do Vendedor:** Dizer que o garçom vai sumir.
 
-* **O Diagnóstico de Elite:** Medo de rejeição do público mais velho ou perda de essência.
+* **O diagnóstico:** Medo de rejeição do público mais velho ou perda de essência.
 
 * **A Resposta Direta:**
 
-> *"Eu respeito muito a tradição da sua casa, seu [Nome]. E a Takeat foi feita para potencializar isso, não para destruir. O QR Code e a Maquininha Smart atendem o cliente que quer velocidade: aquele cara que quer a segunda cerveja ou a conta na hora e não quer ficar caçando o garçom com a mão levantada. Quem quer o papel continua com o papel. A diferença é que agora o seu garçom não está mais sobrecarregado correndo para o computador; ele tem tempo para ser um consultor, sugerir um vinho caro e dar um atendimento de elite para o cliente tradicional. É o melhor dos dois mundos. Faz o Pix do setup aqui comigo e vamos configurar essa dinâmica no seu salão."*
+> *"Eu respeito muito a tradição da sua casa, seu [Nome]. E a Takeat foi feita para potencializar isso, não para destruir. O QR Code e a Maquininha Smart atendem o cliente que quer velocidade: aquele cara que quer a segunda cerveja ou a conta na hora e não quer ficar caçando o garçom com a mão levantada. Quem quer o papel continua com o papel. A diferença é que agora o seu garçom não está mais sobrecarregado correndo para o computador; ele tem tempo para ser um consultor, sugerir um vinho caro e dar um atendimento impecável para o cliente tradicional. É o melhor dos dois mundos. Faz o Pix do setup aqui comigo e vamos configurar essa dinâmica no seu salão."*
 
 #### "Meu restaurante é pequeno, não preciso de tanta tecnologia ou controle robusto."
 
 * **O Erro do Vendedor:** Concordar e oferecer um plano "capado".
 
-* **O Diagnóstico de Elite:** Cegueira de gestão. O dono acha que faturamento alto é sinônimo de bolso cheio.
+* **O diagnóstico:** Cegueira de gestão. O dono acha que faturamento alto é sinônimo de bolso cheio.
 
 * **A Resposta Direta:**
 
@@ -1338,7 +1352,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **O Erro do Vendedor:** Gaguejar ou tentar explicar termos técnicos de TI.
 
-* **O Diagnóstico de Elite:** Medo de colapso operacional e perda de controle.
+* **O diagnóstico:** Medo de colapso operacional e perda de controle.
 
 * **A Resposta Direta:**
 
@@ -1346,7 +1360,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 ** REGRA DE HONESTIDADE COMERCIAL: **nunca prometa "PDV offline" hoje — o módulo está em desenvolvimento (ver FAQ). Prometer offline fecha contrato e gera churn na primeira queda de internet, além de queimar a sua credibilidade na praça. A contingência real e vendável é 4G/5G nas Maquininhas Smart + internet estável de 50mb.
 
-## A Técnica Suprema: O Fechamento por Contraste (O Xeque-Mate)
+## Fechamento por contraste
 
 Sempre que terminar de rebater a objeção principal, o executivo deve desenhar os dois cenários na mesa, forçando o cliente a escolher entre o **prejuízo garantido** e o **lucro imediato**.
 
@@ -1355,9 +1369,9 @@ Sempre que terminar de rebater a objeção principal, o executivo deve desenhar 
 > **Cenário B (O Ecossistema Takeat):** *Operação automatizada, cliente pedindo e pagando na mesa, entrega roteirizada economizando combustível, e o senhor com o DRE e o controle de CMV na palma da mão pelo celular.*\
 > *Continuar no Cenário A está te custando tempo, clientes e dinheiro todos os dias. O Cenário B custa R$ 11 por dia e começa a rodar assim que o senhor pagar a ativação. Vamos liquidar o Pix do setup agora para o meu time virar o seu jogo?"*
 
-## Checklist de Bolso para o Executivo de Rua
+## Checklist de bolso
 
-O vendedor de elite só sai do restaurante se bater os 3 pontos:
+O vendedor Takeat só sai do restaurante se bater os 3 pontos:
 
 1. [ ] Fez o cliente verbalizar e admitir a dor da operação.
 
@@ -1377,9 +1391,11 @@ O vendedor de elite só sai do restaurante se bater os 3 pontos:
 
 ### TÉCNICAS DE FECHAMENTO
 
-# A ARTE DO FECHAMENTO: RITO DE PAGAMENTO IMEDIATO NA MESA
+# Fechamento: o pagamento acontece na mesa
 
-## A Nova Mentalidade do Fechador de Elite
+> *"'Amei, vou fechar' não é venda. Venda é o Asaas acusando o setup pago, com você ainda sentado na frente dele."*
+
+## Fechar é serviço, não é pedir permissão
 
 O cliente verbalizar que "amou a solução e vai fechar" **não significa absolutamente nada**. No mercado de foodservice, a venda só existe quando o financeiro acusa o pagamento do setup no Asaas.
 
@@ -1387,7 +1403,7 @@ O dono de restaurante vive em um caos diário. Se você aceitar o *"pode ir indo
 
 >  **REGRA DE OURO DA TAKEAT:** O vencimento da primeira mensalidade sempre vai ficar para a data escolhida pelo cliente (ex: todo dia 05 ou 10 após o envio dos dados), **mas o valor do Setup/Ativação tem que ser pago na hora, na mesa, olho no olho.** Nós não trabalhamos de graça na montagem do cardápio. O projeto só nasce com o comprovante na tela.
 
-## A Transição Cirúrgica: Ancoragem de Valor e Abertura do Asaas
+## A transição: da demo ao Asaas aberto
 
 Assim que terminar a Demo, você faz o fechamento micro e separa as duas coisas na cabeça do cliente:
 
@@ -1397,7 +1413,7 @@ Assim que terminar a Demo, você faz o fechamento micro e separa as duas coisas 
 > **Cliente:** *"Fica ótimo."*\
 > **Executivo:** *"Perfeito. A mensalidade só vence lá na frente. Agora, para eu liberar a sua ordem de serviço e a nossa engenharia começar a digitar e estruturar o seu cardápio ainda hoje, eu gerei o link da sua Taxa de Ativação aqui na tela. Dá uma olhada no seu WhatsApp por gentileza."*
 
-## Quebrando o Gargalo: Como Travar o Pagamento do Setup na Mesa
+## Trave o pagamento do setup na mesa
 
 Assim que o cliente abrir o WhatsApp na sua frente, use uma das abordagens abaixo para garantir que o Pix ou o Cartão do setup mude de status no Asaas antes de você se levantar:
 
@@ -1413,13 +1429,13 @@ Assim que o cliente abrir o WhatsApp na sua frente, use uma das abordagens abaix
 
 > *"Seu [Nome], nós vamos customizar toda a sua retaguarda e digitalizar o seu cardápio do zero. Isso exige horas de trabalho do nosso time técnico antes mesmo de você pagar a sua primeira mensalidade. O pagamento dessa taxa de ativação agora é o que firma o nosso compromisso mútuo de parceria. Vamos abrir o link juntos? Você faz o Pix agora, nós selamos o negócio e eu já saio daqui com a sua data de inauguração travada."*
 
-## Como Destravar as Desculpas de Enrolação no Pagamento
+## Destrave as desculpas de pagamento
 
 * **Objeção: "Pode ir embora que eu pago o link do setup mais tarde, juro."**
 
-  * **Resposta de Elite:** *"Seu [Nome], eu confio plenamente no senhor, mas o meu sistema é automatizado (sorria). Se eu sair daqui sem o sinal verde da ativação no Asaas, o HubSpot joga seu card para o fim da fila e o time de implantação não consegue nem abrir o seu arquivo para começar o cardápio. A mensalidade já está protegida para o dia X, vamos só liquidar essa ativação em 30 segundos no seu app de banco para eu te dar o protocolo de prioridade máxima. Prefere Pix ou cartão?"*
+  * **A resposta:** *"Seu [Nome], eu confio plenamente no senhor, mas o meu sistema é automatizado (sorria). Se eu sair daqui sem o sinal verde da ativação no Asaas, o HubSpot joga seu card para o fim da fila e o time de implantação não consegue nem abrir o seu arquivo para começar o cardápio. A mensalidade já está protegida para o dia X, vamos só liquidar essa ativação em 30 segundos no seu app de banco para eu te dar o protocolo de prioridade máxima. Prefere Pix ou cartão?"*
 
-## Checklist Inegociável para Encerrar a Visita
+## Checklist inegociável para encerrar a visita
 
 O executivo da Takeat só se levanta da cadeira após cumprir o checklist:
 
@@ -1441,11 +1457,13 @@ O executivo da Takeat só se levanta da cadeira após cumprir o checklist:
 
 ### CLIENTES X MRR
 
-# INTELIGÊNCIA COMERCIAL – DOMÍNIO DE TERRITÓRIO, MRR ALVO E BLINDAGEM DE CARTEIRA
+# Volume × valor: a conta da sua carteira
 
-## A Visão de Dono: O Equilíbrio entre Volume e Valor
+> *"Sua carteira não é uma lista de clientes: é um patrimônio de MRR. Volume enche o mapa, valor sustenta a comissão — e você precisa dos dois."*
 
-Um executivo de elite na Takeat não corre atrás de "vendas isoladas"; ele atua como um **diretor de expansão da sua própria carteira**. Para construir um portfólio altamente rentável, saudável e resiliente, o profissional de campo precisa equilibrar com maestria dois motores estratégicos: o **Volume de Ativações** (Presença) e a **Geração de MRR de Alto Valor** (Margem).
+## Visão de dono: o equilíbrio entre volume e valor
+
+Um executivo Takeat na Takeat não corre atrás de "vendas isoladas"; ele atua como um **diretor de expansão da sua própria carteira**. Para construir um portfólio altamente rentável, saudável e resiliente, o profissional de campo precisa equilibrar com maestria dois motores estratégicos: o **Volume de Ativações** (Presença) e a **Geração de MRR de Alto Valor** (Margem).
 
 ```text
    ┌─────────────────────────────────────────────────────────┐
@@ -1460,7 +1478,7 @@ Um executivo de elite na Takeat não corre atrás de "vendas isoladas"; ele atua
    └────────────────────────────┴────────────────────────────┘
 ```
 
-## A Métrica do Volume: O Fenômeno da "Mancha de Bairro"
+## O fenômeno da mancha de bairro
 
 No Field Sales, **ocupação de território é poder de conversão**. Nós nunca deixamos de atender ou vender para operações menores, pois elas cumprem um papel fundamental na nossa estratégia de crescimento: a **construção da barreira de mercado local**.
 
@@ -1470,11 +1488,11 @@ No Field Sales, **ocupação de território é poder de conversão**. Nós nunca
 
 * **Autoridade Local:** Dominar um perímetro geográfico reduz o seu tempo de deslocamento de follow-up, otimiza o suporte presencial e transforma você na referência máxima de tecnologia para aquela região.
 
-## O Foco no MRR Estratégico: O Alvo de R$ 400,00
+## O MRR alvo de R$ 400,00
 
 Se o volume traz relevância e autoridade na rua, o **MRR (Receita Recorrente Mensal) Alto** é o que traz a sustentabilidade da carteira e o ganho real de comissão para o bolso do executivo. O nosso ICP (Perfil de Cliente Ideal) prioritário foca no plano de **R$ 400,00+**.
 
-### Por que focar no ICP de R$ 400,00?
+### Por que focar no cliente de R$ 400,00
 
 1. **Parceria de Longo Prazo e Menor Churn:** O cliente que investe em um plano de valor agregado superior possui uma operação estruturada, faturamento maduro e maturidade empresarial. Ele encara a Takeat como um investimento que gera retorno sobre o capital (ROI), e não como uma despesa. O resultado? Um **LTV (Lifetime Value)** drasticamente maior.
 
@@ -1482,11 +1500,11 @@ Se o volume traz relevância e autoridade na rua, o **MRR (Receita Recorrente Me
 
 3. **Rede de Indicações Qualificadas:** Donos de grandes casas frequentam os mesmos círculos de investidores e operam múltiplos negócios. Construir um relacionamento de alto nível com um cliente de R$ 400,00 abre as portas diretamente para novos contratos do mesmo patamar na região.
 
-## A Blindagem de Longo Prazo: Planos Trimestrais e Anuais
+## Blindagem de longo prazo: trimestral e anual
 
-Comercializar a recorrência mensal é o básico da rua; vender os **Planos Trimestrais e Anuais** é a assinatura de um executivo de alta performance. Fechar contratos de longo prazo significa selar um compromisso mútuo com o sucesso do cliente, protegendo a sua carteira contra oscilações de mercado.
+Comercializar a recorrência mensal é o básico da rua; vender os **Planos Trimestrais e Anuais** é a assinatura de um executivo que bate meta. Fechar contratos de longo prazo significa selar um compromisso mútuo com o sucesso do cliente, protegendo a sua carteira contra oscilações de mercado.
 
-### As Vantagens da Blindagem Contratual:
+### As vantagens da blindagem contratual
 
 * **Bloqueio Antitruste (Barreira Contra a Concorrência):** O cliente que assume um compromisso anual com a Takeat fica completamente "blindado". Ele ignora propostas de concorrentes que batem à sua porta tentando brigar por preço, pois sua decisão estratégica de médio prazo já foi tomada e consolidada conosco.
 
@@ -1497,19 +1515,19 @@ Comercializar a recorrência mensal é o básico da rua; vender os **Planos Trim
 >  **Script de Fechamento Anual/Trimestral:**\
 > *"Seu [Nome], o plano mensal é desenhado para quem quer apenas fazer testes operacionais. Já o plano anual é para quem busca transformar a gestão da casa, estabilizar a equipe e garantir uma economia imediata de [X]% na contratação do ecossistema. Olhando para o planejamento de crescimento da sua casa para este ano, qual desses modelos faz mais sentido para blindarmos a sua margem?"*
 
-## A Metodologia de Campo: "A Caça e a Pesca"
+## A caça e a pesca
 
 Para manter a constância e a agressividade comercial na rua, o executivo Takeat deve dividir o seu dia de campo em dois momentos estratégicos e complementares:
 
-### A Pesca (Foco em Volume de Cobertura)
+### A pesca: volume de cobertura
 
 São as abordagens de oportunidade no PAP ao longo das ruas mapeadas na sua rota. Servem para criar a "mancha", coletar dados de concorrência, alimentar o topo do seu funil no HubSpot com novas oportunidades e garantir a dominância territorial do bairro.
 
-### A Caça (Foco em MRR de Alto Valor)
+### A caça: MRR de alto valor
 
 São as **2 Demos diárias de alta qualidade** agendadas previamente na sua agenda. Aqui, você está diante de operações robustas (ICP de R$ 400,00+). É o momento de abrir o tablet e provar por meio de dados matemáticos simples que, se o sistema evitar apenas dois erros de pedido ou o desperdício de duas mesas no final de semana, o investimento no ecossistema já se pagou sozinho.
 
->  **O MANTRA DO TIME DE ELITE TAKEAT:**\
+>  **O mantra do time:**\
 > *"O volume de ativações nos dá autoridade e domínio na rua; o faturamento de MRR alto nos traz poder de comissão e rentabilidade; a presença física e o relacionamento presencial com o cliente blindam as chaves do nosso território."*
 
 ***
@@ -1524,15 +1542,17 @@ São as **2 Demos diárias de alta qualidade** agendadas previamente na sua agen
 
 ### RELACIONAMENTO
 
-# RELACIONAMENTO DE ELITE – PÓS-VENDA PRESENCIAL E A MÁQUINA DE INDICAÇÕES
+# Pós-venda presencial: a máquina de indicações
 
-## O Posicionamento: O Contrato Abre a Porta, o Relacionamento Domina o Bairro
+> *"O contrato abre a porta. O que domina o bairro é a visita que você faz quando não tem nada para vender."*
 
-Na Takeat, o aperto de mão no fechamento da venda não é o fim do processo; é o início de um ciclo estratégico. O executivo de elite compreende que o relacionamento presencial com a base é o nosso maior ativo de **retenção (Churn Zero)** e a nossa principal **fonte de novas receitas (Up-sell e Indicações)**.
+## O contrato abre a porta; o relacionamento domina o bairro
+
+Na Takeat, o aperto de mão no fechamento da venda não é o fim do processo; é o início de um ciclo estratégico. O executivo Takeat compreende que o relacionamento presencial com a base é o nosso maior ativo de **retenção (Churn Zero)** e a nossa principal **fonte de novas receitas (Up-sell e Indicações)**.
 
 Enquanto os concorrentes nacionais tentam gerenciar os restaurantes por meio de ligações frias e robôs de chat, o executivo Takeat está no asfalto, olhando no olho do dono e acompanhando o ritmo do balcão. Quem é visto e lembrado no salão torna-se insubstituível.
 
-## O Ritual da Visita de Cortesia: Presença Oportuna na Rota
+## A visita de cortesia, dentro da rota
 
 A visita de relacionamento não deve ser um evento formal que exige horas de agendamento. Ela deve ser integrada de forma inteligente e dinâmica à **geografia da sua rota diária** de prospecção.
 
@@ -1542,11 +1562,11 @@ A visita de relacionamento não deve ser um evento formal que exige horas de age
 
 > *"Fala, seu [Nome], tudo bem? Cara, eu estava aqui na rua desenhando a nova operação de um parceiro e fiz questão de dar um pulo aqui no seu balcão para ver como foi o fluxo do último final de semana com o nosso ecossistema. Tem algum ponto de processo ou algum ajuste de cardápio que eu possa te ajudar a calibrar aqui no tablet hoje para rodar ainda mais rápido?"*
 
-## Extraindo o "Lead Infinito": A Engenharia da Indicação Ativa
+## Indicação ativa: como pedir e receber
 
-Donos de restaurantes bem-sucedidos conversam entre si, frequentam os mesmos polos gastronômicos e compartilham dores de gestão. O seu cliente satisfeito é o melhor e mais barato canal de aquisição de novos leads (CAC Zero). No entanto, o executivo de elite não espera a indicação vir de graça; ele a **extrai de forma técnica**.
+Donos de restaurantes bem-sucedidos conversam entre si, frequentam os mesmos polos gastronômicos e compartilham dores de gestão. O seu cliente satisfeito é o melhor e mais barato canal de aquisição de novos leads (CAC Zero). No entanto, o executivo Takeat não espera a indicação vir de graça; ele a **extrai de forma técnica**.
 
-### O Protocolo dos 3 Passos para a Indicação de Elite:
+### O Protocolo dos 3 Passos para a indicação ativa:
 
 * **Passo 1: O Timing do Elogio (Gatilho da Reciprocidade)**
 
@@ -1565,9 +1585,9 @@ Donos de restaurantes bem-sucedidos conversam entre si, frequentam os mesmos pol
 > **Executivo:** *"Excelente, a operação do Marcos é fantástica. Vamos fazer o seguinte para poupar tempo: manda um 'Oi' rápido para ele aí no seu WhatsApp agora, dizendo que eu sou o especialista que cuida da sua tecnologia e que vou dar um pulo no balcão dele amanhã para pagar um café. Pode ser?"*\
 > *( Essa introdução quente aumenta a taxa de agendamento da sua Demo em mais de 90%, destruindo qualquer barreira fria).*
 
-## A Blindagem de Base contra Aventureiros do Mercado
+## Blindagem contra o concorrente de ocasião
 
-O mercado de tecnologia para foodservice está saturado de plataformas simplistas ("quebra-galhos") tentando atrair o cliente pelo argumento do preço baixo. O relacionamento de campo é a única vacina contra a guerra de preços.
+O mercado de tecnologia para foodservice está saturado de plataformas simplistas ("quebra-galhos") tentando atrair o cliente pelo argumento do preço baixo. O relacionamento de campo é a única vacina contra a briga de preço.
 
 * **Educação Continuada de Campo:** Sempre que o time de produto da Takeat lançar uma nova funcionalidade, atualização de layout ou melhoria no BI, use isso como pretexto para visitar o cliente. Mostre que o ecossistema dele está evoluindo e se valorizando sem que ele precise pagar a mais por isso.
 
@@ -1575,17 +1595,17 @@ O mercado de tecnologia para foodservice está saturado de plataformas simplista
 
 > *"Seu [Nome], eu conheço a solução deles, é um sistema de prateleira operado por call center de fora do estado. Eu te pergunto: se o sistema deles travar em um sábado de salão lotado, o gerente deles vai sair de casa para sentar aqui na mesa com o senhor e resolver o problema no olho no olho, como eu faço? Eles cobram mais barato porque entregam menos valor e zero presença. Aqui o senhor tem um parceiro de negócios do seu lado da calçada."*
 
-## Checklist de Campo do Relacionamento de Sucesso
+## Checklist de campo
 
 Para garantir que a sua carteira de clientes seja um porto seguro de receita e indicações, o executivo deve cumprir este padrão operacional:
 
 * **[ ] Registro de Notas de Relacionamento no HubSpot:** Cada visita de cortesia deve virar uma nota descritiva no CRM. Exemplo: *"Visita de cortesia realizada. Cliente muito satisfeito com o fechamento via QR Code. Mencionou que o proprietário da Hamburgueria Y (vizinho de quadra) está insatisfeito com o Yooga. Lead coletado e card de prospecção aberto."*
 
-* **[ ] Mapeamento de Clima e Staff:** O relacionamento de elite envolve o decisor, mas respeita a equipe. Saiba o nome do gerente de operações e do chefe de cozinha. Entenda os dias e horários de pico absoluto da casa para garantir que sua visita seja sempre um alívio de suporte, e nunca um estorvo operacional.
+* **[ ] Mapeamento de Clima e Staff:** O relacionamento bem feito envolve o decisor, mas respeita a equipe. Saiba o nome do gerente de operações e do chefe de cozinha. Entenda os dias e horários de pico absoluto da casa para garantir que sua visita seja sempre um alívio de suporte, e nunca um estorvo operacional.
 
 * **[ ] Celebração Compartilhada:** Se o cliente bater um recorde de faturamento no mês utilizando o ecossistema ou atingir uma métrica expressiva de retenção pelo Cashback, passe na casa para parabenizá-lo. Mostre que você é parte do ecossistema de crescimento dele.
 
->  **DIRETRIZ MÁXIMA DA TAKEAT:** O vendedor comum desaparece após receber a comissão. O executivo de elite da Takeat fincará a bandeira no bairro, cuidará do balcão do cliente como se fosse seu e usará essa autoridade presencial para extrair os leads que pagarão as suas metas dos próximos meses. **O asfalto não perdoa o vendedor ausente.**
+>  **DIRETRIZ MÁXIMA DA TAKEAT:** O vendedor comum desaparece após receber a comissão. O executivo Takeat da Takeat fincará a bandeira no bairro, cuidará do balcão do cliente como se fosse seu e usará essa autoridade presencial para extrair os leads que pagarão as suas metas dos próximos meses. **O asfalto não perdoa o vendedor ausente.**
 
 ***
 
@@ -1599,7 +1619,7 @@ Para garantir que a sua carteira de clientes seja um porto seguro de receita e i
 
 ### COMO EVITAR CHURN
 
-# BLINDAGEM DE CARTEIRA: COMO NÃO PERDER O QUE VOCÊ JÁ VENDEU
+# Como não perder o que você já vendeu
 
 ### O cliente que cancela em março é o cliente que você vai ter que vender de novo em abril
 
@@ -1710,7 +1730,7 @@ E se ele insistir na comparação, use o que é público: nós publicamos **oito
 
 ### PIPELINE
 
-# PIPELINE OFICIAL — as 8 etapas e as duas automações que não se mexem
+# Pipeline oficial: as 8 etapas e as duas automações que não se mexem
 
 O Pipeline de Field Sales no HubSpot (pipeline `916011864` — o único que vale pra dados operacionais) tem 8 etapas na esteira principal, mais 3 etapas de apoio (Conta Alvo, Perdido, Reciclagem). Cada etapa exige uma ação clara pra garantir que só negócio saudável avança — e duas delas têm automação crítica que **nunca deve ser mexida manualmente fora do fluxo normal**.
 
@@ -1777,7 +1797,7 @@ O Pipeline de Field Sales no HubSpot (pipeline `916011864` — o único que vale
 
 ### Enviado Onboarding
 
-**Racional:** O "pedágio" técnico da Takeat — eliminar o *gap* entre a venda e o uso real. Diretriz clara: **sem cardápio, não há Onboarding.** **Automação crítica:** mover um card pra cá migra o negócio automaticamente pra outro pipeline (Implantação) e cria um grupo de WhatsApp com o cliente na hora — não dá pra desfazer com um clique.
+**Racional:** O "pedágio" técnico da Takeat — eliminar o buraco entre a venda e o uso real. Diretriz clara: **sem cardápio, não há Onboarding.** **Automação crítica:** mover um card pra cá migra o negócio automaticamente pra outro pipeline (Implantação) e cria um grupo de WhatsApp com o cliente na hora — não dá pra desfazer com um clique.
 
 * **Indicador de Entrada:** Pagamento confirmado + card movido pra fase de transição.
 * **Ação crítica antes de mover:**
@@ -1840,7 +1860,7 @@ Não são etapas do pipeline — são de onde o lead nasce antes de entrar na es
 
 ### DADOS PARA CADASTRO
 
-# ATIVAÇÃO SEM ATRITO: OS DADOS QUE DESTRAVAM A IMPLANTAÇÃO
+# Os dados que destravam a implantação
 
 ### Como sair da assinatura para a operação rodando sem perder uma semana no meio
 
@@ -1948,11 +1968,13 @@ Você não precisa ser contador, precisa saber pedir e saber conferir:
 
 ### EQUIPAMENTOS
 
-# Guia Completo de Equipamentos e Infraestrutura
+# Equipamentos: a estrutura que o dono precisa ter
 
-Para que a tecnologia Takeat rode com 100% de performance, o lojista precisa da estrutura correta. Os equipamentos ficam por conta do lojista, e o papel do executivo é orientar essa aquisição para garantir uma implantação sem erros.
+> *"Implantação que trava por causa de impressora errada não é problema de suporte: é venda mal orientada na mesa."*
 
-## Estação de Gestão (Computador)
+Para que a tecnologia Takeat rode redondo, o lojista precisa da estrutura correta. Os equipamentos ficam por conta do lojista, e o papel do executivo é orientar essa aquisição para garantir uma implantação sem erros.
+
+## Estação de gestão (computador)
 
 Para utilização completa do sistema e gestão administrativa:
 
@@ -1960,7 +1982,7 @@ Para utilização completa do sistema e gestão administrativa:
 
 * **Sistema Operacional:** Ideal que seja Windows 10 para frente.
 
-## Recomendação de Impressora (Cozinha e Bar)
+## Impressora (cozinha e bar)
 
 A impressora térmica é vital para a produção.
 
@@ -1970,7 +1992,7 @@ A impressora térmica é vital para a produção.
 
 * **Modelos Compatíveis:** Bematech 4200th | Elgin: i8 e i9 | Tanca: Tp-650 e Tp-450 | Control id.
 
-## Tablet para o Garçom Digital (Autoatendimento na Mesa)
+## Tablet para o Garçom Digital
 
 O Tablet é o terminal onde o **cliente** faz o pedido sozinho na mesa.
 
@@ -1984,7 +2006,7 @@ O Tablet é o terminal onde o **cliente** faz o pedido sozinho na mesa.
 
   * **Suportes:** Base Fixa (R$ 89) ou Base Móvel (R$ 35).
 
-## Garçom Manager (Operação do Garçom)
+## Garçom Manager (operação do garçom)
 
 O garçom acessa o sistema para gerenciar mesas e pedidos através de:
 
@@ -1998,7 +2020,7 @@ O garçom acessa o sistema para gerenciar mesas e pedidos através de:
 
   * **Outros:** Positivo L400 (REDE), Pagbank, Maquinona do iFood, Picpay.
 
-## Totem de Autoatendimento (Balcão) + TEF Fiserv
+## Totem de autoatendimento e TEF Fiserv
 
 #### Especificações de Hardware e Acessórios
 
@@ -2015,7 +2037,7 @@ O garçom acessa o sistema para gerenciar mesas e pedidos através de:
 > **Venda Exclusiva:** O hardware do Totem de Autoatendimento **não é comercializado de forma isolada** ou com outras adquirentes. A venda está condicionada à ativação do TEF da Fiserv.\
 > **Precificação do Adicional:** **R$ 299,00/mês** (Totem + licença TEF Fiserv).
 
-## Integrações — Balança
+## Integração com balança
 
 São **duas integrações diferentes**, e elas resolvem problemas diferentes. Saber qual é qual na mesa evita prometer o que o modelo do cliente não faz — e evita a pior conversa possível, que é a de voltar atrás depois de vendido.
 
@@ -2079,11 +2101,13 @@ Diferencie claramente para o cliente:
 
 ### FAQ
 
-# FAQ DE SOBREVIVÊNCIA E REGRAS DE OURO (SÓ PARA ELITE)
+# FAQ de sobrevivência — se está aqui, é lei
+
+> *"Se está escrito aqui, é lei. E não mande mensagem para o Julyan antes de ler."*
 
 Este é o guia definitivo de consultas rápidas para o campo. Se está escrito aqui, **é lei**. Não mande mensagem para o Julyan antes de ler este documento.
 
-## POLÍTICA COMERCIAL, PREÇOS E CONDIÇÕES
+## Política comercial, preços e condições
 
 ** RÉGUA OFICIAL DE PREÇO (leia antes de qualquer negociação): **R$ 349 = plano padrão mínimo, piso inegociável na recorrência mensal. R$ 400+ = ticket-alvo do ICP prioritário (casa estruturada, com módulos adicionais) — é a meta de MRR do executivo, não um preço diferente de tabela. Plano Inovação = plano que destrava a Precificação Dinâmica (ver FAQ técnico). Adicionais fora do plano padrão: Teka R$ 99/mês, Roteirização Inteligente R$ 109/mês, Totem + TEF Fiserv R$ 299/mês. Quando o playbook fala de "ICP de R$ 400", está falando de alvo de MRR; quando fala de R$ 349, está falando do piso de tabela. Desconto só via prazo (trimestral/semestral/anual).
 
@@ -2103,7 +2127,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 >  **NÃO.** Toda e qualquer negociação que envolva alguma particularidade, cortesia ou alteração de escopo do sistema **DEVE ser aprovada previamente pelo Gestor (Julyan) e pelo time de Operações**. Se subir contrato sem aviso, vai voltar.
 
-## PARTE TÉCNICA: EQUIPAMENTOS E INTEGRAÇÕES
+## Parte técnica: equipamentos e integrações
 
 ### Quais equipamentos de infraestrutura o cliente precisa ter para rodar a Takeat?
 
@@ -2151,7 +2175,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 >  NÃO. A Precificação Dinâmica — CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado — só entra a partir do **Plano Inovação**. No plano padrão (R$ 349) o cliente tem Controle de CMV e Ficha Técnica, mas sem o recálculo em tempo real por item. Se o dono perguntar "eu sei se meu prato mais vendido dá lucro ou prejuízo hoje?" e a dor for forte, é gatilho para subir o cliente para o Plano Inovação — não tente entregar essa funcionalidade fora dele.
 
-## PROCESSO INTERNO: HUBSPOT, ASAAS E ONBOARDING
+## Processo interno: HubSpot, Asaas e onboarding
 
 ### Como eu emito o boleto/link de pagamento para o cliente pelo Asaas?
 
@@ -2163,16 +2187,16 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ### Tive um problema com o prazo ou processo de implantação de um cliente, o Julyan resolve?
 
->  **NÃO! O gestor do Field não faz microgestão de Onboarding.** Ele é o gestor focado em estratégia e performance comercial. Se houver ruído, **o VENDEDOR e o ATIVADOR (Onboarding) devem se comunicar diretamente** para alinhar o setup do cliente. O Julyan só entra em ação internamente se o processo travar por um erro sistêmico grave. Seja dono da sua carteira.
+>  **NÃO! O gestor do Field não faz microgestão de Onboarding.** Ele é o gestor focado em estratégia e resultado comercial. Se houver ruído, **o VENDEDOR e o ATIVADOR (Onboarding) devem se comunicar diretamente** para alinhar o setup do cliente. O Julyan só entra em ação internamente se o processo travar por um erro sistêmico grave. Seja dono da sua carteira.
 
-## DISCURSO DE ELITE: POR QUE A TAKEAT É IMBATÍVEL?
+## O discurso: por que a Takeat é imbatível
 
 ### O que responder quando o cliente pergunta: "Por que a Takeat é tão diferente dos outros sistemas?"
 
 >  **Porque nós não somos um "software de balcão", nós somos um Ecossistema Operacional e de Inteligência 360º.**\
 > A maioria dos concorrentes só serve para tirar o pedido e emitir a nota. A Takeat controla a ponta do salão (com Totem moderno, Tablet na mesa, QR Code/Garçom Digital e Smart POS para giro rápido) e entrega tudo mastigado na retaguarda (com conciliação financeira automática via arquivo OFX, controle rigoroso de estoque por insumos, cálculo de CMV automatizado, ferramenta multilojas integrada e inteligência de CRM com Cashback nativo para fazer o cliente voltar). **Nós aumentamos o faturamento no salão e estancamos o desperdício na gestão.** Nenhum concorrente amarra as duas pontas com a nossa fluidez.
 
-## PERGUNTAS EXTRAS
+## Perguntas extras
 
 ### O cliente assinou, escolheu pagar por Boleto no link do Asaas. O onboarding já começa?
 
@@ -2194,7 +2218,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ### LINKS ÚTEIS
 
-# OS ATALHOS OFICIAIS DO TIME
+# Links úteis, na ordem do dia
 
 ### Cada link com o momento em que você usa, para não procurar no meio da rua
 
@@ -2268,7 +2292,7 @@ Esta página não é uma lista de favoritos: é a ordem em que as coisas acontec
 
 ### DISPLAYS/COMANDAS
 
-# MATERIAL DE MESA: O QUE FAZ O GARÇOM DIGITAL EXISTIR
+# Material de mesa: o que faz o Garçom Digital existir
 
 ### Sem display na mesa, o autoatendimento que você vendeu não acontece
 
@@ -2364,13 +2388,13 @@ Material na caixa atrás do balcão não gera pedido. **No dia da entrega, posic
 
 ### PLANO DE CARREIRA
 
-# CONSTRUINDO O FUTURO: SEU LEGADO NA TAKEAT
+# Plano de carreira: os degraus que você controla
 
 ### O caminho existe, e ele é medido — não é sobre esperar a vaga aparecer
 
 > *"Onde a empresa cresce, quem entrega floresce."*
 
-A Takeat é um organismo em hiper-crescimento e a meta é o **Brasil todo**. Aqui você não ocupa uma função estática; você **conquista território**. Quem domina o campo e entrega resultado consistente ganha o direito de desenhar o próprio destino e liderar as frentes que nascem todos os meses.
+A Takeat é um organismo em crescimento acelerado e a meta é o **Brasil todo**. Aqui você não ocupa uma função estática; você **conquista território**. Quem domina o campo e entrega resultado consistente ganha o direito de desenhar o próprio destino e liderar as frentes que nascem todos os meses.
 
 Só que "conquistar território" não é discurso: é uma sequência de coisas mensuráveis, e todas elas já estão neste playbook. Esta página junta as duas metades — **o que a empresa abre** e **o que se cobra de você para chegar lá**.
 
@@ -2395,7 +2419,7 @@ Não existe promoção por tempo de casa nem por simpatia. Os gates da rampagem 
 
 ## Intraempreendedorismo: o dono do resultado
 
-Cada praça é tratada como unidade de negócio de alta performance. Se você faz o motor girar e domina o mercado, você tem voz ativa na estratégia da companhia.
+Cada praça é tratada como unidade de negócio que dá resultado. Se você faz o motor girar e domina o mercado, você tem voz ativa na estratégia da companhia.
 
 - **Pensar fora da caixa.** Vale mais quem traz solução criativa para o desafio do campo do que quem espera as coisas acontecerem.
 - **Cultura e execução.** O seu crescimento é pavimentado por resultado entregue e pela prática real dos **4 pilares**: o cliente precisa **vender mais**, **reduzir custos**, **melhorar a experiência do cliente dele** e **aumentar o tempo livre**. Se o seu cliente não avançou em pelo menos um deles, a venda foi transação, não parceria.
@@ -2409,7 +2433,7 @@ Como a expansão é acelerada, as oportunidades surgem antes de terem nome ofici
 
 - **Liderança de expansão nacional** — comandar a entrada da Takeat em novas regiões, formando time do zero e replicando a cultura de vitória.
 - **Head de nova vertical** — viu um nicho que ainda não atacamos (redes de franquia, grandes eventos, hotelaria)? Você pode ser o mentor e o líder dessa unidade de receita.
-- **Inteligência e novos negócios** — atuar na sala de guerra, desenhando as campanhas e táticas que o país inteiro vai seguir.
+- **Inteligência e novos negócios** — atuar na mesa de planejamento, desenhando as campanhas e táticas que o país inteiro vai seguir.
 - **Criação de área inexistente** — se a Takeat ainda não tem uma área e você prova que ela é necessária para escalar, a área nasce com você liderando.
 
 ***
@@ -2463,9 +2487,9 @@ O próximo líder de expansão nacional **está na rua agora, fazendo o básico 
 
 ### ROTINA
 
-# O GESTOR DE FIELD SALES DE ELITE: A ROTINA QUE SUSTENTA O CANAL
+# A rotina do gestor: disciplina de dado
 
-> *"Um executivo de elite é fruto de disciplina de rua. Um gestor de elite é fruto de disciplina de dado. Se o seu time vive de rotina no asfalto, a sua rotina como gestor não pode viver de achismo na sala."*
+> *"Um executivo Takeat é fruto de disciplina de rua. Um gestor Takeat é fruto de disciplina de dado. Se o seu time vive de rotina no asfalto, a sua rotina como gestor não pode viver de achismo na sala."*
 
 Você já construiu o playbook mais completo que esse canal já teve. O que falta não é mais processo pro executivo — é a **rotina do gestor** que transforma esse processo em resultado sustentado. Isso não é dashboard passivo; é uma cadência ativa, tão obrigatória pra você quanto as 6 visitas/dia com qualidade são pro time.
 
@@ -2473,13 +2497,13 @@ Você já construiu o playbook mais completo que esse canal já teve. O que falt
 
 ***
 
-## A Mentalidade do Gestor de Elite
+## A cabeça do gestor: disciplina de dado
 
-O gestor amador reage ao mês: olha o número no dia 28 e descobre que perdeu a meta. O gestor de elite **audita a operação toda semana**, com dado, antes do problema virar resultado perdido. Ele não pergunta "como foi o mês?" — ele já sabe, porque acompanhou semana a semana. A pergunta dele no 1:1 nunca é genérica ("precisa melhorar"); é cirúrgica ("43% dos seus leads travam em Prospecção — vamos resolver isso hoje").
+O gestor amador reage ao mês: olha o número no dia 28 e descobre que perdeu a meta. O gestor Takeat **audita a operação toda semana**, com dado, antes do problema virar resultado perdido. Ele não pergunta "como foi o mês?" — ele já sabe, porque acompanhou semana a semana. A pergunta dele no 1:1 nunca é genérica ("precisa melhorar"); é cirúrgica ("43% dos seus leads travam em Prospecção — vamos resolver isso hoje").
 
 ***
 
-## A Rotina Semanal do Gestor
+## A rotina semanal
 
 ### Segunda-feira de manhã — Auditoria do Funil (30 min)
 
@@ -2535,7 +2559,7 @@ Não precisa rodar a análise completa de novo. Olhe rápido:
 
 ***
 
-## A Rotina Mensal do Gestor
+## A rotina mensal
 
 | Quando                  | Ação                                                                                                             | Ferramenta            |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------- |
@@ -2546,18 +2570,18 @@ Não precisa rodar a análise completa de novo. Olhe rápido:
 
 ***
 
-## Como Você Incentiva Cadência Sem Virar Fiscal Chato
+## Como incentivar cadência sem virar fiscal chato
 
-O risco de qualquer sistema de trava e SLA é o time sentir que virou vigilância. A diferença entre gestor de elite e microgerenciador está em **como você comunica o porquê**:
+O risco de qualquer sistema de trava e SLA é o time sentir que virou vigilância. A diferença entre gestor Takeat e microgerenciador está em **como você comunica o porquê**:
 
 >  **Erro:** "Vocês precisam preencher o campo de decisor porque é regra."\
->  **Elite:** "Toda vez que a gente não sabe o nome do decisor, a demo cai pra quem não decide — e isso é comissão que vocês perdem, não só número que eu perco. Esse campo existe pra proteger o seu tempo de rua."
+>  **O gestor:** "Toda vez que a gente não sabe o nome do decisor, a demo cai pra quem não decide — e isso é comissão que vocês perdem, não só número que eu perco. Esse campo existe pra proteger o seu tempo de rua."
 
 A régua: **toda cobrança de disciplina vem amarrada ao benefício do executivo**, não só ao controle do gestor. Isso é coerente com o próprio tom do seu playbook — ele nunca pede disciplina "porque sim", sempre amarra a comissão e o resultado pessoal do executivo.
 
 ***
 
-## O Seu Ritmo de Trabalho Comigo
+## O seu ritmo de trabalho comigo
 
 Pra essa rotina não depender da sua memória:
 
@@ -2571,9 +2595,9 @@ Pra essa rotina não depender da sua memória:
 
 ***
 
-## A Diretriz Máxima do Gestor de Elite
+## A diretriz que sustenta o canal
 
-O executivo de elite gasta a sola do sapato. O gestor de elite gasta a régua de dado. Se o seu time vive de "bateu o pé, registrou o lead", a sua rotina vive de **"virou a semana, auditou o funil"**. Isso não é burocracia — é a mesma disciplina que você já cobra do time, aplicada em você primeiro.
+O executivo Takeat gasta a sola do sapato. O gestor Takeat gasta a régua de dado. Se o seu time vive de "bateu o pé, registrou o lead", a sua rotina vive de **"virou a semana, auditou o funil"**. Isso não é burocracia — é a mesma disciplina que você já cobra do time, aplicada em você primeiro.
 
 ***
 
