@@ -17916,7 +17916,7 @@ async function renderResumoSemanal() {
     const ranking = (rs.ranking || []).slice(0, 3);
     podioMetaNovoHtml = `
       <div class="sem-podio-col">
-        <h3>Pódio da semana</h3>
+        <h3>Quem fechou mais na semana</h3>
         <span style="font-size:10.5px;color:var(--muted2);margin-bottom:2px;">por fechamentos · desempate por conversão</span>
         <div class="podio">
           ${ranking.length ? ranking.map((r, i) => {
@@ -18735,6 +18735,63 @@ function gxBlocoPerdaHTML(r) {
     <div class="gx-forma">${barras}</div>
     <div class="gx-secao-nota">${nota}</div>
   </div>`;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   QUEM VAI FICAR SEM RUA — a cobertura de fila do time, por executivo.
+
+   A aba Prospecção do gestor respondia "o que eu aprovo hoje?" e, com a fila de importação
+   vazia, mostrava um estado vazio honesto e um botão. Honesto e inútil: a pergunta que o
+   gestor precisa responder ali é OUTRA, e ela tem dado — "quem vai ficar sem rua primeiro?".
+
+   A conta: negócio aberto COM ENDEREÇO é o que dá para visitar. Dividido pelo alvo de
+   visitas/dia da fase dele, dá quantos DIAS DE RUA a carteira cobre. Quem cobre menos de uma
+   semana precisa de fila nova antes de precisar de cobrança — porque lead importado hoje só
+   vira visita depois de qualificação, e venda depois disso.
+
+   Sem inventar: negócio sem endereço não conta como rua (é telefone), e onde o alvo da fase
+   não está definido a linha diz isso em vez de dividir por um número que ninguém combinou.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+function gxCoberturaDeRuaHTML() {
+  const reps = (DATA.reps || []).filter(r => r && r.ownerId && (typeof ownerAtivoNoField !== 'function' || ownerAtivoNoField(r.ownerId)));
+  if (!reps.length) return '';
+  const fl = DATA.funilLeads || {};
+  const todos = Object.values(fl).flat();
+
+  const linhas = reps.map(r => {
+    const meus = todos.filter(l => String(l.ownerId) === String(r.ownerId));
+    const comEndereco = meus.filter(l => l.lat != null || (l.cep && String(l.cep).length >= 8)).length;
+    /* alvo de visitas/dia: a mesma régua de rampagem que o resto do cockpit usa */
+    let alvo = null;
+    if (typeof rampDoOwner === 'function') {
+      const f = rampDoOwner(r.ownerId);
+      if (f && f.definido && f.alvo != null && f.alvo > 0) alvo = Number(f.alvo);
+    }
+    const dias = alvo ? comEndereco / alvo : null;
+    return { r, abertos: meus.length, comEndereco, alvo, dias };
+  }).sort((a, b) => (a.dias == null ? 99 : a.dias) - (b.dias == null ? 99 : b.dias));
+
+  const maiorDias = Math.max.apply(null, linhas.map(x => x.dias || 0).concat([1]));
+  const emRisco = linhas.filter(x => x.dias != null && x.dias < 5);
+
+  const html = linhas.map(x => {
+    const pct = x.dias != null ? Math.min(100, Math.round(100 * x.dias / maiorDias)) : 0;
+    const critico = x.dias != null && x.dias < 5;
+    return `<div class="gx-forma-linha">
+      <span class="gx-forma-rot">${esc(String(x.r.name).split(' ').slice(0, 2).join(' '))}</span>
+      <span class="gx-forma-trilha"><i class="${critico ? 'is-gordo' : ''}" style="width:${pct}%"></i></span>
+      <span class="gx-forma-num">${x.dias != null ? x.dias.toFixed(1) : '—'}<small>${x.dias != null ? 'dias de rua' : 'fase sem alvo'}</small></span>
+    </div>`;
+  }).join('');
+
+  return `<div class="gx"><div class="gx-secao">
+    <div class="gx-secao-cab"><b>Quem vai ficar sem rua</b><span>negócios abertos com endereço ÷ alvo de visitas/dia da fase</span></div>
+    <div class="gx-forma">${html}</div>
+    <div class="gx-secao-nota">${emRisco.length
+      ? `<b>${emRisco.map(x => esc(String(x.r.name).split(' ')[0])).join(', ')}</b> cobre${emRisco.length === 1 ? '' : 'm'} menos de uma semana de rua com o que tem em aberto. Fila nova aqui é urgente antes de ser cobrança: lead importado hoje só vira visita depois de qualificação, e venda depois disso.`
+      : 'Todo mundo tem mais de uma semana de rua no funil atual. A fila pode esperar; o que não pode esperar é o que já está aberto e parado.'}
+      <br>Negócio sem endereço não entra nesta conta — é telefone, não é rua.</div>
+  </div></div>`;
 }
 
 /* A tela inteira. Ordem: forma, idade, dinheiro, meta, promessa, mix. */
@@ -25522,14 +25579,24 @@ async function renderCockpitExecutionCommand() {
     .map(x => String(x.r.name).split(' ')[0]).join(', ')
     + ((criticos + atencao) > 3 ? ` +${(criticos + atencao) - 3}` : '');
   const rampSemDefinir = linhas.filter(x => !x.ramp.definido).length;
+  /* DIA SEM DAILY (30/08/26): num domingo, "0/6 planos fechados" e "0 visitas com
+     cliente identificado" apareciam em VERMELHO, como falha — no mesmo dia em que o
+     ritual do gestor, dois blocos acima, diz "Sem Daily, faça apenas leitura gerencial".
+     A tela cobrava o que ela mesma acabava de dispensar. Em dia não útil os números
+     ficam neutros e a faixa diz que hoje não se cobra. */
+  const ehDiaUtilHoje = (() => {
+    const dow = new Date().getDay();
+    return dow !== 0 && dow !== 6;
+  })();
+  const corSeUtil = (valorOk, corRuim) => !ehDiaUtilHoje ? 'var(--muted2)' : (valorOk ? 'var(--green)' : corRuim);
 
   el.innerHTML = `
     <section class="chart-card command-center" aria-label="Comando de hoje">
       <div class="command-head"><div><h3 style="margin:0 0 4px;font-family:'Archivo',system-ui,sans-serif;">Comando de hoje</h3><div class="chart-subtitle">Gestão por exceção: quem precisa de intervenção e qual é a próxima cobrança.</div></div><button type="button" class="command-action" data-command-view="viewDaily">Abrir ritual da Daily →</button></div>
       <div class="command-kpis">
-        <div class="command-kpi"><b style="color:${rotasProntas === linhas.length ? 'var(--green)' : 'var(--red)'}">${rotasProntas}/${linhas.length}</b><span>rotas com paradas hoje</span></div>
-        <div class="command-kpi"><b style="color:${planosFechados === linhas.length ? 'var(--green)' : 'var(--amber)'}">${planosFechados}/${linhas.length}</b><span>planos do dia fechados</span></div>
-        <div class="command-kpi"><b>${visitasAuditaveis}</b><span>visitas com cliente identificado</span></div>
+        <div class="command-kpi"><b style="color:${corSeUtil(rotasProntas === linhas.length, 'var(--red)')}">${rotasProntas}/${linhas.length}</b><span>rotas com paradas hoje</span></div>
+        <div class="command-kpi"><b style="color:${corSeUtil(planosFechados === linhas.length, 'var(--amber)')}">${planosFechados}/${linhas.length}</b><span>planos do dia fechados</span></div>
+        <div class="command-kpi"><b style="color:${ehDiaUtilHoje ? 'var(--ink)' : 'var(--muted2)'}">${visitasAuditaveis}</b><span>visitas com cliente identificado</span></div>
         <div class="command-kpi"><b style="color:${hotTotal && hotProtegidos < hotTotal ? 'var(--red)' : 'var(--green)'}">${hotProtegidos}/${hotTotal}</b><span>quentes com próximo passo futuro</span></div>
         <div class="command-kpi"><b style="color:${funilAberto.length && funilProtegido < funilAberto.length ? 'var(--red)' : 'var(--green)'}">${funilProtegido}/${funilAberto.length}</b><span>funil aberto protegido por tarefa</span></div>
         <div class="command-kpi"><b style="color:${slaTotal ? 'var(--red)' : 'var(--green)'}">${slaTotal}</b><span>negócios acima do SLA</span></div>
@@ -25551,27 +25618,23 @@ async function renderCockpitExecutionCommand() {
 
            A ordem de dentro não mudou: a lista já vem ordenada por score, ou seja,
            quem precisa de intervenção primeiro. -->
-      <details class="command-list-wrap">
-        <summary class="command-list-summary">
-          <span class="command-list-n ${criticos > 0 ? 'is-critical' : criticos === 0 && atencao === 0 ? 'is-ok' : ''}">${criticos + atencao}/${linhas.length}</span>
-          <span class="command-list-txt">${(criticos + atencao) > 0
-            ? `precisam de intervenção hoje · <b>${esc(nomesEmExcecao)}</b>`
+      <!-- A LISTA "VER POR EXECUTIVO" SAIU (30/08/26). O comentário acima já dizia que
+           ela responde a MESMA pergunta das sete linhas da aba Daily; com o bloco
+           inteiro agora vivendo NA Daily, ela virava a mesma lista duas vezes na mesma
+           tela — e as linhas de lá são mais ricas (barra de prometido × cumprido,
+           agenda do dia, detalhe que abre, funil da pessoa). Ficam os seis sinais
+           vitais, que nenhuma outra parte da tela mostra juntos. -->
+      <div class="command-list-summary" style="cursor:default;">
+        <!-- Em dia sem Daily a contagem de excecao sai: "6/6 precisam de intervencao" ao
+             lado de "hoje nao se cobra" seria a mesma contradicao de novo, so em outro
+             lugar. Ninguem esta em excecao por nao ter plano num domingo. -->
+        <span class="command-list-n ${!ehDiaUtilHoje ? '' : criticos > 0 ? 'is-critical' : (criticos === 0 && atencao === 0 ? 'is-ok' : '')}">${!ehDiaUtilHoje ? '—' : (criticos + atencao) + '/' + linhas.length}</span>
+        <span class="command-list-txt">${!ehDiaUtilHoje
+          ? 'dia sem Daily — os números acima são leitura, não cobrança. As linhas do time, abaixo, mostram quem já deixou o próximo dia útil preparado.'
+          : (criticos + atencao) > 0
+            ? `precisam de intervenção hoje · <b>${esc(nomesEmExcecao)}</b> — cada um na própria linha, abaixo`
             : 'ninguém em exceção agora — rota e plano fechados no time inteiro'}</span>
-          <span class="command-list-abrir">ver por executivo</span>
-        </summary>
-      <div class="command-list">
-        ${linhas.map(x => `
-          <div class="command-row ${x.score >= 10 ? 'is-critical' : x.score >= 5 ? 'is-warning' : ''}">
-            <div class="command-name"><b>${esc(x.r.name)}</b><small>${esc(x.r.praca || '')}</small> <span class="ramp-pill ${x.ramp.chave === 'pleno' ? 'is-full' : ''}" style="vertical-align:middle;">${esc(x.ramp.label)}${x.ramp.alvo != null ? ` · alvo ${x.ramp.alvo}/dia` : ''}</span></div>
-            <div class="command-cell command-route"><b>${x.paradas}</b><small>paradas na rota</small></div>
-            <div class="command-cell"><b>${x.realizado}/${x.prometido || '—'}</b><small>visitas real/prom.</small></div>
-            <div class="command-cell"><b style="color:${x.hotSemPasso ? 'var(--red)' : 'var(--green)'}">${x.hotSemPasso}</b><small>quentes sem passo</small></div>
-            <div class="command-cell"><b style="color:${x.r.leadsTravados ? 'var(--red)' : 'var(--green)'}">${x.r.leadsTravados || 0}</b><small>acima do SLA</small></div>
-            <div class="command-cell command-next"><b>${esc(x.proxima.texto)}</b><small>${x.nomes.length < x.realizado ? 'registro de visita não auditável' : (x.planoFechado ? 'plano fechado' : 'plano ainda aberto')}</small></div>
-            <button type="button" class="command-action" data-command-view="${x.proxima.view}" data-command-owner="${esc(String(x.r.ownerId))}">Agir →</button>
-          </div>`).join('')}
       </div>
-      </details>
       <div class="command-note">Regra operacional: rota e plano fechados antes da rua; visita só conta para gestão quando está vinculada ao cliente; negócio quente precisa sair de cada toque com próximo passo e data. ${rampSemDefinir ? `<b>${rampSemDefinir} executivo${rampSemDefinir === 1 ? '' : 's'} ainda sem fase de rampagem definida.</b>` : ''}</div>
     </section>`;
 
@@ -29067,7 +29130,7 @@ async function renderDaily() {
      depois o funil de agora, depois quem está quente, e por último onde agir. É a
      sequência que ele conduz de pé: quem planejou -> o que temos -> o que está na mão
      -> o que eu cobro. */
-  const slotsMigradosDaily = souRepDaily ? '' : '<div id="dailySlotFunilQuentes"></div><div id="dailySlotDecisoes"></div>';
+  const slotsMigradosDaily = souRepDaily ? '' : '<div id="dailySlotComando"></div><div id="dailySlotFunilQuentes"></div><div id="dailySlotDecisoes"></div>';
 
   /* A BARRA DE DATAS SAIU DO CAMINHO DA AÇÃO (28/08/26) — só pro executivo.
 
@@ -29241,8 +29304,12 @@ async function renderDaily() {
             ${gradeHtml}
           </div>
           <div class="chart-card">
-            <h3 style="margin-bottom:2px;">Pódio da Daily</h3>
-            <div class="chart-subtitle" style="margin-bottom:12px;">semana atual · pontos (visita +10, avanço +25, proposta +40, fechamento +100)</div>
+            <!-- "Podio da Daily" x "Podio da semana" (na aba Semana) eram dois nomes quase
+                 iguais para duas medidas diferentes: aqui e PONTO, la e FECHAMENTO. Cada um
+                 passa a dizer o que ordena. E este nunca foi do dia: o subtitulo sempre disse
+                 "semana atual". -->
+            <h3 style="margin-bottom:2px;">Placar de pontos · semana</h3>
+            <div class="chart-subtitle" style="margin-bottom:12px;">visita +10 · avanço +25 · proposta +40 · fechamento +100</div>
             <div class="podio">${podioHtml}</div>
             ${semanaCheiaRep ? `<div class="rit-celeb">🎉 <b>${esc(semanaCheiaRep.name.split(' ')[0])}</b> completou "semana cheia" — bateu o prometido em todos os dias úteis já passados.</div>` : ''}
           </div>
@@ -29771,6 +29838,19 @@ async function renderDaily() {
   /* Funil + quentes: move o nó (não duplica o HTML) e pede o render dos dois. Se o
      gestor abrir a Daily antes da Time, os renders nunca teriam rodado — por isso a
      chamada fica aqui e não só no fluxo da outra aba. */
+  /* COMANDO DE HOJE: os seis sinais vitais da operação. Vive na aba Time até aqui e é
+     movido para dentro da Daily — é a pergunta da reunião das 9h, não de painel. Se ele
+     abriu a Daily antes da Time, o bloco ainda não existe: manda renderizar e volta.
+     Nada de duplicar o HTML; um #cockpitExecutionCommand no documento. */
+  const slotComando = document.getElementById('dailySlotComando');
+  const blocoComando = document.querySelector('#cockpitExecutionCommand .command-center');
+  if (slotComando && blocoComando) slotComando.appendChild(blocoComando);
+  else if (slotComando && typeof renderCockpitExecutionCommand === 'function' && !slotComando.children.length) {
+    renderCockpitExecutionCommand().then(() => {
+      const agora = document.querySelector('#cockpitExecutionCommand .command-center');
+      if (agora && slotComando && !slotComando.children.length) slotComando.appendChild(agora);
+    });
+  }
   const slotFunilQuentes = document.getElementById('dailySlotFunilQuentes');
   const blocoFunilQuentes = document.getElementById('dailyFunilQuentesOrigem');
   if (slotFunilQuentes && blocoFunilQuentes) {
@@ -31930,8 +32010,14 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">O que eu aprovo hoje?</h1>
         </div>
       </div>` : '';
+    /* A LEITURA QUE DECIDE SE PRECISA IMPORTAR HOJE (30/08/26). Sem fila para aprovar,
+       a aba mostrava só o vazio; a pergunta vizinha — "quem fica sem rua primeiro?" — tem
+       dado e é o que acelera venda. Só para o gestor: o executivo não importa lote. */
+    const coberturaDeRua = (sessaoAtual && sessaoAtual.role === 'manager' && typeof gxCoberturaDeRuaHTML === 'function')
+      ? gxCoberturaDeRuaHTML() : '';
     el.innerHTML = `
       ${bannerVazio}
+      ${coberturaDeRua}
       <div class="chart-card" style="border-left:3px solid var(--blue);">
         <h3 style="margin-bottom:4px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>Prospecção</h3>
         <div class="empty-state">${souGestorProspVazio
