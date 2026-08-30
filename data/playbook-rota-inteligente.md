@@ -1,6 +1,8 @@
-# 🛣️ ROTA INTELIGENTE — o elo que falta no delivery próprio
+# Rota Inteligente: o elo que falta no delivery próprio
 
-**R$ 109/mês.** Terceiro adicional mais caro da tabela. Ele é o fecho de uma guerra que a gente já sabia lutar pela metade.
+> *"Tirar o dono do marketplace sem resolver a entrega é entregar meio problema. A rota é o elo que faltava."*
+
+**R$ 109/mês.** Terceiro adicional mais caro da tabela. Ele fecha uma frente que a gente já sabia disputar pela metade.
 
 ## A dor do dono
 
@@ -68,11 +70,11 @@ E a segunda, que qualifica de verdade: *"seu motoboy é seu ou é freela?"* — 
 
 *Fonte dos números de configuração: página pública `takeat.app/solucoes/roteirizacao`, conferida em 29/08/2026.*
 
-Aprofundar: [Delivery Próprio — a guerra da taxa de marketplace](playbook:ecossistema-takeat#ecossistema-takeat-delivery-proprio-a-guerra-da-taxa-abusiva-de-marketplace) · [Mapa dor → solução](playbook:mapa-dor-solucao)
+Aprofundar: [Delivery Próprio — a taxa do marketplace](playbook:ecossistema-takeat#ecossistema-takeat-delivery-proprio-a-taxa-abusiva-do-marketplace) · [Mapa dor → solução](playbook:mapa-dor-solucao)
 
 ***
 
-## ✅ O que fazer agora
+## O que fazer agora
 
 - Pergunte hoje, em duas casas com delivery próprio: quantos motoboys rodam no pico e quantos pedidos cada um leva por viagem.
 - Se a resposta for "um pedido por viagem", a conta se faz sozinha: até 9 pedidos por rota, no raio de 1,5 km.

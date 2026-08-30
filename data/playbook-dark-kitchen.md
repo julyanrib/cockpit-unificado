@@ -1,4 +1,6 @@
-# 🍳 DARK KITCHEN — a mesma cozinha vendendo mais de uma marca
+# Dark Kitchen: a mesma cozinha vendendo mais de uma marca
+
+> *"A cozinha dele está paga e ociosa metade do dia. Dark Kitchen é faturamento novo em cima de custo fixo que já foi pago."*
 
 **R$ 199/mês.** Segundo adicional mais caro da tabela, depois do Totem.
 
@@ -22,7 +24,7 @@ Este é o ponto que muda a conversa, e o executivo precisa dizer com segurança:
 
 Isso importa porque o dono de dark kitchen pensa em portfólio, não em unidade. Quando ele pergunta "e se der certo e eu quiser dez?", a resposta é "a cozinha aguenta dez?" — e a conversa vira operação, que é o terreno onde ele decide comprar.
 
-## O que é POR MARCA (e é isso que o concorrente não faz)
+## O que é por marca — e é isso que o concorrente não faz
 
 Diga item por item, porque cada um resolve uma gambiarra que ele vive hoje:
 
@@ -60,11 +62,11 @@ E a que qualifica o caso fácil: *"você já tem mais de uma marca rodando hoje?
 
 *Fonte das funcionalidades e do prazo de implantação: página pública `takeat.app/para/dark-kitchen`, conferida em 29/08/2026.*
 
-Aprofundar: [Delivery Próprio — a guerra da taxa de marketplace](playbook:ecossistema-takeat#ecossistema-takeat-delivery-proprio-a-guerra-da-taxa-abusiva-de-marketplace) · [Mapa dor → solução](playbook:mapa-dor-solucao)
+Aprofundar: [Delivery Próprio — a taxa do marketplace](playbook:ecossistema-takeat#ecossistema-takeat-delivery-proprio-a-taxa-abusiva-do-marketplace) · [Mapa dor → solução](playbook:mapa-dor-solucao)
 
 ***
 
-## ✅ O que fazer agora
+## O que fazer agora
 
 - Identifique na sua carteira quem tem cozinha ociosa em algum turno. É o candidato natural.
 - Leve a conta pronta: faturamento novo sobre custo fixo que ele já paga, sem aluguel novo e sem equipe nova.
