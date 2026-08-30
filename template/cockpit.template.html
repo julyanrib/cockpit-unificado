@@ -4498,10 +4498,23 @@
   .pb-catalog-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:2px 3px 11px;}
   .pb-catalog-head b{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);}
   .pb-catalog-head span{font-size:9.5px;color:var(--muted2);}
-  .pb-cat-chips{display:flex;gap:5px;overflow-x:auto;padding:0 0 11px;scrollbar-width:none;}
-  .pb-cat-chips::-webkit-scrollbar{display:none;}
-  .pb-cat-chip{flex:none;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--muted);padding:5px 9px;font-size:9.5px;font-weight:750;cursor:pointer;white-space:nowrap;}
+  /* ══ AS NOVE CATEGORIAS CABEM NA TELA (30/08/26, print do Julyan) ═══════════════════
+
+     "isso tem que ser arrastavel, o executivo nao consegue". Medi: a faixa tem 230px de
+     largura e 852px de conteudo — 622px ESCONDIDOS, seis das nove categorias
+     inalcancaveis. E a CSS escondia a barra de rolagem (scrollbar-width:none +
+     ::-webkit-scrollbar display:none), entao no desktop, com mouse, nao havia gesto
+     nenhum para chegar la: nem barra, nem arrastar, nem seta. Dois tercos da navegacao
+     da biblioteca eram inacessiveis.
+
+     Em vez de ensinar um gesto, tirei a necessidade dele: a faixa QUEBRA em linhas e as
+     nove aparecem de uma vez. Custa ~90px de altura na coluna e devolve a biblioteca
+     inteira — e nada fica escondido atras de arrastar, que era o problema.
+     Se um dia forem trinta categorias, a decisao muda; com nove, quebrar e o certo. */
+  .pb-cat-chips{display:flex;flex-wrap:wrap;gap:5px;padding:0 0 11px;}
+  .pb-cat-chip{flex:none;max-width:100%;border:1px solid var(--line);border-radius:999px;background:var(--panel2);color:var(--muted);padding:5px 9px;font-size:9.5px;font-weight:750;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .pb-cat-chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--panel);}
+  @media (max-width:760px){ .pb-cat-chip{min-height:44px;padding:5px 14px;font-size:11px;} }
   .pb-group+.pb-group{margin-top:13px;padding-top:12px;border-top:1px solid var(--line-soft);}
   .pb-group-title{display:block;padding:0 5px 6px;font-size:8.5px;font-weight:850;letter-spacing:.11em;text-transform:uppercase;color:var(--ter);}
   .pb-page-btn{position:relative;z-index:1;display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;width:100%;padding:7px;border:0;border-radius:10px;background:transparent;color:var(--ink);text-align:left;cursor:pointer;transition:background .13s var(--ease);}
@@ -20467,9 +20480,20 @@ function wireFichaLeadFunilEdicao(container, l) {
         statusEl.style.color = 'var(--amber-ink)';
         mostrarToast(respData.aviso, 'atencao');
       } else {
-        statusEl.textContent = 'Próximo passo salvo no HubSpot.';
+        /* O DESTINO ENTRA NA CONFIRMACAO (30/08/26, pergunta do Julyan: "quando ele clica
+           em proximo passo, vai para a agenda ou pra daily dele hoje?").
+
+           A cadeia real, conferida ponta a ponta: o clique abre a ficha no campo de passo,
+           salvar grava TAREFA DATADA no HubSpot (api/criar-tarefa-rota.js), e a leitura do
+           HubSpot traz tarefa e reuniao para a Agenda ("reuniao vira MEETING e follow-up
+           vira TASK", fetch-hubspot.js) — ou seja o passo datado aparece na Agenda dele no
+           dia escolhido, e conta em "compromissos hoje" da Daily quando o dia chega.
+           Estava tudo certo e MUDO: a confirmacao dizia so "salvo no HubSpot". Agora ela
+           diz a data e o lugar, que e o que fecha o ciclo pra quem clicou. */
+        const dataBRPasso = String(data).split('-').reverse().join('/');
+        statusEl.textContent = `Próximo passo salvo — aparece na sua Agenda em ${dataBRPasso}.`;
         statusEl.style.color = 'var(--green)';
-        mostrarToast(`Próximo passo planejado pra "${l.name}" no HubSpot.`, 'sucesso');
+        mostrarToast(`Próximo passo de "${l.name}" datado pra ${dataBRPasso} — entra na sua Agenda como follow-up.`, 'sucesso');
       }
       btnPasso.disabled = false;
     } catch (e) {
