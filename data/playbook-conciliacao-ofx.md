@@ -1,10 +1,10 @@
-# 🏦 CONCILIAÇÃO BANCÁRIA OFX — o extrato conversando com o caixa
+# CONCILIAÇÃO BANCÁRIA OFX — o extrato conversando com o caixa
 
 **R$ 99/mês** como adicional, e **já incluído no Enterprise**.
 
 > **Sobre o nome.** O material oficial de planos traz "CFX"; o produto que existe hoje é **OFX**, confirmado pelo Julyan em 29/08/2026. OFX é o formato padrão de arquivo de extrato bancário — é isso que o módulo lê.
 
-## ⚠️ Leia isto antes de entrar na mesa: o nosso próprio site se contradiz
+## Leia isto antes de entrar na mesa: o nosso próprio site se contradiz
 
 Duas páginas nossas dizem coisas diferentes, e o cliente que pesquisou vai te confrontar com a errada.
 
@@ -87,7 +87,7 @@ Aprofundar: [Gestão Financeira — a guerra do controle gerencial](playbook:eco
 
 ***
 
-## ✅ O que fazer agora
+## O que fazer agora
 
 - Pergunte quanto tempo o financeiro dele gasta para fechar o mês. Se a resposta vier em dias, você tem venda.
 - Diga na primeira frase que a Takeat **não pede senha de banco** — é a objeção que mata essa conversa antes de começar.

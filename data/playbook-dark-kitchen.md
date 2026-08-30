@@ -1,4 +1,4 @@
-# 🍳 DARK KITCHEN — a mesma cozinha vendendo mais de uma marca
+# DARK KITCHEN — a mesma cozinha vendendo mais de uma marca
 
 **R$ 199/mês.** Segundo adicional mais caro da tabela, depois do Totem.
 
@@ -64,7 +64,7 @@ Aprofundar: [Delivery Próprio — a guerra da taxa de marketplace](playbook:eco
 
 ***
 
-## ✅ O que fazer agora
+## O que fazer agora
 
 - Identifique na sua carteira quem tem cozinha ociosa em algum turno. É o candidato natural.
 - Leve a conta pronta: faturamento novo sobre custo fixo que ele já paga, sem aluguel novo e sem equipe nova.

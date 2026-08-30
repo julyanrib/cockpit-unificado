@@ -132,7 +132,7 @@ function montarCatalogo(root) {
   };
 
   const linhas = [];
-  linhas.push('# 📚 CATÁLOGO DE SOLUÇÕES — o que cada funcionalidade faz, e onde ela entra');
+  linhas.push('# Catálogo de soluções: o que cada funcionalidade faz, e onde ela entra');
   linhas.push('');
   linhas.push('Esta página existe para uma coisa: **ninguém na rua precisar perguntar o que a Takeat faz.** São as **' + mapa.size + ' funcionalidades** da tabela oficial e os **' + preco.adicionais.length + ' adicionais**, cada um com o que faz, como ajuda o dono e em que plano entra.');
   linhas.push('');
@@ -165,7 +165,7 @@ function montarCatalogo(root) {
   linhas.push('***');
   linhas.push('');
   /* h2, nao h1: a pagina tem um titulo so, e o leitor monta a faixa do primeiro. */
-  linhas.push('## 🧩 OS ' + preco.adicionais.length + ' ADICIONAIS');
+  linhas.push('## Os ' + preco.adicionais.length + ' adicionais');
   linhas.push('');
   linhas.push('Adicional é o que entra por cima do plano. **O desconto do período vale para eles também** — cada adicional que entra na proposta também entra no desconto, e isso é argumento na mesa.');
   preco.adicionais.forEach(a => {
@@ -194,7 +194,7 @@ function montarCatalogo(root) {
   linhas.push('');
   linhas.push('***');
   linhas.push('');
-  linhas.push('## O que este catálogo NÃO responde');
+  linhas.push('## O que este catálogo não responde');
   linhas.push('');
   linhas.push('- **Qual plano oferecer.** Isso sai da dor registrada, não da lista. Veja [Mapa dor → solução](playbook:mapa-dor-solucao).');
   linhas.push('- **Como atacar o concorrente** em cada módulo. Isso é [Ecossistema Takeat](playbook:ecossistema-takeat) e [Concorrência](playbook:concorrencia).');
@@ -207,7 +207,7 @@ function montarCatalogo(root) {
   linhas.push('');
   linhas.push('***');
   linhas.push('');
-  linhas.push('## ✅ O que fazer agora');
+  linhas.push('## O que fazer agora');
   linhas.push('');
   linhas.push('- Escolha os **três itens** que respondem a dor mais comum do seu território e decore só as frases deles. Catálogo se usa por recorte, nunca inteiro.');
   linhas.push('- Antes de oferecer adicional, confira em que plano ele já vem incluído. Vender o que o cliente já tem é o erro mais caro de credibilidade que existe na mesa.');

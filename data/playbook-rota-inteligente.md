@@ -1,4 +1,4 @@
-# 🛣️ ROTA INTELIGENTE — o elo que falta no delivery próprio
+# ROTA INTELIGENTE — o elo que falta no delivery próprio
 
 **R$ 109/mês.** Terceiro adicional mais caro da tabela. Ele é o fecho de uma guerra que a gente já sabia lutar pela metade.
 
@@ -72,7 +72,7 @@ Aprofundar: [Delivery Próprio — a guerra da taxa de marketplace](playbook:eco
 
 ***
 
-## ✅ O que fazer agora
+## O que fazer agora
 
 - Pergunte hoje, em duas casas com delivery próprio: quantos motoboys rodam no pico e quantos pedidos cada um leva por viagem.
 - Se a resposta for "um pedido por viagem", a conta se faz sozinha: até 9 pedidos por rota, no raio de 1,5 km.
