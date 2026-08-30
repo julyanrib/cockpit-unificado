@@ -10614,19 +10614,6 @@ function prcDataValidade() {
   return data.toLocaleDateString('pt-BR');
 }
 
-function prcResumoAdicionais(calculo) {
-  const cobrados = calculo.itens.filter(item => !item.incluido);
-  if (!cobrados.length) return 'Nenhum adicional cobrado';
-  // PEDIDO (18/08/26, Julyan): "colocar o nome dos adicionais e preço, pra ficar
-  // evidente o pq do preço" — antes só listava o nome, sem custo, então o cliente
-  // via o total final sem entender de onde vinha a diferença pro preço base do plano.
-  return cobrados.map(item => {
-    const qtd = item.quantidade > 1 ? ` × ${item.quantidade}` : '';
-    /* prcMoeda(item.unitario), não item.preco: este texto vai para o documento e para o
-       WhatsApp, e o número ali tem de ser o que ele vai pagar. */
-    return `${item.nome}${qtd} (${prcMoeda(item.unitario)}/un.)`;
-  }).join(', ');
-}
 
 /* O bloco da dor dentro de "só você vê": o chip que abre o mapa na dor certa, o
    sistema que ele usa hoje como contexto, e — quando for o caso — o aviso de que o
@@ -10829,17 +10816,6 @@ function prcLigarResumoFixo(raiz) {
   }));
 }
 
-function prcPeriodosNoDocumentoHTML() {
-  return `<div class="prc-per-doc">${precificacaoCache.periodicidades.map(item => {
-    const c = calcularPrecificacao(item.id);
-    const meses = prcEconomiaEmMeses(c);
-    return `<button type="button" data-prc-periodo="${item.id}" aria-pressed="${item.id === precificacaoEstado.periodo}">
-      <span>${esc(item.nome)}</span>
-      <b>${prcMoeda(c.mensal)}<i>/mês</i></b>
-      ${c.economia > 0 ? `<em>economiza ${prcMoeda(c.economia)}${meses ? ' · ' + esc(meses) : ''}</em>` : '<em>preço de tabela</em>'}
-    </button>`;
-  }).join('')}</div>`;
-}
 /* O DOCUMENTO — é isto que o cliente vê, e é a mesma peça do PNG. Sem accordion: a lista
    inteira do plano em duas colunas, porque o cliente lê a proposta uma vez e não clica. */
 function prcPreviewHTML() {
@@ -10955,23 +10931,6 @@ function atualizarPreviewPrecificacao() {
   if (btnWhatsDoc && !btnWhatsDoc.dataset.ligado) { btnWhatsDoc.dataset.ligado = '1'; btnWhatsDoc.addEventListener('click', abrirWhatsappProposta); }
 }
 
-/* A ESCADA, COMO O CLIENTE LÊ (29/08/26). O material oficial de planos apresenta cada
-   plano como "Tudo do <anterior> +" e lista só o que ele acrescenta. É assim que a subida
-   de 279 para 349 para 549 faz sentido: não são quatro ofertas, é uma escada.
-
-   A tela tinha a lista COMPLETA de cada plano e nenhuma noção de herança, então os quatro
-   cards pareciam quatro produtos. Agora cada card diz de quem herda e quantos itens
-   acrescenta — e o número sai da DIFERENÇA entre as listas, não de texto escrito à mão.
-   Se o dado mudar, o texto acompanha; se alguém escrever "+8 itens" na mão, mente no dia
-   em que o plano ganhar o nono. */
-function prcHerancaTexto(tipo, plano) {
-  if (!plano.herdaDe) return '';
-  const anterior = (tipo.planos || []).find(x => x.id === plano.herdaDe);
-  if (!anterior) return '';
-  const doAnterior = new Set(Object.values(anterior.secoes || {}).flat());
-  const novos = Object.values(plano.secoes || {}).flat().filter(i => !doAnterior.has(i)).length;
-  return 'Tudo do ' + esc(anterior.nome) + (novos ? ' + ' + novos : '');
-}
 
 /* ============================================================================
    A PROPOSTA É PARA O CLIENTE VER (29/08/26)
@@ -11547,11 +11506,6 @@ function prcPeriodoProsa(c) {
   return nome + ', em ' + (c.periodo.observacao || (c.periodo.meses + 'x no cartão'));
 }
 
-function prcPeriodoTexto(c) {
-  const nome = c.periodo.nome;
-  if (c.periodo.meses <= 1) return nome;
-  return nome + ' · ' + (c.periodo.observacao || (c.periodo.meses + 'x no cartão'));
-}
 
 /* Só os adicionais COBRADOS, pelo nome. Os inclusos no plano não são "adicional" para
    o cliente — são o plano. */
@@ -11563,10 +11517,6 @@ function prcAdicionaisComPreco(c) {
     rot: i.nome + (i.quantidade > 1 ? ' ×' + i.quantidade : '') + (i.ate ? ' (até ' + i.ate + ' un.)' : ''),
     preco: '+' + prcMoedaCentavos(i.subtotal) + '/mês'
   }));
-}
-function prcAdicionaisCobrados(c) {
-  return (c.itens || []).filter(i => !i.incluido)
-    .map(i => i.nome + (i.quantidade > 1 ? ' (' + i.quantidade + ')' : ''));
 }
 
 /* O compromisso datado do fecho. Sai dos chips de próximo passo; o padrão é amanhã
@@ -11725,57 +11675,12 @@ function carregarImagemProposta(src) {
   });
 }
 
-/* ============================================================================
-   A IMAGEM QUE O DONO RECEBE (29/08/26) — prancha v3, seções A3 e F
-   ----------------------------------------------------------------------------
-   O TESTE QUE A PEÇA ANTERIOR REPROVAVA. Ela tinha 1200px de largura e desenhava as
-   14 a 40 funcionalidades do plano em 14px. No balão do WhatsApp de um celular
-   (~300px), 14px viram 3,5px EFETIVOS: as 32 funcionalidades do Profissional eram
-   textura cinza. O dono precisava abrir a imagem em tela cheia e dar zoom para ler
-   qualquer coisa — inclusive o preço.
-
-   Agora: 1080x1350 FIXO (4:5, a proporção que o WhatsApp mostra maior sem cortar), e
-   o menor texto da peça é 26px — ~7px no balão, e só no rodapé. Tudo que decide
-   (nome, preço, economia) está de 30px para cima.
-
-   O QUE SAIU:
-     · a lista completa de funcionalidades — foi para a TELA (modo cliente e
-       accordion), onde há espaço e um executivo explicando com o dedo. Nada foi
-       apagado; mudou de casa. Na peça fica a linha-síntese "+ as N funcionalidades".
-     · a marca d'água `layout v3 · 18/08` — era diagnóstico de deploy numa peça
-       comercial.
-     · `Arial` em 20 chamadas de ctx.font — agora Archivo/Manrope, a identidade do
-       sistema, carregadas ANTES de desenhar (ver prcCarregarFontesDaPeca).
-     · as cores próprias (#FF4757, #5CE0AE, #9C9284) — agora os tokens do painel
-       escuro do sistema.
-     · `prcMoedaCentavos` — a peça e a tela mostravam o mesmo preço em dois formatos
-       ("R$ 549,00" e "R$ 549"). Agora prcMoeda nas duas.
-     · a altura variável por plano (920 a 1291px) e as duas passadas de medição.
-     · `prcBadge()`, que nunca foi chamada desde que foi escrita.
-
-   O QUE ENTROU: o de→por com `prcRiscado()` (escrita para isso e nunca chamada), a
-   linha de economia, 5 marcadores de benefício, a validade em data absoluta, e o
-   primeiro marcador trocado pela DOR registrada quando o plano a resolve.
-
-   DESVIO CONSCIENTE DA PRANCHA: ela desenha a palavra "TAKEAT" em Archivo 900 no
-   topo. Isso trocaria a marca real — o logotipo da Takeat é um wordmark próprio, e o
-   arquivo existe em assets/logo-takeat.png. A prancha foi mockada em HTML, sem o
-   asset. Mantive o logotipo de verdade e deixei "PROPOSTA" à direita, como ela pede.
-   ============================================================================ */
-const PRC_PECA_W = 1080;
-const PRC_PECA_H = 1350;
-const PRC_PECA_PAD = 72;
 /* OS VALORES SÃO OS TOKENS DE VERDADE, conferidos no :root (29/08/26).
    Eu havia escrito #1A1815 para o fundo e #FDFBF0 para a tinta, seguindo a prancha — e a
    prancha errou: ela diz "--dark #1A1815", mas o token do sistema é #1A1613, e a tinta do
    painel escuro é --dark-ink #FFFDF8 (o #FDFBF0 é --panel, que é papel claro). A diferença
    é invisível a olho; a afirmação de que a peça usava os tokens do sistema não era. Canvas
    não lê var(), então os valores vêm copiados — por isso ficam nomeados aqui, com a fonte. */
-const PRC_PECA_BG = '#1A1613';                      // --dark
-const PRC_PECA_INK = '#FFFDF8';                     // --dark-ink
-const PRC_PECA_MUT = '#9C9284';                     // --dark-mut
-const PRC_PECA_LINE = 'rgba(253,251,240,.16)';      // --dark-line
-const PRC_PECA_GREEN = '#6FD3AC';                   // --dark-green (o verde do painel escuro)
 
 /* OS MARCADORES DE BENEFÍCIO — derivados da lista REAL do plano, não fixos por tipo de
    operação como a prancha propôs. Medido: o Básico Completo não tem CMV Dinâmico, nem
@@ -11819,393 +11724,300 @@ function prcChiado(c, dor) {
   return lista.slice(0, 5);
 }
 
-/* As fontes TÊM que estar carregadas antes do primeiro fillText: canvas não espera
-   webfont, e sem isto a peça sai em fallback do sistema sem nenhum erro aparecer —
-   exatamente o tipo de defeito silencioso que só se descobre olhando a imagem. */
-async function prcCarregarFontesDaPeca() {
-  if (!document.fonts || !document.fonts.load) return;
-  try {
-    await Promise.all([
-      document.fonts.load('900 120px Archivo'),
-      document.fonts.load('800 34px Archivo'),
-      document.fonts.load('700 30px Archivo'),
-      document.fonts.load('700 22px Archivo'),
-      document.fonts.load('600 30px Manrope'),
-      document.fonts.load('500 26px Manrope')
-    ]);
-    await document.fonts.ready;
-  } catch (e) { /* pior tipografia é aceitável; peça que não sai, não. */ }
-}
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   PROPOSTA PNG 1080×1350 — a peça que vai no WhatsApp do dono (30/08/26).
 
-const PRC_ARCHIVO = '"Archivo", system-ui, sans-serif';
-const PRC_MANROPE = '"Manrope", system-ui, sans-serif';
+   Este bloco é o `proposta-png.js` entregue pelo Claude Design, colado como pedido no
+   prompt ("não reescrever a lógica: colar o IIFE e chamar"). Ele já vem testado nos três
+   casos extremos do harness — nome longo, 5 adicionais, mensal sem desconto.
 
-/* Canvas 2D não tem letter-spacing confiável entre navegadores (ctx.letterSpacing é
-   recente). As etiquetas em caixa alta da identidade dependem do tracking, então ele
-   é desenhado caractere a caractere. Devolve a largura ocupada. */
-function prcTracking(ctx, texto, x, y, emPx, align) {
-  const chars = String(texto).split('');
-  const larguras = chars.map(ch => ctx.measureText(ch).width);
-  const total = larguras.reduce((a, b) => a + b, 0) + emPx * (chars.length - 1);
-  let cx = align === 'right' ? x - total : (align === 'center' ? x - total / 2 : x);
-  const alinhamentoAntes = ctx.textAlign; ctx.textAlign = 'left';
-  chars.forEach((ch, i) => { ctx.fillText(ch, cx, y); cx += larguras[i] + emPx; });
-  ctx.textAlign = alinhamentoAntes;
-  return total;
-}
+   O QUE ELE CONSERTA, e por que a peça anterior tinha de sair:
+   · texto cortado na borda ("…desconto do período também no", sem fim): agora TODO texto
+     passa por wrap() (quebra medida, com teto de linhas e ellipsis na palavra) ou por
+     fit() (encolhe a fonte até caber — nome do cliente e valor);
+   · conteúdo estourando o rodapé quando havia muitos itens: o rodapé é desenhado PRIMEIRO
+     e define o teto; antes de desenhar, um orçamento vertical decide o que cabe — corta
+     destaques (5 → mínimo 3), resume adicionais (3 + "+N outros · +R$ X/mês") e, em
+     último caso, derruba a nota;
+   · nitidez ruim no WhatsApp Web: canvas 2× (2160×2700), que sobrevive à compressão.
 
-/* Preço cheio riscado — o "de X por Y". A função existia desde 16/08, escrita com o
-   comentário citando o pedido ("tem que ser mais impactante o desconto que damos"), e
-   nunca foi chamada: 1 ocorrência no arquivo, a definição. Agora é chamada. */
-function prcRiscado(ctx, texto, x, y, cor, fontSize) {
-  ctx.fillStyle = cor; ctx.fillText(texto, x, y);
-  const largura = ctx.measureText(texto).width;
-  ctx.strokeStyle = cor; ctx.lineWidth = Math.max(2, fontSize * 0.09);
-  ctx.beginPath(); ctx.moveTo(x, y - fontSize * 0.30); ctx.lineTo(x + largura, y - fontSize * 0.30); ctx.stroke();
-  return largura;
-}
+   UMA COISA QUE EU ACRESCENTEI ao arquivo entregue: o PRÓXIMO PASSO no rodapé. O contrato
+   de dados do prompt tem o campo `proximoPasso` ("null => linha não aparece") e a spec do
+   rodapé pede "VÁLIDA ATÉ + PRÓXIMO PASSO à direita", mas o desenho entregue nunca lia o
+   campo — os três casos de teste passavam o valor e ele não aparecia em nenhum. Um
+   compromisso datado é a parte da peça que faz o dono esperar a ligação; ficou.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const W = 1080, H = 1350, S = 2, PAD = 72;
+  const C = { bg: '#232120', ink: '#EDEAE4', mut: '#B7B0A5', dim: '#8E887D', red: '#E51A31', green: '#3DBE7B', line: 'rgba(237,234,228,.14)', greenBg: 'rgba(61,190,123,.14)', greenBd: 'rgba(61,190,123,.4)' };
+  const F = (w, s, f) => `${w} ${s}px ${f || 'Archivo'}, sans-serif`;
 
-/* Retângulo de cantos arredondados sem depender de ctx.roundRect nativo. */
-function prcRoundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-/* O ✓ é DESENHADO, nunca fillText de emoji ou de caractere: glifo de check renderiza
-   diferente (ou não renderiza) por plataforma no canvas, e a peça circula por
-   aparelhos que a gente não controla. */
-function prcCheck(ctx, x, y, lado) {
-  ctx.strokeStyle = PRC_PECA_LINE; ctx.lineWidth = 2;
-  prcRoundRect(ctx, x, y, lado, lado, 6); ctx.stroke();
-  ctx.strokeStyle = PRC_PECA_INK; ctx.lineWidth = 3;
-  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x + lado * 0.24, y + lado * 0.52);
-  ctx.lineTo(x + lado * 0.43, y + lado * 0.71);
-  ctx.lineTo(x + lado * 0.78, y + lado * 0.29);
-  ctx.stroke();
-  ctx.lineCap = 'butt';
-}
-
-/* Quebra em até maxLinhas. `completo` diz se o texto INTEIRO caberia — é isso que
-   permite tentar um corpo menor antes de mutilar o nome. */
-function prcQuebrar(ctx, texto, maxW, maxLinhas) {
-  const palavras = String(texto || '').trim().split(/\s+/);
-  const linhas = []; let atual = '';
-  for (const palavra of palavras) {
-    const teste = atual ? atual + ' ' + palavra : palavra;
-    if (ctx.measureText(teste).width <= maxW) { atual = teste; continue; }
-    if (atual) linhas.push(atual);
-    atual = palavra;
-    if (linhas.length === maxLinhas) return { linhas: linhas, completo: false };
+  function fit(ctx, txt, font, size, maxW, minSize) {
+    let s = size;
+    ctx.font = font.replace(size + 'px', s + 'px');
+    while (ctx.measureText(txt).width > maxW && s > (minSize || 24)) { s -= 2; ctx.font = font.replace(size + 'px', s + 'px'); }
+    return s;
   }
-  if (atual) linhas.push(atual);
-  return { linhas: linhas, completo: ctx.measureText(atual).width <= maxW && linhas.length <= maxLinhas };
-}
-
-function prcElipse(ctx, texto, maxW) {
-  let t = String(texto);
-  while (t.length > 4 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
-  return ctx.measureText(texto).width > maxW ? t.trim() + '…' : texto;
-}
-
-/* A COMPOSIÇÃO É CALCULADA, NÃO EMPILHADA (29/08/26).
-
-   A primeira versão desta peça empilhava os blocos de cima para baixo com espaçamentos
-   fixos. MEDIDO varrendo as linhas do PNG gerado (procurando pixels diferentes do
-   fundo): o conteúdo terminava em y=926 e o rodapé começa em y=1239 — um vão de 313px,
-   23% da peça, enquanto todos os outros vãos tinham 44 a 56px. Não é respiro: é buraco,
-   e num documento comercial buraco parece erro.
-
-   Agora a altura é fixa e a folga é DISTRIBUÍDA: mede-se o conteúdo real (quantas
-   linhas o nome ocupou, se existe desconto, quantos marcadores qualificaram), calcula-se
-   o que sobra até o rodapé, e a sobra entra nos vãos com pesos — a maior parte entre os
-   marcadores, que é onde o ar melhora a leitura. Nome de duas linhas ou proposta sem
-   desconto reequilibram sozinhos, em vez de deixar o buraco em outro lugar. */
-function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
-  const W = larguraCanvas || PRC_PECA_W;
-  const H = PRC_PECA_H;
-  const PAD = PRC_PECA_PAD;
-  const uteis = W - PAD * 2;
-  const dor = prcDor();
-  const temDesconto = c.periodo.desconto > 0 && c.mensalCheio > c.mensal;
-
-  ctx.fillStyle = PRC_PECA_BG; ctx.fillRect(0, 0, W, H);
-  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-
-  /* ================= 1. medir ================= */
-  const nome = String(precificacaoEstado.cliente || '').trim() || 'Sua proposta';
-  const nomeMedido = prcMedirNome(ctx, nome, uteis);
-
-  /* Os adicionais SAEM da linha do plano e ganham bloco próprio com preço. Na linha
-     eles disputavam espaço com o nome do plano e o rótulo da operação, e com dois ou
-     três adicionais a frase era cortada — num documento comercial, cortado é pior que
-     ausente. Limite de 3 linhas + "e mais N": a peça tem altura fixa. */
-  const addMostrar = prcAdicionaisComPreco(c);
-  /* ORÇAMENTO DE ALTURA (30/08/26): a peça tem 1350px fixos, então a lista completa só
-     cabe se o passo entre linhas encolher com a quantidade. 230px é o orçamento; o passo
-     nunca passa de 38 (uma linha sozinha não fica esparramada) nem cai de 20 (abaixo
-     disso duas linhas se tocam). A fonte é 70% do passo, entre 17 e 26. */
-  const addPasso = addMostrar.length ? Math.max(20, Math.min(38, 230 / addMostrar.length)) : 0;
-  const addFonte = Math.max(17, Math.min(26, Math.round(addPasso * 0.7)));
-  const linhaPlano = 'Plano ' + c.plano.nome + ' · ' + (tipo.rotuloOficial || tipo.nome);
-  ctx.font = '600 28px ' + PRC_MANROPE;
-  const planoLinhas = prcQuebrar(ctx, linhaPlano, uteis, 2).linhas;
-
-  const meses = prcEconomiaEmMeses(c);
-  let economiaLinhas = [];
-  if (c.economia > 0) {
-    ctx.font = '800 30px ' + PRC_ARCHIVO;
-    economiaLinhas = prcQuebrar(ctx, 'Economia de ' + prcMoedaCentavos(c.economia) + (meses ? ' · ' + meses + ' por nossa conta' : ''), uteis - 100, 1).linhas;
-  }
-
-  /* QUEM CEDE ESPAÇO, e por quê: com 5+ adicionais a peça precisa da conta mais do que
-     do 4º e 5º marcador de benefício. Os marcadores são argumento; a lista de adicionais
-     é a explicação do preço — e preço sem explicação é objeção na hora da visita. */
-  const bullets = prcChiado(c, dor).slice(0, prcAdicionaisComPreco(c).length >= 5 ? 3 : 5);
-
-  /* OS VÃOS MÍNIMOS, e o avanço natural.
-
-     ERRO QUE EU COMETI NA PRIMEIRA TENTATIVA, e a lição: eu somei as ALTURAS dos blocos
-     onde o desenho consome AVANÇOS. Não é a mesma coisa — um texto de uma linha tem
-     altura 36 e avanço zero (só desloca a linha de base). O modelo superestimava o
-     conteúdo em 187px, a folga saía pequena na mesma medida, e o buraco antes do rodapé
-     caiu de 313 para 230px em vez de desaparecer. Medido varrendo os pixels do PNG, não
-     conferido de cabeça.
-
-     Agora o cálculo espelha o desenho linha por linha: cada termo aqui existe lá */
-  const VAO = {
-    nomePlano: 40,
-    planoPreco: 44,
-    riscadoPreco: temDesconto ? 46 : 0,
-    precoPeriodo: 40,
-    periodoSeparador: 34,
-    separadorEconomia: economiaLinhas.length ? 44 : 0,
-    economiaBullets: 52,
-    entreBullets: 0,
-    /* 72, não 46: MEDIDO no PNG instrumentado (log de cada fillText com o y). Com 46 o
-       rótulo ADICIONAIS ESCOLHIDOS caía em y=1050 e o último marcador em 1030 — cinco
-       pixels entre as duas linhas, que na peça lê como erro de composição. */
-    bulletsAdd: addMostrar.length ? 72 : 0,
-    bulletsSintese: 44
-  };
-
-  const TOPO = 152;               // logo em 88, respiro, e o nome começa aqui
-  const FIM = H - 110 - 80;       // 80px de margem antes da linha do rodapé
-
-  const avancoNatural =
-      nomeMedido.corpo * 0.78                                    // 1ª linha de base do nome
-    + (nomeMedido.linhas.length - 1) * (nomeMedido.corpo + 8)     // linhas extras do nome
-    + VAO.nomePlano
-    + (planoLinhas.length - 1) * 36                              // linhas extras do plano
-    + VAO.planoPreco
-    + VAO.riscadoPreco
-    + 88                                                          // o preço-herói
-    + VAO.precoPeriodo
-    + VAO.periodoSeparador
-    + (economiaLinhas.length ? VAO.separadorEconomia + 26 + (economiaLinhas.length - 1) * 42 : 0)
-    + VAO.economiaBullets
-    + Math.max(0, bullets.length - 1) * 54
-    + VAO.bulletsAdd
-    + (addMostrar.length - 1 > 0 ? (addMostrar.length - 1) * addPasso : 0)
-    + VAO.bulletsSintese;
-
-  const folga = Math.max(0, (FIM - TOPO) - avancoNatural);
-
-  /* Onde a folga entra. A maior fatia vai entre os marcadores: é a lista que o dono lê
-     de cima a baixo, e ar entre linhas é o que a faz ser lida em vez de escaneada. Os
-     pesos somam 1, então a folga é consumida inteira e o conteúdo termina onde FIM diz. */
-  VAO.entreBullets = bullets.length > 1 ? folga * 0.30 / (bullets.length - 1) : 0;
-  VAO.economiaBullets += folga * 0.20;
-  VAO.planoPreco += folga * 0.16;
-  VAO.bulletsSintese += folga * 0.14;
-  VAO.nomePlano += folga * 0.12;
-  VAO.precoPeriodo += folga * 0.08;
-
-  /* ================= 2. desenhar ================= */
-  /* topo: a marca de verdade (assets/logo-takeat.png), e a palavra PROPOSTA */
-  if (logo && logo.width) {
-    const lw = 190, lh = logo.height * lw / logo.width;
-    ctx.drawImage(logo, PAD, 88 - lh * 0.78, lw, lh);
-  } else {
-    ctx.fillStyle = PRC_PECA_INK; ctx.font = '900 40px ' + PRC_ARCHIVO;
-    ctx.fillText('Takeat', PAD, 88);
-  }
-  ctx.fillStyle = PRC_PECA_MUT; ctx.font = '700 22px ' + PRC_ARCHIVO;
-  prcTracking(ctx, 'PROPOSTA', W - PAD, 88, 3, 'right');
-
-  let y = TOPO + nomeMedido.corpo * 0.78;
-  ctx.fillStyle = PRC_PECA_INK;
-  ctx.font = '900 ' + nomeMedido.corpo + 'px ' + PRC_ARCHIVO;
-  nomeMedido.linhas.forEach((linha, k) => ctx.fillText(linha, PAD, y + k * (nomeMedido.corpo + 8)));
-  y += (nomeMedido.linhas.length - 1) * (nomeMedido.corpo + 8);
-
-  y += VAO.nomePlano;
-  ctx.fillStyle = PRC_PECA_MUT; ctx.font = '600 28px ' + PRC_MANROPE;
-  planoLinhas.forEach((linha, k) => ctx.fillText(linha, PAD, y + k * 36));
-  y += (planoLinhas.length - 1) * 36;
-
-  /* o de → por: prcRiscado, escrita em 16/08 para isto e nunca chamada até hoje */
-  y += VAO.planoPreco;
-  if (temDesconto) {
-    ctx.font = '600 30px ' + PRC_MANROPE;
-    prcRiscado(ctx, prcMoeda(c.mensalCheio), PAD, y, PRC_PECA_MUT, 30);
-    y += VAO.riscadoPreco;
-  }
-  /* PARCELAS x VALOR, como o configurador do Takeat OS mostra e como o Julyan pediu:
-     "12x R$ 439,00" diz o que sai do bolso dele por mês E que são doze vezes. Com
-     centavos, porque é o número que ele assina. */
-  let xPreco = PAD;
-  if (c.periodo.meses > 1) {
-    ctx.fillStyle = PRC_PECA_MUT; ctx.font = '900 62px ' + PRC_ARCHIVO;
-    const parcelas = c.periodo.meses + 'x';
-    ctx.fillText(parcelas, xPreco, y + 88);
-    xPreco += ctx.measureText(parcelas).width + 18;
-  }
-  ctx.fillStyle = PRC_PECA_INK; ctx.font = '900 112px ' + PRC_ARCHIVO;
-  const precoTxt = prcMoedaCentavos(c.mensal);
-  ctx.fillText(precoTxt, xPreco, y + 88);
-  if (c.periodo.meses <= 1) {
-    const larguraPreco = ctx.measureText(precoTxt).width;
-    ctx.fillStyle = PRC_PECA_MUT; ctx.font = '600 34px ' + PRC_MANROPE;
-    ctx.fillText('/mês', xPreco + larguraPreco + 12, y + 88);
-  }
-  y += 88;
-
-  y += VAO.precoPeriodo;
-  ctx.fillStyle = PRC_PECA_MUT; ctx.font = '600 28px ' + PRC_MANROPE;
-  ctx.fillText(c.periodo.meses > 1
-    ? esc(c.periodo.nome) + ' · ' + (c.periodo.observacao || (c.periodo.meses + 'x no cartão')) + ' · total do período ' + prcMoedaCentavos(c.total)
-    : 'Cobrança mensal', PAD, y);
-
-  /* a economia: aritmética de documento no painel escuro (§C da prancha). Sem selo
-     verde (não é prova medida com amostra) e sem tarja âmbar (não é promessa: se ele
-     pagar semestral, o preço É esse). Sem desconto, o bloco não existe. */
-  y += VAO.periodoSeparador;
-  ctx.strokeStyle = PRC_PECA_LINE; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
-  if (economiaLinhas.length) {
-    /* O SELO VERDE da economia — o tratamento que o Takeat OS já dá a este número e que
-       o Julyan escolheu. Pílula com o texto em verde sobre verde translúcido, e o check
-       DESENHADO num círculo cheio (nunca glifo: no canvas ✓ renderiza diferente por
-       plataforma, e esta peça circula por aparelhos que não controlamos). */
-    y += VAO.separadorEconomia + 30;
-    ctx.font = '800 30px ' + PRC_ARCHIVO;
-    const texto = economiaLinhas.join(' ');
-    const larguraTexto = ctx.measureText(texto).width;
-    const padH = 26, alturaSelo = 62, diam = 26;
-    const largura = Math.min(uteis, diam + 14 + larguraTexto + padH * 2);
-    prcRoundRect(ctx, PAD, y - 40, largura, alturaSelo, alturaSelo / 2);
-    ctx.fillStyle = 'rgba(111,211,172,.17)'; ctx.fill();
-    const cx = PAD + padH + diam / 2, cy = y - 40 + alturaSelo / 2;
-    ctx.beginPath(); ctx.arc(cx, cy, diam / 2, 0, Math.PI * 2);
-    ctx.fillStyle = PRC_PECA_GREEN; ctx.fill();
-    ctx.strokeStyle = PRC_PECA_BG; ctx.lineWidth = 3;
-    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(cx - 6, cy + 1); ctx.lineTo(cx - 2, cy + 5); ctx.lineTo(cx + 6, cy - 5);
-    ctx.stroke(); ctx.lineCap = 'butt';
-    ctx.fillStyle = PRC_PECA_GREEN;
-    ctx.font = '800 30px ' + PRC_ARCHIVO;
-    ctx.fillText(prcElipse(ctx, texto, largura - padH * 2 - diam - 14), PAD + padH + diam + 14, y + 10);
-    y += 22;
-  }
-
-  y += VAO.economiaBullets;
-  bullets.forEach((txt, k) => {
-    const ly = y + k * (54 + VAO.entreBullets);
-    prcCheck(ctx, PAD, ly - 22, 26);
-    ctx.fillStyle = PRC_PECA_INK; ctx.font = '600 30px ' + PRC_MANROPE;
-    ctx.fillText(prcElipse(ctx, txt, uteis - 44), PAD + 44, ly);
-  });
-  y += Math.max(0, bullets.length - 1) * (54 + VAO.entreBullets);
-
-  /* ADICIONAIS ESCOLHIDOS: nome à esquerda, o que soma à direita, alinhado pela borda.
-     É a conta que explica a diferença entre o preço do plano e o preço do mês. */
-  if (addMostrar.length) {
-    y += VAO.bulletsAdd;
-    ctx.fillStyle = PRC_PECA_MUT; ctx.font = '700 20px ' + PRC_ARCHIVO;
-    prcTracking(ctx, 'ADICIONAIS ESCOLHIDOS', PAD, y - 26, 2.4);
-    addMostrar.forEach((a, k) => {
-      const ly = y + k * addPasso;
-      ctx.textAlign = 'right';
-      ctx.fillStyle = PRC_PECA_GREEN; ctx.font = '800 ' + addFonte + 'px ' + PRC_ARCHIVO;
-      ctx.fillText(a.preco, W - PAD, ly);
-      const larguraPreco = ctx.measureText(a.preco).width;
-      ctx.textAlign = 'left';
-      ctx.fillStyle = PRC_PECA_INK; ctx.font = '600 ' + addFonte + 'px ' + PRC_MANROPE;
-      ctx.fillText(prcElipse(ctx, a.rot, uteis - larguraPreco - 30), PAD, ly);
-    });
-    y += (addMostrar.length - 1) * addPasso;
-  }
-
-  /* a lista completa mudou de casa — e a peça diz para onde */
-  y += VAO.bulletsSintese;
-  const quantas = Object.values(c.plano.secoes || {}).flat().length;
-  ctx.fillStyle = PRC_PECA_MUT; ctx.font = '500 24px ' + PRC_MANROPE;
-  ctx.fillText('+ as ' + quantas + ' funcionalidades do plano, apresentadas na visita'
-    + (addMostrar.length && c.periodo.desconto > 0 ? ' · desconto do período também nos adicionais' : ''),
-    PAD, Math.min(y, H - 150));
-
-  /* rodapé fixo: quem preparou, e até quando vale */
-  const yRod = H - 110;
-  ctx.strokeStyle = PRC_PECA_LINE; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(PAD, yRod); ctx.lineTo(W - PAD, yRod); ctx.stroke();
-  const eu = (typeof sessaoAtual !== 'undefined' && sessaoAtual) ? sessaoAtual : null;
-  const meuNome = String((eu && eu.nome) || '').trim();
-  /* Telefone é o dado acionável numa peça que circula no WhatsApp. Ele NÃO existe em
-     data/usuarios.json (só email, role, ownerId, nome), então o e-mail segue sendo o
-     contato — não invento um número. Se o campo passar a existir, ele entra aqui sem
-     mais nenhuma mudança. */
-  const meuContato = String((eu && (eu.telefone || eu.email)) || '').trim();
-  if (meuNome) {
-    ctx.fillStyle = PRC_PECA_INK; ctx.font = '700 30px ' + PRC_ARCHIVO;
-    ctx.fillText(meuNome, PAD, yRod + 44);
-    if (meuContato) {
-      ctx.fillStyle = PRC_PECA_MUT; ctx.font = '500 26px ' + PRC_MANROPE;
-      ctx.fillText(meuContato, PAD, yRod + 78);
+  function wrap(ctx, txt, maxW, maxLines) {
+    const words = String(txt).split(/\s+/), lines = [];
+    let cur = '';
+    for (const w of words) {
+      const t = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(t).width <= maxW) cur = t;
+      else { if (cur) lines.push(cur); cur = w; }
     }
+    if (cur) lines.push(cur);
+    if (maxLines && lines.length > maxLines) {
+      const keep = lines.slice(0, maxLines);
+      let last = keep[maxLines - 1];
+      while (ctx.measureText(last + '…').width > maxW && last.includes(' ')) last = last.slice(0, last.lastIndexOf(' '));
+      keep[maxLines - 1] = last + '…';
+      return keep;
+    }
+    return lines;
   }
-  ctx.fillStyle = PRC_PECA_MUT; ctx.font = '700 22px ' + PRC_ARCHIVO;
-  prcTracking(ctx, 'VÁLIDA ATÉ ' + prcDataValidade(), W - PAD, yRod + 44, 3, 'right');
+  const brl = v => 'R$ ' + Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  return H;
-}
+  function gerar(d, logo) {
+    const cv = document.createElement('canvas');
+    cv.width = W * S; cv.height = H * S;
+    const ctx = cv.getContext('2d');
+    ctx.scale(S, S);
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = C.bg; ctx.fillRect(0, 0, W, H);
+    const CW = W - PAD * 2;
 
-/* Mede o nome do cliente: devolve o corpo que couber e as linhas já quebradas. Nome de
-   restaurante longo é comum, e três linhas empurrariam o preço para fora da altura
-   fixa — desce 64 -> 56 antes de reticenciar, porque reduzir o corpo é menos ruim que
-   cortar o nome de quem vai receber a proposta. */
-function prcMedirNome(ctx, nome, maxW) {
-  for (const corpo of [64, 56]) {
-    ctx.font = '900 ' + corpo + 'px ' + PRC_ARCHIVO;
-    const r = prcQuebrar(ctx, nome, maxW, 2);
-    if (r.completo) return { corpo: corpo, linhas: r.linhas };
+    /* ── rodapé primeiro (ancorado): define o teto do conteúdo ── */
+    const footTop = H - 150;
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, footTop); ctx.lineTo(W - PAD, footTop); ctx.stroke();
+    ctx.font = F(700, 30, 'Manrope'); ctx.fillStyle = C.ink; ctx.textAlign = 'left';
+    ctx.fillText(wrap(ctx, d.executivo, CW * 0.55, 1)[0], PAD, footTop + 52);
+    ctx.font = F(500, 25, 'Manrope'); ctx.fillStyle = C.mut;
+    ctx.fillText(wrap(ctx, d.contato, CW * 0.55, 1)[0], PAD, footTop + 90);
+    /* VÁLIDA ATÉ e, quando existe, o compromisso datado — as duas à direita, uma sobre a
+       outra. Sem próximo passo, a validade fica centrada na altura, como antes. */
+    ctx.textAlign = 'right';
+    ctx.letterSpacing = '3px';
+    if (d.proximoPasso) {
+      ctx.font = F(800, 22); ctx.fillStyle = C.mut;
+      ctx.fillText('VÁLIDA ATÉ ' + d.validade, W - PAD, footTop + 48);
+      ctx.font = F(800, 22); ctx.fillStyle = C.green;
+      ctx.fillText('PRÓXIMO PASSO: ' + String(d.proximoPasso).toUpperCase(), W - PAD, footTop + 88);
+    } else {
+      ctx.font = F(800, 22); ctx.fillStyle = C.mut;
+      ctx.fillText('VÁLIDA ATÉ ' + d.validade, W - PAD, footTop + 70);
+    }
+    ctx.letterSpacing = '0px';
+
+    /* ── cabeçalho ── */
+    let y = 56;
+    if (logo) { const lh = 50, lw = logo.width * (lh / logo.height); ctx.drawImage(logo, PAD, y, lw, lh); }
+    ctx.textAlign = 'right'; ctx.font = F(800, 22); ctx.fillStyle = C.mut; ctx.letterSpacing = '5px';
+    ctx.fillText('PROPOSTA COMERCIAL', W - PAD, y + 38); ctx.letterSpacing = '0px';
+    y += 132;
+
+    /* ── cliente ── */
+    ctx.textAlign = 'left';
+    ctx.font = F(800, 21); ctx.fillStyle = C.dim; ctx.letterSpacing = '4px';
+    ctx.fillText('PREPARADA PARA', PAD, y); ctx.letterSpacing = '0px';
+    y += 64;
+    const nome = d.cliente || 'Seu próximo cliente';
+    let ns = fit(ctx, nome, F(900, 62), 62, CW, 40);
+    ctx.font = F(900, ns);
+    let linhasNome = [nome];
+    /* MEDIDO NOS PIXELS: fit() tem piso de 40px e devolve o corpo mesmo quando 40 ainda
+       não cabem — "Churrascaria Espeto de Prata do Vovô Andrade" vazava 15px para dentro
+       da margem direita. Não cabendo em uma linha, quebra em duas, num corpo mais baixo;
+       a linha extra é absorvida pelo orçamento vertical, que corta um destaque. */
+    if (ctx.measureText(nome).width > CW) {
+      ns = Math.min(ns, 46);
+      ctx.font = F(900, ns);
+      linhasNome = wrap(ctx, nome, CW, 2);
+    }
+    ctx.fillStyle = C.ink;
+    linhasNome.forEach((ln, i) => ctx.fillText(ln, PAD, y + i * (ns + 6)));
+    y += (linhasNome.length - 1) * (ns + 6);
+    y += 50;
+    ctx.font = F(500, 29, 'Manrope'); ctx.fillStyle = C.mut;
+    ctx.fillText(wrap(ctx, `Plano ${d.plano} · ${d.operacao} · ${d.periodo}`, CW, 1)[0], PAD, y);
+    y += 82;
+
+    /* ── preço: de → por ── */
+    if (d.precoCheio && d.precoCheio > d.valorParcela) {
+      const de = 'de ' + brl(d.precoCheio) + '/mês';
+      ctx.font = F(600, 27, 'Manrope'); ctx.fillStyle = C.dim; ctx.fillText(de, PAD, y);
+      const dw = ctx.measureText(de).width;
+      ctx.strokeStyle = C.dim; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(PAD, y - 9); ctx.lineTo(PAD + dw, y - 9); ctx.stroke();
+      y += 84;
+    } else y += 30;
+    const parc = (d.parcelas > 1 ? d.parcelas + 'x ' : '');
+    ctx.font = F(900, 58); ctx.fillStyle = C.mut;
+    const pw = ctx.measureText(parc).width;
+    ctx.fillText(parc, PAD, y);
+    const valor = brl(d.valorParcela);
+    const vs = fit(ctx, valor, F(900, 96), 96, CW - pw - 20, 60);
+    ctx.font = F(900, vs); ctx.fillStyle = C.ink; ctx.fillText(valor, PAD + pw, y);
+    y += 48;
+    ctx.font = F(500, 27, 'Manrope'); ctx.fillStyle = C.mut;
+    for (const ln of wrap(ctx, d.condicao, CW, 2)) { ctx.fillText(ln, PAD, y); y += 38; }
+    y += 28;
+
+    /* ── economia ── */
+    if (d.economia) {
+      const t = 'Economia de ' + brl(d.economia);
+      ctx.font = F(800, 27);
+      const tw = ctx.measureText(t).width, ph = 66, pw2 = tw + 96;
+      ctx.fillStyle = C.greenBg; ctx.strokeStyle = C.greenBd; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.roundRect(PAD, y - 45, pw2, ph, 33); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = C.green;
+      ctx.beginPath(); ctx.arc(PAD + 38, y - 12, 14, 0, 7); ctx.fill();
+      ctx.strokeStyle = C.bg; ctx.lineWidth = 3.4;
+      ctx.beginPath(); ctx.moveTo(PAD + 31, y - 12); ctx.lineTo(PAD + 36, y - 6); ctx.lineTo(PAD + 45, y - 19); ctx.stroke();
+      ctx.fillStyle = C.green; ctx.fillText(t, PAD + 62, y - 2);
+      y += 64;
+    }
+    ctx.strokeStyle = C.line; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, y); ctx.lineTo(W - PAD, y); ctx.stroke();
+    const yLinha = y;
+
+    /* ── orçamento vertical: decide quantos itens cabem ANTES de desenhar ── */
+    const H_DEST = 60, H_ADR = 50;
+    const destAll = (d.destaques || []).slice(0, 5);
+    const adsAll = d.adicionais || [];
+    let adsShown = Math.min(adsAll.length, 3);
+    const adsRows = () => adsShown + (adsAll.length > adsShown ? 1 : 0);
+    ctx.font = F(500, 24, 'Manrope');
+    const nota = d.nota || (`+ as ${d.nFuncionalidades} funcionalidades do plano, apresentadas na visita` + ((d.precoCheio || d.economia) && adsAll.length ? ' · o desconto do período vale também nos adicionais' : ''));
+    const notaLines = wrap(ctx, nota, CW, 2);
+    let nDest = destAll.length, drawNota = true;
+    const need = () => nDest * H_DEST + 30 + (adsRows() ? 54 + adsRows() * H_ADR + 20 : 0) + (drawNota ? notaLines.length * 36 + 12 : 0);
+    /* MARGEM DE 28, não 10: com 10 o caso cheio terminava a 3px da linha do rodapé —
+       medido nos pixels. 28px é o que separa "perto" de "colado". */
+    const RESPIRO = 28;
+    /* ordem de sacrifício, do mais barato para o mais caro */
+    while (y + need() > footTop - RESPIRO && nDest > 3) nDest--;
+    while (y + need() > footTop - RESPIRO && adsShown > 1) adsShown--;
+    if (y + need() > footTop - RESPIRO) drawNota = false;
+    /* A FOLGA É DISTRIBUÍDA, não sobra no fim. Sem isto, a proposta do dia a dia (plano
+       + 2 adicionais) saía com 275px de vão morto antes do rodapé, e a mensal sem
+       adicional com 395px. Os pesos somam 1: a maior fatia vai entre os destaques, que é
+       a lista que o dono lê de cima a baixo, e onde ar melhora a leitura. */
+    const folga = Math.max(0, (footTop - RESPIRO) - (y + need()));
+    const folgaAposLinha = folga * 0.28;
+    const folgaEntreDest = nDest > 0 ? folga * 0.34 / nDest : 0;
+    const folgaAntesAdd = folga * 0.24;
+    const folgaAntesNota = folga * 0.14;
+
+    /* ── destaques ── */
+    y = yLinha + 62 + folgaAposLinha;
+    const dest = destAll.slice(0, nDest);
+    ctx.font = F(600, 30, 'Manrope');
+    for (const item of dest) {
+      ctx.strokeStyle = C.green; ctx.lineWidth = 2.6;
+      ctx.strokeRect(PAD, y - 24, 30, 30);
+      ctx.beginPath(); ctx.moveTo(PAD + 7, y - 9); ctx.lineTo(PAD + 13, y - 3); ctx.lineTo(PAD + 24, y - 18); ctx.stroke();
+      ctx.fillStyle = C.ink;
+      ctx.fillText(wrap(ctx, item, CW - 58, 1)[0], PAD + 58, y);
+      y += H_DEST + folgaEntreDest;
+    }
+    y += 30 + folgaAntesAdd;
+
+    /* ── adicionais ── */
+    if (adsAll.length) {
+      ctx.font = F(800, 21); ctx.fillStyle = C.dim; ctx.letterSpacing = '4px';
+      ctx.fillText('ADICIONAIS ESCOLHIDOS', PAD, y); ctx.letterSpacing = '0px';
+      y += 54;
+      for (const a of adsAll.slice(0, adsShown)) {
+        ctx.font = F(700, 25); ctx.fillStyle = C.green; ctx.textAlign = 'right';
+        const vtxt = '+' + brl(a.valor) + '/mês';
+        ctx.fillText(vtxt, W - PAD, y);
+        const vw = ctx.measureText(vtxt).width;
+        ctx.font = F(600, 27, 'Manrope'); ctx.fillStyle = C.ink; ctx.textAlign = 'left';
+        ctx.fillText(wrap(ctx, a.nome, CW - vw - 40, 1)[0], PAD, y);
+        y += H_ADR;
+      }
+      if (adsAll.length > adsShown) {
+        const resto = adsAll.slice(adsShown).reduce((s, a) => s + a.valor, 0);
+        ctx.font = F(500, 24, 'Manrope'); ctx.fillStyle = C.mut;
+        ctx.fillText(`+ ${adsAll.length - adsShown} outros adicionais · +${brl(resto)}/mês`, PAD, y);
+        y += H_ADR;
+      }
+      y += 20 + folgaAntesNota;
+    }
+
+    /* ── nota final (só desenha se cabe — nunca sobrepõe nem invade o rodapé) ── */
+    if (drawNota) {
+      ctx.font = F(500, 24, 'Manrope'); ctx.fillStyle = C.dim;
+      for (const ln of notaLines) { ctx.fillText(ln, PAD, y); y += 36; }
+    }
+
+    return cv;
   }
-  ctx.font = '900 56px ' + PRC_ARCHIVO;
-  const r = prcQuebrar(ctx, nome, maxW, 2);
-  const linhas = r.linhas.slice(0, 2);
-  if (linhas.length) linhas[linhas.length - 1] = prcElipse(ctx, linhas[linhas.length - 1], maxW);
-  return { corpo: 56, linhas: linhas };
+
+  window.TakeatPropostaPNG = {
+    gerar,
+    async pronto() {
+      if (!document.fonts || !document.fonts.load) return;
+      await Promise.all([
+        document.fonts.load('900 96px Archivo'), document.fonts.load('800 22px Archivo'),
+        document.fonts.load('700 30px Manrope'), document.fonts.load('600 30px Manrope'), document.fonts.load('500 27px Manrope')
+      ]).catch(() => {});
+      await document.fonts.ready;
+    }
+  };
+})();
+
+/* Os dados da peça saem do MESMO estado que desenha o documento na tela: calcularPrecificacao()
+   para a conta, prcChiado() para os destaques (que já põem a dor registrada em primeiro lugar),
+   prcAdicionaisComPreco() para os adicionais com o valor já descontado. Uma fonte — se a peça
+   calculasse por conta, ela e a tela discordariam no dia em que a tabela mudasse. */
+function prcDadosDaPeca() {
+  const c = calcularPrecificacao();
+  const tipo = prcTipo();
+  const eu = (typeof sessaoAtual !== 'undefined' && sessaoAtual) ? sessaoAtual : null;
+  const passo = prcProximoPassoTexto();
+  const totalTxt = prcMoedaCentavos(c.total);
+  const meses = prcEconomiaEmMeses(c);
+  const condicao = c.periodo.meses > 1
+    ? (c.periodo.observacao || (c.periodo.meses + 'x no cartão')) + ' · total do período ' + totalTxt + (meses ? ' · equivale a ' + meses + ' grátis' : '')
+    : 'cobrança mensal · preço de tabela';
+  return {
+    cliente: (precificacaoEstado.conta && precificacaoEstado.conta.nome) || precificacaoEstado.cliente.trim() || 'Seu próximo cliente',
+    plano: c.plano.nome,
+    operacao: tipo.rotuloOficial || tipo.nome,
+    periodo: c.periodo.nome,
+    parcelas: c.periodo.meses,
+    valorParcela: c.mensal,
+    /* de→por só quando existe desconto de verdade */
+    precoCheio: c.mensalCheio > c.mensal ? c.mensalCheio : null,
+    economia: c.economia > 0 ? c.economia : null,
+    condicao: condicao,
+    destaques: prcChiado(c, prcDor()),
+    /* MESMO RÓTULO da lista do documento, mas com o valor como NÚMERO: a peça formata
+       sozinha, e reconverter "+R$ 132,00/mês" de volta para número seria pedir para errar
+       no dia em que o formato mudasse. */
+    adicionais: (c.itens || []).filter(i => !i.incluido).map(i => ({
+      nome: i.nome + (i.quantidade > 1 ? ' ×' + i.quantidade : '') + (i.ate ? ' (até ' + i.ate + ' un.)' : ''),
+      valor: i.subtotal
+    })),
+    nFuncionalidades: Object.values(c.plano.secoes || {}).flat().length,
+    executivo: String((eu && eu.nome) || 'Time Takeat').trim(),
+    contato: String((eu && (eu.telefone || eu.email)) || '').trim(),
+    validade: prcDataValidade(),
+    /* prcProximoPassoTexto devolve { dia, hora } — "Amanhã, 10h". É o mesmo compromisso que
+       a mensagem do WhatsApp promete, então os dois nunca divergem. */
+    proximoPasso: passo && passo.dia ? (passo.dia + ', ' + passo.hora) : null
+  };
 }
 
 async function gerarBlobPropostaPrecificacao() {
-  const tipo = prcTipo(); const c = calcularPrecificacao();
   const logo = await carregarImagemProposta('assets/logo-takeat.png');
-  await prcCarregarFontesDaPeca();
-
-  /* Uma passada só. As duas passadas antigas existiam para MEDIR a altura, que variava
-     de 920 a 1291px com o número de funcionalidades. A lista saiu da peça e a altura é
-     fixa em 4:5, então não há mais nada para medir. */
-  const canvas = document.createElement('canvas');
-  canvas.width = PRC_PECA_W; canvas.height = PRC_PECA_H;
-  desenharProposta(canvas.getContext('2d'), PRC_PECA_W, tipo, c, logo);
-
+  /* As fontes TÊM que estar carregadas antes do primeiro fillText: canvas não espera
+     webfont e desenharia em Arial, silenciosamente. */
+  await TakeatPropostaPNG.pronto();
+  const canvas = TakeatPropostaPNG.gerar(prcDadosDaPeca(), logo);
   return await new Promise((resolve, reject) => canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Falha ao gerar o PNG.')), 'image/png'));
 }
 
@@ -12225,7 +12037,10 @@ function baixarBlobProposta(blob) {
 
 async function baixarPropostaPrecificacao() {
   const btn = document.getElementById('prcBaixar');
-  if (btn) { btn.disabled = true; btn.textContent = 'Gerando PNG…'; }
+  /* MEDIDO NO CLIQUE: o finally devolvia o rótulo "Baixar proposta em PNG", mas o cartão
+     do v4 chama o botão de "Baixar PNG" — depois de usar uma vez, o botão se renomeava
+     sozinho. Guarda o rótulo que estava lá e devolve esse. */
+  if (btn) { btn.dataset.rotulo = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando PNG…'; }
   try {
     const blob = await gerarBlobPropostaPrecificacao();
     baixarBlobProposta(blob);
@@ -12233,7 +12048,7 @@ async function baixarPropostaPrecificacao() {
   } catch (e) {
     mostrarToast('Não consegui gerar o PNG da proposta.', 'erro');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = 'Baixar proposta em PNG'; }
+    if (btn) { btn.disabled = false; btn.textContent = btn.dataset.rotulo || 'Baixar PNG'; }
   }
 }
 
@@ -12346,8 +12161,6 @@ function playbookNormalizar(texto) {
   return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-
-
 // PROGRESSO (16/08/26) — repaginada gamificada do playbook, handoff do Julyan:
 // "hoje o progresso salva no navegador... passar a salvar por usuário no Supabase".
 // playbookProgressoCache é populado uma vez por sessão (carregarPlaybookProgresso) e
@@ -12447,8 +12260,6 @@ function playbookPagina(id) {
   return pb ? pb.paginas.find(p => p.id === id) : null;
 }
 
-
-
 function playbookLigarBotoesPagina(raiz) {
   raiz.querySelectorAll('[data-pb-page]').forEach(btn => btn.addEventListener('click', () => abrirPaginaPlaybook(btn.dataset.pbPage)));
 
@@ -12472,8 +12283,6 @@ function playbookLigarBotoesPagina(raiz) {
     btn.addEventListener('click', () => abrirPaginaPlaybook(destino, anc));
   });
 }
-
-
 
 
 /* ══════════════════════════════════════════════════════════════════════════════════════
@@ -28788,8 +28597,6 @@ async function renderDaily() {
     const souGestor = sessaoAtual && sessaoAtual.role === 'manager';
     const disabledAttr = souGestor ? 'disabled' : '';
     const inputStyleExtra = souGestor ? 'opacity:.65;cursor:not-allowed;' : '';
-
-
 
     // Semana com ícone por dia útil — reaproveita diasUteisDaSemana/bateuPrometido/getDaily,
     // que já existiam (usados no cálculo de sequência). Dia futuro (sem daily ainda) fica neutro.
