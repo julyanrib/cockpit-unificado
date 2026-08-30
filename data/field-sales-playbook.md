@@ -31,29 +31,83 @@ Isso é sobre o que a ferramenta **faz**, não sobre como o time vende.
 
 > 🔑 **Princípio fundamental, vale para as 19 frentes abaixo:** a Takeat **não fornece hardware nenhum** — nem tablet, nem totem, nem maquininha própria. Entrega 100% tecnologia, incluindo **integração direta com as maiores adquirentes do mercado** (a maquininha física é de terceiro; a inteligência que processa o pagamento e conecta com o resto da operação é da Takeat). Isso é posicionamento, não limitação: o restaurante fica livre para negociar equipamento com quem quiser, e paga a Takeat só pelo que ela realmente entrega.
 
-**⚠️ ÚNICA EXCEÇÃO — Totem de Autoatendimento: **o discurso de "hardware livre" vale para 18 dos 19 módulos. O Totem tem regra comercial própria e obrigatória (vigência jun/2026): a venda está condicionada à ativação do TEF Fiserv, com adicional de R$ 299,00/mês (Totem + licença TEF) e hardware na especificação homologada. Não use o punch de "use o totem que quiser" numa negociação de Totem — ali o correto é vender a solução homologada. Detalhes na página EQUIPAMENTOS.
+**⚠️ ÚNICA EXCEÇÃO — Totem de Autoatendimento:** o discurso de "hardware livre" vale para 18 dos 19 módulos. O Totem tem regra comercial própria e obrigatória (vigência jun/2026): a venda está condicionada à ativação do TEF Fiserv, com adicional de R$ 299,00/mês (Totem + licença TEF) e hardware na especificação homologada. Não use o punch de "use o totem que quiser" numa negociação de Totem — ali o correto é vender a solução homologada. Detalhes na página EQUIPAMENTOS.
 
-| #  | Módulo                         | O que resolve                                                                                                                                                                                      | Pilar principal           |
-| --- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
-| 1  | **PDV Balcão**                 | Ponto de venda tradicional no caixa — abre comanda, lança item, fecha conta, emite nota fiscal.                                                                                                    | Experiência               |
-| 2  | **Ferramenta de Garçom**       | App do garçom pra lançar pedido direto na mesa, sem voltar ao balcão.                                                                                                                              | Experiência + Vendas      |
-| 3  | **Garçom Digital**             | Autoatendimento via QR Code na mesa — cliente pede sem depender do garçom.                                                                                                                         | Experiência + Tempo Livre |
-| 4  | **Tablet**                     | Autoatendimento — o próprio cliente faz o pedido direto no tablet, sem depender do garçom. Takeat fornece a **tecnologia**, não o hardware.                                                        | Experiência + Custos      |
-| 5  | **Totem**                      | Mesma lógica do Tablet, em formato de quiosque fixo: o cliente faz o próprio pedido sozinho, do início ao fim. **Software** de autoatendimento — o equipamento físico é do cliente ou de terceiro. | Experiência + Custos      |
-| 6  | **Painel KDS**                 | Tela digital na cozinha que substitui a comanda de papel — pedido chega, some da tela quando pronto. Atualização em tempo real por estação, corta erro de preparo e mede tempo real de cada prato. | Experiência + Tempo Livre |
-| 7  | **Delivery Próprio**           | Canal de entrega gerido pelo próprio restaurante — reduz comissão de marketplace. Integra também iFood, 99Food e Keeta num painel único, então o marketplace vira canal a mais, não um sistema à parte. | Custos + Vendas       |
-| 8  | **Roteirização Inteligente**   | *(adicional pago, R$ 109/mês — ver FAQ)* Agrupa até 9 pedidos prontos por região numa rota só, calcula a melhor ordem de entrega e manda o roteiro pro WhatsApp do motoboy — em vez de um motoboy por pedido. | Custos + Tempo Livre |
-| 9  | **Teka (IA de Atendimento)**   | *(adicional pago, R$ 99/mês — ver FAQ)* Inteligência artificial que responde o cliente do delivery automaticamente, sem precisar de humano dedicado a isso.                                       | **Custos + Tempo Livre**  |
-| 10 | **Integração com Adquirentes** | Conexão direta com as maiores adquirentes — pagamento processado já entra na conciliação.                                                                                                          | Tempo Livre               |
-| 11 | **Fidelidade**                 | Cashback nativo e retenção — traz o cliente de volta sem depender de desconto.                                                                                                                     | Vendas                    |
-| 12 | **Reservas de Mesa**           | Link público onde o cliente escolhe dia/horário e reserva sozinho — a mesa fica bloqueada pelo período todo, WhatsApp cuida da confirmação e do lembrete, e a comanda já abre sozinha quando a recepção confirma a chegada. | Experiência + Vendas |
-| 13 | **Gestão Financeira**          | Controle de caixa, conciliação bancária por importação de OFX (sem credencial bancária no sistema), DRE automático.                                                                                                                 | Tempo Livre               |
-| 14 | **Gestão de Estoque**          | Controle de insumo integrado — saída automática a cada venda.                                                                                                                                      | Custos + Tempo Livre      |
-| 15 | **Controle de CMV**            | Custo de Mercadoria Vendida calculado automaticamente.                                                                                                                                             | Custos                    |
-| 16 | **Ficha Técnica**              | Cadastro de receita/composição de cada prato.                                                                                                                                                      | Custos                    |
-| 17 | **Precificação Dinâmica**      | *(exclusivo Plano Inovação — ver FAQ)* CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado.                                                              | Custos                    |
-| 18 | **Recorrência**                | Motor de assinatura/recompra.                                                                                                                                                                      | Vendas                    |
-| 19 | **CRM**                        | Gestão de relacionamento com o cliente final — base, histórico, segmentação.                                                                                                                       | Vendas + Experiência      |
+**Como ler as cinco frentes abaixo:** elas não estão em ordem de importância, estão em ordem de **onde a dor aparece na operação dele**. Escolha a frente pelo que você viu na visita, não pela ordem da lista.
+
+***
+
+### 🍽️ Frente 1 — O salão: onde o cliente está sentado
+
+O que resolve fila no caixa, garçom correndo e mesa que demora a girar.
+
+| Módulo                        | O que resolve                                                                                                                                                                                      | Pilar                     |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| **PDV Balcão**                | Ponto de venda tradicional no caixa — abre comanda, lança item, fecha conta, emite nota fiscal.                                                                                                    | Experiência               |
+| **Ferramenta de Garçom**      | App do garçom pra lançar pedido direto na mesa, sem voltar ao balcão.                                                                                                                              | Experiência + Vendas      |
+| **Garçom Digital**            | Autoatendimento via QR Code na mesa — cliente pede sem depender do garçom.                                                                                                                         | Experiência + Tempo Livre |
+| **Tablet**                    | Autoatendimento — o próprio cliente faz o pedido direto no tablet, sem depender do garçom. Takeat fornece a **tecnologia**, não o hardware.                                                        | Experiência + Custos      |
+| **Totem**                     | Mesma lógica do Tablet, em formato de quiosque fixo: o cliente faz o próprio pedido sozinho, do início ao fim. **Software** de autoatendimento — o equipamento físico é do cliente ou de terceiro. | Experiência + Custos      |
+| **Reservas de Mesa**          | Link público onde o cliente escolhe dia/horário e reserva sozinho — a mesa fica bloqueada pelo período todo, WhatsApp cuida da confirmação e do lembrete, e a comanda já abre sozinha quando a recepção confirma a chegada. | Experiência + Vendas |
+
+> **A frase que abre essa frente:** *"Seu [Nome], quanto tempo o seu cliente espera hoje entre levantar a mão e o garçom chegar? Porque cada minuto ali é mesa que não gira — e é aí que o autoatendimento não tira o garçom do salão, ele libera o garçom pra vender."*
+
+***
+
+### 🛵 Frente 2 — O delivery: o pedido que vem de fora
+
+O que resolve comissão de marketplace, motoboy caro e atendimento preso no WhatsApp.
+
+| Módulo                       | O que resolve                                                                                                                                                                                      | Pilar                    |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| **Delivery Próprio**         | Canal de entrega gerido pelo próprio restaurante — reduz comissão de marketplace. Integra também iFood, 99Food e Keeta num painel único, então o marketplace vira canal a mais, não um sistema à parte. | Custos + Vendas      |
+| **Roteirização Inteligente** | *(adicional pago, R$ 109/mês — ver FAQ)* Agrupa até 9 pedidos prontos por região numa rota só, calcula a melhor ordem de entrega e manda o roteiro pro WhatsApp do motoboy — em vez de um motoboy por pedido. | Custos + Tempo Livre |
+| **Teka (IA de Atendimento)** | *(adicional pago, R$ 99/mês — ver FAQ)* Inteligência artificial que responde o cliente do delivery automaticamente, sem precisar de humano dedicado a isso.                                       | Custos + Tempo Livre     |
+
+> **A frase que abre essa frente:** *"Seu [Nome], de cada dez pedidos de delivery, quantos vêm do iFood? E quanto o senhor paga de comissão nesses dez? Porque o cliente que já conhece a sua casa não precisa passar por lá — e o marketplace continua servindo pra quem ainda não te conhece."*
+
+***
+
+### 🔥 Frente 3 — A cozinha e a produção: onde o dinheiro vira prato
+
+O que resolve comanda de papel, prato errado e insumo que desaparece.
+
+| Módulo                | O que resolve                                                                                                                                                                                      | Pilar                  |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- |
+| **Painel KDS**        | Tela digital na cozinha que substitui a comanda de papel — pedido chega, some da tela quando pronto. Atualização em tempo real por estação, corta erro de preparo e mede tempo real de cada prato. | Experiência + Tempo Livre |
+| **Gestão de Estoque** | Controle de insumo integrado — saída automática a cada venda.                                                                                                                                      | Custos + Tempo Livre   |
+| **Ficha Técnica**     | Cadastro de receita/composição de cada prato.                                                                                                                                                      | Custos                 |
+
+> **A frase que abre essa frente:** *"Seu [Nome], quando a cozinha erra um prato no sábado à noite, o senhor descobre pelo cliente reclamando ou pelo sistema? E o insumo que saiu naquele prato, quem deu baixa?"*
+
+***
+
+### 💰 Frente 4 — O dinheiro: margem, caixa e conciliação
+
+O que resolve margem que ninguém sabe, caixa fechado no caderno e cartão que não bate.
+
+| Módulo                         | O que resolve                                                                                                                                          | Pilar       |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
+| **Controle de CMV**            | Custo de Mercadoria Vendida calculado automaticamente.                                                                                                 | Custos      |
+| **Precificação Dinâmica**      | *(exclusivo Plano Inovação — ver FAQ)* CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado.                  | Custos      |
+| **Gestão Financeira**          | Controle de caixa, conciliação bancária por importação de OFX (sem credencial bancária no sistema), DRE automático.                                     | Tempo Livre |
+| **Integração com Adquirentes** | Conexão direta com as maiores adquirentes — pagamento processado já entra na conciliação.                                                               | Tempo Livre |
+
+> **A frase que abre essa frente:** *"Seu [Nome], o senhor sabe agora, sem abrir planilha, se o seu prato mais vendido está dando lucro no preço de hoje? A maioria dos donos não sabe — e esse silêncio custa margem todo mês."*
+
+***
+
+### 🤝 Frente 5 — O cliente e a recorrência: fazer voltar
+
+O que resolve terça-feira vazia, base de clientes que ninguém usa e desconto como única arma.
+
+| Módulo          | O que resolve                                                                        | Pilar                |
+| --------------- | ------------------------------------------------------------------------------------ | -------------------- |
+| **Fidelidade**  | Cashback nativo e retenção — traz o cliente de volta sem depender de desconto.        | Vendas               |
+| **Recorrência** | Motor de assinatura/recompra.                                                         | Vendas               |
+| **CRM**         | Gestão de relacionamento com o cliente final — base, histórico, segmentação.          | Vendas + Experiência |
+
+> **A frase que abre essa frente:** *"Seu [Nome], o senhor tem o telefone de quem come aqui toda semana? Porque quem pede pelo iFood é cliente do iFood. Quem pede pelo seu canal é seu — e dá pra chamar de volta numa terça fraca sem dar desconto."*
 
 ***
 
