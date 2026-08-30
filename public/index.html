@@ -2075,6 +2075,11 @@
      25): números grandes em Archivo, badge em pílula colorida em vez de texto solto,
      cartões com sombra e cantos generosos. Nenhum data-attribute mudou — é troca de
      roupa, não de esqueleto; todo clique continua funcionando exatamente igual. ===== */
+  /* O "＋ dia hora" é a ação primária da linha de sugestão: é ele que a prancha quer a um
+     clique. "Ver ficha" fica ao lado, no tom secundário que ela já tinha. */
+  .ag-plan-btn-agendar{background:var(--ink);color:var(--dark-ink);border-color:var(--ink);font-weight:800;white-space:nowrap;}
+  .ag-plan-btn-agendar:hover{opacity:.9;}
+
   .agdx{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);margin-bottom:16px;}
   .agdx-t{--tone:var(--ink);--tone-soft:var(--sunk);text-align:left;background:var(--panel);border:none;padding:16px 19px;font-family:inherit;cursor:pointer;min-width:0;transition:background .15s var(--ease);}
   .agdx-t:hover{background:var(--panel2);}
@@ -13483,11 +13488,35 @@ function agendaContasAlvoHTML(ownerId, dias, naSemana) {
     .sort((a, b) => distanciaBase(a) - distanciaBase(b) || (Number(b.avaliacoes) || 0) - (Number(a.avaliacoes) || 0))
     .slice(0, 2);
   if (!contas.length) return '<div class="ag-rail-empty">Sua carteira não tem outra conta-alvo livre nesta região. As recém-abertas abaixo podem abastecer a próxima semana.</div>';
-  return contas.map(l => {
+  /* O BURACO REAL DA SEMANA, um por sugestão (30/08/26 — DE/PARA da Agenda na prancha:
+     "trilha o que merece entrar: lista passiva -> cada sugestão com '＋ dia/hora' apontando
+     para o buraco real", efeito "agendar = 1 clique (era abrir compromisso e preencher)").
+
+     Esta trilha oferecia só "Ver ficha →": para marcar, o executivo abria a ficha e
+     preenchia. As OUTRAS famílias de sugestão desta mesma trilha (quente fora da semana,
+     conta nova da Casa dos Dados) já tinham o botão direto há tempo — a de conta-alvo era
+     a única que ficou de fora.
+
+     agendaSlotsLivres é a MESMA função que alimenta as outras, então as três sugestões
+     apontam para os mesmos buracos e nunca duas para o mesmo horário: cada uma consome a
+     sua posição no array. E o botão usa data-agagendar/data-agdata/data-aghora, o handler
+     que já existe — ele busca a conta em prospeccaoCache (que é onde conta-alvo vive) e
+     grava por criarTarefaVisitaNoHubspot. Nenhum caminho de escrita novo. */
+  const slotsLivres = agendaSlotsLivres(ownerId, dias, naSemana);
+  return contas.map((l, iSug) => {
     const km = distanciaBase(l);
     const naRota = l.status === 'na_rota' && l.data_rota === isoDate(new Date());
     const meta = [prospeccaoBairroExibicao(l.bairro) || l.cidade, Number.isFinite(km) ? km.toFixed(1).replace('.', ',') + ' km da região-base' : null, l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : null].filter(Boolean).join(' · ');
-    return `<div class="ag-rail-lead tone-green is-clickable" data-agleadalvo="${agendaEsc(String(l.id))}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(l.nome)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(l.nome)}">${agendaEsc(l.nome)}</b><span>${agendaEsc(meta || prospeccaoPraca(l))}</span><span class="ag-rail-source">${agendaEsc(agendaRotuloDeFonte(l.fonte))} · conta-alvo${naRota ? ' · na rota hoje' : ''}</span></div><div class="ag-plan-actions"><button type="button" class="ag-plan-btn" data-agficha-alvo="${agendaEsc(String(l.id))}">Ver ficha →</button></div></div>`;
+    /* Sem buraco na semana não se oferece horário: o botão desaparece e "Ver ficha" segue
+       sendo o caminho. Prometer um encaixe que não existe é pior que não oferecer. */
+    const slot = slotsLivres[iSug] || null;
+    const jaAgendado = slot ? agendadoLocalDe(l.id, slot.dataISO) : null;
+    const btnAgendar = !slot
+      ? ''
+      : jaAgendado
+        ? `<span class="ag-rail-place" style="color:var(--green);">✓ Agenda ${agendaEsc(jaAgendado.hora)}</span>`
+        : `<button type="button" class="ag-plan-btn ag-plan-btn-agendar" data-agagendar="${agendaEsc(String(l.id))}" data-agdata="${agendaEsc(slot.dataISO)}" data-aghora="${agendaEsc(slot.hora)}" title="Cria a visita no HubSpot para ${agendaEsc(slot.dia)} às ${agendaEsc(slot.hora)}">＋ ${agendaEsc(slot.dia)} ${agendaEsc(slot.hora)}</button>`;
+    return `<div class="ag-rail-lead tone-green is-clickable" data-agleadalvo="${agendaEsc(String(l.id))}" role="button" tabindex="0" aria-label="Abrir ficha de ${agendaEsc(l.nome)}"><div class="ag-rail-lead-main"><b title="${agendaEsc(l.nome)}">${agendaEsc(l.nome)}</b><span>${agendaEsc(meta || prospeccaoPraca(l))}</span><span class="ag-rail-source">${agendaEsc(agendaRotuloDeFonte(l.fonte))} · conta-alvo${naRota ? ' · na rota hoje' : ''}</span></div><div class="ag-plan-actions">${btnAgendar}<button type="button" class="ag-plan-btn" data-agficha-alvo="${agendaEsc(String(l.id))}">Ver ficha →</button></div></div>`;
   }).join('');
 }
 
