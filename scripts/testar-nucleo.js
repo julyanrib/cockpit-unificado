@@ -933,24 +933,31 @@ teste('o tipo da promessa sai da etapa do negócio', () => {
   igual(c.tipoDaPromessa({ stageId: '1395880473' }), 'fechamentos', 'Ag. Pagamento = fechamento');
 });
 
-teste('sem etapa conhecida cai em visitas, nunca em null', () => {
-  // A soma tem de fechar com a contagem de marcados. Um tipo null faria a promessa
-  // perder item no caminho e o executivo veria número diferente do que marcou.
+teste('sem etapa conhecida não inventa uma visita', () => {
+  // A promessa é auditável: negócio fora do mapa precisa ser classificado antes de
+  // entrar no compromisso, em vez de inflar visitas por aproximação.
   const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
-  igual(c.tipoDaPromessa({ stageId: '1396006164' }), 'visitas', 'etapa fora do mapa');
-  igual(c.tipoDaPromessa({}), 'visitas', 'sem stageId');
-  igual(c.tipoDaPromessa(null), 'visitas', 'lead nulo');
+  igual(c.tipoDaPromessa({ stageId: '1396006164' }), null, 'etapa fora do mapa');
+  igual(c.tipoDaPromessa({}), null, 'sem stageId');
+  igual(c.tipoDaPromessa(null), null, 'lead nulo');
 });
 
-teste('a soma fecha com a quantidade de itens marcados', () => {
+teste('a soma ignora tipo inválido em vez de transformá-lo em visita', () => {
   const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
   const itens = [
     { tipo: 'visitas' }, { tipo: 'visitas' }, { tipo: 'avancos' },
     { tipo: 'propostas' }, { tipo: 'fechamentos' }, { tipo: 'coisa_invalida' }
   ];
   const som = c.somaDaPromessa(itens);
-  igual(som, { visitas: 3, avancos: 1, propostas: 1, fechamentos: 1 }, 'tipo inválido conta como visita');
-  igual(som.visitas + som.avancos + som.propostas + som.fechamentos, itens.length, 'nenhum item se perde');
+  igual(som, { visitas: 2, avancos: 1, propostas: 1, fechamentos: 1 }, 'tipo inválido não entra na promessa');
+  igual(som.visitas + som.avancos + som.propostas + som.fechamentos, itens.length - 1, 'só itens classificados entram');
+});
+
+teste('a promessa trava exatamente às 9h30 no relógio de Brasília', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 9, 29))), false, '9h29 ainda permite confirmar');
+  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 9, 30))), true, '9h30 trava');
+  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 18, 0))), true, 'não reabre durante o dia');
 });
 
 // NOTA (28/08/26) — a integração "a sequência do dia carrega o tipo de cada item" NÃO
