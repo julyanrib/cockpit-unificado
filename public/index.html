@@ -5856,6 +5856,12 @@
     </div>
   </div>
 
+  <!-- POR QUE PERDEMOS (30/08/26): depois do funil, de propósito. A ordem conta a
+       história certa — o que está no funil, e o que sai pelo ralo. O motivo vem do
+       HubSpot (motivo_do_perdido), que o time já preenche há muito tempo e que nunca
+       tinha chegado a uma tela. -->
+  <div id="cockpitPorQuePerdemos" style="margin-bottom:20px;"></div>
+
   <!-- BLOCO 2 (10/08/26): "Pódio da semana + Meta do mês" migrou pra aba Semana. A faixa
        de KPIs no topo desta aba já diz "Fechados no mês · meta X · Y% do caminho" — o
        rodapé do pódio repetia o MESMO número na mesma dobra. Aqui fica só Vendas do mês
@@ -6502,6 +6508,7 @@ function aplicarVisaoPorPapel() {
     if (typeof renderFunilBarras === 'function') renderFunilBarras();
     if (typeof renderLeadsPrioritarios === 'function') renderLeadsPrioritarios();
     if (typeof renderVendasMes === 'function') renderVendasMes();
+    if (typeof renderPorQuePerdemos === 'function') renderPorQuePerdemos();
     if (typeof renderRepsList === 'function') renderRepsList();
     // Aguarda o fim da avaliação do script porque o comando cruza Daily, Rotas e Agenda,
     // declaradas mais abaixo. É o painel de decisão do gestor, não mais um snapshot.
@@ -6528,6 +6535,7 @@ function aplicarVisaoPorPapel() {
     if (typeof renderKpiStripHero === 'function') renderKpiStripHero();
     if (typeof renderLeadsPrioritarios === 'function') renderLeadsPrioritarios();
     if (typeof renderVendasMes === 'function') renderVendasMes();
+    if (typeof renderPorQuePerdemos === 'function') renderPorQuePerdemos();
     if (typeof renderPodioMeta === 'function') renderPodioMeta();
   }
   // BLOCO 2 (10/08/26, Julyan — "a tela tá demorando a abrir, principalmente a aba
@@ -13193,6 +13201,16 @@ function wireVendasMesEdicao(containerEl) {
   });
 }
 
+/* POR QUE PERDEMOS: so para o gestor. O executivo ve a propria assinatura de perda dentro
+   do funil dele (gxBlocoPerdaHTML); o total do time e a comparacao entre executivos sao
+   material de gestao — ranking de derrota nas costas do outro nao e transparencia. */
+function renderPorQuePerdemos() {
+  const el = document.getElementById('cockpitPorQuePerdemos');
+  if (!el) return;
+  if (sessaoAtual && sessaoAtual.role === 'rep') { el.innerHTML = ''; return; }
+  el.innerHTML = gxPorQuePerdemosHTML();
+}
+
 function renderVendasMes() {
   const el = document.getElementById('vendasMesBloco');
   if (!el) return;
@@ -17227,6 +17245,7 @@ document.getElementById('tabBtnCockpit').addEventListener('click', () => {
     if (typeof renderFunilBarras === 'function') renderFunilBarras();
     if (typeof renderLeadsPrioritarios === 'function') renderLeadsPrioritarios();
     if (typeof renderVendasMes === 'function') renderVendasMes();
+    if (typeof renderPorQuePerdemos === 'function') renderPorQuePerdemos();
     if (typeof renderRepsList === 'function') renderRepsList();
     if (typeof renderAderenciaDailyHero === 'function') renderAderenciaDailyHero();
     if (typeof renderCockpitDossieInline === 'function') renderCockpitDossieInline();
@@ -18500,6 +18519,127 @@ function gxBlocoMixHTML(r) {
   </div>`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   POR QUE PERDEMOS — o dado que estava no HubSpot e nunca chegou à tela.
+
+   O playbook trazia "investigar o motivo das 100 perdas com dados" como AÇÃO DA SEMANA,
+   escrita à mão. O motivo já estava preenchido no CRM (motivo_do_perdido, "Motivo - Perda
+   (Comercial)"), e o cockpit puxava dos perdidos só nome e dono.
+
+   O que a consulta mostrou, e é por isso que isto virou tela: o time não perde para preço
+   nem para produto — perde para o SILÊNCIO. E cada executivo tem uma assinatura de perda
+   diferente, o que faz o 1:1 ser individual em vez de genérico.
+
+   Duas leituras: a do time (o que nos derrota) e a de cada um (o que derrota ELE, contra
+   o time). Sem inventar: se o campo não vier no payload, a tela diz que não veio.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Cor por motivo: o que é abandono nosso em vermelho, o que é escolha do cliente em âmbar,
+   o que é falha de cadastro em cinza. A cor já é a leitura. */
+const GX_MOTIVO_COR = {
+  'Sem retorno': 'var(--gx-red)',
+  'Outros': 'var(--gx-muted2)',
+  'Sem motivo preenchido': 'var(--gx-muted2)',
+  'Não quer mudar de sistema': 'var(--gx-amber-claro)',
+  'Preço': 'var(--gx-amber)',
+  'Funcionalidade': 'var(--gx-green)',
+  'Estorno (Reembolso)': 'var(--gx-muted)'
+};
+function gxCorMotivo(m) { return GX_MOTIVO_COR[m] || 'var(--gx-muted)'; }
+
+/* Os motivos que são NOSSOS de resolver: silêncio e cadastro em branco. Preço e sistema
+   atual do cliente são objeção — têm resposta no playbook, não são descuido. */
+const GX_MOTIVO_NOSSO = ['Sem retorno', 'Sem motivo preenchido'];
+
+function gxMotivosOrdenados(mapa) {
+  return Object.entries(mapa || {}).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+}
+
+/* ── A leitura do time ────────────────────────────────────────────────────── */
+function gxPorQuePerdemosHTML() {
+  const mp = DATA.motivosPerda;
+  if (!mp || !mp.porMotivo || !Object.keys(mp.porMotivo).length) {
+    return `<div class="gx"><div class="gx-secao">
+      <div class="gx-secao-cab"><b>Por que perdemos</b></div>
+      <div class="gx-vazio">O motivo de perda ainda não veio nesta carga do HubSpot. Ele é lido de <code>motivo_do_perdido</code> na próxima rodada do robô — não é um campo que alguém precise preencher aqui.</div>
+    </div></div>`;
+  }
+  const lista = gxMotivosOrdenados(mp.porMotivo);
+  const total = lista.reduce((s, [, v]) => s + v, 0);
+  const maior = lista[0] ? lista[0][1] : 0;
+  const nossos = lista.filter(([k]) => GX_MOTIVO_NOSSO.includes(k)).reduce((s, [, v]) => s + v, 0);
+  const pctNosso = total ? Math.round(100 * nossos / total) : 0;
+
+  const barras = lista.map(([motivo, n]) => `<div class="gx-forma-linha">
+      <span class="gx-forma-rot">${esc(motivo)}</span>
+      <span class="gx-forma-trilha"><i style="width:${maior ? Math.round(100 * n / maior) : 0}%;background:${gxCorMotivo(motivo)}"></i></span>
+      <span class="gx-forma-num">${n}<small>${Math.round(100 * n / total)}%</small></span>
+    </div>`).join('');
+
+  return `<div class="gx"><div class="gx-secao">
+    <div class="gx-secao-cab"><b>Por que perdemos</b><span>${total} negócios perdidos nos últimos ${mp.dias || 90} dias · motivo declarado no HubSpot</span></div>
+    <div class="gx-forma">${barras}</div>
+    <div class="gx-secao-nota">
+      <b>${pctNosso}% das perdas são nossas de resolver</b> — "sem retorno" e perda sem motivo preenchido. Preço e "não quer mudar de sistema" são objeção, e objeção tem resposta no playbook; silêncio não tem: é follow-up que não aconteceu.
+      ${(mp.porMotivo['Outros'] || 0) > total * 0.25 ? '<br>E <b>"Outros" passa de um quarto das perdas</b>: enquanto o motivo real não for escolhido no CRM, esta tela mede o cadastro, não o mercado. Isso é combinado de 1:1, não é gráfico.' : ''}
+    </div>
+  </div></div>`;
+}
+
+/* ── A assinatura de perda de UM executivo, contra a do time ──────────────── */
+function gxBlocoPerdaHTML(r) {
+  const mp = DATA.motivosPerda;
+  if (!mp || !mp.porOwner) return '';
+  const meu = mp.porOwner[String(r.ownerId)];
+  if (!meu || !Object.keys(meu).length) {
+    return `<div class="gx-secao">
+      <div class="gx-secao-cab"><b>Como ele perde</b><span>últimos ${mp.dias || 90} dias</span></div>
+      <div class="gx-vazio">Nenhuma perda com motivo declarado no período. Sem amostra não há assinatura — e inventar padrão com dois casos é pior que não olhar.</div>
+    </div>`;
+  }
+  const lista = gxMotivosOrdenados(meu);
+  const totalMeu = lista.reduce((s, [, v]) => s + v, 0);
+  const totalTime = gxMotivosOrdenados(mp.porMotivo).reduce((s, [, v]) => s + v, 0);
+  const maior = lista[0] ? lista[0][1] : 0;
+
+  /* o que o diferencia: motivo em que a fatia dele passa de 1,5× a do time */
+  const destaques = lista.map(([motivo, n]) => {
+    const fatia = n / totalMeu;
+    const fatiaTime = totalTime ? (mp.porMotivo[motivo] || 0) / totalTime : 0;
+    return { motivo, n, fatia, fatiaTime, razao: fatiaTime > 0 ? fatia / fatiaTime : 0 };
+  });
+  const acima = destaques.filter(d => d.razao >= 1.5 && d.n >= 5).sort((a, b) => b.razao - a.razao);
+
+  const barras = destaques.map(d => `<div class="gx-forma-linha">
+      <span class="gx-forma-rot">${esc(d.motivo)}</span>
+      <span class="gx-forma-trilha">
+        <i style="width:${maior ? Math.round(100 * d.n / maior) : 0}%;background:${gxCorMotivo(d.motivo)}"></i>
+        <span class="gx-forma-marca" style="left:${maior ? Math.min(99, Math.round(100 * (d.fatiaTime * totalMeu) / maior)) : 0}%"></span>
+      </span>
+      <span class="gx-forma-num">${d.n}<small>${Math.round(d.fatia * 100)}%</small></span>
+    </div>`).join('');
+
+  /* a frase muda com o motivo: cada assinatura pede um coaching diferente, e o playbook
+     tem a página de cada um. Nada de "converse com ele" genérico. */
+  const receita = {
+    'Preço': 'Ele perde por preço acima do time. Preço não se defende com desconto: <b>Objeções — a conversa é sobre margem</b> tem o fechamento por contraste.',
+    'Sem retorno': 'Ele perde por silêncio acima do time. Isso é cadência, não talento: <b>Follow-up — presença no prazo certo</b> tem a régua por etapa.',
+    'Não quer mudar de sistema': 'Ele perde para o sistema que o cliente já tem. O caminho é a pergunta que desarma o PDV legado: <b>Concorrência — os três tipos</b>.',
+    'Funcionalidade': 'Ele perde por funcionalidade. Vale conferir se é falta de produto ou falta de repertório: o <b>Catálogo de soluções</b> diz o que existe e em qual plano.',
+    'Outros': 'A maior parte das perdas dele está em "Outros" — o motivo real não está sendo escolhido no CRM. Antes de coaching, isso é combinado de cadastro.',
+    'Sem motivo preenchido': 'As perdas dele saem sem motivo nenhum. Sem isso não há o que aprender do que deu errado — comece por aqui no 1:1.'
+  };
+  const nota = acima.length
+    ? (receita[acima[0].motivo] || `Ele perde em <b>${esc(acima[0].motivo)}</b> bem acima do time — vale entender o padrão antes de orientar.`)
+    : 'A assinatura de perda dele acompanha a do time. O que o separa não está em <em>por que</em> perde, e sim em quanto entra no funil e em quanto tempo ele demora — olhe a forma e a idade acima.';
+
+  return `<div class="gx-secao">
+    <div class="gx-secao-cab"><b>Como ele perde</b><span>${totalMeu} perdas nos últimos ${mp.dias || 90} dias · régua = o time</span></div>
+    <div class="gx-forma">${barras}</div>
+    <div class="gx-secao-nota">${nota}</div>
+  </div>`;
+}
+
 /* A tela inteira. Ordem: forma, idade, dinheiro, meta, promessa, mix. */
 function gxFunilDoExecutivoHTML(r) {
   return `<div class="gx">
@@ -18512,7 +18652,10 @@ function gxFunilDoExecutivoHTML(r) {
       ${gxBlocoMetaHTML(r)}
       ${gxBlocoPromessaHTML(r)}
     </div>
-    ${gxBlocoMixHTML(r)}
+    <div class="gx-grid">
+      ${gxBlocoPerdaHTML(r)}
+      ${gxBlocoMixHTML(r)}
+    </div>
   </div>`;
 }
 
