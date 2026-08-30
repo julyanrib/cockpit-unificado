@@ -4484,8 +4484,21 @@
 
   .prosp2-scrim{position:fixed;inset:0;background:rgba(26,22,19,.4);opacity:0;pointer-events:none;transition:opacity .2s var(--ease);z-index:60;}
   .prosp2-scrim.open{opacity:1;pointer-events:auto;}
-  .prosp2-drawer{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:94vw;background:var(--panel);z-index:70;transform:translateX(105%);transition:transform .25s var(--ease);box-shadow:var(--shadow-drawer,-18px 0 44px rgba(26,22,19,.3));display:flex;flex-direction:column;}
-  .prosp2-drawer.open{transform:none;}
+  /* O DRAWER FECHADO SAI DA ORDEM DE TABULAÇÃO (30/08/26, achado na auditoria de clique).
+
+     Fechado, ele só era empurrado para fora com translateX(105%) — continuava
+     visibility:visible, sem inert, e com CINCO controles focáveis por Tab. Medido. Dois
+     desses controles são "→ Criar negócio no funil" e "devolver pro gestor", que são as
+     duas ações desta tela que ESCREVEM. Ou seja: dava para tabular às cegas para dentro
+     de um painel invisível e disparar uma escrita sem ver em qual conta.
+
+     Isso é pior que clique morto — é clique invisível em ação destrutiva.
+
+     visibility:hidden resolve as duas coisas de uma vez (sai do Tab e do hit-test). O
+     atraso de .25s na volta preserva a animação de saída: o painel desliza para fora e só
+     depois desaparece. Ao abrir, a visibilidade volta na hora e a transição roda. */
+  .prosp2-drawer{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:94vw;background:var(--panel);z-index:70;transform:translateX(105%);visibility:hidden;transition:transform .25s var(--ease),visibility 0s .25s;box-shadow:var(--shadow-drawer,-18px 0 44px rgba(26,22,19,.3));display:flex;flex-direction:column;}
+  .prosp2-drawer.open{transform:none;visibility:visible;transition:transform .25s var(--ease),visibility 0s 0s;}
   .prosp2-dw-head{padding:20px 22px 16px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:12px;}
   .prosp2-dw-head .prosp2-avatar{width:46px;height:46px;font-size:15px;border-radius:13px;}
   .prosp2-dw-id{flex:1;min-width:0;}
@@ -14269,7 +14282,22 @@ function prosp2LigarEventos(universo, ownerId) {
   const locInput = document.getElementById('prosp2LocInput');
   const locGo = document.getElementById('prosp2LocGo');
   const aplicarBusca = async (texto) => {
-    if (!texto || !texto.trim()) return;
+    /* CAMPO VAZIO PRECISA RESPONDER (30/08/26, achado na auditoria de clique).
+
+       Isto era `if (!texto || !texto.trim()) return;` — retorno silencioso. Medido: o
+       executivo clica em "Buscar aqui" com o campo vazio e a tela não faz absolutamente
+       nada: zero mutação no DOM, zero mudança de estado, e o foco nem vai para o campo.
+       Do ponto de vista de quem está na rua isso é um botão quebrado — ele clica de novo,
+       clica mais forte, e conclui que a tela travou.
+
+       Não desabilitei o botão enquanto o campo está vazio de propósito: botão apagado
+       esconde o caminho, e este é o caminho para trocar de praça. Ele responde: leva o
+       foco para onde falta digitar e diz o que digitar. */
+    if (!texto || !texto.trim()) {
+      if (locInput) { locInput.focus(); locInput.select(); }
+      prosp2Toast('Escreva o bairro, a cidade ou o endereço onde você quer buscar.', 'aviso');
+      return;
+    }
     locGo.disabled = true; locGo.textContent = 'Buscando…';
     const terrVies = territorioDe(ownerId);
     const resultado = await geocodificarLocalAtuacao(texto.trim(), terrVies && terrVies.lat, terrVies && terrVies.lng);
