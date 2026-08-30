@@ -69,3 +69,11 @@ E a segunda, que qualifica de verdade: *"seu motoboy é seu ou é freela?"* — 
 *Fonte dos números de configuração: página pública `takeat.app/solucoes/roteirizacao`, conferida em 29/08/2026.*
 
 Aprofundar: [Delivery Próprio — a guerra da taxa de marketplace](playbook:ecossistema-takeat#ecossistema-takeat-delivery-proprio-a-guerra-da-taxa-abusiva-de-marketplace) · [Mapa dor → solução](playbook:mapa-dor-solucao)
+
+***
+
+## ✅ O que fazer agora
+
+- Pergunte hoje, em duas casas com delivery próprio: quantos motoboys rodam no pico e quantos pedidos cada um leva por viagem.
+- Se a resposta for "um pedido por viagem", a conta se faz sozinha: até 9 pedidos por rota, no raio de 1,5 km.
+- Lembre que o motoboy não precisa de app: o roteiro chega no WhatsApp dele. É a objeção mais comum e ela já está resolvida.

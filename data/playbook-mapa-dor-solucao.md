@@ -135,3 +135,11 @@ Três regras que separam diagnóstico de interrogatório:
 3. **O reenquadramento vem depois do número dele**, nunca antes. Reenquadrar antes de o dono dizer o próprio número é discurso; depois, é conta.
 
 **O que este mapa não faz:** ele não substitui o registro. A dor continua indo para o campo obrigatório do negócio — é dela que a proposta, a imagem e a mensagem se alimentam. Diagnóstico não registrado é diagnóstico que morre no fim do dia.
+
+***
+
+## ✅ O que fazer agora
+
+- Na próxima visita, saia com **uma dor nomeada** e escrita no negócio. Sem dor registrada, não há motivo para voltar.
+- Puxe só o módulo que responde àquela dor. Demonstração de tudo é o jeito mais rápido de não vender nada.
+- Use a frase de campo da dor que você identificou — ela está nesta página, pronta. Improviso na frente do dono custa autoridade.
