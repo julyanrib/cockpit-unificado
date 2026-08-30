@@ -1412,52 +1412,113 @@ Para garantir que a sua carteira de clientes seja um porto seguro de receita e i
 
 ### COMO EVITAR CHURN
 
-## 🛡️ Blindagem e Recuperação: Defendendo sua Carteira
+# 🛡️ BLINDAGEM DE CARTEIRA: COMO NÃO PERDER O QUE VOCÊ JÁ VENDEU
 
-No mercado de alimentação, a concorrência vai tentar bater na porta do seu cliente com "preço baixo". O executivo de elite não entra em leilão; ele reafirma o **valor da parceria presencial** e a agilidade de quem está na rua.
+### O cliente que cancela em março é o cliente que você vai ter que vender de novo em abril
 
-### A) Identificando o Risco (O Radar do Executivo)
+> *"Cancelamento não é um evento. É o fim de um processo que começou umas seis semanas antes, e ninguém foi lá ver."*
 
-Um cliente não cancela do nada. Fique atento aos sinais:
+Faça a conta antes de ler o resto. Um cliente de **R$ 400 de MRR** que cancela no quarto mês não custa R$ 400: custa os R$ 400 que iam repetir todo mês, a comissão que você já não recebe, o esforço de prospecção que virou pó e — o mais caro — um endereço queimado no seu território, porque restaurante que teve experiência ruim conta para o vizinho. Repor esse MRR exige um ciclo inteiro de funil novo: prospectar, visitar, demonstrar, negociar, fechar. **Defender é mais barato que vender.**
 
-* O dono parou de responder suas mensagens de relacionamento.
-
-* O volume de pedidos no sistema caiu sem motivo sazonal.
-
-* O gerente mencionou que "veio um pessoal de outro sistema aqui".
-
-### B) Ações de Recuperação (O Resgate Presencial)
-
-Se o cliente sinalizar que quer sair ou que o concorrente é mais barato: **Não tente resolver pelo WhatsApp. Vá até a loja.**
-
-1. **Ouça Primeiro (Sem Retrucar):** *"Fulano, entendi que o preço deles parece atrativo. Mas me conta, além do preço, o que na sua operação hoje não está 100% e que você acha que eles vão resolver?"*
-
-2. **Venda a "Custo de Troca":** Relembre o cliente do trabalho que dá trocar de sistema e o risco de perder dados. *"Vale a pena arriscar sua operação rodando liso por uma diferença que não paga um jantar na sua casa?"*
-
-3. **O Trunfo da Linha de Frente:** *"Nós temos um time de Suporte e Sucesso (CS) dedicado, mas **eu estou aqui na rua, na sua frente agora**. Eu antecipo qualquer problema antes mesmo de chegar no suporte. Se o sistema do concorrente travar numa sexta-feira à noite, quem vai sentar aqui com você para resolver? Eu estou no bairro, eles são apenas um 0800."*
-
-### C) O Papel do Executivo vs. Suporte (CS)
-
-Embora a Takeat tenha uma estrutura robusta de Sucesso do Cliente (CS) e Suporte Técnico, o executivo de campo é o **primeiro interventor**.
-
-* **Antecipação:** Não espere o CS ligar. Se você sentiu um incômodo na visita, resolva ali. Ajuste o tablet, tire a dúvida do garçom, alinhe a expectativa do dono.
-
-* **Agilidade:** Estar na linha de frente permite que você identifique o problema antes dele virar um pedido de cancelamento. Use essa vantagem competitiva.
-
-### D) Contorno de Objeção: "O outro é R$ 100 mais barato"
-
-Traga o cliente para a **Realidade do Lucro**:
-
-* **Argumento Matador:** *"Fulano, a Takeat custa R$ 400 porque nós garantimos que você não perca pedidos. Se você perder apenas **um pedido de R$ 50 por semana** por falha do sistema barato, no final do mês o 'barato' saiu mais caro que a Takeat. Você quer economia de centavos ou quer lucro de verdade?"*
+E defender é trabalho de campo, não de e-mail. A Takeat tem CS e Suporte, mas eles atendem por chamado — você atende por presença. Quem está no bairro chega antes.
 
 ***
 
-## 💡 A Mentalidade de Defesa
+## 1 — O radar: os sinais que aparecem antes do pedido de cancelamento
 
-* **Blindagem é constante:** Se o relacionamento é bom, o concorrente nem consegue apresentar a proposta.
+Nenhum cliente cancela do nada. Ele avisa, em silêncio, nesta ordem:
 
-* **O "Não" para o concorrente é um "Sim" para a Takeat:** Reforce que ele está investindo na melhor tecnologia e no suporte de quem realmente "pisa no barro" com ele.
+| Sinal                                                        | O que costuma significar                          | Sua ação, no mesmo dia                                    |
+| ------------------------------------------------------------ | ------------------------------------------------- | --------------------------------------------------------- |
+| **Parou de responder suas mensagens de relacionamento**      | Perdeu o vínculo com você, não com o produto      | Visita presencial sem aviso — 10 minutos, sem pauta comercial |
+| **Volume de pedidos caiu sem sazonalidade**                  | A operação parou de usar parte do sistema         | Sente com o gerente e veja QUAL etapa deixou de ser usada  |
+| **"Veio um pessoal de outro sistema aqui"**                  | O concorrente já apresentou proposta              | Vá hoje. Depois da assinatura do outro não há resgate      |
+| **Trocou o gerente ou o caixa**                              | Quem foi treinado saiu; ninguém sabe usar         | Retreinamento de 20 minutos com quem chegou                |
+| **Reclamou de uma coisa pequena duas vezes**                 | A segunda reclamação é sobre você não ter resolvido a primeira | Resolva na frente dele e mostre resolvido           |
+| **Pediu segunda via, boleto, "quero ver o contrato"**        | Está calculando saída                             | Ligue no mesmo dia com o valor por pedido na mão           |
 
+**Regra prática:** dois sinais na mesma casa = visita presencial nesta semana, sem exceção. Um sinal isolado = mensagem no mesmo dia.
+
+***
+
+## 2 — Os três momentos que decidem a retenção
+
+### 🗓️ Dias 1 a 14 — a implantação é a sua reunião de retenção
+
+A maior janela de churn é a primeira: cliente que assinou e não subiu não tem apego nenhum. Você tem duas obrigações aqui — **garantir que o cardápio chegou** e **aparecer no dia do go-live**. Estar presente no primeiro dia de uso vale mais que dez follow-ups depois.
+
+### 🗓️ Dias 15 a 45 — a hora do "não é bem o que eu imaginei"
+
+É quando a equipe erra o fluxo e conclui que "o sistema é complicado". Uma visita de 20 minutos nesse intervalo, sentado com o garçom e com o caixa, resolve o que três chamados de suporte não resolvem. **Pergunta que abre tudo:** *"Me mostra como você está lançando o pedido da mesa 4?"* — você vai ver o erro em 30 segundos.
+
+### 🗓️ Do dia 46 em diante — presença com motivo
+
+Relacionamento sem pauta vira incômodo. Toda visita de carteira leva **uma** coisa nova: uma função que ele não usa, um número da operação dele, uma novidade do ecossistema. Sem pauta, não é relacionamento — é interrupção.
+
+***
+
+## 3 — Resgate presencial: o roteiro de quando ele já disse que quer sair
+
+**Não resolva por WhatsApp.** Mensagem dá tempo para ele racionalizar a saída. Vá até a loja.
+
+**Passo 1 — Ouça primeiro, sem retrucar.**
+
+> *"Fulano, entendi que o preço deles parece atrativo. Mas me conta: além do preço, o que na sua operação hoje não está 100% e que você acha que eles vão resolver?"*
+
+Cale-se e anote. Em 80% dos casos aparece um problema operacional que você resolve na hora — e o preço deixa de ser o assunto.
+
+**Passo 2 — Ponha o custo de troca na mesa, com nome e sobrenome.**
+
+> *"Trocar de sistema não é trocar de mensalidade. É recadastrar cardápio inteiro, retreinar o time no meio do movimento, perder o histórico de pedidos que você usa para decidir compra, e rodar uns dias instável até o novo assentar. Vale arriscar sua operação rodando lisa por uma diferença que não paga um jantar na sua casa?"*
+
+**Passo 3 — Use o seu trunfo, que o 0800 não tem.**
+
+> *"Nós temos CS e Suporte dedicados, mas eu estou aqui na sua frente agora. Eu antecipo o problema antes de virar chamado. Se o sistema deles travar numa sexta às 21h, quem senta aqui com você? Eu estou no bairro. Eles são um 0800."*
+
+**Passo 4 — Feche com um compromisso seu, não com desconto.**
+
+> *"Fecha assim comigo: eu volto na terça para sentar com o seu garçom e destravar o que está te incomodando. Se em duas semanas você continuar achando que não vale, eu mesmo te ajudo a sair. Combinado?"*
+
+Desconto compra um mês. Compromisso cumprido compra o ano.
+
+***
+
+## 4 — "O outro é R$ 100 mais barato"
+
+Traga para a realidade do lucro, não para o leilão de preço:
+
+> *"Fulano, a Takeat custa o que custa porque garante que você não perca pedido. Se o sistema barato te fizer perder **um pedido de R$ 50 por semana**, no fim do mês o barato saiu mais caro. Você quer economizar centavos ou ganhar dinheiro?"*
+
+E se ele insistir na comparação, use o que é público: nós publicamos **oito comparativos lado a lado** em `takeat.app/comparativos` — Saipos, Cardápio Web, Repediu, Yooga, Consumer, Colibri, Anota AI e Goomer — com matriz de recursos e data de revisão. Abra na frente dele e compare o que ele usa de verdade. **Nem sempre a Takeat é a melhor escolha para o caso dele, e dizer isso é o que faz ele confiar nas outras 15 linhas da matriz.**
+
+***
+
+## 5 — Onde termina você e começa o CS
+
+| Situação                                              | Quem resolve   | O que você faz                                                       |
+| ----------------------------------------------------- | -------------- | -------------------------------------------------------------------- |
+| Dúvida de uso, fluxo, treinamento de equipe           | **Você**       | Resolve na visita. Não abre chamado para o que se ensina em 5 minutos |
+| Bug, indisponibilidade, erro fiscal                   | Suporte        | Abre o chamado **com print, horário e o que o cliente estava fazendo** |
+| Insatisfação com resultado, ameaça de cancelamento    | **Você + CS**  | Avisa o CS no mesmo dia e vai presencialmente                        |
+| Pedido formal de cancelamento                         | CS conduz      | Você tenta o resgate antes de virar formal — depois é processo        |
+
+**Antecipação é a sua vantagem competitiva:** se você sentiu um incômodo na visita, resolva ali. Ajuste o tablet, tire a dúvida do garçom, alinhe a expectativa do dono. Não espere o CS te ligar contando o que você já podia ter visto.
+
+***
+
+## 6 — A mentalidade de defesa
+
+- **Blindagem é constante.** Se o relacionamento está bom, o concorrente não consegue nem apresentar a proposta.
+- **Cliente ativo é prova de venda.** Ele é a sua melhor referência na rua e a sua fonte mais barata de indicação.
+- **Um "não" dele para o concorrente é um "sim" para você.** Reforce que ele está com a melhor tecnologia e com quem pisa no barro junto.
+
+***
+
+## 7 — O que fazer agora
+
+- Olhe sua carteira e liste quem você **não visita há mais de 30 dias**. Essa lista é o seu risco.
+- Escolha os três com mais MRR dessa lista e marque visita nesta semana — com pauta.
+- Se alguém já mencionou concorrente: vá hoje. Amanhã pode ser depois da assinatura do outro.
 
 ### PIPELINE
 
@@ -1580,54 +1641,110 @@ Não são etapas do pipeline — são de onde o lead nasce antes de entrar na es
 
 ### DADOS PARA CADASTRO
 
-🚀 CHECKLIST DE ATIVAÇÃO: ECOSSISTEMA TAKEAT
+# 📋 ATIVAÇÃO SEM ATRITO: OS DADOS QUE DESTRAVAM A IMPLANTAÇÃO
 
-*Copie e envie para o cliente após o fechamento:*
+### Como sair da assinatura para a operação rodando sem perder uma semana no meio
 
-Fala, seu **[Nome]**, tudo bem?
+> *"Contrato assinado não é cliente ativo. Cliente ativo é o que já vendeu pela plataforma."*
 
-Para darmos o pontapé inicial na configuração da sua plataforma e travar a sua data com o nosso time de implantação, preciso que me envie esses dados rápidos aqui abaixo.
+Entre a assinatura e o primeiro pedido existe um vão, e é nesse vão que o negócio morre em silêncio. O card já foi para Enviado Onboarding, a comissão já apareceu na planilha, mas o restaurante continua anotando pedido em papel porque falta um arquivo. A implantação assistida da Takeat roda em **7 a 14 dias** — esse prazo começa a contar quando o pacote está completo, não quando o contrato foi assinado. Cada campo que falta empurra a data de go-live para frente, e um restaurante que assinou e não subiu é o candidato número um a churn no primeiro mês.
 
-Assim que recebermos, nosso time de engenharia já começa a desenhar a inteligência do seu cardápio! 🛠️
+Duas travas são absolutas e não têm jeitinho: **sem cardápio não há Onboarding**, e mover o card para Enviado Onboarding migra o negócio para o pipeline de Implantação e cria o grupo de WhatsApp com o cliente na hora — **não dá para desfazer com um clique**. Ou seja: você move quando o pacote está fechado, não antes.
 
-### 🏢 1. Dados Cadastrais (Faturamento)
+***
 
-* **Nome do Contratante:**
+## 1 — O que bloqueia, o que acelera e onde conseguir
 
-* **CPF:**
+| Item                              | Quem fornece         | Se faltar, bloqueia                          | Onde ele consegue                                                       |
+| --------------------------------- | -------------------- | -------------------------------------------- | ----------------------------------------------------------------------- |
+| **CNPJ + razão social + endereço**| Contratante          | Emissão do contrato e do faturamento         | Cartão CNPJ (site da Receita) ou contrato social                        |
+| **CPF e nome do responsável**     | Contratante          | Assinatura e cobrança                        | Documento do dono                                                        |
+| **E-mail e telefone oficiais**    | Contratante          | Acesso ao painel e grupo de implantação      | O que ele usa de verdade, não o do contador                             |
+| **Cardápio atual**                | Restaurante          | **Tudo.** Sem cardápio não há Onboarding     | PDF, print do sistema antigo ou fotos nítidas de todas as páginas       |
+| **Logotipo em alta**              | Restaurante/designer | Identidade do cardápio digital e do totem    | PNG ou PDF; print de Instagram não serve                                |
+| **Instagram oficial**             | Restaurante          | Curadoria visual do cardápio                 | @ do perfil que ele usa hoje                                            |
+| **Nº de mesas / comandas ativas** | Restaurante          | Dimensionamento de licenças e do Garçom      | Contagem do salão, incluindo mesas de rua                               |
+| **Regime tributário**             | Contador             | Escolha do módulo fiscal certo               | O contador responde em uma mensagem                                     |
+| **Certificado digital A1**        | Contador             | Emissão de nota (só no módulo fiscal)        | Arquivo `.pfx` ou `.p12` — o contador emite ou já tem                   |
+| **Senha do certificado**          | Contador             | Instalação do certificado                    | Vem junto com o arquivo; sem ela o arquivo é inútil                     |
+| **CSC + ID do CSC**               | Contador/SEFAZ       | Autorização de NFC-e no estado               | Portal da SEFAZ do estado, área do contribuinte                         |
 
-* **Nome do Restaurante:**
+**Regra prática:** peça tudo de uma vez, na mesma mensagem, no dia do fechamento. Pedir em três mensagens ao longo da semana é como o cliente aprende que dá para responder devagar.
 
-* **CNPJ:**
+***
 
-* **E-mail:**
+## 2 — A mensagem pronta (copie, troque o nome, envie)
 
-* **Telefone:**
+> *"Fala, seu [Nome]! Fechado então — parabéns pela decisão.*
+>
+> *Já estou abrindo seu cadastro aqui do meu lado. Para eu travar sua data com o time de implantação hoje ainda, preciso que você me mande esse pacotinho aqui. Leva uns 10 minutos e é uma vez só:*
+>
+> ***1. Cadastro*** *— CNPJ, nome do restaurante, nome e CPF de quem assina, e-mail e telefone que você usa no dia a dia, endereço completo com CEP.*
+>
+> ***2. Cardápio e identidade*** *— o cardápio atual (PDF, print do sistema antigo ou foto nítida de todas as páginas), o logo em PNG ou PDF, o @ do Instagram e quantas mesas/comandas você tem ativas hoje.*
+>
+> ***3. Fiscal*** *(só se você contratou o módulo) — regime tributário, o certificado digital `.pfx` ou `.p12` com a senha, e o CSC com o ID do CSC. Isso normalmente é seu contador quem manda; se quiser eu falo direto com ele.*
+>
+> *O cardápio é o que mais pesa: é dele que meu time de engenharia começa a montar sua operação. Assim que ele chega, sua data está travada."*
 
-* **Endereço Completo (com CEP e Número):**
+**Por que essa versão funciona melhor que a lista seca:** ela diz o tempo ("10 minutos, uma vez só"), diz o que cada bloco serve, oferece falar com o contador — que é onde 90% dos atrasos nascem — e termina com a troca clara: cardápio na mão, data travada.
 
-### 🍕 2. Engenharia de Cardápio & Identidade
+***
 
-* **Logotipo da Casa:** *(Enviar em alta qualidade, de preferência em formato PNG ou PDF)*
+## 3 — Os cinco erros que atrasam a implantação
 
-* **Arquivo do Cardápio Atual:** *(Fotos nítidas, PDF ou link do sistema antigo)*
+### ❌ Cardápio em foto ruim
 
-* **Instagram Oficial:** `@`
+Foto tremida, cortada ou sem preço volta para você. **O que fazer:** peça o PDF do sistema antigo primeiro; se não existir, tire você mesmo as fotos na visita — luz do salão, cardápio aberto na mesa, uma página por foto.
 
-* **Quantidade de Mesas/Comandas Ativas:**
+### ❌ Logo tirado do Instagram
 
-### 🛡️ 3. Módulo Fiscal (Se Contratado)
+Print de perfil sai serrilhado no cardápio digital e no totem, e é a primeira coisa que o cliente vê. **O que fazer:** peça o arquivo original ao designer dele; se não houver, peça o maior PNG que existir e avise a implantação.
 
-* **Certificado Digital:** *(Arquivo com extensão *`.pfx`* ou *`.p12`*)*
+### ❌ Certificado digital vencido
 
-* **Senha do Certificado:**
+Certificado A1 vale **um ano**. Muito restaurante descobre que venceu justamente na hora de emitir a primeira nota. **O que fazer:** pergunte a data de validade junto do arquivo, na mesma mensagem.
 
-* **Código CSC (Token Tokenizador):**
+### ❌ CSC e ID do CSC trocados
 
-* **ID do CSC:**
+São duas coisas diferentes: o **CSC** é o código de segurança do contribuinte (uma sequência longa) e o **ID** é o número curto que o identifica. Trocar os dois faz a nota ser rejeitada pela SEFAZ. **O que fazer:** peça um print da tela do portal da SEFAZ, com os dois campos visíveis.
 
-Se tiver qualquer dúvida para extrair o certificado ou o token fiscal, me avisa aqui que eu te guio. No aguardo para colocarmos a sua operação para rodar no topo da eficiência! 🚀
+### ❌ Mover o card antes do pacote
 
+Enviado Onboarding cria o grupo de WhatsApp com o cliente e migra o negócio de pipeline **na hora**. Mover com o cardápio faltando expõe o time a um cliente que ainda não pode ser atendido. **O que fazer:** cardápio anexado no negócio primeiro, card movido depois.
+
+***
+
+## 4 — Fiscal em linguagem de campo
+
+Você não precisa ser contador, precisa saber pedir e saber conferir:
+
+| Termo               | O que é, em uma frase                                              | Como você confere na hora                    |
+| ------------------- | ------------------------------------------------------------------ | -------------------------------------------- |
+| **Certificado A1**  | O RG digital da empresa, um arquivo que fica no computador          | Extensão `.pfx` ou `.p12` e uma senha        |
+| **Senha do certificado** | A chave do arquivo — sem ela ninguém instala nada             | Ele te manda junto; teste pedindo confirmação |
+| **CSC**             | Código de segurança que a SEFAZ dá ao contribuinte para NFC-e       | Sequência longa, alfanumérica                 |
+| **ID do CSC**       | O número que identifica aquele CSC                                  | Número curto, geralmente 6 dígitos ou menos  |
+| **Regime**          | Simples Nacional ou Lucro Presumido/Real — define o módulo fiscal   | Uma pergunta ao contador                      |
+
+**Atalho que resolve:** ofereça falar com o contador. *"Me passa o WhatsApp do seu contador que eu peço direto — ele me manda em 5 minutos e você não precisa ficar no meio."* Isso tira o cliente do papel de mensageiro e corta dias do prazo.
+
+***
+
+## 5 — Depois de enviar: o que você faz, não o cliente
+
+1. **Anexe o cardápio ao negócio no HubSpot** — é o arquivo que a implantação abre primeiro.
+2. **Preencha os campos obrigatórios e os Dados Tributários** (regime, CSC, certificado) no negócio. É isso que o gate de saída da etapa cobra.
+3. **Só então mova para Enviado Onboarding** — e o grupo de WhatsApp nasce com o pacote completo.
+4. **Volte no terceiro dia.** Uma mensagem: *"Seu [Nome], o time já começou seu cardápio. Tá tudo caminhando por aí?"* Cliente que se sente acompanhado na implantação não vira churn no segundo mês.
+
+***
+
+## 6 — O que fazer agora
+
+- Se você fechou hoje: envie a mensagem do bloco 2 **antes de sair do restaurante**. Pedido feito na frente do dono é respondido no mesmo dia.
+- Se você tem um contrato assinado e parado: descubra qual item falta, e peça só aquele — cobrança genérica ("preciso dos dados") não move ninguém.
+- Se o módulo fiscal foi contratado: fale com o contador hoje. Ele é o caminho crítico do seu go-live.
 
 ### EQUIPAMENTOS
 
@@ -1859,99 +1976,163 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ### LINKS ÚTEIS
 
-DAILY OUTBOUND - 09:30 am\
-<https://meet.google.com/ebg-dmmn-sax>
+# 🔗 OS ATALHOS OFICIAIS DO TIME
 
-PLANILHA DE VENDAS 2026\
-<https://docs.google.com/spreadsheets/d/1Wk-980jA51GdUpm0XyrjV9XgSu8dE_KUrEvgoghL_tA/edit?gid=0#gid=0>
+### Cada link com o momento em que você usa, para não procurar no meio da rua
 
-DIRETRIZ DE OPERAÇÃO COMERCIAL 2026/1:\
-<https://drive.google.com/file/d/1JxdXTT3MHT3UK4OnlLsEsB0662Nkg59y/view?usp=sharing>
+> *"Link que você não acha na hora é link que não existe."*
 
-MANUAL DE EXCELÊNCIA - EXECUTIVO TAKEAT FIELD SALES\
-<https://drive.google.com/file/d/1tL_qV4dq2NLAjZ4tELFjXKtO_X_SUsz2/view?usp=sharing>
+Esta página não é uma lista de favoritos: é a ordem em que as coisas acontecem no seu dia. Se você está na rua e precisa de um destes, o índice abaixo resolve em um toque. **Se algum link mudar ou morrer, avise no Discord** — página de atalhos desatualizada custa mais caro que página sem atalho.
 
-MATERIAL COMERCIAL\
-<https://drive.google.com/drive/folders/1BDEPtbTW3ws2EviO1mHnNtOevHp5j6O1?hl=pt-br>
+***
 
-VÍDEOS AULAS FUNCIONALIDADES DO SISTEMA\
-<https://drive.google.com/drive/folders/1yzMZiZJF4-QJEbGf_ej9o_FQo844YvOm>
+## 1 — Antes de sair: preparar a rua
 
-PLAYBOOK COMERCIAL - (SPICED, SOLUCOES e PERSONAS)\
-<https://docs.google.com/spreadsheets/d/1B1zzkZ2FERqtvXg8v6eAWmb7cGedZmRu/edit?gid=1176329124#gid=1176329124>
-
-LINK SISTEMA PARA FOOD PARK\
-<https://foodpark.takeat.app/ax1y1g/>\
-CASA DOS DADOS\
+**Casa dos Dados** — CNPJs abertos recentemente, filtro por CNAE, bairro e data de abertura. É a base da prospecção inteligente.
 <https://casadosdados.com.br>
 
-LISTA ATUALIZADA CLIENTES MARÇO 2026\
+**Playbook comercial — SPICED, soluções e personas** — a planilha-mãe de qualificação e discurso por persona.
+<https://docs.google.com/spreadsheets/d/1B1zzkZ2FERqtvXg8v6eAWmb7cGedZmRu/edit?gid=1176329124#gid=1176329124>
+
+**Lista atualizada de clientes (março/2026)** — quem já é cliente. Confira antes de bater na porta: chegar oferecendo Takeat para quem já tem Takeat queima autoridade na hora.
 <https://docs.google.com/spreadsheets/d/1_nB3KrDlTVqrC8cRSd86b5q60TyZsPeCx8wEsKwQpNg/edit?gid=117572231#gid=117572231>
 
-Formulário para envio de NFS-e\
-<https://docs.google.com/forms/d/e/1FAIpQLSc-tevz69qWERBk_X1XjrwTR7b93VhBmUvBcqr08knAPGBwmQ/viewform>
+***
 
-Solicitação de Reembolso\
-<https://docs.google.com/forms/d/e/1FAIpQLSc8zGNIo3snL9YqC1a7J62qEP4no5bZYtqs_OoSw1wE0DOYrw/viewform?pli=1>
+## 2 — Na mesa do cliente: demonstrar
 
-LINK PRODUÇÃO DISPLAYS\
+**Sistema para Food Park** — ambiente de demonstração da operação de praça de alimentação, com várias marcas num mesmo espaço.
+<https://foodpark.takeat.app/ax1y1g/>
+
+**Comparativos públicos** — oito comparativos lado a lado, com matriz de 15 recursos e data de revisão. Abra na frente do cliente quando ele citar concorrente.
+<https://takeat.app/comparativos>
+
+***
+
+## 3 — Depois do fechamento: colocar de pé
+
+**Solicitação de displays e comandas** — material de mesa personalizado com QR Code exclusivo. Peça comandas e displays no mesmo pedido: o frete é fixo por pedido.
 <https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB>
 
-Comunicação:\
+***
+
+## 4 — Administrativo: o que é seu
+
+**Envio de NFS-e** — formulário oficial para nota fiscal de serviço.
+<https://docs.google.com/forms/d/e/1FAIpQLSc-tevz69qWERBk_X1XjrwTR7b93VhBmUvBcqr08knAPGBwmQ/viewform>
+
+**Solicitação de reembolso** — combustível, pedágio e despesas de rota. Junte os comprovantes antes de abrir; pedido incompleto volta.
+<https://docs.google.com/forms/d/e/1FAIpQLSc8zGNIo3snL9YqC1a7J62qEP4no5bZYtqs_OoSw1wE0DOYrw/viewform?pli=1>
+
+***
+
+## 5 — Comunicação do time
+
+**Discord do time** — é onde a resposta chega mais rápido: dúvida de produto, preço fora de tabela, cliente com caso estranho, link quebrado nesta página.
 <https://discord.gg/kxjRMdjy>
 
+***
+
+## 6 — Regras de uso destes links
+
+- **Cliente nunca recebe link interno.** Planilha, formulário do ClickUp e Discord são ferramentas do time. Para o cliente vai o material dele: proposta, comparativo público, cardápio.
+- **Dado do cliente não vai por planilha solta.** O que é do negócio mora no negócio, no HubSpot — é lá que a implantação e o seu gestor vão procurar.
+- **Achou um link melhor?** Traga para o Discord antes de adotar. Duas fontes para a mesma coisa é como o time começa a dar respostas diferentes para o mesmo cliente.
 
 ### DISPLAYS/COMANDAS
 
-# 🏷️ Displays e Comandas Personalizadas (Material de Mesa)
+# 🏷️ MATERIAL DE MESA: O QUE FAZ O GARÇOM DIGITAL EXISTIR
 
-Para que o **Garçom Digital** e a visualização do cardápio funcionem com excelência, a Takeat fornece materiais de mesa profissionais e personalizados com QR Codes exclusivos para cada estabelecimento.
+### Sem display na mesa, o autoatendimento que você vendeu não acontece
 
-## 📦 Nossos Materiais
+> *"O cliente não pede pelo QR Code que está numa folha amassada ao lado do saleiro."*
 
-O executivo deve orientar o lojista sobre a importância de ter um material de alta durabilidade e com a identidade visual correta para não gerar atrito no atendimento.
+O material de mesa parece detalhe de implantação e é, na prática, o interruptor do produto: o Garçom Digital só é usado se o cliente final vê o QR Code, entende que pode pedir sozinho e confia no que está olhando. Um display profissional na mesa é o que transforma um recurso contratado em pedido lançado — e pedido lançado é o número que segura o cliente na base.
 
-* **Comandas Personalizadas:** R$ 2,90 (unidade)
-
-  * Ideais para controle individual e agilidade no fechamento de conta.
-
-* **Displays de Mesa:** R$ 11,70 (unidade)
-
-  * O ponto de contato principal para o cliente acessar o Garçom Digital via QR Code.
-
-* **Custo de Envio (Frete):** R$ 50,00 (preço fixo por pedido)
+É por isso que essa conversa não é "quer comprar uns suportes?". É **"vamos garantir que aquilo que você acabou de contratar seja usado desde o primeiro dia"**.
 
 ***
 
-## 🚀 Como Solicitar a Produção
+## 1 — O que a Takeat produz, e quanto custa
 
-A produção desses materiais não é automática no fechamento do contrato. O executivo de campo é o responsável por coletar as informações e abrir o pedido formal junto ao time de produção.
+| Item                          | Preço            | Para que serve                                                        |
+| ----------------------------- | ---------------- | --------------------------------------------------------------------- |
+| **Comanda personalizada**     | **R$ 2,90** /un. | Controle individual e agilidade no fechamento da conta                 |
+| **Display de mesa**           | **R$ 11,70** /un.| Ponto de contato do cliente com o Garçom Digital, via QR Code exclusivo |
+| **Frete**                     | **R$ 50,00** fixo por pedido | Envio único, independente da quantidade                  |
 
-**Passo a Passo para o Executivo:**
+Todo material sai **personalizado com a identidade do restaurante e com QR Code exclusivo daquele estabelecimento** — não é adesivo genérico.
 
-1. Defina com o lojista a quantidade exata de mesas/pontos de atendimento.
+**O frete é fixo por pedido, e isso muda a conversa:** juntar o pedido de displays e comandas numa única solicitação é mais barato que pedir duas vezes. Diga isso ao cliente.
 
-2. Garanta que o logotipo do cliente esteja em alta resolução.
+***
 
-3. Acesse o link oficial de produção abaixo e preencha todos os dados:
+## 2 — A conta que você faz na frente do dono
+
+Não pergunte "quantos você quer". Conte com ele:
+
+1. **Displays** = número de mesas ativas **+ 2** (as duas sobrando cobrem mesa de rua, quebra e a que sempre desaparece).
+2. **Comandas** = número de mesas × 2, se a casa trabalha com comanda individual por cliente.
+3. **Some o frete uma vez.**
+
+**Exemplo real de balcão — casa com 12 mesas:**
+
+- 14 displays × R$ 11,70 = **R$ 163,80**
+- 24 comandas × R$ 2,90 = **R$ 69,60**
+- Frete = **R$ 50,00**
+- **Total: R$ 283,40**, uma vez, para a operação inteira funcionar como você vendeu.
+
+> *"Seu [Nome], são R$ 283 uma única vez para as 12 mesas. Se o autoatendimento te economizar uma ida do garçom por mesa por noite, isso se paga na primeira semana — e o material fica aí por anos."*
+
+***
+
+## 3 — Como solicitar (o processo, na ordem)
+
+1. **Confirme a quantidade final com o cliente** — mesas ativas contadas, não estimadas.
+2. **Garanta o logotipo em alta resolução.** Print de Instagram sai serrilhado no material impresso e não tem volta depois de produzido.
+3. **Preencha a solicitação oficial** com todos os dados:
 
 🔗 **[LINK PARA SOLICITAÇÃO DE DISPLAYS E COMANDAS](https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB)**
 
+4. **Registre no negócio no HubSpot** que o material foi solicitado, com a data. Assim a implantação sabe que o material está a caminho e o dono não te cobra duas vezes pela mesma coisa.
+
 ***
 
-## 💡 Visão de Dono: O Valor do Material de Mesa
+## 4 — Os erros que estragam o material
 
-Não trate o display apenas como um "acessório". Ele é uma ferramenta de venda:
+### ❌ Logo em baixa resolução
 
-* **Aumento de Ticket Médio:** Um display bem posicionado incentiva o cliente a pedir mais sem esperar o garçom.
+É o erro mais comum e o mais visível: o cliente vê a marca dele serrilhada na mesa dele. **Peça o arquivo original ao designer; PNG ou PDF, nunca print.**
 
-* **Redução de Erros:** O QR Code direciona o pedido direto para a cozinha, eliminando falhas de comunicação.
+### ❌ Contar mesas "de cabeça"
 
-* **Profissionalismo:** Uma mesa com material Takeat personalizado passa muito mais confiança e modernidade para o público do restaurante.
+Faltar display é o cliente improvisando com papel — exatamente a cena que o produto veio eliminar. **Conte o salão andando por ele.**
 
-> **Dica de Ouro:** Durante a implementação, certifique-se de que os displays estão visíveis e limpos. Material de mesa bem cuidado reflete a qualidade do sistema que você vendeu.
+### ❌ Dois pedidos, dois fretes
 
+R$ 50 pagos duas vezes por falta de planejamento. **Junte comandas e displays no mesmo pedido.**
 
+### ❌ Entregar e não posicionar
+
+Material na caixa atrás do balcão não gera pedido. **No dia da entrega, posicione você mesmo o primeiro display e mostre ao garçom o que dizer para a mesa.**
+
+***
+
+## 5 — Visão de dono: por que isso vale mais que o preço
+
+- **Ticket médio:** display bem posicionado incentiva o cliente a pedir mais sem esperar o garçom passar.
+- **Menos erro:** o pedido vai direto para a cozinha, sem intermediário anotando errado.
+- **Percepção de profissionalismo:** mesa com material personalizado passa modernidade — e essa percepção é do restaurante, não da Takeat.
+
+> **Dica de ouro:** na implantação, confira se os displays estão visíveis e limpos. Material de mesa bem cuidado reflete a qualidade do sistema que você vendeu. Material sujo ou torto passa o contrário, e o cliente associa isso a você.
+
+***
+
+## 6 — O que fazer agora
+
+- Em todo fechamento com Garçom Digital ou Cardápio Digital: faça a conta de material **na mesma mesa da assinatura**. Depois vira "depois".
+- Se você tem cliente ativo sem display: essa é a visita de carteira mais fácil de justificar que existe.
+- Peça o logo em alta **no mesmo pacote dos dados de cadastro** — um pedido, não dois.
 
 ### PLANO DE CARREIRA
 
