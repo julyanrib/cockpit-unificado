@@ -1,4 +1,4 @@
-# MAPA DOR → SOLUÇÃO — as 6 dores reais, e o que levantar em cada uma
+# Mapa dor → solução: as 6 dores reais, e o que levantar em cada uma
 
 Esta página existe para resolver um buraco que era só nosso: o campo **"Dor que ele te contou"** (`gargalo_operacional`) tem **seis opções fechadas** — é o que o dono realmente diz — e o estudo comparativo do **Ecossistema Takeat** está organizado por **módulo**. Ninguém havia traduzido uma coisa na outra. O executivo registrava a dor e depois escolhia o argumento de cabeça.
 

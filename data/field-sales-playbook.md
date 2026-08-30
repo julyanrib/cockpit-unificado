@@ -225,11 +225,11 @@ A regra prática pro executivo: **primeiro descubra qual módulo dói mais** (us
 
 ### GUIA DE EXCELÊNCIA
 
-# COMO SER UM EXECUTIVO DE EXCELÊNCIA (CULTURA DE ELITE)
+# O padrão de quem domina uma praça
 
-> *"O amador acorda para ver o que a rua vai dar. O Executivo de Elite sai de casa sabendo exatamente qual mercado vai dominar hoje. Field Sales não é um trabalho de campo; é o domínio estratégico de um território."*
+> *"O amador acorda para ver o que a rua vai dar. O executivo Takeat sai de casa sabendo exatamente qual praça vai dominar hoje. Field Sales não é um trabalho de campo; é o domínio estratégico de um território."*
 
-## MENTALIDADE DE DONO (OWNERSHIP & MINDSET STONE)
+## Mentalidade de dono
 
 A excelência no Field Sales começa na forma como você enxerga a sua praça. O vendedor comum visita clientes para bater uma meta isolada e ganhar o dia; o Executivo de Elite gerencia seu território como se fosse sua própria empresa e constrói um patrimônio de receita recorrente (MRR).
 
@@ -245,7 +245,7 @@ A excelência no Field Sales começa na forma como você enxerga a sua praça. O
 
 * **Responsabilidade Ponta a Ponta:** O contrato assinado e o link do Asaas aprovado na mesa não são o fim da linha, são o nascimento do cliente na sua carteira. Acompanhar a primeira semana de uso e garantir que a implantação rode com perfeição é o que blinda o seu resultado contra o *churn* (cancelamento). O Executivo de Elite vende com tanta qualidade consultiva que nunca precisa vender duas vezes no mesmo endereço.
 
-## O PITCH DE ALTO IMPACTO (FALE A LÍNGUA DO DONO)
+## O pitch que fala a língua do dono
 
 Dominar o pitch no asfalto é ter a capacidade técnica e psicológica de desarmar o escudo de "vendedor" do lojista em 60 segundos, assumindo a postura de um consultor de negócios altamente necessário.
 
@@ -255,7 +255,7 @@ Dominar o pitch no asfalto é ter a capacidade técnica e psicológica de desarm
 
 > *"Seu [Nome], hoje a sua operação gasta, em média, de 7 a 10 minutos entre o garçom ir à mesa, anotar no papel, digitar no computador antigo do caixa e o pedido finalmente começar a ser produzido na cozinha. Com a nossa inteligência, esse processo acontece em 30 segundos, direto da mesa para a tela de produção (KDS). Onde o senhor quer que a sua equipe gaste energia hoje: carregando papelada e batendo cabeça no balcão ou vendendo adicionais e atendendo bem o seu cliente?"*
 
-## PLANEJAMENTO E DISCIPLINA CEGA (A MÁQUINA DE FIELD SALES)
+## Planejamento é a vantagem
 
 No asfalto, a disciplina metodológica é a sua maior vantagem competitiva. O talento ou a lábia podem te fazer vender em um dia isolado; mas é o processo e a rotina que te fazem bater a meta todo mês.
 
@@ -268,7 +268,7 @@ No asfalto, a disciplina metodológica é a sua maior vantagem competitiva. O ta
 > *"Seu [Nome], acabei de estruturar o fluxo de atendimento ali do seu vizinho no [Nome do Restaurante Vizinho] para o final de semana. Entrei aqui porque notei que a sua casa tem o mesmo perfil de fluxo e o mesmo problema de gargalo no caixa..."*\
 > *O medo de ficar para trás move o mercado de foodservice.*
 
-## CRIATIVIDADE CONSULTIVA (INOVAÇÃO NO ASFALTO)
+## Criatividade consultiva
 
 O mercado de São Paulo e das grandes capitais exige malícia comercial. Se a abordagem tradicional travou por causa de uma barreira emocional do dono, mude o ângulo do ataque.
 
@@ -278,7 +278,7 @@ O mercado de São Paulo e das grandes capitais exige malícia comercial. Se a ab
 
 * **Follow-up de Valor (O Antivendedor Chatice):** Se o lead esfriou ou entrou em vácuo, nunca envie mensagens vazias como *"Olá, olhou a proposta?"*. Em vez disso, mande um insight de mercado, um vídeo curto da operação de um parceiro rodando no final de semana ou uma foto do concorrente dele tracionando forte com a nossa solução. Mostre que você está ali como um parceiro de negócios interessado no faturamento dele, não como um cobrador de contratos.
 
-## DOMÍNIO TÉCNICO E DE MERCADO (AUTORIDADE MÁXIMA)
+## Domínio técnico
 
 Você deve agir, falar e se posicionar como a maior autoridade em gestão e operação de Foodservice que o lojista já conheceu na vida profissional dele.
 
@@ -286,7 +286,7 @@ Você deve agir, falar e se posicionar como a maior autoridade em gestão e oper
 
 * **Maturidade de Gestão Financeira:** Domine conceitos fundamentais da saúde financeira de um restaurante (DRE, Markup, Curva ABC de Estoque). O empresário do setor só respeita e só compra de quem sabe sentar à mesa e discutir margem de lucro de igual para igual.
 
-## OS TRÊS MANDAMENTOS DO EXECUTIVO DE ELITE
+## Os três mandamentos
 
 1. **EXECUÇÃO É TUDO:** Uma estratégia nota 10 com uma execução de campo nota 5 não bate meta e gera frustração. Uma execução de rota nota 10, com volume diário constante e disciplina de ferro, bate meta e enche o bolso de comissão todo mês.
 
@@ -308,9 +308,9 @@ Você deve agir, falar e se posicionar como a maior autoridade em gestão e oper
 
 ### ONBOARDING DE NOVOS EXECUTIVOS
 
-# ONBOARDING & RAMPAGEM — PROGRAMA OFICIAL
+# Seus primeiros 60 dias
 
-> *"Rampa nao e o tempo que a empresa te da pra aprender. E o tempo que voce leva pra parar de precisar de autorizacao pra decidir na frente do cliente."*
+> *"Rampa não é o tempo que a empresa te dá pra aprender. É o tempo que você leva pra parar de precisar de autorização pra decidir na frente do cliente."*
 
 **Decisão de gestão: **não contratamos vendedores para "aprenderem sozinhos". O programa entrega autonomia comercial com padrão — e diz, **com números**, quando o executivo está pronto e quando não está.
 
@@ -430,7 +430,7 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 
 ### METAS & CADÊNCIA OFICIAL
 
-# METAS & CADÊNCIA OFICIAL — FONTE ÚNICA
+# Os números que valem — fonte única
 
 **Esta é a única fonte de verdade dos números do Field Sales. **Se qualquer outra página do playbook mostrar um número diferente, vale o que está aqui. Todo o playbook foi recalibrado para este padrão em agosto/2026.
 
@@ -511,7 +511,7 @@ Levantadas em 29/08/2026 comparando a tabela do cockpit, o site público e o con
 
 Detalhe completo na página ONBOARDING DE NOVOS EXECUTIVOS.
 
-## O que NUNCA prometer em campo
+## O que nunca prometer em campo
 
 * **PDV 100% offline — **módulo em desenvolvimento. A contingência vendável hoje é 4G/5G nas Maquininhas Smart + 50mb de fibra dedicados.
 
@@ -535,16 +535,16 @@ Versão 1.0 · Agosto 2026 · Responsável: Gestor de Field Sales. Qualquer alte
 
 ### ROTINA
 
-# A ROTINA INDESTRUTÍVEL: O CRONOGRAMA DINÂMICO DE FIELD SALES
+# A semana de quem bate meta
 
 > *"O talento sem rotina é um desperdício de potencial. No Field Sales da Takeat, nós não contamos com a sorte; nós dominamos a estatística. Quem tem disciplina na agenda, tem dinheiro no bolso. Quem inventa desculpa na rota, assiste o colega bater a meta e levar a comissão."*
 
-## O CALENDÁRIO SEMANAL DE CORPO PRESENTE
+## O calendário semanal de corpo presente
 
 A regra é clara, inegociável e auditada via CRM: **Mínimo de 4 dias inteiros por semana em rota externa (asfalto).**\
 O escritório ou a mesa de casa servem apenas para organizar o exército; a guerra se ganha e o território se conquista na calçada do lojista.
 
-## A CRONOGRAMA INTEGRADO (FLUXO CONTÍNUO DE ASFALTO)
+## O cronograma integrado
 
 #### 30 às 09:00 | Revisão de Campo: O Dia já está Ganho
 
@@ -590,7 +590,7 @@ Este é o bloco de preparação final. Antes de sair, o executivo precisa estar 
 
 * **Apenas Validação:** Como você usou o aplicativo de Field Sales em tempo real após cada visita na rua, seu funil já está 100% limpo e atualizado. Este bloco serve apenas para abrir o mapa e desenhar a sua próxima microrota de amanhã. Deixe os agendamentos prontos. Durma sabendo exatamente onde você vai pisar amanhã.
 
-## DIRETRIZ DE MÁXIMO VALOR PARA O EXECUTIVO TAKEAT
+## A diretriz que vale mais que todas
 
 O aplicativo de Field Sales é a sua arma de agilidade. Ele existe para te libertar da mesa do escritório e te manter focado onde o dinheiro está: na frente do cliente. O asfalto é justo: ele pune o preguiçoso e premia o disciplinado de forma geométrica. Cada porta batida, cada Demo bem executada na mesa e cada registro feito na hora no app te deixam mais perto de explodir a sua comissão. **Venda valor, gaste a sola do sapato, use a tecnologia a seu favor e assuma o controle do seu território!**
 
@@ -606,15 +606,13 @@ O aplicativo de Field Sales é a sua arma de agilidade. Ele existe para te liber
 
 ### GUIA PROSPECÇÃO 1/2
 
-# GUIA DE PROSPECÇÃO DE EXCELÊNCIA NO PORTA A PORTA (PAP)
+# Porta a porta: a rua como sistema
 
-## Edição Revisada — Padrão Top Performer
-
-> *"Vendedor mediano bate a mesma rua duas vezes sem perceber. Top performer sabe, antes de sair de casa, em qual quarteirão vai estar às 10h, às 14h e às 17h — e por quê."*
+> *"Vendedor mediano bate a mesma rua duas vezes sem perceber. A referência do time sabe, antes de sair de casa, em qual quarteirão vai estar às 10h, às 14h e às 17h — e por quê."*
 
 ***
 
-## A Engenharia da Previsibilidade: A Matemática do Funil
+## A matemática do funil: previsibilidade
 
 No Field Sales de alta performance, o sucesso não depende da sorte, do humor do mercado ou do talento improvisado; depende estritamente de **processo, consistência e volume controlado**. Entender a matemática do funil dá ao executivo a clareza de que cada "não" recebido na calçada é apenas uma etapa estatística previsível que o aproxima do próximo fechamento.
 
@@ -636,7 +634,7 @@ O nosso modelo é movido a taxas de conversão claras. Para garantir previsibili
 
 ***
 
-## A Engenharia de Microrrotas: Como Top Performers Multiplicam o Mesmo Esforço
+## Microrrotas: como multiplicar o mesmo esforço
 
 > *"O amador escolhe a próxima porta pela conveniência do momento. O top performer já sabia qual seria a 6ª porta do dia antes de bater na 1ª."*
 
@@ -658,7 +656,7 @@ Quando um executivo ativa 5 ou 6 estabelecimentos na mesma rua, o restaurante qu
 
 ***
 
-## Disciplina Operacional: Registro em Tempo Real Como Vantagem Competitiva
+## Registro em tempo real é vantagem
 
 Vendas só se tornam ciência previsível se os dados forem reais — e capturados no momento exato em que acontecem, não reconstruídos de memória no fim do dia.
 
@@ -676,7 +674,7 @@ Vendas só se tornam ciência previsível se os dados forem reais — e capturad
 
 ***
 
-## O Scanner de 30 Segundos: Leitura Técnica de Cenário
+## O scanner de 30 segundos: ler o salão
 
 Antes de dar o primeiro passo para dentro de um restaurante, o consultor Takeat realiza uma leitura visual de 30 segundos no salão para identificar onde estão as ineficiências financeiras e operacionais da casa:
 
@@ -690,7 +688,7 @@ Antes de dar o primeiro passo para dentro de um restaurante, o consultor Takeat 
 
 ***
 
-## Engenharia de Abordagem: Como Atiçar a Curiosidade e Levantar a Dor
+## Abordagem: acender a curiosidade e levantar a dor
 
 O objetivo do Porta a Porta **nunca é fechar a venda no primeiro minuto**, mas estabelecer conexão imediata, gerar valor rápido e vender um agendamento de Demonstração de 10 minutos para um horário de calmaria.
 
@@ -731,7 +729,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 ***
 
-## A Mentalidade do Top Performer — O Que Separa os 20% de Cima
+## O que separa os 20% de cima
 
 1. **Ele mede qualidade E densidade, não só volume. **6 visitas em microrrota com decisor mapeado valem mais que 15 visitas espalhadas e superficiais — é justamente por isso que o padrão oficial baixou o número e subiu a régua.
 
@@ -755,15 +753,15 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 ### GUIA PROSPECÇÃO 2/2
 
-# PROSPECÇÃO INTELIGENTE – CASA DOS DADOS, GOOGLE MAPS E REDES SOCIAIS
+# Prospecção com dados: escolha a porta antes de sair
 
-## A Mentalidade do "Sniper" de Vendas
+## Escolher antes de andar
 
-Se o Porta a Porta (PAP) é a nossa força de infantaria no asfalto, a prospecção via dados e canais digitais é o nosso **serviço de inteligência**. O objetivo aqui é usar ferramentas estratégicas para mapear o ICP de alto valor (R$349) antes mesmo de pisar no restaurante ou fazer a primeira ligação.
+O porta a porta cobre o quarteirão com o pé; a prospecção por dados escolhe **qual** quarteirão merece o seu dia. O objetivo aqui é usar ferramentas estratégicas para mapear o ICP de alto valor (R$349) antes mesmo de pisar no restaurante ou fazer a primeira ligação.
 
-Um executivo de elite não liga para uma lista aleatória; ele estuda o alvo, descobre a dor provável e aborda o decisor com um nível de autoridade tão alto que o agendamento da demonstração (Demo) vira uma consequência natural.
+O executivo Takeat não liga para uma lista aleatória; ele estuda o alvo, descobre a dor provável e aborda o decisor com um nível de autoridade tão alto que o agendamento da demonstração (Demo) vira uma consequência natural.
 
-## Casa dos Dados & Econodata: O Filtro de Poder
+## Casa dos Dados e Econodata: o filtro que separa
 
 A inteligência de dados serve para o executivo chegar com o timing perfeito e o argumento exato baseado no ciclo de vida da empresa. No mercado de foodservice, existem dois momentos de ouro para capturar o cliente:
 
@@ -787,7 +785,7 @@ A inteligência de dados serve para o executivo chegar com o timing perfeito e o
 > *"Seu [Nome], tudo bem? Acompanho o sucesso do [Nome do Restaurante] e sei que vocês são uma das casas mais consolidadas aqui da região. Liguei justamente porque notei que, mesmo com o volume fantástico de clientes que vocês têm, a operação de atendimento e fechamento de contas de vocês ainda depende muito de processos manuais.*\
 > *Recentemente ajudamos uma casa super tradicional aqui perto a migrar do 'jeito de sempre' para o nosso ecossistema e a margem de lucro deles subiu 15% só eliminando o desperdício oculto de estoque e agilizando o giro de mesa. Faz sentido para o senhor atualizar a gestão da sua casa para o padrão de 2026? Vamos reservar 10 minutos nesta semana para eu te mostrar como tirar esse peso das suas costas."*
 
-## Google Maps: O Mapeamento de Densidade e ICP
+## Google Maps: densidade e perfil do cliente
 
 O Google Maps é a melhor ferramenta gratuita para desenhar rotas de campo inteligentes e filtrar visualmente o tamanho do restaurante antes de ir para o PAP.
 
@@ -804,7 +802,7 @@ O Google Maps é a melhor ferramenta gratuita para desenhar rotas de campo intel
 > *"Seu [Nome], tudo bem? Eu sou o [Seu Nome] da Takeat. Estava fazendo um mapeamento de mercado das casas de alto fluxo aqui do bairro e notei que o seu restaurante é super elogiado pela qualidade da comida. No entanto, analisando o comportamento dos clientes na internet, notei que o seu maior desafio hoje, devido ao grande sucesso da casa, está sendo a velocidade do atendimento e o tempo de espera para o fechamento das contas nos fins de semana.*\
 > *A Takeat é um ecossistema focado exatamente em estancar essa perda de receita. Nós ajudamos a equipe de salão a rodar com garçons digitais e smart POS integrados, eliminando em 100% o atrito de fechamento. Quero te mostrar como reverter essa dor de atendimento em faturamento puro. Vamos marcar 10 minutos na quarta-feira?"*
 
-## Redes Sociais (Instagram): O Gancho Visual e Experiência do Cliente
+## Instagram: o gancho visual
 
 O Instagram é a fachada digital do restaurante. Nós usamos a rede social para encontrar o tom de voz do cliente, descobrir quem é o dono (geralmente marcado nas fotos ou seguindo o perfil) e gerar conexões de alto valor.
 
@@ -822,7 +820,7 @@ O Instagram é a fachada digital do restaurante. Nós usamos a rede social para 
 > *Fazemos parte da Takeat e somos especialistas em implementar o padrão de atendimento das casas mais modernas de 2026. Notamos que vocês entregam uma experiência de alto nível no prato, mas queríamos entender: como vocês estão trabalhando hoje para fazer esse cliente do Instagram voltar mais vezes no mês?*\
 > *Nós desenvolvemos um ecossistema 360º que integra o salão à retaguarda e conta com um sistema de Cashback nativo que faz o cliente do salão comprar mais e retornar em até 30% mais vezes à casa. Quem é o responsável pela gestão estratégica da operação para eu enviar um vídeo rápido de 30 segundos mostrando o impacto disso?"*
 
-## Regras de Conexão: Do Digital para o HubSpot
+## Do digital para o HubSpot
 
 Para que a prospecção digital tenha alta conversão, o executivo deve seguir o fluxo de tração:
 
@@ -844,7 +842,7 @@ Para que a prospecção digital tenha alta conversão, o executivo deve seguir o
 
 ### COMO ACHAR O TD
 
-# MÓDULO 3: O PROTOCOLO DE ACESSO AO DECISOR
+# Como chegar em quem assina
 
 ### Como quebrar a barreira do "ele não está" e chegar em quem assina
 
@@ -854,7 +852,7 @@ Hoje essa é a maior perda de eficiência do funil: o Executivo faz o PAP certo,
 
 ***
 
-## Antes de bater na porta: Mapeamento de Porte
+## Antes de bater na porta: mapeamento de porte
 
 Nem todo estabelecimento tem o mesmo caminho até o decisor. Classifique em 5 segundos ao entrar:
 
@@ -868,7 +866,7 @@ Nem todo estabelecimento tem o mesmo caminho até o decisor. Classifique em 5 se
 
 ***
 
-## O Kit de Neutralização de Barreira
+## O kit para neutralizar a barreira
 
 Cada objeção do staff/gatekeeper tem uma resposta estruturada em 3 passos: **Validar → Reposicionar → Ancorar Retorno**.
 
@@ -908,7 +906,7 @@ Colete o dado, agradeça, e **volte em outro horário** — nunca insista em pé
 
 ***
 
-## Táticas de Alavancagem para Furar a Fila
+## Como furar a fila
 
 1. **Prova social hiperlocal (a mais forte):** use o nome do vizinho que você já atendeu/demonstrou.
 
@@ -928,7 +926,7 @@ Colete o dado, agradeça, e **volte em outro horário** — nunca insista em pé
 
 ***
 
-## O Gatilho de Curiosidade Takeat: Escala Nacional + Categoria Única
+## O gatilho: escala nacional e categoria única
 
 As táticas do item 3.3 funcionam em qualquer venda de campo. Esta seção é diferente: usa dois ativos que **só a Takeat tem** para furar a barreira — presença validada em restaurantes de referência em todo o Brasil, e o fato de não existir concorrente direto que resolva o setor de food da mesma forma. Isso muda a abordagem de "mais um vendedor de sistema" para "estou trazendo algo que o mercado inteiro já está adotando e ele ainda não tem".
 
@@ -1093,9 +1091,7 @@ Quase sempre a resposta é "só o caixa". A partir daí não é mais troca de si
 
 ### FOLLOW UP
 
-# O GUIA DE FOLLOW-UP DE EXCELÊNCIA: A INTERVENÇÃO PRESENCIAL CONTINUADA
-
-## Edição Revisada — Padrão Top Performer, com SLA por Etapa
+# Follow-up: presença no prazo certo
 
 > *"Fazer follow-up por mensagem é pedir para ser ignorado. No Field Sales da Takeat, o acompanhamento não é um lembrete digital passivo; é uma intervenção física cirúrgica. Se você tem uma proposta aberta na mesma região onde está rodando hoje e não entra no salão do cliente, você está jogando a sua comissão no lixo."*
 
@@ -1109,7 +1105,7 @@ Isso muda a forma de encarar follow-up: não é um plano B pra quando a venda n�
 
 ***
 
-## O SLA por Etapa — A Régua Que Não Negocia
+## O SLA por etapa — a régua que não negocia
 
 | Etapa                                             | SLA máximo                                                  | O que acontece se estourar                                                                                       |
 | ------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
@@ -1121,7 +1117,7 @@ Isso muda a forma de encarar follow-up: não é um plano B pra quando a venda n�
 
 ***
 
-## As 4 Estratégias de Campo para o Follow-Up de Elite
+## As 4 estratégias de campo
 
 #### A Visita Oportuna de Fechamento: O "Passei por Aqui" (Presencial)
 
@@ -1163,7 +1159,7 @@ O telefone não serve para bater papo. Serve para usar a escassez da agenda téc
 
 ***
 
-## A Escada de Escalonamento: Qual Estratégia Usar em Qual Dia do SLA
+## A escada: qual estratégia em qual dia do SLA
 
 Isso é o que transforma as 4 estratégias soltas em **sistema**. Cada dia do prazo tem uma ferramenta certa — nunca use a mais forte cedo demais, nem a mais fraca quando o prazo já está apertado.
 
@@ -1187,7 +1183,7 @@ Isso é o que transforma as 4 estratégias soltas em **sistema**. Cada dia do pr
 
 ***
 
-## A Estratégia do "Cercadinho Geográfico" no Aplicativo
+## O cercadinho geográfico no aplicativo
 
 Com o aplicativo de Field Sales ativo, a organização das suas tarefas de acompanhamento é cirúrgica e baseada em densidade de rota — o mesmo princípio da microrrota que rege a prospecção nova (ver Guia de Prospecção PAP):
 
@@ -1203,7 +1199,7 @@ Com o aplicativo de Field Sales ativo, a organização das suas tarefas de acomp
 
 ***
 
-## A Mentalidade do Top Performer no Follow-up
+## A cabeça certa no follow-up
 
 1. **Ele não trata follow-up como plano B.** É a maior parte do jogo, tratado com o mesmo rigor da abordagem de porta.
 
@@ -1227,7 +1223,7 @@ Com o aplicativo de Field Sales ativo, a organização das suas tarefas de acomp
 
 ### RUA x WHATSAPP
 
-# WHATSAPP E LIGAÇÃO: O LEVE AUXÍLIO PARA IMPULSIONAR O ASFALTO
+# WhatsApp conecta, o asfalto converte
 
 ### A Mentalidade do Executivo de Elite: O WhatsApp Conecta, o Asfalto Converte
 
@@ -1235,7 +1231,7 @@ No ecossistema da Takeat, o WhatsApp e as ligações telefônicas **nunca** são
 
 O WhatsApp é um ambiente de alta distração. Se você tenta vender por texto, você concorre com o garçom chamando o dono, o motoboy buzinando e o cliente reclamando. **O objetivo único, exclusivo e inegociável de qualquer interação digital é vender os próximos 15 minutos presenciais.** Não gaste cartucho no chat. Vá para a rua.
 
-## Scripts de Fluxo Rápido: Derrubando o Chat e Forçando o Presencial
+## Tirar da conversa e marcar o presencial
 
 Quando o cliente tentar puxar a negociação para o ambiente digital para economizar o tempo dele, o seu papel é cortar o papo e agendar a visita física imediatamente.
 
@@ -1263,7 +1259,7 @@ Quando o cliente tentar puxar a negociação para o ambiente digital para econom
 
 > *"Eu entendo perfeitamente, seu [Nome]. Dono de restaurante faturando alto nunca para! Mas é exatamente por isso que a Takeat existe: para tirar o senhor do operacional e te devolver tempo. Como estou exatamente na sua rua agora fazendo uma auditoria, tenho uma brecha de 10 minutos. É o tempo de eu te mostrar como colocar o salão para rodar no automático e parar de apagar incêndio. Estou estacionando aqui na frente, nos vemos em 2 minutos!"*
 
-## Engenharia de Rota e Confirmação Antivácuo
+## Rota e confirmação: como não levar vácuo
 
 Para garantir a constância da sua rota e evitar que o cliente cancele o compromisso em cima da hora, utilize a técnica da **Aproximação por Rota**. Nunca dê a opção de ele desmarcar.
 
@@ -1273,7 +1269,7 @@ Para garantir a constância da sua rota e evitar que o cliente cancele o comprom
 
 * **Vença o Vácuo com Presença Física:** Se o lead parou de responder no WhatsApp, mas o restaurante dele está dentro do quadrante da sua microrota do dia, **não mande texto perguntando se ele viu sua mensagem. Vá até lá.** Entre no restaurante, sinta o clima do salão, procure o decisor e faça a abordagem presencial. O asfalto quebra qualquer vácuo digital.
 
-## A DIRETRIZ MÁXIMA DA TAKEAT
+## A diretriz que resolve tudo
 
 O WhatsApp serve apenas para plantar a curiosidade e alinhar o trajeto. O executivo que bate meta vive no campo, gasta a sola do sapato, conhece a rota clinicamente e fecha o contrato olhando no olho do lojista, dentro do restaurante. **Menos tela, mais asfalto!**
 
