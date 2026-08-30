@@ -5992,8 +5992,12 @@
       <div id="dailyFunilQuentesOrigem">
   <div class="charts-row">
     <div class="chart-card">
-      <h3><span class="source-tag hub">HubSpot</span>Funil por etapa</h3>
-      <div class="chart-subtitle" id="funilBarrasSubtitle">negócios em aberto · relação entre etapas (estoque atual, não conversão histórica)</div>
+      <!-- "DISTRIBUIÇÃO ATUAL", não "funil por etapa" (30/08/26). O subtítulo sempre disse
+           que é estoque de agora; o TÍTULO era a única parte que deixava ler como taxa de
+           conversão. Com o histórico de etapa disponível (hs_v2_date_entered_*), conversão
+           de verdade vai existir na aba Semana — e as duas não podem ter o mesmo nome. -->
+      <h3><span class="source-tag hub">HubSpot</span>Distribuição atual do funil</h3>
+      <div class="chart-subtitle" id="funilBarrasSubtitle">negócios em aberto agora · a relação entre as barras é de estoque, não de conversão</div>
       <div id="funilBarras"></div>
       <div class="gargalo-nota-box" id="funilInsight" style="margin-top:14px;"></div>
     </div>
@@ -6002,7 +6006,9 @@
         <h3 style="margin-bottom:0;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d="M12 2c1 3 4 4.5 4 8a4 4 0 01-8 0c0-1 .3-1.8.8-2.6C9.5 8.6 10.5 10 12 10c-.6-2.4-.4-5 0-8z"/><path d="M12 22a7 7 0 007-7c0-2-.8-3.8-2-5.2"/><path d="M5 15a7 7 0 007 7"/></svg>Leads quentes</h3>
         <span id="leadsQuentesCount" style="font-size:11.5px;color:var(--muted2);"></span>
       </div>
-      <div class="chart-subtitle" style="margin-top:6px;">Negócios em etapa avançada e dentro do SLA — primeiro aparecem os que ainda estão sem próximo passo.</div>
+      <!-- A DEFINIÇÃO FICA NA TELA: "quente" era usado em quatro lugares do login do gestor
+           e definido em nenhum. Aqui, e no title do bloco, para quem chega pelo meio. -->
+      <div class="chart-subtitle" style="margin-top:6px;"><b>Quente = etapa avançada (do decisor em diante) e ainda dentro do prazo da etapa.</b> Primeiro aparecem os que estão sem próximo passo marcado — são os que se perdem por silêncio.</div>
       <div id="leadsQuentesLista" style="max-height:420px;overflow-y:auto;"></div>
     </div>
   </div>
@@ -6564,10 +6570,15 @@ function aplicarVisaoPorPapel() {
   const viewProibidaAgora = (viewAtivaId === 'viewCoaching' && !souGestorSessao)
     || (viewAtivaId === 'viewMeuPainel' && !souRep)
     || (viewAtivaId === 'viewMeuFunil' && !souRep)
-    || (viewAtivaId === 'viewCockpit' && !souGestorSessao)
-    || (viewAtivaId === 'viewAgenda' && souGestorSessao);
+    || (viewAtivaId === 'viewCockpit' && !souGestorSessao);
+  /* A AGENDA DEIXOU DE SER PROIBIDA PARA O GESTOR (30/08/26). A cláusula
+     `viewAtivaId === 'viewAgenda' && souGestorSessao` era resto da época em que a Agenda
+     vivia dentro da Daily. Hoje ela é uma aba de gestor de pleno direito, com KPIs de
+     cobertura, matriz da semana e filtros — e a regra jogava ele para a Daily quando a
+     sessão era reaplicada com a Agenda aberta. Armadilha latente, não defeito diário; sai
+     agora porque a única coisa que a mantinha de pé era o histórico. */
   if (viewProibidaAgora) {
-    activateTab(souRep ? 'viewMeuPainel' : (viewAtivaId === 'viewAgenda' ? 'viewDaily' : 'viewCockpit'));
+    activateTab(souRep ? 'viewMeuPainel' : 'viewCockpit');
   }
 
   if (souRep) {
@@ -13756,7 +13767,7 @@ function renderKpiStripHero() {
           <div class="stat-hint">acima do SLA da etapa · clique pra ver</div>
         </div>
         <div class="kpi-hero" id="kpiHeroAderenciaDaily">
-          <div class="l">Sua aderência da Daily</div>
+          <div class="l">Sua promessa cumprida da Daily</div>
           <div class="v" style="color:#F0A83D;">—</div>
           <div class="stat-hint">carregando…</div>
         </div>
@@ -13790,8 +13801,11 @@ function renderKpiStripHero() {
       <div class="v" style="color:#FF5A6B;">${k.leadsTravados}${kpiDeltaHtml('leadsTravados')}</div>
       <div class="stat-hint">acima do SLA da etapa · clique pra ver</div>
     </div>
+    <!-- "PROMESSA CUMPRIDA" e não "Aderência da Daily" (30/08/26): aderência é jargão, e o
+         número mede uma coisa só — quanto do que foi prometido às 9h30 foi cumprido. Mesmo
+         vocabulário do resto do produto (plano do dia ≠ promessa das 9h30). -->
     <div class="kpi-hero" id="kpiHeroAderenciaDaily">
-      <div class="l">Aderência da Daily</div>
+      <div class="l">Promessa cumprida</div>
       <div class="v" style="color:#F0A83D;">—</div>
       <div class="stat-hint">carregando…</div>
     </div>
@@ -13849,7 +13863,11 @@ async function renderAderenciaDailyHero() {
 
   el.querySelector('.v').style.color = cor;
   el.querySelector('.v').textContent = aderencia === null ? '—' : `${aderencia}%`;
-  el.querySelector('.stat-hint').textContent = aderencia === null ? 'sem dailies essa semana ainda' : `${real} informadas de ${prom} prometidas`;
+  /* O vazio diz o que fazer, não o que falta no banco: "sem dailies" é vocabulário de quem
+     construiu o sistema. A promessa fecha às 9h30 — é isso que o gestor cobra. */
+  el.querySelector('.stat-hint').textContent = aderencia === null
+    ? 'ninguém prometeu esta semana · a promessa fecha às 9h30'
+    : `${real} cumpridas de ${prom} prometidas`;
 }
 renderAderenciaDailyHero();
 
@@ -18124,7 +18142,12 @@ function renderFunilBarras() {
       valor,
       cor: DATA.funil.cores[idx],
       stageId: FUNIL_STAGE_IDS[idx],
-      conversao: (valorAnterior && valorAnterior > 0) ? Math.round((valor / valorAnterior) * 100) : null
+      /* RAZÃO ENTRE ESTOQUES, não conversão (30/08/26). Esta coluna mostrava
+         `valor / valorAnterior` em porcentagem com uma seta, e na carga de hoje a linha da
+         Visita exibia "294% →" — 50 em Visita sobre 17 em Prospecção. Nenhuma taxa de
+         conversão passa de 100%, e quem lê na reunião das 9h não tem como desconfiar.
+         A conta é a mesma; o que muda é dizer o que ela é. */
+      razaoEstoque: (valorAnterior && valorAnterior > 0) ? (valor / valorAnterior) : null
     };
   });
   const max = Math.max(...linhas.map(l => l.valor), 1);
@@ -18142,7 +18165,7 @@ function renderFunilBarras() {
         <span class="funil-bar-label">${l.label}</span>
         <div class="funil-bar-track"><div class="funil-bar-fill" style="width:${(l.valor / max * 100).toFixed(0)}%;background:${l.cor};"><span class="val">${l.valor}</span></div></div>
         ${estourados > 0 ? `<span style="font-size:11px;font-weight:800;color:var(--red);background:var(--red-soft);border-radius:var(--r-pill);padding:2px 8px;white-space:nowrap;">⚠ ${estourados}</span>` : `<span style="width:1px;"></span>`}
-        <span class="funil-bar-conv">${l.conversao === null ? '—' : `${l.conversao}% →`}</span>
+        <span class="funil-bar-conv" title="Quantas vezes esta etapa é maior que a anterior, em estoque de agora. Não é taxa de conversão.">${l.razaoEstoque === null ? '—' : `${l.razaoEstoque.toFixed(1).replace('.', ',')}× a anterior`}</span>
       </div>
     `;
   }).join('');
@@ -18159,12 +18182,13 @@ function renderFunilBarras() {
   // "últimas N semanas" porque só temos o snapshot de agora — não histórico suficiente pra isso.
   const insightEl = document.getElementById('funilInsight');
   if (!insightEl) return;
-  const comConversao = linhas.filter(l => l.conversao !== null);
-  if (comConversao.length === 0) { insightEl.innerHTML = ''; insightEl.style.display = 'none'; return; }
+  const comRazao = linhas.filter(l => l.razaoEstoque !== null);
+  if (comRazao.length === 0) { insightEl.innerHTML = ''; insightEl.style.display = 'none'; return; }
   insightEl.style.display = '';
-  const pior = comConversao.reduce((a, b) => (b.conversao < a.conversao ? b : a));
+  const pior = comRazao.reduce((a, b) => (b.razaoEstoque < a.razaoEstoque ? b : a));
   const anterior = linhas[linhas.indexOf(pior) - 1];
-  insightEl.innerHTML = `O maior afunilamento do estoque atual está entre <b>${anterior.label} → ${pior.label}</b> (${pior.conversao}% da etapa anterior). Relação entre estoques de agora — não é taxa de conversão histórica.`;
+  const pct = Math.round(pior.razaoEstoque * 100);
+  insightEl.innerHTML = `O maior estreitamento do estoque de agora está entre <b>${anterior.label} → ${pior.label}</b>: a etapa seguinte tem <b>${pct}%</b> do que a anterior tem parado. É fotografia de agora — a conversão de verdade, por coorte, é outra leitura.`;
 }
 renderFunilBarras();
 
@@ -27774,10 +27798,15 @@ function buildIndicadoresGestorHTML() {
           return !u.rampStage && !u.aComecar;
         });
         if (semFase.length === 0) return '';
+        /* TEXTO SEM NOME DE CAMPO (30/08/26). A tela dizia literalmente "Sem `rampStage`
+           em `data/usuarios.json`" e listava os valores aceitos pelo arquivo — instrução
+           para quem edita o repositório, não para quem lê a tela. E não existe botão de
+           definir fase no Cockpit hoje: prometer um aqui seria clique morto. Então o texto
+           diz o que é, o que a falta de fase causa, e para quem é a decisão. */
         return `<div style="margin-top:13px;padding:11px 13px;background:var(--amber-soft);border:1px solid rgba(184,121,14,.3);border-radius:11px;font-size:11.5px;color:var(--amber-ink);line-height:1.6;">
           <b>${semFase.length} executivo(s) sem fase de rampagem definida:</b> ${esc(semFase.map(x => String(x.name || '').split(' ')[0]).join(', '))}.
-          Sem <code>rampStage</code> em <code>data/usuarios.json</code>, o Cockpit não tem alvo justo de visitas/dia para eles — o gate de agenda cai no mínimo e a leitura de ritmo da tarde não aparece.
-          Valores aceitos: <code>preparacao</code>, <code>semana_2_3</code>, <code>semana_4</code>, <code>semana_5</code>, <code>semana_6_7</code>, <code>pleno</code>.
+          Sem a fase, o Cockpit não tem alvo justo de visitas por dia para eles — o gate de agenda cai no mínimo e a leitura de ritmo da tarde não aparece.
+          <b>A fase é definida no cadastro do time.</b> Enquanto não estiver, o Cockpit não cobra alvo dessas pessoas, de propósito: cobrar 6 visitas de quem está na semana 2 é pior do que não cobrar.
         </div>`;
       })()}
 
