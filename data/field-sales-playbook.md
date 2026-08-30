@@ -1711,14 +1711,6 @@ E se ele insistir na comparação, use o que é público: nós publicamos **oito
 - Escolha os três com mais MRR dessa lista e marque visita nesta semana — com pauta.
 - Se alguém já mencionou concorrente: vá hoje. Amanhã pode ser depois da assinatura do outro.
 
-***
-
-## O que fazer agora
-
-- Olhe sua carteira e liste quem você **não visita há mais de 30 dias**. Essa lista é o seu risco.
-- Escolha os três com mais MRR dessa lista e marque visita nesta semana — com pauta.
-- Se alguém já mencionou concorrente: vá hoje. Amanhã pode ser depois da assinatura do outro.
-
 
 ### PIPELINE
 
@@ -1955,14 +1947,6 @@ Você não precisa ser contador, precisa saber pedir e saber conferir:
 
 - Se você fechou hoje: envie a mensagem do bloco 2 **antes de sair do restaurante**. Pedido feito na frente do dono é respondido no mesmo dia.
 - Se você tem um contrato assinado e parado: descubra qual item falta, e peça só aquele — cobrança genérica ("preciso dos dados") não move ninguém.
-- Se o módulo fiscal foi contratado: fale com o contador hoje. Ele é o caminho crítico do seu go-live.
-
-***
-
-## O que fazer agora
-
-- Se você fechou hoje: envie a mensagem do bloco 2 **antes de sair do restaurante**.
-- Se você tem um contrato assinado e parado: descubra qual item falta e peça só aquele.
 - Se o módulo fiscal foi contratado: fale com o contador hoje. Ele é o caminho crítico do seu go-live.
 
 
@@ -2381,14 +2365,6 @@ Material na caixa atrás do balcão não gera pedido. **No dia da entrega, posic
 - Se você tem cliente ativo sem display: essa é a visita de carteira mais fácil de justificar que existe.
 - Peça o logo em alta **no mesmo pacote dos dados de cadastro** — um pedido, não dois.
 
-***
-
-## O que fazer agora
-
-- Em todo fechamento com Garçom Digital ou Cardápio Digital: faça a conta de material **na mesma mesa da assinatura**.
-- Se você tem cliente ativo sem display, essa é a visita de carteira mais fácil de justificar que existe.
-- Peça o logo em alta no mesmo pacote dos dados de cadastro — um pedido, não dois.
-
 
 ### PLANO DE CARREIRA
 
@@ -2487,14 +2463,6 @@ O próximo líder de expansão nacional **está na rua agora, fazendo o básico 
 - Escolha a dimensão mais fraca das seis e defina o que muda na sua próxima visita por causa dela.
 - Leve as duas coisas ao seu próximo 1:1. Carreira que não é dita em voz alta para o gestor não entra em planejamento nenhum.
 
-
-***
-
-## O que fazer agora
-
-- Escreva onde você quer estar em 12 meses e qual das trilhas desta página leva até lá.
-- Escolha a competência que mais te separa do próximo degrau e trate como projeto do trimestre.
-- Leve isso ao seu próximo 1:1. Carreira que não é dita em voz alta para o gestor não entra em nenhum planejamento.
 
 
 ### ROTINA
