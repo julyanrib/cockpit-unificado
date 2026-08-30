@@ -29076,7 +29076,10 @@ async function renderDaily() {
     return `
     <div style="display:flex;align-items:stretch;flex-wrap:wrap;margin:-6px 0 16px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;">
       ${bloco('🔥', quentes.length > 0 ? 'var(--amber-ink)' : 'var(--muted2)', quentes.length,
-              'Quentes sem próxima ação', detalheQuentes, 'viewCockpit')}
+              /* DESTINO CORRIGIDO (30/08/26): apontava para a aba Time, e em #136 a lista
+                 de quentes mudou para a propria Daily. Agora rola ate ela, sem trocar de
+                 aba — o terceiro destino que a minha mudanca de aba deixou no vazio. */
+              'Quentes sem próxima ação', detalheQuentes, 'rolar:leadsQuentesLista')}
       <span style="width:1px;align-self:stretch;background:var(--line);flex:none;"></span>
       ${bloco('🎯', (rotaHojeTotal == null ? 'var(--muted2)' : rotaHojeTotal > 0 ? 'var(--green)' : 'var(--red)'),
               (rotaHojeTotal == null ? '—' : rotaHojeTotal),
@@ -29898,7 +29901,15 @@ async function renderDaily() {
      sincronia na primeira mudanca. Clicar o botao garante comportamento identico ao
      de um clique do gestor. */
   el.querySelectorAll('[data-faixa-ir]').forEach(b => b.addEventListener('click', () => {
-    const alvo = document.querySelector(`.tab-btn[data-view="${b.dataset.faixaIr}"]`);
+    /* "rolar:<id>" leva para um bloco DESTA aba em vez de trocar de aba. Existe porque o
+       destino de um numero da faixa pode estar na propria Daily desde #136. */
+    const destino = b.dataset.faixaIr || '';
+    if (destino.startsWith('rolar:')) {
+      const el2 = document.getElementById(destino.slice(6));
+      if (el2) window.scrollTo({ top: el2.getBoundingClientRect().top + window.scrollY - 110, behavior: 'smooth' });
+      return;
+    }
+    const alvo = document.querySelector(`.tab-btn[data-view="${destino}"]`);
     if (alvo) alvo.click();
   }));
   wireRoteiroChecks(el);
