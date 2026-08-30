@@ -1660,12 +1660,24 @@
   .pill-prazo.is-tarde{background:var(--amber-soft);color:var(--amber-ink);}
   .badge-etapa{display:inline-block;border:1px solid var(--line);color:var(--muted);border-radius:var(--r-sm);padding:3px 9px;font:800 9.5px "Archivo",system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;}
   .overline{font:800 10px "Archivo",system-ui,sans-serif;letter-spacing:.14em;color:var(--ter);text-transform:uppercase;}
-  .card-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);}
+  /* .card-panel SAIU (30/08/26). Ela vinha do Bloco 4 da prancha e nunca foi ligada em
+     nada: zero usos, medido. É o mesmo painel que .chart-card já é, em 54 lugares. Dois
+     nomes para o mesmo cartão é o começo de duas fontes divergentes — o defeito que este
+     arquivo passa o tempo consolidando. Se algum dia o cartão precisar de um segundo
+     tratamento, ele nasce como variante de .chart-card, não como nome paralelo. */
   .num-hero{font:900 24px "Archivo",system-ui,sans-serif;font-variant-numeric:tabular-nums;letter-spacing:-.01em;}
   .num-hero small{font:900 14px "Archivo",system-ui,sans-serif;color:var(--ter);}
-  .tarja-promessa{border:1.5px dashed var(--amber);border-radius:var(--r-md);background:var(--panel);}
-  .selo-promessa{display:inline-block;background:var(--amber-soft);color:var(--amber-ink);border-radius:var(--r-pill);padding:2px 8px;font:800 8.5px "Archivo",system-ui,sans-serif;letter-spacing:.08em;}
-  .selo-prova{display:inline-block;background:var(--green);color:#fff;border-radius:var(--r-pill);padding:2px 8px;font:800 8.5px "Archivo",system-ui,sans-serif;letter-spacing:.08em;}
+  /* .tarja-promessa, .selo-promessa e .selo-prova SAÍRAM (30/08/26) — e a semântica delas
+     FICA, porque já estava implementada com os nomes da casa antes de a prancha chegar:
+
+         .tarja-promessa  ->  .promessa-card    (1.5px tracejada âmbar, no card da Daily)
+         .selo-promessa   ->  .promessa-badge   ("promessa · não é prova")
+         .selo-prova      ->  .evidencia-selo   (verde, caixa alta, "· evidência")
+
+     As três da prancha tinham ZERO usos, medido. A própria prancha diz, na seção 12, que
+     nenhum nome de classe usado por JS foi renomeado — ou seja, ela sabia que ia conviver
+     com os nomes existentes. Manter as duas famílias é garantir que um dia metade da tela
+     use um selo verde e a outra metade use outro. */
 
   /* ESCOPO: dentro de @media (max-width:760px). BLOCO 5 — alvo de toque.
      O executivo usa isto de pé, na rua, com uma mão. 44px é o mínimo que a diretriz de
@@ -3855,6 +3867,33 @@
      É aritmética de documento, e a superfície de documento oficial é o painel escuro.
      Sem selo verde, sem tarja âmbar. */
   .prc-ctx{padding:16px 23px 0;color:var(--dark-mut);font-size:11px;font-weight:700;line-height:1.5;}
+
+  /* ══ BARRA DE RESUMO FIXA (Bloco 6 da prancha) ═══════════════════════════════════
+     Base fora de @media, como manda a regra §7: a barra NÃO existe por padrão, e o
+     @media de 420 é que a liga. Assim nada aqui depende de ordem de cascata. */
+  .prop-resumo{display:none;}
+
+  @media (max-width:420px){
+    /* bottom:76px e não 0: a navegação do app já é uma barra fixa de 76px embaixo nesta
+       largura (medido). Em bottom:0 esta barra cairia em cima dela. z-index 40 fica acima
+       do 30 da navegação e abaixo dos 70 do drawer. */
+    .prc-shell:not(.modo-cliente) .prop-resumo{
+      display:flex;align-items:center;gap:10px;
+      position:fixed;left:0;right:0;bottom:76px;z-index:40;
+      padding:11px 14px;background:var(--dark);color:var(--dark-ink);
+      border-radius:var(--r-lg) var(--r-lg) 0 0;box-shadow:0 -8px 24px rgba(26,22,19,.3);
+    }
+    /* Espaço para a barra não cobrir o fim do documento. */
+    .prc-shell:not(.modo-cliente){padding-bottom:74px;}
+  }
+
+  .prop-resumo-num{display:flex;align-items:baseline;gap:5px;flex:1;min-width:0;font-variant-numeric:tabular-nums;}
+  .prop-resumo-num em{font:900 15px "Archivo",system-ui,sans-serif;font-style:normal;color:var(--dark-mut);}
+  .prop-resumo-num b{font:900 21px "Archivo",system-ui,sans-serif;letter-spacing:-.03em;color:#fff;}
+  .prop-resumo-num i{font:800 11px "Manrope",system-ui,sans-serif;font-style:normal;color:var(--dark-mut);}
+  .prop-resumo-ger{flex:none;min-height:44px;padding:10px 16px;border:1px solid var(--dark-line);border-radius:999px;background:none;color:var(--dark-ink);font:800 12px "Archivo",system-ui,sans-serif;cursor:pointer;}
+  .prop-resumo-zap{flex:none;display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:999px;background:var(--dark-green);color:var(--dark);cursor:pointer;}
+  .prop-resumo-zap svg{fill:currentColor;}
 
   /* ══ INVESTIMENTO ══════════════════════════════════════════════════════════════
      ESCOPO: dentro de .prc-proposal (painel escuro). Estrutura e ordem vindas do
@@ -9912,6 +9951,19 @@ function prcLigarPeriodos(raiz) {
   }));
 }
 
+/* A barra de resumo fixa não tem ação própria: ela ACIONA os CTAs de verdade, que vivem
+   no mesmo documento e já têm todo o tratamento de estado. Fica ligada nos MESMOS dois
+   lugares que prcLigarPeriodos — o render completo e a atualização do preview — porque
+   atualizarPreviewPrecificacao reescreve o documento inteiro e leva os listeners com ele.
+   Foi exatamente assim que os períodos do modo cliente ficaram mudos uma vez. */
+function prcLigarResumoFixo(raiz) {
+  raiz.querySelectorAll('[data-prop-resumo]').forEach(btn => btn.addEventListener('click', () => {
+    const alvo = btn.dataset.propResumo === 'whats' ? 'prcWhatsapp' : 'prcBaixar';
+    const real = document.getElementById(alvo);
+    if (real) real.click();
+  }));
+}
+
 function prcPeriodosNoDocumentoHTML() {
   return `<div class="prc-per-doc">${precificacaoCache.periodicidades.map(item => {
     const c = calcularPrecificacao(item.id);
@@ -9978,6 +10030,32 @@ function prcPreviewHTML() {
          mesmo data-prc-periodo, então a fiação é a que já existe. -->
     ${prcModoCliente ? prcPeriodosNoDocumentoHTML() : ''}
     ${prcModoCliente ? '' : prcBlocoPassoHTML()}
+    <!-- BARRA DE RESUMO FIXA (30/08/26 — Bloco 6 da prancha do Claude Design, cujo
+         DE/PARA de Propostas diz: "sticky escuro mantido; 375 = barra fixa com total +
+         Gerar + ✆", com o efeito "preço sempre visível na mesa").
+
+         MEDIDO a 375px antes de mexer: a página tem 4.896px, o bloco de INVESTIMENTO cai
+         em y=3.698 e o "Enviar PNG no WhatsApp" em y=4.039 — quatro e meia e cinco telas
+         abaixo. No celular o executivo não sabia o preço sem rolar cinco telas, e a ação
+         principal estava no fim de tudo.
+
+         Os dois botões CLICAM OS CTAs QUE JÁ EXISTEM (#prcBaixar e #prcWhatsapp) em vez de
+         repetir a lógica: gerar PNG e abrir a conversa são caminhos com estado (desabilita,
+         troca o rótulo, trata erro) e ter uma segunda cópia deles seria ter dois lugares
+         para consertar. Mesmo motivo pelo qual a passagem da Hoje clica o botão de aba real.
+
+         Só aparece de 420px para baixo, e nunca no modo cliente: virar a tela para o dono
+         é apresentação em tela cheia, e uma barra flutuante por cima disso é ruído. -->
+    <div class="prop-resumo" aria-hidden="false">
+      <span class="prop-resumo-num">
+        ${c.periodo.meses > 1 ? `<em>${c.periodo.meses}x</em>` : ''}<b>${prcMoedaCentavos(c.mensal)}</b>${c.periodo.meses > 1 ? '' : '<i>/mês</i>'}
+      </span>
+      <button type="button" class="prop-resumo-ger" data-prop-resumo="baixar">Gerar</button>
+      <button type="button" class="prop-resumo-zap" data-prop-resumo="whats" aria-label="Enviar PNG no WhatsApp">
+        <svg viewBox="0 0 24 24" aria-hidden="true" width="17" height="17"><path d="M12.04 2a9.84 9.84 0 0 0-8.45 14.88L2 22l5.25-1.54A9.94 9.94 0 1 0 12.04 2Zm0 17.88a7.87 7.87 0 0 1-4.02-1.1l-.29-.17-3.12.92.94-3.04-.19-.31a7.85 7.85 0 1 1 6.68 3.7Z"/></svg>
+      </button>
+    </div>
+
     <div class="prc-actions"><button type="button" class="prc-action whatsapp" id="prcWhatsapp" title="Gera o PNG e abre a conversa do cliente"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 2a9.84 9.84 0 0 0-8.45 14.88L2 22l5.25-1.54A9.94 9.94 0 1 0 12.04 2Zm0 17.88a7.87 7.87 0 0 1-4.02-1.1l-.29-.17-3.12.92.94-3.04-.19-.31a7.85 7.85 0 1 1 6.68 3.7Zm4.31-5.89c-.24-.12-1.4-.69-1.61-.77-.22-.08-.38-.12-.54.12-.16.24-.61.77-.75.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.9-1.17a7.13 7.13 0 0 1-1.31-1.63c-.14-.24-.02-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.73-1.78-.2-.47-.39-.4-.54-.41h-.46a.88.88 0 0 0-.63.3c-.22.24-.83.81-.83 1.98s.85 2.3.97 2.46c.12.16 1.67 2.55 4.05 3.58.57.24 1.01.39 1.35.5.57.18 1.08.15 1.49.09.45-.07 1.4-.57 1.59-1.12.2-.55.2-1.03.14-1.13-.06-.1-.22-.16-.45-.28Z"/></svg>Enviar PNG no WhatsApp</button><div class="prc-whatsapp-hint">Desktop: o PNG fica copiado para colar na conversa. Celular: compartilha o arquivo.</div><button type="button" class="prc-action secondary" id="prcBaixar">Baixar proposta em PNG</button><button type="button" class="prc-action secondary" id="prcCopiar">Copiar texto</button>
     <!-- REGISTRAR NO NEGÓCIO: o rótulo diz o que vai acontecer nesta posição do funil,
          em vez de um "Registrar" genérico que às vezes moveria de etapa e às vezes não.
@@ -10014,6 +10092,7 @@ function atualizarPreviewPrecificacao() {
      tocáveis do modo cliente estão aqui: sem esta linha, eles aparecem e não
      respondem. */
   prcLigarPeriodos(slot);
+  prcLigarResumoFixo(slot);
   document.getElementById('prcBaixar').addEventListener('click', baixarPropostaPrecificacao);
   const btnRegistrar = document.getElementById('prcRegistrar');
   if (btnRegistrar) btnRegistrar.addEventListener('click', prcRegistrarNoNegocio);
@@ -10557,6 +10636,7 @@ function renderPrecificacaoConfigurador() {
   slot.querySelectorAll('[data-prc-tipo]').forEach(btn => btn.addEventListener('click', () => { precificacaoEstado.tipo = btn.dataset.prcTipo; renderPrecificacaoConfigurador(); }));
   slot.querySelectorAll('[data-prc-plano]').forEach(btn => btn.addEventListener('click', () => { precificacaoEstado.plano = btn.dataset.prcPlano; renderPrecificacaoConfigurador(); }));
   prcLigarPeriodos(slot);
+  prcLigarResumoFixo(slot);
   slot.querySelectorAll('[data-prc-addon]').forEach(btn => btn.addEventListener('click', () => { const id = btn.dataset.prcAddon; precificacaoEstado.adicionais[id] = !precificacaoEstado.adicionais[id]; if (!precificacaoEstado.quantidades[id]) precificacaoEstado.quantidades[id] = 1; renderPrecificacaoConfigurador(); }));
   slot.querySelectorAll('[data-prc-qty]').forEach(btn => btn.addEventListener('click', () => { const id = btn.dataset.prcQty; precificacaoEstado.quantidades[id] = Math.max(1, Number(precificacaoEstado.quantidades[id] || 1) + Number(btn.dataset.delta || 0)); renderPrecificacaoConfigurador(); }));
   atualizarPreviewPrecificacao();
