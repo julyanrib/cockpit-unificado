@@ -25595,8 +25595,31 @@ async function renderCockpitExecutionCommand() {
     else if (hotSemPasso > 0) proxima = { texto: `Agendar ${hotSemPasso} próximo${hotSemPasso === 1 ? '' : 's'} passo${hotSemPasso === 1 ? '' : 's'}`, view: 'viewDaily' };
     else if ((r.leadsTravados || 0) > 0) proxima = { texto: `Destravar ${r.leadsTravados} no SLA`, view: 'viewDaily' };
     else if (prometido > 0 && realizado < prometido) proxima = { texto: `Cobrar ${prometido - realizado} visita${prometido - realizado === 1 ? '' : 's'}`, view: 'viewDaily' };
-    const score = (!planoFechado ? 4 : 0) + (paradas === 0 ? 4 : 0) + hotSemPasso * 3 + (r.leadsTravados || 0) + (prometido > realizado ? 2 : 0) + (!ramp.definido ? 2 : 0);
-    return { r, daily, prometido, realizado, nomes, hotSemPasso, paradas, planoFechado, ramp, proxima, score };
+    /* A RÉGUA DE INTERVENÇÃO (reescrita em 30/08/26). Os mesmos números aparecem na tela,
+       no detalhe "como esta fila é ordenada" no fim do bloco — regra invisível é regra que
+       ninguém pode contestar.
+
+       · TAXA, não número absoluto, para negócio travado. Antes cada travado somava +1 sem
+         teto: 18 travados = +18, abafando todo o resto e punindo carteira grande. Agora é
+         a fatia travada da carteira, com teto de 10 — carteira pequena com tudo travado
+         finalmente aparece na fila.
+       · A FASE CONTA. Rota e plano do dia só pontuam para quem tem alvo de campo maior que
+         zero. Cobrar rua de quem está na semana 2 é o oposto de rampagem. */
+    const alvoDeCampo = (ramp && ramp.definido && ramp.alvo != null) ? Number(ramp.alvo) : null;
+    const naRua = alvoDeCampo == null || alvoDeCampo > 0;
+    const abertosDele = Number(r.open) || 0;
+    const travadosDele = Number(r.leadsTravados) || 0;
+    const taxaTravado = abertosDele > 0 ? travadosDele / abertosDele : 0;
+    const pesos = {
+      plano: (naRua && !planoFechado) ? 4 : 0,
+      rota: (naRua && paradas === 0) ? 4 : 0,
+      quentes: hotSemPasso * 3,
+      travados: Math.min(10, Math.round(taxaTravado * 10)),
+      promessa: (prometido > realizado) ? 2 : 0,
+      fase: (!ramp.definido) ? 2 : 0
+    };
+    const score = pesos.plano + pesos.rota + pesos.quentes + pesos.travados + pesos.promessa + pesos.fase;
+    return { r, daily, prometido, realizado, nomes, hotSemPasso, paradas, planoFechado, ramp, proxima, score, pesos, taxaTravado, naRua };
   }).sort((a, b) => b.score - a.score);
 
   const rotasProntas = linhas.filter(x => x.paradas > 0).length;
@@ -25634,7 +25657,7 @@ async function renderCockpitExecutionCommand() {
         <div class="command-kpi"><b style="color:${corSeUtil(planosFechados === linhas.length, 'var(--amber)')}">${planosFechados}/${linhas.length}</b><span>planos do dia fechados</span></div>
         <div class="command-kpi"><b style="color:${ehDiaUtilHoje ? 'var(--ink)' : 'var(--muted2)'}">${visitasAuditaveis}</b><span>visitas com cliente identificado</span></div>
         <div class="command-kpi"><b style="color:${hotTotal && hotProtegidos < hotTotal ? 'var(--red)' : 'var(--green)'}">${hotProtegidos}/${hotTotal}</b><span>quentes com próximo passo futuro</span></div>
-        <div class="command-kpi"><b style="color:${funilAberto.length && funilProtegido < funilAberto.length ? 'var(--red)' : 'var(--green)'}">${funilProtegido}/${funilAberto.length}</b><span>funil aberto protegido por tarefa</span></div>
+        <div class="command-kpi"><b style="color:${funilAberto.length && funilProtegido < funilAberto.length ? 'var(--red)' : 'var(--green)'}">${funilProtegido}/${funilAberto.length}</b><span>funil aberto com próximo passo marcado</span></div>
         <div class="command-kpi"><b style="color:${slaTotal ? 'var(--red)' : 'var(--green)'}">${slaTotal}</b><span>negócios acima do SLA</span></div>
       </div>
       <!-- A LISTA POR EXECUTIVO RECOLHEU (28/08/26).
@@ -25690,6 +25713,19 @@ async function renderCockpitExecutionCommand() {
             <button type="button" class="command-action" data-command-view="${x.proxima.view}" data-command-owner="${esc(String(x.r.ownerId))}">Agir →</button>
           </div>`).join('')}
       </div>` : ''}
+      <!-- A REGRA FICA NA TELA (30/08/26). Ela ordenava a fila e não existia em lugar
+           nenhum que o gestor pudesse ler — então ninguém podia contestar a ordem. Fica
+           recolhida: quem quer saber por que alguém está no topo, abre. -->
+      <details class="command-note" style="margin-bottom:9px;">
+        <summary style="cursor:pointer;font-weight:700;color:var(--ink);">Como esta fila é ordenada</summary>
+        <div style="margin-top:8px;line-height:1.7;">
+          Cada executivo soma pontos de exceção. <b>5 ou mais</b> entra na fila; <b>10 ou mais</b> é crítico.
+          <br>· plano do dia não fechado <b>+4</b> · sem parada na rota <b>+4</b> — os dois só contam para quem já tem alvo de visitas por dia
+          <br>· cada negócio quente sem próximo passo <b>+3</b>
+          <br>· fatia da carteira travada acima do SLA <b>+1 a +10</b> (é taxa, não número: 18 travados em 29 pesa mais que 18 em 100)
+          <br>· prometeu mais do que cumpriu hoje <b>+2</b> · fase de rampagem não definida <b>+2</b>
+        </div>
+      </details>
       <div class="command-note">Regra operacional: rota e plano fechados antes da rua; visita só conta para gestão quando está vinculada ao cliente; negócio quente precisa sair de cada toque com próximo passo e data. ${rampSemDefinir ? `<b>${rampSemDefinir} executivo${rampSemDefinir === 1 ? '' : 's'} ainda sem fase de rampagem definida.</b>` : ''}</div>
     </section>`;
 
@@ -33713,12 +33749,21 @@ async function renderPDIs() {
       const tudoFeito = temCompromisso && feitosCount === x.compromissos.length;
       const pdiVencido = estado.data && estado.data < dataHojeISO2 && !tudoFeito;
       const semPlano = !temCompromisso || tudoFeito;
-      const travadosAlto = (x.leadsTravados || 0) >= 4;
-      // Vermelho é exceção: PDI vencido ou 8+ negócios acima do SLA. Com 4–7,
-      // o executivo segue na fila de monitoramento, sem parecer que todo o time está crítico.
-      const urgente = pdiVencido || (x.leadsTravados || 0) >= 8;
-      return { x, estado, temCompromisso, feitosCount, tudoFeito, pdiVencido, semPlano, travadosAlto, urgente };
-    }).sort((a, b) => (b.urgente - a.urgente) || (b.x.leadsTravados || 0) - (a.x.leadsTravados || 0));
+      /* TAXA, NÃO CONTAGEM (30/08/26). O critério de vermelho era "8 ou mais negócios acima
+         do SLA" e a ordenação era pelo número absoluto — os dois favorecem carteira grande.
+         Medido no time: Amanda tem 17 travados de 20 abertos (85%, a carteira mais abandonada
+         do time) e aparecia DEPOIS da Kelly, que tem 18 de 29 (62%). A fila levava o gestor à
+         pessoa de carteira maior em vez da pessoa em situação pior.
+
+         Urgente = PDI vencido, ou metade da carteira parada com pelo menos 5 negócios. O piso
+         de 5 existe para 1 travado em 1 aberto não virar 100% e furar a fila. */
+      const abertosDele = Number(x.open) || 0;
+      const travadosDele = Number(x.leadsTravados) || 0;
+      const taxaTravado = abertosDele > 0 ? travadosDele / abertosDele : 0;
+      const travadosAlto = taxaTravado >= 0.3 && travadosDele >= 3;
+      const urgente = pdiVencido || (taxaTravado >= 0.5 && travadosDele >= 5);
+      return { x, estado, temCompromisso, feitosCount, tudoFeito, pdiVencido, semPlano, travadosAlto, urgente, taxaTravado };
+    }).sort((a, b) => (b.urgente - a.urgente) || (b.taxaTravado - a.taxaTravado) || ((b.x.leadsTravados || 0) - (a.x.leadsTravados || 0)));
 
     const urgentes = cardsTime.filter(c => c.urgente).slice(0, 3);
     const idsUrgentes = new Set(urgentes.map(c => c.x.ownerId));
@@ -33753,7 +33798,7 @@ async function renderPDIs() {
             <div class="pessoas-card-urgente" data-owner="${c.x.ownerId}" style="border:1.5px solid var(--red);border-radius:15px;padding:14px 16px;font-size:12px;background:var(--red-soft);cursor:pointer;">
               <div style="display:flex;align-items:center;gap:9px;"><span style="width:30px;height:30px;border-radius:99px;background:var(--red);color:#fff;font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:11px;display:grid;place-items:center;">${esc(c.x.name.split(' ').map(p => p[0]).slice(0, 2).join(''))}</span><span><b style="font-size:13px;">${esc(c.x.name)}</b><span style="display:block;font-size:11px;color:var(--muted2);">${esc(c.x.praca || '')}</span></span></div>
               <div style="margin-top:9px;color:var(--muted);font-variant-numeric:tabular-nums;"><b style="color:var(--ink);">${c.x.open}</b> aberto${c.x.leadsTravados > 0 ? ` · <b style="color:var(--red);">${c.x.leadsTravados} travado${c.x.leadsTravados === 1 ? '' : 's'}</b>` : ''} · <b style="color:var(--ink);">${visitasInformadasTexto(c.x.ownerId)}</b> visitas</div>
-              <div style="margin-top:4px;font-size:11px;color:var(--red);font-weight:700;">${[c.pdiVencido ? 'PDI vencido' : '', c.travadosAlto ? `${c.x.leadsTravados} travados` : ''].filter(Boolean).join(' · ')}</div>
+              <div style="margin-top:4px;font-size:11px;color:var(--red);font-weight:700;">${[c.pdiVencido ? 'PDI vencido' : '', c.travadosAlto ? `${c.x.leadsTravados} travados · ${Math.round(c.taxaTravado * 100)}% da carteira` : ''].filter(Boolean).join(' · ')}</div>
               <span class="pessoas-btn-preparar" data-owner="${c.x.ownerId}" style="display:inline-block;margin-top:10px;background:var(--red);color:#fff;border-radius:999px;padding:4px 13px;font-size:11px;font-weight:700;">Preparar 1:1 →</span>
             </div>
           `).join('')}
