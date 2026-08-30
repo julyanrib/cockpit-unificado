@@ -25556,8 +25556,11 @@ async function renderCockpitExecutionCommand() {
     let proxima = { texto: 'Acompanhar execução', view: 'viewDaily' };
     if (!daily || prometido === 0 || !planoFechado) proxima = { texto: 'Fechar plano do dia', view: 'viewDaily' };
     else if (paradas === 0) proxima = { texto: 'Montar rota antes da rua', view: 'viewRotas' };
-    else if (hotSemPasso > 0) proxima = { texto: `Agendar ${hotSemPasso} próximo${hotSemPasso === 1 ? '' : 's'} passo${hotSemPasso === 1 ? '' : 's'}`, view: 'viewCockpit' };
-    else if ((r.leadsTravados || 0) > 0) proxima = { texto: `Destravar ${r.leadsTravados} no SLA`, view: 'viewCockpit' };
+    /* DESTINO CORRIGIDO (30/08/26): estes dois apontavam para a aba Time, e em #136 a
+       lista de quentes e o "Onde agir hoje" mudaram para a Daily. Clique que troca de aba
+       e não encontra a lista prometida é pior que clique nenhum. */
+    else if (hotSemPasso > 0) proxima = { texto: `Agendar ${hotSemPasso} próximo${hotSemPasso === 1 ? '' : 's'} passo${hotSemPasso === 1 ? '' : 's'}`, view: 'viewDaily' };
+    else if ((r.leadsTravados || 0) > 0) proxima = { texto: `Destravar ${r.leadsTravados} no SLA`, view: 'viewDaily' };
     else if (prometido > 0 && realizado < prometido) proxima = { texto: `Cobrar ${prometido - realizado} visita${prometido - realizado === 1 ? '' : 's'}`, view: 'viewDaily' };
     const score = (!planoFechado ? 4 : 0) + (paradas === 0 ? 4 : 0) + hotSemPasso * 3 + (r.leadsTravados || 0) + (prometido > realizado ? 2 : 0) + (!ramp.definido ? 2 : 0);
     return { r, daily, prometido, realizado, nomes, hotSemPasso, paradas, planoFechado, ramp, proxima, score };
@@ -25624,6 +25627,10 @@ async function renderCockpitExecutionCommand() {
            tela — e as linhas de lá são mais ricas (barra de prometido × cumprido,
            agenda do dia, detalhe que abre, funil da pessoa). Ficam os seis sinais
            vitais, que nenhuma outra parte da tela mostra juntos. -->
+      <!-- A LISTA DE INTERVENÇÃO (30/08/26). Na primeira tentativa eu removi ela inteira
+           por duplicar as linhas da Daily. Duplicava os NÚMEROS — mas levava embora o que
+           só ela tem: a ação gerencial nomeada, com destino. Voltou sem as colunas de
+           número (a Daily as mostra com barra) e só com quem passa do limite de exceção. -->
       <div class="command-list-summary" style="cursor:default;">
         <!-- Em dia sem Daily a contagem de excecao sai: "6/6 precisam de intervencao" ao
              lado de "hoje nao se cobra" seria a mesma contradicao de novo, so em outro
@@ -25635,6 +25642,21 @@ async function renderCockpitExecutionCommand() {
             ? `precisam de intervenção hoje · <b>${esc(nomesEmExcecao)}</b> — cada um na própria linha, abaixo`
             : 'ninguém em exceção agora — rota e plano fechados no time inteiro'}</span>
       </div>
+      ${ehDiaUtilHoje && (criticos + atencao) > 0 ? `<div class="command-list">
+        ${linhas.filter(x => x.score >= 5).map(x => `
+          <div class="command-row ${x.score >= 10 ? 'is-critical' : 'is-warning'}" style="grid-template-columns:minmax(0,1.1fr) minmax(0,1.4fr) auto;">
+            <div class="command-name"><b>${esc(x.r.name)}</b><small>${esc(x.r.praca || '')} · ${esc(x.ramp.label)}</small></div>
+            <div class="command-cell command-next" style="text-align:left;">
+              <b>${esc(x.proxima.texto)}</b>
+              <small>${!x.planoFechado ? 'plano do dia ainda aberto'
+                : x.paradas === 0 ? 'sem parada na rota de hoje'
+                : x.hotSemPasso > 0 ? `${x.hotSemPasso} quente${x.hotSemPasso === 1 ? '' : 's'} sem próximo passo`
+                : (x.r.leadsTravados || 0) > 0 ? `${x.r.leadsTravados} acima do SLA da etapa`
+                : 'prometeu mais do que cumpriu hoje'}</small>
+            </div>
+            <button type="button" class="command-action" data-command-view="${x.proxima.view}" data-command-owner="${esc(String(x.r.ownerId))}">Agir →</button>
+          </div>`).join('')}
+      </div>` : ''}
       <div class="command-note">Regra operacional: rota e plano fechados antes da rua; visita só conta para gestão quando está vinculada ao cliente; negócio quente precisa sair de cada toque com próximo passo e data. ${rampSemDefinir ? `<b>${rampSemDefinir} executivo${rampSemDefinir === 1 ? '' : 's'} ainda sem fase de rampagem definida.</b>` : ''}</div>
     </section>`;
 
@@ -25644,6 +25666,17 @@ async function renderCockpitExecutionCommand() {
       cockpitExecSelecionado = ownerId;
       renderRepsList();
       renderCockpitDossieInline();
+    }
+    /* Na Daily, "Agir" não pode só trocar de aba e deixar ele procurar entre sete linhas:
+       abre a linha daquele executivo e rola até ela. O clique termina onde a ação está. */
+    if (ownerId && btn.dataset.commandView === 'viewDaily') {
+      setTimeout(() => {
+        const linha = document.getElementById('dailyAcc_' + ownerId);
+        if (linha) {
+          linha.open = true;
+          window.scrollTo({ top: linha.getBoundingClientRect().top + window.scrollY - 110, behavior: 'smooth' });
+        }
+      }, 320);
     }
     // Dispara o botão real do menu para que a view seja ativada E renderizada.
     // Chamar apenas activateTab deixava Daily/Rotas visualmente vazias até um
