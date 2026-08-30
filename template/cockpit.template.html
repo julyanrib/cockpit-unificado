@@ -3468,6 +3468,22 @@
   .d4-ontem-nota b{color:var(--d4-ambar-claro);}
   .d4-conq{display:flex;gap:8px;flex-wrap:wrap;margin:10px 20px 16px;}
   .d4-conq-on{font-size:11px;font-weight:700;padding:6px 11px;border-radius:999px;background:var(--d4-ambar-bg);border:1px solid var(--d4-ambar-linha);color:var(--d4-ambar);}
+  /* trava das 9h30 e fecho das 19h (30/08/26) */
+  /* margin-left:auto pelo mesmo motivo de .d4-card-nota: dentro de .is-linha o selo
+     precisa ser empurrado para a direita, senao cola no titulo. */
+  .d4-selo-trava{margin-left:auto;font-size:9.5px;font-weight:800;letter-spacing:.1em;color:var(--d4-ambar);background:rgba(214,142,32,.12);border:1px solid rgba(214,142,32,.34);border-radius:999px;padding:4px 9px;white-space:nowrap;}
+  .d4-eixo-travado{display:inline-flex;flex-direction:column;align-items:center;min-width:64px;padding:5px 10px;border:1.5px solid var(--d4-linha);border-radius:10px;background:var(--d4-canvas);}
+  .d4-eixo-travado b{font-size:19px;font-weight:800;line-height:1.05;color:var(--d4-escuro);font-variant-numeric:tabular-nums;}
+  .d4-eixo-travado span{font-size:8.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--d4-muted);}
+  .d4-barras.is-claro .d4-barra-rot{color:var(--d4-muted);}
+  .d4-barras.is-claro .d4-barra-trilha{background:var(--d4-canvas);}
+  .d4-barras.is-claro .d4-barra b{color:var(--d4-escuro);}
+  .d4-fecho-pts{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid var(--d4-linha);}
+  .d4-fecho-pts b{font-size:26px;font-weight:800;line-height:1;color:var(--d4-verde);font-variant-numeric:tabular-nums;}
+  .d4-fecho-pts span{font-size:11.5px;color:var(--d4-muted);}
+  .d4-fecho-streak{margin-top:9px;font-size:12px;color:var(--d4-escuro);}
+  .d4-fecho-streak b{font-weight:800;}
+
   .d4-conq-off{font-size:11px;font-weight:600;padding:6px 11px;border-radius:999px;border:1px solid var(--d4-linha-forte);color:var(--d4-muted2);background:var(--d4-card);}
   /* estreito */
   @media (max-width:1240px){
@@ -3490,6 +3506,14 @@
     .d4-eixo-quem{grid-area:quem;}
     .d4-eixo-pts{grid-area:pts;}
     .d4-stepper{grid-area:stepper;justify-self:end;}
+    /* VISTO A 375: o rótulo do "vale até" tem flex:1 e disputava a linha com o número
+       e a nota — virou uma palavra por linha. Aqui ele fica com a fileira inteira e o
+       número desce junto da nota. */
+    .d4-vale{flex-wrap:wrap;}
+    .d4-vale>span:first-child{flex:1 1 100%;}
+    /* e o selo da trava desce para a própria fileira em vez de esmagar o título */
+    .d4-card-cab.is-linha{flex-wrap:wrap;}
+    .d4-card-cab.is-linha>.d4-card-rot{flex:1 1 100%;}
   }
   @media (max-width:640px){
     /* O motivo cai para a segunda linha em vez de virar reticências, e o alvo do
@@ -26089,9 +26113,33 @@ function d4PotencialMax(linha) {
   const bruto = D4_EIXOS.reduce((s, e) => s + Number(l[e.campoP] || 0) * e.pts, 0);
   return { bruto, comBonus: Math.round(bruto * D4_BONUS) };
 }
-/* Streak = dias úteis consecutivos com 100% cumprido, andando para trás de hoje. */
-function d4Streak(ownerId) {
-  let dia = diaUtilAnterior(isoDate(new Date()));
+/* ── OS TRÊS MOMENTOS DO DIA ────────────────────────────────────────────────
+   A mesma aba diz três coisas diferentes conforme a hora, porque o executivo pede
+   três coisas diferentes dela:
+     antes de 9h30  → "o que você promete" (steppers vivos, promessa editável)
+     9h30 às 19h    → a promessa está TRAVADA e o dia corre contra ela
+     depois das 19h → o placar do dia fechou; o que importa é o resultado
+   Derivado do relógio, não gravado: uma trava guardada no banco seria um segundo
+   lugar para a verdade morar e poderia divergir da hora real. */
+const D4_TRAVA_MIN = 9 * 60 + 30;
+const D4_FECHA_MIN = 19 * 60;
+function d4FaseDoDia(refISO) {
+  const hojeISO = isoDate(new Date());
+  /* olhando um dia que não é hoje: passado está fechado, futuro ainda é promessa */
+  if (refISO && refISO !== hojeISO) return refISO < hojeISO ? 'fechado' : 'antes';
+  const ag = new Date();
+  const min = ag.getHours() * 60 + ag.getMinutes();
+  if (min >= D4_FECHA_MIN) return 'fechado';
+  if (min >= D4_TRAVA_MIN) return 'corrida';
+  return 'antes';
+}
+
+/* Streak = dias úteis consecutivos com 100% cumprido, andando para trás. Com o dia
+   FECHADO (19h) hoje já entra na conta — é isso que "atualizar o streak no fecho"
+   significa aqui, sem contador gravado para desencontrar da realidade. */
+function d4Streak(ownerId, incluirHoje) {
+  const hojeISO = isoDate(new Date());
+  let dia = (incluirHoje && nearestBusinessDay(hojeISO) === hojeISO) ? hojeISO : diaUtilAnterior(hojeISO);
   let n = 0;
   for (let i = 0; i < 30; i++) {
     const linha = getDaily(ownerId, dia);
@@ -26125,6 +26173,24 @@ function d4PosicaoNoTime(ownerId) {
   return i < 0 ? null : { pos: i + 1, de: tabela.length };
 }
 
+/* Prometido × realizado em barras SÓLIDAS — o mesmo desenho do gráfico do Meu Funil.
+   Uma função só porque a mesma leitura aparece duas vezes: no cartão de ONTEM e no
+   fecho do próprio dia às 19h. Se as duas divergissem, uma delas estaria mentindo. */
+function d4BarrasHTML(linha) {
+  const l = linha || {};
+  return D4_EIXOS.map(e => {
+    const prom = Number(l[e.campoP] || 0);
+    const feito = Number(l[e.campoR] || 0);
+    const pct = prom > 0 ? Math.min(100, Math.round(feito / prom * 100)) : 0;
+    const zerado = prom > 0 && feito === 0;
+    return `<div class="d4-barra">
+      <span class="d4-barra-rot">${esc(e.rot.split(' ')[0])}</span>
+      <span class="d4-barra-trilha"><i style="width:${pct}%;${zerado ? 'background:#FF6B78;' : ''}"></i></span>
+      <b class="${prom > 0 && feito >= prom ? 'is-verde' : zerado ? 'is-vermelho' : ''}">${feito}/${prom}</b>
+    </div>`;
+  }).join('');
+}
+
 /* ── A TELA ────────────────────────────────────────────────────────────────── */
 function dailyV4HTML(r) {
   const hojeISO = isoDate(new Date());
@@ -26133,13 +26199,19 @@ function dailyV4HTML(r) {
   const linhaOntem = getDaily(r.ownerId, ontemISO) || {};
   const potencial = d4PotencialMax(linhaHoje);
   const pontosSemana = d4PontosDaSemana(r.ownerId);
-  const streak = d4Streak(r.ownerId);
+  /* prometeu / travada / fechado governam a aba inteira daqui para baixo */
+  const prometeu = D4_EIXOS.some(e => Number(linhaHoje[e.campoP] || 0) > 0);
+  const fase = d4FaseDoDia(hojeISO);
+  const fechado = fase === 'fechado';
+  /* só trava o que existe: passar das 9h30 SEM promessa não tranca a porta — melhor
+     uma promessa atrasada, que ainda pode ser medida, do que dia nenhum. */
+  const travada = fase !== 'antes' && prometeu;
+  const streak = d4Streak(r.ownerId, fechado);
   const posicao = d4PosicaoNoTime(r.ownerId);
   const agora = new Date();
   const horaAgora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const rotuloHoje = fmtDailyLabel(hojeISO);
   const primeiroNome = String(r.name || '').split(' ')[0];
-  const prometeu = D4_EIXOS.some(e => Number(linhaHoje[e.campoP] || 0) > 0);
 
   /* conquistas: a mesma lista comprovada do resto da aba */
   let conq = [];
@@ -26151,8 +26223,14 @@ function dailyV4HTML(r) {
     <div class="d4-hero">
       <div class="d4-hero-quem">
         <div class="d4-hero-rot">MINHA DAILY · ${esc(primeiroNome.toUpperCase())} · ${esc(rotuloHoje.toUpperCase())} · ${esc(horaAgora)}</div>
-        <div class="d4-hero-titulo">O que você promete pra hoje?</div>
-        <div class="d4-hero-sub">a promessa fecha às 9h30 — depois disso o dia corre contra ela</div>
+        <div class="d4-hero-titulo">${fechado ? 'Como o dia fechou' : travada ? 'O dia está correndo contra a sua promessa' : prometeu || fase === 'antes' ? 'O que você promete pra hoje?' : 'Você ainda não prometeu hoje'}</div>
+        <div class="d4-hero-sub">${fechado
+          ? 'placar fechado às 19h · a promessa de amanhã se faz no Planejamento'
+          : travada
+            ? 'promessa travada às 9h30 — o gestor está vendo o que você prometeu'
+            : fase === 'antes'
+              ? 'a promessa fecha às 9h30 — depois disso o dia corre contra ela'
+              : 'passou das 9h30 — prometa agora, o dia ainda pode valer pontos'}</div>
       </div>
       <span class="d4-hero-risco"></span>
       <div class="d4-placar">
@@ -26171,10 +26249,41 @@ function dailyV4HTML(r) {
   /* o alvo da fase vem da MESMA funcao que monta a fila do dia — uma fonte so */
   let alvoFase = null, seqDoDia = { seq: [], alvoTamanho: null, totalNaFila: 0 };
   try { seqDoDia = sequenciaSugeridaDoDia(r) || seqDoDia; alvoFase = seqDoDia.alvoTamanho || null; } catch (e) {}
-  const col1 = `
+  /* ── O FECHO DAS 19h ──────────────────────────────────────────────────────
+     Depois das 19h a promessa não é mais uma pergunta: é um resultado. A coluna 1
+     deixa de oferecer steppers (não existe prometer um dia que já acabou) e passa a
+     mostrar o placar fechado, se o streak andou, e para onde ir agora — amanhã se
+     planeja no Planejamento, não aqui. */
+  const fechoDoDia = (() => {
+    const p = d4Pontos(linhaHoje);
+    const max = d4PotencialMax(linhaHoje);
+    const pct = max.bruto > 0 ? Math.round(p.bruto / max.bruto * 100) : 0;
+    return `<div class="d4-card">
+      <div class="d4-card-cab is-linha">
+        <div class="d4-card-rot">O DIA FECHOU · ${esc(rotuloHoje.toUpperCase())}</div>
+        <span class="d4-selo-trava">🔒 PLACAR FECHADO ÀS 19H</span>
+      </div>
+      ${prometeu ? `<div class="d4-barras is-claro">${d4BarrasHTML(linhaHoje)}</div>
+      <div class="d4-fecho-pts">
+        <b>+${p.pts} pts</b>
+        <span>${pct}% da promessa cumprido ${p.bonus ? '· bônus ×1,5 aplicado' : '· sem bônus, o bônus pede 100%'}</span>
+      </div>
+      <div class="d4-fecho-streak">${p.bonus
+        ? `🔥 Streak em <b>${streak} dia${streak === 1 ? '' : 's'} cumprindo</b> — hoje contou.`
+        : '🔥 O streak zerou hoje: ele só anda com a promessa inteira cumprida.'}</div>`
+        : '<div class="d4-vazio">O dia fechou sem promessa registrada. Não há placar para fechar — e é isso que o gestor vai ver às 9h30 de amanhã.</div>'}
+      <div class="d4-prometer">
+        <button type="button" class="d4-btn-prometer" id="d4PlanejarAmanha">Planejar amanhã → montar a fila do dia</button>
+        <div class="d4-prometer-nota">A promessa de amanhã se faz de manhã, com a fila pronta. O Planejamento é onde a fila nasce.</div>
+      </div>
+    </div>`;
+  })();
+
+  const col1 = fechado ? fechoDoDia : `
     <div class="d4-card">
-      <div class="d4-card-cab">
+      <div class="d4-card-cab is-linha">
         <div class="d4-card-rot">PROMESSA DO DIA${alvoFase ? ` <em>· alvo da sua fase: ${alvoFase} visitas/dia</em>` : ''}</div>
+        ${travada ? '<span class="d4-selo-trava">🔒 TRAVADA ÀS 9H30</span>' : ''}
       </div>
       <div class="d4-eixos">
         ${D4_EIXOS.map(e => {
@@ -26182,23 +26291,27 @@ function dailyV4HTML(r) {
           return `<div class="d4-eixo">
             <div class="d4-eixo-quem"><b>${esc(e.rot)}</b><span>${esc(e.sub)}</span></div>
             <span class="d4-eixo-pts">+${e.pts} pts cada</span>
-            <span class="d4-stepper">
+            ${travada
+              ? `<span class="d4-eixo-travado"><b>${n}</b><span>prometido</span></span>`
+              : `<span class="d4-stepper">
               <button type="button" data-d4-eixo="${e.k}" data-d4-delta="-1" aria-label="menos um ${esc(e.rot)}">−</button>
               <b data-d4-valor="${e.k}">${n}</b>
               <button type="button" data-d4-eixo="${e.k}" data-d4-delta="1" aria-label="mais um ${esc(e.rot)}">+</button>
-            </span>
+            </span>`}
           </div>`;
         }).join('')}
       </div>
       <div class="d4-vale">
-        <span>promessa de hoje vale até</span>
+        <span>${travada ? 'a promessa travada vale até' : 'promessa de hoje vale até'}</span>
         <b>${potencial.comBonus} pts</b>
         <span class="d4-vale-nota">com bônus ×1,5</span>
       </div>
-      <div class="d4-prometer">
+      ${travada ? `<div class="d4-prometer">
+        <div class="d4-prometer-nota">A promessa fechou às 9h30 e não se mexe mais hoje — é isso que a torna uma promessa. O que muda daqui para a frente é o <b>cumprido</b>, e ele se escreve na rua: cada visita registrada sobe a barra.</div>
+      </div>` : `<div class="d4-prometer">
         <button type="button" class="d4-btn-prometer" id="d4Prometer">${prometeu ? 'Atualizar a promessa → vira agenda' : 'Prometer o dia → vira agenda'}</button>
-        <div class="d4-prometer-nota" id="d4PrometerNota">${Number(linhaHoje.prometido_visitas || 0)} visitas prometidas = ${Number(linhaHoje.prometido_visitas || 0)} slots na sua Agenda de hoje · o gestor vê a promessa às 9h30</div>
-      </div>
+        <div class="d4-prometer-nota" id="d4PrometerNota">${Number(linhaHoje.prometido_visitas || 0)} visitas prometidas = ${Number(linhaHoje.prometido_visitas || 0)} slots na sua Agenda de hoje${fase === 'antes' ? ' · o gestor vê a promessa às 9h30' : ' · promessa atrasada: ela trava no instante em que você gravar'}</div>
+      </div>`}
     </div>`;
 
   /* ── coluna 2: leads para encher a promessa ── */
@@ -26217,7 +26330,9 @@ function dailyV4HTML(r) {
   const col2 = `
     <div class="d4-card">
       <div class="d4-card-cab is-linha">
-        <span class="d4-card-rot">LEADS PARA ENCHER A PROMESSA</span>
+        <!-- depois das 19h a promessa nao esta mais para ser enchida: a mesma lista passa
+             a ser a fila que sobrou para amanha. Titulo que mente e titulo morto. -->
+        <span class="d4-card-rot">${fechado ? 'O QUE FICOU PARA AMANHÃ' : 'LEADS PARA ENCHER A PROMESSA'}</span>
         <span class="d4-card-nota">${Math.min(comEndereco, promVisitas || comEndereco)} de ${promVisitas || comEndereco} visitas já têm endereço</span>
       </div>
       ${seq.length ? seq.map(s => {
@@ -26237,7 +26352,9 @@ function dailyV4HTML(r) {
               : `<span class="d4-lead-sem">sem horário livre hoje</span>`}
         </div>`;
       }).join('') : '<div class="d4-vazio">Sua fila de hoje está vazia — puxe contas na Prospecção para encher a promessa.</div>'}
-      <div class="d4-lead-pe">${promVisitas > comEndereco
+      <div class="d4-lead-pe">${fechado
+        ? `${seq.length} conta${seq.length === 1 ? '' : 's'} continuam pedindo ação — elas abrem a fila de amanhã no <button type="button" class="d4-link" id="d4IrProspeccao">Planejamento</button>`
+        : promVisitas > comEndereco
         ? `faltam <b>${promVisitas - comEndereco} visita${promVisitas - comEndereco === 1 ? '' : 's'} sem endereço</b> — puxe da <button type="button" class="d4-link" id="d4IrProspeccao">Prospecção</button> ou a promessa fica descoberta`
         : 'toda visita prometida tem endereço — a rota está coberta'}</div>
     </div>`;
@@ -26265,19 +26382,7 @@ function dailyV4HTML(r) {
 
       <div class="d4-card-escuro">
         <div class="d4-card-rot is-claro">ONTEM · ${esc(fmtDailyLabel(ontemISO).toUpperCase())} — PROMETIDO × CUMPRIDO</div>
-        <div class="d4-barras">
-          ${D4_EIXOS.map(e => {
-            const prom = Number(linhaOntem[e.campoP] || 0);
-            const feito = Number(linhaOntem[e.campoR] || 0);
-            const pct = prom > 0 ? Math.min(100, Math.round(feito / prom * 100)) : 0;
-            const zerado = prom > 0 && feito === 0;
-            return `<div class="d4-barra">
-              <span class="d4-barra-rot">${esc(e.rot.split(' ')[0])}</span>
-              <span class="d4-barra-trilha"><i style="width:${pct}%;${zerado ? 'background:#FF6B78;' : ''}"></i></span>
-              <b class="${prom > 0 && feito >= prom ? 'is-verde' : zerado ? 'is-vermelho' : ''}">${feito}/${prom}</b>
-            </div>`;
-          }).join('')}
-        </div>
+        <div class="d4-barras">${d4BarrasHTML(linhaOntem)}</div>
         ${(() => {
           const p = d4Pontos(linhaOntem);
           const max = d4PotencialMax(linhaOntem);
@@ -26296,7 +26401,7 @@ function dailyV4HTML(r) {
       </div>
     </div>`;
 
-  return `<div class="d4-shell">
+  return `<div class="d4-shell" data-d4-fase="${fase}" data-d4-travada="${travada ? '1' : '0'}">
     ${hero}
     <div class="d4-grid">${col1}${col2}${col3}</div>
   </div>`;
@@ -28868,7 +28973,12 @@ async function renderDaily() {
         const nota = shell.querySelector('#d4PrometerNota');
         if (nota) nota.textContent = rascunho.visitas + ' visitas prometidas = ' + rascunho.visitas + ' slots na sua Agenda de hoje · o gestor vê a promessa às 9h30';
       };
+      /* A TRAVA VALE NO CLIQUE, não só no desenho. Sem stepper na tela a chance de
+         chegar aqui é remota, mas quem grava a promessa não pode confiar em quem a
+         desenha: a mesma verdade nos dois lugares. */
+      const travadoAgora = () => shell.dataset.d4Travada === '1';
       shell.querySelectorAll('[data-d4-eixo]').forEach(btn => btn.addEventListener('click', () => {
+        if (travadoAgora()) { mostrarToast('A promessa de hoje travou às 9h30 — o que muda agora é o cumprido.', 'atencao'); return; }
         const k = btn.dataset.d4Eixo;
         const d = Number(btn.dataset.d4Delta || 0);
         /* teto de 20 por eixo: promessa de 50 visitas não é promessa, é piada. */
@@ -28878,6 +28988,7 @@ async function renderDaily() {
 
       const btnProm = shell.querySelector('#d4Prometer');
       if (btnProm) btnProm.addEventListener('click', async () => {
+        if (travadoAgora()) { mostrarToast('A promessa de hoje travou às 9h30 e não se mexe mais.', 'atencao'); return; }
         const algum = D4_EIXOS.some(e => rascunho[e.k] > 0);
         if (!algum) { mostrarToast('Promessa vazia não vira dia: suba pelo menos as visitas.', 'atencao'); return; }
         btnProm.disabled = true;
@@ -28931,6 +29042,12 @@ async function renderDaily() {
         if (doFunil) { abrirFichaLeadFunilDrawer(doFunil, null, 'passo'); return; }
         mostrarToast('Essa conta não está na sua fila carregada — abra o Planejamento uma vez e volte.', 'atencao');
       }));
+
+      /* fecho das 19h: amanhã se planeja no Planejamento, que é onde a fila nasce. */
+      const btnAmanha = shell.querySelector('#d4PlanejarAmanha');
+      if (btnAmanha) btnAmanha.addEventListener('click', () => {
+        if (typeof agendaIrParaPlanejamento === 'function') agendaIrParaPlanejamento();
+      });
 
       const irProsp = shell.querySelector('#d4IrProspeccao');
       if (irProsp) irProsp.addEventListener('click', () => {
