@@ -2577,6 +2577,11 @@
   @media (max-width:760px){
     .comp-seq-btn,.briefing-cta,.daily-date-nav button{min-height:44px;}
     .chart-acc-sum{min-height:44px;align-items:center;}
+    /* Medidos a 375 depois da primeira rodada: o "Prometer agora" do banner (26px, meu,
+       criado hoje) e o "O que eu faco agora ->" do pe do briefing (21px). O segundo e o
+       unico atalho do rodape do briefing para a acao do dia. */
+    .daily-prometer-cta{min-height:44px;}
+    .daily-promise-foot .push{min-height:44px;}
   }
   .briefing-ramp{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--body);align-items:baseline;}
   .briefing-ramp .is-green{color:var(--green);font-weight:700;}
@@ -3263,7 +3268,14 @@
      Vermelho neste produto significa "aja agora, isto é real". Promessa não é real
      ainda — e promessa com a cara de prova é o que faz compromisso ser lido como
      execução, na tela do executivo e na daily do gestor. Prova segue verde e sólida. */
-  .promessa-card{background:var(--panel);border:1.5px dashed var(--amber)!important;}
+  /* SOLIDA, NAO TRACEJADA (30/08/26). A convencao da prancha era tracejado = promessa,
+     solido = prova. O Julyan recusou o tracejado duas vezes, e olhando a tela ele esta
+     certo: o card da promessa e o MAIOR bloco da aba, e um retangulo tracejado desse
+     tamanho faz a tela inteira parecer rascunho. O ambar sozinho ja diz "promessa" — a
+     mesma cor do selo, do tally e do aviso; o tracejado era redundante com a cor.
+     Fica 1.5px solida em ambar, e o !important sai porque nao ha mais briga: era ele que
+     vencia a borda base do .briefing-bloco. */
+  .promessa-card{background:var(--panel);border:1.5px solid var(--amber);}
   .promessa-badge{background:var(--amber-soft);color:var(--amber-ink);font:800 9.5px 'Manrope',sans-serif;
     letter-spacing:.07em;text-transform:uppercase;border-radius:999px;padding:4px 10px;white-space:nowrap;}
   .promessa-tally{background:var(--amber-soft);color:var(--amber-ink);border-radius:10px;padding:7px 11px;
@@ -3286,6 +3298,13 @@
   .comp-seq-motivo{flex:1;min-width:0;font-size:10.5px;color:var(--muted2);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .comp-seq-acoes{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:11px;}
+  /* A linha de conta nova fecha a promessa: fila (o que já existe) + prospecção (o que
+     entra novo). Verde porque conta nova é crescimento, e o mesmo verde de prova. */
+  .comp-seq-prosp{display:flex;align-items:center;justify-content:space-between;gap:11px;flex-wrap:wrap;
+    margin-top:11px;padding:9px 12px;border-radius:10px;background:var(--green-soft);
+    border:1px solid color-mix(in srgb,var(--green) 26%,transparent);font-size:11.5px;color:var(--ink);line-height:1.5;}
+  .comp-seq-prosp b{font-weight:800;color:var(--green);}
+  .comp-seq-prosp .comp-seq-btn{flex:none;padding:7px 14px;font-size:11.5px;}
   .comp-seq-rodape{font-size:10.5px;color:var(--muted2);margin-top:9px;line-height:1.5;}
 
   /* ---- ONTEM: PROMETIDO × REALIZADO ----
@@ -27020,6 +27039,39 @@ function buildCompromissoDoDiaHTML(r) {
       </div>
       <span class="comp-seq-status" id="compromissoStatus"></span>
 
+      <!-- ══ PROSPECÇÃO NOVA FAZ PARTE DO DIA (30/08/26, pedido do Julyan) ═══════════════
+
+           "ele tem q ter a opção de ter novas prospecções no dia tbm". A promessa mede
+           quatro coisas (visitas, decisores, propostas, fechamentos) e nenhuma delas é
+           conta nova — mas conta nova JÁ TEM um gesto no produto: marcar a conta na
+           Prospecção com data_rota de hoje é ele dizendo "vou nesta conta neste dia".
+           Em vez de inventar um quinto campo de promessa (que pediria coluna nova no
+           banco e outra fonte de verdade), esta linha traz o gesto que existe para dentro
+           da promessa: mostra quantas contas novas já estão na rota de hoje e leva ao
+           Planejamento para escolher mais.
+
+           A contagem só aparece quando a fila de prospecção já foi carregada nesta sessão
+           (agendaProspeccaoPronta). Sem isso, dizer "0 contas novas" seria afirmar um
+           vazio que eu não medi — então o texto convida em vez de contar. -->
+      ${(() => {
+        const hojeI = isoDate(new Date());
+        const cacheOk = (typeof agendaProspeccaoPronta !== 'undefined' && agendaProspeccaoPronta)
+          && typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache);
+        const naRotaHoje = cacheOk
+          ? prospeccaoCache.filter(l => String(l.responsavel_owner_id || '') === String(r.ownerId)
+              && l.status === 'na_rota' && l.data_rota === hojeI).length
+          : null;
+        const txt = naRotaHoje == null
+          ? '<b>Prospecção nova</b> entra pelo Planejamento: marcar a conta na rota de hoje já conta como conta nova do dia.'
+          : naRotaHoje > 0
+            ? `<b>${naRotaHoje} conta${naRotaHoje === 1 ? '' : 's'} nova${naRotaHoje === 1 ? '' : 's'}</b> na sua rota de hoje, além da fila acima.`
+            : '<b>Nenhuma conta nova</b> na sua rota de hoje — a fila acima é toda de negócio que já existe.';
+        return `<div class="comp-seq-prosp">
+          <span>${txt}</span>
+          <button type="button" class="comp-seq-btn" id="compromissoProspectar">${naRotaHoje ? 'Ver no Planejamento →' : 'Escolher contas →'}</button>
+        </div>`;
+      })()}
+
       <div class="comp-seq-rodape">
         Grava no Cockpit e aparece na Daily do seu gestor com os nomes. <b>Nenhuma tarefa é criada no HubSpot por aqui</b> — isso acontece quando você registra o desfecho ou agenda o retorno.
       </div>
@@ -27327,7 +27379,7 @@ async function renderDaily() {
       return `<span style="display:inline-flex;align-items:center;gap:7px;margin-top:7px;font-size:11.5px;font-weight:700;color:var(--dark-green);"><span style="width:7px;height:7px;border-radius:99px;background:currentColor;"></span>Promessa de hoje registrada: ${esc(partes.join(' · '))}</span>`;
     }
     return `<span style="display:inline-flex;align-items:center;gap:9px;margin-top:7px;flex-wrap:wrap;font-size:11.5px;font-weight:700;color:var(--dark-amber);"><span style="display:inline-flex;align-items:center;gap:7px;"><span style="width:7px;height:7px;border-radius:99px;background:currentColor;"></span>Você ainda não prometeu hoje — sem promessa não há o que comparar amanhã</span>
-      <button type="button" id="dailyPrometerAgora" style="border:1px solid var(--dark-amber);background:none;color:var(--dark-amber);border-radius:999px;padding:5px 13px;font:800 11px 'Archivo',system-ui,sans-serif;cursor:pointer;">Prometer agora →</button></span>`;
+      <button type="button" id="dailyPrometerAgora" class="daily-prometer-cta" style="border:1px solid var(--dark-amber);background:none;color:var(--dark-amber);border-radius:999px;padding:5px 13px;font:800 11px 'Archivo',system-ui,sans-serif;cursor:pointer;">Prometer agora →</button></span>`;
   })();
 
   const bannerDaily = souRepDaily && briefingBanner ? `
@@ -28296,6 +28348,14 @@ async function renderDaily() {
 
   /* "Prometer agora" do banner: leva para hoje se for preciso e rola até o card da
      promessa. Sempre pelo caminho real — se a data já é hoje, não re-renderiza de graça. */
+  /* "Escolher contas" / "Ver no Planejamento" da promessa: o deck de Planejamento é onde
+     a conta nova entra na rota. Caminho real, o mesmo do CTA da Agenda. */
+  const btnProspectar = document.getElementById('compromissoProspectar');
+  if (btnProspectar) btnProspectar.addEventListener('click', () => {
+    if (typeof agendaIrParaPlanejamento === 'function') agendaIrParaPlanejamento();
+    else if (typeof activateTab === 'function') activateTab('viewAgenda');
+  });
+
   const btnPrometer = document.getElementById('dailyPrometerAgora');
   if (btnPrometer) btnPrometer.addEventListener('click', async () => {
     if (dailyRefDate !== isoDate(new Date())) { dailyRefDate = isoDate(new Date()); await renderDaily(); }
