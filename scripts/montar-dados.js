@@ -202,6 +202,9 @@ function montarDadosCompletos() {
       perdidos: (hubspot.kpiDetalhe?.perdidos || []).map(d => ({ ...d, vendedor: (narrativas.reps[d.ownerId] || {}).name || '—' }))
     },
     kpiDeltas,
+    /* POR QUE PERDEMOS (30/08/26): motivo de perda dos ultimos 90 dias, por motivo e por
+       executivo. Vem do HubSpot em motivo_do_perdido, que o time preenche. */
+    motivosPerda: hubspot.motivosPerda || null,
     funil: hubspot.funil,
     funilLeads: hubspot.funilLeads || {},
     leadsReciclagem60: hubspot.leadsReciclagem60 || [],
@@ -354,6 +357,15 @@ function filtrarParaPapel(dados, usuario) {
       leadsCriados: soMeu(dados.kpiDetalhe.leadsCriados),
       perdidos: soMeu(dados.kpiDetalhe.perdidos)
     },
+    /* O EXECUTIVO VE SO A PROPRIA ASSINATURA DE PERDA. O total do time e a comparacao
+       entre executivos e material de gestao: saber que o colega perde mais por preco nao
+       ajuda ninguem na rua, e ranking de derrota nas costas do outro nao e transparencia. */
+    motivosPerda: dados.motivosPerda ? {
+      dias: dados.motivosPerda.dias,
+      total: Object.values((dados.motivosPerda.porOwner || {})[meuId] || {}).reduce((a, b) => a + b, 0),
+      porMotivo: (dados.motivosPerda.porOwner || {})[meuId] || {},
+      porOwner: { [meuId]: (dados.motivosPerda.porOwner || {})[meuId] || {} }
+    } : null,
     temperatura: {
       quentes: soMeu(dados.temperatura.quentes),
       frios: soMeu(dados.temperatura.frios)

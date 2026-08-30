@@ -689,6 +689,44 @@ async function stageTotalLast7Days(stageIdOuLista) {
 
 // Conta quantos negócios fecharam DESDE O DIA 1º DO MÊS CORRENTE (horário de Brasília),
 // mesmo critério de closedate usado acima — pro KPI "Fechados no mês".
+/* MOTIVO DA PERDA, ultimos 90 dias (30/08/26).
+
+   A propriedade e `motivo_do_perdido` ("Motivo - Perda (Comercial)"), conferida no
+   HubSpot: 3.263 negocios perdidos classificados neste pipeline. Existem outras tres
+   parecidas (`motivo_da_perda`, `closed_lost_reason`, e as de analise por IA) — esta e a
+   que o time preenche, e por isso e a que vale.
+
+   90 dias porque perda antiga nao ensina nada sobre o time de agora. Devolve o total do
+   time por motivo E por executivo, porque a assinatura de perda de cada um e diferente —
+   e e ela que faz o 1:1 ser individual. */
+async function motivosDePerda() {
+  const noventaDias = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  const results = await hsSearchAll({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: STAGES.perdido },
+        { propertyName: 'closedate', operator: 'GTE', value: String(noventaDias) }
+      ]
+    }],
+    properties: ['dealname', 'hubspot_owner_id', 'motivo_do_perdido', 'closedate', 'valor_de_mrr']
+  });
+  const validos = results.filter(d => !isExcludedDeal(d));
+  const porMotivo = {};
+  const porOwner = {};
+  validos.forEach(d => {
+    const p = d.properties || {};
+    /* motivo vazio nao vira 'Outros': 'Outros' e uma escolha do time e 'sem motivo' e
+       outra coisa — juntar os dois esconderia justamente o problema de cadastro. */
+    const motivo = String(p.motivo_do_perdido || '').trim() || 'Sem motivo preenchido';
+    const owner = String(p.hubspot_owner_id || '') || 'sem-dono';
+    porMotivo[motivo] = (porMotivo[motivo] || 0) + 1;
+    if (!porOwner[owner]) porOwner[owner] = {};
+    porOwner[owner][motivo] = (porOwner[owner][motivo] || 0) + 1;
+  });
+  return { total: validos.length, dias: 90, porMotivo, porOwner };
+}
+
 async function stageTotalThisMonth(stageIdOuLista) {
   const now = new Date();
   // Início do mês corrente às 00:00 em America/Sao_Paulo — usa o horário de Brasília (não UTC)
@@ -1030,6 +1068,9 @@ async function main() {
   // seguinte do MESMO negócio, não representa um cliente novo fechando.
   const ganhoSemana = await stageTotalLast7Days([STAGES.ganho1, STAGES.ganho2]);
   const perdidoSemanaDeals = await stageDealsLast7DaysComNomes(STAGES.perdido);
+  /* POR QUE PERDEMOS: motivo de perda dos ultimos 90 dias, por motivo e por executivo.
+     Uma consulta a mais no fetch que ja roda — nada de endpoint novo (12/12 na Vercel). */
+  const motivosPerda = await motivosDePerda();
   const perdidoSemana = perdidoSemanaDeals.length;
 
   // Fechados no mês corrente (pro KPI "Fechados no mês" vs. meta do time) — mesma
@@ -1427,6 +1468,7 @@ async function main() {
       leadsCriados: leadsCriadosDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id })),
       perdidos: perdidoSemanaDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id }))
     },
+    motivosPerda,
     funil: {
       labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
       valores: [backlog, prospeccao, visita, diagnostico, demoProposta, negociacao, agPagamento, ganho, perdido, reciclagem],
