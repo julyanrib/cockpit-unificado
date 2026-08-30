@@ -1718,17 +1718,10 @@
   .hoje-yesterday-metric{display:block!important;background:var(--panel2);border:1px solid var(--line-soft)!important;border-radius:10px;padding:9px 11px!important;}
   .hoje-yesterday-metric>span:first-child{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.055em;margin-bottom:5px;}
   .hoje-yesterday-metric>span:last-child{font-size:11.5px;}
-  /* A PASSAGEM PARA O PLANEJAMENTO — fecha a coluna de prioridade. Calma de propósito:
-     é a saída da tela, não mais uma urgência. */
-  .hoje-passagem{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;
-    padding:15px 18px;border:1px dashed var(--line-btn);border-radius:var(--r-lg);background:var(--panel2);}
-  .hoje-passagem-txt{display:flex;flex-direction:column;gap:3px;min-width:200px;flex:1;}
-  .hoje-passagem-txt>b{font:800 12.5px 'Archivo',system-ui,sans-serif;color:var(--ink);}
-  .hoje-passagem-txt>span{font-size:11.5px;line-height:1.5;color:var(--muted);}
-  .hoje-passagem-txt b b{color:var(--ink);}
-  .hoje-passagem-cta{flex:none;min-height:40px;padding:10px 16px;border:1px solid var(--ink);border-radius:999px;
-    background:var(--ink);color:var(--dark-ink);font:800 12px 'Archivo',system-ui,sans-serif;cursor:pointer;}
-  .hoje-passagem-cta:hover{opacity:.9;}
+  /* O CTA colado no número do banner. Herda a caixa da pílula, então não introduz
+     nenhuma medida nova: só o contraste de um botão dentro dela. */
+  .meu-hoje-signal-cta{flex:none;margin-left:auto;min-height:28px;padding:5px 11px;border:1px solid var(--ink);border-radius:999px;background:var(--ink);color:var(--dark-ink);font:800 10.5px 'Archivo',system-ui,sans-serif;white-space:nowrap;cursor:pointer;}
+  .meu-hoje-signal-cta:hover{opacity:.9;}
 
   .hoje-l1-grid>.roteiro-hoje-card{height:100%;box-sizing:border-box;margin:0;}
   .hoje-month-card{background:linear-gradient(135deg,#fffdfa 0%,#fff5f1 100%);color:var(--ink);border:1.5px solid var(--red);box-shadow:0 5px 18px rgba(229,26,49,.08);}
@@ -7270,12 +7263,19 @@ function indicadoresDoExecutivo(r) {
 // subview 'hoje' (ver aplicarVisaoPorPapel — o rótulo muda, a view é a mesma).
 // `bloco` é 'carteira' | 'dia' | 'rua', os três passos do Escopo 3.
 let planejamentoFocoInicial = null;
-function irParaPlanejamento(bloco) {
+/* O SEGUNDO ARGUMENTO É UM BALDE PEDIDO (30/08/26).
+
+   A limpeza abaixo existe para o caso do estado VAZANDO: quem filtrou um balde no Meu
+   funil e depois foi para o Planejamento não pediu aquele filtro. Mas há o caso oposto,
+   que a prancha pede no DE/PARA da Hoje: um CTA que abre o passo A JÁ FILTRADO no balde
+   certo ("Datar os 23 →", efeito "ação a 1 clique, era ≥3: achar → aba → filtro").
+
+   Os dois casos convivem num caminho só: limpa sempre, e só depois aplica o que foi
+   explicitamente pedido. Sem o argumento, o comportamento é o de antes, letra por letra. */
+function irParaPlanejamento(bloco, baldePedido) {
   planejamentoFocoInicial = bloco || null;
-  // Limpa o foco da fila: sem isso, quem filtrasse um balde no Meu funil e depois
-  // fosse pro Planejamento encontrava a fila do passo A já filtrada por aquele
-  // balde, sem ter pedido — estado de uma tela vazando na outra.
   filaFocoInicial = null;
+  if (baldePedido) filaFocoInicial = baldePedido;
   if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'hoje';
   activateTab('viewAgenda');
   if (typeof renderAgenda === 'function') { try { renderAgenda(); } catch (e) {} }
@@ -7943,34 +7943,6 @@ function contasLivresParaSugerir() {
     (typeof prospeccaoAtiva !== 'function' || prospeccaoAtiva(l)) &&
     (typeof prospeccaoFazSentido !== 'function' || prospeccaoFazSentido(l)));
 }
-/* A PASSAGEM PARA O PLANEJAMENTO (29/08/26) — o "e já planejar" do pedido.
-
-   A aba Hoje não tinha saída nenhuma para o Planejamento: ela dizia o que fazer e o que
-   revisar, e terminava. Quem monta o dia e a semana é a outra aba, e o executivo tinha
-   de descobrir isso sozinho na barra de abas.
-
-   Uma linha e um botão, de propósito: a aba já sofre de informação demais, e esta é uma
-   PASSAGEM, não um painel. O número vem da fila que já foi calculada para esta tela
-   (diag.fila) — nenhuma consulta nova, nenhum indicador novo. Sem fila descoberta, o
-   texto muda em vez de mostrar zero: zero aqui significaria "nada a planejar", e o que
-   é verdade é "nada pendente — dá para abrir conta nova".
-
-   Não é vermelho: planejar não é urgência. */
-function buildPassagemPlanejamentoHTML(diag) {
-  const fila = (diag && diag.fila) || {};
-  const descobertos = Number(fila.negociosAfetados || 0);
-  return `
-    <div class="hoje-passagem">
-      <div class="hoje-passagem-txt">
-        <b>E depois: planejar</b>
-        <span>${descobertos > 0
-          ? `Você tem <b>${descobertos}</b> negócio${descobertos === 1 ? '' : 's'} da sua carteira sem próximo passo. O Planejamento é onde eles entram no seu dia e na sua semana.`
-          : 'Sua carteira está coberta. O Planejamento é onde você enche o dia com as contas-alvo do seu território.'}</span>
-      </div>
-      <button type="button" class="hoje-passagem-cta" data-hoje-ir="planejamento">Abrir Planejamento →</button>
-    </div>`;
-}
-
 function buildAcoesDeAgoraHTML(r, diag) {
   const acoes = acoesDeAgora(r, diag, contasLivresParaSugerir());
   const fila = diag.fila;
@@ -8081,11 +8053,10 @@ function wireHojeExecucao(rootEl, r, diag) {
      razão anotada na faixa do time da Daily: cada aba tem render e efeito colateral
      próprios no clique, e reproduzir isso à mão cria um segundo caminho de navegação
      que sai de sincronia na primeira mudança. */
-  rootEl.querySelectorAll('[data-hoje-ir="planejamento"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const aba = document.getElementById('tabBtnAgenda');
-      if (aba) aba.click();
-    });
+  /* "Datar os N" abre o Planejamento no passo A com o balde já focado. Uma chamada,
+     nenhuma regra nova: irParaPlanejamento faz a navegação e o foco. */
+  rootEl.querySelectorAll('[data-hoje-ir="carteira-descoberta"]').forEach(btn => {
+    btn.addEventListener('click', () => irParaPlanejamento('carteira', 'visita_sem_passo'));
   });
 
   const ctaBanner = rootEl.querySelector('#meuPainelCtaDia');
@@ -8468,6 +8439,21 @@ async function renderMeuPainel() {
       ${negociosDoRep.length > 0 ? `
       <span class="meu-hoje-signal ${comPassoCount === negociosDoRep.length ? 'is-success' : 'is-alert'}" title="Negócio sem tarefa futura no HubSpot é negócio que ninguém vai tocar de novo por acidente">
         <span style="opacity:.7;display:inline-flex;"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;width:14px;height:14px;margin-right:0;vertical-align:middle;"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span> <b>${comPassoCount}/${negociosDoRep.length}</b> com próximo passo
+        <!-- O CAMINHO COLADO NO NÚMERO (30/08/26 — DE/PARA da Hoje na prancha: "1/24
+             indicador no meio dos cards -> número do banner + CTA 'Datar os 23 →' que
+             abre o passo A filtrado", efeito medível "ação a 1 clique (era ≥3: achar →
+             aba → filtro)").
+
+             O NÚMERO DO CTA VEM DO BALDE DE DESTINO, não da conta da pílula. São
+             recortes diferentes — a pílula conta todo negócio sem tarefa futura, o balde
+             conta os que já receberam visita — e prometer "datar os 24" para cair numa
+             lista de 23 é o tipo de desencontro que faz o executivo desconfiar da tela.
+             Assim o número e o destino são a mesma coisa por construção. -->
+        ${(() => {
+          const balde = (diagDia.fila && diagDia.fila.baldes && diagDia.fila.baldes.visita_sem_passo) || [];
+          if (!balde.length) return '';
+          return `<button type="button" class="meu-hoje-signal-cta" data-hoje-ir="carteira-descoberta">Datar ${balde.length === 1 ? 'o único' : 'os ' + balde.length} →</button>`;
+        })()}
       </span>` : ''}
     </div>
 
@@ -8502,7 +8488,13 @@ async function renderMeuPainel() {
 
       ${buildGatesDoDiaHTML(r, diagDia)}
 
-      ${buildPassagemPlanejamentoHTML(diagDia)}
+      <!-- O bloco "E depois: planejar" SAIU (30/08/26). Eu o acrescentei em 29/08 para
+           responder ao "e já planejar" do pedido, e ele funcionava — mas a prancha resolve
+           a mesma necessidade em dois lugares que JÁ EXISTEM: o CTA "Datar os N →" colado
+           no número do banner (1 clique) e o "ver a fila inteira (N) →" no rodapé do card
+           de ações. Com os três, a mesma contagem e o mesmo destino apareciam três vezes
+           na mesma tela. A espinha da Hoje na prancha é: banner + 3 ações + 2 cards +
+           régua — sem quarto bloco. -->
       </div>
 
       <!-- Coluna direita = "o que aconteceu", em duas escalas: o último dia na rua e o
