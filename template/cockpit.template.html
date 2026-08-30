@@ -4745,7 +4745,14 @@
   .p4-doc-add-preco{white-space:nowrap;font-weight:800;color:#EDEAE4;}
   .p4-doc-add-preco s{font-weight:600;color:var(--p4-doc-mut);}
   .p4-doc-add-pe{margin-top:9px;font-size:10.5px;color:var(--p4-doc-mut);}
+  /* CLASSE, NÃO style inline: com a fonte inline o modo cliente NÃO conseguiria crescer
+     de volta (inline vence qualquer seletor sem !important), e a peça que o cliente lê
+     ficaria em 9,5px. Densidade por classe deixa as duas réguas conviverem. */
+  .p4-doc-add.is-densa{font-size:10.5px;}
+  .p4-doc-add.is-muito-densa{font-size:9.5px;}
   .prc-shell.modo-cliente .p4-doc-add{font-size:14px;}
+  .prc-shell.modo-cliente .p4-doc-add.is-densa{font-size:12.5px;}
+  .prc-shell.modo-cliente .p4-doc-add.is-muito-densa{font-size:11.5px;}
   .prc-shell.modo-cliente .p4-doc-add-pe{font-size:12px;}
   .p4-inv{background:var(--p4-doc-inv);padding:24px 34px;text-align:center;}
   .p4-inv-rot{font:800 10px 'Archivo',system-ui,sans-serif;letter-spacing:.22em;color:var(--p4-doc-mut);}
@@ -4776,6 +4783,16 @@
     .p4-planos,.p4-periodos{grid-template-columns:repeat(2,minmax(0,1fr));}
   }
   @media (max-width:760px){
+    /* MODO CLIENTE A 375 (achado medindo, 30/08/26): as regras de modo-cliente têm
+       especificidade 0,3,0 e venciam as do estreito, então o preço-herói ficava em 52px.
+       "R$ 1.206,00" nesse corpo pede 388px de min-content — a peça saía 366 num trilho de
+       271 e a PÁGINA rolava para o lado (418/375), justamente na tela que o executivo vira
+       para o dono do restaurante. Aqui elas voltam ao tamanho do aparelho. */
+    .prc-shell.modo-cliente .p4-grid{padding:16px;}
+    .prc-shell.modo-cliente .p4-inv-num{font-size:30px;}
+    .prc-shell.modo-cliente .p4-doc-plano{font-size:30px;}
+    .prc-shell.modo-cliente .p4-doc-cols{font-size:12.5px;gap:0;}
+    .prc-shell.modo-cliente .p4-inv-eco{font-size:12px;padding:8px 16px;}
     .p4-grid{padding:16px;gap:16px;}
     .p4-conta{padding:12px 16px;gap:10px;}
     .p4-card{padding:15px 16px;}
@@ -10854,7 +10871,9 @@ function prcPreviewHTML() {
         <div>${coluna(colB)}</div>
       </div>
       ${cobrados.length ? `<div class="p4-doc-rot is-add">ADICIONAIS ESCOLHIDOS</div>
-      <div class="p4-doc-add">
+      <!-- a mesma régua da peça: quanto mais adicionais, mais miúda a linha, para o
+           bloco não empurrar o investimento para fora da primeira tela. -->
+      <div class="p4-doc-add${cobrados.length > 6 ? ' is-muito-densa' : cobrados.length > 4 ? ' is-densa' : ''}">
         ${cobrados.map(item => `<div class="p4-doc-add-linha">
           <span><b>✓</b> ${esc(item.nome)}${item.quantidade > 1 ? ` <em>× ${item.quantidade}</em>` : ''}${item.ate ? ` <em>(até ${item.ate} un.)</em>` : ''}</span>
           <b class="p4-doc-add-preco">${per.desconto ? `<s>${prcMoedaCentavos(item.subtotalCheio)}</s> ` : ''}+${prcMoedaCentavos(item.subtotal)}/mês</b>
@@ -11914,9 +11933,13 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
      eles disputavam espaço com o nome do plano e o rótulo da operação, e com dois ou
      três adicionais a frase era cortada — num documento comercial, cortado é pior que
      ausente. Limite de 3 linhas + "e mais N": a peça tem altura fixa. */
-  const addPeca = prcAdicionaisComPreco(c);
-  const addMostrar = addPeca.slice(0, 3);
-  const addResto = addPeca.length - addMostrar.length;
+  const addMostrar = prcAdicionaisComPreco(c);
+  /* ORÇAMENTO DE ALTURA (30/08/26): a peça tem 1350px fixos, então a lista completa só
+     cabe se o passo entre linhas encolher com a quantidade. 230px é o orçamento; o passo
+     nunca passa de 38 (uma linha sozinha não fica esparramada) nem cai de 20 (abaixo
+     disso duas linhas se tocam). A fonte é 70% do passo, entre 17 e 26. */
+  const addPasso = addMostrar.length ? Math.max(20, Math.min(38, 230 / addMostrar.length)) : 0;
+  const addFonte = Math.max(17, Math.min(26, Math.round(addPasso * 0.7)));
   const linhaPlano = 'Plano ' + c.plano.nome + ' · ' + (tipo.rotuloOficial || tipo.nome);
   ctx.font = '600 28px ' + PRC_MANROPE;
   const planoLinhas = prcQuebrar(ctx, linhaPlano, uteis, 2).linhas;
@@ -11928,7 +11951,10 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
     economiaLinhas = prcQuebrar(ctx, 'Economia de ' + prcMoedaCentavos(c.economia) + (meses ? ' · ' + meses + ' por nossa conta' : ''), uteis - 100, 1).linhas;
   }
 
-  const bullets = prcChiado(c, dor);
+  /* QUEM CEDE ESPAÇO, e por quê: com 5+ adicionais a peça precisa da conta mais do que
+     do 4º e 5º marcador de benefício. Os marcadores são argumento; a lista de adicionais
+     é a explicação do preço — e preço sem explicação é objeção na hora da visita. */
+  const bullets = prcChiado(c, dor).slice(0, prcAdicionaisComPreco(c).length >= 5 ? 3 : 5);
 
   /* OS VÃOS MÍNIMOS, e o avanço natural.
 
@@ -11973,7 +11999,7 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
     + VAO.economiaBullets
     + Math.max(0, bullets.length - 1) * 54
     + VAO.bulletsAdd
-    + (addMostrar.length ? (addMostrar.length - 1) * 38 + (addResto > 0 ? 34 : 0) : 0)
+    + (addMostrar.length - 1 > 0 ? (addMostrar.length - 1) * addPasso : 0)
     + VAO.bulletsSintese;
 
   const folga = Math.max(0, (FIM - TOPO) - avancoNatural);
@@ -12093,21 +12119,16 @@ function desenharProposta(ctx, larguraCanvas, tipo, c, logo) {
     ctx.fillStyle = PRC_PECA_MUT; ctx.font = '700 20px ' + PRC_ARCHIVO;
     prcTracking(ctx, 'ADICIONAIS ESCOLHIDOS', PAD, y - 26, 2.4);
     addMostrar.forEach((a, k) => {
-      const ly = y + k * 38;
+      const ly = y + k * addPasso;
       ctx.textAlign = 'right';
-      ctx.fillStyle = PRC_PECA_GREEN; ctx.font = '800 26px ' + PRC_ARCHIVO;
+      ctx.fillStyle = PRC_PECA_GREEN; ctx.font = '800 ' + addFonte + 'px ' + PRC_ARCHIVO;
       ctx.fillText(a.preco, W - PAD, ly);
       const larguraPreco = ctx.measureText(a.preco).width;
       ctx.textAlign = 'left';
-      ctx.fillStyle = PRC_PECA_INK; ctx.font = '600 26px ' + PRC_MANROPE;
+      ctx.fillStyle = PRC_PECA_INK; ctx.font = '600 ' + addFonte + 'px ' + PRC_MANROPE;
       ctx.fillText(prcElipse(ctx, a.rot, uteis - larguraPreco - 30), PAD, ly);
     });
-    y += (addMostrar.length - 1) * 38;
-    if (addResto > 0) {
-      y += 34;
-      ctx.fillStyle = PRC_PECA_MUT; ctx.font = '500 22px ' + PRC_MANROPE;
-      ctx.fillText('e mais ' + addResto + ' adicional' + (addResto === 1 ? '' : 'is') + ', detalhados na mensagem', PAD, y);
-    }
+    y += (addMostrar.length - 1) * addPasso;
   }
 
   /* a lista completa mudou de casa — e a peça diz para onde */
