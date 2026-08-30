@@ -61,3 +61,11 @@ E a que qualifica o caso fácil: *"você já tem mais de uma marca rodando hoje?
 *Fonte das funcionalidades e do prazo de implantação: página pública `takeat.app/para/dark-kitchen`, conferida em 29/08/2026.*
 
 Aprofundar: [Delivery Próprio — a guerra da taxa de marketplace](playbook:ecossistema-takeat#ecossistema-takeat-delivery-proprio-a-guerra-da-taxa-abusiva-de-marketplace) · [Mapa dor → solução](playbook:mapa-dor-solucao)
+
+***
+
+## ✅ O que fazer agora
+
+- Identifique na sua carteira quem tem cozinha ociosa em algum turno. É o candidato natural.
+- Leve a conta pronta: faturamento novo sobre custo fixo que ele já paga, sem aluguel novo e sem equipe nova.
+- Comece por uma marca só. Dono que testa três de uma vez desiste das três.

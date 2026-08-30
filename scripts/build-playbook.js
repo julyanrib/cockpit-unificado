@@ -164,7 +164,8 @@ function montarCatalogo(root) {
   linhas.push('');
   linhas.push('***');
   linhas.push('');
-  linhas.push('# 🧩 OS ' + preco.adicionais.length + ' ADICIONAIS');
+  /* h2, nao h1: a pagina tem um titulo so, e o leitor monta a faixa do primeiro. */
+  linhas.push('## 🧩 OS ' + preco.adicionais.length + ' ADICIONAIS');
   linhas.push('');
   linhas.push('Adicional é o que entra por cima do plano. **O desconto do período vale para eles também** — cada adicional que entra na proposta também entra no desconto, e isso é argumento na mesa.');
   preco.adicionais.forEach(a => {
@@ -200,6 +201,17 @@ function montarCatalogo(root) {
   linhas.push('- **Hardware homologado** (balança, impressora, totem, TEF). Isso é [Equipamentos](playbook:equipamentos).');
   linhas.push('- **Preço final.** A tabela viva está na aba Propostas, e é ela que gera a peça do cliente.');
 
+  /* FECHAMENTO ACIONAVEL (30/08/26). A auditoria mostrou que 26 das 30 paginas
+     terminavam sem nenhuma instrucao de saida — o executivo lia e fechava a aba. O
+     catalogo e gerado, entao o fechamento dele vive aqui. */
+  linhas.push('');
+  linhas.push('***');
+  linhas.push('');
+  linhas.push('## ✅ O que fazer agora');
+  linhas.push('');
+  linhas.push('- Escolha os **três itens** que respondem a dor mais comum do seu território e decore só as frases deles. Catálogo se usa por recorte, nunca inteiro.');
+  linhas.push('- Antes de oferecer adicional, confira em que plano ele já vem incluído. Vender o que o cliente já tem é o erro mais caro de credibilidade que existe na mesa.');
+  linhas.push('- Achou item cuja frase não te convence? Traga no Discord. A frase é do time, e frase ruim aqui é venda perdida na rua.');
   return linhas.join(L2);
 }
 

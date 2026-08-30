@@ -84,3 +84,11 @@ Se a resposta tiver "mais ou menos", "quase" ou um silêncio, o módulo está ve
 *Fonte: página pública `takeat.app/conciliacao-bancaria`, conferida em 29/08/2026. A divergência com `/solucoes` e `/solucoes/controle-financeiro-dre` foi conferida nas mesmas páginas, na mesma data.*
 
 Aprofundar: [Gestão Financeira — a guerra do controle gerencial](playbook:ecossistema-takeat#ecossistema-takeat-gestao-financeira-a-guerra-do-controle-gerencial) · [Catálogo de soluções](playbook:catalogo-solucoes) · [Mapa dor → solução](playbook:mapa-dor-solucao)
+
+***
+
+## ✅ O que fazer agora
+
+- Pergunte quanto tempo o financeiro dele gasta para fechar o mês. Se a resposta vier em dias, você tem venda.
+- Diga na primeira frase que a Takeat **não pede senha de banco** — é a objeção que mata essa conversa antes de começar.
+- Mostre os três estados do match. O que vende não é importar o extrato, é o mês parar de fechar por aproximação.

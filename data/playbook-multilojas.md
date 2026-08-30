@@ -63,3 +63,16 @@ E para franqueadora: *"como você calcula o royalty hoje?"* — se alguém soma 
 *Fonte dos claims e das funcionalidades: página pública `takeat.app/franquias`, conferida em 29/08/2026.*
 
 Aprofundar: [Gestão Financeira — a guerra do controle gerencial](playbook:ecossistema-takeat#ecossistema-takeat-gestao-financeira-a-guerra-do-controle-gerencial) · [Clientes × MRR](playbook:clientes-mrr)
+
+***
+
+## 🗣️ A frase que abre a conversa
+
+> *"Seu [Nome], com quantas casas o senhor esta hoje? E pra saber como foi o dia nas tres, o senhor abre tres sistemas ou um? Porque aqui e uma visao so: o senhor publica cardapio e preco da matriz e ve o consolidado numa tela — e cada unidade continua com a operacao dela. Por R$ 29 a unidade, isso deixa de ser decisao e passa a ser obviedade."*
+
+***
+## ✅ O que fazer agora
+
+- Descubra quantas unidades ele tem e se o cardápio é publicado por unidade ou pela matriz. É a pergunta que separa dono de operador.
+- A R$ 29 por unidade, a decisão é automática — não gaste a visita defendendo o preço, gaste mostrando o consolidado.
+- Se ele é franqueadora, o assunto é royalty automático e padrão de marca, não relatório.
