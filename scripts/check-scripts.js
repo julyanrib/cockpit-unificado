@@ -145,6 +145,25 @@ function checarBreakpoints() {
      hoje: varredura que le comentario como codigo. */
   const txt = cru.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
   const fora = [];
+  /* MAX-WIDTH E MIN-WIDTH (30/08/26 — Bloco 7 da prancha: "adicionar ao check-scripts.js:
+     falhar se @media usar valor fora de {1240,1000,720,420}").
+
+     A versão anterior olhava só max-width, e um @media (min-width:1051px) passava limpo.
+     Não havia nenhum no arquivo — medido, os 222 "min-width:" de lá são propriedades CSS,
+     não media queries — mas guarda existe para o commit de amanhã, não para o estado de
+     hoje. Feature query (hover, prefers-reduced-motion) não tem largura e continua fora da
+     conta, como deve.
+
+     Duas passadas de propósito: uma @media pode declarar DUAS larguras (faixa com min e max
+     no mesmo bloco), e um laço que casa uma vez por bloco deixaria a segunda escapar. */
+  for (const bloco of txt.matchAll(/@media[^{]*/g)) {
+    for (const w of bloco[0].matchAll(/(?:max|min)-width:\s*(\d+)px/g)) {
+      const v = Number(w[1]);
+      if (!ESCALA_BREAKPOINTS.includes(v)) fora.push(v);
+    }
+  }
+  /* Mantido: o laço antigo, que casa a forma canônica e serve de rede se alguém mexer no
+     regex de cima. Duplicar o mesmo valor em `fora` não muda o relatório — ele deduplica. */
   for (const m of txt.matchAll(/@media\s*\(?\s*max-width:\s*(\d+)px/g)) {
     const v = Number(m[1]);
     if (!ESCALA_BREAKPOINTS.includes(v)) fora.push(v);
