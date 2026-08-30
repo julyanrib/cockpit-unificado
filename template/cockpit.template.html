@@ -392,7 +392,12 @@
   .acao-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--r-sm);background:var(--panel2);font-size:12.5px;cursor:pointer;border:1px solid transparent;transition:background .15s var(--ease),border-color .15s var(--ease),transform .15s var(--ease);}
   .acao-item:hover{background:var(--hover,var(--sunk));border-color:var(--line);transform:translateX(2px);}
   .acao-item:hover .acao-go{opacity:1;transform:none;}
-  .acao-item b{font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);}
+  /* O NOME DO CLIENTE NÃO TRUNCA (30/08/26, revisão final). Medi a 1240px: "UAU UNIDADE
+     PENHA" pedia 127px numa caixa de 114 e saía "UAU UNIDADE PEN…". Nome pela metade não
+     é nome — é a mesma regra que tirou "Módulo Fiscal - Lucro Presumi…" dos adicionais e
+     que me fez empilhar os botões de etapa do kanban. O @media estreito já quebrava a
+     linha; o desktop é que cortava. */
+  .acao-item b{font-weight:700;flex:1;min-width:0;white-space:normal;overflow-wrap:break-word;color:var(--ink);}
   .acao-item .meta{font-size:11px;color:var(--muted2);white-space:nowrap;}
   .acao-item .flag{font-size:11px;font-weight:800;color:var(--tone-ink);background:var(--tone-soft);border-radius:var(--r-pill);padding:2px 8px;white-space:nowrap;font-variant-numeric:tabular-nums;}
   .acao-go{opacity:0;transform:translateX(-3px);transition:all .15s var(--ease);font-weight:800;color:var(--tone-ink);font-size:12px;flex:none;}
@@ -1585,7 +1590,18 @@
   /* Meu espaço > Hoje: primeira dobra orientada à execução, sem colunas vazias. */
   .meu-hoje-hero{margin-bottom:14px;padding:24px 26px;background:linear-gradient(112deg,#171412 0%,#211b17 72%,#321d1a 100%);}
   .meu-hoje-signal-strip{display:grid;grid-template-columns:1.35fr repeat(4,1fr);gap:8px;margin:0 0 16px;}
-  .meu-hoje-signal{min-width:0;display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:11.5px;box-shadow:var(--shadow-sm);}
+  /* flex-wrap:wrap (30/08/26, revisão final). A faixa é uma grade de colunas fixas, e a
+     pílula que ganhou o CTA "Datar os N →" passou a pedir 215px numa coluna de 210 —
+     5px de estouro que eu mesmo criei ao colocar o botão ali. Medido a 1240px.
+
+     Quebrar em vez de alargar a coluna: o número do CTA cresce com a carteira ("Datar os
+     124 →" é possível), e coluna fixa dimensionada para o texto de hoje volta a estourar
+     no dia em que o número ganhar um dígito. Com wrap, o botão desce sozinho quando não
+     cabe e a faixa nunca estoura, seja qual for o número.
+
+     Os textos das pílulas seguem com nowrap próprio, então nenhuma delas passa a quebrar
+     no meio de uma frase por causa disto. */
+  .meu-hoje-signal{min-width:0;display:flex;align-items:center;flex-wrap:wrap;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:11.5px;box-shadow:var(--shadow-sm);}
   .meu-hoje-signal svg{flex:none;color:var(--muted2);}
   .meu-hoje-signal b{font:800 13px/1.2 'Archivo',system-ui,sans-serif;white-space:nowrap;}
   .meu-hoje-signal span:last-child{min-width:0;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -1720,7 +1736,40 @@
   .hoje-yesterday-metric>span:last-child{font-size:11.5px;}
   /* O CTA colado no número do banner. Herda a caixa da pílula, então não introduz
      nenhuma medida nova: só o contraste de um botão dentro dela. */
+  /* ══ O BANNER DO EXECUTIVO NO ESTREITO (30/08/26, revisão final) ══════════════════
+
+     MEDIDO a 375: o banner da Daily tinha scrollWidth 336 contra clientWidth 319 — 17px
+     de conteúdo vazando e sendo clipado por um ancestral. A causa não era o texto: era o
+     FILHO DO FLEX com `flex:none`, que dimensiona pelo conteúdo (o H1 pedia 310px) e nunca
+     encolhe. A caixa de conteúdo do banner a 375 tem 267px. Resultado: a primeira linha da
+     Daily aparecia cortada no celular.
+
+     Esses valores estavam INLINE, e inline só cede a !important — que é justamente o que o
+     Bloco 8 da prancha manda reduzir. Então o inline saiu e virou classe: no largo o
+     comportamento é o mesmo de antes, e no estreito o bloco encolhe e ocupa a linha toda.
+
+     Aplicado nos cinco banners do EXECUTIVO (Agenda 2, Daily 2, Desenvolvimento 1). Os do
+     gestor seguem com o inline: a prancha lista a experiência dele como fora de escopo, e
+     refatorar a tela dele não é o meu escopo aqui. */
+  .hero-titulo{display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;}
+  .hero-eyebrow{white-space:nowrap;}
+  /* A LINHA DE MÉTRICAS DO BANNER (30/08/26). Depois de fazer o título encolher, o banner
+     da Daily continuava com 336px contra 319 — e o culpado passou a ser esta linha: quatro
+     números com gap de 26px pedem 310px de max-content e, sem wrap, ela define a largura da
+     linha do flex. O título com flex-basis:100% então resolvia contra esses 310 e voltava a
+     vazar. Aqui também o valor estava inline, ou seja fora do alcance de @media. */
+  .hero-metricas{display:flex;gap:26px;font-variant-numeric:tabular-nums;}
+  @media (max-width:760px){
+    .hero-titulo{min-width:0;flex:1 1 100%;}
+    .hero-eyebrow{white-space:normal;}
+    /* Os quatro números passam a caber em duas fileiras em vez de empurrar o banner. */
+    .hero-metricas{flex-wrap:wrap;gap:12px 18px;min-width:0;}
+  }
+
+  /* 44px de toque no celular (30/08/26). Este CTA é meu, entrou hoje, e eu o deixei com
+     28px — abaixo da régua que o Bloco 5 da prancha manda para alvo tocável. */
   .meu-hoje-signal-cta{flex:none;margin-left:auto;min-height:28px;padding:5px 11px;border:1px solid var(--ink);border-radius:999px;background:var(--ink);color:var(--dark-ink);font:800 10.5px 'Archivo',system-ui,sans-serif;white-space:nowrap;cursor:pointer;}
+  @media (max-width:760px){ .meu-hoje-signal-cta{min-height:44px;padding:5px 15px;} }
   .meu-hoje-signal-cta:hover{opacity:.9;}
 
   .hoje-l1-grid>.roteiro-hoje-card{height:100%;box-sizing:border-box;margin:0;}
@@ -2135,7 +2184,12 @@
   .ag-rail-lead.tone-green{--ag-tone:var(--green);}
   .ag-rail-lead:focus-visible{outline:2px solid var(--ag-tone);outline-offset:2px;}
   .ag-rail-lead-main{min-width:0;}
-  .ag-rail-lead-main b{display:block;font-size:12.5px;line-height:1.3;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  /* NOME DO CLIENTE NÃO TRUNCA (30/08/26, revisão final). A 375 a trilha "o que merece
+     entrar" cortava "DONNA MARIA", "Hamburgueria.com", "Kebab shop" e o nome das
+     contas-alvo. É o nome que ele vai procurar na rua — a última coisa que pode terminar
+     em reticências. A linha de META abaixo (bairro, km, avaliações) continua truncando de
+     propósito: aquilo é contexto, e contexto pela metade ainda informa. */
+  .ag-rail-lead-main b{display:block;font-size:12.5px;line-height:1.3;color:var(--ink);white-space:normal;overflow-wrap:break-word;}
   .ag-rail-lead-main span{display:block;margin-top:3px;font-size:10px;color:var(--muted2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   /* CORREÇÃO (28/08/26, achada navegando com a fila cheia): este rótulo vazava 38px
      PARA FORA do cartão. A causa é `width:max-content` — ele cresce até o conteúdo e
@@ -2845,8 +2899,13 @@
   .kb-col-head{padding:12px 14px 10px;border-bottom:1px solid var(--line-soft);background:var(--panel);}
   .kb-col-topo{display:flex;align-items:center;gap:7px;}
   .kb-col-cor{width:9px;height:9px;border-radius:3px;flex:none;}
+  /* O NOME DA ETAPA NÃO TRUNCA (30/08/26, revisão final). Medi a 1240px: "Conversa com
+     Decisor" pedia 138px em 118 e "Enviado Onboarding" 125 em 118 — o cabeçalho da coluna
+     mostrava "Conversa com Decis…". Mesma regra dos botões de mover etapa: num kanban,
+     metade do nome da etapa é a diferença entre avançar e reciclar. O cabeçalho tem folga
+     vertical (o SLA vem numa linha própria embaixo), então quebrar não desloca nada. */
   .kb-col-nome{font-family:'Archivo',system-ui,sans-serif;font-size:12.5px;font-weight:800;color:var(--ink);
-    letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    letter-spacing:-.01em;white-space:normal;overflow-wrap:break-word;}
   .kb-col-n{margin-left:auto;font-size:11px;font-weight:800;color:var(--muted);background:var(--sunk);
     border-radius:var(--r-pill);padding:2px 9px;font-variant-numeric:tabular-nums;flex:none;}
   .kb-col-sla{display:block;margin-top:4px;font-size:10px;font-weight:700;letter-spacing:.06em;
@@ -2947,7 +3006,11 @@
   .mf-funnel-bar{display:grid;grid-template-columns:136px minmax(0,1fr) 34px 48px;align-items:center;gap:8px;
     border:0;background:none;padding:2px 0;text-align:left;cursor:pointer;color:var(--ink);}
   .mf-funnel-bar:hover .mf-funnel-track{background:var(--line-soft);}
-  .mf-funnel-label{font-size:10.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  /* NOME DA ETAPA NÃO TRUNCA (30/08/26, revisão final). A 375 "Conversa com Decisor"
+     virava "Conversa com Deci…" na barra do funil. Mesma regra do cabeçalho da coluna do
+     kanban e dos botões de mover etapa: num funil, metade do nome da etapa não identifica
+     etapa. A barra tem altura de sobra para uma segunda linha. */
+  .mf-funnel-label{font-size:10.5px;font-weight:700;white-space:normal;overflow-wrap:break-word;}
   .mf-funnel-track{height:14px;border-radius:999px;background:var(--panel2);overflow:hidden;transition:background .14s var(--ease);}
   .mf-funnel-fill{display:block;height:100%;min-width:8px;border-radius:999px;background:var(--stage-color);}
   .mf-funnel-count{font-size:11px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right;}
@@ -3165,7 +3228,15 @@
   .destrava-sev.is-red{background:var(--red);}
   .destrava-item b{flex:none;max-width:170px;font:700 12.5px/1.3 'Archivo',system-ui,sans-serif;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .destrava-dias{flex:none;font-size:10px;font-weight:800;color:var(--muted2);font-variant-numeric:tabular-nums;}
-  .destrava-mov{flex:1;min-width:0;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  /* NÃO TRUNCA MAIS, EM NENHUMA LARGURA (30/08/26, revisão final).
+
+     O @media de 640 logo abaixo já dizia a coisa certa: "no celular o movimento é a
+     informação que decide a ação, e cortada em uma linha ela vira reticências". O
+     raciocínio vale igual no desktop, e era lá que estava cortando: medi a 1240px e 18
+     destes itens truncavam, um deles com 63px de texto faltando — "Registrar sistema e
+     dor — sem isso o pró…". A instrução que decide a ação é a última coisa que pode
+     terminar em reticências, e a linha tem folga vertical de sobra para uma segunda linha. */
+  .destrava-mov{flex:1;min-width:0;font-size:11px;color:var(--muted);white-space:normal;overflow-wrap:break-word;}
   .destrava-seta{flex:none;color:var(--red);font-weight:800;font-size:12px;}
   .destrava-mais{margin-top:6px;}
   .destrava-mais summary{cursor:pointer;font:800 11px 'Manrope',sans-serif;color:var(--red);list-style:none;}
@@ -3176,7 +3247,9 @@
        ela vira reticências. Aqui o item empilha e o texto quebra inteiro. */
     .destrava-item{flex-wrap:wrap;}
     .destrava-item b{max-width:none;}
-    .destrava-mov{flex-basis:100%;white-space:normal;}
+    /* white-space:normal saiu daqui: virou o padrão na regra base. Fica só o que é
+       específico do estreito — a linha inteira para o movimento. */
+    .destrava-mov{flex-basis:100%;}
   }
 
   .mf-view-filter{border:1px solid var(--line);background:var(--panel);color:var(--muted);border-radius:999px;padding:6px 10px;
@@ -3334,7 +3407,7 @@
     .mf-shell .sec-head h2{flex:1;min-width:0;}
     .mf-shell .sec-head p{flex:0 0 calc(100% - 31px);margin-left:31px;padding:0;}
     .mf-actions-grid .acao-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 8px;}
-    .mf-actions-grid .acao-item b{grid-column:1/-1;white-space:normal;}
+    .mf-actions-grid .acao-item b{grid-column:1/-1;}
     .mf-actions-grid .acao-item .meta{white-space:normal;}
     .mf-actions-grid .acao-item .flag{grid-column:2;grid-row:2;}
     .mf-actions-grid .acao-item .acao-agendar{grid-column:2;grid-row:2;}
@@ -15011,8 +15084,8 @@ function renderAgenda() {
     const quentesFora = agendaMarcarQuentes(naSemana, quentes).length;
     return `
     <div class="cockpit-hero-combo" style="align-items:center;">
-      <div style="display:flex;flex-direction:column;gap:4px;flex:none;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Agenda do time · ${rotulo}</span>
+      <div class="hero-titulo">
+        <span class="hero-eyebrow" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Agenda do time · ${rotulo}</span>
         <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">A semana do time está coberta?</h1>
       </div>
       <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
@@ -15052,8 +15125,8 @@ function renderAgenda() {
       : `${feitasHoje} ${feitasHoje === 1 ? 'registrada' : 'registradas'} · ${pendentesHoje} ${pendentesHoje === 1 ? 'pendente' : 'pendentes'}`;
     return `
     <div class="cockpit-hero-combo" style="align-items:center;">
-      <div style="display:flex;flex-direction:column;gap:4px;flex:none;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Rota & Agenda · ${rotulo} · <span style="color:#8FB5FF;">planejamento</span></span>
+      <div class="hero-titulo">
+        <span class="hero-eyebrow" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Rota & Agenda · ${rotulo} · <span style="color:#8FB5FF;">planejamento</span></span>
         <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">${agendaEstado.subview === 'semana' ? 'Minha semana está planejada?' : 'Meu dia de campo está pronto?'}</h1>
         <span style="font-size:10.5px;color:var(--dark-mut);margin-top:2px;">Próximos passos do funil, compromissos e novas contas da sua região no mesmo plano.</span>
       </div>
@@ -26873,12 +26946,12 @@ async function renderDaily() {
 
   const bannerDaily = souRepDaily && briefingBanner ? `
     <div class="cockpit-hero-combo" style="align-items:center;">
-      <div style="display:flex;flex-direction:column;gap:4px;min-width:240px;flex:none;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Briefing das 9h · ${fmtDailyLabel(dailyRefDate)}</span>
+      <div class="hero-titulo">
+        <span class="hero-eyebrow" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Briefing das 9h · ${fmtDailyLabel(dailyRefDate)}</span>
         <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">O que aconteceu e o que vem agora</h1>
       </div>
       <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
-      <div style="display:flex;gap:26px;font-variant-numeric:tabular-nums;">
+      <div class="hero-metricas">
         <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${briefingBanner.at.visitas.length + briefingBanner.at.reunioes.length}</div><div style="font-size:11px;color:var(--dark-mut);">comprovadas ${fmtDailyLabel(briefingBanner.ontemBanner)}</div></div>
         <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:24px;color:var(--dark-ink);">${briefingBanner.hojeAt.total}</div><div style="font-size:11px;color:var(--dark-mut);">compromissos hoje</div></div>
         <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:24px;color:${briefingBanner.pedindoAcao > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${briefingBanner.pedindoAcao}</div><div style="font-size:11px;color:var(--dark-mut);">pedindo ação</div></div>
@@ -26892,8 +26965,8 @@ async function renderDaily() {
       </div>
     </div>` : `
     <div class="cockpit-hero-combo" style="align-items:center;">
-      <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Daily & Ritmo · ${fmtDailyLabel(dailyRefDate)}</span>
+      <div class="hero-titulo">
+        <span class="hero-eyebrow" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Daily & Ritmo · ${fmtDailyLabel(dailyRefDate)}</span>
         <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Quem planejou clientes, quem executou, quem precisa de ação?</h1>
         <span style="font-size:10.5px;color:${frescorDaily.confiavel ? 'var(--dark-mut)' : '#FFB0B8'};margin-top:2px;">${frescorDaily.confiavel ? 'Plano vem do Cockpit; execução vem da evidência do HubSpot.' : esc(frescorDaily.rotulo) + ' · não cobre realizado até a próxima carga.'}</span>
       </div>
@@ -31239,8 +31312,8 @@ async function renderPDIs() {
     });
     const bannerPessoas = `
       <div class="cockpit-hero-combo" style="align-items:center;">
-        <div style="display:flex;flex-direction:column;gap:4px;min-width:220px;flex:none;">
-          <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Pessoas · Desenvolvimento + Coaching</span>
+        <div class="hero-titulo">
+          <span class="hero-eyebrow" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Pessoas · Desenvolvimento + Coaching</span>
           <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Quem precisa de mim no 1:1?</h1>
         </div>
         <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
