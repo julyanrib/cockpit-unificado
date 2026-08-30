@@ -223,6 +223,22 @@ window.auditarFiltro = async function(nome, seletorBotoes, seletorLista, seletor
      await auditarFiltro('Planejamento · visão', '#viewAgenda [data-v]',          '#prosp2Grid',   '.prosp2-card')
      await auditarFiltro('Agenda · tipo',        '#viewAgenda [data-agfiltro]',   '#viewAgenda',   '[data-agev]')
      await auditarFiltro('Agenda · vista',       '#viewAgenda [data-agvista]',    '#viewAgenda',   '[data-agev]')
+     await auditarFiltro('Playbook · categoria', '#viewPlaybook [data-pb-cat]',   '.pb-catalog',   '[data-pb-page]')
+
+   A LISTA ACIMA JÁ FICOU INCOMPLETA UMA VEZ (30/08/26): a família do Playbook faltava, e
+   por isso ela passou uma rodada inteira sem auditoria enquanto eu declarava as outras
+   oito conferidas. Ao criar um filtro novo, acrescente a linha aqui no mesmo commit —
+   auditoria que não conhece o controle não o cobre, e o relatório fica falso sem ninguém
+   perceber. Para conferir se falta alguma, liste os atributos de filtro do template:
+     Object.keys([...document.querySelectorAll('#viewPlaybook,#viewAgenda,#viewMeuFunil'))
+   ou, mais direto, no repositório:
+     grep -o 'data-[a-z-]*\\(filtro\\|cat\\|visao\\|vista\\|balde\\|etapa\\|visao\\)[a-z-]*=' template/cockpit.template.html | sort -u
+
+   O chip "Todos" do Playbook carrega data-pb-cat="Todos", que NÃO é uma categoria dos
+   dados — ele mostra a biblioteca inteira. Ao comparar com playbookDados(), trate-o à
+   parte, senão o esperado vira 0 e o relatório acusa um falso negativo (foi o que me
+   aconteceu; as 8 categorias reais somam exatamente o total de guias).
+
    A busca do Playbook é INPUT e não se testa clicando — digite:
      const i = document.querySelector('#viewPlaybook input');
      i.value = 'objecao'; i.dispatchEvent(new Event('input', {bubbles:true}));
