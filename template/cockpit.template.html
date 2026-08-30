@@ -419,6 +419,39 @@
   .acao-cta:hover{filter:brightness(1.08);}
   .acao-sec{font-size:11.5px;font-weight:700;color:var(--muted2);cursor:pointer;}
   .acao-sec:hover{color:var(--ink);}
+  /* ══ O CABEÇALHO DAS SEÇÕES DO DESENVOLVIMENTO NO CELULAR (30/08/26) ═══════════════
+
+     MEDIDO a 375, peça por peça do cabeçalho da seção 1:
+         sec-num 20x20   h2 47x62 ("Faça isso hoje")   p 162x50   link 57x46
+     Ou seja: o título da seção em UMA COLUNA DE 47px, quebrado em quatro linhas, com o
+     subtítulo e o atalho brigando pela mesma faixa. Era flex nowrap com quatro filhos
+     em 319px. O mesmo defeito que medi no cabeçalho da Agenda hoje.
+
+     A classe é ESCOPADA (.sec-head-dev) e aplicada nos três cabeçalhos do executivo em
+     vez de valer para .sec-head global: a mesma classe base é usada nas telas do gestor,
+     e a prancha lista a experiência dele como fora de escopo.
+
+     O margin-left:auto do atalho sai do inline e vira classe. Inline só cede a
+     !important, e o Bloco 8 da prancha manda reduzir !important — então a regra do
+     estreito precisava que o valor estivesse alcançável por cascata. */
+  /* ══ ATALHO É BOTÃO, NÃO SPAN (30/08/26) ═══════════════════════════════════════════
+
+     Os dois atalhos desta aba ("Abrir Meu Funil · Visita" e "ver meus PDIs ↓") eram
+     <span> com addEventListener. Clicavam, sim — mas não recebiam foco, não respondiam a
+     Enter e não eram anunciados como botão pelo leitor de tela. Para quem navega por
+     teclado eles eram exatamente o que o Julyan chama de clique morto.
+
+     Viraram <button>, com o cromo do navegador zerado aqui para a aparência não mudar em
+     um pixel. E no estreito o atalho do cabeçalho ganha 44px de altura: medido a 375, ele
+     tinha 319px de largura e DEZESSEIS de altura. */
+  .sec-head-cta,.acao-btn-nu{background:none;border:0;padding:0;font-family:inherit;text-align:left;}
+  .sec-head-cta{margin-left:auto;}
+  @media (max-width:640px){
+    .sec-head-dev{flex-wrap:wrap;}
+    .sec-head-dev h2{flex:1 1 auto;min-width:0;}
+    .sec-head-dev p{flex:1 1 100%;}
+    .sec-head-dev .sec-head-cta{flex:1 1 100%;margin-left:0;min-height:44px;display:flex;align-items:center;}
+  }
   /* BLOCO 37 HOTFIX (13/08/26) — Julyan ao vivo: "cheio de negrito, muito feio", e o
      motivo real era mais grave que estético — .acao-item foi desenhada pro Meu Funil
      pra truncar o NOME de um lead numa linha compacta (flex:1 + ellipsis + nowrap no
@@ -31716,7 +31749,9 @@ async function renderPDIs() {
       const d = destravarFunil(r.ownerId);
       if (!d || !d.etapaTravada) return null;
       const g = (typeof GESTO_DA_ETAPA !== 'undefined' && GESTO_DA_ETAPA[d.etapaTravada]) || null;
-      return { etapa: d.etapaTravadaLabel, proxima: d.proximaLabel, gesto: g ? g.gesto : null,
+      /* O sid entra junto do rótulo (30/08/26): o rótulo é para ler, o sid é para NAVEGAR —
+         é ele que o Meu Funil usa em meuFunilFiltroEtapa. Ver o link do cabeçalho abaixo. */
+      return { etapa: d.etapaTravadaLabel, sid: d.etapaTravada, proxima: d.proximaLabel, gesto: g ? g.gesto : null,
         pergunta: d.pergunta, saudavel: d.saudavel,
         faltaPasso: d.faltandoPasso, faltaQualif: d.faltandoQualificacao, prontos: d.prontosParaSubir };
     })();
@@ -31737,7 +31772,7 @@ async function renderPDIs() {
         <span class="diag-tag">Gargalo da semana${fonteTag ? ' · HubSpot ' + esc(fonteTag) : ''}</span>
         <h3>${esc(manchete)}</h3>
         <p>${corpoGargalo}</p>
-        <div class="diag-src">${fonteNumeros}${saudeNarrativa.dataBaseFmt ? ` · base ${esc(saudeNarrativa.dataBaseFmt)}` : ''} · <span class="acao-sec" data-scrollpdi style="display:inline;font-size:10.5px;color:var(--red-dk);">ver meus PDIs ↓</span></div>
+        <div class="diag-src">${fonteNumeros}${saudeNarrativa.dataBaseFmt ? ` · base ${esc(saudeNarrativa.dataBaseFmt)}` : ''} · <button type="button" class="acao-sec acao-btn-nu" data-scrollpdi style="display:inline;font-size:10.5px;color:var(--red-dk);">ver meus PDIs ↓</button></div>
       </div>` : temGargalo ? `
       <div class="diag-card" style="border-left-color:var(--amber);">
         <span class="diag-tag" style="color:var(--amber-ink);background:var(--amber-soft);">Gargalo de hoje · do funil ao vivo</span>
@@ -31781,11 +31816,38 @@ async function renderPDIs() {
 
     const secaoFoco = `
     <section class="sec" style="margin-top:22px;">
-      <div class="sec-head">
+      <div class="sec-head sec-head-dev">
         <span class="sec-num">1</span>
         <h2>Faça isso hoje</h2>
         <p>o mesmo que seu gestor lê antes do 1:1 — nada aqui é escolhido à mão</p>
-        <span class="acao-sec" data-irfunil style="margin-left:auto;">Abrir Meu Funil →</span>
+        ${(() => {
+          /* ══ ONDE AS TRÊS PRIORIDADES ACONTECEM (30/08/26, decisão pedida pelo Julyan) ══
+
+             As três "Prioridades" abaixo eram texto puro: 497px de altura sem nenhuma saída.
+             Ele lia "atacar agora os 3 leads com SLA estourado" e ia procurar sozinho.
+
+             POR QUE O DESTINO NÃO É POR CARTÃO. A frase vem da análise de IA como texto
+             solto, sem categoria e sem destino — o comentário do TONS_ACAO, mais abaixo, já
+             registra que rotular o tema exigiria classificar a frase. Um CTA por cartão
+             obrigaria a adivinhar o assunto de cada uma, e CTA que aponta para o lugar
+             errado é pior que CTA nenhum. Também não existe, na tela do executivo, campo de
+             texto onde uma prioridade caiba: o plano de três prioridades é da tela antiga
+             (#planoDoDiaSlot não existe para ele) e o agendador rápido exige uma CONTA.
+             Tentei os dois caminhos antes de escolher este.
+
+             O QUE É SEMPRE VERDADE: as três nascem da MESMA análise semanal do MESMO funil,
+             e o degrau travado desse funil é DADO — destravarFunil() devolve o sid da etapa.
+             Então o destino é um só, é o mesmo das três, e por isso mora uma vez aqui no
+             cabeçalho da seção, logo acima dos cartões: em vez de "Abrir Meu Funil", o link
+             diz a etapa e leva a lista dela já filtrada.
+
+             Sem gargalo (funil saudável ou sem dado) o rótulo não promete etapa nenhuma e o
+             link segue abrindo o funil inteiro. Prometer um filtro que não existe seria a
+             mesma mentira dos cliques mortos. */
+          const sidTravado = (gestoVivo && !gestoVivo.saudavel && gestoVivo.sid) ? gestoVivo.sid : '';
+          const nomeEtapa = sidTravado ? (gestoVivo.etapa || (typeof STAGE_LABELS !== 'undefined' ? STAGE_LABELS[sidTravado] : '') || '') : '';
+          return `<button type="button" class="acao-sec sec-head-cta" data-irfunil="${esc(sidTravado)}">Abrir Meu Funil${nomeEtapa ? ' · ' + esc(nomeEtapa) : ''} →</button>`;
+        })()}
       </div>
       <div class="diag">
         ${cardGargalo}
@@ -31827,7 +31889,7 @@ async function renderPDIs() {
 
     const secaoPlano = `
     <section class="sec">
-      <div class="sec-head">
+      <div class="sec-head sec-head-dev">
         <span class="sec-num">2</span>
         <h2>Seu plano, em 3 partes</h2>
         <p>leitura da semana, boas práticas pro seu caso, e os acordos do seu último 1:1</p>
@@ -31921,7 +31983,7 @@ async function renderPDIs() {
       ${secaoPlano}
 
       <section class="sec" id="devSecaoPdis">
-        <div class="sec-head">
+        <div class="sec-head sec-head-dev">
           <span class="sec-num">3</span>
           <h2>Meus PDIs anexados</h2>
           <p>histórico completo dos acordos com seu gestor — mais recente primeiro</p>
@@ -31941,9 +32003,31 @@ async function renderPDIs() {
         else if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });
     });
+    /* O link do cabeçalho leva à ETAPA travada, não ao funil genérico.
+
+       Três detalhes que só aparecem medindo, e que a versão anterior deste handler não
+       tinha: (a) activateTab só troca a view visível — quem desenha é o listener do BOTÃO
+       da aba, então clico no botão real em vez de trocar a view na mão; (b) mesmo assim,
+       desenharViewSeNecessario NÃO redesenha uma view já desenhada, então chamo
+       renderMeuFunil() explicitamente depois de setar o filtro — é o mesmo caminho que os
+       chips de etapa do próprio Meu Funil usam; (c) zero a visão para "todos" junto,
+       senão um filtro anterior (SLA, sem passo) esconderia parte da etapa e ele veria uma
+       lista menor do que a que o cabeçalho prometeu. */
     const irFunil = el.querySelector('[data-irfunil]');
     if (irFunil) irFunil.addEventListener('click', () => {
-      if (typeof activateTab === 'function') activateTab('viewMeuFunil');
+      const sid = irFunil.dataset.irfunil || '';
+      if (sid) {
+        if (typeof meuFunilFiltroEtapa !== 'undefined') meuFunilFiltroEtapa = sid;
+        if (typeof meuFunilFiltroVisao !== 'undefined') meuFunilFiltroVisao = 'todos';
+      }
+      const abaFunil = document.getElementById('tabBtnMeuFunil');
+      if (abaFunil) abaFunil.click();
+      else if (typeof activateTab === 'function') activateTab('viewMeuFunil');
+      if (!sid || typeof renderMeuFunil !== 'function') return;
+      Promise.resolve(renderMeuFunil()).then(() => {
+        const painel = document.querySelector('#meuFunilContent .mf-stage-panel');
+        if (painel) painel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }).catch(e => console.error('Falha ao abrir a etapa travada no Meu Funil:', e));
     });
     wireFocoDeHabilidade(el);
     // Marcar acordo do 1:1 grava em pdi_compromissos (Supabase) pela MESMA função que o
