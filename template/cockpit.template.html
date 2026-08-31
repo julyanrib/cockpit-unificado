@@ -1977,7 +1977,11 @@
     .kpi .v{font-size:21px;}
     .kpi-strip-hero{grid-template-columns:repeat(2,1fr);padding:18px 16px;gap:14px;}
     .kpi-hero .v{font-size:24px;}
-    .charts-row{grid-template-columns:1fr;gap:14px;margin-bottom:18px;}
+    /* minmax(0,1fr) e não 1fr: 1fr é minmax(AUTO,1fr), então o mínimo é o min-content do
+       maior filho — um filho que não encolhe estoura a coluna para fora do container. Foi
+       o que aconteceu na Daily: coluna de 354,86px dentro de uma linha de 319px. */
+    .charts-row{grid-template-columns:minmax(0,1fr);gap:14px;margin-bottom:18px;}
+    .charts-row>*{min-width:0;}
     .rep-card{padding:13px 16px;}
     .rep-name{font-size:14.5px;}
     .overlay{padding:0;align-items:flex-end;}
@@ -5717,11 +5721,39 @@
     #viewDaily .decisoes-mais,
     #viewCockpit .command-action,
     #viewCockpit .dossie-leads-tab-btn,
-    #viewDaily .funil-bar-row,
     #viewDaily .daily-client-empty button,
     #viewCockpit a[href*="app.hubspot.com"]{min-height:44px;display:inline-flex;align-items:center;}
+    /* ALVO DE TOQUE SEM TROCAR O LAYOUT (30/08/26). #viewDaily .funil-bar-row estava no
+       grupo acima, que aplica display:inline-flex para centralizar o conteúdo em 44px de
+       altura. Numa linha que é GRID, isso mata as colunas: os filhos viravam conteúdo
+       inline, a largura mínima da linha ia a 305px dentro de um cartão de 270px, e a
+       Daily passava a rolar de lado (corpo em 384px numa janela de 375). Aqui ela
+       mantém o grid, ganha a altura mínima, e as colunas encolhem para caber. */
+    #viewDaily .funil-bar-row{min-height:44px;grid-template-columns:96px minmax(0,1fr) auto;gap:8px;}
+    #viewDaily .funil-bar-conv{grid-column:1 / -1;text-align:left;font-size:10.5px;}
     .gd-placar-linha{grid-template-columns:82px minmax(0,1fr) 62px;gap:8px;}
     #viewDaily .daily-team-cta{min-height:44px;display:flex;align-items:center;justify-content:center;}
+
+    /* ALVO DE TOQUE, SEGUNDA RODADA (30/08/26). Medidos 31 controles abaixo de 44px a
+       375px nas nove abas do gestor. Cada família recebe o tratamento do SEU display:
+       mudar o modo de layout para ganhar altura é o erro que fez a Daily rolar de lado. */
+    #viewDaily .gestor-abrir-fila,
+    #viewPDIs .pdiUpload{min-height:44px;display:inline-flex;align-items:center;}
+    #viewResumo .ga-cta{min-height:44px;display:flex;align-items:center;justify-content:center;}
+    /* duas linhas dentro do botão: só altura, senão o nome do mês e a contagem viram uma linha */
+    #viewResumo .gs-turma{min-height:44px;}
+    #viewAgenda .ag-placar-nav button{min-height:44px;}
+    /* grid: centraliza as linhas, sem trocar o display */
+    #viewPDIs .coach-funil-etapa{min-height:44px;align-content:center;}
+    #viewPDIs .pdiTitulo,
+    #viewPlaybook #playbookBusca{min-height:44px;}
+    /* summary continua list-item para não perder o marcador do acordeão: altura vem de
+       min-height com padding simétrico, que também centraliza o texto */
+    #viewDaily .command-note>summary,
+    #viewCockpit summary,
+    #viewPDIs summary,
+    #viewPDIs .card-summary{min-height:44px;padding-top:13px;padding-bottom:13px;}
+    #viewPDIs .card-summary{align-items:center;}
   }
 
   /* ═══════════════════════════════════════════════════════════════════════════════════
@@ -34313,7 +34345,8 @@ async function renderPDIs() {
               </div>
               <textarea class="pdiCompromissos" placeholder="Compromissos combinados (um por linha) — vira checklist pro executivo..." style="width:100%;min-height:60px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);padding:8px 10px;font-family:inherit;font-size:13px;margin-bottom:8px;"></textarea>
               <input type="file" class="pdiArquivo" aria-label="Selecionar arquivo do PDI (PDF ou Word)" accept=".pdf,.doc,.docx" style="margin-bottom:8px;font-size:12.5px;">
-              <button class="pdiUpload btn-prim" style="padding:9px 16px;min-height:38px;">Anexar PDI</button>
+              <!-- 44px, não 38: alvo de toque no celular. O valor fica inline porque é aqui que ele estava, e estilo inline vence qualquer regra do @media — deixar 38 aqui e "corrigir" na folha seria uma regra que nunca aplica. -->
+              <button class="pdiUpload btn-prim" style="padding:11px 16px;min-height:44px;">Anexar PDI</button>
               <span class="pdiStatus" style="font-size:12px;color:var(--muted);margin-left:10px;"></span>
               <div class="pdiLista" style="margin-top:12px;"><div class="empty-state">Carregando...</div></div>
             </div>
