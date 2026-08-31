@@ -7138,6 +7138,10 @@ function aplicarVisaoPorPapel() {
   // Hoje"): só o que é BARATO e aparece fora das abas roda agora.
   /* a fila do app é lida uma vez e guardada; quem usa é frescorDosDados() */
   if (typeof carregarFilaPwa === 'function') carregarFilaPwa();
+  /* ação de campo vai para o app: o interceptador é registrado sempre (ele se cala sozinho
+     quando não há app configurado), e a marcação dos links só quando há. */
+  if (typeof pwaLigarInterceptadorDeAcoes === 'function') pwaLigarInterceptadorDeAcoes();
+  if (typeof pwaObservarLinksDeAcao === 'function') pwaObservarLinksDeAcao();
   if (typeof atualizarSinoAvisos === 'function') atualizarSinoAvisos();
   if (typeof preencherHealthBadge === 'function') preencherHealthBadge();
 
@@ -7982,6 +7986,136 @@ function rotuloDeRegistroDaVisita(tp) {
    é a única fonte da tarja de frescor — todas as telas leem daqui.
    --------------------------------------------------------------------------- */
 
+/* ══ AÇÃO DE CAMPO VAI PARA O APP ════════════════════════════════════════════════════
+   O Cockpit é a aba de GESTÃO dentro do app de campo; o mapa é a aba operacional. Então
+   ligar, mandar WhatsApp e navegar até o cliente não terminam no discador do sistema:
+   entram no app, que é quem sabe registrar o que aconteceu depois da ligação.
+
+   Um interceptador em vez de 18 trocas de href: são 9 links tel:, 3 wa.me e 5 navegações
+   de Maps em sete telas, e o próximo link que alguém escrever também precisa entrar no
+   trilho. Na fase de CAPTURA, porque várias dessas âncoras vivem dentro de cartões
+   clicáveis que dão stopPropagation — na fase de bolha, metade nunca chegaria aqui.
+
+   Sem DATA.pwa.deepLink configurado, NADA muda: tel: liga, wa.me abre, Maps navega.
+   Nenhuma ação fica esperando o outro time para funcionar. */
+function pwaBase() {
+  const p = (typeof DATA !== 'undefined' && DATA && DATA.pwa) || null;
+  const base = p && typeof p.deepLink === 'string' ? p.deepLink.trim() : '';
+  /* só http(s) e só absoluto: link relativo aqui viraria navegação dentro do Cockpit,
+     e um esquema exótico (javascript:, data:) seria buraco de segurança de graça. */
+  return /^https?:\/\//i.test(base) ? base : '';
+}
+function pwaAcoesAtivo() { return !!pwaBase(); }
+
+/* ABRIR SEM SUMIR. Dentro do app o Cockpit roda em WebView, e WebView bloqueia janela
+   nova: window.open devolve null e o clique não faz nada — clique morto, e no celular de
+   quem está na rua. Aba nova primeiro (o gestor no desktop não pode perder o Cockpit de
+   vista); se for bloqueada, navega na própria aba, onde o roteador do app pega o link. */
+function pwaAbrir(url) {
+  if (!url) return false;
+  let j = null;
+  try { j = window.open(url, '_blank', 'noopener'); } catch (e) { j = null; }
+  if (j) return true;
+  try { window.location.href = url; return true; } catch (e) { return false; }
+}
+
+/* o link que o app recebe. Tudo em querystring, porque é o que atravessa WebView,
+   Android intent e iOS universal link sem combinação extra. */
+function pwaLinkDeAcao(tipo, d) {
+  const base = pwaBase();
+  if (!base) return '';
+  const q = new URLSearchParams();
+  q.set('acao', String(tipo || ''));
+  if (d && d.telefone) q.set('telefone', String(d.telefone).replace(/[^0-9]/g, ''));
+  if (d && d.dealId) q.set('dealId', String(d.dealId));
+  if (d && d.cliente) q.set('cliente', String(d.cliente).slice(0, 120));
+  if (d && d.lat != null && d.lng != null) { q.set('lat', String(d.lat)); q.set('lng', String(d.lng)); }
+  if (d && d.quando) q.set('quando', String(d.quando));
+  if (sessaoAtual && sessaoAtual.ownerId) q.set('ownerId', String(sessaoAtual.ownerId));
+  q.set('origem', 'cockpit');
+  return base + (base.indexOf('?') >= 0 ? '&' : '?') + q.toString();
+}
+
+/* NAVEGAR: usado pelos três window.open de Maps que existiam soltos. Com o app ativo, a
+   rota abre no app (que sabe marcar o check-in); sem ele, no Maps, como sempre foi. */
+function abrirNavegacaoDeCampo(lat, lng, rotulo, dealId) {
+  if (lat == null || lng == null) return false;
+  const noApp = pwaLinkDeAcao('navegar', { lat: lat, lng: lng, cliente: rotulo, dealId: dealId });
+  const url = noApp || ('https://www.google.com/maps/dir/?api=1&destination=' + Number(lat) + ',' + Number(lng) + '&travelmode=driving&dir_action=navigate');
+  return pwaAbrir(url);
+}
+
+/* Um clique, um lugar. Lê o tipo do próprio href — assim link novo entra no trilho sem
+   ninguém lembrar de registrar nada. */
+function pwaTipoDoLink(href) {
+  const h = String(href || '');
+  if (/^tel:/i.test(h)) return 'ligar';
+  if (/wa\.me|api\.whatsapp\.com/i.test(h)) return 'whatsapp';
+  if (/google\.com\/maps/i.test(h)) return 'navegar';
+  return '';
+}
+function pwaDadosDoLink(a) {
+  const h = String(a.getAttribute('href') || '');
+  const d = { cliente: '', telefone: '', dealId: '' };
+  const mTel = h.match(/^tel:\+?([0-9]+)/i) || h.match(/wa\.me\/\+?([0-9]+)/i);
+  if (mTel) d.telefone = mTel[1];
+  const mCoord = h.match(/destination=(-?[0-9.]+),(-?[0-9.]+)/) || h.match(/query=(-?[0-9.]+),(-?[0-9.]+)/);
+  if (mCoord) { d.lat = mCoord[1]; d.lng = mCoord[2]; }
+  /* o negócio vem do contexto da linha quando ela declara — vários cartões já carregam
+     data-negocio/data-ficha/data-lead para abrir a ficha. Sem isso o app recebe telefone
+     e nome, que é o mínimo para achar a conta. */
+  const dono = a.closest('[data-negocio],[data-ficha],[data-lead],[data-deal]');
+  if (dono) d.dealId = dono.getAttribute('data-negocio') || dono.getAttribute('data-ficha') || dono.getAttribute('data-lead') || dono.getAttribute('data-deal') || '';
+  const titulo = a.getAttribute('title') || '';
+  const mCli = titulo.match(/(?:para|de|WhatsApp de)\s+(.+?)(?:\s+[—-]|$)/i);
+  if (mCli) d.cliente = mCli[1].trim();
+  return d;
+}
+/* Chamado no boot, como todo ouvinte deste arquivo — registrar no escopo do módulo
+   quebra a suíte de núcleo, que avalia este script fora do navegador. */
+function pwaLigarInterceptadorDeAcoes() {
+  if (typeof document === 'undefined' || !document.addEventListener) return;
+  document.addEventListener('click', function (ev) {
+    /* consultado a CADA clique, e não uma vez: os dados chegam depois do login, então no
+       instante do registro DATA.pwa ainda não existe. */
+    if (!pwaAcoesAtivo()) return;
+    const a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;
+    if (!a) return;
+    const tipo = pwaTipoDoLink(a.getAttribute('href'));
+    if (!tipo) return;
+    const url = pwaLinkDeAcao(tipo, pwaDadosDoLink(a));
+    if (!url) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    pwaAbrir(url);
+  }, true);
+}
+
+/* O usuário tem que saber que o clique muda de destino. Sem isto, "Ligar" abrindo o app
+   em vez do discador parece bug — e na primeira vez que parecer bug, alguém liga por fora
+   e o registro se perde de novo. */
+/* Ligado no boot e só quando o app está configurado. Sem PWA_DEEP_LINK, nem o observador
+   nasce — nenhuma marcação, nenhum custo, nenhuma mudança de comportamento. */
+function pwaObservarLinksDeAcao() {
+  if (!pwaAcoesAtivo() || typeof MutationObserver !== 'function') return;
+  pwaMarcarLinksDeAcao(document);
+  let pendente = null;
+  new MutationObserver(() => {
+    if (pendente) return;
+    pendente = setTimeout(() => { pendente = null; pwaMarcarLinksDeAcao(document); }, 250);
+  }).observe(document.body, { childList: true, subtree: true });
+}
+
+function pwaMarcarLinksDeAcao(raiz) {
+  if (!pwaAcoesAtivo()) return;
+  const escopo = raiz || document;
+  escopo.querySelectorAll('a[href^="tel:"],a[href*="wa.me"],a[href*="google.com/maps"]').forEach(a => {
+    if (a.dataset.pwaMarcado) return;
+    a.dataset.pwaMarcado = '1';
+    const t = a.getAttribute('title') || '';
+    a.setAttribute('title', (t ? t + ' · ' : '') + 'abre no app de campo, que registra a ação');
+  });
+}
 /* ══ FILA PENDENTE DO APP DE CAMPO ═══════════════════════════════════════════════════
    Lida uma vez por sessão e guardada aqui. O app declara por POST /api/fila-pwa; esta
    ponta só lê. Se a leitura falhar ou a tabela estiver vazia para o dia, o estado é
@@ -8569,6 +8703,9 @@ function acoesDeAgora(r, diag, contasLivres) {
       ultimaInteracao: agendaHhmm(e.inicio) + ' de hoje',
       ctaLabel: 'Registrar desfecho',
       tel: telDoEvento,
+      /* o negócio do evento, quando o evento traz dealId — é o que faz o link para o app
+         chegar com a conta certa em vez de o app ter que adivinhar pelo telefone. */
+      leadId: (negocioDoEvento && negocioDoEvento.id) || null,
       acao: () => abrirRegistroDeDesfechoPorNome(e.cliente, e)
     });
   });
@@ -9529,7 +9666,7 @@ function buildAcoesDeAgoraHTML(r, diag) {
         ? `<div class="empty-state" style="padding:16px 0;">Nenhuma pendência aberta: toda visita tem desfecho, todo negócio tocado tem próximo passo datado e nenhuma cadência está atrasada. 🎉</div>`
         : `<div style="display:grid;gap:9px;margin-top:14px;">
             ${acoes.map((a, i) => `
-              <div class="acao-agora-item" data-acao-idx="${i}" style="background:var(--panel2);border:1px solid var(--line-soft);border-radius:13px;padding:12px 14px;">
+              <div class="acao-agora-item" data-acao-idx="${i}"${a.leadId ? ` data-negocio="${esc(String(a.leadId))}"` : ''} style="background:var(--panel2);border:1px solid var(--line-soft);border-radius:13px;padding:12px 14px;">
                 <div style="display:flex;gap:11px;align-items:baseline;flex-wrap:wrap;">
                   <span class="mono" style="flex:none;font-size:10px;font-weight:800;color:var(--red);">${i + 1}</span>
                   <b style="flex:1;min-width:140px;font-size:12.5px;color:var(--ink);line-height:1.4;">${esc(a.verbo)} ${esc(a.cliente)}</b>
@@ -13952,7 +14089,7 @@ function wireVendasMesEdicao(containerEl) {
 
     // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — item 8 da revisão: zerar o MRR
     // agora é uma ação EXPLÍCITA e separada, com confirmação — não basta digitar "0"
-    // no campo normal (o servidor recusa isso desde agora, ver api/atualizar-mrr.js).
+    // no campo normal (o servidor recusa isso desde agora, ver lib/acoes-negocio/atualizar-mrr.js).
     const btnZerar = edit.querySelector('.vm-zerar');
     if (btnZerar) btnZerar.addEventListener('click', (ev) => {
       ev.stopPropagation();
@@ -14612,11 +14749,11 @@ const AGENDA_TIPOS = {
 // ATUALIZAÇÃO (15/08/26, Julyan): "ele pode enviar pra onboarding... ele pode
 // movimentar pelo cockpit, faça isso" — 1396006163 (Enviado Onboarding) adicionada
 // como 7ª etapa alcançável. Espelha exatamente ETAPAS_ABERTAS do servidor
-// (api/mudar-etapa-negocio.js) — "Ganho" (1396006162) fica de fora de propósito,
+// (lib/acoes-negocio/mudar-etapa-negocio.js) — "Ganho" (1396006162) fica de fora de propósito,
 // é alcançado só automaticamente pelo ASAAS quando o pagamento confirma.
 // ATUALIZAÇÃO (17/08/26, Julyan): "adicionar a etapa reciclagem em nosso funil, como
 // já fez com enviado onboarding" — 1398311191 (Reciclagem) adicionada. Espelha
-// ETAPAS_ABERTAS do servidor (api/mudar-etapa-negocio.js) — lá, Reciclagem é isenta
+// ETAPAS_ABERTAS do servidor (lib/acoes-negocio/mudar-etapa-negocio.js) — lá, Reciclagem é isenta
 // da regra de "não pula fase" (é bucket lateral de resgate, alcançável de qualquer
 // etapa aberta, não um degrau sequencial).
 const AGENDA_DIAS = ['seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
@@ -14782,7 +14919,7 @@ const AGENDA_INTERNOS = /^(daily|reuni[ãa]o\s*interna|interno|treinamento|rolep
 // BLOCO 34 (13/08/26) — "sugestão do gestor, pendente até o executivo confirmar"
 // (decisão do Julyan). O marcador vive na 1ª linha do corpo da tarefa no HubSpot —
 // nunca no assunto, pra não quebrar AGENDA_RE_TITULO/agendaTipoDoTexto, que dependem
-// do assunto começar EXATAMENTE por "Visita"/"Reunião"/etc (ver api/criar-tarefa-rota.js
+// do assunto começar EXATAMENTE por "Visita"/"Reunião"/etc (ver lib/acoes-negocio/criar-tarefa-rota.js
 // pro porquê). Espelho do RE_MARCADOR do servidor — os dois precisam mudar juntos.
 const AGENDA_RE_MARCADOR_GESTOR = /^SUGESTAO_GESTOR:([^:\n]*):PENDENTE\n?/;
 function agendaSugestaoGestor(obs) {
@@ -15419,7 +15556,7 @@ function prosp2ConflitoHorario(ownerId, diaISO, hora) {
    nenhum aqui — nem "marcar como feito", nem "esconder".
 
    LIMITE DECLARADO: "Perder com motivo" não é oferecido como ação de um clique
-   porque api/mudar-etapa-negocio.js só aceita as etapas ABERTAS do pipeline
+   porque lib/acoes-negocio/mudar-etapa-negocio.js só aceita as etapas ABERTAS do pipeline
    (Perdido ficou de fora daquela rodada, de propósito). Oferecer um botão que
    não escreve nada seria pior do que não oferecer: o oferecido aqui é "Reciclar
    com data" (que é escrita real) e, para perda, o link direto pro negócio no
@@ -16126,9 +16263,18 @@ async function renderProspeccaoExecutivo() {
     const ordem = ordenarPorProximidade(selecionados, centro);
     const destino = ordem[ordem.length - 1];
     const meio = ordem.slice(0, -1).map(l => `${l.lat},${l.lng}`).join('|');
-    window.open(`https://www.google.com/maps/dir/?api=1&origin=${centro.lat},${centro.lng}` +
-      `&destination=${destino.lat},${destino.lng}&waypoints=${encodeURIComponent(meio)}&travelmode=driving`,
-      '_blank', 'noopener');
+    /* com o app de campo ativo, a sequência abre NELE: rota do dia com as paradas em
+       ordem, que é o que permite check-in e registro. Sem app, Maps como sempre. */
+    const noApp = (typeof pwaLinkDeAcao === 'function') ? pwaLinkDeAcao('navegar-rota', {
+      lat: centro.lat, lng: centro.lng,
+      cliente: ordem.length + ' paradas'
+    }) : '';
+    const urlRota = noApp
+      ? noApp + '&paradas=' + encodeURIComponent(ordem.map(l => l.lat + ',' + l.lng).join('|')) +
+        '&ids=' + encodeURIComponent(ordem.map(l => String(l.id || '')).join('|'))
+      : (`https://www.google.com/maps/dir/?api=1&origin=${centro.lat},${centro.lng}` +
+         `&destination=${destino.lat},${destino.lng}&waypoints=${encodeURIComponent(meio)}&travelmode=driving`);
+    window.open(urlRota, '_blank', 'noopener');
   });
 }
 
@@ -17670,7 +17816,7 @@ document.addEventListener('click', function (ev) {
   }
   // PEDIDO (17/08/26, Julyan): resgate de leads em Reciclagem 60+ dias — reaproveita
   // o MESMO fluxo de mudança de etapa que qualquer outro card do funil já usa
-  // (abrirPassagemDeEtapa → api/mudar-etapa-negocio.js). Destino fixo: Prospecção —
+  // (abrirPassagemDeEtapa → lib/acoes-negocio/mudar-etapa-negocio.js). Destino fixo: Prospecção —
   // é o reinício mais honesto pra um lead que esfriou (não assume que já tem
   // decisor identificado ou visita marcada, que é o que a etapa Visita pressupõe).
   const resgatarBtn = ev.target.closest('[data-resgatarreciclagembtn]');
@@ -22420,7 +22566,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   const iDe = ORDEM_ETAPAS_FUNIL.indexOf(de);
   const iPara = ORDEM_ETAPAS_FUNIL.indexOf(para);
   // Reciclagem é bucket lateral de resgate, não um degrau do funil — isenta da regra
-  // de "não pula fase" nos dois sentidos (mesma isenção do servidor, api/mudar-etapa-negocio.js).
+  // de "não pula fase" nos dois sentidos (mesma isenção do servidor, lib/acoes-negocio/mudar-etapa-negocio.js).
   const ehReciclagem = para === '1398311191' || de === '1398311191';
   if (!ehReciclagem && iDe >= 0 && iPara > iDe + 1) {
     mostrarToast('O HubSpot não permite pular fases neste pipeline. Conclua a próxima etapa primeiro.', 'atencao');
@@ -22760,9 +22906,9 @@ function abrirFichaLeadFunilDrawer(l, voltarPara, foco) {
 
 // ===== BLOCO 42 (14/08/26) — "o executivo tem que poder limpar o lead, adicionar
 // nota, fazer o planejamento pelo cockpit, e ele registrar automaticamente no
-// hubspot" (Julyan). Três ações (mesma arquitetura de api/criar-tarefa-rota.js —
+// hubspot" (Julyan). Três ações (mesma arquitetura de lib/acoes-negocio/criar-tarefa-rota.js —
 // token do HubSpot nunca sai do servidor):
-//   1. clicar num segmento da trilha  → api/mudar-etapa-negocio.js (dealstage)
+//   1. clicar num segmento da trilha  → lib/acoes-negocio/mudar-etapa-negocio.js (dealstage)
 //   2. "Salvar nota"                  → api/criar-nota-negocio.js, tipoAcao:'nota' (Note associada)
 //   3. "Salvar próximo passo"         → api/criar-nota-negocio.js, tipoAcao:'proximo-passo' (Task associada)
 // CONSOLIDAÇÃO (15/08/26): os itens 2 e 3 viraram UM endpoint só (limite de 12 funções
@@ -22959,7 +23105,7 @@ function wireFichaLeadFunilEdicao(container, l) {
            em proximo passo, vai para a agenda ou pra daily dele hoje?").
 
            A cadeia real, conferida ponta a ponta: o clique abre a ficha no campo de passo,
-           salvar grava TAREFA DATADA no HubSpot (api/criar-tarefa-rota.js), e a leitura do
+           salvar grava TAREFA DATADA no HubSpot (lib/acoes-negocio/criar-tarefa-rota.js), e a leitura do
            HubSpot traz tarefa e reuniao para a Agenda ("reuniao vira MEETING e follow-up
            vira TASK", fetch-hubspot.js) — ou seja o passo datado aparece na Agenda dele no
            dia escolhido, e conta em "compromissos hoje" da Daily quando o dia chega.
@@ -26738,7 +26884,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         if (btnMaps) btnMaps.addEventListener('click', () => {
           const proxima = naRotaTodas[0];
           if (!proxima) return;
-          window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${proxima.lat},${proxima.lng}`)}&travelmode=driving&dir_action=navigate`, '_blank', 'noopener');
+          /* passa pelo funil: com o app ativo, a rota abre nele — é ele que marca check-in */
+          abrirNavegacaoDeCampo(proxima.lat, proxima.lng, proxima.nome || proxima.cliente || '', proxima.id || '');
         });
       }
     }
@@ -32682,7 +32829,7 @@ async function tokenDeSessaoGlobal() {
 // local da Agenda imediatamente: o executivo não precisa esperar o próximo snapshot
 // para ver a ação que acabou de registrar no CRM. Reaproveita o reconhecimento que já existe
 // pra "Visita - <nome>" (fetch-hubspot.js, Agenda, contagem da Daily) — zero lógica
-// nova de leitura, só a escrita via api/criar-tarefa-rota.js (nunca expõe o token).
+// nova de leitura, só a escrita via lib/acoes-negocio/criar-tarefa-rota.js (nunca expõe o token).
 async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, dataISO) {
   // opcoes.silencioso: usado pelo envio em lote da rota, que mostra um resumo único no
   // fim. Sem isso, 6 paradas renderiam 6 toasts empilhados na cara do executivo.
