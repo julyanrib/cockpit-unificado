@@ -741,6 +741,20 @@
     .praca-nums{flex-wrap:wrap;}
   }
 
+  /* DEDO NÃO SABE A LARGURA DA JANELA (31/08/26). As regras de 44px acima moram em
+     @media (max-width:640px) — o que resolve celular e deixa TABLET de fora: a 1024px, o
+     ✎ de MRR volta a ter 25px de altura. E o destino do Cockpit é justamente rodar dentro
+     do app de campo, onde não há mouse em nenhuma largura.
+     `pointer:coarse` pergunta a coisa certa: o apontador é grosso? Então alvo de 44px,
+     seja em 375 ou em 1180. Em desktop com mouse nada muda, porque lá 25px é clicável de
+     verdade e a linha da tabela fica compacta como o gestor quer. */
+  @media (pointer:coarse){
+    .vm-editar,.gi-cell-btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
+    .gi-cell-btn{justify-content:flex-end;width:100%;}
+    .ag-cumprido>summary,.gi-ref>summary{min-height:44px;}
+    .gi-rank,.gi-btn{min-height:44px;}
+  }
+
   /* --- Prospecção: estoque por praça (tanques) --- */
   .estoque{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
   .est{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:15px 17px;box-shadow:var(--shadow);cursor:pointer;transition:transform .16s var(--ease),box-shadow .16s var(--ease);}
@@ -10112,7 +10126,13 @@ async function renderMeuPainel() {
   el.innerHTML = `
     <div class="cockpit-hero-combo meu-hoje-hero" style="align-items:center;">
       <div style="flex:1;min-width:220px;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">${dataHojeExtenso()} · ${diasUteisRestantesNoMes()} dias úteis no mês</span>
+        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">${dataHojeExtenso()} · ${(() => {
+          /* "1 DIAS ÚTEIS NO MÊS" (visto na tela do Bruno em 31/08). O outro lugar que usa
+             esta conta já tratava o singular; este ficou. E "resta/restam" diz o que o
+             número é: dias que sobraram, não dias que o mês tem. */
+          const du = diasUteisRestantesNoMes();
+          return du === 1 ? 'resta 1 dia útil no mês' : `restam ${du} dias úteis no mês`;
+        })()}</span>
         <div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:22px;margin-top:3px;letter-spacing:-.01em;color:var(--dark-ink);line-height:1.25;">${saudacaoDoDia()}, ${r.name.split(' ')[0]}</div>
         <div style="font-size:13px;color:var(--dark-mut);margin-top:5px;">${diagnosticoFrase}</div>
       </div>
@@ -10166,7 +10186,13 @@ async function renderMeuPainel() {
         ${(() => {
           const balde = (diagDia.fila && diagDia.fila.baldes && diagDia.fila.baldes.visita_sem_passo) || [];
           if (!balde.length) return '';
-          return `<button type="button" class="meu-hoje-signal-cta" data-hoje-ir="carteira-descoberta">Datar ${balde.length === 1 ? 'o único' : 'os ' + balde.length} →</button>`;
+          /* O TÍTULO EXISTE PORQUE OS DOIS NÚMEROS SE ENCOSTAM NA TELA (31/08/26). Lado a
+             lado, "1/27 com próximo passo" e "Datar os 25" convidam à leitura de que 25 é o
+             complemento de 1 em 27 — e não é: a pílula conta todo negócio sem tarefa futura,
+             o botão conta só os que JÁ RECEBERAM VISITA. Encurtar o rótulo do botão não
+             cabe (a pílula com o CTA já estourou uma coluna de 210px em 30/08), então a
+             diferença fica dita aqui, e a lista de destino mostra exatamente esses. */
+          return `<button type="button" class="meu-hoje-signal-cta" data-hoje-ir="carteira-descoberta" title="Os ${balde.length} que já receberam visita e ficaram sem próximo passo. Os outros da pílula ainda não foram visitados — para eles, o passo é a visita.">Datar ${balde.length === 1 ? 'o único' : 'os ' + balde.length} →</button>`;
         })()}
       </span>` : ''}
     </div>
