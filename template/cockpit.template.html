@@ -5815,6 +5815,10 @@
   .gs-tempo-trilha{position:relative;height:16px;background:var(--gs-linha-fina);border-radius:999px;overflow:hidden;}
   .gs-tempo-trilha i{display:block;height:100%;border-radius:999px;background:var(--gs-green);}
   .gs-tempo-trilha i.is-estourado{background:var(--gs-red);}
+  /* "mesmo dia" não é mérito nem falha: é ausência de ritmo medível. Tom neutro, de
+     propósito — verde diria que somos rápidos, vermelho diria que somos lentos. */
+  .gs-tempo-trilha i.is-mesmo-dia{background:var(--gs-muted2);}
+  .gs-tempo-num.is-mesmo-dia{color:var(--gs-muted);font-size:11.5px;}
   /* o SLA é uma régua, não uma barra — compara sem competir com o dado */
   .gs-tempo-sla{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--gs-amber);}
   .gs-tempo-num{text-align:right;font:800 12px 'Archivo',system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--gs-ink);}
@@ -5855,6 +5859,10 @@
     .gx-motivo>summary,.gx-lista>summary{min-height:44px;display:flex;align-items:center;}
     .gx-lista-linha{flex-direction:column;gap:1px;}
   }
+  /* número da tabela de cadência: abre a fila daquela pessoa */
+  td.cad-cel{cursor:pointer;}
+  td.cad-cel:hover{background:rgba(26,22,19,.05);}
+  td.cad-cel:focus-visible{outline:2px solid var(--red);outline-offset:-2px;}
   .gs-abre{cursor:pointer;color:var(--gs-ink);font-weight:700;}
   .gs-abre:hover{text-decoration:underline;}
   @media (max-width:640px){
@@ -17963,14 +17971,20 @@ function gsTempoHTML(h) {
   const comDado = (h.velocidade || []).filter(v => v.mediana != null);
   if (!comDado.length) return '';
   const maior = Math.max.apply(null, comDado.map(v => Math.max(v.p75 || 0, v.sla || 0)));
+  /* MESMO DIA NÃO É VELOCIDADE (31/08/26). Quatro das seis etapas têm mediana 0 na carga
+     real: o negócio percorre o funil no mesmo dia porque o registro entra depois da venda.
+     Verde com "0 dias" leria como mérito; então mediana abaixo de um dia vira "mesmo dia",
+     em tom neutro, e o bloco diz em quantas etapas isso acontece. */
+  const mesmoDia = comDado.filter(v => v.mediana < 1);
   const linhas = (h.velocidade || []).map(v => {
     if (v.mediana == null) {
       return '<div class="gs-tempo-linha"><div class="gs-degrau-rot">' + esc(v.nome) + '</div>' +
         '<div class="gs-tempo-trilha"></div>' +
         '<div class="gs-tempo-num" style="font-weight:600;color:var(--gs-muted2);font-size:10.5px;">ninguém avançou daqui ainda</div></div>';
     }
-    const estourado = v.sla != null && v.mediana > v.sla;
-    const larg = Math.max(2, Math.round((v.mediana / maior) * 100));
+    const noMesmoDia = v.mediana < 1;
+    const estourado = !noMesmoDia && v.sla != null && v.mediana > v.sla;
+    const larg = noMesmoDia ? 3 : Math.max(2, Math.round((v.mediana / maior) * 100));
     const marca = v.sla != null ? Math.min(100, Math.round((v.sla / maior) * 100)) : null;
     /* idem: sem id da etapa, a linha é leitura e não finge ser botão */
     const abre = v.id
@@ -17978,18 +17992,32 @@ function gsTempoHTML(h) {
       : ' class="gs-tempo-linha"';
     return '<div' + abre + '>' +
       '<div class="gs-degrau-rot">' + esc(v.nome) + '<small>' + v.n + ' negócio(s) que avançaram</small></div>' +
-      '<div class="gs-tempo-trilha"><i class="' + (estourado ? 'is-estourado' : '') + '" style="width:' + larg + '%;"></i>' +
+      '<div class="gs-tempo-trilha"><i class="' + (estourado ? 'is-estourado' : (noMesmoDia ? 'is-mesmo-dia' : '')) + '" style="width:' + larg + '%;"></i>' +
         (marca === null ? '' : '<span class="gs-tempo-sla" style="left:' + marca + '%;"></span>') + '</div>' +
-      '<div class="gs-tempo-num">' + String(v.mediana).replace('.', ',') + ' dias' +
-        '<small>' + (v.p75 != null ? 'os mais lentos: ' + String(v.p75).replace('.', ',') + 'd' : '') +
-        (v.sla != null ? ' · SLA ' + v.sla + 'd' : '') + '</small></div>' +
+      '<div class="gs-tempo-num' + (noMesmoDia ? ' is-mesmo-dia' : '') + '">' + (noMesmoDia ? 'mesmo dia' : String(v.mediana).replace('.', ',') + ' dias') +
+        /* MESMO DIA NA MEDIANA NAO APAGA A CAUDA. Prospeccao tem mediana abaixo de um dia e
+           p75 de 5,7 dias: metade anda no mesmo dia (registro depois do fato) e um quarto
+           leva quase seis. Esconder o p75 aqui apagaria a unica parte medivel da etapa. */
+        '<small>' + (noMesmoDia
+          ? (v.p75 != null && v.p75 >= 2
+            ? 'metade no mesmo dia · um quarto leva ' + String(v.p75).replace('.', ',') + 'd ou mais'
+            : 'registro entrou depois — não dá para medir ritmo')
+          : (v.p75 != null ? 'os mais lentos: ' + String(v.p75).replace('.', ',') + 'd' : '') + (v.sla != null ? ' · SLA ' + v.sla + 'd' : '')) + '</small></div>' +
     '</div>';
   }).join('');
 
-  const acima = comDado.filter(v => v.sla != null && v.mediana > v.sla);
-  const nota = acima.length
-    ? 'Acima do próprio SLA, na mediana: <b>' + acima.map(v => esc(v.nome) + ' (' + String(v.mediana).replace('.', ',') + 'd contra ' + v.sla + 'd)').join(', ') + '</b>. Mediana estourada não é caso isolado — é o normal da etapa.'
-    : 'Nenhuma etapa está acima do próprio SLA na mediana.';
+  const acima = comDado.filter(v => v.sla != null && v.mediana >= 1 && v.mediana > v.sla);
+  const nota = mesmoDia.length >= 3
+    ? '<b>Em ' + mesmoDia.length + ' das ' + comDado.length + ' etapas a mediana é o mesmo dia.</b> Isso não é ritmo, é cadastro: o negócio é registrado depois de a conversa acontecer e percorre o funil de uma vez. ' +
+      'Enquanto o registro chegar depois, esta leitura mede a disciplina de CRM, não a velocidade do time — e o funil não pode ser gerido antes de existir nele. ' +
+      (acima.length
+        ? 'Onde dá para medir, está acima do SLA: <b>' + acima.map(v => esc(v.nome)).join(', ') + '</b>.'
+        : (mesmoDia.length === comDado.length
+          ? 'Nenhuma etapa desta janela tem duração medível — o SLA por etapa não pode ser cobrado com este cadastro.'
+          : 'Onde dá para medir, ninguém está acima do SLA.'))
+    : (acima.length
+      ? 'Acima do próprio SLA, na mediana: <b>' + acima.map(v => esc(v.nome) + ' (' + String(v.mediana).replace('.', ',') + 'd contra ' + v.sla + 'd)').join(', ') + '</b>. Mediana estourada não é caso isolado — é o normal da etapa.'
+      : 'Nenhuma etapa está acima do próprio SLA na mediana.' + (mesmoDia.length ? ' E em ' + mesmoDia.length + ' etapa(s) a mediana é o mesmo dia — ali o registro entrou depois do fato, então não há ritmo para medir.' : ''));
 
   return '<div class="gs-secao">' +
     '<div class="gs-secao-cab"><b>Quanto tempo cada etapa leva</b>' +
@@ -17997,6 +18025,7 @@ function gsTempoHTML(h) {
     '<div class="gs-tempo">' + linhas + '</div>' +
     '<div class="gs-legenda"><span><i style="background:var(--gs-green);"></i>mediana dentro do SLA</span>' +
       '<span><i style="background:var(--gs-red);"></i>mediana acima do SLA</span>' +
+      '<span><i style="background:var(--gs-muted2);"></i>mesmo dia — sem ritmo para medir</span>' +
       '<span><i style="background:var(--gs-amber);width:3px;height:12px;"></i>SLA da etapa</span></div>' +
     '<div class="gs-nota">' + nota +
       '<br>Quem está <b>parado</b> não tem duração, tem idade — e a idade de quem está parado já está na Daily, como negócio acima do SLA. As duas coisas não se somam.' +
@@ -19683,7 +19712,7 @@ function gxBlocoConversaoHTML(r) {
       '<div class="gx-forma-num">' + (poucos || taxa == null ? '—' : Math.round(taxa * 100) + '%') +
         '<small>' + (poucos
           ? e.chegaram + ' caso(s), pouco pra taxa'
-          : e.chegaram + ' chegaram' + (e.mediana != null ? ' · ' + String(e.mediana).replace('.', ',') + 'd' : '')) + '</small>' +
+          : e.chegaram + ' chegaram' + (e.mediana != null ? (e.mediana < 1 ? ' · mesmo dia' : ' · ' + String(e.mediana).replace('.', ',') + 'd') : '')) + '</small>' +
       '</div>' +
     '</div>';
   }).join('');
@@ -28630,16 +28659,29 @@ function indicadoresDeCadenciaDoTime() {
     .sort((a, b) => b.pendentes - a.pendentes);
 }
 
+/* qual número da tabela de cadência o gestor clicou, para o painel dizer de onde ele veio */
+let cadMetricaClicada = '';
+let cadValorClicado = '';
 function buildIndicadoresGestorHTML() {
   let linhas;
   try { linhas = indicadoresDeCadenciaDoTime(); } catch (e) { return ''; }
   if (!linhas || linhas.length === 0) return '';
 
   const fresco = frescorDosDados();
-  const cel = (valor, sufixo, bom) => {
+  /* A coluna de decisor só é confiável se ALGUÉM tiver registro: ela vem da nota de campo,
+     e nota que não nomeia quem recebeu produz zero — que não é o mesmo que não ter falado. */
+  const decisorSemRegistro = linhas.every(x => !x.decisores);
+  /* CADA NÚMERO ABRE A FILA DAQUELA PESSOA (31/08/26). Antes, o único clique da linha era
+     o "ver a fila →" na ponta; o gestor lia "24 visitas sem follow-up" e não tinha como
+     perguntar quais. A métrica clicada vai no atributo e aparece no cabeçalho do painel.
+     A fila NÃO é filtrada pela métrica de propósito: tabela e fila são agregações
+     diferentes, e filtrar faria a contagem da fila discordar do número que está na frente
+     dele. Destino honesto vale mais que filtro que se contradiz. */
+  const cel = (valor, sufixo, bom, ownerId, metrica) => {
     if (valor == null) return `<td style="text-align:right;color:var(--muted2);">—</td>`;
     const cor = bom == null ? 'var(--body)' : bom ? 'var(--green)' : 'var(--red)';
-    return `<td style="text-align:right;font-variant-numeric:tabular-nums;color:${cor};font-weight:700;">${valor}${sufixo || ''}</td>`;
+    const abre = ownerId ? ` class="cad-cel" data-fila-metrica="${esc(String(metrica || ''))}" role="button" tabindex="0" title="Ver os negócios desta pessoa"` : '';
+    return `<td style="text-align:right;font-variant-numeric:tabular-nums;color:${cor};font-weight:700;"${abre}>${valor}${sufixo || ''}</td>`;
   };
 
   const corpo = linhas.map(x => `
@@ -28648,15 +28690,15 @@ function buildIndicadoresGestorHTML() {
         <b style="font-size:12.5px;">${esc(String(x.r.name || '').split(' ').slice(0, 2).join(' '))}</b>
         <span style="display:block;font-size:10px;color:var(--muted2);">${esc(x.r.praca || '—')} · ${x.total} em aberto</span>
       </td>
-      ${cel(x.semFollowUp, '', x.semFollowUp === 0)}
-      ${cel(x.pctPasso, '%', x.pctPasso != null && x.pctPasso >= 80)}
-      ${cel(x.pct24h, '%', x.pct24h != null && x.pct24h >= 70)}
-      ${cel(x.aderenciaCadencia, '%', x.aderenciaCadencia != null && x.aderenciaCadencia >= 70)}
-      ${cel(x.media2, 'd', x.media2 != null && x.media2 <= 2)}
-      ${cel(x.abandonados, '', x.abandonados === 0)}
-      ${cel(x.decisores, '', null)}
-      ${cel(x.propostasSemData, '', x.propostasSemData === 0)}
-      ${cel(x.vencidos, '', x.vencidos === 0)}
+      ${cel(x.semFollowUp, '', x.semFollowUp === 0, x.r.ownerId, 'visita sem follow-up')}
+      ${cel(x.pctPasso, '%', x.pctPasso != null && x.pctPasso >= 80, x.r.ownerId, 'negócio com próximo passo')}
+      ${cel(x.pct24h, '%', x.pct24h != null && x.pct24h >= 70, x.r.ownerId, 'passo marcado em 24h')}
+      ${cel(x.aderenciaCadencia, '%', x.aderenciaCadencia != null && x.aderenciaCadencia >= 70, x.r.ownerId, 'aderência de cadência')}
+      ${cel(x.media2, 'd', x.media2 != null && x.media2 <= 2, x.r.ownerId, 'tempo até o 2º toque')}
+      ${cel(x.abandonados, '', x.abandonados === 0, x.r.ownerId, 'abandonado no 1º toque')}
+      ${cel(decisorSemRegistro ? null : x.decisores, '', null, x.r.ownerId, 'decisor alcançado')}
+      ${cel(x.propostasSemData, '', x.propostasSemData === 0, x.r.ownerId, 'proposta sem data')}
+      ${cel(x.vencidos, '', x.vencidos === 0, x.r.ownerId, 'follow-up vencido')}
       <td style="text-align:right;padding-right:4px;">
         <button type="button" class="gestor-abrir-fila" data-owner="${esc(String(x.r.ownerId))}" class="btn-txt" style="white-space:nowrap;">ver a fila →</button>
       </td>
@@ -28674,6 +28716,10 @@ function buildIndicadoresGestorHTML() {
         Ordenado por <b>volume de pendência</b>, que é carga de trabalho descoberto, não julgamento de pessoa.
       </div>
 
+      ${decisorSemRegistro ? `<div style="margin:11px 0 0;padding:10px 13px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;font-size:11px;line-height:1.6;color:var(--muted);">
+        <b>Decisor alcançado aparece como "—" para todos.</b> Esse número vem da nota de campo: sem a nota dizer com quem foi a conversa, o Cockpit não tem como saber.
+        Zero ali significaria que ninguém falou com decisor em 90 dias, o que não é verdade — então mostra ausência, não zero. Para acender essa coluna, a nota precisa nomear quem recebeu.
+      </div>` : ''}
       <div style="overflow-x:auto;margin-top:12px;">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:820px;">
           <thead>
@@ -28741,6 +28787,20 @@ function buildIndicadoresGestorHTML() {
 }
 
 function wireIndicadoresGestor(rootEl) {
+  /* As células da tabela acionam o BOTÃO da própria linha — um caminho só para abrir a
+     fila, e a métrica clicada fica guardada para o cabeçalho do painel dizer de onde veio. */
+  rootEl.querySelectorAll('.cad-cel').forEach(td => {
+    const acionar = () => {
+      const linha = td.closest('tr');
+      const botao = linha && linha.querySelector('.gestor-abrir-fila');
+      if (!botao) return;
+      cadMetricaClicada = td.getAttribute('data-fila-metrica') || '';
+      cadValorClicado = td.textContent.trim();
+      botao.click();
+    };
+    td.addEventListener('click', acionar);
+    td.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); acionar(); } });
+  });
   rootEl.querySelectorAll('.gestor-abrir-fila').forEach(btn => {
     btn.addEventListener('click', () => {
       const oid = btn.dataset.owner;
@@ -28752,7 +28812,15 @@ function wireIndicadoresGestor(rootEl) {
       let fila;
       try { tpInvalidarCache(); fila = filaDeFollowUp(r.ownerId); } catch (e) { return; }
       stageModalName.textContent = String(r.name || '');
-      stageModalMeta.innerHTML = `<span style="font-size:12px;color:var(--muted2);">Fila de follow-up · ${fila.negociosAfetados} negócio${fila.negociosAfetados === 1 ? '' : 's'} pedindo ação</span>`;
+      /* de onde o gestor veio: o número que ele clicou na tabela */
+      /* OS DOIS NÚMEROS SÃO DIFERENTES, E A TELA DIZ ISSO. Ele clica em "25 follow-ups
+         vencidos" e a fila tem 26 negócios: a tabela conta uma métrica, a fila junta TODAS
+         as pendências daquela pessoa. Sem explicar, parece erro de conta. */
+      const veioDe = cadMetricaClicada
+        ? `<b style="color:var(--ink);">${esc(cadMetricaClicada)}: ${esc(cadValorClicado)}</b> · a fila completa dele tem `
+        : 'Fila de follow-up · ';
+      cadMetricaClicada = ''; cadValorClicado = '';
+      stageModalMeta.innerHTML = `<span style="font-size:12px;color:var(--muted2);">${veioDe}${fila.negociosAfetados} negócio${fila.negociosAfetados === 1 ? '' : 's'} pedindo ação</span>`;
       const itens = fila.ordenada.slice(0, 25);
       stageModalBody.innerHTML = itens.length === 0
         ? '<div class="empty-state">Nada pendente: toda visita saiu com próximo passo e nenhuma cadência está atrasada.</div>'
@@ -28856,7 +28924,7 @@ function funilDaPessoaNaDailyHTML(r, opts) {
             <span style="flex:none;width:104px;font-size:10.5px;color:${ehGargalo ? 'var(--ink)' : 'var(--muted)'};font-weight:${ehGargalo ? '700' : '400'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(STAGE_LABELS[sid])}</span>
             <span style="flex:1;height:15px;background:var(--sunk);border-radius:5px;overflow:hidden;position:relative;min-width:40px;">
               ${n > 0 ? `<span style="display:block;height:100%;width:${Math.max(6, pct)}%;background:${stageColor(sid)};border-radius:5px;"></span>` : ''}
-              ${trav > 0 ? `<span style="position:absolute;inset:0 auto 0 0;height:100%;width:${Math.max(4, Math.round((trav / maxEtapa) * 100))}%;background:repeating-linear-gradient(45deg,rgba(229,26,49,.85) 0 3px,transparent 3px 6px);border-radius:5px;" title="${trav} acima do SLA"></span>` : ''}
+              ${trav > 0 ? `<span style="position:absolute;inset:0 auto 0 0;height:100%;width:${Math.max(4, Math.round((trav / maxEtapa) * 100))}%;background:var(--red);border-radius:5px;" title="${trav} acima do SLA"></span>` : ''}
             </span>
             <span class="mono" style="flex:none;width:22px;text-align:right;font-size:11px;font-weight:800;color:${n > 0 ? 'var(--ink)' : 'var(--ter)'};">${n}</span>
             <span class="mono" style="flex:none;width:34px;text-align:right;font-size:10px;font-weight:800;color:${trav > 0 ? 'var(--red)' : 'transparent'};">${trav > 0 ? trav + '⚠' : '·'}</span>
