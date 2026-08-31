@@ -4127,7 +4127,21 @@
   #loginGate .login-trust-dot{width:6px;height:6px;border-radius:50%;background:var(--login-mint);box-shadow:0 0 0 4px rgba(88,218,176,.1);}
 
   /* Agenda do gestor: sinais acionáveis em um só bloco, sem faixas repetidas. */
-  .ag-manager-score{grid-template-columns:repeat(3,minmax(0,1fr));}
+  /* quatro números desde que "Plano cumprido" entrou (30/08/26) */
+  .ag-manager-score{grid-template-columns:repeat(4,minmax(0,1fr));}
+  .ag-cumprido{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:13px 16px;margin:0 0 14px;}
+  .ag-cumprido>summary{cursor:pointer;font-family:'Archivo',system-ui,sans-serif;font-size:12.5px;font-weight:800;color:var(--ink);min-height:28px;display:flex;align-items:center;}
+  .ag-cumprido-lista{display:grid;grid-template-columns:repeat(auto-fit,minmax(178px,1fr));gap:9px;margin-top:12px;}
+  .ag-cumprido-linha{display:grid;gap:2px;text-align:left;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:10px 12px;cursor:pointer;min-height:44px;font:inherit;color:inherit;}
+  .ag-cumprido-linha:hover{border-color:var(--muted2);}
+  .ag-cumprido-linha.is-aberto{border-left:3px solid var(--red);}
+  .ag-cumprido-linha b{font-family:'Archivo',system-ui,sans-serif;font-size:13px;}
+  .ag-cumprido-linha span{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .ag-cumprido-linha i{font-style:normal;font-size:10.5px;font-weight:700;color:var(--muted2);}
+  .ag-cumprido-linha.is-aberto i{color:var(--red-dk);}
+  .ag-cumprido-nota{margin-top:11px;font-size:11px;line-height:1.6;color:var(--muted2);}
+  @media (max-width:1050px){ .ag-manager-score{grid-template-columns:repeat(2,minmax(0,1fr));} }
   .ag-manager-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:0 0 14px;}
   .ag-action-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:17px 18px;min-width:0;}
   .ag-action-card[data-tone="danger"]{border-top:3px solid var(--red);}
@@ -16481,6 +16495,26 @@ function renderAgenda() {
   // calendário COM diagnóstico. As cinco métricas soltas do placar viraram as três
   // perguntas que decidem a semana dele — buracos, quentes descobertos e cadência —,
   // cada uma clicando direto no cartão de ação correspondente.
+  /* PLANEJADO × EXECUTADO (30/08/26). Os três números do placar falavam só do futuro.
+     Este olha para trás: dos compromissos desta semana que JA VENCERAM, quantos foram
+     fechados no HubSpot. Usa o `desfecho` que agendaDoHubspotTask já normaliza a partir
+     de hs_task_status — dado que estava no payload e ninguém lia. */
+  const agora_cumpr = agendaAgora();
+  const venceramNaSemana = naSemana.filter(e => {
+    const info = AGENDA_TIPOS[e.tipo] || {};
+    if (info.conta === null) return false;   // daily, 1:1, treinamento não são compromisso de rua
+    return e.inicio && e.inicio.getTime() < agora_cumpr.getTime();
+  });
+  const fechadosNaSemana = venceramNaSemana.filter(e => e.desfecho === 'COMPLETED' || e.registro === true);
+  const pctCumprido = venceramNaSemana.length ? Math.round((fechadosNaSemana.length / venceramNaSemana.length) * 100) : null;
+  const corCumprido = pctCumprido === null ? 'var(--muted2)' : (pctCumprido >= 80 ? 'var(--green)' : (pctCumprido >= 50 ? 'var(--amber)' : 'var(--red)'));
+  /* por executivo, para a fila de cobrança da daily — só quem tem compromisso vencido */
+  const cumpridoPorRep = time.map(r => {
+    const meus = venceramNaSemana.filter(e => e.ownerId === String(r.ownerId));
+    const meusFechados = meus.filter(e => e.desfecho === 'COMPLETED' || e.registro === true);
+    return { r: r, venceu: meus.length, fechou: meusFechados.length, aberto: meus.length - meusFechados.length };
+  }).filter(x => x.venceu > 0).sort((a, b) => b.aberto - a.aberto);
+
   const placarSemana = souRep ? agendaDiagnosticoExec({
     dias: dias, naSemana: naSemana, hojeK: hojeK, rotulo: rotulo,
     visitas: visitas, metaV: metaV, reunioes: reunioes, metaR: metaR,
@@ -16490,6 +16524,16 @@ function renderAgenda() {
     '<div class="ag-placar-i"><div class="ag-placar-v" style="color:' + corPct + '">' + pct + '<i>%</i></div><div class="ag-placar-l"><b>Cadência planejada</b><br>' + visitas + ' visitas · ' + reunioes + ' reuniões</div></div>' +
     '<div class="ag-placar-i"><div class="ag-placar-v" style="color:' + corHor + '">' + horiz.size + '<i>/10</i></div><div class="ag-placar-l"><b>Cobertura futura</b><br>dias úteis com agenda</div></div>' +
     '<div class="ag-placar-i"><div class="ag-placar-v" style="color:' + corQ + '">' + naAgenda + '<i>/' + quentes.length + '</i></div><div class="ag-placar-l"><b>Pipeline protegido</b><br>quentes com próximo passo</div></div>' +
+    /* O UNICO NUMERO DO PLACAR QUE OLHA PARA TRAS. Sem ele, semana 100% coberta no papel
+       e nada cumprido leem igual. "Fechado no HubSpot" e nao "visita realizada": COMPLETED
+       diz que a tarefa foi fechada, nao o que aconteceu na visita. */
+    '<div class="ag-placar-i"><div class="ag-placar-v" style="color:' + corCumprido + '">' +
+      (pctCumprido === null ? '—' : pctCumprido + '<i>%</i>') + '</div>' +
+      '<div class="ag-placar-l"><b>Plano cumprido</b><br>' +
+      (pctCumprido === null
+        ? 'nenhum compromisso venceu ainda nesta semana'
+        : fechadosNaSemana.length + ' de ' + venceramNaSemana.length + ' já vencidos, fechados no HubSpot') +
+      '</div></div>' +
     '<div class="ag-placar-nav"><button data-agnav="-1" aria-label="Semana anterior">←</button><span class="ag-per">' + rotulo + '</span><button data-agnav="1" aria-label="Próxima semana">→</button><button data-agnav="0">Esta semana</button></div></div>'
   );
 
@@ -16503,10 +16547,29 @@ function renderAgenda() {
   // semNada continua sendo calculado acima porque agendaGradeTime() usa.
   const acoesGestor = '';
 
+  /* QUEM DEIXOU VENCER: recolhido, porque em semana boa isto é ruído. Cada nome usa o
+     filtro que a aba já tem (data-agrep), então clicar leva a algum lugar de verdade —
+     a grade fica só com a semana daquela pessoa. */
+  const filaCumprido = (souRep || !cumpridoPorRep.length) ? '' : (
+    '<details class="ag-cumprido"' + (cumpridoPorRep[0].aberto > 0 ? ' open' : '') + '>' +
+    '<summary>Quem deixou compromisso vencer sem fechar</summary>' +
+    '<div class="ag-cumprido-lista">' +
+    cumpridoPorRep.map(x =>
+      '<button type="button" data-agrep="' + agendaEsc(String(x.r.ownerId)) + '" class="ag-cumprido-linha' + (x.aberto > 0 ? ' is-aberto' : '') + '">' +
+        '<b>' + agendaEsc(String(x.r.name || '').split(' ')[0]) + '</b>' +
+        '<span>' + x.fechou + ' de ' + x.venceu + ' fechados</span>' +
+        '<i>' + (x.aberto > 0 ? x.aberto + ' vencido(s) em aberto' : 'em dia') + '</i>' +
+      '</button>').join('') +
+    '</div>' +
+    '<div class="ag-cumprido-nota">Clicar num nome deixa a grade abaixo só com a semana dele. ' +
+      'Vencido em aberto é tarefa cuja hora passou e ninguém fechou no HubSpot — pode ser visita não feita ou visita feita e não registrada, e as duas exigem a mesma conversa.</div>' +
+    '</details>'
+  );
+
   let hSemana = '';
   if (mostrarSemana) hSemana +=
     (souRep ? '<div class="ag-exec-cols"><div class="ag-exec-main"><div class="ag-section-head ag-cal-head"><i>2</i><h2>Sua semana</h2><span>Compromissos confirmados e espaço livre para planejar.</span></div>' : '') +
-    '<div class="ag-wrap">' + placarSemana + acoesGestor;
+    '<div class="ag-wrap">' + placarSemana + filaCumprido + acoesGestor;
 
   // ranking de planejamento — premia comportamento, não resultado
 
