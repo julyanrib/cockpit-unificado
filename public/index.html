@@ -18779,13 +18779,26 @@ async function renderResumoSemanal() {
       : 'Sem volume preocupante de SLA estourado no seu funil essa semana.';
   } else {
     const lider = [...DATA.reps].sort((a, b) => (b.ganhosSemana || 0) - (a.ganhosSemana || 0))[0];
-    const maisTravado = [...DATA.reps].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
+    /* O MAIS TRAVADO PODE NÃO SER DO CAMPO (31/08/26). Quem está em transição para Inside
+       acumula negócio travado por definição — a carteira dela parou de ser trabalhada na
+       rua. Escolher essa pessoa como "prioridade pro 1:1 da semana" é pedir a conversa
+       errada; o que a carteira dela exige é dono novo ou encerramento. Então o ponto de
+       atenção olha o time de campo, e a carteira de fora do campo vira uma frase própria. */
+    const foraCampo = r => typeof ownerAtivoNoField === 'function' && !ownerAtivoNoField(r.ownerId);
+    const maisTravado = [...DATA.reps].filter(r => !foraCampo(r))
+      .sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
+    const travadoForaDoCampo = [...DATA.reps].filter(r => foraCampo(r) && (Number(r.leadsTravados) || 0) > 0)
+      .sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
     destaqueTxt = (lider && lider.ganhosSemana > 0)
       ? `<b>${lider.name.split(' ')[0]}</b> — ${lider.ganhosSemana} fechamento${lider.ganhosSemana > 1 ? 's' : ''} essa semana, a melhor performance do time.`
       : 'Nenhum fechamento registrado ainda essa semana.';
     atencaoTxt = (maisTravado && maisTravado.leadsTravados >= 3)
       ? `<b>${maisTravado.name.split(' ')[0]}</b> — ${maisTravado.leadsTravados} leads acima do SLA na praça de ${maisTravado.praca}. Prioridade pro 1:1 da semana.`
-      : 'Nenhuma praça com volume preocupante de SLA estourado essa semana.';
+      : 'Nenhuma praça do time de campo com volume preocupante de SLA estourado essa semana.';
+    /* dito à parte, e sem pedir 1:1: é decisão de carteira, não de ritmo */
+    if (travadoForaDoCampo) {
+      atencaoTxt += ` <span style="color:var(--muted);">${travadoForaDoCampo.name.split(' ')[0]} tem ${travadoForaDoCampo.leadsTravados} acima do SLA, mas saiu do campo: aqueles negócios precisam de dono novo ou de encerramento, não de 1:1.</span>`;
+    }
   }
 
   // Leitura da semana: individual pro executivo (só a dele), coletiva de time pro gestor.
@@ -19138,7 +19151,14 @@ async function renderResumoSemanal() {
       heroNumMeio = `<div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${k.atual.reunioes}</div><div style="font-size:11px;color:var(--dark-mut);">reuniões (Demo/Proposta)</div>`;
     }
     const liderChip = [...DATA.reps].sort((a, b) => (b.ganhosSemana || 0) - (a.ganhosSemana || 0))[0];
-    const travadoChip = [...DATA.reps].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
+    /* MESMA REGRA DO TEXTO (31/08/26). Este avatar e a frase do "ponto de atenção" precisam
+       apontar para a MESMA pessoa: quando a frase passou a escolher só quem está no campo, o
+       avatar continuou pegando o maior travado do time inteiro — e a tela ficou com a inicial
+       da Amanda ao lado de um texto sobre a Kelly. Cara de uma pessoa com o nome de outra é
+       pior que o defeito original. */
+    const travadoChip = [...DATA.reps]
+      .filter(r => typeof ownerAtivoNoField !== 'function' || ownerAtivoNoField(r.ownerId))
+      .sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
     heroPessoasHtml = `
       <div class="hero-people">
         ${liderChip ? `<span class="pers"><span class="av" style="background:${corDoExecutivo(liderChip.ownerId)};">${iniciaisNome(liderChip.name)}</span>${destaqueTxt}</span>` : ''}
@@ -27228,7 +27248,21 @@ async function renderCockpitExecutionCommand() {
   const hotTotal = quentes.length;
   const hotProtegidos = quentes.filter(leadTemProximoPasso).length;
   const funilProtegido = funilAberto.filter(leadTemProximoPasso).length;
-  const slaTotal = linhas.reduce((s, x) => s + (Number(x.r.leadsTravados) || 0), 0);
+  /* ACIMA DO SLA CONTA O TIME INTEIRO (31/08/26). Era a soma sobre `linhas`, que exclui
+     quem saiu do campo — e no dia da medição isso apagava 17 negócios travados da
+     carteira da Amanda do único painel de decisão do dia, enquanto o número vizinho
+     ("funil aberto com próximo passo") contava os 124 do time inteiro. Dois universos,
+     um rótulo. Agora o total é o mesmo do hero (que abre a lista completa no clique) e a
+     parte de quem já não está na rua é dita com nome, porque ela exige decisão do
+     gestor: dono novo ou encerramento. */
+  const slaCampo = linhas.reduce((s, x) => s + (Number(x.r.leadsTravados) || 0), 0);
+  const foraDoCampo = (DATA.reps || []).filter(r => r && r.ownerId &&
+    typeof ownerAtivoNoField === 'function' && !ownerAtivoNoField(r.ownerId) && (Number(r.leadsTravados) || 0) > 0);
+  const slaForaDoCampo = foraDoCampo.reduce((s, r) => s + (Number(r.leadsTravados) || 0), 0);
+  const slaTotal = slaCampo + slaForaDoCampo;
+  const notaForaDoCampo = slaForaDoCampo > 0
+    ? ' · ' + slaForaDoCampo + ' na carteira de ' + foraDoCampo.map(r => String(r.name || '').split(' ')[0]).join(', ') + ' (fora do campo)'
+    : '';
   /* Para o resumo do <details> da lista por executivo: os mesmos limites de score que
      já pintam a borda de cada linha (is-critical em 10, is-warning em 5), pra o número
      do resumo e a cor das linhas nunca discordarem. */
@@ -27258,7 +27292,7 @@ async function renderCockpitExecutionCommand() {
         <div class="command-kpi"><b style="color:${ehDiaUtilHoje ? 'var(--ink)' : 'var(--muted2)'}">${visitasAuditaveis}</b><span>visitas com cliente identificado</span></div>
         <div class="command-kpi"><b style="color:${hotTotal && hotProtegidos < hotTotal ? 'var(--red)' : 'var(--green)'}">${hotProtegidos}/${hotTotal}</b><span>quentes com próximo passo futuro</span></div>
         <div class="command-kpi"><b style="color:${funilAberto.length && funilProtegido < funilAberto.length ? 'var(--red)' : 'var(--green)'}">${funilProtegido}/${funilAberto.length}</b><span>funil aberto com próximo passo marcado</span></div>
-        <div class="command-kpi"><b style="color:${slaTotal ? 'var(--red)' : 'var(--green)'}">${slaTotal}</b><span>negócios acima do SLA</span></div>
+        <div class="command-kpi"${slaForaDoCampo > 0 ? ` title="${slaCampo} são do time de campo e entram na cobrança de hoje. ${slaForaDoCampo} estão na carteira de quem saiu do campo (${foraDoCampo.map(r => String(r.name || '')).join(', ')}): não se cobra ritmo de quem não está na rua, mas esses negócios precisam de dono novo ou de encerramento."` : ''}><b style="color:${slaTotal ? 'var(--red)' : 'var(--green)'}">${slaTotal}</b><span>negócios acima do SLA${notaForaDoCampo}</span></div>
       </div>
       <!-- A LISTA POR EXECUTIVO RECOLHEU (28/08/26).
 
@@ -35689,7 +35723,7 @@ async function renderPDIs() {
           ${rampagemTime.map(({ x, fase, visitas }) => `
             <div style="border:1px solid ${fase.definido ? 'var(--line)' : 'rgba(184,121,14,.35)'};background:${fase.definido ? 'var(--panel)' : 'var(--amber-soft)'};border-radius:13px;padding:11px 13px;">
               <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;"><b style="font-size:12.5px;">${esc(x.name)}</b><span class="ramp-pill ${fase.chave === 'pleno' ? 'is-full' : ''}">${esc(fase.label)}</span></div>
-              <div style="font-size:10.5px;color:var(--muted);margin-top:7px;">Semana: <b style="color:var(--ink);">${visitas.real}/${visitas.prom || '—'} visitas</b>${fase.alvo != null ? ` · alvo atual ${fase.alvo}/dia` : ' · defina a fase antes da cobrança'}</div>
+              <div style="font-size:10.5px;color:var(--muted);margin-top:7px;">Semana: <b style="color:var(--ink);">${visitas.real}/${visitas.prom || '—'} visitas</b>${fase.alvo != null ? ` · alvo atual ${fase.alvo}/dia` : (fase.foraDoCampo ? ' · sem alvo de visitas: carteira em transição para Inside' : ' · defina a fase antes da cobrança')}</div>
             </div>`).join('')}
         </div>
         <details style="margin-top:11px;"><summary class="card-summary" style="font-size:10.5px;color:var(--muted2);cursor:pointer;">Ver critério das fases</summary><div style="font-size:11px;color:var(--muted);line-height:1.65;margin-top:8px;">Semanas 2–3: 15–20 demos acompanhadas + 20 ligações/dia · Semana 4: 12–15 visitas à base ativa · Semana 5: 3 visitas/dia · Semanas 6–7: 4–5 visitas/dia · Semana 8+: 6 visitas qualificadas/dia. A passagem de fase acontece nos checkpoints D30, D45 e D60.</div></details>

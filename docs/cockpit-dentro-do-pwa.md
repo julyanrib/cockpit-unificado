@@ -123,6 +123,47 @@ app. Fica no Cockpit o que é decisão de gestor.**
 
 ---
 
+## 4b. O risco maior da fusão: dois números para a mesma pergunta
+
+Na captura da tela de gestão que já existe no app (31/08, aba "Time · Onde eu ajo hoje?"),
+os números não são os nossos. Mesma pergunta, respostas diferentes:
+
+| executivo | "abertos" no app | em aberto no Cockpit |
+|---|---|---|
+| Kelly | 7 | **30** |
+| Bruno | 6 | **27** |
+| Amanda | 18 | **20** |
+| Marco | 13 | **20** |
+| Wericles (aparece como "Whell Andrade") | 5 | **17** |
+| Sandro | 11 | **10** |
+| **time** | **115** no topo | **124** |
+
+Três coisas a resolver **antes** de as duas telas ficarem lado a lado no mesmo app — não
+depois, porque quando um gestor vê 27 numa aba e 6 na outra, ele para de confiar nas duas:
+
+1. **O que conta como "em aberto".** No Cockpit é deal nas seis etapas abertas do pipeline
+   Field Sales — Prospecção 16 · Visita 51 · Conversa com Decisor 21 · Demo/Proposta 11 ·
+   Negociação 19 · Ag. Pagamento 6 = **124**, e a soma por executivo fecha com esse total
+   (30+27+20+20+17+10). Se o número do app é outro recorte (criados no período, com
+   atividade recente, outro pipeline), o rótulo tem que dizer qual — ou os dois têm que usar
+   o mesmo.
+2. **O topo do app não fecha com a própria tabela dele.** 115 no hero, e a coluna por
+   executivo somando bem menos que isso nas linhas visíveis (há um "Mostrar 8 sem atividade"
+   recolhido). Pode ser recorte diferente entre hero e tabela; vale checar, porque é o mesmo
+   defeito que a gente caçou aqui — dois recortes com um rótulo só.
+3. **Quem é do time, e com que nome.** O app dá linha de executivo ao Julyan (4) — o
+   Cockpit trata gestor como gestor, e isso muda toda média por pessoa. E chama o Wericles
+   de "Whell Andrade": nome que o time não usa vira dúvida de "quem é esse?" na Daily. Os
+   dois lados leem o mesmo HubSpot, então o nome pode vir de lá em vez de ser digitado.
+
+**Como eu proporia resolver:** uma fonte só para os números de gestão. O Cockpit já lê o
+HubSpot, já tem as definições escritas e testadas, e vira a aba de gestão — então o app
+mostra o Cockpit nessa aba em vez de recalcular. Se eles preferirem manter a tela deles, o
+mínimo é publicar a definição de cada número e conferir uma vez por semana, porque duas
+contas para a mesma pergunta divergem sempre — a única dúvida é quando.
+
+---
+
 ## 5. Como testar sem app nenhum
 
 ```bash
