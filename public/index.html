@@ -7120,6 +7120,8 @@ function aplicarVisaoPorPapel() {
   }
   // BLOCO 2 (10/08/26, Julyan — "a tela tá demorando a abrir, principalmente a aba
   // Hoje"): só o que é BARATO e aparece fora das abas roda agora.
+  /* a fila do app é lida uma vez e guardada; quem usa é frescorDosDados() */
+  if (typeof carregarFilaPwa === 'function') carregarFilaPwa();
   if (typeof atualizarSinoAvisos === 'function') atualizarSinoAvisos();
   if (typeof preencherHealthBadge === 'function') preencherHealthBadge();
 
@@ -7964,6 +7966,47 @@ function rotuloDeRegistroDaVisita(tp) {
    é a única fonte da tarja de frescor — todas as telas leem daqui.
    --------------------------------------------------------------------------- */
 
+/* ══ FILA PENDENTE DO APP DE CAMPO ═══════════════════════════════════════════════════
+   Lida uma vez por sessão e guardada aqui. O app declara por POST /api/fila-pwa; esta
+   ponta só lê. Se a leitura falhar ou a tabela estiver vazia para o dia, o estado é
+   "sem declaração" — que é diferente de "fila zerada", e a tela diz qual dos dois. */
+let filaPwaCache = null;
+let filaPwaPromessa = null;
+async function carregarFilaPwa() {
+  if (filaPwaCache) return filaPwaCache;
+  if (filaPwaPromessa) return filaPwaPromessa;
+  filaPwaPromessa = (async () => {
+    if (!supa) return (filaPwaCache = { estado: 'sem-banco', porOwner: {} });
+    try {
+      const hoje = isoDate(new Date());
+      const { data, error } = await supa.from('fila_pwa').select('owner_id,dia,pendentes,falhas,ultima_tentativa,versao_app,origem').eq('dia', hoje);
+      if (error) return (filaPwaCache = { estado: 'sem-permissao', porOwner: {} });
+      const porOwner = {};
+      (data || []).forEach(l => { porOwner[String(l.owner_id)] = l; });
+      return (filaPwaCache = { estado: 'ok', porOwner, dia: hoje });
+    } catch (e) {
+      return (filaPwaCache = { estado: 'erro', porOwner: {} });
+    }
+  })();
+  return filaPwaPromessa;
+}
+
+/* Resumo do time para a tarja e para o bloco de sincronização. Sem declaração de ninguém,
+   devolve o estado antigo — a frase honesta que já existia. */
+function filaPwaResumo() {
+  const c = filaPwaCache;
+  if (!c || c.estado !== 'ok') return { estado: 'nao_confirmado', comFila: 0, pendentes: 0, falhas: 0, declararam: 0 };
+  const linhas = Object.values(c.porOwner);
+  if (!linhas.length) return { estado: 'nao_confirmado', comFila: 0, pendentes: 0, falhas: 0, declararam: 0 };
+  const pendentes = linhas.reduce((a, l) => a + (Number(l.pendentes) || 0), 0);
+  const falhas = linhas.reduce((a, l) => a + (Number(l.falhas) || 0), 0);
+  const comFila = linhas.filter(l => (Number(l.pendentes) || 0) > 0).length;
+  return {
+    estado: falhas > 0 ? 'falhou' : (pendentes > 0 ? 'pendente' : 'subiu'),
+    comFila, pendentes, falhas, declararam: linhas.length, porOwner: c.porOwner
+  };
+}
+
 function frescorDosDados() {
   const iso = DATA.hubspotUpdatedAtISO || null;
   const minutos = iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)) : null;
@@ -7987,7 +8030,9 @@ function frescorDosDados() {
     // não tiver, o estado desses dois é declaradamente DESCONHECIDO — melhor um
     // "não confirmado" honesto do que um ✓ verde que não prova nada.
     expogo: 'nao_confirmado',
-    pwa: 'nao_confirmado'
+    /* era a string fixa 'nao_confirmado'; agora vem da fila declarada pelo app */
+    pwa: filaPwaResumo().estado,
+    fila: filaPwaResumo()
   };
 }
 
@@ -7998,7 +8043,12 @@ function frescorTarjaHTML() {
   const partes = [f.rotulo];
   if (f.falhaMinha) partes.push('uma escrita sua falhou na última rodada');
   else if (f.falhaSync) partes.push('a última rodada teve falha');
-  partes.push('Expogo e PWA: sincronização não confirmada');
+  /* A frase deixa de ser fixa: ela era honesta e imutável, então virava paisagem. */
+  const fila = f.fila || { estado: 'nao_confirmado' };
+  if (fila.estado === 'pendente') partes.push(fila.pendentes + ' evento(s) do app ainda na fila de ' + fila.comFila + ' executivo(s) — o número da tela está atrasado, não baixo');
+  else if (fila.estado === 'falhou') partes.push(fila.falhas + ' evento(s) do app desistiram de subir — isso é suporte, não cobrança');
+  else if (fila.estado === 'subiu') partes.push('app sem fila pendente em ' + fila.declararam + ' executivo(s) — o que está aqui é tudo que aconteceu');
+  else partes.push('Expogo e PWA: sincronização não confirmada');
   return `<div class="frescor-tarja" style="display:flex;align-items:center;gap:7px;font-size:10.5px;color:${cor};line-height:1.5;">
     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="flex:none;"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
     <span>${esc(partes.join(' · '))}${grave ? ' — o que está na tela pode estar atrás do que você já fez.' : ''}</span>
@@ -29104,7 +29154,22 @@ function buildIndicadoresGestorHTML() {
         <div style="font-size:11.5px;color:var(--ink);line-height:1.6;">
           HubSpot: <b>${esc(fresco.rotulo)}</b>${fresco.velho ? ' <span style="color:var(--amber);">(atrasado — não cobre número individual antes de conferir)</span>' : ''}.
           ${fresco.falhaSync ? '<span style="color:var(--red);">A última rodada do robô teve falha — o detalhe por executivo está no aviso do topo desta tela.</span>' : 'Última rodada do robô sem falhas registradas.'}
-          <br>Expogo e PWA Outbound: <b style="color:var(--amber);">sincronização não confirmada</b> — o Cockpit lê o HubSpot, não os apps. Não dá pra distinguir "o app não subiu" de "não aconteceu" até o PWA expor a fila pendente (docs/contrato-eventos-rpa.md §4 e §7.6).
+          <br>${(() => {
+            /* ATÉ 31/08/26 esta linha era fixa: "sincronização não confirmada". Agora existe
+               POST /api/fila-pwa, e ela mostra o que o app declarou — com o estado de ausência
+               preservado, porque app que não declara não é app sem fila. */
+            const fila = (fresco && fresco.fila) || { estado: 'nao_confirmado' };
+            if (fila.estado === 'pendente') {
+              return `Fila do app: <b style=\"color:var(--amber);\">${fila.pendentes} evento(s) presos em ${fila.comFila} executivo(s)</b> — o que está nesta tela está ATRASADO, não baixo. Não cobre número individual de quem tem fila; cobre a sincronização.`;
+            }
+            if (fila.estado === 'falhou') {
+              return `Fila do app: <b style=\"color:var(--red);\">${fila.falhas} evento(s) desistiram de subir</b> — isso é suporte técnico, não conversa de Daily.`;
+            }
+            if (fila.estado === 'subiu') {
+              return `Fila do app: <b style=\"color:var(--green);\">sem pendência</b> em ${fila.declararam} executivo(s) que declararam — para eles, o que está aqui é tudo que aconteceu.`;
+            }
+            return `Expogo e PWA Outbound: <span class=\"gi-nm\">não declarado</span> — o Cockpit lê o HubSpot, não os apps. Enquanto o app não declarar a fila em <code>POST /api/fila-pwa</code>, não dá para distinguir \"o app não subiu\" de \"não aconteceu\" — e cobrar em cima de zero seria chute.`;
+          })()}
         </div>
       </div>
 
