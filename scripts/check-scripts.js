@@ -187,3 +187,70 @@ function checarVariaveisCss() {
   return false;
 }
 if (!checarVariaveisCss()) process.exit(1);
+
+/* ── TRAVA DE DESTINO ──────────────────────────────────────────────────────────────
+   Existe porque em 30/08/26 eu mesmo deixei três botões apontando para viewCockpit
+   depois de mover o conteúdo deles para a Daily. Nenhum estava "morto": a view existia,
+   o clique respondia, a auditoria de clique passava. O destino é que estava errado.
+
+   Pega a parte mecânica: view que não existe, âncora de rolagem que não existe, aba sem
+   view e view de aba sem botão. Conteúdo que mudou de aba com destino ainda válido não
+   dá para pegar assim — isso continua sendo leitura de tela. */
+function checarDestinos() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(arquivo, 'utf8');
+  const erros = [];
+
+  const ids = new Set();
+  let m;
+  const reId = /\bid="([A-Za-z][\w-]*)"/g;
+  while ((m = reId.exec(cru))) ids.add(m[1]);
+
+  /* views declaradas e botões de aba que as abrem */
+  const views = new Set();
+  const reView = /<div class="view" id="(view[\w-]*)"/g;
+  while ((m = reView.exec(cru))) views.add(m[1]);
+  const abas = new Set();
+  const reAba = /class="tab-btn"[^>]*data-view="(view[\w-]*)"/g;
+  while ((m = reAba.exec(cru))) abas.add(m[1]);
+
+  /* Uma view é alcançável por BOTÃO DE ABA ou por activateTab no código. viewOnboarding é
+     do segundo tipo de propósito: é a tela de primeiro acesso do executivo (role rep com
+     aComecar), e dar aba no topo para ela seria pior — apareceria para quem já entrou. */
+  const abertasPorCodigo = new Set();
+  const reAbrir = /activateTab\(\s*'(view[\w-]*)'/g;
+  while ((m = reAbrir.exec(cru))) abertasPorCodigo.add(m[1]);
+  views.forEach(v => {
+    if (!abas.has(v) && !abertasPorCodigo.has(v)) erros.push('  view que ninguém abre — nem aba no topo, nem activateTab: ' + v);
+  });
+  abas.forEach(v => { if (!views.has(v)) erros.push('  botão de aba para uma view que não existe: ' + v); });
+
+  /* destinos escritos como literal em qualquer lugar do código */
+  const destinos = new Map();   // destino -> quantas vezes
+  const registrar = (d, ctx) => { if (!destinos.has(d)) destinos.set(d, ctx); };
+  const reAtivar = /activateTab\(\s*'(view[\w-]*)'/g;
+  while ((m = reAtivar.exec(cru))) registrar(m[1], 'activateTab');
+  const reRolar = /'rolar:([\w-]+)'/g;
+  while ((m = reRolar.exec(cru))) registrar('rolar:' + m[1], 'rolar');
+  const reFaixa = /data-(?:faixa-ir|ir-para)="(view[\w-]*)"/g;
+  while ((m = reFaixa.exec(cru))) registrar(m[1], 'atributo');
+
+  destinos.forEach((ctx, d) => {
+    if (d.indexOf('rolar:') === 0) {
+      const id = d.slice(6);
+      if (!ids.has(id)) erros.push('  destino "' + d + '" (' + ctx + ') rola até um id que não existe no template');
+      return;
+    }
+    if (!views.has(d)) erros.push('  destino "' + d + '" (' + ctx + ') aponta para uma view que não existe');
+  });
+
+  if (!erros.length) {
+    console.log('OK destinos — ' + views.size + ' views, ' + destinos.size + ' destino(s) literal(is), todos existem.');
+    return true;
+  }
+  console.error('\nDESTINO INVÁLIDO em ' + arquivo + ':');
+  erros.forEach(e => console.error(e));
+  console.error('  Um clique pode responder e ainda assim levar para o lugar errado. Confira também, na mão, se o CONTEÚDO prometido ainda está na aba de destino.');
+  return false;
+}
+if (!checarDestinos()) process.exit(1);
