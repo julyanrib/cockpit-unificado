@@ -11478,9 +11478,33 @@ async function renderMeuFunil() {
     btn.addEventListener('click', () => {
       const sid = btn.dataset.mfetapa;
       meuFunilFiltroEtapa = (sid !== '' && meuFunilFiltroEtapa === sid) ? '' : sid;
+      /* v3 (31/08/26) — RELATADO PELO JULYAN NA TELA: "quando eu clico no gráfico da etapa,
+         tá jogando pro kanban, tem que jogar pra lateral, com os próximos passos a se fazer".
+         Estava certo: este handler rolava para .mf-stage-panel (a seção do kanban) depois de
+         cada clique de barra. Fazia sentido no desenho ANTIGO, em que a lista da etapa
+         SUBSTITUÍA o kanban — era preciso ir até lá para ver o resultado do clique. Agora a
+         lista vive no card "Etapa em foco", ao lado do funil, e a prancha é explícita: clique
+         em etapa nunca desloca a página.
+         Então: em duas colunas (>=1050px), a página NÃO se move — quem vê a barra vê o card.
+         Empilhado (celular), o card fica ABAIXO do funil, e aí trazer o card para a tela é o
+         oposto de deslocar: é mostrar a resposta do clique. Só rola se ele estiver fora da
+         vista, e para o CARD, nunca para o kanban.
+         mfFocoExpandido volta a false: cada etapa começa pelos 5 que mais pedem ação. */
+      mfFocoExpandido = false;
       renderMeuFunil().then(() => {
-        const painel = document.querySelector('#meuFunilContent .mf-stage-panel');
-        if (painel) painel.scrollIntoView({ block: 'start', behavior: 'smooth' });
+        const card = document.querySelector('#meuFunilContent .mf-nivel1 > div:nth-child(2)');
+        if (!card) return;
+        const r = card.getBoundingClientRect();
+        /* MEDIDO E CORRIGIDO NA HORA (31/08/26): a primeira versão testava se o TOPO do card
+           estava dentro da tela, e com o Julyan a 260px de rolagem o topo já tinha passado —
+           então ela deslocava a página 34px, que é exatamente o "não desloca" que a prancha
+           proíbe. O card é alto: o que importa não é onde ele começa, é se dá para LER a
+           lista. Então a régua é a área visível dele: 160px de card na tela = resposta
+           visível, não mexe. */
+        const areaVisivel = Math.min(r.bottom, window.innerHeight) - Math.max(r.top, 56);
+        if (areaVisivel >= 160) return;            // duas colunas: nada se move
+        card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        return;
       });
     });
   });
