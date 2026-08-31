@@ -381,7 +381,14 @@ function filtrarParaPapel(dados, usuario) {
       dias: dados.motivosPerda.dias,
       total: Object.values((dados.motivosPerda.porOwner || {})[meuId] || {}).reduce((a, b) => a + b, 0),
       porMotivo: (dados.motivosPerda.porOwner || {})[meuId] || {},
-      porOwner: { [meuId]: (dados.motivosPerda.porOwner || {})[meuId] || {} }
+      porOwner: { [meuId]: (dados.motivosPerda.porOwner || {})[meuId] || {} },
+      /* Exemplos para o clique no motivo — so os negocios DELE. Corte no servidor: perda
+         de outra pessoa nao desce para o navegador dele. */
+      exemplos: Object.keys(dados.motivosPerda.exemplos || {}).reduce((acc, motivo) => {
+        const meus = (dados.motivosPerda.exemplos[motivo] || []).filter(x => String(x.ownerId || '') === String(meuId));
+        if (meus.length) acc[motivo] = meus;
+        return acc;
+      }, {})
     } : null,
     temperatura: {
       quentes: soMeu(dados.temperatura.quentes),
