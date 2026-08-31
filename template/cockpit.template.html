@@ -30509,7 +30509,14 @@ async function renderDaily() {
      depois o funil de agora, depois quem está quente, e por último onde agir. É a
      sequência que ele conduz de pé: quem planejou -> o que temos -> o que está na mão
      -> o que eu cobro. */
-  const slotsMigradosDaily = souRepDaily ? '' : '<div id="dailySlotComando"></div><div id="dailySlotFunilQuentes"></div><div id="dailySlotDecisoes"></div>';
+  /* O "COMANDO DE HOJE" SAIU DA DAILY (31/08/26, prancha §4). Ele não era uma cópia: o
+     render MOVIA o nó da aba Time para cá, então a Time ficava sem ele e as duas abas
+     mediam a mesma coisa em lugares diferentes. Sem o slot, o bloco fica onde nasce — na
+     Time, que é a aba de gestão por exceção — e a Daily deixa de repetir a leitura.
+
+     Os outros dois slots continuam, agora DENTRO da referência recolhida: funil de agora,
+     leads quentes (o card antigo) e "onde agir hoje" são nível 3. O conteúdo é o mesmo. */
+  const slotsMigradosDaily = souRepDaily ? '' : '<div id="dailySlotFunilQuentes"></div><div id="dailySlotDecisoes"></div>';
 
   /* A BARRA DE DATAS SAIU DO CAMINHO DA AÇÃO (28/08/26) — só pro executivo.
 
@@ -30703,6 +30710,48 @@ async function renderDaily() {
   // sem nenhuma tarefa concluída correspondente, o cockpit continua sem contar como
   // visita feita (decisão explícita — não infla número de ninguém), mas também não
   // deixa isso invisível: aparece aqui, pro gestor cobrar quem tem pendência.
+  /* ═══ BLOCO 3 — OS QUENTES SEM PRÓXIMO PASSO (31/08/26, prancha .gi-lead) ═══
+     A Daily tinha o card "Leads quentes" com 12 linhas de tabela e uma faixa com a
+     contagem em cima. O gestor via o número, não os nomes — e o que ele precisa às 9h é
+     nomear cada um na frente do dono. Aqui é lead a lead, com o estado em COR + PALAVRA
+     (nunca cor sozinha), e a mesma fonte do hero: quentesNoRadar(null).
+
+     Ordem: quem está mais perto de estourar o prazo primeiro. Mostra 5 e diz quantos
+     faltam — a conversa da Daily não segura mais que isso de pé. */
+  let quentesGiHtml = '';
+  if (!souRepDaily) {
+    const radarGi = (typeof quentesNoRadar === 'function') ? quentesNoRadar(null) : { radar: [], semPasso: [] };
+    const semPassoGi = (radarGi.semPasso || []).slice().sort((a, b) => (Number(b.slaRatio) || 0) - (Number(a.slaRatio) || 0));
+    const totalRadarGi = (radarGi.radar || []).length;
+    if (semPassoGi.length) {
+      const chipDoLead = l => {
+        const dias = Number(l.dias) || 0;
+        const sla = ((DATA.stageMeta && DATA.stageMeta.slaDays) || {})[l.stageId] || null;
+        if (l.slaBreach) return `<span class="gi-chip-red">${dias}d na etapa · prazo estourado</span>`;
+        if (sla && dias >= sla - 1) return `<span class="gi-chip-amber">falta ${Math.max(0, sla - dias)}d pro prazo</span>`;
+        return `<span class="gi-chip-amber">sem próximo passo</span>`;
+      };
+      const linhasQuentesGi = semPassoGi.slice(0, 5).map(l => `
+        <button type="button" class="gi-lead" data-gx-etapa="${esc(String(l.stageId || ''))}" data-gx-owner="${esc(String(l.ownerId || ''))}" title="Abrir a etapa deste negócio na carteira de ${esc(String(l.vendedor || ''))}">
+          <span><b>${esc(l.name || l.dealname || 'Sem nome')}</b> <span style="color:var(--muted2);">· ${esc(String(l.vendedor || 'sem dono').split(' ')[0])} · ${esc(l.stage || '')} · ${Number(l.dias) || 0}d na etapa</span></span>
+          ${chipDoLead(l)}
+          <span class="abrir">abrir ▸</span>
+        </button>`).join('');
+      quentesGiHtml = `
+      <div class="gi-card" style="margin-top:14px;">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;">
+          <h3 class="gi-h">Os ${semPassoGi.length} quentes sem próximo passo</h3>
+          <span class="gi-note" style="font-weight:500;">para nomear na rodada, não depois dela</span>
+          <span class="gi-src" style="margin-left:auto;">${semPassoGi.length} de ${totalRadarGi} quentes</span>
+        </div>
+        <p class="gi-note" style="margin:0 0 10px;">Quente = etapa avançada (do decisor em diante) e ainda dentro do prazo da etapa. Sem próximo passo marcado, se perdem por silêncio.</p>
+        ${linhasQuentesGi}
+        ${semPassoGi.length > 5 ? `<div class="gi-note" style="margin-top:9px;">+ ${semPassoGi.length - 5} lead(s) na mesma situação — a lista completa está no funil, na referência da aba.</div>` : ''}
+        <div class="gi-proc"><span class="gi-src">HubSpot · negócios em etapa avançada, dentro do prazo, sem tarefa futura</span></div>
+      </div>`;
+    }
+  }
+
   let followUpsSemConfirmacaoHtml = '';
   if (!souRepDaily) {
     const hojeISOFup = isoDate(new Date());
@@ -31198,13 +31247,32 @@ async function renderDaily() {
 
   /* O PLACAR DO TIME fica ANTES dos blocos migrados e DEPOIS das linhas do time: ele
      resume em uma barra o que as linhas mostram pessoa por pessoa. */
-  if (!souRepDaily) html += gdPlacarDoTimeHTML(repsDaily, dailyRefDate);
-  html += slotsMigradosDaily;
+  /* ═══ A ORDEM DA DAILY, EM 5 BLOCOS (31/08/26, prancha §4) ═══
+     Antes eram 12 blocos e ~5.400px: ele rolava a reunião. Agora o primeiro plano tem o
+     que decide a conversa (hero, a rodada pessoa a pessoa, os quentes sem passo, os
+     follow-ups sem confirmação) e TODO O RESTO desce para uma referência recolhida —
+     recolhido, não apagado: o conteúdo é o mesmo nó, com a mesma fiação. */
+  html += quentesGiHtml;
   html += followUpsSemConfirmacaoHtml;
-  html += ritmoSemanaHtml;
-  // Escopo 13 — bloco ADITIVO e RECOLHIDO, só pro gestor. Ver a nota longa em
-  // buildIndicadoresGestorHTML(): nada do que ele já usa muda de lugar ou de forma.
-  if (!souRepDaily) html += buildIndicadoresGestorHTML();
+  if (!souRepDaily) {
+    html += `
+    <details class="gi-ref" style="margin-top:14px;">
+      <summary>
+        <h3 class="gi-h">Referência da aba</h3>
+        <span class="gi-note" style="font-weight:500;">placar do time · funil de agora · leads quentes · onde agir · ritmo da semana · cadência</span>
+        <span class="cue">nível 3 · fechado por padrão</span>
+      </summary>
+      <div style="padding:12px 18px 16px;">
+        ${gdPlacarDoTimeHTML(repsDaily, dailyRefDate)}
+        ${slotsMigradosDaily}
+        ${ritmoSemanaHtml}
+        ${buildIndicadoresGestorHTML()}
+      </div>
+    </details>`;
+  } else {
+    html += slotsMigradosDaily;
+    html += ritmoSemanaHtml;
+  }
   html += navNoPe;   // vazio pro gestor e pro executivo fora de hoje — ver navNoTopo
 
   el.innerHTML = html;
@@ -31221,15 +31289,11 @@ async function renderDaily() {
      movido para dentro da Daily — é a pergunta da reunião das 9h, não de painel. Se ele
      abriu a Daily antes da Time, o bloco ainda não existe: manda renderizar e volta.
      Nada de duplicar o HTML; um #cockpitExecutionCommand no documento. */
-  const slotComando = document.getElementById('dailySlotComando');
-  const blocoComando = document.querySelector('#cockpitExecutionCommand .command-center');
-  if (slotComando && blocoComando) slotComando.appendChild(blocoComando);
-  else if (slotComando && typeof renderCockpitExecutionCommand === 'function' && !slotComando.children.length) {
-    renderCockpitExecutionCommand().then(() => {
-      const agora = document.querySelector('#cockpitExecutionCommand .command-center');
-      if (agora && slotComando && !slotComando.children.length) slotComando.appendChild(agora);
-    });
-  }
+  /* O PREENCHEDOR DO COMANDO SAIU DAQUI (31/08/26). Com o slot removido da Daily, estas
+     nove linhas nunca mais rodariam: slotComando seria sempre null e os dois ramos
+     morreriam em silêncio. Código que não pode executar é pior que código removido —
+     quem ler depois vai supor que o bloco ainda vem para cá. O nó agora fica onde nasce,
+     na aba Time, e é renderizado por renderCockpitExecutionCommand no boot do gestor. */
   /* Os cartões voltam da garagem para o slot novo. O par disto — devolver para a garagem
      antes do innerHTML — está lá em cima, junto do bloco de decisões: sem ele, estes dois
      blocos viviam um render só. */
