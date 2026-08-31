@@ -6199,6 +6199,9 @@
   </div>
 
   <div class="view" id="viewPlaybook">
+    <!-- Leitura do time, só para o gestor (30/08/26). Fica FORA de #playbookContent porque
+         renderPlaybook reescreve aquele nó inteiro a cada navegação do repertório. -->
+    <div class="gx" id="pbTimeBloco" style="margin-bottom:16px;"></div>
     <div id="playbookContent"></div>
   </div>
 
@@ -13160,7 +13163,151 @@ async function renderPlaybook() {
      responsável por carregar a biblioteca protegida, tratar erro e escolher a tela. */
   pbv6MontarLeitor(slot, pb, pagina);
 }
-document.getElementById('tabBtnPlaybook').addEventListener('click', () => { playbookTelaAtual = 'inicio'; activateTab('viewPlaybook'); renderPlaybook(); });
+/* O PLAYBOOK DO TIME, para o gestor (30/08/26, PR 8).
+
+   O Playbook virou 30 guias com marcação de leitura, e cada leitura já é gravada em
+   playbook_progresso (user_email, guia_slug, tipo, concluido_em). Só que ninguém nunca leu
+   essa tabela do lado do gestor: a consulta existente filtra `.eq('user_email',
+   sessaoAtual.email)`. Resultado prático — o material de desenvolvimento do time era um
+   depósito sem leitura de retorno: dava para escrever, não dava para saber quem estudou.
+
+   Este bloco responde três coisas, e nada além delas:
+     · quem leu quanto, e quando foi a última leitura;
+     · quais guias NINGUÉM leu — é o que decide o que vira pauta da Daily;
+     · e, quando não é possível ler o dado, ele diz isso em vez de mostrar zero.
+
+   A última parte não é detalhe: a tabela é filtrada por e-mail, e a política de acesso pode
+   não permitir que o gestor veja linha de outra pessoa. Se vier vazio por permissão, "0
+   leituras" seria uma acusação falsa contra o time inteiro. Então erro e vazio são estados
+   DIFERENTES na tela.
+
+   Nenhum botão de ação: o gestor não marca leitura no lugar de ninguém. Quem lê, marca. */
+let pbTimeCache = null;
+
+async function pbProgressoDoTime() {
+  if (pbTimeCache) return pbTimeCache;
+  /* A LISTA DO TIME É DATA.reps, não usuarios com role 'rep' (30/08/26): usuarios trouxe
+     11 nomes, incluindo quem não está no Field Sales, e cada um aparecia como "nenhuma
+     leitura". DATA.reps é a mesma base do resto do login do gestor; o e-mail vem de
+     usuarios pelo ownerId. */
+  const emailPorOwner = {};
+  (DATA.usuarios || []).forEach(u => { if (u && u.ownerId && u.email) emailPorOwner[String(u.ownerId)] = u.email; });
+  const equipe = (DATA.reps || []).map(r => ({
+    nome: r.name, ownerId: String(r.ownerId),
+    email: emailPorOwner[String(r.ownerId)] || null
+  }));
+  if (!supa) return (pbTimeCache = { estado: 'sem-conexao', equipe });
+  if (!equipe.length) return (pbTimeCache = { estado: 'sem-equipe', equipe });
+  const comEmail = equipe.filter(u => u.email);
+  if (!comEmail.length) return (pbTimeCache = { estado: 'sem-email', equipe });
+  const { data, error } = await supa.from('playbook_progresso')
+    .select('user_email,guia_slug,tipo,concluido_em')
+    .in('user_email', comEmail.map(u => u.email));
+  if (error) return (pbTimeCache = { estado: 'sem-permissao', erro: error.message || String(error), equipe });
+  return (pbTimeCache = { estado: 'ok', linhas: data || [], equipe });
+}
+
+function pbAvisoHTML(titulo, corpo) {
+  return '<div class="gx-secao">' +
+    '<div class="gx-secao-cab"><b>O que o time estudou</b><span>leitura registrada no Playbook</span></div>' +
+    '<div class="gx-secao-nota"><b>' + titulo + '</b><br>' + corpo + '</div>' +
+  '</div>';
+}
+
+function pbPlaybookDoTimeHTML(res) {
+  if (res.estado === 'sem-conexao') {
+    return pbAvisoHTML('Sem conexão com o banco de progresso.',
+      'A leitura de cada guia é gravada no banco; sem conexão não dá para saber quem estudou. Não é o mesmo que ninguém ter lido.');
+  }
+  if (res.estado === 'sem-equipe') {
+    return pbAvisoHTML('Nenhum executivo cadastrado.', 'Sem time no cadastro, não há progresso para comparar.');
+  }
+  if (res.estado === 'sem-email') {
+    return pbAvisoHTML('O time não tem e-mail no cadastro.',
+      'A leitura é gravada por e-mail; sem ele, não existe como ligar o que foi lido a quem leu. Isso é cadastro, não falta de estudo.');
+  }
+  if (res.estado === 'sem-permissao') {
+    return pbAvisoHTML('Não foi possível ler o progresso do time.',
+      'O banco recusou a consulta — é permissão de acesso, não ausência de leitura. Mostrar zero aqui seria acusar o time de algo que não foi medido.');
+  }
+
+  const cat = (typeof playbookDados === 'function' ? playbookDados() : null) || {};
+  const paginas = cat.paginas || [];
+  const tituloDe = {};
+  paginas.forEach(p => { tituloDe[p.id] = p.titulo; });
+
+  const porPessoa = {};
+  const semEmail = [];
+  res.equipe.forEach(u => {
+    if (!u.email) { semEmail.push(String(u.nome || '').split(' ')[0]); return; }
+    porPessoa[u.email] = { nome: String(u.nome || u.email).split(' ')[0], leituras: 0, missoes: 0, ultima: null };
+  });
+  const lidos = new Set();
+  (res.linhas || []).forEach(r => {
+    const p = porPessoa[r.user_email];
+    lidos.add(r.guia_slug);
+    if (!p) return;
+    if (r.tipo === 'missao') p.missoes++; else p.leituras++;
+    const d = r.concluido_em ? String(r.concluido_em).slice(0, 10) : null;
+    if (d && (!p.ultima || d > p.ultima)) p.ultima = d;
+  });
+
+  const pessoas = Object.keys(porPessoa).map(k => porPessoa[k]).sort((a, b) => b.leituras - a.leituras);
+  const total = paginas.length || 1;
+  const linhas = pessoas.map(p => {
+    const larg = Math.max(2, Math.round((p.leituras / total) * 100));
+    return '<div class="gx-forma-linha">' +
+      '<div class="gx-forma-rot">' + esc(p.nome) + '</div>' +
+      '<div class="gx-forma-trilha"><i class="' + (p.leituras === 0 ? 'is-gordo' : '') + '" style="width:' + larg + '%;"></i></div>' +
+      '<div class="gx-forma-num">' + p.leituras + '<small>' + (p.ultima ? 'última em ' + p.ultima.split('-').reverse().join('/') : 'nenhuma leitura') + '</small></div>' +
+    '</div>';
+  }).join('');
+
+  /* NENHUMA LINHA = AMBÍGUO. Pode ser time que não estudou, pode ser a política do banco
+     não deixando o gestor ver linha de outra pessoa (a consulta é por e-mail). O lado
+     errado dessa ambiguidade acusa sete pessoas de algo que não foi medido — então quando
+     não vem nenhuma linha, a tela diz as duas possibilidades e para de afirmar. */
+  const nenhumaLinha = !(res.linhas || []).length;
+  const ninguemLeu = paginas.filter(p => !lidos.has(p.id));
+  const nomesNinguem = ninguemLeu.slice(0, 6).map(p => esc(p.titulo)).join(' · ');
+  const notaNinguem = ninguemLeu.length
+    ? '<b>' + ninguemLeu.length + ' de ' + paginas.length + ' guias ninguém leu ainda</b>' +
+      (nomesNinguem ? ': ' + nomesNinguem + (ninguemLeu.length > 6 ? ' e outros ' + (ninguemLeu.length - 6) : '') + '.' : '.') +
+      ' Guia que ninguém abriu é pauta de Daily ou material que não serve — as duas conclusões valem mais do que o guia parado.'
+    : '<b>Todos os ' + paginas.length + ' guias já foram lidos por alguém.</b>';
+
+  const semNada = pessoas.filter(p => p.leituras === 0);
+  const notaSemNada = semNada.length
+    ? '<br>Sem nenhuma leitura registrada: <b>' + semNada.map(p => esc(p.nome)).join(', ') + '</b>.'
+    : '';
+
+  const notaSemEmail = semEmail.length
+    ? '<br>Sem e-mail no cadastro, então sem como medir: <b>' + semEmail.map(esc).join(', ') + '</b>.'
+    : '';
+
+  const corpo = nenhumaLinha
+    ? '<b>Nenhuma leitura registrada para o time.</b> Duas coisas produzem esta tela e ela não distingue: ninguém marcou leitura, ou o banco não está deixando este login ver o registro de outra pessoa. ' +
+      'Antes de cobrar na Daily, confirme com um executivo que marcou um guia — se ele marcou e não aparece aqui, é acesso, não estudo.'
+    : notaNinguem + notaSemNada + notaSemEmail;
+
+  return '<div class="gx-secao">' +
+    '<div class="gx-secao-cab"><b>O que o time estudou</b>' +
+      '<span>guias marcados como lidos, de ' + paginas.length + ' no repertório · quem lê, marca — o gestor não marca no lugar de ninguém</span></div>' +
+    (nenhumaLinha ? '' : '<div class="gx-forma">' + linhas + '</div>') +
+    '<div class="gx-secao-nota">' + corpo + '</div>' +
+  '</div>';
+}
+
+async function renderPlaybookDoTime() {
+  const el = document.getElementById('pbTimeBloco');
+  if (!el) return;
+  if (!(sessaoAtual && sessaoAtual.role === 'manager')) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="gx-secao"><div class="gx-secao-nota">Lendo o progresso do time…</div></div>';
+  const res = await pbProgressoDoTime();
+  el.innerHTML = pbPlaybookDoTimeHTML(res);
+}
+
+document.getElementById('tabBtnPlaybook').addEventListener('click', () => { playbookTelaAtual = 'inicio'; activateTab('viewPlaybook'); renderPlaybook(); renderPlaybookDoTime(); });
 document.addEventListener('keydown', ev => {
   if (ev.key === '/' && document.querySelector('#viewPlaybook.active') && !/input|textarea|select/i.test(document.activeElement.tagName)) {
     ev.preventDefault(); const busca = document.getElementById('playbookBusca'); if (busca) busca.focus();
