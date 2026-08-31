@@ -19478,6 +19478,9 @@ function cadenciaSugeridaDoLead(lead) {
   return 'Decisão ou reciclagem · D+7';
 }
 
+/* o clique "ver os outros N" abre a lista inteira no proprio cartao; estado fora da funcao
+   porque renderLeadsPrioritarios() e chamada de varios lugares. */
+let quentesVitrineExpandida = false;
 function renderLeadsPrioritarios() {
   const listaEl = document.getElementById('leadsQuentesLista');
   const countEl = document.getElementById('leadsQuentesCount');
@@ -19511,7 +19514,13 @@ function renderLeadsPrioritarios() {
     return;
   }
 
-  listaEl.innerHTML = todosQuentes.map(l => {
+  /* O CARTÃO MOSTRA 12; O CONTADOR ACIMA MOSTRA O TOTAL (31/08/26). A lista do snapshot
+     deixou de ser cortada em 12 — ela era a fonte das contagens do gestor, e o corte
+     escondia 14 negócios quentes. Aqui o corte é de VITRINE, e por isso é dito: sem a
+     frase, este cartão viraria o mesmo defeito com outra roupa. */
+  const TETO_VITRINE = 12;
+  const quentesNaVitrine = quentesVitrineExpandida ? todosQuentes : todosQuentes.slice(0, TETO_VITRINE);
+  listaEl.innerHTML = quentesNaVitrine.map(l => {
     const prioridade = PRIORIDADE_ETAPA[l.stageId] || 50;
     const estilo = prioridade >= 90 ? { bg: 'var(--green-soft)', fg: 'var(--green)' }
       : prioridade >= 70 ? { bg: 'var(--amber-soft)', fg: 'var(--amber)' }
@@ -19533,6 +19542,26 @@ function renderLeadsPrioritarios() {
       </div>
     `;
   }).join('');
+
+  /* O QUE FICOU FORA DA VITRINE É DITO, COM CAMINHO (31/08/26). O contador do cabeçalho já
+     mostra o total no radar; esta linha fecha a diferença entre o que o cartão lista e o que
+     existe, para o corte de vitrine nunca ser confundido com o tamanho do problema. */
+  if (todosQuentes.length > quentesNaVitrine.length) {
+    const resto = todosQuentes.length - quentesNaVitrine.length;
+    listaEl.insertAdjacentHTML('beforeend',
+      '<button type="button" class="gi-btn" data-ver-quentes="1" style="width:100%;margin-top:8px;justify-content:center;">' +
+      'mostrando ' + quentesNaVitrine.length + ' de ' + todosQuentes.length + ' no radar · abrir os outros ' + resto + ' aqui →</button>');
+    const btnResto = listaEl.querySelector('[data-ver-quentes]');
+    if (btnResto) btnResto.addEventListener('click', () => {
+      /* ABRE AQUI, e não em outra tela. A primeira versão deste clique ia para o filtro
+         "Quentes" do funil — que existe só no Meu Funil (aba do executivo) e usa OUTRA
+         definição de quente (por etapa, ignorando o SLA). Mandar o gestor para uma tela que
+         ele não tem, ou para uma contagem diferente da que ele acabou de ler, seria trocar
+         um corte silencioso por um destino errado. Expandir no lugar não pode divergir. */
+      quentesVitrineExpandida = true;
+      renderLeadsPrioritarios();
+    });
+  }
 
   listaEl.querySelectorAll('[data-lead-id]').forEach(row => {
     row.addEventListener('click', () => {

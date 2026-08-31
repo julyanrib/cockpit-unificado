@@ -1707,7 +1707,18 @@ async function main() {
 
   // Ranking de temperatura do time inteiro — pros cards "Leads Quentes" e "Leads Travados/Frios"
   // do Cockpit geral. Quentes: etapa avançada (Demo+) e dentro do SLA. Frios: SLA estourado.
-  const leadsQuentes = todosQuentes.sort((a, b) => (b.rank - a.rank) || (a.slaRatio - b.slaRatio)).slice(0, 12);
+  /* A LISTA DE QUENTES NÃO PODE SER CORTADA (31/08/26).
+     Era `.slice(0, 12)`, e esse corte nasceu para o cartão "Leads quentes" e para orçar
+     a busca de notas. Só que o cliente lê ESTE array em quentesNoRadar(), que alimenta
+     o KPI "quentes com próximo passo" do gestor, a faixa da Daily, o dossiê do 1:1 e a
+     frase de coaching. Medido em 31/08: a tela dizia 11 quentes e o time tinha 26. O
+     gestor cobrava sobre um teto de cartão sem nenhum aviso na tela.
+     Agora a lista vai inteira (é dela que saem as contagens) e o TETO FICA ONDE ELE
+     TINHA MOTIVO: na busca de notas, logo abaixo, que custa 3 chamadas por lead. */
+  const leadsQuentes = todosQuentes.sort((a, b) => (b.rank - a.rank) || (a.slaRatio - b.slaRatio));
+  /* frios continua cortado de propósito: é lista de cartão, e NENHUM contador da tela lê
+     este array — o KPI "Leads travados" vem de repsData e o modal dele agrega o funil
+     inteiro. Cortar lista de cartão é legítimo; o defeito era contador lendo corte. */
   const leadsFrios = todosFrios.sort((a, b) => b.dias - a.dias).slice(0, 12);
 
   // Busca as notas/observações mais recentes dos leads que realmente aparecem em tela:
@@ -1718,7 +1729,9 @@ async function main() {
   // custa 3 chamadas com pausa de rate limit — buscar 2x o mesmo lead era desperdício.
   // Requer escopo crm.objects.notes.read no Private App do HubSpot.
   const travadosPorRep = Object.values(repsData).flatMap(r => (r.travados || []).slice(0, 5));
-  const leadsQuePrecisamDeNota = [...leadsQuentes, ...leadsFrios, ...travadosPorRep];
+  /* o orçamento de notas continua nos 12 quentes mais avançados: são os que aparecem no
+     cartão e no roteiro. Sem este corte, tirar o slice de cima triplicaria as chamadas. */
+  const leadsQuePrecisamDeNota = [...leadsQuentes.slice(0, 12), ...leadsFrios, ...travadosPorRep];
   const idsUnicos = [...new Set(leadsQuePrecisamDeNota.map(l => l.id))];
 
   console.log(`Buscando notas de campo de ${idsUnicos.length} leads em destaque...`);
