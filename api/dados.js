@@ -90,6 +90,16 @@ function removerNulosRecursivo(valor) {
   try {
     const completo = montarDadosCompletos();
     const dados = removerNulosRecursivo(filtrarParaPapel(completo, usuario));
+    /* AÇÃO DE CAMPO VAI PARA O APP (31/08/26). Decidido na reunião com o RPA: o Cockpit vira
+       a aba de gestão dentro do app de campo, e o mapa é a aba operacional que fica aberta na
+       rua. Ligar, mandar WhatsApp e navegar têm que entrar no app — é ele que sabe registrar
+       o que aconteceu depois. A tela já sabe fazer isso; só falta o endereço do app.
+       Enquanto PWA_DEEP_LINK não existir no ambiente, nada muda: tel: liga, wa.me abre,
+       Maps navega. Ligar a transição é uma variável de ambiente, não um deploy de código. */
+    const pwaDeepLink = String(process.env.PWA_DEEP_LINK || '').trim();
+    if (/^https?:\/\//i.test(pwaDeepLink)) {
+      dados.pwa = { deepLink: pwaDeepLink };
+    }
     return res.status(200).json({
       sessao: { email: usuario.email, role: usuario.role, ownerId: usuario.ownerId, nome: usuario.nome, aComecar: !!usuario.aComecar },
       dados
