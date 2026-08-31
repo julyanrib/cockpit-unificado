@@ -18,15 +18,32 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..900&family=Manrope:wght@400;500;600;700;800&display=swap">
 <style>
   :root{
-    --bg:#EFE9DC; --panel:#FDFBF0; --panel2:#FBF6EC; --sunk:#F3EDE0;
-    --ink:#1A1613; --muted:#6E6558; --muted2:#736857; --line:#E4DBC6;
-    --line-soft:#F0E9D8; --line-btn:#D8CFBA; --ter:#A2937A;
+    /* IDENTIDADE DO GESTOR (31/08/26). Migração de token da prancha de design: o canvas
+       global passa a ser o mesmo do painel do executivo (#F4F1EA) — antes o produto tinha
+       dois cremes, um global mais amarelo e um escopado, e a diferença aparecia ao trocar
+       de aba. Painel mais claro sobe o contraste do texto nas tabelas densas. */
+    --bg:#F4F1EA; --panel:#FFFEFB; --panel2:#F9F5EC; --sunk:#EFEAE0;
+    --ink:#1A1613; --muted:#6E6558; --muted2:#736857; --line:#E3DDD0;
+    --line-soft:#EEE9DE; --line-btn:#D8CFBA; --ter:#A2937A;
     --red:#E51A31; --red-dk:#C7142A; --red-soft:#FBEEF0;
-    --green:#1E7A63; --green-soft:#E9F4EF; --amber:#B0782A; --amber-soft:#FBF1DF;
+    /* UM VERDE SÓ NO PRODUTO: o do executivo. Havia dois, e nenhum motivo para isso. */
+    --green:#157A5C; --green-soft:#E8F3EE; --amber:#B0782A; --amber-soft:#F9F0DE;
     /* Tinta escura pro âmbar quando o fundo é --amber-soft: o par --amber/--amber-soft
        dá 3.37:1 em texto pequeno, abaixo do mínimo AA. */
     --amber-ink:#8A5D1F;
-    --dark:#1A1613; --dark-ink:#FFFDF8; --dark-mut:#9C9284; --dark-fill:rgba(253,251,240,.07);
+    /* O painel escuro deixa de ser igual à tinta (#1A1613): separando os dois, o hero
+       escuro para de "colar" no texto preto de quem está ao lado dele. */
+    --dark:#14110D; --dark-ink:#FFFDF8; --dark-mut:#9C9284; --dark-fill:rgba(253,251,240,.07);
+    /* NÃO MEDIDO — par exclusivo deste estado, e de mais nenhum. Existe para que "não
+       medido" nunca seja confundido com zero, com vazio ou com desabilitado: quando este
+       par aparece, a tela está dizendo que a informação não existe, e o motivo vem ao
+       lado. Não usar em nenhum outro contexto. */
+    /* O valor de --nm-ink veio #8A7D68 na prancha e dava 3,36:1 sobre --nm-bg — abaixo do
+       minimo para texto pequeno, e este chip e de 10px. A propria regra do design diz que
+       ele nunca pode ser perdido de vista, e ele e lido no celular, na rua. Escurecido para
+       #6F6350: 4,9:1, mesma familia de neutro quente, mesma leitura de "informacao que nao
+       existe". */
+    --nm-ink:#6F6350; --nm-bg:#EFEAE0; --nm-line:#D8CFBA;
     /* DUAS VARIAVEIS QUE O ARQUIVO USAVA SEM NUNCA DEFINIR (28/08/26).
 
        Encontradas cruzando toda ocorrencia de var(--x) contra as definicoes: --body era
@@ -37,12 +54,15 @@
        o desenho pediu.
 
        O valor de --body nao foi escolhido por mim: os tres unicos usos protegidos escrevem
-       var(--body, var(--ink)) — a intencao ja estava documentada no proprio codigo.
+       var(--ink) — a intencao ja estava documentada no proprio codigo.
 
        --dark-line e filete sobre painel escuro. As bordas irmas espalhadas pelo arquivo
        usam rgba(253,251,240,.1) a .22 e rgba(255,255,255,.1) a .17; .16 fica no meio dessa
        faixa e mantem o mesmo tom de --dark-fill. Valor sujeito a revisao do design. */
-    --body:var(--ink); --dark-line:rgba(253,251,240,.16);
+    /* --body saiu em 31/08/26: era alias de --ink e mais um nome para a mesma coisa. Os
+       usos foram trocados um por um; apagar só o token deixaria as declarações mortas e o
+       texto herdando do pai sem ninguém notar. */
+    --dark-line:rgba(253,251,240,.16);
     /* BLOCO 48 (14/08/26) — --dark-green/--dark-red/--dark-amber eram usados em 25 lugares
        e NUNCA foram definidos no :root (só --dark-green/--dark-amber, localmente, dentro de
        .plano-origin-card). var() sem fallback e sem definição invalida a propriedade: em
@@ -100,7 +120,11 @@
        Aditivos — nada existente foi renomeado, então nenhum uso antigo quebra. */
     --sp-1:4px; --sp-2:8px; --sp-3:16px; --sp-4:24px; --sp-5:32px; --sp-6:48px;
     --icon-sm:16px; --icon-md:20px; --icon-lg:24px;
-    --focus-ring:0 0 0 3px rgba(37,99,235,.45);
+    /* FOCO VERMELHO, E UM SÓ (31/08/26). Havia dois estilos brigando: este anel azul
+       global e um outline vermelho nos botões. Azul agora significa rota e nada mais, e o
+       anel duplo (interno claro + externo vermelho) funciona tanto no painel claro quanto
+       no escuro, onde um outline simples desaparecia. */
+    --focus-ring:0 0 0 2px var(--panel), 0 0 0 4px var(--red);
     --nav-width:220px; --nav-width-compact:72px;
   }
   :focus-visible{ outline:none; box-shadow:var(--focus-ring); border-radius:var(--r-sm); }
@@ -1257,7 +1281,8 @@
   .tab-btn.active{position:relative;background:var(--ink);color:var(--panel);font-weight:700;}
   .tab-btn.active::before{content:none;}
   .tab-btn.active:hover{background:var(--ink);}
-  .tab-btn:focus-visible, button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible{outline:2px solid var(--red);outline-offset:2px;}
+  /* O outline vermelho daqui saiu: o :focus-visible global já dá o anel duplo vermelho, e
+     dois estilos de foco no mesmo elemento é o tipo de coisa que ninguém revisa depois. */
   /* BLOCO 4 (10/08/26, Julyan): Avisos deixou de ser aba. Publicar/ler comunicado é ação
      eventual — ocupava 1/7 do menu permanente do gestor. Virou sino no topbar + drawer. */
   .avisos-sino{position:relative;flex:none;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:99px;border:1px solid var(--line);background:var(--panel);color:var(--muted);cursor:pointer;transition:background .13s var(--ease),color .13s var(--ease);}
@@ -2405,7 +2430,7 @@
   .comp-seq-origem{flex:none;font-size:9.5px;font-weight:800;color:var(--muted2);border:1px solid var(--line);border-radius:5px;padding:2px 6px;white-space:nowrap;}
   .comp-seq-item:has(.comp-seq-check:not(:checked)){opacity:.45;}
   .comp-seq-acoes{display:flex;align-items:center;gap:11px;margin-top:12px;flex-wrap:wrap;}
-  .comp-seq-btn{background:var(--panel);border:1px solid var(--line-btn);color:var(--body);border-radius:999px;padding:10px 20px;font-size:12.5px;font-weight:700;cursor:pointer;}
+  .comp-seq-btn{background:var(--panel);border:1px solid var(--line-btn);color:var(--ink);border-radius:999px;padding:10px 20px;font-size:12.5px;font-weight:700;cursor:pointer;}
   .comp-seq-btn.is-primaria{background:var(--red);border-color:var(--red);color:#fff;}
   .comp-seq-btn.is-primaria:hover{background:var(--red-dk);}
   .comp-seq-btn:disabled{opacity:.55;cursor:default;}
@@ -2455,7 +2480,7 @@
   .cond-chips span{font-size:10px;font-weight:700;color:var(--green);background:var(--green-soft);border-radius:999px;padding:3px 9px;}
   .cond-chips span.mais{color:var(--muted2);background:var(--sunk);}
   .cond-vazio{font-size:12px;color:var(--muted);line-height:1.55;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:9px;}
-  .cond-vazio.is-alerta{background:var(--red-soft);color:var(--body);}
+  .cond-vazio.is-alerta{background:var(--red-soft);color:var(--ink);}
   .cond-compromisso{margin-top:9px;display:grid;gap:6px;}
   .cond-compromisso > div{display:flex;gap:9px;align-items:baseline;font-size:12.5px;color:var(--ink);line-height:1.45;}
   .cond-compromisso .n{flex:none;width:18px;height:18px;border-radius:6px;background:var(--ink);color:var(--panel);font:800 10px/18px 'Manrope',sans-serif;text-align:center;}
@@ -2469,7 +2494,7 @@
   .cond-quentes .mais{font-size:10.5px;color:var(--muted2);}
   .cond-nota{font-size:10.5px;color:var(--muted2);margin-top:7px;line-height:1.5;}
   .cond-rodape{display:flex;gap:9px;align-items:center;margin-top:18px;flex-wrap:wrap;}
-  .cond-btn{background:var(--panel);border:1px solid var(--line-btn);color:var(--body);border-radius:999px;padding:10px 18px;font-size:12.5px;font-weight:700;cursor:pointer;}
+  .cond-btn{background:var(--panel);border:1px solid var(--line-btn);color:var(--ink);border-radius:999px;padding:10px 18px;font-size:12.5px;font-weight:700;cursor:pointer;}
   .cond-btn:hover:not(:disabled){border-color:var(--ink);}
   .cond-btn:disabled{opacity:.4;cursor:default;}
   .cond-btn.is-primaria{background:var(--red);border-color:var(--red);color:#fff;margin-left:auto;}
@@ -2523,7 +2548,7 @@
   .fila-prazo{flex:none;font-size:9.5px;font-weight:800;color:var(--red);white-space:nowrap;}
   .fila-detalhe{padding:0 12px 11px 29px;}
   .fila-meta{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:10.5px;color:var(--muted2);}
-  .fila-meta b{color:var(--body);font-weight:700;}
+  .fila-meta b{color:var(--ink);font-weight:700;}
   .fila-cadencia{font-size:10.5px;color:var(--muted);margin-top:8px;background:var(--panel);border-radius:8px;padding:7px 10px;line-height:1.5;}
   .fila-ctas{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px;}
   @media (max-width:760px){
@@ -2535,7 +2560,7 @@
     .fila-nome{flex:1;max-width:none;}
     .fila-linha .fila-cta{flex-basis:100%;white-space:normal;text-align:center;justify-content:center;margin-top:2px;}
   }
-  .fila-cta{background:var(--panel);border:1px solid var(--line-btn);color:var(--body);border-radius:999px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;}
+  .fila-cta{background:var(--panel);border:1px solid var(--line-btn);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;}
   .fila-cta:hover{border-color:var(--ink);}
   .fila-cta.is-primaria{background:var(--red);border-color:var(--red);color:#fff;}
   .fila-cta.is-primaria:hover{background:var(--red-dk);border-color:var(--red-dk);}
@@ -2604,7 +2629,7 @@
     .daily-prometer-cta{min-height:44px;}
     .daily-promise-foot .push{min-height:44px;}
   }
-  .briefing-ramp{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--body);align-items:baseline;}
+  .briefing-ramp{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--ink);align-items:baseline;}
   .briefing-ramp .is-green{color:var(--green);font-weight:700;}
   .briefing-ramp .is-amber{color:var(--amber);font-weight:700;}
   .daily-promise-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-sm);margin-bottom:16px;}
@@ -5381,7 +5406,7 @@
   .prosp2-sem-aval{font-size:10.5px;font-weight:700;color:var(--ter);font-style:italic;}
   .prosp2-card-end{display:flex;align-items:flex-start;gap:7px;font-size:11.5px;color:var(--muted);line-height:1.45;}
   .prosp2-card-end .pin{color:var(--ter);flex:none;font-size:11px;margin-top:1px;}
-  .prosp2-card-end .dist{margin-left:auto;flex:none;font-weight:800;color:var(--body,var(--ink));font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums;background:var(--sunk);border-radius:var(--r-pill);padding:2px 8px;}
+  .prosp2-card-end .dist{margin-left:auto;flex:none;font-weight:800;color:var(--ink);font-size:11px;white-space:nowrap;font-variant-numeric:tabular-nums;background:var(--sunk);border-radius:var(--r-pill);padding:2px 8px;}
   .prosp2-card-foot{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--line);margin-top:auto;}
   .prosp2-add{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--ink);color:var(--panel);border:none;border-radius:var(--r-pill);padding:9px 14px;font:700 12px 'Manrope',sans-serif;cursor:pointer;transition:all .15s var(--ease);min-height:36px;}
   .prosp2-add:hover{background:var(--red);}
@@ -5887,6 +5912,161 @@
     .gs-degrau-rot,.gs-degrau-rot small{font-size:10.5px;}
     .gs-turma{min-height:36px;}
   }
+
+  /* ═══════════════════════════════════════════════════════════════════════════════════
+     .gi-* — IDENTIDADE DO GESTOR (31/08/26)
+
+     Copiado do arquivo da prancha (mockups-identidade-gestor-standalone.html), extraído
+     por script para não perder valor na transcrição. Prefixo próprio: não toca em .d4-*
+     (executivo), .gx-*, .gs-* nem .pbv6.
+
+     A gramática, em uma linha cada:
+       · planejado = contorno oco  ·  executado = sólido com tinta cheia
+       · promessa com hora = oco em âmbar
+       · NÃO MEDIDO = par exclusivo (--nm-*) + o motivo ao lado, nunca traço nem zero
+       · número clicável = sublinha em repouso  ·  zero verdadeiro = --ter, sem sublinha
+       · crítico = vermelho só quando exige ação hoje  ·  verde = prova de feito, em chip
+     ═══════════════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   IDENTIDADE DO GESTOR — tokens + classes componentizadas (prefixo .gi-)
+   Um <style> único, sem framework. Breakpoints permitidos: 420/640/760/900/1050/1240.
+   Nada tracejado, nada hachurado. Alvo de toque 44px.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── escala tipográfica (papéis declarados) ── */
+.gi-num-hero{font-family:'Archivo',sans-serif;font-size:44px;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;}
+.gi-num-lg{font-family:'Archivo',sans-serif;font-size:24px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums;}
+.gi-num{font-family:'Archivo',sans-serif;font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;}
+.gi-h{font-family:'Archivo',sans-serif;font-size:15px;font-weight:800;letter-spacing:-.02em;margin:0;}
+.gi-col{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted2);}
+.gi-body{font-size:13px;line-height:1.55;}
+.gi-note{font-size:11.5px;font-weight:600;color:var(--muted);line-height:1.5;}   /* nota de verdade — jamais apagar */
+.gi-src{font-size:10px;font-weight:700;color:var(--muted2);}   /* --ter dava 2,98:1 em 10px; --muted2 da 5,41 e continua discreto */                        /* procedência — piso 10px */
+
+/* ── estados de verdade ── */
+.gi-nm{display:inline-flex;align-items:center;gap:6px;background:var(--nm-bg);border:1px solid var(--nm-line);border-radius:var(--r-pill);padding:3px 10px;font-size:10px;font-weight:800;letter-spacing:.05em;color:var(--nm-ink);text-transform:uppercase;white-space:nowrap;}
+.gi-plan{display:inline-flex;border:1.5px solid var(--line-btn);border-radius:6px;padding:1px 7px;font-size:11.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;} /* planejado = oco */
+.gi-prom{display:inline-flex;border:1.5px solid rgba(176,120,42,.5);color:var(--amber-ink);border-radius:var(--r-pill);padding:2px 9px;font-size:10px;font-weight:700;white-space:nowrap;} /* promessa aguardando hora */
+.gi-chip-red{display:inline-flex;font-size:11px;font-weight:800;color:var(--red-dk);background:var(--red-soft);border-radius:var(--r-pill);padding:3px 9px;white-space:nowrap;}
+.gi-chip-amber{display:inline-flex;font-size:11px;font-weight:800;color:var(--amber-ink);background:var(--amber-soft);border-radius:var(--r-pill);padding:3px 9px;white-space:nowrap;}
+.gi-chip-green{display:inline-flex;font-size:11px;font-weight:800;color:var(--green);background:var(--green-soft);border-radius:var(--r-pill);padding:3px 9px;white-space:nowrap;}
+
+/* ── cartão base ── */
+.gi-card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:16px 18px;box-shadow:var(--shadow);}
+
+/* ── botões ── */
+.gi-btn{min-height:44px;border:1px solid var(--line-btn);background:var(--panel);color:var(--muted);border-radius:var(--r-pill);padding:0 18px;font:700 12px 'Manrope',sans-serif;cursor:pointer;transition:border-color .13s var(--ease),color .13s var(--ease);}
+.gi-btn:hover{border-color:var(--ink);color:var(--ink);}
+.gi-btn.is-primary{border:0;background:var(--ink);color:var(--panel);}
+.gi-btn.is-red{border:0;background:var(--red);color:#fff;font-weight:800;}
+.gi-btn:active{transform:translateY(1px);}
+
+/* ── N1: hero de decisão (um por aba, painel escuro) ── */
+.gi-hero{background:var(--dark);border-radius:var(--r-lg);padding:24px 26px;color:var(--dark-ink);display:flex;gap:28px;align-items:stretch;flex-wrap:wrap;}
+.gi-hero-kicker{font-size:10px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--dark-mut);margin-bottom:8px;}
+.gi-hero h2{font-family:'Archivo',sans-serif;font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin:0 0 14px;color:var(--dark-ink);}
+.gi-hero-main{flex:1.4;min-width:340px;}
+.gi-hero-sep{width:1px;background:var(--dark-line);}
+.gi-hero-side{flex:1;min-width:300px;display:flex;flex-direction:column;justify-content:center;gap:16px;}
+.gi-rank{display:grid;grid-template-columns:26px 1fr auto;gap:12px;align-items:center;text-align:left;width:100%;background:var(--dark-fill);border:1px solid var(--dark-line);border-radius:var(--r-md);padding:11px 14px;min-height:44px;cursor:pointer;color:var(--dark-ink);font-size:13px;line-height:1.4;transition:background .14s var(--ease);}
+.gi-rank:hover{background:rgba(253,251,240,.12);}
+.gi-rank + .gi-rank{margin-top:7px;}
+.gi-rank-sq{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-family:'Archivo',sans-serif;font-weight:800;font-size:12px;background:rgba(253,251,240,.1);color:var(--dark-mut);}
+.gi-rank.is-critical .gi-rank-sq{background:var(--red);color:#fff;}
+.gi-rank.is-warning .gi-rank-sq{background:rgba(224,166,74,.2);color:var(--dark-amber);}
+.gi-rank-go{font-size:11.5px;font-weight:800;color:var(--dark-mut);white-space:nowrap;}
+.gi-rank.is-critical .gi-rank-go{color:var(--dark-red);}
+.gi-rank.is-warning .gi-rank-go{color:var(--dark-amber);}
+.gi-hero-kpis{display:flex;gap:26px;flex-wrap:wrap;}
+.gi-hero-kpi .l{display:block;font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--dark-mut);margin-bottom:6px;}
+.gi-hero-kpi .meta{font-size:12px;font-weight:700;color:var(--dark-mut);border:1.5px solid rgba(253,251,240,.25);border-radius:8px;padding:2px 8px;}
+.gi-hero-kpi .sub{display:block;font-size:11px;color:var(--dark-mut);margin-top:6px;}
+.gi-hero-truth{font-size:10px;font-weight:700;color:var(--dark-mut);border-top:1px solid var(--dark-line);padding-top:10px;line-height:1.5;}
+
+/* ── N2: fila / rodada (arquétipo A) ── */
+.gi-fila-head{display:grid;grid-template-columns:1.25fr 1.4fr .9fr 1fr auto;gap:12px;padding:8px 14px;}
+.gi-row{display:grid;grid-template-columns:1.25fr 1.4fr .9fr 1fr auto;gap:12px;align-items:center;padding:11px 14px;border-radius:var(--r-md);border:1px solid var(--line-soft);background:var(--panel);margin-top:5px;transition:background .14s var(--ease);}
+.gi-row:hover{background:var(--panel2);}
+.gi-row.is-critical{background:linear-gradient(90deg,var(--red-soft),var(--panel) 42%);border-color:var(--line);}
+.gi-row.is-warning{background:linear-gradient(90deg,var(--amber-soft),var(--panel) 42%);border-color:var(--line);}
+.gi-who b{display:block;font-size:13px;font-weight:700;}
+.gi-who small{font-size:11px;color:var(--muted2);}
+.gi-alerta{font-size:12px;font-weight:800;color:var(--red-dk);}
+.gi-row.is-warning .gi-alerta{color:var(--amber-ink);}
+.gi-cell{font-size:12px;color:var(--muted);line-height:1.45;}
+.gi-row .gi-mob{display:none;}
+
+/* ── célula clicável (arquétipo C) ── */
+.gi-cell-btn{background:none;border:0;padding:4px 2px;cursor:pointer;font-family:'Archivo',sans-serif;font-weight:800;font-size:15px;color:var(--ink);border-bottom:1px solid var(--line-btn);border-radius:0;font-variant-numeric:tabular-nums;}
+.gi-cell-btn:hover{border-bottom-color:var(--ink);background:var(--panel2);}
+.gi-cell-btn.is-critical{color:var(--red-dk);border-bottom-color:var(--red-dk);}
+.gi-zero{font-family:'Archivo',sans-serif;font-weight:800;font-size:15px;color:var(--ter);} /* zero verdadeiro: sem sublinha, nada abre */
+
+/* ── barra com régua (arquétipo B) ── */
+.gi-bar{display:grid;grid-template-columns:90px 1fr 44px;gap:10px;align-items:center;width:100%;background:none;border:0;padding:4px 2px;cursor:pointer;text-align:left;border-radius:var(--r-sm);}
+.gi-bar:hover{background:var(--panel2);}
+.gi-bar .nome{font-size:12px;font-weight:700;color:var(--ink);}
+.gi-bar-track{position:relative;display:block;height:14px;border-radius:5px;background:var(--panel2);}
+.gi-bar-fill{position:absolute;inset:0;border-radius:5px 0 0 5px;background:var(--ink);display:flex;align-items:center;padding-left:8px;color:#fff;font-size:10px;font-weight:700;font-variant-numeric:tabular-nums;}
+.gi-bar-fill.is-critical{background:var(--red-dk);}
+.gi-bar-fill.is-full{border-radius:5px;}
+.gi-bar-rule{position:absolute;top:-4px;bottom:-4px;width:2.5px;background:var(--ink);border-radius:2px;} /* mediana do time */
+.gi-bar-nm{display:flex;height:14px;border-radius:5px;background:var(--nm-bg);border:1px solid var(--nm-line);align-items:center;justify-content:center;font-size:9px;font-weight:800;letter-spacing:.05em;color:var(--nm-ink);text-transform:uppercase;}
+.gi-bar .val{font-family:'Archivo',sans-serif;font-weight:800;font-size:13px;text-align:right;border-bottom:1px solid var(--line-btn);font-variant-numeric:tabular-nums;}
+
+/* ── lista de leads (porta para nomes) ── */
+.gi-lead{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;text-align:left;width:100%;background:var(--panel2);border:0;border-radius:10px;padding:10px 13px;min-height:44px;cursor:pointer;font-size:12.5px;transition:background .14s var(--ease);}
+.gi-lead:hover{background:var(--sunk);}
+.gi-lead + .gi-lead{margin-top:4px;}
+.gi-lead .abrir{font-size:11px;font-weight:700;color:var(--muted2);}
+
+/* ── N3: referência recolhida ── */
+.gi-ref{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;}
+.gi-ref>summary{list-style:none;cursor:pointer;padding:14px 18px;display:flex;align-items:center;gap:10px;min-height:44px;}
+.gi-ref>summary::-webkit-details-marker{display:none;}
+.gi-ref>summary .cue{margin-left:auto;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--ter);}
+.gi-ref[open]>summary{border-bottom:1px solid var(--line-soft);}
+.gi-ref-body{padding:12px 18px 16px;display:flex;flex-direction:column;gap:8px;font-size:12px;color:var(--muted);line-height:1.5;}
+
+/* ── rodapé de procedência (todo bloco termina nele) ── */
+.gi-proc{display:flex;gap:16px;align-items:center;flex-wrap:wrap;padding:10px 4px 0;}
+
+/* ── modo TV ── */
+.gi-tv{background:var(--dark);border-radius:var(--r-lg);aspect-ratio:16/9;padding:4.2% 4.6%;color:var(--dark-ink);display:flex;flex-direction:column;overflow:hidden;}
+.gi-tv-comeca{font-size:15px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--dark-red);margin-bottom:6px;}
+.gi-tv-nome{font-family:'Archivo',sans-serif;font-size:52px;font-weight:800;letter-spacing:-.02em;line-height:1;}
+.gi-tv-motivo{font-size:19px;color:#CFC6B6;margin-top:8px;}
+.gi-tv-row{display:grid;grid-template-columns:150px 1fr 150px;gap:14px;align-items:center;margin-top:6px;}
+.gi-tv-row b{font-size:16px;}
+.gi-tv-estado{display:flex;height:16px;border-radius:5px;background:rgba(229,26,49,.14);border:1px solid rgba(255,122,133,.4);align-items:center;justify-content:center;font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--dark-red);text-transform:uppercase;}
+.gi-tv-plan{position:relative;height:12px;border:1.5px solid rgba(253,251,240,.3);border-radius:5px;}
+.gi-tv-val{font-size:14px;font-weight:800;color:var(--dark-mut);}
+
+/* ── moldura do documento (não é produto) ── */
+
+/* ── breakpoints (só os permitidos) ── */
+@media (max-width:1050px){
+  .gi-fila-head{display:none;}
+  .gi-row{grid-template-columns:1fr auto;row-gap:6px;}
+  .gi-row .gi-cell,.gi-row .gi-alerta{grid-column:1/-1;}
+}
+@media (max-width:760px){
+  .gi-hero{padding:20px 18px;}
+  /* MIN-WIDTH ZERADO NO CELULAR (31/08/26). A prancha dá min-width:340px ao lado principal
+     do hero e 300px ao lateral — a 375px, com 18px de padding de cada lado, sobram 339px e o
+     bloco estoura por 1px, levando o CORPO da página a rolar de lado (medido: 386 numa
+     janela de 375). É o mesmo laço do 1fr: largura mínima declarada não encolhe sozinha. */
+  .gi-hero-main,.gi-hero-side{min-width:0;}
+  .gi-hero{gap:18px;}
+  .gi-hero-sep{display:none;}
+  .gi-row{grid-template-columns:1fr;}
+  .gi-row .gi-btn{width:100%;}
+  .gi-btn{min-height:44px;}
+}
+@media (max-width:640px){
+  .gi-hero-kpis{gap:16px;}
+  .gi-bar{grid-template-columns:70px 1fr 38px;}
+}
 
   /* ═══ MODO TV (handoff "Daily & Ritmo", Seção 3) ═══ */
   body.tv .app-main{max-width:1880px;}
@@ -8757,7 +8937,7 @@ function desfechoBodyHTML(lead, st, quando) {
           <input type="date" class="desf-data" style="font-size:12.5px;padding:8px 10px;border:1px solid var(--line-btn);border-radius:9px;background:var(--panel);color:var(--ink);">
         </div>
         <div class="desf-encerra" style="display:none;margin-top:11px;padding-top:11px;border-top:1px solid var(--line);">
-          <div style="font-size:11.5px;color:var(--body);margin-bottom:8px;line-height:1.5;">Esse desfecho tira o negócio da cadência. <b>Precisa de motivo registrado</b> — sem motivo, o negócio volta pra fila de segunda tentativa.</div>
+          <div style="font-size:11.5px;color:var(--ink);margin-bottom:8px;line-height:1.5;">Esse desfecho tira o negócio da cadência. <b>Precisa de motivo registrado</b> — sem motivo, o negócio volta pra fila de segunda tentativa.</div>
           <select class="desf-motivo" style="width:100%;font-size:12.5px;padding:8px 10px;border:1px solid var(--line-btn);border-radius:9px;background:var(--panel);color:var(--ink);">
             <option value="">Escolha o motivo…</option>
             ${cadenciaMotivosDeSaida().map(m => `<option value="${esc(m.id)}">${esc(m.rotulo)}</option>`).join('')}
@@ -8799,7 +8979,7 @@ function wireRegistroDeDesfecho(container, lead, st) {
            usam tinta, que e o que o resto do sistema usa para estado ativo. */
         b.setAttribute('aria-pressed', String(on));
         b.style.background = on ? 'var(--ink)' : 'var(--panel)';
-        b.style.color = on ? 'var(--panel)' : 'var(--body)';
+        b.style.color = on ? 'var(--panel)' : 'var(--ink)';
         b.style.borderColor = on ? 'var(--ink)' : 'var(--line-btn)';
       });
       aplicarSugestao(btn.dataset.desfecho);
@@ -9044,7 +9224,7 @@ function buildGatesDoDiaHTML(r, diag) {
            virou UMA linha, e só aparece quando a janela traz algo que os gates não
            dizem. Nada foi perdido: as checagens da manhã continuam visíveis, como gates. -->
       ${(janela.janela.id !== 'manha' && janela.itens.length > 0) ? `
-        <div style="margin-top:9px;background:${janela.cobravel ? 'var(--amber-soft)' : 'var(--panel2)'};border-radius:9px;padding:8px 11px;font-size:11.5px;color:var(--body);line-height:1.5;">
+        <div style="margin-top:9px;background:${janela.cobravel ? 'var(--amber-soft)' : 'var(--panel2)'};border-radius:9px;padding:8px 11px;font-size:11.5px;color:var(--ink);line-height:1.5;">
           <b style="font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);display:block;margin-bottom:3px;">${esc(janela.janela.rotulo)}</b>
           ${esc(janela.itens.slice(0, 3).join(' · '))}
         </div>` : ''}
@@ -15708,7 +15888,7 @@ async function renderProspeccaoExecutivo() {
         </div>
         <div class="prosp2-dw-sec">
           <h4>Por que visitar</h4>
-          <p id="prosp2DwWhy" style="font-size:12.5px;color:var(--body,var(--ink));line-height:1.6;margin:0;"></p>
+          <p id="prosp2DwWhy" style="font-size:12.5px;color:var(--ink);line-height:1.6;margin:0;"></p>
         </div>
       </div>
       <div class="prosp2-dw-foot">
@@ -21169,7 +21349,7 @@ function fichaLeadFunilBodyHTML(l) {
       // l.notas localmente (só reflete depois do próximo sync) — ou seja, a nota
       // exibida aqui NUNCA é a que acabou de ser salva por aqui. Não tem como saber
       // o canal de verdade, então a assinatura para de inventar um.
-      return `<div style="background:var(--panel2);border-left:3px solid var(--line-btn);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--body,var(--ink));line-height:1.55;">${esc(textoBruto)}${quando ? `<span style="display:block;margin-top:6px;font-size:10.5px;color:var(--ter);">${quando}</span>` : ''}</div>`;
+      return `<div style="background:var(--panel2);border-left:3px solid var(--line-btn);border-radius:0 11px 11px 0;padding:11px 13px;font-size:12px;color:var(--ink);line-height:1.55;">${esc(textoBruto)}${quando ? `<span style="display:block;margin-top:6px;font-size:10.5px;color:var(--ter);">${quando}</span>` : ''}</div>`;
     })()}
 
     <!-- BLOCO 42 (14/08/26) — editar direto do Cockpit: nota e próximo passo escrevem
@@ -27856,7 +28036,7 @@ function persistenciaHTML(r) {
           </div>`).join('')}
       </div>
       ${soUmToque > 0
-        ? `<div style="font-size:11.5px;color:var(--body);margin-top:11px;line-height:1.55;background:var(--amber-soft);border-radius:10px;padding:10px 12px;">
+        ? `<div style="font-size:11.5px;color:var(--ink);margin-top:11px;line-height:1.55;background:var(--amber-soft);border-radius:10px;padding:10px 12px;">
              <b>${soUmToque} negócio${soUmToque === 1 ? '' : 's'} com um único toque conhecido.</b> A régua existe justamente pra esses: o 2º toque em D+1 é o que separa "visitei" de "estou trabalhando".
            </div>`
         : `<div style="font-size:11.5px;color:var(--green);margin-top:11px;line-height:1.55;">Nenhum negócio seu parou no primeiro toque. É isso que faz a venda aparecer no 3º e no 4º.</div>`}
@@ -28679,7 +28859,7 @@ function buildIndicadoresGestorHTML() {
      dele. Destino honesto vale mais que filtro que se contradiz. */
   const cel = (valor, sufixo, bom, ownerId, metrica) => {
     if (valor == null) return `<td style="text-align:right;color:var(--muted2);">—</td>`;
-    const cor = bom == null ? 'var(--body)' : bom ? 'var(--green)' : 'var(--red)';
+    const cor = bom == null ? 'var(--ink)' : bom ? 'var(--green)' : 'var(--red)';
     const abre = ownerId ? ` class="cad-cel" data-fila-metrica="${esc(String(metrica || ''))}" role="button" tabindex="0" title="Ver os negócios desta pessoa"` : '';
     return `<td style="text-align:right;font-variant-numeric:tabular-nums;color:${cor};font-weight:700;"${abre}>${valor}${sufixo || ''}</td>`;
   };
@@ -28743,7 +28923,7 @@ function buildIndicadoresGestorHTML() {
 
       <div style="margin-top:13px;padding-top:12px;border-top:1px solid var(--line-soft);">
         <div style="font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:7px;">Sincronização</div>
-        <div style="font-size:11.5px;color:var(--body);line-height:1.6;">
+        <div style="font-size:11.5px;color:var(--ink);line-height:1.6;">
           HubSpot: <b>${esc(fresco.rotulo)}</b>${fresco.velho ? ' <span style="color:var(--amber);">(atrasado — não cobre número individual antes de conferir)</span>' : ''}.
           ${fresco.falhaSync ? '<span style="color:var(--red);">A última rodada do robô teve falha — o detalhe por executivo está no aviso do topo desta tela.</span>' : 'Última rodada do robô sem falhas registradas.'}
           <br>Expogo e PWA Outbound: <b style="color:var(--amber);">sincronização não confirmada</b> — o Cockpit lê o HubSpot, não os apps. Não dá pra distinguir "o app não subiu" de "não aconteceu" até o PWA expor a fila pendente (docs/contrato-eventos-rpa.md §4 e §7.6).
@@ -28832,7 +29012,7 @@ function wireIndicadoresGestor(rootEl) {
                   <span style="font-size:10.5px;color:var(--muted);">${esc(it.lead.stage || STAGE_LABELS[it.lead.stageId] || '')}</span>
                   <span class="mono" style="margin-left:auto;font-size:9.5px;font-weight:800;color:var(--muted2);">≥${it.estado.toques.total || 0} toques</span>
                 </div>
-                <div style="font-size:11px;color:var(--body);margin-top:4px;line-height:1.5;">${esc(it.motivo)}</div>
+                <div style="font-size:11px;color:var(--ink);margin-top:4px;line-height:1.5;">${esc(it.motivo)}</div>
                 <div style="font-size:10px;color:var(--muted2);margin-top:4px;">${esc(it.baldeRotulo)} · <a href="${esc(hsUrl(it.lead.id))}" target="_blank" rel="noopener" style="color:var(--red);font-weight:700;text-decoration:none;">abrir no HubSpot ↗</a></div>
               </div>`).join('')}
             ${fila.negociosAfetados > itens.length ? `<div style="font-size:10.5px;color:var(--muted2);">+${fila.negociosAfetados - itens.length} não listados aqui.</div>` : ''}
@@ -28932,7 +29112,7 @@ function funilDaPessoaNaDailyHTML(r, opts) {
         }).join('')}
       </div>
 
-      <div style="font-size:11.5px;color:var(--body);line-height:1.55;margin-top:10px;background:var(--panel2);border-radius:9px;padding:9px 11px;">${frase}</div>
+      <div style="font-size:11.5px;color:var(--ink);line-height:1.55;margin-top:10px;background:var(--panel2);border-radius:9px;padding:9px 11px;">${frase}</div>
 
       ${piores.length ? `
         <div style="margin-top:9px;">
@@ -30057,23 +30237,109 @@ async function renderDaily() {
         <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Briefing das 9h · ${fmtDailyLabel(dailyRefDate)}</span>
         <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:4px 0 0;letter-spacing:-.015em;color:var(--dark-ink);">Seu cadastro ainda não tem funil</h1>
       </div>
-    </div>` : `
-    <div class="cockpit-hero-combo" style="align-items:center;">
-      <div class="hero-titulo">
-        <span class="hero-eyebrow" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Daily & Ritmo · ${fmtDailyLabel(dailyRefDate)}</span>
-        <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Quem planejou clientes, quem executou, quem precisa de ação?</h1>
-        <span style="font-size:10.5px;color:${frescorDaily.confiavel ? 'var(--dark-mut)' : '#FFB0B8'};margin-top:2px;">${frescorDaily.confiavel ? 'Plano vem do Cockpit; execução vem da evidência do HubSpot.' : esc(frescorDaily.rotulo) + ' · não cobre realizado até a próxima carga.'}</span>
+    </div>` : (() => {
+      /* ═══ HERO DA DAILY DO GESTOR — nível 1 da nova identidade (31/08/26) ═══
+         A prancha pede o que o hero antigo não fazia: DIZER A DECISÃO. Antes eram quatro
+         números grandes lado a lado ("16 clientes nomeados · 4 sem cliente · 0/7 fecharam ·
+         0 fechados no dia") e o gestor montava a conclusão de cabeça, na frente do time, às
+         9h da manhã. Agora o título é a conclusão, e os três primeiros nomes já são botões.
+
+         A ordem não é inventada aqui: é a mesma régua da fila de intervenção da aba Time —
+         sem plano do dia pesa mais, depois a FATIA da carteira travada (não a contagem,
+         senão carteira grande ganha sempre), e quem tem alvo de campo zero (rampagem
+         inicial) não é cobrado por rua.
+
+         Os dois números do hero são os que mudam o que ele fala: planos fechados contra o
+         time, e quentes sem próximo passo — este vindo de quentesNoRadar(null), a MESMA
+         fonte da faixa logo abaixo, porque dois números da mesma coisa na mesma tela é o
+         defeito que eu passei a noite tirando daqui.
+
+         "Fechados no dia" desceu para a linha de verdade do rodapé: descreve o dia, não
+         decide nada às 9h — e quando a carga do HubSpot não chegou, ele aparece como NÃO
+         MEDIDO, nunca como zero. */
+      const faseDoDia = typeof d4FaseDoDia === 'function' ? d4FaseDoDia(dailyRefDate) : 'antes';
+      const travaRotulo = faseDoDia === 'antes'
+        ? ' · promessa das 9h30 ainda aberta'
+        : faseDoDia === 'corrida' ? ' · promessa travada às 9h30' : ' · dia fechado';
+
+      const radarGestor = (typeof quentesNoRadar === 'function') ? quentesNoRadar(null) : { radar: [], semPasso: [] };
+      const quentesSemPassoTime = (radarGestor.semPasso || []).length;
+      const quentesTotalTime = (radarGestor.radar || []).length;
+
+      const rankDaily = compromissosHoje.map(x => {
+        const r = x.r;
+        const nomeados = Number(x.resumo && x.resumo.nomes) || 0;
+        const abertos = Number(r.open) || 0;
+        const travados = Number(r.leadsTravados) || 0;
+        const taxa = abertos > 0 ? travados / abertos : 0;
+        const ramp = typeof rampDoOwner === 'function' ? rampDoOwner(r.ownerId) : null;
+        const alvo = (ramp && ramp.definido && ramp.alvo != null) ? Number(ramp.alvo) : null;
+        const naRua = alvo == null || alvo > 0;
+        const pontos = (naRua && !nomeados ? 6 : 0) + Math.min(6, Math.round(taxa * 6));
+        return { r, nomeados, travados, abertos, naRua, pontos, ramp };
+      }).filter(x => x.pontos > 0).sort((a, b) => b.pontos - a.pontos).slice(0, 3);
+
+      const semPlanoAgora = compromissosHoje.filter(x => !(Number(x.resumo && x.resumo.nomes) || 0));
+      const primeiro = rankDaily[0];
+      const nSemPlano = semPlanoAgora.length;
+      const nomeCurto = r => esc(String((r && r.name) || '').split(' ')[0] || 'ele');
+      const emPalavra = n => n === 2 ? 'Dois' : n === 3 ? 'Três' : n === 4 ? 'Quatro' : n === 5 ? 'Cinco' : n === 6 ? 'Seis' : String(n);
+      const headline = !primeiro
+        ? 'Ninguém está pendente de cobrança. Confirme a promessa das 9h30 e libere a rua.'
+        : nSemPlano > 1
+          ? `${emPalavra(nSemPlano)} saem para o campo sem plano. Comece por ${nomeCurto(primeiro.r)}.`
+          : nSemPlano === 1
+            ? `${nomeCurto(semPlanoAgora[0].r)} sai para o campo sem plano. Comece por aí.`
+            : `Comece por ${nomeCurto(primeiro.r)}: ${primeiro.travados} de ${primeiro.abertos} negócios acima do SLA.`;
+
+      const motivoDoRank = x => {
+        const partes = [];
+        if (!x.nomeados) partes.push('sem plano do dia');
+        if (x.travados > 0) partes.push(`<b style="color:var(--dark-red);">${x.travados} acima do SLA</b>${x.abertos ? ` de ${x.abertos} abertos` : ''}`);
+        if (!x.ramp || !x.ramp.definido) partes.push('fase de rampagem não definida');
+        return partes.join(' · ') || 'pendência de acompanhamento';
+      };
+      const linhaDoRank = (x, i) => `<button type="button" class="gi-rank${x.pontos >= 9 ? ' is-critical' : x.pontos >= 6 ? ' is-warning' : ''}" data-gx-dono="${esc(String(x.r.ownerId))}" title="Abrir a linha de ${esc(String(x.r.name || ''))} na rodada">`
+        + `<span class="gi-rank-sq">${i + 1}</span>`
+        + `<span><b>${esc(String(x.r.name || '').split(' ').slice(0, 2).join(' '))}</b> · ${motivoDoRank(x)}</span>`
+        + `<span class="gi-rank-go">${x.nomeados ? 'abrir' : 'cobrar plano'} ▸</span></button>`;
+
+      return `
+    <div class="gi-hero">
+      <div class="gi-hero-main">
+        <div class="gi-hero-kicker">Daily &amp; Ritmo · ${fmtDailyLabel(dailyRefDate)}${travaRotulo}</div>
+        <h2>${headline}</h2>
+        ${rankDaily.length
+          ? rankDaily.map(linhaDoRank).join('')
+          : `<div class="gi-hero-truth" style="border-top:0;padding-top:0;">Todo mundo com cliente nomeado hoje, e nenhuma carteira com metade travada.</div>`}
       </div>
-      <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
-      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
-        <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${clientesPlanejadosTotal}</div><div style="font-size:11px;color:var(--dark-mut);">clientes nomeados hoje</div></div>
-        <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:${semClientesNomeados > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${semClientesNomeados}</div><div style="font-size:11px;color:var(--dark-mut);">executivos sem cliente definido</div></div>
-        <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:${planosFechadosTotal < repsDaily.length ? '#E0A64A' : 'var(--dark-ink)'};">${planosFechadosTotal}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">fecharam o plano do dia</div></div>
-        <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:${frescorDaily.confiavel ? '#57C29A' : 'var(--dark-mut)'};">${frescorDaily.confiavel ? fechadosHojeTotal : '—'}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia${frescorDaily.confiavel ? '' : ' · carga pendente'}</div></div>
+      <div class="gi-hero-sep"></div>
+      <div class="gi-hero-side">
+        <div class="gi-hero-kpis">
+          <div class="gi-hero-kpi">
+            <span class="l">Planos fechados</span>
+            <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${planosFechadosTotal < repsDaily.length ? ' style="color:var(--dark-amber);"' : ''}>${planosFechadosTotal}</span><span class="meta">de ${repsDaily.length}</span></span>
+            <span class="sub">${clientesPlanejadosTotal} cliente(s) nomeado(s)${semClientesNomeados > 0 ? ` · ${semClientesNomeados} sem cliente` : ''}</span>
+          </div>
+          <div class="gi-hero-kpi">
+            <span class="l">Quentes sem passo</span>
+            <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${quentesSemPassoTime > 0 ? ' style="color:var(--dark-red);"' : ''}>${quentesSemPassoTime}</span><span class="meta">de ${quentesTotalTime}</span></span>
+            <span class="sub">${quentesSemPassoTime > 0 ? 'nomear na rodada, não depois dela' : 'todo quente com próximo passo marcado'}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:9px;flex-wrap:wrap;">
+          <button class="gi-btn is-red" type="button" id="dailyConduzir" style="padding:0 20px;">Conduzir a Daily →</button>
+          <button class="gi-btn" type="button" id="dailyTvToggle" aria-pressed="false" style="background:none;border-color:rgba(253,251,240,.25);color:var(--dark-ink);">Modo TV</button>
+        </div>
+        <div class="gi-hero-truth">
+          Plano vem do Cockpit; execução vem da evidência do HubSpot — a promessa das 9h30 é outra medida.
+          Fechados no dia: ${frescorDaily.confiavel
+            ? `<b style="color:var(--dark-green);">${fechadosHojeTotal}</b>`
+            : `<span class="gi-nm" style="background:rgba(253,251,240,.08);border-color:var(--dark-line);color:var(--dark-mut);">não medido</span> — a carga do HubSpot ainda não chegou, e isso não é zero`}.
+        </div>
       </div>
-      <button class="btn-prim" type="button" id="dailyConduzir" style="margin-left:auto;flex:none;padding:11px 20px;">Conduzir a Daily →</button>
-      <button type="button" class="btn-ol" id="dailyTvToggle" style="flex:none;" aria-pressed="false">📺 Modo TV</button>
     </div>`;
+    })();
 
   // Ritual do gestor: a Daily precisa terminar em compromisso, não em leitura de placar.
   // BLOCO 31 — mesma correção: esta lista alimenta a frase "Objetivo de hoje" no topo da
@@ -34646,7 +34912,7 @@ function focoDeHabilidadeHTML(r, diag) {
         <h3 style="margin:0;">Foco de habilidade · ${esc(f.titulo)}</h3>
         <span style="font-size:10.5px;color:var(--muted2);">um só por vez — comportamento, não resultado</span>
       </div>
-      <p style="font-size:12.5px;color:var(--body);line-height:1.6;margin:8px 0 0;">${esc(f.porque(diag))}</p>
+      <p style="font-size:12.5px;color:var(--ink);line-height:1.6;margin:8px 0 0;">${esc(f.porque(diag))}</p>
       <div style="background:var(--panel2);border-radius:11px;padding:12px 14px;margin-top:11px;">
         <div style="font-size:9.5px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);margin-bottom:5px;">Roleplay de 5 minutos</div>
         <div style="font-size:12.5px;color:var(--ink);line-height:1.6;">${esc(f.roleplay)}</div>
@@ -35157,8 +35423,8 @@ async function renderPDIs() {
                     <div><b>${x.texto}</b><span style="display:block;font-size:10.5px;font-weight:700;color:${x.cor};margin-top:4px;">${esc(x.situacao)}</span></div>
                   </div>`).join('')}
               </div>
-              <div style="background:var(--green-soft);border-radius:10px;padding:9px 12px;font-size:11px;color:var(--body);line-height:1.5;margin-top:9px;">A conclusão é validada pelo seu gestor no 1:1. Assim, o acordo só aparece como cumprido depois da conversa e da evidência combinada.</div>
-              ${prazos1a1.some(x => x.vencido) ? `<div style="background:var(--red-soft);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--body);line-height:1.55;margin-top:9px;">Acordo vencido não é acordo em aberto. Leve os vencidos pro próximo 1:1 pra reprogramar ou encerrar — deixar como pendente indefinidamente é o que transforma o plano num 0/3 permanente.</div>` : ''}` : '<div class="empty-state" style="padding:0;">Nenhum acordo combinado ainda — sai no próximo 1:1.</div>'}
+              <div style="background:var(--green-soft);border-radius:10px;padding:9px 12px;font-size:11px;color:var(--ink);line-height:1.5;margin-top:9px;">A conclusão é validada pelo seu gestor no 1:1. Assim, o acordo só aparece como cumprido depois da conversa e da evidência combinada.</div>
+              ${prazos1a1.some(x => x.vencido) ? `<div style="background:var(--red-soft);border-radius:10px;padding:10px 12px;font-size:11.5px;color:var(--ink);line-height:1.55;margin-top:9px;">Acordo vencido não é acordo em aberto. Leve os vencidos pro próximo 1:1 pra reprogramar ou encerrar — deixar como pendente indefinidamente é o que transforma o plano num 0/3 permanente.</div>` : ''}` : '<div class="empty-state" style="padding:0;">Nenhum acordo combinado ainda — sai no próximo 1:1.</div>'}
             <!-- A DATA E O HISTÓRICO chegaram da aba Hoje (29/08/26): eram os dois únicos
                  controles que existiam lá e em lugar nenhum. O resto do card do 1:1 da
                  Hoje era duplicata do que já estava aqui. -->
