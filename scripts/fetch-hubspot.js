@@ -727,6 +727,202 @@ async function motivosDePerda() {
   return { total: validos.length, dias: 90, porMotivo, porOwner };
 }
 
+/* HISTORICO DE ETAPA — a primeira conversao de verdade do produto (30/08/26).
+
+   Até aqui o Cockpit só sabia ESTOQUE: quantos negócios estão em cada etapa agora. Isso
+   nunca foi conversão, e a tela chegou a mostrar "294%" por dividir dois estoques. O que
+   faltava era a data de entrada em cada etapa — e ela existe e está preenchida:
+   hs_v2_date_entered_<etapa>, populada a partir de julho/26.
+
+   Com ela dá para responder o que o gestor pergunta na segunda-feira: dos negócios que
+   entraram no funil em julho, quantos chegaram à Visita? Quantos dias leva cada etapa?
+   Qual o ciclo de quem fechou? A resposta é por TURMA (quem entrou no mês X) — nunca
+   comparando estoques de agora.
+
+   Duas portas de entrada, não uma: 149 negócios de jul+ago entraram direto na Visita, sem
+   passar por Prospecção. Contar só a porta da Prospecção esconderia 28% do funil — então a
+   consulta tem dois grupos de filtro (a API faz OU entre grupos).
+
+   Uma consulta a mais no fetch que já roda — nada de endpoint novo (12/12 na Vercel). */
+const HIST_ORDEM = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGES.demoProposta, STAGES.negociacao, STAGES.agPagamento];
+const HIST_DIAS = 120;
+const propEntrada = id => 'hs_v2_date_entered_' + id;
+
+function mediana(lista) {
+  if (!lista.length) return null;
+  const o = [...lista].sort((a, b) => a - b);
+  const m = Math.floor(o.length / 2);
+  return o.length % 2 ? o[m] : (o[m - 1] + o[m]) / 2;
+}
+function percentil(lista, p) {
+  if (!lista.length) return null;
+  const o = [...lista].sort((a, b) => a - b);
+  return o[Math.min(o.length - 1, Math.ceil(p * o.length) - 1)];
+}
+
+async function historicoDeEtapas() {
+  const corte = Date.now() - HIST_DIAS * 24 * 60 * 60 * 1000;
+  const props = [
+    'dealname', 'hubspot_owner_id', 'dealstage', 'valor_de_mrr', 'createdate', 'closedate',
+    ...HIST_ORDEM.map(propEntrada),
+    propEntrada(STAGES.ganho1), propEntrada(STAGES.ganho2), propEntrada(STAGES.perdido)
+  ];
+  const results = await hsSearchAll({
+    filterGroups: [
+      { filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: propEntrada(STAGES.prospeccao), operator: 'GTE', value: String(corte) }
+      ] },
+      { filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: propEntrada(STAGES.visita), operator: 'GTE', value: String(corte) }
+      ] }
+    ],
+    properties: props
+  });
+
+  const t = v => { const n = v ? Date.parse(v) : NaN; return Number.isFinite(n) ? n : null; };
+  const DIA = 24 * 60 * 60 * 1000;
+
+  const negocios = results.filter(d => !isExcludedDeal(d)).map(d => {
+    const p = d.properties || {};
+    const entrada = {};
+    HIST_ORDEM.forEach((id, i) => { const ms = t(p[propEntrada(id)]); if (ms != null) entrada[i + 1] = ms; });
+    const ganho = t(p[propEntrada(STAGES.ganho1)]) || t(p[propEntrada(STAGES.ganho2)]);
+    const perda = t(p[propEntrada(STAGES.perdido)]);
+    const ranks = Object.keys(entrada).map(Number);
+    const porta = ranks.length ? Math.min(...ranks.map(r => entrada[r])) : null;
+    const rankMax = ranks.length ? Math.max(...ranks) : 0;
+    return {
+      owner: String(p.hubspot_owner_id || '') || 'sem-dono',
+      etapaAtual: String(p.dealstage || ''),
+      mrr: Number(p.valor_de_mrr) || 0,
+      entrada, ganho, perda, porta, rankMax
+    };
+  }).filter(d => d.porta != null);
+
+  const mesDe = ms => new Date(ms).toISOString().slice(0, 7);
+
+  /* TURMA = quem entrou no funil no mês. Mês com menos de 30 negócios não vira taxa: turma
+     pequena com "50% de conversão" em 2 negócios é ruído com cara de dado. */
+  const turmas = {};
+  negocios.forEach(d => {
+    const m = mesDe(d.porta);
+    if (!turmas[m]) turmas[m] = [];
+    turmas[m].push(d);
+  });
+
+  const etapas = HIST_ORDEM.map((id, i) => ({ rank: i + 1, id, nome: STAGE_LABELS[id] }));
+
+  const escada = {};
+  Object.keys(turmas).forEach(m => {
+    const lista = turmas[m];
+    if (lista.length < 30) return;
+    /* POR ONDE A TURMA ENTROU: sem isso a tela mostra Prospecção menor que o topo e
+       parece erro de conta — na verdade é a segunda porta (entrada direta na Visita). */
+    const portas = {};
+    lista.forEach(d => {
+      const ranks = Object.keys(d.entrada).map(Number);
+      const rankPorta = ranks.filter(r => d.entrada[r] === d.porta).sort((a, b) => a - b)[0];
+      const nome = STAGE_LABELS[HIST_ORDEM[rankPorta - 1]] || 'outra etapa';
+      portas[nome] = (portas[nome] || 0) + 1;
+    });
+    escada[m] = {
+      entraramNoFunil: lista.length,
+      portas,
+      ganharam: lista.filter(d => d.ganho != null).length,
+      perderam: lista.filter(d => d.perda != null).length,
+      etapas: etapas.map(e => {
+        const chegaram = lista.filter(d => d.entrada[e.rank] != null);
+        const avancaram = chegaram.filter(d => d.rankMax > e.rank || d.ganho != null);
+        const ganharam = chegaram.filter(d => d.ganho != null);
+        /* Perdeu NESTA etapa = perdeu e não passou dela. Sem isso a mesma perda apareceria
+           em todas as etapas por onde o negócio passou. */
+        const perderamAqui = chegaram.filter(d => d.perda != null && d.rankMax === e.rank);
+        const aindaAqui = chegaram.filter(d => d.etapaAtual === e.id);
+        return {
+          rank: e.rank, nome: e.nome,
+          chegaram: chegaram.length,
+          avancaram: avancaram.length,
+          ganharam: ganharam.length,
+          perderamAqui: perderamAqui.length,
+          aindaAqui: aindaAqui.length
+        };
+      })
+    };
+  });
+
+  /* VELOCIDADE: dias entre entrar numa etapa e entrar na próxima que o negócio alcançou.
+     Só quem avançou entra na conta — quem está parado não tem duração, tem idade, e são
+     coisas diferentes (a idade de quem está parado já está na tela, como SLA estourado). */
+  const velocidade = etapas.map(e => {
+    const dias = [];
+    negocios.forEach(d => {
+      const de = d.entrada[e.rank];
+      if (de == null) return;
+      const proximos = Object.keys(d.entrada).map(Number).filter(r => r > e.rank).map(r => d.entrada[r]);
+      const alvos = d.ganho != null ? proximos.concat([d.ganho]) : proximos;
+      const destino = alvos.length ? Math.min.apply(null, alvos) : null;
+      if (destino == null || destino <= de) return;
+      dias.push((destino - de) / DIA);
+    });
+    return {
+      rank: e.rank, nome: e.nome, sla: SLA_DAYS[e.id] || null, n: dias.length,
+      mediana: dias.length ? Math.round(mediana(dias) * 10) / 10 : null,
+      p75: dias.length ? Math.round(percentil(dias, 0.75) * 10) / 10 : null
+    };
+  });
+
+  const ciclos = negocios.filter(d => d.ganho != null && d.ganho > d.porta).map(d => (d.ganho - d.porta) / DIA);
+  const ciclo = {
+    n: ciclos.length,
+    mediana: ciclos.length ? Math.round(mediana(ciclos) * 10) / 10 : null,
+    p75: ciclos.length ? Math.round(percentil(ciclos, 0.75) * 10) / 10 : null
+  };
+
+  /* POR EXECUTIVO: a janela inteira, não mês a mês — turma de um mês por pessoa tem n
+     pequeno demais para virar taxa. O n vai junto para a tela poder dizer "poucos casos". */
+  const porOwner = {};
+  const owners = Array.from(new Set(negocios.map(d => d.owner)));
+  owners.forEach(o => {
+    const meus = negocios.filter(d => d.owner === o);
+    const cic = meus.filter(d => d.ganho != null && d.ganho > d.porta).map(d => (d.ganho - d.porta) / DIA);
+    porOwner[o] = {
+      entraramNoFunil: meus.length,
+      ciclo: { n: cic.length, mediana: cic.length ? Math.round(mediana(cic) * 10) / 10 : null },
+      etapas: etapas.map(e => {
+        const chegaram = meus.filter(d => d.entrada[e.rank] != null);
+        const avancaram = chegaram.filter(d => d.rankMax > e.rank || d.ganho != null);
+        const dias = [];
+        chegaram.forEach(d => {
+          const de = d.entrada[e.rank];
+          const proximos = Object.keys(d.entrada).map(Number).filter(r => r > e.rank).map(r => d.entrada[r]);
+          const alvos = d.ganho != null ? proximos.concat([d.ganho]) : proximos;
+          const destino = alvos.length ? Math.min.apply(null, alvos) : null;
+          if (destino != null && destino > de) dias.push((destino - de) / DIA);
+        });
+        return {
+          rank: e.rank, nome: e.nome,
+          chegaram: chegaram.length, avancaram: avancaram.length,
+          mediana: dias.length ? Math.round(mediana(dias) * 10) / 10 : null, nDias: dias.length
+        };
+      })
+    };
+  });
+
+  const meses = Object.keys(escada).sort();
+  return {
+    dias: HIST_DIAS,
+    negocios: negocios.length,
+    /* De onde vem o histórico: a propriedade começa em julho/26. A tela precisa poder dizer
+       isso — senão "nenhuma turma antes de julho" parece defeito do Cockpit. */
+    primeiroMes: meses[0] || null,
+    ultimoMes: meses[meses.length - 1] || null,
+    minimoDaTurma: 30,
+    escada, velocidade, ciclo, porOwner
+  };
+}
+
 async function stageTotalThisMonth(stageIdOuLista) {
   const now = new Date();
   // Início do mês corrente às 00:00 em America/Sao_Paulo — usa o horário de Brasília (não UTC)
@@ -1071,6 +1267,8 @@ async function main() {
   /* POR QUE PERDEMOS: motivo de perda dos ultimos 90 dias, por motivo e por executivo.
      Uma consulta a mais no fetch que ja roda — nada de endpoint novo (12/12 na Vercel). */
   const motivosPerda = await motivosDePerda();
+  /* CONVERSAO DE VERDADE: por turma, sobre a data de entrada em cada etapa. */
+  const historicoEtapas = await historicoDeEtapas();
   const perdidoSemana = perdidoSemanaDeals.length;
 
   // Fechados no mês corrente (pro KPI "Fechados no mês" vs. meta do time) — mesma
@@ -1469,6 +1667,7 @@ async function main() {
       perdidos: perdidoSemanaDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id }))
     },
     motivosPerda,
+    historicoEtapas,
     funil: {
       labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
       valores: [backlog, prospeccao, visita, diagnostico, demoProposta, negociacao, agPagamento, ganho, perdido, reciclagem],

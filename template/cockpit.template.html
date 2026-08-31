@@ -673,6 +673,18 @@
     .board .rep{grid-template-columns:1fr;gap:10px;}
     .rep-status{justify-self:start;}
   }
+  /* O CORPO NAO ROLA DE LADO (30/08/26). Medido a 375px: a página tinha 466px porque o
+     menor override de .pracas parava em 2 colunas, no 1240 acima. .estoque (Prospecção)
+     tem o mesmo desenho de 5 colunas e o mesmo defeito.
+     Este bloco vem DEPOIS do 1240 de propósito: mesma especificidade, ganha quem vem
+     por último — na primeira tentativa a regra ficou acima e nunca aplicou.
+     min-width:0 nos filhos porque grade de uma coluna ainda é empurrada por conteúdo de
+     largura mínima (aqui, três números lado a lado no card de praça). */
+  @media (max-width:640px){
+    .pracas,.estoque{grid-template-columns:minmax(0,1fr);}
+    .pracas>*,.estoque>*{min-width:0;}
+    .praca-nums{flex-wrap:wrap;}
+  }
 
   /* --- Prospecção: estoque por praça (tanques) --- */
   .estoque{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
@@ -5696,6 +5708,98 @@
     #viewDaily .daily-team-cta{min-height:44px;display:flex;align-items:center;justify-content:center;}
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════════════════
+     .gs — A SEMANA ANALITICA (30/08/26). Conversão de verdade, pela primeira vez.
+
+     O Cockpit só sabia estoque: quantos negócios estão em cada etapa AGORA. Estoque nunca
+     foi conversão — e a tela chegou a dividir dois estoques e mostrar "294%". Com a data de
+     entrada em cada etapa (hs_v2_date_entered_*, preenchida desde julho/26) dá para
+     perguntar por TURMA: dos que entraram no funil em julho, quantos chegaram à Visita?
+
+     Três leituras, nesta ordem, porque é a ordem das perguntas do gestor:
+       1. A ESCADA da turma — onde o funil vaza, com o degrau pior marcado;
+       2. QUANTO TEMPO cada etapa leva — mediana e P75 contra o SLA da etapa;
+       3. O CICLO de quem fechou — do primeiro dia no funil até o ganho.
+
+     Mesma paleta do resto (.d4-shell / .gx / .pbv6), escopada em .gs.
+     ═══════════════════════════════════════════════════════════════════════════════════ */
+  .gs{
+    --gs-card:#FFFEFB; --gs-linha:#E3DDD0; --gs-linha-fina:#EEE9DE; --gs-ink:#1A1613;
+    --gs-muted:#6B6254; --gs-muted2:#988D7B; --gs-red:#E51A31; --gs-dark:#14110D;
+    --gs-dark-ink:#F6F3EC; --gs-dark-mut:#A79C8A; --gs-amber:#B0782A; --gs-amber-bg:#FBF3E4;
+    --gs-amber-linha:#EAD9B4; --gs-green:#157A5C; --gs-green-bg:#E4F2EB;
+  }
+  .gs-secao{background:var(--gs-card);border:1px solid var(--gs-linha);border-radius:16px;padding:18px 20px;margin-bottom:16px;}
+  .gs-secao-cab{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:6px;}
+  .gs-secao-cab b{font:800 11px 'Archivo',system-ui,sans-serif;letter-spacing:.13em;text-transform:uppercase;color:var(--gs-muted2);}
+  .gs-secao-cab span{font-size:11.5px;color:var(--gs-muted);}
+  .gs-nota{margin-top:12px;font-size:11.5px;line-height:1.6;color:var(--gs-muted);}
+  .gs-nota b{color:var(--gs-ink);font-weight:800;}
+
+  /* seletor de turma: chips reais, um por mês com turma cheia */
+  .gs-turmas{display:flex;gap:7px;flex-wrap:wrap;margin:12px 0 4px;}
+  .gs-turma{border:1px solid var(--gs-linha);background:transparent;border-radius:999px;padding:6px 13px;
+    font:700 11.5px 'Manrope',system-ui,sans-serif;color:var(--gs-muted);cursor:pointer;min-height:32px;}
+  .gs-turma:hover{border-color:var(--gs-muted2);color:var(--gs-ink);}
+  .gs-turma.is-ativa{background:var(--gs-dark);border-color:var(--gs-dark);color:var(--gs-dark-ink);}
+  .gs-turma small{display:block;font-weight:600;font-size:9.5px;opacity:.75;}
+
+  /* 1 · a escada: cada degrau é uma etapa, a largura é quanta gente chegou */
+  .gs-escada{display:grid;gap:10px;margin-top:14px;}
+  .gs-degrau{display:grid;grid-template-columns:150px minmax(0,1fr) 108px;gap:11px;align-items:center;}
+  .gs-degrau-rot{font-size:11.5px;color:var(--gs-muted);}
+  .gs-degrau-rot small{display:block;font-size:10px;color:var(--gs-muted2);}
+  .gs-degrau-trilha{position:relative;height:20px;background:var(--gs-linha-fina);border-radius:6px;overflow:hidden;}
+  .gs-degrau-trilha i{display:block;height:100%;border-radius:6px;background:var(--gs-ink);}
+  .gs-degrau-trilha i.is-vaza{background:var(--gs-red);}
+  .gs-degrau-num{text-align:right;font:800 13px 'Archivo',system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--gs-ink);}
+  .gs-degrau-num small{display:block;font-weight:700;font-size:10.5px;color:var(--gs-muted2);}
+  .gs-degrau-num small.is-vaza{color:var(--gs-red);}
+  /* o destino de quem chegou nesta etapa, em uma linha */
+  .gs-destino{grid-column:2/4;display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--gs-muted2);margin-top:-4px;}
+  .gs-destino b{font-weight:800;color:var(--gs-muted);}
+  .gs-destino .is-ganho b{color:var(--gs-green);}
+  .gs-destino .is-perda b{color:var(--gs-red);}
+
+  /* 2 · tempo por etapa: mediana contra o SLA */
+  .gs-tempo{display:grid;gap:9px;margin-top:14px;}
+  .gs-tempo-linha{display:grid;grid-template-columns:150px minmax(0,1fr) 120px;gap:11px;align-items:center;}
+  .gs-tempo-trilha{position:relative;height:16px;background:var(--gs-linha-fina);border-radius:999px;overflow:hidden;}
+  .gs-tempo-trilha i{display:block;height:100%;border-radius:999px;background:var(--gs-green);}
+  .gs-tempo-trilha i.is-estourado{background:var(--gs-red);}
+  /* o SLA é uma régua, não uma barra — compara sem competir com o dado */
+  .gs-tempo-sla{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--gs-amber);}
+  .gs-tempo-num{text-align:right;font:800 12px 'Archivo',system-ui,sans-serif;font-variant-numeric:tabular-nums;color:var(--gs-ink);}
+  .gs-tempo-num small{display:block;font-weight:600;font-size:10px;color:var(--gs-muted2);}
+  .gs-legenda{display:flex;gap:14px;flex-wrap:wrap;margin-top:11px;font-size:10.5px;color:var(--gs-muted2);}
+  .gs-legenda i{display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle;}
+
+  /* 3 · o ciclo de quem fechou */
+  .gs-ciclo{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;background:var(--gs-dark);color:var(--gs-dark-ink);
+    border-radius:14px;padding:16px 20px;margin-top:14px;}
+  .gs-ciclo-num{font:800 30px 'Archivo',system-ui,sans-serif;font-variant-numeric:tabular-nums;line-height:1;}
+  .gs-ciclo-num span{font-size:13px;font-weight:700;margin-left:4px;}
+  .gs-ciclo-tx{font-size:12px;color:var(--gs-dark-mut);line-height:1.6;flex:1;min-width:180px;}
+  .gs-ciclo-tx b{color:var(--gs-dark-ink);}
+
+  .gs-vazio{padding:22px 20px;border:1px solid var(--gs-amber-linha);background:var(--gs-amber-bg);border-radius:14px;
+    font-size:12.5px;line-height:1.65;color:var(--gs-muted);}
+  .gs-vazio b{color:var(--gs-ink);}
+
+  @media (max-width:760px){
+    .gs-secao{padding:15px 14px;}
+    .gs-degrau{grid-template-columns:110px minmax(0,1fr) 84px;gap:8px;}
+    .gs-tempo-linha{grid-template-columns:110px minmax(0,1fr) 96px;gap:8px;}
+    .gs-degrau-num{font-size:12px;}
+    .gs-ciclo-num{font-size:25px;}
+  }
+  @media (max-width:420px){
+    .gs-degrau{grid-template-columns:88px minmax(0,1fr) 74px;}
+    .gs-tempo-linha{grid-template-columns:88px minmax(0,1fr) 88px;}
+    .gs-degrau-rot,.gs-degrau-rot small{font-size:10.5px;}
+    .gs-turma{min-height:36px;}
+  }
+
   /* ═══ MODO TV (handoff "Daily & Ritmo", Seção 3) ═══ */
   body.tv .app-main{max-width:1880px;}
   body.tv .revbar{display:none;}
@@ -5957,6 +6061,9 @@
   <div class="view" id="viewResumo">
     <!-- Correção v3 2.2: banner-título genérico removido — a faixa escura da própria aba é o único cabeçalho. -->
     <div id="resumoContent"></div>
+    <!-- A SEMANA ANALITICA (30/08/26): fica FORA de #resumoContent porque
+         renderResumoSemanal reescreve aquele nó inteiro via innerHTML. -->
+    <div class="gs" id="gsHistoricoBloco" style="margin-top:20px;"></div>
     <!-- BLOCO 2 (10/08/26): Pódio + Meta do mês vindos do Cockpit. Fica FORA de
          #resumoContent de propósito — renderResumoSemanal reescreve aquele nó inteiro
          via innerHTML e apagaria este cartão a cada render. renderPodioMeta continua
@@ -6648,6 +6755,7 @@ function aplicarVisaoPorPapel() {
     if (typeof renderVendasMes === 'function') renderVendasMes();
     if (typeof renderPorQuePerdemos === 'function') renderPorQuePerdemos();
     if (typeof renderPodioMeta === 'function') renderPodioMeta();
+    if (typeof renderHistoricoEtapas === 'function') renderHistoricoEtapas();
   }
   // BLOCO 2 (10/08/26, Julyan — "a tela tá demorando a abrir, principalmente a aba
   // Hoje"): só o que é BARATO e aparece fora das abas roda agora.
@@ -17374,6 +17482,7 @@ document.getElementById('tabBtnResumo').addEventListener('click', () => {
   desenharViewSeNecessario('viewResumo', () => {
     if (typeof renderResumoSemanal === 'function') renderResumoSemanal();
     if (typeof renderPodioMeta === 'function') renderPodioMeta();
+    if (typeof renderHistoricoEtapas === 'function') renderHistoricoEtapas();
   });
 });
 document.getElementById('tabBtnDaily').addEventListener('click', () => {
@@ -17489,6 +17598,180 @@ activateTab((hojeEhSegunda && DATA.resumoSemanal) ? 'viewResumo' : 'viewCockpit'
 // de kpisDetalheHtml (ver comentário acima da função renderResumoSemanal), que também
 // foi limpo. .delta (a classe CSS que deltaHtml gerava) segue definida e em uso pelos
 // novos tileKpiNovo/kpis da Semana — só esta função-helper específica morreu.
+
+/* ═══════════════════════════════════════════════════════════════════════════════════
+   A SEMANA ANALITICA — escada da turma, tempo por etapa, ciclo de quem fechou.
+
+   Regra que vale para as três leituras: NADA aqui compara estoques. Toda taxa é de turma
+   (quem entrou no funil no mês X, seguido no tempo), e todo tempo é medido entre duas datas
+   de entrada reais. Se o histórico não veio, a tela diz isso — ausência não é zero.
+   ═══════════════════════════════════════════════════════════════════════════════════ */
+const GS_MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function gsRotuloMes(iso) {
+  const p = String(iso || '').split('-');
+  const m = Number(p[1]);
+  if (!p[0] || !m) return String(iso || '');
+  return GS_MESES[m - 1] + '/' + p[0].slice(2);
+}
+let gsTurmaAtual = null;
+
+function gsEscadaHTML(h) {
+  const meses = Object.keys(h.escada).sort();
+  if (!meses.includes(gsTurmaAtual)) gsTurmaAtual = meses[meses.length - 1];
+  const turma = h.escada[gsTurmaAtual];
+  const topo = turma.entraramNoFunil || 1;
+
+  /* TAXA DE SAIDA, não "% da etapa anterior" (corrigido em 30/08/26 lendo a tela).
+     Comparar uma etapa com a de cima não resiste às DUAS PORTAS de entrada: quem entra
+     direto na Visita nunca passou pela Prospecção, e a tela chegou a dizer que 94 negócios
+     "pararam" na Prospecção quando eles tinham entrado pela outra porta. A conta honesta é
+     dentro da própria etapa: de quem CHEGOU aqui, quantos saíram daqui para frente.
+     Numerador e denominador no mesmo conjunto — imune às portas e a negócio que salta etapa.
+
+     O pior degrau é a menor taxa de saída, e só entra na disputa etapa com pelo menos 20
+     negócios: 2 de 3 é 67% e não é notícia. Marca uma só — duas marcas vermelhas em seis
+     linhas é decoração, não diagnóstico. */
+  const MIN_PARA_ACUSAR = 20;
+  const taxaDe = e => e.chegaram > 0 ? e.avancaram / e.chegaram : null;
+  let pior = { i: -1, taxa: 2 };
+  turma.etapas.forEach((e, i) => {
+    const t = taxaDe(e);
+    if (t === null || e.chegaram < MIN_PARA_ACUSAR) return;
+    if (t < pior.taxa) pior = { i: i, taxa: t, nome: e.nome, chegaram: e.chegaram, avancaram: e.avancaram };
+  });
+
+  const chips = meses.map(m => '<button type="button" class="gs-turma' + (m === gsTurmaAtual ? ' is-ativa' : '') +
+    '" data-gs-turma="' + m + '">' + gsRotuloMes(m) +
+    '<small>' + h.escada[m].entraramNoFunil + ' negócios</small></button>').join('');
+
+  const degraus = turma.etapas.map((e, i) => {
+    const doTopo = Math.round((e.chegaram / topo) * 100);
+    const t = taxaDe(e);
+    const vaza = i === pior.i;
+    const largura = Math.max(e.chegaram > 0 ? 2 : 0, Math.round((e.chegaram / topo) * 100));
+    const destino = [];
+    if (e.perderamAqui) destino.push('<span class="is-perda"><b>' + e.perderamAqui + '</b> perderam aqui</span>');
+    if (e.aindaAqui) destino.push('<span><b>' + e.aindaAqui + '</b> ainda parados nesta etapa</span>');
+    return '<div class="gs-degrau">' +
+      '<div class="gs-degrau-rot">' + esc(e.nome) + '<small>' + doTopo + '% de quem entrou no funil</small></div>' +
+      '<div class="gs-degrau-trilha"><i class="' + (vaza ? 'is-vaza' : '') + '" style="width:' + largura + '%;"></i></div>' +
+      '<div class="gs-degrau-num">' + e.chegaram +
+        (t === null ? '' : '<small class="' + (vaza ? 'is-vaza' : '') + '">' + Math.round(t * 100) + '% saíram daqui</small>') +
+      '</div>' +
+      (destino.length ? '<div class="gs-destino">' + destino.join('') + '</div>' : '') +
+    '</div>';
+  }).join('');
+
+  const notaPior = pior.i >= 0
+    ? 'A etapa que segura mais gente é <b>' + esc(pior.nome) + '</b>: de ' + pior.chegaram + ' que chegaram nela, ' +
+      pior.avancaram + ' saíram para frente — <b>' + Math.round(pior.taxa * 100) + '% de saída</b>. É onde uma hora de treino do time rende mais.'
+    : 'Nenhuma etapa desta turma tem negócios suficientes para apontar a pior.';
+
+  /* POR ONDE ENTRARAM: explica por que a primeira barra é menor que o topo. */
+  const portas = turma.portas || null;
+  const notaPortas = portas
+    ? ' Entraram por: <b>' + Object.keys(portas).map(k => esc(k) + ' ' + portas[k]).join(' · ') + '</b>.'
+    : '';
+  const notaFim = turma.ganharam != null
+    ? ' Dessa turma, <b>' + turma.ganharam + ' fecharam</b> até agora' + (turma.perderam != null ? ' e ' + turma.perderam + ' foram perdidos' : '') + '.'
+    : '';
+
+  return '<div class="gs-secao">' +
+    '<div class="gs-secao-cab"><b>A escada da turma</b>' +
+      '<span>de quem ENTROU no funil no mês, quantos chegaram a cada etapa — seguidos no tempo, não estoque de agora</span></div>' +
+    '<div class="gs-turmas">' + chips + '</div>' +
+    '<div class="gs-escada">' + degraus + '</div>' +
+    '<div class="gs-nota">' + notaPior +
+      '<br>Quem entrou em ' + gsRotuloMes(gsTurmaAtual) + ': <b>' + topo + ' negócios</b>.' + notaPortas + notaFim +
+      '<br><b>"% saíram daqui"</b> é medido dentro da própria etapa: de quem chegou nela, quantos seguiram para frente. Não é comparação com a etapa de cima — o funil tem duas portas de entrada, e comparar de cima para baixo inventaria perdas que não existiram.' +
+      ' Turma com menos de ' + h.minimoDaTurma + ' negócios não aparece aqui.' +
+    '</div>' +
+  '</div>';
+}
+
+function gsTempoHTML(h) {
+  const comDado = (h.velocidade || []).filter(v => v.mediana != null);
+  if (!comDado.length) return '';
+  const maior = Math.max.apply(null, comDado.map(v => Math.max(v.p75 || 0, v.sla || 0)));
+  const linhas = (h.velocidade || []).map(v => {
+    if (v.mediana == null) {
+      return '<div class="gs-tempo-linha"><div class="gs-degrau-rot">' + esc(v.nome) + '</div>' +
+        '<div class="gs-tempo-trilha"></div>' +
+        '<div class="gs-tempo-num" style="font-weight:600;color:var(--gs-muted2);font-size:10.5px;">ninguém avançou daqui ainda</div></div>';
+    }
+    const estourado = v.sla != null && v.mediana > v.sla;
+    const larg = Math.max(2, Math.round((v.mediana / maior) * 100));
+    const marca = v.sla != null ? Math.min(100, Math.round((v.sla / maior) * 100)) : null;
+    return '<div class="gs-tempo-linha">' +
+      '<div class="gs-degrau-rot">' + esc(v.nome) + '<small>' + v.n + ' negócio(s) que avançaram</small></div>' +
+      '<div class="gs-tempo-trilha"><i class="' + (estourado ? 'is-estourado' : '') + '" style="width:' + larg + '%;"></i>' +
+        (marca === null ? '' : '<span class="gs-tempo-sla" style="left:' + marca + '%;"></span>') + '</div>' +
+      '<div class="gs-tempo-num">' + String(v.mediana).replace('.', ',') + ' dias' +
+        '<small>' + (v.p75 != null ? 'os mais lentos: ' + String(v.p75).replace('.', ',') + 'd' : '') +
+        (v.sla != null ? ' · SLA ' + v.sla + 'd' : '') + '</small></div>' +
+    '</div>';
+  }).join('');
+
+  const acima = comDado.filter(v => v.sla != null && v.mediana > v.sla);
+  const nota = acima.length
+    ? 'Acima do próprio SLA, na mediana: <b>' + acima.map(v => esc(v.nome) + ' (' + String(v.mediana).replace('.', ',') + 'd contra ' + v.sla + 'd)').join(', ') + '</b>. Mediana estourada não é caso isolado — é o normal da etapa.'
+    : 'Nenhuma etapa está acima do próprio SLA na mediana.';
+
+  return '<div class="gs-secao">' +
+    '<div class="gs-secao-cab"><b>Quanto tempo cada etapa leva</b>' +
+      '<span>dias entre entrar na etapa e entrar na próxima · só quem avançou entra na conta</span></div>' +
+    '<div class="gs-tempo">' + linhas + '</div>' +
+    '<div class="gs-legenda"><span><i style="background:var(--gs-green);"></i>mediana dentro do SLA</span>' +
+      '<span><i style="background:var(--gs-red);"></i>mediana acima do SLA</span>' +
+      '<span><i style="background:var(--gs-amber);width:3px;height:12px;"></i>SLA da etapa</span></div>' +
+    '<div class="gs-nota">' + nota +
+      '<br>Quem está <b>parado</b> não tem duração, tem idade — e a idade de quem está parado já está na Daily, como negócio acima do SLA. As duas coisas não se somam.' +
+    '</div>' +
+  '</div>';
+}
+
+function gsCicloHTML(h) {
+  const c = h.ciclo || {};
+  if (c.mediana == null) return '';
+  return '<div class="gs-secao">' +
+    '<div class="gs-secao-cab"><b>O ciclo de quem fechou</b>' +
+      '<span>do primeiro dia no funil até o ganho · ' + c.n + ' negócio(s) fechados nos últimos ' + h.dias + ' dias</span></div>' +
+    '<div class="gs-ciclo">' +
+      '<div class="gs-ciclo-num">' + String(c.mediana).replace('.', ',') + '<span>dias</span></div>' +
+      '<div class="gs-ciclo-tx">é o que leva, na mediana, entre o negócio entrar no funil e ser fechado. ' +
+        (c.p75 != null ? 'Um quarto dos fechamentos levou <b>' + String(c.p75).replace('.', ',') + ' dias ou mais</b>. ' : '') +
+        'Serve para uma coisa prática: um negócio que entrou hoje e você quer no mês, precisa andar mais rápido que isso.</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function gsHistoricoHTML() {
+  const h = DATA && DATA.historicoEtapas;
+  if (!h || !h.escada || !Object.keys(h.escada).length) {
+    /* AUSENCIA NAO E ZERO: sem histórico a tela não mostra 0%, mostra por que não tem. */
+    return '<div class="gs-vazio"><b>A conversão por turma entra no próximo carregamento do HubSpot.</b><br>' +
+      'Ela é calculada sobre a data de entrada em cada etapa, que passou a ser lida agora. O carregamento roda às 8h56, 13h e 19h — ' +
+      'até o próximo, esta parte fica vazia de propósito: melhor sem número do que com número inventado.' +
+      (h && h.negocios === 0 ? '<br>O último carregamento não encontrou negócios com data de entrada nos últimos ' + h.dias + ' dias.' : '') +
+    '</div>';
+  }
+  return gsEscadaHTML(h) + gsTempoHTML(h) + gsCicloHTML(h) +
+    '<div class="gs-nota" style="padding:0 4px;">Histórico de etapa disponível de <b>' + gsRotuloMes(h.primeiroMes) +
+    '</b> em diante — antes disso o HubSpot não guardava a data de entrada, então não existe turma mais antiga para comparar.</div>';
+}
+
+function renderHistoricoEtapas() {
+  const el = document.getElementById('gsHistoricoBloco');
+  if (!el) return;
+  el.innerHTML = gsHistoricoHTML();
+  /* os chips de turma são o único clique deste bloco, e trocam a escada de verdade */
+  el.querySelectorAll('[data-gs-turma]').forEach(b => {
+    b.addEventListener('click', () => {
+      gsTurmaAtual = b.getAttribute('data-gs-turma');
+      renderHistoricoEtapas();
+    });
+  });
+}
 
 async function renderResumoSemanal() {
   const resumoEl = document.getElementById('resumoContent');
