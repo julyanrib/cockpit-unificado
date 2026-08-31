@@ -1394,6 +1394,35 @@ teste('quentes no radar: a guarda de SLA e o "sem proximo passo" sao uma fonte s
   igual(vazio.quentesNoRadar(null).semPasso, [], 'e semPasso vazio');
 });
 
+teste('o ultimo dia do SLA fica DENTRO do radar, e e nomeado', () => {
+  /* DEFEITO REAL, medido em 31/08/26 com a carteira do time na mao. Duas regras para a
+     mesma pergunta discordavam num ponto so — o dia em que `dias == sla`:
+       servidor  (fetch-hubspot): estourou = dias > sla   -> 7 > 7 falso  -> QUENTE
+       cliente   (quentesNoRadar): radar   = sla - dias > 0 -> 0 > 0 falso -> FORA
+     Tres negocios cairam nesse vao naquele dia (UAU UNIDADE PENHA e Two Guys em
+     Negociacao 7/7, O Minas em Ag. Pagamento 2/2): nao apareciam na lista de quentes
+     porque o cliente os tirava, e nao apareciam na de travados porque o servidor nao os
+     marcou. Eram justamente os negocios em que agir HOJE decide, porque amanha estouram.
+
+     A regra unica e a do servidor: estourar e PASSAR do prazo. Este teste existe para o
+     `>= 0` nunca voltar a ser `> 0` sem alguem tropecar. */
+  const base = dados({
+    stageMeta: { labels: { '1395880472': 'Negociacao' }, slaDays: { '1395880472': 7 } },
+    temperatura: { quentes: [
+      { id: 'u1', name: 'No ultimo dia', ownerId: OWNER, stageId: '1395880472', dias: 7, tarefas: [], notas: [] },
+      { id: 'u2', name: 'Um dia antes', ownerId: OWNER, stageId: '1395880472', dias: 6, tarefas: [], notas: [] },
+      { id: 'u3', name: 'Um dia depois', ownerId: OWNER, stageId: '1395880472', dias: 8, tarefas: [], notas: [] }
+    ] }
+  });
+  const c = novoContexto(base, { ownerId: null, role: 'manager' });
+  const q = c.quentesNoRadar(null);
+  igual(q.radar.map(l => l.id), ['u1', 'u2'], 'o do ultimo dia continua no radar; o que passou, nao');
+  igual(q.noLimite.map(l => l.id), ['u1'], 'e o ultimo dia e nomeado a parte, para a tela poder avisar');
+  igual(q.foraDoPrazo.map(l => l.id), ['u3'], 'quem o servidor mandou como quente ja fora do prazo nao desaparece');
+  verdade(q.noLimite.every(l => q.radar.includes(l)), 'noLimite e subconjunto do radar');
+  verdade(q.foraDoPrazo.every(l => !q.radar.includes(l)), 'foraDoPrazo nunca esta no radar');
+});
+
 teste('visoes da prospeccao: recem-aberta e pronta-pra-ligar sao mundos disjuntos', () => {
   // Medido na base de 970 contas em 28/08: recem-aberta E com telefone = ZERO. Nao e
   // acidente de preenchimento, e a forma das fontes — Casa dos Dados vem do CNPJ e traz
