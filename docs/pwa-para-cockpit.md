@@ -102,7 +102,19 @@ sendHubspotEvent({
 da API. Validem no cliente **e** na edge.
 
 Se preferirem não criar evento novo, o Cockpit já expõe uma rota equivalente e
-autenticada — `POST /api/criar-nota-negocio` com `tipoAcao: 'proximo-passo'` e o objeto
+autenticada.
+
+> **Mudou o caminho canônico em 31/08/26.** As ações de negócio do Cockpit passaram a ser
+> servidas por uma porta única: `POST /api/negocio-acao` com `op: 'nota'`. O motivo é
+> capacidade — o plano Hobby da Vercel dá 12 funções, as 12 estavam ocupadas, e precisamos
+> de espaço para o endpoint onde o PWA vai publicar a fila pendente do app.
+>
+> **A URL antiga continua valendo.** `POST /api/criar-nota-negocio` segue existindo como
+> apelido da mesma implementação, com o mesmo corpo e os mesmos códigos de erro. Nada que
+> vocês já tenham escrito precisa mudar. Quando confirmarem a migração para a porta única,
+> a gente remove o apelido e libera mais um slot.
+
+O corpo é idêntico nos dois caminhos: `tipoAcao: 'proximo-passo'` e o objeto
 `qualificacao: { nomeDoSistema, gargalo }`. Ela grava as duas propriedades e mais nada,
 valida a picklist no servidor e confere pipeline e dono. Mas o caminho pelo
 `hubspot-sync` é mais direto e não faz o PWA depender do Cockpit.
@@ -124,7 +136,8 @@ Procurei `DESFECHO_VISITA` no bundle do PWA: **não existe**.
 ### O que fazer
 
 Ao fechar a visita, gravar a nota no negócio **com este bloco como corpo** — via
-`hubspot-sync` (evento de nota) ou via `POST /api/criar-nota-negocio` do Cockpit:
+`hubspot-sync` (evento de nota) ou via `POST /api/negocio-acao` do Cockpit (`op: 'nota'`;
+a URL antiga `/api/criar-nota-negocio` continua funcionando como apelido):
 
 ```
 DESFECHO_VISITA v1
