@@ -6314,6 +6314,37 @@
   .xv3-chip-btn:active{transform:translateY(1px);}
 
   /* 4 · hero de 1 andar, com os números DENTRO */
+/* ── faixa de cadência da aba Meu funil (v3, 31/08/26) ─────────────────────────── */
+/* rodapé do kanban: as duas pílulas de disciplina, lado a lado (v3, 31/08/26) */
+/* ALVO DE TOQUE NA ABA MEU FUNIL (v3, 31/08/26). Medidos 55 controles abaixo de 38px:
+     os 4 chips de filtro (28), as 6 barras do funil (19-21) e as 22 ações de mover do
+     kanban (24). A prancha pede >=38 no desktop e 44 no toque, e estes são justamente os
+     controles que o executivo usa com o dedo, no celular, dentro do app. A barra do funil
+     cresce por padding — o trilho continua com 14px, como a prancha desenha. */
+  #viewMeuFunil .mf-view-filter{min-height:38px;display:inline-flex;align-items:center;}
+  #viewMeuFunil .mf-funnel-bar{min-height:38px;}
+  #viewMeuFunil .kb-action{min-height:38px;display:inline-flex;align-items:center;justify-content:center;}
+  #viewMeuFunil .kb-col-more{min-height:38px;}
+  /* os dois botoes de mover de cada card do kanban ("< Prospeccao" / "Decisor >") vinham
+     sem classe, com 22px — sao os controles que movem negocio no HubSpot, os ultimos que
+     deviam ser pequenos. */
+  #viewMeuFunil .kb-mover button{min-height:38px;}
+  @media (pointer:coarse){ #viewMeuFunil .kb-mover button{min-height:44px;} }
+  @media (pointer:coarse){
+    #viewMeuFunil .mf-view-filter,#viewMeuFunil .mf-funnel-bar,#viewMeuFunil .kb-action,#viewMeuFunil .kb-col-more{min-height:44px;}
+  }
+  .xv3-kb-rodape{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px;}
+  @media (max-width:760px){ .xv3-kb-rodape{grid-template-columns:minmax(0,1fr);} }
+  .xv3-cadencia{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 14px;}
+  .xv3-cad-card{display:flex;align-items:center;gap:11px;text-align:left;background:var(--panel);border:1px solid var(--line-soft);border-radius:14px;padding:11px 14px;min-height:44px;cursor:pointer;box-shadow:var(--sh-card);transition:all .18s var(--ease);}
+  .xv3-cad-card:hover{transform:translateY(-2px);box-shadow:var(--sh-hover);}
+  .xv3-cad-card:active{transform:translateY(1px);}
+  .xv3-cad-card.is-on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink),var(--sh-card);}
+  .xv3-cad-card>b{font-family:'Archivo',sans-serif;font-weight:900;font-size:24px;line-height:1;font-variant-numeric:tabular-nums;flex:none;}
+  .xv3-cad-card>span{min-width:0;font-size:10.5px;color:var(--muted);line-height:1.4;}
+  .xv3-cad-card>span i{display:block;font-style:normal;font-weight:800;font-size:12px;color:var(--ink);}
+  .xv3-cad-card.is-green>b{color:var(--green);} .xv3-cad-card.is-amber>b{color:var(--amber-ink);} .xv3-cad-card.is-red>b{color:var(--red-dk);}
+  @media (max-width:760px){ .xv3-cadencia{grid-template-columns:minmax(0,1fr);} }
   .xv3-hero{background:var(--hero-grad);color:var(--dark-ink);border-radius:20px;padding:20px 26px;display:flex;align-items:center;gap:26px;box-shadow:var(--sh-hero);flex-wrap:wrap;}
   .xv3-hero-id{flex:none;min-width:246px;max-width:320px;}
   .xv3-kicker{font-family:'Archivo',sans-serif;font-weight:800;font-size:10px;letter-spacing:.16em;color:var(--hero-kicker);text-transform:uppercase;}
@@ -10891,6 +10922,40 @@ function coletarCamposPassagem(container, campos) {
    (ranking). Nada é buscado nem inventado aqui — é uma nova leitura do mesmo dado. ---- */
 let meuFunilFiltroEtapa = ''; // '' = todas
 let meuFunilFiltroVisao = 'todos'; // todos | sem_passo | sla | quentes
+/* o card "Etapa em foco" mostra 5 e abre o resto no lugar (v3, 31/08/26). Volta a 5
+   quando o executivo troca de etapa: cada etapa começa pelos 5 que mais pedem ação. */
+let mfFocoExpandido = false;
+/* ESTADO DE CADÊNCIA DE UM NEGÓCIO (v3, 31/08/26) — para a faixa da aba Meu funil.
+   Três estados possíveis, e a ordem importa: "atrasado" ganha de tudo (se o negócio já
+   passou do prazo da etapa, ter próximo passo marcado não o põe em dia), depois "hoje",
+   depois "em dia". Sem próximo passo não é nenhum dos três — é o que a visão
+   "Sem passo" já mostra, e contar em dois lugares diferentes seria pedir divergência. */
+function cadenciaEstadoDoLead(l) {
+  const sla = (DATA.stageMeta && DATA.stageMeta.slaDays) ? DATA.stageMeta.slaDays[l.stageId] : null;
+  if (sla != null && (Number(l.dias) || 0) > sla) return 'atrasado';
+  const p = l.proximaAtividade || l.proximaReuniao || null;
+  if (!p) return 'sem_passo';
+  const d = new Date(p);
+  if (isNaN(d.getTime())) return 'em_dia';
+  const hoje = isoDate(new Date());
+  const dia = isoDate(d);
+  if (dia === hoje) return 'hoje';
+  return dia < hoje ? 'atrasado' : 'em_dia';
+}
+/* A PERGUNTA DE CADA ETAPA — a prancha pede que o card em foco diga o que se pergunta
+   ali, e não só quantos negócios existem. As frases são as do funil comercial que o
+   playbook já usa; nenhuma é inventada aqui. */
+function perguntaDaEtapa(sid) {
+  const p = {
+    '1395880469': 'esta conta merece uma visita, e quando?',
+    '1396005401': 'quem decide, e quando ele te recebe?',
+    '1395880470': 'qual é a dor que justifica a proposta?',
+    '1395880471': 'a proposta está na mão de quem assina?',
+    '1395880472': 'o que falta para ele dizer sim hoje?',
+    '1395880473': 'o pagamento tem data e responsável?'
+  };
+  return p[String(sid)] || 'o que precisa acontecer para este negócio andar?';
+}
 /* BLOCO 53 (14/08/26) — Meu Funil virou mesa de planejamento do executivo:
    hero compacto → pipeline com filtros e foco em mural → plano de ataque expansível →
    disciplina comercial recolhida. A repetição Quentes/Travados foi removida.
@@ -10991,7 +11056,12 @@ function wireFilaResumo(rootEl) {
     });
   });
 }
-function destravarFunilHTML(r) {
+/* `soDiagnostico` entrou em 31/08/26 com o card "Etapa em foco" da v3. Lá embaixo do
+   diagnóstico já vem a lista dos 5 negócios da etapa — e os 3 "candidatos" deste bloco
+   SÃO negócios daquela mesma etapa. Mostrar os dois era a mesma lista duas vezes, uma
+   com 3 itens e outra com 5, o que faz o executivo perguntar qual das duas é a certa.
+   Sem argumento, comportamento igual ao de antes. */
+function destravarFunilHTML(r, soDiagnostico) {
   const d = destravarFunil(r.ownerId);
   if (!d || !d.etapaTravada || d.porEtapa.length === 0) return '';
 
@@ -11033,8 +11103,8 @@ function destravarFunilHTML(r) {
       ${d.prontosParaSubir > 0 ? `<span class="is-verde"><b>${d.prontosParaSubir}</b> pronto(s) pra subir</span>` : ''}
     </div>
 
-    <div class="destrava-lista">${visiveis.map(linhaCandidato).join('')}</div>
-    ${resto.length ? `<details class="destrava-mais"><summary>ver os outros ${resto.length}</summary>
+    ${soDiagnostico ? '' : `<div class="destrava-lista">${visiveis.map(linhaCandidato).join('')}</div>`}
+    ${(!soDiagnostico && resto.length) ? `<details class="destrava-mais"><summary>ver os outros ${resto.length}</summary>
       <div class="destrava-lista">${resto.map(linhaCandidato).join('')}</div></details>` : ''}`;
 }
 
@@ -11110,6 +11180,9 @@ async function renderMeuFunil() {
     if (meuFunilFiltroVisao === 'sem_passo') return !l.proximaAtividade;
     if (meuFunilFiltroVisao === 'sla') { const sla = slaDe(l.stageId); return sla != null && (l.dias || 0) > sla; }
     if (meuFunilFiltroVisao === 'quentes') return ETAPAS_FECHAMENTO.includes(l.stageId);
+    /* v3: as duas visões da faixa de cadência. Mesmo filtro, não um segundo mecanismo. */
+    if (meuFunilFiltroVisao === 'em_cadencia') return cadenciaEstadoDoLead(l) === 'em_dia';
+    if (meuFunilFiltroVisao === 'vence_hoje') return cadenciaEstadoDoLead(l) === 'hoje';
     return true;
   });
   const filtrosPipeline = [
@@ -11139,6 +11212,18 @@ async function renderMeuFunil() {
      dentro. O degrau vazio no meio do funil é o diagnóstico (Bruno: 14 em Visita, 0
      no Decisor), e barra de largura mínima faz o vazio parecer "pouco". */
   const diagFunil = destravarFunil(r.ownerId) || { porEtapa: [], etapaTravada: null };
+  /* ETAPA EM FOCO (v3): sem escolha do executivo, começa no gargalo — é o que a prancha
+     mostra e é a etapa que ele precisa olhar antes das outras. */
+  const etapaFoco = meuFunilFiltroEtapa || diagFunil.etapaTravada || '1396005401';
+  const etapaFocoEhGargalo = String(etapaFoco) === String(diagFunil.etapaTravada || '');
+  /* quantos negócios estão na etapa em foco, com o filtro de visão que estiver ligado —
+     o contador do cabeçalho tem que ser o tamanho da lista que aparece embaixo dele, e
+     não o total da etapa: senão o cartão diz 12 e mostra 5 sem explicar a diferença. */
+  const nFoco = leadsPipeline.filter(l => String(l.stageId) === String(etapaFoco)).length;
+  /* a faixa de cadência conta sobre TODOS os meus negócios, não sobre o filtro ligado —
+     senão clicar num cartão mudaria o próprio número do cartão. */
+  const cadEmDia = meusLeads.filter(l => cadenciaEstadoDoLead(l) === 'em_dia').length;
+  const cadHoje = meusLeads.filter(l => cadenciaEstadoDoLead(l) === 'hoje').length;
   const maxEtapa = Math.max(1, ...diagFunil.porEtapa.map(e => e.n));
   const barrasPipeline = diagFunil.porEtapa.map(e => {
     const vazia = e.n === 0;
@@ -11200,11 +11285,46 @@ async function renderMeuFunil() {
         <p class="mf-n1-nota">O número da direita é a <b>mediana de dias na etapa dividida pelo SLA dela</b>. Acima de 1x, a etapa devolve mais devagar do que a própria régua manda.</p>
       </div>
 
-      <div class="mf-n1-card${diagFunil.saudavel ? '' : ' is-decisao'}">
-        <span class="overline-mini${diagFunil.saudavel ? '' : ' is-red'}">${diagFunil.saudavel ? 'Fluxo do funil' : 'Destravar · o degrau parado'}</span>
-        ${destravarFunilHTML(r)}
+      <!-- ETAPA EM FOCO (v3, 31/08/26) — a mudança de interação mais forte da prancha.
+           Antes: clicar numa barra do funil TROCAVA o kanban pela lista da etapa, 900px
+           abaixo. O executivo clicava em "Visita", a página redesenhava, e ele tinha que
+           procurar onde a lista apareceu — a prancha chama isso de "empurrar pra baixo" e
+           pede o oposto: o clique preenche o card AO LADO, e a página não desce.
+           O kanban volta a ser sempre kanban: ele é onde o negócio se move, e perdê-lo a
+           cada clique de etapa era trocar a ferramenta pela leitura.
+           O diagnóstico do degrau (destravarFunilHTML) mora aqui dentro, porque é a
+           pergunta desta etapa — não um cartão à parte com a mesma fonte de dado. -->
+      <div class="mf-n1-card${etapaFocoEhGargalo ? ' is-decisao' : ''}">
+        <div class="mf-n1-head">
+          <span class="overline-mini${etapaFocoEhGargalo ? ' is-red' : ''}">Etapa em foco · ${esc(STAGE_LABELS[etapaFoco] || 'funil')}</span>
+          <span style="display:flex;align-items:center;gap:8px;margin-left:auto;">
+            <span style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:15px;font-variant-numeric:tabular-nums;">${nFoco}</span>
+            ${meuFunilFiltroEtapa ? '<button type="button" class="xv3-ghost mf-limpar-etapa" data-mfetapa="">Ver todas as etapas</button>' : ''}
+          </span>
+        </div>
+        ${etapaFocoEhGargalo ? destravarFunilHTML(r, true) : `<p class="mf-n1-nota">A pergunta desta etapa: <i>${esc(perguntaDaEtapa(etapaFoco))}</i></p>`}
+        ${listaEtapaHTML(leadsPipeline, etapaFoco, slaDe, mfFocoExpandido ? 0 : 5)}
+        <p class="mf-n1-nota">Clique no lead para abrir a ficha completa — a tela não desce.</p>
       </div>
     </section>
+
+    <!-- FAIXA DE CADÊNCIA (v3, 31/08/26). A pergunta que o funil por etapa não responde:
+         dos meus negócios, quantos estão com o próximo passo em dia, quantos vencem HOJE e
+         quantos já passaram do prazo. Cada cartão FILTRA o funil e o kanban — a prancha pede
+         "cards táteis que filtram", e cartão que só informa neste lugar seria número morto
+         no meio de uma tela de ação. -->
+    <div class="xv3-cadencia">
+      ${[
+        { id: 'em_cadencia', n: cadEmDia, rot: 'Em cadência', sub: 'próximo passo marcado e no prazo', tom: 'is-green' },
+        { id: 'vence_hoje', n: cadHoje, rot: 'Vencem hoje', sub: 'agir antes das 18h mantém a cadência', tom: 'is-amber' },
+        { id: 'sla', n: travados.length, rot: 'Atrasados', sub: 'acima do SLA — filtram o funil e o kanban', tom: 'is-red' }
+      ].map(c => `
+        <button type="button" class="xv3-cad-card ${c.tom}${meuFunilFiltroVisao === c.id ? ' is-on' : ''}" data-mfvisao="${c.id}"
+          aria-pressed="${meuFunilFiltroVisao === c.id}" title="Filtrar o funil e o kanban por: ${esc(c.rot)}">
+          <b>${c.n}</b>
+          <span><i>${esc(c.rot)}</i>${esc(c.sub)}</span>
+        </button>`).join('')}
+    </div>
 
     <section class="sec">
       <div class="sec-head">
@@ -11217,60 +11337,47 @@ async function renderMeuFunil() {
           <p>${meuFunilFiltroEtapa ? `<b style="color:var(--ink);">Lista de ${esc(STAGE_LABELS[meuFunilFiltroEtapa] || '')}.</b> Clique em um lead para abrir a ficha completa.` : `<b style="color:var(--ink);">${leadsPipeline.length} negócios nesta visão.</b> Cada coluna mostra os 4 prioritários · clique na etapa para ver a lista completa.`}</p>
           ${meuFunilFiltroEtapa ? '<button type="button" class="mf-limpar-etapa" data-mfetapa="">Ver todas as etapas</button>' : ''}
         </div>
-        <div class="kb-wrap" id="mfKanbanSlot">${meuFunilFiltroEtapa ? listaEtapaHTML(leadsPipeline, meuFunilFiltroEtapa, slaDe) : kanbanHTML(leadsPipeline, slaDe, '')}</div>
+        <!-- SEMPRE O KANBAN (v3, 31/08/26): a lista da etapa mudou de lugar — vive no card
+             "Etapa em foco", ao lado do funil. Trocar o kanban pela lista a cada clique de
+             etapa era tirar do executivo a única superfície onde ele MOVE negócio. -->
+        <div class="kb-wrap" id="mfKanbanSlot">${kanbanHTML(leadsPipeline, slaDe, '')}</div>
       </div>
     </section>
 
-    <!-- A fila completa NÃO mora mais aqui: 2677px e 146 botões na carteira da Kelly,
-         antes do kanban. Ela é a protagonista da aba Planejamento, com o mesmo
-         componente e a MESMA ordenação (filaDeFollowUp). Aqui ficam os 3 mais graves. -->
-    <section class="sec">
-      <div class="sec-head">
-        <span class="sec-num">2</span>
-        <h2>Resolver primeiro</h2>
-        <p>Os três mais graves da sua fila. A fila inteira, com filtros e as ações secundárias, vive no Planejamento.</p>
-      </div>
-      ${filaResumoHTML(r)}
-    </section>
-
-    <section class="sec">
-      <div class="sec-head">
-        <span class="sec-num">3</span>
-        <h2>Plano de ataque</h2>
-        <p>Abra quando quiser montar o dia por frente.</p>
-      </div>
+    <!-- RODAPÉ DO KANBAN (v3, 31/08/26): as duas pílulas de disciplina, recolhidas.
+         Eram duas seções com cabeçalho numerado e subtítulo cada — moldura de 300px para
+         dois <details> fechados. E a terceira seção, "Resolver primeiro", saiu: a faixa de
+         cadência acima responde com números o que ela respondia com três nomes, e a fila
+         inteira é a protagonista do Planejamento (o próprio subtítulo dela dizia isso).
+         filaResumoHTML() continua existindo, caso a leitura volte a fazer falta. -->
+    <div class="xv3-kb-rodape">
       <details class="mf-discipline">
-        <!-- O RÓTULO DESTE SUMMARY É ESCRITO PELO CONTEÚDO, não pelo HTML (30/08/26).
-             Ele dizia, fixo, "Três frentes para planejar o dia · rota, contas-alvo e
-             recuperação" — e estava errado duas vezes: as frentes são destravar, marcar
-             próximo passo e abrir contas-alvo (rota nenhuma), e elas são CONDICIONAIS:
-             medi com o dado real e só UMA existia (5 quentes sem data). Prometer três e
-             abrir uma é o mesmo tipo de desencontro do clique morto.
-             Quem preenche é montarAcoesDoFunil, que sabe quantas frentes existem. -->
+        <!-- O RÓTULO DESTE SUMMARY É ESCRITO PELO CONTEÚDO, não pelo HTML (30/08/26): as
+             frentes são condicionais, e prometer três abrindo uma é o mesmo desencontro do
+             clique morto. Quem preenche é montarAcoesDoFunil. -->
         <summary><b>Plano de ataque</b><span id="mfAcoesResumo">abrindo…</span></summary>
         <div id="mfAcoesSlot"></div>
       </details>
-    </section>
-
-    <section class="sec">
-      <div class="sec-head">
-        <span class="sec-num">4</span>
-        <h2>Ritmo comercial</h2>
-        <p>Abra apenas quando quiser revisar a disciplina do seu funil.</p>
-      </div>
       <details class="mf-discipline">
         <summary><b>Checklist de consistência</b><span>${travados.length} acima do SLA · ${fechamentoSemPasso.length} em fechamento sem próximo passo</span></summary>
         <div id="mfPadraoSlot" class="pb">${padraoTrabalhoLinhasHTML(r, { semanaCount: null, planoAmanha: null })}</div>
       </details>
-    </section>
+    </div>
   </div>`;
 
   // Clique em etapa foca o kanban nela; repetir o clique ou usar "Ver todas" restaura
   // as seis colunas. A antiga tabela longa não faz mais parte desta superfície.
   // A visão geral é um kanban de prioridades; clicar numa etapa troca para a lista
   // completa. Só o clique num lead abre a ficha, sem confundir etapa com negócio.
-  if (meuFunilFiltroEtapa) ligarListaEtapa(el, leadsPipeline, () => renderMeuFunil());
-  else ligarKanban(el, leadsPipeline, () => renderMeuFunil());
+  /* sempre: o card "Etapa em foco" desenha a lista mesmo sem etapa escolhida (começa no
+     gargalo), então a fiação não pode depender de meuFunilFiltroEtapa. */
+  ligarListaEtapa(el, leadsPipeline, () => renderMeuFunil());
+  /* "ver os outros N" abre a lista inteira NO PRÓPRIO CARD — sem trocar de tela. */
+  el.querySelectorAll('.mf-foco-mais').forEach(b => b.addEventListener('click', () => { mfFocoExpandido = true; renderMeuFunil(); }));
+  /* o kanban agora existe SEMPRE (a lista da etapa saiu do slot dele e foi para o card
+     "Etapa em foco"), então a fiação dele também deixa de ser alternativa — era
+     `else ligarKanban(...)`, e o else ficou órfão quando o if saiu. */
+  ligarKanban(el, leadsPipeline, () => renderMeuFunil());
 
   // Destravar (nível 1) — cada candidato abre a ficha no próximo passo.
   wireDestravarFunil(el);
@@ -22369,14 +22476,19 @@ function kanbanHTML(leads, slaDe, etapaAtiva) {
   </div>`;
 }
 
-function listaEtapaHTML(leads, etapaId, slaDe) {
+/* `limite` entrou em 31/08/26 para o card "Etapa em foco" da v3: lá cabem 5 linhas e o
+   resto abre com um clique. Sem argumento, comportamento idêntico ao de antes — o
+   chamador antigo (a lista no lugar do kanban) não sabe que o parâmetro existe. */
+function listaEtapaHTML(leads, etapaId, slaDe, limite) {
   const sla = slaDe(etapaId);
   const lista = (leads || []).filter(l => String(l.stageId) === String(etapaId)).slice().sort((a, b) => {
     const semPassoA = (a.proximaAtividade || a.proximaReuniao) ? 0 : 1;
     const semPassoB = (b.proximaAtividade || b.proximaReuniao) ? 0 : 1;
     return (semPassoB - semPassoA) || ((b.dias || 0) - (a.dias || 0));
   });
-  const linhas = lista.map(l => {
+  const teto = (limite && limite > 0) ? limite : lista.length;
+  const escondidos = Math.max(0, lista.length - teto);
+  const linhas = lista.slice(0, teto).map(l => {
     const dias = l.dias != null ? Number(l.dias) : null;
     const atrasado = sla != null && dias != null && dias > sla;
     const proxima = l.proximaAtividade || l.proximaReuniao || null;
@@ -22396,6 +22508,7 @@ function listaEtapaHTML(leads, etapaId, slaDe) {
   return `<div class="mf-lead-list" data-mf-list-stage="${etapaId}">
     <div class="mf-lead-list-head"><span>Negócio</span><span>Tempo</span><span>Próximo passo</span><span></span></div>
     ${linhas || `<div class="mf-lead-empty">Nenhum negócio nesta etapa com o filtro atual.</div>`}
+    ${escondidos > 0 ? `<button type="button" class="xv3-ghost mf-foco-mais" style="margin:8px 0 2px;">ver os outros ${escondidos} →</button>` : ''}
   </div>`;
 }
 
