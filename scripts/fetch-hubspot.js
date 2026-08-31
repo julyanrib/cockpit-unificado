@@ -873,20 +873,48 @@ async function historicoDeEtapas() {
     };
   });
 
-  const ciclos = negocios.filter(d => d.ganho != null && d.ganho > d.porta).map(d => (d.ganho - d.porta) / DIA);
+  /* CICLO SÓ DE QUEM ANDOU O FUNIL (31/08/26). Na primeira rodada com dado real o ciclo
+     mediano saiu 1,7 dia — e não era erro: o days_to_close do próprio HubSpot dá 1 dia
+     de mediana em 82 ganhos. O negócio é cadastrado praticamente no dia do fechamento,
+     porque a conversa acontece na rua e o registro entra quando já está ganho.
+     Chamar isso de "ciclo" convidaria a ler "vendemos em dois dias". Então entram na
+     conta só os ganhos que entraram por uma das duas portas (Prospecção ou Visita) e
+     levaram pelo menos dois dias; o resto é contado à parte, para a tela poder dizer
+     quantos ganhos o CRM não consegue medir — que é o achado de verdade. */
+  const PORTAS_DE_ENTRADA = 2;   // rank 1 = Prospecção, rank 2 = Visita
+  const rankDaPorta = d => {
+    const ranks = Object.keys(d.entrada).map(Number).filter(r => d.entrada[r] === d.porta);
+    return ranks.length ? Math.min.apply(null, ranks) : null;
+  };
+  const andouOFunil = d => {
+    if (d.ganho == null) return false;
+    const rp = rankDaPorta(d);
+    return rp != null && rp <= PORTAS_DE_ENTRADA && (d.ganho - d.porta) >= 2 * DIA;
+  };
+  const ganhosNaJanela = negocios.filter(d => d.ganho != null);
+  const comCiclo = ganhosNaJanela.filter(andouOFunil);
+  const ciclos = comCiclo.map(d => (d.ganho - d.porta) / DIA);
   const ciclo = {
     n: ciclos.length,
+    ganhosNaJanela: ganhosNaJanela.length,
+    semCicloNoCrm: ganhosNaJanela.length - comCiclo.length,
     mediana: ciclos.length ? Math.round(mediana(ciclos) * 10) / 10 : null,
     p75: ciclos.length ? Math.round(percentil(ciclos, 0.75) * 10) / 10 : null
   };
 
   /* POR EXECUTIVO: a janela inteira, não mês a mês — turma de um mês por pessoa tem n
      pequeno demais para virar taxa. O n vai junto para a tela poder dizer "poucos casos". */
+  /* SÓ OS DONOS DO TIME (31/08/26). A primeira rodada real trouxe 16 pessoas em
+     porOwner: 6 do time e 10 de fora — ex-donos e outras operações — com 316 dos 991
+     negócios. O agregado, que é a régua do "time", incluía todas elas: era taxa do
+     pipeline com nome de taxa do time. A escada por turma continua sobre o pipeline
+     inteiro, de propósito: ali a pergunta é o que acontece com quem entra no funil. */
+  const idsDoTime = new Set(REPS.map(r => String(r.ownerId)));
   const porOwner = {};
-  const owners = Array.from(new Set(negocios.map(d => d.owner)));
+  const owners = Array.from(new Set(negocios.map(d => d.owner))).filter(o => idsDoTime.has(String(o)));
   owners.forEach(o => {
     const meus = negocios.filter(d => d.owner === o);
-    const cic = meus.filter(d => d.ganho != null && d.ganho > d.porta).map(d => (d.ganho - d.porta) / DIA);
+    const cic = meus.filter(andouOFunil).map(d => (d.ganho - d.porta) / DIA);
     porOwner[o] = {
       entraramNoFunil: meus.length,
       ciclo: { n: cic.length, mediana: cic.length ? Math.round(mediana(cic) * 10) / 10 : null },
@@ -913,8 +941,9 @@ async function historicoDeEtapas() {
   /* AGREGADO DO TIME, pronto para virar régua. Vai separado de porOwner porque o
      executivo recebe apenas a própria fatia: sem este campo, a régua do time no login
      dele seria a soma de um só — ele mesmo — e nunca acusaria nada. */
+  const doTime = negocios.filter(d => idsDoTime.has(String(d.owner)));
   const agregado = etapas.map(e => {
-    const chegaram = negocios.filter(d => d.entrada[e.rank] != null);
+    const chegaram = doTime.filter(d => d.entrada[e.rank] != null);
     const avancaram = chegaram.filter(d => d.rankMax > e.rank || d.ganho != null);
     return { rank: e.rank, nome: e.nome, chegaram: chegaram.length, avancaram: avancaram.length };
   });
