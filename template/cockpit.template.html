@@ -20157,9 +20157,13 @@ function renderCockpitDossieInline() {
 
       <div style="border-top:1px solid var(--line);margin:20px 0;"></div>
 
-      <div class="charts-row" style="margin-bottom:0;">
-        <div>
-          <h3 style="margin-bottom:10px;">Plano da semana · compromissos</h3>
+      <!-- PLANO DA SEMANA RECOLHIDO (31/08/26, prancha §6). O dossiê tem 2.126px, e este
+           bloco é leitura de sexta: o gestor abre o dossiê para ver onde a pessoa perde,
+           não para revisar compromissos da semana. Recolhido, não removido — os
+           checkboxes e o rodapé de assinatura continuam funcionando iguais. -->
+      <details class="gi-ref" style="margin-bottom:14px;">
+        <summary><h3 class="gi-h">Plano da semana · compromissos</h3><span class="cue">nível 3 · fechado por padrão</span></summary>
+        <div style="padding:12px 18px 16px;">
           <ul class="commit-list" id="cockpitDossiePlanoList">
             ${r.compromissos.map((c, ci) => `
               <li class="commit-item">
@@ -20170,6 +20174,9 @@ function renderCockpitDossieInline() {
           </ul>
           <div class="sign-row"><span id="cockpitDossiePdiCount">${rodapePlano}</span></div>
         </div>
+      </details>
+      <div class="charts-row" style="margin-bottom:0;">
+        <div>
         <div>
           <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
             <h3 style="margin:0;">Leads de ${r.name.split(' ')[0]}</h3>
@@ -21583,13 +21590,21 @@ function kanbanCardHTML(l, slaDias) {
   // lead... tá arrastando pro kanban... tem que abrir igual abre no do gestor". O
   // card INTEIRO era draggable com cursor de agarrar: qualquer clique com 2-3px de
   // movimento (o clique normal de qualquer mão) virava dragstart e o click morria —
-  // a ficha nunca abria. Agora o card é clique puro (abre a ficha) e o arrasto vive
-  // só na alça ⠿ do canto; as setas ← → continuam movendo sem arrastar nada.
+  // a ficha nunca abria.
+  //
+  // CORRIGIDO O PRÓPRIO COMENTÁRIO (31/08/26): ele dizia que "o arrasto vive só na alça ⠿",
+  // e o código faz outra coisa — o pointerdown está no CARD INTEIRO, com um limiar de 6px
+  // (LIMIAR_PX) que separa clique de arrasto e resolve o bug original. A alça ⠿ é a DICA
+  // visual de que o card se move, não a única área de pega. Deixar o comentário mentindo é
+  // convite para alguém "consertar" o código na direção errada, tirando o arrasto de onde
+  // ele funciona. Verificado com gesto de ponteiro simulado: fantasma aparece, coluna alvo
+  // acende e soltar abre a confirmação de passagem de etapa — nada é escrito em silêncio.
+  // Botões ‹ › e teclado ← → continuam movendo sem arrastar nada.
   return `<article class="kb-card${estourou ? ' is-estourado' : ''}" tabindex="0"
       data-kb-id="${esc(String(l.id))}" data-kb-etapa="${esc(String(l.stageId || ''))}"
       style="--kb-cor:${stageColor(l.stageId)};" aria-label="${esc(l.name || '')} — ${esc(STAGE_LABELS[l.stageId] || '')}">
     <div class="kb-card-head"><span class="kb-card-nome">${esc(l.name || 'Sem nome')}</span>
-      <span class="kb-arrasto" title="Arrastar para outra etapa" aria-hidden="true"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.1"/><circle cx="11" cy="4" r="1.1"/><circle cx="5" cy="8" r="1.1"/><circle cx="11" cy="8" r="1.1"/><circle cx="5" cy="12" r="1.1"/><circle cx="11" cy="12" r="1.1"/></svg></span>
+      <span class="kb-arrasto" title="Arraste o card para outra etapa — ou use os botões ‹ ›" aria-hidden="true"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="5" cy="4" r="1.1"/><circle cx="11" cy="4" r="1.1"/><circle cx="5" cy="8" r="1.1"/><circle cx="11" cy="8" r="1.1"/><circle cx="5" cy="12" r="1.1"/><circle cx="11" cy="12" r="1.1"/></svg></span>
     </div>
     <div class="kb-card-contexto">
       <span class="${estourou ? 'is-late' : ''}">${dias != null ? dias + 'd na etapa' : 'entrada recente'}${slaDias ? ` · SLA ${slaDias}d` : ''}</span>
@@ -26930,6 +26945,13 @@ async function renderCockpitExecutionCommand() {
   renderCockpitDevelopmentHub();
 }
 
+/* RECOLHIDO EM 31/08/26 (prancha §6): a aba Time é gestão por exceção — quem precisa de
+   mim hoje. Desenvolvimento é outra conversa, e ela tem aba própria (Pessoas), com PDI,
+   fila de 1:1, fase de rampagem e roteiro. Este bloco é a versão resumida daquilo.
+
+   Não movi o código para Pessoas de propósito: criar uma segunda montagem da mesma
+   leitura é como duas verdades nascem e discordam numa reunião. Ele fica aqui, fechado,
+   com o resumo em uma linha e o caminho para a aba onde a conversa acontece. */
 function renderCockpitDevelopmentHub() {
   const el = document.getElementById('cockpitDevelopmentHub');
   if (!el || !sessaoAtual || sessaoAtual.role !== 'manager') return;
@@ -26996,8 +27018,19 @@ function renderCockpitDevelopmentHub() {
     ? `${desenvolver.travadosAtual} acima do SLA${desenvolver.hotSemPasso ? ` e ${desenvolver.hotSemPasso} quente${desenvolver.hotSemPasso === 1 ? '' : 's'} sem próximo passo` : ''}. Pergunte antes de orientar e feche um compromisso observável até a próxima revisão.`
     : 'Abra um 1:1 com pergunta, dado e um compromisso pequeno o suficiente para ser acompanhado.';
 
+  /* NASCE RECOLHIDO (31/08/26, prancha §6): a aba Time é gestão por exceção — quem precisa
+     de mim hoje. Desenvolvimento é outra conversa e tem aba própria (Pessoas), com PDI, fila
+     de 1:1, fase de rampagem e roteiro; este bloco é o resumo daquilo. O resumo de uma linha
+     fica visível e o conteúdo abre para quem quiser — nada foi movido de aba, porque uma
+     segunda montagem da mesma leitura é como duas verdades nascem e discordam na reunião. */
   el.innerHTML = `
-    <section class="chart-card development-hub" aria-label="Ritual de desenvolvimento do gestor">
+    <details class="gi-ref" style="margin-bottom:16px;">
+      <summary>
+        <h3 class="gi-h">Ritual de desenvolvimento · 15 min</h3>
+        <span class="gi-note" style="font-weight:500;">${leituras.length} executivo(s) com leitura de hoje · a conversa completa vive na aba Pessoas</span>
+        <span class="cue">nível 3 · fechado por padrão</span>
+      </summary>
+    <section class="chart-card development-hub" style="border:0;box-shadow:none;" aria-label="Ritual de desenvolvimento do gestor">
       <div class="development-head">
         <div><h3 style="margin:0 0 4px;font-family:'Archivo',system-ui,sans-serif;">Ritual de desenvolvimento · 15 min</h3><div class="chart-subtitle">Faça o time querer voltar: reconheça o que funcionou, trate desvios em privado e transforme prática em repertório.</div></div>
         <span class="development-private">🔒 visão privada do gestor</span>
@@ -27025,7 +27058,7 @@ function renderCockpitDevelopmentHub() {
         </article>
       </div>
       <div class="development-principle"><b>Princípio:</b> resultado abre a conversa; comportamento define o coaching. Reconhecimento pode ser público. Correção, compromisso e contexto ficam no 1:1.</div>
-    </section>`;
+    </section></details>`;
 
   el.querySelectorAll('[data-development-nav]').forEach(btn => btn.addEventListener('click', () => {
     const destino = document.getElementById(btn.dataset.developmentNav || '');
