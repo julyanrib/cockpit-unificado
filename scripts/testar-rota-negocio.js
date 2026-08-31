@@ -26,7 +26,10 @@ process.env.SUPABASE_ANON_KEY = 'fake';
 
 // Caminho relativo a ESTE arquivo: require não olha o cwd (o process.chdir acima serve
 // só para o require('../data/usuarios.json') de dentro da rota se comportar como na Vercel).
-const handler = require('../api/criar-nota-negocio.js');
+/* O modulo saiu de api/ na consolidacao de 31/08/26 (porta unica /api/negocio-acao).
+   O teste passa a apontar para a implementacao real, nao para o apelido — se o apelido for
+   removido no futuro, este teste continua valendo. */
+const handler = require('../lib/acoes-negocio/criar-nota-negocio.js');
 const KELLY = { email: 'kelly.takeat@gmail.com', ownerId: '91477292' };
 
 let ok = 0, falhou = 0;

@@ -9203,9 +9203,9 @@ function wireRegistroDeDesfecho(container, lead, st) {
       const cab = { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
 
       // 1) nota = evidência do desfecho
-      const rNota = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
+      const rNota = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
         method: 'POST', signal, headers: cab,
-        body: JSON.stringify({ dealId: lead.id, texto: nota, tipoAcao: 'nota' })
+        body: JSON.stringify({ op: 'nota', dealId: lead.id, texto: nota, tipoAcao: 'nota' })
       }), 9000, 'desfecho-nota');
       const dNota = await rNota.json().catch(() => ({}));
       if (!rNota.ok || !dNota.ok) throw new Error((dNota && dNota.erro) || 'Não consegui gravar o desfecho.');
@@ -9220,9 +9220,9 @@ function wireRegistroDeDesfecho(container, lead, st) {
         const tipoPasso = passoFinal.canal === 'visita' ? 'Visita'
           : passoFinal.canal === 'reuniao' ? 'Reunião'
           : passoFinal.canal === 'demo' ? 'Demo' : 'Follow-up';
-        const rPasso = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
+        const rPasso = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
           method: 'POST', signal, headers: cab,
-          body: JSON.stringify({ dealId: lead.id, texto: passoFinal.texto, data: passoFinal.data, tipo: tipoPasso, tipoAcao: 'proximo-passo' })
+          body: JSON.stringify({ op: 'nota', dealId: lead.id, texto: passoFinal.texto, data: passoFinal.data, tipo: tipoPasso, tipoAcao: 'proximo-passo' })
         }), 9000, 'desfecho-proximo-passo');
         const dPasso = await rPasso.json().catch(() => ({}));
         if (!rPasso.ok || !dPasso.ok) {
@@ -13742,7 +13742,10 @@ function fmtBRL(v) {
 }
 
 // troca a URL abaixo pelo domínio real do seu deploy na Vercel, se for diferente
-const ATUALIZAR_MRR_URL = '/api/atualizar-mrr';
+/* A porta unica das acoes de negocio (31/08/26): a rota /api/atualizar-mrr virou o modulo
+   lib/acoes-negocio/atualizar-mrr.js, chamado por /api/negocio-acao com op:'mrr'. O corpo
+   que ele espera nao mudou. */
+const ATUALIZAR_MRR_URL = '/api/negocio-acao';
 
 // Mesmo padrão de prazo duro + token do "Criar negócio" (Leads da praça): nunca deixa
 // o botão travado esperando pra sempre, e manda o token de sessão pro servidor validar.
@@ -13766,7 +13769,7 @@ async function salvarMrrNoHubspot(dealId, mrr, zerar) {
     const resp = await fetch(ATUALIZAR_MRR_URL, {
       method: 'POST', signal: ctrl.signal,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-      body: JSON.stringify({ dealId, mrr, ...(zerar ? { zerar: true } : {}) })
+      body: JSON.stringify({ op: 'mrr', dealId, mrr, ...(zerar ? { zerar: true } : {}) })
     });
     let data;
     try { data = await resp.json(); }
@@ -17425,10 +17428,10 @@ function agendaAbrirDetalhe(id) {
       botao.textContent = acao === 'confirmar' ? 'Confirmando…' : 'Recusando…';
       const token = await tokenDeSessaoGlobal();
       try {
-        const resp = await comPrazoGlobal(async signal => fetch('/api/confirmar-sugestao-gestor', {
+        const resp = await comPrazoGlobal(async signal => fetch('/api/negocio-acao', {
           method: 'POST', signal,
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-          body: JSON.stringify({ taskId: e.hsTaskId, acao })
+          body: JSON.stringify({ op: 'sugestao-gestor', taskId: e.hsTaskId, acao })
         }), 8000, 'confirmar-sugestao-gestor');
         const json = await resp.json().catch(() => ({}));
         if (!resp.ok || !json.ok) { throw new Error((json && json.erro) || 'HubSpot recusou'); }
@@ -21394,10 +21397,10 @@ function ligarPropsFichaEditaveis(container, lead) {
         btn.disabled = true; btn.textContent = '…';
         try {
           const token = await tokenDeSessaoGlobal();
-          const resp = await comPrazoGlobal(async (signal) => fetch('/api/mudar-etapa-negocio', {
+          const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
             method: 'POST', signal,
             headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-            body: JSON.stringify({ dealId: lead.id, novaEtapa: lead.stageId, propriedades: { [propNome]: v.valor } })
+            body: JSON.stringify({ op: 'mudar-etapa', dealId: lead.id, novaEtapa: lead.stageId, propriedades: { [propNome]: v.valor } })
           }), 8000, 'mudar-etapa-negocio');
           const data = await resp.json().catch(() => ({}));
           if (!resp.ok || !data.ok) {
@@ -22352,10 +22355,10 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
     status.textContent = 'Escrevendo etapa e propriedades…';
     try {
       const token = await tokenDeSessaoGlobal();
-      const resp = await comPrazoGlobal(async (signal) => fetch('/api/mudar-etapa-negocio', {
+      const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId: lead.id, novaEtapa: para, propriedades: coleta.propriedades })
+        body: JSON.stringify({ op: 'mudar-etapa', dealId: lead.id, novaEtapa: para, propriedades: coleta.propriedades })
       }), 10000, 'mudar-etapa-negocio');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data.ok) {
@@ -22375,10 +22378,10 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
         const tipoPasso = passoCanal === 'visita' ? 'Visita'
           : passoCanal === 'reuniao' ? 'Reunião'
           : passoCanal === 'demo' ? 'Demo' : 'Follow-up';
-        const rp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
+        const rp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
           method: 'POST', signal,
           headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-          body: JSON.stringify({ dealId: lead.id, texto: passoAcao, data: passoData, tipo: tipoPasso, tipoAcao: 'proximo-passo' })
+          body: JSON.stringify({ op: 'nota', dealId: lead.id, texto: passoAcao, data: passoData, tipo: tipoPasso, tipoAcao: 'proximo-passo' })
         }), 9000, 'passagem-proximo-passo');
         const dp = await rp.json().catch(() => ({}));
         if (rp.ok && dp.ok) passoOk = true;
@@ -22666,10 +22669,10 @@ function wireFichaLeadFunilEdicao(container, l) {
     statusEl.textContent = 'Salvando no HubSpot...';
     try {
       const token = await tokenDeSessaoGlobal();
-      const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
+      const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId, texto, tipoAcao: 'nota' })
+        body: JSON.stringify({ op: 'nota', dealId, texto, tipoAcao: 'nota' })
       }), 8000, 'criar-nota-negocio');
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok || !data.ok) {
@@ -22763,10 +22766,10 @@ function wireFichaLeadFunilEdicao(container, l) {
          ANTES de criar a tarefa: se a qualificação falha, não existe próximo passo. A
          ordem que antes dependia de duas chamadas no navegador virou ordem de execução
          dentro de um handler — mais simples e sem estado intermediário possível. */
-      const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-nota-negocio', {
+      const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo', ...(qualifPayload ? { qualificacao: qualifPayload } : {}) })
+        body: JSON.stringify({ op: 'nota', dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo', ...(qualifPayload ? { qualificacao: qualifPayload } : {}) })
       }), 8000, 'criar-nota-negocio-proximo-passo');
       const respData = await resp.json().catch(() => ({}));
       if (!resp.ok || !respData.ok) {
@@ -32500,7 +32503,7 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, d
   const silencioso = !!(opcoes && opcoes.silencioso);
   const token = await tokenDeSessaoGlobal();
   try {
-    const resp = await comPrazoGlobal(async (signal) => fetch('/api/criar-tarefa-rota', {
+    const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
       method: 'POST', signal,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
       // dataISO só vai quando o alvo NÃO é hoje (preenchimento de buraco da semana);
@@ -32508,7 +32511,7 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, d
       // BLOCO 34 — tipo ('visita'|'reuniao') e sugeridoPorGestor viajam até aqui via
       // `opcoes` (mesmo parâmetro que já carregava `silencioso`); omitidos, o servidor
       // já assume 'visita' + false — chamadas antigas não mudam de comportamento.
-      body: JSON.stringify({ nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista,
+      body: JSON.stringify({ op: 'tarefa-rota', nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista,
         ...(opcoes && opcoes.tipo ? { tipo: opcoes.tipo } : {}),
         ...(opcoes && opcoes.sugeridoPorGestor ? { sugeridoPorGestor: true } : {}),
         ...(dataISO ? { data: dataISO } : {}) })
@@ -32548,10 +32551,10 @@ async function removerTarefaVisitaNoHubspot(lead, ownerId, dataISO, opcoes) {
   const token = await tokenDeSessaoGlobal();
   const silencioso = !!(opcoes && opcoes.silencioso);
   try {
-    const resp = await comPrazoGlobal(async signal => fetch('/api/criar-tarefa-rota', {
+    const resp = await comPrazoGlobal(async signal => fetch('/api/negocio-acao', {
       method: 'POST', signal,
       headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-      body: JSON.stringify({ acao: 'remover', nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, data: dataISO || isoDate(new Date()) })
+      body: JSON.stringify({ op: 'tarefa-rota', acao: 'remover', nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, data: dataISO || isoDate(new Date()) })
     }), 8000, 'remover-tarefa-rota');
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || !data.ok) throw new Error(data.erro || 'HubSpot recusou remover a tarefa.');
