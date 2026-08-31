@@ -5830,6 +5830,38 @@
   .gs-ciclo-tx{font-size:12px;color:var(--gs-dark-mut);line-height:1.6;flex:1;min-width:180px;}
   .gs-ciclo-tx b{color:var(--gs-dark-ink);}
 
+  /* O QUE ABRE PARECE QUE ABRE (31/08/26). Sem isto, gráfico clicável é gráfico com
+     segredo: o gestor não descobre sozinho. Fundo no hover e foco visível pelo teclado. */
+  .gx-forma-linha.is-abre,.gx-idade-linha.is-abre,.gx-dinheiro-linha.is-abre,
+  .gd-placar-linha.is-abre,.gs-tempo-linha.is-abre{cursor:pointer;border-radius:8px;
+    margin:0 -8px;padding:3px 8px;transition:background .12s ease;}
+  .gx-forma-linha.is-abre:hover,.gx-idade-linha.is-abre:hover,.gx-dinheiro-linha.is-abre:hover,
+  .gd-placar-linha.is-abre:hover,.gs-tempo-linha.is-abre:hover{background:rgba(26,22,19,.045);}
+  .gx-forma-linha.is-abre:focus-visible,.gx-idade-linha.is-abre:focus-visible,
+  .gx-dinheiro-linha.is-abre:focus-visible,.gd-placar-linha.is-abre:focus-visible,
+  .gs-tempo-linha.is-abre:focus-visible,.gs-abre:focus-visible{outline:2px solid var(--gx-red);outline-offset:2px;}
+  /* acordeão de negócios: motivo de perda e fila de reciclagem */
+  .gx-motivo,.gx-lista{margin:0;}
+  .gx-motivo>summary,.gx-lista>summary{cursor:pointer;list-style:none;border-radius:8px;padding:2px 8px;margin:0 -8px;}
+  .gx-motivo>summary::-webkit-details-marker,.gx-lista>summary::-webkit-details-marker{display:none;}
+  .gx-motivo>summary:hover,.gx-lista>summary:hover{background:rgba(26,22,19,.045);}
+  .gx-motivo>summary:focus-visible,.gx-lista>summary:focus-visible{outline:2px solid var(--gx-red);outline-offset:2px;}
+  .gx-lista-corpo{display:grid;gap:6px;margin:8px 0 4px;padding:10px 12px;background:var(--gx-canvas);border-radius:10px;}
+  .gx-lista-linha{display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:11.5px;}
+  .gx-lista-linha b{color:var(--gx-ink);font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .gx-lista-linha span{color:var(--gx-muted2);flex:none;font-variant-numeric:tabular-nums;}
+  .gx-lista-nota{font-size:10.5px;color:var(--gx-muted2);line-height:1.55;padding:0 2px 4px;}
+  @media (max-width:640px){
+    .gx-motivo>summary,.gx-lista>summary{min-height:44px;display:flex;align-items:center;}
+    .gx-lista-linha{flex-direction:column;gap:1px;}
+  }
+  .gs-abre{cursor:pointer;color:var(--gs-ink);font-weight:700;}
+  .gs-abre:hover{text-decoration:underline;}
+  @media (max-width:640px){
+    .gx-forma-linha.is-abre,.gx-idade-linha.is-abre,.gx-dinheiro-linha.is-abre,
+    .gd-placar-linha.is-abre,.gs-tempo-linha.is-abre{min-height:44px;}
+    .gs-abre{display:inline-flex;align-items:center;min-height:44px;padding:0 2px;}
+  }
   .gs-vazio{padding:22px 20px;border:1px solid var(--gs-amber-linha);background:var(--gs-amber-bg);border-radius:14px;
     font-size:12.5px;line-height:1.65;color:var(--gs-muted);}
   .gs-vazio b{color:var(--gs-ink);}
@@ -17879,7 +17911,10 @@ function gsEscadaHTML(h) {
     const largura = Math.max(e.chegaram > 0 ? 2 : 0, Math.round((e.chegaram / topo) * 100));
     const destino = [];
     if (e.perderamAqui) destino.push('<span class="is-perda"><b>' + e.perderamAqui + '</b> perderam aqui</span>');
-    if (e.aindaAqui) destino.push('<span><b>' + e.aindaAqui + '</b> ainda parados nesta etapa</span>');
+    /* SÓ O "AINDA PARADOS" ABRE. A turma é histórica — clicar num degrau de julho para ver
+       quem está lá hoje compararia dois conjuntos diferentes, que é o tipo de ligação que
+       parece funcionar e ensina o número errado. Quem está parado agora, sim, é de hoje. */
+    if (e.aindaAqui) destino.push('<span class="gs-abre" data-gx-etapa="' + esc(String(e.id || '')) + '" role="button" tabindex="0" title="Ver quem está parado nesta etapa agora"><b>' + e.aindaAqui + '</b> ainda parados nesta etapa →</span>');
     return '<div class="gs-degrau">' +
       '<div class="gs-degrau-rot">' + esc(e.nome) + '<small>' + doTopo + '% de quem entrou no funil</small></div>' +
       '<div class="gs-degrau-trilha"><i class="' + (vaza ? 'is-vaza' : '') + '" style="width:' + largura + '%;"></i></div>' +
@@ -17930,7 +17965,7 @@ function gsTempoHTML(h) {
     const estourado = v.sla != null && v.mediana > v.sla;
     const larg = Math.max(2, Math.round((v.mediana / maior) * 100));
     const marca = v.sla != null ? Math.min(100, Math.round((v.sla / maior) * 100)) : null;
-    return '<div class="gs-tempo-linha">' +
+    return '<div class="gs-tempo-linha is-abre" data-gx-etapa="' + esc(String(v.id || '')) + '" role="button" tabindex="0" title="Ver quem está acima do SLA nesta etapa agora">' +
       '<div class="gs-degrau-rot">' + esc(v.nome) + '<small>' + v.n + ' negócio(s) que avançaram</small></div>' +
       '<div class="gs-tempo-trilha"><i class="' + (estourado ? 'is-estourado' : '') + '" style="width:' + larg + '%;"></i>' +
         (marca === null ? '' : '<span class="gs-tempo-sla" style="left:' + marca + '%;"></span>') + '</div>' +
@@ -18997,6 +19032,47 @@ function gxFormaDoTime() {
 
 /* 1 · A FORMA. Barra = a fatia dele naquela etapa; risco âmbar = a fatia do time na mesma
    etapa. Onde a barra passa muito da régua, o funil dele engorda — e é ali que ele para. */
+/* ══ OS GRÁFICOS DO GESTOR ABREM (31/08/26) ═══════════════════════════════════════
+   Um caminho só: openStageModal, que já existia. Delegação no document porque estes
+   blocos são redesenhados por muitos caminhos — religar listener a cada render é como
+   se perde um clique sem ninguém notar. */
+function gxAbrirEtapa(stageId, ownerId) {
+  if (!stageId || typeof openStageModal !== 'function') return;
+  const rotulo = (DATA.stageMeta && DATA.stageMeta.labels && DATA.stageMeta.labels[stageId]) || 'Etapa';
+  openStageModal(stageId, rotulo, ownerId || null);
+}
+
+/* Abre a linha daquele executivo na Daily — mesmo destino que a fila de intervenção usa,
+   porque é lá que estão as ações dele. */
+function gxIrParaLinhaDaDaily(ownerId) {
+  if (!ownerId) return;
+  const aba = document.getElementById('tabBtnDaily');
+  if (aba) aba.click();
+  let tentativas = 0;
+  const abrir = () => {
+    const linha = document.getElementById('dailyAcc_' + ownerId);
+    if (!linha) { if (++tentativas < 40) setTimeout(abrir, 110); return; }
+    linha.open = true;
+    const y = linha.getBoundingClientRect().top + window.scrollY - 110;
+    window.scrollTo({ top: y, behavior: 'auto' });
+  };
+  setTimeout(abrir, 120);
+}
+
+document.addEventListener('click', ev => {
+  const etapa = ev.target.closest('[data-gx-etapa]');
+  if (etapa) { gxAbrirEtapa(etapa.getAttribute('data-gx-etapa'), etapa.getAttribute('data-gx-owner') || null); return; }
+  const dono = ev.target.closest('[data-gx-dono]');
+  if (dono) { gxIrParaLinhaDaDaily(dono.getAttribute('data-gx-dono')); return; }
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+  const alvo = ev.target.closest && ev.target.closest('[data-gx-etapa],[data-gx-dono]');
+  if (!alvo) return;
+  ev.preventDefault();
+  alvo.click();
+});
+
 function gxBlocoFormaHTML(r) {
   const time = gxFormaDoTime();
   const meu = {};
@@ -19016,7 +19092,7 @@ function gxBlocoFormaHTML(r) {
     const fatia = n / total;
     const fatiaTime = time.pct[id];
     const gordo = n > 0 && (fatiaTime > 0 ? fatia >= fatiaTime * 1.4 : false) && (fatia - fatiaTime) >= 0.12;
-    return `<div class="gx-forma-linha">
+    return `<div class="gx-forma-linha is-abre" data-gx-etapa="${id}" data-gx-owner="${esc(String(r.ownerId || ''))}" role="button" tabindex="0" title="Ver os negócios desta etapa na carteira dele">
       <span class="gx-forma-rot">${esc(gxRotuloEtapa(id))}</span>
       <span class="gx-forma-trilha">
         <i class="${gordo ? 'is-gordo' : ''}" style="width:${maior ? Math.round(100 * n / maior) : 0}%"></i>
@@ -19066,7 +19142,7 @@ function gxBlocoIdadeHTML(r) {
     const media = Math.round(g.dias.reduce((a, b) => a + b, 0) / g.dias.length);
     const sla = gxSlaEtapa(id);
     const estourado = sla > 0 && media > sla;
-    return `<div class="gx-idade-linha">
+    return `<div class="gx-idade-linha is-abre" data-gx-etapa="${id}" data-gx-owner="${esc(String(r.ownerId || ''))}" role="button" tabindex="0" title="Ver os negócios travados desta etapa">
       <span class="gx-forma-rot">${esc(gxRotuloEtapa(id))}</span>
       <span class="gx-idade-trilha">
         <i class="${estourado ? 'is-estourado' : ''}" style="width:${maiorDia ? Math.round(100 * media / maiorDia) : 0}%"></i>
@@ -19102,7 +19178,7 @@ function gxBlocoDinheiroHTML(r) {
   const ids = GX_ETAPAS.filter(id => porEtapa[id]);
   const maior = Math.max.apply(null, ids.map(id => porEtapa[id]));
   const total = ids.reduce((s, id) => s + porEtapa[id], 0);
-  const linhas = ids.map(id => `<div class="gx-dinheiro-linha">
+  const linhas = ids.map(id => `<div class="gx-dinheiro-linha is-abre" data-gx-etapa="${id}" data-gx-owner="${esc(String(r.ownerId || ''))}" role="button" tabindex="0" title="Ver os negócios desta etapa">
       <span class="gx-forma-rot">${esc(gxRotuloEtapa(id))}</span>
       <span class="gx-dinheiro-trilha"><i style="width:${maior ? Math.round(100 * porEtapa[id] / maior) : 0}%"></i></span>
       <span class="gx-dinheiro-num">${prcMoeda(porEtapa[id])}</span>
@@ -19258,6 +19334,29 @@ function gxMotivosOrdenados(mapa) {
 }
 
 /* ── A leitura do time ────────────────────────────────────────────────────── */
+/* Lista de negócios dentro de um acordeão. Serve motivo de perda e fila de reciclagem —
+   os dois falam de negócio que NÃO está numa etapa aberta, então openStageModal não
+   serve: não há etapa para abrir. */
+function gxListaDeNegociosHTML(rotulo, itens, totalReal, sufixo) {
+  if (!itens || !itens.length) {
+    return '<details class="gx-lista"><summary>' + esc(rotulo) + '</summary>' +
+      '<div class="gx-lista-nota">Os negócios deste grupo não vieram na última carga. A lista entra no próximo carregamento do HubSpot.</div></details>';
+  }
+  const linhas = itens.map(x => '<div class="gx-lista-linha">' +
+    '<b>' + esc(x.nome || 'Sem nome') + '</b>' +
+    '<span>' + (x.vendedor ? esc(String(x.vendedor).split(' ')[0]) : 'sem dono') +
+      (x.fechadoEm ? ' · ' + String(x.fechadoEm).split('-').reverse().join('/') : '') +
+      (x.dias != null ? ' · ' + x.dias + 'd parada' : '') +
+      (x.mrr ? ' · ' + prcMoeda(x.mrr) : '') + '</span>' +
+  '</div>').join('');
+  const sobra = (Number(totalReal) || 0) - itens.length;
+  const nota = sobra > 0
+    ? '<div class="gx-lista-nota">Mostrando ' + itens.length + ' de ' + totalReal + ' — os mais recentes. ' + (sufixo || '') + '</div>'
+    : (sufixo ? '<div class="gx-lista-nota">' + sufixo + '</div>' : '');
+  return '<details class="gx-lista"><summary>' + esc(rotulo) + '</summary>' +
+    '<div class="gx-lista-corpo">' + linhas + '</div>' + nota + '</details>';
+}
+
 function gxPorQuePerdemosHTML() {
   const mp = DATA.motivosPerda;
   if (!mp || !mp.porMotivo || !Object.keys(mp.porMotivo).length) {
@@ -19272,11 +19371,24 @@ function gxPorQuePerdemosHTML() {
   const nossos = lista.filter(([k]) => GX_MOTIVO_NOSSO.includes(k)).reduce((s, [, v]) => s + v, 0);
   const pctNosso = total ? Math.round(100 * nossos / total) : 0;
 
-  const barras = lista.map(([motivo, n]) => `<div class="gx-forma-linha">
+  /* CADA MOTIVO ABRE OS NEGÓCIOS DELE (31/08/26). Era o gráfico mais importante da tela e
+     o único caminho depois dele era a memória do gestor. Agora a barra é um acordeão: o
+     título é a linha inteira, e dentro estão os negócios com nome, dono e data. */
+  const barras = lista.map(([motivo, n]) => {
+    const linha = `<div class="gx-forma-linha" style="pointer-events:none;">
       <span class="gx-forma-rot">${esc(motivo)}</span>
       <span class="gx-forma-trilha"><i style="width:${maior ? Math.round(100 * n / maior) : 0}%;background:${gxCorMotivo(motivo)}"></i></span>
       <span class="gx-forma-num">${n}<small>${Math.round(100 * n / total)}%</small></span>
-    </div>`).join('');
+    </div>`;
+    const exemplos = (mp.exemplos || {})[motivo] || [];
+    return `<details class="gx-motivo">
+      <summary>${linha}</summary>
+      <div class="gx-lista-corpo">${exemplos.length
+        ? exemplos.map(x => `<div class="gx-lista-linha"><b>${esc(x.nome || 'Sem nome')}</b><span>${x.vendedor ? esc(String(x.vendedor).split(' ')[0]) : 'sem dono'}${x.fechadoEm ? ' · ' + String(x.fechadoEm).split('-').reverse().join('/') : ''}${x.mrr ? ' · ' + prcMoeda(x.mrr) : ''}</span></div>`).join('')
+        : '<div class="gx-lista-nota">Os negócios deste motivo entram no próximo carregamento do HubSpot.</div>'}</div>
+      ${exemplos.length && n > exemplos.length ? `<div class="gx-lista-nota">Mostrando ${exemplos.length} de ${n} — os mais recentes.</div>` : ''}
+    </details>`;
+  }).join('');
 
   return `<div class="gx"><div class="gx-secao">
     <div class="gx-secao-cab"><b>Por que perdemos</b><span>${total} negócios perdidos nos últimos ${mp.dias || 90} dias · motivo declarado no HubSpot</span></div>
@@ -19385,7 +19497,7 @@ function gxReciclagemDoTimeHTML() {
   let comEndereco = 0;
   fila.forEach(l => {
     const chave = String(l.ownerId || '') || 'sem-dono';
-    if (!porOwner[chave]) porOwner[chave] = { nome: l.vendedor || 'Sem dono', n: 0, maisVelho: 0 };
+    if (!porOwner[chave]) porOwner[chave] = { nome: l.vendedor || 'Sem dono', ownerId: chave, n: 0, maisVelho: 0 };
     porOwner[chave].n++;
     porOwner[chave].maisVelho = Math.max(porOwner[chave].maisVelho, Number(l.dias) || 0);
     if (l.cidade || l.bairro) comEndereco++;
@@ -19397,13 +19509,25 @@ function gxReciclagemDoTimeHTML() {
   const mediana = dias.length % 2 ? dias[(dias.length - 1) / 2] : Math.round((dias[dias.length / 2 - 1] + dias[dias.length / 2]) / 2);
   const maisVelho = dias[dias.length - 1];
 
+  /* CADA EXECUTIVO ABRE AS CONTAS PARADAS DELE (31/08/26). A fila mostrava só quantidade,
+     e sem os nomes o gestor não tem o que falar na Daily. Acordeão, não modal: estas
+     contas não estão em nenhuma etapa aberta, então openStageModal não serve. */
   const linhas = linhasOwner.map(o => {
     const larg = Math.max(2, Math.round((o.n / maior) * 100));
-    return '<div class="gx-forma-linha">' +
+    const linha = '<div class="gx-forma-linha" style="pointer-events:none;">' +
       '<div class="gx-forma-rot">' + esc(String(o.nome).split(' ')[0]) + '</div>' +
       '<div class="gx-forma-trilha"><i style="width:' + larg + '%;"></i></div>' +
       '<div class="gx-forma-num">' + o.n + '<small>mais velha: ' + o.maisVelho + 'd</small></div>' +
     '</div>';
+    const dele = fila.filter(l => String(l.ownerId || '') === String(o.ownerId || ''))
+      .sort((a, b) => (Number(b.dias) || 0) - (Number(a.dias) || 0)).slice(0, 8);
+    return '<details class="gx-motivo"><summary>' + linha + '</summary>' +
+      '<div class="gx-lista-corpo">' +
+      dele.map(l => '<div class="gx-lista-linha"><b>' + esc(l.name || l.dealname || 'Sem nome') + '</b>' +
+        '<span>' + (Number(l.dias) || 0) + 'd parada' + (l.cidade ? ' · ' + esc(l.cidade) : ' · sem endereço') + '</span></div>').join('') +
+      '</div>' +
+      (o.n > dele.length ? '<div class="gx-lista-nota">Mostrando ' + dele.length + ' de ' + o.n + ' — as mais antigas primeiro.</div>' : '') +
+    '</details>';
   }).join('');
 
   const semEndereco = fila.length - comEndereco;
@@ -19447,7 +19571,7 @@ function gxCoberturaDeRuaHTML() {
   const html = linhas.map(x => {
     const pct = x.dias != null ? Math.min(100, Math.round(100 * x.dias / maiorDias)) : 0;
     const critico = x.dias != null && x.dias < 5;
-    return `<div class="gx-forma-linha">
+    return `<div class="gx-forma-linha is-abre" data-gx-dono="${esc(String(x.r.ownerId || ''))}" role="button" tabindex="0" title="Abrir a linha dele na Daily">
       <span class="gx-forma-rot">${esc(String(x.r.name).split(' ').slice(0, 2).join(' '))}</span>
       <span class="gx-forma-trilha"><i class="${critico ? 'is-gordo' : ''}" style="width:${pct}%"></i></span>
       <span class="gx-forma-num">${x.dias != null ? x.dias.toFixed(1) : '—'}<small>${x.dias != null ? 'dias de rua' : 'fase sem alvo'}</small></span>
@@ -19535,7 +19659,7 @@ function gxBlocoConversaoHTML(r) {
     }
     const larg = taxa == null ? 0 : Math.max(2, Math.round(taxa * 100));
     const marca = taxaTime == null ? null : Math.min(100, Math.round(taxaTime * 100));
-    return '<div class="gx-forma-linha">' +
+    return '<div class="gx-forma-linha is-abre" data-gx-etapa="' + esc(String(e.id || '')) + '" data-gx-owner="' + esc(String(r.ownerId || '')) + '" role="button" tabindex="0" title="Ver os negócios desta etapa na carteira dele">' +
       '<div class="gx-forma-rot">' + esc(e.nome) + '</div>' +
       '<div class="gx-forma-trilha">' +
         (poucos || taxa == null ? '' : '<i class="' + (atras ? 'is-gordo' : '') + '" style="width:' + larg + '%;"></i>') +
@@ -29573,6 +29697,10 @@ function gdPlacarDoTimeHTML(reps, diaISO) {
     const g = soma[e.k];
     if (!g.prom) return '';
     const p = Math.min(100, Math.round(100 * g.real / g.prom));
+    /* ESTA LINHA NAO ABRE, e e de proposito (31/08/26). Cheguei a marcar como clicavel e
+       era clique morto: o laco aqui percorre os EIXOS da promessa (visitas, reunioes,
+       propostas), nao as pessoas — nao existe `e.ownerId`. Eixo nao tem para onde levar;
+       quem tem sao as linhas do time logo abaixo, e essas ja abrem. */
     return `<div class="gd-placar-linha">
       <span>${esc(e.rot.split(' ')[0])}</span>
       <span class="gd-placar-trilha"><i class="${g.real === 0 ? 'is-zero' : ''}" style="width:${p}%"></i></span>

@@ -714,6 +714,30 @@ async function motivosDePerda() {
   const validos = results.filter(d => !isExcludedDeal(d));
   const porMotivo = {};
   const porOwner = {};
+  /* EXEMPLOS PARA O CLIQUE (31/08/26). O gráfico de motivo mostrava só porcentagem, e
+     clicar não tinha para onde ir. Até 8 negócios por motivo, os mais recentes — oito
+     nomes é o que cabe numa conversa de Daily; mais que isso é relatório. */
+  const exemplos = {};
+  const maisNovoPrimeiro = [...validos].sort((a, b) => {
+    const ta = Date.parse((a.properties || {}).closedate || 0) || 0;
+    const tb = Date.parse((b.properties || {}).closedate || 0) || 0;
+    return tb - ta;
+  });
+  maisNovoPrimeiro.forEach(d => {
+    const p = d.properties || {};
+    const motivo = String(p.motivo_do_perdido || '').trim() || 'Sem motivo preenchido';
+    if (!exemplos[motivo]) exemplos[motivo] = [];
+    if (exemplos[motivo].length >= 8) return;
+    const dono = REPS.find(r => String(r.ownerId) === String(p.hubspot_owner_id || ''));
+    exemplos[motivo].push({
+      id: d.id || null,
+      nome: p.dealname || 'Sem nome',
+      vendedor: dono ? dono.name : null,
+      ownerId: p.hubspot_owner_id ? String(p.hubspot_owner_id) : null,
+      fechadoEm: p.closedate ? String(p.closedate).slice(0, 10) : null,
+      mrr: Number(p.valor_de_mrr) || 0
+    });
+  });
   validos.forEach(d => {
     const p = d.properties || {};
     /* motivo vazio nao vira 'Outros': 'Outros' e uma escolha do time e 'sem motivo' e
@@ -724,7 +748,7 @@ async function motivosDePerda() {
     if (!porOwner[owner]) porOwner[owner] = {};
     porOwner[owner][motivo] = (porOwner[owner][motivo] || 0) + 1;
   });
-  return { total: validos.length, dias: 90, porMotivo, porOwner };
+  return { total: validos.length, dias: 90, porMotivo, porOwner, exemplos };
 }
 
 /* HISTORICO DE ETAPA — a primeira conversao de verdade do produto (30/08/26).
@@ -812,6 +836,8 @@ async function historicoDeEtapas() {
     turmas[m].push(d);
   });
 
+  /* `id` viaja junto com rank e nome porque a tela usa o id para abrir a lista da etapa
+     (openStageModal). Ligar por nome quebraria no dia em que alguém renomear a etapa. */
   const etapas = HIST_ORDEM.map((id, i) => ({ rank: i + 1, id, nome: STAGE_LABELS[id] }));
 
   const escada = {};
@@ -841,7 +867,7 @@ async function historicoDeEtapas() {
         const perderamAqui = chegaram.filter(d => d.perda != null && d.rankMax === e.rank);
         const aindaAqui = chegaram.filter(d => d.etapaAtual === e.id);
         return {
-          rank: e.rank, nome: e.nome,
+          rank: e.rank, id: e.id, nome: e.nome,
           chegaram: chegaram.length,
           avancaram: avancaram.length,
           ganharam: ganharam.length,
@@ -867,7 +893,7 @@ async function historicoDeEtapas() {
       dias.push((destino - de) / DIA);
     });
     return {
-      rank: e.rank, nome: e.nome, sla: SLA_DAYS[e.id] || null, n: dias.length,
+      rank: e.rank, id: e.id, nome: e.nome, sla: SLA_DAYS[e.id] || null, n: dias.length,
       mediana: dias.length ? Math.round(mediana(dias) * 10) / 10 : null,
       p75: dias.length ? Math.round(percentil(dias, 0.75) * 10) / 10 : null
     };
@@ -930,7 +956,7 @@ async function historicoDeEtapas() {
           if (destino != null && destino > de) dias.push((destino - de) / DIA);
         });
         return {
-          rank: e.rank, nome: e.nome,
+          rank: e.rank, id: e.id, nome: e.nome,
           chegaram: chegaram.length, avancaram: avancaram.length,
           mediana: dias.length ? Math.round(mediana(dias) * 10) / 10 : null, nDias: dias.length
         };
@@ -945,7 +971,7 @@ async function historicoDeEtapas() {
   const agregado = etapas.map(e => {
     const chegaram = doTime.filter(d => d.entrada[e.rank] != null);
     const avancaram = chegaram.filter(d => d.rankMax > e.rank || d.ganho != null);
-    return { rank: e.rank, nome: e.nome, chegaram: chegaram.length, avancaram: avancaram.length };
+    return { rank: e.rank, id: e.id, nome: e.nome, chegaram: chegaram.length, avancaram: avancaram.length };
   });
 
   const meses = Object.keys(escada).sort();
