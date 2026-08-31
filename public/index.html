@@ -14035,6 +14035,23 @@ function renderVendasMes() {
     });
   });
 
+  /* O MRR DA TABELA "POR EXECUTIVO" ABRE AQUI (31/08/26). Delegacao no document porque
+     aquela tabela e redesenhada por outro caminho (renderRepsList) e religar listener em
+     cada render e como se perde um clique. Usa o MESMO estado do clique de cima —
+     vendasMesExpandido — para nao existir uma segunda forma de abrir a mesma lista. */
+  if (!window.__vendasPorRepLigado) {
+    window.__vendasPorRepLigado = true;
+    document.addEventListener('click', ev => {
+      const b = ev.target.closest('[data-vendas-owner]');
+      if (!b) return;
+      ev.stopPropagation();
+      vendasMesExpandido = b.getAttribute('data-vendas-owner');
+      renderVendasMes();
+      const alvoLinha = document.querySelector('.vendas-mes-clientes[data-owner="' + vendasMesExpandido + '"]');
+      if (alvoLinha) window.scrollTo({ top: alvoLinha.getBoundingClientRect().top + window.scrollY - 120, behavior: 'auto' });
+    });
+  }
+
   wireVendasMesEdicao(el);
 }
 
@@ -20273,7 +20290,7 @@ function renderRepsList() {
     const variantAvatar = r.tag === 'crit' ? 'risco' : 'neutro';
 
     return `
-      <div class="rep-row" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:1.6fr .8fr .8fr .8fr .8fr 1.1fr;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
+      <div class="rep-row" data-owner="${r.ownerId}" style="display:grid;grid-template-columns:1.5fr .7fr .7fr .7fr .7fr 1fr 1fr;align-items:center;padding:16px 22px;border-bottom:1px solid var(--line);cursor:pointer;gap:10px;">
         <div class="rep-nometag-wrap" style="display:flex;align-items:center;gap:10px;min-width:0;text-align:left;flex:1;">
           <span class="rep-avatar-slot" data-owner="${r.ownerId}" data-variant="${variantAvatar}"></span>
           <div style="min-width:0;flex:1 1 auto;">
@@ -20296,6 +20313,36 @@ function renderRepsList() {
           <div class="mono" style="font-size:10.5px;color:var(--muted);margin-bottom:3px;">${semDados ? '' : `${fechadosMes}/${meta}`}</div>
           <div class="bar-track" style="height:6px;">${semDados ? '' : `<div class="bar-fill" style="width:${pctMeta}%;background:${corMeta};"></div>`}</div>
         </div>
+        <!-- DINHEIRO NA MESMA LINHA DO FUNIL (31/08/26, prancha §6). Antes eram duas
+             tabelas por executivo, uma embaixo da outra, somando 1.105px: uma com funil,
+             outra com MRR. Agora o gestor lê as duas coisas na mesma linha. A EDIÇÃO de MRR
+             continua no bloco de vendas, recolhido abaixo — não passo o caminho de escrita
+             por uma refatoração de layout. O número aqui abre exatamente aquele bloco. -->
+        ${(() => {
+          /* porRep e ARRAY, nao objeto indexado por ownerId. Eu tinha escrito o acesso por
+             chave e TODOS os executivos apareciam como "nao medido" — o pior erro possivel
+             aqui, porque esse chip existe justamente para dizer a verdade sobre ausencia. Se
+             ele mente, nao serve para mais nada. Achado conferindo a tela, nao o codigo. */
+          const porRepVendas = (DATA.vendasMes || {}).porRep;
+          const listaVendas = Array.isArray(porRepVendas) ? porRepVendas : Object.values(porRepVendas || {});
+          const vm = listaVendas.find(x => x && String(x.ownerId) === String(r.ownerId)) || null;
+          const mrr = vm ? Number(vm.mrrTotal) || 0 : 0;
+          const clientes = vm ? Number(vm.count) || 0 : 0;
+          /* ZERO DE VERDADE ≠ NAO MEDIDO, e esta e a distincao que a identidade toda defende.
+             porRep so traz quem FECHOU no mes. Sem a linha, existem dois casos diferentes:
+               · o executivo tem dado e nao fechou nada  -> zero verdadeiro, mostra R$ 0;
+               · o executivo esta sem dado (rampagem, sem carga) -> nao medido, com o motivo.
+             Tratar os dois como "nao medido" seria mentir sobre quem simplesmente nao vendeu. */
+          if (!vm) {
+            return semDados
+              ? `<div style="text-align:right;"><span class="gi-nm">não medido</span><div class="mono" style="font-size:10px;color:var(--muted2);margin-top:4px;">sem carga para este executivo</div></div>`
+              : `<div style="text-align:right;"><span class="gi-zero">R$ 0</span><div class="mono" style="font-size:10px;color:var(--muted2);margin-top:3px;">nenhum fechamento no mês</div></div>`;
+          }
+          return `<div style="text-align:right;">
+            <button type="button" class="gi-cell-btn" data-vendas-owner="${esc(String(r.ownerId))}" title="Abrir os ${clientes} cliente(s) fechados por ${esc(String(r.name || '').split(' ')[0])} — dá para corrigir o MRR lá">${fmtBRL(mrr)}</button>
+            <div class="mono" style="font-size:10px;color:var(--muted2);margin-top:3px;">${clientes} cliente(s) no mês</div>
+          </div>`;
+        })()}
       </div>
     `;
   }).join('');
