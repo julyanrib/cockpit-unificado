@@ -205,6 +205,8 @@ function montarDadosCompletos() {
     /* POR QUE PERDEMOS (30/08/26): motivo de perda dos ultimos 90 dias, por motivo e por
        executivo. Vem do HubSpot em motivo_do_perdido, que o time preenche. */
     motivosPerda: hubspot.motivosPerda || null,
+    /* Conversão por turma, velocidade de etapa e ciclo — o gestor recebe inteiro. */
+    historicoEtapas: hubspot.historicoEtapas || null,
     funil: hubspot.funil,
     funilLeads: hubspot.funilLeads || {},
     leadsReciclagem60: hubspot.leadsReciclagem60 || [],
@@ -360,6 +362,21 @@ function filtrarParaPapel(dados, usuario) {
     /* O EXECUTIVO VE SO A PROPRIA ASSINATURA DE PERDA. O total do time e a comparacao
        entre executivos e material de gestao: saber que o colega perde mais por preco nao
        ajuda ninguem na rua, e ranking de derrota nas costas do outro nao e transparencia. */
+    /* HISTÓRICO DE ETAPA DO EXECUTIVO: só a fatia dele, mais as referências do time que
+       não têm nome de ninguém (velocidade por etapa, ciclo e agregado). Corte no
+       servidor, como o resto do arquivo: carteira de outra pessoa não desce para o
+       navegador dele. A escada por turma sai — é leitura de time, não dele. */
+    historicoEtapas: dados.historicoEtapas ? {
+      dias: dados.historicoEtapas.dias,
+      primeiroMes: dados.historicoEtapas.primeiroMes,
+      ultimoMes: dados.historicoEtapas.ultimoMes,
+      minimoDaTurma: dados.historicoEtapas.minimoDaTurma,
+      escada: {},
+      velocidade: dados.historicoEtapas.velocidade || [],
+      ciclo: dados.historicoEtapas.ciclo || null,
+      agregado: dados.historicoEtapas.agregado || null,
+      porOwner: { [meuId]: (dados.historicoEtapas.porOwner || {})[meuId] || null }
+    } : null,
     motivosPerda: dados.motivosPerda ? {
       dias: dados.motivosPerda.dias,
       total: Object.values((dados.motivosPerda.porOwner || {})[meuId] || {}).reduce((a, b) => a + b, 0),
