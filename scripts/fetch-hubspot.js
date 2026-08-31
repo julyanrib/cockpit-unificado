@@ -910,6 +910,15 @@ async function historicoDeEtapas() {
     };
   });
 
+  /* AGREGADO DO TIME, pronto para virar régua. Vai separado de porOwner porque o
+     executivo recebe apenas a própria fatia: sem este campo, a régua do time no login
+     dele seria a soma de um só — ele mesmo — e nunca acusaria nada. */
+  const agregado = etapas.map(e => {
+    const chegaram = negocios.filter(d => d.entrada[e.rank] != null);
+    const avancaram = chegaram.filter(d => d.rankMax > e.rank || d.ganho != null);
+    return { rank: e.rank, nome: e.nome, chegaram: chegaram.length, avancaram: avancaram.length };
+  });
+
   const meses = Object.keys(escada).sort();
   return {
     dias: HIST_DIAS,
@@ -919,7 +928,7 @@ async function historicoDeEtapas() {
     primeiroMes: meses[0] || null,
     ultimoMes: meses[meses.length - 1] || null,
     minimoDaTurma: 30,
-    escada, velocidade, ciclo, porOwner
+    escada, velocidade, ciclo, porOwner, agregado
   };
 }
 
@@ -1264,11 +1273,28 @@ async function main() {
   // seguinte do MESMO negócio, não representa um cliente novo fechando.
   const ganhoSemana = await stageTotalLast7Days([STAGES.ganho1, STAGES.ganho2]);
   const perdidoSemanaDeals = await stageDealsLast7DaysComNomes(STAGES.perdido);
-  /* POR QUE PERDEMOS: motivo de perda dos ultimos 90 dias, por motivo e por executivo.
-     Uma consulta a mais no fetch que ja roda — nada de endpoint novo (12/12 na Vercel). */
-  const motivosPerda = await motivosDePerda();
-  /* CONVERSAO DE VERDADE: por turma, sobre a data de entrada em cada etapa. */
-  const historicoEtapas = await historicoDeEtapas();
+  /* AS DUAS LEITURAS ADICIONAIS SÃO À PROVA DE FALHA, pelo mesmo motivo da agenda lá em
+     cima: main() termina em process.exit(1), então uma exceção aqui não gravaria
+     data/hubspot.json e o cockpit inteiro ficaria no snapshot de ontem — por causa de um
+     bloco secundário. Falha aqui vira null com aviso no log, e a tela já sabe dizer que
+     a leitura não veio, em vez de mostrar zero.
+
+     POR QUE PERDEMOS: motivo de perda dos últimos 90 dias, por motivo e por executivo.
+     CONVERSÃO DE VERDADE: por turma, sobre a data de entrada em cada etapa.
+     As duas são consultas a mais no fetch que já roda — nada de endpoint novo (12/12 na
+     Vercel). */
+  let motivosPerda = null;
+  try {
+    motivosPerda = await motivosDePerda();
+  } catch (e) {
+    console.error('AVISO: motivo de perda não veio nesta rodada (' + e.message + '). O resto do refresh segue.');
+  }
+  let historicoEtapas = null;
+  try {
+    historicoEtapas = await historicoDeEtapas();
+  } catch (e) {
+    console.error('AVISO: histórico de etapa não veio nesta rodada (' + e.message + '). O resto do refresh segue.');
+  }
   const perdidoSemana = perdidoSemanaDeals.length;
 
   // Fechados no mês corrente (pro KPI "Fechados no mês" vs. meta do time) — mesma
