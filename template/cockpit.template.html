@@ -19177,6 +19177,71 @@ function gxBlocoPerdaHTML(r) {
    Sem inventar: negócio sem endereço não conta como rua (é telefone), e onde o alvo da fase
    não está definido a linha diz isso em vez de dividir por um número que ninguém combinou.
    ══════════════════════════════════════════════════════════════════════════════════════ */
+/* A FILA QUE JA EXISTE — reciclagem, para o gestor (30/08/26, PR 7).
+
+   A aba Prospecção do gestor pergunta "o que eu aprovo hoje?" e, sem lote importado, ficava
+   com um vazio e a leitura de cobertura de rua. Enquanto isso, DATA.leadsReciclagem60 traz
+   112 contas paradas há mais de 60 dias — e esse bloco só era desenhado para o EXECUTIVO
+   (`souRep ? ... : ''`). Quem decide importar lote novo nunca via o estoque que já tem.
+
+   Medido antes de escrever a frase, e a medição mudou o texto: das 112, só UMA tem endereço
+   no CRM. Então esta fila não vira dia de rua — a conta de cobertura de rua, no bloco de
+   cima, exclui negócio sem endereço de propósito ("é telefone, não é rua"). Dizer que 112
+   contas somam semanas de campo seria exatamente o número inventado que não pode existir
+   aqui. O bloco diz o que a fila é: trabalho de telefone, e um sintoma de cadastro.
+
+   Sem botão de ação: o gestor não resgata lead no lugar do executivo. É leitura para a
+   conversa da Daily, e quem resgata é quem atende. */
+function gxReciclagemDoTimeHTML() {
+  const fila = (DATA && DATA.leadsReciclagem60) || [];
+  if (!fila.length) {
+    return '<div class="gx-secao">' +
+      '<div class="gx-secao-cab"><b>A fila que já existe</b><span>contas que esfriaram e ainda podem voltar</span></div>' +
+      '<div class="gx-secao-nota">Nenhuma conta parada há mais de 60 dias. Quando houver, ela aparece aqui antes de a decisão ser importar lote novo.</div>' +
+    '</div>';
+  }
+
+  const porOwner = {};
+  let comEndereco = 0;
+  fila.forEach(l => {
+    const chave = String(l.ownerId || '') || 'sem-dono';
+    if (!porOwner[chave]) porOwner[chave] = { nome: l.vendedor || 'Sem dono', n: 0, maisVelho: 0 };
+    porOwner[chave].n++;
+    porOwner[chave].maisVelho = Math.max(porOwner[chave].maisVelho, Number(l.dias) || 0);
+    if (l.cidade || l.bairro) comEndereco++;
+  });
+  const linhasOwner = Object.keys(porOwner).map(k => porOwner[k]).sort((a, b) => b.n - a.n);
+  const maior = linhasOwner[0].n || 1;
+
+  const dias = fila.map(l => Number(l.dias) || 0).sort((a, b) => a - b);
+  const mediana = dias.length % 2 ? dias[(dias.length - 1) / 2] : Math.round((dias[dias.length / 2 - 1] + dias[dias.length / 2]) / 2);
+  const maisVelho = dias[dias.length - 1];
+
+  const linhas = linhasOwner.map(o => {
+    const larg = Math.max(2, Math.round((o.n / maior) * 100));
+    return '<div class="gx-forma-linha">' +
+      '<div class="gx-forma-rot">' + esc(String(o.nome).split(' ')[0]) + '</div>' +
+      '<div class="gx-forma-trilha"><i style="width:' + larg + '%;"></i></div>' +
+      '<div class="gx-forma-num">' + o.n + '<small>mais velha: ' + o.maisVelho + 'd</small></div>' +
+    '</div>';
+  }).join('');
+
+  const semEndereco = fila.length - comEndereco;
+  const notaEndereco = semEndereco === fila.length
+    ? '<b>Nenhuma das ' + fila.length + ' tem endereço no CRM.</b> Reativar aqui é telefone, não rua — a conta de cobertura, acima, exclui negócio sem endereço de propósito.'
+    : '<b>' + semEndereco + ' das ' + fila.length + ' não têm endereço no CRM.</b> Essas são trabalho de telefone: para virarem dia de rua, o endereço precisa entrar no cadastro primeiro — a conta de cobertura, acima, exclui negócio sem endereço de propósito.';
+
+  return '<div class="gx-secao">' +
+    '<div class="gx-secao-cab"><b>A fila que já existe</b>' +
+      '<span>contas paradas há mais de 60 dias · não contam no funil aberto nem no SLA, então não aparecem em nenhuma outra tela</span></div>' +
+    '<div class="gx-meta-num" style="margin-top:10px;"><b>' + fila.length + ' contas</b>' +
+      '<span>parada mediana há ' + mediana + ' dias · a mais velha há ' + maisVelho + '</span></div>' +
+    '<div class="gx-forma">' + linhas + '</div>' +
+    '<div class="gx-secao-nota">' + notaEndereco +
+      '<br>Antes de importar lote novo, esta é a pergunta da Daily: quem tem fila parada e não está tocando nela. Resgatar é do executivo — cada um resgata da própria carteira, na tela dele.</div>' +
+  '</div>';
+}
+
 function gxCoberturaDeRuaHTML() {
   const reps = (DATA.reps || []).filter(r => r && r.ownerId && (typeof ownerAtivoNoField !== 'function' || ownerAtivoNoField(r.ownerId)));
   if (!reps.length) return '';
@@ -32676,9 +32741,16 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
        dado e é o que acelera venda. Só para o gestor: o executivo não importa lote. */
     const coberturaDeRua = (sessaoAtual && sessaoAtual.role === 'manager' && typeof gxCoberturaDeRuaHTML === 'function')
       ? gxCoberturaDeRuaHTML() : '';
+    /* A FILA QUE JA EXISTE, antes da decisão de importar lote novo. O bloco de reciclagem
+       existia só para o executivo (souRep ? ... : ''), então quem decide importação nunca
+       via o estoque parado — 112 contas na carga de hoje. Vem DEPOIS da cobertura de rua
+       de propósito: primeiro quem fica sem rua, depois o que já existe para trabalhar. */
+    const filaReciclagem = (sessaoAtual && sessaoAtual.role === 'manager' && typeof gxReciclagemDoTimeHTML === 'function')
+      ? gxReciclagemDoTimeHTML() : '';
     el.innerHTML = `
       ${bannerVazio}
       ${coberturaDeRua}
+      ${filaReciclagem}
       <div class="chart-card" style="border-left:3px solid var(--blue);">
         <h3 style="margin-bottom:4px;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r=".8" fill="currentColor"/></svg>Prospecção</h3>
         <div class="empty-state">${souGestorProspVazio
