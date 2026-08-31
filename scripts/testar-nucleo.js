@@ -1487,10 +1487,20 @@ teste('Daily do gestor usa plano real, nao a promessa manual aposentada', () => 
     'existe uma derivacao unica para plano e clientes nomeados');
   verdade(daily.includes("const nomesLista = nomesPlano.length ? nomesPlano : nomesAgenda"),
     'agenda confirmada cobre o vazio quando ainda nao existe plano fechado');
-  verdade(daily.includes('clientes nomeados hoje'),
+  /* ATUALIZADO EM 31/08/26, com a nova identidade do gestor. O teste fixava as frases
+     literais do hero antigo ('clientes nomeados hoje' / 'executivos sem cliente
+     definido'). O hero mudou de forma — o titulo agora e a decisao e esses dois numeros
+     desceram para a linha de apoio — mas a INVARIANTE que este teste protege e outra: o
+     hero tem que declarar a unidade real do compromisso (cliente nomeado) e transformar o
+     vazio em cobranca. As duas continuam verdadeiras, com menos palavras. Verificar
+     conceito em vez de frase, para o teste nao quebrar em cada revisao de texto e para
+     nao ser afrouxado quando isso acontecer. */
+  verdade(daily.includes('cliente(s) nomeado(s)') || daily.includes('clientes nomeados'),
     'o hero declara a unidade real do compromisso');
-  verdade(daily.includes('executivos sem cliente definido'),
+  verdade(daily.includes('sem cliente'),
     'o vazio vira uma cobranca objetiva');
+  verdade(daily.includes('sem plano do dia'),
+    'o hero nomeia quem sai sem plano, que e a cobranca da reuniao');
   falso(daily.includes('const promessasHoje = repsDaily.map'),
     'o hero nao volta a contar os campos prometido_* aposentados');
   verdade(daily.includes('const resumoPlanoHoje = compromissoDoPlano(planoHoje, r.ownerId)'),

@@ -6052,6 +6052,12 @@
 }
 @media (max-width:760px){
   .gi-hero{padding:20px 18px;}
+  /* MIN-WIDTH ZERADO NO CELULAR (31/08/26). A prancha dá min-width:340px ao lado principal
+     do hero e 300px ao lateral — a 375px, com 18px de padding de cada lado, sobram 339px e o
+     bloco estoura por 1px, levando o CORPO da página a rolar de lado (medido: 386 numa
+     janela de 375). É o mesmo laço do 1fr: largura mínima declarada não encolhe sozinha. */
+  .gi-hero-main,.gi-hero-side{min-width:0;}
+  .gi-hero{gap:18px;}
   .gi-hero-sep{display:none;}
   .gi-row{grid-template-columns:1fr;}
   .gi-row .gi-btn{width:100%;}
@@ -30231,23 +30237,109 @@ async function renderDaily() {
         <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Briefing das 9h · ${fmtDailyLabel(dailyRefDate)}</span>
         <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:4px 0 0;letter-spacing:-.015em;color:var(--dark-ink);">Seu cadastro ainda não tem funil</h1>
       </div>
-    </div>` : `
-    <div class="cockpit-hero-combo" style="align-items:center;">
-      <div class="hero-titulo">
-        <span class="hero-eyebrow" style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);">Daily & Ritmo · ${fmtDailyLabel(dailyRefDate)}</span>
-        <h1 style="font-family:'Archivo',system-ui,sans-serif;font-size:22px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">Quem planejou clientes, quem executou, quem precisa de ação?</h1>
-        <span style="font-size:10.5px;color:${frescorDaily.confiavel ? 'var(--dark-mut)' : '#FFB0B8'};margin-top:2px;">${frescorDaily.confiavel ? 'Plano vem do Cockpit; execução vem da evidência do HubSpot.' : esc(frescorDaily.rotulo) + ' · não cobre realizado até a próxima carga.'}</span>
+    </div>` : (() => {
+      /* ═══ HERO DA DAILY DO GESTOR — nível 1 da nova identidade (31/08/26) ═══
+         A prancha pede o que o hero antigo não fazia: DIZER A DECISÃO. Antes eram quatro
+         números grandes lado a lado ("16 clientes nomeados · 4 sem cliente · 0/7 fecharam ·
+         0 fechados no dia") e o gestor montava a conclusão de cabeça, na frente do time, às
+         9h da manhã. Agora o título é a conclusão, e os três primeiros nomes já são botões.
+
+         A ordem não é inventada aqui: é a mesma régua da fila de intervenção da aba Time —
+         sem plano do dia pesa mais, depois a FATIA da carteira travada (não a contagem,
+         senão carteira grande ganha sempre), e quem tem alvo de campo zero (rampagem
+         inicial) não é cobrado por rua.
+
+         Os dois números do hero são os que mudam o que ele fala: planos fechados contra o
+         time, e quentes sem próximo passo — este vindo de quentesNoRadar(null), a MESMA
+         fonte da faixa logo abaixo, porque dois números da mesma coisa na mesma tela é o
+         defeito que eu passei a noite tirando daqui.
+
+         "Fechados no dia" desceu para a linha de verdade do rodapé: descreve o dia, não
+         decide nada às 9h — e quando a carga do HubSpot não chegou, ele aparece como NÃO
+         MEDIDO, nunca como zero. */
+      const faseDoDia = typeof d4FaseDoDia === 'function' ? d4FaseDoDia(dailyRefDate) : 'antes';
+      const travaRotulo = faseDoDia === 'antes'
+        ? ' · promessa das 9h30 ainda aberta'
+        : faseDoDia === 'corrida' ? ' · promessa travada às 9h30' : ' · dia fechado';
+
+      const radarGestor = (typeof quentesNoRadar === 'function') ? quentesNoRadar(null) : { radar: [], semPasso: [] };
+      const quentesSemPassoTime = (radarGestor.semPasso || []).length;
+      const quentesTotalTime = (radarGestor.radar || []).length;
+
+      const rankDaily = compromissosHoje.map(x => {
+        const r = x.r;
+        const nomeados = Number(x.resumo && x.resumo.nomes) || 0;
+        const abertos = Number(r.open) || 0;
+        const travados = Number(r.leadsTravados) || 0;
+        const taxa = abertos > 0 ? travados / abertos : 0;
+        const ramp = typeof rampDoOwner === 'function' ? rampDoOwner(r.ownerId) : null;
+        const alvo = (ramp && ramp.definido && ramp.alvo != null) ? Number(ramp.alvo) : null;
+        const naRua = alvo == null || alvo > 0;
+        const pontos = (naRua && !nomeados ? 6 : 0) + Math.min(6, Math.round(taxa * 6));
+        return { r, nomeados, travados, abertos, naRua, pontos, ramp };
+      }).filter(x => x.pontos > 0).sort((a, b) => b.pontos - a.pontos).slice(0, 3);
+
+      const semPlanoAgora = compromissosHoje.filter(x => !(Number(x.resumo && x.resumo.nomes) || 0));
+      const primeiro = rankDaily[0];
+      const nSemPlano = semPlanoAgora.length;
+      const nomeCurto = r => esc(String((r && r.name) || '').split(' ')[0] || 'ele');
+      const emPalavra = n => n === 2 ? 'Dois' : n === 3 ? 'Três' : n === 4 ? 'Quatro' : n === 5 ? 'Cinco' : n === 6 ? 'Seis' : String(n);
+      const headline = !primeiro
+        ? 'Ninguém está pendente de cobrança. Confirme a promessa das 9h30 e libere a rua.'
+        : nSemPlano > 1
+          ? `${emPalavra(nSemPlano)} saem para o campo sem plano. Comece por ${nomeCurto(primeiro.r)}.`
+          : nSemPlano === 1
+            ? `${nomeCurto(semPlanoAgora[0].r)} sai para o campo sem plano. Comece por aí.`
+            : `Comece por ${nomeCurto(primeiro.r)}: ${primeiro.travados} de ${primeiro.abertos} negócios acima do SLA.`;
+
+      const motivoDoRank = x => {
+        const partes = [];
+        if (!x.nomeados) partes.push('sem plano do dia');
+        if (x.travados > 0) partes.push(`<b style="color:var(--dark-red);">${x.travados} acima do SLA</b>${x.abertos ? ` de ${x.abertos} abertos` : ''}`);
+        if (!x.ramp || !x.ramp.definido) partes.push('fase de rampagem não definida');
+        return partes.join(' · ') || 'pendência de acompanhamento';
+      };
+      const linhaDoRank = (x, i) => `<button type="button" class="gi-rank${x.pontos >= 9 ? ' is-critical' : x.pontos >= 6 ? ' is-warning' : ''}" data-gx-dono="${esc(String(x.r.ownerId))}" title="Abrir a linha de ${esc(String(x.r.name || ''))} na rodada">`
+        + `<span class="gi-rank-sq">${i + 1}</span>`
+        + `<span><b>${esc(String(x.r.name || '').split(' ').slice(0, 2).join(' '))}</b> · ${motivoDoRank(x)}</span>`
+        + `<span class="gi-rank-go">${x.nomeados ? 'abrir' : 'cobrar plano'} ▸</span></button>`;
+
+      return `
+    <div class="gi-hero">
+      <div class="gi-hero-main">
+        <div class="gi-hero-kicker">Daily &amp; Ritmo · ${fmtDailyLabel(dailyRefDate)}${travaRotulo}</div>
+        <h2>${headline}</h2>
+        ${rankDaily.length
+          ? rankDaily.map(linhaDoRank).join('')
+          : `<div class="gi-hero-truth" style="border-top:0;padding-top:0;">Todo mundo com cliente nomeado hoje, e nenhuma carteira com metade travada.</div>`}
       </div>
-      <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
-      <div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;">
-        <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:var(--dark-ink);">${clientesPlanejadosTotal}</div><div style="font-size:11px;color:var(--dark-mut);">clientes nomeados hoje</div></div>
-        <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:${semClientesNomeados > 0 ? '#FF6B78' : 'var(--dark-ink)'};">${semClientesNomeados}</div><div style="font-size:11px;color:var(--dark-mut);">executivos sem cliente definido</div></div>
-        <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:${planosFechadosTotal < repsDaily.length ? '#E0A64A' : 'var(--dark-ink)'};">${planosFechadosTotal}<span style="font-size:15px;color:var(--dark-mut);font-weight:700;">/${repsDaily.length}</span></div><div style="font-size:11px;color:var(--dark-mut);">fecharam o plano do dia</div></div>
-        <div><div style="font-family:'Archivo',system-ui,sans-serif;font-weight:800;font-size:28px;color:${frescorDaily.confiavel ? '#57C29A' : 'var(--dark-mut)'};">${frescorDaily.confiavel ? fechadosHojeTotal : '—'}</div><div style="font-size:11px;color:var(--dark-mut);">fechados no dia${frescorDaily.confiavel ? '' : ' · carga pendente'}</div></div>
+      <div class="gi-hero-sep"></div>
+      <div class="gi-hero-side">
+        <div class="gi-hero-kpis">
+          <div class="gi-hero-kpi">
+            <span class="l">Planos fechados</span>
+            <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${planosFechadosTotal < repsDaily.length ? ' style="color:var(--dark-amber);"' : ''}>${planosFechadosTotal}</span><span class="meta">de ${repsDaily.length}</span></span>
+            <span class="sub">${clientesPlanejadosTotal} cliente(s) nomeado(s)${semClientesNomeados > 0 ? ` · ${semClientesNomeados} sem cliente` : ''}</span>
+          </div>
+          <div class="gi-hero-kpi">
+            <span class="l">Quentes sem passo</span>
+            <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${quentesSemPassoTime > 0 ? ' style="color:var(--dark-red);"' : ''}>${quentesSemPassoTime}</span><span class="meta">de ${quentesTotalTime}</span></span>
+            <span class="sub">${quentesSemPassoTime > 0 ? 'nomear na rodada, não depois dela' : 'todo quente com próximo passo marcado'}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:9px;flex-wrap:wrap;">
+          <button class="gi-btn is-red" type="button" id="dailyConduzir" style="padding:0 20px;">Conduzir a Daily →</button>
+          <button class="gi-btn" type="button" id="dailyTvToggle" aria-pressed="false" style="background:none;border-color:rgba(253,251,240,.25);color:var(--dark-ink);">Modo TV</button>
+        </div>
+        <div class="gi-hero-truth">
+          Plano vem do Cockpit; execução vem da evidência do HubSpot — a promessa das 9h30 é outra medida.
+          Fechados no dia: ${frescorDaily.confiavel
+            ? `<b style="color:var(--dark-green);">${fechadosHojeTotal}</b>`
+            : `<span class="gi-nm" style="background:rgba(253,251,240,.08);border-color:var(--dark-line);color:var(--dark-mut);">não medido</span> — a carga do HubSpot ainda não chegou, e isso não é zero`}.
+        </div>
       </div>
-      <button class="btn-prim" type="button" id="dailyConduzir" style="margin-left:auto;flex:none;padding:11px 20px;">Conduzir a Daily →</button>
-      <button type="button" class="btn-ol" id="dailyTvToggle" style="flex:none;" aria-pressed="false">📺 Modo TV</button>
     </div>`;
+    })();
 
   // Ritual do gestor: a Daily precisa terminar em compromisso, não em leitura de placar.
   // BLOCO 31 — mesma correção: esta lista alimenta a frase "Objetivo de hoje" no topo da
