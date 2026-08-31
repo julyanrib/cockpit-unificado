@@ -19105,8 +19105,116 @@ function gxCoberturaDeRuaHTML() {
 }
 
 /* A tela inteira. Ordem: forma, idade, dinheiro, meta, promessa, mix. */
+/* CONVERSAO DELE × DO TIME, por etapa (30/08/26 — PR 5). "Como eu estudo o funil de cada
+   um?" tinha cinco leituras e todas eram foto de AGORA. A pergunta da 1:1 — onde ele perde —
+   não tinha resposta: a forma do funil mostra onde os negócios dele estão parados, o que é
+   consequência, não causa.
+
+   Usa historicoEtapas.porOwner, que veio no PR 4: de quem chegou a cada etapa NA CARTEIRA
+   DA PESSOA, quantos saíram dela para frente, com a taxa do time ao lado como régua. Mesma
+   gramática visual do bloco "forma do funil" logo abaixo, de propósito — o gestor não
+   precisa aprender a ler dois desenhos diferentes na mesma tela.
+
+   Três cuidados que o dado exige:
+   · n pequeno não vira taxa (menos de 10 casos: mostra o número, não desenha porcentagem);
+   · abaixo do time só é acusação com folga de 10 pontos — menos que isso é empate;
+   · sem venda não existe ciclo, e ciclo zero seria mentira. */
+const GX_MIN_CASOS = 10;
+const GX_FOLGA_PP = 10;
+
+function gxConversaoDoTime() {
+  const h = DATA && DATA.historicoEtapas;
+  if (!h || !h.porOwner) return null;
+  const soma = {};
+  Object.keys(h.porOwner).forEach(o => {
+    (h.porOwner[o].etapas || []).forEach(e => {
+      if (!soma[e.rank]) soma[e.rank] = { rank: e.rank, nome: e.nome, chegaram: 0, avancaram: 0 };
+      soma[e.rank].chegaram += e.chegaram || 0;
+      soma[e.rank].avancaram += e.avancaram || 0;
+    });
+  });
+  const etapas = Object.keys(soma).map(k => soma[k]).sort((a, b) => a.rank - b.rank);
+  return etapas.length ? etapas : null;
+}
+
+function gxCicloDoTime() {
+  const h = DATA && DATA.historicoEtapas;
+  return h && h.ciclo && h.ciclo.mediana != null ? h.ciclo : null;
+}
+
+function gxBlocoConversaoHTML(r) {
+  const h = DATA && DATA.historicoEtapas;
+  const meu = h && h.porOwner ? h.porOwner[String(r.ownerId)] : null;
+  const time = gxConversaoDoTime();
+
+  if (!meu || !time) {
+    /* AUSENCIA NAO E ZERO: sem histórico, o bloco diz por que está vazio. */
+    return '<div class="gx-secao">' +
+      '<div class="gx-secao-cab"><b>Onde esse funil perde</b><span>conversão por etapa, desta carteira contra o time</span></div>' +
+      '<div class="gx-secao-nota">Esta leitura vem do histórico de etapa do HubSpot, que entra no próximo carregamento (8h56 · 13h · 19h). ' +
+      'Até lá ela fica vazia de propósito — melhor sem número do que com número inventado.</div>' +
+    '</div>';
+  }
+
+  const primeiro = esc(String((r.name || '').split(' ')[0] || 'ele'));
+  let pior = null;
+  const linhas = meu.etapas.map(e => {
+    const t = time.find(x => x.rank === e.rank);
+    const taxaTime = t && t.chegaram > 0 ? t.avancaram / t.chegaram : null;
+    const poucos = e.chegaram < GX_MIN_CASOS;
+    const taxa = e.chegaram > 0 ? e.avancaram / e.chegaram : null;
+    const atras = !poucos && taxa != null && taxaTime != null && (taxaTime - taxa) * 100 >= GX_FOLGA_PP;
+    if (atras && (!pior || (taxaTime - taxa) > pior.dif)) {
+      pior = { nome: e.nome, dif: taxaTime - taxa, taxa: taxa, taxaTime: taxaTime, chegaram: e.chegaram, avancaram: e.avancaram };
+    }
+    const larg = taxa == null ? 0 : Math.max(2, Math.round(taxa * 100));
+    const marca = taxaTime == null ? null : Math.min(100, Math.round(taxaTime * 100));
+    return '<div class="gx-forma-linha">' +
+      '<div class="gx-forma-rot">' + esc(e.nome) + '</div>' +
+      '<div class="gx-forma-trilha">' +
+        (poucos || taxa == null ? '' : '<i class="' + (atras ? 'is-gordo' : '') + '" style="width:' + larg + '%;"></i>') +
+        (marca === null ? '' : '<span class="gx-forma-marca" style="left:' + marca + '%;"></span>') +
+      '</div>' +
+      '<div class="gx-forma-num">' + (poucos || taxa == null ? '—' : Math.round(taxa * 100) + '%') +
+        '<small>' + (poucos
+          ? e.chegaram + ' caso(s), pouco pra taxa'
+          : e.chegaram + ' chegaram' + (e.mediana != null ? ' · ' + String(e.mediana).replace('.', ',') + 'd' : '')) + '</small>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  const cicloTime = gxCicloDoTime();
+  const cicloDele = meu.ciclo && meu.ciclo.mediana != null ? meu.ciclo : null;
+  const notaCiclo = cicloDele
+    ? 'Ciclo de ' + primeiro + ': <b>' + String(cicloDele.mediana).replace('.', ',') + ' dias</b> em ' + cicloDele.n + ' venda(s)' +
+      (cicloTime ? ', contra ' + String(cicloTime.mediana).replace('.', ',') + ' dias do time.' : '.')
+    : primeiro + ' ainda não fechou nenhuma venda na janela, então não tem ciclo — e ciclo zero seria mentira.';
+
+  const notaPior = pior
+    ? 'A etapa para treinar com ' + primeiro + ' é <b>' + esc(pior.nome) + '</b>: de ' + pior.chegaram + ' que chegaram nela, ' +
+      pior.avancaram + ' seguiram — <b>' + Math.round(pior.taxa * 100) + '% contra ' + Math.round(pior.taxaTime * 100) + '% do time</b>.'
+    : 'Nenhuma etapa de ' + primeiro + ' está mais de ' + GX_FOLGA_PP + ' pontos abaixo do time — este funil converte no ritmo do time.';
+
+  return '<div class="gx-secao">' +
+    '<div class="gx-secao-cab"><b>Onde esse funil perde</b>' +
+      '<span>de quem chegou a cada etapa nesta carteira, quantos saíram dela para frente · últimos ' + h.dias + ' dias</span></div>' +
+    '<div class="gx-forma">' + linhas + '</div>' +
+    '<div class="gx-legenda">' +
+      '<span><i style="background:var(--gx-ink);"></i>taxa de saída desta carteira</span>' +
+      '<span><i style="background:var(--gx-red);"></i>' + GX_FOLGA_PP + '+ pontos abaixo do time</span>' +
+      '<span><i style="background:var(--gx-amber);width:3px;height:12px;"></i>taxa do time na mesma etapa</span>' +
+    '</div>' +
+    '<div class="gx-secao-nota">' + notaPior + '<br>' + notaCiclo +
+      '<br>Etapa com menos de ' + GX_MIN_CASOS + ' negócios não vira porcentagem, só número de casos. E esta taxa é medida dentro da própria etapa — não é comparação com a etapa de cima.</div>' +
+  '</div>';
+}
+
 function gxFunilDoExecutivoHTML(r) {
+  /* "Onde esse funil perde" vem PRIMEIRO: é a única leitura que explica as outras. A forma do
+     funil e a idade continuam logo abaixo — elas mostram o estado de agora, que é
+     consequência do que esta primeira mostra. */
   return `<div class="gx">
+    ${gxBlocoConversaoHTML(r)}
     <div class="gx-grid">
       ${gxBlocoFormaHTML(r)}
       ${gxBlocoIdadeHTML(r)}
