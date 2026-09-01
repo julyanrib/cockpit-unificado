@@ -270,8 +270,18 @@ module.exports = async function handler(req, res) {
   const linhasTodas = leads.map(l => {
     const cidade = canonizarCidade(l.cidade || l.city || '');
     const bairro = l.bairro || null;
-    // Dono: explícito no lead (l.responsavel_owner_id) vence; senão, roteia por território.
-    const dono = l.responsavel_owner_id ? String(l.responsavel_owner_id) : rotearTerritorio(cidade, bairro);
+    const lat = l.lat != null ? l.lat : (l.latitude != null ? l.latitude : null);
+    const lng = l.lng != null ? l.lng : (l.longitude != null ? l.longitude : null);
+    /* Dono: explícito no lead (l.responsavel_owner_id) vence; senão, roteia por território.
+       A COORDENADA VAI JUNTO (01/09/26): sem ela o roteador só consegue decidir pelo nome do
+       bairro, e nome não cobre uma cidade de 96 distritos — foi assim que a regra de sobra
+       despejou 290 contas numa pessoa em São Paulo. Com lat/lng, bairro que nenhuma lista
+       conhece cai no executivo do centro de zona mais próximo, que é geograficamente coerente
+       por construção. Ver lib/territorios.js.
+       lat/lng são lidos aqui com a MESMA regra usada logo abaixo no objeto da linha: se as
+       duas leituras divergirem, o dono passa a ser calculado sobre coordenada diferente da
+       que fica gravada, e o km do card deixa de explicar o dono. */
+    const dono = l.responsavel_owner_id ? String(l.responsavel_owner_id) : rotearTerritorio(cidade, bairro, lat, lng);
     return {
     place_id: l.place_id || null,
     cnpj: l.cnpj || null,
@@ -287,8 +297,8 @@ module.exports = async function handler(req, res) {
     telefone_normalizado: normalizarTelefone(l.telefone || l.phone_number),
     nota: l.nota != null ? l.nota : (l.rating != null ? l.rating : null),
     avaliacoes: l.avaliacoes != null ? l.avaliacoes : (l.rating_count != null ? l.rating_count : null),
-    lat: l.lat != null ? l.lat : (l.latitude != null ? l.latitude : null),
-    lng: l.lng != null ? l.lng : (l.longitude != null ? l.longitude : null),
+    lat: lat,
+    lng: lng,
     presencial: l.presencial !== false,
     delivery: !!l.delivery,
     horario_funcionamento: Array.isArray(l.weekday_hours) ? l.weekday_hours.join(' | ') : (l.horario_funcionamento || null),
