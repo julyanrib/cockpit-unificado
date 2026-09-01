@@ -6468,6 +6468,38 @@
      o que é exclusivo desta aba mora neste bloco.
      A regra visual que manda em tudo: UMA mancha vermelha na tela — o balde aberto.
      Fechado usa âmbar no contador; verde é escolhido/feito. */
+.prosp2-tray-rota{margin:8px 0 0;font-size:11px;color:var(--dark-mut);line-height:1.45;}
+  .prosp2-tray-rota b{color:var(--dark-ink);}
+
+/* os três cards de passo do hero do ritual (v4, 01/09/26) */
+  .pl4-hero{padding:18px 24px;gap:20px;}
+  .pl4-passos{display:flex;gap:8px;flex:1 1 520px;min-width:0;flex-wrap:wrap;}
+  .pl4-passo{flex:1 1 160px;min-width:150px;text-align:left;background:rgba(255,253,248,.07);border:1px solid rgba(255,253,248,.12);border-radius:14px;padding:10px 13px;cursor:pointer;color:inherit;font:inherit;transition:all .18s var(--ease);min-height:44px;}
+  .pl4-passo:hover{background:rgba(255,253,248,.13);transform:translateY(-1px);}
+  .pl4-passo:active{transform:translateY(1px);}
+  /* "você está aqui": borda clara de 1,5px e o disco cheio — a prancha pede este contraste */
+  .pl4-passo.is-aqui{border:1.5px solid rgba(255,253,248,.55);background:rgba(255,253,248,.12);}
+  .pl4-passo-topo{display:flex;align-items:center;gap:7px;}
+  .pl4-passo-letra{flex:none;width:20px;height:20px;border-radius:999px;display:grid;place-items:center;font:800 10px 'Archivo',sans-serif;border:1.5px solid rgba(255,253,248,.4);color:var(--hero-sub);}
+  .pl4-passo.is-aqui .pl4-passo-letra{background:var(--dark-ink);border-color:var(--dark-ink);color:var(--dark);}
+  .pl4-passo-topo b{font-family:'Archivo',sans-serif;font-weight:800;font-size:12px;letter-spacing:-.01em;}
+  .pl4-passo-sub{display:block;margin-top:5px;font-size:10.5px;color:var(--hero-sub);line-height:1.4;}
+  .pl4-passo-sub.is-critico{color:var(--dk-red);}
+  .pl4-passo-sub b{color:var(--dark-ink);}
+
+  /* a mesa de planejamento: 5 colunas × 2 linhas, o lote inteiro à vista */
+  .xv3-plan-b .prosp2-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;}
+  /* a escala da casa: 1240 e 1050. Eu havia escrito 1400 e 1150 e o guard de breakpoints
+     me pegou — colapsar mais cedo nunca estoura; mais tarde, sim. */
+  @media (max-width:1240px){ .xv3-plan-b .prosp2-grid{grid-template-columns:repeat(4,minmax(0,1fr));} }
+  @media (max-width:1050px){ .xv3-plan-b .prosp2-grid{grid-template-columns:repeat(3,minmax(0,1fr));} }
+  @media (max-width:900px){ .xv3-plan-b .prosp2-grid{grid-template-columns:repeat(2,minmax(0,1fr));} }
+  @media (max-width:640px){ .xv3-plan-b .prosp2-grid{grid-template-columns:minmax(0,1fr);} }
+  /* o ⌄ que abre o popover de dia/hora, ao lado do "+ bandeja · qua 09:00" */
+  .prosp2-abrir-slot{flex:none;min-width:38px;min-height:38px;border:1px solid var(--line);background:var(--panel);border-radius:10px;color:var(--muted);cursor:pointer;font-size:13px;transition:all .18s var(--ease);}
+  .prosp2-abrir-slot:hover{border-color:var(--ink);color:var(--ink);}
+  @media (pointer:coarse){ .prosp2-abrir-slot{min-width:44px;min-height:44px;} }
+
 /* passo B: os dois níveis de escolha e a faixa da rota (v4, 31/08/26) */
   .pl4-niveis{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin:0 0 10px;}
   .pl4-nivel{display:flex;flex-direction:column;gap:5px;min-width:0;}
@@ -16928,7 +16960,18 @@ async function renderProspeccaoExecutivo() {
     const ag = prosp2Estado.agenda[l.id];
     const aval = l.nota ? `<span class="prosp2-stars num">${prosp2Fmt1(l.nota)} <span class="est">★</span><small>· ${Number(l.avaliacoes || 0).toLocaleString('pt-BR')} avaliações</small></span>` : `<span class="prosp2-sem-aval">sem avaliações ainda — CNPJ novo</span>`;
     const novo = l._dias != null && l._dias <= 60 ? `<span class="prosp2-novo num ${l._dias > 30 ? 'a' : ''}">● Aberta há ${l._dias} dias</span>` : '';
-    const btn = ag ? `<button class="prosp2-add done">✓ Na agenda · ${esc(ag.rotulo)}</button>` : `<button class="prosp2-add" data-add="${esc(String(l.id))}">+ Agendar visita</button>`;
+    /* O SLOT JÁ VEM SUGERIDO (v4, 01/09/26). O botão abria um popover de DIA e depois um
+       de HORA: três cliques para pôr uma conta na bandeja, vezes quatro contas, vezes
+       todo dia. A prancha pede "+ bandeja · ter 10h" — o slot sugerido no próprio botão.
+       A sugestão é determinística e visível: o próximo dia útil e o primeiro horário da
+       régua ainda livre na bandeja, na ordem de PROSP2_HORAS. Quem quiser outro dia ou
+       outra hora abre o ⌄, que continua ali com o popover completo — a escolha não foi
+       tirada de ninguém, só deixou de ser obrigatória. */
+    const slot = pl4SlotSugerido();
+    const btn = ag
+      ? `<button class="prosp2-add done">✓ na bandeja · ${esc(ag.rotulo)}</button>`
+      : `<button class="prosp2-add" data-pl4-add="${esc(String(l.id))}" title="Põe na bandeja já com ${esc(slot.rotulo)} — para outro dia ou horário, use o ⌄">+ bandeja · ${esc(slot.rotulo)}</button>`
+        + `<button class="prosp2-abrir-slot" data-add="${esc(String(l.id))}" title="Escolher outro dia e horário" aria-label="Escolher outro dia e horário para ${esc(l.nome)}">⌄</button>`;
     const dias = prosp2DiasUteis();
     return `<article class="prosp2-card ${ag ? 'na-agenda' : ''}" data-id="${esc(String(l.id))}" style="--sc:${F.cor}">
       <div class="prosp2-card-top"><span class="prosp2-avatar">${esc(prosp2Iniciais(l.nome))}</span>
@@ -16967,25 +17010,56 @@ async function renderProspeccaoExecutivo() {
   const repDoPlano = DATA.reps.find(x => String(x.ownerId) === String(ownerId));
   /* o número do passo A no segmentado do hero — mesma fonte da fila que ele abre */
   const nFilaPlan = repDoPlano ? (filaDeFollowUp(repDoPlano.ownerId) || { negociosAfetados: 0 }).negociosAfetados : 0;
+  /* ── O RITUAL SABE EM QUE PASSO VOCÊ ESTÁ (v4, 01/09/26) ─────────────────────────
+     "Você está aqui" não é enfeite: é o passo que ainda tem trabalho. A regra, na ordem
+     do ritual: se a carteira tem linha pendente, o passo é A; se não tem e a bandeja está
+     vazia, é B (buscar o novo); com bandeja cheia, é C (enviar). Nenhum estado novo — os
+     três números já existem. */
+  const pl4DiaDoPlano = pl4ProximoDiaUtilISO();
+  const pl4PassoAtivo = nFilaPlan > 0 ? 0 : (nAgenda === 0 ? 1 : 2);
+  const pl4ResolvidosTotal = (() => {
+    if (!pl4BaseDosBaldes || !repDoPlano) return 0;
+    const f = filaDeFollowUp(repDoPlano.ownerId);
+    return Math.max(0, Object.keys(pl4BaseDosBaldes).reduce((soma, id) =>
+      soma + Math.max(0, (pl4BaseDosBaldes[id] || 0) - ((f.baldes[id] || []).length)), 0));
+  })();
+  /* quantos compromissos JÁ existem na agenda do dia do plano — é o que diz se o ritual
+     de ontem terminou em compromisso ou em intenção. */
+  const pl4JaNaAgendaDeAmanha = (() => {
+    if (typeof DATA === 'undefined' || !DATA.agenda || !repDoPlano) return 0;
+    const evs = (typeof agendaNormalizar === 'function' ? agendaNormalizar(DATA.agenda) : []) || [];
+    return evs.filter(e => e && String(e.ownerId) === String(repDoPlano.ownerId) && e.inicio && agendaChave(e.inicio) === pl4DiaDoPlano).length;
+  })();
   tpInvalidarCache();
 
   box.innerHTML = `
-    <!-- UM HERO SÓ (v3, 31/08/26). Prancha: "os 3 heros escuros empilhados (A, B e C tinham
-         cada um o seu) viram 1 hero + 2 cards claros + 1 barra". Medido antes: 2.434px de
-         altura, com o passo A sozinho ocupando 1.688 e o B começando em 1.831 — ou seja, o
-         executivo rolava a tela inteira antes de ver as contas-alvo.
-         O segmentado leva os três passos com a contagem de cada um e ancora em cada bloco:
-         é a navegação da aba, não decoração. -->
-    <div class="xv3-hero" style="padding:16px 22px;gap:18px;">
-      <div class="xv3-hero-id" style="min-width:300px;flex:1;">
-        <div class="xv3-kicker">Planejamento · ${dataHojeExtenso()}</div>
-        <h1 style="font-size:23px;">Proteja o que anda. Depois busque o novo.</h1>
-        <div class="xv3-hero-sub">quem eu vou visitar, e o que eu protejo antes disso?</div>
+    <!-- HERO DO RITUAL (v4, 01/09/26). A prancha v4 troca o segmentado por três CARDS DE
+         PROGRESSO — "você está aqui" — porque a pergunta desta aba não é "para onde eu
+         navego", é "em que passo do ritual eu estou". Cada card carrega o número real do seu
+         passo e continua sendo a navegação (ancora no bloco).
+         O plano é sempre PARA O PRÓXIMO DIA ÚTIL, e o kicker diz qual: planejar "hoje" é o
+         que fazia o executivo montar rota para um dia que já estava correndo. -->
+    <div class="xv3-hero pl4-hero">
+      <div class="xv3-hero-id" style="min-width:280px;flex:1;">
+        <div class="xv3-kicker">Planejamento · ${esc(String(repDoPlano ? repDoPlano.name : '').split(' ')[0])} · para ${esc(pl4RotuloDoDia(pl4DiaDoPlano))}</div>
+        <h1 style="font-size:25px;">Só ganha jogo quem se planeja antes.</h1>
+        <div class="xv3-hero-sub">proteja o que anda, depois busque o novo — 15 minutos, 3 passos</div>
       </div>
-      <div class="xv3-seg on-dark" role="group" aria-label="Passos do planejamento" style="flex:none;">
-        <button type="button" data-plan-ir="carteira" aria-pressed="true">A · Proteger a carteira · ${nFilaPlan}</button>
-        <button type="button" data-plan-ir="dia" aria-pressed="false">B · Contas-alvo · ${dentroDoRaio.length}</button>
-        <button type="button" data-plan-ir="rua" aria-pressed="false">C · Bandeja · ${nAgenda}</button>
+      <div class="pl4-passos">
+        ${[
+          { id: 'carteira', letra: 'A', titulo: 'Proteger a carteira',
+            n: nFilaPlan, sub: nFilaPlan > 0 ? `${nFilaPlan} pedindo ação · ${pl4ResolvidosTotal} resolvidos` : 'nada pendente na carteira',
+            critico: nFilaPlan > 0 },
+          { id: 'dia', letra: 'B', titulo: 'Prospectar o novo',
+            n: null, sub: `${noRaioDaRota.length} perto da rota · ${dentroDoRaio.length} no território`, critico: false },
+          { id: 'rua', letra: 'C', titulo: 'Enviar pra agenda',
+            n: null, sub: `${nAgenda} na bandeja · ${pl4JaNaAgendaDeAmanha} na agenda de ${esc(pl4RotuloDoDia(pl4DiaDoPlano).split(' ')[0])}`,
+            critico: nAgenda === 0 && pl4JaNaAgendaDeAmanha === 0 }
+        ].map((p, i) => `
+          <button type="button" class="pl4-passo${i === pl4PassoAtivo ? ' is-aqui' : ''}" data-plan-ir="${p.id}" aria-pressed="${i === pl4PassoAtivo}">
+            <span class="pl4-passo-topo"><span class="pl4-passo-letra">${p.letra}</span><b>${esc(p.titulo)}</b></span>
+            <span class="pl4-passo-sub${p.critico ? ' is-critico' : ''}">${p.sub}${i === pl4PassoAtivo ? ' — <b>você está aqui</b>' : ''}</span>
+          </button>`).join('')}
       </div>
     </div>
 
@@ -17213,9 +17287,26 @@ async function renderProspeccaoExecutivo() {
         <div class="prosp2-tray-head"><span class="plan-passo-num" style="flex:none;">C</span><h3>Organizar a rua</h3><span class="cnt num" id="prosp2TrayN">${nAgenda}</span></div>
         <p class="prosp2-tray-sub">Clientes selecionados, horário e sequência. O que você adicionar aqui vira <b style="color:var(--dark-ink)">visita na sua agenda da semana</b> — e entra na sua rota do dia.</p>
         <div id="prosp2TrayList">${prosp2TrayListHTML(todosOsMeus)}</div>
-        <button class="prosp2-tray-cta" id="prosp2TrayCta" ${nAgenda ? '' : 'disabled'}>Enviar pra agenda da semana</button>
+        <button class="prosp2-tray-cta" id="prosp2TrayCta" ${nAgenda ? '' : 'disabled'}>${nAgenda ? `Enviar ${nAgenda} para ${esc(pl4RotuloDoDia(pl4DiaDoPlano).split(' ')[0])} →` : 'Enviar pra agenda da semana'}</button>
         ${nAgenda ? `<button type="button" class="prosp2-ver" id="prosp2AbrirMaps" style="width:100%;margin-top:7px;">Abrir a sequência no Maps ↗</button>` : ''}
-        <p class="prosp2-tray-foot">Você confirma dia e horário de cada visita antes de gravar — nada vai pro HubSpot sem sua confirmação.</p>
+        <!-- O RESUMO DE ROTA (v4, 01/09/26). A prancha pede "rota de 1,1 km entre as duas":
+             a bandeja diz quanto ANDAR o que ele acabou de escolher custa. Sem isso, quatro
+             contas boas espalhadas pela cidade viram um dia impossível que só aparece na rua.
+             É distância em linha reta entre as paradas na ordem escolhida — serve para
+             comparar escolhas, não para cronometrar, e o texto diz isso. */ -->
+        ${(() => {
+          const escolhidos = Object.keys(prosp2Estado.agenda)
+            .map(id => todosOsMeus.find(x => String(x.id) === String(id)))
+            .filter(x => x && x.lat != null && x.lng != null);
+          if (escolhidos.length < 2) return '';
+          let km = 0;
+          for (let i = 1; i < escolhidos.length; i++) {
+            const d = distanciaKm(escolhidos[i - 1].lat, escolhidos[i - 1].lng, escolhidos[i].lat, escolhidos[i].lng);
+            if (d != null) km += d;
+          }
+          return `<p class="prosp2-tray-rota">rota de <b>${km.toFixed(1).replace('.', ',')} km</b> entre as ${escolhidos.length === 2 ? 'duas' : escolhidos.length} — linha reta, para comparar escolhas, não para cronometrar</p>`;
+        })()}
+        <p class="prosp2-tray-foot">Cada envio vira compromisso com data na Agenda, gravado no HubSpot — e você confirma antes.</p>
         <!-- Estados (Escopo 3): a distinção que faltava. "Na bandeja" e "gravado no
              HubSpot" pareciam a mesma coisa na tela antiga, e era isso que fazia o
              executivo achar que tinha agendado quando ainda não tinha. -->
