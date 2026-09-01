@@ -3172,6 +3172,17 @@
     background:var(--panel2);border:1px solid var(--line);border-top:3px solid var(--kb-et,var(--line));
     border-radius:var(--r-lg);overflow:hidden;
     transition:border-color .16s var(--ease),background .16s var(--ease);}
+  /* a marca de "é este aqui" — 1,4s, sem mover nada de lugar (só sombra e borda, para não
+     empurrar o layout) e obediente a quem pediu menos animação no sistema. */
+  .is-alvo-piscar{animation:alvoPiscar 1.4s var(--ease) 1;}
+  @keyframes alvoPiscar{
+    0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ink) 42%,transparent);}
+    18%{box-shadow:0 0 0 5px color-mix(in srgb,var(--ink) 30%,transparent);}
+    100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--ink) 0%,transparent);}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .is-alvo-piscar{animation:none;outline:2px solid var(--ink);outline-offset:3px;}
+  }
   .kb-col.is-alvo{border-color:var(--ink);background:var(--panel);box-shadow:0 12px 30px -18px rgba(26,22,19,.5);}
 
   /* Os dois botões de etapa vizinha, com as medidas do Bloco 9 da prancha. O rótulo
@@ -6337,6 +6348,7 @@
   .xv3-btn.is-danger:hover{background:var(--red-press);}
   .xv3-btn.is-light{background:var(--panel);color:var(--ink);box-shadow:0 2px 6px rgba(0,0,0,.25);}
   .xv3-btn.is-full{width:100%;}
+  a.xv3-ghost{text-decoration:none;display:inline-flex;align-items:center;justify-content:center;}
   .xv3-ghost{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:0 13px;border:1px solid var(--line);border-radius:var(--r-pill);background:var(--panel);color:var(--ink);font:700 11.5px 'Manrope',sans-serif;cursor:pointer;transition:all .18s var(--ease);}
   .xv3-ghost:hover{background:var(--bg);border-color:var(--line-btn);transform:translateY(-1px);}
   .xv3-ghost:active{transform:translateY(1px);}
@@ -14246,7 +14258,11 @@ function pbv6MontarLeitor(slot, pb, pagina) {
 
   slot.querySelectorAll('#playbookToc button').forEach(btn => btn.addEventListener('click', () => {
     const alvo = document.getElementById(btn.dataset.pbAnchor);
-    if (alvo) window.scrollTo({ top: alvo.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
+    if (!alvo) return;
+    window.scrollTo({ top: alvo.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' });
+    /* aponta sempre: quando a leitura já está no capítulo, o scroll não tem para onde ir e o
+       clique ficava sem resposta nenhuma. */
+    piscarAlvo(alvo);
   }));
 
   const proxFrase = document.getElementById('playbookProxFrase');
@@ -14255,6 +14271,7 @@ function pbv6MontarLeitor(slot, pb, pagina) {
     if (!cards.length) return;
     const alvo = cards.find(c => c.getBoundingClientRect().top > 150) || cards[0];
     window.scrollTo({ top: alvo.getBoundingClientRect().top + window.scrollY - 130, behavior: 'smooth' });
+    piscarAlvo(alvo);
   });
 
   /* COPIAR: o texto da frase pronta vai limpo para a área de transferência — é para colar
@@ -16712,7 +16729,12 @@ function pl4PassoAHTML(rep) {
             ${tel ? `<a class="xv3-ghost" href="tel:+${tel}" onclick="event.stopPropagation()">Ligar</a>
             <a class="xv3-ghost" href="https://wa.me/${tel}" target="_blank" rel="noopener" onclick="event.stopPropagation()">WhatsApp</a>` : '<span class="gi-nm">sem telefone no CRM</span>'}
             <button type="button" class="xv3-ghost" data-pl4-ficha="${esc(String(lead.id))}">Ficha completa</button>
-            ${secundarias.map(c => `<button type="button" class="xv3-ghost" data-pl4-sec="${esc(String(lead.id))}|${esc(c.id)}">${esc(c.rotulo)}</button>`).join('')}
+            <!-- href vira <a>, como na fila de sempre: ver a NOTA do patch. Botão com CTA de
+                 href era clique morto — e justamente em Ligar, WhatsApp e HubSpot. Sendo <a>,
+                 o interceptador de ações do PWA os captura como qualquer link de ação. -->
+            ${secundarias.map(c => c.href
+              ? `<a class="xv3-ghost${c.discreta ? ' is-discreta' : ''}" href="${esc(c.href)}" target="_blank" rel="noopener" title="${esc(c.rotulo)} — ${esc(lead.name || '')}">${esc(c.rotulo)}</a>`
+              : `<button type="button" class="xv3-ghost" data-pl4-sec="${esc(String(lead.id))}|${esc(c.id)}">${esc(c.rotulo)}</button>`).join('')}
           </div>
           ${it.estado ? `<div class="pl4-dossie-nota">${esc(pl4NotaDoDossie(it))}</div>` : ''}
         </div>
@@ -17270,8 +17292,9 @@ async function renderProspeccaoExecutivo() {
         <div class="xv3-seg" role="group" aria-label="Sinal">
           <button type="button" data-v="todas" aria-pressed="${prosp2Estado.visao === 'todas'}">Todas · ${universoB.length}</button>
           <button type="button" data-v="recemAberta" aria-pressed="${prosp2Estado.visao === 'recemAberta'}">Recém-abertas · ${nNovos}</button>
-          <button type="button" data-v="comTelefone" aria-pressed="${prosp2Estado.visao === 'comTelefone'}">Com telefone · ${nComTelefone}</button>
+          <button type="button" data-v="comTelefone" aria-pressed="${prosp2Estado.visao === 'comTelefone'}" title="Tem telefone gravado: dá pra qualificar por ligação antes de gastar deslocamento. Vem do Google/Outscraper, que não traz data de abertura.">Com telefone · ${nComTelefone}</button>
         </div>
+        ${nNovos > 0 && nComTelefone > 0 ? `<p class="prosp2-visoes-nota">Uma visão por vez: <b>recém-aberta</b> vem do CNPJ e não traz telefone; <b>com telefone</b> vem do Google e não traz data de abertura. Somar as duas daria lista vazia.</p>` : ''}
       </div>
     </div>
     ${pl4FaixaDaRotaHTML(pl4RotaAtual, noRaioDaRota.length, PL4_RAIO_ROTA)}
@@ -17281,17 +17304,11 @@ async function renderProspeccaoExecutivo() {
         <button class="prosp2-fonte ${prosp2Estado.fonte === 'todas' ? 'on' : ''}" data-f="todas">Todas <span class="n num">${dentroDoRaio.length}</span></button>
         ${Object.entries(PROSP2_FONTES).map(([k, F]) => `<button class="prosp2-fonte ${prosp2Estado.fonte === k ? 'on' : ''}" data-f="${k}" style="--fc:${F.cor}"><span class="fdot"></span>${esc(F.nome)} <span class="n num">${contagemFonte[k] || 0}</span></button>`).join('')}
       </div>
-      <!-- AS TRÊS VISÕES, EXCLUSIVAS (30/08/26 — pedido da prancha). Uma por vez, com
-           "Todas" sempre presente para ser a saída. Antes eram duas caixas que somavam,
-           e somá-las pedia a interseção de dois conjuntos que não se cruzam: lista vazia
-           garantida. aria-pressed em todas as três, e role="group" com rótulo, porque
-           agora elas são um seletor e não dois interruptores. -->
-      <div class="prosp2-visoes" id="prosp2Visoes" role="group" aria-label="Visão da lista">
-        <button class="prosp2-visao ${prosp2Estado.visao === 'todas' ? 'on' : ''}" data-v="todas" aria-pressed="${prosp2Estado.visao === 'todas'}" title="Todas as contas-alvo do seu território que atendem aos filtros de fonte e distância.">Todas</button>
-        ${nNovos > 0 ? `<button class="prosp2-visao ${prosp2Estado.visao === 'recemAberta' ? 'on' : ''}" data-v="recemAberta" aria-pressed="${prosp2Estado.visao === 'recemAberta'}" title="Abriu nos últimos 6 meses — precisa de sistema e ainda não tem fornecedor fixo. Vem do CNPJ (Casa dos Dados): estas contas não têm telefone gravado, o gesto delas é buscar o contato na ficha ou visitar.">Recém-abertas <span class="n num">${nNovos}</span></button>` : ''}
-        ${nComTelefone > 0 ? `<button class="prosp2-visao ${prosp2Estado.visao === 'comTelefone' ? 'on' : ''}" data-v="comTelefone" aria-pressed="${prosp2Estado.visao === 'comTelefone'}" title="Tem telefone gravado: dá pra qualificar por ligação antes de gastar deslocamento. Vem do Google/Outscraper, que não traz data de abertura.">Prontas pra ligar <span class="n num">${nComTelefone}</span></button>` : ''}
-      </div>
-      ${nNovos > 0 && nComTelefone > 0 ? `<p class="prosp2-visoes-nota">Uma visão por vez: <b>recém-aberta</b> vem do CNPJ e não traz telefone; <b>pronta pra ligar</b> vem do Google e não traz data de abertura. Somar as duas daria lista vazia.</p>` : ''}
+      <!-- AS TRÊS VISÕES SAÍRAM DAQUI (01/09/26). Elas viraram o nível "Sinal" da v4, no
+           topo do passo B, com os mesmos data-v e os mesmos números — ficavam desenhadas
+           DUAS VEZES na mesma tela. E foi por isso que o nível novo nascia morto: o
+           ouvinte estava pendurado em #prosp2Visoes e exigia a classe .prosp2-visao.
+           Agora o ouvinte é por [data-v], onde os botões realmente estão. -->
       <label class="prosp2-ordenar">Ordenar por
         <select id="prosp2Ordenar">
           <option value="score" ${prosp2Estado.ordenar === 'score' ? 'selected' : ''}>Melhores primeiro (recomendado)</option>
@@ -17716,10 +17733,9 @@ function prosp2LigarEventos(universo, ownerId) {
     prosp2Estado.mostrar = PROSP2_LOTE;
     renderProspeccaoExecutivo();
   });
-  const visoesEl = document.getElementById('prosp2Visoes');
-  if (visoesEl) visoesEl.addEventListener('click', ev => {
-    const b = ev.target.closest('.prosp2-visao');
-    if (!b) return;
+  /* Por [data-v] e não por #prosp2Visoes: o container antigo saiu, e amarrar o ouvinte ao
+     desenho foi exatamente o que deixou o nível Sinal da v4 morto em produção. */
+  document.querySelectorAll('.pl4-niveis [data-v]').forEach(b => b.addEventListener('click', () => {
     /* Seletor, não interruptor: clicar numa visão TROCA para ela. Clicar na que já está
        ligada volta para "todas", que é o gesto natural de desmarcar sem procurar o botão
        "Todas" com o olho. */
@@ -17728,7 +17744,7 @@ function prosp2LigarEventos(universo, ownerId) {
     prosp2Estado.visao = (prosp2Estado.visao === alvo) ? 'todas' : alvo;
     prosp2Estado.mostrar = PROSP2_LOTE;
     renderProspeccaoExecutivo();
-  });
+  }));
   const ordenarEl = document.getElementById('prosp2Ordenar');
   if (ordenarEl) ordenarEl.addEventListener('change', ev => { prosp2Estado.ordenar = ev.target.value; renderProspeccaoExecutivo(); });
   const limparEl = document.getElementById('prosp2Limpar');
@@ -19447,8 +19463,7 @@ document.addEventListener('click', function (ev) {
        as contas para preencher. Fica na mesma aba — buraco de agenda se resolve
        escolhendo conta, não trocando de tela. */
     if (!agendaRolarAteCard(foco.dataset.agdxfoco)) {
-      const trilha = document.querySelector('.ag-exec-rail');
-      if (trilha) trilha.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      agendaApontarPara(document.querySelector('.ag-exec-rail'));
     }
     return;
   }
@@ -22501,10 +22516,28 @@ function agendaGradeHoras(dias, hojeK, souRep, vista) {
    renderiza, e só então rola. O "if (alvoCard)" silencioso é o que transformava um
    botão em enfeite — a única saída aceitável quando o alvo não existe é ir buscá-lo.
    ============================================================================ */
+/* APONTAR O DESTINO (01/09/26) — ver a NOTA no patch: rolar é o meio, apontar é a resposta.
+   Sem isto, clicar num atalho cujo destino já está na tela não produzia efeito visível, e
+   clique sem efeito visível é clique morto para quem usa, mesmo com o ouvinte funcionando. */
+/* a marca de destino, sozinha — usada por quem já tem a própria conta de rolagem (o leitor
+   do Playbook desconta a altura do cabeçalho fixo) e por agendaApontarPara. */
+function piscarAlvo(el) {
+  if (!el) return false;
+  el.classList.remove('is-alvo-piscar');
+  void el.offsetWidth;
+  el.classList.add('is-alvo-piscar');
+  setTimeout(() => el.classList.remove('is-alvo-piscar'), 1400);
+  return true;
+}
+
+function agendaApontarPara(el) {
+  if (!el) return false;
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  return piscarAlvo(el);
+}
+
 function agendaRolarAteCard(idCard) {
-  const card = document.getElementById(idCard);
-  if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); return true; }
-  return false;
+  return agendaApontarPara(document.getElementById(idCard));
 }
 
 /* IR PARA O PLANEJAMENTO, COM A BARRA DE ABAS DIZENDO A VERDADE.
