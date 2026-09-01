@@ -16526,6 +16526,35 @@ function pl4FaixaDaRotaHTML(rota, nNoRaio, raioKm) {
   </div>`;
 }
 
+/* O SLOT SUGERIDO (v4, 01/09/26) — o que troca três cliques por um.
+
+   Pôr uma conta na bandeja custava: clicar "+ Agendar visita", escolher o DIA num popover,
+   escolher a HORA em outro. Três cliques × quatro contas × todo dia. E o dia era quase sempre
+   o mesmo (o próximo útil) e a hora, o primeiro horário livre.
+
+   Então a sugestão vem pronta no botão: próximo dia útil + primeiro horário de PROSP2_HORAS
+   que ainda não está ocupado na bandeja. Determinística, visível no rótulo, e reversível — o
+   ⌄ ao lado abre o popover completo de sempre para quem quiser outro dia ou hora.
+
+   Por que o primeiro horário LIVRE e não sempre 09:00: duas contas na bandeja com o mesmo
+   horário seriam dois compromissos conflitantes gravados no HubSpot pelo próprio ritual. */
+function pl4SlotSugerido() {
+  const dias = (typeof prosp2DiasUteis === 'function') ? prosp2DiasUteis() : [];
+  const alvo = pl4ProximoDiaUtilISO();
+  const dia = dias.find(d => d.iso === alvo) || dias[0] || null;
+  const ocupadas = new Set(Object.values(prosp2Estado.agenda || {})
+    .filter(a => a && (!dia || a.dia === dia.iso))
+    .map(a => a && a.hora).filter(Boolean));
+  const hora = PROSP2_HORAS.find(h => !ocupadas.has(h)) || null;
+  return {
+    iso: dia ? dia.iso : alvo,
+    diaCurto: dia ? dia.curto : '',
+    diaData: dia ? dia.data : '',
+    hora,
+    rotulo: (dia ? String(dia.curto).toLowerCase() : '') + (hora ? ' ' + hora : ' (definir hora)')
+  };
+}
+
 function pl4RiscoDoBalde(id) {
   /* O RISCO, não o rótulo. Cada frase responde "o que eu perco se não fizer isto hoje?" */
   return ({
@@ -17622,6 +17651,28 @@ function prosp2LigarEventos(universo, ownerId) {
   // ---- grade de cards: abrir popover de dia/hora, ver ficha, abrir ficha ----
   const grid = document.getElementById('prosp2Grid');
   if (grid) grid.addEventListener('click', ev => {
+    /* UM CLIQUE PARA A BANDEJA (v4, 01/09/26). Usa a MESMA escrita do popover (o mesmo
+       prosp2Estado.agenda, o mesmo aviso de conflito, o mesmo teto de 15) — só pula as
+       duas escolhas quando a sugestão serve. */
+    const addRapido = ev.target.closest('[data-pl4-add]');
+    if (addRapido) {
+      const id = addRapido.dataset.pl4Add;
+      const slot = pl4SlotSugerido();
+      if (Object.keys(prosp2Estado.agenda).length >= 15 && !prosp2Estado.agenda[id]) {
+        prosp2Toast('Máximo de 15 visitas por envio — mande esta leva antes de adicionar mais.', 'aviso');
+        return;
+      }
+      prosp2Estado.agenda[id] = { dia: slot.iso, hora: slot.hora, rotulo: slot.diaCurto + ' ' + slot.diaData + (slot.hora ? ' · ' + slot.hora : '') };
+      const lr = buscarLead(id);
+      const conflito = slot.hora ? prosp2ConflitoHorario(ownerId, slot.iso, slot.hora) : null;
+      if (conflito) {
+        prosp2Toast(`${lr ? lr.nome : 'Conta'} na bandeja em ${slot.rotulo} — mas você já tem "${conflito.titulo}" perto desse horário. Use o ⌄ para trocar.`, 'aviso');
+      } else {
+        prosp2Toast(`${lr ? lr.nome : 'Conta'} na bandeja · ${slot.rotulo}`);
+      }
+      renderProspeccaoExecutivo(true);
+      return;
+    }
     const hora = ev.target.closest('[data-hora]');
     const dia = ev.target.closest('[data-dia]');
     const add = ev.target.closest('[data-add]');
