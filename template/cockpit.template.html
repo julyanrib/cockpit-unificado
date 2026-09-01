@@ -31404,15 +31404,10 @@ function d4PontosDaSemana(ownerId) {
   }
   return total;
 }
-/* Posição no placar do time, pelos pontos da semana. Sem time visível, não invento. */
-function d4PosicaoNoTime(ownerId) {
-  const reps = (DATA.reps || []).filter(r => r && r.ownerId);
-  if (reps.length < 2) return null;
-  const tabela = reps.map(r => ({ id: String(r.ownerId), pts: d4PontosDaSemana(r.ownerId) }))
-    .sort((a, b) => b.pts - a.pts);
-  const i = tabela.findIndex(x => x.id === String(ownerId));
-  return i < 0 ? null : { pos: i + 1, de: tabela.length };
-}
+/* d4PosicaoNoTime saiu em 01/09/26. Ela ranqueava os reps por pontos da semana, e na
+   sessão de um executivo isso é sempre 1º: o RLS de `dailies` entrega só a própria
+   linha. Ver a NOTA do patch sai-a-posicao-falsa. O placar do time da Daily v2
+   (dl2PlacarTime) compara atividade comprovada, que a sessão realmente recebe. */
 
 /* Prometido × realizado em barras SÓLIDAS — o mesmo desenho do gráfico do Meu Funil.
    Uma função só porque a mesma leitura aparece duas vezes: no cartão de ONTEM e no
@@ -31945,49 +31940,68 @@ function dl2Semana(r) {
   </div>`;
 }
 
+/* ── O PLACAR DO TIME ────────────────────────────────────────────────────────────────
+   O QUE ELE COMPARA: contratos fechados na semana (ganhosSemana). É o único número de
+   colega que a sessão do executivo recebe de verdade — e eu descobri isso depois de
+   montar o card duas vezes com número que vinha zero:
+
+     · PONTOS DA SEMANA não serve: o RLS de dailies entrega ao executivo só a própria
+       linha. Medido em produção, o card dizia "1º você 400 · 2º Bruno 0" e o Bruno tinha
+       fechado 2 contratos no dia anterior.
+     · ATIVIDADE DE HOJE não serve: resumoDeColega (scripts/montar-dados.js) zera
+       visitasHubspotHoje e os três companheiros para colega, de propósito. O campo
+       existe no objeto; o conteúdo, não.
+
+   A regra que fica: antes de mostrar número de outra pessoa, MEDIR o número de outra
+   pessoa. Duas vezes eu conferi a minha própria linha, que estava certa, e não a do lado.
+
+   E o card nomeia o que compara. Contrato fechado é o que o time inteiro persegue; ponto
+   depende da promessa de cada um, e promessa de colega é dado de gestão. */
 function dl2PlacarTime(r) {
   const reps = (DATA.reps || []).filter(x => x && x.ownerId);
   if (reps.length < 2) return '';
   const tabela = reps.map(x => ({
-    id: String(x.ownerId), nome: String(x.name || '').split(' ')[0],
-    pts: d4PontosDaSemana(x.ownerId)
-  })).sort((a, b) => b.pts - a.pts);
+    id: String(x.ownerId),
+    nome: String(x.name || '').split(' ')[0],
+    n: Number(x.ganhosSemana || 0)
+  })).sort((a, b) => b.n - a.n || a.nome.localeCompare(b.nome));
+
   const iVoce = tabela.findIndex(x => x.id === String(r.ownerId));
-  /* top 3 SEMPRE com você dentro: se estiver em 7º, a lista mostra o pódio e a sua linha —
-     placar que não mostra onde você está não é placar, é notícia dos outros. */
+  if (iVoce < 0) return '';
+  /* top 3 SEMPRE com você dentro: placar que não mostra onde você está não é placar, é
+     notícia dos outros. */
   const mostrar = tabela.slice(0, 3);
   if (iVoce >= 3) mostrar.push(tabela[iVoce]);
   const acima = iVoce > 0 ? tabela[iVoce - 1] : null;
-  const dif = acima ? acima.pts - tabela[iVoce].pts : 0;
-  /* O CASO ZERADO. Se ninguém do time pontuou ainda, "você está na frente" é vitória
-     inventada — e se o número do colega não chegou (a tabela de dailies é carregada sem
-     filtro de dono, então isso depende do que o Supabase devolve para o executivo), a
-     tela estaria afirmando algo que ela não sabe. Nos dois casos o texto honesto é o
-     mesmo: o placar ainda não tem pontos nesta semana. */
-  const somaDosOutros = tabela.filter(x => x.id !== String(r.ownerId)).reduce((a, x) => a + x.pts, 0);
+  const dif = acima ? acima.n - tabela[iVoce].n : 0;
+  const meus = tabela[iVoce].n;
+  const ninguemFechou = tabela.every(x => x.n === 0);
+  const plural = n => n === 1 ? 'contrato' : 'contratos';
 
   return `<div class="dl2-card is-escuro">
     <div class="dl2-cab">
       <span class="dl2-rot">PLACAR DO TIME</span>
-      <span class="dl2-nota is-fim">pontos da semana</span>
+      <span class="dl2-nota is-fim">contratos na semana</span>
     </div>
     <div class="dl2-time">
-      ${mostrar.map((x, i) => {
+      ${mostrar.map(x => {
         const pos = tabela.findIndex(t => t.id === x.id) + 1;
         const ehVoce = x.id === String(r.ownerId);
         return `<div class="dl2-time-linha${ehVoce ? ' is-voce' : ''}">
           <span class="dl2-time-pos">${pos}º</span>
           <span class="dl2-time-nome">${esc(x.nome)}${ehVoce ? ' — você' : ''}</span>
-          <span class="dl2-time-pts">${x.pts.toLocaleString('pt-BR')}</span>
+          <span class="dl2-time-pts">${x.n}</span>
         </div>`;
       }).join('')}
     </div>
-    <div class="dl2-nota">${somaDosOutros === 0
-      ? 'Ninguém do time pontuou nesta semana ainda — pontos vêm da promessa cumprida, e a semana está começando.'
+    <div class="dl2-nota">${ninguemFechou
+      ? 'Ninguém fechou nesta semana ainda — o primeiro contrato abre o placar.'
       : acima
-        ? esc(acima.nome) + ' está ' + dif + ' pts na frente' + (dif <= 200
-          ? ' — um contrato fechado hoje vale 200 e resolve a conta.' : '.')
-        : 'Você está na frente por ' + (tabela[iVoce].pts - (tabela[iVoce + 1] ? tabela[iVoce + 1].pts : 0)) + ' pts.'}</div>
+        ? esc(acima.nome) + ' está ' + dif + ' ' + plural(dif) + ' na frente'
+          + (meus > 0 ? ' — você tem ' + meus + '.' : ' — você ainda não fechou nesta semana.')
+        : 'Você lidera com ' + meus + ' ' + plural(meus) + ' nesta semana.'}</div>
+    <div class="dl2-nota">contrato fechado, comprovado no HubSpot. <b>Não são pontos</b>:
+      ponto depende da promessa de cada um, e a promessa do colega só o gestor vê.</div>
   </div>`;
 }
 
@@ -32512,7 +32526,6 @@ function dailyV4HTML(r) {
   const travada = fase !== 'antes';
   const travadaVazia = travada && !prometeu;
   const streak = d4Streak(r.ownerId, fechado);
-  const posicao = d4PosicaoNoTime(r.ownerId);
   const agora = new Date();
   const horaAgora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const rotuloHoje = fmtDailyLabel(hojeISO);
@@ -32541,7 +32554,10 @@ function dailyV4HTML(r) {
       <div class="d4-placar">
         <div><div class="d4-placar-n is-ambar">${pontosSemana.toLocaleString('pt-BR')}</div><div class="d4-placar-rot">PONTOS NA SEMANA</div></div>
         <div><div class="d4-placar-n">🔥 ${streak}</div><div class="d4-placar-rot">DIAS CUMPRINDO</div></div>
-        ${posicao ? `<div><div class="d4-placar-n is-verde">${posicao.pos}º</div><div class="d4-placar-rot">NO PLACAR DO TIME</div></div>` : ''}
+        <!-- o tile "Nº NO PLACAR DO TIME" saiu em 01/09/26: era sempre 1º. O RLS de
+             dailies entrega ao executivo só a própria linha, então todo colega
+             voltava 0 nesta conta. O placar verdadeiro está na v2, feito da atividade
+             comprovada que a sessão de fato recebe. -->
         <div><div class="d4-placar-n">${feitas.length}<span>/${conq.length || 11}</span></div><div class="d4-placar-rot">CONQUISTAS</div></div>
       </div>
       <div class="d4-regra">
