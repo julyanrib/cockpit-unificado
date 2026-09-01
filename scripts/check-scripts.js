@@ -323,3 +323,51 @@ function checarChamadasSemDeclaracao() {
   return !falhou;
 }
 if (!checarChamadasSemDeclaracao()) process.exit(1);
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   O PLACAR DO EXECUTIVO NÃO PODE COMPARAR DADO QUE CHEGA ZERADO (01/09/26)
+
+   POR QUE ESTA GUARDA EXISTE: montei o placar do time da Minha Daily v2 três vezes, e as
+   duas primeiras comparavam número que, na sessão de um EXECUTIVO, é sempre zero para o
+   colega — não por ele não ter feito, mas porque a sessão não recebe o dado:
+
+     · pontos da semana (d4PontosDaSemana / getDaily): a política de RLS da tabela dailies
+       entrega ao executivo SÓ a própria linha. Medido em produção: o card dizia
+       "1º você 400 · 2º Bruno 0" e o Bruno tinha fechado 2 contratos no dia anterior;
+     · visitasHubspotHoje e companhia: resumoDeColega, em scripts/montar-dados.js, zera
+       esses quatro campos para colega de propósito.
+
+   Nenhum teste pegava, porque o código está correto — ele soma o que recebe. O defeito é
+   de PROCEDÊNCIA do dado, e só aparece olhando a linha de outra pessoa.
+
+   Se um dia o produto decidir abrir esses dados para o executivo (RLS ou resumoDeColega),
+   esta guarda tem que cair junto com a decisão — e aí ela força a conversa, que é o ponto.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+function checarPlacarDoExecutivo() {
+  const ZERADOS = ['d4PontosDaSemana', 'visitasHubspotHoje', 'avancosHubspotHoje',
+    'propostasHubspotHoje', 'fechamentosHubspotHoje'];
+  let falhou = false;
+  alvos.forEach(caminho => {
+    const rel = path.relative(root, caminho);
+    const src = fs.readFileSync(caminho, 'utf8');
+    const linhas = src.split(/\r?\n/);
+    const ini = linhas.findIndex(l => l.startsWith('function dl2PlacarTime('));
+    if (ini < 0) return;
+    let fim = ini;
+    while (fim < linhas.length && linhas[fim] !== '}') fim++;
+    const corpo = linhas.slice(ini, fim + 1)
+      .filter(l => !/^\s*(\/\*|\*|\/\/)/.test(l))
+      .join('\n');
+    const usados = ZERADOS.filter(n => corpo.indexOf(n) >= 0);
+    if (usados.length) {
+      falhou = true;
+      console.error('\nPLACAR COM DADO ZERADO em ' + rel + ':');
+      usados.forEach(n => console.error('  dl2PlacarTime usa ' + n + ', que chega ZERO para colega na sessão do executivo'));
+      console.error('  O placar mostraria todo colega em zero — e diria ao executivo que ele é o primeiro, sempre.');
+      console.error('  O que a sessão recebe de verdade sobre colega: ganhosSemana, fechadosNoMes, metaMensal.');
+    }
+  });
+  if (!falhou) console.log('OK placar — o placar do executivo compara dado que a sessão dele recebe.');
+  return !falhou;
+}
+if (!checarPlacarDoExecutivo()) process.exit(1);
