@@ -149,33 +149,13 @@ function mesclarRestaurante(base, novo) {
 // de território fica 'pendente' sem dono — o gestor decide, nada de chute.
 // Porto Alegre: rotação Kelly/Ricardo fica pra quando o Ricardo tiver owner ID
 // no HubSpot; até lá, POA e Canoas vão pra Kelly.
-function semAcento(s) {
-  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-// Rotas oficiais passadas pelo Julyan em 10/08/2026:
-//   Marco→Vila Velha · Amanda→Vitória · Whell→Zona Sul de SP
-//   Bruno→Taquara/Jacarepaguá · Sandro→Tijuca · Kelly→POA+Canoas · Ricardo→POA.
-// Nova Iguaçu saiu do mapa do Michel nesta rodada. O split POA Kelly/Ricardo entra
-// quando o Ricardo tiver owner ID real no HubSpot (hoje: 'pendente_ricardo2') —
-// até lá POA inteira roteia pra Kelly, e o gestor reatribui na ficha se quiser.
-// ATUALIZAÇÃO (20/08/26) — Michel Carvalho foi desligado. Campo Grande/RJ e Bangu
-// (território dele) ficam SEM roteamento automático até o Julyan decidir quem
-// assume — os leads dessas regiões caem sem dono (fila geral), não em nenhum
-// executivo específico, pra não atribuir engano a quem não pediu esse território.
-const TERRITORIOS = [
-  { owner: '86100505', nome: 'Marco Filho', teste: t => t.includes('vila velha') },
-  { owner: '87069181', nome: 'Amanda Pardim', teste: t => t.includes('vitoria') },
-  { owner: '87569072', nome: 'Sandro Linhares', teste: t => t.includes('tijuca') || t.includes('vila isabel') || t.includes('cachambi') || t.includes('meier') || t.includes('sao cristovao') },
-  { owner: '86100506', nome: 'Bruno Martins', teste: t => t.includes('taquara') || t.includes('jacarepagua') || (t.includes('freguesia') && !t.includes('ilha')) || (t.includes('rio de janeiro') && /\banil\b/.test(t)) || t.includes('recreio') || t.includes('barra olimpica') || t.includes('guaratiba') },
-  { owner: '89842507', nome: 'Wericles Andrade', teste: t => t.includes('sao paulo') },
-  { owner: '91477292', nome: 'Kelly Travieso', teste: t => t.includes('canoas') || t.includes('porto alegre') }
-];
-function rotearTerritorio(cidade, bairro) {
-  const chave = semAcento(cidade) + ' ' + semAcento(bairro);
-  const acerto = TERRITORIOS.find(x => x.teste(chave));
-  return acerto ? acerto.owner : null;
-}
-
+/* A TABELA DE TERRITORIOS MUDOU DE CASA (01/09/26).
+   Ela vivia aqui dentro, e passou a ser lida por tres lugares: esta importacao, a
+   redistribuicao dos leads que ja estao na base sem dono, e o backfill semanal (que
+   precisa saber quantas contas buscar por executivo). Tres copias da mesma regra e o
+   comeco de tres verdades — alguem corrige um bairro num lado, esquece nos outros, e o
+   lead cai para quem nao pediu aquele territorio. Uma fonte: lib/territorios.js. */
+const { rotearTerritorio, semAcento } = require('../lib/territorios.js');
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');

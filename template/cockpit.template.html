@@ -8070,7 +8070,9 @@ function aplicarVisaoPorPapel() {
   // pra resolver um problema que é de NAVEGAÇÃO, não de renderização. O executivo vê
   // duas abas separadas; por trás, uma view só que muda de modo.
   const btnAgSemana = document.getElementById('tabBtnAgendaSemana');
-  if (btnAgSemana) btnAgSemana.style.display = souRep ? 'flex' : 'none';
+  /* a Agenda (calendário) depende de compromisso do HubSpot: sem owner lá, ela abre
+     vazia e não há o que fazer nela. Fica escondida até o owner existir. */
+  if (btnAgSemana) btnAgSemana.style.display = (souRep && !emOnboarding) ? 'flex' : 'none';
   const lblResumo = document.querySelector('#tabBtnResumo .tab-btn-label');
   if (lblResumo) lblResumo.textContent = 'Semana';
   // Julyan (08/08): "Semana" sai do menu do executivo — a análise semanal dele agora é
@@ -8088,7 +8090,13 @@ function aplicarVisaoPorPapel() {
   // Otimização 08/08 (decisão do Julyan): a agenda embutida na Daily do gestor MORREU —
   // a Daily & Ritmo tinha duas almas (placar + agenda inteira) e ficou impossível de gerir.
   // Agora a Agenda é aba própria pros DOIS papéis, e a Daily faz só o trabalho dela.
-  document.getElementById('tabBtnAgenda').style.display = emOnboarding ? 'none' : 'flex';
+  /* PLANEJAMENTO LIBERADO NO ONBOARDING (01/09/26, Julyan: "já pode até liberar a aba
+     planejamento deles"). Estava invertido: esta aba, que NÃO depende do HubSpot (a
+     prospecção vive na nossa tabela), ficava escondida — e a Agenda, que depende, ficava
+     visível e vazia. Quem entra hoje tem 108 e 70 contas-alvo esperando; esconder a tela
+     onde elas vivem é escondê-las. O passo A (carteira do funil) abre em zero para eles,
+     e zero aqui é diagnóstico: o trilho de filtros mostra os baldes vazios com o número. */
+  document.getElementById('tabBtnAgenda').style.display = souRep ? 'flex' : 'none';
   const agendaMiniHero = document.getElementById('agendaMiniHero');
   const agendaContentDiv = document.getElementById('agendaContent');
   const agendaSlotNaDaily = document.getElementById('agendaEmbutidaNaDaily');
@@ -17894,7 +17902,13 @@ async function renderProspeccaoExecutivo() {
   //   A · proteger a carteira  (fila de follow-up, o mesmo componente do Meu funil)
   //   B · completar o dia      (o território, que já existia — intocado)
   //   C · organizar a rua      (a bandeja, com os estados explícitos e o Maps)
-  const repDoPlano = DATA.reps.find(x => String(x.ownerId) === String(ownerId));
+  /* ver a NOTA no patch rep-novo: quem entrou hoje ainda nao esta em DATA.reps (que vem
+     do HubSpot), e sem este fallback o hero saia sem nome e o passo A era trocado por uma
+     mensagem de cadastro nao encontrado — para alguem que esta cadastrado. */
+  const repDoPlano = DATA.reps.find(x => String(x.ownerId) === String(ownerId))
+    || (sessaoAtual && sessaoAtual.ownerId === ownerId
+      ? { ownerId: ownerId, name: sessaoAtual.nome || '', semFunilAinda: true }
+      : null);
   /* o número do passo A no segmentado do hero — mesma fonte da fila que ele abre */
   const nFilaPlan = repDoPlano ? (filaDeFollowUp(repDoPlano.ownerId) || { negociosAfetados: 0 }).negociosAfetados : 0;
   /* ── O RITUAL SABE EM QUE PASSO VOCÊ ESTÁ (v4, 01/09/26) ─────────────────────────
@@ -17962,7 +17976,7 @@ async function renderProspeccaoExecutivo() {
            progressiva — um aberto por vez, 1 CTA por linha, dossiê no ⌄. filaDeFollowUpHTML
            continua existindo para o Meu funil; aqui quem manda é pl4PassoAHTML. -->
       ${repDoPlano ? pl4PassoAHTML(repDoPlano)
-        : '<div class="empty-state">Não encontrei seu cadastro no cockpit para montar a carteira.</div>'}
+        : '<div class="empty-state">Este painel está montado para outro executivo — recarregue a página para voltar ao seu.</div>'}
     </div>
       </div>
       <div class="xv3-plan-b">
@@ -25783,7 +25797,33 @@ const TERRITORIO_DO_EXECUTIVO = {
   '91477292': { rotulo: 'Auxiliadora / Moinhos de Vento', bairro: ['Moinhos de Vento', 'Auxiliadora'], municipio: 'Porto Alegre', uf: 'RS', lat: -30.0245, lng: -51.2050, raioKm: 4 },
   '89842507': { rotulo: 'Santo Amaro', bairro: 'Santo Amaro', municipio: 'São Paulo', uf: 'SP', lat: -23.6520, lng: -46.7080, raioKm: 5 },
   // Ricardo segue com ownerId provisório: território da praça, sem bairro fechado ainda.
-  'pendente_ricardo2': { rotulo: 'Porto Alegre (a definir)', bairro: null, municipio: 'Porto Alegre', uf: 'RS', lat: -30.0346, lng: -51.2177, raioKm: 8 }
+  'pendente_ricardo2': { rotulo: 'Porto Alegre (a definir)', bairro: null, municipio: 'Porto Alegre', uf: 'RS', lat: -30.0346, lng: -51.2177, raioKm: 8 },
+  /* OS QUATRO QUE ENTRARAM EM 01/09/26 (Julyan: "André e Luiz vão pro RJ, Renata e
+     Sérgio integram SP"). Seguem com ownerId provisório 'pendente_*' porque ainda não
+     têm owner no HubSpot — e isso NÃO impede o Planejamento: a prospecção vive na nossa
+     tabela, filtrada por este mesmo id. O funil (Meu funil, Daily, Agenda) continua
+     escondido até o HubSpot dar owner de verdade, porque ali o dado é de lá.
+     Sem território declarado a aba abre dizendo "Seu território ainda não foi
+     configurado" — medido simulando a sessão do André antes de publicar qualquer coisa.
+     Coordenada = centro da zona; raio = o que cobre a zona. É daí que sai o km dos cards
+     enquanto não houver rota marcada. */
+  'pendente_andregomes': { rotulo: 'Zona Sul e Centro do Rio', bairro: ['Botafogo', 'Copacabana', 'Ipanema', 'Leblon', 'Centro'], municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9500, lng: -43.1830, raioKm: 7 },
+  'pendente_luizpimentel': { rotulo: 'Zona Norte e Ilha do Governador', bairro: ['Penha', 'Olaria', 'Ilha do Governador', 'Madureira'], municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.8420, lng: -43.2790, raioKm: 11 },
+  'pendente_renatapessoa': { rotulo: 'Centro, Zona Leste e Vila Mariana', bairro: ['Bela Vista', 'Mooca', 'Tatuapé', 'Vila Mariana'], municipio: 'São Paulo', uf: 'SP', lat: -23.5550, lng: -46.6350, raioKm: 11 },
+  'pendente_scaetano': { rotulo: 'Zona Norte de São Paulo', bairro: ['Santana', 'Casa Verde', 'Freguesia do Ó', 'Lapa'], municipio: 'São Paulo', uf: 'SP', lat: -23.5020, lng: -46.6250, raioKm: 10 },
+  /* OS QUATRO QUE ENTRARAM EM 01/09/26 (Julyan: "André e Luiz vão pro RJ, Renata e
+     Sérgio integram SP"). Seguem com ownerId provisório 'pendente_*' porque ainda não
+     têm owner no HubSpot — e isso NÃO impede o Planejamento: a prospecção vive na nossa
+     tabela, filtrada por este mesmo id. O funil (Meu funil, Daily, Agenda) continua
+     escondido até o HubSpot dar owner de verdade, porque ali o dado é de lá.
+     Sem território declarado a aba abre dizendo "Seu território ainda não foi
+     configurado" — medido simulando a sessão do André antes de publicar qualquer coisa.
+     Coordenada = centro da zona; raio = o que cobre a zona. É daí que sai o km dos cards
+     enquanto não houver rota marcada. */
+  'pendente_andregomes': { rotulo: 'Zona Sul e Centro do Rio', bairro: ['Botafogo', 'Copacabana', 'Ipanema', 'Leblon', 'Centro'], municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.9500, lng: -43.1830, raioKm: 7 },
+  'pendente_luizpimentel': { rotulo: 'Zona Norte e Ilha do Governador', bairro: ['Penha', 'Olaria', 'Ilha do Governador', 'Madureira'], municipio: 'Rio de Janeiro', uf: 'RJ', lat: -22.8420, lng: -43.2790, raioKm: 11 },
+  'pendente_renatapessoa': { rotulo: 'Centro, Zona Leste e Vila Mariana', bairro: ['Bela Vista', 'Mooca', 'Tatuapé', 'Vila Mariana'], municipio: 'São Paulo', uf: 'SP', lat: -23.5550, lng: -46.6350, raioKm: 11 },
+  'pendente_scaetano': { rotulo: 'Zona Norte de São Paulo', bairro: ['Santana', 'Casa Verde', 'Freguesia do Ó', 'Lapa'], municipio: 'São Paulo', uf: 'SP', lat: -23.5020, lng: -46.6250, raioKm: 10 }
 };
 function territorioDe(ownerId) { return TERRITORIO_DO_EXECUTIVO[String(ownerId)] || null; }
 
