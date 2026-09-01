@@ -110,6 +110,35 @@ checar('o centro do bairro é a média das coordenadas dos leads dele',
   Math.abs(mv.lat - (-30.03)) < 0.0001 && Math.abs(mv.lng - (-51.20)) < 0.0001,
   mv.lat.toFixed(4) + ', ' + mv.lng.toFixed(4));
 
+/* ── O MESMO BAIRRO EM DUAS GRAFIAS (achado em PRODUÇÃO, 01/09/26) ───────────────────
+   A base tem "Praia da Costa" e "PRAIA DA COSTA" — o mesmo bairro, vindo de coletas
+   diferentes. A 1ª versão agrupava pelo nome cru: a busca mostrava duas linhas iguais com
+   a contagem partida (7 e 6) e nenhuma das duas dizia a verdade, 13.
+   E o filtro que monta o lote DEPOIS do clique já era insensível a caixa — então clicar em
+   "· 7" traria 13 cards, quebrando na cara da pessoa a única promessa que esta busca faz.
+   Este caso não aparecia nos dados de mentira porque eu os escrevi com grafia consistente:
+   é o tipo de defeito que só dado real produz. */
+const leadsGrafia = [
+  { id: 1, bairro: 'Praia da Costa', cidade: 'Vila Velha', lat: -20.33, lng: -40.29 },
+  { id: 2, bairro: 'Praia da Costa', cidade: 'Vila Velha', lat: -20.34, lng: -40.28 },
+  { id: 3, bairro: 'PRAIA DA COSTA', cidade: 'Vila Velha', lat: -20.35, lng: -40.30 },
+  { id: 4, bairro: 'praia da costa', cidade: 'Vila Velha', lat: -20.36, lng: -40.27 },
+  { id: 5, bairro: 'PRAIA DE ITAPARICA', cidade: 'Vila Velha', lat: -20.40, lng: -40.29 }
+];
+const grupos = ctx.pl5BairrosDoTerritorio(leadsGrafia);
+checar('três grafias do mesmo bairro viram UMA linha',
+  grupos.filter(g => ctx.pl5Chave(g.nome) === 'praia da costa').length === 1,
+  grupos.map(g => g.nome + '=' + g.n).join(' · '));
+checar('a contagem é a do grupo inteiro, não de uma grafia',
+  grupos.find(g => ctx.pl5Chave(g.nome) === 'praia da costa').n === 4);
+checar('o rótulo exibido é a grafia legível, não a que grita',
+  grupos.find(g => ctx.pl5Chave(g.nome) === 'praia da costa').nome === 'Praia da Costa');
+checar('bairro que só existe em maiúscula mantém a própria grafia',
+  grupos.find(g => ctx.pl5Chave(g.nome) === 'praia de itaparica').nome === 'PRAIA DE ITAPARICA');
+checar('a contagem prometida é a mesma que o filtro do lote devolve',
+  grupos.find(g => ctx.pl5Chave(g.nome) === 'praia da costa').n ===
+  leadsGrafia.filter(l => ctx.pl5Chave(l.bairro) === ctx.pl5Chave('Praia da Costa')).length);
+
 /* ── 3: acento e caixa ──────────────────────────────────────────────────────────────── */
 const casa = termo => bairros.filter(b => ctx.pl5Chave(b.nome).includes(ctx.pl5Chave(termo)));
 checar('"botanico" sem acento acha "Jardim Botânico"',

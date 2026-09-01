@@ -17002,18 +17002,36 @@ let pl5Busca = { texto: '', aberto: false, indice: -1, itens: [], geo: [], busca
    cada um — é ela que vira o centro quando o bairro é escolhido, para o km dos cards ser
    recalculado a partir de onde a pessoa vai atuar, não do centro da praça. */
 function pl5BairrosDoTerritorio(leads) {
+  /* AGRUPA PELA CHAVE, NÃO PELO NOME CRU (01/09/26, achado em produção com dado real).
+     A base tem "Praia da Costa" e "PRAIA DA COSTA" — o mesmo bairro, de coletas
+     diferentes. Agrupando pelo nome cru, o mesmo lugar aparecia DUAS VEZES na busca, com
+     a contagem partida (7 e 6), e nenhuma das duas dizia a verdade: 13.
+     E o filtro que monta o lote depois do clique já usava pl5Chave, insensível a caixa —
+     então clicar em "· 7" traria 13 cards, quebrando na cara da pessoa exatamente a
+     promessa que esta busca existe para cumprir: o número aparece ANTES do clique.
+     O rótulo exibido é a grafia mais frequente, com desempate para a que NÃO é toda em
+     maiúscula — "Praia da Costa" se lê, "PRAIA DA COSTA" se grita. */
   const mapa = new Map();
   (leads || []).forEach(l => {
     const nome = (l.bairro || '').trim();
     if (!nome) return;
+    const chave = pl5Chave(nome);
     const lat = Number(l.lat), lng = Number(l.lng);
-    const alvo = mapa.get(nome) || { nome, n: 0, cidade: (l.cidade || '').trim(), somaLat: 0, somaLng: 0, comCoord: 0 };
+    const alvo = mapa.get(chave) || { chave, grafias: new Map(), n: 0, cidade: (l.cidade || '').trim(), somaLat: 0, somaLng: 0, comCoord: 0 };
     alvo.n++;
+    alvo.grafias.set(nome, (alvo.grafias.get(nome) || 0) + 1);
     if (Number.isFinite(lat) && Number.isFinite(lng)) { alvo.somaLat += lat; alvo.somaLng += lng; alvo.comCoord++; }
-    mapa.set(nome, alvo);
+    mapa.set(chave, alvo);
   });
+  const melhorGrafia = grafias => [...grafias.entries()].sort((a, b) => {
+    /* mais frequente primeiro; empate, a que não é toda em maiúscula */
+    if (b[1] !== a[1]) return b[1] - a[1];
+    const capsA = a[0] === a[0].toUpperCase(), capsB = b[0] === b[0].toUpperCase();
+    if (capsA !== capsB) return capsA ? 1 : -1;
+    return a[0].localeCompare(b[0], 'pt-BR');
+  })[0][0];
   return [...mapa.values()].map(b => ({
-    nome: b.nome, n: b.n, cidade: b.cidade,
+    nome: melhorGrafia(b.grafias), n: b.n, cidade: b.cidade,
     lat: b.comCoord ? b.somaLat / b.comCoord : null,
     lng: b.comCoord ? b.somaLng / b.comCoord : null
   })).sort((a, b) => b.n - a.n);
