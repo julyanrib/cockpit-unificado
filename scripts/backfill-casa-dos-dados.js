@@ -46,15 +46,28 @@ const CIDADES = [
   { municipio: 'Vila Velha', uf: 'ES', objetivoMinimo: 30, tetoMaximo: 150 }, // Marco Filho
   { municipio: 'Vitória', uf: 'ES', objetivoMinimo: 30, tetoMaximo: 150 }, // Amanda Pardim
   {
-    municipio: 'Rio de Janeiro', uf: 'RJ', objetivoMinimo: 90, tetoMaximo: 400,
+    municipio: 'Rio de Janeiro', uf: 'RJ', objetivoMinimo: 120, tetoMaximo: 500,
     metaBairros: [
-      { nome: 'Bruno Martins (Taquara/Jacarepaguá/Freguesia/Anil)', minimo: 30, teste: b => /taquara|jacarepagua|freguesia|\banil\b/.test(b) },
-      { nome: 'Sandro Linhares (Tijuca)', minimo: 30, teste: b => /tijuca/.test(b) }
+      { nome: 'Bruno Martins (Jacarepaguá e Zona Oeste)', minimo: 30, teste: b => /taquara|jacarepagua|freguesia|anil|campo grande|bangu|santa cruz|realengo|valqueire/.test(b) },
+      { nome: 'Sandro Brito (Grande Tijuca)', minimo: 30, teste: b => /tijuca|vila isabel|maracana|andarai|grajau|meier|cachambi/.test(b) },
+      /* os dois que entraram em 01/09/26 — sem sub-cota, a cidade cumpre a meta geral
+         com contas de uma zona so e a zona nova nasce vazia */
+      { nome: 'André Gomes (Zona Sul e Centro)', minimo: 30, teste: b => /copacabana|ipanema|leblon|botafogo|laranjeiras|catete|flamengo|gloria|humaita|gavea|lapa|centro/.test(b) },
+      { nome: 'Luiz Pimentel (Zona Norte e Ilha)', minimo: 30, teste: b => /olaria|penha|braz de pina|bras de pina|cordovil|del castilho|mare|bonsucesso|ramos|pavuna|madureira|iraja|jardim carioca|jardim guanabara|cacuia|portuguesa|taua/.test(b) }
       // Michel Carvalho (Campo Grande) removido em 20/08/26 — desligado. Campo Grande
       // fica sem sub-cota dedicada até o Julyan reatribuir o território a alguém.
     ]
   },
-  { municipio: 'São Paulo', uf: 'SP', objetivoMinimo: 30, tetoMaximo: 150 }, // Wericles Andrade (Santo Amaro/Morumbi)
+  {
+    municipio: 'São Paulo', uf: 'SP', objetivoMinimo: 90, tetoMaximo: 400,
+    /* Whell + Renata + Sergio a partir de 01/09/26. SP tinha 42 contas na base INTEIRA
+       para tres pessoas — com objetivoMinimo 30 a busca parava na primeira leva. */
+    metaBairros: [
+      { nome: 'Wericles Andrade (Zona Sul e Oeste)', minimo: 30, teste: b => /morumbi|santo amaro|itaim|vila olimpia|brooklin|moema|campo belo|jardim paulista|pinheiros|vila madalena|perdizes|butanta/.test(b) },
+      { nome: 'Renata Pessoa (Centro, Zona Leste e Vila Mariana)', minimo: 30, teste: b => /bela vista|consolacao|republica|liberdade|bom retiro|bras|mooca|tatuape|ipiranga|vila prudente|itaquera|penha|vila mariana|saude|jabaquara|centro/.test(b) },
+      { nome: 'Sérgio Caetano (Zona Norte)', minimo: 30, teste: b => /santana|tucuruvi|casa verde|freguesia do o|lapa|barra funda|vila guilherme|vila maria|jacana|pirituba|imirim|mandaqui|limao/.test(b) }
+    ]
+  },
   { municipio: 'Porto Alegre', uf: 'RS', objetivoMinimo: 30, tetoMaximo: 150 }, // Kelly Travieso (Moinhos de Vento/Auxiliadora/Cidade Baixa)
   { municipio: 'Canoas', uf: 'RS', objetivoMinimo: 30, tetoMaximo: 150 } // também roteia pra Kelly
 ];
