@@ -300,6 +300,40 @@ async function main() {
     console.log('[backfill-casa-dos-dados] IMPORT_SECRET ausente — rodando em MODO MANUAL: vai gravar um JSON pra importar pelo modal do Cockpit em vez de importar sozinho.');
   }
 
+  /* ── PULAR CIDADE NESTA RODADA (01/09/26) ──────────────────────────────────────────
+     Pedido: "coloque outra lista de casa dos dados para os executivos online, menos a
+     Amanda". A Amanda cobre Vitória, e a lista CIDADES acima mapeia cidade→executivo.
+
+     Por que PARÂMETRO e não remoção da linha: "menos a Amanda" é o estado de hoje, não
+     uma regra do produto. Apagar Vitória do array faria a próxima rodada automática (o
+     cron de domingo) deixar a praça dela sem backlog para sempre, silenciosamente — e
+     ninguém iria lembrar de recolocar. Com o parâmetro, o padrão continua sendo TODAS as
+     cidades, e pular é uma escolha explícita de quem dispara, registrada no log.
+
+     Casa sem acento e sem caixa, porque quem digita no botão do workflow vai escrever
+     "vitoria" tanto quanto "Vitória". */
+  const semAcento = t => String(t || '').normalize('NFD')
+    .replace(new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g'), '')
+    .toLowerCase().trim();
+  const pularPedido = String(process.env.PULAR_CIDADES || '').split(',').map(semAcento).filter(Boolean);
+  const cidadesDaRodada = CIDADES.filter(c => !pularPedido.includes(semAcento(c.municipio)));
+  if (pularPedido.length) {
+    const puladas = CIDADES.filter(c => pularPedido.includes(semAcento(c.municipio))).map(c => c.municipio + '/' + c.uf);
+    const naoAchadas = pularPedido.filter(p => !CIDADES.some(c => semAcento(c.municipio) === p));
+    console.log('[backfill-casa-dos-dados] PULANDO nesta rodada: ' + (puladas.join(', ') || '(nenhuma)'));
+    /* pedido que não casa com cidade nenhuma é erro de digitação, e erro de digitação
+       aqui significa importar para quem não devia — melhor parar do que adivinhar. */
+    if (naoAchadas.length) {
+      console.error('[backfill-casa-dos-dados] PULAR_CIDADES tem nome que não existe na lista: ' + naoAchadas.join(', '));
+      console.error('  cidades conhecidas: ' + CIDADES.map(c => c.municipio).join(', '));
+      process.exit(1);
+    }
+    if (!cidadesDaRodada.length) {
+      console.error('[backfill-casa-dos-dados] todas as cidades foram puladas — nada a fazer.');
+      process.exit(1);
+    }
+  }
+
   let totalInseridos = 0, totalDuplicados = 0;
   const porCidade = {};
   const todosOsLeads = [];
@@ -307,7 +341,7 @@ async function main() {
   // inserir"). Sem esta lista, recusa em todas as cidades fechava a execução em verde.
   const recusadas = [];
   let totalEncontrados = 0;
-  for (const cidadeCfg of CIDADES) {
+  for (const cidadeCfg of cidadesDaRodada) {
     const { municipio, uf } = cidadeCfg;
     console.log(`[backfill-casa-dos-dados] Buscando ${municipio}/${uf}… (objetivo mínimo: ${cidadeCfg.objetivoMinimo})`);
     const { leads: leadsCidade, porMeta } = await buscarCidade(cidadeCfg, casaToken);

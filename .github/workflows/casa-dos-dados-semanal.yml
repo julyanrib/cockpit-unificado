@@ -12,7 +12,12 @@ on:
     # Domingo às 22h em Brasília (01:00 UTC de segunda) — a fila de Prospecção já
     # chega renovada quando o executivo abre a tela na segunda de manhã.
     - cron: '0 1 * * 1'
-  workflow_dispatch: {} # permite rodar manualmente pelo botão "Run workflow"
+  workflow_dispatch:   # permite rodar manualmente pelo botão "Run workflow"
+    inputs:
+      pular:
+        description: "Cidades a PULAR nesta rodada, separadas por vírgula (ex.: Vitória). Em branco = todas."
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -33,6 +38,9 @@ jobs:
         env:
           CASADOSDADOS_TOKEN: ${{ secrets.CASADOSDADOS_TOKEN }}
           IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          # em branco no cron semanal (todas as cidades); preenchido só quando alguém
+          # dispara à mão pedindo para pular uma praça — a escolha fica no log da execução.
+          PULAR_CIDADES: ${{ github.event.inputs.pular }}
         run: node scripts/backfill-casa-dos-dados.js
 
       - name: Publicar JSON pra importação manual (se o IMPORT_SECRET ainda não estiver ativo)
