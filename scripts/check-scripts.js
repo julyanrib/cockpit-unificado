@@ -254,3 +254,72 @@ function checarDestinos() {
   return false;
 }
 if (!checarDestinos()) process.exit(1);
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   FUNÇÃO CHAMADA QUE NÃO EXISTE (01/09/26)
+   --------------------------------------------------------------------------------------
+   NASCEU DE UM DEFEITO MEU, EM PRODUÇÃO, com 15 minutos no ar: o card de conta-alvo
+   chamava `pl4SlotSugerido()` e a função nunca entrou no arquivo — o script de patch
+   escreveu o template ANTES de aplicar os últimos passos, e o passo perdido era justamente
+   a declaração. Sintaxe válida, build verde, 102 testes verdes, os outros guards verdes.
+
+   E o pior: o erro só aparecia COM DADO. O card só é renderizado quando existe conta-alvo
+   na fila, e o preview local zera o Supabase — então a aba abria limpa aqui e quebrava lá,
+   mostrando a tela antiga da semana no lugar do ritual. ReferenceError em render é aba
+   morta silenciosa: quem usa não vê erro, vê a tela errada.
+
+   O que este guard faz: para os prefixos que ESTE projeto criou, toda chamada `nome(`
+   precisa ter uma declaração no mesmo arquivo. Restrito aos nossos prefixos de propósito —
+   verificar todo identificador acusaria cada método de biblioteca, e guard que grita demais
+   é guard que ninguém lê. Comentários são removidos antes da varredura: a 1ª versão acusou
+   duas funções que existem só na NOTA que explica por que foram removidas.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+function checarChamadasSemDeclaracao() {
+  const PREFIXOS = /^(pl4|xv3|gx|gi|d4|gd|gs|mf|kb|tp|prosp2|prospeccao|agenda|fila|cadencia|daily|frescor|render|abrir|wire|ligar|build|montar|checar|buscar|carregar|salvar|atualizar|desenhar|irPara)[A-Z]/;
+  let falhou = false;
+  alvos.forEach(arquivo => {
+    const html = fs.readFileSync(arquivo, 'utf8');
+    const rel = path.relative(root, arquivo);
+    let codigo = '';
+    RE_SCRIPT.lastIndex = 0;
+    let mm;
+    while ((mm = RE_SCRIPT.exec(html)) !== null) {
+      const attrs = mm[1] || '';
+      if (/\bsrc\s*=/i.test(attrs)) continue;
+      if (/type\s*=\s*["']application\/json["']/i.test(attrs)) continue;
+      codigo += '\n' + (mm[2] || '');
+    }
+    /* comentário não é chamada */
+    codigo = codigo.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+
+    const declaradas = new Set();
+    const guarda = re => { (codigo.match(re) || []).forEach(m => {
+      const nome = (m.match(/[A-Za-z_$][\w$]*/g) || []).filter(x => !/^(function|const|let|var|async|window)$/.test(x))[0];
+      if (nome) declaradas.add(nome);
+    }); };
+    guarda(/function\s+[A-Za-z_$][\w$]*\s*\(/g);
+    guarda(/(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:async\s*)?function/g);
+    guarda(/(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:async\s*)?\(/g);
+    /* seta de um parâmetro sem parênteses: `const buscarLead = id => ...` */
+    guarda(/(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:async\s*)?[A-Za-z_$][\w$]*\s*=>/g);
+    guarda(/window\.[A-Za-z_$][\w$]*\s*=\s*(?:async\s*)?(?:function|\()/g);
+    guarda(/[A-Za-z_$][\w$]*\s*:\s*(?:async\s*)?function/g);
+
+    const chamadas = new Set();
+    (codigo.match(/\b[A-Za-z_$][\w$]*\s*\(/g) || []).forEach(m => {
+      const nome = m.replace(/\s*\($/, '').trim();
+      if (PREFIXOS.test(nome)) chamadas.add(nome);
+    });
+    const faltando = [...chamadas].filter(n => !declaradas.has(n)).sort();
+    if (faltando.length) {
+      falhou = true;
+      console.error('\nCHAMADA SEM DECLARAÇÃO em ' + rel + ':');
+      faltando.forEach(n => console.error('  ' + n + '() é chamada e não existe neste arquivo'));
+      console.error('  ReferenceError em render não mostra erro para quem usa: mostra a tela errada.');
+      console.error('  E costuma aparecer só COM DADO — o preview local zera o Supabase e esconde o caso.');
+    }
+  });
+  if (!falhou) console.log('OK referências — toda função dos nossos prefixos que é chamada existe.');
+  return !falhou;
+}
+if (!checarChamadasSemDeclaracao()) process.exit(1);
