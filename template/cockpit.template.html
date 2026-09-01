@@ -31747,6 +31747,12 @@ function dl2LinhaHTML(item, r, ehAgora) {
    que a diferencia de um gráfico: cumprida diz QUANDO e ONDE; pendente diz A ARMA. */
 function dl2ContextoDoEixo(r, eixo, prom, feito, linhas) {
   const cumprida = prom > 0 && feito >= prom;
+  /* FEITO FORA DA PROMESSA vem antes de tudo: sem isto, o eixo com prometido 0 e feito 1
+     caía no ramo 'pendente' e a tela oferecia '+200' por um contrato já assinado. */
+  if (prom === 0 && feito > 0) {
+    return { ok: false, txt: 'você fez ' + feito + ' e não estava na promessa — não entra'
+      + ' nos pontos de hoje, porque a promessa é o denominador. Amanhã, prometa.' };
+  }
   const nomeNaEtapa = etapas => {
     const item = (linhas || []).find(l => {
       if (l.estado === 'feita' || l.estado === 'furou') return false;
@@ -32045,10 +32051,15 @@ function dl2Hero(r, linhaHoje, fase, linhas) {
     const cump = dl2Cumprido(linhaHoje, e);
     const ok = prom > 0 && cump.n >= prom;
     const pct = prom > 0 ? Math.min(100, cump.n / prom * 100) : 0;
-    /* o pé do tile diz o que ainda vale, não repete o número de cima */
-    const pe = ok ? '+' + (cump.n * e.pts) + ' pts · cumprido'
-      : prom > 0 ? 'vale +' + ((prom - cump.n) * e.pts)
-        : 'nada prometido';
+    /* o pé do tile diz o que ainda vale, não repete o número de cima.
+       FEITO FORA DA PROMESSA (achado em produção, ver a NOTA do patch): prometido 0 com
+       feito > 0 não é 'nada prometido' nem 'vale +N' — é feito que não pontua, porque
+       pontos = min(feito, prometido). A tela diz. */
+    const foraDaPromessa = prom === 0 && cump.n > 0;
+    const pe = foraDaPromessa ? 'feito fora da promessa · 0 pts'
+      : ok ? '+' + (cump.n * e.pts) + ' pts · cumprido'
+        : prom > 0 ? 'vale +' + ((prom - cump.n) * e.pts)
+          : 'nada prometido';
     return `<span class="dl2-tile${ok ? ' is-ok' : ''}">
       <span class="dl2-tile-rot">${esc(e.rot.toUpperCase())}${ok ? ' ✓' : ''}</span>
       <span class="dl2-tile-n">${cump.n}<span>/${prom}</span></span>
