@@ -10,6 +10,32 @@
 // Nenhuma verificação estática acha isso. O único jeito de saber se um botão funciona é
 // clicar nele e ver se algo muda. Este arquivo torna isso repetível.
 //
+// ─────────────────────────────────────────────────────────────────────────────────────
+// DUAS ARMADILHAS DESTE AUDITOR (01/09/26) — as duas me pegaram no mesmo dia.
+//
+// 1. `__ouvinteNaCadeia` NÃO É VEREDITO. Ele responde "existe algum ouvinte de clique
+//    daqui até o document?", e nestas telas existe um ouvinte GLOBAL de clique — então a
+//    resposta é "global" para praticamente tudo, e usar isso como varredura dá verde em
+//    botão morto. Foi assim que passaram: o segmentado "Sinal" da v4 (botões com data-v e
+//    ouvinte que exigia a classe .prosp2-visao) e três botões por linha no dossiê da
+//    carteira (CTA com `href` renderizado como <button>, e o ouvinte só chamava .acao()).
+//    Ele serve para DIAGNOSTICAR um morto já encontrado — nunca para encontrá-lo.
+//    Use auditarAba, que clica.
+//
+// 2. "NÃO MUDOU NADA" NEM SEMPRE É MORTE, E "MUDOU" NEM SEMPRE É VIDA.
+//    Falso positivo: atalho cujo trabalho é ROLAR até um destino que já está na tela — não
+//    há para onde rolar, nada muda, e o auditor acusa. Aconteceu com "Buracos restantes",
+//    "Quentes sem compromisso" e o índice do Playbook. Mas repare: do ponto de vista de
+//    quem usa, o auditor estava CERTO — clique sem efeito visível é clique morto. A
+//    correção foi fazer o destino piscar (piscarAlvo), não silenciar o auditor.
+//    Falso negativo: filtro que acende o próprio botão e não filtra a lista muta o DOM e
+//    passa como vivo — é para isso que existe a auditoria semântica de filtro, mais abaixo.
+//
+//    Prático: dê 400ms de espera (scroll suave não cabe em 180ms) e, quando um morto
+//    aparecer, CONFIRME à mão antes de consertar — metade deles é o auditor, metade é o
+//    código, e as duas metades exigem consertos diferentes.
+// ─────────────────────────────────────────────────────────────────────────────────────
+//
 // COMO USAR:
 //   1. node scripts/build.js
 //   2. node scripts/preview-local.js rep C:\caminho\preview.html
