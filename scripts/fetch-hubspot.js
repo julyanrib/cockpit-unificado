@@ -6,6 +6,11 @@
 const fs = require('fs');
 const path = require('path');
 
+/* A CONTA DO REALIZADO MORA NA LIB (01/09/26) — ver a nota de abertura de
+   lib/realizado.js. A tela da Daily v2 pergunta "o que já foi cumprido agora" a cada
+   minuto; este robô grava o mesmo número 3x por dia. Uma conta, dois transportes. */
+const REALIZADO = require('../lib/realizado.js');
+
 const TOKEN = process.env.HUBSPOT_TOKEN;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
@@ -536,35 +541,13 @@ async function fetchAgenda() {
 // comportamento de antes. Com ele, conta a JANELA FECHADA daquele dia (00h–24h BRT),
 // que é o que permite gravar o realizado de ontem já consolidado.
 async function visitasTarefasHojeByOwner(ownerId, diaISO) {
-  const base = diaISO ? new Date(diaISO + 'T12:00:00Z') : new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const inicioDoDiaBRTms = Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 3, 0, 0);
-  const fimDoDiaBRTms = inicioDoDiaBRTms + 86400000;
-  const filtrosData = diaISO
-    ? [{ propertyName: 'hs_createdate', operator: 'BETWEEN', value: String(inicioDoDiaBRTms), highValue: String(fimDoDiaBRTms) }]
-    : [{ propertyName: 'hs_createdate', operator: 'GTE', value: String(inicioDoDiaBRTms) }];
-  const data = await hsSearchTipo('tasks', {
-    filterGroups: [{ filters: [
-      { propertyName: 'hubspot_owner_id', operator: 'EQ', value: String(ownerId) },
-      ...filtrosData
-    ] }],
-    properties: ['hs_task_subject', 'hs_task_body', 'hs_task_status'],
-    limit: 100
-  });
-  // BLOCO 17 (12/08/26) — CORRECAO DE DADO. Antes contava toda tarefa de visita CRIADA
-  // no dia, sem olhar o status. Só que a rota do cockpit cria tarefa NOT_STARTED no
-  // momento em que o executivo monta o dia: a visita que ele ainda VAI fazer entrava
-  // como visita FEITA. Flagrado na Kelly em 12/08 — o cockpit dizia "2 realizado" às
-  // 09h e as duas tarefas eram compromissos das 10:00 e 10:45, ainda não realizados.
-  // Isso é exatamente o dado errado que não pode chegar na Daily: cobrar entrega de
-  // quem ainda nem saiu, ou dar por feito o que não foi.
-  // Visita registrada pelo Expogo nasce COMPLETED; a marcada pela rota nasce
-  // NOT_STARTED e vira COMPLETED quando o executivo registra. Então realizado = COMPLETED.
-  return (data.results || []).filter(t => {
-    const titulo = String(t.properties.hs_task_subject || '');
-    const corpo = String(t.properties.hs_task_body || '');
-    const ehVisita = /^\s*(re)?visita\b/i.test(titulo) || /app\s*outbound/i.test(corpo);
-    return ehVisita && String(t.properties.hs_task_status || '') === 'COMPLETED';
-  }).length;
+  /* DELEGA para lib/realizado.js (01/09/26). A regra — visita feita = tarefa COMPLETED
+     criada no dia, achado de 12/08/26 na Kelly, quando o cockpit dava por feitas duas
+     visitas das 10h às 9h da manhã — e a janela em horário de Brasília passaram para lá,
+     porque a Minha Daily v2 faz a mesma pergunta a cada minuto e duas implementações da
+     mesma conta dariam dois números para o mesmo dia. O nome desta função fica: são
+     dezenas de chamadas neste arquivo e nenhuma precisa saber que a conta mudou de casa. */
+  return REALIZADO.visitasFeitasNoDia(hsSearchTipo, ownerId, diaISO);
 }
 
 // Busca TODAS as páginas de uma pesquisa, sem cap de 100/200 — várias contagens
@@ -627,9 +610,10 @@ async function createdLast7Days() {
 
 // Negócios de teste/dummy (ex: "Teste", "TESTE_SONY_DIAG", "Coliseu teste") não devem contar
 // em NENHUMA métrica. Detectado em auditoria manual — filtra pelo nome, case-insensitive.
+/* delega para lib/realizado.js: a tela ao vivo aplica a MESMA exclusão, senão ela
+   creditaria +200 pts num fechamento que o robô descarta à noite. */
 function isTestDeal(dealname) {
-  if (!dealname) return false;
-  return /teste/i.test(dealname);
+  return REALIZADO.ehNegocioDeTeste(dealname);
 }
 
 // Negócios "Ganho" no HubSpot que são exceções conhecidas e NÃO devem contar como fechamento
@@ -644,8 +628,7 @@ function isTestDeal(dealname) {
 const EXCLUDED_DEAL_IDS = ['62640951452', '59186260237'];
 
 function isExcludedDeal(deal) {
-  if (EXCLUDED_DEAL_IDS.includes(String(deal.id))) return true;
-  return isTestDeal(deal.properties && deal.properties.dealname);
+  return REALIZADO.ehNegocioExcluido(deal);
 }
 
 // Conta quantos negócios ENTRARAM numa etapa específica nos últimos 7 dias (fluxo da semana),
