@@ -4040,8 +4040,9 @@
   .fn2-seg:hover{filter:brightness(1.15);}
   .fn2-rotulos{display:flex;gap:3px;margin-top:6px;font:800 10px var(--font-body);
     color:var(--dark-mut);}
-  .fn2-rotulos>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .fn2-rotulos>span.is-dinheiro{color:var(--dark-amber);}
+  .fn2-rotulos>span{display:flex;flex-direction:column;gap:1px;}
+  .fn2-rotulos>span>i{font-style:normal;line-height:1.2;overflow-wrap:anywhere;}
+  .fn2-rotulos>span>b{color:var(--dark-amber);font-weight:800;line-height:1.2;}
   .fn2-degrau{font-size:11px;color:var(--dark-mut);margin-top:8px;line-height:1.5;}
   .fn2-degrau b{color:var(--dark-ink);}
   .fn2-degrau b.is-vaza{color:var(--dark-red);}
@@ -12302,12 +12303,15 @@ function wireDestravarFunil(rootEl) {
 /* As cinco etapas da esteira, na ordem do funil. Ag. Pagamento (1395880473) sai daqui e
    vira "fases pós-venda" no canto do header — é pedido da prancha (regra 5) e faz sentido:
    negócio esperando pagamento não é mais uma venda a fazer, é uma entrega a acompanhar. */
+/* 'curto' é o nome do rótulo sob a barra do hero, onde a fatia da etapa magra tem 40px de
+   largura. O nome inteiro vive no cabeçalho da coluna, um bloco abaixo — e é lá que o
+   executivo lê a etapa. Aqui a barra é o retrato, e o rótulo só diz QUAL fatia é qual. */
 const FN2_ETAPAS = [
-  { id: '1395880469', rot: 'PROSPECÇÃO', prazo: '1º toque em' },
-  { id: '1396005401', rot: 'VISITA FEITA', prazo: 'follow-up em' },
-  { id: '1395880470', rot: 'CONVERSA C/ DECISOR', prazo: 'toque a cada' },
-  { id: '1395880471', rot: 'DEMO/PROPOSTA', prazo: 'proposta em', dinheiro: true },
-  { id: '1395880472', rot: 'NEGOCIAÇÃO', prazo: 'retorno em', dinheiro: true }
+  { id: '1395880469', rot: 'PROSPECÇÃO', curto: 'PROSPEC.', prazo: '1º toque em' },
+  { id: '1396005401', rot: 'VISITA FEITA', curto: 'VISITA', prazo: 'follow-up em' },
+  { id: '1395880470', rot: 'CONVERSA C/ DECISOR', curto: 'DECISOR', prazo: 'toque a cada' },
+  { id: '1395880471', rot: 'DEMO/PROPOSTA', curto: 'DEMO', prazo: 'proposta em', dinheiro: true },
+  { id: '1395880472', rot: 'NEGOCIAÇÃO', curto: 'NEGOC.', prazo: 'retorno em', dinheiro: true }
 ];
 const FN2_POS_VENDA = ['1395880473', '1396006162', '1396006163', '1396007427'];
 const FN2_VISIVEIS_POR_COLUNA = 3;
@@ -12539,12 +12543,25 @@ function fn2Hero(r, itens, movimentos) {
       title="${esc(e.rot)} · ${n} · abrir a etapa">${n === 0 ? '—' : n}</button>`;
   }).join('');
 
+  /* O RÓTULO NÃO HERDA O PESO DO SEGMENTO (medido em produção, 02/09/26). A barra é
+     proporcional de propósito — ela é o retrato do funil. O rótulo herdava o mesmo flex, e o
+     efeito era que a largura do NOME da etapa dependia de quantos negócios ela tem: na
+     sessão do Marco, VISITA FEITA cortava 20px e NEGOCIAÇÃO · R$ 998 cortava 25px, as duas
+     etapas de 1 negócio. É o contrário do que importa — a etapa magra é a que ele precisa
+     ler. Agora as cinco células têm a mesma largura, o nome usa a forma curta e QUEBRA
+     LINHA em vez de recortar, e o R$ ganha linha própria.
+     Nada disso mexe na barra: a proporção continua contando a verdade logo acima. */
   const rotulos = FN2_ETAPAS.map(e => {
     const n = itens.filter(x => x.stageId === e.id).length;
     const soma = itens.filter(x => x.stageId === e.id).reduce((a, x) => a + x.valor, 0);
-    const rs = e.dinheiro && soma > 0 ? ' · ' + fn2Rs(soma) : '';
-    return `<span class="${e.dinheiro ? 'is-dinheiro' : ''}" style="flex:${Math.max(1, n)}"
-      title="${esc(e.rot)}">${esc(e.rot)}${rs}</span>`;
+    const rs = e.dinheiro && soma > 0 ? fn2Rs(soma) : '';
+    /* o MESMO peso do segmento, para o rótulo ficar debaixo da fatia dele — largura igual
+       resolvia o recorte e criava um defeito pior: 'VISITA' com 132px sobre uma fatia de
+       52px, e aí não se sabe qual rótulo é de qual pedaço. O que impede o recorte agora é o
+       CSS: nome curto, quebra permitida e sem min-width:0, então a célula nunca encolhe
+       abaixo da palavra que carrega. */
+    return `<span style="flex:${Math.max(1, n)} 1 auto" title="${esc(e.rot)}"><i>${
+      esc(e.curto || e.rot)}</i>${rs ? '<b>' + esc(rs) + '</b>' : ''}</span>`;
   }).join('');
 
   return `<div class="fn2-hero">
