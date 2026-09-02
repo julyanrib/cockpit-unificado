@@ -125,7 +125,18 @@ const candidatos = function(raiz){
       if (el.disabled) return false;
       const r = el.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return false;
-      if (typeof el.checkVisibility === 'function' && !el.checkVisibility()) return false;
+      /* checkVisibility() SEM opções não olha visibility:hidden nem content-visibility —
+         só display:none e tamanho zero. Foi por isso que a auditoria do Planejamento em
+         02/09/26 reportou "+ Agendar visita" do drawer fechado como morto: o botão tem
+         visibility:hidden e mora em x=1469 numa janela de 1440. Passar as duas opções faz
+         o filtro dizer o que o nome dele promete, e o falso positivo desaparece. */
+      if (typeof el.checkVisibility === 'function'
+        && !el.checkVisibility({ checkVisibilityCSS: true, contentVisibilityAuto: true })) return false;
+      /* E FORA DA JANELA não é candidato: painel fechado que fica deslocado para o lado
+         (o drawer da Prospecção) produzia um morto por rodada, e a investigação dele
+         terminava sempre na mesma conclusão. Controle que o usuário não alcança sem abrir
+         o painel se audita COM o painel aberto — que é outro passo, não este. */
+      if (r.right < 0 || r.bottom < 0 || r.left > window.innerWidth || r.top > window.innerHeight) return false;
       if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return false;
       return true;
     });
