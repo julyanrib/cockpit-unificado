@@ -68,7 +68,29 @@ checar('a tela distingue "provada" de "lida antes da prova"',
   /antes da prova existir/.test(template) && /function pb7LidasSemProva\(\)/.test(template));
 
 /* ── 4. capítulo 100% = selo ─────────────────────────────────────────────────────── */
-checar('a biblioteca mostra SELO no capítulo completo', /\$\{selo \? 'SELO ✓ ' : ''\}/.test(template));
+/* A v8 trocou a barra do capitulo pela CAPA da estante, e o selo passou a aparecer em
+   dois lugares: o emoji na capa e a linha de estado. A checagem segue o RESULTADO (o
+   texto que o capitulo completo mostra), nao a forma antiga em caixa alta. */
+checar('a capa do capítulo completo mostra selo e a contagem provada',
+  template.indexOf('selo ✓ · ') > 0 && template.indexOf('provadas') > 0
+  && template.indexOf('pb8-capa-selo') > 0 && template.indexOf('🏅') > 0);
+checar('a estante não tem mais fundo colorido por capítulo (cor é fio)',
+  template.indexOf('.pb8-capa{') > 0
+  && template.indexOf('border-top:3px solid var(--pb8-ac)') > 0
+  && template.indexOf('.pb7-cap{') < 0);
+checar('um capítulo aberto por vez, e a troca é no lugar (sem acordeão)',
+  template.indexOf('pb8Aberto = cat;') > 0
+  && template.indexOf('spread.innerHTML = pb8SpreadHTML(') > 0
+  && template.indexOf('@keyframes pb8Entra') > 0);
+checar('a troca de capítulo não passa por setTimeout (aba de fundo estrangula timer)',
+  template.indexOf('.pb8-spread > *{animation:pb8Entra') > 0
+  && template.indexOf("spread.classList.add('is-trocando')") < 0);
+checar('a numeração dos capítulos é fixa, não reordenada pelo momento',
+  template.indexOf('const PB8_ORDEM = ') > 0
+  && template.indexOf('function pb8NumeroDe(') > 0);
+checar('o filtro de formato esmaece em vez de esconder',
+  template.indexOf("pg.classList.toggle('is-fora'") > 0
+  && template.indexOf('.pb8-pg.is-fora{opacity:.3;}') > 0);
 checar('o selo é declarado como coisa do placar do time', /selo conta no placar do time|selo aparece no placar do time/.test(template));
 
 /* ── 5. "mais usadas" só com uso REAL ────────────────────────────────────────────── */
