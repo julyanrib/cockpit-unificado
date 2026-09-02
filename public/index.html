@@ -9543,12 +9543,42 @@ function filaPwaResumo() {
   };
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════
+   A CADÊNCIA DA SINCRONIZAÇÃO — uma frase só, num lugar só (02/09/26).
+
+   O robô roda 08:30 · 10:30 · 12:30 · 14:30 · 16:30 · 18:30 · 19:00 nos dias úteis, e
+   09:00 no fim de semana (.github/workflows/daily-refresh.yml). O webhook do HubSpot
+   acelera entre elas, no máximo uma vez por hora, e só dentro do expediente.
+
+   A CONSTANTE NÃO CITA OS HORÁRIOS de propósito. Antes desta mudança, doze lugares do
+   template escreviam "08:56, 13h e 19h" à mão — quatro deles em texto que o usuário lê.
+   Mudar a grade fez os doze mentirem de uma vez. O que o usuário precisa saber é a
+   frequência e a janela, não o minuto de cada rodada. */
+const SYNC_CADENCIA = 'a cada 2h no horário comercial (08:30 às 19h)';
+
+/* Os dois limites de "dado velho". Um limite fixo não serve para os dois mundos: no
+   expediente o maior buraco legítimo é 2h, e de noite/fim de semana ele é grande de
+   propósito (19h → 08:30 são 13h30; sábado 09h → domingo 09h são 24h). Com o limite
+   antigo de 8h, uma rodada que falhasse às 10:30 só acenderia o aviso às 18:30. */
+const SYNC_LIMITE_EXPEDIENTE_MIN = 150;   /* 2h30: a grade de 2h + meia hora de folga */
+const SYNC_LIMITE_FORA_MIN = 26 * 60;     /* 26h: cobre o fim de semana de 1 rodada/dia */
+
+function syncDentroDoExpediente(quando) {
+  /* Brasília = UTC−3, fixo. Mesma conversão da grade e do webhook. */
+  const brt = new Date((quando ? quando.getTime() : Date.now()) - 3 * 60 * 60 * 1000);
+  const dow = brt.getUTCDay();
+  if (dow < 1 || dow > 5) return false;
+  const min = brt.getUTCHours() * 60 + brt.getUTCMinutes();
+  return min >= (8 * 60 + 30) && min < 19 * 60;
+}
+
 function frescorDosDados() {
   const iso = DATA.hubspotUpdatedAtISO || null;
   const minutos = iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)) : null;
-  // As rodadas automáticas são 08:56, 13h e 19h — mais de 8h sem carga significa
-  // que uma rodada falhou, não que o executivo parou de trabalhar.
-  const velho = minutos === null || minutos > 480;
+  /* No expediente, mais de 2h30 sem carga significa que uma rodada falhou — não que o
+     executivo parou de trabalhar. Fora dele, o buraco é esperado. */
+  const limite = syncDentroDoExpediente() ? SYNC_LIMITE_EXPEDIENTE_MIN : SYNC_LIMITE_FORA_MIN;
+  const velho = minutos === null || minutos > limite;
   const sync = DATA.syncStatus || null;
   const falhaSync = !!(sync && (sync.houveFalha || (Array.isArray(sync.falhas) && sync.falhas.length > 0)));
   const falhaMinha = !!(sync && sync.falhaMinha);
@@ -21225,7 +21255,7 @@ function gsCicloHTML(h) {
   if (c.ganhosNaJanela == null) {
     return '<div class="gs-secao">' +
       '<div class="gs-secao-cab"><b>O ciclo de quem fechou</b><span>do primeiro dia no funil até o ganho</span></div>' +
-      '<div class="gs-secao-nota" style="margin-top:4px;">Esta leitura está sendo recalculada e entra no próximo carregamento do HubSpot (8h56 · 13h · 19h). ' +
+      '<div class="gs-secao-nota" style="margin-top:4px;">Esta leitura está sendo recalculada e entra no próximo carregamento do HubSpot (' + SYNC_CADENCIA + '). ' +
         'A conta anterior misturava negócio cadastrado no dia do fechamento com negócio que andou o funil, e o resultado — pouco mais de um dia — descrevia o cadastro, não a venda.</div>' +
     '</div>';
   }
@@ -21256,7 +21286,7 @@ function gsHistoricoHTML() {
   if (!h || !h.escada || !Object.keys(h.escada).length) {
     /* AUSENCIA NAO E ZERO: sem histórico a tela não mostra 0%, mostra por que não tem. */
     return '<div class="gs-vazio"><b>A conversão por turma entra no próximo carregamento do HubSpot.</b><br>' +
-      'Ela é calculada sobre a data de entrada em cada etapa, que passou a ser lida agora. O carregamento roda às 8h56, 13h e 19h — ' +
+      'Ela é calculada sobre a data de entrada em cada etapa, que passou a ser lida agora. O carregamento roda ' + SYNC_CADENCIA + ' — ' +
       'até o próximo, esta parte fica vazia de propósito: melhor sem número do que com número inventado.' +
       (h && h.negocios === 0 ? '<br>O último carregamento não encontrou negócios com data de entrada nos últimos ' + h.dias + ' dias.' : '') +
     '</div>';
@@ -22940,7 +22970,7 @@ function gxBlocoConversaoHTML(r) {
     /* AUSENCIA NAO E ZERO: sem histórico, o bloco diz por que está vazio. */
     return '<div class="gx-secao">' +
       '<div class="gx-secao-cab"><b>Onde esse funil perde</b><span>conversão por etapa, desta carteira contra o time</span></div>' +
-      '<div class="gx-secao-nota">Esta leitura vem do histórico de etapa do HubSpot, que entra no próximo carregamento (8h56 · 13h · 19h). ' +
+      '<div class="gx-secao-nota">Esta leitura vem do histórico de etapa do HubSpot, que entra no próximo carregamento (' + SYNC_CADENCIA + '). ' +
       'Até lá ela fica vazia de propósito — melhor sem número do que com número inventado.</div>' +
     '</div>';
   }
@@ -24488,7 +24518,7 @@ function fichaLeadFunilBodyHTML(l) {
 
     <!-- BLOCO 42 (14/08/26) — editar direto do Cockpit: nota e próximo passo escrevem
          de verdade no HubSpot (associados a este negócio). O que muda aqui NÃO aparece
-         sozinho no Cockpit até a próxima atualização automática (08:56/13h/19h) — só
+         sozinho no Cockpit até a próxima atualização automática (ver SYNC_CADENCIA) — só
          no HubSpot é imediato. Isso é dito explicitamente no aviso de sucesso, não só
          aqui, porque "achei que tinha atualizado" já causou confusão neste projeto antes. -->
     <div class="ficha-editar" data-lead-id="${l.id}" data-owner-id="${l.ownerId || ''}" style="border-top:1px solid var(--line);padding-top:13px;margin-bottom:13px;">
@@ -25399,7 +25429,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       fechar();
       const quantos = Object.keys(coleta.propriedades).length;
       if (passoOk) {
-        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''} · próximo passo em ${fmtDailyLabel(passoData)}. O Cockpit reconcilia na próxima rodada automática (08:56/13h/19h).`, 'sucesso');
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''} · próximo passo em ${fmtDailyLabel(passoData)}. O Cockpit reconcilia na próxima rodada automática (${SYNC_CADENCIA}).`, 'sucesso');
       } else {
         mostrarToast(`"${lead.name}" mudou de etapa, mas o próximo passo NÃO foi criado (${erroPasso}). O negócio está na etapa nova e descoberto — crie a tarefa na ficha antes de sair da tela.`, 'erro');
       }
@@ -25416,7 +25446,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
 /* @nucleo3:inicio — lido por scripts/testar-nucleo.js. Não remover. */
 /* Espelha no DATA em memória a nota recém-criada (desfecho de visita). Mesmo padrão e
    mesmo motivo de aplicarProximoPassoNoDataLocal, logo abaixo: a escrita no HubSpot é
-   imediata, mas o snapshot da tela só é recarregado nas rodadas de 08:56/13h/19h.
+   imediata, mas o snapshot da tela só é recarregado nas rodadas do robô (ver SYNC_CADENCIA).
 
    CUIDADO (caí nisso ao verificar, 27/08/26): estas duas funções mutam os objetos DENTRO
    de DATA, e meusNegociosAbertos() devolve CÓPIA dos itens de funilLeads (é lá que a
@@ -25509,7 +25539,7 @@ function negocioCego(lead) {
 
 // Espelha no DATA em memória o que a rota acabou de gravar no HubSpot. Sem isto a
 // ficha continuaria pedindo a qualificação depois de gravada, e a fila seguiria
-// marcando o negócio como cego até o próximo sync (08:56/13h/19h).
+// marcando o negócio como cego até o próximo sync (ver SYNC_CADENCIA).
 function aplicarQualificacaoNoDataLocal(leadId, props) {
   const alvo = String(leadId);
   const aplicar = l => {
@@ -25599,11 +25629,11 @@ function abrirFichaLeadFunilDrawer(l, voltarPara, foco) {
 // comportamento de cada um continua idêntico, só mudou pra onde o front aponta.
 // ATUALIZAÇÃO (15/08/26) — webhook do HubSpot: mudança de ETAPA (item 1, dealstage) já
 // dispara o robô de atualização sozinho, em poucos minutos — não depende mais só das
-// rodadas de 08:56/13h/19h. Nota e próximo-passo (itens 2 e 3) continuam dependendo
+// rodadas do robô (ver SYNC_CADENCIA). Nota e próximo-passo (itens 2 e 3) continuam dependendo
 // das rodadas automáticas, porque Task/Note não têm webhook disponível nesta conta do
 // HubSpot (só Negócio, Empresa, Contato, Ticket, Produto, Item de linha e Conversas).
 // IMPORTANTE: sucesso aqui é IMEDIATO no HubSpot, mas o Cockpit só reflete essa
-// mudança na próxima atualização automática (08:56/13h/19h) — os três avisos de
+// mudança na próxima atualização automática (ver SYNC_CADENCIA) — os três avisos de
 // sucesso dizem isso explicitamente, porque "achei que tinha atualizado sozinho"
 // já causou confusão de diagnóstico neste projeto antes (DATA.agenda é a mesma lição).
 function wireFichaLeadFunilEdicao(container, l) {
@@ -25772,7 +25802,7 @@ function wireFichaLeadFunilEdicao(container, l) {
         return;
       }
       // O servidor devolve o que gravou; espelhar aqui é o que faz a ficha parar de
-      // cobrar a qualificação na mesma sessão (o sync só roda 08:56/13h/19h).
+      // cobrar a qualificação na mesma sessão (o sync roda na cadência de SYNC_CADENCIA).
       if (respData.qualificacao) {
         aplicarQualificacaoNoDataLocal(dealId, respData.qualificacao);
         if (boxQualif) boxQualif.remove();

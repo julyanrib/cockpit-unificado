@@ -100,6 +100,40 @@ module.exports = async function handler(req, res) {
     return res.status(500).json({ erro: 'Servidor sem SUPABASE_URL/SUPABASE_SERVICE_KEY configurados (necessários pro lock de cooldown).' });
   }
 
+  // ---- 2.5. A JANELA DE EXPEDIENTE (02/09/26) ----
+  // PEDIDO DO JULYAN, palavra por palavra: "pelo menos um intervalo de 2 em 2 horas no
+  // horário comercial, passou das 19 horas, só voltaria as 08:30".
+  //
+  // O agendamento passou a ser 08:30 · 10:30 · 12:30 · 14:30 · 16:30 · 18:30 · 19:00 nos
+  // dias úteis (ver .github/workflows/daily-refresh.yml). Faltava a outra metade: o
+  // webhook não tinha limite de horário nenhum. Medido nas 18 últimas rodadas, ele estava
+  // disparando de hora em hora MADRUGADA ADENTRO — a última às 21:26 de Brasília.
+  //
+  // Por que isso importa e não é só estética: cada disparo é um deploy na Vercel (teto de
+  // 100/dia no plano Hobby, e foi bater nele que criou o cooldown de 60 min), e ninguém
+  // olha o cockpit às 3 da manhã. O que muda no HubSpot fora da janela entra na rodada das
+  // 08:30, que também refecha o dia anterior.
+  //
+  // FORA DA JANELA A ROTA RESPONDE 200, não erro: para o HubSpot, 200 quer dizer "recebi".
+  // Erro faria o HubSpot reenviar o mesmo aviso várias vezes e, dependendo da política
+  // dele, desativar a subscrição por falha repetida.
+  const AGORA_BRT = new Date(Date.now() - 3 * 60 * 60 * 1000); // Brasília = UTC−3, fixo
+  const DIA_SEMANA = AGORA_BRT.getUTCDay();                    // 0=domingo ... 6=sábado
+  const MIN_DO_DIA = AGORA_BRT.getUTCHours() * 60 + AGORA_BRT.getUTCMinutes();
+  const ABRE = 8 * 60 + 30;   // 08:30
+  const FECHA = 19 * 60;      // 19:00
+  const ehDiaUtil = DIA_SEMANA >= 1 && DIA_SEMANA <= 5;
+  const naJanela = ehDiaUtil && MIN_DO_DIA >= ABRE && MIN_DO_DIA < FECHA;
+  if (!naJanela) {
+    const hhmm = String(AGORA_BRT.getUTCHours()).padStart(2, '0') + ':'
+      + String(AGORA_BRT.getUTCMinutes()).padStart(2, '0');
+    console.log('[hubspot-webhook] Fora da janela de expediente (' + hhmm + ' BRT, dia ' + DIA_SEMANA + ') — não dispara.');
+    return res.status(200).json({
+      ok: true, disparado: false,
+      motivo: 'fora da janela de expediente (08:30–19:00, dias úteis) — entra na rodada das 08:30'
+    });
+  }
+
   // ---- 3. intervalo mínimo entre disparos (cooldown) — LOCK ATÔMICO, não checagem ----
   // CORREÇÃO (19/08/26, achado real: pares de execuções com segundos de diferença,
   // mesmo com cooldown de 60min) — a versão antiga fazia "consultar API do GitHub →
