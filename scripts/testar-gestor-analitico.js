@@ -39,6 +39,8 @@ const soCodigo = (txt) => String(txt)
   .join(String.fromCharCode(10));
 const templateCodigo = soCodigo(template);
 
+const q3 = String.fromCharCode(39);   /* apostrofo, para casar codigo-fonte sem escapar */
+
 let ok = 0;
 const falhas = [];
 function checar(nome, condicao) {
@@ -180,6 +182,58 @@ checar('a fila agrupa por pessoa+categoria e preserva o volume',
 checar('o cabeçalho publica frentes E casos',
   template.indexOf('frente${linhas.length === 1') > 0 &&
   template.indexOf('casosTotais') > 0);
+
+/* ── 11. UM CAMPO DE MRR DIGITADO, DOIS DERIVADOS ─────────────────────────────────
+   Medido no pipeline em 02/09/26: 5.207 negocios, 597 com mrr (11%) e 353 com
+   valor_de_mrr (7%) — e os dois DIVERGIAM onde ambos existiam (403 x 244,33 no mesmo
+   negocio; um contrato trimestral com 900 no campo mensal). amount e o total do periodo:
+   838 trimestral tem amount 2.514. Somar amount como MRR infla por 3 ou por 6. */
+const servidor = fs.readFileSync(path.join(raiz, 'lib', 'acoes-negocio', 'mudar-etapa-negocio.js'), 'utf8');
+const servidorCodigo = soCodigo(servidor);
+checar('o servidor deriva mrr e amount de valor_de_mrr',
+  servidorCodigo.indexOf('function derivarDinheiro(') > 0 &&
+  servidorCodigo.indexOf('MESES_DO_PERIODO') > 0);
+checar('a derivacao acontece antes da escrita e sobrescreve o que o cliente mandou',
+  servidorCodigo.indexOf('const propriedadesFinais = derivarDinheiro(') > 0 &&
+  servidorCodigo.indexOf('...propriedadesFinais, dealstage:') > 0 &&
+  servidorCodigo.indexOf('...limpeza.propriedades, dealstage:') < 0);
+checar('sem periodo conhecido o amount nao e inventado',
+  servidorCodigo.indexOf('if (meses) saida.amount') > 0);
+checar('Demo/Proposta passa a exigir valor de MRR, plano e data da reuniao',
+  servidorCodigo.indexOf('1395880471' + q3 + ': [') > 0 &&
+  servidorCodigo.indexOf(q3 + 'valor_de_mrr' + q3 + ', ' + q3 + 'plano_apresentado') > 0 &&
+  servidorCodigo.indexOf(q3 + 'data_da_reuniao' + q3 + ']') > 0);
+/* A checagem olha o MAPA DA ETAPA, nao o arquivo inteiro: amount e mrr continuam em
+   PROPS_PERMITIDAS e PROPS_NUMERICAS de proposito — a rota tem que aceita-los para
+   normalizar e a derivacao tem que poder escrever neles. O que nao pode e a etapa
+   EXIGIR que uma pessoa os digite. A primeira versao desta linha varria o arquivo todo
+   e reprovou codigo correto. */
+const mapaPagamento = servidorCodigo.slice(
+  servidorCodigo.indexOf(String.fromCharCode(39) + '1395880473' + String.fromCharCode(39) + ':'),
+  servidorCodigo.indexOf(String.fromCharCode(39) + '1396006163' + String.fromCharCode(39) + ':'));
+checar('Ag. Pagamento nao exige mais amount nem mrr digitados',
+  mapaPagamento.length > 40 &&
+  mapaPagamento.indexOf(String.fromCharCode(39) + 'amount' + String.fromCharCode(39)) < 0 &&
+  mapaPagamento.indexOf(String.fromCharCode(39) + 'mrr' + String.fromCharCode(39)) < 0 &&
+  mapaPagamento.indexOf(String.fromCharCode(39) + 'valor_de_mrr' + String.fromCharCode(39)) > 0);
+checar('a ficha nao chama o total do periodo de mensal',
+  template.indexOf('Total do contrato') > 0 &&
+  template.indexOf("label: 'Valor da proposta'") < 0);
+checar('campo calculado nao abre input que o servidor sobrescreve',
+  templateCodigo.indexOf('.ficha-prop:not(.is-calculado)') > 0 &&
+  templateCodigo.indexOf('if (c.calculado) {') > 0);
+
+/* ── 12. O FURO DA BARREIRA VIRA EVIDENCIA ─────────────────────────────────────────
+   A barreira de campos obrigatorios so vale DENTRO do Cockpit: quem move o negocio no
+   HubSpot passa por fora da API. Medido: a Negociacao exige valor_de_mrr e 10 dos 29
+   negocios de la entraram sem ele. A fila do gestor passa a listar isso como evidencia. */
+checar('a fila lista negocio que esta na etapa sem o campo que a etapa exige',
+  templateCodigo.indexOf("id: 'campo_obrigatorio_faltando'") > 0 &&
+  templateCodigo.indexOf('function gxCamposFaltando(') > 0 &&
+  templateCodigo.indexOf('GX_EXIGE_POR_ETAPA') > 0);
+checar('a etapa do lead vem da chave do mapa, nao de um campo que nao existe',
+  templateCodigo.indexOf('function gxCamposFaltando(lead, stageId)') > 0 &&
+  templateCodigo.indexOf('gxCamposFaltando(lead, etapaId)') > 0);
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
