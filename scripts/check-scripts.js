@@ -446,3 +446,54 @@ function checarSeletoresDeFiacao() {
   return false;
 }
 if (!checarSeletoresDeFiacao()) process.exit(1);
+
+/* ══ PISO DE DESKTOP QUE VIRA TETO NO TOQUE (02/09/26) ═══════════════════════════════
+   Em 01/09 eu subi quatro campos para o piso de desktop com seletor de ID
+   (#prosp2Ordenar, #devPdiData, #prcCliente, #prcTelefone -> min-height:38px). ID é
+   (1,0,0) e vence classe (0,1,1) INCLUSIVE dentro de @media — então essas linhas anularam
+   em silêncio os pisos de 44px que já existiam para o toque (.p4-campo input,
+   .um-next input[type=date], .prosp2-ordenar select). O desktop melhorou e o celular
+   piorou, na mesma linha, sem aviso.
+   É a segunda vez que um piso de toque cai sem ninguém ver (a primeira foi uma limpeza de
+   CSS que apagou a regra dos 44px porque ela começava com uma classe aposentada).
+   A regra da casa é: 38px no desktop, 44px em <=760px. Então todo ID que recebe piso de
+   38 tem que ter o par de 44 dentro do breakpoint de 760 — e o par tem que ser por ID
+   também, senão perde a especificidade de novo. */
+function checarPisoDeToque() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  const linhas = cru.split('\n');
+
+  const de38 = new Set();
+  const de44 = new Set();
+  linhas.forEach(l => {
+    const corpo = l.trim();
+    if (corpo.indexOf('//') === 0 || corpo.indexOf('*') === 0) return;
+    const ids = corpo.match(/#[A-Za-z][\w-]*/g);
+    if (!ids) return;
+    /* SELETOR e DECLARACAO separados. Na primeira versao eu varri a linha inteira e
+       #fff (uma cor) entrou como id — falso vermelho no primeiro uso da guarda. */
+    const chave = corpo.indexOf('{');
+    if (chave < 0) return;
+    const seletor = corpo.slice(0, chave);
+    const decl = corpo.slice(chave);
+    const doSeletor = ids.filter(i => seletor.indexOf(i) >= 0);
+    if (!doSeletor.length) return;
+    if (decl.indexOf('min-height:38px') >= 0) doSeletor.forEach(i => de38.add(i));
+    if (decl.indexOf('min-height:44px') >= 0) doSeletor.forEach(i => de44.add(i));
+  });
+
+  const semPar = [...de38].filter(i => !de44.has(i));
+  if (!semPar.length) {
+    console.log('OK piso de toque — os ' + de38.size + ' ID(s) com piso de 38px têm o par de 44px para <=760px.');
+    return true;
+  }
+  console.error('\nPISO DE DESKTOP SEM PAR NO TOQUE em ' + arquivo + ':');
+  semPar.forEach(i => {
+    console.error('  ' + i + ' recebe min-height:38px por ID e não tem min-height:44px por ID');
+    console.error('     Seletor de ID vence classe inclusive dentro de @media: se havia regra de 44px');
+    console.error('     por classe para este controle, ela está anulada e o alvo fica 38px no celular.');
+  });
+  return false;
+}
+if (!checarPisoDeToque()) process.exit(1);

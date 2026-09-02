@@ -176,7 +176,21 @@ window.auditarAba = async function(idAba, idView, orcamentoMs){
   const t0 = Date.now();
   while (Date.now() - t0 < (orcamentoMs || 30000)) {
     if (getComputedStyle(view).display === 'none') await abrir();
-    const lista = candidatos(view).filter(function(el){ return !vistos.has(descrever(el)); });
+    /* LISTA VAZIA NAO E FIM DE VARREDURA NA PRIMEIRA OLHADA (02/09/26, segundo defeito
+       grave deste auditor no mesmo dia). abrir() se satisfaz com o conteudo VELHO da aba:
+       ele clica o botao e checa candidatos no instante seguinte, quando o render antigo
+       ainda esta na tela. Aba que se redesenha no clique — a Minha Daily e a que faz isso
+       de proposito — esvazia o container por alguns frames logo depois, o laco batia nesse
+       instante e encerrava com 'novos: 0, mortos: 0'. Medido: a chamada inteira voltava em
+       7ms com a view cheia de 6 botoes vivos.
+       Falso verde silencioso, e do pior tipo: quanto mais a aba se redesenha, mais ela
+       parece aprovada. Agora vazio exige TRES confirmacoes espacadas antes de encerrar. */
+    var lista = candidatos(view).filter(function(el){ return !vistos.has(descrever(el)); });
+    for (var tentativa = 0; !lista.length && tentativa < 3; tentativa++) {
+      await esperar(450);
+      if (getComputedStyle(view).display === 'none') await abrir();
+      lista = candidatos(view).filter(function(el){ return !vistos.has(descrever(el)); });
+    }
     r.restam = lista.length;
     if (!lista.length) break;
     const el = lista[0], desc = descrever(el), tag = el.tagName;
