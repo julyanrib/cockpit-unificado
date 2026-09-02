@@ -235,6 +235,33 @@ checar('a etapa do lead vem da chave do mapa, nao de um campo que nao existe',
   templateCodigo.indexOf('function gxCamposFaltando(lead, stageId)') > 0 &&
   templateCodigo.indexOf('gxCamposFaltando(lead, etapaId)') > 0);
 
+/* ── 13. COMPORTAMENTO POR ETAPA, EXECUTIVO A EXECUTIVO (bloco Semana) ────────────
+   A secao compara pessoas, e comparar pessoas e onde este produto mais facilmente
+   viraria nota. As checagens abaixo guardam as tres regras que impedem isso: amostra
+   curta nao mostra taxa, a coluna vem do agregado (nao de um literal de etapas) e a
+   propria tela diz que nao e ranking. */
+checar('a comparacao por executivo reusa porOwner, que ja existia no agregado',
+  templateCodigo.indexOf('function gsPorExecutivoHTML(') > 0 &&
+  templateCodigo.indexOf('gsPorExecutivoHTML(h)') > 0 &&
+  templateCodigo.indexOf('const po = h.porOwner') > 0);
+checar('celula com amostra curta mostra o n, nunca a taxa',
+  templateCodigo.indexOf('GS_MIN_CELULA') > 0 &&
+  templateCodigo.indexOf('curta: e.chegaram < GS_MIN_CELULA') > 0 &&
+  templateCodigo.indexOf('if (c.curta) return ' + q3 + '<td class="gs-px-curta">n=' + q3) > 0);
+checar('a cor so aparece com diferenca que nao e ruido de semana',
+  templateCodigo.indexOf('GS_DIF_QUE_CONTA = 0.10') > 0 &&
+  templateCodigo.indexOf('Math.abs(c.taxa - ref[i]) < GS_DIF_QUE_CONTA') > 0);
+checar('as colunas vem do agregado do robo, nao de uma lista de etapas escrita a mao',
+  templateCodigo.indexOf('const ordem = Array.isArray(h.agregado) ? h.agregado : []') > 0);
+checar('a tela declara que nao e ranking e diz de onde vem o numero',
+  template.indexOf('Isto não é ranking.') > 0 &&
+  template.indexOf('data de entrada em etapa no HubSpot') > 0);
+checar('a comparacao respeita quem ainda esta no campo',
+  templateCodigo.indexOf('!ownerAtivoNoField(rep.ownerId)) return null') > 0);
+checar('o degrau da escada mostra avancaram em numero, nao so a taxa',
+  templateCodigo.indexOf(q3 + " saíram · " + q3) > 0 ||
+  templateCodigo.indexOf("e.avancaram + ' saíram · '") > 0);
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');

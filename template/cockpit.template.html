@@ -725,6 +725,14 @@
   .praca-acao b{color:var(--ink);}
   .pracas .praca>a{font-size:11px;font-weight:700;color:var(--red-dk);text-decoration:none;cursor:pointer;}
   .pracas .praca>a:hover{color:var(--red);text-decoration:underline;}
+  /* O 'VER FUNIL DA PRACA' TINHA 15px DE ALTURA (02/09/26). Medido a 390px na sessao
+     do gestor: cinco desses links, 299px de largura por 15 de altura. O clique FUNCIONA
+     (a fiacao existe em [data-verpraca]) - o problema era so o dedo. Como e o unico
+     caminho do cartao de praca para o funil dela, errar o toque devolve a pessoa para a
+     tela sem nada acontecer, que e indistinguivel de botao morto para quem usa. */
+  @media (max-width:760px){
+    .pracas .praca>a{display:flex;align-items:center;min-height:44px;margin-top:-6px;}
+  }
 
   /* --- Semana: board por executivo --- */
   .board{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden;}
@@ -7381,6 +7389,17 @@
      duas "colarem", porque são idênticas. */
   .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:2px;background:var(--line);border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow);}
   @media (max-width:1240px){ .kpis{grid-template-columns:repeat(3,1fr);} }
+  /* A FAIXA DE NUMEROS DA SEMANA A 390px (02/09/26). Medido na sessao do gestor:
+     .kpis tinha 377px de conteudo numa caixa de 333 - as tres colunas nao caberiam
+     nunca, porque cada cartao tem 34px de recuo horizontal mais um numeral de 24px.
+     Nao era rolo de pagina (o corpo esta travado), era conteudo cortado dentro do
+     bloco: parte dos numeros da semana ficava fora da tela sem dizer que estava.
+     Duas colunas a 420px resolvem com folga (166px por cartao) e o recuo cai junto. */
+  @media (max-width:420px){
+    .kpis{grid-template-columns:repeat(2,1fr);}
+    .kpis .kpi{padding:12px 12px;}
+    .kpis .kpi .v b,.kpis .kpi .val b{font-size:20px;}
+  }
 
   /* ═══ REPAGINADA "SEMANA" (gestor, 16/08/26 — handoff semana-gestor.html) ═══ */
   .sec-k{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--ter);display:flex;align-items:center;gap:8px;margin:22px 0 10px;}
@@ -7678,6 +7697,36 @@
     .gd-placar-linha.is-abre,.gs-tempo-linha.is-abre{min-height:44px;}
     .gs-abre{display:inline-flex;align-items:center;min-height:44px;padding:0 2px;}
   }
+  /* -- COMPORTAMENTO POR ETAPA, EXECUTIVO A EXECUTIVO (02/09/26) ----------------
+     Tabela de verdade e nao grade de div: e dado tabular com cabecalho de coluna e
+     de linha, e leitor de tela precisa da relacao. O rolo horizontal e do PROPRIO
+     bloco (gs-px-rolo), nunca da pagina - com 6 etapas + nome + ciclo nao existe
+     largura de celular que caiba, e esconder coluna esconderia etapa. */
+  .gs-px-rolo{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--gs-linha);
+    border-radius:12px;background:var(--gs-card);}
+  .gs-px{border-collapse:collapse;width:100%;min-width:620px;font-variant-numeric:tabular-nums;}
+  .gs-px th,.gs-px td{padding:9px 10px;text-align:right;border-bottom:1px solid var(--gs-linha-fina);
+    vertical-align:top;}
+  .gs-px tr:last-child td{border-bottom:0;}
+  .gs-px th{font:800 11px var(--font-display);color:var(--gs-muted);
+    border-bottom:1px solid var(--gs-linha);white-space:nowrap;}
+  .gs-px th small,.gs-px td small{display:block;font:700 9px var(--font-body);color:var(--gs-muted2);
+    margin-top:2px;letter-spacing:0;text-transform:none;}
+  /* A COLUNA DO NOME e a unica a esquerda e a unica que gruda: rolando de lado, o
+     gestor tem que continuar sabendo de quem e a linha. */
+  .gs-px .gs-px-quem{text-align:left;position:sticky;left:0;background:var(--gs-card);min-width:150px;}
+  .gs-px .gs-px-quem b{font:800 12px var(--font-display);color:var(--gs-ink);}
+  .gs-px td.gs-px-cel b{font:800 14px var(--font-display);color:var(--gs-ink);}
+  .gs-px td.gs-px-cel.is-acima b{color:var(--gs-green);}
+  .gs-px td.gs-px-cel.is-abaixo b{color:var(--gs-red);}
+  /* Amostra curta e ausencia sao ESTADOS, nao numeros ruins: cinza, sem cor de alarme. */
+  .gs-px td.gs-px-curta,.gs-px td.gs-px-vazia{color:var(--gs-muted2);font:700 12px var(--font-body);}
+  .gs-px td.gs-px-ciclo b{font:800 13px var(--font-display);color:var(--gs-ink);}
+  @media (max-width:760px){
+    .gs-px th,.gs-px td{padding:8px 8px;}
+    .gs-px .gs-px-quem{min-width:126px;}
+  }
+
   .gs-vazio{padding:22px 20px;border:1px solid var(--gs-amber-linha);background:var(--gs-amber-bg);border-radius:var(--r-md);
     font-size:12px;line-height:1.65;color:var(--gs-muted);}
   .gs-vazio b{color:var(--gs-ink);}
@@ -24744,8 +24793,12 @@ function gsEscadaHTML(h) {
     return '<div class="gs-degrau">' +
       '<div class="gs-degrau-rot">' + esc(e.nome) + '<small>' + doTopo + '% de quem entrou no funil</small></div>' +
       '<div class="gs-degrau-trilha"><i class="' + (vaza ? 'is-vaza' : '') + '" style="width:' + largura + '%;"></i></div>' +
+      /* CHEGARAM e AVANCARAM, os dois em numero absoluto (02/09/26). A taxa sozinha
+         esconde o tamanho: 67% de 3 negocios e 67% de 300 leem igual na tela e nao sao
+         a mesma informacao. O prompt do gestor pede cinco numeros por degrau; este era
+         o unico que estava so implicito. */
       '<div class="gs-degrau-num">' + e.chegaram +
-        (t === null ? '' : '<small class="' + (vaza ? 'is-vaza' : '') + '">' + Math.round(t * 100) + '% saíram daqui</small>') +
+        (t === null ? '' : '<small class="' + (vaza ? 'is-vaza' : '') + '">' + e.avancaram + ' saíram · ' + Math.round(t * 100) + '%</small>') +
       '</div>' +
       (destino.length ? '<div class="gs-destino">' + destino.join('') + '</div>' : '') +
     '</div>';
@@ -24894,6 +24947,116 @@ function gsCicloHTML(h) {
   '</div>';
 }
 
+
+/* == CONSISTENCIA POR EXECUTIVO (02/09/26) =======================================
+   historicoEtapas.porOwner JA EXISTIA e o gestor nao via. Ele traz, por executivo,
+   quantos entraram no funil, o ciclo de quem fechou e - por etapa - chegaram,
+   avancaram e a mediana de dias. A tela do EXECUTIVO ja lia isso para desenhar a
+   escada dele; para o gestor, o dado ficava no DATA sem ninguem comparar. Nada aqui
+   e conta nova: e o mesmo agregado, lido por pessoa.
+
+   O QUE ESTA SECAO E E O QUE ELA NAO E. Ela compara COMPORTAMENTO por etapa: de quem
+   chegou nesta etapa com esta pessoa, quantos seguiram para frente. Nao e ranking,
+   nao tem nota, nao tem primeiro lugar - e a razao e tecnica antes de ser politica:
+   as amostras sao diferentes. Um executivo com 3 negocios numa etapa e outro com 53
+   nao comparam, e po-los na mesma coluna como se comparassem e inventar conclusao.
+
+   POR ISSO A CELULA CURTA NAO MOSTRA TAXA: mostra o n e diz 'amostra curta'. E a
+   mesma regua que a escada ja usa (minimoDaTurma), aplicada por etapa em vez de por
+   turma - porque aqui o denominador e a etapa, nao o funil de um mes. O piso por
+   celula e menor de proposito: turma e o funil inteiro (30), etapa e um degrau dele.
+   Oito e onde a taxa deixa de virar de lado com um negocio a mais.
+
+   E A COR SO APARECE COM 10 PONTOS de diferenca do time. Pintar de vermelho uma
+   diferenca de 3 pontos e acusar variacao normal de semana. */
+const GS_MIN_CELULA = 8;
+const GS_DIF_QUE_CONTA = 0.10;
+function gsPorExecutivoHTML(h) {
+  const po = h.porOwner || {};
+  /* O agregado e um ARRAY PLANO de etapas (rank, id, nome, chegaram, avancaram) - a
+     ordem das colunas vem dele, nao de um literal: se o pipeline ganhar etapa, a
+     tabela acompanha sem ninguem lembrar de editar aqui. */
+  const ordem = Array.isArray(h.agregado) ? h.agregado : [];
+  if (!ordem.length || !Object.keys(po).length) return '';
+
+  const linhas = Object.keys(po).map(function (id) {
+    const rep = (DATA.reps || []).find(function (r) { return String(r.ownerId) === String(id); });
+    if (!rep || !rep.name) return null;
+    if (typeof ownerAtivoNoField === 'function' && !ownerAtivoNoField(rep.ownerId)) return null;
+    const dele = po[id] || {};
+    const porEtapa = {};
+    (dele.etapas || []).forEach(function (e) { porEtapa[String(e.id)] = e; });
+    const celulas = ordem.map(function (et) {
+      const e = porEtapa[String(et.id)];
+      if (!e || !e.chegaram) return { vazia: true };
+      return { n: e.chegaram, saiu: e.avancaram, taxa: e.avancaram / e.chegaram,
+        curta: e.chegaram < GS_MIN_CELULA };
+    });
+    return { nome: rep.name, praca: rep.praca || rep.cidade || '',
+      entraram: Number(dele.entraramNoFunil) || 0, ciclo: dele.ciclo || null, celulas: celulas };
+  }).filter(Boolean).sort(function (a, b) { return b.entraram - a.entraram; });
+  if (!linhas.length) return '';
+
+  /* A REFERENCIA DE CADA COLUNA e a taxa do time inteiro naquela etapa - sem ela cada
+     celula e um numero solto. */
+  const ref = ordem.map(function (et) {
+    return et.chegaram > 0 ? (et.avancaram / et.chegaram) : null;
+  });
+
+  const cabecalho = '<tr><th class="gs-px-quem">Executivo</th>' +
+    ordem.map(function (et, i) {
+      return '<th>' + esc(et.nome) +
+        (ref[i] == null ? '' : '<small>time ' + Math.round(ref[i] * 100) + '%</small>') + '</th>';
+    }).join('') + '<th class="gs-px-ciclo">Ciclo</th></tr>';
+
+  const corpo = linhas.map(function (l) {
+    const cels = l.celulas.map(function (c, i) {
+      if (c.vazia) return '<td class="gs-px-vazia">—<small>não passou</small></td>';
+      if (c.curta) return '<td class="gs-px-curta">n=' + c.n + '<small>amostra curta</small></td>';
+      const cls = (ref[i] == null || Math.abs(c.taxa - ref[i]) < GS_DIF_QUE_CONTA) ? ''
+        : (c.taxa > ref[i] ? ' is-acima' : ' is-abaixo');
+      return '<td class="gs-px-cel' + cls + '"><b>' + Math.round(c.taxa * 100) + '%</b>' +
+        '<small>' + c.saiu + ' de ' + c.n + '</small></td>';
+    }).join('');
+    const ciclo = (l.ciclo && l.ciclo.n)
+      ? '<b>' + Math.round(l.ciclo.mediana) + 'd</b><small>n=' + l.ciclo.n + '</small>'
+      : '—<small>sem ganho na janela</small>';
+    return '<tr><td class="gs-px-quem"><b>' + esc(l.nome) + '</b><small>' +
+      (l.praca ? esc(l.praca) + ' · ' : '') + l.entraram + ' no funil</small></td>' + cels +
+      '<td class="gs-px-ciclo">' + ciclo + '</td></tr>';
+  }).join('');
+
+  /* QUEM ESTA NA REFERENCIA E NAO ESTA NA TABELA (02/09/26). O 'time X%' do cabecalho
+     vem do agregado, que e o funil INTEIRO da janela - inclusive de quem saiu do campo.
+     Medido: Amanda tem 70 negocios no periodo e ownerAtivoNoField false, entao ela conta
+     na referencia e nao tem linha. Sem dizer isso, as colunas nao fecham com as linhas e
+     o gestor fica com uma diferenca que nao consegue explicar - e diferenca inexplicada
+     e o comeco de nao confiar em nenhum numero da tela. */
+  const naReferencia = Object.keys(po).length;
+  const foraDaTabela = naReferencia - linhas.length;
+
+  return '<div class="gs-secao">' +
+    '<div class="gs-secao-cab"><b>Comportamento por etapa, executivo a executivo</b>' +
+      '<span>de quem chegou nesta etapa com esta pessoa, quantos seguiram para frente</span></div>' +
+    '<div class="gs-px-rolo"><table class="gs-px">' + cabecalho + corpo + '</table></div>' +
+    '<div class="gs-nota">Cada célula é <b>saíram de chegaram dentro da própria etapa</b> — o mesmo cálculo ' +
+      'da escada acima, quebrado por pessoa. O <b>time</b> no cabeçalho é a referência da coluna, e a cor só ' +
+      'aparece com 10 pontos ou mais de diferença dela.' +
+      '<br>Célula com menos de ' + GS_MIN_CELULA + ' negócios mostra <b>o n, não a taxa</b>: com amostra curta o ' +
+      'número diria mais sobre o azar da semana que sobre comportamento.' +
+      '<br><b>Isto não é ranking.</b> As amostras são diferentes entre as pessoas e entre as etapas; a leitura é ' +
+      '"onde treinar", não "quem é melhor". Fonte: data de entrada em etapa no HubSpot, últimos ' + h.dias +
+      ' dias, ' + h.negocios + ' negócios.' +
+      (foraDaTabela > 0
+        ? '<br>São <b>' + linhas.length + ' de ' + naReferencia + '</b> executivos com histórico na janela: ' +
+          foraDaTabela + ' já não está' + (foraDaTabela > 1 ? 'ão' : '') + ' no campo e por isso não tem linha aqui — ' +
+          'mas os negócios de quem saiu <b>continuam na referência do time</b>, porque ela é o funil inteiro do período. ' +
+          'É de propósito: a coluna mede o processo, a linha mede quem ainda pode ser treinado.'
+        : '') +
+    '</div>' +
+  '</div>';
+}
+
 function gsHistoricoHTML() {
   const h = DATA && DATA.historicoEtapas;
   if (!h || !h.escada || !Object.keys(h.escada).length) {
@@ -24904,7 +25067,7 @@ function gsHistoricoHTML() {
       (h && h.negocios === 0 ? '<br>O último carregamento não encontrou negócios com data de entrada nos últimos ' + h.dias + ' dias.' : '') +
     '</div>';
   }
-  return gsEscadaHTML(h) + gsTempoHTML(h) + gsCicloHTML(h) +
+  return gsEscadaHTML(h) + gsTempoHTML(h) + gsPorExecutivoHTML(h) + gsCicloHTML(h) +
     '<div class="gs-nota" style="padding:0 4px;">Histórico de etapa disponível de <b>' + gsRotuloMes(h.primeiroMes) +
     '</b> em diante — antes disso o HubSpot não guardava a data de entrada, então não existe turma mais antiga para comparar.</div>';
 }
