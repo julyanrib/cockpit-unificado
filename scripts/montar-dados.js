@@ -213,6 +213,7 @@ function montarDadosCompletos() {
        dizer 'nada saiu da carteira desde 01/09' e a coluna vazia leria como 'nunca perdi
        nada' — mentira por omissao, com 1.811 perdas no CRM. */
     perdidoVisivel: hubspot.perdidoVisivel || null,
+    onboardingVisivel: hubspot.onboardingVisivel || null,
     leadsReciclagem60: hubspot.leadsReciclagem60 || [],
     vendasMes,
     temperatura: temperaturaComPraca,
@@ -328,6 +329,7 @@ function filtrarParaPapel(dados, usuario) {
   /* O corte de Perdido nao tem nome de ninguem: e a data em que o Cockpit passou a
      registrar perda. Vai inteiro para o executivo. */
   const perdidoVisivel = dados.perdidoVisivel || null;
+  const onboardingVisivel = dados.onboardingVisivel || null;
 
   // BLOCO 4 (11/08/26) — corte por papel na agenda.
   // Nota do Expogo e tarefa criada por automação chegam do HubSpot SEM
@@ -403,6 +405,7 @@ function filtrarParaPapel(dados, usuario) {
     },
     funilLeads,
     perdidoVisivel,
+    onboardingVisivel,
     leadsReciclagem60: soMeu(dados.leadsReciclagem60 || []),
     vendasMes,
     resumoSemanal: resumoSemanalFiltrado,
