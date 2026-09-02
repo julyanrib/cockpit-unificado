@@ -4836,17 +4836,21 @@
   .pb7-toc-sec button:hover{background:var(--panel2);color:var(--ink);}
 
   /* a coluna de leitura: 660px é a medida da prancha, e é a medida do texto confortável */
-  .pb7-artigo{max-width:660px;background:#FFFDF8;border:1px solid var(--line);
-    border-radius:var(--r-lg);padding:30px 34px 24px;}
+  /* ══ LEITURA v8 (02/09/26) — MEDIDA DE REVISTA ═══════════════════════════════════
+     640px de coluna e canto de 20px são da prancha, e os dois têm o mesmo motivo: a
+     linha de texto tem que caber num movimento de olho. 660 não é pecado, 640 é o número
+     que ela pediu e a diferença some no papel — mas o CORPO em 13px era. */
+  .pb7-artigo{max-width:640px;background:#FFFDF8;border:1px solid var(--line);
+    border-radius:20px;padding:30px 34px 24px;}
   .pb7-art-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;
     font:700 11px var(--font-body);color:var(--muted2);}
   .pb7-chip-fmt{font:900 10px var(--font-display);letter-spacing:.09em;background:var(--sunk);
     color:var(--muted);border-radius:var(--r-xs);padding:3px 8px;}
   .pb7-art-ok{color:var(--green);font-weight:900;}
-  .pb7-artigo h1{font:900 34px/1.12 var(--font-display);letter-spacing:-.02em;margin:12px 0 0;
+  .pb7-artigo h1{font:900 38px/1.1 var(--font-display);letter-spacing:-.025em;margin:12px 0 0;
     text-wrap:balance;}
   .pb7-art-num{color:var(--red);}
-  .pb7-standfirst{font-size:16.5px;line-height:1.6;color:var(--muted);margin-top:12px;
+  .pb7-standfirst{font-size:17.5px;line-height:1.55;color:var(--muted);margin-top:12px;
     font-weight:600;}
   .pb7-pager{display:flex;gap:10px;margin-top:22px;border-top:1px solid var(--line);padding-top:16px;}
   .pb7-pager button{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;
@@ -4968,6 +4972,19 @@
        dizendo o título inteiro, e a medição de truncamento não tinha como enxergar. */
     .pb7-crumb-tit{display:none;}
     .pb7-topo-prog{flex:1;}
+    /* ── NO TOQUE O TEXTO VEM PRIMEIRO (v8) ────────────────────────────────────────
+       Em coluna única a ordem do DOM punha o sumário do capítulo (até 13 páginas) ANTES
+       do artigo: para chegar na primeira linha do texto a pessoa rolava um índice inteiro.
+       Agora a ordem no toque é artigo → LEVE PRA RUA + prova → sumário, que é a ordem que
+       a prancha pede para o trilho e resolve o índice pelo mesmo movimento.
+       A prancha pedia o sumário como DROPDOWN no breadcrumb. Não fiz: o sumário é um só
+       markup, e virar dropdown no toque exigiria duplicá-lo (uma versão para cada
+       largura) — duas fontes da mesma verdade é como o #playbookToc desta mesma tela
+       morreu sem ninguém ver. Com `order` o problema real (índice na frente do texto)
+       acaba, e continua existindo UM sumário. */
+    .pb7-artigo{order:1;}
+    .pb7-rail{order:2;}
+    .pb7-toc{order:3;}
   }
   @media (max-width:420px){
     .pb7-hero{padding:20px 18px;}
@@ -6627,7 +6644,21 @@
     .gx-pxc-linha{grid-template-columns:88px minmax(0,1fr) 58px;}
   }
 
-  .pbv6{
+  /* ══ A PALETA DA LEITURA ESTAVA INALCANCAVEL (02/09/26) ══════════════════════════
+     Estes tokens eram declarados SO em .pbv6 — e nao existe nenhum elemento com essa
+     classe no documento: o shell do leitor virou .pb7 .pb7-lendo na v7 e a classe antiga
+     saiu do markup sem que a declaracao acompanhasse. Resultado medido no navegador:
+     getPropertyValue(--v6-dark) devolvia VAZIO, e os 46 usos de var(--v6-*) da pagina de
+     leitura caiam todos em invalido — background transparente, cor herdada, borda nenhuma.
+     Na pratica: TODO bloco escuro de fala pronta (FALE ASSIM) estava sendo desenhado como
+     caixa transparente, o cartao ambar do "O que fazer agora" sem fundo, o cabecalho de
+     tabela sem cor. O desenho existia e nao chegava — e nada disso da erro de sintaxe,
+     nao quebra nada e nao aparece em teste que le arquivo.
+     A guarda de variavel-nunca-definida nao pegou porque a variavel ESTAVA definida; o
+     que faltava era ela ser ALCANCAVEL. Isso virou checagem propria (ver check-scripts).
+     Os dois seletores ficam: .pbv6 por compatibilidade, .pb7-lendo porque e onde o
+     artigo mora hoje. */
+  .pbv6,.pb7-lendo{
     --v6-canvas:#F4F1EA; --v6-card:#FFFEFB; --v6-linha:#E3DDD0; --v6-linha-forte:#D5CDBC;
     --v6-linha-fina:#EEE9DE; --v6-ink:#1A1613; --v6-corpo:#3E382F; --v6-muted:#6B6254;
     --v6-muted2:#988D7B; --v6-red:#E51A31; --v6-dark:#14110D; --v6-dark2:#232120;
@@ -6646,7 +6677,11 @@
   /* ── leitor ───────────────────────────────────────────────────────────────── */
 
   /* ── o artigo ─────────────────────────────────────────────────────────────── */
-  .pba{font-size:13px;line-height:1.8;color:var(--v6-corpo);counter-reset:sec;margin-top:6px;}
+  /* O CORPO ERA 13px. Sete minutos de texto em 13px é o que a prancha chamou de "doc
+     denso espremido" — e o critério de aceite dela é explícito: nada de corpo abaixo de
+     15px. 15.5/1.8 é a medida de leitura longa; o custo é altura de página, que numa
+     coluna de 640px com rolagem não custa nada. */
+  .pba{font-size:15.5px;line-height:1.8;color:var(--v6-corpo);counter-reset:sec;margin-top:6px;}
   .pba h1{font:900 32px/1.14 var(--font-display);letter-spacing:-.02em;color:var(--v6-ink);margin:0 0 18px;}
   .pba h2{font:900 20px/1.25 var(--font-display);letter-spacing:-.01em;color:var(--v6-ink);margin:38px 0 12px;scroll-margin-top:120px;}
   /* o número da seção é do CSS, não do texto: a fonte do playbook não carrega numeração */
@@ -6670,8 +6705,14 @@
   .pba code{background:var(--v6-linha-fina);border-radius:var(--r-xs);padding:2px 6px;font-size:.88em;color:var(--v6-amber);}
   .pba pre{overflow:auto;margin:14px 0 18px;padding:14px 16px;border-radius:var(--r-md);background:var(--v6-dark2);color:var(--v6-dark-ink2);font-size:11px;line-height:1.6;white-space:pre-wrap;}
   .pba pre code{padding:0;background:none;color:inherit;}
-  .pba blockquote.manifesto{margin:22px 0;background:var(--v6-dark2);color:var(--v6-dark-ink2);border-radius:var(--r-md);padding:22px 26px;border:0;}
-  .pba blockquote.manifesto p,.pba blockquote.manifesto em{color:var(--v6-dark-ink2);font:700 15px/1.55 var(--font-display);font-style:normal;margin:0;}
+  /* O PULL-QUOTE DEIXOU DE SER BLOCO ESCURO (v8). Escuro agora tem UM significado só na
+     página: fala pronta para copiar. Quando a tese da página também era escura, os dois
+     tinham o mesmo peso e o olho não sabia o que era para copiar e o que era para pensar.
+     A tese passa a ser fio âmbar de 3px sobre o papel — presença sem competir. */
+  .pba blockquote.manifesto{margin:26px 0;background:none;border:0;
+    border-left:3px solid var(--v6-amber-claro);border-radius:0;padding:2px 0 2px 20px;}
+  .pba blockquote.manifesto p,.pba blockquote.manifesto em{color:var(--v6-ink);
+    font:700 18px/1.5 var(--font-display);font-style:normal;margin:0;letter-spacing:-.01em;}
   .pba .fa-card{margin:18px 0;background:var(--v6-dark);color:var(--v6-dark-ink);border-radius:var(--r-md);overflow:hidden;}
   .pba .fa-head{display:flex;align-items:center;gap:10px;padding:11px 20px;border-bottom:1px solid rgba(246,243,236,.1);}
   .pba .fa-label{font:900 10px var(--font-display);letter-spacing:.16em;color:var(--v6-amber-claro);}
@@ -6689,11 +6730,19 @@
      ganha por vir depois, e o botão ficava em 38px no celular. Medido a 375px: seis
      botões abaixo do piso. */
   @media (max-width:760px){ .pba .fa-copy{min-height:44px;} }
-  .pba .fa-body{padding:15px 20px;font-size:13px;line-height:1.75;color:var(--v6-dark-ink2);}
+  /* O SCRIPT TAMBEM SOBE PARA 15.5px. Ficou de fora na primeira passada da v8 e a
+     medicao pegou: 162 blocos em 13px. E o pior lugar para deixar corpo pequeno — e o
+     texto que a pessoa le EM VOZ ALTA na frente do dono, muitas vezes de pe, com o
+     telefone na mao e sol na tela. */
+  .pba .fa-body{padding:16px 20px;font-size:15.5px;line-height:1.7;color:var(--v6-dark-ink2);}
   .pba .fa-body p{margin:0 0 8px;color:var(--v6-dark-ink2);}
   .pba .fa-body p:last-child{margin:0;}
   .pba .fa-body em{color:var(--v6-dark-ink2);font-style:normal;}
   .pba .fa-body a,.pba .fa-body strong,.pba .fa-body b{color:var(--v6-dark-ink);}
+  /* [Nome do Dono], [Vizinho], [Nicho] — 67 campos variáveis escritos entre colchetes no
+     playbook. Em âmbar dentro do bloco escuro eles param de ser texto e passam a ser
+     LACUNA: dá para ver, antes de copiar, o que ainda precisa ser trocado. */
+  .pba .fa-body .pb8-var{color:#F2B84B;font-weight:800;}
   .pba .fa-body a{color:var(--v6-amber-claro);border-bottom:1px solid rgba(224,166,74,.45);font-weight:700;}
   .pba .fa-body code{background:rgba(246,243,236,.12);color:var(--v6-amber-claro);}
   /* CAIXA DE MARCAR SEM FLEX (medido a 375): com display:flex cada filho inline do <li>
@@ -6701,11 +6750,58 @@
      fora do cartao, sem quebrar. Marcador posicionado deixa o texto correr normal. */
   .pba li.cb{list-style:none;margin-left:-22px;padding-left:27px;position:relative;display:block;}
   .pba li.cb::before{content:"";position:absolute;left:0;top:6px;width:17px;height:17px;border:2px solid var(--v6-amber);border-radius:var(--r-xs);}
-  .pba .twrap{overflow-x:auto;margin:0 0 18px;border:1px solid var(--v6-linha);border-radius:var(--r-md);}
-  .pba table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.6;min-width:560px;}
-  .pba th{background:var(--v6-canvas);color:var(--v6-ink);text-align:left;font:800 10px var(--font-display);letter-spacing:.06em;text-transform:uppercase;padding:10px 12px;}
-  .pba td{padding:10px 12px;border-top:1px solid var(--v6-linha-fina);vertical-align:top;color:var(--v6-muted);}
-  .pba tbody tr:nth-child(even){background:#FBF9F4;}
+  /* ══ A TABELA MORREU (v8) ════════════════════════════════════════════════════════
+     Eram 33 tabelas em 14 das 30 páginas, de 2 a 5 colunas, e a solução v7 era a caixa
+     rolar de lado (min-width:560px numa coluna de 640). Tabela de 4 colunas em telefone
+     não é conteúdo, é um rolo horizontal onde a pessoa perde a linha entre a ida e a
+     volta — e este playbook é lido na rua.
+     Cada LINHA virou um card: a primeira célula é o título e as outras são campos
+     rotulados pelo <th> da coluna. Isso dá de graça o "mesmos campos, mesma ordem,
+     sempre" que a prancha pede, porque a ordem é a da tabela — e nenhuma palavra do
+     playbook precisou ser reescrita para caber. */
+  .pba .pb8-cards{display:flex;flex-direction:column;gap:10px;margin:0 0 20px;}
+  .pba .pb8-card{background:var(--v6-card);border:1px solid #E8E2D4;border-radius:18px;
+    overflow:hidden;box-shadow:0 1px 2px rgba(26,22,19,.04);}
+  .pba .pb8-card-cab{display:flex;align-items:baseline;gap:10px;background:#F6F2E8;
+    padding:12px 18px;border-bottom:1px solid #F1ECE2;}
+  .pba .pb8-card-num{flex:none;font:900 24px/1 var(--font-display);color:#C7142A;
+    font-variant-numeric:tabular-nums;}
+  .pba .pb8-card-tit{font:800 18px/1.3 var(--font-display);color:var(--v6-ink);
+    letter-spacing:-.01em;min-width:0;overflow-wrap:break-word;}
+  .pba .pb8-card-sub{display:block;font:600 12px var(--font-body);color:var(--v6-muted2);
+    margin-top:3px;letter-spacing:0;}
+  /* o chip de produto é o ÚNICO ponto de cor do header, e é discreto de propósito:
+     a prancha manda zero pílula colorida no meio do texto. */
+  .pba .pb8-chip{margin-left:auto;flex:none;font:900 9.5px var(--font-display);
+    letter-spacing:.09em;text-transform:uppercase;color:#2E7D5B;background:#EAF6EF;
+    border:1px solid #CFE9DA;border-radius:var(--r-pill);padding:4px 9px;white-space:nowrap;}
+  /* 134px, nao os 118 da prancha, e o motivo esta no screenshot: "REENQUADRAMENTO"
+     pedia 132px numa coluna de 118 e quebrava no MEIO DA PALAVRA ("REENQUADRAMEN / TO").
+     Medi a palavra mais larga de TODOS os rotulos das 30 paginas — e essa, com 132px, e
+     a unica que nao cabia. A coluna passa a ter o tamanho do que ela precisa guardar. O
+     custo e 16px do valor numa coluna de ~470px, e a 760px a grade vira uma coluna so
+     (rotulo em cima), onde isso nao pesa nada. */
+  .pba .pb8-campo{display:grid;grid-template-columns:134px minmax(0,1fr);gap:14px;
+    padding:12px 18px;border-top:1px solid #F1ECE2;}
+  .pba .pb8-campo:first-of-type{border-top:0;}
+  .pba .pb8-campo-rot{font:800 10.5px var(--font-display);letter-spacing:.08em;
+    text-transform:uppercase;color:#A2937A;line-height:1.5;padding-top:2px;}
+  /* 15px é o piso da prancha para corpo. Eu tinha posto 14.5 aqui por hábito de card. */
+  .pba .pb8-campo-val{min-width:0;font-size:15px;line-height:1.65;color:var(--v6-corpo);
+    overflow-wrap:break-word;}
+  .pba .pb8-campo-val p{margin:0 0 8px;}
+  .pba .pb8-campo-val p:last-child{margin:0;}
+  .pba .pb8-campo-val em{color:var(--v6-ink);font-weight:600;}
+  .pba .pb8-campo-val ul,.pba .pb8-campo-val ol{margin:4px 0 0;padding-left:18px;}
+  /* o bloco escuro FECHA o card: é o gesto, e gesto fica no fim. */
+  .pba .pb8-card .fa-card{margin:0;border-radius:0;}
+  @media (max-width:760px){
+    .pba .pb8-campo{grid-template-columns:minmax(0,1fr);gap:4px;}
+    .pba .pb8-card-tit{font-size:16px;}
+    .pba .pb8-card-num{font-size:20px;}
+    .pba .pb8-chip{margin-left:0;order:3;flex-basis:100%;}
+    .pba .pb8-card-cab{flex-wrap:wrap;}
+  }
   .pba .oqfa-card{margin:30px 0 0;background:var(--v6-amber-bg);border:1px solid var(--v6-amber-linha);border-radius:var(--r-md);padding:20px 24px;}
   .pba .oqfa-card h2{margin:0 0 12px;font-size:12px;letter-spacing:.14em;color:var(--v6-amber);text-transform:uppercase;}
   .pba .oqfa-card ul{margin:0;padding:0;}
@@ -6713,7 +6809,35 @@
   .pba .oqfa-card li::before{content:"";position:absolute;left:0;top:6px;width:17px;height:17px;border:2px solid var(--v6-amber);border-radius:var(--r-xs);}
   .pba .oqfa-card li.cb{margin-left:0;padding-left:27px;}
   /* referência cruzada entre páginas: pílula, nunca o cinza do navegador */
-  .pba .pb-ir{display:inline-block;margin:0 2px;border:1px solid rgba(229,26,49,.35);border-radius:var(--r-pill);padding:3px 13px;background:#FFF7F4;color:var(--v6-red);font:700 12px var(--font-body);cursor:pointer;}
+  .pba .pb-ir{display:inline-block;margin:0 2px;border:1px solid rgba(229,26,49,.35);border-radius:var(--r-pill);padding:3px 13px;background:#FFF7F4;color:var(--v6-red);font:700 13px var(--font-body);cursor:pointer;position:relative;}
+  /* ── A PILULA DE REFERENCIA CRUZADA NO TOQUE (02/09/26) ─────────────────────────
+     Medido a 375px com um artigo aberto: nove .pb-ir com 24px de altura, onde o piso do
+     toque e 44. Elas navegam para OUTRA pagina do playbook — errar o toque tira a pessoa
+     do lugar onde ela estava lendo.
+     Nao dei min-height:44px porque METADE delas fica no MEIO DE FRASE (medido nas 30
+     paginas: 21 paragrafos com pilula, 10 em linha propria do tipo "Aprofundar:", os
+     outros 11 dentro do texto). Botao de 44px no meio de um paragrafo estica a entrelinha
+     daquela linha so, e o texto passa a andar aos soluços.
+     A SAIDA NAO FOI AMPLIAR AREA POR CIMA DO VIZINHO. Tentei duas vezes um ::after
+     invisivel centrado no botao (44px, depois 28px) e MEDI com elementFromPoint: em ambas,
+     a 12-15px do centro quem respondia no ponto era a pilula da LINHA VIZINHA. A 375px a
+     entrelinha e 28px (15.5 x 1.8) e estas referencias costumam vir em par ("Falta de
+     Gestao -> e Estoque ->"), entao qualquer area maior que a linha rouba a vizinha — e o
+     dedo abre a pagina ERRADA. Alvo pequeno faz repetir o toque; alvo que rouba o vizinho
+     leva a pessoa para outro lugar, o que e pior.
+     Entao o que cresce e o PROPRIO botao, via padding: isso aumenta a caixa de linha
+     daquela linha por igual e nao ha como invadir nada. Nao chega aos 44px do piso e eu
+     nao vou fingir que chega: chegar aos 44 aqui e decisao de CONTEUDO, nao de CSS — por
+     a referencia em linha propria (como as 10 que ja usam "Aprofundar:") em vez de no meio
+     da frase. Fica anotado para o Julyan decidir. */
+  .pba .pb-ir{padding:7px 14px;}   /* em toda largura: 34px, e o teto sem invadir a linha */
+  /* O ITEM ATIVO DO SUMÁRIO (v8): fio de 2px na esquerda e âmbar. Sem isto o sumário
+     diz onde dá para ir e não diz onde a pessoa ESTÁ — e numa página de 7 minutos com
+     seis seções, "onde estou" é a metade útil da informação. */
+  .pb7-toc-sec button{position:relative;border-left:2px solid transparent;
+    transition:color var(--t-base) var(--ease),border-color var(--t-base) var(--ease);}
+  .pb7-toc-sec button.is-aqui{border-left-color:var(--dark-amber);
+    color:var(--dark-amber);font-weight:800;}
   .pba .pb-ir:hover{background:var(--v6-red);color:var(--dark-ink);}
   .pba .pb-ir.is-morto{border-style:solid;color:var(--v6-muted2);background:none;cursor:default;}
   .pba .fa-body .pb-ir{background:rgba(224,166,74,.12);border-color:rgba(224,166,74,.45);color:var(--v6-amber-claro);}
@@ -16934,17 +17058,136 @@ function pbv6TransformarArtigo(html) {
       }
     });
 
-    /* Tabela larga rola dentro da própria caixa. ATENÇÃO: o compilador JÁ embrulha toda
-       tabela em .pb-table-wrap (visto no compiled.json), então criar outro wrapper aqui
-       daria caixa dentro de caixa — duas bordas, dois raios. Quando o embrulho existe,
-       ele só troca de classe. */
+    /* ══ TODA TABELA VIRA CARDS (v8) ═══════════════════════════════════════════════
+       Antes: .twrap com overflow-x e a tabela com min-width:560px numa coluna de 640 —
+       ou seja, rolo horizontal. São 33 tabelas em 14 das 30 páginas e o playbook é lido
+       na rua; tabela de 4 colunas no telefone é onde a pessoa perde a linha entre a ida
+       e a volta.
+       A regra é genérica e sai do próprio dado: PRIMEIRA célula = título do card, as
+       outras = campos rotulados pelo <th> da coluna. Conferi as 33 antes de escrever:
+       todas têm cabeçalho com rótulo real (Indicador, Etapa, Porte, Módulo, Concorrente,
+       Item, Termo, Dimensão, Quando, Evento...) e de 2 a 5 colunas. Assim o "mesmos
+       campos, mesma ordem, sempre" da prancha vem da tabela, e nenhuma palavra do
+       playbook foi reescrita para caber.
+       Tabela sem <th> ou sem linha de corpo NÃO é transformada: fica como estava, com
+       rolagem. Melhor uma tabela honesta que um card montado com rótulo inventado. */
     raiz.querySelectorAll('table').forEach(t => {
       const pai = t.parentElement;
-      if (pai && pai.classList.contains('pb-table-wrap')) { pai.className = 'twrap'; return; }
-      const w = doc.createElement('div');
-      w.className = 'twrap';
-      t.replaceWith(w);
-      w.appendChild(t);
+      const alvo = (pai && pai.classList.contains('pb-table-wrap')) ? pai : t;
+      const linhasTodas = [...t.querySelectorAll('tr')];
+      const cabeca = linhasTodas.find(tr => tr.querySelector('th'));
+      const rotulos = cabeca ? [...cabeca.querySelectorAll('th')].map(th => th.textContent.trim()) : [];
+      const corpo = linhasTodas.filter(tr => tr !== cabeca && tr.querySelector('td'));
+      if (!rotulos.length || !corpo.length) {
+        if (alvo === t) { const w = doc.createElement('div'); w.className = 'twrap'; t.replaceWith(w); w.appendChild(t); }
+        else alvo.className = 'twrap';
+        return;
+      }
+      const lista = doc.createElement('div');
+      lista.className = 'pb8-cards';
+      corpo.forEach((tr, i) => {
+        const cels = [...tr.querySelectorAll('td')];
+        if (!cels.length) return;
+        const card = doc.createElement('div');
+        card.className = 'pb8-card';
+        const cab = doc.createElement('div');
+        cab.className = 'pb8-card-cab';
+        cab.innerHTML = '<span class="pb8-card-num">' + String(i + 1) + '</span>'
+          + '<span class="pb8-card-tit">' + cels[0].innerHTML
+          + (rotulos[0] ? '<span class="pb8-card-sub">' + esc(rotulos[0]) + '</span>' : '')
+          + '</span>';
+        card.appendChild(cab);
+        cels.slice(1).forEach((td, j) => {
+          const campo = doc.createElement('div');
+          campo.className = 'pb8-campo';
+          campo.innerHTML = '<span class="pb8-campo-rot">' + esc(rotulos[j + 1] || '') + '</span>'
+            + '<span class="pb8-campo-val">' + td.innerHTML + '</span>';
+          card.appendChild(campo);
+        });
+        lista.appendChild(card);
+      });
+      alvo.replaceWith(lista);
+    });
+
+    /* ══ SEÇÃO DE RÓTULOS VIRA CARD (v8) ══════════════════════════════════════════
+       Duas páginas escrevem as seções como corrida de <p><strong>Rótulo.</strong> texto</p>:
+       o Mapa dor -> solução (Sinal do scanner / Pergunta de implicação / Reenquadramento /
+       Solução / Plano mín. -> upgrade / No WhatsApp) e o Catálogo de soluções (O que faz /
+       Como ajuda o dono / Onde entra). É exatamente o card de dor da prancha, já escrito
+       na fonte — então o card sai do dado, com os RÓTULOS DA FONTE.
+       Eu NÃO renomeei para "O SINAL / A PERGUNTA / O REENQUADRE" como no mockup: rótulo é
+       conteúdo, e "Sinal do scanner" diz mais que "O SINAL". Se a prancha quiser os
+       curtos, é troca de texto no playbook-fonte, não no renderizador.
+       E o campo que fala de WhatsApp fecha o card como BLOCO ESCURO COPIÁVEL — reusa
+       .fa-card/.fa-body, então o botão de copiar e a contagem do "mais usadas" já
+       funcionam sem uma segunda fiação. */
+    /* O CARD É POR CABEÇALHO, h2 OU h3 — e essa distinção não é detalhe.
+       Primeira versão: só h2. No Mapa dor->solução deu certo (cada dor é um h2 com seis
+       parágrafos rotulados). No Catálogo de soluções virou monstro: lá o h2 é o GRUPO
+       ("Operacional — 10 funcionalidades") e cada funcionalidade é um h3 com três
+       rótulos. Medido: 7 cards com 142 campos, ou seja um card de vinte campos por grupo
+       em vez de um card por funcionalidade. Agora a unidade é o cabeçalho mais próximo, e
+       a corrida de rótulos para no PRÓXIMO cabeçalho de qualquer nível. */
+    [...raiz.querySelectorAll('h2,h3')].forEach(h2 => {
+      const ps = [];
+      let n = h2.nextElementSibling;
+      while (n && !/^H[1-4]$/.test(n.tagName) && n.tagName !== 'HR') {
+        if (n.tagName === 'P') ps.push(n);
+        n = n.nextElementSibling;
+      }
+      /* o script já transformado (.fa-card) que vem logo depois FECHA o card, que é o
+         ritmo da prancha: campos, depois o gesto. */
+      let script = h2.nextElementSibling;
+      while (script && !/^H[1-4]$/.test(script.tagName) && script.tagName !== 'HR'
+        && !(script.classList && script.classList.contains('fa-card'))) script = script.nextElementSibling;
+      if (script && !(script.classList && script.classList.contains('fa-card'))) script = null;
+      const rotulados = ps.filter(p => {
+        const st = p.firstElementChild;
+        return st && st.tagName === 'STRONG' && /\.\s*$/.test(st.textContent) && p.textContent.trim().length > st.textContent.trim().length + 2;
+      });
+      if (rotulados.length < 3) return;
+      const card = doc.createElement('div');
+      card.className = 'pb8-card';
+      /* O ID DO CABECALHO VAI PARA O CARD. Sem isto o card come a ancora: o sumario
+         NESTA PAGINA aponta para o id do h2, e o h2 deixa de existir quando vira card —
+         seis itens de sumario que rolam para lugar nenhum na pagina do mapa. */
+      if (h2.id) card.id = h2.id;
+      const cab = doc.createElement('div');
+      cab.className = 'pb8-card-cab';
+      cab.innerHTML = '<span class="pb8-card-tit">' + h2.innerHTML + '</span>';
+      card.appendChild(cab);
+      rotulados.forEach(p => {
+        const st = p.firstElementChild;
+        const rot = st.textContent.replace(/\.\s*$/, '').trim();
+        const clone = p.cloneNode(true);
+        clone.removeChild(clone.firstElementChild);
+        const valor = clone.innerHTML.replace(/^\s*/, '');
+        if (/whats/i.test(rot)) {
+          const bloco = doc.createElement('div');
+          bloco.className = 'fa-card';
+          bloco.innerHTML = '<div class="fa-head"><span class="fa-label">' + esc(rot.toUpperCase())
+            + '</span><button type="button" class="fa-copy">⧉ copiar</button></div>'
+            + '<div class="fa-body">' + valor + '</div>';
+          card.appendChild(bloco);
+        } else {
+          const campo = doc.createElement('div');
+          campo.className = 'pb8-campo';
+          campo.innerHTML = '<span class="pb8-campo-rot">' + esc(rot) + '</span>'
+            + '<span class="pb8-campo-val">' + valor + '</span>';
+          card.appendChild(campo);
+        }
+      });
+      h2.replaceWith(card);
+      rotulados.forEach(p => p.remove());
+      if (script) card.appendChild(script);
+    });
+
+    /* ══ CAMPO VARIÁVEL DO SCRIPT ═════════════════════════════════════════════════
+       [Nome do Dono], [Vizinho], [Nicho] — 67 no playbook. Dentro do bloco escuro eles
+       viram lacuna visível em âmbar, para a pessoa ver o que trocar ANTES de copiar. */
+    raiz.querySelectorAll('.fa-body').forEach(b => {
+      b.innerHTML = b.innerHTML.replace(/\[([^\[\]<>]{2,60})\]/g,
+        '<span class="pb8-var">[$1]</span>');
     });
 
     /* "O que fazer agora" vira o cartão âmbar do fim da página */
@@ -17238,6 +17481,15 @@ function pb7HojeContadas() {
    quem copiou (RLS não restringe agregado; ver o comentário da migração). Uma chamada por
    sessão: é dado de semana, não de segundo. */
 let pb7CopiasCache = null;
+let pb7TeclasLeitor = null;   /* ouvinte de j/k do leitor — um só, trocado a cada página */
+/* ══ O PORTÃO DE 60% DA PROVA (v8) ═══════════════════════════════════════════════════
+   Pedido literal da prancha: a prova destrava só depois de 60% de rolagem. A razão é a
+   mesma do teto de 2 por dia — a prova existe para creditar LEITURA, e três alternativas
+   respondidas de cara acertam por eliminação em 1/3 das vezes.
+   Guarda o MÁXIMO alcançado, não a posição atual: quem leu tudo e voltou para reler o
+   script não pode ver a prova se trancar de novo. E é por PÁGINA — zera ao abrir. */
+const PB7_PORTAO = 0.6;
+let pb7RolouAte = 0;
 let pb7CopiasPromise = null;
 async function pb7CarregarCopias() {
   if (pb7CopiasCache) return pb7CopiasCache;
@@ -17847,7 +18099,7 @@ function pbv6MontarLeitor(slot, pb, pagina) {
   const leve = pb7LevePraRua(pagina);
   const secoes = (pagina.headings || []).filter(h => h.nivel === 2 && !/o que fazer agora/i.test(h.titulo));
 
-  pb7Tentativas = 0; pb7Travado = false; pb7Respondida = null;
+  pb7Tentativas = 0; pb7Travado = false; pb7Respondida = null; pb7RolouAte = 0;
 
   slot.innerHTML = `<div class="pb7 pb7-lendo">
     <div class="pb7-topo">
@@ -17859,7 +18111,7 @@ function pbv6MontarLeitor(slot, pb, pagina) {
         <b><span class="pb7-crumb-num">${pbv6Num(pagina)}</span><span class="pb7-crumb-tit"> · ${esc(pbv6Titulo(pagina.titulo))}</span></b>
       </div>
       <div class="pb7-topo-prog"><i id="playbookProgresso" style="width:0%"></i></div>
-      <span class="pb7-topo-min" id="pb7Restam">${minutos} min de leitura</span>
+      <span class="pb7-topo-min" id="pb7Restam" data-pb-min="${minutos}">${minutos} min de leitura</span>
       <button type="button" class="pb7-topo-x" id="playbookVoltarIndice" aria-label="fechar a leitura">✕</button>
     </div>
 
@@ -17883,7 +18135,11 @@ function pbv6MontarLeitor(slot, pb, pagina) {
           : faltamNoCap.length === 1
             ? 'prove a <b>' + pbv6Num(faltamNoCap[0]) + '</b> e o capítulo ganha <b>selo</b> — selo aparece no placar do time'
             : 'faltam <b>' + faltamNoCap.length + '</b> para este capítulo ganhar <b>selo</b> no placar do time'}</div>
-        ${minutos >= 8 && secoes.length > 3 ? `<div class="pb7-toc-sec">
+        <!-- NESTA PÁGINA sem condição (v8). Antes só aparecia com >=8 min E >3 seções:
+             das 30 páginas, a maioria ficava sem sumário de seção, e é justamente nas
+             páginas de 4-6 minutos que a pessoa quer pular direto para a dor que o dono
+             acabou de contar. Duas seções já justificam um índice. -->
+        ${secoes.length > 1 ? `<div class="pb7-toc-sec">
           <div class="pb7-toc-rot">NESTA PÁGINA · ${minutos} MIN</div>
           ${secoes.map(h => `<button type="button" data-pb-anchor="${esc(h.id)}">${esc(pbv6H2(h.titulo))}</button>`).join('')}
         </div>` : ''}
@@ -17952,6 +18208,10 @@ function pb7ProvaHTML(pagina, provada, lidaSemProva, agora) {
 
   const acertou = pb7Respondida != null && pb7Respondida === q.correta;
   const errou = pb7Respondida != null && pb7Respondida !== q.correta;
+  /* Antes de 60% as alternativas nascem desabilitadas — não escondidas. Escondida deixa
+     a pessoa sem saber que existe prova; desabilitada com o motivo escrito diz o que
+     fazer para liberar. Quem já respondeu não volta a travar. */
+  const cedo = !acertou && !errou && pb7RolouAte < PB7_PORTAO;
 
   return cabecalho + `
     <div class="pb7-prova-q">${esc(q.pergunta)}</div>
@@ -17962,7 +18222,7 @@ function pb7ProvaHTML(pagina, provada, lidaSemProva, agora) {
         const cls = acertou && certa ? ' is-certa'
           : errou && escolhida ? ' is-errada'
           : '';
-        return `<button type="button" class="pb7-alt${cls}" data-pb-alt="${i}"${acertou ? ' disabled' : ''}>
+        return `<button type="button" class="pb7-alt${cls}" data-pb-alt="${i}"${acertou || cedo ? ' disabled' : ''}>
           <b>${String.fromCharCode(65 + i)}</b><span>${esc(a)}</span>${acertou && certa ? ' <i>✓</i>' : ''}
         </button>`;
       }).join('')}
@@ -17971,6 +18231,9 @@ function pb7ProvaHTML(pagina, provada, lidaSemProva, agora) {
         ? 'certo! Mas o teto de ' + PBV6_LEITURAS_POR_DIA + ' páginas de hoje já fechou — a página fica <b>provada ✓</b> e o ponto não duplica.'
         : 'certo! <b>+' + PBV6_PTS_LEITURA + ' creditados na sua Daily</b> · página provada ✓'}<br><span>${esc(q.porque)}</span></div>`
       : errou ? `<div class="pb7-prova-fim is-meio">não é essa. <b>Sobrou uma tentativa</b> — a resposta está no texto que você acabou de ler.</div>`
+      : cedo ? `<div class="pb7-prova-nota" id="pb7ProvaEspera">continue lendo pra liberar —
+          a prova abre depois de ${Math.round(PB7_PORTAO * 100)}% da página. Responder é o que credita o ponto,
+          e a resposta está no texto.</div>`
       : `<div class="pb7-prova-nota">responder é o que credita o ponto. ${lidaSemProva
           ? 'Você já tinha marcado esta como lida antes da prova existir: ela conta no seu nível, e a prova vale o +' + PBV6_PTS_LEITURA + '.'
           : 'Ler sem responder não pontua — rolar a tela não é leitura.'}</div>`}`;
@@ -18027,6 +18290,29 @@ function pb7LigarLeitor(slot, pb, pagina) {
       mostrarToast('Não consegui copiar — selecione o texto do cartão e copie à mão.', 'atencao');
     }
   }));
+
+  /* ── j / k NAVEGAM (v8) ─────────────────────────────────────────────────────────
+     j = próxima, k = anterior, e as setas ← → fazem o mesmo. O ouvinte fica no
+     documento porque a leitura não tem foco fixo (a pessoa rolou, o foco está no body),
+     mas SAI quando o leitor sai — sem isso ele acumularia um ouvinte por página aberta,
+     e j numa página começaria a andar duas casas. Ignora quando o foco está em campo de
+     texto: 'j' em busca é letra, não comando. */
+  const anteriorTecla = pb.paginas[pb.paginas.indexOf(pagina) - 1] || null;
+  const proximaTecla = pb.paginas[pb.paginas.indexOf(pagina) + 1] || null;
+  if (pb7TeclasLeitor) document.removeEventListener('keydown', pb7TeclasLeitor);
+  pb7TeclasLeitor = function (ev) {
+    if (!document.getElementById('playbookArtigo')) { document.removeEventListener('keydown', pb7TeclasLeitor); pb7TeclasLeitor = null; return; }
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return;
+    const k = ev.key;
+    const alvo = (k === 'j' || k === 'J' || k === 'ArrowRight') ? proximaTecla
+      : (k === 'k' || k === 'K' || k === 'ArrowLeft') ? anteriorTecla : null;
+    if (!alvo) return;
+    ev.preventDefault();
+    abrirPaginaPlaybook(alvo.id);
+  };
+  document.addEventListener('keydown', pb7TeclasLeitor);
 
   pb7LigarProva(slot, pagina);
 
@@ -18194,11 +18480,49 @@ function pbv6AtualizarScroll() {
   const doc = document.documentElement;
   const max = doc.scrollHeight - doc.clientHeight;
   barra.style.width = Math.round(100 * (max > 0 ? Math.min(1, Math.max(0, doc.scrollTop / max)) : 0)) + '%';
+  /* ══ O SCROLLSPY ESTAVA VARRENDO ZERO BOTÕES (02/09/26) ══════════════════════════
+     Este bloco procurava '#playbookToc button' e '#playbookToc' NÃO EXISTE no markup —
+     nenhuma linha do arquivo gera esse id. E a classe que ele ligava, .is-ativo, não tem
+     regra para o sumário do playbook em lugar nenhum do CSS. Ou seja: o scrollspy rodava
+     a cada rolagem, encontrava lista vazia e não fazia nada, desde que o sumário virou
+     .pb7-toc-sec. Terceiro caso da MESMA família nesta tela (os outros dois: a paleta
+     --v6-* declarada só em .pbv6, e o container .pl4-niveis do filtro de visão).
+     Agora casa pelo ATRIBUTO, que é o que o markup gera, e pinta .is-aqui, que é o que o
+     CSS desenha.
+     E O CARD TAMBÉM VIRA ÂNCORA: depois da v8 as seções de rótulo deixaram de ser h2 e
+     passaram a ser .pb8-card — se o spy olhasse só h2[id], as seis dores do mapa não
+     acenderiam nada. */
   let ativo = null;
-  document.querySelectorAll('.pba h2[id]').forEach(h => { if (h.getBoundingClientRect().top < 140) ativo = h.id; });
-  document.querySelectorAll('#playbookToc button').forEach(b => {
-    b.classList.toggle('is-ativo', !!ativo && b.dataset.pbAnchor === ativo);
+  document.querySelectorAll('.pba h2[id],.pba h3[id],.pba .pb8-card[id]').forEach(h => {
+    if (h.getBoundingClientRect().top < 140) ativo = h.id;
   });
+  document.querySelectorAll('.pb7-toc-sec [data-pb-anchor]').forEach(b => {
+    b.classList.toggle('is-aqui', !!ativo && b.dataset.pbAnchor === ativo);
+  });
+  /* "N min restantes", recalculado pela rolagem — a prancha pede o RESTANTE, não o
+     total. Total é uma etiqueta; restante é uma decisão (dá para terminar antes da
+     próxima visita?). Arredonda para cima e nunca mostra 0 antes do fim. */
+  /* DESTRAVA NO LUGAR, sem redesenhar a prova: redesenhar apagaria uma resposta em curso
+     e faria a tela piscar a cada tick de rolagem. Só liga os botões e troca a nota. */
+  const lidoAgora = max > 0 ? Math.min(1, Math.max(0, doc.scrollTop / max)) : 1;
+  if (lidoAgora > pb7RolouAte) pb7RolouAte = lidoAgora;
+  if (pb7RolouAte >= PB7_PORTAO) {
+    const espera = document.getElementById('pb7ProvaEspera');
+    if (espera) {
+      document.querySelectorAll('#pb7Prova .pb7-alt[disabled]').forEach(b => { b.disabled = false; });
+      espera.classList.remove('pb7-prova-nota');
+      espera.className = 'pb7-prova-nota';
+      espera.removeAttribute('id');
+      espera.innerHTML = 'prova liberada — responder é o que credita o ponto, e a resposta está no texto.';
+    }
+  }
+  const restam = document.getElementById('pb7Restam');
+  if (restam && restam.dataset.pbMin) {
+    const total = Number(restam.dataset.pbMin) || 0;
+    const lido = max > 0 ? Math.min(1, Math.max(0, doc.scrollTop / max)) : 0;
+    const falta = Math.max(0, Math.ceil(total * (1 - lido)));
+    restam.textContent = lido >= 0.995 || falta === 0 ? 'página lida' : falta + ' min restantes';
+  }
 }
 
 /* CORREÇÃO (29/08/26) — TELA BRANCA NO ATALHO. Medido em produção, logado como
