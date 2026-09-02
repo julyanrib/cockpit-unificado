@@ -32,6 +32,12 @@ const servidor = fs.readFileSync(path.join(raiz, 'lib', 'acoes-negocio', 'mudar-
 const template = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
 const robo = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8');
 const montar = fs.readFileSync(path.join(raiz, 'scripts', 'montar-dados.js'), 'utf8');
+const semanal = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-weekly-comparison.js'), 'utf8');
+/* As checagens de AUSÊNCIA precisam olhar código, não comentário: o comentário que
+   explica um defeito cita a forma errada, e a checagem ingênua acusa a explicação. */
+const semanalCodigo = semanal.split(String.fromCharCode(10))
+  .filter(l => l.trim().indexOf('//') !== 0 && l.trim().indexOf('*') !== 0)
+  .join(String.fromCharCode(10));
 
 let ok = 0;
 const falhas = [];
@@ -324,6 +330,23 @@ checar('template: Onboarding não pede próximo passo (o negócio saiu do funil 
   template.indexOf('const exigePasso = !paraOnb;') > 0);
 checar('template: a coluna vazia declara o corte em vez de parecer defeito',
   template.indexOf('nada enviado para onboarding') > 0);
+
+/* ── A PROPRIEDADE DE ENTRADA NA ETAPA NÃO EXISTE PARA TODA ETAPA (02/09/26) ─────
+   O robô caiu com um HubSpot 400 porque pediu hs_v2_date_entered_1398311191, que não
+   existe: a Reciclagem é a única etapa do Field Sales sem essa propriedade. E o robô é
+   o gargalo de TODA a ferramenta — quando ele cai, nenhum número da semana atualiza.
+   Estas checagens não conversam com o HubSpot (suíte é offline); elas travam a forma
+   que já se provou errada e fixam a que se provou certa. */
+checar('semanal: ninguém monta hs_v2_date_entered_ + a etapa de Reciclagem (não existe)',
+  semanalCodigo.indexOf("'hs_v2_date_entered_' + STAGES.reciclagem") < 0 &&
+  semanalCodigo.indexOf('hs_v2_date_entered_' + RECICLAGEM) < 0);
+checar('semanal: Reciclagem conta pela data de entrada na etapa ATUAL (propriedade global)',
+  semanal.indexOf("'hs_v2_date_entered_current_stage'") > 0);
+checar('semanal: Perdido conta por closedate (etapa fechada), não por última modificação',
+  semanal.indexOf("contagemComFiltro(STAGES.perdido, startMs, endMs, 'closedate')") > 0);
+checar('semanal: a contagem é o total do servidor, não o tamanho da página',
+  semanalCodigo.indexOf('return data.total || 0;') > 0 &&
+  semanalCodigo.indexOf('hs_lastmodifieddate') < 0);
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
