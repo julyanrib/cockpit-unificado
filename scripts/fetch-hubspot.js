@@ -760,6 +760,10 @@ async function motivosDePerda() {
   const validos = results.filter(d => !isExcludedDeal(d));
   const porMotivo = {};
   const porOwner = {};
+  /* acumuladores do MRR informado — ver o comentario no fim desta funcao */
+  let totalMrrConhecido = 0, comMrr = 0, semMrr = 0;
+  const mrrPorMotivo = {};
+  const mrrPorOwner = {};
   /* EXEMPLOS PARA O CLIQUE (31/08/26). O gráfico de motivo mostrava só porcentagem, e
      clicar não tinha para onde ir. Até 8 negócios por motivo, os mais recentes — oito
      nomes é o que cabe numa conversa de Daily; mais que isso é relatório. */
@@ -793,8 +797,30 @@ async function motivosDePerda() {
     porMotivo[motivo] = (porMotivo[motivo] || 0) + 1;
     if (!porOwner[owner]) porOwner[owner] = {};
     porOwner[owner][motivo] = (porOwner[owner][motivo] || 0) + 1;
+    /* MRR INFORMADO NAS PERDAS (02/09/26, pedido do gestor). A consulta ja trazia
+       valor_de_mrr e ele so era usado nos 8 exemplos por motivo — o resto ia para o
+       lixo. Agora soma sobre TODOS os validos.
+       O NOME IMPORTA: isto e 'MRR informado em negocios perdidos', nunca 'receita
+       perdida'. Medido no portal em 02/09/26: 89 dos 975 perdidos de 90 dias tem o
+       campo preenchido — 9%. Chamar de receita perdida seria multiplicar por onze o
+       que se sabe. Por isso comMrr/semMrr descem junto: a tela e obrigada a mostrar
+       a cobertura ao lado do numero.
+       E nao ha estimativa nenhuma: quem nao tem o campo entra em semMrr e fica de fora
+       da soma. Nao se multiplica perda por ticket medio. */
+    const mrrDaPerda = Number(p.valor_de_mrr) || 0;
+    if (mrrDaPerda > 0) {
+      totalMrrConhecido += mrrDaPerda;
+      comMrr += 1;
+      mrrPorMotivo[motivo] = (mrrPorMotivo[motivo] || 0) + mrrDaPerda;
+      mrrPorOwner[owner] = (mrrPorOwner[owner] || 0) + mrrDaPerda;
+    } else {
+      semMrr += 1;
+    }
   });
-  return { total: validos.length, dias: 90, porMotivo, porOwner, exemplos };
+  return {
+    total: validos.length, dias: 90, porMotivo, porOwner, exemplos,
+    totalMrrConhecido, comMrr, semMrr, mrrPorMotivo, mrrPorOwner
+  };
 }
 
 /* HISTORICO DE ETAPA — a primeira conversao de verdade do produto (30/08/26).
