@@ -34659,7 +34659,17 @@ async function dl2Medir(motivo) {
        comum, porque o robô acabou de rodar. Redesenho que não muda pixel nenhum é só o
        flash. Agora a comparação decide: mudou, redesenha; não mudou, a tela fica quieta e
        só a linha de procedência é atualizada no lugar (ela carrega a hora da medição). */
-    const mudou = !dl2VivoAnterior || dl2MudouAlgo(dl2VivoAnterior, dl2Vivo);
+    /* A PRIMEIRA MEDIÇÃO TAMBÉM NÃO REDESENHA DE GRAÇA (medido em produção depois do
+       primeiro conserto). Eu tinha deixado "não há medição anterior, logo mudou" — e a
+       aba caiu de 3 renders para 2, sendo o segundo a primeira medição chegando. Medido na
+       sessão do Marco: a medição ao vivo devolveu exatamente o número que o robô já
+       mostrava (0 e 0). O segundo render não mudou um pixel.
+       A pergunta certa na primeira medição não é "tenho com o que comparar?" e sim "isto
+       muda o que está na tela?". O que está na tela é dl2Cumprido, que é o MAIOR entre o
+       vivo e o robô — então a tela só muda se algum número ao vivo passar do do robô. */
+    const mudou = dl2VivoAnterior
+      ? dl2MudouAlgo(dl2VivoAnterior, dl2Vivo)
+      : dl2VivoPassouDoRobo(dl2Vivo);
     if (mudou) {
       if (typeof renderDaily === 'function') renderDaily();
     } else {
@@ -34745,6 +34755,19 @@ function dl2MudouAlgo(a, b) {
   const chave = x => ((x.detalhe || {}).visitas || [])
     .map(v => [v.nome, v.estado, v.horaRegistro, v.contaPontos].join('|')).join('||');
   return chave(a) !== chave(b);
+}
+
+/* A medição ao vivo muda a tela? Só se algum eixo passar do número do robô — porque a tela
+   mostra o maior dos dois (ver dl2Cumprido). Empate ou abaixo: a tela já está certa. */
+function dl2VivoPassouDoRobo(vivo) {
+  if (!vivo) return false;
+  /* getDaily(owner, hoje) é a MESMA fonte que dailyV5HTML usa para montar a tela — comparar
+     contra outra coisa seria comparar com um número que ninguém está vendo. */
+  const meu = sessaoAtual ? sessaoAtual.ownerId : null;
+  if (!meu || typeof getDaily !== 'function') return true;
+  const linha = getDaily(meu, isoDate(new Date()));
+  if (!linha) return true;   /* sem linha do robô para comparar, desenha e não arrisca */
+  return D4_EIXOS.some(e => Number(vivo[e.campoR] || 0) > Number(linha[e.campoR] || 0));
 }
 
 function dl2LigarAoVivo() {
