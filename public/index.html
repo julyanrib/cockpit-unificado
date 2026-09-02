@@ -6992,6 +6992,8 @@
   /* CAMPO EM BRANCO NAO E ZERO: aparece marcado, e em cinza, nao em vermelho - a falta e
      do preenchimento, nao do negocio. */
   .gx-fx-mrr.is-sem{color:var(--ter);font-style:italic;}
+  /* Procedencia em fonte menor e cinza: informa sem competir com o numero. */
+  .gx-fx-mrr em{font-style:normal;font-weight:700;font-size:9.5px;color:var(--ter);}
   .gx-fx-dossie{margin-top:4px;min-height:38px;padding:0 15px;border-radius:var(--r-pill);
     border:1px solid var(--ink);background:var(--ink);color:var(--panel);
     font:700 11.5px var(--font-body);cursor:pointer;}
@@ -13487,7 +13489,17 @@ const ETAPA_PROSPECCAO = '1395880469';
 // Valor que já existe no lead pra pré-preencher o campo — o executivo não redigita o
 // que o CRM já sabe. Datas viram yyyy-mm-dd (formato do <input type="date">).
 function valorAtualDoCampo(lead, campo) {
-  const bruto = lead ? (campo.prop === 'dealname' ? (lead.dealname || lead.name) : lead[campo.prop]) : null;
+  /* O CAMPO DE MRR PUXA DE ONDE O NÚMERO ESTÁ. Se o executivo já digitou o MRR pelo
+     HubSpot, ele caiu em `mrr`, e este formulário — que lê lead[prop] — abria em branco e
+     pedia o mesmo número de novo. Agora abre com o que ele pôs, e ele segue livre para
+     mudar: é o valor que foi pago, quem decide é ele. Ao salvar, a rota grava
+     `valor_de_mrr` e o servidor espelha `mrr` — os dois param de divergir sozinhos,
+     negócio por negócio, conforme o funil anda. */
+  const bruto = lead
+    ? (campo.prop === 'dealname' ? (lead.dealname || lead.name)
+      : campo.prop === 'valor_de_mrr' ? mrrDoNegocio(lead)
+      : lead[campo.prop])
+    : null;
   if (bruto == null || bruto === '') return '';
   if (campo.tipo === 'data') {
     // BUG PEGO NO TESTE: o HubSpot devolve datetime como epoch em ms, e como STRING
@@ -26249,6 +26261,47 @@ function gxSlaEtapa(id) {
 }
 function gxNum(v) { return Number(v || 0); }
 
+/* ══ DE ONDE SAI O MRR DE UM NEGÓCIO (02/09/26) ════════════════════════════════════
+   Medido no snapshot, nos 146 abertos: 14 negócios têm `mrr` preenchido e `valor_de_mrr`
+   VAZIO — R$ 5.262/mês que o Cockpit não via, porque toda tela lia só `valor_de_mrr`.
+   Oito deles estão em Negociação, quatro em Enviado Onboarding, um em Ag. Pagamento e um
+   em Conversa com Decisor.
+
+   POR QUE OS DOIS CAMPOS EXISTEM E POR QUE O NÚMERO CAI NO OUTRO. O formulário do Cockpit
+   escreve `valor_de_mrr`; o formulário de etapa DENTRO do HubSpot tem `mrr`. Quem move o
+   negócio pelo HubSpot passa por fora da nossa API — é o furo já medido — e o número que
+   ele digitou fica num campo que ninguém lê aqui. Prova: Escritório Bar & Botequim está em
+   Ag. Pagamento com mrr 583 e amount 1.749 (= 583 x 3) e `valor_de_mrr` em branco.
+
+   O ENCADEAMENTO PREFERE `valor_de_mrr`, e não é arbitrário: é o campo que a nossa rota
+   escreve e, desde a revisão das propriedades, o servidor espelha `mrr` a partir dele. Os
+   dois só divergem em registros antigos (Adega 12 450x449, O Minas 349x299, Gujorebar
+   403x273,50), e nesses o nosso é o que passou pela validação. `mrr` entra quando o nosso
+   está vazio — aí ele é a única versão que existe do número que a pessoa digitou.
+
+   NÃO É ESTIMATIVA E NÃO INVENTA NADA: é o valor que o executivo pôs, lido no campo em que
+   ele o pôs. Zero e negativo não contam como preenchido (campo de dinheiro em branco
+   costuma chegar como 0), e sem nenhum dos dois a resposta é null — para a tela poder
+   dizer "sem MRR preenchido" em vez de mostrar R$ 0. */
+function mrrDoNegocio(lead) {
+  if (!lead) return null;
+  const nosso = Number(lead.valor_de_mrr);
+  if (isFinite(nosso) && nosso > 0) return nosso;
+  const doHub = Number(lead.mrr);
+  if (isFinite(doHub) && doHub > 0) return doHub;
+  return null;
+}
+/* Qual campo respondeu — a tela usa isto para declarar a procedência quando o número não
+   veio do campo que a nossa rota escreve. */
+function mrrFonteDoNegocio(lead) {
+  if (!lead) return null;
+  const nosso = Number(lead.valor_de_mrr);
+  if (isFinite(nosso) && nosso > 0) return 'valor_de_mrr';
+  const doHub = Number(lead.mrr);
+  if (isFinite(doHub) && doHub > 0) return 'mrr';
+  return null;
+}
+
 /* A forma do time: soma das etapas de todos os executivos, normalizada. É a régua contra a
    qual a forma de UM é lida — sem ela, 12 em Visita não quer dizer nada. */
 function gxFormaDoTime() {
@@ -26396,7 +26449,9 @@ function gxBlocoIdadeHTML(r) {
 /* 3 · O DINHEIRO PARADO. Soma do MRR declarado dos negócios travados, por etapa. Traduz
    "18 travados" em reais — e é o número que muda o tom da conversa. */
 function gxBlocoDinheiroHTML(r) {
-  const travados = (r.travados || []).filter(l => gxNum(l.valor_de_mrr) > 0);
+  /* Aqui tambem: o MRR sai de onde ele foi digitado, senao a cobertura mente para baixo
+     e a tela diz "nao medido" sobre negocio que tem valor. */
+  const travados = (r.travados || []).filter(l => mrrDoNegocio(l) != null);
   if (!travados.length) {
     return `<div class="gx-secao">
       <div class="gx-secao-cab"><b>Dinheiro parado</b><span>MRR dos negócios acima do SLA</span></div>
@@ -26406,7 +26461,7 @@ function gxBlocoDinheiroHTML(r) {
   const porEtapa = {};
   travados.forEach(l => {
     const id = String(l.stageId || '');
-    porEtapa[id] = (porEtapa[id] || 0) + gxNum(l.valor_de_mrr);
+    porEtapa[id] = (porEtapa[id] || 0) + (mrrDoNegocio(l) || 0);
   });
   const ids = GX_ETAPAS.filter(id => porEtapa[id]);
   const maior = Math.max.apply(null, ids.map(id => porEtapa[id]));
@@ -33574,9 +33629,19 @@ const GX_EXIGE_POR_ETAPA = {
    mapa. A funcao recebia undefined, nao achava exigencia nenhuma e a categoria nova
    nascia com ZERO linhas, enquanto o dado mostrava 21 de 22 negocios em Demo/Proposta
    sem MRR. Silencio, nao erro: exatamente o tipo de falha que passa por teste de codigo. */
+/* A EXIGÊNCIA DE MRR ACEITA OS DOIS CAMPOS (02/09/26). Antes disto, um negócio com `mrr`
+   preenchido e `valor_de_mrr` vazio entrava na fila do gestor como "etapa sem o campo
+   obrigatório" — acusando o executivo de não ter preenchido justamente o que ele
+   preencheu, só no outro campo. Medido: 9 dos 14 invisíveis estão em etapas que exigem
+   MRR (oito em Negociação, um em Ag. Pagamento), e todos apareciam na fila.
+   A evidência tem que ser verdadeira antes de ser útil: acusar quem fez é pior que não
+   acusar ninguém, porque queima a fila inteira para quem a lê. */
 function gxCamposFaltando(lead, stageId) {
   const exige = GX_EXIGE_POR_ETAPA[String(stageId || (lead && lead.stageId) || '')] || [];
   return exige.filter(x => {
+    /* MRR tem dois campos e a pessoa preenche em um deles. Perguntar por um só produz
+       acusação falsa — ver o comentário acima. */
+    if (x.p === 'valor_de_mrr') return mrrDoNegocio(lead) == null;
     const v = lead[x.p];
     return v == null || String(v).trim() === '';
   }).map(x => x.rot);
@@ -33901,11 +33966,14 @@ function gxFxCasosHTML(etapa, exec) {
 
   const linhas = usar.map(function (x) {
     const l = x.l;
-    const mrr = Number(l.valor_de_mrr);
+    const mrr = mrrDoNegocio(l);
     /* MRR ausente aparece MARCADO, nunca como zero: zero seria um negocio sem valor,
-       e o que existe e um campo em branco. */
-    const dinheiro = (isFinite(mrr) && mrr > 0)
-      ? '<span class="gx-fx-mrr">R$ ' + mrr.toLocaleString('pt-BR') + '/mês</span>'
+       e o que existe e um campo em branco. E quando o numero veio do campo do HubSpot em
+       vez do nosso, o cartao diz de onde veio - procedencia e parte do numero. */
+    const dinheiro = (mrr != null)
+      ? '<span class="gx-fx-mrr">R$ ' + mrr.toLocaleString('pt-BR') + '/mês' +
+        (mrrFonteDoNegocio(l) === 'mrr' ? '<em title="preenchido no campo MRR do HubSpot, não pelo Cockpit"> · campo do HubSpot</em>' : '') +
+        '</span>'
       : '<span class="gx-fx-mrr is-sem">sem MRR preenchido</span>';
     const tempo = (l.dias == null)
       ? '<span class="gx-fx-nm">sem dias medidos</span>'

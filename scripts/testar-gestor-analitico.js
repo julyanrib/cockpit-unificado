@@ -288,7 +288,7 @@ checar('o caso ordena pelo estouro do prazo, nao pelos dias',
   templateCodigo.indexOf('(sla == null || l.dias == null) ? null : (l.dias - sla)') > 0);
 checar('MRR ausente no caso aparece marcado, nunca como zero',
   template.indexOf('sem MRR preenchido') > 0 &&
-  templateCodigo.indexOf('(isFinite(mrr) && mrr > 0)') > 0);
+  templateCodigo.indexOf('const mrr = mrrDoNegocio(l);') > 0);
 checar('etapa sem caso estourado explica, em vez de ficar vazia',
   template.indexOf('passou do prazo desta etapa') > 0 &&
   template.indexOf('estes são os mais antigos') > 0);
@@ -339,6 +339,36 @@ checar('linha que chega ja agregada declara o proprio volume na contagem',
 checar('e a linha pre-agregada nao tem a frase reescrita por cima',
   templateCodigo.indexOf('return { ...g, casos: Number(g.quantidade) };') <
   templateCodigo.indexOf("evidencia: g.casos + ' negócios com '"));
+
+/* ── 16. DE ONDE SAI O MRR DE UM NEGOCIO ──────────────────────────────────────────
+   Medido no snapshot: 14 dos 146 abertos tem `mrr` preenchido e `valor_de_mrr` vazio -
+   R$ 5.262/mes que o Cockpit nao via, porque toda tela lia so `valor_de_mrr`. Quem move
+   o negocio pelo formulario de etapa DENTRO do HubSpot digita no campo `mrr`.
+   Estas checagens guardam que existe UM leitor, que ele prefere o campo que a nossa rota
+   escreve, que zero nao conta como preenchido e que a exigencia de campo obrigatorio
+   olha os dois - senao ela acusa quem preencheu. */
+checar('existe um leitor unico de MRR, e ele encadeia os dois campos',
+  templateCodigo.indexOf('function mrrDoNegocio(lead)') > 0 &&
+  templateCodigo.indexOf('const nosso = Number(lead.valor_de_mrr)') > 0 &&
+  templateCodigo.indexOf('const doHub = Number(lead.mrr)') > 0);
+checar('o leitor prefere o campo que a nossa rota escreve',
+  templateCodigo.indexOf('const nosso = Number(lead.valor_de_mrr)') <
+  templateCodigo.indexOf('const doHub = Number(lead.mrr)'));
+checar('zero e negativo nao contam como MRR preenchido, e a ausencia e null',
+  templateCodigo.indexOf('if (isFinite(nosso) && nosso > 0) return nosso;') > 0 &&
+  templateCodigo.indexOf('if (isFinite(doHub) && doHub > 0) return doHub;') > 0 &&
+  /(function mrrDoNegocio[\s\S]{0,600}?return null;)/.test(templateCodigo));
+checar('a exigencia de campo obrigatorio nao acusa quem preencheu no outro campo',
+  templateCodigo.indexOf("if (x.p === 'valor_de_mrr') return mrrDoNegocio(lead) == null;") > 0);
+checar('o formulario de etapa abre com o MRR que o negocio ja tem',
+  templateCodigo.indexOf("campo.prop === 'valor_de_mrr' ? mrrDoNegocio(lead)") > 0);
+checar('o dinheiro em risco e a soma por etapa usam o leitor unico',
+  templateCodigo.indexOf('(r.travados || []).filter(l => mrrDoNegocio(l) != null)') > 0 &&
+  templateCodigo.indexOf('(mrrDoNegocio(l) || 0)') > 0 &&
+  templateCodigo.indexOf('gxNum(l.valor_de_mrr)') < 0);
+checar('quando o numero vem do campo do HubSpot, a tela declara a procedencia',
+  template.indexOf('campo do HubSpot') > 0 &&
+  templateCodigo.indexOf('function mrrFonteDoNegocio(lead)') > 0);
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
