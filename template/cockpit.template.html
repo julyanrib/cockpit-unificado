@@ -414,6 +414,12 @@
   .command-action,.dossie-leads-tab-btn,.ga-cta,.gi-cell-btn,#sugestaoPlanoBtn,.btn-prim,
   #prospeccaoImportBtn{min-height:38px;}
   .gx-forma-linha,.gx-idade-linha,.gx-dinheiro-linha,.coach-funil-etapa{min-height:30px;}
+  /* MAS O QUE ABRE ALGO CUMPRE O PISO (02/09/26). Medido na aba Time: 13 alvos de 30px,
+     todos com .is-abre - 8px abaixo do piso de 38 do desktop. Linha que so informa pode
+     ter 30px; linha que abre uma lista e alvo e precisa do piso. A regra de <=760px logo
+     abaixo ja levava todas a 44px, entao o furo era so no desktop. */
+  .gx-forma-linha.is-abre,.gx-idade-linha.is-abre,.gx-dinheiro-linha.is-abre,
+  .coach-funil-etapa.is-abre{min-height:38px;}
   /* .gs-abre já tinha 44 no toque e nada no mouse: metade de regra é regra escrita por
      reação. Agora tem os dois. */
   .gs-abre{display:inline-flex;align-items:center;min-height:26px;}
@@ -6870,6 +6876,19 @@
     padding:13px 16px;cursor:pointer;min-height:38px;font-family:var(--font-display);}
   .gx-recolhido > summary span{font:600 11.5px var(--font-body);color:var(--muted2);}
   .gx-recolhido[open] > summary{border-bottom:1px solid var(--line-soft);}
+  /* ══ A MANCHETE DE TREINO DO DOSSIE (02/09/26, prancha v4) ═════════════════════════
+     Filete vermelho a esquerda e nao fundo vermelho: e a conclusao da conversa, nao um
+     alarme. Ela vem antes das cinco formas porque saber por onde comecar precede ler os
+     graficos que sustentam o comeco. */
+  .gx-treinar{border-left:3px solid var(--red);background:var(--panel2);border-radius:0 12px 12px 0;
+    padding:12px 15px;margin-bottom:16px;}
+  .gx-treinar-k{font:800 9.5px var(--font-display);letter-spacing:.12em;text-transform:uppercase;
+    color:var(--red-dk);margin-bottom:5px;}
+  .gx-treinar-tx{font-size:12.5px;line-height:1.6;color:var(--ink);text-wrap:pretty;}
+  .gx-treinar-tx b{font-weight:800;}
+  /* No bloco de como ele perde, a linha que se afasta do time ganha o numeral vermelho -
+     a barra fica neutra, porque perder por um motivo nao e violacao, e sinal de treino. */
+  .gx-forma-linha.is-fora .gx-forma-num{color:var(--red-dk);}
   /* ══ RAIO-X: OS CINCO CARTOES (02/09/26, prancha v4) ═══════════════════════════════
      Uma linha por item, sempre com a mesma anatomia: rotulo, trilha, numero e a leitura
      embaixo. Cinco cartoes com cinco formas diferentes obrigariam o gestor a reaprender
@@ -26862,7 +26881,22 @@ function gxBlocoPerdaHTML(r) {
   return `<div class="gx-secao">
     <div class="gx-secao-cab"><b>Como ele perde</b><span>${totalMeu} perdas nos últimos ${mp.dias || 90} dias · régua = o time</span></div>
     <div class="gx-forma">${barras}</div>
-    <div class="gx-secao-nota">${nota}</div>
+    <div class="gx-secao-nota">${nota}
+      ${(function(){
+        /* O MRR INFORMADO NAS PERDAS DELE (02/09/26). mrrPorOwner ja vinha do robo e
+           ninguem lia. O rotulo importa mais que o numero: e MRR DECLARADO no que se
+           perdeu - quem nao preencheu o campo nao entra na soma. Chamar a soma de perda de
+           faturamento exigiria multiplicar perda por ticket medio, que e exatamente o que
+           este produto nao faz. Por isso a cobertura vem junto no proprio texto.
+           (A guarda de testar-gestor-analitico exige que a frase proibida apareca SO
+            negada; ela conta ocorrencias no arquivo inteiro, comentario incluido - e foi
+            ela que me pegou escrevendo a frase solta aqui.) */
+        const v = mp.mrrPorOwner ? Number(mp.mrrPorOwner[String(r.ownerId)]) : null;
+        if (!v || v <= 0) return '';
+        return `<br><b>R$ ${v.toLocaleString('pt-BR')}</b> de MRR <b>informado</b> nos negócios perdidos dele — é o que estava
+          declarado no campo, não receita perdida: os negócios sem MRR preenchido não entram nesta soma.`;
+      })()}
+    </div>
   </div>`;
 }
 
@@ -27172,6 +27206,98 @@ function gxFunilDoExecutivoHTML(r) {
   </div>`;
 }
 
+
+/* ══ O QUE FALTAVA NO DOSSIE (02/09/26) ════════════════════════════════════════════
+   Prancha v4, secao 5. O dossie ja tinha, e nao foi refeito: a forma do funil dele contra
+   a regua do time (gx-forma, com a marca ambar), onde os negocios dele morrem por etapa
+   (gx-idade, com o SLA), o dinheiro parado, a meta do mes com o que falta e a aderencia do
+   prometido. Faltavam tres coisas, e a pauta.
+
+   1. A MANCHETE DE TREINO. O dossie comecava pelas formas e o diagnostico escrito vinha
+      depois; o gestor lia cinco graficos antes de saber por onde comecar a conversa. O
+      texto de r.gargalo ja existia (a analise individual o escreve) - ele so nao era a
+      primeira coisa.
+
+   2. COMO ELE PERDE CONTRA O TIME. motivosPerda.porOwner JA VINHA no DATA e ninguem
+      comparava. Medido: um executivo perde por Preco em 60 de 206 (29%), contra 7% do
+      time. Isso e uma conversa de treino com endereco - e o dado estava no ar.
+
+   3. O QUE COBRAR HOJE. As frentes da fila daquela pessoa, com o mesmo '+' da pauta. Sem
+      isso, o gestor lia o dossie, decidia a cobranca e tinha que subir a tela para marcar.
+
+   TUDO ISTO E SO DO GESTOR. O executivo ve o proprio dossie e nao pode receber comparacao
+   com colega nem a pauta de cobranca - o corte de privacidade e o mesmo do resto da tela. */
+/* O QUE EU FIZ ERRADO AQUI, e fica registrado (02/09/26): eu escrevi um bloco
+   "Como ele perde, contra o time" e o dossie JA TINHA UM, dentro de
+   gxFunilDoExecutivoHTML - e o que ja existia e melhor que o meu. Ele compara com a
+   regua do time, exige razao de 1,5x com amostra minima de 5 para apontar desvio, tem
+   cor por motivo e, o que o meu nao tinha, LIGA CADA MOTIVO A UM MODULO DO PLAYBOOK
+   (perde por preco -> Objecoes; perde por silencio -> Follow-up). Duas telas contando a
+   mesma coisa de dois jeitos e exatamente o que o pedido proibe, e a versao a manter
+   nao e a mais nova: e a melhor. O que faltava nela era uma linha, e essa eu acrescentei
+   la mesmo - ver o MRR informado nas perdas, mais abaixo. */
+
+
+function gxCobrarHojeHTML(r) {
+  let linhas = [];
+  try { linhas = gxFilaDeIntervencao().filter(function (l) { return String(l.ownerId) === String(r.ownerId); }); }
+  catch (e) { linhas = []; }
+  if (!linhas.length) {
+    return '<div class="gx-secao"><div class="gx-secao-cab"><b>O que cobrar hoje</b>' +
+      '<span>nenhuma evidência de intervenção nesta carga</span></div>' +
+      '<div class="gx-secao-nota">Plano do dia fechado, rota montada, nada acima do SLA e nenhum quente sem próximo passo. ' +
+      'É leitura da carga atual — não é promessa de que o dia acabou.</div></div>';
+  }
+  const itens = linhas.map(function (l) {
+    const ch = (typeof gxPautaChaveDe === 'function') ? gxPautaChaveDe(l) : null;
+    const dentro = ch && typeof gxPautaTem === 'function' && gxPautaTem(ch);
+    return '<div class="gx-mt-frente" style="--gx-tom:' + (GX_TONS_CATEGORIA[l.categoria] || 'var(--line-btn)') + '">' +
+      '<span class="gx-mt-frente-txt"><b>' + esc(l.evidencia || l.rotulo) + '</b>' +
+        '<small>' + esc(l.acao || '') + '</small></span>' +
+      (ch ? '<button type="button" class="gx-btn gx-btn-pauta' + (dentro ? ' is-dentro' : '') +
+        '" data-gx-pauta-por="' + esc(ch) + '" aria-pressed="' + (dentro ? 'true' : 'false') +
+        '" title="' + (dentro ? 'Tirar da pauta da Daily' : 'Mandar para a pauta da Daily') + '">' +
+        (dentro ? '✓' : '+') + '</button>' : '') +
+    '</div>';
+  }).join('');
+  return '<div class="gx-secao">' +
+    '<div class="gx-secao-cab"><b>O que cobrar hoje</b>' +
+      '<span>' + linhas.length + ' frente(s) desta pessoa · o "+" manda para a pauta da Daily</span></div>' +
+    '<div class="gx-mt-frentes">' + itens + '</div>' +
+  '</div>';
+}
+
+/* A PAUTA DO 1:1 e texto pronto para a conversa, montado do que a tela ja mostra. Ela nao
+   escreve em fonte nenhuma - e a mesma natureza da pauta da Daily. */
+function gxTextoPautaDo11(r) {
+  const nl = String.fromCharCode(10);
+  const partes = ['Pauta do 1:1 — ' + r.name + ' (' + (r.praca || 'praça não informada') + ')',
+    'Carga de ' + (DATA.hubspotUpdatedAtFmt || 'horário não informado'), ''];
+  if (r.gargalo) {
+    const limpo = String(r.gargalo).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+    partes.push('ONDE TREINAR:', limpo, '');
+  }
+  let frentes = [];
+  try { frentes = gxFilaDeIntervencao().filter(function (l) { return String(l.ownerId) === String(r.ownerId); }); }
+  catch (e) { frentes = []; }
+  if (frentes.length) {
+    partes.push('COBRAR HOJE:');
+    frentes.forEach(function (l) { partes.push('- ' + (l.evidencia || l.rotulo) + ' -> ' + (l.acao || '')); });
+    partes.push('');
+  }
+  partes.push('META DO MÊS: ' + (Number(r.fechadosNoMes) || 0) + ' de ' + (Number(r.metaMensal) || 0));
+  const det = (typeof visitasInformadasDetalhe === 'function') ? visitasInformadasDetalhe(r.ownerId) : null;
+  if (det) {
+    partes.push('PROMETIDO x CUMPRIDO (semana): ' +
+      (det.aderencia == null ? 'não medido — nenhuma visita prometida' : det.aderencia + '% (' + det.real + ' de ' + det.prom + ')'));
+  }
+  if (Array.isArray(r.boasPraticas) && r.boasPraticas.length) {
+    partes.push('', 'RECONHECER (comportamento observado para multiplicar):');
+    r.boasPraticas.forEach(function (b) { partes.push('- ' + String(b).replace(/<[^>]*>/g, '')); });
+  }
+  return partes.join(nl);
+}
+
 function renderCockpitDossieInline() {
   const el = document.getElementById('cockpitDossieInline');
   if (!el) return;
@@ -27281,11 +27407,12 @@ function renderCockpitDossieInline() {
   // críticos, em terceira pessoa. NUNCA aparecem pro próprio executivo, mesmo que esta
   // função seja chamada de outro lugar no futuro — o corte fica aqui dentro, não só no call
   // site. Aderência é só um número calculado ao vivo, sem tom, então é seguro pros dois.
+  /* O CARTAO "GARGALO" SAIU (02/09/26): o mesmo r.gargalo virou a MANCHETE do dossie, no
+     topo e antes das formas, que e onde a prancha o quer e onde ele de fato serve - o
+     gestor precisa saber por onde comecar a conversa antes de ler cinco graficos. Manter
+     os dois seria o mesmo texto duas vezes na mesma tela, a 300px de distancia.
+     A boa pratica e a aderencia continuam cartoes: sao outras duas coisas. */
   const cardsDiagnostico = souRepSessao ? cardAderencia : `
-    <div style="background:var(--red-soft);border-radius:var(--r-md);padding:13px 15px;">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--red);margin-bottom:4px;">GARGALO</div>
-      <div style="font-size:12px;line-height:1.55;">${r.gargalo}</div>
-    </div>
     <div style="background:var(--green-soft);border-radius:var(--r-md);padding:13px 15px;">
       <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--green);margin-bottom:4px;">BOA PRÁTICA A REPLICAR</div>
       <div style="font-size:12px;line-height:1.55;">${(r.boasPraticas && r.boasPraticas[0]) || '—'}</div>
@@ -27302,18 +27429,38 @@ function renderCockpitDossieInline() {
             <div style="color:var(--muted);font-size:12px;">${r.praca} · dossiê para o 1:1</div>
           </div>
         </div>
-        <a href="${hsExecutivoUrl(r.ownerId)}" target="_blank" rel="noopener" style="flex-shrink:0;font-size:12px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:var(--r-pill);padding:8px 16px;text-decoration:none;transition:background var(--t-base) var(--ease);" onmouseover="this.style.background='var(--red-soft)'" onmouseout="this.style.background='transparent'">Abrir no HubSpot ↗</a>
+        <span style="display:flex;gap:8px;flex-shrink:0;flex-wrap:wrap;">
+          ${souRepSessao ? '' : '<button type="button" id="gxCopiarPauta11" class="gx-pauta-btn">copiar pauta do 1:1</button>'}
+          <a href="${hsExecutivoUrl(r.ownerId)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;min-height:38px;font-size:12px;font-weight:700;color:var(--red);background:transparent;border:1.5px solid var(--red);border-radius:var(--r-pill);padding:0 16px;text-decoration:none;transition:background var(--t-base) var(--ease);" onmouseover="this.style.background='var(--red-soft)'" onmouseout="this.style.background='transparent'">Abrir no HubSpot ↗</a>
+        </span>
       </div>
 
-      <!-- O FUNIL DELE PRIMEIRO (30/08/26). A conversa de 1:1 começava por um parágrafo
-           de diagnóstico; agora começa por cinco leituras com forma — onde o funil dele
-           engorda, onde os negócios morrem, quanto dinheiro está parado, quanto falta de
-           meta e quanto ele cumpriu do que prometeu. O texto continua logo abaixo. -->
+      <!-- A MANCHETE DE TREINO VEM ANTES DAS FORMAS (02/09/26, prancha v4 §5). As cinco
+           leituras com forma entraram em 30/08 na frente do parágrafo de diagnóstico, e
+           isso resolveu um problema e criou outro: o gestor passou a ler cinco gráficos
+           antes de saber por onde começar a conversa. A manchete é UMA linha com o filete
+           vermelho, tirada do mesmo texto que já existia (r.gargalo, escrito pela análise
+           individual) — as formas continuam logo abaixo, na mesma ordem. -->
+      ${souRepSessao || !r.gargalo ? '' : `
+        <div class="gx-treinar">
+          <div class="gx-treinar-k">Onde treinar com ${esc(String(r.name).split(' ')[0])} esta semana</div>
+          <div class="gx-treinar-tx">${r.gargalo}</div>
+        </div>`}
+
+      <!-- O FUNIL DELE (30/08/26). Onde o funil dele engorda, onde os negócios morrem,
+           quanto dinheiro está parado, quanto falta de meta e quanto ele cumpriu do que
+           prometeu. -->
       ${gxFunilDoExecutivoHTML(r)}
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
         ${cardsDiagnostico}
       </div>
+
+      <!-- O QUE COBRAR HOJE (02/09/26, prancha v4 §5). Só do gestor: pauta de cobrança
+           não é coisa que o executivo recebe sobre si na tela dele.
+           "Como ele perde" NÃO entra aqui: já existe dentro de gxFunilDoExecutivoHTML,
+           com a régua do time e a ligação de cada motivo a um módulo do Playbook. -->
+      ${souRepSessao ? '' : gxCobrarHojeHTML(r)}
 
       <div style="border-top:1px solid var(--line);margin:20px 0;"></div>
 
@@ -27352,6 +27499,22 @@ function renderCockpitDossieInline() {
     </div>
   `;
 
+  /* O "+" DENTRO DO DOSSIE alimenta a MESMA pauta da barra do topo: se ele criasse uma
+     segunda lista, o gestor teria duas pautas para conduzir uma Daily. */
+  el.querySelectorAll('[data-gx-pauta-por]').forEach(btn => btn.addEventListener('click', () => {
+    if (typeof gxPautaAlternar === 'function') gxPautaAlternar(btn.getAttribute('data-gx-pauta-por'));
+    renderCockpitDossieInline();
+  }));
+  const btnP11 = document.getElementById('gxCopiarPauta11');
+  if (btnP11) btnP11.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(gxTextoPautaDo11(r));
+      btnP11.textContent = '✓ copiada';
+      setTimeout(() => { btnP11.textContent = 'copiar pauta do 1:1'; }, 1600);
+    } catch (e) {
+      mostrarToast('Não consegui copiar — o dossiê está na tela, selecione e copie à mão.', 'atencao');
+    }
+  });
   el.querySelectorAll('.dossie-leads-tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       el.querySelectorAll('.dossie-leads-tab-btn').forEach(b => {

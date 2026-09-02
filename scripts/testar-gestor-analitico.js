@@ -416,6 +416,37 @@ checar('os quatro blocos que o raio-X resume foram recolhidos, nao apagados',
   template.indexOf('id="vendasMesBloco"') > 0 &&
   template.indexOf('id="cockpitPorQuePerdemos"') > 0);
 
+/* ── 18. O DOSSIE DO 1:1 (aba Time, prancha v4 secao 5) ───────────────────────────
+   O dossie ja tinha a forma do funil dele contra o time, a idade por etapa, o dinheiro
+   parado, a meta e a aderencia. Faltavam a manchete de treino, o que cobrar hoje e a
+   pauta - e eu escrevi um bloco de perdas que JA EXISTIA e era melhor que o meu. As
+   checagens guardam que o duplicado nao volta e que a versao mantida e a completa. */
+checar('a manchete de treino vem antes das formas, e o cartao GARGALO nao ficou duplicado',
+  template.indexOf('Onde treinar com ${esc(String(r.name).split(') > 0 &&
+  template.indexOf('>GARGALO<') < 0);
+checar('existe UM bloco de perdas por pessoa, o que compara com o time',
+  templateCodigo.indexOf('function gxComoElePerdeHTML') < 0 &&
+  template.indexOf('régua = o time') > 0 &&
+  template.indexOf('d.razao >= 1.5 && d.n >= 5') > 0);
+checar('o bloco de perdas por pessoa liga o motivo a um modulo do Playbook',
+  template.indexOf('Objeções — a conversa é sobre margem') > 0 &&
+  template.indexOf('Follow-up — presença no prazo certo') > 0);
+checar('o MRR das perdas dele aparece com a cobertura, e nao como receita',
+  templateCodigo.indexOf('mp.mrrPorOwner[String(r.ownerId)]') > 0 &&
+  template.indexOf('os negócios sem MRR preenchido não entram nesta soma') > 0);
+checar('o que cobrar hoje reusa a fila e o mesmo + da pauta da Daily',
+  templateCodigo.indexOf('function gxCobrarHojeHTML(r)') > 0 &&
+  templateCodigo.indexOf("gxFilaDeIntervencao().filter(function (l) { return String(l.ownerId) === String(r.ownerId); })") > 0);
+checar('a pauta do 1:1 monta texto do que a tela mostra, sem escrever em fonte nenhuma',
+  templateCodigo.indexOf('function gxTextoPautaDo11(r)') > 0 &&
+  template.indexOf('copiar pauta do 1:1') > 0 &&
+  templateCodigo.indexOf('RECONHECER (comportamento observado para multiplicar)') > 0);
+checar('a comparacao com o time e a pauta nao chegam ao executivo',
+  templateCodigo.indexOf("souRepSessao ? '' : gxCobrarHojeHTML(r)") > 0 &&
+  templateCodigo.indexOf("souRepSessao ? '' : '<button type=\"button\" id=\"gxCopiarPauta11\"") > 0);
+checar('o que abre lista no dossie cumpre o piso de 38px no desktop',
+  template.indexOf('.coach-funil-etapa.is-abre{min-height:38px;}') > 0);
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
