@@ -497,3 +497,99 @@ function checarPisoDeToque() {
   return false;
 }
 if (!checarPisoDeToque()) process.exit(1);
+
+/* ══ VARIÁVEL DECLARADA ONDE O MARKUP NÃO CHEGA (02/09/26) ═══════════════════════════
+   A página de leitura do Playbook tinha 46 usos de var(--v6-*) e a paleta inteira estava
+   INALCANÇÁVEL: os tokens eram declarados só em .pbv6, e nenhum markup gera essa classe
+   desde que o shell do leitor virou .pb7-lendo. Medido no navegador:
+   getPropertyValue("--v6-dark") devolvia VAZIO — então todo bloco escuro de fala pronta
+   era desenhado transparente, o cartão âmbar do "O que fazer agora" ficava sem fundo e o
+   cabeçalho de tabela sem cor. O desenho existia e não chegava.
+   A guarda de variável-nunca-definida não pegou porque a variável ESTAVA definida; o que
+   faltava era ALCANCE. Foi o terceiro caso da mesma família na mesma tela (os outros: o
+   container .pl4-niveis do filtro de visão e o id #playbookToc do scrollspy) — alguém
+   renomeia o markup e o CSS/JS segue apontando para o nome antigo, sem erro nenhum.
+
+   ESCOPO: só o bloco <style>. A primeira versão varria o arquivo inteiro e tratou linhas
+   de JS como seletor ("const tituloEv = ..." tem chave), acusando --alt e --agm-nd, que
+   são declaradas INLINE no style= do elemento. Declaração inline sempre alcança, porque
+   mora no próprio nó — então ela também entra na conta. */
+function checarAlcanceDasVariaveis() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+
+  /* so o CSS */
+  const ini = cru.indexOf(String.fromCharCode(60) + 'style');
+  const fim = cru.indexOf('</style>');
+  if (ini < 0 || fim < 0) { console.log('OK alcance — sem bloco de estilo para conferir.'); return true; }
+  const css = cru.slice(cru.indexOf('>', ini) + 1, fim);
+
+  const geradas = new Set();
+  let m;
+  const reClass = /class="([^"]*)"/g;
+  while ((m = reClass.exec(cru))) {
+    String(m[1]).split(/[\s${}()?:'"+]+/).forEach(t => { if (t) geradas.add(t.replace(/^\./, '')); });
+  }
+  const reLista = /classList\.(?:add|remove|toggle)\(\s*'([^']+)'/g;
+  while ((m = reLista.exec(cru))) geradas.add(m[1]);
+  const reCn = /className\s*=\s*'([^']*)'/g;
+  while ((m = reCn.exec(cru))) String(m[1]).split(/\s+/).forEach(t => { if (t) geradas.add(t); });
+
+  /* variável declarada inline no elemento: style="--x:algo" — alcança sempre */
+  const inline = new Set();
+  const reInline = /style="[^"]*?(--[A-Za-z][\w-]*)\s*:/g;
+  while ((m = reInline.exec(cru))) inline.add(m[1]);
+
+  const declaradaEm = new Map();
+  let seletorAtual = '';
+  css.split(/\r?\n/).forEach(linha => {
+    const t = linha.trim();
+    if (t.indexOf('*') === 0 || t.indexOf('/*') === 0) return;
+    const abre = t.indexOf('{');
+    if (abre > 0 && t.indexOf('@') !== 0) seletorAtual = t.slice(0, abre).trim();
+    const vars = t.match(/--[A-Za-z][\w-]*(?=\s*:)/g);
+    if (!vars) return;
+    vars.forEach(v => {
+      if (!declaradaEm.has(v)) declaradaEm.set(v, new Set());
+      declaradaEm.get(v).add(seletorAtual);
+    });
+  });
+
+  /* Classe gerada por BIBLIOTECA, nao pelo nosso markup: o FullCalendar cria .fc no
+     runtime. Lista fechada e pequena de proposito — cada nome aqui e uma excecao que
+     alguem teve que justificar. */
+  const DE_BIBLIOTECA = ['fc'];
+  const alcanca = (sel) => {
+    if (!sel) return false;
+    if (DE_BIBLIOTECA.some(c => sel.indexOf('.' + c) >= 0)) return true;
+    if (/(^|,)\s*(:root|\*|html|body)\s*(,|$)/.test(sel)) return true;
+    return sel.split(',').map(x => x.trim()).filter(Boolean).some(parte => {
+      const classes = parte.match(/\.[A-Za-z][\w-]*/g);
+      if (!classes) return true;
+      return classes.every(c => geradas.has(c.slice(1)));
+    });
+  };
+
+  const usadas = new Set();
+  const reUso = /var\(\s*(--[A-Za-z][\w-]*)/g;
+  while ((m = reUso.exec(css))) usadas.add(m[1]);
+
+  const mortas = [];
+  usadas.forEach(v => {
+    if (inline.has(v)) return;
+    const onde = declaradaEm.get(v);
+    if (!onde || !onde.size) return;   /* nunca definida é outra guarda */
+    if (![...onde].some(alcanca)) mortas.push(v + '  declarada só em: ' + [...onde].join(' | ').slice(0, 80));
+  });
+
+  if (!mortas.length) {
+    console.log('OK alcance — as ' + usadas.size + ' variáveis do CSS são declaradas em seletor que o markup gera.');
+    return true;
+  }
+  console.error('\nVARIÁVEL DECLARADA ONDE O MARKUP NÃO CHEGA em ' + arquivo + ':');
+  mortas.forEach(x => console.error('  ' + x));
+  console.error('  Sem markup para o seletor, var(...) cai em inválido: fundo transparente,');
+  console.error('  cor herdada, borda nenhuma — e nada disso dá erro de sintaxe.');
+  return false;
+}
+if (!checarAlcanceDasVariaveis()) process.exit(1);

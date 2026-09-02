@@ -176,8 +176,24 @@ checar('sem bullets reconhecíveis, a seção FICA no corpo',
   /if \(!bullets\.length\) return \{ bullets: \[\], html \};/.test(template));
 checar('no celular a ordem é quiz e depois "leve pra rua"',
   /\.pb7-prova\{order:1;\}[\s\S]{0,120}?\.pb7-rail-bloco\{order:2;\}/.test(template));
-checar('a coluna de leitura tem a medida da prancha (660px)',
-  /\.pb7-artigo\{max-width:660px/.test(template));
+/* A v8 fechou a coluna em 640px (medida de revista da prancha nova) e subiu o corpo de
+   13px para 15.5px, que era o defeito real: o critério de aceite dela é nada de corpo
+   abaixo de 15px. A checagem passa a guardar os dois. */
+checar('a coluna de leitura tem a medida de revista (640px) e corpo acima de 15px',
+  template.indexOf('.pb7-artigo{max-width:640px') > 0
+  && template.indexOf('.pba{font-size:15.5px') > 0);
+checar('nenhuma tabela sobrevive: virou card com rótulo do cabeçalho',
+  template.indexOf('pb8-cards') > 0 && template.indexOf('pb8-campo-rot') > 0
+  && template.indexOf('.pba table{') < 0);
+checar('o script continua bloco escuro copiável, e o campo variável fica âmbar',
+  template.indexOf('.pba .fa-body .pb8-var{color:#F2B84B') > 0);
+checar('a paleta da leitura alcança o shell do leitor',
+  template.indexOf('.pbv6,.pb7-lendo{') > 0);
+checar('o scrollspy casa pelo atributo que o markup gera, não por id inexistente',
+  template.indexOf("querySelectorAll('.pb7-toc-sec [data-pb-anchor]')") > 0
+  /* Checa o USO em codigo, nao a mencao: o comentario que documenta o defeito cita o id
+     morto, e a primeira versao desta linha acusou a propria explicacao. */
+  && template.indexOf('querySelectorAll(' + String.fromCharCode(39,35) + 'playbookToc') < 0);
 
 /* ── 11. o alvo de copiar script está no piso ───────────────────────────────────── */
 checar('o botão copiar script está no piso de 38px',
