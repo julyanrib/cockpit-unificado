@@ -8753,6 +8753,18 @@
   .sec-head h2,.gi-h,.agdx-k{text-wrap:balance;}
   .prosa,.command-note,.gi-note,.empty-state,.pcard-body > div,.diag-card p,
   .pl4-balde-pe,.d4-prometer-nota,.leitura-frase{text-wrap:pretty;}
+
+  /* EXECUTIVO NA RUA — piso de toque real (02/09/26).
+     A tela já não estoura horizontalmente em 390px; o problema restante eram ações de
+     36/38px em Hoje, Planejamento, Agenda e Propostas. O escopo fica preso ao papel do
+     executivo para não interferir no redesenho simultâneo das telas do gestor. */
+  @media (max-width:640px){
+    body.exec-v3 button,
+    body.exec-v3 a.btn,
+    body.exec-v3 a[class*="cta"],
+    body.exec-v3 a[class*="btn"],
+    body.exec-v3 [role="button"]{min-height:44px;}
+  }
 </style>
 </head>
 <body>
@@ -11656,7 +11668,11 @@ function irParaPlanejamento(bloco, baldePedido) {
    MESMA variável que os chips do Meu funil usam (meuFunilFiltroVisao) — não é um
    segundo filtro paralelo, é o mesmo estado. */
 function irParaMeuFunilVisao(visao) {
-  if (typeof meuFunilFiltroVisao !== 'undefined') meuFunilFiltroVisao = visao || 'todos';
+  /* Os deep-links antigos usam hífen (sem-passo) e o estado interno do funil usa
+     underscore (sem_passo). Normaliza na fronteira para o CTA abrir exatamente a fila
+     que promete, sem espalhar duas grafias pelo restante do Meu Funil. */
+  const visaoCanonica = ({ 'sem-passo': 'sem_passo' })[visao] || visao || 'todos';
+  if (typeof meuFunilFiltroVisao !== 'undefined') meuFunilFiltroVisao = visaoCanonica;
   if (typeof meuFunilFiltroEtapa !== 'undefined') meuFunilFiltroEtapa = '';
   const btn = document.getElementById('tabBtnMeuFunil');
   if (btn) btn.click();
@@ -12767,9 +12783,9 @@ async function renderMeuPainel() {
   const dOntem = getDaily(r.ownerId, ontemISO) || {};
   const ontemLabel = new Date(ontemISO + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }).replace('.', '');
   const ontemLinhas = [
-    { rotulo: 'Visitas', valor: ontemAtividade.visitas.length, fonte: 'agenda fechada' },
-    { rotulo: 'Reuniões', valor: ontemAtividade.reunioes.length, fonte: 'agenda fechada' },
-    { rotulo: 'Propostas', valor: dOntem.realizado_propostas != null ? dOntem.realizado_propostas : null, fonte: 'robô da noite' }
+    { rotulo: 'Visitas', valor: ontemAtividade.visitas.length, fonte: 'visitas comprovadas no HubSpot' },
+    { rotulo: 'Reuniões', valor: ontemAtividade.reunioes.length, fonte: 'reuniões comprovadas no HubSpot' },
+    { rotulo: 'Propostas', valor: dOntem.realizado_propostas != null ? dOntem.realizado_propostas : null, fonte: 'última atualização automática' }
   ];
   const ontemTemDado = ontemAtividade.total > 0;
 
@@ -12784,7 +12800,7 @@ async function renderMeuPainel() {
   const agendaVaziaHoje = hojeConta.total === 0;
   const pendenteAtrasada = hojeConta.pendentes > 0 && !(proximoCompromisso && proximoCompromisso.ehHoje);
   const diagnosticoPartes = [];
-  if (agendaVaziaHoje) diagnosticoPartes.push('Agenda vazia');
+  if (agendaVaziaHoje) diagnosticoPartes.push('Agenda de hoje vazia');
   // Visita marcada cujo horário passou e ninguém fechou no HubSpot: some da leitura de
   // "próximo compromisso" e por isso ficava invisível — é o oposto de agenda vazia.
   else if (pendenteAtrasada) diagnosticoPartes.push(`${hojeConta.pendentes} visita${hojeConta.pendentes === 1 ? '' : 's'} de hoje sem fechamento`);
@@ -17984,6 +18000,17 @@ let pb7Tentativas = 0;     /* tentativas do quiz na página aberta (2 é o limit
 let pb7Travado = false;    /* errou as duas: destrava quando o artigo for rolado de novo */
 let pb7Respondida = null;  /* índice escolhido, para pintar a alternativa */
 
+/* Scripts de campo podem usar [Seu nome]. O Playbook é uma fonte única para todo o
+   time, mas a fala pronta precisa sair com o nome de quem está logado — nunca com o nome
+   de quem escreveu o exemplo. A substituição acontece antes de montar artigo e cartões,
+   portanto o texto visível e o texto copiado são o mesmo. */
+function pb7PersonalizarHTML(html) {
+  const ownerId = sessaoAtual && sessaoAtual.ownerId;
+  const rep = (DATA.reps || []).find(r => String(r.ownerId) === String(ownerId));
+  const primeiroNome = String((rep && rep.name) || '').trim().split(/\s+/)[0] || 'seu nome';
+  return String(html || '').replace(/\[Seu nome\]/gi, esc(primeiroNome));
+}
+
 /* "a mais copiada do time" só pode ser dito de UMA página — o superlativo aplicado a três
    linhas ao mesmo tempo é ruído com cara de destaque. */
 function pb7EhMaisCopiada(id) {
@@ -18002,7 +18029,7 @@ function pb7EhMaisCopiada(id) {
    decidindo se vale o tempo. A seção sai do corpo para não dizer a mesma coisa duas vezes
    na mesma tela — que é o defeito que este projeto vem corrigindo em toda aba. */
 function pb7LevePraRua(pagina) {
-  const html = String(pagina.html || '');
+  const html = pb7PersonalizarHTML(pagina.html || '');
   const h2s = [...html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/g)];
   const alvo = h2s.find(m => /o que fazer agora/i.test(m[1].replace(/<[^>]+>/g, '')));
   if (!alvo) return { bullets: [], html };
@@ -21360,7 +21387,7 @@ function pl4PassoAHTML(rep) {
           <br>Um por vez: quando você conclui o balde, ele fecha e o próximo abre.</div>`}
       </div>
     </div>
-    <div class="xv3-proc">Fonte: HubSpot (pipeline 9451149A) · tarefas, notas e etapas lidas na carga de ${esc(frescorDosDados().rotulo || 'carga não confirmada')} — a fila é derivada, ninguém a preenche à mão.</div>
+    <div class="xv3-proc">Fonte: HubSpot (pipeline 916011864) · tarefas, notas e etapas lidas na carga de ${esc(frescorDosDados().rotulo || 'carga não confirmada')} — a fila é derivada, ninguém a preenche à mão.</div>
   </div>`;
 }
 
@@ -27502,10 +27529,10 @@ function agendaDiagnosticoExec(o) {
   return '<div class="agdx">' +
     '<button class="agdx-t" data-agdxfoco="buracosCard" data-tone="' + (buracos.length ? 'red' : 'green') + '">' +
       '<span class="agdx-k">Buracos restantes</span>' +
-      '<span class="agdx-v">' + buracos.length + '<em> de ' + diasAcionaveis.length + ' dias úteis restantes</em></span>' +
+      '<span class="agdx-v">' + buracos.length + '<em> de ' + diasAcionaveis.length + ' dias de atuação restantes</em></span>' +
       '<span class="agdx-s">' + (buracos.length
         ? agendaEsc(buracos.map(curto).join(' · ')) + ' — sem nada marcado'
-        : (diasAcionaveis.length ? 'Todos os dias úteis restantes têm compromisso.' : 'Semana encerrada — sem buraco acionável.')) + '</span></button>' +
+        : (diasAcionaveis.length ? 'Todos os dias de atuação restantes têm compromisso.' : 'Semana encerrada — sem buraco acionável.')) + '</span></button>' +
     '<button class="agdx-t" data-agdxfoco="quentesForaCard" data-tone="' + (!o.quentes.length ? '' : fora ? 'amber' : 'green') + '">' +
       '<span class="agdx-k">Quentes sem compromisso</span>' +
       '<span class="agdx-v">' + fora + '<em> de ' + o.quentes.length + '</em></span>' +
@@ -35734,7 +35761,7 @@ function dl2Col1(r, linhaHoje, linhas, fase) {
       ? `<div class="dl2-pe-caixa"><b>${pontos.pts} de ${potencial.bruto} pts</b> ·
           fechar 100% vira <b class="is-ambar">${potencial.comBonus} com o bônus ×1,5</b> ·
           prometido furado = 0 — a promessa não se edita, se cumpre.
-          <br>página do Playbook lida = +10 pts, máx. 2/dia.</div>`
+          <br>página do Playbook provada = +10 pts, máx. 2/dia.</div>`
       : `<div class="dl2-prometer">
           <button type="button" class="d4-btn-prometer" id="d4Prometer">${
             potencial.bruto > 0 ? 'Atualizar a promessa → vira agenda' : 'Prometer o dia → vira agenda'}</button>
@@ -36512,7 +36539,7 @@ function dailyV4HTML(r) {
       </div>
       <div class="d4-regra">
         <div class="d4-regra-rot">REGRA DO JOGO</div>
-        <div class="d4-regra-txt">pontos = prometido × cumprido<br><b>100% cumprido = bônus ×1,5</b> · prometido furado = 0<br>página do Playbook lida = <b>+${PBV6_PTS_LEITURA} pts</b> · máx. ${PBV6_LEITURAS_POR_DIA}/dia</div>
+        <div class="d4-regra-txt">pontos = prometido × cumprido<br><b>100% cumprido = bônus ×1,5</b> · prometido furado = 0<br>página do Playbook provada = <b>+${PBV6_PTS_LEITURA} pts</b> · máx. ${PBV6_LEITURAS_POR_DIA}/dia</div>
       </div>
     </div>`;
 
@@ -36701,6 +36728,12 @@ function d4EventosDeHoje(ownerId) {
   return (agendaNormalizar(DATA.agenda) || [])
     .filter(e => String(e.ownerId || '') === String(ownerId))
     .filter(e => e.inicio && agendaChave(e.inicio) === hojeK)
+    /* A linha da Daily representa rua. DAILY OUTBOUND, 1:1, treinamento e qualquer
+       outro evento interno continuam visíveis na Agenda, mas nunca viram cliente,
+       visita prometida, slot comercial ou card AGORA. */
+    .filter(e => typeof agendaContaComoCompromisso === 'function'
+      ? agendaContaComoCompromisso(e)
+      : !!(AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta))
     .sort((a, b) => String(a.hora || '').localeCompare(String(b.hora || '')));
 }
 
@@ -40389,8 +40422,8 @@ function montarPerfilProgresso() {
   // ---- medalhas: cada uma com a prova do lado ----
   const medalhas = [
     { icone: '🎯', nome: 'Meta do mês', ganha: metaMes > 0 && fechados >= metaMes, prova: fechados + ' de ' + (metaMes || '—') + ' fechamentos' },
-    { icone: '🛡️', nome: 'Pipeline protegido', ganha: quentesTodos.length > 0 && quentesSemPasso === 0, prova: quentesTodos.length === 0 ? 'sem quente no funil ainda' : (quentesSemPasso === 0 ? 'todo quente com próximo passo' : quentesSemPasso + ' quente(s) sem passo') },
-    { icone: '⏱️', nome: 'SLA limpo', ganha: travados === 0, prova: travados === 0 ? 'nenhum lead travado' : travados + ' travado(s)' },
+    { icone: '🛡️', nome: 'Meta: pipeline protegido', ganha: quentesTodos.length > 0 && quentesSemPasso === 0, prova: quentesTodos.length === 0 ? 'sem lead quente no funil ainda' : (quentesSemPasso === 0 ? 'todo lead quente com próximo passo' : quentesSemPasso + (quentesSemPasso === 1 ? ' lead quente sem próximo passo' : ' leads quentes sem próximo passo')) },
+    { icone: '⏱️', nome: 'Meta: SLA limpo', ganha: travados === 0, prova: travados === 0 ? 'nenhum negócio acima do SLA' : travados + (travados === 1 ? ' negócio acima do SLA' : ' negócios acima do SLA') },
     { icone: '🗺️', nome: 'Rua cheia', ganha: visitasSemana >= metaSemana, prova: visitasSemana + ' de ' + metaSemana + ' visitas na semana' }
   ];
   if (!gestor) medalhas.push({ icone: '🔥', nome: 'Sequência', ganha: sequencia >= 3, prova: sequencia > 0 ? sequencia + ' dia(s) batendo o prometido' : 'sem sequência ativa' });
@@ -43155,7 +43188,10 @@ function narrativaDivergencias(texto, r) {
   if (abertos && r.open != null) {
     const noTexto = Number(abertos[1]);
     const aoVivo = Number(r.open);
-    if (aoVivo > 0 && Math.abs(noTexto - aoVivo) / aoVivo >= 0.25) {
+    /* Texto que dirige o dia não ganha tolerância: 31 escrito e 30 ao vivo já são
+       universos diferentes. A leitura continua acessível como histórico, mas perde a
+       autoridade de gerar a ação de hoje na primeira divergência. */
+    if (noTexto !== aoVivo) {
       out.push({ campo: 'negócios em aberto', noTexto, aoVivo });
     }
   }
@@ -43163,7 +43199,7 @@ function narrativaDivergencias(texto, r) {
   if (sla && Array.isArray(r.travados)) {
     const noTexto = Number(sla[1]);
     const aoVivo = r.travados.length;
-    if (aoVivo > 0 && Math.abs(noTexto - aoVivo) / aoVivo >= 0.5) {
+    if (noTexto !== aoVivo) {
       out.push({ campo: 'leads com SLA estourado', noTexto, aoVivo });
     }
   }
@@ -43699,6 +43735,28 @@ async function renderPDIs() {
                   gestoVivo.faltaQualif > 0 ? gestoVivo.faltaQualif + ' sem sistema e dor registrados' : ''
                 ].filter(Boolean).join(' · ')}</p>`
               : ''}`);
+
+    /* AÇÕES COM A MESMA VALIDADE DO DIAGNÓSTICO (02/09/26).
+       O card de gargalo já recolhia a narrativa vencida, mas os três cartões logo abaixo
+       continuavam vindo de `comoAgirIndividual` antigo. Resultado medido na tela: o topo
+       dizia 9 acima do SLA e a prioridade mandava atacar 3. Quando a narrativa não passa
+       na guarda, as ações agora nascem apenas de fatos que o Meu Funil também calcula. */
+    const acoesAoVivo = [];
+    if (travadosRep > 0) {
+      acoesAoVivo.push(`Resolver ${travadosRep} negócio${travadosRep === 1 ? '' : 's'} acima do SLA: avançar, datar o próximo passo, reciclar com data ou perder com motivo.`);
+    }
+    if (gestoVivo && !gestoVivo.saudavel) {
+      acoesAoVivo.push(`${gestoVivo.etapa || 'Etapa mais cheia'}${gestoVivo.proxima ? ' → ' + gestoVivo.proxima : ''}: ${gestoVivo.gesto || gestoVivo.pergunta || 'executar o próximo movimento e registrar o resultado no HubSpot'}.`);
+    }
+    if (gestoVivo && gestoVivo.faltaPasso > 0) {
+      acoesAoVivo.push(`Datar o próximo passo dos ${gestoVivo.faltaPasso} negócio${gestoVivo.faltaPasso === 1 ? '' : 's'} descoberto${gestoVivo.faltaPasso === 1 ? '' : 's'} nesta etapa.`);
+    } else if (gestoVivo && gestoVivo.faltaQualif > 0) {
+      acoesAoVivo.push(`Registrar sistema atual e dor nos ${gestoVivo.faltaQualif} negócio${gestoVivo.faltaQualif === 1 ? '' : 's'} sem qualificação suficiente.`);
+    }
+    if (!acoesAoVivo.length && abertosRep === 0) {
+      acoesAoVivo.push('Abrir novos negócios a partir das contas-alvo do Planejamento e sair com a primeira visita datada.');
+    }
+    const acoesHoje = (saudeNarrativa.valida ? acoesSemana : acoesAoVivo).slice(0, 3);
     const cardGargalo = temGargalo && saudeNarrativa.valida ? `
       <div class="diag-card">
         <span class="diag-tag">Gargalo da semana${fonteTag ? ' · HubSpot ' + esc(fonteTag) : ''}</span>
@@ -43736,13 +43794,13 @@ async function renderPDIs() {
       { t: 'var(--amber)', i: 'var(--amber-ink)', s: 'var(--amber-soft)' },
       { t: 'var(--green)', i: 'var(--green)', s: 'var(--green-soft)' }
     ];
-    const cardsAcao = acoesSemana.slice(0, 3).map((a, k) => {
+    const cardsAcao = acoesHoje.map((a, k) => {
       const tom = TONS_ACAO[k] || TONS_ACAO[2];
       return `
       <article class="acao" style="--tone:${tom.t};--tone-ink:${tom.i};--tone-soft:${tom.s};">
         <div class="acao-top"><span class="acao-tag">Prioridade ${k + 1}</span></div>
         <h3>${a}</h3>
-        <div class="acao-foot"><span class="prazo"><i></i>até sexta (${dataSexta})</span></div>
+        <div class="acao-foot"><span class="prazo"><i></i>${saudeNarrativa.valida ? `até sexta (${dataSexta})` : 'agir hoje · HubSpot de agora'}</span></div>
       </article>`;
     }).join('');
 
@@ -43785,7 +43843,7 @@ async function renderPDIs() {
         ${cardGargalo}
         ${numerosDiag}
       </div>
-      ${acoesSemana.length ? `<div class="acoes acoes-3">${cardsAcao}</div>` : ''}
+      ${acoesHoje.length ? `<div class="acoes acoes-3">${cardsAcao}</div>` : ''}
     </section>`;
 
     // ---- Seção 2: o plano em 3 partes ----
@@ -43842,7 +43900,8 @@ async function renderPDIs() {
               dTravados ? (dTravados.subiu ? 'a limpeza não acompanhou' : 'limpeza andou — manter') : (travadosRep > 0 ? 'precisa de decisão registrada' : 'nada travado'),
               dTravados ? dTravados.txt : String(travadosRep), travadosRep > 0 ? 'var(--red-dk)' : 'var(--green)')}
             ${indSemana && indSemana.resumoIndividual
-              ? `<p class="leitura-frase">${indSemana.resumoIndividual}</p><p style="font-size:11px;color:var(--muted2);margin-top:6px;">Leitura escrita ${(DATA.resumoSemanal && DATA.resumoSemanal.geradoEmFmt) || 'na última sexta'} — os números acima já são de agora.</p>`
+              ? `<p style="font-size:11px;color:var(--muted2);margin:8px 0 0;">Os números acima são do HubSpot de agora. A leitura escrita fica abaixo apenas como histórico.</p>
+                 <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--muted);">Ler histórico escrito ${(DATA.resumoSemanal && DATA.resumoSemanal.geradoEmFmt) || 'na última sexta'}</summary><p class="leitura-frase" style="margin-top:9px;">${indSemana.resumoIndividual}</p></details>`
               : `<p class="leitura-frase">Sua leitura escrita fecha na sexta — os números acima já são os de agora.</p>`}
           </div>
         </div>
@@ -43893,11 +43952,11 @@ async function renderPDIs() {
         <div style="display:flex;flex-direction:column;gap:4px;min-width:260px;flex:1;">
           <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Meu desenvolvimento · ${esc(String(r && r.name || '').split(' ')[0])}</span>
           <h1 style="font-family:var(--font-display);font-size:24px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.18;">Como eu melhoro?</h1>
-          <p class="hero-sub">Sua semana fechou com <b>${ganhosSemRep} ganho${ganhosSemRep === 1 ? '' : 's'}</b>${pctInicio >= 50 ? ` e <b>${pctInicio}% do funil</b> ainda antes do decisor` : ` e ${abertosRep} negócio${abertosRep === 1 ? '' : 's'} em aberto`}.${acoesSemana.length ? ` O plano abaixo ataca exatamente isso — em ${acoesSemana.length} ${acoesSemana.length === 1 ? 'ação' : 'ações'} com prazo.` : ''}</p>
+          <p class="hero-sub">Sua semana fechou com <b>${ganhosSemRep} ganho${ganhosSemRep === 1 ? '' : 's'}</b>${pctInicio >= 50 ? ` e <b>${pctInicio}% do funil</b> ainda antes do decisor` : ` e ${abertosRep} negócio${abertosRep === 1 ? '' : 's'} em aberto`}.${acoesHoje.length ? ` O plano abaixo ataca exatamente isso — em ${acoesHoje.length} ${acoesHoje.length === 1 ? 'ação' : 'ações'} com prazo.` : ''}</p>
         </div>
         <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
         <div style="display:flex;gap:32px;font-variant-numeric:tabular-nums;">
-          <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-ink);line-height:1.05;">${acoesSemana.length}</div><div style="font-size:11px;color:var(--dark-mut);">ações desta semana</div></div>
+          <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-ink);line-height:1.05;">${acoesHoje.length}</div><div style="font-size:11px;color:var(--dark-mut);">ações válidas agora</div></div>
           <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-green);line-height:1.05;">${boasPraticasIA.length}</div><div style="font-size:11px;color:var(--dark-mut);">boas práticas</div></div>
           <div><div id="devPdiCountHero" style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-ink);line-height:1.05;">…</div><div style="font-size:11px;color:var(--dark-mut);">PDIs anexados</div></div>
         </div>

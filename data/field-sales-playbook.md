@@ -1167,7 +1167,7 @@ O telefone não serve para bater papo. Serve para usar a escassez da agenda téc
 
 * **O Script Conclusivo:**
 
-> *"Seu [Nome], tudo bem? É o Ribeiro da Takeat. Estou te ligando porque o nosso time de implantação está fechando a agenda de instalações da sua região para os próximos dias. Como a sua proposta já foi validada, eu liguei para travar a sua data antes que o lote feche. Para a equipe já descer com os equipamentos configurados para o seu número de mesas, fica melhor eu passar aí hoje no fim da tarde para pegarmos a sua assinatura ou o senhor prefere liquidar o link de ativação agora pelo WhatsApp?"*
+> *"Seu [Nome], tudo bem? É [Seu nome], da Takeat. Estou te ligando porque o nosso time de implantação está fechando a agenda de instalações da sua região para os próximos dias. Como a sua proposta já foi validada, eu liguei para travar a sua data antes que o lote feche. Para a equipe já descer com os equipamentos configurados para o seu número de mesas, fica melhor eu passar aí hoje no fim da tarde para pegarmos a sua assinatura ou o senhor prefere liquidar o link de ativação agora pelo WhatsApp?"*
 
 ***
 
@@ -1207,7 +1207,7 @@ Com o aplicativo de Field Sales ativo, a organização das suas tarefas de acomp
 
 * **Custo de Deslocamento Zero:** é terminantemente proibido cruzar a cidade para fazer apenas uma visita de fechamento. O executivo Takeat "cerca" o perímetro. Se o aplicativo mostra que você tem 3 propostas abertas na região X, a sua missão do dia é bater nessas 3 portas para coletar o dinheiro do setup e abrir mais 5 leads novos nos vizinhos de muro.
 
-* **O app já sabe quem está no prazo crítico:** como as tarefas de cadência são automáticas por etapa, o app aponta sozinho quais leads da sua microrrota de hoje estão prestes a estourar o SLA — você não precisa lembrar, só precisar olhar a rota antes de sair de casa.
+* **O app já sabe quem está no prazo crítico:** como as tarefas de cadência são automáticas por etapa, o app aponta sozinho quais leads da sua microrota de hoje estão prestes a estourar o SLA — você não precisa lembrar, só precisa olhar a rota antes de sair de casa.
 
 ***
 

@@ -1567,10 +1567,29 @@ teste('Agenda separa historico vazio de buraco ainda acionavel', () => {
 
   verdade(agenda.includes('const diasAcionaveis = o.dias.filter'),
     'a janela de acao e calculada explicitamente');
-  verdade(html.includes('diasAcionaveis.length') && html.includes('dias úteis restantes'),
+  verdade(html.includes('diasAcionaveis.length') && html.includes('dias de atuação restantes'),
     'numerador e denominador usam a mesma janela');
   verdade(html.includes('<b>Busca ao vivo de novas empresas</b><span>abertas nos últimos 90 dias</span>'),
     'a busca de 90 dias nao se disfarca de carteira de 6 meses');
+});
+
+teste('Daily exclui eventos internos e deep-link do Playbook preserva o filtro prometido', () => {
+  const iniDaily = html.indexOf('function d4EventosDeHoje(ownerId)');
+  const fimDaily = html.indexOf('function buildBriefingExecutivoHTML', iniDaily);
+  const daily = html.slice(iniDaily, fimDaily);
+  verdade(daily.includes('agendaContaComoCompromisso(e)'),
+    'a linha comercial da Daily aplica a mesma regra que exclui DAILY OUTBOUND e 1:1 da rua');
+
+  const iniLink = html.indexOf('function irParaMeuFunilVisao(visao)');
+  const fimLink = html.indexOf('let filaFocoInicial', iniLink);
+  const link = html.slice(iniLink, fimLink);
+  verdade(link.includes("'sem-passo': 'sem_passo'"),
+    'o CTA abrir os N no funil traduz a grafia do Playbook para o filtro real');
+
+  verdade(html.includes('página do Playbook provada ='),
+    'a Daily credita prova, nao simples rolagem da pagina');
+  falso(html.includes('pipeline 9451149A'),
+    'o Planejamento nao publica um pipeline diferente do Field Sales oficial');
 });
 
 teste('as tres acoes de agora nao dao duas vagas ao mesmo cliente', () => {
