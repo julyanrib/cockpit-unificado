@@ -376,6 +376,46 @@ checar('quando o numero vem do campo do HubSpot, a tela declara a procedencia',
   template.indexOf('campo do HubSpot') > 0 &&
   templateCodigo.indexOf('function mrrFonteDoNegocio(lead)') > 0);
 
+/* ── 17. OS CINCO CARTOES DO RAIO-X (aba Time, prancha v4 secao 3b) ───────────────
+   Quatro dos cinco reusam calculo que ja existia; o quinto (onde os negocios morrem) sai
+   do mesmo retrato do funil interativo. As checagens guardam as regras que impedem que
+   cada cartao invente numero: cobertura em negocios e nao em dinheiro, ritmo como conta e
+   nao previsao, promessa ausente como nao medido, mediana em vez de media no estouro, e
+   ninguem cobrado de rua fora da fase de rua. */
+checar('o cartao de campo usa visita comprovada, nunca planejada',
+  template.indexOf('Visita comprovada por evento do Expogo/HubSpot — planejada não conta') > 0 &&
+  templateCodigo.indexOf("(ev.desfecho === 'COMPLETED' || ev.registro)") > 0);
+checar('quem nao esta na rua nesta fase nao aparece como parado',
+  templateCodigo.indexOf('parado: e.naRua && e.comprovadas === 0 && e.paradas === 0') > 0 &&
+  template.indexOf('não está na rua nesta fase da rampagem') > 0);
+checar('o estouro de prazo usa mediana, nao media',
+  templateCodigo.indexOf('const excessos = estourados.map(l => l.dias - prazo).sort') > 0 &&
+  template.indexOf('média seria distorcida por um negócio parado há meses') > 0);
+checar('a meta e a soma das metas individuais declaradas, e o ritmo e conta',
+  templateCodigo.indexOf('const alvo = ativos.reduce((n, r) => n + (Number(r.metaMensal) || 0), 0)') > 0 &&
+  templateCodigo.indexOf('ritmo: (du && du > 0) ? (falta / du) : null') > 0);
+checar('a cobertura e em negocios abertos, nunca em dinheiro',
+  templateCodigo.indexOf('cobertura: falta > 0 ? (abertos / falta) : null') > 0 &&
+  template.indexOf('negócios abertos</b> para esses ') > 0 &&
+  template.indexOf('convenção declarada, não medição') > 0);
+checar('promessa ausente na semana vira nao medido, nunca 0%',
+  templateCodigo.indexOf('function gxPrometidoCumprido()') > 0 &&
+  template.indexOf('não medido</span>') > 0 &&
+  template.indexOf('nenhuma visita prometida nesta semana') > 0);
+checar('o prometido x cumprido reusa visitasInformadasDetalhe, sem segundo calculo',
+  templateCodigo.indexOf('visitasInformadasDetalhe(String(r.ownerId))') > 0);
+checar('as perdas declaram a cobertura do proprio preenchimento',
+  template.indexOf('não é um motivo — é a lista de motivos não dando conta') > 0);
+checar('todo nome do raio-X abre o dossie',
+  templateCodigo.indexOf('data-gx-rx-quem') > 0 &&
+  templateCodigo.indexOf("gxAbrirDestino({ view: 'viewCockpit', ownerId: oid })") > 0);
+checar('os quatro blocos que o raio-X resume foram recolhidos, nao apagados',
+  template.indexOf('id="gxDetalheBlocos"') > 0 &&
+  template.indexOf('id="cockpitExecutionCommand"') > 0 &&
+  template.indexOf('id="reps"') > 0 &&
+  template.indexOf('id="vendasMesBloco"') > 0 &&
+  template.indexOf('id="cockpitPorQuePerdemos"') > 0);
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
