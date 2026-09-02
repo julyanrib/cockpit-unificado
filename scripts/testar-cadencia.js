@@ -125,6 +125,28 @@ conferir('o rebase do robô usa --autostash', /rebase --autostash origin\/main/.
 conferir('o robô prepara data/ e public/ inteiros', /git add -A data public/.test(yml),
   'lista à mão envelhece: era data/field-sales-playbook.compiled.json que ficava de fora — '
   + 'o catálogo do playbook é gerado do dado do CRM, então o compilado muda em quase toda rodada');
+/* A LISTA DE AUTO-RESOLUCAO E A SEGUNDA LISTA A MAO DO ROBO, e envelheceu igual a
+   primeira: faltava o playbook compilado, o mesmo arquivo que ja havia ficado de fora
+   do `git add`. Duas rodadas simultaneas (19:53 manual e 19:54 agendada, 02/09/26)
+   abortaram a segunda com "conflito em arquivo que nao e gerado por este job" sobre um
+   arquivo gerado por ele. A lista continua explicita de proposito - em data/ tambem
+   vivem arquivos editados a mao, e conflito neles TEM que parar - entao a guarda checa
+   que os derivados estao todos lá, um por um. */
+/* SEM REGEX AQUI, DE PROPOSITO: a linha do yml E um padrao de grep -E, com barra
+   invertida antes do ponto. Comparar regex contra regex foi o meu primeiro erro nesta
+   guarda - ela deu vermelho num arquivo que estava na lista. Substring resolve. */
+{
+  const linhaInesperados = yml.split(String.fromCharCode(10))
+    .find(function (l) { return l.indexOf('INESPERADOS=') >= 0; }) || '';
+  ['hubspot', 'weekly-raw', 'sync-status', 'resumo-semanal', 'field-sales-playbook']
+    .forEach(function (arq) {
+      conferir('a auto-resolucao de conflito cobre data/' + arq + '.json',
+        linhaInesperados.indexOf(arq) >= 0,
+        'arquivo 100% derivado fora da lista: duas rodadas simultaneas abortam a segunda '
+        + 'acusando conflito em arquivo que o proprio job gera');
+    });
+}
+
 conferir('rebase que falha SEM conflito para e diz por quê',
   /Rebase falhou SEM conflito/.test(yml),
   'o handler antigo tratava tudo como conflito e chamava rebase --continue sem rebase em andamento');
