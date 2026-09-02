@@ -8253,7 +8253,11 @@
     .xv3-drawer{top:0;right:0;bottom:0;left:0;width:auto;max-width:none;border-radius:var(--r-lg) var(--r-lg) 0 0;}
   }
   @media (pointer:coarse){
-    .xv3-seg>button,.xv3-ghost,.xv3-chip-btn{min-height:44px;}
+    /* .lk entrou na lista em 02/09/26: "ver a fila inteira (12) →" era o ÚNICO controle da
+       aba Hoje abaixo do piso no toque (38px medidos a 375px, com ponteiro grosso). Ele é o
+       caminho para as outras 9 ações do dia — alvo pequeno ali é o dedo errando justamente
+       onde está o resto do trabalho. */
+    .xv3-seg>button,.xv3-ghost,.xv3-chip-btn,.xv3-card-head .lk{min-height:44px;}
     .xv3-btn{min-height:44px;}
     .xv3-step button{width:44px;height:44px;}
     .xv3-check-anel{width:24px;height:24px;}
@@ -10832,6 +10836,19 @@ function telefoneDaAcao(lead, nomeFallback) {
    ainda, no máximo três, e SÓ quando não há mais nada pendente. Essa parte é
    testável inteira.
    ============================================================================ */
+/* QUANTAS AÇÕES A HOJE MOSTRA — e este número tem DOIS pontos de corte (o laço que
+   preenche as vagas e o slice final). Ter dois foi o que me enganou: mudei o slice para 6
+   e a tela continuou com 3, porque o laço parava antes. Um nome só, usado nos dois.
+   SEIS, E NÃO TRÊS (02/09/26, medido a 1440 em produção): a coluna da AÇÃO tem 832px e um
+   card de 354px, a coluna da REVISÃO tem 536px e três cards somando 728px — 374px de
+   vazio embaixo do bloco mais importante da tela, com 12 ações esperando atrás de "ver a
+   fila inteira". Seis fecha o vazio e o que ocupa a coluna da ação continua sendo AÇÃO,
+   então a divisão esquerda=ação / direita=o que aconteceu fica intacta.
+   A regra de UMA VAGA POR CLIENTE (mais abaixo) continua valendo — ela é o que impede as
+   seis vagas de virarem duas vezes o mesmo restaurante. Se o Julyan preferir voltar a
+   três, é este número e nada mais. */
+const HOJE_ACOES_VISIVEIS = 6;
+
 function acoesDeAgora(r, diag, contasLivres) {
   const d = diag || gatesDoDia(r);
   const fila = d.fila;
@@ -10938,7 +10955,7 @@ function acoesDeAgora(r, diag, contasLivres) {
   const clientesNaLista = new Set(acoes.map(a => chaveDoCliente(a.cliente)).filter(Boolean));
 
   itens.forEach(it => {
-    if (acoes.length >= 3) return;
+    if (acoes.length >= HOJE_ACOES_VISIVEIS) return;
     const st = it.estado, lead = it.lead;
     const chave = chaveDoCliente(lead && lead.name);
     if (chave && clientesNaLista.has(chave)) return;   // já tem ação deste cliente
@@ -11000,7 +11017,7 @@ function acoesDeAgora(r, diag, contasLivres) {
       });
   }
 
-  return acoes.slice(0, 3);
+  return acoes.slice(0, HOJE_ACOES_VISIVEIS);
 }
 
 /* ---------------------------------------------------------------------------
@@ -12177,7 +12194,7 @@ function buildInsightsAutomaticosHTML(r) {
 
   if (candidatos.length === 0) return '';
   candidatos.sort((a, b) => b.ordem - a.ordem);
-  const top = candidatos.slice(0, 3);
+  const top = candidatos.slice(0, HOJE_ACOES_VISIVEIS);
 
   return `
     <!-- FECHADO POR PADRÃO (29/08/26). São 277px de leitura no fim de uma aba que o
@@ -12403,7 +12420,13 @@ async function renderMeuPainel() {
              tipo de desencontro que faz o executivo desconfiar da tela. */
           const balde = (diagDia.fila && diagDia.fila.baldes && diagDia.fila.baldes.visita_sem_passo) || [];
           const critico = comPassoCount < negociosDoRep.length;
-          const rotuloDatar = balde.length ? ` · Datar ${balde.length === 1 ? 'o único' : 'os ' + balde.length} →` : '';
+          /* O CTA DIZ O QUE OS N SÃO (02/09/26). Na tela lia-se "0/19 com próximo passo ·
+             Datar os 8 →", e a razão de serem 8 e não 19 vivia só no title do hover: os 8
+             já receberam visita, e para os outros 11 o próximo passo É a visita. Duas
+             contagens na mesma linha sem a relação visível é o executivo desconfiando da
+             tela — e desconfiança em número é o que este projeto passou o mês combatendo.
+             Uma palavra resolve: "os 8 visitados". */
+          const rotuloDatar = balde.length ? ` · Datar ${balde.length === 1 ? 'o único visitado' : 'os ' + balde.length + ' visitados'} →` : '';
           const dica = balde.length
             ? `Os ${balde.length} que já receberam visita e ficaram sem próximo passo. Os outros ainda não foram visitados — para eles, o passo é a visita.`
             : 'Negócio sem tarefa futura no HubSpot é negócio que ninguém vai tocar de novo por acidente.';

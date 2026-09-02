@@ -467,12 +467,35 @@ teste('visita de hoje sem desfecho leva o CTA para "Registrar resultado pendente
   igual(acoes[0].cliente, 'Cliente Pendente');
 });
 
-teste('no máximo três ações, cada uma com os campos obrigatórios', () => {
-  const leads = [1, 2, 3, 4, 5].map(i => lead({ id: 'm' + i, name: 'Lead ' + i, ultimaInteracao: diasAtras(6).toISOString() }));
+/* O TETO É LIDO DO CÓDIGO, não repetido aqui (02/09/26). Este teste dizia "no máximo 3"
+   com o 3 escrito à mão, e a mesma constante estava escrita em dois lugares no template.
+   Quando o teto subiu para 6 (a coluna da ação tinha 374px de vazio a 1440), o teste caiu
+   por causa do PARÂMETRO, não por causa de uma regra quebrada. Número duplicado em teste
+   guarda a digitação, não o comportamento — o que precisa ser guardado é que existe um
+   teto e que ele é respeitado, e isso se faz lendo o teto de onde ele mora. */
+teste('a fila de ações respeita o teto e traz os campos obrigatórios', () => {
+  const leads = [1, 2, 3, 4, 5, 6, 7, 8].map(i => lead({ id: 'm' + i, name: 'Lead ' + i, ultimaInteracao: diasAtras(6).toISOString() }));
   const c = novoContexto(dados({ funilLeads: { '1396005401': leads } }), { ownerId: OWNER, role: 'rep' });
   const d = c.gatesDoDia(c.DATA.reps[0]);
   const acoes = c.acoesDeAgora(c.DATA.reps[0], d);
-  verdade(acoes.length <= 3, 'no máximo 3 (veio ' + acoes.length + ')');
+  /* O teto é lido da FONTE, não do contexto do vm: `const` no topo de um script de vm não
+     vira propriedade do contexto (declaração de função vira, const não). Ler da fonte
+     tem uma vantagem extra — obriga que o número exista declarado UMA vez com nome. */
+  /* SEM REGEX AQUI. Escrever /(\d+)/ dentro de um patch perdeu a barra invertida pela
+     terceira vez hoje neste projeto — a expressão fica VÁLIDA e errada, e o teste reprova
+     um código correto. indexOf + parse não tem o que escapar. */
+  const marca = 'const HOJE_ACOES_VISIVEIS = ';
+  const i = codigoNucleo.indexOf(marca);
+  verdade(i >= 0, 'o teto tem que ser uma constante nomeada no @nucleo (HOJE_ACOES_VISIVEIS)');
+  const teto = parseInt(codigoNucleo.slice(i + marca.length), 10);
+  verdade(Number.isInteger(teto) && teto > 0, 'o teto declarado tem que ser um inteiro positivo');
+  /* e os DOIS cortes têm que usar o nome. Foi ter dois lugares com o número escrito que
+     me fez mudar um e a tela não mudar. */
+  verdade(codigoNucleo.indexOf('acoes.length >= HOJE_ACOES_VISIVEIS') > 0, 'o laço corta pelo nome');
+  verdade(codigoNucleo.indexOf('acoes.slice(0, HOJE_ACOES_VISIVEIS)') > 0, 'o slice final corta pelo nome');
+  verdade(acoes.length <= teto, 'no máximo ' + teto + ' (veio ' + acoes.length + ')');
+  /* com mais leads que o teto, o teto TEM que morder — senão não há teto nenhum */
+  igual(acoes.length, teto, 'com 8 candidatos, a lista enche até o teto');
   verdade(acoes.length > 0, 'pelo menos 1');
   acoes.forEach(a => {
     ['verbo', 'cliente', 'motivo', 'prazo', 'ultimaInteracao', 'ctaLabel'].forEach(k => {
@@ -1576,9 +1599,13 @@ teste('as tres acoes de agora nao dao duas vagas ao mesmo cliente', () => {
   const rep = c.DATA.reps[0];
   const acoes = c.acoesDeAgora(rep);
 
-  igual(acoes.length, 3, 'continua entregando tres acoes');
+  /* A REGRA, e não a contagem: uma vaga por cliente, e a vaga liberada preenchida pelo
+     próximo da fila. Antes este teste fixava 3 — quando o teto subiu para 6 ele caiu sem
+     que nada do que ele protege tivesse mudado. O arranjo tem 4 leads, então a lista tem
+     que trazer os 4, um por cliente. */
   const nomes = acoes.map(a => a.cliente);
-  igual(new Set(nomes).size, 3, 'tres clientes DIFERENTES: ' + nomes.join(' / '));
+  igual(acoes.length, 4, 'entrega uma ação para cada um dos 4 clientes do arranjo');
+  igual(new Set(nomes).size, nomes.length, 'nenhum cliente aparece duas vezes: ' + nomes.join(' / '));
   verdade(nomes.includes('Bonamassa'), 'o cliente da visita de hoje continua na lista');
   igual(nomes.filter(x => x === 'Bonamassa').length, 1, 'mas uma vez so');
   // A vaga liberada tem que ser PREENCHIDA pelo proximo da fila, nao ficar vazia:
