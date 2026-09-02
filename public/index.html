@@ -1451,7 +1451,20 @@
   .daily-client-item{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:center;gap:8px;padding:11px 13px;border:0;background:var(--panel);color:var(--ink);text-align:left;font-family:inherit;cursor:pointer;}
   .daily-client-item:hover{background:var(--panel2);}
   .daily-client-time{font:800 11px var(--font-display);color:var(--red);font-variant-numeric:tabular-nums;}
-  .daily-client-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:800;}
+  /* ── O NOME DO CLIENTE NÃO ESCONDE 697px (02/09/26) ─────────────────────────────
+     Medido na sessão do gestor, em produção: um compromisso do dia aparecia como
+     "Desejo saber se o sistema consegue atender a uma loja de produtos naturais…" —
+     1.233px de conteúdo numa caixa de 536, com 697px depois da reticência.
+     O CAMPO ESTÁ CERTO: o negócio se chama assim no HubSpot. E outro se chama
+     "Sushi Real Japanese Food" com DUAS QUEBRAS DE LINHA no meio do nome.
+     Uma linha só com reticência era a pior resposta possível para isso: o gestor lê o
+     começo de uma frase e não descobre de que cliente se trata. Duas linhas com clamp
+     mostram o suficiente para reconhecer, e o title traz o nome inteiro no hover.
+     A quebra de linha do CRM é colapsada no render (ver o esc + replace na montagem):
+     sem isso ela viraria altura de linha extra dentro de um card de compromisso. */
+  .daily-client-name{min-width:0;overflow:hidden;font-size:12px;font-weight:800;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+    line-height:1.35;overflow-wrap:anywhere;}
   .daily-client-type{font-size:9px;color:var(--muted2);white-space:nowrap;}
   .daily-client-gap{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;background:var(--amber-soft);color:var(--amber-ink);font-size:11px;line-height:1.45;}
   /* NOVO (15/08/26) — aviso de leads quentes fora do plano do dia, pedido explícito do
@@ -38669,6 +38682,30 @@ async function renderDaily() {
       const quentesSemPassoTime = (radarGestor.semPasso || []).length;
       const quentesTotalTime = (radarGestor.radar || []).length;
 
+      /* ══ ROTA MONTADA E FOLLOW-UP DE HOJE (02/09/26) ═══════════════════════════════
+         O hero respondia quatro das seis perguntas da rodada das 9h: quantos fecharam o
+         plano, quantos clientes foram nomeados, quantos quentes estão sem próximo passo e
+         se a carga do HubSpot é confiável. Faltavam duas, e as duas decidem se a pessoa
+         pode sair para a rua: TEM ROTA? e o que VENCE HOJE?
+         Nenhuma das duas é conta nova — rotasCache já diz as paradas (é a mesma fonte da
+         aba Rotas) e filaDeFollowUp(ownerId) já entrega o balde 'hoje', que é próximo
+         passo com prazo vencido ou vencendo. Aqui elas só são somadas sobre quem está na
+         rodada, uma vez, no mesmo lugar que os outros números. */
+      const rotasDoTime = repsDaily.map(r => {
+        const rota = ((rotasCache || {}).porOwner || {})[String(r.ownerId)] || { paradas: [] };
+        return (rota.paradas || []).length;
+      });
+      const comRotaTime = rotasDoTime.filter(n => n > 0).length;
+      const paradasTime = rotasDoTime.reduce((a, b) => a + b, 0);
+      let vencemHojeTime = 0;
+      repsDaily.forEach(r => {
+        try {
+          const f = (typeof filaDeFollowUp === 'function') ? filaDeFollowUp(String(r.ownerId)) : null;
+          const balde = f && f.baldes && Array.isArray(f.baldes.hoje) ? f.baldes.hoje : [];
+          vencemHojeTime += balde.length;
+        } catch (e) { /* sem funil carregado ainda: o número nasce 0 e o render seguinte corrige */ }
+      });
+
       const rankDaily = compromissosHoje.map(x => {
         const r = x.r;
         const nomeados = Number(x.resumo && x.resumo.nomes) || 0;
@@ -38728,6 +38765,11 @@ async function renderDaily() {
             <span class="l" title="Quentes no prazo: em fechamento e dentro do SLA da etapa">Quentes no prazo, sem passo</span>
             <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${quentesSemPassoTime > 0 ? ' style="color:var(--dark-red);"' : ''}>${quentesSemPassoTime}</span><span class="meta">de ${quentesTotalTime} no prazo</span></span>
             <span class="sub">${quentesSemPassoTime > 0 ? 'nomear na rodada, não depois dela' : 'todo quente com próximo passo marcado'}</span>
+          </div>
+          <div class="gi-hero-kpi">
+            <span class="l" title="Rota montada: pelo menos uma parada sequenciada para hoje">Rota montada</span>
+            <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${comRotaTime < repsDaily.length ? ' style="color:var(--dark-amber);"' : ''}>${comRotaTime}</span><span class="meta">de ${repsDaily.length}</span></span>
+            <span class="sub">${paradasTime} parada(s) no time · ${vencemHojeTime} follow-up(s) vencem hoje</span>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
@@ -39375,7 +39417,11 @@ async function renderDaily() {
         <div class="daily-client-plan-head"><span><b>Quantos clientes pra hoje?</b><span>Agenda do Cockpit confirmada no HubSpot — nome, hora e tipo.</span></span><span class="daily-client-count">${clientesNomeados}${visitasPrometidas ? ` de ${visitasPrometidas}` : ''} nomeados</span></div>
         ${comLead.length ? `<div class="daily-client-list">${comLead.map(c => {
           const tag = esc((AGENDA_TIPOS[c.tipo] || {}).rotulo || c.tipo || 'Compromisso');
-          const conteudo = `<span class="daily-client-time">${esc(c.hora)}</span><span class="daily-client-name">${esc(c.lead)}</span><span class="daily-client-type">${tag}</span>`;
+          /* O nome vem do CRM e pode ter quebra de linha dentro dele — colapsa aqui, no
+             render, porque o dado é do cliente e não se corrige no HubSpot por causa de
+             layout. O title fica com o nome inteiro. */
+          const nomeLimpo = String(c.lead == null ? '' : c.lead).replace(/\s+/g, ' ').trim();
+          const conteudo = `<span class="daily-client-time">${esc(c.hora)}</span><span class="daily-client-name" title="${esc(nomeLimpo)}">${esc(nomeLimpo)}</span><span class="daily-client-type">${tag}</span>`;
           return c.dealId ? `<button type="button" class="daily-client-item" data-daily-deal="${esc(String(c.dealId))}">${conteudo}</button>` : `<div class="daily-client-item" style="cursor:default;">${conteudo}</div>`;
         }).join('')}</div>` : `<div class="daily-client-empty"><span>Nenhum cliente está nomeado na agenda deste dia. Uma promessa sem cliente ainda não é um plano.</span><button type="button" data-daily-agenda>Planejar clientes →</button></div>`}
         ${clientesFaltantes ? `<div class="daily-client-gap"><span><b>Faltam ${clientesFaltantes} ${clientesFaltantes === 1 ? 'cliente' : 'clientes'}.</b> Você prometeu ${visitasPrometidas} ${visitasPrometidas === 1 ? 'visita' : 'visitas'}, mas só ${clientesNomeados} ${clientesNomeados === 1 ? 'está nomeada' : 'estão nomeadas'} no HubSpot.</span><button type="button" data-daily-agenda>Completar na Agenda →</button></div>` : ''}
