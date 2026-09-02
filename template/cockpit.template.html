@@ -12560,8 +12560,20 @@ function fn2Estado(lead) {
   return { estourou, passo: false, chip, diag: base.diag, cta: base.cta, acao: base.acao };
 }
 
+/* DATA SÓ-DIA NÃO PASSA POR new Date() (achado em produção, 01/09/26).
+   O card da coluna Perdido dizia "31/08 (segunda)" para um negócio perdido em 01/09
+   (terça). Motivo: 'YYYY-MM-DD' é parseado pela especificação do JavaScript como MEIA-NOITE
+   UTC; em Brasília (UTC−3) isso é 21h do dia anterior, e isoDate() devolvia o dia errado.
+   Errava a data E o dia da semana, que é justamente o que o chip existe para dizer.
+   O robô manda perdidoEm já como 'YYYY-MM-DD' em Brasília, ou seja, já é o valor final:
+   convertê-lo é que introduzia o defeito. Timestamp completo (a próxima atividade, que vem
+   com hora e fuso) continua passando pela conversão, porque ali ela é necessária. */
 function fn2Quando(d) {
   try {
+    const txt = String(d || '');
+    if (/^d{4}-d{2}-d{2}$/.test(txt)) {
+      return (typeof fmtDailyLabel === 'function') ? fmtDailyLabel(txt) : txt;
+    }
     const iso = isoDate(new Date(d));
     return (typeof fmtDailyLabel === 'function') ? fmtDailyLabel(iso) : iso;
   } catch (e) { return null; }

@@ -215,6 +215,18 @@ checar('sem histórico suficiente o degrau não inventa etapa',
 checar('a conversão não é calculada para Perdido (não se "passa" de perdido)',
   /const conv = etapa\.saiu \? null : fn2Conversao\(etapa\.id, fn2OwnerAtual\);/.test(template));
 
+/* ── 11. data só-dia não pode passar por new Date() ─────────────────────────────── */
+/* O card de Perdido dizia "31/08 (segunda)" para uma perda de 01/09 (terça): 'YYYY-MM-DD'
+   é meia-noite UTC pela especificação, e em Brasília (UTC−3) isso é o dia anterior. Errava
+   a data e o dia da semana — que é a única coisa que o chip diz. */
+/* Busca LITERAL, não regex: o padrão a verificar é ele mesmo uma expressão regular, e
+   escapá-la dentro de outra só cria oportunidade de errar o escape (foi o que aconteceu na
+   primeira tentativa desta checagem). indexOf não tem essa armadilha. */
+checar('fn2Quando trata data só-dia sem converter fuso',
+  template.indexOf('if (/^\d{4}-\d{2}-\d{2}$/.test(txt)) {') > 0);
+checar('fn2Quando ainda converte timestamp completo (ali a conversão é necessária)',
+  template.indexOf('const iso = isoDate(new Date(d));') > 0);
+
 /* ── 11. o comentário que declarava o limite não pode continuar mentindo ─────────── */
 checar('o "LIMITE DECLARADO" da fila foi corrigido (Perdido passou a ser aceito)',
   !/LIMITE DECLARADO: "Perder com motivo" não é oferecido/.test(template) &&
