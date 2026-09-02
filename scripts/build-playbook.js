@@ -362,6 +362,39 @@ function montarPlaybook(root) {
     const convertido = markdownToHtml(markdown, meta.id);
     return { ...meta, html: convertido.html, headings: convertido.headings, busca: textoBusca(`${meta.titulo} ${meta.resumo} ${markdown}`) };
   });
+  /* ── FORMATO E PROVA (v7, 02/09/26) ────────────────────────────────────────────────
+     O +10 do playbook passou a exigir prova: um quiz de 1 pergunta no fim da página.
+     Sem isso, ler pagava scroll — e o dado dizia que ninguém estava lendo mesmo assim
+     (21 páginas marcadas por 2 pessoas em 10 dias, medido no Supabase antes de escrever
+     esta linha).
+     O par formato+prova é CURADO em data/playbook-prova.json e não inferido: eu medi os
+     sinais automáticos (contar falas entre aspas, contar <li>, contar tabelas) e eles não
+     separam SCRIPT de MÉTODO — daria palpite com cara de dado. E a pergunta tem que sair
+     de uma regra escrita NA página, senão a prova mede sorte.
+     O build FALHA se faltar uma das 30, mesmo contrato de playbook-catalogo.json: página
+     sem prova é página que renderiza um card de quiz vazio na tela do executivo. */
+  const provas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'playbook-prova.json'), 'utf8'));
+  const FORMATOS = ['SCRIPT', 'MÉTODO', 'ESTUDO', 'CHECKLIST'];
+  const semProva = [];
+  paginas.forEach(p => {
+    const meta = provas[p.id];
+    if (!meta) { semProva.push(p.id + ' (ausente)'); return; }
+    if (FORMATOS.indexOf(meta.formato) < 0) { semProva.push(p.id + ' (formato "' + meta.formato + '" não é um dos 4)'); return; }
+    const q = meta.prova;
+    if (!q || !q.pergunta || !Array.isArray(q.alternativas) || q.alternativas.length !== 3) {
+      semProva.push(p.id + ' (prova precisa de pergunta e 3 alternativas)'); return;
+    }
+    if (!Number.isInteger(q.correta) || q.correta < 0 || q.correta > 2) {
+      semProva.push(p.id + ' (correta tem que ser 0, 1 ou 2)'); return;
+    }
+    if (!q.porque) { semProva.push(p.id + ' (falta o "porque" — a prova ensina, não só mede)'); return; }
+    p.formato = meta.formato;
+    p.prova = { pergunta: q.pergunta, alternativas: q.alternativas.slice(), correta: q.correta, porque: q.porque };
+  });
+  if (semProva.length) {
+    throw new Error('data/playbook-prova.json incompleto — sem isso o +10 não tem como ser provado:\n  · ' + semProva.join('\n  · '));
+  }
+
   const payload = {
     titulo: 'Playbook Field Sales',
     fonte: 'Takeat OS',
