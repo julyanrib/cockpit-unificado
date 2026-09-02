@@ -278,6 +278,19 @@ async function main() {
   // e o ganho da virada seria zero — o snapshot grande sai e este segura a porta.
   // O padrao e o mesmo, de proposito: uma linha por chave, service key, e falha aqui
   // avisa sem derrubar a rodada.
+  // SEM AS CHAVES: CALADO NA MAQUINA, ALTO NO CI (02/09/26). A guarda de ambiente
+  // existe porque rodar isto na maquina de alguem, sem chave, e normal — nao ha o que
+  // publicar e nao ha o que avisar. Mas dentro do GitHub Actions a ausencia da chave nao
+  // e normal: e configuracao faltando, e foi exatamente o que aconteceu na primeira
+  // rodada depois de eu adicionar esta publicacao. O script rodou, terminou com sucesso,
+  // e a tabela ficou sem a linha - descobri conferindo a tabela, nao pelo log.
+  // Silencio que esconde configuracao faltando e o pior tipo de silencio.
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+    if (process.env.GITHUB_ACTIONS) {
+      console.log("ATENCAO: sem SUPABASE_URL/SUPABASE_SERVICE_KEY neste passo — o weekly-raw NAO foi publicado na tabela.");
+      console.log("         O arquivo foi gravado, mas a rota le da tabela: o comparativo semanal vai servir do arquivo do deploy.");
+    }
+  }
   if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
     try {
       const corpo = JSON.stringify(output);
