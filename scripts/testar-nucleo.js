@@ -1331,7 +1331,7 @@ teste('gravar espelha no DATA local e a cobrança para na mesma sessão', () => 
   // deixava a tela pedindo de novo o que já havia sido gravado, até o próximo sync.
   const c = novoContexto(dados({ funilLeads: { '1396005401': [lead({ id: 'q5' })] } }), { ownerId: OWNER, role: 'rep' });
   verdade(c.negocioCego(c.meusNegociosAbertos(OWNER)[0]), 'cego antes');
-  c.aplicarQualificacaoNoDataLocal('q5', { nome_do_sistema: 'Saipos', gargalo_operacional: 'Falta de Gestão' });
+  c.aplicarPropsNoDataLocal('q5', { nome_do_sistema: 'Saipos', gargalo_operacional: 'Falta de Gestão' });
   c.tpInvalidarCache();
   const depois = c.meusNegociosAbertos(OWNER)[0];
   igual(c.qualificacaoFaltante(depois), [], 'não cobra mais');
@@ -1537,8 +1537,20 @@ teste('Daily do gestor usa plano real, nao a promessa manual aposentada', () => 
 
   verdade(daily.includes('const compromissoDoPlano = (plano, ownerId) =>'),
     'existe uma derivacao unica para plano e clientes nomeados');
-  verdade(daily.includes("const nomesLista = nomesPlano.length ? nomesPlano : nomesAgenda"),
-    'agenda confirmada cobre o vazio quando ainda nao existe plano fechado');
+  /* ATUALIZADO EM 02/09/26. Este teste fixava a expressao ternaria antiga
+     nomesAgenda` com a justificativa "a agenda cobre o vazio" - ou seja, ele guardava
+     a agenda como SUBSTITUTA do plano. Medido na sessao do Marco: com duas prioridades
+     digitadas, os compromissos que ele acabara de por na agenda para o mesmo dia
+     ficavam invisiveis nas duas Dailys. Compromisso posto na agenda e compromisso.
+     A invariante agora e UNIAO COM DEDUPLICACAO, e o que este teste guarda e isso:
+     que a agenda entra sempre, e que o mesmo cliente nos dois lugares conta uma vez
+     (senao o denominador de "quantos clientes pra hoje" infla). */
+  verdade(daily.includes('nomesPlano.concat(nomesAgenda).forEach'),
+    'os nomes do plano e da agenda entram os dois, nao um OU o outro');
+  verdade(daily.includes('if (!k || vistos.has(k)) return;'),
+    'o mesmo cliente nos dois lugares conta uma vez');
+  verdade(!daily.includes('nomesPlano.length ? nomesPlano : nomesAgenda'),
+    'a agenda nao volta a ser substituta do plano');
   /* ATUALIZADO EM 31/08/26, com a nova identidade do gestor. O teste fixava as frases
      literais do hero antigo ('clientes nomeados hoje' / 'executivos sem cliente
      definido'). O hero mudou de forma — o titulo agora e a decisao e esses dois numeros

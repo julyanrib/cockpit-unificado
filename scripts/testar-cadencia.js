@@ -95,20 +95,30 @@ if (mPortao) {
     'o portão aponta para ' + String(Math.floor(brtIA / 60)).padStart(2, '0') + ':' + String(brtIA % 60).padStart(2, '0') + ' BRT');
 }
 
-/* ── 4. a janela do webhook usa os mesmos limites ───────────────────────────────────── */
-const mAbre = webhook.match(/const ABRE = (\d+) \* 60 \+ (\d+);/);
-const mFecha = webhook.match(/const FECHA = (\d+) \* 60;/);
+/* ── 4. a janela do webhook TEM QUE CONTER a grade ───────────────────────────────────
+   A invariante era IGUALDADE, e fazia sentido quando o webhook existia so para acelerar
+   entre os horarios fixos. Em 02/09/26 a janela passou a 07:00-22:00 (Julyan: "das 22h
+   até as 07:00 ngm mexe no hubspot") e ficou MAIOR que a grade, de proposito: acao das
+   19h30 esperava 13 horas pela rodada das 08:30, e e o fim de tarde que o executivo usa
+   para registrar a rua.
+   O que nao pode continua guardado, e e o que importa: nenhum horario em que a grade roda
+   pode cair FORA da janela do webhook - senao existiria um pedaco do dia em que o robo
+   roda sozinho e o evento do HubSpot e descartado. Janela maior e seguro; menor, nao. */
+const mAbre = webhook.match(/const ABRE = (\d+) \* 60(?: \+ (\d+))?;/);
+const mFecha = webhook.match(/const FECHA = (\d+) \* 60(?: \+ (\d+))?;/);
 conferir('o webhook declara a hora de abrir', !!mAbre);
 conferir('o webhook declara a hora de fechar', !!mFecha);
 if (mAbre) {
-  const abreWebhook = Number(mAbre[1]) * 60 + Number(mAbre[2]);
-  conferir('o webhook abre na mesma hora da grade', abreWebhook === ABRE,
-    'webhook abre ' + abreWebhook + ' min, grade abre ' + ABRE);
+  const abreWebhook = Number(mAbre[1]) * 60 + Number(mAbre[2] || 0);
+  conferir('a janela do webhook abre antes da grade, ou junto', abreWebhook <= ABRE,
+    'webhook abre ' + abreWebhook + ' min e a grade abre ' + ABRE + ' — haveria rodada com evento descartado');
 }
 if (mFecha) {
-  const fechaWebhook = Number(mFecha[1]) * 60;
-  conferir('o webhook fecha na mesma hora da grade', fechaWebhook === FECHA,
-    'webhook fecha ' + fechaWebhook + ' min, grade fecha ' + FECHA);
+  const fechaWebhook = Number(mFecha[1]) * 60 + Number(mFecha[2] || 0);
+  conferir('a janela do webhook fecha depois da grade, ou junto', fechaWebhook >= FECHA,
+    'webhook fecha ' + fechaWebhook + ' min e a grade fecha ' + FECHA + ' — haveria rodada com evento descartado');
+  conferir('a faixa de silencio declarada e 22h-07h', fechaWebhook === 22 * 60 && mAbre && Number(mAbre[1]) === 7,
+    'a faixa de silencio combinada com o Julyan e 22h as 07h');
 }
 /* fora da janela ele tem que responder 200 — erro faria o HubSpot reenviar e, com falha
    repetida, desativar a subscrição */
@@ -116,7 +126,14 @@ conferir('fora da janela o webhook responde 200',
   /fora da janela de expediente[\s\S]{0,400}?status\(200\)/.test(webhook)
   || /status\(200\)[\s\S]{0,400}?fora da janela de expediente/.test(webhook),
   'não achei o 200 junto do motivo "fora da janela"');
-conferir('o webhook só dispara em dia útil', /DIA_SEMANA >= 1 && DIA_SEMANA <= 5/.test(webhook));
+/* O CORTE POR DIA DA SEMANA SAIU DA JANELA (02/09/26). O webhook so aceitava evento em
+   dia util, e acao feita no sabado esperava ate segunda - mesmo com a grade tendo cron de
+   fim de semana. A faixa de silencio combinada e por HORA, nao por dia. O dia da semana
+   continua sendo calculado e registrado no log, para o disparo ser rastreavel. */
+conferir('a janela do webhook nao e mais limitada a dia util',
+  !/naJanela = ehDiaUtil/.test(webhook) && /const naJanela = MIN_DO_DIA >= ABRE/.test(webhook));
+conferir('o fim de semana tem rodada agendada como piso',
+  /cron: '0 12 \* \* 6,0'/.test(yml));
 
 /* ── 5. a publicação do snapshot não pode voltar a morrer por árvore suja ───────────── */
 conferir('o rebase do robô usa --autostash', /rebase --autostash origin\/main/.test(yml),

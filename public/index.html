@@ -19507,6 +19507,14 @@ function wireVendasMesEdicao(containerEl) {
         btnSalvar.textContent = 'Salvar';
         return;
       }
+      /* ── O MRR ESPELHA NO NEGOCIO INTEIRO (02/09/26) ─────────────────────────────
+         Isto atualizava SO a tabela de vendas do mes. O mesmo numero e lido pelo funil,
+         pelo dinheiro conhecido em risco, pelo raio-X do gestor e pela ficha - e todos
+         seguiam com o valor velho ate a proxima carga do robo, que pode levar duas horas.
+         O executivo corrigia o MRR, via a tabela mudar, e a tela ao lado continuava
+         dizendo outro numero. Uma tela que discorda de si mesma e pior que uma tela
+         desatualizada, porque nao da para saber em qual acreditar. */
+      aplicarPropsNoDataLocal(dealId, { valor_de_mrr: r.mrr, mrr: r.mrr });
       // Atualiza o dado em memória e re-renderiza — totais, % e barras acompanham.
       (DATA.vendasMes.porRep || []).forEach(rep => {
         const c = (rep.clientes || []).find(x => String(x.id) === String(dealId));
@@ -29609,7 +29617,13 @@ function negocioCego(lead) {
 // Espelha no DATA em memória o que a rota acabou de gravar no HubSpot. Sem isto a
 // ficha continuaria pedindo a qualificação depois de gravada, e a fila seguiria
 // marcando o negócio como cego até o próximo sync (ver SYNC_CADENCIA).
-function aplicarQualificacaoNoDataLocal(leadId, props) {
+/* ══ ESPELHO GENERICO DE PROPRIEDADE (renomeado em 02/09/26) ════════════════════════
+   Ele nasceu para a qualificacao e sempre foi generico: aplica QUALQUER propriedade ao
+   negocio, em todas as listas do DATA em que ele aparece. O nome antigo
+   (aplicarQualificacaoNoDataLocal) fazia parecer que o MRR precisava de um espelho novo -
+   e por isso o MRR ficou sem espelho em quase toda a tela. O nome agora diz o que a
+   funcao faz, para o proximo campo nao repetir o mesmo erro. */
+function aplicarPropsNoDataLocal(leadId, props) {
   const alvo = String(leadId);
   const aplicar = l => {
     if (!l || String(l.id) !== alvo) return;
@@ -29774,6 +29788,13 @@ function wireFichaLeadFunilEdicao(container, l) {
         return;
       }
       campo.value = '';
+      /* A NOTA APARECE NA HORA (02/09/26). Ela ia para o HubSpot e a ficha seguia sem
+         ela: o executivo registrava a evidencia e a tela continuava dizendo "visita sem
+         desfecho" ate o robo rodar. O espelho ja existia e este caminho nao o chamava. */
+      if (typeof aplicarNotaNoDataLocal === 'function') {
+        aplicarNotaNoDataLocal(dealId, { texto: texto, data: new Date().toISOString() });
+      }
+      if (typeof tpInvalidarCache === 'function') tpInvalidarCache();
       if (data.aviso) {
         statusEl.textContent = data.aviso;
         statusEl.style.color = 'var(--amber-ink)';
@@ -29873,7 +29894,7 @@ function wireFichaLeadFunilEdicao(container, l) {
       // O servidor devolve o que gravou; espelhar aqui é o que faz a ficha parar de
       // cobrar a qualificação na mesma sessão (o sync roda na cadência de SYNC_CADENCIA).
       if (respData.qualificacao) {
-        aplicarQualificacaoNoDataLocal(dealId, respData.qualificacao);
+        aplicarPropsNoDataLocal(dealId, respData.qualificacao);
         if (boxQualif) boxQualif.remove();
       }
       campoTexto.value = '';
@@ -38120,6 +38141,28 @@ function dl2AbrirFuro(lead, r) {
         } else if (typeof mostrarToast === 'function') {
           mostrarToast('Furo registrado e revisita marcada para ' + (typeof fmtDailyLabel === 'function' ? fmtDailyLabel(data) : data) + '.');
         }
+        /* ── O FURO E A REVISITA APARECEM NA HORA (02/09/26) ───────────────────────
+           Este fluxo gravava DUAS coisas no HubSpot - o motivo do furo e a revisita
+           datada - e nao espelhava nenhuma. O executivo registrava o furo e a mesma tela
+           seguia cobrando o mesmo compromisso, com a revisita invisivel ate a proxima
+           carga. A revisita entra tambem no agendamento local, porque compromisso datado
+           que nao aparece na agenda nem na Daily nao existe para quem le a tela. */
+        if (typeof aplicarNotaNoDataLocal === 'function') {
+          aplicarNotaNoDataLocal(lead.id, { texto: motivo.nota, data: new Date().toISOString() });
+        }
+        if (rTarefa.ok && dTarefa && dTarefa.ok) {
+          if (typeof aplicarProximoPassoNoDataLocal === 'function') {
+            aplicarProximoPassoNoDataLocal(lead.id, {
+              subject: 'Revisita — ' + motivo.rot.toLowerCase() + ' na tentativa anterior',
+              timestamp: new Date(data + 'T12:00:00').getTime(), tipo: 'Visita'
+            });
+          }
+          if (typeof registrarAgendamentoLocal === 'function') {
+            registrarAgendamentoLocal({ id: lead.id, nome: lead.name || lead.nome, bairro: lead.bairro, cidade: lead.cidade },
+              data, '09:00', (sessaoAtual && sessaoAtual.ownerId) || lead.ownerId, 'rota');
+          }
+        }
+        if (typeof tpInvalidarCache === 'function') tpInvalidarCache();
         dl2Medir('furo');
       } catch (e) {
         if (typeof mostrarToast === 'function') mostrarToast(String(e.message || e));
@@ -40084,18 +40127,53 @@ async function renderDaily() {
       motivo: ev.leadDoNegocio ? 'ok' : agendaMotivoSemLead(ev.cliente || ev.titulo),
       tipo: ev.tipo
     }));
+  /* ══ O COMPROMISSO DO DIA E PLANO **E** AGENDA (02/09/26) ═════════════════════════
+     A agenda entrava aqui so como
+     substituta, quando o plano estava vazio. Consequencia medida na sessao do Marco: com
+     duas prioridades digitadas no plano, os compromissos que ele acabara de POR NA AGENDA
+     para o mesmo dia ficavam invisiveis na Daily dele e na do gestor.
+
+     Compromisso posto na agenda E compromisso: a pessoa marcou hora e cliente para hoje.
+     Nao ha leitura em que ele valha menos que uma linha digitada no plano - e a Daily
+     existe justamente para conduzir o que foi combinado para o dia.
+
+     UNIAO COM DEDUPLICACAO POR NOME NORMALIZADO: o mesmo cliente costuma aparecer nos
+     dois lugares (ele digita a prioridade e depois marca a hora na agenda), e contar duas
+     vezes inflaria a promessa - que e o denominador de "quantos clientes pra hoje". A
+     comparacao ignora caixa e acentos porque "Bode Cheiroso" e "bode cheiroso" sao o
+     mesmo restaurante para quem le a tela.
+
+     ISTO NAO RESSUSCITA PROMESSA MANUAL: nenhum dos dois lados e um campo de numero
+     digitado. Um e a sequencia de clientes que a pessoa nomeou no plano, o outro e o
+     compromisso com hora que ela marcou na agenda. Os dois sao derivados de acao real. */
   const compromissoDoPlano = (plano, ownerId) => {
     const prioridades = (plano && Array.isArray(plano.prioridades))
       ? plano.prioridades.filter(Boolean) : [];
     const nomesPlano = nomesDaPromessaDoPlano(prioridades);
     const nomesAgenda = compromissosAgendaDoOwner(ownerId).map(c => c.lead).filter(Boolean);
-    const nomesLista = nomesPlano.length ? nomesPlano : nomesAgenda;
+    const chave = n => String(n == null ? '' : n).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/\s+/g, ' ').trim();
+    const vistos = new Set();
+    const nomesLista = [];
+    nomesPlano.concat(nomesAgenda).forEach(n => {
+      const k = chave(n);
+      if (!k || vistos.has(k)) return;
+      vistos.add(k);
+      nomesLista.push(n);
+    });
+    /* SO NA AGENDA: o que a Daily do gestor usa para dizer que o compromisso veio de la e
+       nao do plano - a procedencia continua visivel por nome. */
+    const vistosDoPlano = new Set(nomesPlano.map(chave));
+    const soNaAgenda = nomesAgenda.filter(n => !vistosDoPlano.has(chave(n)));
     return {
       nomes: nomesLista.length,
       nomesLista,
       nomesPlano,
       nomesAgenda,
-      fonte: nomesPlano.length ? 'plano' : (nomesAgenda.length ? 'agenda' : null),
+      soNaAgenda,
+      fonte: nomesPlano.length
+        ? (soNaAgenda.length ? 'plano+agenda' : 'plano')
+        : (nomesAgenda.length ? 'agenda' : null),
       fechado: !!(plano && plano.status === 'plano_fechado')
     };
   };
@@ -41196,7 +41274,15 @@ async function renderDaily() {
         return `<span class="daily-linha-promessa">
           <b>${promessaTotal}</b> no plano
           <em class="${ok ? 'is-ok' : ''}">${feitas} feito${feitas === 1 ? '' : 's'}</em>
-          ${fontePromessa === 'plano' ? '<i title="Nomes vindos do plano do dia que ele fechou no Cockpit">plano do dia</i>' : '<i title="Nomes vindos da agenda confirmada no HubSpot">agenda</i>'}
+          ${/* A PROCEDENCIA TEM TRES ESTADOS desde 02/09/26, porque os nomes agora sao a
+               uniao de plano e agenda: dizer "agenda" para uma lista que tem os dois
+               esconderia metade da origem, e a origem e o que diz ao gestor se aquilo foi
+               planejado de manha ou marcado no meio do dia. */''}
+          ${fontePromessa === 'plano'
+            ? '<i title="Nomes vindos do plano do dia que ele fechou no Cockpit">plano do dia</i>'
+            : fontePromessa === 'plano+agenda'
+              ? '<i title="Nomes do plano do dia mais compromissos marcados na agenda">plano + agenda</i>'
+              : '<i title="Nomes vindos da agenda confirmada no HubSpot">agenda</i>'}
         </span>
         <span class="gd-linha-barra">
           <span class="gd-linha-trilha"><i class="${feitas === 0 ? 'is-zero' : ''}" style="width:${pct}%"></i></span>
