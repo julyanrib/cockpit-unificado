@@ -262,6 +262,42 @@ checar('o degrau da escada mostra avancaram em numero, nao so a taxa',
   templateCodigo.indexOf(q3 + " saíram · " + q3) > 0 ||
   templateCodigo.indexOf("e.avancaram + ' saíram · '") > 0);
 
+/* ── 14. RAIO-X: O FUNIL INTERATIVO (aba Time, prancha v4) ────────────────────────
+   O cartao poe ESTOQUE e CONVERSAO um em cima do outro, que sao fontes, janelas e
+   denominadores diferentes. E o lugar mais facil do produto para trocar um pelo outro,
+   entao as checagens guardam que os dois estao rotulados e que a conversao vem do
+   historico, nunca da contagem de abertos. */
+checar('o funil do raio-X separa estoque de conversao no proprio rotulo',
+  template.indexOf('abertos aqui agora') > 0 &&
+  template.indexOf('saem daqui') > 0 &&
+  template.indexOf('Estoque alto não é conversão ruim') > 0);
+checar('a conversao do cartao vem do historico de etapa, nao da contagem de abertos',
+  templateCodigo.indexOf('const taxa = et.chegaram > 0 ? (et.avancaram / et.chegaram) : null') > 0 &&
+  templateCodigo.indexOf('const ordem = Array.isArray(h.agregado) ? h.agregado : []') > 0);
+checar('o estoque do cartao vem dos abertos, e so de quem esta no campo',
+  templateCodigo.indexOf('(DATA.funilLeads || {})[id] || []') > 0 &&
+  templateCodigo.indexOf('ownerAtivoNoField(l.ownerId)') > 0);
+checar('o topo vermelho nao acende por estar abaixo da media, e sim onde o vao pesa',
+  templateCodigo.indexOf('const maiorPeso = Math.max.apply') > 0 &&
+  templateCodigo.indexOf('e.acende = maiorPeso > 0 && e.peso >= maiorPeso * 0.75') > 0 &&
+  templateCodigo.indexOf('pontos abaixo do time, com ') > 0);
+checar('amostra curta nao acusa ninguem no funil interativo',
+  templateCodigo.indexOf('curta: dele.chegaram < GX_FX_MIN_CELULA') > 0 &&
+  templateCodigo.indexOf('dele.chegaram >= GX_FX_MIN_CELULA') > 0);
+checar('o caso ordena pelo estouro do prazo, nao pelos dias',
+  templateCodigo.indexOf('(sla == null || l.dias == null) ? null : (l.dias - sla)') > 0);
+checar('MRR ausente no caso aparece marcado, nunca como zero',
+  template.indexOf('sem MRR preenchido') > 0 &&
+  templateCodigo.indexOf('(isFinite(mrr) && mrr > 0)') > 0);
+checar('etapa sem caso estourado explica, em vez de ficar vazia',
+  template.indexOf('passou do prazo desta etapa') > 0 &&
+  template.indexOf('estes são os mais antigos') > 0);
+checar('a linha do caso nao e clicavel: nao existe destino para negocio isolado aqui',
+  templateCodigo.indexOf('data-gx-fx-lead') < 0 &&
+  templateCodigo.indexOf('data-gx-fx-dossie') > 0);
+checar('sem historico de etapa o raio-X diz por que esta vazio',
+  template.indexOf('O raio-X do funil entra no próximo carregamento do HubSpot') > 0);
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
