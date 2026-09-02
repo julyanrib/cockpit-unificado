@@ -14679,7 +14679,9 @@ function fn3Card(item, aceso) {
   const id = esc(String(l.id || ''));
   const arrastavel = !e.onb;
   return `<div class="fn3-card${e.estourou ? ' is-viol' : ''}${e.pagto ? ' is-pagto' : ''}${e.onb ? ' is-onb' : ''}${aceso === false ? ' is-fora' : ''}"
-    data-fn3-card="${id}" data-fn3-de="${esc(item.stageId)}"${arrastavel ? ' draggable="true"' : ''}>
+    data-fn3-card="${id}" data-fn3-de="${esc(item.stageId)}"${arrastavel ? ' draggable="true"' : ''}
+    role="button" tabindex="0" aria-label="Abrir a ficha de ${esc(l.name || 'negócio')}"
+    title="Abrir a ficha${e.cta ? ' — sugestão: ' + esc(String(e.cta).toLowerCase()) : ''}">
     <div class="fn3-card-l1">
       <b class="fn3-nome" title="${esc(l.name || '')}">${esc(l.name || 'sem nome')}</b>
       <span class="fn3-chip${e.estourou ? ' is-viol' : ''}${e.pagto ? ' is-pagto' : ''}">${esc(e.chip)}</span>
@@ -14818,6 +14820,11 @@ function fn3EsteiraHTML(todos, acesos) {
    Arrasto nativo HTML5, de propósito: no desktop o sistema já dá a imagem do card em voo,
    o cursor e o cancelamento por Esc. No toque ele não existe (nenhum navegador móvel
    emite dragstart) — e é por isso que ≤1240px vira acordeão e o caminho é o ⌄ do card. */
+/* Ultimo dragstart, em ms. Existe so para o clique do cartao saber distinguir "soltei
+   aqui" de "quero abrir" - ver o comentario da fiacao do clique. */
+let fn3UltimoArrasto = 0;
+function fn3ArrastouAgora() { return (Date.now() - fn3UltimoArrasto) < 250; }
+
 function fn3LigarArraste(el, redesenhar) {
   const limpar = () => {
     el.querySelectorAll('.fn3-col').forEach(c => c.classList.remove('is-alvo', 'is-alvo-nao', 'is-sobre'));
@@ -14827,6 +14834,7 @@ function fn3LigarArraste(el, redesenhar) {
 
   el.querySelectorAll('.fn3-card[draggable="true"]').forEach(card => {
     card.addEventListener('dragstart', ev => {
+      fn3UltimoArrasto = Date.now();
       const id = card.getAttribute('data-fn3-card');
       const de = card.getAttribute('data-fn3-de');
       fn3Voando = { id, de };
@@ -15183,6 +15191,47 @@ function fn3Ligar(el, redesenhar) {
     if (!lead) { mostrarToast('Não achei este negócio no seu funil — recarregue a aba.'); return; }
     fn3AbrirMenu(lead, redesenhar);
   }));
+
+  /* ══ CLICAR NO CARTAO ABRE A FICHA, JA NA ACAO QUE ELE SUGERE (02/09/26) ══════════
+     Julyan: "quando ele clicar no lead no kanban das etapas tem q abrir a ficha do lead
+     sugerindo ações". O cartao tinha DOIS caminhos e nenhum era o obvio: a CTA (que abre
+     a ficha no campo do proximo passo) e o "⌄" (que abre o menu de etapas). O corpo do
+     cartao - o nome do cliente, que e onde a pessoa clica - nao fazia nada.
+
+     O FOCO VEM DA PROPRIA SUGESTAO DO CARTAO. Cada cartao ja calcula qual e a acao
+     pendente daquele negocio e a publica no data-fn2-acao da CTA. Reusar esse valor
+     significa que abrir pelo nome e abrir pela CTA levam ao MESMO lugar - se levassem a
+     lugares diferentes, o cartao estaria sugerindo duas coisas ao mesmo tempo.
+     Cartao sem acao pendente abre a ficha no corpo, sem foco: nao ha o que apontar.
+
+     ARRASTO NAO E CLIQUE. O cartao e arrastavel no desktop, e soltar em cima da propria
+     coluna dispara um click depois do dragend. A marca de tempo do dragstart resolve:
+     clique que chega menos de 250ms depois de um arrasto e o rabo do arrasto, nao uma
+     intencao de abrir. (No toque nao existe dragstart, e o caminho continua sendo o ⌄.) */
+  el.querySelectorAll('[data-fn3-card]').forEach(card => {
+    const abrir = ev => {
+      /* botao dentro do cartao ja tem dono - os dois usam stopPropagation, isto e cinto
+         e suspensorio para o caso de um terceiro botao entrar aqui sem ele. */
+      if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+      if (fn3ArrastouAgora()) return;
+      const lead = fn3LeadPorId(card.getAttribute('data-fn3-card'));
+      if (!lead) { mostrarToast('Não achei este negócio no seu funil — recarregue a aba.'); return; }
+      const cta = card.querySelector('[data-fn2-acao]');
+      const acao = cta ? cta.getAttribute('data-fn2-acao') : null;
+      /* 'mover' abre a escolha de etapa, igual a CTA faz - o cartao de Perdido sugere
+         reabrir, e reabrir e mudar de etapa. */
+      if (acao === 'mover') { if (typeof abrirEscolhaDeEtapa === 'function') abrirEscolhaDeEtapa(lead, redesenhar); return; }
+      const foco = (acao === 'passo' || acao === 'proposta') ? 'passo' : null;
+      if (typeof abrirFichaLeadFunilDrawer === 'function') abrirFichaLeadFunilDrawer(lead, redesenhar, foco);
+    };
+    card.addEventListener('click', abrir);
+    card.addEventListener('keydown', ev => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return;
+      if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+      ev.preventDefault();
+      abrir(ev);
+    });
+  });
   /* o cabeçalho da coluna vira acordeão a ≤1240: uma classe, sem redesenho */
   el.querySelectorAll('.fn3-col[data-fn3-viol="0"] .fn3-cab').forEach(cab => {
     cab.addEventListener('click', ev => {
