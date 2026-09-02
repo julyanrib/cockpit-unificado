@@ -113,8 +113,13 @@ checar('plano do dia e visita comprovada são coisas diferentes na fila',
 checar('sincronização a confirmar é categoria própria, do time e não da pessoa',
   templateCodigo.indexOf("id: 'sync_a_confirmar'") > 0 &&
   template.indexOf('Conferir a carga antes de cobrar o campo') > 0);
+/* Checa a PROPRIEDADE, nao a forma: esta assertiva quebrou quando a lista virou cartoes
+   e o HTML deixou de ser template literal, embora a hora da carga continuasse declarada
+   nos dois lugares. Checagem que depende de sintaxe de string vira falso vermelho no
+   proximo redesenho. */
 checar('a fila declara a hora da carga que está lendo',
-  template.indexOf('Carga de ${esc(DATA.hubspotUpdatedAtFmt') > 0);
+  template.indexOf('Carga de ') > 0 &&
+  templateCodigo.indexOf('DATA.hubspotUpdatedAtFmt') > 0);
 
 /* ── 5. A FILA NÃO JULGA PESSOA ──────────────────────────────────────────────────────
    O pedido é explícito: "não rotular pessoas como boas ou ruins. Descrever apenas
@@ -180,8 +185,9 @@ checar('a fila agrupa por pessoa+categoria e preserva o volume',
   templateCodigo.indexOf("const k = String(l.ownerId) + '|' + l.categoria") > 0 &&
   templateCodigo.indexOf('casos: 1') > 0);
 checar('o cabeçalho publica frentes E casos',
-  template.indexOf('frente${linhas.length === 1') > 0 &&
-  template.indexOf('casosTotais') > 0);
+  template.indexOf('frentes sobre ') > 0 &&
+  templateCodigo.indexOf('casosTotais') > 0 &&
+  templateCodigo.indexOf("linhas.reduce((n, l) => n + (Number(l.casos) || 1), 0)") > 0);
 
 /* ── 11. UM CAMPO DE MRR DIGITADO, DOIS DERIVADOS ─────────────────────────────────
    Medido no pipeline em 02/09/26: 5.207 negocios, 597 com mrr (11%) e 353 com
