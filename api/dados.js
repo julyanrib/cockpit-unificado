@@ -11,7 +11,7 @@
 // FAIL-CLOSED: sem as env vars, sem sessão válida ou sem cadastro no time → nada sai.
 // Variáveis de ambiente na Vercel (as mesmas das outras rotas): SUPABASE_URL, SUPABASE_ANON_KEY.
 
-const { montarDadosCompletos, filtrarParaPapel, USUARIOS } = require('../scripts/montar-dados.js');
+const { montarDadosCompletos, filtrarParaPapel, USUARIOS, usarSnapshot, temSnapshot } = require('../scripts/montar-dados.js');
 const PLAYBOOK = require('../data/field-sales-playbook.compiled.json');
 const PRECIFICACAO = require('../data/precificacao.json');
 const REALIZADO = require('../lib/realizado.js');
@@ -168,8 +168,77 @@ function removerNulosRecursivo(valor) {
   return valor;
 }
 
+  /* ══ O SNAPSHOT VEM DA TABELA, NAO DO REPOSITORIO (02/09/26) ══════════════════════
+     Julyan: "bora tirar o dado do repositório e jogar pro supabase". O motivo esta no
+     comentario do robo e no da migracao: cada rodada commitava data/*.json, todo commit
+     gera um deploy na Vercel, e o teto de 100 deploys/dia limitava a atualizacao a ~15
+     rodadas — obrigando um cooldown de 20 minutos no webhook do HubSpot.
+
+     LE COM A SERVICE KEY, E TEM QUE SER ELA. A tabela esta com RLS ligada e SEM policy:
+     anon e authenticated nao leem nada. Isso e deliberado — o conteudo e o CRM inteiro do
+     time, e a unica coisa que pode sair daqui e o recorte que filtrarParaPapel faz para o
+     papel de quem pediu. Abrir a tabela para authenticated entregaria a carteira dos
+     colegas a qualquer executivo logado.
+
+     SEM A SERVICE KEY NO AMBIENTE, cai no arquivo e diz isso na resposta. Nao e erro: e o
+     estado de um ambiente que ainda nao tem a variavel.
+
+     UMA FALHA AQUI NAO DERRUBA A TELA. Tabela fora do ar, resposta fora de formato ou
+     tempo esgotado caem no arquivo commitado, que continua sendo gravado pelo robo nesta
+     etapa. A tela informa a origem, e e por isso que ela informa: durante a virada, a
+     unica pergunta que importa e se producao esta sendo servida pelo Supabase ou pelo
+     arquivo — e adivinhar isso olhando numeros iguais e impossivel. */
+  async function lerSnapshotDoSupabase() {
+    const servico = process.env.SUPABASE_SERVICE_KEY;
+    if (!servico) return { fonte: 'arquivo', motivo: 'sem SUPABASE_SERVICE_KEY no ambiente' };
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 6000);
+    try {
+      const r = await fetch(`${supaUrl}/rest/v1/cockpit_snapshot?select=chave,conteudo,atualizado_em`, {
+        signal: ctrl.signal,
+        headers: { apikey: servico, Authorization: `Bearer ${servico}` }
+      });
+      if (!r.ok) return { fonte: 'arquivo', motivo: 'tabela respondeu ' + r.status };
+      const linhas = await r.json();
+      if (!Array.isArray(linhas) || !linhas.length) {
+        return { fonte: 'arquivo', motivo: 'tabela ainda vazia' };
+      }
+      const fontes = {};
+      let maisRecente = null;
+      linhas.forEach(l => {
+        if (!l || !l.chave || l.conteudo == null) return;
+        fontes[l.chave] = l.conteudo;
+        if (!maisRecente || String(l.atualizado_em) > maisRecente) maisRecente = String(l.atualizado_em);
+      });
+      const trocadas = usarSnapshot(fontes);
+      /* A FONTE E DECIDIDA PELO 'hubspot', nao por 'alguma chave'. Ele e o snapshot do
+         CRM: os outros cinco sao complementos (texto da IA, comparativo semanal, status
+         da rodada). Dizer 'supabase' porque o sync-status de 90 bytes veio da tabela,
+         enquanto os 884 KB do funil vieram do arquivo, seria um relatorio que mente na
+         unica pergunta que ele existe para responder. 'misto' e um estado real e tem
+         nome proprio - e o estado normal enquanto os outros scripts nao publicarem. */
+      const temHubspot = trocadas.indexOf('hubspot') >= 0;
+      const fonte = !trocadas.length ? 'arquivo' : (temHubspot ? (trocadas.length === 6 ? 'supabase' : 'supabase-parcial') : 'misto');
+      return { fonte: fonte,
+        motivo: trocadas.length ? (temHubspot ? null : 'a tabela tem complementos, mas o funil veio do arquivo') : 'tabela sem nenhuma chave conhecida',
+        chaves: trocadas, atualizadoEm: maisRecente };
+    } catch (e) {
+      return { fonte: 'arquivo', motivo: (e && e.name === 'AbortError') ? 'tabela demorou mais de 6s' : ('erro ao ler a tabela: ' + (e && e.message)) };
+    } finally { clearTimeout(t); }
+  }
+
   // ---- 3. monta e filtra ----
   try {
+    const procedencia = await lerSnapshotDoSupabase();
+    /* AUSENCIA DE SNAPSHOT E ERRO, NAO TELA COM ZEROS. Sem o dado do CRM — nem na tabela
+       nem no arquivo — "0 negocios em aberto" seria uma afirmacao sobre o funil, e nao ha
+       funil nenhum para afirmar. Melhor uma mensagem que diz o que aconteceu. */
+    if (!temSnapshot()) {
+      return res.status(503).json({
+        erro: 'O snapshot do CRM não está disponível agora (' + (procedencia.motivo || 'origem desconhecida') +
+          '). A próxima carga do robô resolve; nada foi perdido.'
+      });
+    }
     const completo = montarDadosCompletos();
     const dados = removerNulosRecursivo(filtrarParaPapel(completo, usuario));
     /* AÇÃO DE CAMPO VAI PARA O APP (31/08/26). Decidido na reunião com o RPA: o Cockpit vira
@@ -184,6 +253,11 @@ function removerNulosRecursivo(valor) {
     }
     return res.status(200).json({
       sessao: { email: usuario.email, role: usuario.role, ownerId: usuario.ownerId, nome: usuario.nome, aComecar: !!usuario.aComecar },
+      /* A ORIGEM VIAJA NA RESPOSTA. Nao e telemetria: e como se confere, em producao, se a
+         virada funcionou — e como se descobre depois que a tela voltou a ser servida pelo
+         arquivo sem ninguem perceber. */
+      procedencia: { fonte: procedencia.fonte, motivo: procedencia.motivo || null,
+        chaves: procedencia.chaves || [], atualizadoEm: procedencia.atualizadoEm || null },
       dados
     });
   } catch (e) {

@@ -29,6 +29,9 @@ const path = require('path');
 
 const raiz = path.join(__dirname, '..');
 const yml = fs.readFileSync(path.join(raiz, '.github', 'workflows', 'daily-refresh.yml'), 'utf8');
+const rotaDados = fs.readFileSync(path.join(raiz, 'api', 'dados.js'), 'utf8');
+const montar = fs.readFileSync(path.join(raiz, 'scripts', 'montar-dados.js'), 'utf8');
+const robo = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8');
 const webhook = fs.readFileSync(path.join(raiz, 'api', 'hubspot-webhook.js'), 'utf8');
 
 let ok = 0;
@@ -211,6 +214,51 @@ conferir('rebase que falha SEM conflito para e diz por quê',
     tpl.indexOf('SYNC_LIMITE_EXPEDIENTE_MIN = 150') >= 0
     && tpl.indexOf('SYNC_LIMITE_FORA_MIN = 26 * 60') >= 0);
 }
+
+/* ── 7. O SNAPSHOT SAIU DO REPOSITORIO (02/09/26) ────────────────────────────────────
+   O dado do CRM vive agora em public.cockpit_snapshot, e a rota le de la. Tres coisas
+   nao podem se perder nessa mudanca de lugar, e sao elas que estas checagens guardam:
+     1. o corte de privacidade - o snapshot e o CRM INTEIRO do time, e so pode sair pela
+        rota, filtrado por papel. Ler a tabela com a chave ANON abriria o funil de todos
+        para qualquer pessoa que abrisse o navegador;
+     2. a rede de seguranca - falha na tabela cai no arquivo, e a resposta diz de onde
+        veio, senao a tela volta a ser servida pelo arquivo sem ninguem perceber;
+     3. ausencia de dado nao vira tela de zeros. */
+conferir('a rota le o snapshot com a service key, nunca com a anon',
+  /cockpit_snapshot\?select=/.test(rotaDados) &&
+  /const servico = process\.env\.SUPABASE_SERVICE_KEY/.test(rotaDados) &&
+  /apikey: servico, Authorization: `Bearer \$\{servico\}`/.test(rotaDados),
+  'a tabela tem RLS sem policy: com a chave anon a leitura volta vazia, e a tela ficaria sem dado');
+conferir('a rota nao usa a chave anon para ler a tabela do snapshot',
+  !/cockpit_snapshot[\s\S]{0,300}supaAnon/.test(rotaDados),
+  'ler o CRM completo com a chave que roda no navegador seria vazamento, nao otimizacao');
+conferir('falha na tabela cai no arquivo, sem derrubar a tela',
+  /fonte: 'arquivo', motivo: 'tabela respondeu '/.test(rotaDados) &&
+  /tabela ainda vazia/.test(rotaDados) &&
+  /tabela demorou mais de 6s/.test(rotaDados));
+conferir('a resposta declara de onde veio o dado',
+  /procedencia: \{ fonte: procedencia\.fonte/.test(rotaDados),
+  'sem isso nao da para saber, olhando producao, se a virada funcionou');
+conferir('a fonte e decidida pelo funil, nao por qualquer chave',
+  /const temHubspot = trocadas\.indexOf\('hubspot'\) >= 0/.test(rotaDados) &&
+  /'supabase-parcial'/.test(rotaDados) && /'misto'/.test(rotaDados),
+  'dizer supabase porque o sync-status de 90 bytes veio da tabela mentiria sobre os 884 KB do funil');
+conferir('sem snapshot a rota responde erro, nunca uma tela de zeros',
+  /if \(!temSnapshot\(\)\)/.test(rotaDados) && /status\(503\)/.test(rotaDados),
+  '0 negocios em aberto e uma afirmacao sobre o funil - sem dado nao ha o que afirmar');
+conferir('a injecao do snapshot nao apaga o que existe com um vazio que chegou',
+  /if \(valor == null\) return;/.test(montar),
+  'tabela sem a linha e "ainda nao publicou", nao "nao ha dado"');
+conferir('o snapshot do CRM e o unico obrigatorio, e o arquivo segue como rede',
+  /let hubspot = requireOpcional/.test(montar) &&
+  /function temSnapshot\(\) \{ return !!\(hubspot && hubspot\.kpis\); \}/.test(montar));
+conferir('o robo publica o snapshot na tabela depois de gravar os arquivos',
+  /async function publicarNoSnapshot/.test(robo) &&
+  robo.indexOf('fs.writeFileSync(statusPath') < robo.indexOf('for (const [chave, conteudo] of paraPublicar)'),
+  'os arquivos primeiro porque o preview local e o fallback dependem deles');
+conferir('falha ao publicar nao mata a rodada do robo',
+  /Aviso: snapshot '\$\{chave\}' NAO publicado no Supabase/.test(robo),
+  'o robo existe para trazer o dado; perder a rodada por causa da publicacao seria pior');
 
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');
