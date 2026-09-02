@@ -34,7 +34,12 @@ on:
     # abrir o cockpit no domingo vê o funil de sexta como se fosse de agora. Custa dois
     # deploys e mantém o dado honesto.
     - cron: '0 12 * * 6,0'
-  workflow_dispatch: {} # permite rodar manualmente pelo botão "Run workflow" no GitHub
+  workflow_dispatch: # botão "Run workflow" no GitHub, e também o webhook do HubSpot
+    inputs:
+      origem:
+        description: "quem disparou: deixe vazio para disparo humano, o webhook manda webhook"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -169,7 +174,13 @@ jobs:
       # alguém quiser uma leitura em prosa de propósito.
       # ------------------------------------------------------------------
       - name: Gerar diagnóstico de gargalo do dia (IA — só em disparo manual)
-        if: github.event_name == 'workflow_dispatch'
+        # DISPARO HUMANO, NAO AVISO DO CRM (02/09/26). O portao era só o evento
+        # workflow_dispatch, com a intencao de "so em disparo manual" — mas o webhook do
+        # HubSpot dispara por workflow_dispatch tambem, entao a IA rodava a cada aviso do
+        # CRM: com o cooldown de 5 minutos seriam ~18 chamadas por dia, e o pedido do
+        # Julyan e o contrario ("os insights nao precisam ser todo dia ou toda hora").
+        # Alem do custo, cada rodada dela escreve narrativas.json — commit, e deploy.
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.origem != 'webhook'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node scripts/generate-daily-gargalo.js
@@ -242,6 +253,16 @@ jobs:
           # dias buscaram tudo do HubSpot e não publicaram nada (issues
           # #161 #170 #172 #181 #192 #200). data/ e public/ são exatamente os dois
           # diretórios que este job gera; qualquer arquivo novo entra sozinho.
+          # ETAPA 2 DA VIRADA (02/09/26): o snapshot do CRM saiu do git — ele vai para a
+          # tabela do Supabase, publicado pelo proprio fetch-hubspot. Os seis arquivos
+          # estao no .gitignore, com o motivo escrito la.
+          # O preparo continua sendo por DIRETORIO e nao por
+          # lista a mao: o gitignore e que decide o que fica fora. Lista a mao aqui
+          # envelheceu duas vezes hoje, das duas nas mesmas circunstancias.
+          # O que sobra em data/ e configuracao editada a mao e o playbook compilado —
+          # este e deterministico e nao le nada do CRM (conferido: dois builds seguidos
+          # dao o mesmo md5), entao rodada sem mudanca de codigo nao gera commit nenhum,
+          # e sem commit nao ha deploy.
           git add -A data public
           # e se sobrou algo sujo FORA desses dois diretórios, diz o que é. Silêncio aqui
           # foi o que fez o defeito durar dois dias.

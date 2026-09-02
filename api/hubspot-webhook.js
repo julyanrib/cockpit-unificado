@@ -29,6 +29,12 @@ const crypto = require('crypto');
 const GITHUB_OWNER = 'julyanrib';
 const GITHUB_REPO = 'cockpit-unificado';
 const WORKFLOW_FILE = 'daily-refresh.yml';
+// O DISPARO SE IDENTIFICA (02/09/26). O workflow tem um passo de IA cujo portão é
+// `github.event_name == 'workflow_dispatch'`, escrito com a intenção de rodar "só em
+// disparo manual". Só que ESTE webhook dispara exatamente por workflow_dispatch — então
+// a IA rodava em TODO aviso do HubSpot, que é o oposto da intenção e do que o Julyan
+// pediu ("os insights não precisam ser todo dia ou toda hora"). Mandando `origem` o
+// portão passa a distinguir um disparo humano de um aviso do CRM.
 // CORREÇÃO (16/08/26, Julyan — auditoria pós-teto de deploy da Vercel): a única trava
 // que existia era "não disparar se já tem uma rodando/na fila" — isso evita duplicar um
 // disparo simultâneo, mas NÃO limita frequência. O HubSpot manda um aviso pra cada
@@ -43,22 +49,30 @@ const WORKFLOW_FILE = 'daily-refresh.yml';
 // manual de correção e disparo automático (rodando com o código de ANTES da correção)
 // podiam se sobrepor, e o automático, terminando depois, sobrescrevia o commit manual.
 // Menos disparos automáticos por hora reduz a janela onde isso acontece.
-// COOLDOWN 60 -> 20 MINUTOS (02/09/26, Julyan: "eu quero que atualize na hora que eles
-// fizerem isso"). A conta que limita este número não é o HubSpot: é o teto de 100
-// deploys/dia do plano Hobby da Vercel, porque cada rodada do robô faz um commit e todo
-// commit gera um deploy. Com a janela de 15 horas:
-//   60 min -> no máximo 15 disparos por dia
-//   20 min -> no máximo 45, mais os 7 horários fixos = 52, com folga até o teto
-// Vinte minutos triplica o frescor sem chegar perto do limite. A outra razão do 60 —
-// upload manual e disparo automático se sobrepondo — segue coberta pelo rebase com
-// autostash e pela lista de auto-resolução do workflow, que foi consertada hoje.
+// COOLDOWN 60 -> 20 -> 5 MINUTOS (02/09/26, Julyan: "eu quero que atualize na hora que
+// eles fizerem isso").
 //
-// E ISTO NÃO É "NA HORA", E NÃO TEM COMO SER POR AQUI: o caminho HubSpot -> robô ->
-// commit -> deploy leva ~3 minutos no melhor caso e gasta um deploy. O que ficou de fato
-// instantâneo hoje foi a AÇÃO FEITA DENTRO DO COCKPIT, que agora espelha no DATA em
-// memória e re-renderiza sem esperar carga nenhuma. Para ação feita direto no HubSpot ou
-// no PWA, 20 minutos é o piso desta arquitetura.
-const COOLDOWN_MINUTOS = 20;
+// O QUE LIMITAVA ESTE NÚMERO MUDOU DE LUGAR HOJE, e é por isso que ele caiu duas vezes.
+//
+// Antes: cada rodada do robô fazia um commit em data/*.json, todo commit gera um deploy
+// na Vercel, e o plano Hobby tem teto de 100 deploys/dia — o que dava, com a janela de 15
+// horas, no máximo 15 rodadas com 60 min de cooldown. O snapshot saiu do repositório e foi
+// para uma tabela do Supabase: a rodada não commita mais nada, não gera deploy, e esse
+// teto deixou de existir.
+//
+// Agora: o limite é MINUTO DE ACTIONS. O repositório passou a ser privado (o snapshot do
+// CRM estava num repo público, com telefone e nome de cliente em 660 commits), e privado
+// tem 2.000 minutos/mês grátis. Cada rodada leva ~3 minutos:
+//    2 min de cooldown -> ~45 rodadas/dia -> ~4.000 min/mês (~US$ 16/mês de excedente)
+//    5 min de cooldown -> ~18 rodadas/dia -> ~1.600 min/mês (dentro do grátis)
+// Cinco minutos é a escolha do Julyan: doze vezes mais fresco que o começo do dia, sem
+// conta nova para pagar. Se um dia valer o excedente, é este número que muda — e a conta
+// para decidir está escrita aqui.
+//
+// E O QUE JÁ É INSTANTÂNEO NÃO DEPENDE DISTO: ação feita DENTRO do Cockpit espelha no DATA
+// em memória e re-renderiza na hora, sem esperar carga nenhuma. Este cooldown governa só a
+// ação feita direto no HubSpot ou no PWA, que o Cockpit não tem como saber sem perguntar.
+const COOLDOWN_MINUTOS = 5;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
@@ -233,7 +247,7 @@ module.exports = async function handler(req, res) {
     // ---- 5. dispara a mesma Action que já roda 3x por dia, agora sob demanda ----
     const disparo = await fetch(
       `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
-      { method: 'POST', headers: { ...headersGitHub, 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main' }) }
+      { method: 'POST', headers: { ...headersGitHub, 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: 'main', inputs: { origem: 'webhook' } }) }
     );
     if (!disparo.ok) {
       const corpoErro = await disparo.text();

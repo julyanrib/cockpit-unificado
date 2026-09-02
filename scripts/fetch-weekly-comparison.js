@@ -271,6 +271,35 @@ async function main() {
   };
 
   fs.writeFileSync(path.join(__dirname, '..', 'data', 'weekly-raw.json'), JSON.stringify(output, null, 2));
+
+  // ══ PUBLICA NO SNAPSHOT (02/09/26) ═══════════════════════════════════════════════
+  // Mesmo motivo do fetch-hubspot: este arquivo era commitado em toda rodada, e todo
+  // commit gera um deploy. Enquanto ele ficasse no git, a rodada continuaria commitando
+  // e o ganho da virada seria zero — o snapshot grande sai e este segura a porta.
+  // O padrao e o mesmo, de proposito: uma linha por chave, service key, e falha aqui
+  // avisa sem derrubar a rodada.
+  if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    try {
+      const corpo = JSON.stringify(output);
+      const r = await fetch(`${process.env.SUPABASE_URL}/rest/v1/cockpit_snapshot?on_conflict=chave`, {
+        method: 'POST',
+        headers: {
+          apikey: process.env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify([{ chave: 'weekly-raw', conteudo: output,
+          bytes: Buffer.byteLength(corpo, 'utf8'), atualizado_em: new Date().toISOString(),
+          origem: 'fetch-weekly-comparison' }])
+      });
+      console.log(r.ok
+        ? `OK — snapshot 'weekly-raw' publicado no Supabase (${(Buffer.byteLength(corpo, 'utf8') / 1024).toFixed(1)} KB)`
+        : `Aviso: snapshot 'weekly-raw' NAO publicado — ${r.status}`);
+    } catch (e) {
+      console.log(`Aviso: snapshot 'weekly-raw' NAO publicado — ${e.message}`);
+    }
+  }
   console.log('OK — data/weekly-raw.json gravado.');
 }
 
