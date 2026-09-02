@@ -298,6 +298,48 @@ checar('a linha do caso nao e clicavel: nao existe destino para negocio isolado 
 checar('sem historico de etapa o raio-X diz por que esta vazio',
   template.indexOf('O raio-X do funil entra no próximo carregamento do HubSpot') > 0);
 
+/* ── 15. A PAUTA DA DAILY (aba Time, prancha v4) ──────────────────────────────────
+   A pauta e o unico lugar do produto onde o gestor MARCA algo, e por isso e o lugar mais
+   perigoso: um "+" ao lado de uma cobranca parece cobrar alguem. As checagens guardam que
+   ela se declara como lista pessoal, que nao escreve em nenhuma fonte, e que o texto do
+   chip sai da carga viva em vez de congelar o numero da leitura. */
+/* A frase da nota nasce concatenada em varias linhas no fonte, entao a checagem olha os
+   pedacos - foi ela que me pegou escrevendo a busca por uma frase que nunca existiu
+   contigua no arquivo. */
+checar('a pauta declara que nao chega no executivo e nao escreve em fonte nenhuma',
+  template.indexOf('não escreve no HubSpot') > 0 &&
+  template.indexOf('não cria tarefa') > 0 &&
+  template.indexOf('não chega no executivo') > 0 &&
+  template.indexOf('marcar aqui não cobra ninguém') > 0);
+checar('a pauta guarda a chave, nao a frase: o numero e rederivado da carga',
+  templateCodigo.indexOf('function gxPautaChaveDe(linha)') > 0 &&
+  templateCodigo.indexOf('gxPautaItens()') > 0 &&
+  templateCodigo.indexOf('return gxPauta.map(function (x) {') > 0);
+checar('a chave da pauta e a mesma que a fila usa para agrupar',
+  templateCodigo.indexOf("String(linha.ownerId == null ? 'time' : linha.ownerId) + '|' + String(linha.categoria)") > 0 &&
+  templateCodigo.indexOf("const k = String(l.ownerId) + '|' + l.categoria") > 0);
+checar('item que saiu da fila vira estado, nao desaparece nem vira erro',
+  templateCodigo.indexOf('saiu: true') > 0 &&
+  template.indexOf('Saiu da fila desde a leitura') > 0);
+checar('a frase do chip vem da evidencia, que carrega a contagem',
+  templateCodigo.indexOf('const oque = String(linha.evidencia || linha.rotulo') > 0);
+checar('a pauta sobrevive a falta de armazenamento sem quebrar a tela',
+  templateCodigo.indexOf('function gxPautaLer()') > 0 &&
+  templateCodigo.indexOf('catch (e) { gxPauta = []; }') > 0 &&
+  templateCodigo.indexOf('function gxPautaGravar()') > 0);
+checar('a barra so aparece quando tem item',
+  templateCodigo.indexOf("if (!gxPauta.length) { el.innerHTML = ''; return; }") > 0);
+
+/* O CONTADOR DE CASOS SUBCONTAVA: a categoria de SLA empurra uma linha por PESSOA com o
+   total dentro (quantidade), e o agrupamento marcava casos:1 nela. Cinco linhas dizendo
+   9, 22, 8, 4 e 3 negocios entravam na conta como 5. */
+checar('linha que chega ja agregada declara o proprio volume na contagem',
+  templateCodigo.indexOf('if (g.casos === 1 && Number(g.quantidade) > 1) {') > 0 &&
+  templateCodigo.indexOf('return { ...g, casos: Number(g.quantidade) };') > 0);
+checar('e a linha pre-agregada nao tem a frase reescrita por cima',
+  templateCodigo.indexOf('return { ...g, casos: Number(g.quantidade) };') <
+  templateCodigo.indexOf("evidencia: g.casos + ' negócios com '"));
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
