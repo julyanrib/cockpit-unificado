@@ -260,6 +260,53 @@ conferir('falha ao publicar nao mata a rodada do robo',
   /Aviso: snapshot '\$\{chave\}' NAO publicado no Supabase/.test(robo),
   'o robo existe para trazer o dado; perder a rodada por causa da publicacao seria pior');
 
+/* ── 8. A ESTRUTURA DO WORKFLOW, NAO SO OS TEXTOS DELE (02/09/26) ────────────────────
+   ISTO EXISTE POR UM DEFEITO MEU, e o defeito ficou UMA HORA no ar sem ninguem saber.
+
+   Ao adicionar um arquivo na lista de auto-resolucao, o meu patch cortou o fim da linha
+   (o fechamento da aspa e do comando sumiu) e DUPLICOU o bloco seguinte inteiro - o
+   arquivo foi de 341 para 381 linhas. O GitHub nao conseguiu parsear o workflow: cada
+   push criava uma rodada que falhava em ZERO segundo, e a lista de rodadas mostrava o
+   CAMINHO do arquivo no lugar do nome, que e a assinatura de workflow invalido.
+
+   As 51 checagens desta suite passaram verdes o tempo todo, porque todas procuravam
+   TEXTO dentro do arquivo - e os textos estavam lá, alguns duas vezes. Guarda que le
+   string nao percebe estrutura quebrada.
+
+   Sem parser de YAML no projeto (e nao vou adicionar dependencia por isto), o que da para
+   afirmar com certeza e o que quebrou: ancoras estruturais que tem que aparecer UMA vez,
+   e comando cortado no meio. As duas coisas que aconteceram. */
+{
+  const umaVezSo = [
+    'jobs:',
+    'runs-on:',
+    'INESPERADOS=',
+    'Conflito só nos arquivos gerados por este job',
+    'Não consegui enviar mesmo após 3 tentativas',
+    'git add -A data public'
+  ];
+  umaVezSo.forEach(function (ancora) {
+    const n = yml.split(ancora).length - 1;
+    conferir('o workflow tem exatamente um "' + ancora.slice(0, 32) + '"', n === 1,
+      'apareceu ' + n + ' vez(es) — bloco duplicado deixa o YAML invalido e a rodada morre em 0s');
+  });
+
+  /* COMANDO CORTADO NO MEIO. Toda linha que abre um $( tem que fechar, e toda aspa
+     simples aberta tem que fechar na mesma linha - foi exatamente isso que o meu patch
+     quebrou, e o shell nem chegou a rodar para reclamar. */
+  const linhasDoYml = yml.split(String.fromCharCode(10));
+  const cortadas = linhasDoYml.filter(function (l) {
+    if (l.trim().charAt(0) === '#') return false;
+    const abre = (l.match(/\$\(/g) || []).length;
+    const fecha = (l.match(/\)/g) || []).length;
+    const aspas = (l.match(/'/g) || []).length;
+    return (abre > 0 && fecha < abre) || (aspas % 2 !== 0);
+  });
+  conferir('nenhuma linha do workflow tem comando ou aspa cortada no meio',
+    cortadas.length === 0,
+    cortadas.length + ' linha(s): ' + cortadas.map(function (l) { return l.trim().slice(0, 60); }).join(' || '));
+}
+
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  · ' + f));
