@@ -123,7 +123,8 @@ conferir('o rebase do robô usa --autostash', /rebase --autostash origin\/main/.
   'sem autostash, modificação não preparada aborta o rebase e o snapshot do dia é perdido — '
   + 'aconteceu 6 vezes em 2 dias (issues #161 #170 #172 #181 #192 #200)');
 conferir('o robô prepara data/ e public/ inteiros', /git add -A data public/.test(yml),
-  'lista de arquivos à mão envelhece: script novo que grava um data/*.json fica de fora');
+  'lista à mão envelhece: era data/field-sales-playbook.compiled.json que ficava de fora — '
+  + 'o catálogo do playbook é gerado do dado do CRM, então o compilado muda em quase toda rodada');
 conferir('rebase que falha SEM conflito para e diz por quê',
   /Rebase falhou SEM conflito/.test(yml),
   'o handler antigo tratava tudo como conflito e chamava rebase --continue sem rebase em andamento');
