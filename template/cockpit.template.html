@@ -2497,7 +2497,22 @@
   .ag-rail-lead.tone-green{--ag-tone:var(--green);}
   .ag-rail-lead:focus-visible{outline:2px solid var(--ag-tone);outline-offset:2px;}
   .ag-rail-lead-main{min-width:0;}
-  .ag-rail-section{container-type:inline-size;}
+  /* ── O @container DA TRILHA NÃO ALCANÇAVA 5 DOS 7 CARTÕES (02/09/26) ──────────────
+     O bloco @container (max-width:420px) mais abaixo é a correção de 01/09 que devolve o
+     endereço inteiro quando a CAIXA aperta (o raciocínio está lá e continua certo). Mas
+     ele só produz efeito dentro de um elemento que ESTABELEÇA o container, e só
+     .ag-rail-section estabelecia. Medido a 375px na sessão do Bruno: dos 7 .ag-rail-lead
+     da Agenda, apenas 2 moram numa .ag-rail-section — os outros 5 são filhos diretos de
+     .chart-card, e para eles a consulta nunca valeu. "Reciclagem · candidato a resgate"
+     pedia 182px numa caixa de 173 e terminava em reticências; procedência cortada não
+     informa de onde o número vem, que é a regra da casa.
+     Escopado a .ag-exec-rail para não transformar TODA .chart-card do Cockpit em container:
+     container-type traz contenção (novo bloco de contenção para absolute/fixed), e isso
+     não se aplica de atacado. Conferido nestes cartões antes de escrever: nenhum
+     descendente com position absolute/fixed/sticky, largura idêntica (319px) e a altura
+     cresce porque o texto passa a caber — que é exatamente a troca que a nota de 01/09
+     já tinha aceitado. */
+  .ag-rail-section,.ag-exec-rail .chart-card{container-type:inline-size;}
   /* NOME DO CLIENTE NÃO TRUNCA (30/08/26, revisão final). A 375 a trilha "o que merece
      entrar" cortava "DONNA MARIA", "Hamburgueria.com", "Kebab shop" e o nome das
      contas-alvo. É o nome que ele vai procurar na rua — a última coisa que pode terminar
@@ -2562,6 +2577,11 @@
      recorte. Aperto o letter-spacing de .05em para .02em e o padding de 6 para 5 — a 8px
      de fonte isso devolve ~9px, mais do que o suficiente. Medido depois: as cinco pílulas
      com folga zero de recorte. O bairro do lead segue truncando de propósito. */
+  /* Só o acabamento de aperto aqui: quem devolve o texto inteiro é o @container acima,
+     porque o aperto é da caixa e não da janela. Minha primeira tentativa foi um @media
+     nesta mesma regra e ela PERDIA por especificidade para .ag-rail-lead-main span
+     (0,1,1 contra 0,1,0) — o line-height chegava e o white-space não, o que na medição
+     parecia "a regra não chegou". Estilo computado, não presença no arquivo. */
   @media (max-width:420px){ .ag-rail-source{letter-spacing:.02em;padding-left:5px;padding-right:5px;} }
   /* O CABEÇALHO DE SEÇÃO NO CELULAR (30/08/26). Medido a 375: título e subtítulo dividiam
      os mesmos 315px em flex nowrap, e o título levava a pior — "O que merece entrar na
@@ -6675,6 +6695,20 @@
   .prosp2-hero-sub{font-size:12px;color:var(--dark-mut);line-height:1.55;max-width:560px;margin:0;}
   .prosp2-hero-sub b{color:var(--dark-ink);font-weight:700;}
   .prosp2-hero-nums{display:flex;gap:32px;font-variant-numeric:tabular-nums;flex:none;padding-top:4px;}
+  /* ── O ROTULO DO NUMERO NAO SE ESTILHACA (02/09/26, achado NO SCREENSHOT) ──────────
+     A 800px o hero da Agenda mostrava "visitas / na / semana" em tres linhas, com o "na"
+     sozinho no meio, e "na rota de hoje" em duas. Sem flex:none, cada bloco encolhe ate a
+     largura do seu conteudo INDIVISIVEL — que e o numero (40px) — e o rotulo se quebra
+     palavra por palavra dentro disso.
+     Nenhuma das seis medicoes pegou: nao ha truncamento (o texto quebra, nao corta), nao
+     ha scroll horizontal, nao ha alvo abaixo do piso. Geometria intacta, leitura destruida.
+     E o remedio ja era o padrao da casa: .prosp2-hero-nums logo acima usa flex:none pelo
+     mesmo motivo. Medido depois a 1440, 800, 760 e 375: os tres rotulos em UMA linha (15px)
+     e scrollWidth do documento igual a largura da janela em todas.
+     Os outros seis heros do Cockpit carregam a MESMA linha inline sem esta classe; cada um
+     recebe a classe quando a sua aba entrar na varredura, para nao trocar sete telas as
+     cegas de uma vez. */
+  .cockpit-hero-nums>div{flex:none;}
   .prosp2-hero-n b{display:block;font-family:var(--font-display);font-weight:800;font-size:24px;line-height:1.1;color:var(--dark-ink);}
   .prosp2-hero-n b em{font-style:normal;color:var(--dark-green);}
   .prosp2-hero-n span{font-size:11px;color:var(--dark-mut);}
@@ -7775,6 +7809,9 @@
   .pl4-passo-sub{display:block;margin-top:5px;font-size:10px;color:var(--hero-sub);line-height:1.4;}
   .pl4-passo-sub.is-critico{color:var(--dk-red);}
   .pl4-passo-sub b{color:var(--dark-ink);}
+  /* A marca fica escondida e so aparece no passo ativo — ver o comentario no markup. */
+  .pl4-passo-aqui{display:none;}
+  .pl4-passo.is-aqui .pl4-passo-aqui{display:inline;}
 
   /* A MESA: TANTAS COLUNAS QUANTAS CABEM COM O CARD AINDA LEGÍVEL (01/09/26).
      Eu havia fixado repeat(5,1fr) para cumprir "cinco colunas" da prancha. Medido em
@@ -18978,6 +19015,22 @@ const AGENDA_TIPOS = {
   interno:   { cor: 'var(--muted2)', rotulo: 'Interno',    conta: null      }
 };
 
+/* "ESTE DIA TEM COMPROMISSO?" — TRES LUGARES RESPONDIAM ERRADO (02/09/26).
+   A daily do time (tipo interno, 09:00, todo dia) entra na agenda como qualquer outro
+   evento. Medido na sessao do Bruno: dos 4 dias uteis restantes da semana, TRES tinham
+   apenas a daily interna e nada de cliente — e a tela dizia "0 dias sem compromisso" e
+   "Todos os dias uteis restantes tem compromisso". O rotulo que faz a pergunta central
+   da aba ("Minha semana esta planejada?") respondia sim para uma semana com tres dias
+   vazios de rua.
+   A regra certa ja estava escrita AQUI: interno tem conta:null, e naRotaHoje (sete linhas
+   abaixo do hero) ja filtrava por ela, com o comentario "interno nao conta como rua". O
+   que faltava era os tres calculos de dia-vazio consultarem o mesmo modelo — por isso
+   isto virou funcao, e nao mais um filtro copiado no lugar. */
+function agendaContaComoCompromisso(e) {
+  const t = e && AGENDA_TIPOS[e.tipo];
+  return !!(t && t.conta);
+}
+
 // ATUALIZAÇÃO (15/08/26, Julyan): "ele pode enviar pra onboarding... ele pode
 // movimentar pelo cockpit, faça isso" — 1396006163 (Enviado Onboarding) adicionada
 // como 7ª etapa alcançável. Espelha exatamente ETAPAS_ABERTAS do servidor
@@ -21001,7 +21054,13 @@ async function renderProspeccaoExecutivo() {
         ].map((p, i) => `
           <button type="button" class="pl4-passo${i === pl4PassoAtivo ? ' is-aqui' : ''}" data-plan-ir="${p.id}" aria-pressed="${i === pl4PassoAtivo}">
             <span class="pl4-passo-topo"><span class="pl4-passo-letra">${p.letra}</span><b>${esc(p.titulo)}</b></span>
-            <span class="pl4-passo-sub${p.critico ? ' is-critico' : ''}">${p.sub}${i === pl4PassoAtivo ? ' — <b>você está aqui</b>' : ''}</span>
+            <!-- "voce esta aqui" saiu do if de renderizacao e virou marca pintada pela
+                 classe .is-aqui (02/09/26). Antes o clique movia aria-pressed e deixava a
+                 frase onde estava: depois de clicar em C, a tela dizia "voce esta aqui" no
+                 A e o estado de acessibilidade dizia C. Dois indicadores do MESMO fato se
+                 contradizendo, e quem usa leitor de tela ouvia o oposto do que estava
+                 escrito. Agora .is-aqui manda nos dois, e nao ha como divergirem. -->
+            <span class="pl4-passo-sub${p.critico ? ' is-critico' : ''}">${p.sub}<b class="pl4-passo-aqui"> — você está aqui</b></span>
           </button>`).join('')}
       </div>
     </div>
@@ -21021,7 +21080,11 @@ async function renderProspeccaoExecutivo() {
         : '<div class="empty-state">Este painel está montado para outro executivo — recarregue a página para voltar ao seu.</div>'}
     </div>
       </div>
-      <div class="xv3-plan-b">
+      <!-- data-plan-bloco="dia" (02/09/26): o passo B do segmentado do hero aponta para
+           este bloco, e o atributo NAO EXISTIA em lugar nenhum do arquivo — o ouvinte
+           fazia querySelector, recebia null e RETORNAVA. Clique morto no meio de tres,
+           no hero da aba. Medido clicando: A rolava 400 -> 362, B nao mexia em nada. -->
+      <div class="xv3-plan-b" data-plan-bloco="dia">
 
     <!-- O CABEÇALHO SOLTO DO PASSO B SAIU (28/08/26), achado navegando.
 
@@ -21396,7 +21459,11 @@ function prosp2LigarEventos(universo, ownerId) {
       const bloco = btn.dataset.planIr;
       const alvo = document.querySelector(`[data-plan-bloco="${bloco}"]`);
       if (!alvo) return;
-      document.querySelectorAll('[data-plan-ir]').forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+      /* aria-pressed E .is-aqui juntos: sao o mesmo fato, e separados eles divergem. */
+      document.querySelectorAll('[data-plan-ir]').forEach(b => {
+        b.setAttribute('aria-pressed', String(b === btn));
+        b.classList.toggle('is-aqui', b === btn);
+      });
       const coluna = alvo.closest('.xv3-plan-a, .xv3-plan-b');
       if (coluna && coluna.scrollHeight > coluna.clientHeight + 4) {
         coluna.scrollTo({ top: 0, behavior: 'smooth' });
@@ -21404,6 +21471,12 @@ function prosp2LigarEventos(universo, ownerId) {
       }
       if (typeof smoothScrollTo === 'function') smoothScrollTo(coluna || alvo);
       else (coluna || alvo).scrollIntoView({ behavior: 'smooth', block: 'start' });
+      /* E PISCA O DESTINO. Medido clicando em 1440: o passo C acendia o proprio botao e a
+         rolagem ficava em 400 -> 400, porque a bandeja ja estava na tela. Do ponto de vista
+         de quem clica isso e clique morto, e o auditor dava VIVO porque aria-pressed mutou.
+         Piscar e a resposta que o projeto ja escolheu para atalho cujo destino ja esta
+         visivel (piscarAlvo), e vale para os tres passos: o clique sempre responde. */
+      if (typeof piscarAlvo === 'function') piscarAlvo(alvo);
     });
   });
 
@@ -21707,9 +21780,16 @@ function prosp2LigarEventos(universo, ownerId) {
     });
   }
 
-  /* Por [data-v] e não por #prosp2Visoes: o container antigo saiu, e amarrar o ouvinte ao
-     desenho foi exatamente o que deixou o nível Sinal da v4 morto em produção. */
-  document.querySelectorAll('.pl4-niveis [data-v]').forEach(b => b.addEventListener('click', () => {
+  /* Por [data-v] e SEM PREFIXO DE CONTAINER. O comentário que estava aqui já dizia "não
+     amarre ao desenho" — e a linha logo abaixo amarrava a .pl4-niveis, uma classe que só
+     existe no CSS: nenhum markup a gera, o querySelectorAll casava ZERO, e os quatro
+     filtros de visão ficaram inertes. Medido em 02/09/26 com 6 leads semeados: as pílulas
+     declaravam 6 / 3 / 3 / 0 e a grade renderizava 6 em todas — inclusive na "Nota ≥4,5 ·
+     0", onde clicar num filtro que anuncia zero continuava mostrando tudo.
+     É a MESMA falha do nível Sinal da v4, pelo mesmo mecanismo, sob o comentário que
+     mandava não fazer isso: quem renomeia o container não vai ler o ouvinte. data-v não
+     é usado em nenhum outro lugar do arquivo, então o atributo sozinho é o escopo certo. */
+  document.querySelectorAll('[data-v]').forEach(b => b.addEventListener('click', () => {
     /* Seletor, não interruptor: clicar numa visão TROCA para ela. Clicar na que já está
        ligada volta para "todas", que é o gesto natural de desmarcar sem procurar o botão
        "Todas" com o olho. */
@@ -22292,7 +22372,8 @@ function renderAgenda() {
     // (subview 'semana', com o cabeçalho "Minha semana está planejada?") — é o único
     // caso onde não há duplicata, porque o Bloco 25 não cobre a visão semanal.
     if (agendaEstado.subview !== 'semana') return '';
-    const diasComEvento = new Set(naSemana.map(e => agendaChave(e.inicio)));
+    // Interno (a daily) nao torna um dia planejado — ver agendaContaComoCompromisso.
+    const diasComEvento = new Set(naSemana.filter(agendaContaComoCompromisso).map(e => agendaChave(e.inicio)));
     const diasSemCompromisso = dias.filter(d => !diasComEvento.has(agendaChave(d))).length;
     // "Na rota de hoje": compromissos de HOJE do próprio executivo (visita/reunião/rota;
     // interno não conta como rua) — de doTime, pra valer mesmo navegando outra semana.
@@ -22316,7 +22397,15 @@ function renderAgenda() {
         <span style="font-size:10px;color:var(--dark-mut);margin-top:2px;">Próximos passos do funil, compromissos e novas contas da sua região no mesmo plano.</span>
       </div>
       <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
-      <div style="display:flex;gap:32px;font-variant-numeric:tabular-nums;flex:1;min-width:0;flex-wrap:wrap;">
+      <!-- SEM min-width:0 (02/09/26). Com ele a linha encolhia para 40px — a largura de um
+           numero — enquanto os blocos, ja com flex:none, vazavam PARA FORA da caixa dela: a
+           1440 nao dava nada, mas a 800 o rotulo "visitas na semana" atravessava 19px por
+           baixo do botao "Planejar rota do dia". min-width:0 existe para deixar filho
+           encolher e truncar; aqui os filhos nao truncam, entao ele so autorizava o vazamento.
+           Sem ele, a largura minima volta a ser a do maior bloco, a linha quebra dentro de si
+           e o botao desce sozinho. Medido a 1440/1050/900/800/375: rotulo em 1 linha, ZERO
+           sobreposicao e scrollWidth do documento igual a janela em todas. -->
+      <div class="cockpit-hero-nums" style="display:flex;gap:32px;font-variant-numeric:tabular-nums;flex:1;flex-wrap:wrap;">
         <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:${diasSemCompromisso > 0 ? 'var(--dark-red)' : 'var(--dark-ink)'};">${diasSemCompromisso}</div><div style="font-size:11px;color:var(--dark-mut);">dias sem compromisso</div></div>
         <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-ink);">${visitas}</div><div style="font-size:11px;color:var(--dark-mut);">visitas na semana</div></div>
         <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:${pendentesHoje > 0 ? '#E0A64A' : 'var(--dark-ink)'};">${naRotaHoje}</div><div style="font-size:11px;color:var(--dark-mut);">na rota de hoje${quebraHoje ? `<br><span style="font-size:10px;opacity:.8;">${quebraHoje}</span>` : ''}</div></div>
@@ -22337,7 +22426,7 @@ function renderAgenda() {
     // Dia que só tem o que ele acabou de agendar CONTINUA aqui, marcado como em
     // construção — a régua é 6 visitas por dia, e some do card na primeira agendada ele
     // não teria como completar o dia. É o "editar os buracos preenchidos" do pedido.
-    const diasComEventoReal = new Set(naSemana.filter(e => !e.recemAgendado).map(e => agendaChave(e.inicio)));
+    const diasComEventoReal = new Set(naSemana.filter(e => !e.recemAgendado && agendaContaComoCompromisso(e)).map(e => agendaChave(e.inicio)));
     const agendadosPorDia = agendaAgendadosLocal.reduce((acc, a) => {
       (acc[a.dataISO] = acc[a.dataISO] || []).push(a); return acc;
     }, {});
@@ -26606,7 +26695,7 @@ function agendaGradeLista(dias, hojeK) {
 }
 
 function agendaDiagnosticoExec(o) {
-  const comEvento = new Set(o.naSemana.map(function (e) { return agendaChave(e.inicio); }));
+  const comEvento = new Set(o.naSemana.filter(agendaContaComoCompromisso).map(function (e) { return agendaChave(e.inicio); }));
   const curto = function (d) { return ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][d.getUTCDay()] + ' ' + agendaP2(d.getUTCDate()); };
   // O diagnóstico é fila de ação: mede somente os dias que ainda podem ser
   // preenchidos. Antes o numerador olhava os dias restantes e o denominador a semana

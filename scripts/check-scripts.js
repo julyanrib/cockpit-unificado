@@ -371,3 +371,78 @@ function checarPlacarDoExecutivo() {
   return !falhou;
 }
 if (!checarPlacarDoExecutivo()) process.exit(1);
+
+/* ══ FIAÇÃO PRESA A CLASSE QUE NENHUM MARKUP GERA (02/09/26) ══════════════════════════
+   Na Agenda/Planejamento eu achei quatro filtros de visão inertes: o ouvinte fazia
+   querySelectorAll('.pl4-niveis [data-v]') e .pl4-niveis existe SÓ no CSS — nenhum markup
+   a produz. O seletor casava zero, os quatro botões nunca receberam ouvinte, e as pílulas
+   declaravam "6 / 3 / 3 / 0" enquanto a grade renderizava 6 em todas.
+   O que torna isto caro: não é erro de sintaxe, não é referência a função inexistente, não
+   quebra nada em tempo de execução e não aparece em nenhuma das outras guardas. O clique
+   simplesmente não faz nada. Foi a MESMA falha do nível Sinal da v4, pelo mesmo mecanismo,
+   sob o comentário que mandava não amarrar o ouvinte ao desenho — porque quem renomeia o
+   container não vai ler o ouvinte.
+   Esta guarda compara as classes usadas dentro de querySelector/querySelectorAll com as
+   classes que o arquivo realmente produz (class="...", classList.add/remove/toggle,
+   className=). Classe usada em seletor e nunca gerada = fiação que não alcança nada.
+   A DÍVIDA CONHECIDA é lista fechada e tem que ficar EXATA: item novo reprova, e item
+   consertado que não sai da lista também reprova. Whitelist que só cresce é guarda morta. */
+function checarSeletoresDeFiacao() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+
+  /* Dívida herdada, cada uma com a aba que resolve. Não reprova hoje; reprova se mudar. */
+  const DIVIDA = {
+    'plano-map-stage': 'Rotas — "Adicionar por endereco ou CEP" tem botao ligado e abrirAdicionarManual sai no if (!stage) return: o painel nunca abre',
+    'd-prom': 'Minha Daily — fiacao orfa de desenho aposentado',
+    'd-salvar': 'Minha Daily — fiacao orfa de desenho aposentado',
+    'prospeccao-btn-rota': 'Prospeccao — fiacao orfa de desenho aposentado',
+    'prospeccao-btn-semfit': 'Prospeccao — fiacao orfa de desenho aposentado',
+    'prospeccao-btn-criar': 'Prospeccao — fiacao orfa de desenho aposentado',
+    'fn2-esteira': 'Meu Funil — atalho reserva ficou no nome antigo depois da Esteira v3 (.fn3-); o caminho principal (.fn2-gaveta) existe'
+  };
+
+  const geradas = new Set();
+  let m;
+  const reClass = /class="([^"]*)"/g;
+  while ((m = reClass.exec(cru))) {
+    String(m[1]).split(/[\s${}()?:'"+]+/).forEach(t => { if (t) geradas.add(t.replace(/^\./, '')); });
+  }
+  const reLista = /classList\.(?:add|remove|toggle|contains)\(\s*'([^']+)'/g;
+  while ((m = reLista.exec(cru))) geradas.add(m[1]);
+  const reCn = /className\s*=\s*'([^']*)'/g;
+  while ((m = reCn.exec(cru))) String(m[1]).split(/\s+/).forEach(t => { if (t) geradas.add(t); });
+
+  /* A classe só conta quando o ponto abre um seletor — sem esta borda, "wa.me" e
+     "google.com" dentro de a[href*="..."] entram como classes .me e .com. */
+  const achados = new Map();
+  const reQ = /querySelector(?:All)?\(\s*'([^']+)'/g;
+  while ((m = reQ.exec(cru))) {
+    const sel = m[1];
+    const reCls = /(?:^|[\s,>+~([])\.([A-Za-z][\w-]*)/g;
+    let c;
+    while ((c = reCls.exec(sel))) {
+      if (!geradas.has(c[1]) && !achados.has(c[1])) achados.set(c[1], sel);
+    }
+  }
+
+  const novas = [...achados.keys()].filter(c => !DIVIDA[c]);
+  const resolvidas = Object.keys(DIVIDA).filter(c => !achados.has(c));
+  if (!novas.length && !resolvidas.length) {
+    console.log('OK fiação — toda classe usada em seletor é gerada por algum markup (' +
+      Object.keys(DIVIDA).length + ' de dívida conhecida, inalterada).');
+    return true;
+  }
+  console.error('\nFIAÇÃO QUE NÃO ALCANÇA NADA em ' + arquivo + ':');
+  novas.forEach(c => {
+    console.error('  .' + c + ' não é gerada por nenhum markup — o seletor casa ZERO');
+    console.error('     em: ' + achados.get(c));
+    console.error('     Nada quebra: o forEach itera zero e o clique não faz nada.');
+  });
+  resolvidas.forEach(c => {
+    console.error('  .' + c + ' está na lista de dívida e JÁ NÃO aparece — tire da lista');
+    console.error('     (' + DIVIDA[c] + ')');
+  });
+  return false;
+}
+if (!checarSeletoresDeFiacao()) process.exit(1);

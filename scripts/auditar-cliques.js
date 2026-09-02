@@ -132,11 +132,19 @@ const candidatos = function(raiz){
          o filtro dizer o que o nome dele promete, e o falso positivo desaparece. */
       if (typeof el.checkVisibility === 'function'
         && !el.checkVisibility({ checkVisibilityCSS: true, contentVisibilityAuto: true })) return false;
-      /* E FORA DA JANELA não é candidato: painel fechado que fica deslocado para o lado
-         (o drawer da Prospecção) produzia um morto por rodada, e a investigação dele
-         terminava sempre na mesma conclusão. Controle que o usuário não alcança sem abrir
-         o painel se audita COM o painel aberto — que é outro passo, não este. */
-      if (r.right < 0 || r.bottom < 0 || r.left > window.innerWidth || r.top > window.innerHeight) return false;
+      /* FORA DA JANELA NO EIXO X não é candidato: painel fechado fica deslocado para o
+         lado (o drawer da Prospecção, em x=1469 numa janela de 1440) e produzia um morto
+         por rodada cuja investigação terminava sempre na mesma conclusão. Controle que só
+         existe com o painel aberto se audita COM o painel aberto — outro passo, não este.
+
+         MAS NÃO NO EIXO Y, e este era um defeito GRAVE deste auditor (corrigido 02/09/26).
+         Eu escrevi a regra nos dois eixos de uma vez, e abaixo da dobra é o lugar normal
+         de quase todo controle: a Agenda tem 2.610px de altura e 99 controles, dos quais
+         a janela mostra 5. O auditor dizia 'novos: 1, mortos: 0' e isso parecia aprovação.
+         Ele só cobria mais que isso por acidente — clique que rola a página traz outros
+         controles para dentro da janela. Auditoria que depende de sorte não é auditoria.
+         Agora quem está abaixo da dobra é candidato, e o clique rola até ele primeiro. */
+      if (r.right < 0 || r.left > window.innerWidth) return false;
       if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return false;
       return true;
     });
@@ -178,6 +186,12 @@ window.auditarAba = async function(idAba, idView, orcamentoMs){
       if (h && h !== '#' && h.indexOf('javascript:') !== 0) { r.link++; continue; }  // navegação nativa
     }
     if (tag === 'SUMMARY' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') { r.nativo++; continue; }
+    /* Rola até o alvo ANTES de fotografar o estado, por dois motivos: elementFromPoint
+       (que é como alcancavel() decide se o botão está coberto) só responde sobre o que
+       está na janela; e estado() inclui window.scrollY — rolar depois da foto faria todo
+       controle fora da dobra parecer VIVO só por ter mudado a rolagem. */
+    el.scrollIntoView({ block: 'center', inline: 'nearest' });
+    await esperar(90);
     const am = window.__mut, ae = estado();
     try { el.click(); } catch (e) { mortos.push({ desc: desc, motivo: 'erro: ' + e.message }); continue; }
     await esperar(180);
