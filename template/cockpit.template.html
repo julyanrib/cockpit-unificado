@@ -214,7 +214,16 @@
   .cockpit-hero-combo .kpi-strip-hero{background:none;box-shadow:none;padding:0;margin-bottom:0;border-radius:0;flex:1;min-width:0;}
   .meu-funil-grid{}
   @media (max-width:900px){ .meu-funil-grid{grid-template-columns:1fr !important;} }
-  @media (max-width:760px){ .cockpit-hero-combo{flex-direction:column;align-items:stretch;} }
+  /* !important AQUI, e a razão é medida (375px, 02/09/26). Dez heros do Cockpit carregam
+     style="align-items:center" inline — redundante, porque a regra base acima já
+     centraliza, mas estilo inline vence folha de estilo e essa redundância anulava o
+     stretch do celular. Efeito no hero da Semana: coluna de 319px com filhos de 413px, e
+     a PÁGINA ganhando 92px de rolagem horizontal.
+     Corrigir nos dez lugares seria dez chances de esquecer um; e o inline volta no
+     próximo bloco copiado. O !important resolve na origem, e tem o precedente da linha
+     acima (.meu-funil-grid), pelo mesmo motivo: layout de celular não pode depender de
+     ninguém ter lembrado de não escrever um estilo inline. */
+  @media (max-width:760px){ .cockpit-hero-combo{flex-direction:column !important;align-items:stretch !important;} }
 
   /* Prospecção: uma fila única, legível no desktop e acionável no celular. */
   .prospeccao-table-grid{
@@ -24489,20 +24498,42 @@ async function renderResumoSemanal() {
   const heroTopo = souRepAgora ? `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:230px;flex:none;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Semana · ${rs.janela.atual}${rs.janela.anterior ? ` · comparada com ${rs.janela.anterior}` : ''}</span>
+        <!-- nowrap SAIU dos DOIS kickers da Semana (medido a 375px, 02/09/26). A frase
+             "Semana · 31/08–02/09/2026 · comparada com 24/08–28/08/2026" tem 413px e nenhum
+             telefone tem essa largura: com nowrap ela definia a largura MÍNIMA do bloco, o
+             align-items:stretch do celular não tinha como encolher, e a PÁGINA inteira
+             ganhava 92px de rolagem horizontal. nowrap serve para rótulo curto que não pode
+             partir (uma data, um número); numa frase ele só transborda.
+             E os dois kickers são quase idênticos — na primeira tentativa eu troquei um e
+             conferi o outro na tela, o que fez o defeito parecer não corrigido. -->
+        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);line-height:1.4;">Semana · ${rs.janela.atual}${rs.janela.anterior ? ` · comparada com ${rs.janela.anterior}` : ''}</span>
         <h1 style="font-family:var(--font-display);font-size:20px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">O que mudou e o que eu faço?</h1>
       </div>
       <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
       <div style="display:flex;gap:32px;font-variant-numeric:tabular-nums;">
-        <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-green);">${k.atual.ganhos}</div><div style="font-size:11px;color:var(--dark-mut);">ganhos na semana</div></div>
-        <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:${k.atual.reunioes < k.anterior.reunioes ? 'var(--dark-red)' : 'var(--dark-ink)'};">${k.anterior.reunioes}→${k.atual.reunioes}</div><div style="font-size:11px;color:var(--dark-mut);">reuniões marcadas</div></div>
-        <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-ink);">${k.atual.perdidos}</div><div style="font-size:11px;color:var(--dark-mut);">perdidos na semana</div></div>
+        <!-- O HERO DO EXECUTIVO MOSTRA O QUE É DELE (02/09/26).
+             Medido na sessão do Marco: o hero dizia "6 ganhos na semana" e o card logo
+             abaixo dizia "Ganhos 3"; dizia "7→3 reuniões marcadas" e o card dizia "0". Duas
+             leituras do mesmo indicador na mesma tela, com números diferentes, e nenhuma
+             das duas dizendo de quem era.
+             A causa: kpisComparativo é do TIME (a busca não quebra por dono), enquanto os
+             DETALHES (ganhosSemanaDetalhe, reunioesSemanaDetalhe) já descem cortados por
+             executivo pelo montar-dados. O código até filtrava os detalhes duas dezenas de
+             linhas acima — e o hero seguia usando o agregado.
+             Agora: ganhos e reuniões vêm do detalhe DELE (ganhosLeads/reunioesLeads, já
+             filtrados). Perdidos não tem detalhe por pessoa em lugar nenhum do arquivo
+             semanal, então ele continua sendo o do time — e o rótulo passa a DIZER isso.
+             Dado do time com nome de dado pessoal é a pior das duas opções; dado do time
+             rotulado como do time é contexto. -->
+        <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-green);">${ganhosLeads.length}</div><div style="font-size:11px;color:var(--dark-mut);">ganhos seus na semana</div></div>
+        <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-ink);">${reunioesLeads.length}</div><div style="font-size:11px;color:var(--dark-mut);">reuniões suas na semana</div></div>
+        <div><div style="font-family:var(--font-display);font-weight:800;font-size:28px;color:var(--dark-ink);">${k.atual.perdidos}</div><div style="font-size:11px;color:var(--dark-mut);">perdidos <b style="color:var(--dark-amber);">no time</b></div></div>
       </div>
       <span style="margin-left:auto;font-size:11px;color:var(--dark-mut);">Números atualizados em ${rs.numerosAtualizadosEmFmt}${rs.geradoEmFmt ? ` · Análise escrita em ${rs.geradoEmFmt}` : ''}</span>
     </div>` : `
     <div class="cockpit-hero-combo" style="align-items:center;">
       <div style="display:flex;flex-direction:column;gap:4px;min-width:260px;flex:1;">
-        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);white-space:nowrap;">Semana · ${esc(rs.janela.atual)} · time Field Sales</span>
+        <span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dark-mut);line-height:1.4;">Semana · ${esc(rs.janela.atual)} · time Field Sales</span>
         <h1 style="font-family:var(--font-display);font-size:20px;font-weight:800;margin:0;letter-spacing:-.015em;color:var(--dark-ink);line-height:1.25;">O que a semana entregou — e onde ela atua agora</h1>
         <p class="hero-sub" style="max-width:64ch;">${heroSub}</p>
       </div>

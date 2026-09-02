@@ -120,21 +120,37 @@ async function ganhosNaJanela(startMs, endMs) {
   return (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
 }
 
-// Perdidos/reciclagem: usa hs_lastmodifieddate mesmo (não tem um "closedate" equivalente
-// pra essas etapas), mas agora filtrando teste
-async function contagemComFiltro(stageId, startMs, endMs) {
+// PERDIDOS E RECICLAGEM — duas correções em 02/09/26, achadas medindo a tela da Semana.
+//
+// 1. "100 perdidos na semana" era o TETO DA BUSCA, não uma contagem. Esta função pedia
+//    limit:100 e devolvia results.length: semana com mais de cem devolve exatamente cem. E
+//    devolvia 100 nas DUAS janelas comparadas, que é a assinatura de um número saturado —
+//    semana atual e anterior não dão o mesmo valor redondo por coincidência. As outras
+//    contagens deste arquivo já usam data.total, que é exato (o comentário de leadsCriados
+//    diz isso: "exato mesmo se a paginação cortar em 100"); esta ficou para trás.
+//    O filtro isTestDeal não cabe no total (ele precisa dos results, e o total vem do
+//    servidor). Os negócios de teste conhecidos são dois; publicar um teto de 100 como se
+//    fosse a realidade é um erro muito maior que deixar dois passarem.
+//
+// 2. A DATA ERA A ERRADA. hs_lastmodifieddate é "alguém mexeu no registro nesta janela",
+//    não "isto aconteceu nesta janela": negócio perdido em julho e editado ontem contava
+//    como perda da semana. O comentário antigo dizia que não havia "closedate equivalente"
+//    para essas etapas — e há: Perdido é etapa FECHADA, então o HubSpot grava closedate na
+//    entrada dela (foi assim que a coluna Perdido do kanban datou as 1.811 do histórico).
+//    Reciclagem não é fechada; para ela a data de entrada na etapa é a propriedade certa.
+async function contagemComFiltro(stageId, startMs, endMs, propDaData) {
   const data = await hsSearch({
     filterGroups: [{
       filters: [
         { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
         { propertyName: 'dealstage', operator: 'EQ', value: stageId },
-        { propertyName: 'hs_lastmodifieddate', operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
+        { propertyName: propDaData, operator: 'BETWEEN', value: String(startMs), highValue: String(endMs) }
       ]
     }],
     properties: ['dealname'],
-    limit: 100
+    limit: 1
   });
-  return (data.results || []).filter(d => !isTestDeal(d.properties.dealname)).length;
+  return data.total || 0;
 }
 
 // "Reuniões" = negócios que ENTRARAM em Demo/Proposta na janela (fazer uma demo pressupõe reunião)
@@ -156,8 +172,11 @@ async function reunioesNaJanela(startMs, endMs) {
 async function windowCounts(startMs, endMs) {
   const leadsCriadosResultado = await leadsCriadosNaJanela(startMs, endMs);
   const ganhosDeals = await ganhosNaJanela(startMs, endMs);
-  const perdidos = await contagemComFiltro(STAGES.perdido, startMs, endMs);
-  const reciclagem = await contagemComFiltro(STAGES.reciclagem, startMs, endMs);
+  /* closedate para Perdido (etapa fechada) e data de ENTRADA para Reciclagem (que não é
+     fechada, então não tem closedate). Ver o comentário de contagemComFiltro. */
+  const perdidos = await contagemComFiltro(STAGES.perdido, startMs, endMs, 'closedate');
+  const reciclagem = await contagemComFiltro(STAGES.reciclagem, startMs, endMs,
+    'hs_v2_date_entered_' + STAGES.reciclagem);
   const reunioesDeals = await reunioesNaJanela(startMs, endMs);
 
   return {
