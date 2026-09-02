@@ -38,6 +38,27 @@ const STAGES = {
 
 const OPEN_STAGES = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGES.demoProposta, STAGES.negociacao, STAGES.agPagamento];
 
+// O PERDIDO A PARTIR DE HOJE, E SÓ (01/09/26, Julyan: "eu nao quero que puxe nada, que
+// continue no hubspot, só vai pra perdido a partir de hoje").
+// Medido no CRM antes de escrever isto: 1.811 negócios já estão na etapa Perdido do
+// pipeline Field Sales — 418 em julho/26, 400 em agosto, 364 só nos 30 dias até 01/09.
+// Nada disso desce. Uma ÚNICA regra decide a coluna: o negócio entrou em Perdido a partir
+// do dia em que esta funcionalidade subiu. O histórico continua no HubSpot, que é onde ele
+// já está e onde ninguém precisa dele para trabalhar a carteira de hoje.
+// Eu tinha escrito uma segunda trava aqui — janela deslizante de 7 dias, para a coluna não
+// crescer sem limite. Saiu: é regra que o Julyan não pediu e que faria um negócio perdido
+// há oito dias DESAPARECER da tela sem ninguém ter mandado. O crescimento é real e está
+// medido (~2 perdas por executivo por dia útil, ou seja algumas centenas em um trimestre),
+// mas quem segura a TELA é o teto de 3 cards por coluna com "ver todos" — apresentação, não
+// política de dado. Se um dia a gaveta ficar longa demais, a janela volta como decisão dele.
+// A leitura de MOTIVO de perda (motivosDePerda, 90 dias) não usa este corte de propósito:
+// ali a pergunta é 'por que o time perde', e para isso quanto mais histórico melhor. Aqui a
+// pergunta é 'o que saiu da minha carteira desde que o Cockpit passou a registrar'.
+const CORTE_PERDIDO_ISO = '2026-09-01';
+function inicioDoPerdidoVisivel() {
+  return Date.parse(CORTE_PERDIDO_ISO + 'T00:00:00-03:00');
+}
+
 // Meta mensal de negócios fechados do time inteiro — combinada com o Julyan em 27/07/2026.
 // Configurável aqui até existir um lugar melhor pra isso (ex.: data/config.json).
 const META_MENSAL_FECHADOS = 80;
@@ -1052,6 +1073,10 @@ async function stageDealsTeamWide(stageId) {
       ]
     }],
     properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated', 'notes_next_activity_date', 'amount', 'hs_lastmodifieddate', 'latitude', 'longitude',
+      // closedate e motivo_do_perdido servem à coluna Perdido do kanban (02/09/26). Pedir
+      // custa zero para as outras etapas, onde vêm vazios, e sem eles a coluna Perdido não
+      // teria como saber a data da perda nem mostrar o motivo no card.
+      'closedate', 'motivo_do_perdido',
       // BLOCO 20 (12/08/26) — Julyan: "corrija de uma vez so esse erro de localizacao dos
       // quentes". Estes cinco campos EXISTEM no HubSpot (conferido via get_properties:
       // cep, bairro, cidade, logradouro, numero) e o cron nunca os pediu. Sem eles o
@@ -1386,6 +1411,72 @@ async function main() {
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };
     }).sort((a, b) => b.dias - a.dias);
+  }
+
+  // ---- A coluna PERDIDO do kanban: só as perdas dentro do corte + janela ----
+  // Filtro por closedate, que é a data que o HubSpot grava quando o negócio entra numa
+  // etapa fechada — ou seja, a data da perda. Usar hs_lastmodifieddate daria 'quando
+  // alguém mexeu no registro', que é outra coisa: um negócio perdido em março e editado
+  // ontem voltaria para a tela.
+  const inicioPerdido = inicioDoPerdidoVisivel();
+  /* O CORTE VAI NO FILTRO DO HUBSPOT, não num .filter() depois. stageDealsTeamWide traria
+     a etapa inteira — 1.811 negócios, paginados de 100 em 100 — para descartar 99% em
+     JavaScript, sete vezes por dia útil. O closedate GTE resolve na origem, do mesmo jeito
+     que motivosDePerda() já fazia. */
+  const perdidosRecentes = (await hsSearchAll({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: STAGES.perdido },
+        { propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) },
+        { propertyName: 'closedate', operator: 'GTE', value: String(inicioPerdido) }
+      ]
+    }],
+    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated',
+      'notes_next_activity_date', 'amount', 'closedate', 'motivo_do_perdido', 'latitude', 'longitude',
+      'cep', 'bairro', 'cidade', 'logradouro', 'numero', 'celular', ...FIELD_SALES_STAGE_PROPS]
+  })).filter(d => !isExcludedDeal(d));
+  console.log(`Perdido: ${perdidosRecentes.length} negócio(s) do time perdidos a partir de ` +
+    `${CORTE_PERDIDO_ISO} — o histórico anterior fica no HubSpot e não desce para o Cockpit.`);
+
+  // Os perdidos entram no MESMO mapa funilLeads, com a mesma forma de card: é isso que
+  // faz montar-dados.js cortar por dono sem precisar saber que apareceu uma etapa nova, e
+  // faz o kanban do template tratar a coluna como qualquer outra. O que muda é a
+  // ordenação: perdido não tem 'dias parado' que importe — importa quando se perdeu, e o
+  // mais recente primeiro, porque é o que ainda dá para desfazer ou aprender.
+  {
+    const tarefasPerdido = await hsTarefasAbertasDosNegocios(perdidosRecentes.map(d => d.id));
+    funilLeads[STAGES.perdido] = perdidosRecentes.map(d => {
+      const lat = d.properties.latitude != null ? Number(d.properties.latitude) : null;
+      const lng = d.properties.longitude != null ? Number(d.properties.longitude) : null;
+      const fechou = Date.parse(d.properties.closedate || '');
+      return {
+        name: d.properties.dealname,
+        dealname: d.properties.dealname,
+        id: d.id,
+        /* dias = há quantos dias se perdeu. Na coluna Perdido a pergunta não é 'quanto
+           tempo parado' (o negócio não vai andar), é 'quando foi'. */
+        dias: Number.isFinite(fechou) ? Math.max(0, Math.floor((Date.now() - fechou) / 86400000)) : 0,
+        slaBreach: false,
+        perdidoEm: Number.isFinite(fechou) ? new Date(fechou).toISOString().slice(0, 10) : null,
+        motivo_do_perdido: d.properties.motivo_do_perdido || null,
+        proximaAtividade: d.properties.notes_next_activity_date || null,
+        ultimaInteracao: d.properties.notes_last_updated || null,
+        valor: Math.round(parseFloat(d.properties.amount) || 0),
+        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
+        ownerId: d.properties.hubspot_owner_id || null,
+        lat: (lat != null && !isNaN(lat)) ? lat : null,
+        lng: (lng != null && !isNaN(lng)) ? lng : null,
+        cep: d.properties.cep || null,
+        bairro: d.properties.bairro || null,
+        cidade: d.properties.cidade || null,
+        logradouro: d.properties.logradouro || null,
+        numero: d.properties.numero || null,
+        celular: d.properties.celular || null,
+        ...Object.fromEntries(FIELD_SALES_STAGE_PROPS.map(prop => [prop, d.properties[prop] || null])),
+        tarefas: tarefasPerdido[d.id] || []
+      };
+    }).sort((a, b) => a.dias - b.dias);
   }
 
   // ---- Leads em Reciclagem parados há 60+ dias, pra resgate (Julyan, 17/08/26:
@@ -1760,6 +1851,15 @@ async function main() {
       labels: STAGE_LABELS
     },
     funilLeads,
+    perdidoVisivel: {
+      corte: CORTE_PERDIDO_ISO,
+      desde: new Date(inicioDoPerdidoVisivel()).toISOString().slice(0, 10),
+      /* A tela precisa poder dizer de onde vem o recorte: 'Perdido (2)' sem dizer 'nos
+         últimos 7 dias' seria a tela mentindo por omissão — o executivo leria que perdeu
+         dois negócios na vida. O total histórico NÃO desce: são 1.811 e nenhuma tela do
+         Cockpit tem pergunta que ele responda. */
+      visiveis: perdidosRecentes.length
+    },
     leadsReciclagem60,
     vendasMes,
     reps: repsData,
