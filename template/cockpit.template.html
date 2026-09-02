@@ -13183,14 +13183,22 @@ const CAMPOS_POR_ETAPA = {
     { prop: 'gargalo_operacional', label: 'Gargalo Operacional', tipo: 'selecao', opcoes: OP_GARGALO, obrigatorio: true },
     { prop: 'nome_do_sistema', label: 'Nome do Sistema', tipo: 'texto', obrigatorio: true }
   ],
-  '1395880471': [],
+  /* DEMO/PROPOSTA (02/09/26): a etapa não pedia NADA e o valor só era pedido na
+     Negociação — uma etapa depois de a proposta existir. Medido no pipeline: 1 de 22
+     negócios em Demo/Proposta tinha valor_de_mrr. O servidor exige os três; este espelho
+     existe para a pessoa ver o pedido ANTES de arrastar o card, não depois do erro. */
+  '1395880471': [
+    { prop: 'plano_apresentado', label: 'Plano Apresentado', tipo: 'selecao', opcoes: OP_PLANO_APRESENTADO, obrigatorio: true },
+    { prop: 'valor_de_mrr', label: 'Valor de MRR (R$/mês)', tipo: 'numero', obrigatorio: true },
+    { prop: 'data_da_reuniao', label: 'Data da reunião', tipo: 'data', obrigatorio: true }
+  ],
   '1395880472': [
     { prop: 'plano_apresentado', label: 'Plano Apresentado', tipo: 'selecao', opcoes: OP_PLANO_APRESENTADO, obrigatorio: true },
     // CORREÇÃO (15/08/26, Julyan): min:349 removido — R$349 é meta de saúde, não
     // trava comercial. O executivo negocia o valor livremente com o cliente. Etapa
     // Ag. Pagamento (1395880473, logo abaixo) INTENCIONALMENTE não tocada nesta
     // correção — automação real de RPA/ASAAS vive lá, nunca mexer.
-    { prop: 'valor_de_mrr', label: 'Valor de MRR (R$)', tipo: 'numero', obrigatorio: true }
+    { prop: 'valor_de_mrr', label: 'Valor de MRR (R$/mês)', tipo: 'numero', obrigatorio: true }
   ],
   '1395880473': [
     { prop: 'dealname', label: 'Nome do negócio', tipo: 'texto', obrigatorio: true, largo: true },
@@ -13203,8 +13211,14 @@ const CAMPOS_POR_ETAPA = {
     { prop: 'adicional', label: 'Adicional', tipo: 'multiselecao', opcoes: OP_ADICIONAL, obrigatorio: true, largo: true },
     { prop: 'tipo_de_pagamento', label: 'Tipo de Pagamento', tipo: 'selecao', opcoes: ['À Vista', 'Crédito'], obrigatorio: true },
     { prop: 'periodo_contratado', label: 'Assinatura', tipo: 'selecao', opcoes: ['Mensal', 'Trimestral', 'Semestral', 'Anual'], obrigatorio: true },
-    { prop: 'amount', label: 'Valor (R$)', tipo: 'numero', obrigatorio: true, min: 349 },
-    { prop: 'mrr', label: 'MRR (R$)', tipo: 'numero', obrigatorio: true },
+    /* UM CAMPO DE DINHEIRO, NÃO TRÊS (02/09/26). Aqui pedia 'Valor (R$)' (amount) e
+       'MRR (R$)' (mrr) além do valor_de_mrr das etapas anteriores — três lugares para
+       digitar o mesmo número, e o dado provou o resultado: valor_de_mrr 403 contra mrr
+       244,33 no mesmo negócio, e um contrato trimestral com 900 no campo MENSAL.
+       Agora a pessoa digita o mensal e o servidor deriva mrr (espelho) e amount (mensal x
+       meses do período). O total aparece calculado ao lado, para ela conferir antes de
+       enviar — ver a nota de derivarDinheiro no servidor. */
+    { prop: 'valor_de_mrr', label: 'Valor de MRR (R$/mês)', tipo: 'numero', obrigatorio: true },
     { prop: 'deseja_criar_perfil_no_asaas_', label: 'Deseja criar perfil no ASAAS?', tipo: 'sim_nao', obrigatorio: true, largo: true },
     { prop: 'qual_maior_desafio_', label: 'Maior Desafio', tipo: 'selecao', opcoes: OP_MAIOR_DESAFIO, obrigatorio: true, largo: true },
     { prop: 'informacoes_sobre_o_maior_desafio', label: 'Informações sobre o maior desafio', tipo: 'texto_longo', obrigatorio: true, largo: true }
@@ -13244,7 +13258,12 @@ const PROPS_FICHA = [
   { prop: 'cidade',     label: 'Cidade',    tipo: 'texto', desde: 0 },
   { prop: 'logradouro', label: 'Endereço',  tipo: 'texto', desde: 0, largo: true,
     extra: l => [l.bairro, l.cep ? `CEP ${l.cep}` : null].filter(Boolean).join(' · ') },
-  { prop: 'amount',           label: 'Valor da proposta', tipo: 'numero',  desde: 3, prefixo: 'R$ ', sufixo: '/mês' },
+  /* amount É O TOTAL DO PERÍODO, NÃO O MENSAL (02/09/26). Este rótulo dizia "Valor da
+     proposta · R$ X/mês" — e amount é o contrato inteiro: Naha sushi tem amount 2.514
+     com MRR 838 trimestral. Chamar o total de mensal na ficha é a origem da confusão que
+     produziu dois campos de MRR divergentes. Agora ele é somente leitura (o servidor
+     calcula) e o rótulo diz o que é. */
+  { prop: 'amount',           label: 'Total do contrato', tipo: 'numero',  desde: 3, prefixo: 'R$ ', calculado: true },
   { prop: 'reuniao_agendada', label: 'Reunião marcada',   tipo: 'sim_nao', desde: 3 },
   { prop: 'description',      label: 'O que falta pra fechar', tipo: 'texto_longo', desde: 4, largo: true },
   { prop: 'valor_de_mrr',     label: 'Valor de MRR', tipo: 'numero', desde: 4, prefixo: 'R$ ', sufixo: '/mês' }
@@ -27973,6 +27992,21 @@ function propsFichaHTML(lead, idxAtual) {
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
     ${visiveis.map(c => {
       const mostrado = formatarValorFicha(c, lead);
+      /* CAMPO CALCULADO NÃO É EDITÁVEL, E DIZ ISSO (02/09/26). amount passou a ser
+         derivado (valor de MRR x meses do período) — deixá-lo com cursor de mão e o
+         convite "toque pra preencher" seria oferecer uma edição que o servidor
+         sobrescreve no próximo salvamento: clique que parece funcionar e não funciona.
+         Sem valor ele não pede preenchimento; explica que falta o período. */
+      if (c.calculado) {
+        return `<div class="ficha-prop is-calculado" data-prop="${c.prop}"
+          style="grid-column:${c.largo ? '1/-1' : 'auto'};background:var(--sunk);border:1px solid var(--line-soft);border-radius:var(--r-md);padding:9px 12px;cursor:default;">
+          <label style="display:block;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);margin-bottom:3px;">${esc(c.label)}</label>
+          <span class="ficha-prop-valor">${mostrado
+            ? `<b style="font-size:12px;font-weight:700;line-height:1.35;">${mostrado}</b>`
+            : '<span style="color:var(--muted2);font-weight:700;font-size:11px;">calculado do MRR e do período</span>'}</span>
+          <span style="display:block;margin-top:2px;font-size:9.5px;color:var(--ter);line-height:1.35;">valor de MRR × meses do período · não se digita</span>
+        </div>`;
+      }
       return `<div class="ficha-prop${c.largo ? '' : ''}" data-prop="${c.prop}" data-tipo="${c.tipo}" data-min="${c.min || ''}" data-prefixo="${esc(c.prefixo || '')}" data-sufixo="${esc(c.sufixo || '')}"
         style="grid-column:${c.largo ? '1/-1' : 'auto'};background:var(--panel2);border:1px solid var(--line-soft);border-radius:var(--r-md);padding:9px 12px;cursor:pointer;transition:background var(--t-rapido) var(--ease),border-color var(--t-rapido) var(--ease);">
         <label style="display:block;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);margin-bottom:3px;">${esc(c.label)}</label>
@@ -27985,7 +28019,9 @@ function propsFichaHTML(lead, idxAtual) {
 // Vira o card num input na hora do toque — sem re-renderizar a ficha inteira (perderia
 // o foco/scroll). Enter ou o botão ✓ salva; Esc cancela sem gravar nada.
 function ligarPropsFichaEditaveis(container, lead) {
-  container.querySelectorAll('.ficha-prop').forEach(card => {
+  /* O :not(.is-calculado) é a metade que importa: sem ele o card derivado abriria um
+     input que o servidor sobrescreve — e o cursor:default do estilo esconderia isso. */
+  container.querySelectorAll('.ficha-prop:not(.is-calculado)').forEach(card => {
     card.addEventListener('click', function aoClicar() {
       if (card.querySelector('input,textarea,select')) return; // já em edição
       const propNome = card.dataset.prop;
@@ -33181,6 +33217,16 @@ const GX_CATEGORIAS = [
   { id: 'followup_vencido', peso: 80, rot: 'Follow-up vencido',          acao: 'Cobrar o toque de hoje' },
   { id: 'visita_sem_desfecho', peso: 74, rot: 'Visita sem desfecho',     acao: 'Registrar desfecho e próximo passo' },
   { id: 'visita_sem_qualificacao', peso: 70, rot: 'Visita sem qualificação', acao: 'Treinar decisor, dor e sistema' },
+  /* ══ ENTROU NA ETAPA SEM O CAMPO (02/09/26) ═══════════════════════════════════════
+     A barreira de campos obrigatórios do Cockpit só vale DENTRO do Cockpit: quem move o
+     negócio direto no HubSpot passa por fora da nossa API. Medido no pipeline: a
+     Negociação EXIGE valor_de_mrr e ainda assim 10 dos 29 negócios lá entraram sem ele.
+     Não é o executivo burlando — é o caminho estar aberto.
+     Esta categoria é o que transforma esse furo em métrica: ela lista o negócio que está
+     numa etapa sem o campo que a etapa exige, com o nome do campo, e abre o negócio para
+     preencher. Peso alto porque sem isso NADA de dinheiro é mensurável — é o dado que
+     sustenta as três leituras financeiras. */
+  { id: 'campo_obrigatorio_faltando', peso: 84, rot: 'Etapa sem o campo obrigatório', acao: 'Preencher o campo que a etapa exige' },
   { id: 'cadencia_quebrada', peso: 66, rot: 'Cadência quebrada',         acao: 'Retomar a régua ou justificar a saída' },
   { id: 'abandono_1o_toque', peso: 62, rot: 'Abandono após 1º toque',    acao: 'Segunda tentativa antes de reciclar' },
   { id: 'plano_aberto',   peso: 40, rot: 'Plano do dia aberto',          acao: 'Fechar o plano antes da rua' },
@@ -33189,6 +33235,33 @@ const GX_CATEGORIAS = [
   { id: 'sync_a_confirmar', peso: 12, rot: 'Sincronização a confirmar',  acao: 'Conferir a carga antes de cobrar o campo' }
 ];
 function gxCategoria(id) { return GX_CATEGORIAS.find(c => c.id === id) || null; }
+
+/* AS EXIGÊNCIAS POR ETAPA, do ponto de vista da LEITURA. A fronteira de escrita é o
+   servidor (lib/acoes-negocio/mudar-etapa-negocio.js) e ela continua sendo a única que
+   bloqueia; este mapa existe para DIAGNOSTICAR o que entrou sem passar por lá.
+   Só entram aqui os campos que o gestor precisa medir — dinheiro, plano, qualificação e
+   motivo. Endereço e CNPJ são exigidos na escrita e ficam de fora da fila: eles travam o
+   cadastro, não a leitura gerencial, e enchê-la de linhas de CEP faria o gestor parar de
+   ler a fila. */
+const GX_EXIGE_POR_ETAPA = {
+  '1395880469': [{ p: 'origem_do_lead', rot: 'origem do lead' }],
+  '1395880470': [{ p: 'gargalo_operacional', rot: 'dor' }, { p: 'nome_do_sistema', rot: 'sistema atual' }],
+  '1395880471': [{ p: 'valor_de_mrr', rot: 'valor de MRR' }, { p: 'plano_apresentado', rot: 'plano apresentado' }],
+  '1395880472': [{ p: 'valor_de_mrr', rot: 'valor de MRR' }, { p: 'plano_apresentado', rot: 'plano apresentado' }],
+  '1395880473': [{ p: 'valor_de_mrr', rot: 'valor de MRR' }, { p: 'periodo_contratado', rot: 'período contratado' }]
+};
+/* A ETAPA VEM DE FORA, e isto foi um erro meu pego medindo: a primeira versao lia
+   lead.stageId e os leads de DATA.funilLeads NAO TEM esse campo — a etapa e a CHAVE do
+   mapa. A funcao recebia undefined, nao achava exigencia nenhuma e a categoria nova
+   nascia com ZERO linhas, enquanto o dado mostrava 21 de 22 negocios em Demo/Proposta
+   sem MRR. Silencio, nao erro: exatamente o tipo de falha que passa por teste de codigo. */
+function gxCamposFaltando(lead, stageId) {
+  const exige = GX_EXIGE_POR_ETAPA[String(stageId || (lead && lead.stageId) || '')] || [];
+  return exige.filter(x => {
+    const v = lead[x.p];
+    return v == null || String(v).trim() === '';
+  }).map(x => x.rot);
+}
 
 /* QUALIFICAÇÃO DA VISITA — os três campos que o executivo preenche na ficha e que o
    playbook trata como o mínimo de uma visita: quem decide, qual a dor e que sistema usa.
@@ -33272,6 +33345,23 @@ function gxFilaDeIntervencao() {
         cliente: lead.name || lead.dealname || null,
         dealId: lead.id || null,
         destino: { view: 'viewCockpit', dealId: lead.id || null, ownerId: oid }
+      });
+    });
+
+    /* 9b: entrou na etapa sem o campo que a etapa exige. Varre os ABERTOS do executivo,
+       não só os que já apareceram em algum balde — um negócio pode estar em dia de
+       cadência e ainda assim sem MRR. */
+    Object.entries(DATA.funilLeads || {}).forEach(([etapaId, lista]) => {
+      (lista || []).filter(l => l && String(l.ownerId) === oid).forEach(lead => {
+      const faltando = gxCamposFaltando(lead, etapaId);
+      if (!faltando.length) return;
+      const rotEtapa = (DATA.stageMeta && DATA.stageMeta.labels && DATA.stageMeta.labels[etapaId]) || lead.stage || 'etapa aberta';
+      empurrar(rep, 'campo_obrigatorio_faltando',
+        'está em ' + rotEtapa + ' sem ' + faltando.join(' nem '), {
+          cliente: lead.name || lead.dealname || null,
+          dealId: lead.id || null,
+          destino: { view: 'viewCockpit', dealId: lead.id || null, ownerId: oid }
+        });
       });
     });
 
@@ -33501,6 +33591,7 @@ function renderFilaDeIntervencao() {
   const tons = { sla: 'var(--red)', quente_sem_passo: 'var(--red)', proposta_sem_data: 'var(--amber)',
     followup_vencido: 'var(--amber)', visita_sem_desfecho: 'var(--amber)',
     visita_sem_qualificacao: 'var(--blue)', cadencia_quebrada: 'var(--amber)',
+    campo_obrigatorio_faltando: 'var(--red)',
     abandono_1o_toque: 'var(--amber)', plano_aberto: 'var(--line-btn)',
     rota_nao_montada: 'var(--line-btn)', fase_sem_definicao: 'var(--blue)',
     sync_a_confirmar: 'var(--muted2)' };
