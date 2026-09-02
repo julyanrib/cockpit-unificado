@@ -223,7 +223,13 @@ checar('a conversão não é calculada para Perdido (não se "passa" de perdido)
    escapá-la dentro de outra só cria oportunidade de errar o escape (foi o que aconteceu na
    primeira tentativa desta checagem). indexOf não tem essa armadilha. */
 checar('fn2Quando trata data só-dia sem converter fuso',
-  template.indexOf('if (/^\d{4}-\d{2}-\d{2}$/.test(txt)) {') > 0);
+  template.indexOf("if (txt.length === 10 && txt.charAt(4) === '-' && txt.charAt(7) === '-') {") > 0);
+/* E a checagem que faltava: a que teria pego o defeito de verdade. A primeira versão desta
+   guarda procurava o padrão com barras invertidas e as perdeu no mesmo escape que o código
+   perdeu — as duas mangleadas casaram, a guarda passou, e o bug subiu. Esta olha o
+   RESULTADO em vez da forma: se sobrou regex de data neste caminho, ela reprova. */
+checar('não há regex de data em fn2Quando (barra invertida some em patch e a regex fica válida e errada)',
+  !/function fn2Quando\(d\) \{[\s\S]{0,900}?test\(txt\)/.test(template));
 checar('fn2Quando ainda converte timestamp completo (ali a conversão é necessária)',
   template.indexOf('const iso = isoDate(new Date(d));') > 0);
 
