@@ -216,7 +216,7 @@ function montarDadosCompletos() {
     saude,
     reps,
     leadsReferencia: leadsReferencia.pracas || [],
-    footerText: `Fonte: HubSpot (pipeline 916011864, atualizado 08:56, 13:00 e 19:00) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
+    footerText: `Fonte: HubSpot (pipeline 916011864, atualizado a cada 2h no horário comercial) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
     // AUTOMAÇÃO 3 (13/08/26) — status da última rodada do robô: se alguma escrita de
     // realizado_visitas/avancos/propostas falhou ou não bateu na conferência pós-escrita.
     // Opcional: undefined até a primeira rodada rodar com esta automação.
