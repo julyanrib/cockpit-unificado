@@ -137,7 +137,17 @@ async function ganhosNaJanela(startMs, endMs) {
 //    como perda da semana. O comentário antigo dizia que não havia "closedate equivalente"
 //    para essas etapas — e há: Perdido é etapa FECHADA, então o HubSpot grava closedate na
 //    entrada dela (foi assim que a coluna Perdido do kanban datou as 1.811 do histórico).
-//    Reciclagem não é fechada; para ela a data de entrada na etapa é a propriedade certa.
+//    Reciclagem não é fechada, então não tem closedate — e a propriedade de entrada DELA
+//    (hs_v2_date_entered_1398311191) NÃO EXISTE no portal: pedi-la derrubou o robô com um
+//    HubSpot 400 em 02/09/26 (run 33639042897), o que travou a rodada inteira. Todas as
+//    outras etapas do Field Sales têm a sua (conferido uma por uma na API de propriedades);
+//    a Reciclagem é a exceção. A propriedade global hs_v2_date_entered_current_stage existe
+//    e diz a mesma coisa aqui, porque o filtro já fixa dealstage EQ Reciclagem: "está em
+//    Reciclagem" + "entrou na etapa atual nesta janela" = "entrou em Reciclagem nesta
+//    janela". Ela só não conta quem entrou e já saiu na mesma semana — limite que o filtro
+//    por dealstage sempre teve, antes e depois desta correção.
+//    LIÇÃO: propriedade por ID de etapa não é garantida por existir a etapa. Antes de pôr
+//    uma no robô, perguntar à API se ela existe — o robô é o gargalo de TODA a ferramenta.
 async function contagemComFiltro(stageId, startMs, endMs, propDaData) {
   const data = await hsSearch({
     filterGroups: [{
@@ -176,7 +186,7 @@ async function windowCounts(startMs, endMs) {
      fechada, então não tem closedate). Ver o comentário de contagemComFiltro. */
   const perdidos = await contagemComFiltro(STAGES.perdido, startMs, endMs, 'closedate');
   const reciclagem = await contagemComFiltro(STAGES.reciclagem, startMs, endMs,
-    'hs_v2_date_entered_' + STAGES.reciclagem);
+    'hs_v2_date_entered_current_stage');
   const reunioesDeals = await reunioesNaJanela(startMs, endMs);
 
   return {
