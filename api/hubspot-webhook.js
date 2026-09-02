@@ -43,7 +43,22 @@ const WORKFLOW_FILE = 'daily-refresh.yml';
 // manual de correção e disparo automático (rodando com o código de ANTES da correção)
 // podiam se sobrepor, e o automático, terminando depois, sobrescrevia o commit manual.
 // Menos disparos automáticos por hora reduz a janela onde isso acontece.
-const COOLDOWN_MINUTOS = 60;
+// COOLDOWN 60 -> 20 MINUTOS (02/09/26, Julyan: "eu quero que atualize na hora que eles
+// fizerem isso"). A conta que limita este número não é o HubSpot: é o teto de 100
+// deploys/dia do plano Hobby da Vercel, porque cada rodada do robô faz um commit e todo
+// commit gera um deploy. Com a janela de 15 horas:
+//   60 min -> no máximo 15 disparos por dia
+//   20 min -> no máximo 45, mais os 7 horários fixos = 52, com folga até o teto
+// Vinte minutos triplica o frescor sem chegar perto do limite. A outra razão do 60 —
+// upload manual e disparo automático se sobrepondo — segue coberta pelo rebase com
+// autostash e pela lista de auto-resolução do workflow, que foi consertada hoje.
+//
+// E ISTO NÃO É "NA HORA", E NÃO TEM COMO SER POR AQUI: o caminho HubSpot -> robô ->
+// commit -> deploy leva ~3 minutos no melhor caso e gasta um deploy. O que ficou de fato
+// instantâneo hoje foi a AÇÃO FEITA DENTRO DO COCKPIT, que agora espelha no DATA em
+// memória e re-renderiza sem esperar carga nenhuma. Para ação feita direto no HubSpot ou
+// no PWA, 20 minutos é o piso desta arquitetura.
+const COOLDOWN_MINUTOS = 20;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
@@ -120,17 +135,25 @@ module.exports = async function handler(req, res) {
   const AGORA_BRT = new Date(Date.now() - 3 * 60 * 60 * 1000); // Brasília = UTC−3, fixo
   const DIA_SEMANA = AGORA_BRT.getUTCDay();                    // 0=domingo ... 6=sábado
   const MIN_DO_DIA = AGORA_BRT.getUTCHours() * 60 + AGORA_BRT.getUTCMinutes();
-  const ABRE = 8 * 60 + 30;   // 08:30
-  const FECHA = 19 * 60;      // 19:00
-  const ehDiaUtil = DIA_SEMANA >= 1 && DIA_SEMANA <= 5;
-  const naJanela = ehDiaUtil && MIN_DO_DIA >= ABRE && MIN_DO_DIA < FECHA;
+  // JANELA 07:00-22:00, TODO DIA (02/09/26, Julyan: "das 22h até as 07:00 ngm mexe no
+  // hubspot, então nao precisaria mandar nesse horário"). A janela anterior era
+  // 08:30-19:00 em dia útil, e ela criava dois buracos reais:
+  //   * ação às 19h30 esperava até 08:30 do dia seguinte — 13 horas de dado velho, e é
+  //     justamente o fim de tarde em que o executivo registra o que fez na rua;
+  //   * ação no sábado esperava até segunda, embora o robô já tenha cron de fim de semana.
+  // A faixa de silêncio agora é a que o Julyan descreveu — 22h às 07h — e ela vale para
+  // qualquer dia. O dia da semana saiu da conta de propósito: quem mexe no sábado gera
+  // dado que o gestor lê na segunda, e esperar dois dias por ele não tem justificativa.
+  const ABRE = 7 * 60;        // 07:00
+  const FECHA = 22 * 60;      // 22:00
+  const naJanela = MIN_DO_DIA >= ABRE && MIN_DO_DIA < FECHA;
   if (!naJanela) {
     const hhmm = String(AGORA_BRT.getUTCHours()).padStart(2, '0') + ':'
       + String(AGORA_BRT.getUTCMinutes()).padStart(2, '0');
     console.log('[hubspot-webhook] Fora da janela de expediente (' + hhmm + ' BRT, dia ' + DIA_SEMANA + ') — não dispara.');
     return res.status(200).json({
       ok: true, disparado: false,
-      motivo: 'fora da janela de expediente (08:30–19:00, dias úteis) — entra na rodada das 08:30'
+      motivo: 'fora da janela de expediente (07:00–22:00) — entra na próxima rodada agendada'
     });
   }
 
