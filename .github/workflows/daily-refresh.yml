@@ -307,7 +307,47 @@ jobs:
               # alguém escreveu. Só entram aqui os 100% derivados, que o job regera do zero.
               # resumo-semanal.json entrou em 02/09/26: é gerado por generate-weekly-summary
               # e faltava na lista.
-              INESPERADOS=$(echo "$CONFLITOS" | grep -v -E '^data/(hubspot|hubspot-previous|weekly-raw|narrativas|sync-status|resumo-semanal)\.json$|^public/index\.html$' || true)
+              # field-sales-playbook.compiled.json entrou em 02/09/26, e pela SEGUNDA vez
+              # pelo mesmo motivo: esta e uma segunda lista a mao, e a de `git add` ja tinha
+              # envelhecido deixando exatamente este arquivo de fora. Ele e 100% derivado -
+              # build-playbook.js o regera do zero a partir dos .md e do dado do CRM - e por
+              # isso muda em quase toda rodada. Faltando aqui, DUAS rodadas simultaneas
+              # abortam a segunda: foi o que aconteceu as 19:54 UTC de 02/09/26, com o job
+              # anunciando "conflito em arquivo que nao e gerado por este job" sobre um
+              # arquivo que ele mesmo acabara de gerar.
+              INESPERADOS=$(echo "$CONFLITOS" | grep -v -E '^data/(hubspot|hubspot-previous|weekly-raw|narrativas|sync-status|resumo-semanal|field-sales-playbook\.compiled)\.json$|^public/index\.html
+              if [ -n "$INESPERADOS" ]; then
+                echo "Conflito em arquivo que não é gerado por este job — abortando pra revisão manual:"
+                echo "$INESPERADOS"
+                git rebase --abort
+                exit 1
+              fi
+              echo "Conflito só nos arquivos gerados por este job — ficando com a versão recém-gerada (mais fresca) e continuando o rebase:"
+              echo "$CONFLITOS"
+              echo "$CONFLITOS" | xargs -r git checkout --theirs --
+              echo "$CONFLITOS" | xargs -r git add
+              git rebase --continue
+            fi
+          done
+
+          echo "Não consegui enviar mesmo após 3 tentativas — verifique manualmente."
+          exit 1
+
+      # Se qualquer passo acima falhar (token expirado, HubSpot mudou algo, etc.),
+      # abre um Issue visível no repositório — assim dá pra perceber sem precisar
+      # entrar no site todo dia pra conferir se a data bateu.
+      - name: Avisar sobre falha (abre Issue)
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Falha na atualização diária do cockpit — ${new Date().toISOString().slice(0,10)}`,
+              body: `A atualização automática do cockpit falhou.\n\nVeja o log completo aqui: ${context.payload.repository.html_url}/actions/runs/${context.runId}\n\nCausas comuns: token do HubSpot expirado/revogado, mudança de escopo na API, ou limite de requisições.`
+            });
+ || true)
               if [ -n "$INESPERADOS" ]; then
                 echo "Conflito em arquivo que não é gerado por este job — abortando pra revisão manual:"
                 echo "$INESPERADOS"
