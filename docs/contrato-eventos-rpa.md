@@ -324,3 +324,7 @@ Toda ação automática precisa poder rodar duas vezes sem efeito dobrado:
   (`.gitignore` cobre).
 
 Nenhum desses caminhos escreve em HubSpot ou Supabase.
+
+<!-- Prova de disputa de push (02/09/26): este commit foi feito DE PROPOSITO enquanto o robo
+     rodava, para forcar o caminho "push rejeitado -> fetch -> rebase" que falhou 6 vezes em
+     dois dias. Se o robo publicou depois disto, a correcao do passo de publicacao funciona. -->
