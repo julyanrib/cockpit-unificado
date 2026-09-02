@@ -12571,7 +12571,15 @@ function fn2Estado(lead) {
 function fn2Quando(d) {
   try {
     const txt = String(d || '');
-    if (/^d{4}-d{2}-d{2}$/.test(txt)) {
+    /* SEM REGEX AQUI, de propósito. A primeira correção deste bug usou
+       /^\d{4}-\d{2}-\d{2}$/ e as barras invertidas foram comidas pelas camadas de escape
+       do patch: subiu para produção como /^d{4}-d{2}-d{2}$/, que é uma expressão VÁLIDA e
+       errada — nenhum verificador de sintaxe acusa, e a condição simplesmente nunca casava.
+       Pior: a checagem que eu escrevi para guardar isso perdeu as barras do mesmo jeito, e
+       as duas mangleadas casaram entre si. Guarda escrita com o mesmo erro do código não
+       guarda nada.
+       Três comparações de caractere resolvem o mesmo e não têm o que escapar. */
+    if (txt.length === 10 && txt.charAt(4) === '-' && txt.charAt(7) === '-') {
       return (typeof fmtDailyLabel === 'function') ? fmtDailyLabel(txt) : txt;
     }
     const iso = isoDate(new Date(d));
