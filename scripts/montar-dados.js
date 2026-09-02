@@ -13,28 +13,47 @@
 // que a Vercel empacote os JSONs junto com a função serverless (mesmo padrão que o
 // api/atualizar-mrr.js já usa pro usuarios.json).
 
-const hubspot = require('../data/hubspot.json');
-const narrativas = require('../data/narrativas.json');
-const usuariosRaw = require('../data/usuarios.json');
-
 // Arquivos opcionais — podem não existir num repo recém-clonado ou antes da 1ª execução
 // dos workflows. try/catch com require estático mantém o empacotamento da Vercel funcionando.
 function requireOpcional(fn) {
   try { return fn(); } catch (e) { return null; }
 }
+
+// ══ DE ONDE VEM O SNAPSHOT DO CRM (02/09/26) ═══════════════════════════════════════
+// Os seis arquivos que o ROBO produz (hubspot, narrativas, resumo-semanal, weekly-raw,
+// sync-status, hubspot-previous) sairam do repositorio: agora eles vivem numa tabela do
+// Supabase (public.cockpit_snapshot) e a rota /api/dados os injeta aqui antes de montar.
+// Motivo: cada rodada do robo commitava esses arquivos, e todo commit gera um deploy na
+// Vercel — com o teto de 100 deploys/dia, a atualizacao ficava limitada a ~15 por dia.
+//
+// ELES SAO `let` E NAO `const`, e a troca e do PROCESSO INTEIRO, de proposito. O snapshot
+// e o mesmo para todo mundo: nao existe versao do CRM por usuario. O que e por usuario e o
+// FILTRO, e ele acontece depois, em filtrarParaPapel(dados, usuario), que recebe a pessoa
+// por argumento. Guardar o snapshot no modulo e cache; guardar o usuario seria vazamento.
+//
+// E O REQUIRE CONTINUA AQUI COMO REDE: se a tabela estiver vazia ou o Supabase fora do ar,
+// a rota cai no arquivo. Por isso hubspot e narrativas viraram opcionais — antes eram
+// require duro, e no dia em que o arquivo deixar de ser commitado o modulo nem carregaria.
+let hubspot = requireOpcional(() => require('../data/hubspot.json'));
+let narrativas = requireOpcional(() => require('../data/narrativas.json'));
+const usuariosRaw = require('../data/usuarios.json');
+
+// (requireOpcional foi movida para o topo do arquivo em 02/09/26: ela passou a ser usada
+// pelos primeiros requires, e declaracao de function sobe por hoisting mas fica confusa
+// de ler — ver o bloco no inicio do arquivo.)
 const leadsReferencia = requireOpcional(() => require('../data/leads-referencia.json')) || { pracas: [] };
 const supabaseConfig = requireOpcional(() => require('../data/supabase-config.json'));
 const maptilerConfig = requireOpcional(() => require('../data/maptiler-config.json'));
-const resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
-const weeklyRaw = requireOpcional(() => require('../data/weekly-raw.json'));
+let resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
+let weeklyRaw = requireOpcional(() => require('../data/weekly-raw.json'));
 // AUTOMAÇÃO 3 (13/08/26) — status da última rodada do robô da Daily: falhas de
 // sincronização de realizado_visitas/avancos/propostas, se houver. Opcional porque só
 // passa a existir depois da PRIMEIRA execução do fetch-hubspot.js com esta automação.
-const syncStatus = requireOpcional(() => require('../data/sync-status.json'));
+let syncStatus = requireOpcional(() => require('../data/sync-status.json'));
 // Grandes redes que a Takeat não atende — usado pela Prospecção para tirar da fila
 // recomendada (vai pra "Revisar escopo", não some). Dado editável em data/.
 const redesExcluidas = requireOpcional(() => require('../data/redes-excluidas.json'));
-const hubspotPrevious = requireOpcional(() => require('../data/hubspot-previous.json'));
+let hubspotPrevious = requireOpcional(() => require('../data/hubspot-previous.json'));
 // Régua de cadência (data/cadencias.json). É CONFIGURAÇÃO, não código: o template lê
 // DATA.cadencias e nunca hardcoda os passos, então ajustar a régua (dias, canais, quais
 // cadências existem, motivos válidos de saída) é editar esse JSON e rodar o build.
@@ -56,6 +75,36 @@ function fmtDate(iso) {
 }
 
 // ============ MONTAGEM DO DATA COMPLETO (idêntica à antiga lógica do build.js) ============
+
+// ══ A ROTA INJETA O SNAPSHOT AQUI ══════════════════════════════════════════════════
+// Recebe o que veio da tabela e substitui SO o que veio preenchido. Chave ausente ou
+// nula mantem o arquivo — nunca apaga um dado que existe com um vazio que chegou, porque
+// tabela sem a linha e "ainda nao publicou", nao "nao ha dado".
+//
+// Devolve o que foi trocado, e a rota registra isso: sem esse retorno nao daria para
+// saber, olhando producao, se a tela esta sendo servida pelo Supabase ou pelo arquivo —
+// e essa e a unica pergunta que importa durante a virada.
+function usarSnapshot(fontes) {
+  const f = fontes || {};
+  const trocadas = [];
+  const usar = (chave, valor, aplicar) => {
+    if (valor == null) return;
+    aplicar(valor);
+    trocadas.push(chave);
+  };
+  usar('hubspot', f.hubspot, v => { hubspot = v; });
+  usar('narrativas', f.narrativas, v => { narrativas = v; });
+  usar('resumo-semanal', f['resumo-semanal'], v => { resumoSemanal = v; });
+  usar('weekly-raw', f['weekly-raw'], v => { weeklyRaw = v; });
+  usar('sync-status', f['sync-status'], v => { syncStatus = v; });
+  usar('hubspot-previous', f['hubspot-previous'], v => { hubspotPrevious = v; });
+  return trocadas;
+}
+
+// O snapshot do CRM e obrigatorio para montar qualquer coisa. Sem ele — nem na tabela nem
+// no arquivo — a resposta certa e um erro claro, nunca uma tela com zeros: zero negocio
+// aberto e uma afirmacao sobre o funil, e nao ha funil nenhum para afirmar.
+function temSnapshot() { return !!(hubspot && hubspot.kpis); }
 
 function montarDadosCompletos() {
   // Ordem de exibição = ordem em que aparecem no narrativas.json
@@ -445,4 +494,4 @@ function configMaptiler() {
   return maptilerConfig ? maptilerConfig.key : null;
 }
 
-module.exports = { montarDadosCompletos, filtrarParaPapel, configSupabase, configMaptiler, USUARIOS };
+module.exports = { montarDadosCompletos, filtrarParaPapel, configSupabase, configMaptiler, USUARIOS, usarSnapshot, temSnapshot };

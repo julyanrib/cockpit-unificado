@@ -278,6 +278,56 @@ async function hsSearchTipoAll(objectType, body) {
 // e o sync-status só reportava o sintoma a jusante ("linha não encontrada"), nunca a
 // causa. 'sistema-fetch-hubspot' identifica que a linha veio deste robô, não de alguém
 // digitando na tela nem do backfill manual.
+// ══ O SNAPSHOT SAI DO REPOSITORIO (02/09/26) ═══════════════════════════════════════
+// Cada rodada deste robo fazia um commit em data/*.json, e todo commit gera um deploy na
+// Vercel. Com o teto de 100 deploys/dia do plano Hobby, isso limitava a atualizacao a ~15
+// rodadas por dia e obrigava um cooldown de 20 minutos no webhook do HubSpot — ou seja, o
+// executivo mexia no CRM e o Cockpit podia levar 20 minutos para saber.
+//
+// Agora o mesmo JSON e publicado numa tabela do Supabase (public.cockpit_snapshot, uma
+// linha por arquivo). A rota /api/dados le de la. Sem commit, sem deploy, sem teto.
+//
+// OS ARQUIVOS CONTINUAM SENDO GRAVADOS nesta etapa, de proposito: enquanto a leitura pelo
+// Supabase nao estiver comprovada em producao, o arquivo e a rede de seguranca da rota, e
+// o preview local (scripts/preview-local.js) le o arquivo direto. Parar de commitar e o
+// passo seguinte, depois de eu ver a rota servindo do Supabase.
+//
+// SE A PUBLICACAO FALHAR, A RODADA NAO MORRE: ela avisa e segue. O robo existe para trazer
+// o dado; perder a rodada inteira porque a publicacao falhou seria trocar um problema por
+// um pior. O sync-status registra a falha para o gestor ver na tela.
+async function publicarNoSnapshot(chave, conteudo, origem) {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return { ok: true, skipped: true };
+  const corpo = JSON.stringify(conteudo);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/cockpit_snapshot?on_conflict=chave`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_SERVICE_KEY,
+        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify([{
+        chave: String(chave),
+        conteudo: conteudo,
+        bytes: Buffer.byteLength(corpo, 'utf8'),
+        atualizado_em: new Date().toISOString(),
+        origem: origem || 'fetch-hubspot'
+      }])
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      console.log(`Aviso: snapshot '${chave}' NAO publicado no Supabase — ${res.status} ${txt.slice(0, 200)}`);
+      return { ok: false, status: res.status };
+    }
+    console.log(`OK — snapshot '${chave}' publicado no Supabase (${(Buffer.byteLength(corpo, 'utf8') / 1024).toFixed(1)} KB)`);
+    return { ok: true };
+  } catch (e) {
+    console.log(`Aviso: snapshot '${chave}' NAO publicado no Supabase — ${e.message}`);
+    return { ok: false, erro: e.message };
+  }
+}
+
 async function gravarSnapshotDaily(ownerId, dataISO, campos) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return { ok: true, skipped: true };
   try {
@@ -2058,6 +2108,31 @@ async function main() {
     falhas: falhasSyncDaily
   }, null, 2));
   console.log(`OK — status de sincronização gravado (${falhasSyncDaily.length} falha(s) nesta rodada)`);
+
+  // ── PUBLICA O QUE ACABOU DE GRAVAR ──────────────────────────────────────────────
+  // A ordem importa: os arquivos vao primeiro porque o preview local e o fallback da
+  // rota dependem deles; a publicacao vem depois, com o mesmo conteudo. Assim os dois
+  // lugares nunca discordam dentro de uma rodada.
+  const origemDaRodada = process.env.GITHUB_EVENT_NAME === 'workflow_dispatch'
+    ? 'webhook-ou-manual' : (process.env.GITHUB_EVENT_NAME || 'local');
+  const paraPublicar = [
+    ['hubspot', output],
+    ['sync-status', { ultimaExecucao: new Date().toISOString(), totalExecutivos: REPS.length, falhas: falhasSyncDaily }]
+  ];
+  // Os outros arquivos do snapshot sao gravados por OUTROS scripts (weekly-raw e
+  // resumo-semanal pelo comparativo semanal, narrativas pela geracao de texto). Aqui
+  // publica-se o que ESTE robo produziu; cada um publica o seu, e a rota le a uniao.
+  const anterior = (() => {
+    try { return JSON.parse(fs.readFileSync(previousPath, 'utf8')); } catch (e) { return null; }
+  })();
+  if (anterior) paraPublicar.push(['hubspot-previous', anterior]);
+
+  let publicados = 0;
+  for (const [chave, conteudo] of paraPublicar) {
+    const r = await publicarNoSnapshot(chave, conteudo, origemDaRodada);
+    if (r && r.ok) publicados += 1;
+  }
+  console.log(`OK — ${publicados} de ${paraPublicar.length} snapshot(s) publicados no Supabase.`);
 }
 
 main().catch(err => {
