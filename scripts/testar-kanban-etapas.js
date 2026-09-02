@@ -122,13 +122,23 @@ checar('fn2PodeMover libera Perdido nos dois sentidos',
   /if \(pr === FN2_ETAPA_PERDIDO \|\| d === FN2_ETAPA_PERDIDO\) return true;/.test(template));
 checar('fn2PodeMover permite avançar só um degrau (e voltar para qualquer anterior)',
   /return iPara <= iDe \+ 1;/.test(template));
-checar('o drop consulta fn2PodeMover ANTES de abrir formulário',
-  /if \(!fn2PodeMover\(voo\.de, para\)\) \{/.test(template));
-checar('o drop cai em abrirPassagemDeEtapa (a mesma porta), não numa escrita própria',
-  /abrirPassagemDeEtapa\(lead, para, depoisDeMover\);/.test(template));
+checar('o drop consulta fn3PodeMover ANTES de abrir o registro rápido',
+  template.indexOf("if (!fn3PodeMover(voo.de, para)) {") > 0);
+checar('soltar NÃO move: abre o registro rápido',
+  template.indexOf("fn3AbrirRegistro(lead, para, redesenhar);") > 0);
+/* A GUARDA QUE PEGOU O DEFEITO DE VERDADE (02/09/26). A primeira versão do registro
+   rápido reimplementou a sequência inteira de escrita — PATCH da etapa, nota, tarefa,
+   espelho local — e virou a terceira chamada de op:'mudar-etapa' no arquivo. Duas cópias
+   da mesma sequência é como se perde a correção feita numa delas. Ficou uma função só,
+   gravarPassagemDeEtapa, e as duas telas a chamam. */
+checar('existe UMA função de escrita de passagem de etapa',
+  template.indexOf("async function gravarPassagemDeEtapa(opts) {") > 0);
+checar('as duas telas chamam a mesma função',
+  (template.split("await gravarPassagemDeEtapa({").length - 1) === 2,
+  'achado ' + (template.split("await gravarPassagemDeEtapa({").length - 1));
 checar('nenhuma chamada nova a /api/negocio-acao foi criada no bloco do kanban',
   (template.match(/op: 'mudar-etapa'/g) || []).length === 2,
-  'esperado 2 (edição inline de propriedade + a passagem de etapa), achado ' +
+  'esperado 2 (edição inline + a função compartilhada), achado ' +
   (template.match(/op: 'mudar-etapa'/g) || []).length);
 
 /* ── 6. as colunas são o pipeline oficial ────────────────────────────────────────── */
@@ -151,13 +161,14 @@ checar('o shell separa "todos" (colunas) de "itens" (o funil)',
 
 /* ── 7. Perdido não pede próximo passo ───────────────────────────────────────────── */
 checar('a bandeira exigePasso existe e exclui Perdido',
-  /const exigePasso = para !== ETAPA_PERDIDO_ID;/.test(template));
+  template.indexOf("const exigePasso = para !== ETAPA_PERDIDO_ID;") > 0);
 checar('a seção do próximo passo só é renderizada quando exigePasso',
   /\$\{!exigePasso \? '' :/.test(template));
 checar('a validação do próximo passo respeita exigePasso',
   /if \(exigePasso && \(!passoAcao \|\| !passoData\)\) \{/.test(template));
-checar('a criação da tarefa respeita exigePasso',
-  /let passoOk = !exigePasso, erroPasso = null;/.test(template));
+checar('a criação da tarefa respeita exigePasso (dentro da função compartilhada)',
+  template.indexOf("const exigePasso = !!(opts.passoAcao && opts.passoData);") > 0 &&
+  template.indexOf("tipoAcao: 'proximo-passo'") > 0);
 
 /* ── 8. o corte: nada retroativo desce ──────────────────────────────────────────── */
 checar('robô: existe um corte de Perdido, com data',
@@ -191,31 +202,46 @@ checar('o estado de Perdido é decidido ANTES do bloco de "sem próximo passo"',
   template.indexOf('if (et === FN2_ETAPA_PERDIDO) {') > 0 &&
   template.indexOf('if (et === FN2_ETAPA_PERDIDO) {') < template.indexOf("/* SEM PASSO: o verbo vem da etapa"),
   'senão o kanban pediria em vermelho a próxima visita de um negócio morto');
-checar('o card perdido não é arrastável pela borda (reabrir passa pelo menu)',
-  /const arrastavel = item\.stageId !== FN2_ETAPA_PERDIDO;/.test(template));
-checar('a coluna Perdido vazia tem texto próprio (vazio ali é boa notícia)',
-  /if \(etapa\.saiu\) \{/.test(template));
+/* PERDIDO DEIXOU DE SER COLUNA na v3: virou trilho de uma linha no rodapé. Coluna inteira
+   para dizer "0" é a tela gritando o que NÃO aconteceu, no meio de seis que dizem o que
+   aconteceu. O card perdido continua existindo — dentro do trilho, quando se abre.
+   TODAS as checagens daqui usam indexOf literal, e não regex: escapar barra invertida
+   dentro de patch é o erro que a memória do projeto já registra, e ele volta calado —
+   a regex fica VÁLIDA e errada, e a guarda passa verde protegendo nada. */
+const iGrade = template.indexOf('const FN3_COLUNAS = [');
+const grade = iGrade > 0 ? template.slice(iGrade, template.indexOf('];', iGrade)) : '';
+checar('a grade tem 7 colunas', (grade.match(/id: /g) || []).length === 7,
+  'achado ' + (grade.match(/id: /g) || []).length);
+checar('Perdido NÃO é coluna da grade', grade.length > 0 && grade.indexOf('1396006164') < 0);
+checar('Enviado Onboarding é a última coluna da grade',
+  grade.indexOf('onb: true') > grade.indexOf('pagto: true'));
+checar('Perdido é trilho no rodapé, com o corte declarado',
+  template.indexOf('function fn3Perdidos(perdidos) {') > 0 &&
+  template.indexOf('nada saiu da sua carteira') > 0);
+checar('o alternador Ativos/Perdidos existe',
+  template.indexOf('data-fn3-aba="ativos"') > 0 && template.indexOf('data-fn3-aba="perdidos"') > 0);
+checar('o card de Onboarding não se arrasta (o que saiu da sua mão não volta por gesto)',
+  template.indexOf('const arrastavel = !e.onb;') > 0);
 checar('o CTA do card perdido é reabrir, e cai no menu de etapas',
-  /cta: 'Reabrir →', acao: 'mover'/.test(template) &&
-  /if \(acao === 'mover'\) \{ abrirEscolhaDeEtapa\(lead, depoisDeMover\); return; \}/.test(template));
+  template.indexOf("cta: 'Reabrir →', acao: 'mover'") > 0);
 
 /* ── 10. a conversão: a correção que o Julyan pediu ─────────────────────────────── */
 checar('fn2Conversao lê porOwner (dele) e agregado (do time)',
-  /const meu = \(\(h\.porOwner \|\| \{\}\)\[String\(ownerId\)\] \|\| \{\}\)\.etapas \|\| \[\];/.test(template) &&
-  /const doTime = h\.agregado \|\| \[\];/.test(template));
+  template.indexOf('const doTime = h.agregado || [];') > 0);
 checar('n pequeno é declarado em vez de virar porcentagem',
-  /poucos: m\.chegaram < FN2_N_MINIMO/.test(template) &&
-  /if \(c\.poucos\) return 'passou ' \+ c\.avancaram \+ ' de ' \+ c\.chegaram/.test(template));
+  template.indexOf('poucos: m.chegaram < FN2_N_MINIMO') > 0 &&
+  template.indexOf("if (c.poucos) return 'passou '") > 0);
 checar('o degrau do hero usa conversão, não estoque parado',
-  /const pior = candidatos\.slice\(\)\.sort\(\(a, b\) => a\.c\.meu - b\.c\.meu\)\[0\];/.test(template));
+  template.indexOf('const pior = candidatos.slice().sort((a, b) => a.c.meu - b.c.meu)[0];') > 0);
 checar('o degrau compara com o time para separar "etapa dura" de "minha passagem"',
-  /a etapa não é o problema, a sua passagem por ela é/.test(template));
+  template.indexOf('a etapa não é o problema, a sua passagem por ela é') > 0);
 checar('sem histórico suficiente o degrau não inventa etapa',
-  /histórico curto para apontar onde o funil vaza/.test(template));
-checar('a conversão não é calculada para Perdido (não se "passa" de perdido)',
-  /const conv = etapa\.saiu \? null : fn2Conversao\(etapa\.id, fn2OwnerAtual\);/.test(template));
-
-/* ── 11. data só-dia não pode passar por new Date() ─────────────────────────────── */
+  template.indexOf('histórico curto para apontar onde o funil vaza') > 0);
+/* A CONVERSÃO SAIU DO HEADER e foi para o title do hover: três linhas de estatística no
+   header afogavam o nome da etapa, que é o defeito nº 2 do print que o Julyan mandou. */
+checar('a conversão não ocupa linha do header — vive no title do hover',
+  template.indexOf('const conv = (col.pagto || col.onb) ? null : fn2Conversao(col.id, fn2OwnerAtual);') > 0 &&
+  template.indexOf('title="${dica}"') > 0);
 /* O card de Perdido dizia "31/08 (segunda)" para uma perda de 01/09 (terça): 'YYYY-MM-DD'
    é meia-noite UTC pela especificação, e em Brasília (UTC−3) isso é o dia anterior. Errava
    a data e o dia da semana — que é a única coisa que o chip diz. */
@@ -234,11 +260,70 @@ checar('fn2Quando ainda converte timestamp completo (ali a conversão é necess�
   template.indexOf('const iso = isoDate(new Date(d));') > 0);
 
 /* ── 11. o comentário que declarava o limite não pode continuar mentindo ─────────── */
+/* ── 11. o comentário que declarava o limite não pode continuar mentindo ─────────── */
 checar('o "LIMITE DECLARADO" da fila foi corrigido (Perdido passou a ser aceito)',
-  !/LIMITE DECLARADO: "Perder com motivo" não é oferecido/.test(template) &&
-  /LIMITE LEVANTADO \(01\/09\/26\)/.test(template));
+  template.indexOf('LIMITE DECLARADO: "Perder com motivo" não é oferecido') < 0 &&
+  template.indexOf('LIMITE LEVANTADO (01/09/26)') > 0);
 checar('o comentário do topo do servidor não diz mais que Perdido ficou de fora',
-  !/Marcar como Perdido\/Reciclagem ficou fora de propósito nesta rodada/.test(servidor));
+  servidor.indexOf('Marcar como Perdido/Reciclagem ficou fora de propósito nesta rodada') < 0);
+
+/* ── 12. ENVIADO ONBOARDING: clone, sem retroativo, sem escrever propriedade ──────
+   Pedido do Julyan (02/09/26): "puxando do pipe do field com TODAS AS PROPRIEDADES pq
+   quando eles enviam pra onboarding cria automações no whatsapp, cria outro card no pipe
+   do onboarding e etc não é pra alterar NENHUMA propriedade do hubspot, apenas clonar e
+   NÃO QUERO NENHUM RETROATIVO VAI SER A PARTIR DE HOJE TB".
+   Medido antes: 431 negócios já estão na etapa — 391 de julho/26. Sem o corte, a coluna
+   nasce com 431 cards. */
+const ONB = '1396006163';
+checar('robô: existe corte do onboarding, com data',
+  (robo.match(/const CORTE_ONBOARDING_ISO = .[0-9]{4}-[0-9]{2}-[0-9]{2}./) || []).length === 1);
+checar('robô: o corte usa a data de ENTRADA na etapa, não closedate nem lastmodified',
+  robo.indexOf("const PROP_ENTRADA_ONBOARDING = 'hs_v2_date_entered_' + ETAPA_ONBOARDING;") > 0 &&
+  robo.indexOf("propertyName: PROP_ENTRADA_ONBOARDING, operator: 'GTE'") > 0);
+checar('robô: o corte é aplicado no FILTRO do HubSpot',
+  robo.indexOf('value: String(inicioOnb)') > 0);
+checar('robô: só os donos do time',
+  robo.indexOf("propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) },") > 0);
+checar('robô: TODAS as propriedades vêm da API, não de uma lista escrita à mão',
+  robo.indexOf('async function todasAsPropriedadesDeNegocio()') > 0 &&
+  robo.indexOf("fetch('https://api.hubapi.com/crm/v3/properties/deals'") > 0);
+checar('robô: as propriedades são pedidas em lotes (uma requisição gigante é recusada)',
+  robo.indexOf('const LOTE = 120;') > 0);
+checar('robô: só as propriedades PREENCHIDAS descem (nulo não vira snapshot)',
+  robo.indexOf("if (v !== null && v !== undefined && String(v).trim() !== '') atual.properties[k] = v;") > 0);
+checar('robô: o clone inteiro viaja no campo props',
+  robo.indexOf('props: q') > 0);
+checar('robô: a etapa NÃO entrou em OPEN_STAGES (não é degrau do funil aberto)',
+  !/OPEN_STAGES = [[^]]*1396006163/.test(robo));
+checar('robô: falhar o clone não derruba a rodada',
+  robo.indexOf("console.error('Onboarding: não consegui clonar a etapa —', e.message);") > 0);
+checar('robô: o corte desce no payload para a tela poder declarar a data',
+  robo.indexOf('onboardingVisivel: {') > 0 && robo.indexOf('corte: CORTE_ONBOARDING_ISO') > 0);
+checar('montar-dados: os dois papéis recebem onboardingVisivel',
+  montar.indexOf('onboardingVisivel: hubspot.onboardingVisivel || null,') > 0 &&
+  montar.indexOf('const onboardingVisivel = dados.onboardingVisivel || null;') > 0);
+
+/* O COCKPIT NÃO ESCREVE PROPRIEDADE NESTA ETAPA. É a trava mais importante deste bloco:
+   a etapa dispara automação de WhatsApp e cria card em outro pipe. A única escrita que
+   pode existir é a da PASSAGEM (dealstage), e ela vai pela função compartilhada — que
+   recebe {} de propriedades quando o destino é Onboarding, porque CAMPOS_POR_ETAPA não
+   exige nada lá. O card não tem campo editável, e a coluna não é destino de gaveta. */
+checar('template: a etapa Onboarding não exige propriedade nenhuma (nada a escrever)',
+  template.indexOf("'" + ONB + "': [],") > 0);
+checar('servidor: Onboarding continua destino permitido (a passagem é o que dispara)',
+  servidor.indexOf(ONB) > 0);
+checar('template: o card de Onboarding é espelho — nenhum campo editável',
+  template.indexOf("esta coluna não edita nada") > 0);
+checar('template: o registro rápido avisa o que a passagem dispara',
+  template.indexOf('dispara a automação de WhatsApp e cria o card no pipe de Onboarding') > 0 ||
+  (template.indexOf('automação de WhatsApp e cria o card no pipe de Onboarding') > 0 &&
+   template.indexOf('Ao confirmar, o HubSpot') > 0));
+checar('template: e avisa que o Cockpit grava só a etapa',
+  template.indexOf('grava') > 0 && template.indexOf('só a etapa') > 0);
+checar('template: Onboarding não pede próximo passo (o negócio saiu do funil de venda)',
+  template.indexOf('const exigePasso = !paraOnb;') > 0);
+checar('template: a coluna vazia declara o corte em vez de parecer defeito',
+  template.indexOf('nada enviado para onboarding') > 0);
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {

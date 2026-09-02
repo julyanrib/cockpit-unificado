@@ -55,6 +55,48 @@ const OPEN_STAGES = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGE
 // ali a pergunta é 'por que o time perde', e para isso quanto mais histórico melhor. Aqui a
 // pergunta é 'o que saiu da minha carteira desde que o Cockpit passou a registrar'.
 const CORTE_PERDIDO_ISO = '2026-09-01';
+
+// ENVIADO ONBOARDING A PARTIR DE HOJE (02/09/26, Julyan: "NÃO QUERO NENHUM RETROATIVO
+// VAI SER A PARTIR DE HOJE TB").
+// Medido no CRM antes de escrever: 431 negócios já estão na etapa Onboarding do pipeline
+// Field Sales — 391 entraram em julho/26, 39 em agosto, 1 em setembro. Puxar a etapa
+// inteira poria 431 cards numa coluna do kanban. Nada disso desce.
+// O corte usa hs_v2_date_entered_1396006163, que é a data em que o negócio ENTROU nesta
+// etapa. Não usa closedate (que marca o fechamento, outra coisa) nem
+// hs_lastmodifieddate (que é 'alguém mexeu no registro' e traria de volta um negócio
+// enviado em julho e editado ontem).
+const CORTE_ONBOARDING_ISO = '2026-09-02';
+const ETAPA_ONBOARDING = '1396006163';
+const PROP_ENTRADA_ONBOARDING = 'hs_v2_date_entered_' + ETAPA_ONBOARDING;
+function inicioDoOnboardingVisivel() {
+  return Date.parse(CORTE_ONBOARDING_ISO + 'T00:00:00-03:00');
+}
+
+// TODAS AS PROPRIEDADES, e por isso a lista vem do próprio HubSpot em vez de eu
+// escrever cem nomes à mão: /crm/v3/properties/deals é a fonte de verdade do que existe,
+// e amanhã, quando alguém criar uma propriedade nova no pipe, ela entra sozinha.
+// Por que isso importa AQUI e em nenhuma outra coluna: enviar para Onboarding dispara
+// automação de WhatsApp e cria um card no pipe de Onboarding. O card do Cockpit tem que
+// mostrar o negócio inteiro, porque é a última vez que o executivo o vê antes de ele
+// virar responsabilidade de outro time.
+// A busca é feita em LOTES: a API aceita a lista de propriedades no corpo, mas centenas
+// de nomes numa requisição é pedir 414/400 — e, pior, é lento sete vezes por dia útil.
+let cacheDePropriedades = null;
+async function todasAsPropriedadesDeNegocio() {
+  if (cacheDePropriedades) return cacheDePropriedades;
+  const resp = await fetch('https://api.hubapi.com/crm/v3/properties/deals', {
+    headers: { Authorization: `Bearer ${TOKEN}` }
+  });
+  if (!resp.ok) throw new Error('não consegui listar as propriedades de negócio: ' + resp.status);
+  const data = await resp.json();
+  cacheDePropriedades = (data.results || [])
+    .filter(x => x && x.name)
+    /* propriedade de arquivo e de cálculo interno do HubSpot não é dado do negócio e
+       algumas nem são legíveis pela search — pedir só engrossa a requisição. */
+    .filter(x => !x.hidden && !x.calculated && x.type !== 'object_coordinates')
+    .map(x => x.name);
+  return cacheDePropriedades;
+}
 function inicioDoPerdidoVisivel() {
   return Date.parse(CORTE_PERDIDO_ISO + 'T00:00:00-03:00');
 }
@@ -1419,6 +1461,53 @@ async function main() {
   // alguém mexeu no registro', que é outra coisa: um negócio perdido em março e editado
   // ontem voltaria para a tela.
   const inicioPerdido = inicioDoPerdidoVisivel();
+  // ---- A coluna ENVIADO ONBOARDING: clone do pipe, com tudo, só de hoje em diante ----
+  const inicioOnb = inicioDoOnboardingVisivel();
+  let onboardingRecentes = [];
+  let propsPedidas = 0;
+  try {
+    const todasProps = await todasAsPropriedadesDeNegocio();
+    propsPedidas = todasProps.length;
+    /* Em lotes de 120 nomes: cada lote traz o MESMO conjunto de negócios (o filtro é
+       igual) com um pedaço das propriedades, e a gente costura por id. Assim "todas as
+       propriedades" não vira uma requisição gigante que o HubSpot recusa. */
+    const LOTE = 120;
+    const porId = new Map();
+    for (let i = 0; i < todasProps.length; i += LOTE) {
+      const pedaco = todasProps.slice(i, i + LOTE);
+      const achados = await hsSearchAll({
+        filterGroups: [{
+          filters: [
+            { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+            { propertyName: 'dealstage', operator: 'EQ', value: ETAPA_ONBOARDING },
+            { propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) },
+            { propertyName: PROP_ENTRADA_ONBOARDING, operator: 'GTE', value: String(inicioOnb) }
+          ]
+        }],
+        /* dealname e o dono vão em TODO lote: são o que identifica o negócio na costura. */
+        properties: [...new Set(['dealname', 'hubspot_owner_id', PROP_ENTRADA_ONBOARDING, ...pedaco])]
+      });
+      achados.filter(d => !isExcludedDeal(d)).forEach(d => {
+        const atual = porId.get(d.id) || { id: d.id, properties: {} };
+        Object.entries(d.properties || {}).forEach(([k, v]) => {
+          /* SÓ O QUE TEM VALOR. Um negócio tem centenas de propriedades e quase todas
+             vazias: guardar os nulos multiplicaria o snapshot por nada. "Clonar todas as
+             propriedades" é clonar tudo o que EXISTE no negócio. */
+          if (v !== null && v !== undefined && String(v).trim() !== '') atual.properties[k] = v;
+        });
+        porId.set(d.id, atual);
+      });
+    }
+    onboardingRecentes = [...porId.values()];
+  } catch (e) {
+    /* A coluna falhar não pode derrubar a rodada: as outras seis etapas do kanban e o
+       resto do Cockpit não dependem dela. Fica vazia e o log diz por quê. */
+    console.error('Onboarding: não consegui clonar a etapa —', e.message);
+  }
+  console.log(`Onboarding: ${onboardingRecentes.length} negócio(s) enviados a partir de ` +
+    `${CORTE_ONBOARDING_ISO}, com ${propsPedidas} propriedades pedidas ao HubSpot ` +
+    `(só as preenchidas descem). O histórico anterior fica no HubSpot.`);
+
   /* O CORTE VAI NO FILTRO DO HUBSPOT, não num .filter() depois. stageDealsTeamWide traria
      a etapa inteira — 1.811 negócios, paginados de 100 em 100 — para descartar 99% em
      JavaScript, sete vezes por dia útil. O closedate GTE resolve na origem, do mesmo jeito
@@ -1438,6 +1527,43 @@ async function main() {
   })).filter(d => !isExcludedDeal(d));
   console.log(`Perdido: ${perdidosRecentes.length} negócio(s) do time perdidos a partir de ` +
     `${CORTE_PERDIDO_ISO} — o histórico anterior fica no HubSpot e não desce para o Cockpit.`);
+
+  /* ENVIADO ONBOARDING no mesmo mapa funilLeads, como as outras — é o que faz
+     montar-dados.js cortar por dono sem precisar saber que apareceu uma etapa nova.
+     A diferença é o campo `props`: o negócio inteiro, como veio do CRM, para o card poder
+     mostrar o que existe sem nenhuma escrita de volta. O Cockpit NÃO altera propriedade
+     nenhuma desta etapa — ela tem automação de WhatsApp e cria card em outro pipe; aqui
+     é espelho, não formulário. */
+  {
+    const rotuloDoDono = id => ownerNameById[id] || '—';
+    funilLeads[ETAPA_ONBOARDING] = onboardingRecentes.map(d => {
+      const q = d.properties || {};
+      const entrou = Date.parse(q[PROP_ENTRADA_ONBOARDING] || '');
+      const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+      return {
+        name: q.dealname,
+        dealname: q.dealname,
+        id: d.id,
+        /* dias = há quantos dias foi enviado. Nesta coluna a pergunta não é "quanto tempo
+           parado" — é "isso saiu da minha mão quando". */
+        dias: Number.isFinite(entrou) ? Math.max(0, Math.floor((Date.now() - entrou) / 86400000)) : 0,
+        enviadoEm: Number.isFinite(entrou) ? new Date(entrou).toISOString().slice(0, 10) : null,
+        slaBreach: false,
+        valor: Math.round(num(q.amount)),
+        mrr: Math.round(num(q.valor_de_mrr) || num(q.mrr)),
+        vendedor: rotuloDoDono(q.hubspot_owner_id),
+        ownerId: q.hubspot_owner_id || null,
+        celular: q.celular || null,
+        cidade: q.cidade || null,
+        bairro: q.bairro || null,
+        proximaAtividade: q.notes_next_activity_date || null,
+        ultimaInteracao: q.notes_last_updated || null,
+        tarefas: [],
+        /* O CLONE. Tudo o que o negócio tem, com o nome que o HubSpot usa. */
+        props: q
+      };
+    }).sort((a, b) => a.dias - b.dias);
+  }
 
   // Os perdidos entram no MESMO mapa funilLeads, com a mesma forma de card: é isso que
   // faz montar-dados.js cortar por dono sem precisar saber que apareceu uma etapa nova, e
@@ -1851,6 +1977,15 @@ async function main() {
       labels: STAGE_LABELS
     },
     funilLeads,
+    onboardingVisivel: {
+      corte: CORTE_ONBOARDING_ISO,
+      desde: new Date(inicioDoOnboardingVisivel()).toISOString().slice(0, 10),
+      visiveis: onboardingRecentes.length,
+      /* Quantas propriedades foram pedidas ao HubSpot. A tela não mostra isso; o log da
+         rodada mostra, e é como se confere que "todas" continua sendo todas depois de
+         alguém criar uma propriedade nova no pipe. */
+      propriedadesPedidas: propsPedidas
+    },
     perdidoVisivel: {
       corte: CORTE_PERDIDO_ISO,
       desde: new Date(inicioDoPerdidoVisivel()).toISOString().slice(0, 10),
