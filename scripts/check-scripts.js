@@ -393,7 +393,10 @@ function checarSeletoresDeFiacao() {
 
   /* Dívida herdada, cada uma com a aba que resolve. Não reprova hoje; reprova se mudar. */
   const DIVIDA = {
-    'plano-map-stage': 'Rotas — "Adicionar por endereco ou CEP" tem botao ligado e abrirAdicionarManual sai no if (!stage) return: o painel nunca abre',
+    /* PAGA EM 02/09/26: o painel de endereco/CEP deixou de ancorar no palco do mapa (que
+       saiu da tela quando a rota foi para o app de campo) e passou a nascer abaixo do
+       resumo, que existe. A divida era exatamente esta: botao ligado, funcao voltando no
+       primeiro if, e nenhum erro para investigar. */
     'd-prom': 'Minha Daily — fiacao orfa de desenho aposentado',
     'd-salvar': 'Minha Daily — fiacao orfa de desenho aposentado',
     'prospeccao-btn-rota': 'Prospeccao — fiacao orfa de desenho aposentado',

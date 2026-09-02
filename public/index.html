@@ -1523,6 +1523,31 @@
   .rota-pill.on{background:var(--green-soft);color:var(--green);}
   .rota-pill.rascunho{background:var(--amber-soft);color:var(--amber-ink);}
   .rota-pill.off{background:var(--sunk);color:var(--muted2);}
+  /* ── A CAPACIDADE REAL DE RUA (02/09/26, prancha do gestor §5) ─────────────────
+     Cinco a seis numeros pequenos numa linha que embrulha. Nao e grade: a quantidade de
+     itens VARIA por pessoa (visita sem negocio e falha do robo so aparecem quando
+     existem), e grade com celula vazia leria como zero — que e exatamente o que esta tela
+     nao pode dizer. Embrulhando, o que nao existe simplesmente nao ocupa lugar. */
+  /* O "na agenda dele" fica discreto na linha da parada e cumpre o piso de toque: ele
+     escreve no dia de outra pessoa, e errar o alvo aqui cria compromisso onde nao devia. */
+  .rota-seq-agendar{float:right;margin-left:8px;min-height:38px;padding:0 11px;cursor:pointer;
+    border:1px solid var(--line-btn);background:transparent;border-radius:var(--r-pill);
+    font:700 10.5px var(--font-body);color:var(--muted);}
+  .rota-seq-agendar:hover{border-color:var(--ink);color:var(--ink);}
+  @media (max-width:760px){ .rota-seq-agendar{min-height:44px;} }
+
+  .rota-cap{display:flex;flex-wrap:wrap;gap:4px 10px;margin:2px 0 6px;}
+  .rota-cap-item{font:600 11px var(--font-body);color:var(--muted);white-space:nowrap;}
+  .rota-cap-item b{font:800 12px var(--font-display);color:var(--ink);margin-right:3px;
+    font-variant-numeric:tabular-nums;}
+  .rota-cap-item.is-ok b{color:var(--green);}
+  .rota-cap-item.is-atencao b{color:var(--amber-ink,var(--amber));}
+  .rota-cap-item.is-mal b{color:var(--red-dk);}
+  /* NAO MEDIDO em cinza e com o travessao no lugar do numero: a fila do app comeca assim
+     e continua assim ate o PWA publicar. Verde aqui diria que subiu tudo. */
+  .rota-cap-item.is-nm b{color:var(--ter);}
+  .rota-cap-item.is-nm{color:var(--ter);font-style:italic;}
+
   .rota-card-local{font-size:12px;color:var(--muted);line-height:1.45;display:flex;gap:6px;align-items:flex-start;}
   .rota-card-local b{color:var(--ink);font-weight:700;min-width:0;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .rota-card-foot{margin-top:12px;padding-top:11px;border-top:1px solid var(--line);font-size:11px;color:var(--red-dk);font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:10px;}
@@ -28419,6 +28444,30 @@ function abrirAgendadorRapido(dataISO, minutos, x, y, ownerIdAlvo, sugeridoPorGe
   document.body.appendChild(cx);
   agwNovoAberto = cx;
 
+  /* ══ A PARADA ESCOLHIDA EM ROTAS JA VEM SELECIONADA (02/09/26) ═════════════════════
+     Quando o gestor clica "na agenda dele" numa parada da sequencia, ele ja escolheu de
+     QUEM e o dia e QUAL cliente. Abrir a lista em branco o obrigaria a procurar o mesmo
+     nome que ele acabou de clicar — e numa lista longa isso e onde se escolhe o cliente
+     errado.
+
+     E SE A PARADA NAO ESTIVER NA LISTA, A TELA DIZ. A lista do agendador vem das contas
+     que o executivo tem para agendar; uma parada de prospeccao que ainda nao virou
+     negocio pode nao estar la. Silencio faria o gestor agendar o primeiro nome da lista
+     sem perceber a troca. */
+  if (rotaAgendarNomePendente) {
+    const alvo = String(rotaAgendarNomePendente).trim().toLowerCase();
+    rotaAgendarNomePendente = null;
+    const selPre = document.getElementById('agwNovoLead');
+    const msgPre = document.getElementById('agwNovoMsg');
+    const achou = selPre ? [...selPre.options].find(o => String(o.textContent || '').trim().toLowerCase() === alvo) : null;
+    if (achou) {
+      selPre.value = achou.value;
+    } else if (msgPre) {
+      msgPre.textContent = 'A parada que você clicou não está na lista de contas dele — escolha outra ou peça para ele adicionar à carteira.';
+      msgPre.style.color = 'var(--amber-ink, var(--amber))';
+    }
+  }
+
   // Posiciona junto do clique sem sair da tela.
   const larg = 290, alt = cx.getBoundingClientRect().height || 260;
   cx.style.left = Math.max(8, Math.min(window.innerWidth - larg - 8, x - larg / 2)) + 'px';
@@ -30410,14 +30459,33 @@ async function renderRotas() {
   if (sinal) sinal.textContent = comRota + ' de ' + reps.length;
   // Dois sinais que o gestor perguntava e a tela não respondia sem contar card a card.
   const paradasTime = reps.reduce((s, r) => s + ((rotasCache.porOwner[String(r.ownerId)] || { paradas: [] }).paradas.length), 0);
-  const semTerritorio = reps.filter(r => {
+  /* ══ "SEM TERRITORIO" CONTRADIZIA A PROPRIA TELA (02/09/26) ═══════════════════════
+     Este sinal dizia "7 sem territorio declarado" — e o Cockpit SABE a praca dos sete:
+     Vila Velha/ES, Rio de Janeiro (dois), Vitoria/ES, Sao Paulo e Porto Alegre (dois),
+     que aparecem no cartao de cada um duas linhas abaixo. E lib/territorios.js conhece 12
+     territorios. Ler "sem territorio" ao lado do cartao que diz "Rio de Janeiro" faz o
+     gestor duvidar do numero, e com razao.
+
+     O QUE DE FATO FALTA e o `local_atuacao` do plano do dia: onde a pessoa vai atuar HOJE,
+     o bairro ou a regiao que da a sequencia da rota. Praca e onde ela trabalha; area de
+     atuacao e onde ela vai estar. Sao duas coisas, e a tela passa a chamar cada uma pelo
+     nome — junto com o que ela ja sabe, para o numero nao parecer ignorancia do sistema. */
+  const semAreaDeHoje = reps.filter(r => {
     const p = (rotasCache.porOwner[String(r.ownerId)] || {}).plano;
     return !(p && p.local_atuacao);
   }).length;
+  const comPraca = reps.filter(r => r.praca && String(r.praca).trim()).length;
   const sinalP = document.getElementById('rotasSinalParadas');
   if (sinalP) sinalP.textContent = String(paradasTime);
   const sinalT = document.getElementById('rotasSinalTerritorio');
-  if (sinalT) { sinalT.textContent = String(semTerritorio); sinalT.style.color = semTerritorio ? 'var(--dark-red)' : '#fff'; }
+  if (sinalT) {
+    sinalT.textContent = (reps.length - semAreaDeHoje) + ' de ' + reps.length;
+    sinalT.style.color = semAreaDeHoje ? 'var(--dark-amber)' : '#fff';
+    /* AMBAR, NAO VERMELHO: nao declarar a area de hoje atrasa a sequencia da rota, nao
+       viola regra nenhuma. Vermelho aqui gastaria a cor que a tela reserva para violacao. */
+    const rot = sinalT.parentElement && sinalT.parentElement.querySelector('span');
+    if (rot) rot.textContent = 'declararam a área de hoje · praça conhecida para ' + comPraca + ' de ' + reps.length;
+  }
   const badge = document.getElementById('badgeRotas');
   if (badge) {
     const semRota = reps.length - comRota;
@@ -30440,6 +30508,84 @@ async function renderRotas() {
   // gestor via "7 paradas" e continuava sem saber onde o Sandro ia estar. Agora:
   // com rota, o card mostra as primeiras paradas na ordem em que ele montou;
   // sem rota, uma linha honesta e o que existe pra usar (quentes e carteira).
+  /* ══ A CAPACIDADE REAL DE RUA, POR EXECUTIVO (02/09/26) ═══════════════════════════
+     A prancha do gestor pede dez leituras por pessoa nesta aba. O cartao ja tinha tres —
+     territorio (base e o declarado de hoje, distinguidos), rota montada ou nao, e o numero
+     de paradas. As outras entram aqui, e NENHUMA e conta nova:
+
+       clientes nomeados     plano.prioridades — a sequencia que ELE escreveu no plano
+       visitas comprovadas   visitasNomesDoOwnerNoDia — evento com desfecho ou registro
+       sem negocio associado evento comprovado que nao aponta para dealId nenhum
+       fila do app           filaPwaResumo().porOwner — pendentes e falhas de subida
+       sincronizacao         DATA.syncStatus.falhas — escrita do robo nao confirmada
+
+     PLANEJADA NAO E COMPROVADA, e as duas aparecem lado a lado de proposito: parada
+     montada e intencao, visita comprovada e evento. Somar as duas num numero so seria
+     transformar plano em execucao, que e o que esta tela mais precisa nao fazer.
+
+     E "NAO SABEMOS" TEM NOME PROPRIO. A fila do app comeca em 'nao_confirmado' e continua
+     assim ate o PWA publicar: hoje a tabela fila_pwa tem zero linhas, e por isso o cartao
+     diz que nao sabemos em vez de dizer que subiu tudo. Zero pendente e uma afirmacao
+     sobre o celular da pessoa; nao ha informacao para afirma-la.
+
+     VISITA SEM NEGOCIO ASSOCIADO nao e erro dela: e visita que o CRM nao vai saber contar,
+     e por isso vira aviso, nao acusacao - o conserto e associar o negocio, nao cobrar a rua. */
+  const capacidadeDeRua = r => {
+    const oid = String(r.ownerId);
+    const info = rotasCache.porOwner[oid] || { paradas: [], plano: null };
+    const prioridades = (info.plano && Array.isArray(info.plano.prioridades))
+      ? info.plano.prioridades.filter(x => x && String(x).trim()) : [];
+    const nomeados = (typeof nomesDaPromessaDoPlano === 'function')
+      ? nomesDaPromessaDoPlano(prioridades).length : prioridades.length;
+
+    const hojeISO = (typeof isoDate === 'function') ? isoDate(new Date()) : null;
+    let comprovadas = 0, semNegocio = 0;
+    try {
+      const eventos = (typeof agendaNormalizar === 'function' && DATA.agenda) ? agendaNormalizar(DATA.agenda) : [];
+      const meus = eventos.filter(e => String(e.ownerId) === oid && e.inicio &&
+        (typeof agendaChave === 'function' ? agendaChave(e.inicio) === hojeISO : false) &&
+        AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta &&
+        (e.desfecho === 'COMPLETED' || e.registro));
+      comprovadas = meus.length;
+      semNegocio = meus.filter(e => !e.dealId).length;
+    } catch (e) { comprovadas = 0; semNegocio = 0; }
+
+    let fila = { estado: 'nao_confirmado', pendentes: 0, falhas: 0 };
+    try {
+      const resumo = (typeof filaPwaResumo === 'function') ? filaPwaResumo() : null;
+      const dele = resumo && resumo.porOwner ? resumo.porOwner[oid] : null;
+      if (dele) {
+        const p = Number(dele.pendentes) || 0, f = Number(dele.falhas) || 0;
+        fila = { estado: f > 0 ? 'falhou' : (p > 0 ? 'pendente' : 'subiu'), pendentes: p, falhas: f };
+      }
+    } catch (e) { /* sem fila: o estado nasce nao_confirmado, que e a verdade */ }
+
+    const falhasSync = (DATA.syncStatus && Array.isArray(DATA.syncStatus.falhas))
+      ? DATA.syncStatus.falhas.filter(f => !f || !f.ownerId || String(f.ownerId) === oid).length : 0;
+
+    return { paradas: info.paradas.length, nomeados, comprovadas, semNegocio, fila, falhasSync };
+  };
+
+  const capacidadeHTML = cap => {
+    const item = (valor, rotulo, tom) =>
+      '<span class="rota-cap-item' + (tom ? ' is-' + tom : '') + '"><b>' + valor + '</b>' + esc(rotulo) + '</span>';
+    const filaTxt = cap.fila.estado === 'nao_confirmado'
+      ? item('—', 'fila do app não confirmada', 'nm')
+      : cap.fila.estado === 'falhou'
+        ? item(cap.fila.falhas, 'falha(s) ao subir do app', 'mal')
+        : cap.fila.estado === 'pendente'
+          ? item(cap.fila.pendentes, 'na fila do app, sem subir', 'atencao')
+          : item('✓', 'fila do app vazia', 'ok');
+    return '<div class="rota-cap">' +
+      item(cap.paradas, 'parada(s) planejada(s)') +
+      item(cap.comprovadas, 'visita(s) comprovada(s)', cap.comprovadas > 0 ? 'ok' : null) +
+      item(cap.nomeados, 'cliente(s) nomeado(s) no plano') +
+      (cap.semNegocio > 0 ? item(cap.semNegocio, 'sem negócio associado', 'atencao') : '') +
+      filaTxt +
+      (cap.falhasSync > 0 ? item(cap.falhasSync, 'escrita(s) do robô a confirmar', 'atencao') : '') +
+    '</div>';
+  };
+
   const cardDoRep = r => {
     const info = rotasCache.porOwner[String(r.ownerId)] || { paradas: [], plano: null };
     const n = info.paradas.length;
@@ -30478,7 +30624,7 @@ async function renderRotas() {
         (n > 3 ? '<li class="mais">+ ' + (n - 3) + ' parada' + (n - 3 === 1 ? '' : 's') + '</li>' : '') +
       '</ol>';
       return '<button class="rota-card" data-rotaowner="' + esc(String(r.ownerId)) + '">' +
-        cabecalho + linhaTerritorio + lista +
+        cabecalho + linhaTerritorio + capacidadeHTML(capacidadeDeRua(r)) + lista +
         '<div class="rota-card-foot">' +
           (quentes ? '<span class="rota-card-quentes">' + quentes + ' quente' + (quentes === 1 ? '' : 's') + ' no pipeline</span>' : '<span></span>') +
           '<span>Ver rota completa →</span>' +
@@ -30489,7 +30635,7 @@ async function renderRotas() {
     if (quentes) oferta.push('<b>' + quentes + '</b> quente' + (quentes === 1 ? '' : 's') + ' no pipeline dele');
     if (carteira) oferta.push('<b>' + carteira + '</b> conta' + (carteira === 1 ? '' : 's') + '-alvo na carteira');
     return '<button class="rota-card is-vazia" data-rotaowner="' + esc(String(r.ownerId)) + '">' +
-      cabecalho + linhaTerritorio +
+      cabecalho + linhaTerritorio + capacidadeHTML(capacidadeDeRua(r)) +
       '<div class="rota-card-nada">Sem rota montada hoje' + (oferta.length ? ' — dá pra montar com ' + oferta.join(' e ') : '') + '.</div>' +
       '<div class="rota-card-foot"><span></span><span>Abrir e montar a rota dele →</span></div>' +
     '</button>';
@@ -30666,6 +30812,12 @@ function rotaSequenciaAtual(info) {
   return base.map(p => ({ ...p, distanciaDaAnteriorKm: null }));
 }
 
+/* O nome da parada que o gestor escolheu em Rotas, para o agendador abrir com ela no
+   campo em vez de uma busca vazia. Uma variavel e nao um parametro porque
+   abrirAgendadorRapido tem seis argumentos posicionais e ja carrega dono e sugestao —
+   um setimo tornaria a chamada ilegivel nos dois lugares que a usam. */
+let rotaAgendarNomePendente = null;
+
 async function desenharRotaDrawer() {
   const box = document.getElementById('rotaDrawerContent');
   if (!box || !rotaDrawerOwner) return;
@@ -30688,12 +30840,19 @@ async function desenharRotaDrawer() {
         : (territorioDe(rotaDrawerOwner)
             ? esc(territorioDe(rotaDrawerOwner).rotulo) + ' <span style="color:var(--ter);">· base</span>'
             : 'sem região informada')) + '</span>' +
-      '<span style="font-size:12px;color:var(--muted2);margin-left:auto;">' + seq.length + ' parada' + (seq.length === 1 ? '' : 's') + '</span>' +
+      /* ══ ISTO NAO SAO PARADAS DELE (02/09/26) ══════════════════════════════════════
+         `seq` vem de rotaParadasParaSequenciar, que devolve [...quentes, ...paradas,
+         ...sugestoes] — o conjunto de CANDIDATAS a sequenciar, nao a rota montada.
+         Medido: a Kelly tem 0 paradas e 4 quentes, e este numero dizia "4 paradas"
+         enquanto o hero da MESMA aba dizia "0 paradas no time hoje". O gestor abria o
+         drawer e lia que ela tinha rota. Duas telas com a mesma palavra e numeros opostos
+         e a forma mais rapida de perder a confianca nos dois. */
+      '<span style="font-size:12px;color:var(--muted2);margin-left:auto;">' + seq.length + ' para sequenciar</span>' +
     '</div>' +
     // BLOCO 2/3: o que existe de oportunidade na praça dele hoje, antes do mapa.
     '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">' +
       '<span style="flex:1;min-width:110px;background:var(--red-soft);border-radius:var(--r-md);padding:9px 12px;"><b style="display:block;font-family:\'Archivo\',system-ui,sans-serif;font-size:20px;color:var(--red);">' + (info.quentes || []).length + '</b><span style="font-size:10px;color:var(--muted);">quentes no pipeline</span></span>' +
-      '<span style="flex:1;min-width:110px;background:var(--panel2);border-radius:var(--r-md);padding:9px 12px;"><b style="display:block;font-family:\'Archivo\',system-ui,sans-serif;font-size:20px;">' + (info.paradas || []).length + '</b><span style="font-size:10px;color:var(--muted);">contas-alvo na rota</span></span>' +
+      '<span style="flex:1;min-width:110px;background:var(--panel2);border-radius:var(--r-md);padding:9px 12px;"><b style="display:block;font-family:\'Archivo\',system-ui,sans-serif;font-size:20px;">' + (info.paradas || []).length + '</b><span style="font-size:10px;color:var(--muted);">paradas montadas</span></span>' +
       '<span style="flex:1;min-width:110px;background:var(--panel2);border-radius:var(--r-md);padding:9px 12px;"><b style="display:block;font-family:\'Archivo\',system-ui,sans-serif;font-size:20px;">' + (info.sugestoes || []).length + '</b><span style="font-size:10px;color:var(--muted);">livres na carteira</span></span>' +
     '</div>' +
     // BLOCO 11 (12/08/26, Julyan: "preciso dessa tela igual a do salesforce maps com o
@@ -30740,6 +30899,26 @@ async function desenharRotaDrawer() {
     '<div id="rotaManchaSlot"></div>' +
     '<div id="rotaAddSlot"></div>' +
     (seq.length
+      /* ══ POR NA AGENDA DELE, DE DENTRO DE ROTAS (02/09/26) ═════════════════════════
+         Julyan: "eu tenho que poder acessar as rotas e colocar leads na agenda deles,
+         daily e etc".
+
+         O MECANISMO JA EXISTIA E O CAMINHO NAO. abrirAgendadorRapido aceita ownerIdAlvo e
+         sugeridoPorGestor desde o bloco 34, e o gestor alcancava isso clicando num vazio
+         da GRADE da agenda daquele executivo. So que quando ele esta em Rotas — vendo a
+         rua da pessoa, os quentes dela e a sequencia — nao havia como agendar dali: era
+         sair, achar a grade, achar a pessoa, achar o dia. Agora cada parada da sequencia
+         tem o botao, e ele abre o MESMO agendador, com o mesmo dono e a mesma marca de
+         sugestao. Nao ha segundo caminho de escrita.
+
+         E CAI NAS DUAS DAILYS SOZINHO: o compromisso entra na agenda daquele dia, e a
+         Daily passou a ler plano E agenda em uniao (02/09/26) — antes a agenda so contava
+         quando o plano estava vazio, e por isso um lead empurrado pelo gestor podia nao
+         aparecer na Daily de ninguem.
+
+         SUGESTAO, NAO IMPOSICAO: nasce como pendente de confirmacao do executivo, que e o
+         que sugeridoPorGestor faz. O gestor propoe a parada; quem decide a rua e quem
+         esta nela. */
       ? '<ul class="rota-seq">' + seq.map((p, i) =>
           '<li><span class="rota-seq-num">' + (i + 1) + '</span>' +
           '<span class="rota-seq-corpo"><b class="rota-seq-nome">' + esc(p.nome || '') +
@@ -30751,6 +30930,10 @@ async function desenharRotaDrawer() {
              ditas em voz baixa. Sem coordenada a parada NÃO entra na ordenação por
              proximidade nem no total de km: é trabalho de telefone, e o chip diz isso na
              parada, não só no rodapé. Uma parada de telefone não é um dia de rua. */
+          '<button type="button" class="rota-seq-agendar"' +
+            ' data-rota-agendar-nome="' + esc(String(p.nome || '')) + '"' +
+            ' data-rota-agendar-owner="' + esc(String(rotaDrawerOwner)) + '"' +
+            ' title="Sugerir este compromisso na agenda dele — ele confirma">na agenda dele →</button>' +
           '<span class="rota-seq-meta">' + esc([p.bairro, p.cidade].filter(Boolean).join(' · ') || 'endereço não cadastrado') +
             (p.avaliacoes != null ? ' · ' + Number(p.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : '') +
             (Number.isFinite(p.distanciaDaAnteriorKm) ? ' · ' + p.distanciaDaAnteriorKm.toFixed(1).replace('.', ',') + ' km ' + (i === 0 ? 'do ponto de partida' : 'da anterior') : '') +
@@ -30775,6 +30958,35 @@ async function desenharRotaDrawer() {
         ).join('') +
         '</div>'
       : '');
+
+  /* ══ "NA AGENDA DELE" ABRE O MESMO AGENDADOR (02/09/26) ═══════════════════════════
+     Nao existe segundo caminho de escrita: e abrirAgendadorRapido, o mesmo que o gestor
+     ja usava clicando num vazio da grade daquele executivo, com ownerIdAlvo e
+     sugeridoPorGestor. A tarefa nasce PENDENTE DE CONFIRMACAO dele — o gestor propoe a
+     parada, quem decide a rua e quem esta nela.
+
+     A HORA SUGERIDA e a proxima cheia dentro do expediente, com piso em 9h e teto em 17h:
+     o agendador abre com ela preenchida e o gestor muda se quiser. Chutar 'agora' numa
+     sugestao feita as 22h daria um compromisso para as 22h.
+
+     E o botao passa o NOME da parada, nao o id: parada de prospeccao pode nao ter negocio
+     ainda, e o agendador ja sabe casar por nome (e o mesmo caminho da rota).
+     A posicao (x,y) vai no centro da tela porque o clique nao veio da grade — o agendador
+     usa isso so para nao abrir fora do viewport. */
+  box.querySelectorAll('[data-rota-agendar-owner]').forEach(b => b.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const dono = b.getAttribute('data-rota-agendar-owner');
+    const nome = b.getAttribute('data-rota-agendar-nome') || '';
+    if (typeof abrirAgendadorRapido !== 'function') {
+      if (typeof mostrarToast === 'function') mostrarToast('Não consegui abrir o agendador agora — recarregue a aba.');
+      return;
+    }
+    const agora = new Date();
+    const hora = Math.min(17, Math.max(9, agora.getHours() + 1));
+    const dataISO = (typeof isoDate === 'function') ? isoDate(agora) : null;
+    rotaAgendarNomePendente = nome;
+    abrirAgendadorRapido(dataISO, hora * 60, Math.round(window.innerWidth / 2), Math.round(window.innerHeight / 3), dono, true);
+  }));
 
   const btnMicro = document.getElementById('rotaBtnMicro');
   if (btnMicro) btnMicro.addEventListener('click', () => { rotaSeqGerada = true; desenharRotaDrawer(); });
@@ -32115,14 +32327,32 @@ function sincronizarFiltrosDoMapa(poisDoMapa) {
 // buraco: o executivo passa na frente de um restaurante que não está no mapa e precisa
 // conseguir colocá-lo na rota na hora, sem esperar ninguém mapear. Reaproveita o
 // autocomplete da MapTiler que já está na tela (buscarLocais) — zero dependência nova.
+/* ══ O "+ ENDERECO/CEP" NUNCA ABRIA (02/09/26) ══════════════════════════════════════
+   Este painel se ancorava em `.plano-map-stage`, e esse elemento NAO EXISTE MAIS: ele era
+   o palco do mapa visual, e o mapa saiu da tela quando a rota passou a viver no app de
+   campo ("o mapa de rota agora vive no app de campo", escrito na propria tela). A funcao
+   ficou ancorada num elemento que foi embora com ele e voltava no `if (!stage) return`.
+
+   O CLIQUE PARECIA FUNCIONAR: o botao acende, o ouvinte roda, e nada acontece. E o pior
+   tipo de clique morto, porque nao ha erro para ninguem investigar - foi uma das sete
+   entradas de divida da guarda de fiacao, que acusa `.plano-map-stage` como classe usada
+   em seletor e gerada por nenhum markup.
+
+   AGORA ELE ENTRA NO FLUXO, e nao flutuando: sem mapa, nao existe palco onde sobrepor um
+   painel absoluto - ele nasce logo abaixo do resumo do mapa (#planoMapaResumo, que
+   existe), empurrando a lista para baixo como qualquer formulario faria. Se ate o resumo
+   faltar, cai no proprio container do botao: o painel aparece de qualquer jeito, porque a
+   alternativa e o silencio de antes. */
 function abrirAdicionarManual(r, hoje, planoFechado) {
   if (document.getElementById('planoAddManualPainel')) return;
-  const stage = document.querySelector('.plano-map-stage');
-  if (!stage) return;
+  const resumo = document.getElementById('planoMapaResumo');
+  const botao = document.getElementById('planoMapaAddManual');
+  const ancora = resumo || (botao && botao.parentElement);
+  if (!ancora) return;
 
   const painel = document.createElement('div');
   painel.id = 'planoAddManualPainel';
-  painel.style.cssText = 'position:absolute;z-index:40;top:58px;left:12px;right:12px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 18px 40px rgba(15,23,42,.18);padding:14px;';
+  painel.style.cssText = 'margin:10px 0 4px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:0 18px 40px rgba(15,23,42,.18);padding:14px;';
   painel.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;">
       <b style="font-family:var(--font-display);font-size:13px;">Adicionar por endereço ou CEP</b>
@@ -32140,7 +32370,7 @@ function abrirAdicionarManual(r, hoje, planoFechado) {
       style="width:100%;margin-top:9px;padding:10px;border:0;border-radius:var(--r-md);background:var(--ink);color:var(--panel);font-weight:800;font-size:12px;cursor:pointer;opacity:.45;">
       Adicionar à rota de hoje
     </button>`;
-  stage.appendChild(painel);
+  ancora.insertAdjacentElement('afterend', painel);
 
   const inNome = painel.querySelector('#planoAddManualNome');
   const inEnd = painel.querySelector('#planoAddManualEnd');
