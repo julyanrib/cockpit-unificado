@@ -450,6 +450,57 @@ function checarSeletoresDeFiacao() {
 }
 if (!checarSeletoresDeFiacao()) process.exit(1);
 
+/* == O MODO TV NAO PODE MIRAR MARCACAO INEXISTENTE (02/09/26) ========================
+   Julyan: "a aba daily esta com um zoom gigante, n sei pq". Era o Modo TV, gravado em
+   localStorage, com OITO seletores mortos no bloco `body.tv`: .tab-bar, .app-footer,
+   .revbar, .health-badge, .gi-prom, .gi-plan, .daily-nav e .agenda-nav. Nenhum markup
+   gera nenhum deles. Consequencia: a TV aumentava tudo e nao escondia NADA da moldura —
+   e como ela tambem esconde `.gi-btn`, escondia o proprio botao de sair. Ligado e
+   invisivel: para quem olha, e um zoom que apareceu sozinho.
+
+   Ja tinha acontecido: o comentario do proprio bloco registra "duas das regras antigas
+   miravam o hero que a etapa 2 substituiu". Duas vezes o mesmo mecanismo, no mesmo bloco.
+   Nenhuma das outras guardas pega, porque checarSeletoresDeFiacao() olha so classe usada
+   em querySelector — fiacao de JS —, e isto e CSS.
+
+   POR QUE SO O body.tv, e nao o CSS todo: o arquivo tem 473 classes que aparecem apenas
+   no CSS. A maioria e legitima (FullCalendar .fc-*, classe montada por interpolacao que
+   nenhum extrator simples enxerga). Guardar tudo isso exigiria uma whitelist de centenas
+   de itens que so cresce — que e o que o comentario da guarda acima chama de guarda morta.
+   O body.tv e um conjunto FECHADO de ~40 regras cujo trabalho e esconder e aumentar
+   elementos nomeados um por um: aqui alvo morto e sempre defeito. */
+function checarModoTv() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  /* LITERAL, nao string: '[\\s\\S]' dentro de aspas simples chega como '[sS]',
+     e a guarda nascida assim nao tirava estilo nenhum — todo alvo 'existia' e ela dava verde. */
+  const reEstilo = /<style[^>]*>[\s\S]*?<\/style>/g;
+  const foraDoCss = cru.replace(reEstilo, '');
+  const regras = cru.split(String.fromCharCode(10)).filter(l => /^\s*body\.tv/.test(l.replace(/\r$/, ''))).join(String.fromCharCode(10));
+  if (!regras) {
+    console.error('MODO TV: nenhuma regra body.tv encontrada — a guarda perdeu o alvo.');
+    return false;
+  }
+  /* `.tv` e a propria classe do body; l/meta/sub sao classes filhas do hero, geradas
+     por interpolacao dentro do gi-hero-kpi e por isso invisiveis para busca literal. */
+  const IGNORAR = new Set(['.tv', '.l', '.meta', '.sub']);
+  const alvos = new Set();
+  let m;
+  const re = /([.#])([A-Za-z][\w-]*)/g;
+  while ((m = re.exec(regras))) alvos.add(m[1] + m[2]);
+  const mortos = [...alvos].filter(t => !IGNORAR.has(t) && foraDoCss.indexOf(t.slice(1)) < 0);
+  if (mortos.length) {
+    console.error('MODO TV MIRANDO MARCACAO INEXISTENTE em ' + arquivo + ':');
+    mortos.forEach(t => console.error('  ' + t + ' nao e gerada por nenhum markup — a regra e valida e sem efeito'));
+    console.error('  Regra morta que ESCONDE e a pior: a TV aumenta o conteudo e deixa a moldura,');
+    console.error('  e quem ligou ve um zoom que apareceu sozinho, sem botao de sair.');
+    return false;
+  }
+  console.log('OK modo TV — os ' + alvos.size + ' alvos do bloco body.tv existem no markup.');
+  return true;
+}
+if (!checarModoTv()) process.exit(1);
+
 /* ══ PISO DE DESKTOP QUE VIRA TETO NO TOQUE (02/09/26) ═══════════════════════════════
    Em 01/09 eu subi quatro campos para o piso de desktop com seletor de ID
    (#prosp2Ordenar, #devPdiData, #prcCliente, #prcTelefone -> min-height:38px). ID é
