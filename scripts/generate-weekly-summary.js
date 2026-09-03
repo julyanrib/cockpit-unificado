@@ -19,6 +19,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { publicarSnapshot } = require('../lib/publicar-snapshot.js');
 
 const API_KEY = process.env.ANTHROPIC_API_KEY;
 if (!API_KEY) {
@@ -591,6 +592,8 @@ async function main() {
   // registrada no próprio arquivo (o incidente de 04-08/08 ficou 4 dias invisível).
   if (FALHAS_IA.length) output._falhasIA = { em: output.geradoEm, erros: FALHAS_IA };
   fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), JSON.stringify(output, null, 2));
+  /* Mesmo motivo do generate-daily-gargalo — ver o comentario la. */
+  await publicarSnapshot('resumo-semanal', output, 'generate-weekly-summary');
   console.log(`OK — data/resumo-semanal.json gravado (${rodarComoFechamentoMensal ? 'FECHAMENTO MENSAL' : 'semanal'}).`);
 
   if (!rodarComoFechamentoMensal) {
