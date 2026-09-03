@@ -40931,6 +40931,18 @@ async function renderDaily() {
   const clientesPlanejadosTotal = compromissosHoje.reduce((s, x) => s + x.resumo.nomes, 0);
   const semClientesNomeados = compromissosHoje.filter(x => x.resumo.nomes === 0).length;
   const planosFechadosTotal = compromissosHoje.filter(x => x.resumo.fechado).length;
+  /* ══ QUEM PROMETEU NUMERO (03/09/26) ══════════════════════════════════════════════
+     "Planos fechados: 0 de 7" era verdade e lia como "ninguem fez nada" — e em 03/09,
+     CINCO dos sete tinham escrito a promessa em dailies.prometido_visitas entre 11:40 e
+     12:03, enquanto planos_diarios nao recebia uma linha desde 28/08.
+
+     Sao duas coisas diferentes e as duas ficam na tela: plano FECHADO e cliente escolhido;
+     promessa NUMERICA e intencao sem nome. Somar os dois num numero so esconderia
+     exatamente o que a rodada tem que cobrar. */
+  const prometeramNumero = repsDaily.filter(r => {
+    const d = getDaily(r.ownerId, dailyRefDate);
+    return !!(d && Number(d.prometido_visitas) > 0);
+  }).length;
   /* CORRIGIDO (28/08/26): a chamada era para `estadoFrescorDados`, que NAO EXISTE em
      nenhum lugar do projeto. A funcao real e `frescorDosDados` — e devolve exatamente
      esta forma, { confiavel, rotulo }, entao o codigo ao redor estava certo.
@@ -41182,7 +41194,7 @@ async function renderDaily() {
           <div class="gi-hero-kpi">
             <span class="l">Planos fechados</span>
             <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${planosFechadosTotal < repsDaily.length ? ' style="color:var(--dark-amber);"' : ''}>${planosFechadosTotal}</span><span class="meta">de ${repsDaily.length}</span></span>
-            <span class="sub">${clientesPlanejadosTotal} cliente(s) nomeado(s)${semClientesNomeados > 0 ? ` · ${semClientesNomeados} sem cliente` : ''}</span>
+            <span class="sub">${clientesPlanejadosTotal} cliente(s) nomeado(s)${semClientesNomeados > 0 ? ` · ${semClientesNomeados} sem cliente` : ''}${prometeramNumero > 0 ? ` · <b style="color:var(--dark-amber);font-weight:800;">${prometeramNumero} prometeu número</b> sem fechar o plano` : ''}</span>
           </div>
           <div class="gi-hero-kpi">
             <span class="l" title="Quentes no prazo: em fechamento e dentro do SLA da etapa">Quentes no prazo, sem passo</span>
@@ -41925,24 +41937,70 @@ async function renderDaily() {
       '<span class="daily-passo' + (p.ok ? ' is-ok' : (p.meio ? ' is-meio' : '')) + '">' +
         '<i>' + (p.ok ? '✓' : (p.meio ? '◐' : '·')) + '</i>' + esc(p.rot) + '</span>').join('') + '</span>';
 
+    /* ══ A PROMESSA NUMERICA VOLTA A CONTAR (03/09/26) ═══════════════════════════════
+       Reportado pelo Julyan na daily: "a Kelly falou que prometeu e nao registrou no meu
+       gestor". Ela estava certa. O dado dela estava no banco:
+
+         dailies · owner 91477292 · 03/09 · prometido_visitas = 6 · atualizado 11:56
+
+       E a tela do gestor marcava a linha dela em VERMELHO, com o selo "S/ PLANO DO DIA".
+       Nao era ela: eram DUAS tabelas e a tela olhando so para uma.
+
+       ONDE ESTAVA O ERRO: esta linha usava `comprometidasHoje` (contagem de CLIENTES
+       NOMEADOS, que vem de planos_diarios ∪ agenda) como o prometido de Visitas, e NUNCA
+       lia `hoje.prometido_visitas`. As outras duas metricas desta mesma lista leem o campo
+       do dia; so a de Visitas nao lia. E o comentario que justificava isso dizia "nao
+       depende mais de um campo que ninguem escreve" — o que era verdade quando foi
+       escrito e deixou de ser: em 03/09, CINCO dos sete escreveram esse campo entre 11:40
+       e 12:03 (Marco 3, Kelly 6, Sandro 6, Wericles 6, Bruno 6). A tabela planos_diarios,
+       por outro lado, nao recebe uma linha desde 28/08.
+
+       A PRECEDENCIA NAO MUDA, e isso importa: cliente nomeado continua valendo mais que
+       numero, porque nome e compromisso com alguem e numero e intencao. O numero entra
+       como reserva, e a `fonte` diz qual dos dois esta valendo — sem isso, "0 de 6" nao
+       diz se ele prometeu seis clientes ou seis visitas sem dizer para quem. */
+    const promVisitasDoDia = Number(hoje.prometido_visitas);
+    const temPromessaNumerica = isFinite(promVisitasDoDia) && promVisitasDoDia > 0;
     const metricasCompromisso = [
-      { label: 'Visitas', campo: 'prometido_visitas', prom: comprometidasHoje > 0 ? comprometidasHoje : null, real: Number(realVisitas) || 0, cls: 'green', chips: visitasNomesDoOwnerNoDia(r.ownerId, dailyRefDate) },
+      { label: 'Visitas', campo: 'prometido_visitas',
+        prom: comprometidasHoje > 0 ? comprometidasHoje : (temPromessaNumerica ? promVisitasDoDia : null),
+        fonte: comprometidasHoje > 0 ? 'clientes nomeados' : (temPromessaNumerica ? 'número prometido, sem cliente nomeado' : null),
+        real: Number(realVisitas) || 0, cls: 'green', chips: visitasNomesDoOwnerNoDia(r.ownerId, dailyRefDate) },
       { label: 'Demo/Proposta', campo: 'prometido_propostas', prom: hoje.prometido_propostas, real: Number(realPropostas) || 0, cls: 'red', suspeito: escritaDaNoiteSuspeita },
       { label: 'Novos Clientes', campo: 'prometido_fechamentos', prom: hoje.prometido_fechamentos, real: Number(realFechamentos) || 0, cls: 'amber', suspeito: escritaDaNoiteSuspeita }
     ];
-    // "Registrou" agora quer dizer: fechou o plano do dia OU nomeou pelo menos um
-    // cliente. Não depende mais de um campo que ninguém escreve.
-    const registrouResumo = planoDoDiaFechado || comprometidasHoje > 0;
+    /* "REGISTROU" TEM TRES PORTAS (03/09/26), e nao duas. Fechou o plano do dia, OU
+       nomeou pelo menos um cliente, OU escreveu a promessa numerica no dailies. A terceira
+       faltava, e era a unica que o time estava usando hoje — ver o bloco acima.
+
+       QUEM PROMETEU NUMERO SEM NOMEAR CLIENTE NAO E VERDE. Ele sai do vermelho ("nao
+       registrou nada", que era mentira) e vai para o ambar, que e o estado real: ele
+       assumiu um numero e ainda nao disse com quem. A cobranca da rodada muda junto — de
+       "cobrar plano" para "nomear os clientes" —, e essa e a conversa certa. */
+    const registrouResumo = planoDoDiaFechado || comprometidasHoje > 0 || temPromessaNumerica;
+    const soNumeroSemCliente = !planoDoDiaFechado && comprometidasHoje === 0 && temPromessaNumerica;
     const metasPositivas = metricasCompromisso.filter(m => Number(m.prom) > 0);
     const cumpriuTudo = registrouResumo && metasPositivas.length > 0 && metasPositivas.every(m => m.real >= Number(m.prom));
     const iniciouExecucao = metricasCompromisso.some(m => m.real > 0);
     const promessaZerada = registrouResumo && metasPositivas.length === 0;
+    /* Ambar tambem para "numero sem cliente": vermelho e para quem nao registrou nada, e
+       ele registrou. Como registrouResumo agora e true nesse caso, ele cai no ambar sem
+       precisar de ramo novo — mas fica dito, porque a leitura da cor e a que muda a
+       conversa da rodada. */
     const estadoClasse = !registrouResumo ? 'red' : cumpriuTudo ? 'green' : 'amber';
     const estadoCor = !registrouResumo ? 'var(--red)' : cumpriuTudo ? 'var(--green)' : 'var(--amber)';
     // REDESIGN Daily & Ritmo (15/08/26) — tint de fundo do novo avatar por iniciais,
     // mesma régua de 3 estados que já colore a borda esquerda do card (estadoCor).
     const estadoSoft = !registrouResumo ? 'var(--red-soft)' : cumpriuTudo ? 'var(--green-soft)' : 'var(--amber-soft)';
-    const acaoGestor = !registrouResumo ? 'Cobrar plano' : promessaZerada ? 'Recalibrar plano' : cumpriuTudo ? 'Reconhecer entrega' : iniciouExecucao ? 'Destravar execução' : 'Começar agora';
+    /* NOMEAR OS CLIENTES e uma acao propria (03/09/26). Antes, quem prometeu numero sem
+       nomear caia em "Cobrar plano", que e a cobranca de quem nao fez nada — e o Julyan
+       cobraria a pessoa errada, do jeito errado, na frente do time. */
+    const acaoGestor = !registrouResumo ? 'Cobrar plano'
+      : soNumeroSemCliente ? 'Nomear os clientes'
+      : promessaZerada ? 'Recalibrar plano'
+      : cumpriuTudo ? 'Reconhecer entrega'
+      : iniciouExecucao ? 'Destravar execução'
+      : 'Começar agora';
     /* ══ AS ACOES DO GESTOR, EXECUTAVEIS (03/09/26, prancha §4) ═══════════════════════
        `acaoGestor` (linha acima) ja escolhia a acao pela evidencia desde 15/08 — mas era
        ROTULO. A prancha pede que o painel da linha traga os itens executaveis dessa acao,
@@ -41989,6 +42047,16 @@ async function renderDaily() {
         });
       });
       meus.sort((a, b) => (a.atrasado !== b.atrasado) ? (a.atrasado ? -1 : 1) : (b.dias - a.dias));
+      /* PROMETEU NUMERO E NAO NOMEOU NINGUEM (03/09/26): a acao do gestor aqui e SUGERIR,
+         nao datar. Nomear cliente e gesto do executivo; o gestor sugere, entra como ◆
+         pendente na agenda dele, e ele confirma. O plano continua dele.
+         Sem este ramo o rotulo dizia "Nomear os clientes" e os botoes diziam "datar
+         tarefa" — cabecalho e item discordando dentro do mesmo painel. */
+      if (soNumeroSemCliente) {
+        return { chave: 'sugerir_troca', verbo: 'sugerir na agenda dele',
+          frase: 'Ele assumiu ' + promVisitasDoDia + ' visita(s) hoje e não disse com quem. Sugerir entra como ◆ pendente na agenda dele — o plano continua dele, você não sobrescreve.',
+          casos: meus.slice(0, 5) };
+      }
       if (promessaZerada) {
         return { chave: 'sugerir_troca', verbo: 'sugerir na agenda dele',
           frase: 'Ele fechou o plano sem nomear cliente. Sugerir entra como ◆ pendente na agenda dele — o plano continua dele, você não sobrescreve.',
@@ -41999,7 +42067,13 @@ async function renderDaily() {
         casos: meus.slice(0, 5) };
     })();
 
-    const estadoExec = !registrouResumo ? 'Plano aberto' : cumpriuTudo ? 'Plano cumprido' : iniciouExecucao ? 'Em execução' : 'Plano definido';
+    /* O SELO NAO PODE DIZER "Plano definido" PARA QUEM SO ESCREVEU UM NUMERO: a reuniao
+       le esse selo de longe e agiria como se os clientes estivessem escolhidos. */
+    const estadoExec = !registrouResumo ? 'Plano aberto'
+      : cumpriuTudo ? 'Plano cumprido'
+      : iniciouExecucao ? 'Em execução'
+      : soNumeroSemCliente ? 'Número sem cliente'
+      : 'Plano definido';
     const pctMetrica = m => Number(m.prom) > 0 ? Math.min(100, Math.round((m.real / Number(m.prom)) * 100)) : 0;
     const metricaTime = m => `
       <span class="daily-team-metric ${m.cls}">
