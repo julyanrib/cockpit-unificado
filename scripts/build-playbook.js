@@ -395,13 +395,42 @@ function montarPlaybook(root) {
     throw new Error('data/playbook-prova.json incompleto — sem isso o +10 não tem como ser provado:\n  · ' + semProva.join('\n  · '));
   }
 
-  const payload = {
+  /* ══ `versao` E O HASH DA SAIDA, NAO DAS ENTRADAS (03/09/26) ══════════════════════
+     Antes ele era sha256 de `raw + arquivosExtras`, os arquivos como estao no disco.
+     Consequencia medida: dos 31 commits do robo entre 01 e 03/09, NOVE mudaram so este
+     arquivo, e nesses nove os bytes eram identicos (698008 -> 698008), as palavras
+     identicas (43773) e o conteudo sem o campo versao identico — mudava o hash e mais
+     nada. Nove builds de producao para entregar os mesmos bytes.
+
+     O hash mudava porque as entradas variavam de um jeito que a conversao para HTML
+     normaliza depois: quebra de linha, espaco em fim de linha. Rodando localmente tres
+     vezes o hash e estavel, entao a variacao vem do ambiente do runner — e a assinatura
+     e inconfundivel: hash diferente, conteudo igual.
+
+     Hashear a SAIDA resolve os dois problemas de uma vez. O campo passa a dizer o que o
+     nome promete (qual playbook o executivo esta lendo, e nao que bytes o gerador leu),
+     e saida identica passa a produzir arquivo identico: o robo nao commita, e a Vercel
+     nao gasta build. O desperdicio morre na raiz em vez de virar remendo no workflow.
+
+     `palavras` continua contando as ENTRADAS de proposito: e o tamanho do material
+     escrito, nao do HTML gerado — e ninguem le esse numero como identidade de versao. */
+  const semVersao = {
     titulo: 'Playbook Field Sales',
     fonte: 'Takeat OS',
-    versao: crypto.createHash('sha256').update(raw + Object.values(arquivosExtras).join('\n')).digest('hex').slice(0, 12),
     paginas,
     categorias: [...new Set(paginas.map(p => p.categoria))],
     palavras: (raw + '\n' + Object.values(arquivosExtras).join('\n')).trim().split(/\s+/).length
+  };
+  const versao = crypto.createHash('sha256').update(JSON.stringify(semVersao)).digest('hex').slice(0, 12);
+  /* a ordem das chaves na saida fica a mesma de antes — titulo, fonte, versao, ... —
+     para o diff do arquivo gerado continuar legivel para quem ja conhece ele. */
+  const payload = {
+    titulo: semVersao.titulo,
+    fonte: semVersao.fonte,
+    versao,
+    paginas: semVersao.paginas,
+    categorias: semVersao.categorias,
+    palavras: semVersao.palavras
   };
   return payload;
 }

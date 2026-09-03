@@ -224,4 +224,29 @@ if (falhas.length) {
   console.error('\n' + ok + ' ok, ' + falhas.length + ' falha(s).');
   process.exit(1);
 }
+/* ══ O `versao` TEM QUE SER HASH DA SAIDA, NAO DAS ENTRADAS ═════════════════════════
+   MEDIDO em 03/09/26: dos 31 commits do robo entre 01 e 03/09, NOVE mudaram um arquivo
+   so (data/field-sales-playbook.compiled.json) e nesses nove o conteudo era identico —
+   698008 bytes -> 698008 bytes, 43773 palavras -> 43773 palavras, tudo igual menos o
+   campo `versao`. Nove builds de producao da Vercel para entregar os mesmos bytes com
+   outro hash no cabecalho, numa conta que estourou duas vezes em dois dias.
+
+   A causa era o hash ser calculado sobre as ENTRADAS cruas (o markdown como esta no
+   disco). Qualquer variacao que a conversao para HTML normaliza depois mudava o hash sem
+   mudar uma letra da saida — e o robo commitava, e a Vercel buildava.
+
+   Esta assercao NAO olha a implementacao: ela recalcula o hash a partir da saida e exige
+   que bata. Se o `versao` voltar a depender de qualquer coisa que nao esteja na saida,
+   ela falha — que e a unica forma de este desperdicio nao voltar em silencio. */
+const versaoEsperada = require('crypto').createHash('sha256').update(JSON.stringify({
+  titulo: compilado.titulo,
+  fonte: compilado.fonte,
+  paginas: compilado.paginas,
+  categorias: compilado.categorias,
+  palavras: compilado.palavras
+})).digest('hex').slice(0, 12);
+checar('o versao do playbook e o hash da SAIDA — saida igual nao gera commit nem build',
+  compilado.versao === versaoEsperada,
+  'versao no arquivo ' + compilado.versao + ', hash da saida ' + versaoEsperada
+    + ' — se divergem, o versao voltou a depender das entradas e o robo vai commitar por nada');
 console.log('playbook v7: ' + ok + ' checagens ok — prova, teto, níveis, selo, uso real, trilha do funil e busca.');

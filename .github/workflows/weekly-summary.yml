@@ -67,16 +67,35 @@ jobs:
         run: |
           git config user.name "cockpit-bot"
           git config user.email "cockpit-bot@users.noreply.github.com"
-          git add data/weekly-raw.json data/resumo-semanal.json data/narrativas.json public/index.html
+          # ADD POR DIRETÓRIO, COMO NO daily-refresh — e a lista à mão que estava aqui
+          # ESTAVA QUEBRADA, com data marcada para falhar (achado em 03/09/26).
+          #
+          # Ela era: git add data/weekly-raw.json data/resumo-semanal.json \
+          #                  data/narrativas.json public/index.html
+          # Mas weekly-raw.json e narrativas.json entraram no .gitignore em 02/09 (etapa 2
+          # da virada: o snapshot vai para a tabela do Supabase, não para o git) e
+          # deixaram de ser rastreados. 'git add' num caminho IGNORADO falha:
+          #   "The following paths are ignored by one of your .gitignore files" -> exit 1
+          # Reproduzido no repo antes de corrigir. Passo de Actions roda em bash -e, então
+          # o step abortaria ali — e com ele morreriam os dois 'git add' seguintes, que são
+          # o HISTÓRICO ACUMULADO (historico-semanal-mes.json e historico-mensal-time.json).
+          # Esses dois só existem no runner até serem commitados: o fechamento mensal de
+          # sexta seria gerado e perdido, e o workflow ficaria vermelho toda semana
+          # mascarando falha de verdade.
+          #
+          # 'git add -A' respeita o .gitignore em silêncio, não falha em caminho que não
+          # existe (era o motivo da lista com [ -f ] — ver a run #14, "pathspec did not
+          # match any files") e pega arquivo novo sozinho. A lista à mão aqui envelheceu
+          # exatamente como a do daily-refresh envelheceu duas vezes em 02/09.
+          git add -A data public
 
-          # historico-mensal-time.json só passa a existir depois do PRIMEIRO fechamento
-          # mensal (e historico-semanal-mes.json podia, em teoria, não existir ainda numa
-          # instalação nova) — 'git add' num caminho que não existe falha o comando inteiro
-          # (foi o que quebrou a run #14: "pathspec did not match any files"). Adiciona só
-          # se o arquivo já existir no working tree desta rodada.
-          for f in data/historico-semanal-mes.json data/historico-mensal-time.json; do
-            [ -f "$f" ] && git add "$f"
-          done
+          # e se sobrou algo sujo FORA de data/ e public/, diz o que é — silêncio aqui foi
+          # o que fez o defeito do daily durar dois dias.
+          SUJO_FORA=$(git status --porcelain | grep -v -E "^[AMDR ]+ ?(data|public)/" || true)
+          if [ -n "$SUJO_FORA" ]; then
+            echo "ATENÇÃO — modificação fora de data/ e public/ nesta rodada:"
+            echo "$SUJO_FORA"
+          fi
 
           git diff --staged --quiet && echo "Nada mudou." && exit 0
 
