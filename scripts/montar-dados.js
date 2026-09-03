@@ -104,7 +104,26 @@ function usarSnapshot(fontes) {
 // O snapshot do CRM e obrigatorio para montar qualquer coisa. Sem ele — nem na tabela nem
 // no arquivo — a resposta certa e um erro claro, nunca uma tela com zeros: zero negocio
 // aberto e uma afirmacao sobre o funil, e nao ha funil nenhum para afirmar.
-function temSnapshot() { return !!(hubspot && hubspot.kpis); }
+/* NARRATIVAS TAMBEM E OBRIGATORIO (03/09/26), e isto nao era verdade antes de hoje.
+   Ele deixou de ser versionado (o robo commitava e cada commit gerava um deploy), entao
+   nao esta mais no pacote do deploy: a UNICA fonte dele passou a ser a tabela. E ele nao
+   e complemento — montarDadosCompletos() abre com Object.keys(narrativas.reps), ou seja
+   ELE E O QUADRO DE EXECUTIVOS. Sem ele nao ha uma pessoa na tela.
+
+   Antes desta linha, uma leitura de tabela que falhasse (6s de timeout em api/dados.js)
+   derrubava a rota com TypeError em campo nulo — 500 e stack trace. Agora cai no mesmo
+   503 com motivo que o hubspot ausente ja produzia, que e a resposta certa: a tela diz
+   que nao tem dado, em vez de mentir ou explodir. Ver o bloco do .gitignore. */
+function temSnapshot() { return !!(hubspot && hubspot.kpis && narrativas && narrativas.reps); }
+/* QUAL das duas faltou. Vive aqui porque hubspot e narrativas sao locais deste modulo;
+   a rota nao os ve. Uma funcao so, usada num lugar so, para o 503 mandar procurar no
+   lugar certo: as duas chegam pelo mesmo caminho e quebram por motivos diferentes. */
+function faltandoNoSnapshot() {
+  const f = [];
+  if (!(hubspot && hubspot.kpis)) f.push('o funil do CRM');
+  if (!(narrativas && narrativas.reps)) f.push('o quadro de executivos (narrativas)');
+  return f;
+}
 
 function montarDadosCompletos() {
   // Ordem de exibição = ordem em que aparecem no narrativas.json
@@ -494,4 +513,4 @@ function configMaptiler() {
   return maptilerConfig ? maptilerConfig.key : null;
 }
 
-module.exports = { montarDadosCompletos, filtrarParaPapel, configSupabase, configMaptiler, USUARIOS, usarSnapshot, temSnapshot };
+module.exports = { montarDadosCompletos, filtrarParaPapel, configSupabase, configMaptiler, USUARIOS, usarSnapshot, temSnapshot, faltandoNoSnapshot };

@@ -11,7 +11,7 @@
 // FAIL-CLOSED: sem as env vars, sem sessão válida ou sem cadastro no time → nada sai.
 // Variáveis de ambiente na Vercel (as mesmas das outras rotas): SUPABASE_URL, SUPABASE_ANON_KEY.
 
-const { montarDadosCompletos, filtrarParaPapel, USUARIOS, usarSnapshot, temSnapshot } = require('../scripts/montar-dados.js');
+const { montarDadosCompletos, filtrarParaPapel, USUARIOS, usarSnapshot, temSnapshot, faltandoNoSnapshot } = require('../scripts/montar-dados.js');
 const PLAYBOOK = require('../data/field-sales-playbook.compiled.json');
 const PRECIFICACAO = require('../data/precificacao.json');
 const REALIZADO = require('../lib/realizado.js');
@@ -234,8 +234,16 @@ function removerNulosRecursivo(valor) {
        nem no arquivo — "0 negocios em aberto" seria uma afirmacao sobre o funil, e nao ha
        funil nenhum para afirmar. Melhor uma mensagem que diz o que aconteceu. */
     if (!temSnapshot()) {
+      /* QUAL PECA FALTOU (03/09/26). temSnapshot() passou a exigir DUAS coisas: o funil
+         (hubspot) e o quadro de executivos (narrativas — montarDadosCompletos abre com
+         Object.keys(narrativas.reps)). Desde que narrativas.json saiu do git ele nao esta
+         mais no pacote do deploy e a UNICA fonte dele e a tabela; uma leitura que falhe
+         deixa a tela sem uma pessoa. Dizer so "o snapshot do CRM" mandaria procurar no
+         lugar errado: as duas chegam pelo mesmo caminho e quebram por motivos diferentes. */
+      const faltando = faltandoNoSnapshot();
       return res.status(503).json({
-        erro: 'O snapshot do CRM não está disponível agora (' + (procedencia.motivo || 'origem desconhecida') +
+        erro: 'Falta ' + (faltando.join(' e ') || 'o snapshot do CRM') + ' agora (' +
+          (procedencia.motivo || 'origem desconhecida') +
           '). A próxima carga do robô resolve; nada foi perdido.'
       });
     }
