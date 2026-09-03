@@ -1,0 +1,63 @@
+name: Sourcing mensal dos mais bem avaliados (Google Places)
+
+# Pedido do Julyan (03/09/26): "os mais avaliados tem q vir do google places, isso tem q
+# ser automatico, obvio q em lotes para nao sujar o funil do executivo".
+#
+# A Casa dos Dados ja era automatica (casa-dos-dados-semanal.yml) e esta entregando:
+# medido em 03/09, 1032 contas na base, ultima carga em 01/09. Este workflow e o outro
+# lado da moeda — quem ja esta maduro e bem avaliado.
+#
+# POR QUE MENSAL E NAO SEMANAL:
+# Nota e contagem de avaliacoes se movem em meses, nao em semanas. Rodar toda semana
+# devolveria quase o mesmo conjunto, o dedup do importador jogaria fora, e a unica coisa
+# que mudaria seria a fatura da Places API. Abertura nova acontece toda semana — e por
+# isso a OUTRA fonte e semanal. A cadencia segue o dado.
+#
+# E POR QUE EM DIA DIFERENTE:
+# Dia 1 de cada mes, nao segunda. Se as duas fontes caissem no mesmo dia, o executivo
+# abriria a tela com dois lotes de uma vez — exatamente o "sujar o funil" que ele pediu
+# para evitar.
+
+on:
+  schedule:
+    # Dia 1 de cada mês, 22h de Brasília (01:00 UTC do dia 1). O cron do GitHub é UTC.
+    - cron: '0 1 1 * *'
+  workflow_dispatch:
+    inputs:
+      pular:
+        description: "Cidades a PULAR nesta rodada, separadas por vírgula (ex.: Salvador). Em branco = todas."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  sourcing:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Buscar os mais bem avaliados e importar
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          PULAR_CIDADES: ${{ github.event.inputs.pular }}
+        run: node scripts/backfill-google-places.js
+
+      # Mesma ponte do backfill da Casa dos Dados: se o IMPORT_SECRET ainda nao estiver
+      # nos dois lados, a rodada nao se perde — sai como artefato para importacao manual.
+      - name: Publicar JSON pra importação manual (se o IMPORT_SECRET não estiver ativo)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: leads-google-places
+          path: artifacts/leads-google-places.json
+          if-no-files-found: ignore
+          retention-days: 7
