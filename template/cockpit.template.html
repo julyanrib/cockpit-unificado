@@ -2076,7 +2076,6 @@
   @media (max-width:760px){ .meu-hoje-signal-cta{min-height:44px;padding:5px 15px;} }
   .meu-hoje-signal-cta:hover{opacity:.9;}
 
-  .hoje-l1-grid>.roteiro-hoje-card{height:100%;box-sizing:border-box;margin:0;}
   .hoje-month-card{background:linear-gradient(135deg,#fffdfa 0%,#fff5f1 100%);color:var(--ink);border:1.5px solid var(--red);box-shadow:0 5px 18px rgba(229,26,49,.08);}
   .hoje-month-card .hoje-month-rank{background:var(--red-soft)!important;color:var(--red);}
   .hoje-month-card .hoje-month-value{color:var(--red);}
@@ -3539,8 +3538,6 @@
   .ag-key i{width:9px;height:9px;border-radius:var(--r-xs);display:inline-block;}
 
   /* grade */
-  .ag-grade{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);
-    overflow:hidden;box-shadow:var(--shadow-sm);}
   .ag-row{display:grid;grid-template-columns:310px repeat(var(--ag-nd,6),minmax(0,1fr));border-bottom:1px solid var(--line);}
   .ag-row:last-child{border-bottom:0;}
   .ag-row-head{background:var(--panel2);}
@@ -3654,7 +3651,6 @@
   /* BLOCO 41 (limpeza, 14/08/26) — a media query de .ag-cols (@media max-width:1280px)
      saiu: a classe já não existe (era o layout 2 colunas + sidebar da Agenda antiga). */
   @media (max-width:1050px){
-    .ag-grade{overflow-x:auto;-webkit-overflow-scrolling:touch;}
     .ag-row,.ag-tot{grid-template-columns:172px repeat(var(--ag-nd,6),minmax(118px,1fr));min-width:calc(172px + var(--ag-nd,6)*118px + 24px);}
     /* truncada em "0/30 v..." essa linha não informa nada; o anel já dá o percentual */
     .ag-quem-t span{display:none;}
@@ -10692,41 +10688,8 @@ function dataHojeExtenso() {
 // caras de buscar (uma chamada por nota, com pausa pro rate limit), então jogar fora
 // era desperdício duplo: custo no job e contexto perdido pro executivo.
 
-// Índice id-do-lead -> notas. As notas vêm anexadas na lista de temperatura do time
-// (top quentes/frios) e também nos travados de cada executivo — varre as duas origens
-// pra que o roteiro individual tenha contexto dos leads dele, não só dos do time.
-function construirIndiceNotas() {
-  const mapa = {};
-  const registrar = l => { if (l && l.notas && l.notas.length > 0) mapa[l.id] = l.notas; };
-  (DATA.temperatura.quentes || []).forEach(registrar);
-  (DATA.temperatura.frios || []).forEach(registrar);
-  (DATA.reps || []).forEach(rep => (rep.travados || []).forEach(registrar));
-  return mapa;
-}
 
-// Última anotação registrada no lead — é o "onde eu parei" do executivo, sem
-// precisar abrir o HubSpot pra lembrar.
-function ultimaNotaHTML(leadId, mapaNotas) {
-  const notas = mapaNotas[leadId];
-  if (!notas || notas.length === 0) return '';
-  const nota = notas[0];
-  const textoBruto = (nota.texto || '').trim();
-  if (!textoBruto) return '';
-  const LIMITE = 130;
-  const texto = textoBruto.length > LIMITE ? textoBruto.slice(0, LIMITE) + '…' : textoBruto;
-  const quando = nota.data ? new Date(nota.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
-  return `<div style="font-size:11px;color:currentColor;opacity:.72;margin-top:7px;padding-left:9px;border-left:2px solid currentColor;line-height:1.45;"><span style="opacity:.75;">última nota${quando ? ' · ' + quando : ''}:</span> ${esc(texto)}</div>`;
-}
 
-// Selo de gravidade do SLA: mostra quantas vezes o lead já passou do prazo da etapa.
-// slaRatio vem em % (220 = 2,2x o SLA), então divide por 100 pra virar multiplicador.
-function seloSlaHTML(lead) {
-  const ratio = lead.slaRatio || 0;
-  if (ratio <= 100) return '';
-  const vezes = (ratio / 100);
-  const label = vezes >= 2 ? `${vezes.toFixed(vezes >= 10 ? 0 : 1)}x SLA` : 'passou do SLA';
-  return `<span class="mono" style="flex:none;font-size:10px;font-weight:700;color:var(--red);border:1px solid var(--red);border-radius:var(--r-xs);padding:2px 6px;white-space:nowrap;" title="Já passou ${vezes.toFixed(1).replace('.', ',')}x do prazo previsto pra essa etapa">${label}</span>`;
-}
 
 // ---- Vitórias da semana (executivo) ----
 // `ganhosSemanaNomes` já vinha do HubSpot com os NOMES dos clientes fechados e nunca
@@ -10750,26 +10713,6 @@ function buildVitoriasHTML(r) {
   `;
 }
 
-// ---- Roteiro de hoje (executivo) ----
-// Substitui o antigo bloco recolhido de "ação de hoje": em vez de exigir um clique
-// pra descobrir o que fazer, já abre com a lista pronta, separada por MOTIVO —
-// "fechar agora" (etapa avançada, ainda no prazo) x "destravar" (SLA estourado).
-// Isso responde a pergunta das 8:30 ("o que eu faço hoje?") com dado real.
-// Sinal de higiene do funil: usa a nota mais recente já buscada pro lead (mesmo dado do
-// "última nota", só que aqui vira um selo de alerta). Não é um dado novo — é o mesmo
-// `l.notas` que já existia, só que hoje só aparecia como texto solto; aqui vira sinal
-// visível de "esse lead não tem NENHUM registro de contato".
-function interacaoStatusHTML(l, mapaNotas) {
-  const notas = mapaNotas[l.id];
-  if (!notas || notas.length === 0) {
-    return `<span style="flex:none;font-size:10px;font-weight:700;color:var(--amber);border:1px solid var(--amber);border-radius:var(--r-xs);padding:2px 6px;white-space:nowrap;" title="Nenhuma nota de contato registrada nesse lead ainda">sem interação</span>`;
-  }
-  const dataNota = notas[0].data ? new Date(notas[0].data) : null;
-  if (!dataNota) return '';
-  const diasSemInteracao = Math.floor((Date.now() - dataNota.getTime()) / 86400000);
-  if (diasSemInteracao < 3) return '';
-  return `<span style="flex:none;font-size:10px;font-weight:700;color:var(--muted2);border:1px solid var(--line);border-radius:var(--r-xs);padding:2px 6px;white-space:nowrap;" title="Última nota registrada há ${diasSemInteracao} dias">${diasSemInteracao}d sem interação</span>`;
-}
 
 // Versão escura e compacta do roteiro, pro card "Sua fila de hoje" ao lado do "Seu mês"
 // no Meu Painel — mesmos dados (quentes + travados), lista única em vez de duas seções.
@@ -13508,48 +13451,6 @@ function wireHojeExecucao(rootEl, r, diag, acoesCalculadas) {
 // HubSpot — é o caso mais direto de "checkbox local não comprova execução". No lugar
 // dele entra o estado real do negócio: número do toque e se existe (ou não) próximo
 // passo datado. O lead sai desta fila quando o CRM tiver a prova, não antes.
-function buildFilaDeHojeHTML(r) {
-  const mapaNotas = construirIndiceNotas();
-  const meusQuentes = agendaQuentes([r]);
-  const todosTravados = (r.travados || []).slice().sort((a, b) => (b.slaRatio || 0) - (a.slaRatio || 0));
-  const fila = [...meusQuentes.map(l => ({ ...l, tipo: 'quente' })), ...todosTravados.map(l => ({ ...l, tipo: 'travado' }))].slice(0, 4);
-  const totalFila = meusQuentes.length + todosTravados.length;
-  const estados = {};
-  fila.forEach(l => { try { estados[l.id] = estadoDoNegocio(l); } catch (e) { estados[l.id] = null; } });
-
-  return `
-    <div class="chart-card roteiro-hoje-card" data-owner="${r.ownerId}" style="background:var(--dark);color:var(--dark-ink);border:none;border-radius:var(--r-lg);padding:22px 24px;box-shadow:var(--shadow);">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-        <span style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--red);"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;width:13px;height:13px;"><path d="M12 2c1 3 4 4.5 4 8a4 4 0 01-8 0c0-1 .3-1.8.8-2.6C9.5 8.6 10.5 10 12 10c-.6-2.4-.4-5 0-8z"/><path d="M12 22a7 7 0 007-7c0-2-.8-3.8-2-5.2"/><path d="M5 15a7 7 0 007 7"/></svg>Sua fila de hoje</span>
-        <span style="font-size:11px;color:var(--dark-mut);">${fila.length} de ${totalFila}</span>
-      </div>
-      ${fila.length === 0 ? `
-        <div style="font-size:13px;color:var(--dark-mut);line-height:1.5;">Funil em dia — nenhum lead quente ou travado agora.</div>
-      ` : `
-        <div style="font-size:10px;color:var(--dark-mut);margin-bottom:9px;line-height:1.5;">Os selos mostram a higiene do lead: <b>sem interação</b> = nenhuma nota registrada no CRM ainda. O item sai da fila quando o HubSpot tiver a prova — próximo passo datado ou etapa movida.</div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          ${fila.map(l => `
-            <div class="roteiro-item" data-lead="${l.id}" style="background:var(--dark-fill);border-radius:var(--r-md);padding:12px 13px;">
-              <div style="display:flex;align-items:center;gap:10px;min-height:22px;">
-                <span class="mono" style="flex:none;font-size:9px;font-weight:800;color:var(--dark-mut);border:1px solid rgba(255,255,255,.18);border-radius:var(--r-xs);padding:3px 6px;" title="Toques conhecidos hoje — piso, não total (o HubSpot não devolve histórico completo de atividades)">${estados[l.id] ? '≥' + (estados[l.id].toques.total || 0) : '—'}</span>
-                <span class="roteiro-abre-ficha" data-lead-id="${l.id}" data-stage-id="${l.stageId || ''}" data-stage="${esc(l.stage || '')}" data-owner-id="${l.ownerId || ''}" data-dias="${l.dias != null ? l.dias : ''}" data-sla-breach="${l.slaBreach ? '1' : ''}" data-vendedor="${esc(l.vendedor || '')}" style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;cursor:pointer;">
-                  <b style="font-size:13px;">${l.name}</b>
-                  <span style="font-size:11px;color:var(--dark-mut);">${l.stage} · ${l.tipo === 'quente' ? `${l.dias}d na etapa` : `parado há ${l.dias}d`}</span>
-                </span>
-                ${interacaoStatusHTML(l, mapaNotas)}
-                ${l.tipo === 'travado' ? seloSlaHTML(l) : ''}
-                ${(estados[l.id] && estados[l.id].proximoPasso)
-                  ? `<span style="font-size:10px;font-weight:800;color:var(--green);background:rgba(255,255,255,.1);border-radius:var(--r-pill);padding:5px 9px;white-space:nowrap;" title="Próximo passo já existe no HubSpot">✓ ${esc(estados[l.id].proximoPasso.quando.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }))}</span>`
-                  : `<span style="font-size:10px;font-weight:800;color:var(--red);background:rgba(255,255,255,.1);border-radius:var(--r-pill);padding:5px 9px;white-space:nowrap;" title="Nenhuma tarefa futura nesse negócio">sem próximo passo</span>`}
-              </div>
-              ${ultimaNotaHTML(l.id, mapaNotas)}
-            </div>
-          `).join('')}
-        </div>
-      `}
-    </div>
-  `;
-}
 
 function inicioDaSemanaISO() {
   const hoje = isoDate(new Date());
@@ -13558,39 +13459,6 @@ function inicioDaSemanaISO() {
   return addDays(hoje, -offsetSeg);
 }
 
-// REMOVIDO (27/08/26) — roteiroCheckKey/checkbox semanal do roteiro.
-// A chave era `cockpit_roteiro_v1_<owner>_<semana>_<lead>` e mantinha o lead marcado
-// como resolvido por uma semana inteira sem NADA ter mudado no HubSpot: o executivo
-// via a fila limpa, o gestor via os mesmos 20 negócios sem próximo passo, e os dois
-// estavam olhando a mesma tela. Chaves antigas no navegador de quem já usou ficam
-// órfãs e param de ser lidas — não apagamos storage de ninguém.
-// A função continua existindo (e o nome também) porque ela é quem liga o clique no
-// nome do lead → ficha do Cockpit, usada aqui e na Daily.
-function wireRoteiroChecks(rootEl) {
-  rootEl.querySelectorAll('.roteiro-hoje-card').forEach(card => {
-    const ownerId = card.dataset.owner;
-    // BLOCO 43 (14/08/26) — clicar no nome abre a ficha do Cockpit (Bloco 42: trilha de
-    // etapa, nota, próximo passo), não mais o HubSpot direto.
-    // BLOCO 44 — busca o lead completo por id (com celular/endereço/tarefas) em vez de
-    // remontar um objeto parcial só com os data-* do card; os data-* seguem como
-    // fallback pro caso raro do id não ser mais encontrado em DATA nesta sessão.
-    card.querySelectorAll('.roteiro-abre-ficha').forEach(span => {
-      span.addEventListener('click', () => {
-        const completo = buscarLeadFunilPorId(span.dataset.leadId);
-        abrirFichaLeadFunilDrawer(completo || {
-          id: span.dataset.leadId,
-          name: span.querySelector('b') ? span.querySelector('b').textContent : '',
-          stageId: span.dataset.stageId || null,
-          stage: span.dataset.stage || '',
-          dias: span.dataset.dias !== '' ? Number(span.dataset.dias) : null,
-          slaBreach: span.dataset.slaBreach === '1',
-          ownerId: span.dataset.ownerId || ownerId || null,
-          vendedor: span.dataset.vendedor || ''
-        }, null);
-      });
-    });
-  });
-}
 
 // BLOCO 41 (limpeza, 14/08/26) — buildAcaoImediataHTML removida: sem chamador em
 // nenhum lugar do arquivo. buildInsightsAutomaticosHTML (abaixo) é a que está ativa.
@@ -13600,90 +13468,6 @@ function wireRoteiroChecks(rootEl) {
 // por IA em tempo real (o site é estático, gerado à noite). Cada regra vira um "boa prática"
 // só se o padrão dela realmente aparecer no funil da pessoa hoje — senão fica de fora, não
 // preenche com genérico. Ordenado por severidade, mostra só os 3 mais relevantes.
-/* SEM CHAMADOR desde 30/08/26 — o bloco "Dicas pro seu dia" saiu da aba Hoje porque as
-   três leituras que ele gerava já estavam na mesma tela (a pílula de próximo passo com o
-   CTA "Datar os N", a pílula de SLA e o card "Seu mês"). A função fica aqui, intacta e
-   sem uso, pelo mesmo motivo da nota logo acima desta: se voltar a fazer sentido mostrar
-   leituras automáticas em algum lugar, o gerador está pronto — e apagá-lo agora perderia
-   a regra de priorização (candidatos.ordem) que não está escrita em nenhum outro lugar. */
-function buildInsightsAutomaticosHTML(r) {
-  const candidatos = [];
-
-  // 1) Concentração de etapa — funil empacado no início
-  const stageEntries = Object.entries(r.stages || {});
-  if (stageEntries.length > 0 && r.open > 0) {
-    const [stageIdDom, countDom] = stageEntries.sort((a, b) => b[1] - a[1])[0];
-    const pctDom = Math.round((countDom / r.open) * 100);
-    const etapasIniciais = ['1395880469', '1396005401']; // Prospecção, Visita
-    if (pctDom >= 50 && etapasIniciais.includes(stageIdDom)) {
-      candidatos.push({
-        ordem: pctDom,
-        texto: `${pctDom}% do seu funil está parado em ${STAGE_LABELS[stageIdDom]} (${countDom} de ${r.open}). Antes de abrir prospecção nova, avance esses — é o gargalo real hoje.`
-      });
-    }
-  }
-
-  // 2) Volume de SLA estourado, ponderado por gravidade (não só contagem)
-  const travadosGraves = (r.travados || []).filter(l => (l.slaRatio || 0) >= 200).length;
-  if (travadosGraves > 0) {
-    candidatos.push({
-      ordem: 100 + travadosGraves,
-      texto: `${travadosGraves} lead${travadosGraves > 1 ? 's' : ''} seu${travadosGraves > 1 ? 's' : ''} já ${travadosGraves > 1 ? 'passaram' : 'passou'} de 2x o prazo da etapa. Decida hoje: avançar ou reciclar — deixar parado não muda o número.`
-    });
-  }
-
-  // 3) (27/08/26) Era "sua aderência à Daily está em X%", com o conselho "prometer menos
-  // e cumprir tudo vale mais que prometer demais" — ou seja, uma dica sobre como
-  // calibrar a própria promessa. Trocada pela dica que age sobre cliente: negócio
-  // tocado sem próximo passo datado.
-  try {
-    const semPasso = meusNegociosAbertos(r.ownerId).filter(l => !leadTemProximoPasso(l));
-    if (semPasso.length > 0) {
-      const exemplos = semPasso.slice(0, 2).map(l => l.name).join(', ');
-      candidatos.push({
-        ordem: 95 + semPasso.length,
-        texto: `${semPasso.length} negócio${semPasso.length > 1 ? 's' : ''} seu${semPasso.length > 1 ? 's' : ''} sem próximo passo datado (${exemplos}${semPasso.length > 2 ? ` e mais ${semPasso.length - 2}` : ''}). Sem tarefa futura no HubSpot, o próximo toque depende de você lembrar.`
-      });
-    }
-  } catch (e) { /* sem carga de funil ainda: a dica simplesmente não aparece */ }
-
-  // 4) Ritmo da meta do mês vs. dias úteis já passados
-  if (r.metaMensal > 0) {
-    const diasUteisNoMes = 22; // aproximação padrão de dias úteis/mês, mesma usada no ritmo esperado
-    const diaDoMes = new Date().getDate();
-    const pctMesDecorrido = Math.min(1, diaDoMes / 30);
-    const ritmoEsperado = Math.round(r.metaMensal * pctMesDecorrido);
-    const fechados = r.fechadosNoMes || 0;
-    if (fechados < ritmoEsperado - 1) {
-      candidatos.push({
-        ordem: 80 + (ritmoEsperado - fechados),
-        texto: `No ritmo atual do mês você fecharia ${fechados} — a meta pede algo perto de ${ritmoEsperado} até agora. Foco em quem já está em Negociação/Ag. Pagamento pra recuperar.`
-      });
-    }
-  }
-
-  if (candidatos.length === 0) return '';
-  candidatos.sort((a, b) => b.ordem - a.ordem);
-  const top = candidatos.slice(0, HOJE_ACOES_VISIVEIS);
-
-  return `
-    <!-- FECHADO POR PADRÃO (29/08/26). São 277px de leitura no fim de uma aba que o
-         Julyan chamou de "muita informação", e é conteúdo de ler-uma-vez: sai do funil
-         de hoje, não muda durante o expediente e não pede nenhuma ação. O título já diz
-         quantas são, então fechado ele continua avisando que existe. -->
-    <details class="chart-card" style="margin-bottom:18px;border-left:3px solid var(--amber);">
-      <summary style="cursor:pointer;display:flex;align-items:center;gap:6px;min-height:24px;">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d='M9 18h6M10 21h4M12 2a6 6 0 016 6c0 3-2 4.5-2 7H8c0-2.5-2-4-2-7a6 6 0 016-6z'/></svg>
-        <b style="font-family:var(--font-display);font-size:13px;">Dicas pro seu dia</b>
-        <span style="font-size:11px;color:var(--muted2);">${top.length} ${top.length === 1 ? 'leitura' : 'leituras'} do seu funil de hoje</span>
-      </summary>
-      <div class="chart-subtitle" style="margin:11px 0 10px;">As boas práticas da sua análise semanal ficam em Meu desenvolvimento.</div>
-      <ul class="practice-list" style="margin:0;">
-        ${top.map(c => `<li>${c.texto}</li>`).join('')}
-      </ul>
-    </details>
-  `;
-}
 
 async function renderMeuPainel() {
   const el = document.getElementById('meuPainelContent');
@@ -14049,19 +13833,11 @@ async function renderMeuPainel() {
      o carregador do histórico. Quem faz esse trabalho agora é o card "Seu 1:1" da aba
      Desenvolvimento, que já tinha a mesma lista ligada na mesma savePdiState. */
 
-  wireRoteiroChecks(el);
 
   // Julyan (08/08): "Onde você vai agir" (agenda de hoje + contas-alvo + mapa da
   // microrrota) saiu da Hoje e virou parte da aba Rota & Agenda — chamado agora em
   // renderAgenda(), não aqui. Hoje ficou só com a triagem do dia (ações/quentes/ontem).
 
-  const btnIrDaily = document.getElementById('meuPainelIrDaily');
-  if (btnIrDaily) {
-    btnIrDaily.addEventListener('click', () => {
-      activateTab('viewDaily');
-      if (typeof renderDaily === 'function') renderDaily();
-    });
-  }
 
   // REMOVIDO (27/08/26) — o handler do antigo #meuPainelIrPlano ("Fechar meu plano do
   // dia"). O botão que rolava até o card de promessa não existe mais; quem manda no CTA
@@ -14114,15 +13890,6 @@ const STAGE_LABELS = {
    para o botão de mover etapa do card do kanban, onde a coluna tem 240px e "Conversa com
    Decisor" não cabe ao lado de uma seta. O nome inteiro vai no title, então nada se perde
    — e derivar em vez de redigitar garante que renomear a etapa renomeie o botão. */
-const STAGE_LABEL_CURTO = {
-  "1395880470": "Decisor",        // Conversa com Decisor
-  "1395880471": "Demo",           // Demo/Proposta
-  "1395880473": "Pagamento",      // Ag. Pagamento
-  "1396006163": "Onboarding"      // Enviado Onboarding
-};
-function etapaCurta(stageId) {
-  return STAGE_LABEL_CURTO[stageId] || STAGE_LABELS[stageId] || '';
-}
 // Paleta de cores por etapa — exata dos designs/*.html (item 2 do prompt de correção).
 const STAGE_COLORS = {
   "1395880469": "#E8A33D", "1396005401": "#4A7FC7", "1395880470": "#7C6FE0",
@@ -14473,20 +14240,6 @@ let mfFocoExpandido = false;
    passou do prazo da etapa, ter próximo passo marcado não o põe em dia), depois "hoje",
    depois "em dia". Sem próximo passo não é nenhum dos três — é o que a visão
    "Sem passo" já mostra, e contar em dois lugares diferentes seria pedir divergência. */
-/* A PERGUNTA DE CADA ETAPA — a prancha pede que o card em foco diga o que se pergunta
-   ali, e não só quantos negócios existem. As frases são as do funil comercial que o
-   playbook já usa; nenhuma é inventada aqui. */
-function perguntaDaEtapa(sid) {
-  const p = {
-    '1395880469': 'esta conta merece uma visita, e quando?',
-    '1396005401': 'quem decide, e quando ele te recebe?',
-    '1395880470': 'qual é a dor que justifica a proposta?',
-    '1395880471': 'a proposta está na mão de quem assina?',
-    '1395880472': 'o que falta para ele dizer sim hoje?',
-    '1395880473': 'o pagamento tem data e responsável?'
-  };
-  return p[String(sid)] || 'o que precisa acontecer para este negócio andar?';
-}
 /* BLOCO 53 (14/08/26) — Meu Funil virou mesa de planejamento do executivo:
    hero compacto → pipeline com filtros e foco em mural → plano de ataque expansível →
    disciplina comercial recolhida. A repetição Quentes/Travados foi removida.
@@ -14534,40 +14287,12 @@ function perguntaDaEtapa(sid) {
    continuam na ficha do lead, que é onde se decide o detalhe.
    ============================================================================ */
 
-function wireFilaResumo(rootEl) {
-  // O CTA primário abre a ficha no campo de próximo passo — mesmo destino do CTA da
-  // fila completa, então o gesto é o mesmo nas duas telas.
-  rootEl.querySelectorAll('[data-fila-resumo-cta]').forEach(btn => {
-    btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const lead = buscarLeadFunilPorId(btn.dataset.filaResumoCta);
-      if (lead) abrirFichaLeadFunilDrawer(lead, () => renderMeuFunil(), 'passo');
-    });
-  });
-  rootEl.querySelectorAll('[data-ir-aba]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (typeof activateTab === 'function') activateTab('viewAgenda');
-    });
-  });
-}
 /* `soDiagnostico` entrou em 31/08/26 com o card "Etapa em foco" da v3. Lá embaixo do
    diagnóstico já vem a lista dos 5 negócios da etapa — e os 3 "candidatos" deste bloco
    SÃO negócios daquela mesma etapa. Mostrar os dois era a mesma lista duas vezes, uma
    com 3 itens e outra com 5, o que faz o executivo perguntar qual das duas é a certa.
    Sem argumento, comportamento igual ao de antes. */
 
-function wireDestravarFunil(rootEl) {
-  rootEl.querySelectorAll('[data-destrava-lead]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.destravaLead;
-      const lead = buscarLeadFunilPorId(id);
-      // foco="passo" abre a ficha já no campo de próximo passo — e, quando o negócio
-      // está sem qualificação, é lá que o bloco obrigatório aparece. Um clique do
-      // diagnóstico até o gesto.
-      if (lead) abrirFichaLeadFunilDrawer(lead, () => renderMeuFunil(), 'passo');
-    });
-  });
-}
 /* ══════════════════════════════════════════════════════════════════════════════════════
    MEU FUNIL v2 — A ESTEIRA DO DINHEIRO (02/09/26)
 
@@ -14639,7 +14364,6 @@ const FN2_ETAPA_PERDIDO = '1396006164';
    de nada. Sem esta separação a barra proporcional passaria a ter um segmento de saída
    competindo com os de venda pelo mesmo espaço. */
 const FN2_ETAPAS_ABERTAS = FN2_ETAPAS.filter(e => !e.saiu);
-const FN2_ETAPA_PAGAMENTO = '1395880473';
 
 /* QUEM PODE IR PARA ONDE — espelho exato de validarMovimentoEtapa() no servidor
    (lib/acoes-negocio/mudar-etapa-negocio.js). Existe aqui para o arrasto RECUSAR ANTES de
@@ -15270,14 +14994,23 @@ let fn3Registro = null;       /* { lead, para, campos, toggles } do registro rá
    qualquer uma para trás; Perdido e Reciclagem de qualquer lugar. Consultado ANTES de
    abrir formulário, porque destino que o servidor nega é clique morto com formulário em
    cima. Se os dois discordarem, o servidor ganha — e é ele que protege. */
-function fn3PodeMover(de, para) {
-  return fn2PodeMover(de, para);
-}
+/* ══ ESTA FUNCAO NAO E CHAMADA, E FICA — DECISAO DE 03/09/26 ═══════════════════════════
+   Ela apareceu na varredura de codigo morto (declarada, zero chamadas) e eu a removi. O
+   build passou e testar-kanban-etapas reprovou:
 
-/* ── O ESTADO DE UM CARD ──────────────────────────────────────────────────────────────
-   Reaproveita fn2Estado (a régua, o diagnóstico e o CTA por etapa são os mesmos e foram
-   testados), e acrescenta o que a v3 pede: a classe de cor do CTA, o contexto de terceira
-   linha e os dois estados novos (Pagamento e Onboarding). */
+     ✗ template: o card de Onboarding e espelho — nenhum campo editavel
+
+   Aquele teste procura a FRASE "esta coluna nao edita nada", que mora aqui dentro. Ou
+   seja: a assercao de uma regra comercial estava sendo satisfeita por texto dentro de
+   codigo que ninguem executa — falso verde, e nao meu.
+
+   Devolvi em vez de ajustar o teste. Enfraquecer uma assercao de regra comercial como
+   efeito colateral de uma limpeza seria trocar codigo morto por cobertura morta, e a
+   segunda e mais caro: ninguem descobre pelo build.
+
+   O que ficou PENDENTE, e e do Julyan decidir: ou esta coluna volta a ser renderizada por
+   aqui, ou o teste passa a conferir a regra onde a coluna de Onboarding e desenhada de
+   verdade. As duas resolvem; nenhuma das duas e limpeza. */
 function fn3Estado(lead, stageId) {
   const base = fn2Estado(lead);
 
@@ -15321,6 +15054,11 @@ function fn3Estado(lead, stageId) {
     ctx: fn3Contexto(lead)
   };
 }
+
+function fn3PodeMover(de, para) {
+  return fn2PodeMover(de, para);
+}
+
 
 /* A TERCEIRA LINHA: dor, origem e R$. É o que faz o card ser reconhecível sem abrir a
    ficha — e vem do CRM, então aparece só o que existe. */
@@ -16082,10 +15820,6 @@ function fn2Ligar(el, r) {
   const mais = el.querySelector('#fn2GavetaMais');
   if (mais) mais.addEventListener('click', () => { fn2GavetaTudo = true; redesenhar(); });
 
-  const irPlan = el.querySelector('#fn2IrPlanejamento');
-  if (irPlan) irPlan.addEventListener('click', () => {
-    if (typeof agendaIrParaPlanejamento === 'function') agendaIrParaPlanejamento();
-  });
 
   /* ── MOVER DE ETAPA: o botão e o arrasto caem no MESMO fluxo ───────────────────────
      abrirEscolhaDeEtapa / abrirPassagemDeEtapa são de 14/08 e já fazem o que precisa ser
@@ -16191,62 +15925,6 @@ async function renderMeuFunil() {
 // Cada linha do "Padrão de trabalho" com sua régua e o corte de status. Separado em
 // função pra poder repintar sozinho quando a carteira chega (sem redesenhar a tela).
 // Cortes na constante no topo, como o handoff pede — nada espalhado no template.
-const PADRAO_TRABALHO_CORTES = { semanaOk: 3, semanaAviso: 1 };
-function padraoTrabalhoLinhasHTML(r, extra) {
-  const linhas = [];
-  const semPasso = (() => {
-    const contextoPorId = new Map([...(DATA.temperatura?.quentes || []), ...(r.quentes || [])].map(l => [String(l.id), l]));
-    const ETAPAS_FECHAMENTO = ['1395880471', '1395880472', '1395880473'];
-    return Object.entries(DATA.funilLeads || {}).flatMap(([sid, leads]) =>
-      (leads || []).filter(l => String(l.ownerId) === String(r.ownerId) && ETAPAS_FECHAMENTO.includes(sid))
-        .map(l => { const c = contextoPorId.get(String(l.id)) || {}; return l.proximaAtividade || c.proximaAtividade || c.proximaReuniao; })
-    ).filter(x => !x).length;
-  })();
-  linhas.push({
-    marca: semPasso === 0 ? 'ok' : 'bad', titulo: 'Todo quente com próximo passo no CRM',
-    sub: 'Demo/Proposta e Negociação sempre com data marcada',
-    val: semPasso === 0 ? 'em dia' : `${semPasso} sem data`, cor: semPasso === 0 ? 'var(--green)' : 'var(--red-dk)'
-  });
-  const travCount = (r.travados || []).length;
-  linhas.push({
-    marca: travCount === 0 ? 'ok' : (travCount <= 2 ? 'warn' : 'bad'), titulo: 'Nada parado além do SLA da etapa',
-    sub: 'avançar ou perder — não deixar envelhecer',
-    val: `${travCount} de ${r.open || 0}`, cor: travCount === 0 ? 'var(--green)' : 'var(--amber-ink)'
-  });
-  // "Daily preenchida até 9h" — usa visitasInformadasDetalhe, que já existe e é a mesma
-  // função usada no banner do Hoje e no card do gestor. Vem em % (0–100), não fração.
-  const det = (typeof visitasInformadasDetalhe === 'function') ? visitasInformadasDetalhe(r.ownerId) : { aderencia: null, real: 0, prom: 0 };
-  linhas.push({
-    marca: det.aderencia == null ? 'warn' : (det.aderencia >= 90 ? 'ok' : (det.aderencia >= 60 ? 'warn' : 'bad')),
-    titulo: 'Daily preenchida até 9h', sub: 'aderência medida nos dias úteis desta semana',
-    val: det.aderencia == null ? 'sem daily essa semana' : (det.aderencia >= 90 ? 'em dia' : `${det.aderencia}% (${det.real}/${det.prom})`),
-    cor: det.aderencia == null ? 'var(--muted2)' : (det.aderencia >= 90 ? 'var(--green)' : 'var(--amber-ink)')
-  });
-  if (extra.semanaCount == null) {
-    linhas.push({ marca: 'warn', titulo: 'Ao menos 3 contas novas por semana', sub: 'entrada nova sustenta o mês que vem', val: 'carregando…', cor: 'var(--muted2)' });
-  } else {
-    const n = extra.semanaCount;
-    linhas.push({
-      marca: n >= PADRAO_TRABALHO_CORTES.semanaOk ? 'ok' : (n >= PADRAO_TRABALHO_CORTES.semanaAviso ? 'warn' : 'bad'),
-      titulo: 'Ao menos 3 contas novas por semana', sub: 'entrada nova sustenta o mês que vem',
-      val: `${n} esta semana`, cor: n >= PADRAO_TRABALHO_CORTES.semanaOk ? 'var(--green)' : (n >= PADRAO_TRABALHO_CORTES.semanaAviso ? 'var(--amber-ink)' : 'var(--red-dk)')
-    });
-  }
-  if (extra.planoAmanha == null) {
-    linhas.push({ marca: 'warn', titulo: 'Rota montada na véspera', sub: 'plano de amanhã com paradas', val: 'carregando…', cor: 'var(--muted2)' });
-  } else {
-    linhas.push({
-      marca: extra.planoAmanha ? 'ok' : 'warn', titulo: 'Rota montada na véspera', sub: 'plano de amanhã com paradas',
-      val: extra.planoAmanha ? 'pronta' : 'pendente', cor: extra.planoAmanha ? 'var(--green)' : 'var(--amber-ink)'
-    });
-  }
-  const marcaSimbolo = {
-    ok: '<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 8 3 3 7-7"/></svg>',
-    warn: '<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2.5 14 13H2L8 2.5Z"/><path d="M8 6v3.2M8 11.5h.01"/></svg>',
-    bad: '<svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 11.5h.01"/></svg>'
-  };
-  return linhas.map(l => `<div class="pb-row"><span class="pb-mark pb-${l.marca}">${marcaSimbolo[l.marca]}</span><span class="pb-txt"><b>${esc(l.titulo)}</b><span>${esc(l.sub)}</span></span><span class="pb-val" style="color:${l.cor};">${esc(l.val)}</span></div>`).join('');
-}
 
 // BLOCO 25 — chips de atalho do território: "onde atuei ontem" e até 3 praças da
 // carteira dele, ordenadas por (2×travados + contas-alvo). Assíncrono e depois do
@@ -16313,142 +15991,6 @@ async function montarChipsTerritorio(r, hoje) {
 
 // "Faça isso hoje": até 3 cards de ação. Funil zerado não inventa card; cada item abre
 // a ficha do Cockpit e as listas completas expandem sem tirar o executivo do contexto.
-function montarAcoesMeuFunil(r, dados) {
-  const slot = document.getElementById('mfAcoesSlot');
-  if (!slot) return;
-  const cards = [];
-
-  if (dados.cardTravados && dados.cardTravados.length) {
-    const todos = dados.cardTravados;
-    cards.push({
-      tone: 'red', tag: 'Urgente', qtd: `${todos.length} travados`,
-      titulo: 'Destravar quem passou de 2× o prazo da etapa',
-      why: 'São negócios que já foram trabalhados e pararam. Avançar ou marcar como perdido — os dois liberam o funil.',
-      itens: todos.map(l => ({ tipo: 'lead', id: l.id, nome: l.name, meta: STAGE_LABELS[l.stageId] || '', flag: `+${Math.max(0, (l.dias || 0) - ((DATA.stageMeta && DATA.stageMeta.slaDays && DATA.stageMeta.slaDays[l.stageId]) || l.dias || 0))}d`, raw: l })),
-      // BLOCO 51 — "o crm agora é o cockpit, nao quero esses botoes de abrir no crm"
-      // (Julyan). O CTA abre a FICHA do primeiro travado aqui dentro — destravar é
-      // mover de etapa ou marcar o próximo passo, e os dois vivem na ficha.
-      cta: { texto: 'Abrir o mais urgente', leadId: todos[0].id },
-      expansivel: todos.length > 3, sec: todos.length > 3 ? `Ver todos os ${todos.length} no card` : null
-    });
-  }
-  if (dados.cardSemPasso && dados.cardSemPasso.length) {
-    const todos = dados.cardSemPasso;
-    cards.push({
-      tone: 'amber', tag: 'Hoje', qtd: `${dados.cardSemPasso.length} sem data`,
-      titulo: 'Marcar próximo passo nos quentes sem agenda',
-      why: 'Negócio em Demo/Proposta, Negociação ou Ag. Pagamento sem data marcada esfria rápido. Uma tarefa resolve.',
-      itens: todos.map(l => ({ tipo: 'lead', id: l.id, nome: l.name, meta: STAGE_LABELS[l.stageId] || '', flag: l.dias != null ? `${l.dias}d` : '', raw: l })),
-      // BLOCO 51 — o botão dizia "Agendar" mas mandava pro HubSpot. Agora abre a
-      // ficha do primeiro com o cursor já no campo de próximo passo (foco='passo');
-      // salvou um, a ficha volta pra lista e ele segue pro próximo. "ver na agenda"
-      // continua levando pra Agenda — o Julyan gosta desse caminho.
-      cta: { texto: `Agendar o primeiro dos ${dados.cardSemPasso.length}`, leadId: todos[0].id, foco: 'passo' },
-      expansivel: todos.length > 3, sec: todos.length > 3 ? `Ver todos os ${todos.length} no card` : 'ver na agenda', secTab: todos.length > 3 ? null : 'viewAgenda'
-    });
-  }
-  if (dados.contasAlvo && dados.contasAlvo.length) {
-    const todas = dados.contasAlvo;
-    const meta = r.metaMensal || 10, fechados = r.fechadosNoMes || 0;
-    cards.push({
-      tone: 'green', tag: 'Esta semana', qtd: `${dados.contasAlvo.length} na carteira`,
-      titulo: `Abrir ${Math.min(3, dados.contasAlvo.length)} contas-alvo na praça`,
-      why: `Você fecha ${fechados} de ${meta} da meta. Sem conta nova agora, a virada do mês fica sem lastro.`,
-      itens: todas.map(c => ({ tipo: 'alvo', nome: c.nome, meta: c.bairro || c.cidade || '', flag: c.avaliacoes != null ? `${Number(c.avaliacoes).toLocaleString('pt-BR')} avaliações` : '', raw: c })),
-      cta: { texto: 'Abrir conta prioritária', alvoIndex: 0 },
-      expansivel: todas.length > 3, sec: todas.length > 3 ? `Ver as ${todas.length} no card` : null
-    });
-  }
-
-  /* O rótulo do summary conta o que tem dentro — ver a nota no markup do summary. */
-  const resumoEl = document.getElementById('mfAcoesResumo');
-  if (!cards.length) {
-    if (resumoEl) resumoEl.textContent = 'nada pendente';
-    slot.innerHTML = `<div style="background:var(--green-soft);border:1px solid #CFE6DA;border-radius:var(--r-lg);padding:16px 19px;font-size:12px;color:var(--green);font-weight:600;">
-      ✓ Funil em dia — nada acima do SLA e todo quente com próximo passo.
-    </div>`;
-    return;
-  }
-  if (resumoEl) resumoEl.textContent = cards.length + (cards.length === 1 ? ' frente: ' : ' frentes: ') + cards.map(c => c.qtd).join(' · ');
-  const TONES = { red: ['var(--red)', 'var(--red-dk)', 'var(--red-soft)'], amber: ['var(--amber)', 'var(--amber-ink)', 'var(--amber-soft)'], green: ['var(--green)', 'var(--green)', 'var(--green-soft)'] };
-  slot.innerHTML = `<div class="mf-actions-grid">` + cards.map((c, ci) => {
-    const [tone, toneInk, toneSoft] = TONES[c.tone];
-    return `<article class="acao" data-expanded="false" style="--tone:${tone};--tone-ink:${toneInk};--tone-soft:${toneSoft};">
-      <div class="acao-top"><span class="acao-tag">${esc(c.tag)}</span><span class="acao-qtd">${esc(c.qtd)}</span></div>
-      <h3>${esc(c.titulo)}</h3>
-      <p class="acao-why">${esc(c.why)}</p>
-      <div class="acao-list">
-        <!-- BLOCO 50 — "todo lead é clicável" (handoff §1). data-cardidx/itemidx aponta
-             de volta pro objeto "raw" guardado em "cards", então o clique abre a MESMA
-             ficha rica (com propriedades editáveis) que o kanban e a lista abrem —
-             nenhuma cópia parcial de lead reconstruída aqui. -->
-        ${c.itens.map((it, ii) => `<div class="acao-item" data-cardidx="${ci}" data-itemidx="${ii}" data-extra="${ii >= 3}"><b>${esc(it.nome || '')}</b><span class="meta">${esc(it.meta || '')}</span>${it.flag ? `<span class="flag">${esc(it.flag)}</span>` : ''}${it.tipo === 'lead' ? `<button type="button" class="acao-agendar" data-agcardidx="${ci}" data-agitemidx="${ii}" title="Agendar próximo passo">agendar</button>` : ''}<span class="acao-go" aria-hidden="true"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h9M9 4.5 12.5 8 9 11.5"/></svg></span></div>`).join('')}
-      </div>
-      <div class="acao-foot">
-        ${c.cta.leadId ? `<button class="acao-cta" data-acaoctalead="${esc(String(c.cta.leadId))}" data-acaoctafoco="${esc(c.cta.foco || '')}">${esc(c.cta.texto)}</button>` : c.cta.alvoIndex != null ? `<button class="acao-cta" data-acaoctaalvo="${ci}:${c.cta.alvoIndex}">${esc(c.cta.texto)}</button>` : `<button class="acao-cta" data-acaocta="${esc(c.cta.tab || '')}">${esc(c.cta.texto)}</button>`}
-        ${c.sec ? (c.expansivel ? `<button type="button" class="acao-expandir" data-acaoexpandir="${ci}" data-label-fechado="${esc(c.sec)}"><span>${esc(c.sec)}</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m4 6 4 4 4-4"/></svg></button>` : `<span class="acao-sec" data-acaosec="${esc(c.secTab || '')}">${esc(c.sec)}</span>`) : ''}
-      </div>
-    </article>`;
-  }).join('') + '</div>';
-
-  // BLOCO 52 — a lista completa abre dentro do próprio card. O executivo preserva o
-  // contexto e pode clicar em qualquer item sem ser jogado para o fim da página.
-  slot.querySelectorAll('[data-acaoexpandir]').forEach(btn => btn.addEventListener('click', () => {
-    const artigo = btn.closest('.acao');
-    if (!artigo) return;
-    const aberto = artigo.dataset.expanded !== 'true';
-    artigo.dataset.expanded = String(aberto);
-    const label = btn.querySelector('span');
-    if (label) label.textContent = aberto ? 'Mostrar só as prioridades' : btn.dataset.labelFechado;
-  }));
-  slot.querySelectorAll('[data-acaoctalead]').forEach(btn => btn.addEventListener('click', () => {
-    const completo = buscarLeadFunilPorId(btn.dataset.acaoctalead);
-    if (completo) abrirFichaLeadFunilDrawer(completo, () => renderMeuFunil(), btn.dataset.acaoctafoco || null);
-  }));
-  slot.querySelectorAll('[data-acaoctaalvo]').forEach(btn => btn.addEventListener('click', () => {
-    const [ci, ii] = String(btn.dataset.acaoctaalvo).split(':').map(Number);
-    const it = (cards[ci] || {}).itens[ii];
-    if (it && it.raw) abrirFichaProspeccaoDrawer({ ...it.raw, responsavel_owner_id: r.ownerId });
-  }));
-  slot.querySelectorAll('[data-acaocta]').forEach(btn => btn.addEventListener('click', () => {
-    const tab = btn.dataset.acaocta;
-    if (!tab) return;
-    activateTab(tab);
-    if (tab === 'viewAgenda' && typeof renderAgenda === 'function') renderAgenda();
-    if (tab === 'viewRotas' && typeof renderRotas === 'function') renderRotas();
-  }));
-  slot.querySelectorAll('[data-acaosec]').forEach(span => span.addEventListener('click', () => {
-    const tab = span.dataset.acaosec;
-    if (tab) { activateTab(tab); if (tab === 'viewLeadsPraca' && typeof renderProspeccaoNova === 'function') renderProspeccaoNova(true); }
-  }));
-
-  // BLOCO 50 (14/08/26) — clique no item abre a ficha. Lead (travado/sem passo) abre a
-  // ficha rica do funil; conta-alvo abre a ficha de prospecção com as duas ações grandes
-  // (criar negócio em Prospecção / levar pra rota) — mesma ficha que a aba Prospecção usa.
-  slot.querySelectorAll('.acao-item[data-cardidx]').forEach(item => {
-    item.addEventListener('click', () => {
-      const it = (cards[Number(item.dataset.cardidx)] || {}).itens[Number(item.dataset.itemidx)];
-      if (!it || !it.raw) return;
-      if (it.tipo === 'lead') {
-        const completo = buscarLeadFunilPorId(it.raw.id) || it.raw;
-        abrirFichaLeadFunilDrawer(completo, () => renderMeuFunil());
-      } else if (it.tipo === 'alvo') {
-        abrirFichaProspeccaoDrawer({ ...it.raw, responsavel_owner_id: r.ownerId });
-      }
-    });
-  });
-  // BLOCO 51 — atalho "agendar" por lead nos itens: abre a ficha já com o cursor no
-  // próximo passo, com os tipos Follow-up/Visita/Reunião/Demo prontos pra marcar.
-  slot.querySelectorAll('.acao-agendar').forEach(btn => {
-    btn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const it = (cards[Number(btn.dataset.agcardidx)] || {}).itens[Number(btn.dataset.agitemidx)];
-      if (!it || !it.raw) return;
-      const completo = buscarLeadFunilPorId(it.raw.id) || it.raw;
-      abrirFichaLeadFunilDrawer(completo, () => renderMeuFunil(), 'passo');
-    });
-  });
-}
 document.getElementById('tabBtnMeuFunil').addEventListener('click', () => { activateTab('viewMeuFunil'); renderMeuFunil(); });
 
 // ===================== PRECIFICAÇÃO E PROPOSTAS =====================
@@ -18187,9 +17729,6 @@ async function playbookMarcarProgresso(slug, tipo, concluido) {
   }
 }
 
-function playbookConcluidos() {
-  return (playbookProgressoCache && playbookProgressoCache.missao) || new Set();
-}
 
 function playbookLidos() {
   return (playbookProgressoCache && playbookProgressoCache.leitura) || new Set();
@@ -18250,16 +17789,6 @@ const PBV6_MOMENTOS = [
 ];
 let playbookMomentoAtual = null;
 
-/* Quantas FRASES PRONTAS a página tem — e o número tem de ser o mesmo que a transformação
-   produz, senão a lateral anuncia 11 e o texto entrega 12. A regra é a dela: a citação que
-   vem logo depois do h1 é manifesto (não é frase de campo); as outras, sim. */
-function pbv6TemManifesto(pagina) {
-  /* a mesma regra da transformação: citação antes do primeiro h2 é manifesto, não frase */
-  const html = String((pagina && pagina.html) || '');
-  const iH2 = html.search(/<h2[ >]/);
-  const iCit = html.search(/<blockquote/);
-  return iCit >= 0 && (iH2 < 0 || iCit < iH2);
-}
 function pbv6Num(pagina) {
   const pb = playbookDados();
   const i = pb ? pb.paginas.findIndex(p => p.id === pagina.id) : -1;
@@ -19173,14 +18702,6 @@ function pb7PersonalizarHTML(html) {
   return String(html || '').replace(/\[Seu nome\]/gi, esc(primeiroNome));
 }
 
-/* "a mais copiada do time" só pode ser dito de UMA página — o superlativo aplicado a três
-   linhas ao mesmo tempo é ruído com cara de destaque. */
-function pb7EhMaisCopiada(id) {
-  if (!pb7CopiasCache || !pb7CopiasCache.size) return false;
-  let topo = null;
-  pb7CopiasCache.forEach((v, k) => { if (!topo || v.copias > topo.v.copias) topo = { k, v }; });
-  return !!topo && topo.k === id && topo.v.copias > 1;
-}
 
 /* ── LEVE PRA RUA: as 3 ações da própria página, movidas para o trilho ─────────────────
    Achado ao ler as 30: TODAS terminam com uma seção "O que fazer agora" e exatamente três
@@ -19855,13 +19376,6 @@ async function abrirPaginaPlaybook(id, ancora) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function abrirInicioPlaybook() {
-  playbookTelaAtual = 'inicio';
-  playbookBuscaAtual = '';
-  playbookCategoriaAtual = 'Todos';
-  renderPlaybook();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
 
 async function renderPlaybook() {
   const slot = document.getElementById('playbookContent');
@@ -20982,14 +20496,6 @@ const AGENDA_EXCLUIR = new Set([
 const AGENDA_META = { visitasDia: 6, reunioesDia: 2 };
 
 const AGENDA_PRIME = [[10, 0, 11, 30], [15, 0, 17, 0]]; // janelas nobres, hora de Brasília
-const AGENDA_HORA_INI = 8, AGENDA_HORA_FIM = 21;        // faixa da grade horária
-
-const AGENDA_TIPOS = {
-  reuniao:   { cor: 'var(--green)',  rotulo: 'Reunião',    conta: 'reuniao' },
-  follow_up: { cor: 'var(--amber)', rotulo: 'Follow-up',  conta: 'visita'  },
-  rota:      { cor: 'var(--blue)',   rotulo: 'Rota / PAP', conta: 'visita'  },
-  interno:   { cor: 'var(--muted2)', rotulo: 'Interno',    conta: null      }
-};
 
 /* "ESTE DIA TEM COMPROMISSO?" — TRES LUGARES RESPONDIAM ERRADO (02/09/26).
    A daily do time (tipo interno, 09:00, todo dia) entra na agenda como qualquer outro
@@ -21547,25 +21053,6 @@ function agendaTime() {
     .filter(r => !eu || String(r.ownerId) === eu);
 }
 
-/* ---------- métricas de gamificação ---------- */
-function agendaPlacarRep(oid, naSemana, todos) {
-  const meus = naSemana.filter(e => e.ownerId === oid);
-  const visitas = meus.filter(e => AGENDA_TIPOS[e.tipo].conta === 'visita').length;
-  const reunioes = meus.filter(e => AGENDA_TIPOS[e.tipo].conta === 'reuniao').length;
-  const pv = Math.min(1, visitas / (AGENDA_META.visitasDia * 5));
-  const pr = Math.min(1, reunioes / (AGENDA_META.reunioesDia * 5));
-  // Antecedência: média de dias entre criar e executar. Só existe com hs_createdate.
-  const comData = (todos || []).filter(e => e.ownerId === oid && e.criadoEm && e.inicio > e.criadoEm);
-  const antec = comData.length
-    ? comData.reduce((a, e) => a + (e.inicio - e.criadoEm) / 86400000, 0) / comData.length : null;
-  // Marcou na sexta para a semana seguinte = planejou antes de começar
-  const naSexta = comData.filter(e => e.criadoEm.getUTCDay() === 5 && (e.inicio - e.criadoEm) / 86400000 >= 2).length;
-  return {
-    visitas, reunioes, pct: Math.round((pv + pr) / 2 * 100),
-    pctVisitas: Math.round(pv * 100), pctReunioes: Math.round(pr * 100),
-    antec: antec, naSexta: naSexta, streak: agendaStreak(oid, todos)
-  };
-}
 // Dias úteis consecutivos, contando de trás pra frente, com pelo menos a meta de reuniões.
 function agendaStreak(oid, todos) {
   const porDia = {};
@@ -21593,16 +21080,6 @@ function agendaStreak(oid, todos) {
 // PWA e alimentar o Cockpit automaticamente, essa linha divisória pode mudar —
 // até lá, geolocalizacaoAtual() segue existindo porque outras partes do
 // planejamento (plano do dia, "ir para minha posição" no mapa) ainda usam.
-function geolocalizacaoAtual() {
-  return new Promise(resolve => {
-    if (!navigator.geolocation) { resolve(null); return; }
-    navigator.geolocation.getCurrentPosition(
-      pos => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => resolve(null), // sem permissão/sem sinal — segue sem coordenada, não trava o fluxo
-      { timeout: 6000 }
-    );
-  });
-}
 
 // A lateral da Agenda precisa carregar a própria munição. Antes ela lia
 // prospeccaoCache sem garantir que a tabela já tivesse sido buscada; abrir Agenda antes
@@ -22286,15 +21763,6 @@ function pl6Categoria(bruto) {
   return t.split(' ').map(p => p ? p.charAt(0).toLocaleUpperCase('pt-BR') + p.slice(1).toLocaleLowerCase('pt-BR') : p).join(' ');
 }
 
-/* O endereço sem repetir o bairro. Compara pela chave (sem acento, sem caixa), porque o
-   endereço vem "Praia da Costa" e o campo bairro vem "PRAIA DA COSTA" na mesma linha. */
-function pl6EnderecoLimpo(l) {
-  const end = String(l.endereco || '').trim();
-  const bai = String(l.bairro || '').trim();
-  if (!end) return bai || 'endereço não informado';
-  if (bai && pl5Chave(end).includes(pl5Chave(bai))) return end;
-  return [end, bai].filter(Boolean).join(' — ');
-}
 
 /* O bairro como se le: a base tem "TAQUARA" e "Taquara" na mesma coluna (coletas
    diferentes). A busca ja escolhe a grafia legivel do grupo; o card fazia o contrario e
@@ -23594,15 +23062,6 @@ function prosp2LigarEventos(universo, ownerId) {
   const novaContaBtn = document.getElementById('prosp2NovaConta');
   if (novaContaBtn) novaContaBtn.addEventListener('click', () => {
     if (typeof abrirNovaContaProspeccao === 'function') abrirNovaContaProspeccao(() => renderProspeccaoExecutivo());
-  });
-  // ---- filtro de fonte + ordenação ----
-  const fontesEl = document.getElementById('prosp2Fontes');
-  if (fontesEl) fontesEl.addEventListener('click', ev => {
-    const b = ev.target.closest('.prosp2-fonte');
-    if (!b) return;
-    prosp2Estado.fonte = b.dataset.f;
-    prosp2Estado.mostrar = PROSP2_LOTE;
-    renderProspeccaoExecutivo();
   });
   /* O CLIQUE DO EIXO enche a bandeja com as contas daquele dia. Não grava nada no
      HubSpot: quem grava é o "Enviar pra agenda da semana" da bandeja, que já existe e
@@ -25041,98 +24500,7 @@ function agendaMatrizTime(dias, naSemana, time, hojeK) {
   return h;
 }
 
-function agendaGradeTime(dias, vis, naSemana, doTime, time, hojeK, semNada, mostraSabado, temSabado) {
-  const nd = dias.length;
-  let h = '<div class="ag-grade" style="--ag-nd:' + nd + '"><div class="ag-row ag-row-head">' +
-    '<div class="ag-cel ag-quem" style="background:transparent"><div class="ag-quem-t"><span>Executivo</span></div></div>';
-  dias.forEach(function (d) {
-    const k = agendaChave(d), fds = d.getUTCDay() === 6;
-    const n = vis.filter(e => agendaChave(e.inicio) === k).length;
-    h += '<div class="ag-cel ag-dia" data-hoje="' + (k === hojeK ? 1 : 0) + '" data-fds="' + (fds ? 1 : 0) + '">' +
-      '<div class="dw">' + AGENDA_DIAS[d.getUTCDay() === 0 ? 5 : d.getUTCDay() - 1] + '</div>' +
-      '<div class="dn">' + agendaP2(d.getUTCDate()) + '</div>' +
-      '<div class="ds">' + (n ? n + (n === 1 ? ' bloco' : ' blocos') : '—') + '</div></div>';
-  });
-  h += '</div>';
 
-  // quem tem atividade primeiro; quem está zerado agrupa no fim, colapsado
-  const semIds = new Set((semNada || []).map(r => String(r.ownerId)));
-  const comAgenda = time.filter(r => !semIds.has(String(r.ownerId)))
-    .sort(function (a, b) {
-      const pa = agendaPlacarRep(String(a.ownerId), naSemana, doTime).pct;
-      const pb = agendaPlacarRep(String(b.ownerId), naSemana, doTime).pct;
-      return pb - pa || String(a.name).localeCompare(String(b.name));
-    });
-  const zerados = time.filter(r => semIds.has(String(r.ownerId)))
-    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
-
-  function linhaRep(r, min) {
-    const oid = String(r.ownerId), meus = vis.filter(e => e.ownerId === oid);
-    const p = agendaPlacarRep(oid, naSemana, doTime);
-    const cor = p.pct >= 90 ? 'var(--green)' : p.pct >= 40 ? 'var(--amber)' : 'var(--muted2)';
-    h += '<div class="ag-row' + (min ? ' ag-row-min' : '') + '"><div class="ag-cel ag-quem">' +
-      (typeof avatarHTML === 'function' ? avatarHTML(r.email || '', r.name, 30, !min) : '') +
-      '<div class="ag-quem-t"><b title="' + agendaEsc(r.name) + '">' + agendaEsc(r.name) + '</b><span>' +
-      p.visitas + '/' + (AGENDA_META.visitasDia * 5) + ' vis · ' +
-      p.reunioes + '/' + (AGENDA_META.reunioesDia * 5) + ' reu' +
-      (p.streak ? ' · 🔥' + p.streak : '') + '</span></div>' +
-      '<div class="ag-anel" title="Semana planejada: ' + p.pct + '%" ' +
-      'style="background:conic-gradient(' + cor + ' ' + p.pct + '%,var(--line) 0)">' +
-      '<u style="color:' + cor + '">' + p.pct + '</u></div></div>';
-    dias.forEach(function (d) {
-      const k = agendaChave(d), fds = d.getUTCDay() === 6, ehHoje = k === hojeK;
-      const doDia = meus.filter(e => agendaChave(e.inicio) === k).sort((a, b) => a.inicio - b.inicio);
-      h += '<div class="ag-cel" data-fds="' + (fds ? 1 : 0) + '" data-hoje="' + (ehHoje ? 1 : 0) + '">' +
-        (doDia.length ? doDia.map(function (e, ix) {
-            const ant = ix > 0 ? doDia[ix - 1] : null;
-            const troca = !!(ant && e.cidade && ant.cidade &&
-              agendaNorm(e.cidade) !== agendaNorm(ant.cidade));
-            return agendaChip(e, troca);
-          }).join('')
-          // gancho de agendar: a ação ainda não existe no cockpit; quando existir, ligar no data-agadd
-          : '<button class="ag-vazio" data-agadd data-owner="' + oid + '" data-dia="' + k + '"' +
-            (fds ? ' tabindex="-1"' : ' title="Agendar para ' + agendaEsc(r.name) + '"') + '>' +
-            '<i></i><em>+ agendar</em></button>') + '</div>';
-    });
-    h += '</div>';
-  }
-
-  comAgenda.forEach(function (r) { linhaRep(r, false); });
-  if (zerados.length) {
-    h += '<div class="ag-row ag-div"><div class="ag-cel" style="grid-column:1/-1">' +
-      agendaPlural(zerados.length, 'executivo') + ' sem agenda esta semana</div></div>';
-    zerados.forEach(function (r) { linhaRep(r, true); });
-  }
-
-  h += '<div class="ag-tot"><div class="ag-cel">Total do dia</div>';
-  dias.forEach(function (d) {
-    const k = agendaChave(d), t = vis.filter(e => agendaChave(e.inicio) === k);
-    const r = t.filter(e => AGENDA_TIPOS[e.tipo].conta === 'reuniao').length;
-    h += '<div class="ag-cel">' + (t.length
-      ? '<b>' + t.length + '</b>' + (r > 0 ? ' · ' + r + ' reu.' : '')
-      : '<span style="color:var(--muted2)">—</span>') + '</div>';
-  });
-  return h + '</div></div>';
-}
-
-function agendaChip(e, trocaCidade) {
-  const t = AGENDA_TIPOS[e.tipo];
-  // BLOCO 34 — sugestão do gestor ainda pendente ganha um rodapé próprio, que pisca à
-  // frente de "Quente"/bairro/tipo: é a pergunta que mais importa olhando a grade por
-  // cima (confirmado ou só sugerido?), então tem prioridade visual sobre o resto.
-  const sugestao = agendaSugestaoGestor(e.obs);
-  const rodape = sugestao ? ('💡 sugestão de ' + sugestao.gestorNome + ' · toque para decidir')
-    : e.quente ? ('Quente' + (e.etapa && e.etapa !== '—' ? ' · ' + e.etapa : ''))
-    : (e.bairro || e.cidade || t.rotulo);
-  return '<button class="ag-chip" data-agev="' + e.id + '" data-reag="' + (e.reag ? 1 : 0) + '"' +
-    (e.quente ? ' data-quente="1"' : '') + (sugestao ? ' data-sugestao-gestor="1"' : '') +
-    ' title="' + agendaEsc(agendaNomeDoLead(e.cliente) || e.cliente) + '" ' +
-    'style="--c:' + (sugestao ? 'var(--amber)' : t.cor) + '">' +
-    '<span class="ch">' + agendaHhmm(e.inicio) + (agendaEhPrime(e.inicio) ? '<em>●</em>' : '') + '</span>' +
-    '<span class="ct">' + agendaEsc(agendaNomeDoLead(e.cliente) || e.cliente) + '</span>' +
-    '<span class="cm">' + agendaEsc(rodape) + '</span>' +
-    (trocaCidade ? '<span class="cx">↗ outra cidade</span>' : '') + '</button>';
-}
 
 // BLOCO 41 (limpeza, 14/08/26) — agendaBuracos, agendaQuentesLinhas e agendaQuentesFora
 // removidas: nenhuma tinha chamador. A última já estava marcada no próprio código
@@ -25676,7 +25044,7 @@ document.addEventListener('click', function (ev) {
     agendaEstado.modo = 'hora';
     renderAgenda();
     setTimeout(() => {
-      const grade = document.getElementById('agGrade') || document.querySelector('.ag-grade');
+      const grade = document.getElementById('agGrade');
       if (grade) grade.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 60);
     return;
@@ -27718,28 +27086,6 @@ function gxMotivosOrdenados(mapa) {
 }
 
 /* ── A leitura do time ────────────────────────────────────────────────────── */
-/* Lista de negócios dentro de um acordeão. Serve motivo de perda e fila de reciclagem —
-   os dois falam de negócio que NÃO está numa etapa aberta, então openStageModal não
-   serve: não há etapa para abrir. */
-function gxListaDeNegociosHTML(rotulo, itens, totalReal, sufixo) {
-  if (!itens || !itens.length) {
-    return '<details class="gx-lista"><summary>' + esc(rotulo) + '</summary>' +
-      '<div class="gx-lista-nota">Os negócios deste grupo não vieram na última carga. A lista entra no próximo carregamento do HubSpot.</div></details>';
-  }
-  const linhas = itens.map(x => '<div class="gx-lista-linha">' +
-    '<b>' + esc(x.nome || 'Sem nome') + '</b>' +
-    '<span>' + (x.vendedor ? esc(String(x.vendedor).split(' ')[0]) : 'sem dono') +
-      (x.fechadoEm ? ' · ' + String(x.fechadoEm).split('-').reverse().join('/') : '') +
-      (x.dias != null ? ' · ' + x.dias + 'd parada' : '') +
-      (x.mrr ? ' · ' + prcMoeda(x.mrr) : '') + '</span>' +
-  '</div>').join('');
-  const sobra = (Number(totalReal) || 0) - itens.length;
-  const nota = sobra > 0
-    ? '<div class="gx-lista-nota">Mostrando ' + itens.length + ' de ' + totalReal + ' — os mais recentes. ' + (sufixo || '') + '</div>'
-    : (sufixo ? '<div class="gx-lista-nota">' + sufixo + '</div>' : '');
-  return '<details class="gx-lista"><summary>' + esc(rotulo) + '</summary>' +
-    '<div class="gx-lista-corpo">' + linhas + '</div>' + nota + '</details>';
-}
 
 function gxPorQuePerdemosHTML() {
   const mp = DATA.motivosPerda;
@@ -32089,17 +31435,6 @@ function manchaDeAtuacao(pontos) {
 
 // Círculo geodésico como polígono — o MapLibre não desenha círculo em km, só em pixel,
 // e um raio em pixel mudaria de tamanho a cada zoom (mentindo sobre a distância).
-function circuloGeoJSON(lat, lng, raioKm, lados) {
-  const n = lados || 64;
-  const coords = [];
-  const dLat = raioKm / 111;
-  const dLng = raioKm / (111 * Math.max(0.2, Math.cos(lat * Math.PI / 180)));
-  for (let i = 0; i <= n; i++) {
-    const t = (i / n) * 2 * Math.PI;
-    coords.push([lng + dLng * Math.cos(t), lat + dLat * Math.sin(t)]);
-  }
-  return { type: 'Feature', geometry: { type: 'Polygon', coordinates: [coords] }, properties: {} };
-}
 
 // BLOCO 45 (14/08/26) — "não precisamos mais ter esse mapa, já que a aba rota já vai
 // ser o próprio app lá [PWA/Expogo]" (Julyan). O mapa em si saiu; o CÁLCULO da mancha
@@ -32374,22 +31709,6 @@ function carregarSheetJs() {
 
 // Estilo reserva (raster) caso o vetorial do OpenFreeMap esteja fora do ar —
 // o mapa nunca fica em branco por causa de CDN.
-const PLANO_MAPA_ESTILO_RESERVA = {
-  version: 8,
-  sources: {
-    carto: {
-      type: 'raster',
-      tiles: [
-        'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        'https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
-        'https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
-      ],
-      tileSize: 256,
-      attribution: '&copy; OpenStreetMap &copy; CARTO'
-    }
-  },
-  layers: [{ id: 'carto', type: 'raster', source: 'carto' }]
-};
 
 async function carregarPlanoDoDia(ownerId, dataISO) {
   if (!DATA.supabase || !supa) return null;
@@ -33164,21 +32483,15 @@ async function montarPlanoDoDia(r) {
     chkSemFit.setAttribute('aria-pressed', String(planoMapaFiltro.mostrarSemFit));
     montarPlanoMapa(r, hoje, fechado);
   });
-  // BLOCO 21 — desenha a faixa da semana com os compromissos reais da agenda.
-  // Mesma fonte da aba Agenda (agendaNormalizar), pra não existirem duas verdades sobre
-  // quantas visitas ele tem na quinta.
-  (() => {
-    let eventosSemana = [];
-    if (typeof agendaNormalizar === 'function' && DATA.agenda) {
-      try {
-        eventosSemana = agendaNormalizar(DATA.agenda).filter(e =>
-          String(e.ownerId) === String(r.ownerId) && e.inicio &&
-          AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta);
-      } catch (e) { console.error('Faixa da semana:', e && e.message); }
-    }
-    try { renderFaixaSemana(r, eventosSemana); }
-    catch (e) { console.error('Não consegui montar a faixa da semana:', e && e.message); }
-  })();
+  /* ══ A FAIXA DA SEMANA SAIU DAQUI EM 03/09/26 ═══════════════════════════════════════
+     Este bloco montava eventosSemana e passava para renderFaixaSemana, que abria com
+     `if (!slot) return` procurando #planoSemanaFaixa — um slot que markup nenhum gera. A
+     funcao rodava a cada render e voltava calada; o bloco calculava a lista e a jogava
+     fora. Saiu a funcao (55 linhas) e saiu o calculo.
+
+     A informacao NAO se perdeu: a semana do executivo esta na Minha Daily, no bloco SUA
+     SEMANA, que le a mesma fonte (agendaNormalizar). Eram duas faixas para a mesma
+     pergunta, e a que ficou e a que aparece. */
 
   const selAval = slot.querySelector('#planoMapaAvalMin');
   if (typeof ligarBuscaLocal === 'function') ligarBuscaLocal();
@@ -33200,14 +32513,6 @@ async function montarPlanoDoDia(r) {
 
   const btnAdd = slot.querySelector('#planoMapaAddManual');
   if (btnAdd) btnAdd.addEventListener('click', () => abrirAdicionarManual(r, hoje, fechado));
-  // "Aba" de clientes ativos no mapa (pedido do Julyan, 10/08) — isola só os clientes
-  // Takeat já ativos, escondendo os leads novos até desligar de novo. Não mexe na
-  // seleção de ninguém, só no que aparece na tela.
-  const btnSoClientes = slot.querySelector('#planoMapaSoClientes');
-  if (btnSoClientes) btnSoClientes.addEventListener('click', () => {
-    planoMapaFiltro.soClientes = !planoMapaFiltro.soClientes;
-    montarPlanoMapa(r, hoje, fechado);
-  });
 
   montarPlanoMapa(r, hoje, fechado).catch(e => {
     console.error('Erro na lista de planejamento:', e);
@@ -33705,61 +33010,6 @@ function montarMicrorota(candidatas, origem) {
   return rota;
 }
 
-function renderFaixaSemana(r, eventosSemana) {
-  const slot = document.getElementById('planoSemanaFaixa');
-  if (!slot) return;
-  const hojeK = isoDate(new Date());
-  const diasInfo = diasUteisSemanaAtual();
-  const dias = diasInfo.map(d => d.iso);
-  const rot = diasInfo.map(d => d.rotulo.split(' ')[0]);
-
-  const porDia = {};
-  (eventosSemana || []).forEach(e => {
-    if (!e.inicio) return;
-    const k = agendaChave(e.inicio);
-    (porDia[k] = porDia[k] || []).push(e);
-  });
-  if (!planoDiaAlvo || dias.indexOf(planoDiaAlvo) < 0) {
-    // Abre no primeiro dia da semana que ainda dá pra preencher e está mais vazio —
-    // que é onde o planejamento dele rende mais.
-    const candidatos = dias.filter(d => d >= hojeK);
-    planoDiaAlvo = candidatos.sort((a, b) => (porDia[a] || []).length - (porDia[b] || []).length)[0] || hojeK;
-  }
-
-  slot.innerHTML =
-    '<div class="chart-card" style="margin-top:14px;padding:14px 16px;">' +
-      '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px;">' +
-        '<b style="font-size:13px;font-family:\'Archivo\',system-ui,sans-serif;">Sua semana</b>' +
-        '<span style="font-size:11px;color:var(--muted2);">clique no dia que você quer preencher — a lista e a microrota passam a montar pra ele</span>' +
-      '</div>' +
-      '<div class="plano-sem-grid">' +
-        dias.map((k, i) => {
-          const evs = porDia[k] || [];
-          const n = evs.length;
-          const passou = k < hojeK;
-          const ehHoje = k === hojeK;
-          const sel = k === planoDiaAlvo;
-          const vazio = n === 0;
-          return '<button type="button" class="plano-sem-dia' + (sel ? ' is-sel' : '') + (vazio && !passou ? ' is-vazio' : '') + '"' +
-            (passou ? ' disabled title="dia já passou"' : ' data-diaalvo="' + k + '"') + '>' +
-            '<span class="d">' + rot[i] + (ehHoje ? ' · hoje' : '') + '</span>' +
-            '<span class="n">' + agendaP2(new Date(k + 'T12:00:00').getDate()) + '</span>' +
-            '<span class="s">' + (passou ? (n ? n + ' feitas' : '—') : n === 0 ? 'livre' : n + (n === 1 ? ' visita' : ' visitas')) + '</span>' +
-            (!passou && n < 6 ? '<span class="f">' + (6 - n) + ' vagas</span>' : '') +
-          '</button>';
-        }).join('') +
-      '</div>' +
-      '<div id="planoMicroSlot" style="margin-top:12px;"></div>' +
-    '</div>';
-
-  slot.querySelectorAll('[data-diaalvo]').forEach(b => {
-    b.addEventListener('click', () => {
-      planoDiaAlvo = b.dataset.diaalvo;
-      renderFaixaSemana(r, eventosSemana);
-      if (planoMapaRenderAtual) montarPlanoMapa(planoMapaRenderAtual.r, planoMapaRenderAtual.hoje, planoMapaRenderAtual.planoFechado);
-    });
-  });
-}
 
 // BLOCO 45 (14/08/26) — criarPontoNoMapa/fecharPontoNovo/pontoNovoMarcador
 // removidos: eram o fluxo de "marcar um ponto novo tocando no mapa" (Bloco 22,
@@ -33963,10 +33213,6 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     box.innerHTML = `<div class="empty-state" style="padding-top:190px;">Nenhuma conta-alvo com coordenada atende ao volume de avaliações escolhido.</div>`;
     const countEl = document.getElementById('planoMapaRotaCount');
     if (countEl) countEl.textContent = '0 paradas';
-    const gameEl = document.getElementById('planoMapaGame');
-    if (gameEl) gameEl.innerHTML = `<div class="plano-map-progress-copy"><span>Nenhuma conta atende aos filtros atuais.</span><b>0/6 paradas</b></div><div class="plano-map-progress-track"><div class="plano-map-progress-bar" style="width:0%;"></div></div>`;
-    const rotaEl = document.getElementById('planoMapaAbrirRota');
-    if (rotaEl) { rotaEl.disabled = true; rotaEl.textContent = 'Escolha uma parada'; }
     const gerarEl = document.getElementById('planoGerarRota');
     if (gerarEl) { gerarEl.disabled = true; gerarEl.textContent = 'Gerar rota'; }
     if (msg) msg.innerHTML = `<span>${pipelineSemLocal.length ? `${pipelineSemLocal.length} negócio(s) quente(s) seguem visíveis na lista, mas precisam de localização.` : semCoord > 0 ? `${semCoord} conta(s)-alvo sem coordenada ficaram fora da lista.` : 'Ajuste os filtros para ver oportunidades.'}</span>`;
@@ -34725,7 +33971,6 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   const naRotaCount = naRotaTodas.length;
 
   // ---- Gamificação honesta: meta do playbook = 6 visitas qualificadas/dia ----
-  const gameEl = document.getElementById('planoMapaGame');
   if (gameEl) {
     const META_DIA = 6;
     const pct = Math.min(100, Math.round((naRotaCount / META_DIA) * 100));
@@ -40852,7 +40097,6 @@ function desenharConducao() {
     activateTab('viewCockpit');
     if (typeof openStageModal === 'function' && typeof abrirTodosTravados === 'function') {
       // O caminho canônico do funil de uma pessoa é o dossiê do Cockpit do gestor.
-      setTimeout(() => { const el = document.getElementById('repsList'); if (el && typeof smoothScrollTo === 'function') smoothScrollTo(el); }, 120);
     }
   });
   // Barra de progresso do ritual
@@ -43853,7 +43097,6 @@ async function renderDaily() {
     const alvo = document.querySelector(`.tab-btn[data-view="${destino}"]`);
     if (alvo) alvo.click();
   }));
-  wireRoteiroChecks(el);
   if (!souRepDaily) wireIndicadoresGestor(el);
   // Briefing do executivo: três botões de navegação, nenhum estado (27/08/26).
   if (souRepDaily) wireBriefingExecutivo(el);
@@ -44584,11 +43827,7 @@ async function renderBannerComunicados() {
     // publicar foi pro cabeçalho do drawer — se eu só apagasse daqui, o gestor perderia
     // a única forma de criar comunicado no sistema.
     el.innerHTML = '';
-    const antigo = document.getElementById('comunicadosInline');
-    if (antigo) antigo.remove();
   } else {
-    const antigoInline = document.getElementById('comunicadosInline');
-    if (antigoInline) antigoInline.remove();
     const c = naoLidos[0];
     const imgUrl = await urlAssinadaComunicado(c.imagem_caminho);
     el.innerHTML = `
