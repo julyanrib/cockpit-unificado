@@ -881,3 +881,82 @@ function checarAtoDoPlanoNaDaily() {
   return true;
 }
 if (!checarAtoDoPlanoNaDaily()) process.exit(1);
+
+/* == 13. A HORA DA TRAVA E O TEXTO NAO PODEM DIVERGIR (03/09/26) =====================
+   O Julyan mudou a trava da promessa de 9h30 para 13h. A regra vive em UMA constante,
+   PROMESSA_TRAVA_MINUTOS, mas a hora aparece escrita em 32 textos de TELA — e esses
+   textos sao o contrato que o executivo le: "trave até as 13h", "a promessa fechou às 13h
+   e não se mexe mais hoje".
+
+   Mudar a constante e esquecer os textos nao quebra nada e nao aparece em teste: a trava
+   funciona no horario novo e a tela promete o antigo. O executivo perde a janela
+   confiando no que leu, e o gestor cobra dele um prazo que a tela nunca disse. Custo alto,
+   defeito invisivel — o par exato que pede guarda.
+
+   POR QUE LITERAL E NAO INTERPOLACAO: os 32 vivem em contextos de aspas diferentes
+   (template literal, aspas simples, atributo). Reescrever os 32 a mao num arquivo de 45
+   mil linhas era o risco maior. Mesmo arranjo do ESCALA_BREAKPOINTS, pelo mesmo motivo:
+   quando o valor nao pode ser um token, a checagem e o que o mantem verdadeiro.
+
+   COMENTARIO NAO CONTA. Os comentarios deste arquivo contam a HISTORIA da mudanca, e a
+   historia diz 9h30 com razao. Mascarar comentario aqui nao e conveniencia: e a licao que
+   a guarda 10 me ensinou hoje, quando validou uma citacao dentro de um comentario e
+   reportou verde em cima do defeito que existia para pegar. */
+function checarHoraDaTrava() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+
+  const mDef = /const PROMESSA_TRAVA_MINUTOS = (\d+) \* 60(?:\s*\+\s*(\d+))?;/.exec(cru);
+  if (!mDef) {
+    console.error('HORA DA TRAVA: nao achei PROMESSA_TRAVA_MINUTOS - a guarda perdeu o alvo.');
+    return false;
+  }
+  const h = Number(mDef[1]);
+  const m = Number(mDef[2] || 0);
+  const esperado = m === 0 ? h + 'h' : h + 'h' + String(m).padStart(2, '0');
+
+  /* So texto de tela: comentario /* *\/ e <!-- --> saem. */
+  const semCom = cru
+    .replace(/\/\*[\s\S]*?\*\//g, x => x.replace(/[^\n]/g, ' '))
+    .replace(/<!--[\s\S]*?-->/g, x => x.replace(/[^\n]/g, ' '));
+
+  /* Uma hora "de trava" e uma hora que aparece a <=48 caracteres de uma palavra do ritual.
+     O raio evita acusar horario que nao e este — a cadencia (08:30, 10:30...), o fecho das
+     19h, um "13h" de agenda. Sem esse recorte a guarda viraria ruido e alguem a desligaria. */
+  /* "trava" SOZINHO nao entra, e isso me custou um falso positivo na primeira execucao:
+     `Math.min(9 * 60 + ordemHoje * 45, 17 * 60); // trava em 17h` e um teto de agendamento,
+     outra regra, legitimamente 17h. Guarda que acusa o que nao e defeito e guarda que alguem
+     desliga — e a partir do dia em que e desligada ela protege zero.
+
+     As formas que ficaram sao as que so o ritual usa: `promessa` (que cobre "promessa das
+     13h ainda aberta", sem verbo de trava) mais as conjugacoes aplicadas a ela. */
+  const GATILHOS = /(promessa|travad|travou|trave |fecha às|fechou às|fecha as|fechou as)/i;
+  const erradas = new Map();
+  const linhas = semCom.split('\n');
+  linhas.forEach((linha, i) => {
+    const reHora = /\b(\d{1,2})h(\d{2})?\b/g;
+    let mh;
+    while ((mh = reHora.exec(linha)) !== null) {
+      const texto = mh[0];
+      if (texto === esperado) continue;
+      const ini = Math.max(0, mh.index - 48);
+      const volta = linha.slice(ini, mh.index + texto.length + 48);
+      if (!GATILHOS.test(volta)) continue;
+      /* O fecho do dia (19h) e outra regra, e legitimamente diferente da trava. */
+      if (texto === '19h') continue;
+      erradas.set((i + 1) + ': ' + texto, linha.trim().slice(0, 92));
+    }
+  });
+
+  if (erradas.size) {
+    console.error('HORA DA TRAVA DIVERGENTE em ' + arquivo + ' (a constante diz ' + esperado + '):');
+    erradas.forEach((linha, onde) => console.error('  linha ' + onde + '  ' + linha));
+    console.error('  A trava funcionaria em ' + esperado + ' e a tela prometeria outra hora.');
+    console.error('  Isso nao quebra nada e nao aparece em teste: o executivo perde a janela');
+    console.error('  confiando no que leu, e o gestor cobra dele um prazo que a tela nao disse.');
+    return false;
+  }
+  console.log('OK hora da trava - a constante diz ' + esperado + ' e nenhum texto de tela discorda.');
+  return true;
+}
+if (!checarHoraDaTrava()) process.exit(1);

@@ -20682,7 +20682,7 @@ function renderKpiStripHero() {
     <div class="kpi-hero" id="kpiHeroAderenciaDaily">
       <div class="l">Promessa cumprida</div>
       <div class="v" style="color:var(--dark-mut);font-size:15px;">medindo…</div>
-      <div class="stat-hint">comparando promessa das 9h30 com visita comprovada</div>
+      <div class="stat-hint">comparando promessa das 13h com visita comprovada</div>
     </div>
     <div class="kpi-hero">
       <div class="l">Taxa de avanço</div>
@@ -27447,7 +27447,7 @@ function gxBlocoPromessaHTML(r) {
   if (!totalProm) {
     return `<div class="gx-secao">
       <div class="gx-secao-cab"><b>Prometido × cumprido</b><span>esta semana</span></div>
-      <div class="gx-vazio">Ele não registrou promessa nenhuma nesta semana. Isso é o primeiro assunto do 1:1 — e é cobrança de ritual, não de resultado: a promessa fecha às 9h30, todos os dias.</div>
+      <div class="gx-vazio">Ele não registrou promessa nenhuma nesta semana. Isso é o primeiro assunto do 1:1 — e é cobrança de ritual, não de resultado: a promessa fecha às 13h, todos os dias.</div>
     </div>`;
   }
   const linhas = D4_EIXOS.map(e => {
@@ -30966,7 +30966,7 @@ async function salvarDaily(ownerId, dataISO, campos) {
     .some(campo => Object.prototype.hasOwnProperty.call(campos, campo));
   if (alteraPromessa && sessaoAtual && sessaoAtual.role === 'rep'
       && dataISO === agendaChave(agendaAgora()) && promessaDoDiaTravada()) {
-    return { error: new Error('A promessa de hoje fechou às 9h30 e não pode mais ser alterada.') };
+    return { error: new Error('A promessa de hoje fechou às 13h e não pode mais ser alterada.') };
   }
   const existente = getDaily(ownerId, dataISO) || {};
   const linha = {
@@ -37447,10 +37447,42 @@ const ROTULO_DA_PROMESSA = {
   fechamentos: { um: 'fechamento', muitos: 'fechamentos' }
 };
 
-const PROMESSA_TRAVA_MINUTOS = 9 * 60 + 30;
+/* ══ A TRAVA DA PROMESSA: 13H DESDE 03/09/26 ═══════════════════════════════════════
+   Era 9h30. O Julyan mudou para 13h no mesmo dia em que descobrimos que o ato de fechar
+   o plano estava inalcancavel havia seis dias (ver o comentario em dailyV5HTML).
+
+   O RITUAL CONTINUA AS 8H30 — a trava nao e o horario da daily, e o prazo. Travar as 9h30
+   dava uma hora a quem entra na rua as 8h; 13h da a manha inteira, e ainda deixa a tarde
+   correndo contra uma promessa registrada, que e o ponto.
+
+   UMA FONTE, E UMA GUARDA QUE IMPEDE O TEXTO DE DIVERGIR. A hora aparece escrita em 31
+   textos de tela. Mudar esta constante sem mudar os 31 deixaria o produto inteiro mentindo
+   o prazo para o executivo — e ele e cobrado por esse prazo.
+
+   Os 31 continuam sendo literal, e nao interpolacao: eles vivem em contextos de aspas
+   diferentes (template literal, aspas simples, atributo), e reescrever os 31 a mao era o
+   risco maior num arquivo de 45 mil linhas. Quem garante o acordo e a GUARDA 13, que
+   deriva "13h" desta constante e reprova o build se achar outra hora perto de
+   "trava"/"travou"/"fecha as". Mesmo arranjo do ESCALA_BREAKPOINTS, pelo mesmo motivo:
+   quando o valor nao pode ser um token, a checagem e o que o mantem verdadeiro. */
+const PROMESSA_TRAVA_MINUTOS = 13 * 60;
+
+
+/* ══ UM DIA LIBERADO, E SO UM (03/09/26) ══════════════════════════════════════════
+   Julyan: "pode liberar". O ato de fechar o plano ficou inalcancavel de 30/08 a 03/09 —
+   planos_diarios nao recebeu UMA LINHA nesse periodo. Travar o time hoje as 13h seria
+   cobrar deles um prazo que a nossa tela nao deixou cumprir: a Kelly avisou que prometeu,
+   e o botao que ela usou tinha desaparecido.
+
+   A liberacao e DATADA e se apaga sozinha: amanha esta constante nao casa com nenhum dia e
+   a regra das 13h volta a valer sem ninguem precisar lembrar de remover nada. Deixar como
+   flag booleana seria criar uma trava desligada que ninguem religa. */
+const PROMESSA_DIA_LIBERADO = '2026-09-03';
+
 function promessaTravadaNoHorario(agoraBrt) {
   if (!agoraBrt || typeof agoraBrt.getTime !== 'function' || typeof agoraBrt.getUTCHours !== 'function'
       || Number.isNaN(agoraBrt.getTime())) return false;
+  if (agendaChave(agoraBrt) === PROMESSA_DIA_LIBERADO) return false;
   return agoraBrt.getUTCHours() * 60 + agoraBrt.getUTCMinutes() >= PROMESSA_TRAVA_MINUTOS;
 }
 
@@ -38480,7 +38512,7 @@ function dl2Col1(r, linhaHoje, linhas, fase) {
       <span class="dl2-rot">${travada ? 'PROMESSA × REALIZADO' : 'PROMESSA DO DIA'}</span>
       <span class="dl2-nota">${travada
         ? 'a barra anda sozinha — cumprido = registro no HubSpot'
-        : 'trave até as 9h30; depois disso ela não se edita'}</span>
+        : 'trave até as 13h; depois disso ela não se edita'}</span>
     </div>
     ${eixosHTML}
     ${travada
@@ -38741,14 +38773,14 @@ function dl2Hero(r, linhaHoje, fase, linhas) {
   const titulo = fase === 'fechado' ? 'O dia fechou.'
     : travadaVazia ? 'Hoje corre sem promessa.'
       : fase === 'corrida' ? 'O dia está correndo.<br>Sua promessa também.'
-        : 'Trave sua promessa<br>até as 9h30.';
+        : 'Trave sua promessa<br>até as 13h.';
   const sub = fase === 'fechado'
     ? 'o placar fechou às 19h · a promessa de amanhã se faz no Planejamento'
     : travadaVazia
-      ? 'a promessa travou vazia às 9h30 — hoje não vale pontos, e o gestor vê o dia assim'
+      ? 'a promessa travou vazia às 13h — hoje não vale pontos, e o gestor vê o dia assim'
       : fase === 'corrida'
         ? 'o que muda agora é o <b>cumprido</b> — cada registro no HubSpot sobe a barra na hora'
-        : 'depois das 9h30 ela não se edita mais — é isso que a torna uma promessa';
+        : 'depois das 13h ela não se edita mais — é isso que a torna uma promessa';
 
   return `<div class="dl2-hero">
     <div class="dl2-quem">
@@ -39305,10 +39337,10 @@ function dailyV4HTML(r) {
         <div class="d4-hero-sub">${fechado
           ? 'placar fechado às 19h · a promessa de amanhã se faz no Planejamento'
           : travadaVazia
-            ? 'a promessa travou vazia às 9h30 · hoje não vale pontos — o próximo dia útil ainda está em aberto ao lado'
+            ? 'a promessa travou vazia às 13h · hoje não vale pontos — o próximo dia útil ainda está em aberto ao lado'
             : travada
-              ? 'promessa travada às 9h30 — o gestor está vendo o que você prometeu'
-              : 'a promessa fecha às 9h30 — depois disso o dia corre contra ela'}</div>
+              ? 'promessa travada às 13h — o gestor está vendo o que você prometeu'
+              : 'a promessa fecha às 13h — depois disso o dia corre contra ela'}</div>
       </div>
       <span class="d4-hero-risco"></span>
       <div class="d4-placar">
@@ -39352,7 +39384,7 @@ function dailyV4HTML(r) {
       <div class="d4-fecho-streak">${p.bonus
         ? `🔥 Streak em <b>${streak} dia${streak === 1 ? '' : 's'} cumprindo</b> — hoje contou.`
         : '🔥 O streak zerou hoje: ele só anda com a promessa inteira cumprida.'}</div>`
-        : '<div class="d4-vazio">O dia fechou sem promessa registrada. Não há placar para fechar — e é isso que o gestor vai ver às 9h30 de amanhã.</div>'}
+        : '<div class="d4-vazio">O dia fechou sem promessa registrada. Não há placar para fechar — e é isso que o gestor vai ver às 13h de amanhã.</div>'}
       <div class="d4-prometer">
         <button type="button" class="d4-btn-prometer" id="d4PlanejarAmanha">Planejar amanhã → montar a fila do dia</button>
         <div class="d4-prometer-nota">A promessa de amanhã se faz de manhã, com a fila pronta. O Planejamento é onde a fila nasce.</div>
@@ -39388,13 +39420,13 @@ function dailyV4HTML(r) {
         <span class="d4-vale-nota">com bônus ×1,5</span>
       </div>
       ${travadaVazia ? `<div class="d4-prometer">
-        <div class="d4-prometer-nota">Você não prometeu até 9h30, então <b>hoje travou em zero</b> — sem promessa não há pontos, e o gestor vê o dia assim. A hora é 9h30 todos os dias; até acostumar, é ela que manda.</div>
+        <div class="d4-prometer-nota">Você não prometeu até 13h, então <b>hoje travou em zero</b> — sem promessa não há pontos, e o gestor vê o dia assim. A hora é 13h todos os dias; até acostumar, é ela que manda.</div>
         <div class="d4-prometer-nota is-saida">O que ainda dá para fazer daqui: encher o próximo dia útil na coluna do lado. <b>Cada visita marcada já entra na promessa daquele dia.</b></div>
       </div>` : travada ? `<div class="d4-prometer">
-        <div class="d4-prometer-nota">A promessa fechou às 9h30 e não se mexe mais hoje — é isso que a torna uma promessa. O que muda daqui para a frente é o <b>cumprido</b>, e ele se escreve na rua: cada visita registrada sobe a barra.</div>
+        <div class="d4-prometer-nota">A promessa fechou às 13h e não se mexe mais hoje — é isso que a torna uma promessa. O que muda daqui para a frente é o <b>cumprido</b>, e ele se escreve na rua: cada visita registrada sobe a barra.</div>
       </div>` : `<div class="d4-prometer">
         <button type="button" class="d4-btn-prometer" id="d4Prometer">${prometeu ? 'Atualizar a promessa → vira agenda' : 'Prometer o dia → vira agenda'}</button>
-        <div class="d4-prometer-nota" id="d4PrometerNota">${Number(linhaHoje.prometido_visitas || 0)} visitas prometidas = ${Number(linhaHoje.prometido_visitas || 0)} slots na sua Agenda de hoje · o gestor vê a promessa às 9h30</div>
+        <div class="d4-prometer-nota" id="d4PrometerNota">${Number(linhaHoje.prometido_visitas || 0)} visitas prometidas = ${Number(linhaHoje.prometido_visitas || 0)} slots na sua Agenda de hoje · o gestor vê a promessa às 13h</div>
       </div>`}
     </div>`;
 
@@ -40875,9 +40907,9 @@ function buildCompromissoDoDiaHTML(r) {
   if (seq.length === 0) {
     return `
       <div class="briefing-bloco" id="compromissoDoDia">
-        <div class="briefing-head"><b>Hoje — o que você promete?</b><span>${travada ? 'fechou às 9h30' : 'nada pendente na fila'}</span></div>
+        <div class="briefing-head"><b>Hoje — o que você promete?</b><span>${travada ? 'fechou às 13h' : 'nada pendente na fila'}</span></div>
         <div class="briefing-vazio">${travada
-          ? 'A promessa de hoje fechou vazia às 9h30. Você ainda deve planejar e executar o dia, mas o compromisso não pode mais ser reescrito.'
+          ? 'A promessa de hoje fechou vazia às 13h. Você ainda deve planejar e executar o dia, mas o compromisso não pode mais ser reescrito.'
           : 'Sua fila está limpa: nenhum quente descoberto, nenhum SLA estourado, nenhum follow-up vencido. Se quer encher o dia, o Planejamento tem as contas-alvo do seu território.'}
           <button type="button" class="briefing-cta" data-briefing-ir="planejamento">Abrir Planejamento →</button></div>
       </div>`;
@@ -40909,14 +40941,14 @@ function buildCompromissoDoDiaHTML(r) {
     <div class="briefing-bloco promessa-card" id="compromissoDoDia">
       <div class="briefing-head">
         <b>Hoje — o que você promete?</b>
-        <span class="promessa-badge">${travada ? '🔒 travada às 9h30' : 'promessa · não é prova'}</span>
+        <span class="promessa-badge">${travada ? '🔒 travada às 13h' : 'promessa · não é prova'}</span>
       </div>
 
       <div class="comp-seq-intro">
         ${travada
-          ? `A promessa fechou às 9h30 e não se mexe mais hoje. ${jaFechado ? 'O seu gestor continua vendo os clientes confirmados.' : 'O dia ficou sem promessa registrada.'}`
+          ? `A promessa fechou às 13h e não se mexe mais hoje. ${jaFechado ? 'O seu gestor continua vendo os clientes confirmados.' : 'O dia ficou sem promessa registrada.'}`
           : jaFechado
-          ? `Dia confirmado${plano.fechado_em ? ` às ${new Date(plano.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}. Até 9h30, dá pra refazer se algo mudou.`
+          ? `Dia confirmado${plano.fechado_em ? ` às ${new Date(plano.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : ''}. Até 13h, dá pra refazer se algo mudou.`
           : `Já vem na ordem, da sua fila real — <b>você não digita nada</b>. Desmarque o que não vai dar. ${seq.length} de ${totalNaFila} na fila · alvo da sua fase: ${alvoTamanho}.`}
       </div>
 
@@ -40937,7 +40969,7 @@ function buildCompromissoDoDiaHTML(r) {
       <div class="comp-seq-acoes">
         <span class="promessa-tally" id="compromissoSoma">Sua promessa: ${linhaSoma(somaTotal)}</span>
         <span style="flex:1;"></span>
-        <button type="button" class="comp-seq-btn is-primaria" id="compromissoFechar" ${travada ? 'disabled' : ''}>${travada ? 'Travada às 9h30' : jaFechado ? 'Refazer' : 'Confirmar →'}</button>
+        <button type="button" class="comp-seq-btn is-primaria" id="compromissoFechar" ${travada ? 'disabled' : ''}>${travada ? 'Travada às 13h' : jaFechado ? 'Refazer' : 'Confirmar →'}</button>
       </div>
       <span class="comp-seq-status" id="compromissoStatus"></span>
 
@@ -41017,9 +41049,9 @@ function wireCompromissoDoDia(rootEl, r) {
     const status = host.querySelector('#compromissoStatus');
 
     if (promessaDoDiaTravada()) {
-      status.textContent = 'A promessa de hoje fechou às 9h30. Agora, o que muda é somente o realizado.';
+      status.textContent = 'A promessa de hoje fechou às 13h. Agora, o que muda é somente o realizado.';
       status.style.color = 'var(--red)';
-      mostrarToast('A promessa de hoje está travada desde 9h30.', 'atencao');
+      mostrarToast('A promessa de hoje está travada desde 13h.', 'atencao');
       return;
     }
 
@@ -41132,7 +41164,7 @@ function gdPlacarDoTimeHTML(reps, diaISO) {
         <div class="gd-placar-rot">PROMESSA DAS 9H30 · O TIME HOJE</div>
         <div class="gd-placar-num"><b>—</b><span>nenhuma promessa registrada</span></div>
       </div>
-      <div class="gd-placar-vazio">As linhas abaixo mostram o <b>plano do dia</b> — os nomes que cada um separou. A <b>promessa das 9h30</b> é outra medida: o número que ele combina na Daily dele, que vale ponto e não se mexe depois da hora. Sem ela, esta aba mede plano e resultado, mas não mede palavra cumprida.</div>
+      <div class="gd-placar-vazio">As linhas abaixo mostram o <b>plano do dia</b> — os nomes que cada um separou. A <b>promessa das 13h</b> é outra medida: o número que ele combina na Daily dele, que vale ponto e não se mexe depois da hora. Sem ela, esta aba mede plano e resultado, mas não mede palavra cumprida.</div>
     </div>`;
   }
 
@@ -41560,8 +41592,8 @@ async function renderDaily() {
          MEDIDO, nunca como zero. */
       const faseDoDia = typeof d4FaseDoDia === 'function' ? d4FaseDoDia(dailyRefDate) : 'antes';
       const travaRotulo = faseDoDia === 'antes'
-        ? ' · promessa das 9h30 ainda aberta'
-        : faseDoDia === 'corrida' ? ' · promessa travada às 9h30' : ' · dia fechado';
+        ? ' · promessa das 13h ainda aberta'
+        : faseDoDia === 'corrida' ? ' · promessa travada às 13h' : ' · dia fechado';
 
       const radarGestor = (typeof quentesNoRadar === 'function') ? quentesNoRadar(null) : { radar: [], semPasso: [] };
       const quentesSemPassoTime = (radarGestor.semPasso || []).length;
@@ -41639,7 +41671,7 @@ async function renderDaily() {
       const nomeCurto = r => esc(String((r && r.name) || '').split(' ')[0] || 'ele');
       const emPalavra = n => n === 2 ? 'Dois' : n === 3 ? 'Três' : n === 4 ? 'Quatro' : n === 5 ? 'Cinco' : n === 6 ? 'Seis' : String(n);
       const headline = !primeiro
-        ? 'Ninguém está pendente de cobrança. Confirme a promessa das 9h30 e libere a rua.'
+        ? 'Ninguém está pendente de cobrança. Confirme a promessa das 13h e libere a rua.'
         : nSemPlano > 1
           ? `${emPalavra(nSemPlano)} saem para o campo sem plano. Comece por ${nomeCurto(primeiro.r)}.`
           : nSemPlano === 1
@@ -41721,7 +41753,7 @@ async function renderDaily() {
             <button type="button" id="dailyConduzirRota">conduzir pela rota ▸</button>
           </div>` : ''}
         <div class="gi-hero-truth">
-          Plano vem do Cockpit; execução vem da evidência do HubSpot — a promessa das 9h30 é outra medida.
+          Plano vem do Cockpit; execução vem da evidência do HubSpot — a promessa das 13h é outra medida.
           Fechados no dia: ${frescorDaily.confiavel
             ? `<b style="color:var(--dark-green);">${fechadosHojeTotal}</b>`
             : `<span class="gi-nm" style="background:rgba(253,251,240,.08);border-color:var(--dark-line);color:var(--dark-mut);">não medido</span> — a carga do HubSpot ainda não chegou, e isso não é zero`}.
@@ -43528,14 +43560,14 @@ async function renderDaily() {
         const vale = shell.querySelector('.d4-vale b');
         if (vale) vale.textContent = Math.round(bruto * D4_BONUS) + ' pts';
         const nota = shell.querySelector('#d4PrometerNota');
-        if (nota) nota.textContent = rascunho.visitas + ' visitas prometidas = ' + rascunho.visitas + ' slots na sua Agenda de hoje · o gestor vê a promessa às 9h30';
+        if (nota) nota.textContent = rascunho.visitas + ' visitas prometidas = ' + rascunho.visitas + ' slots na sua Agenda de hoje · o gestor vê a promessa às 13h';
       };
       /* A TRAVA VALE NO CLIQUE, não só no desenho. Sem stepper na tela a chance de
          chegar aqui é remota, mas quem grava a promessa não pode confiar em quem a
          desenha: a mesma verdade nos dois lugares. */
       const travadoAgora = () => shell.dataset.d4Travada === '1';
       shell.querySelectorAll('[data-d4-eixo]').forEach(btn => btn.addEventListener('click', () => {
-        if (travadoAgora()) { mostrarToast('A promessa de hoje travou às 9h30 — o que muda agora é o cumprido.', 'atencao'); return; }
+        if (travadoAgora()) { mostrarToast('A promessa de hoje travou às 13h — o que muda agora é o cumprido.', 'atencao'); return; }
         const k = btn.dataset.d4Eixo;
         const d = Number(btn.dataset.d4Delta || 0);
         /* teto de 20 por eixo: promessa de 50 visitas não é promessa, é piada. */
@@ -43545,7 +43577,7 @@ async function renderDaily() {
 
       const btnProm = shell.querySelector('#d4Prometer');
       if (btnProm) btnProm.addEventListener('click', async () => {
-        if (travadoAgora()) { mostrarToast('A promessa de hoje travou às 9h30 e não se mexe mais.', 'atencao'); return; }
+        if (travadoAgora()) { mostrarToast('A promessa de hoje travou às 13h e não se mexe mais.', 'atencao'); return; }
         const algum = D4_EIXOS.some(e => rascunho[e.k] > 0);
         if (!algum) { mostrarToast('Promessa vazia não vira dia: suba pelo menos as visitas.', 'atencao'); return; }
         btnProm.disabled = true;
@@ -43599,7 +43631,7 @@ async function renderDaily() {
          gravado ainda — só a ficha abriu. Pego no clique, no preview. */
       const frasePromessa = (p, dataISO, caminho) => {
         if (p.mexeu) return ' A promessa ' + (dataISO === hojeD4 ? 'de hoje' : 'do dia') + ' subiu para ' + p.novo + ' visita' + (p.novo === 1 ? '' : 's') + '.';
-        if (p.motivo === 'travada' || p.motivo === 'fase') return ' A promessa de hoje está travada às 9h30, então ela não muda.';
+        if (p.motivo === 'travada' || p.motivo === 'fase') return ' A promessa de hoje está travada às 13h, então ela não muda.';
         return caminho === 'agenda'
           ? ' A visita está na agenda, mas a promessa não subiu: confira o número antes de sair.'
           : ' Não consegui subir a promessa do dia: confira o número antes de sair.';
