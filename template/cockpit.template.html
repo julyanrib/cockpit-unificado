@@ -3165,7 +3165,11 @@
      com isso resolvido. Faixa propria, borda vermelha, e um botao que entra na conducao. */
   .daily-rota-alerta{margin-top:14px;border:1px solid var(--dark-red);border-radius:12px;
     padding:12px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
-  .daily-rota-alerta b{font:800 10px var(--font-display);letter-spacing:.13em;
+  /* O SELETOR ERA `b`, NAO `> b` (03/09/26). A regra pegava TODO negrito dentro da
+     faixa, inclusive o enfase no meio da frase — e com white-space:nowrap isso vira um
+     bloco de 324px que nao quebra. Medido a 656px: 76px de overflow horizontal de pagina.
+     A 1440, onde o Julyan projeta, nao aparecia. Filho direto e o rotulo; o resto quebra. */
+  .daily-rota-alerta > b{font:800 10px var(--font-display);letter-spacing:.13em;
     text-transform:uppercase;color:var(--dark-red);white-space:nowrap;}
   /* O MIN-WIDTH DESTA FAIXA TRANSBORDAVA A PAGINA A 390px (02/09/26, defeito meu, pego
      medindo): o rotulo com nowrap (~150px) mais min-width:220px do texto mais o botao
@@ -8467,12 +8471,36 @@
      Entao os dois: coluna larga o bastante para o maior nome do time, e min-width:0 para
      que um nome maior que isso corte em vez de invadir. Medido a 1440 e a 1280: 3
      invasoes -> 0, sem overflow de pagina, e a linha sem TV intocada. */
-  body.tv #viewDaily .daily-team-summary-v2{grid-template-columns:280px minmax(240px,1fr) 92px auto 118px;}
+  /* ══ O SELO DE ESTADO SAIA PELA BORDA NA TV (03/09/26) ═════════════════════════
+     Medido a 1440 com o Modo TV ligado: OITO pilhas "s/ plano do dia" (204px cada, por
+     causa do font-size:15px da TV) terminavam depois da borda direita e eram CORTADAS —
+     nao rolava, simplesmente nao aparecia. E e o selo que a reuniao le de longe: a
+     informacao mais importante da linha era a que faltava na tela projetada.
+
+     A 5a coluna de 118px carregava o `.daily-team-cta`, que o proprio Modo TV esconde —
+     ou seja, 118px reservados para nada, enquanto o selo ao lado nao cabia. Ela sai, a
+     do nome cede 30px, e o selo passa a quebrar em vez de exigir uma linha inteira.
+     Medido depois: 8 elementos fora da tela -> 0. */
+  body.tv #viewDaily .daily-team-summary-v2{grid-template-columns:250px minmax(140px,1fr) 84px auto;column-gap:12px;}
+  body.tv #viewDaily .daily-team-streak{white-space:normal !important;text-align:right;}
   body.tv #viewDaily .daily-person{min-width:0;}
   body.tv #viewDaily .daily-team-summary{padding:18px 22px;}
   body.tv #viewDaily .daily-person b{font-size:24px;}
   body.tv #viewDaily .daily-person span{font-size:17px;}
   body.tv #viewDaily .daily-avatar{width:46px;height:46px;font-size:17px;}
+  /* ══ NOME-FRASE DO CRM NO CHIP (03/09/26) ══════════════════════════════════════
+     Medido no Modo TV a 1440, que e a largura em que o Julyan projeta: este chip virou
+     um bloco de 2172px e foi CORTADO na borda direita — nao rolava, sumia. O conteudo
+     era o nome de um negocio do HubSpot que na verdade e uma mensagem de cliente, com
+     200 caracteres ("Desejo saber se o sistema consegue atender a uma loja de produtos
+     naturais calculando frete..."). Nao se corrige no CRM por causa de layout.
+
+     Padrao nome-frase, o mesmo das outras abas: quebra em qualquer ponto, clamp de 2
+     linhas, e o texto inteiro no title. Duas linhas porque na TV o chip fica ao lado do
+     estado da pessoa e crescer sem limite empurraria o selo para fora de novo. */
+  #viewDaily .daily-clientes-chip{white-space:normal;overflow-wrap:anywhere;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+  #viewDaily .daily-clientes-chip b{white-space:normal;overflow-wrap:anywhere;}
   body.tv #viewDaily .daily-clientes-chip{font-size:17px;}
   body.tv #viewDaily .daily-team-result b{font-size:24px;}
   body.tv #viewDaily .daily-team-result span{font-size:13px;}
@@ -39942,13 +39970,26 @@ function abrirConducaoDaily(planos, criterio, ownerIdInicial) {
     const info = ((typeof rotasCache !== 'undefined' && rotasCache ? rotasCache.porOwner : null) || {})[String(r.ownerId)];
     return !info || !(info.paradas || []).length;
   };
-  const reps = criterio === 'rota'
-    ? ativos.slice().sort((a, b) => {
-        const sa = semRota(a), sb = semRota(b);
-        if (sa !== sb) return sa ? -1 : 1;
-        return urgenciaDoRepNaDaily(b) - urgenciaDoRepNaDaily(a);
-      })
-    : ativos.slice().sort((a, b) => urgenciaDoRepNaDaily(b) - urgenciaDoRepNaDaily(a));
+  /* AGENDA VAZIA PRIMEIRO (03/09/26, prancha v2 §1). Terceira ordem possivel, pela mesma
+     razao da segunda: o botao da faixa entra na MESMA conducao, com a ordem trocada. Quem
+     nao tem nada marcado abre a rodada, porque e o unico caso que nao da para resolver
+     depois — as 10h ele ja esta na rua sem destino. */
+  const semAgenda = r => {
+    try {
+      const evs = (typeof agendaNormalizar === 'function' && DATA.agenda) ? agendaNormalizar(DATA.agenda) : [];
+      return !evs.some(e => e && e.inicio && String(e.ownerId) === String(r.ownerId)
+        && agendaContaComoCompromisso(e) && agendaChave(e.inicio) === dailyRefDate);
+    } catch (e) { return false; }
+  };
+  const porUrgencia = (a, b) => urgenciaDoRepNaDaily(b) - urgenciaDoRepNaDaily(a);
+  const primeiroQuem = teste => (a, b) => {
+    const sa = teste(a), sb = teste(b);
+    if (sa !== sb) return sa ? -1 : 1;
+    return porUrgencia(a, b);
+  };
+  const reps = criterio === 'rota' ? ativos.slice().sort(primeiroQuem(semRota))
+    : criterio === 'agenda' ? ativos.slice().sort(primeiroQuem(semAgenda))
+    : ativos.slice().sort(porUrgencia);
   if (reps.length === 0) { mostrarToast('Nenhum executivo ativo no campo nesta carga.', 'atencao'); return; }
   let idxInicial = 0;
   if (ownerIdInicial) {
@@ -40013,6 +40054,8 @@ function desenharConducao() {
   if (ordemEl) {
     ordemEl.textContent = (condEstado.criterio === 'rota'
       ? 'uma pessoa por vez, começando por quem NÃO tem rota montada'
+      : condEstado.criterio === 'agenda'
+      ? 'uma pessoa por vez, começando por quem está com a AGENDA VAZIA hoje'
       : 'uma pessoa por vez, na ordem de quem mais precisa')
       + ' · setas ← → para navegar, Esc para sair';
   }
@@ -41047,6 +41090,35 @@ async function renderDaily() {
         return (rota.paradas || []).length;
       });
       const comRotaTime = rotasDoTime.filter(n => n > 0).length;
+      /* ══ A AGENDA DE HOJE ENTRA NO HERO (03/09/26, prancha v2 §1) ═══════════════════
+         A prancha v2 pede o KPI "Visitas na agenda de hoje (+ agendas vazias)" e uma faixa
+         vermelha "N agendas vazias — dia sem agenda nao e dia de rua".
+
+         E a pergunta mais direta que a tela das 9h tem que responder, e ela nao estava em
+         lugar nenhum do hero: ROTA diz se ele sequenciou o dia, mas agenda vazia diz que
+         nao ha nada marcado com ninguem. Sao coisas diferentes — da para ter rota montada
+         e zero compromisso, e da para ter compromisso e nenhuma rota.
+
+         A fonte e a MESMA da matriz da semana: agendaContaComoCompromisso, que exclui
+         `interno` porque a daily do time das 9h entra na agenda como qualquer evento e ja
+         fez tres telas dizerem que a semana estava cheia. */
+      const agendaDeHoje = (() => {
+        let eventos = [];
+        try {
+          eventos = (typeof agendaNormalizar === 'function' && DATA.agenda) ? agendaNormalizar(DATA.agenda) : [];
+        } catch (e) { eventos = []; }
+        const porOwner = new Map();
+        eventos.forEach(e => {
+          if (!e || !e.inicio || !agendaContaComoCompromisso(e)) return;
+          if (agendaChave(e.inicio) !== dailyRefDate) return;
+          const k = String(e.ownerId);
+          if (!porOwner.has(k)) porOwner.set(k, []);
+          porOwner.get(k).push(e);
+        });
+        const vazios = repsDaily.filter(r => !(porOwner.get(String(r.ownerId)) || []).length);
+        const total = repsDaily.reduce((a, r) => a + (porOwner.get(String(r.ownerId)) || []).length, 0);
+        return { porOwner, vazios, total, comAlgo: repsDaily.length - vazios.length };
+      })();
       const paradasTime = rotasDoTime.reduce((a, b) => a + b, 0);
       let vencemHojeTime = 0;
       repsDaily.forEach(r => {
@@ -41118,6 +41190,11 @@ async function renderDaily() {
             <span class="sub">${quentesSemPassoTime > 0 ? 'nomear na rodada, não depois dela' : 'todo quente com próximo passo marcado'}</span>
           </div>
           <div class="gi-hero-kpi">
+            <span class="l" title="Compromisso de cliente marcado para hoje na agenda do HubSpot. A daily interna das 9h não conta.">Na agenda de hoje</span>
+            <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${agendaDeHoje.total === 0 ? ' style="color:var(--dark-red);"' : ''}>${agendaDeHoje.total}</span><span class="meta">${agendaDeHoje.comAlgo} de ${repsDaily.length} com algo</span></span>
+            <span class="sub">${agendaDeHoje.vazios.length === 0 ? 'todo mundo com compromisso marcado' : agendaDeHoje.vazios.length + ' com a agenda vazia — ver a faixa abaixo'}</span>
+          </div>
+          <div class="gi-hero-kpi">
             <span class="l" title="Follow-up cujo prazo cai hoje">Follow-ups de hoje</span>
             <span style="display:flex;align-items:baseline;gap:8px;"><span class="gi-num-hero"${vencemHojeTime > 0 ? ' style="color:var(--dark-amber);"' : ''}>${vencemHojeTime}</span><span class="meta">vencem hoje</span></span>
             <span class="sub">${vencemHojeTime > 0 ? 'cobrar na rodada, antes da rua' : 'nenhum follow-up vence hoje'}</span>
@@ -41127,6 +41204,19 @@ async function renderDaily() {
           <button class="gi-btn is-red" type="button" id="dailyConduzir" style="padding:0 20px;">Conduzir a Daily →</button>
           <button class="gi-btn" type="button" id="dailyTvToggle" aria-pressed="false" style="background:none;border-color:rgba(253,251,240,.25);color:var(--dark-ink);">Modo TV</button>
         </div>
+        ${agendaDeHoje.vazios.length > 0 ? `
+          <!-- AGENDA VAZIA E ALERTA (03/09/26, prancha v2 §1): "dia sem agenda nao e dia
+               de rua". Faixa propria e nao KPI pelo mesmo motivo da rota — nao e um numero
+               fraco, e gente que vai sair sem nada marcado. Os nomes vao ESCRITOS: numa tela
+               projetada, "3 agendas vazias" faz cada um olhar para o lado; os nomes fazem a
+               conversa comecar. E o botao entra na conducao por eles primeiro. -->
+          <div class="daily-rota-alerta">
+            <b>${agendaDeHoje.vazios.length === repsDaily.length ? 'Ninguém tem agenda' : 'Agenda vazia'}</b>
+            <span>${agendaDeHoje.vazios.map(r => esc(String(r.name || '').split(' ')[0])).join(' · ')}
+              — ${agendaDeHoje.vazios.length === 1 ? 'sai' : 'saem'} sem nada marcado com cliente hoje.
+              <b style="color:var(--dark-ink);font-weight:800;">Dia sem agenda não é dia de rua.</b></span>
+            <button type="button" id="dailyConduzirAgenda">conduzir por eles ▸</button>
+          </div>` : ''}
         ${comRotaTime < repsDaily.length ? `
           <!-- ROTA 0 DE N E ALERTA, NAO KPI (02/09/26, prancha §1). Ela saiu da fileira de
                numeros do hero porque rota nao e resultado: e pre-requisito de rua. Ao lado de
@@ -41943,7 +42033,43 @@ async function renderDaily() {
       // BLOCO 2 (11/08): compromissos JÁ MARCADOS para o dia que a Daily está mostrando.
     // Mesmo normalizador da aba Agenda; só o nome do lead e a hora, nada de título cru.
     const compromissosHoje = compromissosAgendaDoOwner(r.ownerId);
-    const comLead = compromissosHoje.filter(c => c.lead);
+    /* ══ CONTA CLIENTE, NAO LINHA DE AGENDA (03/09/26, prancha v2 §3) ═══════════════
+       Medido na agenda da Amanda hoje: 18 compromissos que contam, e 9 clientes
+       distintos. "pizzaria da rua" 3x, "Sushi Real Japanese Food" 3x, "Pizzaria tia
+       gloria" 3x. A tela dizia "18 nomeados" e listava as 18 linhas — o gestor leria o
+       mesmo cliente tres vezes em voz alta na frente do time, e o numero do topo estava
+       no DOBRO.
+
+       A repeticao e do CRM: sao varias tarefas de follow-up no mesmo negocio. Nao e erro
+       do executivo e nao se corrige no HubSpot por causa de layout — o compromisso do dia
+       e com o CLIENTE, e e por cliente que ele se conta.
+
+       FICA A PRIMEIRA OCORRENCIA, que preserva a ordem por hora que a lista ja tinha: a
+       primeira hora do dia daquele cliente e a que importa para a rodada. E a chave e a
+       mesma de chaveNome (sem acento, minusculo, espaco colapsado) para "Pizzaria Tia
+       Gloria" e "pizzaria tia gloria" nao contarem duas vezes.
+
+       compromissosHoje continua intacto: quem precisa da agenda inteira (a gaveta da
+       matriz da semana, a cadencia) le de la. Aqui e a leitura do compromisso do dia. */
+    const comLead = (() => {
+      const chaveDoCliente = n => String(n == null ? '' : n)
+        .normalize('NFD')
+        .split('')
+        .filter(c => { const p = c.charCodeAt(0); return p < 0x300 || p > 0x36f; })
+        .join('')
+        .toLowerCase()
+        .split(' ').filter(Boolean).join(' ')
+        .trim();
+      const vistos = new Set();
+      const unicos = [];
+      compromissosHoje.filter(c => c.lead).forEach(c => {
+        const k = chaveDoCliente(c.lead);
+        if (!k || vistos.has(k)) return;
+        vistos.add(k);
+        unicos.push(c);
+      });
+      return unicos;
+    })();
     // NOVO (15/08/26) — pedido explícito do Julyan: "um aviso dos leads quentes estarem
     // na daily ou não, pra forçar o follow". Mesmo dado que já alimenta a aba "Quentes"
     // do dossiê (DATA.temperatura.quentes, filtrado por dono) — comparado contra quem
@@ -42904,6 +43030,9 @@ async function renderDaily() {
     /* Mesma conducao, ordem pela rota — ver o comentario de abrirConducaoDaily. */
     const btnConduzirRota = document.getElementById('dailyConduzirRota');
     if (btnConduzirRota) btnConduzirRota.addEventListener('click', () => abrirConducaoDaily(planosPorOwner, 'rota'));
+    /* Mesma conducao, ordem por agenda vazia — ver o comentario de abrirConducaoDaily. */
+    const btnConduzirAgenda = document.getElementById('dailyConduzirAgenda');
+    if (btnConduzirAgenda) btnConduzirAgenda.addEventListener('click', () => abrirConducaoDaily(planosPorOwner, 'agenda'));
 
     const btnTv = document.getElementById('dailyTvToggle');
     /* A CHAVE VIROU v2 (02/09/26). Quem ligou a TV na v1 ficou ligado para sempre sem
