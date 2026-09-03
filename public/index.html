@@ -2704,8 +2704,28 @@
   .comp-seq-btn{background:var(--panel);border:1px solid var(--line-btn);color:var(--ink);border-radius:var(--r-pill);padding:10px 20px;font-size:12px;font-weight:700;cursor:pointer;}
   .comp-seq-btn.is-primaria{background:var(--red);border-color:var(--red);color:var(--dark-ink);}
   .comp-seq-btn.is-primaria:hover{background:var(--red-dk);}
+  /* A regra :disabled fica: o botao NASCE vivo agora, mas ele se desabilita por 1 segundo
+     enquanto grava ("…"). Esse disabled e transitorio e legitimo — o proibido e o que nasce
+     morto e fica. */
   .comp-seq-btn:disabled{opacity:.55;cursor:default;}
   .comp-seq-status{font-size:11px;color:var(--muted2);}
+
+  /* ══ O ESTADO TRAVADO, QUE E TEXTO E NAO BOTAO (03/09/26) ═══════════════════════════
+     Peso de leitura, nao de acao: fundo afundado, tinta apagada, sem borda de pilula e sem
+     cursor de clique. Tem que ser reconhecivel de longe como "isto e o registro", para nao
+     virar o mesmo engano em outra roupa. */
+  .comp-seq-travada{display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border-radius:var(--r-md);
+    background:var(--sunk);color:var(--muted);font-size:12px;font-weight:600;cursor:default;}
+
+  /* A marca que substitui a caixa quando nao ha o que marcar. Mesmo tamanho da caixa (17px)
+     para a coluna dos nomes nao dancar entre o estado editavel e o de registro. */
+  .comp-seq-marca{width:17px;height:17px;flex:none;display:inline-flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:800;color:var(--muted2);}
+  .comp-seq-marca.is-on{color:var(--red);}
+  /* Sem controle dentro, o cursor:pointer de .comp-seq-item seria a mentira que sobrou. */
+  .comp-seq-item.is-registro{cursor:default;}
+  .comp-seq-item.is-registro:hover{border-color:var(--line-soft);}
+
   .comp-seq-item.is-tipo-pendente{border-color:var(--amber);background:var(--amber-soft);cursor:default;}
   .comp-seq-item.is-tipo-pendente:has(.comp-seq-check:not(:checked)){opacity:1;}
   .comp-seq-item.is-tipo-pendente .comp-seq-tipo{color:var(--amber-ink);border-color:var(--amber);}
@@ -3261,8 +3281,13 @@
     gap:10px;width:100%;min-height:48px;padding:6px 10px;text-align:left;background:none;
     border:1px solid transparent;border-radius:var(--r-sm);cursor:pointer;color:var(--ink);
     font-family:var(--font-body);transition:background var(--t-rapido) var(--ease);}
-  .cob-linha:hover:not([disabled]){background:var(--panel2);border-color:var(--line);}
-  .cob-linha[disabled]{cursor:default;opacity:.72;}
+  .cob-linha:hover:not(.is-coberta){background:var(--panel2);border-color:var(--line);}
+  /* ══ A LINHA 100% COBERTA (03/09/26) ═══════════════════════════════════════════════
+     Era `<button disabled>` com opacity .72, e por isso a BOA noticia do bloco — etapa
+     inteira dentro do dia — aparecia apagada, com cara de indisponivel. Agora ela nasce
+     <div>: nao e clique, nao e opaca, e opacidade nenhuma. O que a diferencia e o cursor e
+     a ausencia de hover, nao a tinta. */
+  .cob-linha.is-coberta{cursor:default;}
   .cob-linha.is-aberta{background:var(--panel2);border-color:var(--ink);}
   .cob-et{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
   .cob-trilha{height:9px;border-radius:var(--r-pill);background:var(--sunk);overflow:hidden;min-width:0;}
@@ -40590,7 +40615,11 @@ function painelConducaoHTML(r, idx, total, planos) {
       </div>
 
       <div class="cond-rodape">
-        <button type="button" class="cond-btn" data-cond-nav="ant" ${idx === 0 ? 'disabled' : ''}>← anterior</button>
+        <!-- No primeiro da fila nao existe anterior, e seta inerte e clique morto: ela
+             ocupa o lugar, pede o dedo e nao leva a lugar nenhum. Sem botao o rodape fica
+             com um item menos, e o "próximo →" continua na mesma ponta (o espacador do
+             flex e que manda). -->
+        ${idx === 0 ? '' : '<button type="button" class="cond-btn" data-cond-nav="ant">← anterior</button>'}
         <button type="button" class="cond-btn is-ghost" data-cond-funil="${esc(String(r.ownerId))}">Abrir o funil completo dele</button>
         <button type="button" class="cond-btn is-ghost" data-cond-sair>Sair da condução</button>
         <button type="button" class="cond-btn is-primaria" data-cond-nav="prox">${idx + 1 === total ? 'Encerrar' : 'próximo →'}</button>
@@ -41104,20 +41133,49 @@ function buildCompromissoDoDiaHTML(r) {
         ${seq.map((s, i) => {
           const tipoPendente = !s.tipo;
           return `
-          <label class="comp-seq-item${tipoPendente ? ' is-tipo-pendente' : ''}">
-            <input type="checkbox" class="comp-seq-check" data-idx="${i}" data-tipo="${esc(s.tipo || '')}" ${tipoPendente ? '' : 'checked'} ${tipoPendente || travada ? 'disabled' : ''}>
+          <!-- ══ SEM INPUT DESABILITADO: OU E CONTROLE, OU E MARCA (03/09/26) ══════════
+               Dois casos nao aceitam clique, e por motivos diferentes:
+
+                 travada       o dia ja fechou — a lista virou registro do combinado
+                 tipoPendente  a etapa do negocio nao e reconhecida (TIPO_DA_PROMESSA),
+                               entao nao da para dizer o que ele promete. A propria linha
+                               explica e manda corrigir no HubSpot.
+
+               Nos dois, o certo e NAO ser caixa. Caixa desabilitada convida o clique e
+               nao responde; marca estatica diz "isto e o que ficou combinado". E o <label>
+               vira <div>: label sem controle dentro nao rotula nada, so herda o
+               cursor:pointer e mente junto. -->
+          ${(tipoPendente || travada)
+            ? `<div class="comp-seq-item is-registro${tipoPendente ? ' is-tipo-pendente' : ''}">
+               <span class="comp-seq-marca${tipoPendente ? '' : ' is-on'}" aria-hidden="true">${tipoPendente ? '—' : '✓'}</span>`
+            : `<label class="comp-seq-item">
+               <input type="checkbox" class="comp-seq-check" data-idx="${i}" data-tipo="${esc(s.tipo || '')}" checked>`}
             <span class="comp-seq-n">${i + 1}</span>
             <b class="comp-seq-nome">${esc(s.nome)}</b>
             <span class="comp-seq-tipo is-${esc(s.tipo || 'pendente')}">${tipoPendente ? 'ação a confirmar' : esc(rotuloDaPromessa(s.tipo, 1))}</span>
             <span class="comp-seq-motivo">${tipoPendente ? 'etapa do negócio não reconhecida — corrija no HubSpot antes de prometer' : esc(s.motivo)}</span>
-          </label>`;
+          ${(tipoPendente || travada) ? '</div>' : '</label>'}`;
         }).join('')}
       </div>
 
       <div class="comp-seq-acoes">
         <span class="promessa-tally" id="compromissoSoma">Sua promessa: ${linhaSoma(somaTotal)}</span>
         <span style="flex:1;"></span>
-        <button type="button" class="comp-seq-btn is-primaria" id="compromissoFechar" ${travada ? 'disabled' : ''}>${travada ? 'Travada às 13h' : jaFechado ? 'Refazer' : 'Confirmar →'}</button>
+        <!-- ══ TRAVADO NAO E BOTAO DESABILITADO (03/09/26) ══════════════════════════════
+             Julyan: "sem botão desabilitado pfv".
+
+             Este era o pior caso do produto: o CTA mais destacado da aba — vermelho, 44px,
+             com a forma de "aja agora" — nascia disabled depois da trava e ficava a tarde
+             inteira ali, convidando o clique e nao respondendo. Opacidade .55 nao e sinal
+             suficiente: a forma grita mais alto que a transparencia.
+
+             Depois da trava nao existe acao neste bloco, e a leitura honesta e essa: ele
+             vira REGISTRO. O que muda dali em diante e o resultado, e os gestos do
+             resultado ("Ficha", "Furou") ja estao vivos logo abaixo, na mesma aba — nao
+             precisa de atalho, precisa de nao mentir. -->
+        ${travada
+          ? '<span class="comp-seq-travada">🔒 Travada às 13h · daqui pra frente só o resultado muda</span>'
+          : `<button type="button" class="comp-seq-btn is-primaria" id="compromissoFechar">${jaFechado ? 'Refazer' : 'Confirmar →'}</button>`}
       </div>
       <span class="comp-seq-status" id="compromissoStatus"></span>
 
@@ -42125,7 +42183,10 @@ async function renderDaily() {
         <button id="dailyPrev">← dia útil anterior</button>
         <span class="date-label">${fmtDailyLabel(dailyRefDate)}</span>
         <button id="dailyNext">próximo dia útil →</button>
-        <button id="dailyToday"${noDiaUtilCorrente ? ' disabled title="Você já está no dia útil corrente"' : ''}>hoje</button>
+        <!-- "hoje" so existe quando ha para onde ir. O title dizia "Você já está no dia
+             útil corrente" — informacao correta escondida atras de um hover, num botao que
+             nao responde. A data ao lado ja diz em que dia ele esta. -->
+        ${noDiaUtilCorrente ? '' : '<button id="dailyToday">hoje</button>'}
       </div>`;
   /* TRÊS SITUAÇÕES DIFERENTES, TRÊS FRASES (30/08/26 — corrigido com o print do Marco).
 
@@ -42656,11 +42717,12 @@ async function renderDaily() {
     // calcularConquistas() saiu daqui: era consumida só pela ficha de promessa do
     // executivo, que virou briefing. As conquistas do executivo agora são as
     // comprovadas (conquistasComprovadas), montadas dentro do próprio briefing.
-    // Gestor só acompanha/valida (na Daily oficial, ao vivo) — quem preenche é o
-    // próprio executivo. Trava os campos pra não rolar sobrescrita sem querer.
+    /* disabledAttr e inputStyleExtra viviam aqui e NUNCA foram usados — conferido em
+       03/09/26: duas declaracoes, zero referencias. A intencao (o gestor ve os campos do
+       executivo travados, com cursor:not-allowed) nunca chegou a tela, e ainda bem: era
+       exatamente o tipo de campo cinza que o Julyan pediu para tirar. Removidas em vez de
+       ligadas. */
     const souGestor = sessaoAtual && sessaoAtual.role === 'manager';
-    const disabledAttr = souGestor ? 'disabled' : '';
-    const inputStyleExtra = souGestor ? 'opacity:.65;cursor:not-allowed;' : '';
 
     // Semana com ícone por dia útil — reaproveita diasUteisDaSemana/bateuPrometido/getDaily,
     // que já existiam (usados no cálculo de sequência). Dia futuro (sem daily ainda) fica neutro.
@@ -43548,14 +43610,18 @@ async function renderDaily() {
       const fora = e.descobertos.length;
       const pctE = e.total ? Math.round((e.cobertos / e.total) * 100) : 0;
       const tom = pctE >= 60 ? 'is-ok' : (pctE >= 25 ? 'is-meio' : 'is-ruim');
-      return '<button type="button" class="cob-linha ' + tom + '"'
-        + (fora > 0 ? ' data-cob-etapa="' + esc(String(e.stageId)) + '"' : ' disabled')
+      /* Etapa 100% coberta nao tem ninguem para mostrar, entao ela nao e botao: e barra.
+         Botao desabilitado aqui era pior que inutil — a linha coberta e a BOA noticia do
+         bloco, e ela aparecia apagada, com cara de indisponivel. */
+      const abre = fora > 0;
+      return '<' + (abre ? 'button type="button"' : 'div') + ' class="cob-linha ' + tom + (abre ? '' : ' is-coberta') + '"'
+        + (abre ? ' data-cob-etapa="' + esc(String(e.stageId)) + '"' : '')
         + ' title="' + (fora > 0 ? 'Ver os ' + fora + ' sem cobertura de ' + esc(String(e.label)) : 'Toda a etapa está coberta hoje') + '">'
         + '<span class="cob-et">' + esc(String(e.label)) + '</span>'
         + '<span class="cob-trilha"><i style="width:' + pctE + '%;"></i></span>'
         + '<span class="cob-num">' + e.cobertos + '<small>/' + e.total + '</small></span>'
         + '<span class="cob-fora">' + (fora > 0 ? fora + ' de fora' + (e.atrasadosSemCobertura > 0 ? ' · ' + e.atrasadosSemCobertura + ' no vermelho' : '') : 'tudo coberto') + '</span>'
-        + '</button>';
+        + '</' + (abre ? 'button' : 'div') + '>';
     }).join('');
 
     return '<div class="gi-card cob-card" id="coberturaFunil">'
