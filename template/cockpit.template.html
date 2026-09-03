@@ -3100,6 +3100,10 @@
   .dc-neutro{display:block;font-size:11.5px;line-height:1.5;color:var(--muted);}
   .dc-nm{display:block;font-size:11px;line-height:1.5;color:var(--muted2);font-weight:700;}
   .dc-resumo{display:block;font-size:11.5px;color:var(--muted);margin-bottom:6px;}
+  /* A evidencia de quem NAO fechou o plano: existe, e nao se confunde com plano. Fio
+     ambar a esquerda porque nao e erro nem acerto — e meio caminho. */
+  .dc-evid{display:block;margin-top:6px;padding-left:8px;border-left:2px solid var(--amber);
+    font-size:11px;line-height:1.5;color:var(--muted);}
   /* A rua em uma linha: os dois estados lado a lado, com um ponto entre eles. Quebra
      sozinha no celular, onde a linha nao cabe. */
   .dc-linha{display:flex;gap:7px;flex-wrap:wrap;align-items:baseline;}
@@ -22862,7 +22866,8 @@ async function renderProspeccaoExecutivo() {
      A CAUSA, em duas linhas do mesmo arquivo que se anulam:
 
        const mostrarHoje = souRep && agendaEstado.subview !== 'semana';   // renderAgenda
-       ... (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '')
+       ... (mostrarHoje ? o div do planoDoDiaSlot : '')
+       [o trecho acima esta parafraseado de proposito: ver a nota no fim deste bloco]
 
        if (souRep && agendaEstado.subview !== 'semana') { renderProspeccaoExecutivo(); return; }
 
@@ -22881,7 +22886,54 @@ async function renderProspeccaoExecutivo() {
      O SLOT VOLTA AQUI, e nao no renderAgenda: esta e a tela que o executivo abre de
      verdade quando clica em Planejamento. Devolver na outra seria devolver para um lugar
      onde ele nao vai. E vem PRIMEIRO, antes do hero do ritual, porque nomear os clientes
-     do dia e o passo 1 do ritual — prospectar vem depois de saber com quem se fala. */
+     do dia e o passo 1 do ritual — prospectar vem depois de saber com quem se fala.
+
+     ── NOTA DE 03/09/26, sobre a parafrase la em cima ────────────────────────────────
+     Este comentario citava a linha do slot TEXTUALMENTE, com o atributo id e tudo. Ao
+     mover o plano para a Minha Daily, a guarda 10 (que procura a forma emitida do slot
+     para descobrir qual funcao a emite) encontrou ESTA CITACAO primeiro, concluiu que o
+     dono era renderProspeccaoExecutivo e reportou VERDE — validando um comentario, com o
+     slot de verdade duas mil linhas adiante e a montagem em outra funcao.
+
+     Ou seja: a documentacao boa de um defeito virou o proximo defeito. Por isso a linha
+     esta parafraseada, e por isso a guarda passou a ignorar comentarios. Duas correcoes
+     independentes para a mesma armadilha, de proposito: esta guarda ja deu falso verde
+     tres vezes, e uma delas em cima do exato defeito que ela existe para pegar. */
+  /* ══ ESTE CARD FICA AQUI, E O ATO DA DAILY E OUTRO (03/09/26) ════════════════════
+     Eu MOVI este slot para a Minha Daily e desfiz. Registro os dois numeros que me
+     fizeram desfazer, porque a intencao estava certa e a execucao errada:
+
+       o card inteiro          3588px  (3,6 telas)
+       "Assine o seu dia"       778px  <- o unico pedaco que fecha plano
+       "Monte a rota"          1374px
+       "Onde voce atua hoje"    511px
+       o brief de instrucao     557px
+
+     Movido para cima do hero, o executivo abria a Minha Daily e recebia 3,6 telas de
+     montagem de rota antes do proprio placar. O Julyan pediu a aba "mais didatica
+     possivel"; isso e o contrario.
+
+     E MOVER ERA A FERRAMENTA ERRADA: a Daily JA TEM o ato de fechar o plano, em
+     #compromissoDoDia — caixas de selecao sobre a fila, zero digitacao, e a gravacao
+     de planos_diarios E de dailies.prometido_* no mesmo confirm. Ele estava
+     inalcancavel (ver o comentario em dailyV5HTML), o que fazia a Daily parecer nao
+     ter plano nenhum. O conserto foi devolver AQUELE bloco, nao arrastar este card.
+
+     O que sobra aqui e o que esta aba sempre foi: territorio, rota e contas-alvo. */
+  /* ══ OS QUATRO ENDERECOS DO MESMO ATO (historico, 03/09/26) ══════════════════════
+     Julyan: "mas onde eles decidem esse plano? é a daily? está confuso pra mim ainda".
+
+     Estava confuso porque eram TRES lugares para um ato:
+       1. o card "Assine o seu dia", aqui no Planejamento;
+       2. a promessa numerica (prometido_visitas), na aba Minha Daily, travando as 9h30;
+       3. a agenda do HubSpot, que a tela do gestor lia como plano.
+
+     E a aba chamada "Minha Daily" nao deixava ele fazer a daily: medido em 03/09, ZERO
+     inputs, nenhum card de plano, e nenhum link para ca. Ela so informava "a promessa
+     travou vazia as 9h30". O nome prometia o ritual e a tela era o placar da derrota.
+
+     Decisao dele: o plano se decide na MINHA DAILY. Este slot foi para dailyV5HTML. Aqui
+     fica o que esta aba sempre foi — prospeccao, rota e contas-alvo. Um ato, um lugar. */
   box.innerHTML = `
     <div id="planoDoDiaSlot"></div>
     <!-- HERO DO RITUAL (v4, 01/09/26). A prancha v4 troca o segmentado por três CARDS DE
@@ -23222,6 +23274,14 @@ async function renderProspeccaoExecutivo() {
     <div class="prosp2-toast" id="prosp2Toast"><span class="ok">✓</span><span id="prosp2ToastTxt">Adicionado</span></div>
   `;
 
+  /* MONTA O CARD NO SLOT QUE ACABOU DE NASCER. Sem esta chamada o slot seria uma div
+     vazia — o mesmo defeito de antes, na direcao oposta. Nao bloqueia o resto da tela
+     (sem await): a fila de contas-alvo nao pode esperar o plano carregar do Supabase. */
+  if (DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
+    const meuRep = (DATA.reps || []).find(x => String(x.ownerId) === String(sessaoAtual.ownerId));
+    if (meuRep) montarPlanoDoDia(meuRep).catch(e => console.error('Erro ao montar o plano do dia:', e));
+  }
+
   prosp2LigarEventos(todosOsMeus, ownerId);
   /* v4: a fila desta aba é a de baldes; wireFilaDeFollowUp continua servindo o Meu funil. */
   if (repDoPlano) pl4LigarPassoA(box, repDoPlano);
@@ -23410,13 +23470,6 @@ function prosp2LigarEventos(universo, ownerId) {
      regra é que a grade NÃO muda enquanto se busca: buscar é uma pergunta, e uma pergunta
      não pode destruir o contexto que a pessoa está usando para decidir.
      ══════════════════════════════════════════════════════════════════════════════════════ */
-  /* MONTA O CARD NO SLOT QUE ACABOU DE NASCER. Sem esta chamada o slot seria uma div
-     vazia — o mesmo defeito de antes, na direcao oposta. Nao bloqueia o resto da tela
-     (sem await): a fila de contas-alvo nao pode esperar o plano carregar do Supabase. */
-  if (DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
-    const meuRep = (DATA.reps || []).find(x => String(x.ownerId) === String(sessaoAtual.ownerId));
-    if (meuRep) montarPlanoDoDia(meuRep).catch(e => console.error('Erro ao montar o plano do dia:', e));
-  }
 
   const pl5Input = document.getElementById('pl5BuscaInput');
   const pl5Drop = document.getElementById('pl5Drop');
@@ -24551,9 +24604,19 @@ function renderAgenda() {
   // que o "escolher contas →" do card promete) nunca tinha sido inserida na tela. Só
   // existia calculada, sem nenhum lugar que a usasse — código morto. Agora entra na
   // subview "hoje", junto dos outros cards do próprio executivo.
+  /* ══ ESTE SLOT ERA CODIGO MORTO, E FOI REMOVIDO EM 03/09/26 ══════════════════════════
+     mostrarHoje aqui e `souRep && agendaEstado.subview !== 'semana'` — a MESMA condicao do
+     early-return no topo desta funcao, que faz `renderProspeccaoExecutivo(); return;`.
+     Quando ela e verdadeira esta funcao ja retornou, entao mostrarHoje so chega aqui como
+     false: o slot nunca era emitido e a montagem nunca achava onde escrever.
+
+     Nao removi so por limpeza. Com o plano morando na Minha Daily, uma mudanca futura de
+     subview que reabrisse este caminho criaria um SEGUNDO #planoDoDiaSlot no documento — e
+     getElementById devolve o primeiro, entao o card apareceria na aba errada, escrevendo
+     no plano de hoje sem que ninguem entendesse por que. Id duplicado nao da erro; da
+     tela errada em silencio. */
   let h = bannerAgendaGestor + bannerAgendaExec +
-    resumoSemanaHojeExec + (mostrarHoje ? buracosCardExec : '') +
-    (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '');
+    resumoSemanaHojeExec + (mostrarHoje ? buracosCardExec : '');
 
   // Centro de ação do gestor: uma fonte visual para os dois riscos que exigem
   // cobrança na daily — executivo sem cobertura e oportunidade quente sem próximo passo.
@@ -24668,12 +24731,9 @@ function renderAgenda() {
 
   box.innerHTML = h;
 
-  // Julyan (08/08): "Onde você vai agir" mudou de casa (era da Hoje) — populamos o
-  // slot aqui agora. Mesma condição de sempre (Supabase configurado, papel = rep).
-  if (souRep && DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
-    const meuRep = (DATA.reps || []).find(x => x.ownerId === sessaoAtual.ownerId);
-    if (meuRep) montarPlanoDoDia(meuRep).catch(e => console.error('Erro ao montar o plano do dia:', e));
-  }
+  /* A montagem que vivia aqui foi junto com o slot, em 03/09/26 — ver o comentario acima.
+     O rastro do Julyan em 08/08 ("Onde voce vai agir mudou de casa") fica registrado: este
+     card ja mudou de aba antes, e e por isso que ele tinha quatro enderecos. */
 
   // A Agenda carrega as duas fontes da lateral por conta própria: contas-alvo no
   // Supabase e CNPJs recentes da Casa dos Dados, sempre limitados ao território do dono.
@@ -38777,6 +38837,40 @@ function dailyV5HTML(r) {
   return `<div class="dl2-shell" data-dl2-fase="${fase}" data-dl2-owner="${esc(String(r.ownerId || ''))}">
     <div class="dl2-corpo">
       ${dl2Hero(r, linhaHoje, fase, dia.linhas)}
+
+      <!-- ══ O ATO DE FECHAR O PLANO VOLTOU PARA CA EM 03/09/26 ═══════════════════════
+           Julyan: "mas onde eles decidem esse plano? e a daily? esta confuso pra mim
+           ainda". A resposta medida era pior do que confusa: em lugar NENHUM.
+
+           #compromissoDoDia e o unico ato que grava as duas coisas de uma vez —
+           planos_diarios (status plano_fechado, prioridades, contas_alvo) E os quatro
+           dailies.prometido_*, estes como SOMA DERIVADA dos clientes marcados. Caixas de
+           selecao sobre a fila sugerida, zero digitacao, e o rodape que diz "Nada marcado
+           — dia sem cliente nomeado nao e plano".
+
+           ELE ESTAVA INALCANCAVEL. buildCompromissoDoDiaHTML so era chamado por
+           buildBriefingExecutivoHTML, que e o TERCEIRO fallback da Daily (v5 -> v4 ->
+           briefing). A v5 funciona, entao o briefing nunca renderiza — e nem a v4 nem a v5
+           emitiam o bloco. wireCompromissoDoDia continuou sendo chamado a cada render,
+           procurando #compromissoDoDia, nao achando e voltando calado.
+
+           O QUE ISSO CUSTOU, medido:
+             planos_diarios sem UMA LINHA desde 28/08 (a ultima e da propria Kelly)
+             a Daily do gestor dizendo "sem cliente nomeado" para os sete, todo dia
+             os quatro prometido_* vazios para o time inteiro — o derivador estava fora
+             a Minha Daily do Bruno com ZERO inputs, so informando que travou as 9h30
+
+           E explica a Kelly, que disse ao Julyan que prometeu e nao apareceu no gestor: o
+           botao que ela usava desapareceu quando a Daily virou v4, em 30/08. Ela estava
+           certa e a tela a desmentia.
+
+           A LICAO, que e a mesma do slot do plano atras do early-return: substituir uma
+           tela por outra melhor leva embora, calado, o que so a antiga emitia. Fallback que
+           nunca roda e codigo morto — e aqui o codigo morto era o unico caminho do ritual
+           das 8h30. Por isso a guarda nova (checarAtoDoPlanoNaDaily) exige que o bloco seja
+           emitido pela montagem que RODA, e nao por alguma das que sobraram atras. -->
+      ${dailyRefDate === isoDate(new Date()) ? buildCompromissoDoDiaHTML(r) : ''}
+
       ${fase === 'fechado' ? dl2Fecho(r, linhaHoje, dia.linhas) : ''}
       <div class="dl2-grid">
         ${dl2Col1(r, linhaHoje, dia.linhas, fase)}
@@ -42525,26 +42619,78 @@ async function renderDaily() {
        registrou nada", que era mentira) e vai para o ambar, que e o estado real: ele
        assumiu um numero e ainda nao disse com quem. A cobranca da rodada muda junto — de
        "cobrar plano" para "nomear os clientes" —, e essa e a conversa certa. */
-    const registrouResumo = planoDoDiaFechado || comprometidasHoje > 0 || temPromessaNumerica;
-    const soNumeroSemCliente = !planoDoDiaFechado && comprometidasHoje === 0 && temPromessaNumerica;
+    /* ══ UMA REGRA PARA "TEM PLANO" (03/09/26) ═══════════════════════════════════════
+       Julyan: "o que diz hoje se o executivo está sem plano ou com plano? pq eles
+       agendando tem plano na daily... eu to achando bem confuso essa aba daily, sendo que
+       ela tem que ser a mais didática possível".
+
+       ELE ESTAVA CERTO, e a confusao tinha endereco: TRES fontes independentes diziam
+       "tem plano", e elas se contradiziam DENTRO DA MESMA LINHA:
+
+         planos_diarios fechado          -> alimentava o SELO ("s/ plano do dia")
+         clientes nomeados = plano ∪ AGENDA -> alimentava o ESTADO ("Plano definido")
+         dailies.prometido_visitas       -> alimentava "Numero sem cliente"
+
+       registrouResumo era o OU das tres, entao qualquer uma tirava o vermelho. Resultado
+       na tela: a mesma linha dizendo "Plano definido" e "s/ plano do dia" ao mesmo tempo,
+       porque o estado vinha da agenda e o selo vinha do plano. Quem so agendou uma tarefa
+       no HubSpot nao falou NADA na rodada, e a tela afirmava que ele planejou.
+
+       A REGRA AGORA E UMA: plano e o que ELE fechou. A daily das 8h30 responde uma
+       pergunta binaria — ele me disse o dia dele ou nao? — e agendar no CRM nao e dizer.
+       Agenda e promessa numerica descem para EVIDENCIA, ao lado, sem virar plano.
+
+       O RISCO ACEITO, dito na hora da decisao: se o time nao fechar o plano, a tela fica
+       vermelha. Mas ai o vermelho e a verdade — e ate 03/09 o card que fecha o plano
+       estava inalcancavel (ver a guarda 10), o que explica por que ninguem fechava. */
+    const planejou = planoDoDiaFechado;
+    /* Mantido com o nome antigo porque doze lugares desta funcao o leem; agora ele e
+       sinonimo de planejou, e nao mais o OU de tres fontes. */
+    const registrouResumo = planejou;
+    /* Deixou de ser ESTADO e virou FRASE: quem prometeu numero sem nomear cliente
+       continua sem plano, e o numero aparece como evidencia dentro do ambar/vermelho. */
+    const soNumeroSemCliente = !planejou && comprometidasHoje === 0 && temPromessaNumerica;
     const metasPositivas = metricasCompromisso.filter(m => Number(m.prom) > 0);
-    const cumpriuTudo = registrouResumo && metasPositivas.length > 0 && metasPositivas.every(m => m.real >= Number(m.prom));
+    /* CUMPRIU nao exige mais ter planejado: quem entregou entregou, e o ✓ e evidencia do
+       HubSpot. Quem cumpriu SEM ter planejado continua em vermelho no estado (nao me
+       disse nada) e ganha o ✓ na evidencia — as duas coisas sao verdade ao mesmo tempo. */
+    const cumpriuTudo = metasPositivas.length > 0 && metasPositivas.every(m => m.real >= Number(m.prom));
     const iniciouExecucao = metricasCompromisso.some(m => m.real > 0);
-    const promessaZerada = registrouResumo && metasPositivas.length === 0;
+    const promessaZerada = planejou && metasPositivas.length === 0;
     /* Ambar tambem para "numero sem cliente": vermelho e para quem nao registrou nada, e
        ele registrou. Como registrouResumo agora e true nesse caso, ele cai no ambar sem
        precisar de ramo novo — mas fica dito, porque a leitura da cor e a que muda a
        conversa da rodada. */
-    const estadoClasse = !registrouResumo ? 'red' : cumpriuTudo ? 'green' : 'amber';
-    const estadoCor = !registrouResumo ? 'var(--red)' : cumpriuTudo ? 'var(--green)' : 'var(--amber)';
+    /* ══ TRES ESTADOS, NAO CINCO (03/09/26, decisao do Julyan) ═══════════════════════
+         SEM PLANO    vermelho — ele nao me disse nada
+         PLANEJADO    ambar    — me disse e ainda nao andou
+         EM EXECUCAO  verde    — planejou E ja tem evidencia no HubSpot (✓ se cumpriu)
+
+       EXECUCAO SO E VERDE PARA QUEM PLANEJOU, e isso e deliberado. Quem esta na rua sem
+       ter dito nada na rodada nao pode ler igual a quem combinou e cumpriu: o verde e o
+       premio do ritual, nao do movimento. Ele fica em vermelho com a evidencia ao lado —
+       "2 visitas comprovadas" —, que e a leitura honesta: fez, e nao combinou.
+
+       "Cumprido" saiu de estado e virou ✓ dentro do verde. "Numero sem cliente" saiu de
+       estado e virou frase dentro do vermelho. Cinco rotulos mais tres de selo viraram
+       tres, porque a pergunta das 8h30 nao tem cinco respostas. */
+    const emExecucao = planejou && iniciouExecucao;
+    const estadoClasse = !planejou ? 'red' : emExecucao ? 'green' : 'amber';
+    const estadoCor = !planejou ? 'var(--red)' : emExecucao ? 'var(--green)' : 'var(--amber)';
     // REDESIGN Daily & Ritmo (15/08/26) — tint de fundo do novo avatar por iniciais,
     // mesma régua de 3 estados que já colore a borda esquerda do card (estadoCor).
-    const estadoSoft = !registrouResumo ? 'var(--red-soft)' : cumpriuTudo ? 'var(--green-soft)' : 'var(--amber-soft)';
+    const estadoSoft = !planejou ? 'var(--red-soft)' : emExecucao ? 'var(--green-soft)' : 'var(--amber-soft)';
     /* NOMEAR OS CLIENTES e uma acao propria (03/09/26). Antes, quem prometeu numero sem
        nomear caia em "Cobrar plano", que e a cobranca de quem nao fez nada — e o Julyan
        cobraria a pessoa errada, do jeito errado, na frente do time. */
-    const acaoGestor = !registrouResumo ? 'Cobrar plano'
-      : soNumeroSemCliente ? 'Nomear os clientes'
+    /* A ACAO SEGUE A MESMA REGUA DO ESTADO (03/09/26). Antes ela lia registrouResumo, que
+       era o OU de tres fontes — e quem so tinha tarefa no CRM caia em "Recalibrar" ou
+       "Comecar agora" em vez de ser cobrado pelo plano que nunca fechou.
+
+       "Nomear os clientes" continua existindo para quem prometeu NUMERO sem nome: e o
+       caso em que cobrar o plano inteiro seria injusto, porque ele fez metade. */
+    const acaoGestor = soNumeroSemCliente ? 'Nomear os clientes'
+      : !planejou ? 'Cobrar plano'
       : promessaZerada ? 'Recalibrar plano'
       : cumpriuTudo ? 'Reconhecer entrega'
       : iniciouExecucao ? 'Destravar execução'
@@ -42617,11 +42763,10 @@ async function renderDaily() {
 
     /* O SELO NAO PODE DIZER "Plano definido" PARA QUEM SO ESCREVEU UM NUMERO: a reuniao
        le esse selo de longe e agiria como se os clientes estivessem escolhidos. */
-    const estadoExec = !registrouResumo ? 'Plano aberto'
-      : cumpriuTudo ? 'Plano cumprido'
-      : iniciouExecucao ? 'Em execução'
-      : soNumeroSemCliente ? 'Número sem cliente'
-      : 'Plano definido';
+    /* Tres rotulos, um por estado. Ver o bloco de estadoClasse para o porque. */
+    const estadoExec = !planejou ? 'Sem plano'
+      : emExecucao ? (cumpriuTudo ? 'Em execução ✓' : 'Em execução')
+      : 'Planejado';
     const pctMetrica = m => Number(m.prom) > 0 ? Math.min(100, Math.round((m.real / Number(m.prom)) * 100)) : 0;
     const metricaTime = m => `
       <span class="daily-team-metric ${m.cls}">
@@ -42980,6 +43125,25 @@ async function renderDaily() {
     /* Q1 — ONDE ELE ATUA HOJE. Chips de cliente com HORA, do compromisso ja deduplicado
        por cliente (ver "conta cliente, nao linha de agenda"). Chip verde = comprovado no
        HubSpot; sem plano = linha vermelha com a frase que a prancha pede. */
+    /* ══ A EVIDENCIA NAO E PLANO, MAS TAMBEM NAO SE ESCONDE (03/09/26) ═══════════════
+       Com a regra nova, agenda e promessa numerica pararam de contar como plano. Elas NAO
+       podem simplesmente desaparecer: quem tem 3 clientes na agenda e nao fechou o plano
+       e um caso diferente de quem nao tem nada — o primeiro se preparou e nao avisou, o
+       segundo nao se preparou. Cobrar os dois igual seria perder a diferenca que decide a
+       conversa.
+
+       Entao a evidencia vem ESCRITA e rotulada como evidencia, embaixo do estado. */
+    const dcEvidenciaHTML = (() => {
+      if (planejou) return '';
+      const partes = [];
+      if (comprometidasHoje > 0) partes.push(comprometidasHoje + ' cliente(s) na agenda do HubSpot');
+      if (temPromessaNumerica) partes.push('prometeu ' + promVisitasDoDia + ' visita(s) no número');
+      const feitas = Number(realVisitas) || 0;
+      if (feitas > 0) partes.push(feitas + ' visita(s) já comprovada(s)');
+      if (!partes.length) return '';
+      return '<span class="dc-evid">tem, mas não fechou o plano: ' + esc(partes.join(' · ')) + '</span>';
+    })();
+
     const dcOndeAtuaHTML = (() => {
       if (!comLead.length) {
         if (soNumeroSemCliente) {
@@ -43071,6 +43235,7 @@ async function renderDaily() {
           <span class="dc-q">
             <span class="dc-rot">Onde ele atua hoje</span>
             ${dcOndeAtuaHTML}
+            ${dcEvidenciaHTML}
           </span>
 
           <!-- PERGUNTA 2 — o que segura o funil dele -->
