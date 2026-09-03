@@ -88,6 +88,22 @@ checar('a troca de capítulo não passa por setTimeout (aba de fundo estrangula 
 checar('a numeração dos capítulos é fixa, não reordenada pelo momento',
   template.indexOf('const PB8_ORDEM = ') > 0
   && template.indexOf('function pb8NumeroDe(') > 0);
+const ordemCapitulos = ['Comece aqui', 'Produto e mercado', 'Venda na rua', 'Converter e fechar',
+  'Processos internos', 'Carteira e retenção', 'Desenvolvimento', 'Liderança'];
+checar('a trilha dos capítulos segue aprender → vender → operar → reter → desenvolver',
+  JSON.stringify(compilado.categorias) === JSON.stringify(ordemCapitulos)
+  && template.indexOf("const PB8_ORDEM = ['Comece aqui', 'Produto e mercado', 'Venda na rua', 'Converter e fechar',") > 0);
+const ordemPaginas = [
+  'excelencia', 'onboarding', 'metas-cadencia', 'rotina-executivo',
+  'ecossistema-takeat', 'catalogo-solucoes', 'concorrencia', 'dark-kitchen', 'rota-inteligente',
+  'conciliacao-ofx', 'multilojas', 'equipamentos', 'displays-comandas',
+  'prospeccao-inteligente', 'prospeccao-porta-a-porta', 'acesso-decisor', 'follow-up', 'rua-whatsapp',
+  'mapa-dor-solucao', 'objecoes', 'fechamento', 'clientes-mrr',
+  'pipeline', 'dados-cadastro', 'faq', 'links-uteis', 'relacionamento', 'evitar-churn',
+  'plano-carreira', 'rotina-gestor'
+];
+checar('as páginas seguem a ordem pedagógica e planejar vem antes de bater na porta',
+  JSON.stringify(compilado.paginas.map(p => p.id)) === JSON.stringify(ordemPaginas));
 checar('o filtro de formato esmaece em vez de esconder',
   template.indexOf("pg.classList.toggle('is-fora'") > 0
   && template.indexOf('.pb8-pg.is-fora{opacity:.3;}') > 0);
