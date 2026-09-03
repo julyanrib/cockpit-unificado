@@ -162,14 +162,19 @@ for (const m of cod.matchAll(/\n(?:const|let) ([A-Z][A-Z0-9_]{2,})\s*=/g)) {
    executivo". A checagem possivel estaticamente e a das TABELAS: se o executivo ESCREVE
    numa coluna que a tela do gestor nunca le, ele preenche no vazio; se o gestor LE uma
    coluna que ninguem escreve, ele cobra o que a tela nao permite registrar. As duas doem, e
-   em direcoes opostas. */
+   em direcoes opostas.
+
+   `status` FALTAVA NA LISTA DE LEITURA e a varredura acusou 'gravada e nunca lida' — o
+   template le plano.status treze vezes. Bug meu, e do tipo mais perigoso numa auditoria:
+   o achado tinha a forma exata de um defeito real (o executivo preenchendo no vazio) e era
+   uma lista incompleta minha. Por isso as duas listas agora tem as MESMAS colunas. */
 const colunasEscritas = new Set();
 const colunasLidas = new Set();
 /* escrita: chaves de objeto passadas a upsert/update/insert nas tabelas do plano/daily */
 for (const m of cod.matchAll(/\b(prometido_[a-z]+|prioridades|contas_alvo|local_atuacao|bloqueios|observacao|status|fechado_em|agenda_resumo|daily_snapshot)\s*:/g)) {
   colunasEscritas.add(m[1]);
 }
-for (const m of cod.matchAll(/\.(prometido_[a-z]+|prioridades|contas_alvo|local_atuacao|bloqueios|observacao|fechado_em|agenda_resumo|daily_snapshot)\b/g)) {
+for (const m of cod.matchAll(/\.(prometido_[a-z]+|prioridades|contas_alvo|local_atuacao|bloqueios|observacao|status|fechado_em|agenda_resumo|daily_snapshot)\b/g)) {
   colunasLidas.add(m[1]);
 }
 for (const c of colunasEscritas) {
