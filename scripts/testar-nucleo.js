@@ -976,11 +976,32 @@ teste('a soma ignora tipo inválido em vez de transformá-lo em visita', () => {
   igual(som.visitas + som.avancos + som.propostas + som.fechamentos, itens.length - 1, 'só itens classificados entram');
 });
 
-teste('a promessa trava exatamente às 9h30 no relógio de Brasília', () => {
+/* A HORA MUDOU DE 9H30 PARA 13H EM 03/09/26 (decisão do Julyan). O ritual continua às
+   8h30 — a trava não é o horário da daily, é o prazo. 9h30 dava uma hora a quem entra na
+   rua às 8h; 13h dá a manhã inteira e ainda deixa a tarde correndo contra uma promessa
+   registrada, que é o ponto de travar.
+
+   O teste continua cravando o minuto exato de propósito: este limite é o que decide se a
+   tela deixa ou não o executivo se comprometer, e um erro de 1 minuto aqui é a diferença
+   entre cobrar alguém por um prazo e cobrá-lo por um bug (foi exatamente o que aconteceu
+   entre 30/08 e 03/09, com o botão de fechar o plano fora da tela). */
+teste('a promessa trava exatamente às 13h no relógio de Brasília', () => {
   const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
-  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 9, 29))), false, '9h29 ainda permite confirmar');
-  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 9, 30))), true, '9h30 trava');
+  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 12, 59))), false, '12h59 ainda permite confirmar');
+  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 13, 0))), true, '13h trava');
   igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 18, 0))), true, 'não reabre durante o dia');
+  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 7, 31, 9, 30))), false, '9h30 deixou de travar');
+});
+
+/* O DIA LIBERADO, que é datado e se apaga sozinho. Sem este teste a liberação seria uma
+   data solta no meio de 45 mil linhas: ninguém saberia que ela existe nem quando deixa de
+   valer, e uma liberação esquecida ligada é uma trava que nunca mais trava. */
+teste('o dia liberado não trava, e só ele', () => {
+  const c = novoContexto(dados({}), { ownerId: OWNER, role: 'rep' });
+  /* Pelo COMPORTAMENTO, e não lendo a constante: o harness expõe as funções marcadas, não
+     os consts do módulo, e de todo modo a pergunta que importa é o que a tela faz. */
+  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 8, 3, 18, 0))), false, '03/09 às 18h ainda aceita');
+  igual(c.promessaTravadaNoHorario(new Date(Date.UTC(2026, 8, 4, 13, 0))), true, '04/09 às 13h já trava');
 });
 
 // NOTA (28/08/26) — a integração "a sequência do dia carrega o tipo de cada item" NÃO
