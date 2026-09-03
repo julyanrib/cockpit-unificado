@@ -22163,6 +22163,322 @@ function wireFilaDeFollowUp(rootEl, r) {
   });
 }
 
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   PLANEJAMENTO 6a — A CAMADA DE DADOS
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Prancha 6a, aprovada pelo Julyan em 03/09/26. A aba passa a ser a SEMANA do executivo:
+   5 dias x 7 horarios (09:00 -> 19:00), uma regiao de ataque por dia, e o abastecimento
+   vindo de dois lados — a carteira do HubSpot e o lote novo de contas-alvo.
+
+   ESTA CAMADA VEM ANTES DA TELA, E FOI PROVADA COM DADO REAL ANTES DELA EXISTIR. Tres
+   coisas que a prancha assumia nao se sustentaram na medicao, e cada uma mudou o desenho:
+
+   1. A REGIAO CASA POR DISTANCIA, NAO POR NOME. O mockup comparava `l.bairro === rota`,
+      porque era mockup com dado inventado. Julyan, confirmando: "eles fazem com as
+      coordenadas, o bairro é onde ele atuaria e corresponde com as coordenadas". E e assim
+      que o resto do Planejamento sempre funcionou (pl4KmDoCaminho, raioKm, "0,4 km do
+      centro da rota").
+
+   2. A CARTEIRA QUASE NAO TEM COORDENADA. Medido na sessao do Marco: 18 negocios abertos,
+      etapa/dias/SLA em 18, coordenada em 4, bairro em ZERO. O HubSpot TEM as propriedades
+      (bairro, cep, logradouro estao na whitelist de mudar-etapa-negocio) e ninguem
+      preenche. Por isso existe pl6EnderecoDoNegocio(): o executivo preenche uma vez e o
+      negocio passa a entrar em regiao. Sem isso, 14 de 18 ficariam fora do mecanismo
+      central da tela para sempre.
+
+   3. BAIRRO DUPLICADO POR CAIXA. A base tem "PRAIA DA COSTA" e "Praia da Costa" como
+      bairros diferentes — 8 contas num, 6 no outro. O picker de regiao mostraria o mesmo
+      bairro duas vezes com as contas partidas. Normalizo NA LEITURA (decisao do Julyan:
+      "normaliza na leitura"), o que junta os dois e preserva a origem.
+
+   O CENTRO DE CADA REGIAO E A MEDIA DAS CONTAS DELA, e nao um geocode. Duas razoes: nao
+   depende de rede, e o centro fica onde as OPORTUNIDADES estao, nao onde a prefeitura
+   desenhou o bairro. Um bairro com oito contas todas numa avenida tem centro naquela
+   avenida, que e onde o executivo vai andar.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+/* Os sete horarios da prancha. Nao e a regua do agendador rapido (10h + 45min): aquele
+   preenche buraco, este e a grade que o executivo LE. As duas conviviam antes desta
+   prancha e continuam — o que nao pode existir e uma terceira. */
+const PL6_HORAS = ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
+const PL6_SLOTS = PL6_HORAS.length;
+const PL6_DIAS_UTEIS = 5;
+const PL6_BLOQUEADO = '__b';
+
+/* Cores por etapa do funil e por fonte do lote — as mesmas da prancha, e as mesmas que a
+   Daily 4a usa. Ficam aqui como tabela porque a prancha as define por nome de etapa, e
+   traduzir de stageId para nome em cada uso espalharia o de/para. */
+const PL6_COR_ETAPA = {
+  '1395880469': '#E51A31', // Prospecção
+  '1396005401': '#F2542D', // Visita (Contato feito, na prancha)
+  '1395880470': '#E8A23D', // Conversa com Decisor
+  '1395880471': '#9C5BD6', // Demo/Proposta
+  '1395880472': '#D6497E', // Negociação
+  '1395880473': '#1E9E7B'  // Ag. Pagamento
+};
+const PL6_FONTES = {
+  casa: { rot: 'CASA DOS DADOS', cor: '#C77D2E', bg: '#FBF3E6' },
+  aval: { rot: 'MAIS AVALIADOS', cor: '#1E9E7B', bg: '#EAF6F1' }
+};
+
+/* ══ A NORMALIZACAO DE BAIRRO, NA LEITURA ═══════════════════════════════════════════
+   Junta "PRAIA DA COSTA" e "Praia da Costa". Devolve a chave para agrupar; o ROTULO que
+   aparece na tela e a forma mais bonita encontrada (Title Case), montada em pl6Regioes.
+
+   Sem regex de acento: normalize('NFD') e filtro por codigo, o mesmo padrao que
+   coberturaDoFunil usa — regex de faixa unicode escrita a mao ja chegou quebrada tres
+   vezes neste projeto. */
+function pl6ChaveBairro(s) {
+  return String(s == null ? '' : s)
+    .normalize('NFD').split('')
+    .filter(c => { const p = c.charCodeAt(0); return p < 0x300 || p > 0x36f; })
+    .join('').toLowerCase()
+    .split(' ').filter(Boolean).join(' ').trim();
+}
+
+function pl6RotuloBairro(s) {
+  const bruto = String(s == null ? '' : s).trim();
+  if (!bruto) return '';
+  /* TODO MAIUSCULA vira Title Case; o resto fica como veio. "PRAIA DA COSTA" e ruido
+     visual num chip de 11px, e "Praia da Costa" ja existe na base para o mesmo lugar. */
+  if (bruto !== bruto.toUpperCase()) return bruto;
+  const minusculas = ['de', 'da', 'do', 'das', 'dos', 'e'];
+  return bruto.toLowerCase().split(' ').filter(Boolean).map((p, i) =>
+    (i > 0 && minusculas.indexOf(p) >= 0) ? p : p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+}
+
+/* ══ A SEMANA ════════════════════════════════════════════════════════════════════════
+   Sempre a PROXIMA seg->sex, ate a trava de sexta 17h; depois dela, a corrente.
+
+   A regra da prancha lida ao pe da letra ("semana sempre = proxima seg→sex ate a trava de
+   sex 17h; depois, a corrente") produz o comportamento que o ritual pede: na quinta ele
+   planeja a semana que vem; na sexta as 18h, depois da trava, ele ja esta olhando a semana
+   que comeca na segunda seguinte — porque a atual acabou. */
+function pl6SegundaDaSemana(agora) {
+  const ag = agora || (typeof agendaAgora === 'function' ? agendaAgora() : new Date());
+  const usaUTC = typeof ag.getUTCDay === 'function' && typeof agendaAgora === 'function';
+  const dow = usaUTC ? ag.getUTCDay() : ag.getDay();
+  const hora = usaUTC ? ag.getUTCHours() : ag.getHours();
+  /* ══ A DATA DE HOJE: TRES TENTATIVAS, TRES MEDICOES ═════════════════════════════════
+     1a: `new Date(cond ? Date.UTC(...) : ano, mes, dia)` — o ternario cobria so o
+         PRIMEIRO argumento, entao com UTC virava Date(milissegundos, mes, dia). A semana
+         saiu "NaN-NaN-NaN".
+     2a: construi meia-noite UTC e passei para isoDate() — que le as partes LOCAIS. Num
+         fuso UTC-3, meia-noite UTC de 03/09 e 02/09 as 21h local: a data voltou um dia, e
+         a segunda-feira veio 30/08 quando o correto era 31/08.
+     3a: usar agendaChave(), que JA existe e JA le as partes UTC — que e a convencao de
+         Brasilia deste arquivo.
+
+     As tres foram pegas medindo a camada de dados ANTES de existir tela. Nenhuma das
+     duas primeiras daria erro: a semana simplesmente apareceria errada, e a grade de 35
+     slots gravaria no dia errado. */
+  const hoje = (typeof agendaChave === 'function' && usaUTC) ? agendaChave(ag) : isoDate(ag);
+  /* dow: 0=domingo ... 6=sabado. A segunda DESTA semana: */
+  const paraSegunda = dow === 0 ? -6 : 1 - dow;
+  const segundaAtual = addDays(hoje, paraSegunda);
+  /* Depois da trava (sexta 17h) ou no fim de semana, a semana em foco e a proxima. */
+  const passouATrava = (dow === 5 && hora >= 17) || dow === 6 || dow === 0;
+  return passouATrava ? addDays(segundaAtual, 7) : segundaAtual;
+}
+
+function pl6Dias(segunda) {
+  const rot = ['seg', 'ter', 'qua', 'qui', 'sex'];
+  return [0, 1, 2, 3, 4].map(i => {
+    const iso = addDays(segunda, i);
+    const d = new Date(iso + 'T12:00:00');
+    return { rot: rot[i], data: agendaP2(d.getDate()) + '/' + agendaP2(d.getMonth() + 1), iso: iso };
+  });
+}
+
+/* Haversine. distanciaKm ja existe no arquivo e e a mesma conta — uso a que existe. */
+function pl6Km(aLat, aLng, bLat, bLng) {
+  if (aLat == null || aLng == null || bLat == null || bLng == null) return null;
+  if (typeof distanciaKm === 'function') return distanciaKm(Number(aLat), Number(aLng), Number(bLat), Number(bLng));
+  const R = 6371, t = x => x * Math.PI / 180;
+  const dLat = t(Number(bLat) - Number(aLat)), dLng = t(Number(bLng) - Number(aLng));
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(t(Number(aLat))) * Math.cos(t(Number(bLat))) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/* ══ AS REGIOES DE ATAQUE ═══════════════════════════════════════════════════════════
+   Um bairro por linha, com centro (media das contas), quantas contas SEM DATA tem, e o
+   rotulo bonito. A contagem e o que a prancha exige aparecer ANTES do clique: "cada um com
+   o nº de contas sem data na regiao". */
+function pl6Regioes(rep) {
+  const contas = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
+    .filter(l => String(l.responsavel_owner_id) === String(rep.ownerId))
+    .filter(l => l.lat != null && l.lng != null && l.bairro);
+  const porChave = new Map();
+  contas.forEach(l => {
+    const k = pl6ChaveBairro(l.bairro);
+    if (!k) return;
+    if (!porChave.has(k)) porChave.set(k, { chave: k, rotulos: [], contas: [] });
+    const g = porChave.get(k);
+    g.rotulos.push(String(l.bairro).trim());
+    g.contas.push(l);
+  });
+  return [...porChave.values()].map(g => {
+    const n = g.contas.length;
+    /* o rotulo mais legivel entre as grafias que existem: a que NAO e toda maiuscula */
+    const bonito = g.rotulos.find(r => r !== r.toUpperCase()) || pl6RotuloBairro(g.rotulos[0]);
+    return {
+      chave: g.chave,
+      nome: bonito,
+      contas: n,
+      lat: g.contas.reduce((s, x) => s + Number(x.lat), 0) / n,
+      lng: g.contas.reduce((s, x) => s + Number(x.lng), 0) / n,
+      /* quantas grafias diferentes a base tem para este mesmo bairro. Vira o title do
+         chip: quem ler "2 grafias" entende por que a contagem juntou. */
+      grafias: [...new Set(g.rotulos)].length
+    };
+  }).sort((a, b) => b.contas - a.contas);
+}
+
+/* A regiao mais proxima de um ponto, com a distancia. Devolve null sem coordenada — e
+   ausencia de coordenada nao vira "regiao zero". */
+function pl6RegiaoDe(lat, lng, regioes) {
+  if (lat == null || lng == null || !regioes.length) return null;
+  let melhor = null;
+  regioes.forEach(r => {
+    const d = pl6Km(lat, lng, r.lat, r.lng);
+    if (d != null && (!melhor || d < melhor.km)) melhor = { chave: r.chave, nome: r.nome, km: d };
+  });
+  return melhor;
+}
+
+/* ══ A CARTEIRA ═════════════════════════════════════════════════════════════════════ */
+function pl6Carteira(rep, regioes) {
+  const abertos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : []);
+  return abertos.map(d => {
+    const reg = pl6RegiaoDe(d.lat, d.lng, regioes);
+    return {
+      id: 'c-' + d.id,
+      tipo: 'c',
+      dealId: String(d.id),
+      nome: d.name || d.dealname || 'Sem nome',
+      stageId: String(d.stageId || ''),
+      etapa: d.stage || (typeof STAGE_LABELS !== 'undefined' ? STAGE_LABELS[d.stageId] : '') || 'Etapa não reconhecida',
+      dias: d.dias != null ? Number(d.dias) : null,
+      sla: d.slaBreach === true,
+      lat: d.lat != null ? Number(d.lat) : null,
+      lng: d.lng != null ? Number(d.lng) : null,
+      regiao: reg ? reg.chave : null,
+      regiaoNome: reg ? reg.nome : null,
+      km: reg ? reg.km : null,
+      /* SEM COORDENADA E UM ESTADO, NAO UM ZERO: a tela oferece preencher o endereco em
+         vez de mostrar "0 km" ou "—" (ver pl6EnderecoDoNegocio). */
+      semEndereco: d.lat == null || d.lng == null,
+      proximaAtividade: d.proximaAtividade || null
+    };
+  });
+}
+
+/* ══ O LOTE NOVO ════════════════════════════════════════════════════════════════════
+   A prancha pede tres fontes (casa / trip / ifood). Medido na base em 03/09: Casa dos
+   Dados 1032, outscraper 235, Google Places 68 — TripAdvisor e iFood com ZERO linha. O
+   segmentado fica "casa dos dados" e "mais avaliados", e "mais avaliados" agrupa Places e
+   outscraper. Se amanha entrar iFood, ele cai no mesmo grupo sem mexer na tela. */
+function pl6GrupoDaFonte(fonte) {
+  const f = pl6ChaveBairro(fonte);
+  return f.indexOf('casa') >= 0 ? 'casa' : 'aval';
+}
+
+function pl6Novos(rep, regioes) {
+  const contas = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
+    .filter(l => String(l.responsavel_owner_id) === String(rep.ownerId))
+    .filter(l => l.status !== 'criado_hubspot' && l.status !== 'sem_fit');
+  return contas.map(l => {
+    const reg = pl6RegiaoDe(l.lat, l.lng, regioes);
+    const meses = l.data_abertura
+      ? Math.max(0, Math.round((Date.now() - new Date(l.data_abertura).getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
+      : null;
+    return {
+      id: 'n-' + l.id,
+      tipo: 'n',
+      leadId: String(l.id),
+      nome: l.nome || 'Sem nome',
+      grupo: pl6GrupoDaFonte(l.fonte),
+      fonteBruta: l.fonte || null,
+      nota: l.nota != null ? Number(l.nota) : null,
+      avaliacoes: l.avaliacoes != null ? Number(l.avaliacoes) : null,
+      mesesAberto: meses,
+      categoria: l.categoria || null,
+      telefone: l.telefone || null,
+      lat: l.lat != null ? Number(l.lat) : null,
+      lng: l.lng != null ? Number(l.lng) : null,
+      regiao: reg ? reg.chave : null,
+      regiaoNome: reg ? reg.nome : null,
+      km: reg ? reg.km : null,
+      semEndereco: l.lat == null || l.lng == null,
+      _bruto: l
+    };
+  });
+}
+
+/* ══ A PRIORIDADE ═══════════════════════════════════════════════════════════════════
+   A prancha: "SLA estourado → dias parado → ★ avaliação → distância". Carteira antes de
+   conta nova, porque cliente que ja existe e risco de perda e conta nova e so upside.
+
+   Numero alto = mais urgente. As faixas nao se cruzam de proposito: nenhuma conta nova,
+   por bem avaliada que seja, passa na frente de um cliente com SLA estourado. */
+function pl6Prioridade(l) {
+  if (l.tipo === 'c') {
+    const dias = l.dias != null ? l.dias : 0;
+    return l.sla ? 3000 + dias : 2000 + dias;
+  }
+  /* conta nova: a nota ordena entre elas, e a contagem de avaliacoes desempata — mesma
+     regua do sourcing, onde volume mede tamanho da operacao. */
+  const nota = l.nota != null ? l.nota * 10 : 0;
+  const vol = l.avaliacoes != null ? Math.min(90, Math.log10(l.avaliacoes + 1) * 25) : 0;
+  return 1000 + nota + vol;
+}
+
+/* Os candidatos para um horario, na ordem da prancha: quem esta NA REGIAO do dia primeiro,
+   depois todos os outros. `exceto` sao os ids ja colocados na grade. */
+/* ══ PRIORIDADE MANDA, REGIAO DESEMPATA — E ISSO CORRIGE A PRANCHA ══════════════════
+   A prancha diz duas coisas que se contradizem quando o lead urgente esta longe:
+
+     "3 candidatos ranqueados — SLA estourado -> dias parado -> ★ avaliacao -> distancia"
+     "contas da regiao primeiro"
+
+   E a propria manchete dela decide a favor da primeira: "Carteira primeiro; o lote novo
+   tem M contas".
+
+   MINHA PRIMEIRA VERSAO IMPLEMENTOU "regiao primeiro" e o resultado, medido com o dado do
+   Marco, foi absurdo: os 14 negocios sem coordenada nao tem regiao, entao a carteira
+   INTEIRA — inclusive clientes com SLA estourado — caiu atras de contas novas. O primeiro
+   candidato virou "Mahai Praia da Costa" (conta nova, prio 1138) na frente de um cliente
+   de prio 3006.
+
+   A ordem certa e por FAIXA: as faixas de pl6Prioridade nao se cruzam (3000 SLA, 2000
+   carteira, 1000 novos), entao SLA nunca perde para conta nova por duzentos metros. A
+   regiao ordena DENTRO da faixa, que e onde ela de fato ajuda: entre dois clientes
+   igualmente parados, vai primeiro o que esta no caminho de hoje. */
+function pl6Candidatos(regiaoChave, todos, jaNaGrade) {
+  const usados = new Set(jaNaGrade || []);
+  const naRegiao = l => (l.regiao && l.regiao === regiaoChave) ? 1 : 0;
+  return todos.filter(l => !usados.has(l.id)).sort((a, b) =>
+    (pl6Prioridade(b) - pl6Prioridade(a))
+    || (naRegiao(b) - naRegiao(a))
+    || ((a.km == null ? 1e9 : a.km) - (b.km == null ? 1e9 : b.km)));
+}
+
+/* O porque de uma linha, que a prancha exige aparecer ANTES do clique. */
+function pl6Porque(l, regiaoChave) {
+  const base = l.tipo === 'c'
+    ? (l.etapa + (l.dias != null ? ' · há ' + l.dias + 'd' : ' · dias não medidos') + (l.sla ? ' · SLA!' : ''))
+    : (l.grupo === 'casa'
+      ? ('novo · ' + (l.mesesAberto != null ? 'CNPJ há ' + l.mesesAberto + ' meses' : 'abertura não medida'))
+      : ('novo · ' + (l.nota != null ? '★ ' + l.nota.toFixed(1).replace('.', ',') : 'sem nota')
+        + (l.avaliacoes != null ? ' · ' + l.avaliacoes.toLocaleString('pt-BR') + ' avaliações' : '')));
+  if (l.semEndereco) return base + ' · sem endereço no CRM';
+  if (l.regiao && l.regiao === regiaoChave) {
+    return base + ' · ' + (l.km != null ? l.km.toFixed(1).replace('.', ',') + ' km' : '') + ' do centro da rota';
+  }
+  return base + ' · ' + (l.regiaoNome || 'fora do território') + ' — fora da rota do dia';
+}
+
 async function renderProspeccaoExecutivo() {
   const box = document.getElementById('agendaContent');
   if (!box) return;
