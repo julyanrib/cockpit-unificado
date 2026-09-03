@@ -501,6 +501,59 @@ function checarModoTv() {
 }
 if (!checarModoTv()) process.exit(1);
 
+/* == O CARD QUE ESCREVE O PLANO DO DIA TEM QUE ESTAR ALCANCAVEL (03/09/26) ==========
+   public.planos_diarios nao recebeu UMA LINHA entre 28/08 e 03/09. Ela e a unica fonte de
+   CLIENTE NOMEADO: sem ela, a Daily do gestor diz "sem cliente nomeado" para o time
+   inteiro, todo dia, e nao ha nada que o executivo possa fazer a respeito. O Julyan
+   descobriu pela Kelly, que disse ter prometido e nao aparecer na tela dele.
+
+   A CAUSA eram duas linhas do template que se anulavam: o slot #planoDoDiaSlot so era
+   emitido quando (souRep && subview !== "semana"), e havia um desvio com a MESMA condicao
+   que chamava renderProspeccaoExecutivo() e retornava antes de chegar nele. O slot era
+   inalcancavel para um executivo nos dois estados possiveis de subview.
+
+   E NADA QUEBROU: montarPlanoDoDia() abre com getElementById do slot e volta calada se
+   ele nao existir. checarSeletoresDeFiacao() nao pega este caso porque ela le
+   querySelector, e aqui e getElementById.
+
+   Esta guarda e ESTREITA de proposito. Ela nao tenta cobrir todo getElementById do
+   arquivo — guarda o caminho de escrita do PLANO DO DIA, que e o dado mais caro de
+   perder nesta ferramenta, porque ele nao volta: um dia sem plano registrado e um dia que
+   o gestor nunca vai poder ler. Duas afirmacoes: o slot e emitido na funcao que o
+   executivo realmente abre, e alguem monta o card dentro dele. */
+function checarPlanoAlcancavel() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  const marca = 'async function renderProspeccaoExecutivo()';
+  const i = cru.indexOf(marca);
+  if (i < 0) {
+    console.error('PLANO DO DIA: renderProspeccaoExecutivo nao existe mais - a guarda perdeu o alvo.');
+    return false;
+  }
+  /* O corpo da funcao: dali ate a proxima declaracao de funcao na coluna zero. */
+  const resto = cru.slice(i + marca.length);
+  const reProxima = /\n(async )?function /;
+  const fim = resto.search(reProxima);
+  const corpo = fim > 0 ? resto.slice(0, fim) : resto;
+  const falhas = [];
+  if (corpo.indexOf('id="planoDoDiaSlot"') < 0) {
+    falhas.push('o slot #planoDoDiaSlot NAO e emitido na tela que o executivo abre');
+  }
+  if (corpo.indexOf('montarPlanoDoDia(') < 0) {
+    falhas.push('ninguem chama montarPlanoDoDia() ali - o slot ficaria uma div vazia');
+  }
+  if (falhas.length) {
+    console.error('PLANO DO DIA INALCANCAVEL em ' + arquivo + ':');
+    falhas.forEach(f => console.error('  ' + f));
+    console.error('  Sem este caminho, planos_diarios para de receber linha e a Daily do gestor');
+    console.error('  diz "sem cliente nomeado" para o time inteiro, sem ninguem poder corrigir.');
+    return false;
+  }
+  console.log('OK plano do dia - o card que escreve planos_diarios esta na tela do executivo.');
+  return true;
+}
+if (!checarPlanoAlcancavel()) process.exit(1);
+
 /* ══ PISO DE DESKTOP QUE VIRA TETO NO TOQUE (02/09/26) ═══════════════════════════════
    Em 01/09 eu subi quatro campos para o piso de desktop com seletor de ID
    (#prosp2Ordenar, #devPdiData, #prcCliente, #prcTelefone -> min-height:38px). ID é

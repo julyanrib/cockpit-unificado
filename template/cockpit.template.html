@@ -22579,7 +22579,40 @@ async function renderProspeccaoExecutivo() {
   })();
   tpInvalidarCache();
 
+  /* ══ O CARD DO PLANO ESTAVA INALCANCAVEL, E POR ISSO planos_diarios PAROU ════════
+     Reportado em 03/09: "a Kelly falou que prometeu e nao registrou no meu gestor". Ela
+     tinha razao em cima de um problema maior que o dela.
+
+     MEDIDO: public.planos_diarios nao recebe UMA LINHA desde 28/08 — a ultima e da
+     propria Kelly, 28/08 11:40, plano_fechado com 6 prioridades. E `planos_diarios` e a
+     unica fonte de CLIENTE NOMEADO: sem ela, a Daily do gestor diz "sem cliente nomeado"
+     para o time inteiro, todos os dias, e nao ha nada que o executivo possa fazer.
+
+     A CAUSA, em duas linhas do mesmo arquivo que se anulam:
+
+       const mostrarHoje = souRep && agendaEstado.subview !== 'semana';   // renderAgenda
+       ... (mostrarHoje ? '<div id="planoDoDiaSlot"></div>' : '')
+
+       if (souRep && agendaEstado.subview !== 'semana') { renderProspeccaoExecutivo(); return; }
+
+     A condicao do desvio e IDENTICA a do slot. O desvio dispara exatamente no caso em
+     que o slot seria emitido, e retorna antes de chegar nele. Na subview 'semana' o slot
+     tambem nao sai, porque `mostrarHoje` fica falso. Ou seja: o slot e inalcancavel para
+     um executivo nos DOIS estados possiveis. Nao esta enterrado — nao existe.
+
+     E nada quebrou, porque montarPlanoDoDia() abre com
+       const slot = document.getElementById('planoDoDiaSlot'); if (!slot ...) return;
+     Slot ausente = funcao volta calada. Mesmo mecanismo dos quatro filtros inertes do
+     Planejamento e do nivel Sinal da v4: fiacao presa a marcacao que deixou de existir.
+     A guarda checarSeletoresDeFiacao() nao pega este caso porque ela le querySelector, e
+     aqui e getElementById — fica anotado como o proximo alvo dela.
+
+     O SLOT VOLTA AQUI, e nao no renderAgenda: esta e a tela que o executivo abre de
+     verdade quando clica em Planejamento. Devolver na outra seria devolver para um lugar
+     onde ele nao vai. E vem PRIMEIRO, antes do hero do ritual, porque nomear os clientes
+     do dia e o passo 1 do ritual — prospectar vem depois de saber com quem se fala. */
   box.innerHTML = `
+    <div id="planoDoDiaSlot"></div>
     <!-- HERO DO RITUAL (v4, 01/09/26). A prancha v4 troca o segmentado por três CARDS DE
          PROGRESSO — "você está aqui" — porque a pergunta desta aba não é "para onde eu
          navego", é "em que passo do ritual eu estou". Cada card carrega o número real do seu
@@ -23106,6 +23139,14 @@ function prosp2LigarEventos(universo, ownerId) {
      regra é que a grade NÃO muda enquanto se busca: buscar é uma pergunta, e uma pergunta
      não pode destruir o contexto que a pessoa está usando para decidir.
      ══════════════════════════════════════════════════════════════════════════════════════ */
+  /* MONTA O CARD NO SLOT QUE ACABOU DE NASCER. Sem esta chamada o slot seria uma div
+     vazia — o mesmo defeito de antes, na direcao oposta. Nao bloqueia o resto da tela
+     (sem await): a fila de contas-alvo nao pode esperar o plano carregar do Supabase. */
+  if (DATA.supabase && supa && typeof montarPlanoDoDia === 'function') {
+    const meuRep = (DATA.reps || []).find(x => String(x.ownerId) === String(sessaoAtual.ownerId));
+    if (meuRep) montarPlanoDoDia(meuRep).catch(e => console.error('Erro ao montar o plano do dia:', e));
+  }
+
   const pl5Input = document.getElementById('pl5BuscaInput');
   const pl5Drop = document.getElementById('pl5Drop');
 
