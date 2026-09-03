@@ -12,7 +12,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { publicarSnapshot } = require('../lib/publicar-snapshot.js');
+const { publicarSnapshot, carregarJsonOuTabela } = require('../lib/publicar-snapshot.js');
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -25,7 +25,15 @@ if (!ANTHROPIC_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
 
 const root = path.join(__dirname, '..');
 const hubspot = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
-const narrativas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'narrativas.json'), 'utf8'));
+/* NARRATIVAS CARREGA DO ARQUIVO OU DA TABELA (03/09/26) =============================
+   Era `const narrativas = JSON.parse(fs.readFileSync(...))` no topo do modulo. Com o
+   arquivo fora do git (a etapa que a pergunta do Julyan sobre deploy pede), isso morre
+   no require e derruba o robo inteiro — foi o que o PR #255 fez e o #256 reverteu.
+   A carga desce para dentro do main() porque ler a tabela e assincrono, e
+   carregarJsonOuTabela ABORTA se nao achar em nenhum dos dois: comecar de {} publicaria
+   um narrativas vazio e apagaria a narrativa e os compromissos de PDI de todo mundo. */
+const narrativasPath = path.join(root, 'data', 'narrativas.json');
+let narrativas = null;
 
 function fmtRange(start, end) {
   // CORREÇÃO (18/08/26, mesmo bug achado em montar-dados.js/fmtDate): sem
@@ -180,6 +188,7 @@ async function buscarMesAnterior(ownerId, mesAnoAtual) {
 }
 
 async function main() {
+  narrativas = (await carregarJsonOuTabela(narrativasPath, 'narrativas')).dado;
   const hoje = new Date();
   // CORREÇÃO (18/08/26, mesmo bug de fuso achado em montar-dados.js) — hoje.getDay()
   // usa o fuso do PROCESSO (UTC no GitHub Actions), não o de Brasília. Perto da

@@ -22,7 +22,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { publicarSnapshot } = require('../lib/publicar-snapshot.js');
+const { publicarSnapshot, carregarJsonOuTabela } = require('../lib/publicar-snapshot.js');
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 if (!ANTHROPIC_KEY) {
@@ -33,7 +33,14 @@ if (!ANTHROPIC_KEY) {
 const root = path.join(__dirname, '..');
 const hubspot = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
 const narrativasPath = path.join(root, 'data', 'narrativas.json');
-const narrativas = JSON.parse(fs.readFileSync(narrativasPath, 'utf8'));
+/* NARRATIVAS CARREGA DO ARQUIVO OU DA TABELA (03/09/26) =============================
+   Era `const narrativas = JSON.parse(fs.readFileSync(...))` no topo do modulo. Com o
+   arquivo fora do git (a etapa que a pergunta do Julyan sobre deploy pede), isso morre
+   no require e derruba o robo inteiro — foi o que o PR #255 fez e o #256 reverteu.
+   A carga desce para dentro do main() porque ler a tabela e assincrono, e
+   carregarJsonOuTabela ABORTA se nao achar em nenhum dos dois: comecar de {} publicaria
+   um narrativas vazio e apagaria a narrativa e os compromissos de PDI de todo mundo. */
+let narrativas = null;
 
 // Aproxima Brasília (UTC-3, sem considerar horário de verão — o Brasil não usa mais).
 function hojeBrasiliaDDMM() {
@@ -107,6 +114,7 @@ async function chamarClaude(prompt, maxTokens, tentativa = 1) {
 }
 
 async function main() {
+  narrativas = (await carregarJsonOuTabela(narrativasPath, 'narrativas')).dado;
   const dataHoje = hojeBrasiliaDDMM();
   const ownerIds = Object.keys(narrativas.reps);
   const labels = (hubspot.stageMeta && hubspot.stageMeta.labels) || {};

@@ -19,7 +19,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { publicarSnapshot } = require('../lib/publicar-snapshot.js');
+const { publicarSnapshot, carregarJsonOuTabela } = require('../lib/publicar-snapshot.js');
 
 const API_KEY = process.env.ANTHROPIC_API_KEY;
 if (!API_KEY) {
@@ -29,7 +29,15 @@ if (!API_KEY) {
 
 const root = path.join(__dirname, '..');
 const raw = JSON.parse(fs.readFileSync(path.join(root, 'data', 'weekly-raw.json'), 'utf8'));
-const narrativas = JSON.parse(fs.readFileSync(path.join(root, 'data', 'narrativas.json'), 'utf8'));
+/* NARRATIVAS CARREGA DO ARQUIVO OU DA TABELA (03/09/26) =============================
+   Era `const narrativas = JSON.parse(fs.readFileSync(...))` no topo do modulo. Com o
+   arquivo fora do git (a etapa que a pergunta do Julyan sobre deploy pede), isso morre
+   no require e derruba o robo inteiro — foi o que o PR #255 fez e o #256 reverteu.
+   A carga desce para dentro do main() porque ler a tabela e assincrono, e
+   carregarJsonOuTabela ABORTA se nao achar em nenhum dos dois: comecar de {} publicaria
+   um narrativas vazio e apagaria a narrativa e os compromissos de PDI de todo mundo. */
+const narrativasPath = path.join(root, 'data', 'narrativas.json');
+let narrativas = null;
 
 // Só pra ter acesso ao stageMeta.labels (mapeia ID bruto da etapa do HubSpot pro nome
 // legível, ex: "1395880470" -> "Conversa com Decisor") — a mesma fonte que o template usa
@@ -363,6 +371,7 @@ Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato
 }
 
 async function main() {
+  narrativas = (await carregarJsonOuTabela(narrativasPath, 'narrativas')).dado;
   const hoje = new Date();
   const { numeroSemana, ehUltimaSemana, mesAno } = infoSemanaDoMes(hoje);
 
