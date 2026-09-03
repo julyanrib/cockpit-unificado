@@ -22,6 +22,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { publicarSnapshot } = require('../lib/publicar-snapshot.js');
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 if (!ANTHROPIC_KEY) {
@@ -171,6 +172,19 @@ Responda SOMENTE com JSON válido, sem markdown, neste formato exato:
   // Propositalmente NÃO mexe em narrativas._atualizado_em nem em reps[id].compromissos
   // — ver comentário no topo do arquivo.
   fs.writeFileSync(narrativasPath, JSON.stringify(narrativas, null, 2));
+  /* PUBLICA NA TABELA, PARA O ROBO PARAR DE COMMITAR (03/09/26) ============
+     Pergunta do Julyan: "a gente nao tirou do vercel pro supabase? pq nao
+     otimizamos o vercel e deixamos o maximo no supabase pra nao gerar deploy?".
+     Ele esta certo, e este arquivo era o furo. A etapa 2 tirou os seis arquivos
+     do CRM do git, mas narrativas.json e resumo-semanal.json ficaram versionados
+     porque nenhum produtor os publicava — e cada rodada do robo commitava um
+     deles, e todo commit gera um deploy. Em 02/09/26 a cota de 100 deploys/dia
+     do plano Hobby estourou e QUATRO PRs de correcao ficaram no main sem chegar
+     na tela dele.
+     Publicando aqui, o robo diario commita ZERO. O writeFileSync acima FICA: o
+     arquivo em disco e a rede de emergencia que a rota /api/dados usa quando a
+     tabela nao responde, e o proximo passo do robo (build) le do disco. */
+  await publicarSnapshot('narrativas', narrativas, 'generate-daily-gargalo');
   console.log(`OK — gargalo atualizado: ${sucesso} sucesso(s), ${falhas} falha(s) mantida(s) com o texto anterior.`);
 }
 

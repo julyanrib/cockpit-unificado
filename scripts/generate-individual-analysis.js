@@ -12,6 +12,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { publicarSnapshot } = require('../lib/publicar-snapshot.js');
 
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -383,6 +384,10 @@ REGRAS OBRIGATÓRIAS pro campo "compromissos":
     if (compromissosMudaram) {
       narrativas._atualizado_em = isoDateHoje(hoje);
       fs.writeFileSync(path.join(root, 'data', 'narrativas.json'), JSON.stringify(narrativas, null, 2));
+      /* Mesmo motivo do generate-daily-gargalo — ver o comentario la. Os DOIS escrevem
+         narrativas.json, e quem publica por ultimo na rodada e que vale; a ordem no
+         workflow e gargalo -> analysis, a mesma do disco. */
+      await publicarSnapshot('narrativas', narrativas, 'generate-individual-analysis');
       console.log(`narrativas.json atualizado — compromissos da semana + versão avançada para ${narrativas._atualizado_em}.`);
     }
   } else {
