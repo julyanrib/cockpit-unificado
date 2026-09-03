@@ -187,8 +187,35 @@ const bootstrap = `
         linhas = linhas.filter(function (l) { return String(l[col]) === String(val); });
         return q;
       };
-      METODOS.forEach(function (m) { if (m !== 'eq') q[m] = function () { return q; }; });
+      /* ══ ESCRITA ECOA O QUE RECEBEU (03/09/26) ═══════════════════════════════════
+         O stub devolvia data vazio tambem para upsert/insert/update. Isso e correto como
+         "nao gravei", mas torna INTESTAVEL no preview qualquer tela que confirme a
+         gravacao lendo a linha de volta — e confirmar assim e a regra deste projeto,
+         porque um erro nulo sem linha de volta ja fez a tela dizer "registrado" sobre tabela
+         vazia (o painel de acao da Daily, 03/09).
+
+         Ecoar o payload deixa o caminho completo exercitavel offline: a tela recebe a
+         linha, atualiza o estado e redesenha, exatamente como em producao. E continua
+         sendo preview: nada sai do navegador, e o aviso no pe da tela diz "sem gravacao".
+
+         O eco NAO inventa id nem timestamp de servidor: devolve o que foi enviado. Se a
+         tela depender de algo que so o Postgres gera, ela quebra aqui — o que e o
+         comportamento desejado num ambiente de revisao. */
+      var ecoar = function (payload) {
+        var linhas = Array.isArray(payload) ? payload : [payload];
+        return { data: linhas, error: null, count: linhas.length };
+      };
+      ['upsert', 'insert', 'update'].forEach(function (m) {
+        q[m] = function (payload) { q.__eco = ecoar(payload); return q; };
+      });
+      METODOS.forEach(function (m) {
+        if (m === 'eq' || m === 'upsert' || m === 'insert' || m === 'update') return;
+        q[m] = function () { return q; };
+      });
       var resolver = function () {
+        /* escrita ecoada tem prioridade: o .select() depois de um upsert tem que
+           devolver a linha gravada, e nao o conteudo da tabela falsa. */
+        if (q.__eco) return Promise.resolve(q.__eco);
         return Promise.resolve(linhas.length
           ? { data: linhas, error: null, count: linhas.length }
           : vazio);

@@ -174,18 +174,18 @@ const faixaLugar = ctx.pl5FaixaHTML({
   modo: 'lugar', rota: rotaCheia, nNoRaio: 18, raioKm: 1, temRota: true, nTerritorio: 108,
   lugar: { rotulo: 'Moinhos de Vento', tipo: 'bairro', n: 24, kmDaParada: 2.3 }
 });
-checar('lugar escolhido: a faixa vira o nome do lugar',
+checarFiacao('lugar escolhido: a faixa vira o nome do lugar',
   faixaLugar.includes('MOINHOS DE VENTO') && faixaLugar.includes('24 contas-alvo'));
-checar('lugar escolhido: diz a distância até a 1ª parada (responde "vale sair de lá pra cá?")',
+checarFiacao('lugar escolhido: diz a distância até a 1ª parada (responde "vale sair de lá pra cá?")',
   faixaLugar.includes('2,3 km da sua 1ª parada'));
-checar('lugar escolhido: oferece a volta ao modo anterior',
+checarFiacao('lugar escolhido: oferece a volta ao modo anterior',
   faixaLugar.includes('id="pl5VoltarModo"') && faixaLugar.includes('voltar pra perto da rota'));
 ctx.prosp2Estado.ondeAntes = 'territorio';
 const faixaLugar2 = ctx.pl5FaixaHTML({
   modo: 'lugar', rota: rotaCheia, nNoRaio: 18, raioKm: 1, temRota: true, nTerritorio: 108,
   lugar: { rotulo: 'Auxiliadora', tipo: 'bairro', n: 9, kmDaParada: null }
 });
-checar('a volta aponta para o modo REAL anterior, não para um padrão fixo',
+checarFiacao('a volta aponta para o modo REAL anterior, não para um padrão fixo',
   faixaLugar2.includes('voltar pra meu território'));
 ctx.prosp2Estado.ondeAntes = 'rota';
 
@@ -208,30 +208,80 @@ const barra = codigo.slice(codigo.indexOf('<div class="pl5-barra">'), codigo.ind
    reprovou. Foi ela que me impediu de jogar a informacao fora junto com o botao. E por
    isso que asserçao com o porque escrito vale mais que asserçao de valor: a primeira
    sobrevive a uma mudanca de forma, a segunda so diz que algo mudou. */
-checar('sem rota, o lugar do segmento diz que nao ha rota (ausência é informação)',
+checarMarcacao('sem rota, o lugar do segmento diz que nao ha rota (ausência é informação)',
   barra.includes('sem rota ainda') && barra.includes('pl5-seg-nota'));
-checar('e o segmento de rota nao nasce desabilitado (nenhum botão cinza)',
+checarMarcacao('e o segmento de rota nao nasce desabilitado (nenhum botão cinza)',
   !barra.includes('disabled aria-disabled="true"'));
-checar('com rota, o segmento mostra a contagem real e nunca um travessão',
+checarMarcacao('com rota, o segmento mostra a contagem real e nunca um travessão',
   barra.includes('· ${noRaioDaRota.length}') && !barra.includes("noRaioDaRota.length : '—'"));
-checar('a busca é um campo vivo, sem botão "Buscar"',
+checarMarcacao('a busca é um campo vivo, sem botão "Buscar"',
   barra.includes('id="pl5BuscaInput"') && !barra.includes('Buscar aqui'));
-checar('o placeholder não esconde regra invisível ("em branco, usamos a sua cidade" morreu)',
+checarMarcacao('o placeholder não esconde regra invisível ("em branco, usamos a sua cidade" morreu)',
   barra.includes('ir pra outro lugar — bairro, endereço ou CEP') && !barra.includes('em branco'));
-checar('o atalho / está anunciado no próprio campo', barra.includes('pl5-kbd'));
-checar('lugar escolhido vira chip escuro com ✕ no lugar do campo',
+checarMarcacao('o atalho / está anunciado no próprio campo', barra.includes('pl5-kbd'));
+checarMarcacao('lugar escolhido vira chip escuro com ✕ no lugar do campo',
   barra.includes('class="pl5-chip"') && barra.includes('id="pl5ChipX"'));
 
 const sinal = codigo.slice(codigo.indexOf('<div class="pl5-sinal">'), codigo.indexOf('<div class="prosp2-grid"'));
-checar('as quatro visões do sinal existem',
+
+/* ══ A TELA QUE ESTAS ASSERÇOES COBRIAM FOI DELETADA (03/09/26, prancha 6a) ═════════
+   24 das 54 asserçoes desta suite leem dois recortes de MARCACAO:
+
+     barra = entre <div class="pl5-barra"> e <div class="pl5-sinal">
+     sinal = entre <div class="pl5-sinal"> e <div class="prosp2-grid">
+
+   A prancha 6a substituiu a aba Planejamento por inteiro — "deletar, nao esconder".
+   Conferido antes de mexer: pl5-barra, pl5-sinal, prosp2-grid e prosp2-tray tem ZERO
+   ocorrencia no template. Os recortes viraram string vazia e todas falharam de uma vez.
+   Nao e regressao: e a tela nao existir mais.
+
+   POR QUE CONDICIONAL E NAO DELETADO: metade destas asserçoes carrega a RAZAO de uma
+   decisao — "ausencia e informacao", "a busca e um campo vivo, sem botao Buscar", "o
+   placeholder nao esconde regra invisivel". Essas razoes valem para qualquer tela de
+   busca que a Takeat venha a ter, e apagar o arquivo apagaria o porque junto. Elas
+   ficam legiveis, e a suite diz quantas pulou — para ninguem confundir "pulei" com
+   "passei", que e como cobertura morta nasce.
+
+   MINHA PRIMEIRA TENTATIVA FOI DELETAR O BLOCO, e ela quebrou a suite: levou junto
+   variaveis que asserçoes POSTERIORES usavam, e 13 checagens de comportamento
+   (debounce, teclado, cache, cota de geocodificacao) passaram a falhar. Aquele
+   comportamento NAO morreu com a tela — ele serve o campo de local do plano do dia.
+
+   O QUE A 6a POE NO LUGAR, e onde e guardado hoje:
+     o sinal antes do clique   -> o picker de regiao mostra contas por bairro ANTES de
+                                  escolher, e a auditoria ao vivo mede isso
+     nenhum botao apagado      -> "dia cheio" e "horario ocupado" sao TEXTO
+     ausencia e informacao     -> sem coordenada a tela diz "sem endereco no CRM" e
+                                  oferece preencher, em vez de mostrar 0 km */
+/* DECLARACAO HOISTED, E SEM TOCAR NOS RECORTES. A primeira versao era const + arrow e
+   lia `barra`/`sinal`: `sinal` e declarado DEPOIS da primeira chamada, e a suite morria
+   com "Cannot access checarMarcacao before initialization". `var` e `function` sobem; e
+   olhar `codigo` direto (em vez das consts) tira a dependencia de ordem de vez. */
+var puladasPorTelaAntiga = 0;
+function telaAntigaSumiu() {
+  return codigo.indexOf('<div class="pl5-barra">') < 0
+    || codigo.indexOf('<div class="pl5-sinal">') < 0;
+}
+function fiacaoDaBuscaSumiu() {
+  return codigo.indexOf('A FIAÇÃO DA BUSCA v5') < 0;
+}
+function checarFiacao(nome, cond, porque) {
+  if (fiacaoDaBuscaSumiu()) { puladasPorTelaAntiga++; return; }
+  return checar(nome, cond, porque);
+}
+function checarMarcacao(nome, cond, porque) {
+  if (telaAntigaSumiu()) { puladasPorTelaAntiga++; return; }
+  return checar(nome, cond, porque);
+}
+checarMarcacao('as quatro visões do sinal existem',
   ['data-v="todas"', 'data-v="recemAberta"', 'data-v="comTelefone"', 'data-v="notaAlta"'].every(x => sinal.includes(x)));
-checar('a frase intocável das visões continua na tela',
+checarMarcacao('a frase intocável das visões continua na tela',
   sinal.includes('visões exclusivas, não somáveis'));
-checar('a fonte virou menu com contadores dentro',
+checarMarcacao('a fonte virou menu com contadores dentro',
   sinal.includes('id="pl5MenuFonte"') && sinal.includes('Fonte:'));
-checar('"+ Nova conta" sobreviveu dentro do menu de fonte',
+checarMarcacao('"+ Nova conta" sobreviveu dentro do menu de fonte',
   sinal.includes('id="prosp2NovaConta"'));
-checar('a ordenação diz "mais perto da rota" quando o modo é rota',
+checarMarcacao('a ordenação diz "mais perto da rota" quando o modo é rota',
   sinal.includes("pl4ModoEfetivo === 'rota' ? 'mais perto da rota'"));
 
 /* ── o que morreu tem de estar morto no arquivo, não escondido ───────────────────────── */
@@ -249,36 +299,37 @@ checar('o banner amarelo genérico saiu',
   !codigo.includes('Nada marcado para ${esc(pl4RotuloDoDia(rota.diaISO))} ainda'));
 
 /* ── contadores do modo ativo (o recorte não pode ser maior que o conjunto) ──────────── */
-checar('os contadores do sinal vêm do universo do modo ativo',
+checarFiacao('os contadores do sinal vêm do universo do modo ativo',
   html.includes('const nNovos = universoB.filter(') &&
   html.includes('const nComTelefone = universoB.filter(') &&
   html.includes('const nBem = universoB.filter('));
 
 /* ── a fiação: o que ela pode e o que ela não pode tocar ────────────────────────────── */
 const fiacao = html.slice(html.indexOf('A FIAÇÃO DA BUSCA v5'), html.indexOf('/* Por [data-v] e não por #prosp2Visoes'));
-checar('digitar não chama o render da tela (a grade não muda enquanto se busca)',
+checarFiacao('digitar não chama o render da tela (a grade não muda enquanto se busca)',
   !/pl5Pintar[\s\S]*?renderProspeccaoExecutivo/.test(fiacao.slice(fiacao.indexOf('function pl5Pintar'), fiacao.indexOf('function pl5ItemDoIndice'))));
-checar('mínimo de 2 caracteres antes de abrir', fiacao.includes('if (t.length < 2)'));
-checar('250 ms de espera só para a parte que custa cota (geocodificação)',
+checarFiacao('mínimo de 2 caracteres antes de abrir', fiacao.includes('if (t.length < 2)'));
+checarFiacao('250 ms de espera só para a parte que custa cota (geocodificação)',
   fiacao.includes('}, 250);') && fiacao.includes('geocodificarLocalAtuacao'));
-checar('a resposta atrasada de uma busca antiga é descartada',
+checarFiacao('a resposta atrasada de uma busca antiga é descartada',
   (fiacao.match(/if \(pl5Busca\.texto !== t\) return;/g) || []).length >= 2);
-checar('teclado: ↑↓ circulam pela lista', fiacao.includes("ev.key === 'ArrowDown'") && fiacao.includes('% total'));
-checar('teclado: ↵ escolhe o destacado', fiacao.includes("ev.key === 'Enter'"));
-checar('teclado: esc limpa o campo e fecha', fiacao.includes("ev.key === 'Escape'") && fiacao.includes("pl5Input.value = ''"));
-checar('escolher guarda o modo anterior antes de virar "lugar"',
+checarFiacao('teclado: ↑↓ circulam pela lista', fiacao.includes("ev.key === 'ArrowDown'") && fiacao.includes('% total'));
+checarFiacao('teclado: ↵ escolhe o destacado', fiacao.includes("ev.key === 'Enter'"));
+checarFiacao('teclado: esc limpa o campo e fecha', fiacao.includes("ev.key === 'Escape'") && fiacao.includes("pl5Input.value = ''"));
+checarFiacao('escolher guarda o modo anterior antes de virar "lugar"',
   fiacao.includes('prosp2Estado.ondeAntes =') && fiacao.includes("prosp2Estado.onde = 'lugar'"));
-checar('escolher zera o lote (o lote é re-puxado, 10 melhores primeiro)',
+checarFiacao('escolher zera o lote (o lote é re-puxado, 10 melhores primeiro)',
   fiacao.includes('prosp2Estado.mostrar = PROSP2_LOTE'));
-checar('o número de contas-alvo do endereço é calculado ANTES do clique',
+checarFiacao('o número de contas-alvo do endereço é calculado ANTES do clique',
   fiacao.includes('const n = (pl5Ctx.universo || []).filter'));
-checar('vazio oferece três bairros clicáveis com contador',
+checarFiacao('vazio oferece três bairros clicáveis com contador',
   fiacao.includes('data-pl5-sug') && fiacao.includes('pl5PertoDaRota'));
-checar('os ouvintes de documento têm guarda idempotente (não empilham a cada render)',
+checarFiacao('os ouvintes de documento têm guarda idempotente (não empilham a cada render)',
   fiacao.includes('if (!window.__pl5Globais)'));
-checar('a tecla / não rouba a digitação de quem está num campo',
+checarFiacao('a tecla / não rouba a digitação de quem está num campo',
   fiacao.includes("a.tagName === 'INPUT'"));
 
 console.log('');
 if (falhas) { console.error(falhas + ' falha(s).'); process.exit(1); }
+if (puladasPorTelaAntiga) console.log('busca de lugar: ' + puladasPorTelaAntiga + ' checagem(ns) de marcação puladas — a tela que elas cobriam foi' + ' deletada pela prancha 6a (ver a nota no meio do arquivo).');
 console.log('busca de lugar: todas as checagens ok.');

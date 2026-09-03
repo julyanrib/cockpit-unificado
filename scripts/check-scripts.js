@@ -521,97 +521,34 @@ if (!checarModoTv()) process.exit(1);
    arquivo — guarda o caminho de escrita do PLANO DO DIA, que e o dado mais caro de
    perder nesta ferramenta, porque ele nao volta: um dia sem plano registrado e um dia que
    o gestor nunca vai poder ler. Duas afirmacoes: o slot e emitido na funcao que o
-   executivo realmente abre, e alguem monta o card dentro dele. */
-/* A guarda NAO CRAVA MAIS O NOME DA ABA (reescrita em 03/09/26).
+   executivo realmente abre, e alguem monta o card dentro dele. *//* == 10. APOSENTADA EM 03/09/26 — A PROTECAO MIGROU PARA A GUARDA 12 =================
+   checarPlanoAlcancavel() exigia que #planoDoDiaSlot fosse emitido numa aba que o
+   executivo abre, e que a mesma funcao chamasse montarPlanoDoDia(). Ela nasceu de um
+   defeito caro: o card que escreve planos_diarios ficou inalcancavel de 28/08 a 03/09, a
+   tabela nao recebeu UMA LINHA nesse periodo, e a Daily do gestor passou a dizer "sem
+   cliente nomeado" para os sete executivos todos os dias.
 
-   A versao anterior exigia o slot dentro de renderProspeccaoExecutivo. Estava certa no dia
-   em que nasceu, e virou obstaculo no dia em que o Julyan decidiu mover o plano para a
-   Minha Daily: ela reprovaria a mudanca CORRETA pelo motivo errado — o endereco, e nao a
-   alcancabilidade, que e o que ela existe para proteger.
+   A prancha 6a substitui a aba Planejamento por inteiro, e manda deletar o card do plano
+   ("deletar, nao esconder"). Com o card fora, esta guarda reprovaria a mudanca CORRETA —
+   e reprovaria pelo motivo errado: o endereco, e nao a alcancabilidade.
 
-   Agora ela pergunta o que importa e nao muda: (1) alguem emite o slot, (2) quem o emite
-   tambem chama a montagem, e (3) essa funcao e uma que o executivo de fato abre. O item 3
-   e o que pegou o defeito original: o slot vivia em renderAgenda, atras de um early-return
-   com a condicao identica a do proprio `mostrarHoje`, entao ele nunca era emitido. Slot em
-   funcao inalcancavel nao da erro nenhum — da planos_diarios sem receber UMA LINHA por
-   seis dias, e a Daily do gestor dizendo "sem cliente nomeado" para o time inteiro.
+   O QUE ELA PROTEGIA CONTINUA PROTEGIDO, e por isso ela pode sair:
 
-   Se o plano mudar de casa outra vez, o que se edita e a lista ABAS_DO_EXECUTIVO. Isso e
-   proposital: obriga quem move a afirmar, por escrito, que a aba de destino e alcancavel. */
-function checarPlanoAlcancavel() {
-  const arquivo = 'template/cockpit.template.html';
-  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
-  /* As funcoes que montam tela que o executivo abre por um clique de aba. renderAgenda NAO
-     esta aqui de proposito: foi exatamente onde o plano ficou inalcancavel. */
-  const ABAS_DO_EXECUTIVO = ['renderDaily', 'renderProspeccaoExecutivo'];
+     planos_diarios nao secar   -> guarda 12 (checarAtoDoPlanoNaDaily), que exige
+                                   #compromissoDoDia na montagem que a Daily USA. E aquele
+                                   bloco que grava planos_diarios hoje: status
+                                   plano_fechado, prioridades e contas_alvo, com os
+                                   clientes nomeados que a tela do gestor le.
 
-  /* COMENTARIO NAO E TELA (03/09/26).
+   A guarda 12 e ESTRITAMENTE mais forte para este risco: a 10 conferia que o slot existia
+   em alguma aba; a 12 le a cadeia de fallback da Daily e exige o ato na montagem que
+   realmente roda. Foi ela que pegou o caso em que o ato existia so num fallback morto.
 
-     Eu achei que procurar a forma emitida (id=" com aspas duplas) ja separasse codigo de
-     comentario. Nao separa: o comentario que documenta o defeito ANTIGO citava a linha
-     textualmente, a busca encontrou a citacao primeiro — duas mil linhas antes do slot de
-     verdade — e a guarda reportou VERDE em cima do plano inalcancavel.
+   Aposentar com a razao escrita, e nao apagar: quem for reintroduzir um card de plano no
+   Planejamento precisa saber que esta guarda existiu, o que ela pegou, e por que a
+   protecao mudou de lugar. Guarda apagada em silencio volta como o mesmo defeito. */
 
-     Entao mascaro comentarios antes de procurar. Preservo o COMPRIMENTO (troco cada byte
-     por espaco em vez de remover) para os indices continuarem valendo no texto original:
-     assim eu mascaro para decidir ONDE olhar, e leio o original para saber o que ha la.
-
-     A mascara e conservadora e imperfeita — nao entende que /* dentro de string nao abre
-     comentario. Nao importa aqui: o unico uso e localizar a emissao do slot e a
-     declaracao de funcao na coluna zero, e nenhum dos dois vive dentro de string. */
-  const mascararComentarios = t => t
-    .replace(/\/\*[\s\S]*?\*\//g, m => ' '.repeat(m.length))
-    .replace(/<!--[\s\S]*?-->/g, m => ' '.repeat(m.length))
-    .replace(/(^|\n)([ \t]*)\/\/[^\n]*/g, (m, a, b) => a + b + ' '.repeat(m.length - a.length - b.length));
-  const semCom = mascararComentarios(cru);
-
-  const alvo = "id=\"planoDoDiaSlot\"";
-  const iSlot = semCom.indexOf(alvo);
-  if (iSlot < 0) {
-    console.error('PLANO DO DIA: ninguem emite #planoDoDiaSlot - o card que escreve');
-    console.error('  planos_diarios nao existe em tela nenhuma.');
-    return false;
-  }
-
-  /* De quem e esse pedaco: a ultima declaracao de funcao na coluna zero antes do slot.
-
-     REGEX LITERAL, NUNCA STRING. Esta guarda nasceu quebrada duas vezes pelo mesmo motivo, e
-     eu repeti o erro AQUI, reescrevendo-a: montada como new RegExp por um heredoc, `\s`
-     chegou como `s` e `\(` como `(`, e o resultado foi "Unterminated group". Da vez anterior
-     nao deu erro nenhum — `[\s\S]` virou `[sS]`, a guarda passou a nao encontrar nada e
-     reportou VERDE em cima de um defeito real. Literal falha na hora; string mente. */
-  const reDecl = /\n(?:async )?function ([a-zA-Z0-9_$]+)\s*\(/g;
-  let dono = null, iDono = -1, m;
-  while ((m = reDecl.exec(semCom)) !== null) {
-    if (m.index > iSlot) break;
-    dono = m[1]; iDono = m.index;
-  }
-  const proxima = reDecl.exec(semCom);
-  /* O corpo vem do texto MASCARADO, e nao do cru: senao uma chamada a montarPlanoDoDia()
-     mencionada em comentario contaria como fiacao. Ela existe — o comentario que explica
-     por que o slot ausente nao dava erro cita a funcao pelo nome. */
-  const corpo = semCom.slice(iDono < 0 ? 0 : iDono, proxima ? proxima.index : semCom.length);
-
-  const falhas = [];
-  if (!dono) {
-    falhas.push('nao consegui dizer qual funcao emite o slot - a guarda perdeu o alvo');
-  } else if (ABAS_DO_EXECUTIVO.indexOf(dono) < 0) {
-    falhas.push('o slot e emitido em ' + dono + '(), que nao e uma aba que o executivo abre');
-  }
-  if (corpo.indexOf('montarPlanoDoDia(') < 0) {
-    falhas.push('ninguem chama montarPlanoDoDia() em ' + dono + '() - o slot fica uma div vazia');
-  }
-  if (falhas.length) {
-    console.error('PLANO DO DIA INALCANCAVEL em ' + arquivo + ':');
-    falhas.forEach(f => console.error('  ' + f));
-    console.error('  Sem este caminho, planos_diarios para de receber linha e a Daily do gestor');
-    console.error('  diz "sem cliente nomeado" para o time inteiro, sem ninguem poder corrigir.');
-    return false;
-  }
-  console.log('OK plano do dia - o card que escreve planos_diarios esta na tela do executivo.');
-  return true;
-}
-if (!checarPlanoAlcancavel()) process.exit(1);
+/* == A GUARDA 11 CONTINUA ATIVA ABAIXO ============================================== */
 
 /* == TODO PROXIMO PASSO SALVO APARECE NA AGENDA (03/09/26) ===========================
    Pedido do Julyan: "esse proximo passo, tem que ir pra agenda tbm". A tarefa datada vai
