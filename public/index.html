@@ -3001,6 +3001,43 @@
      horizontal PROPRIA: sem isso, sete linhas por cinco dias estouram a pagina a 390px
      — foi o defeito que a tabela por executivo da aba Semana teve, e a solucao e a
      mesma. Alvo de 48px na celula: o gestor toca isso de longe, na reuniao. */
+  /* ── O PAINEL DE ACAO DA LINHA (03/09/26, prancha §4) ──────────────────────────
+     Fio de tinta na esquerda, nao fundo colorido: a linha ja tem filete de estado e um
+     segundo bloco pintado competiria com ele. O caso empilha em <=760px porque o nome do
+     cliente e nome-frase (pode ter 200+ caracteres) e coluna fixa o espremeria. */
+  .dae{border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:var(--r-sm);
+    padding:11px 13px;margin-bottom:14px;background:var(--panel);}
+  .dae-cab{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:5px;}
+  .dae-rot{font:800 10px var(--font-display);letter-spacing:.11em;text-transform:uppercase;color:var(--ink);}
+  .dae-estado{font-size:10.5px;font-weight:700;color:var(--muted2);margin-left:auto;}
+  .dae-estado.is-feito{color:var(--green);}
+  .dae-estado.is-erro{color:var(--red);}
+  .dae-frase{font-size:11.5px;line-height:1.55;color:var(--muted);margin-bottom:9px;}
+  .dae-casos{display:flex;flex-direction:column;gap:2px;}
+  .dae-caso{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;
+    min-height:44px;padding:4px 0;border-bottom:1px solid var(--line-soft,var(--line));}
+  .dae-caso:last-child{border-bottom:none;}
+  .dae-caso-nome{font-size:12px;min-width:0;overflow-wrap:anywhere;}
+  .dae-caso-nome b{font-weight:700;}
+  .dae-caso-nome span{color:var(--muted2);}
+  .dae-btn{display:inline-flex;align-items:center;justify-content:center;min-height:38px;
+    padding:0 13px;flex:none;border:1px solid var(--line-btn);border-radius:var(--r-pill);
+    background:none;font:800 11px var(--font-body);color:var(--ink);cursor:pointer;white-space:nowrap;}
+  .dae-btn:hover:not([disabled]){border-color:var(--ink);}
+  .dae-btn.is-primaria{border-color:var(--ink);}
+  .dae-btn[disabled]{opacity:.55;cursor:default;}
+  .dae-btn.is-feito{border-color:var(--green);color:var(--green);}
+  .dae-nota{font-size:10.5px;line-height:1.5;color:var(--muted2);margin-top:9px;
+    padding-top:8px;border-top:1px solid var(--line);}
+  .dae-nota code{font-family:var(--font-mono,monospace);font-size:10px;}
+  .dae-desfazer{background:none;border:none;padding:0 0 0 8px;font:700 10.5px var(--font-body);
+    color:var(--muted);cursor:pointer;text-decoration:underline;}
+  @media (max-width:760px){
+    .dae-caso{grid-template-columns:1fr;min-height:auto;padding:9px 0;}
+    .dae-btn{min-height:44px;width:100%;}
+  }
+  body.tv #viewDaily .dae{display:none !important;}
+
   .cs-card{margin-bottom:0;}
   .cs-rolagem{overflow-x:auto;margin:10px -2px 0;padding:0 2px 4px;}
   .cs-grade{display:grid;grid-template-columns:104px repeat(var(--cs-dias),minmax(62px,1fr));
@@ -41816,6 +41853,62 @@ async function renderDaily() {
     // mesma régua de 3 estados que já colore a borda esquerda do card (estadoCor).
     const estadoSoft = !registrouResumo ? 'var(--red-soft)' : cumpriuTudo ? 'var(--green-soft)' : 'var(--amber-soft)';
     const acaoGestor = !registrouResumo ? 'Cobrar plano' : promessaZerada ? 'Recalibrar plano' : cumpriuTudo ? 'Reconhecer entrega' : iniciouExecucao ? 'Destravar execução' : 'Começar agora';
+    /* ══ AS ACOES DO GESTOR, EXECUTAVEIS (03/09/26, prancha §4) ═══════════════════════
+       `acaoGestor` (linha acima) ja escolhia a acao pela evidencia desde 15/08 — mas era
+       ROTULO. A prancha pede que o painel da linha traga os itens executaveis dessa acao,
+       cada um com um botao que GRAVA DE VERDADE. A regra de escolha nao muda: inventar
+       uma segunda seria ter duas telas discordando sobre o que cobrar da mesma pessoa.
+
+       O QUE GRAVA ONDE, e por que:
+       · datar tarefa  -> tarefa datada no HubSpot, pela porta unica /api/negocio-acao
+         (op:'nota' com data). Mesmo caminho do desfecho de visita, ja em producao.
+       · sugerir troca -> tarefa com o marcador SUGESTAO_GESTOR:...:PENDENTE, que aparece
+         como ◆ na matriz da semana da etapa D. O plano continua dele: sugestao pendente,
+         nunca sobrescrita.
+       · cobrar plano e reconhecer -> public.registros_rodada no Supabase, uma linha por
+         (tipo, executivo, dia) — UNIQUE, entao clicar duas vezes nao duplica, e DELETE
+         desfaz enquanto a rodada esta aberta.
+
+       O QUE NAO EXISTE, E ESTA ESCRITO NA TELA: a prancha pede que cobrar plano mande
+       push no app e WhatsApp. Nenhum dos 13 usuarios em data/usuarios.json tem telefone
+       — o cadastro tem email, role, ownerId e nome. Nao e escolha de desenho, e buraco de
+       dado, e botao de WhatsApp sem numero seria botao que finge. O registro fica, porque
+       e ele que faz a rodada seguinte poder dizer "cobrado as 9:05, ainda aberto" — a
+       parte da prancha que muda o comportamento do gestor. */
+    const acaoItens = (() => {
+      const oid = String(r.ownerId);
+      if (!registrouResumo) {
+        return { chave: 'cobranca_plano', verbo: 'registrar cobrança',
+          frase: 'O plano do dia dele não existe ainda. Registrar a cobrança aqui é o que permite a rodada de amanhã dizer se ele fechou depois de cobrado.',
+          casos: [] };
+      }
+      if (cumpriuTudo) {
+        return { chave: 'reconhecimento', verbo: 'registrar reconhecimento',
+          frase: 'Ele cumpriu o que prometeu. Elogio também é evidência: registrado, entra no prometido × cumprido da aba Time.',
+          casos: [] };
+      }
+      /* Recalibrar e destravar sao a MESMA lista de casos — o negocio parado dele — e
+         mudam so no verbo: sugerir troca quando a promessa esta zerada (ele nao nomeou
+         ninguem), datar tarefa quando ele nomeou e nao andou. */
+      const meus = [];
+      (coberturaDoFunil.etapas || []).forEach(et => {
+        (et.descobertos || []).forEach(l => {
+          if (String(l.ownerId) !== oid) return;
+          meus.push({ id: String(l.id), nome: String(l.name || l.dealname || 'Sem nome'),
+                      etapa: String(et.label), dias: Number(l.dias) || 0, atrasado: !!l.slaBreach });
+        });
+      });
+      meus.sort((a, b) => (a.atrasado !== b.atrasado) ? (a.atrasado ? -1 : 1) : (b.dias - a.dias));
+      if (promessaZerada) {
+        return { chave: 'sugerir_troca', verbo: 'sugerir na agenda dele',
+          frase: 'Ele fechou o plano sem nomear cliente. Sugerir entra como ◆ pendente na agenda dele — o plano continua dele, você não sobrescreve.',
+          casos: meus.slice(0, 5) };
+      }
+      return { chave: 'datar_tarefa', verbo: 'datar tarefa',
+        frase: 'Estes são os negócios dele sem cobertura hoje. Datar cria a tarefa direto no HubSpot, com prazo — é o que tira o negócio da fila de descoberto.',
+        casos: meus.slice(0, 5) };
+    })();
+
     const estadoExec = !registrouResumo ? 'Plano aberto' : cumpriuTudo ? 'Plano cumprido' : iniciouExecucao ? 'Em execução' : 'Plano definido';
     const pctMetrica = m => Number(m.prom) > 0 ? Math.min(100, Math.round((m.real / Number(m.prom)) * 100)) : 0;
     const metricaTime = m => `
@@ -42148,6 +42241,30 @@ async function renderDaily() {
           <span class="daily-team-cta${!registrouResumo ? ' cobrar' : ''}">${!registrouResumo ? 'Cobrar plano →' : 'Plano do dia →'}</span>
         </summary>
         <div class="daily-team-detail">
+          <!-- O PAINEL DE ACAO VEM PRIMEIRO (03/09/26, prancha §4). Abaixo dele fica a
+               leitura (promessa, metricas, notas, funil da pessoa), que e o CONTEXTO. Se
+               a acao ficasse no fim, o gestor rolaria a linha inteira na frente do time",
+               para chegar no unico botao que resolve o caso. -->
+          <div class="dae" data-dae-owner="${esc(String(r.ownerId))}" data-dae-chave="${esc(acaoItens.chave)}">
+            <div class="dae-cab">
+              <span class="dae-rot">${esc(acaoGestor)}</span>
+              <span class="dae-estado" data-dae-estado>—</span>
+            </div>
+            <div class="dae-frase">${esc(acaoItens.frase)}</div>
+            ${acaoItens.casos.length ? `<div class="dae-casos">
+              ${acaoItens.casos.map(c => `
+                <div class="dae-caso" data-dae-caso="${esc(c.id)}">
+                  <span class="dae-caso-nome"><b>${esc(c.nome)}</b><span> · ${esc(c.etapa)} · ${c.dias}d na etapa${c.atrasado ? ' · <b style="color:var(--red);">fora do prazo</b>' : ''}</span></span>
+                  <button type="button" class="dae-btn" data-dae-item="${esc(c.id)}" data-dae-nome="${esc(c.nome)}">${esc(acaoItens.verbo)} ▸</button>
+                </div>`).join('')}
+            </div>` : `<div class="dae-casos">
+              <div class="dae-caso">
+                <span class="dae-caso-nome"><span>${!registrouResumo ? 'Sem plano fechado e sem cliente nomeado hoje.' : 'Nada a listar — a ação é sobre o dia dele, não sobre um negócio.'}</span></span>
+                <button type="button" class="dae-btn is-primaria" data-dae-item="dia">${esc(acaoItens.verbo)} ▸</button>
+              </div>
+            </div>`}
+            ${!registrouResumo ? `<div class="dae-nota">Sem push e sem WhatsApp: nenhum dos executivos tem telefone no cadastro (<code>data/usuarios.json</code> tem e-mail, papel, ownerId e nome). O registro aqui é o que fica.</div>` : ''}
+          </div>
           <div class="daily-team-detail-head"><span><b>Promessa do dia</b><span style="display:block;margin-top:3px;">O combinado, a execução automática e o ponto de intervenção.</span></span><span class="daily-state ${estadoClasse}">${acaoGestor}</span></div>
           <div class="daily-promise-grid">${metricasCompromisso.map(metricaGestorAberta).join('')}</div>
           ${clientesPrometidosHTML}
@@ -42528,6 +42645,139 @@ async function renderDaily() {
     // Condução da Daily — recebe planosPorOwner porque o painel de cada pessoa
     // mostra o compromisso dela, e essa consulta já foi feita no topo desta função.
     dailyPlanosDoRender = planosPorOwner;
+
+    /* ══ AS ACOES DO GESTOR GRAVAM (03/09/26, prancha §4) ══════════════════════════════
+       Um ouvinte delegado no container da Daily, e nao um por botao: a linha re-renderiza
+       (abrir o acordeao, trocar de dia) e ouvinte preso ao no morre com ele. Foi assim que
+       quatro filtros do Planejamento ficaram inertes.
+
+       IDEMPOTENTE E REVERSIVEL, como a prancha pede. Os dois registros do Supabase usam
+       UNIQUE (tipo, owner_id, data), entao upsert duas vezes no mesmo dia nao duplica, e o
+       'desfazer' apaga a linha. As duas escritas no HubSpot NAO tem desfazer aqui de
+       proposito: apagar tarefa no CRM de outra pessoa e um estrago que o gestor tem que
+       fazer olhando o CRM, nao de passagem numa reuniao de 15 minutos.
+
+       O ESTADO VAI PARA A TELA em todos os caminhos, incluindo a falha. Botao que muda de
+       cor e nao diz se gravou e pior que botao que nao existe: o gestor sai da reuniao
+       achando que cobrou. */
+    const daeHost = document.getElementById('dailyContent');
+    if (daeHost && !daeHost.dataset.daeLigado) {
+      daeHost.dataset.daeLigado = '1';
+      daeHost.addEventListener('click', async ev => {
+        const btn = ev.target.closest('.dae-btn, .dae-desfazer');
+        if (!btn) return;
+        ev.preventDefault();
+        ev.stopPropagation();   // o painel vive dentro de <details>: sem isto o clique recolhe a linha
+        const painel = btn.closest('.dae');
+        if (!painel) return;
+        const chave = painel.getAttribute('data-dae-chave');
+        const owner = painel.getAttribute('data-dae-owner');
+        const estadoEl = painel.querySelector('[data-dae-estado]');
+        const desfazendo = btn.classList.contains('dae-desfazer');
+        const dizer = (txt, cls) => {
+          if (!estadoEl) return;
+          estadoEl.textContent = txt;
+          estadoEl.className = 'dae-estado' + (cls ? ' ' + cls : '');
+        };
+        const hhmm = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        btn.disabled = true;
+        dizer(desfazendo ? 'desfazendo…' : 'gravando…');
+        try {
+          if (chave === 'cobranca_plano' || chave === 'reconhecimento') {
+            if (!supa) throw new Error('Sessão do Supabase não carregou nesta aba.');
+            /* sessaoAtual, e nao DATA.usuario — eu inventei o segundo, que nao existe no
+               arquivo. sessaoAtual e { email, role, ownerId, nome } e e a unica fonte de
+               quem esta logado (linha 9910). Com o campo errado, gestor_email vinha null e
+               a policy de INSERT recusaria TODA gravacao: botao que nunca funciona. */
+            const email = (sessaoAtual && sessaoAtual.email) || null;
+            if (!email) throw new Error('Não sei quem está logado para assinar o registro.');
+            if (desfazendo) {
+              /* Mesma regua no desfazer: o delete devolve o que apagou. Sem linha de
+                 volta, "desfeito" seria uma afirmacao sem prova — e o gestor sairia
+                 achando que tirou um registro que continua la. */
+              const { data: apagado, error } = await supa.from('registros_rodada').delete()
+                .eq('tipo', chave).eq('owner_id', String(owner)).eq('data', dailyRefDate).select('id');
+              if (error) throw new Error(error.message);
+              if (!Array.isArray(apagado) || !apagado.length) {
+                throw new Error('não havia registro para desfazer, ou o banco recusou');
+              }
+              dizer('desfeito');
+              const b = painel.querySelector('.dae-btn');
+              if (b) { b.disabled = false; b.classList.remove('is-feito'); }
+              btn.remove();
+            } else {
+              /* PEDE A LINHA DE VOLTA (.select()) E EXIGE QUE ELA VENHA. Antes eu
+                 declarava sucesso por AUSENCIA DE ERRO, e isso me pegou: o cliente
+                 Supabase do preview local e um stub que devolve { data: [], error: null }
+                 sem nem chamar a rede — a tela escreveu "registrado 22:47" e a tabela
+                 ficou vazia. Em producao o erro viria, mas o teste que eu usei para dizer
+                 "funciona" nao provava nada. Exigir a linha de volta e a diferenca entre
+                 "nao deu erro" e "gravou": e a mesma regua que esta tela cobra do gestor. */
+              const { data: gravado, error } = await supa.from('registros_rodada').upsert({
+                tipo: chave, owner_id: String(owner), data: dailyRefDate,
+                gestor_email: email,
+                detalhe: chave === 'cobranca_plano' ? 'plano do dia ainda não fechado quando cobrado' : 'cumpriu o que prometeu'
+              }, { onConflict: 'tipo,owner_id,data' }).select('id');
+              if (error) throw new Error(error.message);
+              if (!Array.isArray(gravado) || !gravado.length) {
+                throw new Error('o banco não devolveu a linha gravada — nada foi registrado');
+              }
+              btn.classList.add('is-feito');
+              btn.textContent = chave === 'cobranca_plano' ? '✓ cobrado ' + hhmm : '✓ reconhecido ' + hhmm;
+              dizer('registrado ' + hhmm, 'is-feito');
+              if (!painel.querySelector('.dae-desfazer')) {
+                const und = document.createElement('button');
+                und.type = 'button'; und.className = 'dae-desfazer'; und.textContent = 'desfazer';
+                btn.parentElement.appendChild(und);
+              }
+            }
+          } else if (chave === 'datar_tarefa') {
+            const dealId = btn.getAttribute('data-dae-item');
+            const nome = btn.getAttribute('data-dae-nome') || 'este negócio';
+            const token = await tokenDeSessaoGlobal();
+            const cab = { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
+            const rr = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
+              method: 'POST', signal, headers: cab,
+              body: JSON.stringify({ op: 'nota', dealId: dealId,
+                texto: 'Próximo passo combinado na Daily com o gestor.',
+                data: dailyRefDate, tipo: 'Follow-up', tipoAcao: 'proximo-passo' })
+            }), 9000, 'daily-datar-tarefa');
+            const dd = await rr.json().catch(() => ({}));
+            if (!rr.ok || !dd.ok) throw new Error((dd && dd.erro) || 'O HubSpot não aceitou a tarefa.');
+            btn.classList.add('is-feito'); btn.textContent = '✓ datada ' + hhmm;
+            dizer('tarefa datada no HubSpot · ' + hhmm, 'is-feito');
+            if (typeof mostrarToast === 'function') mostrarToast('Tarefa datada em ' + nome + ' — já está no funil dele.', 'sucesso');
+          } else if (chave === 'sugerir_troca') {
+            const nome = btn.getAttribute('data-dae-nome') || '';
+            const token = await tokenDeSessaoGlobal();
+            const cab = { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
+            const rr = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
+              method: 'POST', signal, headers: cab,
+              body: JSON.stringify({ op: 'tarefa-rota', nome: nome, ownerId: String(owner),
+                data: dailyRefDate, tipo: 'visita', sugeridoPorGestor: true })
+            }), 9000, 'daily-sugerir-troca');
+            const dd = await rr.json().catch(() => ({}));
+            if (!rr.ok || !dd.ok) throw new Error((dd && dd.erro) || 'Não consegui criar a sugestão.');
+            btn.classList.add('is-feito'); btn.textContent = '✓ sugerido ' + hhmm;
+            dizer('◆ pendente na agenda dele · ' + hhmm, 'is-feito');
+            if (typeof mostrarToast === 'function') mostrarToast('Sugerido: ' + nome + ' entra como ◆ na agenda dele, aguardando ele confirmar.', 'sucesso');
+          } else {
+            throw new Error('Ação sem caminho de escrita: ' + chave);
+          }
+          /* TODOS OS ITENS FEITOS -> o rotulo da acao vira verde, como a prancha pede. */
+          const btns = [...painel.querySelectorAll('.dae-btn')];
+          if (btns.length && btns.every(b => b.classList.contains('is-feito'))) {
+            const rot = painel.querySelector('.dae-rot');
+            if (rot) { rot.textContent = '✓ ' + rot.textContent; rot.style.color = 'var(--green)'; }
+            painel.style.borderLeftColor = 'var(--green)';
+          }
+        } catch (e) {
+          btn.disabled = false;
+          dizer('não gravou: ' + String(e.message || e).slice(0, 90), 'is-erro');
+          if (typeof mostrarToast === 'function') mostrarToast('Não gravou: ' + (e.message || e), 'erro');
+        }
+      });
+    }
 
     /* ══ A GAVETA DA COBERTURA (03/09/26, prancha §C) ═══════════════════════════════
        "Clique abre os descobertos com cobrar". O botao de cada negocio nao abre o
