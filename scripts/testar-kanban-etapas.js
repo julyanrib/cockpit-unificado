@@ -171,9 +171,24 @@ checar('existe UMA função de escrita de passagem de etapa',
 checar('as duas telas chamam a mesma função',
   (template.split("await gravarPassagemDeEtapa({").length - 1) === 2,
   'achado ' + (template.split("await gravarPassagemDeEtapa({").length - 1));
-checar('nenhuma chamada nova a /api/negocio-acao foi criada no bloco do kanban',
-  (template.match(/op: 'mudar-etapa'/g) || []).length === 2,
-  'esperado 2 (edição inline + a função compartilhada), achado ' +
+/* ══ DE 2 PARA 3 CHAMADAS, EM 03/09/26 ══════════════════════════════════════════════
+   Esta assercao conta as chamadas a /api/negocio-acao para impedir que alguem crie um
+   SEGUNDO caminho de escrita no negocio em vez de usar o que existe. A regra e boa e
+   fica; o numero mudou porque nasceu uma terceira chamada LEGITIMA.
+
+   A terceira e o campo de endereco da prancha 6a. A carteira do HubSpot quase nao tem
+   coordenada — medido: 4 de 18 negocios do Marco —, e sem coordenada o negocio nao entra
+   em regiao nenhuma, que e o mecanismo central da tela nova. O executivo preenche o
+   endereco uma vez e a conta passa a casar com o dia da rota.
+
+   E ela usa EXATAMENTE a rota que ja existia: op mudar-etapa com a etapa ATUAL do
+   negocio. mudar-etapa-negocio.js calcula `movendo = atual !== nova`, entao passar a
+   mesma etapa grava propriedade sem mover o negocio; e bairro, cep e logradouro ja
+   estavam na whitelist dela. Zero rota nova, zero whitelist nova — que e precisamente o
+   que esta assercao existe para garantir. */
+checar('nenhuma chamada nova a /api/negocio-acao fora das tres conhecidas',
+  (template.match(/op: 'mudar-etapa'/g) || []).length === 3,
+  'esperado 3 (edição inline + função compartilhada + endereço da prancha 6a), achado ' +
   (template.match(/op: 'mudar-etapa'/g) || []).length);
 
 /* ── 6. as colunas são o pipeline oficial ────────────────────────────────────────── */
