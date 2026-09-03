@@ -448,6 +448,33 @@ teste('dia vazio: gates abertos e CTA vira "Montar minha rota"', () => {
   igual(c.ctaDoDia(d).label, 'Montar minha rota', 'CTA da primeira pendência');
 });
 
+teste('Missão do Dia troca de fase no relógio da operação e nunca fica sem ação', () => {
+  const c = novoContexto(dados(), { ownerId: OWNER, role: 'rep' });
+  const r = c.DATA.reps[0];
+  const d = c.gatesDoDia(r);
+  const as = (h, m) => new c.Date(2026, 8, 3, h, m || 0, 0);
+
+  igual(c.janelaDoDia(as(8, 59)).id, 'manha', '08:59 ainda é preparação');
+  igual(c.janelaDoDia(as(9, 0)).id, 'meio_dia', '09:00 começa execução');
+  igual(c.janelaDoDia(as(16, 30)).id, 'tarde', '16:30 começa resgate');
+  igual(c.janelaDoDia(as(19, 0)).id, 'encerramento', '19:00 começa fechamento');
+
+  const manha = c.missaoDoDia(r, d, [], as(8, 30));
+  igual(manha.cta, 'Montar minha rota', 'preparação herda a primeira pendência real');
+  verdade(typeof manha.acao === 'function', 'preparação tem botão executável');
+
+  const acao = { verbo: 'Ligar para', cliente: 'Cliente Teste', motivo: 'follow-up vencido', ctaLabel: 'Ligar agora', acao: () => {} };
+  const execucao = c.missaoDoDia(r, d, [acao], as(10, 0));
+  igual(execucao.titulo, 'Ligar para Cliente Teste', 'execução nomeia verbo e cliente');
+  igual(execucao.cta, 'Ligar agora', 'execução usa o CTA da ação real');
+  verdade(typeof execucao.acao === 'function', 'execução tem botão executável');
+
+  const fim = c.missaoDoDia(r, d, [], as(19, 1));
+  falso(/excelência/i.test(fim.titulo), 'dia vazio não recebe excelência falsa');
+  igual(fim.cta, 'Revisar Agenda', 'encerramento sem prova aponta para conferência');
+  verdade(typeof fim.acao === 'function', 'encerramento tem botão executável');
+});
+
 teste('visita de hoje sem desfecho leva o CTA para "Registrar resultado pendente"', () => {
   const paradas = [1, 2, 3].map(i => ({
     id: 'p' + i, ownerId: OWNER, dealId: 'g' + (i - 1), tipo: 'rota', inicio: new Date(HOJE.getTime() - i * 3600000),

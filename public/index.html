@@ -9336,6 +9336,26 @@
   .xv3-hero-mes .t b{color:var(--dark-ink);}
   .xv3-hero-mes .t i{font-style:normal;color:var(--hero-kicker);}
 
+  /* MISSÃO DO DIA — a ponte curta entre ler o cockpit e executar. Não é comunicado:
+     muda com a hora, nasce dos mesmos gates/fila do Hoje e sempre termina em ação real. */
+  .missao-dia{display:flex;align-items:center;gap:16px;margin:10px 0 12px;padding:12px 16px;background:var(--panel);border:1px solid var(--line-soft);border-left:4px solid var(--red);border-radius:var(--r-lg);box-shadow:var(--sh-card);}
+  .missao-dia.is-pronta{border-left-color:var(--green);}
+  .missao-dia.is-atencao{border-left-color:var(--amber);}
+  .missao-dia-fase{flex:none;min-width:112px;font:800 9px var(--font-display);letter-spacing:.12em;text-transform:uppercase;color:var(--red-dk);}
+  .missao-dia.is-pronta .missao-dia-fase{color:var(--green);}
+  .missao-dia.is-atencao .missao-dia-fase{color:var(--amber-ink);}
+  .missao-dia-corpo{flex:1;min-width:0;}
+  .missao-dia-corpo b{display:block;font:850 14px/1.3 var(--font-display);color:var(--ink);}
+  .missao-dia-corpo span{display:block;margin-top:2px;font-size:10px;line-height:1.45;color:var(--muted);}
+  .missao-dia-estado{flex:none;font:800 10px var(--font-display);color:var(--muted);white-space:nowrap;}
+  @media (max-width:760px){
+    .missao-dia{align-items:flex-start;flex-wrap:wrap;gap:8px 12px;}
+    .missao-dia-fase{min-width:0;width:100%;}
+    .missao-dia-corpo{flex-basis:100%;}
+    .missao-dia-estado{flex:1;white-space:normal;}
+    .missao-dia .xv3-btn{margin-left:auto;}
+  }
+
   /* 5 · cartão claro e linha de fila */
   .xv3-card{background:var(--panel);border:1px solid var(--line-soft);border-radius:var(--r-lg);box-shadow:var(--sh-card);}
   .xv3-card-head{display:flex;align-items:center;gap:8px;padding:13px 15px 7px;}
@@ -12039,6 +12059,124 @@ function ctaDoDia(diag) {
   };
 }
 
+/* MISSÃO DO DIA (03/09/26) — um único comando operacional que muda com o relógio.
+   Ela não cria uma nova verdade: lê os gates, a agenda e a fila já calculados nesta
+   renderização. Também não possui "concluir" local; a missão muda somente quando a
+   evidência muda no HubSpot/PWA. */
+function missaoDoDia(r, diag, acoes, agora) {
+  const janela = janelaDoDia(agora);
+  const fresco = diag.contexto.fresco.confiavel;
+  const lista = acoes || [];
+  const primeira = lista[0] || null;
+  const classeFrescor = fresco ? '' : 'is-atencao';
+
+  if (janela.id === 'manha') {
+    const cta = ctaDoDia(diag);
+    return diag.pronto
+      ? {
+          fase: 'MISSÃO DO DIA · PREPARAR',
+          titulo: 'Dia pronto para a Daily e para a rua',
+          detalhe: 'Rota, clientes, follow-ups, quentes e SLA estão protegidos por evidência.',
+          estado: `${diag.prontos}/${diag.total} proteções prontas`,
+          classe: fresco ? 'is-pronta' : classeFrescor,
+          cta: cta.label,
+          acao: cta.acao
+        }
+      : {
+          fase: 'MISSÃO DO DIA · PREPARAR',
+          titulo: 'Prepare seu dia antes da Daily',
+          detalhe: cta.motivo,
+          estado: `${diag.prontos}/${diag.total} proteções prontas`,
+          classe: classeFrescor,
+          cta: cta.label,
+          acao: cta.acao
+        };
+  }
+
+  if (janela.id === 'encerramento') {
+    const semDesfecho = diag.contexto.deHoje
+      .filter(e => e.inicio.getTime() < Date.now() && e.desfecho !== 'COMPLETED' && !e.registro);
+    if (semDesfecho.length > 0) {
+      return {
+        fase: 'MISSÃO DO DIA · FECHAR',
+        titulo: `${semDesfecho.length} visita${semDesfecho.length === 1 ? '' : 's'} ainda sem desfecho`,
+        detalhe: 'O dia só fecha quando cada visita deixa resultado e próximo movimento.',
+        estado: 'registro pendente', classe: classeFrescor,
+        cta: 'Registrar desfecho',
+        acao: () => abrirRegistroDeDesfechoPorNome(semDesfecho[0].cliente, semDesfecho[0])
+      };
+    }
+    if (diag.fila.baldes.visita_sem_passo.length > 0) {
+      const n = diag.fila.baldes.visita_sem_passo.length;
+      return {
+        fase: 'MISSÃO DO DIA · FECHAR',
+        titulo: `${n} visita${n === 1 ? '' : 's'} sem próximo passo`,
+        detalhe: 'Não leve para amanhã um negócio que não sabe quando será tocado de novo.',
+        estado: 'follow-up descoberto', classe: classeFrescor,
+        cta: 'Datar próximos passos', acao: () => irParaFila('visita_sem_passo')
+      };
+    }
+    if (diag.fila.baldes.hoje.length > 0 || diag.fila.baldes.cadencia.length > 0) {
+      const cadencia = diag.fila.baldes.cadencia.length > 0;
+      return {
+        fase: 'MISSÃO DO DIA · FECHAR',
+        titulo: cadencia ? 'Ainda há cadência para fechar' : 'Ainda há follow-up para fechar',
+        detalhe: 'Faça o contato ou deixe a próxima ação datada antes de encerrar.',
+        estado: 'ação pendente', classe: classeFrescor,
+        cta: 'Abrir fila', acao: () => irParaFila(cadencia ? 'cadencia' : 'hoje')
+      };
+    }
+    const comprovadas = diag.contexto.deHoje.filter(e => e.desfecho === 'COMPLETED' || e.registro);
+    if (comprovadas.length === 0) {
+      return {
+        fase: 'MISSÃO DO DIA · FECHAR',
+        titulo: 'Nenhuma atividade de campo foi comprovada hoje',
+        detalhe: 'Se você esteve na rua, revise o que não subiu. Se não esteve, prepare a próxima saída com antecedência.',
+        estado: 'execução não comprovada', classe: classeFrescor,
+        cta: 'Revisar Agenda',
+        acao: () => { activateTab('viewAgenda'); if (typeof renderAgenda === 'function') renderAgenda(); }
+      };
+    }
+    return {
+      fase: 'MISSÃO DO DIA · FECHAR',
+      titulo: 'Dia fechado com excelência',
+      detalhe: 'Nenhuma visita sem desfecho e nenhum follow-up descoberto. Prepare a próxima saída.',
+      estado: 'ciclo fechado', classe: fresco ? 'is-pronta' : classeFrescor,
+      cta: 'Preparar próximo dia', acao: () => irParaPlanejamento('dia')
+    };
+  }
+
+  if (primeira) {
+    return {
+      fase: janela.id === 'tarde' ? 'MISSÃO DO DIA · RESGATAR' : 'MISSÃO DO DIA · EXECUTAR',
+      titulo: `${primeira.verbo} ${primeira.cliente}`,
+      detalhe: primeira.motivo,
+      estado: `${lista.length} aç${lista.length === 1 ? 'ão' : 'ões'} na fila visível`,
+      classe: classeFrescor,
+      cta: primeira.ctaLabel,
+      acao: primeira.acao
+    };
+  }
+
+  return {
+    fase: janela.id === 'tarde' ? 'MISSÃO DO DIA · RESGATAR' : 'MISSÃO DO DIA · EXECUTAR',
+    titulo: 'Carteira em ordem — abra a próxima oportunidade',
+    detalhe: 'Sem pendência operacional agora. Use o território para colocar uma nova conta na rota.',
+    estado: 'fila zerada', classe: fresco ? 'is-pronta' : classeFrescor,
+    cta: 'Abrir Planejamento', acao: () => irParaPlanejamento('rua')
+  };
+}
+
+function buildMissaoDoDiaHTML(r, diag, acoes) {
+  const m = missaoDoDia(r, diag, acoes);
+  return `<section class="missao-dia ${m.classe}" aria-label="Missão do dia">
+    <div class="missao-dia-fase">${esc(m.fase)}</div>
+    <div class="missao-dia-corpo"><b>${esc(m.titulo)}</b><span>${esc(m.detalhe)}</span></div>
+    <div class="missao-dia-estado">${esc(m.estado)}</div>
+    <button type="button" class="xv3-btn${m.classe === 'is-pronta' ? '' : ' is-danger'}" id="missaoDiaCta">${esc(m.cta)} →</button>
+  </section>`;
+}
+
 /* ---------------------------------------------------------------------------
    8. AÇÕES DE AGORA (Escopo 1) — no máximo três, sempre com botão que executa
    Cada ação carrega: verbo, cliente, motivo, prazo, número do toque, última
@@ -12300,14 +12438,15 @@ function acoesDeAgora(r, diag, contasLivres) {
    --------------------------------------------------------------------------- */
 
 const JANELAS_DO_DIA = [
-  { id: 'manha',        ate: 11.5, rotulo: 'Antes das 9h',   pergunta: 'Seu dia está pronto para a rua?' },
+  { id: 'manha',        ate: 9,    rotulo: 'Antes das 9h',   pergunta: 'Seu dia está pronto para a rua?' },
   { id: 'meio_dia',     ate: 16.5, rotulo: 'Meio do dia',    pergunta: 'O dia começou de verdade?' },
   { id: 'tarde',        ate: 19,   rotulo: 'Janela de resgate', pergunta: 'O que ainda dá pra salvar hoje?' },
   { id: 'encerramento', ate: 24,   rotulo: 'Encerramento',   pergunta: 'O que ficou comprovado hoje?' }
 ];
 
-function janelaDoDia() {
-  const h = new Date().getHours() + new Date().getMinutes() / 60;
+function janelaDoDia(agora) {
+  const relogio = agora || new Date();
+  const h = relogio.getHours() + relogio.getMinutes() / 60;
   return JANELAS_DO_DIA.find(j => h < j.ate) || JANELAS_DO_DIA[0];
 }
 
@@ -13194,8 +13333,8 @@ function contasLivresParaSugerir() {
     (typeof prospeccaoAtiva !== 'function' || prospeccaoAtiva(l)) &&
     (typeof prospeccaoFazSentido !== 'function' || prospeccaoFazSentido(l)));
 }
-function buildAcoesDeAgoraHTML(r, diag) {
-  const acoes = acoesDeAgora(r, diag, contasLivresParaSugerir());
+function buildAcoesDeAgoraHTML(r, diag, acoesCalculadas) {
+  const acoes = acoesCalculadas || acoesDeAgora(r, diag, contasLivresParaSugerir());
   const fila = diag.fila;
 
   return `
@@ -13233,9 +13372,9 @@ function buildAcoesDeAgoraHTML(r, diag) {
 }
 
 // Liga os botões do Hoje. Só botões: nenhum checkbox, nenhum estado local.
-function wireHojeExecucao(rootEl, r, diag) {
+function wireHojeExecucao(rootEl, r, diag, acoesCalculadas) {
   /* A MESMA lista do build, senão o índice do botão aponta para outra ação. */
-  const acoes = acoesDeAgora(r, diag, contasLivresParaSugerir());
+  const acoes = acoesCalculadas || acoesDeAgora(r, diag, contasLivresParaSugerir());
 
   rootEl.querySelectorAll('.gate-cta').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -13311,6 +13450,12 @@ function wireHojeExecucao(rootEl, r, diag) {
   if (ctaBanner) {
     const cta = ctaDoDia(diag);
     ctaBanner.addEventListener('click', () => { if (typeof cta.acao === 'function') cta.acao(); });
+  }
+
+  const missaoBtn = rootEl.querySelector('#missaoDiaCta');
+  if (missaoBtn) {
+    const missao = missaoDoDia(r, diag, acoes);
+    missaoBtn.addEventListener('click', () => { if (typeof missao.acao === 'function') missao.acao(); });
   }
 }
 
@@ -13649,6 +13794,7 @@ async function renderMeuPainel() {
   tpInvalidarCache();
   const diagDia = gatesDoDia(r);
   const ctaDia = ctaDoDia(diagDia);
+  const acoesDia = acoesDeAgora(r, diagDia, contasLivresParaSugerir());
 
   el.innerHTML = `
     <!-- HERO DE 1 ANDAR (v3, 31/08/26). Antes eram DOIS blocos empilhados: o hero e a
@@ -13734,6 +13880,8 @@ async function renderMeuPainel() {
       </div>
     </div>
 
+    ${buildMissaoDoDiaHTML(r, diagDia, acoesDia)}
+
     <div class="hoje-l1-grid">
       <div class="hoje-priority-stack">
 
@@ -13749,7 +13897,7 @@ async function renderMeuPainel() {
            Antes o checklist vinha primeiro: ele abria a aba e a primeira coisa era uma
            lista de sete pendências de registro, não o nome do cliente para quem ligar.
            Checklist antes de ação é cobrança antes de saída. -->
-      ${buildAcoesDeAgoraHTML(r, diagDia)}
+      ${buildAcoesDeAgoraHTML(r, diagDia, acoesDia)}
       <!-- os portões do dia foram para o rail da direita (v3): eles são REVISÃO, e a
            coluna da esquerda é a da ação. -->
 
@@ -13852,7 +14000,7 @@ async function renderMeuPainel() {
 
   `;
 
-  wireHojeExecucao(el, r, diagDia);
+  wireHojeExecucao(el, r, diagDia, acoesDia);
 
   /* A FIAÇÃO DO PDI SAIU DAQUI junto com o card (29/08/26) — checkbox, persistência e
      o carregador do histórico. Quem faz esse trabalho agora é o card "Seu 1:1" da aba
