@@ -13,8 +13,8 @@
 //
 //   Casa dos Dados   quem ABRIU AGORA. Nao tem avaliacao nenhuma — nao e lead ruim, e
 //                    lead novo: ainda nao escolheu PDV, ainda nao assinou com ninguem.
-//   Google Places    quem esta MADURO E BEM AVALIADO. Ja tem fornecedor e contrato, e o
-//                    argumento e outro — mas o ticket e maior e a operacao existe.
+//   Google Places    quem tem MAIS VOLUME de avaliacao — bem OU mal avaliado. Ja tem
+//                    fornecedor, mas a operacao e grande e o ticket, maior.
 //
 // Sao complementares, nao redundantes. api/novidades-mercado.js ja registra essa
 // distincao por escrito; este arquivo e o outro lado dela.
@@ -48,12 +48,30 @@ const path = require('path');
 const PLACES_URL = 'https://places.googleapis.com/v1/places:searchText';
 const COCKPIT_URL = process.env.COCKPIT_URL || 'https://fieldsalestakeat.vercel.app';
 
-/* ══ O CORTE DE "MAIS AVALIADO" ═══════════════════════════════════════════════════════
-   nota >= 4,5 E >= 100 avaliacoes. Este par nao e escolha minha: e o criterio que o
-   Julyan validou no sourcing mensal, e esta escrito na skill de contas-alvo. Mudar um dos
-   dois numeros muda quem o executivo visita, entao eles ficam aqui, visiveis, e nao
-   escondidos numa query. */
-const NOTA_MINIMA = 4.5;
+/* ══ O CORTE E DE VOLUME, NAO DE QUALIDADE (mudado em 03/09/26) ══════════════════════
+   Julyan: "eu quero dos MAIS avaliados independente se sao bons ou ruins".
+
+   A VERSAO ANTERIOR exigia nota >= 4,5 — e aquele numero nao era invencao minha: era o
+   criterio que ele proprio validou no sourcing mensal, escrito na skill de contas-alvo.
+   Ele mudou de posicao, e a posicao nova e melhor que a antiga. Fica registrado como
+   MUDANCA, e nao reescrito como se sempre tivesse sido assim.
+
+   POR QUE A NOTA NAO DEVE FILTRAR:
+     nota          mede a EXPERIENCIA de quem foi la
+     avaliacoes    mede o TAMANHO da operacao — quanta gente passa por ali
+
+   Uma casa com 3,2 e cinco mil avaliacoes nao e um lead ruim: e uma operacao grande com
+   problema operacional. E problema operacional com volume e o melhor argumento de venda
+   que a Takeat tem — PDV e gestao existem para isso. Cortar por nota alta deixava de fora
+   exatamente quem mais precisa, e ficava com quem ja esta bem servido.
+
+   O QUE SOBRA COMO CORTE e o piso de volume: abaixo de 100 avaliacoes nao da para chamar
+   de "mais avaliado". E a ordenacao por avaliacoes decrescente, com o teto cortando pelo
+   fim da fila, e o que faz "os MAIS avaliados" ser literalmente verdade.
+
+   A NOTA CONTINUA SENDO GRAVADA e aparece no card ("nota 3,2 · 5.140 avaliações"): ela
+   deixou de ser porteira e virou informacao de abordagem. Saber que a casa tem volume E
+   nota baixa muda a primeira frase da visita. */
 const AVALIACOES_MINIMAS = 100;
 
 /* Trava de seguranca: nunca pagina para sempre, mesmo se a API responder bem. */
@@ -161,22 +179,25 @@ async function buscarCidade(cfg, chave) {
     }
     let aceitos = 0;
     for (const l of achados) {
-      if (l.nota == null || l.avaliacoes == null) continue;
-      if (l.nota < NOTA_MINIMA || l.avaliacoes < AVALIACOES_MINIMAS) continue;
+      /* avaliacoes null cai fora porque sem ela nao da para ORDENAR por mais avaliado —
+         e ausencia de medicao nao vira zero. nota null PASSA: o lugar pode ter volume e
+         nao ter media publicada, e isso nao o torna menos alvo. */
+      if (l.avaliacoes == null) continue;
+      if (l.avaliacoes < AVALIACOES_MINIMAS) continue;
       if (porPlaceId.has(l.place_id)) continue;
       porPlaceId.set(l.place_id, l);
       aceitos++;
       if (porPlaceId.size >= tetoMaximo) break;
     }
     console.log(`[places] ${municipio}/${bairro}: ${achados.length} candidato(s), ${aceitos} no corte`
-      + ` (nota>=${NOTA_MINIMA}, ${AVALIACOES_MINIMAS}+ avaliações) — acumulado ${porPlaceId.size}/${tetoMaximo}`);
+      + ` (${AVALIACOES_MINIMAS}+ avaliações, sem corte de nota) — acumulado ${porPlaceId.size}/${tetoMaximo}`);
   }
   /* Os mais avaliados primeiro: quando o teto corta, corta pelo fim da fila. */
   const lista = [...porPlaceId.values()].sort((a, b) => (b.avaliacoes || 0) - (a.avaliacoes || 0));
   const finais = lista.slice(0, tetoMaximo);
   if (finais.length < objetivoMinimo) {
     console.warn(`[places] ${municipio}/${uf}: ${finais.length} conta(s), abaixo do objetivo de ${objetivoMinimo}.`
-      + ' Isso costuma ser lista de bairros curta ou corte alto para a praça — não é erro de execução.');
+      + ' Isso costuma ser lista de bairros curta para a praça — não é erro de execução.');
   }
   return finais;
 }
