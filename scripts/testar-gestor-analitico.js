@@ -371,15 +371,41 @@ checar('e a linha pre-agregada nao tem a frase reescrita por cima',
    olha os dois - senao ela acusa quem preencheu. */
 checar('existe um leitor unico de MRR, e ele encadeia os dois campos',
   templateCodigo.indexOf('function mrrDoNegocio(lead)') > 0 &&
-  templateCodigo.indexOf('const nosso = Number(lead.valor_de_mrr)') > 0 &&
-  templateCodigo.indexOf('const doHub = Number(lead.mrr)') > 0);
-checar('o leitor prefere o campo que a nossa rota escreve',
-  templateCodigo.indexOf('const nosso = Number(lead.valor_de_mrr)') <
-  templateCodigo.indexOf('const doHub = Number(lead.mrr)'));
+  templateCodigo.indexOf('const fechado = Number(lead.mrr)') > 0 &&
+  templateCodigo.indexOf('const emNegociacao = Number(lead.valor_de_mrr)') > 0);
+/* A ORDEM INVERTEU EM 03/09/26, POR REGRA COMERCIAL — e a assercao continua sendo de
+   ordem, porque era a ordem que estava errada e nao a ideia de fixar uma.
+     mrr           preenchido em Ag. Pagamento; e dele que o ASAAS emite o link, e e o
+                   que se mede ("o mrr que vamos medir de cada executivo E EXATAMENTE
+                   esse que ele preenche ao aguardar pagamento" — Julyan, 03/09).
+     valor_de_mrr  valor em NEGOCIACAO, que ainda nao fechou.
+   Preferir o da negociacao media promessa como receita: negocio proposto a 450 e
+   fechado a 299 aparecia valendo 450. */
+checar('o leitor prefere o MRR fechado de Ag. Pagamento, nao o valor em negociacao',
+  templateCodigo.indexOf('const fechado = Number(lead.mrr)') <
+  templateCodigo.indexOf('const emNegociacao = Number(lead.valor_de_mrr)'));
 checar('zero e negativo nao contam como MRR preenchido, e a ausencia e null',
-  templateCodigo.indexOf('if (isFinite(nosso) && nosso > 0) return nosso;') > 0 &&
-  templateCodigo.indexOf('if (isFinite(doHub) && doHub > 0) return doHub;') > 0 &&
-  /(function mrrDoNegocio[\s\S]{0,600}?return null;)/.test(templateCodigo));
+  templateCodigo.indexOf('if (isFinite(fechado) && fechado > 0) return fechado;') > 0 &&
+  templateCodigo.indexOf('if (isFinite(emNegociacao) && emNegociacao > 0) return emNegociacao;') > 0 &&
+  /(function mrrDoNegocio[\s\S]{0,900}?return null;)/.test(templateCodigo));
+/* E A ROTA QUE CORRIGE O MRR TEM QUE ESCREVER O CAMPO QUE A TELA MEDE. Ela gravava so
+   valor_de_mrr enquanto o total soma `mrr`: a correcao aparecia na tela e voltava atras
+   na proxima carga do robo, porque o HubSpot recebia metade. */
+checar('a correcao de MRR grava os DOIS campos no HubSpot',
+  (function () {
+    const f = require('path').join(__dirname, '..', 'lib', 'acoes-negocio', 'atualizar-mrr.js');
+    const c = require('fs').readFileSync(f, 'utf8');
+    return c.indexOf('valor_de_mrr: String(Math.round(mrrNum))') > 0
+      && c.indexOf('mrr: String(Math.round(mrrNum))') > 0;
+  })());
+/* O PISO DESARMADO, E A LISTA VAZIA EM VEZ DO BLOCO REMOVIDO. 349 e o ticket ideal, nao
+   trava: negocio fechado a 299 era recusado na gravacao e travava a etapa. */
+checar('nao existe piso de valor bloqueando a gravacao',
+  (function () {
+    const f = require('path').join(__dirname, '..', 'lib', 'acoes-negocio', 'mudar-etapa-negocio.js');
+    const c = require('fs').readFileSync(f, 'utf8');
+    return c.indexOf('const PROPS_COM_PISO = [];') > 0;
+  })());
 checar('a exigencia de campo obrigatorio nao acusa quem preencheu no outro campo',
   templateCodigo.indexOf("if (x.p === 'valor_de_mrr') return mrrDoNegocio(lead) == null;") > 0);
 checar('o formulario de etapa abre com o MRR que o negocio ja tem',

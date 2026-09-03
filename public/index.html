@@ -14118,7 +14118,12 @@ const CAMPOS_POR_ETAPA = {
 
        Se algum dia os três campos precisarem de fato ser reconciliados, o caminho não é
        apagar os que o RPA lê: é o Julyan decidir com o RPA na frente. */
-    { prop: 'amount', label: 'Valor (R$)', tipo: 'numero', obrigatorio: true, min: 349 },
+    /* SEM MINIMO E SEM MAXIMO (03/09/26, Julyan). R$349 e o ticket IDEAL que a Takeat
+       quer vender, e nao uma trava: negocio fechado abaixo disso e negocio fechado, e
+       recusar a gravacao deixava o executivo sem conseguir mover a etapa de um contrato
+       que ja existe. O piso foi tirado da rota do MRR em 15/08 pelo mesmo motivo e
+       sobreviveu aqui. Obrigatorio continua: o valor tem que estar preenchido. */
+    { prop: 'amount', label: 'Valor (R$)', tipo: 'numero', obrigatorio: true },
     { prop: 'mrr', label: 'MRR (R$)', tipo: 'numero', obrigatorio: true },
     { prop: 'deseja_criar_perfil_no_asaas_', label: 'Deseja criar perfil no ASAAS?', tipo: 'sim_nao', obrigatorio: true, largo: true },
     { prop: 'qual_maior_desafio_', label: 'Maior Desafio', tipo: 'selecao', opcoes: OP_MAIOR_DESAFIO, obrigatorio: true, largo: true },
@@ -26377,22 +26382,33 @@ function gxNum(v) { return Number(v || 0); }
    ele o pôs. Zero e negativo não contam como preenchido (campo de dinheiro em branco
    costuma chegar como 0), e sem nenhum dos dois a resposta é null — para a tela poder
    dizer "sem MRR preenchido" em vez de mostrar R$ 0. */
+/* QUAL DOS DOIS CAMPOS DE MRR MANDA (invertido em 03/09/26, regra do Julyan).
+
+     mrr           preenchido em Ag. Pagamento — e dele que o ASAAS emite o link, e e
+                   ELE que a gente mede: "o mrr que vamos medir de cada executivo e
+                   EXATAMENTE esse que ele preenche ao aguardar pagamento".
+     valor_de_mrr  o valor em NEGOCIACAO, que ainda nao fechou.
+
+   A ordem estava ao contrario: preferia o da negociacao e caia no fechado. Isso mede
+   promessa como se fosse receita — e um negocio que fechou por 299 depois de ter sido
+   proposto a 450 aparecia valendo 450. Fechado primeiro; a negociacao entra so quando
+   nao existe numero fechado, e nesse caso o que se ve e proposta, nao ganho. */
 function mrrDoNegocio(lead) {
   if (!lead) return null;
-  const nosso = Number(lead.valor_de_mrr);
-  if (isFinite(nosso) && nosso > 0) return nosso;
-  const doHub = Number(lead.mrr);
-  if (isFinite(doHub) && doHub > 0) return doHub;
+  const fechado = Number(lead.mrr);
+  if (isFinite(fechado) && fechado > 0) return fechado;
+  const emNegociacao = Number(lead.valor_de_mrr);
+  if (isFinite(emNegociacao) && emNegociacao > 0) return emNegociacao;
   return null;
 }
 /* Qual campo respondeu — a tela usa isto para declarar a procedência quando o número não
    veio do campo que a nossa rota escreve. */
 function mrrFonteDoNegocio(lead) {
   if (!lead) return null;
-  const nosso = Number(lead.valor_de_mrr);
-  if (isFinite(nosso) && nosso > 0) return 'valor_de_mrr';
-  const doHub = Number(lead.mrr);
-  if (isFinite(doHub) && doHub > 0) return 'mrr';
+  const fechado = Number(lead.mrr);
+  if (isFinite(fechado) && fechado > 0) return 'mrr';
+  const emNegociacao = Number(lead.valor_de_mrr);
+  if (isFinite(emNegociacao) && emNegociacao > 0) return 'valor_de_mrr';
   return null;
 }
 
@@ -34593,7 +34609,10 @@ function gxFxCasosHTML(etapa, exec) {
        vez do nosso, o cartao diz de onde veio - procedencia e parte do numero. */
     const dinheiro = (mrr != null)
       ? '<span class="gx-fx-mrr">R$ ' + mrr.toLocaleString('pt-BR') + '/mês' +
-        (mrrFonteDoNegocio(l) === 'mrr' ? '<em title="preenchido no campo MRR do HubSpot, não pelo Cockpit"> · campo do HubSpot</em>' : '') +
+        /* A MARCA MUDOU DE LADO (03/09/26). Ela avisava quando o numero vinha de `mrr`,
+           tratando como suspeito o campo que e a fonte de verdade. O que merece aviso e
+           o contrario: numero que ainda e PROPOSTA, porque nao existe MRR fechado. */
+        (mrrFonteDoNegocio(l) === 'valor_de_mrr' ? '<em title="valor em negociação (valor_de_mrr) — ainda não fechou; o MRR de Ag. Pagamento é que vira receita"> · em negociação</em>' : '') +
         '</span>'
       : '<span class="gx-fx-mrr is-sem">sem MRR preenchido</span>';
     const tempo = (l.dias == null)
