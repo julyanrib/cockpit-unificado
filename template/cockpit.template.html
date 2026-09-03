@@ -20625,7 +20625,12 @@ function registrarAgendamentoLocal(lead, dataISO, hora, ownerId, tipo) {
   agendaAgendadosLocal.push({
     leadId: chaveLead, nome: lead.nome, bairro: lead.bairro || null, cidade: lead.cidade || null,
     lat: lead.lat != null ? Number(lead.lat) : null, lng: lead.lng != null ? Number(lead.lng) : null,
-    dataISO: dataISO, hora: hora, ownerId: String(ownerId), tipo: tipo === 'reuniao' ? 'reuniao' : 'rota'
+    /* ACEITA QUALQUER CHAVE DE AGENDA_TIPOS (03/09/26). Era um ternario que so conhecia
+       'reuniao' e jogava todo o resto em 'rota'. O proximo passo datado da ficha do
+       negocio e quase sempre um FOLLOW-UP, e ele passou a usar este espelho — cair em
+       'rota' pintaria de azul, na faixa de visita, um compromisso que e de telefone. */
+    dataISO: dataISO, hora: hora, ownerId: String(ownerId),
+    tipo: (typeof AGENDA_TIPOS === 'object' && AGENDA_TIPOS[tipo]) ? tipo : 'rota'
   });
 }
 function agendadoLocalDe(leadId, dataISO) {
@@ -28906,7 +28911,57 @@ function abrirFichaCompromisso(e) {
       '<div style="font-family:\'Archivo\',system-ui,sans-serif;font-weight:800;font-size:15px;">No funil · ' + esc(stageNome) + '</div>' +
       '<div style="font-size:12px;color:var(--muted);">' + (lead.dias != null ? lead.dias + 'd na etapa' : '') + (lead.slaBreach ? ' · <b style="color:var(--red);">SLA estourado</b>' : ' · dentro do SLA') + '</div></div>';
   } else {
-    tempHTML = '<div style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:14px 18px;font-size:12px;color:var(--muted);">Não encontrei este nome no funil do HubSpot — pode ser um lead novo de rua, um interno, ou o nome está escrito diferente no negócio.</div>';
+    /* ══ O CARD DO LEAD DE RUA (03/09/26) ═══════════════════════════════════════════
+       Pedido do Julyan: "quando ele clicar no lead la embaixo tem que abrir o card do
+       lead com telefone etc, nao so criar negocio no funil".
+
+       O caso real: RDS TABACARIA, 15:00, Rota/PAP na agenda do Sandro. O painel dizia
+       apenas "nao encontrei este nome no funil" e oferecia "Criar negocio". Mas o dado
+       EXISTIA: a propria observacao do compromisso trazia "Endereco: MEIER, Rio de
+       Janeiro · Origem: conta-alvo adicionada a rota do dia pelo Cockpit" — ou seja, a
+       conta esta em prospeccaoCache, com telefone, bairro, cidade e avaliacoes. O
+       executivo estava na porta do cliente e a tela escondia o telefone dele.
+
+       Nenhuma fonte nova: prospeccaoCache e a mesma que a aba Prospeccao usa,
+       telefoneDaAcao() e a mesma funcao que monta o telefone no resto da tela, e
+       data-agficha-alvo e o handler de ficha que ja existe. So passou a ser consultada
+       aqui, que e onde a pergunta e feita. */
+    const alvoDaRua = (() => {
+      try {
+        if (typeof prospeccaoCache === 'undefined' || !Array.isArray(prospeccaoCache)) return null;
+        const chave = prospeccaoNormalizarTexto(String(e.cliente || ''));
+        if (!chave) return null;
+        return prospeccaoCache.find(c => prospeccaoNormalizarTexto(String(c.nome || '')) === chave) || null;
+      } catch (err) { return null; }
+    })();
+    if (alvoDaRua) {
+      const tel = (typeof telefoneDaAcao === 'function') ? telefoneDaAcao(alvoDaRua, alvoDaRua.nome) : null;
+      const local = [alvoDaRua.endereco, (typeof prospeccaoBairroExibicao === 'function' ? prospeccaoBairroExibicao(alvoDaRua.bairro) : alvoDaRua.bairro), alvoDaRua.cidade]
+        .map(x => String(x || '').trim()).filter(Boolean).join(' · ');
+      const nota = (alvoDaRua.nota != null && alvoDaRua.nota !== '')
+        ? String(alvoDaRua.nota).replace('.', ',') + '★' + (alvoDaRua.avaliacoes != null ? ' · ' + Number(alvoDaRua.avaliacoes).toLocaleString('pt-BR') + ' avaliações' : '')
+        : null;
+      const campo = (rot, val) => '<div style="min-width:150px;flex:1;">'
+        + '<div style="font-size:9.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted2);margin-bottom:3px;">' + rot + '</div>'
+        + '<div style="font-size:13px;">' + val + '</div></div>';
+      tempHTML = '<div style="background:var(--panel2);border:1px solid var(--line);border-left:3px solid var(--blue);border-radius:var(--r-md);padding:14px 18px;">'
+        + '<div style="font-family:\'Archivo\',system-ui,sans-serif;font-weight:800;font-size:15px;">Conta-alvo · ainda não é negócio no HubSpot</div>'
+        + '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">' + esc(String((typeof agendaRotuloDeFonte === 'function' ? agendaRotuloDeFonte(alvoDaRua.fonte) : alvoDaRua.fonte) || 'conta-alvo')) + ' — o cadastro está aqui; criar o negócio é o passo seguinte.</div>'
+        + '<div style="display:flex;gap:16px;flex-wrap:wrap;">'
+        +   campo('Telefone', tel ? '<a href="tel:+' + esc(tel) + '" style="font-weight:800;color:var(--ink);">' + esc(tel.replace(/^55/, '')) + '</a>' : '<span style="color:var(--muted2);">não cadastrado</span>')
+        +   campo('Onde fica', local ? esc(local) : '<span style="color:var(--muted2);">sem endereço</span>')
+        +   (nota ? campo('Reputação', esc(nota)) : '')
+        + '</div>'
+        + (tel ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:13px;">'
+            + '<a class="btn-sec" href="tel:+' + esc(tel) + '" style="padding:9px 15px;text-decoration:none;">📞 Ligar</a>'
+            + '<a class="btn-sec" href="https://wa.me/' + esc(tel) + '" target="_blank" rel="noopener" style="padding:9px 15px;text-decoration:none;">WhatsApp</a>'
+            + '<button type="button" class="btn-sec" data-agficha-alvo="' + agendaEsc(String(alvoDaRua.id)) + '" style="padding:9px 15px;">Ficha completa →</button>'
+          + '</div>'
+          : '<div style="margin-top:13px;"><button type="button" class="btn-sec" data-agficha-alvo="' + agendaEsc(String(alvoDaRua.id)) + '" style="padding:9px 15px;">Ficha completa →</button></div>')
+        + '</div>';
+    } else {
+      tempHTML = '<div style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:14px 18px;font-size:12px;color:var(--muted);">Não encontrei este nome no funil do HubSpot nem na sua lista de contas-alvo — pode ser um lead novo de rua, um interno, ou o nome está escrito diferente no negócio.</div>';
+    }
   }
 
   // Bloco 2 — cadência: a trilha de compromissos deste cliente (passado ✓ e futuro)
@@ -30361,8 +30416,38 @@ function wireFichaLeadFunilEdicao(container, l) {
            dia escolhido, e conta em "compromissos hoje" da Daily quando o dia chega.
            Estava tudo certo e MUDO: a confirmacao dizia so "salvo no HubSpot". Agora ela
            diz a data e o lugar, que e o que fecha o ciclo pra quem clicou. */
+        /* ══ E APARECE NA AGENDA AGORA, NAO NA PROXIMA CARGA (03/09/26) ══════════════
+           Pedido do Julyan na daily: "esse proximo passo, tem que ir pra agenda tbm".
+           A frase abaixo ja prometia isso desde 30/08 e a promessa era verdadeira mas
+           ATRASADA: a tarefa vai pro HubSpot na hora, e o DATA.agenda desta tela e um
+           SNAPSHOT da ultima carga do robo. Quem salvava o passo lia "aparece na sua
+           Agenda em 04/09", ia olhar a Agenda e nao encontrava nada — e concluia, com
+           razao, que o Cockpit nao gravou.
+
+           registrarAgendamentoLocal e o espelho otimista que o BLOCO 34 criou para o
+           agendador rapido, e agendaNormalizar() ja funde agendaAgendadosLocal com o que
+           veio do HubSpot — entao espelhar aqui faz o passo aparecer de uma vez na grade,
+           na lista, na matriz da semana e na contagem de compromissos da Daily. Nenhum
+           caminho de escrita novo: a fonte da verdade continua sendo a tarefa no HubSpot,
+           e a proxima carga substitui o espelho pelo dado real.
+
+           HORA 09:00 porque e a hora que o Cockpit grava toda tarefa datada (12:00 UTC,
+           ver api/criar-nota-negocio.js) — inventar outra faria o espelho e o dado real
+           divergirem por um dia inteiro na grade horaria. */
+        const tipoNaAgenda = passoTipoAtivo === 'Reunião' ? 'reuniao'
+          : passoTipoAtivo === 'Visita' ? 'rota'
+          : 'follow_up';
+        if (typeof registrarAgendamentoLocal === 'function') {
+          try {
+            registrarAgendamentoLocal({
+              id: dealId, nome: l.name,
+              bairro: l.bairro || null, cidade: l.cidade || null,
+              lat: l.lat != null ? l.lat : null, lng: l.lng != null ? l.lng : null
+            }, data, '09:00', l.ownerId, tipoNaAgenda);
+          } catch (err) { console.error('espelho do proximo passo na agenda:', err); }
+        }
         const dataBRPasso = String(data).split('-').reverse().join('/');
-        statusEl.textContent = `Próximo passo salvo — aparece na sua Agenda em ${dataBRPasso}.`;
+        statusEl.textContent = `Próximo passo salvo — já está na sua Agenda em ${dataBRPasso}.`;
         statusEl.style.color = 'var(--green)';
         mostrarToast(`Próximo passo de "${l.name}" datado pra ${dataBRPasso} — entra na sua Agenda como follow-up.`, 'sucesso');
       }
