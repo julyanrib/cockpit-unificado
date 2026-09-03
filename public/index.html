@@ -20495,8 +20495,30 @@ const AGENDA_EXCLUIR = new Set([
 // Visita = follow-up + rota/PAP. Reunião = demo/apresentação. Trilhas separadas.
 const AGENDA_META = { visitasDia: 6, reunioesDia: 2 };
 
-const AGENDA_PRIME = [[10, 0, 11, 30], [15, 0, 17, 0]]; // janelas nobres, hora de Brasília
 
+/* ══ REMOVIDA POR ENGANO EM 03/09/26, E PUBLICADA ASSIM ═══════════════════════════════
+   Esta declaracao desapareceu na limpeza de codigo morto (PR #275) e foi para producao.
+   A aba Planejamento do executivo passou a estourar `AGENDA_TIPOS is not defined` e
+   renderizava 76px — praticamente vazia. Nenhuma guarda pegou: nao e erro de sintaxe, e a
+   guarda de referencias confere FUNCOES dos nossos prefixos, nao constantes.
+
+   A CAUSA foi o meu removedor de const, que decidia a extensao pela primeira linha
+   terminada em `;`. A linha vizinha era
+
+     const AGENDA_HORA_INI = 8, AGENDA_HORA_FIM = 21;        // faixa da grade horaria
+
+   e ela termina em COMENTARIO, nao em `;`. A varredura seguiu adiante procurando o
+   proximo `;` de fim de linha e engoliu AGENDA_HORA_FIM e este objeto inteiro no caminho.
+
+   A licao esta na guarda 15 (checarDeclaracoesUsadas): toda constante USADA tem que ser
+   DECLARADA, conferido no arquivo, a cada build. Erro de runtime que so aparece quando o
+   executivo abre a aba e o pior tipo — passa por build, por guarda e por teste. */
+const AGENDA_TIPOS = {
+  reuniao:   { cor: 'var(--green)',  rotulo: 'Reunião',    conta: 'reuniao' },
+  follow_up: { cor: 'var(--amber)', rotulo: 'Follow-up',  conta: 'visita'  },
+  rota:      { cor: 'var(--blue)',   rotulo: 'Rota / PAP', conta: 'visita'  },
+  interno:   { cor: 'var(--muted2)', rotulo: 'Interno',    conta: null      }
+};
 /* "ESTE DIA TEM COMPROMISSO?" — TRES LUGARES RESPONDIAM ERRADO (02/09/26).
    A daily do time (tipo interno, 09:00, todo dia) entra na agenda como qualquer outro
    evento. Medido na sessao do Bruno: dos 4 dias uteis restantes da semana, TRES tinham
@@ -20617,10 +20639,6 @@ function agendaP2(n) { return String(n).padStart(2, '0'); }
 function agendaChave(d) { return d.getUTCFullYear() + '-' + agendaP2(d.getUTCMonth() + 1) + '-' + agendaP2(d.getUTCDate()); }
 function agendaHhmm(d) { return agendaP2(d.getUTCHours()) + ':' + agendaP2(d.getUTCMinutes()); }
 function agendaAgora() { return agendaParaBRT(new Date().toISOString()); }
-function agendaEhPrime(d) {
-  const m = d.getUTCHours() * 60 + d.getUTCMinutes();
-  return AGENDA_PRIME.some(w => m >= w[0] * 60 + w[1] && m < w[2] * 60 + w[3]);
-}
 function agendaDiaUtil(d) { const w = d.getUTCDay(); return w >= 1 && w <= 5; }
 function agendaSegunda(off) {
   const h = agendaAgora(), dow = h.getUTCDay(), s = new Date(h.getTime());
@@ -21053,24 +21071,6 @@ function agendaTime() {
     .filter(r => !eu || String(r.ownerId) === eu);
 }
 
-// Dias úteis consecutivos, contando de trás pra frente, com pelo menos a meta de reuniões.
-function agendaStreak(oid, todos) {
-  const porDia = {};
-  (todos || []).forEach(function (e) {
-    if (e.ownerId !== oid || AGENDA_TIPOS[e.tipo].conta !== 'reuniao') return;
-    const k = agendaChave(e.inicio); porDia[k] = (porDia[k] || 0) + 1;
-  });
-  let n = 0, d = agendaAgora();
-  d.setUTCHours(0, 0, 0, 0);
-  for (let i = 0; i < 30; i++) {
-    if (agendaDiaUtil(d)) {
-      if ((porDia[agendaChave(d)] || 0) >= AGENDA_META.reunioesDia) n++;
-      else if (i > 0) break;
-    }
-    d.setUTCDate(d.getUTCDate() - 1);
-  }
-  return n;
-}
 
 // Correção 10/08 (Julyan): tirado o painel de check-in/check-out por visita
 // ("Execução de campo") da Rota & Agenda — o time já usa o Expogo pra isso, e
@@ -24935,6 +24935,11 @@ document.addEventListener('click', function (ev) {
   // (caminho novo, confiável) ou com data-agmapa=NOME (caminho antigo, só pra quando o
   // lead não tinha coordenada resolvida — a busca agora usa agendaMesmoLead, não mais
   // um id que nunca existiu pra comparar).
+  /* data-aglat E MARCADOR, NAO VALOR (anotado em 03/09/26). Este handler nao le a
+     coordenada: ele so identifica o botao e manda para o Planejamento. O botao carregava
+     tambem data-aglng e data-agnomelead, que ninguem lia — sobra de uma versao que
+     navegava para a coordenada. Removidos, porque atributo com dado que nao se consome faz
+     o proximo leitor achar que a coordenada importa aqui. */
   const atMapaCoord = ev.target.closest('[data-aglat]');
   if (atMapaCoord) {
     ev.preventDefault(); ev.stopPropagation();
@@ -28874,7 +28879,7 @@ function abrirFichaCompromisso(e) {
     //    não. Reusa a mesma função, que aceita celular do negócio ou telefone da conta
     //    e devolve null sem número de verdade.
     ((sessaoAtual && sessaoAtual.role === 'rep' && e.cliente && lead && lead.lat != null && lead.lng != null)
-      ? '<button type="button" data-aglat="' + lead.lat + '" data-aglng="' + lead.lng + '" data-agnomelead="' + agendaEsc(String(e.cliente)) + '" style="background:var(--blue);color:var(--dark-ink);border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12px inherit;cursor:pointer;">Ver na rota →</button>'
+      ? '<button type="button" data-aglat="' + lead.lat + '" style="background:var(--blue);color:var(--dark-ink);border:none;border-radius:var(--r-pill);padding:10px 18px;font:700 12px inherit;cursor:pointer;">Ver na rota →</button>'
       : '') +
     ((sessaoAtual && sessaoAtual.role === 'rep') ? (() => {
       const telPop = (typeof telefoneDaAcao === 'function') ? telefoneDaAcao(lead, e.cliente) : null;
@@ -32322,6 +32327,22 @@ async function montarPlanoDoDia(r) {
         </aside>
       </div>
       <div id="planoMapaMsg" class="plano-map-footer"></div>
+      <!-- ══ A MICROROTA VOLTOU A TER ENDERECO (03/09/26) ═════════════════════════════════
+           #planoMicroSlot existia no codigo que MONTA a microrota (dentro de montarPlanoMapa)
+           e nao existia em markup nenhum. O bloco rodava a cada render, nao achava o slot e
+           voltava calado — e com ele ia embora um recurso inteiro: "Microrota sugerida", com
+           a sequencia por proximidade e um botao que AGENDA a sequencia toda, de 45 em 45
+           minutos a partir das 10h.
+
+           O slot morava na faixa da semana, que era ela mesma inalcancavel. Uma coisa morta
+           escondendo outra — e por isso a varredura so achou a segunda depois de eu remover
+           a primeira.
+
+           Reconectei em vez de apagar. Apagar codigo morto e limpeza; apagar um agendador em
+           lote que funciona e nunca foi visto e jogar fora capacidade. O lugar e aqui, embaixo
+           do plano de campo: a microrota se calcula a partir do que esta VISIVEL no mapa com
+           os filtros atuais, entao ela pertence ao rodape da mesma secao. -->
+      <div id="planoMicroSlot"></div>
       <div id="planoTimelineSlot"></div>
     </section>
 
@@ -33591,7 +33612,34 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
           <span class="plano-lista-meta">${blocoDele ? `<input type="time" class="plano-hora-input" data-horalead="${esc(String(l.id))}" value="${blocoDele.hora}" aria-label="Horário da visita a ${esc(l.nome)}"> ` : ''}${l.avaliacoes != null ? `<span class="plano-lista-rating">${Number(l.avaliacoes).toLocaleString('pt-BR')} avaliações</span>` : ''}${detalhe ? `<span>· ${esc(detalhe)}</span>` : ''}${kmDoCard(l)}</span>
           ${chips ? `<span class="plano-lista-chips">${chips}</span>` : ''}
         </span>
-        ${planoFechado ? '' : `<button class="plano-lista-btn" data-id="${esc(String(l.id))}" title="${naRota ? 'Tirar da rota' : 'Incluir na rota'}" aria-label="${naRota ? 'Tirar da rota' : 'Incluir na rota'}">${naRota ? '−' : '+'}</button>`}
+        <!-- ══ TRES GESTOS POR CANDIDATO (03/09/26, pedido do Julyan) ══════════════════
+             "tem que ter a opcao de incluir no pipe, ir para a daily e agenda."
+
+             ROTA E A DAILY, E SAO A MESMA COISA. Marcar a conta na rota de hoje e
+             exatamente o que a Daily do gestor le como cliente nomeado (planos_diarios.
+             contas_alvo). Criar um botao "ir para a daily" separado do "+" seria dois
+             gestos para o mesmo efeito — e o executivo clicaria nos dois achando que sao
+             coisas diferentes. Entao o "+" ganhou o rotulo que diz a verdade: ele coloca
+             na rota E o gestor ve isso na Daily. Navegar ate a aba e gesto de TELA, e
+             mora no rodape da secao, uma vez, nao 172 vezes.
+
+             PIPE so aparece para quem AINDA NAO tem negocio. Oferecer "incluir no pipe"
+             a quem ja esta no funil e a mesma classe de mentira do "Ficha" que apareceu
+             para visita sem negocio na Minha Daily: um botao que promete o que nao tem o
+             que fazer. Quem ja tem negocio ve o card abrir a ficha, que e o gesto certo.
+
+             AGENDA usa o mesmo par que a microrota ja usa (criarTarefaVisitaNoHubspot +
+             registrarAgendamentoLocal). Nenhum caminho novo de escrita no CRM. -->
+        ${planoFechado ? '' : `<span class="plano-lista-acoes">
+          <button class="plano-lista-btn plano-lista-btn-rota" data-id="${esc(String(l.id))}"
+            title="${naRota ? 'Tirar da rota de hoje' : 'Colocar na rota de hoje — é isso que o seu gestor vê na Daily'}"
+            aria-label="${naRota ? 'Tirar da rota de hoje' : 'Colocar na rota de hoje'}">${naRota ? '−' : '+'}</button>
+          ${(!noHubspot(l) && !quenteHub(l) && !l._clienteAtivo && !l._quenteAvulso)
+            ? `<button class="plano-lista-acao" data-plano-pipe="${esc(String(l.id))}"
+                title="Criar o negócio no funil — sem negócio, visita e próximo passo não têm onde morar">pipe</button>` : ''}
+          <button class="plano-lista-acao" data-plano-agendar="${esc(String(l.id))}"
+            title="Agendar visita e criar a tarefa no HubSpot">agenda</button>
+        </span>`}
       </div>`;
   };
   const itensRota = ordenadas.filter(naRotaHojeFn);

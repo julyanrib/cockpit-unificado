@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const { mascararComentarios } = require('./mascarar.js');
 
 const root = path.join(__dirname, '..');
 const alvos = [
@@ -1092,3 +1093,91 @@ function checarMinhaDailySemCliqueMorto() {
   return true;
 }
 if (!checarMinhaDailySemCliqueMorto()) process.exit(1);
+
+/* == 15. TODA CONSTANTE USADA E DECLARADA (03/09/26) ================================
+   Esta guarda nasceu de um defeito MEU, que eu publiquei.
+
+   A limpeza de codigo morto do PR #275 apagou `const AGENDA_TIPOS = {...}` por engano. A
+   aba Planejamento do executivo passou a estourar `AGENDA_TIPOS is not defined` e
+   renderizava 76px — praticamente vazia. Ficou assim em producao, e eu so descobri porque
+   fui olhar a aba por outro motivo.
+
+   NADA PEGOU, e vale entender por que cada rede falhou:
+     a checagem de sintaxe  -> `AGENDA_TIPOS[x]` e sintaxe VALIDA; o erro e de runtime
+     as 17 suites           -> nenhuma exercita renderProspeccaoExecutivo, que e a que quebra
+     a guarda de referencias-> confere FUNCOES dos nossos prefixos, nao CONSTANTES
+     o build                -> compilou e publicou, feliz da vida
+
+   A CAUSA foi o meu removedor decidir a extensao da const pela primeira linha terminada em
+   `;`. A vizinha era `const AGENDA_HORA_INI = 8, AGENDA_HORA_FIM = 21;   // faixa da grade`
+   — que termina em COMENTARIO. A varredura seguiu procurando o proximo `;` de fim de linha
+   e engoliu o objeto inteiro no caminho.
+
+   A guarda nao conserta o removedor; ela torna o erro impossivel de publicar. Nome em
+   MAIUSCULA e a convencao deste arquivo para constante de modulo, e e o que permite
+   distinguir "constante nossa" de propriedade de objeto ou variavel de terceiro. */
+function checarDeclaracoesUsadas() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  const semCom = mascararComentarios(cru);
+
+  /* Declaradas: const/let/var em qualquer indentacao, inclusive as de varios nomes numa
+     linha so (`const A = 8, B = 21;`) — foi exatamente uma dessas que se perdeu. */
+  const declaradas = new Set();
+  for (const m of semCom.matchAll(/\b(?:const|let|var)\s+([A-Z][A-Z0-9_]{2,})\s*=/g)) declaradas.add(m[1]);
+  for (const m of semCom.matchAll(/,\s*([A-Z][A-Z0-9_]{2,})\s*=/g)) declaradas.add(m[1]);
+  /* funcao tambem declara nome, e ha constante que e resultado de funcao */
+  for (const m of semCom.matchAll(/\bfunction\s+([A-Z][A-Z0-9_]{2,})\s*\(/g)) declaradas.add(m[1]);
+
+  /* USADAS SO EM POSICAO DE CODIGO: o nome seguido de `[` ou `.`, que e como uma constante
+     de modulo e lida neste arquivo (AGENDA_TIPOS[e.tipo], AGENDA_TIPOS.rota).
+
+     A primeira versao aceitava o nome em qualquer posicao e acusou tres textos de TELA:
+     STATUS, EMPRESA e M14 (este ultimo dentro de um `<path d="M8 14h2...">` de SVG). Guarda
+     que acusa rotulo de coluna como constante faltando e guarda que alguem desliga — e a
+     partir dali ela protege zero. */
+  const usadas = new Map();
+  /* Depois do ponto tem que vir IDENTIFICADOR. Com `[[.]` solto, a guarda acusou `D60` —
+     que aparece em prosa de tela ("Gates: D30 · D45 · D60."), com o ponto sendo o fim da
+     frase. Acesso a propriedade e `NOME.algo`; fim de frase e `NOME.` e nada. */
+  for (const m of semCom.matchAll(/\b([A-Z][A-Z0-9_]{2,})\s*(?:\[|\.[A-Za-z_$])/g)) {
+    const nome = m[1];
+    usadas.set(nome, (usadas.get(nome) || 0) + 1);
+  }
+
+  /* Nomes que vem de fora do template (navegador, bibliotecas, dados injetados) ou que sao
+     texto de tela em maiuscula. Sem esta lista a guarda viraria ruido — e guarda com ruido
+     e guarda desligada. */
+  const DE_FORA = new Set([
+    'DATA', 'JSON', 'Math', 'Object', 'Array', 'String', 'Number', 'Boolean', 'Date', 'Map',
+    'Set', 'Promise', 'RegExp', 'Error', 'URL', 'FormData', 'Intl', 'NaN', 'API', 'CSS',
+    'HTML', 'URL', 'PNG', 'PDF', 'CRM', 'SLA', 'MRR', 'PAP', 'TV', 'ID', 'UTC', 'BRT',
+    'OSM', 'CEP', 'CNPJ', 'CPF', 'WhatsApp', 'HubSpot',
+    /* XLSX e a SheetJS, carregada por <script> externo: e global de verdade, e nao
+       constante nossa. Sem esta entrada a guarda pediria que o template declarasse uma
+       biblioteca de terceiro. */
+    'XLSX'
+  ]);
+
+  const orfas = [];
+  for (const [nome, n] of usadas) {
+    if (declaradas.has(nome) || DE_FORA.has(nome)) continue;
+    /* uma unica ocorrencia e quase sempre texto de tela ("MICRO EMPRESA"); duas ou mais em
+       posicao de codigo e leitura de constante. O corte conservador vale a pena: o caso que
+       me pegou tinha 44 usos. */
+    if (n < 2) continue;
+    orfas.push(nome + ' (' + n + ' usos)');
+  }
+
+  if (orfas.length) {
+    console.error('CONSTANTE USADA E NUNCA DECLARADA em ' + arquivo + ':');
+    orfas.forEach(o => console.error('  ' + o));
+    console.error('  Isto NAO e erro de sintaxe: o build compila e publica. A tela estoura');
+    console.error('  em runtime, e so quando alguem abre a aba que a le — foi assim que a aba');
+    console.error('  Planejamento do executivo foi para producao renderizando 76px.');
+    return false;
+  }
+  console.log('OK declaracoes - toda constante de modulo usada no template esta declarada.');
+  return true;
+}
+if (!checarDeclaracoesUsadas()) process.exit(1);
