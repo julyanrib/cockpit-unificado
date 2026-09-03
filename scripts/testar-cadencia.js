@@ -249,9 +249,22 @@ conferir('sem snapshot a rota responde erro, nunca uma tela de zeros',
 conferir('a injecao do snapshot nao apaga o que existe com um vazio que chegou',
   /if \(valor == null\) return;/.test(montar),
   'tabela sem a linha e "ainda nao publicou", nao "nao ha dado"');
-conferir('o snapshot do CRM e o unico obrigatorio, e o arquivo segue como rede',
+/* A INVARIANTE MUDOU EM 03/09/26, e o teste antigo estava certo em reprovar. Ele afirmava
+   que o funil era o UNICO obrigatorio. Isso valia enquanto narrativas.json estava no git,
+   ou seja no pacote do deploy: mesmo velho, ele tinha o quadro de executivos. Ele saiu do
+   git (o robo commitava e todo commit gera um deploy), a unica fonte dele passou a ser a
+   tabela, e montarDadosCompletos abre com Object.keys(narrativas.reps) — sem ele nao ha
+   uma pessoa na tela. Entao temSnapshot passou a exigir os dois, e faltandoNoSnapshot diz
+   qual faltou para o 503 mandar procurar no lugar certo. */
+conferir('o funil E o quadro de executivos sao obrigatorios, e o arquivo segue como rede',
   /let hubspot = requireOpcional/.test(montar) &&
-  /function temSnapshot\(\) \{ return !!\(hubspot && hubspot\.kpis\); \}/.test(montar));
+  /let narrativas = requireOpcional/.test(montar) &&
+  /function temSnapshot\(\) \{ return !!\(hubspot && hubspot\.kpis && narrativas && narrativas\.reps\); \}/.test(montar),
+  'narrativas nao esta mais no pacote do deploy: sem a linha na tabela, a tela nao tem uma pessoa');
+conferir('o 503 diz QUAL peca faltou, nao so que faltou',
+  /function faltandoNoSnapshot/.test(montar) &&
+  /const faltando = faltandoNoSnapshot\(\)/.test(rotaDados),
+  'as duas chegam pelo mesmo caminho e quebram por motivos diferentes');
 conferir('o robo publica o snapshot na tabela depois de gravar os arquivos',
   /async function publicarNoSnapshot/.test(robo) &&
   robo.indexOf('fs.writeFileSync(statusPath') < robo.indexOf('for (const [chave, conteudo] of paraPublicar)'),
