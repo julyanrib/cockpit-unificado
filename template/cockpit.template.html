@@ -2720,6 +2720,8 @@
   body.cond-aberta{overflow:hidden;}
   .cond-head{flex:none;display:flex;align-items:center;gap:12px;padding:14px 26px;border-bottom:1px solid rgba(253,251,240,.12);}
   .cond-head b{font:800 15px/1 var(--font-display);color:var(--dark-ink);}
+  .cond-head .quem{font:800 15px/1 var(--font-display);color:var(--dark-ink);}
+  .cond-head .quem:not(:empty)::before{content:'·';margin-right:12px;color:var(--dark-mut);font-weight:400;}
   .cond-head span.sub{font-size:11px;color:var(--dark-mut);}
   .cond-head .cnt{margin-left:auto;font:800 12px/1 var(--font-body);color:var(--dark-mut);font-variant-numeric:tabular-nums;}
   .cond-barra{flex:none;height:3px;background:rgba(253,251,240,.12);}
@@ -7835,6 +7837,9 @@
     box-shadow:0 1px 2px rgba(26,22,19,.04);
     transition:border-color var(--t-base) var(--ease), box-shadow var(--t-base) var(--ease);
   }
+  /* A linha de quem acabou de ser conduzido. Borda de tinta, nao cor de estado: o estado
+     dela (vermelho/ambar/verde) continua valendo na borda esquerda e nao pode ser perdido. */
+  #viewDaily .daily-team-row.is-conduzida{border-color:var(--ink);box-shadow:var(--sh-hover);}
   #viewDaily .daily-team-row:hover{box-shadow:var(--sh-hover);}
   #viewDaily .daily-team-row[open]{box-shadow:var(--sh-hover);}
   #viewDaily .daily-team-summary-v2{padding:14px 18px;align-items:center;}
@@ -9676,6 +9681,11 @@
   <div id="conducaoOverlay" aria-modal="true" role="dialog" aria-label="Condução da Daily">
     <div class="cond-head">
       <b>Conduzindo a Daily</b>
+      <!-- O NOME NA BARRA FIXA (02/09/26, prancha §3: "Conduzindo · 2 de 7 · Nome").
+           A barra e o unico pedaco que nao rola. O nome existia so dentro do painel, e
+           numa tela projetada de pe a reuniao pergunta "de quem estamos falando?" olhando
+           para o topo. -->
+      <span class="quem" id="conducaoQuem"></span>
       <span class="sub" id="conducaoOrdem">uma pessoa por vez, na ordem de quem mais precisa · setas ← → para navegar, Esc para sair</span>
       <span class="cnt" id="conducaoContador">—</span>
     </div>
@@ -26669,6 +26679,28 @@ function gxIrParaLinhaDaDaily(ownerId) {
 document.addEventListener('click', ev => {
   const etapa = ev.target.closest('[data-gx-etapa]');
   if (etapa) { gxAbrirEtapa(etapa.getAttribute('data-gx-etapa'), etapa.getAttribute('data-gx-owner') || null); return; }
+  /* ANTES do data-gx-dono de proposito: os dois convivem. [data-gx-conduzir] e o hero da
+     propria Daily e entra no ritual; [data-gx-dono] e a aba Time, que atravessa de aba e
+     precisa mesmo e rolar ate a linha. Trocar os dois por um so quebraria um dos lados. */
+  const conduzir = ev.target.closest('[data-gx-conduzir]');
+  if (conduzir) {
+    const oid = conduzir.getAttribute('data-gx-conduzir');
+    /* QUEM NAO ENTRA NA CONDUCAO VAI PARA A PROPRIA LINHA (02/09/26). A rodada mostra 7
+       pessoas e a conducao percorre 6: ownerAtivoNoField() tira quem esta em preparacao.
+       Medido: a Amanda e o 2o nome do hero (18 acima do SLA de 20 abertos, motivo real
+       para ela estar ali) e NAO esta na ordem da conducao. Sem esta borda, findIndex
+       voltava -1, o idx caia em 0 e o clique na Amanda abria na Kelly — clique na pessoa
+       errada, que e pior que clique morto, porque o gestor cobra quem nao devia.
+       Ela continua no hero, porque a carteira dela precisa de acao; o clique dela leva
+       ao lugar onde essa acao existe, que e a linha dela na rodada. */
+    const podeConduzir = typeof ownerAtivoNoField !== 'function' || ownerAtivoNoField(oid);
+    if (podeConduzir && typeof abrirConducaoDaily === 'function') {
+      abrirConducaoDaily(dailyPlanosDoRender || {}, 'urgencia', oid);
+    } else {
+      gxIrParaLinhaDaDaily(oid);
+    }
+    return;
+  }
   const dono = ev.target.closest('[data-gx-dono]');
   if (dono) { gxIrParaLinhaDaDaily(dono.getAttribute('data-gx-dono')); return; }
 });
@@ -39728,6 +39760,13 @@ function painelConducaoHTML(r, idx, total, planos) {
 }
 
 let condEstado = { idx: 0, ordem: [], planos: null };
+/* `planosPorOwner` e local do renderDaily, e o ouvinte de [data-gx-conduzir] e delegado
+   no document — nao alcanca aquele escopo. Este espelho e escrito no mesmo bloco que
+   amarra o botao Conduzir, ou seja depois do await que carrega os planos. */
+let dailyPlanosDoRender = null;
+/* Quem o gestor estava conduzindo quando encerrou. A lista precisa concordar com a
+   conducao: encerrar em cima do Wericles e voltar para o topo da pagina perde o lugar. */
+let condUltimoDono = null;
 
 /* ══ A CONDUCAO ACEITA UM CRITERIO DE ORDEM (02/09/26, prancha §1) ══════════════════
    A ordem normal e a urgencia (a mesma regua da fila da aba Time). O "conduzir pela rota"
@@ -39736,7 +39775,15 @@ let condEstado = { idx: 0, ordem: [], planos: null };
    comecando por quem trava o dia.
    E a ordem escolhida vai no estado, porque a barra de conducao passa a dizer qual e: sem
    isso o gestor ve uma ordem diferente da que ele conhece e nao sabe por que. */
-function abrirConducaoDaily(planos, criterio) {
+/* ══ ENTRAR NA CONDUCAO NA PESSOA CERTA (02/09/26, prancha §3) ══════════════════════
+   "CTAs do hero entram ja na pessoa certa". Os tres nomes do hero levavam a
+   gxIrParaLinhaDaDaily, que rola a pagina ate a linha e abre o acordeao — util para
+   quem vem de OUTRA aba (e o uso da aba Time), mas errado no hero da propria Daily:
+   o hero diz "comece por Marco" e o clique deixava o gestor onde ele ja estava, com a
+   reuniao ainda por comecar. Agora ele entra na conducao, no Marco.
+   A ordem continua sendo a MESMA lista — muda so por onde ela abre. Sem isso, um clique
+   no 3o nome viraria uma conducao de uma pessoa so, e o ritual perderia os outros seis. */
+function abrirConducaoDaily(planos, criterio, ownerIdInicial) {
   const ativos = (DATA.reps || [])
     .filter(r => r && r.ownerId && (typeof ownerAtivoNoField !== 'function' || ownerAtivoNoField(r.ownerId)));
   const semRota = r => {
@@ -39751,7 +39798,18 @@ function abrirConducaoDaily(planos, criterio) {
       })
     : ativos.slice().sort((a, b) => urgenciaDoRepNaDaily(b) - urgenciaDoRepNaDaily(a));
   if (reps.length === 0) { mostrarToast('Nenhum executivo ativo no campo nesta carga.', 'atencao'); return; }
-  condEstado = { idx: 0, ordem: reps, planos: planos || {}, criterio: criterio || 'urgencia' };
+  let idxInicial = 0;
+  if (ownerIdInicial) {
+    const achou = reps.findIndex(r => String(r.ownerId) === String(ownerIdInicial));
+    /* Cair em 0 calado abre na pessoa errada. Quem chama daqui ja filtra por
+       ownerAtivoNoField (ver o ouvinte de [data-gx-conduzir]); esta e a rede de baixo,
+       para uma chamada futura que esqueca de filtrar. */
+    if (achou >= 0) idxInicial = achou;
+    else if (typeof mostrarToast === 'function') {
+      mostrarToast('Essa pessoa não está na condução de hoje — a rodada começa por quem está em campo.', 'atencao');
+    }
+  }
+  condEstado = { idx: idxInicial, ordem: reps, planos: planos || {}, criterio: criterio || 'urgencia' };
   const host = document.getElementById('conducaoOverlay');
   host.classList.add('show');
   document.body.classList.add('cond-aberta');
@@ -39792,6 +39850,9 @@ function desenharConducao() {
   if (prog) prog.style.width = Math.round(((condEstado.idx + 1) / condEstado.ordem.length) * 100) + '%';
   const cont = document.getElementById('conducaoContador');
   if (cont) cont.textContent = `${condEstado.idx + 1} / ${condEstado.ordem.length}`;
+  const quemEl = document.getElementById('conducaoQuem');
+  if (quemEl) quemEl.textContent = String(r.name || '').split(' ').slice(0, 2).join(' ');
+  condUltimoDono = r.ownerId;
   /* A ORDEM APARECE ESCRITA (02/09/26). A conducao pode entrar por urgencia (o normal) ou
      pela rota (o botao da faixa de alerta do hero). Sem dizer qual esta valendo, o gestor
      ve uma sequencia diferente da que ele conhece e nao sabe por que — e a primeira
@@ -39809,6 +39870,21 @@ function fecharConducao() {
   const host = document.getElementById('conducaoOverlay');
   if (host) host.classList.remove('show');
   document.body.classList.remove('cond-aberta');
+  /* A LISTA CONCORDA COM A CONDUCAO (02/09/26, prancha §3). A prancha pedia a linha atual
+     com borda tinta e as outras esmaecidas — desenhada para uma conducao EM LINHA, que
+     nao e a que existe: aqui ela e um overlay de tela cheia, que projeta melhor e ja tem
+     anterior/proximo/encerrar alcancaveis sem rolar (medido nos 6 passos a 900px). O que
+     sobra de util da ideia e o reencontro: encerrar no Wericles e a pagina estar no topo
+     faz o gestor procurar de novo quem ele acabou de tratar. Ele volta na linha dele,
+     aberta e marcada. Esmaecer as outras, com o overlay fechado, so esconderia o time. */
+  const oid = condUltimoDono;
+  if (!oid) return;
+  const linha = document.getElementById('dailyAcc_' + oid);
+  if (!linha) return;
+  document.querySelectorAll('.daily-team-row.is-conduzida').forEach(e => e.classList.remove('is-conduzida'));
+  linha.classList.add('is-conduzida');
+  linha.open = true;
+  window.scrollTo({ top: linha.getBoundingClientRect().top + window.scrollY - 110, behavior: 'auto' });
 }
 
 // Setas do teclado: numa daily projetada, o gestor não quer procurar botão.
@@ -40789,7 +40865,7 @@ async function renderDaily() {
         if (!x.ramp || !x.ramp.definido) partes.push('fase de rampagem não definida');
         return partes.join(' · ') || 'pendência de acompanhamento';
       };
-      const linhaDoRank = (x, i) => `<button type="button" class="gi-rank${x.pontos >= 9 ? ' is-critical' : x.pontos >= 6 ? ' is-warning' : ''}" data-gx-dono="${esc(String(x.r.ownerId))}" title="Abrir a linha de ${esc(String(x.r.name || ''))} na rodada">`
+      const linhaDoRank = (x, i) => `<button type="button" class="gi-rank${x.pontos >= 9 ? ' is-critical' : x.pontos >= 6 ? ' is-warning' : ''}" data-gx-conduzir="${esc(String(x.r.ownerId))}" title="${(typeof ownerAtivoNoField !== 'function' || ownerAtivoNoField(x.r.ownerId)) ? `Conduzir a Daily começando em ${esc(String(x.r.name || ''))}` : `Abrir a linha de ${esc(String(x.r.name || ''))} na rodada — em preparação, fora da condução`}">`
         + `<span class="gi-rank-sq">${i + 1}</span>`
         + `<span><b>${esc(String(x.r.name || '').split(' ').slice(0, 2).join(' '))}</b> · ${motivoDoRank(x)}</span>`
         + `<span class="gi-rank-go">${x.nomeados ? 'abrir' : 'cobrar plano'} ▸</span></button>`;
@@ -42088,6 +42164,7 @@ async function renderDaily() {
   if (!souRepDaily) {
     // Condução da Daily — recebe planosPorOwner porque o painel de cada pessoa
     // mostra o compromisso dela, e essa consulta já foi feita no topo desta função.
+    dailyPlanosDoRender = planosPorOwner;
     const btnConduzir = document.getElementById('dailyConduzir');
     if (btnConduzir) btnConduzir.addEventListener('click', () => abrirConducaoDaily(planosPorOwner));
     /* Mesma conducao, ordem pela rota — ver o comentario de abrirConducaoDaily. */
