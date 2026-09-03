@@ -4304,6 +4304,16 @@
     letter-spacing:.04em;background:var(--sunk);color:var(--muted);}
   .dl2-etapa.is-quente{background:var(--amber-soft);color:var(--amber-ink,var(--amber));}
   .dl2-etapa.is-verde{background:var(--green-soft);color:var(--green);}
+  /* ══ SEM NEGOCIO: ALERTA DISCRETO, INEQUIVOCO (03/09/26) ═════════════════════════════
+     Ambar, e nao vermelho: nao e perda nem erro do executivo — e uma pendencia de cadastro
+     que ele resolve num clique. Vermelho aqui competiria com o vermelho de "sem plano", que
+     e a informacao mais grave da tela e nao pode ter rival.
+
+     A borda existe porque o selo ambar-suave sozinho, no meio de uma fileira de selos de
+     etapa, some: os outros estados sao ETAPAS do funil e este e a AUSENCIA de funil. Tem
+     que ser reconhecivel como categoria diferente, nao como uma etapa a mais. */
+  .dl2-etapa.is-sem-negocio{background:var(--amber-soft);color:var(--amber-ink,var(--amber));
+    border:1px dashed var(--amber);}
   .dl2-agora-km{margin-left:auto;flex:none;font-size:11px;font-weight:700;color:var(--muted2);}
   .dl2-agora-corpo{display:flex;gap:12px;align-items:stretch;}
   .dl2-arma{flex:1;min-width:0;background:var(--panel2);border-radius:var(--r-md);padding:9px 12px;
@@ -4459,6 +4469,14 @@
     .dl2-linha{flex-wrap:wrap;}
     .dl2-linha-quem{flex:1 1 100%;order:3;}
     .dl2-linha-pts{margin-left:auto;}
+    /* ══ A RESERVA EMPILHA NO ESTREITO (03/09/26) ═══════════════════════════════════════
+       Medido a 375px: .dl2-reserva e flex em LINHA com tres filhos (rótulo, texto, botão)
+       dentro de 250px uteis. O texto ficava com ~55px e virava uma palavra por linha —
+       "furou uma / visita? / Aloha está / na sua / bandeja" —, 176px de altura para duas
+       frases. Nao vazava nem cortava, entao nenhuma medida de overflow acusava; so ficava
+       ilegivel, que e o defeito que so aparece olhando. */
+    .dl2-reserva{flex-direction:column;align-items:stretch;gap:8px;}
+    .dl2-reserva .dl2-linha-btn{width:100%;}
     .dl2-agora-cab>b{flex:1 1 100%;}
     .dl2-agora-km{margin-left:0;}
     /* O CARD AGORA GRUDA NO TOPO (pedido da prancha para 375px). No celular a linha do
@@ -38192,16 +38210,33 @@ function d4PotencialMax(linha) {
      depois das 19h → o placar do dia fechou; o que importa é o resultado
    Derivado do relógio, não gravado: uma trava guardada no banco seria um segundo
    lugar para a verdade morar e poderia divergir da hora real. */
-const D4_TRAVA_MIN = 9 * 60 + 30;
+/* ══ UMA TRAVA, UM RELOGIO (03/09/26) ═══════════════════════════════════════════════
+   Aqui vivia D4_TRAVA_MIN = 9 * 60 + 30: uma SEGUNDA constante para a mesma regra, que
+   ficou para tras quando a trava oficial virou 13h. E ela nao divergia so na hora —
+   divergia no RELOGIO: usava getHours() (o fuso da maquina do executivo) enquanto
+   promessaTravadaNoHorario le agendaAgora(), que e Brasilia. Duas horas e dois relogios
+   para a mesma pergunta.
+
+   O QUE A TELA FAZIA COM ISSO: entre 9h30 e 13h a fase virava "corrida" e o hero dizia
+   que a promessa estava travada, enquanto o bloco do compromisso — que le a regra
+   oficial — mostrava "Confirmar" vivo. A mesma tela afirmando as duas coisas.
+
+   E D4_TRAVA_MIN nao conhecia a liberacao datada, entao no dia liberado o hero seguiria
+   dizendo travada. A guarda 13 nao pegou: ela confere TEXTO de tela contra a constante, e
+   esta divergencia era numerica, escondida atras de um segundo nome.
+
+   Agora a fase DERIVA da regra oficial. Nao ha o que sincronizar. */
 const D4_FECHA_MIN = 19 * 60;
 function d4FaseDoDia(refISO) {
   const hojeISO = isoDate(new Date());
   /* olhando um dia que não é hoje: passado está fechado, futuro ainda é promessa */
   if (refISO && refISO !== hojeISO) return refISO < hojeISO ? 'fechado' : 'antes';
-  const ag = new Date();
-  const min = ag.getHours() * 60 + ag.getMinutes();
+  /* O fecho das 19h passa a ler o mesmo relogio da trava — antes ele era local, e para um
+     executivo fora do fuso de Brasilia o placar fechava na hora errada. */
+  const ag = (typeof agendaAgora === 'function') ? agendaAgora() : new Date();
+  const min = ag.getUTCHours() * 60 + ag.getUTCMinutes();
   if (min >= D4_FECHA_MIN) return 'fechado';
-  if (min >= D4_TRAVA_MIN) return 'corrida';
+  if (typeof promessaTravadaNoHorario === 'function' && promessaTravadaNoHorario(ag)) return 'corrida';
   return 'antes';
 }
 
@@ -38336,7 +38371,36 @@ const DL2_ARMAS = [
     arma: 'retomar do ponto da última visita',
     meta: 'meta: destravar', cta: 'Ver última nota →', acao: 'nota' }
 ];
+/* DL2_ARMA_PADRAO segue sendo o fallback de ETAPA DESCONHECIDA: o negocio existe, mas o
+   stageId nao esta em nenhuma arma. Esse caso e legitimo e a ficha resolve. */
 const DL2_ARMA_PADRAO = DL2_ARMAS[0];
+
+/* ══ VISITA SEM NEGOCIO NAO E 1ª VISITA (03/09/26) ═══════════════════════════════════
+   BUG REPRODUZIDO EM PRODUCAO, na sessao do Marco Filho: o item "Agência de MKT pizza
+   master" mostrava o botao "Ficha"; o clique nao abria nada e a tela dizia
+
+     "Não achei ... no seu funil — a visita está na agenda, mas o negócio não.
+      Abra pelo Meu funil."
+
+   A orientacao era IMPOSSIVEL de seguir: se o negocio nao esta no funil, abrir o Meu
+   funil nao produz negocio nenhum. Clique morto com instrucao que nao tem saida e pior
+   que clique morto — manda a pessoa procurar o que nao existe.
+
+   A CAUSA: dl2ArmaDoNegocio(null) devolvia DL2_ARMA_PADRAO, que e a arma de 1ª VISITA e
+   traz cta "Ficha". A Daily recebe visitas da AGENDA, e agenda nao exige negocio — entao
+   a tela desenhava a porta de uma ficha que nunca existiu.
+
+   O estado tem nome proprio agora, e o CTA e o unico gesto que resolve: criar o negocio.
+   Nao e um caminho novo de criacao — e o abrirNovaContaProspeccao que a Agenda e o
+   Planejamento ja usam, com o nome do estabelecimento na semente.
+
+   E vale para a visita JA REALIZADA sem negocio tambem: sem o negocio, visita, decisor e
+   proximo passo ficam sem onde morar, e o historico se perde em vez de virar funil. */
+const DL2_ARMA_SEM_NEGOCIO = {
+  etapas: [], rotulo: 'SEM NEGÓCIO', cor: 'is-sem-negocio',
+  arma: 'crie o negócio antes de entrar, para ligar visita, decisor e próximo passo ao mesmo histórico',
+  meta: 'meta: negócio criado na etapa certa', cta: 'Criar negócio', acao: 'criar'
+};
 
 /* acha o negócio do executivo pelo NOME que veio no assunto da tarefa. Comparação sem
    acento e sem caixa porque "Nikô Ba" na tarefa e "NIKO BA" no negócio são a mesma casa —
@@ -38374,7 +38438,8 @@ function dl2NegocioPorNome(r, nome) {
 }
 
 function dl2ArmaDoNegocio(neg) {
-  if (!neg) return DL2_ARMA_PADRAO;
+  /* Sem negocio o gesto e criar, nao abrir ficha. Ver o comentario de DL2_ARMA_SEM_NEGOCIO. */
+  if (!neg) return DL2_ARMA_SEM_NEGOCIO;
   /* stageId é o nome do campo no dado real (data/hubspot.json), e meusNegociosAbertos
      garante que ele está preenchido mesmo quando o lead veio de uma lista que não o traz. */
   const etapa = String(neg.stageId || '');
@@ -38545,13 +38610,21 @@ function dl2LinhaHTML(item, r, ehAgora) {
         <div class="dl2-agora-acoes">
           <button type="button" class="dl2-cta" data-dl2-acao="${esc(arma.acao)}"
             data-dl2-neg="${esc(idNeg)}" data-dl2-nome="${esc(item.nome)}">${arma.cta}</button>
-          <span class="dl2-ghosts">
+          <!-- ══ SEM NEGOCIO, SEM GESTO SECUNDARIO (03/09/26) ═════════════════════════
+               "Furou" grava nota e tarefa de remarcacao NO NEGOCIO: sem negocio ele cairia
+               no mesmo beco do "Ficha" — botao que promete e nao tem onde escrever. E o
+               WhatsApp de chegada registrado fora de um negocio e justamente o historico
+               que este conserto existe para nao perder.
+
+               Some em vez de aparecer desabilitado: o CTA "Criar negócio" ao lado ja diz o
+               que fazer, e dois gestos apagados do lado dele so competiriam com a leitura. -->
+          ${neg ? `<span class="dl2-ghosts">
             ${tel ? `<a class="dl2-ghost" href="https://wa.me/${esc(tel)}" target="_blank" rel="noopener"
               style="display:inline-flex;align-items:center;justify-content:center;text-decoration:none;"
               title="Avisar que chegou">WhatsApp de chegada</a>` : ''}
             <button type="button" class="dl2-ghost" data-dl2-acao="furo"
               data-dl2-neg="${esc(idNeg)}" data-dl2-nome="${esc(item.nome)}">Furou</button>
-          </span>
+          </span>` : ''}
         </div>
       </div>
       <div class="dl2-agora-vale">vale +20 da visita${
@@ -38564,11 +38637,26 @@ function dl2LinhaHTML(item, r, ehAgora) {
      novo (os quatro da prancha continuam sendo feita/agora/fila/furou) — é a verdade que
      a hora já contava e a tela estava calando. Fila neutra numa visita de duas horas
      atrás é a tela ajudando a esquecer. */
+  /* ══ ESTE REGEX NUNCA RECONHECEU UMA HORA (corrigido em 03/09/26) ═══════════════════
+     Estava escrito /^(d{1,2}):(d{2})$/ — sem as barras invertidas, que morreram no patch
+     que criou esta funcao. Assim ele exige a LETRA "d": casaria "d:dd" e nunca "09:00".
+     Resultado: `atrasada` era sempre false e o aviso de atraso nunca apareceu para
+     ninguem, desde o dia em que nasceu. Recurso morto que passou em todas as verificacoes,
+     porque regex invalido daria erro e regex VALIDO E ERRADO nao da nada.
+
+     A hora tambem passa a ser a de Brasilia (agendaAgora), e nao a da maquina: comparar
+     "09:00" da agenda com o relogio local marcaria visita atrasada, ou nao, conforme o fuso
+     em que o executivo estivesse.
+
+     A guarda 14 cobre este regex com um caso de "09:00", porque o defeito e invisivel: ele
+     nao quebra nada, so cala. */
   const atrasada = (() => {
-    const m = /^(d{1,2}):(d{2})$/.exec(String(item.hora || ''));
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(item.hora || ''));
     if (!m) return false;
-    const ag = new Date();
-    return (Number(m[1]) * 60 + Number(m[2])) < (ag.getHours() * 60 + ag.getMinutes());
+    const ag = (typeof agendaAgora === 'function') ? agendaAgora() : new Date();
+    const agoraMin = ag.getUTCHours ? (ag.getUTCHours() * 60 + ag.getUTCMinutes())
+      : (ag.getHours() * 60 + ag.getMinutes());
+    return (Number(m[1]) * 60 + Number(m[2])) < agoraMin;
   })();
   return `<div class="dl2-linha">
     <span class="dl2-linha-hora">${esc(item.hora || '—')}</span>
@@ -39318,12 +39406,53 @@ function dl2LigarCliques(shell, r) {
         return;
       }
 
+      /* ══ CRIAR NEGOCIO: O GESTO DE QUEM AINDA NAO TEM UM ═════════════════════════════
+         Vem ANTES da guarda de lead, e tem que vir: e a unica acao cujo pre-requisito e
+         justamente a ausencia do negocio. Depois da guarda, ela nunca rodaria.
+
+         Reusa abrirNovaContaProspeccao — o mesmo fluxo da Agenda e do Planejamento — com o
+         nome do estabelecimento na semente. Uma segunda implementacao de criacao seria um
+         segundo lugar para a regra de etapa e de campos obrigatorios morar. */
+      if (acao === 'criar') {
+        if (typeof abrirNovaContaProspeccao === 'function') {
+          /* o painel de criacao usa o mesmo stageOverlay: abrir um sobre o outro prenderia
+             o de baixo (mesmo cuidado de abrirFichaCompromisso). */
+          if (typeof stageOverlay !== 'undefined' && stageOverlay) stageOverlay.classList.remove('show');
+          abrirNovaContaProspeccao(
+            /* redesenha a Daily depois de salvar: o item volta ja com a ficha e a arma da
+               etapa certa, sem o executivo ter de recarregar nem adivinhar que funcionou. */
+            () => { if (typeof renderDaily === 'function') renderDaily(); },
+            { nome: nome, telefone: '' }
+          );
+        } else if (typeof agendaIrParaPlanejamento === 'function') {
+          /* fallback coerente: o Planejamento tem o mesmo gesto de criar conta. Nunca um
+             clique que nao responde. */
+          agendaIrParaPlanejamento();
+        }
+        return;
+      }
+
       const lead = leadDoBotao(btn);
       if (!lead) {
-        /* sem negócio casado, o botão não pode fingir que abriu algo. Diz o motivo e manda
-           para onde a conta existe: a tarefa tem o nome, mas o funil não tem o negócio. */
+        /* ══ O BECO SEM SAIDA VIROU SAIDA (03/09/26) ═══════════════════════════════════
+           Aqui ficava a mensagem impossivel: "Abra pelo Meu funil" para um negocio que, por
+           definicao, nao esta no funil. Com a arma nova este ramo virou raro — ele sobra
+           para o negocio que DESAPARECE entre o desenho da tela e o clique (sincronizacao
+           do robo no meio, o negocio ganhou outro dono, mudou de nome).
+
+           Raro nao autoriza mensagem inutil: a saida e a mesma que resolve o caso comum,
+           entao a tela diz o que houve e abre a criacao com o nome preenchido. */
         if (typeof mostrarToast === 'function') {
-          mostrarToast('Não achei "' + nome + '" no seu funil — a visita está na agenda, mas o negócio não. Abra pelo Meu funil.');
+          mostrarToast('"' + nome + '" não está mais no seu funil. Vou abrir a criação do negócio com o nome preenchido.', 'atencao');
+        }
+        if (typeof abrirNovaContaProspeccao === 'function') {
+          if (typeof stageOverlay !== 'undefined' && stageOverlay) stageOverlay.classList.remove('show');
+          abrirNovaContaProspeccao(
+            () => { if (typeof renderDaily === 'function') renderDaily(); },
+            { nome: nome, telefone: '' }
+          );
+        } else if (typeof agendaIrParaPlanejamento === 'function') {
+          agendaIrParaPlanejamento();
         }
         return;
       }

@@ -960,3 +960,135 @@ function checarHoraDaTrava() {
   return true;
 }
 if (!checarHoraDaTrava()) process.exit(1);
+
+/* == 14. A MINHA DAILY NAO TEM CLIQUE MORTO (03/09/26) ===============================
+   Quatro checagens de regressao, uma por defeito reproduzido na sessao do Marco Filho.
+   Os quatro tinham a mesma assinatura: nao quebravam nada, nao apareciam em teste, e a
+   tela mentia em silencio.
+
+   (a) VISITA SEM NEGOCIO MOSTRAVA "Ficha". dl2ArmaDoNegocio(null) devolvia
+       DL2_ARMA_PADRAO, que e a arma de 1ª VISITA. O clique nao abria nada e a tela
+       mandava "abrir pelo Meu funil" um negocio que, por definicao, nao esta no funil.
+
+   (b) A ACAO "criar" PRECISA REUSAR abrirNovaContaProspeccao. Uma segunda implementacao
+       de criacao seria um segundo lugar para a regra de etapa e de campos obrigatorios
+       morar — e as duas divergiriam no primeiro campo novo do HubSpot.
+
+   (c) O REGEX DA HORA nasceu sem as barras invertidas, exigindo a LETRA "d". `atrasada`
+       era sempre false e o aviso nunca apareceu para ninguem. Esta guarda EXECUTA o regex
+       do arquivo contra "09:00" — regex invalido daria erro, e regex valido e errado nao
+       da nada, por isso a unica prova e rodar.
+
+   (d) d4FaseDoDia TINHA A PROPRIA TRAVA (D4_TRAVA_MIN = 9h30), esquecida quando a regra
+       virou 13h, e num relogio diferente (getHours local vs Brasilia). Entre 9h30 e 13h a
+       mesma tela dizia "travada" no hero e "Confirmar" no bloco do compromisso.
+
+   A guarda 13 nao pegava (d): ela confere TEXTO de tela contra a constante, e aquela
+   divergencia era numerica, escondida atras de um segundo nome. Guarda de texto e guarda
+   de regra sao coisas diferentes, e este arquivo agora tem as duas. */
+function checarMinhaDailySemCliqueMorto() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  const semCom = cru
+    .replace(/\/\*[\s\S]*?\*\//g, x => x.replace(/[^\n]/g, ' '))
+    .replace(/<!--[\s\S]*?-->/g, x => x.replace(/[^\n]/g, ' '));
+  const falhas = [];
+
+  /* (a) a arma da ausencia existe, e e ela que sai quando nao ha negocio */
+  if (semCom.indexOf('DL2_ARMA_SEM_NEGOCIO') < 0) {
+    falhas.push('DL2_ARMA_SEM_NEGOCIO nao existe - visita sem negocio volta a mostrar "Ficha"');
+  }
+  if (!/if \(!neg\)\s*return\s+DL2_ARMA_SEM_NEGOCIO/.test(semCom)) {
+    falhas.push('dl2ArmaDoNegocio nao devolve DL2_ARMA_SEM_NEGOCIO quando neg e nulo');
+  }
+  if (!/cta:\s*'Criar negócio'/.test(semCom)) {
+    falhas.push('nenhuma arma tem cta "Criar negócio"');
+  }
+
+  /* (b) a acao criar cai no fluxo que ja existe, e nao numa segunda implementacao */
+  const iCriar = semCom.indexOf("if (acao === 'criar')");
+  const iLead = semCom.indexOf('const lead = leadDoBotao(btn);');
+  if (iCriar < 0) {
+    falhas.push('o despacho da Daily nao trata a acao "criar"');
+  } else {
+    /* A JANELA TERMINA NA GUARDA DE LEAD, e nao em N caracteres. Minha primeira versao
+       olhava 1400 caracteres a partir do `if (acao === 'criar')`, e isso alcancava o bloco
+       VIZINHO — o do lead que desapareceu —, que tambem chama abrirNovaContaProspeccao.
+       Resultado: quando eu injetei o defeito de proposito (troquei a chamada de dentro do
+       criar por outra funcao), a guarda encontrou a chamada do bloco seguinte e reportou
+       verde. Guarda com janela por contagem de caracteres le o codigo do vizinho. */
+    const fim = (iLead > iCriar) ? iLead : (iCriar + 1400);
+    const janela = semCom.slice(iCriar, fim);
+    /* COM O PARENTESE: nome mencionado nao e funcao chamada. Minha primeira versao procurava
+       so o nome, e o bloco tem um `typeof abrirNovaContaProspeccao === 'function'` guardando
+       a chamada — entao, quando eu troquei a CHAMADA por outra funcao para testar a guarda,
+       o nome continuou ali no typeof e ela reportou verde. Duas licoes na mesma linha: janela
+       por caracteres le o vizinho, e busca por nome le a mencao. */
+    if (janela.indexOf('abrirNovaContaProspeccao(') < 0) {
+      falhas.push('a acao "criar" nao CHAMA abrirNovaContaProspeccao - criacao duplicada em outro lugar');
+    }
+    if (janela.indexOf('renderDaily(') < 0) {
+      falhas.push('a acao "criar" nao redesenha a Daily - o item ficaria SEM NEGOCIO depois de salvo');
+    }
+    /* Ela tem que vir ANTES da guarda de lead, senao nunca roda: o pre-requisito dela e
+       justamente a ausencia do negocio. */
+    if (iLead >= 0 && iCriar > iLead) {
+      falhas.push('a acao "criar" vem DEPOIS da guarda de lead - ela nunca seria alcancada');
+    }
+  }
+
+  /* (b2) a orientacao impossivel nao volta */
+  if (semCom.indexOf('Abra pelo Meu funil') >= 0) {
+    falhas.push('voltou o "Abra pelo Meu funil" - orientacao impossivel para negocio fora do funil');
+  }
+
+  /* (c) o regex da hora e EXECUTADO, nao lido. Extraio o literal da linha do `atrasada` e
+     rodo contra casos reais: sem isso, um regex valido e errado passa verde. */
+  {
+    let fonte = null;
+    semCom.split('\n').forEach(linha => {
+      if (fonte) return;
+      const m = /(\/\^.*?\$\/)\.exec\(String\(item\.hora/.exec(linha);
+      if (m) fonte = m[1];
+    });
+    if (!fonte) {
+      falhas.push('nao achei o regex da hora em dl2LinhaHTML - a guarda perdeu o alvo');
+    } else {
+      let re = null;
+      try { re = eval(fonte); } catch (e) { re = null; }
+      if (!re) {
+        falhas.push('o regex da hora nao compila: ' + fonte);
+      } else if (!re.test('09:00') || !re.test('8:30') || re.test('d:dd') || re.test('abc')) {
+        falhas.push('o regex da hora nao reconhece HH:MM (' + fonte + ') - "atrasada" fica sempre'
+          + ' falso e o aviso de visita atrasada nunca aparece');
+      }
+    }
+  }
+
+  /* (d) a fase do dia deriva da regra oficial, e nao de uma segunda constante */
+  if (/const D4_TRAVA_MIN\s*=/.test(semCom)) {
+    falhas.push('D4_TRAVA_MIN voltou - segunda constante para a trava, que ja divergiu de 9h30 para 13h');
+  }
+  const iFase = semCom.indexOf('function d4FaseDoDia(');
+  if (iFase < 0) {
+    falhas.push('nao achei d4FaseDoDia - a guarda perdeu o alvo');
+  } else {
+    const corpo = semCom.slice(iFase, iFase + 900);
+    if (corpo.indexOf('promessaTravadaNoHorario') < 0) {
+      falhas.push('d4FaseDoDia nao usa promessaTravadaNoHorario - a fase e a trava podem discordar');
+    }
+    if (/\bag\.getHours\(/.test(corpo)) {
+      falhas.push('d4FaseDoDia usa getHours (relogio da maquina) - a trava le o de Brasilia');
+    }
+  }
+
+  if (falhas.length) {
+    console.error('MINHA DAILY COM CLIQUE MORTO em ' + arquivo + ':');
+    falhas.forEach(f => console.error('  ' + f));
+    console.error('  Cada um destes foi reproduzido em producao, na sessao de um executivo.');
+    return false;
+  }
+  console.log('OK minha daily - visita sem negocio cria negocio, hora e trava tem uma regra so.');
+  return true;
+}
+if (!checarMinhaDailySemCliqueMorto()) process.exit(1);
