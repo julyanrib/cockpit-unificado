@@ -521,26 +521,84 @@ if (!checarModoTv()) process.exit(1);
    perder nesta ferramenta, porque ele nao volta: um dia sem plano registrado e um dia que
    o gestor nunca vai poder ler. Duas afirmacoes: o slot e emitido na funcao que o
    executivo realmente abre, e alguem monta o card dentro dele. */
+/* A guarda NAO CRAVA MAIS O NOME DA ABA (reescrita em 03/09/26).
+
+   A versao anterior exigia o slot dentro de renderProspeccaoExecutivo. Estava certa no dia
+   em que nasceu, e virou obstaculo no dia em que o Julyan decidiu mover o plano para a
+   Minha Daily: ela reprovaria a mudanca CORRETA pelo motivo errado — o endereco, e nao a
+   alcancabilidade, que e o que ela existe para proteger.
+
+   Agora ela pergunta o que importa e nao muda: (1) alguem emite o slot, (2) quem o emite
+   tambem chama a montagem, e (3) essa funcao e uma que o executivo de fato abre. O item 3
+   e o que pegou o defeito original: o slot vivia em renderAgenda, atras de um early-return
+   com a condicao identica a do proprio `mostrarHoje`, entao ele nunca era emitido. Slot em
+   funcao inalcancavel nao da erro nenhum — da planos_diarios sem receber UMA LINHA por
+   seis dias, e a Daily do gestor dizendo "sem cliente nomeado" para o time inteiro.
+
+   Se o plano mudar de casa outra vez, o que se edita e a lista ABAS_DO_EXECUTIVO. Isso e
+   proposital: obriga quem move a afirmar, por escrito, que a aba de destino e alcancavel. */
 function checarPlanoAlcancavel() {
   const arquivo = 'template/cockpit.template.html';
   const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
-  const marca = 'async function renderProspeccaoExecutivo()';
-  const i = cru.indexOf(marca);
-  if (i < 0) {
-    console.error('PLANO DO DIA: renderProspeccaoExecutivo nao existe mais - a guarda perdeu o alvo.');
+  /* As funcoes que montam tela que o executivo abre por um clique de aba. renderAgenda NAO
+     esta aqui de proposito: foi exatamente onde o plano ficou inalcancavel. */
+  const ABAS_DO_EXECUTIVO = ['renderDaily', 'renderProspeccaoExecutivo'];
+
+  /* COMENTARIO NAO E TELA (03/09/26).
+
+     Eu achei que procurar a forma emitida (id=" com aspas duplas) ja separasse codigo de
+     comentario. Nao separa: o comentario que documenta o defeito ANTIGO citava a linha
+     textualmente, a busca encontrou a citacao primeiro — duas mil linhas antes do slot de
+     verdade — e a guarda reportou VERDE em cima do plano inalcancavel.
+
+     Entao mascaro comentarios antes de procurar. Preservo o COMPRIMENTO (troco cada byte
+     por espaco em vez de remover) para os indices continuarem valendo no texto original:
+     assim eu mascaro para decidir ONDE olhar, e leio o original para saber o que ha la.
+
+     A mascara e conservadora e imperfeita — nao entende que /* dentro de string nao abre
+     comentario. Nao importa aqui: o unico uso e localizar a emissao do slot e a
+     declaracao de funcao na coluna zero, e nenhum dos dois vive dentro de string. */
+  const mascararComentarios = t => t
+    .replace(/\/\*[\s\S]*?\*\//g, m => ' '.repeat(m.length))
+    .replace(/<!--[\s\S]*?-->/g, m => ' '.repeat(m.length))
+    .replace(/(^|\n)([ \t]*)\/\/[^\n]*/g, (m, a, b) => a + b + ' '.repeat(m.length - a.length - b.length));
+  const semCom = mascararComentarios(cru);
+
+  const alvo = "id=\"planoDoDiaSlot\"";
+  const iSlot = semCom.indexOf(alvo);
+  if (iSlot < 0) {
+    console.error('PLANO DO DIA: ninguem emite #planoDoDiaSlot - o card que escreve');
+    console.error('  planos_diarios nao existe em tela nenhuma.');
     return false;
   }
-  /* O corpo da funcao: dali ate a proxima declaracao de funcao na coluna zero. */
-  const resto = cru.slice(i + marca.length);
-  const reProxima = /\n(async )?function /;
-  const fim = resto.search(reProxima);
-  const corpo = fim > 0 ? resto.slice(0, fim) : resto;
+
+  /* De quem e esse pedaco: a ultima declaracao de funcao na coluna zero antes do slot.
+
+     REGEX LITERAL, NUNCA STRING. Esta guarda nasceu quebrada duas vezes pelo mesmo motivo, e
+     eu repeti o erro AQUI, reescrevendo-a: montada como new RegExp por um heredoc, `\s`
+     chegou como `s` e `\(` como `(`, e o resultado foi "Unterminated group". Da vez anterior
+     nao deu erro nenhum — `[\s\S]` virou `[sS]`, a guarda passou a nao encontrar nada e
+     reportou VERDE em cima de um defeito real. Literal falha na hora; string mente. */
+  const reDecl = /\n(?:async )?function ([a-zA-Z0-9_$]+)\s*\(/g;
+  let dono = null, iDono = -1, m;
+  while ((m = reDecl.exec(semCom)) !== null) {
+    if (m.index > iSlot) break;
+    dono = m[1]; iDono = m.index;
+  }
+  const proxima = reDecl.exec(semCom);
+  /* O corpo vem do texto MASCARADO, e nao do cru: senao uma chamada a montarPlanoDoDia()
+     mencionada em comentario contaria como fiacao. Ela existe — o comentario que explica
+     por que o slot ausente nao dava erro cita a funcao pelo nome. */
+  const corpo = semCom.slice(iDono < 0 ? 0 : iDono, proxima ? proxima.index : semCom.length);
+
   const falhas = [];
-  if (corpo.indexOf('id="planoDoDiaSlot"') < 0) {
-    falhas.push('o slot #planoDoDiaSlot NAO e emitido na tela que o executivo abre');
+  if (!dono) {
+    falhas.push('nao consegui dizer qual funcao emite o slot - a guarda perdeu o alvo');
+  } else if (ABAS_DO_EXECUTIVO.indexOf(dono) < 0) {
+    falhas.push('o slot e emitido em ' + dono + '(), que nao e uma aba que o executivo abre');
   }
   if (corpo.indexOf('montarPlanoDoDia(') < 0) {
-    falhas.push('ninguem chama montarPlanoDoDia() ali - o slot ficaria uma div vazia');
+    falhas.push('ninguem chama montarPlanoDoDia() em ' + dono + '() - o slot fica uma div vazia');
   }
   if (falhas.length) {
     console.error('PLANO DO DIA INALCANCAVEL em ' + arquivo + ':');
@@ -759,3 +817,67 @@ function checarAlcanceDasVariaveis() {
   return false;
 }
 if (!checarAlcanceDasVariaveis()) process.exit(1);
+
+/* == 12. O ATO DO PLANO ESTA NA MONTAGEM QUE RODA (03/09/26) =========================
+   Irma da guarda 10, e nascida do mesmo defeito visto de outro angulo.
+
+   A guarda 10 cuida do CARD do Planejamento. Esta cuida do ATO: #compromissoDoDia, o
+   unico lugar que grava planos_diarios (status plano_fechado, prioridades, contas_alvo)
+   E os quatro dailies.prometido_* como soma derivada dos clientes marcados.
+
+   O QUE ACONTECEU: buildCompromissoDoDiaHTML so era chamado por
+   buildBriefingExecutivoHTML — o TERCEIRO fallback da Daily (v5 -> v4 -> briefing). A v5
+   funciona, entao o briefing nunca renderiza. Nenhum erro, nenhum log: a Minha Daily
+   simplesmente nao tinha o ato. planos_diarios ficou sem UMA LINHA desde 28/08, a Daily
+   do gestor passou a dizer sem cliente nomeado para os sete todos os dias, e a Kelly
+   avisou que prometeu e nao apareceu — ela estava certa e a tela a desmentia.
+
+   POR QUE ELA NAO CRAVA O NOME DA v5: ela LE a cadeia de fallback. Descobre em renderDaily
+   qual funcao e chamada primeiro (o `try { return X(r); }`) e exige o bloco NAQUELA. Numa
+   v6 amanha, a guarda passa a exigir na v6 sozinha — e reprova se o ato ficar so na v5,
+   que e exatamente o erro de hoje repetido um degrau acima.
+
+   Cravar o nome seria refazer o defeito: quem substitui a montagem principal leva embora,
+   calado, o que so a antiga emitia. Fallback que nunca roda e codigo morto, e aqui o
+   codigo morto era o unico caminho do ritual das 8h30. */
+function checarAtoDoPlanoNaDaily() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+
+  /* Quem e a montagem PRIMARIA da Daily: a primeira do try dentro de renderDaily. */
+  const iRD = cru.indexOf('async function renderDaily()');
+  if (iRD < 0) {
+    console.error('ATO DO PLANO: renderDaily nao existe mais - a guarda perdeu o alvo.');
+    return false;
+  }
+  const mPrim = /try \{ return ([a-zA-Z0-9_$]+)\(r\); \}/.exec(cru.slice(iRD));
+  if (!mPrim) {
+    console.error('ATO DO PLANO: nao achei a cadeia de fallback da Daily em renderDaily.');
+    console.error('  A guarda le `try { return X(r); }` para descobrir a montagem primaria.');
+    return false;
+  }
+  const primaria = mPrim[1];
+
+  /* O corpo dessa funcao: da declaracao dela ate a proxima na coluna zero. */
+  const iF = cru.indexOf('function ' + primaria + '(');
+  if (iF < 0) {
+    console.error('ATO DO PLANO: ' + primaria + '() e chamada mas nao esta declarada.');
+    return false;
+  }
+  const depois = cru.slice(iF + 8);
+  const fim = depois.search(/\n(?:async )?function /);
+  const corpo = fim > 0 ? depois.slice(0, fim) : depois;
+
+  if (corpo.indexOf('buildCompromissoDoDiaHTML(') < 0) {
+    console.error('ATO DO PLANO AUSENTE em ' + arquivo + ':');
+    console.error('  ' + primaria + '() e a montagem que a Daily usa de verdade, e ela nao');
+    console.error('  emite #compromissoDoDia. O executivo abre a Minha Daily e nao tem como');
+    console.error('  fechar o plano: nem os nomes em planos_diarios, nem a soma em');
+    console.error('  dailies.prometido_*. Nao da erro nenhum - so seca as duas tabelas.');
+    console.error('  Emitir apenas num fallback NAO conta: eles so rodam se esta falhar.');
+    return false;
+  }
+  console.log('OK ato do plano - ' + primaria + '() emite o bloco que fecha o plano do dia.');
+  return true;
+}
+if (!checarAtoDoPlanoNaDaily()) process.exit(1);
