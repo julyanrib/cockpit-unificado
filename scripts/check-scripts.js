@@ -1118,3 +1118,159 @@ function checarDeclaracoesUsadas() {
   return true;
 }
 if (!checarDeclaracoesUsadas()) process.exit(1);
+
+/* == 15. NENHUM ARQUIVO QUE O ROBO ESCREVE FICA VERSIONADO ==========================
+   POR QUE EXISTE: a cota de deploy da Vercel estourou em 02/09 e de novo em 03/09, e as
+   duas vezes a causa raiz foi a mesma classe — arquivo GERADO chegando ao git. Todo
+   commit no main promove uma build de producao; arquivo gerado que fica versionado
+   transforma cada rodada do robo (7 a 8 por dia util) em deploy.
+
+   A migracao para a tabela do Supabase (cockpit_snapshot) resolveu isso arquivo por
+   arquivo: hubspot, hubspot-previous, weekly-raw, sync-status e narrativas saem do git e
+   a rota /api/dados le da tabela. Esta guarda existe para a proxima geracao de arquivo
+   NAO precisar de alguem lembrar da regra: se um script passar a gravar um data/*.json e
+   ele estiver rastreado pelo git, isto reprova com o nome do arquivo.
+
+   A EXCEÇAO E DECLARADA, COM A CONDIÇAO DE SAIDA ESCRITA — nao e lista de perdao:
+   resumo-semanal.json continua versionado de proposito. O produtor dele publica na
+   tabela (#253) e le da tabela (#257), mas roda no workflow SEMANAL, e a linha ainda nao
+   existe. Tira-lo antes disso repetiria exatamente o #255, que foi revertido pelo #256
+   por remover arquivo antes de o caminho estar provado. Ele muda uma vez por semana: um
+   deploy semanal e o preco de nao repetir aquele erro.
+
+   COMO SAIR DA EXCEÇAO, depois da primeira rodada semanal (sexta 19:00 UTC):
+     1. conferir que a linha existe:  select chave, bytes, atualizado_em
+                                      from cockpit_snapshot where chave='resumo-semanal'
+     2. data/resumo-semanal.json entra no .gitignore, com a conferencia anotada
+     3. git rm --cached data/resumo-semanal.json
+     4. apagar o nome da lista EXCEÇOES aqui embaixo
+   Com o passo 4 feito, esta guarda passa a proteger tambem esse arquivo. */
+function checarGeradosForaDoGit() {
+  const { execSync } = require('child_process');
+
+  /* NEM TODO ARQUIVO GERADO E DESPERDICIO — a regra real e mais fina, e a primeira versao
+     desta guarda estava grossa demais. O que nao pode ficar no git e arquivo que o robo
+     REGERA A PARTIR DO CRM em toda rodada: esse muda 7 a 8 vezes por dia util e cada
+     mudanca vira deploy. Arquivo derivado de entrada VERSIONADA muda quando alguem muda
+     conteudo — e ai o deploy e exatamente o certo.
+
+     Por isso a exceção tem duas categorias, e a diferenca entre elas e o custo. */
+
+  /* (a) DERIVADO DE ENTRADA VERSIONADA — fica no git, e esta correto que fique.
+     field-sales-playbook.compiled.json e gerado de data/field-sales-playbook.md e dos
+     JSONs de catalogo, todos versionados. Ele so muda quando alguem muda o conteudo do
+     playbook, e nesse caso o deploy e o objetivo, nao o desperdicio.
+     ISSO SO PASSOU A SER VERDADE EM 03/09: o campo `versao` dele era hash das ENTRADAS
+     cruas e mudava sem o conteudo mudar — nove commits em tres dias com bytes identicos.
+     Agora e hash da SAIDA, e testar-playbook-v7 recalcula e exige que bata. Sem aquela
+     correcao este arquivo estaria na categoria (b). */
+  const DERIVADO_DE_CODIGO = ['data/field-sales-playbook.compiled.json'];
+
+  /* (b) PENDENTE DE MIGRAÇAO — fica no git por ora, com o custo medido e a saida escrita.
+     Nenhum destes e regerado do CRM em toda rodada; sao semanais ou mensais, o que da da
+     ordem de 5 deploys por mes somados. Migrar exige o mesmo cuidado do #255/#256:
+     publicar, CONFERIR a linha na tabela, e so depois tirar do git.
+
+       data/resumo-semanal.json         gerado sexta 19:00 UTC por generate-weekly-summary.
+                                        Ja publica (#253) e le da tabela (#257); a linha
+                                        ainda NAO existe (conferido em 03/09: a tabela tem
+                                        hubspot, weekly-raw, narrativas, hubspot-previous e
+                                        sync-status, e nao esta). Sai do git depois da
+                                        primeira rodada semanal, conferindo a linha.
+       data/historico-semanal-mes.json  acumulado do mes, escrito na mesma rodada semanal.
+       data/historico-mensal-time.json  acumulado mensal, escrito no fechamento do mes.
+                                        Estes dois sao HISTORICO acumulado, nao foto do
+                                        CRM: quem migra tem que garantir que a tabela nao
+                                        perca mes nenhum, porque nao ha como reconstruir. */
+  const PENDENTE_DE_MIGRACAO = [
+    'data/resumo-semanal.json',
+    'data/historico-semanal-mes.json',
+    'data/historico-mensal-time.json'
+  ];
+
+  const EXCEÇOES = DERIVADO_DE_CODIGO.concat(PENDENTE_DE_MIGRACAO);
+
+  let rastreados;
+  try {
+    rastreados = execSync('git ls-files data', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .split(/\r?\n/).filter(Boolean);
+  } catch (e) {
+    /* FALHA PARA O LADO DE PASSAR, e diz por que. Sem git (um zip do codigo, um sandbox
+       sem .git) esta guarda nao tem o que medir, e reprovar ai seria reprovar o ambiente
+       em vez do codigo. */
+    console.log('OK gerados fora do git - pulado: nao consegui listar arquivos rastreados (sem git aqui).');
+    return true;
+  }
+
+  /* Quem GRAVA em data/ — procurado no codigo dos produtores, nao numa lista a mao, que
+     e o que envelheceu duas vezes no workflow. */
+  /* ESTE BLOCO JA DEU FALSO VERDE UMA VEZ, e a lição está aqui de propósito.
+     A primeira versão usava `raiz` — variável que NÃO existe neste arquivo (aqui é
+     `root`) — e engolia o ReferenceError num `catch (e) { return; }`. Resultado: a lista
+     de fontes ficava vazia, nada casava, e a guarda imprimia OK sobre uma medição que
+     não aconteceu. Descobri porque testei ela VERMELHA: tirei a exceção e ela continuou
+     passando, quando devia acusar resumo-semanal.json.
+     Agora a falha de leitura REPROVA em vez de virar silêncio: guarda que não conseguiu
+     medir não pode dizer OK. */
+  const dirs = ['scripts', 'lib'];
+  const fonte = [];
+  const naoLidos = [];
+  dirs.forEach(d => {
+    const dir = path.join(root, d);
+    let arquivos;
+    try { arquivos = fs.readdirSync(dir); } catch (e) { naoLidos.push(d + '/ (' + e.message + ')'); return; }
+    arquivos.filter(a => a.endsWith('.js')).forEach(a => {
+      try { fonte.push(fs.readFileSync(path.join(dir, a), 'utf8')); }
+      catch (e) { naoLidos.push(d + '/' + a + ' (' + e.message + ')'); }
+    });
+  });
+  if (naoLidos.length || !fonte.length) {
+    console.error('NAO CONSEGUI LER OS PRODUTORES — esta guarda nao pode dizer OK sem medir:');
+    (naoLidos.length ? naoLidos : ['scripts/ e lib/ nao renderam nenhum .js']).forEach(m => console.error('  ' + m));
+    return false;
+  }
+  const codigo = fonte.join('\n');
+
+  /* DUAS FORMAS DE ESCREVER, E A SEGUNDA QUASE ESCAPOU.
+     A primeira versão só achava o caminho citado DENTRO da chamada:
+       fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), ...)
+     Mas os dois arquivos de histórico são escritos por CONSTANTE:
+       const CAMINHO_HISTORICO_MES = path.join(root, 'data', 'historico-semanal-mes.json');
+       fs.writeFileSync(CAMINHO_HISTORICO_MES, ...)
+     e passavam invisíveis — a guarda dizia OK sobre dois arquivos gerados e versionados.
+     Achei olhando o código dos produtores, não confiando no verde dela.
+     Agora ela resolve as constantes primeiro e depois pergunta quais são escritas. */
+  const escrito = base => {
+    const esc = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    /* (a) caminho citado dentro da própria chamada */
+    if (new RegExp('writeFileSync\\([^)]{0,160}' + esc).test(codigo)) return true;
+    /* (b) constante que aponta para o arquivo, e que é passada ao writeFileSync */
+    const decl = new RegExp('(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=[^;\\n]{0,200}' + esc, 'g');
+    let m;
+    while ((m = decl.exec(codigo)) !== null) {
+      if (new RegExp('writeFileSync\\(\\s*' + m[1] + '\\b').test(codigo)) return true;
+    }
+    return false;
+  };
+
+  const versionadosEEscritos = rastreados.filter(f => {
+    if (EXCEÇOES.indexOf(f) >= 0) return false;
+    return escrito(f.replace(/^data\//, ''));
+  });
+
+  if (versionadosEEscritos.length) {
+    console.error('ARQUIVO GERADO E VERSIONADO (cada rodada do robo vira deploy):');
+    versionadosEEscritos.forEach(f => console.error('  ' + f));
+    console.error('  Um script grava esse arquivo e o git o rastreia. Todo commit no main');
+    console.error('  promove build de producao, e o robo roda 7 a 8 vezes por dia util.');
+    console.error('  Caminho: publicar na tabela cockpit_snapshot (lib/publicar-snapshot.js),');
+    console.error('  conferir que a linha existe, e so depois .gitignore + git rm --cached.');
+    console.error('  Tirar do git antes de provar a publicacao foi o #255, revertido pelo #256.');
+    return false;
+  }
+  console.log('OK gerados fora do git - nenhuma foto do CRM fica versionada ('
+    + DERIVADO_DE_CODIGO.length + ' derivado de codigo, ' + PENDENTE_DE_MIGRACAO.length
+    + ' pendente(s) de migracao — razao e custo de cada um no bloco acima).');
+  return true;
+}
+if (!checarGeradosForaDoGit()) process.exit(1);
