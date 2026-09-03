@@ -8255,9 +8255,27 @@
      O chip "não medido" aparece AMPLIADO — projetado numa reunião, ele é a diferença
      entre cobrar alguém pelo que não fez e cobrar pelo que o sistema não sabe. */
   body.tv .app-main{max-width:1880px;}
-  body.tv .revbar{display:none;}
-  body.tv .daily-ritmo-secao{display:none;}
-  body.tv .tab-bar,body.tv .app-footer,body.tv .health-badge{display:none;}
+  /* ══ O MODO TV FICOU PRESO (02/09/26) ═══════════════════════════════════════════════
+     Julyan: "a aba daily esta com um zoom gigante, n sei pq". Era o Modo TV, ligado uma
+     vez e gravado em localStorage — e com dois defeitos que juntos o tornavam invisivel
+     e inescapavel:
+
+     (a) `.tab-bar`, `.app-footer` e `.revbar` NAO EXISTEM neste arquivo. Cada um aparecia
+         uma unica vez: na propria regra. Os nomes reais sao `.app-sidenav` e `#footerText`.
+         Entao a TV aumentava tudo e nao tirava nada — nao parecia Modo TV, parecia zoom
+         quebrado. E o mesmo defeito que o comentario acima ja registra ("regra que mira
+         marcacao inexistente nao da erro, so para de fazer efeito") em outras tres regras;
+         a correcao de 31/08 arrumou o hero e deixou a moldura.
+     (b) `body.tv .gi-btn{display:none}` escondia o proprio #dailyTvToggle. Ligou, o botao
+         de sair desaparece. Sobrava o Esc, que nenhuma tela dizia existir.
+
+     O `#updatedLine` NAO sai mais da TV (era o alvo do `.revbar`): a tela projetada e onde
+     o time todo le o numero, e e ali que ele precisa dizer de quando ele e. Cresce. */
+  /* `.health-badge` saiu junto: as 4 aparicoes dela no arquivo sao TODAS CSS — nenhum
+     markup a gera. Mesmo caso das tres acima, achado na mesma varredura. */
+  body.tv .app-sidenav,body.tv #footerText{display:none;}
+  body.tv #updatedLine{font-size:15px;}
+  body.tv #viewDaily .daily-ritmo-secao{display:none;}
 
   /* nível 1 cresce */
   body.tv .gi-hero{padding:34px 38px;}
@@ -8285,12 +8303,24 @@
   body.tv #viewDaily .daily-team-result b{font-size:24px;}
   body.tv #viewDaily .daily-team-result span{font-size:13px;}
   body.tv #viewDaily .daily-team-streak{font-size:15px !important;}
-  body.tv .daily-team-cta,body.tv .daily-acc>summary::after,body.tv .daily-team-detail{display:none !important;}
-  body.tv .gi-prom,body.tv .gi-plan{font-size:17px;padding:4px 12px;}
+  body.tv #viewDaily .daily-team-cta,body.tv #viewDaily .daily-acc>summary::after,
+  body.tv #viewDaily .daily-team-detail{display:none !important;}
+  /* `.gi-prom` / `.gi-plan` tinham 2 aparicoes cada: a regra base e esta. Ninguem as
+     renderiza. O selo de estado que a reuniao le de longe e `.daily-team-streak`, que
+     ganha !important logo abaixo por causa do font-size inline de 10px. */
 
   /* o que não se projeta: nível 2, referência, botões e navegação */
-  body.tv .gi-ref,body.tv .gi-btn,body.tv .gi-card,body.tv .sec-k,body.tv #dailySlotDecisoes,
-  body.tv #dailySlotFunilQuentes,body.tv .daily-nav,body.tv .agenda-nav{display:none !important;}
+  /* ESCOPADAS EM #viewDaily (02/09/26): `.gi-card`, `.gi-btn` e `.sec-k` sao classes
+     compartilhadas — a aba Time usa as mesmas. Com a TV presa, ela perdia os cartoes de
+     uma aba que nem tem Modo TV. O que esconde conteudo agora e escopado; o que so aumenta
+     tamanho ficou como estava, porque a moldura sai e nao ha como sair da Daily na TV. */
+  body.tv #viewDaily .gi-ref,body.tv #viewDaily .gi-btn,body.tv #viewDaily .gi-card,
+  body.tv #viewDaily .sec-k,body.tv #dailySlotDecisoes,
+  body.tv #dailySlotFunilQuentes{display:none !important;}
+  /* `.daily-nav` e `.agenda-nav` tinham UMA aparicao no arquivo cada: a propria regra.
+     A navegacao de data que a TV queria esconder chama-se `.daily-date-nav`, e ja esta
+     escondida na regra do piso de leitura mais abaixo. */
+  body.tv #viewDaily #dailyTvToggle{display:inline-flex !important;}
 
   /* "não medido" cresce em vez de desaparecer */
   body.tv .gi-nm{font-size:15px;padding:6px 16px;letter-spacing:.08em;}
@@ -42048,18 +42078,25 @@ async function renderDaily() {
     if (btnConduzirRota) btnConduzirRota.addEventListener('click', () => abrirConducaoDaily(planosPorOwner, 'rota'));
 
     const btnTv = document.getElementById('dailyTvToggle');
+    /* A CHAVE VIROU v2 (02/09/26). Quem ligou a TV na v1 ficou ligado para sempre sem
+       nenhum sinal na tela e sem botao de sair (ver o bloco body.tv no CSS). Corrigir o
+       CSS nao solta quem ja esta preso: o estado gravado continua dizendo 1. Trocar a chave
+       solta todo mundo uma vez, e daqui pra frente o estado persiste — que e o certo para
+       quem projeta a mesma tela toda manha —, agora visivel e com saida. */
     let tvAtivo = false;
-    try { tvAtivo = localStorage.getItem('cockpit_daily_tv_v1') === '1'; } catch (e) {}
+    try { tvAtivo = localStorage.getItem('cockpit_daily_tv_v2') === '1'; } catch (e) {}
     document.body.classList.toggle('tv', tvAtivo);
     if (btnTv) {
       btnTv.setAttribute('aria-pressed', String(tvAtivo));
-      btnTv.textContent = tvAtivo ? '📺 Sair do Modo TV' : '📺 Modo TV';
+      /* O TEXTO DIZ O ESC (02/09/26): o Esc e a unica saida que funciona de qualquer lugar
+         da tela, e nenhuma tela dizia que ele existia. Ver o comentario do bloco body.tv. */
+      btnTv.textContent = tvAtivo ? '📺 Sair do Modo TV (Esc)' : '📺 Modo TV';
       btnTv.addEventListener('click', () => {
         const ligar = !document.body.classList.contains('tv');
         document.body.classList.toggle('tv', ligar);
         btnTv.setAttribute('aria-pressed', String(ligar));
-        btnTv.textContent = ligar ? '📺 Sair do Modo TV' : '📺 Modo TV';
-        try { localStorage.setItem('cockpit_daily_tv_v1', ligar ? '1' : '0'); } catch (e) {}
+        btnTv.textContent = ligar ? '📺 Sair do Modo TV (Esc)' : '📺 Modo TV';
+        try { localStorage.setItem('cockpit_daily_tv_v2', ligar ? '1' : '0'); } catch (e) {}
         /* ESC SAI DO MODO TV (31/08/26). O botão de sair fica escondido no próprio modo —
            quem liga no meio da reunião precisa de uma saída que não dependa de achar o
            controle que a TV esconde. Ouvinte de uma vez só, removido ao sair. */
@@ -42069,7 +42106,7 @@ async function renderDaily() {
             document.body.classList.remove('tv');
             btnTv.setAttribute('aria-pressed', 'false');
             btnTv.textContent = '📺 Modo TV';
-            try { localStorage.setItem('cockpit_daily_tv_v1', '0'); } catch (e) {}
+            try { localStorage.setItem('cockpit_daily_tv_v2', '0'); } catch (e) {}
             document.removeEventListener('keydown', sairNoEsc);
           };
           document.addEventListener('keydown', sairNoEsc);
@@ -42182,7 +42219,7 @@ async function renderDaily() {
 document.addEventListener('keydown', ev => {
   if (ev.key !== 'Escape' || !document.body.classList.contains('tv')) return;
   document.body.classList.remove('tv');
-  try { localStorage.setItem('cockpit_daily_tv_v1', '0'); } catch (e) {}
+  try { localStorage.setItem('cockpit_daily_tv_v2', '0'); } catch (e) {}
   const btnTv = document.getElementById('dailyTvToggle');
   if (btnTv) { btnTv.setAttribute('aria-pressed', 'false'); btnTv.textContent = '📺 Modo TV'; }
 });
