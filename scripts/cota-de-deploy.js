@@ -114,6 +114,51 @@ function main() {
   const primeiro = producao.length ? producao[producao.length - 1].quando : null;
   const ultimo = producao.length ? producao[0].quando : null;
   if (primeiro) console.log('\nprimeiro: ' + primeiro + '   último: ' + ultimo);
+
+  producaoEstaAtual();
+}
+
+/* A PRODUÇÃO ESTÁ SERVINDO O CÓDIGO DO MAIN?
+   Esta é a pergunta que a cota esconde, e a que mais custou. Quando o limite bate, o
+   merge fica verde, as 15 guardas passam, as 17 suítes passam, o commit está no main — e
+   a Vercel continua servindo o arquivo de antes, sem erro em lugar nenhum. Em 02/09
+   quatro PRs de correção ficaram assim, e a pergunta seguinte do Julyan foi "não
+   corrigiu ainda?".
+   A Vercel NÃO repete build de produção que falhou. Então depois de um merge feito
+   dentro da janela fechada, alguém tem que disparar o build (um commit qualquer no main,
+   ou Redeploy no painel) — e sem esta comparação ninguém sabe que precisa.
+   A comparação é byte a byte: o que está no ar contra o public/index.html do disco. */
+function producaoEstaAtual() {
+  const fs = require('fs');
+  const URL_PRODUCAO = 'https://cockpit-unificado.vercel.app/';
+  const LOCAL = require('path').join(__dirname, '..', 'public', 'index.html');
+
+  let local;
+  try { local = fs.readFileSync(LOCAL); } catch (e) {
+    console.log('\n(não achei public/index.html para comparar — rode node scripts/build.js)');
+    return;
+  }
+  let servido;
+  try {
+    /* -L porque o domínio redireciona para fieldsalestakeat.vercel.app */
+    servido = execSync('curl -sL --max-time 25 ' + URL_PRODUCAO,
+      { encoding: 'buffer', maxBuffer: 32 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] });
+  } catch (e) {
+    console.log('\n(não consegui buscar a produção — sem rede, ou ela fora do ar)');
+    return;
+  }
+
+  console.log('');
+  if (servido.length === local.length && Buffer.compare(servido, local) === 0) {
+    console.log('A produção está servindo exatamente o código do disco (byte a byte).');
+    return;
+  }
+  console.log('A PRODUÇÃO ESTÁ DIFERENTE DO CÓDIGO DO DISCO.');
+  console.log('  no ar: ' + servido.length + ' bytes   ·   no disco: ' + local.length + ' bytes');
+  console.log('  Se o disco está igual ao main, a produção está ATRÁS: houve merge sem build');
+  console.log('  (janela de cota fechada) e a Vercel não repete build que falhou. Disparar:');
+  console.log('  um commit qualquer no main, ou Redeploy no painel da Vercel.');
+  console.log('  Se o disco tem trabalho não commitado, a diferença pode ser só isso.');
 }
 
 if (require.main === module) main();
