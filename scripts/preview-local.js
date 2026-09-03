@@ -41,6 +41,37 @@ const comSupaFake = !flags.includes('--sem-supa');
 // pedaço à mão (aplicarVisaoPorPapel, renderDaily, ...) e ver qual pendura.
 const manual = flags.includes('--manual');
 
+/* ══ --contas=<arquivo>: A FILA DE CANDIDATOS NO PREVIEW (03/09/26) ═══════════════════
+   A aba Planejamento monta a lista de contas-alvo a partir de `prospeccaoCache`, que sai
+   da tabela leads_prospeccao no Supabase. O supa falso do preview devolve `{data:[]}`,
+   entao a fila chegava VAZIA — e a secao "Candidatos perto de voce", que e o corpo da aba,
+   nao existia para revisao. Foi assim que o Julyan viu na tela dele 172 candidatos e eu vi
+   zero, achando que a aba estava quebrada.
+
+   O caminho e o mesmo que playbookCache e precificacaoCache ja usam: pre-popular o cache
+   que o carregador consulta. A diferenca e que o instantaneo NAO fica no repositorio — sao
+   contas reais de CRM, e um arquivo dentro do repo seria pego por um `git add -A` sem
+   ninguem notar. Por isso vem por caminho explicito, de fora:
+
+     node scripts/preview-local.js marco.takeat@gmail.com saida.html --contas=C:/tmp/leads.json
+
+   Sem a flag, o preview segue como era: fila vazia, e o aviso abaixo diz isso na tela em
+   vez de deixar a secao parecer defeito. */
+const flagContas = flags.find(f => f.startsWith('--contas='));
+let CONTAS_PREVIEW = null;
+if (flagContas) {
+  const caminho = flagContas.slice('--contas='.length);
+  if (!fs.existsSync(caminho)) {
+    console.error(`--contas: arquivo não encontrado em ${caminho}`);
+    process.exit(1);
+  }
+  CONTAS_PREVIEW = JSON.parse(fs.readFileSync(caminho, 'utf8'));
+  if (!Array.isArray(CONTAS_PREVIEW)) {
+    console.error('--contas: o arquivo tem que ser um array de linhas de leads_prospeccao.');
+    process.exit(1);
+  }
+}
+
 const completos = montarDadosCompletos();
 
 // Escolha do usuário a simular.
@@ -124,21 +155,52 @@ const bootstrap = `
      .length ou Symbol.iterator viravam funções truthy e travavam o renderizador numa
      das telas do gestor (travou de verdade, na revisão de 27/08). Lista explícita
      falha alto (TypeError no console) em vez de travar em silêncio. */
+  /* ══ O STUB RESPONDE POR TABELA (03/09/26) ═════════════════════════════════════════
+     Antes ele devolvia data vazio para tudo. Eu tentei consertar a fila de candidatos
+     pre-populando prospeccaoCache antes do mostrarApp() e nao funcionou: carregarProspeccao()
+     roda no boot, chama supa.from('leads_prospeccao'), recebe o array vazio e SOBRESCREVE o
+     cache. Pre-popular cache que um carregador reescreve e enxugar gelo.
+
+     Responder por tabela e melhor por um motivo alem de funcionar: o carregador percorre o
+     caminho REAL dele — o .eq('responsavel_owner_id', ...), o sort de
+     prospeccaoCompararOrdem, o badge da praca. Se essa cadeia quebrar, o preview quebra
+     junto, que e o comportamento que se quer de um ambiente de revisao.
+
+     NOTA: este comentario vive DENTRO de um template literal (o bootstrap). Nada de
+     backtick aqui — a primeira versao tinha um par deles em volta de "data vazio" e fechou
+     a string, derrubando o script inteiro com "Unexpected token". Terceira vez que esta
+     armadilha aparece neste projeto. */
+  var TABELAS_FALSAS = ${CONTAS_PREVIEW ? JSON.stringify({ leads_prospeccao: CONTAS_PREVIEW }).replace(/<\/script>/gi, '<\\/script>') : '{}'};
+
   function supaFake() {
-    var res = { data: [], error: null, count: 0 };
+    var vazio = { data: [], error: null, count: 0 };
     var METODOS = ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'gt', 'gte',
       'lt', 'lte', 'like', 'ilike', 'is', 'in', 'not', 'or', 'filter', 'order', 'limit',
       'range', 'single', 'maybeSingle', 'match', 'contains', 'overlaps', 'returns', 'abortSignal'];
-    function query() {
+    function query(tabela) {
       var q = {};
-      METODOS.forEach(function (m) { q[m] = function () { return q; }; });
-      q.then = function (ok, err) { return Promise.resolve(res).then(ok, err); };
-      q.catch = function (fn) { return Promise.resolve(res).catch(fn); };
-      q.finally = function (fn) { return Promise.resolve(res).finally(fn); };
+      var linhas = (TABELAS_FALSAS[tabela] || []).slice();
+      /* eq e o unico filtro que importa aqui: o carregador do rep faz
+         .eq('responsavel_owner_id', ownerId), e devolver a base inteira mostraria contas de
+         outro executivo na tela dele — falso positivo pior que fila vazia. */
+      q.eq = function (col, val) {
+        linhas = linhas.filter(function (l) { return String(l[col]) === String(val); });
+        return q;
+      };
+      METODOS.forEach(function (m) { if (m !== 'eq') q[m] = function () { return q; }; });
+      var resolver = function () {
+        return Promise.resolve(linhas.length
+          ? { data: linhas, error: null, count: linhas.length }
+          : vazio);
+      };
+      q.then = function (ok, err) { return resolver().then(ok, err); };
+      q.catch = function (fn) { return resolver().catch(fn); };
+      q.finally = function (fn) { return resolver().finally(fn); };
       return q;
     }
+    var res = vazio;
     return {
-      from: function () { return query(); },
+      from: function (tabela) { return query(tabela); },
       rpc: function () { return query(); },
       storage: { from: function () { return { list: function () { return Promise.resolve(res); }, upload: function () { return Promise.resolve(res); }, createSignedUrl: function () { return Promise.resolve(res); } }; } },
       auth: {
