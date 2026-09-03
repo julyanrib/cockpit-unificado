@@ -183,6 +183,20 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.origem != 'webhook'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # AS CHAVES DO SUPABASE FALTAVAM AQUI (03/09/26), e o log da rodada de
+          # 00:59 UTC diz com estas palavras: "SUPABASE_URL/SUPABASE_SERVICE_KEY
+          # ausentes - snapshot 'narrativas' NAO publicado". Duas consequencias, e a
+          # segunda e pior que a primeira:
+          #  1. este passo nao publicava o que acabou de gravar. O passo seguinte
+          #     (generate-individual-analysis) publicava por cima e mascarava a falta.
+          #  2. quando narrativas.json sair do git, este passo tambem PRECISA das
+          #     chaves para LER da tabela — sem elas, carregarJsonOuTabela nao acha
+          #     em nenhum dos dois lugares e aborta de proposito. Ou seja: sem esta
+          #     correcao, tirar o arquivo do git derruba este passo.
+          # Mesma classe do defeito do passo do comparativo semanal (#246): chave
+          # faltando nao da erro, so faz o passo desistir em silencio.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: node scripts/generate-daily-gargalo.js
 
       - name: Atualizar análise de coaching por executivo (IA — 1x por dia útil, semana corrente)
