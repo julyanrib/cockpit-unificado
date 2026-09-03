@@ -14109,14 +14109,17 @@ const CAMPOS_POR_ETAPA = {
     { prop: 'adicional', label: 'Adicional', tipo: 'multiselecao', opcoes: OP_ADICIONAL, obrigatorio: true, largo: true },
     { prop: 'tipo_de_pagamento', label: 'Tipo de Pagamento', tipo: 'selecao', opcoes: ['À Vista', 'Crédito'], obrigatorio: true },
     { prop: 'periodo_contratado', label: 'Assinatura', tipo: 'selecao', opcoes: ['Mensal', 'Trimestral', 'Semestral', 'Anual'], obrigatorio: true },
-    /* UM CAMPO DE DINHEIRO, NÃO TRÊS (02/09/26). Aqui pedia 'Valor (R$)' (amount) e
-       'MRR (R$)' (mrr) além do valor_de_mrr das etapas anteriores — três lugares para
-       digitar o mesmo número, e o dado provou o resultado: valor_de_mrr 403 contra mrr
-       244,33 no mesmo negócio, e um contrato trimestral com 900 no campo MENSAL.
-       Agora a pessoa digita o mensal e o servidor deriva mrr (espelho) e amount (mensal x
-       meses do período). O total aparece calculado ao lado, para ela conferir antes de
-       enviar — ver a nota de derivarDinheiro no servidor. */
-    { prop: 'valor_de_mrr', label: 'Valor de MRR (R$/mês)', tipo: 'numero', obrigatorio: true },
+    /* ESTES DOIS CAMPOS SÃO O LINK DE PAGAMENTO — NÃO MEXER (revertido em 03/09/26).
+       O aviso do Julyan de 15/08 está oito linhas acima e diz "automação real de
+       RPA/ASAAS vive lá, nunca mexer". Em 02/09 eu troquei os dois por um valor_de_mrr
+       só, achando que consolidava três campos que se contradiziam. O que eu de fato fiz
+       foi cortar o gesto que gera o link: o executivo preenche MRR e Valor aqui, e é
+       disso que o RPA parte. Consolidação que quebra o meio de campo não é consolidação.
+
+       Se algum dia os três campos precisarem de fato ser reconciliados, o caminho não é
+       apagar os que o RPA lê: é o Julyan decidir com o RPA na frente. */
+    { prop: 'amount', label: 'Valor (R$)', tipo: 'numero', obrigatorio: true, min: 349 },
+    { prop: 'mrr', label: 'MRR (R$)', tipo: 'numero', obrigatorio: true },
     { prop: 'deseja_criar_perfil_no_asaas_', label: 'Deseja criar perfil no ASAAS?', tipo: 'sim_nao', obrigatorio: true, largo: true },
     { prop: 'qual_maior_desafio_', label: 'Maior Desafio', tipo: 'selecao', opcoes: OP_MAIOR_DESAFIO, obrigatorio: true, largo: true },
     { prop: 'informacoes_sobre_o_maior_desafio', label: 'Informações sobre o maior desafio', tipo: 'texto_longo', obrigatorio: true, largo: true }
@@ -14170,7 +14173,7 @@ const PROPS_FICHA = [
      com MRR 838 trimestral. Chamar o total de mensal na ficha é a origem da confusão que
      produziu dois campos de MRR divergentes. Agora ele é somente leitura (o servidor
      calcula) e o rótulo diz o que é. */
-  { prop: 'amount',           label: 'Total do contrato', tipo: 'numero',  desde: 3, prefixo: 'R$ ', calculado: true },
+  { prop: 'amount',           label: 'Valor da proposta', tipo: 'numero',  desde: 3, prefixo: 'R$ ', sufixo: '/mês' },
   { prop: 'reuniao_agendada', label: 'Reunião marcada',   tipo: 'sim_nao', desde: 3 },
   { prop: 'description',      label: 'O que falta pra fechar', tipo: 'texto_longo', desde: 4, largo: true },
   { prop: 'valor_de_mrr',     label: 'Valor de MRR', tipo: 'numero', desde: 4, prefixo: 'R$ ', sufixo: '/mês' }
@@ -22467,10 +22470,6 @@ function renderPlanejamento6a(rep) {
   const nomeRegiao = ch => (porChave.get(ch) || {}).nome || null;
 
   /* ── as 5 colunas ───────────────────────────────────────────────────────────── */
-  /* o que a dica de cada dia ja propos — para a semana nao propor a mesma conta cinco
-     vezes. A dica e proposta, nao agendamento: ela nao esta na grade, e por isso
-     pl6Candidatos nao a exclui sozinho. */
-  const jaSugeridas = new Set();
   const colunas = dias.map((d, di) => {
     const col = grade[di];
     const n = col.filter(x => x && x !== PL6_BLOQUEADO).length;
@@ -22478,11 +22477,6 @@ function renderPlanejamento6a(rep) {
     const cands = pl6Candidatos(rota, todos, naGrade);
     const tomo = n >= 4 ? ' is-coberto' : (n ? ' is-meio' : '');
 
-    /* qual e o primeiro horario livre deste dia — a dica vai so nele */
-    const primeiroLivre = PL6_HORAS.findIndex(function (_, k) {
-      const c = (grade[di] || [])[k];
-      return !c;
-    });
     const slots = PL6_HORAS.map((hora, si) => {
       const v = col[si];
       if (v === PL6_BLOQUEADO) {
@@ -22540,15 +22534,11 @@ function renderPlanejamento6a(rep) {
           + '⊘ bloquear horário — compromisso fora da rua</button>'
           + '</div>';
       }
-      /* A DICA VAI SO NO PRIMEIRO LIVRE DO DIA. Com a semana vazia cands[0] e o mesmo
-         para os sete horarios, e a coluna repetia o mesmo nome sete vezes — ruido que
-         parecia defeito. O primeiro livre e o proximo ato de verdade; os outros dizem a
-         hora, que e o que eles sabem. */
-      let dica = '';
-      if (si === primeiroLivre) {
-        const livre = cands.find(function (c) { return !jaSugeridas.has(c.id); });
-        if (livre) { jaSugeridas.add(livre.id); dica = '+ ' + livre.nome; }
-      }
+      /* NENHUM NOME DE CONTA NO HORARIO LIVRE (03/09/26, Julyan: "nao quero esse nome
+         aloha, ele decide o lead que vai"). A tela chegou a estampar uma sugestao no
+         primeiro livre de cada dia. Escolher por ele e passar do sugerir para o decidir,
+         e a decisao de quem visitar e dele. O horario livre diz que esta livre; a lista
+         de candidatos — com a razao de cada um — aparece quando ELE clica. */
       /* SEMANA FECHADA NAO PRODUZ BOTAO APAGADO. Vira texto, e quem fechou reabre pelo
          botao "reabrir" — que existe e diz o que faz. */
       if (fechada) {
@@ -22558,7 +22548,7 @@ function renderPlanejamento6a(rep) {
       }
       return '<button type="button" class="pl6-slot-livre" data-pl6-abrir-sug="' + di + '.' + si + '">'
         + '<span class="pl6-slot-livre-h">' + hora + ' · livre</span>'
-        + (dica ? '<span class="pl6-slot-dica">' + esc(dica) + '</span>' : '') + '</button>';
+        + '</button>';
     }).join('');
 
     /* o chip e o picker da regiao */
@@ -28696,21 +28686,9 @@ function propsFichaHTML(lead, idxAtual) {
   return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
     ${visiveis.map(c => {
       const mostrado = formatarValorFicha(c, lead);
-      /* CAMPO CALCULADO NÃO É EDITÁVEL, E DIZ ISSO (02/09/26). amount passou a ser
-         derivado (valor de MRR x meses do período) — deixá-lo com cursor de mão e o
-         convite "toque pra preencher" seria oferecer uma edição que o servidor
-         sobrescreve no próximo salvamento: clique que parece funcionar e não funciona.
-         Sem valor ele não pede preenchimento; explica que falta o período. */
-      if (c.calculado) {
-        return `<div class="ficha-prop is-calculado" data-prop="${c.prop}"
-          style="grid-column:${c.largo ? '1/-1' : 'auto'};background:var(--sunk);border:1px solid var(--line-soft);border-radius:var(--r-md);padding:9px 12px;cursor:default;">
-          <label style="display:block;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);margin-bottom:3px;">${esc(c.label)}</label>
-          <span class="ficha-prop-valor">${mostrado
-            ? `<b style="font-size:12px;font-weight:700;line-height:1.35;">${mostrado}</b>`
-            : '<span style="color:var(--muted2);font-weight:700;font-size:11px;">calculado do MRR e do período</span>'}</span>
-          <span style="display:block;margin-top:2px;font-size:9.5px;color:var(--ter);line-height:1.35;">valor de MRR × meses do período · não se digita</span>
-        </div>`;
-      }
+      /* O CARTÃO "CALCULADO" SAIU (03/09/26). Ele existia para o amount derivado, e
+         amount voltou a ser preenchido à mão porque é dele que o RPA gera o link de
+         pagamento. Cartão que só serve a um campo que não existe mais é código morto. */
       return `<div class="ficha-prop${c.largo ? '' : ''}" data-prop="${c.prop}" data-tipo="${c.tipo}" data-min="${c.min || ''}" data-prefixo="${esc(c.prefixo || '')}" data-sufixo="${esc(c.sufixo || '')}"
         style="grid-column:${c.largo ? '1/-1' : 'auto'};background:var(--panel2);border:1px solid var(--line-soft);border-radius:var(--r-md);padding:9px 12px;cursor:pointer;transition:background var(--t-rapido) var(--ease),border-color var(--t-rapido) var(--ease);">
         <label style="display:block;font-size:9px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--ter);margin-bottom:3px;">${esc(c.label)}</label>
@@ -28725,7 +28703,7 @@ function propsFichaHTML(lead, idxAtual) {
 function ligarPropsFichaEditaveis(container, lead) {
   /* O :not(.is-calculado) é a metade que importa: sem ele o card derivado abriria um
      input que o servidor sobrescreve — e o cursor:default do estilo esconderia isso. */
-  container.querySelectorAll('.ficha-prop:not(.is-calculado)').forEach(card => {
+  container.querySelectorAll('.ficha-prop').forEach(card => {
     card.addEventListener('click', function aoClicar() {
       if (card.querySelector('input,textarea,select')) return; // já em edição
       const propNome = card.dataset.prop;

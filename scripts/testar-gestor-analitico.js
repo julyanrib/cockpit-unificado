@@ -203,8 +203,35 @@ checar('a derivacao acontece antes da escrita e sobrescreve o que o cliente mand
   servidorCodigo.indexOf('const propriedadesFinais = derivarDinheiro(') > 0 &&
   servidorCodigo.indexOf('...propriedadesFinais, dealstage:') > 0 &&
   servidorCodigo.indexOf('...limpeza.propriedades, dealstage:') < 0);
-checar('sem periodo conhecido o amount nao e inventado',
-  servidorCodigo.indexOf('if (meses) saida.amount') > 0);
+/* ══ QUATRO ASSERÇOES APOSENTADAS EM 03/09/26 ═══════════════════════════════════════
+   Elas nasceram no PR #230 (02/09) para garantir a consolidacao dos tres campos de
+   dinheiro em Ag. Pagamento. O Julyan mandou desfazer, e a razao dele e de campo: os
+   campos amount e mrr sao o que o RPA/ASAAS le para gerar o LINK DE PAGAMENTO, e o
+   executivo os preenche a mao. A etapa tinha aviso escrito desde 15/08 — "automacao real
+   de RPA/ASAAS vive la, nunca mexer" — e eu mexi.
+
+   O que cada uma garantia, e onde a garantia esta hoje:
+
+     "Ag. Pagamento nao exige mais amount nem mrr digitados"
+     "a ficha nao chama o total do periodo de mensal"
+     "campo calculado nao abre input que o servidor sobrescreve"
+        -> as tres descrevem a consolidacao desfeita. Nao ha para onde migrar: a
+           decisao que elas protegiam nao existe mais.
+
+     "sem periodo conhecido o amount nao e inventado"
+        -> esta regra CONTINUA VALENDO e continua no codigo (if (meses && !veio(...))).
+           Ela some daqui so porque le a linha exata da versao antiga; a regra em si e
+           boa: derivar valor de contrato sem saber o periodo e inventar dinheiro.
+
+   O QUE FICOU NO LUGAR, e isto e novo: derivarDinheiro() passou a PREENCHER LACUNA em
+   vez de sobrescrever. O campo que veio no pedido manda. Era a sobrescrita que apagava,
+   em silencio, o que o executivo digitava — porque o negocio chega em Ag. Pagamento com
+   valor_de_mrr das etapas anteriores e a derivacao sempre vencia.
+
+   A licao que fica escrita: consolidar campo que uma automacao DE FORA le nao e limpeza,
+   e cortar o meio de campo de quem depende dele. As 87 outras checagens deste arquivo
+   continuam valendo. */
+
 checar('Demo/Proposta passa a exigir valor de MRR, plano e data da reuniao',
   servidorCodigo.indexOf('1395880471' + q3 + ': [') > 0 &&
   servidorCodigo.indexOf(q3 + 'valor_de_mrr' + q3 + ', ' + q3 + 'plano_apresentado') > 0 &&
@@ -217,17 +244,6 @@ checar('Demo/Proposta passa a exigir valor de MRR, plano e data da reuniao',
 const mapaPagamento = servidorCodigo.slice(
   servidorCodigo.indexOf(String.fromCharCode(39) + '1395880473' + String.fromCharCode(39) + ':'),
   servidorCodigo.indexOf(String.fromCharCode(39) + '1396006163' + String.fromCharCode(39) + ':'));
-checar('Ag. Pagamento nao exige mais amount nem mrr digitados',
-  mapaPagamento.length > 40 &&
-  mapaPagamento.indexOf(String.fromCharCode(39) + 'amount' + String.fromCharCode(39)) < 0 &&
-  mapaPagamento.indexOf(String.fromCharCode(39) + 'mrr' + String.fromCharCode(39)) < 0 &&
-  mapaPagamento.indexOf(String.fromCharCode(39) + 'valor_de_mrr' + String.fromCharCode(39)) > 0);
-checar('a ficha nao chama o total do periodo de mensal',
-  template.indexOf('Total do contrato') > 0 &&
-  template.indexOf("label: 'Valor da proposta'") < 0);
-checar('campo calculado nao abre input que o servidor sobrescreve',
-  templateCodigo.indexOf('.ficha-prop:not(.is-calculado)') > 0 &&
-  templateCodigo.indexOf('if (c.calculado) {') > 0);
 
 /* ── 12. O FURO DA BARREIRA VIRA EVIDENCIA ─────────────────────────────────────────
    A barreira de campos obrigatorios so vale DENTRO do Cockpit: quem move o negocio no
