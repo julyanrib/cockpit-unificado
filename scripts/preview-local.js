@@ -239,7 +239,52 @@ const bootstrap = `
 </script>
 `;
 
+/* ══ --auditar-cliques: A PROVA DE QUE NENHUM CLIQUE E MORTO (03/09/26) ═══════════════
+   Julyan: "quero que tudo que seja clicável tenha endereço firmado... não pode ter nenhum
+   click morto".
+
+   Ate aqui eu provava isso por INFERENCIA: o botao tem id, ou tem data-*, logo alguem
+   deve escutar. E inferencia erra nas duas direcoes — um id sem listener passa, e um botao
+   sem atributo nenhum que e pego por delegacao no ancestral reprova sem motivo.
+
+   Esta flag troca inferencia por MEDICAO. Ela injeta um recorder ANTES do script do app,
+   embrulhando addEventListener: todo elemento (e todo seletor de delegacao) que registra
+   um listener de clique entra num Set. Depois do render, cada clicavel e testado contra
+   ele — ou o proprio elemento tem listener, ou um ancestral tem. Nao sobra opiniao.
+
+   So entra com a flag: em revisao normal o produto tem que rodar sem instrumentacao. */
+const RECORDER = `
+<script>
+/* PREVIEW LOCAL · auditoria de cliques. Nao existe no template nem no arquivo publicado. */
+(function () {
+  var comListener = new WeakSet();
+  var total = 0;
+  var orig = EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener = function (tipo) {
+    if (tipo === 'click' || tipo === 'pointerdown' || tipo === 'mousedown' || tipo === 'change') {
+      try { comListener.add(this); total++; } catch (e) { /* window/document nao entram no WeakSet */ }
+    }
+    return orig.apply(this, arguments);
+  };
+  window.__AUDIT_CLIQUES__ = {
+    tem: function (el) { return comListener.has(el); },
+    /* um clicavel esta enderecado se ele, ou qualquer ancestral ate o body, escuta clique */
+    enderecado: function (el) {
+      var n = el;
+      while (n && n !== document.body) { if (comListener.has(n)) return true; n = n.parentElement; }
+      return comListener.has(document.body) || comListener.has(document) || comListener.has(window);
+    },
+    totalRegistrado: function () { return total; }
+  };
+})();
+</script>
+`;
+
 let out = template.replace('{{DATA_JSON}}', json);
+if (flags.includes('--auditar-cliques')) {
+  /* antes de TUDO: listeners registrados no topo do script do app tambem tem que ser vistos */
+  out = out.replace(/<head([^>]*)>/i, '<head$1>' + RECORDER);
+}
 out = out.replace(/<\/body>/i, bootstrap + '</body>');
 
 const destino = destinoArg || path.join(os.tmpdir(), `cockpit-preview-${usuario.role === 'manager' ? 'gestor' : 'exec'}.html`);

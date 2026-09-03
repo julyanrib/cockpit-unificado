@@ -33944,6 +33944,119 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
   // o botão "+rota" da lista agora busca o lead direto em leadPorId, no lugar de achar
   // o marcador do mapa primeiro pra só então chegar no lead — mesma ação de sempre
   // (alternarRota/alternarClienteNaRota/alternarQuenteAvulso), uma ponte a menos.
+  /* ══ CRIAR NEGOCIO — o gesto de quem ainda nao esta no funil (03/09/26) ══════════════
+     Dois caminhos, porque sao duas origens diferentes, e usar o mesmo para as duas
+     gravaria conta errada:
+
+       porta do OSM (l._doMapa)   nao existe em base nenhuma ainda. Vai por
+                                  abrirNovaContaProspeccao com o nome na semente — o mesmo
+                                  fluxo que a Minha Daily usa para visita sem negocio.
+       conta-alvo da base         ja existe em leads_prospeccao. Vai por
+                                  abrirPassagemContaAlvoProFunil, que faz o de/para das
+                                  colunas (a base usa outros nomes que o HubSpot).
+
+     Nenhum caminho novo de criacao. Os dois redesenham a lista depois de salvar, para o
+     card voltar ja sem o botao "pipe" — quem tem negocio nao ve o gesto de criar. */
+  lista.querySelectorAll('[data-plano-pipe]').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const l = leadPorId.get(String(btn.dataset.planoPipe));
+      if (!l) return;
+      const depois = () => montarPlanoMapa(r, hoje, planoFechado);
+      if (l._doMapa && typeof abrirNovaContaProspeccao === 'function') {
+        abrirNovaContaProspeccao(depois, { nome: l.nome, telefone: l.telefone || '' });
+      } else if (typeof abrirPassagemContaAlvoProFunil === 'function') {
+        abrirPassagemContaAlvoProFunil(l, depois);
+      }
+    });
+  });
+
+  /* ══ EM QUAL DIA ELE VAI — e a regra da Daily (03/09/26) ═════════════════════════════
+     Julyan: "adicionar em qual dia ele vai, se for o dia da daily tem q aparecer na daily
+     dele".
+
+     O "+" sempre colocou na rota de HOJE, e so. Faltava o resto da semana: o executivo que
+     sabe que passa naquele bairro na quinta nao tinha onde dizer isso — ou marcava para
+     hoje (mentira) ou nao marcava (perda).
+
+     A REGRA DO DIA DE HOJE, que e o pedido dele: escolher HOJE nao e so agendar. E tambem
+     entrar na rota do dia, porque a rota de hoje e o que planos_diarios.contas_alvo grava
+     e o que a Daily do gestor le como cliente nomeado. Sem isso, o executivo agendaria
+     para hoje e o gestor nao veria — as duas telas discordando sobre o mesmo dia.
+
+     Escolher outro dia agenda e pronto: aquele dia tem a Daily dele no proprio dia. */
+  lista.querySelectorAll('[data-plano-agendar]').forEach(btn => {
+    btn.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const l = leadPorId.get(String(btn.dataset.planoAgendar));
+      if (!l || typeof abrirModalConfirmacao !== 'function') return;
+      const dias = (typeof diasUteisSemanaAtual === 'function' ? diasUteisSemanaAtual() : [])
+        .filter(d => d.iso >= hoje);
+      if (!dias.length) {
+        if (typeof mostrarToast === 'function') mostrarToast('A semana já fechou. Use o Planejamento da próxima.', 'atencao');
+        return;
+      }
+      let escolhido = dias[0].iso;
+      abrirModalConfirmacao({
+        titulo: 'Em que dia você vai a ' + esc(l.nome || 'esta conta') + '?',
+        corpoHTML: '<div style="color:var(--muted);margin-bottom:12px;">A visita entra na sua agenda e vira tarefa no '
+          + 'HubSpot no dia escolhido. <b>Escolhendo hoje</b>, ela também entra na sua rota de hoje — '
+          + 'é isso que o seu gestor vê na Daily.</div>'
+          + '<div id="planoDiaEscolha" style="display:flex;flex-wrap:wrap;gap:7px;">'
+          + dias.map((d, i) => '<button type="button" class="btn-sec" data-dia="' + d.iso + '"'
+            + ' style="min-height:44px;padding:0 14px;' + (i === 0 ? 'border-color:var(--ink);color:var(--ink);' : '') + '">'
+            + esc(d.rotulo) + (d.iso === hoje ? ' · hoje' : '') + '</button>').join('')
+          + '</div>',
+        confirmarLabel: 'Marcar visita',
+        aoConfirmar: async () => {
+          const hora = typeof proximoHorarioParaDia === 'function'
+            ? proximoHorarioParaDia(escolhido, r.ownerId) : '10:00';
+          /* porta do OSM ainda nao existe em base nenhuma: agendar sem materializar
+             criaria tarefa apontando para um lead que nao da para reabrir depois. */
+          let alvo = l;
+          if (l._doMapa && typeof materializarLeadDoMapa === 'function') {
+            const { lead, error } = await materializarLeadDoMapa(l, r.ownerId);
+            if (error || !lead) {
+              if (typeof mostrarToast === 'function') mostrarToast('Não consegui salvar esta conta antes de agendar. Tente de novo.', 'erro');
+              return;
+            }
+            alvo = lead;
+          }
+          try {
+            if (typeof criarTarefaVisitaNoHubspot === 'function') {
+              await criarTarefaVisitaNoHubspot(alvo, r.ownerId, hora, { silencioso: true }, escolhido);
+            }
+            if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(alvo, escolhido, hora, r.ownerId);
+            /* O DIA DE HOJE ENTRA NA ROTA: ver o comentario acima. */
+            if (escolhido === hoje && typeof alternarRota === 'function' && !naRotaHojeFn(alvo)) {
+              await alternarRota(alvo, null);
+            }
+            if (typeof mostrarToast === 'function') {
+              mostrarToast('Visita marcada para ' + (escolhido === hoje ? 'hoje' : pl4RotuloDoDia(escolhido)) + ' às ' + hora
+                + (escolhido === hoje ? ' — e entrou na sua rota de hoje.' : '.'), 'sucesso');
+            }
+            await montarPlanoMapa(r, hoje, planoFechado);
+            if (escolhido === hoje && typeof renderDaily === 'function') renderDaily();
+          } catch (e) {
+            console.error('Nao consegui marcar a visita:', e && e.message);
+            if (typeof mostrarToast === 'function') mostrarToast('Não consegui marcar a visita. Ela continua disponível na lista.', 'erro');
+          }
+        }
+      });
+      /* a escolha do dia pinta o botao ativo e guarda o iso; o confirmar le daqui */
+      const box = document.getElementById('planoDiaEscolha');
+      if (box) {
+        box.querySelectorAll('[data-dia]').forEach(b => {
+          b.addEventListener('click', () => {
+            escolhido = b.dataset.dia;
+            box.querySelectorAll('[data-dia]').forEach(x => { x.style.borderColor = ''; x.style.color = ''; });
+            b.style.borderColor = 'var(--ink)'; b.style.color = 'var(--ink)';
+          });
+        });
+      }
+    });
+  });
+
   lista.querySelectorAll('.plano-lista-btn').forEach(btn => {
     btn.addEventListener('click', ev => {
       ev.stopPropagation();
