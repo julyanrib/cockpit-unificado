@@ -27,26 +27,34 @@ data/hubspot-previous.json
 data/weekly-raw.json
 data/sync-status.json
 
-# NARRATIVAS.JSON VOLTOU AO GIT (03/09/26) — E O MOTIVO E UMA LICAO, NAO UM RECUO.
+# NARRATIVAS.JSON SAI DO GIT (03/09/26), NA SEGUNDA TENTATIVA E COM O CAMINHO PRONTO.
 #
-# Eu tirei do git no PR #255 depois de conferir a linha na tabela, e estava certo sobre a
-# tabela e ERRADO sobre quem le o arquivo. TRES scripts do robo leem narrativas.json com
-# readFileSync duro, NO TOPO DO MODULO: generate-daily-gargalo, generate-individual-analysis
-# e generate-weekly-summary. Sem o arquivo, eles morrem no require e o robo inteiro cai.
+# A primeira (#255) foi revertida (#256) porque tres produtores liam o arquivo com
+# readFileSync duro NO TOPO DO MODULO e morriam no require sem ele. Publicar na tabela
+# resolveu a leitura da TELA e nao a dos PRODUTORES. O que faltava, e agora existe:
 #
-# POR QUE ISSO NAO ACONTECEU COM OS OUTROS SEIS: hubspot.json e weekly-raw.json tambem sao
-# lidos com readFileSync duro e tambem nao estao no git — mas um passo ANTERIOR da mesma
-# rodada os grava em disco (fetch-hubspot, fetch-weekly-comparison). O narrativas.json e
-# diferente: e ESTADO ACUMULADO, ninguem o regenera do zero, e quem o carregava de uma
-# rodada para a outra era o git. Publicar na tabela resolve a LEITURA DA TELA; nao resolve
-# a leitura dos produtores.
+#  #253 os tres produtores PUBLICAM na tabela (lib/publicar-snapshot.js).
+#  #257 os tres CARREGAM do arquivo OU da tabela, e ABORTAM se nao acharem em nenhum
+#       dos dois - comecar de objeto vazio publicaria um narrativas vazio e apagaria a
+#       narrativa e os compromissos de PDI dos 7 executivos.
+#  #258 o passo do gargalo ganhou SUPABASE_URL/SUPABASE_SERVICE_KEY, que faltavam. Sem
+#       elas ele nao publicava (silencio, mascarado pelo passo seguinte) e, pior, nao
+#       conseguiria LER da tabela - tirar o arquivo derrubaria esse passo.
 #
-# PARA TIRAR DAQUI DE VERDADE falta um passo: os tres produtores precisam carregar do
-# arquivo OU da tabela, e ABORTAR se nao acharem em nenhum dos dois. Comecar de {} seria
-# pior que quebrar: a primeira gravacao publicaria um narrativas vazio e apagaria o
-# historico de todo mundo. As leituras estao no topo do modulo e a leitura da tabela e
-# assincrona, entao os tres precisam mover a carga para dentro do main() — e e isso que
-# tem que ser feito antes de repetir o PR #255.
+# CONFERIDO em CI antes de tirar, na rodada 33701954734: os DOIS passos logam que o
+# snapshot narrativas foi publicado, 10.2 KB. A linha na tabela existe.
 #
-# O CUSTO DE FICAR ASSIM e um deploy por rodada do robo, que foi o que estourou a cota de
-# 100/dia do plano Hobby em 02/09/26. Continua sendo um problema. Mas robo caido e pior.
+# O QUE ISSO COMPRA: narrativas.json era o UNICO arquivo que o robo diario ainda
+# commitava - uma linha, 7 vezes por dia util - e todo commit gera um deploy na Vercel.
+# Em 02/09/26 as 23:34 UTC a cota de 100 deploys/dia do plano Hobby estourou e quatro PRs
+# de correcao ficaram no main sem chegar na tela. A partir daqui o robo diario commita
+# ZERO, e a cota fica inteira para mudanca de codigo.
+#
+# RESUMO-SEMANAL.JSON FICA VERSIONADO. O produtor dele tambem publica (#253) e carrega da
+# tabela (#257), mas roda no workflow SEMANAL e a tabela ainda nao tem a linha. Ele entra
+# aqui depois da primeira rodada semanal, conferindo a linha do mesmo jeito. Muda uma vez
+# por semana: nao atrapalha a cota.
+#
+# O arquivo continua sendo gravado em disco: o passo de build le do disco, e a rota
+# /api/dados usa o arquivo do pacote como rede quando a tabela nao responde.
+data/narrativas.json
