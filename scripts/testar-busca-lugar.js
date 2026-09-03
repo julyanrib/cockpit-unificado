@@ -193,10 +193,27 @@ ctx.prosp2Estado.ondeAntes = 'rota';
 /* os recortes usam marcação, não comentário: os marcadores anteriores eram comentários e
    `codigo` acabou de tirá-los — o recorte vinha vazio e TODA checagem dele falhava. */
 const barra = codigo.slice(codigo.indexOf('<div class="pl5-barra">'), codigo.indexOf('<div class="pl5-sinal">'));
-checar('o segmento de rota mostra "—" quando não há rota, nunca "0"',
-  barra.includes("temRotaV5 ? noRaioDaRota.length : '—'"));
-checar('o segmento de rota fica desabilitado (não desaparece: ausência é informação)',
-  barra.includes('disabled aria-disabled="true"'));
+/* ══ A REGRA MUDOU DE FORMA, NAO DE INTENCAO (03/09/26) ═══════════════════════════════
+   Estas duas asserçoes diziam que o segmento de rota fica DESABILITADO mostrando "—", e
+   a segunda explicava por que: "nao desaparece: ausencia e informacao". A intencao esta
+   certa e continua valendo — o executivo tem que saber que o filtro de rota existe antes
+   de existir rota.
+
+   O que mudou foi a FORMA. O Julyan pediu "sem nenhum botão cinza feio", e um segmento
+   apagado dizendo um travessao e exatamente isso. Agora o lugar do segmento traz uma
+   etiqueta de texto — .pl5-seg-nota, "Perto da rota de sexta · sem rota ainda" — que diz
+   a mesma coisa com mais palavras e sem convidar o clique.
+
+   REGISTRO DE COMO ISTO FOI DESCOBERTO: eu comecei APAGANDO o segmento, e esta suite
+   reprovou. Foi ela que me impediu de jogar a informacao fora junto com o botao. E por
+   isso que asserçao com o porque escrito vale mais que asserçao de valor: a primeira
+   sobrevive a uma mudanca de forma, a segunda so diz que algo mudou. */
+checar('sem rota, o lugar do segmento diz que nao ha rota (ausência é informação)',
+  barra.includes('sem rota ainda') && barra.includes('pl5-seg-nota'));
+checar('e o segmento de rota nao nasce desabilitado (nenhum botão cinza)',
+  !barra.includes('disabled aria-disabled="true"'));
+checar('com rota, o segmento mostra a contagem real e nunca um travessão',
+  barra.includes('· ${noRaioDaRota.length}') && !barra.includes("noRaioDaRota.length : '—'"));
 checar('a busca é um campo vivo, sem botão "Buscar"',
   barra.includes('id="pl5BuscaInput"') && !barra.includes('Buscar aqui'));
 checar('o placeholder não esconde regra invisível ("em branco, usamos a sua cidade" morreu)',
