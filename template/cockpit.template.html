@@ -4570,6 +4570,13 @@
   .fn3-topo-rot{font:900 17px var(--font-display);letter-spacing:-.01em;}
   .fn3-topo-nota{font-size:13px;color:var(--muted);font-weight:700;}
   .fn3-topo-gesto{margin-left:auto;font-size:12px;color:var(--ter);font-weight:700;}
+  /* O botao de alimentar o pipe fica entre a nota do gesto e o alternador de
+     Ativos/Perdidos: ele e ACAO, o alternador e FILTRO. Piso de 38px no desktop e 44px
+     em <=760px, que e onde o executivo usa isto — na rua, no celular. */
+  .fn3-novo{display:inline-flex;align-items:center;min-height:38px;padding:0 15px;
+    border:1px solid var(--ink);border-radius:var(--r-pill);background:var(--ink);
+    color:#FFFDF8;font:800 11.5px var(--font-body);cursor:pointer;white-space:nowrap;}
+  .fn3-novo:hover{opacity:.88;}
   .fn3-alt{display:flex;gap:2px;background:var(--sunk);border-radius:var(--r-pill);padding:3px;
     font:800 12px var(--font-body);flex:none;}
   .fn3-alt button{border:0;background:none;border-radius:var(--r-pill);padding:0 14px;
@@ -4797,6 +4804,7 @@
     .fn3-col[data-fn3-viol="0"].is-aberta .fn3-cab-n::after{content:" ⌃";font-size:13px;}
     .fn3-card{cursor:pointer;}
     .fn3-topo-gesto{display:none;}
+    .fn3-novo{min-height:44px;width:100%;justify-content:center;order:9;}
   }
   @media (max-width:760px){
     .fn3-cta,.fn3-mais,.fn3-ver,.fn3-alt button,.fn3-perdidos-cta,.fn3-toggle,
@@ -12811,6 +12819,11 @@ function wireRegistroDeDesfecho(container, lead, st) {
           // criar exatamente o "follow-up descoberto" que este fluxo existe pra
           // impedir — então avisa alto e mantém o negócio na fila.
           avisoPasso = (dPasso && dPasso.erro) || 'Desfecho gravado, mas o próximo passo NÃO foi criado.';
+        } else {
+          /* Ver espelharPassoNaAgenda: sem isto o passo do desfecho so apareceria na
+             agenda na proxima carga do robo, e quem acabou de registrar concluiria que
+             nao gravou. */
+          espelharPassoNaAgenda(lead, passoFinal.data, tipoPasso, lead.ownerId);
         }
       }
 
@@ -15116,6 +15129,14 @@ function fn3EsteiraHTML(todos, acesos) {
       <span class="fn3-topo-rot">A ESTEIRA</span>
       <span class="fn3-topo-nota">a régua de cada etapa manda — quem estourou sobe</span>
       <span class="fn3-topo-gesto">arraste o card pra trocar de etapa — soltar abre o registro rápido</span>
+      <!-- ALIMENTAR O PIPE (03/09/26). Pedido do Julyan: "preciso de um botao pra criar
+           negocio aqui tbm, pq eles precisam alimentar o pipe". A esteira mostrava o funil
+           e nao tinha por onde colocar negocio novo nele — para abrir um lead de rua o
+           executivo tinha que sair para outra aba, e no meio da rua isso nao acontece.
+           Reusa abrirNovaContaProspeccao(), o mesmo caminho da acao "Criar negocio para X"
+           do Meu painel. Sem semente: aqui o negocio nasce do zero. -->
+      <button type="button" class="fn3-novo" id="fn3NovoNegocio"
+        title="Abrir um negócio novo no seu funil — conta de rua, indicação, quem você acabou de visitar">＋ Novo negócio</button>
       <span class="fn3-alt">
         <button type="button" class="${fn3Aba === 'ativos' ? 'is-ativo' : ''}" data-fn3-aba="ativos">Ativos · ${naEsteira}</button>
         <button type="button" class="${fn3Aba === 'perdidos' ? 'is-ativo' : ''}" data-fn3-aba="perdidos">Perdidos${perdidos.length ? ' · ' + perdidos.length : ''} ⌄</button>
@@ -15492,6 +15513,20 @@ function fn3AbrirMenu(lead, redesenhar) {
 
 /* ── A FIAÇÃO DA ESTEIRA ─────────────────────────────────────────────────────────────── */
 function fn3Ligar(el, redesenhar) {
+  /* Ver o comentario do botao no markup. renderMeuFunil como callback para o negocio
+     novo aparecer na coluna de Prospeccao sem o executivo ter que recarregar. */
+  const btnNovo = el.querySelector('#fn3NovoNegocio');
+  if (btnNovo) btnNovo.addEventListener('click', () => {
+    if (typeof abrirNovaContaProspeccao !== 'function') {
+      if (typeof mostrarToast === 'function') mostrarToast('O formulário de conta nova não carregou nesta aba.', 'erro');
+      return;
+    }
+    abrirNovaContaProspeccao(() => {
+      if (typeof renderMeuFunil === 'function') renderMeuFunil();
+      if (typeof mostrarToast === 'function') mostrarToast('Negócio criado — entra na coluna Prospecção. Datar o próximo passo é o que o mantém vivo.', 'sucesso');
+    }, {});
+  });
+
   el.querySelectorAll('[data-fn3-aba]').forEach(btn => btn.addEventListener('click', () => {
     fn3Aba = btn.dataset.fn3Aba;
     redesenhar();
@@ -20618,6 +20653,42 @@ let agwNovoAberto = null;
 // aparecia na tela como "Visita" até o próximo build puxar do HubSpot — exatamente a
 // métrica que este bloco existe pra corrigir (cadência de reunião), sabotada pelo
 // próprio cache otimista que deveria só antecipar a tela.
+/* ══ TODO PROXIMO PASSO SALVO APARECE NA AGENDA NA HORA (03/09/26) ══════════════════
+   Pedido do Julyan: "esse proximo passo, tem que ir pra agenda tbm".
+
+   O Cockpit salva proximo passo em CINCO lugares diferentes — desfecho de visita, ficha
+   do negocio, passagem de etapa, remarcacao apos motivo, e o "datar tarefa" do painel de
+   acao da Daily do gestor. Todos gravam a mesma tarefa datada no HubSpot pela porta unica,
+   e NENHUM deles aparecia na agenda antes da proxima carga do robo, porque o DATA.agenda
+   da tela e um snapshot.
+
+   Eu consertei UM na primeira passada (a ficha) e deixei quatro. Este helper existe para
+   nao haver uma sexta chance de esquecer: quem salva passo chama isto, e a guarda 11
+   reprova o build se um site novo de proximo-passo nao chamar.
+
+   HORA 09:00 porque e a hora em que o Cockpit grava toda tarefa datada (12:00 UTC, ver
+   api/criar-nota-negocio.js). Inventar outra faria o espelho e o dado real divergirem na
+   grade horaria por um dia inteiro.
+
+   O TIPO E TRADUZIDO do rotulo do HubSpot ("Follow-up"/"Visita"/"Reuniao"/"Demo") para a
+   chave de AGENDA_TIPOS. Demo cai em reuniao porque demo e reuniao marcada, nao rua.
+   Errar isto pinta na faixa de visita um compromisso que e de telefone. */
+function espelharPassoNaAgenda(lead, dataISO, tipoPasso, ownerId) {
+  if (!lead || !dataISO || !ownerId) return;
+  const rot = String(tipoPasso || '').toLowerCase();
+  const tipo = (rot.indexOf('reuni') >= 0 || rot.indexOf('demo') >= 0) ? 'reuniao'
+    : rot.indexOf('visita') >= 0 ? 'rota'
+    : 'follow_up';
+  try {
+    registrarAgendamentoLocal({
+      id: lead.id != null ? lead.id : null,
+      nome: lead.name || lead.nome || '',
+      bairro: lead.bairro || null, cidade: lead.cidade || null,
+      lat: lead.lat != null ? lead.lat : null, lng: lead.lng != null ? lead.lng : null
+    }, dataISO, '09:00', ownerId, tipo);
+  } catch (e) { console.error('espelho do proximo passo na agenda:', e); }
+}
+
 function registrarAgendamentoLocal(lead, dataISO, hora, ownerId, tipo) {
   const chaveLead = lead.id != null ? String(lead.id) : 'nome:' + prospeccaoNormalizarTexto(lead.nome || '');
   const jaTem = agendaAgendadosLocal.some(a => String(a.leadId) === chaveLead && a.dataISO === dataISO && a.hora === hora);
@@ -29802,7 +29873,10 @@ async function gravarPassagemDeEtapa(opts) {
           data: opts.passoData, tipo: opts.passoTipo || 'Follow-up', tipoAcao: 'proximo-passo' })
       }), 9000, 'passagem-proximo-passo');
       const dp = await rp.json().catch(() => ({}));
-      if (rp.ok && dp.ok) saida.passoOk = true;
+      if (rp.ok && dp.ok) {
+        saida.passoOk = true;
+        espelharPassoNaAgenda(lead, opts.passoData, opts.passoTipo || 'Follow-up', lead.ownerId);
+      }
       else saida.erroPasso = (dp && dp.erro) || 'o HubSpot recusou a criação da tarefa';
     } catch (e) { saida.erroPasso = String((e && e.message) || e); }
   }
@@ -30434,18 +30508,7 @@ function wireFichaLeadFunilEdicao(container, l) {
            HORA 09:00 porque e a hora que o Cockpit grava toda tarefa datada (12:00 UTC,
            ver api/criar-nota-negocio.js) — inventar outra faria o espelho e o dado real
            divergirem por um dia inteiro na grade horaria. */
-        const tipoNaAgenda = passoTipoAtivo === 'Reunião' ? 'reuniao'
-          : passoTipoAtivo === 'Visita' ? 'rota'
-          : 'follow_up';
-        if (typeof registrarAgendamentoLocal === 'function') {
-          try {
-            registrarAgendamentoLocal({
-              id: dealId, nome: l.name,
-              bairro: l.bairro || null, cidade: l.cidade || null,
-              lat: l.lat != null ? l.lat : null, lng: l.lng != null ? l.lng : null
-            }, data, '09:00', l.ownerId, tipoNaAgenda);
-          } catch (err) { console.error('espelho do proximo passo na agenda:', err); }
-        }
+        espelharPassoNaAgenda({ id: dealId, name: l.name, bairro: l.bairro, cidade: l.cidade, lat: l.lat, lng: l.lng }, data, passoTipoAtivo, l.ownerId);
         const dataBRPasso = String(data).split('-').reverse().join('/');
         statusEl.textContent = `Próximo passo salvo — já está na sua Agenda em ${dataBRPasso}.`;
         statusEl.style.color = 'var(--green)';
@@ -38870,10 +38933,11 @@ function dl2AbrirFuro(lead, r) {
               timestamp: new Date(data + 'T12:00:00').getTime(), tipo: 'Visita'
             });
           }
-          if (typeof registrarAgendamentoLocal === 'function') {
-            registrarAgendamentoLocal({ id: lead.id, nome: lead.name || lead.nome, bairro: lead.bairro, cidade: lead.cidade },
-              data, '09:00', (sessaoAtual && sessaoAtual.ownerId) || lead.ownerId, 'rota');
-          }
+          /* PASSA PELO HELPER (03/09/26) e nao pelo espelho direto: a traducao de rotulo
+             do HubSpot para chave da agenda ('Visita' -> 'rota') vira UMA regra em vez de
+             uma por site. Este era o unico dos cinco que espelhava por conta propria, do
+             conserto de 02/09 — o comportamento nao muda, a regra fica no mesmo lugar. */
+          espelharPassoNaAgenda(lead, data, 'Visita', (sessaoAtual && sessaoAtual.ownerId) || lead.ownerId);
         }
         if (typeof tpInvalidarCache === 'function') tpInvalidarCache();
         dl2Medir('furo');
@@ -43070,6 +43134,10 @@ async function renderDaily() {
             }), 9000, 'daily-datar-tarefa');
             const dd = await rr.json().catch(() => ({}));
             if (!rr.ok || !dd.ok) throw new Error((dd && dd.erro) || 'O HubSpot não aceitou a tarefa.');
+            /* Ver espelharPassoNaAgenda. A tarefa que o GESTOR data pelo painel da Daily
+               e do executivo, e tem que aparecer na agenda DELE na hora — senao a proxima
+               tela que o gestor abre continua dizendo que o negocio esta descoberto. */
+            espelharPassoNaAgenda({ id: dealId, name: nome }, dailyRefDate, 'Follow-up', owner);
             btn.classList.add('is-feito'); btn.textContent = '✓ datada ' + hhmm;
             dizer('tarefa datada no HubSpot · ' + hhmm, 'is-feito');
             if (typeof mostrarToast === 'function') mostrarToast('Tarefa datada em ' + nome + ' — já está no funil dele.', 'sucesso');

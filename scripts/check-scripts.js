@@ -554,6 +554,65 @@ function checarPlanoAlcancavel() {
 }
 if (!checarPlanoAlcancavel()) process.exit(1);
 
+/* == TODO PROXIMO PASSO SALVO APARECE NA AGENDA (03/09/26) ===========================
+   Pedido do Julyan: "esse proximo passo, tem que ir pra agenda tbm". A tarefa datada vai
+   pro HubSpot na hora, mas o DATA.agenda da tela e um SNAPSHOT da ultima carga do robo —
+   entao quem salvava o passo ia olhar a Agenda, nao encontrava nada, e concluia (com
+   razao) que o Cockpit nao gravou.
+
+   O Cockpit salva proximo passo em CINCO lugares: desfecho de visita, ficha do negocio,
+   passagem de etapa, remarcacao apos motivo, e o "datar tarefa" do painel de acao da
+   Daily do gestor. Eu consertei UM na primeira passada e deixei quatro — inclusive o do
+   gestor, que era justamente o que ele tinha pedido.
+
+   Por isso a guarda, e nao a memoria: cada `tipoAcao: 'proximo-passo'` tem que ter uma
+   chamada a espelharPassoNaAgenda por perto. A janela e generosa (40 linhas) porque o
+   espelho vive no ramo de sucesso, que pode estar depois do tratamento de erro.
+
+   O que esta guarda NAO faz: verificar que o espelho recebe os argumentos certos. Isso
+   e o teste de tela — medido em 03/09 com o evento aparecendo as 09:00 como Follow-up e
+   agendaContaComoCompromisso() devolvendo true. */
+function checarEspelhoDoProximoPasso() {
+  const arquivo = 'template/cockpit.template.html';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  const linhas = cru.split(/\r?\n/);
+  /* JANELA MEDIDA, NAO CHUTADA. As distancias reais entre o fetch e o espelho nos cinco
+     sites, em 03/09: 9, 5, 50, 32 e 4 linhas. A da ficha e 50 porque o ramo de sucesso
+     dela passa pelo tratamento de erro e pelo espelho da qualificacao antes. 80 da folga
+     para um ramo crescer sem a guarda virar falso positivo, e continua curto o bastante
+     para nao alcancar o site seguinte (o menor intervalo entre sites e ~1.100 linhas). */
+  const JANELA = 80;
+  const orfaos = [];
+  let sites = 0;
+  linhas.forEach((linha, i) => {
+    if (linha.indexOf("tipoAcao: 'proximo-passo'") < 0) return;
+    sites++;
+    const trecho = linhas.slice(Math.max(0, i - 6), i + JANELA).join("\n");
+    if (trecho.indexOf('espelharPassoNaAgenda') < 0) {
+      orfaos.push((i + 1) + ": " + linha.trim().slice(0, 78));
+    }
+  });
+  if (!sites) {
+    console.error('PROXIMO PASSO: nenhum site de tipoAcao proximo-passo encontrado - a guarda perdeu o alvo.');
+    return false;
+  }
+  if (cru.indexOf('function espelharPassoNaAgenda') < 0) {
+    console.error('PROXIMO PASSO: espelharPassoNaAgenda() nao existe mais.');
+    return false;
+  }
+  if (orfaos.length) {
+    console.error('PROXIMO PASSO SEM ESPELHO NA AGENDA em ' + arquivo + ':');
+    orfaos.forEach(o => console.error('  linha ' + o));
+    console.error('  A tarefa vai pro HubSpot e a Agenda da tela e um snapshot: sem o espelho,');
+    console.error('  quem salva o passo vai olhar a Agenda, nao encontra nada, e conclui que');
+    console.error('  o Cockpit nao gravou. Chame espelharPassoNaAgenda no ramo de sucesso.');
+    return false;
+  }
+  console.log('OK proximo passo - os ' + sites + ' sites que salvam passo espelham na agenda.');
+  return true;
+}
+if (!checarEspelhoDoProximoPasso()) process.exit(1);
+
 /* ══ PISO DE DESKTOP QUE VIRA TETO NO TOQUE (02/09/26) ═══════════════════════════════
    Em 01/09 eu subi quatro campos para o piso de desktop com seletor de ID
    (#prosp2Ordenar, #devPdiData, #prcCliente, #prcTelefone -> min-height:38px). ID é
