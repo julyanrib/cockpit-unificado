@@ -168,13 +168,48 @@ async function main() {
       /usuario\.ownerId/.test(fonte) && /403/.test(fonte));
   });
 
+  /* ══ AS QUATRO ACOES DA DAILY (03/09/26, prancha §4) ══════════════════════════════
+     O painel de acao da rodada grava de verdade em quatro caminhos, e o que esta suite
+     guarda e que nenhum deles invente uma porta nova nem confie no cliente:
+
+     · datar tarefa e sugerir troca passam pela PORTA UNICA /api/negocio-acao, onde a
+       regra de dono do lib/hubspot-deal-guard.js ja e aplicada. Chamar o HubSpot direto
+       do navegador exporia o token e pularia a guarda.
+     · cobranca e reconhecimento gravam em public.registros_rodada, cuja policy de INSERT
+       exige role=manager E gestor_email = auth.email(). Testado no banco com JWT
+       simulado e rollback: gestor insere, rep e bloqueado, o dono le o registro sobre
+       ele, outro rep nao le.
+     · e o sucesso e declarado por EVIDENCIA (.select() e a linha ter voltado), nao por
+       ausencia de erro — o stub do preview local devolve { data: [], error: null } sem
+       chamar a rede, e a tela chegou a escrever "registrado" com a tabela vazia. */
+  const tpl = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
+  checar('datar tarefa passa pela porta unica, com data e tipoAcao de proximo passo',
+    /daily-datar-tarefa/.test(tpl) && /op: 'nota', dealId: dealId/.test(tpl)
+      && /tipoAcao: 'proximo-passo'/.test(tpl));
+  checar('sugerir troca usa tarefa-rota com sugeridoPorGestor, que e o marcador do ◆',
+    /op: 'tarefa-rota'/.test(tpl) && /sugeridoPorGestor: true/.test(tpl));
+  checar('as duas escritas do HubSpot NAO montam URL do HubSpot no navegador',
+    !/api\.hubapi\.com/.test(tpl.slice(tpl.indexOf('daily-datar-tarefa') - 3000, tpl.indexOf('daily-datar-tarefa') + 3000)));
+  checar('cobranca e reconhecimento gravam em registros_rodada assinando com a sessao',
+    /from\('registros_rodada'\)/.test(tpl) && /gestor_email: email/.test(tpl)
+      && /sessaoAtual && sessaoAtual\.email/.test(tpl));
+  checar('a escrita e idempotente pelo onConflict do UNIQUE (tipo, owner, dia)',
+    /onConflict: 'tipo,owner_id,data'/.test(tpl));
+  checar('sucesso por evidencia: pede a linha de volta e exige que ela venha',
+    /\.select\('id'\)/.test(tpl) && /não devolveu a linha gravada/.test(tpl));
+  checar('o desfazer tambem exige evidencia do que apagou',
+    /não havia registro para desfazer/.test(tpl));
+  checar('a falha vai para a tela, nunca ✓ silencioso',
+    /não gravou: /.test(tpl));
+
   if (falhas.length) {
     console.error('FALHAS (' + falhas.length + '):');
     falhas.forEach(f => console.error('  · ' + f));
     process.exit(1);
   }
   console.log('autorização de escrita: ' + ok + ' checagens ok — rep não toca no negócio do colega, '
-    + 'gestor toca no time, outro pipeline recusa, e as cinco ações mantêm a regra de dono.');
+    + 'gestor toca no time, outro pipeline recusa, as cinco ações mantêm a regra de dono, '
+    + 'e as quatro ações da Daily gravam pela porta única ou na tabela só-gestor, por evidência.');
 }
 
 main().catch(e => { console.error('erro na suíte:', e); process.exit(1); });
