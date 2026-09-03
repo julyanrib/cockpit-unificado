@@ -135,9 +135,26 @@ checar('supabase/migrations/*.sql e ignoravel, lib/*.sql nao',
     /^\S+\s+\S+\s+1\s+\*\s+\*$/.test(String(cronPlaces)),
     'nota e contagem de avaliacoes se movem em meses; semanal devolveria o mesmo conjunto e so pagaria a API');
 
-  checar('o corte de mais avaliado esta explicito e nao escondido numa query',
-    /const NOTA_MINIMA = 4\.5;/.test(places) && /const AVALIACOES_MINIMAS = 100;/.test(places),
-    'estes dois numeros decidem quem o executivo visita — mudar um muda a operacao');
+  /* ══ O CORTE DEIXOU DE TER NOTA (03/09/26) ══════════════════════════════════════════
+     Esta assercao exigia NOTA_MINIMA = 4.5, e estava certa no dia em que nasceu. O Julyan
+     mudou: "eu quero dos MAIS avaliados independente se sao bons ou ruins".
+
+     A razao dele e boa: nota mede EXPERIENCIA, avaliacoes medem TAMANHO. Uma casa com 3,2
+     e cinco mil avaliacoes e operacao grande com problema operacional — o melhor argumento
+     de venda que a Takeat tem. O corte antigo deixava de fora justamente quem mais precisa.
+
+     Entao a assercao passa a proteger o que sobrou de decisivo (o piso de volume) e, no
+     lugar do que saiu, GUARDA A AUSENCIA: se NOTA_MINIMA voltar a aparecer no script, e
+     porque alguem reintroduziu o filtro sem ler esta nota. */
+  checar('o piso de volume esta explicito e nao escondido numa query',
+    /const AVALIACOES_MINIMAS = 100;/.test(places),
+    'este numero decide quem o executivo visita — mudar muda a operacao');
+  checar('a nota NAO filtra: ela e informacao de abordagem, nao porteira',
+    !/NOTA_MINIMA/.test(places) && !/l\.nota <\s/.test(places),
+    'cortar por nota alta deixa de fora a operacao grande com problema operacional');
+  checar('a ordem e por avaliacoes decrescente — e o que faz "os MAIS avaliados" ser verdade',
+    /\(b\.avaliacoes \|\| 0\) - \(a\.avaliacoes \|\| 0\)/.test(places),
+    'sem a ordem, o teto cortaria ao acaso em vez de cortar pelo fim da fila');
 
   checar('cada cidade tem teto de lote',
     (places.match(/tetoMaximo:/g) || []).length >= 6 && /porPlaceId\.size >= tetoMaximo/.test(places),
@@ -155,9 +172,12 @@ checar('supabase/migrations/*.sql e ignoravel, lib/*.sql nao',
     /GOOGLE_PLACES_API_KEY ausente/.test(places) && /process\.exit\(1\)/.test(places),
     'rodada silenciosa que nao importa nada e pior que rodada que falha e avisa');
 
-  checar('sem nota ou sem avaliacoes o lead nao entra (ausencia nao vira zero)',
-    /l\.nota == null \|\| l\.avaliacoes == null/.test(places),
-    'tratar ausencia como zero reprovaria conta boa e aprovaria conta sem dado');
+  checar('sem avaliacoes o lead nao entra (ausencia nao vira zero)',
+    /if \(l\.avaliacoes == null\) continue;/.test(places),
+    'sem a contagem nao da para ORDENAR por mais avaliado, e ausencia nao e zero');
+  checar('sem NOTA o lead entra: volume sem media publicada nao e menos alvo',
+    !/l\.nota == null.*continue/.test(places),
+    'exigir nota descartaria conta com volume que so nao tem media no Google');
 
   checar('o Places nao cria Company nem Deal — entrega no importador',
     /api\/importar-leads/.test(places) && !/criar-negocio|criar-empresa/.test(places),
