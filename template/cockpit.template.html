@@ -13963,12 +13963,38 @@ const OP_PLANO_APRESENTADO = ['Básico (PDV + delivery)', 'Básico (PDV + mesa +
 const OP_PLANO_CONTRATADO = ['Básico', 'Básico (delivery e balcão)', 'Inovação', 'Inovação (delivery e balcão)', 'Profissional', 'Profissional (delivery e balcão)', 'Enterprise', 'Enterprise (delivery e balcão)', 'Upsell', 'Produtos Personalizados', 'Básico (Delivery)', 'Básico (PDV Balcão)', 'Básico (Delivery + PDV Balcão)', 'Intermediário (Delivery + PDV Balcão + PDV Mesa)', 'Apenas Cardapio'];
 const OP_ADICIONAL = ['Sem adicionais', 'Fiscal SN', 'Maquininha POS', 'Cashback', 'Tablet', 'IA Conversacional (TEKA)', 'Totem de Autoatendimento', 'Robô de Whatsapp', 'Multilojas', 'Campanhas Personalizadas', 'Fiscal LP / LR', 'IA de Fechamento', 'TEF', 'Precificação Dinâmica', 'Display ou Comandas', 'Dark Kitchen', 'Conciliação Bancária', 'Rota Inteligente'];
 const OP_MAIOR_DESAFIO = ['Problemas com Atendimento', 'Gestão Financeira', 'Problemas de Gestão', 'Problemas em Fidelizar o Cliente', 'Gerenciar várias lojas', 'Controle fiscal', 'Operação', 'Suporte do sistema'];
-/* Os seis valores REAIS da propriedade motivo_do_perdido no HubSpot (conferidos via
-   get_properties em 01/09/26). Não é lista de conveniência: é a mesma dimensão que
-   alimenta a assinatura de perda do executivo, onde hoje 403 de 974 perdas caem em
-   "Outros" — inventar um sétimo motivo aqui criaria uma fatia que nenhum gráfico conhece.
+/* ══ O MOTIVO DA PERDA FALA DA DECISAO DO CLIENTE (03/09/26) ═════════════════════════
+   Os valores REAIS da propriedade motivo_do_perdido no HubSpot, conferidos em 01/09 e
+   remedidos em 03/09 sobre os 981 perdidos dos ultimos 90 dias:
+
+     Outros                     410  (42%)
+     Sem retorno                293  (30%)
+     Nao quer mudar de sistema  196  (20%)
+     Preco                       67  ( 7%)
+     Funcionalidade              13  ( 1%)
+     Estorno (Reembolso)          2
+
+   SETENTA E DOIS POR CENTO nao sao decisao do cliente. "Outros" e o que se escolhe
+   quando o motivo real nao esta na lista, e "Sem retorno" nao e uma decisao contra nos —
+   e a ausencia de decisao: nunca chegamos a ela. Os dois juntos apagam a unica coisa que
+   uma derrota tem de aproveitavel.
+
+   DECISAO DO JULYAN EM 03/09: "Sem retorno" SAI daqui. Perda sem contato pertence a
+   `motivo_saida_cadencia`, propriedade que ja existe no HubSpot (e hoje esta vazia nos
+   5.218 negocios do pipeline). Duas consequencias, as duas desejadas: a assinatura de
+   perda do executivo passa a ser sobre venda, e a fila de cadencia ganha o numero real
+   de quem nunca atendeu.
+
+   ELA SO SAI DA OFERTA, nao do historico: os 293 negocios que ja tem "Sem retorno"
+   gravado continuam com ele, e os graficos que leem a propriedade continuam somando a
+   fatia. Remover opcao do seletor e seguro; INVENTAR opcao nao e — e por isso os outros
+   cinco valores nao foram tocados. Motivo novo ("contrato vigente com concorrente",
+   "medo de migrar", "decisor nao comprou a ideia") exige criar a opcao no HubSpot
+   primeiro, senao a gravacao falha ou nasce uma fatia que nenhum relatorio conhece.
    'Reembolso' aparece na tela do CRM como 'Estorno'; o valor gravado é 'Reembolso'. */
-const OP_MOTIVO_PERDA = ['Preço', 'Sem retorno', 'Não quer mudar de sistema', 'Funcionalidade', 'Reembolso', 'Outros'];
+const OP_MOTIVO_PERDA = ['Preço', 'Não quer mudar de sistema', 'Funcionalidade', 'Reembolso', 'Outros'];
+/* Os motivos que NAO explicam nada sozinhos e por isso exigem a observacao escrita. */
+const MOTIVOS_QUE_EXIGEM_TEXTO = ['Outros', 'Funcionalidade'];
 
 const CAMPOS_POR_ETAPA = {
   '1395880469': [
@@ -14063,7 +14089,16 @@ const CAMPOS_POR_ETAPA = {
   // descarta escolhe entre seis motivos, e a assinatura de perda do executivo passa a
   // ser construída pelo próprio executivo em vez de ficar em 'Sem motivo preenchido'.
   '1396006164': [
-    { prop: 'motivo_do_perdido', label: 'Por que perdeu', tipo: 'selecao', opcoes: OP_MOTIVO_PERDA, obrigatorio: true, largo: true }
+    { prop: 'motivo_do_perdido', label: 'Por que perdeu', tipo: 'selecao', opcoes: OP_MOTIVO_PERDA, obrigatorio: true, largo: true },
+    /* A OBSERVACAO SO E OBRIGATORIA ONDE A OPCAO NAO EXPLICA (03/09/26). Medido:
+       `observacao__desqualificado` esta VAZIA em 100% dos perdidos da janela de 90 dias —
+       ou seja, nem o texto livre salvava os 42% de "Outros". Exigir em todo perdido seria
+       atrito em 981 negocios por trimestre; exigir onde a opcao e generica cobra
+       exatamente o que falta. Em "Funcionalidade" a pergunta e QUAL, que e o que faz o
+       motivo virar pauta de produto em vez de estatistica. */
+    { prop: 'observacao__desqualificado', label: 'O que pesou na decisão dele', tipo: 'texto',
+      largo: true, obrigatorioSe: props => MOTIVOS_QUE_EXIGEM_TEXTO.indexOf(String(props.motivo_do_perdido || '')) >= 0,
+      dica: 'Em "Outros" e "Funcionalidade", escreva a frase dele. "Sócio decide e não atende", "usa Consumer com contrato até dezembro", "faltou integração com a balança" — isso volta como pauta. "Não quis" não conta.' }
   ]
 };
 
@@ -14199,8 +14234,15 @@ function coletarCamposPassagem(container, campos) {
       if (aviso) { aviso.textContent = msg; aviso.hidden = false; }
       if (!primeiroErro) primeiroErro = el;
     };
+    /* OBRIGATORIEDADE CONDICIONAL (03/09/26). `obrigatorio` e booleano estatico e nao
+       dava conta do caso real: a observacao da perda so e exigida quando o motivo
+       escolhido nao explica nada ("Outros", "Funcionalidade"). `obrigatorioSe` recebe as
+       propriedades JA coletadas — e por isso a ordem do array importa: o motivo vem antes
+       da observacao, e quando chega nela o motivo ja esta em `propriedades`. */
+    const exigido = campo.obrigatorio === true
+      || (typeof campo.obrigatorioSe === 'function' && campo.obrigatorioSe(propriedades));
     if (!valor) {
-      if (campo.obrigatorio) falhar('Preencha para avançar a etapa.');
+      if (exigido) falhar(campo.obrigatorioSe ? 'Este motivo não explica sozinho — escreva o que pesou.' : 'Preencha para avançar a etapa.');
       continue;
     }
     if (campo.tipo === 'numero') {

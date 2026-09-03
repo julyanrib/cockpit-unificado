@@ -98,18 +98,47 @@ checar('template: o campo do motivo é obrigatório na etapa Perdido',
 checar('template: motivo_do_perdido está em PROPS_GRAVAVEIS (senão a gravação é recusada)',
   /'reuniao_agendada', 'description', 'motivo_do_perdido'\]/.test(template));
 
-/* As seis opções da tela têm que ser as mesmas seis do servidor — e as duas listas têm
-   que ser as da propriedade real no HubSpot. Ordem pode diferir (na tela as mais usadas
-   vêm primeiro); o CONJUNTO, não. */
+/* ══ A REGRA MUDOU EM 03/09/26: SUBCONJUNTO, NAO IGUALDADE ═══════════════════════════
+   Ate 02/09 as duas listas tinham que ser identicas, e estava certo: as duas espelhavam
+   a propriedade real do HubSpot.
+
+   Em 03/09 o Julyan decidiu APOSENTAR "Sem retorno" do motivo de perda. Medido nos 981
+   perdidos dos ultimos 90 dias: "Outros" 410 (42%) e "Sem retorno" 293 (30%) — 72% dos
+   motivos nao sao decisao do cliente. "Sem retorno" nao e uma decisao contra nos, e a
+   AUSENCIA de decisao, e pertence a `motivo_saida_cadencia`.
+
+   O SERVIDOR CONTINUA ACEITANDO OS SEIS, e isso e deliberado. A lista dele e whitelist de
+   VALIDACAO: tirar um valor de la faz o HubSpot recusar qualquer escrita com ele — e o
+   Cockpit nao e o unico escritor. O PWA move negocio de etapa pela mesma porta
+   (mudar-etapa-negocio.js), e nao da para garantir daqui que ele nunca manda "Sem
+   retorno". Aposentar opcao quebrando o outro escritor seria trocar um problema de
+   relatorio por um problema de campo.
+
+   Entao a regra passa a ser: a tela e SUBCONJUNTO do servidor. O servidor tolera o que
+   existe (historico e outros escritores), a tela nao oferece o que aposentamos. E os 293
+   negocios que ja tem "Sem retorno" gravado continuam intactos.
+
+   O QUE ESTA GUARDA AINDA IMPEDE, que e o risco de verdade: a tela oferecer um valor que
+   o servidor recusa. Esse e o defeito que trava a passagem de etapa na cara do executivo,
+   e ele continua reprovando o build. */
 const opTela = lerLista(template, 'OP_MOTIVO_PERDA');
 const opServidorM = servidor.match(/motivo_do_perdido: \[([^\]]*)\]/);
 const opServidor = opServidorM ? opServidorM[1].split(',').map(x => x.trim().replace(/^'|'$/g, '')) : null;
-checar('template declara OP_MOTIVO_PERDA', Array.isArray(opTela) && opTela.length === 6);
+checar('template declara OP_MOTIVO_PERDA com as 5 que ficam',
+  Array.isArray(opTela) && opTela.length === 5,
+  opTela ? 'tela=[' + opTela.join(',') + ']' : 'nao achei a lista');
 if (opTela && opServidor) {
-  checar('as opções de motivo são o mesmo conjunto nos dois lados',
-    opTela.slice().sort().join('|') === opServidor.slice().sort().join('|'),
+  checar('toda opção da tela é aceita pelo servidor (subconjunto)',
+    opTela.every(o => opServidor.indexOf(o) >= 0),
     'tela=[' + opTela.join(',') + '] servidor=[' + opServidor.join(',') + ']');
+  checar('"Sem retorno" saiu da tela e ficou no servidor',
+    opTela.indexOf('Sem retorno') < 0 && opServidor.indexOf('Sem retorno') >= 0,
+    'a tela não pode mais oferecer, e o servidor não pode recusar o que já foi gravado');
 }
+checar('a observação da perda é exigida onde a opção não explica',
+  /MOTIVOS_QUE_EXIGEM_TEXTO/.test(template)
+    && /obrigatorioSe/.test(template) && /observacao__desqualificado/.test(template),
+  'sem isso os 42% de "Outros" seguem sem uma palavra de explicação');
 
 /* ── 4. as isenções da regra de pulo: Perdido e Reciclagem, nos dois sentidos ─────── */
 checar('servidor: Reciclagem isenta da regra de pulo nos dois sentidos',
