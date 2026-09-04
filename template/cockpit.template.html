@@ -22408,23 +22408,36 @@ function pl6Reciclagem(rep, regioes) {
   return bruto
     .filter(l => String(l.ownerId) === String(rep.ownerId))
     .map(function (l) {
+      const lat = l.lat != null ? Number(l.lat) : null;
+      const lng = l.lng != null ? Number(l.lng) : null;
+      const temPonto = lat != null && lng != null && !isNaN(lat) && !isNaN(lng);
+      /* REGIAO POR DISTANCIA quando ha ponto — igual a carteira. O Expogo grava a
+         coordenada no check-in, e 51 dos 336 negocios da etapa a tem; essas entram na
+         rota do dia de verdade, ordenadas por km.
+         O FALLBACK POR NOME DE BAIRRO fica para quem nunca foi visitado: sem ele essas
+         contas sairiam do filtro de territorio e desapareceriam da tela — e sumir
+         calado e o que faz o executivo achar que a conta deixou de existir. */
+      const porPonto = temPonto ? pl6RegiaoDe(lat, lng, regioes) : null;
       const ch = l.bairro ? pl6ChaveBairro(l.bairro) : null;
-      const reg = ch && porChave.has(ch) ? porChave.get(ch) : null;
+      const porNome = ch && porChave.has(ch) ? porChave.get(ch) : null;
+      const reg = porPonto || porNome;
       return {
         id: 'r-' + l.id,
         tipo: 'c',
         dealId: String(l.id),
         nome: l.name || l.dealname || 'Sem nome',
-        stageId: '',
+        stageId: String(l.stageId || ''),
         etapa: 'Reciclagem',
         dias: l.dias != null ? Number(l.dias) : null,
+        /* 60+ dias parado E o critério desta lista: o `sla` diz a verdade sobre o
+           estado, e a ordenacao por `dias` e que os poe na frente. */
         sla: true,
-        lat: null,
-        lng: null,
+        lat: temPonto ? lat : null,
+        lng: temPonto ? lng : null,
         regiao: reg ? reg.chave : null,
         regiaoNome: reg ? reg.nome : (l.bairro || null),
-        km: null,
-        semEndereco: true,
+        km: porPonto ? porPonto.km : null,
+        semEndereco: !temPonto,
         proximaAtividade: null,
         reciclagem: true
       };
