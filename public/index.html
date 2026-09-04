@@ -38135,6 +38135,9 @@ function dl2LinhaDoDia(r, linhaHoje) {
      achar que a lista está viva. */
   const eventos = (typeof d4EventosDeHoje === 'function' ? d4EventosDeHoje(r.ownerId) : []) || [];
   return { fonte: 'robo', linhas: eventos.map(ev => ({
+    /* `ev.hora` vem pronta de d4EventosDeHoje desde 03/09 — ela NAO existe no evento
+       normalizado cru, e por isso a linha do dia ficava sem horario nenhum. A hora agora
+       sai da fonte, para nao depender de cada leitor lembrar. */
     nome: ev.cliente || 'compromisso', estado: 'fila', hora: ev.hora || null,
     horaRegistro: null, pontua: false, id: null
   })) };
@@ -39463,7 +39466,24 @@ const D4_BADGES = {
 /* Compromissos de hoje, do mesmo snapshot que a Agenda usa. */
 function d4EventosDeHoje(ownerId) {
   if (typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
-  const hojeK = agendaChave(new Date());
+  /* ══ "HOJE" AQUI ERA O DIA ERRADO DAS 21h À MEIA-NOITE (achado em 03/09/26) ══════════
+     Era `agendaChave(new Date())`. agendaChave lê as partes UTC, e às 21:56 de Brasília o
+     instante cru já está em 2026-09-04 — enquanto o resto da Daily usa
+     `isoDate(new Date())`, que dá 2026-09-03. Duas definições de "hoje" na MESMA tela.
+
+     MEDIDO ao vivo: registrei uma visita para hoje 15:00, ela normalizou certo (chave
+     2026-09-03, dono certo, tipo rota, conta:true) e esta função a descartou, porque
+     comparava com 2026-09-04. A linha do dia da Daily ficava VAZIA — e, pior, os
+     compromissos de amanhã apareceriam como sendo de hoje.
+
+     A janela é todo dia útil das 21h à meia-noite: exatamente quando o executivo fecha o
+     dia na rua e abre a Daily para ver o que ainda tem.
+
+     agendaAgora() é o padrão que este arquivo já usa nos outros TRÊS lugares que fazem
+     esta mesma pergunta (o card de hoje, o placar do time e a trava da promessa): ele
+     devolve a hora de Brasília independente do relógio do aparelho, e aí as partes UTC
+     que agendaChave lê são a data de Brasília. Esta era a única que estava fora do padrão. */
+  const hojeK = agendaChave(agendaAgora());
   return (agendaNormalizar(DATA.agenda) || [])
     .filter(e => String(e.ownerId || '') === String(ownerId))
     .filter(e => e.inicio && agendaChave(e.inicio) === hojeK)
@@ -39473,6 +39493,21 @@ function d4EventosDeHoje(ownerId) {
     .filter(e => typeof agendaContaComoCompromisso === 'function'
       ? agendaContaComoCompromisso(e)
       : !!(AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta))
+    /* ══ A HORA VEM DAQUI, E NAO DE CADA LEITOR (03/09/26) ═════════════════════════════
+       O evento normalizado NAO TEM a propriedade `hora` — medido: 'hora' in ev === false.
+       Ela vive em .inicio e se le com agendaHhmm(). Os DOIS consumidores desta funcao
+       liam `ev.hora` e recebiam undefined:
+         · a linha do dia da Daily mostrava os clientes SEM HORARIO
+         · o card "SUA AGENDA DE HOJE" imprimia um <b> vazio no lugar da hora
+       e a ordenacao aqui comparava '' com '' em todos os pares, ou seja NAO ORDENAVA:
+       o compromisso de 15:00 podia vir antes do de 08:00.
+
+       Remendar os dois leitores deixaria o terceiro — o que alguem escrever amanha — com
+       o mesmo defeito, e ele nao aparece em teste: a tela renderiza, so sem a hora. Por
+       isso a hora passa a sair DAQUI, pronta, para todo consumidor. */
+    .map(function (e) {
+      return Object.assign({}, e, { hora: agendaHhmm(e.inicio) });
+    })
     .sort((a, b) => String(a.hora || '').localeCompare(String(b.hora || '')));
 }
 
