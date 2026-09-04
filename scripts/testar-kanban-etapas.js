@@ -175,7 +175,24 @@ checar('soltar NÃO move: abre o registro rápido',
    rápido reimplementou a sequência inteira de escrita — PATCH da etapa, nota, tarefa,
    espelho local — e virou a terceira chamada de op:'mudar-etapa' no arquivo. Duas cópias
    da mesma sequência é como se perde a correção feita numa delas. Ficou uma função só,
-   gravarPassagemDeEtapa, e as duas telas a chamam. */
+   gravarPassagemDeEtapa, e as duas telas a chamam.
+
+   ══ ELA PEGOU O DEFEITO DE NOVO EM 04/09/26 ════════════════════════════════════════
+   O «✕ marcar perdido» da ficha do Planejamento (prancha 6c) nasceu com o fetch escrito
+   à mão — a QUARTA chamada a op:'mudar-etapa' — e a irmã abaixo o pegou. Estava certa: à
+   mão eu perdia o confirmarEtapaGravada, que PERGUNTA ao HubSpot se gravou depois de um
+   abort em vez de chutar (a espera que a Kelly perdeu em 11:03 sobre um negócio que TINHA
+   sido gravado).
+
+   E O CONTADOR AQUI CONTINUOU EM 2, o que é o melhor sinal possível: a correção final não
+   foi a ficha chamar gravarPassagemDeEtapa, foi ela entrar por abrirPassagemDeEtapa —
+   que já chama. Assim a ficha ganhou de graça a porteira CAMPOS_POR_ETAPA, e é por isso
+   que o «marcar perdido» pede motivo_do_perdido como qualquer outra transição (04/09/26,
+   Julyan: "manter todas as propriedades do hubspot por etapa... o gestor precisa dos
+   dados de tudo q é feito").
+
+   Se algum dia este número precisar subir, subir exige vir aqui e dizer qual tela e por
+   quê — mas desconfie: telas que entram pelo painel de passagem não mexem nele. */
 checar('existe UMA função de escrita de passagem de etapa',
   template.indexOf("async function gravarPassagemDeEtapa(opts) {") > 0);
 checar('as duas telas chamam a mesma função',

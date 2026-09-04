@@ -1677,3 +1677,26 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ══ GUARDA 21 — CSS PARA CLASSE QUE NENHUM MARKUP GERA (04/09/26) ════════════════════
+   A irmã da guarda 7 (`checarSeletoresDeFiacao`), medindo a direção oposta: aquela pega
+   classe usada em querySelector e nunca gerada — fiação que não alcança nada; esta pega
+   regra de estilo sem markup — CSS descrevendo tela que não existe.
+
+   O CASO: a prancha 6c moveu o agendar do Planejamento para dentro da ficha, e o painel
+   empilhado do card saiu. Ficaram 40 linhas de CSS de `.pl6-card-cta`, `.pl6-sel*` e
+   `.pl6-end*`. Não quebrava nada — e por isso é caro: o comentário "a saída de emergência
+   não disputa com o caminho bom" continuava lá, convencendo quem lê de que o card ainda tem
+   dois botões.
+   E ela escondia perda REAL: a lista de `min-height:44px` do bloco de celular — o piso de
+   dedo, para quem usa isto na rua — listava os quatro botões mortos e nenhum botão da tela
+   nova, que nasceu com alvos de 30px. A lista parecia preenchida.
+
+   Arquivo próprio pelo mesmo motivo da 20: ela lê só o conteúdo dos <style> e com outra
+   gramática. Na primeira execução achou duas que eu não conhecia, no Meu funil. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-css-sem-markup.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
