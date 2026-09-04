@@ -13793,10 +13793,10 @@ function wireRegistroDeDesfecho(container, lead, st) {
           // impedir — então avisa alto e mantém o negócio na fila.
           avisoPasso = (dPasso && dPasso.erro) || 'Desfecho gravado, mas o próximo passo NÃO foi criado.';
         } else {
-          /* Ver espelharPassoNaAgenda: sem isto o passo do desfecho so apareceria na
+          /* Ver espelharPassoNasTelas: sem isto o passo do desfecho so apareceria na
              agenda na proxima carga do robo, e quem acabou de registrar concluiria que
              nao gravou. */
-          espelharPassoNaAgenda(lead, passoFinal.data, tipoPasso, lead.ownerId);
+          espelharPassoNasTelas(lead, passoFinal.data, tipoPasso, lead.ownerId);
         }
       }
 
@@ -16908,8 +16908,8 @@ function fn3Ligar(el, redesenhar) {
     }
     /* O ESPELHO NA AGENDA: a mesma tarefa passa a existir na Minha Daily e no
        Planejamento, que leem a agenda — sem isto o passo existiria so no HubSpot. */
-    if (typeof espelharPassoNaAgenda === 'function') {
-      espelharPassoNaAgenda({ id: String(lead.id), name: lead.name, bairro: lead.bairro,
+    if (typeof espelharPassoNasTelas === 'function') {
+      espelharPassoNasTelas({ id: String(lead.id), name: lead.name, bairro: lead.bairro,
         cidade: lead.cidade, lat: lead.lat, lng: lead.lng }, dataISO, tipo, lead.ownerId);
     }
     /* E O ESPELHO NO DATA, pela funcao unica — o chip fica verde na hora. Sem isto ele
@@ -21974,8 +21974,119 @@ let agwNovoAberto = null;
    O TIPO E TRADUZIDO do rotulo do HubSpot ("Follow-up"/"Visita"/"Reuniao"/"Demo") para a
    chave de AGENDA_TIPOS. Demo cai em reuniao porque demo e reuniao marcada, nao rua.
    Errar isto pinta na faixa de visita um compromisso que e de telefone. */
-function espelharPassoNaAgenda(lead, dataISO, tipoPasso, ownerId) {
+/* ══ O PASSO ENTRA NA SEMANA DELE (04/09/26, Julyan) ══════════════════════════════════
+   "quando ele marcar o proximo passo obrigatoriamente tem que ir pra agenda semanal dele,
+   tem q ir pra daily tbm, ou seja, tudo tem q se conversar."
+
+   MEDIDO: o passo chegava no HubSpot e na Agenda, e NÃO chegava na grade semanal do
+   Planejamento. A Daily herdava o furo porque `d7PlanoDeHoje` LÊ a grade — então ele
+   datava a visita na ficha e, na segunda, o Planejamento mostrava o horário livre e a
+   Daily mostrava o dia vazio. Duas telas negando um compromisso que ele acabou de marcar.
+
+   A GRADE É INTENÇÃO e a tarefa é o compromisso; as duas têm de dizer a mesma coisa. Quem
+   escreve aqui é o passo, então a data do passo é o plano.
+
+   O QUE ELA RECUSA, e devolve dito em vez de fingir:
+     `fora`   — a data cai fora da semana em foco. A grade é UMA semana; forçar seria
+                plano falso. A tarefa segue no CRM e na agenda.
+     `cheio`  — o dia não tem faixa livre. Empurrar alguém seria decidir por ele.
+     `foraDaMunicao` — o negócio não está em pl6TodasAsContas (um Perdido, por exemplo).
+                Slot com id que a munição não conhece é a "órfã" que a grade já desenha;
+                fabricar uma de propósito seria criar o defeito. */
+async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
+  if (!lead || !dataISO || !ownerId) return { nada: true };
+  if (typeof pl6Dias !== 'function' || typeof pl6Gravar !== 'function') return { nada: true };
+  const rep = (DATA.reps || []).find(x => String(x.ownerId) === String(ownerId));
+  if (!rep) return { nada: true };
+
+  /* A SEMANA EM FOCO, pela mesma regra de todo mundo: pl6SegundaDaSemana vira na sexta
+     às 17h de Brasília. Um passo para segunda que vem, marcado numa sexta à noite, cai
+     DENTRO da semana em foco — e é isso que se quer. */
+  const dias = pl6Dias(pl6SegundaDaSemana());
+  const di = dias.findIndex(d => String(d.iso) === String(dataISO));
+  if (di < 0) return { fora: true, semana: dias[0] && dias[0].data };
+
+  const idNaGrade = 'c-' + String(lead.id);
+  /* A MUNIÇÃO TEM DE CONHECER O ID: pl6TodasAsContas monta os ids da grade, e slot com
+     id desconhecido é órfão. */
+  let conhecido = false;
+  try {
+    conhecido = pl6TodasAsContas(rep, pl6Regioes(rep)).some(l => l.id === idNaGrade);
+  } catch (e) { conhecido = false; }
+  if (!conhecido) return { foraDaMunicao: true };
+
+  /* O PLANO ATUAL, LIDO ANTES DE ESCREVER. O passo pode ser salvo do Meu funil ou da
+     Agenda, onde o Planejamento nunca foi carregado nesta sessão — e gravar sobre um
+     `pl6Plano` nulo apagaria a semana inteira dele. */
+  try { await pl6Carregar(rep); } catch (e) { return { erro: 'não consegui ler seu plano da semana' }; }
+  const grade = pl6GradeDoPlano();
+
+  /* SAI DE ONDE ESTAVA: a data do passo é o plano novo, então ele MUDA de lugar em vez
+     de aparecer duas vezes na mesma semana. */
+  let tirouDe = null;
+  for (let d = 0; d < grade.length; d++) {
+    for (let sl = 0; sl < grade[d].length; sl++) {
+      if (pl6SlotId(grade[d][sl]) === idNaGrade) { grade[d][sl] = null; tirouDe = { d: d, sl: sl }; }
+    }
+  }
+
+  /* A FAIXA: a que contém a hora combinada, ou a primeira livre do dia. `pl6HoraNaFaixa`
+     não existe — a faixa é escolhida comparando o texto 'HH:MM' das sete, que é o mesmo
+     critério que o slot usa para guardar { id, hora }. */
+  const livre = sl => !pl6SlotId(grade[di][sl]) && !pl6SlotBloqueado(grade[di][sl])
+    && !pl6SlotRua(grade[di][sl]);
+  let si = -1;
+  if (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) {
+    /* a última faixa que começa ANTES ou NA hora combinada: 11:15 entra na faixa das
+       10:30, que é onde o executivo a veria na tela. */
+    for (let k = 0; k < PL6_HORAS.length; k++) {
+      if (String(PL6_HORAS[k]) <= String(hora) && livre(k)) si = k;
+    }
+  }
+  if (si < 0) { for (let k = 0; k < PL6_HORAS.length; k++) { if (livre(k)) { si = k; break; } } }
+  if (si < 0) {
+    /* dia cheio: devolve o lead para onde estava, senão eu o tiro do plano sem pôr em
+       lugar nenhum — e aí o passo some da semana em vez de mudar de dia. */
+    if (tirouDe) grade[tirouDe.d][tirouDe.sl] = idNaGrade;
+    return { cheio: true, dia: dias[di].rot };
+  }
+
+  /* A HORA COMBINADA VIVE DENTRO DA FAIXA, no formato { id, hora } que a grade já
+     entende — e é assim que a Daily e a tela do gestor mostram 11:15 e não 10:30. */
+  const horaDaFaixa = PL6_HORAS[si];
+  grade[di][si] = (hora && String(hora) !== String(horaDaFaixa))
+    ? { id: idNaGrade, hora: String(hora) } : idNaGrade;
+
+  const r = await pl6Gravar(rep, { grade: grade });
+  if (r.error) return { erro: r.error.message || 'o Supabase recusou' };
+  return { ok: true, dia: dias[di].rot, data: dias[di].data,
+    hora: hora && String(hora) !== String(horaDaFaixa) ? String(hora) : horaDaFaixa,
+    mudouDeLugar: !!tirouDe };
+}
+
+/* ══ O ESPELHO DAS TELAS ══════════════════════════════════════════════════════════════
+   Ela chamava `espelharPassoNaAgenda` e só espelhava na agenda. Desde 04/09/26 ela
+   espelha também na GRADE SEMANAL — e a Daily vem de graça, porque d7PlanoDeHoje lê a
+   grade. O nome mudou porque o antigo passaria a mentir.
+
+   A GUARDA 11 é o que faz isso valer para sempre: ela varre todo site com
+   `tipoAcao: 'proximo-passo'` e reprova o build se ele não chamar esta função. Um site
+   novo não tem como esquecer nenhum dos dois espelhos. */
+function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
   if (!lead || !dataISO || !ownerId) return;
+  /* A GRADE, SEM SEGURAR QUEM CHAMOU. Espelhar é complemento: a tarefa já está no CRM,
+     e travar o retorno do passo numa escrita do Supabase transformaria o complemento em
+     requisito. Falha só fala quando é falha de verdade — os casos `fora`, `cheio` e
+     `foraDaMunicao` são recusas legítimas e silenciosas: a agenda e o CRM têm o dado. */
+  Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId))
+    .then(function (r) {
+      if (!r || !r.erro) return;
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('A tarefa está no HubSpot ✓, mas não entrou no seu plano da semana ('
+          + r.erro + '). Ponha a visita no dia pelo Planejamento.', 'atencao');
+      }
+    })
+    .catch(function (e) { console.error('Espelho do passo no plano semanal:', e && e.message); });
   const rot = String(tipoPasso || '').toLowerCase();
   const tipo = (rot.indexOf('reuni') >= 0 || rot.indexOf('demo') >= 0) ? 'reuniao'
     : rot.indexOf('visita') >= 0 ? 'rota'
@@ -32636,7 +32747,7 @@ async function gravarPassagemDeEtapa(opts) {
       const dp = await rp.json().catch(() => ({}));
       if (rp.ok && dp.ok) {
         saida.passoOk = true;
-        espelharPassoNaAgenda(lead, opts.passoData, opts.passoTipo || 'Follow-up', lead.ownerId);
+        espelharPassoNasTelas(lead, opts.passoData, opts.passoTipo || 'Follow-up', lead.ownerId);
       }
       else saida.erroPasso = (dp && dp.erro) || 'o HubSpot recusou a criação da tarefa';
     } catch (e) { saida.erroPasso = String((e && e.message) || e); }
@@ -33335,7 +33446,7 @@ function wireFichaLeadFunilEdicao(container, l) {
            HORA 09:00 porque e a hora que o Cockpit grava toda tarefa datada (12:00 UTC,
            ver api/criar-nota-negocio.js) — inventar outra faria o espelho e o dado real
            divergirem por um dia inteiro na grade horaria. */
-        espelharPassoNaAgenda({ id: dealId, name: l.name, bairro: l.bairro, cidade: l.cidade, lat: l.lat, lng: l.lng }, data, passoTipoAtivo, l.ownerId);
+        espelharPassoNasTelas({ id: dealId, name: l.name, bairro: l.bairro, cidade: l.cidade, lat: l.lat, lng: l.lng }, data, passoTipoAtivo, l.ownerId);
         const dataBRPasso = String(data).split('-').reverse().join('/');
         statusEl.textContent = `Próximo passo salvo — já está na sua Agenda em ${dataBRPasso}.`;
         statusEl.style.color = 'var(--green)';
@@ -46603,10 +46714,10 @@ async function renderDaily() {
             }), 9000, 'daily-datar-tarefa');
             const dd = await rr.json().catch(() => ({}));
             if (!rr.ok || !dd.ok) throw new Error((dd && dd.erro) || 'O HubSpot não aceitou a tarefa.');
-            /* Ver espelharPassoNaAgenda. A tarefa que o GESTOR data pelo painel da Daily
+            /* Ver espelharPassoNasTelas. A tarefa que o GESTOR data pelo painel da Daily
                e do executivo, e tem que aparecer na agenda DELE na hora — senao a proxima
                tela que o gestor abre continua dizendo que o negocio esta descoberto. */
-            espelharPassoNaAgenda({ id: dealId, name: nome }, dailyRefDate, 'Follow-up', owner);
+            espelharPassoNasTelas({ id: dealId, name: nome }, dailyRefDate, 'Follow-up', owner);
             btn.classList.add('is-feito'); btn.textContent = '✓ datada ' + hhmm;
             dizer('tarefa datada no HubSpot · ' + hhmm, 'is-feito');
             if (typeof mostrarToast === 'function') mostrarToast('Tarefa datada em ' + nome + ' — já está no funil dele.', 'sucesso');

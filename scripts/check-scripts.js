@@ -564,8 +564,24 @@ if (!checarModoTv()) process.exit(1);
    gestor, que era justamente o que ele tinha pedido.
 
    Por isso a guarda, e nao a memoria: cada `tipoAcao: 'proximo-passo'` tem que ter uma
-   chamada a espelharPassoNaAgenda por perto. A janela e generosa (40 linhas) porque o
-   espelho vive no ramo de sucesso, que pode estar depois do tratamento de erro.
+   chamada ao espelho por perto. A janela e generosa (40 linhas) porque o espelho vive no
+   ramo de sucesso, que pode estar depois do tratamento de erro.
+
+   ══ E AGORA SAO DOIS ESPELHOS, EM 04/09/26 ═══════════════════════════════════════════
+   Julyan: "quando ele marcar o proximo passo obrigatoriamente tem que ir pra agenda
+   semanal dele, tem q ir pra daily tbm, ou seja, tudo tem q se conversar."
+
+   MEDIDO: o passo chegava no HubSpot e na Agenda, e NAO chegava na grade semanal do
+   Planejamento. A Daily herdava o furo, porque `d7PlanoDeHoje` LE a grade — ele datava a
+   visita na ficha e na segunda o Planejamento mostrava o horario livre e a Daily mostrava
+   o dia vazio. Duas telas negando um compromisso que ele acabou de marcar.
+
+   A FUNCAO MUDOU DE NOME de proposito: `espelharPassoNaAgenda` -> `espelharPassoNasTelas`,
+   porque ela passou a gravar no Supabase (planos_semanais) e o nome antigo mentiria. E o
+   espelho da grade mora DENTRO dela — nao num sexto lugar para lembrar. Esta guarda ja
+   obriga os cinco sites a chamar uma funcao; pendurando o segundo espelho na primeira,
+   nenhum site novo tem como esquecer. Um sexto ponto seria a sexta chance de esquecer, e
+   a cicatriz disso esta escrita tres paragrafos acima.
 
    O que esta guarda NAO faz: verificar que o espelho recebe os argumentos certos. Isso
    e o teste de tela — medido em 03/09 com o evento aparecendo as 09:00 como Follow-up e
@@ -573,7 +589,14 @@ if (!checarModoTv()) process.exit(1);
 function checarEspelhoDoProximoPasso() {
   const arquivo = 'template/cockpit.template.html';
   const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
-  const linhas = cru.split(/\r?\n/);
+  /* MASCARA OS COMENTARIOS ANTES DE CONTAR OS SITES (04/09/26). Ela contava 5 e passou a
+     contar 6 quando eu escrevi um comentario explicando a propria guarda — a explicacao
+     cita `tipoAcao: 'proximo-passo'` em prosa, e a linha virou um site fantasma.
+     Passou por acaso, porque o fantasma nasceu perto da funcao que chama o espelho. O
+     risco real e o inverso: um comentario com a forma certa perto de um site ORFAO faria
+     a guarda aprovar o orfao. E o mesmo falso positivo que derrubou a primeira versao da
+     guarda do "hoje da agenda", e o mascarador dela ja existe. */
+  const linhas = mascararComentarios(cru).split(/\r?\n/);
   /* JANELA MEDIDA, NAO CHUTADA. As distancias reais entre o fetch e o espelho nos cinco
      sites, em 03/09: 9, 5, 50, 32 e 4 linhas. A da ficha e 50 porque o ramo de sucesso
      dela passa pelo tratamento de erro e pelo espelho da qualificacao antes. 80 da folga
@@ -586,7 +609,7 @@ function checarEspelhoDoProximoPasso() {
     if (linha.indexOf("tipoAcao: 'proximo-passo'") < 0) return;
     sites++;
     const trecho = linhas.slice(Math.max(0, i - 6), i + JANELA).join("\n");
-    if (trecho.indexOf('espelharPassoNaAgenda') < 0) {
+    if (trecho.indexOf('espelharPassoNasTelas') < 0) {
       orfaos.push((i + 1) + ": " + linha.trim().slice(0, 78));
     }
   });
@@ -594,8 +617,8 @@ function checarEspelhoDoProximoPasso() {
     console.error('PROXIMO PASSO: nenhum site de tipoAcao proximo-passo encontrado - a guarda perdeu o alvo.');
     return false;
   }
-  if (cru.indexOf('function espelharPassoNaAgenda') < 0) {
-    console.error('PROXIMO PASSO: espelharPassoNaAgenda() nao existe mais.');
+  if (cru.indexOf('function espelharPassoNasTelas') < 0) {
+    console.error('PROXIMO PASSO: espelharPassoNasTelas() nao existe mais.');
     return false;
   }
   if (orfaos.length) {
@@ -603,10 +626,31 @@ function checarEspelhoDoProximoPasso() {
     orfaos.forEach(o => console.error('  linha ' + o));
     console.error('  A tarefa vai pro HubSpot e a Agenda da tela e um snapshot: sem o espelho,');
     console.error('  quem salva o passo vai olhar a Agenda, nao encontra nada, e conclui que');
-    console.error('  o Cockpit nao gravou. Chame espelharPassoNaAgenda no ramo de sucesso.');
+    console.error('  o Cockpit nao gravou. Chame espelharPassoNasTelas no ramo de sucesso.');
     return false;
   }
-  console.log('OK proximo passo - os ' + sites + ' sites que salvam passo espelham na agenda.');
+  /* O SEGUNDO ESPELHO TEM DE EXISTIR: sem ele o nome da funcao mente e a grade
+     semanal volta a ficar sem a visita que ele acabou de datar. */
+  if (cru.indexOf('async function espelharPassoNoPlanoSemanal') < 0) {
+    console.error('PROXIMO PASSO: espelharPassoNoPlanoSemanal() nao existe — a grade semanal');
+    console.error('  volta a nao receber o passo, e a Daily com ela (d7PlanoDeHoje le a grade).');
+    return false;
+  }
+  /* Sem regex: a distancia entre a assinatura e a chamada e o que importa, e `indexOf`
+     mede isso sem depender de escape — foi um patch com barra invertida comida que
+     produziu esta linha errada na primeira tentativa. */
+  const iAssin = cru.indexOf('function espelharPassoNasTelas(');
+  /* A BUSCA COMECA NA ASSINATURA, e nao no inicio do arquivo: a DEFINICAO de
+     espelharPassoNoPlanoSemanal fica ACIMA dela, e um indexOf ingenuo achava a definicao,
+     concluia "esta antes" e reprovava um codigo correto. */
+  const iChama = iAssin < 0 ? -1 : cru.indexOf('espelharPassoNoPlanoSemanal(', iAssin);
+  if (iAssin < 0 || iChama < 0 || iChama - iAssin > 900) {
+    console.error('PROXIMO PASSO: espelharPassoNasTelas nao chama o espelho da grade.');
+    console.error('  Os dois espelhos moram juntos de proposito: um sexto lugar para lembrar');
+    console.error('  seria a sexta chance de esquecer.');
+    return false;
+  }
+  console.log('OK proximo passo - os ' + sites + ' sites espelham na agenda E na grade semanal.');
   return true;
 }
 if (!checarEspelhoDoProximoPasso()) process.exit(1);
