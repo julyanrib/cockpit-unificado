@@ -5192,11 +5192,55 @@
   .fn3-cta.is-pagto{background:#157A5C;color:#fff;border-color:#157A5C;
     box-shadow:0 2px 6px rgba(21,122,92,.3);}
   .fn3-cta.is-pagto:hover{background:#0E5A43;}
+  /* ── o chip de valor no cartao (04/09/26) ──────────────────────────────────────
+     AMBAR E TRACEJADO quando falta, verde quando tem: e a mesma gramatica do "sem
+     proximo passo" desta tela, porque e a mesma natureza — falta um dado que o CRM
+     precisa. Medido: 34 dos 37 negocios do Bruno estao sem MRR, e por isso a aba nao
+     conseguia dizer quanto dinheiro esta em jogo. */
+  .fn3-card-valor{margin:5px 0 0;}
+  .fn3-valor{min-height:26px;padding:0 9px;border-radius:var(--r-pill);cursor:pointer;
+    font:800 10.5px var(--font-body);font-variant-numeric:tabular-nums;}
+  .fn3-valor.is-sem{border:1.5px dashed var(--amber);background:var(--amber-soft);
+    color:var(--amber-ink);}
+  .fn3-valor.is-sem:hover{border-style:solid;}
+  .fn3-valor.is-tem{border:1px solid var(--green);background:var(--green-soft);color:var(--green);}
+  .fn3-valor-pick{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding:6px;
+    border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);}
+  .fn3-valor-op{min-height:30px;padding:0 8px;border:1px solid var(--line-btn);
+    border-radius:var(--r-sm);background:var(--panel);color:var(--ink);cursor:pointer;
+    font:800 11px var(--font-body);font-variant-numeric:tabular-nums;text-align:left;}
+  .fn3-valor-op:hover{border-color:var(--green);color:var(--green);}
+  .fn3-valor-op span{display:block;font:700 8.5px var(--font-body);color:var(--muted2);}
+  .fn3-valor-outro{display:flex;gap:4px;align-items:center;}
+  .fn3-valor-in{width:66px;min-height:30px;padding:0 7px;border:1px solid var(--line-btn);
+    border-radius:var(--r-sm);background:var(--panel);color:var(--ink);
+    font:800 11px var(--font-body);font-variant-numeric:tabular-nums;}
+  .fn3-valor-in:focus{outline:none;border-color:var(--green);}
+  .fn3-valor-ok{min-height:30px;padding:0 10px;border:1px solid var(--green);
+    border-radius:var(--r-sm);background:var(--green);color:var(--panel);cursor:pointer;
+    font:800 10.5px var(--font-body);}
+  .fn3-valor-pe{flex-basis:100%;font:700 9px var(--font-body);color:var(--muted2);}
   .fn3-mais{flex:none;width:38px;height:38px;border-radius:var(--r-pill);
     border:1px solid var(--line);background:none;cursor:pointer;display:grid;place-items:center;
     font:900 13px var(--font-body);color:var(--ter);
     transition:background var(--t-base) var(--ease),color var(--t-base) var(--ease);}
   .fn3-mais:hover{background:var(--panel2);color:var(--ink);}
+
+  /* ── OS DOIS PASSOS DA ETAPA (04/09/26) ──────────────────────────────────────────
+     Linha propria, e de PESO MENOR que a CTA de cima: a CTA e a sugestao do que fazer
+     agora, e estes dois sao o registro do que aconteceu. Se tivessem o mesmo peso, a
+     hierarquia do cartao sumiria e o executivo leria tres botoes iguais. */
+  .fn3-passos{display:flex;gap:6px;margin-top:6px;}
+  .fn3-passo{flex:1;min-width:0;min-height:32px;border-radius:var(--r-pill);
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--line);background:transparent;cursor:pointer;
+    font:800 11px var(--font-body);padding:0 8px;
+    transition:background var(--t-base) var(--ease),color var(--t-base) var(--ease),
+    border-color var(--t-base) var(--ease);}
+  .fn3-passo.is-ava{color:var(--green);}
+  .fn3-passo.is-ava:hover{background:var(--green);border-color:var(--green);color:var(--panel);}
+  .fn3-passo.is-per{color:var(--muted2);}
+  .fn3-passo.is-per:hover{background:#C7142A;border-color:#C7142A;color:#fff;}
 
   /* os cards de Pagamento: a vitória tem cor própria */
   .fn3-card.is-pagto{background:#F1F9F5;border:1.5px solid #BFE3D3;
@@ -15299,6 +15343,33 @@ function fn3PodeMover(de, para) {
   return fn2PodeMover(de, para);
 }
 
+/* RECICLAGEM NAO E AVANCO, e sai dela VOLTANDO para Prospeccao (e o que a aba Agenda
+   faz). Ela mora no fim de ORDEM_ETAPAS_FUNIL porque aquela lista compara RANK — nao
+   porque seja o passo seguinte a nada. */
+const FN3_ETAPA_RECICLAGEM = '1398311191';
+
+/* A PROXIMA ETAPA DE UMA ETAPA — derivada da ordem, nunca cravada (04/09/26).
+   Devolve null quando nao ha proximo passo legitimo; quem chama usa o null para NAO
+   desenhar o botao, porque botao sem destino e clique morto.
+
+   DUAS EXCECOES, e as duas sao de NATUREZA, nao de indice — a primeira versao disto
+   usava so ORDEM_ETAPAS_FUNIL[i+1] e propunha, no cartao de um negocio GANHO, avancar
+   para Reciclagem (medido na tela em 04/09/26):
+     1. de Onboarding nao se avanca: a venda acabou, e o arraste JA recusa esse cartao
+        (e.onb tira o draggable). O atalho nao pode furar uma regra que a tela tem.
+     2. para Reciclagem nao se avanca: entra-se nela pelo TEMPO, nao por progresso.
+   As duas passagens continuam possiveis pelo ⌄, que lista o que fn2PodeMover autoriza.
+   Aqui o pudor e do atalho verde: ele so propoe o que e de fato um avanco. */
+function fn3ProximaEtapa(de) {
+  const d = String(de || '');
+  if (d === FN3_ETAPA_ONBOARDING || d === FN3_ETAPA_RECICLAGEM) return null;
+  const i = ORDEM_ETAPAS_FUNIL.indexOf(d);
+  if (i < 0 || i + 1 >= ORDEM_ETAPAS_FUNIL.length) return null;
+  const proxima = ORDEM_ETAPAS_FUNIL[i + 1];
+  if (proxima === FN3_ETAPA_RECICLAGEM) return null;
+  return fn3PodeMover(d, proxima) ? proxima : null;
+}
+
 
 /* A TERCEIRA LINHA: dor, origem e R$. É o que faz o card ser reconhecível sem abrir a
    ficha — e vem do CRM, então aparece só o que existe. */
@@ -15379,6 +15450,9 @@ function fn3Card(item, aceso) {
       <span class="fn3-chip${e.estourou ? ' is-viol' : ''}${e.pagto ? ' is-pagto' : ''}">${esc(e.chip)}</span>
     </div>
     <div class="fn3-diag ${e.diagCls || ''}">${esc(e.diag)}</div>
+    <!-- O VALOR FICA ANTES DO CONTEXTO de proposito: e a pendencia que impede a aba
+         inteira de dizer quanto dinheiro esta em jogo (medido: 34 de 37 sem MRR). -->
+    <div class="fn3-card-valor">${fn3ChipValor(l)}</div>
     ${e.ctx ? `<div class="fn3-ctx">${e.ctx}</div>` : ''}
     <div class="fn3-pe">
       ${e.cta ? `<button type="button" class="fn3-cta ${e.ctaCls || ''}"
@@ -15387,7 +15461,71 @@ function fn3Card(item, aceso) {
       <button type="button" class="fn3-mais" data-fn3-menu="${id}"
         aria-label="mais ações de ${esc(l.name || 'negócio')}">⌄</button>
     </div>
+    <!-- OS DOIS PASSOS DA ETAPA (prancha 12a). Ambos abrem fn3AbrirRegistro, o mesmo
+         caminho do arraste e do ⌄: o atalho e para CHEGAR ao registro, nunca para
+         pular o registro. O "avancar" so existe se houver proxima etapa autorizada. -->
+    ${fn3PassosHTML(item, id)}
   </div>`;
+}
+
+/* Os dois passos, fora do template literal do cartao para o cartao continuar legivel. */
+function fn3PassosHTML(item, id) {
+  const de = String(item.stageId || '');
+  const prox = fn3ProximaEtapa(de);
+  const podePerder = fn3PodeMover(de, FN2_ETAPA_PERDIDO);
+  if (!prox && !podePerder) return '';
+  const avancar = !prox ? '' :
+    '<button type="button" class="fn3-passo is-ava" data-fn3-avancar="' + id + '"'
+    + ' data-fn3-destino="' + esc(prox) + '"'
+    + ' title="Registrar a passagem para ' + esc(STAGE_LABELS[prox] || '') + '">→ avançar</button>';
+  const perder = !podePerder ? '' :
+    '<button type="button" class="fn3-passo is-per" data-fn3-perder="' + id + '"'
+    + ' title="Registrar a perda — o HubSpot exige motivo">✕ perder</button>';
+  return '<div class="fn3-passos">' + avancar + perder + '</div>';
+}
+
+/* ══ O CHIP DE VALOR (04/09/26) ═══════════════════════════════════════════════════════
+   Quem esta com o picker aberto. Um por vez: dois pickers abertos na mesma coluna e
+   duas listas de preco competindo pelo mesmo olhar. */
+let fn3ValorAberto = null;
+
+/* OS QUATRO PRECOS REAIS (data/precificacao.json e a aba Propostas). Nao inventar
+   faixa: chip que grava numero fora da tabela e pior que campo vazio, porque parece
+   medido. E "outro" existe porque proposta fora de tabela acontece — sem essa saida,
+   quem tem R$ 420 na mesa deixa vazio de novo. */
+const FN3_PLANOS = [
+  { v: 279, rot: 'Básico' },
+  { v: 349, rot: 'Inovação' },
+  { v: 549, rot: 'Profissional' },
+  { v: 799, rot: 'Enterprise' }
+];
+
+function fn3ChipValor(l) {
+  const id = esc(String(l.id || ''));
+  const mrr = (typeof mrrDoNegocio === 'function') ? mrrDoNegocio(l) : null;
+  const aberto = fn3ValorAberto === String(l.id);
+  const chip = mrr != null
+    ? '<button type="button" class="fn3-valor is-tem" data-fn3-valor="' + id + '"'
+      + ' title="MRR no HubSpot — clique para corrigir">R$ ' + mrr.toLocaleString('pt-BR') + '</button>'
+    /* TRACEJADO E AMBAR: e pendencia, nao informacao. O mesmo desenho do "sem proximo
+       passo", porque e a mesma natureza — falta um dado que o CRM precisa. */
+    : '<button type="button" class="fn3-valor is-sem" data-fn3-valor="' + id + '"'
+      + ' title="Sem MRR no HubSpot: este negócio não entra na conta do dinheiro em jogo">'
+      + 'R$ ? definir</button>';
+  if (!aberto) return chip;
+  return chip
+    + '<div class="fn3-valor-pick">'
+    +   FN3_PLANOS.map(function (p) {
+          return '<button type="button" class="fn3-valor-op" data-fn3-set-valor="' + id + '.' + p.v + '">'
+            + 'R$ ' + p.v + '<span>' + esc(p.rot) + '</span></button>';
+        }).join('')
+    +   '<span class="fn3-valor-outro">'
+    +     '<input type="number" min="1" step="1" class="fn3-valor-in" data-fn3-valor-in="' + id + '"'
+    +       ' placeholder="outro" inputmode="numeric">'
+    +     '<button type="button" class="fn3-valor-ok" data-fn3-set-valor-livre="' + id + '">gravar ▸</button>'
+    +   '</span>'
+    +   '<span class="fn3-valor-pe">grava valor_de_mrr e mrr no HubSpot, na hora</span>'
+    + '</div>';
 }
 
 /* ── A COLUNA ───────────────────────────────────────────────────────────────────────── */
@@ -15913,6 +16051,103 @@ function fn3Ligar(el, redesenhar) {
     fn3Aba = btn.dataset.fn3Aba;
     redesenhar();
   }));
+  /* ══ O CHIP DE VALOR (04/09/26) ═════════════════════════════════════════════════════
+     Tres gestos: abrir o picker, escolher um plano, ou gravar um valor livre. Os tres
+     passam por salvarMrrNoHubspot, que reusa a op `mrr` da rota — a MESMA que a
+     edicao de MRR de "vendas do mes" usa, e que grava valor_de_mrr E mrr. Uma segunda
+     implementacao seria o segundo lugar para a regra do dinheiro morar, e essa regra e
+     a que o RPA/ASAAS le para emitir o link de pagamento. */
+  el.querySelectorAll('[data-fn3-valor]').forEach(btn => btn.addEventListener('click', ev => {
+    ev.stopPropagation();   /* o cartao inteiro abre a ficha; o chip nao pode abrir junto */
+    const id = btn.dataset.fn3Valor;
+    fn3ValorAberto = (fn3ValorAberto === id) ? null : id;
+    redesenhar();
+  }));
+
+  const gravarValor = async function (id, valor, botao) {
+    const n = Number(valor);
+    /* VALOR INVALIDO NAO VAI PARA O CRM, e o executivo ouve por que. Gravar 0 aqui
+       seria pior que campo vazio: o negocio passaria a contar como medido com zero. */
+    if (!isFinite(n) || n <= 0) {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Escreva um valor de MRR maior que zero — não gravei nada.', 'atencao');
+      }
+      return;
+    }
+    const lead = fn3LeadPorId(id);
+    if (botao) { botao.disabled = true; botao.textContent = 'gravando…'; }
+    const r = (typeof salvarMrrNoHubspot === 'function')
+      ? await salvarMrrNoHubspot(id, n)
+      : { ok: false, erro: 'A rota de MRR não carregou nesta aba.' };
+    if (!r.ok) {
+      if (botao) { botao.disabled = false; botao.textContent = 'gravar ▸'; }
+      if (typeof mostrarToast === 'function') mostrarToast('Não gravei o MRR: ' + r.erro, 'erro');
+      return;
+    }
+    /* O ESPELHO E O QUE JA EXISTE (corrigido em 04/09/26). Sem ele o chip voltava a
+       dizer "R$ ?" no mesmo instante em que o toast dizia que gravou — medido: gravei
+       279 e a manchete seguiu em "3 de 37 com valor no CRM".
+       A minha primeira versao escrevia em lead.valor_de_mrr, e fn3LeadPorId devolve
+       COPIA (buscarLeadFunilPorId faz `{ ...achado }`): escrevia num descarte.
+       aplicarPropsNoDataLocal cobre as QUATRO listas onde o negocio mora, e existe
+       desde 02/09/26 exatamente para o MRR nao ter um segundo espelho.
+       Grava r.mrr, o valor que a ROTA confirma — nao o que foi digitado. */
+    if (typeof aplicarPropsNoDataLocal === 'function') {
+      aplicarPropsNoDataLocal(id, { valor_de_mrr: r.mrr, mrr: r.mrr });
+    }
+    fn3ValorAberto = null;
+    if (typeof mostrarToast === 'function') {
+      mostrarToast((lead && lead.name ? '"' + lead.name + '"' : 'Negócio') + ' com MRR de R$ '
+        + n.toLocaleString('pt-BR') + ' no HubSpot ✓ — já entra na conta do dinheiro em jogo.', 'sucesso');
+    }
+    redesenhar();
+  };
+
+  el.querySelectorAll('[data-fn3-set-valor]').forEach(btn => btn.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    const partes = String(btn.dataset.fn3SetValor).split('.');
+    const valor = partes.pop();
+    await gravarValor(partes.join('.'), valor, btn);
+  }));
+
+  el.querySelectorAll('[data-fn3-set-valor-livre]').forEach(btn => btn.addEventListener('click', async ev => {
+    ev.stopPropagation();
+    const id = btn.dataset.fn3SetValorLivre;
+    /* le o campo NA HORA do clique: guardar em estado a cada tecla redesenharia o
+       cartao e o cursor sairia do campo a cada digito. */
+    const campo = el.querySelector('[data-fn3-valor-in="' + id + '"]');
+    await gravarValor(id, campo ? campo.value : '', btn);
+  }));
+
+  /* ══ AVANCAR E PERDER (04/09/26) ═════════════════════════════════════════════════
+     Os dois entram em fn3AbrirRegistro, igual ao arraste e ao ⌄. stopPropagation em
+     ambos: o cartao inteiro abre a ficha, e abrir a ficha junto com o registro seria
+     duas telas por um toque. */
+  el.querySelectorAll('[data-fn3-avancar]').forEach(btn => btn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const lead = fn3LeadPorId(btn.dataset.fn3Avancar);
+    const para = btn.dataset.fn3Destino;
+    if (!lead || !para) {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não encontrei este negócio na carga desta tela — recarregue.', 'erro');
+      }
+      return;
+    }
+    fn3AbrirRegistro(lead, para, redesenhar);
+  }));
+
+  el.querySelectorAll('[data-fn3-perder]').forEach(btn => btn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const lead = fn3LeadPorId(btn.dataset.fn3Perder);
+    if (!lead) {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não encontrei este negócio na carga desta tela — recarregue.', 'erro');
+      }
+      return;
+    }
+    fn3AbrirRegistro(lead, FN2_ETAPA_PERDIDO, redesenhar);
+  }));
+
   el.querySelectorAll('[data-fn3-menu]').forEach(btn => btn.addEventListener('click', ev => {
     ev.stopPropagation();
     const lead = fn3LeadPorId(btn.dataset.fn3Menu);
