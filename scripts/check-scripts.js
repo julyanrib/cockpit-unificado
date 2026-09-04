@@ -1274,3 +1274,81 @@ function checarGeradosForaDoGit() {
   return true;
 }
 if (!checarGeradosForaDoGit()) process.exit(1);
+
+/* == 16. TODO CAMPO DE LISTA DA TELA TEM ROTULO VINDO DO CRM ========================
+   POR QUE EXISTE: em 03/09 o Julyan mandou o print do formulario de Ag. Pagamento com
+   "TEM Q SER IGUAL A PROPRIEDADE QUE TEM NO HUB". Estava mesmo diferente — a tela
+   imprimia o VALOR gravado onde o HubSpot mostra outro ROTULO, em oito opcoes. A pior:
+   o valor "Problemas de Gestao" se chama "Gestao de Estoque" no CRM. Nao e a mesma
+   pergunta: o executivo escolhia lendo uma coisa e gravava outra, e o relatorio do
+   gestor le o valor.
+
+   A correcao fez o rotulo vir de /crm/v3/properties/deals, no snapshot, para renomear
+   no HubSpot aparecer no Cockpit sozinho. Mas o fetch so carrega as opcoes das
+   propriedades DECLARADAS em PROPS_DE_LISTA_NA_TELA — a lista e limitada de proposito,
+   porque o payload vai para o navegador de sete executivos e o portal tem muita
+   propriedade de enumeracao que nenhum formulario mostra.
+
+   O BURACO QUE ESTA GUARDA FECHA: campo de lista novo no formulario, e o nome esquecido
+   naquela lista. O rotulo daquele campo volta a ser o valor cru, e ninguem percebe — e
+   o defeito de 03/09 de volta, so num campo. Eu havia deixado isso como INSTRUCAO NUM
+   COMENTARIO, e comentario nao impede nada: 18 dias antes, dois comentarios afirmavam
+   uma remocao que nunca aconteceu (ver a guarda 15).
+
+   Ela compara os dois arquivos: toda prop declarada no template com tipo selecao,
+   multiselecao ou sim_nao tem que estar em PROPS_DE_LISTA_NA_TELA. A recíproca tambem e
+   avisada — nome na lista que a tela nao desenha mais e peso no snapshot sem leitor. */
+function checarRotulosDeLista() {
+  const tpl = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
+  let fetchSrc;
+  try {
+    fetchSrc = fs.readFileSync(path.join(root, 'scripts', 'fetch-hubspot.js'), 'utf8');
+  } catch (e) {
+    /* FALHA PARA O LADO DE REPROVAR: guarda que nao conseguiu ler o que compara nao
+       pode dizer OK. Foi assim que a guarda 15 nasceu verde sem medir nada. */
+    console.error('NAO CONSEGUI LER scripts/fetch-hubspot.js: ' + e.message);
+    return false;
+  }
+
+  const naTela = new Set();
+  const re = /prop:\s*'([a-z0-9_]+)'[^}]*tipo:\s*'(selecao|multiselecao|sim_nao)'/g;
+  let m;
+  while ((m = re.exec(tpl)) !== null) naTela.add(m[1]);
+  if (!naTela.size) {
+    console.error('NAO ACHEI NENHUM CAMPO DE LISTA no template — o padrao de declaracao mudou');
+    console.error('  e esta guarda parou de medir. Corrigir o padrao aqui antes de seguir.');
+    return false;
+  }
+
+  const i = fetchSrc.indexOf('const PROPS_DE_LISTA_NA_TELA');
+  if (i < 0) {
+    console.error('NAO ACHEI PROPS_DE_LISTA_NA_TELA em scripts/fetch-hubspot.js.');
+    console.error('  Sem ela o snapshot nao carrega rotulo nenhum e a tela mostra o valor cru.');
+    return false;
+  }
+  const fim = fetchSrc.indexOf('];', i);
+  const declarado = new Set();
+  const re2 = /'([a-z0-9_]+)'/g;
+  const corpo = fetchSrc.slice(i, fim < 0 ? i + 2000 : fim);
+  let m2;
+  while ((m2 = re2.exec(corpo)) !== null) declarado.add(m2[1]);
+
+  const faltando = [...naTela].filter(p => !declarado.has(p));
+  const sobrando = [...declarado].filter(p => !naTela.has(p));
+
+  if (faltando.length) {
+    console.error('CAMPO DE LISTA SEM ROTULO DO CRM (a tela vai mostrar o valor cru):');
+    faltando.forEach(p => console.error('  ' + p));
+    console.error('  Ponha o nome em PROPS_DE_LISTA_NA_TELA, em scripts/fetch-hubspot.js.');
+    console.error('  Sem isso, o executivo le o valor gravado em vez do nome que o HubSpot da');
+    console.error('  a opcao — e em 03/09 uma dessas divergencias trocava a pergunta inteira.');
+    return false;
+  }
+  if (sobrando.length) {
+    console.log('AVISO rotulos de lista - ' + sobrando.length + ' nome(s) em PROPS_DE_LISTA_NA_TELA'
+      + ' que a tela nao desenha mais: ' + sobrando.join(', ') + ' (peso no snapshot sem leitor).');
+  }
+  console.log('OK rotulos de lista - as ' + naTela.size + ' propriedades de lista da tela tem rotulo vindo do CRM.');
+  return true;
+}
+if (!checarRotulosDeLista()) process.exit(1);

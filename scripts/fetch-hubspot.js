@@ -85,6 +85,37 @@ let cacheDePropriedades = null;
 /* {prop: [{v, r}]} das propriedades de enumeração — preenchido junto com o de nomes,
    na mesma requisição, e enviado no snapshot para a tela mostrar o rótulo do CRM. */
 let cacheDeOpcoes = {};
+
+/* ══ AS PROPRIEDADES DE LISTA QUE O COCKPIT DESENHA ═════════════════════════════════
+   Só as opções DESTAS viajam no snapshot. A primeira versão levava as de TODA
+   propriedade de enumeração do negócio, e o payload vai para o Supabase e para o
+   navegador de cada executivo — o hubspot.json já tem 700 KB. Este portal tem muita
+   propriedade customizada de enumeração ("Atingiu 100 comandas?", "Pré Seleção
+   Enterprise (Delivery e Balcão)", "Motivo saída cadência"...) que nenhum formulário do
+   Cockpit mostra: seria banda e memória em sete celulares por rodada, para dado que
+   ninguém lê.
+
+   A lista foi LEVANTADA do template (toda prop declarada com tipo selecao,
+   multiselecao ou sim_nao), não escolhida a dedo. Fica declarada aqui porque este
+   script não lê o template.
+
+   AO ADICIONAR UM CAMPO DE LISTA NOVO NO FORMULÁRIO, PONHA O NOME AQUI. Sem isso o
+   rótulo daquele campo não vem do CRM e a tela volta a mostrar o valor cru — que é
+   exatamente o defeito de 03/09 (oito opções com nome diferente do HubSpot, uma delas
+   trocando a pergunta: o valor "Problemas de Gestão" se chama "Gestão de Estoque"). */
+const PROPS_DE_LISTA_NA_TELA = [
+  'adicional',
+  'deseja_criar_perfil_no_asaas_',
+  'gargalo_operacional',
+  'motivo_do_perdido',
+  'origem_do_lead',
+  'pacote_contratado',
+  'periodo_contratado',
+  'plano_apresentado',
+  'qual_maior_desafio_',
+  'reuniao_agendada',
+  'tipo_de_pagamento'
+];
 async function todasAsPropriedadesDeNegocio() {
   if (cacheDePropriedades) return cacheDePropriedades;
   const resp = await fetch('https://api.hubapi.com/crm/v3/properties/deals', {
@@ -106,6 +137,7 @@ async function todasAsPropriedadesDeNegocio() {
   cacheDeOpcoes = {};
   uteis.forEach(function (p) {
     if (p.type !== 'enumeration' || !Array.isArray(p.options) || !p.options.length) return;
+    if (PROPS_DE_LISTA_NA_TELA.indexOf(p.name) < 0) return;
     cacheDeOpcoes[p.name] = p.options.map(function (o) {
       return { v: String(o.value), r: String(o.label == null ? o.value : o.label) };
     });
