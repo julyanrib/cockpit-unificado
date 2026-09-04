@@ -14010,6 +14010,43 @@ const OP_PLANO_APRESENTADO = ['Básico (PDV + delivery)', 'Básico (PDV + mesa +
 const OP_PLANO_CONTRATADO = ['Básico', 'Básico (delivery e balcão)', 'Inovação', 'Inovação (delivery e balcão)', 'Profissional', 'Profissional (delivery e balcão)', 'Enterprise', 'Enterprise (delivery e balcão)', 'Upsell', 'Produtos Personalizados', 'Básico (Delivery)', 'Básico (PDV Balcão)', 'Básico (Delivery + PDV Balcão)', 'Intermediário (Delivery + PDV Balcão + PDV Mesa)', 'Apenas Cardapio'];
 const OP_ADICIONAL = ['Sem adicionais', 'Fiscal SN', 'Maquininha POS', 'Cashback', 'Tablet', 'IA Conversacional (TEKA)', 'Totem de Autoatendimento', 'Robô de Whatsapp', 'Multilojas', 'Campanhas Personalizadas', 'Fiscal LP / LR', 'IA de Fechamento', 'TEF', 'Precificação Dinâmica', 'Display ou Comandas', 'Dark Kitchen', 'Conciliação Bancária', 'Rota Inteligente'];
 const OP_MAIOR_DESAFIO = ['Problemas com Atendimento', 'Gestão Financeira', 'Problemas de Gestão', 'Problemas em Fidelizar o Cliente', 'Gerenciar várias lojas', 'Controle fiscal', 'Operação', 'Suporte do sistema'];
+
+/* ══ O RÓTULO É DO HUBSPOT, NÃO NOSSO (03/09/26) ═══════════════════════════════════
+   Os valores acima são o que se GRAVA e estão certos. O que a tela MOSTRA tem que ser
+   o rótulo que o HubSpot mostra, e oito opções divergiam — inclusive uma que troca a
+   pergunta: o valor "Problemas de Gestão" se chama "Gestão de Estoque" no CRM.
+
+   Este mapa é a REDE, não a fonte. A fonte é DATA.opcoesHubspot, que o fetch-hubspot
+   traz de /crm/v3/properties/deals em toda rodada — renomear a opção no HubSpot passa
+   a aparecer aqui sozinho. O mapa vale só enquanto o snapshot não trouxer as opções, e
+   está datado de propósito: rede sem data de medição vira fonte por acidente.
+   Medido em 03/09/26 com get_properties. Só as opções que DIFEREM do valor entram. */
+const ROTULOS_HUBSPOT_REDE = {
+  adicional: {
+    'Tablet': 'Tablet de mesa',
+    'Totem de Autoatendimento': 'Totem de Autoatendimento com TEF Fiserv',
+    'TEF': 'TEF Balcão Fiserv',
+    'Conciliação Bancária': 'Conciliação Bancária OFX'
+  },
+  tipo_de_pagamento: { 'Crédito': 'Parcelado' },
+  qual_maior_desafio_: {
+    'Problemas com Atendimento': 'Atendimento / Mão de obra',
+    'Problemas de Gestão': 'Gestão de Estoque',
+    'Problemas em Fidelizar o Cliente': 'Fidelizar o Cliente'
+  }
+};
+/* Como o executivo LÊ uma opção. O valor gravado nunca passa por aqui. */
+function rotuloDaOpcao(prop, valor) {
+  const v = String(valor);
+  const doSnapshot = (typeof DATA !== 'undefined' && DATA && DATA.opcoesHubspot)
+    ? DATA.opcoesHubspot[prop] : null;
+  if (doSnapshot) {
+    const achou = doSnapshot.find(function (o) { return String(o.v) === v; });
+    if (achou && achou.r) return achou.r;
+  }
+  const rede = ROTULOS_HUBSPOT_REDE[prop];
+  return (rede && rede[v]) || v;
+}
 /* ══ O MOTIVO DA PERDA FALA DA DECISAO DO CLIENTE (03/09/26) ═════════════════════════
    Os valores REAIS da propriedade motivo_do_perdido no HubSpot, conferidos em 01/09 e
    remedidos em 03/09 sobre os 981 perdidos dos ultimos 90 dias:
@@ -14123,8 +14160,14 @@ const CAMPOS_POR_ETAPA = {
        recusar a gravacao deixava o executivo sem conseguir mover a etapa de um contrato
        que ja existe. O piso foi tirado da rota do MRR em 15/08 pelo mesmo motivo e
        sobreviveu aqui. Obrigatorio continua: o valor tem que estar preenchido. */
-    { prop: 'amount', label: 'Valor (R$)', tipo: 'numero', obrigatorio: true },
-    { prop: 'mrr', label: 'MRR (R$)', tipo: 'numero', obrigatorio: true },
+    /* `sempre: true` — ESTES DOIS NUNCA SE ESCONDEM, mesmo já preenchidos (03/09/26).
+       O formulário oculta campo que já tem valor no CRM, e isso escondeu justamente o
+       MRR: medido na Adega 12, mrr=449 e valor_de_mrr=450 no mesmo negócio. O 449 tinha
+       sobrado de antes, ficou invisível, e o link do contrato sairia com um número que o
+       executivo não olhou. Para celular e CEP esconder é bom; para o número que vira
+       cobrança é o contrário. */
+    { prop: 'amount', label: 'Valor (R$)', tipo: 'numero', obrigatorio: true, sempre: true },
+    { prop: 'mrr', label: 'MRR (R$)', tipo: 'numero', obrigatorio: true, sempre: true },
     { prop: 'deseja_criar_perfil_no_asaas_', label: 'Deseja criar perfil no ASAAS?', tipo: 'sim_nao', obrigatorio: true, largo: true },
     { prop: 'qual_maior_desafio_', label: 'Maior Desafio', tipo: 'selecao', opcoes: OP_MAIOR_DESAFIO, obrigatorio: true, largo: true },
     { prop: 'informacoes_sobre_o_maior_desafio', label: 'Informações sobre o maior desafio', tipo: 'texto_longo', obrigatorio: true, largo: true }
@@ -14239,12 +14282,12 @@ function campoPassagemHTML(campo, valor) {
   } else if (campo.tipo === 'multiselecao') {
     const marcados = new Set(String(valor || '').split(';').map(v => v.trim()).filter(Boolean));
     controle = `<div class="pe-multi" id="${id}" data-prop="${campo.prop}" data-tipo="${campo.tipo}">
-      ${(campo.opcoes || []).map(op => `<label><input type="checkbox" value="${esc(op)}" ${marcados.has(op) ? 'checked' : ''}><span>${esc(op)}</span></label>`).join('')}
+      ${(campo.opcoes || []).map(op => `<label><input type="checkbox" value="${esc(op)}" ${marcados.has(op) ? 'checked' : ''}><span>${esc(rotuloDaOpcao(campo.prop, op))}</span></label>`).join('')}
     </div>`;
   } else if (campo.tipo === 'selecao') {
     controle = `<select id="${id}" data-prop="${campo.prop}" data-tipo="${campo.tipo}">
       <option value="">Selecione…</option>
-      ${(campo.opcoes || []).map(op => `<option value="${esc(op)}" ${String(valor) === String(op) ? 'selected' : ''}>${esc(op)}</option>`).join('')}
+      ${(campo.opcoes || []).map(op => `<option value="${esc(op)}" ${String(valor) === String(op) ? 'selected' : ''}>${esc(rotuloDaOpcao(campo.prop, op))}</option>`).join('')}
     </select>`;
   } else if (campo.tipo === 'sim_nao') {
     controle = `<select id="${id}" data-prop="${campo.prop}" data-tipo="${campo.tipo}">
@@ -15518,10 +15561,16 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
   const voltando = iDe >= 0 && iPara >= 0 && iPara < iDe;
   const paraOnb = para === FN3_ETAPA_ONBOARDING;
 
-  /* os campos que a etapa exige e que AINDA não estão preenchidos */
+  /* Os campos que a etapa exige e que AINDA não estão preenchidos — MENOS os marcados
+     com `sempre: true`, que aparecem preenchidos ou não.
+     Por que a exceção existe: os dois campos de dinheiro de Ag. Pagamento são o que o
+     RPA/ASAAS lê para gerar o link do contrato, e o negócio chega naquela etapa podendo
+     carregar um valor velho da negociação (medido: Adega 12 com mrr=449 e
+     valor_de_mrr=450). Escondido, o executivo confirma sem ver e o link sai com o
+     número que ele não olhou. */
   const todosOsCampos = (CAMPOS_POR_ETAPA[para] || []);
   const jaTem = c => { const v = valorAtualDoCampo(lead, c); return v != null && String(v).trim() !== ''; };
-  const campos = voltando ? [] : todosOsCampos.filter(c => !jaTem(c));
+  const campos = voltando ? [] : todosOsCampos.filter(c => c.sempre || !jaTem(c));
   const prontos = voltando ? 0 : todosOsCampos.length - campos.length;
 
   /* o próximo passo já sugerido pela régua da etapa de DESTINO — o caminho de menor

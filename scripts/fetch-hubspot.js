@@ -82,6 +82,9 @@ function inicioDoOnboardingVisivel() {
 // A busca é feita em LOTES: a API aceita a lista de propriedades no corpo, mas centenas
 // de nomes numa requisição é pedir 414/400 — e, pior, é lento sete vezes por dia útil.
 let cacheDePropriedades = null;
+/* {prop: [{v, r}]} das propriedades de enumeração — preenchido junto com o de nomes,
+   na mesma requisição, e enviado no snapshot para a tela mostrar o rótulo do CRM. */
+let cacheDeOpcoes = {};
 async function todasAsPropriedadesDeNegocio() {
   if (cacheDePropriedades) return cacheDePropriedades;
   const resp = await fetch('https://api.hubapi.com/crm/v3/properties/deals', {
@@ -89,12 +92,25 @@ async function todasAsPropriedadesDeNegocio() {
   });
   if (!resp.ok) throw new Error('não consegui listar as propriedades de negócio: ' + resp.status);
   const data = await resp.json();
-  cacheDePropriedades = (data.results || [])
+  const uteis = (data.results || [])
     .filter(x => x && x.name)
     /* propriedade de arquivo e de cálculo interno do HubSpot não é dado do negócio e
        algumas nem são legíveis pela search — pedir só engrossa a requisição. */
-    .filter(x => !x.hidden && !x.calculated && x.type !== 'object_coordinates')
-    .map(x => x.name);
+    .filter(x => !x.hidden && !x.calculated && x.type !== 'object_coordinates');
+  /* AS OPÇÕES TAMBÉM, e não só o nome (03/09/26). Este fetch já era a fonte de verdade
+     do que EXISTE e jogava fora o que cada opção se CHAMA — então a tela do executivo
+     imprimia o valor cru e oito opções apareciam com nome diferente do CRM, uma delas
+     trocando a pergunta ("Problemas de Gestão" é "Gestão de Estoque" lá). Guardar
+     {v, r} aqui faz o rótulo viajar no snapshot: renomear no HubSpot aparece no
+     Cockpit na próxima rodada, sem ninguém editar lista à mão. */
+  cacheDeOpcoes = {};
+  uteis.forEach(function (p) {
+    if (p.type !== 'enumeration' || !Array.isArray(p.options) || !p.options.length) return;
+    cacheDeOpcoes[p.name] = p.options.map(function (o) {
+      return { v: String(o.value), r: String(o.label == null ? o.value : o.label) };
+    });
+  });
+  cacheDePropriedades = uteis.map(x => x.name);
   return cacheDePropriedades;
 }
 function inicioDoPerdidoVisivel() {
@@ -2021,6 +2037,10 @@ async function main() {
 
   const output = {
     updatedAt: new Date().toISOString(),
+    /* O QUE CADA OPÇÃO SE CHAMA NO CRM. A tela grava o valor e mostra o rótulo; sem
+       isto ela mostrava o valor cru e divergia do HubSpot em oito opções. Vai junto do
+       snapshot porque é dado do CRM, não configuração nossa. */
+    opcoesDeNegocio: cacheDeOpcoes,
     kpis: {
       leadsCriados,
       ganhos: ganhoSemana,
