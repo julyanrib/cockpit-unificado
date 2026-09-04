@@ -19805,25 +19805,23 @@ function preencherCabecalhoRodape() {
   const ativos = repsCadastrados.length
     ? repsCadastrados.length - emPreparacao
     : (DATA.reps || []).length;
-  // ITEM 4 (10/08/26, Julyan): o robô roda 1x por dia, às 5h. Se ele falhar (token do
-  // HubSpot expirado, API fora, push rejeitado), a tela continuava mostrando os números
-  // de ontem com a mesma cara de sempre — e a Daily das 9h ia ao ar com dado velho sem
-  // ninguém perceber. Agora a idade do dado é calculada e, passando de 26h, vira aviso
-  // vermelho explícito. 26h e não 24h pra não alarmar por um atraso normal do cron.
+  /* A LINHA DISCRETA FICA; O BANNER VERMELHO SAIU EM 04/09/26.
+     Ele existia desde 10/08 para gritar quando o robô falhasse. Sai por pedido
+     direto ("EU N QUERO ESSE BANNER DE HUBSPOT OU ALGO DO TIPO") e porque era a
+     terceira cópia da mesma informação — esta linha e o rodapé da sidebar já dizem
+     quando o HubSpot sincronizou.
+
+     E ele acusava a produção de estar quebrada quando o velho era o disco de quem
+     desenvolve: data/hubspot.json saiu do git na migração para o Supabase, e em
+     04/09 a faixa disse "a atualização das 5h falhou" num dia com nove execuções
+     bem-sucedidas e snapshot de 5 minutos em cockpit_snapshot.
+
+     PARA SABER SE O ROBÔ RODOU, a fonte é o Supabase: a chave `sync-status` em
+     cockpit_snapshot traz { falhas, ultimaExecucao, totalExecutivos }. Estimar isso
+     a partir da idade de um arquivo local foi o que produziu o alarme falso. */
   const updatedEl = document.getElementById('updatedLine');
-  const tsSync = DATA.hubspotUpdatedAtISO ? new Date(DATA.hubspotUpdatedAtISO) : null;
-  const horasDesdeSync = (tsSync && !isNaN(tsSync.getTime())) ? (Date.now() - tsSync.getTime()) / 3600000 : null;
-  const syncVelho = horasDesdeSync !== null && horasDesdeSync > 26;
   updatedEl.textContent =
     `HubSpot atualizado automaticamente em ${DATA.hubspotUpdatedAtFmt} · Time ativo: ${ativos} executivos${emPreparacao ? ` · ${emPreparacao} em preparação` : ''}`;
-  const avisoSyncAntigo = document.getElementById('avisoSyncVelho');
-  if (avisoSyncAntigo) avisoSyncAntigo.remove();
-  if (syncVelho) {
-    updatedEl.insertAdjacentHTML('afterend',
-      `<span id="avisoSyncVelho" style="display:inline-flex;align-items:center;gap:6px;background:var(--red);color:var(--dark-ink);border-radius:var(--r-pill);padding:4px 12px;font-size:11px;font-weight:800;white-space:nowrap;">
-        ⚠ Dados de ${Math.floor(horasDesdeSync)}h atrás — a atualização das 5h falhou. Não apresente estes números.
-      </span>`);
-  }
 
   // Rodapé da sidebar — mesma data/hora que já vem pronta em DATA.hubspotUpdatedAtFmt
   // ("DD/MM/AAAA às HH:MM"), só reformatada mais curta pra caber no rodapé estreito.
