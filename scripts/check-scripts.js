@@ -1583,3 +1583,81 @@ function checarGestorSemZeroInventado() {
   return true;
 }
 if (!checarGestorSemZeroInventado()) process.exit(1);
+
+/* == 19. TODA PROPRIEDADE QUE A TELA COLETA, A ROTA ACEITA (04/09/26) =============
+   A Kelly escolheu o motivo, escreveu a frase do cliente, clicou em "Mover para
+   Perdido" e levou: Propriedade nao permitida por esta rota:
+   "observacao__desqualificado". O negocio NAO foi movido. Duas telas diferentes, o
+   mesmo erro.
+
+   NAO FOI MUDANCA NO HUBSPOT — conferido na fonte: a propriedade existe com esse nome
+   exato, label "Observacao Perdido". O que havia eram DUAS LISTAS que precisam
+   concordar e nada as comparava:
+     CAMPOS_POR_ETAPA (template)  o que a tela PEDE ao executivo
+     PROPS_PERMITIDAS (a rota)    o que o servidor ACEITA gravar
+   Acrescentar um campo na primeira e esquecer a segunda produz o pior desfecho
+   possivel: o executivo faz o trabalho todo — escolhe, escreve, clica — e a acao morre
+   no fim, com uma mensagem tecnica que nao diz o que ele deve fazer.
+
+   E NADA PEGAVA. A sintaxe e valida, as suites nao chamam a rota, e o erro so aparece
+   com o formulario preenchido de verdade: exatamente o par (custo alto, defeito
+   invisivel) que pede guarda.
+
+   COMENTARIO NAO CONTA, pelos dois lados: os comentarios deste projeto citam nomes de
+   propriedade ao contar a historia, e foi assim que a guarda 10 deu verde sobre o
+   defeito que existia para pegar. */
+function checarPropriedadesEspelhadas() {
+  const arquivo = 'template/cockpit.template.html';
+  const rota = 'lib/acoes-negocio/mudar-etapa-negocio.js';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  const rotaTxt = fs.readFileSync(path.join(root, rota), 'utf8');
+  const semCom = t => t
+    .replace(/\/\*[\s\S]*?\*\//g, x => x.replace(/[^\n]/g, ' '))
+    .replace(/^\s*\/\/.*$/gm, '');
+
+  /* A DECLARACAO, e nao a primeira mencao: indexOf('CAMPOS_POR_ETAPA') acha um
+     comentario 120 linhas antes, e a medicao devolve zero propriedades — zero
+     conveniente, que e o sinal de medicao quebrada. Aconteceu comigo hoje. */
+  const iC = cru.indexOf('const CAMPOS_POR_ETAPA = {');
+  if (iC < 0) {
+    console.error('PROPRIEDADES ESPELHADAS: nao achei a declaracao de CAMPOS_POR_ETAPA -');
+    console.error('  a guarda perdeu o alvo. Se a lista de campos por etapa mudou de');
+    console.error('  lugar, ensine o lugar novo aqui: guarda que nao acha o alvo reprova.');
+    return false;
+  }
+  const depois = cru.slice(iC);
+  const fimC = depois.search(/\n\};/);
+  const blocoCampos = semCom(fimC > 0 ? depois.slice(0, fimC) : depois);
+  const coletadas = [...new Set((blocoCampos.match(/prop:\s*'([a-z0-9_]+)'/g) || [])
+    .map(x => x.replace(/prop:\s*'/, '').replace("'", '')))];
+  if (!coletadas.length) {
+    console.error('PROPRIEDADES ESPELHADAS: CAMPOS_POR_ETAPA nao tem nenhuma prop -');
+    console.error('  a extracao quebrou. Nenhuma propriedade coletada e resultado');
+    console.error('  conveniente demais para ser verdade nesta tela.');
+    return false;
+  }
+
+  const iP = rotaTxt.indexOf('PROPS_PERMITIDAS = [');
+  if (iP < 0) {
+    console.error('PROPRIEDADES ESPELHADAS: nao achei PROPS_PERMITIDAS em ' + rota);
+    return false;
+  }
+  const blocoPerm = semCom(rotaTxt.slice(iP, rotaTxt.indexOf('];', iP)));
+  const aceitas = new Set((blocoPerm.match(/'([a-z0-9_]+)'/g) || []).map(x => x.slice(1, -1)));
+
+  const faltando = coletadas.filter(p => !aceitas.has(p));
+  if (faltando.length) {
+    console.error('PROPRIEDADE COLETADA E RECUSADA PELA ROTA em ' + rota + ':');
+    faltando.forEach(p => console.error('  ' + p + ' - a tela pede e o servidor recusa'));
+    console.error('  O executivo escolhe, escreve, clica - e a acao morre no fim, com uma');
+    console.error('  mensagem tecnica que nao diz o que fazer. Foi o que a Kelly levou em');
+    console.error('  04/09 ao mover um negocio para Perdido.');
+    console.error('  Antes de liberar: confira que a propriedade EXISTE no HubSpot com esse');
+    console.error('  nome. Liberar um nome errado troca este erro por um 400 do HubSpot.');
+    return false;
+  }
+  console.log('OK propriedades espelhadas - as ' + coletadas.length + ' que a tela coleta'
+    + ' sao aceitas pela rota de etapa.');
+  return true;
+}
+if (!checarPropriedadesEspelhadas()) process.exit(1);

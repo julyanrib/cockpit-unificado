@@ -14077,6 +14077,11 @@ const ROTULOS_HUBSPOT_REDE = {
     'Conciliação Bancária': 'Conciliação Bancária OFX'
   },
   tipo_de_pagamento: { 'Crédito': 'Parcelado' },
+  /* No HubSpot o valor e "Reembolso" e o rotulo e "Estorno". Em runtime rotuloDaOpcao
+     ja prefere DATA.opcoesHubspot e mostra "Estorno" sozinho; esta entrada e a rede
+     para quando o snapshot nao chega — sem ela, a tela offline dizia "Reembolso" e o
+     CRM dizia "Estorno" para a mesma perda. */
+  motivo_do_perdido: { 'Reembolso': 'Estorno' },
   qual_maior_desafio_: {
     'Problemas com Atendimento': 'Atendimento / Mão de obra',
     'Problemas de Gestão': 'Gestão de Estoque',
@@ -14124,6 +14129,16 @@ function rotuloDaOpcao(prop, valor) {
    "medo de migrar", "decisor nao comprou a ideia") exige criar a opcao no HubSpot
    primeiro, senao a gravacao falha ou nasce uma fatia que nenhum relatorio conhece.
    'Reembolso' aparece na tela do CRM como 'Estorno'; o valor gravado é 'Reembolso'. */
+/* CINCO, E NAO AS SEIS DO HUBSPOT — e isso e deliberado (03/09/26, medido).
+   "Sem retorno" foi aposentada: dos 981 perdidos dos ultimos 90 dias, "Outros" eram
+   410 (42%) e "Sem retorno" 293 (30%) — 72% dos motivos nao eram decisao do cliente.
+   "Sem retorno" nao e uma decisao contra nos, e a AUSENCIA de decisao, e pertence a
+   `motivo_saida_cadencia`.
+   A REGRA E SUBCONJUNTO, NAO IGUALDADE: o servidor continua aceitando os seis (ha 293
+   negocios com o valor gravado, e o PWA escreve pela mesma porta), e a tela nao
+   oferece o que foi aposentado. Em 04/09 eu tentei "consertar" isto acrescentando a
+   opcao de volta, e a suite testar-kanban-etapas me reprovou — era decisao de
+   produto, nao lacuna de espelho. */
 const OP_MOTIVO_PERDA = ['Preço', 'Não quer mudar de sistema', 'Funcionalidade', 'Reembolso', 'Outros'];
 /* Os motivos que NAO explicam nada sozinhos e por isso exigem a observacao escrita. */
 const MOTIVOS_QUE_EXIGEM_TEXTO = ['Outros', 'Funcionalidade'];
@@ -14278,12 +14293,12 @@ const PROPS_FICHA = [
 // Espelho do que a rota /api/mudar-etapa-negocio aceita. Manter os dois em sincronia:
 // o servidor rejeita qualquer prop fora da lista dele, então um campo novo aqui sem o
 // par de lá simplesmente não grava (e o erro aparece no drawer, não em silêncio).
-const PROPS_GRAVAVEIS = ['dealname', 'email', 'cnpj_cpf', 'celular', 'cep', 'bairro', 'cidade', 'logradouro', 'numero',
-  'origem_do_lead', 'gargalo_operacional', 'nome_do_sistema', 'plano_apresentado',
-  'valor_de_mrr', 'pacote_contratado', 'adicional', 'tipo_de_pagamento',
-  'periodo_contratado', 'amount', 'mrr', 'deseja_criar_perfil_no_asaas_',
-  'qual_maior_desafio_', 'informacoes_sobre_o_maior_desafio', 'data_da_reuniao',
-  'reuniao_agendada', 'description', 'motivo_do_perdido'];
+/* PROPS_GRAVAVEIS SAIU EM 04/09/26: lista morta cujo nome mentia.
+   Declarada numa linha e usada em NENHUMA — nao filtrava nada. A suite afirmava
+   sobre ela "senao a gravacao e recusada", o que era falso, e isso custaria a hora
+   de quem fosse investigar por que um campo nao chegou ao HubSpot.
+   Quem faz o trabalho e PROPS_PERMITIDAS, em lib/acoes-negocio/mudar-etapa-negocio.js,
+   e a guarda 19 compara aquela lista com o que CAMPOS_POR_ETAPA coleta. */
 
 const ETAPA_PROSPECCAO = '1395880469';
 

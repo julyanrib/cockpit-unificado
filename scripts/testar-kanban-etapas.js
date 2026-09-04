@@ -87,16 +87,26 @@ checar('template: o menu de destinos itera ETAPAS_DESTINO_FUNIL (e não a escada
   /\$\{ETAPAS_DESTINO_FUNIL\.map\(sid => \{/.test(template));
 
 /* ── 3. o motivo é obrigatório para entrar em Perdido, dos dois lados ─────────────── */
+/* PERTENCIMENTO, e nao posicao. A versao anterior exigia que motivo_do_perdido fosse
+   o ULTIMO item da allowlist, e reprovou quando observacao__desqualificado entrou
+   (o conserto do defeito da Kelly em 04/09). Teste que depende da ordem de uma lista
+   quebra em toda insercao legitima e ensina a contorna-lo. */
 checar('servidor: motivo_do_perdido está na allowlist de propriedades',
-  /'reuniao_agendada', 'description', 'motivo_do_perdido'\]/.test(servidor));
+  /PROPS_PERMITIDAS = \[[\s\S]*?'motivo_do_perdido'[\s\S]*?\];/.test(servidor));
+checar('servidor: observacao__desqualificado está na allowlist (o defeito da Kelly)',
+  /PROPS_PERMITIDAS = \[[\s\S]*?'observacao__desqualificado'[\s\S]*?\];/.test(servidor),
+  'sem ela o executivo preenche o motivo, clica em Perdido e leva "Propriedade não permitida"');
 checar('servidor: Perdido exige motivo_do_perdido',
   new RegExp("'" + PERDIDO + "': \\['motivo_do_perdido'\\]").test(servidor));
 checar('servidor: o motivo tem lista fechada de valores',
   /motivo_do_perdido: \['Preço', 'Funcionalidade', 'Sem retorno', 'Reembolso', 'Não quer mudar de sistema', 'Outros'\]/.test(servidor));
 checar('template: o campo do motivo é obrigatório na etapa Perdido',
   new RegExp("'" + PERDIDO + "': \\[[\\s\\S]{0,240}?motivo_do_perdido[\\s\\S]{0,160}?obrigatorio: true").test(template));
-checar('template: motivo_do_perdido está em PROPS_GRAVAVEIS (senão a gravação é recusada)',
-  /'reuniao_agendada', 'description', 'motivo_do_perdido'\]/.test(template));
+/* PROPS_GRAVAVEIS SAIU EM 04/09/26 e esta assercao com ela: a lista era morta (uma
+   declaracao, zero usos) e a mensagem deste teste era falsa — nada era recusado por
+   ela. Quem recusa e o servidor, e a guarda 19 do check-scripts compara a allowlist
+   dele com tudo o que CAMPOS_POR_ETAPA coleta, que e a checagem que pega o defeito
+   de verdade. */
 
 /* ══ A REGRA MUDOU EM 03/09/26: SUBCONJUNTO, NAO IGUALDADE ═══════════════════════════
    Ate 02/09 as duas listas tinham que ser identicas, e estava certo: as duas espelhavam
