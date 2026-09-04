@@ -1661,3 +1661,19 @@ function checarPropriedadesEspelhadas() {
   return true;
 }
 if (!checarPropriedadesEspelhadas()) process.exit(1);
+
+/* ══ GUARDA 20 — VARIAVEL USADA ANTES DE EXISTIR (04/09/26) ═══════════════════════════
+   Ela vive em arquivo proprio porque le o template com outro metodo (mascara comentarios e
+   strings e compara POSICAO de declaracao contra posicao de uso), e misturar isso aqui
+   faria este arquivo ter duas gramaticas de leitura.
+
+   O CASO: usei `semRecic` na linha do filtro e declarei 200 linhas abaixo. `const` em TDZ
+   estoura, o Planejamento morria inteiro — e build, as 19 guardas e as 22 suites ficaram
+   verdes, porque nenhuma delas avalia as funcoes de render. */
+const { execFileSync } = require('child_process');
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-ordem-declaracao.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
