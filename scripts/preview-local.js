@@ -255,8 +255,26 @@ const bootstrap = `
     } catch (e) { console.warn('[preview] nao consegui pre-popular playbook/precificacao:', e); }
     if (!${manual ? 'true' : 'false'}) mostrarApp();
     else { window.__PREVIEW_MANUAL__ = true; console.log('[preview] modo manual: sessão e supa prontos, mostrarApp() NÃO chamado'); }
+    /* A IDADE DO DADO É DO DISCO, E O PREVIEW TEM DE DIZER ISSO (04/09/26).
+       A faixa vermelha do template diz "a atualização das 5h falhou" — texto que só faz
+       sentido em produção, onde o dado vem do Supabase. No preview, o que está velho é
+       data/hubspot.json na máquina de quem desenvolve, e essa frase fez o Julyan achar
+       que o robô do CRM estava quebrado num dia em que ele rodou nove vezes com sucesso.
+       Aqui a faixa é reescrita para dizer de quem é a velhice e como resolver. */
+    var idadeH = null;
+    try {
+      var tsP = DATA.hubspotUpdatedAtISO ? new Date(DATA.hubspotUpdatedAtISO) : null;
+      if (tsP && !isNaN(tsP.getTime())) idadeH = (Date.now() - tsP.getTime()) / 3600000;
+    } catch (e) {}
+    var faixa = document.getElementById('avisoSyncVelho');
+    if (faixa) {
+      faixa.textContent = '⚠ PREVIEW LOCAL: este data/hubspot.json tem '
+        + Math.floor(idadeH) + 'h — é o disco desta máquina, NÃO a produção.'
+        + ' A produção lê o Supabase (cockpit_snapshot). Rode o fetch local para atualizar.';
+    }
     var aviso = document.createElement('div');
-    aviso.textContent = 'PREVIEW LOCAL · ' + sessao.nome + ' (' + sessao.role + ') · dados reais, sem gravação';
+    aviso.textContent = 'PREVIEW LOCAL · ' + sessao.nome + ' (' + sessao.role + ') · dados reais, sem gravação'
+      + (idadeH != null ? ' · dado do disco: ' + (idadeH < 1 ? 'menos de 1h' : Math.floor(idadeH) + 'h') : '');
     aviso.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#1A1613;color:#E0A64A;font:700 11px/1 system-ui;padding:7px 12px;text-align:center;letter-spacing:.06em;';
     document.body.appendChild(aviso);
   } catch (e) {
@@ -321,3 +339,20 @@ fs.writeFileSync(destino, out);
 console.log(`Preview gerado: ${destino}`);
 console.log(`Sessão simulada: ${usuario.nome || usuario.email} · papel ${usuario.role === 'manager' ? 'manager' : 'rep'} · ownerId ${usuario.ownerId}`);
 console.log('ATENÇÃO: o arquivo contém dados reais do CRM. Não versione, não compartilhe.');
+/* A IDADE NO TERMINAL, antes de eu abrir a tela: foi olhando um preview de 38h que eu
+   deixei passar uma faixa vermelha acusando a produção de estar quebrada. */
+try {
+  const isoDisco = (typeof dados !== 'undefined' && dados) ? dados.hubspotUpdatedAtISO : null;
+  const tsDisco = isoDisco ? new Date(isoDisco) : null;
+  if (tsDisco && !isNaN(tsDisco.getTime())) {
+    const h = (Date.now() - tsDisco.getTime()) / 3600000;
+    if (h > 26) {
+      console.log('AVISO: data/hubspot.json deste disco tem ' + Math.floor(h) + 'h. O preview vai',
+        'mostrar números velhos — e isso NÃO diz nada sobre a produção, que lê o Supabase.');
+    } else {
+      console.log('data/hubspot.json deste disco: ' + (h < 1 ? 'menos de 1h' : Math.floor(h) + 'h') + '.');
+    }
+  } else {
+    console.log('AVISO: não achei updatedAt em data/hubspot.json — a idade do dado do preview é desconhecida.');
+  }
+} catch (e) { console.log('AVISO: não consegui medir a idade de data/hubspot.json:', e && e.message); }
