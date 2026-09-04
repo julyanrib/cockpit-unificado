@@ -1173,6 +1173,7 @@
   .pl6-regiao-op:hover{background:var(--pl6-territorio-soft);}
   .pl6-regiao-op b{margin-left:auto;font:900 11px var(--font-display);font-variant-numeric:tabular-nums;color:var(--pl6-territorio);}
   .pl6-regiao-op small{font-size:9.5px;color:var(--muted2);}
+  .pl6-regiao-nota{display:block;padding:6px 8px 2px;font-size:9px;color:var(--muted2);line-height:1.4;}
   .pl6-regiao-mais{width:100%;min-height:38px;border:0;background:none;color:var(--muted);cursor:pointer;
     font:800 10px var(--font-body);border-top:1px solid var(--line-soft);margin-top:4px;}
 
@@ -22207,6 +22208,12 @@ const PL6_BLOQUEADO = '__b';
 /* Cores por etapa do funil e por fonte do lote — as mesmas da prancha, e as mesmas que a
    Daily 4a usa. Ficam aqui como tabela porque a prancha as define por nome de etapa, e
    traduzir de stageId para nome em cada uso espalharia o de/para. */
+/* AS ETAPAS QUE ESTAO "NA MESA" — proposta entregue e negociacao em curso. Ag. Pagamento
+   (1395880473) fica FORA de proposito: ali o cliente ja disse sim e o que falta e o
+   pagamento; contar como "na mesa" inflaria a promessa com negocio que nao precisa mais
+   de conversa. O par 471+472 e o mesmo que outros tres calculos deste arquivo usam
+   escrito a mao; aqui ele ganha nome. */
+const PL6_ETAPAS_DE_MESA = ['1395880471', '1395880472'];
 const PL6_COR_ETAPA = {
   '1395880469': '#E51A31', // Prospecção
   '1396005401': '#F2542D', // Visita (Contato feito, na prancha)
@@ -22771,20 +22778,39 @@ function renderPlanejamento6a(rep) {
         + '<span aria-hidden="true">⌖</span><span class="pl6-regiao-nome">'
         + esc(rotaNome || 'escolher região') + '</span><span style="margin-left:auto;">⌄</span></button>';
       if (pl6UI.rotaPicker === di) {
-        const mostrar = pl6UI.verTodasRegioes ? regioes : regioes.slice(0, PL6_REGIOES_VISIVEIS);
+        /* ══ O NUMERO E DE CONTA LIVRE, NAO DO TOTAL DO BAIRRO (04/09/26) ═════════════
+           Mostrava r.contas, que conta toda conta com coordenada no bairro. Medido em
+           Praia da Costa: dizia 14, o bairro tinha 11 agendaveis e apenas 4 LIVRES — o
+           numero que decide onde atacar estava inflado em 27%, e ele e lido ANTES do
+           clique. Mesma lei que fez o chip de Territorio contar livre: numero que
+           promete 14 e entrega 4 mentiu na hora da decisao.
+           Usa livrePorRegiao, o MESMO mapa dos chips de Territorio — um calculo, dois
+           lugares, impossivel divergirem. */
+        const comLivre = regioes
+          .map(r => Object.assign({}, r, { livres: livrePorRegiao.get(r.chave) || 0 }))
+          .sort((a, b) => b.livres - a.livres);
+        const mostrar = pl6UI.verTodasRegioes ? comLivre : comLivre.slice(0, PL6_REGIOES_VISIVEIS);
         regiaoHTML += '<div class="pl6-regiao-lista">'
-          + (regioes.length ? mostrar.map(r =>
+          + (comLivre.length ? mostrar.map(r =>
             '<button type="button" class="pl6-regiao-op" data-pl6-regiao="' + di + '.' + esc(r.chave) + '">'
             + '<span>' + esc(r.nome) + (r.grafias > 1
               ? ' <small title="a base tem ' + r.grafias + ' grafias para este bairro — a contagem soma as duas">('
                 + r.grafias + ' grafias)</small>' : '') + '</span>'
-            + '<b>' + r.contas + '</b></button>').join('')
+            /* zero livre nao e botao morto: o bairro continua clicavel (ele pode querer
+               a rota por outro motivo), mas o numero diz que nao ha conta esperando. */
+            + '<b' + (r.livres ? '' : ' style="color:var(--muted2);"') + '>' + r.livres + '</b></button>').join('')
             : '<div class="pl6-sug-vazio">Nenhuma conta-alvo com endereço no seu território ainda.</div>')
-          + (regioes.length > PL6_REGIOES_VISIVEIS
+          + (comLivre.length > PL6_REGIOES_VISIVEIS
             ? '<button type="button" class="pl6-regiao-mais" data-pl6-mais-regioes="1">'
-              + (pl6UI.verTodasRegioes ? 'mostrar só as 8 com mais contas'
-                : 'ver todas as ' + regioes.length + ' regiões') + '</button>'
+              + (pl6UI.verTodasRegioes
+                ? 'mostrar só as ' + PL6_REGIOES_VISIVEIS + ' com mais conta livre'
+                : 'ver todas as ' + comLivre.length + ' regiões') + '</button>'
             : '')
+          /* A LEGENDA PASSOU A SER NECESSARIA porque o numero mudou de significado: era o
+             total do bairro, virou conta LIVRE. Numero sem legenda e numero que cada um
+             interpreta como quer — e este e o numero que decide onde ele passa o dia. */
+          + '<span class="pl6-regiao-nota">nº = contas <b>livres</b> — as que ainda não estão'
+          + ' na sua semana · trocar a região recalcula as sugestões do dia</span>'
           + '</div>';
       }
     }
@@ -23105,49 +23131,36 @@ function renderPlanejamento6a(rep) {
    muda e o toast diz o que aconteceu — porque tela que muda sem o banco mudar e a mentira
    que fez a Kelly jurar que tinha prometido.
    ══════════════════════════════════════════════════════════════════════════════════════ */
-function pl6Ligar(box, rep) {
-  if (!box || box.dataset.pl6Ligado === '1') return;
-  box.dataset.pl6Ligado = '1';
+/* ══ AGENDAR NUM HORARIO — UM CAMINHO SO, PARA AS DUAS TELAS ═══════════════════════════
+   O clique no picker do Planejamento, o ARRASTAR da munição e a Minha Daily 7a chamam
+   esta mesma funcao. Se cada gesto (ou cada tela) escrevesse por conta propria, um deles
+   ficaria sem algum efeito colateral — a tarefa no HubSpot, o negocio criado para conta
+   nova, o toast que diz onde gravou — e a divergencia so apareceria no fim do mes, com
+   metade das visitas sem tarefa no CRM.
 
-  const redesenhar = async () => {
-    const el = document.getElementById('agendaContent');
-    if (!el) return;
-    el.innerHTML = renderPlanejamento6a(rep);
-  };
+   NENHUM DOS CHAMADORES CRIA TAREFA POR CONTA PROPRIA. A ordem aqui e deliberada: o
+   HubSpot primeiro, a grade depois — a semana nunca diz "agendado" sem tarefa do outro
+   lado.
 
-  /* Grava e redesenha, ou nao faz nada e explica. Um caminho so para as sete mutacoes. */
-  const mutar = async (campos, toastOk) => {
-    if (pl6UI.salvando) return;
-    pl6UI.salvando = true;
-    const { error } = await pl6Gravar(rep, campos);
-    pl6UI.salvando = false;
-    if (error) {
-      pl6UI.toast = null;
-      if (typeof mostrarToast === 'function') {
-        mostrarToast('Não consegui gravar a semana: ' + (error.message || 'erro desconhecido')
-          + '. A tela não mudou — tente de novo.', 'erro');
-      }
-      return false;
-    }
-    pl6UI.toast = toastOk || null;
-    await redesenhar();
-    return true;
-  };
-
-  /* ══ DIGITAR FILTRA OS CHIPS SEM REDESENHAR ═══════════════════════════════════════
-     Um listener de `input`, delegado como o de clique. Ele NAO toca no estado e NAO
-     redesenha: esconde e mostra os chips por atributo. Se redesenhasse, o input seria
-     recriado a cada letra e o cursor sairia do campo — e a pessoa digita isso com uma
-     mao, no carro, com o motor ligado.
-     Compara contra data-nome, que o render ja emite normalizado (sem acento, minusculo):
-     "itapua" acha "Itapuã". */
-  /* ══ AGENDAR NUM HORARIO — UM CAMINHO SO, DOIS GESTOS ════════════════════════════
-     O clique numa opcao do picker e o ARRASTAR da munição chamam esta mesma funcao.
-     Se cada gesto escrevesse por conta propria, um deles ficaria sem algum efeito
-     colateral — a tarefa no HubSpot, o negocio criado para conta nova, o toast que diz
-     onde gravou — e a divergencia so apareceria no fim do mes, com metade das visitas
-     sem tarefa no CRM. */
-  const agendarNoSlot = async function (id, di, si) {
+   `ganchos` e o que cada tela tem de proprio:
+     mutar(campos, textoOk)  grava em planos_semanais e redesenha aquela tela
+     redesenhar()            so redesenha
+     box                     a raiz daquela tela (usada para achar o cartao aberto)
+   A REGRA fica aqui; o jeito de gravar e de redesenhar e de quem chamou. */
+async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
+  /* O nome e "gk" e nao "g" porque o corpo desta funcao JA usa "g" para a grade da
+     semana. Duas declaracoes com o mesmo nome no mesmo escopo derrubam o arquivo inteiro
+     ("Identifier g has already been declared") — e nao so esta tela: o template e um
+     script unico, entao o Cockpit todo fica branco. A guarda de sintaxe do build pegou na
+     primeira tentativa, que e o motivo de ela existir. */
+  const gk = ganchos || {};
+  const mutar = gk.mutar;
+  const redesenhar = gk.redesenhar || function () {};
+  const box = gk.box || document;
+  if (typeof mutar !== 'function') {
+    console.error('pl6AgendarNoSlot chamada sem o gancho mutar — nada foi gravado.');
+    return;
+  }
     const regioes = pl6Regioes(rep);
     const todos = pl6Carteira(rep, regioes).concat(pl6Novos(rep, regioes));
     const l = todos.find(x => x.id === id);
@@ -23233,7 +23246,49 @@ function pl6Ligar(box, rep) {
     g[di][si] = l.id;
     return mutar({ grade: g }, l.nome + ' · agendado ' + dias[di].rot + ' ' + dias[di].data + ' ' + hora
       + ' — tarefa no HubSpot ✓ · slot no Supabase ✓');
+}
+
+function pl6Ligar(box, rep) {
+  if (!box || box.dataset.pl6Ligado === '1') return;
+  box.dataset.pl6Ligado = '1';
+
+  const redesenhar = async () => {
+    const el = document.getElementById('agendaContent');
+    if (!el) return;
+    el.innerHTML = renderPlanejamento6a(rep);
   };
+
+  /* Grava e redesenha, ou nao faz nada e explica. Um caminho so para as sete mutacoes. */
+  const mutar = async (campos, toastOk) => {
+    if (pl6UI.salvando) return;
+    pl6UI.salvando = true;
+    const { error } = await pl6Gravar(rep, campos);
+    pl6UI.salvando = false;
+    if (error) {
+      pl6UI.toast = null;
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não consegui gravar a semana: ' + (error.message || 'erro desconhecido')
+          + '. A tela não mudou — tente de novo.', 'erro');
+      }
+      return false;
+    }
+    pl6UI.toast = toastOk || null;
+    await redesenhar();
+    return true;
+  };
+
+  /* ══ DIGITAR FILTRA OS CHIPS SEM REDESENHAR ═══════════════════════════════════════
+     Um listener de `input`, delegado como o de clique. Ele NAO toca no estado e NAO
+     redesenha: esconde e mostra os chips por atributo. Se redesenhasse, o input seria
+     recriado a cada letra e o cursor sairia do campo — e a pessoa digita isso com uma
+     mao, no carro, com o motor ligado.
+     Compara contra data-nome, que o render ja emite normalizado (sem acento, minusculo):
+     "itapua" acha "Itapuã". */
+    /* a REGRA de agendar vive em pl6AgendarNoSlot (escopo de modulo), porque a Minha
+       Daily 7a agenda a mesma coisa. Aqui vao so os ganchos desta tela. */
+    const agendarNoSlot = function (id, di, si) {
+      return pl6AgendarNoSlot(rep, id, di, si, { mutar: mutar, redesenhar: redesenhar, box: box });
+    };
 
   /* ══════════════ ARRASTAR A CONTA PARA O DIA (Pointer Events) ═══════════════════ */
   let arraste = null;
@@ -38187,6 +38242,501 @@ function dl2PontosDeAgora(linhaHoje) {
    Uma lista só. Estados: feita (verde, hora real, pontos), AGORA (um por vez, borda de
    tinta, arma e CTA da etapa), fila (neutra, arma resumida), furou (riscada, motivo).
    A RESERVA fecha a lista: uma conta da bandeja do Planejamento perto da rota. */
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   MINHA DAILY 7a — CAMADA DE DADOS (04/09/26)
+
+   "ELE monta o plano de hoje. O sistema pre-carrega e sugere; quem agenda, promete e
+   declara e o executivo." As funcoes daqui respondem as perguntas da tela; nenhuma
+   desenha nada, e nenhuma agenda por conta propria.
+
+   Reaproveita a 6a de proposito: pl6Carteira, pl6Novos, pl6Regioes, pl6Prioridade e a
+   grade de planos_semanais sao as MESMAS. Duas copias do ranqueador divergiriam na
+   primeira mudanca de criterio, e o executivo veria a Daily sugerir uma conta e o
+   Planejamento sugerir outra, sem razao visivel.
+   ══════════════════════════════════════════════════════════════════════════════════ */
+
+/* Os sete horarios sao os mesmos da semana: a Daily e a coluna de hoje daquela grade. */
+const D7_HORAS = PL6_HORAS;
+
+/* ══ A HORA DA TRAVA TEM UMA FONTE SO ══════════════════════════════════════════════════
+   Eu havia declarado 9h30 aqui, que e o que a prancha 7a desenha — e PROMESSA_TRAVA_MINUTOS
+   diz outra coisa, porque o Julyan mudou a trava hoje. Duas constantes para a mesma regra
+   sao duas verdades: a tela prometeria uma hora e a trava aconteceria em outra, e quem
+   perde a janela e o executivo que confiou no que leu. A guarda 13 existe exatamente para
+   pegar isso, e pegou.
+
+   Agora e apelido, e o ROTULO sai da constante: mudar a hora num lugar muda a tela toda,
+   e nenhum texto escreve hora a mao. */
+const D7_TRAVA_MIN = PROMESSA_TRAVA_MINUTOS;
+/* "13h" ou "9h30", derivado — nunca digitado. */
+function d7HoraDaTravaRot() {
+  const h = Math.floor(D7_TRAVA_MIN / 60);
+  const m = D7_TRAVA_MIN % 60;
+  return m === 0 ? (h + 'h') : (h + 'h' + String(m).padStart(2, '0'));
+}
+
+/* QUAL COLUNA DA SEMANA E HOJE, ou -1 no fim de semana.
+   Usa agendaAgora() e nao new Date(): agendaChave le as partes UTC, e das 21h a
+   meia-noite de Brasilia o instante cru ja esta no dia seguinte. Foi exatamente esse
+   defeito que a auditoria de 03/09 achou na linha do dia (ver a guarda 17). */
+function d7ColunaDeHoje() {
+  const hoje = agendaChave(agendaAgora());
+  const dias = pl6Dias(pl6SegundaDaSemana());
+  for (let i = 0; i < dias.length; i++) if (dias[i].iso === hoje) return i;
+  return -1;
+}
+
+/* A ROTA DE HOJE — o bairro que ele escolheu para hoje no Planejamento. Vira o titulo da
+   coluna e o criterio que ranqueia a munição. null quando ele nao escolheu. */
+function d7RotaDeHoje(rep) {
+  const di = d7ColunaDeHoje();
+  if (di < 0) return null;
+  const ch = pl6RegioesDoPlano()[di];
+  if (!ch) return null;
+  const r = pl6Regioes(rep).find(x => x.chave === ch);
+  return { chave: ch, nome: (r && r.nome) || ch };
+}
+
+/* ══ O PLANO DE HOJE, HORA A HORA ══════════════════════════════════════════════════════
+   Sete linhas, uma por horario. Cada uma e um de quatro estados:
+
+     visita     tem conta no horario. `naAgenda` diz se existe compromisso de verdade no
+                CRM para ela, e `estado` diz onde a visita esta (fila / na porta / feita)
+     bloqueado  ele marcou compromisso fora da rua
+     livre      ninguem ali
+     orfa       a grade tem um id que nao esta mais na base dele (virou cliente, mudou de
+                dono, foi perdido). NAO pode virar linha muda: a tela diz o que houve e
+                oferece liberar o horario
+
+   POR QUE `naAgenda` EXISTE, e nao e detalhe: a grade e INTENCAO (escrita na hora que
+   ele clica) e a agenda do HubSpot e COMPROMISSO. Quando a tarefa falha ao ser criada, a
+   grade tem a visita e a agenda nao — e essa diferenca e o furo que o gestor cobra as
+   8h30. Esconder seria mentir por omissao. */
+function d7PlanoDeHoje(rep) {
+  const di = d7ColunaDeHoje();
+  const regioes = pl6Regioes(rep);
+  const todos = pl6Carteira(rep, regioes).concat(pl6Novos(rep, regioes));
+  const porId = new Map(todos.map(l => [l.id, l]));
+  const grade = pl6GradeDoPlano();
+  const coluna = di >= 0 ? (grade[di] || []) : [];
+
+  /* o que EXISTE como compromisso hoje, por nome normalizado — a agenda nao tem o id do
+     nosso lead, so o nome do cliente. agendaNorm e o normalizador que a propria agenda
+     usa para esse cruzamento. */
+  const eventos = (typeof d4EventosDeHoje === 'function') ? d4EventosDeHoje(rep.ownerId) : [];
+  const porNome = new Map();
+  eventos.forEach(function (e) {
+    const k = agendaNorm(e.cliente || '');
+    if (k && !porNome.has(k)) porNome.set(k, e);
+  });
+
+  return D7_HORAS.map(function (hora, si) {
+    const v = coluna[si];
+    if (v === PL6_BLOQUEADO) return { hora: hora, si: si, tipo: 'bloqueado' };
+    if (!v) return { hora: hora, si: si, tipo: 'livre' };
+    const l = porId.get(v);
+    if (!l) return { hora: hora, si: si, tipo: 'orfa' };
+    const ev = porNome.get(agendaNorm(l.nome));
+    return {
+      hora: hora, si: si, tipo: 'visita', lead: l,
+      /* a tarefa existe no CRM? */
+      naAgenda: !!ev,
+      /* e ela ja aconteceu? o desfecho vem do HubSpot (tarefa concluida) ou do Expogo */
+      estado: ev ? ((ev.desfecho === 'COMPLETED' || ev.registro) ? 'feita' : 'fila') : 'fila'
+    };
+  });
+}
+
+/* ══ A PROMESSA, DERIVADA DO PLANO ═════════════════════════════════════════════════════
+   Lei 3 da prancha: os contadores sao CALCULADOS, nunca digitados. A Daily antiga tinha
+   contadores com −/+ e o executivo digitava numeros que nao correspondiam ao dia dele —
+   e o gestor cobrava numero digitado, nao plano.
+
+   `quentesFora` NAO entra na promessa: ele e a divida do dia, e a pergunta da rodada.
+   Somar a divida na promessa faria o executivo prometer o que ele acabou de dizer que
+   nao vai fazer. */
+function d7PromessaDerivada(rep, plano) {
+  const visitas = plano.filter(x => x.tipo === 'visita');
+  return {
+    visitas: visitas.length,
+    prospeccoes: visitas.filter(x => x.lead.tipo === 'n').length,
+    naMesa: visitas.filter(x => x.lead.tipo === 'c' && PL6_ETAPAS_DE_MESA.indexOf(String(x.lead.stageId)) >= 0).length,
+    semTarefa: visitas.filter(x => !x.naAgenda).length,
+    bloqueados: plano.filter(x => x.tipo === 'bloqueado').length,
+    livres: plano.filter(x => x.tipo === 'livre').length
+  };
+}
+
+/* ══ QUENTES FORA DO PLANO ═════════════════════════════════════════════════════════════
+   O que esta quente no funil e NAO esta no plano de hoje. E a pergunta que o gestor faz
+   as 8h30, e a tela existe para ele chegar com resposta em vez de desculpa.
+
+   Cruza por NOME normalizado, nao por id: o quente vem de DATA.temperatura.quentes, que
+   tem forma propria, e o plano vem da carteira. agendaNorm e o mesmo normalizador que a
+   agenda usa para esse cruzamento — um so, para os dois nao divergirem. */
+function d7QuentesForaDoPlano(rep, plano) {
+  const noPlano = new Set(plano
+    .filter(x => x.tipo === 'visita')
+    .map(x => agendaNorm(x.lead.nome)));
+  const meus = [];
+  const vistos = new Set();
+  const registrar = function (l) {
+    if (!l || String(l.ownerId) !== String(rep.ownerId)) return;
+    const nome = (typeof agendaLeadNome === 'function') ? agendaLeadNome(l) : (l.name || l.nome || '');
+    const k = agendaNorm(nome);
+    if (!k || vistos.has(k) || noPlano.has(k)) return;
+    vistos.add(k);
+    meus.push({
+      nome: nome,
+      etapa: (DATA.stageMeta && DATA.stageMeta.labels && DATA.stageMeta.labels[l.stageId]) || l.etapa || 'etapa não medida',
+      stageId: l.stageId || null,
+      dias: (l.diasParado != null) ? l.diasParado : (l.dias != null ? l.dias : null),
+      dealId: l.id || l.dealId || null,
+      /* de onde a tela diz que ele veio — procedencia e parte do numero */
+      origem: l.proximaAtividade ? 'tem próxima atividade no CRM' : 'sem tarefa futura no CRM'
+    });
+  };
+  ((DATA.temperatura && DATA.temperatura.quentes) || []).forEach(registrar);
+  (rep.quentes || []).forEach(function (l) { registrar(Object.assign({}, l, { ownerId: l.ownerId || rep.ownerId })); });
+  /* quem esta parado ha mais tempo primeiro: e por ele que a rodada comeca */
+  return meus.sort(function (a, b) { return (b.dias == null ? -1 : b.dias) - (a.dias == null ? -1 : a.dias); });
+}
+
+/* ══ A MUNIÇÃO PARA COMPLETAR O DIA ════════════════════════════════════════════════════
+   Carteira sem data + lote novo, menos quem ja esta no plano, ranqueados pela ROTA DE
+   HOJE. Usa pl6CandidatosDaRota quando ha rota — o mesmo ranqueador da sugestao da
+   semana, para a Daily e o Planejamento nunca sugerirem coisas diferentes.
+
+   SEM ROTA ESCOLHIDA, cai em pl6Candidatos (prioridade primeiro): aqui ele esta
+   completando o dia de hoje, e um dia sem bairro definido ainda precisa de quem mais
+   precisa dele. A tela diz qual dos dois criterios esta valendo. */
+function d7Municao(rep, plano, filtro) {
+  const regioes = pl6Regioes(rep);
+  const todos = pl6Carteira(rep, regioes).concat(pl6Novos(rep, regioes));
+  const usados = plano
+    .filter(x => x.tipo === 'visita')
+    .map(x => x.lead.id);
+  const rota = d7RotaDeHoje(rep);
+  const base = rota
+    ? pl6CandidatosDaRota(rota.chave, todos, usados)
+    : pl6Candidatos(null, todos, usados);
+  const f = filtro || 'tudo';
+  return {
+    rota: rota,
+    criterio: rota ? ('rota de hoje: ' + rota.nome) : 'sem rota escolhida — por quem mais precisa de você',
+    lista: base.filter(function (l) {
+      if (f === 'carteira') return l.tipo === 'c';
+      if (f === 'novos') return l.tipo === 'n';
+      return true;
+    })
+  };
+}
+
+/* ══ QUANTO FALTA PARA A TRAVA ══════════════════════════════════════════════════════════
+   Minutos ate as 9h30 de Brasilia, ou negativo depois. A prancha pede contagem
+   regressiva REAL — nao um rotulo fixo. Depois das 9h30 a promessa trava de verdade. */
+function d7MinutosParaTrava() {
+  const agora = agendaAgora();
+  return D7_TRAVA_MIN - (agora.getUTCHours() * 60 + agora.getUTCMinutes());
+}
+function d7Travada() { return d7MinutosParaTrava() <= 0; }
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   MINHA DAILY 7a — A TELA (04/09/26)
+   Sobre a camada d7*, ja medida com dado real. Sem faixa vermelha; check-in e do Expogo.
+   ══════════════════════════════════════════════════════════════════════════════════ */
+
+let d7UI = {
+  filtro: 'tudo',   /* munição: tudo | carteira | novos */
+  slot: null,       /* qual horario livre esta com o card de sugestao aberto */
+  apostas: {},      /* {leadId: true} — a UNICA escolha manual da promessa (lei 3) */
+  toast: null,
+  salvando: false
+};
+
+/* A linha de uma visita: estado do Expogo/HubSpot + os tres desfechos do Cockpit. */
+function d7LinhaVisita(l) {
+  const lead = l.lead;
+  const isC = lead.tipo === 'c';
+  const cor = isC ? (PL6_COR_ETAPA[lead.stageId] || 'var(--muted2)')
+    : ((PL6_FONTES[lead.grupo] || {}).cor || 'var(--muted2)');
+  const tag = isC
+    ? (lead.etapa + (lead.sla ? ' · SLA!' : ''))
+    : ('prospecção nova · ' + ((PL6_FONTES[lead.grupo] || {}).chip || 'lote novo'));
+  /* O ESTADO DIZ O QUE FALTA E ONDE SE FAZ. "aguardando check-in no Expogo" e
+     informacao; linha muda nao e. E "sem tarefa no CRM" e o furo que o gestor cobra:
+     a grade tem a visita e a agenda nao. */
+  const estado = l.estado === 'feita'
+    ? '<span class="d7-st is-feita">✓ visita registrada no Expogo</span>'
+    : (l.naAgenda
+      ? '<span class="d7-st">⊙ aguardando check-in no Expogo</span>'
+      : '<span class="d7-st is-sem">⚠ sem tarefa no CRM — planejada, não confirmada</span>');
+  const obj = isC
+    ? (lead.dias != null ? ('parado há ' + lead.dias + 'd — ' + (lead.sla ? 'acima do SLA' : 'dentro do prazo')) : 'dias não medidos')
+    : (lead.nota != null
+      ? ('★ ' + lead.nota.toFixed(1).replace('.', ',')
+        + (lead.avaliacoes != null ? ' · ' + lead.avaliacoes.toLocaleString('pt-BR') + ' avaliações' : ''))
+      : (lead.mesesAberto != null ? ('CNPJ aberto há ' + lead.mesesAberto + ' meses') : 'sinal não medido'));
+  const desfechos = l.estado === 'feita' ? ''
+    : ('<div class="d7-desf">'
+      + '<button type="button" class="d7-b-prop" data-d7-proposta="' + esc(lead.id) + '">virou proposta ▸</button>'
+      + '<button type="button" class="d7-b-fech" data-d7-fechou="' + esc(lead.id) + '">fechou · contrato ▸</button>'
+      + '<button type="button" class="d7-b-ret" data-d7-retorno="' + esc(lead.id) + '">sem avanço · datar retorno ▸</button>'
+      + '</div>');
+  return '<div class="d7-linha is-visita" style="border-left-color:' + cor + ';">'
+    + '<span class="d7-hora">' + l.hora + '</span>'
+    + '<div class="d7-corpo">'
+    +   '<div class="d7-tit"><b>' + esc(lead.nome) + '</b>'
+    +     '<span class="d7-tag" style="color:' + cor + ';">' + esc(tag) + '</span>' + estado + '</div>'
+    +   '<span class="d7-obj">' + esc(obj) + '</span>' + desfechos
+    + '</div>'
+    + '<button type="button" class="d7-x" data-d7-tirar="' + l.si + '"'
+    + ' title="Tirar ' + esc(lead.nome) + ' do plano" aria-label="Tirar do plano">✕</button>'
+    + '</div>';
+}
+
+function minhaDaily7aHTML(rep) {
+  const dias = pl6Dias(pl6SegundaDaSemana());
+  const di = d7ColunaDeHoje();
+  const iso = dias[di >= 0 ? di : 0].iso;
+  const hojeRot = di >= 0 ? (dias[di].rot + ' ' + dias[di].data) : 'fim de semana';
+  const rota = d7RotaDeHoje(rep);
+  const plano = d7PlanoDeHoje(rep);
+  const prom = d7PromessaDerivada(rep, plano);
+  const quentes = d7QuentesForaDoPlano(rep, plano);
+  const mun = d7Municao(rep, plano, d7UI.filtro);
+  const min = d7MinutosParaTrava();
+  const travada = d7Travada();
+  const linhaDia = (typeof getDaily === 'function') ? (getDaily(rep.ownerId, iso) || {}) : {};
+  const jaTravou = String(linhaDia.status || '') === 'plano_fechado';
+  const horaTrava = linhaDia.fechado_em ? String(linhaDia.fechado_em).slice(11, 16) : '';
+
+  /* ══ A MANCHETE, por regra — tres estados, e cada um diz o proximo ato ═════════════ */
+  const manchete = jaTravou
+    ? (quentes.length
+      ? ('Promessa travada — mas ' + quentes.length + ' quente(s) seu(s) está(ão) fora do plano.'
+        + ' O gestor vai perguntar às 8h30: agende ou date antes.')
+      : 'Agora é rua — check-in na porta pelo Expogo, e o desfecho em 1 clique aqui.')
+    : (prom.visitas
+      ? ('Seu Planejamento deixou ' + prom.visitas + ' visita(s) prontas pra hoje.'
+        + (prom.livres ? ' Complete os ' + prom.livres + ' horário(s) livre(s),' : '')
+        + (quentes.length ? ' responda ' + quentes.length + ' quente(s)' : '')
+        + ' e trave sua promessa' + (travada ? ' — o prazo das ' + d7HoraDaTravaRot() + ' passou.' : ' — faltam ' + min + ' min.'))
+      : ('Hoje está em branco. Monte o dia pelos horários livres ou pela munição'
+        + (rota ? ' da sua rota em ' + rota.nome : '') + ', e trave a promessa'
+        + (travada ? ' — o prazo das ' + d7HoraDaTravaRot() + ' passou.' : ' — faltam ' + min + ' min.')));
+
+  const kpis = [
+    { rot: 'Seu plano de hoje', v: String(prom.visitas), de: 'visita(s)',
+      fonte: 'montado por você · pré-carregado do Planejamento', cor: 'var(--ink)' },
+    { rot: 'Sua promessa', v: jaTravou ? '✓' : '—',
+      de: jaTravou ? ('travada ' + horaTrava)
+        : (travada ? ('passou das ' + d7HoraDaTravaRot()) : ('até ' + d7HoraDaTravaRot())),
+      fonte: 'o gestor cobra na rodada e à noite · Supabase planos_diarios',
+      cor: jaTravou ? 'var(--green)' : 'var(--pl6-atencao)' },
+    { rot: 'Quentes fora do plano', v: String(quentes.length), de: 'sem resposta',
+      fonte: 'etapa ≥ Visita e sem tarefa futura · HubSpot',
+      cor: quentes.length ? 'var(--pl6-bloqueio)' : 'var(--green)' },
+    { rot: 'Na mesa hoje', v: String(prom.naMesa), de: 'proposta/negociação',
+      fonte: 'sua palavra, não forecast · do seu plano de hoje', cor: '#9C5BD6' }
+  ];
+
+  /* ══ AS SETE LINHAS ═══════════════════════════════════════════════════════════════ */
+  const linhas = plano.map(function (l) {
+    if (l.tipo === 'visita') return d7LinhaVisita(l);
+    if (l.tipo === 'bloqueado') {
+      return '<div class="d7-linha is-bloq"><span class="d7-hora">' + l.hora + '</span>'
+        + '<div class="d7-corpo"><span class="d7-obj">bloqueado — compromisso fora da rua</span></div>'
+        + '<button type="button" class="d7-x" data-d7-tirar="' + l.si + '" title="Desbloquear" aria-label="Desbloquear">✕</button></div>';
+    }
+    if (l.tipo === 'orfa') {
+      /* CONTA QUE SAIU DA BASE nao vira linha muda: diz o que houve e oferece a unica
+         acao que resolve. Mesmo tratamento do slot orfao no Planejamento. */
+      return '<div class="d7-linha is-bloq"><span class="d7-hora">' + l.hora + '</span>'
+        + '<div class="d7-corpo"><span class="d7-obj">a conta saiu da sua base — virou cliente, mudou de dono ou foi perdida</span></div>'
+        + '<button type="button" class="d7-x" data-d7-tirar="' + l.si + '" title="Liberar o horário" aria-label="Liberar o horário">✕</button></div>';
+    }
+    if (d7UI.slot !== l.si) {
+      return '<button type="button" class="d7-linha is-livre" data-d7-abrir="' + l.si + '">'
+        + '<span class="d7-hora">' + l.hora + '</span>'
+        + '<span class="d7-livre-txt">livre — o que você coloca aqui?</span></button>';
+    }
+    /* O CARD DE SUGESTAO: quentes PRIMEIRO (a divida do dia), depois a munição da rota.
+       Nenhuma se auto-agenda — a escolha e dele (lei 2). */
+    const sugQ = quentes.slice(0, 2).map(function (q) {
+      return '<button type="button" class="d7-sug is-quente" data-d7-por="q:' + esc(String(q.dealId || q.nome)) + '.' + l.si + '">'
+        + '<span class="d7-sug-tit"><b>' + esc(q.nome) + '</b><span class="d7-badge is-quente">QUENTE</span></span>'
+        + '<span class="d7-sug-pq">' + esc(q.etapa + (q.dias != null ? ' · há ' + q.dias + 'd' : '')) + ' — fora do plano, o gestor vai perguntar</span>'
+        + '</button>';
+    }).join('');
+    const sugM = mun.lista.slice(0, 4).map(function (c) {
+      const isC = c.tipo === 'c';
+      const cor = isC ? (PL6_COR_ETAPA[c.stageId] || 'var(--muted2)') : ((PL6_FONTES[c.grupo] || {}).cor || 'var(--muted2)');
+      return '<button type="button" class="d7-sug" data-d7-por="l:' + esc(c.id) + '.' + l.si + '">'
+        + '<span class="d7-sug-tit"><b>' + esc(c.nome) + '</b>'
+        + '<span class="d7-badge" style="color:' + cor + ';">' + esc(isC ? 'CARTEIRA' : ((PL6_FONTES[c.grupo] || {}).rot || 'NOVO')) + '</span></span>'
+        + '<span class="d7-sug-pq">' + esc(pl6Porque(c, rota ? rota.chave : null)) + '</span>'
+        + '</button>';
+    }).join('');
+    return '<div class="d7-card">'
+      + '<div class="d7-card-topo"><span>' + l.hora + ' · o que você coloca aqui?</span>'
+      + '<button type="button" class="d7-card-x" data-d7-fechar-card="1" aria-label="Fechar">✕</button></div>'
+      + ((sugQ + sugM) || '<div class="d7-vazio">Nada livre na carteira nem no lote — tudo já está na semana.</div>')
+      + '<button type="button" class="d7-bloq" data-d7-bloquear="' + l.si + '">⊘ bloquear — compromisso fora da rua</button>'
+      + '</div>';
+  }).join('');
+
+  /* ══ A PROMESSA: contadores DERIVADOS (lei 3) + a aposta, que e a unica manual ═════ */
+  const chips = [
+    { t: prom.visitas + ' visita(s)', c: 'var(--ink)' },
+    { t: prom.prospeccoes + ' prospecção(ões) nova(s)', c: 'var(--amber)' },
+    { t: prom.naMesa + ' na mesa', c: '#9C5BD6' }
+  ].concat(prom.semTarefa ? [{ t: prom.semTarefa + ' sem tarefa no CRM', c: 'var(--pl6-bloqueio)' }] : [])
+   .concat(quentes.length ? [{ t: quentes.length + ' quente(s) sem resposta', c: 'var(--pl6-atencao)' }] : []);
+
+  const naMesa = plano.filter(x => x.tipo === 'visita' && x.lead.tipo === 'c'
+    && PL6_ETAPAS_DE_MESA.indexOf(String(x.lead.stageId)) >= 0);
+  const mrrDe = x => (typeof mrrDoNegocio === 'function') ? mrrDoNegocio(x.lead._bruto || x.lead) : null;
+  const apostas = naMesa.map(function (x) {
+    const on = !!d7UI.apostas[x.lead.id];
+    const m = mrrDe(x);
+    return '<button type="button" class="d7-aposta' + (on ? ' on' : '') + '" data-d7-aposta="' + esc(x.lead.id) + '">'
+      + esc(x.lead.nome) + ' · ' + (m != null ? 'R$ ' + m.toLocaleString('pt-BR') : 'MRR não medido') + '</button>';
+  }).join('');
+  const escolhidas = naMesa.filter(x => d7UI.apostas[x.lead.id]);
+  const somaAposta = escolhidas.reduce(function (t2, x) { return t2 + (mrrDe(x) || 0); }, 0);
+
+  /* ══ QUENTES FORA DO PLANO — a pergunta da rodada ══════════════════════════════════ */
+  const cardsQuentes = quentes.length
+    ? quentes.map(function (q) {
+        return '<div class="d7-q">'
+          + '<span class="d7-q-tit"><b>' + esc(q.nome) + '</b> · ' + esc(q.etapa)
+          + (q.dias != null ? ' · <b class="d7-q-dias">' + q.dias + 'd</b>' : ' · dias não medidos') + '</span>'
+          + '<span class="d7-q-org">' + esc(q.origem) + '</span>'
+          + '<div class="d7-q-acoes">'
+          +   '<button type="button" class="d7-q-ag" data-d7-q-agendar="' + esc(String(q.dealId || q.nome)) + '">agendo hoje ▸</button>'
+          +   '<button type="button" class="d7-q-tf" data-d7-q-tarefa="' + esc(String(q.dealId || q.nome)) + '">dato tarefa ▸</button>'
+          + '</div></div>';
+      }).join('')
+    : '<div class="d7-q-zero">0 quentes fora do plano — a pergunta da rodada não existe hoje ✓</div>';
+
+  /* ══ A MUNIÇÃO ════════════════════════════════════════════════════════════════════ */
+  const filtros = [
+    ['tudo', 'tudo · ' + d7Municao(rep, plano, 'tudo').lista.length],
+    ['carteira', 'carteira · ' + d7Municao(rep, plano, 'carteira').lista.length],
+    ['novos', 'novos · ' + d7Municao(rep, plano, 'novos').lista.length]
+  ].map(([k, rot]) => '<button type="button" class="' + (d7UI.filtro === k ? 'on' : '') + '"'
+    + ' data-d7-filtro="' + k + '">' + esc(rot) + '</button>').join('');
+  const cardsMun = mun.lista.length
+    ? mun.lista.slice(0, 12).map(function (c) {
+        const isC = c.tipo === 'c';
+        const cor = isC ? (PL6_COR_ETAPA[c.stageId] || 'var(--muted2)') : ((PL6_FONTES[c.grupo] || {}).cor || 'var(--muted2)');
+        return '<div class="d7-m">'
+          + '<span class="d7-m-tit"><b>' + esc(c.nome) + '</b>'
+          + '<span class="d7-badge" style="color:' + cor + ';">' + esc(isC ? (c.etapa || 'CARTEIRA') : ((PL6_FONTES[c.grupo] || {}).rot || 'NOVO')) + '</span></span>'
+          + '<span class="d7-m-pq">' + esc(pl6Porque(c, rota ? rota.chave : null)) + '</span>'
+          + '<button type="button" class="d7-m-cta' + (isC ? '' : ' is-novo') + '" data-d7-m-abrir="' + esc(c.id) + '">'
+          + (isC ? 'agendar hoje ▸' : 'criar negócio + agendar hoje ▸') + '</button>'
+          + (d7UI.horas === c.id ? d7HorasHTML(plano, c.id) : '')
+          + '</div>';
+      }).join('')
+    : '<div class="d7-vazio">Nada livre' + (rota ? ' em ' + esc(rota.nome) : '') + ' — tudo já está na semana.</div>';
+
+  /* ══ A TELA ═══════════════════════════════════════════════════════════════════════ */
+  return '<div class="d7">'
+    /* A TARJA DE CONTEXTO, no lugar da faixa vermelha: so o que o header do app nao diz. */
+    + '<div class="d7-tarja">'
+    +   '<span class="d7-tarja-hoje">hoje · ' + esc(hojeRot) + ' · ' + agendaHhmm(agendaAgora()) + '</span>'
+    +   '<span class="d7-tarja-trava' + (jaTravou ? ' is-ok' : (travada ? ' is-tarde' : '')) + '">'
+    +     (jaTravou ? '✓ promessa travada ' + horaTrava
+        : (travada ? ('o prazo das ' + d7HoraDaTravaRot() + ' passou — trave assim mesmo, o gestor vê a hora')
+          : ('trave sua promessa até ' + d7HoraDaTravaRot() + ' — faltam ' + min + ' min'))) + '</span>'
+    +   (rota ? '<span class="d7-tarja-rota">⌖ rota de hoje · ' + esc(rota.nome) + '</span>'
+        : '<span class="d7-tarja-rota is-sem">sem rota escolhida no Planejamento</span>')
+    + '</div>'
+    + '<div class="d7-cabeca">'
+    +   '<div><span class="d7-kicker">A decisão dos primeiros 3 segundos</span>'
+    +   '<h1 class="d7-manchete">' + esc(manchete) + '</h1></div>'
+    +   '<div class="d7-kpis">' + kpis.map(k =>
+          '<div class="d7-kpi"><span class="d7-kpi-rot">' + esc(k.rot) + '</span>'
+          + '<span class="d7-kpi-n"><b style="color:' + k.cor + ';">' + esc(k.v) + '</b>'
+          + '<span class="d7-kpi-de">' + esc(k.de) + '</span></span>'
+          + '<span class="d7-kpi-fonte">' + esc(k.fonte) + '</span></div>').join('')
+    +   '</div>'
+    + '</div>'
+    + '<div class="d7-corpo-grid">'
+    +   '<div class="d7-plano">'
+    +     '<div class="d7-sec"><span class="d7-sec-rot">O plano de hoje — montado por você · 9h→19h</span>'
+    +       '<small class="d7-sec-dica">pré-carregado do seu Planejamento — ajuste, complete e trave</small></div>'
+    +     linhas
+    +     (d7UI.toast ? '<div class="d7-toast">' + esc(d7UI.toast) + '</div>' : '')
+    +     '<p class="d7-pe">quem agenda é <b>você</b> — o sistema só sugere: quentes primeiro, depois'
+    +       ' a munição da sua rota, por SLA → parado → ★ → distância. O check-in na porta é no'
+    +       ' <b>Expogo</b>; o desfecho é aqui.</p>'
+    +   '</div>'
+    +   '<div class="d7-lado">'
+    /* ── cartao 1: a promessa ── */
+    +     '<div class="d7-cartao">'
+    +       '<p class="d7-cartao-tit">Sua promessa de hoje — trava às ' + d7HoraDaTravaRot() + '</p>'
+    +       '<p class="d7-cartao-sub">sai do plano que <b>você</b> montou — nada digitado duas vezes</p>'
+    +       '<div class="d7-chips">' + chips.map(c =>
+            '<span class="d7-chip" style="color:' + c.c + ';border-color:' + c.c + ';">' + esc(c.t) + '</span>').join('') + '</div>'
+    +       '<p class="d7-cartao-tit is-menor">Fecho hoje — sua palavra, não forecast</p>'
+    +       (apostas ? '<div class="d7-apostas">' + apostas + '</div>'
+            + '<span class="d7-aposta-tot">' + (escolhidas.length
+              ? ('sua palavra: ' + escolhidas.length + ' · R$ ' + somaAposta.toLocaleString('pt-BR') + ' MRR')
+              : 'sem aposta hoje — tudo bem, palavra só quando há contrato na mesa') + '</span>'
+            : '<span class="d7-aposta-tot">nenhuma negociação no plano de hoje — sem aposta a fazer</span>')
+    +       (jaTravou
+            ? '<span class="d7-travada">✓ promessa travada ' + horaTrava + ' · Supabase planos_diarios</span>'
+              + '<span class="d7-aguardando">aguardando alinhamento do gestor na rodada — quando ele alinhar, aparece ✓ aqui</span>'
+              + (travada ? '<span class="d7-aposta-tot">passou das ' + d7HoraDaTravaRot() + ' — a promessa de hoje não reabre mais</span>'
+                : '<button type="button" class="d7-reabrir" data-d7-reabrir="1">reabrir e ajustar ▸</button>')
+            : '<button type="button" class="d7-travar" data-d7-travar="1">travar minha promessa ▸</button>'
+              + '<p class="d7-cartao-pe">grava no Supabase com hora · o gestor vê na rodada'
+              + (travada ? ' · o prazo passou, e a hora fica registrada' : ' · depois das ' + d7HoraDaTravaRot() + ' trava sozinha') + '</p>')
+    +     '</div>'
+    /* ── cartao 2: quentes fora do plano ── */
+    +     '<div class="d7-cartao">'
+    +       '<p class="d7-cartao-tit">Quentes fora do plano — o gestor vai perguntar por quê</p>'
+    +       cardsQuentes
+    +       '<p class="d7-cartao-pe">quente = etapa ≥ Visita e sem tarefa futura no CRM ·'
+    +         ' chegue na rodada com resposta, não com desculpa</p>'
+    +     '</div>'
+    /* ── cartao 3: munição ── */
+    +     '<div class="d7-cartao">'
+    +       '<div class="d7-mun-topo"><p class="d7-cartao-tit">Munição pra completar o dia</p>'
+    +       '<div class="d7-filtros">' + filtros + '</div></div>'
+    +       '<p class="d7-cartao-sub">' + esc(mun.criterio) + '</p>'
+    +       '<div class="d7-mun-lista">' + cardsMun + '</div>'
+    +     '</div>'
+    +   '</div>'
+    + '</div>'
+    + '<div class="d7-fontes">'
+    +   'Plano de hoje: <b>Supabase planos_semanais</b> (escrito no seu Planejamento) · '
+    +   'promessa e alinhamento: <b>Supabase planos_diarios</b> — o mesmo registro que o gestor lê · '
+    +   'etapas, tarefas, quentes e carteira: <b>HubSpot</b> · '
+    +   'visita registrada: <b>Expogo</b>, o app de campo · '
+    +   'lote novo: <b>leads_prospeccao</b>.'
+    + '</div>'
+    + '</div>';
+}
+
+/* As pilulas de horario da munição: livre e botao, ocupado e AVISO com o nome de quem
+   esta nele — o aviso vem antes do clique, nunca um erro depois (lei 5). */
+function d7HorasHTML(plano, leadId) {
+  const pils = plano.map(function (l) {
+    if (l.tipo === 'livre') {
+      return '<button type="button" class="d7-h" data-d7-m-hora="' + esc(leadId) + '.' + l.si + '">' + l.hora + '</button>';
+    }
+    if (l.tipo === 'bloqueado') return '<span class="d7-h is-bloq">' + l.hora + ' · bloq.</span>';
+    const quem = (l.lead && l.lead.nome) ? l.lead.nome : 'ocupado';
+    return '<span class="d7-h is-ocup" title="' + esc(quem) + ' já está neste horário">' + l.hora + ' · ' + esc(quem) + '</span>';
+  }).join('');
+  return '<div class="d7-horas">' + pils
+    + '<span class="d7-horas-nota">vinho = ocupado — o chip diz quem já está no horário</span></div>';
+}
+
 function dl2LinhaDoDia(r, linhaHoje) {
   const doVivo = (dl2Vivo && dl2Vivo.detalhe && Array.isArray(dl2Vivo.detalhe.visitas))
     ? dl2Vivo.detalhe.visitas : null;
