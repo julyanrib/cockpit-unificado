@@ -1352,3 +1352,58 @@ function checarRotulosDeLista() {
   return true;
 }
 if (!checarRotulosDeLista()) process.exit(1);
+
+/* == 17. "HOJE" NA AGENDA NAO PODE SAIR DE new Date() CRU =============================
+   POR QUE EXISTE, e a janela e diaria: agendaChave() le as PARTES UTC de uma data. Isso
+   e correto dentro do modulo de agenda, onde os horarios sao construidos com o truque do
+   sufixo Z para que as partes UTC SEJAM os valores de exibicao. Mas `new Date()` e um
+   instante REAL: as 21:56 de Brasilia ele ja esta em 2026-09-04, enquanto o resto da tela
+   usa isoDate(new Date()) e diz 2026-09-03.
+
+   ACHADO EM 03/09/26 as 21:56, medindo ao vivo: d4EventosDeHoje usava
+   agendaChave(new Date()) e descartava os compromissos de hoje. A linha do dia da Minha
+   Daily do Marco ficava VAZIA com TRES compromissos reais na agenda — e, pior, os de
+   amanha apareceriam como sendo de hoje. Todo dia util das 21h a meia-noite: exatamente
+   quando o executivo fecha o dia na rua e abre a Daily para ver o que falta.
+
+   O PADRAO CERTO ja era usado em tres lugares do mesmo arquivo (o card de hoje, o placar
+   do time e a trava da promessa): agendaAgora(), que devolve a hora de Brasilia
+   independente do relogio do aparelho — e ai as partes UTC que agendaChave le sao a data
+   de Brasilia. Só uma linha estava fora do padrao, e era a que a Daily usava.
+
+   Esta guarda proibe a forma errada. Se algum dia existir um uso legitimo de
+   agendaChave(new Date()), ele precisa vir com a razao escrita — e ai esta guarda muda
+   junto, de proposito. */
+function checarHojeDaAgenda() {
+  const cru = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
+  /* MASCARA OS COMENTARIOS ANTES DE PROCURAR. A primeira versao desta guarda reprovou
+     pelo PROPRIO comentario que explica o defeito — ele cita a forma errada no texto, para
+     quem for ler entender o que nao fazer. E exatamente o falso positivo que derrubou a
+     guarda 10, que achou dentro de um comentario o marcador que procurava no codigo. */
+  const tpl = mascararComentarios(cru);
+  const linhas = tpl.split(/\r?\n/);
+  const maus = [];
+  linhas.forEach(function (l, i) {
+    if (l.indexOf('agendaChave(new Date())') < 0) return;
+    maus.push((i + 1) + ': ' + l.trim().slice(0, 100));
+  });
+  if (maus.length) {
+    console.error('"HOJE" DA AGENDA SAINDO DE new Date() CRU:');
+    maus.forEach(m => console.error('  ' + m));
+    console.error('  agendaChave() le as partes UTC, e das 21h a meia-noite de Brasilia o');
+    console.error('  instante cru ja esta no dia seguinte — a tela passa a olhar o dia errado.');
+    console.error('  Use agendaChave(agendaAgora()), que e o padrao dos outros tres lugares.');
+    return false;
+  }
+  /* e a forma CERTA tem que existir: se ninguem mais usa agendaAgora() com agendaChave,
+     o padrao morreu e esta guarda ficou sem sentido — reprovar aqui e melhor que dar OK
+     sobre um arquivo que mudou de forma sem ninguem notar. */
+  if (tpl.indexOf('agendaChave(agendaAgora())') < 0 && tpl.indexOf('agendaChave(agora') < 0) {
+    console.error('NAO ACHEI NENHUM agendaChave(agendaAgora()) no template — o padrao de');
+    console.error('  "hoje na agenda" mudou de forma e esta guarda parou de medir o que devia.');
+    return false;
+  }
+  console.log('OK hoje da agenda - nenhum "hoje" saindo de new Date() cru (fuso de Brasilia).');
+  return true;
+}
+if (!checarHojeDaAgenda()) process.exit(1);
