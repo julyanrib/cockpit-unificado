@@ -15822,6 +15822,14 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
       fechar();
       if (paraOnb) {
         mostrarToast(`"${lead.name}" foi para Enviado Onboarding. O WhatsApp e o card no pipe de entrega são disparados pelo HubSpot agora — o Cockpit gravou só a etapa.`, 'sucesso');
+      } else if (r.demorou) {
+        /* A ESPERA ESTOUROU E A CONFIRMAÇÃO PROVOU QUE GRAVOU. Dizer "está em Perdido" sem
+           mais nada deixaria o executivo — que viu a tela travar — sem saber se o que ele
+           leu tem a ver com o que ele fez. E os complementos NÃO rodaram: a sequência parou
+           no meio, e avisar é o que evita ele procurar no CRM uma nota que ninguém escreveu. */
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} ✓ — a resposta do HubSpot demorou`
+          + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
+          + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
       } else if (passoOk) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''} · próximo passo em ${fmtDailyLabel(passoData)}. O Cockpit reconcilia na próxima rodada (${SYNC_CADENCIA}).`, 'sucesso');
       } else {
@@ -30241,6 +30249,29 @@ let passagemVoltarPara = null;
         avanço NÃO é completo: o negócio está na etapa nova e descoberto;
      4. o espelho no DATA em memória, para a tela não mentir até a próxima rodada do robô.
    Devolve o que aconteceu em cada passo; quem chamou decide o que dizer na tela. */
+/* ══ CONFIRMAR SE A ETAPA FOI GRAVADA (04/09/26) ═══════════════════════════════════════
+   Chamada quando a espera da escrita e abortada. Devolve:
+     { sabe: true,  gravou: true  }  o negocio JA esta na etapa de destino
+     { sabe: true,  gravou: false }  esta em outra etapa: nao gravou
+     { sabe: false }                 nem a leitura respondeu: a tela nao pode afirmar nada
+
+   PRAZO CURTO (8s) de proposito: e uma leitura de uma propriedade, e quem esta
+   esperando e uma pessoa em pe na frente do cliente. Se nem isso responder, a mensagem
+   honesta e melhor que mais espera. */
+async function confirmarEtapaGravada(dealId, etapaDestino, cab) {
+  try {
+    const r = await comPrazoGlobal(async signal => fetch('/api/negocio-acao', {
+      method: 'POST', signal, headers: cab,
+      body: JSON.stringify({ op: 'ler-etapa', dealId: dealId })
+    }), 8000, 'ler-etapa');
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok || !d.etapa) return { sabe: false };
+    return { sabe: true, gravou: String(d.etapa) === String(etapaDestino) };
+  } catch (e) {
+    return { sabe: false };
+  }
+}
+
 async function gravarPassagemDeEtapa(opts) {
   const lead = opts.lead;
   const para = String(opts.para);
@@ -30251,16 +30282,51 @@ async function gravarPassagemDeEtapa(opts) {
   const token = await tokenDeSessaoGlobal();
   const cab = { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
 
-  const resp = await comPrazoGlobal(async signal => fetch('/api/negocio-acao', {
-    method: 'POST', signal, headers: cab,
-    body: JSON.stringify({ op: 'mudar-etapa', dealId: lead.id, novaEtapa: para, propriedades })
-  }), 10000, 'mudar-etapa-negocio');
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok || !data.ok) {
-    saida.erro = (data && data.erro) || 'O HubSpot recusou a mudança.';
-    return saida;
+  /* ══ 25s, E NAO 10s (04/09/26) ═══════════════════════════════════════════════════
+     Este passo faz DUAS idas ao HubSpot — o GET de autorizacao, que nunca confia na
+     etapa que o navegador informou, e o PATCH — mais a partida a frio da funcao na
+     Vercel. 10s estourava no caminho NORMAL: a Kelly perdeu a espera em 11:03 e o
+     negocio tinha sido gravado. E este e o unico passo que ESCREVE a etapa, ou seja, o
+     unico que nao da para repetir sem risco de escrever duas vezes.
+     A nota e o proximo passo seguem em 9s de proposito: sao complementos, e falhar
+     neles ja tem tratamento proprio. */
+  let resp = null;
+  let abortou = false;
+  try {
+    resp = await comPrazoGlobal(async signal => fetch('/api/negocio-acao', {
+      method: 'POST', signal, headers: cab,
+      body: JSON.stringify({ op: 'mudar-etapa', dealId: lead.id, novaEtapa: para, propriedades })
+    }), 25000, 'mudar-etapa-negocio');
+  } catch (e) {
+    /* ABORT NAO E RESPOSTA. O pedido pode ter chegado e sido gravado — foi o que
+       aconteceu com a Kelly. Perguntar e a unica forma de nao chutar. */
+    abortou = true;
   }
-  saida.ok = true;
+
+  if (abortou) {
+    const conf = await confirmarEtapaGravada(lead.id, para, cab);
+    if (conf.gravou) {
+      /* gravou: segue o fluxo normal, e a tela diz que demorou — nao que falhou. */
+      saida.ok = true;
+      saida.demorou = true;
+    } else if (conf.sabe) {
+      saida.erro = 'A mudança demorou e NÃO foi gravada — o negócio segue na etapa anterior.'
+        + ' Pode tentar de novo.';
+      return saida;
+    } else {
+      /* nem a confirmacao respondeu: a tela para de afirmar o que nao sabe. */
+      saida.erro = 'A mudança demorou e eu não consegui confirmar se gravou.'
+        + ' RECARREGUE e confira a etapa antes de tentar de novo — repetir pode escrever duas vezes.';
+      return saida;
+    }
+  } else {
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      saida.erro = (data && data.erro) || 'O HubSpot recusou a mudança.';
+      return saida;
+    }
+    saida.ok = true;
+  }
 
   if (opts.nota) {
     try {
@@ -30489,6 +30555,14 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       const quantos = Object.keys(coleta.propriedades).length;
       if (!exigePasso) {
         mostrarToast(`"${lead.name}" saiu do funil como PERDIDO no HubSpot · motivo: ${esc(coleta.propriedades.motivo_do_perdido || '—')}. Entra na sua assinatura de perda; se foi engano, o card na coluna Perdido volta para qualquer etapa.`, 'sucesso');
+      } else if (r.demorou) {
+        /* A ESPERA ESTOUROU E A CONFIRMAÇÃO PROVOU QUE GRAVOU. Dizer "está em Perdido" sem
+           mais nada deixaria o executivo — que viu a tela travar — sem saber se o que ele
+           leu tem a ver com o que ele fez. E os complementos NÃO rodaram: a sequência parou
+           no meio, e avisar é o que evita ele procurar no CRM uma nota que ninguém escreveu. */
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} ✓ — a resposta do HubSpot demorou`
+          + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
+          + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
       } else if (passoOk) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''} · próximo passo em ${fmtDailyLabel(passoData)}. O Cockpit reconcilia na próxima rodada automática (${SYNC_CADENCIA}).`, 'sucesso');
       } else {
