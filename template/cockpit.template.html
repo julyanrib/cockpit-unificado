@@ -2955,7 +2955,6 @@
   .hoje-side-stack .xv3-card-head{padding:11px 15px 5px;}
   .hoje-side-stack .gi-note{font-size:10px;line-height:1.4;}
   .hoje-side-stack .daily-vchip{font-size:9px;padding:2px 6px;}
-  .hoje-actions-card{height:auto;margin:0;}
 
   /* ══════════════ A FILA DO DIA — PRANCHA 8b (04/09/26) ═══════════════════════════════
      A cadência da prancha é obrigatória e tem regra: régua estourada pulsa em vinho, a
@@ -3069,6 +3068,44 @@
   .h8-painel-pe{font-size:9.5px;color:var(--muted2);line-height:1.45;}
   .h8-cancelar{background:none;border:0;padding:0 0 0 4px;font:800 9.5px var(--font-body);
     color:var(--muted);cursor:pointer;text-decoration:underline;}
+
+  /* ══ A FAIXA DE CADÊNCIA E O ENCERRAMENTO (prancha 8b) ══════════════════════════════
+     Vivem no rail da direita, em cima dos sete portões. O número vinho pisca enquanto há
+     pendência e vira ✓ verde quando zera — "nada piscando = dia pronto pra rua". */
+  .h8-cad{display:flex;flex-direction:column;gap:5px;margin:10px 0 4px;}
+  .h8-cad-linha{display:flex;align-items:center;gap:8px;padding:7px 9px;
+    border:1px solid #F0DFB6;border-radius:var(--r-sm);background:var(--amber-soft);}
+  .h8-cad-linha.is-ok{border-color:#CBE8DD;background:var(--green-soft);}
+  .h8-ck-n{flex:none;width:22px;height:22px;border-radius:50%;display:flex;
+    align-items:center;justify-content:center;background:var(--pl6-bloqueio);
+    color:var(--dark-ink);font:800 11px var(--font-body);font-variant-numeric:tabular-nums;
+    animation:h8PiscaN 1.6s ease-in-out infinite;}
+  .h8-ck-n.is-ok{background:var(--green-soft);color:var(--green);animation:none;}
+  .h8-cad-txt{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1;}
+  .h8-cad-txt b{font:800 10.5px var(--font-body);color:var(--ink);}
+  .h8-cad-txt i{font-style:normal;font-size:9.5px;line-height:1.4;color:var(--amber-ink);}
+  .h8-cad-linha.is-ok .h8-cad-txt i{color:var(--green);}
+  /* O CTA PULSA porque é a pendência chamando — a mesma regra da ★ da fila. */
+  .h8-cad-cta{flex:none;min-height:32px;padding:0 10px;border:1px solid var(--red);
+    border-radius:var(--r-pill);background:var(--red);color:var(--dark-ink);
+    font:800 9.5px var(--font-body);cursor:pointer;
+    animation:h8PulsaVermelho 1.8s ease-in-out infinite;}
+  .h8-cad-cta:hover{background:var(--red-dk);border-color:var(--red-dk);}
+  @media (prefers-reduced-motion:reduce){ .h8-ck-n,.h8-cad-cta{animation:none!important;} }
+
+  .h8-encerra{display:flex;flex-direction:column;gap:5px;margin:8px 0 2px;padding:9px 10px;
+    border-radius:var(--r-sm);background:var(--panel2);border:1px solid var(--line);}
+  .h8-encerra-rot{font:800 9px var(--font-body);letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted2);}
+  .h8-encerra-txt{font-size:10px;color:var(--ink);line-height:1.5;}
+  .h8-encerra-cta{min-height:34px;padding:0 11px;border:1px solid var(--amber);
+    border-radius:var(--r-pill);background:var(--amber-soft);color:var(--amber-ink);
+    font:800 10px var(--font-body);cursor:pointer;
+    animation:h8PulsaVermelho 1.8s ease-in-out infinite;}
+  .h8-encerra-cta:hover{background:var(--amber);color:var(--dark-ink);}
+  .h8-encerra-pe{font-size:9.5px;color:var(--muted2);line-height:1.45;}
+  @media (prefers-reduced-motion:reduce){ .h8-encerra-cta{animation:none!important;} }
+  @media (max-width:760px){ .h8-cad-cta,.h8-encerra-cta{min-height:44px;} }
 
   /* FEITAS HOJE. Verde é o único lugar da tela onde ele aparece: é a cor da prova. */
   .h8-feitas{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:11px;
@@ -3347,7 +3384,7 @@
        linha inteira virava largura mínima de ~450px e fazia o body rolar na horizontal.
        Aqui a linha do gate empilha (o CTA cai pra baixo, ocupando a largura) em vez de
        competir por espaço com o texto. */
-    .hoje-priority-stack,.hoje-actions-card{min-width:0;}
+    .hoje-priority-stack{min-width:0;}
     /* TEXTO ESMAGADO NO CELULAR (28/08/26, medido a 420px).
 
        O flex-wrap sozinho nao bastava: os filhos de um flex tem min-width:auto por
@@ -13194,6 +13231,20 @@ function telefoneDaAcao(lead, nomeFallback) {
    três, é este número e nada mais. */
 const HOJE_ACOES_VISIVEIS = 6;
 
+/* ══ acoesDeAgora FICA, E EU IA APAGA-LA POR ENGANO (04/09/26) ═══════════════════════
+   Eu a removi achando que era so o motor do cartao de 3 acoes. A suite testar-nucleo.js
+   reprovou em SETE pontos e mostrou um TERCEIRO comportamento que eu nao havia medido:
+   ela sugere CONTAS-ALVO livres na lista do dia (as tres primeiras da fila de prospeccao,
+   com o motivo saindo do que a base sabe da conta).
+
+   E eu havia escrito no comentario da remocao que "a Hoje nao inventa mais sugestao de
+   conta nova no meio da fila" — inventei uma decisao de desenho para cobrir uma delecao
+   que nao medi. A suite pegou; sem ela eu teria apagado a capacidade e a explicacao junto.
+
+   ONDE ELA ESTA HOJE: sem chamador na tela — o cartao que a desenhava saiu com a prancha
+   8b. A capacidade precisa entrar na fila nova (conta-alvo como item quando a fila esta
+   curta), e ai sim ela sai. Enquanto isso ela fica AQUI, com a suite verde: capacidade
+   testada e sem tela e divida; capacidade apagada e perda. */
 function acoesDeAgora(r, diag, contasLivres) {
   const d = diag || gatesDoDia(r);
   const fila = d.fila;
@@ -14147,6 +14198,84 @@ function gatePillHTML(gate, cobravel) {
     : `<span style="flex:none;font-size:10px;font-weight:800;color:var(--muted);background:var(--sunk);border-radius:var(--r-pill);padding:3px 8px;">não confirmado</span>`;
 }
 
+/* ══ A FAIXA DE CADÊNCIA (prancha 8b) ═════════════════════════════════════════════════
+   Três linhas em cima dos sete portões: cada uma com o número vinho PISCANDO e o botão
+   vermelho PULSANDO que filtra a fila ao lado. Zerou, vira ✓ verde e para de piscar —
+   "nada piscando = dia pronto pra rua".
+
+   AS CONTAGENS SAEM DE h8Insight, as MESMAS dos cinco filtros da fila. Recontar aqui é
+   como três leituras do mesmo dado divergem na mesma tela — foi o defeito do "2/12 quentes"
+   contra "11 no radar" contra "9 sem próximo passo", três números do mesmo dado na mesma
+   sessão.
+
+   OS SETE PORTÕES CONTINUAM ABAIXO e não foram tocados: eles cobrem o que a prancha não
+   pede (rota, plano fechado, carga, sincronização) e são o mesmo N/7 que o gestor vê na
+   Daily. Trocar sete por três seria perder cobertura para caber num mockup. */
+/* ══ O ENCERRAMENTO (prancha 8b) ══════════════════════════════════════════════════════
+   "N atividade(s) comprovada(s) hoje · M visitas de hoje ainda sem registro" + o botão.
+
+   E O BOTÃO NÃO GRAVA EM LOTE. Ele leva para a fila filtrada nas visitas de hoje, onde
+   cada uma tem desfecho e data. Gravar N visitas com um clique seria INVENTAR o desfecho de
+   N clientes — exatamente o que o registro existe para não deixar acontecer, e o oposto de
+   "a ação só sai da fila com prova". O rótulo diz para onde vai, não que resolve. */
+function h8EncerramentoHTML(r, diag) {
+  const itens = h8Fila(r, diag);
+  const deHoje = itens.filter(function (it) { return it.balde === 'visita_de_hoje'; });
+  const feitas = Object.keys(h8Feitas).length;
+  const semRegistro = deHoje.filter(function (it) { return !h8Feitas[String(it.lead.id)]; }).length;
+
+  return '<div class="h8-encerra">'
+    + '<span class="h8-encerra-rot">Encerramento — o que ficou comprovado hoje?</span>'
+    + '<span class="h8-encerra-txt">' + feitas + ' atividade(s) comprovada(s) hoje ·'
+    +   ' cada ✓ = desfecho e próximo passo datado no HubSpot'
+    +   (semRegistro
+      ? ' · <b>' + semRegistro + ' visita(s) de hoje ainda sem registro</b>'
+      : ' · todas as visitas de hoje registradas ✓') + '</span>'
+    + (semRegistro
+      ? '<button type="button" class="h8-encerra-cta" data-h8-filtro="hoje">'
+        + 'ver as ' + semRegistro + ' visita(s) de hoje ▸</button>'
+        + '<span class="h8-encerra-pe">o botão leva para elas na fila — cada visita sai com'
+        + ' desfecho e data. Gravar em lote seria inventar o desfecho de ' + semRegistro
+        + ' cliente(s).</span>'
+      : '')
+    + '</div>';
+}
+
+function h8CadenciaHTML(r, diag) {
+  const itens = h8Fila(r, diag);
+  const cats = itens.map(function (it) { return h8Insight(it).cat; });
+  const n = function (c) { return cats.filter(function (x) { return x === c; }).length; };
+
+  const linhas = [
+    { cat: 'sla', rot: 'Régua priorizada', cta: 'resolver réguas ▸',
+      pend: 'acima da régua da etapa, sem decisão marcada',
+      ok: 'toda régua estourada com decisão e data ✓' },
+    { cat: 'quente', rot: 'Quentes protegidos', cta: 'proteger quentes ▸',
+      pend: 'quente(s) sem próxima ação datada',
+      ok: 'todo quente com próximo passo ✓' },
+    { cat: 'follow', rot: 'Follow-ups em dia', cta: 'fazer follow-ups ▸',
+      pend: 'follow-up(s) de visitas anteriores',
+      ok: 'follow-ups zerados ✓' }
+  ];
+
+  return '<div class="h8-cad">'
+    + linhas.map(function (l) {
+        const q = n(l.cat);
+        const zerou = q === 0;
+        return '<div class="h8-cad-linha' + (zerou ? ' is-ok' : '') + '">'
+          + '<span class="h8-ck-n' + (zerou ? ' is-ok' : '') + '">' + (zerou ? '✓' : q) + '</span>'
+          + '<span class="h8-cad-txt"><b>' + esc(l.rot) + '</b>'
+          +   '<i>' + (zerou ? esc(l.ok) : q + ' ' + esc(l.pend)) + '</i></span>'
+          /* SEM PENDÊNCIA, SEM BOTÃO: botão que filtra uma lista vazia é clique morto, e
+             o ✓ já diz o que precisava ser dito. */
+          + (zerou ? ''
+            : '<button type="button" class="h8-cad-cta" data-h8-filtro="' + l.cat + '">'
+              + esc(l.cta) + '</button>')
+          + '</div>';
+      }).join('')
+    + '</div>';
+}
+
 function buildGatesDoDiaHTML(r, diag) {
   const cobravel = diag.contexto.fresco.confiavel;
   const janela = checagensDaJanela(r, diag);
@@ -14172,6 +14301,8 @@ function buildGatesDoDiaHTML(r, diag) {
         <div style="height:5px;border-radius:var(--r-pill);background:var(--sunk);overflow:hidden;">
           <span style="display:block;height:100%;width:${pct}%;border-radius:var(--r-pill);background:${diag.pronto ? 'var(--green)' : 'var(--red)'};"></span>
         </div>
+        ${h8CadenciaHTML(r, diag)}
+        ${h8EncerramentoHTML(r, diag)}
         <div class="gi-note" style="margin-top:6px;font-size:10px;">
           ${esc(janela.janela.rotulo)} · ${esc(janela.janela.pergunta)} Cada linha fecha sozinha quando a evidência aparece no HubSpot — não tem o que marcar aqui.
         </div>
@@ -14294,6 +14425,8 @@ function ancorasDaSemanaExec(ownerId) {
   return out;
 }
 
+/* contasLivresParaSugerir FICA com acoesDeAgora — ver a nota dela. Ela alimenta a
+   sugestao de conta-alvo, que a fila 8b ainda nao cobre. */
 function contasLivresParaSugerir() {
   if (typeof prospeccaoCache === 'undefined' || !Array.isArray(prospeccaoCache)) return [];
   return prospeccaoCache.filter(l =>
@@ -14439,6 +14572,84 @@ function h8LinhaHTML(item, i, ins) {
     + '</div>';
 }
 
+/* ══ A FILA DO DIA, COMPLETA (prancha 8b) ═════════════════════════════════════════════
+   extras ++ ordenada, e é ESTA a lista que a tela desenha e que o delegado busca. Duas
+   listas fariam o clique responder "não achei" sobre uma linha que a tela acabou de
+   desenhar — o pior tipo de clique morto.
+
+   OS EXTRAS SÃO AS VISITAS DE HOJE, e vêm na frente porque a razão do código antigo
+   continua valendo: "sem desfecho, o resto da cadeia não tem de onde partir". A visita
+   aconteceu hoje; é o dado mais fresco e o único que se perde se não for registrado no dia. */
+function h8Fila(r, diag) {
+  const d = diag || gatesDoDia(r);
+  const base = (d.fila && d.fila.ordenada) ? d.fila.ordenada.slice() : [];
+  const extras = [];
+
+  /* as visitas de HOJE que já passaram da hora e não têm desfecho nem registro */
+  const deHoje = (d.contexto && d.contexto.deHoje) ? d.contexto.deHoje : [];
+  const pendentesDeHoje = deHoje.filter(function (e) {
+    return e.inicio && e.inicio.getTime() < Date.now()
+      && e.desfecho !== 'COMPLETED' && !e.registro;
+  });
+
+  const jaNaFila = new Set(base.map(function (x) { return String(x.lead.id); }));
+
+  pendentesDeHoje.forEach(function (e) {
+    const negocio = e.dealId && typeof buscarLeadFunilPorId === 'function'
+      ? buscarLeadFunilPorId(e.dealId) : null;
+    /* CASA POR NOME quando o evento não trouxe dealId: a agenda guarda o nome do cliente,
+       não o id do nosso negócio, e `tpMesmoCliente` é o casador desta casa. */
+    const porNome = (!negocio && typeof meusNegociosAbertos === 'function')
+      ? meusNegociosAbertos(r.ownerId).find(function (l) {
+          return typeof tpMesmoCliente === 'function' && tpMesmoCliente(l.name, e.cliente);
+        })
+      : null;
+    const lead = negocio || porNome || null;
+
+    if (!lead) {
+      /* SEM NEGÓCIO NO FUNIL: o pseudo-lead existe só para a linha ter o que desenhar, e
+         o único gesto dela é CRIAR o negócio. `ev:` no id garante que ele nunca seja
+         confundido com um dealId em nenhuma busca. */
+      extras.push({
+        lead: {
+          id: 'ev:' + e.id,
+          name: e.cliente,
+          stageId: null,
+          dias: 0,
+          celular: (typeof telefoneDaAcao === 'function') ? telefoneDaAcao(null, e.cliente) : null
+        },
+        estado: { toques: { total: 0 }, temProximoPasso: false },
+        semNegocio: true,
+        evento: e,
+        balde: 'visita_de_hoje',
+        baldeRotulo: 'Visitas de hoje sem registro',
+        prio: 0
+      });
+      return;
+    }
+
+    /* TEM NEGÓCIO E A VISITA NÃO FOI REGISTRADA. Se ele já está na fila por outro motivo,
+       não entra duas vezes — mas o item da fila não sabe que houve visita hoje, e é isso
+       que muda a urgência. Então o extra SUBSTITUI a posição dele. */
+    if (jaNaFila.has(String(lead.id))) {
+      const i = base.findIndex(function (x) { return String(x.lead.id) === String(lead.id); });
+      if (i >= 0) base.splice(i, 1);
+    }
+    const st = (typeof estadoDoNegocio === 'function') ? estadoDoNegocio(lead) : {};
+    extras.push({
+      lead: lead,
+      estado: st,
+      semDesfechoHoje: true,
+      evento: e,
+      balde: 'visita_de_hoje',
+      baldeRotulo: 'Visitas de hoje sem registro',
+      prio: 0
+    });
+  });
+
+  return extras.concat(base);
+}
+
 /* ══ O CARTÃO INTEIRO: filtros, fila e as feitas de hoje ══════════════════════════════ */
 /* ══ OS GESTOS DA FILA 8b ═════════════════════════════════════════════════════════════
    Um delegado no cartão, como no Planejamento e no funil: a fila é redesenhada inteira a
@@ -14446,13 +14657,22 @@ function h8LinhaHTML(item, i, ins) {
    `data-h8-ligado` garante uma ligação só — sem ele, cada render somaria um ouvinte e um
    clique de escrita dispararia N vezes. */
 function h8LigarFila(el, r, redesenhar) {
-  const card = el.querySelector('[data-h8-owner]');
+  /* NA RAIZ DA ABA, e não no cartão da fila: o chip do SLA no hero, os três CTAs da
+     cadência e o botão do encerramento vivem FORA do cartão, e ouvinte no cartão não
+     alcança irmão — os quatro seriam clique morto.
+     `#meuPainelContent` é estável entre renders (o render troca o innerHTML, não o nó),
+     então a ligação sobrevive ao redesenho. `data-h8-ligado` garante UMA: religar a cada
+     render faria um clique de escrita disparar N vezes, e N cresce com o tempo de tela
+     aberta. */
+  const card = el;
   if (!card || card.dataset.h8Ligado === '1') return;
   card.dataset.h8Ligado = '1';
 
+  /* A MESMA LISTA QUE A TELA DESENHOU. Buscar em `diag.fila.ordenada` deixaria as visitas
+     de hoje (os extras) sem clique — a linha existiria e o gesto responderia "não achei
+     este negócio", que é o pior clique morto: o de uma linha que a tela acabou de pôr. */
   const achar = function (id) {
-    const d = gatesDoDia(r);
-    return (d.fila.ordenada || []).find(function (x) { return String(x.lead.id) === String(id); }) || null;
+    return h8Fila(r, null).find(function (x) { return String(x.lead.id) === String(id); }) || null;
   };
 
   card.addEventListener('click', async function (ev) {
@@ -14592,17 +14812,26 @@ function h8LigarFila(el, r, redesenhar) {
   });
 }
 function h8FilaCardHTML(r, diag) {
-  const fila = (diag && diag.fila) ? diag.fila : { ordenada: [], total: 0 };
+  /* A FILA COMPLETA — extras (visitas de hoje) ++ ordenada. O delegado busca na MESMA
+     lista, senão o clique responderia "não achei" sobre uma linha desenhada aqui. */
+  const itens = h8Fila(r, diag);
   /* O INSIGHT DE CADA ITEM, calculado UMA vez: ele decide a categoria, e a categoria
      alimenta os cinco filtros, os cinco chips do hero e o checklist da direita. Calcular
      duas vezes é como os três contadores da mesma coisa divergem. */
-  const comIns = fila.ordenada.map(function (it) { return { it: it, ins: h8Insight(it) }; });
+  const comIns = itens.map(function (it) { return { it: it, ins: h8Insight(it) }; });
   const feitos = Object.keys(h8Feitas);
   const pendentes = comIns.filter(function (x) { return !h8Feitas[String(x.it.lead.id)]; });
   const nCat = function (c) { return pendentes.filter(function (x) { return x.ins.cat === c; }).length; };
 
+  /* O FILTRO 'hoje' é por BALDE e não por categoria: as visitas de hoje podem ser sla,
+     quente ou follow — o que as junta é o dia, não o diagnóstico. É o recorte que o
+     botão do encerramento abre. */
   const recorte = h8Filtro === 'feitas' ? []
-    : pendentes.filter(function (x) { return h8Filtro === 'todas' || x.ins.cat === h8Filtro; });
+    : pendentes.filter(function (x) {
+        if (h8Filtro === 'todas') return true;
+        if (h8Filtro === 'hoje') return x.it.balde === 'visita_de_hoje';
+        return x.ins.cat === h8Filtro;
+      });
 
   const FILTROS = [
     ['todas', 'todas · ' + pendentes.length],
@@ -14663,49 +14892,19 @@ function h8FilaCardHTML(r, diag) {
     + '</div>';
 }
 
-function buildAcoesDeAgoraHTML(r, diag, acoesCalculadas) {
-  const acoes = acoesCalculadas || acoesDeAgora(r, diag, contasLivresParaSugerir());
-  const fila = diag.fila;
+/* O CARTAO DE 3 ACOES SAIU DAQUI (04/09/26, prancha 8b).
+   Ele mostrava tres linhas e um "ver a fila inteira (37) ->" que levava para outra
+   tela. A 8b pede a fila INTEIRA na Hoje, com os cinco filtros, o insight de cada
+   negocio e o painel inline desfecho -> datar: quem desenha agora e h8FilaCardHTML.
 
-  return `
-    <div class="xv3-card acao-card-v3 hoje-actions-card" data-acoes-owner="${r.ownerId}" style="border-color:var(--red-line);">
-      <div class="xv3-card-head">
-        <span class="k">O QUE EU FAÇO AGORA</span>
-        ${fila.total > acoes.length ? `<button class="lk acao-ver-fila">ver a fila inteira (${fila.negociosAfetados}) →</button>` : ''}
-      </div>
-
-      ${acoes.length === 0
-        ? `<div class="empty-state" style="padding:16px 0;">Nenhuma pendência aberta: toda visita tem desfecho, todo negócio tocado tem próximo passo datado e nenhuma cadência está atrasada. 🎉</div>`
-        : `<div class="xv3-rows">
-            ${acoes.map((a, i) => `
-              <div class="xv3-row acao-agora-item${i === 0 ? ' is-critical' : ''}" data-acao-idx="${i}"${a.leadId ? ` data-negocio="${esc(String(a.leadId))}"` : ''}>
-                <span class="xv3-row-n">${i + 1}</span>
-                <span class="xv3-row-corpo">
-                  <b>${esc(a.verbo)} ${esc(a.cliente)}</b>
-                  ${a.toque ? `<span class="xv3-tag" title="Contado sobre o que o HubSpot devolve hoje — é um piso, não um total">${a.toque.parcial ? '≥' : ''}${a.toque.n}º toque</span>` : ''}
-                  <span class="xv3-tag${a.prazo === 'hoje' ? ' is-red' : ''}">${esc(a.prazo)}</span>
-                  <span class="por">${esc(a.motivo)} · ${esc(a.ultimaInteracao)}</span>
-                </span>
-                <span class="xv3-row-acoes">
-                  ${a.tel ? `<a class="xv3-ghost acao-canal" href="tel:+${a.tel}" title="Ligar para ${esc(a.cliente)} — ${a.tel}" onclick="event.stopPropagation()">Ligar</a>
-                  <a class="xv3-ghost acao-canal is-whats" href="https://wa.me/${a.tel}" target="_blank" rel="noopener" title="Abrir WhatsApp de ${esc(a.cliente)}" onclick="event.stopPropagation()">WhatsApp</a>` : ''}
-                  <button class="xv3-btn acao-agora-cta${i === 0 ? ' is-danger' : ''}" data-acao-idx="${i}">${esc(a.ctaLabel)} →</button>
-                </span>
-              </div>
-            `).join('')}
-          </div>
-          <div class="xv3-proc" style="display:flex;gap:6px;align-items:flex-start;">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" style="flex:none;margin-top:2px;"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z"/></svg>
-            <span>A ação sai desta lista quando existir prova no HubSpot — tarefa datada criada, desfecho registrado ou etapa movida. Não há como concluir daqui.</span>
-          </div>`}
-    </div>`;
-}
-
-// Liga os botões do Hoje. Só botões: nenhum checkbox, nenhum estado local.
-function wireHojeExecucao(rootEl, r, diag, acoesCalculadas) {
-  /* A MESMA lista do build, senão o índice do botão aponta para outra ação. */
-  const acoes = acoesCalculadas || acoesDeAgora(r, diag, contasLivresParaSugerir());
-
+   OS DOIS CASOS QUE SO ELE TINHA FORAM MOVIDOS ANTES: visita de hoje sem negocio no
+   funil e visita de hoje sem desfecho entraram em h8Fila como extras, com
+   `semNegocio`/`semDesfechoHoje`. Mover primeiro, apagar depois — na outra ordem eu
+   teria perdido as duas linhas mais urgentes do dia. */
+/* A LISTA DE ACOES SAIU DAQUI em 04/09/26: ela existia para o `.acao-agora-cta` achar a
+   acao pelo indice do botao, e esse botao morreu com o cartao antigo. O parametro
+   `acoesCalculadas` saiu com ela — ninguem tem mais o que passar. */
+function wireHojeExecucao(rootEl, r, diag) {
   rootEl.querySelectorAll('.gate-cta').forEach(btn => {
     btn.addEventListener('click', () => {
       const g = diag.gates.find(x => x.id === btn.dataset.gate);
@@ -14727,23 +14926,13 @@ function wireHojeExecucao(rootEl, r, diag, acoesCalculadas) {
      Delega para o CTA em vez de duplicar a acao, e ignora clique que nasceu num link
      (Ligar/WhatsApp) ou no proprio botao — senao o toque em 'Ligar' abriria o drawer
      junto com a ligacao. */
-  rootEl.querySelectorAll('.acao-agora-item').forEach(linha => {
-    linha.style.cursor = 'pointer';
-    linha.addEventListener('click', ev => {
-      if (ev.target.closest('a, button')) return;   // link ou o proprio CTA cuidam de si
-      const cta = linha.querySelector('.acao-agora-cta');
-      if (cta) cta.click();
-    });
-  });
-  rootEl.querySelectorAll('.acao-agora-cta').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const a = acoes[Number(btn.dataset.acaoIdx)];
-      if (a && typeof a.acao === 'function') a.acao();
-    });
-  });
-
-  const verFila = rootEl.querySelector('.acao-ver-fila');
-  if (verFila) verFila.addEventListener('click', () => irParaFila(null));
+  /* AQUI FICAVA A FIACAO DO CARTAO DE 3 ACOES (.acao-agora-item, .acao-agora-cta,
+     .acao-ver-fila). Ele saiu em 04/09/26 com a prancha 8b: a fila inteira, com os cinco
+     filtros e o painel inline, e por isso nao ha mais "ver a fila inteira" — a fila JA
+     esta na tela.
+     O RESTO DESTA FUNCAO CONTINUA VIVO e foi por isso que ela nao foi apagada inteira:
+     os sete portoes (.gate-cta), o "Datar os N" do banner, os tiles do hero e o
+     #meuPainelCtaDia. Apagar a funcao levaria os quatro. */
 
   /* A passagem CLICA O BOTÃO DE ABA REAL em vez de chamar activateTab direto — mesma
      razão anotada na faixa do time da Daily: cada aba tem render e efeito colateral
@@ -14766,8 +14955,14 @@ function wireHojeExecucao(rootEl, r, diag, acoesCalculadas) {
       if (qual === 'sla') return irParaMeuFunilVisao('sla');
       if (qual === 'pendente') {
         /* a ação da visita pendente está na fila desta mesma tela: rolar até ela é o
-           caminho honesto — trocar de aba seria mandar o executivo procurar de novo. */
-        const fila = rootEl.querySelector('.hoje-actions-card');
+           caminho honesto — trocar de aba seria mandar o executivo procurar de novo.
+           O ALVO MUDOU EM 04/09/26: era `.hoje-actions-card`, o cartão de 3 ações, e ele
+           saiu com a prancha 8b. A guarda 7 cobrou na hora — "o seletor casa ZERO... nada
+           quebra: o forEach itera zero e o clique não faz nada" — e é exatamente o clique
+           morto silencioso que ela existe para pegar. Agora rola até `.h8-card`, que é onde
+           a fila mora, e a visita pendente é a PRIMEIRA linha dela (os extras do dia vêm na
+           frente em h8Fila). */
+        const fila = rootEl.querySelector('.h8-card');
         if (fila && typeof smoothScrollTo === 'function') smoothScrollTo(fila);
         else if (fila) fila.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
@@ -14960,7 +15155,9 @@ async function renderMeuPainel() {
   tpInvalidarCache();
   const diagDia = gatesDoDia(r);
   const ctaDia = ctaDoDia(diagDia);
-  const acoesDia = acoesDeAgora(r, diagDia, contasLivresParaSugerir());
+  /* `acoesDia` SAIU em 04/09/26: era calculado aqui e passado so para o cartao de 3
+     acoes e para a fiacao dele. A fila 8b le `h8Fila(r, diag)`, que compoe os extras do
+     dia com a fila ordenada — uma fonte, e a mesma que o delegado busca. */
 
   el.innerHTML = `
     <!-- HERO DE 1 ANDAR (v3, 31/08/26). Antes eram DOIS blocos empilhados: o hero e a
@@ -15003,7 +15200,14 @@ async function renderMeuPainel() {
           <b>${meusQuentesCount}</b><span>em fechamento${meusQuentesCount > 0 ? ' · Demo, Negociação, Ag. Pgto' : ' · nada em jogo agora'}</span>
         </button>
 
-        <button type="button" class="xv3-herostat${acimaDoSlaCount > 0 ? ' is-amber' : ' is-green'}" data-hoje-stat="sla" title="Abrir Meu funil filtrado no que passou do prazo da etapa">
+        <!-- ══ ELE FILTRA ESTA FILA (prancha 8b, 04/09/26) ═══════════════════════════
+             Antes abria o Meu funil filtrado. Não era clique morto — mas a prancha é
+             explícita: "chips do hero e filtros filtram a MESMA fila", e sair da tela
+             para ver o recorte é o oposto do que esta aba faz.
+             O CHIP "em fechamento" acima CONTINUA indo para o Meu funil, de propósito:
+             ele conta ETAPA (Demo, Negociação, Ag. Pgto), não pendência de fila —
+             filtrar por ele daria um número diferente do que o próprio chip mostra. -->
+        <button type="button" class="xv3-herostat${acimaDoSlaCount > 0 ? ' is-amber' : ' is-green'}" data-h8-filtro="sla" title="Acender na fila abaixo quem passou do prazo da etapa">
           <b>${acimaDoSlaCount}</b><span>${acimaDoSlaCount > 0 ? 'acima do SLA · avançar ou soltar' : 'nenhum acima do SLA'}</span>
         </button>
 
@@ -15184,11 +15388,11 @@ async function renderMeuPainel() {
      e nao no DOM. */
   h8LigarFila(el, r, function () { return renderMeuPainel(); });
 
-  /* wireHojeExecucao FICA POR ORA E NAO ALCANCA NADA: os alvos dela (.acao-agora-item,
-     .acao-ver-fila) sairam do DOM com o cartao antigo. Ela sai na mesma passada de remocao,
-     de proposito — para a remocao ser UMA varredura medida, e nao tres cortes no meio de
-     uma prancha. Foi assim que eu derrubei esta aba tres vezes. */
-  wireHojeExecucao(el, r, diagDia, acoesDia);
+  /* wireHojeExecucao CONTINUA, e a varredura mostrou por que: ela liga SEIS coisas e so
+     TRES morreram com o cartao antigo. As vivas sao os sete portoes (.gate-cta), o
+     "Datar os N" do banner, os tiles do hero e o #meuPainelCtaDia — apagar a funcao
+     levaria os quatro. Os tres blocos mortos sairam de dentro dela. */
+  wireHojeExecucao(el, r, diagDia);
 
   /* A FIAÇÃO DO PDI SAIU DAQUI junto com o card (29/08/26) — checkbox, persistência e
      o carregador do histórico. Quem faz esse trabalho agora é o card "Seu 1:1" da aba
