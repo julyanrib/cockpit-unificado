@@ -258,6 +258,10 @@ function montarDadosCompletos() {
   };
 
   return {
+    /* AS OPÇÕES DAS PROPRIEDADES DE ENUMERAÇÃO, como o HubSpot as nomeia. A tela usa
+       para MOSTRAR; o valor gravado continua vindo das listas do template. Sem isto a
+       tela imprimia o valor cru e oito opções divergiam do CRM. */
+    opcoesHubspot: hubspot.opcoesDeNegocio || null,
     hubspotUpdatedAtFmt: fmtDate(hubspot.updatedAt),
     // ITEM 4 (10/08/26): o timestamp CRU vai junto do formatado. A tela precisa dele
     // pra calcular a idade do dado e avisar em vermelho quando o robô das 5h falhou —
