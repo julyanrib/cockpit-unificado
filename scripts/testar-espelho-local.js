@@ -112,9 +112,19 @@ checar('o chip de valor do funil espelha pela função única',
   'escrever em lead.valor_de_mrr escreve numa CÓPIA — foi o defeito de #306');
 const iPasso = codigo.indexOf('const gravarPasso = async function');
 const corpoPasso = iPasso > 0 ? codigo.slice(iPasso, iPasso + 3400) : '';
-checar('o próximo passo do cartão espelha e vai para a agenda',
-  /aplicarPropsNoDataLocal\(/.test(corpoPasso) && /espelharPassoNaAgenda\(/.test(corpoPasso),
+/* O NOME MUDOU EM 04/09/26 e a razão está na guarda 11: `espelharPassoNaAgenda` passou a
+   gravar também na grade semanal (planos_semanais), então virou `espelharPassoNasTelas`.
+   Julyan: "quando ele marcar o proximo passo obrigatoriamente tem que ir pra agenda semanal
+   dele, tem q ir pra daily tbm, ou seja, tudo tem q se conversar."
+   A Daily vem de graça: `d7PlanoDeHoje` LÊ a grade. */
+checar('o próximo passo do cartão espelha e vai para as telas',
+  /aplicarPropsNoDataLocal\(/.test(corpoPasso) && /espelharPassoNasTelas\(/.test(corpoPasso),
   'sem os dois ele datava de novo e o HubSpot ficava com duas tarefas');
+/* E A GRADE NÃO PODE VOLTAR A ESPERAR O ROBÔ: o espelho dela grava em planos_semanais na
+   hora, e é dessa linha que o Planejamento e a Daily leem no render seguinte. */
+checar('o espelho da grade semanal grava na hora, sem esperar carga',
+  /async function espelharPassoNoPlanoSemanal[\s\S]{0,4000}await pl6Gravar\(rep, \{ grade: grade \}\)/.test(codigo),
+  'sem o pl6Gravar a visita ficaria só na sessão e sumiria no próximo login');
 
 /* ── 7. e "todas as contas" continua vindo de um lugar ──────────────────────────── */
 const naMao = (codigo.match(/pl6Carteira\(rep, regioes\)\s*\n?\s*\.concat\(pl6Novos/g) || []).length;

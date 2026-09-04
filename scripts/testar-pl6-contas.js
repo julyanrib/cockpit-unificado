@@ -60,6 +60,15 @@ const CADEIA = ['pl6ChaveBairro', 'pl6RotuloBairro', 'pl6ChaveTerrLivre', 'pl6Se
 // falta de dependência — e o certo é ela EXECUTAR a cadeia nova, não ignorá-la.
 const fonte = [
   pegarConst('PL6_TERR_PREFIXO'),
+  /* AS ETAPAS QUE SAIRAM DO FUNIL (04/09/26). Medido na tela do Bruno: "UAU UNIDADE PENHA ·
+     Perdido" aparecia na munição da semana com o conselho "sem próximo passo datado" — a tela
+     mandando planejar visita a um negócio já perdido.
+     O stub de FN2_ETAPAS vem ANTES da const porque ela o lê no momento da declaração; sem ele
+     o `typeof` a deixaria vazia e o filtro não seria exercido — a suíte daria verde sobre um
+     filtro que não filtra, que é o pior verde possível. */
+  "const FN2_ETAPAS = [{ id: '1395880469', rot: 'PROSPECÇÃO' },"
+    + " { id: '1396006164', rot: 'PERDIDO', saiu: true }];",
+  pegarConst('PL6_ETAPAS_QUE_SAIRAM'),
   'let pl6TerrLivres = [];',
   // pl6SemearTerrLivres lê o plano da semana; no cenário não há plano, e o `typeof` dela
   // já cobre isso. O stub existe para a chamada não estourar por identificador ausente.
@@ -92,7 +101,12 @@ const CENARIO = `
       { id: '3', name: 'COM CEP B', stageId: '1395880469', dias: 40, cep: '21235110',
         logradouro: 'Avenida Monsenhor Félix', cidade: 'Rio de Janeiro', lat: -22.842, lng: -43.325,
         slaBreach: true },
-      { id: '4', name: 'SO CIDADE', stageId: '1395880469', dias: 1, cidade: 'Salvador' }
+      { id: '4', name: 'SO CIDADE', stageId: '1395880469', dias: 1, cidade: 'Salvador' },
+      /* O PERDIDO (04/09/26). meusNegociosAbertos varre TODO DATA.funilLeads e a etapa
+         Perdido vem na carga como as outras — o nome dela mente. Este lead existe no cenário
+         para provar que pl6Carteira se protege: negócio que saiu do funil não é munição. */
+      { id: '5', name: 'JA PERDIDO', stageId: '1396006164', dias: 0, bairro: 'Praia da Costa',
+        cidade: 'Vila Velha', lat: -20.33, lng: -40.29 }
     ];
   }
   const prospeccaoCache = [
@@ -250,6 +264,127 @@ checar('ninguém monta "todas as contas" na mão',
   naMao + ' lugar(es) concatenando carteira+novos direto — quem quer todas chama pl6TodasAsContas');
 
 console.log('');
+
+/* ══════════════ A FICHA DO LEAD (prancha 6c) ══════════════════════════════════════════
+   Quatro assercoes de FORMA. As tres primeiras vieram de defeitos meus nesta prancha, e a
+   quarta guarda uma decisao do Julyan contra a propria prancha. */
+
+/* 1. A GAVETA SAI DA TELA ANTES DO PAINEL.
+   MEDIDO com elementFromPoint: com so `pl6Ficha = null`, o select do motivo do Perdido
+   abria e quem estava no ponto dele era `.pl6-fi-v` — a ficha (z 70) cobrindo o painel
+   (`.overlay`, z 50). O clique existia, o handler rodava, o painel abria, e o campo era
+   INALCANCAVEL. Zerar a variavel nao tira nada do DOM; repintar tira.
+   Esta assercao le o texto entre cada `pl6Ficha = null` e o `return` seguinte: se ele
+   chama um `abrirPassagem*` ou `agendarNoSlot`, tem que haver um `await redesenhar()`
+   no meio. */
+(function () {
+  const partes = tpl.split('pl6Ficha = null;').slice(1);
+  let semRepintar = 0;
+  partes.forEach(function (p) {
+    const trecho = p.slice(0, 1400);
+    const abrePainel = /return (abrirPassagem[A-Za-z]*|agendarNoSlot)\(/.test(trecho);
+    if (!abrePainel) return;   /* o ✕ e o fechar terminam em redesenhar() e nao entram */
+    const antes = trecho.split(/return (?:abrirPassagem[A-Za-z]*|agendarNoSlot)\(/)[0];
+    if (antes.indexOf('await redesenhar()') < 0) semRepintar++;
+  });
+  checar('a ficha sai do DOM antes de abrir painel — nenhum `pl6Ficha = null` sem repintar',
+    semRepintar === 0, semRepintar + ' caminho(s) abrem painel com a gaveta ainda na tela');
+})();
+
+/* 2. UMA FRASE SO PARA A PROXIMA MELHOR ACAO.
+   A ficha usou `pl6Porque`, que responde "por que esta conta e candidata a este dia" e na
+   ficha saiu como estado: "Visita · ha 9d · SLA! · Rua Lupicinio Rodrigues e regiao — fora
+   da rota do dia". A acao mora em `pl6Motivo`, e o card le a MESMA. */
+checar('pl6Motivo existe e e a fonte unica da proxima melhor acao',
+  tpl.indexOf('function pl6Motivo(l) {') > 0);
+checar('o card le pl6Motivo (nao tem copia da frase)',
+  tpl.indexOf('const motivo = pl6Motivo(l);') > 0);
+checar('a ficha NAO usa pl6Porque para a acao',
+  tpl.indexOf("esc(pl6Porque(l, pl6RegioesDoPlano()") < 0);
+
+/* 3. O ENDERECO DA FICHA NAO CAI NA REGIAO.
+   `l.regiaoNome` e o ROTULO DA REGIAO, e a regiao leva o nome da rua do CENTROIDE dela.
+   A ficha do Bistro de rua dizia "Rua Lupicinio Rodrigues e regiao" quando o endereco no
+   HubSpot e "Estrada da Agua Grande". Campo vazio ele completa na visita; campo ERRADO
+   ele descobre na porta da conta errada — e por isso o fallback e proibido, nao so
+   corrigido. */
+(function () {
+  const i = tpl.indexOf('function pl6FichaHTML(');
+  const corpo = i > 0 ? tpl.slice(i, i + 9000) : '';
+  checar('a ficha monta o endereco sem cair em l.regiaoNome',
+    corpo.indexOf('const endereco = [') > 0
+    && corpo.slice(corpo.indexOf('const endereco = ['), corpo.indexOf('const endereco = [') + 420)
+         .indexOf('regiaoNome') < 0);
+  checar('a ficha busca o negocio bruto (senao jura que o telefone nao existe)',
+    corpo.indexOf('brutoDoNegocio(l.dealId)') > 0);
+})();
+checar('brutoDoNegocio e uma funcao de topo, nao um local de uma tela so',
+  tpl.indexOf('function brutoDoNegocio(dealId) {') > 0
+  && tpl.indexOf('const brutoDoNegocio = function') < 0);
+checar('brutoDoNegocio cai na reciclagem (os 48 do Bruno vem em lista separada)',
+  /function brutoDoNegocio[\s\S]{0,900}leadsReciclagem60/.test(tpl));
+
+/* 4. O PERDIDO PEDE O MOTIVO (04/09/26, Julyan).
+   A prancha 6c pedia "Perdido sem trava: 1 clique limpa" e eu construi assim. O Julyan
+   reverteu: "manter todas as propriedades do hubspot por etapa... o gestor precisa dos
+   dados de tudo q e feito". E dele que sai a analise de perda e o bloco PERDIDOS · MES.
+   Sem esta assercao, a proxima leitura da prancha desfaz a decisao dele em silencio. */
+checar('o botao de perder entra pela porteira de etapa (pede motivo_do_perdido)',
+  /class="pl6-fi-perder"[\s\S]{0,200}data-pl6-fi-etapa/.test(tpl));
+checar('nao existe atalho de Perdido sem porteira na ficha',
+  tpl.indexOf('data-pl6-fi-perder') < 0);
+checar('a etapa Perdido continua exigindo o motivo',
+  /'1396006164': \[[\s\S]{0,400}motivo_do_perdido[\s\S]{0,120}obrigatorio: true/.test(tpl));
+
+/* 5. NAO SE AGENDA NO PASSADO.
+   Numa sexta, os quatro primeiros dias da grade eram botao clicavel com "7 livres", e
+   clicar criava tarefa no HubSpot datada na segunda anterior. Duas camadas: a ficha nao
+   oferece, e a porta unica do agendar recusa. */
+checar('pl6DiaPassou usa a hora de Brasilia, nao o relogio do aparelho',
+  /function pl6DiaPassou[\s\S]{0,600}agendaChave\(agendaAgora\(\)\)/.test(tpl));
+checar('a porta unica do agendar recusa dia que passou',
+  /pl6AgendarNoSlot[\s\S]{0,4000}if \(pl6DiaPassou\(diaISO\)\)/.test(tpl));
+checar('a ficha nao oferece dia que passou como botao',
+  /if \(pl6DiaPassou\(d\.iso\)\)[\s\S]{0,300}pl6-fi-dia is-passou/.test(tpl));
+
+/* 6. O HISTORICO DE TOQUES NASCE SEM DONO.
+   O Julyan ja avisou que o Meu funil e o proximo a mostrar as interacoes do Expogo e do
+   PWA. Se ela nascesse `pl6*`, a copia seria o caminho de menor esforco — e duas linhas
+   do tempo que divergem na primeira mudanca de criterio e o defeito que esta semana
+   inteira foi cacar. */
+checar('historicoDeToquesHTML nao leva prefixo de tela no nome',
+  tpl.indexOf('function historicoDeToquesHTML(') > 0
+  && tpl.indexOf('function pl6HistoricoDeToques') < 0);
+checar('o historico reusa touchpointsDoLead (nao remonta as fontes)',
+  /function historicoDeToquesHTML[\s\S]{0,900}touchpointsDoLead\(/.test(tpl));
+checar('o historico diz a fonte de cada toque (Expogo, PWA, HubSpot)',
+  tpl.indexOf("HIST_FONTE_ROT = { expogo: 'Expogo', pwa: 'PWA', hubspot: 'HubSpot' }") > 0);
+
+
+/* ══ NEGOCIO QUE SAIU DO FUNIL NAO E MUNICAO (04/09/26) ══════════════════════════════
+   MEDIDO na tela do Bruno: "UAU UNIDADE PENHA · Perdido · ha 0d" na lista da semana, com o
+   conselho "sem proximo passo datado" embaixo — a tela mandando planejar visita a um
+   negocio ja perdido, e ainda cobrando um proximo passo.
+   A causa e , que varre TODO DATA.funilLeads: a etapa Perdido vem na
+   carga como as outras sete, e o nome da funcao mente. Ela tem 19 chamadores, entao o
+   Planejamento se protege aqui em vez de trocar o comportamento de 19 telas de uma vez.
+   RECICLAGEM NAO ENTRA nesta regra e o teste abaixo prova: ela nao saiu do funil, esta
+   parada — e continua sendo municao pelo chip proprio dela. */
+(function () {
+  const cart = api.pl6Carteira(rep, api.pl6Regioes(rep));
+  const nomes = cart.map(function (l) { return l.nome; });
+  checar("a carteira do Planejamento nao traz negocio Perdido",
+    nomes.indexOf("JA PERDIDO") < 0, "achou: " + nomes.join(", "));
+  checar("e nao perdeu os outros quatro no caminho",
+    cart.length === 4, "achou " + cart.length);
+  const todas = api.pl6TodasAsContas(rep, api.pl6Regioes(rep));
+  checar("pl6TodasAsContas tambem nao traz o Perdido",
+    todas.filter(function (l) { return l.nome === "JA PERDIDO"; }).length === 0);
+  checar("a RECICLAGEM continua na municao (ela nao saiu do funil, esta parada)",
+    todas.filter(function (l) { return l.reciclagem; }).length > 0,
+    "reciclagem sumiu junto com o Perdido — o filtro pegou demais");
+})();
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);

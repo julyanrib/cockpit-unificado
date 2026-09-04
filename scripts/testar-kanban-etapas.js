@@ -175,12 +175,82 @@ checar('soltar NÃO move: abre o registro rápido',
    rápido reimplementou a sequência inteira de escrita — PATCH da etapa, nota, tarefa,
    espelho local — e virou a terceira chamada de op:'mudar-etapa' no arquivo. Duas cópias
    da mesma sequência é como se perde a correção feita numa delas. Ficou uma função só,
-   gravarPassagemDeEtapa, e as duas telas a chamam. */
+   gravarPassagemDeEtapa, e as duas telas a chamam.
+
+   ══ ELA PEGOU O DEFEITO DE NOVO EM 04/09/26 ════════════════════════════════════════
+   O «✕ marcar perdido» da ficha do Planejamento (prancha 6c) nasceu com o fetch escrito
+   à mão — a QUARTA chamada a op:'mudar-etapa' — e a irmã abaixo o pegou. Estava certa: à
+   mão eu perdia o confirmarEtapaGravada, que PERGUNTA ao HubSpot se gravou depois de um
+   abort em vez de chutar (a espera que a Kelly perdeu em 11:03 sobre um negócio que TINHA
+   sido gravado).
+
+   E O CONTADOR AQUI CONTINUOU EM 2, o que é o melhor sinal possível: a correção final não
+   foi a ficha chamar gravarPassagemDeEtapa, foi ela entrar por abrirPassagemDeEtapa —
+   que já chama. Assim a ficha ganhou de graça a porteira CAMPOS_POR_ETAPA, e é por isso
+   que o «marcar perdido» pede motivo_do_perdido como qualquer outra transição (04/09/26,
+   Julyan: "manter todas as propriedades do hubspot por etapa... o gestor precisa dos
+   dados de tudo q é feito").
+
+   Se algum dia este número precisar subir, subir exige vir aqui e dizer qual tela e por
+   quê — mas desconfie: telas que entram pelo painel de passagem não mexem nele.
+
+   ══ A INVARIANTE SUBIU DE NÍVEL EM 04/09/26 ════════════════════════════════════════
+   Julyan: "quero que todas as ações sejam instantaneas no cockpit". As duas telas passaram
+   a chamar `gravarPassagemOtimista`, que move o card no mesmo quadro, escreve atrás e —
+   esta é a parte que importa — DEVOLVE o card se o HubSpot recusar.
+
+   Então o que precisa ser medido agora é mais forte que "duas telas, uma função de
+   escrita": é que NINGUÉM pule o motor. Uma tela que chame `gravarPassagemDeEtapa` direto
+   fica instantânea sem reversão — ou seja, mostra um card numa etapa que o CRM não tem, e
+   o gestor lê o número errado. É o oposto exato do que ele pediu na mesma conversa ("o
+   gestor precisa dos dados de tudo q é feito").
+
+   As três asserções abaixo, juntas, prendem a forma: uma sequência de escrita, um lugar
+   com a regra de reversão, e o único caller da escrita é esse lugar. */
 checar('existe UMA função de escrita de passagem de etapa',
   template.indexOf("async function gravarPassagemDeEtapa(opts) {") > 0);
-checar('as duas telas chamam a mesma função',
-  (template.split("await gravarPassagemDeEtapa({").length - 1) === 2,
-  'achado ' + (template.split("await gravarPassagemDeEtapa({").length - 1));
+checar('existe UM lugar com a regra de reversão',
+  template.indexOf("async function gravarPassagemOtimista(opts) {") > 0);
+checar('as duas telas chamam o motor otimista',
+  (template.split("await gravarPassagemOtimista({").length - 1) === 2,
+  'achado ' + (template.split("await gravarPassagemOtimista({").length - 1));
+/* O NÚMERO É 1 E O 1 É O MOTOR. Se subir para 2, alguém escreveu no HubSpot por fora da
+   reversão — e o card dele vai ficar numa etapa que o CRM recusou. */
+checar('ninguém escreve etapa pulando a reversão',
+  (template.split("await gravarPassagemDeEtapa(opts)").length - 1) === 1
+  && (template.split("await gravarPassagemDeEtapa({").length - 1) === 0,
+  'chamadas diretas com objeto: ' + (template.split("await gravarPassagemDeEtapa({").length - 1));
+/* DOIS GESTOS NO MESMO NEGÓCIO AO MESMO TEMPO NÃO: sem esta trava, dois cliques rápidos
+   viram duas escritas, e a reversão do segundo restaura um "antes" que já era o depois do
+   primeiro — o card acaba numa etapa que ninguém escolheu. */
+checar('o motor recusa gesto em cima de gravação em andamento',
+  /FN_GRAVANDO\.has\(id\)/.test(template) && /FN_GRAVANDO\.add\(id\)/.test(template)
+  && /FN_GRAVANDO\.delete\(id\)/.test(template));
+/* A REVERSÃO TEM DE DEVOLVER OS DIAS. Avançar zera o contador (está certo, é etapa nova),
+   mas o card que VOLTA precisa dos 8 dias que tinha — senão a tela diz que o negócio é
+   fresco e a régua passa a mentir no caso em que nada aconteceu. */
+checar('a reversão devolve etapa, dias e propriedades',
+  /aplicarEtapaNoDataLocal\(id, antes\.stageId, antes\.props, antes\.dias\)/.test(template));
+/* O CASO DA KELLY: espera estourada E confirmação sem resposta. Ninguém sabe se gravou, e
+   reverter apagaria da tela uma mudança que talvez exista no CRM.
+
+   A PRIMEIRA VERSÃO DESTA ASSERÇÃO DEU VERDE SEM MEDIR NADA: ela era um regex sobre o
+   TEXTO do bloco, e eu a testei trocando `if (naoSei)` por `if (false && naoSei)` — o
+   texto continuou lá e ela passou. Guarda que não distingue código vivo de código morto é
+   a terceira que eu escrevo assim.
+   Agora ela prende duas coisas verificáveis em texto: a condição é LITERALMENTE `naoSei`
+   (a troca por `false &&` muda a literal e reprova), e o `return` dela vem ANTES da linha
+   de reversão — que é o que faz o caso da Kelly não ser revertido. Ordem textual é fraca,
+   mas é honesta sobre o que mede; o comportamento em si se prova no navegador. */
+(function () {
+  const iSe = template.indexOf('  if (naoSei) {');
+  const iRev = template.indexOf('aplicarEtapaNoDataLocal(id, antes.stageId');
+  checar('o motor testa `naoSei` sem condição pendurada',
+    iSe > 0, iSe > 0 ? '' : 'não achei `if (naoSei) {` — a condição mudou de forma');
+  checar('e o retorno de "não sei se gravou" vem ANTES da reversão',
+    iSe > 0 && iRev > iSe,
+    'naoSei em ' + iSe + ', reversão em ' + iRev);
+})();
 /* ══ DE 2 PARA 3 CHAMADAS, EM 03/09/26 ══════════════════════════════════════════════
    Esta assercao conta as chamadas a /api/negocio-acao para impedir que alguem crie um
    SEGUNDO caminho de escrita no negocio em vez de usar o que existe. A regra e boa e
@@ -200,6 +270,59 @@ checar('nenhuma chamada nova a /api/negocio-acao fora das tres conhecidas',
   (template.match(/op: 'mudar-etapa'/g) || []).length === 3,
   'esperado 3 (edição inline + função compartilhada + endereço da prancha 6a), achado ' +
   (template.match(/op: 'mudar-etapa'/g) || []).length);
+
+
+/* ══ O GESTO INSTANTÂNEO TEM DE SER VISÍVEL (04/09/26) ═══════════════════════════════
+   MEDIDO: confirmei "→ avançar" e o cartão DESAPARECEU da tela. Não era o motor otimista —
+   o dado moveu certo (DATA e fn2Leads devolviam o lead em Visita) —, mas a coluna Visita do
+   Bruno tem 31 cartões e FN2_VISIVEIS_POR_COLUNA é 3: o recém-chegado caía na 31ª posição,
+   atrás do "ver os 31 →".
+
+   É o defeito do BLOCO 16 deste produto outra vez, escrito lá sobre o primeiro cache
+   otimista: "o botão virava ✓ ... parecia que não tinha funcionado, e dava vontade de clicar
+   de novo (criando duplicata)". Instantâneo que não se vê é pior que a ampulheta — a
+   ampulheta pelo menos dizia que algo estava acontecendo. */
+checar('o recém-movido existe e sobe na coluna de destino',
+  template.indexOf('const FN3_RECEM = new Set();') > 0
+  && template.indexOf('const recem = a => (typeof FN3_RECEM') > 0
+  && template.indexOf('const dR = recem(a) - recem(b);') > 0);
+checar('o motor marca o recém-movido junto com o movimento',
+  /FN_GRAVANDO\.add\(id\);[\s\S]{0,400}FN3_RECEM\.add\(id\);/.test(template));
+checar('e a reversão tira a marca (ele não se moveu)',
+  template.indexOf('FN3_RECEM.delete(id);') > 0);
+/* TRACEJADO ENQUANTO ESCREVE: a convenção deste arquivo para "existe mas ainda não
+   confirmado" (a mesma do recemAgendado na agenda). Sem ela a tela afirma uma gravação que
+   pode ser recusada, e o card voltando sem aviso parece a tela se mexendo sozinha. */
+checar('o cartão em voo é tracejado e diz que pode voltar',
+  /\.fn3-card\.is-gravando\{border-style:dashed/.test(template)
+  && template.indexOf('se recusar, o cartão volta') > 0);
+/* O SELO DO TOPO NÃO PODE PROMETER REALTIME. Medido no produto: `.channel(`,
+   `postgres_changes` e `.subscribe(` aparecem ZERO vezes. E realtime na FOTO do HubSpot
+   (cockpit_snapshot) dispararia uma vez por rodada do robô — o oposto de tempo real. A
+   prancha 12b pede o selo "Supabase realtime"; ele não entra enquanto não existir. */
+/* MASCARA OS COMENTÁRIOS ANTES DE PROCURAR. A primeira versão desta asserção reprovou pelo
+   PRÓPRIO comentário que explica a decisão — ele cita "Supabase realtime" para dizer por que
+   o selo NÃO usa aquilo. É o mesmo falso positivo que derrubou a primeira versão da guarda
+   10 e a do "hoje da agenda": a explicação do defeito contém a forma errada. */
+(function () {
+  const semComentario = template
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/\/\*[\s\S]*?\*\//g, ' ');
+  checar('o selo do hero não promete Supabase realtime',
+    semComentario.indexOf('Supabase realtime') < 0
+    && semComentario.indexOf('suas ações são instantâneas') > 0,
+    semComentario.indexOf('Supabase realtime') >= 0
+      ? 'a promessa de realtime está em código, não em comentário' : '');
+})();
+checar('e ele diz o que NÃO é instantâneo',
+  template.indexOf('mudança de outra pessoa entra na próxima carga') > 0);
+/* O SCROLL DO KANBAN (Julyan, duas vezes). Piso de coluna com 1fr no máximo: em tela larga
+   as colunas crescem em vez de deixar buraco. */
+checar('o kanban tem piso de coluna e rola na horizontal',
+  /grid-auto-columns:minmax\(232px,1fr\)/.test(template)
+  && /\.fn3-grade\{[^}]*overflow-x:auto/.test(template));
+checar('e o acordeão do toque desfaz o piso (senão rola sem ter o que rolar)',
+  /\.fn3-grade\{grid-auto-flow:row;grid-auto-columns:auto;/.test(template));
 
 /* ── 6. as colunas são o pipeline oficial ────────────────────────────────────────── */
 const idsColunas = (template.match(/const FN2_ETAPAS = \[([\s\S]*?)\n\];/) || [])[1] || '';
