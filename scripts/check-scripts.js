@@ -398,7 +398,9 @@ function checarSeletoresDeFiacao() {
        saiu da tela quando a rota foi para o app de campo) e passou a nascer abaixo do
        resumo, que existe. A divida era exatamente esta: botao ligado, funcao voltando no
        primeiro if, e nenhum erro para investigar. */
-    'd-prom': 'Minha Daily — fiacao orfa de desenho aposentado',
+    /* PAGA EM 04/09/26: a divida era a fiacao dos inputs `.d-prom` rodando em vazio.
+       Ela saiu de verdade, junto com as tres telas antigas da Daily — nao foi consertada,
+       foi apagada, o que resolve igual. `d-salvar` fica: aquele ainda aparece na tela. */
     'd-salvar': 'Minha Daily — fiacao orfa de desenho aposentado',
     'prospeccao-btn-rota': 'Prospeccao — fiacao orfa de desenho aposentado',
     'prospeccao-btn-semfit': 'Prospeccao — fiacao orfa de desenho aposentado',
@@ -782,40 +784,100 @@ function checarAtoDoPlanoNaDaily() {
   const arquivo = 'template/cockpit.template.html';
   const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
 
-  /* Quem e a montagem PRIMARIA da Daily: a primeira do try dentro de renderDaily. */
   const iRD = cru.indexOf('async function renderDaily()');
   if (iRD < 0) {
     console.error('ATO DO PLANO: renderDaily nao existe mais - a guarda perdeu o alvo.');
     return false;
   }
-  const mPrim = /try \{ return ([a-zA-Z0-9_$]+)\(r\); \}/.exec(cru.slice(iRD));
+
+  /* 1. A MONTAGEM PRIMARIA da Daily do executivo. Duas formas aceitas, porque as duas
+        ja existiram neste arquivo: a cadeia de fallback (`try { return X(r); }`, ate a
+        7a) e a montagem unica (`const nova = X(r);`). Aceitar as duas evita o que
+        aconteceu quando a cadeia saiu: o regex antigo casou o primeiro try/return de
+        QUALQUER funcao adiante, e a guarda passou a medir persistenciaHTML() em silencio. */
+  const fimRD = cru.slice(iRD + 30).search(/\n(?:async )?function /);
+  const trecho = fimRD > 0 ? cru.slice(iRD, iRD + 30 + fimRD) : cru.slice(iRD);
+  const mPrim = /try \{ return ([a-zA-Z0-9_$]+)\(r\); \}/.exec(trecho)
+    || /const nova = ([a-zA-Z0-9_$]+)\(r\);/.exec(trecho);
   if (!mPrim) {
-    console.error('ATO DO PLANO: nao achei a cadeia de fallback da Daily em renderDaily.');
-    console.error('  A guarda le `try { return X(r); }` para descobrir a montagem primaria.');
+    console.error('ATO DO PLANO: nao achei a montagem primaria da Daily em renderDaily.');
+    console.error('  A guarda le `try { return X(r); }` ou `const nova = X(r);`.');
+    console.error('  Se a montagem passou a ser chamada de outra forma, ensine a forma aqui —');
+    console.error('  guarda que nao acha o alvo tem de reprovar, nunca passar em branco.');
     return false;
   }
   const primaria = mPrim[1];
-
-  /* O corpo dessa funcao: da declaracao dela ate a proxima na coluna zero. */
   const iF = cru.indexOf('function ' + primaria + '(');
   if (iF < 0) {
     console.error('ATO DO PLANO: ' + primaria + '() e chamada mas nao esta declarada.');
     return false;
   }
   const depois = cru.slice(iF + 8);
-  const fim = depois.search(/\n(?:async )?function /);
-  const corpo = fim > 0 ? depois.slice(0, fim) : depois;
+  const fimF = depois.search(/\n(?:async )?function /);
+  const corpo = fimF > 0 ? depois.slice(0, fimF) : depois;
 
-  if (corpo.indexOf('buildCompromissoDoDiaHTML(') < 0) {
+  /* 2. OS GANCHOS QUE A MONTAGEM EMITE. O caminho comeca na tela, nao na gravacao:
+        `status: 'plano_fechado'` aparece DUAS vezes no arquivo (o Planejamento e a
+        Daily), e partir da gravacao fazia a guarda derivar o gancho do lugar errado e
+        reprovar desenho correto. */
+  const ganchos = [...new Set((corpo.match(/data-[a-z0-9-]+/g) || []))];
+  if (!ganchos.length) {
+    console.error('ATO DO PLANO: ' + primaria + '() nao emite nenhum gancho data-*.');
+    console.error('  Sem gancho nao ha ato: a tela nao tem por onde fechar o plano.');
+    return false;
+  }
+
+  /* 3. E UM DELES TEM DE ALCANCAR AS DUAS TABELAS que o gestor le de manha:
+        planos_diarios com status 'plano_fechado' (os clientes NOMEADOS) e dailies com
+        os quatro prometido_* (a soma). Perder a soma e ruim; perder os nomes e o que fez
+        o gestor ler "sem cliente nomeado" para os sete, todos os dias, por onze dias. */
+  const QUATRO = ['prometido_visitas', 'prometido_avancos', 'prometido_propostas', 'prometido_fechamentos'];
+  let ok = null; const perto = [];
+  ganchos.forEach(function (attr) {
+    const chave = attr.replace(/^data-/, '').replace(/-([a-z])/g, function (m, c) { return c.toUpperCase(); });
+    const iIf = cru.indexOf('if (d.' + chave + ')');
+    if (iIf < 0) return;
+    /* O RAMO FECHA POR CHAVES, nao por contagem de caracteres. Com janela de 6000 o ramo
+       de um gancho vizinho engolia o ramo da trava e QUALQUER gancho parecia gravar —
+       testado: trocar o gancho da tela por outro nome deixava a guarda verde. */
+    let ramo = '';
+    {
+      const iAbre = cru.indexOf('{', iIf);
+      if (iAbre > 0) {
+        let d = 1;
+        let k = iAbre + 1;
+        while (k < cru.length && d > 0) {
+          if (cru[k] === '{') d++; else if (cru[k] === '}') d--;
+          k++;
+        }
+        ramo = cru.slice(iIf, k);
+      }
+    }
+    if (!ramo) return;
+    const temNomes = ramo.indexOf("status: 'plano_fechado'") >= 0;
+    const faltam = QUATRO.filter(function (k) { return ramo.indexOf(k) < 0; });
+    if (temNomes && !faltam.length) { ok = attr; return; }
+    if (temNomes || faltam.length < 4) perto.push(attr + (temNomes ? ' (grava os nomes, falta: ' + faltam.join(', ') + ')' : ' (grava a soma, nao grava os nomes)'));
+  });
+
+  if (!ok) {
     console.error('ATO DO PLANO AUSENTE em ' + arquivo + ':');
-    console.error('  ' + primaria + '() e a montagem que a Daily usa de verdade, e ela nao');
-    console.error('  emite #compromissoDoDia. O executivo abre a Minha Daily e nao tem como');
-    console.error('  fechar o plano: nem os nomes em planos_diarios, nem a soma em');
-    console.error('  dailies.prometido_*. Nao da erro nenhum - so seca as duas tabelas.');
+    console.error('  ' + primaria + '() e a montagem que a Daily usa de verdade, e nenhum');
+    console.error('  dos ' + ganchos.length + ' ganchos que ela emite fecha o plano do dia.');
+    if (perto.length) {
+      console.error('  Chegou perto (e por isso e pior — parece feito):');
+      perto.forEach(function (p) { console.error('    ' + p); });
+    }
+    console.error('  O ato precisa gravar AS DUAS: planos_diarios com status plano_fechado');
+    console.error('  (os clientes nomeados) e dailies com os quatro prometido_* (a soma).');
+    console.error('  Sem isso o executivo abre a Minha Daily e nao tem como fechar o plano.');
+    console.error('  Nao da erro nenhum - so seca as duas tabelas, e a Daily do gestor passa');
+    console.error('  a dizer "sem cliente nomeado" para o time todo, todos os dias.');
     console.error('  Emitir apenas num fallback NAO conta: eles so rodam se esta falhar.');
     return false;
   }
-  console.log('OK ato do plano - ' + primaria + '() emite o bloco que fecha o plano do dia.');
+  console.log('OK ato do plano - ' + primaria + '() emite [' + ok + '], e esse ramo grava'
+    + ' planos_diarios (plano_fechado) e os quatro prometido_*.');
   return true;
 }
 if (!checarAtoDoPlanoNaDaily()) process.exit(1);
@@ -932,46 +994,75 @@ function checarMinhaDailySemCliqueMorto() {
     .replace(/<!--[\s\S]*?-->/g, x => x.replace(/[^\n]/g, ' '));
   const falhas = [];
 
-  /* (a) a arma da ausencia existe, e e ela que sai quando nao ha negocio */
-  if (semCom.indexOf('DL2_ARMA_SEM_NEGOCIO') < 0) {
-    falhas.push('DL2_ARMA_SEM_NEGOCIO nao existe - visita sem negocio volta a mostrar "Ficha"');
+  /* (a)+(b) VISITA CUJA CONTA AINDA NAO E NEGOCIO TEM DE TER SAIDA.
+     O ramo do desfecho e achado pelo EFEITO, nao pelo nome: e o que leva para Ag.
+     Pagamento ('1395880473') via abrirPassagemDeEtapa — a etapa onde o executivo
+     preenche MRR e Valor, de onde o RPA/ASAAS gera o link. Cravar 'd7Proposta' faria
+     esta guarda morrer no proximo redesenho, do mesmo jeito que morreu no anterior. */
+  /* TODAS as ocorrencias, nao a primeira: '1395880473' aparece em varios lugares (a
+     tabela de campos por etapa, a acao de negocio, o ramo da Daily). indexOf pegava a
+     primeira e media codigo que nao tem nada com esta tela — o mesmo erro que fez a
+     guarda 11 medir persistenciaHTML() em silencio. O ramo da Daily e o unico que junta
+     a etapa de Ag. Pagamento com abrirPassagemDeEtapa dentro de um `if (d.<gancho>)`. */
+  let ramo = '';
+  {
+    let de = 0;
+    for (;;) {
+      const i = semCom.indexOf("'1395880473'", de);
+      if (i < 0) break;
+      de = i + 12;
+      const iRamo = semCom.slice(0, i).lastIndexOf('    if (d.');
+      if (iRamo < 0) continue;
+      /* O RAMO TEM DE ESTAR PERTO. Sem este limite, o `if (d.` mais proximo acima podia
+         estar 4.600 linhas atras (medido: a ocorrencia da linha 21950 ancorava num if da
+         17321) e a janela virava 266 mil caracteres — que contem abrirPassagemDeEtapa por
+         acidente e faz a varredura parar no lugar errado. Ramo de verdade e curto: o da
+         Daily tem 2.201 caracteres. */
+      if (i - iRamo > 4000) continue;
+      /* A janela vai ate o INICIO DO PROXIMO RAMO, nao ate o literal da etapa:
+         abrirPassagemDeEtapa vem DEPOIS de '1395880473' (a etapa e o argumento dela),
+         e cortar no literal fazia o ramo certo ser rejeitado. Terminar no proximo
+         `if (d.` tambem impede a janela de vazar para o vizinho, que foi o erro
+         original desta guarda: janela por contagem de caracteres le o codigo ao lado. */
+      const resto = semCom.slice(i);
+      const iFim = resto.indexOf('\n    if (');
+      const cand = semCom.slice(iRamo, iFim > 0 ? i + iFim : i + 3000);
+      if (cand.indexOf('abrirPassagemDeEtapa(') >= 0) { ramo = cand; break; }
+    }
   }
-  if (!/if \(!neg\)\s*return\s+DL2_ARMA_SEM_NEGOCIO/.test(semCom)) {
-    falhas.push('dl2ArmaDoNegocio nao devolve DL2_ARMA_SEM_NEGOCIO quando neg e nulo');
-  }
-  if (!/cta:\s*'Criar negócio'/.test(semCom)) {
-    falhas.push('nenhuma arma tem cta "Criar negócio"');
-  }
-
-  /* (b) a acao criar cai no fluxo que ja existe, e nao numa segunda implementacao */
-  const iCriar = semCom.indexOf("if (acao === 'criar')");
-  const iLead = semCom.indexOf('const lead = leadDoBotao(btn);');
-  if (iCriar < 0) {
-    falhas.push('o despacho da Daily nao trata a acao "criar"');
+  if (!ramo) {
+    falhas.push('nao achei o ramo de desfecho da Daily (Ag. Pagamento via'
+      + ' abrirPassagemDeEtapa) - a guarda perdeu o alvo');
   } else {
-    /* A JANELA TERMINA NA GUARDA DE LEAD, e nao em N caracteres. Minha primeira versao
-       olhava 1400 caracteres a partir do `if (acao === 'criar')`, e isso alcancava o bloco
-       VIZINHO — o do lead que desapareceu —, que tambem chama abrirNovaContaProspeccao.
-       Resultado: quando eu injetei o defeito de proposito (troquei a chamada de dentro do
-       criar por outra funcao), a guarda encontrou a chamada do bloco seguinte e reportou
-       verde. Guarda com janela por contagem de caracteres le o codigo do vizinho. */
-    const fim = (iLead > iCriar) ? iLead : (iCriar + 1400);
-    const janela = semCom.slice(iCriar, fim);
-    /* COM O PARENTESE: nome mencionado nao e funcao chamada. Minha primeira versao procurava
-       so o nome, e o bloco tem um `typeof abrirNovaContaProspeccao === 'function'` guardando
-       a chamada — entao, quando eu troquei a CHAMADA por outra funcao para testar a guarda,
-       o nome continuou ali no typeof e ela reportou verde. Duas licoes na mesma linha: janela
-       por caracteres le o vizinho, e busca por nome le a mencao. */
-    if (janela.indexOf('abrirNovaContaProspeccao(') < 0) {
-      falhas.push('a acao "criar" nao CHAMA abrirNovaContaProspeccao - criacao duplicada em outro lugar');
+    /* COM O PARENTESE: nome mencionado nao e funcao chamada. Ja me enganei assim uma
+       vez nesta mesma guarda, com um typeof guardando a chamada. */
+    if (ramo.indexOf('abrirNovaContaProspeccao(') < 0) {
+      falhas.push('o desfecho da Daily nao oferece criar o negocio para conta nova -'
+        + ' visita sem negocio volta a ser clique sem caminho');
     }
-    if (janela.indexOf('renderDaily(') < 0) {
-      falhas.push('a acao "criar" nao redesenha a Daily - o item ficaria SEM NEGOCIO depois de salvo');
+    /* O redesenhar tem de estar DENTRO da chamada de criacao, e por isso a extensao dela
+       e medida por parenteses balanceados em vez de eu olhar o ramo inteiro: o ramo tem
+       um segundo `redesenhar()` (o callback da passagem de etapa), e procurar no ramo
+       todo dava verde mesmo com o callback da criacao vazio. Testado vermelho. */
+    const iCria = ramo.indexOf('abrirNovaContaProspeccao(');
+    if (iCria >= 0) {
+      let d = 0, fim = -1;
+      for (let k = iCria + 'abrirNovaContaProspeccao'.length; k < ramo.length; k++) {
+        if (ramo[k] === '(') d++;
+        else if (ramo[k] === ')') { d--; if (d === 0) { fim = k; break; } }
+      }
+      const chamada = fim > 0 ? ramo.slice(iCria, fim + 1) : ramo.slice(iCria);
+      if (chamada.indexOf('redesenhar()') < 0) {
+        falhas.push('a criacao pela Daily nao redesenha - a linha ficaria SEM NEGOCIO'
+          + ' depois de o negocio ter sido salvo');
+      }
     }
-    /* Ela tem que vir ANTES da guarda de lead, senao nunca roda: o pre-requisito dela e
-       justamente a ausencia do negocio. */
-    if (iLead >= 0 && iCriar > iLead) {
-      falhas.push('a acao "criar" vem DEPOIS da guarda de lead - ela nunca seria alcancada');
+    /* A saida tem de vir ANTES da exigencia de negocio, senao nunca roda: o
+       pre-requisito dela e justamente a ausencia do negocio. */
+    const iSaida = ramo.indexOf('abrirNovaContaProspeccao(');
+    const iExige = ramo.indexOf('brutoDoNegocio(');
+    if (iSaida >= 0 && iExige >= 0 && iSaida > iExige) {
+      falhas.push('a criacao vem DEPOIS da exigencia do negocio - nunca seria alcancada');
     }
   }
 
@@ -980,28 +1071,14 @@ function checarMinhaDailySemCliqueMorto() {
     falhas.push('voltou o "Abra pelo Meu funil" - orientacao impossivel para negocio fora do funil');
   }
 
-  /* (c) o regex da hora e EXECUTADO, nao lido. Extraio o literal da linha do `atrasada` e
-     rodo contra casos reais: sem isso, um regex valido e errado passa verde. */
-  {
-    let fonte = null;
-    semCom.split('\n').forEach(linha => {
-      if (fonte) return;
-      const m = /(\/\^.*?\$\/)\.exec\(String\(item\.hora/.exec(linha);
-      if (m) fonte = m[1];
-    });
-    if (!fonte) {
-      falhas.push('nao achei o regex da hora em dl2LinhaHTML - a guarda perdeu o alvo');
-    } else {
-      let re = null;
-      try { re = eval(fonte); } catch (e) { re = null; }
-      if (!re) {
-        falhas.push('o regex da hora nao compila: ' + fonte);
-      } else if (!re.test('09:00') || !re.test('8:30') || re.test('d:dd') || re.test('abc')) {
-        falhas.push('o regex da hora nao reconhece HH:MM (' + fonte + ') - "atrasada" fica sempre'
-          + ' falso e o aviso de visita atrasada nunca aparece');
-      }
-    }
-  }
+  /* (c) SAIU EM 04/09/26, e o motivo importa mais que a remocao.
+     Ela executava o regex que lia a hora de um TEXTO de tela, porque na v2 a hora vinha
+     escrita na linha da visita. Na 7a a hora vem do INDICE do slot na grade (PL6_HORAS
+     pelo si), e nao existe texto para interpretar — o defeito que ela pegou (regex sem as
+     barras invertidas, `atrasada` sempre falso, aviso que nunca apareceu para ninguem)
+     ficou impossivel por desenho, nao por conserto.
+     SE ALGUEM VOLTAR A LER HORA DE TEXTO, esta checagem tem de voltar com ela: regex
+     invalido da erro, mas regex valido e errado nao da nada — a unica prova e executar. */
 
   /* (d) a fase do dia deriva da regra oficial, e nao de uma segunda constante */
   if (/const D4_TRAVA_MIN\s*=/.test(semCom)) {

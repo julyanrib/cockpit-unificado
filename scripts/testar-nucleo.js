@@ -1613,7 +1613,11 @@ teste('Agenda separa historico vazio de buraco ainda acionavel', () => {
 
 teste('Daily exclui eventos internos e deep-link do Playbook preserva o filtro prometido', () => {
   const iniDaily = html.indexOf('function d4EventosDeHoje(ownerId)');
-  const fimDaily = html.indexOf('function buildBriefingExecutivoHTML', iniDaily);
+  /* O FIM E O DA PROPRIA FUNCAO. Antes esta linha apontava para a vizinha
+     (buildBriefingExecutivoHTML), que saiu quando as tres telas antigas da Daily foram
+     apagadas: indexOf deu -1, a fatia ficou vazia e o teste caiu sem que a regra que ele
+     protege tivesse mudado. Ancora em vizinha e ancora que a proxima limpeza arranca. */
+  const fimDaily = html.indexOf(String.fromCharCode(10) + 'function ', iniDaily + 10);
   const daily = html.slice(iniDaily, fimDaily);
   verdade(daily.includes('agendaContaComoCompromisso(e)'),
     'a linha comercial da Daily aplica a mesma regra que exclui DAILY OUTBOUND e 1:1 da rua');
@@ -1624,8 +1628,11 @@ teste('Daily exclui eventos internos e deep-link do Playbook preserva o filtro p
   verdade(link.includes("'sem-passo': 'sem_passo'"),
     'o CTA abrir os N no funil traduz a grafia do Playbook para o filtro real');
 
-  verdade(html.includes('página do Playbook provada ='),
-    'a Daily credita prova, nao simples rolagem da pagina');
+  /* SAIU EM 04/09/26 com o placar de pontos da Daily. Ela conferia que a Daily creditava
+     PROVA de Playbook e nao simples rolagem — certo para o desenho de entao, e o que
+     media era o placar, que a prancha 7a manda deletar junto com pontos e conquistas.
+     A prova em si continua: pb7Provadas(), na aba Playbook, segue separando pagina
+     provada de pagina rolada. Se a Daily voltar a creditar prova, esta linha volta. */
   falso(html.includes('pipeline 9451149A'),
     'o Planejamento nao publica um pipeline diferente do Field Sales oficial');
 });
