@@ -1878,13 +1878,26 @@
      flexivel, cujo conteudo natural sao os 3707px dos 188 cards. A lista nao pode derivar da
      coluna quando a coluna deriva da lista.
 
-     Ficou o teto de viewport, que e o que funcionava. O desalinhamento real medido a 1440px
-     e de 73px de vazio na esquerda — pequeno, e o preco de duas colunas com origens de
-     altura diferentes. Resolver de verdade exige a lista numa camada `position:absolute`
-     dentro da coluna (aí ela para de contribuir para a linha), e isso e mudanca de markup,
-     nao de CSS solto no fim de uma prancha. */
-  .pl6-lista{display:flex;flex-direction:column;gap:7px;
-    max-height:min(62vh,720px);min-height:240px;overflow-y:auto;padding-right:4px;
+     Ficou o teto de viewport por um dia, e ele pediu o encaixe: "faz a camada absoluta
+     então, quero encaixado". FEITO ABAIXO, e e o markup que resolve.
+
+     ══ COMO A CAMADA QUEBRA O CIRCULO ═══════════════════════════════════════════════
+     .pl6-lista-caixa cresce (`flex:1 1 0`) e a lista mora DENTRO dela em
+     `position:absolute;inset:0`. Um filho absoluto sai do fluxo: ele nao entrega altura
+     nenhuma ao pai. Entao a coluna da direita passa a medir cabecalho + fontes + nota +
+     rodape + o piso de 240px — numero pequeno e ESTAVEL —, a linha do grid sai da
+     ESQUERDA (a semana), e a caixa engole exatamente a sobra. As duas colunas fecham na
+     mesma linha em qualquer largura, e a lista rola dentro do que sobrou em vez de
+     inventar 3707px de cards.
+     `flex-basis:0` e obrigatorio, e nao 1 1 auto: com basis `auto` o navegador ainda
+     mede o conteudo da caixa antes de distribuir.
+
+     E O PISO DE 240px MUDOU DE LUGAR: ele e da CAIXA agora. Na lista absoluta, um
+     min-height nao teria efeito nenhum (inset:0 ja crava as quatro bordas), e a coluna
+     ficaria livre para encolher a lista a zero numa tela baixa. */
+  .pl6-lista-caixa{position:relative;flex:1 1 0;min-height:240px;}
+  .pl6-lista{position:absolute;inset:0;display:flex;flex-direction:column;gap:7px;
+    overflow-y:auto;padding-right:4px;
     scrollbar-width:thin;overscroll-behavior-y:contain;}
   .pl6-card{border:1px solid var(--line-soft);border-radius:var(--r-md);background:var(--panel);padding:9px 11px;}
   .pl6-card.is-sla{border-color:#E3C6C6;}
@@ -2130,6 +2143,11 @@
   @media (max-width:1050px){
     .pl6-corpo{grid-template-columns:minmax(0,1fr);}
     .pl6-semana{border-right:0;border-bottom:1px solid var(--line);}
+    /* SEM COLUNA VIZINHA NAO HA O QUE ENCAIXAR: empilhado, a municao nao tem de quem
+       herdar altura, e a camada absoluta congelaria a lista nos 240px do piso. Aqui ela
+       volta ao teto de viewport, que e o comportamento certo para uma coluna sozinha. */
+    .pl6-lista-caixa{position:static;flex:none;min-height:0;}
+    .pl6-lista{position:static;max-height:min(62vh,720px);min-height:240px;}
     .pl6-cabeca{grid-template-columns:minmax(0,1fr);}
     .pl6-grade{grid-template-columns:repeat(2,minmax(0,1fr));}
   }
@@ -26335,12 +26353,17 @@ function renderPlanejamento6a(rep) {
             ? ' <b>' + esc(fontesVazias.join(' e ')) + '</b> ainda não tem nenhuma conta na base — não é zero, é não medido.'
             : '')
           + '</div>'
+          /* A CAIXA DA CAMADA ABSOLUTA (04/09/26): ela e o que cresce; a lista flutua
+             dentro. Envolve SO a lista — o rodape continua irmao dela e visivel, senao
+             ficaria por baixo da camada. Ver .pl6-lista-caixa no CSS. */
+    +     '<div class="pl6-lista-caixa">'
     +     '<div class="pl6-lista">' + (cards ||
             '<div class="pl6-sug-vazio">' + (fonteSel === 'carteira'
               ? 'Carteira toda com data ✓ — nada aqui esperando você.'
               : fonteSel === 'todas'
                 ? 'Nada livre: tudo que você tem já está na semana.'
                 : 'Nenhuma conta desta fonte livre agora.') + '</div>') + '</div>'
+    +     '</div>'
     +     '<div class="pl6-rodape-lista">' + (fonteSel === 'carteira'
             ? 'Agendou, saiu da lista — vira compromisso na coluna do dia. O ✕ no chip devolve pra cá.'
             : 'Conta nova: agendar cria o negócio (HubSpot, etapa Prospecção) e o compromisso na Agenda, no mesmo clique.')

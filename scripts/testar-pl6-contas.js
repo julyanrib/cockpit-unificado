@@ -385,6 +385,66 @@ checar('o historico diz a fonte de cada toque (Expogo, PWA, HubSpot)',
     "reciclagem sumiu junto com o Perdido — o filtro pegou demais");
 })();
 
+/* == A CAMADA ABSOLUTA DA MUNICAO (04/09/26, Julyan: "faz a camada absoluta entao, quero
+   encaixado") ============================================================================
+   MEDIDO ANTES: teto de viewport na lista -> 73px de vazio no pe da esquerda a 1440px.
+   MEDIDO ANTES DISSO: flex:1 na lista -> coluna de 3983px, 3229px de vazio, porque com
+   align-items:stretch a linha do grid sai do CONTEUDO do item mais alto e a lista flexivel
+   media os 3707px dos cards. A lista nao pode derivar da coluna quando a coluna deriva da
+   lista.
+   MEDIDO DEPOIS DA CAMADA: 1280/1440/1760px, com 37 e com 48 cards, fim das duas colunas
+   igual (diferenca 0) e a lista rolando (494 visiveis de 3707).
+   As pecas abaixo sao o que sustenta isso, e cada uma sozinha desfaz o encaixe.
+   SEM REGEX DE PROPOSITO: barra invertida morre no meu caminho de patch, e uma regex que
+   chega sem as barras fica VALIDA e ERRADA — o ponto passa a casar qualquer caractere e a
+   assertion fica verde medindo outra coisa. */
+function pl6RegraCSS(nome) {
+  const i = tpl.indexOf('\n  .' + nome + '{');
+  if (i < 0) return null;
+  return tpl.slice(i + nome.length + 5, tpl.indexOf('}', i));
+}
+(function () {
+  const regraCaixa = pl6RegraCSS('pl6-lista-caixa');
+  checar('a caixa da camada existe no CSS', regraCaixa !== null);
+  const cxs = regraCaixa || '';
+  checar('a caixa se posiciona (senao o inset:0 da lista sobe para a coluna)',
+    cxs.indexOf('position:relative') > -1, cxs);
+  checar('a caixa cresce com basis 0 (com basis auto o navegador ainda mede o conteudo)',
+    cxs.indexOf('flex:1 1 0') > -1, cxs);
+  checar('o piso de altura e da CAIXA, e nao da lista absoluta (onde nao teria efeito)',
+    cxs.indexOf('min-height:240px') > -1, cxs);
+
+  const lst = pl6RegraCSS('pl6-lista') || '';
+  checar('a lista flutua na camada', lst.indexOf('position:absolute') > -1, lst);
+  checar('e ocupa a caixa inteira', lst.indexOf('inset:0') > -1, lst);
+  checar('a lista NAO tem mais teto de viewport (era ele que deixava vazio na esquerda)',
+    lst.indexOf('max-height') < 0, lst);
+
+  /* NO EMPILHADO A CAMADA SE DESFAZ: sem coluna vizinha nao ha de quem herdar altura, e a
+     camada congelaria a lista nos 240px do piso. Medido a 1000px: static nas duas. */
+  /* A ANCORA E A REGRA DO PL6, E NAO "@media 1050px": o template tem QUATRO blocos de
+     1050px e o primeiro deles nao e desta tela — eu ancorei no @media e a fatia saiu com
+     zero caractere, deixando duas assertions vermelhas por medirem o bloco errado. */
+  const iUm = tpl.indexOf('.pl6-corpo{grid-template-columns:minmax(0,1fr);}');
+  const bloco = tpl.slice(iUm, iUm + 900);
+  checar('a ancora do empilhado nao se perdeu', iUm > -1 && bloco.length > 80,
+    'bloco de ' + bloco.length + ' chars');
+  checar('no empilhado a caixa volta ao fluxo',
+    bloco.indexOf('.pl6-lista-caixa{position:static') > -1);
+  checar('no empilhado a lista volta ao teto de viewport',
+    bloco.indexOf('.pl6-lista{position:static;max-height:min(62vh') > -1);
+
+  /* O MARKUP: a caixa envolve SO a lista. Se envolvesse o rodape, ele ficaria por baixo da
+     camada — medido: fim da caixa 1021px, topo do rodape 1029px, sem sobreposicao. */
+  const iCaixa = tpl.indexOf('<div class="pl6-lista-caixa">');
+  checar('a caixa e emitida no markup', iCaixa > -1);
+  const iFecha = tpl.indexOf("+     '</div>'", tpl.indexOf('pl6-sug-vazio'));
+  const iRodape = tpl.indexOf('<div class="pl6-rodape-lista">');
+  checar('o rodape da lista fica FORA da camada (senao ele some por baixo dela)',
+    iFecha > -1 && iRodape > iFecha && iCaixa > -1 && iCaixa < iRodape,
+    'caixa ' + iCaixa + ' fecha ' + iFecha + ' rodape ' + iRodape);
+})();
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);
