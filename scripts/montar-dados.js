@@ -101,6 +101,32 @@ function usarSnapshot(fontes) {
   return trocadas;
 }
 
+// ══ CADA LEAD DIZ EM QUE ETAPA ESTA (04/09/26) ═════════════════════════════════════
+// Os objetos de funilLeads[etapa] vinham do robo SEM stageId: a etapa existia so como
+// chave do mapa. Medido na ficha do negocio — ela faz ORDEM_FUNIL_FICHA.indexOf(l.stageId)
+// e com -1 NAO DESENHA A TRILHA: os oito segmentos de mudar etapa nao existiam para
+// negocio nenhum vindo da carga (0 segmentos medidos num lead do robo, 8 no criado na
+// sessao, que nasce com stageId). O chip do topo tambem saia sem o nome da etapa.
+//
+// AQUI E NAO NO ROBO porque esta funcao e a porta unica — producao, preview e as suites
+// passam por ela, e o snapshot do Supabase e injetado antes dela rodar. Corrigir no robo
+// valeria so na proxima rodada e deixaria todo snapshot ja gravado sem o campo.
+//
+// `||` e nao sobrescrita: se o lead ja trouxer a etapa, a dele manda. A chave do mapa e o
+// fallback, nao a autoridade.
+function comEtapaNoLead(porEtapa) {
+  const saida = {};
+  Object.entries(porEtapa || {}).forEach(([etapa, leads]) => {
+    saida[etapa] = (Array.isArray(leads) ? leads : []).map(l => (l && typeof l === 'object')
+      ? Object.assign({}, l, {
+          stageId: l.stageId || etapa,
+          stage: l.stage || ((hubspot.stageMeta && hubspot.stageMeta.labels) ? (hubspot.stageMeta.labels[etapa] || '') : '')
+        })
+      : l);
+  });
+  return saida;
+}
+
 // O snapshot do CRM e obrigatorio para montar qualquer coisa. Sem ele — nem na tabela nem
 // no arquivo — a resposta certa e um erro claro, nunca uma tela com zeros: zero negocio
 // aberto e uma afirmacao sobre o funil, e nao ha funil nenhum para afirmar.
@@ -280,7 +306,8 @@ function montarDadosCompletos() {
     /* Conversão por turma, velocidade de etapa e ciclo — o gestor recebe inteiro. */
     historicoEtapas: hubspot.historicoEtapas || null,
     funil: hubspot.funil,
-    funilLeads: hubspot.funilLeads || {},
+    /* SEM ISTO A TRILHA DE ETAPAS DA FICHA NAO DESENHA — ver comEtapaNoLead. */
+    funilLeads: comEtapaNoLead(hubspot.funilLeads),
     /* O CORTE DA COLUNA PERDIDO desce para os dois papeis. Sem ele a tela nao tem como
        dizer 'nada saiu da carteira desde 01/09' e a coluna vazia leria como 'nunca perdi
        nada' — mentira por omissao, com 1.811 perdas no CRM. */
