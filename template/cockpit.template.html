@@ -22905,7 +22905,12 @@ function renderPlanejamento6a(rep) {
         + '</div>';
     }
 
-    return '<div class="pl6-card' + (isC && l.sla ? ' is-sla' : '') + '">'
+    /* data-pl6-abrir-card e o endereco da FICHA. O card inteiro tambem e a alca do
+       arraste; quem separa os dois e o limiar de 6px do motor — clique sem movimento
+       nao e arraste. */
+    return '<div class="pl6-card' + (isC && l.sla ? ' is-sla' : '') + '"'
+      + ' data-pl6-abrir-card="' + esc(l.id) + '" data-pl6-card-tipo="' + l.tipo + '"'
+      + ' title="Abrir a ficha de ' + esc(l.nome) + '">'
       + '<div class="pl6-card-topo"><span class="pl6-card-nome">' + esc(l.nome) + '</span>'
       + '<span class="pl6-selo" style="color:' + cor + ';background:' + bg + ';">' + esc(selo) + '</span></div>'
       + '<span class="pl6-card-sub">' + esc(sub) + '</span>'
@@ -23105,49 +23110,39 @@ function renderPlanejamento6a(rep) {
    muda e o toast diz o que aconteceu — porque tela que muda sem o banco mudar e a mentira
    que fez a Kelly jurar que tinha prometido.
    ══════════════════════════════════════════════════════════════════════════════════════ */
-function pl6Ligar(box, rep) {
-  if (!box || box.dataset.pl6Ligado === '1') return;
-  box.dataset.pl6Ligado = '1';
+/* ══ AGENDAR NUM HORARIO — UM CAMINHO SO, PARA AS DUAS TELAS ═══════════════════════════
+   Julyan, 04/09: "planejamento e daily se completam, se ele planejou no dia que
+   corresponde ao dia da daily ali tem q se complementar mesmo". E por isso que a regra
+   fica num lugar: o que ele agenda na semana E o que amanhece na Daily daquele dia.
+   O clique no picker do Planejamento, o ARRASTAR da munição e a Minha Daily 7a chamam
+   esta mesma funcao. Se cada gesto (ou cada tela) escrevesse por conta propria, um deles
+   ficaria sem algum efeito colateral — a tarefa no HubSpot, o negocio criado para conta
+   nova, o toast que diz onde gravou — e a divergencia so apareceria no fim do mes, com
+   metade das visitas sem tarefa no CRM.
 
-  const redesenhar = async () => {
-    const el = document.getElementById('agendaContent');
-    if (!el) return;
-    el.innerHTML = renderPlanejamento6a(rep);
-  };
+   NENHUM DOS CHAMADORES CRIA TAREFA POR CONTA PROPRIA. A ordem aqui e deliberada: o
+   HubSpot primeiro, a grade depois — a semana nunca diz "agendado" sem tarefa do outro
+   lado.
 
-  /* Grava e redesenha, ou nao faz nada e explica. Um caminho so para as sete mutacoes. */
-  const mutar = async (campos, toastOk) => {
-    if (pl6UI.salvando) return;
-    pl6UI.salvando = true;
-    const { error } = await pl6Gravar(rep, campos);
-    pl6UI.salvando = false;
-    if (error) {
-      pl6UI.toast = null;
-      if (typeof mostrarToast === 'function') {
-        mostrarToast('Não consegui gravar a semana: ' + (error.message || 'erro desconhecido')
-          + '. A tela não mudou — tente de novo.', 'erro');
-      }
-      return false;
-    }
-    pl6UI.toast = toastOk || null;
-    await redesenhar();
-    return true;
-  };
-
-  /* ══ DIGITAR FILTRA OS CHIPS SEM REDESENHAR ═══════════════════════════════════════
-     Um listener de `input`, delegado como o de clique. Ele NAO toca no estado e NAO
-     redesenha: esconde e mostra os chips por atributo. Se redesenhasse, o input seria
-     recriado a cada letra e o cursor sairia do campo — e a pessoa digita isso com uma
-     mao, no carro, com o motor ligado.
-     Compara contra data-nome, que o render ja emite normalizado (sem acento, minusculo):
-     "itapua" acha "Itapuã". */
-  /* ══ AGENDAR NUM HORARIO — UM CAMINHO SO, DOIS GESTOS ════════════════════════════
-     O clique numa opcao do picker e o ARRASTAR da munição chamam esta mesma funcao.
-     Se cada gesto escrevesse por conta propria, um deles ficaria sem algum efeito
-     colateral — a tarefa no HubSpot, o negocio criado para conta nova, o toast que diz
-     onde gravou — e a divergencia so apareceria no fim do mes, com metade das visitas
-     sem tarefa no CRM. */
-  const agendarNoSlot = async function (id, di, si) {
+   `ganchos` e o que cada tela tem de proprio:
+     mutar(campos, textoOk)  grava em planos_semanais e redesenha aquela tela
+     redesenhar()            so redesenha
+     box                     a raiz daquela tela (usada para achar o cartao aberto)
+   A REGRA fica aqui; o jeito de gravar e de redesenhar e de quem chamou. */
+async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
+  /* O nome e "gk" e nao "g" porque o corpo desta funcao JA usa "g" para a grade da
+     semana. Duas declaracoes com o mesmo nome no mesmo escopo derrubam o arquivo inteiro
+     ("Identifier g has already been declared") — e nao so esta tela: o template e um
+     script unico, entao o Cockpit todo fica branco. A guarda de sintaxe do build pegou
+     isso na primeira tentativa, que e o motivo de ela existir. */
+  const gk = ganchos || {};
+  const mutar = gk.mutar;
+  const redesenhar = gk.redesenhar || function () {};
+  const box = gk.box || document;
+  if (typeof mutar !== 'function') {
+    console.error('pl6AgendarNoSlot chamada sem o gancho mutar — nada foi gravado.');
+    return;
+  }
     const regioes = pl6Regioes(rep);
     const todos = pl6Carteira(rep, regioes).concat(pl6Novos(rep, regioes));
     const l = todos.find(x => x.id === id);
@@ -23233,10 +23228,55 @@ function pl6Ligar(box, rep) {
     g[di][si] = l.id;
     return mutar({ grade: g }, l.nome + ' · agendado ' + dias[di].rot + ' ' + dias[di].data + ' ' + hora
       + ' — tarefa no HubSpot ✓ · slot no Supabase ✓');
+}
+
+function pl6Ligar(box, rep) {
+  if (!box || box.dataset.pl6Ligado === '1') return;
+  box.dataset.pl6Ligado = '1';
+
+  const redesenhar = async () => {
+    const el = document.getElementById('agendaContent');
+    if (!el) return;
+    el.innerHTML = renderPlanejamento6a(rep);
   };
+
+  /* Grava e redesenha, ou nao faz nada e explica. Um caminho so para as sete mutacoes. */
+  const mutar = async (campos, toastOk) => {
+    if (pl6UI.salvando) return;
+    pl6UI.salvando = true;
+    const { error } = await pl6Gravar(rep, campos);
+    pl6UI.salvando = false;
+    if (error) {
+      pl6UI.toast = null;
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não consegui gravar a semana: ' + (error.message || 'erro desconhecido')
+          + '. A tela não mudou — tente de novo.', 'erro');
+      }
+      return false;
+    }
+    pl6UI.toast = toastOk || null;
+    await redesenhar();
+    return true;
+  };
+
+  /* ══ DIGITAR FILTRA OS CHIPS SEM REDESENHAR ═══════════════════════════════════════
+     Um listener de `input`, delegado como o de clique. Ele NAO toca no estado e NAO
+     redesenha: esconde e mostra os chips por atributo. Se redesenhasse, o input seria
+     recriado a cada letra e o cursor sairia do campo — e a pessoa digita isso com uma
+     mao, no carro, com o motor ligado.
+     Compara contra data-nome, que o render ja emite normalizado (sem acento, minusculo):
+     "itapua" acha "Itapuã". */
+    /* a REGRA de agendar vive em pl6AgendarNoSlot (escopo de modulo), porque a Minha
+       Daily 7a agenda a mesma coisa. Aqui vao so os ganchos desta tela. */
+    const agendarNoSlot = function (id, di, si) {
+      return pl6AgendarNoSlot(rep, id, di, si, { mutar: mutar, redesenhar: redesenhar, box: box });
+    };
 
   /* ══════════════ ARRASTAR A CONTA PARA O DIA (Pointer Events) ═══════════════════ */
   let arraste = null;
+  /* instante do fim do ultimo arraste DE VERDADE (que passou do limiar) — o abridor de
+     ficha consulta para nao abrir por causa do click que vem depois do soltar. */
+  let ultimoArraste = 0;
 
   const limparAlvos = function () {
     box.querySelectorAll('.pl6-solte').forEach(e => e.classList.remove('pl6-solte'));
@@ -23313,6 +23353,10 @@ function pl6Ligar(box, rep) {
     document.body.classList.remove('pl6-arrastando');
     limparAlvos();
     try { if (a.grip && a.pointerId != null) a.grip.releasePointerCapture(a.pointerId); } catch (e) { /* ok */ }
+    /* QUEM ACABOU DE ARRASTAR NAO QUER A FICHA NA CARA. O click do navegador chega
+       depois do pointerup; esta marca faz o abridor de ficha ignorar os 250 ms
+       seguintes a um arraste de verdade. */
+    if (a.ativo) ultimoArraste = Date.now();
     /* nao chegou a virar arraste: deixa o clique seguir o caminho normal */
     if (!a.ativo) return;
     const alvo = alvoDoPonto(ev.clientX, ev.clientY);
@@ -23408,6 +23452,50 @@ function pl6Ligar(box, rep) {
   });
 
   box.addEventListener('click', async ev => {
+    /* ══ O CLIQUE NO CORPO DO CARD ABRE A FICHA ═══════════════════════════════════════
+       Vem ANTES do resto de propósito: se um filho interativo foi clicado, o closest
+       abaixo acha o gesto dele e este ramo nem roda. E ele nao dispara depois de um
+       arraste (ver ultimoArraste). */
+    const cardAlvo = ev.target.closest('[data-pl6-abrir-card]');
+    if (cardAlvo && !ev.target.closest('button,input,select,textarea,a,label')
+        && (Date.now() - ultimoArraste) > 250) {
+      const id = cardAlvo.getAttribute('data-pl6-abrir-card');
+      const tipo = cardAlvo.getAttribute('data-pl6-card-tipo');
+      const regioes = pl6Regioes(rep);
+      const todos = pl6Carteira(rep, regioes).concat(pl6Novos(rep, regioes));
+      const l = todos.find(x => x.id === id);
+      if (!l) {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Essa conta não está mais na sua base. Recarreguei a lista.', 'atencao');
+        }
+        return redesenhar();
+      }
+      if (tipo === 'c') {
+        /* A FICHA DO FUNIL QUER O LEAD COMPLETO, nao o resumo do pl6: ela le `name`,
+           as propriedades e os touchpoints. Buscar pelo dealId no DATA.funilLeads em
+           vez de adaptar o resumo evita abrir uma ficha pela metade. */
+        const bruto = Object.entries(DATA.funilLeads || {})
+          .flatMap(([sid, ls]) => (ls || []).map(x => Object.assign({}, x, { stageId: sid })))
+          .find(x => String(x.id) === String(l.dealId));
+        if (bruto && typeof abrirFichaLeadFunilDrawer === 'function') {
+          return abrirFichaLeadFunilDrawer(bruto);
+        }
+        /* SEM O REGISTRO COMPLETO, DIZER — em vez de abrir uma ficha vazia. */
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Não achei o negócio de ' + l.nome + ' na carga do HubSpot desta sessão.'
+            + ' A próxima carga do robô resolve.', 'atencao');
+        }
+        return;
+      }
+      if (l._bruto && typeof abrirFichaProspeccaoDrawer === 'function') {
+        return abrirFichaProspeccaoDrawer(l._bruto);
+      }
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não consegui abrir a ficha desta conta-alvo nesta sessão.', 'erro');
+      }
+      return;
+    }
+
     const alvo = ev.target.closest('[data-pl6-fonte],[data-pl6-terr],[data-pl6-terr-limpar],'
       + '[data-pl6-mais-terr],'
       + '[data-pl6-sugerir-dia],'
