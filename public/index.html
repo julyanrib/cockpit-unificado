@@ -1173,7 +1173,6 @@
   .pl6-regiao-op:hover{background:var(--pl6-territorio-soft);}
   .pl6-regiao-op b{margin-left:auto;font:900 11px var(--font-display);font-variant-numeric:tabular-nums;color:var(--pl6-territorio);}
   .pl6-regiao-op small{font-size:9.5px;color:var(--muted2);}
-  .pl6-regiao-nota{display:block;padding:6px 8px 2px;font-size:9px;color:var(--muted2);line-height:1.4;}
   .pl6-regiao-mais{width:100%;min-height:38px;border:0;background:none;color:var(--muted);cursor:pointer;
     font:800 10px var(--font-body);border-top:1px solid var(--line-soft);margin-top:4px;}
 
@@ -22208,12 +22207,6 @@ const PL6_BLOQUEADO = '__b';
 /* Cores por etapa do funil e por fonte do lote — as mesmas da prancha, e as mesmas que a
    Daily 4a usa. Ficam aqui como tabela porque a prancha as define por nome de etapa, e
    traduzir de stageId para nome em cada uso espalharia o de/para. */
-/* AS ETAPAS QUE ESTAO "NA MESA" — proposta entregue e negociacao em curso. Ag. Pagamento
-   (1395880473) fica FORA de proposito: ali o cliente ja disse sim e o que falta e o
-   pagamento; contar como "na mesa" inflaria a promessa com negocio que nao precisa mais
-   de conversa. O par 471+472 e o mesmo que outros tres calculos deste arquivo usam
-   escrito a mao; aqui ele ganha nome. */
-const PL6_ETAPAS_DE_MESA = ['1395880471', '1395880472'];
 const PL6_COR_ETAPA = {
   '1395880469': '#E51A31', // Prospecção
   '1396005401': '#F2542D', // Visita (Contato feito, na prancha)
@@ -22778,39 +22771,20 @@ function renderPlanejamento6a(rep) {
         + '<span aria-hidden="true">⌖</span><span class="pl6-regiao-nome">'
         + esc(rotaNome || 'escolher região') + '</span><span style="margin-left:auto;">⌄</span></button>';
       if (pl6UI.rotaPicker === di) {
-        /* ══ O NUMERO E DE CONTA LIVRE, NAO DO TOTAL DO BAIRRO (04/09/26) ═════════════
-           Mostrava r.contas, que conta toda conta com coordenada no bairro. Medido em
-           Praia da Costa: dizia 14, o bairro tinha 11 agendaveis e apenas 4 LIVRES — o
-           numero que decide onde atacar estava inflado em 27%, e ele e lido ANTES do
-           clique. Mesma lei que fez o chip de Territorio contar livre: numero que
-           promete 14 e entrega 4 mentiu na hora da decisao.
-           Usa livrePorRegiao, o MESMO mapa dos chips de Territorio — um calculo, dois
-           lugares, impossivel divergirem. */
-        const comLivre = regioes
-          .map(r => Object.assign({}, r, { livres: livrePorRegiao.get(r.chave) || 0 }))
-          .sort((a, b) => b.livres - a.livres);
-        const mostrar = pl6UI.verTodasRegioes ? comLivre : comLivre.slice(0, PL6_REGIOES_VISIVEIS);
+        const mostrar = pl6UI.verTodasRegioes ? regioes : regioes.slice(0, PL6_REGIOES_VISIVEIS);
         regiaoHTML += '<div class="pl6-regiao-lista">'
-          + (comLivre.length ? mostrar.map(r =>
+          + (regioes.length ? mostrar.map(r =>
             '<button type="button" class="pl6-regiao-op" data-pl6-regiao="' + di + '.' + esc(r.chave) + '">'
             + '<span>' + esc(r.nome) + (r.grafias > 1
               ? ' <small title="a base tem ' + r.grafias + ' grafias para este bairro — a contagem soma as duas">('
                 + r.grafias + ' grafias)</small>' : '') + '</span>'
-            /* zero livre nao e botao morto: o bairro continua clicavel (ele pode querer
-               a rota por outro motivo), mas o numero diz que nao ha conta esperando. */
-            + '<b' + (r.livres ? '' : ' style="color:var(--muted2);"') + '>' + r.livres + '</b></button>').join('')
+            + '<b>' + r.contas + '</b></button>').join('')
             : '<div class="pl6-sug-vazio">Nenhuma conta-alvo com endereço no seu território ainda.</div>')
-          + (comLivre.length > PL6_REGIOES_VISIVEIS
+          + (regioes.length > PL6_REGIOES_VISIVEIS
             ? '<button type="button" class="pl6-regiao-mais" data-pl6-mais-regioes="1">'
-              + (pl6UI.verTodasRegioes
-                ? 'mostrar só as ' + PL6_REGIOES_VISIVEIS + ' com mais conta livre'
-                : 'ver todas as ' + comLivre.length + ' regiões') + '</button>'
+              + (pl6UI.verTodasRegioes ? 'mostrar só as 8 com mais contas'
+                : 'ver todas as ' + regioes.length + ' regiões') + '</button>'
             : '')
-          /* A LEGENDA PASSOU A SER NECESSARIA porque o numero mudou de significado: era o
-             total do bairro, virou conta LIVRE. Numero sem legenda e numero que cada um
-             interpreta como quer — e este e o numero que decide onde ele passa o dia. */
-          + '<span class="pl6-regiao-nota">nº = contas <b>livres</b> — as que ainda não estão'
-          + ' na sua semana · trocar a região recalcula as sugestões do dia</span>'
           + '</div>';
       }
     }
@@ -23131,36 +23105,49 @@ function renderPlanejamento6a(rep) {
    muda e o toast diz o que aconteceu — porque tela que muda sem o banco mudar e a mentira
    que fez a Kelly jurar que tinha prometido.
    ══════════════════════════════════════════════════════════════════════════════════════ */
-/* ══ AGENDAR NUM HORARIO — UM CAMINHO SO, PARA AS DUAS TELAS ═══════════════════════════
-   O clique no picker do Planejamento, o ARRASTAR da munição e a Minha Daily 7a chamam
-   esta mesma funcao. Se cada gesto (ou cada tela) escrevesse por conta propria, um deles
-   ficaria sem algum efeito colateral — a tarefa no HubSpot, o negocio criado para conta
-   nova, o toast que diz onde gravou — e a divergencia so apareceria no fim do mes, com
-   metade das visitas sem tarefa no CRM.
+function pl6Ligar(box, rep) {
+  if (!box || box.dataset.pl6Ligado === '1') return;
+  box.dataset.pl6Ligado = '1';
 
-   NENHUM DOS CHAMADORES CRIA TAREFA POR CONTA PROPRIA. A ordem aqui e deliberada: o
-   HubSpot primeiro, a grade depois — a semana nunca diz "agendado" sem tarefa do outro
-   lado.
+  const redesenhar = async () => {
+    const el = document.getElementById('agendaContent');
+    if (!el) return;
+    el.innerHTML = renderPlanejamento6a(rep);
+  };
 
-   `ganchos` e o que cada tela tem de proprio:
-     mutar(campos, textoOk)  grava em planos_semanais e redesenha aquela tela
-     redesenhar()            so redesenha
-     box                     a raiz daquela tela (usada para achar o cartao aberto)
-   A REGRA fica aqui; o jeito de gravar e de redesenhar e de quem chamou. */
-async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
-  /* O nome e "gk" e nao "g" porque o corpo desta funcao JA usa "g" para a grade da
-     semana. Duas declaracoes com o mesmo nome no mesmo escopo derrubam o arquivo inteiro
-     ("Identifier g has already been declared") — e nao so esta tela: o template e um
-     script unico, entao o Cockpit todo fica branco. A guarda de sintaxe do build pegou na
-     primeira tentativa, que e o motivo de ela existir. */
-  const gk = ganchos || {};
-  const mutar = gk.mutar;
-  const redesenhar = gk.redesenhar || function () {};
-  const box = gk.box || document;
-  if (typeof mutar !== 'function') {
-    console.error('pl6AgendarNoSlot chamada sem o gancho mutar — nada foi gravado.');
-    return;
-  }
+  /* Grava e redesenha, ou nao faz nada e explica. Um caminho so para as sete mutacoes. */
+  const mutar = async (campos, toastOk) => {
+    if (pl6UI.salvando) return;
+    pl6UI.salvando = true;
+    const { error } = await pl6Gravar(rep, campos);
+    pl6UI.salvando = false;
+    if (error) {
+      pl6UI.toast = null;
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não consegui gravar a semana: ' + (error.message || 'erro desconhecido')
+          + '. A tela não mudou — tente de novo.', 'erro');
+      }
+      return false;
+    }
+    pl6UI.toast = toastOk || null;
+    await redesenhar();
+    return true;
+  };
+
+  /* ══ DIGITAR FILTRA OS CHIPS SEM REDESENHAR ═══════════════════════════════════════
+     Um listener de `input`, delegado como o de clique. Ele NAO toca no estado e NAO
+     redesenha: esconde e mostra os chips por atributo. Se redesenhasse, o input seria
+     recriado a cada letra e o cursor sairia do campo — e a pessoa digita isso com uma
+     mao, no carro, com o motor ligado.
+     Compara contra data-nome, que o render ja emite normalizado (sem acento, minusculo):
+     "itapua" acha "Itapuã". */
+  /* ══ AGENDAR NUM HORARIO — UM CAMINHO SO, DOIS GESTOS ════════════════════════════
+     O clique numa opcao do picker e o ARRASTAR da munição chamam esta mesma funcao.
+     Se cada gesto escrevesse por conta propria, um deles ficaria sem algum efeito
+     colateral — a tarefa no HubSpot, o negocio criado para conta nova, o toast que diz
+     onde gravou — e a divergencia so apareceria no fim do mes, com metade das visitas
+     sem tarefa no CRM. */
+  const agendarNoSlot = async function (id, di, si) {
     const regioes = pl6Regioes(rep);
     const todos = pl6Carteira(rep, regioes).concat(pl6Novos(rep, regioes));
     const l = todos.find(x => x.id === id);
@@ -23246,49 +23233,7 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
     g[di][si] = l.id;
     return mutar({ grade: g }, l.nome + ' · agendado ' + dias[di].rot + ' ' + dias[di].data + ' ' + hora
       + ' — tarefa no HubSpot ✓ · slot no Supabase ✓');
-}
-
-function pl6Ligar(box, rep) {
-  if (!box || box.dataset.pl6Ligado === '1') return;
-  box.dataset.pl6Ligado = '1';
-
-  const redesenhar = async () => {
-    const el = document.getElementById('agendaContent');
-    if (!el) return;
-    el.innerHTML = renderPlanejamento6a(rep);
   };
-
-  /* Grava e redesenha, ou nao faz nada e explica. Um caminho so para as sete mutacoes. */
-  const mutar = async (campos, toastOk) => {
-    if (pl6UI.salvando) return;
-    pl6UI.salvando = true;
-    const { error } = await pl6Gravar(rep, campos);
-    pl6UI.salvando = false;
-    if (error) {
-      pl6UI.toast = null;
-      if (typeof mostrarToast === 'function') {
-        mostrarToast('Não consegui gravar a semana: ' + (error.message || 'erro desconhecido')
-          + '. A tela não mudou — tente de novo.', 'erro');
-      }
-      return false;
-    }
-    pl6UI.toast = toastOk || null;
-    await redesenhar();
-    return true;
-  };
-
-  /* ══ DIGITAR FILTRA OS CHIPS SEM REDESENHAR ═══════════════════════════════════════
-     Um listener de `input`, delegado como o de clique. Ele NAO toca no estado e NAO
-     redesenha: esconde e mostra os chips por atributo. Se redesenhasse, o input seria
-     recriado a cada letra e o cursor sairia do campo — e a pessoa digita isso com uma
-     mao, no carro, com o motor ligado.
-     Compara contra data-nome, que o render ja emite normalizado (sem acento, minusculo):
-     "itapua" acha "Itapuã". */
-    /* a REGRA de agendar vive em pl6AgendarNoSlot (escopo de modulo), porque a Minha
-       Daily 7a agenda a mesma coisa. Aqui vao so os ganchos desta tela. */
-    const agendarNoSlot = function (id, di, si) {
-      return pl6AgendarNoSlot(rep, id, di, si, { mutar: mutar, redesenhar: redesenhar, box: box });
-    };
 
   /* ══════════════ ARRASTAR A CONTA PARA O DIA (Pointer Events) ═══════════════════ */
   let arraste = null;
@@ -38255,6 +38200,15 @@ function dl2PontosDeAgora(linhaHoje) {
    Planejamento sugerir outra, sem razao visivel.
    ══════════════════════════════════════════════════════════════════════════════════ */
 
+/* AS ETAPAS QUE ESTAO "NA MESA" — proposta entregue e negociacao em curso. Ag. Pagamento
+   (1395880473) fica FORA de proposito: ali o cliente ja disse sim e o que falta e o
+   pagamento; contar como "na mesa" inflaria a promessa com negocio que nao precisa mais
+   de conversa.
+   Fica NO BLOCO DA DAILY, e nao junto das constantes do Planejamento: quem usa e so esta
+   tela, e a aba Planejamento tem que continuar byte a byte como estava.
+   O par 471+472 e o mesmo que outros tres calculos deste arquivo escrevem a mao. */
+const D7_ETAPAS_DE_MESA = ['1395880471', '1395880472'];
+
 /* Os sete horarios sao os mesmos da semana: a Daily e a coluna de hoje daquela grade. */
 const D7_HORAS = PL6_HORAS;
 
@@ -38360,7 +38314,7 @@ function d7PromessaDerivada(rep, plano) {
   return {
     visitas: visitas.length,
     prospeccoes: visitas.filter(x => x.lead.tipo === 'n').length,
-    naMesa: visitas.filter(x => x.lead.tipo === 'c' && PL6_ETAPAS_DE_MESA.indexOf(String(x.lead.stageId)) >= 0).length,
+    naMesa: visitas.filter(x => x.lead.tipo === 'c' && D7_ETAPAS_DE_MESA.indexOf(String(x.lead.stageId)) >= 0).length,
     semTarefa: visitas.filter(x => !x.naAgenda).length,
     bloqueados: plano.filter(x => x.tipo === 'bloqueado').length,
     livres: plano.filter(x => x.tipo === 'livre').length
@@ -38595,7 +38549,7 @@ function minhaDaily7aHTML(rep) {
    .concat(quentes.length ? [{ t: quentes.length + ' quente(s) sem resposta', c: 'var(--pl6-atencao)' }] : []);
 
   const naMesa = plano.filter(x => x.tipo === 'visita' && x.lead.tipo === 'c'
-    && PL6_ETAPAS_DE_MESA.indexOf(String(x.lead.stageId)) >= 0);
+    && D7_ETAPAS_DE_MESA.indexOf(String(x.lead.stageId)) >= 0);
   const mrrDe = x => (typeof mrrDoNegocio === 'function') ? mrrDoNegocio(x.lead._bruto || x.lead) : null;
   const apostas = naMesa.map(function (x) {
     const on = !!d7UI.apostas[x.lead.id];
