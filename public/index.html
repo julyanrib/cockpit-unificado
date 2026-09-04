@@ -15003,6 +15003,36 @@ function inicioDaSemanaISO() {
 // só se o padrão dela realmente aparecer no funil da pessoa hoje — senão fica de fora, não
 // preenche com genérico. Ordenado por severidade, mostra só os 3 mais relevantes.
 
+/* ══ REDESENHAR SEM PERDER A ROLAGEM (04/09/26) ═══════════════════════════════════════
+   Julyan: "quando clica na aba hoje em algum lead a tela volta la pra cima, ao inves de so
+   abrir os cards". Trocar innerHTML zera a rolagem, e as quatro telas de execução são
+   altas: ele clicava na 12ª linha, o painel abria, e ele perdia de vista onde estava.
+
+   MEDIDO rolando e clicando em cada aba: Hoje e Planejamento pulavam; Meu funil já tinha o
+   padrão; a Minha Daily não pulava por SORTE — ela troca um nó interno de altura estável, e
+   o navegador só prende o scroll quando a altura muda. "Não pulou no meu teste" não é "não
+   pula": é "não pulou naquela altura".
+
+   O `requestAnimationFrame` é obrigatório, não decoração: a restauração tem de acontecer
+   DEPOIS de o navegador pintar o DOM novo — antes disso a altura ainda é a antiga e o
+   scrollTo satura no máximo velho.
+
+   `seletorInterno` é para as listas que rolam por dentro (a fila da Hoje, a munição do
+   Planejamento): restaurar só a página deixaria a lista no topo e a linha clicada fora de
+   vista — o mesmo defeito, uma camada abaixo. */
+async function redesenharPreservandoRolagem(desenhar, seletorInterno) {
+  const y = window.scrollY;
+  const interno = seletorInterno ? document.querySelector(seletorInterno) : null;
+  const yInterno = interno ? interno.scrollTop : 0;
+  await desenhar();
+  await new Promise(function (r) { requestAnimationFrame(function () { r(); }); });
+  window.scrollTo({ top: y, behavior: 'auto' });
+  if (seletorInterno) {
+    const depois = document.querySelector(seletorInterno);
+    if (depois) depois.scrollTop = yInterno;
+  }
+}
+
 async function renderMeuPainel() {
   const el = document.getElementById('meuPainelContent');
   const r = DATA.reps.find(x => x.ownerId === sessaoAtual.ownerId);
@@ -15386,7 +15416,26 @@ async function renderMeuPainel() {
      O redesenho e o proprio render da aba: a fila e reconstruida inteira a cada gesto, como
      no Planejamento e no funil, e por isso o estado (filtro, painel, feitas) vive no modulo
      e nao no DOM. */
-  h8LigarFila(el, r, function () { return renderMeuPainel(); });
+  /* ══ REDESENHAR SEM VOLTAR AO TOPO (04/09/26, Julyan) ═══════════════════════════════
+     "quando clica na aba hoje em algum lead a tela volta la pra cima, ao inves de so abrir
+     os cards."
+     A causa: cada gesto chama renderMeuPainel(), que troca o innerHTML da aba — e trocar
+     innerHTML zera a rolagem. Ele clicava na 12ª linha da fila, o painel abria, e ele
+     perdia de vista a linha em que estava.
+
+     O Meu funil já resolvia isso com este padrão e a razão escrita ("a esteira é alta, e
+     voltar ao topo a cada clique fazia o executivo perder de vista a coluna em que
+     estava"). A Hoje só não tinha.
+
+     E AQUI SÃO DOIS SCROLLS, não um: a página E a fila, que ganhou rolagem própria hoje.
+     Restaurar só o da página deixaria a fila no topo, e a linha clicada continuaria fora
+     de vista — o mesmo defeito, uma camada abaixo.
+     `requestAnimationFrame` porque a restauração tem de acontecer DEPOIS de o navegador
+     pintar o DOM novo; antes disso a altura ainda é a antiga e o scrollTo satura. */
+  h8LigarFila(el, r, function () {
+    /* a fila rola por dentro, entao os DOIS scrolls sao preservados — ver o helper. */
+    return redesenharPreservandoRolagem(function () { return renderMeuPainel(); }, '.h8-fila');
+  });
 
   /* wireHojeExecucao CONTINUA, e a varredura mostrou por que: ela liga SEIS coisas e so
      TRES morreram com o cartao antigo. As vivas sao os sete portoes (.gate-cta), o
@@ -26335,10 +26384,15 @@ function pl6Ligar(box, rep) {
   if (!box || box.dataset.pl6Ligado === '1') return;
   box.dataset.pl6Ligado = '1';
 
+  /* MEDIDO: esta tela pulava (421 -> 377 rolando e clicando num territorio). Ela troca o
+     innerHTML inteiro, e a municao da direita rola por dentro — os dois precisam voltar
+     ao lugar. Ver redesenharPreservandoRolagem. */
   const redesenhar = async () => {
     const el = document.getElementById('agendaContent');
     if (!el) return;
-    el.innerHTML = renderPlanejamento6a(rep);
+    await redesenharPreservandoRolagem(function () {
+      el.innerHTML = renderPlanejamento6a(rep);
+    }, '.pl6-lista');
   };
 
   /* Grava e redesenha, ou nao faz nada e explica. Um caminho so para as sete mutacoes. */
@@ -42534,10 +42588,13 @@ function g14Ligar(box, reps, planosPorOwner, ontemISO, planosLidos) {
   if (!box || box.dataset.g14Ligado === '1') return;
   box.dataset.g14Ligado = '1';
 
+  /* A tela do gestor tem sete linhas de time e rola; o mesmo motivo das outras tres. */
   const redesenhar = function () {
     const alvo = document.querySelector('[data-g14-raiz]');
     if (!alvo) return;
-    alvo.innerHTML = dailyGestor14aHTML(reps, planosPorOwner, ontemISO, planosLidos);
+    return redesenharPreservandoRolagem(function () {
+      alvo.innerHTML = dailyGestor14aHTML(reps, planosPorOwner, ontemISO, planosLidos);
+    });
   };
   const dizer = function (txt, tipo) {
     if (typeof mostrarToast === 'function') mostrarToast(txt, tipo || undefined);
@@ -42723,8 +42780,12 @@ function d7Ligar(box, rep) {
   const di = d7ColunaDeHoje();
   const iso = dias[di >= 0 ? di : 0].iso;
 
+  /* NAO PULAVA POR SORTE: ela troca um no interno de altura estavel, e o navegador so
+     prende o scroll quando a altura muda — e muda quando o filtro encurta a lista. */
   const redesenhar = async function () {
-    box.innerHTML = minhaDaily7aHTML(rep);
+    await redesenharPreservandoRolagem(function () {
+      box.innerHTML = minhaDaily7aHTML(rep);
+    });
   };
 
   /* Grava a grade da semana e redesenha, ou nao faz nada e explica. Um caminho para as
