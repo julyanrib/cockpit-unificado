@@ -1111,13 +1111,19 @@
   .pl6{display:flex;flex-direction:column;min-width:0;}
 
   /* ── a faixa vermelha do topo ─────────────────────────────────────────────────── */
-  .pl6-faixa{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:13px 22px;background:var(--red);}
-  .pl6-marca{font:900 17px var(--font-display);color:#FFFDF8;letter-spacing:-.02em;}
-  .pl6-onde{font:800 12px var(--font-display);color:#FFD9DE;letter-spacing:.02em;}
-  .pl6-chip-semana{font:800 11px var(--font-body);color:var(--red);background:#FFFDF8;border-radius:var(--r-pill);padding:5px 12px;}
-  .pl6-chip-trava{font:800 11px var(--font-body);color:#FFFDF8;border:1px dashed rgba(255,253,248,.65);border-radius:var(--r-pill);padding:5px 12px;}
-  .pl6-quem{margin-left:auto;display:inline-flex;align-items:center;gap:8px;font:800 11px var(--font-body);color:#FFFDF8;}
-  .pl6-avatar{width:24px;height:24px;border-radius:var(--r-pill);background:#FFFDF8;color:var(--red);display:grid;place-items:center;font:900 11px var(--font-display);}
+  /* ── A TARJA DE CONTEXTO (03/09/26) ───────────────────────────────────────────────
+     Substitui a faixa vermelha que repetia o header do app (wordmark, nome da tela e
+     avatar). Uma linha, no papel, com o que o header NAO diz: qual semana e ate quando
+     fechar. Sem fundo cheio, para nao ler como um segundo cabecalho. */
+  .pl6-tarja{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:9px 22px;border-bottom:1px solid var(--line-soft);background:var(--panel2);}
+  .pl6-tarja-semana{font:900 11px var(--font-display);letter-spacing:.02em;color:var(--red);
+    text-transform:lowercase;}
+  .pl6-tarja-trava{font:700 10.5px var(--font-body);color:var(--muted);}
+  .pl6-tarja-trava.is-fechada{color:var(--green);font-weight:800;}
+  /* .pl6-quem e .pl6-avatar sairam em 03/09/26 com a faixa vermelha: o nome e o avatar do
+     executivo ja estao no header do app, e repeti-los era o segundo cabecalho que o Julyan
+     mandou tirar. As variaveis nomeExec/inicial que os alimentavam sairam junto. */
 
   /* ── manchete + 4 KPIs ───────────────────────────────────────────────────────── */
   .pl6-cabeca{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:24px;align-items:center;
@@ -1266,7 +1272,11 @@
       /* touch-action so no grip: no card inteiro mataria a rolagem da lista */
       touch-action:none;}
     .pl6-card-grip:hover{background:var(--sunk);color:var(--ink);}
-    .pl6-card{position:relative;}
+    /* o card INTEIRO e a alca: o cursor diz isso em qualquer ponto dele, e os filhos
+       interativos voltam ao cursor de clique porque o arraste nao comeca neles. */
+    .pl6-card{position:relative;cursor:grab;}
+    .pl6-card button,.pl6-card input,.pl6-card select,.pl6-card textarea,.pl6-card label{cursor:pointer;}
+    .pl6-card input,.pl6-card textarea{cursor:text;}
   }
   /* o fantasma que segue o dedo. pointer-events:none para nao virar ele mesmo o alvo
      de elementFromPoint, que e como o alvo do arraste e descoberto. */
@@ -22460,6 +22470,28 @@ function pl6Prioridade(l) {
    carteira, 1000 novos), entao SLA nunca perde para conta nova por duzentos metros. A
    regiao ordena DENTRO da faixa, que e onde ela de fato ajuda: entre dois clientes
    igualmente parados, vai primeiro o que esta no caminho de hoje. */
+/* ══ QUEM ENTRA NA ROTA DE UM DIA ══════════════════════════════════════════════════
+   SO os leads do bairro do dia, por prioridade entre eles. Diferente de pl6Candidatos
+   (logo abaixo), que ordena por prioridade e usa a regiao como desempate.
+
+   As duas ordens existem porque as duas perguntas sao diferentes:
+     · o picker do slot escolhe UMA conta para UMA hora -> quem mais precisa primeiro
+     · a sugestao monta uma ROTA -> um dia com contas de cinco bairros nao e rota, e o
+       executivo gasta o dia no carro
+
+   Quando o bairro acaba, ela devolve menos do que caberia — de proposito. Completar
+   com contas de fora transformaria a rota em zigue-zague sem ninguem pedir. */
+function pl6CandidatosDaRota(regiaoChave, todos, jaNaGrade) {
+  if (!regiaoChave) return [];
+  const usados = new Set(jaNaGrade || []);
+  return todos
+    .filter(l => !usados.has(l.id) && l.regiao === regiaoChave)
+    .sort((a, b) => (pl6Prioridade(b) - pl6Prioridade(a))
+      || ((a.km == null ? 1e9 : a.km) - (b.km == null ? 1e9 : b.km)));
+}
+
+/* Para o PICKER DO SLOT: prioridade primeiro, regiao como desempate. Ver a nota acima
+   sobre por que a sugestao de rota usa outra ordem. */
 function pl6Candidatos(regiaoChave, todos, jaNaGrade) {
   const usados = new Set(jaNaGrade || []);
   const naRegiao = l => (l.regiao && l.regiao === regiaoChave) ? 1 : 0;
@@ -22960,21 +22992,24 @@ function renderPlanejamento6a(rep) {
   /* rep.name (nao rep.nome — este projeto usa `name` no objeto de rep), depois o nome da
      sessao, e o email so como ultimo recurso: a faixa e o lugar onde o executivo se
      reconhece, e email ali parece tela de sistema, nao a tela dele. */
-  const nomeExec = rep.name || rep.nome || (sessaoAtual && sessaoAtual.nome) || (sessaoAtual && sessaoAtual.email) || '';
-  const inicial = String(nomeExec || '?').trim().charAt(0).toUpperCase();
   const cargaHub = DATA.atualizadoEm ? (' · carga ' + esc(String(DATA.atualizadoEm))) : '';
 
   return '<div class="pl6">'
-    + '<div class="pl6-faixa">'
-    +   '<span class="pl6-marca">takeat</span>'
-    +   '<span class="pl6-onde">Cockpit Field Sales · Planejamento</span>'
-    +   '<span class="pl6-chip-semana">semana · ' + dias[0].rot + ' ' + dias[0].data
+    /* ══ UMA BARRA, NAO DUAS (03/09/26, Julyan) ═════════════════════════════════════
+       Aqui havia uma faixa vermelha com wordmark "takeat", "Cockpit Field Sales ·
+       Planejamento" e o avatar + nome do executivo. O app JA tem tudo isso no header:
+       o logo de verdade, a aba ativa marcada e o nome dele no canto. Era um segundo
+       cabecalho repetindo o primeiro — e com um wordmark de TEXTO que nao e o logo
+       oficial da Takeat. Conferido: pl6-marca existia so aqui, nenhuma outra aba faz.
+
+       O que fica e o que ele disse que serve: a SEMANA. Uma tarja de contexto de uma
+       linha, no papel, com o intervalo da semana e o prazo de fechar. */
+    + '<div class="pl6-tarja">'
+    +   '<span class="pl6-tarja-semana">semana · ' + dias[0].rot + ' ' + dias[0].data
         + ' → ' + dias[4].rot + ' ' + dias[4].data + '</span>'
-    +   '<span class="pl6-chip-trava">' + (fechada
-          ? 'planejamento fechado · Supabase planos_semanais'
+    +   '<span class="pl6-tarja-trava' + (fechada ? ' is-fechada' : '') + '">' + (fechada
+          ? '✓ fechado · Supabase planos_semanais'
           : 'feche até sex 17h — o gestor alinha na Semanal de seg 8h30') + '</span>'
-    +   '<span class="pl6-quem"><span class="pl6-avatar">' + esc(inicial) + '</span>'
-        + esc(nomeExec) + '</span>'
     + '</div>'
     + '<div class="pl6-cabeca">'
     +   '<div><span class="pl6-kicker">A decisão dos primeiros 3 segundos</span>'
@@ -23222,19 +23257,30 @@ function pl6Ligar(box, rep) {
   };
 
   box.addEventListener('pointerdown', ev => {
-    const grip = ev.target.closest('[data-pl6-arrastar]');
-    if (!grip || ev.button > 0) return;
+    if (ev.button > 0) return;
+    /* ══ O CARD INTEIRO E A ALCA (03/09/26, Julyan: "tem q ser arrastaveis em qlq lugar",
+       "nao so no quadradinho") ════════════════════════════════════════════════════════
+       O ⠿ continua visivel como PISTA — sem ele ninguem descobre que o card arrasta —
+       mas o gesto comeca em qualquer ponto.
+
+       MENOS nos filhos interativos: o CTA de agendar, os campos de endereco, os botoes
+       do seletor de dia/hora. Se o arraste comecasse neles, ele sequestraria o clique
+       deles — e o CTA e o caminho principal, o unico que existe no celular. */
+    const card = ev.target.closest('.pl6-card');
+    if (!card) return;
+    if (ev.target.closest('button,input,select,textarea,a,label')) return;
+    const grip = card.querySelector('[data-pl6-arrastar]');
+    if (!grip) return;   /* semana fechada: o card nao tem alca */
     arraste = {
       id: grip.getAttribute('data-pl6-arrastar'),
       x0: ev.clientX, y0: ev.clientY, ativo: false, fantasma: null,
-      nome: (grip.closest('.pl6-card') || {}).querySelector
-        ? (grip.closest('.pl6-card').querySelector('.pl6-card-nome') || {}).textContent || ''
-        : ''
+      nome: (card.querySelector('.pl6-card-nome') || {}).textContent || ''
     };
-    /* pointer capture: o gesto continua sendo nosso mesmo que o dedo saia do grip */
-    try { grip.setPointerCapture(ev.pointerId); } catch (e) { /* nao critico */ }
+    /* pointer capture no CARD: o gesto continua sendo nosso mesmo que o cursor saia
+       dele, e o card e a alca desde 03/09. */
+    try { card.setPointerCapture(ev.pointerId); } catch (e) { /* nao critico */ }
     arraste.pointerId = ev.pointerId;
-    arraste.grip = grip;
+    arraste.grip = card;
   });
 
   box.addEventListener('pointermove', ev => {
@@ -23481,28 +23527,41 @@ function pl6Ligar(box, rep) {
       const rotas = pl6RegioesDoPlano();
       const usados = new Set(g.flat().filter(x => x && x !== PL6_BLOQUEADO));
       let n = 0;
+      let semRegiao = 0, bairroAcabou = 0;
       for (let di = 0; di < PL6_DIAS_UTEIS; di++) {
         if (soEsteDia != null && di !== soEsteDia) continue;
-        const cands = pl6Candidatos(rotas[di], todos, [...usados]);
+        const livresDoDia = g[di].filter(x => !x).length;
+        if (!livresDoDia) continue;
+        /* DIA SEM REGIAO NAO SUGERE. A sugestao sai dos leads do bairro; sem bairro ela
+           encheria o dia com contas de qualquer lugar, que e o oposto de uma rota. */
+        if (!rotas[di]) { semRegiao++; continue; }
+        const cands = pl6CandidatosDaRota(rotas[di], todos, [...usados]);
         for (let si = 0; si < PL6_SLOTS; si++) {
           if (g[di][si]) continue;
           const l = cands.shift();
-          if (!l) break;
+          if (!l) { bairroAcabou++; break; }
           usados.add(l.id); g[di][si] = l.id; n++;
         }
       }
-      return { grade: g, n: n };
+      return { grade: g, n: n, semRegiao: semRegiao, bairroAcabou: bairroAcabou };
     };
 
     if (d.pl6Sugerir) {
-      const { grade, n } = distribuir(null);
+      const { grade, n, semRegiao } = distribuir(null);
       pl6UI.slotPicker = null;
       if (!n) {
-        if (typeof mostrarToast === 'function') mostrarToast('Nada livre para distribuir.', 'atencao');
+        if (typeof mostrarToast === 'function') {
+          /* a causa mais comum e a mesma do ✨ do dia: nenhum dia tem regiao escolhida, e
+             a sugestao sai dos leads do bairro. */
+          mostrarToast(semRegiao === PL6_DIAS_UTEIS
+            ? 'Escolha a região de ataque de pelo menos um dia — a sugestão sai dos leads do bairro.'
+            : 'Nada livre para distribuir nos bairros escolhidos.', 'atencao');
+        }
         return;
       }
-      return mutar({ grade: grade }, 'sugestão aplicada — ' + n + ' visita(s) distribuída(s) por região, SLA e avaliação · '
-        + 'Supabase. Nenhuma tarefa criada no HubSpot ainda: confirme cada uma no slot.');
+      return mutar({ grade: grade }, 'sugestão aplicada — ' + n + ' visita(s), cada uma no bairro do dia'
+        + (semRegiao ? ' (' + semRegiao + ' dia(s) sem região ficaram de fora)' : '')
+        + ' · Supabase. Nenhuma tarefa criada no HubSpot ainda: confirme cada uma no slot.');
     }
 
     if (d.pl6SugerirDia != null && d.pl6SugerirDia !== '') {
@@ -23510,22 +23569,29 @@ function pl6Ligar(box, rep) {
       const dias = pl6Dias(pl6SegundaDaSemana());
       const rotaCh = pl6RegioesDoPlano()[di];
       const rotaNome = rotaCh ? ((pl6Regioes(rep).find(r => r.chave === rotaCh) || {}).nome || rotaCh) : null;
-      const { grade, n } = distribuir(di);
+      const { grade, n, semRegiao, bairroAcabou } = distribuir(di);
       pl6UI.slotPicker = null;
       if (!n) {
-        /* DIZER QUAL DOS DOIS MOTIVOS, porque a acao e a mesma e a causa nao: dia cheio
-           pede outro dia, falta de conta pede outra fonte ou outra regiao. */
+        /* TRES CAUSAS DIFERENTES, TRES FRASES. A acao e a mesma e o que resolve nao:
+           dia cheio pede outro dia, dia sem regiao pede escolher o bairro, e bairro sem
+           conta livre pede outro bairro ou outra fonte. */
         const cheio = pl6GradeDoPlano()[di].every(x => x);
         if (typeof mostrarToast === 'function') {
-          mostrarToast(cheio
-            ? (dias[di] || {}).rot + ' já está cheio — nenhum horário livre para preencher.'
-            : 'Nada livre para ' + ((dias[di] || {}).rot || 'este dia') + '.', 'atencao');
+          mostrarToast(
+            cheio ? ((dias[di] || {}).rot + ' já está cheio — nenhum horário livre para preencher.')
+            : semRegiao ? ('Escolha a região de ataque de ' + ((dias[di] || {}).rot || 'do dia')
+                + ' primeiro — a sugestão do dia sai dos leads do bairro.')
+            : ('Nenhuma conta livre em ' + (rotaNome || 'na região do dia')
+                + ' — escolha outro bairro ou outra fonte na munição.'), 'atencao');
         }
         return;
       }
       return mutar({ grade: grade }, (dias[di] || {}).rot + ' · ' + n + ' visita(s) sugerida(s)'
-        + (rotaNome ? ' na região de ' + rotaNome : '') + ' · Supabase. Nenhuma tarefa no HubSpot ainda:'
-        + ' confirme cada uma no slot.');
+        + (rotaNome ? ' em ' + rotaNome : '')
+        /* SE O BAIRRO ACABOU ANTES DO DIA, dizer — senao ele olha o dia com 3 de 7 e nao
+           sabe se a tela falhou ou se o bairro nao tem mais conta livre. */
+        + (bairroAcabou ? ' — o bairro não tem mais conta livre, o resto do dia ficou aberto' : '')
+        + ' · Supabase. Nenhuma tarefa no HubSpot ainda: confirme cada uma no slot.');
     }
 
     /* ── FECHAR / REABRIR a semana ─────────────────────────────────────────────── */
