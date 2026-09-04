@@ -15921,6 +15921,25 @@ function campoPassagemHTML(campo, valor) {
 // Lê o formulário, valida obrigatório/piso e devolve {ok, propriedades} — a validação
 // vive aqui (um lugar só) porque o mesmo drawer é usado pela seta, pelo arrasto do
 // kanban e pela trilha da ficha. Três portas, uma regra.
+/* ══ CEP E CNPJ SO DIGITOS (04/09/26) ═══════════════════════════════════════════════
+   O HubSpot recusa a passagem inteira quando estes dois chegam pontuados — medido na
+   auditoria, em Ag. Pagamento: "cep: Enter only numbers and letters, not special
+   characters like -". O executivo digita 29050-000 porque e assim que se escreve um CEP.
+   Conferido no CRM: os 543 negocios com o campo preenchido guardam SO DIGITOS, entao
+   limpar aqui e escrever no formato da casa — nao inventar convencao.
+   PROPS_SO_DIGITOS e uma lista curta e explicita: limpar 'tudo que parece numero' comeria
+   o ponto decimal de amount e mrr, que sao o que o RPA/ASAAS le para gerar o link. */
+const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };
+function limparSoDigitos(prop, valor) {
+  if (!(prop in PROPS_SO_DIGITOS)) return { valor: valor, erro: null };
+  const digitos = String(valor == null ? '' : valor).replace(/[^0-9]/g, '');
+  const teto = PROPS_SO_DIGITOS[prop];
+  if (digitos.length > teto) {
+    return { valor: null, erro: 'O HubSpot aceita no máximo ' + teto + ' dígitos aqui — vieram ' + digitos.length + '.' };
+  }
+  return { valor: digitos, erro: null };
+}
+
 function coletarCamposPassagem(container, campos) {
   const propriedades = {};
   let primeiroErro = null;
@@ -15964,7 +15983,11 @@ function coletarCamposPassagem(container, campos) {
       if (isNaN(d.getTime())) { falhar('Data inválida.'); continue; }
       propriedades[campo.prop] = String(d.getTime());
     } else {
-      propriedades[campo.prop] = valor;
+      /* CEP e CNPJ vao so com digitos — o HubSpot recusa a passagem inteira com
+         pontuacao, e todos os 543 negocios da base ja estao assim. Ver limparSoDigitos. */
+      const limpo = limparSoDigitos(campo.prop, valor);
+      if (limpo.erro) { falhar(limpo.erro); continue; }
+      propriedades[campo.prop] = limpo.valor;
     }
   }
   if (primeiroErro) { try { primeiroErro.focus(); } catch (e) {} return { ok: false, propriedades: null }; }
@@ -33035,6 +33058,12 @@ function ligarPropsFichaEditaveis(container, lead) {
         const bruto = campoEl.value;
         const v = validarValorCampoUnico(tipo, bruto, min);
         if (!v.ok) { campoEl.style.borderColor = 'var(--red)'; mostrarToast(v.erro, 'erro'); return; }
+        /* A FICHA GRAVA CAMPO A CAMPO POR OUTRO CAMINHO, e sem esta limpeza editar o CEP
+           aqui volta a mandar pontuado e a receber a recusa do HubSpot que esta auditoria
+           achou. A regra e a MESMA da coleta — limparSoDigitos decide num lugar so. */
+        const limpoUnico = limparSoDigitos(propNome, v.valor);
+        if (limpoUnico.erro) { campoEl.style.borderColor = 'var(--red)'; mostrarToast(limpoUnico.erro, 'erro'); return; }
+        v.valor = limpoUnico.valor;
         const btn = card.querySelector('.ficha-prop-salvar');
         btn.disabled = true; btn.textContent = '…';
         try {
@@ -33412,6 +33441,16 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
     }
     const logradouro = (document.getElementById('peEnd').value || '').trim();
     if (logradouro) coleta.propriedades.logradouro = logradouro;
+    /* ══ O TELEFONE VIRA PROPRIEDADE, E NAO SO TEXTO NA DESCRICAO (04/09/26) ════════
+       Julyan: "eu preenchi o telefone e na etapa nao foi". MEDIDO — o corpo enviado era
+       {telefone:"(27) 99999-0001", propriedades:{origem_do_lead:"Rua"}}. O campo
+       `telefone` a rota escreve na DESCRICAO do negocio; a propriedade `celular` — a que
+       a ficha le, a que a rota de etapa aceita, a que o gestor filtra — ficava vazia.
+       Campo obrigatorio no formulario cujo dado nao chega onde alguem procura e pior que
+       campo ausente: ele promete. `celular` ja e permitido pela rota (PROPS_PERMITIDAS
+       em api/criar-negocio.js), e continua indo na descricao tambem — quem le o negocio
+       na tela do HubSpot ve o telefone sem abrir a aba de propriedades. */
+    coleta.propriedades.celular = telefone;
 
     btnCriar.disabled = true;
     btnCriar.textContent = 'Criando no HubSpot…';
@@ -33509,6 +33548,11 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
       status.textContent = 'Faltou o que a etapa Prospecção exige.';
       return;
     }
+    /* MESMA CORRECAO DO FORMULARIO MANUAL (04/09/26): o telefone da conta-alvo ia so
+       para a descricao, e o insert local abaixo ainda gravava `celular` na memoria —
+       ou seja, a tela mostrava um telefone que o HubSpot nao tinha, e ele desaparecia
+       na carga seguinte do robo. Agora os dois lados dizem a mesma coisa. */
+    if (lead.telefone) coleta.propriedades.celular = lead.telefone;
     btnCriar.disabled = true;
     btnCriar.textContent = 'Criando no HubSpot…';
     status.style.color = 'var(--muted2)';
@@ -33595,7 +33639,6 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
 // campo nenhum — o negócio chegava em Pagamento sem MRR. Agora toda passagem passa por
 // aqui: mostra de onde pra onde, pede o que a etapa exige e só então escreve.
 // Três portas usam esta mesma função (seta do card, arrasto do kanban, trilha da ficha).
-let passagemVoltarPara = null;
 
 // BLOCO 50 — Vista A do handoff (§7): "escolher destino". Usada pelo botão "Mover de
 // etapa ▸" do rodapé da ficha e pelo "mover ▸" da lista. Mostra os 6 alvos grandes;
@@ -33679,7 +33722,22 @@ async function gravarPassagemOtimista(opts) {
   const id = String(lead.id);
   const para = String(opts.para);
   const props = opts.propriedades || {};
-  const redesenhar = typeof opts.redesenhar === 'function' ? opts.redesenhar : function () {};
+  /* ══ O DESENHO NAO DERRUBA A ESCRITA (04/09/26) ═════════════════════════════════
+     REPRODUZIDO: `redesenhar` era o callback da ficha, que estourava TypeError, e o
+     estouro subia daqui — a etapa nunca chegava ao HubSpot (medido: zero requisicoes),
+     o card ficava movido so na tela e FN_GRAVANDO ficava preso com o id, travando toda
+     tentativa seguinte com "ainda estou gravando a mudanca anterior".
+     Uma falha de PINTURA nao pode cancelar uma escrita no CRM. Ela aparece — em aviso,
+     porque tela que nao se repinta e defeito e nao detalhe — e a gravacao segue. */
+  let falhaDeDesenho = null;
+  const redesenhar = function (leadDepois) {
+    if (typeof opts.redesenhar !== 'function') return;
+    try { opts.redesenhar(leadDepois); }
+    catch (e) {
+      falhaDeDesenho = (e && e.message) || String(e);
+      if (typeof console !== 'undefined' && console.error) console.error('[passagem] a tela nao repintou:', e);
+    }
+  };
 
   /* DOIS GESTOS NO MESMO NEGÓCIO AO MESMO TEMPO NÃO. Sem isto, dois cliques rápidos
      viram duas escritas e o segundo reverte para um "antes" que já era o depois do
@@ -33712,14 +33770,27 @@ async function gravarPassagemOtimista(opts) {
   redesenhar();
 
   let r = { ok: false, erro: 'não cheguei a tentar' };
+  /* `finally` E NAO A LINHA SEGUINTE: qualquer saida daqui — inclusive um erro que eu
+     nao previ — tem de soltar a tranca, senao o negocio fica bloqueado pelo resto da
+     sessao. Foi exatamente o que aconteceu com o estouro da ficha. */
   try {
     r = await gravarPassagemDeEtapa(opts);
   } catch (e) {
     r = { ok: false, erro: 'sem conexão: ' + ((e && e.message) || 'erro') };
+  } finally {
+    FN_GRAVANDO.delete(id);
   }
-  FN_GRAVANDO.delete(id);
 
-  if (r.ok) { redesenhar(); return r; }
+  if (r.ok) {
+    redesenhar();
+    /* GRAVOU E A TELA NAO ACOMPANHOU: dizer isso e o que evita ele repetir o gesto
+       sobre um negocio que JA mudou de etapa no CRM. */
+    if (falhaDeDesenho && typeof mostrarToast === 'function') {
+      mostrarToast('Gravei a etapa no HubSpot ✓, mas a tela nao conseguiu se repintar ('
+        + falhaDeDesenho + '). Recarregue para ver o estado certo — nao repita o movimento.', 'atencao');
+    }
+    return r;
+  }
 
   /* ══ NÃO GRAVOU ══════════════════════════════════════════════════════════════════
      `naoSei` é o caso da Kelly: a espera estourou e a confirmação também não respondeu.
@@ -33942,7 +34013,6 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
     };
   })();
 
-  passagemVoltarPara = aoConcluir || null;
   stageModalName.textContent = lead.name || 'Negócio';
   stageModalMeta.innerHTML = `<span style="font-size:12px;color:var(--muted2);">${voltando ? 'Voltando etapa' : 'Avançando etapa'} · grava no HubSpot</span>`;
 
@@ -34031,7 +34101,21 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
         lead, para, propriedades: coleta.propriedades, exigePasso,
         passoAcao: exigePasso ? passoAcao : '', passoData: exigePasso ? passoData : '',
         passoTipo: tipoPasso,
-        redesenhar: function () { if (typeof aoConcluir === 'function') aoConcluir(); }
+        /* ══ O CALLBACK RECEBE O LEAD (04/09/26) ═══════════════════════════════════
+           Os dois callers desta funcao sao `leadAtualizado => abrirFichaLeadFunilDrawer(
+           leadAtualizado, ...)` — a trilha da ficha e o botao "Mover de etapa". Este
+           era o unico produtor, e chamava sem argumento: `undefined.name`, TypeError, e
+           a escrita no HubSpot morria antes de sair (medido: zero requisicoes).
+           O lead depois do movimento se monta AQUI porque e aqui que se sabe as duas
+           metades: a etapa de destino e as propriedades que o formulario coletou. */
+        redesenhar: function () {
+          if (typeof aoConcluir !== 'function') return;
+          aoConcluir(Object.assign({}, lead, coleta.propriedades, {
+            stageId: para,
+            stage: (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[para]) || '',
+            dias: 0, slaBreach: false
+          }));
+        }
       });
       /* FALHA NÃO FALA AQUI: o motor já reverteu e já disse. */
       if (!r.ok) return;
@@ -34052,7 +34136,10 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       } else {
         mostrarToast(`"${lead.name}" mudou de etapa, mas o próximo passo NÃO foi criado (${erroPasso}). O negócio está na etapa nova e descoberto — crie a tarefa na ficha antes de sair da tela.`, 'erro');
       }
-      if (typeof passagemVoltarPara === 'function') passagemVoltarPara(lead);
+      /* AQUI HAVIA UMA SEGUNDA CHAMADA DO MESMO CALLBACK (04/09/26), com o lead ANTES
+         do movimento: `passagemVoltarPara(lead)`. Duas portas para a mesma ideia, e a
+         segunda reabria a ficha na etapa velha em cima da nova. O callback agora tem
+         UMA porta — o `redesenhar` acima —, que entrega o lead depois. */
     } catch (e) {
       /* O PAINEL JÁ FECHOU: o erro sai por toast. Este ramo é para o que escapa do
          motor, que já trata recusa e falha de rede com a reversão do lado. */
@@ -34281,8 +34368,18 @@ function aplicarEtapaNoDataLocal(leadId, novaEtapa, propriedades, diasForcado) {
 }
 
 function abrirFichaLeadFunilDrawer(l, voltarPara, foco) {
+  /* ELA TINHA 21 CHAMADORES E CONFIAVA EM TODOS (04/09/26). Um deles entregava
+     `undefined` e o `l.name` desta linha derrubou uma gravacao inteira no HubSpot. O
+     contrato foi consertado na origem; esta rede existe porque sao 21 portas e a
+     proxima quebra nao pode voltar a ser um TypeError dentro de uma escrita. */
+  if (!l) {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Nao achei este negocio na carga desta sessao — recarregue a pagina para abrir a ficha.', 'atencao');
+    }
+    return;
+  }
   stageModalVoltarPara = voltarPara || null;
-  stageModalName.textContent = l.name;
+  stageModalName.textContent = l.name || 'Negócio';
   stageModalMeta.innerHTML = stageModalVoltarPara
     ? `<button id="stageFichaVoltar" class="btn-txt">Voltar ao funil</button>`
     : '';

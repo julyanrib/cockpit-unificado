@@ -34,6 +34,23 @@ const ORIGENS_LEAD = ['Rua', 'Indicação', 'Casa dos Dados', 'Instagram', 'Ads'
 // básica (número finito e positivo), sem impor piso nenhum.
 const PROPS_VALOR = ['amount', 'valor_de_mrr'];
 
+// ══ CEP E CNPJ SO DIGITOS (04/09/26) ══════════════════════════════════════════════
+// O HubSpot RECUSA a escrita inteira quando eles chegam pontuados — medido em auditoria:
+// "cep: Enter only numbers and letters, not special characters like -". O executivo
+// digita 29050-000 porque e assim que se escreve um CEP. Conferido no CRM: os 543
+// negocios com o campo preenchido guardam so digitos, entao limpar aqui e escrever no
+// formato que a base ja usa. A tela tambem limpa; esta e a ultima linha, para os
+// caminhos que nao passam por ela.
+const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };
+function soDigitos(chave, texto) {
+  if (!(chave in PROPS_SO_DIGITOS)) return { valor: texto, erro: null };
+  const d = String(texto).replace(/[^0-9]/g, '');
+  if (d.length > PROPS_SO_DIGITOS[chave]) {
+    return { valor: null, erro: `"${chave}" tem ${d.length} dígitos e o HubSpot aceita ${PROPS_SO_DIGITOS[chave]}.` };
+  }
+  return { valor: d, erro: null };
+}
+
 function limparPropriedades(bruto) {
   if (!bruto || typeof bruto !== 'object') return { propriedades: {}, erro: null };
   const propriedades = {};
@@ -55,6 +72,11 @@ function limparPropriedades(bruto) {
     if (chave === 'origem_do_lead' && !ORIGENS_LEAD.includes(texto)) {
       return { propriedades: null, erro: 'Origem do Lead inválida.' };
     }
+    /* CEP e CNPJ so digitos — ver PROPS_SO_DIGITOS. */
+    const limpo = soDigitos(chave, texto);
+    if (limpo.erro) return { propriedades: null, erro: limpo.erro };
+    propriedades[chave] = limpo.valor;
+    continue;
     if (texto.length > 2000) return { propriedades: null, erro: `"${chave}" é longo demais.` };
     propriedades[chave] = texto;
   }

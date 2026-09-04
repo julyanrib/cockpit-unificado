@@ -555,6 +555,176 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
   semanalCodigo.indexOf('return data.total || 0;') > 0 &&
   semanalCodigo.indexOf('hs_lastmodifieddate') < 0);
 
+/* ══ A PASSAGEM DE ETAPA ABERTA PELA FICHA (04/09/26) ═══════════════════════════════════
+   O JULYAN, na tela: "ao ir pra visita tá dando isso tbm" — «Falha ao falar com o HubSpot:
+   Cannot read properties of undefined (reading 'name')».
+
+   REPRODUZIDO no bundle real com fetch instrumentado, e a stack foi esta:
+     TypeError ... at abrirFichaLeadFunilDrawer   <- l.name, com l === undefined
+       at (o callback da trilha)                  <- leadAtualizado => abrirFicha(...)
+       at redesenhar                              <- aoConcluir()  SEM ARGUMENTO
+       at gravarPassagemOtimista
+   Dois callers esperavam receber o lead atualizado; o único produtor chamava sem nada.
+   MEDIDO o que isso causava: zero requisições ao HubSpot (a etapa NUNCA foi gravada, e a
+   frase de erro dizia o contrário), o card movido só na tela, e FN_GRAVANDO preso com o id
+   — toda tentativa seguinte respondia "ainda estou gravando a mudança anterior".
+
+   As checagens abaixo prendem as quatro peças do conserto. Sem regex: barra invertida morre
+   no caminho de patch, e regex sem as barras fica válida e errada. */
+(function () {
+  /* 1. NENHUMA CHAMADA DE CALLBACK SEM ARGUMENTO no produtor. `aoConcluir()` com parênteses
+     vazios é exatamente a forma que produziu o TypeError. */
+  const iPass = template.indexOf('function abrirPassagemDeEtapa(');
+  const fimPass = template.indexOf(String.fromCharCode(10) + "function ", iPass + 10);
+  const corpoPass = iPass > 0 ? template.slice(iPass, fimPass > 0 ? fimPass : iPass + 9000) : '';
+  checar('a passagem de etapa existe para ser medida', iPass > 0 && corpoPass.length > 500);
+  checar('a passagem de etapa nunca chama o callback sem o lead',
+    corpoPass.indexOf('aoConcluir();') < 0,
+    'voltou um aoConcluir() sem argumento — foi essa forma que matou a escrita no HubSpot');
+
+  /* 2. E O QUE ELE ENTREGA É O LEAD DEPOIS DO MOVIMENTO: etapa de destino + o que o
+     formulário coletou. Entregar o lead de antes reabriria a ficha na etapa velha. */
+  const iRed = template.indexOf('redesenhar: function () {');
+  checar('o produtor monta o lead atualizado para entregar', iRed > 0);
+  const trecho = iRed > 0 ? template.slice(iRed, iRed + 420) : '';
+  checar('o callback recebe o lead com a etapa de destino',
+    trecho.indexOf('aoConcluir(Object.assign({}, lead, coleta.propriedades') > -1
+    && trecho.indexOf('stageId: para') > -1, trecho.slice(0, 160));
+
+  /* 3. UMA PORTA SÓ. Havia uma segunda chamada do mesmo callback no fim do handler
+     (`passagemVoltarPara(lead)`), com o lead ANTES do movimento: duas portas para a mesma
+     ideia, e a segunda desfazia o efeito da primeira na tela. */
+  checar('a segunda porta do callback não voltou',
+    template.indexOf('let passagemVoltarPara') < 0
+    && template.indexOf('passagemVoltarPara = aoConcluir') < 0,
+    'passagemVoltarPara reapareceu — o callback volta a ser chamado duas vezes, uma com o lead velho');
+
+  /* 4. O DESENHO NÃO DERRUBA A ESCRITA. Esta é a classe, não o caso: qualquer erro em
+     qualquer tela chamada pelo redesenhar abortaria a gravação no CRM. */
+  const iMotor = template.indexOf('async function gravarPassagemOtimista');
+  const motor = iMotor > 0 ? template.slice(iMotor, iMotor + 4200) : '';
+  checar('o motor existe para ser medido', iMotor > 0);
+  checar('o motor isola o desenho num try',
+    motor.indexOf('try { opts.redesenhar(leadDepois); }') > -1,
+    'o redesenhar voltou a ser chamado cru dentro do motor');
+  checar('e a falha de pintura é dita, não silenciada',
+    motor.indexOf('falhaDeDesenho') > -1 && motor.indexOf('nao conseguiu se repintar') > -1);
+
+  /* 5. A TRANCA SAI NO `finally`. Sem isso, um erro que eu não previ deixa o negócio
+     bloqueado pelo resto da sessão — foi o que a ficha fez. */
+  const iFin = motor.indexOf('} finally {');
+  checar('a tranca do negócio sai no finally',
+    iFin > -1 && motor.slice(iFin, iFin + 90).indexOf('FN_GRAVANDO.delete(id)') > -1,
+    'FN_GRAVANDO.delete voltou para fora do finally');
+
+  /* 6. A FICHA TEM 21 CHAMADORES: a rede existe porque a próxima quebra de contrato não
+     pode voltar a ser um TypeError dentro de uma escrita no CRM. */
+  const iFicha = template.indexOf('function abrirFichaLeadFunilDrawer(');
+  const ficha = iFicha > 0 ? template.slice(iFicha, iFicha + 700) : '';
+  checar('a ficha responde em vez de estourar quando chega sem lead',
+    ficha.indexOf('if (!l) {') > -1 && ficha.indexOf('recarregue a pagina') > -1);
+
+  /* 7. O TELEFONE DA CRIAÇÃO VIRA PROPRIEDADE. Julyan: "eu preenchi o telefone e na etapa
+     nao foi". Medido: o corpo enviado tinha telefone (que a rota escreve na DESCRIÇÃO) e
+     propriedades sem `celular` — a propriedade que a ficha lê e o gestor filtra. */
+  checar('o formulário manual manda o telefone como propriedade celular',
+    template.indexOf('coleta.propriedades.celular = telefone;') > -1);
+  checar('e a conta-alvo também',
+    template.indexOf('if (lead.telefone) coleta.propriedades.celular = lead.telefone;') > -1);
+  checar('a rota aceita celular (senão os dois acima virariam 400)',
+    fs.readFileSync(path.join(raiz, 'api', 'criar-negocio.js'), 'utf8')
+      .indexOf("'celular'") > -1);
+
+  /* 8. CADA LEAD DIZ EM QUE ETAPA ESTÁ. A etapa vinha só como CHAVE do mapa, e a ficha faz
+     ORDEM_FUNIL_FICHA.indexOf(l.stageId): com -1 ela NÃO DESENHA A TRILHA. Medido no
+     bundle real: 0 dos 8 segmentos de mudar etapa num lead da carga, 8 no criado na
+     sessão. A carteira inteira estava sem a trilha. */
+  checar('montar-dados normaliza a etapa dentro do lead',
+    montar.indexOf('function comEtapaNoLead(') > -1
+    && montar.indexOf('funilLeads: comEtapaNoLead(hubspot.funilLeads)') > -1);
+  checar('e não sobrescreve a etapa que o lead já traga',
+    montar.indexOf('stageId: l.stageId || etapa') > -1,
+    'a chave do mapa é o fallback, nunca a autoridade');
+})();
+
+/* ══ E ISTO RODA DE VERDADE: 146 leads, nenhum sem etapa ════════════════════════════════
+   A checagem textual acima prova a forma; esta prova o COMPORTAMENTO com o dado que existe
+   neste disco. As duas juntas são o que impede a normalização de virar comentário. */
+(function () {
+  let mod = null;
+  try { mod = require(path.join(raiz, 'scripts', 'montar-dados.js')); } catch (e) { mod = null; }
+  if (!mod || typeof mod.montarDadosCompletos !== 'function') {
+    checar('montar-dados carrega para o teste de comportamento', false, 'nao carregou');
+    return;
+  }
+  let d = null;
+  try { d = mod.montarDadosCompletos(); } catch (e) { d = null; }
+  if (!d) { checar('montarDadosCompletos roda neste disco', false, 'sem snapshot local — teste pulado'); return; }
+  const todos = [];
+  Object.entries(d.funilLeads || {}).forEach(function (par) {
+    (par[1] || []).forEach(function (l) { todos.push([par[0], l]); });
+  });
+  checar('há lead na carga para medir', todos.length > 0, todos.length + ' leads');
+  const semEtapa = todos.filter(function (p) { return !p[1].stageId; });
+  checar('nenhum lead da carga sai sem stageId',
+    semEtapa.length === 0, semEtapa.length + ' de ' + todos.length + ' sem etapa');
+  const errados = todos.filter(function (p) { return String(p[1].stageId) !== String(p[0]); });
+  checar('e o stageId de cada lead é a etapa em que ele está',
+    errados.length === 0, errados.length + ' com etapa diferente da coluna');
+})();
+
+/* ══ CEP E CNPJ SÓ DÍGITOS — O HUBSPOT SEMPRE RECUSOU O RESTO (04/09/26) ════════════════
+   ACHADO movendo um negócio de teste pelo Cockpit até Ag. Pagamento. Resposta do HubSpot,
+   ao pé da letra:
+     cep: Enter only numbers and letters, not special characters like -
+     cnpj_cpf: Enter only numbers and letters, not special characters like ., /, -
+   O executivo digita "29050-000" e "00.000.000/0001-00" — é como esses números se escrevem
+   e como o cliente os dita. A passagem INTEIRA era recusada, e na etapa do dinheiro: Ag.
+   Pagamento é a que alimenta o RPA/ASAAS.
+
+   CONFERIDO NO CRM antes de escolher o formato: 543 negócios do pipeline têm o campo
+   preenchido e todos guardam só dígitos (02858882000156, 05846410). Não é convenção nova —
+   é o formato da casa, e é o que o RPA já lê. O Cockpit é espelho: quem se ajusta é ele.
+
+   DUAS CAMADAS: a tela limpa na coleta (as quatro portas de passagem passam por
+   coletarCamposPassagem) e as rotas limpam de novo, para os caminhos que não passam pela
+   tela. E amount/mrr ficam FORA da lista de propósito: são números com decimal e são o que
+   o RPA/ASAAS lê para gerar o link — limpar "tudo que parece número" comeria o ponto. */
+(function () {
+  const rotaEtapa = fs.readFileSync(path.join(raiz, 'lib', 'acoes-negocio', 'mudar-etapa-negocio.js'), 'utf8');
+  const rotaCriar = fs.readFileSync(path.join(raiz, 'api', 'criar-negocio.js'), 'utf8');
+
+  checar('a tela tem a regra de só-dígitos num lugar só',
+    template.indexOf('const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };') > -1
+    && template.indexOf('function limparSoDigitos(') > -1);
+  checar('a coleta de campos da passagem usa a regra',
+    template.indexOf('const limpo = limparSoDigitos(campo.prop, valor);') > -1);
+  checar('e a edição inline da ficha, que grava por outro caminho, usa a mesma',
+    template.indexOf('const limpoUnico = limparSoDigitos(propNome, v.valor);') > -1
+    && template.indexOf('v.valor = limpoUnico.valor;') > -1);
+
+  checar('a rota de etapa limpa também',
+    rotaEtapa.indexOf('const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };') > -1
+    && rotaEtapa.indexOf('const limpo = soDigitos(chave, texto);') > -1);
+  checar('a rota de criação limpa também',
+    rotaCriar.indexOf('const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };') > -1
+    && rotaCriar.indexOf('const limpo = soDigitos(chave, texto);') > -1);
+
+  /* AMOUNT E MRR NÃO ENTRAM, e isto é uma trava e não uma observação: eles são o que o
+     RPA/ASAAS lê para gerar o link do contrato, e um dia alguém vai querer "limpar todo
+     campo numérico". 349.90 viraria 34990. */
+  checar('a lista de só-dígitos é exatamente cep e cnpj — nada mais entra',
+    template.indexOf("PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };") > -1
+    && template.indexOf("PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14, ") < 0,
+    'alguém ampliou a lista: com amount ou mrr dentro dela, 349.90 vira 34990');
+
+  /* O TETO É O DO HUBSPOT, medido na recusa: "Enter 8 characters or fewer" (cep) e
+     "Enter 14 characters or fewer" (cnpj_cpf). Passar de 14 dígitos é erro de digitação e
+     tem de aparecer na tela, não virar recusa em inglês depois do clique. */
+  checar('o teto de dígitos é dito na tela antes de o HubSpot recusar',
+    template.indexOf('O HubSpot aceita no máximo ') > -1);
+})();
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
