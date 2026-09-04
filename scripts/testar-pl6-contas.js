@@ -49,11 +49,22 @@ function pegarConst(nome) {
   return m[0];
 }
 
-const CADEIA = ['pl6ChaveBairro', 'pl6RotuloBairro', 'pl6ChaveDeLugar', 'pl6RotuloDoGrupo',
+const CADEIA = ['pl6ChaveBairro', 'pl6RotuloBairro', 'pl6ChaveTerrLivre', 'pl6SemearTerrLivres',
+  'pl6FontesCruas', 'pl6ContarTerrLivre',
+  'pl6LeadNoTerrLivre', 'pl6ChaveDeLugar', 'pl6RotuloDoGrupo',
   'pl6Km', 'pl6RegiaoDoLead', 'pl6Regioes', 'pl6Carteira', 'pl6Reciclagem', 'pl6GrupoDaFonte',
   'pl6Novos', 'pl6TodasAsContas'];
 
-const fonte = CADEIA.map(pegarFn).join('\n');
+// O TERRITORIO DIGITADO entrou na cadeia (prancha 6c): pl6Regioes chama pl6SemearTerrLivres
+// e pl6RegiaoDoLead lê pl6TerrLivres. Sem estes dois aqui a suíte reprovaria a cadeia por
+// falta de dependência — e o certo é ela EXECUTAR a cadeia nova, não ignorá-la.
+const fonte = [
+  pegarConst('PL6_TERR_PREFIXO'),
+  'let pl6TerrLivres = [];',
+  // pl6SemearTerrLivres lê o plano da semana; no cenário não há plano, e o `typeof` dela
+  // já cobre isso. O stub existe para a chamada não estourar por identificador ausente.
+  'function pl6RegioesDoPlano() { return []; }'
+].concat(CADEIA.map(pegarFn)).join('\n');
 
 /* ── o dado de mentira: um de cada caso que a cascata de lugar precisa cobrir ────── */
 const CENARIO = `
@@ -94,7 +105,9 @@ let api;
 try {
   api = new Function(CENARIO + '\n' + fonte
     + '\nreturn { pl6Regioes, pl6Carteira, pl6Reciclagem, pl6Novos, pl6TodasAsContas,'
-    + ' pl6ChaveDeLugar, pl6RotuloDoGrupo, DATA, meusNegociosAbertos };')();
+    + ' pl6ChaveDeLugar, pl6RotuloDoGrupo, pl6LeadNoTerrLivre, DATA, meusNegociosAbertos,'
+    + ' criarTerr: function (t) { pl6TerrLivres.push(t); },'
+    + ' limparTerr: function () { pl6TerrLivres.length = 0; } };')();
 } catch (e) {
   console.error('  FALHA  o bloco do Planejamento não avalia: ' + e.message);
   process.exit(1);
@@ -183,6 +196,51 @@ checar('e o lead sem nenhum campo de lugar fica SEM região',
   'sem isso ele seria agendado numa região onde não está');
 checar('quem não tem coordenada tem km null, não 0',
   !!semLugar && semLugar.km === null && semLugar.semEndereco === true);
+
+/* ── 6b. O TERRITÓRIO QUE ELE DIGITA (prancha 6c) ───────────────────────────────── */
+// "O executivo manda no mapa": ele digita qualquer bairro e aquilo vira território. Antes,
+// `pl6UI.terr && porChave.has(...)` descartava em silêncio o texto que não fosse uma região
+// derivada — o campo só filtrava chips, nunca criava.
+checar('o texto casa por qualquer campo de lugar',
+  api.pl6LeadNoTerrLivre({ cidade: 'Rio de Janeiro' }, 'rio')
+    && api.pl6LeadNoTerrLivre({ logradouro: 'Avenida Monsenhor Félix' }, 'monsenhor')
+    && api.pl6LeadNoTerrLivre({ bairro: 'Praia da Costa' }, 'praia'),
+  'exigir bairro faria o território digitado não casar com quase nada — bairro tem 3,5%');
+checar('e sem acento também',
+  api.pl6LeadNoTerrLivre({ bairro: 'Maracanã' }, 'maracana'),
+  'ele digita com uma mão, no carro');
+checar('texto que não casa não captura ninguém',
+  !api.pl6LeadNoTerrLivre({ cidade: 'Salvador' }, 'curitiba'));
+
+api.limparTerr();
+api.criarTerr('monsenhor');
+const comTerr = api.pl6Regioes(rep);
+const meu = comTerr.find(r => r.chave === 't:monsenhor');
+checar('o território digitado volta como REGIÃO em pl6Regioes', !!meu,
+  'todo consumidor da aba pergunta `l.regiao === chave` — um filtro de texto paralelo faria '
+  + 'cinco lugares saberem de duas coisas');
+checar('e ele declara que foi digitado', !!meu && meu.digitado === 'monsenhor'
+  && meu.via === 'seu território',
+  'o chip precisa dizer que a fonte é a palavra dele, não o bairro nem o CEP');
+const todasComTerr = api.pl6TodasAsContas(rep, comTerr);
+const capturados = todasComTerr.filter(x => x.regiao === 't:monsenhor');
+checar('os leads que casam entram no território dele',
+  capturados.length === 3 && !!meu && meu.contas === 3,
+  'capturou ' + capturados.length + ', a região diz ' + (meu ? meu.contas : '?'));
+// A PALAVRA DELE GANHA DA DERIVAÇÃO — mas SÓ para quem casa, e essa distinção é o ponto.
+// Dos 4 leads da faixa 21235, três estão na Avenida Monsenhor Félix e um é uma conta-alvo
+// na "Rua Qualquer" que só compartilha o CEP. O território "monsenhor" leva os três e deixa
+// o quarto onde ele está: território é um pedaço do mapa, não um balde por faixa de CEP.
+// (Escrevi esta asserção esperando ZERO na faixa; o teste me corrigiu.)
+const sobraramNoCep = todasComTerr.filter(x => x.regiao === 'z:21235');
+checar('os que casam saem da faixa de CEP, e só eles',
+  sobraramNoCep.length === 1 && sobraramNoCep[0].id === 'n-50',
+  'sobraram ' + sobraramNoCep.length + ': ' + sobraramNoCep.map(x => x.id).join(', ')
+  + ' — deveria sobrar só a conta-alvo da Rua Qualquer');
+api.limparTerr();
+checar('sem território digitado, a cascata volta a valer',
+  api.pl6TodasAsContas(rep, api.pl6Regioes(rep)).filter(x => x.regiao === 'z:21235').length === 4,
+  'o território é da sessão: some quando ele desfaz');
 
 /* ── 7. e a única fonte é a única fonte ─────────────────────────────────────────── */
 // Se alguém voltar a montar "todas as contas" na mão, some uma fonte de novo.
