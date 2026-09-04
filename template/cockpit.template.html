@@ -1652,6 +1652,24 @@
     font-size:12px;line-height:1;cursor:pointer;padding:0;}
   .pl6-col-sug:hover{border-color:var(--red);color:var(--red);}
   /* ── O PICKER DO SLOT: busca + lista rolavel (prancha 6b) ── */
+  /* ── a dívida do SLA, em número e em vermelho (04/09/26) ── */
+  .pl6-sla-faixa{display:block;margin:7px 0 0;padding:6px 10px;border-radius:var(--r-sm);
+    background:var(--red-soft);border:1px solid var(--red);color:var(--red-dk);
+    font:700 10.5px/1.45 var(--font-body);}
+  .pl6-sla-faixa b{font:900 12px var(--font-display);font-variant-numeric:tabular-nums;}
+  .pl6-sla-faixa i{font-style:normal;color:var(--muted);font-weight:700;}
+  .pl6-abast-acoes{display:flex;gap:7px;flex-wrap:wrap;margin:8px 0 2px;}
+
+  /* ── criar lead na hora (04/09/26) ── */
+  .pl6-sug-novo{display:block;width:100%;box-sizing:border-box;text-align:left;margin-top:6px;
+    padding:8px 11px;border:1.5px dashed var(--red);border-radius:var(--r-sm);
+    background:transparent;color:var(--red);font:800 11.5px var(--font-body);cursor:pointer;}
+  .pl6-sug-novo:hover{background:var(--red-soft);}
+  .pl6-sug-novo span{display:block;font:700 9.5px var(--font-body);color:var(--muted2);margin-top:2px;}
+  .pl6-novo-cta{display:inline-flex;align-items:center;gap:6px;min-height:34px;padding:0 13px;
+    border:1px solid var(--red);border-radius:var(--r-pill);background:var(--red);
+    color:var(--dark-ink);font:800 11px var(--font-body);cursor:pointer;}
+  .pl6-novo-cta:hover{background:var(--red-dk);border-color:var(--red-dk);}
   .pl6-sug-busca{width:100%;min-height:38px;padding:0 10px;margin-bottom:7px;box-sizing:border-box;
     border:1px solid var(--line-btn);border-radius:var(--r-sm);background:var(--panel);
     color:var(--ink);font:600 11px var(--font-body);}
@@ -22768,6 +22786,14 @@ function renderPlanejamento6a(rep) {
           + '<div class="pl6-sug-topo"><span class="pl6-sug-rot">' + hora + ' · escolher lead'
           + (nomeRegiao(rota) ? ' · ' + esc(nomeRegiao(rota)) : '') + '</span>'
           + '<button type="button" class="pl6-sug-x" data-pl6-fechar-sug="1" aria-label="Fechar">✕</button></div>'
+          /* CRIAR NA HORA, com fonte. O executivo esta na rua, vê um restaurante que
+             nao esta na base (ou achou um no Instagram/Google Maps) e precisa por na
+             semana AGORA. Sem esta porta ele teria de sair para o Meu funil, criar, e
+             voltar para achar o horario de novo. */
+          + '<button type="button" class="pl6-sug-novo" data-pl6-novo-slot="' + di + '.' + si + '">'
+          +   '+ criar lead novo neste horário'
+          +   '<span>Instagram, Google Maps, indicação, rua — a fonte entra no HubSpot</span>'
+          + '</button>'
           + (cands.length
             ? '<input type="text" class="pl6-sug-busca" data-pl6-sug-busca="1"'
                 + ' placeholder="buscar lead pelo nome…" autocomplete="off">'
@@ -22812,10 +22838,20 @@ function renderPlanejamento6a(rep) {
         + '<span aria-hidden="true">⌖</span><span class="pl6-regiao-nome">'
         + esc(rotaNome || 'escolher região') + '</span><span style="margin-left:auto;">⌄</span></button>';
       if (pl6UI.rotaPicker === di) {
+        /* COM BUSCA ATIVA nao ha corte: ela procura na lista INTEIRA, porque o bairro
+           que ele quer provavelmente nao esta entre os 8 com mais contas — foi por isso
+           que ele pediu "a regiao que eu quiser, nao so as pre selecionadas". */
         const mostrar = pl6UI.verTodasRegioes ? regioes : regioes.slice(0, PL6_REGIOES_VISIVEIS);
         regiaoHTML += '<div class="pl6-regiao-lista">'
-          + (regioes.length ? mostrar.map(r =>
-            '<button type="button" class="pl6-regiao-op" data-pl6-regiao="' + di + '.' + esc(r.chave) + '">'
+          + (regioes.length > PL6_REGIOES_VISIVEIS
+            ? '<input type="text" class="pl6-sug-busca" data-pl6-regiao-busca="1"'
+              + ' placeholder="buscar bairro… (' + regioes.length + ' no seu território)"'
+              + ' autocomplete="off">'
+            : '')
+          + (regioes.length ? regioes.map(r =>
+            '<button type="button" class="pl6-regiao-op" data-pl6-regiao="' + di + '.' + esc(r.chave) + '"'
+            + ' data-nome="' + esc(pl6ChaveBairro(r.nome)) + '"'
+            + (mostrar.indexOf(r) < 0 ? ' hidden' : '') + '>'
             + '<span>' + esc(r.nome) + (r.grafias > 1
               ? ' <small title="a base tem ' + r.grafias + ' grafias para este bairro — a contagem soma as duas">('
                 + r.grafias + ' grafias)</small>' : '') + '</span>'
@@ -22857,6 +22893,11 @@ function renderPlanejamento6a(rep) {
      valor dele como os outros.
      `todas` mistura carteira e lote novo numa ordem so: e o estado em que a tela abre,
      porque a pergunta do executivo e "quem eu visito", nao "de que tabela veio". */
+  /* O SLA ESTOURADO E A DIVIDA DO DIA, e ele passa a ter numero na tela. Conta so a
+     carteira SEM data na semana (cartLivre): negocio com SLA estourado que ele JA
+     agendou nao e pendencia, e trabalho em andamento — e numero que nao cai quando ele
+     trabalha vira ruido em duas semanas. */
+  const slaNaCarteira = cartLivre.filter(l => l.sla).length;
   const fonteSel = pl6UI.fonte || 'todas';
   const porFonte = fonteSel === 'todas' ? livres.slice()
     : fonteSel === 'carteira' ? cartLivre.slice()
@@ -23108,6 +23149,19 @@ function renderPlanejamento6a(rep) {
     +   '<div class="pl6-abast">'
     +     '<div class="pl6-abast-tit">Munição da semana'
           + '<span> — clique e escolha o dia, ou arraste ⠿</span></div>'
+          /* O SLA ESTOURADO EM NUMERO, E EM VERMELHO (04/09/26). A ordenacao ja punha
+             SLA na frente e a nota da fonte dizia isso em texto — mas para saber QUANTOS
+             ele tinha de contar cartao por cartao. E "0 acima do SLA" nao aparece: nao
+             ha por que ocupar a linha com a ausencia de divida. */
+    +     (slaNaCarteira
+            ? '<div class="pl6-sla-faixa">⚠ <b>' + slaNaCarteira + '</b> da sua carteira'
+              + ' com SLA estourado — estes vêm primeiro na lista'
+              + (fonteSel === 'carteira' ? '' : ' <i>(veja em “carteira”)</i>') + '</div>'
+            : '')
+    +     '<div class="pl6-abast-acoes">'
+    +       '<button type="button" class="pl6-novo-cta" data-pl6-novo-lead="1">'
+    +         '+ lead novo — Instagram, Google Maps, rua…</button>'
+    +     '</div>'
     +     '<div class="pl6-fontes">' + fontesBtns + '</div>'
     +     '<div class="pl6-nota-fonte">' + (fonteSel === 'carteira'
             ? 'Sua carteira do HubSpot, ordenada por quem mais precisa de você: SLA estourado primeiro, depois dias parado.'
@@ -23448,6 +23502,43 @@ function pl6Ligar(box, rep) {
        cursor nao sair do campo. Ela procura na lista inteira (os 3 destacados e o
        resto), porque o executivo digita o nome do cliente que ligou — e esse
        provavelmente nao esta entre os 3 da regiao do dia. */
+    /* ── a busca do SELETOR DE REGIAO ────────────────────────────────────────────
+       Mesma tecnica: filtra no DOM sem redesenhar. As opcoes fora das 8 primeiras
+       nascem com `hidden` e a busca as revela — assim a lista inteira esta no DOM (a
+       busca alcanca os 104 bairros) sem virar parede de botoes na abertura. */
+    const buscaReg = ev.target.closest('[data-pl6-regiao-busca]');
+    if (buscaReg) {
+      const q = pl6ChaveBairro(buscaReg.value || '');
+      const lista = buscaReg.closest('.pl6-regiao-lista');
+      if (!lista) return;
+      const ops = lista.querySelectorAll('[data-pl6-regiao]');
+      let visiveis = 0;
+      ops.forEach(function (o, i) {
+        /* sem busca, volta ao corte das 8 com mais contas */
+        const casa = q
+          ? (o.getAttribute('data-nome') || '').indexOf(q) >= 0
+          : (pl6UI.verTodasRegioes || i < PL6_REGIOES_VISIVEIS);
+        o.hidden = !casa;
+        if (casa) visiveis++;
+      });
+      const mais = lista.querySelector('[data-pl6-mais-regioes]');
+      if (mais) mais.hidden = !!q;   /* com busca, "ver todas" nao tem o que fazer */
+      let nota = lista.querySelector('.pl6-regiao-nota');
+      if (!nota) {
+        nota = document.createElement('div');
+        nota.className = 'pl6-sug-vazio pl6-regiao-nota';
+        lista.appendChild(nota);
+      }
+      /* ZERO RESULTADO DIZ O QUE FAZER. "nenhum bairro" sozinho deixa ele sem saida:
+         a regiao vem das contas-alvo importadas, e bairro sem conta nao existe aqui. */
+      nota.hidden = !q || visiveis > 0;
+      if (q && !visiveis) {
+        nota.textContent = 'Nenhum bairro seu com esse nome. As regiões vêm das suas'
+          + ' contas-alvo com endereço — se você quer atuar num bairro novo, crie um lead'
+          + ' dele aqui pelo "+ lead novo" e o bairro passa a existir na lista.';
+      }
+      return;
+    }
     const busca = ev.target.closest('[data-pl6-sug-busca]');
     if (busca) {
       const q = pl6ChaveBairro(busca.value || '');
@@ -23549,7 +23640,9 @@ function pl6Ligar(box, rep) {
       + '[data-pl6-picker],[data-pl6-sel-dia],'
       + '[data-pl6-agendar],[data-pl6-abrir-sug],[data-pl6-fechar-sug],[data-pl6-bloquear],[data-pl6-remover],'
       + '[data-pl6-abrir-regiao],[data-pl6-regiao],[data-pl6-mais-regioes],[data-pl6-sugerir],'
-      + '[data-pl6-fechar],[data-pl6-reabrir],[data-pl6-end-abrir],[data-pl6-end-salvar]');
+      + '[data-pl6-fechar],[data-pl6-reabrir],[data-pl6-end-abrir],[data-pl6-end-salvar],'
+      /* criar lead na hora (04/09/26) — sem estes dois o markup novo seria clique morto */
+      + '[data-pl6-novo-lead],[data-pl6-novo-slot]');
     if (!alvo || !box.contains(alvo)) return;
     ev.preventDefault();
     ev.stopPropagation();
@@ -23592,6 +23685,59 @@ function pl6Ligar(box, rep) {
       return redesenhar();
     }
     if (d.pl6MaisRegioes) { pl6UI.verTodasRegioes = !pl6UI.verTodasRegioes; return redesenhar(); }
+
+    /* ══ CRIAR LEAD NA HORA (04/09/26) ═══════════════════════════════════════════
+       Duas portas para o mesmo fluxo, e o mesmo fluxo do Meu funil e do Meu painel:
+       abrirNovaContaProspeccao cria o negocio no HubSpot na etapa Prospeccao, com os
+       campos obrigatorios e a FONTE (Instagram, Google Maps, rua, indicacao…).
+
+       DEPOIS DE CRIAR, RECARREGA A PROSPECCAO antes de redesenhar: o lead nasce fora da
+       memoria desta tela, e sem recarregar o executivo criaria a conta e nao a veria na
+       lista — o que parece exatamente que a criacao falhou. */
+    const criarLead = function (aoTerminar) {
+      if (typeof abrirNovaContaProspeccao !== 'function') {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('O formulário de conta nova não carregou nesta aba.', 'atencao');
+        }
+        return;
+      }
+      pl6UI.picker = null; pl6UI.slotPicker = null; pl6UI.rotaPicker = null;
+      abrirNovaContaProspeccao(async function () {
+        try { if (typeof carregarProspeccao === 'function') await carregarProspeccao(); }
+        catch (e) { console.error('Planejamento, recarregar a prospecção:', e && e.message); }
+        if (typeof aoTerminar === 'function') { await aoTerminar(); return; }
+        await redesenhar();
+      }, {});
+    };
+
+    if (d.pl6NovoLead) { criarLead(null); return; }
+
+    /* CRIAR E AGENDAR NO MESMO GESTO: e o caminho de quem esta com o telefone na mao.
+       O agendar reusa pl6AgendarNoSlot; o que sobra aqui e achar o lead que acabou de
+       nascer, e ele e o MAIS RECENTE da base dele — por data_abertura nao serve (e a
+       data de abertura do CNPJ, nao a da criacao). */
+    if (d.pl6NovoSlot) {
+      const [di, si] = String(d.pl6NovoSlot).split('.').map(Number);
+      const antes = new Set((typeof prospeccaoCache !== 'undefined' ? prospeccaoCache : [])
+        .map(function (l) { return String(l.id); }));
+      criarLead(async function () {
+        const novos = (typeof prospeccaoCache !== 'undefined' ? prospeccaoCache : [])
+          .filter(function (l) { return !antes.has(String(l.id)); });
+        if (!novos.length) {
+          /* nao achei o lead novo: NAO agendo nada e digo a verdade. Agendar o lead
+             errado num horario e pior que nao agendar. */
+          if (typeof mostrarToast === 'function') {
+            mostrarToast('Criei o negócio, mas não achei a conta nova na lista para agendar —'
+              + ' ela aparece na munição, agende por lá.', 'atencao');
+          }
+          return redesenhar();
+        }
+        const l = novos[0];
+        return pl6AgendarNoSlot(rep, 'n-' + l.id, di, si,
+          { mutar: mutar, redesenhar: redesenhar, box: box });
+      });
+      return;
+    }
     if (d.pl6EndAbrir) {
       pl6UI.endereco = pl6UI.endereco === d.pl6EndAbrir ? null : d.pl6EndAbrir;
       pl6UI.picker = null;
