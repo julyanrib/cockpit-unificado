@@ -39861,6 +39861,17 @@ function dailyGestor14aHTML(reps, planosPorOwner, ontemISO, planosLidos) {
   return '<div class="g14">'
     + '<div class="g14-tarja">'
     +   '<span class="g14-tarja-hoje">rodada das 8h30 · esta tela é a que vai na TV</span>'
+    /* SE ELE NAVEGOU PARA OUTRO DIA, a tela tem de dizer que o roteiro nao acompanhou.
+       A trava e a palavra vem de planos_diarios NA DATA EM FOCO; o roteiro vem de
+       planos_semanais na coluna de HOJE, porque d7ColunaDeHoje le o relogio real. Sem
+       este aviso a tela mistura dois dias sem avisar — e o gestor cobraria o roteiro de
+       hoje com a promessa de ontem. */
+    +   ((typeof dailyRefDate !== 'undefined' && typeof isoDate === 'function'
+          && dailyRefDate !== isoDate(new Date()))
+        ? '<span class="g14-tarja-fonte" style="color:var(--pl6-bloqueio);font-weight:800;">'
+          + '⚠ promessa e palavra são de ' + esc(dailyRefDate.split('-').reverse().slice(0, 2).join('/'))
+          + ', mas o roteiro mostrado é o de HOJE — o plano da semana não navega por dia</span>'
+        : '')
     +   '<span class="g14-tarja-fonte">promessas do Supabase · funis do HubSpot</span>'
     +   '<button type="button" class="g14-tarja-tv" data-g14-tv="1">▣ modo TV</button>'
     + '</div>'
@@ -41955,14 +41966,25 @@ async function renderDaily() {
     : (!hojeEhDiaUtil && noDiaUtilCorrente)
       ? `Hoje é ${fmtDailyLabel(hojeISODaily).replace(/^[\d\/]+ \(/, '').replace(/\)$/, '')} · você está vendo o último dia útil`
       : 'Você está vendo um dia que já passou';
-  const navNoTopo = (!souRepDaily || !ehHojeDaily) ? `
+  /* ══ A NAVEGACAO DE DIA E SO DO GESTOR (04/09/26) ═══════════════════════════════
+     Medido na auditoria de cliques: no executivo, clicar em "← dia util anterior"
+     mudava dailyRefDate e NAO mudava uma linha da tela — a 7a le o relogio real
+     (d7ColunaDeHoje), nao a data em foco, e a tarja continuava dizendo "hoje".
+     Estado mudando em silencio com a tela afirmando outro dia e pior que botao
+     ausente. E fazer a 7a honrar a data seria deixa-lo travar promessa e registrar
+     desfecho num dia que passou.
+     A semana dele esta inteira no Planejamento, e e para la que a frase aponta. */
+  const navNoTopo = (!souRepDaily) ? `
     <div class="daily-header">
       ${avisoDataDaily ? `<span style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--amber-ink);background:var(--amber-soft);border-radius:var(--r-pill);padding:4px 11px;">${avisoDataDaily}</span>` : ''}
       ${navBotoesDaily}
     </div>` : '';
-  const navNoPe = (souRepDaily && ehHojeDaily) ? `
-    <div class="daily-header" style="justify-content:flex-end;margin:18px 0 0;opacity:.72;">
-      ${navBotoesDaily}
+  const navNoPe = souRepDaily ? `
+    <div class="daily-header" style="justify-content:flex-end;margin:18px 0 0;">
+      <span style="font-size:11px;font-weight:700;color:var(--muted2);">
+        Esta tela é <b>o dia de hoje</b> — a promessa trava hoje e o desfecho é de hoje.
+        Sua semana inteira está no <b>Planejamento</b>.
+      </span>
     </div>` : '';
 
   let html = `
