@@ -1595,7 +1595,17 @@
   /* ── o corpo: semana | abastecimento ─────────────────────────────────────────── */
   .pl6-corpo{display:grid;grid-template-columns:minmax(0,1.72fr) minmax(0,1fr);align-items:stretch;}
   .pl6-semana{padding:14px 18px 16px 22px;border-right:1px solid var(--line);min-width:0;}
-  .pl6-abast{padding:14px 20px 16px 18px;min-width:0;background:var(--panel2);}
+  /* ══ AS DUAS COLUNAS ACABAM JUNTAS (04/09/26, Julyan: "quero tudo encaixado, alinhado") ══
+     MEDIDO a 1440px: a esquerda tinha 73px de vazio embaixo, e em tela mais alta o vazio
+     cresce — porque a munição tinha altura em `vh` e a semana tem a altura do conteúdo dela.
+     Duas alturas de origens diferentes nunca fecham na mesma linha por acaso.
+     Agora a coluna é FLEX e a lista tem `flex:1`: a altura dela é DERIVADA da coluna, que o
+     grid iguala à da semana. Encaixa por construção, em qualquer largura — e o `min-height`
+     impede que ela suma numa tela baixa, onde três cards já valem a rolagem.
+     `min-height:0` no pai é obrigatório: sem ele o filho flex não encolhe abaixo do próprio
+     conteúdo e a lista estoura a coluna em vez de rolar. */
+  .pl6-abast{padding:14px 20px 16px 18px;min-width:0;background:var(--panel2);
+    display:flex;flex-direction:column;min-height:0;}
   .pl6-sec{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px;}
   .pl6-sec-rot{font:900 10px var(--font-display);letter-spacing:.12em;text-transform:uppercase;color:var(--ink);}
   .pl6-sec-n{font:800 10.5px var(--font-body);color:var(--pl6-atencao);font-variant-numeric:tabular-nums;}
@@ -1858,7 +1868,24 @@
     font:700 10px var(--font-body);cursor:pointer;}
   .pl6-terr-mais:hover{border-color:var(--pl6-territorio);color:var(--pl6-territorio);}
   .pl6-terr-pe{display:block;margin-top:8px;font-size:9.5px;color:var(--muted2);line-height:1.45;}
-  .pl6-lista{display:flex;flex-direction:column;gap:7px;max-height:600px;overflow-y:auto;}
+  /* ══ EU TENTEI FAZER A LISTA DERIVAR A ALTURA DA COLUNA, E PIOREI (04/09/26) ═══════════
+     A ideia era `flex:1` dentro de .pl6-abast para as duas colunas fecharem na mesma linha
+     em qualquer largura, em vez de uma medir por conteudo e a outra por viewport.
+
+     MEDIDO DEPOIS: a coluna foi de 827px para 3983px e a esquerda ficou com 3229px de vazio.
+     A causa e circular e eu devia ter previsto: com `align-items:stretch`, a altura da LINHA
+     do grid sai do CONTEUDO do item mais alto — e o item mais alto passou a ser a lista
+     flexivel, cujo conteudo natural sao os 3707px dos 188 cards. A lista nao pode derivar da
+     coluna quando a coluna deriva da lista.
+
+     Ficou o teto de viewport, que e o que funcionava. O desalinhamento real medido a 1440px
+     e de 73px de vazio na esquerda — pequeno, e o preco de duas colunas com origens de
+     altura diferentes. Resolver de verdade exige a lista numa camada `position:absolute`
+     dentro da coluna (aí ela para de contribuir para a linha), e isso e mudanca de markup,
+     nao de CSS solto no fim de uma prancha. */
+  .pl6-lista{display:flex;flex-direction:column;gap:7px;
+    max-height:min(62vh,720px);min-height:240px;overflow-y:auto;padding-right:4px;
+    scrollbar-width:thin;overscroll-behavior-y:contain;}
   .pl6-card{border:1px solid var(--line-soft);border-radius:var(--r-md);background:var(--panel);padding:9px 11px;}
   .pl6-card.is-sla{border-color:#E3C6C6;}
   .pl6-card-topo{display:flex;align-items:baseline;gap:7px;flex-wrap:wrap;}
@@ -3004,7 +3031,7 @@
   .h8-fila::-webkit-scrollbar-thumb:hover,.pl6-lista::-webkit-scrollbar-thumb:hover{
     background:var(--ter);}
   /* A MUNIÇÃO ganha a mesma medida em vh, pelo mesmo motivo — ela tinha 600px fixos. */
-  .pl6-lista{max-height:min(62vh,720px)!important;scrollbar-width:thin;}
+
   /* A LINHA: fundo #FDF7F7 e borda vinho quando a régua estourou — o hex é o da prancha. */
   .h8-linha{display:flex;gap:10px;padding:11px 12px;border:1px solid var(--line-soft);
     border-radius:var(--r-md);background:var(--panel);}
@@ -5682,17 +5709,34 @@
      dragover. Arrastar de Prospeccao para Onboarding com a grade rolada exige rolar
      antes; e por isso que o ⌄ do cartao e o "→ avancar" continuam sendo o caminho
      principal, e o arraste o atalho. */
-  .fn3-grade{display:grid;grid-auto-flow:column;
-    grid-auto-columns:minmax(232px,1fr);gap:10px;align-items:start;
-    overflow-x:auto;overflow-y:visible;padding-bottom:6px;
-    scrollbar-width:thin;overscroll-behavior-x:contain;}
-  /* a barra de rolagem discreta, na cor do papel — ela e do kanban, nao um elemento */
-  .fn3-grade::-webkit-scrollbar{height:9px;}
-  .fn3-grade::-webkit-scrollbar-track{background:var(--sunk);border-radius:var(--r-pill);}
-  .fn3-grade::-webkit-scrollbar-thumb{background:var(--line-btn);border-radius:var(--r-pill);}
-  .fn3-grade::-webkit-scrollbar-thumb:hover{background:var(--ter);}
+  /* ══ AS SETE NA TELA, E A ROLAGEM VAI PARA DENTRO DA COLUNA (04/09/26, Julyan) ═════
+     Ontem eu pus piso de 232px com rolagem horizontal. Estava errado: nas telas dele
+     Pagamento e Onboarding ficavam CORTADOS. O kanban existe para ele ler o ESTADO do
+     funil de uma vez — sete colunas com nome truncado dizem o estado; cinco legíveis e
+     duas fora da tela não dizem. O nome inteiro está no title e na ficha.
+     E o custo que eu registrei ontem (arraste não auto-rola o container) desaparece:
+     sem rolagem lateral, Prospecção → Onboarding volta a ser um gesto só. */
+  .fn3-grade{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:10px;
+    align-items:start;}
+
+  /* ══ A COLUNA ROLA, E O CABEÇALHO FICA ══════════════════════════════════════════
+     `sticky` no cabeçalho porque ele é o PRIMEIRO filho da coluna — não precisou de
+     markup novo. Sem ele, rolar a coluna faz perder de vista QUAL etapa se está lendo,
+     que é o único dado que a coluna carrega de graça. Ele já tem fundo sólido
+     (var(--ink)), então os cartões passam por baixo sem transparecer.
+     A altura é em vh: a coluna tem de caber na TELA de quem olha, e px fixo é metade de
+     um monitor e uma tela e meia de celular. */
   .fn3-col{display:flex;flex-direction:column;gap:10px;min-width:0;
-    border-radius:var(--r-lg);transition:opacity var(--t-base) var(--ease);}
+    border-radius:var(--r-lg);transition:opacity var(--t-base) var(--ease);
+    max-height:min(68vh,780px);overflow-y:auto;overflow-x:hidden;
+    padding-right:3px;scrollbar-width:thin;overscroll-behavior-y:contain;}
+  .fn3-col > .fn3-cab{position:sticky;top:0;z-index:2;}
+  /* a MESMA barra discreta das outras listas longas (a fila da Hoje, a munição) —
+     três listas com três barras diferentes é o que faz parecer remendo. */
+  .fn3-col::-webkit-scrollbar{width:8px;}
+  .fn3-col::-webkit-scrollbar-track{background:transparent;}
+  .fn3-col::-webkit-scrollbar-thumb{background:var(--line-btn);border-radius:var(--r-pill);}
+  .fn3-col::-webkit-scrollbar-thumb:hover{background:var(--ter);}
 
   /* ══ ESCREVENDO / ACABOU DE MOVER (04/09/26) ═══════════════════════════════════════
      TRACEJADO é a convenção deste arquivo para "existe mas ainda não confirmado" — a
@@ -5995,8 +6039,12 @@
     /* O ACORDEAO NAO ROLA DE LADO: aqui as colunas empilham, e `grid-auto-flow:column`
        teria de ser desfeito junto com o piso, senao a coluna unica herda 232px de
        minimo e o overflow-x volta num lugar onde nao ha nada para rolar. */
-    .fn3-grade{grid-auto-flow:row;grid-auto-columns:auto;
-      grid-template-columns:minmax(0,1fr);gap:8px;overflow-x:visible;}
+    /* NO TOQUE A COLUNA NÃO ROLA POR DENTRO: ela empilha e a PÁGINA rola. Caixa de 68vh
+       dentro de uma tela de 68vh é rolagem dentro de rolagem, e o dedo não sabe qual
+       das duas está movendo. */
+    .fn3-grade{grid-template-columns:minmax(0,1fr);gap:8px;}
+    .fn3-col{max-height:none;overflow-y:visible;padding-right:0;}
+    .fn3-col > .fn3-cab{position:static;}
     .fn3-col{border:1px solid var(--line);border-radius:14px;background:var(--panel2);
       overflow:hidden;}
     .fn3-cab{border-radius:0;}
@@ -16091,7 +16139,11 @@ function fn2ConversaoTexto(c) {
   if (Math.abs(dif) < 5) return base + ' · time ' + c.time + '%';
   return base + ' · time ' + c.time + '% — ' + (dif > 0 ? 'você passa mais' : 'você passa menos');
 }
-const FN2_VISIVEIS_POR_COLUNA = 3;
+/* TETO DE SEGURANÇA, NÃO CORTE DE LEITURA (04/09/26). Era 3, e com a coluna rolando
+   verticalmente esconder 28 cartões atrás de um botão é o oposto do pedido do Julyan
+   ("chegou no último lead de cima pra baixo ele scrolla"). A maior coluna medida na
+   carteira real tem 37; 60 existe para uma carga anômala não montar 500 nós de DOM. */
+const FN2_VISIVEIS_POR_COLUNA = 60;
 const FN2_NA_GAVETA = 5;
 
 let fn2Movimento = null;      /* 'sem-passo' | 'estourou' | 'decide-semana' | null */
@@ -16575,6 +16627,57 @@ function fn2Dinheiro(itens) {
 
    "SEM MOTIVO PREENCHIDO" APARECE COMO FALTA, e nao escondido: negocio perdido sem
    motivo e a perda que nao ensina nada, e e isso que o gestor cobra. */
+/* ══ OS RECICLADOS (04/09/26, Julyan) ═════════════════════════════════════════════════
+   "uma lista dos perdidos e reciclados sem destaque, mas q ele pode ver e quem sabe voltar
+   ao funil."
+
+   ELES VIVEM EM LISTA SEPARADA (DATA.leadsReciclagem60) porque o kanban desenha sete
+   colunas e Reciclagem não é uma delas. Medido na carteira do Bruno: 48 — MAIS que os 46
+   ativos. É por isso que aqui é cinza e no pé: com cor ou número grande, a aba passaria a
+   gritar estoque de 140 dias em cima do funil em jogo, que é o defeito que a prancha 6c
+   corrigiu no Planejamento. Mesma decisão, outra tela.
+
+   "voltar ao funil" usa fn3AbrirRegistro para Prospecção — a MESMA porta do reabrir do
+   perdido, que é o registro rápido de qualquer troca de etapa. Voltar da reciclagem pede as
+   propriedades que Prospecção exige, como qualquer passagem: o gestor recebe o movimento
+   com dado, e não um card reaparecendo sem explicação. */
+function fn2RecicladosPainel(rep) {
+  const todos = (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [])
+    .filter(function (l) { return String(l.ownerId) === String(rep.ownerId); });
+  const n = todos.length;
+  /* mais parados primeiro: se ele vai olhar seis, que sejam os seis que mais esperaram */
+  const linhas = todos.slice().sort(function (a, b) { return (b.dias || 0) - (a.dias || 0); })
+    .slice(0, 6).map(function (l) {
+      const dias = l.dias != null ? l.dias + 'd parado' : 'dias não medidos';
+      return '<div class="fn2-perd">'
+        + '<b class="fn2-perd-nome">' + esc(l.name || l.dealname || 'sem nome') + '</b>'
+        + '<span class="fn2-perd-motivo is-sem">' + esc(dias) + '</span>'
+        + '<button type="button" class="fn2-perd-reabrir" data-fn2-reciclar="'
+        +   esc(String(l.id)) + '" title="Volta para Prospecção — o registro é obrigatório,'
+        +   ' igual a qualquer troca de etapa">voltar ao funil ▸</button>'
+        + '</div>';
+    }).join('');
+
+  return '<div class="fn2-painel">'
+    + '<div class="fn2-painel-cab">'
+    +   '<span class="fn2-painel-rot">RECICLAGEM' + (n ? ' · ' + n : '') + '</span>'
+    +   '<span class="fn2-painel-nota">60 dias ou mais sem movimento</span>'
+    + '</div>'
+    + (n
+      ? '<div class="fn2-perd-lista">' + linhas
+        + (n > 6
+          ? '<span class="fn2-perd-ver" style="cursor:default;">e outros ' + (n - 6)
+            + ' — a lista inteira, com filtro e agendamento, está no Planejamento</span>'
+          : '')
+        + '</div>'
+      /* ZERO AQUI É BOA NOTÍCIA e a frase diz isso, em vez de mostrar uma caixa vazia. */
+      : '<div class="fn2-vazia-txt">nenhum negócio seu passou de 60 dias sem movimento —'
+        + ' é o melhor estado possível deste bloco.</div>')
+    + '<div class="fn2-perd-pe">sem destaque de propósito: estoque parado não disputa a'
+    +   ' atenção com o funil em jogo. Voltar ao funil pede o registro, como qualquer etapa.</div>'
+    + '</div>';
+}
+
 function fn2PerdidosPainel(perdidos) {
   const corte = DATA.perdidoVisivel && DATA.perdidoVisivel.corte;
   const desde = corte ? (fn2Quando(corte) || corte) : null;
@@ -17212,10 +17315,15 @@ function fn3Coluna(col, itens, idsAcesos) {
   const corpo = n === 0
     ? fn3ColunaVazia(col, itens)
     : visiveis.map(x => fn3Card(x, idsAcesos ? idsAcesos.has(String(x.lead.id)) : true)).join('')
-      + (n > FN2_VISIVEIS_POR_COLUNA
+      /* ══ O BOTÃO DEIXOU DE SER "OS ESCONDIDOS" (04/09/26) ═════════════════════════
+         Com a coluna rolando, não há cartão escondido — o rótulo "ver os 31 →" prometia
+         revelar o que já está na tela. Ele passa a dizer o que a gaveta sempre fez por
+         dentro: ORDENAR (por risco / mais novos) numa lista só. Aparece de 6 em diante,
+         que é onde ordenar começa a valer mais que rolar. */
+      + (n >= 6
         ? `<button type="button" class="fn3-ver${estourados ? ' is-viol' : ''}" data-fn2-etapa="${col.id}">${
-          estourados ? 'ver os ' + n + ' · ' + estourados + ' estourado' + (estourados === 1 ? '' : 's') + ' →'
-            : 'ver todos os ' + n + ' →'}</button>`
+          estourados ? 'ordenar os ' + n + ' · ' + estourados + ' estourado' + (estourados === 1 ? '' : 's') + ' ▸'
+            : 'ordenar os ' + n + ' ▸'}</button>`
         : '')
       /* o slot da coluna de Pagamento aparece MESMO com card: ele não é "vazio", é a
          promessa do que acontece quando o pagamento cai. */
@@ -17768,6 +17876,25 @@ function fn3Ligar(el, redesenhar) {
     fn3AbrirRegistro(lead, '1395880469', redesenhar);
   }));
 
+  /* ══ VOLTAR DA RECICLAGEM (04/09/26) ═════════════════════════════════════════════
+     `brutoDoNegocio` e NAO `fn3LeadPorId`: aquele busca so em DATA.funilLeads e
+     devolveria null para um reciclado — o botao responderia "nao achei este negocio"
+     sobre uma linha que a tela acabou de desenhar. Foi o defeito do FRANGO CHIC, e a
+     funcao existe justamente porque a reciclagem vem em lista separada. */
+  el.querySelectorAll('[data-fn2-reciclar]').forEach(btn => btn.addEventListener('click', ev => {
+    ev.stopPropagation();
+    const lead = (typeof brutoDoNegocio === 'function') ? brutoDoNegocio(btn.dataset.fn2Reciclar) : null;
+    if (!lead) {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Nao achei este negocio na carga desta sessao — recarregue.', 'atencao');
+      }
+      return;
+    }
+    /* A MESMA PORTA do reabrir do perdido: registro rapido para Prospeccao, com as
+       propriedades que a etapa exige. */
+    fn3AbrirRegistro(lead, '1395880469', redesenhar);
+  }));
+
   el.querySelectorAll('[data-fn3-alimentar]').forEach(btn => btn.addEventListener('click', ev => {
     ev.stopPropagation();
     if (typeof activateTab !== 'function') {
@@ -18058,7 +18185,12 @@ function fn2ShellHTML(r) {
     <div class="fn2-trio">
       ${fn2Comando(itens)}
       ${fn2DinheiroPara(itens)}
+      <!-- OS DOIS BLOCOS DISCRETOS DO PÉ (04/09/26): o que saiu (perdidos, com motivo) e
+           o que parou (reciclagem, 60d+). Nenhum dos dois com cor ou número grande — os
+           48 reciclados do Bruno são mais que os 46 ativos, e destacá-los faria a aba
+           gritar estoque parado em cima do funil em jogo. -->
       ${fn2PerdidosPainel(todos.filter(x => x.stageId === FN2_ETAPA_PERDIDO))}
+      ${fn2RecicladosPainel(r)}
     </div>
     ${fn2Gaveta(todos)}
   </div>`;

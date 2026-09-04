@@ -316,13 +316,43 @@ checar('o cartão em voo é tracejado e diz que pode voltar',
 })();
 checar('e ele diz o que NÃO é instantâneo',
   template.indexOf('mudança de outra pessoa entra na próxima carga') > 0);
-/* O SCROLL DO KANBAN (Julyan, duas vezes). Piso de coluna com 1fr no máximo: em tela larga
-   as colunas crescem em vez de deixar buraco. */
-checar('o kanban tem piso de coluna e rola na horizontal',
-  /grid-auto-columns:minmax\(232px,1fr\)/.test(template)
-  && /\.fn3-grade\{[^}]*overflow-x:auto/.test(template));
-checar('e o acordeão do toque desfaz o piso (senão rola sem ter o que rolar)',
-  /\.fn3-grade\{grid-auto-flow:row;grid-auto-columns:auto;/.test(template));
+/* ══ A ROLAGEM DO KANBAN INVERTEU EM 04/09/26, E EU ESTAVA ERRADO ═════════════════════
+   No mesmo dia eu escrevi aqui a asserção oposta: piso de 232px por coluna e rolagem
+   HORIZONTAL, com o argumento de que "sete colunas legíveis valem mais que sete colunas
+   visíveis".
+
+   O Julyan mandou as telas: Pagamento e Onboarding ficavam CORTADOS, com barra horizontal.
+   "eu quero todas as etapas na tela... o scroll q falei foi pra baixo, chegou no ultimo lead
+   de cima p baixo ele scrolla, n quero lateral" — e depois, explícito: "scroll vertical por
+   coluna, cabeçalho fixo".
+
+   Ele está certo, e a razão é o que o kanban É: uma leitura do ESTADO do funil de uma vez.
+   Sete colunas com o nome truncado dizem o estado; cinco legíveis e duas fora da tela não
+   dizem. O nome inteiro está no title e na ficha.
+
+   O CABEÇALHO STICKY É PARTE DA REGRA, não enfeite: rolar a coluna sem ele faz perder de
+   vista QUAL etapa se está lendo — o único dado que a coluna carrega de graça.
+
+   E O CORTE DE 3 POR COLUNA VIROU TETO DE 60: com a coluna rolando, esconder 28 cartões
+   atrás de um botão é o oposto do pedido. O 60 existe só para uma carga anômala não montar
+   500 nós; a maior coluna medida tem 37. */
+checar('o kanban encaixa as sete etapas e NÃO rola na horizontal',
+  /\.fn3-grade\{display:grid;grid-template-columns:repeat\(7,minmax\(0,1fr\)\)/.test(template)
+  && !/\.fn3-grade\{[^}]*overflow-x:auto/.test(template),
+  'a grade voltou a rolar de lado — Pagamento e Onboarding saem da tela');
+checar('a coluna rola VERTICALMENTE, com altura em vh',
+  /\.fn3-col\{[\s\S]{0,400}?max-height:min\(68vh,780px\);overflow-y:auto/.test(template));
+checar('e o cabeçalho da coluna fica fixo enquanto ela rola',
+  template.indexOf('.fn3-col > .fn3-cab{position:sticky;top:0;') > 0,
+  'sem o sticky ele rola a coluna e perde de vista qual etapa está lendo');
+checar('o corte por coluna deixou de esconder cartão',
+  template.indexOf('const FN2_VISIVEIS_POR_COLUNA = 60;') > 0,
+  'voltou a esconder cartão atrás de um botão numa coluna que rola');
+/* NO TOQUE A COLUNA NÃO ROLA POR DENTRO: ela empilha e a PÁGINA rola. Caixa de 68vh dentro
+   de uma tela de 68vh é rolagem dentro de rolagem, e o dedo não sabe qual das duas move. */
+checar('o acordeão do toque desfaz a rolagem por coluna',
+  /\.fn3-col\{max-height:none;overflow-y:visible/.test(template)
+  && /\.fn3-col > \.fn3-cab\{position:static;\}/.test(template));
 
 /* ── 6. as colunas são o pipeline oficial ────────────────────────────────────────── */
 const idsColunas = (template.match(/const FN2_ETAPAS = \[([\s\S]*?)\n\];/) || [])[1] || '';
