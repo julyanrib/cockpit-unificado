@@ -26,7 +26,8 @@
 // CONTRATO
 //   POST /api/negocio-acao
 //   Authorization: Bearer <token de sessão do Supabase>   (igual ao de antes)
-//   body: { op: 'mudar-etapa' | 'nota' | 'tarefa-rota' | 'mrr' | 'sugestao-gestor', ...resto }
+//   body: { op: 'mudar-etapa' | 'nota' | 'tarefa-rota' | 'mrr' | 'sugestao-gestor'
+//              | 'ler-etapa', ...resto }
 //   O "resto" é exatamente o corpo que a rota antiga recebia — nada mudou de nome.
 
 const ACOES = {
@@ -34,7 +35,11 @@ const ACOES = {
   'nota': require('../lib/acoes-negocio/criar-nota-negocio'),
   'tarefa-rota': require('../lib/acoes-negocio/criar-tarefa-rota'),
   'mrr': require('../lib/acoes-negocio/atualizar-mrr'),
-  'sugestao-gestor': require('../lib/acoes-negocio/confirmar-sugestao-gestor')
+  'sugestao-gestor': require('../lib/acoes-negocio/confirmar-sugestao-gestor'),
+  /* SO LE, e existe para a tela nao mentir quando a escrita e abortada por tempo:
+     em 04/09 a Kelly viu 'Falha ao falar com o HubSpot' sobre um negocio que ESTAVA
+     gravado em Perdido. Agora o cliente pergunta a etapa atual antes de afirmar. */
+  'ler-etapa': require('../lib/acoes-negocio/ler-etapa-negocio')
 };
 
 module.exports = async function handler(req, res) {
