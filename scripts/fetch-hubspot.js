@@ -716,6 +716,24 @@ async function visitasTarefasHojeByOwner(ownerId, diaISO) {
 // usavam só a 1ª página e ficavam erradas sempre que passavam do limite. Uma
 // semana de 204 leads criados ou 100 perdidos (já aconteceu, é real) já bastava
 // pra dar número errado. Isso resolve pra sempre, independente do volume.
+/* ══ COORDENADA VALIDA, OU NULL ══════════════════════════════════════════════════════
+   `Number('')` e ZERO, nao NaN — e 0,0 e um ponto valido, no Golfo da Guine. O idioma
+   antigo (`x != null ? Number(x) : null` + `!isNaN`) gravava zero para coordenada vazia,
+   e o executivo seguiria o pino. A interface do HubSpot deixa string vazia quando se
+   limpa um campo, entao isto acontece por uso normal do CRM, nao por dado corrompido.
+
+   Medido em 04/09/26: 0 dos 125 negocios com coordenada estavam em 0,0 — era defeito
+   latente, e agora nao ha por onde ele voltar. */
+function coordenadaValida(valor) {
+  if (valor == null) return null;
+  const txt = String(valor).trim();
+  if (!txt) return null;
+  const n = Number(txt);
+  if (!isFinite(n)) return null;
+  /* 0,0 nunca e um restaurante nosso: e o valor que aparece quando o campo foi zerado. */
+  if (n === 0) return null;
+  return n;
+}
 async function hsSearchAll(body) {
   let todos = [];
   let after = undefined;
@@ -1550,8 +1568,8 @@ async function main() {
       // Coordenada real do check-in via Expogo (Julyan, 10/08: "eles marcam no Expogo
       // e tem coordenadas que enviam para o HubSpot" — direto na propriedade do negócio,
       // não precisa mais casar por nome com a base de prospecção pra achar isso).
-      const lat = d.properties.latitude != null ? Number(d.properties.latitude) : null;
-      const lng = d.properties.longitude != null ? Number(d.properties.longitude) : null;
+      const lat = coordenadaValida(d.properties.latitude);
+      const lng = coordenadaValida(d.properties.longitude);
       return {
         name: d.properties.dealname,
         dealname: d.properties.dealname,
@@ -1563,7 +1581,7 @@ async function main() {
         valor: Math.round(parseFloat(d.properties.amount) || 0),
         vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
         ownerId: d.properties.hubspot_owner_id || null,
-        lat: (lat != null && !isNaN(lat)) ? lat : null,
+        lat: lat,   /* coordenadaValida ja garantiu: numero finito e nao-zero, ou null */
         // Endereço textual segue junto: é o que permite ao front geocodificar quem não
         // tem coordenada, em vez de sumir do mapa.
         cep: d.properties.cep || null,
@@ -1697,8 +1715,8 @@ async function main() {
   {
     const tarefasPerdido = await hsTarefasAbertasDosNegocios(perdidosRecentes.map(d => d.id));
     funilLeads[STAGES.perdido] = perdidosRecentes.map(d => {
-      const lat = d.properties.latitude != null ? Number(d.properties.latitude) : null;
-      const lng = d.properties.longitude != null ? Number(d.properties.longitude) : null;
+      const lat = coordenadaValida(d.properties.latitude);
+      const lng = coordenadaValida(d.properties.longitude);
       const fechou = Date.parse(d.properties.closedate || '');
       return {
         name: d.properties.dealname,
@@ -1715,8 +1733,8 @@ async function main() {
         valor: Math.round(parseFloat(d.properties.amount) || 0),
         vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
         ownerId: d.properties.hubspot_owner_id || null,
-        lat: (lat != null && !isNaN(lat)) ? lat : null,
-        lng: (lng != null && !isNaN(lng)) ? lng : null,
+        lat: lat,   /* coordenadaValida ja garantiu: numero finito e nao-zero, ou null */
+        lng: lng,
         cep: d.properties.cep || null,
         bairro: d.properties.bairro || null,
         cidade: d.properties.cidade || null,
@@ -1738,17 +1756,36 @@ async function main() {
   // de verdade, não pra quem acabou de cair ali.
   const reciclagemDealsRaw = await stageDealsTeamWide(STAGES.reciclagem);
   const leadsReciclagem60 = reciclagemDealsRaw
-    .map(d => ({
-      name: d.properties.dealname,
-      dealname: d.properties.dealname,
-      id: d.id,
-      dias: daysInCurrentStage(d.properties),
-      vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
-      ownerId: d.properties.hubspot_owner_id || null,
-      bairro: d.properties.bairro || null,
-      cidade: d.properties.cidade || null,
-      valor: Math.round(parseFloat(d.properties.amount) || 0)
-    }))
+    .map(d => {
+      /* A COORDENADA VEM DO HUBSPOT (04/09/26). stageDealsTeamWide JA pede latitude e
+         longitude; este mapeamento e que as descartava, e por isso as 48 contas de
+         reciclagem chegavam ao Planejamento sem lugar no mapa — nao entravam na rota do
+         dia e o cartao pedia um endereco que o CRM ja tinha.
+         Medido na fonte: dos 336 negocios na etapa, 51 tem coordenada de check-in do
+         Expogo. Numero mede o que existe; quem nao foi visitado ainda segue sem, e a tela
+         diz "sem endereco no CRM" em vez de inventar um ponto. */
+      const lat = coordenadaValida(d.properties.latitude);
+      const lng = coordenadaValida(d.properties.longitude);
+      return {
+        name: d.properties.dealname,
+        dealname: d.properties.dealname,
+        id: d.id,
+        dias: daysInCurrentStage(d.properties),
+        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
+        ownerId: d.properties.hubspot_owner_id || null,
+        bairro: d.properties.bairro || null,
+        cidade: d.properties.cidade || null,
+        /* NaN NAO PASSA: coordenada invalida virava pino no meio do Atlantico. */
+        lat: lat,   /* coordenadaValida ja garantiu: numero finito e nao-zero, ou null */
+        lng: lng,
+        /* o endereco completo, para o cartao nao pedir o que o CRM ja tem */
+        cep: d.properties.cep || null,
+        logradouro: d.properties.logradouro || null,
+        numero: d.properties.numero || null,
+        stageId: d.properties.dealstage || null,
+        valor: Math.round(parseFloat(d.properties.amount) || 0)
+      };
+    })
     .filter(l => l.dias >= 60)
     .sort((a, b) => b.dias - a.dias);
   console.log(`Reciclagem: ${reciclagemDealsRaw.length} negócios no total, ${leadsReciclagem60.length} parados há 60+ dias (candidatos a resgate).`);
@@ -1922,8 +1959,8 @@ async function main() {
       else if (rank >= 4) temperatura = 'quente';
 
       // Mesma coordenada real do check-in via Expogo — ver comentário em funilLeads acima.
-      const lat = d.properties.latitude != null ? Number(d.properties.latitude) : null;
-      const lng = d.properties.longitude != null ? Number(d.properties.longitude) : null;
+      const lat = coordenadaValida(d.properties.latitude);
+      const lng = coordenadaValida(d.properties.longitude);
 
       return {
         name: d.properties.dealname,
@@ -1940,7 +1977,7 @@ async function main() {
         proximaAtividade,
         ultimaInteracao: d.properties.notes_last_updated || null,
         valor: Math.round(parseFloat(d.properties.amount) || 0),
-        lat: (lat != null && !isNaN(lat)) ? lat : null,
+        lat: lat,   /* coordenadaValida ja garantiu: numero finito e nao-zero, ou null */
         // Endereço textual segue junto: é o que permite ao front geocodificar quem não
         // tem coordenada, em vez de sumir do mapa.
         cep: d.properties.cep || null,
