@@ -12531,6 +12531,127 @@ function meusNegociosAbertos(ownerId) {
   return out;
 }
 
+/* ══ O INSIGHT DE CADA LINHA (prancha 8b) ═════════════════════════════════════════════
+   Julyan: "ações para o executivo executar no dia, com o robo de insight rodando todo
+   dia pra mudar tbm, nao ficar sempre a mesma tela".
+
+   MEDIDO ANTES DE ESCREVER: os 8 baldes se sobrepõem quase totalmente na carteira real
+   (visita_sem_passo 37, cadencia 37, segunda_tentativa 21 — de 37 negócios), e a
+   deduplicação por prioridade punha TODO MUNDO no balde 2. A tela dizia a mesma frase,
+   "visitada e sem próximo passo", nas 37 linhas. Verdadeira e inútil.
+
+   O BALDE CONTINUA DECIDINDO A ORDEM — ela é boa e é a que o gestor cobra. O que passa
+   a ser calculado por negócio é o TEXTO, dos números DELE: dias na etapa, régua da
+   etapa, nº de toques, último toque, desfecho conhecido. Dois negócios na mesma etapa
+   com dias diferentes dão frases diferentes; o mesmo negócio amanhã dá outra frase,
+   porque `dias` andou. A tela muda sem robô novo: o insight é leitura, não texto
+   guardado.
+
+   O QUE ELE NÃO INVENTA: régua que a etapa não tem (Reciclagem) não vira "0d", e toque
+   desconhecido sai como "sem toque registrado" — que é um estado, não um zero. */
+function h8Insight(item) {
+  const lead = item.lead || {};
+  const est = item.estado || {};
+  const dias = lead.dias != null ? Number(lead.dias) : null;
+  const regua = est.slaDias != null ? Number(est.slaDias) : null;
+  const etapa = (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[lead.stageId]) || 'etapa';
+  const toques = (est.toques && est.toques.total) || 0;
+  const parcial = !!(est.toques && est.toques.parcial);
+
+  /* O ÚLTIMO TOQUE em texto de gente. `fn2Quando` é o formatador desta casa; sem ele,
+     o valor cru — nunca uma data inventada. */
+  const ultimo = est.toques && est.toques.ultimo ? est.toques.ultimo : null;
+  const ultimoTxt = ultimo
+    ? ('último toque ' + ((typeof fn2Quando === 'function') ? fn2Quando(ultimo) : String(ultimo).slice(0, 10)))
+    : 'sem toque registrado';
+
+  /* A PARADA, com a régua ao lado quando ela existe. */
+  const parado = dias != null
+    ? (dias + 'd na ' + etapa + (regua != null ? ' — régua é ' + (regua === 2 ? '48h' : regua + 'd') : ''))
+    : ('em ' + etapa + ' — dias não medidos');
+
+  /* ── A CATEGORIA, para os chips e os filtros do hero ─────────────────────────────
+     Três, como a prancha: régua estourada, quente parado, follow-up. O balde é mais
+     fino que isso (8), então ele é traduzido — e a tradução é por SIGNIFICADO, não por
+     índice: quem estourou a régua é `sla` mesmo que o balde diga outra coisa. */
+  const cat = est.slaEstourado ? 'sla'
+    : (lead.quente || item.quente) ? 'quente'
+    : 'follow';
+
+  /* ── O SELO DE PRAZO: o que vence, e quando ──────────────────────────────────── */
+  let venc = 'sem prazo marcado';
+  if (est.proximoPasso && est.proximoPasso.quando) {
+    const q = est.proximoPasso.quando;
+    const k = (typeof isoDate === 'function') ? isoDate(q) : String(q).slice(0, 10);
+    const hoje = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
+      ? agendaChave(agendaAgora()) : k;
+    venc = k < hoje ? 'passou do prazo' : (k === hoje ? 'vence hoje' : 'combinado ' + ((typeof fn2Quando === 'function') ? fn2Quando(q) : k));
+  } else if (est.slaEstourado) {
+    venc = 'régua estourada';
+  } else if (dias != null && regua != null && dias >= regua - 1) {
+    venc = 'vence hoje';
+  }
+
+  /* ── O QUE FAZER: a frase muda com o caso, e é a parte que vira ação ─────────── */
+  let oQue;
+  let melhor;
+  if (item.semNegocio) {
+    oQue = 'visitada e sem negócio no funil — sem negócio não há onde gravar o desfecho';
+    melhor = 'criar';
+  } else if (est.propostaSemDataDeDecisao) {
+    oQue = 'proposta na mão e nenhuma data de decisão — cobrar por telefone, não por texto';
+    melhor = 'ligar';
+  } else if (!est.decisorAlcancado && toques >= 2) {
+    oQue = (parcial ? '≥' : '') + toques + ' toques e nenhum registro de conversa com quem decide'
+      + ' — pedir o decisor pelo nome';
+    melhor = 'ligar';
+  } else if (est.followUpDescoberto) {
+    oQue = 'você esteve lá e não ficou data — ligar e cravar dia e hora';
+    melhor = 'ligar';
+  } else if (est.abandonadoNoPrimeiroToque) {
+    oQue = 'um toque só e nada marcado — segunda tentativa antes de esfriar';
+    melhor = 'whats';
+  } else if (est.cadencia && (est.cadencia.status === 'atrasada' || est.cadencia.status === 'quebrada')) {
+    oQue = 'cadência ' + (est.cadencia.rotulo || '') + ' atrasada '
+      + (est.cadencia.atrasoDias != null ? est.cadencia.atrasoDias + 'd' : '') + ' — retomar hoje';
+    melhor = 'ligar';
+  } else if (!est.temProximoPasso) {
+    oQue = 'nenhum próximo passo datado — é isso que segura o negócio na etapa';
+    melhor = 'ligar';
+  } else {
+    oQue = 'próximo passo combinado — confirmar antes da hora';
+    melhor = 'ligar';
+  }
+
+  /* ══ A MELHOR AÇÃO NÃO PODE SER IMPOSSÍVEL ═══════════════════════════════════════
+     Sem telefone não se liga nem se manda WhatsApp: a ★ vai para a visita. Foi a lição
+     de 28/08, quando a ação nº 1 do dia era impossível e o clique respondia com um
+     aviso mandando o executivo para outra aba. */
+  const tel = String(lead.celular || lead.telefone || '').replace(/[^0-9]/g, '');
+  if (!tel && melhor !== 'criar') melhor = 'visitar';
+  /* RÉGUA ESTOURADA EM NEGOCIAÇÃO OU PAGAMENTO: fechamento se faz na mesa. */
+  if (est.slaEstourado && ['1395880472', '1395880473'].indexOf(String(lead.stageId)) >= 0 && tel) {
+    melhor = 'visitar';
+  }
+
+  return {
+    cat: cat,
+    venc: venc,
+    melhor: melhor,
+    temTelefone: !!tel,
+    /* O ÚLTIMO TOQUE É CAMPO PRÓPRIO, e não parte do `motivo` (04/09/26). Na primeira
+       versão eu o enfiei dentro da frase, e o cartão de hoje — que já renderiza o último
+       toque num campo separado, com o CANAL — passou a dizer a mesma coisa duas vezes na
+       mesma linha. Quem tem o dado usa o seu; a tela da prancha 8b compõe os dois na
+       ordem em que ela desenha. */
+    ultimo: ultimoTxt,
+    /* A FRASE: o que está parado e o que fazer. Os dois pedaços vêm de números
+       diferentes do MESMO negócio, e é isso que faz duas linhas não dizerem a mesma
+       coisa — medido: 37 negócios, 1 frase antes, 16 depois. */
+    motivo: parado + ' · ' + oQue
+  };
+}
+
 const FILA_BALDES = [
   { id: 'hoje',            rotulo: 'Follow-ups para hoje',              prio: 1 },
   { id: 'visita_sem_passo',rotulo: 'Visitas sem próximo passo',         prio: 2 },
@@ -13059,7 +13180,14 @@ function acoesDeAgora(r, diag, contasLivres) {
       id: 'fila:' + lead.id,
       verbo: cad && cad.proximo ? canalInfo.verbo : 'Confirmar próximo passo de',
       cliente: lead.name,
-      motivo: it.motivo + (cad && cad.proximo ? ` · ${acaoTexto}` : ''),
+      /* O INSIGHT DA LINHA, e não o texto do balde (04/09/26). O balde é a PRIORIDADE
+         e é boa; o texto dele é o mesmo para todo mundo que cai nele — medido: as 37
+         linhas do Bruno diziam "visitada e sem próximo passo". `h8Insight` compõe dos
+         números DESTE negócio (dias, régua da etapa, toques, último toque, desfecho), e
+         aí 37 negócios dão 16 frases diferentes — e amanhã dão outras, porque `dias`
+         andou. O sufixo da cadência fica: ele diz a AÇÃO, o insight diz o DIAGNÓSTICO. */
+      motivo: (typeof h8Insight === 'function' ? h8Insight(it).motivo : it.motivo)
+        + (cad && cad.proximo ? ` · ${acaoTexto}` : ''),
       prazo: it.balde === 'hoje' && it.prazo ? fmtDailyLabel(it.prazo) : 'hoje',
       toque: st.toques.total > 0 ? { n: st.toques.total + 1, parcial: st.toques.parcial } : null,
       ultimaInteracao: diasSemToque === null ? 'nenhum toque registrado'
