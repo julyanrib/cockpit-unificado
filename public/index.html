@@ -22707,6 +22707,19 @@ function renderPlanejamento6a(rep) {
             + '" title="Desbloquear ' + hora + '" aria-label="Desbloquear ' + hora + '">✕</button>')
           + '</div>';
       }
+      /* A PROSPECCAO DE RUA (04/09/26). Sem este ramo o slot caia no ultimo caso, o do
+         horario vazio: a 6a mostrava "livre" onde a Daily mostrava a volta de rua, e o
+         "livre" da 6a e um BOTAO — ele agendaria uma visita em cima da propria rua, sem
+         aviso, e o contador da coluna contaria uma vaga que nao existe. */
+      if (pl6SlotRua(v)) {
+        return '<div class="pl6-slot-cheio" style="border-left:3px solid ' + PL6_RUA_COR + ';">'
+          + '<span class="pl6-slot-hora">' + hora + '</span>'
+          + '<span class="pl6-slot-nome" style="color:' + PL6_RUA_COR + ';">prospecção de rua</span>'
+          + (fechada ? '' : '<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
+            + '" title="Tirar a prospecção de rua das ' + hora + '"'
+            + ' aria-label="Tirar a prospecção de rua das ' + hora + '">✕</button>')
+          + '</div>';
+      }
       if (pl6SlotId(v)) {
         const l = porId.get(pl6SlotId(v));
         if (!l) {
@@ -23620,6 +23633,9 @@ function pl6Ligar(box, rep) {
          avisado. O ✕ devolve a conta para a lista — nao desmarca a visita. */
       const msg = pl6SlotBloqueado(era)
         ? dias[di].rot + ' ' + PL6_HORAS[si] + ' desbloqueado · Supabase'
+        : pl6SlotRua(era)
+        /* a hora do SLOT, e nao a da faixa: ele pode ter posto a rua num horario proprio */
+        ? dias[di].rot + ' ' + pl6SlotHora(era, si) + ' — prospecção de rua saiu do plano · Supabase'
         : 'saiu da semana e voltou para a lista · Supabase — se a visita já estava marcada no HubSpot, desmarque na Agenda';
       return mutar({ grade: g }, msg);
     }
