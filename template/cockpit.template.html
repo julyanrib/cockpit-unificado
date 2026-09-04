@@ -10777,9 +10777,21 @@ function aplicarVisaoPorPapel() {
   // pra resolver um problema que é de NAVEGAÇÃO, não de renderização. O executivo vê
   // duas abas separadas; por trás, uma view só que muda de modo.
   const btnAgSemana = document.getElementById('tabBtnAgendaSemana');
-  /* a Agenda (calendário) depende de compromisso do HubSpot: sem owner lá, ela abre
-     vazia e não há o que fazer nela. Fica escondida até o owner existir. */
-  if (btnAgSemana) btnAgSemana.style.display = (souRep && !emOnboarding) ? 'flex' : 'none';
+  /* ══ A AGENDA SAI DO EXECUTIVO (04/09/26, Julyan: "não faz mais sentido visto o
+     planejamento") ═══════════════════════════════════════════════════════════════
+     Medi o que só existia lá antes de tirar. Três coisas, e cada uma tem destino:
+       · a RECICLAGEM (48 negócios dele parados 121-140 dias, que a carteira do
+         Planejamento não trazia) virou fonte da munição no commit anterior, com chip
+         próprio e agendável como qualquer conta. Era o único conteúdo insubstituível;
+       · "Sua semana" (os compromissos MARCADOS no HubSpot) tem substituto ACIONÁVEL na
+         Minha Daily, por visita: "⚠ sem tarefa no CRM — planejada, não confirmada";
+       · "Prioridade do funil" e "Sugestões do território" eram repetição da munição,
+         que já ordena por pl6Prioridade e corta pela faixa de território.
+     A VIEW CONTINUA VIVA e o gestor continua com a Agenda dele: quebrar renderAgenda
+     em duas seria refatoração grande para resolver um problema de navegação. E os oito
+     activateTab('viewAgenda') espalhados seguem válidos — levam ao subview 'hoje', que
+     é o Planejamento. */
+  if (btnAgSemana) btnAgSemana.style.display = 'none';
   const lblResumo = document.querySelector('#tabBtnResumo .tab-btn-label');
   if (lblResumo) lblResumo.textContent = 'Semana';
   // Julyan (08/08): "Semana" sai do menu do executivo — a análise semanal dele agora é
@@ -22378,6 +22390,47 @@ function pl6Carteira(rep, regioes) {
   });
 }
 
+/* ══ A RECICLAGEM (04/09/26) ══════════════════════════════════════════════════════════
+   48 negocios dele parados 121 a 140 dias, que viviam SO na aba Agenda. A carteira
+   (meusNegociosAbertos) nao os traz — conferido: zero deles em abertos.
+
+   REGIAO POR NOME DE BAIRRO, e nao por distancia: eles nao tem coordenada (0 de 48
+   medidos), e a chave de regiao E o bairro normalizado. Assim o filtro de territorio
+   funciona para eles como para qualquer outra conta. `km` fica null, e a tela ja sabe
+   dizer "sem endereco" em vez de inventar "0 km".
+
+   `sla: true` porque 60+ dias parado E a definicao de estouro para uma conta em
+   reciclagem — e e isso que a poe na frente da fila, que e o pedido do Julyan
+   ("PRINCIPALMENTE com os slas estourados"). */
+function pl6Reciclagem(rep, regioes) {
+  const bruto = Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [];
+  const porChave = new Map((regioes || []).map(r => [r.chave, r]));
+  return bruto
+    .filter(l => String(l.ownerId) === String(rep.ownerId))
+    .map(function (l) {
+      const ch = l.bairro ? pl6ChaveBairro(l.bairro) : null;
+      const reg = ch && porChave.has(ch) ? porChave.get(ch) : null;
+      return {
+        id: 'r-' + l.id,
+        tipo: 'c',
+        dealId: String(l.id),
+        nome: l.name || l.dealname || 'Sem nome',
+        stageId: '',
+        etapa: 'Reciclagem',
+        dias: l.dias != null ? Number(l.dias) : null,
+        sla: true,
+        lat: null,
+        lng: null,
+        regiao: reg ? reg.chave : null,
+        regiaoNome: reg ? reg.nome : (l.bairro || null),
+        km: null,
+        semEndereco: true,
+        proximaAtividade: null,
+        reciclagem: true
+      };
+    });
+}
+
 /* ══ O LOTE NOVO ════════════════════════════════════════════════════════════════════
    A prancha pede tres fontes (casa / trip / ifood). Medido na base em 03/09: Casa dos
    Dados 1032, outscraper 235, Google Places 68 — TripAdvisor e iFood com ZERO linha. O
@@ -22659,7 +22712,11 @@ function renderPlanejamento6a(rep) {
   const porChave = new Map(regioes.map(r => [r.chave, r]));
   const carteira = pl6Carteira(rep, regioes);
   const novos = pl6Novos(rep, regioes);
-  const todos = carteira.concat(novos);
+  /* A RECICLAGEM (04/09/26): 48 negocios parados 121-140 dias que viviam so na aba
+     Agenda. Entram como carteira (tipo 'c') porque sao negocios do HubSpot — e por
+     isso o contador de SLA os inclui, o que esta certo: 140 dias parado e divida. */
+  const reciclagem = (typeof pl6Reciclagem === 'function') ? pl6Reciclagem(rep, regioes) : [];
+  const todos = carteira.concat(novos).concat(reciclagem);
   const porId = new Map(todos.map(l => [l.id, l]));
   const grade = pl6GradeDoPlano();
   const rotas = pl6RegioesDoPlano();
@@ -22897,10 +22954,16 @@ function renderPlanejamento6a(rep) {
      carteira SEM data na semana (cartLivre): negocio com SLA estourado que ele JA
      agendou nao e pendencia, e trabalho em andamento — e numero que nao cai quando ele
      trabalha vira ruido em duas semanas. */
-  const slaNaCarteira = cartLivre.filter(l => l.sla).length;
+  const slaNaCarteira = cartLivre.filter(l => l.sla && !l.reciclagem).length;
+  /* a reciclagem tem chip proprio, entao tem numero proprio: somar as duas numa frase
+     que diz "sua carteira" faria ele ler 57 e achar 9 ao clicar na carteira. */
+  const slaEmReciclagem = cartLivre.filter(l => l.reciclagem).length;
   const fonteSel = pl6UI.fonte || 'todas';
   const porFonte = fonteSel === 'todas' ? livres.slice()
-    : fonteSel === 'carteira' ? cartLivre.slice()
+    /* "minha carteira" e a carteira ATIVA; a reciclagem tem chip proprio. Somar as
+       duas no mesmo filtro faria o numero do chip nao corresponder a lista. */
+    : fonteSel === 'carteira' ? cartLivre.filter(l => !l.reciclagem)
+    : fonteSel === 'reciclagem' ? cartLivre.filter(l => l.reciclagem)
     : novoLivre.filter(l => l.grupo === fonteSel);
   /* o territorio da faixa de baixo corta por bairro. Conta SEM coordenada nao tem
      regiao nenhuma e sai do filtro — a tela avisa, porque sumir calado faz o executivo
@@ -23019,9 +23082,14 @@ function renderPlanejamento6a(rep) {
      contagem; as outras nao aparecem. iFood e TripAdvisor estao declarados e a base tem
      zero linha dos dois (medido em 03/09) — o chip nasce sozinho quando entrarem.
      Chip com 0 seria clique morto: abre uma lista vazia e nao explica nada. */
+  /* UM CHIP PROPRIO PARA A RECICLAGEM. Misturada na carteira ela some no meio de 38
+     negocios; separada, ele consegue olhar so para o estoque parado — que e o unico
+     jeito de trabalhar 48 contas sem esquecer nenhuma. */
+  const recLivre = livres.filter(l => l.reciclagem);
   const fontesBtns = [
     ['todas', 'todas · ' + livres.length],
-    ['carteira', 'minha carteira · ' + cartLivre.length]
+    ['carteira', 'minha carteira · ' + cartLivre.filter(l => !l.reciclagem).length],
+    ['reciclagem', recLivre.length ? 'reciclagem · ' + recLivre.length : '']
   ].concat(Object.keys(PL6_FONTES).map(function (k) {
     const n = novoLivre.filter(l => l.grupo === k).length;
     return n ? [k, PL6_FONTES[k].chip + ' · ' + n] : null;
@@ -23153,17 +23221,21 @@ function renderPlanejamento6a(rep) {
              SLA na frente e a nota da fonte dizia isso em texto — mas para saber QUANTOS
              ele tinha de contar cartao por cartao. E "0 acima do SLA" nao aparece: nao
              ha por que ocupar a linha com a ausencia de divida. */
-    +     (slaNaCarteira
-            ? '<div class="pl6-sla-faixa">⚠ <b>' + slaNaCarteira + '</b> da sua carteira'
-              + ' com SLA estourado — estes vêm primeiro na lista'
-              + (fonteSel === 'carteira' ? '' : ' <i>(veja em “carteira”)</i>') + '</div>'
+    +     ((slaNaCarteira || slaEmReciclagem)
+            ? '<div class="pl6-sla-faixa">⚠ '
+              + (slaNaCarteira ? '<b>' + slaNaCarteira + '</b> da carteira ativa acima do SLA' : '')
+              + (slaNaCarteira && slaEmReciclagem ? ' · ' : '')
+              + (slaEmReciclagem ? '<b>' + slaEmReciclagem + '</b> em reciclagem (60d+ parados)' : '')
+              + ' — estes vêm primeiro na lista</div>'
             : '')
     +     '<div class="pl6-abast-acoes">'
     +       '<button type="button" class="pl6-novo-cta" data-pl6-novo-lead="1">'
     +         '+ lead novo — Instagram, Google Maps, rua…</button>'
     +     '</div>'
     +     '<div class="pl6-fontes">' + fontesBtns + '</div>'
-    +     '<div class="pl6-nota-fonte">' + (fonteSel === 'carteira'
+    +     '<div class="pl6-nota-fonte">' + (fonteSel === 'reciclagem'
+            ? 'Negócios parados há 60 dias ou mais — o estoque que ninguém tocou. Eles não têm endereço no CRM: preencha no cartão para entrarem na rota do dia.'
+            : fonteSel === 'carteira'
             ? 'Sua carteira do HubSpot, ordenada por quem mais precisa de você: SLA estourado primeiro, depois dias parado.'
             : 'Sinais, não cadastro — confirme a placa na rua. O nome é a razão social; a placa pode ser outra.')
           + (fontesVazias.length
@@ -23239,7 +23311,12 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
     return;
   }
     const regioes = pl6Regioes(rep);
-    const todos = pl6Carteira(rep, regioes).concat(pl6Novos(rep, regioes));
+    /* A RECICLAGEM TAMBEM. Sem ela aqui, clicar em agendar numa conta de reciclagem
+       diria "essa conta nao esta mais na sua base" para uma conta que esta na tela —
+       clique com caminho para o erro. */
+    const todos = pl6Carteira(rep, regioes)
+      .concat(pl6Novos(rep, regioes))
+      .concat(typeof pl6Reciclagem === 'function' ? pl6Reciclagem(rep, regioes) : []);
     const l = todos.find(x => x.id === id);
     if (!l) {
       if (typeof mostrarToast === 'function') {
