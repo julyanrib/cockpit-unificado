@@ -255,23 +255,16 @@ const bootstrap = `
     } catch (e) { console.warn('[preview] nao consegui pre-popular playbook/precificacao:', e); }
     if (!${manual ? 'true' : 'false'}) mostrarApp();
     else { window.__PREVIEW_MANUAL__ = true; console.log('[preview] modo manual: sessão e supa prontos, mostrarApp() NÃO chamado'); }
-    /* A IDADE DO DADO É DO DISCO, E O PREVIEW TEM DE DIZER ISSO (04/09/26).
-       A faixa vermelha do template diz "a atualização das 5h falhou" — texto que só faz
-       sentido em produção, onde o dado vem do Supabase. No preview, o que está velho é
-       data/hubspot.json na máquina de quem desenvolve, e essa frase fez o Julyan achar
-       que o robô do CRM estava quebrado num dia em que ele rodou nove vezes com sucesso.
-       Aqui a faixa é reescrita para dizer de quem é a velhice e como resolver. */
+    /* A IDADE DO DADO DO DISCO, no rodapé do preview e no terminal — e em nenhum
+       banner. O template não tem mais a faixa vermelha (saiu em 04/09/26 por pedido
+       do Julyan), e o preview não vai inventar uma: o que ele precisa dizer é que os
+       números da tela vêm de data/hubspot.json desta máquina, que fica velho porque
+       o arquivo saiu do git na migração para o Supabase. */
     var idadeH = null;
     try {
       var tsP = DATA.hubspotUpdatedAtISO ? new Date(DATA.hubspotUpdatedAtISO) : null;
       if (tsP && !isNaN(tsP.getTime())) idadeH = (Date.now() - tsP.getTime()) / 3600000;
     } catch (e) {}
-    var faixa = document.getElementById('avisoSyncVelho');
-    if (faixa) {
-      faixa.textContent = '⚠ PREVIEW LOCAL: este data/hubspot.json tem '
-        + Math.floor(idadeH) + 'h — é o disco desta máquina, NÃO a produção.'
-        + ' A produção lê o Supabase (cockpit_snapshot). Rode o fetch local para atualizar.';
-    }
     var aviso = document.createElement('div');
     aviso.textContent = 'PREVIEW LOCAL · ' + sessao.nome + ' (' + sessao.role + ') · dados reais, sem gravação'
       + (idadeH != null ? ' · dado do disco: ' + (idadeH < 1 ? 'menos de 1h' : Math.floor(idadeH) + 'h') : '');
