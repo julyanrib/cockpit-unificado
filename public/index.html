@@ -1602,7 +1602,22 @@
   .pl6-sec-dica{margin-left:auto;font:700 10px var(--font-body);color:var(--muted2);}
 
   /* ── a grade 5 x 7 ───────────────────────────────────────────────────────────── */
-  .pl6-grade{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;}
+  /* ══ O SCROLL FICA NA GRADE (04/09/26, pedido do Julyan) ════════════════════════
+     O slot agendado virou tres linhas (prancha 6c: o nome inteiro em linha propria), e
+     tres linhas pedem coluna mais larga. Cinco colunas largas nao cabem em 1440px —
+     alargar sem dar scroll a grade empurraria a PAGINA de lado, e a barra horizontal do
+     documento arrasta cabecalho, KPIs e rodape junto. Aqui a grade rola sozinha e o
+     resto da tela fica parado.
+     200px por coluna e o que o slot de tres linhas pede para o nome nao quebrar em toda
+     palavra; abaixo disso volta a ilegibilidade que a prancha manda tirar. */
+  .pl6-grade{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:9px;
+    overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px;
+    scrollbar-width:thin;}
+  /* a barra fina, na cor da casa — a do sistema aparece preta sobre o creme */
+  .pl6-grade::-webkit-scrollbar{height:8px;}
+  .pl6-grade::-webkit-scrollbar-track{background:var(--sunk);border-radius:999px;}
+  .pl6-grade::-webkit-scrollbar-thumb{background:var(--line-btn);border-radius:999px;}
+  .pl6-grade::-webkit-scrollbar-thumb:hover{background:var(--muted2);}
   .pl6-col{min-width:0;border:1px solid var(--line-soft);border-radius:var(--r-md);background:var(--panel);
     border-top:3px solid var(--line-btn);padding:8px 8px 9px;}
   /* ── A COLUNA DE HOJE (04/09/26) ─────────────────────────────────────────────────
@@ -1644,9 +1659,22 @@
 
   /* os slots */
   .pl6-slots{display:flex;flex-direction:column;gap:5px;}
-  .pl6-slot-cheio{display:flex;align-items:center;gap:6px;min-height:38px;padding:5px 7px;background:var(--panel);
-    border:1px solid var(--line-soft);border-left:3px solid var(--line-btn);border-radius:var(--r-sm);}
-  .pl6-slot-hora{font:900 10px var(--font-display);font-variant-numeric:tabular-nums;color:var(--muted);flex:none;}
+  /* ══ O SLOT AGENDADO EM TRES LINHAS (prancha 6c) ════════════════════════════════
+     Era uma linha so, com hora + nome + tag + ✕ disputando 157px — e o nome, que era o
+     unico com ellipsis, virava duas letras. Agora: hora e etapa em cima, o NOME na
+     linha dele com overflow-wrap, e onde/km + "ficha ▸" embaixo.
+     A borda esquerda vai a 5px, que e a da prancha: numa coluna estreita ela e o que
+     diz a etapa antes de qualquer leitura. */
+  .pl6-slot-cheio{display:block;padding:7px 9px;background:var(--panel);cursor:pointer;
+    border:1px solid var(--line-soft);border-left:5px solid var(--line-btn);
+    border-radius:var(--r-sm);text-align:left;width:100%;box-sizing:border-box;}
+  .pl6-slot-cheio:hover{border-color:var(--line-btn);}
+  .pl6-slot-l1{display:flex;align-items:center;gap:6px;min-width:0;}
+  .pl6-slot-hora{font:900 11px var(--font-display);font-variant-numeric:tabular-nums;color:var(--ink);flex:none;}
+  .pl6-slot-quem{display:block;margin-top:2px;font:800 12.5px/1.3 var(--font-body);
+    color:var(--ink);overflow-wrap:anywhere;}
+  .pl6-slot-onde{display:block;margin-top:1px;font:700 9.5px/1.3 var(--font-body);color:var(--muted2);}
+  /* o nome de UMA LINHA continua existindo para bloqueado / rua / conta que saiu */
   .pl6-slot-nome{font:800 10.5px var(--font-body);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
   .pl6-slot-tag{font:800 8.5px var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
@@ -1654,6 +1682,11 @@
     cursor:pointer;font-size:13px;border-radius:var(--r-sm);}
   .pl6-slot-x:hover{background:var(--sunk);color:var(--ink);}
   .pl6-slot-bloq{background:var(--sunk);border-left-color:var(--pl6-bloqueio);}
+  /* BLOQUEADO, RUA E CONTA QUE SAIU nao tem nome de lead para ler: uma linha basta, e
+     por isso eles voltam ao flex. O :has nao serve aqui (suporte), entao a classe e
+     explicita no markup — ver pl6-slot-1l. */
+  .pl6-slot-cheio.pl6-slot-1l{display:flex;align-items:center;gap:6px;min-height:38px;
+    padding:5px 7px;cursor:default;}
   .pl6-slot-bloq .pl6-slot-nome{color:var(--muted);}
   .pl6-slot-livre{width:100%;min-height:38px;display:flex;flex-direction:column;justify-content:center;gap:1px;
     padding:4px 8px;border:1px dashed var(--line-btn);border-radius:var(--r-sm);background:none;cursor:pointer;
@@ -1929,10 +1962,12 @@
     .pl6-corpo{grid-template-columns:minmax(0,1fr);}
     .pl6-semana{border-right:0;border-bottom:1px solid var(--line);}
     .pl6-cabeca{grid-template-columns:minmax(0,1fr);}
-    .pl6-grade{grid-template-columns:repeat(2,minmax(0,1fr));}
+    /* COM DUAS COLUNAS NAO HA O QUE ROLAR de lado: o minimo por coluna sai, senao ele
+       criaria scroll onde ele nao serve. */
+    .pl6-grade{grid-template-columns:repeat(2,minmax(0,1fr));overflow-x:visible;}
   }
   @media (max-width:760px){
-    .pl6-grade{grid-template-columns:minmax(0,1fr);}
+    .pl6-grade{grid-template-columns:minmax(0,1fr);overflow-x:visible;}
     .pl6-kpis{grid-template-columns:repeat(2,minmax(0,1fr));}
     .pl6-manchete{font-size:21px;}
     /* dedo na rua: 44px em tudo que se toca */
@@ -16454,7 +16489,7 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
           + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
           + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
       } else if (passoOk) {
-        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''} · próximo passo em ${fmtDailyLabel(passoData)}. O Cockpit reconcilia na próxima rodada (${SYNC_CADENCIA}).`, 'sucesso');
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''} · próximo passo em ${fmtDailyLabel(passoData)}.`, 'sucesso');
       } else {
         mostrarToast(`"${lead.name}" mudou de etapa, mas o próximo passo NÃO foi criado (${erroPasso}). O negócio está na etapa nova e descoberto — crie a tarefa na ficha antes de sair da tela.`, 'erro');
       }
@@ -23800,7 +23835,7 @@ function renderPlanejamento6a(rep) {
          10:30. A faixa continua sendo o rotulo do slot vazio. */
       const hora = pl6SlotHora(v, si);
       if (pl6SlotBloqueado(v)) {
-        return '<div class="pl6-slot-cheio pl6-slot-bloq">'
+        return '<div class="pl6-slot-cheio pl6-slot-1l pl6-slot-bloq">'
           + '<span class="pl6-slot-hora">' + hora + '</span>'
           + '<span class="pl6-slot-nome">bloqueado</span>'
           + ('<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
@@ -23812,7 +23847,7 @@ function renderPlanejamento6a(rep) {
          "livre" da 6a e um BOTAO — ele agendaria uma visita em cima da propria rua, sem
          aviso, e o contador da coluna contaria uma vaga que nao existe. */
       if (pl6SlotRua(v)) {
-        return '<div class="pl6-slot-cheio" style="border-left:3px solid ' + PL6_RUA_COR + ';">'
+        return '<div class="pl6-slot-cheio pl6-slot-1l" style="border-left:5px solid ' + PL6_RUA_COR + ';">'
           + '<span class="pl6-slot-hora">' + hora + '</span>'
           + '<span class="pl6-slot-nome" style="color:' + PL6_RUA_COR + ';">prospecção de rua</span>'
           + ('<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
@@ -23826,7 +23861,7 @@ function renderPlanejamento6a(rep) {
           /* O LEAD SAIU DA BASE ENTRE O AGENDAMENTO E AGORA (virou cliente, mudou de dono,
              foi perdido). A tela nao pode ficar com um slot mudo: diz o que houve e oferece
              a unica acao que resolve, que e liberar o horario. */
-          return '<div class="pl6-slot-cheio pl6-slot-bloq">'
+          return '<div class="pl6-slot-cheio pl6-slot-1l pl6-slot-bloq">'
             + '<span class="pl6-slot-hora">' + hora + '</span>'
             + '<span class="pl6-slot-nome">conta saiu da sua base</span>'
             + ('<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
@@ -23837,12 +23872,31 @@ function renderPlanejamento6a(rep) {
           ? (PL6_COR_ETAPA[l.stageId] || 'var(--muted2)')
           : PL6_FONTES[l.grupo].cor;
         const tag = l.tipo === 'c' ? l.etapa : ('novo · ' + (l.grupo === 'casa' ? 'casa dados' : 'mais avaliado'));
-        return '<div class="pl6-slot-cheio" style="border-left-color:' + cor + ';">'
-          + '<span class="pl6-slot-hora">' + hora + '</span>'
-          + '<span class="pl6-slot-nome">' + esc(l.nome) + '</span>'
-          + '<span class="pl6-slot-tag">' + esc(tag) + '</span>'
-          + ('<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
-            + '" title="Tirar ' + esc(l.nome) + ' deste horário" aria-label="Tirar deste horário">✕</button>')
+        /* ══ TRES LINHAS, E O NOME NA DELE (prancha 6c) ════════════════════════════
+           A prancha: "nunca truncar o nome pra 2 letras". A causa nao era o CSS do
+           nome, era a GEOMETRIA: hora, nome, tag e ✕ disputavam uma linha de 157px
+           (cinco colunas em 1440px, medido). Com o nome em linha propria e
+           overflow-wrap:anywhere, "RITROVO Eventos C7" cabe — quebrando, se precisar.
+           Linha 1: hora + etapa colorida + ✕   ·   Linha 2: o nome   ·   Linha 3: onde + ficha */
+        const ondeKm = [l.regiaoNome || null,
+          (l.km != null && isFinite(l.km)) ? (l.km < 10
+            ? l.km.toFixed(1).replace('.', ',') + ' km' : Math.round(l.km) + ' km') : null]
+          .filter(Boolean).join(' · ');
+        return '<div class="pl6-slot-cheio" style="border-left-color:' + cor + ';"'
+          + ' data-pl6-slot-ficha="' + esc(l.id) + '" role="button" tabindex="0"'
+          + ' title="Abrir a ficha de ' + esc(l.nome) + '">'
+          + '<span class="pl6-slot-l1">'
+          +   '<span class="pl6-slot-hora">' + hora + '</span>'
+          +   '<span class="pl6-slot-tag" style="color:' + cor + ';">' + esc(tag) + '</span>'
+          /* O ✕ PARA A PROPAGACAO na fiacao: tirar da agenda nao abre a ficha. */
+          +   '<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
+          +     '" title="Tirar ' + esc(l.nome) + ' deste horário" aria-label="Tirar deste horário">✕</button>'
+          + '</span>'
+          + '<b class="pl6-slot-quem">' + esc(l.nome) + '</b>'
+          /* ONDE + KM SO SE EXISTIREM: "sem endereço no CRM" e um estado, e dizer
+             "0 km" para quem nao tem coordenada seria inventar distancia. */
+          + '<span class="pl6-slot-onde">' + (ondeKm ? esc(ondeKm) + ' · ' : '')
+          +   (l.semEndereco ? 'sem endereço no CRM · ' : '') + 'ficha ▸</span>'
           + '</div>';
       }
       /* livre */
@@ -24724,6 +24778,47 @@ function pl6Ligar(box, rep) {
   });
 
   box.addEventListener('click', async ev => {
+    /* ══ O CLIQUE NO SLOT DA GRADE ABRE A FICHA (prancha 6c) ═════════════════════════
+       "Clicar no slot abre a ficha do lead (o ✕ tira da agenda sem abrir a ficha)."
+       Vem ANTES do ramo do card por ser mais especifico, e o teste de `button` e o que
+       deixa o ✕ passar: ele tem o proprio alvo alguns ramos abaixo. */
+    const slotFicha = ev.target.closest('[data-pl6-slot-ficha]');
+    if (slotFicha && !ev.target.closest('button,input,select,textarea,a,label')) {
+      const id = slotFicha.getAttribute('data-pl6-slot-ficha');
+      const regioes = pl6Regioes(rep);
+      const l = pl6TodasAsContas(rep, regioes).find(x => x.id === id);
+      if (!l) {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Essa conta saiu da sua base — recarreguei a semana.', 'atencao');
+        }
+        return redesenhar();
+      }
+      /* CARTEIRA E RECICLAGEM: a ficha do funil quer o registro COMPLETO, nao o resumo
+         do pl6 — ela le propriedades e touchpoints que so o registro tem. */
+      if (l.tipo === 'c') {
+        const bruto = Object.entries(DATA.funilLeads || {})
+          .flatMap(([sid, ls]) => (ls || []).map(x => Object.assign({}, x, { stageId: sid })))
+          .find(x => String(x.id) === String(l.dealId))
+          || (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [])
+            .find(x => String(x.id) === String(l.dealId));
+        if (bruto && typeof abrirFichaLeadFunilDrawer === 'function') {
+          return abrirFichaLeadFunilDrawer(bruto);
+        }
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Não achei o negócio de ' + l.nome + ' na carga desta sessão.'
+            + ' A próxima carga do robô resolve.', 'atencao');
+        }
+        return;
+      }
+      if (l._bruto && typeof abrirFichaProspeccaoDrawer === 'function') {
+        return abrirFichaProspeccaoDrawer(l._bruto);
+      }
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não consegui abrir a ficha desta conta-alvo nesta sessão.', 'erro');
+      }
+      return;
+    }
+
     /* ══ O CLIQUE NO CORPO DO CARD ABRE A FICHA ═══════════════════════════════════════
        Vem ANTES do resto de propósito: se um filho interativo foi clicado, o closest
        abaixo acha o gesto dele e este ramo nem roda. E ele nao dispara depois de um
@@ -25051,6 +25146,7 @@ function pl6Ligar(box, rep) {
         return i ? String(i.value || '').trim() : '';
       };
       const logradouro = valor('logradouro'), bairro = valor('bairro'), cep = valor('cep');
+      let propriedadesGravadas = {};
       if (!logradouro && !bairro) {
         if (typeof mostrarToast === 'function') {
           mostrarToast('Preencha ao menos a rua ou o bairro — sem isso o negócio não entra em região.', 'atencao');
@@ -25077,6 +25173,10 @@ function pl6Ligar(box, rep) {
         if (logradouro) propriedades.logradouro = logradouro;
         if (bairro) propriedades.bairro = bairro;
         if (cep) propriedades.cep = cep;
+        /* GUARDA FORA DO try: o espelho local acontece DEPOIS dele, e `propriedades` e
+           declarada aqui dentro. Sem esta linha o espelho leria uma variavel morta —
+           foi assim que eu derrubei uma aba tres vezes nesta semana. */
+        propriedadesGravadas = propriedades;
         const resp = await fetch('/api/negocio-acao', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
@@ -25094,13 +25194,23 @@ function pl6Ligar(box, rep) {
         return;
       }
       pl6UI.endereco = null;
-      if (typeof mostrarToast === 'function') {
-        mostrarToast('Endereço gravado no negócio (HubSpot) ✓. A conta entra em região na próxima carga do robô.', 'sucesso');
+      /* ══ A CONTA ENTRA EM REGIAO AGORA (04/09/26) ══════════════════════════════════
+         O comentario anterior dizia que a regiao so aparecia na proxima carga, porque a
+         coordenada vem da geocodificacao do robo. Isso ENVELHECEU no #307: a chave de
+         lugar virou uma cascata — bairro primeiro, prefixo de CEP depois, cidade por
+         ultimo. O bairro que ele acabou de digitar ja poe a conta em regiao, sem
+         geocodificacao nenhuma.
+         O que ainda depende do robo e so o KM: distancia precisa de coordenada. */
+      if (typeof aplicarPropsNoDataLocal === 'function') {
+        aplicarPropsNoDataLocal(String(l.dealId), propriedadesGravadas);
       }
-      /* A REGIAO SO APARECE NA PROXIMA CARGA, e a tela diz isso em vez de fingir. DATA e um
-         SNAPSHOT: o endereco esta no CRM agora, mas a coordenada dele vem da geocodificacao
-         que o robo faz na carga. Prometer "ja entrou na regiao" seria a tela afirmando o que
-         ela nao pode ver. */
+      if (typeof mostrarToast === 'function') {
+        const entrouEmRegiao = !!(propriedadesGravadas.bairro || propriedadesGravadas.cep);
+        mostrarToast('Endereço gravado no negócio (HubSpot) ✓'
+          + (entrouEmRegiao
+            ? ' — a conta já entra em região agora. A distância em km aparece na próxima carga do robô.'
+            : ' — sem bairro nem CEP ela ainda não entra em região.'), 'sucesso');
+      }
       return redesenhar();
     }
   });
@@ -31169,16 +31279,20 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
         btnCriar.textContent = 'Criar em Prospecção';
         return;
       }
-      // Entra no DATA local pra aparecer no kanban imediatamente, sem esperar o cron.
-      if (!Array.isArray(DATA.funilLeads[ETAPA_PROSPECCAO])) DATA.funilLeads[ETAPA_PROSPECCAO] = [];
-      DATA.funilLeads[ETAPA_PROSPECCAO].push({
-        id: data.id, name: nome, ownerId: r.ownerId, stageId: ETAPA_PROSPECCAO,
-        stage: STAGE_LABELS[ETAPA_PROSPECCAO], dias: 0, proximaAtividade: null, ...coleta.propriedades
+      /* ══ UMA IMPLEMENTACAO SO (04/09/26) ═══════════════════════════════════════════
+         Aqui havia um push cru — a SEGUNDA forma de "negocio novo entra nas listas". A
+         outra (abrirPassagemContaAlvoProFunil) simplesmente nao inseria, e o negocio
+         esperava a carga do robo. Duas implementacoes da mesma ideia, uma esquecida: e a
+         forma exata que produziu os defeitos de hoje. Agora as duas chamam a mesma
+         funcao, que tambem cuida dos contadores do rep. */
+      inserirNegocioNoDataLocal({
+        id: data.id, nome: nome, ownerId: r.ownerId, stageId: ETAPA_PROSPECCAO,
+        props: coleta.propriedades || {}
       });
-      if (r.stages) r.stages[ETAPA_PROSPECCAO] = (r.stages[ETAPA_PROSPECCAO] || 0) + 1;
-      r.open = (r.open || 0) + 1;
       stageOverlay.classList.remove('show');
-      mostrarToast(`"${nome}" criado em Prospecção no HubSpot. Já aparece no seu kanban; o Cockpit reconcilia na próxima rodada automática.`, 'sucesso');
+      /* A FRASE PARA DE MANDAR ESPERAR: a reconciliacao continua acontecendo, mas ele
+         nao precisa dela para ver o negocio. */
+      mostrarToast(`"${nome}" criado em Prospecção no HubSpot — já está no seu kanban e na munição do Planejamento ✓`, 'sucesso');
       if (typeof aoConcluir === 'function') aoConcluir();
     } catch (e) {
       status.style.color = 'var(--red)';
@@ -31268,6 +31382,27 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
       // coluna hubspot_deal_id ainda não existir no Supabase, o update falha em
       // silêncio no console e o botão só reaparece — nada quebra na tela.
       await atualizarLeadProspeccao(lead.id, { hubspot_deal_id: String(data.id) });
+      /* ══ O NEGOCIO ENTRA NAS LISTAS AGORA (04/09/26) ═══════════════════════════════
+         Sem isto ele so aparecia na proxima carga do robo (ate 2h) — no Meu funil, no
+         Planejamento e na Daily. O dado ja esta todo aqui: a conta-alvo veio do
+         Supabase e as propriedades acabaram de ser coletadas no formulario. */
+      const entrou = (typeof inserirNegocioNoDataLocal === 'function')
+        ? inserirNegocioNoDataLocal({
+            id: data.id, nome: lead.nome, ownerId: ownerId, stageId: ETAPA_PROSPECCAO,
+            props: Object.assign({
+              celular: lead.telefone || null,
+              bairro: lead.bairro || null,
+              cidade: lead.cidade || null,
+              logradouro: lead.endereco || null,
+              /* A COORDENADA SO SE FOR VALIDA: coordenada vazia virando 0,0 poe o
+                 negocio no meio do Atlantico e a rota do dia sai errada. */
+              lat: (lead.lat != null && isFinite(Number(lead.lat)) && Number(lead.lat) !== 0)
+                ? Number(lead.lat) : null,
+              lng: (lead.lng != null && isFinite(Number(lead.lng)) && Number(lead.lng) !== 0)
+                ? Number(lead.lng) : null
+            }, coleta.propriedades || {})
+          })
+        : false;
       stageOverlay.classList.remove('show');
       // A criação do Deal em si deu certo mesmo se a associação à Company falhar —
       // mas a falha não pode ficar só no console (regra do prompt: nada some em
@@ -31277,7 +31412,12 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
         console.warn('[criar-negocio] associação à Company falhou:', data.associacaoFalhou);
         mostrarToast(`"${lead.nome}" entrou no funil, mas não consegui vincular à empresa no HubSpot (${data.associacaoFalhou}). Confira manualmente.`, 'erro');
       } else {
-        mostrarToast(`"${lead.nome}" entrou no funil em Prospecção. O Cockpit reconcilia na próxima rodada automática.`, 'sucesso');
+        /* A FRASE MUDOU (04/09/26): ela mandava esperar ("reconcilia na proxima rodada"),
+           e era isso que fazia o executivo recarregar a aba. A reconciliacao continua
+           acontecendo; ele e que nao precisa esperar por ela. */
+        mostrarToast(`"${lead.nome}" entrou no funil em Prospecção`
+          + (entrou ? ' — já está no seu Meu funil e na munição do Planejamento ✓' : '')
+          + '.', 'sucesso');
       }
       if (typeof aoConcluir === 'function') aoConcluir();
     } catch (e) {
@@ -31628,7 +31768,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
           + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
           + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
       } else if (passoOk) {
-        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''} · próximo passo em ${fmtDailyLabel(passoData)}. O Cockpit reconcilia na próxima rodada automática (${SYNC_CADENCIA}).`, 'sucesso');
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''} · próximo passo em ${fmtDailyLabel(passoData)}.`, 'sucesso');
       } else {
         mostrarToast(`"${lead.name}" mudou de etapa, mas o próximo passo NÃO foi criado (${erroPasso}). O negócio está na etapa nova e descoberto — crie a tarefa na ficha antes de sair da tela.`, 'erro');
       }
@@ -31754,6 +31894,60 @@ function aplicarPropsNoDataLocal(leadId, props) {
   Object.values(DATA.funilLeads || {}).forEach(lista => (lista || []).forEach(aplicar));
   (DATA.reps || []).forEach(r => ['travados', 'criticos', 'quentes'].forEach(k => (r[k] || []).forEach(aplicar)));
   if (DATA.temperatura) { (DATA.temperatura.quentes || []).forEach(aplicar); (DATA.temperatura.frios || []).forEach(aplicar); }
+}
+
+/* ══ UM NEGOCIO NOVO ENTRA NAS LISTAS NA HORA (04/09/26) ═══════════════════════════
+   Julyan: "quando ele cria o negocio na casa dos dados pro hubspot, tem que ir pro funil
+   do executivo na hora, nao so quando o hub atualizar."
+
+   IRMA de aplicarPropsNoDataLocal, e nao a mesma funcao: aquela ATUALIZA um negocio que
+   ja existe nas listas; esta INSERE um que nao existe em nenhuma. Ficam vizinhas de
+   proposito — a licao de 02/09 foi que "o negocio entra na tela" espalhado em varios
+   lugares faz um deles esquecer.
+
+   O DADO JA ESTA TODO NA MAO quando isto e chamado: a conta-alvo vem do Supabase com
+   nome, telefone, endereco e coordenada; as propriedades da etapa acabaram de ser
+   coletadas; e a rota devolveu o dealId. Nao ha o que esperar do robo.
+
+   `dias: 0` e `slaBreach: false` porque o negocio nasceu agora — nenhuma regua estourou
+   num negocio de um segundo, e inventar dias aqui poria um cartao vinho na tela dele.
+
+   IDEMPOTENTE: se o id ja estiver em alguma lista (dois cliques, ou o robo passou no
+   meio), nao duplica — so espelha as propriedades novas. */
+function inserirNegocioNoDataLocal(deal) {
+  if (!deal || !deal.id) return false;
+  const alvo = String(deal.id);
+  const etapa = String(deal.stageId || ETAPA_PROSPECCAO);
+  const jaExiste = Object.values(DATA.funilLeads || {})
+    .some(lista => (lista || []).some(l => l && String(l.id) === alvo));
+  if (jaExiste) {
+    if (typeof aplicarPropsNoDataLocal === 'function') aplicarPropsNoDataLocal(alvo, deal.props || {});
+    return false;
+  }
+  const linha = Object.assign({
+    id: alvo,
+    name: deal.nome || 'Sem nome',
+    dealname: deal.nome || 'Sem nome',
+    stageId: etapa,
+    stage: (typeof STAGE_LABELS !== 'undefined' ? STAGE_LABELS[etapa] : '') || '',
+    ownerId: String(deal.ownerId || ''),
+    dias: 0,
+    slaBreach: false,
+    proximaAtividade: null
+  }, deal.props || {});
+  if (!DATA.funilLeads) DATA.funilLeads = {};
+  if (!Array.isArray(DATA.funilLeads[etapa])) DATA.funilLeads[etapa] = [];
+  DATA.funilLeads[etapa].push(linha);
+  /* OS CONTADORES DO REP fazem parte de "o negocio entrou": o cabecalho da coluna, o
+     Comando de vendas e o painel do gestor leem r.stages/r.open. Sem isto o cartao
+     apareceria e a contagem acima dele continuaria dizendo o numero antigo — uma tela
+     discordando de si mesma. */
+  const rep = (DATA.reps || []).find(x => String(x.ownerId) === String(linha.ownerId));
+  if (rep) {
+    if (rep.stages) rep.stages[etapa] = (rep.stages[etapa] || 0) + 1;
+    rep.open = (rep.open || 0) + 1;
+  }
+  return true;
 }
 
 /* @nucleo3:fim */
