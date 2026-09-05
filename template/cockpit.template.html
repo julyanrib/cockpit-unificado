@@ -7710,7 +7710,12 @@
      acoes, e nenhuma cor nova. */
   .prc-shell.modo-cliente .prc-config{display:none;}
   .prc-shell.modo-cliente .prc-grid{grid-template-columns:minmax(0,1fr);}
-  .prc-shell.modo-cliente .prc-proposal{position:static;max-width:820px;margin:0 auto;}
+  /* ESCOPADA NO .prc-grid (05/09/26). Esta regra é do layout v3, e o v4 usa a MESMA
+     classe .prc-proposal para a peça: com 0,3,0 de especificidade ela vencia o
+     .p4-palco > .prc-proposal e devolvia o cartão para o fluxo justamente no modo
+     cliente — 930px de peça estática empurrando a grade para baixo, que é o cartão
+     solto embaixo da faixa preta que o Julyan fotografou. */
+  .prc-shell.modo-cliente .prc-grid .prc-proposal{position:static;max-width:820px;margin:0 auto;}
 
   .prc-modo-barra{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px;
     padding:11px 16px;border-radius:var(--r-lg);background:var(--dark);color:var(--dark-ink);}
@@ -8220,7 +8225,14 @@
     min-height:0;overflow:hidden;}
   .app-main > #viewPrecificacao.active{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
   #viewPrecificacao.active > #precificacaoContent{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
-  #viewPrecificacao.active .prc-shell{flex:1 1 0;min-height:0;}
+  /* AS FILEIRAS EXPLICITAS (05/09/26). A casca e uma grade de duas fileiras — a barra
+     e a grade dos passos — sem template de linhas. Grade sem template distribui a SOBRA
+     entre as fileiras automaticas: fora do modo cliente nao havia sobra e ninguem viu,
+     mas com os controles escondidos a barra de "voltar a configurar" virou uma faixa
+     preta de 397px e empurrou o cartao para a metade de baixo da tela. Foi essa a foto.
+     auto para a barra, o resto para a grade. */
+  #viewPrecificacao.active .prc-shell{flex:1 1 0;min-height:0;
+    grid-template-rows:auto minmax(0,1fr);}
   #viewPrecificacao.active .p4-grid{flex:1 1 0;min-height:0;}
   /* A COLUNA DO CARTAO E minmax(430px,480px): 430 e a largura de desenho da peca, entao
      abaixo disso a escala comecaria a reduzir por falta de LARGURA, e nao por falta de
@@ -8413,7 +8425,9 @@
      transform e não zoom: zoom muda o layout e o cartão deixaria de ser 430px reais —
      e é o nó de 430px, sem transform, que o PNG precisa capturar para sair nítido. */
   .p4-palco{position:relative;flex:1 1 0;min-height:0;overflow:hidden;}
-  .p4-palco > .prc-proposal{position:absolute;left:50%;top:50%;width:430px;
+  /* A largura aqui e so o ponto de partida do primeiro quadro: quem manda e
+     prcLarguraDeDesenho, que mede e escreve a largura inline. */
+  .p4-palco > .prc-proposal{position:absolute;left:50%;top:50%;width:560px;
     transform-origin:center center;border-radius:var(--r-lg);}
 
   /* A MENSAGEM CUSTAVA 195px, tirados direto da altura da peça. Fica no pé, menor, com
@@ -19738,24 +19752,57 @@ function prcPreviewHTML() {
    o palco não muda de tamanho quando o cartão escala, então não há laço), quando as
    fontes terminam de carregar (texto com fonte de sistema mede outra altura) e a cada
    troca de plano ou adicional — essa terceira vem de quem redesenha o cartão. */
-const PRC_LARGURA_DESENHO = 430;
+/* ══ A LARGURA DE DESENHO SAI DA PROPORÇÃO DO PNG ═══════════════════════════════════
+   430px fixos foi a primeira volta, e o Julyan viu o resultado antes de mim: a peça
+   ficava um trilho estreito no meio de um palco largo. A conta explica — a altura da
+   peça quase NÃO muda com a largura (medido: 930px a 430 de largura, 831px a 800,
+   porque o que a faz alta é o NÚMERO de funcionalidades, não a quebra de linha). Com
+   altura quase fixa, a escala é sempre alturaDoPalco/alturaNatural, e desenhar estreito
+   só joga largura fora: a 480x508 de palco, 430 de desenho rendiam 271px de cartão.
+
+   Então a largura passa a ser aquela em que a peça fica na PROPORÇÃO DO PNG que o dono
+   vai receber (1080x1350, 4:5) — e aí a prévia finalmente tem a forma da imagem que o
+   executivo envia, que antes era 0,46 contra 0,80. No mesmo palco: 678x848 de desenho,
+   escala 0,599, cartão de 406x508. Preenche.
+
+   É medida, não fórmula: a altura muda com o plano e com os adicionais, então a largura
+   é procurada em até quatro passos a partir da última que funcionou, e presa entre 430
+   (o piso do handoff) e 760 (acima disso as duas colunas de funcionalidades ficam
+   largas demais para o corpo de 11px). */
+const PRC_LARGURA_MIN = 430;
+const PRC_LARGURA_MAX = 760;
+function prcLarguraDeDesenho(peca) {
+  const razao = (window.TakeatPropostaPNG && window.TakeatPropostaPNG.razao) || 1.25;
+  let largura = Number(peca.dataset.larguraDesenho) || 560;
+  for (let i = 0; i < 4; i++) {
+    peca.style.width = largura + 'px';
+    const alvo = Math.round(peca.offsetHeight / razao);
+    const nova = Math.max(PRC_LARGURA_MIN, Math.min(PRC_LARGURA_MAX, alvo));
+    if (nova === largura) break;
+    largura = nova;
+  }
+  peca.style.width = largura + 'px';
+  peca.dataset.larguraDesenho = String(largura);
+  return largura;
+}
 function prcAjustarPeca() {
   const palco = document.querySelector('#precificacaoContent .p4-palco');
   const peca = document.getElementById('precificacaoPreview');
   if (!palco || !peca) return;
+  const largura = prcLarguraDeDesenho(peca);
   const natural = peca.offsetHeight;
   const larguraLivre = palco.clientWidth;
   const alturaLivre = palco.clientHeight;
   let s = 1;
   if (natural > 0 && larguraLivre > 0 && alturaLivre > 0) {
     /* VIRADO PARA O CLIENTE a peça pode passar de 1: ela deixa de ser prévia e vira o
-       documento que o dono lê na mesa, do outro lado do notebook. O teto de 1,15 e os
-       0,86 da altura são do handoff — os 70px descontados são o que a barra de voltar
-       ocupa embaixo. */
-    s = prcModoCliente
-      ? Math.min(1.15, (window.innerWidth * 0.9) / PRC_LARGURA_DESENHO,
-          (window.innerHeight * 0.86 - 70) / natural)
-      : Math.min(1, larguraLivre / PRC_LARGURA_DESENHO, alturaLivre / natural);
+       documento que o dono lê na mesa, do outro lado do notebook. Só o TETO muda.
+       O handoff escreve esse teto contra a janela (vw*0,9, vh*0,86 − 70); aqui a conta
+       é contra o PALCO, que no modo cliente já é a janela inteira menos a barra de
+       voltar e o respiro da grade — medido, e não estimado. Contra a janela, a peça
+       transbordava o palco e era recortada em cima. */
+    const teto = prcModoCliente ? 1.15 : 1;
+    s = Math.min(teto, larguraLivre / largura, alturaLivre / natural);
     if (!(s > 0)) s = 1;
   }
   peca.style.transform = 'translate(-50%,-50%) scale(' + (Math.floor(s * 1000) / 1000) + ')';
@@ -20958,8 +21005,11 @@ function prcChiado(c, dor) {
     return cv;
   }
 
+  /* A PROPORÇÃO SAI DAQUI, de W e H do próprio PNG (1080x1350). Quem desenha a prévia
+     precisa dela, e ler a constante é a única forma de as duas não divergirem. */
   window.TakeatPropostaPNG = {
     gerar,
+    razao: H / W,
     async pronto() {
       if (!document.fonts || !document.fonts.load) return;
       await Promise.all([
