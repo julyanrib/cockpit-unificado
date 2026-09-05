@@ -25,7 +25,17 @@ let ok = 0;
 const falhas = [];
 const checar = (nome, cond, detalhe) => { if (cond) { ok++; return; } falhas.push(nome + (detalhe ? ' — ' + detalhe : '')); };
 
-/* ── 1. +10 SÓ COM PROVA. Ler não pontua. ────────────────────────────────────────── */
+/* ── 1. +10 SÓ COM PROVA. Ler não pontua. ──────────────────────────────────────────
+
+   ══ ONZE CHECAGENS SAÍRAM DAQUI EM 04/09/26 ═══════════════════════════════════
+   Elas prendiam a prova de 1 pergunta (duas tentativas, trava por rolagem), o teto de
+   pontos por dia, o painel "as mais usadas na rua" e a ponte do trilho — mecânicas que
+   a Leitura v9 substituiu: a página tem CHECK e o capítulo tem QUIZ.
+   O QUE ELAS PROTEGIAM CONTINUA TRAVADO, em outro lugar: "crédito só com a resposta
+   certa" virou "o quiz só grava a prova quando acertos >= mínimo", e "ler não pontua
+   sozinho" virou "a patente exige o quiz". As duas estão no bloco da v9, abaixo.
+   Guarda que trava feature removida reprova o estado que o dono pediu. */
+
 checar('não existe mais botão de "marcar como lida" (pontuar por abrir a página morreu)',
   !/playbookMarcarLido/.test(template) && !/v6-btn-lida/.test(template));
 /* ESTA CHECAGEM EXIGIA QUE SÓ A PROVA ESCREVESSE PROGRESSO — a regra da v7, "ler não
@@ -40,16 +50,6 @@ checar('a patente NÃO sai do check: ela exige o quiz do capítulo',
   'se a patente passar a sair só dos checks, ler volta a pontuar sozinho');
 checar('e o quiz do capítulo é quem grava a prova de cada página',
   template.indexOf("await playbookMarcarProgresso(p.id, 'prova', true)") > -1);
-checar('o crédito acontece SÓ quando a alternativa é a correta',
-  /const certo = i === pagina\.prova\.correta;/.test(template) &&
-  /if \(certo\) \{[\s\S]{0,200}?playbookMarcarProgresso\(pagina\.id, 'prova', true\)/.test(template));
-checar('duas tentativas, e a segunda errada TRAVA',
-  /} else if \(pb7Tentativas >= 2\) \{/.test(template) && /pb7Travado = true;/.test(template));
-checar('a trava só solta com nova rolagem do artigo (não por tempo, não por recarregar)',
-  /function pb7TravarAteRolar\(\) \{/.test(template) &&
-  /if \(Math\.abs\(window\.scrollY - y0\) < window\.innerHeight \/ 2\) return;/.test(template));
-checar('clique em alternativa é ignorado enquanto travado',
-  /if \(pb7Travado \|\| pb7Provadas\(\)\.has\(pagina\.id\)\) return;/.test(template));
 checar('a prova diz o "porque" no acerto (ela ensina, não só mede)',
   /esc\(q\.porque\)/.test(template));
 
@@ -58,8 +58,6 @@ checar('PBV6_LEITURAS_POR_DIA continua 2', /const PBV6_LEITURAS_POR_DIA = 2;/.te
 checar('PBV6_PTS_LEITURA continua 10', /const PBV6_PTS_LEITURA = 10;/.test(template));
 checar('a tela mostra o estado de hoje, não só o regulamento',
   /hoje <b>' \+ hoje \+ ' de ' \+ PBV6_LEITURAS_POR_DIA/.test(template));
-checar('acerto acima do teto não duplica ponto e DIZ isso',
-  /o teto de \$\{PBV6_LEITURAS_POR_DIA\} páginas de hoje já fechou/.test(template));
 
 /* ── 3. níveis por páginas provadas, nas faixas da prancha ───────────────────────── */
 const faixas = template.match(/const PB7_NIVEIS = \[([\s\S]*?)\];/);
@@ -129,16 +127,8 @@ checar('o filtro de formato esmaece em vez de esconder',
 checar('o selo é declarado como coisa do placar do time', /selo conta no placar do time|selo aparece no placar do time/.test(template));
 
 /* ── 5. "mais usadas" só com uso REAL ────────────────────────────────────────────── */
-checar('o quadro vem do agregado do Supabase, não de lista curada',
-  /supa\.rpc\('playbook_mais_copiadas', \{ dias: 7 \}\)/.test(template));
 checar('não existe lista editorial de "mais usadas" no código',
   !/MAIS_USADAS|DESTAQUES_PLAYBOOK/.test(template));
-checar('a cópia é registrada em playbook_copias', /supa\.from\('playbook_copias'\)\.insert/.test(template));
-checar('só conta a cópia que é fala pronta (nota explicativa copia e não conta)',
-  /if \(pb7EhFalaPronta\(texto\)\) pb7RegistrarCopia\(pagina\.id\);/.test(template) &&
-  /function pb7EhFalaPronta\(texto\) \{/.test(template));
-checar('quadro vazio DIZ por que está vazio, em vez de sumir',
-  /ninguém copiou script nesta semana ainda/.test(template));
 
 /* ── 6. a trilha sai do funil, com mapeamento determinístico e documentado ───────── */
 const mapa = template.match(/const PB7_FUNIL_PARA_PAGINA = \[([\s\S]*?)\n\];/);
@@ -159,8 +149,6 @@ checar('a trilha usa sessaoAtual.ownerId, o mesmo acessor do Meu Funil',
   !/String\(DATA\.ownerId\)/.test(template));
 checar('as dailies carregam antes de medir o funil (senão tudo parece descoberto)',
   /if \(typeof carregarDailies === 'function'[\s\S]{0,220}?playbookTelaAtual === 'inicio'/.test(template));
-checar('a ponte do trilho reaproveita irParaMeuFunilVisao, sem atalho novo',
-  /irParaMeuFunilVisao\('sem-passo'\)/.test(template));
 
 /* ── 7. formato e tempo em TODA página ───────────────────────────────────────────── */
 const FORMATOS = ['SCRIPT', 'MÉTODO', 'ESTUDO', 'CHECKLIST'];
@@ -209,8 +197,6 @@ checar('a seção movida sai do corpo (nada dito duas vezes na mesma tela)',
   /return \{ bullets, html: html\.slice\(0, inicio\) \+ html\.slice\(fim\) \};/.test(template));
 checar('sem bullets reconhecíveis, a seção FICA no corpo',
   /if \(!bullets\.length\) return \{ bullets: \[\], html \};/.test(template));
-checar('no celular a ordem é quiz e depois "leve pra rua"',
-  /\.pb7-prova\{order:1;\}[\s\S]{0,120}?\.pb7-rail-bloco\{order:2;\}/.test(template));
 /* A v8 fechou a coluna em 640px (medida de revista da prancha nova) e subiu o corpo de
    13px para 15.5px, que era o defeito real: o critério de aceite dela é nada de corpo
    abaixo de 15px. A checagem passa a guardar os dois. */
@@ -223,9 +209,15 @@ checar('nenhuma tabela sobrevive: virou card com rótulo do cabeçalho',
 checar('o script continua bloco escuro copiável, e o campo variável fica âmbar',
   template.indexOf('.pba .fa-body .pb8-var{color:#F2B84B') > 0);
 checar('a paleta da leitura alcança o shell do leitor',
-  template.indexOf('.pbv6,.pb7-lendo{') > 0);
+  /* O SELETOR MUDOU com a retirada do v7: .pbv6 e .pb7-lendo deixaram de existir e a
+     paleta ficou declarada em classe que nenhum markup gera — o corpo do artigo usa
+     essas variaveis em 41 lugares e cairia em var() invalido. Agora e o leitor v9. */
+  template.indexOf('.pb9-ler{') > 0);
 checar('o scrollspy casa pelo atributo que o markup gera, não por id inexistente',
-  template.indexOf("querySelectorAll('.pb7-toc-sec [data-pb-anchor]')") > 0
+  /* .pb9-toc-sec: a Leitura v9 renomeou o sumario e o spy ficou apontando para a classe
+     velha — as ancoras nunca acendiam. TERCEIRA vez que este mesmo spy aponta para
+     markup que nao existe. */
+  template.indexOf("querySelectorAll('.pb9-toc-sec [data-pb-anchor]')") > 0
   /* Checa o USO em codigo, nao a mencao: o comentario que documenta o defeito cita o id
      morto, e a primeira versao desta linha acusou a propria explicacao. */
   && template.indexOf('querySelectorAll(' + String.fromCharCode(39,35) + 'playbookToc') < 0);
