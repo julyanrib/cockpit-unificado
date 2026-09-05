@@ -1308,6 +1308,8 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 ## As 5 objeções de mesa
 
+> **Se a objeção não cair na mesa.** O follow-up existe para comprar a próxima presença — nunca para rediscutir a objeção por escrito. No texto o senhor concorre com o garçom chamando, o motoboy buzinando e o cliente reclamando: quem argumenta ali perde. Mande uma linha que marque a hora e volte para o balcão.
+
 #### "O sistema de vocês é caro / Não tenho o valor do setup agora."
 
 * **O Erro do Vendedor:** Tentar dar desconto ou recuar.
@@ -1317,6 +1319,8 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 * **A Resposta Direta:**
 
 > *"Seu [Nome], caro não é a Takeat. Caro é o senhor manter 3 garçons a mais no salão batendo cabeça porque o atendimento é lento. Caro é o senhor perder de 5% a 8% de mercadoria no estoque todo mês por falta de controle de CMV. A Takeat custa R$ 11,63 por dia. Menos que o valor de um refrigerante. O sistema se paga sozinho no primeiro final de semana pelo aumento de ticket médio e redução de desperdício. Vamos passar o setup no Pix agora para a engenharia já começar o seu cardápio?"*
+
+* **No follow-up, depois da visita:** *"Seu [Nome], fiz a conta do que a fila e o desperdício custaram só no seu fim de semana. Passo aí terça às 15h para o senhor ver o número na tela — 15 minutos."*
 
 #### "Eu já tenho o sistema X e estou satisfeito. Não quero mexer nisso agora."
 
@@ -1328,6 +1332,8 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 > *"Que ótimo que o senhor já usa sistema, mostra que o senhor é profissional! Mas deixa eu ser bem franco: o seu sistema atual é um parceiro ativo de vendas ou ele só serve para registrar o pedido e emitir a nota? Ele tem CRM com Cashback nativo que faz o cliente que comprou na sexta voltar na terça? Ele tem Precificação Dinâmica que recalcula o seu CMV item por item em tempo real e te avisa se o prato está dando prejuízo hoje? O mercado mudou. O seu sistema atual te ajuda a faturar ou só serve para organizar o papel? Vamos rodar a nossa ativação hoje e eu te mostro a diferença na pele."*
 
+* **No follow-up, depois da visita:** *"Separei duas coisas que o seu sistema atual não faz e que mexem no seu caixa. Não dá para mostrar por aqui: passo amanhã no balcão e o senhor julga vendo."*
+
 #### "Meu cliente é tradicional, prefere o papel/garçom humano. Tenho medo de esfriar o salão."
 
 * **O Erro do Vendedor:** Dizer que o garçom vai sumir.
@@ -1337,6 +1343,8 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 * **A Resposta Direta:**
 
 > *"Eu respeito muito a tradição da sua casa, seu [Nome]. E a Takeat foi feita para potencializar isso, não para destruir. O QR Code e a Maquininha Smart atendem o cliente que quer velocidade: aquele cara que quer a segunda cerveja ou a conta na hora e não quer ficar caçando o garçom com a mão levantada. Quem quer o papel continua com o papel. A diferença é que agora o seu garçom não está mais sobrecarregado correndo para o computador; ele tem tempo para ser um consultor, sugerir um vinho caro e dar um atendimento impecável para o cliente tradicional. É o melhor dos dois mundos. Faz o Pix do setup aqui comigo e vamos configurar essa dinâmica no seu salão."*
+
+* **No follow-up, depois da visita:** *"Pensei no seu salão: o garçom continua na mesa, o que muda é ele parar de andar até o caixa. Levo o tablet na quinta e o senhor vê com a sua equipe."*
 
 #### "Meu restaurante é pequeno, não preciso de tanta tecnologia ou controle robusto."
 
@@ -1348,6 +1356,8 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 > *"Seu [Nome], o restaurante pequeno e médio é o que mais quebra silenciosamente por falta de controle. O erro do grande dói, mas o erro do pequeno quebra a empresa. Se o senhor não sabe o custo exato de cada grama de insumo que sai da sua cozinha hoje, o senhor está jogando no escuro com o seu lucro. A Takeat não vem para complicar a sua rotina; ela vem para acender a luz do seu caixa e te mostrar onde o seu dinheiro está sumindo. Vamos fechar a ativação agora para botar ordem na casa antes do próximo fim de semana?"*
 
+* **No follow-up, depois da visita:** *"O controle não é para restaurante grande, é para margem apertada — que é a sua. Passo aí para montarmos a ficha de dois pratos seus, dá 15 minutos."*
+
 #### "E se a internet cair? Minha operação vai travar e parar?"
 
 * **O Erro do Vendedor:** Gaguejar ou tentar explicar termos técnicos de TI.
@@ -1357,6 +1367,8 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 * **A Resposta Direta:**
 
 > *"Essa é a preocupação de todo grande gestor, seu [Nome]. Vou te responder com transparência total: a Takeat roda em nuvem, e a nossa contingência hoje é por **dados móveis nas Maquininhas Smart** — se o Wi-Fi da casa oscilar, a operação segue no 4G/5G e o pedido continua subindo pra cozinha. É por isso que eu recomendo 50mb de fibra dedicados pra operação: a conexão nunca pode ser o gargalo do seu salão. O módulo **100% offline já está em desenvolvimento pleno** e entra no seu sistema sem custo adicional quando sair. Agora, vamos olhar para o papel: se o seu garçom rasgar uma comanda ou esquecer de lançar uma bebida na correria, o senhor perde o dinheiro e nem fica sabendo — e isso acontece todo sábado, sem depender de internet nenhuma. Vamos assinar o termo de adesão e rodar o Pix do setup para travar sua data?"*
+
+* **No follow-up, depois da visita:** *"Trouxe o registro do modo offline rodando num cliente aqui do bairro. Melhor que print é ver: passo amanhã e a gente desliga a internet na sua frente."*
 
 ** REGRA DE HONESTIDADE COMERCIAL: **nunca prometa "PDV offline" hoje — o módulo está em desenvolvimento (ver FAQ). Prometer offline fecha contrato e gera churn na primeira queda de internet, além de queimar a sua credibilidade na praça. A contingência real e vendável é 4G/5G nas Maquininhas Smart + internet estável de 50mb.
 

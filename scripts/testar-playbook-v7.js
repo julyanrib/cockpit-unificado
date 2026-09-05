@@ -97,11 +97,21 @@ checar('a troca de capítulo não passa por setTimeout (aba de fundo estrangula 
 checar('a numeração dos capítulos é fixa, não reordenada pelo momento',
   template.indexOf('const PB8_ORDEM = ') > 0
   && template.indexOf('function pb8NumeroDe(') > 0);
-const ordemCapitulos = ['Comece aqui', 'Produto e mercado', 'Venda na rua', 'Converter e fechar',
-  'Processos internos', 'Carteira e retenção', 'Desenvolvimento', 'Liderança'];
-checar('a trilha dos capítulos segue aprender → vender → operar → reter → desenvolver',
-  JSON.stringify(compilado.categorias) === JSON.stringify(ordemCapitulos)
-  && template.indexOf("const PB8_ORDEM = ['Comece aqui', 'Produto e mercado', 'Venda na rua', 'Converter e fechar',") > 0);
+/* A ORDEM DOS CAPITULOS VIVIA EM TRES LUGARES e esta checagem prendia dois deles por
+   literal. Ela pegou o capitulo novo pela metade — eu tinha atualizado o conteudo e a
+   trilha e esquecido a estante da busca. Agora PB8_ORDEM DERIVA de PB9_CAPITULOS, entao
+   a checagem mede o que importa: que a ordem do CONTEUDO e a ordem da TRILHA sao a mesma,
+   e que ninguem voltou a escrever a lista a mao. */
+/* SO O BLOCO DA TRILHA: a chave rot aparece em dezenas de estruturas do arquivo, e medir o
+   arquivo inteiro trouxe 90 rotulos de outras telas. */
+const iTrilha = template.indexOf('const PB9_CAPITULOS = [');
+const blocoTrilha = iTrilha > -1 ? template.slice(iTrilha, template.indexOf('];', iTrilha)) : '';
+const ordemNaTrilha = (blocoTrilha.match(/rot: '[^']+'/g) || []).map(function (m) { return m.slice(6, -1); });
+checar('a ordem dos capitulos do conteudo e a da trilha sao a mesma',
+  JSON.stringify(compilado.categorias) === JSON.stringify(ordemNaTrilha),
+  'conteudo: ' + compilado.categorias.join(' > ') + '  |  trilha: ' + ordemNaTrilha.join(' > '));
+checar('a estante da busca deriva da trilha, em vez de repetir a lista',
+  template.indexOf("const PB8_ORDEM = PB9_CAPITULOS.map(function (c) { return c.rot; });") > -1);
 const ordemPaginas = [
   'excelencia', 'onboarding', 'metas-cadencia', 'rotina-executivo',
   'ecossistema-takeat', 'catalogo-solucoes', 'concorrencia', 'dark-kitchen', 'rota-inteligente',
@@ -353,6 +363,63 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
      tem nada, em vez de mostrar zero e ensinar o time a duvidar da tela. */
   checar('o card do funil só aparece quando há número',
     template.indexOf('const rua = (semPasso || estourados)') > -1);
+})();
+
+/* ══ O PAR MESA/FOLLOW-UP E O REEQUILÍBRIO DOS CAPÍTULOS (04/09/26) ═════════════════════
+   Julyan: "faz as duas, o par mesa/follow-up e o reequilíbrio dos capítulos, mas sendo
+   coerente em todos os topicos para nao misturar nada q nao faça sentido". */
+(function () {
+  const mapa = compilado.paginas.find(function (p) { return p.id === 'mapa-dor-solucao'; });
+  const obj = compilado.paginas.find(function (p) { return p.id === 'objecoes'; });
+  const fech = compilado.paginas.find(function (p) { return p.id === 'fechamento'; });
+
+  /* O PAR: a frase da mesa vem ANTES da do follow-up, porque é o que acontece antes. */
+  checar('as 6 dores têm a frase da mesa', (mapa.html.match(/Na mesa\./g) || []).length === 6);
+  checar('e as 6 têm o follow-up rotulado como depois da visita',
+    (mapa.html.match(/No follow-up, depois da visita/g) || []).length === 6);
+  checar('o rótulo "No WhatsApp" não voltou como se fosse alternativa à visita',
+    mapa.html.indexOf('No WhatsApp.') < 0);
+  checar('a frase da mesa vem antes da do follow-up em cada dor',
+    mapa.html.indexOf('Na mesa.') < mapa.html.indexOf('No follow-up'));
+
+  /* AS 5 OBJEÇÕES ganham o follow-up, e a REGRA vem antes das frases: ele compra a próxima
+     presença, nunca rediscute por texto. Sem a regra, cinco frases prontas de WhatsApp numa
+     página de mesa ensinam o contrário do que a página inteira defende. */
+  checar('as 5 objeções têm o follow-up',
+    (obj.html.match(/No follow-up, depois da visita/g) || []).length === 5);
+  checar('e a regra que impede o follow-up de virar discussão por texto vem antes',
+    obj.html.indexOf('comprar a próxima presença') > -1
+    && obj.html.indexOf('comprar a próxima presença') < obj.html.indexOf('No follow-up'));
+
+  /* NO FECHAMENTO NÃO ENTRA PAR, de propósito: a página existe para dizer que o pagamento
+     acontece na mesa, e "se ele não pagou, mande mensagem" licenciaria o contrário. */
+  checar('a página de fechamento continua sem follow-up de WhatsApp',
+    fech.html.indexOf('No follow-up') < 0,
+    'a doutrina dela é que o pagamento acontece na mesa — o par ali inverteria o ensino');
+
+  /* O REEQUILÍBRIO: nenhum capítulo com 9 páginas, e o corte é por ASSUNTO. */
+  const porCap = {};
+  compilado.paginas.forEach(function (p) { porCap[p.categoria] = (porCap[p.categoria] || 0) + 1; });
+  const maior = Math.max.apply(null, Object.values(porCap));
+  checar('nenhum capítulo passa de 5 páginas', maior <= 5,
+    'maior: ' + maior + ' — ' + JSON.stringify(porCap));
+  checar('os quatro módulos ficaram juntos, e só eles',
+    porCap['Módulos que viram receita'] === 4
+    && ['dark-kitchen', 'rota-inteligente', 'conciliacao-ofx', 'multilojas'].every(function (id) {
+      const p = compilado.paginas.find(function (x) { return x.id === id; });
+      return p && p.categoria === 'Módulos que viram receita';
+    }));
+  /* VOLUME × VALOR é sobre território, MRR e blindagem da receita — carteira, não
+     fechamento. */
+  checar('Volume × valor mudou para Carteira e retenção',
+    (compilado.paginas.find(function (p) { return p.id === 'clientes-mrr'; }) || {}).categoria === 'Carteira e retenção');
+  /* E O QUE EU NÃO FIZ: encher "Desenvolvimento" de páginas de produto para ele deixar de
+     ter uma página só. Desenvolvimento é a carreira do executivo; catálogo ali seria a
+     mistura que ele pediu para evitar. Capítulo de uma página é melhor que incoerente. */
+  checar('nenhuma página de produto foi parar no capítulo de carreira',
+    compilado.paginas.filter(function (p) { return p.categoria === 'Desenvolvimento'; })
+      .every(function (p) { return p.id === 'plano-carreira'; }),
+    'produto em Desenvolvimento é a mistura que o Julyan pediu para evitar');
 })();
 
 if (falhas.length) {
