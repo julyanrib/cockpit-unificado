@@ -8,7 +8,6 @@
 
 > *"Você não vende um PDV nem um cardápio digital. Você vende o fato de que todas as dores do restaurante se resolvem no mesmo lugar."*
 
-### E o Estudo Comparativo Contra a Concorrência do Foodservice, Módulo por Módulo
 
 ***
 
@@ -850,7 +849,7 @@ Para que a prospecção digital tenha alta conversão, o executivo deve seguir o
 
 # Como chegar em quem assina
 
-### Como quebrar a barreira do "ele não está" e chegar em quem assina
+## Como quebrar a barreira do "ele não está" e chegar em quem assina
 
 > *"Você não perde venda para o concorrente. Você perde venda para o balcão que te barra antes de você chegar no dono."*
 
@@ -1109,7 +1108,7 @@ E há recursos onde o comparativo marca o concorrente como **"a verificar"** —
 
 ***
 
-### Ninguém fecha de primeira, e tudo bem
+## Ninguém fecha de primeira, e tudo bem
 
 Quem dera se toda demo terminasse com o Pix na hora. Não termina — e quem bate meta não trata isso como falha, trata como **a régua real do jogo**. A diferença entre o executivo mediano e o Takeat não é fechar mais na primeira visita; é **ter um sistema tão preciso de retorno que o "não fechei hoje" nunca vira "esqueci desse lead"**.
 
@@ -1131,7 +1130,7 @@ Isso muda a forma de encarar follow-up: não é um plano B pra quando a venda n�
 
 ## As 4 estratégias de campo
 
-#### A Visita Oportuna de Fechamento: O "Passei por Aqui" (Presencial)
+### A Visita Oportuna de Fechamento: O "Passei por Aqui" (Presencial)
 
 O follow-up mais eficiente do mercado não avisa que vai acontecer. Ele pega o decisor focado na operação e resolve a pendência em 5 minutos.
 
@@ -1141,7 +1140,7 @@ O follow-up mais eficiente do mercado não avisa que vai acontecer. Ele pega o d
 
 > *"Fala, seu [Nome], tudo bem? Cara, eu estava estruturando a virada de chave ali no seu vizinho do [Restaurante X] para o final de semana e passei aqui porque o técnico me cobrou a liberação do seu contrato para encaixar na mesma rota de implantação. Como eu já mapeei o gargalo da sua comanda na terça-feira, vim direto no balcão para a gente dar o 'ok' no setup e garantir que o seu salão já rode no automático nos dias de maior movimento. Consegue abrir o link do Pix aí rapidinho pra gente liquidar isso?"*
 
-#### O WhatsApp de Impacto Operacional (Vídeo de Prova Social Local)
+### O WhatsApp de Impacto Operacional (Vídeo de Prova Social Local)
 
 Se você precisar usar o chat, use-o apenas como um soco no estômago visual para cavar a sua próxima entrada física em menos de 24 horas. Nunca mande texto cobrando resposta.
 
@@ -1151,7 +1150,7 @@ Se você precisar usar o chat, use-o apenas como um soco no estômago visual par
 
 > *"Seu [Nome], acabei de sair da operação aqui do [Parceiro X] e lembrei na hora do gargalo de fechamento de conta que o senhor me contou. Olha a velocidade com que o pedido sobe e a conta é paga sem o garçom dar um passo. Estou com a agenda de campo aberta para amanhã de manhã e vou passar aí para a gente desenhar esse mesmo fluxo no seu salão. Às 10h ou às 11h fica melhor para o senhor?"*
 
-#### O "Almoço Invisível" de Diagnóstico (Vivenciando a Dor)
+### O "Almoço Invisível" de Diagnóstico (Vivenciando a Dor)
 
 Não existe argumento técnico que vença a exposição em tempo real do erro do cliente.
 
@@ -1161,7 +1160,7 @@ Não existe argumento técnico que vença a exposição em tempo real do erro do
 
 > *"Seu [Nome], o prato de vocês é espetacular. Mas olha que curioso: eu sentei ali na mesa 4 e notei que o seu garçom levou 12 minutos para conseguir me trazer a conta, e o salão nem está na capacidade máxima. Lembra que na nossa reunião nós conversamos sobre como o autoatendimento estanca essa perda de dinheiro? Vamos rodar o Pix do setup aqui no balcão agora para eu trazer o time de implantação na segunda-feira e resolver esse problema de uma vez por todas?"*
 
-#### A Ligação de Alinhamento de Logística (Gatilho da Escassez)
+### A Ligação de Alinhamento de Logística (Gatilho da Escassez)
 
 O telefone não serve para bater papo. Serve para usar a escassez da agenda técnica e forçar o lojista a tomar uma decisão de curto prazo.
 
@@ -1175,7 +1174,7 @@ O telefone não serve para bater papo. Serve para usar a escassez da agenda téc
 
 Isso é o que transforma as 4 estratégias soltas em **sistema**. Cada dia do prazo tem uma ferramenta certa — nunca use a mais forte cedo demais, nem a mais fraca quando o prazo já está apertado.
 
-#### Dentro do SLA de Negociação (7 dias)
+### Dentro do SLA de Negociação (7 dias)
 
 | Dia              | Estratégia indicada                 | Objetivo do dia                                                                                                                                                                        |
 | ---------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1184,7 +1183,7 @@ Isso é o que transforma as 4 estratégias soltas em **sistema**. Cada dia do pr
 | **D+5**          | Ligação de Alinhamento de Logística | Forçar decisão usando escassez de agenda técnica — pressão legítima antes do prazo fechar                                                                                              |
 | **D+7 (limite)** | Decisão obrigatória                 | Fecha (avança para Aguardando Pagamento), ou aplica o "Almoço Invisível" como última tentativa de diagnóstico, ou move para Reciclagem/Perdido — mas **não fica aberto além do dia 7** |
 
-#### Dentro do SLA de Aguardando Pagamento (2 dias — janela curta)
+### Dentro do SLA de Aguardando Pagamento (2 dias — janela curta)
 
 | Dia              | Estratégia indicada                               | Objetivo do dia                                                                                                                                           |
 | ---------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1633,7 +1632,7 @@ Para garantir que a sua carteira de clientes seja um porto seguro de receita e i
 
 # Como não perder o que você já vendeu
 
-### O cliente que cancela em março é o cliente que você vai ter que vender de novo em abril
+## O cliente que cancela em março é o cliente que você vai ter que vender de novo em abril
 
 > *"Cancelamento não é um evento. É o fim de um processo que começou umas seis semanas antes, e ninguém foi lá ver."*
 
@@ -1878,7 +1877,7 @@ Não são etapas do pipeline — são de onde o lead nasce antes de entrar na es
 
 # Os dados que destravam a implantação
 
-### Como sair da assinatura para a operação rodando sem perder uma semana no meio
+## Como sair da assinatura para a operação rodando sem perder uma semana no meio
 
 > *"Contrato assinado não é cliente ativo. Cliente ativo é o que já vendeu pela plataforma."*
 
@@ -2038,7 +2037,7 @@ O garçom acessa o sistema para gerenciar mesas e pedidos através de:
 
 ## Totem de autoatendimento e TEF Fiserv
 
-#### Especificações de Hardware e Acessórios
+### Especificações de Hardware e Acessórios
 
 * **Hardware Base:** Mini PC Intel Celeron (8GB RAM / 128GB SSD) + Monitor Dell Touchscreen 23,8" (P2418HT).
 
@@ -2048,7 +2047,7 @@ O garçom acessa o sistema para gerenciar mesas e pedidos através de:
 
 * **Contato Direto para Suporte/Garantia Dell:** Matheus (Executivo DELL) — +55 51 9216-4663.
 
-#### Regra Comercial Obrigatória (Vigência: Junho/2026)
+### Regra Comercial Obrigatória (Vigência: Junho/2026)
 
 > **Venda Exclusiva:** O hardware do Totem de Autoatendimento **não é comercializado de forma isolada** ou com outras adquirentes. A venda está condicionada à ativação do TEF da Fiserv.\
 > **Precificação do Adicional:** **R$ 299,00/mês** (Totem + licença TEF Fiserv).
@@ -2236,7 +2235,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 # Links úteis, na ordem do dia
 
-### Cada link com o momento em que você usa, para não procurar no meio da rua
+## Cada link com o momento em que você usa, para não procurar no meio da rua
 
 > *"Link que você não acha na hora é link que não existe."*
 
@@ -2310,7 +2309,7 @@ Esta página não é uma lista de favoritos: é a ordem em que as coisas acontec
 
 # Material de mesa: o que faz o Garçom Digital existir
 
-### Sem display na mesa, o autoatendimento que você vendeu não acontece
+## Sem display na mesa, o autoatendimento que você vendeu não acontece
 
 > *"O cliente não pede pelo QR Code que está numa folha amassada ao lado do saleiro."*
 
@@ -2406,7 +2405,7 @@ Material na caixa atrás do balcão não gera pedido. **No dia da entrega, posic
 
 # Plano de carreira: os degraus que você controla
 
-### O caminho existe, e ele é medido — não é sobre esperar a vaga aparecer
+## O caminho existe, e ele é medido — não é sobre esperar a vaga aparecer
 
 > *"Onde a empresa cresce, quem entrega floresce."*
 
