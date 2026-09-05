@@ -319,6 +319,9 @@ function montarDadosCompletos() {
     stageMeta: hubspot.stageMeta || { slaDays: {}, descriptions: {}, labels: {} },
     saude,
     reps,
+    /* AGREGADO ANÔNIMO: só percentuais e a contagem de quantas pessoas entraram na
+       conta. Nenhum nome, nenhum ownerId de colega, nenhuma lista. */
+    habitosTime: habitosDoTime(hubspot.reps || {}, ownerIds),
     leadsReferencia: leadsReferencia.pracas || [],
     footerText: `Fonte: HubSpot (pipeline 916011864, atualizado a cada 2h no horário comercial) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
     // AUTOMAÇÃO 3 (13/08/26) — status da última rodada do robô: se alguma escrita de
@@ -365,6 +368,60 @@ function montarDadosCompletos() {
 // gargalo ou coaching dos outros. Corte aprovado pelo Julyan em 07/08/26.
 
 // Campos de colega visíveis pra qualquer executivo (necessários pro Pódio/seletores):
+/* ══ HÁBITOS DO TIME — NÚMERO AGREGADO, SEM NOME ════════════════════════════════════
+   Ver o cabeçalho de scripts/montar-dados.js? Não: a razão inteira está no commit e no
+   comentário da aba. Aqui fica a mecânica.
+   Três percentuais por pessoa, e o percentil 80 do time como referência. Quem não tem
+   negócio aberto fica FORA da conta (n/0 não é 0%, é "não medido" — e um zero desses
+   puxaria o benchmark do time inteiro para baixo). */
+function pctSeguro(parte, total) {
+  if (!total || total <= 0) return null;
+  return Math.round((parte / total) * 100);
+}
+
+function habitosDoRep(h) {
+  const abertos = Number(h && h.open) || 0;
+  if (!abertos) return { cadencia: null, qualificacao: null, proximoPasso: null, abertos: 0 };
+  const travados = Number(h && h.leadsTravados) || 0;
+  /* a lista completa de abertos por rep não vem no snapshot; o que vem por rep são os
+     recortes (travados, criticos, quentes). Para os dois hábitos de registro, a base é
+     a união desses recortes — é a amostra que existe, e ela é a mesma para todo mundo. */
+  const amostra = [];
+  ['travados', 'criticos', 'quentes'].forEach(k => {
+    (h && Array.isArray(h[k]) ? h[k] : []).forEach(l => {
+      if (l && l.id && !amostra.some(x => x.id === l.id)) amostra.push(l);
+    });
+  });
+  const comQualif = amostra.filter(l => String(l.nome_do_sistema || '').trim() && String(l.gargalo_operacional || '').trim()).length;
+  const comPasso = amostra.filter(l => String(l.proximaAtividade || l.proximaReuniao || '').trim()).length;
+  return {
+    cadencia: pctSeguro(abertos - travados, abertos),
+    qualificacao: pctSeguro(comQualif, amostra.length),
+    proximoPasso: pctSeguro(comPasso, amostra.length),
+    abertos
+  };
+}
+
+function percentil80(valores) {
+  const v = (valores || []).filter(x => typeof x === 'number' && isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return null;
+  /* percentil 80 pelo método do índice mais próximo: com 6 pessoas cai no 2º melhor. */
+  const i = Math.min(v.length - 1, Math.max(0, Math.ceil(0.8 * v.length) - 1));
+  return v[i];
+}
+
+function habitosDoTime(hubspotReps, ownerIds) {
+  const porRep = {};
+  (ownerIds || []).forEach(id => { porRep[id] = habitosDoRep((hubspotReps || {})[id]); });
+  const medidos = Object.values(porRep).filter(x => x && x.abertos > 0);
+  const benchmark = {
+    cadencia: percentil80(medidos.map(x => x.cadencia)),
+    qualificacao: percentil80(medidos.map(x => x.qualificacao)),
+    proximoPasso: percentil80(medidos.map(x => x.proximoPasso))
+  };
+  return { porRep, benchmark, pessoasMedidas: medidos.length };
+}
+
 function resumoDeColega(r) {
   return {
     ownerId: r.ownerId,
@@ -460,8 +517,19 @@ function filtrarParaPapel(dados, usuario) {
     (Array.isArray(p.responsaveis) && p.responsaveis.includes(meuNome)) || p.nome === (meuRep && meuRep.praca)
   );
 
+  /* O EXECUTIVO RECEBE O PRÓPRIO HÁBITO E O NÚMERO DO TIME — nunca o porRep inteiro.
+     O spread de ...dados levaria o mapa com todo mundo, que é exatamente o vazamento
+     silencioso que o corte de snapshotReps fechou em 07/08. */
+  const habitosMeu = (dados.habitosTime && dados.habitosTime.porRep && dados.habitosTime.porRep[meuId]) || null;
+  const habitosTime = dados.habitosTime ? {
+    meu: habitosMeu,
+    benchmark: dados.habitosTime.benchmark,
+    pessoasMedidas: dados.habitosTime.pessoasMedidas
+  } : null;
+
   return {
     ...dados,
+    habitosTime,
     reps,
     kpiDetalhe: {
       leadsCriados: soMeu(dados.kpiDetalhe.leadsCriados),
