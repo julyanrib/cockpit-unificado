@@ -110,17 +110,35 @@ checar('a ordem dos capitulos do conteudo e a da trilha sao a mesma',
   'conteudo: ' + compilado.categorias.join(' > ') + '  |  trilha: ' + ordemNaTrilha.join(' > '));
 checar('a estante da busca deriva da trilha, em vez de repetir a lista',
   template.indexOf("const PB8_ORDEM = PB9_CAPITULOS.map(function (c) { return c.rot; });") > -1);
+/* A ORDEM MUDOU EM 05/09/26, E O MOTIVO ESTA MEDIDO: com a trava valendo, "Venda na rua"
+   so abria depois de 13 paginas, 92 minutos e 2 quizzes — e o executivo esta na calcada no
+   dia 2. "Produto e mercado" tem 9 paginas e 71 minutos, 36% do playbook: ele e o capitulo
+   de fundo, nao o de entrada. A rua subiu para o 2o degrau e o produto foi para o 4o.
+   NENHUMA PAGINA TROCOU DE CAPITULO — so a ordem dos blocos. E a lista continua fixa aqui
+   de proposito: e ela que impede a ordem de mudar sem alguem decidir que mudou. */
 const ordemPaginas = [
   'excelencia', 'onboarding', 'metas-cadencia', 'rotina-executivo',
-  'ecossistema-takeat', 'catalogo-solucoes', 'concorrencia', 'dark-kitchen', 'rota-inteligente',
-  'conciliacao-ofx', 'multilojas', 'equipamentos', 'displays-comandas',
   'prospeccao-inteligente', 'prospeccao-porta-a-porta', 'acesso-decisor', 'follow-up', 'rua-whatsapp',
   'mapa-dor-solucao', 'objecoes', 'fechamento', 'clientes-mrr',
+  'ecossistema-takeat', 'catalogo-solucoes', 'concorrencia', 'dark-kitchen', 'rota-inteligente',
+  'conciliacao-ofx', 'multilojas', 'equipamentos', 'displays-comandas',
   'pipeline', 'dados-cadastro', 'faq', 'links-uteis', 'relacionamento', 'evitar-churn',
   'plano-carreira', 'rotina-gestor'
 ];
-checar('as páginas seguem a ordem pedagógica e planejar vem antes de bater na porta',
-  JSON.stringify(compilado.paginas.map(p => p.id)) === JSON.stringify(ordemPaginas));
+checar('as páginas seguem a ordem da trilha, e a rua vem antes do catálogo de produto',
+  JSON.stringify(compilado.paginas.map(p => p.id)) === JSON.stringify(ordemPaginas),
+  'ordem no arquivo: ' + compilado.paginas.map(p => p.id).slice(0, 8).join(' > '));
+/* O NUMERO DA PAGINA SOBE ENQUANTO SE LE: se o conteudo e a trilha discordassem, a estante
+   diria "capitulo 2" e as paginas dele seriam 14 a 18. */
+(function () {
+  const cats = compilado.paginas.map(p => p.categoria);
+  let trocas = 0;
+  const vistas = [];
+  cats.forEach(function (c) { if (vistas.indexOf(c) < 0) vistas.push(c); });
+  cats.forEach(function (c, i) { if (i && c !== cats[i - 1] && vistas.indexOf(c) < vistas.indexOf(cats[i - 1])) trocas++; });
+  checar('as páginas de um capítulo ficam juntas, em bloco',
+    trocas === 0, trocas + ' ida(s) e volta(s) entre capítulos na lista de páginas');
+})();
 checar('o filtro de formato esmaece em vez de esconder',
   template.indexOf("pg.classList.toggle('is-fora'") > 0
   && template.indexOf('.pb8-pg.is-fora{opacity:.3;}') > 0);
@@ -276,8 +294,16 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
 
   /* 5. O CADEADO É DA PATENTE, NUNCA DO CONTEÚDO — é a regra que o prompt repete três
      vezes. Na prática: toda capa é clicável e todo item abre a leitura. */
+  /* A LEGENDA É ONDE A REGRA SE ENSINA, então ela é medida pelas duas metades da regra e
+     não pela frase inteira: "dá para ler" e "o que espera é o crédito". Assim reescrever a
+     frase não reprova, mas apagar qualquer uma das duas metades reprova. */
   checar('a legenda diz que a leitura continua livre',
-    template.indexOf('As páginas continuam abertas pra consulta') > -1);
+    /as páginas se leem à vontade|páginas continuam abertas/.test(template),
+    'sem isso o executivo lê o cadeado como "esse conteúdo não é para você"');
+  checar('a legenda diz que o que espera a vez é o crédito, não o texto',
+    /espera a sua vez é o check/.test(template));
+  checar('a legenda explica o capítulo de consulta',
+    /📖 = capítulo de consulta/.test(template));
   checar('não existe capa desabilitada por patente',
     template.indexOf('class="pb9-capa') > -1
     && template.indexOf('pb9-capa" disabled') < 0 && template.indexOf("pb9-capa' disabled") < 0);
@@ -288,9 +314,11 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
   checar('toda página tem a pergunta que o quiz do capítulo usa',
     compilado.paginas.every(function (p) { return p.prova && p.prova.pergunta; }),
     'páginas sem prova: ' + compilado.paginas.filter(function (p) { return !(p.prova && p.prova.pergunta); }).length);
-  checar('o quiz só abre com todos os checks do capítulo',
+  checar('o quiz só abre com todos os checks do capítulo E com o degrau liberado',
     template.indexOf('function pb9QuizAberto(cap) {') > -1
-    && template.indexOf('return !!(cap && cap.completo);') > -1);
+    && template.indexOf('return !!(cap && cap.completo && cap.liberado !== false);') > -1,
+    'o quiz é o que dá a patente, então ele é o degrau: sem o liberado aqui, dava para provar'
+      + ' um capítulo fora de ordem entrando nele pela busca');
 
   /* 7. O NÚMERO VIVO NÃO PODE SER CHUTE: o resumo do capítulo cita "os seus N sem próximo
      passo", e esse N vem da mesma conta do Meu Funil. Eu tinha lido um campo `.semPasso`
@@ -403,12 +431,13 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
     compilado.categorias.indexOf("Módulos que viram receita") < 0);
 })();
 
-if (falhas.length) {
-  console.error('\nFALHAS (' + falhas.length + '):');
-  falhas.forEach(f => console.error('  ✗ ' + f));
-  console.error('\n' + ok + ' ok, ' + falhas.length + ' falha(s).');
-  process.exit(1);
-}
+/* ══ A TRAVA SAIU DAQUI EM 05/09/26, E ISSO ERA UM DEFEITO DA SUITE ════════════════
+   Ela ficava AQUI, no meio do arquivo, com 26 linhas de checagem depois dela — inclusive
+   a do hash do `versao`, que existe para nao estourar a cota de deploy. Checagem depois
+   do process.exit(1) nunca reprova nada: sabotei o hash de proposito e a suite terminou
+   verde. Agora a trava e a ULTIMA coisa do arquivo, e toda checagem nova cai dentro dela
+   por construcao. */
+
 /* ══ O `versao` TEM QUE SER HASH DA SAIDA, NAO DAS ENTRADAS ═════════════════════════
    MEDIDO em 03/09/26: dos 31 commits do robo entre 01 e 03/09, NOVE mudaram um arquivo
    so (data/field-sales-playbook.compiled.json) e nesses nove o conteudo era identico —
@@ -434,4 +463,192 @@ checar('o versao do playbook e o hash da SAIDA — saida igual nao gera commit n
   compilado.versao === versaoEsperada,
   'versao no arquivo ' + compilado.versao + ', hash da saida ' + versaoEsperada
     + ' — se divergem, o versao voltou a depender das entradas e o robo vai commitar por nada');
-console.log('playbook v7: ' + ok + ' checagens ok — prova, teto, níveis, selo, uso real, trilha do funil e busca.');
+
+/* ══ O LINK EXTERNO E A ESTRUTURA DE TITULOS (05/09/26) ═════════════════════════════
+   As quatro coisas abaixo eu quebrei ou achei quebradas nesta auditoria, e nenhuma delas
+   aparece em medicao de geometria — as seis medicoes de sempre estavam verdes. */
+
+/* 1. AUTOLINK. O compilador nao conhecia <https://...>: o esc() virava &lt;...&gt; e o
+      executivo LIA a URL como texto morto. Nove URLs, TODAS na pagina de Links uteis,
+      cuja propria tese e "link que voce nao acha na hora e link que nao existe". */
+(function () {
+  let cruas = 0;
+  let selos = 0;
+  let semSeguranca = 0;
+  compilado.paginas.forEach(function (p) {
+    const semAncora = p.html.replace(/<a [^>]*>[\s\S]*?<\/a>/g, '');
+    cruas += (semAncora.match(/https?:\/\/|&lt;https?:/g) || []).length;
+    (p.html.match(/<a class="pb-out"[^>]*>/g) || []).forEach(function (a) {
+      selos++;
+      if (!/target="_blank"/.test(a) || !/rel="noopener"/.test(a)) semSeguranca++;
+    });
+  });
+  checar('nenhuma URL aparece como texto morto no playbook',
+    cruas === 0,
+    cruas + ' URL(s) fora de <a> — o autolink <https://...> voltou a ser escapado');
+  checar('todo link externo tem selo, e o selo existe',
+    selos >= 10, 'achei ' + selos + ' selo(s) .pb-out e esperava ao menos 10');
+  checar('link externo nao rouba a aba do Cockpit',
+    semSeguranca === 0,
+    semSeguranca + ' selo(s) sem target="_blank" + rel="noopener" — abrir a planilha por cima do Cockpit'
+      + ' perde a tela onde o executivo estava lendo, no meio da visita');
+  /* o dominio e o que diz se aquilo pode aparecer na frente do cliente — a regra da
+     propria pagina de Links uteis e "cliente nunca recebe link interno". */
+  checar('o selo mostra o dominio, nao so o rotulo',
+    compilado.paginas.some(function (p) { return /class="pb-out-h"/.test(p.html); }));
+  checar('o dominio nao quebra no meio da palavra',
+    /[.]pba [.]pb-out-h\{[^}]*white-space:nowrap/.test(template),
+    'sem nowrap o .pba a{overflow-wrap:anywhere} parte "docs.google" numa linha e ".com" na outra');
+})();
+
+/* 2. A TESE NAO E FALA PARA O CLIENTE. Escuro tem UM significado no leitor: frase pronta
+      para copiar. Quando promovi o subtitulo de abertura de h3 para h2, a citacao passou
+      a vir depois do primeiro h2 e em 6 paginas a TESE virou cartao "FALE ASSIM · copiar"
+      — o playbook mandando o executivo copiar o proprio manifesto para o dono. */
+(function () {
+  const i = template.indexOf('const antesDasSecoes');
+  const bloco = i > -1 ? template.slice(i, i + 420) : '';
+  checar('o manifesto e decidido por CONTAGEM de secoes antes da citacao',
+    /secoesAntes\s*<=\s*1/.test(bloco),
+    'a regra voltou a ser "antes do primeiro h2", que quebra em toda pagina cuja abertura e h2');
+  /* e a estrutura que a regra pressupoe: no maximo 1 secao antes da primeira citacao */
+  let pior = 0;
+  compilado.paginas.forEach(function (p) {
+    const k = p.html.indexOf('<blockquote');
+    if (k < 0) return;
+    const n = (p.html.slice(0, k).match(/<h2/g) || []).length;
+    if (n > pior) pior = n;
+  });
+  checar('nenhuma pagina tem 2+ secoes antes da sua primeira citacao',
+    pior <= 1,
+    'a pior tem ' + pior + ' — com 2 ou mais, o limite <=1 deixa a tese virar FALE ASSIM outra vez');
+})();
+
+/* 3. A ESTRUTURA DE TITULOS. O trilho do leitor lista APENAS nivel 2: pagina que abre com
+      h3 nao tem entrada para o bloco de abertura, e o executivo nao consegue voltar para
+      a tese. As 30 abrem igual agora. */
+(function () {
+  let pulos = 0;
+  let abremErrado = 0;
+  compilado.paginas.forEach(function (p) {
+    const h = p.headings || [];
+    let anterior = 0;
+    h.forEach(function (x) { if (anterior && x.nivel > anterior + 1) pulos++; anterior = x.nivel; });
+    const iH1 = h.findIndex(function (x) { return x.nivel === 1; });
+    const prox = h[iH1 + 1];
+    if (!prox || prox.nivel !== 2) abremErrado++;
+  });
+  checar('nenhuma pagina pula nivel de titulo', pulos === 0, pulos + ' pulo(s)');
+  checar('todas as paginas abrem com uma secao de nivel 2',
+    abremErrado === 0,
+    abremErrado + ' pagina(s) abrindo fora do padrao — a abertura fica sem entrada no trilho');
+})();
+
+/* 4. O MARCADOR DE PAGINA E NIVEL 3, E ISSO E ESTRUTURAL. montarPlaybook() fatia as 30
+      paginas por /^###/ cruzado com MARCADORES. Eu promovi "### ECOSSISTEMA TAKEAT" para
+      h2 numa arrumacao de nivel e o build morreu com "Pagina do playbook nao encontrada".
+      Medir um uso (o id da ancora sai de idUnico(titulo), sem o nivel) nao prova que e o
+      unico uso. */
+(function () {
+  const build = fs.readFileSync(path.join(raiz, 'scripts', 'build-playbook.js'), 'utf8');
+  checar('o fatiador de paginas continua exigindo nivel 3 no marcador',
+    /match\(\/\^#{3}\\s\+\(\.\+\)\$\/\)/.test(build) || /\^###\\s/.test(build),
+    'se o fatiador mudar de nivel sem o markdown mudar junto, o build cai inteiro');
+  checar('as 30 paginas continuam sendo geradas', compilado.paginas.length === 30,
+    'achei ' + compilado.paginas.length);
+})();
+
+/* ══ A TRAVA DA TRILHA (05/09/26) ═══════════════════════════════════════════════════
+   O Julyan pediu trava "pra eles lerem o conteúdo". Trava estrita eu medi e ela custava:
+   "Venda na rua" abria no minuto 92, o capítulo de consulta no minuto 151, e 24 dos 53
+   links internos apontariam para capítulo fechado — 24 pílulas mortas dentro do texto.
+   O desenho que ficou: TRANCA O CAMINHO, NÃO A INFORMAÇÃO. As checagens abaixo são as
+   duas metades disso, e uma sem a outra é um produto diferente. */
+(function () {
+  /* METADE 1 — o degrau tranca, e a regra mora num lugar só */
+  const i = template.indexOf('const PB9_SEMPRE_ABERTO');
+  checar('existe a lista do que nunca tranca', i > -1);
+  checar('e o capítulo de consulta está nela',
+    i > -1 && template.slice(i, i + 120).indexOf("'Processos internos'") > -1,
+    'Pipeline, Dados para cadastro, o FAQ que se chama "é lei" e os Links úteis são consulta:'
+      + ' com trava estrita eles abririam no minuto 151 e o executivo move card no dia 1');
+  checar('o liberado é calculado na trilha, num lugar só',
+    /c\.liberado = souGestorNaTrilha \|\| i === 0 \|\| c\.consulta/.test(template),
+    'se cada tela decidir por conta, a estante tranca uma coisa e a leitura tranca outra');
+  checar('o capítulo atual é o primeiro não provado ENTRE OS LIBERADOS',
+    /return !c\.provado && c\.liberado && !c\.consulta/.test(template),
+    'sem isso o capítulo de consulta virava "você está aqui" e o hero mandava o executivo pro FAQ');
+  /* eu havia escrito aqui uma cláusula que negava um regex — `.test(...) === false` sobre
+     um padrão que nunca casa. Cláusula vazia num && não mede nada e o verde é o mesmo. */
+  checar('a patente sai da POSIÇÃO na trilha, não do capítulo',
+    template.indexOf('const PB9_PATENTES = [') > -1
+    && /patente: PB9_PATENTES\[i\]/.test(template),
+    'presas ao capítulo, reordenar a trilha faria "Vendedor de Rua" cair depois de "Dono de Praça"');
+  /* e o rank tem de subir: nome repetido faria dois capítulos darem a mesma patente */
+  (function () {
+    const iP = template.indexOf('const PB9_PATENTES = [');
+    const bloco = iP > -1 ? template.slice(iP, template.indexOf('];', iP)) : '';
+    const nomes = (bloco.match(/'[^']+'/g) || []).map(function (m) { return m.slice(1, -1); });
+    checar('são 8 patentes, uma por capítulo, sem repetir',
+      nomes.length === 8 && new Set(nomes).size === 8,
+      nomes.length + ' nome(s), ' + new Set(nomes).size + ' distinto(s)');
+  })();
+
+  /* METADE 2 — a informação NÃO tranca */
+  checar('a capa de capítulo fechado continua clicável',
+    template.indexOf('pb9-capa" disabled') < 0 && template.indexOf("pb9-capa' disabled") < 0);
+  checar('o leitor não recusa página de capítulo fechado',
+    template.indexOf('function pb9MontarLeitor(slot, pb, pagina) {') > -1
+    && template.slice(template.indexOf('function pb9MontarLeitor'), template.indexOf('function pb9MontarLeitor') + 900)
+        .indexOf('liberado') < 0,
+    'se o leitor barrar, a busca e os 53 links internos passam a levar a lugar nenhum');
+  /* e o que segura a ordem em pé: consulta não credita */
+  checar('o check desliga no capítulo fechado, em vez de aceitar o clique e não gravar',
+    /const fechado = cap\.liberado === false;/.test(template)
+    && /\(fechado \? ' disabled' : ''\)/.test(template),
+    'clique que não muda nada é pior que botão desligado — o executivo acha que deu check');
+  checar('e o check desligado DIZ qual patente abre o capítulo',
+    /Este capítulo abre com a patente ' \+ esc\(cap\.abrePor/.test(template));
+})();
+
+/* ══ O ÍNDICE DO CATÁLOGO (05/09/26) ════════════════════════════════════════════════
+   O catálogo é a página mais longa (26 min) e a única que ninguém lê: se consulta, com o
+   dono na frente perguntando de um módulo. Eram 52 módulos escritos como nível 3, e o
+   sumário do leitor lista só nível 2 — para chegar em "Comandas Individuais" o executivo
+   rolava 26 minutos na frente do cliente.
+   A checagem NÃO mede o texto do índice: mede a COBERTURA. Módulo novo na tabela que não
+   aparecer no índice reprova, e âncora que aponta para lugar nenhum reprova. */
+(function () {
+  const cat = compilado.paginas.find(p => p.id === 'catalogo-solucoes');
+  checar('o catálogo existe para ser medido', !!cat);
+  if (!cat) return;
+  const modulos = (cat.headings || []).filter(h => h.nivel === 3).map(h => h.id);
+  const links = [...cat.html.matchAll(/data-pb-ancora="([a-z0-9-]+)"/g)].map(m => m[1]);
+  const ancoras = new Set();
+  compilado.paginas.forEach(p => (p.headings || []).forEach(h => ancoras.add(h.id)));
+  const quebradas = links.filter(a => !ancoras.has(a));
+  const fora = modulos.filter(id => links.indexOf(id) < 0);
+  checar('o índice do catálogo alcança TODOS os módulos da página',
+    modulos.length > 40 && fora.length === 0,
+    modulos.length + ' módulo(s), ' + fora.length + ' fora do índice'
+      + (fora.length ? ' — ex.: ' + fora.slice(0, 3).join(', ') : ''));
+  checar('e nenhum salto do índice cai no vazio',
+    quebradas.length === 0,
+    quebradas.length + ' âncora(s) inexistente(s): ' + quebradas.slice(0, 3).join(', '));
+  /* o título do adicional carrega o preço, então índice e seção têm de montá-lo no MESMO
+     lugar — senão o índice quebra sozinho no dia que um preço mudar */
+  const build = fs.readFileSync(path.join(raiz, 'scripts', 'build-playbook.js'), 'utf8');
+  checar('o título do adicional é montado num lugar só',
+    /const tituloAdicional = a =>/.test(build)
+    && (build.match(/tituloAdicional\(a\)/g) || []).length >= 2,
+    'índice e seção montando o título cada um por sua conta = índice apontando para âncora'
+      + ' que deixou de existir quando o preço mudou');
+})();
+
+if (falhas.length) {
+  console.error('\nFALHAS (' + falhas.length + '):');
+  falhas.forEach(f => console.error('  ✗ ' + f));
+  console.error('\n' + ok + ' ok, ' + falhas.length + ' falha(s).');
+  process.exit(1);
+}
+console.log('playbook v7: ' + ok + ' checagens ok — prova, teto, níveis, selo, uso real, trilha do funil, busca, link externo e estrutura de títulos.');

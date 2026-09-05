@@ -8,7 +8,6 @@
 
 > *"Você não vende um PDV nem um cardápio digital. Você vende o fato de que todas as dores do restaurante se resolvem no mesmo lugar."*
 
-### E o Estudo Comparativo Contra a Concorrência do Foodservice, Módulo por Módulo
 
 ***
 
@@ -33,7 +32,7 @@ Isso é sobre o que a ferramenta **faz**, não sobre como o time vende.
 
 >  **Princípio fundamental, vale para as 19 frentes abaixo:** a Takeat **não fornece hardware nenhum** — nem tablet, nem totem, nem maquininha própria. Entrega 100% tecnologia, incluindo **integração direta com as maiores adquirentes do mercado** (a maquininha física é de terceiro; a inteligência que processa o pagamento e conecta com o resto da operação é da Takeat). Isso é posicionamento, não limitação: o restaurante fica livre para negociar equipamento com quem quiser, e paga a Takeat só pelo que ela realmente entrega.
 
-** ÚNICA EXCEÇÃO — Totem de Autoatendimento:** o discurso de "hardware livre" vale para 18 dos 19 módulos. O Totem tem regra comercial própria e obrigatória (vigência jun/2026): a venda está condicionada à ativação do TEF Fiserv, com adicional de R$ 299,00/mês (Totem + licença TEF) e hardware na especificação homologada. Não use o punch de "use o totem que quiser" numa negociação de Totem — ali o correto é vender a solução homologada. Detalhes na página EQUIPAMENTOS.
+**ÚNICA EXCEÇÃO — Totem de Autoatendimento:** o discurso de "hardware livre" vale para 18 dos 19 módulos. O Totem tem regra comercial própria e obrigatória (vigência jun/2026): a venda está condicionada à ativação do TEF Fiserv, com adicional de R$ 299,00/mês (Totem + licença TEF) e hardware na especificação homologada. Não use o punch de "use o totem que quiser" numa negociação de Totem — ali o correto é vender a solução homologada. Detalhes na página EQUIPAMENTOS.
 
 **Como ler as cinco frentes abaixo:** elas não estão em ordem de importância, estão em ordem de **onde a dor aparece na operação dele**. Escolha a frente pelo que você viu na visita, não pela ordem da lista.
 
@@ -63,8 +62,8 @@ O que resolve comissão de marketplace, motoboy caro e atendimento preso no What
 | Módulo                       | O que resolve                                                                                                                                                                                      | Pilar                    |
 | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
 | **Delivery Próprio**         | Canal de entrega gerido pelo próprio restaurante — reduz comissão de marketplace. Integra também iFood, 99Food e Keeta num painel único, então o marketplace vira canal a mais, não um sistema à parte. | Custos + Vendas      |
-| **Roteirização Inteligente** | *(adicional pago, R$ 109/mês — ver FAQ)* Agrupa até 9 pedidos prontos por região numa rota só, calcula a melhor ordem de entrega e manda o roteiro pro WhatsApp do motoboy — em vez de um motoboy por pedido. | Custos + Tempo Livre |
-| **Teka (IA de Atendimento)** | *(adicional pago, R$ 99/mês — ver FAQ)* Inteligência artificial que responde o cliente do delivery automaticamente, sem precisar de humano dedicado a isso.                                       | Custos + Tempo Livre     |
+| **Roteirização Inteligente** | *(adicional pago, R$ 109/mês — ver [FAQ](playbook:faq))* Agrupa até 9 pedidos prontos por região numa rota só, calcula a melhor ordem de entrega e manda o roteiro pro WhatsApp do motoboy — em vez de um motoboy por pedido. | Custos + Tempo Livre |
+| **Teka (IA de Atendimento)** | *(adicional pago, R$ 99/mês — ver [FAQ](playbook:faq))* Inteligência artificial que responde o cliente do delivery automaticamente, sem precisar de humano dedicado a isso.                                       | Custos + Tempo Livre     |
 
 > **A frase que abre essa frente:** *"Seu [Nome], de cada dez pedidos de delivery, quantos vêm do iFood? E quanto o senhor paga de comissão nesses dez? Porque o cliente que já conhece a sua casa não precisa passar por lá — e o marketplace continua servindo pra quem ainda não te conhece."*
 
@@ -91,7 +90,7 @@ O que resolve margem que ninguém sabe, caixa fechado no caderno e cartão que n
 | Módulo                         | O que resolve                                                                                                                                          | Pilar       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------- |
 | **Controle de CMV**            | Custo de Mercadoria Vendida calculado automaticamente.                                                                                                 | Custos      |
-| **Precificação Dinâmica**      | *(exclusivo Plano Inovação — ver FAQ)* CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado.                  | Custos      |
+| **Precificação Dinâmica**      | *(exclusivo Plano Inovação — ver [FAQ](playbook:faq))* CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado.                  | Custos      |
 | **Gestão Financeira**          | Controle de caixa, conciliação bancária por importação de OFX (sem credencial bancária no sistema), DRE automático.                                     | Tempo Livre |
 | **Integração com Adquirentes** | Conexão direta com as maiores adquirentes — pagamento processado já entra na conciliação.                                                               | Tempo Livre |
 
@@ -183,7 +182,7 @@ O Tablet e o Totem resolvem os **dois pilares ao mesmo tempo**, e é isso que pr
 
 ### Delivery Próprio (A taxa abusiva do marketplace)
 
-**Posicionamento oficial — canal complementar, não substituto. **O restaurante pode continuar no marketplace para ser descoberto por cliente novo. O Delivery Próprio existe para fazer duas coisas que o marketplace nunca vai fazer: **(1) tirar o cliente recorrente das taxas abusivas** — quem já conhece a casa passa a pedir pelo canal direto, sem comissão por pedido; e **(2) registrar os dados de quem pede** — nome, telefone, histórico e frequência ficam com o restaurante, alimentando o CRM, o Cashback e a Recorrência. No marketplace, esse cliente é da plataforma; no Delivery Próprio, ele é do dono.
+**Posicionamento oficial — canal complementar, não substituto.** O restaurante pode continuar no marketplace para ser descoberto por cliente novo. O Delivery Próprio existe para fazer duas coisas que o marketplace nunca vai fazer: **(1) tirar o cliente recorrente das taxas abusivas** — quem já conhece a casa passa a pedir pelo canal direto, sem comissão por pedido; e **(2) registrar os dados de quem pede** — nome, telefone, histórico e frequência ficam com o restaurante, alimentando o CRM, o Cashback e a Recorrência. No marketplace, esse cliente é da plataforma; no Delivery Próprio, ele é do dono.
 
 > *"Seu [Nome], me responde uma coisa: o senhor sabe o nome e o telefone do cliente que pediu do seu restaurante no marketplace ontem? Não sabe — porque aquele cliente não é seu, é da plataforma. E além de não te entregar o dado, ela fica com uma fatia da venda em cada pedido. Com o Delivery Próprio da Takeat, quem já conhece a sua casa pede direto no seu canal: o senhor não paga comissão e passa a ter o cadastro de quem pede, o que ele pede e de quanto em quanto tempo. Aí esse cliente entra no seu Cashback e volta sozinho. O senhor continua no marketplace pra ser descoberto por gente nova — mas para de pagar pedágio em cima do cliente que já era seu."*
 
@@ -314,9 +313,9 @@ Você deve agir, falar e se posicionar como a maior autoridade em gestão e oper
 
 > *"Rampa não é o tempo que a empresa te dá pra aprender. É o tempo que você leva pra parar de precisar de autorização pra decidir na frente do cliente."*
 
-**Decisão de gestão: **não contratamos vendedores para "aprenderem sozinhos". O programa entrega autonomia comercial com padrão — e diz, **com números**, quando o executivo está pronto e quando não está.
+**Decisão de gestão:** não contratamos vendedores para "aprenderem sozinhos". O programa entrega autonomia comercial com padrão — e diz, **com números**, quando o executivo está pronto e quando não está.
 
-**Tese central: **teoria cria familiaridade; **volume de apresentações reais cria competência**. Quanto mais o executivo apresenta — primeiro assistindo às reuniões do Inside Sales, depois conduzindo as próprias — mais rápido domina o produto e mais curta é a rampa. Por isso cada fase tem volumes mínimos, e nenhum gate avança sem volume **e** qualidade.
+**Tese central:** teoria cria familiaridade; **volume de apresentações reais cria competência**. Quanto mais o executivo apresenta — primeiro assistindo às reuniões do Inside Sales, depois conduzindo as próprias — mais rápido domina o produto e mais curta é a rampa. Por isso cada fase tem volumes mínimos, e nenhum gate avança sem volume **e** qualidade.
 
 ## A Jornada: Rampa (dias 1–30) + Consolidação (dias 31–60)
 
@@ -382,7 +381,7 @@ Prospecção externa com coaching, escalando a cadência até a meta plena do pl
 
 * **Registro:** toda decisão de gate registrada com data, evidências e responsável — no Cockpit e no PDI
 
-**Por que existe ponto de corte: **estender indefinidamente uma rampa que não converge custa salário, praça parada e energia de gestão. O corte no dia 45 não é punição — é o compromisso de que cada praça terá, no menor tempo possível, um executivo em condição real de performar.
+**Por que existe ponto de corte:** estender indefinidamente uma rampa que não converge custa salário, praça parada e energia de gestão. O corte no dia 45 não é punição — é o compromisso de que cada praça terá, no menor tempo possível, um executivo em condição real de performar.
 
 ## Ferramentas e Rituais (a rampa roda na rotina existente)
 
@@ -412,7 +411,7 @@ Prospecção externa com coaching, escalando a cadência até a meta plena do pl
 
 * **Autonomia:** sabe quando agir e quando pedir ajuda
 
-**Pergunta de coaching: **"Qual hipótese você tinha, que evidência encontrou e o que mudará na sua próxima interação?" Feedback existe para gerar uma ação melhor, não apenas uma avaliação.
+**Pergunta de coaching:** "Qual hipótese você tinha, que evidência encontrou e o que mudará na sua próxima interação?" Feedback existe para gerar uma ação melhor, não apenas uma avaliação.
 
 ## Resultado Esperado
 
@@ -436,7 +435,7 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 
 > *"Meta não é opinião. Se dois lugares deste playbook mostram números diferentes, o que vale é esta página — e é ela que o seu gestor vai abrir no 1:1."*
 
-**Esta é a única fonte de verdade dos números do Field Sales. **Se qualquer outra página do playbook mostrar um número diferente, vale o que está aqui. Todo o playbook foi recalibrado para este padrão em agosto/2026.
+**Esta é a única fonte de verdade dos números do Field Sales.** Se qualquer outra página do playbook mostrar um número diferente, vale o que está aqui. Todo o playbook foi recalibrado para este padrão em agosto/2026.
 
 ## Cadência diária do executivo (campo pleno)
 
@@ -459,23 +458,23 @@ Versão 2.2 · Agosto 2026 · Responsável: Gestor de Field Sales (Julyan Bourgu
 | Propostas             | 2       | 40      | 100%           |
 | Contratos fechados    | 1       | 20      | 50%            |
 
-**Conversão final: 16,7% **— a cada 6 visitas qualificadas, 1 contrato. Resultado previsível: 20 clientes/mês. Mesmo resultado do modelo antigo de 8 visitas frias, com menos porta e mais profundidade por porta.
+**Conversão final: 16,7%** — a cada 6 visitas qualificadas, 1 contrato. Resultado previsível: 20 clientes/mês. Mesmo resultado do modelo antigo de 8 visitas frias, com menos porta e mais profundidade por porta.
 
 ## Régua de preço e MRR
 
-* **R$ 349 — **plano padrão mínimo. Piso inegociável na recorrência mensal.
+**O valor de plano vive na aba Precificação do Cockpit, não nesta página.** Tabela de plano muda; página decorada não muda junto. Antes de qualquer proposta, abra a Precificação e leia o valor de lá — é a única fonte que o financeiro reconhece. Aqui fica a regra, que não muda quando a tabela muda.
 
-* **R$ 400+ — **ticket-alvo do ICP prioritário (casa estruturada com módulos). É meta de MRR, não outra tabela.
+* **R$ 349 é o ticket médio ideal da carteira, não um piso.** Média se faz com casos acima e casos abaixo dela. Fechar acima puxa a sua média para cima; fechar abaixo continua sendo venda, contrato e território.
 
-* **R$ 299/mês — **adicional Totem + licença TEF Fiserv (venda condicionada — ver EQUIPAMENTOS).
+* **Ninguém está isento de ofertar os planos de entrada.** Existem planos vendáveis abaixo do ticket ideal e eles são para usar: a operação menor que entra hoje é mancha de bairro, é prova social na rua e é upsell no ano que vem. Recusar o plano de entrada é recusar território — e território é o ativo do executivo.
 
-* **Teka (IA de atendimento) — **R$ 99/mês, adicional fora do plano padrão.
+* **O ICP prioritário não é um preço, é uma operação:** casa que fatura **mais de R$ 70 mil por mês no canal próprio** — salão e delivery próprio, o que não passa por marketplace. É esse faturamento que sustenta o ecossistema completo e é ele que decide a ordem da sua rota. **Atendemos todos os portes:** o critério prioriza porta, nunca serve para recusar cliente.
 
-* **Roteirização Inteligente — **R$ 109/mês, adicional. Otimiza rotas do Delivery Próprio — venda principalmente para quem tem motoboy próprio (frota própria, não terceirizada).
+* **Adicional é upsell de eficiência**, vendido pela dor que resolve — nunca embutido de brinde para justificar preço. Os que mais aparecem em campo: **Teka** (a IA que atende o delivery de ponta a ponta), **Totem + licença TEF Fiserv** (venda condicionada — ver [Equipamentos](playbook:equipamentos)) e **Roteirização Inteligente** (otimiza rotas do delivery próprio — venda para quem tem frota própria, não terceirizada).
 
-* **Plano Inovação — **destrava a Precificação Dinâmica (CMV recalculado em tempo real, item por item). No plano padrão o cliente só tem CMV e Ficha Técnica estáticos.
+* **Plano Inovação** destrava a Precificação Dinâmica (CMV recalculado em tempo real, item por item). No plano padrão o cliente tem CMV e Ficha Técnica estáticos.
 
-* **Desconto — **somente via prazo (trimestral/semestral/anual). Plano longo parcelado só no cartão de crédito.
+* **Desconto só via prazo** (trimestral, semestral, anual): o plano longo já carrega o desconto embutido. Plano longo parcelado, só no cartão de crédito.
 
 ### Quatro divergências ABERTAS entre as nossas próprias fontes
 
@@ -505,25 +504,25 @@ Levantadas em 29/08/2026 comparando a tabela do cockpit, o site público e o con
 
 ## Cadência durante a rampagem (executivo novo)
 
-* **Fase 1 (semana 1): **8–10 shadowings de Inside Sales + 3 role-plays aprovados
+* **Fase 1 (semana 1):** 8–10 shadowings de Inside Sales + 3 role-plays aprovados
 
-* **Fase 2 (semanas 2–3): **15–20 demos + 20 ligações/dia + 1 demo certificada pelo gestor
+* **Fase 2 (semanas 2–3):** 15–20 demos + 20 ligações/dia + 1 demo certificada pelo gestor
 
-* **Fase 3 (semana 4): **12–15 visitas à base ativa + 3 casos documentados
+* **Fase 3 (semana 4):** 12–15 visitas à base ativa + 3 casos documentados
 
-* **Fase 4 (dias 31–60): **3 visitas/dia na semana 5 → 4–5 nas semanas 6–7 → 6/dia da semana 8 em diante
+* **Fase 4 (dias 31–60):** 3 visitas/dia na semana 5 → 4–5 nas semanas 6–7 → 6/dia da semana 8 em diante
 
 Detalhe completo na página ONBOARDING DE NOVOS EXECUTIVOS.
 
 ## O que nunca prometer em campo
 
-* **PDV 100% offline — **módulo em desenvolvimento. A contingência vendável hoje é 4G/5G nas Maquininhas Smart + 50mb de fibra dedicados.
+* **PDV 100% offline** — módulo em desenvolvimento. A contingência vendável hoje é 4G/5G nas Maquininhas Smart + 50mb de fibra dedicados.
 
-* **Integrações ou customizações sob medida — **o produto é padronizado e escalável.
+* **Integrações ou customizações sob medida** — o produto é padronizado e escalável.
 
-* **Cortesias, desconto fora de tabela ou alteração de escopo — **só com aprovação prévia do gestor e de Operações.
+* **Cortesias, desconto fora de tabela ou alteração de escopo** — só com aprovação prévia do gestor e de Operações.
 
-* **"Use o totem que quiser" — **o Totem tem regra própria com TEF Fiserv obrigatório; o discurso de hardware livre vale para os outros módulos.
+* **"Use o totem que quiser"** — o Totem tem regra própria com TEF Fiserv obrigatório; o discurso de hardware livre vale para os outros módulos.
 
 Versão 1.0 · Agosto 2026 · Responsável: Gestor de Field Sales. Qualquer alteração de meta passa por esta página primeiro, e depois nas páginas que a referenciam.
 
@@ -550,7 +549,7 @@ O escritório ou a mesa de casa servem para organizar o dia; a praça se conquis
 
 ## O cronograma integrado
 
-#### 30 às 09:00 | Revisão de Campo: O Dia já está Ganho
+### 08:30 às 09:00 | Revisão de Campo: O Dia já está Ganho
 
 > *O amador planeja o dia quando acorda. O executivo Takeat acorda com a rota pronta.*
 
@@ -568,13 +567,13 @@ Este é o bloco de preparação final. Antes de sair, o executivo precisa estar 
 
 * **Pronto para executar:** às 09:00, o executivo não deve estar “se organizando”. Deve estar pronto para apresentar ao gestor qual território vai dominar, quais reuniões vai conduzir e quais oportunidades pretende avançar.
 
-#### 00 às 09:30 | Daily com Gestor: Alinhamento de Campo
+### 09:00 às 09:30 | Daily com Gestor: Alinhamento de Campo
 
 * **Foco:** Sangue no olho. Compartilhamento de vitórias do dia anterior, blindagem de discursos para as objeções difíceis e validação da rota do dia com o gestor.
 
 * **Postura:** Você não entra na Daily para perguntar o que deve fazer; você entra para apresentar o quadrante que vai dominar e quantas Demos vai cravar hoje.
 
-#### 30 às 17:30 | Execução de Asfalto Absoluta: O Dia Completo de Rua
+### 09:30 às 17:30 | Execução de Asfalto Absoluta: O Dia Completo de Rua
 
 > *Sem divisões, sem travas. O seu dia de rua é um fluxo contínuo de geração de valor, olho no olho e fechamento. Se o lojista abre cedo ou o decisor só está na casa à tarde, você se adapta e domina o perímetro comercial.*
 
@@ -586,11 +585,11 @@ Este é o bloco de preparação final. Antes de sair, o executivo precisa estar 
 
   * *O Script de Ouro da Indicação:* *"Fulano, que bom que o sistema está tracionando! Me diz uma coisa: quem é o dono de restaurante aqui da região que você mais admira e que tem uma operação séria que eu deveria ajudar com a nossa tecnologia também?"*
 
-* ** O Almoço Estratégico (O Almoço Invisível):** Faça sua pausa para o almoço em um restaurante do seu funil ou de um concorrente de peso na região da rota. Sinta o calo da operação deles na pele enquanto se alimenta. Aproveite os últimos 15 minutos para checar o app e travar a estratégia das visitas seguintes.
+* **O Almoço Estratégico (O Almoço Invisível):** Faça sua pausa para o almoço em um restaurante do seu funil ou de um concorrente de peso na região da rota. Sinta o calo da operação deles na pele enquanto se alimenta. Aproveite os últimos 15 minutos para checar o app e travar a estratégia das visitas seguintes.
 
 * **A Regra do "Saiu do Cliente, Alimentou o App":** Acabou a reunião? Teve um PAP de oportunidade? **Você não espera o fim do dia para registrar.** No portão do cliente, abra o aplicativo de Field Sales no celular, mude o status do negócio, digite as notas da visita e crie o próximo follow-up imediatamente. O HubSpot se limpa ao longo do dia, passo a passo, no calor da ação.
 
-#### 30 às 18:00 | Engenharia do Dia Seguinte (O Fechamento)
+### 17:30 às 18:00 | Engenharia do Dia Seguinte (O Fechamento)
 
 * **Apenas Validação:** Como você usou o aplicativo de Field Sales em tempo real após cada visita na rua, seu funil já está 100% limpo e atualizado. Este bloco serve apenas para abrir o mapa e desenhar a sua próxima microrota de amanhã. Deixe os agendamentos prontos. Durma sabendo exatamente onde você vai pisar amanhã.
 
@@ -622,7 +621,7 @@ No Field Sales que dá resultado, o sucesso não depende da sorte, do humor do m
 
 O nosso modelo é movido a taxas de conversão claras. Para garantir previsibilidade total e alcançar o resultado de 10 a 20 clientes novos no mês, o ritmo diário obrigatório de campo é a métrica oficial de **6 visitas por dia com qualidade** — menos porta, mais profundidade por porta: decisor identificado, hipótese preparada e registro completo em cada uma. É essa qualidade que sustenta a conversão maior por etapa e entrega o mesmo resultado final com menos desgaste de rua.
 
-#### O Funil de Conversões (Baseado em 20 Dias Úteis)
+### O Funil de Conversões (Baseado em 20 Dias Úteis)
 
 | **Etapa do Pipeline**        | **Métrica Diária**          | **Volume Mensal**            | **Taxa de Conversão** | **Objetivo Operacional**                                                                                |
 | ---------------------------- | --------------------------- | ---------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -632,7 +631,7 @@ O nosso modelo é movido a taxas de conversão claras. Para garantir previsibili
 | **4. Propostas na Mesa**     | **2** Propostas             | **40** Propostas             | **100%** (Avanço)     | Envio de proposta comercial e alinhamento de termos técnicos.                                           |
 | **5. Contratos Fechados**    | **1** Fechamento            | **20** Clientes              | 50% (de Demos)        | **Sucesso Total.** Assinatura e link do Asaas enviado.                                                  |
 
-**Nota de Conversão Geral: **o modelo opera com uma taxa de conversão final de **16,7%** (a cada 6 visitas qualificadas na rua, 1 se transforma em contrato fechado). Se o executivo mantiver a consistência de 6 visitas diárias com qualidade, ele constrói um resultado previsível de 1 novo cliente por dia — exatamente o mesmo resultado do modelo antigo de 8 visitas frias.
+**Nota de Conversão Geral:** o modelo opera com uma taxa de conversão final de **16,7%** (a cada 6 visitas qualificadas na rua, 1 se transforma em contrato fechado). Se o executivo mantiver a consistência de 6 visitas diárias com qualidade, ele constrói um resultado previsível de 1 novo cliente por dia — exatamente o mesmo resultado do modelo antigo de 8 visitas frias.
 
 >  **O que a matemática do funil não mostra sozinha:** 6 visitas de qualidade batidas em 3 quarteirões valem mais que 15 visitas espalhadas em 3 bairros diferentes. É exatamente isso que a seção seguinte resolve.
 
@@ -644,7 +643,7 @@ O nosso modelo é movido a taxas de conversão claras. Para garantir previsibili
 
 O maior diferencial entre um executivo mediano e uma referência do time não é quantas portas ele bate — é **quanto tempo ele perde entre uma porta e outra**. Cada minuto andando de um estabelecimento distante para outro é minuto que não vira visita, não vira decisor, não vira contrato.
 
-#### O Princípio da Microrrota
+### O Princípio da Microrrota
 
 Uma microrrota é um agrupamento de **8 a 12 estabelecimentos dentro de um raio caminhável de poucos minutos** — normalmente 2 a 3 quarteirões, nunca um deslocamento que exija carro entre uma porta e outra durante o bloco de prospecção ativa.
 
@@ -654,7 +653,7 @@ Uma microrrota é um agrupamento de **8 a 12 estabelecimentos dentro de um raio 
 
 * **A regra dos 60/40:** dentro de cada microrrota, 60% do tempo é para **Prospecção Ativa** (portas novas, ainda não visitadas) e 40% é para **Intervenção de Follow-up** (retornos e visitas de reforço a leads que já estão em Conversa com Decisor, Demo/Proposta ou Negociação na mesma região). Isso significa que a microrrota do dia nunca é só sobre gente nova — é sobre dominar o quarteirão inteiro, incluindo quem você já está trabalhando ali.
 
-#### O Efeito Mancha de Bairro
+### O Efeito Mancha de Bairro
 
 Quando um executivo ativa 5 ou 6 estabelecimentos na mesma rua, o restaurante que ainda resiste começa a perceber que "todo mundo ao redor já modernizou" — isso reduz drasticamente a resistência da próxima porta. Microrrota bem executada não é só economia de tempo, é **construção de prova social geográfica**: o vizinho que você acabou de atender vira a sua melhor ferramenta de abertura na porta seguinte (ver Módulo 3.4 do playbook, Gatilho de Curiosidade por prova social hiperlocal).
 
@@ -696,7 +695,7 @@ Antes de dar o primeiro passo para dentro de um restaurante, o consultor Takeat 
 
 O objetivo do Porta a Porta **nunca é fechar a venda no primeiro minuto**, mas estabelecer conexão imediata, gerar valor rápido e vender um agendamento de Demonstração de 10 minutos para um horário de calmaria.
 
-#### Passo 1: A Quebra de Padrão (Posicionamento Consultivo)
+### Passo 1: A Quebra de Padrão (Posicionamento Consultivo)
 
 Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em eficiência, processos e ganho de receita para o mercado de Foodservice.
 
@@ -709,7 +708,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 > *"Tudo bem? Sou o [Seu Nome] da Takeat. Estava conversando com a gestão aqui da rua sobre como os novos ecossistemas de automação de pedidos ajudam a reter o cliente e facilitar o trabalho físico do time de atendimento. Reparei que o movimento de vocês também é fantástico no horário de pico. Geralmente é o [Nome do Dono, se souber] quem avalia essa parte de processos e sistemas na casa ou vocês têm um gerente de operações focado nisso?"*\
 > *( Objetivo: coletar o nome exato do decisor, o sistema atual e o horário mais tranquilo para encontrá-lo.)*
 
-#### Passo 2: O Levantamento Diagnóstico (Fazendo o Cliente Pensar)
+### Passo 2: O Levantamento Diagnóstico (Fazendo o Cliente Pensar)
 
 * **Foco no Salão (Frente):**
 
@@ -721,7 +720,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
   * *"Com a oscilação constante de preços dos insumos hoje, como o senhor faz o acompanhamento do seu CMV? O senhor tem esses dados integrados ao estoque de forma automatizada ou precisa passar horas cruzando notas no fechamento do mês?"*
 
-#### Passo 3: O Fechamento da Reunião (Agendando a Demo ou aplicando o "Strike")
+### Passo 3: O Fechamento da Reunião (Agendando a Demo ou aplicando o "Strike")
 
 * **Abordagem Padrão (decisor ocupado):**
 
@@ -735,7 +734,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 ## O que separa os 20% de cima
 
-1. **Ele mede qualidade E densidade, não só volume. **6 visitas em microrrota com decisor mapeado valem mais que 15 visitas espalhadas e superficiais — é justamente por isso que o padrão oficial baixou o número e subiu a régua.
+1. **Ele mede qualidade E densidade, não só volume.** 6 visitas em microrrota com decisor mapeado valem mais que 15 visitas espalhadas e superficiais — é justamente por isso que o padrão oficial baixou o número e subiu a régua.
 
 2. **Ele trata "não" como dado, não como rejeição pessoal.** Cada porta fechada é uma etapa estatística esperada dentro dos 16,7% de conversão — não motivo pra desacelerar o ritmo do dia.
 
@@ -763,7 +762,7 @@ Esqueça a abordagem batida de "vendedor de sistema". O posicionamento foca em e
 
 ## Escolher antes de andar
 
-O porta a porta cobre o quarteirão com o pé; a prospecção por dados escolhe **qual** quarteirão merece o seu dia. O objetivo aqui é usar ferramentas estratégicas para mapear o ICP de alto valor (R$349) antes mesmo de pisar no restaurante ou fazer a primeira ligação.
+O porta a porta cobre o quarteirão com o pé; a prospecção por dados escolhe **qual** quarteirão merece o seu dia. O objetivo aqui é usar ferramentas estratégicas para mapear o ICP prioritário — a casa que fatura mais de R$ 70 mil por mês no canal próprio, salão e delivery próprio — antes mesmo de pisar no restaurante ou fazer a primeira ligação.
 
 O executivo Takeat não liga para uma lista aleatória; ele estuda o alvo, descobre a dor provável e aborda o decisor com um nível de autoridade tão alto que o agendamento da demonstração (Demo) vira uma consequência natural.
 
@@ -799,7 +798,7 @@ O Google Maps é a melhor ferramenta gratuita para desenhar rotas de campo intel
 
 1. **Pesquise por Nichos Específicos:** Em vez de buscar apenas "restaurantes", busque por nichos de ICP alto (*"Pizzarias em Vila Velha"*, *"Churrascarias em Vitória"*).
 
-2. **Avalie o Volume de Avaliações:** Um restaurante com mais de 200 ou 300 avaliações no Google indica alto fluxo de caixa e salão cheio no pico — perfil perfeito para o plano de R$ 349+.
+2. **Avalie o Volume de Avaliações:** Um restaurante com mais de 200 ou 300 avaliações no Google indica alto fluxo de caixa e salão cheio no pico: é o sinal visível de canal próprio forte, o perfil que costuma passar dos R$ 70 mil por mês em salão e delivery próprio.
 
 3. **Procure o "Gargalo Crítico" nos Comentários Negativos:** Filtre as avaliações por "Mais recentes" ou "Mais baixas". Procure por palavras-chave como: *"demora no atendimento"*, *"pedido veio errado"*, *"garçom demorou para trazer a conta"*.
 
@@ -834,7 +833,7 @@ Para que a prospecção digital tenha alta conversão, o executivo deve seguir o
 
 2. **Mapeie o Instagram da Casa:** Insira o link do perfil do restaurante dentro das notas do HubSpot para que você possa consultar a cara do salão e o cardápio atual antes da reunião.
 
-3. **Transacione para o Contato Direto:** O objetivo do Direct ou da pesquisa de dados é conseguir o número do decisor. Assim que conseguir o WhatsApp, mova o card para **Demo/Proposta** (ver PIPELINE) e parta para a apresentação do ecossistema.
+3. **Transacione para o Contato Direto:** O objetivo do Direct ou da pesquisa de dados é conseguir o número do decisor. Com o WhatsApp na mão, o card sai de Prospecção para **Visita**: o telefone compra os próximos 15 minutos presenciais, não a demonstração. **Demo/Proposta** só recebe o card quando a demo estiver agendada ou realizada — é o indicador de entrada da etapa (ver [Pipeline oficial](playbook:pipeline#pipeline-demo-proposta)).
 
 ***
 
@@ -850,7 +849,7 @@ Para que a prospecção digital tenha alta conversão, o executivo deve seguir o
 
 # Como chegar em quem assina
 
-### Como quebrar a barreira do "ele não está" e chegar em quem assina
+## Como quebrar a barreira do "ele não está" e chegar em quem assina
 
 > *"Você não perde venda para o concorrente. Você perde venda para o balcão que te barra antes de você chegar no dono."*
 
@@ -1109,7 +1108,7 @@ E há recursos onde o comparativo marca o concorrente como **"a verificar"** —
 
 ***
 
-### Ninguém fecha de primeira, e tudo bem
+## Ninguém fecha de primeira, e tudo bem
 
 Quem dera se toda demo terminasse com o Pix na hora. Não termina — e quem bate meta não trata isso como falha, trata como **a régua real do jogo**. A diferença entre o executivo mediano e o Takeat não é fechar mais na primeira visita; é **ter um sistema tão preciso de retorno que o "não fechei hoje" nunca vira "esqueci desse lead"**.
 
@@ -1131,7 +1130,7 @@ Isso muda a forma de encarar follow-up: não é um plano B pra quando a venda n�
 
 ## As 4 estratégias de campo
 
-#### A Visita Oportuna de Fechamento: O "Passei por Aqui" (Presencial)
+### A Visita Oportuna de Fechamento: O "Passei por Aqui" (Presencial)
 
 O follow-up mais eficiente do mercado não avisa que vai acontecer. Ele pega o decisor focado na operação e resolve a pendência em 5 minutos.
 
@@ -1141,7 +1140,7 @@ O follow-up mais eficiente do mercado não avisa que vai acontecer. Ele pega o d
 
 > *"Fala, seu [Nome], tudo bem? Cara, eu estava estruturando a virada de chave ali no seu vizinho do [Restaurante X] para o final de semana e passei aqui porque o técnico me cobrou a liberação do seu contrato para encaixar na mesma rota de implantação. Como eu já mapeei o gargalo da sua comanda na terça-feira, vim direto no balcão para a gente dar o 'ok' no setup e garantir que o seu salão já rode no automático nos dias de maior movimento. Consegue abrir o link do Pix aí rapidinho pra gente liquidar isso?"*
 
-#### O WhatsApp de Impacto Operacional (Vídeo de Prova Social Local)
+### O WhatsApp de Impacto Operacional (Vídeo de Prova Social Local)
 
 Se você precisar usar o chat, use-o apenas como um soco no estômago visual para cavar a sua próxima entrada física em menos de 24 horas. Nunca mande texto cobrando resposta.
 
@@ -1151,7 +1150,7 @@ Se você precisar usar o chat, use-o apenas como um soco no estômago visual par
 
 > *"Seu [Nome], acabei de sair da operação aqui do [Parceiro X] e lembrei na hora do gargalo de fechamento de conta que o senhor me contou. Olha a velocidade com que o pedido sobe e a conta é paga sem o garçom dar um passo. Estou com a agenda de campo aberta para amanhã de manhã e vou passar aí para a gente desenhar esse mesmo fluxo no seu salão. Às 10h ou às 11h fica melhor para o senhor?"*
 
-#### O "Almoço Invisível" de Diagnóstico (Vivenciando a Dor)
+### O "Almoço Invisível" de Diagnóstico (Vivenciando a Dor)
 
 Não existe argumento técnico que vença a exposição em tempo real do erro do cliente.
 
@@ -1161,7 +1160,7 @@ Não existe argumento técnico que vença a exposição em tempo real do erro do
 
 > *"Seu [Nome], o prato de vocês é espetacular. Mas olha que curioso: eu sentei ali na mesa 4 e notei que o seu garçom levou 12 minutos para conseguir me trazer a conta, e o salão nem está na capacidade máxima. Lembra que na nossa reunião nós conversamos sobre como o autoatendimento estanca essa perda de dinheiro? Vamos rodar o Pix do setup aqui no balcão agora para eu trazer o time de implantação na segunda-feira e resolver esse problema de uma vez por todas?"*
 
-#### A Ligação de Alinhamento de Logística (Gatilho da Escassez)
+### A Ligação de Alinhamento de Logística (Gatilho da Escassez)
 
 O telefone não serve para bater papo. Serve para usar a escassez da agenda técnica e forçar o lojista a tomar uma decisão de curto prazo.
 
@@ -1175,7 +1174,7 @@ O telefone não serve para bater papo. Serve para usar a escassez da agenda téc
 
 Isso é o que transforma as 4 estratégias soltas em **sistema**. Cada dia do prazo tem uma ferramenta certa — nunca use a mais forte cedo demais, nem a mais fraca quando o prazo já está apertado.
 
-#### Dentro do SLA de Negociação (7 dias)
+### Dentro do SLA de Negociação (7 dias)
 
 | Dia              | Estratégia indicada                 | Objetivo do dia                                                                                                                                                                        |
 | ---------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1184,7 +1183,7 @@ Isso é o que transforma as 4 estratégias soltas em **sistema**. Cada dia do pr
 | **D+5**          | Ligação de Alinhamento de Logística | Forçar decisão usando escassez de agenda técnica — pressão legítima antes do prazo fechar                                                                                              |
 | **D+7 (limite)** | Decisão obrigatória                 | Fecha (avança para Aguardando Pagamento), ou aplica o "Almoço Invisível" como última tentativa de diagnóstico, ou move para Reciclagem/Perdido — mas **não fica aberto além do dia 7** |
 
-#### Dentro do SLA de Aguardando Pagamento (2 dias — janela curta)
+### Dentro do SLA de Aguardando Pagamento (2 dias — janela curta)
 
 | Dia              | Estratégia indicada                               | Objetivo do dia                                                                                                                                           |
 | ---------------- | ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1247,7 +1246,7 @@ O WhatsApp é um ambiente de alta distração. Se você tenta vender por texto, 
 
 Quando o cliente tentar puxar a negociação para o ambiente digital para economizar o tempo dele, o seu papel é cortar o papo e agendar a visita física imediatamente.
 
-#### A) Quando o cliente pede: "Me manda um PDF / Apresentação / Proposta"
+### A) Quando o cliente pede: "Me manda um PDF / Apresentação / Proposta"
 
 * **O Erro Comum:** Mandar o arquivo e ficar rezando por uma resposta no vácuo.
 
@@ -1255,7 +1254,7 @@ Quando o cliente tentar puxar a negociação para o ambiente digital para econom
 
 > *"Com certeza, seu [Nome]! Já te mandei o portfólio aí. Mas a verdade é que o papel aceita tudo e o que eu tenho aqui mexe direto com o lucro do seu salão no próximo final de semana. Como estou mapeando a sua região hoje e atendendo um parceiro bem do seu lado, eu faço questão de passar aí 15 minutos para te mostrar no tablet como essa engenharia funciona na prática. O senhor está na casa hoje às 14h ou às 16h fica melhor?"*
 
-#### B) Quando o cliente pergunta: "Qual o valor / preço / mensalidade?"
+### B) Quando o cliente pergunta: "Qual o valor / preço / mensalidade?"
 
 * **O Erro Comum:** Soltar o preço no texto e ver o lead sumir. Preço sem valor percebido presencialmente parece caro.
 
@@ -1263,7 +1262,7 @@ Quando o cliente tentar puxar a negociação para o ambiente digital para econom
 
 > *"Seu [Nome], o investimento varia de acordo com o tamanho do seu salão e o número de mesas, mas garanto que a nossa mensalidade custa menos do que o desperdício que o processo manual de comanda causa na sua cozinha em um único sábado de movimento. Como eu preciso calcular o seu ganho de eficiência real, estou passando na sua rua amanhã. O período da manhã ou da tarde é mais tranquilo para tomarmos um café rápido e fazermos essa conta juntos?"*
 
-#### C) Quando o cliente diz no chat: "Estou totalmente sem tempo agora."
+### C) Quando o cliente diz no chat: "Estou totalmente sem tempo agora."
 
 * **O Erro Comum:** Responder "tudo bem, quando tiver tempo me avisa".
 
@@ -1310,7 +1309,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 > **Se a objeção não cair na mesa.** O follow-up existe para comprar a próxima presença — nunca para rediscutir a objeção por escrito. No texto o senhor concorre com o garçom chamando, o motoboy buzinando e o cliente reclamando: quem argumenta ali perde. Mande uma linha que marque a hora e volte para o balcão.
 
-#### "O sistema de vocês é caro / Não tenho o valor do setup agora."
+### "O sistema de vocês é caro / Não tenho o valor do setup agora."
 
 * **O Erro do Vendedor:** Tentar dar desconto ou recuar.
 
@@ -1322,7 +1321,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **No follow-up, depois da visita:** *"Seu [Nome], fiz a conta do que a fila e o desperdício custaram só no seu fim de semana. Passo aí terça às 15h para o senhor ver o número na tela — 15 minutos."*
 
-#### "Eu já tenho o sistema X e estou satisfeito. Não quero mexer nisso agora."
+### "Eu já tenho o sistema X e estou satisfeito. Não quero mexer nisso agora."
 
 * **O Erro do Vendedor:** Falar mal do concorrente.
 
@@ -1334,7 +1333,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **No follow-up, depois da visita:** *"Separei duas coisas que o seu sistema atual não faz e que mexem no seu caixa. Não dá para mostrar por aqui: passo amanhã no balcão e o senhor julga vendo."*
 
-#### "Meu cliente é tradicional, prefere o papel/garçom humano. Tenho medo de esfriar o salão."
+### "Meu cliente é tradicional, prefere o papel/garçom humano. Tenho medo de esfriar o salão."
 
 * **O Erro do Vendedor:** Dizer que o garçom vai sumir.
 
@@ -1346,7 +1345,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **No follow-up, depois da visita:** *"Pensei no seu salão: o garçom continua na mesa, o que muda é ele parar de andar até o caixa. Levo o tablet na quinta e o senhor vê com a sua equipe."*
 
-#### "Meu restaurante é pequeno, não preciso de tanta tecnologia ou controle robusto."
+### "Meu restaurante é pequeno, não preciso de tanta tecnologia ou controle robusto."
 
 * **O Erro do Vendedor:** Concordar e oferecer um plano "capado".
 
@@ -1358,7 +1357,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **No follow-up, depois da visita:** *"O controle não é para restaurante grande, é para margem apertada — que é a sua. Passo aí para montarmos a ficha de dois pratos seus, dá 15 minutos."*
 
-#### "E se a internet cair? Minha operação vai travar e parar?"
+### "E se a internet cair? Minha operação vai travar e parar?"
 
 * **O Erro do Vendedor:** Gaguejar ou tentar explicar termos técnicos de TI.
 
@@ -1370,7 +1369,7 @@ Se o cliente acha a Takeat cara, a culpa é sua, que vendeu o produto como um cu
 
 * **No follow-up, depois da visita:** *"Trouxe o registro do modo offline rodando num cliente aqui do bairro. Melhor que print é ver: passo amanhã e a gente desliga a internet na sua frente."*
 
-** REGRA DE HONESTIDADE COMERCIAL: **nunca prometa "PDV offline" hoje — o módulo está em desenvolvimento (ver FAQ). Prometer offline fecha contrato e gera churn na primeira queda de internet, além de queimar a sua credibilidade na praça. A contingência real e vendável é 4G/5G nas Maquininhas Smart + internet estável de 50mb.
+**REGRA DE HONESTIDADE COMERCIAL:** nunca prometa "PDV offline" hoje — o módulo está em desenvolvimento (ver [FAQ](playbook:faq)). Prometer offline fecha contrato e gera churn na primeira queda de internet, além de queimar a sua credibilidade na praça. A contingência real e vendável é 4G/5G nas Maquininhas Smart + internet estável de 50mb.
 
 ## Fechamento por contraste
 
@@ -1429,15 +1428,15 @@ Assim que terminar a Demo, você faz o fechamento micro e separa as duas coisas 
 
 Assim que o cliente abrir o WhatsApp na sua frente, use uma das abordagens abaixo para garantir que o Pix ou o Cartão do setup mude de status no Asaas antes de você se levantar:
 
-#### A) A Técnica do "Pedágio da Implantação" (Mensalidade para frente, Setup agora)
+### A) A Técnica do "Pedágio da Implantação" (Mensalidade para frente, Setup agora)
 
 > *"Seu [Nome], funciona assim: a sua mensalidade ficou agendada para o mês que vem, mas a nossa Engenharia de Cardápio só recebe o sinal verde do sistema para começar a desenhar suas telas quando o Asaas acusa a compensação dessa taxa de ativação. Faz o Pix ou joga no crédito aí na minha frente que eu já tiro o print, anexo no seu contrato aqui no HubSpot e garanto que nosso time comece a trabalhar no seu restaurante ainda hoje à tarde. Qual você prefere, Pix ou cartão?"*
 
-#### B) A Técnica da Escassez de Cronograma Técnico (Agenda do Engenheiro)
+### B) A Técnica da Escassez de Cronograma Técnico (Agenda do Engenheiro)
 
 > *"Seu [Nome], abre o link do setup que te mandei no WhatsApp por gentileza. Como a mensalidade ficou só para o dia X, eu preciso que a gente liquide essa ativação agora pelo seguinte: nossa agenda de implantação física para a região está lotada. Se você pagar esse Pix agora, o sistema trava a vaga de instalação das maquininhas Smart para a próxima terça-feira. Se deixarmos para pagar mais tarde, o próximo restaurante da fila pega a vaga e a sua operação continua perdendo dinheiro por mais uma semana. Vamos liquidar agora para travar a sua data?"*
 
-#### C) A Técnica do "Contrato de Parceria e Reciprocidade"
+### C) A Técnica do "Contrato de Parceria e Reciprocidade"
 
 > *"Seu [Nome], nós vamos customizar toda a sua retaguarda e digitalizar o seu cardápio do zero. Isso exige horas de trabalho do nosso time técnico antes mesmo de você pagar a sua primeira mensalidade. O pagamento dessa taxa de ativação agora é o que firma o nosso compromisso mútuo de parceria. Vamos abrir o link juntos? Você faz o Pix agora, nós selamos o negócio e eu já saio daqui com a sua data de inauguração travada."*
 
@@ -1482,11 +1481,11 @@ Um executivo Takeat na Takeat não corre atrás de "vendas isoladas"; ele atua c
    │             O EQUILÍBRIO ESTRATÉGICO TAKEAT             │
    ├────────────────────────────┬────────────────────────────┤
    │      VOLUME DE VENDAS      │          MRR ALVO          │
-   │   (A "Mancha de Bairro")   │      (Ticket R$ 400+)      │
+   │   (A "Mancha de Bairro")   │   (Canal próprio 70k+)     │
    ├────────────────────────────┼────────────────────────────┤
    │  • Domínio territorial     │  • Alta lucratividade      │
    │  • Prova social imbatível  │  • Clientes estruturados   │
-   │  • Barreira de entrada     │  • LTV estendido (Churn ) │
+   │  • Barreira de entrada     │  • Churn baixo, LTV alto   │
    └────────────────────────────┴────────────────────────────┘
 ```
 
@@ -1500,17 +1499,17 @@ No Field Sales, **ocupação de território é poder de conversão**. Nós nunca
 
 * **Autoridade Local:** Dominar um perímetro geográfico reduz o seu tempo de deslocamento de follow-up, otimiza o suporte presencial e transforma você na referência máxima de tecnologia para aquela região.
 
-## O MRR alvo de R$ 400,00
+## O MRR alto e o ICP prioritário
 
-Se o volume traz relevância e autoridade na rua, o **MRR (Receita Recorrente Mensal) Alto** é o que traz a sustentabilidade da carteira e o ganho real de comissão para o bolso do executivo. O nosso ICP (Perfil de Cliente Ideal) prioritário foca no plano de **R$ 400,00+**.
+Se o volume traz relevância e autoridade na rua, o **MRR (Receita Recorrente Mensal) Alto** é o que traz a sustentabilidade da carteira e o ganho real de comissão para o bolso do executivo. O nosso ICP (Perfil de Cliente Ideal) prioritário é a casa que fatura **mais de R$ 70 mil por mês no canal próprio** — salão e delivery próprio, o faturamento que não passa por marketplace. É essa operação que usa o ecossistema completo e devolve o MRR mais alto da carteira.
 
-### Por que focar no cliente de R$ 400,00
+### Por que focar na casa de canal próprio forte
 
 1. **Parceria de Longo Prazo e Menor Churn:** O cliente que investe em um plano de valor agregado superior possui uma operação estruturada, faturamento maduro e maturidade empresarial. Ele encara a Takeat como um investimento que gera retorno sobre o capital (ROI), e não como uma despesa. O resultado? Um **LTV (Lifetime Value)** drasticamente maior.
 
 2. **Eficiência de Onboarding e Suporte:** Restaurantes que contratam soluções completas seguem processos de forma mais rigorosa. Eles treinam a equipe com seriedade, entendem a importância da tecnologia e utilizam o ecossistema (salão à retaguarda) em sua capacidade máxima, reduzindo acionamentos de suporte simples.
 
-3. **Rede de Indicações Qualificadas:** Donos de grandes casas frequentam os mesmos círculos de investidores e operam múltiplos negócios. Construir um relacionamento de alto nível com um cliente de R$ 400,00 abre as portas diretamente para novos contratos do mesmo patamar na região.
+3. **Rede de Indicações Qualificadas:** Donos de grandes casas frequentam os mesmos círculos de investidores e operam múltiplos negócios. Construir um relacionamento de alto nível com uma casa desse porte abre as portas diretamente para novos contratos do mesmo patamar na região.
 
 ## Blindagem de longo prazo: trimestral e anual
 
@@ -1537,7 +1536,7 @@ São as abordagens de oportunidade no PAP ao longo das ruas mapeadas na sua rota
 
 ### A caça: MRR de alto valor
 
-São as **2 Demos diárias de alta qualidade** agendadas previamente na sua agenda. Aqui, você está diante de operações robustas (ICP de R$ 400,00+). É o momento de abrir o tablet e provar por meio de dados matemáticos simples que, se o sistema evitar apenas dois erros de pedido ou o desperdício de duas mesas no final de semana, o investimento no ecossistema já se pagou sozinho.
+São as **2 Demos diárias de alta qualidade** agendadas previamente na sua agenda. Aqui, você está diante de operações robustas (operações de canal próprio forte, o ICP prioritário). É o momento de abrir o tablet e provar por meio de dados matemáticos simples que, se o sistema evitar apenas dois erros de pedido ou o desperdício de duas mesas no final de semana, o investimento no ecossistema já se pagou sozinho.
 
 >  **O mantra do time:**\
 > *"O volume de ativações nos dá autoridade e domínio na rua; o faturamento de MRR alto nos traz poder de comissão e rentabilidade; a presença física e o relacionamento presencial com o cliente blindam as chaves do nosso território."*
@@ -1633,7 +1632,7 @@ Para garantir que a sua carteira de clientes seja um porto seguro de receita e i
 
 # Como não perder o que você já vendeu
 
-### O cliente que cancela em março é o cliente que você vai ter que vender de novo em abril
+## O cliente que cancela em março é o cliente que você vai ter que vender de novo em abril
 
 > *"Cancelamento não é um evento. É o fim de um processo que começou umas seis semanas antes, e ninguém foi lá ver."*
 
@@ -1753,6 +1752,10 @@ O Pipeline de Field Sales no HubSpot (pipeline `916011864` — o único que vale
 
 ***
 
+## A esteira principal
+
+As oito etapas abaixo são a esteira: o card entra em Prospecção e sai em Enviado Onboarding. Cada etapa tem indicador de entrada e de saída, e etapa não se pula — card em etapa que o indicador não sustenta é funil que mente para você e para o gestor.
+
 ### Prospecção
 
 **Racional:** A boca do funil orgânica. Aqui entram leads que o próprio executivo encontrou na rua (porta a porta), por indicação, ou que qualificou manualmente a partir de uma conta-alvo.
@@ -1776,14 +1779,14 @@ O Pipeline de Field Sales no HubSpot (pipeline `916011864` — o único que vale
 
 ### Demo/Proposta
 
-**Racional:** O momento da verdade. Apresentação do ecossistema Takeat focada na dor descoberta na etapa anterior — nunca o discurso genérico de "ecossistema completo" (ver ECOSSISTEMA TAKEAT, Parte 3).
+**Racional:** O momento da verdade. Apresentação do ecossistema Takeat focada na dor descoberta na etapa anterior — nunca o discurso genérico de "ecossistema completo" (ver [O ecossistema Takeat](playbook:ecossistema-takeat)).
 
 * **Indicador de Entrada:** Demonstração técnica/comercial agendada ou realizada.
 * **Indicador de Saída:** **Plano Apresentado** definido e **MRR preenchido manualmente** no card. Proposta formal enviada marca a conclusão desta etapa.
 
 ### Negociação
 
-**Racional:** Alinhamento de expectativas, quebra de objeções (ver QUEBRA DE OBJEÇÕES) e ajustes contratuais/financeiros. É aqui que todo o cadastro do cliente e os detalhes comerciais do fechamento são coletados — Ag. Pagamento não abre sem isso.
+**Racional:** Alinhamento de expectativas, quebra de objeções (ver [Objeções: a conversa é sobre margem](playbook:objecoes)) e ajustes contratuais/financeiros. É aqui que todo o cadastro do cliente e os detalhes comerciais do fechamento são coletados — Ag. Pagamento não abre sem isso.
 
 * **Indicador de Entrada:** Proposta recebida pelo lojista, iniciando discussão sobre prazo, condições ou desconto.
 * **Indicador de Saída — o card não avança pra Ag. Pagamento sem TODOS estes campos preenchidos no HubSpot:**
@@ -1805,7 +1808,7 @@ O Pipeline de Field Sales no HubSpot (pipeline `916011864` — o único que vale
 **Racional:** A venda terminou na assinatura, mas o sucesso começa na ativação. Esta etapa exige rigor técnico pro time de Onboarding receber o bastão sem ruído.
 
 * **Indicador de Entrada:** Pagamento confirmado pela automação do Asaas.
-* **Indicador de Saída:** Todos os **Campos Obrigatórios de Cadastro** e **Detalhes da Operação** preenchidos (ver DADOS PARA CADASTRO) — sem isso, o Onboarding não pode começar depois.
+* **Indicador de Saída:** Todos os **Campos Obrigatórios de Cadastro** e **Detalhes da Operação** preenchidos (ver [Dados para cadastro](playbook:dados-cadastro)) — sem isso, o Onboarding não pode começar depois.
 
 ### Enviado Onboarding
 
@@ -1852,9 +1855,9 @@ O Pipeline de Field Sales no HubSpot (pipeline `916011864` — o único que vale
 
 Não são etapas do pipeline — são de onde o lead nasce antes de entrar na esteira:
 
-* ** ADS:** leads quentes de campanha de marketing. Preencheu formulário → SLA de 2h pro primeiro contato.
-* ** Segunda Chance (Inside → Field):** o Inside Sales não conseguiu fechar por falta de presença física ("necessita visita presencial", "lead regionalizado") — o Field retoma com visita real.
-* ** Casa dos Dados:** CNPJs de foodservice recém-abertos ou já maduros na região do executivo, importados em lote direto pra **Conta Alvo** (ver PROSPECÇÃO INTELIGENTE).
+* **ADS:** leads quentes de campanha de marketing. Preencheu formulário → SLA de 2h pro primeiro contato.
+* **Segunda Chance (Inside → Field):** o Inside Sales não conseguiu fechar por falta de presença física ("necessita visita presencial", "lead regionalizado") — o Field retoma com visita real.
+* **Casa dos Dados:** CNPJs de foodservice recém-abertos ou já maduros na região do executivo, importados em lote direto pra **Conta Alvo** (ver [Prospecção com dados](playbook:prospeccao-inteligente)).
 
 ***
 
@@ -1874,7 +1877,7 @@ Não são etapas do pipeline — são de onde o lead nasce antes de entrar na es
 
 # Os dados que destravam a implantação
 
-### Como sair da assinatura para a operação rodando sem perder uma semana no meio
+## Como sair da assinatura para a operação rodando sem perder uma semana no meio
 
 > *"Contrato assinado não é cliente ativo. Cliente ativo é o que já vendeu pela plataforma."*
 
@@ -2034,7 +2037,7 @@ O garçom acessa o sistema para gerenciar mesas e pedidos através de:
 
 ## Totem de autoatendimento e TEF Fiserv
 
-#### Especificações de Hardware e Acessórios
+### Especificações de Hardware e Acessórios
 
 * **Hardware Base:** Mini PC Intel Celeron (8GB RAM / 128GB SSD) + Monitor Dell Touchscreen 23,8" (P2418HT).
 
@@ -2044,7 +2047,7 @@ O garçom acessa o sistema para gerenciar mesas e pedidos através de:
 
 * **Contato Direto para Suporte/Garantia Dell:** Matheus (Executivo DELL) — +55 51 9216-4663.
 
-#### Regra Comercial Obrigatória (Vigência: Junho/2026)
+### Regra Comercial Obrigatória (Vigência: Junho/2026)
 
 > **Venda Exclusiva:** O hardware do Totem de Autoatendimento **não é comercializado de forma isolada** ou com outras adquirentes. A venda está condicionada à ativação do TEF da Fiserv.\
 > **Precificação do Adicional:** **R$ 299,00/mês** (Totem + licença TEF Fiserv).
@@ -2121,11 +2124,11 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ## Política comercial, preços e condições
 
-** RÉGUA OFICIAL DE PREÇO (leia antes de qualquer negociação): **R$ 349 = plano padrão mínimo, piso inegociável na recorrência mensal. R$ 400+ = ticket-alvo do ICP prioritário (casa estruturada, com módulos adicionais) — é a meta de MRR do executivo, não um preço diferente de tabela. Plano Inovação = plano que destrava a Precificação Dinâmica (ver FAQ técnico). Adicionais fora do plano padrão: Teka R$ 99/mês, Roteirização Inteligente R$ 109/mês, Totem + TEF Fiserv R$ 299/mês. Quando o playbook fala de "ICP de R$ 400", está falando de alvo de MRR; quando fala de R$ 349, está falando do piso de tabela. Desconto só via prazo (trimestral/semestral/anual).
+**RÉGUA OFICIAL — leia antes de qualquer negociação.** Os valores estão na aba Precificação do Cockpit; esta página traz a regra, não a tabela. **R$ 349 é o ticket médio ideal da carteira, não um piso** — existem planos vendáveis abaixo dele e ninguém está isento de ofertá-los quando a operação pede. O **ICP prioritário** é definido pela operação, não pelo nosso preço: casa que fatura **mais de R$ 70 mil por mês no canal próprio** (salão e delivery próprio). **Atendemos todos os portes** — o critério prioriza a ordem das portas, não recusa cliente. **Plano Inovação** destrava a Precificação Dinâmica (ver [a parte técnica, nesta mesma página](playbook:faq#faq-parte-tecnica-equipamentos-e-integracoes)). **Adicionais** fora do plano padrão: Teka, Roteirização Inteligente, Totem + TEF Fiserv — upsell de eficiência, valores na Precificação. **Desconto só via prazo** (trimestral/semestral/anual).
 
 ### Posso dar desconto na mensalidade padrão?
 
->  **NÃO! Não damos desconto no plano mensal padrão.** Valorize o ecossistema. Nosso preço de R$ 349 é inegociável na recorrência mensal.
+>  **NÃO! Não damos desconto no plano mensal padrão.** Valorize o ecossistema. O desconto existe e tem nome: prazo. A mensalidade padrão sai pelo valor da Precificação — o que se negocia é o tempo de contrato, nunca o preço do mês.
 
 ### O cliente quer desconto de qualquer jeito. O que eu faço?
 
@@ -2177,7 +2180,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ### A Teka (IA de atendimento) está inclusa no plano padrão ou é adicional?
 
->  **A Teka é um módulo ADICIONAL de R$ 99/mês, não vem no plano padrão de R$ 349.** Ela é a IA que responde o cliente do delivery de ponta a ponta, sem depender de humano de plantão — diferente dos robôs de fluxo fixo dos concorrentes (Anota AI, Mesa Delivery), que travam fora do roteiro. Ao apresentar, deixe claro que é um upsell de eficiência: o ganho é eliminar o custo de ter alguém preso respondendo delivery o dia inteiro.
+>  **A Teka é um módulo ADICIONAL, não vem no plano padrão.** Ela é a IA que responde o cliente do delivery de ponta a ponta, sem depender de humano de plantão — diferente dos robôs de fluxo fixo dos concorrentes (Anota AI, Mesa Delivery), que travam fora do roteiro. Ao apresentar, deixe claro que é um upsell de eficiência: o ganho é eliminar o custo de ter alguém preso respondendo delivery o dia inteiro.
 
 ### O que é a Roteirização Inteligente e quando vender esse adicional?
 
@@ -2185,7 +2188,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 ### A Precificação Dinâmica (CMV em tempo real) vem em qualquer plano?
 
->  NÃO. A Precificação Dinâmica — CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado — só entra a partir do **Plano Inovação**. No plano padrão (R$ 349) o cliente tem Controle de CMV e Ficha Técnica, mas sem o recálculo em tempo real por item. Se o dono perguntar "eu sei se meu prato mais vendido dá lucro ou prejuízo hoje?" e a dor for forte, é gatilho para subir o cliente para o Plano Inovação — não tente entregar essa funcionalidade fora dele.
+>  NÃO. A Precificação Dinâmica — CMV recalculado em tempo real, item por item, com alerta de lucro/prejuízo no preço praticado — só entra a partir do **Plano Inovação**. No plano padrão o cliente tem Controle de CMV e Ficha Técnica, mas sem o recálculo em tempo real por item. Se o dono perguntar "eu sei se meu prato mais vendido dá lucro ou prejuízo hoje?" e a dor for forte, é gatilho para subir o cliente para o Plano Inovação — não tente entregar essa funcionalidade fora dele.
 
 ## Processo interno: HubSpot, Asaas e onboarding
 
@@ -2232,7 +2235,7 @@ Este é o guia definitivo de consultas rápidas para o campo. Se está escrito a
 
 # Links úteis, na ordem do dia
 
-### Cada link com o momento em que você usa, para não procurar no meio da rua
+## Cada link com o momento em que você usa, para não procurar no meio da rua
 
 > *"Link que você não acha na hora é link que não existe."*
 
@@ -2242,48 +2245,39 @@ Esta página não é uma lista de favoritos: é a ordem em que as coisas acontec
 
 ## Antes de sair: preparar a rua
 
-**Casa dos Dados** — CNPJs abertos recentemente, filtro por CNAE, bairro e data de abertura. É a base da prospecção inteligente.
-<https://casadosdados.com.br>
+[Casa dos Dados](https://casadosdados.com.br) — CNPJs abertos recentemente, filtro por CNAE, bairro e data de abertura. É a base da prospecção inteligente.
 
-**Playbook comercial — SPICED, soluções e personas** — a planilha-mãe de qualificação e discurso por persona.
-<https://docs.google.com/spreadsheets/d/1B1zzkZ2FERqtvXg8v6eAWmb7cGedZmRu/edit?gid=1176329124#gid=1176329124>
+[Playbook comercial — SPICED, soluções e personas](https://docs.google.com/spreadsheets/d/1B1zzkZ2FERqtvXg8v6eAWmb7cGedZmRu/edit?gid=1176329124#gid=1176329124) — a planilha-mãe de qualificação e discurso por persona.
 
-**Lista atualizada de clientes (março/2026)** — quem já é cliente. Confira antes de bater na porta: chegar oferecendo Takeat para quem já tem Takeat queima autoridade na hora.
-<https://docs.google.com/spreadsheets/d/1_nB3KrDlTVqrC8cRSd86b5q60TyZsPeCx8wEsKwQpNg/edit?gid=117572231#gid=117572231>
+[Lista atualizada de clientes (março/2026)](https://docs.google.com/spreadsheets/d/1_nB3KrDlTVqrC8cRSd86b5q60TyZsPeCx8wEsKwQpNg/edit?gid=117572231#gid=117572231) — quem já é cliente. Confira antes de bater na porta: chegar oferecendo Takeat para quem já tem Takeat queima autoridade na hora.
 
 ***
 
 ## Na mesa do cliente: demonstrar
 
-**Sistema para Food Park** — ambiente de demonstração da operação de praça de alimentação, com várias marcas num mesmo espaço.
-<https://foodpark.takeat.app/ax1y1g/>
+[Sistema para Food Park](https://foodpark.takeat.app/ax1y1g/) — ambiente de demonstração da operação de praça de alimentação, com várias marcas num mesmo espaço.
 
-**Comparativos públicos** — oito comparativos lado a lado, com matriz de 15 recursos e data de revisão. Abra na frente do cliente quando ele citar concorrente.
-<https://takeat.app/comparativos>
+[Comparativos públicos](https://takeat.app/comparativos) — oito comparativos lado a lado, com matriz de 15 recursos e data de revisão. Abra na frente do cliente quando ele citar concorrente.
 
 ***
 
 ## Depois do fechamento: colocar de pé
 
-**Solicitação de displays e comandas** — material de mesa personalizado com QR Code exclusivo. Peça comandas e displays no mesmo pedido: o frete é fixo por pedido.
-<https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB>
+[Solicitação de displays e comandas](https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB) — material de mesa personalizado com QR Code exclusivo. Peça comandas e displays no mesmo pedido: o frete é fixo por pedido.
 
 ***
 
 ## Administrativo: o que é seu
 
-**Envio de NFS-e** — formulário oficial para nota fiscal de serviço.
-<https://docs.google.com/forms/d/e/1FAIpQLSc-tevz69qWERBk_X1XjrwTR7b93VhBmUvBcqr08knAPGBwmQ/viewform>
+[Envio de NFS-e](https://docs.google.com/forms/d/e/1FAIpQLSc-tevz69qWERBk_X1XjrwTR7b93VhBmUvBcqr08knAPGBwmQ/viewform) — formulário oficial para nota fiscal de serviço.
 
-**Solicitação de reembolso** — combustível, pedágio e despesas de rota. Junte os comprovantes antes de abrir; pedido incompleto volta.
-<https://docs.google.com/forms/d/e/1FAIpQLSc8zGNIo3snL9YqC1a7J62qEP4no5bZYtqs_OoSw1wE0DOYrw/viewform?pli=1>
+[Solicitação de reembolso](https://docs.google.com/forms/d/e/1FAIpQLSc8zGNIo3snL9YqC1a7J62qEP4no5bZYtqs_OoSw1wE0DOYrw/viewform?pli=1) — combustível, pedágio e despesas de rota. Junte os comprovantes antes de abrir; pedido incompleto volta.
 
 ***
 
 ## Comunicação do time
 
-**Discord do time** — é onde a resposta chega mais rápido: dúvida de produto, preço fora de tabela, cliente com caso estranho, link quebrado nesta página.
-<https://discord.gg/kxjRMdjy>
+[Discord do time](https://discord.gg/kxjRMdjy) — é onde a resposta chega mais rápido: dúvida de produto, preço fora de tabela, cliente com caso estranho, link quebrado nesta página.
 
 ***
 
@@ -2306,7 +2300,7 @@ Esta página não é uma lista de favoritos: é a ordem em que as coisas acontec
 
 # Material de mesa: o que faz o Garçom Digital existir
 
-### Sem display na mesa, o autoatendimento que você vendeu não acontece
+## Sem display na mesa, o autoatendimento que você vendeu não acontece
 
 > *"O cliente não pede pelo QR Code que está numa folha amassada ao lado do saleiro."*
 
@@ -2355,7 +2349,7 @@ Não pergunte "quantos você quer". Conte com ele:
 2. **Garanta o logotipo em alta resolução.** Print de Instagram sai serrilhado no material impresso e não tem volta depois de produzido.
 3. **Preencha a solicitação oficial** com todos os dados:
 
- **[LINK PARA SOLICITAÇÃO DE DISPLAYS E COMANDAS](https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB)**
+ [Abrir a solicitação de displays e comandas](https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB)
 
 4. **Registre no negócio no HubSpot** que o material foi solicitado, com a data. Assim a implantação sabe que o material está a caminho e o dono não te cobra duas vezes pela mesma coisa.
 
@@ -2402,7 +2396,7 @@ Material na caixa atrás do balcão não gera pedido. **No dia da entrega, posic
 
 # Plano de carreira: os degraus que você controla
 
-### O caminho existe, e ele é medido — não é sobre esperar a vaga aparecer
+## O caminho existe, e ele é medido — não é sobre esperar a vaga aparecer
 
 > *"Onde a empresa cresce, quem entrega floresce."*
 

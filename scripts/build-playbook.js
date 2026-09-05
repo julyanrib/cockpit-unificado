@@ -10,15 +10,6 @@ const PAGINAS = [
   { marker: 'ONBOARDING DE NOVOS EXECUTIVOS', id: 'onboarding', categoria: 'Comece aqui', icone: '↗', titulo: 'Seus primeiros 60 dias', resumo: 'A jornada dia 1 ao 60, os gates e o que a empresa mede em cada um.' },
   { marker: 'METAS & CADÊNCIA OFICIAL', id: 'metas-cadencia', categoria: 'Comece aqui', icone: '◎', titulo: 'Os números que valem — fonte única', resumo: 'Meta, matemática do funil, preço, MRR e SLA. Todo número do playbook aponta para cá.' },
   { marker: 'ROTINA', occurrence: 0, id: 'rotina-executivo', categoria: 'Comece aqui', icone: '◷', titulo: 'A semana de quem bate meta', resumo: 'O cronograma do dia e da semana para ganhar o dia antes de sair de casa.' },
-  { marker: 'ECOSSISTEMA TAKEAT', occurrence: 0, id: 'ecossistema-takeat', categoria: 'Produto e mercado', icone: '⬡', titulo: 'O ecossistema e o comparativo contra a concorrência', resumo: 'Os 4 pilares, o produto módulo por módulo e como cruzar isso com a dor real.' },
-  { gerado: 'catalogo', id: 'catalogo-solucoes', categoria: 'Produto e mercado', icone: '▦', titulo: 'Catálogo de soluções', resumo: 'O que cada funcionalidade faz, como ajuda o dono, em que plano entra e a frase de mesa.' },
-  { marker: 'CONCORRÊNCIA', id: 'concorrencia', categoria: 'Produto e mercado', icone: '⚑', titulo: 'Concorrência', resumo: 'Os 3 tipos de concorrente, onde cada um falha e a pergunta que desarma cada um.' },
-  { arquivo: 'playbook-dark-kitchen.md', id: 'dark-kitchen', categoria: 'Produto e mercado', icone: '◐', titulo: 'Dark Kitchen', resumo: 'Marcas virtuais sobre a mesma cozinha: faturamento novo sobre custo fixo pago.' },
-  { arquivo: 'playbook-rota-inteligente.md', id: 'rota-inteligente', categoria: 'Produto e mercado', icone: '⇉', titulo: 'Rota Inteligente', resumo: 'O elo que falta no delivery próprio: agrupar e sequenciar a rota do entregador.' },
-  { arquivo: 'playbook-conciliacao-ofx.md', id: 'conciliacao-ofx', categoria: 'Produto e mercado', icone: '⊞', titulo: 'Conciliação Bancária OFX', resumo: 'O extrato do banco conversando com o caixa: o mês deixa de fechar por aproximação.' },
-  { arquivo: 'playbook-multilojas.md', id: 'multilojas', categoria: 'Produto e mercado', icone: '⧉', titulo: 'Multilojas / Franqueadora', resumo: 'R$ 29 é preço de decisão automática — e o gancho natural do Enterprise.' },
-  { marker: 'EQUIPAMENTOS', id: 'equipamentos', categoria: 'Produto e mercado', icone: '▣', titulo: 'Equipamentos', resumo: 'Infraestrutura homologada: computador, impressora, tablet, totem, TEF e balança.' },
-  { marker: 'DISPLAYS/COMANDAS', id: 'displays-comandas', categoria: 'Produto e mercado', icone: '▤', titulo: 'Material de mesa: o que faz o Garçom Digital existir', resumo: 'Displays e comandas: preço, processo de solicitação e a conta na frente do dono.' },
   { marker: 'GUIA PROSPECÇÃO 2/2', id: 'prospeccao-inteligente', categoria: 'Venda na rua', icone: '⌕', titulo: 'Prospecção com dados: escolha a porta antes de sair', resumo: 'Casa dos Dados, Google Maps, Instagram e a passagem do digital para o CRM.' },
   { marker: 'GUIA PROSPECÇÃO 1/2', id: 'prospeccao-porta-a-porta', categoria: 'Venda na rua', icone: '⌖', titulo: 'Porta a porta: a rua como sistema', resumo: 'Microrrotas, o scanner do salão, abordagem e registro em tempo real.' },
   { marker: 'COMO ACHAR O TD', id: 'acesso-decisor', categoria: 'Venda na rua', icone: '◇', titulo: 'Como chegar em quem assina', resumo: 'Como atravessar quem barra na porta e falar com quem decide.' },
@@ -28,6 +19,15 @@ const PAGINAS = [
   { marker: 'QUEBRA DE OBJEÇÕES', id: 'objecoes', categoria: 'Converter e fechar', icone: '◈', titulo: 'Objeções: a conversa é sobre margem', resumo: 'As 5 objeções de mesa e o fechamento por contraste, resposta por resposta.' },
   { marker: 'TÉCNICAS DE FECHAMENTO', id: 'fechamento', categoria: 'Converter e fechar', icone: '✓', titulo: 'Fechamento: o pagamento acontece na mesa', resumo: 'A transição da demo ao Asaas aberto, e como travar o setup sem enrolação.' },
   { marker: 'CLIENTES X MRR', id: 'clientes-mrr', categoria: 'Converter e fechar', icone: '△', titulo: 'Volume × valor: a conta da sua carteira', resumo: 'Território, mancha de bairro, MRR alvo e blindagem da receita recorrente.' },
+  { marker: 'ECOSSISTEMA TAKEAT', occurrence: 0, id: 'ecossistema-takeat', categoria: 'Produto e mercado', icone: '⬡', titulo: 'O ecossistema e o comparativo contra a concorrência', resumo: 'Os 4 pilares, o produto módulo por módulo e como cruzar isso com a dor real.' },
+  { gerado: 'catalogo', id: 'catalogo-solucoes', categoria: 'Produto e mercado', icone: '▦', titulo: 'Catálogo de soluções', resumo: 'O que cada funcionalidade faz, como ajuda o dono, em que plano entra e a frase de mesa.' },
+  { marker: 'CONCORRÊNCIA', id: 'concorrencia', categoria: 'Produto e mercado', icone: '⚑', titulo: 'Concorrência', resumo: 'Os 3 tipos de concorrente, onde cada um falha e a pergunta que desarma cada um.' },
+  { arquivo: 'playbook-dark-kitchen.md', id: 'dark-kitchen', categoria: 'Produto e mercado', icone: '◐', titulo: 'Dark Kitchen', resumo: 'Marcas virtuais sobre a mesma cozinha: faturamento novo sobre custo fixo pago.' },
+  { arquivo: 'playbook-rota-inteligente.md', id: 'rota-inteligente', categoria: 'Produto e mercado', icone: '⇉', titulo: 'Rota Inteligente', resumo: 'O elo que falta no delivery próprio: agrupar e sequenciar a rota do entregador.' },
+  { arquivo: 'playbook-conciliacao-ofx.md', id: 'conciliacao-ofx', categoria: 'Produto e mercado', icone: '⊞', titulo: 'Conciliação Bancária OFX', resumo: 'O extrato do banco conversando com o caixa: o mês deixa de fechar por aproximação.' },
+  { arquivo: 'playbook-multilojas.md', id: 'multilojas', categoria: 'Produto e mercado', icone: '⧉', titulo: 'Multilojas / Franqueadora', resumo: 'R$ 29 é preço de decisão automática — e o gancho natural do Enterprise.' },
+  { marker: 'EQUIPAMENTOS', id: 'equipamentos', categoria: 'Produto e mercado', icone: '▣', titulo: 'Equipamentos', resumo: 'Infraestrutura homologada: computador, impressora, tablet, totem, TEF e balança.' },
+  { marker: 'DISPLAYS/COMANDAS', id: 'displays-comandas', categoria: 'Produto e mercado', icone: '▤', titulo: 'Material de mesa: o que faz o Garçom Digital existir', resumo: 'Displays e comandas: preço, processo de solicitação e a conta na frente do dono.' },
   { marker: 'PIPELINE', id: 'pipeline', categoria: 'Processos internos', icone: '⟶', titulo: 'Pipeline oficial', resumo: 'As 8 etapas, os critérios de cada uma e as duas automações que não se mexem.' },
   { marker: 'DADOS PARA CADASTRO', id: 'dados-cadastro', categoria: 'Processos internos', icone: '□', titulo: 'Dados para cadastro', resumo: 'O que bloqueia, o que acelera, a mensagem pronta e o fiscal em linguagem de campo.' },
   { marker: 'FAQ', id: 'faq', categoria: 'Processos internos', icone: '?', titulo: 'FAQ de sobrevivência — se está aqui, é lei', resumo: 'Política comercial, equipamentos, integrações, Asaas e onboarding.' },
@@ -142,6 +142,38 @@ function montarCatalogo(root) {
   linhas.push('');
   linhas.push('***');
 
+  /* ══ O ÍNDICE DE SALTO (05/09/26) ═══════════════════════════════════════════════════
+     Esta é a página mais longa do playbook: 25 minutos, e a única que ninguém LÊ — se
+     consulta, com o dono do restaurante na frente perguntando de um módulo. Medido: são
+     52 módulos escritos como `###`, e o sumário do leitor lista só nível 2, ou seja as 6
+     seções. Para chegar em "Comandas Individuais" o executivo rolava 25 minutos na frente
+     do cliente.
+     O índice sai do MESMO dado que gera as seções abaixo — nome novo na tabela entra aqui
+     sozinho, e não existe a chance de o índice citar um módulo que a página não tem. */
+  /* O TÍTULO DO ADICIONAL MORA AQUI, num lugar só: ele carrega o preço, então a âncora
+     dele carrega o preço também. Índice e seção montando esse texto cada um por sua conta
+     seria um índice que aponta para âncora que não existe no dia que o preço mudar. */
+  const tituloAdicional = a => a.nome + ' — R$ ' + a.preco
+    + (a.unidade && a.unidade !== 'mês' ? '/' + a.unidade : '/mês');
+  const saltoPara = titulo => '(playbook:catalogo-solucoes#catalogo-solucoes-' + slug(titulo) + ')';
+
+  linhas.push('');
+  linhas.push('## Índice — toque no módulo que o dono perguntou');
+  linhas.push('');
+  linhas.push('Os ' + (mapa.size + preco.adicionais.length) + ' módulos, na ordem das seções.'
+    + ' Com cliente na frente, o caminho é este e não a rolagem.');
+  ordemSecoes.forEach(secao => {
+    const itens = [...mapa.entries()].filter(([, reg]) => reg.secao === secao);
+    if (!itens.length) return;
+    linhas.push('');
+    linhas.push('**' + secao + '** — ' + itens.map(([nome]) => '[' + nome + ']' + saltoPara(nome)).join(' '));
+  });
+  linhas.push('');
+  linhas.push('**Adicionais** — ' + preco.adicionais.map(a =>
+    '[' + a.nome + ']' + saltoPara(tituloAdicional(a))).join(' '));
+  linhas.push('');
+  linhas.push('***');
+
   ordemSecoes.forEach(secao => {
     const itens = [...mapa.entries()].filter(([, reg]) => reg.secao === secao);
     if (!itens.length) return;
@@ -172,7 +204,7 @@ function montarCatalogo(root) {
     const d = desc.adicionais[a.nome];
     const unid = a.unidade && a.unidade !== 'mês' ? '/' + a.unidade : '/mês';
     linhas.push('');
-    linhas.push('### ' + a.nome + ' — R$ ' + a.preco + unid);
+    linhas.push('### ' + tituloAdicional(a));
     linhas.push('');
     linhas.push('**O que faz.** ' + d.faz);
     linhas.push('');
@@ -234,6 +266,24 @@ function slug(texto) {
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 72) || 'secao';
 }
 
+/* O SELO DO LINK EXTERNO (05/09/26).
+   Ele diz PARA ONDE vai, nao so que e um link: rotulo + dominio + "↗". O link interno e
+   uma pilula vermelha com "→" e significa "continua no playbook"; o externo tira a pessoa
+   do Cockpit, e no meio de uma visita saber se o destino e docs.google.com (ferramenta do
+   time) ou takeat.app (material que pode ir para o cliente) e a propria regra da pagina
+   de Links uteis. Rotulo igual ao dominio nao repete o dominio. */
+function hostDe(href) {
+  return String(href).replace(/^https?:\/\//, '').replace(/^www[.]/, '').split('/')[0];
+}
+
+function seloExterno(href, rotulo) {
+  const host = hostDe(href);
+  const texto = (rotulo || host).trim();
+  const nome = (texto === host) ? '' : `<span class="pb-out-l">${texto}</span>`;
+  return `<a class="pb-out" href="${href}" target="_blank" rel="noopener">${nome}`
+    + `<span class="pb-out-h">${host}<span aria-hidden="true"> ↗</span></span></a>`;
+}
+
 function inline(texto) {
   let s = esc(String(texto || '').replace(/\\$/g, ''));
   const tokens = [];
@@ -242,7 +292,10 @@ function inline(texto) {
   s = s.replace(/\[([^\]]+)\]\(playbook:([a-z0-9-]+)(?:#([a-z0-9-]+))?\)/gi, (_, label, pagina, ancora) =>
     guardar(`<button type="button" class="pb-ir" data-pb-ir="${pagina.toLowerCase()}"${ancora ? ` data-pb-ancora="${ancora.toLowerCase()}"` : ''}>${label}<span aria-hidden="true"> →</span></button>`));
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, href) =>
-    guardar(`<a href="${href}" target="_blank" rel="noopener">${label}<span aria-hidden="true"> ↗</span></a>`));
+    guardar(seloExterno(href, label)));
+  /* AUTOLINK <https://...>: quando este replace roda o texto JA passou por esc(), entao o
+     que existe aqui e &lt; e &gt;. Casar /<https?:/ nao acharia nada e o verde seria falso. */
+  s = s.replace(/&lt;(https?:\/\/[^\s]*?)&gt;/g, (_, href) => guardar(seloExterno(href, '')));
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
