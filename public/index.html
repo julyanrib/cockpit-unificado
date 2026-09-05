@@ -19564,10 +19564,12 @@ function prcPreviewHTML() {
     <div class="p4-inv">
       <div class="p4-inv-rot">INVESTIMENTO</div>
       <div class="p4-inv-num">${parcelas}<span class="p4-inv-valor">${prcMoedaCentavos(c.mensal)}</span></div>
-      <!-- TRES CASOS: parcelado no cartao; prazo pago a vista; e o mensal, que nao tem
-           prazo nenhum. Antes eram dois, e o "a vista" nao existia. -->
+      <!-- DOIS CASOS, e o "a vista" saiu (05/09/26). Eu tinha aberto um terceiro ramo
+           para prazo pago a vista, seguindo a Calculadora de Planos, e o Julyan cortou:
+           a Takeat vende parcelado, e dois cartoes por prazo dobravam a fileira sem
+           oferecer nada. Sem periodo com meses>1 e parcelas==1, aquele ramo passou a ser
+           inalcancavel — texto que descreve uma condicao que o produto nao tem. -->
       <div class="p4-inv-como">${nParcelas > 1 ? '▭ no cartão de crédito'
-        : per.meses > 1 ? '▭ à vista, no boleto ou cartão'
         : '▭ no boleto ou cartão · sem fidelidade'}</div>
       <div class="p4-inv-total">${per.meses > 1
         ? `${c.economia > 0 ? `<s>de ${prcMoedaCentavos(c.mensalCheio)}/mês</s> · ` : ''}Total: ${prcMoedaCentavos(c.total)}`
@@ -20723,12 +20725,11 @@ function prcDadosDaPeca() {
   const passo = prcProximoPassoTexto();
   const totalTxt = prcMoedaCentavos(c.total);
   const meses = prcEconomiaEmMeses(c);
-  /* A MENSAGEM DIZ A FORMA DE PAGAMENTO, e ela agora tem tres formas: parcelado no
-     cartao, prazo a vista, e mensal sem prazo. Dizer "3x no cartao" num plano que ele
-     escolheu pagar a vista e prometer uma condicao que o financeiro nao vai cobrar. */
-  const nParc = Number(c.periodo.parcelas || 1);
+  /* O NUMERO DE PARCELAS SAI DO CAMPO parcelas, e nao de meses: sao a mesma coisa hoje
+     (todo prazo e parcelado), mas o campo diz qual dos dois a frase quer dizer. */
+  const nParc = Number(c.periodo.parcelas || c.periodo.meses || 1);
   const condicao = c.periodo.meses > 1
-    ? (c.periodo.observacao || (nParc > 1 ? nParc + 'x no cartão' : 'à vista'))
+    ? (c.periodo.observacao || (nParc + 'x no cartão'))
       + ' · total do período ' + totalTxt + (meses ? ' · equivale a ' + meses + ' grátis' : '')
     : 'cobrança mensal · preço de tabela';
   return {
