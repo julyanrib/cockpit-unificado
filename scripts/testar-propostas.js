@@ -184,6 +184,33 @@ checar('a resposta e a âncora saem do mesmo bloco do playbook',
 checar('o aviso da dor continua visível na coluna',
   template.indexOf("${prcModoCliente ? '' : prcBlocoDorHTML()}") > -1);
 
+/* ── 10. O PALCO — as três coisas que quebraram na tela do Julyan ────────────────
+   Ele abriu a aba e viu duas: a peça pequena no meio de um palco largo, e o modo
+   cliente com uma faixa preta de 397px empurrando o cartão para baixo da tela. */
+
+/* A peça é desenhada na proporção do PNG que o dono recebe. Desenhar estreito num
+   palco largo joga largura fora, porque a altura da peça quase não muda com a
+   largura — o que a faz alta é o número de funcionalidades. */
+checar('a peça é desenhada na proporção do PNG, lida do próprio gerador',
+  template.indexOf('function prcLarguraDeDesenho(') > -1
+  && /prcLarguraDeDesenho\([\s\S]{0,400}TakeatPropostaPNG\.razao/.test(template)
+  && /window\.TakeatPropostaPNG = \{[\s\S]{0,120}razao: H \/ W/.test(template),
+  'proporção copiada à mão diverge do PNG em silêncio — a prévia deixa de ter a forma do que é enviado');
+
+/* position:static no cartão do palco o devolve ao fluxo: 930px de peça empurrando a
+   grade. A regra é do layout v3, que usa a MESMA classe, e vencia por especificidade. */
+checar('nenhuma regra devolve o cartão do palco ao fluxo',
+  template.indexOf('.prc-shell.modo-cliente .prc-proposal{position:static') === -1
+  && /\.p4-palco > \.prc-proposal\{position:absolute/.test(template),
+  'foi assim que o cartão apareceu solto embaixo da faixa preta no modo cliente');
+
+/* Grade sem template de linhas divide a SOBRA entre as fileiras automáticas. Fora do
+   modo cliente não há sobra e ninguém vê; com os controles escondidos, a barra de
+   voltar vira uma faixa de 397px. */
+checar('a casca diz quais fileiras crescem',
+  /#viewPrecificacao\.active \.prc-shell\{[^}]*grid-template-rows:auto minmax\(0,1fr\)/.test(template),
+  'sem template, a barra de voltar divide a tela com a peça no modo cliente');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
