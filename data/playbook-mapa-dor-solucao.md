@@ -30,7 +30,9 @@ A tradução está aqui, escrita uma vez, num lugar só. **Cada dor tem cinco co
 
 **Plano mín. → upgrade.** Básico → adicional Totem.
 
-**No WhatsApp.** *"Sobre a fila que você me mostrou: o totem atende ela sozinho, sem contratar ninguém."*
+**Na mesa.** *"O senhor viu comigo: saíram três na fila agora há pouco. O totem atende esse balcão sozinho, sem contratar ninguém — eu deixo rodando aqui na sua frente e o senhor decide vendo."*
+
+**No follow-up, depois da visita.** *"Sobre a fila que você me mostrou: o totem atende ela sozinho, sem contratar ninguém."*
 
 Aprofundar: [Tablet + Totem, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-tablet-totem-experiencia-do-cliente-e-custo-a-takeat-nao-vende-hardware) · [Equipamentos](playbook:equipamentos)
 
@@ -48,7 +50,9 @@ Aprofundar: [Tablet + Totem, no Ecossistema](playbook:ecossistema-takeat#ecossis
 
 **Plano mín. → upgrade.** Básico Completo → Tablets.
 
-**No WhatsApp.** *"Sobre a equipe enxuta: com o pedido saindo da própria mesa, seu garçom cobre o dobro do salão."*
+**Na mesa.** *"Seu garçom não está devendo: ele não tem perna. Com o pedido saindo da própria mesa, ele cobre o dobro do salão — quer ver funcionando no seu almoço de amanhã?"*
+
+**No follow-up, depois da visita.** *"Sobre a equipe enxuta: com o pedido saindo da própria mesa, seu garçom cobre o dobro do salão."*
 
 Aprofundar: [O domínio do salão, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-ferramenta-de-garcom-garcom-digital-o-dominio-do-salao)
 
@@ -66,7 +70,9 @@ Aprofundar: [O domínio do salão, no Ecossistema](playbook:ecossistema-takeat#e
 
 **Plano mín. → upgrade.** Inovação → Profissional + OFX (a conciliação já vem no Enterprise).
 
-**No WhatsApp.** *"Sobre o controle que você quer: a ficha técnica te mostra a margem de cada prato desde a primeira semana."*
+**Na mesa.** *"O senhor sabe o que vende; o que falta é saber o que sobra. A ficha técnica te dá a margem prato a prato já na primeira semana — vamos montar dois pratos seus agora?"*
+
+**No follow-up, depois da visita.** *"Sobre o controle que você quer: a ficha técnica te mostra a margem de cada prato desde a primeira semana."*
 
 Aprofundar: [A retaguarda do dono, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-pdv-balcao-ficha-tecnica-cmv-precificacao-dinamica-a-retaguarda-do-dono) · [Conciliação Bancária OFX](playbook:conciliacao-ofx)
 
@@ -84,7 +90,9 @@ Aprofundar: [A retaguarda do dono, no Ecossistema](playbook:ecossistema-takeat#e
 
 **Plano mín. → upgrade.** Profissional → TEKA.
 
-**No WhatsApp.** *"Sobre fazer o cliente voltar: o cashback e o CRM chamam sua base de volta na semana fraca."*
+**Na mesa.** *"O movimento da terça não aparece sozinho. Sua base já comprou uma vez: o cashback chama ela de volta. Deixa eu te mostrar quantos clientes seus voltariam?"*
+
+**No follow-up, depois da visita.** *"Sobre fazer o cliente voltar: o cashback e o CRM chamam sua base de volta na semana fraca."*
 
 Aprofundar: [A base que volta, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-fidelidade-recorrencia-crm-a-base-que-volta)
 
@@ -102,7 +110,9 @@ Aprofundar: [A base que volta, no Ecossistema](playbook:ecossistema-takeat#ecoss
 
 **Plano mín. → upgrade.** Básico → POS / TEF.
 
-**No WhatsApp.** *"Sobre o fechamento lento: a conta sai dividida na maquininha, na mesa, na hora."*
+**Na mesa.** *"Mesa que demora para fechar é mesa que não gira. A conta sai dividida na maquininha, na hora — quer testar na próxima que pedir a conta?"*
+
+**No follow-up, depois da visita.** *"Sobre o fechamento lento: a conta sai dividida na maquininha, na mesa, na hora."*
 
 Aprofundar: [O domínio do salão, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-ferramenta-de-garcom-garcom-digital-o-dominio-do-salao) · [Equipamentos](playbook:equipamentos)
 
@@ -120,7 +130,9 @@ Aprofundar: [O domínio do salão, no Ecossistema](playbook:ecossistema-takeat#e
 
 **Plano mín. → upgrade.** Profissional.
 
-**No WhatsApp.** *"Sobre o estoque: a baixa é automática por ficha técnica — você sabe o que vai acabar antes de acabar."*
+**Na mesa.** *"Recusar venda com o cliente sentado é o pior prejuízo que existe. A baixa é automática por ficha técnica: o senhor sabe o que vai acabar antes de acabar. Vamos cadastrar um prato agora?"*
+
+**No follow-up, depois da visita.** *"Sobre o estoque: a baixa é automática por ficha técnica — você sabe o que vai acabar antes de acabar."*
 
 Aprofundar: [A retaguarda do dono, no Ecossistema](playbook:ecossistema-takeat#ecossistema-takeat-pdv-balcao-ficha-tecnica-cmv-precificacao-dinamica-a-retaguarda-do-dono)
 
