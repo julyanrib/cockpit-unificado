@@ -57,9 +57,13 @@ checar('prioridade vinda da prosa semanal não ganha CTA próprio',
   /acoesSemana \|\| \[\]\)\.map\(t => \(\{ txt: t, ir: null \}\)\)/.test(template),
   'texto livre da análise não tem categoria — CTA ali é chute');
 
+/* PRESA AO CÓDIGO, DE NOVO (05/09/26): esta checagem exigia a linha `const cta = ir`, e o
+   quadro copiado do mockup escreve o botão inline. A regra nunca mudou — botão de
+   prioridade só existe dentro de um condicional sobre o destino. É isso que ela mede
+   agora, e é isso que ela deveria ter medido desde o começo. */
 checar('o CTA só é desenhado quando existe destino',
-  template.indexOf('const cta = ir') > -1 && template.indexOf("      : '';") > -1,
-  'sem esse if, a prioridade da prosa nasce com um botão que não sabe para onde ir');
+  /\$\{pr\.ir \?[\s\S]{0,140}data-acao-ir/.test(template),
+  'botão de prioridade fora do condicional nasce sem saber para onde ir');
 
 /* ── 3. A FALA PRONTA COBRE AS MESMAS ETAPAS QUE O GESTO ─────────────────────────── */
 function idsDoCatalogo(nome) {
@@ -76,7 +80,7 @@ checar('a fala pronta existe para toda etapa que tem gesto',
   + 'gesto: ' + idsGesto.length + ', fala: ' + idsFala.length);
 
 checar('a fala pronta não aparece sem gargalo',
-  /falaProntaHTML = \(\(\) => \{[\s\S]{0,220}if \(!gestoVivo \|\| gestoVivo\.saudavel/.test(template),
+  /falaPronta = \(\(\) => \{[\s\S]{0,220}gestoVivo\.saudavel/.test(template),
   'sem etapa travada não há o que pedir — script genérico é conselho de biscoito');
 
 /* ── 4. O BENCHMARK NÃO VAZA COLEGA ──────────────────────────────────────────────
