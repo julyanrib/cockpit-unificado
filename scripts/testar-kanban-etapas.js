@@ -350,9 +350,12 @@ checar('o corte por coluna deixou de esconder cartão',
   'voltou a esconder cartão atrás de um botão numa coluna que rola');
 /* NO TOQUE A COLUNA NÃO ROLA POR DENTRO: ela empilha e a PÁGINA rola. Caixa de 68vh dentro
    de uma tela de 68vh é rolagem dentro de rolagem, e o dedo não sabe qual das duas move. */
+/* EXIGIA position:static no cabecalho do toque ate 04/09/26 — e static era o defeito:
+   rolando os 8.000px da coluna de Visita o executivo perdia de vista qual etapa lia. A
+   metade certa dela (no toque a coluna NAO rola por dentro; quem rola e a pagina) fica;
+   o sticky do cabecalho e conferido no bloco do toque, la embaixo. */
 checar('o acordeão do toque desfaz a rolagem por coluna',
-  /\.fn3-col\{max-height:none;overflow-y:visible/.test(template)
-  && /\.fn3-col > \.fn3-cab\{position:static;\}/.test(template));
+  /.fn3-col{max-height:none;overflow-y:visible/.test(template));
 
 /* ── 6. as colunas são o pipeline oficial ────────────────────────────────────────── */
 const idsColunas = (template.match(/const FN2_ETAPAS = \[([\s\S]*?)\n\];/) || [])[1] || '';
@@ -901,6 +904,57 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
   checar('o ramo sem passo vem antes do que formata a data',
     iSemPasso > -1 && iComData > -1 && iSemPasso < iComData,
     'sem passo em ' + iSemPasso + ', data em ' + iComData);
+})();
+
+/* ══ O TOQUE NA MEU FUNIL: CABEÇALHO FIXO E TODA COLUNA RECOLHÍVEL (04/09/26) ═══════════
+   Julyan: "ataca o toque agora, cabeçalho fixo e colunas recolhíveis".
+
+   O acordeão JÁ EXISTIA no CSS e o gesto não chegava nele. Três coisas erradas, medidas a
+   375px com a carteira real:
+     · o toggle que funciona estava ligado só em `[data-fn3-viol="0"]` — a Visita, com 8
+       estourados e 31 cartões (coluna de 7.975px), era a ÚNICA que não fechava
+     · um segundo toggle testava `fn2-col-cab`, classe renomeada para `fn3-cab` no
+       redesenho: aparecia UMA vez no arquivo, nesta linha, e em nenhum markup. Nunca rodou.
+     · o limiar do gesto era 1240px e o do @media é 1050px: entre os dois, o toque alternava
+       uma classe sem efeito E bloqueava a gaveta — 190px de clique morto
+   E o cabeçalho era `position:static` no toque porque `overflow:hidden` na coluna quebra o
+   sticky (hidden cria caixa de rolagem). `overflow:clip` corta igual sem criar caixa.
+
+   MEDIDO DEPOIS, a 375px: fechar a Visita leva o kanban de 8.701px para 796px; com tudo
+   fechado o funil inteiro cabe em 526px (era 14,7 telas de rolagem, virou 4,6 na página).
+   O cabeçalho fica em top:0 rolando 2.000px e 5.000px dentro da coluna.
+   E a 1440px nada mudou: 7 colunas, rolagem por dentro (auto, teto 612px), nada recolhido,
+   e o cabeçalho volta a abrir a gaveta. */
+(function () {
+  const bloco = template.slice(template.indexOf('.pl6-corpo{grid-template-columns:minmax(0,1fr);}') - 4000,
+                               template.indexOf('@media (max-width:760px)', template.indexOf('.fn3-col:not(.is-aberta)')));
+  checar('no toque toda coluna recolhe, e não só as sem estourado',
+    template.indexOf('.fn3-col:not(.is-aberta)>*:not(.fn3-cab){display:none;}') > -1
+    && template.indexOf('.fn3-col[data-fn3-viol="0"]:not(.is-aberta)>*:not(.fn3-cab)') < 0,
+    'a regra voltou a olhar data-fn3-viol — a coluna com estourado deixa de fechar');
+  checar('quem tem estourado apenas NASCE aberta',
+    template.indexOf("class=\"fn3-col${estourados ? ' is-aberta' : ''}\"") > -1);
+  checar('o cabeçalho fica no topo também no toque',
+    template.indexOf('.fn3-col > .fn3-cab{position:sticky;top:0;z-index:3;}') > -1
+    && template.indexOf('.fn3-col > .fn3-cab{position:static;}') < 0);
+  /* clip e não hidden: hidden cria caixa de rolagem e mata o sticky do filho. */
+  checar('a coluna corta sem virar caixa de rolagem',
+    template.indexOf("background:var(--panel2);\n      overflow:clip;}") > -1,
+    'medindo a regra DA COLUNA: overflow:clip aparece em 4 lugares do arquivo');
+
+  checar('o gesto está ligado em toda coluna',
+    template.indexOf("el.querySelectorAll('.fn3-col .fn3-cab').forEach(cab => {") > -1
+    && template.indexOf("el.querySelectorAll('.fn3-col[data-fn3-viol=\"0\"] .fn3-cab')") < 0);
+  checar('e no mesmo limiar do desenho, sem faixa de clique morto',
+    template.indexOf('if (window.innerWidth > 1050) return;') > -1
+    && template.indexOf('if (window.innerWidth > 1240) return;') < 0);
+  /* A CLASSE RENOMEADA: o ramo morto não pode voltar, e nenhuma guarda pega isso —
+     `contains` de uma classe que sumiu do markup compila igual e é sempre falso. */
+  checar('o acordeão morto na classe renomeada não voltou',
+    /* MEDIA O PROPRIO COMENTARIO na primeira versao: ele cita a classe para explicar o
+       defeito, e a busca crua casou a explicacao. A forma de CODIGO e o contains. */
+    template.indexOf("contains('fn2-col-cab') ? btn.closest") < 0,
+    'fn2-col-cab reapareceu: classe que não existe em markup nenhum');
 })();
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
