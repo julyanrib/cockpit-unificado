@@ -28,9 +28,18 @@ const checar = (nome, cond, detalhe) => { if (cond) { ok++; return; } falhas.pus
 /* ── 1. +10 SÓ COM PROVA. Ler não pontua. ────────────────────────────────────────── */
 checar('não existe mais botão de "marcar como lida" (pontuar por abrir a página morreu)',
   !/playbookMarcarLido/.test(template) && !/v6-btn-lida/.test(template));
-checar('a única escrita de progresso de leitura da tela é do tipo "prova"',
-  /playbookMarcarProgresso\(pagina\.id, 'prova', true\)/.test(template) &&
-  !/playbookMarcarProgresso\([^)]*'leitura'/.test(template));
+/* ESTA CHECAGEM EXIGIA QUE SÓ A PROVA ESCREVESSE PROGRESSO — a regra da v7, "ler não
+   pontua". A v9 muda isso de propósito: a página tem CHECK (escreve leitura) e o QUIZ
+   passou a ser do capítulo (escreve prova). O que não pode mudar é o fundo da regra:
+   check sozinho NÃO dá patente. Então a checagem passa a medir isso — que é o que
+   sustentava a v7 — em vez do formato antigo, que agora reprovaria o desenho novo. */
+checar('o check escreve leitura, e é a porta única de progresso que grava',
+  template.indexOf("playbookMarcarProgresso(id, 'leitura', true)") > -1);
+checar('a patente NÃO sai do check: ela exige o quiz do capítulo',
+  template.indexOf("provado: comCheck.length === doCapitulo.length && comProva.length === doCapitulo.length") > -1,
+  'se a patente passar a sair só dos checks, ler volta a pontuar sozinho');
+checar('e o quiz do capítulo é quem grava a prova de cada página',
+  template.indexOf("await playbookMarcarProgresso(p.id, 'prova', true)") > -1);
 checar('o crédito acontece SÓ quando a alternativa é a correta',
   /const certo = i === pagina\.prova\.correta;/.test(template) &&
   /if \(certo\) \{[\s\S]{0,200}?playbookMarcarProgresso\(pagina\.id, 'prova', true\)/.test(template));
@@ -286,6 +295,64 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
      que não existe — pb7EstadoDoFunil devolve uma LISTA — e a tela teria dito "undefined". */
   checar('o resumo conta os sem passo a partir da lista real do funil',
     template.indexOf("estado.filter(function (x) { return !x.passo; }).length") > -1);
+})();
+
+/* ══ PLAYBOOK v9 — A LEITURA E O QUIZ DO CAPÍTULO (04/09/26) ════════════════════════════
+   As duas peças vieram juntas por necessidade: a v9 troca a prova DA PÁGINA por um check e
+   move o quiz para o CAPÍTULO. Entregar só o check congelaria a trilha em zero patente e o
+   gestor pararia de receber prova de leitura. */
+(function () {
+  /* 1. O CHECK FICA NO FIM DO ARTIGO. Dar check antes de ler seria o botão que a v7 tirou
+     depois de medir 21 páginas "lidas" em dez dias. */
+  checar('o check existe e é do fim da página', template.indexOf('function pb9CheckHTML(') > -1);
+  const iArt = template.indexOf("+     '<div class=\"pba\" id=\"playbookArtigo\">'");
+  /* A DEFINICAO CONTEM A MESMA ASSINATURA da chamada: procurar o nome cru acha a funcao,
+     nao o uso. Foi assim que esta checagem reprovou o codigo certo. */
+  const iCheck = template.indexOf("+     pb9CheckHTML(pagina, cap, jaTem)");
+  checar('e ele vem DEPOIS do corpo do artigo, não antes',
+    iArt > -1 && iCheck > iArt, 'artigo em ' + iArt + ', check em ' + iCheck);
+
+  /* 2. O CHECK NÃO REDESENHA O LEITOR: quem acabou de ler não pode voltar ao topo do texto
+     que terminou. O card se troca no lugar. */
+  checar('o check troca o card no lugar em vez de remontar a tela',
+    template.indexOf("caixa.outerHTML = pb9CheckHTML(pagina, cap2, true)") > -1);
+
+  /* 3. O QUIZ SÃO AS PERGUNTAS DAS PÁGINAS DO CAPÍTULO, e 80% arredonda PARA CIMA — em 5
+     perguntas são 4, e não 4 vírgula alguma coisa. */
+  checar('o quiz monta uma pergunta por página do capítulo',
+    template.indexOf('function pb9QuizHTML(cap)') > -1
+    && template.indexOf('cap.paginas.map(function (p, i)') > -1);
+  checar('o mínimo é 80% arredondado para cima',
+    template.indexOf('return Math.ceil(cap.total * 0.8);') > -1);
+  /* O PORQUÊ APARECE PARA QUEM ERROU: a prova ensina, e quem errou é justamente quem
+     precisa da frase. */
+  checar('a correção mostra o porquê de cada pergunta',
+    template.indexOf('pb9QuizCorrigido && q.porque') > -1);
+
+  /* 4. APROVAR GRAVA `prova` PARA CADA PÁGINA — mesma tabela, sem schema novo, e o placar
+     do gestor (que conta provas) continua funcionando sem tocar em nada. */
+  checar('aprovar o quiz grava a prova de cada página do capítulo',
+    template.indexOf("await playbookMarcarProgresso(p.id, 'prova', true);") > -1);
+  checar('e só grava quando passou do mínimo',
+    template.indexOf('if (acertos < pb9QuizMinimo(cap)) return false;') > -1);
+
+  /* 5. O QUIZ NÃO É UMA QUARTA TELA: ele toma o lugar do conteúdo da Biblioteca. Rota nova
+     só para responder N perguntas seria mais um estado para o histórico entender. */
+  checar('o quiz mora dentro da Biblioteca', template.indexOf('if (pb9QuizCap) {') > -1);
+
+  /* 6. O QUE EU NÃO INVENTEI: o mockup mostra "atualizada ago/26 · testada na rua por Ramon
+     e Iago" no kicker. Nem a data nem a autoria existem no JSON — inventar nome de colega
+     numa tela de treinamento destrói a confiança na tela inteira quando alguém percebe. */
+  const temAutoria = compilado.paginas.some(function (p) { return p.testadaPor || p.atualizadaEm; });
+  checar('o conteúdo não tem autoria nem data de revisão por página', !temAutoria,
+    'passou a ter: o kicker pode mostrar de verdade em vez de omitir');
+  checar('e o kicker não inventa nenhuma das duas',
+    template.indexOf('testada na rua por') < 0 || template.indexOf('testada na rua por') > template.indexOf('O QUE EU NÃO INVENTEI'));
+
+  /* 7. O NÚMERO DO RAIL É VIVO OU NÃO EXISTE: "use hoje na rua" some quando o funil não
+     tem nada, em vez de mostrar zero e ensinar o time a duvidar da tela. */
+  checar('o card do funil só aparece quando há número',
+    template.indexOf('const rua = (semPasso || estourados)') > -1);
 })();
 
 if (falhas.length) {
