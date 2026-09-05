@@ -149,23 +149,36 @@ checar('a mensagem fica fora do cartão do documento',
   template.indexOf('<div class="prc-proposal" id="precificacaoPreview">${prcPreviewHTML()}</div>') <
   template.indexOf('id="prcMensagemJunto"'));
 
+/* Os cinco chips do handoff, pelo que o DONO diz — não pelo nome da função que os
+   desenha. É o texto que tem de continuar na tela, mude o desenho que mudar. */
+const PRC_CHIPS = ['está caro', 'já tenho sistema', 'meu cliente é tradicional',
+  'meu restaurante é pequeno', 'e se a internet cair'];
+
 /* ── 9. O QUE JÁ EXISTIA E NÃO PODE SUMIR ───────────────────────────────────────
    Estas quatro são as ações que fazem a aba valer: sem elas o gerador é um desenho. */
 ['function abrirWhatsappProposta', 'function baixarPropostaPrecificacao',
   'function copiarTextoProposta', 'function gerarBlobPropostaPrecificacao'].forEach(fn => {
   checar('continua existindo: ' + fn.replace('function ', ''), template.indexOf(fn) > -1);
 });
-/* AS OBJEÇÕES VIRARAM BOTÃO (05/09/26): o bloco ocupava 104px fixos na coluna dos passos
-   e é ajuda para UM momento. A regra que importa não mudou — ela é do executivo e some
-   quando a tela vira para o cliente — então a checagem passa a medir a regra, e não o
-   markup que a implementava. (Esta checagem já me reprovou nesta mudança, com razão.) */
-checar('as objeções existem e são só do executivo',
-  template.indexOf('function prcBotaoObjecoesHTML()') > -1
-  && template.indexOf("${prcModoCliente ? '' : prcBotaoObjecoesHTML()}") > -1,
+/* AS OBJEÇÕES JÁ MUDARAM DE CASA DUAS VEZES (bloco na coluna -> botão flutuante na barra
+   -> caixa âmbar no pé da coluna, com resposta inline). Estas checagens ficaram cravadas
+   no nome do botão na primeira mudança e me reprovaram na segunda — de novo. Agora medem
+   as três regras que sobrevivem a qualquer desenho:
+     1. as cinco objeções são do EXECUTIVO e somem quando a tela vira para o cliente;
+     2. abrir a resposta não empurra a coluna (teto de altura + rolagem própria);
+     3. a resposta e a âncora do playbook saem do MESMO bloco — uma regra, um lugar. */
+checar('as cinco objeções existem e são só do executivo',
+  PRC_CHIPS.every(c => template.indexOf(c) > -1)
+  && template.indexOf("${prcModoCliente ? '' : prcCaixaObjecoesHTML()}") > -1,
   'no modo cliente elas têm de sumir — é a resposta às objeções DELE, virada para ele');
-checar('e elas abrem flutuando, sem empurrar o layout',
-  /\.p4-obj-painel\{position:absolute/.test(template),
-  'abrir empurrando devolve a rolagem que a aba acabou de perder');
+checar('abrir a resposta não empurra a coluna',
+  /\.p4-so-voce-resp\{[^}]*max-height:\d+px/.test(template)
+  && /\.p4-so-voce-resp\{[^}]*overflow-y:auto/.test(template),
+  'sem teto de altura, a resposta mais longa empurra os cinco passos e a rolagem volta');
+checar('a resposta e a âncora saem do mesmo bloco do playbook',
+  template.indexOf('function prcBlocoObjecao(') > -1
+  && /function prcAncoraObjecao\([\s\S]{0,160}prcBlocoObjecao\(/.test(template),
+  'duas buscas separadas divergem em silêncio — foi assim que a âncora devolveu null nas cinco');
 /* O AVISO DA DOR NÃO FOI JUNTO: "o plano na tela não cobre X" é aviso sobre a proposta
    montada agora, não resposta a objeção — atrás de um botão ele deixa de ser aviso. */
 checar('o aviso da dor continua visível na coluna',

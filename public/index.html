@@ -8194,13 +8194,39 @@
      desperdício aqui: numa tela de 1907 sobravam 347px de margem enquanto a coluna dos
      passos rolava por falta de espaço. Largura sobrando vira altura economizada, porque
      os cartões param de quebrar em mais fileiras. Só nesta view. */
-  .app-main:has(> #viewPrecificacao.active){max-width:none;padding-left:18px;padding-right:18px;}
+  /* ══ A PÁGINA VALE EXATAMENTE A JANELA — SÓ NESTA ABA (05/09/26) ═════════════════
+     O handoff chama isto de inegociável: em 1920x1080, 1600x900 e 1366x768 a aba não
+     rola. A cadeia de flex abaixo só entrega isso se o topo da cadeia tiver ALTURA
+     FIXA — com min-height:100vh (o que a casca tem) o conteúdo empurra e a página
+     cresce; com height:100vh ela para de crescer e cada elo distribui o que existe.
+     overflow:hidden no body é a rede: se um dia sobrar 1px, ele é recortado em vez de
+     devolver a barra de rolagem que este trabalho inteiro veio tirar.
+     :has(#viewPrecificacao.active) prende tudo a esta view — as outras sete abas
+     continuam rolando como sempre, e voltam ao normal no clique da navegação. */
+  body:has(#viewPrecificacao.active){overflow:hidden;}
+  /* AS DUAS FOLGAS DA CASCA, medidas nesta tela: a linha "HubSpot atualizado" reserva
+     24px embaixo e o rodapé da fonte reserva 28px em cima. São 52px que, em qualquer
+     outra aba, são respiro — aqui viram altura do cartão, que encolhe na razão direta
+     do que sobra. Nenhuma das duas some: elas só param de reservar o dobro. */
+  body:has(#viewPrecificacao.active) #updatedLine{margin-bottom:6px;}
+  body:has(#viewPrecificacao.active) #footerText{margin-top:8px;}
+  #appRoot:has(#viewPrecificacao.active) > div{height:100vh;min-height:0;}
+  #appRoot:has(#viewPrecificacao.active) > div > div{min-height:0;}
+  /* O PADDING DO .app-main VIRA PALCO. Ele reserva 26px em cima e 44 embaixo — folga boa
+     para texto, 70px caros aqui: cada pixel que sobra e altura do cartao, e o cartao
+     encolhe na razao direta do que sobra. Medido a 1907x880: o palco tinha 418px e o
+     cartao saia a 0,416 de escala. */
+  .app-main:has(> #viewPrecificacao.active){max-width:none;padding:10px 18px 10px;
+    min-height:0;overflow:hidden;}
   .app-main > #viewPrecificacao.active{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
   #viewPrecificacao.active > #precificacaoContent{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
   #viewPrecificacao.active .prc-shell{flex:1 1 0;min-height:0;}
   #viewPrecificacao.active .p4-grid{flex:1 1 0;min-height:0;}
-  .p4-grid{display:grid;grid-template-columns:minmax(0,1fr) 520px;gap:20px;padding:14px 20px 16px;
-    align-items:stretch;}
+  /* A COLUNA DO CARTAO E minmax(430px,480px): 430 e a largura de desenho da peca, entao
+     abaixo disso a escala comecaria a reduzir por falta de LARGURA, e nao por falta de
+     altura. O teto de 480 devolve a sobra para os passos. gap 18 e padding do handoff. */
+  .p4-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(430px,480px);gap:18px;
+    padding:14px 20px 16px;align-items:stretch;}
   /* OS CINCO PASSOS EM DUAS COLUNAS: a coluna tem 924px e empilhava tudo, gastando
      1095px de altura. 1+2 na primeira linha, 3 inteiro (os chips dos adicionais
      precisam da largura), 4+5 na última. A leitura continua 1,2,3,4,5 — esquerda para
@@ -8280,25 +8306,13 @@
   .p4-btn-sec{flex:1;text-align:center;font:700 12px var(--font-display);color:var(--p4-escuro);border:1px solid var(--p4-linha-forte);border-radius:var(--r-md);padding:11px;background:var(--p4-canvas);cursor:pointer;}
   .p4-btn-sec:hover{border-color:var(--p4-escuro);}
   .p4-acoes-dica{font-size:10px;color:var(--p4-muted2);text-align:center;}
-  /* O GATILHO DAS OBJEÇÕES E O PAINEL FLUTUANTE (05/09/26).
-     Âmbar porque nesta casa âmbar é "atenção, isto é seu" — a mesma tinta que o bloco
-     tinha quando ocupava a coluna. O painel é absolute para NÃO empurrar layout: abrir
-     empurrando devolveria a rolagem que a aba acabou de perder.
-     z-index alto e fundo do papel porque ele cobre os cartões dos passos. */
-  .p4-obj{position:relative;flex:none;}
-  .p4-obj-btn{font:800 11px var(--font-display);letter-spacing:.04em;color:var(--p4-ambar);
-    background:var(--p4-ambar-bg);border:1px solid var(--p4-ambar-linha);border-radius:var(--r-pill);
-    padding:9px 14px;min-height:36px;cursor:pointer;white-space:nowrap;}
-  .p4-obj-btn:hover{border-color:var(--p4-ambar);}
-  .p4-obj-btn[aria-expanded="true"]{background:var(--p4-ambar);color:var(--p4-card);}
-  .p4-obj-painel{position:absolute;top:calc(100% + 8px);right:0;z-index:60;width:min(560px,80vw);
-    background:var(--p4-ambar-bg);border:1px solid var(--p4-ambar-linha);border-radius:var(--r-md);
-    padding:12px 14px;box-shadow:0 16px 44px rgba(43,52,64,.18);}
-  .p4-obj-rot{font:800 9px var(--font-display);letter-spacing:.16em;color:var(--p4-ambar);}
-  .p4-obj-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;}
-  .p4-obj-chips button{font-size:11.5px;font-weight:600;padding:8px 12px;border-radius:var(--r-pill);
-    background:var(--p4-card);border:1px solid var(--p4-ambar-linha);color:var(--p4-muted);cursor:pointer;}
-  .p4-obj-chips button:hover{border-color:var(--p4-ambar);color:var(--p4-escuro);}
+  /* O PAINEL FLUTUANTE DAS OBJEÇÕES SAIU DAQUI (05/09/26).
+     Ele foi um botão na barra do topo por uma versão, para economizar os 104px que a
+     caixa custava na coluna. O handoff final desfaz isso, e com razão: a resposta
+     precisa ficar ao ALCANCE DO OLHO no momento em que o dono objeta, não atrás de um
+     clique num canto da tela. A caixa volta ao pé da coluna e a resposta abre DENTRO
+     dela — o custo de altura fica preso num max-height com rolagem própria, então o
+     resto da coluna não se mexe quando ela abre. */
   /* o aviso da dor ocupa a fileira inteira quando existe — e some quando não há dor */
   .p4-controles > .prc-dor-linha{grid-column:1 / -1;}
   /* só você vê */
@@ -8310,17 +8324,35 @@
   .p4-so-voce-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:0;flex:1;}
   .p4-so-voce-chips button{font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--r-pill);background:var(--p4-card);border:1px solid var(--p4-ambar-linha);color:var(--p4-muted);cursor:pointer;}
   .p4-so-voce-chips button:hover{border-color:var(--p4-ambar);color:var(--p4-ambar);}
+  .p4-so-voce-chips button[aria-pressed="true"]{background:var(--p4-ambar);border-color:var(--p4-ambar);color:var(--p4-card);}
+  /* A RESPOSTA INLINE. flex-basis:100% porque a caixa é uma fileira flex e a resposta
+     tem de romper para a linha de baixo. max-height + rolagem própria: a resposta mais
+     longa das cinco tem 1972 caracteres de HTML, e sem o teto ela empurraria a coluna
+     inteira ao abrir. */
+  .p4-so-voce-resp{flex-basis:100%;margin-top:9px;padding-top:9px;border-top:1px solid var(--p4-ambar-linha);
+    max-height:196px;overflow-y:auto;font-size:11.5px;line-height:1.55;color:var(--p4-escuro);}
+  .p4-so-voce-resp p,.p4-so-voce-resp ul,.p4-so-voce-resp blockquote{margin:0 0 7px;}
+  .p4-so-voce-resp ul{padding-left:16px;}
+  .p4-so-voce-resp blockquote{padding:8px 10px;border-left:2px solid var(--p4-ambar);
+    background:var(--p4-card);border-radius:var(--r-sm);color:var(--p4-escuro);}
+  .p4-so-voce-resp .p4-so-voce-ir{font:800 10px var(--font-display);letter-spacing:.1em;
+    color:var(--p4-ambar);background:none;border:0;padding:0;cursor:pointer;text-decoration:underline;}
   /* ══ O DOCUMENTO — é a peça do cliente, e é a mesma que vai no PNG ══ */
   .prc-proposal{background:var(--p4-doc);border-radius:var(--r-lg);overflow:hidden;color:var(--p4-doc-ink);
     box-shadow:0 12px 40px rgba(20,17,13,.35);position:sticky;top:72px;}
-  .p4-doc-topo{padding:30px 34px 22px;text-align:center;}
+  /* AS MARGENS INTERNAS SEGUEM A LARGURA DE DESENHO (05/09/26). O cartão nasceu com
+     ~520px de largura e 34px de folga lateral; o handoff final o desenha em 430px, e
+     34px ali são 16% da peça em margem. Encolhidas, sobram para o conteúdo — e como o
+     cartão inteiro é escalado para caber, cada pixel de altura que sai da margem volta
+     como tamanho de letra na tela e no PNG. */
+  .p4-doc-topo{padding:20px 24px 16px;text-align:center;}
   .p4-doc-logo{height:34px;width:auto;display:inline-block;}
   .p4-doc-linha{font:800 10px var(--font-display);letter-spacing:.22em;color:var(--p4-doc-mut);margin-top:14px;}
   .p4-doc-plano{font:900 28px var(--font-display);letter-spacing:-.01em;margin-top:4px;}
   .p4-doc-para{font-size:11px;color:var(--p4-doc-mut);margin-top:6px;}
   .p4-doc-para b{color:var(--p4-doc-ink);}
-  .p4-doc-corpo{padding:0 34px 26px;}
-  .p4-doc-rot{font:800 10px var(--font-display);letter-spacing:.2em;color:var(--p4-doc-mut);border-top:1px solid rgba(237,234,228,.1);padding-top:18px;}
+  .p4-doc-corpo{padding:0 24px 18px;}
+  .p4-doc-rot{font:800 10px var(--font-display);letter-spacing:.2em;color:var(--p4-doc-mut);border-top:1px solid rgba(237,234,228,.1);padding-top:13px;}
   .p4-doc-cols{display:grid;grid-template-columns:1fr 1fr;gap:0 24px;margin-top:12px;font-size:11px;line-height:1.5;}
   .p4-doc-sec{font:800 10px var(--font-display);letter-spacing:.12em;color:var(--p4-vermelho);margin:12px 0 4px;}
   .p4-doc-sec.is-primeira{margin-top:8px;}
@@ -8343,7 +8375,7 @@
   .prc-shell.modo-cliente .p4-doc-add.is-densa{font-size:12px;}
   .prc-shell.modo-cliente .p4-doc-add.is-muito-densa{font-size:11px;}
   .prc-shell.modo-cliente .p4-doc-add-pe{font-size:12px;}
-  .p4-inv{background:var(--p4-doc-inv);padding:24px 34px;text-align:center;}
+  .p4-inv{background:var(--p4-doc-inv);padding:16px 24px;text-align:center;}
   .p4-inv-rot{font:800 10px var(--font-display);letter-spacing:.22em;color:var(--p4-doc-mut);}
   .p4-inv-num{font:900 32px var(--font-display);margin-top:8px;}
   .p4-inv-x{color:var(--p4-doc-ink);}
@@ -8352,7 +8384,7 @@
   .p4-inv-total{font-size:11px;color:var(--p4-doc-mut);margin-top:2px;}
   .p4-inv-eco{display:inline-block;margin-top:12px;font:800 11px var(--font-display);color:var(--p4-check);
     background:rgba(61,190,123,.12);border:1px solid rgba(61,190,123,.35);border-radius:var(--r-pill);padding:7px 16px;}
-  .p4-doc-pe{padding:16px 34px 22px;text-align:center;border-top:1px solid rgba(237,234,228,.08);}
+  .p4-doc-pe{padding:12px 24px 15px;text-align:center;border-top:1px solid rgba(237,234,228,.08);}
   .p4-doc-por{font-size:11px;color:var(--p4-doc-item);}
   .p4-doc-por b{color:var(--p4-doc-ink);}
   /* O PASSO COMBINADO E A ENTREGA (05/09/26). Duas linhas que a peça não tinha:
@@ -8371,10 +8403,19 @@
      A mensagem fica FORA da rolagem: ela e o que acompanha o PNG e precisa estar visivel
      no momento em que ele aperta enviar. */
   .p4-peca{display:flex;flex-direction:column;min-height:0;min-width:0;}
-  /* SEM BARRA AQUI: o zoom de prcAjustarPeca faz o documento caber, entao nao ha o que
-     rolar. overflow:hidden e a rede — se um dia a conta falhar, recorta em vez de
-     devolver a barra que o Julyan pediu para tirar. */
-  .p4-rolagem{flex:1 1 0;min-height:0;overflow:hidden;border-radius:var(--r-lg);}
+  /* ══ O CARTÃO AUTO-ESCALA (05/09/26, prancha final) ═══════════════════════════════
+     Regra do handoff, ao pé da letra: o cartão é desenhado em 430px FIXOS, medido com
+     offsetHeight (transform não afeta offsetHeight, e é por isso que a medida é feita
+     assim), e recebe transform:scale(s) com
+         s = min(1, larguraDisponível/430, alturaDisponível/alturaNatural)
+     centralizado com translate(-50%,-50%) dentro de um wrapper relative/flex:1/
+     min-height:0/overflow:hidden.
+     transform e não zoom: zoom muda o layout e o cartão deixaria de ser 430px reais —
+     e é o nó de 430px, sem transform, que o PNG precisa capturar para sair nítido. */
+  .p4-palco{position:relative;flex:1 1 0;min-height:0;overflow:hidden;}
+  .p4-palco > .prc-proposal{position:absolute;left:50%;top:50%;width:430px;
+    transform-origin:center center;border-radius:var(--r-lg);}
+
   /* A MENSAGEM CUSTAVA 195px, tirados direto da altura da peça. Fica no pé, menor, com
      teto: o que passar rola dentro dela. É texto que o executivo já conhece de cor —
      a peça é que ele precisa VER. */
@@ -8390,15 +8431,16 @@
   .p4-doc-entrega{font-size:10.5px;line-height:1.5;color:var(--p4-doc-mut);margin-top:5px;}
   .p4-doc-por{margin-top:8px;}
   .p4-doc-selo{font:700 9px var(--font-display);letter-spacing:.16em;color:var(--p4-doc-mut);margin-top:6px;}
-  /* modo cliente: a coluna de controles sai e o documento centraliza */
+  /* ══ VIRAR PARA O CLIENTE É O MESMO CARTÃO, MAIOR ═══════════════════════════════
+     Havia dois cartões aqui: o da coluna e, no modo cliente, um mais largo com sete
+     tamanhos de fonte redefinidos. Dois desenhos da mesma peça divergem — e divergiam:
+     o dono via um cartão que não era o do PNG que ele receberia.
+     Agora o modo cliente é a MESMA peça de 430px com outra escala, a do handoff:
+       cv = min(1,15, largura*0,9/430, (altura*0,86 − 70)/alturaNatural)
+     A conta mora em prcAjustarPeca, junto com a escala da prévia — uma regra, um
+     lugar. Aqui fica só o que é layout: os controles sumindo e a peça sozinha. */
   .prc-shell.modo-cliente .p4-grid{grid-template-columns:minmax(0,1fr);padding:24px;}
   .prc-shell.modo-cliente .p4-controles{display:none;}
-  .prc-shell.modo-cliente .prc-proposal{position:static;max-width:820px;margin:0 auto;}
-  .prc-shell.modo-cliente .p4-doc-plano{font-size:40px;}
-  .prc-shell.modo-cliente .p4-doc-cols{font-size:13px;gap:0 34px;}
-  .prc-shell.modo-cliente .p4-doc-sec{font-size:12px;}
-  .prc-shell.modo-cliente .p4-inv-num{font-size:52px;}
-  .prc-shell.modo-cliente .p4-inv-eco{font-size:13px;padding:9px 20px;}
   /* estreito: o documento vai para baixo dos controles, na largura toda */
   @media (max-width:1240px){
     .p4-grid{grid-template-columns:minmax(0,1fr);}
@@ -19680,35 +19722,52 @@ function prcPreviewHTML() {
 }
 
 /* ══ A ALTURA DA ABA SAI DE MEDICAO (05/09/26) ══════════════════════════════════════
-/* ══ A PEÇA ENCOLHE PARA CABER (05/09/26) ═══════════════════════════════════════════
-   O documento tem 953px e a coluna dele tem ~460. Antes ele rolava por dentro, e o
-   Julyan foi claro: nenhuma rolagem. Então ele ENCOLHE — e encolher é honesto aqui,
-   porque a peça é a prévia de um PNG: uma miniatura fiel é a mesma imagem, menor. Para
-   ler em tamanho real existe o "Virar para o cliente", que é o gesto que já existia.
+/* ══ A PEÇA AUTO-ESCALA (05/09/26, prancha final) ═══════════════════════════════════
+   O cartão é desenhado em 430px FIXOS — a largura do handoff — e a tela mostra uma
+   redução dele:
+       s = min(1, larguraDisponível/430, alturaDisponível/alturaNatural)
+   transform:scale e não zoom. Foi zoom por uma versão, e o motivo de trocar é o PNG:
+   a captura precisa acontecer no nó de 430px REAIS, sem transform, senão sai borrada.
+   zoom muda o layout do nó (ele deixa de ter 430px de verdade); transform só desenha,
+   e como o cartão é absolute dentro do palco, desenhar menor não pede rolagem nenhuma.
 
-   zoom e não transform:scale de propósito: transform desenha menor mas continua ocupando
-   o espaço original, e a barra de rolagem voltaria. zoom muda o layout, que é o que se
-   quer aqui.
+   offsetHeight é a medida certa da altura natural justamente porque transform NÃO a
+   afeta — não é preciso zerar a escala para medir.
 
-   O FATOR SAI DE MEDIÇÃO e não de constante: zoom volta a 1, mede a altura natural, e o
-   fator é o que couber. ResizeObserver porque a coluna muda de altura quando a janela
-   muda — e o guarda evita o laço, já que mexer no zoom dispara o próprio observer. */
+   RECALCULA em três momentos, os três do handoff: no resize do palco (ResizeObserver;
+   o palco não muda de tamanho quando o cartão escala, então não há laço), quando as
+   fontes terminam de carregar (texto com fonte de sistema mede outra altura) e a cada
+   troca de plano ou adicional — essa terceira vem de quem redesenha o cartão. */
+const PRC_LARGURA_DESENHO = 430;
 function prcAjustarPeca() {
-  const caixa = document.querySelector('#precificacaoContent .p4-rolagem');
+  const palco = document.querySelector('#precificacaoContent .p4-palco');
   const peca = document.getElementById('precificacaoPreview');
-  if (!caixa || !peca) return;
-  if (prcAjustarPeca._rodando) return;
-  prcAjustarPeca._rodando = true;
-  peca.style.zoom = '1';
-  const disponivel = caixa.clientHeight;
+  if (!palco || !peca) return;
   const natural = peca.offsetHeight;
-  const fator = (natural > 0 && disponivel > 0) ? Math.min(1, disponivel / natural) : 1;
-  peca.style.zoom = fator < 1 ? String(Math.floor(fator * 1000) / 1000) : '1';
-  prcAjustarPeca._rodando = false;
+  const larguraLivre = palco.clientWidth;
+  const alturaLivre = palco.clientHeight;
+  let s = 1;
+  if (natural > 0 && larguraLivre > 0 && alturaLivre > 0) {
+    /* VIRADO PARA O CLIENTE a peça pode passar de 1: ela deixa de ser prévia e vira o
+       documento que o dono lê na mesa, do outro lado do notebook. O teto de 1,15 e os
+       0,86 da altura são do handoff — os 70px descontados são o que a barra de voltar
+       ocupa embaixo. */
+    s = prcModoCliente
+      ? Math.min(1.15, (window.innerWidth * 0.9) / PRC_LARGURA_DESENHO,
+          (window.innerHeight * 0.86 - 70) / natural)
+      : Math.min(1, larguraLivre / PRC_LARGURA_DESENHO, alturaLivre / natural);
+    if (!(s > 0)) s = 1;
+  }
+  peca.style.transform = 'translate(-50%,-50%) scale(' + (Math.floor(s * 1000) / 1000) + ')';
 
-  if (!prcAjustarPeca._observando && typeof ResizeObserver === 'function') {
+  if (!prcAjustarPeca._observando) {
     prcAjustarPeca._observando = true;
-    new ResizeObserver(function () { prcAjustarPeca(); }).observe(caixa);
+    if (typeof ResizeObserver === 'function') {
+      new ResizeObserver(function () { prcAjustarPeca(); }).observe(palco);
+    }
+    if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
+      document.fonts.ready.then(function () { prcAjustarPeca(); });
+    }
   }
 }
 
@@ -19952,15 +20011,31 @@ function abrirPropostaDaConta(lead) {
 
 let prcModoCliente = false;
 
-/* A âncora sai do CONTEÚDO, não de um id cravado: procura o título que começa com o
-   número da objeção na página objecoes. Se o playbook for reescrito, isto continua
-   achando — e se não achar, abre a página sem âncora em vez de errar em silêncio. */
-function prcAncoraObjecao(numero) {
+/* A RESPOSTA E A ÂNCORA SAEM DO MESMO LUGAR (05/09/26): o bloco da objeção na página
+   compilada do playbook. Antes a âncora era procurada por um título que começasse com
+   "1." — e nenhum título da página começa assim, então ela devolvia null nas cinco e o
+   chip abria a página no topo, em silêncio.
+   Agora o corte é por POSIÇÃO entre os títulos de nível 3 da página, que são exatamente
+   as cinco objeções de mesa, na ordem em que PRC_OBJECOES as lista. Se um dia a página
+   deixar de ter cinco, a função devolve null e a caixa manda abrir o playbook — errar
+   dizendo é melhor que errar mostrando a resposta da objeção errada. */
+function prcBlocoObjecao(numero) {
   const pb = (typeof playbookCache !== 'undefined') ? playbookCache : null;
   const pag = pb && (pb.paginas || []).find(x => x.id === 'objecoes');
-  if (!pag || !Array.isArray(pag.headings)) return null;
-  const alvo = pag.headings.find(h => new RegExp('^' + numero + '\\.').test(String(h.texto || h.text || h.titulo || '').trim()));
-  return alvo ? alvo.id : null;
+  if (!pag || !pag.html) return null;
+  const blocos = String(pag.html).split(/(?=<h[1-6][ >])/).filter(t => /^<h3[ >]/.test(t));
+  if (blocos.length !== PRC_OBJECOES.length) return null;
+  const bruto = blocos[Number(numero) - 1];
+  if (!bruto) return null;
+  const m = bruto.match(/^<h3 id="([^"]+)"/);
+  return {
+    ancora: m ? m[1] : null,
+    html: bruto.replace(/^<h3[^>]*>[\s\S]*?<\/h3>\s*/, '')
+  };
+}
+function prcAncoraObjecao(numero) {
+  const bloco = prcBlocoObjecao(numero);
+  return bloco ? bloco.ancora : null;
 }
 
 /* As cinco, na ordem do playbook. O rótulo é o que o CLIENTE diz, encurtado para caber
@@ -20063,7 +20138,6 @@ function prcBarraContaHTML() {
       ${etiquetaEtapa ? `<span class="p4-chip-etapa">ETAPA · ${esc(String(etiquetaEtapa).toUpperCase())}</span>` : ''}
       ${conta.dor ? `<span class="p4-chip-dor">DOR · ${esc(String(conta.dor).toUpperCase())}</span>` : ''}
       <span class="p4-conta-usa">${conta.sistema ? `usa hoje: <b>${esc(conta.sistema)}</b>` : 'sistema atual não registrado'}${conta.telefone ? ` · ☎ ${esc(conta.telefone)}` : ''}</span>
-      ${prcModoCliente ? '' : prcBotaoObjecoesHTML()}
       <button type="button" class="p4-btn-txt" id="prcTrocarConta">trocar conta</button>
       <button type="button" class="p4-btn-escuro" id="prcMostrarCliente">Virar para o cliente →</button>
     </div>`;
@@ -20075,31 +20149,21 @@ function prcBarraContaHTML() {
     <label class="p4-campo"><span>WhatsApp</span><input id="prcTelefone" value="${esc(precificacaoEstado.whatsapp)}" placeholder="(27) 99999-9999" inputmode="tel" autocomplete="tel"></label>
     <datalist id="prcContasLista">${candidatas.map(l => `<option value="${esc(l.name)}"></option>`).join('')}</datalist>
     <span class="p4-conta-usa">abrindo pela ficha do negócio, em <b>Gerar proposta</b>, nome, telefone e dor vêm prontos</span>
-    ${prcModoCliente ? '' : prcBotaoObjecoesHTML()}
     <button type="button" class="p4-btn-escuro" id="prcMostrarCliente">Virar para o cliente →</button>
   </div>`;
 }
 
-/* ══ AS OBJEÇÕES VIRARAM BOTÃO (05/09/26) ═══════════════════════════════════════════
-   O bloco "SÓ VOCÊ VÊ" ocupava 104px fixos na coluna dos passos — 104 dos 194px que
-   faziam aquela coluna rolar. E ele é ajuda para UM momento: quando o dono objeta.
-   Aberto o tempo todo, custava altura em todos os outros momentos.
-
-   Agora é um botão na barra do topo, que já tinha espaço vazio, e as respostas abrem
-   FLUTUANDO (position:absolute) — abrir empurrando o layout devolveria a rolagem que
-   este trabalho veio tirar.
-
-   Continua sendo só do executivo: prcModoCliente não desenha o gatilho, porque a tela
-   virada para o cliente não pode ter "se ele disser que está caro" escrito nela. */
-function prcBotaoObjecoesHTML() {
-  return `<div class="p4-obj">
-    <button type="button" class="p4-obj-btn" id="prcObjecoes"
-      aria-expanded="false" aria-controls="prcObjecoesPainel"
-      title="As respostas prontas do playbook, só para você">⚠ se ele disser…</button>
-    <div class="p4-obj-painel" id="prcObjecoesPainel" hidden>
-      <div class="p4-obj-rot">SÓ VOCÊ VÊ — RESPOSTA PRONTA NO PLAYBOOK</div>
-      <div class="p4-obj-chips">${PRC_OBJECOES.map(o => `<button type="button" data-prc-objecao="${o.n}">“${esc(o.chip)}”</button>`).join('')}</div>
-    </div>
+/* ══ SÓ VOCÊ VÊ — A CAIXA ÂMBAR NO PÉ DA COLUNA ═════════════════════════════════════
+   Cinco chips com o que o dono diz, e a resposta do playbook abrindo INLINE, logo
+   abaixo — o executivo lê com o dono na frente, sem trocar de aba e sem perder a
+   proposta que acabou de montar.
+   Nunca no modo cliente e nunca no PNG: a caixa não é desenhada quando prcModoCliente
+   está ligado, e o PNG captura só o cartão, que fica na outra coluna. */
+function prcCaixaObjecoesHTML() {
+  return `<div class="p4-so-voce">
+    <span class="p4-so-voce-rot">SÓ VOCÊ VÊ</span>
+    <div class="p4-so-voce-chips">${PRC_OBJECOES.map(o => `<button type="button" data-prc-objecao="${o.n}" aria-pressed="false" aria-controls="prcObjecaoResposta">“${esc(o.chip)}”</button>`).join('')}</div>
+    <div class="p4-so-voce-resp" id="prcObjecaoResposta" hidden></div>
   </div>`;
 }
 
@@ -20222,14 +20286,12 @@ function renderPrecificacaoConfigurador() {
         ${prcBlocoAdicionaisHTML()}
         ${prcBlocoPeriodoHTML()}
         ${prcBlocoPassoHTML()}
-        <!-- AS OBJEÇÕES SAÍRAM DA COLUNA (05/09/26). O bloco ocupava 104px fixos para uma
-             ajuda que só serve QUANDO o dono objeta — e eram 104 dos 194px que faziam a
-             coluna dos passos rolar. Agora ele é um botão na barra do topo, que abre as
-             respostas flutuando por cima. Continua só do executivo: some no modo cliente.
-             O ALERTA DA DOR NÃO FOI JUNTO. "O plano na tela não cobre X" é aviso sobre a
-             proposta que está montada agora, não resposta a objeção — atrás de um botão
-             ele deixaria de ser aviso. Fica aqui, e só ocupa altura quando existe. -->
+        <!-- O ALERTA DA DOR VEM ANTES DAS OBJEÇÕES: "o plano na tela não cobre X" é aviso
+             sobre a proposta que está montada AGORA, e só ocupa altura quando existe.
+             A caixa âmbar fecha a coluna, que é onde o handoff a quer — ajuda ao alcance
+             do olho no momento em que o dono objeta. Nenhuma das duas no modo cliente. -->
         ${prcModoCliente ? '' : prcBlocoDorHTML()}
+        ${prcModoCliente ? '' : prcCaixaObjecoesHTML()}
       </div>
       <!-- A MENSAGEM QUE VAI JUNTO (05/09/26). O PNG não viaja sozinho: o WhatsApp leva
            imagem + texto, e o texto é o que faz o dono abrir a imagem. Ele já existia —
@@ -20244,7 +20306,7 @@ function renderPrecificacaoConfigurador() {
            volta para debaixo da peça, que é onde ela pertence — e é essa célula que
            permite o documento rolar por dentro com a mensagem presa no pé. -->
       <div class="p4-peca">
-        <div class="p4-rolagem">
+        <div class="p4-palco">
           <div class="prc-proposal" id="precificacaoPreview">${prcPreviewHTML()}</div>
         </div>
         ${prcModoCliente ? '' : `<div class="p4-msg" id="prcMensagemJunto">
@@ -20308,33 +20370,37 @@ function renderPrecificacaoConfigurador() {
     abrirPaginaPlaybook('mapa-dor-solucao', prcAncoraDor(dor.nome));
   });
 
-  /* OBJEÇÃO -> PLAYBOOK, na âncora. Sem âncora, abre a página mesmo assim: melhor a
-     página certa sem âncora que nada. */
-  /* O GATILHO DAS OBJEÇÕES. Fecha ao escolher uma resposta (a tela vai para o playbook),
-     ao clicar fora e no Esc — painel que só fecha no próprio botão é painel que fica
-     aberto por cima dos passos enquanto o executivo tenta configurar. */
-  const btnObj = slot.querySelector('#prcObjecoes');
-  const painelObj = slot.querySelector('#prcObjecoesPainel');
-  if (btnObj && painelObj) {
-    const fechar = () => { painelObj.hidden = true; btnObj.setAttribute('aria-expanded', 'false'); };
-    btnObj.addEventListener('click', ev => {
-      ev.stopPropagation();
-      const abrindo = painelObj.hidden;
-      painelObj.hidden = !abrindo;
-      btnObj.setAttribute('aria-expanded', abrindo ? 'true' : 'false');
-    });
-    painelObj.addEventListener('click', ev => ev.stopPropagation());
-    document.addEventListener('click', fechar);
-    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') fechar(); });
-  }
-
+  /* O CHIP ABRE A RESPOSTA AQUI MESMO. Trocar de aba era o comportamento antigo, e ele
+     custava a proposta montada saindo da tela justamente no minuto em que o dono está
+     objetando. O chip clicado de novo fecha; o link no pé leva ao playbook inteiro,
+     para quem quiser o contexto todo depois da visita.
+     Quando a página do playbook não entrega as cinco, a caixa DIZ que não achou e
+     oferece o playbook — em vez de mostrar a resposta da objeção errada. */
+  const respObj = slot.querySelector('#prcObjecaoResposta');
   slot.querySelectorAll('[data-prc-objecao]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const anc = prcAncoraObjecao(Number(btn.dataset.prcObjecao));
-      activateTab('viewPlaybook');
-      if (typeof abrirPaginaPlaybook === 'function') abrirPaginaPlaybook('objecoes', anc);
+      if (!respObj) return;
+      const n = Number(btn.dataset.prcObjecao);
+      const jaAberto = btn.getAttribute('aria-pressed') === 'true';
+      slot.querySelectorAll('[data-prc-objecao]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      if (jaAberto) { respObj.hidden = true; return; }
+      btn.setAttribute('aria-pressed', 'true');
+      const bloco = prcBlocoObjecao(n);
+      respObj.innerHTML = bloco
+        ? bloco.html + `<button type="button" class="p4-so-voce-ir" data-prc-objecao-ir="${bloco.ancora || ''}">ABRIR NO PLAYBOOK →</button>`
+        : `<p>Resposta não encontrada na página compilada do playbook.</p><button type="button" class="p4-so-voce-ir" data-prc-objecao-ir="">ABRIR NO PLAYBOOK →</button>`;
+      respObj.hidden = false;
+      respObj.scrollTop = 0;
     });
   });
+  if (respObj) {
+    respObj.addEventListener('click', ev => {
+      const ir = ev.target.closest('[data-prc-objecao-ir]');
+      if (!ir) return;
+      activateTab('viewPlaybook');
+      if (typeof abrirPaginaPlaybook === 'function') abrirPaginaPlaybook('objecoes', ir.dataset.prcObjecaoIr || null);
+    });
+  }
 
   slot.querySelectorAll('[data-prc-tipo]').forEach(btn => btn.addEventListener('click', () => { precificacaoEstado.tipo = btn.dataset.prcTipo; renderPrecificacaoConfigurador(); }));
   slot.querySelectorAll('[data-prc-plano]').forEach(btn => btn.addEventListener('click', () => { precificacaoEstado.plano = btn.dataset.prcPlano; renderPrecificacaoConfigurador(); }));
