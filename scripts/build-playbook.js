@@ -234,6 +234,24 @@ function slug(texto) {
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 72) || 'secao';
 }
 
+/* O SELO DO LINK EXTERNO (05/09/26).
+   Ele diz PARA ONDE vai, nao so que e um link: rotulo + dominio + "↗". O link interno e
+   uma pilula vermelha com "→" e significa "continua no playbook"; o externo tira a pessoa
+   do Cockpit, e no meio de uma visita saber se o destino e docs.google.com (ferramenta do
+   time) ou takeat.app (material que pode ir para o cliente) e a propria regra da pagina
+   de Links uteis. Rotulo igual ao dominio nao repete o dominio. */
+function hostDe(href) {
+  return String(href).replace(/^https?:\/\//, '').replace(/^www[.]/, '').split('/')[0];
+}
+
+function seloExterno(href, rotulo) {
+  const host = hostDe(href);
+  const texto = (rotulo || host).trim();
+  const nome = (texto === host) ? '' : `<span class="pb-out-l">${texto}</span>`;
+  return `<a class="pb-out" href="${href}" target="_blank" rel="noopener">${nome}`
+    + `<span class="pb-out-h">${host}<span aria-hidden="true"> ↗</span></span></a>`;
+}
+
 function inline(texto) {
   let s = esc(String(texto || '').replace(/\\$/g, ''));
   const tokens = [];
@@ -242,7 +260,10 @@ function inline(texto) {
   s = s.replace(/\[([^\]]+)\]\(playbook:([a-z0-9-]+)(?:#([a-z0-9-]+))?\)/gi, (_, label, pagina, ancora) =>
     guardar(`<button type="button" class="pb-ir" data-pb-ir="${pagina.toLowerCase()}"${ancora ? ` data-pb-ancora="${ancora.toLowerCase()}"` : ''}>${label}<span aria-hidden="true"> →</span></button>`));
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, href) =>
-    guardar(`<a href="${href}" target="_blank" rel="noopener">${label}<span aria-hidden="true"> ↗</span></a>`));
+    guardar(seloExterno(href, label)));
+  /* AUTOLINK <https://...>: quando este replace roda o texto JA passou por esc(), entao o
+     que existe aqui e &lt; e &gt;. Casar /<https?:/ nao acharia nada e o verde seria falso. */
+  s = s.replace(/&lt;(https?:\/\/[^\s]*?)&gt;/g, (_, href) => guardar(seloExterno(href, '')));
   s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
   s = s.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');

@@ -8618,6 +8618,46 @@
   .pba .oqfa-card li.cb{margin-left:0;padding-left:27px;}
   /* referência cruzada entre páginas: pílula, nunca o cinza do navegador */
   .pba .pb-ir{display:inline-block;margin:0 2px;border:1px solid rgba(229,26,49,.35);border-radius:var(--r-pill);padding:3px 13px;background:#FFF7F4;color:var(--v6-red);font:700 13px var(--font-body);cursor:pointer;position:relative;}
+  /* ── O SELO DO LINK EXTERNO (05/09/26) ─────────────────────────────────────────
+     A pilula vermelha com "→" acima significa "continua no playbook". Esta aqui e a outra
+     metade: o link que TIRA a pessoa do Cockpit. Ela nao pode ter a mesma cara, senao o
+     executivo no meio de uma visita nao sabe se vai perder a tela onde estava lendo.
+     E ela mostra o DOMINIO em letra miuda porque a regra da propria pagina de Links uteis
+     e "cliente nunca recebe link interno": ver docs.google.com antes de tocar e o que
+     evita abrir a planilha do time na frente do dono do restaurante.
+     border-bottom vem depois do border porque .pba a ja pinta um sublinhado vermelho, e
+     sublinhado dentro de pilula fica um risco solto no meio do selo.
+
+     NOME EM CIMA, DOMINIO EMBAIXO, E A MESMA COISA EM QUALQUER LARGURA. Eu tinha posto o
+     empilhamento e o piso de 44px perto da regra de padding da .pb-ir, acreditando
+     que aquele trecho fosse do @media de 760px. Nao e: perguntei ao CSSOM do navegador e
+     as 16 regras desta familia sao GLOBAIS — o comentario daquela linha ate diz "em toda
+     largura". Minha regra de celular estava valendo no desktop sem eu saber. Em vez de
+     empurra-la para dentro do @media, deixo UMA regra e assumo o empilhamento em todo
+     lugar: o playbook e lido no telefone na rua e no laptop na daily, e chip que muda de
+     forma entre os dois faz o executivo procurar duas vezes onde o link estava.
+     O PISO DE 44px vale aqui e NAO vale na .pb-ir acima, e a diferenca esta medida: das
+     pilulas internas 11 das 21 ficam NO MEIO de um paragrafo, e botao de 44px no meio de
+     frase estica a entrelinha daquela linha so. Os 10 selos externos ABREM paragrafo,
+     todos os 10, medidos nas 30 paginas — sem esse risco, o alvo de toque vem primeiro. */
+  .pba .pb-out{display:inline-flex;flex-direction:column;align-items:flex-start;gap:1px;
+    margin:0 2px;vertical-align:baseline;min-height:44px;padding:7px 14px;
+    border:1px solid var(--v6-linha);border-bottom:1px solid var(--v6-linha);border-radius:var(--r-pill);
+    background:var(--v6-linha-fina);text-decoration:none;}
+  .pba .pb-out:hover{border-color:var(--v6-red);border-bottom-color:var(--v6-red);background:#FFF7F4;}
+  .pba .pb-out-l{color:var(--v6-ink);font:800 13px var(--font-body);}
+  /* O DOMINIO NUNCA QUEBRA NO MEIO DA PALAVRA. Medi 44px de piso e coluna sem vazamento e
+     achei que estava pronto; a FOTO mostrou "docs.google" numa linha e ".com" na outra, e
+     num selo "docs.google.c" / "om". A culpa e do .pba a{overflow-wrap:anywhere} la em cima,
+     que existe para endereco e codigo longos poderem quebrar na coluna do celular — e pega
+     o host tambem. Dominio picado nao serve para o que ele existe: dizer para onde eu vou. */
+  .pba .pb-out-h{color:var(--v6-muted);font:700 10px var(--font-body);letter-spacing:.02em;
+    white-space:nowrap;overflow-wrap:normal;word-break:keep-all;}
+  .pba .pb-out:hover .pb-out-h{color:var(--v6-red);}
+  /* dentro do cartao escuro de FALE ASSIM, papel claro e tinta escura invertem */
+  .pba .fa-body .pb-out{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.22);border-bottom-color:rgba(255,255,255,.22);}
+  .pba .fa-body .pb-out-l{color:var(--v6-dark-ink);}
+  .pba .fa-body .pb-out-h{color:var(--v6-dark-mut);}
   /* ── A PILULA DE REFERENCIA CRUZADA NO TOQUE (02/09/26) ─────────────────────────
      Medido a 375px com um artigo aberto: nove .pb-ir com 24px de altura, onde o piso do
      toque e 44. Elas navegam para OUTRA pagina do playbook — errar o toque tira a pessoa
@@ -20914,13 +20954,31 @@ function pbv6TransformarArtigo(html) {
     /* citações: a primeira logo depois do h1 é o MANIFESTO da página; as outras são
        ferramenta de campo e ganham cabeçalho FALE ASSIM com botão de copiar. */
     const citacoes = [...raiz.querySelectorAll('blockquote')];
-    /* MANIFESTO = a citação de ABERTURA, e abertura não é "irmã imediata do h1": quase
-       toda página tem uma linha de subtítulo (h3) entre o título e a citação. Medido nas
-       30 páginas: pela regra antiga só 6 ganhavam manifesto, e nas outras a TESE da
-       página aparecia como cartão FALE ASSIM — como se fosse frase para dizer ao dono.
-       A regra certa é "a primeira citação antes da primeira seção". */
-    const primeiroH2 = raiz.querySelector('h2');
-    const antesDasSecoes = el => !primeiroH2 || !!(el.compareDocumentPosition(primeiroH2) & Node.DOCUMENT_POSITION_FOLLOWING);
+    /* MANIFESTO = a citação de ABERTURA, e abertura não é "irmã imediata do h1": a página
+       tem uma linha de subtítulo entre o título e a citação. Medido nas 30 páginas: pela
+       regra "irmã imediata do h1" só 6 ganhavam manifesto, e nas outras a TESE da página
+       aparecia como cartão FALE ASSIM — como se fosse frase para dizer ao dono.
+
+       POR QUE ELA MUDOU DE NOVO EM 05/09/26: a versão anterior era "a primeira citação
+       ANTES da primeira seção", e isso contava com o subtítulo de abertura ser h3. Na
+       auditoria eu promovi esse subtítulo para h2 nas páginas que abriam com h3 — as 30
+       agora abrem igual, e a abertura passou a ter entrada no trilho do leitor, que só
+       lista nível 2. Efeito colateral que só apareceu no OLHO, com as seis medições
+       verdes: em 6 páginas o subtítulo passou a ser o primeiro h2, a citação passou a vir
+       depois dele, e a tese virou cartão "FALE ASSIM · copiar" — o playbook mandando o
+       executivo copiar o próprio manifesto para o dono do restaurante.
+
+       A regra agora conta SEÇÕES ANTES: manifesto é a citação que tem no máximo uma seção
+       antes dela, ou seja, a que ainda está no bloco de abertura. Medido antes de escrever:
+       das 30 páginas, 24 têm a citação antes de qualquer h2 e 6 com exatamente 1 antes.
+       NENHUMA tem 2 ou mais — então este limite corrige as 6 e não toca nas 24. */
+    const antesDasSecoes = el => {
+      let secoesAntes = 0;
+      raiz.querySelectorAll('h2').forEach(h => {
+        if (h.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) secoesAntes++;
+      });
+      return secoesAntes <= 1;
+    };
     citacoes.forEach((bq, i) => {
       if (i === 0 && antesDasSecoes(bq)) {
         bq.className = 'manifesto';

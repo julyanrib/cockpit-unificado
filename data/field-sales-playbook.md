@@ -2245,48 +2245,39 @@ Esta página não é uma lista de favoritos: é a ordem em que as coisas acontec
 
 ## Antes de sair: preparar a rua
 
-**Casa dos Dados** — CNPJs abertos recentemente, filtro por CNAE, bairro e data de abertura. É a base da prospecção inteligente.
-<https://casadosdados.com.br>
+[Casa dos Dados](https://casadosdados.com.br) — CNPJs abertos recentemente, filtro por CNAE, bairro e data de abertura. É a base da prospecção inteligente.
 
-**Playbook comercial — SPICED, soluções e personas** — a planilha-mãe de qualificação e discurso por persona.
-<https://docs.google.com/spreadsheets/d/1B1zzkZ2FERqtvXg8v6eAWmb7cGedZmRu/edit?gid=1176329124#gid=1176329124>
+[Playbook comercial — SPICED, soluções e personas](https://docs.google.com/spreadsheets/d/1B1zzkZ2FERqtvXg8v6eAWmb7cGedZmRu/edit?gid=1176329124#gid=1176329124) — a planilha-mãe de qualificação e discurso por persona.
 
-**Lista atualizada de clientes (março/2026)** — quem já é cliente. Confira antes de bater na porta: chegar oferecendo Takeat para quem já tem Takeat queima autoridade na hora.
-<https://docs.google.com/spreadsheets/d/1_nB3KrDlTVqrC8cRSd86b5q60TyZsPeCx8wEsKwQpNg/edit?gid=117572231#gid=117572231>
+[Lista atualizada de clientes (março/2026)](https://docs.google.com/spreadsheets/d/1_nB3KrDlTVqrC8cRSd86b5q60TyZsPeCx8wEsKwQpNg/edit?gid=117572231#gid=117572231) — quem já é cliente. Confira antes de bater na porta: chegar oferecendo Takeat para quem já tem Takeat queima autoridade na hora.
 
 ***
 
 ## Na mesa do cliente: demonstrar
 
-**Sistema para Food Park** — ambiente de demonstração da operação de praça de alimentação, com várias marcas num mesmo espaço.
-<https://foodpark.takeat.app/ax1y1g/>
+[Sistema para Food Park](https://foodpark.takeat.app/ax1y1g/) — ambiente de demonstração da operação de praça de alimentação, com várias marcas num mesmo espaço.
 
-**Comparativos públicos** — oito comparativos lado a lado, com matriz de 15 recursos e data de revisão. Abra na frente do cliente quando ele citar concorrente.
-<https://takeat.app/comparativos>
+[Comparativos públicos](https://takeat.app/comparativos) — oito comparativos lado a lado, com matriz de 15 recursos e data de revisão. Abra na frente do cliente quando ele citar concorrente.
 
 ***
 
 ## Depois do fechamento: colocar de pé
 
-**Solicitação de displays e comandas** — material de mesa personalizado com QR Code exclusivo. Peça comandas e displays no mesmo pedido: o frete é fixo por pedido.
-<https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB>
+[Solicitação de displays e comandas](https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB) — material de mesa personalizado com QR Code exclusivo. Peça comandas e displays no mesmo pedido: o frete é fixo por pedido.
 
 ***
 
 ## Administrativo: o que é seu
 
-**Envio de NFS-e** — formulário oficial para nota fiscal de serviço.
-<https://docs.google.com/forms/d/e/1FAIpQLSc-tevz69qWERBk_X1XjrwTR7b93VhBmUvBcqr08knAPGBwmQ/viewform>
+[Envio de NFS-e](https://docs.google.com/forms/d/e/1FAIpQLSc-tevz69qWERBk_X1XjrwTR7b93VhBmUvBcqr08knAPGBwmQ/viewform) — formulário oficial para nota fiscal de serviço.
 
-**Solicitação de reembolso** — combustível, pedágio e despesas de rota. Junte os comprovantes antes de abrir; pedido incompleto volta.
-<https://docs.google.com/forms/d/e/1FAIpQLSc8zGNIo3snL9YqC1a7J62qEP4no5bZYtqs_OoSw1wE0DOYrw/viewform?pli=1>
+[Solicitação de reembolso](https://docs.google.com/forms/d/e/1FAIpQLSc8zGNIo3snL9YqC1a7J62qEP4no5bZYtqs_OoSw1wE0DOYrw/viewform?pli=1) — combustível, pedágio e despesas de rota. Junte os comprovantes antes de abrir; pedido incompleto volta.
 
 ***
 
 ## Comunicação do time
 
-**Discord do time** — é onde a resposta chega mais rápido: dúvida de produto, preço fora de tabela, cliente com caso estranho, link quebrado nesta página.
-<https://discord.gg/kxjRMdjy>
+[Discord do time](https://discord.gg/kxjRMdjy) — é onde a resposta chega mais rápido: dúvida de produto, preço fora de tabela, cliente com caso estranho, link quebrado nesta página.
 
 ***
 
@@ -2358,7 +2349,7 @@ Não pergunte "quantos você quer". Conte com ele:
 2. **Garanta o logotipo em alta resolução.** Print de Instagram sai serrilhado no material impresso e não tem volta depois de produzido.
 3. **Preencha a solicitação oficial** com todos os dados:
 
- **[LINK PARA SOLICITAÇÃO DE DISPLAYS E COMANDAS](https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB)**
+ [Abrir a solicitação de displays e comandas](https://forms.clickup.com/9007042153/f/8cdt3k9-2433/NQGOGI4V2G54FO9PJB)
 
 4. **Registre no negócio no HubSpot** que o material foi solicitado, com a data. Assim a implantação sabe que o material está a caminho e o dono não te cobra duas vezes pela mesma coisa.
 

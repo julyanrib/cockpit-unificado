@@ -403,12 +403,13 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
     compilado.categorias.indexOf("Módulos que viram receita") < 0);
 })();
 
-if (falhas.length) {
-  console.error('\nFALHAS (' + falhas.length + '):');
-  falhas.forEach(f => console.error('  ✗ ' + f));
-  console.error('\n' + ok + ' ok, ' + falhas.length + ' falha(s).');
-  process.exit(1);
-}
+/* ══ A TRAVA SAIU DAQUI EM 05/09/26, E ISSO ERA UM DEFEITO DA SUITE ════════════════
+   Ela ficava AQUI, no meio do arquivo, com 26 linhas de checagem depois dela — inclusive
+   a do hash do `versao`, que existe para nao estourar a cota de deploy. Checagem depois
+   do process.exit(1) nunca reprova nada: sabotei o hash de proposito e a suite terminou
+   verde. Agora a trava e a ULTIMA coisa do arquivo, e toda checagem nova cai dentro dela
+   por construcao. */
+
 /* ══ O `versao` TEM QUE SER HASH DA SAIDA, NAO DAS ENTRADAS ═════════════════════════
    MEDIDO em 03/09/26: dos 31 commits do robo entre 01 e 03/09, NOVE mudaram um arquivo
    so (data/field-sales-playbook.compiled.json) e nesses nove o conteudo era identico —
@@ -434,4 +435,105 @@ checar('o versao do playbook e o hash da SAIDA — saida igual nao gera commit n
   compilado.versao === versaoEsperada,
   'versao no arquivo ' + compilado.versao + ', hash da saida ' + versaoEsperada
     + ' — se divergem, o versao voltou a depender das entradas e o robo vai commitar por nada');
-console.log('playbook v7: ' + ok + ' checagens ok — prova, teto, níveis, selo, uso real, trilha do funil e busca.');
+
+/* ══ O LINK EXTERNO E A ESTRUTURA DE TITULOS (05/09/26) ═════════════════════════════
+   As quatro coisas abaixo eu quebrei ou achei quebradas nesta auditoria, e nenhuma delas
+   aparece em medicao de geometria — as seis medicoes de sempre estavam verdes. */
+
+/* 1. AUTOLINK. O compilador nao conhecia <https://...>: o esc() virava &lt;...&gt; e o
+      executivo LIA a URL como texto morto. Nove URLs, TODAS na pagina de Links uteis,
+      cuja propria tese e "link que voce nao acha na hora e link que nao existe". */
+(function () {
+  let cruas = 0;
+  let selos = 0;
+  let semSeguranca = 0;
+  compilado.paginas.forEach(function (p) {
+    const semAncora = p.html.replace(/<a [^>]*>[\s\S]*?<\/a>/g, '');
+    cruas += (semAncora.match(/https?:\/\/|&lt;https?:/g) || []).length;
+    (p.html.match(/<a class="pb-out"[^>]*>/g) || []).forEach(function (a) {
+      selos++;
+      if (!/target="_blank"/.test(a) || !/rel="noopener"/.test(a)) semSeguranca++;
+    });
+  });
+  checar('nenhuma URL aparece como texto morto no playbook',
+    cruas === 0,
+    cruas + ' URL(s) fora de <a> — o autolink <https://...> voltou a ser escapado');
+  checar('todo link externo tem selo, e o selo existe',
+    selos >= 10, 'achei ' + selos + ' selo(s) .pb-out e esperava ao menos 10');
+  checar('link externo nao rouba a aba do Cockpit',
+    semSeguranca === 0,
+    semSeguranca + ' selo(s) sem target="_blank" + rel="noopener" — abrir a planilha por cima do Cockpit'
+      + ' perde a tela onde o executivo estava lendo, no meio da visita');
+  /* o dominio e o que diz se aquilo pode aparecer na frente do cliente — a regra da
+     propria pagina de Links uteis e "cliente nunca recebe link interno". */
+  checar('o selo mostra o dominio, nao so o rotulo',
+    compilado.paginas.some(function (p) { return /class="pb-out-h"/.test(p.html); }));
+  checar('o dominio nao quebra no meio da palavra',
+    /[.]pba [.]pb-out-h\{[^}]*white-space:nowrap/.test(template),
+    'sem nowrap o .pba a{overflow-wrap:anywhere} parte "docs.google" numa linha e ".com" na outra');
+})();
+
+/* 2. A TESE NAO E FALA PARA O CLIENTE. Escuro tem UM significado no leitor: frase pronta
+      para copiar. Quando promovi o subtitulo de abertura de h3 para h2, a citacao passou
+      a vir depois do primeiro h2 e em 6 paginas a TESE virou cartao "FALE ASSIM · copiar"
+      — o playbook mandando o executivo copiar o proprio manifesto para o dono. */
+(function () {
+  const i = template.indexOf('const antesDasSecoes');
+  const bloco = i > -1 ? template.slice(i, i + 420) : '';
+  checar('o manifesto e decidido por CONTAGEM de secoes antes da citacao',
+    /secoesAntes\s*<=\s*1/.test(bloco),
+    'a regra voltou a ser "antes do primeiro h2", que quebra em toda pagina cuja abertura e h2');
+  /* e a estrutura que a regra pressupoe: no maximo 1 secao antes da primeira citacao */
+  let pior = 0;
+  compilado.paginas.forEach(function (p) {
+    const k = p.html.indexOf('<blockquote');
+    if (k < 0) return;
+    const n = (p.html.slice(0, k).match(/<h2/g) || []).length;
+    if (n > pior) pior = n;
+  });
+  checar('nenhuma pagina tem 2+ secoes antes da sua primeira citacao',
+    pior <= 1,
+    'a pior tem ' + pior + ' — com 2 ou mais, o limite <=1 deixa a tese virar FALE ASSIM outra vez');
+})();
+
+/* 3. A ESTRUTURA DE TITULOS. O trilho do leitor lista APENAS nivel 2: pagina que abre com
+      h3 nao tem entrada para o bloco de abertura, e o executivo nao consegue voltar para
+      a tese. As 30 abrem igual agora. */
+(function () {
+  let pulos = 0;
+  let abremErrado = 0;
+  compilado.paginas.forEach(function (p) {
+    const h = p.headings || [];
+    let anterior = 0;
+    h.forEach(function (x) { if (anterior && x.nivel > anterior + 1) pulos++; anterior = x.nivel; });
+    const iH1 = h.findIndex(function (x) { return x.nivel === 1; });
+    const prox = h[iH1 + 1];
+    if (!prox || prox.nivel !== 2) abremErrado++;
+  });
+  checar('nenhuma pagina pula nivel de titulo', pulos === 0, pulos + ' pulo(s)');
+  checar('todas as paginas abrem com uma secao de nivel 2',
+    abremErrado === 0,
+    abremErrado + ' pagina(s) abrindo fora do padrao — a abertura fica sem entrada no trilho');
+})();
+
+/* 4. O MARCADOR DE PAGINA E NIVEL 3, E ISSO E ESTRUTURAL. montarPlaybook() fatia as 30
+      paginas por /^###/ cruzado com MARCADORES. Eu promovi "### ECOSSISTEMA TAKEAT" para
+      h2 numa arrumacao de nivel e o build morreu com "Pagina do playbook nao encontrada".
+      Medir um uso (o id da ancora sai de idUnico(titulo), sem o nivel) nao prova que e o
+      unico uso. */
+(function () {
+  const build = fs.readFileSync(path.join(raiz, 'scripts', 'build-playbook.js'), 'utf8');
+  checar('o fatiador de paginas continua exigindo nivel 3 no marcador',
+    /match\(\/\^#{3}\\s\+\(\.\+\)\$\/\)/.test(build) || /\^###\\s/.test(build),
+    'se o fatiador mudar de nivel sem o markdown mudar junto, o build cai inteiro');
+  checar('as 30 paginas continuam sendo geradas', compilado.paginas.length === 30,
+    'achei ' + compilado.paginas.length);
+})();
+
+if (falhas.length) {
+  console.error('\nFALHAS (' + falhas.length + '):');
+  falhas.forEach(f => console.error('  ✗ ' + f));
+  console.error('\n' + ok + ' ok, ' + falhas.length + ' falha(s).');
+  process.exit(1);
+}
+console.log('playbook v7: ' + ok + ' checagens ok — prova, teto, níveis, selo, uso real, trilha do funil, busca, link externo e estrutura de títulos.');
