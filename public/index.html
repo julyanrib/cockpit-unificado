@@ -16966,6 +16966,26 @@ function fn2Gaveta(itens) {
 
 const FN3_ETAPA_ONBOARDING = '1396006163';
 
+/* ══ QUEM PEDE PRÓXIMO PASSO (04/09/26) ═════════════════════════════════════════════
+   Uma regra, porque havia duas e cada uma isentava uma etapa diferente:
+     o card do kanban isentava Onboarding e COBRAVA passo do Perdido — medido: marcar
+       perdido criava a tarefa "Visita ou abordagem inicial" para hoje e a tela anunciava
+       "próximo passo em 04/09" sobre um negócio que acabou de morrer;
+     o drawer isentava Perdido e COBRAVA do Onboarding.
+   O motivo é o mesmo nos dois casos: o negócio SAIU do funil de venda. Perdido morreu;
+   Onboarding virou entrega, e o acompanhamento é de outro time. Tarefa datada em qualquer
+   um dos dois é lixo na agenda do executivo e na Daily do gestor.
+   Enquanto forem dois `if`, a próxima etapa que sair do funil nasce certa numa porta e
+   errada na outra — e só se descobre quando alguém recebe a tarefa. */
+function etapaPedeProximoPasso(etapaId) {
+  const id = String(etapaId || '');
+  if (id === ETAPA_PERDIDO_ID) return false;
+  if (id === FN3_ETAPA_ONBOARDING) return false;
+  return true;
+}
+
+
+
 /* As colunas, na ordem do pipeline. `dinheiro` pinta a régua de âmbar e mostra o R$ da
    pilha; `pagto` e `onb` são as duas identidades próprias. */
 /* ROTULO E RÉGUA CURTOS, e é medição, não gosto (02/09/26). A prancha pede header de DUAS
@@ -17718,8 +17738,10 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
   const prontos = voltando ? 0 : todosOsCampos.length - campos.length;
 
   /* o próximo passo já sugerido pela régua da etapa de DESTINO — o caminho de menor
-     esforço tem que ser o certo. Onboarding não pede: o negócio saiu do funil de venda. */
-  const exigePasso = !paraOnb;
+     esforço tem que ser o certo. Onboarding e Perdido não pedem: o negócio saiu do funil
+     de venda. A regra é uma só e mora em etapaPedeProximoPasso — aqui ela era `!paraOnb`,
+     e marcar perdido criava tarefa datada para um negócio morto. */
+  const exigePasso = etapaPedeProximoPasso(para);
   const sugerido = (() => {
     if (!exigePasso) return null;
     try {
@@ -17777,8 +17799,11 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
       </div>` : ''}
     </div>
 
-    ${exigePasso ? '' : `<div class="fn3-reg-aviso">Onboarding não pede próximo passo — o
-      acompanhamento passa a ser da entrega, e tarefa datada aqui seria lixo na sua agenda.</div>`}
+    ${exigePasso ? '' : `<div class="fn3-reg-aviso">${para === ETAPA_PERDIDO_ID
+      ? 'Perdido não pede próximo passo — o negócio saiu do funil. Se ele voltar a esquentar,'
+        + ' o card na coluna Perdido devolve para qualquer etapa.'
+      : 'Onboarding não pede próximo passo — o acompanhamento passa a ser da entrega, e'
+        + ' tarefa datada aqui seria lixo na sua agenda.'}</div>`}
 
     <div class="fn3-reg-acoes">
       <button type="button" class="fn3-reg-ok" id="fn3RegOk">Confirmar → registra no HubSpot</button>
@@ -17875,6 +17900,10 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
 
       if (paraOnb) {
         mostrarToast(`"${lead.name}" foi para Enviado Onboarding. O WhatsApp e o card no pipe de entrega são disparados pelo HubSpot agora — o Cockpit gravou só a etapa.`, 'sucesso');
+      } else if (!exigePasso) {
+        /* PERDIDO: sem passo, entao o ramo de baixo diria "proximo passo em Invalid Date"
+           — foi o que aconteceu quando a regra passou a isentar o Perdido tambem. */
+        mostrarToast(`"${lead.name}" saiu do funil como PERDIDO no HubSpot · motivo: ${esc(coleta.propriedades.motivo_do_perdido || '—')}. Entra na sua assinatura de perda; se foi engano, o card na coluna Perdido volta para qualquer etapa.`, 'sucesso');
       } else if (r.demorou) {
         /* A ESPERA ESTOUROU E A CONFIRMAÇÃO PROVOU QUE GRAVOU. Dizer "está em Perdido" sem
            mais nada deixaria o executivo — que viu a tela travar — sem saber se o que ele
@@ -34103,9 +34132,10 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   }
   const voltando = etapaEhRecuo(de, para);
   const corPara = stageColor(para);
-  /* A ÚNICA etapa que não pede próximo passo. Ver o comentário grande da seção lá
-     embaixo: a regra existe para negócio que ainda vai andar. */
-  const exigePasso = para !== ETAPA_PERDIDO_ID;
+  /* A regra existe para negócio que ainda vai andar — e são DUAS as etapas que não
+     pedem, não uma. Aqui era só o Perdido, então mover para Onboarding por esta porta
+     cobrava tarefa datada de quem já saiu para a entrega. Ver etapaPedeProximoPasso. */
+  const exigePasso = etapaPedeProximoPasso(para);
 
   // Sugestão de próximo passo para a etapa de DESTINO, tirada da régua configurada.
   // Reciclagem cai na régua de reciclagem, que já começa em D+30 — é isso que faz
