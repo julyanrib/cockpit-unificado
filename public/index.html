@@ -8218,7 +8218,7 @@
      fonte disso continua escrita no rodapé, que fica. Nas outras sete abas ela
      permanece onde sempre esteve. */
   body:has(#viewPrecificacao.active) #updatedLine{display:none;}
-  body:has(#viewPrecificacao.active) #footerText{margin-top:8px;}
+  body:has(#viewPrecificacao.active) #footerText{margin-top:4px;font-size:10.5px;}
   #appRoot:has(#viewPrecificacao.active) > div{height:100vh;min-height:0;}
   #appRoot:has(#viewPrecificacao.active) > div > div{min-height:0;}
   /* O PADDING DO .app-main VIRA PALCO. Ele reserva 26px em cima e 44 embaixo — folga boa
@@ -8380,7 +8380,7 @@
      34px ali são 16% da peça em margem. Encolhidas, sobram para o conteúdo — e como o
      cartão inteiro é escalado para caber, cada pixel de altura que sai da margem volta
      como tamanho de letra na tela e no PNG. */
-  .p4-doc-topo{padding:20px 24px 16px;text-align:center;}
+  .p4-doc-topo{padding:15px 24px 12px;text-align:center;}
   .p4-doc-logo{height:34px;width:auto;display:inline-block;}
   .p4-doc-linha{font:800 10px var(--font-display);letter-spacing:.22em;color:var(--p4-doc-mut);margin-top:14px;}
   .p4-doc-plano{font:900 28px var(--font-display);letter-spacing:-.01em;margin-top:4px;}
@@ -8394,7 +8394,10 @@
      cartao NAO cresce, a escala nao cai, e a letra que chega na tela vai de 10,5 para
      12,4px. Foi a unica forma de aumentar o texto sem tirar funcionalidade da lista —
      altura fixa dividida pelo numero de linhas e o que manda no tamanho final. */
-  .p4-doc-cols{display:grid;grid-template-columns:1fr 1fr;gap:0 22px;margin-top:10px;font-size:13px;line-height:1.26;}
+  /* 14px com entrelinha 1,17 = 16,4px por linha, exatamente a mesma fileira dos 13px
+     com 1,26. O cartão não muda de altura, a escala não cai, e a letra sobe de novo.
+     Este é o teto: abaixo de 1,15 as duas linhas dos itens longos se encostam. */
+  .p4-doc-cols{display:grid;grid-template-columns:1fr 1fr;gap:0 20px;margin-top:10px;font-size:14px;line-height:1.17;}
   .p4-doc-sec{font:800 11px var(--font-display);letter-spacing:.1em;color:var(--p4-vermelho);margin:10px 0 3px;}
   .p4-doc-sec.is-primeira{margin-top:8px;}
   .p4-doc-itens{display:grid;gap:1px;color:var(--p4-doc-item);}
@@ -8416,7 +8419,7 @@
   .prc-shell.modo-cliente .p4-doc-add.is-densa{font-size:12px;}
   .prc-shell.modo-cliente .p4-doc-add.is-muito-densa{font-size:11px;}
   .prc-shell.modo-cliente .p4-doc-add-pe{font-size:12px;}
-  .p4-inv{background:var(--p4-doc-inv);padding:16px 24px;text-align:center;}
+  .p4-inv{background:var(--p4-doc-inv);padding:13px 24px;text-align:center;}
   .p4-inv-rot{font:800 10px var(--font-display);letter-spacing:.22em;color:var(--p4-doc-mut);}
   .p4-inv-num{font:900 32px var(--font-display);margin-top:8px;}
   .p4-inv-x{color:var(--p4-doc-ink);}
@@ -8425,7 +8428,7 @@
   .p4-inv-total{font-size:11px;color:var(--p4-doc-mut);margin-top:2px;}
   .p4-inv-eco{display:inline-block;margin-top:12px;font:800 11px var(--font-display);color:var(--p4-check);
     background:rgba(61,190,123,.12);border:1px solid rgba(61,190,123,.35);border-radius:var(--r-pill);padding:7px 16px;}
-  .p4-doc-pe{padding:12px 24px 15px;text-align:center;border-top:1px solid rgba(237,234,228,.08);}
+  .p4-doc-pe{padding:10px 24px 12px;text-align:center;border-top:1px solid rgba(237,234,228,.08);}
   .p4-doc-por{font-size:11px;color:var(--p4-doc-item);}
   .p4-doc-por b{color:var(--p4-doc-ink);}
   /* O PASSO COMBINADO E A ENTREGA (05/09/26). Duas linhas que a peça não tinha:
@@ -19544,6 +19547,8 @@ function prcTelaCheia(entrar) {
 
 function prcSairDoModoCliente() {
   prcModoCliente = false;
+  const grade = document.querySelector('#precificacaoContent .p4-grid');
+  if (grade) grade.style.gridTemplateColumns = '';
   prcTelaCheia(false);
   renderPrecificacaoConfigurador();
 }
@@ -19837,10 +19842,44 @@ function prcLarguraDeDesenho(peca) {
   peca.dataset.larguraDesenho = String(largura);
   return largura;
 }
+/* ══ A COLUNA DA PEÇA VALE A PEÇA (05/09/26) ════════════════════════════════════════
+   A coluna era minmax(430px,720px) — largura fixa. Só que quem limita a escala é a
+   ALTURA: numa janela de 918px o cartão renderiza ~500px de largura, e os outros 220
+   ficavam de vazio dos dois lados dele. Foi a lacuna que o Julyan fotografou.
+   Agora a trilha da direita recebe a largura que o cartão REALMENTE ocupa, e a sobra
+   vai para os passos — que é onde ela faz diferença: mais largura ali significa menos
+   fileiras de chips, e menos fileiras significa menos rolagem na coluna.
+
+   NÃO OSCILA, e isso é o que me faria não escrever largura em JS: quando a altura é o
+   limite, s = alturaDoPalco/alturaNatural e não depende da largura do palco; encolher
+   a trilha para largura*s devolve o MESMO s na medição seguinte. Os +2px e a zona morta
+   de 3px são a folga contra arredondamento. Quando é a largura que limita, a trilha já
+   está no tamanho do cartão e a função não mexe em nada. */
+function prcAjustarColunaDaPeca(largura, s) {
+  const grade = document.querySelector('#precificacaoContent .p4-grid');
+  if (!grade || prcModoCliente) return;
+  /* a zona morta de 3px e os +2px de folga são o que impede o vaivém: com eles a
+     passagem seguinte encontra a trilha já no tamanho certo e sai sem escrever. */
+  const trilhas = getComputedStyle(grade).gridTemplateColumns.split(/\s+/).filter(Boolean);
+  if (trilhas.length < 2) return; /* empilhado (<=1240px): uma coluna só, nada a fazer */
+  const querida = Math.ceil(largura * s) + 2;
+  const atual = Math.round(parseFloat(trilhas[1]));
+  if (!(querida > 0) || Math.abs(atual - querida) <= 3) return;
+  grade.style.gridTemplateColumns = 'minmax(700px,1fr) ' + querida + 'px';
+}
+
 function prcAjustarPeca() {
   const palco = document.querySelector('#precificacaoContent .p4-palco');
   const peca = document.getElementById('precificacaoPreview');
   if (!palco || !peca) return;
+  if (prcAjustarPeca._rodando) return;
+  prcAjustarPeca._rodando = true;
+  /* A TRILHA VOLTA AO TAMANHO DO CSS ANTES DE MEDIR. Sem isto a conta vira catraca: a
+     largura livre medida seria a trilha que a última passagem encolheu, a escala
+     passaria a ser limitada por ela e o cartão nunca cresceria de volta quando a
+     janela crescesse — foi exatamente o que eu medi indo de 918 para 1080. */
+  const grade = document.querySelector('#precificacaoContent .p4-grid');
+  if (grade && !prcModoCliente) grade.style.gridTemplateColumns = '';
   const largura = prcLarguraDeDesenho(peca);
   const natural = peca.offsetHeight;
   const larguraLivre = palco.clientWidth;
@@ -19858,6 +19897,8 @@ function prcAjustarPeca() {
     if (!(s > 0)) s = 1;
   }
   peca.style.transform = 'translate(-50%,-50%) scale(' + (Math.floor(s * 1000) / 1000) + ')';
+  prcAjustarColunaDaPeca(largura, s);
+  prcAjustarPeca._rodando = false;
 
   if (!prcAjustarPeca._observando) {
     prcAjustarPeca._observando = true;
