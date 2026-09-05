@@ -6062,16 +6062,29 @@
        das duas está movendo. */
     .fn3-grade{grid-template-columns:minmax(0,1fr);gap:8px;}
     .fn3-col{max-height:none;overflow-y:visible;padding-right:0;}
-    .fn3-col > .fn3-cab{position:static;}
+    /* ══ O CABEÇALHO FICA, TAMBÉM NO TOQUE (04/09/26) ═══════════════════════════════
+       Era `position:static` aqui, e por um motivo real: `overflow:hidden` na coluna
+       QUEBRA o sticky — hidden cria caixa de rolagem, e o sticky passa a se prender a
+       ela, que não rola. `overflow:clip` corta igual (o canto arredondado continua
+       cortando o cartão) e NÃO cria caixa de rolagem, então o sticky volta a valer
+       contra a página. Sem isso, rolar os 31 cartões da Visita faz perder de vista qual
+       etapa se está lendo — o único dado que a coluna dá de graça. */
+    .fn3-col > .fn3-cab{position:sticky;top:0;z-index:3;}
     .fn3-col{border:1px solid var(--line);border-radius:14px;background:var(--panel2);
-      overflow:hidden;}
+      overflow:clip;}
     .fn3-cab{border-radius:0;}
     .fn3-col>*:not(.fn3-cab){margin:0 8px;}
     .fn3-col>*:last-child{margin-bottom:8px;}
-    /* estourados primeiro: coluna sem violação começa fechada, o toque no header abre */
-    .fn3-col[data-fn3-viol="0"]:not(.is-aberta)>*:not(.fn3-cab){display:none;}
-    .fn3-col[data-fn3-viol="0"]:not(.is-aberta) .fn3-cab-n::after{content:" ⌄";font-size:13px;}
-    .fn3-col[data-fn3-viol="0"].is-aberta .fn3-cab-n::after{content:" ⌃";font-size:13px;}
+    /* ══ TODA COLUNA RECOLHE (04/09/26) ═════════════════════════════════════════════
+       A regra olhava `[data-fn3-viol="0"]`, entao a coluna COM estourado nunca fechava —
+       e e justamente ela que tem cartao: medido a 375px, a Visita abria os 31 e a pagina
+       ia a 11.897px, ~14 telas ate o Onboarding, sem jeito de fechar.
+       "Estourados primeiro" nao se perde: vira ESTADO INICIAL (o render marca is-aberta
+       em quem tem violacao) em vez de privilegio permanente. Quem decide o que fica
+       aberto passa a ser o dedo. */
+    .fn3-col:not(.is-aberta)>*:not(.fn3-cab){display:none;}
+    .fn3-col:not(.is-aberta) .fn3-cab-n::after{content:" ⌄";font-size:13px;}
+    .fn3-col.is-aberta .fn3-cab-n::after{content:" ⌃";font-size:13px;}
     .fn3-card{cursor:pointer;}
     .fn3-topo-gesto{display:none;}
     .fn3-novo{min-height:44px;width:100%;justify-content:center;order:9;}
@@ -17484,7 +17497,10 @@ function fn3Coluna(col, itens, idsAcesos) {
       </button>`
     : '';
 
-  return `<div class="fn3-col" data-fn3-alvo="${col.id}" data-fn3-viol="${estourados ? 1 : 0}">
+  /* NASCE ABERTA QUEM TEM SLA ESTOURADO (04/09/26): no toque toda coluna recolhe, entao
+     "estourados primeiro" precisa de um estado inicial em vez da regra de CSS que impedia
+     de fechar. No desktop a classe nao muda nada — la nada recolhe. */
+  return `<div class="fn3-col${estourados ? ' is-aberta' : ''}" data-fn3-alvo="${col.id}" data-fn3-viol="${estourados ? 1 : 0}">
     ${fn3Cabecalho(col, daEtapa)}
     ${corpo}
     ${alimentar}
@@ -18285,10 +18301,17 @@ function fn3Ligar(el, redesenhar) {
       abrir(ev);
     });
   });
-  /* o cabeçalho da coluna vira acordeão a ≤1240: uma classe, sem redesenho */
-  el.querySelectorAll('.fn3-col[data-fn3-viol="0"] .fn3-cab').forEach(cab => {
+  /* ══ O CABEÇALHO É O ACORDEÃO, EM TODA COLUNA (04/09/26) ═══════════════════════════
+     Estava ligado só em `[data-fn3-viol="0"]` — as colunas SEM estourado. Medido a
+     375px: a Visita, com 8 estourados e 31 cartões (7.975px de coluna), era a única que
+     NÃO fechava. A que mais precisa. Agora vale para todas, e quem tem estourado apenas
+     NASCE aberta.
+     E o limiar virou 1050, o mesmo do @media: era 1240, e entre 1051 e 1240 o toque
+     alternava uma classe sem efeito (as regras de recolher só existem a ≤1050) e ainda
+     bloqueava a gaveta — 190px de largura de clique morto. */
+  el.querySelectorAll('.fn3-col .fn3-cab').forEach(cab => {
     cab.addEventListener('click', ev => {
-      if (window.innerWidth > 1240) return;   /* no desktop o header abre a gaveta */
+      if (window.innerWidth > 1050) return;   /* no desktop o header abre a gaveta */
       ev.stopPropagation();
       ev.preventDefault();
       cab.closest('.fn3-col').classList.toggle('is-aberta');
@@ -18389,11 +18412,14 @@ function fn2Ligar(el, r) {
      jeito de ver os cards de uma etapa fechada seria pela gaveta, e o acordeão não
      serviria para nada. A porta da gaveta no celular continua sendo o "ver todos os N" e a
      barra do Comando de vendas. */
-  const noCelular = () => window.matchMedia('(max-width:640px)').matches;
+  /* AQUI HAVIA UM SEGUNDO ACORDEÃO, MORTO (04/09/26): ele testava
+     `btn.classList.contains('fn2-col-cab')`, e o cabeçalho se chama `fn3-cab` desde o
+     redesenho do kanban — `fn2-col-cab` aparecia UMA vez no arquivo inteiro, nesta linha,
+     e em nenhum markup. Condição sempre falsa, ramo nunca executado, e ninguém notou
+     porque `contains` de uma classe que não existe compila igual.
+     O acordeão de verdade é o de cima, no cabeçalho. Aqui fica só a gaveta. */
   el.querySelectorAll('[data-fn2-etapa]').forEach(btn => {
     btn.addEventListener('click', () => {
-      const coluna = btn.classList.contains('fn2-col-cab') ? btn.closest('.fn2-col') : null;
-      if (coluna && noCelular()) { coluna.classList.toggle('is-aberta'); return; }
       fn2GavetaEtapa = btn.getAttribute('data-fn2-etapa');
       fn2GavetaTudo = false;
       fn2GavetaOrdem = 'risco';
