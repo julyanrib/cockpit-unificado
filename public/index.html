@@ -19524,7 +19524,12 @@ function prcPreviewHTML() {
   /* só o que é COBRADO entra na lista de adicionais: o que já vem no plano está na
      coluna de funcionalidades, e repetir ali daria a impressão de custo dobrado. */
   const cobrados = c.itens.filter(item => !item.incluido);
-  const parcelas = per.meses > 1 ? `<span class="p4-inv-x">${per.meses}x</span> ` : '';
+  /* O MULTIPLICADOR SAI DAS PARCELAS, NAO DOS MESES (05/09/26). Com meses, o trimestral
+     saia como "3x no cartao" sem ninguem ter escolhido parcelar — e a calculadora oficial
+     oferece as duas formas no mesmo prazo. O campo meses e o prazo do contrato; o campo
+     parcelas e a forma de pagamento. */
+  const nParcelas = Number(per.parcelas || 1);
+  const parcelas = nParcelas > 1 ? `<span class="p4-inv-x">${nParcelas}x</span> ` : '';
   return `
     <div class="p4-doc-topo">
       <img src="assets/logo-takeat.png" alt="Takeat" class="p4-doc-logo">
@@ -19559,7 +19564,11 @@ function prcPreviewHTML() {
     <div class="p4-inv">
       <div class="p4-inv-rot">INVESTIMENTO</div>
       <div class="p4-inv-num">${parcelas}<span class="p4-inv-valor">${prcMoedaCentavos(c.mensal)}</span></div>
-      <div class="p4-inv-como">${per.meses > 1 ? '▭ no cartão de crédito' : '▭ no boleto ou cartão · sem fidelidade'}</div>
+      <!-- TRES CASOS: parcelado no cartao; prazo pago a vista; e o mensal, que nao tem
+           prazo nenhum. Antes eram dois, e o "a vista" nao existia. -->
+      <div class="p4-inv-como">${nParcelas > 1 ? '▭ no cartão de crédito'
+        : per.meses > 1 ? '▭ à vista, no boleto ou cartão'
+        : '▭ no boleto ou cartão · sem fidelidade'}</div>
       <div class="p4-inv-total">${per.meses > 1
         ? `${c.economia > 0 ? `<s>de ${prcMoedaCentavos(c.mensalCheio)}/mês</s> · ` : ''}Total: ${prcMoedaCentavos(c.total)}`
         : 'preço de tabela, por mês'}</div>
@@ -19946,10 +19955,14 @@ function prcBlocoPeriodoHTML() {
         /* mensal é a tabela; trimestral mostra o absoluto; semestral e anual, meses grátis */
         const gratis = '≈ ' + meses.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
           + (meses >= 2 ? ' meses' : ' mês') + ' grátis';
-        /* trimestral dá 0,3 mês e chamar isso de "quase um terço de mês grátis" soa a
-           truque — ali fica só o absoluto, que é o número que ele confere na hora. */
+        /* O CORTE SAI DO NÚMERO, NÃO DO NOME (05/09/26). A regra prendia em
+           per.id === 'trimestral' e, quando entrou 'trimestral-parcelado', o cartão novo
+           passou a anunciar '≈ 0,3 mês grátis' — que é justamente a fração que eu tinha
+           decidido não mostrar, porque soa a truque na frente do dono. Meio mês é o piso
+           do que vale dizer em voz alta; abaixo disso fica só o absoluto, que é o número
+           que ele confere na hora. */
         const nota = per.meses === 1 ? 'preço de tabela'
-          : (per.id === 'trimestral'
+          : (meses < 0.5
             ? 'economiza ' + prcMoeda(c.economia) + '/período'
             : gratis + ' · economiza ' + prcMoeda(c.economia) + '/período');
         return `<button type="button" class="p4-periodo${on ? ' is-on' : ''}" data-prc-periodo="${per.id}" aria-pressed="${on}">
@@ -20710,15 +20723,20 @@ function prcDadosDaPeca() {
   const passo = prcProximoPassoTexto();
   const totalTxt = prcMoedaCentavos(c.total);
   const meses = prcEconomiaEmMeses(c);
+  /* A MENSAGEM DIZ A FORMA DE PAGAMENTO, e ela agora tem tres formas: parcelado no
+     cartao, prazo a vista, e mensal sem prazo. Dizer "3x no cartao" num plano que ele
+     escolheu pagar a vista e prometer uma condicao que o financeiro nao vai cobrar. */
+  const nParc = Number(c.periodo.parcelas || 1);
   const condicao = c.periodo.meses > 1
-    ? (c.periodo.observacao || (c.periodo.meses + 'x no cartão')) + ' · total do período ' + totalTxt + (meses ? ' · equivale a ' + meses + ' grátis' : '')
+    ? (c.periodo.observacao || (nParc > 1 ? nParc + 'x no cartão' : 'à vista'))
+      + ' · total do período ' + totalTxt + (meses ? ' · equivale a ' + meses + ' grátis' : '')
     : 'cobrança mensal · preço de tabela';
   return {
     cliente: (precificacaoEstado.conta && precificacaoEstado.conta.nome) || precificacaoEstado.cliente.trim() || 'Seu próximo cliente',
     plano: c.plano.nome,
     operacao: tipo.rotuloOficial || tipo.nome,
     periodo: c.periodo.nome,
-    parcelas: c.periodo.meses,
+    parcelas: nParc,
     valorParcela: c.mensal,
     /* de→por só quando existe desconto de verdade */
     precoCheio: c.mensalCheio > c.mensal ? c.mensalCheio : null,

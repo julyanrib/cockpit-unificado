@@ -111,12 +111,17 @@ checar('o selo aparece em todo período com desconto',
   template.indexOf('${per.desconto ? `<span class="p4-selo is-escuro">−${per.desconto}%</span>` : \'\'}') > -1);
 checar('e a nota diz quanto economiza no período',
   /economiza ' \+ prcMoeda\(c\.economia\) \+ '\/período'/.test(template));
-/* TRIMESTRAL NÃO GANHA "MESES GRÁTIS": são 0,3 mês e chamar isso de fração de mês
-   grátis soa a truque na frente do dono. */
-checar('trimestral fica só com o absoluto, sem fração de mês grátis',
-  /per\.id === 'trimestral'/.test(template)
-  && /truque/.test(template.slice(Math.max(0, template.indexOf("per.id === 'trimestral'") - 400),
-       template.indexOf("per.id === 'trimestral'") + 200)));
+/* FRAÇÃO PEQUENA NÃO VIRA "MÊS GRÁTIS": o trimestral dá 0,3 mês, e chamar isso de
+   fração de mês grátis soa a truque na frente do dono.
+   ESTA CHECAGEM JÁ ME REPROVOU UMA VEZ, COM RAZÃO: ela prendia em per.id ===
+   'trimestral', e no dia em que entrou 'trimestral-parcelado' o cartão novo passou a
+   anunciar "≈ 0,3 mês grátis" — a regra estava presa ao NOME e o nome mudou. Agora ela
+   mede o corte numérico, que é o que a regra sempre quis dizer. */
+checar('a fração de mês grátis tem piso, e ele sai do número',
+  /meses < 0\.5/.test(template)
+  && /truque/.test(template.slice(Math.max(0, template.indexOf('meses < 0.5') - 500),
+       template.indexOf('meses < 0.5') + 200)),
+  'preso ao id do período, o corte não alcança um período novo com o mesmo prazo');
 
 /* ── 7. A OPERAÇÃO DIZ O QUE ELA É ──────────────────────────────────────────────
    O botão lia "COMPLETO" e, embaixo, "Completo": duas linhas para a mesma palavra,
