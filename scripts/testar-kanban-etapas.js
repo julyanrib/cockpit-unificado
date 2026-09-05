@@ -808,6 +808,55 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
   });
 })();
 
+/* ══ O TAMANHO MÍNIMO QUE SÓ O HUBSPOT SABIA (04/09/26) ═════════════════════════════════
+   Julyan, subindo um negócio de verdade em produção:
+     «HubSpot recusou a mudança de etapa: "Insira pelo menos 50 caracteres",
+      "error":"MIN_LENGTH","name":"informacoes_sobre_o_maior_desafio".
+      Devolvi "vasco123" para Negociação»
+   Ele escreveu curto, a porteira deixou passar, e o CRM recusou a passagem INTEIRA — na
+   etapa do dinheiro, com o cliente na frente, depois de os outros 14 campos já estarem
+   preenchidos. (O motor de reversão fez o certo: devolveu o card e disse que a tela não
+   mostra o que o CRM não tem.)
+
+   E CONFERIDO HOJE: o conector NÃO expõe validação de propriedade — devolve tipo, rótulo e
+   opções, e nada do mínimo. Regra assim só aparece quando o CRM recusa. Por isso ela mora
+   num objeto único, e não num `if` dentro de uma tela: a próxima descoberta é uma linha.
+
+   MEDIDO no bundle real depois do conserto:
+     "vasco123" -> contador 8/50, a porteira trava no campo, ZERO ida ao HubSpot
+     96 chars   -> contador 96/50 verde, e as duas chamadas saem */
+(function () {
+  const rotaEtapa = fs.readFileSync(path.join(raiz, 'lib', 'acoes-negocio', 'mudar-etapa-negocio.js'), 'utf8');
+
+  checar('a tela guarda o mínimo num lugar só',
+    template.indexOf('const PROPS_TAMANHO_MINIMO = { informacoes_sobre_o_maior_desafio: 50 };') > -1);
+  checar('e a rota de etapa guarda o mesmo',
+    rotaEtapa.indexOf('const PROPS_TAMANHO_MINIMO = { informacoes_sobre_o_maior_desafio: 50 };') > -1);
+
+  /* A PORTEIRA TRAVA ANTES: é o que evita a recusa cara. */
+  checar('a coleta trava o texto curto antes de mandar',
+    template.indexOf('if (minTexto && valor.length < minTexto) {') > -1
+    && template.indexOf("falhar('O HubSpot exige pelo menos ' + minTexto") > -1);
+  checar('a rota confere também, para quem não passa pela tela',
+    rotaEtapa.indexOf('if (minimo && texto.length < minimo) {') > -1);
+  checar('a ficha, que grava campo a campo por outro caminho, também trava',
+    template.indexOf('const minAqui = PROPS_TAMANHO_MINIMO[propNome] || 0;') > -1);
+
+  /* O CAMPO AVISA. Travar sem avisar é o mesmo clique morto de antes, só que educado. */
+  checar('o campo nasce com minlength e com o contador',
+    template.indexOf('data-mintexto="${minimo}"') > -1
+    && template.indexOf('data-conta-de="${campo.prop}"') > -1);
+
+  /* E O CONTADOR CONTA: desenhado uma vez e nunca atualizado, ele mente a partir do
+     primeiro caractere — e é nele que o executivo confia para saber quando pode. */
+  checar('o contador tem quem o atualize', template.indexOf('function ligarContadorDeTexto(') > -1);
+  const chamadas = template.split('ligarContadorDeTexto(').length - 1;
+  checar('e ele é ligado nas DUAS portas que montam o formulário, não só definido',
+    chamadas >= 3, 'aparições: ' + chamadas + ' (1 definição + 2 chamadas)');
+  checar('o contador vira ✓ quando chega no mínimo',
+    template.indexOf("' caracteres ✓'") > -1);
+})();
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');

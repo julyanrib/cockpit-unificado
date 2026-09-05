@@ -15887,8 +15887,13 @@ function campoPassagemHTML(campo, valor) {
   const req = campo.obrigatorio ? '<i title="obrigatório"> *</i>' : '';
   const id = 'peCampo_' + campo.prop;
   let controle;
+  /* O MINIMO APARECE NO CAMPO, com contador (04/09/26). "Pelo menos 50 caracteres" sem
+     saber quantos ja foram escritos e adivinhacao — e adivinhar com o cliente na frente
+     e o que fez a passagem ser recusada. Ver PROPS_TAMANHO_MINIMO. */
+  const minimo = PROPS_TAMANHO_MINIMO[campo.prop] || 0;
   if (campo.tipo === 'texto_longo') {
-    controle = `<textarea id="${id}" rows="3" maxlength="600" data-prop="${campo.prop}" data-tipo="${campo.tipo}">${esc(valor)}</textarea>`;
+    controle = `<textarea id="${id}" rows="3" maxlength="600"${minimo ? ` minlength="${minimo}" data-mintexto="${minimo}"` : ''} data-prop="${campo.prop}" data-tipo="${campo.tipo}">${esc(valor)}</textarea>`
+      + (minimo ? `<small class="pe-conta" data-conta-de="${campo.prop}">${String(valor || '').trim().length}/${minimo} caracteres — o HubSpot recusa a passagem abaixo disso</small>` : '');
   } else if (campo.tipo === 'multiselecao') {
     const marcados = new Set(String(valor || '').split(';').map(v => v.trim()).filter(Boolean));
     controle = `<div class="pe-multi" id="${id}" data-prop="${campo.prop}" data-tipo="${campo.tipo}">
@@ -15979,6 +15984,15 @@ function conferirCpfCnpj(digitos) {
   return 'CPF tem 11 dígitos e CNPJ tem 14 — você digitou ' + digitos.length
     + (faltam ? ' (falta' + (faltam === 1 ? ' 1' : 'm ' + faltam) + ').' : '.');
 }
+/* ══ TAMANHO MINIMO QUE O HUBSPOT EXIGE (04/09/26) ══════════════════════════════════
+   Julyan, subindo um negocio de verdade: «HubSpot recusou a mudanca de etapa: Insira
+   pelo menos 50 caracteres — informacoes_sobre_o_maior_desafio». Ele escreveu curto, a
+   porteira deixou passar, e o CRM recusou a passagem INTEIRA na etapa do dinheiro.
+   O conector NAO expoe validacao de propriedade — conferido hoje: devolve tipo, rotulo e
+   opcoes, e nada do minimo. Entao regra assim so aparece quando o CRM recusa, e este
+   objeto e onde cada uma passa a morar quando aparece. Uma linha hoje; a proxima recusa
+   vira a segunda, em vez de virar um `if` perdido dentro de uma tela. */
+const PROPS_TAMANHO_MINIMO = { informacoes_sobre_o_maior_desafio: 50 };
 const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };
 function limparSoDigitos(prop, valor) {
   if (!(prop in PROPS_SO_DIGITOS)) return { valor: valor, erro: null };
@@ -16039,6 +16053,14 @@ function coletarCamposPassagem(container, campos) {
       if (isNaN(d.getTime())) { falhar('Data inválida.'); continue; }
       propriedades[campo.prop] = String(d.getTime());
     } else {
+      /* TAMANHO MINIMO antes de tudo: e a recusa mais cara, porque derruba a passagem
+         inteira depois de o executivo ter preenchido os outros 14 campos. */
+      const minTexto = PROPS_TAMANHO_MINIMO[campo.prop] || 0;
+      if (minTexto && valor.length < minTexto) {
+        falhar('O HubSpot exige pelo menos ' + minTexto + ' caracteres aqui — você escreveu '
+          + valor.length + '. Conte o que ele te disse, com as palavras dele.');
+        continue;
+      }
       /* CEP e CNPJ vao so com digitos — o HubSpot recusa a passagem inteira com
          pontuacao, e todos os 543 negocios da base ja estao assim. Ver limparSoDigitos. */
       const limpo = limparSoDigitos(campo.prop, valor);
@@ -17769,6 +17791,7 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
 
   document.body.appendChild(fundo);
   if (typeof ligarCamposMultiselecao === 'function') ligarCamposMultiselecao(fundo);
+  if (typeof ligarContadorDeTexto === 'function') ligarContadorDeTexto(fundo);
 
   const escolhas = evid.map(x => !!x.on);
   fundo.querySelectorAll('[data-fn3-tog]').forEach(btn => btn.addEventListener('click', () => {
@@ -32952,6 +32975,29 @@ function abrirFichaCompromisso(e) {
 
 // No HubSpot, "Sem adicionais" representa a ausência dos demais itens. Mantê-lo
 // junto com outro adicional produziria um valor válido tecnicamente, mas contraditório.
+/* ══ O CONTADOR DE CARACTERES CONTA (04/09/26) ══════════════════════════════════════
+   O campo com minimo do HubSpot nasce com "0/50". Sem esta ligacao o numero congela e
+   passa a mentir no primeiro caractere — e e justamente nele que o executivo confia para
+   saber quando parou de faltar. Fica verde quando chega la, porque "ja pode" e a unica
+   informacao que ele procura ali. */
+function ligarContadorDeTexto(raiz) {
+  if (!raiz) return;
+  raiz.querySelectorAll('[data-mintexto]').forEach(function (campo) {
+    const minimo = Number(campo.dataset.mintexto) || 0;
+    const conta = raiz.querySelector('[data-conta-de="' + campo.dataset.prop + '"]');
+    if (!minimo || !conta) return;
+    const pintar = function () {
+      const n = String(campo.value || '').trim().length;
+      conta.textContent = n >= minimo
+        ? n + '/' + minimo + ' caracteres ✓'
+        : n + '/' + minimo + ' caracteres — o HubSpot recusa a passagem abaixo disso';
+      conta.style.color = n >= minimo ? 'var(--green)' : 'var(--muted2)';
+    };
+    campo.addEventListener('input', pintar);
+    pintar();
+  });
+}
+
 function ligarCamposMultiselecao(container) {
   container.querySelectorAll('.pe-multi').forEach(grupo => {
     grupo.querySelectorAll('input[type="checkbox"]').forEach(input => {
@@ -33114,9 +33160,16 @@ function ligarPropsFichaEditaveis(container, lead) {
         const bruto = campoEl.value;
         const v = validarValorCampoUnico(tipo, bruto, min);
         if (!v.ok) { campoEl.style.borderColor = 'var(--red)'; mostrarToast(v.erro, 'erro'); return; }
-        /* A FICHA GRAVA CAMPO A CAMPO POR OUTRO CAMINHO, e sem esta limpeza editar o CEP
-           aqui volta a mandar pontuado e a receber a recusa do HubSpot que esta auditoria
-           achou. A regra e a MESMA da coleta — limparSoDigitos decide num lugar so. */
+        /* MESMAS DUAS REGRAS DA COLETA, porque este e outro caminho de escrita: tamanho
+           minimo e so-digitos. Sem elas, editar o campo aqui recebe a mesma recusa do
+           HubSpot que esta auditoria achou. */
+        const minAqui = PROPS_TAMANHO_MINIMO[propNome] || 0;
+        if (minAqui && String(v.valor).trim().length < minAqui) {
+          campoEl.style.borderColor = 'var(--red)';
+          mostrarToast('O HubSpot exige pelo menos ' + minAqui + ' caracteres neste campo — você escreveu '
+            + String(v.valor).trim().length + '.', 'erro');
+          return;
+        }
         const limpoUnico = limparSoDigitos(propNome, v.valor);
         if (limpoUnico.erro) { campoEl.style.borderColor = 'var(--red)'; mostrarToast(limpoUnico.erro, 'erro'); return; }
         v.valor = limpoUnico.valor;
@@ -34116,6 +34169,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   `;
   stageOverlay.classList.add('show');
   ligarCamposMultiselecao(stageModalBody);
+  ligarContadorDeTexto(stageModalBody);
 
   const btnCancelar = document.getElementById('peCancelar');
   const btnConfirmar = document.getElementById('peConfirmar');
