@@ -155,10 +155,21 @@ checar('a mensagem fica fora do cartão do documento',
   'function copiarTextoProposta', 'function gerarBlobPropostaPrecificacao'].forEach(fn => {
   checar('continua existindo: ' + fn.replace('function ', ''), template.indexOf(fn) > -1);
 });
-checar('o bloco de objeções é só do executivo',
-  template.indexOf('SÓ VOCÊ VÊ — SE ELE DISSER…') > -1
-  && template.indexOf('${prcModoCliente ? \'\' : `<div class="p4-so-voce">') > -1,
-  'no modo cliente ele tem de sumir — é a resposta às objeções DELE, virada para ele');
+/* AS OBJEÇÕES VIRARAM BOTÃO (05/09/26): o bloco ocupava 104px fixos na coluna dos passos
+   e é ajuda para UM momento. A regra que importa não mudou — ela é do executivo e some
+   quando a tela vira para o cliente — então a checagem passa a medir a regra, e não o
+   markup que a implementava. (Esta checagem já me reprovou nesta mudança, com razão.) */
+checar('as objeções existem e são só do executivo',
+  template.indexOf('function prcBotaoObjecoesHTML()') > -1
+  && template.indexOf("${prcModoCliente ? '' : prcBotaoObjecoesHTML()}") > -1,
+  'no modo cliente elas têm de sumir — é a resposta às objeções DELE, virada para ele');
+checar('e elas abrem flutuando, sem empurrar o layout',
+  /\.p4-obj-painel\{position:absolute/.test(template),
+  'abrir empurrando devolve a rolagem que a aba acabou de perder');
+/* O AVISO DA DOR NÃO FOI JUNTO: "o plano na tela não cobre X" é aviso sobre a proposta
+   montada agora, não resposta a objeção — atrás de um botão ele deixa de ser aviso. */
+checar('o aviso da dor continua visível na coluna',
+  template.indexOf("${prcModoCliente ? '' : prcBlocoDorHTML()}") > -1);
 
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
