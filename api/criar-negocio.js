@@ -42,11 +42,53 @@ const PROPS_VALOR = ['amount', 'valor_de_mrr'];
 // formato que a base ja usa. A tela tambem limpa; esta e a ultima linha, para os
 // caminhos que nao passam por ela.
 const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };
+// == DIGITO VERIFICADOR DE CPF E CNPJ (04/09/26) ===================================
+// O RPA do Asaas recusa documento invalido e avisa por WhatsApp horas depois, com o
+// contrato ja assinado — medido em auditoria. O caso do dia foi um CNPJ com 13 digitos
+// em vez de 14: um zero a menos. A tela ja confere; esta e a ultima linha.
+// Aceita CPF (11) e CNPJ (14) porque a base tem os dois no mesmo campo.
+function cpfEhValido(d) {
+  if (d.length !== 11) return false;
+  if (/^(\d)\1{10}$/.test(d)) return false;
+  for (let corte = 9; corte <= 10; corte++) {
+    let soma = 0;
+    for (let i = 0; i < corte; i++) soma += Number(d[i]) * (corte + 1 - i);
+    let dv = (soma * 10) % 11;
+    if (dv === 10) dv = 0;
+    if (dv !== Number(d[corte])) return false;
+  }
+  return true;
+}
+function cnpjEhValido(d) {
+  if (d.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(d)) return false;
+  const pesos = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  for (const corte of [12, 13]) {
+    const p = pesos.slice(13 - corte);
+    let soma = 0;
+    for (let i = 0; i < corte; i++) soma += Number(d[i]) * p[i];
+    const resto = soma % 11;
+    const dv = resto < 2 ? 0 : 11 - resto;
+    if (dv !== Number(d[corte])) return false;
+  }
+  return true;
+}
+function conferirCpfCnpj(digitos) {
+  if (digitos.length === 11) return cpfEhValido(digitos) ? null : 'CPF invalido — confira o numero.';
+  if (digitos.length === 14) return cnpjEhValido(digitos) ? null : 'CNPJ invalido — confira o numero.';
+  return 'CPF tem 11 digitos e CNPJ tem 14 — vieram ' + digitos.length + '.';
+}
+
 function soDigitos(chave, texto) {
   if (!(chave in PROPS_SO_DIGITOS)) return { valor: texto, erro: null };
   const d = String(texto).replace(/[^0-9]/g, '');
   if (d.length > PROPS_SO_DIGITOS[chave]) {
     return { valor: null, erro: `"${chave}" tem ${d.length} dígitos e o HubSpot aceita ${PROPS_SO_DIGITOS[chave]}.` };
+  }
+  /* o documento tambem passa pelo digito verificador — ver conferirCpfCnpj */
+  if (chave === 'cnpj_cpf') {
+    const problema = conferirCpfCnpj(d);
+    if (problema) return { valor: null, erro: problema };
   }
   return { valor: d, erro: null };
 }
@@ -90,6 +132,55 @@ try {
   const raw = require('../data/usuarios.json');
   USUARIOS = Array.isArray(raw) ? raw : (raw.usuarios || []);
 } catch (e) { USUARIOS = []; }
+
+// == O CONTATO DO NEGOCIO (04/09/26) =============================================
+// O RPA do Asaas parte do CONTATO e procura o negocio dele. Sem o vinculo ele falha com
+// "Sem deal associado" e manda WhatsApp de erro para o executivo — medido em auditoria.
+// Os negocios que geram Asaas hoje tem contato associado (Quintal da Vo -> Veronica,
+// criado 0,6s antes do proprio negocio); o que o Cockpit criava nao tinha nenhum.
+// MEDI ANTES DE MEXER que NAO era a Company: nenhum dos dois que geraram Asaas tem uma.
+//
+// ACHAR ANTES DE CRIAR, pelo telefone: o mesmo restaurante visitado duas vezes nao pode
+// virar dois contatos. Busca o telefone como foi digitado E so os digitos, porque o
+// portal tem os dois formatos gravados.
+async function acharOuCriarContato(token, nome, telefone) {
+  const cab = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const digitos = String(telefone || '').replace(/[^0-9]/g, '');
+  if (digitos.length >= 10) {
+    const formas = [String(telefone).trim(), digitos];
+    for (const forma of formas) {
+      try {
+        const r = await fetch('https://api.hubapi.com/crm/v3/objects/contacts/search', {
+          method: 'POST', headers: cab,
+          body: JSON.stringify({
+            filterGroups: [{ filters: [{ propertyName: 'phone', operator: 'EQ', value: forma }] }],
+            properties: ['phone'], limit: 1
+          })
+        });
+        if (r.ok) {
+          const d = await r.json();
+          if (d && Array.isArray(d.results) && d.results[0]) {
+            return { id: String(d.results[0].id), criado: false, erro: null };
+          }
+        }
+      } catch (e) { /* a busca e otimizacao: falhar aqui so leva a criar um contato novo */ }
+    }
+  }
+  /* NOME DA FACHADA no firstname, e nao um nome de pessoa inventado: quem atende aquele
+     telefone e o dono, e o Cockpit nao pergunta o nome dele na criacao. */
+  try {
+    const props = { firstname: String(nome).slice(0, 100) };
+    if (digitos.length >= 10) props.phone = String(telefone).trim();
+    const r = await fetch('https://api.hubapi.com/crm/v3/objects/contacts', {
+      method: 'POST', headers: cab, body: JSON.stringify({ properties: props })
+    });
+    const d = await r.json();
+    if (!r.ok) return { id: null, criado: false, erro: (d && d.message) || ('HTTP ' + r.status) };
+    return { id: String(d.id), criado: true, erro: null };
+  } catch (e) {
+    return { id: null, criado: false, erro: String(e.message || e) };
+  }
+}
 
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*'); // ajuste para o domínio do cockpit se quiser travar mais
@@ -230,10 +321,37 @@ module.exports = async function handler(req, res) {
       }
     }
 
+    /* == E O CONTATO, QUE E O QUE O RPA DO ASAAS PROCURA (04/09/26) ================
+       Sem este vinculo o negocio chega em Ag. Pagamento e a cobranca falha com "Sem deal
+       associado" — e o executivo descobre por WhatsApp, depois de o cliente ter assinado.
+       Best-effort: o negocio ja existe e e valido mesmo se isto falhar. Mas a falha VOLTA
+       no retorno, porque associacao que some em silencio da no mesmo que nao existir — so
+       que descoberta tarde. */
+    let contatoId = null;
+    let contatoCriado = false;
+    let contatoFalhou = null;
+    try {
+      const c = await acharOuCriarContato(token, nome, telefone);
+      if (!c.id) {
+        contatoFalhou = c.erro || 'nao consegui achar nem criar o contato';
+      } else {
+        contatoId = c.id;
+        contatoCriado = c.criado;
+        const assoc = await fetch(
+          `https://api.hubapi.com/crm/v3/objects/deals/${data.id}/associations/contacts/${contatoId}/deal_to_contact`,
+          { method: 'PUT', headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!assoc.ok) contatoFalhou = 'HTTP ' + assoc.status + ' ao associar ao contato ' + contatoId;
+      }
+    } catch (e) {
+      contatoFalhou = 'excecao ao associar contato: ' + String(e.message || e);
+    }
+
     return res.status(200).json({
       ok: true, id: data.id, etapa: etapaEntrada,
       propriedadesGravadas: Object.keys(limpeza.propriedades),
       companyIdAssociado: companyIdParaAssociar, associacaoFalhou,
+      contatoId, contatoCriado, contatoFalhou,
       url: `https://app.hubspot.com/contacts/24373118/record/0-3/${data.id}`
     });
   } catch (e) {

@@ -15929,6 +15929,56 @@ function campoPassagemHTML(campo, valor) {
    limpar aqui e escrever no formato da casa — nao inventar convencao.
    PROPS_SO_DIGITOS e uma lista curta e explicita: limpar 'tudo que parece numero' comeria
    o ponto decimal de amount e mrr, que sao o que o RPA/ASAAS le para gerar o link. */
+/* ══ O DIGITO VERIFICADOR DE CPF E CNPJ (04/09/26) ══════════════════════════════════
+   O RPA do Asaas recusa CNPJ invalido e avisa por WhatsApp, horas depois, DEPOIS de o
+   cliente ter assinado — medido em auditoria. O caso que apareceu no mesmo dia foi um
+   CNPJ digitado com 13 digitos em vez de 14: um zero a menos, indistinguivel a olho.
+   Aqui ele aparece no campo, na hora.
+   Os dois formatos existem na base (11 digitos = CPF, 14 = CNPJ) e o campo se chama
+   cnpj_cpf por isso — validar so CNPJ reprovaria metade dos negocios reais. */
+function cpfEhValido(d) {
+  if (d.length !== 11) return false;
+  /* 111.111.111-11 e companhia passam na conta dos digitos e nao existem. */
+  if (/^(\d)\1{10}$/.test(d)) return false;
+  for (let corte = 9; corte <= 10; corte++) {
+    let soma = 0;
+    for (let i = 0; i < corte; i++) soma += Number(d[i]) * (corte + 1 - i);
+    let dv = (soma * 10) % 11;
+    if (dv === 10) dv = 0;
+    if (dv !== Number(d[corte])) return false;
+  }
+  return true;
+}
+function cnpjEhValido(d) {
+  if (d.length !== 14) return false;
+  if (/^(\d)\1{13}$/.test(d)) return false;
+  const pesos = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  for (const corte of [12, 13]) {
+    const p = pesos.slice(13 - corte);
+    let soma = 0;
+    for (let i = 0; i < corte; i++) soma += Number(d[i]) * p[i];
+    const resto = soma % 11;
+    const dv = resto < 2 ? 0 : 11 - resto;
+    if (dv !== Number(d[corte])) return false;
+  }
+  return true;
+}
+function conferirCpfCnpj(digitos) {
+  if (digitos.length === 11) {
+    return cpfEhValido(digitos) ? null
+      : 'Esse CPF não passa no dígito verificador — confira o número.';
+  }
+  if (digitos.length === 14) {
+    return cnpjEhValido(digitos) ? null
+      : 'Esse CNPJ não passa no dígito verificador — confira o número.';
+  }
+  /* A FRASE DIZ QUANTO FALTA, e nao "invalido": o erro real e quase sempre um zero a
+     menos, e contar digito a digito na tela e o que o executivo nao vai fazer. */
+  const faltam = digitos.length < 11 ? 11 - digitos.length
+    : digitos.length < 14 ? 14 - digitos.length : 0;
+  return 'CPF tem 11 dígitos e CNPJ tem 14 — você digitou ' + digitos.length
+    + (faltam ? ' (falta' + (faltam === 1 ? ' 1' : 'm ' + faltam) + ').' : '.');
+}
 const PROPS_SO_DIGITOS = { cep: 8, cnpj_cpf: 14 };
 function limparSoDigitos(prop, valor) {
   if (!(prop in PROPS_SO_DIGITOS)) return { valor: valor, erro: null };
@@ -15936,6 +15986,12 @@ function limparSoDigitos(prop, valor) {
   const teto = PROPS_SO_DIGITOS[prop];
   if (digitos.length > teto) {
     return { valor: null, erro: 'O HubSpot aceita no máximo ' + teto + ' dígitos aqui — vieram ' + digitos.length + '.' };
+  }
+  /* O DIGITO VERIFICADOR SO PARA O DOCUMENTO: o CEP nao tem um, e inventar conferencia
+     para ele reprovaria endereco valido. Ver conferirCpfCnpj. */
+  if (prop === 'cnpj_cpf') {
+    const problema = conferirCpfCnpj(digitos);
+    if (problema) return { valor: null, erro: problema };
   }
   return { valor: digitos, erro: null };
 }
