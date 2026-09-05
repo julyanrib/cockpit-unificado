@@ -373,8 +373,22 @@ checar('o shell separa "todos" (colunas) de "itens" (o funil)',
   /const todos = fn2Leads\(r\);[\s\S]{0,220}?const itens = todos\.filter\(x => x\.stageId !== FN2_ETAPA_PERDIDO\);/.test(template));
 
 /* ── 7. Perdido não pede próximo passo ───────────────────────────────────────────── */
-checar('a bandeira exigePasso existe e exclui Perdido',
-  template.indexOf("const exigePasso = para !== ETAPA_PERDIDO_ID;") > 0);
+/* MEDIA O LITERAL `exigePasso = para !== ETAPA_PERDIDO_ID` ate 04/09/26 — e o literal
+   era o defeito: cada porta tinha o seu, e cada uma isentava uma etapa diferente. O card
+   do kanban cobrava proximo passo do PERDIDO (medido: criou a tarefa "Visita ou abordagem
+   inicial" para hoje num negocio que acabou de morrer) e o drawer cobrava do ONBOARDING.
+   Agora: uma funcao, e as duas portas perguntam a ela. */
+checar('quem pede proximo passo e UMA regra',
+  template.indexOf('function etapaPedeProximoPasso(') > 0);
+checar('e a regra exclui as duas etapas que saem do funil de venda',
+  template.indexOf('if (id === ETAPA_PERDIDO_ID) return false;') > 0
+  && template.indexOf('if (id === FN3_ETAPA_ONBOARDING) return false;') > 0);
+checar('as duas portas perguntam a ela, e nenhuma decide sozinha',
+  template.split('const exigePasso = etapaPedeProximoPasso(para);').length - 1 === 2,
+  'portas chamando a regra: ' + (template.split('const exigePasso = etapaPedeProximoPasso(para);').length - 1));
+checar('e nenhum literal antigo sobrou decidindo por conta propria',
+  template.indexOf('const exigePasso = !paraOnb;') < 0
+  && template.indexOf('const exigePasso = para !== ETAPA_PERDIDO_ID;') < 0);
 checar('a seção do próximo passo só é renderizada quando exigePasso',
   /\$\{!exigePasso \? '' :/.test(template));
 checar('a validação do próximo passo respeita exigePasso',
@@ -533,8 +547,9 @@ checar('template: o registro rápido avisa o que a passagem dispara',
    template.indexOf('Ao confirmar, o HubSpot') > 0));
 checar('template: e avisa que o Cockpit grava só a etapa',
   template.indexOf('grava') > 0 && template.indexOf('só a etapa') > 0);
+/* mesma troca da secao 7: a regra e uma so, e e ela que isenta o Onboarding */
 checar('template: Onboarding não pede próximo passo (o negócio saiu do funil de venda)',
-  template.indexOf('const exigePasso = !paraOnb;') > 0);
+  template.indexOf('if (id === FN3_ETAPA_ONBOARDING) return false;') > 0);
 checar('template: a coluna vazia declara o corte em vez de parecer defeito',
   template.indexOf('nada enviado para onboarding') > 0);
 
@@ -855,6 +870,37 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     chamadas >= 3, 'aparições: ' + chamadas + ' (1 definição + 2 chamadas)');
   checar('o contador vira ✓ quando chega no mínimo',
     template.indexOf("' caracteres ✓'") > -1);
+})();
+
+/* ══ PERDIDO NÃO GANHA TAREFA, E O AVISO FALA DO CASO CERTO (04/09/26) ══════════════════
+   Medido marcando um negócio como perdido pelo "✕ perder" do card:
+     ANTES: «"Bar do dudu" está em Perdido · próximo passo em 04/09 (sexta)» + uma tarefa
+            datada "Visita ou abordagem inicial" para um negócio que acabou de morrer
+     DEPOIS da regra única: nenhuma tarefa, e o toast conta o que importa (motivo, e que
+            perda por engano tem volta)
+   No caminho, dois efeitos colaterais da generalização, os dois medidos na tela e corrigidos:
+     · o aviso da ficha falava de ONBOARDING numa ficha de Perdido
+     · o toast dizia "próximo passo em Invalid Date (undefined)" */
+(function () {
+  checar('o aviso diz o motivo de cada caso, e não só o do Onboarding',
+    template.indexOf("'Perdido não pede próximo passo — o negócio saiu do funil.") > -1
+    && template.indexOf("'Onboarding não pede próximo passo — o acompanhamento passa a ser da entrega") > -1);
+
+  /* O TOAST SEM PASSO: sem este ramo, o de baixo formata uma data que não existe. */
+  const iCard = template.indexOf('function fn3AbrirRegistro(');
+  const corpo = iCard > 0 ? template.slice(iCard, iCard + 14000) : '';
+  checar('o registro do card existe para ser medido', iCard > 0 && corpo.length > 3000);
+  checar('o card tem ramo de toast para etapa sem próximo passo',
+    corpo.indexOf('} else if (!exigePasso) {') > -1,
+    'sem ele o toast diz "próximo passo em Invalid Date"');
+  checar('e esse ramo conta o motivo da perda',
+    corpo.indexOf('saiu do funil como PERDIDO no HubSpot · motivo:') > -1);
+  /* A ORDEM IMPORTA: o ramo sem-passo tem de vir ANTES do ramo que formata a data. */
+  const iSemPasso = corpo.indexOf('} else if (!exigePasso) {');
+  const iComData = corpo.indexOf('· próximo passo em ${fmtDailyLabel(passoData)}');
+  checar('o ramo sem passo vem antes do que formata a data',
+    iSemPasso > -1 && iComData > -1 && iSemPasso < iComData,
+    'sem passo em ' + iSemPasso + ', data em ' + iComData);
 })();
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
