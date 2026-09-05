@@ -114,13 +114,13 @@ function limparPropriedades(bruto) {
     if (chave === 'origem_do_lead' && !ORIGENS_LEAD.includes(texto)) {
       return { propriedades: null, erro: 'Origem do Lead inválida.' };
     }
-    /* CEP e CNPJ so digitos — ver PROPS_SO_DIGITOS. */
+    if (texto.length > 2000) return { propriedades: null, erro: `"${chave}" é longo demais.` };
+    /* CEP e CNPJ so digitos, e o documento passa pelo digito verificador — depois da
+       trava de tamanho, nunca antes: um `continue` aqui em cima ja deixou a trava morta. */
     const limpo = soDigitos(chave, texto);
     if (limpo.erro) return { propriedades: null, erro: limpo.erro };
     propriedades[chave] = limpo.valor;
     continue;
-    if (texto.length > 2000) return { propriedades: null, erro: `"${chave}" é longo demais.` };
-    propriedades[chave] = texto;
   }
   return { propriedades, erro: null };
 }
