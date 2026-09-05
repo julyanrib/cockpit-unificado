@@ -222,6 +222,19 @@ checar('a casca diz quais fileiras crescem',
   /#viewPrecificacao\.active \.prc-shell\{[^}]*grid-template-rows:auto minmax\(0,1fr\)/.test(template),
   'sem template, a barra de voltar divide a tela com a peça no modo cliente');
 
+/* ── 11. O TEXTO CORTADO ─────────────────────────────────────────────────────────
+   Medido no print do Julyan: no arranjo de duas colunas o passo 2 recebia uma célula
+   de 335px e cada cartão de plano ficava com 68px — "Profissional" transbordava 39px,
+   "R$ 549" 32px, "14 funcionalidades" 32px. Dividir a largura não cria espaço: troca
+   altura por corte. Estas duas travam o par de regras que resolve. */
+checar('os cinco passos ficam num cartão só, na largura inteira',
+  /\.p4-controles\{display:flex;flex-direction:column/.test(template),
+  'em duas colunas o cartão de plano fica com 68px e o nome do plano corta');
+checar('planos e períodos em 4 colunas que podem encolher',
+  /\.p4-planos,\.p4-periodos\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/.test(template)
+  && /\.p4-plano,\.p4-periodo\{[^}]*min-width:0/.test(template),
+  'minmax(0,1fr) e min-width:0 são o par que deixa o cartão encolher em vez de cortar');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
