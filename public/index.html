@@ -3104,7 +3104,19 @@
   .h9-meta-txt b{display:block;font:900 11.5px var(--font-display);color:var(--panel);}
 
   /* ══ CORPO ═════════════════════════════════════════════════════════════════════════ */
-  .h9-esq{padding:20px 22px;min-width:0;}
+  /* ══ A FILA PREENCHE A COLUNA (05/09/26) ═══════════════════════════════════════════
+     MEDIDO na tela, com 37 itens na fila: a coluna tinha 1004px, o card 722px e a lista
+     parava em 620px (o teto de 62vh) — 263px de BRANCO embaixo do card, com a fila
+     cortada e rolando por dentro. A grade estica as duas colunas para a altura da mais
+     alta, e a direita ("Sua daily sai daqui") nao tem teto; a esquerda tinha.
+     A correcao e a mesma do Planejamento: a coluna vira flex, a lista recebe flex:1 e o
+     teto sai. A lista passa a valer exatamente a altura que sobra, e a rolagem por dentro
+     continua — o que some e o vao.
+     min-height:0 nos dois: sem ele o filho de flex nao encolhe abaixo do conteudo e o
+     teto volta por outro caminho. */
+  .h9-esq{padding:20px 22px;min-width:0;display:flex;flex-direction:column;}
+  .h9-esq > .h8-card{flex:1 1 0;display:flex;flex-direction:column;min-height:0;}
+  .h9-esq .h8-fila{flex:1 1 0;max-height:none;min-height:0;}
   .h9-dir{background:var(--panel2);border-left:1px solid var(--line);padding:18px 18px 20px;
     display:flex;flex-direction:column;gap:12px;min-width:0;}
   .h9-sec-rot{font:900 9.5px var(--font-display);letter-spacing:.13em;text-transform:uppercase;color:var(--ter);}
@@ -3155,6 +3167,10 @@
     font-size:9.5px;line-height:1.5;color:var(--muted2);}
 
   @media (max-width:1240px){
+    /* EMPILHADO NAO TEM COLUNA IRMA para igualar altura, entao nao ha vao a corrigir —
+       e sem o teto a fila de 37 itens viraria uma rolagem de pagina sem fim no celular. */
+    .h9-esq > .h8-card{flex:none;}
+    .h9-esq .h8-fila{flex:none;max-height:min(62vh,720px);}
     .h9-grade{grid-template-columns:minmax(0,1fr);}
     .h9-dir,.h9-pe-dir{border-left:0;border-top:1px solid var(--line);}
     .h9-hero{grid-template-columns:minmax(0,1fr);}
@@ -15175,12 +15191,35 @@ function h8LigarFila(el, r, redesenhar) {
         + ' · próximo passo ' + ((typeof fmtDailyLabel === 'function') ? fmtDailyLabel(dataISO) : dataISO)
         + ' ✓ HubSpot';
       await redesenhar();
+
+      /* ══ E AGORA A SEMANA (05/09/26) ═══════════════════════════════════════════════
+         O toast daqui prometia "a visita já entrou na sua semana e na Daily" e isso não
+         acontecia: gravarDesfechoEPasso escreve no HubSpot e para ali. Agora a promessa
+         é cumprida — e quando não dá para cumprir, o toast DIZ o que faltou em vez de
+         afirmar mesmo assim. O HubSpot já está gravado neste ponto, então falha aqui
+         nunca devolve a linha para a fila: seria desfazer um registro que existe. */
+      let naSemana = { ok: false, motivo: 'não tentei' };
+      try {
+        naSemana = await h8AgendarNaSemana(r, lead.id, dataISO);
+      } catch (e) {
+        naSemana = { ok: false, motivo: 'erro ao escrever o plano: ' + ((e && e.message) || 'desconhecido') };
+      }
+      if (naSemana.ok && !naSemana.jaEstava) {
+        h8Feitas[String(lead.id)] += ' · semana ' + (naSemana.hora || '');
+        await redesenhar();
+      }
+
       if (typeof mostrarToast === 'function') {
-        mostrarToast(rg.avisoPasso
-          ? (rg.avisoPasso + ' "' + lead.name + '" continua na fila até a tarefa existir.')
-          : ('"' + lead.name + '" registrado ✓ — desfecho e próximo passo no HubSpot, e a'
-             + ' visita já entrou na sua semana e na Daily.'),
-          rg.avisoPasso ? 'atencao' : 'sucesso');
+        if (rg.avisoPasso) {
+          mostrarToast(rg.avisoPasso + ' "' + lead.name + '" continua na fila até a tarefa existir.', 'atencao');
+        } else if (naSemana.ok) {
+          mostrarToast('"' + lead.name + '" registrado ✓ — desfecho e próximo passo no HubSpot'
+            + (naSemana.jaEstava ? ', e ele já estava na sua semana.'
+               : ', e a visita entrou na sua semana às ' + naSemana.hora + ' e na Daily.'), 'sucesso');
+        } else {
+          mostrarToast('"' + lead.name + '" registrado ✓ no HubSpot — desfecho e próximo passo.'
+            + ' Na sua semana ele NÃO entrou: ' + naSemana.motivo + '.', 'atencao');
+        }
       }
       return;
     }
@@ -16060,7 +16099,10 @@ async function renderMeuPainel() {
         if (error || !sugestoes || sugestoes.length === 0) { sugEl.innerHTML = ''; return; }
         sugEl.innerHTML = `
           <div style="border-left:3px solid var(--ink);background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:0 var(--r-md) var(--r-md) 0;padding:14px 16px;margin-bottom:18px;">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink);margin-bottom:6px;">Recado do seu gestor</div>
+            <!-- O TITULO SAIU DAQUI (05/09/26): o rodape ja imprime "Recado do seu gestor"
+                 no .h9-pe-rot logo acima deste painel, e o executivo lia a mesma frase duas
+                 vezes seguidas — uma como rotulo da celula e outra dentro da caixa. So
+                 aparecia quando HAVIA recado, que e por que o preview sem recado nao mostrava. -->
             ${sugestoes.map((s, i) => `
               <div style="${i > 0 ? 'margin-top:10px;padding-top:10px;border-top:1px solid var(--line);' : ''}font-size:13px;line-height:1.55;">
                 ${esc(s.texto)}
@@ -43267,11 +43309,74 @@ function d7HoraDaTravaRot() {
    Usa agendaAgora() e nao new Date(): agendaChave le as partes UTC, e das 21h a
    meia-noite de Brasilia o instante cru ja esta no dia seguinte. Foi exatamente esse
    defeito que a auditoria de 03/09 achou na linha do dia (ver a guarda 17). */
-function d7ColunaDeHoje() {
-  const hoje = agendaChave(agendaAgora());
+/* A COLUNA DA SEMANA PARA UMA DATA QUALQUER (05/09/26). d7ColunaDeHoje já fazia esta
+   conta para hoje; a fila do dia precisa dela para uma data futura, e escrever o mesmo
+   calendário duas vezes é como as duas telas passam a discordar sobre qual dia é quinta. */
+function pl6ColunaDaData(iso) {
   const dias = pl6Dias(pl6SegundaDaSemana());
-  for (let i = 0; i < dias.length; i++) if (dias[i].iso === hoje) return i;
+  for (let i = 0; i < dias.length; i++) if (dias[i].iso === iso) return i;
   return -1;
+}
+
+function d7ColunaDeHoje() {
+  return pl6ColunaDaData(agendaChave(agendaAgora()));
+}
+
+/* ══ O PRÓXIMO PASSO DATADO ENTRA NA SEMANA (05/09/26) ═══════════════════════════════
+   O QUE ESTAVA ERRADO: ao concluir uma ação na fila do dia, o toast dizia "a visita já
+   entrou na sua semana e na Daily". Não entrava. gravarDesfechoEPasso escreve nota e
+   tarefa no HubSpot e nada mais — medi: zero ocorrências de planos_semanais nele. Duas
+   linhas acima, o mesmo bloco diz "a tela não afirma um registro que o gestor não vai
+   encontrar", e era exatamente o que ela fazia.
+
+   POR QUE NÃO USO pl6Gravar: aquela função monta a linha com pl6GradeDoPlano(), que lê a
+   grade CARREGADA NA SESSÃO. Quem está na aba Hoje pode não ter aberto o Planejamento —
+   a grade em memória estaria vazia e o upsert APAGARIA a semana inteira dele. Aqui eu
+   leio a linha do banco na hora, mexo em UMA célula e devolvo.
+
+   E ELE NUNCA INVENTA LINHA: sem plano da semana, devolve o motivo e o toast conta. Criar
+   a semana por baixo do pano poria o executivo com um plano que ele não montou. */
+async function h8AgendarNaSemana(rep, leadId, dataISO) {
+  if (!DATA.supabase || !supa) return { ok: false, motivo: 'esta sessão está sem Supabase' };
+  if (!rep || rep.ownerId == null) return { ok: false, motivo: 'sem dono na sessão' };
+  const di = pl6ColunaDaData(dataISO);
+  if (di < 0) return { ok: false, motivo: 'a data cai fora desta semana útil' };
+
+  const segunda = pl6SegundaDaSemana();
+  const { data: linhas, error: erroLeitura } = await supa.from('planos_semanais')
+    .select('*').eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
+  if (erroLeitura) return { ok: false, motivo: 'não consegui ler o seu plano da semana' };
+  const linha = Array.isArray(linhas) && linhas[0];
+  if (!linha) return { ok: false, motivo: 'você ainda não montou a semana no Planejamento' };
+
+  /* normalizo o formato aqui: linha antiga pode vir com coluna curta */
+  const grade = Array.from({ length: PL6_DIAS_UTEIS }, function (_, ci) {
+    const col = (linha.grade && linha.grade[ci]) || [];
+    const arr = Array.isArray(col) ? col.slice(0, PL6_SLOTS) : [];
+    while (arr.length < PL6_SLOTS) arr.push(null);
+    return arr;
+  });
+
+  const alvo = String(leadId);
+  for (let c = 0; c < PL6_DIAS_UTEIS; c++) {
+    for (let s = 0; s < PL6_SLOTS; s++) if (String(grade[c][s] || '') === alvo) {
+      return { ok: true, jaEstava: true, dia: c, slot: s };
+    }
+  }
+  let vaga = -1;
+  for (let s = 0; s < PL6_SLOTS; s++) if (!grade[di][s]) { vaga = s; break; }
+  if (vaga < 0) return { ok: false, motivo: 'esse dia já está com os ' + PL6_SLOTS + ' horários ocupados' };
+
+  grade[di][vaga] = alvo;
+  const { error: erroEscrita } = await supa.from('planos_semanais').upsert({
+    owner_id: String(rep.ownerId),
+    data_segunda: segunda,
+    regioes: linha.regioes,
+    grade: grade,
+    atualizado_em: new Date().toISOString()
+  }, { onConflict: 'owner_id,data_segunda' }).select();
+  if (erroEscrita) return { ok: false, motivo: 'o banco recusou: ' + erroEscrita.message };
+  return { ok: true, dia: di, slot: vaga, hora: PL6_HORAS[vaga] };
 }
 
 /* A ROTA DE HOJE — o bairro que ele escolheu para hoje no Planejamento. Vira o titulo da
