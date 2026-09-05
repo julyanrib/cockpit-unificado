@@ -8178,8 +8178,22 @@
      align-items:stretch e não start: as duas colunas precisam receber a altura da
      linha para poderem rolar por dentro. Com start elas encolhem para o conteúdo e a
      rolagem volta para a página. */
+  /* ══ A ABA PREENCHE A TELA SEM CONTA NENHUMA (05/09/26) ══════════════════════════
+     Eu tinha feito isso com JavaScript medindo a janela, e errou duas vezes: primeiro um
+     calc(100vh - 215px) que ignorava 98px de rodape e padding, depois uma medicao que
+     subtraia a folga do .app-main esticado e deixou a aba do tamanho de uma caixinha no
+     meio da tela vazia. Conta de altura em JS tambem ENVELHECE: roda no render e no
+     resize, e qualquer coisa que mexa no topo depois disso deixa o numero velho.
+     O .app-main JA e flex column com flex:1. Entao a aba nao precisa saber a altura de
+     nada: ela pede o que sobrou. min-height:0 em cada elo porque sem ele o filho de flex
+     nao encolhe abaixo do conteudo e a rolagem volta pela porta dos fundos.
+     Escopado nesta view: nenhuma das outras sete abas muda de comportamento. */
+  .app-main > #viewPrecificacao.active{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
+  #viewPrecificacao.active > #precificacaoContent{flex:1 1 0;min-height:0;display:flex;flex-direction:column;}
+  #viewPrecificacao.active .prc-shell{flex:1 1 0;min-height:0;}
+  #viewPrecificacao.active .p4-grid{flex:1 1 0;min-height:0;}
   .p4-grid{display:grid;grid-template-columns:minmax(0,1fr) 496px;gap:24px;padding:20px 28px 22px;
-    align-items:stretch;min-height:520px;}
+    align-items:stretch;}
   /* OS CINCO PASSOS EM DUAS COLUNAS: a coluna tem 924px e empilhava tudo, gastando
      1095px de altura. 1+2 na primeira linha, 3 inteiro (os chips dos adicionais
      precisam da largura), 4+5 na última. A leitura continua 1,2,3,4,5 — esquerda para
@@ -8259,6 +8273,27 @@
   .p4-btn-sec{flex:1;text-align:center;font:700 12px var(--font-display);color:var(--p4-escuro);border:1px solid var(--p4-linha-forte);border-radius:var(--r-md);padding:11px;background:var(--p4-canvas);cursor:pointer;}
   .p4-btn-sec:hover{border-color:var(--p4-escuro);}
   .p4-acoes-dica{font-size:10px;color:var(--p4-muted2);text-align:center;}
+  /* O GATILHO DAS OBJEÇÕES E O PAINEL FLUTUANTE (05/09/26).
+     Âmbar porque nesta casa âmbar é "atenção, isto é seu" — a mesma tinta que o bloco
+     tinha quando ocupava a coluna. O painel é absolute para NÃO empurrar layout: abrir
+     empurrando devolveria a rolagem que a aba acabou de perder.
+     z-index alto e fundo do papel porque ele cobre os cartões dos passos. */
+  .p4-obj{position:relative;flex:none;}
+  .p4-obj-btn{font:800 11px var(--font-display);letter-spacing:.04em;color:var(--p4-ambar);
+    background:var(--p4-ambar-bg);border:1px solid var(--p4-ambar-linha);border-radius:var(--r-pill);
+    padding:9px 14px;min-height:36px;cursor:pointer;white-space:nowrap;}
+  .p4-obj-btn:hover{border-color:var(--p4-ambar);}
+  .p4-obj-btn[aria-expanded="true"]{background:var(--p4-ambar);color:var(--p4-card);}
+  .p4-obj-painel{position:absolute;top:calc(100% + 8px);right:0;z-index:60;width:min(560px,80vw);
+    background:var(--p4-ambar-bg);border:1px solid var(--p4-ambar-linha);border-radius:var(--r-md);
+    padding:12px 14px;box-shadow:0 16px 44px rgba(43,52,64,.18);}
+  .p4-obj-rot{font:800 9px var(--font-display);letter-spacing:.16em;color:var(--p4-ambar);}
+  .p4-obj-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;}
+  .p4-obj-chips button{font-size:11.5px;font-weight:600;padding:8px 12px;border-radius:var(--r-pill);
+    background:var(--p4-card);border:1px solid var(--p4-ambar-linha);color:var(--p4-muted);cursor:pointer;}
+  .p4-obj-chips button:hover{border-color:var(--p4-ambar);color:var(--p4-escuro);}
+  /* o aviso da dor ocupa a fileira inteira quando existe — e some quando não há dor */
+  .p4-controles > .prc-dor-linha{grid-column:1 / -1;}
   /* só você vê */
   /* O RÓTULO ENTRA NA FILEIRA DOS CHIPS: ele tinha linha própria e 16px de folga para três
      palavras, num bloco que é ajuda e não passo. */
@@ -8329,8 +8364,10 @@
      A mensagem fica FORA da rolagem: ela e o que acompanha o PNG e precisa estar visivel
      no momento em que ele aperta enviar. */
   .p4-peca{display:flex;flex-direction:column;min-height:0;min-width:0;}
-  .p4-rolagem{flex:1 1 0;min-height:0;overflow-y:auto;scrollbar-width:thin;
-    overscroll-behavior-y:contain;border-radius:var(--r-lg);}
+  /* SEM BARRA AQUI: o zoom de prcAjustarPeca faz o documento caber, entao nao ha o que
+     rolar. overflow:hidden e a rede — se um dia a conta falhar, recorta em vez de
+     devolver a barra que o Julyan pediu para tirar. */
+  .p4-rolagem{flex:1 1 0;min-height:0;overflow:hidden;border-radius:var(--r-lg);}
   .p4-msg{margin-top:10px;flex:none;background:var(--p4-card);border:1px solid var(--p4-linha);
     border-radius:var(--r-lg);padding:11px 14px;}
   .p4-msg-rot{font:800 9px var(--font-display);letter-spacing:.18em;color:var(--p4-muted);}
@@ -19632,32 +19669,46 @@ function prcPreviewHTML() {
 }
 
 /* ══ A ALTURA DA ABA SAI DE MEDICAO (05/09/26) ══════════════════════════════════════
-   Eu tinha escrito height:calc(100vh - 215px) e errei por 98px, porque abaixo da aba
-   existe coisa que o CSS daqui nao sabe: 30px de rodape e 44px de padding do .app-main.
-   E o rodape que eu media era a faixa do PREVIEW LOCAL — cravar o numero teria acertado
-   nesta tela e errado em producao, que e o pior tipo de acerto.
-   Entao a conta e feita com o que esta na tela: a janela, menos o topo da grade, menos o
-   que sobra embaixo dela. Essa sobra NAO depende da altura da grade (a base do .app-main
-   acompanha a base da view), entao a conta nao se persegue.
-   O piso de 420px existe para janela baixa: abaixo disso e melhor a pagina rolar do que
-   a grade virar uma fresta. */
-function prcAjustarAltura() {
-  const grid = document.querySelector('#precificacaoContent .p4-grid');
-  if (!grid) return;
-  const view = grid.closest('.view');
-  const main = grid.closest('.app-main');
-  if (!view || !main) return;
-  const topo = grid.getBoundingClientRect().top;
-  const abaixo = main.getBoundingClientRect().bottom - view.getBoundingClientRect().bottom;
-  const alt = Math.max(420, Math.floor(window.innerHeight - topo - abaixo - 4));
-  grid.style.height = alt + 'px';
+/* ══ A PEÇA ENCOLHE PARA CABER (05/09/26) ═══════════════════════════════════════════
+   O documento tem 953px e a coluna dele tem ~460. Antes ele rolava por dentro, e o
+   Julyan foi claro: nenhuma rolagem. Então ele ENCOLHE — e encolher é honesto aqui,
+   porque a peça é a prévia de um PNG: uma miniatura fiel é a mesma imagem, menor. Para
+   ler em tamanho real existe o "Virar para o cliente", que é o gesto que já existia.
+
+   zoom e não transform:scale de propósito: transform desenha menor mas continua ocupando
+   o espaço original, e a barra de rolagem voltaria. zoom muda o layout, que é o que se
+   quer aqui.
+
+   O FATOR SAI DE MEDIÇÃO e não de constante: zoom volta a 1, mede a altura natural, e o
+   fator é o que couber. ResizeObserver porque a coluna muda de altura quando a janela
+   muda — e o guarda evita o laço, já que mexer no zoom dispara o próprio observer. */
+function prcAjustarPeca() {
+  const caixa = document.querySelector('#precificacaoContent .p4-rolagem');
+  const peca = document.getElementById('precificacaoPreview');
+  if (!caixa || !peca) return;
+  if (prcAjustarPeca._rodando) return;
+  prcAjustarPeca._rodando = true;
+  peca.style.zoom = '1';
+  const disponivel = caixa.clientHeight;
+  const natural = peca.offsetHeight;
+  const fator = (natural > 0 && disponivel > 0) ? Math.min(1, disponivel / natural) : 1;
+  peca.style.zoom = fator < 1 ? String(Math.floor(fator * 1000) / 1000) : '1';
+  prcAjustarPeca._rodando = false;
+
+  if (!prcAjustarPeca._observando && typeof ResizeObserver === 'function') {
+    prcAjustarPeca._observando = true;
+    new ResizeObserver(function () { prcAjustarPeca(); }).observe(caixa);
+  }
 }
 
-/* uma vez so por sessao: redimensionar a janela reajusta a aba */
-if (typeof window !== 'undefined' && !window.__prcAlturaLigada) {
-  window.__prcAlturaLigada = true;
-  window.addEventListener('resize', function () { prcAjustarAltura(); });
-}
+/* A CONTA DE ALTURA EM JAVASCRIPT SAIU DAQUI (05/09/26).
+   Ela existiu por duas versoes e errou nas duas: primeiro um calc(100vh - 215px) que
+   ignorava 98px de rodape e padding, depois uma medicao que subtraia a folga do .app-main
+   esticado e deixou a aba do tamanho de uma caixinha no meio da tela vazia.
+   O problema nao era a formula: era existir. Conta de altura em JS roda no render e no
+   resize, e envelhece em qualquer outra coisa que mexa no topo da pagina.
+   Agora quem resolve e a cadeia de flex no CSS — .app-main ja e flex column, entao a aba
+   so pede o que sobrou. Procure por "A ABA PREENCHE A TELA SEM CONTA NENHUMA". */
 
 function atualizarPreviewPrecificacao() {
   const slot = document.getElementById('precificacaoPreview');
@@ -20001,6 +20052,7 @@ function prcBarraContaHTML() {
       ${etiquetaEtapa ? `<span class="p4-chip-etapa">ETAPA · ${esc(String(etiquetaEtapa).toUpperCase())}</span>` : ''}
       ${conta.dor ? `<span class="p4-chip-dor">DOR · ${esc(String(conta.dor).toUpperCase())}</span>` : ''}
       <span class="p4-conta-usa">${conta.sistema ? `usa hoje: <b>${esc(conta.sistema)}</b>` : 'sistema atual não registrado'}${conta.telefone ? ` · ☎ ${esc(conta.telefone)}` : ''}</span>
+      ${prcModoCliente ? '' : prcBotaoObjecoesHTML()}
       <button type="button" class="p4-btn-txt" id="prcTrocarConta">trocar conta</button>
       <button type="button" class="p4-btn-escuro" id="prcMostrarCliente">Virar para o cliente →</button>
     </div>`;
@@ -20012,11 +20064,34 @@ function prcBarraContaHTML() {
     <label class="p4-campo"><span>WhatsApp</span><input id="prcTelefone" value="${esc(precificacaoEstado.whatsapp)}" placeholder="(27) 99999-9999" inputmode="tel" autocomplete="tel"></label>
     <datalist id="prcContasLista">${candidatas.map(l => `<option value="${esc(l.name)}"></option>`).join('')}</datalist>
     <span class="p4-conta-usa">abrindo pela ficha do negócio, em <b>Gerar proposta</b>, nome, telefone e dor vêm prontos</span>
+    ${prcModoCliente ? '' : prcBotaoObjecoesHTML()}
     <button type="button" class="p4-btn-escuro" id="prcMostrarCliente">Virar para o cliente →</button>
   </div>`;
 }
 
-/* 1 · OPERAÇÃO — os dois tipos de operação, que mudam a tabela inteira. */
+/* ══ AS OBJEÇÕES VIRARAM BOTÃO (05/09/26) ═══════════════════════════════════════════
+   O bloco "SÓ VOCÊ VÊ" ocupava 104px fixos na coluna dos passos — 104 dos 194px que
+   faziam aquela coluna rolar. E ele é ajuda para UM momento: quando o dono objeta.
+   Aberto o tempo todo, custava altura em todos os outros momentos.
+
+   Agora é um botão na barra do topo, que já tinha espaço vazio, e as respostas abrem
+   FLUTUANDO (position:absolute) — abrir empurrando o layout devolveria a rolagem que
+   este trabalho veio tirar.
+
+   Continua sendo só do executivo: prcModoCliente não desenha o gatilho, porque a tela
+   virada para o cliente não pode ter "se ele disser que está caro" escrito nela. */
+function prcBotaoObjecoesHTML() {
+  return `<div class="p4-obj">
+    <button type="button" class="p4-obj-btn" id="prcObjecoes"
+      aria-expanded="false" aria-controls="prcObjecoesPainel"
+      title="As respostas prontas do playbook, só para você">⚠ se ele disser…</button>
+    <div class="p4-obj-painel" id="prcObjecoesPainel" hidden>
+      <div class="p4-obj-rot">SÓ VOCÊ VÊ — RESPOSTA PRONTA NO PLAYBOOK</div>
+      <div class="p4-obj-chips">${PRC_OBJECOES.map(o => `<button type="button" data-prc-objecao="${o.n}">“${esc(o.chip)}”</button>`).join('')}</div>
+    </div>
+  </div>`;
+}
+
 /* 4 · PERÍODO — o de→por em toda superfície, e a economia em meses grátis. */
 function prcBlocoPeriodoHTML() {
   const base = calcularPrecificacao('mensal');
@@ -20136,13 +20211,14 @@ function renderPrecificacaoConfigurador() {
         ${prcBlocoAdicionaisHTML()}
         ${prcBlocoPeriodoHTML()}
         ${prcBlocoPassoHTML()}
-        <!-- SÓ VOCÊ VÊ fica com os controles, nunca no documento: objeção e dor do
-             cliente na peça que ele lê seria constrangedor. Some no modo cliente. -->
-        ${prcModoCliente ? '' : `<div class="p4-so-voce">
-          <div class="p4-so-voce-rot">SÓ VOCÊ VÊ — SE ELE DISSER…</div>
-          ${prcBlocoDorHTML()}
-          <div class="p4-so-voce-chips">${PRC_OBJECOES.map(o => `<button type="button" data-prc-objecao="${o.n}">“${esc(o.chip)}”</button>`).join('')}</div>
-        </div>`}
+        <!-- AS OBJEÇÕES SAÍRAM DA COLUNA (05/09/26). O bloco ocupava 104px fixos para uma
+             ajuda que só serve QUANDO o dono objeta — e eram 104 dos 194px que faziam a
+             coluna dos passos rolar. Agora ele é um botão na barra do topo, que abre as
+             respostas flutuando por cima. Continua só do executivo: some no modo cliente.
+             O ALERTA DA DOR NÃO FOI JUNTO. "O plano na tela não cobre X" é aviso sobre a
+             proposta que está montada agora, não resposta a objeção — atrás de um botão
+             ele deixaria de ser aviso. Fica aqui, e só ocupa altura quando existe. -->
+        ${prcModoCliente ? '' : prcBlocoDorHTML()}
       </div>
       <!-- A MENSAGEM QUE VAI JUNTO (05/09/26). O PNG não viaja sozinho: o WhatsApp leva
            imagem + texto, e o texto é o que faz o dono abrir a imagem. Ele já existia —
@@ -20223,6 +20299,24 @@ function renderPrecificacaoConfigurador() {
 
   /* OBJEÇÃO -> PLAYBOOK, na âncora. Sem âncora, abre a página mesmo assim: melhor a
      página certa sem âncora que nada. */
+  /* O GATILHO DAS OBJEÇÕES. Fecha ao escolher uma resposta (a tela vai para o playbook),
+     ao clicar fora e no Esc — painel que só fecha no próprio botão é painel que fica
+     aberto por cima dos passos enquanto o executivo tenta configurar. */
+  const btnObj = slot.querySelector('#prcObjecoes');
+  const painelObj = slot.querySelector('#prcObjecoesPainel');
+  if (btnObj && painelObj) {
+    const fechar = () => { painelObj.hidden = true; btnObj.setAttribute('aria-expanded', 'false'); };
+    btnObj.addEventListener('click', ev => {
+      ev.stopPropagation();
+      const abrindo = painelObj.hidden;
+      painelObj.hidden = !abrindo;
+      btnObj.setAttribute('aria-expanded', abrindo ? 'true' : 'false');
+    });
+    painelObj.addEventListener('click', ev => ev.stopPropagation());
+    document.addEventListener('click', fechar);
+    document.addEventListener('keydown', ev => { if (ev.key === 'Escape') fechar(); });
+  }
+
   slot.querySelectorAll('[data-prc-objecao]').forEach(btn => {
     btn.addEventListener('click', () => {
       const anc = prcAncoraObjecao(Number(btn.dataset.prcObjecao));
@@ -20275,10 +20369,8 @@ function renderPrecificacaoConfigurador() {
   const btnRegistrarV4 = document.getElementById('prcRegistrar');
   if (btnRegistrarV4) btnRegistrarV4.addEventListener('click', prcRegistrarNoNegocio);
   atualizarPreviewPrecificacao();
-  /* A ALTURA É MEDIDA DEPOIS DE DESENHAR, e não antes: a barra da proposta avulsa muda de
-     altura quando há conta selecionada, e é ela que empurra o topo da grade. Medir antes
-     do innerHTML seria medir a tela anterior. */
-  prcAjustarAltura();
+  /* A PEÇA ENCOLHE PARA CABER, em vez de rolar por dentro. */
+  prcAjustarPeca();
 }
 
 async function renderPrecificacao() {
