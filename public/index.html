@@ -8234,10 +8234,14 @@
   #viewPrecificacao.active .prc-shell{flex:1 1 0;min-height:0;
     grid-template-rows:auto minmax(0,1fr);}
   #viewPrecificacao.active .p4-grid{flex:1 1 0;min-height:0;}
-  /* A COLUNA DO CARTAO E minmax(430px,480px): 430 e a largura de desenho da peca, entao
-     abaixo disso a escala comecaria a reduzir por falta de LARGURA, e nao por falta de
-     altura. O teto de 480 devolve a sobra para os passos. gap 18 e padding do handoff. */
-  .p4-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(430px,480px);gap:18px;
+  /* A COLUNA DO CARTAO CRESCEU (05/09/26). Com a mensagem fora, o palco passou a ter
+     810px de altura numa tela de 1080 — e ai quem travava a escala virou a LARGURA de
+     480: a peca desenhada a 678 nao passava de 0,708. Agora o teto e 720, que e mais que
+     a largura de desenho, entao o cartao chega perto de 1:1 (0,955 medido a 1080).
+     O piso de 700px na coluna dos passos e o que impede a troca de ficar cara nas telas
+     menores: com menos que isso os cinco passos em duas colunas comecam a quebrar o CTA,
+     que foi o defeito que me fez voltar de tres colunas para duas. */
+  .p4-grid{display:grid;grid-template-columns:minmax(700px,1fr) minmax(430px,720px);gap:18px;
     padding:14px 20px 16px;align-items:stretch;}
   /* OS CINCO PASSOS EM DUAS COLUNAS: a coluna tem 924px e empilhava tudo, gastando
      1095px de altura. 1+2 na primeira linha, 3 inteiro (os chips dos adicionais
@@ -8257,7 +8261,8 @@
   .p4-controles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;
     align-content:start;min-width:0;min-height:0;overflow-y:auto;padding-right:4px;}
   .p4-controles > .p4-card:nth-child(3),
-  .p4-controles > .p4-so-voce{grid-column:1 / -1;}
+  .p4-controles > .p4-so-voce,
+  .p4-controles > .p4-msg{grid-column:1 / -1;}
   .p4-card{background:var(--p4-card);border:1px solid var(--p4-linha);border-radius:var(--r-md);padding:11px 16px;}
   .p4-card-rot{font:800 10px var(--font-display);letter-spacing:.14em;color:var(--p4-muted2);}
   .p4-card-rot em{font-style:normal;font-weight:600;letter-spacing:0;color:var(--p4-muted);}
@@ -8430,11 +8435,12 @@
   .p4-palco > .prc-proposal{position:absolute;left:50%;top:50%;width:560px;
     transform-origin:center center;border-radius:var(--r-lg);}
 
-  /* A MENSAGEM CUSTAVA 195px, tirados direto da altura da peça. Fica no pé, menor, com
-     teto: o que passar rola dentro dela. É texto que o executivo já conhece de cor —
-     a peça é que ele precisa VER. */
-  .p4-msg{margin-top:8px;flex:none;background:var(--p4-card);border:1px solid var(--p4-linha);
-    border-radius:var(--r-lg);padding:9px 12px;max-height:118px;overflow-y:auto;scrollbar-width:thin;}
+  /* A MENSAGEM AGORA MORA NA COLUNA DA ESQUERDA, no pé, ao lado do botão que envia.
+     Embaixo da peça ela custava 126px da altura do cartão; aqui ela custa altura de uma
+     coluna que já rola. Teto de 96px com rolagem própria pelo mesmo motivo de sempre:
+     a mensagem cresce com o nome do restaurante e com os adicionais. */
+  .p4-msg{background:var(--p4-card);border:1px solid var(--p4-linha);
+    border-radius:var(--r-lg);padding:9px 12px;max-height:96px;overflow-y:auto;scrollbar-width:thin;}
   .p4-msg-corpo{font-size:11.5px !important;line-height:1.5 !important;}
   .p4-msg-rot{font:800 9px var(--font-display);letter-spacing:.18em;color:var(--p4-muted);}
   /* --p4-escuro e a tinta desta familia; eu havia escrito --p4-ink, que nao existe, e a
@@ -8453,8 +8459,24 @@
        cv = min(1,15, largura*0,9/430, (altura*0,86 − 70)/alturaNatural)
      A conta mora em prcAjustarPeca, junto com a escala da prévia — uma regra, um
      lugar. Aqui fica só o que é layout: os controles sumindo e a peça sozinha. */
-  .prc-shell.modo-cliente .p4-grid{grid-template-columns:minmax(0,1fr);padding:24px;}
+  /* TELA CHEIA DE VERDADE (05/09/26). O modo cliente era uma coluna dentro da página:
+     o cartão ficava com 550px numa tela de 1920 e o Julyan perguntou como apresentaria
+     isso a um senhor do outro lado da mesa. Tinha razão — a peça estava presa a um
+     palco que valia 689px de 1080 por causa do cabeçalho, da faixa do HubSpot, do
+     rodapé e dos paddings, nada disso servindo ao momento.
+     Agora a grade sai do fluxo e ocupa a janela: position:fixed, inset:0. O palco passa
+     a valer a tela inteira menos a barra de voltar, e a mesma conta de escala (teto
+     1,15) devolve um cartão de ~740x920 num monitor de 1080 — o dobro do que era. */
+  /* UMA FILEIRA SO: com os controles em display:none a grade fica com um filho unico —
+     a peca — e duas fileiras faziam ela cair na primeira, que e auto, com altura zero.
+     O palco media 0 e o cartao ia parar fora da tela. Medido, nao deduzido. */
+  .prc-shell.modo-cliente .p4-grid{position:fixed;inset:0;z-index:70;
+    grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr);
+    padding:14px 18px 18px;gap:10px;background:var(--p4-canvas);}
   .prc-shell.modo-cliente .p4-controles{display:none;}
+  /* a barra de voltar entra DENTRO da tela cheia, senão ela fica atrás do overlay */
+  .prc-shell.modo-cliente .prc-modo-barra{position:fixed;top:14px;left:18px;right:18px;z-index:71;margin:0;}
+  .prc-shell.modo-cliente .p4-peca{padding-top:56px;}
   /* estreito: o documento vai para baixo dos controles, na largura toda */
   @media (max-width:1240px){
     .p4-grid{grid-template-columns:minmax(0,1fr);}
@@ -19812,6 +19834,10 @@ function prcAjustarPeca() {
     if (typeof ResizeObserver === 'function') {
       new ResizeObserver(function () { prcAjustarPeca(); }).observe(palco);
     }
+    /* O RESIZE DA JANELA TAMBEM, e nao so o observer: em tela cheia o palco e fixed e
+       eu medi ele ficando com a escala velha depois de mudar o tamanho da janela. O
+       handoff pede recalculo no resize; o observer sozinho nao estava entregando. */
+    window.addEventListener('resize', function () { prcAjustarPeca(); });
     if (document.fonts && document.fonts.ready && document.fonts.ready.then) {
       document.fonts.ready.then(function () { prcAjustarPeca(); });
     }
@@ -20291,7 +20317,18 @@ function prcBlocoAdicionaisHTML() {
   </div>`;
 }
 
-/* 4 · PERÍODO — o de→por em toda superfície, e a economia em meses grátis. */
+/* A MENSAGEM QUE ACOMPANHA O PNG. É a MESMA função que o CTA envia e que o "copiar
+   texto" copia — textoPropostaPrecificacao() —, e é por isso que ela pode ficar à
+   vista: o executivo lê antes de mandar aquilo que vai ser mandado.
+   (A linha de comentário do PERÍODO estava duplicada aqui, órfã em cima do PLANO,
+   desde antes desta mudança; saiu junto.) */
+function prcMensagemJuntoHTML() {
+  return `<div class="p4-msg" id="prcMensagemJunto">
+    <div class="p4-msg-rot">MENSAGEM QUE VAI JUNTO</div>
+    <div class="p4-msg-corpo">${esc(textoPropostaPrecificacao())}</div>
+  </div>`;
+}
+
 /* 2 · PLANO — os quatro, com o número de funcionalidades de cada um. */
 function prcBlocoPlanoHTML() {
   const tipo = prcTipo();
@@ -20338,6 +20375,13 @@ function renderPrecificacaoConfigurador() {
              A caixa âmbar fecha a coluna, que é onde o handoff a quer — ajuda ao alcance
              do olho no momento em que o dono objeta. Nenhuma das duas no modo cliente. -->
         ${prcModoCliente ? '' : prcBlocoDorHTML()}
+        <!-- A MENSAGEM QUE VAI JUNTO MUDOU DE COLUNA (05/09/26). Ela morava embaixo da
+             peça e custava 126px de altura tirados justamente de quem precisa deles: o
+             cartão encolhe na razão direta do que sobra, e com ela fora a peça foi de
+             479x599 para 655x815 numa tela de 1080. Ela é texto DO EXECUTIVO — o que
+             ele manda junto com a imagem —, então pertence ao lado dele, junto do botão
+             que envia, e não em cima da peça que o dono recebe. -->
+        ${prcModoCliente ? '' : prcMensagemJuntoHTML()}
         ${prcModoCliente ? '' : prcCaixaObjecoesHTML()}
       </div>
       <!-- A MENSAGEM QUE VAI JUNTO (05/09/26). O PNG não viaja sozinho: o WhatsApp leva
@@ -20356,10 +20400,6 @@ function renderPrecificacaoConfigurador() {
         <div class="p4-palco">
           <div class="prc-proposal" id="precificacaoPreview">${prcPreviewHTML()}</div>
         </div>
-        ${prcModoCliente ? '' : `<div class="p4-msg" id="prcMensagemJunto">
-          <div class="p4-msg-rot">MENSAGEM QUE VAI JUNTO</div>
-          <div class="p4-msg-corpo">${esc(textoPropostaPrecificacao())}</div>
-        </div>`}
       </div>
     </div>
   </div>`;

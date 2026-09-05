@@ -15,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 
 const raiz = path.join(__dirname, '..');
+const NL = String.fromCharCode(10);
 const template = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
 const preco = JSON.parse(fs.readFileSync(path.join(raiz, 'data', 'precificacao.json'), 'utf8'));
 
@@ -144,10 +145,20 @@ checar('ela se atualiza a cada clique, e não congela no primeiro estado',
   template.indexOf("const msgJunto = document.getElementById('prcMensagemJunto');") > -1
   && template.indexOf('corpo.textContent = textoPropostaPrecificacao();') > -1,
   'ela vive FORA do #precificacaoPreview, então o innerHTML da prévia não a alcança');
-/* FORA DO CARTÃO ESCURO: dentro, ela pareceria parte da peça que o dono recebe. */
-checar('a mensagem fica fora do cartão do documento',
-  template.indexOf('<div class="prc-proposal" id="precificacaoPreview">${prcPreviewHTML()}</div>') <
-  template.indexOf('id="prcMensagemJunto"'));
+/* FORA DA PEÇA, E SÓ DO EXECUTIVO. Dentro do cartão ela pareceria parte do documento
+   que o dono recebe; no modo cliente ela não pode existir. A checagem media ORDEM no
+   arquivo, e reprovou quando a mensagem mudou de coluna — ordem de código não é lugar
+   na tela. Agora mede as duas regras de verdade. */
+checar('a mensagem não é desenhada dentro da peça', (function () {
+  const i = template.indexOf('function prcPreviewHTML()');
+  const f = template.indexOf(NL + '}', i);
+  return i > -1 && f > i
+    && template.slice(i, f).indexOf('prcMensagemJunto') === -1;
+}()),
+  'dentro do cartão ela viraria parte do documento que o dono recebe — e do PNG');
+checar('e ela some quando a tela vira para o cliente',
+  template.indexOf("${prcModoCliente ? '' : prcMensagemJuntoHTML()}") > -1,
+  'é o texto que o executivo manda, não parte da proposta que o dono lê');
 
 /* Os cinco chips do handoff, pelo que o DONO diz — não pelo nome da função que os
    desenha. É o texto que tem de continuar na tela, mude o desenho que mudar. */
