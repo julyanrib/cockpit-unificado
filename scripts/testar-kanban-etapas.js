@@ -725,6 +725,89 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     template.indexOf('O HubSpot aceita no máximo ') > -1);
 })();
 
+/* ══ O QUE O RPA DO ASAAS PRECISA (04/09/26) ════════════════════════════════════════════
+   Achado subindo um negócio de teste até Ag. Pagamento pelo Cockpit. O RPA respondeu, por
+   WhatsApp, ao Bruno — duas falhas, e as duas eram do Cockpit:
+
+     "Motivo do erro: Sem deal associado."   -> o negócio nascia sem contato
+     "Motivo do erro: CNPJ inválido"         -> a porteira aceitava qualquer 14 dígitos
+
+   MEDIDO no CRM antes de mexer, com leitura:
+     Quintal da Vó (gerou Asaas) -> contato Veronica associado, criado 0,6s ANTES do negócio
+     TORNIAMO      (gerou Asaas) -> contato Wilson Junior associado
+     o criado pelo Cockpit       -> nenhum contato
+   E Company NÃO é: nenhum dos dois que geraram Asaas tem uma. Eu ia consertar a associação
+   errada e a medição me parou. */
+(function () {
+  const rotaCriar = fs.readFileSync(path.join(raiz, 'api', 'criar-negocio.js'), 'utf8');
+  const rotaEtapa = fs.readFileSync(path.join(raiz, 'lib', 'acoes-negocio', 'mudar-etapa-negocio.js'), 'utf8');
+
+  /* 1. O NEGÓCIO NASCE COM CONTATO — é isso que o RPA procura. */
+  checar('a criação acha ou cria o contato',
+    rotaCriar.indexOf('async function acharOuCriarContato(') > -1);
+  checar('e a criação de fato chama isso (definir sem chamar é o defeito clássico)',
+    rotaCriar.indexOf('await acharOuCriarContato(token, nome, telefone)') > -1);
+  checar('a associação é deal_to_contact, que é o vínculo que faltava',
+    rotaCriar.indexOf('/associations/contacts/') > -1
+    && rotaCriar.indexOf('deal_to_contact') > -1);
+  checar('acha antes de criar, para o mesmo restaurante não virar dois contatos',
+    rotaCriar.indexOf("propertyName: 'phone', operator: 'EQ'") > -1);
+  /* A FALHA NÃO PODE SUMIR: associação que falha em silêncio dá no mesmo que não existir,
+     só que descoberta dias depois, por WhatsApp, na frente do cliente. */
+  checar('a falha de associação volta no retorno da rota',
+    rotaCriar.indexOf('contatoFalhou') > -1
+    && rotaCriar.indexOf('contatoId, contatoCriado, contatoFalhou,') > -1);
+  /* E NÃO PODE DERRUBAR A CRIAÇÃO: o negócio já existe e é válido sem o contato. */
+  checar('o negócio não deixa de ser criado por causa do contato',
+    rotaCriar.indexOf('contatoFalhou = ') > -1
+    && rotaCriar.indexOf("throw new Error('contato") < 0);
+
+  /* 2. O DÍGITO VERIFICADOR, NOS TRÊS LUGARES. */
+  ['a tela', 'a rota de etapa', 'a rota de criação'].forEach(function (onde, i) {
+    const fonte = [template, rotaEtapa, rotaCriar][i];
+    checar(onde + ' confere o dígito verificador de CPF e CNPJ',
+      fonte.indexOf('function cnpjEhValido(') > -1
+      && fonte.indexOf('function cpfEhValido(') > -1
+      && fonte.indexOf('function conferirCpfCnpj(') > -1);
+    checar(onde + ' liga a conferência ao campo cnpj_cpf',
+      fonte.indexOf("=== 'cnpj_cpf'") > -1 && fonte.indexOf('conferirCpfCnpj(') > -1);
+  });
+
+  /* CPF TAMBÉM VALE: a base tem os dois no mesmo campo (13157649701 é CPF de negócio real).
+     Validar só CNPJ reprovaria metade da carteira. */
+  checar('a conferência aceita CPF de 11 dígitos, não só CNPJ',
+    template.indexOf('digitos.length === 11') > -1 && template.indexOf('cpfEhValido(digitos)') > -1);
+
+  /* A FRASE DIZ QUANTO FALTA: o erro real do dia foi um zero a menos (13 dígitos), e
+     "inválido" não ajuda quem tem o cliente na frente. */
+  checar('a tela diz quantos dígitos faltam, em vez de só "inválido"',
+    template.indexOf("'CPF tem 11 dígitos e CNPJ tem 14 — você digitou '") > -1);
+})();
+
+/* ══ E A CONFERÊNCIA RODA MESMO, contra números reais da base ═══════════════════════════
+   A checagem de forma acima prova que o código existe. Esta prova que ele ACERTA — e é a
+   que pegaria uma tabela de pesos trocada, que passa despercebida a olho. */
+(function () {
+  const i = template.indexOf('function cpfEhValido');
+  const j = template.indexOf('const PROPS_SO_DIGITOS');
+  if (i < 0 || j < 0 || j < i) { checar('acho a conferência no template para executá-la', false); return; }
+  let conferir = null;
+  try {
+    // eslint-disable-next-line no-eval
+    conferir = eval(template.slice(i, j) + ';conferirCpfCnpj');
+  } catch (e) { checar('a conferência do template executa', false, String(e.message || e)); return; }
+
+  /* OS VÁLIDOS SÃO DE NEGÓCIO REAL DO PIPELINE, lidos do CRM: dois CNPJ e dois CPF. */
+  [['02858882000156', 'Quintal da Vó'], ['30388039000199', 'Gujorebar'],
+   ['13157649701', 'Kokai (CPF)'], ['17509821886', 'Lá Dá Torta (CPF)']].forEach(function (par) {
+    checar('aceita o documento real de ' + par[1], conferir(par[0]) === null, String(conferir(par[0])));
+  });
+  [['00000000000100', '14 dígitos que não fecham'], ['11111111111111', 'repetido'],
+   ['57767203000124', 'um dígito trocado'], ['5776720300125', 'faltando um zero (13)']].forEach(function (par) {
+    checar('recusa ' + par[1], conferir(par[0]) !== null);
+  });
+})();
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
