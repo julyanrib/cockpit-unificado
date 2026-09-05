@@ -26,6 +26,14 @@
     --ink:#1A1613; --muted:#6E6558; --muted2:#736857; --line:#E3DDD0;
     --line-soft:#EEE9DE; --line-btn:#D8CFBA; --ter:#A2937A;
     --red:#E51A31; --red-dk:#C7142A; --red-soft:#FBEEF0;
+    /* O TRIO DO TOM (05/09/26). --tone/--tone-ink/--tone-soft sao usados por seis regras
+       compartilhadas (.acao-tag, .acao-go, .grupo-count e companhia) e eram definidos SO
+       pelo style inline dos cartoes da aba Desenvolvimento. Quando aquele markup saiu, a
+       guarda de alcance mostrou o que ja era verdade nas outras telas: sem definicao e
+       sem fallback, a declaracao morre em silencio — em color o texto herda, em
+       background cai para transparente. O padrao e o mesmo tom que o markup removido
+       usava, entao nada muda de aparencia onde ele existia. */
+    --tone:var(--red); --tone-ink:var(--red-dk); --tone-soft:var(--red-soft);
     /* UM VERDE SÓ NO PRODUTO: o do executivo. Havia dois, e nenhum motivo para isso. */
     --green:#157A5C; --green-soft:#E8F3EE; --amber:#B0782A; --amber-soft:#F9F0DE;
     /* Tinta escura pro âmbar quando o fundo é --amber-soft: o par --amber/--amber-soft
@@ -927,8 +935,12 @@
      documento; soltos, são seis avisos empilhados.
      O padding lateral fica no quadro, e não em cada peça; a barra e o hero vão de
      borda a borda porque a tampa de um quadro não tem margem. */
-  body.exec-v3 #viewPDIs #pdisContent{background:var(--dv-card);border:1px solid var(--dv-linha);
-    border-radius:16px;box-shadow:var(--dv-sombra);overflow:hidden;padding:0 0 18px;}
+  /* A LARGURA DO QUADRO E A DA PRANCHA: min(1600px, 100% - 64px), centrado. O .app-main
+     limita o produto a 1560 — bom para as outras abas, 40px a menos aqui. So nesta view.
+     O card branco agora e o proprio no de fora do markup copiado, entao este seletor nao
+     pinta mais nada: ele so mede. */
+  body.exec-v3 .app-main:has(> #viewPDIs.active){max-width:none;}
+  body.exec-v3 #viewPDIs #pdisContent{width:min(1600px, 100%);margin:0 auto;}
   body.exec-v3 #viewPDIs #pdisContent > *{margin-left:18px;margin-right:18px;}
   body.exec-v3 #viewPDIs .dev-barra{display:flex;align-items:center;gap:14px;flex-wrap:wrap;
     padding:11px 20px;background:var(--dv-vermelho);border-radius:0;margin:0 0 0 0;}
@@ -54267,18 +54279,10 @@ async function renderPDIs() {
        têm e continuam texto. "% do funil em Prospecção + Visita" são DUAS etapas e a
        gaveta abre uma; "ganhos no mês" não é uma fila. Prometer clique nesses dois
        seria o clique morto que este trabalho está tirando. */
-    const numerosDiag = `
-      <div class="diag-nums">
-        <div class="dn${travadosRep > 0 ? ' dn-ir' : ''}"${travadosRep > 0 ? ` role="button" tabindex="0" data-acao-ir="visao" data-acao-valor="sla" title="Abrir os negócios acima do SLA no Meu Funil"` : ''}><b style="color:${travadosRep > 0 ? 'var(--red-dk)' : 'var(--green)'};">${travadosRep}</b><span>${travadosRep === 1 ? 'lead com SLA estourado' : 'leads com SLA estourado'}${travadosRep > 0 ? ' — sua prioridade imediata' : ' — nada travado agora'}</span></div>
-        <div class="dn"><b>${pctInicio}%</b><span>do funil em ${esc(rotuloEtapa(duasPrimeiras[0]))} + ${esc(rotuloEtapa(duasPrimeiras[1]))} (${presosInicio} de ${abertosRep})</span></div>
-        <div class="dn${etapaCheia.id ? ' dn-ir' : ''}"${etapaCheia.id ? ` role="button" tabindex="0" data-acao-ir="etapa" data-acao-valor="${esc(String(etapaCheia.id))}" title="Abrir esta etapa no Meu Funil"` : ''}><b>${dEtapaCheia ? dEtapaCheia.txt : etapaCheia.n}${dEtapaCheia ? `<span class="mov" style="color:${dEtapaCheia.subiu ? 'var(--red-dk)' : 'var(--amber-ink)'};">${dEtapaCheia.subiu ? '▲' : '▼'}</span>` : ''}</b><span>negócios em ${esc(rotuloEtapa(etapaCheia.id))} — sua etapa mais cheia</span></div>
-        <div class="dn"><b>${fechadosRep}<span style="font-size:13px;color:var(--muted2);display:inline;margin-top:0;">/${metaRep}</span></b><span>ganhos no mês${fechadosRep < metaRep ? ` — faltam ${metaRep - fechadosRep} até o fechamento` : ' — meta batida'}</span></div>
-      </div>`;
-
-    // NARRATIVA COM VALIDADE (Escopo 10, 27/08/26) — a leitura da semana não pode
-    // dirigir o dia se ela descreve outro funil. Quando expirou ou contradiz o dado ao
-    // vivo, o card vira recolhido e recebe a tarja: continua existindo como registro
-    // do que foi conversado, sem a autoridade de um texto de hoje.
+    /* ── AS CONTAS DESTA ABA ─────────────────────────────────────────────────────
+       Voltaram para cá quando o quadro passou a ser o markup do mockup: elas estavam
+       intercaladas com os construtores de HTML que saíram, e vieram junto na remoção.
+       Aqui não há uma linha de HTML — só o que a tela precisa saber. */
     const saudeNarrativa = narrativaSaude(r);
     /* O GESTO VIVO (28/08/26) — o que entra onde a prosa da IA não vale.
 
@@ -54304,26 +54308,6 @@ async function renderPDIs() {
         pergunta: d.pergunta, saudavel: d.saudavel,
         faltaPasso: d.faltandoPasso, faltaQualif: d.faltandoQualificacao, prontos: d.prontosParaSubir };
     })();
-    const gestoVivoHTML = !gestoVivo ? '' : (gestoVivo.saudavel
-      ? `<p><b>Nenhum degrau travado no seu funil de hoje.</b> Funil sem travamento é hora de encher: as contas-alvo estão no Planejamento.</p>`
-      : `<p><b>Hoje o degrau que não está sendo subido é ${esc(gestoVivo.etapa || '')}${gestoVivo.proxima ? ' → ' + esc(gestoVivo.proxima) : ''}.</b>${
-            gestoVivo.gesto ? ' O gesto que sobe esse degrau: <b>' + esc(gestoVivo.gesto) + '</b>.' : ''}${
-            gestoVivo.pergunta ? ' A pergunta da etapa: <i>' + esc(gestoVivo.pergunta) + '</i>' : ''}</p>${
-            (gestoVivo.prontos + gestoVivo.faltaPasso + gestoVivo.faltaQualif) > 0
-              ? `<p style="font-size:11px;color:var(--muted);">${[
-                  gestoVivo.prontos > 0 ? gestoVivo.prontos + ' pronto(s) para subir agora' : '',
-                  gestoVivo.faltaPasso > 0 ? gestoVivo.faltaPasso + ' sem próximo passo datado' : '',
-                  gestoVivo.faltaQualif > 0 ? gestoVivo.faltaQualif + ' sem sistema e dor registrados' : ''
-                ].filter(Boolean).join(' · ')}</p>`
-              : ''}`);
-
-    /* AÇÕES COM A MESMA VALIDADE DO DIAGNÓSTICO (02/09/26).
-       O card de gargalo já recolhia a narrativa vencida, mas os três cartões logo abaixo
-       continuavam vindo de `comoAgirIndividual` antigo. Resultado medido na tela: o topo
-       dizia 9 acima do SLA e a prioridade mandava atacar 3. Quando a narrativa não passa
-       na guarda, as ações agora nascem apenas de fatos que o Meu Funil também calcula. */
-    /* CADA AÇÃO AO VIVO NASCE COM O DESTINO DELA. O destino não é escolhido depois,
-       lendo a frase: é o mesmo dado que escreveu a frase. Por isso ele não erra. */
     const acoesAoVivo = [];
     if (travadosRep > 0) {
       acoesAoVivo.push({
@@ -54380,20 +54364,20 @@ async function renderPDIs() {
        Os dois só existem quando há etapa travada: sem gargalo não há por onde começar
        nem o que dizer, e inventar os dois seria encher a tela de conselho genérico.
        O "por onde começar" é aritmética do próprio funil dele; a fala é a da etapa. */
-    const comoDestravarHTML = (() => {
+    const comoDestravarTxt = (() => {
       if (!gestoVivo || gestoVivo.saudavel) return '';
       const naEtapa = Number(etapaCheia && etapaCheia.n) || 0;
       const semPasso = Number(gestoVivo.faltaPasso) || 0;
       const comeco = semPasso > 0 && naEtapa > 0
         ? `${semPasso} dos ${naEtapa} em ${esc(gestoVivo.etapa || 'etapa')} estão sem próximo passo datado — comece por eles.`
         : `Comece pelos mais antigos de ${esc(gestoVivo.etapa || 'etapa')}: são os que já esfriaram.`;
-      return `<p class="dev-destravar"><b>como destravar:</b> ${comeco} ${esc(gestoVivo.gesto || '')}, retorno datado, registro na hora. Cada número desta tela vem do HubSpot ao vivo — nada de memória.</p>`;
+      return `como destravar: ${comeco} ${gestoVivo.gesto || ''}, com retorno datado e registro na hora. Cada número desta tela vem do HubSpot ao vivo — nada de memória.`;
     })();
 
-    const falaProntaHTML = (() => {
-      if (!gestoVivo || gestoVivo.saudavel || !gestoVivo.sid) return '';
+    const falaPronta = (() => {
+      if (!gestoVivo || gestoVivo.saudavel || !gestoVivo.sid) return null;
       const f = (typeof FALA_DA_ETAPA !== 'undefined') ? FALA_DA_ETAPA[String(gestoVivo.sid)] : null;
-      if (!f) return '';
+      if (!f) return null;
       /* O NOME QUE ENTRA NA FALA É O DO NEGÓCIO MAIS PARADO DESSA ETAPA — o executivo
          copia e já sai falando com alguém, não com {cliente}. Sem negócio na etapa, o
          genérico entra: melhor um "senhor" do que uma chave sobrando no texto. */
@@ -54406,118 +54390,9 @@ async function renderPDIs() {
         .split('{cliente}').join(alvo && alvo.name ? alvo.name : 'senhor')
         .split('{eu}').join(meuNome || 'da Takeat')
         .split('{praca}').join((r && r.praca) || 'a sua região');
-      return `<div class="dev-fala">
-        <span class="dev-fala-txt">
-          <span class="dev-fala-rot">Fala pronta — ${esc(f.rotulo)}</span>
-          <span class="dev-fala-corpo" id="devFalaCorpo">“${esc(texto)}”</span>
-        </span>
-        <button type="button" class="dev-fala-btn" data-copiar-fala="${esc(texto)}">copiar a fala ▸</button>
-      </div>`;
+      return { rotulo: f.rotulo, texto: texto };
     })();
 
-    const cardGargalo = temGargalo && saudeNarrativa.valida ? `
-      <div class="diag-card">
-        <span class="diag-tag">Gargalo da semana${fonteTag ? ' · HubSpot ' + esc(fonteTag) : ''}</span>
-        <h3>${esc(manchete)}</h3>
-        <p>${corpoGargalo}</p>
-        <div class="diag-src">${fonteNumeros}${saudeNarrativa.dataBaseFmt ? ` · base ${esc(saudeNarrativa.dataBaseFmt)}` : ''} · <button type="button" class="acao-sec acao-btn-nu" data-scrollpdi style="display:inline;font-size:10px;color:var(--red-dk);">ver meus PDIs ↓</button></div>
-      </div>` : temGargalo ? `
-      <div class="diag-card" style="border-left-color:var(--amber);">
-        <span class="diag-tag" style="color:var(--amber-ink);background:var(--amber-soft);">Gargalo de hoje · do funil ao vivo</span>
-        <h3>${esc(manchete)}</h3>
-        ${gestoVivoHTML}
-        ${narrativaAvisoHTML(saudeNarrativa)}
-        <details><summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--muted);">Ler o texto de ${esc(saudeNarrativa.dataBaseFmt || 'então')} de qualquer forma</summary><p style="margin-top:9px;">${corpoGargalo}</p></details>
-        <div class="diag-src">${fonteNumeros}</div>
-      </div>` : `
-      <div class="diag-card" style="border-left-color:var(--line-btn);">
-        <span class="diag-tag" style="color:var(--muted2);background:var(--sunk);">Gargalo de hoje · do funil ao vivo</span>
-        <h3>${esc(manchete)}</h3>
-        ${gestoVivoHTML}
-        <!-- A frase antiga dizia "ela roda toda madrugada e a leitura da semana fecha na
-             sexta". Deixou de ser verdade em 28/08: a análise escrita nasce na SEGUNDA de
-             manhã (é compromisso de semana) e fecha na sexta. Promessa de cadência em copy
-             precisa acompanhar a cadência real, senão o executivo espera um texto que não
-             vem naquele dia. -->
-        <p style="font-size:11px;color:var(--muted);">Sua análise escrita da semana nasce na segunda de manhã e fecha na sexta. O gargalo acima é calculado do HubSpot de agora, não depende dela.</p>
-        <div class="diag-src">${fonteNumeros}</div>
-      </div>`;
-
-    // Tom por posição: a análise devolve as ações já priorizadas (é o que o prompt pede),
-    // então a 1ª é a vermelha. A tag diz a POSIÇÃO, não o assunto — inventar rótulo
-    // temático ("Qualificação", "Fechamento") exigiria classificar a frase, e a IA não
-    // devolve categoria.
-    const TONS_ACAO = [
-      { t: 'var(--red)', i: 'var(--red-dk)', s: 'var(--red-soft)' },
-      { t: 'var(--amber)', i: 'var(--amber-ink)', s: 'var(--amber-soft)' },
-      { t: 'var(--green)', i: 'var(--green)', s: 'var(--green-soft)' }
-    ];
-    const cardsAcao = acoesHoje.map((a, k) => {
-      const tom = TONS_ACAO[k] || TONS_ACAO[2];
-      const ir = a.ir;
-      const cta = ir
-        ? `<button type="button" class="acao-ir" data-acao-ir="${esc(ir.tipo)}" data-acao-valor="${esc(String(ir.valor))}">${esc(ir.rotulo)}</button>`
-        : '';
-      const como = a.como ? `<div class="acao-como"><span>como fazer</span>${esc(a.como)}</div>` : '';
-      return `
-      <article class="acao" style="--tone:${tom.t};--tone-ink:${tom.i};--tone-soft:${tom.s};">
-        <div class="acao-top"><span class="acao-tag">Prioridade ${k + 1}${a.tag ? ' · ' + esc(a.tag) : ''}</span></div>
-        <h3>${a.txt}</h3>
-        ${como}
-        <div class="acao-foot"><span class="prazo"><i></i>${saudeNarrativa.valida ? `até sexta (${dataSexta})` : 'agir hoje · HubSpot de agora'}</span>${cta}</div>
-      </article>`;
-    }).join('');
-
-    const secaoFoco = `
-    <section class="sec" style="margin-top:22px;">
-      <div class="sec-head sec-head-dev">
-        <span class="sec-num">1</span>
-        <h2>Faça isso hoje</h2>
-        <p>o mesmo que seu gestor lê antes do 1:1 — nada aqui é escolhido à mão</p>
-        ${(() => {
-          /* ══ ONDE AS TRÊS PRIORIDADES ACONTECEM (30/08/26, decisão pedida pelo Julyan) ══
-
-             As três "Prioridades" abaixo eram texto puro: 497px de altura sem nenhuma saída.
-             Ele lia "atacar agora os 3 leads com SLA estourado" e ia procurar sozinho.
-
-             POR QUE O DESTINO NÃO É POR CARTÃO. A frase vem da análise de IA como texto
-             solto, sem categoria e sem destino — o comentário do TONS_ACAO, mais abaixo, já
-             registra que rotular o tema exigiria classificar a frase. Um CTA por cartão
-             obrigaria a adivinhar o assunto de cada uma, e CTA que aponta para o lugar
-             errado é pior que CTA nenhum. Também não existe, na tela do executivo, campo de
-             texto onde uma prioridade caiba: o plano de três prioridades é da tela antiga
-             (#planoDoDiaSlot não existe para ele) e o agendador rápido exige uma CONTA.
-             Tentei os dois caminhos antes de escolher este.
-
-             O QUE É SEMPRE VERDADE: as três nascem da MESMA análise semanal do MESMO funil,
-             e o degrau travado desse funil é DADO — destravarFunil() devolve o sid da etapa.
-             Então o destino é um só, é o mesmo das três, e por isso mora uma vez aqui no
-             cabeçalho da seção, logo acima dos cartões: em vez de "Abrir Meu Funil", o link
-             diz a etapa e leva a lista dela já filtrada.
-
-             Sem gargalo (funil saudável ou sem dado) o rótulo não promete etapa nenhuma e o
-             link segue abrindo o funil inteiro. Prometer um filtro que não existe seria a
-             mesma mentira dos cliques mortos. */
-          const sidTravado = (gestoVivo && !gestoVivo.saudavel && gestoVivo.sid) ? gestoVivo.sid : '';
-          const nomeEtapa = sidTravado ? (gestoVivo.etapa || (typeof STAGE_LABELS !== 'undefined' ? STAGE_LABELS[sidTravado] : '') || '') : '';
-          return `<button type="button" class="acao-sec sec-head-cta" data-irfunil="${esc(sidTravado)}">Abrir Meu Funil${nomeEtapa ? ' · ' + esc(nomeEtapa) : ''} →</button>`;
-        })()}
-      </div>
-      <div class="diag">
-        ${cardGargalo}
-        ${numerosDiag}
-      </div>
-      <!-- COMO DESTRAVAR E A FALA PRONTA VIVEM AQUI, e nao dentro do cartao do gargalo:
-           o cartao tem dois ramos (leitura da semana valida ou recolhida) e os dois
-           blocos nao dependem da leitura — dependem do FUNIL AO VIVO ter uma etapa
-           travada. Dentro do cartao eles sumiam justamente na semana em que a leitura
-           expirou, que e quando o executivo mais precisa de um proximo passo. -->
-      ${comoDestravarHTML}
-      ${falaProntaHTML}
-      ${acoesHoje.length ? `<div class="acoes acoes-3">${cardsAcao}</div>` : ''}
-    </section>`;
-
-    // ---- Seção 2: o plano em 3 partes ----
     const compromissos1a1 = (r && Array.isArray(r.compromissos)) ? r.compromissos.filter(Boolean) : [];
     const estado1a1 = getPdiState(r ? r.ownerId : '', compromissos1a1.length);
     const feitos1a1 = estado1a1.checked.filter(Boolean).length;
@@ -54541,103 +54416,79 @@ async function renderPDIs() {
       return isNaN(d.getTime()) ? data1a1Bruta : d.toLocaleDateString('pt-BR');
     })();
 
-    const linhaDelta = (ic, cls, titulo, sub, valor, corValor) => `
-      <div class="delta-row">
-        <span class="delta-ic ${cls}">${ic}</span>
-        <div class="txt"><b>${esc(titulo)}</b><span>${esc(sub)}</span></div>
-        <span class="delta-val"${corValor ? ` style="color:${corValor};"` : ''}>${valor}</span>
-      </div>`;
 
-    /* OS TRÊS CARTÕES VIRARAM TRÊS PEÇAS (05/09/26). Eles nasceram numa fileira só
-       ("Seu plano, em 3 partes"); a prancha final separa o que se executa do que se
-       consulta, e o 1:1 atravessa para a coluna da direita. O cabeçalho da seção sai
-       junto: com os cartões em colunas diferentes, "em 3 partes" deixaria de ser
-       verdade na tela. */
-    const cardLeitura = `
-        <div class="pcard">
-          <div class="pcard-head"><span class="pcard-dot" style="background:var(--blue);"></span><h3>Leitura da semana</h3></div>
-          <div class="pcard-body">
-            ${linhaDelta(ganhosSemRep > 0 ? '▲' : '!', ganhosSemRep > 0 ? 'di-green' : 'di-red',
-              'Ganhos na semana', `e ${fechadosRep} de ${metaRep} no mês`,
-              String(ganhosSemRep), ganhosSemRep > 0 ? 'var(--green)' : 'var(--red-dk)')}
-            ${linhaDelta(dEtapaCheia ? (dEtapaCheia.subiu ? '▲' : '→') : '→', dEtapaCheia && dEtapaCheia.subiu ? 'di-red' : 'di-amber',
-              `Negócios em ${rotuloEtapa(etapaCheia.id)}`,
-              dEtapaCheia ? (dEtapaCheia.subiu ? 'acumulou — a etapa está enchendo' : 'caiu — indica movimento') : 'sua etapa mais cheia hoje',
-              dEtapaCheia ? dEtapaCheia.txt : String(etapaCheia.n), '')}
-            ${linhaDelta(dTravados ? (dTravados.subiu ? '▲' : '▼') : '!', travadosRep > 0 ? 'di-red' : 'di-green',
-              'SLA estourado',
-              dTravados ? (dTravados.subiu ? 'a limpeza não acompanhou' : 'limpeza andou — manter') : (travadosRep > 0 ? 'precisa de decisão registrada' : 'nada travado'),
-              dTravados ? dTravados.txt : String(travadosRep), travadosRep > 0 ? 'var(--red-dk)' : 'var(--green)')}
-            ${indSemana && indSemana.resumoIndividual
-              ? `<p style="font-size:11px;color:var(--muted2);margin:8px 0 0;">Os números acima são do HubSpot de agora. A leitura escrita fica abaixo apenas como histórico.</p>
-                 <details style="margin-top:10px;"><summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--muted);">Ler histórico escrito ${(DATA.resumoSemanal && DATA.resumoSemanal.geradoEmFmt) || 'na última sexta'}</summary><p class="leitura-frase" style="margin-top:9px;">${indSemana.resumoIndividual}</p></details>`
-              : `<p class="leitura-frase">Sua leitura escrita fecha na sexta — os números acima já são os de agora.</p>`}
-          </div>
-        </div>
-`;
-
-    const cardMelhores = `
-        <div class="pcard">
-          <div class="pcard-head"><span class="pcard-dot" style="background:var(--green);"></span><h3>Boas práticas pra você</h3>${boasPraticasIA.length ? `<span class="cnt">${boasPraticasIA.length}</span>` : ''}</div>
-          <div class="pcard-body">
-            ${boasPraticasIA.length
-              ? boasPraticasIA.map(b => `<div class="bp"><span class="bp-mark">✓</span><div class="txt"><b>${b}</b></div></div>`).join('')
-              : '<div class="empty-state" style="padding:0;">Nenhuma ainda — aparece quando a análise achar um padrão que funciona com você.</div>'}
-          </div>
-        </div>
-`;
-
-    const card1a1 = `
-        <div class="pcard">
-          <!-- O CONTADOR usa compromissosResumoHTML (29/08/26). Ela era a versão da aba
-               Hoje e ficou órfã quando o 1:1 saiu de lá — e é a melhor das duas: diz
-               "3 acordos vencidos · era para 31/08–02/09" em vez de só "0/3". Prazo sem
-               idade foi justamente o que deixava acordo de 17/08 parecendo em aberto. -->
-          <div class="pcard-head"><span class="pcard-dot" style="background:var(--amber);"></span><h3>Seu 1:1</h3><span class="cnt" id="devUmResumo">${compromissos1a1.length ? (compromissosResumoHTML(r) || `${feitos1a1}/${compromissos1a1.length}`) : ''}</span></div>
-          <div class="pcard-body">
-            ${compromissos1a1.length ? `
-              <div class="um">
-                ${prazos1a1.map((x, k) => `
-                  <div class="um-item${x.feito ? ' done' : ''}" data-um-idx="${k}">
-                    <span class="um-check${x.feito ? ' on' : ''}"></span>
-                    <div><b>${x.texto}</b><span style="display:block;font-size:10px;font-weight:700;color:${x.cor};margin-top:4px;">${esc(x.situacao)}</span></div>
-                  </div>`).join('')}
-              </div>
-              <div style="background:var(--green-soft);border-radius:var(--r-md);padding:9px 12px;font-size:11px;color:var(--ink);line-height:1.5;margin-top:9px;">A conclusão é validada pelo seu gestor no 1:1. Assim, o acordo só aparece como cumprido depois da conversa e da evidência combinada.</div>
-              ${prazos1a1.some(x => x.vencido) ? `<div style="background:var(--red-soft);border-radius:var(--r-md);padding:10px 12px;font-size:11px;color:var(--ink);line-height:1.55;margin-top:9px;">Acordo vencido não é acordo em aberto. Leve os vencidos pro próximo 1:1 pra reprogramar ou encerrar — deixar como pendente indefinidamente é o que transforma o plano num 0/3 permanente.</div>` : ''}` : '<div class="empty-state" style="padding:0;">Nenhum acordo combinado ainda — sai no próximo 1:1.</div>'}
-            <!-- A DATA E O HISTÓRICO chegaram da aba Hoje (29/08/26): eram os dois únicos
-                 controles que existiam lá e em lugar nenhum. O resto do card do 1:1 da
-                 Hoje era duplicata do que já estava aqui. -->
-            <div class="um-next">
-              <label for="devPdiData">Próximo 1:1:</label>
-              <!-- ══ DADO QUE SO SE LE E TEXTO, NAO CAMPO TRAVADO (03/09/26) ════════════
-                   Era <input type="date" disabled>: quem marca o 1:1 e o gestor, o executivo
-                   apenas le. A intencao esta certa; a forma era o campo cinza classico, com
-                   cursor de "nao pode" num controle que nunca foi para ele.
-
-                   Agora a data aparece como data, formatada em pt-BR. Quando o gestor ainda
-                   nao marcou, a frase diz isso em vez de mostrar um campo de data vazio, que
-                   e a pior das duas mentiras: parece que ele pode preencher. -->
-              ${data1a1EhISO
-                ? `<b class="um-next-data">${esc(data1a1Bruta.split('-').reverse().join('/'))}</b>`
-                : (dataProximo1a1 ? '' : '<span class="um-next-nota">seu gestor ainda não marcou</span>')}
-              ${dataProximo1a1 && !data1a1EhISO ? `<b>${esc(dataProximo1a1)}</b><span class="um-next-nota">como seu gestor anotou</span>` : ''}
-            </div>
-            <details class="um-hist">
-              <summary>Histórico de 1:1</summary>
-              <div id="devUmAUmHistorico"><div class="empty-state">Carregando...</div></div>
-            </details>
-          </div>
-        </div>`;
+    /* OS CONSTRUTORES DE HTML DESTA ABA SAÍRAM DAQUI (05/09/26).
+       A aba passou a ser o markup do mockup, montado mais abaixo em um bloco só. O que
+       ficou foram as CONTAS (números do gargalo, ações, acordos, hábitos, perguntas);
+       o que saiu foi a casca que eu havia desenhado para elas: numerosDiag, cardGargalo,
+       cardsAcao, secaoFoco, cardLeitura, cardMelhores, card1a1, entendaHTML,
+       conquistasHTML, jogoHTML, contrastesHTML e linhaDelta.
+       Template literal é avaliado na declaração: deixá-los aqui, referenciando nomes que
+       o novo quadro não usa mais, derrubava o render inteiro. */
 
     /* O QUE OS CHIPS DO HERO PRECISAM SABER, calculado uma vez e do mesmo lugar de onde
        os blocos abaixo leem — chip que conta diferente do bloco é a discórdia mais fácil
        de deixar passar nesta tela. */
     const focoSemana = (() => { try { return focoDeHabilidade(gatesDoDia(r)); } catch (e) { return null; } })();
+    /* o porquê do foco é função do diagnóstico; a página do playbook tem título próprio */
+    const focoPorque = (() => { try { return focoSemana ? focoSemana.porque(gatesDoDia(r)) : ''; } catch (e) { return ''; } })();
+    const focoPagina = (() => {
+      if (!focoSemana) return '';
+      const p = (typeof playbookPagina === 'function') ? playbookPagina(focoSemana.playbook) : null;
+      return (p && p.titulo) || focoSemana.titulo;
+    })();
     /* ══ ENTENDA SEUS NÚMEROS ═══════════════════════════════════════════════════════
        Quatro perguntas que o executivo faz sobre si mesmo, cada uma respondida com o
        número dele e com um destino real. As respostas são calculadas aqui, no render:
        não há chamada de API no clique, que é o que a prancha pede. */
+    const contrastes = (typeof contrastesDoExecutivo === 'function')
+      ? contrastesDoExecutivo((() => { try { return gatesDoDia(r); } catch (e) { return {}; } })())
+      : [];
+    const jogoLinhas = (() => {
+      const h = DATA.habitosTime;
+      if (!h || !h.meu) return [];
+      const cor = (v, bm) => {
+        if (typeof bm !== 'number') return '#2B3440';
+        if (v >= bm) return '#1E9E7B';
+        if (v >= bm * 0.7) return '#B07C1F';
+        return '#E51A31';
+      };
+      return [
+        {
+          rot: 'Cadência dentro da régua',
+          v: h.meu.cadencia, bm: h.benchmark && h.benchmark.cadencia,
+          coach: 'os melhores não deixam negócio dormir: todo contato termina com o próximo passo datado com o cliente.'
+        },
+        {
+          rot: 'Qualificação registrada na visita',
+          v: h.meu.qualificacao, bm: h.benchmark && h.benchmark.qualificacao,
+          coach: 'os melhores registram na porta do cliente, antes de ligar o carro — nunca “à noite, de memória”.'
+        },
+        {
+          rot: 'Próximo passo datado',
+          v: h.meu.proximoPasso, bm: h.benchmark && h.benchmark.proximoPasso,
+          coach: 'os melhores saem da visita com o retorno marcado com o cliente — não “vou ver e te falo”.'
+        }
+      ].filter(l => typeof l.v === 'number').map(l => ({ ...l, cor: cor(l.v, l.bm) }));
+    })();
+    const conquistas = (() => {
+      const itens = [];
+      if (fechadosRep > 0) itens.push(`${fechadosRep} fechamento${fechadosRep === 1 ? '' : 's'} no mês`);
+      if (ganhosSemRep > 0) itens.push(`${ganhosSemRep} ganho${ganhosSemRep === 1 ? '' : 's'} nesta semana`);
+      const patente = (() => {
+        try {
+          if (typeof playbookCache === 'undefined' || !playbookCache) return null;
+          const t = pb9Trilha(playbookCache) || [];
+          const ganhas = t.filter(c => c.provado);
+          return ganhas.length ? ganhas[ganhas.length - 1].patente : null;
+        } catch (e) { return null; }
+      })();
+      if (patente) itens.push(`Playbook · ${esc(patente)}`);
+      const feitos1a1n = prazos1a1.filter(x => x.feito).length;
+      if (feitos1a1n > 0) itens.push(`${feitos1a1n} acordo${feitos1a1n === 1 ? '' : 's'} do 1:1 cumprido${feitos1a1n === 1 ? '' : 's'}`);
+      return itens;
+    })();
+
     const perguntasNumeros = (() => {
       const diag = (() => { try { return gatesDoDia(r); } catch (e) { return {}; } })();
       const baldes = (diag && diag.fila && diag.fila.baldes) || {};
@@ -54685,209 +54536,203 @@ async function renderPDIs() {
       return lista.slice(0, 4);
     })();
 
-    const entendaHTML = `<div class="dev-entenda">
-      <div class="dev-entenda-rot">Entenda seus números</div>
-      <div class="dev-entenda-chips">
-        ${perguntasNumeros.map((p, i) => `<button type="button" class="dev-q" data-dev-q="${i}">${esc(p.q)}</button>`).join('')}
-      </div>
-      <div class="dev-entenda-resp" id="devEntendaResp" hidden></div>
-    </div>`;
-
-    /* ══ CONQUISTAS DO MÊS ══════════════════════════════════════════════════════════
-       Só entra o que aconteceu de verdade. Sem conquista, o bloco diz o que falta para
-       a primeira — que é mais útil que uma faixa verde vazia parabenizando ninguém. */
-    const conquistasHTML = (() => {
-      const itens = [];
-      if (fechadosRep > 0) itens.push(`${fechadosRep} fechamento${fechadosRep === 1 ? '' : 's'} no mês`);
-      if (ganhosSemRep > 0) itens.push(`${ganhosSemRep} ganho${ganhosSemRep === 1 ? '' : 's'} nesta semana`);
-      const patente = (() => {
-        try {
-          if (typeof playbookCache === 'undefined' || !playbookCache) return null;
-          const t = pb9Trilha(playbookCache) || [];
-          const ganhas = t.filter(c => c.provado);
-          return ganhas.length ? ganhas[ganhas.length - 1].patente : null;
-        } catch (e) { return null; }
-      })();
-      if (patente) itens.push(`Playbook · ${esc(patente)}`);
-      const feitos1a1n = prazos1a1.filter(x => x.feito).length;
-      if (feitos1a1n > 0) itens.push(`${feitos1a1n} acordo${feitos1a1n === 1 ? '' : 's'} do 1:1 cumprido${feitos1a1n === 1 ? '' : 's'}`);
-      return `<div class="dev-conq">
-        <div class="dev-conq-rot">Conquistas do mês</div>
-        ${itens.length
-          ? `<div class="dev-conq-pills">${itens.map(i => `<span>${esc(i)}</span>`).join('')}</div>`
-          : `<div class="dev-conq-vazio">A primeira do mês ainda não saiu. O caminho mais curto está na fila de cima — ${esc(gestoVivo && gestoVivo.etapa ? gestoVivo.etapa : 'a sua etapa mais cheia')}.</div>`}
-      </div>`;
-    })();
-
-    /* ══ SEU JOGO VS. OS MELHORES ═══════════════════════════════════════════════════ */
-    const jogoHTML = (() => {
-      const h = DATA.habitosTime;
-      if (!h || !h.meu) return '';
-      const linhas = [
-        {
-          rot: 'Cadência dentro da régua',
-          v: h.meu.cadencia, bm: h.benchmark && h.benchmark.cadencia,
-          coach: 'os melhores não deixam negócio dormir: todo contato termina com o próximo passo datado com o cliente.'
-        },
-        {
-          rot: 'Qualificação registrada na visita',
-          v: h.meu.qualificacao, bm: h.benchmark && h.benchmark.qualificacao,
-          coach: 'os melhores registram na porta do cliente, antes de ligar o carro — nunca “à noite, de memória”.'
-        },
-        {
-          rot: 'Próximo passo datado',
-          v: h.meu.proximoPasso, bm: h.benchmark && h.benchmark.proximoPasso,
-          coach: 'os melhores saem da visita com o retorno marcado com o cliente — não “vou ver e te falo”.'
-        }
-      ].filter(l => typeof l.v === 'number');
-      if (!linhas.length) return '';
-      const cor = (v, bm) => {
-        if (typeof bm !== 'number') return 'var(--dv-titulo)';
-        if (v >= bm) return 'var(--dv-verde)';
-        if (v >= bm * 0.7) return 'var(--dv-ambar)';
-        return 'var(--dv-vermelho)';
-      };
-      return `<div class="pcard dev-jogo">
-        <div class="pcard-head"><span class="pcard-dot" style="background:var(--dv-verde);"></span><h3>Seu jogo vs. os melhores</h3><span class="cnt">${h.pessoasMedidas} no time</span></div>
-        <div class="pcard-body">
-          ${linhas.map(l => `<div class="jg">
-            <div class="jg-topo"><b>${esc(l.rot)}</b><span style="color:${cor(l.v, l.bm)};">${l.v}%</span></div>
-            <div class="jg-barra"><i style="width:${Math.max(2, Math.min(100, l.v))}%;background:${cor(l.v, l.bm)};"></i>${typeof l.bm === 'number' ? `<u style="left:${Math.max(0, Math.min(100, l.bm))}%;" title="os melhores do time: ${l.bm}%"></u>` : ''}</div>
-            <div class="jg-pe">${typeof l.bm === 'number' ? `os melhores do time: <b>${l.bm}%</b> · ` : ''}${esc(l.coach)}</div>
-          </div>`).join('')}
-          <div class="jg-fonte">Comparação com o time inteiro (${h.pessoasMedidas} pessoas com funil aberto), sem nome de ninguém — a referência é o percentil 80.</div>
-        </div>
-      </div>`;
-    })();
-
-    const contrastesHTML = (() => {
-      const lista = (typeof contrastesDoExecutivo === 'function')
-        ? contrastesDoExecutivo((() => { try { return gatesDoDia(r); } catch (e) { return {}; } })())
-        : [];
-      if (!lista.length) return '';
-      return `<div class="pcard">
-        <div class="pcard-head"><span class="pcard-dot" style="background:var(--green);"></span><h3>Como os melhores agem</h3><span class="cnt">1 min</span></div>
-        <div class="pcard-body">
-          ${lista.map(c => `<div class="ctr">
-            <div class="ctr-tema">${esc(c.tema)} <em>· ${c.n} caso${c.n === 1 ? '' : 's'} seu${c.n === 1 ? '' : 's'} hoje</em></div>
-            <div class="ctr-par">
-              <div class="ctr-comum"><span>o comum ·</span> ${esc(c.comum)}</div>
-              <div class="ctr-melhor"><span>o melhor ·</span> ${esc(c.melhor)}</div>
-            </div>
-          </div>`).join('')}
-          <div class="ctr-fecho">nenhuma dessas é talento — são hábitos.</div>
-        </div>
-      </div>`;
-    })();
     const acordosAbertos = prazos1a1.filter(x => !x.feito).length;
 
+    /* ══ O QUADRO, COPIADO DO MOCKUP ═══════════════════════════════════════════════
+       Estrutura e estilos vêm de desenvolvimento-final-STANDALONE.html, literalmente.
+       Só os dados são nossos. Cada <sc-for> do mockup virou um .map() aqui. */
+
+    /* ── os dados que cada bloco do mockup consome ─────────────────────────────── */
+    const meuPrimeiroNome = String((r && r.name) || '').split(' ')[0];
+    const manchete2 = `Sua semana fechou com ${ganhosSemRep} ganho${ganhosSemRep === 1 ? '' : 's'}${pctInicio >= 50 ? ` e ${pctInicio}% do funil parado antes do decisor` : ` e ${abertosRep} negócio${abertosRep === 1 ? '' : 's'} em aberto`}.${acoesHoje.length ? ` O plano de hoje ataca exatamente isso — em ${acoesHoje.length} ${acoesHoje.length === 1 ? 'ação' : 'ações'} com prazo.` : ''}`;
+
+    const heroChips = [
+      { v: String(acoesHoje.length), rot: 'ações valem agora', sub: 'pra destravar seu funil', cor: '#FDFEFF' },
+      { v: String(contrastes.length), rot: 'hábitos dos melhores', sub: 'leitura de 1 minuto', cor: '#7FD9BE' },
+      { v: focoSemana ? '1' : '0', rot: 'foco de habilidade', sub: focoSemana ? String(focoSemana.titulo).toLowerCase() : 'nenhum padrão pendente', cor: '#C9A8E8' },
+      { v: String(acordosAbertos), rot: 'acordos do 1:1 abertos', sub: dataProximo1a1 ? `próximo 1:1 ${dataProximo1a1}` : 'próximo 1:1 sem data', cor: acordosAbertos > 0 ? '#FF8D9A' : '#7FD9BE' }
+    ];
+
+    const gargaloStats = [
+      { v: String(travadosRep), rot: travadosRep === 1 ? 'lead com SLA estourado — sua prioridade imediata' : (travadosRep > 0 ? 'leads com SLA estourado — sua prioridade imediata' : 'leads com SLA estourado — nada travado agora'), cor: travadosRep > 0 ? '#E51A31' : '#1E9E7B', ir: travadosRep > 0 ? { tipo: 'visao', valor: 'sla' } : null },
+      { v: pctInicio + '%', rot: `do funil em ${rotuloEtapa(duasPrimeiras[0])} + ${rotuloEtapa(duasPrimeiras[1])} (${presosInicio} de ${abertosRep})`, cor: '#6E1210', ir: null },
+      { v: String(etapaCheia.n), rot: `negócios em ${rotuloEtapa(etapaCheia.id)} — sua etapa mais cheia`, cor: '#E8703A', ir: etapaCheia.id ? { tipo: 'etapa', valor: String(etapaCheia.id) } : null },
+      { v: fechadosRep + '/' + metaRep, rot: fechadosRep < metaRep ? `ganhos no mês — faltam ${metaRep - fechadosRep} até o fechamento` : 'ganhos no mês — meta batida', cor: '#2B3440', ir: null }
+    ];
+
+    /* as três prioridades, na forma do mockup: cor por urgência e CTA com deeplink */
+    const CORES_PRIORIDADE = ['#6E1210', '#E51A31', '#B07C1F'];
+    const prioridades = acoesHoje.map((a, k) => ({
+      n: k + 1,
+      cor: CORES_PRIORIDADE[k] || CORES_PRIORIDADE[2],
+      tag: a.tag || 'da sua semana',
+      titulo: a.txt,
+      porque: a.porque || (saudeNarrativa.valida ? `até sexta (${dataSexta})` : 'do HubSpot de agora — vale hoje'),
+      como: a.como || '',
+      cta: a.ir ? a.ir.rotulo : '',
+      ir: a.ir || null,
+      quente: k === 0
+    }));
+
+    /* ── o quadro ───────────────────────────────────────────────────────────────── */
     el.innerHTML = `
-      <!-- ══ A BARRA VERMELHA DO QUADRO (prancha final) ═══════════════════════════════
-           A prancha desenha esta aba como um quadro que começa por uma barra vermelha
-           com a logo, o nome da tela e o carimbo do snapshot. O nav do cockpit continua
-           sendo o nav do produto — o que entra aqui é o CARIMBO, que é a informação que
-           a própria prancha exige visível no teste de aceite: de quando é o número que
-           está na tela.
-           A logo é o PNG oficial, invertido para branco por filtro — é o mesmo arquivo
-           de todas as telas, não um texto "takeat" redesenhado. -->
-      <div class="dev-barra">
-        <img src="assets/logo-takeat.png" alt="Takeat" width="82" height="24" class="dev-barra-logo">
-        <span class="dev-barra-tit">Cockpit Field Sales · Desenvolvimento</span>
-        <span class="dev-barra-pil">${esc(DATA.hubspotUpdatedAtFmt ? 'HubSpot de ' + DATA.hubspotUpdatedAtFmt : 'HubSpot sem carimbo nesta carga')}</span>
-        <span class="dev-barra-eu">${esc(String((r && r.name) || ''))}${r && r.praca ? ' · ' + esc(r.praca) : ''}</span>
+<div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
+
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:13px 24px;background:#E51A31;">
+        <img src="assets/logo-takeat.png" alt="Takeat" width="82" height="24" style="height:19px;width:auto;display:block;filter:brightness(0) invert(1);">
+        <span style="font:800 12px 'Archivo',sans-serif;color:#FFD9DE;letter-spacing:.02em;">Cockpit Field Sales · Desenvolvimento</span>
+        <span style="font:800 11px 'Manrope',sans-serif;color:#E51A31;background:#FFFDF8;border-radius:999px;padding:5px 12px;">${esc(DATA.hubspotUpdatedAtFmt ? 'HubSpot de ' + DATA.hubspotUpdatedAtFmt : 'HubSpot sem carimbo nesta carga')}</span>
+        <span style="margin-left:auto;display:inline-flex;align-items:center;gap:8px;font:800 11px 'Manrope',sans-serif;color:#FFFDF8;"><span style="width:24px;height:24px;border-radius:999px;display:grid;place-items:center;background:#FFFDF8;color:#E51A31;font:900 10px 'Archivo',sans-serif;">${esc(String((r && r.name) || '').split(' ').map(p => p[0] || '').join('').slice(0, 2).toUpperCase())}</span>${esc(String((r && r.name) || ''))}${r && r.praca ? ' · ' + esc(r.praca) : ''}</span>
       </div>
 
-      <div class="cockpit-hero-combo" style="align-items:center;">
-        <!-- A PERGUNTA É O KICKER, A MANCHETE É O TÍTULO (05/09/26, comparando com o
-             mockup). Estava invertido: "Como eu melhoro?" grande é a pergunta da aba, e
-             ele já sabe em que aba está; o que ele não sabe é o que a semana dele diz.
-             A manchete é a frase que muda toda segunda. -->
-        <div style="display:flex;flex-direction:column;gap:5px;min-width:260px;flex:1 1 430px;">
-          <span class="dev-hero-kicker">Como eu melhoro, ${esc(String(r && r.name || '').split(' ')[0])}?</span>
-          <h1 class="dev-hero-titulo">Sua semana fechou com ${ganhosSemRep} ganho${ganhosSemRep === 1 ? '' : 's'}${pctInicio >= 50 ? ` e ${pctInicio}% do funil parado antes do decisor` : ` e ${abertosRep} negócio${abertosRep === 1 ? '' : 's'} em aberto`}.${acoesHoje.length ? ` O plano de hoje ataca exatamente isso — em ${acoesHoje.length} ${acoesHoje.length === 1 ? 'ação' : 'ações'} com prazo.` : ''}</h1>
-          <p class="hero-sub">leitura dos seus ${abertosRep} negócios, das suas atividades e do seu funil — o detalhe está logo abaixo</p>
+      <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap;padding:18px 24px;background:#2B3440;">
+        <div style="min-width:300px;max-width:460px;">
+          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#FF8D9A;">Como eu melhoro, ${esc(meuPrimeiroNome)}?</span>
+          <h1 style="font:900 24px/1.18 'Archivo',sans-serif;letter-spacing:-.02em;color:#FDFEFF;margin:5px 0 0;text-wrap:balance;">${esc(manchete2)}</h1>
+          <span style="display:block;font:700 11px/1.5 'Manrope',sans-serif;color:#8E99AC;margin-top:5px;">leitura dos seus ${abertosRep} negócios, das suas atividades e do seu funil — o detalhe está logo abaixo</span>
         </div>
-        <span style="width:1px;align-self:stretch;background:var(--dark-fill);"></span>
-        <!-- OS QUATRO CHIPS DA PRANCHA. O quarto — acordos do 1:1 em aberto — é o que
-             faltava, e é o único que muda de cor: vermelho enquanto houver acordo em
-             aberto, verde quando os três estiverem cumpridos. O contador de PDIs sai do
-             hero e vira o quinto? Não: ele CONTINUA aqui, porque o id devPdiCountHero é
-             preenchido depois pela carga do Supabase e sumir com ele deixaria três
-             linhas de código escrevendo em elemento que não existe. -->
-        <div class="dev-chips">
-          <div class="dev-chip"><b>${acoesHoje.length}</b><span>ações valem agora</span><i>pra destravar seu funil</i></div>
-          <div class="dev-chip"><b style="color:var(--dark-green);">${boasPraticasIA.length}</b><span>hábitos dos melhores</span><i>leitura de 1 minuto</i></div>
-          <div class="dev-chip"><b style="color:#C9A8E8;">${focoSemana ? 1 : 0}</b><span>foco de habilidade</span><i>${focoSemana ? esc(focoSemana.titulo) : 'nenhum padrão pendente'}</i></div>
-          <div class="dev-chip"><b style="color:${acordosAbertos > 0 ? 'var(--dark-red)' : 'var(--dark-green)'};">${acordosAbertos}</b><span>acordos do 1:1 abertos</span><i>${dataProximo1a1 ? `próximo 1:1 ${esc(dataProximo1a1)}` : 'próximo 1:1 sem data'}</i></div>
-          <div class="dev-chip"><b id="devPdiCountHero">…</b><span>PDIs anexados</span><i>o vigente guia as ações</i></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;">
+          ${heroChips.map(h => `
+            <div style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:130px;border:1.5px solid #3E4A5C;border-radius:11px;padding:9px 13px;">
+              <b style="font:900 22px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${h.cor};line-height:1;">${esc(h.v)}</b>
+              <span style="font:800 9px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#C6CDDA;">${esc(h.rot)}</span>
+              <span style="font:700 9px 'Manrope',sans-serif;color:#8E99AC;">${esc(h.sub)}</span>
+            </div>`).join('')}
         </div>
-        <span style="flex:none;display:inline-flex;align-items:center;gap:8px;border:1px solid ${temGargalo ? 'var(--dark-red)' : 'var(--dark-green)'};border-radius:var(--r-pill);padding:6px 14px;font-size:11px;font-weight:700;color:${temGargalo ? 'var(--dark-red)' : 'var(--dark-green)'};">
-          <span style="width:7px;height:7px;border-radius:var(--r-pill);background:currentColor;"></span>${temGargalo ? 'Com gargalo pra destravar' : 'Semana em dia'}
-        </span>
       </div>
 
-      <!-- ══ DUAS COLUNAS (05/09/26, prancha final) ═══════════════════════════════
-           Esquerda, o que ele EXECUTA: onde está travado, as três prioridades, o foco
-           de habilidade da semana e como os melhores agem.
-           Direita, o que ele CONSULTA enquanto executa: os acordos do 1:1 e os PDIs.
-           Mesmo grid no rodapé, para as bordas correrem de ponta a ponta. -->
-      <div class="dev-grid">
-        <div class="dev-esq">
-          ${secaoFoco}
-          <!-- FOCO DE HABILIDADE (Escopo 10) — comportamento, não resultado, e ligado
-               a uma página do Playbook que já existe + um roleplay concreto. Entra depois
-               do diagnóstico de propósito: o resultado abre a conversa, o comportamento
-               é o que se treina. -->
-          ${(() => { try { return focoDeHabilidadeHTML(r, gatesDoDia(r)); } catch (e) { return ''; } })()}
-          <section class="sec">
-            <div class="sec-head sec-head-dev">
-              <span class="sec-num">2</span>
-              <h2>Como os melhores agem</h2>
-              <p>leitura de 1 minuto — os três hábitos onde a sua distância é maior</p>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 430px;align-items:stretch;">
+
+        <div style="padding:16px 20px 18px 24px;border-right:1px solid #E2E6EE;min-width:0;display:flex;flex-direction:column;gap:14px;">
+
+          <div style="background:#FDF7F7;border:1px solid #6E1210;border-left:4px solid #6E1210;border-radius:12px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#FDFEFF;background:#6E1210;border-radius:5px;padding:3px 8px;animation:dvPisca 1.6s ease-in-out infinite;">onde você está travado · do funil, ao vivo</span>
+              <small style="margin-left:auto;font:700 9px 'Manrope',sans-serif;color:#7A8494;">${esc(fonteNumeros)}</small>
             </div>
-            ${contrastesHTML}
-            ${contrastesHTML ? '<div style="height:12px;"></div>' : ''}
-            ${cardMelhores}
-            <div style="height:12px;"></div>
-            ${cardLeitura}
-          </section>
-        </div>
+            <h2 style="font:900 18px/1.25 'Archivo',sans-serif;color:#6E1210;letter-spacing:-.01em;margin:8px 0 0;text-wrap:balance;">${esc(manchete)}</h2>
+            ${gestoVivo && !gestoVivo.saudavel ? `<p style="margin:6px 0 0;font:700 12px/1.6 'Manrope',sans-serif;color:#2B3440;">Hoje o degrau que não está sendo subido é <b>${esc(gestoVivo.etapa || '')}${gestoVivo.proxima ? ' → ' + esc(gestoVivo.proxima) : ''}</b>. O gesto que sobe esse degrau: <b style="color:#E51A31;">${esc(gestoVivo.gesto || '')}</b>.${gestoVivo.pergunta ? ` A pergunta da etapa: <i>“${esc(gestoVivo.pergunta)}”</i>` : ''}</p>` : ''}
+            <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:12px;">
+              ${gargaloStats.map(g => `
+                <div${g.ir ? ` role="button" tabindex="0" data-acao-ir="${g.ir.tipo}" data-acao-valor="${esc(String(g.ir.valor))}" title="abrir no Meu Funil"` : ''} style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:9px;padding:8px 11px;min-width:0;${g.ir ? 'cursor:pointer;' : ''}"><b style="display:block;font:900 19px 'Archivo',sans-serif;color:${g.cor};font-variant-numeric:tabular-nums;">${esc(g.v)}</b><span style="font:700 9px/1.35 'Manrope',sans-serif;color:#7A8494;">${esc(g.rot)}</span></div>`).join('')}
+            </div>
+            ${comoDestravarTxt ? `<p style="margin:10px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #F0DFB6;border-radius:9px;padding:8px 11px;">${esc(comoDestravarTxt)}</p>` : ''}
+            ${falaPronta ? `<div style="margin-top:10px;background:#2B3440;border-radius:10px;padding:10px 13px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+              <span style="min-width:0;flex:1;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#FF8D9A;">Fala pronta — ${esc(falaPronta.rotulo)}</span><span style="display:block;font:700 12px/1.6 'Manrope',sans-serif;color:#FDFEFF;margin-top:3px;">“${esc(falaPronta.texto)}”</span></span>
+              <button type="button" data-copiar-fala="${esc(falaPronta.texto)}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid #7FD9BE;border-radius:999px;background:transparent;font:800 10px 'Manrope',sans-serif;color:#7FD9BE;cursor:pointer;white-space:nowrap;">copiar a fala ▸</button>
+            </div>` : ''}
+          </div>
 
-        <aside class="dev-dir">
-          <div class="dev-dir-rot">Seu 1:1 · acordos com o gestor</div>
-          ${card1a1}
-          ${jogoHTML ? '<div class="dev-dir-rot">Seu jogo vs. os melhores do field</div>' : ''}
-          ${jogoHTML}
-          <section class="sec" id="devSecaoPdis" style="margin:0;">
-            <div class="dev-dir-rot">Meus PDIs</div>
-            <div class="pdis">
-              <div class="pdis-head"><h3>Meu plano de desenvolvimento</h3><span>o vigente guia as ações lá de cima</span></div>
-              <div class="daily-rep-card pdiHostExec" data-owner="${r ? r.ownerId : ''}" style="border:none;border-radius:0;box-shadow:none;padding:0;background:none;">
-                <div class="pdiLista"><div class="empty-state">Carregando seu plano...</div></div>
+          ${prioridades.length ? `<div>
+            <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px;">
+              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#E51A31;">Suas ${prioridades.length} prioridade${prioridades.length === 1 ? '' : 's'} da semana</span>
+              <small style="font:700 10px 'Manrope',sans-serif;color:#7A8494;">— saem direto do seu funil, e são as mesmas que seu gestor verá antes do 1:1</small>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(${prioridades.length},minmax(0,1fr));gap:10px;">
+              ${prioridades.map(pr => `
+                <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-top:4px solid ${pr.cor};border-radius:11px;padding:12px 14px;min-width:0;display:flex;flex-direction:column;gap:8px;">
+                  <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${pr.cor};">prioridade ${pr.n} · ${esc(pr.tag)}</span>
+                  <b style="font:800 13px/1.4 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;text-wrap:pretty;">${esc(pr.titulo)}</b>
+                  <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;">${esc(pr.porque)}</span>
+                  ${pr.como ? `<span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#2B3440;background:#F4F1EA;border-radius:8px;padding:7px 10px;"><b style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#E51A31;">como fazer · </b>${esc(pr.como)}</span>` : ''}
+                  ${pr.ir ? `<button type="button" data-acao-ir="${pr.ir.tipo}" data-acao-valor="${esc(String(pr.ir.valor))}" style="margin-top:auto;display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 14px;border:1.5px solid ${pr.quente ? '#E51A31' : '#DCE1EA'};border-radius:999px;background:${pr.quente ? '#E51A31' : '#FDFEFF'};font:800 10.5px 'Manrope',sans-serif;color:${pr.quente ? '#FFFDF8' : '#2B3440'};cursor:pointer;white-space:nowrap;${pr.quente ? 'animation:dvPulsa 1.8s ease-in-out infinite;' : ''}">${esc(pr.cta)}</button>` : ''}
+                </div>`).join('')}
+            </div>
+          </div>` : ''}
+
+          ${focoSemana ? `<div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:14px 16px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#FDFEFF;background:#9C5BD6;border-radius:5px;padding:3px 8px;">foco de habilidade da semana</span>
+              <b style="font:800 14px 'Archivo',sans-serif;color:#2B3440;">${esc(focoSemana.titulo)}</b>
+              <small style="margin-left:auto;font:700 9px 'Manrope',sans-serif;color:#7A8494;">um foco por vez — comprometimento, não mural</small>
+            </div>
+            <p style="margin:8px 0 0;font:700 11.5px/1.6 'Manrope',sans-serif;color:#5B667A;">${esc(focoPorque)}</p>
+            <div style="margin-top:10px;background:#F7F2FB;border:1px solid #E3D4F2;border-radius:10px;padding:10px 13px;">
+              <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#9C5BD6;">treino de 5 minutos · roleplay</span>
+              <p style="margin:4px 0 0;font:700 11px/1.55 'Manrope',sans-serif;color:#5B667A;">${esc(focoSemana.roleplay)}</p>
+              <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;">
+                <button type="button" class="foco-playbook" data-playbook="${esc(focoSemana.playbook)}" style="display:inline-flex;align-items:center;min-height:34px;padding:0 14px;border:1.5px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;white-space:nowrap;">abrir no Playbook: ${esc(focoPagina)} ▸</button>
               </div>
             </div>
-          </section>
-        </aside>
+          </div>` : ''}
+
+          ${contrastes.length ? `<div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:14px 16px;">
+            <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;">
+              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#1E9E7B;">Como os melhores agem · leitura de 1 minuto</span>
+              <small style="margin-left:auto;font:700 10px 'Manrope',sans-serif;color:#7A8494;">os três hábitos onde a sua distância é maior hoje</small>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+              ${contrastes.map(mm => `
+                <div style="border:1px solid #EDEBE5;border-radius:10px;overflow:hidden;min-width:0;">
+                  <span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#2B3440;background:#F4F1EA;padding:5px 12px;">${esc(mm.tema)} · ${mm.n} caso${mm.n === 1 ? '' : 's'} seu${mm.n === 1 ? '' : 's'} hoje</span>
+                  <div style="display:grid;grid-template-columns:1fr 1fr;min-width:0;">
+                    <span style="padding:9px 12px;font:700 11px/1.55 'Manrope',sans-serif;color:#9AA2B1;border-right:1px solid #EDEBE5;"><b style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#9AA2B1;">o comum · </b>${esc(mm.comum)}</span>
+                    <span style="padding:9px 12px;font:700 11px/1.55 'Manrope',sans-serif;color:#2B3440;background:#F2FAF7;"><b style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#1E9E7B;">o melhor · </b>${esc(mm.melhor)}</span>
+                  </div>
+                </div>`).join('')}
+            </div>
+            <p style="margin:9px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;">nenhuma dessas é talento — são hábitos. O da direita é sempre copiável hoje, na primeira visita do dia.</p>
+          </div>` : ''}
+        </div>
+
+        <div style="padding:16px 24px 18px 20px;background:#FBFAF6;display:flex;flex-direction:column;gap:10px;min-width:0;">
+          <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:12px 14px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;">Seu 1:1 · acordos com o gestor</span>
+              <b style="margin-left:auto;font:900 13px 'Archivo',sans-serif;color:${acordosAbertos === 0 && prazos1a1.length ? '#1E9E7B' : '#E51A31'};font-variant-numeric:tabular-nums;">${prazos1a1.filter(x => x.feito).length}/${prazos1a1.length}</b>
+            </div>
+            <span style="display:block;font:700 9.5px 'Manrope',sans-serif;color:#7A8494;margin-top:2px;">${dataProximo1a1 ? `próximo 1:1 ${esc(dataProximo1a1)} · ` : ''}a conclusão é validada pelo gestor</span>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;">
+              ${prazos1a1.length ? prazos1a1.map((ac, k) => `
+                <button type="button" data-um-idx="${k}" style="display:flex;align-items:flex-start;gap:10px;text-align:left;background:${ac.feito ? '#EAF6F1' : '#FDFEFF'};border:1px solid ${ac.feito ? '#CBE8DD' : '#E2E6EE'};border-radius:10px;padding:9px 12px;min-width:0;cursor:pointer;font-family:'Manrope',sans-serif;">
+                  <span style="flex:none;width:20px;height:20px;border-radius:999px;display:grid;place-items:center;background:${ac.feito ? '#1E9E7B' : '#FDFEFF'};color:#FFFDF8;font:900 11px 'Archivo',sans-serif;border:1.5px solid ${ac.feito ? '#1E9E7B' : (ac.vencido ? '#E51A31' : '#C9CFDA')};margin-top:1px;">${ac.feito ? '✓' : ''}</span>
+                  <span style="min-width:0;"><span style="display:block;font:700 11px/1.5 'Manrope',sans-serif;color:${ac.feito ? '#1E9E7B' : '#5B667A'};">${esc(ac.texto)}</span><span style="display:block;font:800 9px 'Manrope',sans-serif;color:${ac.feito ? '#1E9E7B' : (ac.vencido ? '#E51A31' : '#B07C1F')};margin-top:2px;">${esc(ac.situacao)}</span></span>
+                </button>`).join('') : `<span style="font:700 10.5px 'Manrope',sans-serif;color:#7A8494;">Nenhum acordo combinado ainda — sai no próximo 1:1.</span>`}
+            </div>
+          </div>
+
+          ${jogoLinhas.length ? `<div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:12px 14px;">
+            <span style="display:flex;align-items:baseline;gap:6px;"><span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;">Seu jogo vs. os melhores do field</span><small style="margin-left:auto;font:700 9px 'Manrope',sans-serif;color:#7A8494;">agora · HubSpot</small></span>
+            <div style="display:flex;flex-direction:column;gap:9px;margin-top:9px;">
+              ${jogoLinhas.map(ev => `
+                <div style="min-width:0;border:1px solid #EDEBE5;border-radius:10px;padding:9px 11px;background:#FDFEFF;">
+                  <span style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;"><span style="font:800 11px 'Archivo',sans-serif;color:#2B3440;">${esc(ev.rot)}</span></span>
+                  <span style="display:flex;align-items:baseline;gap:6px;margin-top:2px;"><b style="font:900 17px 'Archivo',sans-serif;color:${ev.cor};font-variant-numeric:tabular-nums;">${ev.v}%</b><span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">você</span>${ev.bm != null ? `<span style="margin-left:auto;font:800 9.5px 'Manrope',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;">os melhores: ${ev.bm}%</span>` : ''}</span>
+                  <div style="position:relative;height:8px;border-radius:999px;background:#EDEBE5;margin-top:5px;overflow:visible;">
+                    <div style="height:100%;width:${Math.max(2, Math.min(100, ev.v))}%;background:${ev.cor};border-radius:999px;"></div>
+                    ${ev.bm != null ? `<div title="onde os melhores estão" style="position:absolute;left:${Math.max(0, Math.min(100, ev.bm))}%;top:-3px;width:2.5px;height:14px;border-radius:2px;background:#2B3440;"></div>` : ''}
+                  </div>
+                  <span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#5B667A;margin-top:6px;">${esc(ev.coach)}</span>
+                </div>`).join('')}
+            </div>
+            <p style="margin:9px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;">comparação com o time inteiro (${DATA.habitosTime ? DATA.habitosTime.pessoasMedidas : 0} pessoas com funil aberto), sem nome de ninguém — a referência é o percentil 80.</p>
+          </div>` : ''}
+
+          <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:12px 14px;" id="devSecaoPdis">
+            <span style="display:flex;align-items:baseline;gap:6px;"><span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;">Meus PDIs</span><small style="margin-left:auto;font:700 9px 'Manrope',sans-serif;color:#7A8494;">mais recente primeiro</small></span>
+            <div class="daily-rep-card pdiHostExec" data-owner="${r ? r.ownerId : ''}" style="border:none;border-radius:0;box-shadow:none;padding:8px 0 0;background:none;">
+              <div class="pdiLista"><span style="font:700 10.5px 'Manrope',sans-serif;color:#7A8494;">Carregando seu plano…</span></div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- AS DUAS AUDITORIAS MORAM AQUI (30/08/26). Os 13 indicadores vieram da aba Hoje e
-           a carteira por número de toques veio da Daily — nas duas telas de origem elas
-           competiam com a decisão do dia; aqui respondem a pergunta da aba, que é "como eu
-           melhoro?". As duas fechadas por padrão e no fim, depois dos PDIs: quem abre está
-           querendo se auditar, e aí o número tem contexto em vez de virar cobrança. -->
-      <!-- ══ O RODAPÉ, NO MESMO GRID DO CORPO (prancha final) ═══════════════════════
-           Esquerda: as perguntas que o executivo faz sobre si mesmo, já respondidas com
-           os números DELE. Direita: o que ele conquistou no mês. -->
-      <div class="dev-grid dev-rodape">
-        <div class="dev-esq">${entendaHTML}</div>
-        <aside class="dev-dir dev-dir-verde">${conquistasHTML}</aside>
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 430px;border-top:1px solid #E2E6EE;">
+        <div style="padding:14px 20px 14px 24px;border-right:1px solid #E2E6EE;min-width:0;">
+          <span style="display:flex;align-items:baseline;gap:8px;"><span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;">Entenda seus números</span><small style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">respostas com os seus dados, não com teoria</small></span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+            ${perguntasNumeros.map((pg, i) => `<button type="button" data-dev-q="${i}" aria-pressed="false" style="display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1.5px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:800 10px 'Manrope',sans-serif;color:#5B667A;cursor:pointer;white-space:nowrap;">${esc(pg.q)}</button>`).join('')}
+          </div>
+          <p id="devEntendaResp" hidden style="margin:9px 0 0;font:700 11px/1.6 'Manrope',sans-serif;color:#2B3440;background:#F4F1EA;border:1px solid #E3DDD0;border-radius:10px;padding:9px 12px;"></p>
+        </div>
+        <div style="padding:14px 24px 14px 20px;background:#EAF6F1;display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0;">
+          <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#1E9E7B;">Conquistas do mês</span>
+          ${conquistas.length ? conquistas.map(c => `<span style="font:800 10px 'Manrope',sans-serif;color:#1E9E7B;background:#FDFEFF;border:1px solid #CBE8DD;border-radius:999px;padding:5px 11px;white-space:nowrap;">${esc(c)}</span>`).join('') : `<span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#2B3440;">A primeira do mês ainda não saiu — o caminho mais curto está na fila de cima.</span>`}
+        </div>
       </div>
 
-      ${buildIndicadoresExecutivoHTML(r)}
-      ${(() => { try { return persistenciaHTML(r); } catch (e) { return ''; } })()}
-
-      <div class="dev-fonte">Os números desta tela são do seu funil no HubSpot (pipeline 916011864), lidos no snapshot de ${esc(DATA.hubspotUpdatedAtFmt || DATA.versaoAnalise || 'hoje')}. A leitura escrita fecha na sexta; os contadores acima são de agora. A conclusão dos acordos é validada pelo seu gestor no 1:1. <b>takeat</b></div>
-    `;
+      <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 24px 14px;font-size:10px;line-height:1.5;color:#7A8494;">Fonte: HubSpot do seu funil (pipeline 916011864) — etapas, atividades e réguas, lidos no snapshot de ${esc(DATA.hubspotUpdatedAtFmt || 'hoje')} · a leitura escrita fecha na sexta e os contadores acima são de agora · os acordos do 1:1 vêm do seu gestor e a conclusão é validada por ele · <b style="color:#E51A31;">takeat</b> — vender mais servindo com excelência.</p>
+    </div>`;
     el.querySelectorAll('[data-scrollpdi]').forEach(btn => {
       btn.addEventListener('click', () => {
         const alvo = document.getElementById('devSecaoPdis');
@@ -54947,6 +54792,29 @@ async function renderPDIs() {
             }
           });
         });
+      });
+    });
+
+    /* ══ O ACORDO DO 1:1 ═════════════════════════════════════════════════════════════
+       O atributo data-um-idx existia no markup e não tinha handler nenhum: o executivo
+       clicava e nada acontecia. Grava na MESMA tabela que o gestor lê — savePdiState
+       escreve em pdi_compromissos, que é de onde a tela dele monta o 1:1 — então marcar
+       aqui aparece lá. A UI não espera a rede: o cache é otimista e o render é imediato,
+       igual ao resto do produto. */
+    el.querySelectorAll('[data-um-idx]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const k = Number(btn.dataset.umIdx);
+        if (!(k >= 0)) return;
+        const estado = getPdiState(r.ownerId, compromissos1a1.length);
+        const marcados = estado.checked.slice();
+        marcados[k] = !marcados[k];
+        savePdiState(r.ownerId, marcados, estado.data);
+        if (typeof mostrarToast === 'function') {
+          mostrarToast(marcados[k]
+            ? 'Acordo marcado — vai para o seu gestor validar no 1:1.'
+            : 'Acordo voltou para aberto.', 'sucesso');
+        }
+        renderPDIs();
       });
     });
 
