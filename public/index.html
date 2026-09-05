@@ -3104,7 +3104,19 @@
   .h9-meta-txt b{display:block;font:900 11.5px var(--font-display);color:var(--panel);}
 
   /* ══ CORPO ═════════════════════════════════════════════════════════════════════════ */
-  .h9-esq{padding:20px 22px;min-width:0;}
+  /* ══ A FILA PREENCHE A COLUNA (05/09/26) ═══════════════════════════════════════════
+     MEDIDO na tela, com 37 itens na fila: a coluna tinha 1004px, o card 722px e a lista
+     parava em 620px (o teto de 62vh) — 263px de BRANCO embaixo do card, com a fila
+     cortada e rolando por dentro. A grade estica as duas colunas para a altura da mais
+     alta, e a direita ("Sua daily sai daqui") nao tem teto; a esquerda tinha.
+     A correcao e a mesma do Planejamento: a coluna vira flex, a lista recebe flex:1 e o
+     teto sai. A lista passa a valer exatamente a altura que sobra, e a rolagem por dentro
+     continua — o que some e o vao.
+     min-height:0 nos dois: sem ele o filho de flex nao encolhe abaixo do conteudo e o
+     teto volta por outro caminho. */
+  .h9-esq{padding:20px 22px;min-width:0;display:flex;flex-direction:column;}
+  .h9-esq > .h8-card{flex:1 1 0;display:flex;flex-direction:column;min-height:0;}
+  .h9-esq .h8-fila{flex:1 1 0;max-height:none;min-height:0;}
   .h9-dir{background:var(--panel2);border-left:1px solid var(--line);padding:18px 18px 20px;
     display:flex;flex-direction:column;gap:12px;min-width:0;}
   .h9-sec-rot{font:900 9.5px var(--font-display);letter-spacing:.13em;text-transform:uppercase;color:var(--ter);}
@@ -3155,6 +3167,10 @@
     font-size:9.5px;line-height:1.5;color:var(--muted2);}
 
   @media (max-width:1240px){
+    /* EMPILHADO NAO TEM COLUNA IRMA para igualar altura, entao nao ha vao a corrigir —
+       e sem o teto a fila de 37 itens viraria uma rolagem de pagina sem fim no celular. */
+    .h9-esq > .h8-card{flex:none;}
+    .h9-esq .h8-fila{flex:none;max-height:min(62vh,720px);}
     .h9-grade{grid-template-columns:minmax(0,1fr);}
     .h9-dir,.h9-pe-dir{border-left:0;border-top:1px solid var(--line);}
     .h9-hero{grid-template-columns:minmax(0,1fr);}
@@ -8260,6 +8276,24 @@
   .p4-doc-pe{padding:16px 34px 22px;text-align:center;border-top:1px solid rgba(237,234,228,.08);}
   .p4-doc-por{font-size:11px;color:var(--p4-doc-item);}
   .p4-doc-por b{color:var(--p4-doc-ink);}
+  /* O PASSO COMBINADO E A ENTREGA (05/09/26). Duas linhas que a peça não tinha:
+     · o passo saiu do meio do selo de validade porque é compromisso, não letra miúda —
+       ele é a única frase da proposta que o dono vai cobrar de você;
+     · a entrega responde "e depois que eu assino?" antes de ele perguntar, e é a única
+       parte do documento que fala de SERVIÇO em vez de funcionalidade. */
+  /* A MENSAGEM QUE ACOMPANHA O PNG: papel claro embaixo do cartão escuro, para ficar
+     claro que ela NÃO é parte da peça que o dono recebe — ela é o que vai na conversa.
+     pre-wrap porque o texto tem quebras de linha que vão para o WhatsApp como estão. */
+  .p4-msg{margin-top:14px;background:var(--p4-card);border:1px solid var(--p4-linha);
+    border-radius:var(--r-lg);padding:14px 16px;}
+  .p4-msg-rot{font:800 9px var(--font-display);letter-spacing:.18em;color:var(--p4-muted);}
+  /* --p4-escuro e a tinta desta familia; eu havia escrito --p4-ink, que nao existe, e a
+     guarda de alcance pegou: sem fallback a declaracao morre em silencio e o texto herda. */
+  .p4-msg-corpo{margin-top:8px;font-size:12px;line-height:1.6;color:var(--p4-escuro);white-space:pre-wrap;}
+  .p4-doc-passo{font-size:11.5px;line-height:1.5;color:var(--p4-doc-ink);}
+  .p4-doc-passo b{color:#fff;}
+  .p4-doc-entrega{font-size:10.5px;line-height:1.5;color:var(--p4-doc-mut);margin-top:5px;}
+  .p4-doc-por{margin-top:8px;}
   .p4-doc-selo{font:700 9px var(--font-display);letter-spacing:.16em;color:var(--p4-doc-mut);margin-top:6px;}
   /* modo cliente: a coluna de controles sai e o documento centraliza */
   .prc-shell.modo-cliente .p4-grid{grid-template-columns:minmax(0,1fr);padding:24px;}
@@ -15175,12 +15209,35 @@ function h8LigarFila(el, r, redesenhar) {
         + ' · próximo passo ' + ((typeof fmtDailyLabel === 'function') ? fmtDailyLabel(dataISO) : dataISO)
         + ' ✓ HubSpot';
       await redesenhar();
+
+      /* ══ E AGORA A SEMANA (05/09/26) ═══════════════════════════════════════════════
+         O toast daqui prometia "a visita já entrou na sua semana e na Daily" e isso não
+         acontecia: gravarDesfechoEPasso escreve no HubSpot e para ali. Agora a promessa
+         é cumprida — e quando não dá para cumprir, o toast DIZ o que faltou em vez de
+         afirmar mesmo assim. O HubSpot já está gravado neste ponto, então falha aqui
+         nunca devolve a linha para a fila: seria desfazer um registro que existe. */
+      let naSemana = { ok: false, motivo: 'não tentei' };
+      try {
+        naSemana = await h8AgendarNaSemana(r, lead.id, dataISO);
+      } catch (e) {
+        naSemana = { ok: false, motivo: 'erro ao escrever o plano: ' + ((e && e.message) || 'desconhecido') };
+      }
+      if (naSemana.ok && !naSemana.jaEstava) {
+        h8Feitas[String(lead.id)] += ' · semana ' + (naSemana.hora || '');
+        await redesenhar();
+      }
+
       if (typeof mostrarToast === 'function') {
-        mostrarToast(rg.avisoPasso
-          ? (rg.avisoPasso + ' "' + lead.name + '" continua na fila até a tarefa existir.')
-          : ('"' + lead.name + '" registrado ✓ — desfecho e próximo passo no HubSpot, e a'
-             + ' visita já entrou na sua semana e na Daily.'),
-          rg.avisoPasso ? 'atencao' : 'sucesso');
+        if (rg.avisoPasso) {
+          mostrarToast(rg.avisoPasso + ' "' + lead.name + '" continua na fila até a tarefa existir.', 'atencao');
+        } else if (naSemana.ok) {
+          mostrarToast('"' + lead.name + '" registrado ✓ — desfecho e próximo passo no HubSpot'
+            + (naSemana.jaEstava ? ', e ele já estava na sua semana.'
+               : ', e a visita entrou na sua semana às ' + naSemana.hora + ' e na Daily.'), 'sucesso');
+        } else {
+          mostrarToast('"' + lead.name + '" registrado ✓ no HubSpot — desfecho e próximo passo.'
+            + ' Na sua semana ele NÃO entrou: ' + naSemana.motivo + '.', 'atencao');
+        }
       }
       return;
     }
@@ -16060,7 +16117,10 @@ async function renderMeuPainel() {
         if (error || !sugestoes || sugestoes.length === 0) { sugEl.innerHTML = ''; return; }
         sugEl.innerHTML = `
           <div style="border-left:3px solid var(--ink);background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--ink);border-radius:0 var(--r-md) var(--r-md) 0;padding:14px 16px;margin-bottom:18px;">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink);margin-bottom:6px;">Recado do seu gestor</div>
+            <!-- O TITULO SAIU DAQUI (05/09/26): o rodape ja imprime "Recado do seu gestor"
+                 no .h9-pe-rot logo acima deste painel, e o executivo lia a mesma frase duas
+                 vezes seguidas — uma como rotulo da celula e outra dentro da caixa. So
+                 aparecia quando HAVIA recado, que e por que o preview sem recado nao mostrava. -->
             ${sugestoes.map((s, i) => `
               <div style="${i > 0 ? 'margin-top:10px;padding-top:10px;border-top:1px solid var(--line);' : ''}font-size:13px;line-height:1.55;">
                 ${esc(s.texto)}
@@ -19252,7 +19312,7 @@ function prcBlocoDorHTML() {
     const cobre = prcTemRecurso(calcularPrecificacao(), dor.requer);
     partes.push(`<button type="button" class="btn-sec prc-chip-dor" data-prc-dor="1" title="Abrir o mapa dor → solução na dor registrada">
       <em>dor registrada</em>${esc(dor.chip)}</button>`);
-    if (!cobre) partes.push(`<span class="prc-dor-alerta">O plano na tela não cobre <b>${esc(dor.nome.toLowerCase())}</b>. Mínimo que resolve: ${esc(dor.minimo)}.</span>`);
+    if (!cobre) partes.push(`<span class="prc-dor-alerta">O plano na tela não cobre <b>${esc(dor.nome.toLowerCase())}</b>. Mínimo que resolve: ${esc(prcMinimoComPreco(dor))}.</span>`);
   }
   if (sistema) partes.push(`<span class="prc-dor-sistema">usa hoje: <b>${esc(sistema)}</b></span>`);
   return `<div class="prc-dor-linha">${partes.join('')}</div>`;
@@ -19464,13 +19524,18 @@ function prcPreviewHTML() {
   /* só o que é COBRADO entra na lista de adicionais: o que já vem no plano está na
      coluna de funcionalidades, e repetir ali daria a impressão de custo dobrado. */
   const cobrados = c.itens.filter(item => !item.incluido);
-  const parcelas = per.meses > 1 ? `<span class="p4-inv-x">${per.meses}x</span> ` : '';
+  /* O MULTIPLICADOR SAI DAS PARCELAS, NAO DOS MESES (05/09/26). Com meses, o trimestral
+     saia como "3x no cartao" sem ninguem ter escolhido parcelar — e a calculadora oficial
+     oferece as duas formas no mesmo prazo. O campo meses e o prazo do contrato; o campo
+     parcelas e a forma de pagamento. */
+  const nParcelas = Number(per.parcelas || 1);
+  const parcelas = nParcelas > 1 ? `<span class="p4-inv-x">${nParcelas}x</span> ` : '';
   return `
     <div class="p4-doc-topo">
       <img src="assets/logo-takeat.png" alt="Takeat" class="p4-doc-logo">
-      <div class="p4-doc-linha">${esc(String(tipo.rotuloOficial || tipo.nome).toUpperCase())} · ${esc(String(per.nome).toUpperCase())}${per.desconto ? ` (−${per.desconto}%)` : ''}</div>
+      <div class="p4-doc-linha">${esc(String(tipo.nome || tipo.rotuloOficial).toUpperCase())} · ${esc(String(per.nome).toUpperCase())}${per.desconto ? ` (−${per.desconto}%)` : ''}</div>
       <div class="p4-doc-plano">${esc(plano.nome)}</div>
-      <div class="p4-doc-para">preparada para <b>${esc(cliente)}</b></div>
+      <div class="p4-doc-para">para <b>${esc(cliente)}</b>${executivo ? ` · preparada por <b>${esc(executivo)}</b>` : ''}</div>
     </div>
     <div class="p4-doc-corpo">
       <div class="p4-doc-rot">FUNCIONALIDADES</div>
@@ -19499,13 +19564,21 @@ function prcPreviewHTML() {
     <div class="p4-inv">
       <div class="p4-inv-rot">INVESTIMENTO</div>
       <div class="p4-inv-num">${parcelas}<span class="p4-inv-valor">${prcMoedaCentavos(c.mensal)}</span></div>
-      <div class="p4-inv-como">${per.meses > 1 ? '▭ no cartão de crédito' : '▭ cobrança mensal'}</div>
-      <div class="p4-inv-total">${c.economia > 0 ? `<s>de ${prcMoedaCentavos(c.mensalCheio)}/mês</s> · ` : ''}Total: ${prcMoedaCentavos(c.total)}</div>
+      <!-- TRES CASOS: parcelado no cartao; prazo pago a vista; e o mensal, que nao tem
+           prazo nenhum. Antes eram dois, e o "a vista" nao existia. -->
+      <div class="p4-inv-como">${nParcelas > 1 ? '▭ no cartão de crédito'
+        : per.meses > 1 ? '▭ à vista, no boleto ou cartão'
+        : '▭ no boleto ou cartão · sem fidelidade'}</div>
+      <div class="p4-inv-total">${per.meses > 1
+        ? `${c.economia > 0 ? `<s>de ${prcMoedaCentavos(c.mensalCheio)}/mês</s> · ` : ''}Total: ${prcMoedaCentavos(c.total)}`
+        : 'preço de tabela, por mês'}</div>
       ${c.economia > 0 ? `<span class="p4-inv-eco">↗ Economia de ${prcMoedaCentavos(c.economia)}</span>` : ''}
     </div>
     <div class="p4-doc-pe">
+      <div class="p4-doc-passo">Próximo passo combinado: <b>${diaPasso.toLowerCase()}, ${esc(String(passo.hora))}</b> — fechamento marcado, não pedido.</div>
+      <div class="p4-doc-entrega">implantação assistida por 30 dias · treinamento da equipe incluso · suporte humano 7 dias por semana</div>
       ${executivo ? `<div class="p4-doc-por">preparada por <b>${esc(executivo)}</b>${telExec ? ` · ${esc(telExec)}` : ''}</div>` : ''}
-      <div class="p4-doc-selo">PROPOSTA VÁLIDA POR ${Number(precificacaoCache.validadeDias || 2)} DIA${Number(precificacaoCache.validadeDias || 2) === 1 ? '' : 'S'} · TAKEAT ${new Date().getFullYear()} · PRÓXIMO PASSO: ${diaPasso}, ${esc(String(passo.hora).toUpperCase())}</div>
+      <div class="p4-doc-selo">PROPOSTA VÁLIDA POR ${Number(precificacaoCache.validadeDias || 2)} DIA${Number(precificacaoCache.validadeDias || 2) === 1 ? '' : 'S'} · TAKEAT ${new Date().getFullYear()}</div>
     </div>`;
 }
 
@@ -19513,6 +19586,14 @@ function atualizarPreviewPrecificacao() {
   const slot = document.getElementById('precificacaoPreview');
   if (!slot || !precificacaoCache) return;
   slot.innerHTML = prcPreviewHTML();
+  /* A MENSAGEM VIVE FORA do #precificacaoPreview, então esta linha é o que a mantém viva:
+     sem ela o texto congelaria no primeiro estado e o executivo leria "R$ 549 no mensal"
+     depois de ter escolhido o anual. Mesma função que o CTA envia — uma fonte só. */
+  const msgJunto = document.getElementById('prcMensagemJunto');
+  if (msgJunto) {
+    const corpo = msgJunto.querySelector('.p4-msg-corpo');
+    if (corpo) corpo.textContent = textoPropostaPrecificacao();
+  }
   /* Religa o que vive DENTRO do documento e acabou de ser substituído. Os períodos
      tocáveis do modo cliente estão aqui: sem esta linha, eles aparecem e não
      respondem. */
@@ -19599,6 +19680,22 @@ function atualizarPreviewPrecificacao() {
    colocaria duas afirmações falsas numa proposta de Básico. Com `requer`, quando o
    plano não cobre a dor registrada, a proposta não promete: em vez disso avisa o
    EXECUTIVO (nunca o cliente) qual é o plano mínimo que resolve. */
+/* O PREÇO DO MÍNIMO SAI DA TABELA (05/09/26). O aviso de "plano não cobre esta dor" diz
+   qual é o mínimo que resolve, e trazia o valor do adicional escrito à mão — a suíte nova
+   pegou. Aqui ele é lido de precificacao.json pelo MESMO nome que a lista "requer" já usa,
+   nome e preço nunca divergem. Adicional sem preço na tabela devolve só o texto, em vez
+   de "R$ undefined". */
+function prcMinimoComPreco(dor) {
+  const base = String((dor && dor.minimo) || '').trim();
+  if (!base || !dor || !Array.isArray(dor.requer) || !precificacaoCache) return base;
+  const lista = precificacaoCache.adicionais || [];
+  const precos = dor.requer.map(function (nome) {
+    const a = lista.find(function (x) { return x.nome === nome; });
+    return (a && Number(a.preco)) ? prcMoeda(a.preco) + (a.unidade && a.unidade !== 'mês' ? '/' + a.unidade : '/mês') : null;
+  }).filter(Boolean);
+  return precos.length ? base + ' (' + precos.join(' + ') + ')' : base;
+}
+
 const PRC_DOR = {
   'Fila': {
     chip: 'fila → totem de autoatendimento',
@@ -19606,7 +19703,10 @@ const PRC_DOR = {
     bullet: 'Fila atendida pelo totem, sem contratar ninguém',
     whatsapp: 'Sobre a fila que você me mostrou: o totem atende ela sozinho, sem contratar ninguém.',
     requer: ['Totem de Autoatendimento + TEF Fiserv'],
-    minimo: 'Básico + adicional Totem (R$ 299/mês)'
+    /* SEM PREÇO CRAVADO AQUI: prcMinimoComPreco() põe o valor do adicional lido de
+       data/precificacao.json. Escrito à mão, este número envelhece calado — e ele
+       aparece justamente quando o executivo está decidindo o que oferecer. */
+    minimo: 'Básico + adicional Totem'
   },
   'Falta de Garçom': {
     chip: 'falta de garçom → garçom digital + tablet',
@@ -19638,7 +19738,7 @@ const PRC_DOR = {
     bullet: 'Conta fechada na mesa, dividida na hora',
     whatsapp: 'Sobre o fechamento lento: a conta sai dividida na maquininha, na mesa, na hora.',
     requer: ['Comandas Individuais', 'Maquininha POS', 'TEF Balcão Fiserv'],
-    minimo: 'Básico Completo, ou adicional Maquininha POS (R$ 99/mês)'
+    minimo: 'Básico Completo, ou adicional Maquininha POS'
   },
   'Estoque': {
     chip: 'estoque → controle + curva ABC',
@@ -19797,8 +19897,14 @@ function prcBlocoOperacaoHTML() {
       ${precificacaoCache.tipos.map(t => {
         const on = precificacaoEstado.tipo === t.id;
         const curto = (t.rotuloOficial || t.nome).split(',')[0].trim().toUpperCase();
+        /* A SEGUNDA LINHA DIZ O QUE A OPERAÇÃO É, e antes ela repetia o rótulo: o botão
+           lia "COMPLETO" e, embaixo, "Completo". Duas linhas para a mesma palavra ocupam
+           o lugar da única informação que faz o dono do restaurante escolher junto.
+           O texto mora AQUI e não em precificacao.json de propósito: aquele arquivo é a
+           tabela de PREÇO conferida, e legenda de botão é redação de tela — misturar as
+           duas faz revisão de preço tropeçar em revisão de texto. */
         return `<button type="button" class="p4-op-btn${on ? ' is-on' : ''}" data-prc-tipo="${t.id}" aria-pressed="${on}">
-          ${esc(curto)}<span>${esc(t.rotuloOficial || t.nome)}</span>
+          ${esc(curto)}<span>${t.id === 'mesas' ? 'salão + delivery + caixa' : 'só operação de entrega'}</span>
         </button>`;
       }).join('')}
     </div>
@@ -19847,13 +19953,22 @@ function prcBlocoPeriodoHTML() {
         const economiaMes = base.mensal - c.mensal;
         const meses = base.mensal > 0 ? (c.economia / base.mensal) : 0;
         /* mensal é a tabela; trimestral mostra o absoluto; semestral e anual, meses grátis */
+        const gratis = '≈ ' + meses.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+          + (meses >= 2 ? ' meses' : ' mês') + ' grátis';
+        /* O CORTE SAI DO NÚMERO, NÃO DO NOME (05/09/26). A regra prendia em
+           per.id === 'trimestral' e, quando entrou 'trimestral-parcelado', o cartão novo
+           passou a anunciar '≈ 0,3 mês grátis' — que é justamente a fração que eu tinha
+           decidido não mostrar, porque soa a truque na frente do dono. Meio mês é o piso
+           do que vale dizer em voz alta; abaixo disso fica só o absoluto, que é o número
+           que ele confere na hora. */
         const nota = per.meses === 1 ? 'preço de tabela'
-          : (per.id === 'trimestral' ? 'economiza ' + prcMoeda(c.economia)
-            : '≈ ' + meses.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + (meses >= 2 ? ' meses' : ' mês') + ' grátis');
+          : (meses < 0.5
+            ? 'economiza ' + prcMoeda(c.economia) + '/período'
+            : gratis + ' · economiza ' + prcMoeda(c.economia) + '/período');
         return `<button type="button" class="p4-periodo${on ? ' is-on' : ''}" data-prc-periodo="${per.id}" aria-pressed="${on}">
           <!-- o selo fica só no de maior desconto (anual), como no mockup: quatro selos
                na mesma fileira competem entre si e nenhum chama atenção. -->
-          ${per.id === maiorDesconto ? `<span class="p4-selo is-escuro">−${per.desconto}%</span>` : ''}
+          ${per.desconto ? `<span class="p4-selo is-escuro">−${per.desconto}%</span>` : ''}
           <span class="p4-periodo-rot">${esc(String(per.nome).toUpperCase())}</span>
           <span class="p4-periodo-valor">${economiaMes > 0 ? `<s>${prcMoeda(base.mensal)}</s> ` : ''}${prcMoeda(c.mensal)}</span>
           <span class="p4-periodo-nota${per.meses === 1 ? '' : ' is-verde'}">${esc(nota)}</span>
@@ -19952,7 +20067,18 @@ function renderPrecificacaoConfigurador() {
           <div class="p4-so-voce-chips">${PRC_OBJECOES.map(o => `<button type="button" data-prc-objecao="${o.n}">“${esc(o.chip)}”</button>`).join('')}</div>
         </div>`}
       </div>
+      <!-- A MENSAGEM QUE VAI JUNTO (05/09/26). O PNG não viaja sozinho: o WhatsApp leva
+           imagem + texto, e o texto é o que faz o dono abrir a imagem. Ele já existia —
+           textoPropostaPrecificacao() é a MESMA função que o CTA envia e que o "copiar
+           texto" copia — e não aparecia em lugar nenhum antes de enviar. O executivo
+           mandava para o cliente uma frase que ele nunca tinha lido.
+           FICA FORA do cartão escuro de propósito: dentro, ela pareceria parte da peça
+           que o dono recebe. Aqui ela é o que ACOMPANHA a peça. -->
       <div class="prc-proposal" id="precificacaoPreview">${prcPreviewHTML()}</div>
+      ${prcModoCliente ? '' : `<div class="p4-msg" id="prcMensagemJunto">
+        <div class="p4-msg-rot">MENSAGEM QUE VAI JUNTO</div>
+        <div class="p4-msg-corpo">${esc(textoPropostaPrecificacao())}</div>
+      </div>`}
     </div>
   </div>`;
 
@@ -20597,15 +20723,20 @@ function prcDadosDaPeca() {
   const passo = prcProximoPassoTexto();
   const totalTxt = prcMoedaCentavos(c.total);
   const meses = prcEconomiaEmMeses(c);
+  /* A MENSAGEM DIZ A FORMA DE PAGAMENTO, e ela agora tem tres formas: parcelado no
+     cartao, prazo a vista, e mensal sem prazo. Dizer "3x no cartao" num plano que ele
+     escolheu pagar a vista e prometer uma condicao que o financeiro nao vai cobrar. */
+  const nParc = Number(c.periodo.parcelas || 1);
   const condicao = c.periodo.meses > 1
-    ? (c.periodo.observacao || (c.periodo.meses + 'x no cartão')) + ' · total do período ' + totalTxt + (meses ? ' · equivale a ' + meses + ' grátis' : '')
+    ? (c.periodo.observacao || (nParc > 1 ? nParc + 'x no cartão' : 'à vista'))
+      + ' · total do período ' + totalTxt + (meses ? ' · equivale a ' + meses + ' grátis' : '')
     : 'cobrança mensal · preço de tabela';
   return {
     cliente: (precificacaoEstado.conta && precificacaoEstado.conta.nome) || precificacaoEstado.cliente.trim() || 'Seu próximo cliente',
     plano: c.plano.nome,
     operacao: tipo.rotuloOficial || tipo.nome,
     periodo: c.periodo.nome,
-    parcelas: c.periodo.meses,
+    parcelas: nParc,
     valorParcela: c.mensal,
     /* de→por só quando existe desconto de verdade */
     precoCheio: c.mensalCheio > c.mensal ? c.mensalCheio : null,
@@ -43267,11 +43398,74 @@ function d7HoraDaTravaRot() {
    Usa agendaAgora() e nao new Date(): agendaChave le as partes UTC, e das 21h a
    meia-noite de Brasilia o instante cru ja esta no dia seguinte. Foi exatamente esse
    defeito que a auditoria de 03/09 achou na linha do dia (ver a guarda 17). */
-function d7ColunaDeHoje() {
-  const hoje = agendaChave(agendaAgora());
+/* A COLUNA DA SEMANA PARA UMA DATA QUALQUER (05/09/26). d7ColunaDeHoje já fazia esta
+   conta para hoje; a fila do dia precisa dela para uma data futura, e escrever o mesmo
+   calendário duas vezes é como as duas telas passam a discordar sobre qual dia é quinta. */
+function pl6ColunaDaData(iso) {
   const dias = pl6Dias(pl6SegundaDaSemana());
-  for (let i = 0; i < dias.length; i++) if (dias[i].iso === hoje) return i;
+  for (let i = 0; i < dias.length; i++) if (dias[i].iso === iso) return i;
   return -1;
+}
+
+function d7ColunaDeHoje() {
+  return pl6ColunaDaData(agendaChave(agendaAgora()));
+}
+
+/* ══ O PRÓXIMO PASSO DATADO ENTRA NA SEMANA (05/09/26) ═══════════════════════════════
+   O QUE ESTAVA ERRADO: ao concluir uma ação na fila do dia, o toast dizia "a visita já
+   entrou na sua semana e na Daily". Não entrava. gravarDesfechoEPasso escreve nota e
+   tarefa no HubSpot e nada mais — medi: zero ocorrências de planos_semanais nele. Duas
+   linhas acima, o mesmo bloco diz "a tela não afirma um registro que o gestor não vai
+   encontrar", e era exatamente o que ela fazia.
+
+   POR QUE NÃO USO pl6Gravar: aquela função monta a linha com pl6GradeDoPlano(), que lê a
+   grade CARREGADA NA SESSÃO. Quem está na aba Hoje pode não ter aberto o Planejamento —
+   a grade em memória estaria vazia e o upsert APAGARIA a semana inteira dele. Aqui eu
+   leio a linha do banco na hora, mexo em UMA célula e devolvo.
+
+   E ELE NUNCA INVENTA LINHA: sem plano da semana, devolve o motivo e o toast conta. Criar
+   a semana por baixo do pano poria o executivo com um plano que ele não montou. */
+async function h8AgendarNaSemana(rep, leadId, dataISO) {
+  if (!DATA.supabase || !supa) return { ok: false, motivo: 'esta sessão está sem Supabase' };
+  if (!rep || rep.ownerId == null) return { ok: false, motivo: 'sem dono na sessão' };
+  const di = pl6ColunaDaData(dataISO);
+  if (di < 0) return { ok: false, motivo: 'a data cai fora desta semana útil' };
+
+  const segunda = pl6SegundaDaSemana();
+  const { data: linhas, error: erroLeitura } = await supa.from('planos_semanais')
+    .select('*').eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
+  if (erroLeitura) return { ok: false, motivo: 'não consegui ler o seu plano da semana' };
+  const linha = Array.isArray(linhas) && linhas[0];
+  if (!linha) return { ok: false, motivo: 'você ainda não montou a semana no Planejamento' };
+
+  /* normalizo o formato aqui: linha antiga pode vir com coluna curta */
+  const grade = Array.from({ length: PL6_DIAS_UTEIS }, function (_, ci) {
+    const col = (linha.grade && linha.grade[ci]) || [];
+    const arr = Array.isArray(col) ? col.slice(0, PL6_SLOTS) : [];
+    while (arr.length < PL6_SLOTS) arr.push(null);
+    return arr;
+  });
+
+  const alvo = String(leadId);
+  for (let c = 0; c < PL6_DIAS_UTEIS; c++) {
+    for (let s = 0; s < PL6_SLOTS; s++) if (String(grade[c][s] || '') === alvo) {
+      return { ok: true, jaEstava: true, dia: c, slot: s };
+    }
+  }
+  let vaga = -1;
+  for (let s = 0; s < PL6_SLOTS; s++) if (!grade[di][s]) { vaga = s; break; }
+  if (vaga < 0) return { ok: false, motivo: 'esse dia já está com os ' + PL6_SLOTS + ' horários ocupados' };
+
+  grade[di][vaga] = alvo;
+  const { error: erroEscrita } = await supa.from('planos_semanais').upsert({
+    owner_id: String(rep.ownerId),
+    data_segunda: segunda,
+    regioes: linha.regioes,
+    grade: grade,
+    atualizado_em: new Date().toISOString()
+  }, { onConflict: 'owner_id,data_segunda' }).select();
+  if (erroEscrita) return { ok: false, motivo: 'o banco recusou: ' + erroEscrita.message };
+  return { ok: true, dia: di, slot: vaga, hora: PL6_HORAS[vaga] };
 }
 
 /* A ROTA DE HOJE — o bairro que ele escolheu para hoje no Planejamento. Vira o titulo da

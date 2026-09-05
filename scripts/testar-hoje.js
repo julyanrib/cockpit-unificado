@@ -121,6 +121,73 @@ checar('a nota de fonte fecha o quadro', template.indexOf('<div class="h9-fonte"
 checar('e explica a ordem da fila',
   template.indexOf('cadência quebrada → follow-up → visita → touchpoint') > -1);
 
+/* ── 8. A COLUNA NÃO SOBRA BRANCO (05/09/26) ─────────────────────────────────────
+   O Julyan mandou print: a fila cortada e um vão branco antes do rodapé. Medido na
+   tela: coluna de 1004px, card de 722px e a lista parando em 620px (o teto de 62vh)
+   — 263px de branco. A grade estica as duas colunas para a altura da mais alta e a
+   direita não tem teto; a esquerda tinha. Depois da correção: vão de 20px, que é o
+   padding, e a lista em 862px. */
+checar('a coluna da fila é flex, para a lista poder preencher',
+  template.indexOf('.h9-esq{padding:20px 22px;min-width:0;display:flex;flex-direction:column;}') > -1);
+checar('e a lista cresce até o fim da coluna, sem teto',
+  template.indexOf('.h9-esq .h8-fila{flex:1 1 0;max-height:none;min-height:0;}') > -1,
+  'com o teto de volta, a coluna estica com a irmã e sobra branco embaixo da fila');
+checar('o card entre a coluna e a lista também estica',
+  template.indexOf('.h9-esq > .h8-card{flex:1 1 0;display:flex;flex-direction:column;min-height:0;}') > -1,
+  'sem isto o flex:1 da lista não tem contra quem crescer');
+/* NO EMPILHADO O TETO VOLTA: sem coluna irmã não há vão, e 37 itens sem teto viram
+   uma rolagem de página sem fim no celular. */
+checar('empilhado (<=1240px) devolve o teto da fila',
+  template.indexOf('.h9-esq .h8-fila{flex:none;max-height:min(62vh,720px);}') > -1);
+
+/* ── 9. O RECADO DO GESTOR TEM UM TÍTULO SÓ ──────────────────────────────────────
+   O rodapé imprime "Recado do seu gestor" no .h9-pe-rot e o painel imprimia o MESMO
+   texto dentro da caixa. Só aparecia quando havia recado — por isso passou. */
+(function () {
+  /* CONTA O TEXTO DO ELEMENTO, não a frase no arquivo: a minha primeira versão casava
+     /Recado do seu gestor/ e dava 2 — a segunda era o COMENTÁRIO que explica a remoção.
+     Assertion que mede o próprio comentário é verde que não protege nada. */
+  const rotulos = (template.match(/>Recado do seu gestor</g) || []).length;
+  checar('"Recado do seu gestor" aparece uma vez só na tela',
+    rotulos === 1,
+    rotulos + ' ocorrência(s) em markup — o rótulo da célula e o título do painel eram a'
+      + ' mesma frase, uma embaixo da outra');
+})();
+
+/* ── 10. A PROMESSA DO TOAST É CUMPRIDA (05/09/26) ───────────────────────────────
+   O toast de conclusão dizia "a visita já entrou na sua semana e na Daily" e isso não
+   acontecia: gravarDesfechoEPasso escreve nota e tarefa no HubSpot e nada mais — zero
+   ocorrências de planos_semanais nele. Duas linhas acima, o mesmo bloco diz "a tela não
+   afirma um registro que o gestor não vai encontrar". */
+checar('existe a ponte que põe o próximo passo na semana',
+  template.indexOf('async function h8AgendarNaSemana(rep, leadId, dataISO)') > -1);
+checar('e a fila do dia CHAMA a ponte, não só a define',
+  template.indexOf('naSemana = await h8AgendarNaSemana(r, lead.id, dataISO);') > -1,
+  'definir e não chamar é o defeito que mais aparece nesta base');
+/* A LEITURA FRESCA É O QUE IMPEDE DE APAGAR A SEMANA DELE: pl6Gravar monta a linha com
+   pl6GradeDoPlano(), a grade CARREGADA NA SESSÃO. Quem está no Hoje pode não ter aberto o
+   Planejamento — a grade em memória viria vazia e o upsert levaria a semana junto. */
+checar('a ponte lê o plano do banco antes de escrever',
+  /from\('planos_semanais'\)[\s\S]{0,120}\.select\('\*'\)\.eq\('owner_id'/.test(template),
+  'sem a leitura fresca, o upsert grava a grade vazia da sessão por cima da semana dele');
+checar('e ela não usa pl6Gravar, que escreveria a grade da sessão',
+  template.slice(template.indexOf('async function h8AgendarNaSemana'),
+    template.indexOf('async function h8AgendarNaSemana') + 2600).indexOf('pl6Gravar(') < 0);
+checar('sem plano da semana ela NÃO inventa a linha',
+  template.indexOf('você ainda não montou a semana no Planejamento') > -1,
+  'criar a semana por baixo do pano põe o executivo com um plano que ele não montou');
+/* E O TOAST CONTA O QUE FALTOU, em vez de afirmar mesmo assim */
+checar('quando a semana não recebe, o toast diz por quê',
+  template.indexOf('Na sua semana ele NÃO entrou: ') > -1);
+checar('a falha na semana não devolve a linha para a fila',
+  template.indexOf('nunca devolve a linha para a fila: seria desfazer um registro que existe') > -1,
+  'o HubSpot já gravou neste ponto — desfazer na tela criaria divergência com o CRM');
+/* UM CALENDÁRIO SÓ: d7ColunaDeHoje passou a derivar da função geral */
+checar('a coluna da semana é calculada num lugar só',
+  template.indexOf('function pl6ColunaDaData(iso)') > -1
+  && template.indexOf('return pl6ColunaDaData(agendaChave(agendaAgora()));') > -1,
+  'dois calendários é como duas telas passam a discordar sobre qual dia é quinta');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
