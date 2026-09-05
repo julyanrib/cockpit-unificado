@@ -218,6 +218,76 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
   /@media \(max-width:760px\)\{ \.pba \.fa-copy\{min-height:44px;\} \}/.test(template));
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
+/* ══ PLAYBOOK v9 — A BIBLIOTECA COM TRILHA DE PATENTES (04/09/26) ═══════════════════════
+   Handoff do Julyan (prompt v9 + mockup). O que estas checagens prendem é o que a tela
+   promete e não dá para ver num print: que os capítulos são os do DADO, que o cadeado é da
+   patente e nunca do conteúdo, e que existe UM lugar contando o progresso. */
+(function () {
+  const rota = fs.readFileSync(path.join(raiz, 'api', 'dados.js'), 'utf8');
+  const preview = fs.readFileSync(path.join(raiz, 'scripts', 'preview-local.js'), 'utf8');
+
+  /* 1. OS CAPÍTULOS SÃO AS CATEGORIAS DO JSON — não uma lista paralela que envelhece
+     sozinha quando o conteúdo é recategorizado. */
+  const cats = compilado.categorias || [];
+  checar('a trilha tem um capítulo para cada categoria do conteúdo',
+    cats.every(function (c) { return template.indexOf("rot: '" + c + "'") > -1; }),
+    'faltou: ' + cats.filter(function (c) { return template.indexOf("rot: '" + c + "'") < 0; }).join(', '));
+  checar('e nenhum capítulo inventado além deles',
+    (template.match(/rot: '[^']+',\s+accent:/g) || []).length === cats.length);
+
+  /* 2. LIDERANÇA É DO GESTOR, E O CORTE É NO SERVIDOR. Cortar na tela deixaria o conteúdo
+     viajando na resposta — papel se corta onde o resto do app corta. */
+  checar('a rota corta o capítulo de gestor para executivo',
+    rota.indexOf("const CAPITULO_DE_GESTOR = 'Liderança';") > -1
+    && rota.indexOf('p.categoria !== CAPITULO_DE_GESTOR') > -1);
+  checar('e o gestor continua recebendo tudo',
+    rota.indexOf("if (ehGestor) return res.status(200).json({ ok: true, playbook: PLAYBOOK") > -1);
+  /* O PREVIEW TEM DE MENTIR MENOS: era nele que eu ia conferir o corte, e ele injetava o
+     playbook inteiro — preview que mostra o que produção esconde é pior que preview nenhum. */
+  checar('o preview aplica o mesmo corte da rota',
+    preview.indexOf("const CAPITULO_DE_GESTOR = 'Liderança';") > -1
+    && preview.indexOf('JSON.stringify(playbookDoPapel())') > -1);
+  /* O nome do capítulo está escrito em três arquivos porque são três processos. Se ele for
+     renomeado no conteúdo, esta checagem cai — que é exatamente o que tem de acontecer. */
+  checar('o nome do capítulo de gestor existe no conteúdo',
+    cats.indexOf('Liderança') > -1,
+    'renomearam a categoria: o corte da rota e do preview passa a não casar com nada');
+
+  /* 3. A COROA FICA NO ÚLTIMO CAPÍTULO DE QUEM OLHA (Julyan: "quero sim q ele se torne
+     elite"). Fixar Elite no capítulo 8 daria ao executivo um teto que ele nunca alcança. */
+  checar('a coroa é do último capítulo da trilha de quem olha',
+    template.indexOf("capitulos[capitulos.length - 1].patente = 'Elite'") > -1);
+
+  /* 4. UM LUGAR CONTA. Biblioteca e Leitura mostram o mesmo 3/5 porque leem pb9Trilha. */
+  checar('existe uma função só que monta a trilha', template.indexOf('function pb9Trilha(') > -1);
+  checar('e a próxima página sai dela, não de cada tela',
+    template.indexOf('function pb9Proxima(trilha)') > -1);
+
+  /* 5. O CADEADO É DA PATENTE, NUNCA DO CONTEÚDO — é a regra que o prompt repete três
+     vezes. Na prática: toda capa é clicável e todo item abre a leitura. */
+  checar('a legenda diz que a leitura continua livre',
+    template.indexOf('As páginas continuam abertas pra consulta') > -1);
+  checar('não existe capa desabilitada por patente',
+    template.indexOf('class="pb9-capa') > -1
+    && template.indexOf('pb9-capa" disabled') < 0 && template.indexOf("pb9-capa' disabled") < 0);
+
+  /* 6. O QUIZ DO CAPÍTULO SÃO AS PERGUNTAS DAS PÁGINAS DELE. O prompt pedia "5 perguntas" e
+     esse conjunto não existe: cada página tem UMA e os capítulos vão de 1 a 9 páginas.
+     Inventar quatro perguntas para fechar cinco seria conteúdo que ninguém escreveu. */
+  checar('toda página tem a pergunta que o quiz do capítulo usa',
+    compilado.paginas.every(function (p) { return p.prova && p.prova.pergunta; }),
+    'páginas sem prova: ' + compilado.paginas.filter(function (p) { return !(p.prova && p.prova.pergunta); }).length);
+  checar('o quiz só abre com todos os checks do capítulo',
+    template.indexOf('function pb9QuizAberto(cap) {') > -1
+    && template.indexOf('return !!(cap && cap.completo);') > -1);
+
+  /* 7. O NÚMERO VIVO NÃO PODE SER CHUTE: o resumo do capítulo cita "os seus N sem próximo
+     passo", e esse N vem da mesma conta do Meu Funil. Eu tinha lido um campo `.semPasso`
+     que não existe — pb7EstadoDoFunil devolve uma LISTA — e a tela teria dito "undefined". */
+  checar('o resumo conta os sem passo a partir da lista real do funil',
+    template.indexOf("estado.filter(function (x) { return !x.passo; }).length") > -1);
+})();
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));

@@ -120,6 +120,17 @@ const DATA_PREVIEW = Object.assign({}, dados, {
    O playbook compilado é grande; ele já é o mesmo conteúdo que o arquivo gerado
    carrega, e o aviso de "contém dados reais, não versione" continua valendo. */
 const PLAYBOOK_PREVIEW = require(path.join(root, 'data', 'field-sales-playbook.compiled.json'));
+/* MESMO CORTE DA ROTA (04/09/26): api/dados.js nao entrega o capitulo de Lideranca para
+   executivo, entao o preview de executivo tambem nao pode mostrar. Preview que mostra o
+   que producao esconde e pior que preview nenhum — era nele que eu ia conferir o corte. */
+const CAPITULO_DE_GESTOR = 'Liderança';
+function playbookDoPapel() {
+  if (usuario && usuario.role === 'manager') return PLAYBOOK_PREVIEW;
+  return Object.assign({}, PLAYBOOK_PREVIEW, {
+    paginas: (PLAYBOOK_PREVIEW.paginas || []).filter(p => p.categoria !== CAPITULO_DE_GESTOR),
+    categorias: (PLAYBOOK_PREVIEW.categorias || []).filter(c => c !== CAPITULO_DE_GESTOR)
+  });
+}
 const PRECIFICACAO_PREVIEW = require(path.join(root, 'data', 'precificacao.json'));
 
 const template = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
@@ -250,7 +261,7 @@ const bootstrap = `
        aqui, as duas abas montam sem rede e sem sessão. Ver a nota longa em
        PLAYBOOK_PREVIEW, no topo deste arquivo. */
     try {
-      playbookCache = ${JSON.stringify(PLAYBOOK_PREVIEW).replace(/<\/script>/gi, '<\\/script>')};
+      playbookCache = ${JSON.stringify(playbookDoPapel()).replace(/<\/script>/gi, '<\\/script>')};
       precificacaoCache = ${JSON.stringify(PRECIFICACAO_PREVIEW).replace(/<\/script>/gi, '<\\/script>')};
     } catch (e) { console.warn('[preview] nao consegui pre-popular playbook/precificacao:', e); }
     if (!${manual ? 'true' : 'false'}) mostrarApp();

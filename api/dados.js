@@ -13,6 +13,10 @@
 
 const { montarDadosCompletos, filtrarParaPapel, USUARIOS, usarSnapshot, temSnapshot, faltandoNoSnapshot } = require('../scripts/montar-dados.js');
 const PLAYBOOK = require('../data/field-sales-playbook.compiled.json');
+/* O único capítulo que não desce para executivo — ver o corte na rota do playbook. O nome
+   é o da categoria no JSON compilado: se ela for renomeada lá, esta linha vai junto, e a
+   suíte do playbook reprova se as duas divergirem. */
+const CAPITULO_DE_GESTOR = 'Liderança';
 const PRECIFICACAO = require('../data/precificacao.json');
 const REALIZADO = require('../lib/realizado.js');
 
@@ -58,7 +62,20 @@ module.exports = async function handler(req, res) {
   // Biblioteca interna sob demanda. Reutiliza esta rota autenticada para não criar uma
   // 13ª Function (limite do plano Vercel Hobby) nem adicionar 400 KB ao login normal.
   if (req.query && req.query.recurso === 'playbook') {
-    return res.status(200).json({ ok: true, playbook: PLAYBOOK });
+    /* ══ LIDERANÇA É CAPÍTULO DE GESTOR (04/09/26, Julyan) ══════════════════════════
+       "essa aba de liderança deveria só aparecer para os managers, apenas esse capitulo
+       que vai ser diferente do playbook do executivo".
+       O CORTE É AQUI e não na tela: esconder no navegador deixaria o conteúdo viajando
+       na resposta, e papel se corta no servidor em todo o resto do app.
+       E o corte é de UM capítulo — o executivo continua com as outras 29 páginas e com
+       a busca sobre tudo o que ele recebe. */
+    const ehGestor = usuario.role === 'manager';
+    if (ehGestor) return res.status(200).json({ ok: true, playbook: PLAYBOOK, papel: 'manager' });
+    const semLideranca = Object.assign({}, PLAYBOOK, {
+      paginas: (PLAYBOOK.paginas || []).filter(p => p.categoria !== CAPITULO_DE_GESTOR),
+      categorias: (PLAYBOOK.categorias || []).filter(c => c !== CAPITULO_DE_GESTOR)
+    });
+    return res.status(200).json({ ok: true, playbook: semLideranca, papel: 'rep' });
   }
   if (req.query && req.query.recurso === 'precificacao') {
     return res.status(200).json({ ok: true, precificacao: PRECIFICACAO });
