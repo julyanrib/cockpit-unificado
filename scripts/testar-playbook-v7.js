@@ -397,29 +397,18 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
     fech.html.indexOf('No follow-up') < 0,
     'a doutrina dela é que o pagamento acontece na mesa — o par ali inverteria o ensino');
 
-  /* O REEQUILÍBRIO: nenhum capítulo com 9 páginas, e o corte é por ASSUNTO. */
-  const porCap = {};
-  compilado.paginas.forEach(function (p) { porCap[p.categoria] = (porCap[p.categoria] || 0) + 1; });
-  const maior = Math.max.apply(null, Object.values(porCap));
-  checar('nenhum capítulo passa de 5 páginas', maior <= 5,
-    'maior: ' + maior + ' — ' + JSON.stringify(porCap));
-  checar('os quatro módulos ficaram juntos, e só eles',
-    porCap['Módulos que viram receita'] === 4
-    && ['dark-kitchen', 'rota-inteligente', 'conciliacao-ofx', 'multilojas'].every(function (id) {
-      const p = compilado.paginas.find(function (x) { return x.id === id; });
-      return p && p.categoria === 'Módulos que viram receita';
-    }));
-  /* VOLUME × VALOR é sobre território, MRR e blindagem da receita — carteira, não
-     fechamento. */
-  checar('Volume × valor mudou para Carteira e retenção',
-    (compilado.paginas.find(function (p) { return p.id === 'clientes-mrr'; }) || {}).categoria === 'Carteira e retenção');
-  /* E O QUE EU NÃO FIZ: encher "Desenvolvimento" de páginas de produto para ele deixar de
-     ter uma página só. Desenvolvimento é a carreira do executivo; catálogo ali seria a
-     mistura que ele pediu para evitar. Capítulo de uma página é melhor que incoerente. */
-  checar('nenhuma página de produto foi parar no capítulo de carreira',
-    compilado.paginas.filter(function (p) { return p.categoria === 'Desenvolvimento'; })
-      .every(function (p) { return p.id === 'plano-carreira'; }),
-    'produto em Desenvolvimento é a mistura que o Julyan pediu para evitar');
+  /* O REEQUILÍBRIO DOS CAPÍTULOS FOI REVERTIDO A PEDIDO DO JULYAN (04/09/26):
+     "nesses modulos que viram receitas, a gente tem tanta coisa pra limitar só naquilo...
+     eu preciso que fale tudo, o executivo precisa saber tudo que a takeat tem, não quero
+     mais reorganizar, prefiro do jeito que estava antes".
+     Eu tinha separado quatro módulos num capítulo próprio para desempatar 9 páginas contra
+     1. O nome do capítulo dava a entender que o produto se resume àqueles quatro — e o
+     conhecimento de produto é justamente o que ele NÃO quer limitar.
+     AS CHECAGENS QUE PRENDIAM AQUELA DIVISÃO SAÍRAM daqui: guarda que trava uma decisão
+     revertida reprova o estado que o dono pediu. Fica registrado que a distribuição
+     desigual (9 e 1) é ESCOLHA, não descuido — para ninguém "consertar" de novo. */
+  checar("Produto e mercado continua inteiro, sem capítulo separado de módulos",
+    compilado.categorias.indexOf("Módulos que viram receita") < 0);
 })();
 
 if (falhas.length) {
