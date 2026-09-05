@@ -8276,6 +8276,24 @@
   .p4-doc-pe{padding:16px 34px 22px;text-align:center;border-top:1px solid rgba(237,234,228,.08);}
   .p4-doc-por{font-size:11px;color:var(--p4-doc-item);}
   .p4-doc-por b{color:var(--p4-doc-ink);}
+  /* O PASSO COMBINADO E A ENTREGA (05/09/26). Duas linhas que a peça não tinha:
+     · o passo saiu do meio do selo de validade porque é compromisso, não letra miúda —
+       ele é a única frase da proposta que o dono vai cobrar de você;
+     · a entrega responde "e depois que eu assino?" antes de ele perguntar, e é a única
+       parte do documento que fala de SERVIÇO em vez de funcionalidade. */
+  /* A MENSAGEM QUE ACOMPANHA O PNG: papel claro embaixo do cartão escuro, para ficar
+     claro que ela NÃO é parte da peça que o dono recebe — ela é o que vai na conversa.
+     pre-wrap porque o texto tem quebras de linha que vão para o WhatsApp como estão. */
+  .p4-msg{margin-top:14px;background:var(--p4-card);border:1px solid var(--p4-linha);
+    border-radius:var(--r-lg);padding:14px 16px;}
+  .p4-msg-rot{font:800 9px var(--font-display);letter-spacing:.18em;color:var(--p4-muted);}
+  /* --p4-escuro e a tinta desta familia; eu havia escrito --p4-ink, que nao existe, e a
+     guarda de alcance pegou: sem fallback a declaracao morre em silencio e o texto herda. */
+  .p4-msg-corpo{margin-top:8px;font-size:12px;line-height:1.6;color:var(--p4-escuro);white-space:pre-wrap;}
+  .p4-doc-passo{font-size:11.5px;line-height:1.5;color:var(--p4-doc-ink);}
+  .p4-doc-passo b{color:#fff;}
+  .p4-doc-entrega{font-size:10.5px;line-height:1.5;color:var(--p4-doc-mut);margin-top:5px;}
+  .p4-doc-por{margin-top:8px;}
   .p4-doc-selo{font:700 9px var(--font-display);letter-spacing:.16em;color:var(--p4-doc-mut);margin-top:6px;}
   /* modo cliente: a coluna de controles sai e o documento centraliza */
   .prc-shell.modo-cliente .p4-grid{grid-template-columns:minmax(0,1fr);padding:24px;}
@@ -19294,7 +19312,7 @@ function prcBlocoDorHTML() {
     const cobre = prcTemRecurso(calcularPrecificacao(), dor.requer);
     partes.push(`<button type="button" class="btn-sec prc-chip-dor" data-prc-dor="1" title="Abrir o mapa dor → solução na dor registrada">
       <em>dor registrada</em>${esc(dor.chip)}</button>`);
-    if (!cobre) partes.push(`<span class="prc-dor-alerta">O plano na tela não cobre <b>${esc(dor.nome.toLowerCase())}</b>. Mínimo que resolve: ${esc(dor.minimo)}.</span>`);
+    if (!cobre) partes.push(`<span class="prc-dor-alerta">O plano na tela não cobre <b>${esc(dor.nome.toLowerCase())}</b>. Mínimo que resolve: ${esc(prcMinimoComPreco(dor))}.</span>`);
   }
   if (sistema) partes.push(`<span class="prc-dor-sistema">usa hoje: <b>${esc(sistema)}</b></span>`);
   return `<div class="prc-dor-linha">${partes.join('')}</div>`;
@@ -19510,9 +19528,9 @@ function prcPreviewHTML() {
   return `
     <div class="p4-doc-topo">
       <img src="assets/logo-takeat.png" alt="Takeat" class="p4-doc-logo">
-      <div class="p4-doc-linha">${esc(String(tipo.rotuloOficial || tipo.nome).toUpperCase())} · ${esc(String(per.nome).toUpperCase())}${per.desconto ? ` (−${per.desconto}%)` : ''}</div>
+      <div class="p4-doc-linha">${esc(String(tipo.nome || tipo.rotuloOficial).toUpperCase())} · ${esc(String(per.nome).toUpperCase())}${per.desconto ? ` (−${per.desconto}%)` : ''}</div>
       <div class="p4-doc-plano">${esc(plano.nome)}</div>
-      <div class="p4-doc-para">preparada para <b>${esc(cliente)}</b></div>
+      <div class="p4-doc-para">para <b>${esc(cliente)}</b>${executivo ? ` · preparada por <b>${esc(executivo)}</b>` : ''}</div>
     </div>
     <div class="p4-doc-corpo">
       <div class="p4-doc-rot">FUNCIONALIDADES</div>
@@ -19541,13 +19559,17 @@ function prcPreviewHTML() {
     <div class="p4-inv">
       <div class="p4-inv-rot">INVESTIMENTO</div>
       <div class="p4-inv-num">${parcelas}<span class="p4-inv-valor">${prcMoedaCentavos(c.mensal)}</span></div>
-      <div class="p4-inv-como">${per.meses > 1 ? '▭ no cartão de crédito' : '▭ cobrança mensal'}</div>
-      <div class="p4-inv-total">${c.economia > 0 ? `<s>de ${prcMoedaCentavos(c.mensalCheio)}/mês</s> · ` : ''}Total: ${prcMoedaCentavos(c.total)}</div>
+      <div class="p4-inv-como">${per.meses > 1 ? '▭ no cartão de crédito' : '▭ no boleto ou cartão · sem fidelidade'}</div>
+      <div class="p4-inv-total">${per.meses > 1
+        ? `${c.economia > 0 ? `<s>de ${prcMoedaCentavos(c.mensalCheio)}/mês</s> · ` : ''}Total: ${prcMoedaCentavos(c.total)}`
+        : 'preço de tabela, por mês'}</div>
       ${c.economia > 0 ? `<span class="p4-inv-eco">↗ Economia de ${prcMoedaCentavos(c.economia)}</span>` : ''}
     </div>
     <div class="p4-doc-pe">
+      <div class="p4-doc-passo">Próximo passo combinado: <b>${diaPasso.toLowerCase()}, ${esc(String(passo.hora))}</b> — fechamento marcado, não pedido.</div>
+      <div class="p4-doc-entrega">implantação assistida por 30 dias · treinamento da equipe incluso · suporte humano 7 dias por semana</div>
       ${executivo ? `<div class="p4-doc-por">preparada por <b>${esc(executivo)}</b>${telExec ? ` · ${esc(telExec)}` : ''}</div>` : ''}
-      <div class="p4-doc-selo">PROPOSTA VÁLIDA POR ${Number(precificacaoCache.validadeDias || 2)} DIA${Number(precificacaoCache.validadeDias || 2) === 1 ? '' : 'S'} · TAKEAT ${new Date().getFullYear()} · PRÓXIMO PASSO: ${diaPasso}, ${esc(String(passo.hora).toUpperCase())}</div>
+      <div class="p4-doc-selo">PROPOSTA VÁLIDA POR ${Number(precificacaoCache.validadeDias || 2)} DIA${Number(precificacaoCache.validadeDias || 2) === 1 ? '' : 'S'} · TAKEAT ${new Date().getFullYear()}</div>
     </div>`;
 }
 
@@ -19555,6 +19577,14 @@ function atualizarPreviewPrecificacao() {
   const slot = document.getElementById('precificacaoPreview');
   if (!slot || !precificacaoCache) return;
   slot.innerHTML = prcPreviewHTML();
+  /* A MENSAGEM VIVE FORA do #precificacaoPreview, então esta linha é o que a mantém viva:
+     sem ela o texto congelaria no primeiro estado e o executivo leria "R$ 549 no mensal"
+     depois de ter escolhido o anual. Mesma função que o CTA envia — uma fonte só. */
+  const msgJunto = document.getElementById('prcMensagemJunto');
+  if (msgJunto) {
+    const corpo = msgJunto.querySelector('.p4-msg-corpo');
+    if (corpo) corpo.textContent = textoPropostaPrecificacao();
+  }
   /* Religa o que vive DENTRO do documento e acabou de ser substituído. Os períodos
      tocáveis do modo cliente estão aqui: sem esta linha, eles aparecem e não
      respondem. */
@@ -19641,6 +19671,22 @@ function atualizarPreviewPrecificacao() {
    colocaria duas afirmações falsas numa proposta de Básico. Com `requer`, quando o
    plano não cobre a dor registrada, a proposta não promete: em vez disso avisa o
    EXECUTIVO (nunca o cliente) qual é o plano mínimo que resolve. */
+/* O PREÇO DO MÍNIMO SAI DA TABELA (05/09/26). O aviso de "plano não cobre esta dor" diz
+   qual é o mínimo que resolve, e trazia o valor do adicional escrito à mão — a suíte nova
+   pegou. Aqui ele é lido de precificacao.json pelo MESMO nome que a lista "requer" já usa,
+   nome e preço nunca divergem. Adicional sem preço na tabela devolve só o texto, em vez
+   de "R$ undefined". */
+function prcMinimoComPreco(dor) {
+  const base = String((dor && dor.minimo) || '').trim();
+  if (!base || !dor || !Array.isArray(dor.requer) || !precificacaoCache) return base;
+  const lista = precificacaoCache.adicionais || [];
+  const precos = dor.requer.map(function (nome) {
+    const a = lista.find(function (x) { return x.nome === nome; });
+    return (a && Number(a.preco)) ? prcMoeda(a.preco) + (a.unidade && a.unidade !== 'mês' ? '/' + a.unidade : '/mês') : null;
+  }).filter(Boolean);
+  return precos.length ? base + ' (' + precos.join(' + ') + ')' : base;
+}
+
 const PRC_DOR = {
   'Fila': {
     chip: 'fila → totem de autoatendimento',
@@ -19648,7 +19694,10 @@ const PRC_DOR = {
     bullet: 'Fila atendida pelo totem, sem contratar ninguém',
     whatsapp: 'Sobre a fila que você me mostrou: o totem atende ela sozinho, sem contratar ninguém.',
     requer: ['Totem de Autoatendimento + TEF Fiserv'],
-    minimo: 'Básico + adicional Totem (R$ 299/mês)'
+    /* SEM PREÇO CRAVADO AQUI: prcMinimoComPreco() põe o valor do adicional lido de
+       data/precificacao.json. Escrito à mão, este número envelhece calado — e ele
+       aparece justamente quando o executivo está decidindo o que oferecer. */
+    minimo: 'Básico + adicional Totem'
   },
   'Falta de Garçom': {
     chip: 'falta de garçom → garçom digital + tablet',
@@ -19680,7 +19729,7 @@ const PRC_DOR = {
     bullet: 'Conta fechada na mesa, dividida na hora',
     whatsapp: 'Sobre o fechamento lento: a conta sai dividida na maquininha, na mesa, na hora.',
     requer: ['Comandas Individuais', 'Maquininha POS', 'TEF Balcão Fiserv'],
-    minimo: 'Básico Completo, ou adicional Maquininha POS (R$ 99/mês)'
+    minimo: 'Básico Completo, ou adicional Maquininha POS'
   },
   'Estoque': {
     chip: 'estoque → controle + curva ABC',
@@ -19839,8 +19888,14 @@ function prcBlocoOperacaoHTML() {
       ${precificacaoCache.tipos.map(t => {
         const on = precificacaoEstado.tipo === t.id;
         const curto = (t.rotuloOficial || t.nome).split(',')[0].trim().toUpperCase();
+        /* A SEGUNDA LINHA DIZ O QUE A OPERAÇÃO É, e antes ela repetia o rótulo: o botão
+           lia "COMPLETO" e, embaixo, "Completo". Duas linhas para a mesma palavra ocupam
+           o lugar da única informação que faz o dono do restaurante escolher junto.
+           O texto mora AQUI e não em precificacao.json de propósito: aquele arquivo é a
+           tabela de PREÇO conferida, e legenda de botão é redação de tela — misturar as
+           duas faz revisão de preço tropeçar em revisão de texto. */
         return `<button type="button" class="p4-op-btn${on ? ' is-on' : ''}" data-prc-tipo="${t.id}" aria-pressed="${on}">
-          ${esc(curto)}<span>${esc(t.rotuloOficial || t.nome)}</span>
+          ${esc(curto)}<span>${t.id === 'mesas' ? 'salão + delivery + caixa' : 'só operação de entrega'}</span>
         </button>`;
       }).join('')}
     </div>
@@ -19889,13 +19944,18 @@ function prcBlocoPeriodoHTML() {
         const economiaMes = base.mensal - c.mensal;
         const meses = base.mensal > 0 ? (c.economia / base.mensal) : 0;
         /* mensal é a tabela; trimestral mostra o absoluto; semestral e anual, meses grátis */
+        const gratis = '≈ ' + meses.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+          + (meses >= 2 ? ' meses' : ' mês') + ' grátis';
+        /* trimestral dá 0,3 mês e chamar isso de "quase um terço de mês grátis" soa a
+           truque — ali fica só o absoluto, que é o número que ele confere na hora. */
         const nota = per.meses === 1 ? 'preço de tabela'
-          : (per.id === 'trimestral' ? 'economiza ' + prcMoeda(c.economia)
-            : '≈ ' + meses.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + (meses >= 2 ? ' meses' : ' mês') + ' grátis');
+          : (per.id === 'trimestral'
+            ? 'economiza ' + prcMoeda(c.economia) + '/período'
+            : gratis + ' · economiza ' + prcMoeda(c.economia) + '/período');
         return `<button type="button" class="p4-periodo${on ? ' is-on' : ''}" data-prc-periodo="${per.id}" aria-pressed="${on}">
           <!-- o selo fica só no de maior desconto (anual), como no mockup: quatro selos
                na mesma fileira competem entre si e nenhum chama atenção. -->
-          ${per.id === maiorDesconto ? `<span class="p4-selo is-escuro">−${per.desconto}%</span>` : ''}
+          ${per.desconto ? `<span class="p4-selo is-escuro">−${per.desconto}%</span>` : ''}
           <span class="p4-periodo-rot">${esc(String(per.nome).toUpperCase())}</span>
           <span class="p4-periodo-valor">${economiaMes > 0 ? `<s>${prcMoeda(base.mensal)}</s> ` : ''}${prcMoeda(c.mensal)}</span>
           <span class="p4-periodo-nota${per.meses === 1 ? '' : ' is-verde'}">${esc(nota)}</span>
@@ -19994,7 +20054,18 @@ function renderPrecificacaoConfigurador() {
           <div class="p4-so-voce-chips">${PRC_OBJECOES.map(o => `<button type="button" data-prc-objecao="${o.n}">“${esc(o.chip)}”</button>`).join('')}</div>
         </div>`}
       </div>
+      <!-- A MENSAGEM QUE VAI JUNTO (05/09/26). O PNG não viaja sozinho: o WhatsApp leva
+           imagem + texto, e o texto é o que faz o dono abrir a imagem. Ele já existia —
+           textoPropostaPrecificacao() é a MESMA função que o CTA envia e que o "copiar
+           texto" copia — e não aparecia em lugar nenhum antes de enviar. O executivo
+           mandava para o cliente uma frase que ele nunca tinha lido.
+           FICA FORA do cartão escuro de propósito: dentro, ela pareceria parte da peça
+           que o dono recebe. Aqui ela é o que ACOMPANHA a peça. -->
       <div class="prc-proposal" id="precificacaoPreview">${prcPreviewHTML()}</div>
+      ${prcModoCliente ? '' : `<div class="p4-msg" id="prcMensagemJunto">
+        <div class="p4-msg-rot">MENSAGEM QUE VAI JUNTO</div>
+        <div class="p4-msg-corpo">${esc(textoPropostaPrecificacao())}</div>
+      </div>`}
     </div>
   </div>`;
 
