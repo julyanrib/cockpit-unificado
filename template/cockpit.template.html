@@ -33640,8 +33640,12 @@ function gxTextoPautaDo11(r) {
   const nl = String.fromCharCode(10);
   const partes = ['Pauta do 1:1 — ' + r.name + ' (' + (r.praca || 'praça não informada') + ')',
     'Carga de ' + (DATA.hubspotUpdatedAtFmt || 'horário não informado'), ''];
-  if (r.gargalo) {
-    const limpo = String(r.gargalo).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+  /* A frase vem do funil ao vivo (fraseDoGargalo) e não do parágrafo da IA, que saiu
+     em 05/09 junto com o robô que o escrevia. Continua sendo texto puro aqui: isto é
+     para colar no WhatsApp, então a marcação sai. */
+  const ondeTreinar = (typeof fraseDoGargalo === 'function') ? fraseDoGargalo(r) : '';
+  if (ondeTreinar) {
+    const limpo = String(ondeTreinar).replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
     partes.push('ONDE TREINAR:', limpo, '');
   }
   let frentes = [];
@@ -33808,11 +33812,16 @@ function renderCockpitDossieInline() {
            antes de saber por onde começar a conversa. A manchete é UMA linha com o filete
            vermelho, tirada do mesmo texto que já existia (r.gargalo, escrito pela análise
            individual) — as formas continuam logo abaixo, na mesma ordem. -->
-      ${souRepSessao || !r.gargalo ? '' : `
+      ${(() => {
+        if (souRepSessao) return '';
+        const frase = fraseDoGargalo(r);
+        if (!frase) return '';
+        return `
         <div class="gx-treinar">
           <div class="gx-treinar-k">Onde treinar com ${esc(String(r.name).split(' ')[0])} esta semana</div>
-          <div class="gx-treinar-tx">${r.gargalo}</div>
-        </div>`}
+          <div class="gx-treinar-tx">${frase}</div>
+        </div>`;
+      })()}
 
       <!-- O FUNIL DELE (30/08/26). Onde o funil dele engorda, onde os negócios morrem,
            quanto dinheiro está parado, quanto falta de meta e quanto ele cumpriu do que
@@ -33975,7 +33984,7 @@ function renderRepsList() {
             <div style="font-size:13px;font-weight:600;line-height:1.3;overflow-wrap:break-word;">${r.name}</div>
             <div style="font-size:11px;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.praca}</div>
           </div>
-          <span class="rep-tag ${semDados ? 'nodata' : r.tag}" style="margin-left:4px;flex:none;">${r.tagLabel}</span>
+          ${(() => { const e = estadoDoRep(r); return `<span class="rep-tag ${semDados ? 'nodata' : e.tag}" style="margin-left:4px;flex:none;">${semDados ? 'Sem dados' : esc(e.rotulo)}</span>`; })()}
         </div>
         <div class="mono" style="font-size:13px;text-align:right;${semDados ? 'color:var(--muted2);' : ''}">${semDados ? '—' : r.open}</div>
         <div style="text-align:right;">
@@ -34112,7 +34121,7 @@ function buildDetailHTML(r, idPrefix, skipLeadsList) {
 
     ${souRepSessao ? '' : `
     <h3 class="block-label">GARGALO <span style="font-weight:500;text-transform:none;color:var(--muted2);">(análise de ${DATA.versaoAnalise || '—'} — pode estar desatualizada)</span></h3>
-    <div class="gargalo-box">${r.gargalo}</div>
+    ${(() => { const f = fraseDoGargalo(r); return f ? `<div class="gargalo-box">${f}</div>` : ''; })()}
 
     <h3 class="block-label">BOA PRÁTICA — ação a executar</h3>
     <ul class="practice-list">${r.boasPraticas.map(b => `<li>${b}</li>`).join('')}</ul>
@@ -43314,6 +43323,50 @@ function atividadesComprovadasNoDia(ownerId, dataISO) {
    travada mede fluxo INTERROMPIDO. O Bruno tem 1 de 18 acima do SLA (parece o mais
    saudável do time) e 14 em Visita com ZERO em Conversa com Decisor — ele é o caso
    mais grave, e qualquer régua baseada só em SLA o coloca por último. */
+/* ══ O ESTADO E A FRASE DO GARGALO, SEM IA (05/09/26) ═══════════════════════════════
+   Substituem reps[].tag, reps[].tagLabel e reps[].gargalo, que eram escritos pelo robô
+   diário (apagado). Saem de gargaloDoRep() + GESTO_DA_ETAPA, que é o mesmo par que a
+   aba do executivo usa desde 30/08 — e que o próprio comentário do workflow já dizia
+   ser melhor: "vivo, gratuito, e é AÇÃO em vez de descrição".
+   A regra do estado é a mesma que o prompt pedia à IA, agora escrita como conta:
+     crit  — mais da metade do funil parado numa etapa só, ou SLA estourado em 1/4 dele
+     warn  — concentração alta (>=40%) mas com movimento
+     ok    — distribuído
+     nodata— sem negócio em aberto */
+function estadoDoRep(r) {
+  const abertos = Number(r && r.open) || 0;
+  if (!abertos) return { tag: 'nodata', rotulo: 'Sem dados' };
+  const g = (typeof gargaloDoRep === 'function') ? gargaloDoRep(r) : null;
+  const travados = Number(r && r.leadsTravados) || 0;
+  const concentracao = (g && g.n && abertos) ? (g.n / abertos) : 0;
+  const etapa = (g && g.sid && typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[g.sid]) || '';
+  if (travados / abertos >= 0.25) {
+    return { tag: 'crit', rotulo: 'SLA estourado' };
+  }
+  if (concentracao >= 0.5 && etapa) {
+    return { tag: 'crit', rotulo: 'Travado em ' + etapa };
+  }
+  if (concentracao >= 0.4 && etapa) {
+    return { tag: 'warn', rotulo: 'Concentrado em ' + etapa };
+  }
+  return { tag: 'ok', rotulo: 'Funil distribuído' };
+}
+
+/* A frase que substitui o parágrafo da IA: o degrau travado e o gesto que o sobe.
+   Uma linha, do funil de agora. Sem etapa travada, devolve vazio — e quem chama
+   simplesmente não desenha o bloco, em vez de imprimir "tudo certo" decorativo. */
+function fraseDoGargalo(r) {
+  if (!r) return '';
+  const g = (typeof gargaloDoRep === 'function') ? gargaloDoRep(r) : null;
+  if (!g || g.vazio || !g.sid) return '';
+  const meta = (typeof GESTO_DA_ETAPA !== 'undefined' && GESTO_DA_ETAPA[g.sid]) || null;
+  const etapa = (meta && meta.rotulo) || (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[g.sid]) || 'a etapa mais cheia';
+  const abertos = Number(r.open) || 0;
+  const pct = abertos ? Math.round((g.n / abertos) * 100) : 0;
+  const gesto = (meta && meta.gesto) || 'executar o próximo movimento e registrar no HubSpot';
+  return `<b>${g.n} de ${abertos} negócios (${pct}%) parados em ${etapa}</b>. O gesto que sobe esse degrau: <b>${gesto}</b>.${g.trav ? ` ${g.trav} deles já passaram da régua da etapa.` : ''}`;
+}
+
 function gargaloDoRep(r) {
   const stages = (r && r.stages) || {};
   const ordem = ORDEM_ETAPAS_FUNIL.filter(sid => STAGE_LABELS[sid]);
@@ -53749,72 +53802,12 @@ function narrativaDataNoTexto(texto) {
   return achados.sort((a, b) => a - b)[0];
 }
 
-// Números que a prosa afirma, comparados com o funil ao vivo. Só checa o que dá
-// pra checar sem interpretar a frase: "N negócios em aberto" e "N leads com SLA".
-function narrativaDivergencias(texto, r) {
-  const t = String(texto || '').replace(/<[^>]*>/g, ' ');
-  const out = [];
-  const abertos = t.match(/(\d+)\s+neg[óo]cios?\s+em\s+aberto/i);
-  if (abertos && r.open != null) {
-    const noTexto = Number(abertos[1]);
-    const aoVivo = Number(r.open);
-    /* Texto que dirige o dia não ganha tolerância: 31 escrito e 30 ao vivo já são
-       universos diferentes. A leitura continua acessível como histórico, mas perde a
-       autoridade de gerar a ação de hoje na primeira divergência. */
-    if (noTexto !== aoVivo) {
-      out.push({ campo: 'negócios em aberto', noTexto, aoVivo });
-    }
-  }
-  const sla = t.match(/(\d+)\s+(?:dos?\s+\d+\s+)?leads?\s+com\s+SLA/i);
-  if (sla && Array.isArray(r.travados)) {
-    const noTexto = Number(sla[1]);
-    const aoVivo = r.travados.length;
-    if (noTexto !== aoVivo) {
-      out.push({ campo: 'leads com SLA estourado', noTexto, aoVivo });
-    }
-  }
-  return out;
-}
-
-// Idade a partir da qual uma leitura semanal deixa de valer como leitura de hoje.
-// 10 dias corridos: mais de uma semana comercial inteira aconteceu no meio.
-const NARRATIVA_VALIDADE_DIAS = 10;
-
-function narrativaSaude(r) {
-  const texto = String((r && r.gargalo) || '');
-  const carimbo = (DATA.versaoAnalise && /^\d{4}-\d{2}-\d{2}$/.test(DATA.versaoAnalise)) ? DATA.versaoAnalise : null;
-  const dataTexto = narrativaDataNoTexto(texto);
-  // Vale a data mais ANTIGA entre carimbo e prosa: é a idade real do conteúdo.
-  const base = dataTexto && carimbo
-    ? (dataTexto < new Date(carimbo + 'T12:00:00Z') ? dataTexto : new Date(carimbo + 'T12:00:00Z'))
-    : (dataTexto || (carimbo ? new Date(carimbo + 'T12:00:00Z') : null));
-  const idadeDias = base ? Math.floor((Date.now() - base.getTime()) / 86400000) : null;
-  const divergencias = narrativaDivergencias(texto, r);
-  return {
-    temTexto: !!texto.trim(),
-    carimbo,
-    dataBase: base,
-    dataBaseFmt: base ? base.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : null,
-    idadeDias,
-    expirada: idadeDias != null && idadeDias > NARRATIVA_VALIDADE_DIAS,
-    divergencias,
-    // Inválida = expirada OU contradiz o funil ao vivo. Continua existindo (é
-    // histórico do que foi conversado), só perde o direito de dirigir o dia.
-    valida: !!texto.trim() && !(idadeDias != null && idadeDias > NARRATIVA_VALIDADE_DIAS) && divergencias.length === 0
-  };
-}
-
-function narrativaAvisoHTML(saude) {
-  if (!saude.temTexto || saude.valida) return '';
-  const partes = [];
-  if (saude.expirada) partes.push(`escrita há ${saude.idadeDias} dias (base ${saude.dataBaseFmt})`);
-  saude.divergencias.forEach(d => partes.push(`diz ${d.noTexto} ${d.campo}, o funil de hoje tem ${d.aoVivo}`));
-  return `
-    <div style="background:var(--amber-soft);border:1px solid rgba(184,121,14,.3);border-radius:var(--r-md);padding:11px 14px;font-size:11px;color:var(--amber-ink);line-height:1.55;margin-bottom:12px;">
-      <b>Esta leitura não descreve o seu funil de hoje</b> — ${esc(partes.join(' · '))}.
-      Ela fica aqui como registro do que foi conversado, não como plano de hoje. Os números do HubSpot ao lado valem agora.
-    </div>`;
-}
+/* A MÁQUINA DE MEDIR A PROSA SAIU (05/09/26): narrativaDivergencias, narrativaSaude e
+   narrativaAvisoHTML existiam para descobrir quando o parágrafo da IA tinha envelhecido
+   e avisar na tela que ele não descrevia mais o funil. O parágrafo saiu junto com o robô
+   que o escrevia; sem ele, as três mediam o vazio.
+   narrativaDataNoTexto FICA, logo acima: ela lê a data escrita dentro do texto de um
+   acordo do 1:1 ("até quinta (20/08)") e é o que dá prazo aos acordos. */
 
 /* ---------------------------------------------------------------------------
    Compromissos do 1:1 com prazo real
@@ -54219,7 +54212,8 @@ async function renderPDIs() {
     // ANTES, pra chegar no 1:1 sabendo do que se trata em vez de ser informado na hora.
     const indSemana = (DATA.resumoSemanal && DATA.resumoSemanal.porRep && r)
       ? DATA.resumoSemanal.porRep[r.ownerId] : null;
-    const temGargalo = !!(r && r.gargalo);
+    /* temGargalo/gargaloTxt/fonteTag/corpoGargalo saíram em 05/09: eles liam o parágrafo
+       da IA, que não é mais escrito nem mostrado. O que a aba usa é gestoVivo, do funil. */
 
     // ===== BLOCO 40 (14/08/26) — repaginação da aba Desenvolvimento do executivo, a
     // partir do mock preview/desenvolvimento-executivo.html. O Bloco 37 trouxe a moldura
@@ -54289,12 +54283,7 @@ async function renderPDIs() {
       return `Funil girando: ${abertosRep} abertos e ${fechadosRep} de ${metaRep} fechados no mês`;
     })();
 
-    // O prefixo de fonte do texto da IA vira a TAG do card (é literalmente o que o mock
-    // pede na tag) e sai do corpo — em vez de aparecer duas vezes na mesma tela.
-    const gargaloTxt = temGargalo ? String(r.gargalo) : '';
-    const casaFonte = gargaloTxt.match(/^\s*<b>\s*HubSpot([^<]*)<\/b>\s*/i);
-    const fonteTag = casaFonte ? casaFonte[1].replace(/^[\s(]+|[\s):]+$/g, '') : '';
-    const corpoGargalo = casaFonte ? gargaloTxt.slice(casaFonte[0].length) : gargaloTxt;
+
 
     // Sexta desta semana (se hoje é sexta, é hoje). Fuso: UTC tratado como Brasília, mesma
     // convenção do resto do template.
@@ -54318,7 +54307,6 @@ async function renderPDIs() {
        Voltaram para cá quando o quadro passou a ser o markup do mockup: elas estavam
        intercaladas com os construtores de HTML que saíram, e vieram junto na remoção.
        Aqui não há uma linha de HTML — só o que a tela precisa saber. */
-    const saudeNarrativa = narrativaSaude(r);
     /* O GESTO VIVO (28/08/26) — o que entra onde a prosa da IA não vale.
 
        A prosa do gargalo deixou de ser gerada no cron (ver a nota longa no workflow
@@ -54616,7 +54604,7 @@ async function renderPDIs() {
       cor: CORES_PRIORIDADE[k] || CORES_PRIORIDADE[2],
       tag: a.tag || 'da sua semana',
       titulo: a.txt,
-      porque: a.porque || (saudeNarrativa.valida ? `até sexta (${dataSexta})` : 'do HubSpot de agora — vale hoje'),
+      porque: a.porque || 'do HubSpot de agora — vale hoje',
       como: a.como || '',
       cta: a.ir ? a.ir.rotulo : '',
       ir: a.ir || null,
@@ -55262,7 +55250,7 @@ async function renderCoaching() {
           <span class="coach-timeline-num">2</span>
           <div class="coach-timeline-body">
             <div class="coach-timeline-label">Nomear o gargalo com dado <span class="coach-timeline-sub">(análise de ${DATA.versaoAnalise || '—'})</span></div>
-            <div class="coach-timeline-text coachingGargaloRoteiro">${r.gargalo || 'Sem gargalo mapeado ainda.'}</div>
+            <div class="coach-timeline-text coachingGargaloRoteiro">${fraseDoGargalo(r) || 'Sem gargalo mapeado ainda.'}</div>
           </div>
         </div>
         <div class="coach-timeline-item">
@@ -55350,7 +55338,8 @@ async function renderCoaching() {
 
   if (!erroSemanas && semanas && semanas.length > 0) {
     el.querySelector('.coachingTendencia').innerHTML = tendenciaBadge(semanas[0].tendencia);
-    el.querySelector('.coachingGargaloRoteiro').textContent = semanas[0].gargalo_semana || r.gargalo;
+    /* o fallback deixa de ser a prosa velha e passa a ser a frase do funil de agora */
+    el.querySelector('.coachingGargaloRoteiro').innerHTML = semanas[0].gargalo_semana || fraseDoGargalo(r) || 'Sem gargalo mapeado ainda.';
   }
 
   const mensalEl = el.querySelector('.coachingMensal');
