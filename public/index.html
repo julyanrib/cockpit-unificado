@@ -54012,11 +54012,14 @@ function rt7Dados() {
       slots: temSemana ? slotsCheios + '/35' : 'não montada',
       rota: e.naRota ? e.naRota + ' na rota' : 'nenhuma conta na rota',
       rotaCor: e.naRota ? '#1E9E7B' : '#8A3B3B',
-      /* CHECK-IN AINDA NÃO CHEGA AQUI, e a tela não finge: o realizado do Expogo é
-         sincronizado para o HubSpot pelo robô da Daily, e não há contador por semana
-         exposto no snapshot. Dizer "0 cumpridos" seria acusar o time de não ter ido à
-         rua quando o que falta é a medida. */
-      cump: 'check-in não medido nesta tela',
+      /* O CUMPRIDO DA RUA EXISTE (06/09/26). Eu tinha escrito aqui que não era medido; o
+         Julyan apontou que a visita marcada na rua vai para o Expogo e chega ao HubSpot,
+         e chega mesmo — o robô da Daily grava realizado_visitas por dia em `dailies`.
+         A mesma soma da aba Semana, reusada. */
+      cump: (function () {
+        const vs = (typeof sm9VisitasDaSemana === 'function') ? sm9VisitasDaSemana(oid) : { medido: false };
+        return vs.medido ? vs.v + ' visita(s) na semana' : 'sem daily registrada nesta semana';
+      }()),
       cumpCor: '#7A8494',
       alvo: e.carteira + ' na carteira · ' + e.fila + ' na fila',
       alvoCor: '#7A8494',
@@ -54528,6 +54531,41 @@ function sm9DiaUtil() {
   return { dia: Math.max(0, Math.min(5, dif + 1)), de: 5 };
 }
 
+/* ── AS VISITAS DA SEMANA, somadas do que o time registrou na rua ────────────────
+   Vem de `dailies.realizado_visitas`, que o robô da Daily grava por pessoa por dia a
+   partir da tarefa de visita no HubSpot — que por sua vez nasce do registro no Expogo.
+   O app já carrega 42 dias em dailiesCache, então isto é um laço de cinco chaves.
+
+   DIA SEM LINHA NÃO É DIA SEM VISITA: é dia sem registro. Por isso a função conta
+   quantos dias TÊM linha e devolve `medido: false` quando não há nenhum — aí o placar
+   mostra "—", que é a verdade, em vez de zero, que seria acusação. */
+function sm9VisitasDaSemana(ownerId) {
+  const seg = sm9Segunda();
+  if (!seg || typeof getDaily !== 'function' || typeof addDays !== 'function') {
+    return { v: null, medido: false, dias: 0, fonte: 'cache de dailies indisponível nesta sessão' };
+  }
+  const hoje = (typeof agendaChave === "function" && typeof agendaAgora === "function")
+    ? agendaChave(agendaAgora()) : null;
+  let soma = 0, diasComLinha = 0;
+  for (let i = 0; i < 5; i++) {
+    const dia = addDays(seg, i);
+    /* não olha o futuro: sexta ainda não aconteceu na terça */
+    if (hoje && dia > hoje) break;
+    const linha = getDaily(String(ownerId), dia);
+    if (!linha) continue;
+    diasComLinha++;
+    soma += Number(linha.realizado_visitas) || 0;
+  }
+  return {
+    v: diasComLinha ? soma : null,
+    medido: diasComLinha > 0,
+    dias: diasComLinha,
+    fonte: diasComLinha
+      ? 'tarefa de visita no HubSpot (registro do Expogo), somada em ' + diasComLinha + ' dia(s) de daily'
+      : 'nenhuma linha de daily nesta semana ainda'
+  };
+}
+
 /* ── o cumprido, por pessoa, com a fonte de cada coluna ─────────────────────────── */
 function sm9Cumprido(ownerId) {
   const rep = (DATA.reps || []).find(r => String(r.ownerId) === String(ownerId)) || {};
@@ -54535,8 +54573,7 @@ function sm9Cumprido(ownerId) {
   const criados = (rs.leadsCriadosSemanaDetalhe || []).filter(x => String(x.ownerId) === String(ownerId)).length;
   return {
     fechamentos: { v: Number(rep.ganhosSemana) || 0, medido: true, fonte: 'HubSpot ao vivo' },
-    /* NÃO MEDIDO, e por isso não é zero — ver o comentário do topo */
-    visitas: { v: null, medido: false, fonte: 'check-in do Expogo não chega ao snapshot por semana' },
+    visitas: sm9VisitasDaSemana(ownerId),
     prospeccao: { v: criados, medido: !!(rs.leadsCriadosSemanaDetalhe), fonte: 'resumo semanal, janela ' + ((rs.janela && rs.janela.atual) || 'não informada') }
   };
 }
@@ -54944,8 +54981,24 @@ function sm9Dados() {
     { rot: 'Fechamentos', v: P.comecou ? String(P.feitos) : '—', de: 'meta ' + P.meta + (P.metaEhPrometida ? ' (prometida)' : ' (derivada)'), cor: '#FFFDF8' },
     { rot: 'Projeção sexta', v: P.projecao == null ? '—' : String(P.projecao), de: P.comecou ? (P.atras ? 'abaixo da meta' : 'na meta') : 'a semana não começou', cor: P.atras ? '#FF5F6E' : '#7FD9BE' },
     { rot: 'Novo MRR no mês', v: tl5Mil(mrrDoMes), de: clientesDoMes + ' de ' + clientesDoMes + ' com MRR', cor: '#7FD9BE' },
-    /* VISITAS NÃO SÃO MEDIDAS POR SEMANA — o slot fica, dizendo isso, em vez de um F/P falso */
-    { rot: 'Visitas F/P', v: '—', de: 'check-in do Expogo não chega por semana', cor: '#8B93A3' },
+    /* VISITAS F/P DE VERDADE: soma da semana contra a soma prometida. Sem promessa,
+       mostra só o feito; sem nenhuma linha de daily, mostra "—". */
+    (function () {
+      const feito = elenco.reduce((s2, u) => { const c = sm9VisitasDaSemana(u.ownerId); return s2 + (c.medido ? c.v : 0); }, 0);
+      const algumMedido = elenco.some(u => sm9VisitasDaSemana(u.ownerId).medido);
+      const prometido = elenco.reduce((s2, u) => {
+        const p = s.promessas[String(u.ownerId)];
+        return s2 + ((p && p.promessa && Number(p.promessa.visitas)) || 0);
+      }, 0);
+      const esperadoPct = Math.round(P.dia / P.de * 100);
+      return {
+        rot: 'Visitas F/P',
+        v: !algumMedido ? '—' : (prometido ? feito + '/' + prometido : String(feito)),
+        de: !algumMedido ? 'nenhuma daily registrada nesta semana'
+          : (prometido ? 'esperado até hoje: ' + esperadoPct + '%' : 'ninguém prometeu visita'),
+        cor: !algumMedido ? '#8B93A3' : (prometido && feito < prometido * (P.dia / P.de) ? '#FF5F6E' : '#7FD9BE')
+      };
+    }()),
     { rot: 'Promessa não dada', v: String(semPromessa.length), de: semPromessa.length ? semPromessa.map(u => String(u.nome).split(' ')[0]).join(', ') : 'todos deram', cor: semPromessa.length ? '#FF5F6E' : '#7FD9BE' }
   ];
 
@@ -54967,7 +55020,10 @@ function sm9Dados() {
     const rm = m.porRep.find(x => x.ownerId === oid) || { acima: 0, abertos: 0 };
 
     const fe = par(c.fechamentos.v, Number(prom.fechamentos) || 0, P.comecou);
-    const vis = par(null, Number(prom.visitas) || 0, false);
+    /* MEDE DE VERDADE AGORA: a coluna era "—" fixa porque eu tinha concluído que visita
+       por semana não existia. Existe — soma de dailies. Só fica "—" quando não há
+       nenhuma linha de daily na semana. */
+    const vis = par(c.visitas.v, Number(prom.visitas) || 0, P.comecou && c.visitas.medido);
     const prs = par(c.prospeccao.v, Number(prom.prospeccao) || 0, P.comecou && c.prospeccao.medido);
 
     /* PACE só com dimensão que tem promessa E medida — prometer 0 não premia, e não medir
@@ -54975,6 +55031,8 @@ function sm9Dados() {
     const dims = [];
     if (P.comecou && Number(prom.fechamentos) > 0) dims.push(c.fechamentos.v / Number(prom.fechamentos));
     if (P.comecou && c.prospeccao.medido && Number(prom.prospeccao) > 0) dims.push(c.prospeccao.v / Number(prom.prospeccao));
+    /* terceira dimensão, agora que ela tem medida */
+    if (P.comecou && c.visitas.medido && Number(prom.visitas) > 0) dims.push(c.visitas.v / Number(prom.visitas));
     const pct = dims.length ? Math.min(100, Math.round(dims.reduce((a, b) => a + b, 0) / dims.length * 100)) : null;
     const esperadoPct = Math.round(P.dia / P.de * 100);
 
@@ -55105,7 +55163,7 @@ function sm9Dados() {
     fBorda: marcados === ROTEIRO.length ? '#1E9E7B' : '#DCE1EA',
     metas, leituras,
     notaDeFonte: 'Cumprido: HubSpot — fechamentos ao vivo por pessoa (' + (DATA.hubspotUpdatedAtFmt || 'sem carimbo') + '), '
-      + 'prospecção pela janela do resumo semanal, visitas por semana NÃO medidas (check-in do Expogo não chega ao snapshot). '
+      + 'prospecção pela janela do resumo semanal, visitas somadas de dailies.realizado_visitas (tarefa de visita no HubSpot, que nasce do registro no Expogo). '
       + 'Prometido: Supabase planos_semanais, dado por cada um no Meu Funil. Escada, tempos, praças e ciclo: '
       + ((DATA.historicoEtapas && DATA.historicoEtapas.negocios) || 0) + ' negócios em '
       + ((DATA.historicoEtapas && DATA.historicoEtapas.dias) || 0) + ' dias. Nenhum texto desta aba é gerado por IA.'
