@@ -11905,6 +11905,13 @@
   </div>
 
   <div class="view" id="viewMeuFunil">
+
+    <!-- ══ A PALAVRA DA SEMANA (06/09/26) ═══════════════════════════════════════
+         Metade do par que a aba Semana v2 do gestor mede. O cumprido sempre veio do
+         HubSpot; o prometido nao existia — nem coluna, nem tela. Fica ACIMA do funil e
+         em no proprio, porque renderMeuFunil reescreve #meuFunilContent inteiro a cada
+         navegacao e levaria o cartao junto. -->
+    <div id="pm8Raiz"></div>
     <div id="meuFunilContent"></div>
   </div>
 
@@ -19621,9 +19628,277 @@ document.addEventListener('keydown', ev => {
 /* ── O RENDER ─────────────────────────────────────────────────────────────────────────
    O nome da função fica: ela é chamada de cinco lugares (troca de aba, pós-ação, atalho
    do Hoje) e nenhum deles precisa saber que a tela mudou por dentro. */
+/* ═══ A PROMESSA DA SEMANA, NO MEU FUNIL DO EXECUTIVO (06/09/26) ═══════════════════
+   Metade do par que a aba Semana v2 do gestor mede. O cumprido sempre veio do HubSpot; o
+   PROMETIDO não existia — nem coluna, nem tela onde a pessoa desse a palavra. Esta é a
+   tela. A outra metade (o placar por nome) é a Semana do gestor.
+
+   TRÊS DECISÕES QUE VALE DIZER EM VOZ ALTA:
+
+   1. A SUGESTÃO É CALCULADA, A PROMESSA É DELE. O sistema chega com um número em cima da
+      mesa (gap da meta ÷ semanas que faltam, limitado pelo que ele TEM maduro no funil) —
+      porque promessa em campo branco vira zero ou chute. Mas o campo é editável e quem
+      confirma é ele: é isso que faz o placar da segunda ser cobrança de compromisso
+      próprio, e não de meta atribuída.
+
+   2. A SUGESTÃO NÃO PROMETE O QUE ELE NÃO TEM. Se o gap da meta pede 5 fechamentos e ele
+      tem 2 negócios em Negociação/Ag. Pagamento, a sugestão é 2 — e a tela DIZ isso. Pedir
+      5 seria transformar a promessa em ficção na primeira segunda.
+
+   3. O ATRASO É REGISTRADO, NÃO PUNIDO PELA TELA. A regra do produto é 8h30 de segunda.
+      Depois disso ele ainda pode dar a palavra (melhor tarde que nunca), e o carimbo
+      guarda a hora — quem lê a consequência é o placar do gestor, que já sabe dizer
+      "promessa dada seg 8h07" ou "dada terça 14h20, fora do prazo". Tela que se recusa a
+      gravar às 8h31 só produz semana sem promessa nenhuma. */
+
+const PM8 = { promessa: null, carregou: false, salvando: false, toast: null, rascunho: null };
+
+/* A SEMANA VEM DE pl6SegundaDaSemana, NAO DE UMA CONTA MINHA (06/09/26).
+   Eu tinha escrito a minha: (getDay()+6)%7 dias para tras. Ela dava 31/08 num domingo,
+   06/09 — a semana que JA ACABOU —, enquanto o produto grava em 07/09, porque a regra
+   daqui e "a semana corrente ate sexta 17h; dai em diante, a seguinte". O executivo
+   planeja no domingo a semana que comeca amanha.
+   pl6SegundaDaSemana ja implementa isso, e o comentario dela lista TRES tentativas
+   erradas antes de acertar (ternario cobrindo so um argumento, meia-noite UTC lida como
+   local, e por fim agendaChave). Reescrever a quarta versao seria pedir o quarto erro. */
+function pm8Segunda() {
+  if (typeof pl6SegundaDaSemana === 'function') return pl6SegundaDaSemana();
+  /* sem ela o cartao nao adivinha semana: prefiro nao desenhar a gravar no dia errado */
+  return null;
+}
+function pm8DiasUteisRestantesNoMes() {
+  const h = new Date();
+  const fim = new Date(h.getFullYear(), h.getMonth() + 1, 0);
+  let n = 0;
+  for (let d = new Date(h); d <= fim; d.setDate(d.getDate() + 1)) {
+    const w = d.getDay();
+    if (w !== 0 && w !== 6) n++;
+  }
+  return n;
+}
+
+/* ── a sugestão, calculada do funil dele ─────────────────────────────────────────── */
+function pm8Sugestao() {
+  const r = (DATA.reps || []).find(x => sessaoAtual && String(x.ownerId) === String(sessaoAtual.ownerId));
+  if (!r) return null;
+  const meta = Number(r.metaMensal) || 10;
+  const feitos = Number(r.fechadosNoMes) || 0;
+  const gap = Math.max(0, meta - feitos);
+  const semanas = Math.max(1, Math.ceil(pm8DiasUteisRestantesNoMes() / 5));
+  const pedidoPelaMeta = Math.ceil(gap / semanas);
+
+  /* O QUE ELE TEM MADURO: negócios nas duas últimas etapas antes do ganho. É o teto
+     honesto da promessa de fechamento desta semana. */
+  const MADURAS = ['1395880472', '1395880473'];
+  const maduros = MADURAS.reduce((t, id) => {
+    const ls = (DATA.funilLeads && DATA.funilLeads[id]) || [];
+    return t + ls.filter(l => String(l.ownerId) === String(r.ownerId)).length;
+  }, 0);
+
+  const fechamentos = Math.max(0, Math.min(pedidoPelaMeta, maduros));
+  const carteira = (DATA.funilLeads ? Object.keys(DATA.funilLeads) : []).reduce((t, id) => {
+    const ls = DATA.funilLeads[id] || [];
+    return t + ls.filter(l => String(l.ownerId) === String(r.ownerId)).length;
+  }, 0);
+
+  return {
+    fechamentos, visitas: Math.min(15, Math.max(5, Math.round(carteira * 0.25))), prospeccao: 4,
+    porque: {
+      fechamentos: pedidoPelaMeta > maduros
+        ? 'a meta pediria ' + pedidoPelaMeta + ', mas você tem ' + maduros + ' negócio(s) maduro(s) em Negociação/Ag. Pagamento — prometer mais que isso seria ficção'
+        : 'gap de ' + gap + ' para a meta de ' + meta + ', dividido pelas ' + semanas + ' semana(s) que faltam no mês',
+      visitas: 'um quarto da sua carteira de ' + carteira + ' negócios abertos, com piso de 5',
+      prospeccao: 'quatro por semana é o mínimo que mantém o funil alimentado — abaixo disso ele seca em duas semanas'
+    },
+    maduros, gap, meta, semanas
+  };
+}
+
+/* ── ler o que já foi prometido ── */
+async function pm8Carregar() {
+  PM8.promessa = null;
+  if (typeof supa === 'undefined' || !supa || !sessaoAtual || !sessaoAtual.ownerId) { PM8.carregou = true; return; }
+  try {
+    const { data, error } = await supa.from('planos_semanais')
+      .select('id,promessa,promessa_dada_em,promessa_dada_por,promessa_travada_em')
+      .eq('owner_id', String(sessaoAtual.ownerId))
+      .eq('data_segunda', pm8Segunda())
+      .limit(1);
+    if (error) throw error;
+    const l = (data || [])[0];
+    if (l && l.promessa) PM8.promessa = l;
+  } catch (e) {
+    console.log('promessa: nao consegui ler - ' + (e && e.message));
+  }
+  PM8.carregou = true;
+}
+
+/* ── gravar a palavra ── */
+async function pm8Confirmar() {
+  const s = pm8Sugestao();
+  if (!s) { PM8.toast = 'não achei o seu funil nesta build'; return; }
+  const v = PM8.rascunho || { fechamentos: s.fechamentos, visitas: s.visitas, prospeccao: s.prospeccao };
+  const promessa = {
+    fechamentos: Math.max(0, Number(v.fechamentos) || 0),
+    visitas: Math.max(0, Number(v.visitas) || 0),
+    prospeccao: Math.max(0, Number(v.prospeccao) || 0)
+  };
+  if (!promessa.fechamentos && !promessa.visitas && !promessa.prospeccao) {
+    PM8.toast = 'uma promessa de zero em tudo não é promessa — ajuste ao menos uma linha';
+    return;
+  }
+  if (typeof supa === 'undefined' || !supa) { PM8.toast = 'sem conexão aqui — nada foi gravado'; return; }
+  PM8.salvando = true; renderPromessaDaSemana();
+  try {
+    /* UPSERT pelo par (owner, semana), que é o unique da tabela: dar a promessa duas
+       vezes é ajustar a mesma linha, não criar uma segunda semana. */
+    const linha = {
+      owner_id: String(sessaoAtual.ownerId),
+      data_segunda: pm8Segunda(),
+      promessa,
+      promessa_dada_em: new Date().toISOString(),
+      promessa_dada_por: sessaoAtual.email || sessaoAtual.nome || null
+    };
+    const { data, error } = await supa.from('planos_semanais')
+      .upsert(linha, { onConflict: 'owner_id,data_segunda' }).select().single();
+    if (error) throw error;
+    /* O QUE VOLTA DO SUPABASE NAO TEM FORMA GARANTIDA. Medido no navegador: o eco do
+       preview devolveu ARRAY de uma posicao, e o cartao — que so sabia ler objeto — ficou
+       dizendo "confirmar minha semana" DEPOIS de gravar. A tela mentindo que nao salvou
+       faz a pessoa clicar de novo, e o segundo clique reescreve a promessa com o carimbo
+       de hora errado. Normalizo aqui e caio no payload que eu mesmo enviei se nada vier:
+       o que importa e a tela refletir a escrita que deu certo. */
+    const volta = Array.isArray(data) ? data[0] : data;
+    PM8.promessa = (volta && volta.promessa) ? volta : linha;
+    PM8.rascunho = null;
+    PM8.toast = 'palavra dada ✓ — o placar da Semanal mede isto contra o HubSpot';
+  } catch (e) {
+    PM8.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
+  }
+  PM8.salvando = false;
+}
+
+function pm8Prazo() {
+  /* 8h30 de segunda. Sem semana (pl6SegundaDaSemana ausente), nao ha prazo a comparar —
+     e nao ha cartao tambem: renderPromessaDaSemana desiste antes de chegar aqui. */
+  const s = pm8Segunda();
+  if (!s) return { limite: null, passou: false };
+  const seg = s.split('-').map(Number);
+  const limite = new Date(seg[0], seg[1] - 1, seg[2], 8, 30, 0);
+  return { limite, passou: Date.now() > limite.getTime() };
+}
+
+/* ── O CARTÃO, na identidade do Cockpit ──────────────────────────────────────────── */
+function pm8Fmt(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  return dias[d.getDay()] + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+}
+
+function renderPromessaDaSemana() {
+  const raiz = document.getElementById('pm8Raiz');
+  if (!raiz) return;
+  /* só o executivo dá promessa: o gestor LÊ o placar na Semana dele */
+  if (!sessaoAtual || sessaoAtual.role !== 'rep') { raiz.innerHTML = ''; return; }
+  const seg = pm8Segunda();
+  if (!seg) { raiz.innerHTML = ''; return; }
+  const s = pm8Sugestao();
+  if (!s) { raiz.innerHTML = ''; return; }
+
+  const p = PM8.promessa;
+  const dada = !!(p && p.promessa);
+  const prazo = pm8Prazo();
+  const rasc = PM8.rascunho || { fechamentos: s.fechamentos, visitas: s.visitas, prospeccao: s.prospeccao };
+  const val = dada ? p.promessa : rasc;
+
+  const linha = (k, rot, porque) => `
+    <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid var(--line);min-width:0;">
+      <span style="width:118px;flex:none;font:800 10.5px 'Manrope',sans-serif;color:var(--ink);">${rot}</span>
+      ${dada
+      ? `<b style="font:900 20px 'Archivo',sans-serif;color:var(--ink);font-variant-numeric:tabular-nums;width:44px;text-align:right;flex:none;">${Number(val[k]) || 0}</b>`
+      : `<input type="number" min="0" max="99" inputmode="numeric" data-pm8-campo="${k}" value="${Number(val[k]) || 0}"
+             style="width:64px;flex:none;min-height:38px;text-align:center;font:900 17px 'Archivo',sans-serif;color:var(--ink);
+                    background:var(--panel);border:1.5px solid var(--line-btn);border-radius:var(--r-sm);">`}
+      <span style="font:700 10px/1.45 'Manrope',sans-serif;color:var(--muted);min-width:0;overflow-wrap:anywhere;">${esc(porque)}</span>
+    </div>`;
+
+  raiz.innerHTML = `
+  <section style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);padding:15px 18px;margin-bottom:16px;">
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+      <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:var(--red);">
+        A sua palavra desta semana</span>
+      <span style="font:700 10px 'Manrope',sans-serif;color:var(--muted2);">semana de ${esc(seg.split('-').reverse().join('/'))}</span>
+      ${dada
+      ? `<span style="margin-left:auto;font:800 10px 'Manrope',sans-serif;color:var(--green);background:var(--green-soft);border:1px solid var(--green-line);border-radius:999px;padding:3px 10px;">
+           dada ${esc(pm8Fmt(p.promessa_dada_em))} ✓</span>`
+      : `<span style="margin-left:auto;font:800 10px 'Manrope',sans-serif;color:${prazo.passou ? 'var(--red-dk)' : 'var(--muted2)'};">
+           ${prazo.passou ? 'fora do prazo das 8h30 — dê agora, ainda conta' : 'até segunda 8h30'}</span>`}
+    </div>
+    <p style="margin:0 0 8px;font:700 11px/1.5 'Manrope',sans-serif;color:var(--muted);">
+      ${dada
+      ? 'Isto é o que o placar da Semanal mede contra o HubSpot — check-ins, negócios criados e fechamentos na janela. Nada aqui é auto-relato.'
+      : 'O sistema sugere; quem promete é você. O gestor mede isto contra o HubSpot na Semanal de segunda, não contra o que você contar.'}
+    </p>
+    ${linha('fechamentos', 'fechamentos', s.porque.fechamentos)}
+    ${linha('visitas', 'visitas', s.porque.visitas)}
+    ${linha('prospeccao', 'contas novas', s.porque.prospeccao)}
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:11px;">
+      <button type="button" data-pm8-acao="${dada ? 'ajustar' : 'confirmar'}"
+        style="min-height:38px;padding:8px 16px;border-radius:var(--r-sm);cursor:pointer;
+               font:800 11.5px 'Manrope',sans-serif;border:1.5px solid ${dada ? 'var(--line-btn)' : 'var(--green)'};
+               background:${dada ? 'var(--panel)' : 'var(--green)'};color:${dada ? 'var(--ink)' : '#FFFDF8'};">
+        ${PM8.salvando ? 'gravando…' : (dada ? 'ajustar a promessa' : 'confirmar minha semana →')}</button>
+      ${PM8.toast ? `<span style="font:800 10.5px 'Manrope',sans-serif;color:var(--ink);background:var(--green-soft);border:1px solid var(--green-line);border-radius:999px;padding:4px 11px;">${esc(PM8.toast)}</span>` : ''}
+      ${(dada && p.promessa_travada_em)
+      ? `<span style="font:700 10px 'Manrope',sans-serif;color:var(--muted2);">travada pelo gestor na Semanal ✓</span>`
+      : ''}
+    </div>
+  </section>`;
+}
+
+/* delegação: um listener para o cartão inteiro */
+document.addEventListener('click', ev => {
+  const b = ev.target.closest && ev.target.closest('[data-pm8-acao]');
+  if (!b) return;
+  ev.preventDefault();
+  const acao = b.getAttribute('data-pm8-acao');
+  if (acao === 'ajustar') {
+    /* volta para edição partindo do que ele já prometeu, não da sugestão — ajustar é
+       mexer na própria palavra, e recomeçar do zero apagaria a decisão dele */
+    PM8.rascunho = Object.assign({}, (PM8.promessa && PM8.promessa.promessa) || {});
+    PM8.promessa = null;
+    PM8.toast = null;
+    renderPromessaDaSemana();
+    return;
+  }
+  if (acao === 'confirmar') pm8Confirmar().then(renderPromessaDaSemana);
+});
+
+/* o que ele digita fica no rascunho: sem isso, qualquer redesenho zera os campos */
+document.addEventListener('input', ev => {
+  const c = ev.target.closest && ev.target.closest('[data-pm8-campo]');
+  if (!c) return;
+  const s = pm8Sugestao();
+  PM8.rascunho = PM8.rascunho || (s ? { fechamentos: s.fechamentos, visitas: s.visitas, prospeccao: s.prospeccao } : {});
+  PM8.rascunho[c.getAttribute('data-pm8-campo')] = c.value;
+});
+
+async function pm8Iniciar() {
+  if (!sessaoAtual || sessaoAtual.role !== 'rep') return;
+  renderPromessaDaSemana();
+  await pm8Carregar();
+  renderPromessaDaSemana();
+}
+
+
 async function renderMeuFunil() {
   const el = document.getElementById('meuFunilContent');
   if (!el) return;
+  /* o cartao da promessa e irmao do funil, nao filho: desenha aqui e sobrevive aos
+     redesenhos do funil, que reescrevem so #meuFunilContent */
+  if (typeof pm8Iniciar === 'function') pm8Iniciar();
   const r = (DATA.reps || []).find(x => sessaoAtual && String(x.ownerId) === String(sessaoAtual.ownerId));
   if (!r) {
     el.innerHTML = '<div class="empty-state">Seu funil ainda não chegou nesta build — confira se seu e-mail está vinculado a um executivo ativo.</div>';
