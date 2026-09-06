@@ -117,15 +117,29 @@ checar('sincronização a confirmar é categoria própria, do time e não da pes
    e o HTML deixou de ser template literal, embora a hora da carga continuasse declarada
    nos dois lugares. Checagem que depende de sintaxe de string vira falso vermelho no
    proximo redesenho. */
-checar('a fila declara a hora da carga que está lendo',
-  template.indexOf('Carga de ') > 0 &&
-  templateCodigo.indexOf('DATA.hubspotUpdatedAtFmt') > 0);
+/* A TELA DECLARA A HORA DA CARGA QUE ESTA LENDO. Era a fila de intervencao; hoje sao as
+   quatro abas do gestor, cada uma com nota de fonte carimbada. Numero sem hora faz
+   alguem decidir na quarta com o dado de segunda. */
+checar('as abas do gestor declaram a hora da carga que estao lendo',
+  (function () {
+    const notas = (templateCodigo.match(/notaDeFonte:/g) || []).length;
+    const carimbos = (templateCodigo.match(/DATA\.hubspotUpdatedAtFmt/g) || []).length;
+    return notas >= 4 && carimbos >= 4;
+  }()),
+  'numero sem hora de carga faz decidir na quarta com o dado de segunda');
 
 /* ── 5. A FILA NÃO JULGA PESSOA ──────────────────────────────────────────────────────
    O pedido é explícito: "não rotular pessoas como boas ou ruins. Descrever apenas
    comportamento e evidência". */
-checar('a fila diz que a linha é evidência, não nota da pessoa',
-  template.indexOf('não uma nota da pessoa') > 0);
+/* EVIDENCIA, NAO NOTA DA PESSOA — o pedido original do Julyan: descrever o que o dado
+   mostra, sem rotular ninguem. A fila saiu; as leituras por pessoa das abas novas
+   herdaram a regra, e cada uma cita NUMERO em vez de adjetivo. */
+checar('a leitura por pessoa cita numero, e nao adjetivo de pessoa',
+  templateCodigo.indexOf('negócios acima da régua') > 0 &&
+  templateCodigo.indexOf('scoreHumano') < 0 &&
+  templateCodigo.indexOf('notaGeral') < 0 &&
+  templateCodigo.indexOf("'Executivo ruim'") < 0,
+  'adjetivo no lugar de numero transforma leitura em julgamento');
 checar('nenhuma categoria da fila é adjetivo de pessoa',
   templateCodigo.indexOf('GX_CATEGORIAS') > 0 &&
   templateCodigo.indexOf("rot: 'Executivo ruim'") < 0 &&
@@ -143,16 +157,42 @@ checar('linha sem destino não entra na fila',
    que a aba Time nova nao tem mais). A REGRA sobreviveu: clicar num destino nao pode
    apenas trocar de aba — tem que levar A PESSOA junto, senao o gestor cai numa lista e
    procura de novo o nome que ele acabou de clicar. */
+/* O DESTINO LEVA A PESSOA JUNTO. gxAbrirDestino saiu na varredura; gxFocarExecutivo
+   ficou — e ficou porque MEDI que o botao do funil na Daily chega nele e a tela nao
+   mudava: destino removido, clique vivo. Agora ele abre o funil daquele executivo na
+   aba Time. A regra e a mesma: chegar na aba sem a pessoa faz o gestor procurar de novo
+   o nome que ele acabou de clicar. */
 checar('o destino leva a pessoa junto, nao so troca de aba',
-  templateCodigo.indexOf('function gxAbrirDestino(') > 0 &&
   templateCodigo.indexOf('function gxFocarExecutivo(') > 0 &&
-  /o destino.*ownerId|gxFocarExecutivo\(oid, destino\.view\)/.test(templateCodigo),
+  templateCodigo.indexOf('TL5_ESTADO.funil = oid') > 0 &&
+  templateCodigo.indexOf('TL5_ESTADO.sel = oid') > 0,
   'destino sem pessoa faz o gestor procurar de novo o nome que acabou de clicar');
-checar('trocar de aba usa o botão de aba real, nunca activateTab à mão',
-  templateCodigo.indexOf("document.getElementById(destino.view === 'viewRotas' ? 'tabBtnRotas' : 'tabBtnPDIs')") > 0);
-checar('o foco por executivo rola até o card e pisca',
-  templateCodigo.indexOf('function gxFocarExecutivo(') > 0 &&
-  templateCodigo.indexOf('piscarAlvo(alvo)') > 0);
+/* TROCAR DE ABA CLICA O BOTAO REAL, nunca activateTab a mao: cada aba tem render e
+   efeito colateral proprios no clique, e reproduzir isso a mao cria um segundo caminho
+   de navegacao que sai de sincronia na primeira mudanca. A checagem cravava a string do
+   ternario de gxAbrirDestino, que saiu — mas a regra vale, e o conserto de
+   gxFocarExecutivo a seguiu antes de a checagem obrigar. */
+checar('trocar de aba usa o botao de aba real, nunca activateTab a mao',
+  (function () {
+    const i = templateCodigo.indexOf('function gxFocarExecutivo(');
+    if (i < 0) return false;
+    const bloco = templateCodigo.slice(i, i + 1400);
+    return bloco.indexOf("getElementById('tabBtnCockpit')") > 0
+      && bloco.indexOf('aba.click()') > 0
+      && bloco.indexOf('activateTab(') < 0;
+  }()),
+  'activateTab a mao pula o render e o efeito colateral que o clique da aba faz');
+/* O FOCO ROLA ATE O ALVO. O 'pisca' era do card da fila de intervencao, que saiu; o que
+   sobrevive e a regra de aterrissar NO alvo — chegar na aba e deixar o gestor rolando
+   atras do que ele pediu e o mesmo que nao levar. */
+checar('o foco por executivo rola ate o alvo',
+  (function () {
+    const i = templateCodigo.indexOf('function gxFocarExecutivo(');
+    if (i < 0) return false;
+    const bloco = templateCodigo.slice(i, i + 1400);
+    return bloco.indexOf('window.scrollTo(') > 0 && bloco.indexOf('getBoundingClientRect()') > 0;
+  }()),
+  'trocar de aba sem rolar deixa o gestor procurando o que ele acabou de pedir');
 
 /* ── 7. O NÚMERO DO CARTÃO E O DA LISTA NÃO SE CONTRADIZEM ─────────────────────────
    Erro meu, pego medindo: a legenda dizia "a mesma contagem do cartão" e a lista de risco
@@ -174,9 +214,26 @@ checar('cobrar rua respeita a fase de rampagem',
   templateCodigo.indexOf('const naRua = alvoDeCampo == null || alvoDeCampo > 0') > 0);
 
 /* ── 9. O EXECUTIVO NÃO RECEBE DADO DO COLEGA ──────────────────────────────────────── */
-checar('os blocos do gestor só desenham para papel manager',
-  templateCodigo.indexOf("function renderFilaDeIntervencao() {") > 0 &&
-  templateCodigo.indexOf("if (!el || !sessaoAtual || sessaoAtual.role !== 'manager') return;") > 0);
+/* SÓ O GESTOR DESENHA BLOCO DE GESTOR — privacidade, e a regra menos negociável desta
+   suíte. Era medida em renderFilaDeIntervencao; hoje as QUATRO abas novas do gestor
+   recusam desenhar para outro papel, cada uma na primeira linha do seu render. A
+   checagem exige as quatro: uma sozinha passando esconderia as outras três abertas. */
+checar('as quatro abas do gestor recusam desenhar para outro papel',
+  (function () {
+    /* renderRotasProspeccao, e nao renderRotas: ja existia um renderRotas (a tela antiga,
+       que desenha #rotasContent). Esta checagem foi quem ACHOU a colisao — ela procurou
+       `function renderRotas(` e encontrou a ANTIGA, que usa a forma positiva do teste de
+       papel. Duas funcoes com o mesmo nome: a ultima declarada vencia, e a minha passou a
+       atender as chamadas da tela antiga em silencio. */
+    const RENDERS = ['renderTimeLider', 'renderPessoas', 'renderRotasProspeccao', 'renderSemana'];
+    return RENDERS.every(function (fn) {
+      const i = templateCodigo.indexOf('function ' + fn + '(');
+      if (i < 0) return false;
+      const cabeca = templateCodigo.slice(i, i + 420);
+      return cabeca.indexOf("role !== 'manager'") > 0 && cabeca.indexOf('return') > 0;
+    });
+  }()),
+  'aba de gestor desenhando no papel do executivo vaza o time inteiro para ele');
 checar('o corte por papel no servidor continua intacto',
   montar.indexOf('function filtrarParaPapel(') > 0 &&
   montar.indexOf('function resumoDeColega(') > 0 &&
@@ -189,10 +246,11 @@ checar('o corte por papel no servidor continua intacto',
 checar('a fila agrupa por pessoa+categoria e preserva o volume',
   templateCodigo.indexOf("const k = String(l.ownerId) + '|' + l.categoria") > 0 &&
   templateCodigo.indexOf('casos: 1') > 0);
-checar('o cabeçalho publica frentes E casos',
-  template.indexOf('frentes sobre ') > 0 &&
-  templateCodigo.indexOf('casosTotais') > 0 &&
-  templateCodigo.indexOf("linhas.reduce((n, l) => n + (Number(l.casos) || 1), 0)") > 0);
+/* ESTA CHECAGEM MORREU COM O CABEÇALHO QUE ELA MEDIA (06/09/26), e o motivo fica no
+   lugar da linha: 'frentes sobre N casos' era o cabeçalho da fila de intervenção, que
+   agrupava linhas por categoria. As abas novas não agrupam — cada uma lista pessoa por
+   pessoa, e o total aparece no KPI do topo. Não inventei checagem nova com o mesmo nome:
+   guarda que mede cabeçalho inexistente dá verde sobre nada. */
 
 /* ── 11. UM CAMPO DE MRR DIGITADO, DOIS DERIVADOS ─────────────────────────────────
    Medido no pipeline em 02/09/26: 5.207 negocios, 597 com mrr (11%) e 353 com
@@ -470,33 +528,83 @@ checar('quando o numero vem do campo do HubSpot, a tela declara a procedencia',
    cada cartao invente numero: cobertura em negocios e nao em dinheiro, ritmo como conta e
    nao previsao, promessa ausente como nao medido, mediana em vez de media no estouro, e
    ninguem cobrado de rua fora da fase de rua. */
-checar('o cartao de campo usa visita comprovada, nunca planejada',
-  template.indexOf('Visita comprovada por evento do Expogo/HubSpot — planejada não conta') > 0 &&
-  templateCodigo.indexOf("(ev.desfecho === 'COMPLETED' || ev.registro)") > 0);
-checar('quem nao esta na rua nesta fase nao aparece como parado',
-  templateCodigo.indexOf('parado: e.naRua && e.comprovadas === 0 && e.paradas === 0') > 0 &&
-  template.indexOf('não está na rua nesta fase da rampagem') > 0);
-checar('o estouro de prazo usa mediana, nao media',
-  templateCodigo.indexOf('const excessos = estourados.map(l => l.dias - prazo).sort') > 0 &&
-  template.indexOf('média seria distorcida por um negócio parado há meses') > 0);
+/* VISITA COMPROVADA, NUNCA PLANEJADA — a regra sobreviveu e ficou mais forte: a aba
+   Semana passou a somar `dailies.realizado_visitas`, que é REALIZADO (tarefa concluída
+   no HubSpot, nascida do registro no Expogo), e nunca o prometido. E dia sem linha de
+   daily não conta como zero: conta como dia sem registro. */
+checar('a visita que o placar conta e realizada, nunca prometida',
+  templateCodigo.indexOf('function sm9VisitasDaSemana(') > 0 &&
+  templateCodigo.indexOf('realizado_visitas') > 0 &&
+  templateCodigo.indexOf('nenhuma linha de daily nesta semana ainda') > 0,
+  'contar visita planejada como feita e o auto-relato que este placar existe para evitar');
+/* ESTA SAI COM O CARTÃO DE RAMPAGEM que ela media (06/09/26). A regra por trás dela —
+   ausência de dado não é resultado ruim — continua viva e medida em três lugares novos:
+   'sem funil medido' na aba Pessoas, 'consumo não medido' na Rotas, e 'nenhuma linha de
+   daily nesta semana' na Semana. Cada um tem checagem própria; repetir a quarta com o
+   nome do cartão antigo seria medir desenho que não existe. */
+/* MEDIANA OU MEDIA — A TELA DECLARA QUAL, e por que. O raio-X usava mediana (com muitos
+   negocios por etapa, um parado ha meses distorce a media). O acordeao de tempos da
+   Semana usa MEDIA de proposito, e diz o motivo no proprio callout: com poucos negocios
+   por etapa a mediana esconde o caso extremo, que e justamente o que trava. A regra que
+   importa nao e 'use mediana' — e 'declare qual voce usou'. */
+checar('a leitura de tempo declara se usa media ou mediana',
+  templateCodigo.indexOf('Média de dias na etapa contra a régua declarada') > 0 &&
+  templateCodigo.indexOf('Média, não mediana') > 0,
+  'estatistica sem nome deixa o leitor supor a que lhe convem');
 checar('a meta e a soma das metas individuais declaradas, e o ritmo e conta',
   templateCodigo.indexOf('const alvo = ativos.reduce((n, r) => n + (Number(r.metaMensal) || 0), 0)') > 0 &&
   templateCodigo.indexOf('ritmo: (du && du > 0) ? (falta / du) : null') > 0);
-checar('a cobertura e em negocios abertos, nunca em dinheiro',
-  templateCodigo.indexOf('cobertura: falta > 0 ? (abertos / falta) : null') > 0 &&
-  template.indexOf('negócios abertos</b> para esses ') > 0 &&
-  template.indexOf('convenção declarada, não medição') > 0);
-checar('promessa ausente na semana vira nao medido, nunca 0%',
-  templateCodigo.indexOf('function gxPrometidoCumprido()') > 0 &&
-  template.indexOf('não medido</span>') > 0 &&
-  template.indexOf('nenhuma visita prometida nesta semana') > 0);
-checar('o prometido x cumprido reusa visitasInformadasDetalhe, sem segundo calculo',
-  templateCodigo.indexOf('visitasInformadasDetalhe(String(r.ownerId))') > 0);
-checar('as perdas declaram a cobertura do proprio preenchimento',
-  template.indexOf('não é um motivo — é a lista de motivos não dando conta') > 0);
-checar('todo nome do raio-X abre o dossie',
-  templateCodigo.indexOf('data-gx-rx-quem') > 0 &&
-  templateCodigo.indexOf("gxAbrirDestino({ view: 'viewCockpit', ownerId: oid })") > 0);
+/* NUNCA ESTIMAR RECEITA. A cobertura do raio-X saiu, mas a regra e mais ampla e vale nas
+   quatro abas: MRR aparece com a cobertura do preenchimento, e negocio sem valor no CRM
+   aparece dizendo isso — nunca como zero, e nunca extrapolado para uma receita
+   'potencial'. As asserções negativas (ticketMedio, receitaEstimada) continuam na suite
+   e passam por ausencia. */
+checar('MRR aparece com cobertura, e ausencia nunca vira receita estimada',
+  templateCodigo.indexOf('sem valor no CRM') > 0 &&
+  templateCodigo.indexOf('sem valor de MRR informado') > 0 &&
+  templateCodigo.indexOf('receitaEstimada') < 0 &&
+  templateCodigo.indexOf('ticketMedio') < 0,
+  'receita estimada e o numero que ninguem consegue defender na reuniao seguinte');
+/* PROMESSA AUSENTE E 'NAO MEDIDO', NUNCA 0%. A regra sobreviveu inteira e ficou mais
+   visivel: no placar da Semana, quem nao deu promessa aparece com o status literal
+   'promessa NAO dada', e a coluna mostra '/ —' em vez de um F/P com denominador zero.
+   Zero ali seria acusar quem nao prometeu de ter falhado no que nao prometeu. */
+checar('promessa ausente aparece como nao dada, nunca como 0%',
+  templateCodigo.indexOf("'promessa NÃO dada'") > 0 &&
+  templateCodigo.indexOf("if (!prometido) return { txt: feito + ' / —'") > 0,
+  'zero contra promessa inexistente acusa alguem do que ele nao prometeu');
+/* UM CALCULO DE VISITA, DUAS TELAS. Era visitasInformadasDetalhe; hoje e
+   sm9VisitasDaSemana, e a aba Rotas chama A MESMA funcao em vez de somar de novo —
+   duas contas para 'quantas visitas ele fez' dariam dois numeros na mesma sessao. */
+checar('a soma de visitas da semana tem um calculo so, usado nas duas telas',
+  (templateCodigo.match(/function sm9VisitasDaSemana\(/g) || []).length === 1 &&
+  (templateCodigo.match(/sm9VisitasDaSemana\(/g) || []).length >= 3,
+  'segunda conta da mesma pergunta = dois numeros na mesma sessao');
+/* AS PERDAS DECLARAM A COBERTURA DO PROPRIO PREENCHIMENTO. Medido em 06/09: 41% das 974
+   perdas sairam como 'Outros'. Sem declarar isso, a tela anunciaria 'Outros e a maior
+   causa de perda' — dizer com cara de diagnostico que a maior causa e nao sabermos a
+   causa. As duas telas que mostram perdas dizem a fatia de 'Outros' antes de qualquer
+   conclusao. */
+checar('as perdas declaram quanto do proprio preenchimento falta',
+  templateCodigo.indexOf('maior motivo classificado') > 0 &&
+  templateCodigo.indexOf('sem motivo escolhido') > 0,
+  'anunciar Outros como causa e diagnosticar a propria ignorancia');
+/* TODO NOME NA TELA DO GESTOR ABRE ALGUMA COISA — a regra que o raio-X guardava com
+   data-gx-rx-quem, e que sobreviveu ao desenho. Nas abas novas, o nome de cada executivo
+   e um botao: na Time abre o dossie, na Pessoas abre a pauta do 1:1, na Semana expande a
+   linha do placar, na Rotas troca a fila. Nome que nao abre nada e o gestor lendo uma
+   lista sem saber que ela responde. */
+checar('o nome do executivo abre algo em todas as abas do gestor',
+  (function () {
+    const ACOES = [
+      "abrir: 'sel:' + r.ownerId",      /* Time: abre o dossie */
+      "abrir: 'sel:' + p.ownerId",      /* Pessoas: abre a pauta do 1:1 */
+      "abrir: 'abrir:' + oid",          /* Semana: expande o placar */
+      "on: 'sel:' + oid"                /* Rotas: troca a fila */
+    ];
+    return ACOES.every(function (a) { return templateCodigo.indexOf(a) > 0; });
+  }()),
+  'nome que nao abre nada e lista que o gestor le sem saber que ela responde');
 /* O DETALHE DOS QUATRO BLOCOS ANTIGOS TEM ENDERECO NOVO (06/09/26).
    A versao anterior desta checagem exigia os quatro nos RECOLHIDOS na tela. A aba Time
    v5 os apagou de proposito, e cravar o id de um no fazia esta suite reprovar o desenho

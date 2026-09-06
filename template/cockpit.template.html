@@ -12497,10 +12497,10 @@ function aplicarVisaoPorPapel() {
        O dinheiro do mes ja esta em DATA e poderia desenhar antes, mas desenhar os dois
        juntos evita a tela montar em dois saltos. */
     if (typeof renderDinheiroDoGestor === 'function') setTimeout(renderDinheiroDoGestor, 0);
-    if (typeof renderFilaDeIntervencao === 'function') setTimeout(renderFilaDeIntervencao, 0);
+    
     
     if (typeof renderPautaDaily === 'function') setTimeout(renderPautaDaily, 0);
-    if (typeof renderRaioXCartoes === 'function') setTimeout(renderRaioXCartoes, 0);
+    
     viewsDesenhadas.add('viewCockpit');
     // BLOCO 1 (10/08): aqui havia um segundo setTimeout(renderAgenda) — o bloco geral
     // logo abaixo já chama renderAgenda pros dois papéis, então a agenda inteira era
@@ -32492,19 +32492,7 @@ function mrrFonteDoNegocio(lead) {
   return null;
 }
 
-/* A forma do time: soma das etapas de todos os executivos, normalizada. É a régua contra a
-   qual a forma de UM é lida — sem ela, 12 em Visita não quer dizer nada. */
-function gxFormaDoTime() {
-  const soma = {};
-  GX_ETAPAS.forEach(id => { soma[id] = 0; });
-  (DATA.reps || []).forEach(r => {
-    GX_ETAPAS.forEach(id => { soma[id] += gxNum(r.stages && r.stages[id]); });
-  });
-  const total = GX_ETAPAS.reduce((s, id) => s + soma[id], 0);
-  const pct = {};
-  GX_ETAPAS.forEach(id => { pct[id] = total ? soma[id] / total : 0; });
-  return { soma, total, pct };
-}
+
 
 /* 1 · A FORMA. Barra = a fatia dele naquela etapa; risco âmbar = a fatia do time na mesma
    etapa. Onde a barra passa muito da régua, o funil dele engorda — e é ali que ele para. */
@@ -32571,50 +32559,7 @@ document.addEventListener('keydown', ev => {
   alvo.click();
 });
 
-function gxBlocoFormaHTML(r) {
-  const time = gxFormaDoTime();
-  const meu = {};
-  GX_ETAPAS.forEach(id => { meu[id] = gxNum(r.stages && r.stages[id]); });
-  const total = GX_ETAPAS.reduce((s, id) => s + meu[id], 0);
-  if (!total) {
-    return `<div class="gx-secao">
-      <div class="gx-secao-cab"><b>A forma do funil dele</b><span>contra a forma do time</span></div>
-      <div class="gx-vazio">Nenhum negócio aberto nas seis etapas da esteira. Sem funil não há forma para ler — a conversa aqui é sobre entrada, não sobre gargalo.</div>
-    </div>`;
-  }
-  /* "gordo" = fatia dele 1,4× a do time OU 12 pontos percentuais acima. Dois critérios
-     porque só o relativo grita em etapa pequena, e só o absoluto perdoa etapa grande. */
-  const maior = Math.max.apply(null, GX_ETAPAS.map(id => meu[id]));
-  const linhas = GX_ETAPAS.map(id => {
-    const n = meu[id];
-    const fatia = n / total;
-    const fatiaTime = time.pct[id];
-    const gordo = n > 0 && (fatiaTime > 0 ? fatia >= fatiaTime * 1.4 : false) && (fatia - fatiaTime) >= 0.12;
-    return `<div class="gx-forma-linha is-abre" data-gx-etapa="${id}" data-gx-owner="${esc(String(r.ownerId || ''))}" role="button" tabindex="0" title="Ver os negócios desta etapa na carteira dele">
-      <span class="gx-forma-rot">${esc(gxRotuloEtapa(id))}</span>
-      <span class="gx-forma-trilha">
-        <i class="${gordo ? 'is-gordo' : ''}" style="width:${maior ? Math.round(100 * n / maior) : 0}%"></i>
-        <span class="gx-forma-marca" style="left:${maior ? Math.min(99, Math.round(100 * (fatiaTime * total) / maior)) : 0}%"></span>
-      </span>
-      <span class="gx-forma-num">${n}<small>${Math.round(fatia * 100)}% dele</small></span>
-    </div>`;
-  }).join('');
 
-  const gordas = GX_ETAPAS.filter(id => {
-    const fatia = meu[id] / total;
-    return meu[id] > 0 && time.pct[id] > 0 && fatia >= time.pct[id] * 1.4 && (fatia - time.pct[id]) >= 0.12;
-  });
-  const nota = gordas.length
-    ? `O funil dele engorda em <b>${gordas.map(id => esc(gxRotuloEtapa(id))).join('</b> e <b>')}</b> — fatia bem acima da do time na mesma etapa. É onde a conversa começa.`
-    : 'A forma do funil dele acompanha a do time. O problema, se existir, não é distribuição de etapa — olhe a idade e o dinheiro parado abaixo.';
-
-  return `<div class="gx-secao">
-    <div class="gx-secao-cab"><b>A forma do funil dele</b><span>${total} negócios abertos na esteira · contra a forma do time</span></div>
-    <div class="gx-forma">${linhas}</div>
-    <div class="gx-legenda"><span><i style="background:var(--gx-ink)"></i>ele</span><span><i style="background:var(--gx-red)"></i>fatia acima do time</span><span><i style="background:var(--gx-amber);width:3px;height:12px"></i>onde o time está</span></div>
-    <div class="gx-secao-nota">${nota}</div>
-  </div>`;
-}
 
 /* 2 · A IDADE. Por etapa, a média de dias parado dos negócios travados dele, contra o SLA
    daquela etapa. Barra vermelha = média já passou do SLA. É onde os negócios morrem. */
@@ -33231,27 +33176,7 @@ function gxBlocoConversaoHTML(r) {
   '</div>';
 }
 
-function gxFunilDoExecutivoHTML(r) {
-  /* "Onde esse funil perde" vem PRIMEIRO: é a única leitura que explica as outras. A forma do
-     funil e a idade continuam logo abaixo — elas mostram o estado de agora, que é
-     consequência do que esta primeira mostra. */
-  return `<div class="gx">
-    ${gxBlocoConversaoHTML(r)}
-    <div class="gx-grid">
-      ${gxBlocoFormaHTML(r)}
-      ${gxBlocoIdadeHTML(r)}
-    </div>
-    <div class="gx-grid-3">
-      ${gxBlocoDinheiroHTML(r)}
-      ${gxBlocoMetaHTML(r)}
-      ${gxBlocoPromessaHTML(r)}
-    </div>
-    <div class="gx-grid">
-      ${gxBlocoPerdaHTML(r)}
-      ${gxBlocoMixHTML(r)}
-    </div>
-  </div>`;
-}
+
 
 
 /* ══ O QUE FALTAVA NO DOSSIE (02/09/26) ════════════════════════════════════════════
@@ -33288,10 +33213,10 @@ if (DATA.supabase && supa) {
     
     /* A fila depende de plano do dia e rota, que so existem depois do Supabase — sem
        este redesenho ela nasceria dizendo 'plano aberto' para todo mundo. */
-    if (typeof renderFilaDeIntervencao === 'function') renderFilaDeIntervencao();
+    
     
     if (typeof renderPautaDaily === 'function') renderPautaDaily();
-    if (typeof renderRaioXCartoes === 'function') renderRaioXCartoes();
+    
   })();
 }
 
@@ -40402,7 +40327,7 @@ function gxPautaAlternar(chave) {
   else gxPauta = gxPauta.concat([{ chave: chave, em: Date.now() }]);
   gxPautaGravar();
   if (typeof renderPautaDaily === 'function') renderPautaDaily();
-  if (typeof renderFilaDeIntervencao === 'function') renderFilaDeIntervencao();
+  
 }
 
 /* A chave de um item cobravel e a MESMA que a fila usa para agrupar: pessoa + categoria.
@@ -40520,7 +40445,7 @@ function renderPautaDaily() {
     gxPauta = [];
     gxPautaGravar();
     renderPautaDaily();
-    if (typeof renderFilaDeIntervencao === 'function') renderFilaDeIntervencao();
+    
   });
 }
 
@@ -40829,156 +40754,9 @@ function gxMetaDoTime() {
   };
 }
 
-function gxPrometidoCumprido() {
-  return (DATA.reps || []).filter(r => r && r.ownerId &&
-    (typeof ownerAtivoNoField !== 'function' || ownerAtivoNoField(r.ownerId))
-  ).map(r => {
-    const d = (typeof visitasInformadasDetalhe === 'function')
-      ? visitasInformadasDetalhe(String(r.ownerId)) : { real: 0, prom: 0, aderencia: null };
-    return { ownerId: String(r.ownerId), nome: r.name, real: d.real, prom: d.prom, pct: d.aderencia };
-  }).sort((a, b) => {
-    /* Quem nao tem promessa na semana vai para o fim: nao e 0%, e nao medido. */
-    if ((a.pct == null) !== (b.pct == null)) return a.pct == null ? 1 : -1;
-    return (a.pct || 0) - (b.pct || 0);
-  });
-}
 
-function renderRaioXCartoes() {
-  const el = document.getElementById('gxRaioXCartoes');
-  if (!el || !sessaoAtual || sessaoAtual.role !== 'manager') return;
 
-  const nomeBotao = (ownerId, texto, titulo) =>
-    '<span class="gx-rx-nome" role="button" tabindex="0" data-gx-rx-quem="' + esc(String(ownerId)) +
-    '" title="' + esc(titulo || 'Abrir o dossiê desta pessoa') + '">' + esc(texto) + '</span>';
 
-  /* 1 ── O CAMPO AGORA ─────────────────────────────────────────────────────────── */
-  const campo = gxCampoAgora();
-  const maxVis = Math.max(1, ...campo.map(c => Math.max(c.comprovadas, c.alvo || 0)));
-  const cartaoCampo = '<article class="gx-rx-card">' +
-    '<h4>O campo agora</h4>' +
-    '<p class="gx-rx-def">Visita comprovada por evento do Expogo/HubSpot — planejada não conta. Janela: hoje.</p>' +
-    (campo.length ? campo.map(c => {
-      const larg = Math.max(3, Math.round((c.comprovadas / maxVis) * 100));
-      const sub = !c.naRua
-        ? 'não está na rua nesta fase da rampagem — não há rua para cobrar hoje'
-        : c.ultimaHora
-          ? 'última às ' + c.ultimaHora + (c.ultimoCliente ? ' · ' + c.ultimoCliente : '')
-          : (c.paradas > 0 ? c.paradas + ' parada(s) montada(s), nenhuma comprovada ainda' : 'sem rota e sem visita comprovada');
-      return '<div class="gx-rx-linha' + (c.parado ? ' is-parado' : '') + '">' +
-        '<span class="gx-rx-rot">' + nomeBotao(c.ownerId, c.nome) + '</span>' +
-        '<span class="gx-rx-tr"><i style="width:' + larg + '%;"></i></span>' +
-        '<span class="gx-rx-num">' + (!c.naRua ? '<span class="gx-rx-nm">fora da rua</span>'
-          : c.comprovadas + (c.alvo != null ? ' de ' + c.alvo : '')) + '</span>' +
-        '<span class="gx-rx-sub">' + esc(sub) + '</span>' +
-      '</div>';
-    }).join('') : '<div class="gx-rx-vazio">Nenhum executivo ativo no campo nesta carga.</div>') +
-  '</article>';
-
-  /* 2 ── ONDE OS NEGOCIOS MORREM ───────────────────────────────────────────────── */
-  const morrem = gxOndeMorrem();
-  const maxEst = Math.max(1, ...morrem.map(m => m.estourados));
-  const cartaoMorrem = '<article class="gx-rx-card">' +
-    '<h4>Onde os negócios do time morrem</h4>' +
-    '<p class="gx-rx-def">Negócio aberto que passou do prazo da própria etapa. O excesso é a <b>mediana</b> dos dias além do prazo — média seria distorcida por um negócio parado há meses.</p>' +
-    (morrem.length ? morrem.map(m => {
-      return '<div class="gx-rx-linha">' +
-        '<span class="gx-rx-rot">' + esc(m.nome) + '<small>prazo ' + (m.sla == null ? '—' : m.sla + 'd') + '</small></span>' +
-        '<span class="gx-rx-tr"><i class="is-vaza" style="width:' + Math.max(3, Math.round((m.estourados / maxEst) * 100)) + '%;"></i></span>' +
-        '<span class="gx-rx-num">' + m.estourados + ' de ' + m.noEstoque + '</span>' +
-        '<span class="gx-rx-sub">' + (m.excessoMediano != null ? '+' + m.excessoMediano + 'd além do prazo' : 'sem dias medidos') +
-          (m.concentra ? ' · concentra: ' + nomeBotao(m.concentra.ownerId, String(m.concentra.nome).split(' ')[0] + ' (' + m.concentra.quantos + ')') : '') +
-        '</span>' +
-      '</div>';
-    }).join('') : '<div class="gx-rx-vazio"><b>Nenhum negócio aberto passou do prazo da etapa.</b> Leitura da carga atual — não é promessa de que nenhum vai passar.</div>') +
-  '</article>';
-
-  /* 3 ── META E RITMO ──────────────────────────────────────────────────────────── */
-  const meta = gxMetaDoTime();
-  const pctMeta = meta.alvo > 0 ? Math.round((meta.feitos / meta.alvo) * 100) : null;
-  const maxAlvo = Math.max(1, ...meta.porPessoa.map(p => p.alvo || 0));
-  const cartaoMeta = '<article class="gx-rx-card">' +
-    '<h4>Meta do time e ritmo</h4>' +
-    '<p class="gx-rx-def">Meta é a <b>soma das metas individuais</b> declaradas; fechados vêm do HubSpot no mês corrente.</p>' +
-    '<div class="gx-rx-grande">' + meta.feitos + '<small>de ' + meta.alvo +
-      (pctMeta == null ? '' : ' · ' + pctMeta + '%') + '</small></div>' +
-    '<div class="gx-rx-conta">' +
-      (meta.falta === 0
-        ? 'Meta do time atingida nesta carga.'
-        : 'Faltam <b>' + meta.falta + '</b> fechamento(s)' +
-          (meta.diasUteis != null
-            ? ' em ' + meta.diasUteis + ' dia(s) útil(eis) — <b>' + (meta.ritmo != null ? meta.ritmo.toFixed(2).replace('.', ',') : '—') + '/dia útil</b>.'
-            : ' — dias úteis restantes não calculados nesta carga.') +
-          (meta.cobertura != null
-            ? ' Há <b>' + meta.abertos + ' negócios abertos</b> para esses ' + meta.falta + ': cobertura de <b>' +
-              meta.cobertura.toFixed(1).replace('.', ',') + '×</b> (a régua da casa é ' + GX_COBERTURA_REGUA + '×, e é convenção declarada, não medição).'
-            : '')) +
-    '</div>' +
-    meta.porPessoa.map(p => '<div class="gx-rx-linha">' +
-      '<span class="gx-rx-rot">' + nomeBotao(p.ownerId, p.nome) + '</span>' +
-      '<span class="gx-rx-tr"><i style="width:' + Math.max(3, Math.round(((p.feitos || 0) / maxAlvo) * 100)) + '%;"></i></span>' +
-      '<span class="gx-rx-num">' + p.feitos + ' de ' + p.alvo + '</span>' +
-    '</div>').join('') +
-  '</article>';
-
-  /* 4 ── PROMETIDO x CUMPRIDO ──────────────────────────────────────────────────── */
-  const prom = gxPrometidoCumprido();
-  const semPromessa = prom.filter(p => p.pct == null).length;
-  const cartaoProm = '<article class="gx-rx-card">' +
-    '<h4>Prometido × cumprido</h4>' +
-    '<p class="gx-rx-def">Visitas que a pessoa <b>prometeu</b> no plano do dia contra as que ficaram <b>comprovadas</b> na agenda. Janela: esta semana. Quem não prometeu aparece como <b>não medido</b> — não como 0%.</p>' +
-    prom.map(p => {
-      const cor = p.pct == null ? '' : (p.pct >= GX_ADERENCIA_BOA ? ' is-ok' : ' is-abaixo');
-      return '<div class="gx-rx-linha' + cor + '">' +
-        '<span class="gx-rx-rot">' + nomeBotao(p.ownerId, p.nome) + '</span>' +
-        '<span class="gx-rx-tr">' + (p.pct == null ? '<i class="is-nulo" style="width:100%;"></i>'
-          : '<i style="width:' + Math.max(3, Math.min(100, p.pct)) + '%;"></i>') + '</span>' +
-        '<span class="gx-rx-num">' + (p.pct == null ? '<span class="gx-rx-nm">não medido</span>' : p.pct + '%') + '</span>' +
-        '<span class="gx-rx-sub">' + (p.pct == null ? 'nenhuma visita prometida nesta semana' : p.real + ' de ' + p.prom + ' prometidas') + '</span>' +
-      '</div>';
-    }).join('') +
-    '<div class="gx-rx-pe">Abaixo de ' + GX_ADERENCIA_BOA + '% é conversa de comportamento, não de número.' +
-      (semPromessa ? ' ' + semPromessa + ' pessoa(s) sem promessa na semana — cobrar o plano vem antes de cobrar a taxa.' : '') + '</div>' +
-  '</article>';
-
-  /* 5 ── COMO O TIME PERDE ─────────────────────────────────────────────────────── */
-  const mp = DATA.motivosPerda || null;
-  const motivos = mp && mp.porMotivo
-    ? Object.entries(mp.porMotivo).sort((a, b) => b[1] - a[1]) : [];
-  const maxMot = motivos.length ? motivos[0][1] : 1;
-  const cartaoPerde = '<article class="gx-rx-card">' +
-    '<h4>Como o time perde</h4>' +
-    (mp
-      ? '<p class="gx-rx-def">Motivo <b>declarado no HubSpot</b> nos ' + mp.total + ' negócios perdidos dos últimos ' + mp.dias + ' dias.</p>' +
-        motivos.map(([m, n]) => '<div class="gx-rx-linha">' +
-          '<span class="gx-rx-rot">' + esc(m) + '</span>' +
-          '<span class="gx-rx-tr"><i class="is-vaza" style="width:' + Math.max(3, Math.round((n / maxMot) * 100)) + '%;"></i></span>' +
-          '<span class="gx-rx-num">' + n + '</span>' +
-          '<span class="gx-rx-sub">' + Math.round((n / mp.total) * 100) + '% das perdas</span>' +
-        '</div>').join('') +
-        '<div class="gx-rx-pe">"Outros" com ' + Math.round(((mp.porMotivo['Outros'] || 0) / mp.total) * 100) +
-          '% não é um motivo — é a lista de motivos não dando conta. Enquanto ele for o maior, a leitura das perdas é limitada por preenchimento.</div>'
-      : '<div class="gx-rx-vazio">Os motivos de perda entram no próximo carregamento do HubSpot.</div>') +
-  '</article>';
-
-  el.innerHTML = '<section class="chart-card" aria-label="Raio-X do time" style="margin-bottom:20px;">' +
-    '<div class="gx-fila-cab">' +
-      '<h3 style="margin:0;font-family:var(--font-display);">Raio-X do time</h3>' +
-      '<span class="chart-subtitle" style="margin:0;">campo, funil, meta, promessa e perdas — cada nome abre o dossiê</span>' +
-    '</div>' +
-    '<div class="gx-rx-grade">' + cartaoCampo + cartaoMorrem + cartaoMeta + cartaoProm + cartaoPerde + '</div>' +
-  '</section>';
-
-  const vai = elx => {
-    const oid = elx.getAttribute('data-gx-rx-quem');
-    if (typeof gxAbrirDestino === 'function') gxAbrirDestino({ view: 'viewCockpit', ownerId: oid });
-  };
-  el.querySelectorAll('[data-gx-rx-quem]').forEach(n => {
-    n.addEventListener('click', () => vai(n));
-    n.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); vai(n); }
-    });
-  });
-}
 
 
 
@@ -41256,47 +41034,41 @@ function gxDinheiroDoGestor() {
 }
 
 
-/* ── RENDER DA FILA DE INTERVENÇÃO ─────────────────────────────────────────────────
-   Uma linha por evidência. O botão de cada linha abre o DESTINO JÁ FILTRADO usando o
-   mecanismo que já existia: cockpitExecSelecionado + renderCockpitDossieInline para a
-   pessoa, e o clique no botão de aba real para Rotas/Desenvolvimento (nunca activateTab
-   à mão — cada aba tem render e efeito colateral próprios no clique). */
-function gxAbrirDestino(destino) {
-  if (!destino) return;
-  const oid = destino.ownerId ? String(destino.ownerId) : null;
-  if (destino.view === 'viewRotas' || destino.view === 'viewPDIs') {
-    const btn = document.getElementById(destino.view === 'viewRotas' ? 'tabBtnRotas' : 'tabBtnPDIs');
-    if (btn) btn.click();
-    if (oid && typeof gxFocarExecutivo === 'function') gxFocarExecutivo(oid, destino.view);
-    return;
-  }
-  /* Pessoa e negócio abrem o dossiê individual, que é onde o gestor vê a carteira dela
-     inteira — inclusive o negócio da linha. Trocar de aba e deixar o gestor procurando
-     de novo é o que o pedido proíbe. */
-  if (oid) {
-    cockpitExecSelecionado = oid;
-    const painel = document.getElementById('cockpitDossieInline');
-    if (painel && typeof smoothScrollTo === 'function') smoothScrollTo(painel);
-    else if (painel) painel.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    if (typeof piscarAlvo === 'function') piscarAlvo(painel);
-    return;
-  }
-  const btn = document.getElementById('tabBtnDaily');
-  if (btn) btn.click();
-}
-/* Foco por executivo nas abas que têm card por pessoa. Rola até o card e pisca — sem
-   isso o clique troca de aba e larga o gestor na lista inteira. */
-function gxFocarExecutivo(ownerId, view) {
+
+/* ── ABRIR O FUNIL DELE: O BOTÃO ESTAVA VIVO E O DESTINO TINHA SUMIDO (06/09/26) ──
+   Cadeia: Daily → expandir a linha do executivo → botão do funil → g14Ligar → aqui.
+   Medido no navegador: o clique chegava até esta função e a tela NÃO MUDAVA, porque o
+   destino era o painel por executivo do raio-X, removido na varredura da aba Time.
+   Clique vivo levando a lugar nenhum é pior que botão ausente — o gestor clica, nada
+   acontece, e ele conclui que o produto travou.
+
+   O destino que o botão promete existe: o cartão de funil em modo leitura da aba Time,
+   que a própria aba abre pela ação funil:<ownerId>. Levo para lá, em vez de apagar o
+   botão — a intenção do clique sempre foi boa. */
+function gxFocarExecutivo(ownerId) {
+  if (!ownerId) return;
+  const oid = String(ownerId);
+  const aba = document.getElementById('tabBtnCockpit');
+  if (!aba) return;
+  /* clica a ABA de verdade, e não activateTab: cada aba tem render e efeito colateral
+     próprios no clique, e reproduzir isso à mão cria um segundo caminho de navegação. */
+  aba.click();
   let tentativas = 0;
-  const tentar = () => {
-    const alvo = document.querySelector('#' + view + ' [data-owner="' + ownerId + '"]')
-      || document.querySelector('#' + view + ' [data-rota-owner="' + ownerId + '"]')
-      || document.querySelector('#' + view + ' [data-pdi-owner="' + ownerId + '"]');
-    if (!alvo) { if (++tentativas > 40) return; setTimeout(tentar, 100); return; }
-    alvo.scrollIntoView({ block: 'center' });
-    if (typeof piscarAlvo === 'function') piscarAlvo(alvo);
+  const abrirFunil = () => {
+    if (typeof TL5_ESTADO === 'undefined' || typeof renderTimeLider !== 'function') {
+      if (++tentativas < 40) { setTimeout(abrirFunil, 110); return; }
+      return;
+    }
+    TL5_ESTADO.funil = oid;
+    TL5_ESTADO.sel = oid;
+    renderTimeLider();
+    const alvo = document.querySelector('#tl5Raiz [data-tl5-acao="funil:"]');
+    if (alvo) {
+      const y = alvo.getBoundingClientRect().top + window.scrollY - 110;
+      window.scrollTo({ top: y, behavior: 'auto' });
+    }
   };
-  setTimeout(tentar, 120);
+  setTimeout(abrirFunil, 120);
 }
 
 /* ══ MEU TIME: UM CARTAO POR PESSOA (02/09/26) ═════════════════════════════════════
@@ -41355,152 +41127,7 @@ function gxEstadoDoDia(ownerId) {
   };
 }
 
-function renderFilaDeIntervencao() {
-  const el = document.getElementById('gxFilaIntervencao');
-  if (!el || !sessaoAtual || sessaoAtual.role !== 'manager') return;
-  let linhas = [];
-  try { linhas = gxFilaDeIntervencao(); } catch (e) { linhas = []; }
-  /* as duas contagens seguem publicadas: frentes de triagem e o volume por tras delas */
-  const casosTotais = linhas.reduce((n, l) => n + (Number(l.casos) || 1), 0);
 
-  /* AGRUPA POR PESSOA. A linha do robo (sem ownerId) nao e de ninguem e sai num aviso
-     proprio, antes dos cartoes - carga velha nao pode virar acusacao a uma pessoa. */
-  const doTime = linhas.filter(l => l.ownerId == null);
-  const porPessoa = new Map();
-  linhas.filter(l => l.ownerId != null).forEach(l => {
-    const k = String(l.ownerId);
-    if (!porPessoa.has(k)) porPessoa.set(k, { ownerId: k, nome: l.nome, praca: l.praca, fase: l.fase, frentes: [] });
-    porPessoa.get(k).frentes.push(l);
-  });
-
-  const cartoes = [...porPessoa.values()].map(p => {
-    p.frentes.sort((a, b) => (b.peso - a.peso) || ((Number(b.casos) || 1) - (Number(a.casos) || 1)));
-    p.casos = p.frentes.reduce((n, f) => n + (Number(f.casos) || 1), 0);
-    p.piorPeso = p.frentes.length ? p.frentes[0].peso : 0;
-    const rep = (DATA.reps || []).find(r => String(r.ownerId) === p.ownerId) || {};
-    p.fechadosNoMes = Number(rep.fechadosNoMes) || 0;
-    p.metaMensal = Number(rep.metaMensal) || 0;
-    /* ── A CARTEIRA AO LADO DO NUMERO (02/09/26) ─────────────────────────────────
-       O numeral grande e soma de EVIDENCIA, e um mesmo negocio entra em varias frentes:
-       quem esta acima do SLA costuma tambem estar sem proximo passo. Medido: Bruno tem
-       38 negocios abertos e 172 evidencias - 4,5x a carteira inteira. Chamar isso de
-       "casos" faz o numero ser lido como negocios, e um numero que le errado por 4,5
-       vezes nao e um detalhe de rotulo: e o gestor parar de confiar na tela.
-       Nao da para deduplicar por negocio aqui: a frente de SLA chega agregada por pessoa,
-       com a contagem e sem os ids. Entao o numero se chama pelo que e - evidencias - e a
-       carteira aberta fica do lado, que e o que da a proporcao. */
-    p.abertos = Object.values(DATA.funilLeads || {}).reduce((n, arr) =>
-      n + (arr || []).filter(l => String(l.ownerId) === p.ownerId).length, 0);
-    p.estado = gxEstadoDoDia(p.ownerId);
-    return p;
-  }).sort((a, b) => (b.piorPeso - a.piorPeso) || (b.casos - a.casos) || String(a.nome).localeCompare(String(b.nome)));
-
-  const chip = (ok, txt, titulo) =>
-    '<span class="gx-mt-chip' + (ok ? ' is-ok' : ' is-falta') + '" title="' + esc(titulo) + '">' + esc(txt) + '</span>';
-
-  const cartaoHTML = p => {
-    const tom = GX_TONS_CATEGORIA[p.frentes[0] && p.frentes[0].categoria] || 'var(--line-btn)';
-    const e = p.estado;
-    const aberto = (typeof cockpitExecSelecionado !== 'undefined') && String(cockpitExecSelecionado) === p.ownerId;
-    const mostrar = p.frentes.slice(0, GX_FRENTES_NO_CARTAO);
-    const sobra = p.frentes.length - mostrar.length;
-
-    const frentesHTML = mostrar.map(f => {
-      const t = GX_TONS_CATEGORIA[f.categoria] || 'var(--line-btn)';
-      const ch = (typeof gxPautaChaveDe === 'function') ? gxPautaChaveDe(f) : null;
-      const dentro = ch && typeof gxPautaTem === 'function' && gxPautaTem(ch);
-      return '<div class="gx-mt-frente" style="--gx-tom:' + t + '">' +
-        '<span class="gx-mt-frente-txt"><b>' + esc(f.evidencia || f.rotulo) + '</b>' +
-          '<small>' + esc(f.acao || '') + '</small></span>' +
-        (ch ? '<button type="button" class="gx-btn gx-btn-pauta' + (dentro ? ' is-dentro' : '') +
-          '" data-gx-pauta-por="' + esc(ch) + '" aria-pressed="' + (dentro ? 'true' : 'false') +
-          '" title="' + (dentro ? 'Tirar da pauta da Daily' : 'Mandar para a pauta da Daily') + '">' +
-          (dentro ? '✓' : '+') + '</button>' : '') +
-      '</div>';
-    }).join('');
-
-    /* A LEITURA DE UMA LINHA E COMPOSICAO DE EVIDENCIA, nunca avaliacao da pessoa. */
-    /* A LEITURA NAO REPETE O NUMERAL nem apaga a sigla. Ela dizia "172 evidencias em 10
-       frentes", com o 172 ja gigante duas linhas acima, e o toLowerCase transformava
-       "Negocio acima do SLA" em "...do sla" - achados no screenshot, os dois. O que esta
-       linha tem de proprio e a PROPORCAO entre frentes e carteira, que nenhum outro
-       elemento do cartao diz. */
-    const leitura = p.frentes.length + ' frente' + (p.frentes.length === 1 ? '' : 's') +
-      ' sobre ' + p.abertos + ' negócio' + (p.abertos === 1 ? '' : 's') + ' aberto' +
-      (p.abertos === 1 ? '' : 's') + ' · a mais grave é ' + p.frentes[0].rotulo;
-
-    const visitasTxt = e.alvoDeVisitas != null
-      ? e.comprovadas + ' de ' + e.alvoDeVisitas + ' visitas'
-      : e.comprovadas + ' visita' + (e.comprovadas === 1 ? '' : 's') + ' comprovada' + (e.comprovadas === 1 ? '' : 's');
-
-    return '<article class="gx-mt-card" style="--gx-tom:' + tom + '">' +
-      '<div class="gx-mt-topo">' +
-        '<span class="gx-mt-ini" aria-hidden="true">' + esc(String(p.nome || '?').trim().charAt(0).toUpperCase()) + '</span>' +
-        '<span class="gx-mt-quem"><b>' + esc(p.nome) + '</b>' +
-          '<small>' + esc(p.praca || '—') + ' · fase ' + esc(p.fase || '—') + '</small></span>' +
-        '<span class="gx-mt-casos"><b>' + p.casos + '</b><small>evidências</small></span>' +
-      '</div>' +
-      '<div class="gx-mt-mes">' + p.abertos + ' negócio' + (p.abertos === 1 ? '' : 's') +
-        ' aberto' + (p.abertos === 1 ? '' : 's') + ' · ' + p.fechadosNoMes + ' de ' + p.metaMensal +
-        ' fechamento' + (p.metaMensal === 1 ? '' : 's') + ' no mês</div>' +
-      '<div class="gx-mt-frentes">' + frentesHTML +
-        (sobra > 0 ? '<div class="gx-mt-sobra">+ ' + sobra + ' frente' + (sobra === 1 ? '' : 's') +
-          ' no dossiê</div>' : '') +
-      '</div>' +
-      '<div class="gx-mt-chips">' +
-        chip(e.planoFechado, e.planoFechado ? 'plano fechado' : 'plano aberto',
-          'Plano do dia no Cockpit · fonte: planos_diarios') +
-        chip(e.paradas > 0, e.paradas > 0 ? e.paradas + ' parada' + (e.paradas === 1 ? '' : 's') : 'sem rota',
-          'Paradas sequenciadas para hoje · fonte: rota do Cockpit') +
-        chip(e.comprovadas > 0, visitasTxt,
-          'Visita comprovada por evento do Expogo/HubSpot — planejada não conta') +
-      '</div>' +
-      '<div class="gx-mt-leitura">' + esc(leitura) + '</div>' +
-      '<button type="button" class="gx-mt-dossie" data-gx-mt-dossie="' + p.ownerId + '"' +
-        ' aria-expanded="' + (aberto ? 'true' : 'false') + '">' +
-        (aberto ? 'fechar ✕' : 'dossiê →') + '</button>' +
-    '</article>';
-  };
-
-  el.innerHTML = '<section class="chart-card" aria-label="Meu time" style="margin-bottom:20px;">' +
-    '<div class="gx-fila-cab">' +
-      '<h3 style="margin:0;font-family:var(--font-display);">Quem precisa de mim hoje</h3>' +
-      '<span class="chart-subtitle" style="margin:0;">' + cartoes.length + ' pessoa' +
-        (cartoes.length === 1 ? '' : 's') + ' com evidência · ' + linhas.filter(l => l.ownerId != null).length +
-        ' frentes sobre ' + casosTotais + ' evidências</span>' +
-    '</div>' +
-    '<p class="gx-fila-nota">Cada frente é uma <b>evidência</b> do que o time registrou — não uma nota da pessoa. ' +
-      'Fonte: HubSpot (funil, tarefas, etapas) + Supabase (plano do dia, rota, visitas comprovadas). ' +
-      'Janela: hoje. Ordem: <b>gravidade da pior frente</b>, não volume. Carga de ' +
-      esc(DATA.hubspotUpdatedAtFmt || 'horário não informado') + '.' +
-      '<br>O numeral de cada cartão conta <b>evidências, não negócios</b>: um mesmo negócio entra em mais de uma ' +
-      'frente — quem está acima do SLA costuma também estar sem próximo passo. Por isso a carteira aberta ' +
-      'aparece ao lado: é ela que dá a proporção.</p>' +
-    doTime.map(l => '<div class="gx-mt-aviso"><b>' + esc(l.rotulo) + ':</b> ' + esc(l.evidencia) +
-      ' — ' + esc(l.acao || '') + '</div>').join('') +
-    (cartoes.length
-      ? '<div class="gx-mt-grade">' + cartoes.map(cartaoHTML).join('') + '</div>'
-      : '<div class="gx-vazia"><b>Nenhuma evidência de intervenção agora.</b> Plano do dia fechado, rota montada, ' +
-        'nenhum quente sem próximo passo e nada acima do SLA entre os executivos ativos. ' +
-        'Isso é leitura da carga de ' + esc(DATA.hubspotUpdatedAtFmt || 'hoje') + ' — não é promessa de que o dia acabou.</div>') +
-  '</section>';
-
-  el.querySelectorAll('[data-gx-pauta-por]').forEach(btn => btn.addEventListener('click', () => {
-    if (typeof gxPautaAlternar === 'function') gxPautaAlternar(btn.getAttribute('data-gx-pauta-por'));
-  }));
-  el.querySelectorAll('[data-gx-mt-dossie]').forEach(btn => btn.addEventListener('click', () => {
-    const oid = btn.getAttribute('data-gx-mt-dossie');
-    /* Clicar no cartao aberto FECHA o dossie - senao o botao "fechar" nao fecharia nada e
-       seria um clique que muda o rotulo sem mudar a tela. */
-    if (String(cockpitExecSelecionado) === String(oid)) {
-      cockpitExecSelecionado = null;
-      renderFilaDeIntervencao();
-      return;
-    }
-    if (typeof gxAbrirDestino === 'function') gxAbrirDestino({ view: 'viewCockpit', ownerId: oid });
-    renderFilaDeIntervencao();
-  }));
-}
 
 /* ── RENDER DO DINHEIRO CONHECIDO ──────────────────────────────────────────────────
    Três cartões. Nenhum número estimado, cobertura presa ao número, e cada valor abre a
@@ -54238,7 +53865,7 @@ async function rt7Disparar() {
   const municipio = String(praca.nome).split('/')[0].trim();
   RT7_ESTADO.importando = true;
   RT7_ESTADO.toast = 'buscando em ' + municipio + '…';
-  renderRotas();
+  renderRotasProspeccao();
   try {
     const token = (typeof tokenDeSessaoGlobal === 'function') ? await tokenDeSessaoGlobal() : null;
     const resp = await fetch('/api/buscar-leads', {
@@ -54305,12 +53932,19 @@ async function rt7Executar(acao) {
       S.toast = 'transferência em massa não está ligada: mover 436 contas de dono é decisão que precisa de regra por praça, não de um clique. Me diga a regra e eu ligo.';
     }
   }
-  renderRotas();
+  renderRotasProspeccao();
 }
 
 
 /* ── DESENHA A ABA ROTAS & PROSPECÇÃO ────────────────────────────────────────── */
-function renderRotas() {
+/* NOME PROPRIO, PORQUE JA EXISTIA UM renderRotas (06/09/26). A aba antiga tem
+    desenhando #rotasContent; eu declarei outra com o MESMO
+   nome mais abaixo, e declaracao de funcao nao avisa: a ultima vence, entao a minha
+   passou a atender as chamadas da tela antiga e a dela nunca mais rodou. Nao deu sintoma
+   porque o bloco antigo esta escondido para o gestor — era defeito latente esperando
+   alguem reabrir aquele bloco. Quem apontou foi a checagem de privacidade da suite, que
+   procurou  e achou a ANTIGA. */
+function renderRotasProspeccao() {
   const raiz = document.getElementById('rt7Raiz');
   if (!raiz) return;
   if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
@@ -54482,9 +54116,9 @@ document.addEventListener('click', ev => {
 
 async function rt7Iniciar() {
   if (!sessaoAtual || sessaoAtual.role !== 'manager') return;
-  renderRotas();
+  renderRotasProspeccao();
   await rt7Carregar();
-  renderRotas();
+  renderRotasProspeccao();
 }
 
 /* ═══ ABA SEMANA DO GESTOR, v2 — PAINEL VIVO (06/09/26) ════════════════════════════
