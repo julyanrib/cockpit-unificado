@@ -166,6 +166,35 @@ checar('o fundo da página só muda nesta aba',
 ['focoDeHabilidadeHTML', 'buildIndicadoresExecutivoHTML', 'compromissosComPrazo', 'destravarFunil']
   .forEach(fn => checar('continua existindo: ' + fn, template.indexOf('function ' + fn) > -1));
 
+/* ── 10. O TREINO DA SEMANA ──────────────────────────────────────────────────────
+   Coluna aditiva em pdi_compromissos (treino_feito_em, treino_foco), autorizada pelo
+   Julyan em 05/09. Duas regras que nao podem cair: */
+/* A primeira versão desta checagem media a FUNÇÃO inteira e reprovava sozinha: o corpo
+   tem `{ checked: [], data: '' }` como valor padrão do cache, que não é o upsert. O que
+   importa é o PAYLOAD que sobe — é ele que o Postgres aplica. */
+checar('o treino grava sem apagar os acordos', (function () {
+  const i = template.indexOf('function savePdiTreino(');
+  if (i < 0) return false;
+  const u = template.indexOf(".upsert({", i);
+  if (u < 0 || u > i + 900) return false;
+  const fim = template.indexOf('}, {', u);
+  if (fim < 0) return false;
+  return template.slice(u, fim).indexOf('checked') === -1;
+}()),
+  'mandar checked no payload faria o treino sobrescrever os acordos do 1:1 com o que estivesse no cache');
+/* E aqui o que importa é o GUARDA: sem ele a linha do treino aparece para todo mundo,
+   inclusive para quem nunca marcou — que é o oposto do que a coluna significa. */
+checar('o gestor ve o treino, e só quando ele existe', (function () {
+  const i = template.indexOf('idPrefix}PdiCount');
+  if (i < 0) return false;
+  const trecho = template.slice(i, i + 900);
+  return trecho.indexOf("if (!est.treinoEm) return ''") > -1 && trecho.indexOf('treino de habilidade feito') > -1;
+}()),
+  'sem isso o executivo marca e ninguem ve — e a promessa da tela dele e que o gestor ve');
+checar('treino nao marcado e ausencia, nao falso',
+  template.indexOf('treinoEm: row.treino_feito_em || null') > -1,
+  'quem nunca marcou nao pode aparecer como quem desmarcou');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));

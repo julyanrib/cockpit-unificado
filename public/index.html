@@ -32625,7 +32625,7 @@ async function carregarPdiCompromissos() {
   pdiCarregado = true;
   if (error) { console.error('Erro ao carregar PDI:', error.message); return; }
   pdiCache = {};
-  (data || []).forEach(row => { pdiCache[`${row.owner_id}_${row.versao_analise}`] = { checked: row.checked || [], data: row.data_um_a_um || '' }; });
+  (data || []).forEach(row => { pdiCache[`${row.owner_id}_${row.versao_analise}`] = { checked: row.checked || [], data: row.data_um_a_um || '', treinoEm: row.treino_feito_em || null, treinoFoco: row.treino_foco || null }; });
 }
 function pdiStorageKey(ownerId) {
   return `${ownerId}_${DATA.versaoAnalise}`;
@@ -32634,10 +32634,16 @@ function getPdiState(ownerId, total) {
   const salvo = pdiCache[pdiStorageKey(ownerId)];
   const checked = Array.isArray(salvo && salvo.checked) ? [...salvo.checked] : new Array(total).fill(false);
   while (checked.length < total) checked.push(false);
-  return { checked, data: (salvo && salvo.data) || '' };
+  return { checked, data: (salvo && salvo.data) || '',
+    treinoEm: (salvo && salvo.treinoEm) || null, treinoFoco: (salvo && salvo.treinoFoco) || null };
 }
 function savePdiState(ownerId, checked, data) {
-  pdiCache[pdiStorageKey(ownerId)] = { checked, data }; // otimista: UI já reflete antes do round-trip
+  /* PRESERVA O TREINO. O upsert abaixo só manda as colunas do 1:1, e no Postgres o
+     ON CONFLICT atualiza apenas o que foi enviado — mas o CACHE é sobrescrito inteiro
+     aqui, e sem esta linha o botão do treino voltaria a "não feito" na tela até a
+     próxima carga, sem nada ter mudado no banco. */
+  const antes = pdiCache[pdiStorageKey(ownerId)] || {};
+  pdiCache[pdiStorageKey(ownerId)] = { checked, data, treinoEm: antes.treinoEm || null, treinoFoco: antes.treinoFoco || null }; // otimista: UI já reflete antes do round-trip
   if (!DATA.supabase || !supa) return;
   supa.from('pdi_compromissos').upsert({
     owner_id: ownerId, versao_analise: DATA.versaoAnalise,
@@ -32646,6 +32652,27 @@ function savePdiState(ownerId, checked, data) {
     updated_at: new Date().toISOString()
   }, { onConflict: 'owner_id,versao_analise' }).then(({ error }) => {
     if (error) console.error('Erro ao salvar PDI no Supabase:', error.message);
+  });
+}
+
+/* O TREINO DA SEMANA (05/09/26). Mesma tabela, mesma chave, mesmo caminho otimista do
+   1:1: a tela reage no clique e o banco recebe em paralelo.
+   Manda só as colunas do treino: o ON CONFLICT do Postgres atualiza o que chega, então
+   marcar o treino não pode apagar os acordos — e mandar os acordos aqui seria repetir a
+   verdade de outro lugar, que é como as duas versões acabam divergindo. */
+function savePdiTreino(ownerId, focoId, feito) {
+  const chave = pdiStorageKey(ownerId);
+  const antes = pdiCache[chave] || { checked: [], data: '' };
+  const quando = feito ? new Date().toISOString() : null;
+  pdiCache[chave] = { ...antes, treinoEm: quando, treinoFoco: feito ? (focoId || null) : null };
+  if (!DATA.supabase || !supa) return;
+  supa.from('pdi_compromissos').upsert({
+    owner_id: ownerId, versao_analise: DATA.versaoAnalise,
+    treino_feito_em: quando, treino_foco: feito ? (focoId || null) : null,
+    atualizado_por: (sessaoAtual && sessaoAtual.email) || null,
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'owner_id,versao_analise' }).then(({ error }) => {
+    if (error) console.error('Erro ao salvar o treino no Supabase:', error.message);
   });
 }
 
@@ -34124,6 +34151,16 @@ function buildDetailHTML(r, idPrefix, skipLeadsList) {
       <span>Combinado no 1:1 de <input type="text" id="${idPrefix}PdiData" aria-label="Data combinada no 1:1 (dd/mm)" placeholder="dd/mm"></span>
       <span id="${idPrefix}PdiCount">✓ ${r.compromissos.length} compromissos</span>
     </div>
+    <!-- O TREINO DA SEMANA APARECE PARA O GESTOR (05/09/26). Sem esta linha o executivo
+         marcaria o treino e ninguém veria — e a promessa da tela dele é justamente que o
+         gestor vê. Só aparece quando existe: ausência não vira "não fez" na cara dele. -->
+    ${(() => {
+      const est = getPdiState(r.ownerId, r.compromissos.length);
+      if (!est.treinoEm) return '';
+      const d = new Date(est.treinoEm);
+      const quando = isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      return `<div class="sign-row" style="border:0;padding-top:0;"><span style="color:var(--green);font-weight:700;">✓ treino de habilidade feito${quando ? ' em ' + quando : ''}${est.treinoFoco ? ' · ' + est.treinoFoco.replace(/_/g, ' ') : ''}</span></div>`;
+    })()}
 
     <hr class="pdi-divider">
     <div class="pdi-eyebrow">Histórico de 1:1</div>
@@ -54432,6 +54469,14 @@ async function renderPDIs() {
     const focoSemana = (() => { try { return focoDeHabilidade(gatesDoDia(r)); } catch (e) { return null; } })();
     /* o porquê do foco é função do diagnóstico; a página do playbook tem título próprio */
     const focoPorque = (() => { try { return focoSemana ? focoSemana.porque(gatesDoDia(r)) : ''; } catch (e) { return ''; } })();
+    /* O TREINO DESTA SEMANA. Marcado = tem carimbo de quando; o rótulo mostra o dia,
+       porque "feito" sem data vira medalha permanente e o foco é semanal. */
+    const treinoFeito = !!(estado1a1 && estado1a1.treinoEm);
+    const treinoQuando = (() => {
+      if (!estado1a1 || !estado1a1.treinoEm) return '';
+      const d = new Date(estado1a1.treinoEm);
+      return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    })();
     const focoPagina = (() => {
       if (!focoSemana) return '';
       const p = (typeof playbookPagina === 'function') ? playbookPagina(focoSemana.playbook) : null;
@@ -54651,6 +54696,7 @@ async function renderPDIs() {
               <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#9C5BD6;">treino de 5 minutos · roleplay</span>
               <p style="margin:4px 0 0;font:700 11px/1.55 'Manrope',sans-serif;color:#5B667A;">${esc(focoSemana.roleplay)}</p>
               <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;">
+                <button type="button" data-treino="${esc(focoSemana.id)}" style="display:inline-flex;align-items:center;min-height:34px;padding:0 14px;border:1.5px solid #9C5BD6;border-radius:999px;background:${treinoFeito ? '#9C5BD6' : '#FDFEFF'};font:800 10.5px 'Manrope',sans-serif;color:${treinoFeito ? '#FFFDF8' : '#9C5BD6'};cursor:pointer;white-space:nowrap;">${treinoFeito ? '✓ treino feito' + (treinoQuando ? ' · ' + esc(treinoQuando) : '') : 'começar o treino de 5 min ▸'}</button>
                 <button type="button" class="foco-playbook" data-playbook="${esc(focoSemana.playbook)}" style="display:inline-flex;align-items:center;min-height:34px;padding:0 14px;border:1.5px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;white-space:nowrap;">abrir no Playbook: ${esc(focoPagina)} ▸</button>
               </div>
             </div>
@@ -54801,6 +54847,24 @@ async function renderPDIs() {
        escreve em pdi_compromissos, que é de onde a tela dele monta o 1:1 — então marcar
        aqui aparece lá. A UI não espera a rede: o cache é otimista e o render é imediato,
        igual ao resto do produto. */
+    /* O TREINO: marca, grava e redesenha. Desmarcar desfaz — a prancha pede desfazer em
+       toda ação, e treino marcado por engano no bolso não pode virar registro permanente
+       na tela do gestor. */
+    el.querySelectorAll('[data-treino]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const foco = btn.dataset.treino || '';
+        const estado = getPdiState(r.ownerId, compromissos1a1.length);
+        const marcando = !estado.treinoEm;
+        savePdiTreino(r.ownerId, foco, marcando);
+        if (typeof mostrarToast === 'function') {
+          mostrarToast(marcando
+            ? 'Treino marcado — 5 minutos no relógio. Seu gestor vê no 1:1.'
+            : 'Treino desmarcado.', 'sucesso');
+        }
+        renderPDIs();
+      });
+    });
+
     el.querySelectorAll('[data-um-idx]').forEach(btn => {
       btn.addEventListener('click', () => {
         const k = Number(btn.dataset.umIdx);
