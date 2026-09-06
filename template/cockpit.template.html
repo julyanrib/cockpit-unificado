@@ -20327,9 +20327,10 @@ function atualizarPreviewPrecificacao() {
   const btnRegistrar = document.getElementById('prcRegistrar');
   if (btnRegistrar) btnRegistrar.addEventListener('click', prcRegistrarNoNegocio);
   slot.querySelectorAll('[data-prc-passo]').forEach(btn => btn.addEventListener('click', () => {
-    const op = PRC_PASSOS.find(x => x.id === btn.dataset.prcPasso);
-    if (!op) return;
-    precificacaoEstado.passo = { dias: op.dias, hora: op.hora, escolhido: null };
+    /* mesma funcao do ligador do v4 — ver prcPassoDoChip */
+    const escolha = prcPassoDoChip(btn.dataset.prcPasso);
+    if (!escolha) return;
+    precificacaoEstado.passo = escolha;
     atualizarPreviewPrecificacao();
   }));
   const passoLivre = document.getElementById('prcPassoLivre');
@@ -20969,8 +20970,11 @@ function renderPrecificacaoConfigurador() {
       try { alvoCampo.focus(); } catch (e) {}
       return;
     }
-    const partes = String(v).split('|');
-    precificacaoEstado.passo = { dias: Number(partes[0]), hora: partes[1], escolhido: null };
+    /* resolve o ID na lista — ver prcPassoDoChip. O split("|") que estava aqui esperava
+       um formato que chip nenhum emite. */
+    const escolha = prcPassoDoChip(v);
+    if (!escolha) return;
+    precificacaoEstado.passo = escolha;
     renderPrecificacaoConfigurador();
   }));
   const btnCopiarV4 = document.getElementById('prcCopiar');
@@ -21114,6 +21118,19 @@ const PRC_PASSOS = [
 function prcPassoAtivo(op) {
   const passo = precificacaoEstado.passo || {};
   return !passo.escolhido && Number(passo.dias) === op.dias && passo.hora === op.hora;
+}
+
+/* QUAL PASSO O CHIP REPRESENTA — UM LUGAR SÓ (06/09/26).
+   O chip carrega o ID da opção (amanha10, amanha15), não um par "dias|hora". Havia dois
+   ligadores lendo esse atributo e só um sabia disso: o outro fazia split("|") e gravava
+   dias=NaN, o que apagava o chip E fazia o próximo passo da proposta virar
+   "Invalid Date" — texto que a mensagem do WhatsApp e o PNG leem. Agora os dois passam
+   por aqui, então não existe mais um segundo lugar onde a regra possa divergir.
+   Devolve null para id desconhecido: quem chama NÃO altera o estado nesse caso, porque
+   estado meio preenchido é pior que clique sem efeito. */
+function prcPassoDoChip(id) {
+  const op = PRC_PASSOS.find(x => x.id === id);
+  return op ? { dias: op.dias, hora: op.hora, escolhido: null } : null;
 }
 
 /* 5 · PRÓXIMO PASSO (v4, 30/08/26) — os chips do fecho E as três ações. As ações
@@ -55413,7 +55430,13 @@ async function renderCoaching() {
     const input = el.querySelector('.sugestaoPlanoInput');
     const statusEl = el.querySelector('.sugestaoPlanoStatus');
     const texto = input.value.trim();
-    if (!texto) return;
+    /* CLIQUE MUDO NAO (06/09/26): sair no primeiro if sem dizer nada faz o botao parecer
+       quebrado. Ele nao esta — falta o texto, e agora a tela diz isso. */
+    if (!texto) {
+      statusEl.textContent = 'Escreva o compromisso antes de enviar.';
+      try { input.focus(); } catch (e) {}
+      return;
+    }
     statusEl.textContent = 'Enviando...';
     const { error } = await supa.from('sugestoes_planos').insert({
       owner_id: ownerId, texto, autor: sessaoAtual.nome || sessaoAtual.email
