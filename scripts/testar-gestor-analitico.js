@@ -451,12 +451,24 @@ checar('as perdas declaram a cobertura do proprio preenchimento',
 checar('todo nome do raio-X abre o dossie',
   templateCodigo.indexOf('data-gx-rx-quem') > 0 &&
   templateCodigo.indexOf("gxAbrirDestino({ view: 'viewCockpit', ownerId: oid })") > 0);
-checar('os quatro blocos que o raio-X resume foram recolhidos, nao apagados',
-  template.indexOf('id="gxDetalheBlocos"') > 0 &&
-  template.indexOf('id="cockpitExecutionCommand"') > 0 &&
-  template.indexOf('id="reps"') > 0 &&
-  template.indexOf('id="vendasMesBloco"') > 0 &&
-  template.indexOf('id="cockpitPorQuePerdemos"') > 0);
+/* O DETALHE DOS QUATRO BLOCOS ANTIGOS TEM ENDERECO NOVO (06/09/26).
+   A versao anterior desta checagem exigia os quatro nos RECOLHIDOS na tela. A aba Time
+   v5 os apagou de proposito, e cravar o id de um no fazia esta suite reprovar o desenho
+   novo em vez de proteger o usuario. O que importa e que a INFORMACAO nao sumiu junto:
+   cada um dos quatro tem que estar sendo produzido pelo provedor da aba nova. */
+checar('nenhuma informacao dos blocos antigos sumiu com eles',
+  /* tabela por executivo -> bloco 2, um cartao por pessoa com criticos por nome */
+  templateCodigo.indexOf('execs,') > 0 &&
+  templateCodigo.indexOf('criticos: (r.criticos || [])') > 0 &&
+  /* vendas do mes -> KPI Novo MRR no cabecalho */
+  templateCodigo.indexOf('Novo MRR no mês') > 0 &&
+  templateCodigo.indexOf('DATA.vendasMes') > 0 &&
+  /* por que perdemos -> painel de perdas do bloco 1 */
+  templateCodigo.indexOf('DATA.motivosPerda') > 0 &&
+  templateCodigo.indexOf('perdaLeitura') > 0 &&
+  /* comando de hoje -> as acoes do dossie viram pauta datada */
+  templateCodigo.indexOf("tl5Alternar('cobranca_daily'") > 0,
+  'a aba pode mudar de desenho; perder um destes quatro e perder informacao do gestor');
 
 /* ── 18. O DOSSIE DO 1:1 (aba Time, prancha v4 secao 5) ───────────────────────────
    O dossie ja tinha a forma do funil dele contra o time, a idade por etapa, o dinheiro
