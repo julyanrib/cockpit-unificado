@@ -139,10 +139,15 @@ checar('as doze categorias permitidas estão declaradas em um lugar só',
 /* ── 6. NENHUMA AÇÃO GERA BOTÃO SEM DESTINO ────────────────────────────────────────── */
 checar('linha sem destino não entra na fila',
   templateCodigo.indexOf('.filter(l => l.destino)') > 0);
-checar('o destino abre pessoa/negócio filtrado, não só troca de aba',
+/* O DOSSIE INLINE SAIU NA VARREDURA DE 06/09/26 (ele montava em #cockpitDossieInline,
+   que a aba Time nova nao tem mais). A REGRA sobreviveu: clicar num destino nao pode
+   apenas trocar de aba — tem que levar A PESSOA junto, senao o gestor cai numa lista e
+   procura de novo o nome que ele acabou de clicar. */
+checar('o destino leva a pessoa junto, nao so troca de aba',
   templateCodigo.indexOf('function gxAbrirDestino(') > 0 &&
-  templateCodigo.indexOf('cockpitExecSelecionado = oid') > 0 &&
-  templateCodigo.indexOf('renderCockpitDossieInline()') > 0);
+  templateCodigo.indexOf('function gxFocarExecutivo(') > 0 &&
+  /o destino.*ownerId|gxFocarExecutivo\(oid, destino\.view\)/.test(templateCodigo),
+  'destino sem pessoa faz o gestor procurar de novo o nome que acabou de clicar');
 checar('trocar de aba usa o botão de aba real, nunca activateTab à mão',
   templateCodigo.indexOf("document.getElementById(destino.view === 'viewRotas' ? 'tabBtnRotas' : 'tabBtnPDIs')") > 0);
 checar('o foco por executivo rola até o card e pisca',
@@ -475,9 +480,18 @@ checar('nenhuma informacao dos blocos antigos sumiu com eles',
    parado, a meta e a aderencia. Faltavam a manchete de treino, o que cobrar hoje e a
    pauta - e eu escrevi um bloco de perdas que JA EXISTIA e era melhor que o meu. As
    checagens guardam que o duplicado nao volta e que a versao mantida e a completa. */
-checar('a manchete de treino vem antes das formas, e o cartao GARGALO nao ficou duplicado',
-  template.indexOf('Onde treinar com ${esc(String(r.name).split(') > 0 &&
-  template.indexOf('>GARGALO<') < 0);
+/* O CARTAO DE TREINO ERA DO DOSSIE. A regra que fica: a pauta do 1:1 tem QUATRO cards
+   distintos, e o gargalo aparece em UM. Duplicar o gargalo em dois cards e o defeito
+   que a checagem antiga existia para pegar. */
+checar('a pauta do 1:1 tem os quatro cards e o gargalo aparece uma vez so',
+  (function () {
+    const i = templateCodigo.indexOf('const pItens = pSel ?');
+    if (i < 0) return false;
+    const bloco = templateCodigo.slice(i, i + 3000);
+    const rots = (bloco.match(/rot: '(reconhecer|o gargalo|acordos anteriores|novo acordo)'/g) || []);
+    return rots.length === 4 && (bloco.match(/rot: 'o gargalo'/g) || []).length === 1;
+  }()),
+  'quatro cards, um de cada — gargalo repetido faz o 1:1 girar no mesmo assunto');
 checar('existe UM bloco de perdas por pessoa, o que compara com o time',
   templateCodigo.indexOf('function gxComoElePerdeHTML') < 0 &&
   template.indexOf('régua = o time') > 0 &&
@@ -488,16 +502,44 @@ checar('o bloco de perdas por pessoa liga o motivo a um modulo do Playbook',
 checar('o MRR das perdas dele aparece com a cobertura, e nao como receita',
   templateCodigo.indexOf('mp.mrrPorOwner[String(r.ownerId)]') > 0 &&
   template.indexOf('os negócios sem MRR preenchido não entram nesta soma') > 0);
-checar('o que cobrar hoje reusa a fila e o mesmo + da pauta da Daily',
-  templateCodigo.indexOf('function gxCobrarHojeHTML(r)') > 0 &&
-  templateCodigo.indexOf("gxFilaDeIntervencao().filter(function (l) { return String(l.ownerId) === String(r.ownerId); })") > 0);
-checar('a pauta do 1:1 monta texto do que a tela mostra, sem escrever em fonte nenhuma',
-  templateCodigo.indexOf('function gxTextoPautaDo11(r)') > 0 &&
-  template.indexOf('copiar pauta do 1:1') > 0 &&
-  templateCodigo.indexOf('RECONHECER (comportamento observado para multiplicar)') > 0);
-checar('a comparacao com o time e a pauta nao chegam ao executivo',
-  templateCodigo.indexOf("souRepSessao ? '' : gxCobrarHojeHTML(r)") > 0 &&
-  templateCodigo.indexOf("souRepSessao ? '' : '<button type=\"button\" id=\"gxCopiarPauta11\"") > 0);
+/* NAO CALCULAR A MESMA COISA DUAS VEZES — a regra que gxCobrarHojeHTML carregava, e que
+   depois da varredura de 06/09/26 vale para as tres abas do gestor. Time, Pessoas e
+   Rotas leem O MESMO motor (tl5Medir): quem tem negocio acima da regua e um numero so
+   no produto. Duas telas do mesmo gestor discordando no mesmo numero e pior que uma
+   tela so, e ja aconteceu aqui (a Pessoas dizia que ninguem precisava dele enquanto a
+   Time gritava dois nomes). */
+checar('as abas do gestor leem o mesmo motor, e nao recalculam por conta',
+  /* sem regex com parêntese escapado aqui: indexOf de trecho literal diz a mesma coisa e
+     não depende de a barra invertida sobreviver ao caminho até o arquivo — ela já morreu
+     três vezes neste projeto, e uma regex sem as barras fica válida, errada e verde */
+  templateCodigo.indexOf('function tl5Medir(') > 0 &&
+  (function () {
+    const iPessoas = templateCodigo.indexOf('function ps6Pessoas()');
+    const iRotas = templateCodigo.indexOf('function rt7Dados()');
+    if (iPessoas < 0 || iRotas < 0) return false;
+    return templateCodigo.slice(iPessoas, iPessoas + 300).indexOf('tl5Medir()') > 0
+      && templateCodigo.slice(iRotas, iRotas + 300).indexOf('tl5Medir()') > 0;
+  }()) &&
+  templateCodigo.split('function tl5Medir(').length - 1 === 1,
+  'motor duplicado = duas telas do mesmo gestor discordando do mesmo numero');
+/* A PAUTA DO 1:1 MUDOU DE TELA (06/09/26): era o dossie da aba Time, agora e o painel
+   da aba Pessoas. A regra e a mesma e vale mais que a tela: a pauta sai do NUMERO que
+   a propria tela mostra, e nenhum pedaco dela e escrito por IA. */
+checar('a pauta do 1:1 sai do numero da tela, sem IA',
+  templateCodigo.indexOf('function ps6Dados(') > 0 &&
+  /pItens\s*=/.test(templateCodigo) &&
+  templateCodigo.indexOf('pSel.melhorHabito.bench') > 0 &&
+  templateCodigo.indexOf('nenhum texto aqui foi escrito por IA') > 0,
+  'pauta sem numero vira opiniao, e opiniao nao se cobra no 1:1');
+/* PRIVACIDADE — a regra que MAIS importa desta lista, e a que menos podia sumir junto
+   com o dossie: o executivo nao ve a comparacao do time nem a pauta do 1:1 dele. Hoje
+   isso e garantido em dois lugares, e a checagem exige os DOIS, porque um so falha
+   sozinho: renderPessoas se recusa a desenhar para quem nao e gestor, e renderPDIs
+   esconde a raiz do gestor no papel do executivo. */
+checar('a comparacao de time e a pauta do 1:1 nao chegam ao executivo',
+  /function renderPessoas\(\)[\s\S]{0,400}role !== 'manager'[\s\S]{0,80}return;/.test(templateCodigo) &&
+  /raizGestor[\s\S]{0,200}role === 'manager'[\s\S]{0,40}'none'/.test(templateCodigo),
+  'a aba Pessoas e do gestor: desenhar para o executivo vaza o 1:1 dele e o dos colegas');
 checar('o que abre lista no dossie cumpre o piso de 38px no desktop',
   template.indexOf('.coach-funil-etapa.is-abre{min-height:38px;}') > 0);
 
