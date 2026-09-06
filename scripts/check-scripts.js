@@ -958,6 +958,11 @@ function checarHoraDaTrava() {
   const h = Number(mDef[1]);
   const m = Number(mDef[2] || 0);
   const esperado = m === 0 ? h + 'h' : h + 'h' + String(m).padStart(2, '0');
+  /* o segundo prazo do produto, lido da propria constante — ver o comentario abaixo */
+  const mSem = /const PROMESSA_SEMANA_MINUTOS = (\d+) \* 60 \+ (\d+);/.exec(cru);
+  const esperadoSemana = mSem
+    ? (Number(mSem[2]) ? mSem[1] + 'h' + String(mSem[2]).padStart(2, '0') : mSem[1] + 'h')
+    : null;
 
   /* So texto de tela: comentario /* *\/ e <!-- --> saem. */
   const semCom = cru
@@ -988,6 +993,10 @@ function checarHoraDaTrava() {
       if (!GATILHOS.test(volta)) continue;
       /* O fecho do dia (19h) e outra regra, e legitimamente diferente da trava. */
       if (texto === '19h') continue;
+      /* E A PALAVRA DA SEMANA E UMA TERCEIRA (06/09/26): PROMESSA_SEMANA_MINUTOS, dada
+         na segunda no Meu Funil. Nao e excecao a mao — a guarda LE a constante, entao se
+         alguem mudar o prazo da semana e esquecer a tela, ela volta a acusar. */
+      if (esperadoSemana && texto === esperadoSemana) continue;
       erradas.set((i + 1) + ': ' + texto, linha.trim().slice(0, 92));
     }
   });

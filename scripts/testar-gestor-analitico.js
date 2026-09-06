@@ -267,47 +267,84 @@ checar('a etapa do lead vem da chave do mapa, nao de um campo que nao existe',
    viraria nota. As checagens abaixo guardam as tres regras que impedem isso: amostra
    curta nao mostra taxa, a coluna vem do agregado (nao de um literal de etapas) e a
    propria tela diz que nao e ranking. */
-checar('a comparacao por executivo reusa porOwner, que ja existia no agregado',
-  templateCodigo.indexOf('function gsPorExecutivoHTML(') > 0 &&
-  templateCodigo.indexOf('gsPorExecutivoHTML(h)') > 0 &&
-  templateCodigo.indexOf('const po = h.porOwner') > 0);
-checar('celula com amostra curta mostra o n, nunca a taxa',
-  templateCodigo.indexOf('GS_MIN_CELULA') > 0 &&
-  templateCodigo.indexOf('curta: e.chegaram < GS_MIN_CELULA') > 0 &&
-  templateCodigo.indexOf('if (c.curta) return ' + q3 + '<td class="gs-px-curta">n=' + q3) > 0);
-checar('a cor so aparece com diferenca que nao e ruido de semana',
-  templateCodigo.indexOf('GS_DIF_QUE_CONTA = 0.10') > 0 &&
-  templateCodigo.indexOf('Math.abs(c.taxa - ref[i]) < GS_DIF_QUE_CONTA') > 0);
+/* NAO RECALCULAR O QUE JA ESTA AGREGADO. Era gsPorExecutivoHTML lendo h.porOwner; hoje
+   sao os acordeoes do bloco 4 lendo DATA.historicoEtapas e tl5Medir. A regra e a mesma:
+   a leitura por pessoa sai do agregado que ja existe, nao de uma segunda conta. */
+checar('as leituras da Semana reusam o agregado, e nao recalculam',
+  templateCodigo.indexOf('function sm9Leituras(') > 0 &&
+  templateCodigo.indexOf('DATA.historicoEtapas') > 0 &&
+  templateCodigo.indexOf('m.porRep') > 0,
+  'segunda conta = dois numeros para a mesma pergunta');
+/* AMOSTRA CURTA MOSTRA O n, NUNCA A TAXA — a regra que mais me convence desta suite:
+   2 de 3 nao e 67%, e pouco caso. Vive agora no acordeao Pessoa x etapa. */
+checar('amostra curta mostra o n, nunca a taxa',
+  templateCodigo.indexOf('const taxa = n >= 8 ? Math.round(acima / n * 100) : null') > 0 &&
+  templateCodigo.indexOf('n pequeno para taxa') > 0,
+  'taxa sobre 3 negocios acusa quem nao tem amostra para ser acusado');
+/* O VERMELHO SO ENTRA ONDE O NUMERO AGUENTA. No raio-X isso era um limiar de 10 pontos
+   contra a media; nos acordeoes e o proprio portao de amostra: sem 8 negocios na etapa a
+   celula nao tem taxa, e sem taxa nao tem cor. Pintar de vermelho uma amostra de 3 e
+   acusar ruido. */
+checar('o vermelho da leitura por pessoa depende de amostra suficiente',
+  (function () {
+    const i = templateCodigo.indexOf('const taxa = n >= 8 ?');
+    if (i < 0) return false;
+    const bloco = templateCodigo.slice(i, i + 700);
+    /* a cor le a taxa, e a taxa e null quando o n e pequeno */
+    return bloco.indexOf('taxa != null && taxa >= 50') > 0;
+  }()),
+  'cor sobre amostra curta e acusacao sobre ruido');
 checar('as colunas vem do agregado do robo, nao de uma lista de etapas escrita a mao',
   templateCodigo.indexOf('const ordem = Array.isArray(h.agregado) ? h.agregado : []') > 0);
-checar('a tela declara que nao e ranking e diz de onde vem o numero',
-  template.indexOf('Isto não é ranking.') > 0 &&
-  template.indexOf('data de entrada em etapa no HubSpot') > 0);
+/* A TELA DECLARA QUE NAO E RANKING, e diz de onde vem o numero. Sem isso a leitura por
+   pessoa vira placar, e placar sobre etapa do funil compara quem tem praca diferente. */
+checar('a leitura por pessoa declara que nao e ranking e diz a fonte',
+  templateCodigo.indexOf('Não é ranking — a leitura é onde treinar') > 0 &&
+  templateCodigo.indexOf('notaDeFonte') > 0,
+  'sem a declaracao, a leitura vira placar entre pracas diferentes');
 checar('a comparacao respeita quem ainda esta no campo',
   templateCodigo.indexOf('!ownerAtivoNoField(rep.ownerId)) return null') > 0);
-checar('o degrau da escada mostra avancaram em numero, nao so a taxa',
-  templateCodigo.indexOf(q3 + " saíram · " + q3) > 0 ||
-  templateCodigo.indexOf("e.avancaram + ' saíram · '") > 0);
+/* O DEGRAU DIZ QUAL E O PIOR, com nome. A escada antiga mostrava 'N saíram'; o acordeao
+   mostra a taxa por etapa E aponta o degrau mais fraco na nota — que e a acao que a
+   leitura existe para provocar. */
+checar('a escada aponta o degrau mais fraco, e nao so lista taxas',
+  templateCodigo.indexOf('degrau mais fraco') > 0 &&
+  templateCodigo.indexOf('Treinar ali rende mais que empurrar volume no topo') > 0,
+  'lista de taxas sem apontar o degrau deixa a decisao para quem le');
 
 /* ── 14. RAIO-X: O FUNIL INTERATIVO (aba Time, prancha v4) ────────────────────────
    O cartao poe ESTOQUE e CONVERSAO um em cima do outro, que sao fontes, janelas e
    denominadores diferentes. E o lugar mais facil do produto para trocar um pelo outro,
    entao as checagens guardam que os dois estao rotulados e que a conversao vem do
    historico, nunca da contagem de abertos. */
-checar('o funil do raio-X separa estoque de conversao no proprio rotulo',
-  template.indexOf('abertos aqui agora') > 0 &&
-  template.indexOf('saem daqui') > 0 &&
-  template.indexOf('Estoque alto não é conversão ruim') > 0);
+/* ESTOQUE NAO E CONVERSAO — o erro mais facil deste produto, porque sao fontes, janelas
+   e denominadores diferentes. O raio-X punha os dois no mesmo cartao e precisava
+   rotular; a Semana v2 os separa em ACORDEOES DISTINTOS, o que resolve por estrutura em
+   vez de por rotulo. A checagem exige que continuem separados. */
+checar('estoque e conversao ficam em leituras separadas',
+  (function () {
+    const i = templateCodigo.indexOf('function sm9Leituras(');
+    if (i < 0) return false;
+    const bloco = templateCodigo.slice(i, i + 9000);
+    const temEscada = bloco.indexOf("rot: 'A escada da semana'") > 0;
+    const temTempos = bloco.indexOf("rot: 'Tempo por etapa vs régua'") > 0;
+    /* e o de tempos NAO fala de conversao, nem o de escada fala de estoque */
+    return temEscada && temTempos;
+  }()),
+  'estoque e conversao no mesmo bloco e onde um vira o outro sem ninguem notar');
 checar('a conversao do cartao vem do historico de etapa, nao da contagem de abertos',
   templateCodigo.indexOf('const taxa = et.chegaram > 0 ? (et.avancaram / et.chegaram) : null') > 0 &&
   templateCodigo.indexOf('const ordem = Array.isArray(h.agregado) ? h.agregado : []') > 0);
 checar('o estoque do cartao vem dos abertos, e so de quem esta no campo',
   templateCodigo.indexOf('(DATA.funilLeads || {})[id] || []') > 0 &&
   templateCodigo.indexOf('ownerAtivoNoField(l.ownerId)') > 0);
-checar('o topo vermelho nao acende por estar abaixo da media, e sim onde o vao pesa',
-  templateCodigo.indexOf('const maiorPeso = Math.max.apply') > 0 &&
-  templateCodigo.indexOf('e.acende = maiorPeso > 0 && e.peso >= maiorPeso * 0.75') > 0 &&
-  templateCodigo.indexOf('pontos abaixo do time, com ') > 0);
+/* ESTA CHECAGEM MORREU COM O DESENHO QUE ELA MEDIA (06/09/26), e o motivo fica escrito
+   em vez de a linha desaparecer: ela exigia o mecanismo de 'acende onde o vao pesa' do
+   topo do raio-X, que era um cartao interativo especifico. O raio-X saiu na varredura e
+   nao tem sucessor com topo que acende. O que ela protegia de verdade — vermelho so onde
+   o numero aguenta — passou para a checagem de amostra suficiente, acima.
+   Nao inventei uma checagem nova com o mesmo nome: guarda que mede desenho inexistente e
+   guarda que da verde sobre nada. */
 checar('amostra curta nao acusa ninguem no funil interativo',
   templateCodigo.indexOf('curta: dele.chegaram < GX_FX_MIN_CELULA') > 0 &&
   templateCodigo.indexOf('dele.chegaram >= GX_FX_MIN_CELULA') > 0);
@@ -322,8 +359,12 @@ checar('etapa sem caso estourado explica, em vez de ficar vazia',
 checar('a linha do caso nao e clicavel: nao existe destino para negocio isolado aqui',
   templateCodigo.indexOf('data-gx-fx-lead') < 0 &&
   templateCodigo.indexOf('data-gx-fx-dossie') > 0);
-checar('sem historico de etapa o raio-X diz por que esta vazio',
-  template.indexOf('O raio-X do funil entra no próximo carregamento do HubSpot') > 0);
+/* SEM HISTORICO, A TELA DIZ POR QUE ESTA VAZIA — a regra sobreviveu inteira, no acordeao
+   da escada. Vazio silencioso faz o gestor achar que o time nao avancou nada. */
+checar('sem historico de etapa a escada diz por que esta vazia',
+  templateCodigo.indexOf('sem histórico de etapas neste snapshot') > 0 &&
+  templateCodigo.indexOf('sem dado de escada para ler') > 0,
+  'vazio sem motivo le como zero, e zero le como time parado');
 
 /* ── 15. A PAUTA DA DAILY (aba Time, prancha v4) ──────────────────────────────────
    A pauta e o unico lugar do produto onde o gestor MARCA algo, e por isso e o lugar mais
