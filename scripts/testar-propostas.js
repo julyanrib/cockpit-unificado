@@ -20,6 +20,8 @@ const template = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.h
 const preco = JSON.parse(fs.readFileSync(path.join(raiz, 'data', 'precificacao.json'), 'utf8'));
 
 let ok = 0;
+/* estado que as funções do fecho leem, para poderem ser executadas aqui (checagem 15) */
+const sandbox = { passo: { dias: null, hora: null, escolhido: null } };
 const falhas = [];
 const checar = (nome, cond, detalhe) => { if (cond) { ok++; return; } falhas.push(nome + (detalhe ? ' — ' + detalhe : '')); };
 
@@ -234,6 +236,89 @@ checar('planos e períodos em 4 colunas que podem encolher',
   /\.p4-planos,\.p4-periodos\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/.test(template)
   && /\.p4-plano,\.p4-periodo\{[^}]*min-width:0/.test(template),
   'minmax(0,1fr) e min-width:0 são o par que deixa o cartão encolher em vez de cortar');
+
+/* ── 15. O CHIP DO PRÓXIMO PASSO LEVA A UM PASSO VÁLIDO ──────────────────────────
+   ESTA CHECAGEM NASCEU DE UM DEFEITO QUE ESTAVA EM PRODUÇÃO (06/09/26), achado clicando
+   na tela do gestor, não lendo código:
+     antes do clique   dias=1    -> próximo passo "Amanhã, 15h", chip aceso
+     depois do clique  dias=NaN  -> próximo passo "Invalid Date", chip apagado
+   Clicar no chip QUEBRAVA o passo que já estava certo — e "Invalid Date" é o texto que a
+   mensagem do WhatsApp e o PNG da proposta leem. A causa: dois ligadores para o mesmo
+   atributo, e um deles fazia split("|") num id que nunca teve "|".
+
+   Por que ela EXECUTA em vez de procurar texto: o código quebrado era sintaticamente
+   perfeito e citava todos os nomes certos. Só rodando dá para ver o NaN. */
+(function () {
+  /* tira as quatro funções do template e roda de verdade. Se alguma sumir ou mudar de
+     nome, isto reprova — e reprovar é o certo: elas são a regra do fecho. */
+  const pegar = nome => {
+    const i = template.indexOf('function ' + nome + '(');
+    if (i < 0) return null;
+    let nivel = 0, vi = false;
+    for (let j = i; j < template.length; j++) {
+      const c = template[j];
+      if (c === '{') { nivel++; vi = true; }
+      else if (c === '}') { nivel--; if (vi && nivel === 0) return template.slice(i, j + 1); }
+    }
+    return null;
+  };
+  const listaIni = template.indexOf('const PRC_PASSOS = [');
+  const listaFim = listaIni < 0 ? -1 : template.indexOf('];', listaIni);
+  const fontes = ['prcPassoDoChip', 'prcPassoAtivo', 'prcProximoPassoTexto', 'prcMaiuscula'].map(pegar);
+  if (listaIni < 0 || listaFim < 0 || fontes.indexOf(null) >= 0) {
+    checar('as funções do chip do fecho existem para serem medidas', false,
+      'sem elas esta suíte não mede nada, e verde sem medição é o pior resultado');
+    return;
+  }
+  ok++;
+  const codigo = template.slice(listaIni, listaFim + 2) + NL + fontes.join(NL) + NL
+    + 'return { PRC_PASSOS, prcPassoDoChip, prcPassoAtivo, prcProximoPassoTexto };';
+  let api;
+  try {
+    /* precificacaoEstado é o estado que as quatro leem; entra como variável do sandbox */
+    api = new Function('precificacaoEstado', codigo)(sandbox);
+  } catch (e) {
+    checar('as funções do chip do fecho carregam', false, e.message);
+    return;
+  }
+  ok++;
+
+  /* A REGRA, medida uma vez por chip que a tela oferece: clicar no chip tem que (a)
+     acender esse chip e (b) produzir uma data de verdade. */
+  api.PRC_PASSOS.forEach(op => {
+    const escolha = api.prcPassoDoChip(op.id);
+    if (!escolha) {
+      checar('o chip ' + op.id + ' vira um passo', false,
+        'id que a tela emite e a regra não resolve = clique sem efeito');
+      return;
+    }
+    ok++;
+    sandbox.passo = escolha;
+    checar('o chip ' + op.id + ' acende depois do próprio clique',
+      api.prcPassoAtivo(op),
+      'o gestor clica, nada acende, e ele clica de novo');
+    const t = api.prcProximoPassoTexto();
+    checar('o chip ' + op.id + ' produz data válida',
+      !!t.data && !isNaN(t.data.getTime()) && String(t.dia).indexOf('Invalid') < 0,
+      'este é o texto que vai no WhatsApp e no PNG: ' + t.dia + ', ' + t.hora);
+  });
+  sandbox.passo = { dias: null, hora: null, escolhido: null };
+}());
+
+/* ── 16. UM LUGAR SÓ RESOLVE O ID DO CHIP ────────────────────────────────────────
+   O defeito só existiu porque havia DOIS ligadores para [data-prc-passo] e eles
+   discordavam. Não é o número de ligadores que importa (podem conviver): é nenhum deles
+   inventar a própria leitura do id. */
+(function () {
+  const ligadores = template.split('data-prc-passo]').length - 1;
+  checar('os ligadores do chip existem', ligadores >= 1);
+  const atalho = template.split('dataset.prcPasso').length - 1;
+  const viaRegra = template.split('prcPassoDoChip(').length - 1;
+  checar('nenhum ligador inventa a leitura do id do chip',
+    /* cada leitura do atributo tem que desaguar na regra; +1 porque a própria função a declara */
+    viaRegra >= atalho,
+    atalho + ' leitura(s) de dataset.prcPasso para ' + viaRegra + ' uso(s) da regra');
+}());
 
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
