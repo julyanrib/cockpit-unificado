@@ -10,7 +10,7 @@
 // NA ÚLTIMA SEXTA-FEIRA DO MÊS (ou quando FORCE_MONTHLY_MESANO estiver setada, pra teste
 // manual — mesma env var que generate-individual-analysis.js já usa, reaproveitada aqui de
 // propósito pra testar os dois robôs num único dispatch), este script gera o FECHAMENTO
-// MENSAL em vez do resumo semanal — mesmo formato de saída (resumoGeral/comoAgir/porRep
+// (APAGADO EM 05/09/26 — revisão de custo) o fechamento MENSAL — mesmo formato de saída
 // com resumoIndividual/comoAgirIndividual), só muda o PROMPT e a janela de dados (mês
 // inteiro em vez de semana vs. semana anterior). O template NÃO precisa mudar: ele só lê
 // esses mesmos campos, então a troca é transparente pro front-end.
@@ -53,7 +53,6 @@ try {
 }
 
 const CAMINHO_HISTORICO_MES = path.join(root, 'data', 'historico-semanal-mes.json');
-const CAMINHO_HISTORICO_MENSAL_TIME = path.join(root, 'data', 'historico-mensal-time.json');
 
 // Monta um resumo por executivo (nome + praça + open + etapa dominante) pra dar contexto à Claude
 //
@@ -144,18 +143,6 @@ function lerHistoricoMes(mesAtualStr) {
 
 // Fechamentos mensais já gerados em meses anteriores (time + por executivo) — pra dar
 // continuidade no fechamento mensal seguinte, do mesmo jeito que buscarMesAnterior() faz
-// em generate-individual-analysis.js (lá via Supabase; aqui via arquivo local, já que este
-// script não usa Supabase).
-function lerHistoricoMensalTime() {
-  if (!fs.existsSync(CAMINHO_HISTORICO_MENSAL_TIME)) return [];
-  try {
-    return JSON.parse(fs.readFileSync(CAMINHO_HISTORICO_MENSAL_TIME, 'utf8'));
-  } catch (e) {
-    console.error(`Não deu pra ler o historico-mensal-time.json (${e.message}) — seguindo sem histórico de meses anteriores.`);
-    return [];
-  }
-}
-
 function promptTime(anterior) {
   const blocoAnterior = (anterior && anterior.comoAgir && anterior.comoAgir.length)
     ? `\nAções recomendadas na semana passada: ${anterior.comoAgir.join(' | ')}. Se os mesmos gargalos continuarem, diga isso explicitamente e escale a recomendação — não repita a mesma frase de novo. Se foram resolvidos, reconheça brevemente e foque no que é novo.`
@@ -179,39 +166,6 @@ Escreva em português do Brasil, tom direto e prático (nada de generalidades ti
 {
   "resumoGeral": "2-4 frases em HTML simples (pode usar <b>) explicando o que mais chamou atenção nos números da semana que passou — comparando com a anterior, citando números concretos.",
   "comoAgir": ["3 a 4 ações objetivas e priorizadas para a semana atual, cada uma como uma string curta, pode usar <b> para destacar números, diferentes das da semana passada se aqueles pontos já foram resolvidos"]
-}
-
-IMPORTANTE: fale só em nível de time/funil agregado. Não cite nome de executivo específico nem avalie
-desempenho individual — essa análise é vista coletivamente por todo o time, e observações sobre uma
-pessoa específica devem ficar reservadas para uma conversa de PDI, não para este resumo coletivo.`;
-}
-
-// Versão MENSAL do prompt de time — mesmos campos de saída (resumoGeral/comoAgir), mas
-// olhando o mês inteiro (soma das semanas já fechadas + a semana atual) em vez de semana
-// vs. semana anterior. Usado só na última sexta do mês (ou com FORCE_MONTHLY_MESANO).
-function promptTimeMensal(mesAtualStr, kpisMes, contextoSemanasTxt, mesAnterior) {
-  const blocoAnterior = mesAnterior
-    ? `\nFechamento do mês passado (${mesAnterior.mesAno}): "${mesAnterior.resumoMensalTime}" — ações recomendadas na época: ${(mesAnterior.comoAgirMensalTime || []).join('; ')}. Se os mesmos pontos continuarem em aberto, diga isso explicitamente em vez de repetir as mesmas ações de novo. Se foram resolvidos, reconheça brevemente.`
-    : '\nNão há fechamento de mês anterior registrado ainda (primeiro fechamento mensal deste robô).';
-
-  return `Você é um analista de operações de vendas (sales ops) experiente, escrevendo para Julyan, que lidera o time de Field Sales (Outbound) da Takeat, uma foodtech B2B brasileira. Hoje é o FECHAMENTO DO MÊS de ${mesAtualStr} — ele usa esse resumo pra avaliar o mês inteiro do time, não só a última semana.
-
-Totais do mês inteiro (somando todas as semanas de ${mesAtualStr} apuradas até agora):
-- Leads criados: ${kpisMes.leadsCriados}
-- Ganhos: ${kpisMes.ganhos}
-- Reuniões (entraram em Demo/Proposta): ${kpisMes.reunioes}
-- Perdidos: ${kpisMes.perdidos}
-- Reciclagem: ${kpisMes.reciclagem}
-
-Leitura semana a semana dentro do mês (mais antiga primeiro):
-${contextoSemanasTxt || 'Sem histórico semanal salvo pra este mês — use só os totais acima.'}
-${blocoAnterior}
-
-Escreva em português do Brasil, tom direto e prático. Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato:
-
-{
-  "resumoGeral": "3-5 frases em HTML simples (pode usar <b>), começando com '<b>Fechamento do mês:</b>', avaliando o MÊS INTEIRO do time — evolução ao longo das semanas, consistência, principal ponto de atenção, com números concretos.",
-  "comoAgir": ["3 a 4 ações objetivas e priorizadas para o PRÓXIMO mês, diferentes das do mês passado se aqueles pontos já foram resolvidos"]
 }
 
 IMPORTANTE: fale só em nível de time/funil agregado. Não cite nome de executivo específico nem avalie
@@ -334,41 +288,6 @@ Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato
 }`;
 }
 
-// Versão MENSAL do prompt individual — mesmos campos de saída (resumoIndividual/
-// comoAgirIndividual), olhando o mês inteiro dessa pessoa. rc.fechadosNoMes/rc.metaMensal
-// já são cumulativos do mês (vêm prontos do weekly-raw.json), então dão a base numérica
-// real sem precisar inventar nada.
-function promptIndividualMensal(rc, mesAtualStr, comoAgirHistoricoRep, mesAnteriorRep) {
-  const blocoAnterior = mesAnteriorRep
-    ? `\nO que foi combinado com você no fechamento do mês passado (${mesAnteriorRep.mesAno}): ${(mesAnteriorRep.comoAgirIndividualMensal || []).join(' | ')}. Se o mesmo ponto continuar em aberto, diga isso direto. Se já resolveu, reconheça em 1 frase e siga pro próximo foco.`
-    : '';
-  const blocoSemanas = (comoAgirHistoricoRep && comoAgirHistoricoRep.length)
-    ? `\nFoco combinado com você em cada semana deste mês: ${comoAgirHistoricoRep.join(' | ')}`
-    : '';
-
-  return `Você é um analista de operações de vendas escrevendo DIRETO para ${rc.name}, executivo(a) de Field Sales
-(Outbound) da Takeat, na praça de ${rc.praca}. Hoje é o FECHAMENTO DO MÊS de ${mesAtualStr} — esse texto é lido só
-por ele(a) mesmo(a), 2ª pessoa ("você"), tom direto, respeitoso e prático. Nada de elogio vazio sem dado por trás.
-
-Fechamento do mês:
-- Fechados no mês: ${rc.fechadosNoMes || 0} de meta ${rc.metaMensal || 10}
-- Situação atual do funil: ${rc.open} negócios em aberto, etapa dominante ${rc.etapaDominante || 'sem dado suficiente'} (${rc.etapaDominanteContagem} negócios)
-- Leads com SLA estourado agora: ${rc.leadsTravados || 0}
-${blocoSemanas}
-${blocoAnterior}
-
-IMPORTANTE: fechamento é automático, puxado do HubSpot quando o negócio muda de etapa —
-não existe "lançar" ou "formalizar" um ganho manualmente. Se "fechados no mês" parecer
-baixo frente ao que a pessoa converteu nas semanas, não invente uma causa administrativa
-("não formalizou", "não lançou no sistema") — ou explique pela janela de datas, ou não
-comente a diferença.
-
-Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato:
-{
-  "resumoIndividual": "3-4 frases em HTML simples (pode usar <b>), começando com '<b>Fechamento do mês:</b>', avaliando o MÊS INTEIRO dela(e) — consistência ao longo das semanas, o que foi bem, o que travou, com números concretos.",
-  "comoAgirIndividual": ["2-3 ações objetivas pro PRÓXIMO mês, diferentes das já resolvidas. PROIBIDO pedir 'enviar print do HubSpot' como evidência — a evidência tem que ser uma ação registrada sozinha no próprio HubSpot."]
-}`;
-}
 
 async function main() {
   narrativas = (await carregarJsonOuTabela(narrativasPath, 'narrativas')).dado;
@@ -379,19 +298,20 @@ async function main() {
   // (generate-individual-analysis.js) — reaproveitada aqui de propósito, pra dar pra
   // testar o fechamento mensal dos dois scripts com um único dispatch manual, sem
   // esperar a última sexta-feira real do mês.
-  const FORCE_MONTHLY = process.env.FORCE_MONTHLY_MESANO;
-  const rodarComoFechamentoMensal = ehUltimaSemana || !!FORCE_MONTHLY;
-  const mesAtualStr = FORCE_MONTHLY || mesAno;
+  /* O FECHAMENTO MENSAL FOI APAGADO (05/09/26). Era 1 chamada de time + 7 individuais
+     uma vez por mês para escrever um texto que aparecia no mesmo lugar do resumo
+     semanal — e mantinha um histórico que nenhuma tela abria. A última sexta do mês
+     agora roda igual às outras quatro. */
+  const mesAtualStr = mesAno;
 
   const anterior = lerResumoAnterior();
   const historicoMes = lerHistoricoMes(mesAtualStr);
-  const historicoMensalTime = lerHistoricoMensalTime();
-  const mesAnteriorEntry = historicoMensalTime.find(m => m.mesAno === mesAnteriorStr(mesAtualStr)) || null;
+
 
   let parsedTime;
   let porRep = {};
 
-  if (!rodarComoFechamentoMensal) {
+  {
     console.log(`Semana ${numeroSemana} de ${mesAno} — gerando resumo SEMANAL (1 de time + ${repsContext.length} individuais, em paralelo)...`);
 
     // Antes rodava 1 chamada de time + N individuais uma de cada vez (for...await) — com 9
@@ -475,65 +395,6 @@ async function main() {
         };
       }
     });
-  } else {
-    console.log(`Fechamento MENSAL de ${mesAtualStr} (${ehUltimaSemana ? 'última sexta do mês' : 'forçado via FORCE_MONTHLY_MESANO'}) — gerando resumo de time + ${repsContext.length} individuais, em paralelo...`);
-
-    // Totais do mês: soma das semanas já acumuladas em historico-semanal-mes.json (semanas
-    // anteriores deste mês) + a semana atual (raw.kpisComparativo.atual, ainda não estava
-    // no acumulador). Nunca fabrica número — é soma direta do que já foi apurado semana a
-    // semana pelo fetch-weekly-comparison.js.
-    const camposKpi = ['leadsCriados', 'ganhos', 'reunioes', 'perdidos', 'reciclagem'];
-    const kpisMes = Object.fromEntries(camposKpi.map(c => [c, raw.kpisComparativo.atual[c] || 0]));
-    historicoMes.semanas.forEach(s => {
-      camposKpi.forEach(c => { kpisMes[c] += (s.kpisSemana && s.kpisSemana[c]) || 0; });
-    });
-
-    const contextoSemanasTxt = historicoMes.semanas
-      .map(s => `Semana ${s.numeroSemana} (${s.janela.atual}): ${s.resumoGeral.replace(/<\/?b>/g, '')}`)
-      .join('\n');
-
-    const promptsIndividuais = repsContext.map(rc => {
-      const historicoRep = historicoMes.semanas
-        .map(s => (s.porRep && s.porRep[rc.ownerId] && s.porRep[rc.ownerId].comoAgirIndividual) || [])
-        .flat();
-      const mesAnteriorRep = mesAnteriorEntry?.porRep?.[rc.ownerId] || null;
-      return promptIndividualMensal(rc, mesAtualStr, historicoRep, mesAnteriorRep);
-    });
-
-    const [resultadoTime, ...resultadosIndividuais] = await Promise.allSettled([
-      chamarClaude(promptTimeMensal(mesAtualStr, kpisMes, contextoSemanasTxt, mesAnteriorEntry), 2500),
-      ...promptsIndividuais.map(p => chamarClaude(p, 1100))
-    ]);
-
-    if (resultadoTime.status === 'rejected') {
-      console.error(`Falha ao gerar o fechamento mensal de time: ${resultadoTime.reason?.message || resultadoTime.reason} — mantendo o texto da última semana em vez de travar tudo.`);
-      FALHAS_IA.push(String(resultadoTime.reason?.message || resultadoTime.reason).slice(0, 220));
-      parsedTime = {
-        resumoGeral: anterior?.resumoGeral || `Fechamento do mês indisponível (falha técnica na geração). Totais brutos de ${mesAtualStr}: ${kpisMes.ganhos} ganhos, ${kpisMes.leadsCriados} leads criados.`,
-        comoAgir: anterior?.comoAgir || ['Revisar manualmente os números do mês — a geração automática do fechamento mensal falhou.']
-      };
-    } else {
-      parsedTime = resultadoTime.value;
-    }
-
-    repsContext.forEach((rc, i) => {
-      const resultado = resultadosIndividuais[i];
-      if (resultado.status === 'fulfilled') {
-        porRep[rc.ownerId] = {
-          name: rc.name,
-          resumoIndividual: resultado.value.resumoIndividual,
-          comoAgirIndividual: resultado.value.comoAgirIndividual || []
-        };
-      } else {
-        console.error(`Falha ao gerar fechamento mensal individual de ${rc.name}: ${resultado.reason?.message || resultado.reason} — gravando fallback honesto.`);
-      FALHAS_IA.push(String(resultado.reason?.message || resultado.reason).slice(0, 220));
-        porRep[rc.ownerId] = {
-          name: rc.name,
-          resumoIndividual: `Fechamento do mês indisponível (falha técnica na geração). Números atuais: <b>${rc.fechadosNoMes || 0}</b> fechados de meta <b>${rc.metaMensal || 10}</b>, <b>${rc.open}</b> negócios em aberto.`,
-          comoAgirIndividual: ['Revisar manualmente neste fechamento de mês — a geração automática falhou e será tentada de novo no próximo mês.']
-        };
-      }
-    });
   }
 
   // ===== BLOCO 40 (14/08/26) — snapshot por executivo, pra viabilizar delta
@@ -603,9 +464,9 @@ async function main() {
   fs.writeFileSync(path.join(root, 'data', 'resumo-semanal.json'), JSON.stringify(output, null, 2));
   /* Mesmo motivo do generate-daily-gargalo — ver o comentario la. */
   await publicarSnapshot('resumo-semanal', output, 'generate-weekly-summary');
-  console.log(`OK — data/resumo-semanal.json gravado (${rodarComoFechamentoMensal ? 'FECHAMENTO MENSAL' : 'semanal'}).`);
+  console.log('OK — data/resumo-semanal.json gravado (semanal).');
 
-  if (!rodarComoFechamentoMensal) {
+  {
     // Acumula esta semana no histórico do mês (idempotente: se rodar 2x na mesma semana,
     // substitui a entrada em vez de duplicar) — é o que alimenta o fechamento mensal daqui
     // a algumas semanas.
@@ -621,20 +482,6 @@ async function main() {
     });
     fs.writeFileSync(CAMINHO_HISTORICO_MES, JSON.stringify(historicoMes, null, 2));
     console.log(`historico-semanal-mes.json atualizado (semana ${numeroSemana} de ${mesAno}).`);
-  } else {
-    // Mês fechado: grava o fechamento pra servir de "mês anterior" no próximo fechamento
-    // mensal, e reseta o acumulador semanal — a próxima semana já é do mês seguinte.
-    const novaEntradaMensal = {
-      mesAno: mesAtualStr,
-      resumoMensalTime: output.resumoGeral,
-      comoAgirMensalTime: output.comoAgir,
-      porRep: Object.fromEntries(Object.entries(porRep).map(([id, r]) => [id, { comoAgirIndividualMensal: r.comoAgirIndividual }]))
-    };
-    const historicoMensalAtualizado = historicoMensalTime.filter(m => m.mesAno !== mesAtualStr);
-    historicoMensalAtualizado.push(novaEntradaMensal);
-    fs.writeFileSync(CAMINHO_HISTORICO_MENSAL_TIME, JSON.stringify(historicoMensalAtualizado, null, 2));
-    fs.writeFileSync(CAMINHO_HISTORICO_MES, JSON.stringify({ mesAno: null, semanas: [] }, null, 2));
-    console.log(`historico-mensal-time.json atualizado com o fechamento de ${mesAtualStr}; historico-semanal-mes.json resetado pro próximo mês.`);
   }
 }
 

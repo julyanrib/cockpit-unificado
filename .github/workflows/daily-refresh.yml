@@ -149,55 +149,16 @@ jobs:
           fi
 
       # ------------------------------------------------------------------
-      # O GARGALO EM PROSA SAIU DO CRON (28/08/26). Só roda em disparo manual.
-      #
-      # Ele custava 35 chamadas/semana (7 executivos x 5 dias) para escrever ~570
-      # caracteres de DESCRIÇÃO por pessoa. Medido na tela do Marco em produção,
-      # em 28/08, o texto dele dizia: "HubSpot (dado ao vivo, 16/08): 12 negócios
-      # em aberto, 42% concentrados em Visita" — doze dias velho, e afirmando a
-      # data velha dentro do próprio texto.
-      #
-      # E o produto JÁ REBAIXA esse texto por conta própria: narrativaSaude()
-      # compara a data e os números da prosa com o funil ao vivo e, quando
-      # divergem, narrativaAvisoHTML() estampa "Esta leitura não descreve o seu
-      # funil de hoje... fica aqui como registro do que foi conversado, não como
-      # plano de hoje". Estávamos pagando para gerar prosa que a nossa própria
-      # guarda desqualifica.
-      #
-      # O que fica no lugar não é menos, é mais: gargaloDoRep() e destravarFunil()
-      # calculam a etapa travada do funil AO VIVO, e GESTO_DA_ETAPA dá o gesto que
-      # sobe aquele degrau ("Ligar pedindo o decisor pelo nome e datar o retorno").
-      # Vivo, gratuito, e é AÇÃO em vez de descrição — que é o que o Julyan pediu:
-      # "vamos focar nas vendas dele apenas, ações, planejamento".
-      #
-      # O script continua no repositório e roda por workflow_dispatch, para quando
-      # alguém quiser uma leitura em prosa de propósito.
+      # O ROBÔ DO GARGALO EM PROSA FOI APAGADO (05/09/26), a pedido do Julyan, na revisão
+      # de custo de API. Ele já estava fora do cron desde 28/08 (só disparo manual), e o
+      # efeito disso era pior que o custo: os três campos que ele escrevia — gargalo, tag
+      # e tagLabel — ficaram CONGELADOS na tela do gestor, texto de 03/09 afirmando o
+      # estado de hoje.
+      # No lugar entraram duas funções no próprio template: estadoDoRep() e
+      # fraseDoGargalo(), que saem de gargaloDoRep() + GESTO_DA_ETAPA — o funil de agora,
+      # de graça, e dizendo o GESTO em vez de descrever o problema.
       # ------------------------------------------------------------------
-      - name: Gerar diagnóstico de gargalo do dia (IA — só em disparo manual)
-        # DISPARO HUMANO, NAO AVISO DO CRM (02/09/26). O portao era só o evento
-        # workflow_dispatch, com a intencao de "so em disparo manual" — mas o webhook do
-        # HubSpot dispara por workflow_dispatch tambem, entao a IA rodava a cada aviso do
-        # CRM: com o cooldown de 5 minutos seriam ~18 chamadas por dia, e o pedido do
-        # Julyan e o contrario ("os insights nao precisam ser todo dia ou toda hora").
-        # Alem do custo, cada rodada dela escreve narrativas.json — commit, e deploy.
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.origem != 'webhook'
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          # AS CHAVES DO SUPABASE FALTAVAM AQUI (03/09/26), e o log da rodada de
-          # 00:59 UTC diz com estas palavras: "SUPABASE_URL/SUPABASE_SERVICE_KEY
-          # ausentes - snapshot 'narrativas' NAO publicado". Duas consequencias, e a
-          # segunda e pior que a primeira:
-          #  1. este passo nao publicava o que acabou de gravar. O passo seguinte
-          #     (generate-individual-analysis) publicava por cima e mascarava a falta.
-          #  2. quando narrativas.json sair do git, este passo tambem PRECISA das
-          #     chaves para LER da tabela — sem elas, carregarJsonOuTabela nao acha
-          #     em nenhum dos dois lugares e aborta de proposito. Ou seja: sem esta
-          #     correcao, tirar o arquivo do git derruba este passo.
-          # Mesma classe do defeito do passo do comparativo semanal (#246): chave
-          # faltando nao da erro, so faz o passo desistir em silencio.
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: node scripts/generate-daily-gargalo.js
+
 
       - name: Atualizar análise de coaching por executivo (IA — 1x por dia útil, semana corrente)
         # AGORA é idempotente de verdade. O comentário anterior afirmava que já era

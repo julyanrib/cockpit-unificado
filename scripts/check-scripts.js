@@ -1299,14 +1299,15 @@ function checarGeradosForaDoGit() {
                                         sync-status, e nao esta). Sai do git depois da
                                         primeira rodada semanal, conferindo a linha.
        data/historico-semanal-mes.json  acumulado do mes, escrito na mesma rodada semanal.
-       data/historico-mensal-time.json  acumulado mensal, escrito no fechamento do mes.
-                                        Estes dois sao HISTORICO acumulado, nao foto do
+       (data/historico-mensal-time.json saiu em 05/09/26 junto com o fechamento mensal —
+        o robo que o escrevia foi apagado na revisao de custo de API, e nenhuma tela lia
+        aquele arquivo: so o proprio robo, para alimentar o fechamento seguinte.)
+                                        O que sobra e HISTORICO acumulado, nao foto do
                                         CRM: quem migra tem que garantir que a tabela nao
                                         perca mes nenhum, porque nao ha como reconstruir. */
   const PENDENTE_DE_MIGRACAO = [
     'data/resumo-semanal.json',
-    'data/historico-semanal-mes.json',
-    'data/historico-mensal-time.json'
+    'data/historico-semanal-mes.json'
   ];
 
   const EXCEÇOES = DERIVADO_DE_CODIGO.concat(PENDENTE_DE_MIGRACAO);
