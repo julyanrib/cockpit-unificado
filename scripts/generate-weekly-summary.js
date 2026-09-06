@@ -19,7 +19,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { publicarSnapshot, carregarJsonOuTabela } = require('../lib/publicar-snapshot.js');
+const { publicarSnapshot, carregarJsonOuTabela, lerSnapshot } = require('../lib/publicar-snapshot.js');
 
 const API_KEY = process.env.ANTHROPIC_API_KEY;
 /* AS CHAVES DO SUPABASE ENTRARAM NA FUSAO (05/09/26): este robo passou a escrever
@@ -142,7 +142,16 @@ function mesAnteriorStr(mesAnoAtual) {
 // script rodou) ANTES de sobrescrevê-lo — assim dá pra alimentar a IA com o que já foi
 // recomendado e evitar repetir a mesma orientação toda semana. Se for a primeira vez
 // rodando (arquivo não existe ainda), segue sem histórico, sem quebrar.
-function lerResumoAnterior() {
+async function lerResumoAnterior() {
+  /* A TABELA PRIMEIRO (05/09/26): o arquivo saiu do git na virada, entao no runner ele
+     nao existe. Sem isto a IA perderia a memoria da semana passada EM SILENCIO — nada
+     quebra, o texto so volta a repetir a mesma recomendacao da semana anterior. */
+  try {
+    const daTabela = await lerSnapshot('resumo-semanal');
+    if (daTabela) return daTabela;
+  } catch (e) {
+    console.log('Aviso: nao consegui ler o resumo anterior na tabela - ' + e.message);
+  }
   const caminho = path.join(root, 'data', 'resumo-semanal.json');
   if (!fs.existsSync(caminho)) return null;
   try {
@@ -157,6 +166,21 @@ function lerResumoAnterior() {
 // — é o que alimenta o fechamento mensal na última sexta (sem isso, o fechamento mensal só
 // enxergaria a última semana, não o mês inteiro). Se o mês mudou desde a última leitura,
 // começa vazio de novo (não faz sentido carregar semanas de um mês já fechado).
+/* O HISTÓRICO DO MÊS ATRAVESSA RODADAS PELA TABELA (05/09/26), não mais pelo git.
+   Ele é o acumulador que vira o "vs. semana passada" da aba do executivo — dado de
+   máquina, e commitá-lo custava um deploy por semana. A leitura continua tolerando o
+   arquivo: dentro da mesma rodada ele é mais novo que a tabela. */
+async function lerHistoricoMesDaTabela(mesAtualStr) {
+  try {
+    const daTabela = await lerSnapshot('historico-semanal-mes');
+    if (daTabela && daTabela.mesAno === mesAtualStr) return daTabela;
+    if (daTabela) return { mesAno: mesAtualStr, semanas: [] }; /* virou o mês: acumulador zera */
+  } catch (e) {
+    console.log('Aviso: nao consegui ler o historico do mes na tabela - ' + e.message);
+  }
+  return null;
+}
+
 function lerHistoricoMes(mesAtualStr) {
   if (!fs.existsSync(CAMINHO_HISTORICO_MES)) return { mesAno: mesAtualStr, semanas: [] };
   try {
@@ -421,8 +445,9 @@ async function main() {
      agora roda igual às outras quatro. */
   const mesAtualStr = mesAno;
 
-  const anterior = lerResumoAnterior();
-  const historicoMes = lerHistoricoMes(mesAtualStr);
+  const anterior = await lerResumoAnterior();
+  /* a tabela primeiro; o arquivo é a rede de quando a tabela ainda não tem a chave */
+  const historicoMes = (await lerHistoricoMesDaTabela(mesAtualStr)) || lerHistoricoMes(mesAtualStr);
 
 
   let parsedTime;
@@ -670,7 +695,10 @@ async function main() {
       porRep: Object.fromEntries(Object.entries(porRep).map(([id, r]) => [id, { comoAgirIndividual: r.comoAgirIndividual, snap: r.snap || null }]))
     });
     fs.writeFileSync(CAMINHO_HISTORICO_MES, JSON.stringify(historicoMes, null, 2));
-    console.log(`historico-semanal-mes.json atualizado (semana ${numeroSemana} de ${mesAno}).`);
+    /* E VAI PARA A TABELA (05/09/26): é assim que ele atravessa para a semana que vem
+       sem passar pelo git — o arquivo em disco morre com o runner. */
+    await publicarSnapshot('historico-semanal-mes', historicoMes, 'generate-weekly-summary');
+    console.log(`historico do mes atualizado (semana ${numeroSemana} de ${mesAno}).`);
   }
 }
 

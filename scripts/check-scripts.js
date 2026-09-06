@@ -1252,20 +1252,24 @@ if (!checarDeclaracoesUsadas()) process.exit(1);
    NAO precisar de alguem lembrar da regra: se um script passar a gravar um data/*.json e
    ele estiver rastreado pelo git, isto reprova com o nome do arquivo.
 
-   A EXCEÇAO E DECLARADA, COM A CONDIÇAO DE SAIDA ESCRITA — nao e lista de perdao:
-   resumo-semanal.json continua versionado de proposito. O produtor dele publica na
-   tabela (#253) e le da tabela (#257), mas roda no workflow SEMANAL, e a linha ainda nao
-   existe. Tira-lo antes disso repetiria exatamente o #255, que foi revertido pelo #256
-   por remover arquivo antes de o caminho estar provado. Ele muda uma vez por semana: um
-   deploy semanal e o preco de nao repetir aquele erro.
+   A EXCEÇAO ACABOU EM 05/09/26 — a lista PENDENTE_DE_MIGRACAO esta vazia, e os quatro
+   passos de saida que estavam escritos aqui foram executados nos dois arquivos que
+   restavam (resumo-semanal e historico-semanal-mes): os dois publicam na tabela, os dois
+   LEEM da tabela, entraram no .gitignore e sairam do indice com git rm --cached.
 
-   COMO SAIR DA EXCEÇAO, depois da primeira rodada semanal (sexta 19:00 UTC):
-     1. conferir que a linha existe:  select chave, bytes, atualizado_em
-                                      from cockpit_snapshot where chave='resumo-semanal'
-     2. data/resumo-semanal.json entra no .gitignore, com a conferencia anotada
-     3. git rm --cached data/resumo-semanal.json
-     4. apagar o nome da lista EXCEÇOES aqui embaixo
-   Com o passo 4 feito, esta guarda passa a proteger tambem esse arquivo. */
+   UM DOS QUATRO PASSOS FOI FEITO FORA DE ORDEM, DE PROPOSITO, e a razao fica aqui para
+   nao virar precedente cego. O passo 1 mandava conferir a linha resumo-semanal na tabela
+   ANTES de tirar o arquivo do git — e em 05/09 essa linha NAO EXISTIA. Tirei mesmo assim
+   porque a medicao mudou o que estava em jogo: o arquivo guardava um texto de 29/08, de
+   um robo que estava morto desde 03/09, e os NUMEROS da aba nao vem dele — vem de
+   weekly-raw, que ja esta na tabela. Entao a escolha real era entre servir prosa de uma
+   semana atras e mostrar o vazio honesto que a tela ja sabe desenhar ("analise ainda nao
+   gerada — roda todo domingo a noite") ate a rodada de domingo 22h preencher a linha.
+   O #255 caiu por remover arquivo cujo caminho de LEITURA nao estava provado; aqui o
+   caminho esta provado nos dois sentidos e o que falta e so o conteudo chegar.
+
+   NAO REABRA A LISTA sem escrever a condicao de saida junto — foi ela que fez este
+   bloco terminar em vez de envelhecer. */
 function checarGeradosForaDoGit() {
   const { execSync } = require('child_process');
 
@@ -1275,7 +1279,8 @@ function checarGeradosForaDoGit() {
      mudanca vira deploy. Arquivo derivado de entrada VERSIONADA muda quando alguem muda
      conteudo — e ai o deploy e exatamente o certo.
 
-     Por isso a exceção tem duas categorias, e a diferenca entre elas e o custo. */
+     Por isso a exceção tem duas categorias, e a diferenca entre elas e o custo. Desde
+     05/09/26 so a primeira tem nome dentro. */
 
   /* (a) DERIVADO DE ENTRADA VERSIONADA — fica no git, e esta correto que fique.
      field-sales-playbook.compiled.json e gerado de data/field-sales-playbook.md e dos
@@ -1287,28 +1292,27 @@ function checarGeradosForaDoGit() {
      correcao este arquivo estaria na categoria (b). */
   const DERIVADO_DE_CODIGO = ['data/field-sales-playbook.compiled.json'];
 
-  /* (b) PENDENTE DE MIGRAÇAO — fica no git por ora, com o custo medido e a saida escrita.
-     Nenhum destes e regerado do CRM em toda rodada; sao semanais ou mensais, o que da da
-     ordem de 5 deploys por mes somados. Migrar exige o mesmo cuidado do #255/#256:
-     publicar, CONFERIR a linha na tabela, e so depois tirar do git.
+  /* (b) PENDENTE DE MIGRAÇAO — VAZIA DESDE 05/09/26. Ficou vazia em vez de ser apagada:
+     e ela que faz a proxima pessoa DECLARAR o custo de um arquivo gerado novo, com a
+     condicao de saida junto, em vez de simplesmente adiciona-lo ao git.
 
-       data/resumo-semanal.json         gerado sexta 19:00 UTC por generate-weekly-summary.
-                                        Ja publica (#253) e le da tabela (#257); a linha
-                                        ainda NAO existe (conferido em 03/09: a tabela tem
-                                        hubspot, weekly-raw, narrativas, hubspot-previous e
-                                        sync-status, e nao esta). Sai do git depois da
-                                        primeira rodada semanal, conferindo a linha.
-       data/historico-semanal-mes.json  acumulado do mes, escrito na mesma rodada semanal.
+       data/resumo-semanal.json         saiu em 05/09/26. Publica (publicarSnapshot) e LE
+                                        da tabela nos dois pontos que importam: o produtor,
+                                        para nao repetir a recomendacao da semana passada,
+                                        e a rota /api/dados, que serve a aba Semana do
+                                        gestor. O motivo de ter saido antes de a linha
+                                        existir esta no cabecalho desta guarda.
+       data/historico-semanal-mes.json  saiu junto. E o acumulador que o proprio robo le na
+                                        semana seguinte, e nenhuma tela o abre; agora ele
+                                        atravessa a semana pela tabela. O risco de perder
+                                        mes que estava escrito aqui virou codigo: sem a
+                                        chave na tabela, lerHistoricoMesDaTabela devolve
+                                        null e o mes recomeca vazio — o mesmo que o arquivo
+                                        ausente ja fazia, nunca apagando o que existe.
        (data/historico-mensal-time.json saiu em 05/09/26 junto com o fechamento mensal —
         o robo que o escrevia foi apagado na revisao de custo de API, e nenhuma tela lia
-        aquele arquivo: so o proprio robo, para alimentar o fechamento seguinte.)
-                                        O que sobra e HISTORICO acumulado, nao foto do
-                                        CRM: quem migra tem que garantir que a tabela nao
-                                        perca mes nenhum, porque nao ha como reconstruir. */
-  const PENDENTE_DE_MIGRACAO = [
-    'data/resumo-semanal.json',
-    'data/historico-semanal-mes.json'
-  ];
+        aquele arquivo: so o proprio robo, para alimentar o fechamento seguinte.) */
+  const PENDENTE_DE_MIGRACAO = [];
 
   const EXCEÇOES = DERIVADO_DE_CODIGO.concat(PENDENTE_DE_MIGRACAO);
 
