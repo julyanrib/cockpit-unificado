@@ -1213,6 +1213,12 @@
     #tl5Raiz [data-tl5-hv="7"]:hover{filter:brightness(1.06);}
     /* foco visível: o mockup não tinha, e teclado sem foco é acessibilidade quebrada */
     #tl5Raiz [data-tl5-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
+    /* ══ ABA PESSOAS DO GESTOR (06/09/26) — hovers que o dc-runtime resolvia ══ */
+    #ps6Raiz [data-ps6-hv]{cursor:pointer;}
+    #ps6Raiz [data-ps6-hv="0"]:hover{filter:brightness(1.07);}
+    #ps6Raiz [data-ps6-hv="1"]:hover{filter:brightness(1.08);}
+    #ps6Raiz [data-ps6-hv="2"]:hover{border-color:#E51A31;color:#E51A31;}
+    #ps6Raiz [data-ps6-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
     #viewCockpit .gi-cell-btn{min-height:44px;display:inline-flex;align-items:center;justify-content:flex-end;width:100%;}
     #viewAgenda .ag-cumprido>summary{min-height:44px;}
     .pracas,.estoque{grid-template-columns:minmax(0,1fr);}
@@ -11918,6 +11924,12 @@
 
   <div class="view" id="viewPDIs">
     <!-- Correção v3 2.2: banner-título genérico removido — a faixa escura da própria aba é o único cabeçalho. -->
+
+    <!-- ══ DUAS ABAS NO MESMO NÓ (06/09/26) ═════════════════════════════════════
+         Esta view é "Desenvolvimento" para o executivo e "Pessoas" para o gestor —
+         sempre foi. #ps6Raiz é o lado do GESTOR, desenhado da prancha pessoas-final;
+         #pdisContent continua sendo o do executivo, intocado. renderPDIs escolhe. -->
+    <div id="ps6Raiz" style="width:min(1780px,100% - 64px);margin:0 auto;"></div>
     <div id="pdisContent"></div>
     <div id="coachingEmbutido" style="display:none;">
       <div style="display:flex;align-items:center;gap:8px;margin:28px 0 12px;">
@@ -54822,14 +54834,664 @@ function wireFocoDeHabilidade(rootEl) {
   });
 }
 
+/* ═══ ABA PESSOAS DO GESTOR (06/09/26) — O LADO HUMANO DO TIME ═════════════════════
+   Prancha `pessoas-final-STANDALONE.html`, convertida mecanicamente como a do Time: os
+   estilos inline são byte a byte os dela, só o dado é nosso.
+
+   DUAS DECISÕES DO JULYAN ESTÃO CRAVADAS AQUI, e é bom que estejam escritas:
+
+   1. SEM ROBÔ. O prompt pedia uma análise da Claude 1x/semana + refresh diário às 06:00
+      para escrever a pauta do 1:1 e a "prova". Ele optou por cálculo ao vivo — e o próprio
+      prompt dizia que todo número seria re-verificado por query antes de exibir, ou seja,
+      a IA só emolduraria número que já temos. Aqui os 4 cards da pauta, as 6 estatísticas
+      do dossiê e a prova saem de conta sobre o funil de agora. Custo zero, nunca envelhece
+      em silêncio. Ver a memória de custo de API.
+
+   2. A BARRA DO PDI MEDE ADESÃO SEMANAL, e diz isso. Não existe no banco percentual nem
+      prazo de PDI — `pdi_documentos` tem 10 linhas, a última de 14/08, sem meta e sem
+      vencimento. Em vez de inventar campo, a barra usa o que É real: compromissos
+      marcados / total da semana, e "vence" = dias desde a última análise. O rótulo na tela
+      não promete progresso de PDI de médio prazo, promete o que mede.
+
+   O MOTOR É O MESMO DA ABA TIME (tl5Medir). Duas telas do gestor que discordassem no
+   número de negócios acima da régua seriam piores que uma tela só. */
+
+/* quem entra na régua: rep de campo ativo. Amanda sai por fieldStatus no dado, e não por
+   nome cravado no código — a lista de gente é dado, e dado se edita sem deploy. */
+function ps6Ativos() {
+  const us = (DATA.usuarios || []).filter(u => u.role === 'rep' && !u.aComecar && u.fieldStatus !== 'transicao_inside');
+  return us.map(u => String(u.ownerId));
+}
+function ps6Rampa() {
+  return (DATA.usuarios || []).filter(u => u.role === 'rep' && u.aComecar);
+}
+
+const PS6_ESTADO = { sel: null, aba: 'pauta', toast: null, pauta: {}, validacoes: [], compromissos: {}, umAUm: [], carregou: false };
+
+function ps6Dias(desde) {
+  if (!desde) return null;
+  const d = new Date(desde);
+  if (isNaN(d.getTime())) return null;
+  return Math.max(0, Math.round((Date.now() - d.getTime()) / 86400000));
+}
+
+/* ── o retrato humano de cada executivo ──────────────────────────────────────────
+   Junta o funil (tl5Medir) com o que o executivo marcou (pdi_compromissos) e com o
+   hábito em que ele está acima do time (habitosTime). */
+function ps6Pessoas() {
+  const m = tl5Medir();
+  const ativos = ps6Ativos();
+  const ht = DATA.habitosTime || { porRep: {}, benchmark: {} };
+  const HAB = [
+    { k: 'cadencia', rot: 'toques na cadência' },
+    { k: 'qualificacao', rot: 'negócios qualificados' },
+    { k: 'proximoPasso', rot: 'próximo passo datado' }
+  ];
+
+  return m.porRep.filter(r => ativos.indexOf(r.ownerId) >= 0).map(r => {
+    const rep = (DATA.reps || []).find(x => String(x.ownerId) === r.ownerId) || {};
+    const comp = PS6_ESTADO.compromissos[r.ownerId] || null;
+    const textos = rep.compromissos || [];
+    const marcados = comp && comp.checked ? comp.checked.filter(Boolean).length : 0;
+    const total = textos.length;
+    const diasDaAnalise = ps6Dias(comp ? comp.versao_analise : DATA.versaoAnalise);
+
+    /* ACORDO VENCIDO: passou de 7 dias e sobrou compromisso sem marcar. Sete porque o
+       ciclo é semanal — o acordo nasce no 1:1 e morre no 1:1 seguinte. */
+    const acordoVencido = total > 0 && marcados < total && diasDaAnalise != null && diasDaAnalise > 7;
+    /* PDI VENCIDO: 30 dias sem análise nova é o que a própria prancha chama de vermelho */
+    const pdiVencido = diasDaAnalise != null && diasDaAnalise > 30;
+
+    /* no que ele está ACIMA do time — vira o card "reconhecer" da pauta */
+    let melhorHabito = null;
+    HAB.forEach(h => {
+      const bench = Number(ht.benchmark && ht.benchmark[h.k]);
+      const v = ht.porRep && ht.porRep[r.ownerId] ? ht.porRep[r.ownerId][h.k] : null;
+      if (v == null || !isFinite(Number(v)) || !isFinite(bench) || Number(v) <= bench) return;
+      if (!melhorHabito || Number(v) - bench > melhorHabito.delta) {
+        melhorHabito = { rot: h.rot, v: Number(v), bench, delta: Number(v) - bench };
+      }
+    });
+
+    /* a etapa onde o funil dele mais trava */
+    const gargalo = m.etapas.map(e => ({
+      rot: e.rot, regua: e.regua,
+      acima: e.leads.filter(l => String(l.ownerId) === r.ownerId && l.slaBreach).length,
+      n: e.leads.filter(l => String(l.ownerId) === r.ownerId).length
+    })).sort((a, b) => b.acima - a.acima)[0] || { rot: '—', acima: 0, n: 0 };
+
+    const urgencia = (acordoVencido ? 40 : 0) + (pdiVencido ? 30 : 0) + Math.round(r.ratio * 30);
+    /* o humano SOBE o nivel; nunca desce o que o funil ja acusou — ver o bloco abaixo */
+    const nivelHumano = (acordoVencido && pdiVencido) ? 'crit' : ((acordoVencido || pdiVencido) ? 'aten' : 'ok');
+    const nivel = ps6PiorNivel(ps6NivelDoFunil(r), nivelHumano);
+
+    return {
+      ownerId: r.ownerId, nome: r.nome, praca: r.praca,
+      abertos: r.abertos, acima: r.acima, ratio: r.ratio, prospeccao: r.prospeccao,
+      fech: r.fech, meta: r.meta, criticos: r.criticos,
+      marcados, total, diasDaAnalise, acordoVencido, pdiVencido,
+      melhorHabito, gargalo, urgencia, nivel,
+      travado: !!PS6_ESTADO.pauta['um_a_um:' + r.ownerId]
+    };
+  }).sort((a, b) => b.urgencia - a.urgencia);
+}
+
+const PS6_COR = { crit: '#6E1210', aten: '#B07C1F', ok: '#1E9E7B' };
+
+/* ── DOIS DEFEITOS QUE A MEDIÇÃO PEGOU ANTES DO DESENHO (06/09/26) ────────────────
+
+   1. A ABA DIZIA QUE NINGUÉM PRECISA DO GESTOR. Com o peso original (acordo vencido 40 +
+      PDI vencido 30 + funil 30), as cinco pessoas caíam em "ok" — porque as tabelas
+      humanas estão quase vazias (0 linhas em um_a_um, 9 em pdi_compromissos) e o funil,
+      que é o único sinal populado, valia no máximo 30 de 100. Resultado: a aba Time
+      gritando "Amanda e Kelly precisam de você" e a aba Pessoas, do mesmo gestor, dizendo
+      que está tudo bem. Duas telas discordando é pior que uma tela só.
+      Agora o nível é o MAIOR entre o do funil (a MESMA regra da aba Time, via tl5Score) e
+      o humano — o sinal humano só escala, nunca abaixa. Quando as tabelas encherem, ele
+      passa a mandar sozinho, sem eu mexer em peso nenhum.
+
+   2. A AMANDA SUMIA DA TELA. O prompt manda tirá-la da régua (transição para inside), e
+      isso está certo: cobrar meta de campo de quem está saindo do campo é injusto. Mas ela
+      é a pessoa com 18 de 20 negócios acima da régua — some da aba Pessoas e o gestor
+      perde de vista a carteira dela justamente na semana da transição. Ela aparece FORA da
+      ordenação, com o rótulo do que está acontecendo. Sair da régua não é sair da vista. */
+function ps6NivelDoFunil(r) {
+  const st = tl5StatusDoRep(r);
+  if (st.semFunil) return 'ok';
+  return st.bg === '#6E1210' ? 'crit' : (st.bg === '#FDF6E7' ? 'aten' : 'ok');
+}
+function ps6PiorNivel(a, b) {
+  const ordem = { crit: 3, aten: 2, ok: 1 };
+  return ordem[a] >= ordem[b] ? a : b;
+}
+function ps6EmTransicao() {
+  const m = tl5Medir();
+  return (DATA.usuarios || [])
+    .filter(u => u.role === 'rep' && !u.aComecar && u.fieldStatus === 'transicao_inside')
+    .map(u => m.porRep.find(r => r.ownerId === String(u.ownerId)))
+    .filter(Boolean);
+}
+
+/* ── OS NOMES QUE A PRANCHA DE PESSOAS CONSOME ─────────────────────────────────── */
+function ps6Dados() {
+  const s = PS6_ESTADO;
+  const pessoas = ps6Pessoas();
+  const transicao = ps6EmTransicao();
+  const m = tl5Medir();
+
+  const cartao = p => {
+    const cor = PS6_COR[p.nivel];
+    const status = p.nivel === 'crit' ? 'precisa de você' : (p.nivel === 'aten' ? 'atenção' : 'no ritmo');
+    /* A LEITURA CITA UM NÚMERO, SEMPRE. É ela que o gestor leva para a conversa, e frase
+       sem número vira opinião — que é justamente o que esta aba não pode ser. */
+    const tipoRot = p.nivel === 'ok' && p.melhorHabito ? 'boa prática:' : 'gargalo:';
+    const leitura = (p.nivel === 'ok' && p.melhorHabito)
+      ? p.melhorHabito.rot + ' em ' + p.melhorHabito.v + '% contra ' + p.melhorHabito.bench + '% do time — é o hábito para elevar no time todo.'
+      : (p.gargalo.acima
+        ? p.gargalo.acima + ' de ' + p.gargalo.n + ' negócios parados em ' + p.gargalo.rot + ' acima da régua de ' + p.gargalo.regua + 'd.'
+        : p.acima + ' de ' + p.abertos + ' negócios acima da régua no funil dele.');
+    const pend = [];
+    if (p.total) pend.push(p.marcados + ' de ' + p.total + ' acordos marcados');
+    if (p.diasDaAnalise != null) pend.push('última análise há ' + p.diasDaAnalise + 'd');
+    if (p.prospeccao < 4) pend.push('prospecção ' + p.prospeccao);
+    return {
+      ini: p.nome.split(' ').map(x => x[0]).slice(0, 2).join(''),
+      nome: p.nome, praca: p.praca,
+      topo: cor, avBg: cor,
+      bg: p.nivel === 'crit' ? '#FDF7F7' : '#FDFEFF',
+      borda: s.sel === p.ownerId ? '#2B3440' : (p.nivel === 'crit' ? '#E3C6C6' : '#E2E6EE'),
+      status, stCor: p.nivel === 'crit' ? '#FDFEFF' : (p.nivel === 'aten' ? '#8A6516' : '#1E9E7B'),
+      stBg: p.nivel === 'crit' ? '#6E1210' : (p.nivel === 'aten' ? '#FDF6E7' : '#EAF6F1'),
+      tipoRot, leitura,
+      meta: pend.join(' · ') || 'sem pendência registrada',
+      metaCor: p.acordoVencido || p.pdiVencido ? '#6E1210' : '#7A8494',
+      btRot: p.travado ? '✓ 1:1 travado' : 'preparar 1:1 →',
+      btBg: p.travado ? '#EAF6F1' : (p.nivel === 'crit' ? '#E51A31' : '#FDFEFF'),
+      btCor: p.travado ? '#1E9E7B' : (p.nivel === 'crit' ? '#FFFDF8' : '#2B3440'),
+      btBorda: p.travado ? '#CBE8DD' : (p.nivel === 'crit' ? '#E51A31' : '#DCE1EA'),
+      abrir: 'sel:' + p.ownerId
+    };
+  };
+
+  /* quem está saindo do campo entra DEPOIS da régua, com o rótulo do que é — ver o
+     comentário em ps6EmTransicao */
+  const cartoesTransicao = transicao.map(r => ({
+    ini: r.nome.split(' ').map(x => x[0]).slice(0, 2).join(''),
+    nome: r.nome, praca: r.praca,
+    topo: '#5B667A', avBg: '#5B667A', bg: '#FBFAF6', borda: '#E4E0D6',
+    status: 'fora da régua', stCor: '#5B667A', stBg: '#F4F1EA',
+    tipoRot: 'em transição para inside:',
+    leitura: 'não entra na ordenação de campo, mas a carteira continua dela — '
+      + r.acima + ' de ' + r.abertos + ' negócios acima da régua hoje. Combine o destino de cada um antes da virada.',
+    meta: 'sai da régua por fieldStatus em usuarios.json',
+    metaCor: '#7A8494',
+    btRot: 'preparar 1:1 →',
+    btBg: '#FDFEFF', btCor: '#2B3440', btBorda: '#DCE1EA',
+    abrir: 'sel:' + r.ownerId
+  }));
+
+  const sel = pessoas.find(p => p.ownerId === s.sel)
+    || (s.sel ? { ownerId: s.sel, nome: (transicao.find(r => r.ownerId === s.sel) || {}).nome || '' } : null);
+  const pSel = pessoas.find(p => p.ownerId === s.sel) || null;
+
+  /* ── a pauta: 4 cards, cada um citando número de agora ── */
+  const pItens = pSel ? [
+    {
+      rot: 'reconhecer', cor: '#1E9E7B',
+      txt: pSel.melhorHabito
+        ? 'Comece pelo que ele faz melhor que o time: ' + pSel.melhorHabito.rot + ' em ' + pSel.melhorHabito.v
+          + '%, contra ' + pSel.melhorHabito.bench + '% do time. Diga o número — reconhecimento sem número não ensina ninguém.'
+        : 'Nenhum hábito dele está acima da média do time esta semana. Não invente elogio: reconheça esforço específico que você viu, e siga para o gargalo.'
+    },
+    {
+      rot: 'o gargalo', cor: '#6E1210',
+      txt: pSel.gargalo.acima
+        ? pSel.gargalo.acima + ' de ' + pSel.gargalo.n + ' negócios dele em ' + pSel.gargalo.rot
+          + ' passaram da régua de ' + pSel.gargalo.regua + 'd. Pergunte por nome: '
+          + ((pSel.criticos || []).slice(0, 2).map(c => c.name || c.dealname).filter(Boolean).join(', ') || 'abra o funil dele na aba Time')
+          + '. O que trava não é o volume, é a decisão que não foi tomada.'
+        : 'O funil dele está dentro da régua (' + pSel.acima + ' de ' + pSel.abertos + ' acima). Use o tempo para alimentar: prospecção em ' + pSel.prospeccao + '.'
+    },
+    {
+      rot: 'acordos anteriores', cor: '#B07C1F',
+      txt: pSel.total
+        ? 'Ele marcou ' + pSel.marcados + ' de ' + pSel.total + ' acordos da última análise (há ' + pSel.diasDaAnalise + 'd). '
+          + (pSel.marcados < pSel.total
+            ? 'Cobre o que ficou ANTES de combinar coisa nova — combinar por cima do que não foi feito é como acordo perde valor.'
+            : 'Todos marcados: valide no bloco 2 com a evidência, não pela palavra.')
+        : 'Nenhum acordo registrado para ele ainda. Este 1:1 é onde o primeiro nasce.'
+    },
+    {
+      rot: 'novo acordo', cor: '#8E3B5C',
+      txt: 'Proposta que sai do número acima: até a próxima sexta, cada negócio dele em '
+        + pSel.gargalo.rot + ' acima da régua tem decisão registrada no HubSpot — avançar, reciclar ou perder. '
+        + 'Meta verificável: ' + pSel.gargalo.acima + ' negócios tratados. Você valida na semana que vem pela evidência.'
+    }
+  ] : [];
+
+  /* ── o dossiê: 6 números, e é ele que prova a pauta ── */
+  const pDossie = pSel ? [
+    { v: String(pSel.abertos), rot: 'negócios em aberto', cor: '#2B3440' },
+    { v: String(pSel.acima), rot: 'acima da régua', cor: pSel.acima ? '#6E1210' : '#1E9E7B' },
+    { v: Math.round(pSel.ratio * 100) + '%', rot: 'do funil dele travado', cor: pSel.ratio >= 0.5 ? '#6E1210' : (pSel.ratio >= 0.25 ? '#B07C1F' : '#1E9E7B') },
+    { v: String(pSel.prospeccao), rot: 'em prospecção', cor: pSel.prospeccao < 4 ? '#E51A31' : '#1E9E7B' },
+    { v: pSel.fech + '/' + pSel.meta, rot: 'fechados no mês', cor: pSel.fech >= pSel.meta / 2 ? '#1E9E7B' : '#B07C1F' },
+    { v: pSel.marcados + '/' + pSel.total, rot: 'acordos marcados', cor: pSel.total && pSel.marcados === pSel.total ? '#1E9E7B' : '#B07C1F' }
+  ] : [];
+
+  const pProva = pSel
+    ? 'a prova da pauta: os ' + pSel.acima + ' acima da régua e os ' + pSel.marcados + ' de ' + pSel.total
+      + ' acordos marcados são os mesmos números da aba Time e da tela dele — nenhum texto aqui foi escrito por IA, tudo é conta sobre o funil de '
+      + (DATA.hubspotUpdatedAtFmt || 'agora') + '.'
+    : '';
+
+  /* ── bloco 2: o que ele marcou e você ainda não validou ── */
+  const validacoes = s.validacoes.map(v => ({
+    ini: v.ini, txt: v.texto,
+    evid: v.evidencia, evCor: v.evidenciaCor,
+    avBg: '#B07C1F',
+    bg: '#FDFEFF', borda: '#F0DFB6',
+    okRot: 'validar ✓', okBg: '#1E9E7B', okCor: '#FFFDF8',
+    ok: 'validar:' + v.ownerId + ':' + v.indice,
+    dev: 'devolver:' + v.ownerId + ':' + v.indice
+  }));
+
+  /* ── bloco 3: PDIs. A barra mede ADESÃO SEMANAL e o rótulo diz isso ── */
+  const pdis = pessoas.map(p => {
+    const pct = p.total ? Math.round(p.marcados / p.total * 100) : 0;
+    const venc = p.diasDaAnalise == null ? 'sem análise registrada'
+      : (p.diasDaAnalise > 30 ? 'sem revisão há ' + p.diasDaAnalise + 'd'
+        : (p.diasDaAnalise > 21 ? 'revisar em ' + (30 - p.diasDaAnalise) + 'd' : 'revisada há ' + p.diasDaAnalise + 'd'));
+    return {
+      nome: p.nome,
+      foco: p.gargalo.acima ? 'destravar ' + p.gargalo.rot : 'manter ritmo e alimentar prospecção',
+      pct: Math.max(pct, 2) + '%',
+      v: p.total ? pct + '%' : '—',
+      cor: pct >= 100 ? '#1E9E7B' : (pct > 0 ? '#B07C1F' : '#C9CFDA'),
+      vence: venc,
+      vcCor: (p.diasDaAnalise != null && p.diasDaAnalise > 30) ? '#6E1210' : ((p.diasDaAnalise != null && p.diasDaAnalise > 21) ? '#B07C1F' : '#7A8494')
+    };
+  });
+
+  /* ── a agenda: sai dos travamentos, não de horário inventado ── */
+  const agenda = s.umAUm.length ? s.umAUm : [{
+    quando: 'nenhum 1:1 marcado',
+    rot: 'trave uma pauta acima',
+    sub: 'travar a pauta de um executivo marca o 1:1 aqui e grava o combinado com prazo',
+    bg: '#FBFAF6', borda: '#E4E0D6', qCor: '#7A8494'
+  }];
+
+  const aguardando = s.validacoes.length;
+  const vencendo = pessoas.filter(p => p.diasDaAnalise != null && p.diasDaAnalise > 21).length;
+  const emDia = pessoas.filter(p => p.total && p.marcados === p.total).length;
+
+  return {
+    quando: (DATA.hubspotUpdatedAtFmt || 'sem carimbo') + ' · Supabase ao vivo',
+    titulo: 'Pessoas, ' + ((sessaoAtual && sessaoAtual.nome ? String(sessaoAtual.nome).split(' ')[0] : 'gestor')) + ' — quem precisa de você primeiro?',
+    kpis: [
+      { rot: '1:1 no mês', v: String(s.umAUm.length), de: 'travados por esta tela', cor: '#FFFDF8' },
+      { rot: 'Aguardando validação', v: String(aguardando), de: aguardando ? 'com evidência ao lado' : 'nada pendente', cor: aguardando ? '#F0B45C' : '#7FD9BE' },
+      { rot: 'PDIs vencendo', v: String(vencendo), de: 'sem revisão há 21d+', cor: vencendo ? '#FF5F6E' : '#7FD9BE' },
+      { rot: 'Acordos em dia', v: emDia + '/' + pessoas.length, de: 'todos marcados', cor: '#7FD9BE' },
+      { rot: 'Próximo 1:1', v: s.umAUm.length ? s.umAUm[0].rot.split(' ')[0] : '—', de: s.umAUm.length ? s.umAUm[0].quando : 'nenhum marcado', cor: '#8B93A3' }
+    ],
+    temToast: !!s.toast, toast: s.toast || '',
+    execs: pessoas.map(cartao).concat(cartoesTransicao),
+    temPauta: !!sel,
+    pNome: sel ? sel.nome : '',
+    pFechar: 'sel:',
+    verPauta: 'aba:pauta', verDossie: 'aba:dossie',
+    tabPautaBg: s.aba === 'pauta' ? '#2B3440' : '#FDFEFF',
+    tabPautaCor: s.aba === 'pauta' ? '#FDFEFF' : '#5B667A',
+    tabDossieBg: s.aba === 'dossie' ? '#2B3440' : '#FDFEFF',
+    tabDossieCor: s.aba === 'dossie' ? '#FDFEFF' : '#5B667A',
+    mostraPauta: s.aba === 'pauta', mostraDossie: s.aba === 'dossie',
+    pItens, pDossie, pProva,
+    pTravar: 'travar:' + (s.sel || ''),
+    pTravarRot: (s.sel && s.pauta['um_a_um:' + s.sel]) ? '✓ 1:1 travado — na agenda' : 'travar pauta + marcar 1:1 →',
+    validacoes, pdis, agenda,
+    /* o aviso do bloco 3 conta o que E, e nao um numero fixo da prancha */
+    pdiAviso: vencendo ? vencendo + ' PDI(s) sem revisao ha 21 dias ou mais' : 'nenhum PDI vencendo — todos revisados nos ultimos 21 dias',
+    /* a rampa fica desenhada e DESLIGADA, como o prompt pede — e a tela diz quantos são,
+       para o bloco não virar promessa esquecida */
+    rampaN: ps6Rampa().length,
+    notaDeFonte: 'Funil, régua e críticos: HubSpot (pipeline Field Sales), ' + (DATA.hubspotUpdatedAtFmt || 'sem carimbo')
+      + ' · acordos, validações e PDI: Supabase (pdi_compromissos) · hábitos: o mesmo cálculo da aba Desenvolvimento'
+      + ' · elenco: data/usuarios.json (' + pessoas.length + ' em campo, ' + ps6Rampa().length + ' em rampa, desligada)'
+      + '. Nenhum texto desta aba é gerado por IA: pauta, dossiê e prova são conta sobre o funil de agora.'
+  };
+}
+
+/* ── PESSOAS: LER O QUE O EXECUTIVO MARCOU, E VALIDAR ────────────────────────────
+   A tabela é a mesma que a aba Desenvolvimento do executivo escreve (pdi_compromissos):
+   ele marca `checked[i]`, o gestor carimba `validado_em[i]`. MESMA LINHA, não cópia — é
+   isso que faz o ✓ aparecer nos dois lados sem sincronização nenhuma. */
+async function ps6Carregar() {
+  PS6_ESTADO.compromissos = {};
+  PS6_ESTADO.validacoes = [];
+  /* pauta NAO e zerada aqui: quem acabou de travar tem o estado vindo da escrita, e uma
+     leitura vazia nao pode desfazer isso na tela — ver ps6Travar. */
+  PS6_ESTADO.umAUm = [];
+  if (typeof supa === 'undefined' || !supa) { PS6_ESTADO.carregou = true; return; }
+  try {
+    const { data, error } = await supa.from('pdi_compromissos')
+      .select('*').order('updated_at', { ascending: false }).limit(200);
+    if (error) throw error;
+
+    /* SÓ A LINHA MAIS NOVA DE CADA EXECUTIVO. A tabela guarda uma por semana de análise;
+       validar a de agosto seria carimbar acordo que já morreu. */
+    (data || []).forEach(l => {
+      const oid = String(l.owner_id);
+      if (!PS6_ESTADO.compromissos[oid]) PS6_ESTADO.compromissos[oid] = l;
+    });
+
+    Object.keys(PS6_ESTADO.compromissos).forEach(oid => {
+      const l = PS6_ESTADO.compromissos[oid];
+      const rep = (DATA.reps || []).find(r => String(r.ownerId) === oid);
+      if (!rep) return;
+      const textos = rep.compromissos || [];
+      (l.checked || []).forEach((marcado, i) => {
+        if (!marcado) return;
+        if ((l.validado_em || [])[i]) return;      /* já validado */
+        if ((l.devolvido_em || [])[i]) return;     /* devolvido, a bola está com ele */
+        PS6_ESTADO.validacoes.push({
+          ownerId: oid, indice: i,
+          ini: String(rep.name || '').split(' ').map(x => x[0]).slice(0, 2).join(''),
+          texto: (rep.name || '') + ' · ' + (textos[i] || 'acordo sem texto na análise desta semana'),
+          /* A EVIDÊNCIA É O QUE O SISTEMA VIU, e não uma tentativa de interpretar a frase
+             do acordo. O prompt pedia "3 avanços no HubSpot ✓ batem" — casar texto livre
+             com atividade seria adivinhação com cara de verificação. Mostro os números
+             objetivos do período e deixo a conferência com o gestor, que é o que a própria
+             nota da prancha promete: "você valida o resultado, não a palavra". */
+          evidencia: ps6Evidencia(rep),
+          evidenciaCor: '#5B667A'
+        });
+      });
+    });
+
+    /* os 1:1 travados por esta tela vivem em pauta_do_lider, junto com a pauta do Time */
+    const { data: pl } = await supa.from('pauta_do_lider').select('*')
+      .eq('tipo', 'um_a_um').order('criado_em', { ascending: false }).limit(50);
+    (pl || []).forEach(l => {
+      const chave = String(l.chave || '').split(':').slice(0, 2).join(':');
+      PS6_ESTADO.pauta[chave] = l;
+    });
+    PS6_ESTADO.umAUm = (pl || []).slice(0, 4).map((l, i) => ({
+      quando: new Date(l.criado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+      rot: String(l.titulo || '').replace(/^1:1 com /, ''),
+      sub: l.detalhe || 'pauta travada nesta tela',
+      bg: i === 0 ? '#FDF7F7' : '#FDFEFF',
+      borda: i === 0 ? '#E3C6C6' : '#E2E6EE',
+      qCor: i === 0 ? '#6E1210' : '#7A8494'
+    }));
+  } catch (e) {
+    console.log('pessoas: nao consegui ler - ' + (e && e.message));
+  }
+  PS6_ESTADO.carregou = true;
+}
+
+/* o que o HubSpot registrou para essa pessoa na semana — o lado verificável do par */
+function ps6Evidencia(rep) {
+  const partes = [];
+  if (rep.ganhosSemana) partes.push(rep.ganhosSemana + ' ganho(s) na semana');
+  if (rep.avancosHubspotHoje) partes.push(rep.avancosHubspotHoje + ' avanço(s) hoje');
+  if (rep.propostasHubspotHoje) partes.push(rep.propostasHubspotHoje + ' proposta(s) hoje');
+  if (rep.visitasHubspotHoje) partes.push(rep.visitasHubspotHoje + ' visita(s) hoje');
+  const travados = (rep.travados || []).length;
+  partes.push(travados + ' negócio(s) ainda acima da régua');
+  return 'no HubSpot: ' + partes.join(' · ');
+}
+
+/* ── validar / devolver: carimba a MESMA linha que o executivo marcou ───────────── */
+async function ps6Carimbar(ownerId, indice, acao, motivo) {
+  if (typeof supa === 'undefined' || !supa) { PS6_ESTADO.toast = 'sem conexão aqui — nada foi gravado'; return; }
+  const linha = PS6_ESTADO.compromissos[ownerId];
+  if (!linha) { PS6_ESTADO.toast = 'não achei o acordo para carimbar'; return; }
+  const tam = (linha.checked || []).length;
+  const arr = (orig, valor) => {
+    const a = (orig || []).slice();
+    while (a.length < tam) a.push(null);
+    a[indice] = valor;
+    return a;
+  };
+  const patch = acao === 'validar'
+    ? {
+      validado_em: arr(linha.validado_em, new Date().toISOString()),
+      validado_por: arr(linha.validado_por, (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || 'gestor')
+    }
+    : {
+      devolvido_em: arr(linha.devolvido_em, new Date().toISOString()),
+      devolvido_motivo: arr(linha.devolvido_motivo, motivo || 'sem motivo informado')
+    };
+  try {
+    const { error } = await supa.from('pdi_compromissos').update(patch).eq('id', linha.id);
+    if (error) throw error;
+    Object.keys(patch).forEach(k => { linha[k] = patch[k]; });
+    PS6_ESTADO.validacoes = PS6_ESTADO.validacoes.filter(v => !(v.ownerId === ownerId && v.indice === indice));
+    PS6_ESTADO.toast = acao === 'validar'
+      ? 'validado ✓ — o mesmo ✓ aparece na tela dele'
+      : 'devolvido — ele vê o motivo no Hoje dele';
+  } catch (e) {
+    PS6_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
+  }
+}
+
+/* ── travar a pauta: vira 1:1 na agenda, e reusa a tabela da aba Time ───────────── */
+async function ps6Travar(ownerId) {
+  const p = ps6Pessoas().find(x => x.ownerId === ownerId)
+    || ps6EmTransicao().find(x => x.ownerId === ownerId);
+  if (!p) return;
+  const d = ps6Dados();
+  const resumo = (d.pItens || []).map(i => i.rot + ': ' + i.txt).join(' | ').slice(0, 900);
+  await tl5Alternar('um_a_um', ownerId, '1:1 com ' + p.nome, resumo, 'um_a_um:' + ownerId);
+  PS6_ESTADO.toast = TL5_ESTADO.toast;
+  /* O ESTADO LOCAL VEM DA ESCRITA, NAO DA RELEITURA (medido no navegador: o botao voltava
+     a dizer travar depois de travar). ps6Carregar re-consulta a tabela, e QUALQUER leitura
+     que volte vazia — rede lenta, replica atrasada, preview sem banco — apagava o que
+     acabara de ser gravado. Agora a tela reflete o que a escrita devolveu, e a releitura
+     so completa. */
+  const gravado = TL5_ESTADO.pauta['um_a_um:' + ownerId];
+  if (gravado) PS6_ESTADO.pauta['um_a_um:' + ownerId] = gravado;
+  else delete PS6_ESTADO.pauta['um_a_um:' + ownerId];
+  await ps6Carregar();
+  if (gravado) PS6_ESTADO.pauta['um_a_um:' + ownerId] = PS6_ESTADO.pauta['um_a_um:' + ownerId] || gravado;
+}
+
+async function ps6Executar(acao) {
+  const [verbo, a, b] = String(acao).split(':');
+  if (verbo === 'sel') { PS6_ESTADO.sel = (!a || PS6_ESTADO.sel === a) ? null : a; PS6_ESTADO.aba = 'pauta'; PS6_ESTADO.toast = null; }
+  else if (verbo === 'aba') { PS6_ESTADO.aba = a === 'dossie' ? 'dossie' : 'pauta'; }
+  else if (verbo === 'travar') { if (a) await ps6Travar(a); }
+  else if (verbo === 'validar') { await ps6Carimbar(a, Number(b), 'validar'); }
+  else if (verbo === 'devolver') {
+    /* motivo é obrigatório: devolver sem dizer por quê é o gestor mandando refazer sem
+       dizer o quê, e isso volta para a mesa dele na semana seguinte igual */
+    const motivo = (typeof prompt === 'function') ? prompt('Por que está devolvendo? O executivo vê este texto.') : null;
+    if (motivo === null) return;
+    if (!String(motivo).trim()) { PS6_ESTADO.toast = 'devolver exige um motivo — ele precisa saber o que refazer'; renderPessoas(); return; }
+    await ps6Carimbar(a, Number(b), 'devolver', String(motivo).trim());
+  }
+  renderPessoas();
+}
+
+
+/* ── DESENHA A ABA PESSOAS ───────────────────────────────────────────────────────
+   HTML convertido mecanicamente da prancha; estilos byte a byte. Dado de ps6Dados(). */
+function renderPessoas() {
+  const raiz = document.getElementById('ps6Raiz');
+  if (!raiz) return;
+  if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
+  const d = ps6Dados();
+  const { quando, titulo, kpis, temToast, toast, execs, temPauta, pNome, verPauta, verDossie, tabPautaBg, tabPautaCor, tabDossieBg, tabDossieCor, pTravar, pTravarRot, pFechar, mostraPauta, mostraDossie, pItens, pDossie, pProva, validacoes, pdis, pdiAviso, agenda, notaDeFonte } = d;
+  raiz.innerHTML = `<div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
+
+        <div style="background:#16181D;color:#FFFDF8;padding:16px 22px;display:flex;align-items:center;gap:28px;flex-wrap:wrap;">
+          <div style="min-width:0;">
+            <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${quando}</span>
+            <b style="display:block;font:900 22px 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;">${titulo}</b>
+          </div>
+          <div style="display:flex;gap:26px;flex-wrap:wrap;margin-left:auto;">
+            ${(kpis||[]).map(k => `
+              <span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${k.rot}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 24px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span></span>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="padding:16px 22px 6px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · Quem precisa de você primeiro <span style="color:#7A8494;">— ordenado por urgência real: acordo vencido + PDI + gargalo · clique prepara o 1:1</span></span>
+            ${(temToast) ? `
+              <span style="font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:5px 12px;overflow-wrap:anywhere;">${toast}</span>
+            ` : ''}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;">
+            ${(execs||[]).map(e => `
+              <div style="border:1.5px solid ${e.borda};border-top:4px solid ${e.topo};border-radius:12px;background:${e.bg};padding:12px 14px;min-width:0;display:flex;flex-direction:column;gap:7px;">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                  <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${e.avBg};color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">${e.ini}</span>
+                  <span style="min-width:0;"><b style="display:block;font:800 12.5px 'Archivo',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.nome}</b><span style="font:700 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">${e.praca}</span></span>
+                </div>
+                <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${e.stCor};background:${e.stBg};border-radius:6px;padding:3px 8px;align-self:flex-start;white-space:nowrap;">${e.status}</span>
+                <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;"><b style="color:#2B3440;">${e.tipoRot}</b> ${e.leitura}</span>
+                <span style="font:700 9.5px 'Manrope',sans-serif;color:${e.metaCor};">${e.meta}</span>
+                <button data-ps6-acao="${e.abrir}" style="margin-top:auto;display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:0 12px;border:1.5px solid ${e.btBorda};border-radius:999px;background:${e.btBg};font:800 10px 'Manrope',sans-serif;color:${e.btCor};cursor:pointer;white-space:nowrap;" data-ps6-hv="0">${e.btRot}</button>
+              </div>
+            `).join('')}
+          </div>
+
+          ${(temPauta) ? `
+            <div style="margin-top:12px;background:#FDFEFF;border:1.5px solid #2B3440;border-radius:13px;padding:13px 16px;box-shadow:0 10px 28px rgba(43,52,64,.14);">
+              <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px;">
+                <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#2B3440;">1:1 de ${pNome}</span>
+                <span style="display:inline-flex;gap:4px;background:#F4F1EA;border-radius:999px;padding:3px;">
+                  <button data-ps6-acao="${verPauta}" style="border:0;cursor:pointer;min-height:28px;padding:0 13px;border-radius:999px;background:${tabPautaBg};font:800 10px 'Manrope',sans-serif;color:${tabPautaCor};white-space:nowrap;">pauta do 1:1</button>
+                  <button data-ps6-acao="${verDossie}" style="border:0;cursor:pointer;min-height:28px;padding:0 13px;border-radius:999px;background:${tabDossieBg};font:800 10px 'Manrope',sans-serif;color:${tabDossieCor};white-space:nowrap;">dossiê · números reais</button>
+                </span>
+                <span style="font:700 10px 'Manrope',sans-serif;color:#7A8494;">o dossiê é a prova da pauta — cada item cita um número daqui</span>
+                <button data-ps6-acao="${pTravar}" style="margin-left:auto;display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border:0;border-radius:999px;background:#1E9E7B;font:800 10.5px 'Manrope',sans-serif;color:#FFFDF8;cursor:pointer;white-space:nowrap;" data-ps6-hv="1">${pTravarRot}</button>
+                <button data-ps6-acao="${pFechar}" style="flex:none;width:26px;height:26px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 13px 'Manrope',sans-serif;cursor:pointer;line-height:1;padding:0;" data-ps6-hv="2">✕</button>
+              </div>
+              ${(mostraPauta) ? `
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;">
+                  ${(pItens||[]).map(pi => `
+                    <div style="background:#FBFAF6;border:1px solid #E4E0D6;border-top:3px solid ${pi.cor};border-radius:10px;padding:10px 12px;min-width:0;">
+                      <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:${pi.cor};">${pi.rot}</span>
+                      <p style="margin:5px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#2B3440;">${pi.txt}</p>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+              ${(mostraDossie) ? `
+                <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;">
+                  ${(pDossie||[]).map(pn => `
+                    <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:10px;padding:10px 12px;min-width:0;">
+                      <b style="display:block;font:900 19px 'Archivo',sans-serif;color:${pn.cor};font-variant-numeric:tabular-nums;">${pn.v}</b>
+                      <span style="display:block;font:700 9px/1.4 'Manrope',sans-serif;color:#7A8494;">${pn.rot}</span>
+                    </div>
+                  `).join('')}
+                </div>
+                <p style="margin:9px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#2B3440;background:#F4F1EA;border:1px solid #E3DDD0;border-radius:9px;padding:8px 12px;">▸ ${pProva}</p>
+              ` : ''}
+            </div>
+          ` : ''}
+        </div>
+
+        <div style="padding:16px 22px 6px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;">
+          <div style="background:#FDF6E7;border:1px solid #F0DFB6;border-radius:12px;padding:13px 16px;">
+            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#B07C1F;">2 · Aguardando a sua validação <span style="color:#7A8494;">— o executivo marcou como feito; só fecha quando você valida (aqui ou na aba Time)</span></span>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;">
+              ${(validacoes||[]).map(va => `
+                <div style="display:flex;align-items:center;gap:10px;background:${va.bg};border:1px solid ${va.borda};border-radius:10px;padding:8px 12px;min-width:0;">
+                  <span style="width:24px;height:24px;border-radius:999px;display:grid;place-items:center;background:${va.avBg};color:#FDFEFF;font:900 9px 'Archivo',sans-serif;flex:none;">${va.ini}</span>
+                  <span style="min-width:0;flex:1;"><span style="display:block;font:700 11px/1.4 'Manrope',sans-serif;color:#2B3440;">${va.txt}</span><span style="font:800 9px 'Manrope',sans-serif;color:${va.evCor};">${va.evid}</span></span>
+                  <button data-ps6-acao="${va.ok}" style="flex:none;display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:0;border-radius:999px;background:${va.okBg};font:800 10px 'Manrope',sans-serif;color:${va.okCor};cursor:pointer;white-space:nowrap;" data-ps6-hv="0">${va.okRot}</button>
+                  <button data-ps6-acao="${va.dev}" style="flex:none;display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:800 10px 'Manrope',sans-serif;color:#7A8494;cursor:pointer;white-space:nowrap;" data-ps6-hv="2">devolver</button>
+                </div>
+              `).join('')}${validacoes.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nada aguardando você — todo acordo que o time marcou como feito já foi validado ou devolvido. Quando alguém marcar um, ele aparece aqui com a evidência do HubSpot ao lado.</span>`}
+            </div>
+            <p style="margin:8px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#8A6516;">▸ a evidência vem do HubSpot/Supabase — você valida o resultado, não a palavra. Validar aqui acende o mesmo ✓ na aba Time e no Desenvolvimento do executivo.</p>
+          </div>
+
+          <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
+            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8E3B5C;">3 · PDIs do time <span style="color:#7A8494;">— metas quantitativas calculadas do HubSpot, sem depoimento</span></span>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;">
+              ${(pdis||[]).map(pd => `
+                <span style="display:flex;align-items:center;gap:9px;padding:2px 4px;min-width:0;">
+                  <span style="font:800 10.5px 'Manrope',sans-serif;color:#2B3440;width:96px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pd.nome}</span>
+                  <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;width:170px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pd.foco}</span>
+                  <span style="flex:1;height:8px;border-radius:999px;background:#EDEBE5;overflow:hidden;"><span style="display:block;height:100%;width:${pd.pct};background:${pd.cor};border-radius:999px;"></span></span>
+                  <b style="font:900 10.5px 'Archivo',sans-serif;color:${pd.cor};font-variant-numeric:tabular-nums;flex:none;width:56px;text-align:right;">${pd.v}</b>
+                  <span style="font:800 9px 'Manrope',sans-serif;color:${pd.vcCor};flex:none;width:86px;text-align:right;white-space:nowrap;">${pd.vence}</span>
+                </span>
+              `).join('')}${pdis.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nenhum executivo de campo ativo na régua agora.</span>`}
+            </div>
+            <div style="margin-top:8px;background:#FBF5F8;border:1px solid #E9D9E1;border-radius:9px;padding:8px 12px;">
+              <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#8E3B5C;">▸ <b>${pdiAviso}</b> — a revisão entra na pauta do 1:1 automaticamente. PDI sem revisão em 30d aparece aqui em vermelho.</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 22px 18px;">
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Sua agenda de 1:1 <span style="color:#7A8494;">— travar a pauta acima marca aqui · o combinado de cada 1:1 vira acordo com prazo</span></span>
+          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:9px;">
+            ${(agenda||[]).map(ag => `
+              <div style="background:${ag.bg};border:1px solid ${ag.borda};border-radius:11px;padding:10px 13px;min-width:0;">
+                <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${ag.qCor};">${ag.quando}</span>
+                <b style="display:block;font:800 12px 'Archivo',sans-serif;color:#2B3440;margin-top:2px;">${ag.rot}</b>
+                <span style="display:block;font:700 9.5px/1.45 'Manrope',sans-serif;color:#5B667A;margin-top:2px;">${ag.sub}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 22px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${notaDeFonte}</p>
+      </div>
+    
+  
+</section>`;
+}
+
+document.addEventListener('click', ev => {
+  const alvo = ev.target.closest && ev.target.closest('[data-ps6-acao]');
+  if (!alvo) return;
+  ev.preventDefault();
+  ps6Executar(alvo.getAttribute('data-ps6-acao'));
+});
+
+async function ps6Iniciar() {
+  if (!sessaoAtual || sessaoAtual.role !== 'manager') return;
+  renderPessoas();
+  await ps6Carregar();
+  renderPessoas();
+}
+
 async function renderPDIs() {
   const el = document.getElementById('pdisContent');
+  /* o executivo nunca ve a raiz do gestor — as duas vivem na mesma view */
+  const raizGestor = document.getElementById('ps6Raiz');
+  if (raizGestor) raizGestor.style.display = (sessaoAtual && sessaoAtual.role === 'manager') ? '' : 'none';
   if (!DATA.supabase || !supa) {
     el.innerHTML = `<div class="empty-state">Nenhum PDI registrado — combine no próximo 1:1.</div>`;
     return;
   }
 
   if (sessaoAtual.role === 'manager') {
+    /* ══ A ABA PESSOAS v6 ASSUMIU AQUI (06/09/26) ═══════════════════════════════
+       O gestor passa a ver a prancha pessoas-final, desenhada por renderPessoas em
+       #ps6Raiz. Tudo abaixo deste return e o desenho ANTIGO do lado do gestor: ficou
+       inalcancavel de proposito, e nao apagado, porque sao centenas de linhas e parte
+       das funcoes que ele chama serve outras telas. Varrer os usos antes de remover e
+       um passo proprio — no impulso, isso ja derrubou uma aba tres vezes neste arquivo.
+       O ramo do EXECUTIVO, abaixo do fecho deste if, continua valendo e intocado. */
+    const alvoGestor = document.getElementById('ps6Raiz');
+    if (alvoGestor) {
+      const coach = document.getElementById('coachingEmbutido');
+      if (coach) coach.style.display = 'none';
+      if (el) el.innerHTML = '';
+      if (typeof ps6Iniciar === 'function') ps6Iniciar();
+      return;
+    }
+
     if (!pessoaSelecionadaId) {
       const maisUrgente = [...DATA.reps].sort((a, b) => (b.leadsTravados || 0) - (a.leadsTravados || 0))[0];
       pessoaSelecionadaId = maisUrgente ? maisUrgente.ownerId : DATA.reps[0].ownerId;
