@@ -1219,6 +1219,16 @@
     #ps6Raiz [data-ps6-hv="1"]:hover{filter:brightness(1.08);}
     #ps6Raiz [data-ps6-hv="2"]:hover{border-color:#E51A31;color:#E51A31;}
     #ps6Raiz [data-ps6-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
+    /* ══ ABA ROTAS & PROSPECCAO (06/09/26) — hovers do dc-runtime ══ */
+    #rt7Raiz [data-rt7-hv]{cursor:pointer;}
+    #rt7Raiz [data-rt7-hv="0"]:hover{border-color:#E51A31;color:#E51A31;}
+    #rt7Raiz [data-rt7-hv="1"]:hover{border-color:#2B3440;}
+    #rt7Raiz [data-rt7-hv="2"]:hover{filter:brightness(1.08);}
+    #rt7Raiz [data-rt7-hv="3"]:hover{opacity:.8;}
+    #rt7Raiz [data-rt7-hv="4"]:hover{color:#E51A31;}
+    #rt7Raiz [data-rt7-hv="5"]:hover{filter:brightness(1.07);}
+    #rt7Raiz [data-rt7-hv="6"]:hover{border-color:#6E1210;}
+    #rt7Raiz [data-rt7-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
     #viewCockpit .gi-cell-btn{min-height:44px;display:inline-flex;align-items:center;justify-content:flex-end;width:100%;}
     #viewAgenda .ag-cumprido>summary{min-height:44px;}
     .pracas,.estoque{grid-template-columns:minmax(0,1fr);}
@@ -11941,6 +11951,16 @@
   </div>
 
   <div class="view" id="viewRotas">
+
+    <!-- ══ UMA ABA NO LUGAR DE DUAS (06/09/26) ══════════════════════════════════
+         #rt7Raiz é a prancha rotas-final para o GESTOR: a torneira (importar →
+         aprovar → carteira) e a rua (semana, rota) na mesma tela. Para ele, a aba
+         Prospecção sai da nav e esta assume as duas.
+         O bloco antigo abaixo continua servindo o resto: ele é escondido para o
+         gestor por renderRotasDoTime, e o executivo nunca chega aqui (a aba Rotas
+         já era só do gestor). -->
+    <div id="rt7Raiz" style="width:min(1780px,100% - 64px);margin:0 auto;"></div>
+    <div id="rotasAntigo">
     <section class="exec-support-hero" aria-labelledby="rotasTitulo">
       <div style="position:relative;z-index:1;">
         <div class="exec-support-kicker">Rotas do time · hoje</div>
@@ -11954,6 +11974,7 @@
       </div>
     </section>
     <div id="rotasContent"><div class="empty-state">Carregando rotas…</div></div>
+    </div><!-- /rotasAntigo -->
   </div>
 
   <div class="view" id="viewLeadsPraca">
@@ -12392,7 +12413,13 @@ function aplicarVisaoPorPapel() {
   // badge de 56 virou contador na própria sub-aba. Para o GESTOR continua aba de topo,
   // porque ver a fila do time inteiro é papel dele e ele não usa a Rota do executivo.
   const btnProsp = document.getElementById('tabBtnLeadsPraca');
-  if (btnProsp) btnProsp.style.display = souRep ? 'none' : 'flex';
+  /* A PROSPECÇÃO SAIU DA NAV DO GESTOR (06/09/26): a aba Rotas & Prospecção assumiu as
+     duas — a fila de aprovação e o disparo de importação moraram lá desde a prancha
+     rotas-final. Some para os DOIS papéis agora, cada um pelo seu motivo: o executivo
+     tem a fila como sub-aba da Rota & Agenda, o gestor tem a aba unificada. */
+  if (btnProsp) btnProsp.style.display = 'none';
+  const btnRotasRot = document.querySelector('#tabBtnRotas .tab-btn-label');
+  if (btnRotasRot && souGestorSessao) btnRotasRot.textContent = 'Rotas & Prospecção';
   // Se o executivo estava na Prospecção quando a aba sumiu, leva ele pra Rota & Agenda
   // já na sub-aba certa — em vez de deixar a tela ativa num botão que não existe mais.
   if (souRep && document.querySelector('.view.active')?.id === 'viewLeadsPraca') {
@@ -32064,6 +32091,17 @@ document.getElementById('tabBtnLeadsPraca').addEventListener('click', () => { ac
 // Rotas sempre redesenha ao abrir: é a foto do dia corrente e muda enquanto o time
 // monta a rota durante a manhã — cache aqui só serviria pra mostrar dado velho.
 document.getElementById('tabBtnRotas').addEventListener('click', () => {
+  /* a prancha nova desenha primeiro e o bloco antigo some para o gestor */
+  const raizNova = document.getElementById('rt7Raiz');
+  const antigo = document.getElementById('rotasAntigo');
+  const ehGestor = sessaoAtual && sessaoAtual.role === 'manager';
+  if (antigo) antigo.style.display = ehGestor ? 'none' : '';
+  if (raizNova) raizNova.style.display = ehGestor ? '' : 'none';
+  /* ATIVA A VIEW ANTES DE SAIR. A primeira versao dava return aqui e pulava o
+     activateTab logo abaixo: a aba nova desenhava no no certo e a tela continuava
+     mostrando a aba Time. O DOM ficava perfeito e o usuario nao via nada — defeito
+     que so aparece olhando, nunca medindo o innerHTML. */
+  if (ehGestor && typeof rt7Iniciar === 'function') { activateTab('viewRotas'); rt7Iniciar(); return; }
   activateTab('viewRotas');
   if (typeof renderRotas === 'function') renderRotas();
 });
@@ -55463,6 +55501,704 @@ async function ps6Iniciar() {
   renderPessoas();
   await ps6Carregar();
   renderPessoas();
+}
+
+/* ═══ ABA ROTAS & PROSPECÇÃO DO GESTOR (06/09/26) ══════════════════════════════════
+   Prancha `rotas-final`, convertida mecanicamente (estilos byte a byte). Ela substitui
+   DUAS abas — Rotas e Prospecção — por uma: a torneira (importar → aprovar → carteira) e
+   a rua (semana, rota, check-ins) na mesma tela.
+
+   A REGRA DE OURO DA ABA: nada entra sozinho. O gestor dispara a importação, por praça,
+   quando o estoque pede — e aprovar exige confirmação, porque aprovar muda o trabalho de
+   campo de outra pessoa (decisão do Julyan em 06/09).
+
+   ONDE A REALIDADE MUDOU A PRANCHA (as três estão medidas, não supostas):
+
+   1. O TERRITÓRIO ÓRFÃO NÃO É "LEAD SEM DONO". A prancha mostrava "Campo Grande + Bangu
+      sem dono — 65 contas paradas". Medido: 1.335 leads, 10 donos, e exatamente UM sem
+      dono. O roteamento funciona. O que existe de verdade é pior e maior: 436 contas
+      atribuídas aos cinco executivos que AINDA NÃO COMEÇARAM (aComecar em usuarios.json).
+      Conta validada em nome de quem não entrou é conta parada — e é isso que o card mede.
+
+   2. REGIÃO NÃO FILTRA CASA DOS DADOS. A fonte busca por município; os chips de bairro só
+      morderiam no Google Places (que busca por raio). O painel diz isso em vez de fingir.
+
+   3. TELEFONE FALTA NA MAIORIA. 196 de 196 leads de uma leva, 141 de 141 em outra: a Casa
+      dos Dados devolve CNPJ, não telefone. O badge "sem telefone" da prancha não é borda,
+      é o caso comum — e por isso ele explica o caminho (buscar pelo CNPJ) em vez de só
+      acusar a falta. */
+
+const RT7_ESTADO = {
+  sel: null,            /* executivo cuja fila está à esquerda */
+  verTodas: false,
+  marcadas: {},         /* leads seleccionados para aprovar */
+  abertos: {},          /* leads com endereço/telefone expandidos */
+  impAberto: null,      /* painel de disparo aberto para qual executivo */
+  impRegioes: {}, impFontes: { casa_dos_dados: true }, impQtd: 25,
+  toast: null,
+  leads: [], estoqueSemana: {}, semanas: {}, carregou: false, importando: false
+};
+
+/* ── quem é de campo, e quem ainda não começou ──────────────────────────────── */
+function rt7Ativos() {
+  return (DATA.usuarios || []).filter(u => u.role === 'rep' && !u.aComecar && u.fieldStatus !== 'transicao_inside');
+}
+function rt7NaoComecaram() {
+  return (DATA.usuarios || []).filter(u => u.role === 'rep' && u.aComecar);
+}
+function rt7Nome(ownerId) {
+  const u = (DATA.usuarios || []).find(x => String(x.ownerId) === String(ownerId));
+  if (u) return u.nome || u.name || String(ownerId);
+  const r = (DATA.reps || []).find(x => String(x.ownerId) === String(ownerId));
+  return r ? r.name : String(ownerId);
+}
+
+/* ── o SCORE de um lead ────────────────────────────────────────────────────────
+   A prancha pede "score = nota × volume × sinais de dor". Nota e volume existem; sinais
+   de dor sairiam de reviews, que nós não coletamos. Então o score diz o que sabe:
+   qualidade (nota) ponderada por prova social (avaliações). Lead sem nota — o caso da
+   Casa dos Dados, que traz CNPJ — NÃO recebe zero: recebe "—", porque não medido não é
+   zero, e um CNPJ recém-aberto sem avaliação é justamente o alvo que queremos. */
+function rt7Score(l) {
+  const nota = Number(l.nota);
+  const avals = Number(l.avaliacoes);
+  if (!isFinite(nota) || !nota) return null;
+  const volume = isFinite(avals) && avals > 0 ? Math.min(1, Math.log10(avals + 1) / 3) : 0.35;
+  return Math.round(Math.min(100, (nota / 5) * 100 * (0.55 + 0.45 * volume)));
+}
+function rt7CorScore(s) {
+  if (s == null) return '#7A8494';
+  return s >= 90 ? '#1E9E7B' : (s >= 75 ? '#B07C1F' : '#7A8494');
+}
+
+/* ── estoque em semanas ────────────────────────────────────────────────────────
+   consumo/semana = contas que saíram de "atribuido" para a rua nas últimas 4 semanas.
+   Sem histórico suficiente, o consumo é DESCONHECIDO e a tela diz isso — dividir por um
+   consumo inventado produziria "≈ 12 semanas de estoque" sobre nada. */
+function rt7Estoque(ownerId) {
+  const meus = RT7_ESTADO.leads.filter(l => String(l.responsavel_owner_id) === String(ownerId));
+  const carteira = meus.filter(l => l.status === 'atribuido').length;
+  const naRota = meus.filter(l => l.status === 'na_rota').length;
+  const consumo = RT7_ESTADO.estoqueSemana[String(ownerId)];
+  const semanas = (consumo && consumo > 0) ? carteira / consumo : null;
+  return { carteira, naRota, fila: meus.filter(l => l.status === 'pendente').length, consumo, semanas };
+}
+
+/* ── OS 10 NOMES DE LISTA QUE A PRANCHA DE ROTAS CONSOME ───────────────────────── */
+
+/* as fontes, e a verdade sobre cada uma (decisão do Julyan em 06/09: mostrar as três com
+   o motivo, em vez de esconder as que não funcionam) */
+const RT7_FONTES = [
+  { id: 'casa_dos_dados', rot: 'Casa dos Dados', ativa: true, porque: '' },
+  { id: 'google_places', rot: 'Google Places', ativa: false, porque: 'falta a chave GOOGLE_PLACES_API_KEY nas env vars da Vercel — hoje ela só existe no GitHub, então o mensal roda e o botão não' },
+  { id: 'tripadvisor', rot: 'TripAdvisor', ativa: false, porque: 'fora da allowlist de rede e o ToS proíbe coleta automatizada — não é "ainda não", é por este caminho nunca' }
+];
+
+function rt7Dados() {
+  const s = RT7_ESTADO;
+  const ativos = rt7Ativos();
+  const m = tl5Medir();
+
+  /* o executivo cuja fila aparece à esquerda; sem escolha, o de fila maior */
+  const comFila = ativos.map(u => ({ u, e: rt7Estoque(u.ownerId) }))
+    .sort((a, b) => b.e.fila - a.e.fila);
+  const selId = s.sel || (comFila[0] ? String(comFila[0].u.ownerId) : null);
+  const selNome = selId ? rt7Nome(selId) : '';
+
+  /* ── esquerda: a fila do selecionado ── */
+  const filaTodos = s.leads
+    .filter(l => String(l.responsavel_owner_id) === String(selId) && l.status === 'pendente')
+    .map(l => ({ l, sc: rt7Score(l) }))
+    .sort((a, b) => (b.sc == null ? -1 : b.sc) - (a.sc == null ? -1 : a.sc));
+  const fila = (s.verTodas ? filaTodos : filaTodos.slice(0, 8)).map(({ l, sc }) => {
+    const marcada = !!s.marcadas[l.id];
+    const aberta = !!s.abertos[l.id];
+    const aprovada = l.status === 'atribuido';
+    const temTel = !!(l.telefone && String(l.telefone).trim());
+    return {
+      score: sc == null ? '—' : String(sc), scCor: rt7CorScore(sc),
+      nome: l.nome || 'sem nome',
+      tipo: l.categoria || l.cidade || '',
+      motivo: aberta
+        ? '📍 ' + (l.endereco || 'endereço não veio na fonte')
+          + (temTel ? '  ✆ ' + l.telefone : '  ✆ sem telefone — o robô busca pelo CNPJ ' + (l.cnpj || '(não veio)'))
+        : (l.bairro ? l.bairro + (l.cidade ? ' · ' + l.cidade : '') : (l.cidade || 'sem endereço na fonte')),
+      seta: aberta ? '▾' : '▸',
+      nota: (l.nota != null && l.nota !== '') ? '★ ' + l.nota : '★ —',
+      avals: (l.avaliacoes != null && l.avaliacoes !== '') ? String(l.avaliacoes) : 'sem avaliações',
+      tel: temTel ? '' : 'sem telefone',
+      telCor: temTel ? '#7A8494' : '#8A3B3B',
+      fonte: (l.fonte || 'manual').replace(/_/g, ' '),
+      dono: '→ ' + (selNome.split(' ')[0] || ''),
+      donoCor: '#7A8494',
+      end: '',
+      ck: aprovada ? '✓' : (marcada ? '✓' : ''),
+      ckBg: aprovada ? '#EAF6F1' : (marcada ? '#1E9E7B' : '#FDFEFF'),
+      ckBorda: aprovada ? '#CBE8DD' : (marcada ? '#1E9E7B' : '#DCE1EA'),
+      bg: aprovada ? '#EAF6F1' : '#FDFEFF',
+      borda: aprovada ? '#CBE8DD' : '#E2E6EE',
+      marcar: 'marcar:' + l.id,
+      abrir: 'abrir:' + l.id
+    };
+  });
+  const nMarcadas = Object.keys(s.marcadas).filter(k => s.marcadas[k]).length;
+
+  /* ── direita: quem precisa de contas ── */
+  const estoque = ativos.map(u => {
+    const oid = String(u.ownerId);
+    const e = rt7Estoque(oid);
+    const seco = e.semanas != null && e.semanas < 1;
+    const selecionado = oid === String(selId);
+    return {
+      rot: (u.nome || u.name || oid).split(' ').slice(0, 2).join(' '),
+      nomeCor: selecionado ? '#E51A31' : '#2B3440',
+      selBg: selecionado ? '#F4F1EA' : 'transparent',
+      n: String(e.carteira),
+      pct: Math.min(100, Math.round(e.carteira / 2)) + '%',
+      cor: seco ? '#E51A31' : (e.carteira >= 60 ? '#1E9E7B' : '#B07C1F'),
+      /* SEM CONSUMO MEDIDO A TELA DIZ ISSO, e não "≈ 999 sem" */
+      sem: e.semanas == null ? 'consumo não medido' : '≈ ' + (Math.round(e.semanas * 10) / 10) + ' sem',
+      semCor: e.semanas == null ? '#7A8494' : (seco ? '#E51A31' : '#7A8494'),
+      btRot: seco ? 'importar AGORA' : '⤓ importar',
+      btBg: seco ? '#E51A31' : '#FDFEFF',
+      btCor: seco ? '#FFFDF8' : '#2B3440',
+      btBorda: seco ? '#E51A31' : '#DCE1EA',
+      on: 'sel:' + oid,
+      ver: 'disparo:' + oid
+    };
+  });
+
+  /* ── o painel de disparo ── */
+  const impU = s.impAberto ? ativos.find(u => String(u.ownerId) === String(s.impAberto)) : null;
+  const praca = impU ? rt7PracaDoRep(impU) : null;
+  const impRegioes = (praca && praca.regioes ? praca.regioes : []).map(rg => ({
+    rot: rg, on: 'reg:' + rg,
+    bg: s.impRegioes[rg] ? '#2B3440' : '#FDFEFF',
+    cor: s.impRegioes[rg] ? '#FDFEFF' : '#5B667A',
+    borda: s.impRegioes[rg] ? '#2B3440' : '#DCE1EA'
+  }));
+  const impFontes = RT7_FONTES.map(f => ({
+    rot: f.ativa ? f.rot : f.rot + ' · indisponível',
+    on: f.ativa ? 'fonte:' + f.id : 'fonteoff:' + f.id,
+    bg: (f.ativa && s.impFontes[f.id]) ? '#2B3440' : '#FDFEFF',
+    cor: f.ativa ? ((s.impFontes[f.id]) ? '#FDFEFF' : '#5B667A') : '#8B93A3',
+    borda: (f.ativa && s.impFontes[f.id]) ? '#2B3440' : '#DCE1EA'
+  }));
+  const impQtds = [25, 50, 100].map(q => ({
+    rot: 'top ' + q, on: 'qtd:' + q,
+    bg: s.impQtd === q ? '#2B3440' : '#FDFEFF',
+    cor: s.impQtd === q ? '#FDFEFF' : '#5B667A',
+    borda: s.impQtd === q ? '#2B3440' : '#DCE1EA'
+  }));
+
+  /* ── o card do território parado ── */
+  const naoComecaram = rt7NaoComecaram();
+  const paradas = naoComecaram.map(u => ({
+    u, n: s.leads.filter(l => String(l.responsavel_owner_id) === String(u.ownerId)).length
+  })).filter(x => x.n > 0).sort((a, b) => b.n - a.n);
+  const totalParadas = paradas.reduce((t, x) => t + x.n, 0);
+  const orfao = totalParadas ? [
+    { rot: 'transferir para quem cobre a praça hoje', on: 'orfao:transferir', bg: '#E51A31', cor: '#FFFDF8', borda: '#E51A31' },
+    { rot: 'manter reservado para a entrada deles', on: 'orfao:reservar', bg: '#FDFEFF', cor: '#2B3440', borda: '#DCE1EA' },
+    { rot: 'ver as contas', on: 'orfao:ver', bg: '#FDFEFF', cor: '#2B3440', borda: '#DCE1EA' }
+  ] : [];
+
+  /* ── bloco 2: a rua de cada executivo ── */
+  const ruas = ativos.map(u => {
+    const oid = String(u.ownerId);
+    const r = m.porRep.find(x => x.ownerId === oid) || { acima: 0, abertos: 0 };
+    const e = rt7Estoque(oid);
+    const sem = s.semanas[oid];
+    const slotsCheios = sem ? (sem.grade || []).filter(x => x && x !== '__b').length : 0;
+    const temSemana = !!sem;
+    const critico = !temSemana || slotsCheios < 10;
+    return {
+      ini: (u.nome || oid).split(' ').map(x => x[0]).slice(0, 2).join(''),
+      nome: u.nome || oid, praca: (rt7PracaDoRep(u) || {}).nome || '',
+      avBg: critico ? '#6E1210' : '#1E9E7B',
+      bg: critico ? '#FDF7F7' : '#FDFEFF',
+      borda: critico ? '#E3C6C6' : '#E2E6EE',
+      /* OS CINCO QUADRADINHOS, um por dia útil. A grade de planos_semanais é 5×7 em
+         sequência (7 horários por dia), então cada bloco de 7 vira um quadradinho, e o
+         quanto ele está cheio vira a opacidade. Sem semana montada, os cinco aparecem
+         apagados — a linha continua comparável de relance com a dos colegas. */
+      grade: [0, 1, 2, 3, 4].map(dia => {
+        const doDia = temSemana ? (sem.grade || []).slice(dia * 7, dia * 7 + 7) : [];
+        const cheios = doDia.filter(x => x && x !== '__b').length;
+        const cor = !temSemana ? '#EDEBE5' : (cheios >= 5 ? '#1E9E7B' : (cheios >= 2 ? '#B07C1F' : (cheios ? '#F0B45C' : '#EDEBE5')));
+        const titulo = ['segunda', 'terça', 'quarta', 'quinta', 'sexta'][dia]
+          + (temSemana ? ': ' + cheios + ' de 7 horários' : ': semana não montada');
+        return '<span title="' + titulo + '" style="width:11px;height:11px;border-radius:3px;background:'
+          + cor + ';border:1px solid ' + (temSemana ? 'transparent' : '#E4E0D6') + ';flex:none;"></span>';
+      }).join(''),
+      gradeCor: temSemana ? (slotsCheios >= 20 ? '#1E9E7B' : '#B07C1F') : '#6E1210',
+      /* o rótulo ao lado: curto, porque o espaço dele é de rótulo, não de frase */
+      slots: temSemana ? slotsCheios + '/35' : 'não montada',
+      rota: e.naRota ? e.naRota + ' na rota' : 'nenhuma conta na rota',
+      rotaCor: e.naRota ? '#1E9E7B' : '#8A3B3B',
+      /* CHECK-IN AINDA NÃO CHEGA AQUI, e a tela não finge: o realizado do Expogo é
+         sincronizado para o HubSpot pelo robô da Daily, e não há contador por semana
+         exposto no snapshot. Dizer "0 cumpridos" seria acusar o time de não ter ido à
+         rua quando o que falta é a medida. */
+      cump: 'check-in não medido nesta tela',
+      cumpCor: '#7A8494',
+      alvo: e.carteira + ' na carteira · ' + e.fila + ' na fila',
+      alvoCor: '#7A8494',
+      leitura: !temSemana
+        ? 'não montou a semana no Planejamento — sem grade, a rota do Expogo nasce vazia'
+        : (slotsCheios < 10
+          ? 'só ' + slotsCheios + ' de 35 slots preenchidos — a semana dele está mais vazia que cheia'
+          : slotsCheios + ' de 35 slots preenchidos, com ' + e.carteira + ' contas na carteira para alimentar'),
+      leiaCor: critico ? '#6E1210' : '#1E9E7B',
+      btRot: critico ? 'cobrar rota no WhatsApp →' : 'no ritmo',
+      btBg: critico ? '#E51A31' : '#EAF6F1',
+      btCor: critico ? '#FFFDF8' : '#1E9E7B',
+      btBorda: critico ? '#E51A31' : '#CBE8DD',
+      acao: critico ? 'whats:' + oid : 'nada:' + oid
+    };
+  });
+
+  /* ── bloco 3: radar, os maiores scores em jogo ── */
+  const tops = s.leads
+    .filter(l => l.status !== 'pendente')
+    .map(l => ({ l, sc: rt7Score(l) }))
+    .filter(x => x.sc != null)
+    .sort((a, b) => b.sc - a.sc)
+    .slice(0, 6)
+    .map(({ l, sc }, i) => {
+      const dono = String(l.responsavel_owner_id || '');
+      const ativo = ativos.some(u => String(u.ownerId) === dono);
+      const primeiroSemDono = i === 0 && !ativo;
+      return {
+        score: String(sc), cor: primeiroSemDono ? '#6E1210' : rt7CorScore(sc),
+        nome: l.nome || 'sem nome',
+        nota: (l.nota != null ? '★ ' + l.nota : '★ —'),
+        avals: (l.avaliacoes != null ? l.avaliacoes + ' avaliações' : 'sem avaliações'),
+        motivo: l.categoria || l.bairro || l.cidade || 'sem categoria na fonte',
+        /* SINAIS DE DOR SAEM DO DADO QUE TEMOS, e nao de reviews. A prancha propunha
+           chips como "so aceita dinheiro" e "fila constante", que sairiam da leitura das
+           avaliacoes — e nos nao coletamos review nenhuma. Inventar esses chips seria
+           por na tela uma conclusao sobre a operacao do restaurante que ninguem apurou.
+           Estes saem de campo preenchido, e cada um diz algo util para preparar a visita. */
+        sinais: (function () {
+          const sig = [];
+          const av = Number(l.avaliacoes);
+          if (isFinite(av) && av >= 500) sig.push(av + ' avaliações — volume alto');
+          if (!l.telefone) sig.push('sem telefone — buscar pelo CNPJ');
+          if (l.ja_existe_hubspot) sig.push('já tem ficha no HubSpot');
+          if (l.data_abertura) {
+            const dias = Math.round((Date.now() - new Date(l.data_abertura).getTime()) / 86400000);
+            if (isFinite(dias) && dias >= 0 && dias < 365) sig.push('abriu há ' + dias + 'd — ainda escolhendo sistema');
+          }
+          return sig.slice(0, 3);
+        }()),
+        dono: ativo ? rt7Nome(dono).split(' ')[0] : (dono ? rt7Nome(dono).split(' ')[0] + ' (não começou)' : 'sem dono'),
+        status: l.status === 'na_rota' ? 'na rota' : (l.ja_existe_hubspot ? 'já no funil' : 'na carteira'),
+        stBg: primeiroSemDono ? '#6E1210' : (l.status === 'na_rota' ? '#EAF6F1' : '#F4F1EA'),
+        stCor: primeiroSemDono ? '#FDFEFF' : (l.status === 'na_rota' ? '#1E9E7B' : '#5B667A'),
+        prox: l.status === 'na_rota' ? 'já está na rota da semana' : 'entra na próxima rota do dono',
+        proxCor: '#7A8494'
+      };
+    });
+
+  const semDono = s.leads.filter(l => !l.responsavel_owner_id).length;
+  const secos = estoque.filter(e => e.semCor === '#E51A31').length;
+  const naFila = s.leads.filter(l => l.status === 'pendente').length;
+
+  return {
+    quando: (DATA.hubspotUpdatedAtFmt || 'sem carimbo'),
+    kpis: [
+      { rot: 'Na fila para aprovar', v: String(naFila), de: 'aguardando você', cor: naFila ? '#F0B45C' : '#7FD9BE' },
+      { rot: 'Contas paradas', v: String(totalParadas), de: 'com quem não começou', cor: totalParadas ? '#FF5F6E' : '#7FD9BE' },
+      { rot: 'Backlog seco', v: String(secos), de: 'executivo(s) < 1 semana', cor: secos ? '#FF5F6E' : '#7FD9BE' },
+      { rot: 'Na carteira do time', v: String(s.leads.filter(l => l.status === 'atribuido').length), de: 'contas validadas', cor: '#FFFDF8' },
+      { rot: 'Sem dono', v: String(semDono), de: 'roteamento por território', cor: semDono ? '#F0B45C' : '#7FD9BE' }
+    ],
+    temToast: !!s.toast, toast: s.toast || '',
+    filaTitulo: selNome ? 'Fila de ' + selNome.split(' ')[0] : 'Fila',
+    filaSub: praca ? praca.nome : (selNome ? 'contas aguardando sua aprovação' : ''),
+    fila, selN: String(nMarcadas),
+    aprovarLote: 'aprovar',
+    verTodas: 'vertodas',
+    verTodasRot: s.verTodas ? 'ver menos ▴' : 'ver as ' + filaTodos.length + ' ▸',
+    /* CLIQUE MORTO NAO: a primeira versao mandava esses chips para uma acao inexistente
+       (nada:fonte) — eles pareciam botao, eram botao no DOM, e nao faziam nada. Agora
+       cada um conta de onde a fila vem, que e a unica coisa util que um chip de legenda
+       tem a dizer. */
+    fontes: RT7_FONTES.map(f => ({ rot: f.ativa ? f.rot : f.rot + ' ·', on: 'sobrefonte:' + f.id })),
+    estoque,
+    /* o sc-if do painel de disparo se chama temImp na prancha */
+    temImp: !!impU,
+    impAberto: !!impU,
+    impExecNome: impU ? (impU.nome || '') : '',
+    impRegioes, impFontes, impQtds,
+    impDisparar: 'disparar',
+    impFechar: 'disparo:',
+    orfao,
+    orfaoTitulo: totalParadas
+      ? totalParadas + ' contas validadas paradas com quem ainda não começou'
+      : 'nenhuma conta parada — todo território tem dono ativo',
+    orfaoDetalhe: totalParadas
+      ? paradas.map(x => (x.u.nome || '').split(' ')[0] + ': ' + x.n).join(' · ')
+        + '. Elas já passaram pelo corte de qualidade e pelo roteamento — só não têm quem visite.'
+      : 'os ' + s.leads.length + ' leads da base estão com executivos ativos.',
+    ruas, tops,
+    notaDeFonte: 'Fila e carteira: Supabase leads_prospeccao (' + s.leads.length + ' contas) · semana 5×7: planos_semanais'
+      + ' · funil: HubSpot, ' + (DATA.hubspotUpdatedAtFmt || 'sem carimbo')
+      + ' · território: data/leads-referencia.json · importação: Casa dos Dados sob demanda por api/buscar-leads,'
+      + ' o mesmo coletor do cron de segunda. Score = nota ponderada por avaliações; lead sem nota aparece como "—",'
+      + ' nunca como zero. Check-in do Expogo não é medido nesta tela.'
+  };
+}
+
+/* a praça do executivo, com as regiões que o prewarm conhece */
+function rt7PracaDoRep(u) {
+  const nome = String(u.nome || u.name || '');
+  const ref = (DATA.leadsReferencia && DATA.leadsReferencia.length ? DATA.leadsReferencia : []);
+  const p = ref.find(x => (x.responsaveis || []).some(r => String(r).toLowerCase() === nome.toLowerCase()));
+  if (!p) return null;
+  const bairros = [...new Set((p.leads || []).map(l => l.bairro).filter(Boolean))];
+  return { nome: p.nome, regioes: bairros.slice(0, 8) };
+}
+
+/* ── LER A TORNEIRA E A RUA ────────────────────────────────────────────────────── */
+async function rt7Carregar() {
+  if (typeof supa === 'undefined' || !supa) { RT7_ESTADO.carregou = true; return; }
+  try {
+    /* a base inteira: 1.335 linhas e crescendo. Paginado de propósito — o limite padrão
+       do PostgREST cortaria em 1.000 e a tela mostraria estoque menor do que existe, que
+       é o tipo de erro que ninguém percebe olhando. */
+    let todos = [], de = 0;
+    for (let i = 0; i < 8; i++) {
+      const { data, error } = await supa.from('leads_prospeccao')
+        .select('id,nome,categoria,endereco,bairro,cidade,telefone,nota,avaliacoes,fonte,status,responsavel_owner_id,cnpj,data_abertura,ja_existe_hubspot,created_at,updated_at')
+        .order('created_at', { ascending: false }).range(de, de + 999);
+      if (error) throw error;
+      todos = todos.concat(data || []);
+      if (!data || data.length < 1000) break;
+      de += 1000;
+    }
+    RT7_ESTADO.leads = todos;
+
+    /* CONSUMO POR SEMANA: contas que saíram para a rua nas últimas 4 semanas. Se não
+       houver movimento registrado, fica UNDEFINED e a tela diz "consumo não medido" —
+       ver rt7Estoque. */
+    const corte = Date.now() - 28 * 86400000;
+    const consumo = {};
+    todos.forEach(l => {
+      if (l.status !== 'na_rota') return;
+      const q = new Date(l.updated_at || l.created_at).getTime();
+      if (!isFinite(q) || q < corte) return;
+      const k = String(l.responsavel_owner_id || '');
+      consumo[k] = (consumo[k] || 0) + 1;
+    });
+    RT7_ESTADO.estoqueSemana = {};
+    Object.keys(consumo).forEach(k => { RT7_ESTADO.estoqueSemana[k] = consumo[k] / 4; });
+
+    /* a semana 5x7 de cada um */
+    const { data: sem } = await supa.from('planos_semanais').select('owner_id,grade,regioes,data_segunda,fechado_em')
+      .order('data_segunda', { ascending: false }).limit(40);
+    RT7_ESTADO.semanas = {};
+    (sem || []).forEach(l => { const k = String(l.owner_id); if (!RT7_ESTADO.semanas[k]) RT7_ESTADO.semanas[k] = l; });
+  } catch (e) {
+    console.log('rotas: nao consegui ler - ' + (e && e.message));
+  }
+  RT7_ESTADO.carregou = true;
+}
+
+/* ── APROVAR: a única ação desta tela que muda o trabalho de campo de outra pessoa ──
+   Por isso ela CONFIRMA antes (decisão do Julyan em 06/09). O resto dos botões desta aba
+   é navegação ou disparo de busca; este cria visita obrigatória na semana de alguém. */
+async function rt7Aprovar() {
+  const ids = Object.keys(RT7_ESTADO.marcadas).filter(k => RT7_ESTADO.marcadas[k]);
+  if (!ids.length) { RT7_ESTADO.toast = 'marque ao menos uma conta para aprovar'; return; }
+  const dono = RT7_ESTADO.sel || (RT7_ESTADO.leads.find(l => String(l.id) === ids[0]) || {}).responsavel_owner_id;
+  const nome = rt7Nome(dono);
+  const ok = (typeof confirm === 'function')
+    ? confirm('Aprovar ' + ids.length + ' conta(s) para ' + nome + '?\n\n'
+      + 'Elas entram na carteira dele e viram visita obrigatória na rota do Expogo.')
+    : false;
+  if (!ok) { RT7_ESTADO.toast = 'nada foi aprovado'; return; }
+  if (typeof supa === 'undefined' || !supa) { RT7_ESTADO.toast = 'sem conexão aqui — nada foi gravado'; return; }
+  try {
+    const { error } = await supa.from('leads_prospeccao')
+      .update({ status: 'atribuido', updated_at: new Date().toISOString() })
+      .in('id', ids);
+    if (error) throw error;
+    /* a ficha JA ESTA COMPLETA na linha: nome, endereço, telefone, nota, fonte e cnpj
+       vieram no import. Aprovar é mudar o status, não recriar o registro — recriar seria
+       a segunda cópia da mesma conta, que é exatamente o que o dedupe do import evita. */
+    RT7_ESTADO.leads.forEach(l => { if (ids.indexOf(String(l.id)) >= 0) l.status = 'atribuido'; });
+    RT7_ESTADO.marcadas = {};
+    RT7_ESTADO.toast = ids.length + ' conta(s) na carteira de ' + nome.split(' ')[0] + ' ✓';
+  } catch (e) {
+    RT7_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
+  }
+}
+
+/* ── DISPARAR A BUSCA: chama api/buscar-leads, que reusa o coletor semanal ──────── */
+async function rt7Disparar() {
+  const oid = RT7_ESTADO.impAberto;
+  const u = rt7Ativos().find(x => String(x.ownerId) === String(oid));
+  if (!u) return;
+  const praca = rt7PracaDoRep(u);
+  if (!praca) { RT7_ESTADO.toast = 'não achei a praça dele em leads-referencia.json'; return; }
+  const regioes = Object.keys(RT7_ESTADO.impRegioes).filter(k => RT7_ESTADO.impRegioes[k]);
+  if (!regioes.length) { RT7_ESTADO.toast = 'escolha ao menos uma região antes de disparar'; return; }
+  /* o município sai do nome da praça ("Vila Velha/ES" -> "Vila Velha"): é ele que o
+     roteador do import conhece. As regiões escolhidas NÃO estreitam a Casa dos Dados
+     (ela busca por município) — o painel avisa isso, e elas ficam registradas no toast
+     para o gestor saber o que pediu. */
+  const municipio = String(praca.nome).split('/')[0].trim();
+  RT7_ESTADO.importando = true;
+  RT7_ESTADO.toast = 'buscando em ' + municipio + '…';
+  renderRotas();
+  try {
+    const token = (typeof tokenDeSessaoGlobal === 'function') ? await tokenDeSessaoGlobal() : null;
+    const resp = await fetch('/api/buscar-leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: JSON.stringify({ municipio, quantidade: RT7_ESTADO.impQtd })
+    });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
+    RT7_ESTADO.toast = d.inseridos
+      ? d.inseridos + ' conta(s) nova(s) em ' + municipio + ' — na fila para você aprovar'
+      : (d.aviso || 'a busca rodou e não trouxe conta nova nesta praça');
+    RT7_ESTADO.impAberto = null;
+    await rt7Carregar();
+  } catch (e) {
+    RT7_ESTADO.toast = 'a importação falhou: ' + (e && e.message ? e.message : 'erro desconhecido');
+  }
+  RT7_ESTADO.importando = false;
+}
+
+async function rt7Executar(acao) {
+  const i = String(acao).indexOf(':');
+  const verbo = i < 0 ? acao : String(acao).slice(0, i);
+  const a = i < 0 ? '' : String(acao).slice(i + 1);
+  const S = RT7_ESTADO;
+
+  if (verbo === 'sel') { S.sel = a || null; S.marcadas = {}; S.verTodas = false; S.toast = null; }
+  else if (verbo === 'vertodas') { S.verTodas = !S.verTodas; }
+  else if (verbo === 'marcar') { S.marcadas[a] = !S.marcadas[a]; }
+  else if (verbo === 'abrir') { S.abertos[a] = !S.abertos[a]; }
+  else if (verbo === 'disparo') { S.impAberto = (!a || S.impAberto === a) ? null : a; S.impRegioes = {}; S.toast = null; }
+  else if (verbo === 'reg') { S.impRegioes[a] = !S.impRegioes[a]; }
+  else if (verbo === 'fonte') { S.impFontes[a] = !S.impFontes[a]; }
+  else if (verbo === 'fonteoff') {
+    /* clique numa fonte indisponível NÃO é morto: ele explica por que ela está apagada */
+    const f = RT7_FONTES.find(x => x.id === a);
+    S.toast = f ? f.rot + ': ' + f.porque : 'fonte indisponível';
+  }
+  else if (verbo === 'qtd') { S.impQtd = Number(a) || 25; }
+  else if (verbo === 'sobrefonte') {
+    const fo = RT7_FONTES.find(x => x.id === a);
+    S.toast = !fo ? 'fonte desconhecida'
+      : (fo.ativa ? fo.rot + ': ativa — busca por município, e é ela que o botão dispara'
+        : fo.rot + ': ' + fo.porque);
+  }
+  else if (verbo === 'disparar') { await rt7Disparar(); }
+  else if (verbo === 'aprovar') { await rt7Aprovar(); }
+  else if (verbo === 'whats') {
+    const u = rt7Ativos().find(x => String(x.ownerId) === String(a));
+    const sem = S.semanas[String(a)];
+    const slots = sem ? (sem.grade || []).filter(x => x && x !== '__b').length : 0;
+    const txt = 'Oi ' + String((u && u.nome) || '').split(' ')[0] + ', vi que sua semana está com '
+      + (sem ? slots + ' de 35 slots' : 'a grade ainda não montada')
+      + '. Consegue fechar o planejamento hoje pra rota sair no Expogo?';
+    /* abre o WhatsApp Web sem número: o telefone do time não está no dado da tela, e
+       inventar link com número errado é pior que abrir a busca */
+    window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank', 'noopener');
+    S.toast = 'mensagem pronta no WhatsApp';
+  }
+  else if (verbo === 'orfao') {
+    if (a === 'ver') { S.sel = null; S.toast = 'as contas paradas estão listadas por pessoa no próprio card'; }
+    else if (a === 'reservar') { S.toast = 'mantidas reservadas — nada mudou de dono'; }
+    else if (a === 'transferir') {
+      S.toast = 'transferência em massa não está ligada: mover 436 contas de dono é decisão que precisa de regra por praça, não de um clique. Me diga a regra e eu ligo.';
+    }
+  }
+  renderRotas();
+}
+
+
+/* ── DESENHA A ABA ROTAS & PROSPECÇÃO ────────────────────────────────────────── */
+function renderRotas() {
+  const raiz = document.getElementById('rt7Raiz');
+  if (!raiz) return;
+  if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
+  const d = rt7Dados();
+  const { quando, kpis, temToast, toast, filaTitulo, filaSub, fila, selN, aprovarLote, verTodas, verTodasRot, fontes, estoque, temImp, impAberto, impExecNome, impRegioes, impFontes, impQtds, impDisparar, impFechar, orfao, orfaoTitulo, orfaoDetalhe, ruas, tops, notaDeFonte } = d;
+  raiz.innerHTML = `<div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
+
+        <div style="background:#16181D;color:#FFFDF8;padding:16px 22px;display:flex;align-items:center;gap:28px;flex-wrap:wrap;">
+          <div style="min-width:0;">
+            <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${quando} · Supabase leads_prospeccao ao vivo</span>
+            <b style="display:block;font:900 22px 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;">Rotas &amp; Prospecção, Julyan — a torneira e a rua, numa tela só</b>
+          </div>
+          <div style="display:flex;gap:26px;flex-wrap:wrap;margin-left:auto;">
+            ${(kpis||[]).map(k => `
+              <span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${k.rot}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 24px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span></span>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="padding:16px 22px 6px;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · Abastecer <span style="color:#7A8494;">— importa, você aprova, cai na carteira do dono da praça · sem aprovação nada chega no executivo</span></span>
+            ${(fontes||[]).map(fo => `
+              <button data-rt7-acao="${fo.on}" style="display:inline-flex;align-items:center;gap:6px;min-height:30px;padding:0 13px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:800 10px 'Manrope',sans-serif;color:#5B667A;cursor:pointer;white-space:nowrap;" data-rt7-hv="0">⤓ ${fo.rot}</button>
+            `).join('')}
+            ${(temToast) ? `
+              <span style="font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:5px 12px;overflow-wrap:anywhere;">${toast}</span>
+            ` : ''}
+          </div>
+
+          <div style="display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:12px;">
+            <div style="background:#FBFAF6;border:1px solid #E4E0D6;border-radius:12px;padding:12px 15px;">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#2B3440;">${filaTitulo} <span style="color:#7A8494;">· ${filaSub}</span></span>
+                <button data-rt7-acao="${verTodas}" style="margin-left:auto;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:800 10px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;white-space:nowrap;" data-rt7-hv="1">${verTodasRot}</button>
+                <button data-rt7-acao="${aprovarLote}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border:0;border-radius:999px;background:#1E9E7B;font:800 10.5px 'Manrope',sans-serif;color:#FFFDF8;cursor:pointer;white-space:nowrap;" data-rt7-hv="2">aprovar selecionadas (${selN}) →</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:5px;margin-top:9px;">
+                ${(fila||[]).map(f => `
+                  <div style="background:${f.bg};border:1px solid ${f.borda};border-radius:10px;padding:7px 11px;min-width:0;">
+                  <div style="display:flex;align-items:center;gap:9px;min-width:0;">
+                    <button data-rt7-acao="${f.marcar}" style="flex:none;width:20px;height:20px;border-radius:6px;border:1.5px solid ${f.ckBorda};background:${f.ckBg};color:#FFFDF8;font:900 11px 'Archivo',sans-serif;cursor:pointer;line-height:1;padding:0;">${f.ck}</button>
+                    <span style="flex:none;width:34px;text-align:center;"><b style="display:block;font:900 14px 'Archivo',sans-serif;color:${f.scCor};font-variant-numeric:tabular-nums;line-height:1;">${f.score}</b><span style="font:900 6.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">score</span></span>
+                    <button data-rt7-acao="${f.abrir}" style="text-align:left;border:0;background:transparent;cursor:pointer;padding:0;min-width:0;flex:1;" data-rt7-hv="3"><b style="font:800 11.5px 'Archivo',sans-serif;color:#2B3440;">${f.nome}</b> <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">· ${f.tipo} ${f.seta}</span><span style="display:block;font:700 9px/1.4 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.motivo}</span></button>
+                    <span style="flex:none;font:800 10px 'Manrope',sans-serif;color:#B07C1F;white-space:nowrap;">★ ${f.nota} <span style="color:#7A8494;">· ${f.avals}</span></span>
+                    ${(f.semTel) ? `<span style="flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#8A3B3B;background:#FDF7F7;border:1px solid #E3C6C6;border-radius:5px;padding:2px 6px;white-space:nowrap;">sem telefone</span>` : ''}
+                    <span style="flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#5B667A;background:#F4F1EA;border-radius:5px;padding:2px 7px;white-space:nowrap;">${f.fonte}</span>
+                    <span style="flex:none;font:800 9.5px 'Manrope',sans-serif;color:${f.donoCor};white-space:nowrap;">→ ${f.dono}</span>
+                  </div>
+                  ${(f.aberto) ? `
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;border-top:1px dashed #E3DDD0;margin-top:7px;padding-top:7px;">
+                      <span style="font:700 10px/1.5 'Manrope',sans-serif;color:#2B3440;min-width:0;">📍 ${f.end}</span>
+                      <span style="font:700 10px 'Manrope',sans-serif;color:${f.telCor};white-space:nowrap;font-variant-numeric:tabular-nums;">✆ ${f.tel}</span>
+                      <span style="margin-left:auto;font:700 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">tudo isso vai junto na ficha do Expogo ao aprovar</span>
+                    </div>
+                  ` : ''}
+                  </div>
+                `).join('')}${fila.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nenhuma conta aguardando aprovação para este executivo. Use "⤓ importar" à direita para buscar contas novas na praça dele.</span>`}
+              </div>
+              <p style="margin:8px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;">▸ <b style="color:#2B3440;">nada entra sozinho</b>: você dispara a importação por praça no painel ao lado · score = nota × volume × sinais de dor · o dono é automático pelo território oficial · aprovar grava no Supabase e vira <b style="color:#2B3440;">visita obrigatória no Expogo</b> · sem telefone não bloqueia: o robô busca pelo CNPJ depois</p>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:12px;min-width:0;">
+              <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:12px 15px;">
+                <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#B07C1F;">Quem precisa de contas — o gatilho é seu <span style="color:#7A8494;">· estoque = contas restantes ÷ consumo/semana na rua</span></span>
+                <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+                  ${(estoque||[]).map(es => `
+                    <span style="display:flex;align-items:center;gap:9px;padding:3px 6px;min-width:0;background:${es.selBg};border-radius:8px;">
+                      <button data-rt7-acao="${es.ver}" title="ver a fila deste executivo" style="text-align:left;border:0;background:transparent;cursor:pointer;font:800 10.5px 'Manrope',sans-serif;color:${es.nomeCor};width:148px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0;" data-rt7-hv="4">${es.rot} ▸</button>
+                      <span style="flex:1;height:8px;border-radius:999px;background:#EDEBE5;overflow:hidden;"><span style="display:block;height:100%;width:${es.pct};background:${es.cor};border-radius:999px;"></span></span>
+                      <b style="font:900 10.5px 'Archivo',sans-serif;color:${es.cor};font-variant-numeric:tabular-nums;flex:none;width:22px;text-align:right;">${es.n}</b>
+                      <span style="font:800 9px 'Manrope',sans-serif;color:${es.semCor};flex:none;width:64px;text-align:right;white-space:nowrap;">${es.sem}</span>
+                      <button data-rt7-acao="${es.on}" style="flex:none;display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border:1.5px solid ${es.btBorda};border-radius:999px;background:${es.btBg};font:800 9px 'Manrope',sans-serif;color:${es.btCor};cursor:pointer;white-space:nowrap;" data-rt7-hv="5">${es.btRot}</button>
+                    </span>
+                  `).join('')}
+                </div>
+                ${(temImp) ? `
+                  <div style="margin-top:9px;background:#F4F1EA;border:1.5px solid #2B3440;border-radius:10px;padding:10px 12px;">
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#2B3440;">Disparar importação — ${impExecNome}</span>
+                      <button data-rt7-acao="${impFechar}" style="margin-left:auto;flex:none;width:22px;height:22px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 11px 'Manrope',sans-serif;cursor:pointer;line-height:1;padding:0;" data-rt7-hv="0">✕</button>
+                    </div>
+                    <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;margin-top:7px;">regiões da praça <span style="text-transform:none;letter-spacing:0;font:700 9px 'Manrope',sans-serif;">— escolha onde caçar</span></span>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">
+                      ${(impRegioes||[]).map(rg => `
+                        <button data-rt7-acao="${rg.on}" style="display:inline-flex;align-items:center;min-height:26px;padding:0 11px;border:1.5px solid ${rg.borda};border-radius:999px;background:${rg.bg};font:800 9.5px 'Manrope',sans-serif;color:${rg.cor};cursor:pointer;white-space:nowrap;">${rg.rot}</button>
+                      `).join('')}${impRegioes.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">A praça dele não tem bairros mapeados em leads-referencia.json.</span>`}
+                    </div>
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;">
+                      <span style="min-width:0;"><span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">fontes</span><span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">${(impFontes||[]).map(ft => `<button data-rt7-acao="${ft.on}" style="display:inline-flex;align-items:center;min-height:26px;padding:0 11px;border:1.5px solid ${ft.borda};border-radius:999px;background:${ft.bg};font:800 9.5px 'Manrope',sans-serif;color:${ft.cor};cursor:pointer;white-space:nowrap;">${ft.rot}</button>`).join('')}</span></span>
+                      <span style="min-width:0;"><span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">quantas (após o corte)</span><span style="display:flex;gap:4px;margin-top:4px;">${(impQtds||[]).map(q => `<button data-rt7-acao="${q.on}" style="display:inline-flex;align-items:center;min-height:26px;padding:0 11px;border:1.5px solid ${q.borda};border-radius:999px;background:${q.bg};font:800 9.5px 'Manrope',sans-serif;color:${q.cor};cursor:pointer;white-space:nowrap;">${q.rot}</button>`).join('')}</span></span>
+                      <button data-rt7-acao="${impDisparar}" style="margin-left:auto;align-self:flex-end;display:inline-flex;align-items:center;min-height:32px;padding:0 15px;border:0;border-radius:999px;background:#E51A31;font:900 10.5px 'Archivo',sans-serif;letter-spacing:.02em;color:#FFFDF8;cursor:pointer;white-space:nowrap;" data-rt7-hv="2">⤓ disparar importação →</button>
+                    </div>
+                  </div>
+                ` : ''}
+                <p style="margin:8px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#8A6516;">▸ consumo real: visitas a contas-alvo/semana no Expogo · regra: <b>abaixo de 1 semana de estoque, importe hoje</b> · você escolhe executivo, regiões, fontes e quantidade — nada entra sozinho</p>
+              </div>
+              <div style="background:#FDF7F7;border:1.5px solid #6E1210;border-radius:12px;padding:12px 15px;">
+                <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#FDFEFF;background:#6E1210;border-radius:5px;padding:3px 8px;">território órfão — decisão sua</span>
+                <b style="display:block;font:900 15px 'Archivo',sans-serif;color:#6E1210;margin-top:7px;">${orfaoTitulo}</b>
+                <p style="margin:5px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#2B3440;">${orfaoDetalhe}</p>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">
+                  ${(orfao||[]).map(of => `
+                    <button data-rt7-acao="${of.on}" style="display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1.5px solid ${of.borda};border-radius:999px;background:${of.bg};font:800 10px 'Manrope',sans-serif;color:${of.cor};cursor:pointer;white-space:nowrap;" data-rt7-hv="6">${of.rot}</button>
+                  `).join('')}${orfao.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;"></span>`}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 22px 6px;">
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">2 · A rua de cada executivo <span style="color:#7A8494;">— semana planejada (grade 5×7), rota enviada e cumprida (Expogo) · clique cobra em 1 gesto</span></span>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;">
+            ${(ruas||[]).map(r => `
+              <div style="display:flex;align-items:center;gap:14px;background:${r.bg};border:1.5px solid ${r.borda};border-radius:12px;padding:10px 15px;min-width:0;flex-wrap:wrap;">
+                <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${r.avBg};color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">${r.ini}</span>
+                <span style="width:190px;flex:none;min-width:0;"><b style="display:block;font:800 13px 'Archivo',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.nome}</b><span style="font:700 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">${r.praca}</span></span>
+                <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">semana 5×7</span><span style="display:flex;align-items:center;gap:5px;"><span style="display:flex;gap:2px;">${r.grade}</span><b style="font:800 11px 'Manrope',sans-serif;color:${r.gradeCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.slots}</b></span></span>
+                <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">rota → Expogo</span><b style="font:800 11px 'Manrope',sans-serif;color:${r.rotaCor};white-space:nowrap;">${r.rota}</b></span>
+                <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">cumprido na semana</span><b style="font:800 11px 'Manrope',sans-serif;color:${r.cumpCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.cump}</b></span>
+                <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">contas-alvo cobertas</span><b style="font:800 11px 'Manrope',sans-serif;color:${r.alvoCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.alvo}</b></span>
+                <span style="flex:1;min-width:140px;font:700 10.5px/1.45 'Manrope',sans-serif;color:${r.leiaCor};">▸ ${r.leitura}</span>
+                <button data-rt7-acao="${r.acao}" style="margin-left:auto;flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1.5px solid ${r.btBorda};border-radius:999px;background:${r.btBg};font:800 10px 'Manrope',sans-serif;color:${r.btCor};cursor:pointer;white-space:nowrap;" data-rt7-hv="5">${r.btRot}</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="padding:16px 22px 18px;">
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#1E9E7B;">3 · Radar de leads — os maiores scores em jogo <span style="color:#7A8494;">— score = nota × volume × sinais de dor (só dinheiro, fila, QR, grupos) · onde cada um está e qual o próximo gesto</span></span>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
+            ${(tops||[]).map(t => `
+              <div style="background:#FBFAF6;border:1px solid #E4E0D6;border-left:4px solid ${t.cor};border-radius:11px;padding:10px 13px;min-width:0;">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                  <span style="flex:none;text-align:center;"><b style="display:block;font:900 17px 'Archivo',sans-serif;color:${t.cor};font-variant-numeric:tabular-nums;line-height:1;">${t.score}</b><span style="font:900 6.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">score</span></span>
+                  <b style="font:800 12px 'Archivo',sans-serif;color:#2B3440;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.nome}</b>
+                  <span style="margin-left:auto;flex:none;font:800 10px 'Manrope',sans-serif;color:#B07C1F;white-space:nowrap;">★ ${t.nota} · ${t.avals}</span>
+                </div>
+                <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">
+                  ${(t.sinais||[]).map(sn => `
+                    <span style="font:800 8.5px 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #F0DFB6;border-radius:999px;padding:2px 8px;white-space:nowrap;">${sn}</span>
+                  `).join('')}
+                </div>
+                <span style="display:block;font:700 9.5px/1.45 'Manrope',sans-serif;color:#5B667A;margin-top:5px;">${t.motivo}</span>
+                <div style="display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap;">
+                  <span style="font:800 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">${t.dono}</span>
+                  <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${t.stCor};background:${t.stBg};border-radius:5px;padding:2px 7px;white-space:nowrap;">${t.status}</span>
+                  <span style="margin-left:auto;font:700 9px 'Manrope',sans-serif;color:${t.proxCor};white-space:nowrap;">${t.prox}</span>
+                </div>
+              </div>
+            `).join('')}${tops.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nenhum lead com nota na base ainda — a Casa dos Dados traz CNPJ sem avaliação, e o score precisa de nota para existir.</span>`}
+          </div>
+        </div>
+
+        <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 22px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${notaDeFonte}</p>
+      </div>
+    
+  
+</section>`;
+}
+
+document.addEventListener('click', ev => {
+  const alvo = ev.target.closest && ev.target.closest('[data-rt7-acao]');
+  if (!alvo) return;
+  ev.preventDefault();
+  rt7Executar(alvo.getAttribute('data-rt7-acao'));
+});
+
+async function rt7Iniciar() {
+  if (!sessaoAtual || sessaoAtual.role !== 'manager') return;
+  renderRotas();
+  await rt7Carregar();
+  renderRotas();
 }
 
 async function renderPDIs() {

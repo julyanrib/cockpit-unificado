@@ -470,7 +470,28 @@ async function main() {
   }
 }
 
-main().catch(e => {
-  console.log('[backfill-casa-dos-dados] Falha geral:', e.message || e);
-  process.exit(1);
-});
+/* ── QUEM CHAMA ESTE ARQUIVO (06/09/26) ─────────────────────────────────────────
+   Como PROGRAMA (o cron de segunda, e o disparo manual do workflow): roda a rodada
+   inteira, todas as cidades. Como MODULO (api/buscar-leads.js, quando o gestor aperta
+   o botao na aba Rotas): nao roda nada sozinho — quem chama escolhe a cidade.
+   Sem esta guarda, um require aqui dispararia a varredura completa dentro de uma
+   requisicao HTTP. */
+if (require.main === module) {
+  main().catch(e => {
+    console.log('[backfill-casa-dos-dados] Falha geral:', e.message || e);
+    process.exit(1);
+  });
+}
+
+/* As pecas que a rota sob demanda reusa. Nada aqui e reimplementado do outro lado:
+   busca, normalizacao, filtro de foodservice e o envio para /api/importar-leads sao
+   ESTES, os mesmos que rodam toda segunda. */
+module.exports = {
+  CIDADES,
+  buscarCidade,
+  importarLote,
+  normalizar,
+  ehRedeGrande,
+  ehPessoaFisica,
+  ehForaDeFoodservice
+};
