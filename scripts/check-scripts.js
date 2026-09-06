@@ -1758,3 +1758,19 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ── 22. TODO BOTÃO DELEGADO TEM QUEM O ESCUTE (06/09/26) ─────────────────────────────
+   Nasceu de um defeito meu no mesmo dia: a fiação da Daily v2 do gestor ficou pendurada
+   no `if` que resolve o nó do board antigo, que a v2 havia substituído. 28 botões
+   desenhados, nenhum ligado — e build, 21 guardas e 26 suítes verdes, porque nada ali
+   está sintaticamente errado: o listener é registrado num nó ausente.
+
+   Arquivo próprio pelo mesmo motivo da 20 e da 21: gramática diferente (ela cruza o que a
+   tela EMITE com o que alguém ESCUTA, e conhece os três padrões de fiação que convivem
+   aqui — delegado, por nó, e a leitura de atributo, que de propósito não conta). */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-botao-delegado-sem-ouvinte.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
