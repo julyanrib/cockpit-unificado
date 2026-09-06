@@ -160,21 +160,17 @@ jobs:
       # ------------------------------------------------------------------
 
 
-      - name: Atualizar análise de coaching por executivo (IA — 1x por dia útil, semana corrente)
-        # AGORA é idempotente de verdade. O comentário anterior afirmava que já era
-        # ("apaga e regrava a análise da semana corrente (owner+semana)"), mas o rótulo
-        # de semana no script era uma janela deslizante de 7 dias terminando HOJE —
-        # então cada rodada criava uma semana nova e o delete nunca alcançava a linha
-        # anterior. Medido: 28 rótulos distintos desde 24/07, para 5 semanas reais.
-        # Corrigido em scripts/generate-individual-analysis.js (semana civil,
-        # segunda→domingo). O workflow de sexta continua à parte (fecha a semana e
-        # cuida do mensal).
-        if: steps.portao_ia.outputs.gerar == 'sim'
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: node scripts/generate-individual-analysis.js
+      # ------------------------------------------------------------------
+      # O COACHING DE SEGUNDA FOI FUNDIDO NO SEMANAL (05/09/26).
+      # Eram dois robôs lendo o MESMO funil com 4 dias de distância: este, na segunda de
+      # manhã (7 chamadas, escrevia os compromissos do 1:1 e a análise de coaching), e o
+      # generate-weekly-summary de sexta (1 de time + 7 individuais, escrevia a leitura
+      # da semana). Agora é uma rodada só, domingo 22h, e cada chamada individual devolve
+      # os dois conjuntos de campos: 15 chamadas por semana viraram 8.
+      # Consequência aqui: NENHUM passo deste workflow diário chama a IA. O portão
+      # steps.portao_ia continua existindo porque é ele que decide se vale commitar
+      # narrativas, mas nenhuma chamada de API depende mais dele.
+      # ------------------------------------------------------------------
 
       - name: Atualizar números de ganhos/ranking/reuniões (sem gerar texto de IA)
         env:

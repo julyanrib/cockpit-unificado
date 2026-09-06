@@ -1,14 +1,18 @@
-name: Resumo semanal (sexta-feira)
+name: Resumo semanal (domingo à noite)
 
 on:
   schedule:
-    # 16h em Brasília (19h UTC), toda sexta-feira — assim o plano já está pronto
-    # antes da daily de segunda, não gerado em cima da hora
-    - cron: '0 19 * * 5'
+    # DOMINGO 22h (Brasília) = 01:00 UTC de segunda (05/09/26, na fusão dos dois robôs).
+    # Era sexta 16h, e mudou por dois motivos: (1) sexta às 16h a semana ainda tem uma
+    # tarde inteira pela frente, então o "fechamento" fechava cedo; (2) o compromisso do
+    # 1:1 nasce aqui agora, e ele é da SEMANA — chegando domingo à noite, o executivo
+    # abre a tela na segunda de manhã com o plano já pronto, em vez de um plano escrito
+    # três dias antes.
+    - cron: '0 1 * * 1'
   workflow_dispatch:
     inputs:
       force_monthly_mesano:
-        description: 'Força o FECHAMENTO MENSAL (pro time/executivo em generate-weekly-summary.js, e pro coaching em generate-individual-analysis.js) pra um mês específico (AAAA-MM, ex: 2026-07), sem esperar a última sexta-feira real. Deixe em branco pra rodar normal.'
+        description: '(sem efeito desde 05/09/26 — o fechamento mensal foi apagado na revisão de custo de API. O campo fica para não quebrar disparos salvos.)'
         required: false
         type: string
 
@@ -44,16 +48,13 @@ jobs:
         # item B nunca é gerado nem em teste nem de verdade.
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          FORCE_MONTHLY_MESANO: ${{ inputs.force_monthly_mesano }}
-        run: node scripts/generate-weekly-summary.js
-
-      - name: Gerar análise individual de coaching (só o gestor vê)
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # AS CHAVES DO SUPABASE ENTRARAM NA FUSÃO (05/09/26): este passo agora escreve
+          # também a análise de coaching (tabela analise_individual_semanal) e publica o
+          # snapshot de narrativas com os compromissos do 1:1.
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-          FORCE_MONTHLY_MESANO: ${{ inputs.force_monthly_mesano }}
-        run: node scripts/generate-individual-analysis.js
+        run: node scripts/generate-weekly-summary.js
+
 
       - name: Gerar HTML final
         # SEM 'if': o fechamento mensal escreve em data/resumo-semanal.json igual ao
