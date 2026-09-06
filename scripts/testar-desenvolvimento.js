@@ -50,12 +50,19 @@ checar('os destinos reusam os caminhos que já existem',
   && template.indexOf('meuFunilFiltroEtapa = valor') > -1,
   'um quarto caminho próprio para o funil se desatualiza sozinho');
 
-/* ── 2. CTA SÓ COM DESTINO DERIVADO ──────────────────────────────────────────────
-   As ações da prosa semanal entram com ir:null. Se um dia alguém mapear a frase livre
-   para um destino, o CTA passa a apontar para um lugar adivinhado. */
-checar('prioridade vinda da prosa semanal não ganha CTA próprio',
-  /acoesSemana \|\| \[\]\)\.map\(t => \(\{ txt: t, ir: null \}\)\)/.test(template),
-  'texto livre da análise não tem categoria — CTA ali é chute');
+/* ── 2. TODA PRIORIDADE NASCE DO FUNIL AO VIVO ───────────────────────────────────
+   A regra ficou mais forte em 05/09: a prosa da análise deixou de ser fonte das três
+   prioridades. Ela vinha SEM destino (frase livre não tem categoria), então quanto mais
+   fresca a análise, pior ficava a aba — ela perdia os botões. Agora as três saem sempre
+   de acoesAoVivo, que carrega o dado que gerou cada frase.
+   Se alguém reintroduzir a prosa como fonte, esta checagem cai. */
+/* A segunda metade desta checagem exigia que 'comoAgirIndividual' aparecesse UMA vez no
+   arquivo — e ela reprovou na hora: o campo tem dois leitores legítimos, os dois do
+   GESTOR (a Minha Daily dele e o coaching). A regra é sobre a fonte das prioridades DESTA
+   aba, não sobre o campo existir no produto. */
+checar('as três prioridades saem do funil ao vivo',
+  template.indexOf('const acoesHoje = acoesAoVivo.slice(0, 3);') > -1,
+  'prosa da semana como fonte das prioridades traz frase sem destino — e o CTA some');
 
 /* PRESA AO CÓDIGO, DE NOVO (05/09/26): esta checagem exigia a linha `const cta = ir`, e o
    quadro copiado do mockup escreve o botão inline. A regra nunca mudou — botão de
