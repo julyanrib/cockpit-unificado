@@ -8,7 +8,7 @@
 // vê o seu, no Meu Painel. O gestor vê o coletivo + a lista de todos os individuais.
 //
 // NA ÚLTIMA SEXTA-FEIRA DO MÊS (ou quando FORCE_MONTHLY_MESANO estiver setada, pra teste
-// manual — mesma env var que generate-individual-analysis.js já usa, reaproveitada aqui de
+// manual — sobrou do fechamento mensal, que foi apagado em 05/09/26. Mantida para nao
 // propósito pra testar os dois robôs num único dispatch), este script gera o FECHAMENTO
 // (APAGADO EM 05/09/26 — revisão de custo) o fechamento MENSAL — mesmo formato de saída
 // com resumoIndividual/comoAgirIndividual), só muda o PROMPT e a janela de dados (mês
@@ -22,8 +22,16 @@ const path = require('path');
 const { publicarSnapshot, carregarJsonOuTabela } = require('../lib/publicar-snapshot.js');
 
 const API_KEY = process.env.ANTHROPIC_API_KEY;
-if (!API_KEY) {
-  console.error('ERRO: variável ANTHROPIC_API_KEY não encontrada. Configure em GitHub → Settings → Secrets → Actions.');
+/* AS CHAVES DO SUPABASE ENTRARAM NA FUSAO (05/09/26): este robo passou a escrever
+   tambem a analise de coaching por executivo, que mora no Supabase, e os compromissos
+   do 1:1. Chave de SERVICO, nao a anon — ela ignora RLS, que e o que permite o robo
+   escrever sem estar logado como ninguem.
+   O guarda aborta se faltar qualquer uma: chave faltando nao da erro, so faz o passo
+   desistir em silencio — foi assim que o snapshot de narrativas ficou dias sem publicar. */
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+if (!API_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+  console.error('ERRO: faltam variaveis (ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY). Configure em GitHub → Settings → Secrets → Actions.');
   process.exit(1);
 }
 
@@ -67,7 +75,23 @@ const CAMINHO_HISTORICO_MES = path.join(root, 'data', 'historico-semanal-mes.jso
 // do HubSpot (ex: "1395880470"), e a IA repetia esse número literal no texto ("etapa
 // 1395880470") em vez do nome — apareceu em pelo menos um executivo no resumo real.
 // Corrigido mapeando via STAGE_LABELS antes de virar contexto do prompt.
-const repsContext = Object.entries(raw.snapshotReps || {}).map(([ownerId, r]) => {
+/* ══ DEFEITO DE PRODUCAO ACHADO NO ENSAIO DA FUSAO (05/09/26) ═══════════════════════
+   Isto era um const de MODULO que fazia narrativas.reps[...] — e narrativas so e
+   carregado dentro do main(), desde que a carga virou assincrona em 03/09. Ou seja: o
+   robo semanal estourava "Cannot read properties of null" no load, TODA sexta, desde
+   03/09. A prova esta no dado: resumo-semanal.json parou em 29/08.
+   Nenhuma guarda pegou porque nenhuma roda este script; foi o ensaio com rede simulada
+   que derrubou na primeira linha. Agora e funcao, chamada depois da carga. */
+/* VEIO NA FUSAO (05/09/26): o rotulo da semana civil e escrito com ela, e ela morava no
+   robo que foi apagado. Com timeZone de propósito — sem ele, este script (que roda em UTC
+   no Actions) formata a data errada perto da virada do dia em Brasilia. */
+function fmtRange(start, end) {
+  const f = d => d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
+  return `${f(start)}–${f(end)}/${end.getFullYear()}`;
+}
+
+function montarRepsContext() {
+  return Object.entries(raw.snapshotReps || {}).map(([ownerId, r]) => {
   const n = narrativas.reps[ownerId] || {};
   const stageEntries = Object.entries(r.stages || {});
   const dominant = stageEntries.length ? stageEntries.sort((a, b) => b[1] - a[1])[0] : null;
@@ -83,11 +107,15 @@ const repsContext = Object.entries(raw.snapshotReps || {}).map(([ownerId, r]) =>
     metaMensal: r.metaMensal || 10,
     leadsTravados: r.leadsTravados || 0
   };
-});
+  });
+}
+
+/* preenchido no main(), depois que narrativas carrega */
+let repsContext = [];
 
 // Quantas sextas-feiras já passaram neste mês, contando hoje — define a "semana do mês".
 // Se somar 7 dias a partir de hoje cair no mês seguinte, essa é a ÚLTIMA sexta do mês
-// (mesma lógica de generate-individual-analysis.js — duplicada aqui de propósito, os
+// (a mesma logica vivia no robo de coaching, fundido neste em 05/09/26 — os
 // scripts são independentes e não compartilham módulo).
 function infoSemanaDoMes(hoje) {
   const mesAtual = hoje.getMonth();
@@ -173,6 +201,47 @@ desempenho individual — essa análise é vista coletivamente por todo o time, 
 pessoa específica devem ficar reservadas para uma conversa de PDI, não para este resumo coletivo.`;
 }
 
+/* ── Supabase: o que a analise de coaching precisa (veio na fusao de 05/09/26) ──── */
+async function supabaseInsert(tabela, linha) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabela}`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_SERVICE_KEY,
+      Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal'
+    },
+    body: JSON.stringify(linha)
+  });
+  if (!res.ok) throw new Error(`Supabase insert error ${res.status}: ${await res.text()}`);
+}
+
+async function supabaseSelect(tabela, query) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabela}?${query}`, {
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
+  });
+  if (!res.ok) throw new Error(`Supabase select error ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function supabaseDelete(tabela, query) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabela}?${query}`, {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` }
+  });
+  if (!res.ok) throw new Error(`Supabase delete error ${res.status}: ${await res.text()}`);
+}
+
+/* O ultimo registro semanal que NAO e o desta semana: da continuidade ao gestor — se o
+   gargalo e o mesmo de novo, o texto cobra mais forte em vez de repetir a mesma acao. */
+async function buscarUltimaSemana(ownerId, semanaLabelAtual) {
+  const linhas = await supabaseSelect(
+    'analise_individual_semanal',
+    `owner_id=eq.${ownerId}&order=mes_ano.desc,numero_semana_mes.desc&limit=2`
+  );
+  return linhas.find(l => l.semana_label !== semanaLabelAtual) || null;
+}
+
 function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 // Tolerante a preâmbulo/cerca de código que a IA às vezes inclui mesmo instruída a não
@@ -248,9 +317,9 @@ async function chamarClaude(promptTexto, maxTokens, tentativa = 1) {
 }
 
 // Monta o prompt do resumo INDIVIDUAL — endereçado direto ao executivo ("você"), pra
-// aparecer no Meu Painel dele. Diferente da análise de coaching (generate-individual-analysis.js),
+// aparecer no Meu Painel dele. A analise de coaching (privada do gestor) sai da MESMA
 // que é privada e só o gestor vê: esse texto aqui é o próprio vendedor quem lê.
-function promptIndividual(ownerId, rc, comoAgirAnterior) {
+function promptIndividual(ownerId, rc, comoAgirAnterior, hojeDiaSemanaLabel, coachingAnterior) {
   const detalheGanhos = (raw.ganhosSemanaDetalhe || []).filter(g => g.ownerId === ownerId);
   const blocoAnterior = (comoAgirAnterior && comoAgirAnterior.length)
     ? `\nO que foi combinado com você na semana passada: ${comoAgirAnterior.join(' | ')}. Se o mesmo ponto continuar em aberto, diga isso direto. Se já resolveu, reconheça em 1 frase e siga pro próximo foco — não repita a mesma recomendação de novo.`
@@ -268,6 +337,12 @@ function promptIndividual(ownerId, rc, comoAgirAnterior) {
     ? `\nATENÇÃO — leia antes de escrever: "ganhos essa semana" (${rc.ganhosSemana || 0}) é maior que "fechados no mês" (${rc.fechadosNoMes || 0}). Isso é NORMAL quando a semana cruza a virada do mês — parte dos ganhos aconteceu no mês anterior e não conta pro contador do mês novo, que zerou. NÃO diga que os ganhos "não foram formalizados", "não foram lançados no sistema" ou qualquer variação disso — não existe essa ação manual, fechamento é automático via HubSpot. Se for citar esse gap, explique pela virada do mês, ou simplesmente não comente a diferença.`
     : '';
 
+  /* o que o gestor ouviu na semana passada sobre esta pessoa — dá continuidade em vez
+     de recomeçar do zero toda semana */
+  const blocoCoaching = coachingAnterior
+    ? `\nNa semana passada (${coachingAnterior.semana_label}) a orientação ao gestor foi: "${coachingAnterior.como_agir}" (gargalo mapeado: "${coachingAnterior.gargalo_semana}"). Se o MESMO gargalo continuar, diga isso explicitamente e proponha uma ação diferente e mais firme; se foi resolvido, reconheça em uma frase e vá para o novo ponto.`
+    : '\nNão há histórico de coaching desta pessoa ainda (primeira análise dela).';
+
   return `Você é um analista de operações de vendas escrevendo DIRETO para ${rc.name}, executivo(a) de Field Sales
 (Outbound) da Takeat, na praça de ${rc.praca}. Esse texto é lido só por ele(a) mesmo(a) — endereça na segunda pessoa
 ("você"), tom direto, respeitoso e prático. Nada de elogio vazio tipo "continue assim" sem dado por trás.
@@ -280,22 +355,64 @@ Dados da semana atual (${raw.janela.atual}) dele(a):
 - Leads com SLA estourado: ${rc.leadsTravados || 0}
 ${explicacaoGap}
 ${blocoAnterior}
+${blocoCoaching}
+
+ESTA MESMA RESPOSTA SERVE A DOIS LEITORES, e eles não podem se misturar:
+  · resumoIndividual e comoAgirIndividual são lidos PELO EXECUTIVO (segunda pessoa, "você");
+  · gargaloSemana, comoAgirGestor e tendencia são PRIVADOS DO GESTOR — o executivo nunca vê.
+    Escreva esses três falando COM O GESTOR sobre ele, na terceira pessoa.
+  · compromissos é o único campo que os DOIS veem: o executivo marca como feito na tela
+    dele e o gestor valida no 1:1. Escreva no imperativo profissional, falando com o
+    executivo ("Avance", "Registre", "Feche").
 
 Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato:
 {
   "resumoIndividual": "2-3 frases em HTML simples (pode usar <b>) contando pra essa pessoa como foi a semana dela especificamente, com números concretos — reconhecendo o que foi bem e nomeando o que travou, sem rodeio.",
-  "comoAgirIndividual": ["2-3 ações objetivas e específicas pra essa pessoa focar na semana que começa, cada uma como uma string curta, pode usar <b> pra destacar números, diferentes das da semana passada se já foram resolvidas. PROIBIDO pedir 'enviar print do HubSpot' (por WhatsApp ou qualquer canal) como forma de mostrar progresso — a evidência tem que ser uma ação que já fica registrada sozinha no HubSpot: nota, próximo passo com data, etapa alterada, negócio descartado/reciclado."]
-}`;
+  "comoAgirIndividual": ["2-3 ações objetivas e específicas pra essa pessoa focar na semana que começa, cada uma como uma string curta, pode usar <b> pra destacar números, diferentes das da semana passada se já foram resolvidas. PROIBIDO pedir 'enviar print do HubSpot' (por WhatsApp ou qualquer canal) como forma de mostrar progresso — a evidência tem que ser uma ação que já fica registrada sozinha no HubSpot: nota, próximo passo com data, etapa alterada, negócio descartado/reciclado."],
+  "gargaloSemana": "1-2 frases, PRO GESTOR, sobre o que está acontecendo com essa pessoa nesta semana especificamente, baseado nos números acima.",
+  "comoAgirGestor": "Roteiro pro gestor conduzir o 1:1, em 2-4 frases curtas e NESTA ORDEM: (1) abrir revisitando a semana anterior — o compromisso combinado foi cumprido ou não, diga qual; (2) o que MANTER — elogiar nominalmente uma boa prática ou um ganho concreto da semana (cliente pelo nome, se houver); (3) o que cobrar agora, específico. Sem genérico.",
+  "tendencia": "1 frase curta dizendo se essa pessoa está melhorando, piorando ou estável, com base no volume travado e nos ganhos.",
+  "compromissos": ["compromisso 1", "compromisso 2", "compromisso 3 (opcional)"]
+}
+
+REGRAS OBRIGATÓRIAS pro campo "compromissos" (elas vieram do robô de segunda-feira, que
+foi fundido neste em 05/09/26 — cada uma nasceu de um defeito real na tela):
+- PROIBIDO qualquer menção a consequência aplicada pelo gestor ("o gestor encerra", "sem
+  aviso e sem reversão"): isso é ameaça, não compromisso. Descreva a AÇÃO e o PRAZO.
+- PROIBIDO pedir "enviar print do HubSpot" como evidência — a evidência tem que ser uma
+  ação que já fica registrada sozinha no CRM: nota criada, tarefa concluída, etapa
+  alterada, próximo passo com data, negócio reciclado, visita registrada.
+- Todo prazo é uma data FUTURA em relação a hoje (${hojeDiaSemanaLabel}), e o dia da
+  semana escrito tem que bater com a data escrita.
+- NUNCA retorne lista vazia. Sempre 2 ou 3 compromissos concretos e checáveis.
+- Se os da semana passada não foram cumpridos e ainda fazem sentido, repita-os quase
+  literalmente. Se não havia nenhum, crie 2-3 do zero a partir do gargalo.
+- NUNCA comece um compromisso com rótulo ("Novo:", "Repetindo:"). Escreva a ação direto.
+- O compromisso é da SEMANA: ele nasce agora e vale até a próxima rodada. Não escreva
+  como se fosse mudar amanhã.`;
 }
 
 
 async function main() {
   narrativas = (await carregarJsonOuTabela(narrativasPath, 'narrativas')).dado;
+  /* SÓ AQUI: montarRepsContext lê narrativas, e narrativas acabou de chegar. */
+  repsContext = montarRepsContext();
   const hoje = new Date();
   const { numeroSemana, ehUltimaSemana, mesAno } = infoSemanaDoMes(hoje);
+  /* VIERAM DO ROBÔ DE SEGUNDA na fusão de 05/09/26. A semana é CIVIL (segunda→domingo):
+     o rótulo antigo era uma janela deslizante de 7 dias terminando hoje, e por isso cada
+     rodada criava uma "semana" nova — 28 rótulos distintos para 5 semanas reais. */
+  const hojeBRT = new Date(hoje.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));
+  const diaBRT = hojeBRT.getDay();
+  const recuoAteSegunda = diaBRT === 0 ? 6 : diaBRT - 1;
+  const segundaDaSemana = new Date(hoje.getTime() - recuoAteSegunda * 86400000);
+  const domingoDaSemana = new Date(segundaDaSemana.getTime() + 6 * 86400000);
+  const semanaAtualLabel = fmtRange(segundaDaSemana, domingoDaSemana);
+  const DIAS_SEMANA_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+  const hojeDiaSemanaLabel = `${DIAS_SEMANA_PT[hojeBRT.getDay()]}, ${hoje.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
 
   // Mesma env var que .github/workflows/weekly-summary.yml já expõe pro outro robô
-  // (generate-individual-analysis.js) — reaproveitada aqui de propósito, pra dar pra
+  // (sem efeito desde a fusao de 05/09/26) — mantida para nao quebrar disparo salvo,
   // testar o fechamento mensal dos dois scripts com um único dispatch manual, sem
   // esperar a última sexta-feira real do mês.
   /* O FECHAMENTO MENSAL FOI APAGADO (05/09/26). Era 1 chamada de time + 7 individuais
@@ -310,6 +427,17 @@ async function main() {
 
   let parsedTime;
   let porRep = {};
+  /* nasce AQUI e nao dentro do bloco de geracao: quem grava no Supabase esta fora dele,
+     e const dentro de bloco nao atravessa a chave — o erro so apareceria em producao. */
+  const coachingParaGravar = {};
+
+  /* O QUE O GESTOR OUVIU NA SEMANA PASSADA. Sem isto, o roteiro do 1:1 repete a mesma
+     frase toda semana em vez de dizer "de novo o mesmo gargalo, cobre mais forte". */
+  const coachingAnteriorPorRep = {};
+  await Promise.all(repsContext.map(async rc => {
+    try { coachingAnteriorPorRep[rc.ownerId] = await buscarUltimaSemana(rc.ownerId, semanaAtualLabel); }
+    catch (e) { coachingAnteriorPorRep[rc.ownerId] = null; }
+  }));
 
   {
     console.log(`Semana ${numeroSemana} de ${mesAno} — gerando resumo SEMANAL (1 de time + ${repsContext.length} individuais, em paralelo)...`);
@@ -321,7 +449,12 @@ async function main() {
     // paralelo não devia estourar o rate limit da API pra um volume desse tamanho (10 chamadas).
     const [resultadoTime, ...resultadosIndividuais] = await Promise.allSettled([
       chamarClaude(promptTime(anterior), 2500),
-      ...repsContext.map(rc => chamarClaude(promptIndividual(rc.ownerId, rc, anterior?.porRep?.[rc.ownerId]?.comoAgirIndividual), 1100))
+      ...repsContext.map(rc => chamarClaude(promptIndividual(
+        rc.ownerId, rc,
+        anterior?.porRep?.[rc.ownerId]?.comoAgirIndividual,
+        hojeDiaSemanaLabel,
+        coachingAnteriorPorRep[rc.ownerId] || null
+      ), 1500))
     ]);
 
     // Antes, se a chamada de time falhasse, o script inteiro morria e NADA era atualizado
@@ -385,6 +518,14 @@ async function main() {
           resumoIndividual: resultado.value.resumoIndividual,
           comoAgirIndividual: resultado.value.comoAgirIndividual || []
         };
+        /* A METADE DO GESTOR da mesma resposta (fusão de 05/09/26). Guardada aqui e
+           gravada depois do loop, junto, para não intercalar rede com montagem. */
+        coachingParaGravar[rc.ownerId] = {
+          gargaloSemana: resultado.value.gargaloSemana || null,
+          comoAgirGestor: resultado.value.comoAgirGestor || null,
+          tendencia: resultado.value.tendencia || null,
+          compromissos: Array.isArray(resultado.value.compromissos) ? resultado.value.compromissos.filter(Boolean) : []
+        };
       } else {
         console.error(`Falha ao gerar resumo individual de ${rc.name}: ${resultado.reason?.message || resultado.reason} — gravando fallback honesto.`);
       FALHAS_IA.push(String(resultado.reason?.message || resultado.reason).slice(0, 220));
@@ -395,6 +536,54 @@ async function main() {
         };
       }
     });
+  }
+
+  /* ══ A METADE DO GESTOR: coaching no Supabase + compromissos do 1:1 ═══════════════
+     Isto era um robo separado, apagado na fusao de 05/09/26. Mesma
+     resposta da IA, dois destinos — e nenhuma chamada a mais.
+
+     O delete antes do insert é idempotência: se a rodada repetir na mesma semana civil,
+     substitui em vez de duplicar. O rótulo é a semana CIVIL (segunda→domingo) porque a
+     janela deslizante antiga criava um rótulo novo a cada rodada e o delete nunca
+     alcançava a linha anterior.
+
+     Se a IA falhou para alguém, esta pessoa simplesmente não entra — os compromissos
+     dela ficam como estavam. Lista vazia aqui apagaria o plano da semana de alguém por
+     causa de um timeout. */
+  let compromissosMudaram = false;
+  for (const ownerId of Object.keys(coachingParaGravar)) {
+    const c = coachingParaGravar[ownerId];
+    const nome = (narrativas.reps[ownerId] && narrativas.reps[ownerId].name) || ownerId;
+    try {
+      await supabaseDelete('analise_individual_semanal', `owner_id=eq.${ownerId}&semana_label=eq.${encodeURIComponent(semanaAtualLabel)}`);
+      await supabaseInsert('analise_individual_semanal', {
+        owner_id: ownerId,
+        semana_label: semanaAtualLabel,
+        numero_semana_mes: numeroSemana,
+        mes_ano: mesAno,
+        gargalo_semana: c.gargaloSemana,
+        como_agir: c.comoAgirGestor,
+        tendencia: c.tendencia
+      });
+    } catch (e) {
+      console.error(`Falha ao gravar o coaching de ${nome}: ${e.message}`);
+      FALHAS_IA.push(`coaching ${nome}: ${String(e.message).slice(0, 160)}`);
+    }
+    if (c.compromissos.length && narrativas.reps[ownerId]) {
+      narrativas.reps[ownerId].compromissos = c.compromissos;
+      compromissosMudaram = true;
+    }
+  }
+
+  /* narrativas._atualizado_em é o carimbo que a tela usa para resetar o check-off dos
+     acordos (pdiStorageKey). Avança UMA vez por rodada, e só se algum compromisso mudou
+     de verdade: é esperado e correto que o check da semana passada seja zerado junto com
+     o compromisso novo. */
+  if (compromissosMudaram) {
+    narrativas._atualizado_em = new Date().toISOString().slice(0, 10);
+    fs.writeFileSync(path.join(root, 'data', 'narrativas.json'), JSON.stringify(narrativas, null, 2));
+    await publicarSnapshot('narrativas', narrativas, 'generate-weekly-summary');
+    console.log(`narrativas atualizado — compromissos da semana + versão ${narrativas._atualizado_em}.`);
   }
 
   // ===== BLOCO 40 (14/08/26) — snapshot por executivo, pra viabilizar delta
