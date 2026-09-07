@@ -1774,3 +1774,18 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ── 23. O SCHEMA DO BANCO ESTÁ NO GIT (07/09/26) ─────────────────────────────────────
+   Achado ao organizar o backend: o Supabase tinha 20 migrations aplicadas e o repositório
+   tinha 5 arquivos. As 15 restantes foram aplicadas direto, e as 17 tabelas base — criadas
+   antes de existir histórico — não tinham CREATE TABLE em lugar nenhum. O banco não era
+   recriável a partir do repositório.
+
+   Arquivo próprio pelo mesmo motivo das outras: gramática diferente (compara o manifesto
+   do que está aplicado com os arquivos do diretório, sem tocar no banco). */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-migrations-versionadas.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
