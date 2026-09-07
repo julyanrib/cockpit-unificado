@@ -39,7 +39,7 @@ const SO_DO_SERVIDOR = ['cockpit_snapshot', 'novidades_mercado', 'restaurantes_o
    `pdi_documentos` tem botão de apagar na tela e não tem política de DELETE. O código
    já parou de mentir — `.select()` depois do `.delete()` conta as linhas e zero linha
    virou falha com aviso na tela. Falta a política, que é mudança no banco e não se
-   aplica sem ele mandar. O SQL está em supabase/propostas/politica-de-delete.sql.
+   aplica sem ele mandar. O SQL está em supabase/propostas/fechar-o-que-ficou-aberto.sql.
 
    `playbook_progresso:delete` esteve nesta lista por meia hora e saiu: medindo os usos,
    o desmarcar do Playbook não existe — nenhum chamador passa concluido=false. Era código
