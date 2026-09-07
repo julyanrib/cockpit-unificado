@@ -43935,40 +43935,18 @@ function g14Ligar(box, reps, planosPorOwner, ontemISO, planosLidos) {
        aquela funcao grava a grade da SESSAO (pl6GradeDoPlano), e usa-la aqui gravaria o
        plano do gestor no owner_id do executivo. */
     if (d.g14Por) {
+      /* A REGRA MORA EM g14AgendarNoHorarioLivre (07/09/26) — o cartao da Daily v2
+         oferece o mesmo agendamento, e duas copias desta gravacao seriam a primeira a
+         divergir. Aqui fica so o que e desta tela: a trava de reentrada e o redesenho. */
       if (g14UI.salvando) return;
-      const owner = d.g14Por, si = Number(d.g14Si), leadId = d.g14Lead;
-      const linhaSem = g14Semanais && g14Semanais[owner];
-      const di = d7ColunaDeHoje();
-      if (di < 0) { dizer('Hoje não é dia útil — o roteiro é de segunda a sexta.', 'atencao'); return; }
-      if (!linhaSem) {
-        dizer('Ele não tem plano da semana no Cockpit — abra o Planejamento com ele em vez de montar por cima.', 'atencao');
-        return;
-      }
-      const grade = g14GradeDe(owner);
-      if (!grade || grade[di][si]) {   /* ocupado em qualquer formato */
-        dizer('Esse horário já não está livre — a tela estava velha. Recarregando.', 'atencao');
-        await g14CarregarSemanais(); return redesenhar();
-      }
       g14UI.salvando = true;
-      const nova = grade.map(function (col, ci) {
-        return col.map(function (v, vi) { return (ci === di && vi === si) ? leadId : v; });
-      });
-      const { data, error } = await supa.from('planos_semanais').upsert({
-        owner_id: String(owner),
-        data_segunda: pl6SegundaDaSemana(),
-        regioes: g14RegioesDe(owner),
-        grade: nova,
-        atualizado_em: new Date().toISOString()
-      }, { onConflict: 'owner_id,data_segunda' }).select();
+      const r = await g14AgendarNoHorarioLivre(d.g14Por, Number(d.g14Si), d.g14Lead);
       g14UI.salvando = false;
-      if (error) { dizer('Não consegui agendar: ' + error.message, 'erro'); return; }
-      if (!Array.isArray(data) || !data.length) {
-        dizer('O banco aceitou e não devolveu a linha — não dá para confirmar que entrou no plano dele.', 'erro');
-        return;
-      }
-      g14Semanais[owner] = data[0];
+      const recado = g14AgendarRecado(r);
+      dizer(recado.txt, recado.tipo === 'ok' ? undefined : recado.tipo);
+      if (r.recarregar) { await g14CarregarSemanais(); return redesenhar(); }
+      if (!r.ok) return;
       g14UI.picker = null;
-      dizer('Agendado às ' + D7_HORAS[si] + ' no plano dele ✓ Supabase — aparece na Minha Daily dele.');
       return redesenhar();
     }
 
@@ -44836,6 +44814,58 @@ function g14OpcoesDoSlot(linha, si) {
   return ops;
 }
 
+/* ══ AGENDAR NO HORARIO LIVRE — A REGRA, SEM TELA (07/09/26) ══════════════════════════
+   Extraida do handler de [data-g14-por] para o cartao da Daily v2 poder oferecer o
+   mesmo agendamento sem reescrever nada. Sao sete cuidados, e cada um custou um defeito:
+
+     · dia nao util nao tem roteiro;
+     · sem plano da semana dele o gestor NAO monta por cima — abre o Planejamento junto;
+     · o slot e RELIDO antes de gravar: se ocupou nesse meio tempo, a tela estava velha;
+     · grava em planos_semanais.grade, a MESMA tabela e coluna que o Planejamento dele
+       escreve — e e por isso que a visita aparece na Minha Daily dele sem ninguem
+       digitar duas vezes;
+     · o id gravado e o da carteira ('c-'+dealId), nunca o dealId cru: dealId solto ali
+       vira "conta fora da carga desta sessao" na tela dele amanha;
+     · a linha devolvida pelo upsert e conferida — erro nulo sem linha de volta ja fez
+       uma tela dizer "registrado" sobre tabela vazia;
+     · NAO passa por pl6Gravar, que grava a grade da SESSAO: usa-la aqui gravaria o
+       plano do gestor no owner_id do executivo.
+
+   Ela nao fala com o usuario: devolve { ok, motivo, hora, recarregar } e quem chamou
+   escreve a frase com as palavras da propria tela. */
+async function g14AgendarNoHorarioLivre(owner, si, leadId) {
+  const di = d7ColunaDeHoje();
+  if (di < 0) return { ok: false, motivo: 'dia-nao-util' };
+  if (!(g14Semanais && g14Semanais[owner])) return { ok: false, motivo: 'sem-plano-da-semana' };
+  const grade = g14GradeDe(owner);
+  if (!grade || grade[di][si]) return { ok: false, motivo: 'ocupado', recarregar: true };
+  const nova = grade.map(function (col, ci) {
+    return col.map(function (v, vi) { return (ci === di && vi === si) ? leadId : v; });
+  });
+  const { data, error } = await supa.from('planos_semanais').upsert({
+    owner_id: String(owner),
+    data_segunda: pl6SegundaDaSemana(),
+    regioes: g14RegioesDe(owner),
+    grade: nova,
+    atualizado_em: new Date().toISOString()
+  }, { onConflict: 'owner_id,data_segunda' }).select();
+  if (error) return { ok: false, motivo: 'erro', erro: error.message };
+  if (!Array.isArray(data) || !data.length) return { ok: false, motivo: 'sem-linha-de-volta' };
+  g14Semanais[owner] = data[0];
+  return { ok: true, hora: D7_HORAS[si] };
+}
+
+/* As frases dos motivos, num lugar: as duas telas que agendam dizem a MESMA coisa para o
+   mesmo motivo. Duas redacoes do mesmo impedimento fazem o gestor achar que sao dois
+   problemas diferentes. */
+function g14AgendarRecado(r) {
+  if (r.ok) return { txt: 'Agendado às ' + r.hora + ' no plano dele ✓ Supabase — aparece na Minha Daily dele.', tipo: 'ok' };
+  if (r.motivo === 'dia-nao-util') return { txt: 'Hoje não é dia útil — o roteiro é de segunda a sexta.', tipo: 'atencao' };
+  if (r.motivo === 'sem-plano-da-semana') return { txt: 'Ele não tem plano da semana no Cockpit — abra o Planejamento com ele em vez de montar por cima.', tipo: 'atencao' };
+  if (r.motivo === 'ocupado') return { txt: 'Esse horário já não está livre — a tela estava velha. Recarregando.', tipo: 'atencao' };
+  if (r.motivo === 'sem-linha-de-volta') return { txt: 'O banco aceitou e não devolveu a linha — não dá para confirmar que entrou no plano dele.', tipo: 'erro' };
+  return { txt: 'Não consegui agendar: ' + (r.erro || 'motivo não identificado'), tipo: 'erro' };
+}
 function g14PickerHTML(linha, si) {
   const ops = g14OpcoesDoSlot(linha, si);
   const hora = D7_HORAS[si];
@@ -46514,9 +46544,43 @@ function dg2Linhas(ctx) {
 /* ── OS VALORES QUE O MARKUP DA PRANCHA CONSOME ──────────────────────────────────────
    Os nomes dos campos sao os do mockup, de proposito: assim o markup entra sem eu
    reescrever uma linha de estilo, e a diferenca entre a prancha e a tela e so o dado. */
+/* ══ O PICKER DE HORARIO LIVRE, NO DESENHO DA v2 (07/09/26) ═══════════════════════════
+   A REGRA de quem pode entrar e g14OpcoesDoSlot — quentes primeiro, depois carteira e
+   contas-alvo da rota, com o id ja resolvido na carteira ('c-'+dealId, nunca o dealId
+   cru, que viraria "conta fora da carga" na tela dele amanha). Isto aqui e so o desenho.
+
+   Os dois vazios sao diferentes de proposito e levam a conversas diferentes na rodada. */
+function dg2PickerHTML(l, si) {
+  const ops = (typeof g14OpcoesDoSlot === 'function') ? g14OpcoesDoSlot(l, si) : [];
+  const hora = (typeof D7_HORAS !== 'undefined' && D7_HORAS[si]) ? D7_HORAS[si] : ('slot ' + si);
+  const cabeca = '<p style="margin:0 0 8px;font:900 9px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#B0782A;">'
+    + 'o que entra às ' + esc(hora) + ' — quentes primeiro, depois carteira e contas-alvo da rota</p>';
+  const corpo = ops.length
+    ? '<div style="display:flex;flex-direction:column;gap:5px;">'
+      + ops.map(function (o) {
+          return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFFDF8;border:1px solid #EEE9DE;border-left:3px solid ' + o.cor + ';border-radius:8px;padding:8px 12px;">'
+            + '<span style="font-size:12px;color:#1A1613;line-height:1.45;flex:1;min-width:200px;overflow-wrap:anywhere;">'
+            + '<b>' + esc(o.nome) + '</b><br><span style="font-size:10.5px;color:#6B6254;">' + esc(o.sub) + '</span></span>'
+            + '<button type="button" data-dg2-acao="por:' + esc(l.ownerId) + ':' + si + ':' + esc(o.id) + '"'
+            + ' style="display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid #1A1613;border-radius:999px;background:#1A1613;font:800 10.5px \'Manrope\',sans-serif;color:#FFFDF8;cursor:pointer;white-space:nowrap;" data-dg2-hv="4">agendar ▸</button>'
+            + '</div>';
+        }).join('')
+      + '</div>'
+    : '<span style="display:block;font:700 11.5px/1.5 \'Manrope\',sans-serif;color:#6B6254;">'
+      + (l.rota
+        ? 'A carteira e as contas-alvo da rota dele já estão todas no plano de hoje — não há o que somar aqui.'
+        : 'Ele não escolheu a região de hoje no Planejamento, então não há rota de onde tirar conta. Os quentes dele aparecem nesta lista quando estiverem na carteira desta carga.')
+      + '</span>';
+  return '<div style="background:#F4F1EA;border:1px solid #E3DDD0;border-radius:10px;padding:12px 15px;">' + cabeca + corpo + '</div>';
+}
+
 function dg2Vals(ctx) {
   const INK = '#1A1613', MUT = '#988D7B', RED = '#C7142A', AMB = '#B0782A', GRN = '#2E7D5B';
   const ls = dg2Linhas(ctx);
+  /* uma leitura do dia util para os sete cartoes: d7ColunaDeHoje por cartao daria a
+     mesma resposta sete vezes, e uma resposta diferente se a meia-noite passasse no
+     meio do laco. */
+  const diaUtilDeHoje = (typeof d7ColunaDeHoje === 'function') ? d7ColunaDeHoje() >= 0 : true;
   /* uma leitura da cobertura para as duas secoes que a usam (a pill e os cartoes de
      etapa): duas leituras dariam dois totais na mesma tela. */
   const cob = ctx.cobertura || { etapas: [], total: 0, cobertos: 0 };
@@ -46689,6 +46753,22 @@ function dg2Vals(ctx) {
       borda: foco === true ? '#1A1613' : '#E3DDD0', op: foco === false ? '.35' : '1',
       passos: passos,
       temClientes: visitas.length > 0, semClientes: visitas.length === 0,
+      /* OS BURACOS DA MESMA PERGUNTA. Slot livre e o horario que o roteiro dele deixou
+         em aberto hoje; o gestor agenda ali na frente do time, e a visita cai no plano
+         DELE (planos_semanais), nao numa lista do gestor. Sem roteiro montado nao ha
+         buraco: ha a conversa de montar o roteiro, que o bloco vermelho acima ja faz. */
+      /* EM DIA NAO UTIL A COLUNA VEM VAZIA e os sete horarios voltam 'livre' — sete
+         convites que todos recusariam com "hoje nao e dia util". A fileira so existe
+         quando ha dia para agendar; o motivo aparece escrito no lugar dela. */
+      livres: diaUtilDeHoje
+        ? (l.plano || []).filter(function (x) { return x.tipo === 'livre'; })
+            .map(function (x) { return { hora: x.hora, si: x.si, acao: 'slot:' + l.ownerId + ':' + x.si }; })
+        : [],
+      semDiaUtil: !diaUtilDeHoje && (l.plano || []).length > 0,
+      pickerAberto: !!(DG2.picker && String(DG2.picker.owner) === String(l.ownerId)),
+      pickerHTML: (DG2.picker && String(DG2.picker.owner) === String(l.ownerId))
+        ? dg2PickerHTML(l, DG2.picker.si) : '',
+      pickerSi: (DG2.picker && String(DG2.picker.owner) === String(l.ownerId)) ? DG2.picker.si : null,
       clientes: visitas.map(function (c, j) {
         const id = 'b' + i + '-' + j;
         const ab = DG2.nomesAbertos[id];   /* estado de TELA, nao de banco: pode morar aqui */
@@ -47010,6 +47090,20 @@ function dg2TelaHTML(ctx) {
           ${(e.semClientes) ? `
             <span style="display:block;font:700 12px 'Manrope',sans-serif;color:#C7142A;">sem plano do dia — o compromisso dele nasce agora, na rodada</span>
           ` : ''}
+          ${(e.semDiaUtil) ? `
+            <span style="display:block;font:700 11px 'Manrope',sans-serif;color:#988D7B;margin-top:7px;">hoje não é dia útil — o roteiro é de segunda a sexta, e não há horário para agendar</span>
+          ` : ''}
+          ${(e.livres && e.livres.length) ? `
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;">
+              <span style="font:800 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#988D7B;white-space:nowrap;">livre</span>
+              ${(e.livres||[]).map(lv => `
+                <button type="button" data-dg2-acao="${lv.acao}" title="agendar uma visita às ${lv.hora} no plano dele" style="display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:4px 11px;border:1px dashed ${e.pickerSi === lv.si ? '#1A1613' : '#C4B9A4'};border-radius:9px;background:${e.pickerSi === lv.si ? '#F4F1EA' : 'none'};font:800 11px 'Manrope',sans-serif;color:#6B6254;cursor:pointer;font-variant-numeric:tabular-nums;" data-dg2-hv="2">+ ${lv.hora}</button>
+              `).join('')}
+            </div>
+          ` : ''}
+          ${(e.pickerAberto) ? `
+            <div style="margin-top:8px;">${e.pickerHTML}</div>
+          ` : ''}
         </div>
         <div style="border-top:1px dashed #E3DDD0;padding-top:9px;">
           <p style="margin:0 0 5px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;">O que segura o funil dele <span style="font:700 10.5px/1.4 'Manrope',sans-serif;letter-spacing:0;text-transform:none;color:${e.funilCor};white-space:nowrap;">${e.funilResumo}${e.quentesResumo ? ' · ' + e.quentesResumo : ''}</span></p>
@@ -47207,6 +47301,43 @@ function dg2Ligar(raiz) {
     if (verbo === 'nome') {
       DG2.nomesAbertos[resto] = !DG2.nomesAbertos[resto];
       return dg2Repintar();
+    }
+    if (verbo === 'slot') {
+      /* um picker aberto por vez: dois abertos numa tela projetada e o time olhando
+         para duas listas de candidatos sem saber qual e a da conversa. */
+      const ps = resto.split(':');
+      const owner = ps[0], si = Number(ps[1]);
+      const igual = DG2.picker && String(DG2.picker.owner) === String(owner) && DG2.picker.si === si;
+      DG2.picker = igual ? null : { owner: owner, si: si };
+      return dg2Repintar();
+    }
+    if (verbo === 'por') {
+      if (typeof g14AgendarNoHorarioLivre !== 'function') {
+        dizer('O agendamento não carregou nesta aba — recarregue a página.', 'atencao');
+        return;
+      }
+      if (alvo.dataset.dg2Salvando === '1') return;
+      alvo.dataset.dg2Salvando = '1';
+      const antes = alvo.textContent;
+      alvo.textContent = 'agendando…';
+      /* o leadId pode ter ':' no meio? Nao — pl6 usa 'c-<dealId>' e 'n-<id>'. Mesmo
+         assim junto o resto, para um id inesperado nao chegar truncado ao banco. */
+      const ps = resto.split(':');
+      const r = await g14AgendarNoHorarioLivre(ps[0], Number(ps[1]), ps.slice(2).join(':'));
+      delete alvo.dataset.dg2Salvando;
+      const recado = g14AgendarRecado(r);
+      dizer(recado.txt, recado.tipo === 'ok' ? undefined : recado.tipo);
+      if (r.recarregar) {
+        if (typeof g14CarregarSemanais === 'function') await g14CarregarSemanais();
+        DG2.picker = null;
+        return (typeof renderDaily === 'function') ? renderDaily() : dg2Repintar();
+      }
+      if (!r.ok) { alvo.textContent = antes; return; }
+      DG2.picker = null;
+      /* renderDaily, e nao dg2Repintar: a grade dele mudou, e o plano do dia, os marcos
+         e o KPI de clientes nomeados saem dela. Repintar so a raiz mostraria o chip novo
+         com o KPI velho na mesma tela. */
+      return (typeof renderDaily === 'function') ? renderDaily() : dg2Repintar();
     }
     if (verbo === 'etapa') {
       const i = Number(resto);

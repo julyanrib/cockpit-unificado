@@ -692,6 +692,44 @@ checar('a comparacao de time e a pauta do 1:1 nao chegam ao executivo',
 checar('o que abre lista no dossie cumpre o piso de 38px no desktop',
   template.indexOf('.coach-funil-etapa.is-abre{min-height:38px;}') > 0);
 
+/* ══ AGENDAR NO HORARIO LIVRE — REALOJADO NO CARTAO (07/09/26) ═══════════════════════
+   Ele ja morreu uma vez: vivia na linha expandida do board antigo do gestor e saiu com a
+   linha, sem nada reprovar. O Julyan pediu de volta e ele voltou para o cartao da Daily
+   v2 — estas quatro travam o que faz dele um agendamento de verdade. */
+
+checar('o agendamento no horario livre existe no cartao da Daily',
+  templateCodigo.indexOf("acao: 'slot:' + l.ownerId") > 0 &&
+  templateCodigo.indexOf('function dg2PickerHTML(') > 0 &&
+  template.indexOf('o que entra às') > 0,
+  'este controle ja sumiu uma vez junto com a linha em que ele morava');
+
+/* UMA GRAVACAO, DUAS TELAS. Sao sete cuidados (dia util, plano da semana dele, releitura
+   do slot, planos_semanais.grade, id da carteira e nao dealId cru, linha de volta
+   conferida, e nao passar por pl6Gravar). Uma segunda copia seria a primeira a divergir. */
+checar('a gravacao do horario livre tem uma implementacao so',
+  (templateCodigo.match(/async function g14AgendarNoHorarioLivre\(/g) || []).length === 1 &&
+  (templateCodigo.match(/g14AgendarNoHorarioLivre\(/g) || []).length >= 3 &&
+  templateCodigo.indexOf("from('planos_semanais').upsert") > 0,
+  'duas copias desta gravacao divergem na primeira mudanca de regra');
+
+/* O CANDIDATO SAI DA MESMA REGRA. g14OpcoesDoSlot poe quentes primeiro e RESOLVE o id na
+   carteira ('c-'+dealId): dealId cru gravado na grade vira "conta fora da carga desta
+   sessao" na tela dele amanha — agendamento que grava sem erro e nao existe no dia
+   seguinte. */
+checar('o picker do cartao usa a mesma regra de candidatos, sem segunda lista',
+  templateCodigo.indexOf('g14OpcoesDoSlot(l, si)') > 0 &&
+  (templateCodigo.match(/function g14OpcoesDoSlot\(/g) || []).length === 1,
+  'segunda lista de candidatos ofereceria conta que a grade dele nao aceita');
+
+/* DIA NAO UTIL NAO TEM CONVITE. d7PlanoDeHoje devolve coluna vazia no fim de semana, e
+   os sete horarios voltam 'livre': o cartao ofereceria sete botoes que todos recusam.
+   Medido em 07/09 (segunda) so por sorte — apareceria no primeiro sabado. */
+checar('em dia nao util a fileira de horarios livres nao aparece, e diz por que',
+  templateCodigo.indexOf('livres: diaUtilDeHoje') > 0 &&
+  templateCodigo.indexOf('semDiaUtil: !diaUtilDeHoje') > 0 &&
+  template.indexOf('hoje não é dia útil — o roteiro é de segunda a sexta, e não há horário para agendar') > 0,
+  'sete convites que recusam e pior que nenhum convite');
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
