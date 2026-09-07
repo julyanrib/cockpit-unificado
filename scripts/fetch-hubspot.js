@@ -206,15 +206,43 @@ const STAGE_DESCRIPTIONS = {
   [STAGES.agPagamento]: 'Contrato fechado, aguardando pagamento. SLA de 2 dias — gargalo crítico se estourar.'
 };
 
-// Reps ativos (nome bate com narrativas.json / expogo.json)
-const REPS = [
-  { ownerId: '86100506', name: 'Bruno Martins' },
-  { ownerId: '87569072', name: 'Sandro Brito' },
-  { ownerId: '91477292', name: 'Kelly Travieso Di Domenico' },
-  { ownerId: '89842507', name: 'Wericles Andrade' },
-  { ownerId: '87069181', name: 'Amanda Pardim' },
-  { ownerId: '86100505', name: 'Marco Filho' }
-];
+// ══ OS REPS VEM DE data/usuarios.json, E NAO DE UMA LISTA AQUI (07/09/26) ═══════════
+//
+// ESTA LISTA ERA CRAVADA, com seis ownerId fixos, e era a TERCEIRA copia do time:
+//   data/usuarios.json        o que a tela sabe, e o que api/dados.js autoriza
+//   mapa_usuarios (Supabase)  o que o banco deixa entrar, via RLS
+//   REPS aqui                 de onde o FUNIL do snapshot e montado
+//
+// Foi a terceira que causou o defeito de 07/09: o Julyan abriu o Cockpit com o login
+// da Renata e viu "nada liberado, apenas playbook". Mesmo depois de ela ganhar owner
+// real do HubSpot e sair do portao `aComecar`, `DATA.reps` nao teria linha para ela —
+// os cinco reps novos nunca entraram nesta lista, e e desta lista que sai todo filtro
+// por owner nas consultas ao HubSpot (owners, nomes, e o laco por rep no fim).
+//
+// Conferido antes de trocar: os seis nomes cravados batiam BYTE A BYTE com os de
+// usuarios.json, entao derivar reproduz a lista de hoje e acrescenta os cinco.
+//
+// A Amanda entra mesmo com fieldStatus "transicao_inside", porque ela esta na lista de
+// hoje — a unificacao nao pode mudar quem e do time de calado. O corte e outro: quem
+// nao tem ownerId, e quem ainda esta com placeholder "pendente_*" (cadastrado antes de
+// existir o usuario no CRM). Owner que nao existe no HubSpot faz a API devolver 400 e
+// derruba o robo inteiro.
+const REPS = (function () {
+  const arq = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'usuarios.json'), 'utf8'));
+  const lista = Array.isArray(arq) ? arq : (arq.usuarios || []);
+  const reps = lista
+    .filter(u => u && u.role === 'rep' && u.ownerId && !String(u.ownerId).startsWith('pendente_'))
+    .map(u => ({ ownerId: String(u.ownerId), name: u.nome }));
+  if (!reps.length) {
+    /* SEM REPS, NAO RODA. Um snapshot com zero rep sobrescreveria o funil do time por um
+       arquivo que nao foi lido — e a tela mostraria o mes inteiro zerado, sem erro. */
+    console.error('ABORTANDO: data/usuarios.json nao rendeu nenhum rep com ownerId valido.');
+    process.exit(1);
+  }
+  console.log('REPS de data/usuarios.json: ' + reps.length + ' executivos (' +
+    reps.map(r => r.name).join(', ') + ')');
+  return reps;
+})();
 
 // BUG REAL corrigido aqui (30/07): todo cálculo de "hoje"/"mês corrente" abaixo usava
 // now.getUTCFullYear()/Month()/Date() direto — isso é a data em UTC, não em Brasília.
