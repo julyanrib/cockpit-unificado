@@ -20,6 +20,30 @@ const { buildPlaybook } = require('./build-playbook.js');
 
 const root = path.join(__dirname, '..');
 
+/* ══ O TAMANHO DO TIME, PARA A TELA DE LOGIN (07/09/26) ═══════════════════════════════
+   A tela 1b publica "N executivos na rua" antes do login, e `usuarios` e [] no DATA
+   publico de proposito (ele carrega e-mails). Entao a contagem entra como DOIS INTEIROS.
+
+   A REGRA E A DO CABECALHO, e nao uma minha: reps cadastrados menos os `aComecar`. O
+   cabecalho publica o mesmo numero depois do login (preencherCabecalhoRodape) e as duas
+   telas nao podem discordar — o primeiro numero que o executivo le e o do login.
+   Ha uma checagem na suite comparando os dois, porque a regra existe em dois lugares
+   por necessidade: aqui em Node, la no navegador. */
+function contarTimeNoField() {
+  let arq;
+  try {
+    arq = JSON.parse(fs.readFileSync(path.join(root, 'data', 'usuarios.json'), 'utf8'));
+  } catch (e) {
+    /* SEM O ARQUIVO, NAO INVENTA ZERO. Zero ali diria "nenhum executivo na rua" na
+       primeira tela do produto. null faz a tela nao desenhar a metrica. */
+    return null;
+  }
+  const lista = Array.isArray(arq) ? arq : (arq.usuarios || []);
+  const reps = lista.filter(function (u) { return u && u.role === 'rep'; });
+  const emPreparacao = reps.filter(function (u) { return u.aComecar; }).length;
+  return { ativos: reps.length - emPreparacao, emPreparacao: emPreparacao };
+}
+
 const DATA_PUBLICO = {
   // Marca de arquitetura: o template usa isso pra saber que precisa hidratar via api/dados.
   shellProtegido: true,
@@ -49,7 +73,9 @@ const DATA_PUBLICO = {
   // cai numa régua inventada em código.
   cadencias: null,
   syncStatus: null,
-  usuarios: []
+  usuarios: [],
+  /* dois inteiros, para a tela de login — ver contarTimeNoField acima */
+  timeNoField: contarTimeNoField()
 };
 
 const template = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
