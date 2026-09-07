@@ -28,20 +28,16 @@ const root = path.join(__dirname, '..');
 const ARQ_TIME = path.join(root, 'supabase', 'TIME.txt');
 const ARQ_JSON = path.join(root, 'data', 'usuarios.json');
 
-/* DÍVIDA DECLARADA (07/09/26): os 4 reps em preparação estão no json e ainda não no
-   banco. O SQL que os põe lá está em supabase/propostas/fechar-o-que-ficou-aberto.sql,
-   pronto e idempotente — o DDL daquele arquivo foi bloqueado pelo classificador de
-   permissão da sessão em que foi escrito, então ele espera uma execução manual.
+/* LISTA VAZIA, que é o estado correto (07/09/26).
 
-   Ao aplicar: regenerar TIME.txt e ESVAZIAR esta lista. A checagem de dívida morta, mais
-   abaixo, reprova o build se alguém esquecer — dívida que fica na lista para sempre
-   deixa de ser vista. */
-const SEM_ACESSO_AINDA = [
-  'scaetano.takeat@gmail.com',
-  'renatapessoa.takeat@gmail.com',
-  'andregomes.takeat@gmail.com',
-  'luizpimentel.takeat@gmail.com'
-];
+   Ela existiu por algumas horas com os 4 reps em preparação, que estavam no json e não
+   no banco. O Julyan aplicou o insert e eles entraram — medido depois: os quatro gravam
+   a própria daily (testado virando cada um deles, com rollback).
+
+   Se voltar a ter item aqui, é dívida ESPERANDO uma mudança no banco. A checagem de
+   dívida morta, mais abaixo, reprova o build quando o item deixa de ser verdade —
+   dívida que fica na lista para sempre deixa de ser vista. */
+const SEM_ACESSO_AINDA = [];
 
 function lerEspelhoDoBanco() {
   if (!fs.existsSync(ARQ_TIME)) {

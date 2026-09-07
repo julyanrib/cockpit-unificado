@@ -1,18 +1,21 @@
 -- O QUE FICOU ABERTO NA VARREDURA DE 07/09/26 — estado de cada parte.
 --
--- APLICADO nesta sessão (via execute_sql, portanto NÃO registrado em
--- supabase_migrations.schema_migrations — é por isso que está aqui: o repositório tem
--- que descrever o banco, e não o que eu queria que ele fosse):
+-- JÁ APLICADO (nada a fazer nos itens 4, 5 e 6):
+--   4. os 4 reps em preparação entraram no mapa — o Julyan rodou no SQL Editor.
+--      MEDIDO DEPOIS, virando cada um deles com rollback: os quatro gravam a própria
+--      daily. O login dos quatro está liberado de verdade, não só a linha inserida.
 --   5. os três que saíram do time perderam a linha em mapa_usuarios
 --   6. o login dos três foi revogado e as sessões vivas encerradas
 --
--- PENDENTE — o classificador de permissão desta sessão bloqueou. Cole no SQL Editor:
---   4. *** URGENTE *** os 4 reps em preparação entram no mapa. Eles estão com sessão
---      VIVA agora (andregomes 3, luizpimentel 2, scaetano 2, renatapessoa 1) e, sem
---      linha lá, toda política de RLS devolve vazio: eles usam um app que mostra
---      "não tem dado" em tudo. Julyan pediu para liberar o login completo aos quatro
---      — "já vão começar a ir pra rua".
---   1, 2 e 3. as políticas do PDI e os dois enable row level security.
+-- Os itens 5 e 6 foram por execute_sql e o 4 pelo SQL Editor — nenhum dos três ficou
+-- registrado em supabase_migrations.schema_migrations. É por isso que continuam aqui: o
+-- repositório tem que descrever o banco, e não o que eu queria que ele fosse.
+--
+-- PENDENTE — o classificador de permissão desta sessão bloqueou este DDL:
+--   1 e 2. as políticas do PDI (o botão de apagar volta a funcionar, e as duas de
+--          14/08 deixam de ser sensíveis a caixa).
+--   3. os dois enable row level security — as duas tabelas continuam abertas ao anon
+--      neste momento, e a chave anon viaja no bundle público.
 --   7. duas contas de autenticação que sobraram, para você decidir.
 --
 -- O ARQUIVO INTEIRO É IDEMPOTENTE: rodar tudo de uma vez é seguro, e as partes já
@@ -96,7 +99,7 @@ with check (
 alter table public.webhook_cooldown enable row level security;
 alter table public.backup_donos_sp_20260901 enable row level security;
 
--- ══ 4. OS QUATRO REPS EM PREPARAÇÃO — *** PENDENTE, E URGENTE *** ═══════════════════
+-- ══ 4. OS QUATRO REPS EM PREPARAÇÃO — JÁ APLICADO EM 07/09/26 ═══════════════════
 -- data/usuarios.json lista 5 reps com aComecar:true, mas só ricardoantunes está em
 -- mapa_usuarios. Os outros quatro não existem para a RLS: toda política cruza o e-mail
 -- do JWT com esta tabela, então eles não alcançam nem o próprio dado.
