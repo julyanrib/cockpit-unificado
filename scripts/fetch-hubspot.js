@@ -782,7 +782,12 @@ async function createdLast7Days() {
         { propertyName: 'createdate', operator: 'BETWEEN', value: String(inicioSemana), highValue: String(now) }
       ]
     }],
-    properties: ['dealname', 'hubspot_owner_id']
+    /* createdate entra em 07/09/26: esta busca JA FILTRA por ele (o BETWEEN acima),
+       so nao o pedia de volta. A Daily v3 do gestor precisa recortar "prospeccoes
+       novas ONTEM", e sem a data por item o maximo que a tela sabia era a janela de
+       7 dias inteira. Uma propriedade a mais numa busca que ja existe — nenhuma
+       chamada nova ao HubSpot, nenhum custo de rota. */
+    properties: ['dealname', 'hubspot_owner_id', 'createdate']
   });
   return results.filter(d => !isExcludedDeal(d));
 }
@@ -2122,7 +2127,7 @@ async function main() {
       taxaAvanco: emAbertoTime > 0 ? Math.round((avancaramSemanaTime / emAbertoTime) * 100) : 0
     },
     kpiDetalhe: {
-      leadsCriados: leadsCriadosDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id })),
+      leadsCriados: leadsCriadosDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id, criadoEm: d.properties.createdate })),
       perdidos: perdidoSemanaDeals.map(d => ({ nome: d.properties.dealname, ownerId: d.properties.hubspot_owner_id }))
     },
     motivosPerda,
