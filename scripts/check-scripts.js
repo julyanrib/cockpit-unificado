@@ -1807,3 +1807,20 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ══ GUARDA 25 — O TIME NAS DUAS FONTES (07/09/26) ════════════════════════════════════
+   O time está escrito em dois lugares, e os dois são necessários: data/usuarios.json é o
+   que a TELA sabe (dele sai "N executivos na rua" antes de qualquer login), e
+   mapa_usuarios é o que o BANCO deixa entrar (toda política de RLS cruza o e-mail do JWT
+   com essa tabela).
+
+   Quando divergem, ninguém reclama: quem falta no banco recebe `[]` e a tela mostra "não
+   tem dado"; quem sobra no banco simplesmente entra. Em 07/09/26 divergiam em SETE
+   pessoas — 4 reps em preparação sem acesso (um já lia o Playbook e não salvaria uma
+   daily) e 3 que saíram do time com acesso vivo. Nenhum aparecia em log ou suite. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-time-nas-duas-fontes.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}

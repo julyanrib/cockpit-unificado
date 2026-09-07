@@ -1,20 +1,38 @@
--- PRONTO PARA APLICAR — Julyan autorizou em 07/09/26 ("faça toda a correção").
--- Eu não consegui aplicar daqui: o DDL foi bloqueado pelo classificador de permissão
--- desta sessão. Cole no SQL Editor do Supabase de uma vez — é idempotente, dá para
--- rodar duas vezes sem estrago.
+-- O QUE FICOU ABERTO NA VARREDURA DE 07/09/26 — estado de cada parte.
+--
+-- APLICADO nesta sessão (via execute_sql, portanto NÃO registrado em
+-- supabase_migrations.schema_migrations — é por isso que está aqui: o repositório tem
+-- que descrever o banco, e não o que eu queria que ele fosse):
+--   5. os três que saíram do time perderam a linha em mapa_usuarios
+--   6. o login dos três foi revogado e as sessões vivas encerradas
+--
+-- PENDENTE — o classificador de permissão desta sessão bloqueou. Cole no SQL Editor:
+--   4. *** URGENTE *** os 4 reps em preparação entram no mapa. Eles estão com sessão
+--      VIVA agora (andregomes 3, luizpimentel 2, scaetano 2, renatapessoa 1) e, sem
+--      linha lá, toda política de RLS devolve vazio: eles usam um app que mostra
+--      "não tem dado" em tudo. Julyan pediu para liberar o login completo aos quatro
+--      — "já vão começar a ir pra rua".
+--   1, 2 e 3. as políticas do PDI e os dois enable row level security.
+--   7. duas contas de autenticação que sobraram, para você decidir.
+--
+-- O ARQUIVO INTEIRO É IDEMPOTENTE: rodar tudo de uma vez é seguro, e as partes já
+-- aplicadas viram no-op.
 --
 -- DEPOIS DE APLICAR, três passos que fazem o repositório parar de divergir do banco:
---   1. mv supabase/propostas/fechar-o-que-ficou-aberto.sql \
+--   1. mova este arquivo para
 --        supabase/migrations/20260907230000_fechar_o_que_ficou_aberto.sql
---   2. acrescente `20260907230000 fechar_o_que_ficou_aberto` em migrations/APLICADAS.txt
---   3. node scripts/ler-politicas-do-banco.js --sql   (regenera POLITICAS.txt)
---      e apague 'pdi_documentos:delete' de DIVIDA_CONHECIDA em
---      scripts/checar-politica-do-front.js — a guarda 24 vai COBRAR isso, porque dívida
---      morta na lista reprova o build.
+--   2. acrescente a linha "20260907230000 fechar_o_que_ficou_aberto" em
+--        supabase/migrations/APLICADAS.txt
+--   3. regenere os dois espelhos e esvazie as duas listas de dívida:
+--        node scripts/ler-politicas-do-banco.js --sql
+--          (e apague pdi_documentos:delete de DIVIDA_CONHECIDA em
+--           scripts/checar-politica-do-front.js)
+--        node scripts/ler-time-do-banco.js
+--          (e esvazie SEM_ACESSO_AINDA em scripts/checar-time-nas-duas-fontes.js)
 --
--- Quatro coisas, todas com o mesmo tema: o banco permitia menos, ou mais, do que a tela
--- supunha — e em nenhum dos casos aparecia erro.
-
+--      As guardas 24 e 25 COBRAM o passo 3: dívida morta na lista reprova o build, de
+--      propósito. Dívida que fica na lista para sempre deixa de ser vista.
+--
 -- ══ 1. O APAGAR DO PDI VOLTA A FUNCIONAR ═════════════════════════════════════════════
 -- Medido com transação e rollback: o gestor VÊ a linha (1), manda apagar, o banco apaga
 -- 0. Delete barrado por RLS não é erro no Postgres — devolve sucesso apagando zero. O
@@ -78,7 +96,7 @@ with check (
 alter table public.webhook_cooldown enable row level security;
 alter table public.backup_donos_sp_20260901 enable row level security;
 
--- ══ 4. OS QUATRO REPS EM PREPARAÇÃO ENTRAM NO MAPA DE ACESSO ═════════════════════════
+-- ══ 4. OS QUATRO REPS EM PREPARAÇÃO — *** PENDENTE, E URGENTE *** ═══════════════════
 -- data/usuarios.json lista 5 reps com aComecar:true, mas só ricardoantunes está em
 -- mapa_usuarios. Os outros quatro não existem para a RLS: toda política cruza o e-mail
 -- do JWT com esta tabela, então eles não alcançam nem o próprio dado.
@@ -115,3 +133,62 @@ where not exists (
 -- leads. A evidência é ambígua — ou o sinalizador está velho, ou `aComecar` quer dizer
 -- "sem carteira ainda" e está certo. Não mexi porque isso muda o número da tela de
 -- login: hoje ela publica "6 executivos na rua", e sem o sinalizador publicaria 7.
+
+-- ══ 5. OS TRÊS QUE SAÍRAM DO TIME — JÁ APLICADO EM 07/09/26 ═════════════════════════
+-- Julyan confirmou em 07/09/26: michel, gleyson e ricardofiaes saíram.
+--
+-- JÁ APLICADO por execute_sql nesta sessão — está aqui porque o delete NÃO ficou
+-- registrado em supabase_migrations.schema_migrations, e o repositório precisa descrever
+-- o banco. Ao rodar este arquivo inteiro, este bloco é um no-op (as linhas já não estão
+-- lá) e a migration passa a registrar a mudança completa de 07/09.
+--
+-- TIRA O ACESSO, NÃO O HISTÓRICO: dailies, análises e PDIs continuam gravados por
+-- owner_id, e o gestor continua alcançando tudo pela cláusula de manager — o número do
+-- mês passado do time não muda. Conferido depois de aplicar: 28 dailies, 28 análises
+-- semanais e 3 PDIs preservados, zero perfil órfão.
+--
+-- Conferido ANTES de aplicar, e cada um desses podia ter estragado a operação:
+--   `perfis.email` é a única FK que aponta para mapa_usuarios, e é NO ACTION — perfil
+--   existente faria o delete FALHAR. Nenhum dos três tinha perfil.
+--   Nenhum tinha lead no nome (0 em leads_prospeccao), então não sobrou território sem dono.
+--   No snapshot do HubSpot de hoje eles só aparecem em `motivosPerda` (negócio já
+--   perdido) — zero negócio aberto para reatribuir. E não mexemos no HubSpot de todo jeito.
+delete from public.mapa_usuarios
+where lower(email) in (
+  'michel.takeat@gmail.com',
+  'gleyson.takeat@gmail.com',
+  'ricardofiaes.takeat@gmail.com'
+);
+
+-- ══ 6. O LOGIN DOS TRÊS FOI REVOGADO — JÁ APLICADO EM 07/09/26 ═══════════════════════
+-- Tirar de mapa_usuarios fecha o acesso ao DADO (toda política devolve vazio), e
+-- api/dados.js já devolvia 403 para eles porque não estão em data/usuarios.json. Mas
+-- conta de autenticação viva ainda emite JWT válido — e michel tinha entrado em 13/08.
+-- Um deles ainda tinha SESSÃO ABERTA no momento da limpeza.
+--
+-- BLOQUEIO em vez de delete de auth.users, de propósito: é reversível e preserva o
+-- registro de quem foi (created_at, last_sign_in_at). Apagar a conta é irreversível e
+-- mexe no schema interno do Supabase. Bloqueado já não entra, que era o objetivo — se
+-- você quiser apagar de vez depois, é uma linha.
+--
+-- As sessões vivas morrem junto: sem isso um refresh token existente continuaria
+-- renovando por dias, e o bloqueio só valeria no próximo login.
+with alvo as (
+  select id from auth.users where lower(email) in (
+    'michel.takeat@gmail.com','gleyson.takeat@gmail.com','ricardofiaes.takeat@gmail.com')
+)
+, mortas as (delete from auth.sessions where user_id in (select id from alvo) returning 1)
+update auth.users set banned_until = 'infinity' where id in (select id from alvo);
+
+-- ══ 7. DUAS CONTAS QUE SOBRARAM, PARA VOCÊ DECIDIR ═══════════════════════════════════
+-- Achadas na mesma varredura, com conta de autenticação viva e ausentes das duas fontes
+-- do time (data/usuarios.json e mapa_usuarios). Nenhuma alcança dado: api/dados.js
+-- devolve 403 e toda tabela devolve vazio. Mas continuam podendo autenticar.
+--
+--   test-recon@proton.me      conta de teste, nunca fez parte do time
+--   julyan@takeat.com.br      seu segundo e-mail; o cadastrado é julyan.takeat@gmail.com
+--
+-- Não bloqueei nenhuma das duas: a primeira porque não é uma das três que você nomeou, e
+-- a segunda porque é sua e bloquear pode ser exatamente o contrário do que você quer.
+-- Se for para limpar a de teste:
+--   update auth.users set banned_until = 'infinity' where lower(email) = 'test-recon@proton.me';
