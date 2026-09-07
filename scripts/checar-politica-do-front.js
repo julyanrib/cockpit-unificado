@@ -33,22 +33,20 @@ const ARQ_TEMPLATE = path.join(root, 'template', 'cockpit.template.html');
    service_role. RLS ligada com zero política é a proteção delas. Se o front começar a
    usar uma destas, a guarda reprova — e a resposta é uma rota em api/, nunca uma
    política de leitura no banco. */
-const SO_DO_SERVIDOR = ['cockpit_snapshot', 'novidades_mercado', 'restaurantes_osm'];
+const SO_DO_SERVIDOR = ['cockpit_snapshot', 'novidades_mercado', 'restaurantes_osm',
+  'webhook_cooldown', 'backup_donos_sp_20260901'];
 
-/* DÍVIDA DECLARADA, esperando o ok do Julyan para o DDL (07/09/26).
-   `pdi_documentos` tem botão de apagar na tela e não tem política de DELETE. O código
-   já parou de mentir — `.select()` depois do `.delete()` conta as linhas e zero linha
-   virou falha com aviso na tela. Falta a política, que é mudança no banco e não se
-   aplica sem ele mandar. O SQL está em supabase/propostas/fechar-o-que-ficou-aberto.sql.
+/* LISTA VAZIA, que é o estado correto (07/09/26).
 
-   `playbook_progresso:delete` esteve nesta lista por meia hora e saiu: medindo os usos,
-   o desmarcar do Playbook não existe — nenhum chamador passa concluido=false. Era código
-   morto, e foi removido em vez de ganhar política. Foi a checagem de dívida morta, mais
-   abaixo, que cobrou a saída da lista.
+   Ela teve `pdi_documentos:delete` por algumas horas: a tabela tinha botão de apagar na
+   tela e nenhuma política de DELETE. A migration 20260907233441 criou a política, e o
+   mesmo teste que provou o defeito foi refeito esperando o oposto — o gestor vê a linha
+   e apaga de verdade.
 
-   Ao aplicar: regenerar POLITICAS.txt e APAGAR as duas linhas daqui. Lista vazia é o
-   estado correto — dívida que fica para sempre deixa de ser vista. */
-const DIVIDA_CONHECIDA = ['pdi_documentos:delete'];
+   Se voltar a ter item aqui, é dívida ESPERANDO uma mudança no banco. A checagem de
+   dívida morta, mais abaixo, reprova o build quando o item deixa de ser verdade —
+   dívida que fica na lista para sempre deixa de ser vista. */
+const DIVIDA_CONHECIDA = [];
 
 function lerPoliticas() {
   if (!fs.existsSync(ARQ_POLITICAS)) {
