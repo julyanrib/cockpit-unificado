@@ -1789,3 +1789,21 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ══ GUARDA 24 — POLÍTICA DO BANCO x USO DO FRONT (07/09/26) ══════════════════════════
+   Nasceu de dois botões de apagar que mentiam há meses: `pdi_documentos` e
+   `playbook_progresso` têm RLS ligada e não têm política de DELETE, e delete barrado
+   por RLS NÃO é erro no Postgres — apaga zero linhas e devolve sucesso. Medido no banco
+   com transação e rollback: o gestor vê a linha, manda apagar, o banco apaga zero.
+
+   A mesma armadilha vale para leitura: select sem política devolve `[]` e a tela mostra
+   "não tem dado". É o caminho mais curto para um número errado chegar à tela em silêncio.
+
+   Arquivo próprio pelo mesmo motivo das outras, e sem tocar no banco pelo mesmo motivo
+   da 23: o build roda no CI sem credencial. O contrato vive em supabase/POLITICAS.txt. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-politica-do-front.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}

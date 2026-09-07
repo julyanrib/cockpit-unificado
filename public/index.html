@@ -15856,12 +15856,6 @@ async function playbookGravarProgressoSupabase(slug, tipo) {
   return !error;
 }
 
-async function playbookRemoverProgressoSupabase(slug) {
-  if (!supa || !sessaoAtual || !sessaoAtual.email) return false;
-  const { error } = await supa.from('playbook_progresso').delete().eq('user_email', sessaoAtual.email).eq('guia_slug', slug);
-  return !error;
-}
-
 async function playbookMarcarProgresso(slug, tipo, concluido) {
   if (!playbookProgressoCache) playbookProgressoCache = { missao: new Set(), leitura: new Set(), datas: new Map() };
   if (!playbookProgressoCache.prova) playbookProgressoCache.prova = new Set();
@@ -15873,15 +15867,13 @@ async function playbookMarcarProgresso(slug, tipo, concluido) {
   if (!playbookProgressoCache.datas) playbookProgressoCache.datas = new Map();
   if (concluido) playbookProgressoCache.datas.set(slug, isoDate(new Date()));
   else playbookProgressoCache.datas.delete(slug);
-  if (concluido) {
-    const ok = await playbookGravarProgressoSupabase(slug, tipo);
-    if (!ok) {
-      const pendentes = playbookProgressoLocal();
-      pendentes.push({ slug, tipo });
-      playbookProgressoLocalSalvar(pendentes);
-    }
-  } else {
-    await playbookRemoverProgressoSupabase(slug);
+
+  if (!concluido) return;
+  const ok = await playbookGravarProgressoSupabase(slug, tipo);
+  if (!ok) {
+    const pendentes = playbookProgressoLocal();
+    pendentes.push({ slug, tipo });
+    playbookProgressoLocalSalvar(pendentes);
   }
 }
 
@@ -42729,9 +42721,16 @@ async function renderPDIs() {
               okBtn.disabled = true; okBtn.textContent = 'Apagando...';
               const docId = card.dataset.docId;
               const caminho = card.dataset.docCaminho;
+
+              const { data: apagadas, error } = await supa.from('pdi_documentos')
+                .delete().eq('id', docId).select('id');
+              if (error || !apagadas || apagadas.length === 0) {
+                okBtn.disabled = false; okBtn.textContent = 'Apagar';
+                mostrarToast(error ? 'Não consegui apagar o documento. Tente de novo.'
+                  : 'O banco não deixou apagar este PDI. Nada foi removido — me chame.', 'erro');
+                return;
+              }
               await supa.storage.from('pdi-documentos').remove([caminho]);
-              const { error } = await supa.from('pdi_documentos').delete().eq('id', docId);
-              if (error) { okBtn.disabled = false; okBtn.textContent = 'Apagar'; mostrarToast('Não consegui apagar o documento. Tente de novo.', 'erro'); return; }
               fechar();
               card.remove();
             }

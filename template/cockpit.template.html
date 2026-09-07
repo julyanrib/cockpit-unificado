@@ -22091,11 +22091,6 @@ async function playbookGravarProgressoSupabase(slug, tipo) {
   return !error;
 }
 
-async function playbookRemoverProgressoSupabase(slug) {
-  if (!supa || !sessaoAtual || !sessaoAtual.email) return false;
-  const { error } = await supa.from('playbook_progresso').delete().eq('user_email', sessaoAtual.email).eq('guia_slug', slug);
-  return !error;
-}
 
 // Atualiza otimisticamente o cache local e dispara a gravação real em segundo plano.
 // Se a gravação falhar, enfileira em localStorage pra tentar de novo na próxima sessão
@@ -22112,15 +22107,22 @@ async function playbookMarcarProgresso(slug, tipo, concluido) {
   if (!playbookProgressoCache.datas) playbookProgressoCache.datas = new Map();
   if (concluido) playbookProgressoCache.datas.set(slug, isoDate(new Date()));
   else playbookProgressoCache.datas.delete(slug);
-  if (concluido) {
-    const ok = await playbookGravarProgressoSupabase(slug, tipo);
-    if (!ok) {
-      const pendentes = playbookProgressoLocal();
-      pendentes.push({ slug, tipo });
-      playbookProgressoLocalSalvar(pendentes);
-    }
-  } else {
-    await playbookRemoverProgressoSupabase(slug);
+  /* NÃO EXISTE DESMARCAR NO PLAYBOOK, e é de propósito: o check é o gesto que move a
+     barra, e a página lida não "desle". Os dois chamadores passam concluido=true
+     (prova e leitura). O ramo de apagar que morava aqui nunca rodou — e era uma
+     armadilha carregada, porque playbook_progresso não tem política de DELETE e um
+     delete barrado por RLS devolve sucesso apagando zero linhas.
+
+     Se um dia entrar o gesto de desmarcar: a política de DELETE tem que vir ANTES, e
+     a guarda 24 vai cobrar isso no build. O cache local acima já trata concluido
+     falso, então a tela não quebra — ela só não persiste, e é isso que o servidor
+     hoje permite. */
+  if (!concluido) return;
+  const ok = await playbookGravarProgressoSupabase(slug, tipo);
+  if (!ok) {
+    const pendentes = playbookProgressoLocal();
+    pendentes.push({ slug, tipo });
+    playbookProgressoLocalSalvar(pendentes);
   }
 }
 
@@ -57623,9 +57625,20 @@ async function renderPDIs() {
               okBtn.disabled = true; okBtn.textContent = 'Apagando...';
               const docId = card.dataset.docId;
               const caminho = card.dataset.docCaminho;
+              /* A LINHA PRIMEIRO, O ARQUIVO DEPOIS — e `.select()` para saber se apagou.
+                 Um delete barrado pela RLS apaga zero linhas e NAO devolve erro (medido no
+                 banco, com rollback). Antes, o arquivo do storage era removido aqui em cima,
+                 o cartão saía da tela e a linha ficava no banco apontando para um arquivo
+                 que já não existia. Agora nada é destruído antes de a linha ter ido. */
+              const { data: apagadas, error } = await supa.from('pdi_documentos')
+                .delete().eq('id', docId).select('id');
+              if (error || !apagadas || apagadas.length === 0) {
+                okBtn.disabled = false; okBtn.textContent = 'Apagar';
+                mostrarToast(error ? 'Não consegui apagar o documento. Tente de novo.'
+                  : 'O banco não deixou apagar este PDI. Nada foi removido — me chame.', 'erro');
+                return;
+              }
               await supa.storage.from('pdi-documentos').remove([caminho]);
-              const { error } = await supa.from('pdi_documentos').delete().eq('id', docId);
-              if (error) { okBtn.disabled = false; okBtn.textContent = 'Apagar'; mostrarToast('Não consegui apagar o documento. Tente de novo.', 'erro'); return; }
               fechar();
               card.remove();
             }
