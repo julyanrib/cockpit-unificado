@@ -17,6 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const { configSupabase, configMaptiler } = require('./montar-dados.js');
 const { buildPlaybook } = require('./build-playbook.js');
+const { cortar, verificar } = require('./cortar-comentarios.js');
 
 const root = path.join(__dirname, '..');
 
@@ -83,7 +84,40 @@ const output = template.replace('{{DATA_JSON}}', JSON.stringify(DATA_PUBLICO));
 
 const publicDir = path.join(root, 'public');
 if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
-fs.writeFileSync(path.join(publicDir, 'index.html'), output);
+
+/* ══ O ARQUIVO PUBLICADO VAI SEM COMENTÁRIO (07/09/26) ════════════════════════════════
+   MEDIDO: o index.html tinha 3742 KB brutos e a Vercel serve com Brotli (conferido no
+   cabeçalho: Content-Encoding: br), então o executivo baixava 801 KB na rua, no celular.
+   Desses 801 KB, 373 KB eram comentário — 47% do dado que ele paga era prosa que só eu
+   leio. O template continua com cada comentário no lugar; quem emagrece é o publicado.
+
+   NÃO é minificação: nome de variável, espaço dentro de string e quebra de linha
+   significativa ficam. Sem parser de verdade e sem npm nesta máquina, minificar seria
+   adivinhar — e adivinhar aqui corrompe texto de tela em silêncio.
+
+   AS QUATRO PROVAS RODAM AQUI e o build MORRE se qualquer uma reprovar. Duas versões
+   do scanner erraram antes: a primeira comia `https://` dentro de template literal, a
+   segunda saía do template no `}` de um objeto dentro de ${ } e passava a ler texto de
+   tela como código. As duas geravam arquivo que quase compilava. Ver
+   scripts/cortar-comentarios.js e a suite scripts/testar-corte-de-comentarios.js.
+
+   ESCAPE: COCKPIT_MANTER_COMENTARIOS=1 node scripts/build.js gera com tudo, para
+   quando eu precisar ler o HTML servido em produção numa investigação. */
+let publicado = output;
+if (process.env.COCKPIT_MANTER_COMENTARIOS === '1') {
+  console.log('AVISO — COCKPIT_MANTER_COMENTARIOS=1: publicando COM comentário (arquivo ~1,3 MB maior).');
+} else {
+  publicado = cortar(output);
+  const problemasDoCorte = verificar(output, publicado);
+  if (problemasDoCorte.length) {
+    console.error('BUILD REPROVADO — o corte de comentário alterou o código:');
+    problemasDoCorte.slice(0, 5).forEach(function (p) { console.error('  - ' + p); });
+    process.exit(1);
+  }
+  const kb = function (t) { return (Buffer.byteLength(t, 'utf8') / 1024).toFixed(0); };
+  console.log('corte de comentário: ' + kb(output) + ' KB -> ' + kb(publicado) + ' KB brutos (4 provas ok)');
+}
+fs.writeFileSync(path.join(publicDir, 'index.html'), publicado);
 buildPlaybook(root);
 
 console.log('OK — public/index.html gerado com sucesso (shell protegido, sem dados do CRM).');
