@@ -2,28 +2,32 @@
 #
 # POR QUE ESTE ARQUIVO EXISTE: sem política, o Postgres NÃO dá erro. Um select sem
 # política devolve `[]` e a tela mostra "não tem dado". Um delete sem política apaga
-# zero linhas e devolve sucesso, e a tela diz que apagou. Foi assim que dois botões
-# de apagar passaram meses mentindo (pdi_documentos e playbook_progresso, medidos no
-# banco com transação e rollback em 07/09/26).
+# zero linhas e devolve sucesso, e a tela diz que apagou. Foi assim que o botão de
+# apagar PDI passou meses mentindo — medido no banco com transação e rollback em
+# 07/09/26, e corrigido pela migration 20260907233441.
 #
 # A guarda `checar-politica-do-front.js` lê este arquivo e o template, e reprova o
 # build quando o front usa um comando que a tabela não autoriza. Ela NÃO toca no
 # banco — build tem que rodar offline, no CI, sem credencial.
 #
-# COMO ATUALIZAR: rode `node scripts/ler-politicas-do-banco.js`, que regenera este
-# arquivo lendo pg_policies. Nunca edite à mão: à mão, este arquivo passa a descrever
-# o que eu queria e não o que o banco faz — e a guarda fica verde medindo ficção.
+# COMO ATUALIZAR: `node scripts/ler-politicas-do-banco.js --sql`, rode a consulta, e
+# passe o JSON de volta para o script. Nunca edite à mão: à mão este arquivo passa a
+# descrever o que eu queria e não o que o banco faz, e a guarda fica verde medindo
+# ficção.
 #
-# `(nenhuma)` é legítimo em três tabelas: cockpit_snapshot, novidades_mercado e
-# restaurantes_osm são lidas SÓ pelo servidor (api/, com service_role). RLS ligada com
-# zero política é exatamente a proteção que elas precisam — cockpit_snapshot guarda o
-# CRM inteiro. Se o front passar a ler qualquer uma delas, a guarda reprova, e a
-# resposta certa é uma rota em api/, nunca uma política de leitura aqui.
+# `(nenhuma)` é legítimo em CINCO tabelas, todas lidas só pelo servidor (api/, com
+# service_role): cockpit_snapshot (guarda o CRM inteiro), novidades_mercado,
+# restaurantes_osm, webhook_cooldown e backup_donos_sp_20260901. RLS ligada com zero
+# política é exatamente a proteção que elas precisam — as duas últimas entraram nessa
+# lista em 07/09/26, quando estavam com RLS DESLIGADA e grant ao anon, e a chave anon
+# viaja dentro do bundle público. Se o front passar a ler qualquer uma delas, a guarda
+# reprova, e a resposta certa é uma rota em api/, nunca uma política de leitura aqui.
 #
-# gerado por scripts/ler-politicas-do-banco.js em 07/09/26
+# gerado a partir do banco em 07/09/26
 
 analise_individual_mensal = select
 analise_individual_semanal = select
+backup_donos_sp_20260901 = (nenhuma)
 cockpit_snapshot = (nenhuma)
 comunicados = select,insert,update,delete
 comunicados_lidos = select,insert
@@ -34,7 +38,7 @@ mapa_usuarios = select
 novidades_mercado = (nenhuma)
 pauta_do_lider = select,insert,update,delete
 pdi_compromissos = select,insert,update
-pdi_documentos = select,insert
+pdi_documentos = select,insert,delete
 perfis = select,insert,update
 planos_diarios = select,insert,update
 planos_semanais = select,insert,update
@@ -44,3 +48,4 @@ registros_rodada = select,insert,update,delete
 restaurantes_osm = (nenhuma)
 sugestoes_planos = select,insert
 um_a_um = select,insert
+webhook_cooldown = (nenhuma)

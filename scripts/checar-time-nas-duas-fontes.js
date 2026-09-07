@@ -81,6 +81,35 @@ const tela = lerJson();
 const problemas = [];
 const dividaVista = [];
 
+/* A TERCEIRA FONTE NÃO PODE VOLTAR (07/09/26).
+
+   `REPS` em scripts/fetch-hubspot.js era uma lista CRAVADA de seis ownerId, e é dela
+   que sai todo filtro por owner nas consultas ao HubSpot — ou seja, o funil que a tela
+   desenha. Foi ela que causou o defeito: mesmo depois de os cinco reps novos ganharem
+   owner real e saírem do portão aComecar, `DATA.reps` não teria linha para eles, e o
+   Julyan viu "nada liberado" no login da Renata.
+
+   Agora ela é derivada de data/usuarios.json. Esta checagem existe para o dia em que
+   alguém "resolver rápido" cravando um id de volta: uma lista de owners no robô passa a
+   ser uma quarta fonte, e ninguém percebe até um rep novo abrir a tela vazia. */
+const robo = fs.readFileSync(path.join(root, 'scripts', 'fetch-hubspot.js'), 'utf8');
+const iReps = robo.indexOf('const REPS =');
+if (iReps < 0) {
+  problemas.push('não achei a declaração de REPS em scripts/fetch-hubspot.js — se ela foi'
+    + ' renomeada, esta checagem parou de medir e precisa de uma âncora nova.');
+} else {
+  const trecho = robo.slice(iReps, iReps + 900);
+  if (trecho.indexOf('usuarios.json') < 0) {
+    problemas.push('REPS em scripts/fetch-hubspot.js não vem mais de data/usuarios.json —'
+      + ' lista de owner cravada no robô é uma quarta fonte do time, e é dela que sai o funil.');
+  }
+  const cravados = trecho.match(/ownerId: *['"][0-9]{6,}/g) || [];
+  if (cravados.length) {
+    problemas.push('achei ' + cravados.length + ' ownerId cravado(s) junto de REPS em '
+      + 'scripts/fetch-hubspot.js — o time tem que sair de data/usuarios.json.');
+  }
+}
+
 /* está na tela e não no banco: não alcança o próprio dado */
 Object.keys(tela).forEach(function (email) {
   if (email in banco) return;
