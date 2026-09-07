@@ -2129,8 +2129,13 @@ async function main() {
     historicoEtapas,
     funil: {
       labels: ['Backlog', 'Prospecção', 'Visita', 'Conversa com Decisor', 'Demo/Proposta', 'Negociação', 'Ag. Pagamento', 'Fechado/Onboarding', 'Perdido', 'Reciclagem'],
-      valores: [backlog, prospeccao, visita, diagnostico, demoProposta, negociacao, agPagamento, ganho, perdido, reciclagem],
-      cores: ['#6B7280', '#E8A33D', '#4A7FC7', '#7C6FE0', '#2FA88A', '#D9668F', '#E51A31', '#1FA35C', '#8C1220', '#8B92A3']
+      valores: [backlog, prospeccao, visita, diagnostico, demoProposta, negociacao, agPagamento, ganho, perdido, reciclagem]
+      /* `cores` SAIU EM 07/09/26. Ela era a segunda copia da paleta de etapa: a tela
+         tinha STAGE_COLORS e o snapshot trazia este array, e os dois eram lidos em
+         lugares diferentes — trocar a identidade num deles deixava o outro azul.
+         Cor e identidade visual, nao dado de CRM; a tela resolve por stageColor(id).
+         Array posicional era o agravante: inserir uma etapa no meio desalinhava todas
+         as cores seguintes sem erro nenhum. */
     },
     temperatura: {
       quentes: leadsQuentes,
