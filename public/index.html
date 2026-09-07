@@ -46629,10 +46629,13 @@ const DG2 = {
    Quatro estados, tres cores, e a regra e a MESMA que o resto do produto usa: vermelho e
    ausencia de pre-requisito (nao tem plano), ambar e pendencia (tem plano, mas o plano
    ignora o que esta travado), verde e execucao comprovada. */
+/* O SELO FALA DE PROMESSA (07/09/26, v3), e nao de plano. A pergunta da rodada mudou:
+   antes era "ele montou o dia?", agora e "ele travou a palavra?" — e travar a palavra
+   pressupoe ter montado, porque a promessa e derivada do plano. */
 function dg2EstadoDoRep(l) {
   const temPlano = dg2ClientesNomeados(l).length > 0;
   const feitas = Number(l.feitas) || 0;
-  if (!temPlano) return { estado: 'Plano aberto', tom: '#C7142A', bg: '#FDF0F1', acao: 'Cobrar plano' };
+  if (!l.travou) return { estado: 'Sem promessa', tom: '#C7142A', bg: '#FDF0F1', acao: 'Cobrar promessa' };
   if (feitas > 0) return { estado: 'Em execução', tom: '#2E7D5B', bg: '#EAF6EF', acao: 'Reconhecer entrega' };
   /* PLANO QUE IGNORA O TRAVADO pede recalibragem; plano coerente com o funil pede
      destravar o que segura o dia. A pergunta e "o plano de hoje toca o que esta parado?" */
@@ -46640,8 +46643,8 @@ function dg2EstadoDoRep(l) {
      garantia. Filtrar por um campo noPlano que nao existe dava o mesmo numero por
      acidente, e fazia o proximo leitor acreditar no campo. */
   const quentesFora = (l.quentes || []).length;
-  if (quentesFora > 0) return { estado: 'Plano definido', tom: '#B0782A', bg: '#FBF3E4', acao: 'Recalibrar' };
-  return { estado: 'Plano definido', tom: '#B0782A', bg: '#FBF3E4', acao: 'Destravar execução' };
+  if (quentesFora > 0) return { estado: 'Promessa travada', tom: '#B0782A', bg: '#FBF3E4', acao: 'Recalibrar' };
+  return { estado: 'Promessa travada', tom: '#B0782A', bg: '#FBF3E4', acao: 'Destravar execução' };
 }
 
 /* ── UMA LINHA POR EXECUTIVO, sobre g14LinhaDoRep ──────────────────────────────────── */
@@ -46696,9 +46699,110 @@ function dg2PickerHTML(l, si) {
   return '<div style="background:#F4F1EA;border:1px solid #E3DDD0;border-radius:10px;padding:12px 15px;">' + cabeca + corpo + '</div>';
 }
 
+/* ══ A PROMESSA DE UM EXECUTIVO, CONFERIDA CONTRA A AGENDA (07/09/26) ═════════════════
+   Os tres numeros sao os que ELE travou as 13h em dailies. O campo do meio e
+   `prometido_propostas`, cujo rotulo na tela dele e "Demo/Proposta" — e o "demos" da
+   prancha; usar outro campo seria cobrar um numero que ele nunca prometeu.
+
+   A CONFERENCIA sai de AGENDA_TIPOS, que ja e a regra do produto: rota e follow_up
+   contam como visita, reuniao conta como demo, interno nao conta. Fechamento nao tem
+   evento de calendario — a conferencia dele e closedate de hoje. */
+function dg2PromessaDoRep(l, ctx) {
+  const d = (typeof getDaily === 'function') ? (getDaily(l.ownerId, dailyRefDate) || {}) : {};
+  const num = function (v) { const n = Number(v); return Number.isFinite(n) ? n : null; };
+  const evs = l.evs || [];
+  const conta = function (ev) {
+    const tipo = (typeof AGENDA_TIPOS !== 'undefined') ? AGENDA_TIPOS[ev.tipo] : null;
+    return tipo ? tipo.conta : null;
+  };
+  const naAgendaVisitas = evs.filter(function (e) { return conta(e) === 'visita'; }).length;
+  const naAgendaDemos = evs.filter(function (e) { return conta(e) === 'reuniao'; }).length;
+  const fechadosHoje = Number((l.rep && l.rep.fechamentosHubspotHoje) || 0);
+  return {
+    travada: !!l.travou,
+    /* null e "ele nao prometeu", e nao "prometeu zero" — a tela desenha os dois
+       diferente, porque cobrar zero de quem nao prometeu e acusar do que nao foi dito. */
+    visitas: { p: num(d.prometido_visitas), naAgenda: naAgendaVisitas },
+    demos: { p: num(d.prometido_propostas), naAgenda: naAgendaDemos },
+    fechamentos: { p: num(d.prometido_fechamentos), naAgenda: fechadosHoje, semEvento: true }
+  };
+}
+
+/* AS TRES CELULAS, no formato que o markup da prancha consome. A verificacao tem tres
+   estados e cada um diz uma coisa diferente:
+     prometeu e a agenda cobre  -> "N na agenda ✓" verde
+     prometeu e a agenda nao    -> "x de N na agenda" vermelho
+     nao prometeu               -> "—" cinza, sem julgamento */
+function dg2CelulasDaPromessa(pr) {
+  const GRN = '#2E7D5B', RED = '#C7142A', MUT = '#7A8494';
+  const cel = function (rot, o) {
+    if (o.p === null) return { rot: rot, p: '—', st: 'sem promessa', stCor: MUT, borda: '#E3DDD0' };
+    if (o.p === 0) return { rot: rot, p: '0', st: 'não prometeu', stCor: MUT, borda: '#E3DDD0' };
+    const ok = o.naAgenda >= o.p;
+    return { rot: rot, p: String(o.p),
+      st: ok ? (o.naAgenda + (o.semEvento ? ' fechado(s) ✓' : ' na agenda ✓'))
+        : (o.naAgenda + ' de ' + o.p + (o.semEvento ? ' fechado(s)' : ' na agenda')),
+      stCor: ok ? GRN : RED, borda: ok ? '#CFE6DA' : '#F0D2D6' };
+  };
+  return [cel('Visitas', pr.visitas), cel('Demos', pr.demos), cel('Fechamentos', pr.fechamentos)];
+}
+
+/* ══ PROSPECÇÕES NOVAS, E A JANELA QUE ELAS MEDEM (07/09/26) ══════════════════════════
+   `kpiDetalhe.leadsCriados` sao os deals criados nos ULTIMOS 7 DIAS. Com `criadoEm` na
+   carga (o robo passou a pedir createdate) da para recortar ONTEM, que e o que a prancha
+   quer. Sem ele — carga antiga — a funcao devolve a janela de 7 dias E DIZ que e de 7
+   dias. O numero nunca mente sobre o periodo que mediu. */
+function dg2ProspeccoesNovas() {
+  const lista = (typeof DATA !== 'undefined' && DATA.kpiDetalhe && Array.isArray(DATA.kpiDetalhe.leadsCriados))
+    ? DATA.kpiDetalhe.leadsCriados : null;
+  if (!lista) return { medido: false, janela: null, porOwner: {}, total: 0 };
+  const temData = lista.some(function (x) { return x && x.criadoEm; });
+  let alvo = lista;
+  let janela = '7 dias';
+  if (temData) {
+    janela = 'ontem';
+    const ontem = (typeof addBusinessDays === 'function' && typeof dailyRefDate !== 'undefined')
+      ? addBusinessDays(dailyRefDate, -1) : null;
+    alvo = lista.filter(function (x) {
+      if (!x || !x.criadoEm) return false;
+      const iso = String(x.criadoEm).slice(0, 10);
+      return ontem ? iso === ontem : false;
+    });
+  }
+  const porOwner = {};
+  alvo.forEach(function (x) {
+    const k = String((x && x.ownerId) || '');
+    if (!k) return;
+    porOwner[k] = (porOwner[k] || 0) + 1;
+  });
+  return { medido: true, janela: janela, porOwner: porOwner, total: alvo.length };
+}
+
 function dg2Vals(ctx) {
   const INK = '#1A1613', MUT = '#988D7B', RED = '#C7142A', AMB = '#B0782A', GRN = '#2E7D5B';
   const ls = dg2Linhas(ctx);
+  /* PROSPECÇÃO NOVA POR PESSOA (v3, bloco 4 do cartao). "<2 novas" fica vermelho porque
+     e o piso que o Julyan cobra no topo do funil; sem carga medida, a frase diz isso em
+     vez de mostrar zero — zero aqui acusaria de nao prospectar quem talvez tenha. */
+  const prospNovas = dg2ProspeccoesNovas();
+  const prospDe = function (l) {
+    if (!prospNovas.medido) return null;
+    return Number(prospNovas.porOwner[String(l.ownerId)] || 0);
+  };
+  const prospTxt = function (l) {
+    const n = prospDe(l);
+    if (n === null) return 'prospecção não medida nesta carga';
+    const noPlano = dg2ClientesNomeados(l).filter(function (x) {
+      return x.lead && x.lead.tipo === 'n';
+    }).length;
+    return n + (prospNovas.janela === 'ontem' ? ' nova(s) ontem' : ' nova(s) em 7 dias')
+      + ' · ' + noPlano + ' no plano de hoje';
+  };
+  const prospCor = function (l) {
+    const n = prospDe(l);
+    if (n === null) return '#7A8494';
+    return n < 2 ? '#C7142A' : '#3E382F';
+  };
   /* uma leitura do dia util para os sete cartoes: d7ColunaDeHoje por cartao daria a
      mesma resposta sete vezes, e uma resposta diferente se a meia-noite passasse no
      meio do laco. */
@@ -46711,7 +46815,10 @@ function dg2Vals(ctx) {
 
   /* CONCLUSAO EM UMA FRASE — a mesma regra do hero que ja existia (headline), porque a
      rodada nao pode abrir com duas frases diferentes dependendo de qual bloco venceu. */
-  const semPlano = ls.filter(function (l) { return dg2ClientesNomeados(l).length === 0; });
+  /* QUEM NAO TRAVOU, e nao quem nao nomeou cliente: na v3 o que abre a rodada e a
+     palavra travada. Quem nomeou clientes e nao travou aparece aqui de proposito — e
+     exatamente o caso que a rodada das 8h30 existe para cobrar. */
+  const semPromessa = ls.filter(function (l) { return !l.travou; });
   const quentesFriosTotal = ls.reduce(function (a, l) {
     return a + (l.quentes || []).length;
   }, 0);
@@ -46723,33 +46830,33 @@ function dg2Vals(ctx) {
   const primNome = primeiro ? limpo(primeiro.nome).split(' ')[0] : '';
   const conclusao = !ls.length
     ? 'Nenhum executivo ativo nesta carga — a rodada não tem quem conduzir.'
-    : semPlano.length > 0
-      ? (semPlano.length + (semPlano.length === 1 ? ' sai' : ' saem') + ' para o campo sem plano'
-        + (quentesFriosTotal > 0 ? ' e ' + quentesFriosTotal + ' quente(s) esfriam sem follow-up' : '')
-        + '. Comece por ' + (limpo(semPlano[0].nome).split(' ')[0]) + '.')
+    : semPromessa.length > 0
+      ? (semPromessa.length + (semPromessa.length === 1 ? ' sai' : ' saem') + ' para o campo sem promessa'
+        + (quentesFriosTotal > 0 ? ' e ' + quentesFriosTotal + ' quente(s) esfriam fora dos planos' : '')
+        + '. Comece por ' + (limpo(semPromessa[0].nome).split(' ')[0]) + '.')
       : quentesFriosTotal > 0
-        ? (quentesFriosTotal + ' quente(s) esfriam fora do plano de hoje. Comece por ' + primNome + '.')
-        : 'Todo mundo com cliente nomeado e nenhum quente sem próximo passo. A rodada é de execução.';
+        ? (quentesFriosTotal + ' quente(s) esfriam fora dos planos. Comece por ' + primNome + '.')
+        : 'Todo mundo com a promessa travada e nenhum quente fora dos planos. A rodada é de execução.';
 
   /* FILA DE PRIORIDADE (top 3) — cada cartao entra na conducao daquela pessoa, e o
      data-gx-conduzir continua sendo o atributo, para nao existirem duas entradas para o
      mesmo ritual (o comentario de 30/08 removeu a segunda de proposito). */
   const ranks = ls.slice().sort(function (a, b) {
-    const pa = (dg2ClientesNomeados(a).length ? 0 : 6) + (a.agendaVazia ? 3 : 0)
+    const pa = (a.travou ? 0 : 6) + (a.agendaVazia ? 3 : 0)
       + Math.min(6, a.abertos ? Math.round(a.travados / a.abertos * 6) : 0);
-    const pb = (dg2ClientesNomeados(b).length ? 0 : 6) + (b.agendaVazia ? 3 : 0)
+    const pb = (b.travou ? 0 : 6) + (b.agendaVazia ? 3 : 0)
       + Math.min(6, b.abertos ? Math.round(b.travados / b.abertos * 6) : 0);
     return pb - pa;
   }).slice(0, 3).map(function (l, i) {
     const partes = [];
-    if (!dg2ClientesNomeados(l).length) partes.push('sem plano');
+    if (!l.travou) partes.push('sem promessa');
     if (l.agendaVazia) partes.push('agenda vazia');
     return {
       i: i + 1, nome: limpo(l.nome).split(' ').slice(0, 2).join(' '),
       ev1: partes.length ? partes.join(' · ') + ' ·' : '',
       ev2: l.travados > 0 ? (l.travados + ' acima da régua de ' + l.abertos + ' abertos') : 'pendência de acompanhamento',
-      cta: dg2ClientesNomeados(l).length ? 'recalibrar ▸' : 'cobrar plano ▸',
-      tom: dg2ClientesNomeados(l).length ? '#E0A64A' : '#C7142A',
+      cta: l.travou ? 'recalibrar ▸' : 'cobrar promessa ▸',
+      tom: l.travou ? '#E0A64A' : '#C7142A',
       ir: 'conduzir:' + l.ownerId
     };
   });
@@ -46757,7 +46864,7 @@ function dg2Vals(ctx) {
   /* OS 4 KPIS. O quarto obedece a regra que vale nas cinco telas: carga que nao chegou
      aparece como "nao medido", nunca como zero — zero ali seria dizer que o time nao
      fechou nada hoje, o que e uma afirmacao sobre as pessoas e nao sobre a leitura. */
-  const planosFechados = ls.filter(function (l) { return l.travou; }).length;
+  const promessasTravadas = ls.filter(function (l) { return l.travou; }).length;
   const nomeadosTotal = ls.reduce(function (a, l) { return a + dg2ClientesNomeados(l).length; }, 0);
   const quentesTotal = ls.reduce(function (a, l) { return a + ((l.quentes || []).length); }, 0);
   const agendaTotal = (ctx.agenda && ctx.agenda.total) || 0;
@@ -46765,16 +46872,28 @@ function dg2Vals(ctx) {
   const comprovadasHoje = ls.reduce(function (a, l) { return a + (Number(l.feitas) || 0); }, 0);
   const cargaOk = !ctx.frescor || ctx.frescor.confiavel;
   const kpis = [
-    { rot: 'Planos fechados', v: String(planosFechados), de: 'de ' + ls.length,
-      sub: nomeadosTotal + ' cliente(s) nomeado(s) · ' + semPlano.length + ' sem plano · planos_diarios',
-      cor: planosFechados < ls.length ? '#E0A64A' : '#5FD9A0', fs: '24px' },
-    { rot: 'Quentes sem próximo passo', v: String(quentesFriosTotal), de: 'de ' + quentesTotal + ' quentes',
-      sub: quentesFriosTotal > 0 ? 'datar tarefa na rodada, não depois dela' : 'todo quente com passo marcado',
+    { rot: 'Promessas travadas', v: String(promessasTravadas), de: 'de ' + ls.length,
+      sub: nomeadosTotal + ' cliente(s) nomeado(s) · ' + semPromessa.length + ' sem promessa · planos_diarios',
+      cor: promessasTravadas < ls.length ? '#E0A64A' : '#5FD9A0', fs: '24px' },
+    { rot: 'Quentes fora dos planos', v: String(quentesFriosTotal), de: 'de ' + quentesTotal + ' quentes',
+      sub: quentesFriosTotal > 0 ? 'datar tarefa na rodada, não depois dela' : 'todo quente dentro de algum plano',
       cor: quentesFriosTotal > 0 ? '#FF6B7A' : '#5FD9A0', fs: '24px' },
-    { rot: 'Visitas na agenda de hoje', v: String(agendaTotal),
-      de: agendaVazios > 0 ? ('· ' + agendaVazios + ' agenda(s) vazia(s)') : '· todos com algo',
-      sub: 'calendário HubSpot' + (comprovadasHoje > 0 ? ' · ' + comprovadasHoje + ' já comprovada(s)' : ''),
-      cor: agendaTotal === 0 ? '#FF6B7A' : '#F6F3EC', fs: '24px' },
+    /* KPI 3 VIROU PROSPECÇÃO NOVA (v3): a agenda do dia ja e dita pela faixa de agendas
+       vazias e pela cadencia hora a hora, e o topo do funil nao era medido em nenhum
+       lugar desta tela. O destaque nomeia quem esta abaixo do piso, porque "15 novas" no
+       time esconde o zero de duas pessoas. */
+    (function () {
+      if (!prospNovas.medido) {
+        return { rot: 'Prospecções novas', v: 'não medido', de: '',
+          sub: 'a carga não trouxe os leads criados — e isso não é zero', cor: '#A79C8A', fs: '14px' };
+      }
+      const abaixo = ls.filter(function (l) { const n = prospDe(l); return n !== null && n < 2; })
+        .map(function (l) { return limpo(l.nome).split(' ')[0] + ' ' + prospDe(l); });
+      return { rot: 'Prospecções novas ' + (prospNovas.janela === 'ontem' ? 'ontem' : 'em 7 dias'),
+        v: String(prospNovas.total), de: 'no time',
+        sub: abaixo.length ? ('abaixo de 2: ' + abaixo.join(' · ')) : 'ninguém abaixo de 2 — o topo está alimentado',
+        cor: abaixo.length ? '#FF6B7A' : '#5FD9A0', fs: '24px' };
+    }()),
     cargaOk
       ? { rot: 'Fechados no dia', v: String(Number(ctx.fechadosHoje) || 0), de: 'HubSpot, hoje',
           sub: 'closedate hoje · carga ' + (ctx.horaDaCarga || '08:40'), cor: '#5FD9A0', fs: '24px' }
@@ -46788,11 +46907,11 @@ function dg2Vals(ctx) {
      ja e idempotente. Nenhum caminho de escrita novo: se um dia a regra de cobranca
      mudar, ela muda num lugar. */
   const ACOES = {
-    'Cobrar plano': {
-      t: 'Cobrar plano — grava a cobrança com hora e aparece na próxima rodada',
+    'Cobrar promessa': {
+      t: 'Cobrar promessa — grava a cobrança com hora e aparece na próxima rodada',
       n: 'Fica registrado: se seguir aberto, a rodada de amanhã mostra "cobrado às hh:mm, ainda aberto".',
       itens: function (l) {
-        return [{ id: 'cp-' + l.ownerId, txt: 'Registrar a cobrança do plano de hoje — ele fecha com clientes nomeados antes das ' + dg2HoraDaTrava() + '.',
+        return [{ id: 'cp-' + l.ownerId, txt: 'Registrar a cobrança da promessa de hoje — ele trava visitas, demos e fechamentos antes das ' + dg2HoraDaTrava() + '.',
           /* cobranca DO PLANO, sem extra: e uma por pessoa por dia, e e isso que a
              chave (tipo, owner_id, data) do registros_rodada expressa. */
           btn: 'registrar cobrança ▸', acao: 'cobrar:' + l.ownerId, done: '✓ cobrança registrada' }];
@@ -46855,15 +46974,12 @@ function dg2Vals(ctx) {
     const infoRota = ((typeof rotasCache !== 'undefined' && rotasCache ? rotasCache.porOwner : null) || {})[l.ownerId];
     const paradas = (infoRota && (infoRota.paradas || []).length) || 0;
     const temRota = paradas > 0;
-    const passos = [
-      { rot: 'plano', ok: visitas.length > 0 },
-      { rot: paradas ? (paradas + ' paradas') : 'rota', ok: temRota },
-      { rot: (Number(l.feitas) || 0) + ((Number(l.feitas) || 0) === 1 ? ' visita' : ' visitas'), ok: (Number(l.feitas) || 0) > 0 },
-      { rot: l.travou ? 'palavra travada' : 'sem trava', ok: !!l.travou }
-    ].map(function (p) {
-      return { rot: p.rot, s: p.ok ? '✓' : '·', bg: p.ok ? '#EAF6EF' : '#F4F1EA',
-        borda: p.ok ? '#3ECF8E' : '#E3DDD0', cor: p.ok ? GRN : MUT };
-    });
+    /* OS QUATRO MARCOS ✓/· SAIRAM em 07/09/26: a v3 nao os desenha, e o topo do cartao
+       passou a ser numero da fila + nome + praca + selo. Dado calculado que nenhuma
+       tela le e peso morto — e depois vira "acho que isso e usado em algum lugar". */
+    /* A PROMESSA DELE, conferida contra a agenda — o primeiro bloco do cartao na v3. */
+    const pr = dg2PromessaDoRep(l, ctx);
+    const promessa = dg2CelulasDaPromessa(pr);
 
     /* "N abertos · M acima da régua" — o mesmo par que a aba Time publica. Sem funil
        medido nao vira zero: vira a frase que diz que nao foi medido. */
@@ -46873,7 +46989,11 @@ function dg2Vals(ctx) {
     return {
       i: i + 1, nome: limpo(l.nome), praca: limpo(l.praca), estado: l.estado, tom: l.tom, estadoBg: l.bg,
       borda: foco === true ? '#1A1613' : '#E3DDD0', op: foco === false ? '.35' : '1',
-      passos: passos,
+      prom: promessa,        /* `prom` e o nome que o markup da prancha consome */
+      /* SEM PROMESSA e sobre a TRAVA, nao sobre o plano: ele pode ter nomeado clientes e
+         nao ter travado a palavra, e e exatamente esse o caso que a rodada cobra. */
+      semProm: !pr.travada,  /* idem: `semProm` no markup */
+      prosp: prospTxt(l), prospCor: prospCor(l),
       temClientes: visitas.length > 0, semClientes: visitas.length === 0,
       /* OS BURACOS DA MESMA PERGUNTA. Slot livre e o horario que o roteiro dele deixou
          em aberto hoje; o gestor agenda ali na frente do time, e a visita cai no plano
@@ -47015,7 +47135,33 @@ function dg2Vals(ctx) {
   const fuHoje = { txt: nFu + (nFu === 1 ? ' follow-up' : ' follow-ups'),
     frase: nFu ? 'vencem hoje — cobrar na rodada, antes da rua' : 'vencem hoje: ninguém sai devendo retorno' };
 
+  /* ══ A PROMESSA DO TIME HOJE (v3, pe do hero) ═══════════════════════════════════
+     Soma so das promessas TRAVADAS: somar quem nao prometeu inflaria a promessa do
+     time com o silencio de quem nao falou. E cada linha carrega a conferencia, porque
+     "o time prometeu 23 visitas" sem dizer quantas estao na agenda e um numero que
+     ninguem consegue cobrar. */
+  const promessaDoTime = (function () {
+    const travadas = ls.map(function (l) { return dg2PromessaDoRep(l, ctx); })
+      .filter(function (p) { return p.travada; });
+    const soma = function (chave) {
+      return travadas.reduce(function (a, p) {
+        return { p: a.p + (p[chave].p || 0), naAgenda: a.naAgenda + (p[chave].naAgenda || 0) };
+      }, { p: 0, naAgenda: 0 });
+    };
+    const linha = function (rot, chave, sufixo) {
+      const s = soma(chave);
+      if (!travadas.length) return { v: '—', rot: rot, st: 'nenhuma promessa travada', stCor: '#7A8494' };
+      const ok = s.naAgenda >= s.p;
+      return { v: String(s.p), rot: rot,
+        st: ok ? (s.naAgenda + sufixo + ' ✓') : ('só ' + s.naAgenda + sufixo),
+        stCor: ok ? '#7FD9BE' : '#FF6B7A' };
+    };
+    return [linha('visitas', 'visitas', ' na agenda'), linha('demos', 'demos', ' na agenda'),
+      linha('fechamentos', 'fechamentos', ' fechado(s)')];
+  }());
+
   return {
+    promessaDoTime: promessaDoTime,
     naoTv: !document.body.classList.contains('tv'),
     horaDaCarga: (typeof DATA !== 'undefined' && DATA.hubspotUpdatedAtFmt) ? DATA.hubspotUpdatedAtFmt : 'não medida',
     rotuloDoDia: rotDia(dailyRefDate),
@@ -47023,6 +47169,17 @@ function dg2Vals(ctx) {
     rotuloCentro: (ehHoje ? 'hoje · ' : '') + rotDia(dailyRefDate),
     rotuloProximo: rotDia(vizinho(1)),
     cobHoje: cobHoje, fuHoje: fuHoje,
+    /* A TERCEIRA PILL (v3): quem esta segurando o topo. Sem carga medida ela diz isso,
+       em vez de anunciar zero prospecção para um time que talvez tenha prospectado. */
+    prospHoje: (function () {
+      if (!prospNovas.medido) return { txt: 'não medido', frase: 'a carga não trouxe os leads criados — e isso não é zero' };
+      const abaixo = ls.filter(function (l) { const n = prospDe(l); return n !== null && n < 2; })
+        .map(function (l) { return limpo(l.nome).split(' ')[0] + ' ' + prospDe(l); });
+      return { txt: prospNovas.total + ' prospecções novas ' + (prospNovas.janela === 'ontem' ? 'ontem' : 'em 7 dias'),
+        frase: abaixo.length
+          ? ('· ' + (abaixo.length === 2 ? abaixo.join(' e ') : abaixo.join(' · ')) + ' — o topo depende de quem está abaixo de 2')
+          : '· ninguém abaixo de 2 — o topo está alimentado' };
+    }()),
     tvZoom: '1',   /* o zoom do modo TV e do body.tv, que ja existe — nao um segundo */
     tvBotao: document.body.classList.contains('tv') ? 'sair do modo TV ✕' : 'modo TV',
     toggleTv: 'tv',
@@ -47083,13 +47240,18 @@ function dg2RuaDe(l) {
   return partes.join(' · ');
 }
 
-/* ══ DAILY & RITMO DO GESTOR v2 — A TELA (06/09/26) ═══════════════════════════════════
-   Markup da prancha mockup-gestor-daily-v2.dc.html, convertido mecanicamente e recortado:
-   saiu o chrome de abas do mockup (o Cockpit tem o proprio) e entraram os dados. Nenhuma
-   linha de estilo foi reescrita — a diferenca entre a prancha e esta tela e so o dado.
+/* ══ A DAILY DO GESTOR v3 — A TELA (07/09/26) ═════════════════════════════════════════
+   Markup da prancha mockup-gestor-daily-v3, convertido mecanicamente e recortado: saiu o
+   chrome de abas do mockup (o Cockpit tem o proprio) e entraram os dados. Nenhuma linha
+   de estilo reescrita.
 
-   Os cinco blocos, na ordem da prancha: faixa de carga · hero com fila e KPIs ·
-   controles · o board pessoa por pessoa · a cadencia hora a hora · o funil na Daily. */
+   O QUE A v3 TROUXE sobre a v2: a promessa de cada um em tres celulas conferidas contra
+   a agenda, a faixa da promessa do time no pe do hero, a prospeccao nova como KPI e como
+   pill, e o quarto bloco do cartao. Os quatro marcos ✓/· do topo do cartao sairam.
+
+   RE-INJETADO por mim, porque a prancha nao desenha e nao pode morrer: a ancora
+   data-dg2-card (a conducao rola ate ela) e o AGENDAR NO HORARIO LIVRE, que o Julyan
+   pediu de volta ontem. */
 function dg2TelaHTML(ctx) {
   DG2.ctx = ctx;
   const v = dg2Vals(ctx);
@@ -47099,6 +47261,9 @@ function dg2TelaHTML(ctx) {
   const rotuloCentro = v.rotuloCentro, rotuloProximo = v.rotuloProximo;
   const diaAnterior = v.diaAnterior, diaProximo = v.diaProximo;
   const conclusao = v.conclusao, ranks = v.ranks, kpis = v.kpis;
+  /* promTime e o nome que o markup da prancha usa; promessaDoTime e o do motor.
+     Alinho aqui, no destructuring, e nao no markup — ele e copia literal. */
+  const promTime = v.promessaDoTime;
   const rotaZero = v.rotaZero, nAgendasVazias = v.nAgendasVazias;
   const nomesAgendaVazia = v.nomesAgendaVazia, conduzirRota = v.conduzirRota;
   const conduzindo = v.conduzindo, condPos = v.condPos, condNome = v.condNome;
@@ -47108,18 +47273,18 @@ function dg2TelaHTML(ctx) {
   const board = v.board, timeline = v.timeline, horas = v.horas, funil = v.funil;
   const temEtapa = v.temEtapa, etapaTitulo = v.etapaTitulo;
   const etapaItens = v.etapaItens, etapaRodape = v.etapaRodape;
-  const cobHoje = v.cobHoje, fuHoje = v.fuHoje;
+  const cobHoje = v.cobHoje, fuHoje = v.fuHoje, prospHoje = v.prospHoje;
   return `<div style="max-width:1280px;margin:0 auto;padding:26px 24px 72px;zoom:${tvZoom};">
 
   ${(naoTv) ? `
     <div style="display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-wrap:wrap;padding-bottom:12px;border-bottom:2px solid #1A1613;">
-      <span style="font:700 11px 'Manrope',sans-serif;color:#6B6254;background:#F4F1EA;border-radius:999px;padding:6px 12px;font-variant-numeric:tabular-nums;white-space:nowrap;">carga ${horaDaCarga} · agora <span data-dg2-agora>${agora}</span> · promessa trava às ${horaDaTrava}</span>
+      <span style="font:700 11px 'Manrope',sans-serif;color:#6B6254;background:#F4F1EA;border-radius:999px;padding:6px 12px;font-variant-numeric:tabular-nums;white-space:nowrap;">carga HubSpot ${horaDaCarga} · agora <span data-dg2-agora>${agora}</span> · promessa trava às ${horaDaTrava}</span>
     </div>
   ` : ''}
 
   <!-- HERO: o placar do dia -->
   <div style="background:#14110D;border-radius:18px;margin-top:16px;padding:20px 26px;color:#F6F3EC;">
-    <div style="display:grid;grid-template-columns:minmax(0,1.25fr) 1px minmax(0,1fr);gap:22px;align-items:start;">
+    <div style="display:grid;grid-template-columns:minmax(0,1.2fr) 1px minmax(0,1fr);gap:22px;align-items:start;">
       <div>
         <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.15em;text-transform:uppercase;color:#FF6B7A;">A Daily · ${rotuloDoDia} · o time me fala onde atua hoje</span>
         <h1 style="font:900 26px/1.15 'Archivo',sans-serif;letter-spacing:-.02em;color:#F6F3EC;margin:8px 0 12px;text-wrap:balance;">${conclusao}</h1>
@@ -47143,6 +47308,14 @@ function dg2TelaHTML(ctx) {
           </div>
         `).join('')}
       </div>
+    </div>
+    <!-- a promessa do time, somada -->
+    <div style="margin-top:16px;border-top:1px solid #2C2721;padding-top:13px;display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;">
+      <span style="font:900 9.5px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#A79C8A;white-space:nowrap;">A promessa do time hoje</span>
+      ${(promTime||[]).map(pt => `
+        <span style="display:inline-flex;align-items:baseline;gap:7px;"><b style="font:900 22px 'Archivo',sans-serif;color:#F6F3EC;font-variant-numeric:tabular-nums;">${pt.v}</b><span style="font:700 11.5px 'Manrope',sans-serif;color:#A79C8A;">${pt.rot}</span><span style="font:700 10.5px 'Manrope',sans-serif;color:${pt.stCor};white-space:nowrap;">${pt.st}</span></span>
+      `).join('')}
+      <span style="margin-left:auto;font:700 10.5px 'Manrope',sans-serif;color:#A79C8A;">soma dos planos travados · confirmado = existe na agenda HubSpot</span>
     </div>
     ${(rotaZero) ? `
       <div style="margin-top:14px;border:1px solid #C7142A;border-radius:12px;padding:11px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
@@ -47184,9 +47357,9 @@ function dg2TelaHTML(ctx) {
   <!-- O BOARD DO DIA -->
   <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:26px;padding-bottom:8px;border-bottom:1px solid #E3DDD0;">
     <h2 style="font:900 12px 'Archivo',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#988D7B;margin:0;">O dia, executivo por executivo</h2>
-    <small style="font:700 12px 'Manrope',sans-serif;color:#988D7B;">cada cartão responde: onde ele atua hoje · o que segura o funil dele · a rua está de pé?</small>
+    <small style="font:700 12px 'Manrope',sans-serif;color:#988D7B;">cada cartão responde: o que ele prometeu · onde atua · quem ficou de fora e por quê · a prospecção continua?</small>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:12px;margin-top:12px;">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(470px,1fr));gap:12px;margin-top:12px;">
     ${(board||[]).map(e => `
       <div data-dg2-card="${e.i - 1}" style="background:#FFFDF8;border:1px solid ${e.borda};border-top:3px solid ${e.tom};border-radius:14px;padding:15px 17px;opacity:${e.op};display:flex;flex-direction:column;gap:11px;">
         <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;">
@@ -47195,11 +47368,23 @@ function dg2TelaHTML(ctx) {
           <span style="font:700 10.5px 'Manrope',sans-serif;color:#988D7B;">${e.praca}</span>
           <span style="margin-left:auto;font:800 9.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${e.tom};background:${e.estadoBg};border-radius:6px;padding:3px 8px;white-space:nowrap;">${e.estado}</span>
         </div>
-        <div style="display:flex;gap:13px;flex-wrap:wrap;">
-          ${(e.passos||[]).map(pa => `
-            <span style="display:inline-flex;align-items:center;gap:6px;font:700 10.5px 'Manrope',sans-serif;color:#6B6254;"><span style="width:16px;height:16px;border-radius:999px;display:grid;place-items:center;background:${pa.bg};border:1px solid ${pa.borda};font:900 9px 'Manrope',sans-serif;color:${pa.cor};">${pa.s}</span>${pa.rot}</span>
-          `).join('')}
-        </div>
+
+        <!-- 1. a promessa dele -->
+        ${(e.temProm) ? `
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;">
+            ${(e.prom||[]).map(pr => `
+              <div style="background:#F4F1EA;border:1px solid ${pr.borda};border-radius:10px;padding:7px 11px 8px;">
+                <span style="display:block;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#988D7B;">${pr.rot}</span>
+                <span style="display:flex;align-items:baseline;gap:5px;"><b style="font:900 19px 'Archivo',sans-serif;color:#1A1613;font-variant-numeric:tabular-nums;">${pr.p}</b><span style="font:700 10px 'Manrope',sans-serif;color:${pr.stCor};">${pr.st}</span></span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+        ${(e.semProm) ? `
+          <div style="border:1px dashed #C7142A;border-radius:10px;padding:9px 13px;font:700 12px 'Manrope',sans-serif;color:#C7142A;">sem promessa do dia — nasce agora, na rodada, e trava às 13h</div>
+        ` : ''}
+
+        <!-- 2. onde ele atua -->
         <div>
           <p style="margin:0 0 5px;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;">Onde ele atua hoje</p>
           ${(e.temClientes) ? `
@@ -47210,8 +47395,9 @@ function dg2TelaHTML(ctx) {
             </div>
           ` : ''}
           ${(e.semClientes) ? `
-            <span style="display:block;font:700 12px 'Manrope',sans-serif;color:#C7142A;">sem plano do dia — o compromisso dele nasce agora, na rodada</span>
+            <span style="display:block;font:700 12px 'Manrope',sans-serif;color:#C7142A;">sem clientes nomeados — o compromisso dele nasce agora, na rodada</span>
           ` : ''}
+        
           ${(e.semDiaUtil) ? `
             <span style="display:block;font:700 11px 'Manrope',sans-serif;color:#988D7B;margin-top:7px;">hoje não é dia útil — o roteiro é de segunda a sexta, e não há horário para agendar</span>
           ` : ''}
@@ -47227,25 +47413,33 @@ function dg2TelaHTML(ctx) {
             <div style="margin-top:8px;">${e.pickerHTML}</div>
           ` : ''}
         </div>
+
+        <!-- 3. quem ficou de fora e por quê -->
         <div style="border-top:1px dashed #E3DDD0;padding-top:9px;">
-          <p style="margin:0 0 5px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;">O que segura o funil dele <span style="font:700 10.5px/1.4 'Manrope',sans-serif;letter-spacing:0;text-transform:none;color:${e.funilCor};white-space:nowrap;">${e.funilResumo}${e.quentesResumo ? ' · ' + e.quentesResumo : ''}</span></p>
+          <p style="margin:0 0 5px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;">Ficou de fora do plano — perguntar por quê <span style="font:700 10.5px/1.4 'Manrope',sans-serif;letter-spacing:0;text-transform:none;color:${e.funilCor};white-space:nowrap;">${e.funilResumo}</span></p>
           ${(e.temQuentes) ? `
             <div style="display:flex;flex-direction:column;gap:4px;">
               ${(e.quentes||[]).map(q => `
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#F4F1EA;border:1px solid #EEE9DE;border-radius:8px;padding:6px 10px;">
-                  <span style="font:700 11.5px/1.4 'Manrope',sans-serif;color:#1A1613;flex:1;min-width:160px;overflow-wrap:anywhere;">${q.cliente} <span style="font-weight:400;color:#6B6254;">· ${q.motivo}</span> <b style="color:${q.planoCor};">${q.noPlano}</b></span>
+                  <span style="font:700 11.5px/1.4 'Manrope',sans-serif;color:#1A1613;flex:1;min-width:160px;overflow-wrap:anywhere;">${q.cliente} <b style="color:#C7142A;font-variant-numeric:tabular-nums;">${q.dias}</b> <span style="font-weight:400;color:#6B6254;">· ${q.motivo}</span></span>
                   <button data-dg2-acao="${q.fazer}" style="display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:1px solid ${q.borda};border-radius:999px;background:${q.bg};font:800 10px 'Manrope',sans-serif;color:${q.cor};cursor:pointer;white-space:nowrap;" data-dg2-hv="4">${q.btn}</button>
                 </div>
               `).join('')}
             </div>
           ` : ''}
-          ${(e.zeroQuentes) ? `
-            <span style="font:700 11.5px 'Manrope',sans-serif;color:#2E7D5B;">0 negócios em fechamento sem próximo passo</span>
+          ${(e.zeroQuentes && e.temClientes) ? `
+            <span style="font:700 11.5px 'Manrope',sans-serif;color:#2E7D5B;">nada quente ficou de fora — o plano cobre o funil dele</span>
+          ` : ''}
+          ${(e.zeroQuentes && !e.temClientes) ? `
+            <span style="font:700 11.5px 'Manrope',sans-serif;color:#7A8494;">nenhum quente vencendo — mas sem plano não há o que cobrir</span>
           ` : ''}
         </div>
+
+        <!-- 4. prospecção nova + rua + ação -->
         <div style="border-top:1px dashed #E3DDD0;padding-top:9px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;white-space:nowrap;">A rua</span>
-          <span style="font:400 11.5px/1.45 'Manrope',sans-serif;color:${e.ruaCor};flex:1;min-width:200px;">${e.rua}</span>
+          <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;white-space:nowrap;">Prospecção</span>
+          <span style="font:700 11.5px 'Manrope',sans-serif;color:${e.prospCor};white-space:nowrap;font-variant-numeric:tabular-nums;">${e.prosp}</span>
+          <span style="font:400 11.5px/1.45 'Manrope',sans-serif;color:${e.ruaCor};flex:1;min-width:180px;">${e.rua}</span>
           <button data-dg2-acao="${e.agir}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 15px;border:1px solid ${e.btnBorda};border-radius:999px;background:${e.btnBg};font:800 11px 'Manrope',sans-serif;color:${e.btnCor};cursor:pointer;white-space:nowrap;" data-dg2-hv="4">${e.btnTxt}</button>
         </div>
         ${(e.painelAberto) ? `
@@ -47302,6 +47496,7 @@ function dg2TelaHTML(ctx) {
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
     <span style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px 8px;border:1px solid #C7142A;border-radius:14px;padding:7px 14px;font:700 11.5px/1.5 'Manrope',sans-serif;color:#1A1613;"><b style="color:#C7142A;white-space:nowrap;">${cobHoje.txt}</b> ${cobHoje.frase}</span>
     <span style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px 8px;border:1px solid #E0A64A;border-radius:14px;padding:7px 14px;font:700 11.5px/1.5 'Manrope',sans-serif;color:#1A1613;"><b style="color:#B0782A;white-space:nowrap;">${fuHoje.txt}</b> ${fuHoje.frase}</span>
+    <span style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px 8px;border:1px solid #2E7D5B;border-radius:14px;padding:7px 14px;font:700 11.5px/1.5 'Manrope',sans-serif;color:#1A1613;"><b style="color:#2E7D5B;white-space:nowrap;">${prospHoje.txt}</b> ${prospHoje.frase}</span>
   </div>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px;">
     ${(funil||[]).map(f => `
@@ -47328,7 +47523,7 @@ function dg2TelaHTML(ctx) {
     </div>
   ` : ''}
 
-  <p style="margin:28px 0 0;border-top:1px solid #E3DDD0;padding-top:12px;font-size:11px;line-height:1.55;color:#988D7B;">Plano vem do Cockpit (planos_diarios) · execução, agenda e funil vêm do HubSpot · carga ${horaDaCarga}. O compromisso é <b style="color:#3E382F;">derivado dos clientes nomeados</b>, nunca digitado. Cobrança, sugestão e reconhecimento gravam no Supabase; tarefa datada grava direto no HubSpot. Ausência de carga aparece como "não medido", nunca zero.</p>
+  <p style="margin:28px 0 0;border-top:1px solid #E3DDD0;padding-top:12px;font-size:11px;line-height:1.55;color:#988D7B;">Promessa e plano vêm do Cockpit (planos_diarios, clientes nomeados — trava às 13h) · agenda, visitas, check-ins, prospecções (createdate) e funil vêm do HubSpot · carga ${horaDaCarga}. O compromisso é <b style="color:#3E382F;">derivado dos clientes nomeados</b>, nunca digitado. Cobrança, sugestão e reconhecimento gravam no Supabase; tarefa datada grava direto no HubSpot. Ausência de carga aparece como "não medido", nunca zero.</p>
 </div>`;
 }
 

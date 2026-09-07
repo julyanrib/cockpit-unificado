@@ -107,9 +107,24 @@ checar('o card do último dia lê dela', template.indexOf('const ontemDados = h9
 checar('o script também', template.indexOf("const ontem = (typeof h9Ontem === 'function') ? h9Ontem(r) : null;") > -1);
 /* dailyRefDate É MUTÁVEL: os botões da aba Daily a movem. Ler dela faria o "ontem"
    do Hoje mudar quando o gestor folheasse a Daily de outro dia. */
-checar('o ontem parte de hoje, e não da data navegada na Daily',
-  template.indexOf('addBusinessDays(isoDate(new Date()), -1)') > -1
-  && template.indexOf('addBusinessDays(dailyRefDate, -1) : null;') < 0);
+/* A PROIBIÇÃO É DENTRO DO h9Ontem, E NÃO NO ARQUIVO INTEIRO (07/09/26).
+   A regra continua a mesma e é boa: o "ontem" da aba Hoje tem de partir de HOJE,
+   porque dailyRefDate é mutável e os botões da Daily a movem — ler dela faria este
+   número andar quando o gestor folheasse a Daily de outro dia.
+
+   O QUE MUDOU: a checagem media a AUSÊNCIA da string no template todo, e a Daily v3 do
+   gestor passou a ter um "ontem" legítimo relativo ao dia navegado (prospecções novas
+   ontem: se ele folheia para a Daily de terça, o "ontem" dali é segunda). Guarda
+   cravada numa string global reprova código correto de outra tela — foi o que
+   aconteceu. Agora ela lê o CORPO do h9Ontem, que é o que ela sempre quis proteger. */
+checar('o ontem da aba Hoje parte de hoje, e não da data navegada na Daily',
+  (function () {
+    const i = template.indexOf('function h9Ontem(r) {');
+    if (i < 0) return false;
+    const corpo = template.slice(i, i + 900);
+    return corpo.indexOf('addBusinessDays(isoDate(new Date()), -1)') > -1
+      && corpo.indexOf('addBusinessDays(dailyRefDate') < 0;
+  }()));
 /* SEM DADO A LINHA DIZ ISSO, e não um zero: "0 visitas" afirma que ele não trabalhou. */
 checar('sem registro o script não afirma que o dia foi vazio',
   template.indexOf('nada comprovado no HubSpot ainda') > -1);
