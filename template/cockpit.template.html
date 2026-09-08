@@ -6626,8 +6626,35 @@
     border-radius:var(--r-pill);min-height:38px;padding:0 14px;cursor:pointer;
     font:800 11.5px var(--font-body);color:var(--muted);}
   .fn3-perdidos-cta:hover{color:var(--ink);border-color:var(--ink);}
-  .fn3-perdidos-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+  /* 300px e não 240px (08/09/26): a linha do perdido tem cinco partes, e a 240px o nome
+     ficava com 27px precisando de 118 — a única parte que importa era a que sumia. Com
+     300px o nome ganha ~120px, e 39 perdidos em quatro colunas somam ~440px de altura,
+     contra os ~7.100px que os cartões de negócio ativo ocupavam. */
+  .fn3-perdidos-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
     gap:8px;}
+  /* ── A LINHA DO PERDIDO (08/09/26) ─────────────────────────────────────────────────
+     Substitui o cartão do ativo nesta lista: 183px por perdido viravam ~7.100px de
+     rolagem com 39 deles. Uma linha de 44px — que é a área de toque mínima da casa —
+     mostra a mesma informação: nome, quando saiu, motivo, valor e o ⌄ para reabrir.
+     O nome tem `min-width:0` e reticências porque ele é a única parte que pode ser longa;
+     o resto é curto por natureza. */
+  .fn3-perdido-linha{display:flex;align-items:center;gap:8px;min-height:44px;
+    padding:0 10px;background:var(--panel);border:1px solid var(--line);
+    border-left:3px solid var(--red);border-radius:10px;cursor:pointer;text-align:left;
+    transition:border-color var(--t-base) var(--ease),background var(--t-base) var(--ease);}
+  .fn3-perdido-linha:hover{border-color:var(--line-btn);background:var(--panel-2,var(--panel));}
+  .fn3-perdido-linha:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  .fn3-perdido-nome{flex:1;min-width:0;font:800 11.5px var(--font-body);color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fn3-perdido-quando{flex:none;font:700 9.5px var(--font-body);color:var(--muted2);white-space:nowrap;}
+  .fn3-perdido-motivo{flex:none;font:700 9.5px var(--font-body);color:var(--red);white-space:nowrap;
+    max-width:120px;overflow:hidden;text-overflow:ellipsis;}
+  .fn3-perdido-valor{flex:none;font:800 10px var(--font-body);color:var(--muted2);
+    white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .fn3-perdido-mais{flex:none;display:inline-flex;align-items:center;justify-content:center;
+    width:28px;height:28px;border:1px solid var(--line);border-radius:8px;
+    background:transparent;color:var(--muted2);cursor:pointer;font:800 12px var(--font-body);}
+  .fn3-perdido-mais:hover{border-color:var(--ink);color:var(--ink);}
 
   /* ── O ARRASTE ─────────────────────────────────────────────────────────────────────
      O card levanta com rotação de -2,5° e sombra funda; os destinos válidos ganham borda
@@ -18850,6 +18877,49 @@ function fn3Cabecalho(col, daEtapa) {
 }
 
 /* ── O CARD ──────────────────────────────────────────────────────────────────────────── */
+/* ══ O PERDIDO É UMA LINHA, NÃO UM CARTÃO (08/09/26) ═══════════════════════════════════
+   Julyan: "na aba meu funil olha essa lista de perdidos, nao precisa disso tudo".
+
+   MEDIDO no navegador: a lista chamava `fn3Card(x, true)` — o cartão do negócio ATIVO — e
+   cada perdido ocupava 183px para mostrar 60 caracteres. A anatomia dos 183px: 45 do nome,
+   18 do motivo, 26 do valor, 44 SÓ do botão ⌄, mais padding. Com 39 perdidos na tela dele,
+   são ~7.100px de rolagem numa coluna.
+
+   E o cartão do ativo carrega o que um perdido não tem: o diagnóstico do que fazer, os
+   dois chips de higiene ("tem data?" / "tem valor?") e os botões de AVANÇAR ETAPA. Negócio
+   perdido não avança, e cobrar higiene de quem já saiu é ruído.
+
+   O QUE UM PERDIDO TEM, e é só isso: o nome, quando saiu, o motivo, o valor que foi
+   embora, e um gesto para reabrir. Cabe numa linha. Os campos vêm do mesmo lugar de antes
+   (`motivo_do_perdido`, `perdidoEm`, `mrr`/`valor`), então nada de novo precisa ser
+   buscado. O ⌄ FICA: é por ele que ele reabre um perdido, e tirar o gesto seria trocar
+   ruído por beco sem saída. */
+function fn3CardPerdido(item) {
+  const l = item.lead || {};
+  const id = esc(String(l.id || ''));
+  /* SEM O DIA DA SEMANA NESTA LINHA. fn2Quando devolve "02/09 (quarta)", que custa 69px
+     numa linha onde o nome do restaurante é o que importa — medido: o nome ficava com 27px
+     precisando de 118. Aqui a data é registro; o dia da semana fica na esteira do ativo,
+     onde ele responde "parado desde quando?". Corto pelo " (" e não por regex: barra
+     invertida em patch já chegou comida neste arquivo, virando expressão válida e errada. */
+  const quandoCheio = l.perdidoEm ? (fn2Quando(l.perdidoEm) || l.perdidoEm) : null;
+  const quando = quandoCheio ? String(quandoCheio).split(' (')[0] : null;
+  const motivo = String(l.motivo_do_perdido || '').trim();
+  const mrr = Number(l.mrr || l.valor_de_mrr) || 0;
+  const valor = mrr ? ('R$ ' + mrr.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + '/mês')
+    : (Number(l.valor) ? (typeof tl5Mil === 'function' ? tl5Mil(Number(l.valor)) : 'R$ ' + l.valor) : null);
+  return `<div class="fn3-perdido-linha" data-fn3-card="${id}" role="button" tabindex="0"
+    aria-label="Abrir a ficha de ${esc(l.name || 'negócio')}"
+    title="Abrir a ficha de ${esc(l.name || 'negócio')}">
+    <b class="fn3-perdido-nome" title="${esc(l.name || '')}">${esc(l.name || 'sem nome')}</b>
+    ${quando ? `<span class="fn3-perdido-quando">${esc(quando)}</span>` : ''}
+    <span class="fn3-perdido-motivo">${motivo ? esc(motivo) : 'sem motivo registrado'}</span>
+    ${valor ? `<span class="fn3-perdido-valor">${esc(valor)}</span>` : ''}
+    <button type="button" class="fn3-perdido-mais" data-fn3-menu="${id}"
+      aria-label="mais ações de ${esc(l.name || 'negócio')}">⌄</button>
+  </div>`;
+}
+
 function fn3Card(item, aceso) {
   const l = item.lead;
   const e = item.est;
@@ -19186,7 +19256,7 @@ function fn3Perdidos(perdidos) {
         <button type="button" class="fn3-perdidos-cta" data-fn3-aba="ativos">voltar aos ativos ⌃</button>
       </div>
       <div class="fn3-perdidos-lista" style="margin-top:10px;">
-        ${perdidos.map(x => fn3Card(x, true)).join('')}
+        ${perdidos.map(x => fn3CardPerdido(x)).join('')}
       </div>
     </div>`;
   }
@@ -26965,7 +27035,16 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   /* O PLANO ATUAL, LIDO ANTES DE ESCREVER. O passo pode ser salvo do Meu funil ou da
      Agenda, onde o Planejamento nunca foi carregado nesta sessão — e gravar sobre um
      `pl6Plano` nulo apagaria a semana inteira dele. */
-  try { await pl6Carregar(rep); } catch (e) { return { erro: 'não consegui ler seu plano da semana' }; }
+  /* LEITURA QUE FALHA NÃO PODE VIRAR ESCRITA (08/09/26). O try/catch daqui nunca disparava
+     porque pl6Carregar engolia o erro e devolvia undefined — e seguir em frente gravaria a
+     grade VAZIA da sessão por cima da semana real dele. Agora ela diz `{ok}` e a recusa é
+     explícita: a tarefa já está no HubSpot e na agenda, então perder o espelho é um
+     complemento a menos; apagar a semana dele seria um estrago. */
+  let leu;
+  try { leu = await pl6Carregar(rep); } catch (e) { leu = { ok: false, motivo: (e && e.message) || 'erro' }; }
+  if (leu && leu.ok === false) {
+    return { erro: 'não consegui ler seu plano da semana (' + (leu.motivo || 'motivo não informado') + ')' };
+  }
   const grade = pl6GradeDoPlano();
 
   /* SAI DE ONDE ESTAVA: a data do passo é o plano novo, então ele MUDA de lugar em vez
@@ -29150,14 +29229,33 @@ function pl6RegioesDoPlano() {
   return arr;
 }
 
+/* ══ ELA DIZ SE CONSEGUIU LER (08/09/26) ═══════════════════════════════════════════════
+   Ela engolia a falha: `console.error` e `return`, deixando `pl6Plano = null`. Quem
+   chamava não tinha como distinguir "esta pessoa não montou a semana" de "a leitura
+   falhou" — e as duas coisas levam a decisões opostas.
+
+   POR QUE ISSO É PERIGOSO AQUI, e não é teoria: `pl6Gravar` monta a linha com
+   `pl6GradeDoPlano()`, que é a grade EM MEMÓRIA. Com a leitura falhada, a grade em memória
+   é vazia, e o upsert gravaria uma semana vazia POR CIMA da semana real dele — perdendo
+   os agendamentos de todos os cinco dias por causa de uma falha de rede de um segundo.
+   O comentário de `espelharPassoNoPlanoSemanal` já dizia que gravar sobre um `pl6Plano`
+   nulo "apagaria a semana inteira dele", e protegia com try/catch — que nunca disparava,
+   porque o erro não era lançado.
+
+   Agora ela devolve `{ ok }`. Os três chamadores antigos ignoram o retorno e continuam
+   funcionando; quem ESCREVE depois é que precisa conferir. */
 async function pl6Carregar(rep) {
   pl6Plano = null;
-  if (!DATA.supabase || !supa) return;
+  if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem Supabase nesta sessão' };
   const segunda = pl6SegundaDaSemana();
   const { data, error } = await supa.from('planos_semanais').select('*')
     .eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
-  if (error) { console.error('Plano semanal, leitura:', error.message); return; }
+  if (error) {
+    console.error('Plano semanal, leitura:', error.message);
+    return { ok: false, motivo: error.message || 'o banco recusou a leitura' };
+  }
   pl6Plano = (data && data[0]) ? data[0] : null;
+  return { ok: true, tinhaLinha: !!pl6Plano };
 }
 
 /* ══ GRAVAR: SUCESSO E LINHA DE VOLTA, NAO AUSENCIA DE ERRO ══════════════════════════
@@ -44282,47 +44380,61 @@ function d7ColunaDeHoje() {
 
    E ELE NUNCA INVENTA LINHA: sem plano da semana, devolve o motivo e o toast conta. Criar
    a semana por baixo do pano poria o executivo com um plano que ele não montou. */
+/* ══ O "HOJE" AGENDA PELA MESMA FUNÇÃO QUE TODO MUNDO (08/09/26) ═══════════════════════
+   Julyan: "na aba hj o lead vai pra aba planejamento, mas nao vai com o mesmo nome".
+
+   O QUE ELA FAZIA, E POR QUE ESTAVA ERRADO. Esta função era uma SEGUNDA implementação de
+   `espelharPassoNoPlanoSemanal`, e gravava `grade[dia][vaga] = String(leadId)` — o dealId
+   CRU do HubSpot. Mas a grade de planos_semanais é indexada pelo id da munição, e ele tem
+   prefixo: `c-<dealId>` para negócio da carteira, `n-<uuid>` para conta nova de
+   prospecção, `__rua` para a volta de rua (conferido no banco em 08/09). Um id só de
+   dígitos não existe naquele espaço.
+
+   CONSEQUÊNCIA MEDIDA: `porId.get()` não achava o slot e a tela do Planejamento desenhava
+   "conta saiu da sua base" no lugar do nome do restaurante. E pior — como
+   `gravarDesfechoEPasso` JÁ chama `espelharPassoNasTelas` (que grava certo, com prefixo),
+   o negócio entrava DUAS vezes: um slot correto e um órfão. A checagem de "já está na
+   grade" desta função comparava o id cru, então nunca via o slot certo e sempre criava o
+   segundo. Achei um desses órfãos vivo no plano da Kelly desta semana.
+
+   E O CÓDIGO JÁ SABIA DA REGRA, escrita em dois lugares: `espelharPassoNoPlanoSemanal`
+   ("const idNaGrade = 'c-' + String(lead.id)") e `g14OpcoesDoSlot`, cuja nota diz que um
+   dealId solto ali "viraria conta fora da carga desta sessao na tela dele amanha —
+   agendamento que grava sem erro e nao existe no dia seguinte". Esta era a terceira
+   implementação, e a única que não seguia.
+
+   AGORA ELA DELEGA. A canônica é idempotente de propósito (ela TIRA o lead de onde
+   estiver antes de pôr no dia novo), então chamá-la de novo depois do espelho não
+   duplica: encontra o `c-<id>`, remove e recoloca no mesmo lugar. O que esta casca faz é
+   só traduzir as recusas dela para o formato que a fila do "Hoje" usa no rótulo. */
 async function h8AgendarNaSemana(rep, leadId, dataISO) {
   if (!DATA.supabase || !supa) return { ok: false, motivo: 'esta sessão está sem Supabase' };
   if (!rep || rep.ownerId == null) return { ok: false, motivo: 'sem dono na sessão' };
-  const di = pl6ColunaDaData(dataISO);
-  if (di < 0) return { ok: false, motivo: 'a data cai fora desta semana útil' };
-
-  const segunda = pl6SegundaDaSemana();
-  const { data: linhas, error: erroLeitura } = await supa.from('planos_semanais')
-    .select('*').eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
-  if (erroLeitura) return { ok: false, motivo: 'não consegui ler o seu plano da semana' };
-  const linha = Array.isArray(linhas) && linhas[0];
-  if (!linha) return { ok: false, motivo: 'você ainda não montou a semana no Planejamento' };
-
-  /* normalizo o formato aqui: linha antiga pode vir com coluna curta */
-  const grade = Array.from({ length: PL6_DIAS_UTEIS }, function (_, ci) {
-    const col = (linha.grade && linha.grade[ci]) || [];
-    const arr = Array.isArray(col) ? col.slice(0, PL6_SLOTS) : [];
-    while (arr.length < PL6_SLOTS) arr.push(null);
-    return arr;
-  });
-
-  const alvo = String(leadId);
-  for (let c = 0; c < PL6_DIAS_UTEIS; c++) {
-    for (let s = 0; s < PL6_SLOTS; s++) if (String(grade[c][s] || '') === alvo) {
-      return { ok: true, jaEstava: true, dia: c, slot: s };
-    }
+  if (typeof espelharPassoNoPlanoSemanal !== 'function') {
+    return { ok: false, motivo: 'o espelho do plano não carregou nesta aba' };
   }
-  let vaga = -1;
-  for (let s = 0; s < PL6_SLOTS; s++) if (!grade[di][s]) { vaga = s; break; }
-  if (vaga < 0) return { ok: false, motivo: 'esse dia já está com os ' + PL6_SLOTS + ' horários ocupados' };
+  /* A FUNÇÃO CANÔNICA PEDE O LEAD, E NÃO O ID: ela precisa do nome para a mensagem e do
+     id para a grade. A fila do "Hoje" tem o objeto inteiro, mas esta assinatura só
+     recebia o id — então resolvo aqui, na carga desta sessão. */
+  let lead = null;
+  const alvo = String(leadId);
+  Object.keys(DATA.funilLeads || {}).some(function (k) {
+    return ((DATA.funilLeads || {})[k] || []).some(function (l) {
+      if (String(l.id) === alvo) { lead = l; return true; }
+      return false;
+    });
+  });
+  if (!lead) return { ok: false, motivo: 'não achei este negócio na carga desta sessão' };
 
-  grade[di][vaga] = alvo;
-  const { error: erroEscrita } = await supa.from('planos_semanais').upsert({
-    owner_id: String(rep.ownerId),
-    data_segunda: segunda,
-    regioes: linha.regioes,
-    grade: grade,
-    atualizado_em: new Date().toISOString()
-  }, { onConflict: 'owner_id,data_segunda' }).select();
-  if (erroEscrita) return { ok: false, motivo: 'o banco recusou: ' + erroEscrita.message };
-  return { ok: true, dia: di, slot: vaga, hora: PL6_HORAS[vaga] };
+  const r = await espelharPassoNoPlanoSemanal(lead, dataISO, null, String(rep.ownerId));
+  if (!r || r.nada) return { ok: false, motivo: 'não consegui escrever no plano' };
+  if (r.ok) return { ok: true, hora: r.hora, dia: r.dia, mudouDeLugar: !!r.mudouDeLugar };
+  if (r.fora) return { ok: false, motivo: 'a data cai fora desta semana útil' };
+  if (r.cheio) return { ok: false, motivo: 'o dia ' + (r.dia || '') + ' já está com todos os horários ocupados' };
+  if (r.foraDaMunicao) {
+    return { ok: false, motivo: 'este negócio não está na sua munição do Planejamento (região não escolhida, ou ele saiu da sua base)' };
+  }
+  return { ok: false, motivo: r.erro || 'o plano da semana recusou' };
 }
 
 /* A ROTA DE HOJE — o bairro que ele escolheu para hoje no Planejamento. Vira o titulo da
@@ -55616,9 +55728,23 @@ function rt7NaoComecaram() {
   return (DATA.usuarios || []).filter(u => u.role === 'rep' && u.aComecar);
 }
 function rt7Nome(ownerId) {
-  const u = (DATA.usuarios || []).find(x => String(x.ownerId) === String(ownerId));
+  /* ══ ID AUSENTE NÃO É UMA PESSOA (08/09/26) ═══════════════════════════════════════
+     Esta função comparava `String(x.ownerId) === String(ownerId)`. Com `ownerId`
+     undefined isso vira "undefined" === "undefined" — e casa com o PRIMEIRO usuário que
+     não tem a coluna. Medido em data/usuarios.json: dois gestores (Julyan Ribeiro e Luiz
+     Paulo) não têm ownerId, porque gestor não é dono de negócio no HubSpot.
+
+     RESULTADO: qualquer lugar que passasse um id ausente escrevia "Julyan Ribeiro" na
+     tela como se fosse o dono. Foi assim que o cartão da Semana v3 mandou "fazer hoje com
+     Julyan" um negócio que é do Bruno — os negócios de `reps[].criticos/quentes` vêm
+     agrupados por dono e NÃO carregam o campo ownerId.
+
+     São 14 pontos de chamada, e nenhum deles conferia. A recusa mora aqui, uma vez, em
+     vez de catorze `if` espalhados. */
+  if (ownerId == null || ownerId === '' || ownerId === 'undefined') return 'sem dono';
+  const u = (DATA.usuarios || []).find(x => x.ownerId != null && String(x.ownerId) === String(ownerId));
   if (u) return u.nome || u.name || String(ownerId);
-  const r = (DATA.reps || []).find(x => String(x.ownerId) === String(ownerId));
+  const r = (DATA.reps || []).find(x => x.ownerId != null && String(x.ownerId) === String(ownerId));
   return r ? r.name : String(ownerId);
 }
 
@@ -56557,12 +56683,19 @@ function sm3Acoes(P) {
            a régua de temperatura marcou como parcial. "Não sei quando foi o último
            toque" não é "faz 6 dias que ninguém liga". */
         if (!Number.isFinite(dias) || dias < 5) return;
-        quentes.push(l);
+        /* O DONO VEM DA ITERACAO, NAO DO NEGOCIO (08/09/26). Os negocios de
+           reps[].criticos/quentes vem AGRUPADOS por dono e nao carregam ownerId —
+           conferido em producao: o campo esta ausente. Ler l.ownerId dava undefined, e
+           rt7Nome(undefined) casava com o usuario do gestor (que nao tem ownerId) e
+           escrevia "Julyan". O cartao mandava "fazer hoje com Julyan" um negocio do
+           Bruno. sm3NegociosDoTime ja sabe de quem e cada um: e daqui que sai. */
+        quentes.push({ l: l, ownerId: it.ownerId, dono: it.dono });
       }(it.l));
     });
     if (!quentes.length) return;
-    quentes.sort((a, b) => (Number(b.temp) || 0) - (Number(a.temp) || 0));
-    const l = quentes[0];
+    quentes.sort((a, b) => (Number(b.l.temp) || 0) - (Number(a.l.temp) || 0));
+    const q = quentes[0];
+    const l = q.l;
     const din = sm3Dinheiro([l]);
     lista.push({
       id: 'geladeira:' + l.id,
@@ -56572,9 +56705,9 @@ function sm3Acoes(P) {
       por: 'quente de verdade esfriando por silêncio'
         + (quentes.length > 1 ? ' — e outros ' + (quentes.length - 1) + ' na mesma faixa' : '')
         + '. Liga hoje ou perde a semana.',
-      valor: din.txt + ' · ' + nomeDe(l.ownerId),
+      valor: din.txt + ' · ' + (q.dono ? String(q.dono).split(' ')[0] : nomeDe(q.ownerId)),
       rot: 'destravar hoje ▸',
-      ownerId: String(l.ownerId || ''),
+      ownerId: String(q.ownerId || ''),
       peso: 90 + Number(l.temp)
     });
   }());

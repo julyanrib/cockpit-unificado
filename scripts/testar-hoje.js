@@ -200,18 +200,90 @@ checar('existe a ponte que põe o próximo passo na semana',
 checar('e a fila do dia CHAMA a ponte, não só a define',
   template.indexOf('naSemana = await h8AgendarNaSemana(r, lead.id, dataISO);') > -1,
   'definir e não chamar é o defeito que mais aparece nesta base');
-/* A LEITURA FRESCA É O QUE IMPEDE DE APAGAR A SEMANA DELE: pl6Gravar monta a linha com
-   pl6GradeDoPlano(), a grade CARREGADA NA SESSÃO. Quem está no Hoje pode não ter aberto o
-   Planejamento — a grade em memória viria vazia e o upsert levaria a semana junto. */
-checar('a ponte lê o plano do banco antes de escrever',
-  /from\('planos_semanais'\)[\s\S]{0,120}\.select\('\*'\)\.eq\('owner_id'/.test(template),
-  'sem a leitura fresca, o upsert grava a grade vazia da sessão por cima da semana dele');
-checar('e ela não usa pl6Gravar, que escreveria a grade da sessão',
-  template.slice(template.indexOf('async function h8AgendarNaSemana'),
-    template.indexOf('async function h8AgendarNaSemana') + 2600).indexOf('pl6Gravar(') < 0);
-checar('sem plano da semana ela NÃO inventa a linha',
-  template.indexOf('você ainda não montou a semana no Planejamento') > -1,
-  'criar a semana por baixo do pano põe o executivo com um plano que ele não montou');
+/* ══ A PONTE DELEGA, E ISSO SUBSTITUIU TRÊS ASSERÇÕES DAQUI (08/09/26) ═══════════════
+   Julyan: "na aba hj o lead vai pra aba planejamento, mas nao vai com o mesmo nome".
+
+   A CAUSA: h8AgendarNaSemana era uma SEGUNDA implementação do espelho e gravava o
+   dealId CRU na grade. A grade de planos_semanais é indexada com prefixo — `c-<dealId>`
+   para carteira, `n-<uuid>` para conta nova, `__rua` para a volta de rua (conferido no
+   banco em 08/09). Id só de dígitos não existe ali, então o Planejamento desenhava
+   "conta saiu da sua base" no lugar do nome. E como gravarDesfechoEPasso JÁ chama
+   espelharPassoNasTelas (que grava com prefixo), o negócio entrava DUAS vezes: um slot
+   certo e um órfão. Achei um órfão vivo no plano da Kelly desta semana.
+
+   AS TRÊS ASSERÇÕES ANTIGAS mediam o corpo daquela segunda implementação: que ela lia o
+   banco antes de escrever, que ela NÃO usava pl6Gravar, e que ela recusava quando não
+   havia plano. As duas primeiras propriedades continuam valendo — agora dentro de
+   espelharPassoNoPlanoSemanal, que faz pl6Carregar (leitura fresca do banco) antes de
+   montar a grade. A terceira MUDOU de propósito, e é a mudança que precisa estar dita:
+
+   O "Hoje" era o ÚNICO dos seis chamadores do espelho que recusava quando a pessoa não
+   tinha montado a semana. Os outros cinco criam a linha. Com a recusa, marcar a visita
+   no Hoje deixava o Planejamento e a Daily negando um compromisso que ela acabou de
+   marcar — exatamente o furo que o espelho foi criado para fechar. Uma regra, um lugar:
+   agora ela cria, como todos os outros. */
+checar('a ponte DELEGA para o espelho canônico, em vez de gravar por conta própria',
+  /const r = await espelharPassoNoPlanoSemanal\(lead, dataISO, null, String\(rep\.ownerId\)\);/.test(template)
+  && template.slice(template.indexOf('async function h8AgendarNaSemana'),
+    template.indexOf('async function h8AgendarNaSemana') + 3200).indexOf("from('planos_semanais').upsert") < 0,
+  'segunda implementação do espelho foi o que gravou o id cru e criou o slot órfão');
+checar('e ela traduz as recusas do espelho, sem inventar sucesso',
+  /if \(r\.fora\) return \{ ok: false/.test(template)
+  && /if \(r\.cheio\) return \{ ok: false/.test(template)
+  && /if \(r\.foraDaMunicao\)/.test(template),
+  'as três recusas do espelho são legítimas e a fila do dia precisa dizer qual foi');
+/* A LEITURA QUE FALHA NÃO PODE VIRAR ESCRITA. pl6Gravar monta a linha com
+   pl6GradeDoPlano(), a grade EM MEMÓRIA: com a leitura falhada ela é vazia, e o upsert
+   gravaria uma semana vazia por cima da real. pl6Carregar engolia o erro e devolvia
+   undefined, então o try/catch que protegia isso nunca disparava. */
+checar('o carregador do plano diz se conseguiu ler',
+  /return \{ ok: false, motivo: error\.message \|\| 'o banco recusou a leitura' \};/.test(template),
+  'leitura que falha em silêncio + upsert da grade em memória = a semana dele apagada');
+/* ══ QUANTOS ESCREVEM NA GRADE, E QUEM ═══════════════════════════════════════════════
+   A grade de planos_semanais é indexada por um ESPAÇO DE ID com prefixo. Todo escritor
+   novo tem de saber disso, e o jeito de garantir que ele saiba é reprovar o build quando
+   aparecer um escritor que ninguém revisou.
+
+   Hoje são dois, e os dois estão certos: `pl6Gravar` (o Planejamento e o espelho, via
+   pl6GradeDoPlano) e `g14AgendarNoHorarioLivre` (a Daily do gestor, cujo chamador resolve
+   o id na carteira antes). O terceiro era h8AgendarNaSemana — e foi ele que gravou o id
+   cru e criou o slot órfão no plano da Kelly. */
+/* CONTA QUEM TOCA A `grade`, e não quem toca a tabela. Medido: há TRÊS upserts em
+   planos_semanais, e o terceiro é `pm8Confirmar`, que grava só a coluna `promessa` — o
+   upsert do PostgREST atualiza apenas as colunas enviadas, então a grade sobrevive
+   intacta. A primeira versão desta guarda contou os três e reprovou o código certo. */
+(function () {
+  /* Olha a FUNÇÃO que contém cada upsert: ela monta `grade` ou não? Duas versões desta
+     guarda erraram antes desta — a primeira contou os três upserts da tabela (e
+     pm8Confirmar grava só `promessa`), e a segunda casou `upsert(linha` nos dois, porque
+     pl6Gravar e pm8Confirmar dão o mesmo nome ao payload. */
+  const nomes = [];
+  /* AS DUAS ASPAS. A sabotagem que escreveu from("planos_semanais") passou VERDE: a
+     regex pedia aspa simples, e um escritor novo com aspa dupla escapava da guarda
+     inteira. Guarda que só vê um estilo de aspa é guarda que o próximo autor burla sem
+     querer. */
+  const re = /from\(["']planos_semanais["']\)[\s\S]{0,60}?\.upsert/g;
+  let m;
+  while ((m = re.exec(template))) {
+    const antes = template.slice(0, m.index);
+    const iFn = Math.max(antes.lastIndexOf('\nasync function '), antes.lastIndexOf('\nfunction '));
+    if (iFn < 0) continue;
+    const nome = (template.slice(iFn).match(/^\s*(?:async )?function ([A-Za-z0-9_]+)/) || [])[1] || '?';
+    /* o corpo da função, até o próximo `\nfunction` */
+    const resto = template.slice(iFn + 1);
+    const fim = resto.search(/\n(?:async )?function /);
+    const corpo = fim > 0 ? resto.slice(0, fim) : resto;
+    if (/\bgrade\b/.test(corpo)) nomes.push(nome);
+  }
+  checar('só os dois escritores conhecidos tocam a GRADE da semana',
+    nomes.length === 2 && nomes.indexOf('pl6Gravar') > -1 && nomes.indexOf('g14AgendarNoHorarioLivre') > -1,
+    'são ' + nomes.length + ' (' + nomes.join(', ') + ') — escritor novo na grade tem de passar pelo espaço de id (c- / n- / __rua); um dealId cru vira slot órfão');
+}());
+
+checar('e o espelho recusa escrever quando a leitura falhou',
+  /if \(leu && leu\.ok === false\)/.test(template)
+  && /não consegui ler seu plano da semana \(/.test(template),
+  'a tarefa já está no CRM: perder o espelho é um complemento a menos, apagar a semana é estrago');
 /* E O TOAST CONTA O QUE FALTOU, em vez de afirmar mesmo assim */
 checar('quando a semana não recebe, o toast diz por quê',
   template.indexOf('Na sua semana ele NÃO entrou: ') > -1);
