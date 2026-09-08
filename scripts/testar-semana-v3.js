@@ -128,6 +128,23 @@ conferir('o grid das ações segue o número de ações',
   /repeat\(\$\{Math\.min\(Math\.max\(\(acoes5\|\|\[\]\)\.length, ?1\), ?5\)\}/.test(tpl),
   'repeat(5) fixo com duas ações deixa dois cartões estreitos e três colunas de vazio');
 
+/* ESTE DEFEITO EU SÓ VI EM PRODUÇÃO, e ele passou por duas medições minhas (375px e
+   1440px) porque eu media SOBREPOSIÇÃO no nó errado — peguei um elemento `relative` com o
+   mesmo texto em vez do span absoluto. O rótulo "onde deveria estar" sobe 17px acima da
+   barra de pace, a linha tem 12px de gap, e as duas frases saíam impressas uma sobre a
+   outra na faixa preta. É empilhamento vertical: acontece em qualquer largura. */
+conferir('a barra de pace tem folga para o rótulo que sobe acima dela',
+  /min-width:220px;margin-top:10px;position:relative;height:10px/.test(tpl),
+  'sem a folga, "onde deveria estar" imprime em cima de "meta da semana: ..."');
+
+conferir('o nome do negócio é limpo antes de entrar na frase',
+  /String\(l\.name \|\| l\.dealname \|\| 'negócio sem nome'\)\.trim\(\)/.test(tpl),
+  'o HubSpot devolve nome com espaço sobrando ("DONNA MARIA  ") e saía dois espaços antes do travessão');
+
+conferir('o prazo da janela fala em dia, não em contagem crua',
+  /it\.faltam === 0 \? 'hoje' : it\.faltam === 1 \? 'amanhã'/.test(tpl),
+  '"janela fecha em 0 dia(s)" num cartão que manda agir hoje faz a pessoa parar para converter');
+
 conferir('o diagnóstico do modo não afirma cadência que não mediu',
   /cadência não medida/.test(corpoDe('sm3ModoDe')),
   'frase que soa precisa sobre dado que não existe é a pior saída numa tela de cobrança');
