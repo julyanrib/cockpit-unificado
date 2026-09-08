@@ -340,17 +340,164 @@ jobs:
           echo "Não consegui enviar mesmo após 3 tentativas — verifique manualmente."
           exit 1
 
-      # Se qualquer passo acima falhar (token expirado, HubSpot mudou algo, etc.),
-      # abre um Issue visível no repositório — assim dá pra perceber sem precisar
-      # entrar no site todo dia pra conferir se a data bateu.
-      - name: Avisar sobre falha (abre Issue)
+      # ══════════════════════════════════════════════════════════════════════════════
+      # O ALARME É UM SÓ, E ELE FECHA SOZINHO (08/09/26)
+      #
+      # Este passo chamava issues.create() direto, sem procurar nada antes. Em 08/09/26
+      # isso rendeu 75 issues IDÊNTICAS em um único dia: das 89 abertas no repositório,
+      # todas eram alarme e nenhuma era assunto de verdade. Alarme que dispara 75 vezes
+      # não é alarme — ele enterra o sinal. E enterrou: a falha real (a guarda 25 exigindo
+      # um arquivo que o .gitignore não deixa o CI ter, corrigida no PR #452) ficou
+      # invisível no meio do ruído, e as 75 foram fechadas à mão depois.
+      #
+      # AGORA: UM alarme aberto por vez. Já existindo um, esta rodada vira um COMENTÁRIO
+      # nele com o link da rodada. A dedupe é pelo RÓTULO alarme-robo, não pelo texto do
+      # título: o título tem a data dentro, então casar por título abriria um alarme novo
+      # a cada dia que a falha durasse — o mesmo acúmulo, só que mais devagar. O rótulo
+      # ainda deixa o filtro barato (uma listForRepo com labels, sem varrer o repositório)
+      # e não depende de ninguém preservar o texto do título.
+      # ══════════════════════════════════════════════════════════════════════════════
+      - name: Avisar sobre falha (abre ou comenta o alarme)
         if: failure()
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.issues.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: `⚠️ Falha na atualização diária do cockpit — ${new Date().toISOString().slice(0,10)}`,
-              body: `A atualização automática do cockpit falhou.\n\nVeja o log completo aqui: ${context.payload.repository.html_url}/actions/runs/${context.runId}\n\nCausas comuns: token do HubSpot expirado/revogado, mudança de escopo na API, ou limite de requisições.`
+            const ROTULO = 'alarme-robo';
+            const PREFIXO = '⚠️ Falha na atualização diária do cockpit';
+            const hoje = new Date().toISOString().slice(0, 10);
+            const link = `${context.payload.repository.html_url}/actions/runs/${context.runId}`;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Procura o alarme aberto: primeiro pelo rótulo, que é o filtro barato; depois,
+            // só se não achou nada, pelo começo do título — alarme aberto ANTES desta
+            // mudança não tem rótulo nenhum e não pode virar órfão eterno por causa disso.
+            async function alarmesAbertos() {
+              try {
+                const porRotulo = await github.rest.issues.listForRepo({
+                  owner: owner, repo: repo, state: 'open', labels: ROTULO, per_page: 100
+                });
+                const achados = porRotulo.data.filter(function (i) { return !i.pull_request; });
+                if (achados.length) return achados;
+
+                const todas = await github.rest.issues.listForRepo({
+                  owner: owner, repo: repo, state: 'open', per_page: 100
+                });
+                return todas.data.filter(function (i) {
+                  return !i.pull_request && i.title.indexOf(PREFIXO) === 0;
+                });
+              } catch (erro) {
+                // Não achar não pode virar silêncio: sem a lista, abrir a issue é o menos pior.
+                core.warning('não consegui listar os alarmes abertos: ' + erro.message);
+                return [];
+              }
+            }
+
+            const abertos = await alarmesAbertos();
+
+            if (abertos.length) {
+              const alvo = abertos[0];
+              await github.rest.issues.createComment({
+                owner: owner,
+                repo: repo,
+                issue_number: alvo.number,
+                body: 'Falhou de novo em ' + hoje + '.\n\nRodada: ' + link
+              });
+              core.notice('alarme #' + alvo.number + ' já estava aberto — comentei nele em vez de abrir outro');
+              return;
+            }
+
+            // O rótulo é criado na primeira vez que o alarme dispara. Já existindo, a API
+            // devolve 422 e seguir em frente é o certo.
+            try {
+              await github.rest.issues.createLabel({
+                owner: owner,
+                repo: repo,
+                name: ROTULO,
+                color: 'd93f0b',
+                description: 'alarme automático do robô de atualização diária'
+              });
+            } catch (erro) {
+              core.debug('rótulo ' + ROTULO + ' não foi criado agora: ' + erro.message);
+            }
+
+            const criada = await github.rest.issues.create({
+              owner: owner,
+              repo: repo,
+              title: PREFIXO + ' — ' + hoje,
+              labels: [ROTULO],
+              body: [
+                'A atualização automática do cockpit falhou.',
+                '',
+                'Rodada: ' + link,
+                '',
+                'Causas comuns: token do HubSpot expirado/revogado, mudança de escopo na API, ou limite de requisições.',
+                '',
+                'Enquanto esta issue estiver ABERTA, as próximas falhas viram comentário aqui, e não issue nova. A primeira rodada verde fecha esta issue sozinha.'
+              ].join('\n')
             });
+            core.notice('abri o alarme #' + criada.data.number);
+
+      # ══════════════════════════════════════════════════════════════════════════════
+      # QUEM ABRE O ALARME TAMBÉM FECHA (08/09/26)
+      #
+      # Antes ninguém fechava. Alarme vencido ficava aberto até alguém varrer à mão, e em
+      # 08/09/26 ainda havia alarme de JULHO aberto. Issue aberta que não corresponde a
+      # nada quebrado é a mesma doença das 75: ruído com cara de sinal. A rodada verde é a
+      # prova de que a falha passou — então é ela quem fecha, dizendo QUAL rodada voltou a
+      # passar, para quem abrir a issue depois entender sem precisar caçar log.
+      #
+      # Fechar nunca pode derrubar a rodada: quando este passo roda, o dado do dia já está
+      # publicado, e perder a publicação por causa da faxina de um aviso seria pior que o
+      # alarme vencido. Por isso o corpo inteiro está dentro de um try.
+      # ══════════════════════════════════════════════════════════════════════════════
+      - name: Fechar alarme quando a rodada volta a passar
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const ROTULO = 'alarme-robo';
+            const PREFIXO = '⚠️ Falha na atualização diária do cockpit';
+            const link = `${context.payload.repository.html_url}/actions/runs/${context.runId}`;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            try {
+              const porRotulo = await github.rest.issues.listForRepo({
+                owner: owner, repo: repo, state: 'open', labels: ROTULO, per_page: 100
+              });
+              let abertos = porRotulo.data.filter(function (i) { return !i.pull_request; });
+
+              if (!abertos.length) {
+                const todas = await github.rest.issues.listForRepo({
+                  owner: owner, repo: repo, state: 'open', per_page: 100
+                });
+                abertos = todas.data.filter(function (i) {
+                  return !i.pull_request && i.title.indexOf(PREFIXO) === 0;
+                });
+              }
+
+              if (!abertos.length) {
+                core.info('nenhum alarme aberto para fechar');
+                return;
+              }
+
+              for (const alarme of abertos) {
+                await github.rest.issues.createComment({
+                  owner: owner,
+                  repo: repo,
+                  issue_number: alarme.number,
+                  body: 'Voltou a passar. Rodada verde: ' + link + '\n\nFechando este alarme automaticamente.'
+                });
+                await github.rest.issues.update({
+                  owner: owner,
+                  repo: repo,
+                  issue_number: alarme.number,
+                  state: 'closed',
+                  state_reason: 'completed'
+                });
+                core.notice('fechei o alarme #' + alarme.number);
+              }
+            } catch (erro) {
+              core.warning('não consegui fechar o alarme: ' + erro.message);
+            }
