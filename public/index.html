@@ -9071,6 +9071,45 @@ function desenharViewSeNecessario(viewId, desenhar, sempre) {
   }
 }
 
+const TELAS_QUE_MOSTRAM_NEGOCIO = {
+  viewMeuFunil: 'renderMeuFunil',
+  viewDaily: 'renderDaily',
+  viewAgenda: 'renderAgenda',
+  viewMeuPainel: 'renderMeuPainel',
+  viewCockpit: 'renderTimeLider',
+  viewRotas: 'renderRotas'
+};
+
+let REPINTE_AGENDADO = null;
+function repintarOndeONegocioAparece() {
+
+  let ativaAgora = null;
+  try { ativaAgora = document.querySelector('.view.active'); } catch (e) { ativaAgora = null; }
+  const idAtivaAgora = ativaAgora ? ativaAgora.id : '';
+  Object.keys(TELAS_QUE_MOSTRAM_NEGOCIO).forEach(function (viewId) {
+    if (viewId === idAtivaAgora) return;
+    try { if (typeof viewsDesenhadas !== 'undefined') viewsDesenhadas.delete(viewId); } catch (e) {}
+  });
+  if (REPINTE_AGENDADO) return;
+  REPINTE_AGENDADO = setTimeout(function () {
+    REPINTE_AGENDADO = null;
+    repintarTelaAtivaDoNegocio();
+  }, 0);
+}
+
+function repintarTelaAtivaDoNegocio() {
+  let ativa = null;
+  try { ativa = document.querySelector('.view.active'); } catch (e) { ativa = null; }
+  const nome = ativa ? TELAS_QUE_MOSTRAM_NEGOCIO[ativa.id] : null;
+  if (!nome) return;
+
+  const fn = (typeof window !== 'undefined') ? window[nome] : null;
+  if (typeof fn !== 'function') return;
+
+  try { fn(); }
+  catch (e) { if (typeof console !== 'undefined' && console.error) console.error('[movimento] ' + nome + ' nao repintou:', e); }
+}
+
 function saudacaoDoDia() {
   const h = new Date().getHours();
   if (h < 12) return 'Bom dia';
@@ -19301,6 +19340,8 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
       lat: lead.lat != null ? lead.lat : null, lng: lead.lng != null ? lead.lng : null
     }, dataISO, '09:00', ownerId, tipo);
   } catch (e) { console.error('espelho do proximo passo na agenda:', e); }
+
+  if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
 }
 
 function registrarAgendamentoLocal(lead, dataISO, hora, ownerId, tipo) {
@@ -21575,6 +21616,8 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
     }
     pl6UI.pickerDia = null; pl6UI.slotPicker = null;
     g[di][si] = valorDoSlot;
+
+    if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
     return mutar({ grade: g }, l.nome + ' · agendado ' + dias[di].rot + ' ' + dias[di].data + ' ' + hora
       + ' — tarefa no HubSpot ✓ · slot no Supabase ✓');
 }
@@ -25960,6 +26003,8 @@ async function gravarPassagemOtimista(opts) {
   }
   redesenhar();
 
+  if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
+
   let r = { ok: false, erro: 'não cheguei a tentar' };
 
   try {
@@ -26001,6 +26046,8 @@ async function gravarPassagemOtimista(opts) {
   if (antes.dias != null) lead.dias = antes.dias;
   Object.keys(antes.props).forEach(function (k) { lead[k] = antes.props[k]; });
   redesenhar();
+
+  if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
   if (typeof mostrarToast === 'function') {
     mostrarToast('Não gravou: ' + r.erro + ' Devolvi "' + (lead.name || 'o negócio')
       + '" para ' + ((typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[antes.stageId])

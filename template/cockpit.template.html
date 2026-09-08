@@ -12742,6 +12742,68 @@ function desenharViewSeNecessario(viewId, desenhar, sempre) {
   }
 }
 
+/* ══ ONDE UM NEGÓCIO APARECE, E COMO REPINTAR TUDO ISSO (08/09/26) ══════════════════
+   Chamada pelo motor otimista de mudança de etapa. Mudar de etapa muda o que SEIS
+   telas mostram: a esteira do funil, a Daily (o plano do dia nomeia clientes), o
+   Planejamento (a grade da semana), o Hoje do executivo, a Time do gestor e as Rotas.
+   Antes disto, quem repintava era o callback de quem abriu o menu de etapas — e dois
+   dos cinco chamadores passavam um callback que só reabre a ficha.
+
+   A view ATIVA repinta agora; as outras saem de `viewsDesenhadas` e redesenham ao
+   abrir. Repintar as seis no meio de uma escrita custaria consultas e travamento —
+   a Daily do gestor sozinha faz duas idas ao Supabase.
+
+   `sempre: true` no desenharViewSeNecessario da view ativa é de propósito: ela JÁ
+   está no Set, e sem o `sempre` a chamada não faria nada. */
+const TELAS_QUE_MOSTRAM_NEGOCIO = {
+  viewMeuFunil: 'renderMeuFunil',
+  viewDaily: 'renderDaily',
+  viewAgenda: 'renderAgenda',
+  viewMeuPainel: 'renderMeuPainel',
+  viewCockpit: 'renderTimeLider',
+  viewRotas: 'renderRotas'
+};
+
+/* UMA PINTURA POR GESTO. Um movimento dispara vários espelhos (etapa, próximo passo,
+   slot da semana, agenda local), e em dois caminhos quem chamou JÁ repinta a tela ativa.
+   Sem juntar, um clique redesenhava o Meu funil três vezes — trabalho jogado fora e
+   piscada na tela. O timer de 0ms colapsa as chamadas do mesmo gesto numa só, e a
+   INVALIDAÇÃO das outras telas acontece na hora (é só apagar do Set, custa nada). */
+let REPINTE_AGENDADO = null;
+function repintarOndeONegocioAparece() {
+  /* as outras telas saem do Set agora, sem esperar o timer: se a pessoa trocar de aba
+     no mesmo instante, a aba nova já nasce redesenhada. */
+  let ativaAgora = null;
+  try { ativaAgora = document.querySelector('.view.active'); } catch (e) { ativaAgora = null; }
+  const idAtivaAgora = ativaAgora ? ativaAgora.id : '';
+  Object.keys(TELAS_QUE_MOSTRAM_NEGOCIO).forEach(function (viewId) {
+    if (viewId === idAtivaAgora) return;
+    try { if (typeof viewsDesenhadas !== 'undefined') viewsDesenhadas.delete(viewId); } catch (e) {}
+  });
+  if (REPINTE_AGENDADO) return;
+  REPINTE_AGENDADO = setTimeout(function () {
+    REPINTE_AGENDADO = null;
+    repintarTelaAtivaDoNegocio();
+  }, 0);
+}
+
+function repintarTelaAtivaDoNegocio() {
+  let ativa = null;
+  try { ativa = document.querySelector('.view.active'); } catch (e) { ativa = null; }
+  const nome = ativa ? TELAS_QUE_MOSTRAM_NEGOCIO[ativa.id] : null;
+  if (!nome) return;   /* a aba aberta nao mostra negocio: nada a repintar */
+  /* AS FUNCOES SAO BUSCADAS POR NOME, e nao guardadas no mapa: o mapa e declarado no
+     topo do script e tres desses renders sao declarados centenas de linhas abaixo —
+     guardar a referencia ali gravaria `undefined`. Declaracao de funcao sobe para o
+     escopo global, entao a busca por nome funciona e nao depende da ordem do arquivo. */
+  const fn = (typeof window !== 'undefined') ? window[nome] : null;
+  if (typeof fn !== 'function') return;
+  /* FALHA DE PINTURA NAO DERRUBA A ESCRITA (a licao de 04/09: um TypeError da ficha
+     cancelava a gravacao no HubSpot antes de ela sair). */
+  try { fn(); }
+  catch (e) { if (typeof console !== 'undefined' && console.error) console.error('[movimento] ' + nome + ' nao repintou:', e); }
+}
+
 function saudacaoDoDia() {
   const h = new Date().getHours();
   if (h < 12) return 'Bom dia';
@@ -26702,6 +26764,11 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
       lat: lead.lat != null ? lead.lat : null, lng: lead.lng != null ? lead.lng : null
     }, dataISO, '09:00', ownerId, tipo);
   } catch (e) { console.error('espelho do proximo passo na agenda:', e); }
+  /* E AS TELAS ACOMPANHAM (08/09/26). O espelho acima ja punha o passo no plano da
+     semana e na agenda local; nenhuma tela era repintada, entao o Planejamento e a
+     Daily so mostravam a visita depois de a pessoa trocar de aba e voltar. Mesmo
+     conserto do movimento de etapa, e pelo mesmo motivo. */
+  if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
 }
 
 function registrarAgendamentoLocal(lead, dataISO, hora, ownerId, tipo) {
@@ -30080,6 +30147,11 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
     }
     pl6UI.pickerDia = null; pl6UI.slotPicker = null;
     g[di][si] = valorDoSlot;
+    /* A DAILY MOSTRA ESTES MESMOS SETE SLOTS (08/09/26). `mutar` abaixo repinta o
+       Planejamento; sem esta linha, a Minha Daily seguia com o horario livre ate a
+       pessoa trocar de aba — a mesma familia do defeito que a promessa travada teve
+       hoje de manha (cache de sessao que mente na outra aba). */
+    if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
     return mutar({ grade: g }, l.nome + ' · agendado ' + dias[di].rot + ' ' + dias[di].data + ' ' + hora
       + ' — tarefa no HubSpot ✓ · slot no Supabase ✓');
 }
@@ -35872,6 +35944,12 @@ async function gravarPassagemOtimista(opts) {
     aplicarEtapaNoDataLocal(id, para, props);
   }
   redesenhar();
+  /* E AS TELAS QUE NÃO SÃO A DE ORIGEM (08/09/26). O relato do time era "move pra
+     perdido e o card continua na etapa": dois dos cinco chamadores passam um
+     `redesenhar` que só reabre a ficha, e a esteira atrás dela ficava com o card no
+     lugar antigo. Repintar aqui — e não em cada callback — é o que faz o próximo
+     chamador nascer certo. */
+  if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
 
   let r = { ok: false, erro: 'não cheguei a tentar' };
   /* `finally` E NAO A LINHA SEGUINTE: qualquer saida daqui — inclusive um erro que eu
@@ -35927,6 +36005,11 @@ async function gravarPassagemOtimista(opts) {
   if (antes.dias != null) lead.dias = antes.dias;
   Object.keys(antes.props).forEach(function (k) { lead[k] = antes.props[k]; });
   redesenhar();
+  /* A REVERSÃO TAMBÉM TEM DE APARECER EM TODA TELA (08/09/26). Se só a tela de origem
+     voltasse, o kanban atrás da ficha continuaria mostrando o card na etapa nova
+     DEPOIS de o HubSpot ter recusado — a pior das duas mentiras: a tela afirmando um
+     movimento que o CRM não tem. */
+  if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
   if (typeof mostrarToast === 'function') {
     mostrarToast('Não gravou: ' + r.erro + ' Devolvi "' + (lead.name || 'o negócio')
       + '" para ' + ((typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[antes.stageId])
