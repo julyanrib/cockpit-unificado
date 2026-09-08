@@ -11346,6 +11346,16 @@
     .ag-rail-head>div{flex-wrap:wrap;min-width:0;}
     .xv3-check{align-items:flex-start;padding:8px 0;}
     .xv3-check-anel{margin-top:2px;}
+    /* OS PORTÕES NO CELULAR (08/09/26), medido no aparelho e não deduzido: a linha é
+       anel + rótulo + pílula + CTA numa fileira só, e a 375px o CTA saía do cartão —
+       o cartão ia até 328px e "Fazer follow-ups pendentes →" chegava a 396px, fora da
+       janela. Eles usam isso na rua, no celular, e botão cortado é clique perdido.
+       Com wrap o CTA cai para a linha de baixo e a linha fica dentro do cartão. Não dá
+       para encolher o botão: o markup põe flex:none nele de propósito, e botão de ação
+       apertado é pior que linha dobrada. O recuo de 30px alinha o CTA sob o rótulo,
+       passando o anel de 20px e o gap de 10px. */
+    .xv3-check{flex-wrap:wrap;}
+    .xv3-check .gate-cta{margin-left:30px;max-width:calc(100% - 30px);}
   }
   .xv3-check{min-height:40px;align-items:center;}
   /* linha de duas alturas: o anel sobe para o topo em vez de flutuar no meio */
@@ -24197,6 +24207,34 @@ function pbv6LigarScroll() {
   if (pbv6ScrollLigado) { pbv6AtualizarScroll(); return; }
   pbv6ScrollLigado = true;
   window.addEventListener('scroll', pbv6AtualizarScroll, { passive: true });
+
+  /* ══ O SUMÁRIO PASSA A LEVAR A ALGUM LUGAR (08/09/26) ═════════════════════════
+     Achado clicando: os botões do sumário (data-pb-anchor) eram GERADOS e eram LIDOS
+     pelo scroll-spy logo abaixo, para acender o "você está aqui" — e não tinham
+     ouvinte de clique. Nenhum dos 7 de uma página de 12 minutos fazia nada.
+
+     E UM DELES NÃO TEM DESTINO NO CORPO, de propósito: pb7LevePraRua tira a seção
+     "O que fazer agora" do artigo e transforma os 3 itens dela no trilho .pb7-leve.
+     A seção continua na página — mudou de lugar. O sumário sai de pagina.headings,
+     que vem do compilado e ainda a lista. Então, sem destino no corpo, a âncora é o
+     trilho: some do sumário seria esconder a parte acionável da página.
+
+     DELEGADO NO DOCUMENTO, e uma vez só: o leitor é redesenhado por vários caminhos
+     (abrir página, marcar check, corrigir quiz), e religar ouvinte a cada render é
+     como se perde um clique sem ninguém notar. */
+  document.addEventListener('click', function (ev) {
+    const btn = ev.target.closest && ev.target.closest('[data-pb-anchor]');
+    if (!btn) return;
+    const id = btn.getAttribute('data-pb-anchor');
+    let alvo = id ? document.getElementById(id) : null;
+    if (!alvo) alvo = document.querySelector('.pb7-leve');
+    if (!alvo) return;   /* nem corpo nem trilho: melhor nada do que rolar pro topo */
+    if (typeof smoothScrollTo === 'function') smoothScrollTo(alvo);
+    else alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    /* acende o "você está aqui" na hora, sem esperar o evento de rolagem */
+    setTimeout(pbv6AtualizarScroll, 320);
+  });
+
   pbv6AtualizarScroll();
 }
 function pbv6AtualizarScroll() {
