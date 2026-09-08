@@ -265,13 +265,49 @@ conferir('o 503 diz QUAL peca faltou, nao so que faltou',
   /function faltandoNoSnapshot/.test(montar) &&
   /const faltando = faltandoNoSnapshot\(\)/.test(rotaDados),
   'as duas chegam pelo mesmo caminho e quebram por motivos diferentes');
+/* ESTAS DUAS MEDEM ONDE A LOGICA MORA HOJE (08/09/26). A publicacao do snapshot existia
+   DUAS vezes, byte a byte a mesma: uma copia em fetch-hubspot.js e a de
+   lib/publicar-snapshot.js — e o proprio comentario do lib diz que ele nasceu "para a
+   mesma funcao nao ser copiada em tres produtores". A copia sobreviveu aquela limpeza.
+
+   O FAROL FORCOU A JUNTAR: ele tem de ser tocado em TODA publicacao, e com duas
+   implementacoes o produtor esquecido publica dado novo sem avisar as abas — um
+   mecanismo de frescor que finge cobrir e deixa metade fora.
+
+   As duas propriedades que estas linhas cobram continuam valendo; mudou o arquivo onde
+   elas se provam. Por isso a suite passa a ler o lib TAMBEM, em vez de afrouxar a regex
+   e ficar verde medindo nada. */
+const libPub = fs.readFileSync(path.join(raiz, 'lib', 'publicar-snapshot.js'), 'utf8');
+
 conferir('o robo publica o snapshot na tabela depois de gravar os arquivos',
-  /async function publicarNoSnapshot/.test(robo) &&
+  /require\('\.\.\/lib\/publicar-snapshot\.js'\)/.test(robo) &&
+  /async function publicarSnapshot/.test(libPub) &&
   robo.indexOf('fs.writeFileSync(statusPath') < robo.indexOf('for (const [chave, conteudo] of paraPublicar)'),
   'os arquivos primeiro porque o preview local e o fallback dependem deles');
+
 conferir('falha ao publicar nao mata a rodada do robo',
-  /Aviso: snapshot '\$\{chave\}' NAO publicado no Supabase/.test(robo),
+  /NAO publicado/.test(libPub) &&
+  /return \{ ok: false, erro: e\.message \}/.test(libPub),
   'o robo existe para trazer o dado; perder a rodada por causa da publicacao seria pior');
+
+/* ── O FAROL (08/09/26) ──────────────────────────────────────────────────────────────
+   Julyan: "tudo na tela tem q ser instantaneo pelo supabase". O farol e o que faz a aba
+   JA ABERTA saber que o snapshot mudou. Duas propriedades dele nao aparecem rodando o
+   robo, e as duas quebram calado:
+     1. tocar DEPOIS do sucesso. Tocado antes, a aba busca um snapshot que talvez nao
+        tenha sido gravado, e mostra dado velho achando que e o novo;
+     2. nao derrubar a publicacao. Quando o farol roda, o snapshot JA esta na tabela;
+        farol que lanca transforma "as abas nao souberam agora" em "a rodada falhou". */
+conferir('o farol e tocado depois de o snapshot estar gravado, e nunca antes',
+  libPub.indexOf('await tocarFarol(chave, origem)') >
+    libPub.indexOf('OK - snapshot ') &&
+  libPub.indexOf('await tocarFarol(chave, origem)') > -1,
+  'tocar antes faz a aba buscar um dado que pode nao ter sido gravado');
+
+conferir('farol que falha nao derruba a publicacao',
+  /async function tocarFarol/.test(libPub) &&
+  /o snapshot esta gravado; as abas abertas so nao vao saber agora/.test(libPub),
+  'o dado ja esta na tabela; perder a rodada por causa do aviso seria pior');
 
 /* ── 8. A ESTRUTURA DO WORKFLOW, NAO SO OS TEXTOS DELE (02/09/26) ────────────────────
    ISTO EXISTE POR UM DEFEITO MEU, e o defeito ficou UMA HORA no ar sem ninguem saber.

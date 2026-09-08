@@ -418,39 +418,15 @@ async function hsSearchTipoAll(objectType, body) {
 // SE A PUBLICACAO FALHAR, A RODADA NAO MORRE: ela avisa e segue. O robo existe para trazer
 // o dado; perder a rodada inteira porque a publicacao falhou seria trocar um problema por
 // um pior. O sync-status registra a falha para o gestor ver na tela.
-async function publicarNoSnapshot(chave, conteudo, origem) {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return { ok: true, skipped: true };
-  const corpo = JSON.stringify(conteudo);
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/cockpit_snapshot?on_conflict=chave`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_SERVICE_KEY,
-        Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates'
-      },
-      body: JSON.stringify([{
-        chave: String(chave),
-        conteudo: conteudo,
-        bytes: Buffer.byteLength(corpo, 'utf8'),
-        atualizado_em: new Date().toISOString(),
-        origem: origem || 'fetch-hubspot'
-      }])
-    });
-    if (!res.ok) {
-      const txt = await res.text();
-      console.log(`Aviso: snapshot '${chave}' NAO publicado no Supabase — ${res.status} ${txt.slice(0, 200)}`);
-      return { ok: false, status: res.status };
-    }
-    console.log(`OK — snapshot '${chave}' publicado no Supabase (${(Buffer.byteLength(corpo, 'utf8') / 1024).toFixed(1)} KB)`);
-    return { ok: true };
-  } catch (e) {
-    console.log(`Aviso: snapshot '${chave}' NAO publicado no Supabase — ${e.message}`);
-    return { ok: false, erro: e.message };
-  }
-}
+/* A PUBLICACAO DO SNAPSHOT MORA EM lib/publicar-snapshot.js (08/09/26).
+   Havia uma copia aqui, byte a byte a mesma logica — e o comentario do proprio lib diz
+   que ele nasceu "para a mesma funcao nao ser copiada em tres produtores". A copia
+   sobreviveu aquela limpeza.
 
+   O que forcou a juntar foi o FAROL: ele tem de ser tocado em TODA publicacao, e com
+   duas implementacoes o produtor esquecido publicaria dado novo sem avisar as abas —
+   um mecanismo de frescor que finge cobrir e deixa metade de fora. */
+const { publicarSnapshot } = require('../lib/publicar-snapshot.js');
 async function gravarSnapshotDaily(ownerId, dataISO, campos) {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return { ok: true, skipped: true };
   try {
@@ -2427,12 +2403,17 @@ async function main() {
   })();
   if (anterior) paraPublicar.push(['hubspot-previous', anterior]);
 
-  let publicados = 0;
+  let publicados = 0, pulados = 0;
   for (const [chave, conteudo] of paraPublicar) {
-    const r = await publicarNoSnapshot(chave, conteudo, origemDaRodada);
+    const r = await publicarSnapshot(chave, conteudo, origemDaRodada);
     if (r && r.ok) publicados += 1;
+    /* PULADO NAO E PUBLICADO. A copia daqui devolvia {ok:true, skipped:true} sem
+       credencial, e esta contagem somava isso como sucesso: rodando local, sem chave, o
+       log dizia "7 de 7 publicados" tendo publicado zero. O lib devolve ok:false. */
+    else if (r && r.skipped) pulados += 1;
   }
-  console.log(`OK — ${publicados} de ${paraPublicar.length} snapshot(s) publicados no Supabase.`);
+  console.log(`OK — ${publicados} de ${paraPublicar.length} snapshot(s) publicados no Supabase`
+    + (pulados ? ` (${pulados} pulado(s): sem SUPABASE_URL/SERVICE_KEY neste ambiente)` : '') + '.');
 }
 
 main().catch(err => {
