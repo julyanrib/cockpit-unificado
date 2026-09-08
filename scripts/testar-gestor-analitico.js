@@ -708,9 +708,15 @@ checar('o que abre lista no dossie cumpre o piso de 38px no desktop',
    linha, sem nada reprovar. O Julyan pediu de volta e ele voltou para o cartao da Daily
    v2 — estas quatro travam o que faz dele um agendamento de verdade. */
 
-checar('o agendamento no horario livre existe no cartao da Daily',
-  templateCodigo.indexOf("acao: 'slot:' + l.ownerId") > 0 &&
-  templateCodigo.indexOf('function dg2PickerHTML(') > 0 &&
+/* A DAILY v4 NAO EDITA PLANO DE NINGUEM (08/09/26). O prompt dela e explicito: "o gestor
+   NUNCA edita o plano — so cobra/pergunta/reconhece". Entao o agendamento no horario livre
+   saiu do primeiro plano junto com o cartao da v2, e sobrou UM dono: o board g14, na
+   Referencia da aba. A regra que esta checagem sempre guardou continua a mesma — o
+   controle nao pode sumir sem alguem decidir. Ele nao sumiu: mudou de casa, e agora tem
+   uma casa so. */
+checar('o agendamento no horario livre existe, e num lugar so',
+  templateCodigo.indexOf('g14UI.picker') > 0 &&
+  (templateCodigo.match(/function g14PickerHTML\(/g) || []).length === 1 &&
   template.indexOf('o que entra às') > 0,
   'este controle ja sumiu uma vez junto com a linha em que ele morava');
 
@@ -719,7 +725,10 @@ checar('o agendamento no horario livre existe no cartao da Daily',
    conferida, e nao passar por pl6Gravar). Uma segunda copia seria a primeira a divergir. */
 checar('a gravacao do horario livre tem uma implementacao so',
   (templateCodigo.match(/async function g14AgendarNoHorarioLivre\(/g) || []).length === 1 &&
-  (templateCodigo.match(/g14AgendarNoHorarioLivre\(/g) || []).length >= 3 &&
+  /* >=2 e nao >=3: a v2 era o terceiro ponto (declaracao + os dois cartoes). Com ela
+     fora, sobram a declaracao e o board g14. O que a checagem cobra e que exista UMA
+     implementacao e que ela seja chamada — nao quantas telas a chamam. */
+  (templateCodigo.match(/g14AgendarNoHorarioLivre\(/g) || []).length >= 2 &&
   templateCodigo.indexOf("from('planos_semanais').upsert") > 0,
   'duas copias desta gravacao divergem na primeira mudanca de regra');
 
@@ -728,18 +737,26 @@ checar('a gravacao do horario livre tem uma implementacao so',
    sessao" na tela dele amanha — agendamento que grava sem erro e nao existe no dia
    seguinte. */
 checar('o picker do cartao usa a mesma regra de candidatos, sem segunda lista',
-  templateCodigo.indexOf('g14OpcoesDoSlot(l, si)') > 0 &&
+  /* `g14OpcoesDoSlot(linha, si)` e a chamada do board g14; a forma `(l, si)` era a da v2.
+     A funcao continua UMA — e e isso que impede a segunda lista de candidatos. */
+  templateCodigo.indexOf('g14OpcoesDoSlot(linha, si)') > 0 &&
   (templateCodigo.match(/function g14OpcoesDoSlot\(/g) || []).length === 1,
   'segunda lista de candidatos ofereceria conta que a grade dele nao aceita');
 
 /* DIA NAO UTIL NAO TEM CONVITE. d7PlanoDeHoje devolve coluna vazia no fim de semana, e
    os sete horarios voltam 'livre': o cartao ofereceria sete botoes que todos recusam.
    Medido em 07/09 (segunda) so por sorte — apareceria no primeiro sabado. */
-checar('em dia nao util a fileira de horarios livres nao aparece, e diz por que',
-  templateCodigo.indexOf('livres: diaUtilDeHoje') > 0 &&
-  templateCodigo.indexOf('semDiaUtil: !diaUtilDeHoje') > 0 &&
-  template.indexOf('hoje não é dia útil — o roteiro é de segunda a sexta, e não há horário para agendar') > 0,
-  'sete convites que recusam e pior que nenhum convite');
+/* DIA NAO UTIL: A RECUSA MUDOU DE CAMADA (08/09/26), e a que importa ficou.
+   A v2 escondia a fileira de horarios no fim de semana (`livres: diaUtilDeHoje`) — camada
+   de cortesia, e ela saiu com o cartao da v2. A camada que PROTEGE continua, e e mais
+   forte: a propria gravacao recusa com motivo 'dia-nao-util' e a tela diz a frase.
+   FICA ANOTADO O QUE SE PERDEU: no board g14 os horarios ainda sao oferecidos no sabado, e
+   a recusa acontece no clique em vez de antes dele. Nao inventei uma checagem nova com o
+   nome antigo — esta mede a recusa real. */
+checar('em dia nao util a gravacao do horario livre recusa, com motivo',
+  templateCodigo.indexOf("motivo: 'dia-nao-util'") > 0 &&
+  template.indexOf('Hoje não é dia útil — o roteiro é de segunda a sexta.') > 0,
+  'agendar em dia que o roteiro nao tem grava lixo no plano dele');
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {

@@ -1226,6 +1226,23 @@
      tela projetada da reunião e a mesa da diretoria nunca tiveram hover nem foco
      visível nas abas Time, Pessoas, Rotas e Semana. Nada reprovava: a regra existe, o
      seletor casa, e só o estilo computado na largura real mostra. */
+  /* ══ DAILY DO GESTOR v4 (08/09/26) — os dois hovers da prancha ══════════════════
+     Fora de qualquer @media, como os das outras abas depois do conserto de hoje: hover
+     e gesto de mouse, e por dois dias essas regras valeram so no celular. */
+  [data-dg4-acao]{transition:background .16s ease,border-color .16s ease,filter .16s ease;}
+  #dg4Raiz [data-dg4-hv]{cursor:pointer;}
+  #dg4Raiz [data-dg4-hv="0"]:hover{border-color:#2B3440;}
+  #dg4Raiz [data-dg4-hv="1"]:hover{filter:brightness(1.08);}
+  #dg4Raiz [data-dg4-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
+  /* O ESTREITO, sem passada de desenho (foco no desktop, decisao dele em 08/09): a
+     grade de dois executivos vira uma coluna, e os 7 slots empilham. */
+  @media (max-width:1050px){
+    #dg4Raiz [style*="repeat(2,minmax(0,1fr))"]{grid-template-columns:minmax(0,1fr)!important;}
+  }
+  @media (max-width:900px){
+    #dg4Raiz [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important;}
+    #dg4Raiz [style*="width:1780px"]{width:100%!important;}
+  }
   /* ══ ABA TIME DO GESTOR v2 (08/09/26) ═══════════════════════════════════════
      A prancha declara hover em style-hover=, atributo do dc-runtime que não existe
      fora dele. As ONZE regras viram CSS de verdade aqui, com o MESMO valor, na
@@ -44195,6 +44212,24 @@ function d7AcaoDe(lead, planoDia) {
   return (gravada && gravada.acao) ? String(gravada.acao) : '';
 }
 
+/* ══ DE ONDE VEIO A CONTA DO SLOT (08/09/26) ═══════════════════════════════════════
+   Gravado no ato de travar, para a Daily do gestor espelhar sem adivinhar. As
+   palavras são as MESMAS que o cartão da conta já mostra nesta tela — "sua carteira
+   — HubSpot", "reciclagem — HubSpot", e o chip da fonte para o lote novo. Dois
+   vocabulários para a mesma coisa é como as duas telas param de se conversar.
+
+   `grupo` viaja junto quando é lote: é o que diz Casa dos Dados / Google Places, e é
+   informação que o gestor usa para saber se a praça está sendo alimentada de verdade. */
+function d7OrigemDoLead(lead) {
+  if (!lead) return { origem: null, origemRot: '' };
+  if (lead.tipo === 'n') {
+    const f = (typeof PL6_FONTES !== 'undefined' && PL6_FONTES[lead.grupo]) || {};
+    return { origem: 'lote', grupo: lead.grupo || null, origemRot: f.chip || 'lote novo' };
+  }
+  if (lead.reciclagem) return { origem: 'reciclagem', origemRot: 'reciclagem — HubSpot' };
+  return { origem: 'carteira', origemRot: 'sua carteira — HubSpot' };
+}
+
 function d7AcaoHTML(lead) {
   const id = esc(String(lead.id || ''));
   const atual = d7AcaoDe(lead);
@@ -45265,14 +45300,26 @@ function d7Ligar(box, rep) {
          contas_alvo e jsonb e todos os leitores dele usam so `id` e `nome`.
          `mrr: null` quando o HubSpot nao tem valor: a tela do executivo diz "MRR nao
          medido", e gravar 0 faria a soma do time contar zero como medida. */
+      /* TODO SLOT ENTRA, com ou sem negócio no HubSpot (08/09/26). O filtro por
+         `dealId` que morava aqui descartava a conta nova — e ela é justamente a que o
+         gestor precisa ver no espelho. Medido no histórico: 04/09, Marco, 4
+         prioridades e 1 conta_alvo. O id da conta nova é o mesmo da grade
+         ('n-<uuid>'), então ele também casa com leads_prospeccao do lado do gestor. */
       const contas = visitas
-        .filter(x => x.lead.dealId)
         .map(function (x) {
           const apostou = !!d7UI.apostas[x.lead.id];
           const m = (typeof mrrDoNegocio === 'function')
             ? mrrDoNegocio(x.lead._bruto || x.lead) : null;
+          const org = d7OrigemDoLead(x.lead);
           return {
-            id: String(x.lead.dealId),
+            id: String(x.lead.dealId || x.lead.id),
+            /* `dealId` explícito: quem cruza com o funil do HubSpot precisa saber se
+               este id É um negócio ou o id da conta nova. Antes dava para presumir
+               porque só negócio entrava. */
+            dealId: x.lead.dealId ? String(x.lead.dealId) : null,
+            origem: org.origem,
+            origemRot: org.origemRot,
+            grupo: org.grupo || null,
             nome: x.lead.nome,
             hora: x.hora,
             aposta: apostou,
@@ -46811,21 +46858,22 @@ function abrirConducaoDaily(planos, criterio, ownerIdInicial) {
      regra da rodada; o overlay era apresentacao. Trocar a apresentacao nao podia
      custar a regra — e por isso este bloco acima nao mudou uma linha.
 
-     A conducao anda pelo INDICE do board, que e a ordem em que os cartoes estao
-     desenhados; entao traduzo o ownerId escolhido para esse indice. Sem essa traducao
-     a barra anunciaria um nome e escureceria outro cartao. */
-  const idxNoBoard = (function () {
-    const ctx = (typeof DG2 !== 'undefined') ? DG2.ctx : null;
-    if (!ctx || !ctx.reps) return 0;
-    const oid = String((reps[idxInicial] || {}).ownerId || '');
-    const k = ctx.reps.findIndex(function (r) { return String(r.ownerId) === oid; });
-    return k >= 0 ? k : 0;
-  }());
-  if (typeof DG2 !== 'undefined') {
-    DG2.cond = idxNoBoard;
-    DG2.ordem = reps;
-    if (typeof dg2Repintar === 'function') dg2Repintar();
-    const card = document.querySelector('[data-dg2-card="' + idxNoBoard + '"]');
+     O FOCO E POR DONO, e nao por posicao (08/09/26). A v2 andava pelo INDICE do board
+     e este trecho traduzia o ownerId escolhido para esse indice — sem a traducao a
+     barra anunciava um nome e escurecia outro cartao. A v4 destaca por ownerId: a
+     posicao muda com a ordem da rodada, o dono nao. A traducao saiu junto com o
+     board. */
+  /* `oid` MORAVA DENTRO DO BLOCO QUE SAIU. Ele era declarado na IIFE que traduzia
+     ownerId -> indice do board da v2; removi a IIFE e deixei os dois usos abaixo — e
+     isso e ReferenceError em runtime, no clique da conducao, sem build nem suite
+     reclamando. A memoria do projeto tem tres casos meus dessa mesma familia (remover
+     bloco exige varrer os usos), e foi a checagem de escopo que pegou este. A fonte
+     certa e a mesma de antes: a pessoa em que a rodada abre. */
+  const donoEmFoco = String((reps[idxInicial] || {}).ownerId || ownerIdInicial || '');
+  if (donoEmFoco && typeof DG4_ESTADO !== 'undefined' && typeof dg4Repintar === 'function') {
+    DG4_ESTADO.foco = donoEmFoco;
+    dg4Repintar();
+    const card = document.querySelector('#dg4Raiz [data-dg4-acao="foco:' + donoEmFoco + '"]');
     if (card) {
       const y = card.getBoundingClientRect().top + window.scrollY - 120;
       window.scrollTo({ top: y, behavior: 'auto' });
@@ -47242,1243 +47290,728 @@ function gdPlacarDoTimeHTML(reps, diaISO) {
   </div>`;
 }
 
-/* ══ DAILY & RITMO DO GESTOR, v2 — OS VALORES (06/09/26) ═══════════════════════════════
-   Prancha: mockup-gestor-daily-v2.dc.html, aprovada pelo Julyan. O MARKUP dela entra
-   verbatim (convertido mecanicamente por converter-mockup.js, prefixo dg2); este arquivo
-   e o `renderVals()` do mockup reescrito contra o dado real.
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   DAILY DO GESTOR — v4 (08/09/26, prancha daily-gestor-v4 + prompt "o espelho da tela
+   do executivo")
+   ══════════════════════════════════════════════════════════════════════════════════════
+   A tese é a que o Julyan pediu com uma frase: "me mostrar as promessas de cada". O
+   executivo monta o dia slot por slot na tela dele e trava até as 13h; esta tela lê O
+   MESMO REGISTRO (planos_diarios + dailies) e mostra o plano hora a hora, sem tradução e
+   sem auto-relato.
 
-   NADA AQUI E CALCULO NOVO. Cada numero sai de uma funcao que ja existia e que outra tela
-   ja usa:
-     g14LinhaDoRep(rep, planoDia)  -> plano do dia com clientes nomeados, quentes fora do
-                                      plano, rota, trava e visitas feitas
-     ctx.agenda                    -> agendaDeHoje do renderDaily (calendario HubSpot)
-     ctx.cobertura                 -> coberturaDoFunil do renderDaily
-     ctx.cadencia                  -> cadenciaDeHoje do renderDaily
-     ctx.frescor                   -> frescorDosDados(), que diz se a carga chegou
-   Se um desses numeros estiver errado, ele esta errado na origem e em todas as telas ao
-   mesmo tempo — que e exatamente o que a gente quer. */
+   O QUE ESTA v4 SUBSTITUI, e o que ela NÃO traz — decisão (C) dele em 08/09/26:
+     sai   a condução da rodada (barra fixa, ‹ anterior / próximo ›, foco no cartão)
+     sai   a timeline hora a hora da cadência do time
+     sai   os cartões de cobertura por etapa
+     FICA  o gesto de GRAVAR: cobrar, reconhecer e perguntar caem no mesmo
+           `registros_rodada`, pelo mesmo g14Registrar que o painel antigo usava. A
+           prancha já prevê um botão por executivo, então nenhum caminho de escrita se
+           perdeu — só saiu o que virou redundante com o espelho.
 
-/* A HORA DA TRAVA VEM DA CONSTANTE, e nao da prancha. A prancha escreve "promessa trava
-   as 9h30"; a regra viva deste produto e 13h (PROMESSA_TRAVA_MINUTOS), e a hora ja mudou
-   uma vez — foi por isso que nasceu a guarda que mantem 32 textos de tela em sintonia com
-   a constante. Copiar "9h30" da prancha seria publicar uma hora que o time nao cumpre. */
-function dg2HoraDaTrava() {
-  const m = (typeof PROMESSA_TRAVA_MINUTOS === 'number') ? PROMESSA_TRAVA_MINUTOS : 13 * 60;
-  const h = Math.floor(m / 60), mi = m % 60;
-  return mi ? (h + 'h' + String(mi).padStart(2, '0')) : (h + 'h');
-}
+   TRÊS DIVERGÊNCIAS ENTRE A PRANCHA E O DADO, todas medidas antes de eu desenhar:
 
-/* CLIENTE NOMEADO E SLOT DE VISITA, e nada mais. d7PlanoDeHoje devolve a grade de 7
-   horarios do dia, e nela convivem visita (cliente de verdade), rua, bloqueado, livre e
-   orfa. Perguntar `plano.length` responde 'ele montou a grade?', que nao e a pergunta da
-   rodada: a pergunta e 'ele nomeou cliente?'. Uma funcao para os quatro lugares que
-   perguntam — tres deles erravam para o lado otimista antes desta. */
-function dg2ClientesNomeados(l) {
-  return (l && l.plano ? l.plano : []).filter(function (x) { return x.tipo === 'visita'; });
-}
+   1. SÃO 7 SLOTS, NÃO 6. A grade do executivo é 09:00 · 10:30 · 13:30 · 15:00 · 16:30 ·
+      18:00 · 19:00 (PL6_HORAS, sete). A prancha desenha seis. O plano de hoje do Wericles
+      usa os sete, e o sétimo é cliente de verdade às 19:00. Espelho que perde um slot por
+      dia não é espelho — vai de sete, e a grade sai de PL6_HORAS para nunca divergir de
+      novo.
 
-/* "ISTO JA FOI FEITO?" — UMA PERGUNTA, UM DEPOSITO. A resposta mora em g14Feitos,
-   que g14CarregarFeitos le de registros_rodada no boot. A excecao e a tarefa datada:
-   ela nao tem linha em registros_rodada (a prova dela e a tarefa existir no HubSpot,
-   e isso so aparece na proxima carga), entao vale a marca desta sessao — e o rotulo
-   do botao diz exatamente isso, em vez de fingir que o funil ja sabe. */
-function dg2FeitoDaAcao(acao) {
-  if (!acao) return false;
-  const dp = acao.indexOf(':');
-  const verbo = dp < 0 ? acao : acao.slice(0, dp);
-  const resto = dp < 0 ? '' : acao.slice(dp + 1);
-  if (verbo === 'tarefa') {
-    const dealId = resto.split(':')[1] || '';
-    return !!(typeof DG2_TAREFAS_DESTA_SESSAO !== 'undefined' && DG2_TAREFAS_DESTA_SESSAO[dealId]);
-  }
-  const ps = resto.split(':');
-  const base = (typeof DG2_BASES !== 'undefined' && DG2_BASES[verbo]) ? DG2_BASES[verbo] : verbo;
-  return dg2Feito(base, ps[0], ps.length > 1 ? ps.slice(1).join(':') : undefined);
-}
+   2. A ORIGEM DE CADA CONTA não existia no registro: zero de 20 slots gravados casavam a
+      lista de contas-alvo, e o único marcador de conta nova era o sufixo de texto
+      "(conta nova)" na frase de prioridades. Decisão dele: (a) o selo mostra agora o que
+      É derivável — a etapa do negócio no funil, ou "fora do funil" — e (b) a tela do
+      executivo passou a gravar `origem` no slot (feito no mesmo commit). Registro antigo
+      não tem o campo, e aí o selo diz "origem não registrada" em vez de adivinhar.
 
-const DG2 = {
-  acaoAberta: null,      /* indice do cartao com o painel de acao aberto */
-  /* SEM `feitos` AQUI. Ele existia como mapa local e seria o segundo deposito da
-     mesma verdade: no F5 o "✓ cobrado" nasceria apagado com a linha viva no
-     Supabase, e o gestor cobraria duas vezes. Quem pergunta usa dg2FeitoDaAcao. */
-  nomesAbertos: {},      /* chip de cliente expandido (nome longo em 1 linha vs inteiro) */
-  etapaFunil: null,      /* etapa selecionada na secao 5 */
-  cond: null,            /* indice do executivo em conducao, ou null */
-  ordem: [],             /* ordem da conducao, vinda de abrirConducaoDaily */
-  picker: null,          /* { owner, si } do horario livre — reusa g14OpcoesDoSlot */
-  ctx: null              /* o ultimo contexto recebido do renderDaily, para repintar */
-};
+   3. `contas_alvo` PODIA SER MENOR QUE `prioridades` — 04/09, Marco: 4 prioridades e 1
+      conta. O filtro que descartava slot sem negócio no HubSpot saiu na mesma passada.
+      Para os registros antigos, este provedor lê as DUAS listas e casa por hora.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
 
-/* ── O ESTADO DE CADA EXECUTIVO, e a acao que ele pede ────────────────────────────────
-   Quatro estados, tres cores, e a regra e a MESMA que o resto do produto usa: vermelho e
-   ausencia de pre-requisito (nao tem plano), ambar e pendencia (tem plano, mas o plano
-   ignora o que esta travado), verde e execucao comprovada. */
-/* O SELO FALA DE PROMESSA (07/09/26, v3), e nao de plano. A pergunta da rodada mudou:
-   antes era "ele montou o dia?", agora e "ele travou a palavra?" — e travar a palavra
-   pressupoe ter montado, porque a promessa e derivada do plano. */
-function dg2EstadoDoRep(l) {
-  const temPlano = dg2ClientesNomeados(l).length > 0;
-  const feitas = Number(l.feitas) || 0;
-  if (!l.travou) return { estado: 'Sem promessa', tom: '#C7142A', bg: '#FDF0F1', acao: 'Cobrar promessa' };
-  if (feitas > 0) return { estado: 'Em execução', tom: '#2E7D5B', bg: '#EAF6EF', acao: 'Reconhecer entrega' };
-  /* PLANO QUE IGNORA O TRAVADO pede recalibragem; plano coerente com o funil pede
-     destravar o que segura o dia. A pergunta e "o plano de hoje toca o que esta parado?" */
-  /* d7QuentesForaDoPlano JA devolve so os de fora do plano — o nome da funcao e a
-     garantia. Filtrar por um campo noPlano que nao existe dava o mesmo numero por
-     acidente, e fazia o proximo leitor acreditar no campo. */
-  const quentesFora = (l.quentes || []).length;
-  if (quentesFora > 0) return { estado: 'Promessa travada', tom: '#B0782A', bg: '#FBF3E4', acao: 'Recalibrar' };
-  return { estado: 'Promessa travada', tom: '#B0782A', bg: '#FBF3E4', acao: 'Destravar execução' };
-}
+/* Estado de tela. A pauta NÃO mora aqui: cobrança, reconhecimento e pergunta vivem em
+   `registros_rodada` (g14Registrar/g14Feitos), que é o que a Semana e o Time também leem. */
+const DG4_ESTADO = { foco: null, toast: null };
 
-/* ── UMA LINHA POR EXECUTIVO, sobre g14LinhaDoRep ──────────────────────────────────── */
-function dg2Linhas(ctx) {
-  const reps = ctx.reps || [];
-  return reps.map(function (r, i) {
-    const oid = String(r.ownerId);
-    const planoDia = ctx.planos ? ctx.planos[oid] : undefined;
-    const l = g14LinhaDoRep(r, planoDia);
-    const est = dg2EstadoDoRep(l);
-    const evs = (ctx.agenda && ctx.agenda.porOwner) ? (ctx.agenda.porOwner.get(oid) || []) : [];
-    const abertos = Number(r.open) || 0;
-    const travados = Number(r.leadsTravados) || 0;
-    return Object.assign({}, l, est, {
-      idx: i, ownerId: oid, praca: r.praca || r.regiao || '',
-      abertos: abertos, travados: travados, evs: evs,
-      agendaVazia: evs.length === 0
-    });
-  });
-}
-
-/* ── OS VALORES QUE O MARKUP DA PRANCHA CONSOME ──────────────────────────────────────
-   Os nomes dos campos sao os do mockup, de proposito: assim o markup entra sem eu
-   reescrever uma linha de estilo, e a diferenca entre a prancha e a tela e so o dado. */
-/* ══ O PICKER DE HORARIO LIVRE, NO DESENHO DA v2 (07/09/26) ═══════════════════════════
-   A REGRA de quem pode entrar e g14OpcoesDoSlot — quentes primeiro, depois carteira e
-   contas-alvo da rota, com o id ja resolvido na carteira ('c-'+dealId, nunca o dealId
-   cru, que viraria "conta fora da carga" na tela dele amanha). Isto aqui e so o desenho.
-
-   Os dois vazios sao diferentes de proposito e levam a conversas diferentes na rodada. */
-function dg2PickerHTML(l, si) {
-  const ops = (typeof g14OpcoesDoSlot === 'function') ? g14OpcoesDoSlot(l, si) : [];
-  const hora = (typeof D7_HORAS !== 'undefined' && D7_HORAS[si]) ? D7_HORAS[si] : ('slot ' + si);
-  const cabeca = '<p style="margin:0 0 8px;font:900 9px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#B0782A;">'
-    + 'o que entra às ' + esc(hora) + ' — quentes primeiro, depois carteira e contas-alvo da rota</p>';
-  const corpo = ops.length
-    ? '<div style="display:flex;flex-direction:column;gap:5px;">'
-      + ops.map(function (o) {
-          return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFFDF8;border:1px solid #EEE9DE;border-left:3px solid ' + o.cor + ';border-radius:8px;padding:8px 12px;">'
-            + '<span style="font-size:12px;color:#1A1613;line-height:1.45;flex:1;min-width:200px;overflow-wrap:anywhere;">'
-            + '<b>' + esc(o.nome) + '</b><br><span style="font-size:10.5px;color:#6B6254;">' + esc(o.sub) + '</span></span>'
-            + '<button type="button" data-dg2-acao="por:' + esc(l.ownerId) + ':' + si + ':' + esc(o.id) + '"'
-            + ' style="display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid #1A1613;border-radius:999px;background:#1A1613;font:800 10.5px \'Manrope\',sans-serif;color:#FFFDF8;cursor:pointer;white-space:nowrap;" data-dg2-hv="4">agendar ▸</button>'
-            + '</div>';
-        }).join('')
-      + '</div>'
-    : '<span style="display:block;font:700 11.5px/1.5 \'Manrope\',sans-serif;color:#6B6254;">'
-      + (l.rota
-        ? 'A carteira e as contas-alvo da rota dele já estão todas no plano de hoje — não há o que somar aqui.'
-        : 'Ele não escolheu a região de hoje no Planejamento, então não há rota de onde tirar conta. Os quentes dele aparecem nesta lista quando estiverem na carteira desta carga.')
-      + '</span>';
-  return '<div style="background:#F4F1EA;border:1px solid #E3DDD0;border-radius:10px;padding:12px 15px;">' + cabeca + corpo + '</div>';
-}
-
-/* ══ A PROMESSA DE UM EXECUTIVO, CONFERIDA CONTRA A AGENDA (07/09/26) ═════════════════
-   Os tres numeros sao os que ELE travou as 13h em dailies. O campo do meio e
-   `prometido_propostas`, cujo rotulo na tela dele e "Demo/Proposta" — e o "demos" da
-   prancha; usar outro campo seria cobrar um numero que ele nunca prometeu.
-
-   A CONFERENCIA sai de AGENDA_TIPOS, que ja e a regra do produto: rota e follow_up
-   contam como visita, reuniao conta como demo, interno nao conta. Fechamento nao tem
-   evento de calendario — a conferencia dele e closedate de hoje. */
-function dg2PromessaDoRep(l, ctx) {
-  const d = (typeof getDaily === 'function') ? (getDaily(l.ownerId, dailyRefDate) || {}) : {};
-  const num = function (v) { const n = Number(v); return Number.isFinite(n) ? n : null; };
-  const evs = l.evs || [];
-  const conta = function (ev) {
-    const tipo = (typeof AGENDA_TIPOS !== 'undefined') ? AGENDA_TIPOS[ev.tipo] : null;
-    return tipo ? tipo.conta : null;
-  };
-  const naAgendaVisitas = evs.filter(function (e) { return conta(e) === 'visita'; }).length;
-  const naAgendaDemos = evs.filter(function (e) { return conta(e) === 'reuniao'; }).length;
-  const fechadosHoje = Number((l.rep && l.rep.fechamentosHubspotHoje) || 0);
-  return {
-    travada: !!l.travou,
-    /* null e "ele nao prometeu", e nao "prometeu zero" — a tela desenha os dois
-       diferente, porque cobrar zero de quem nao prometeu e acusar do que nao foi dito. */
-    visitas: { p: num(d.prometido_visitas), naAgenda: naAgendaVisitas },
-    demos: { p: num(d.prometido_propostas), naAgenda: naAgendaDemos },
-    fechamentos: { p: num(d.prometido_fechamentos), naAgenda: fechadosHoje, semEvento: true }
-  };
-}
-
-/* AS TRES CELULAS, no formato que o markup da prancha consome. A verificacao tem tres
-   estados e cada um diz uma coisa diferente:
-     prometeu e a agenda cobre  -> "N na agenda ✓" verde
-     prometeu e a agenda nao    -> "x de N na agenda" vermelho
-     nao prometeu               -> "—" cinza, sem julgamento */
-function dg2CelulasDaPromessa(pr) {
-  const GRN = '#2E7D5B', RED = '#C7142A', MUT = '#7A8494';
-  const cel = function (rot, o) {
-    if (o.p === null) return { rot: rot, p: '—', st: 'sem promessa', stCor: MUT, borda: '#E3DDD0' };
-    if (o.p === 0) return { rot: rot, p: '0', st: 'não prometeu', stCor: MUT, borda: '#E3DDD0' };
-    const ok = o.naAgenda >= o.p;
-    return { rot: rot, p: String(o.p),
-      st: ok ? (o.naAgenda + (o.semEvento ? ' fechado(s) ✓' : ' na agenda ✓'))
-        : (o.naAgenda + ' de ' + o.p + (o.semEvento ? ' fechado(s)' : ' na agenda')),
-      stCor: ok ? GRN : RED, borda: ok ? '#CFE6DA' : '#F0D2D6' };
-  };
-  return [cel('Visitas', pr.visitas), cel('Demos', pr.demos), cel('Fechamentos', pr.fechamentos)];
-}
-
-/* ══ PROSPECÇÕES NOVAS, E A JANELA QUE ELAS MEDEM (07/09/26) ══════════════════════════
-   `kpiDetalhe.leadsCriados` sao os deals criados nos ULTIMOS 7 DIAS. Com `criadoEm` na
-   carga (o robo passou a pedir createdate) da para recortar ONTEM, que e o que a prancha
-   quer. Sem ele — carga antiga — a funcao devolve a janela de 7 dias E DIZ que e de 7
-   dias. O numero nunca mente sobre o periodo que mediu. */
-function dg2ProspeccoesNovas() {
-  const lista = (typeof DATA !== 'undefined' && DATA.kpiDetalhe && Array.isArray(DATA.kpiDetalhe.leadsCriados))
-    ? DATA.kpiDetalhe.leadsCriados : null;
-  if (!lista) return { medido: false, janela: null, porOwner: {}, total: 0 };
-  const temData = lista.some(function (x) { return x && x.criadoEm; });
-  let alvo = lista;
-  let janela = '7 dias';
-  if (temData) {
-    janela = 'ontem';
-    const ontem = (typeof addBusinessDays === 'function' && typeof dailyRefDate !== 'undefined')
-      ? addBusinessDays(dailyRefDate, -1) : null;
-    alvo = lista.filter(function (x) {
-      if (!x || !x.criadoEm) return false;
-      const iso = String(x.criadoEm).slice(0, 10);
-      return ontem ? iso === ontem : false;
-    });
-  }
-  const porOwner = {};
-  alvo.forEach(function (x) {
-    const k = String((x && x.ownerId) || '');
-    if (!k) return;
-    porOwner[k] = (porOwner[k] || 0) + 1;
-  });
-  return { medido: true, janela: janela, porOwner: porOwner, total: alvo.length };
-}
-
-function dg2Vals(ctx) {
-  const INK = '#1A1613', MUT = '#988D7B', RED = '#C7142A', AMB = '#B0782A', GRN = '#2E7D5B';
-  const ls = dg2Linhas(ctx);
-  /* PROSPECÇÃO NOVA POR PESSOA (v3, bloco 4 do cartao). "<2 novas" fica vermelho porque
-     e o piso que o Julyan cobra no topo do funil; sem carga medida, a frase diz isso em
-     vez de mostrar zero — zero aqui acusaria de nao prospectar quem talvez tenha. */
-  const prospNovas = dg2ProspeccoesNovas();
-  const prospDe = function (l) {
-    if (!prospNovas.medido) return null;
-    return Number(prospNovas.porOwner[String(l.ownerId)] || 0);
-  };
-  const prospTxt = function (l) {
-    const n = prospDe(l);
-    if (n === null) return 'prospecção não medida nesta carga';
-    const noPlano = dg2ClientesNomeados(l).filter(function (x) {
-      return x.lead && x.lead.tipo === 'n';
-    }).length;
-    return n + (prospNovas.janela === 'ontem' ? ' nova(s) ontem' : ' nova(s) em 7 dias')
-      + ' · ' + noPlano + ' no plano de hoje';
-  };
-  const prospCor = function (l) {
-    const n = prospDe(l);
-    if (n === null) return '#7A8494';
-    return n < 2 ? '#C7142A' : '#3E382F';
-  };
-  /* uma leitura do dia util para os sete cartoes: d7ColunaDeHoje por cartao daria a
-     mesma resposta sete vezes, e uma resposta diferente se a meia-noite passasse no
-     meio do laco. */
-  const diaUtilDeHoje = (typeof d7ColunaDeHoje === 'function') ? d7ColunaDeHoje() >= 0 : true;
-  /* uma leitura da cobertura para as duas secoes que a usam (a pill e os cartoes de
-     etapa): duas leituras dariam dois totais na mesma tela. */
-  const cob = ctx.cobertura || { etapas: [], total: 0, cobertos: 0 };
-  const limpo = function (s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); };
-  const mil = function (n) { return String(n); };
-
-  /* CONCLUSAO EM UMA FRASE — a mesma regra do hero que ja existia (headline), porque a
-     rodada nao pode abrir com duas frases diferentes dependendo de qual bloco venceu. */
-  /* QUEM NAO TRAVOU, e nao quem nao nomeou cliente: na v3 o que abre a rodada e a
-     palavra travada. Quem nomeou clientes e nao travou aparece aqui de proposito — e
-     exatamente o caso que a rodada das 8h30 existe para cobrar. */
-  const semPromessa = ls.filter(function (l) { return !l.travou; });
-  const quentesFriosTotal = ls.reduce(function (a, l) {
-    return a + (l.quentes || []).length;
-  }, 0);
-  const primeiro = ls.slice().sort(function (a, b) {
-    const pa = (dg2ClientesNomeados(a).length ? 0 : 6) + Math.min(6, a.abertos ? Math.round(a.travados / a.abertos * 6) : 0);
-    const pb = (dg2ClientesNomeados(b).length ? 0 : 6) + Math.min(6, b.abertos ? Math.round(b.travados / b.abertos * 6) : 0);
-    return pb - pa;
-  })[0];
-  const primNome = primeiro ? limpo(primeiro.nome).split(' ')[0] : '';
-  const conclusao = !ls.length
-    ? 'Nenhum executivo ativo nesta carga — a rodada não tem quem conduzir.'
-    : semPromessa.length > 0
-      ? (semPromessa.length + (semPromessa.length === 1 ? ' sai' : ' saem') + ' para o campo sem promessa'
-        + (quentesFriosTotal > 0 ? ' e ' + quentesFriosTotal + ' quente(s) esfriam fora dos planos' : '')
-        + '. Comece por ' + (limpo(semPromessa[0].nome).split(' ')[0]) + '.')
-      : quentesFriosTotal > 0
-        ? (quentesFriosTotal + ' quente(s) esfriam fora dos planos. Comece por ' + primNome + '.')
-        : 'Todo mundo com a promessa travada e nenhum quente fora dos planos. A rodada é de execução.';
-
-  /* FILA DE PRIORIDADE (top 3) — cada cartao entra na conducao daquela pessoa, e o
-     data-gx-conduzir continua sendo o atributo, para nao existirem duas entradas para o
-     mesmo ritual (o comentario de 30/08 removeu a segunda de proposito). */
-  const ranks = ls.slice().sort(function (a, b) {
-    const pa = (a.travou ? 0 : 6) + (a.agendaVazia ? 3 : 0)
-      + Math.min(6, a.abertos ? Math.round(a.travados / a.abertos * 6) : 0);
-    const pb = (b.travou ? 0 : 6) + (b.agendaVazia ? 3 : 0)
-      + Math.min(6, b.abertos ? Math.round(b.travados / b.abertos * 6) : 0);
-    return pb - pa;
-  }).slice(0, 3).map(function (l, i) {
-    const partes = [];
-    if (!l.travou) partes.push('sem promessa');
-    if (l.agendaVazia) partes.push('agenda vazia');
-    return {
-      i: i + 1, nome: limpo(l.nome).split(' ').slice(0, 2).join(' '),
-      ev1: partes.length ? partes.join(' · ') + ' ·' : '',
-      ev2: l.travados > 0 ? (l.travados + ' acima da régua de ' + l.abertos + ' abertos') : 'pendência de acompanhamento',
-      cta: l.travou ? 'recalibrar ▸' : 'cobrar promessa ▸',
-      tom: l.travou ? '#E0A64A' : '#C7142A',
-      ir: 'conduzir:' + l.ownerId
-    };
-  });
-
-  /* OS 4 KPIS. O quarto obedece a regra que vale nas cinco telas: carga que nao chegou
-     aparece como "nao medido", nunca como zero — zero ali seria dizer que o time nao
-     fechou nada hoje, o que e uma afirmacao sobre as pessoas e nao sobre a leitura. */
-  const promessasTravadas = ls.filter(function (l) { return l.travou; }).length;
-  const nomeadosTotal = ls.reduce(function (a, l) { return a + dg2ClientesNomeados(l).length; }, 0);
-  const quentesTotal = ls.reduce(function (a, l) { return a + ((l.quentes || []).length); }, 0);
-  const agendaTotal = (ctx.agenda && ctx.agenda.total) || 0;
-  const agendaVazios = (ctx.agenda && ctx.agenda.vazios) ? ctx.agenda.vazios.length : 0;
-  const comprovadasHoje = ls.reduce(function (a, l) { return a + (Number(l.feitas) || 0); }, 0);
-  const cargaOk = !ctx.frescor || ctx.frescor.confiavel;
-  const kpis = [
-    { rot: 'Promessas travadas', v: String(promessasTravadas), de: 'de ' + ls.length,
-      sub: nomeadosTotal + ' cliente(s) nomeado(s) · ' + semPromessa.length + ' sem promessa · planos_diarios',
-      cor: promessasTravadas < ls.length ? '#E0A64A' : '#5FD9A0', fs: '24px' },
-    { rot: 'Quentes fora dos planos', v: String(quentesFriosTotal), de: 'de ' + quentesTotal + ' quentes',
-      sub: quentesFriosTotal > 0 ? 'datar tarefa na rodada, não depois dela' : 'todo quente dentro de algum plano',
-      cor: quentesFriosTotal > 0 ? '#FF6B7A' : '#5FD9A0', fs: '24px' },
-    /* KPI 3 VIROU PROSPECÇÃO NOVA (v3): a agenda do dia ja e dita pela faixa de agendas
-       vazias e pela cadencia hora a hora, e o topo do funil nao era medido em nenhum
-       lugar desta tela. O destaque nomeia quem esta abaixo do piso, porque "15 novas" no
-       time esconde o zero de duas pessoas. */
-    (function () {
-      if (!prospNovas.medido) {
-        return { rot: 'Prospecções novas', v: 'não medido', de: '',
-          sub: 'a carga não trouxe os leads criados — e isso não é zero', cor: '#A79C8A', fs: '14px' };
-      }
-      const abaixo = ls.filter(function (l) { const n = prospDe(l); return n !== null && n < 2; })
-        .map(function (l) { return limpo(l.nome).split(' ')[0] + ' ' + prospDe(l); });
-      return { rot: 'Prospecções novas ' + (prospNovas.janela === 'ontem' ? 'ontem' : 'em 7 dias'),
-        v: String(prospNovas.total), de: 'no time',
-        sub: abaixo.length ? ('abaixo de 2: ' + abaixo.join(' · ')) : 'ninguém abaixo de 2 — o topo está alimentado',
-        cor: abaixo.length ? '#FF6B7A' : '#5FD9A0', fs: '24px' };
-    }()),
-    cargaOk
-      ? { rot: 'Fechados no dia', v: String(Number(ctx.fechadosHoje) || 0), de: 'HubSpot, hoje',
-          sub: 'closedate hoje · carga ' + (ctx.horaDaCarga || '08:40'), cor: '#5FD9A0', fs: '24px' }
-      : { rot: 'Fechados no dia', v: 'não medido', de: '',
-          sub: 'a carga não chegou — e isso não é zero', cor: '#A79C8A', fs: '14px' }
-  ];
-
-  /* ── O BOARD ──────────────────────────────────────────────────────────────────────
-     A acao contextual grava pelo MESMO g14Registrar que o board antigo usava (cobranca,
-     alinhar, ajuste), e a tarefa datada pela MESMA op 'tarefa-rota' de negocio-acao, que
-     ja e idempotente. Nenhum caminho de escrita novo: se um dia a regra de cobranca
-     mudar, ela muda num lugar. */
-  const ACOES = {
-    'Cobrar promessa': {
-      t: 'Cobrar promessa — grava a cobrança com hora e aparece na próxima rodada',
-      n: 'Fica registrado: se seguir aberto, a rodada de amanhã mostra "cobrado às hh:mm, ainda aberto".',
-      itens: function (l) {
-        return [{ id: 'cp-' + l.ownerId, txt: 'Registrar a cobrança da promessa de hoje — ele trava visitas, demos e fechamentos antes das ' + dg2HoraDaTrava() + '.',
-          /* cobranca DO PLANO, sem extra: e uma por pessoa por dia, e e isso que a
-             chave (tipo, owner_id, data) do registros_rodada expressa. */
-          btn: 'registrar cobrança ▸', acao: 'cobrar:' + l.ownerId, done: '✓ cobrança registrada' }];
-      }
-    },
-    'Recalibrar': {
-      t: 'Recalibrar — o plano de hoje ignora o que está travado',
-      n: 'A sugestão entra na agenda dele como ◆ aguardando confirmação — o plano continua dele, nunca é sobrescrito.',
-      itens: function (l) {
-        return (l.quentes || []).filter(function (q) { return !q.noPlano; }).slice(0, 4).map(function (q, k) {
-          return { id: 'rc-' + l.ownerId + '-' + k,
-            txt: limpo(q.cliente || q.nome) + ' — ' + limpo(q.motivo || 'sem próximo passo') + ', fora do plano de hoje',
-            btn: 'sugerir troca ▸', acao: 'alinhar:' + l.ownerId + ':' + limpo(q.nome), done: '◆ sugestão enviada — aguarda confirmação' };
-        });
-      }
-    },
-    'Destravar execução': {
-      t: 'Destravar execução — o que segura o dia dele',
-      n: 'A tarefa datada grava direto no funil (HubSpot), sem sair da rodada.',
-      itens: function (l) {
-        return (l.quentes || []).slice(0, 4).map(function (q, k) {
-          return { id: 'dx-' + l.ownerId + '-' + k,
-            txt: limpo(q.cliente || q.nome) + ' — ' + limpo(q.motivo || 'sem próximo passo') + ', sem tarefa marcada',
-            btn: 'datar tarefa ▸', acao: 'tarefa:' + l.ownerId + ':' + (q.dealId || q.id || ''), done: '✓ tarefa datada · no funil' };
-        });
-      }
-    },
-    'Reconhecer entrega': {
-      t: 'Reconhecer entrega — elogio também é evidência',
-      n: 'O reconhecimento entra no ritual e aparece no prometido × cumprido da aba Time.',
-      itens: function (l) {
-        return [{ id: 'rn-' + l.ownerId,
-          txt: (Number(l.feitas) || 0) + ' visita(s) comprovada(s) hoje + ' + dg2ClientesNomeados(l).length + ' cliente(s) nomeado(s)',
-          btn: 'registrar reconhecimento ▸', acao: 'ajuste:' + l.ownerId, done: '✓ registrado no ritual' }];
-      }
-    }
-  };
-
-  const board = ls.map(function (l, i) {
-    const det = ACOES[l.acao];
-    const brutos = det.itens(l);
-    const itens = brutos.map(function (it) {
-      const ok = dg2FeitoDaAcao(it.acao);
-      const eSug = ok && it.done.charAt(0) === '◆';
-      return { txt: it.txt, fazer: ok ? '' : it.acao,
-        btn: ok ? it.done : it.btn,
-        bg: ok ? (eSug ? '#FBF3E4' : '#EAF6EF') : '#1A1613',
-        cor: ok ? (eSug ? AMB : GRN) : '#FFFDF8',
-        borda: ok ? (eSug ? '#E0A64A' : '#3ECF8E') : '#1A1613' };
-    });
-    const aberto = DG2.acaoAberta === i;
-    const tudo = brutos.length > 0 && brutos.every(function (it) { return dg2FeitoDaAcao(it.acao); });
-    const foco = DG2.cond === null ? null : DG2.cond === i;
-    /* SO AS VISITAS SAO CLIENTE NOMEADO. d7PlanoDeHoje devolve a GRADE de 7 horarios:
-       tipo visita (cliente de verdade), rua, bloqueado, livre e orfa. Medido antes de
-       instalar: contar plano.length daria 7 clientes para quem nomeou 2. */
-    const visitas = (l.plano || []).filter(function (x) { return x.tipo === 'visita'; });
-    /* A ROTA NAO VEM DO PLANO: d7RotaDeHoje devolve { chave, nome }, sem paradas. As
-       paradas vivem em rotasCache.porOwner, a mesma fonte que a conducao le. */
-    const infoRota = ((typeof rotasCache !== 'undefined' && rotasCache ? rotasCache.porOwner : null) || {})[l.ownerId];
-    const paradas = (infoRota && (infoRota.paradas || []).length) || 0;
-    const temRota = paradas > 0;
-    /* OS QUATRO MARCOS ✓/· SAIRAM em 07/09/26: a v3 nao os desenha, e o topo do cartao
-       passou a ser numero da fila + nome + praca + selo. Dado calculado que nenhuma
-       tela le e peso morto — e depois vira "acho que isso e usado em algum lugar". */
-    /* A PROMESSA DELE, conferida contra a agenda — o primeiro bloco do cartao na v3. */
-    const pr = dg2PromessaDoRep(l, ctx);
-    const promessa = dg2CelulasDaPromessa(pr);
-
-    /* "N abertos · M acima da régua" — o mesmo par que a aba Time publica. Sem funil
-       medido nao vira zero: vira a frase que diz que nao foi medido. */
-    const funilResumo = !l.abertos ? 'sem funil medido nesta carga'
-      : (l.abertos + ' abertos · ' + l.travados + ' acima da régua');
-
-    return {
-      i: i + 1, nome: limpo(l.nome), praca: limpo(l.praca), estado: l.estado, tom: l.tom, estadoBg: l.bg,
-      borda: foco === true ? '#1A1613' : '#E3DDD0', op: foco === false ? '.35' : '1',
-      prom: promessa,        /* `prom` e o nome que o markup da prancha consome */
-      /* SEM PROMESSA e sobre a TRAVA, nao sobre o plano: ele pode ter nomeado clientes e
-         nao ter travado a palavra, e e exatamente esse o caso que a rodada cobra. */
-      semProm: !pr.travada,  /* idem: `semProm` no markup */
-      prosp: prospTxt(l), prospCor: prospCor(l),
-      temClientes: visitas.length > 0, semClientes: visitas.length === 0,
-      /* OS BURACOS DA MESMA PERGUNTA. Slot livre e o horario que o roteiro dele deixou
-         em aberto hoje; o gestor agenda ali na frente do time, e a visita cai no plano
-         DELE (planos_semanais), nao numa lista do gestor. Sem roteiro montado nao ha
-         buraco: ha a conversa de montar o roteiro, que o bloco vermelho acima ja faz. */
-      /* EM DIA NAO UTIL A COLUNA VEM VAZIA e os sete horarios voltam 'livre' — sete
-         convites que todos recusariam com "hoje nao e dia util". A fileira so existe
-         quando ha dia para agendar; o motivo aparece escrito no lugar dela. */
-      livres: diaUtilDeHoje
-        ? (l.plano || []).filter(function (x) { return x.tipo === 'livre'; })
-            .map(function (x) { return { hora: x.hora, si: x.si, acao: 'slot:' + l.ownerId + ':' + x.si }; })
-        : [],
-      semDiaUtil: !diaUtilDeHoje && (l.plano || []).length > 0,
-      pickerAberto: !!(DG2.picker && String(DG2.picker.owner) === String(l.ownerId)),
-      pickerHTML: (DG2.picker && String(DG2.picker.owner) === String(l.ownerId))
-        ? dg2PickerHTML(l, DG2.picker.si) : '',
-      pickerSi: (DG2.picker && String(DG2.picker.owner) === String(l.ownerId)) ? DG2.picker.si : null,
-      clientes: visitas.map(function (c, j) {
-        const id = 'b' + i + '-' + j;
-        const ab = DG2.nomesAbertos[id];   /* estado de TELA, nao de banco: pode morar aqui */
-        /* o nome mora em c.lead, e nao em c: a linha da grade e o SLOT, e o lead e o
-           que esta dentro dele. Sem isto o chip sai com o horario e o nome vazio. */
-        const nome = limpo((c.lead && (c.lead.nome || c.lead.name)) || '');
-        const feita = c.estado === 'feita';
-        return { nome: nome, cheio: nome, h: limpo(c.hora || '—'),
-          hCor: feita ? GRN : MUT, bg: feita ? '#EAF6EF' : '#F4F1EA', borda: feita ? '#3ECF8E' : '#E3DDD0',
-          linhas: ab ? '99' : (nome.length > 60 ? '2' : '1'), ver: 'nome:' + id };
-      }),
-      funilResumo: funilResumo, funilCor: (!l.abertos || l.travados > 0) ? RED : GRN,
-      quentesResumo: (l.quentes || []).length
-        ? ((l.quentes || []).length + ' fora do plano de hoje')
-        : '',
-      temQuentes: !!(l.quentes && l.quentes.length), zeroQuentes: !(l.quentes && l.quentes.length),
-      quentes: (l.quentes || []).slice(0, 4).map(function (q, k) {
-        const acaoQ = 'tarefa:' + l.ownerId + ':' + (q.dealId || '');
-        const ok = dg2FeitoDaAcao(acaoQ);
-        /* dias pode ser null: o HubSpot nao tem data de entrada em toda etapa (a
-           Reciclagem nao tem). null vira 'tempo na etapa nao medido', nunca 0d. */
-        const motivo = (q.dias != null)
-          ? (q.dias + 'd em ' + limpo(q.etapa))
-          : ('em ' + limpo(q.etapa) + ' · tempo na etapa não medido');
-        /* SEM SELO POR ITEM: d7QuentesForaDoPlano ja devolve SO os de fora do plano, e
-           um selo que nunca muda de cor nao informa nada. O par vai para o cabecalho,
-           onde os dois numeros existem de verdade. */
-        return { cliente: limpo(q.nome), motivo: motivo,
-          noPlano: '', planoCor: RED,
-          fazer: ok ? '' : acaoQ,
-          btn: ok ? '✓ tarefa datada' : 'datar tarefa ▸',
-          bg: ok ? '#EAF6EF' : '#FFFDF8', cor: ok ? GRN : INK, borda: ok ? '#3ECF8E' : '#1A1613' };
-      }),
-      rua: dg2RuaDe(l), ruaCor: temRota ? '#3E382F' : RED,
-      agir: 'painel:' + i,
-      btnTxt: tudo ? ('✓ ' + l.acao.toLowerCase()) : (aberto ? l.acao + ' ▴' : l.acao + ' ▾'),
-      btnBg: tudo ? '#EAF6EF' : '#1A1613', btnCor: tudo ? GRN : '#FFFDF8', btnBorda: tudo ? '#3ECF8E' : '#1A1613',
-      painelAberto: aberto, painelTitulo: det.t, painelNota: det.n, painelItens: itens
-    };
-  });
-
-  /* ── A CADENCIA, HORA A HORA ─────────────────────────────────────────────────────── */
-  const tipoCfg = {
-    vis: { bg: '#EAF6EF', borda: '#3ECF8E', cor: GRN, estilo: 'solid', p: '■ ' },
-    fu: { bg: '#FBF3E4', borda: '#E0A64A', cor: AMB, estilo: 'solid', p: '▲ ' },
-    sug: { bg: '#FFFDF8', borda: '#E0A64A', cor: AMB, estilo: 'dashed', p: '◆ ' },
-    ok: { bg: '#2E7D5B', borda: '#2E7D5B', cor: '#FFFDF8', estilo: 'solid', p: '✓ ' }
-  };
-  const col = function (h, dur) {
-    const a = Math.max(1, Math.min(40, Math.round((h - 8) * 4) + 1));
-    return a + ' / span ' + Math.max(2, Math.min(41 - a, Math.round(dur * 4)));
-  };
-  const timeline = ls.map(function (l) {
-    const partes = limpo(l.nome).split(' ');
-    const curto = partes.length > 1 ? (partes[0] + ' ' + partes[partes.length - 1].charAt(0) + '.') : partes[0];
-    return {
-      nome: curto, cor: l.agendaVazia ? RED : INK, ir: 'conduzir:' + l.ownerId, vazia: l.agendaVazia,
-      evs: (l.evs || []).map(function (ev) {
-        const d = new Date(ev.inicio);
-        const h = d.getHours() + (d.getMinutes() / 60);
-        /* dur vem em MINUTOS de agendaNormalizar (30 por padrao). Tratado como horas,
-           um evento de meia hora ocuparia 30 horas da timeline. */
-        const dur = Math.max(0.25, (Number(ev.dur) || 30) / 60);
-        /* comprovada = a MESMA regra do estado 'feita' do plano: desfecho COMPLETED no
-           HubSpot ou registro do Expogo. Duas definicoes de visita comprovada dariam
-           dois numeros na mesma tela. */
-        const comprovada = ev.desfecho === 'COMPLETED' || !!ev.registro;
-        const tipo = comprovada ? 'ok' : (ev.recemAgendado ? 'sug' : (ev.tipo === 'tarefa' ? 'fu' : 'vis'));
-        const c = tipoCfg[tipo];
-        const slots = Math.max(2, Math.round(dur * 4));
-        const rotHora = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-        const titulo = limpo(ev.cliente || ev.titulo || 'compromisso');
-        return { col: col(h, dur), bg: c.bg, borda: c.borda, cor: c.cor, estilo: c.estilo,
-          rot: slots < 4 ? c.p.trim() : (c.p + titulo), title: rotHora + ' · ' + titulo };
-      })
-    };
-  });
-  const horas = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17].map(function (h) {
-    return { rot: h + 'h', col: ((h - 8) * 4 + 1) + ' / span 4' };
-  });
-
-  /* ── O FUNIL ENTRA NA DAILY? ─────────────────────────────────────────────────────── */
-  const etapas = cob.etapas || [];
-  const funil = etapas.map(function (f, i) {
-    const abertos = Number(f.total) || 0;
-    const cobertos = Number(f.cobertos) || 0;
-    const desc = abertos - cobertos;
-    const pct = abertos ? Math.round(cobertos / abertos * 100) : null;
-    const aberta = DG2.etapaFunil === i;
-    const ruim = pct !== null && pct < 50;
-    return { etapa: limpo(f.label || f.etapa), abertos: String(abertos),
-      descTxt: pct === null ? 'sem negócio nesta etapa' : (desc + ' sem cadência'),
-      cor: ruim ? RED : GRN, w: (pct === null ? 0 : pct) + '%',
-      pct: pct === null ? '—' : (pct + '%'),
-      caret: aberta ? '▴' : '▾', selBg: aberta ? '#F4F1EA' : '#FFFDF8',
-      selBorda: aberta ? '#1A1613' : '#E3DDD0', sel: 'etapa:' + i };
-  });
-  const ef = DG2.etapaFunil;
-  const efB = (ef !== null && etapas[ef]) ? etapas[ef] : null;
-  const efItens = efB ? (efB.descobertos || []).slice(0, 8) : [];
-
-  /* OS TRES ROTULOS DO NAVEGADOR DE DIA. fmtDailyLabel e a mesma formatacao que o resto
-     da aba usa, e addBusinessDays garante que sabado nao aparece como "proximo dia". */
-  const rotDia = function (iso) {
-    return (typeof fmtDailyLabel === 'function') ? fmtDailyLabel(iso) : String(iso);
-  };
-  const ehHoje = (typeof isoDate === 'function') && dailyRefDate === isoDate(new Date());
-  const vizinho = function (n) {
-    return (typeof addBusinessDays === 'function') ? addBusinessDays(dailyRefDate, n) : dailyRefDate;
-  };
-
-  /* A COBERTURA DO FUNIL ABERTO, e nao "abertos ontem": ver o cabecalho deste patch.
-     n<8 numa quebra mostra n, nunca %, pela regra que a prancha declara. */
-  const cobTotal = Number(cob.total) || 0;
-  const cobCob = Number(cob.cobertos) || 0;
-  const cobHoje = !cobTotal
-    ? { txt: 'não medido', frase: 'a carga do funil não chegou — e isso não é zero' }
-    : { txt: cobCob + ' de ' + cobTotal,
-        frase: 'negócios abertos têm plano, tarefa datada ou follow-up marcado — '
-          + (cobTotal - cobCob) + ' seguem sem cadência' };
-  const nFu = Number(ctx.vencemHoje) || 0;
-  const fuHoje = { txt: nFu + (nFu === 1 ? ' follow-up' : ' follow-ups'),
-    frase: nFu ? 'vencem hoje — cobrar na rodada, antes da rua' : 'vencem hoje: ninguém sai devendo retorno' };
-
-  /* ══ A PROMESSA DO TIME HOJE (v3, pe do hero) ═══════════════════════════════════
-     Soma so das promessas TRAVADAS: somar quem nao prometeu inflaria a promessa do
-     time com o silencio de quem nao falou. E cada linha carrega a conferencia, porque
-     "o time prometeu 23 visitas" sem dizer quantas estao na agenda e um numero que
-     ninguem consegue cobrar. */
-  const promessaDoTime = (function () {
-    const travadas = ls.map(function (l) { return dg2PromessaDoRep(l, ctx); })
-      .filter(function (p) { return p.travada; });
-    const soma = function (chave) {
-      return travadas.reduce(function (a, p) {
-        return { p: a.p + (p[chave].p || 0), naAgenda: a.naAgenda + (p[chave].naAgenda || 0) };
-      }, { p: 0, naAgenda: 0 });
-    };
-    const linha = function (rot, chave, sufixo) {
-      const s = soma(chave);
-      if (!travadas.length) return { v: '—', rot: rot, st: 'nenhuma promessa travada', stCor: '#7A8494' };
-      const ok = s.naAgenda >= s.p;
-      return { v: String(s.p), rot: rot,
-        st: ok ? (s.naAgenda + sufixo + ' ✓') : ('só ' + s.naAgenda + sufixo),
-        stCor: ok ? '#7FD9BE' : '#FF6B7A' };
-    };
-    return [linha('visitas', 'visitas', ' na agenda'), linha('demos', 'demos', ' na agenda'),
-      linha('fechamentos', 'fechamentos', ' fechado(s)')];
-  }());
-
-  return {
-    promessaDoTime: promessaDoTime,
-    naoTv: !document.body.classList.contains('tv'),
-    horaDaCarga: (typeof DATA !== 'undefined' && DATA.hubspotUpdatedAtFmt) ? DATA.hubspotUpdatedAtFmt : 'não medida',
-    rotuloDoDia: rotDia(dailyRefDate),
-    rotuloAnterior: rotDia(vizinho(-1)),
-    rotuloCentro: (ehHoje ? 'hoje · ' : '') + rotDia(dailyRefDate),
-    rotuloProximo: rotDia(vizinho(1)),
-    cobHoje: cobHoje, fuHoje: fuHoje,
-    /* A TERCEIRA PILL (v3): quem esta segurando o topo. Sem carga medida ela diz isso,
-       em vez de anunciar zero prospecção para um time que talvez tenha prospectado. */
-    prospHoje: (function () {
-      if (!prospNovas.medido) return { txt: 'não medido', frase: 'a carga não trouxe os leads criados — e isso não é zero' };
-      const abaixo = ls.filter(function (l) { const n = prospDe(l); return n !== null && n < 2; })
-        .map(function (l) { return limpo(l.nome).split(' ')[0] + ' ' + prospDe(l); });
-      return { txt: prospNovas.total + ' prospecções novas ' + (prospNovas.janela === 'ontem' ? 'ontem' : 'em 7 dias'),
-        frase: abaixo.length
-          ? ('· ' + (abaixo.length === 2 ? abaixo.join(' e ') : abaixo.join(' · ')) + ' — o topo depende de quem está abaixo de 2')
-          : '· ninguém abaixo de 2 — o topo está alimentado' };
-    }()),
-    tvZoom: '1',   /* o zoom do modo TV e do body.tv, que ja existe — nao um segundo */
-    tvBotao: document.body.classList.contains('tv') ? 'sair do modo TV ✕' : 'modo TV',
-    toggleTv: 'tv',
-    agora: DG2.agora || '',
-    horaDaTrava: dg2HoraDaTrava(),
-    conclusao: conclusao,
-    ranks: ranks, kpis: kpis, board: board, timeline: timeline, horas: horas, funil: funil,
-    rotaZero: agendaVazios > 0,
-    nAgendasVazias: agendaVazios,
-    nomesAgendaVazia: (ctx.agenda && ctx.agenda.vazios ? ctx.agenda.vazios : [])
-      .map(function (r) { return limpo(String(r.name || r.nome || '')).split(' ')[0]; }).join(' e '),
-    conduzirRota: 'conduzir-agenda',
-    diaAnterior: 'dia:-1', diaProximo: 'dia:+1',
-    conduzindo: DG2.cond !== null,
-    condPos: DG2.cond !== null ? ((DG2.cond + 1) + ' de ' + ls.length) : '',
-    condNome: DG2.cond !== null && ls[DG2.cond] ? limpo(ls[DG2.cond].nome) : '',
-    condFrase: DG2.cond !== null && ls[DG2.cond]
-      ? (ls[DG2.cond].estado.toLowerCase() + ' — ele fala onde atua hoje; a tela mostra se o funil confirma') : '',
-    condAnt: 'cond:-1', condProx: 'cond:+1', condFim: 'cond:fim',
-    toggleConduzir: DG2.cond === null ? 'conduzir' : 'cond:fim',
-    condBotao: DG2.cond === null ? 'Conduzir a Daily →' : 'encerrar condução ✕',
-    condBg: DG2.cond === null ? '#1A1613' : '#FFFDF8',
-    condCor: DG2.cond === null ? '#FFFDF8' : '#1A1613',
-    temEtapa: ef !== null && !!efB,
-    etapaTitulo: efB ? (limpo(efB.label || efB.etapa) + ' — sem cadência, ordenados pelo tempo parado') : '',
-    etapaRodape: efB
-      ? ('Mostrando ' + efItens.length + ' de ' + ((Number(efB.total) || 0) - (Number(efB.cobertos) || 0))
-        + ' descobertos · cobrar ▸ leva o caso para a rodada da pessoa e grava a cobrança')
-      : '',
-    etapaItens: efItens.map(function (it, k) {
-      /* a cobranca de um caso do funil e a MESMA cobranca de quente do board antigo:
-         base cobranca, extra = nome do cliente. Sem o nome no extra, cobrar dois
-         clientes do mesmo executivo gravaria uma linha so. */
-      const acaoC = 'cobrar:' + (it.ownerId || '') + ':' + String(it.name || it.dealname || '');
-      const ok = dg2FeitoDaAcao(acaoC);
-      /* it e o LEAD cru que a cobertura separou: o nome vem de name/dealname e o
-         executivo se resolve por ownerId em DATA.reps. */
-      const dono = (DATA.reps || []).find(function (r) { return String(r.ownerId) === String(it.ownerId); });
-      const dd = (it.diasParado != null) ? it.diasParado : (it.dias != null ? it.dias : null);
-      return { cliente: limpo(it.name || it.dealname), exec: limpo(dono ? (dono.name || dono.nome) : ''),
-        dias: dd != null ? (dd + 'd na etapa') : 'tempo na etapa não medido',
-        cobrar: ok ? '' : acaoC,
-        btn: ok ? '✓ na rodada' : 'cobrar ▸',
-        bg: ok ? '#EAF6EF' : '#1A1613', cor: ok ? GRN : '#FFFDF8', borda: ok ? '#3ECF8E' : '#1A1613' };
-    })
-  };
-}
-
-/* A RUA, em uma frase: ultima visita comprovada + estado da rota. Le de rotasCache e do
-   plano ja filtrado — nao conta visita de novo. */
-function dg2RuaDe(l) {
-  const partes = [];
-  const feitas = Number(l.feitas) || 0;
-  if (feitas > 0) partes.push(feitas === 1 ? '1 visita comprovada hoje' : (feitas + ' visitas comprovadas hoje'));
-  else partes.push('nenhuma visita comprovada hoje ainda');
-  const paradas = (l.rota && (l.rota.paradas || []).length) || 0;
-  partes.push(paradas ? ('rota montada · ' + paradas + ' parada(s)') : 'rota de hoje vazia');
-  return partes.join(' · ');
-}
-
-/* ══ A DAILY DO GESTOR v3 — A TELA (07/09/26) ═════════════════════════════════════════
-   Markup da prancha mockup-gestor-daily-v3, convertido mecanicamente e recortado: saiu o
-   chrome de abas do mockup (o Cockpit tem o proprio) e entraram os dados. Nenhuma linha
-   de estilo reescrita.
-
-   O QUE A v3 TROUXE sobre a v2: a promessa de cada um em tres celulas conferidas contra
-   a agenda, a faixa da promessa do time no pe do hero, a prospeccao nova como KPI e como
-   pill, e o quarto bloco do cartao. Os quatro marcos ✓/· do topo do cartao sairam.
-
-   RE-INJETADO por mim, porque a prancha nao desenha e nao pode morrer: a ancora
-   data-dg2-card (a conducao rola ate ela) e o AGENDAR NO HORARIO LIVRE, que o Julyan
-   pediu de volta ontem. */
-function dg2TelaHTML(ctx) {
-  DG2.ctx = ctx;
-  const v = dg2Vals(ctx);
-  const naoTv = v.naoTv, tvZoom = v.tvZoom, tvBotao = v.tvBotao, toggleTv = v.toggleTv;
-  const agora = v.agora, horaDaTrava = v.horaDaTrava, horaDaCarga = v.horaDaCarga;
-  const rotuloDoDia = v.rotuloDoDia, rotuloAnterior = v.rotuloAnterior;
-  const rotuloCentro = v.rotuloCentro, rotuloProximo = v.rotuloProximo;
-  const diaAnterior = v.diaAnterior, diaProximo = v.diaProximo;
-  const conclusao = v.conclusao, ranks = v.ranks, kpis = v.kpis;
-  /* promTime e o nome que o markup da prancha usa; promessaDoTime e o do motor.
-     Alinho aqui, no destructuring, e nao no markup — ele e copia literal. */
-  const promTime = v.promessaDoTime;
-  const rotaZero = v.rotaZero, nAgendasVazias = v.nAgendasVazias;
-  const nomesAgendaVazia = v.nomesAgendaVazia, conduzirRota = v.conduzirRota;
-  const conduzindo = v.conduzindo, condPos = v.condPos, condNome = v.condNome;
-  const condFrase = v.condFrase, condAnt = v.condAnt, condProx = v.condProx, condFim = v.condFim;
-  const toggleConduzir = v.toggleConduzir, condBotao = v.condBotao;
-  const condBg = v.condBg, condCor = v.condCor;
-  const board = v.board, timeline = v.timeline, horas = v.horas, funil = v.funil;
-  const temEtapa = v.temEtapa, etapaTitulo = v.etapaTitulo;
-  const etapaItens = v.etapaItens, etapaRodape = v.etapaRodape;
-  const cobHoje = v.cobHoje, fuHoje = v.fuHoje, prospHoje = v.prospHoje;
-  return `<div style="max-width:1280px;margin:0 auto;padding:26px 24px 72px;zoom:${tvZoom};">
-
-  ${(naoTv) ? `
-    <div style="display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-wrap:wrap;padding-bottom:12px;border-bottom:2px solid #1A1613;">
-      <span style="font:700 11px 'Manrope',sans-serif;color:#6B6254;background:#F4F1EA;border-radius:999px;padding:6px 12px;font-variant-numeric:tabular-nums;white-space:nowrap;">carga HubSpot ${horaDaCarga} · agora <span data-dg2-agora>${agora}</span> · promessa trava às ${horaDaTrava}</span>
-    </div>
-  ` : ''}
-
-  <!-- HERO: o placar do dia -->
-  <div style="background:#14110D;border-radius:18px;margin-top:16px;padding:20px 26px;color:#F6F3EC;">
-    <div style="display:grid;grid-template-columns:minmax(0,1.2fr) 1px minmax(0,1fr);gap:22px;align-items:start;">
-      <div>
-        <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.15em;text-transform:uppercase;color:#FF6B7A;">A Daily · ${rotuloDoDia} · o time me fala onde atua hoje</span>
-        <h1 style="font:900 26px/1.15 'Archivo',sans-serif;letter-spacing:-.02em;color:#F6F3EC;margin:8px 0 12px;text-wrap:balance;">${conclusao}</h1>
-        <div style="display:flex;flex-direction:column;gap:5px;">
-          ${(ranks||[]).map(r => `
-            <button data-dg2-acao="${r.ir}" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:rgba(255,253,248,.05);border:1px solid #2C2721;border-left:3px solid ${r.tom};border-radius:9px;padding:9px 12px;min-height:44px;font:400 12.5px 'Manrope',sans-serif;color:#F6F3EC;cursor:pointer;" data-dg2-hv="0">
-              <span style="flex:none;width:20px;height:20px;border-radius:5px;display:grid;place-items:center;background:rgba(255,253,248,.1);font:900 10px 'Archivo',sans-serif;">${r.i}</span>
-              <span style="min-width:0;"><b>${r.nome}</b> · ${r.ev1} <b style="color:#FF6B7A;">${r.ev2}</b></span>
-              <span style="margin-left:auto;font:800 10.5px 'Manrope',sans-serif;color:#E0A64A;white-space:nowrap;">${r.cta}</span>
-            </button>
-          `).join('')}
-        </div>
-      </div>
-      <div style="background:#2C2721;"></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px 18px;">
-        ${(kpis||[]).map(k => `
-          <div>
-            <span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#A79C8A;">${k.rot}</span>
-            <span style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;min-width:0;"><b style="font-family:'Archivo',sans-serif;font-weight:900;font-size:${k.fs};line-height:1.15;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 11px/1.3 'Manrope',sans-serif;color:#A79C8A;white-space:nowrap;">${k.de}</span></span>
-            <span style="display:block;font-size:10.5px;color:#A79C8A;line-height:1.4;margin-top:2px;">${k.sub}</span>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-    <!-- a promessa do time, somada -->
-    <div style="margin-top:16px;border-top:1px solid #2C2721;padding-top:13px;display:flex;align-items:center;gap:10px 22px;flex-wrap:wrap;">
-      <span style="font:900 9.5px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#A79C8A;white-space:nowrap;">A promessa do time hoje</span>
-      ${(promTime||[]).map(pt => `
-        <span style="display:inline-flex;align-items:baseline;gap:7px;"><b style="font:900 22px 'Archivo',sans-serif;color:#F6F3EC;font-variant-numeric:tabular-nums;">${pt.v}</b><span style="font:700 11.5px 'Manrope',sans-serif;color:#A79C8A;">${pt.rot}</span><span style="font:700 10.5px 'Manrope',sans-serif;color:${pt.stCor};white-space:nowrap;">${pt.st}</span></span>
-      `).join('')}
-      <span style="margin-left:auto;font:700 10.5px 'Manrope',sans-serif;color:#A79C8A;">soma dos planos travados · confirmado = existe na agenda HubSpot</span>
-    </div>
-    ${(rotaZero) ? `
-      <div style="margin-top:14px;border:1px solid #C7142A;border-radius:12px;padding:11px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-        <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#FF6B7A;white-space:nowrap;">${nAgendasVazias} agenda${nAgendasVazias === 1 ? '' : 's'} vazia${nAgendasVazias === 1 ? '' : 's'}</span>
-        <span style="font-size:12.5px;color:#F6F3EC;flex:1;min-width:220px;">${nomesAgendaVazia} não ${nAgendasVazias === 1 ? 'existe' : 'existem'} no calendário de hoje — dia sem agenda não é dia de rua. A rodada termina com <b>${nAgendasVazias === 1 ? 'ele montando o dia' : 'eles montando o dia'} na frente de todos</b>.</span>
-        <button data-dg2-acao="${conduzirRota}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 16px;border:1px solid #FF6B7A;border-radius:999px;background:none;font:800 11px 'Manrope',sans-serif;color:#FF6B7A;cursor:pointer;white-space:nowrap;" data-dg2-hv="1">conduzir por eles ▸</button>
-      </div>
-    ` : ''}
-  </div>
-
-  <!-- CONTROLES -->
-  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px;">
-    ${(naoTv) ? `
-      <div style="display:flex;align-items:center;gap:6px;">
-        <button data-dg2-acao="${diaAnterior}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 13px;border:1px solid #E3DDD0;border-radius:999px;background:#FFFDF8;font:800 11px 'Manrope',sans-serif;color:#6B6254;cursor:pointer;">‹ ${rotuloAnterior}</button>
-        <span style="display:inline-flex;align-items:center;min-height:38px;padding:0 16px;border:1px solid #1A1613;border-radius:999px;background:#1A1613;font:800 11px 'Manrope',sans-serif;color:#FFFDF8;">${rotuloCentro}</span>
-        <button data-dg2-acao="${diaProximo}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 13px;border:1px solid #E3DDD0;border-radius:999px;background:#FFFDF8;font:800 11px 'Manrope',sans-serif;color:#6B6254;cursor:pointer;">${rotuloProximo} ›</button>
-      </div>
-    ` : ''}
-    <div style="display:flex;gap:8px;flex-wrap:wrap;">
-      <button data-dg2-acao="${toggleTv}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 16px;border:1px solid #E3DDD0;border-radius:999px;background:#FFFDF8;font:800 11px 'Manrope',sans-serif;color:#1A1613;cursor:pointer;" data-dg2-hv="2">${tvBotao}</button>
-      <button data-dg2-acao="${toggleConduzir}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 18px;border:1px solid #1A1613;border-radius:999px;background:${condBg};font:800 11px 'Manrope',sans-serif;color:${condCor};cursor:pointer;" data-dg2-hv="3">${condBotao}</button>
-    </div>
-  </div>
-
-  ${(conduzindo) ? `
-    <div style="position:sticky;top:8px;z-index:5;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#14110D;border-radius:12px;padding:11px 16px;margin-top:14px;box-shadow:0 8px 24px rgba(20,17,13,.25);">
-      <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#F6F3EC;">Conduzindo · ${condPos}</span>
-      <span style="font:800 15px 'Archivo',sans-serif;color:#E0A64A;">${condNome}</span>
-      <span style="font:700 11px 'Manrope',sans-serif;color:#A79C8A;">${condFrase}</span>
-      <div style="margin-left:auto;display:flex;gap:6px;">
-        <button data-dg2-acao="${condAnt}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid #2C2721;border-radius:999px;background:none;font:800 11px 'Manrope',sans-serif;color:#F6F3EC;cursor:pointer;">‹ anterior</button>
-        <button data-dg2-acao="${condProx}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 16px;border:1px solid #E0A64A;border-radius:999px;background:none;font:800 11px 'Manrope',sans-serif;color:#E0A64A;cursor:pointer;">próximo ▸</button>
-        <button data-dg2-acao="${condFim}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid #2C2721;border-radius:999px;background:none;font:800 11px 'Manrope',sans-serif;color:#A79C8A;cursor:pointer;">encerrar ✕</button>
-      </div>
-    </div>
-  ` : ''}
-
-  <!-- O BOARD DO DIA -->
-  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:26px;padding-bottom:8px;border-bottom:1px solid #E3DDD0;">
-    <h2 style="font:900 12px 'Archivo',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#988D7B;margin:0;">O dia, executivo por executivo</h2>
-    <small style="font:700 12px 'Manrope',sans-serif;color:#988D7B;">cada cartão responde: o que ele prometeu · onde atua · quem ficou de fora e por quê · a prospecção continua?</small>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(470px,100%),1fr));gap:12px;margin-top:12px;">
-    ${(board||[]).map(e => `
-      <div data-dg2-card="${e.i - 1}" style="background:#FFFDF8;border:1px solid ${e.borda};border-top:3px solid ${e.tom};border-radius:14px;padding:15px 17px;opacity:${e.op};display:flex;flex-direction:column;gap:11px;">
-        <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;">
-          <span style="flex:none;width:22px;height:22px;border-radius:6px;display:grid;place-items:center;background:#F4F1EA;font:900 11px 'Archivo',sans-serif;color:#1A1613;align-self:center;">${e.i}</span>
-          <span style="font:800 16px 'Archivo',sans-serif;color:#1A1613;letter-spacing:-.01em;overflow-wrap:anywhere;">${e.nome}</span>
-          <span style="font:700 10.5px 'Manrope',sans-serif;color:#988D7B;">${e.praca}</span>
-          <span style="margin-left:auto;font:800 9.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${e.tom};background:${e.estadoBg};border-radius:6px;padding:3px 8px;white-space:nowrap;">${e.estado}</span>
-        </div>
-
-        <!-- 1. a promessa dele -->
-        ${(e.temProm) ? `
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;">
-            ${(e.prom||[]).map(pr => `
-              <div style="background:#F4F1EA;border:1px solid ${pr.borda};border-radius:10px;padding:7px 11px 8px;">
-                <span style="display:block;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#988D7B;">${pr.rot}</span>
-                <span style="display:flex;align-items:baseline;gap:5px;"><b style="font:900 19px 'Archivo',sans-serif;color:#1A1613;font-variant-numeric:tabular-nums;">${pr.p}</b><span style="font:700 10px 'Manrope',sans-serif;color:${pr.stCor};">${pr.st}</span></span>
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-        ${(e.semProm) ? `
-          <div style="border:1px dashed #C7142A;border-radius:10px;padding:9px 13px;font:700 12px 'Manrope',sans-serif;color:#C7142A;">sem promessa do dia — nasce agora, na rodada, e trava às 13h</div>
-        ` : ''}
-
-        <!-- 2. onde ele atua -->
-        <div>
-          <p style="margin:0 0 5px;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;">Onde ele atua hoje</p>
-          ${(e.temClientes) ? `
-            <div style="display:flex;gap:5px;flex-wrap:wrap;">
-              ${(e.clientes||[]).map(cl => `
-                <button data-dg2-acao="${cl.ver}" title="${cl.cheio}" style="max-width:100%;text-align:left;display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:5px 11px;border:1px solid ${cl.borda};border-radius:9px;background:${cl.bg};font:700 11px/1.35 'Manrope',sans-serif;color:#3E382F;cursor:pointer;" data-dg2-hv="2"><b style="font:800 10px 'Manrope',sans-serif;color:${cl.hCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${cl.h}</b><span style="display:-webkit-box;-webkit-line-clamp:${cl.linhas};-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;">${cl.nome}</span></button>
-              `).join('')}
-            </div>
-          ` : ''}
-          ${(e.semClientes) ? `
-            <span style="display:block;font:700 12px 'Manrope',sans-serif;color:#C7142A;">sem clientes nomeados — o compromisso dele nasce agora, na rodada</span>
-          ` : ''}
-        
-          ${(e.semDiaUtil) ? `
-            <span style="display:block;font:700 11px 'Manrope',sans-serif;color:#988D7B;margin-top:7px;">hoje não é dia útil — o roteiro é de segunda a sexta, e não há horário para agendar</span>
-          ` : ''}
-          ${(e.livres && e.livres.length) ? `
-            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;">
-              <span style="font:800 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#988D7B;white-space:nowrap;">livre</span>
-              ${(e.livres||[]).map(lv => `
-                <button type="button" data-dg2-acao="${lv.acao}" title="agendar uma visita às ${lv.hora} no plano dele" style="display:inline-flex;align-items:center;gap:5px;min-height:32px;padding:4px 11px;border:1px dashed ${e.pickerSi === lv.si ? '#1A1613' : '#C4B9A4'};border-radius:9px;background:${e.pickerSi === lv.si ? '#F4F1EA' : 'none'};font:800 11px 'Manrope',sans-serif;color:#6B6254;cursor:pointer;font-variant-numeric:tabular-nums;" data-dg2-hv="2">+ ${lv.hora}</button>
-              `).join('')}
-            </div>
-          ` : ''}
-          ${(e.pickerAberto) ? `
-            <div style="margin-top:8px;">${e.pickerHTML}</div>
-          ` : ''}
-        </div>
-
-        <!-- 3. quem ficou de fora e por quê -->
-        <div style="border-top:1px dashed #E3DDD0;padding-top:9px;">
-          <p style="margin:0 0 5px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;">Ficou de fora do plano — perguntar por quê <span style="font:700 10.5px/1.4 'Manrope',sans-serif;letter-spacing:0;text-transform:none;color:${e.funilCor};white-space:nowrap;">${e.funilResumo}</span></p>
-          ${(e.temQuentes) ? `
-            <div style="display:flex;flex-direction:column;gap:4px;">
-              ${(e.quentes||[]).map(q => `
-                <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#F4F1EA;border:1px solid #EEE9DE;border-radius:8px;padding:6px 10px;">
-                  <span style="font:700 11.5px/1.4 'Manrope',sans-serif;color:#1A1613;flex:1;min-width:160px;overflow-wrap:anywhere;">${q.cliente} <b style="color:#C7142A;font-variant-numeric:tabular-nums;">${q.dias}</b> <span style="font-weight:400;color:#6B6254;">· ${q.motivo}</span></span>
-                  ${dg2Gesto(q.fazer, q.btn, `display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:1px solid ${q.borda};border-radius:999px;background:${q.bg};font:800 10px 'Manrope',sans-serif;color:${q.cor};white-space:nowrap;`, 4)}
-                </div>
-              `).join('')}
-            </div>
-          ` : ''}
-          ${(e.zeroQuentes && e.temClientes) ? `
-            <span style="font:700 11.5px 'Manrope',sans-serif;color:#2E7D5B;">nada quente ficou de fora — o plano cobre o funil dele</span>
-          ` : ''}
-          ${(e.zeroQuentes && !e.temClientes) ? `
-            <span style="font:700 11.5px 'Manrope',sans-serif;color:#7A8494;">nenhum quente vencendo — mas sem plano não há o que cobrir</span>
-          ` : ''}
-        </div>
-
-        <!-- 4. prospecção nova + rua + ação -->
-        <div style="border-top:1px dashed #E3DDD0;padding-top:9px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-          <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#988D7B;white-space:nowrap;">Prospecção</span>
-          <span style="font:700 11.5px 'Manrope',sans-serif;color:${e.prospCor};white-space:nowrap;font-variant-numeric:tabular-nums;">${e.prosp}</span>
-          <span style="font:400 11.5px/1.45 'Manrope',sans-serif;color:${e.ruaCor};flex:1;min-width:180px;">${e.rua}</span>
-          <button data-dg2-acao="${e.agir}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 15px;border:1px solid ${e.btnBorda};border-radius:999px;background:${e.btnBg};font:800 11px 'Manrope',sans-serif;color:${e.btnCor};cursor:pointer;white-space:nowrap;" data-dg2-hv="4">${e.btnTxt}</button>
-        </div>
-        ${(e.painelAberto) ? `
-          <div style="background:#F4F1EA;border:1px solid #E3DDD0;border-radius:10px;padding:12px 15px;">
-            <p style="margin:0 0 8px;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:${e.tom};">${e.painelTitulo}</p>
-            <div style="display:flex;flex-direction:column;gap:5px;">
-              ${(e.painelItens||[]).map(pi => `
-                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFFDF8;border:1px solid #EEE9DE;border-radius:8px;padding:8px 12px;">
-                  <span style="font-size:12px;color:#1A1613;line-height:1.45;flex:1;min-width:200px;overflow-wrap:anywhere;">${pi.txt}</span>
-                  ${dg2Gesto(pi.fazer, pi.btn, `display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid ${pi.borda};border-radius:999px;background:${pi.bg};font:800 10.5px 'Manrope',sans-serif;color:${pi.cor};white-space:nowrap;`, 4)}
-                </div>
-              `).join('')}
-            </div>
-            <p style="margin:8px 0 0;font-size:10px;color:#988D7B;">${e.painelNota}</p>
-          </div>
-        ` : ''}
-      </div>
-    `).join('')}
-  </div>
-
-  <!-- AGENDA DE HOJE -->
-  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:30px;padding-bottom:8px;border-bottom:1px solid #E3DDD0;">
-    <h2 style="font:900 12px 'Archivo',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#988D7B;margin:0;">A cadência de hoje, hora a hora</h2>
-    <small style="font:700 12px 'Manrope',sans-serif;color:#988D7B;">calendário HubSpot · linha vazia = o dia não existe · ◆ sugestão do gestor aguardando confirmação</small>
-  </div>
-  <div style="margin-top:12px;background:#FFFDF8;border:1px solid #E3DDD0;border-radius:14px;padding:14px 16px;overflow:hidden;">
-    <div style="display:grid;grid-template-columns:110px minmax(0,1fr);gap:4px 10px;align-items:center;">
-      <span></span>
-      <div style="display:grid;grid-template-columns:repeat(40,1fr);">
-        ${(horas||[]).map(h => `
-          <span style="grid-column:${h.col};font:800 9.5px 'Manrope',sans-serif;color:#988D7B;font-variant-numeric:tabular-nums;border-left:1px solid #EEE9DE;padding-left:4px;">${h.rot}</span>
-        `).join('')}
-      </div>
-      ${(timeline||[]).map(t => `
-        <button data-dg2-acao="${t.ir}" title="abrir na rodada" style="text-align:right;background:none;border:none;padding:4px 0;min-height:36px;font:800 12px 'Manrope',sans-serif;color:${t.cor};cursor:pointer;white-space:nowrap;" data-dg2-hv="5">${t.nome}</button>
-        <div style="position:relative;display:grid;grid-template-columns:repeat(40,1fr);gap:0;height:36px;background:repeating-linear-gradient(90deg,#F4F1EA 0 1px,transparent 1px 10%);border-radius:6px;">
-          ${(t.vazia) ? `
-            <span style="grid-column:1/-1;display:flex;align-items:center;padding:0 12px;border:1px dashed #C7142A;border-radius:6px;font:700 10.5px 'Manrope',sans-serif;color:#C7142A;">agenda vazia — cobrar na rodada</span>
-          ` : ''}
-          ${(t.evs||[]).map(ev => `
-            <span title="${ev.title}" style="grid-column:${ev.col};margin:4px 1px;display:block;overflow:hidden;text-overflow:ellipsis;padding:0 7px;background:${ev.bg};border:1px ${ev.estilo} ${ev.borda};border-radius:6px;font:800 9.5px/26px 'Manrope',sans-serif;color:${ev.cor};white-space:nowrap;">${ev.rot}</span>
-          `).join('')}
-        </div>
-      `).join('')}
-    </div>
-    <p style="margin:10px 0 0;font-size:10.5px;color:#988D7B;">■ visita · ▲ follow-up · ✓ comprovada (check-in) · ◆ sugestão pendente — clicar no nome entra na condução daquela pessoa</p>
-  </div>
-
-  <!-- O FUNIL ENTRA NA DAILY? -->
-  <div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-top:30px;padding-bottom:8px;border-bottom:1px solid #E3DDD0;">
-    <h2 style="font:900 12px 'Archivo',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#988D7B;margin:0;">O funil entra na Daily?</h2>
-    <small style="font:700 12px 'Manrope',sans-serif;color:#988D7B;">coberto = está no plano de hoje, ou tem tarefa datada, ou follow-up marcado · negócio sem cadência não avança de etapa</small>
-  </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-    <span style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px 8px;border:1px solid #C7142A;border-radius:14px;padding:7px 14px;font:700 11.5px/1.5 'Manrope',sans-serif;color:#1A1613;"><b style="color:#C7142A;white-space:nowrap;">${cobHoje.txt}</b> ${cobHoje.frase}</span>
-    <span style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px 8px;border:1px solid #E0A64A;border-radius:14px;padding:7px 14px;font:700 11.5px/1.5 'Manrope',sans-serif;color:#1A1613;"><b style="color:#B0782A;white-space:nowrap;">${fuHoje.txt}</b> ${fuHoje.frase}</span>
-    <span style="display:inline-flex;align-items:center;flex-wrap:wrap;gap:3px 8px;border:1px solid #2E7D5B;border-radius:14px;padding:7px 14px;font:700 11.5px/1.5 'Manrope',sans-serif;color:#1A1613;"><b style="color:#2E7D5B;white-space:nowrap;">${prospHoje.txt}</b> ${prospHoje.frase}</span>
-  </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px;">
-    ${(funil||[]).map(f => `
-      <button data-dg2-acao="${f.sel}" style="text-align:left;background:${f.selBg};border:1px solid ${f.selBorda};border-radius:12px;padding:11px 13px;cursor:pointer;min-height:44px;" data-dg2-hv="2">
-        <span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#988D7B;">${f.etapa}</span>
-        <span style="display:flex;align-items:baseline;gap:2px 6px;flex-wrap:wrap;margin-top:3px;"><b style="font:900 20px 'Archivo',sans-serif;color:#1A1613;font-variant-numeric:tabular-nums;">${f.abertos}</b><span style="font:700 10.5px/1.4 'Manrope',sans-serif;color:${f.cor};white-space:nowrap;">${f.descTxt}</span></span>
-        <span style="display:block;height:4px;border-radius:99px;background:#F1E3E3;margin-top:7px;overflow:hidden;"><span style="display:block;height:100%;width:${f.w};background:${f.cor};"></span></span>
-        <span style="display:block;font:700 9.5px 'Manrope',sans-serif;color:#988D7B;margin-top:4px;">${f.pct} coberto ${f.caret}</span>
-      </button>
-    `).join('')}
-  </div>
-  ${(temEtapa) ? `
-    <div style="margin-top:8px;background:#F4F1EA;border:1px solid #E3DDD0;border-radius:12px;padding:13px 16px;">
-      <p style="margin:0 0 8px;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#C7142A;">${etapaTitulo}</p>
-      <div style="display:flex;flex-direction:column;gap:5px;">
-        ${(etapaItens||[]).map(it => `
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFFDF8;border:1px solid #EEE9DE;border-radius:8px;padding:8px 12px;">
-            <span style="font-size:12px;color:#1A1613;flex:1;min-width:200px;overflow-wrap:anywhere;"><b>${it.cliente}</b> · ${it.exec} · <b style="color:#C7142A;">${it.dias}</b></span>
-            ${dg2Gesto(it.cobrar, it.btn, `display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid ${it.borda};border-radius:999px;background:${it.bg};font:800 10.5px 'Manrope',sans-serif;color:${it.cor};white-space:nowrap;`, 4)}
-          </div>
-        `).join('')}
-      </div>
-      <p style="margin:8px 0 0;font-size:10px;color:#988D7B;">${etapaRodape}</p>
-    </div>
-  ` : ''}
-
-  <p style="margin:28px 0 0;border-top:1px solid #E3DDD0;padding-top:12px;font-size:11px;line-height:1.55;color:#988D7B;">Promessa e plano vêm do Cockpit (planos_diarios, clientes nomeados — trava às 13h) · agenda, visitas, check-ins, prospecções (createdate) e funil vêm do HubSpot · carga ${horaDaCarga}. O compromisso é <b style="color:#3E382F;">derivado dos clientes nomeados</b>, nunca digitado. Cobrança, sugestão e reconhecimento gravam no Supabase; tarefa datada grava direto no HubSpot. Ausência de carga aparece como "não medido", nunca zero.</p>
-</div>`;
-}
-
-/* ══ DAILY & RITMO DO GESTOR, v2 — A FIACAO (06/09/26) ═════════════════════════════════
-   Um ouvinte delegado na raiz, um `data-dg2-acao` por botao, e ZERO caminho de escrita
-   novo. Cada acao cai numa funcao que ja existia:
-
-     cobrar / alinhar / ajuste  -> g14Registrar(base, ownerId)  [registros_rodada]
-     datar tarefa               -> negocio-acao, op 'tarefa-rota' [HubSpot, idempotente]
-     conduzir                   -> abrirConducaoDaily(planos, criterio, ownerId)
-     modo TV                    -> body.tv, a mesma classe que o CSS de TV ja usa
-     dia anterior / proximo     -> dailyRefDate + renderDaily, como os botoes antigos
-
-   O ESTADO DE "FEITO" NAO E MEU. g14Registrar mantem g14Feitos, que g14CarregarFeitos le
-   do banco no boot. Guardar um segundo mapa local aqui faria o "✓ cobrado" desaparecer no
-   F5 com a linha viva no Supabase — e o gestor cobraria duas vezes a mesma pessoa. Quem
-   pergunta se algo foi feito pergunta ao g14Feitos, pela mesma chave. */
-
-/* A unica excecao, e ela e declarada na tela: a tarefa datada nao tem linha em
-   registros_rodada — a prova dela e a tarefa existir no HubSpot, e isso so aparece na
-   proxima carga. Ate lá o botao mostra o efeito com o prazo dito por extenso, em vez de
-   fingir que o funil ja sabe. */
-const DG2_TAREFAS_DESTA_SESSAO = {};
-
-/* VERBO DA TELA -> BASE DO BANCO. A tela fala 'cobrar'; o banco guarda 'cobranca'
-   desde o board antigo, e mudar isso agora orfanaria as linhas que ja estao lá. */
-/* BOTAO OU SELO, EM UM LUGAR SO (08/09/26).
-   Acao vazia significa "ja foi feito" nos tres construtores da v2. Enquanto isso
-   saia como <button>, era um clique morto de desenho perfeito: pilula verde, cursor
-   de clique, e o despacho saindo no primeiro if. Aqui a decisao e uma:
-     com acao  -> <button data-dg2-acao=...>   (o gesto)
-     sem acao  -> <span>                        (o estado)
-   O estilo vem de fora inteiro, para o selo ficar identico ao botao cumprido que o
-   gestor ja conhece — muda o elemento e o cursor, nao a aparencia. */
-function dg2Gesto(acao, rotulo, estilo, hv) {
-  const base = String(estilo || '');
-  if (!acao) {
-    /* default: o cursor de clique sai; sem isso o selo continua convidando */
-    return `<span style="${base}cursor:default;" title="já registrado nesta rodada">${rotulo}</span>`;
-  }
-  return `<button type="button" data-dg2-acao="${acao}" data-dg2-hv="${hv == null ? 4 : hv}" style="${base}cursor:pointer;">${rotulo}</button>`;
-}
-
-const DG2_BASES = { cobrar: 'cobranca', alinhar: 'alinhar', ajuste: 'ajuste' };
-
-function dg2Feito(base, ownerId, extra) {
+/* ══ O ESTADO DE UM REGISTRO DA RODADA ══════════════════════════════════════════════
+   Era `dg2Feito`, e mudou de nome com a saída da v2 (08/09/26): a única chamadora hoje
+   é esta aba. Nome de bloco aposentado numa função viva é a placa errada na porta.
+   A tabela e a chave continuam as mesmas — g14Chave/g14Feitos, registros_rodada —, que
+   é o que faz a cobrança desta tela aparecer na Semana e no Time. */
+function dg4Feito(base, ownerId, extra) {
   try {
     if (typeof g14Chave !== 'function' || typeof g14Feitos === 'undefined') return false;
     return !!g14Feitos[g14Chave(base, String(ownerId), extra)];
   } catch (e) { return false; }
 }
 
-function dg2Repintar() {
-  const raiz = document.querySelector('[data-dg2-raiz]');
-  if (!raiz || !DG2.ctx) return;
-  raiz.innerHTML = dg2TelaHTML(DG2.ctx);
+
+/* A hora da trava é UMA constante no produto inteiro — a guarda 'hora da trava' reprova o
+   build se algum texto de tela discordar dela. */
+function dg4MinutosDaTrava() {
+  /* PROMESSA_TRAVA_MINUTOS e o nome real da constante, e a guarda 'hora da trava' do
+     build LE esse nome: se alguem mudar o prazo e esquecer um texto de tela, ela
+     reprova. Ler a constante aqui e o que mantem esta aba dentro dessa protecao —
+     cravar 13 daria uma segunda verdade que a guarda nao alcanca. */
+  return (typeof PROMESSA_TRAVA_MINUTOS !== 'undefined') ? Number(PROMESSA_TRAVA_MINUTOS) : (13 * 60);
 }
 
-/* O RELOGIO DO CABECALHO. Um intervalo só, guardado, e limpo antes de criar outro: a
-   primeira versao criava um por render e depois de dez cliques a aba tinha dez timers
-   repintando a tela por cima da rodada. */
-let DG2_RELOGIO = null;
-function dg2LigarRelogio() {
-  if (DG2_RELOGIO) clearInterval(DG2_RELOGIO);
-  const tick = function () {
-    const d = new Date();
-    DG2.agora = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-    const alvo = document.querySelector('[data-dg2-agora]');
-    if (alvo) alvo.textContent = DG2.agora;
-  };
-  tick();
-  DG2_RELOGIO = setInterval(tick, 30000);
+/* Quantos minutos faltam para a trava, contados no fuso de Brasília como o resto da tela.
+   Negativo depois da hora — quem chama decide a frase. */
+function dg4MinutosParaTrava() {
+  const agora = new Date();
+  const mins = dg4MinutosDaTrava();
+  const trava = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate(), Math.floor(mins / 60), mins % 60, 0);
+  return Math.round((trava - agora) / 60000);
 }
 
-/* UM OUVINTE, NO DOCUMENTO — o mesmo padrao das outras quatro abas do gestor (tl5, ps6,
-   rt7, sm9). Pendurar no no da tela foi o que produziu o defeito de hoje: o no que eu
-   consultava era de outra tela e o ouvinte nunca existiu, com 28 botoes desenhados. No
-   documento nao ha no para errar, e ele sobrevive a qualquer repinte da raiz.
+/* ══ O PLANO DE UMA PESSOA, NA GRADE DE 7 HORÁRIOS ═══════════════════════════════════
+   Lê `contas_alvo` (estruturado: hora, nome, ação, origem) e completa com `prioridades`
+   (texto) para os registros antigos, em que o slot sem negócio no HubSpot não entrava na
+   lista estruturada. Casa por HORA quando ela existe.
 
-   dg2Ligar mantem a assinatura para quem chama nao precisar saber disso. */
-let DG2_OUVINTE = false;
+   Devolve sempre os 7 slots, na ordem de PL6_HORAS — a grade é a mesma da tela dele. */
+function dg4SlotsDoPlano(plano) {
+  const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
+    ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
+  const contas = (plano && Array.isArray(plano.contas_alvo)) ? plano.contas_alvo : [];
+  const prios = (plano && Array.isArray(plano.prioridades)) ? plano.prioridades : [];
 
-function dg2Ligar(raiz) {
-  if (DG2_OUVINTE) return;
-  DG2_OUVINTE = true;
+  /* as prioridades viram {hora, nome, acao, nova} quando a frase tem hora. O formato é o
+     que a tela dele grava: "Nome — 09:00 (conta nova) · ação". Sem hora, a frase é do
+     modelo antigo (prioridade por tema) e entra na lista de fora da grade. */
+  const daFrase = [];
+  prios.forEach(function (linha) {
+    const txt = String(linha || '');
+    const m = txt.match(/^(.*?)\s+—\s+(\d{2}:\d{2})(.*)$/);
+    if (!m) { daFrase.push({ hora: null, nome: txt.split(' — ')[0] || txt, acao: '', nova: /\(conta nova\)/i.test(txt) }); return; }
+    const resto = m[3] || '';
+    daFrase.push({
+      hora: m[2],
+      nome: (m[1] || '').trim(),
+      acao: (resto.split('·')[1] || '').trim(),
+      nova: /\(conta nova\)/i.test(resto)
+    });
+  });
 
-  const dizer = function (txt, tipo) {
-    if (typeof mostrarToast === 'function') mostrarToast(txt, tipo || undefined);
-  };
-
-  document.addEventListener('click', async function (ev) {
-    const alvo = ev.target.closest && ev.target.closest('[data-dg2-acao]');
-    if (!alvo) return;
-    /* so dentro da tela do gestor: se um dia outra tela emitir um data-dg2-acao por
-       copia-e-cola, ele nao vai cair nesta fiacao sem passar por aqui. */
-    if (!alvo.closest('[data-dg2-raiz]')) return;
-    const acao = alvo.getAttribute('data-dg2-acao') || '';
-    if (!acao) return;
-    const dp = acao.indexOf(':');
-    const verbo = dp < 0 ? acao : acao.slice(0, dp);
-    const resto = dp < 0 ? '' : acao.slice(dp + 1);
-
-    /* ── so mexe na tela ─────────────────────────────────────────────────────────── */
-    if (verbo === 'painel') {
-      const i = Number(resto);
-      DG2.acaoAberta = (DG2.acaoAberta === i) ? null : i;
-      return dg2Repintar();
-    }
-    if (verbo === 'nome') {
-      DG2.nomesAbertos[resto] = !DG2.nomesAbertos[resto];
-      return dg2Repintar();
-    }
-    if (verbo === 'slot') {
-      /* um picker aberto por vez: dois abertos numa tela projetada e o time olhando
-         para duas listas de candidatos sem saber qual e a da conversa. */
-      const ps = resto.split(':');
-      const owner = ps[0], si = Number(ps[1]);
-      const igual = DG2.picker && String(DG2.picker.owner) === String(owner) && DG2.picker.si === si;
-      DG2.picker = igual ? null : { owner: owner, si: si };
-      return dg2Repintar();
-    }
-    if (verbo === 'por') {
-      if (typeof g14AgendarNoHorarioLivre !== 'function') {
-        dizer('O agendamento não carregou nesta aba — recarregue a página.', 'atencao');
-        return;
-      }
-      if (alvo.dataset.dg2Salvando === '1') return;
-      alvo.dataset.dg2Salvando = '1';
-      const antes = alvo.textContent;
-      alvo.textContent = 'agendando…';
-      /* o leadId pode ter ':' no meio? Nao — pl6 usa 'c-<dealId>' e 'n-<id>'. Mesmo
-         assim junto o resto, para um id inesperado nao chegar truncado ao banco. */
-      const ps = resto.split(':');
-      const r = await g14AgendarNoHorarioLivre(ps[0], Number(ps[1]), ps.slice(2).join(':'));
-      delete alvo.dataset.dg2Salvando;
-      const recado = g14AgendarRecado(r);
-      dizer(recado.txt, recado.tipo === 'ok' ? undefined : recado.tipo);
-      if (r.recarregar) {
-        if (typeof g14CarregarSemanais === 'function') await g14CarregarSemanais();
-        DG2.picker = null;
-        return (typeof renderDaily === 'function') ? renderDaily() : dg2Repintar();
-      }
-      if (!r.ok) { alvo.textContent = antes; return; }
-      DG2.picker = null;
-      /* renderDaily, e nao dg2Repintar: a grade dele mudou, e o plano do dia, os marcos
-         e o KPI de clientes nomeados saem dela. Repintar so a raiz mostraria o chip novo
-         com o KPI velho na mesma tela. */
-      return (typeof renderDaily === 'function') ? renderDaily() : dg2Repintar();
-    }
-    if (verbo === 'etapa') {
-      const i = Number(resto);
-      DG2.etapaFunil = (DG2.etapaFunil === i) ? null : i;
-      return dg2Repintar();
-    }
-    if (verbo === 'tv') {
-      /* A MESMA CLASSE, e nao um segundo modo TV. O CSS de body.tv ja existe (esconde o
-         chrome, aumenta o corpo) e o Esc global ja sai dele. Um zoom proprio aqui seria a
-         segunda implementacao do mesmo modo, saindo de sincronia no primeiro ajuste. */
-      const ligado = document.body.classList.toggle('tv');
-      try { localStorage.setItem('cockpit_daily_tv_v2', ligado ? '1' : '0'); } catch (e) {}
-      return dg2Repintar();
-    }
-    if (verbo === 'dia') {
-      /* MESMO COMPORTAMENTO DOS BOTOES ANTIGOS (dailyPrev/dailyNext), que ficaram sem
-         botao quando o hero foi trocado em 04/09: anda em DIA UTIL, nao em dia corrido —
-         a Daily de sabado nao existe. */
-      if (typeof addBusinessDays !== 'function') return;
-      dailyRefDate = addBusinessDays(dailyRefDate, resto === '-1' ? -1 : 1);
-      DG2.acaoAberta = null; DG2.etapaFunil = null; DG2.cond = null;
-      if (typeof renderDaily === 'function') renderDaily();
-      return;
-    }
-
-    /* ── conducao ────────────────────────────────────────────────────────────────── */
-    if (verbo === 'conduzir' || verbo === 'conduzir-agenda') {
-      if (typeof abrirConducaoDaily !== 'function') {
-        dizer('A condução não carregou nesta aba — recarregue a página.', 'atencao');
-        return;
-      }
-      const planos = (DG2.ctx && DG2.ctx.planos) || {};
-      if (verbo === 'conduzir-agenda') abrirConducaoDaily(planos, 'agenda');
-      else if (resto) abrirConducaoDaily(planos, 'urgencia', resto);
-      else abrirConducaoDaily(planos);
-      return;
-    }
-    if (verbo === 'cond') {
-      const ls = (DG2.ctx ? dg2Linhas(DG2.ctx) : []);
-      if (resto === 'fim') { DG2.cond = null; return dg2Repintar(); }
-      if (DG2.cond === null) return;
-      const passo = resto === '-1' ? -1 : 1;
-      DG2.cond = Math.max(0, Math.min(ls.length - 1, DG2.cond + passo));
-      dg2Repintar();
-      /* ROLA ATE O CARTAO EM FOCO. Conduzir sem levar o olho ao cartao deixa o time
-         olhando para a barra e o gestor rolando atras da pessoa que ele acabou de
-         anunciar. */
-      const card = document.querySelector('[data-dg2-card="' + DG2.cond + '"]');
-      if (card) {
-        const y = card.getBoundingClientRect().top + window.scrollY - 120;
-        window.scrollTo({ top: y, behavior: 'auto' });
-      }
-      return;
-    }
-
-    /* ── escreve ─────────────────────────────────────────────────────────────────── */
-    if (verbo === 'cobrar' || verbo === 'alinhar' || verbo === 'ajuste') {
-      if (typeof g14Registrar !== 'function') {
-        dizer('O registro da rodada não carregou nesta aba — recarregue a página.', 'atencao');
-        return;
-      }
-      if (alvo.dataset.dg2Salvando === '1') return;
-      alvo.dataset.dg2Salvando = '1';
-      const rotuloAntes = alvo.textContent;
-      alvo.textContent = 'gravando…';
-      /* resto pode ser '<ownerId>' ou '<ownerId>:<nome do cliente>' — o segundo e a
-         cobranca DE UM QUENTE, que no banco carrega o nome no extra. A chave tem de
-         ser byte a byte a mesma que o board antigo escrevia. */
-      const ps = resto.split(':');
-      const owner = ps[0];
-      const extra = ps.length > 1 ? ps.slice(1).join(':') : undefined;
-      const r = await g14Registrar(DG2_BASES[verbo] || verbo, owner, extra);
-      delete alvo.dataset.dg2Salvando;
-      if (r && r.error) {
-        alvo.textContent = rotuloAntes;
-        /* O ERRO VAI INTEIRO PARA A TELA. "Não foi possível" faz o gestor tentar de novo
-           no mesmo lugar; a mensagem do banco diz se foi RLS, rede ou conflito. */
-        dizer('Não gravei: ' + r.error.message, 'erro');
-        return;
-      }
-      dizer(r && r.desfeito ? 'Registro desfeito.' : 'Registrado na rodada de hoje.', 'ok');
-      return dg2Repintar();
-    }
-
-    if (verbo === 'tarefa') {
-      const partes = resto.split(':');
-      const ownerId = partes[0], dealId = partes[1] || '';
-      if (!dealId) {
-        /* NEGOCIO SEM ID NAO TEM TAREFA. Isso acontece com o quente que veio de uma
-           origem sem deal no HubSpot — e melhor dizer do que abrir um caminho que falha
-           no servidor com uma mensagem que o gestor nao entende. */
-        dizer('Esse negócio não tem id no HubSpot nesta carga — abra o funil dele para datar a tarefa.', 'atencao');
-        return;
-      }
-      if (alvo.dataset.dg2Salvando === '1') return;
-      alvo.dataset.dg2Salvando = '1';
-      const antes = alvo.textContent;
-      alvo.textContent = 'datando…';
-      try {
-        const resp = await fetch('/api/negocio-acao', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ op: 'tarefa-rota', dealId: dealId, ownerId: ownerId,
-            origem: 'daily-gestor', assunto: 'Próximo passo definido na Daily' })
-        });
-        const js = await resp.json().catch(function () { return {}; });
-        delete alvo.dataset.dg2Salvando;
-        if (!resp.ok) {
-          alvo.textContent = antes;
-          dizer('Não datei a tarefa: ' + (js.erro || resp.status), 'erro');
-          return;
-        }
-        DG2_TAREFAS_DESTA_SESSAO[dealId] = true;
-        dizer('Tarefa datada no HubSpot — aparece no funil na próxima carga.', 'ok');
-        return dg2Repintar();
-      } catch (e) {
-        delete alvo.dataset.dg2Salvando;
-        alvo.textContent = antes;
-        dizer('Não datei a tarefa: ' + e.message, 'erro');
-      }
-      return;
+  const porHora = {};
+  contas.forEach(function (c) { if (c && c.hora) porHora[String(c.hora)] = c; });
+  daFrase.forEach(function (f) {
+    if (f.hora && !porHora[f.hora]) {
+      /* SÓ A FRASE TEM ESTE SLOT: registro antigo, conta sem negócio no HubSpot. Entra
+         com o que a frase carrega, e sem id — o cruzamento com o funil não acontece e o
+         selo diz isso. */
+      porHora[f.hora] = { id: null, dealId: null, nome: f.nome, hora: f.hora, acao: f.acao,
+        origem: f.nova ? 'lote' : null, _daFrase: true };
     }
   });
+
+  /* o que sobrou sem hora: plano nomeado, não hora-a-hora (as linhas de 28/08 têm 6
+     contas e zero horas). Quem chama escreve isso na tela em vez de mostrar 7 vazios. */
+  const semHora = contas.filter(function (c) { return c && !c.hora; })
+    .concat(daFrase.filter(function (f) { return !f.hora; }));
+
+  return { horas: horas, porHora: porHora, semHora: semHora };
 }
+
+/* ══ O SELO DE ORIGEM DO SLOT ════════════════════════════════════════════════════════
+   Decisão 2(a)+2(b) do Julyan. Ordem de preferência:
+     1. `origem` gravada no ato pelo executivo (a partir de 08/09/26) — a verdade dele;
+     2. o negócio no funil do HubSpot, e aí o selo mostra A ETAPA, que é mais útil do que
+        a palavra "carteira" (o gestor vê "no funil · Negociação");
+     3. sem os dois: "origem não registrada" — nunca um chute. */
+function dg4OrigemDoSlot(slot, mapaFunil) {
+  if (!slot) return null;
+  const noFunil = slot.dealId ? mapaFunil[String(slot.dealId)]
+    : (slot.id ? mapaFunil[String(slot.id)] : null);
+  if (slot.origem === 'lote') {
+    return { rot: 'CONTA ALVO', bg: '#FDECEF', cor: '#B0184B', borda: '#F0C9D5' };
+  }
+  if (slot.origem === 'reciclagem') {
+    return { rot: 'RECICLAGEM', bg: '#F4F1EA', cor: '#8A6516', borda: '#EAD9B4' };
+  }
+  if (noFunil) {
+    return { rot: 'NO FUNIL · ' + String(noFunil.etapa || 'etapa').toUpperCase(),
+      bg: '#F1F3F7', cor: '#2B3440', borda: '#DCE1EA' };
+  }
+  if (slot.origem === 'carteira') {
+    return { rot: 'CARTEIRA', bg: '#F1F3F7', cor: '#2B3440', borda: '#DCE1EA' };
+  }
+  /* NÃO INVENTA. Registro anterior a 08/09/26 e conta que não está no funil aberto: a
+     tela diz que não sabe, e é assim que ela continua confiável. */
+  return { rot: 'ORIGEM NÃO REGISTRADA', bg: '#FBFAF6', cor: '#7A8494', borda: '#E4E0D6' };
+}
+/* ══ O PROVEDOR DA DAILY v4 ═════════════════════════════════════════════════════════
+   O markup convertido só lê nomes. Aqui é o único lugar onde dado encosta no desenho, e
+   por isso toda divergência entre a prancha e a realidade fica aqui, com o motivo escrito.
+
+   `ctx` vem do renderDaily, que JÁ carrega tudo isto numa consulta só:
+     reps        os executivos visíveis
+     planos      planosPorOwner — a linha de planos_diarios do dia em foco, por dono
+     planosLidos false = a consulta falhou. Sem esta bandeira a tela abriria a reunião
+                 dizendo "0 de 11 travaram" por causa de um erro de RLS — uma acusação
+                 contra onze pessoas produzida por uma consulta quebrada.
+     frescor     hora da carga do HubSpot */
+function dg4Dados(ctx) {
+  const c = ctx || {};
+  const reps = (c.reps || []).filter(function (r) { return r && r.ownerId; });
+  const planos = c.planos || {};
+  const planosLidos = c.planosLidos === undefined ? true : !!c.planosLidos;
+  const s = DG4_ESTADO;
+  const tv = document.body.classList.contains('tv');
+  const hoje = isoDate(new Date());
+  const ehHoje = (typeof dailyRefDate === 'undefined') || dailyRefDate === hoje;
+
+  /* mapa dos negócios abertos por id, para o selo do slot e para os quentes */
+  const mapaFunil = {};
+  Object.keys(DATA.funilLeads || {}).forEach(function (stageId) {
+    ((DATA.funilLeads || {})[stageId] || []).forEach(function (d) {
+      mapaFunil[String(d.id)] = {
+        id: String(d.id), nome: d.name || d.dealname, ownerId: String(d.ownerId),
+        etapa: (DATA.stageMeta && DATA.stageMeta.labels && DATA.stageMeta.labels[stageId]) || d.stage || 'etapa',
+        stageId: String(stageId), dias: d.dias, slaBreach: !!d.slaBreach,
+        temp: d.temp == null ? null : Number(d.temp), tempParcial: !!d.tempParcial,
+        proximaAtividade: d.proximaAtividade || null
+      };
+    });
+  });
+
+  /* ══ QUENTE FORA DO PLANO ═══════════════════════════════════════════════════════════
+     A definição é a do prompt: etapa ≥ proposta OU temperatura ≥ 70, e sem tarefa futura
+     — e que não apareça em nenhum slot do dia daquela pessoa.
+
+     A TEMPERATURA SÓ ENTRA QUANDO EXISTE. Antes do primeiro sync com o campo novo, `temp`
+     é null em todo negócio; usar `>= 70` num null daria false e a regra cairia
+     silenciosamente na metade da etapa. Enquanto não houver nota, o critério é só a etapa
+     — e o rótulo do bloco diz isso. */
+  const ETAPAS_AVANCADAS = ['1395880471', '1395880472', '1395880473'];   /* Demo/Proposta, Negociação, Ag. Pagamento */
+  const temNota = Object.keys(mapaFunil).some(function (k) { return mapaFunil[k].temp != null; });
+  const corteQuente = Number(((DATA.temperaturaRegua || {}).faixas || {}).quente) || 70;
+  const eQuente = function (d) {
+    if (d.proximaAtividade) return false;   /* tem tarefa futura: não é o esquecido */
+    if (ETAPAS_AVANCADAS.indexOf(d.stageId) >= 0) return true;
+    return d.temp != null && d.temp >= corteQuente;
+  };
+  const quentesPorOwner = {};
+  Object.keys(mapaFunil).forEach(function (id) {
+    const d = mapaFunil[id];
+    if (!eQuente(d)) return;
+    (quentesPorOwner[d.ownerId] = quentesPorOwner[d.ownerId] || []).push(d);
+  });
+
+  /* ══ A LEITURA DE CADA PESSOA ═════════════════════════════════════════════════════ */
+  const medidos = reps.map(function (r) {
+    const oid = String(r.ownerId);
+    const plano = planos[oid] || null;
+    const grade = dg4SlotsDoPlano(plano);
+    const preenchidos = grade.horas.filter(function (h) { return grade.porHora[h]; });
+    const temPlano = !!plano && (preenchidos.length > 0 || grade.semHora.length > 0);
+    const travada = !!plano && plano.status === 'plano_fechado';
+    const daily = (typeof getDaily === 'function') ? (getDaily(oid, (typeof dailyRefDate !== 'undefined') ? dailyRefDate : hoje) || {}) : {};
+
+    /* os ids que ESTÃO no dia dele — é o que define "fora do plano" */
+    const noPlano = new Set();
+    grade.horas.forEach(function (h) {
+      const sl = grade.porHora[h];
+      if (!sl) return;
+      if (sl.dealId) noPlano.add(String(sl.dealId));
+      if (sl.id) noPlano.add(String(sl.id));
+    });
+    grade.semHora.forEach(function (sl) { if (sl && sl.id) noPlano.add(String(sl.id)); });
+
+    const quentes = (quentesPorOwner[oid] || [])
+      .filter(function (d) { return !noPlano.has(String(d.id)); })
+      .sort(function (a, b) { return (b.temp || 0) - (a.temp || 0) || (b.dias || 0) - (a.dias || 0); });
+
+    /* AS PROSPECÇÕES NOVAS SAEM DOS SLOTS, não de uma segunda contagem. O produto já tem
+       o gesto `data_rota` (Planejamento) contando conta nova do dia, e ele continua na aba
+       Rotas; trazer os dois para cá daria dois números para "prospecção nova hoje" na
+       mesma tela. Quando o registro é anterior a 08/09/26 não há `origem` gravada, e aí o
+       número não é 0: é "não registrado". */
+    const comOrigem = preenchidos.map(function (h) { return grade.porHora[h]; })
+      .filter(function (sl) { return sl.origem != null; });
+    const novas = comOrigem.filter(function (sl) { return sl.origem === 'lote'; }).length;
+    const origemRegistrada = comOrigem.length > 0 || preenchidos.length === 0;
+
+    return { r: r, oid: oid, plano: plano, grade: grade, preenchidos: preenchidos,
+      temPlano: temPlano, travada: travada, daily: daily, quentes: quentes,
+      novas: novas, origemRegistrada: origemRegistrada };
+  });
+
+  /* ══ A ORDEM DA RODADA: sem plano → promessa aberta → travada ════════════════════════
+     Elogio fecha a rodada, e quem não montou fala primeiro porque é o único que ainda dá
+     para resolver antes da trava. */
+  const peso = function (x) { return !x.temPlano ? 0 : (x.travada ? 2 : 1); };
+  medidos.sort(function (a, b) {
+    return peso(a) - peso(b)
+      || (b.quentes.length - a.quentes.length)
+      || String(a.r.name || '').localeCompare(String(b.r.name || ''));
+  });
+
+  const semPlano = medidos.filter(function (x) { return !x.temPlano; });
+  const abertas = medidos.filter(function (x) { return x.temPlano && !x.travada; });
+  const travadas = medidos.filter(function (x) { return x.travada; });
+  const minutos = dg4MinutosParaTrava();
+  const antesDaTrava = ehHoje && minutos > 0;
+
+  /* ══ os 5 KPIs ══════════════════════════════════════════════════════════════════════ */
+  const somaVisitas = medidos.reduce(function (t, x) { return t + (Number(x.daily.prometido_visitas) || 0); }, 0);
+  const somaNovas = medidos.reduce(function (t, x) { return t + x.novas; }, 0);
+  const somaQuentes = medidos.reduce(function (t, x) { return t + x.quentes.length; }, 0);
+  const algumSemOrigem = medidos.some(function (x) { return x.temPlano && !x.origemRegistrada; });
+
+  /* PLANOS NÃO LIDOS NÃO SÃO PLANOS AUSENTES. Com a bandeira em false, os cinco KPIs
+     dizem "não medido" — nenhum deles pode virar acusação por causa de uma consulta. */
+  const kpis = !planosLidos ? [
+    { rot: 'planos montados', v: 'não medido', de: 'a leitura de planos_diarios falhou', cor: '#A79C8A' },
+    { rot: 'promessas travadas', v: 'não medido', de: 'recarregue a aba', cor: '#A79C8A' },
+    { rot: 'visitas prometidas', v: 'não medido', de: '', cor: '#A79C8A' },
+    { rot: 'prospecções novas', v: 'não medido', de: '', cor: '#A79C8A' },
+    { rot: 'quentes fora do plano', v: String(somaQuentes), de: 'do HubSpot, esse número vale', cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
+  ] : [
+    { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length,
+      de: semPlano.length ? (semPlano.length + ' sem montar') : 'todo mundo montou', cor: semPlano.length ? '#FF8D9A' : '#7FD9BE' },
+    { rot: 'promessas travadas', v: travadas.length + '/' + medidos.length,
+      de: antesDaTrava ? (abertas.length + ' ainda editável(is)') : 'janela fechada', cor: travadas.length === medidos.length ? '#7FD9BE' : '#F0B45C' },
+    { rot: 'visitas prometidas', v: String(somaVisitas), de: 'soma do time', cor: '#FFFDF8' },
+    { rot: 'prospecções novas', v: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
+      de: algumSemOrigem ? 'origem não registrada em algum plano' : 'contas do lote nos slots', cor: somaNovas ? '#7FD9BE' : '#F0B45C' },
+    { rot: 'quentes fora do plano', v: String(somaQuentes),
+      de: temNota ? ('etapa avançada ou ' + corteQuente + '°+, sem tarefa') : 'etapa avançada, sem tarefa · temperatura chega no sync',
+      cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
+  ];
+
+  /* ══ a manchete ═════════════════════════════════════════════════════════════════════ */
+  const manchete = (function () {
+    if (!planosLidos) return 'Não consegui ler os planos do dia — nenhum número desta faixa acusa ninguém até a leitura voltar.';
+    const partes = [];
+    if (semPlano.length) partes.push(semPlano.length + ' sem plano montado');
+    if (abertas.length) partes.push(abertas.length + ' com promessa aberta' + (antesDaTrava ? ' a ' + minutos + ' min da trava' : ''));
+    if (somaQuentes) partes.push(somaQuentes + ' quentes esfriando fora dos planos');
+    if (!partes.length) return 'Os ' + medidos.length + ' montaram e travaram, e nenhum quente ficou fora dos planos. A rodada hoje é de reconhecimento.';
+    const primeiro = (semPlano[0] || abertas[0] || medidos[0]);
+    return partes.join(' e ') + '. Comece por ' + String((primeiro.r.name || '').split(' ')[0]) + '.';
+  }());
+
+  /* ══ os chips da rodada ═════════════════════════════════════════════════════════════ */
+  const rodada = medidos.map(function (x, i) {
+    const sel = s.foco === x.oid;
+    const st = !x.temPlano ? 'sem plano' : (x.travada ? '✓' : 'aberta');
+    return {
+      pos: (i + 1) + 'º',
+      nome: esc(String(x.r.name || '').split(' ')[0]),
+      st: st,
+      stCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#8A6516'),
+      bg: sel ? '#2B3440' : '#FDFEFF',
+      cor: sel ? '#FDFEFF' : '#2B3440',
+      nCor: sel ? '#FF8D9A' : '#8E3B5C',
+      borda: sel ? '#2B3440' : '#E4E0D6',
+      on: 'foco:' + x.oid
+    };
+  });
+
+  /* ══ de onde vêm os planos de hoje ══════════════════════════════════════════════════
+     Os três números da faixa da rodada. Só contam slot com `origem` gravada: somar slot
+     sem origem em "carteira" seria inventar. */
+  let origAlvo = 0, origCart = 0, origNova = 0;
+  medidos.forEach(function (x) {
+    x.preenchidos.forEach(function (h) {
+      const sl = x.grade.porHora[h];
+      if (!sl) return;
+      if (sl.origem === 'lote') { origAlvo++; origNova++; return; }
+      if (sl.origem === 'carteira' || sl.origem === 'reciclagem') { origCart++; return; }
+      /* sem origem: entra em nenhum dos três, e o KPI já avisa com o "+" */
+    });
+  });
+
+  /* ══ a grade de executivos ══════════════════════════════════════════════════════════ */
+  const execs = medidos.map(function (x) {
+    const r = x.r, oid = x.oid;
+    const focado = s.foco === oid;
+    const cobrado = (typeof dg2Feito === 'function') ? dg4Feito('cobranca', oid) : false;
+    const reconhecido = (typeof dg2Feito === 'function') ? dg4Feito('ajuste', oid) : false;
+    const naMesa = Number(x.daily.prometido_propostas) || 0;
+    const aposta = Number(x.daily.prometido_fechamentos) || 0;
+    const visitas = Number(x.daily.prometido_visitas) || 0;
+
+    /* AS PÍLULAS DA PROMESSA. A prancha desenha três; aqui elas são um ARRAY, então a
+       APOSTA entra como quarta quando existe — e ela é a promessa mais forte do produto
+       ("a palavra dada", `prometido_fechamentos`). Deixá-la fora seria esconder o
+       compromisso que o executivo assumiu por escolha, não por etapa. */
+    const pillCor = x.travada ? { bg: '#EAF6F1', cor: '#1E9E7B', borda: '#CBE8DD' }
+      : { bg: '#FDF6E7', cor: '#8A6516', borda: '#EAD9B4' };
+    const prom = !x.temPlano
+      ? [{ n: '—', rot: 'nada montado ainda', bg: 'none', cor: '#7A8494', borda: '#D8D2C4', estilo: 'dashed' }]
+      : [
+        { n: String(visitas), rot: visitas === 1 ? 'visita' : 'visitas', bg: pillCor.bg, cor: pillCor.cor, borda: pillCor.borda, estilo: 'solid' },
+        /* prosp. nova = 0 fica em vermelho mesmo travada: é a regra da prancha, e é o
+           número que seca o funil em duas semanas. "não registrado" não é zero. */
+        x.origemRegistrada
+          ? { n: String(x.novas), rot: x.novas === 1 ? 'prosp. nova' : 'prosp. novas',
+            bg: pillCor.bg, cor: x.novas === 0 ? '#E51A31' : pillCor.cor, borda: pillCor.borda, estilo: 'solid' }
+          : { n: '?', rot: 'origem não registrada', bg: '#FBFAF6', cor: '#7A8494', borda: '#E4E0D6', estilo: 'dashed' },
+        { n: String(naMesa), rot: 'na mesa', bg: pillCor.bg, cor: pillCor.cor, borda: pillCor.borda, estilo: 'solid' }
+      ].concat(aposta ? [{ n: String(aposta), rot: aposta === 1 ? 'palavra dada' : 'palavras dadas',
+        bg: '#FDECEF', cor: '#B0184B', borda: '#F0C9D5', estilo: 'solid' }] : []);
+
+    const horaTrava = x.plano && x.plano.fechado_em
+      ? new Date(x.plano.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
+    const promSt = !x.temPlano
+      ? ('sem promessa — trava às ' + Math.floor(dg4MinutosDaTrava() / 60) + 'h')
+      : (x.travada ? ('travada ✓ · palavra dada' + (horaTrava ? ' às ' + horaTrava : ''))
+        : ('trava às ' + Math.floor(dg4MinutosDaTrava() / 60) + 'h — ainda editável'));
+
+    const slots = x.grade.horas.map(function (h) {
+      const sl = x.grade.porHora[h];
+      if (!sl) {
+        return { h: h, conta: x.temPlano ? 'livre — o que ele coloca aqui?' : 'em branco',
+          cCor: '#9AA3B2', etapa: '', origem: '', oBg: 'none', oCor: '#9AA3B2', oBorda: 'transparent',
+          bg: 'none', borda: '#D8D2C4', estilo: 'dashed' };
+      }
+      const org = dg4OrigemDoSlot(sl, mapaFunil);
+      const noFunil = sl.dealId ? mapaFunil[String(sl.dealId)] : null;
+      return {
+        h: h,
+        conta: esc(sl.nome || 'conta sem nome'),
+        cCor: '#2B3440',
+        etapa: esc(sl.acao || (noFunil ? ('follow-up · ' + noFunil.etapa) : 'sem ação escrita')),
+        origem: org.rot, oBg: org.bg, oCor: org.cor, oBorda: org.borda,
+        bg: '#FDFEFF', borda: '#E2E6EE', estilo: 'solid'
+      };
+    });
+
+    const quentes = x.quentes.slice(0, 3).map(function (d) {
+      const perguntado = (typeof dg2Feito === 'function') ? dg4Feito('alinhar', oid, d.nome) : false;
+      return {
+        nome: esc(d.nome || 'negócio sem nome'),
+        issue: esc((d.dias != null ? d.dias + 'd em ' + d.etapa : d.etapa)
+          + (d.temp != null ? ' · ' + d.temp + '°' : '') + ' · sem tarefa marcada'),
+        on: 'perguntar:' + oid + ':' + String(d.nome || ''),
+        rot: perguntado ? '✓ na rodada' : 'perguntar por quê ▸',
+        bg: perguntado ? '#EAF6F1' : '#FDFEFF',
+        cor: perguntado ? '#1E9E7B' : '#B0552F',
+        borda: perguntado ? '#CBE8DD' : '#E3937F'
+      };
+    });
+
+    /* A LEITURA: cobra, pergunta ou reconhece — nunca genérica, e cada ramo nomeia a
+       evidência que a justifica. */
+    const leitura = !planosLidos ? 'não consegui ler o plano dele nesta rodada'
+      : !x.temPlano
+        ? (antesDaTrava
+          ? 'não montou o dia ainda — faltam ' + minutos + ' min para a trava, dá tempo se você cobrar agora'
+          : 'passou a trava sem montar o dia: a promessa de hoje não existe e o placar de amanhã vai medir zero prometido')
+        : !x.travada
+          ? ((x.preenchidos.length ? x.preenchidos.length + ' de ' + x.grade.horas.length + ' horários nomeados' : 'plano começado')
+            + (antesDaTrava ? ', e a promessa ainda está aberta — cobrar a trava é o gesto' : ', e a janela fechou sem travar'))
+          : (x.quentes.length
+            ? 'travou ' + x.preenchidos.length + ' horários, e ' + x.quentes.length + ' quente(s) dele ficaram fora do dia — pergunte por quê, não cobre'
+            : 'travou ' + x.preenchidos.length + ' de ' + x.grade.horas.length + ' horários e nenhum quente ficou fora: reconheça na rodada');
+
+    /* O BOTÃO MUDA COM O ESTADO — e os dois ramos GRAVAM no mesmo registros_rodada que o
+       painel da v2 usava (decisão (C)): cobrança e reconhecimento não se perderam. */
+    const acao = (!x.temPlano || !x.travada)
+      ? { on: 'cobrar:' + oid, rot: cobrado ? '✓ cobrado nesta rodada' : (x.temPlano ? 'cobrar a trava ▸' : 'cobrar o plano agora ▸'),
+        bg: cobrado ? '#EAF6F1' : '#E51A31', cor: cobrado ? '#1E9E7B' : '#FFFDF8', borda: cobrado ? '#CBE8DD' : '#E51A31' }
+      : { on: 'reconhecer:' + oid, rot: reconhecido ? '✓ reconhecimento registrado' : 'mandar reconhecimento ▸',
+        bg: reconhecido ? '#EAF6F1' : '#1E9E7B', cor: reconhecido ? '#1E9E7B' : '#FFFDF8', borda: reconhecido ? '#CBE8DD' : '#1E9E7B' };
+
+    return {
+      ini: esc(String(r.name || '').split(' ').map(function (p) { return p[0]; }).slice(0, 2).join('')),
+      nome: esc(r.name || 'sem nome'),
+      praca: esc((r.praca || 'praça não declarada')
+        + ' · ' + ((x.plano && x.plano.local_atuacao) ? x.plano.local_atuacao : 'sem rota escolhida')),
+      rota: esc((x.plano && x.plano.local_atuacao) || 'sem rota escolhida'),
+      status: !x.temPlano ? 'SEM PLANO' : (x.travada ? 'TRAVADA ✓' : 'PROMESSA ABERTA'),
+      stBg: !x.temPlano ? '#6E1210' : (x.travada ? '#EAF6F1' : '#FDF6E7'),
+      stCor: !x.temPlano ? '#FDFEFF' : (x.travada ? '#1E9E7B' : '#8A6516'),
+      avBg: !x.temPlano ? '#6E1210' : '#E51A31',
+      bg: !x.temPlano ? '#FDF7F7' : '#FDFEFF',
+      borda: focado ? '#2B3440' : (!x.temPlano ? '#E3C6C6' : '#E2E6EE'),
+      prom: prom, promSt: esc(promSt),
+      promStCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#8A6516'),
+      slots: slots,
+      temQuentes: quentes.length > 0,
+      quentes: quentes,
+      semQuentes: x.temPlano && quentes.length === 0,
+      leitura: esc(leitura),
+      leiaCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#B0552F'),
+      cobrar: acao.on, cbRot: acao.rot, cbBg: acao.bg, cbCor: acao.cor, cbBorda: acao.borda
+    };
+  });
+
+  /* ══ o rodapé reativo ═══════════════════════════════════════════════════════════════ */
+  const nCobrados = medidos.filter(function (x) { return (typeof dg2Feito === 'function') && dg4Feito('cobranca', x.oid); }).length;
+  const nPerguntas = medidos.reduce(function (t, x) {
+    return t + x.quentes.filter(function (d) { return (typeof dg2Feito === 'function') && dg4Feito('alinhar', x.oid, d.nome); }).length;
+  }, 0);
+  const agenda = [
+    { hora: 'agora', rot: nCobrados ? (nCobrados + ' executivo(s) cobrado(s) nesta rodada — o registro fica na Semana e no Time')
+      : 'nenhuma cobrança registrada ainda — o botão de cada cartão grava aqui' },
+    { hora: Math.floor(dg4MinutosDaTrava() / 60) + 'h',
+      rot: 'as promessas travam; o que estiver escrito vira o placar de amanhã, medido no HubSpot — zero auto-relato' },
+    { hora: 'rodada', rot: nPerguntas ? (nPerguntas + ' quente(s) fora do plano anotado(s) para perguntar por quê, por nome')
+      : 'nenhum quente anotado — "perguntar por quê" em cada um deixa a pergunta pronta' }
+  ];
+
+  /* `frescor` CHEGA COMO OBJETO. frescorDosDados() devolve { minutos, rotulo, ... } e
+     a primeira versão desta linha o interpolava direto: a faixa preta saiu com
+     "HUBSPOT [OBJECT OBJECT]" na primeira olhada. É o tipo de defeito que nenhuma
+     guarda pega e que a foto entrega em um segundo. */
+  const frescor = (c.frescor && c.frescor.rotulo) ? String(c.frescor.rotulo)
+    : (typeof c.frescor === 'string' && c.frescor ? c.frescor
+      : (DATA.hubspotUpdatedAtFmt ? 'atualizado ' + DATA.hubspotUpdatedAtFmt : 'sem carga registrada'));
+  const DIAS_SEM = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const dRef = new Date(((typeof dailyRefDate !== 'undefined') ? dailyRefDate : hoje) + 'T12:00:00');
+  const agoraTxt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+  return {
+    linhaTopo: esc(DIAS_SEM[dRef.getDay()] + ', ' + String(dRef.getDate()).padStart(2, '0')
+      + ' de ' + MESES[dRef.getMonth()] + ' · ' + agoraTxt
+      /* sem repetir a palavra: `frescor` ja vem como "HubSpot atualizado ha 2h" */
+      + ' · Supabase planos_diarios + ' + frescor
+      + (ehHoje ? '' : ' · dia navegado, não hoje')),
+    /* O TÍTULO E A CONTAGEM. Depois da trava a frase muda: contagem que continua correndo
+       depois da hora é a tela mentindo sobre uma janela que já fechou. */
+    tituloTrava: esc(ehHoje
+      ? (minutos > 0 ? 'Promessas travam às ' + Math.floor(dg4MinutosDaTrava() / 60) + 'h'
+        : 'Promessas travadas às ' + Math.floor(dg4MinutosDaTrava() / 60) + 'h ✓')
+      : 'Promessas de ' + String(dRef.getDate()).padStart(2, '0') + '/' + String(dRef.getMonth() + 1).padStart(2, '0')),
+    contagem: esc(ehHoje && minutos > 0 ? '— faltam ' + minutos + ' min' : ''),
+    kpis: kpis.map(function (k) { return { rot: esc(k.rot), v: esc(k.v), de: esc(k.de), cor: k.cor }; }),
+    manchete: esc(manchete),
+    temToast: !!s.toast, toast: esc(s.toast || ''),
+    rodada: rodada,
+    origAlvo: String(origAlvo), origCart: String(origCart), origNova: String(origNova),
+    execs: execs,
+    /* MODO TV esconde só o que grava — status, plano e promessa continuam à vista, que é
+       o que a projeção existe para mostrar. */
+    acoes: !tv,
+    agenda: agenda,
+    rodapeFonte: esc('Plano, promessa e trava: Supabase planos_diarios + dailies, escritos pelo próprio executivo na Minha Daily'
+      + ' · etapa, dias e quentes: HubSpot (' + frescor + ')'
+      + ' · a origem de cada conta é gravada no slot desde 08/09/26; registro anterior aparece como "origem não registrada", nunca chutada'
+      + ' · cobrança, pergunta e reconhecimento: Supabase registros_rodada, os mesmos que a Semana e o Time leem'
+      + ' · o gestor não edita plano de ninguém, e depois da trava a promessa é somente leitura.')
+  };
+}
+/* ══ O RENDER DA DAILY v4: o markup da prancha, mecanicamente convertido ══════════
+   NÃO EDITE À MÃO para mudar dado — dado sai de dg4Dados(). Este corpo é a prancha
+   daily-gestor-v4 convertida por script (sc-for -> map, sc-if -> ternário,
+   {{x}} -> ${x}, sc-camel-on-click -> data-dg4-acao, style-hover -> classe). */
+function dg4TelaHTML(d) {
+  const { acoes, agenda, contagem, execs, kpis, linhaTopo, manchete, origAlvo, origCart, origNova, rodada, rodapeFonte, temToast, tituloTrava, toast } = d;
+  return `
+      <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
+
+        <div style="background:#16181D;color:#FFFDF8;padding:18px 24px;display:flex;align-items:center;gap:30px;flex-wrap:wrap;">
+          <div style="min-width:0;">
+            <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${linhaTopo}</span>
+            <b style="display:block;font:900 22px 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;">${tituloTrava} <span style="color:#F0B45C;">${contagem}</span></b>
+          </div>
+          <div style="display:flex;gap:28px;flex-wrap:wrap;margin-left:auto;">
+            ${(kpis||[]).map(k => `
+              <span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${k.rot}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 26px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span></span>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:16px;padding:15px 24px 13px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
+          <h1 style="font:900 24px/1.2 'Archivo',sans-serif;letter-spacing:-.02em;color:#2B3440;margin:0;text-wrap:balance;flex:1;min-width:480px;">${manchete}</h1>
+          ${(temToast) ? `
+            <span style="flex:none;font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:6px 13px;max-width:520px;overflow-wrap:anywhere;">${toast}</span>
+          ` : ''}
+        </div>
+
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;background:#FBFAF6;">
+          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#E51A31;flex:none;">A rodada — quem fala primeiro</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">
+            ${(rodada||[]).map(r => `
+              <button data-dg4-acao="${r.on}" style="display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border:1.5px solid ${r.borda};border-radius:999px;background:${r.bg};font:800 10.5px 'Manrope',sans-serif;color:${r.cor};cursor:pointer;white-space:nowrap;" data-dg4-hv="0"><b style="font:900 10px 'Archivo',sans-serif;color:${r.nCor};">${r.pos}</b>${r.nome}<span style="font:800 8.5px 'Archivo',sans-serif;color:${r.stCor};">${r.st}</span></button>
+            `).join('')}
+          </div>
+          <span style="margin-left:auto;flex:none;font:700 10px 'Manrope',sans-serif;color:#7A8494;">ordem: sem plano → promessa aberta → travadas · de onde vêm os planos de hoje: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${origNova} prospecção nova</b></span>
+        </div>
+
+        <div style="padding:16px 24px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+          ${(execs||[]).map(e => `
+            <div style="background:${e.bg};border:1.5px solid ${e.borda};border-radius:13px;min-width:0;overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:10px;padding:12px 16px 0;flex-wrap:wrap;">
+                <span style="width:32px;height:32px;border-radius:999px;display:grid;place-items:center;background:${e.avBg};color:#FDFEFF;font:900 12px 'Archivo',sans-serif;flex:none;">${e.ini}</span>
+                <span style="min-width:0;"><b style="display:block;font:800 14px 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;">${e.nome}</b><span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">${e.praca} · ${e.rota}</span></span>
+                <span style="margin-left:auto;flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:${e.stCor};background:${e.stBg};border-radius:6px;padding:4px 9px;">${e.status}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:7px;padding:10px 16px 0;flex-wrap:wrap;">
+                <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#7A8494;flex:none;">promessa de hoje</span>
+                ${(e.prom||[]).map(pm => `
+                  <span style="display:inline-flex;align-items:center;gap:5px;border:1.5px ${pm.estilo} ${pm.borda};border-radius:999px;padding:4px 11px;font:800 10.5px 'Manrope',sans-serif;color:${pm.cor};background:${pm.bg};white-space:nowrap;"><b style="font:900 12px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;">${pm.n}</b>${pm.rot}</span>
+                `).join('')}
+                <span style="flex:none;font:800 9.5px 'Manrope',sans-serif;color:${e.promStCor};">${e.promSt}</span>
+              </div>
+              <div style="padding:10px 16px 0;">
+                <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#2B3440;">o plano dele — montado por ele, conta a conta</span>
+                <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px;">
+                  ${(e.slots||[]).map(sl => `
+                    <div style="display:flex;align-items:center;gap:9px;border:1px ${sl.estilo} ${sl.borda};border-radius:8px;background:${sl.bg};padding:5px 11px;min-width:0;">
+                      <span style="font:800 10px 'Manrope',sans-serif;color:#8E3B5C;flex:none;width:38px;font-variant-numeric:tabular-nums;">${sl.h}</span>
+                      <b style="font:800 11px 'Manrope',sans-serif;color:${sl.cCor};min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.conta}</b>
+                      <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;flex:none;white-space:nowrap;">${sl.etapa}</span>
+                      <span style="margin-left:auto;flex:none;font:800 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${sl.oCor};background:${sl.oBg};border:1px solid ${sl.oBorda};border-radius:4px;padding:2px 7px;white-space:nowrap;">${sl.origem}</span>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+              <div style="padding:10px 16px 0;">
+                ${(e.temQuentes) ? `
+                  <div style="border:1.5px dashed #E3937F;border-radius:10px;background:#FDF7F5;padding:8px 12px;">
+                    <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#B0552F;">quentes fora do plano — a pergunta da rodada</span>
+                    <div style="display:flex;flex-direction:column;gap:4px;margin-top:5px;">
+                      ${(e.quentes||[]).map(q => `
+                        <span style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">
+                          <b style="font:800 11px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;">${q.nome}</b>
+                          <span style="font:700 9.5px 'Manrope',sans-serif;color:#8A3B3B;min-width:0;flex:1;">${q.issue}</span>
+                          ${(acoes) ? `
+                            <button data-dg4-acao="${q.on}" style="flex:none;display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border:1px solid ${q.borda};border-radius:999px;background:${q.bg};font:800 9px 'Manrope',sans-serif;color:${q.cor};cursor:pointer;white-space:nowrap;" data-dg4-hv="1">${q.rot}</button>
+                          ` : ''}
+                        </span>
+                      `).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+                ${(e.semQuentes) ? `
+                  <span style="display:inline-flex;align-items:center;gap:6px;font:700 10px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:4px 11px;">todos os quentes dele estão no plano ✓</span>
+                ` : ''}
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 16px 13px;flex-wrap:wrap;">
+                <span style="font:700 10px/1.5 'Manrope',sans-serif;color:${e.leiaCor};min-width:0;flex:1;">▸ ${e.leitura}</span>
+                ${(acoes) ? `
+                  <button data-dg4-acao="${e.cobrar}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${e.cbBorda};border-radius:999px;background:${e.cbBg};font:800 10px 'Manrope',sans-serif;color:${e.cbCor};cursor:pointer;white-space:nowrap;" data-dg4-hv="1">${e.cbRot}</button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+
+        <div style="padding:10px 24px 18px;">
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Sua rodada <span style="color:#7A8494;">— tudo que você clicou vira a pauta de agora</span></span>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
+            ${(agenda||[]).map(ag => `
+              <span style="display:flex;align-items:flex-start;gap:9px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:9px 13px;min-width:0;">
+                <span style="font:800 9px 'Manrope',sans-serif;color:#8E3B5C;flex:none;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;">${ag.hora}</span>
+                <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;overflow-wrap:anywhere;">${ag.rot}</span>
+              </span>
+            `).join('')}
+          </div>
+        </div>
+        <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 24px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${rodapeFonte}</p>
+      </div>
+
+`;
+}
+/* ══ A FIAÇÃO DA DAILY v4 ══════════════════════════════════════════════════════════
+   UM ouvinte, no documento, como nas outras abas do gestor. E ZERO caminho de escrita
+   novo — é a decisão (C) do Julyan em prática: a v2 saiu, mas o gesto de gravar ficou.
+
+     foco        só estado de tela (o chip da rodada destaca o cartão)
+     cobrar      -> g14Registrar('cobranca', ownerId)      [registros_rodada]
+     reconhecer  -> g14Registrar('ajuste', ownerId)        [registros_rodada]
+     perguntar   -> g14Registrar('alinhar', ownerId, nome) [registros_rodada]
+
+   As três bases são as MESMAS que o painel de ação da v2 usava, e são as que a aba Semana
+   e a aba Time leem. Uma base nova aqui criaria uma pauta que só esta tela vê.
+
+   O gestor NUNCA edita o plano: não existe verbo de escrita em planos_diarios nesta aba.
+   É a regra do prompt, e ela é o que faz o espelho ser espelho. */
+function dg4Repintar() {
+  const raiz = document.getElementById('dg4Raiz');
+  if (!raiz || !DG4_CTX) return;
+  raiz.innerHTML = dg4TelaHTML(dg4Dados(DG4_CTX));
+}
+
+/* O CONTEXTO FICA GUARDADO porque o repinte não pode refazer as consultas do renderDaily:
+   a Daily do gestor é a tela mais pesada da sessão, e repintar por clique não vale uma ida
+   ao banco. Mesma razão pela qual a v2 guardava DG2.ctx. */
+let DG4_CTX = null;
+
+async function dg4Executar(acao) {
+  const partes = String(acao || '').split(':');
+  const verbo = partes[0];
+  const resto = partes.slice(1).join(':');
+
+  if (verbo === 'foco') {
+    DG4_ESTADO.toast = null;
+    DG4_ESTADO.foco = DG4_ESTADO.foco === resto ? null : resto;
+    return dg4Repintar();
+  }
+
+  if (typeof g14Registrar !== 'function') {
+    DG4_ESTADO.toast = 'o registro da rodada não carregou nesta aba — recarregue a página';
+    return dg4Repintar();
+  }
+
+  const nomeDoRep = function (oid) {
+    const r = ((DG4_CTX && DG4_CTX.reps) || DATA.reps || []).find(function (x) { return String(x.ownerId) === String(oid); });
+    return r ? String(r.name || '').split(' ')[0] : 'ele';
+  };
+
+  if (verbo === 'cobrar' || verbo === 'reconhecer') {
+    const base = verbo === 'cobrar' ? 'cobranca' : 'ajuste';
+    const r = await g14Registrar(base, resto);
+    if (r && r.error) { DG4_ESTADO.toast = 'não gravei: ' + r.error.message; return dg4Repintar(); }
+    DG4_ESTADO.toast = r && r.desfeito
+      ? ('registro desfeito — ' + nomeDoRep(resto) + ' saiu da rodada')
+      : (verbo === 'cobrar'
+        ? (nomeDoRep(resto) + ' cobrado ✓ — o registro fica na Semana e no Time')
+        : ('reconhecimento de ' + nomeDoRep(resto) + ' registrado ✓'));
+    return dg4Repintar();
+  }
+
+  if (verbo === 'perguntar') {
+    /* o nome do cliente pode ter ':' — junto o resto de volta, senão a chave chega
+       truncada e a pergunta grava para outro negócio. */
+    const ps = resto.split(':');
+    const oid = ps[0];
+    const cliente = ps.slice(1).join(':');
+    if (!cliente) { DG4_ESTADO.toast = 'esse quente chegou sem nome nesta carga — não gravei a pergunta'; return dg4Repintar(); }
+    const r = await g14Registrar('alinhar', oid, cliente);
+    if (r && r.error) { DG4_ESTADO.toast = 'não gravei: ' + r.error.message; return dg4Repintar(); }
+    DG4_ESTADO.toast = r && r.desfeito
+      ? ('"' + cliente + '" saiu da rodada')
+      : ('pergunta anotada: por que "' + cliente + '" não está no dia de ' + nomeDoRep(oid) + '?');
+    return dg4Repintar();
+  }
+}
+
+let DG4_OUVINTE = false;
+function dg4Ligar() {
+  if (DG4_OUVINTE) return;
+  DG4_OUVINTE = true;
+  document.addEventListener('click', function (ev) {
+    const alvo = ev.target.closest && ev.target.closest('[data-dg4-acao]');
+    if (!alvo) return;
+    if (!alvo.closest('[data-dg4-raiz]')) return;
+    const acao = alvo.getAttribute('data-dg4-acao');
+    if (!acao) return;
+    dg4Executar(acao);
+  });
+}
+
+/* O RELÓGIO DA TRAVA. A contagem "faltam N min" tem de andar sozinha: uma tela projetada
+   às 12h40 que continua dizendo "faltam 38 min" às 13h10 é pior do que não ter contagem.
+   Um intervalo só, guardado e limpo antes de criar outro — a v2 aprendeu isso criando um
+   timer por render e chegando a dez repintando por cima da rodada. */
+let DG4_RELOGIO = null;
+function dg4LigarRelogio() {
+  if (DG4_RELOGIO) clearInterval(DG4_RELOGIO);
+  DG4_RELOGIO = setInterval(function () {
+    /* repinta só se a aba estiver visível: repintar aba escondida é trabalho jogado fora,
+       e a memória do projeto diz que aba oculta mente na medição. */
+    const raiz = document.getElementById('dg4Raiz');
+    if (!raiz || !raiz.offsetParent) return;
+    dg4Repintar();
+  }, 60000);
+}
+
 
 async function renderDaily() {
   /* ESPERA O PROGRESSO DO PLAYBOOK: os pontos de estudo entram no placar da semana, e
@@ -49872,7 +49405,11 @@ async function renderDaily() {
              que e onde vivem os controles de cobranca. Sem dono no time nao ha quem
              conduzir — ali vai a razao escrita, e nao um botao inerte. */
           const acaoFup = g.ownerId
-            ? `<button type="button" data-dg2-acao="conduzir:${esc(g.ownerId)}" data-dg2-hv="4" title="abre a rodada nesta pessoa, onde estão os controles de cobrança" style="display:inline-flex;align-items:center;min-height:38px;padding:0 13px;border:1px solid var(--line);border-radius:999px;background:var(--paper);font:800 10.5px var(--font-body);color:var(--ink);cursor:pointer;white-space:nowrap;">cobrar na rodada ▸</button>`
+            /* A CONDUÇÃO SAIU COM A v2 (08/09/26) — decisão (C). O destino equivalente
+               na v4 é o foco da rodada: destaca o cartão daquela pessoa, que é onde o
+               plano, a promessa e o botão de cobrar dela estão. Deixar o verbo antigo
+               aqui seria um clique morto no cartão que eu entreguei hoje. */
+            ? `<button type="button" data-dg4-acao="foco:${esc(g.ownerId)}" data-dg2-hv="4" title="destaca o cartão desta pessoa na rodada, com o plano e o botão de cobrar" style="display:inline-flex;align-items:center;min-height:38px;padding:0 13px;border:1px solid var(--line);border-radius:999px;background:var(--paper);font:800 10.5px var(--font-body);color:var(--ink);cursor:pointer;white-space:nowrap;">ver na rodada ▸</button>`
             : '<span style="font:700 10.5px var(--font-body);color:var(--muted2);white-space:nowrap;">sem dono no time — reatribuir no HubSpot</span>';
           return `
           <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap;">
@@ -49886,7 +49423,7 @@ async function renderDaily() {
          e este cartao vive FORA da raiz do board de proposito — dg2Repintar reescreve
          o innerHTML dela a cada clique e apagaria este cartao. */
       followUpsSemConfirmacaoHtml = `
-      <div data-dg2-raiz="1">
+      <div data-dg4-raiz="1">
       <div class="sec-k"><b>Follow-ups sem confirmação</b><span>agendados pelo App Outbound, data já passou, sem tarefa concluída correspondente</span></div>
       <div class="chart-card">
         <div class="chart-subtitle" style="margin-bottom:10px;">${pendentes.length} follow-up${pendentes.length === 1 ? '' : 's'} não confirmado${pendentes.length === 1 ? '' : 's'} — não contam como visita feita até alguém confirmar no HubSpot.</div>
@@ -50841,13 +50378,20 @@ async function renderDaily() {
        O CONTEXTO VAI PRONTO, e nao recalculado la dentro. Todos estes numeros o
        renderDaily acabou de medir; refaze-los na v2 criaria uma segunda contagem para
        discordar da primeira na mesma tela. */
-    html = '<div data-dg2-raiz="1">'
-      + dg2TelaHTML({
-          reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
-          ontemISO: yesterdayISO, agenda: agendaDeHoje, cobertura: coberturaDoFunil,
-          cadencia: cadenciaDeHoje, frescor: frescorDaily,
-          fechadosHoje: fechadosHojeTotal, vencemHoje: vencemHojeTime
-        })
+    /* ══ DAILY DO GESTOR v4 (08/09/26) ═══════════════════════════════════════════
+       "me mostrar as promessas de cada" — o espelho da Minha Daily do executivo. A
+       v2 (board por pessoa, condução, timeline de cadência e cobertura por etapa)
+       sai por decisão (C) do Julyan; o gesto de GRAVAR fica, nas mesmas bases de
+       registros_rodada.
+
+       O CONTEXTO VAI PRONTO e fica guardado em DG4_CTX: o repinte por clique não
+       pode refazer as consultas desta função — ela é a mais pesada da sessão. */
+    DG4_CTX = {
+      reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
+      frescor: frescorDaily
+    };
+    html = '<div id="dg4Raiz" data-dg4-raiz="1">'
+      + dg4TelaHTML(dg4Dados(DG4_CTX))
       + '</div>';
   }
 
@@ -50984,10 +50528,13 @@ async function renderDaily() {
      Depois do innerHTML, nunca antes: delegado precisa de no montado. */
   if (!souRepDaily) {
     try {
-      const raizDg2 = el.querySelector('[data-dg2-raiz]');   /* ainda serve para nao ligar antes do no existir */
-      if (raizDg2 && typeof dg2Ligar === 'function') {
-        dg2Ligar(raizDg2);
-        if (typeof dg2LigarRelogio === 'function') dg2LigarRelogio();
+      /* A v4 (08/09/26). O ouvinte é delegado no documento, então não depende do nó —
+         mas ligar depois do innerHTML mantém a ordem que o resto do arquivo usa, e o
+         relógio da trava precisa do nó para saber se a aba está visível. */
+      const raizDg4 = el.querySelector('[data-dg4-raiz]');
+      if (raizDg4 && typeof dg4Ligar === 'function') {
+        dg4Ligar();
+        if (typeof dg4LigarRelogio === 'function') dg4LigarRelogio();
       }
     } catch (e) { console.error('Daily v2 — nao liguei a fiacao:', e && e.message); }
   }
@@ -51485,12 +51032,13 @@ document.addEventListener('keydown', ev => {
   try { localStorage.setItem('cockpit_daily_tv_v2', '0'); } catch (e) {}
   const btnTv = document.getElementById('dailyTvToggle');
   if (btnTv) { btnTv.setAttribute('aria-pressed', 'false'); btnTv.textContent = '📺 Modo TV'; }
-  /* E A DAILY v2 SE REPINTA (06/09/26). Medido: o Esc saia do modo TV e o botao da v2
-     continuava dizendo "sair do modo TV" — o rotulo mentindo sobre o estado, porque
-     este listener so conhecia o #dailyTvToggle, que a troca do hero levou embora.
-     Repintar em vez de escrever o rotulo aqui: ele nasce de dg2Vals, que le a classe
-     do body. Se um dia o texto mudar, muda num lugar. */
-  if (typeof dg2Repintar === 'function') dg2Repintar();
+  /* E A DAILY DO GESTOR SE REPINTA (06/09/26, atualizado em 08/09/26 para a v4).
+     Medido na v2: o Esc saia do modo TV e o botao continuava dizendo "sair do modo
+     TV" — o rotulo mentindo sobre o estado, porque este listener so conhecia o
+     #dailyTvToggle, que a troca do hero levou embora. Repintar em vez de escrever o
+     rotulo aqui: ele nasce do provedor, que le a classe do body. Se o texto mudar,
+     muda num lugar. */
+  if (typeof dg4Repintar === 'function') dg4Repintar();
 });
 
 // Consolidado semanal dos compromissos diários (usado no Resumo Semanal)
