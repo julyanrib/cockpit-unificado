@@ -106,9 +106,35 @@ const dividaVista = [];
    conteúdo (gargalo, boasPraticas, compromissos) é do robô semanal e não é cobrado — o
    que não pode faltar é a pessoa. */
 const narrPath = path.join(root, 'data', 'narrativas.json');
+/* ══ AUSÊNCIA NO CI NÃO É DIVERGÊNCIA (08/09/26) ═══════════════════════════════════
+   ESTA LINHA DERRUBOU O ROBÔ 71 VEZES EM UM DIA. Eu escrevi a checagem em 07/09 às
+   21:13 e ela reprovava o build sempre que o arquivo faltava. Só que
+   `data/narrativas.json` está no .gitignore de propósito (é narrativa de CRM em
+   repositório público), então no checkout da GitHub Actions ele NUNCA existe: as 27
+   rodadas daquele dia passaram porque foram antes das 21:13, e as 73 seguintes
+   falharam — cada uma abrindo uma Issue de alarme.
+
+   E o alarme era falso: em produção as narrativas NÃO saem do disco. montar-dados.js
+   as lê do snapshot (`usar('narrativas', f.narrativas, ...)`), e o require do arquivo
+   é opcional. O robô buscava o dado, gravava o snapshot — e só então reprovava no
+   build, por um arquivo que não faz parte daquele ambiente.
+
+   Então a regra passa a distinguir os dois casos, e diz qual é:
+     sem o arquivo E no CI   -> a quarta fonte não é comparável aqui; imprime e segue
+     sem o arquivo E local   -> reprova, porque quem desenvolve TEM o arquivo (sem ele
+                                nem o preview monta) e a comparação é o motivo desta guarda
+   O que se perde: o CI não cobra a quarta fonte. Aceito de propósito — a divergência
+   nasce no editor de quem mexe em usuarios.json, e é lá que a guarda tem de gritar. */
+const noCI = !!(process.env.CI || process.env.GITHUB_ACTIONS);
 if (!fs.existsSync(narrPath)) {
-  problemas.push('falta data/narrativas.json — é dele que sai DATA.reps, e sem ele nenhum'
-    + ' executivo existe no cockpit.');
+  if (noCI) {
+    console.log('AVISO time nas duas fontes - data/narrativas.json nao existe neste ambiente'
+      + ' (gitignored, e em producao ela vem do snapshot). A quarta fonte nao foi comparada.');
+  } else {
+    problemas.push('falta data/narrativas.json — é dele que sai DATA.reps, e sem ele nenhum'
+      + ' executivo existe no cockpit. (Rode o robô ou traga o arquivo: no CI esta checagem'
+      + ' é dispensada, aqui não.)');
+  }
 } else {
   let narr = null;
   try { narr = JSON.parse(fs.readFileSync(narrPath, 'utf8')); }
