@@ -39963,7 +39963,14 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       if (!micro) return;
       const candidatas = ordenadas.filter(l => !naRotaHojeFn(l));
       const seq = montarMicrorota(candidatas, planoMapaOrigemAtual);
-      const diaBR = planoDiaAlvo ? planoDiaAlvo.split('-').reverse().slice(0, 2).join('/') : '';
+      /* SEM DIA ALVO, O DIA E HOJE — e a tela tem que dizer isso. `planoDiaAlvo` so era
+         escrito pelo seletor do popup do mapa, que era codigo morto (botaoAcaoHTML nunca
+         foi chamada), entao ele e sempre null aqui: o cartao escrevia "Microrota sugerida
+         para " e o botao "Agendar as 5 no dia ", os dois sem dia nenhum.
+         O DADO ja estava certo — criarTarefaVisitaNoHubspot omite `data` quando ela e nula
+         e o servidor grava no dia corrente. Era so o texto que prometia e nao entregava. */
+      const diaDaMicrorota = planoDiaAlvo || hoje;
+      const diaBR = diaDaMicrorota.split('-').reverse().slice(0, 2).join('/');
       if (seq.length < 2) {
         micro.innerHTML = '<div style="font-size:11px;color:var(--muted2);">Não há contas suficientes agrupadas pra montar uma microrota com os filtros atuais. Amplie o raio ou inclua contas sem fit.</div>';
         return;
@@ -39995,8 +40002,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
         for (const l of seq) {
           const hora = agendaP2(Math.floor(minutos / 60)) + ':' + agendaP2(minutos % 60);
           try {
-            await criarTarefaVisitaNoHubspot(l, r.ownerId, hora, { silencioso: true }, planoDiaAlvo);
-            registrarAgendamentoLocal(l, planoDiaAlvo, hora, r.ownerId);
+            await criarTarefaVisitaNoHubspot(l, r.ownerId, hora, { silencioso: true }, diaDaMicrorota);
+            registrarAgendamentoLocal(l, diaDaMicrorota, hora, r.ownerId);
             ok++;
           } catch (e) { console.error('Microrota, parada não agendada:', l.nome, e && e.message); }
           minutos += 45;
