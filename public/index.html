@@ -20123,12 +20123,14 @@ function pl6CandidatosDaRota(regiaoChave, todos, jaNaGrade) {
       || ((a.km == null ? 1e9 : a.km) - (b.km == null ? 1e9 : b.km)));
 }
 
-function pl6Candidatos(regiaoChave, todos, jaNaGrade) {
+function pl6Candidatos(regiaoChave, todos, jaNaGrade, comReciclagem) {
   const usados = new Set(jaNaGrade || []);
   const naRegiao = l => (l.regiao && l.regiao === regiaoChave) ? 1 : 0;
+  const base = comReciclagem ? (todos || []) : pl6SemReciclagem(todos);
+  return base.filter(l => !usados.has(l.id)).sort((a, b) =>
 
-  return pl6SemReciclagem(todos).filter(l => !usados.has(l.id)).sort((a, b) =>
-    (pl6Prioridade(b) - pl6Prioridade(a))
+    ((a.reciclagem ? 1 : 0) - (b.reciclagem ? 1 : 0))
+    || (pl6Prioridade(b) - pl6Prioridade(a))
     || (naRegiao(b) - naRegiao(a))
     || ((a.km == null ? 1e9 : a.km) - (b.km == null ? 1e9 : b.km)));
 }
@@ -20163,6 +20165,8 @@ let pl6UI = {
   toast: null, salvando: false
 };
 let pl6Plano = null;
+
+let d7PreCargaFeita = false;
 
 const PL6_TERR_VISIVEIS = 12;
 const PL6_REGIOES_VISIVEIS = 8;
@@ -20721,7 +20725,10 @@ function renderPlanejamento6a(rep) {
             + '<span style="color:' + cor + ';">' + esc(pq) + '</span></button>';
         };
         const tres = cands.slice(0, 3);
-        const resto = cands.slice(3);
+
+        const idsSugeridos = new Set(tres.map(l => l.id));
+        const todosLivres = pl6Candidatos(rota, todos, naGrade, true);
+        const resto = todosLivres.filter(l => !idsSugeridos.has(l.id));
         return '<div class="pl6-sug">'
           + '<div class="pl6-sug-topo"><span class="pl6-sug-rot">' + hora + ' · escolher lead'
           + (nomeRegiao(rota) ? ' · ' + esc(nomeRegiao(rota)) : '') + '</span>'
@@ -20737,8 +20744,10 @@ function renderPlanejamento6a(rep) {
               + (tres.length ? '<div class="pl6-sug-topn">' + tres.map(opcao).join('') + '</div>' : '')
               + (resto.length
                 ? '<div class="pl6-sug-resto">' + resto.map(opcao).join('') + '</div>'
-                  + '<span class="pl6-sug-nota">' + cands.length + ' conta(s) livres — as 3 primeiras são as melhores'
-                  + (nomeRegiao(rota) ? ' pra ' + esc(nomeRegiao(rota)) : '') + '; role ou busque pelo nome</span>'
+
+                  + '<span class="pl6-sug-nota">' + (tres.length + resto.length) + ' conta(s) livres — as 3 primeiras são as melhores'
+                  + (nomeRegiao(rota) ? ' pra ' + esc(nomeRegiao(rota)) : '')
+                  + '; role ou busque pelo nome. Reciclagem entra no fim da lista.</span>'
                 : '')
             : '<div class="pl6-sug-vazio">Nada livre na carteira nem no lote — todos já estão na semana.</div>')
 
@@ -34934,6 +34943,25 @@ async function renderDaily() {
 
   try { if (typeof carregarPlaybookProgresso === 'function') await carregarPlaybookProgresso(); }
   catch (e) { console.error('[Daily] progresso do playbook não carregou, estudo fica em 0:', e); }
+
+  if (!d7PreCargaFeita && sessaoAtual && sessaoAtual.role === 'rep' && sessaoAtual.ownerId) {
+    d7PreCargaFeita = true;
+    const repPreCarga = (DATA.reps || []).find(function (x) {
+      return String(x.ownerId) === String(sessaoAtual.ownerId);
+    });
+    if (repPreCarga && typeof pl6Carregar === 'function') {
+      try { await pl6Carregar(repPreCarga); }
+      catch (e) { console.error('[Daily] plano da semana não carregou — o dia pode aparecer vazio:', e && e.message); }
+    }
+    const semLote = (typeof prospeccaoCache === 'undefined') || !Array.isArray(prospeccaoCache) || !prospeccaoCache.length;
+    if (semLote && typeof carregarProspeccao === 'function') {
+      try {
+        await carregarProspeccao();
+
+        if (typeof agendaProspeccaoPronta !== 'undefined') agendaProspeccaoPronta = true;
+      } catch (e) { console.error('[Daily] lote de contas-alvo não carregou:', e && e.message); }
+    }
+  }
   const el = document.getElementById('dailyContent');
 
   const souRepDailyPre = !!(sessaoAtual && sessaoAtual.role === 'rep');
