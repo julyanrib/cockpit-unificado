@@ -60,6 +60,10 @@ let hubspotPrevious = requireOpcional(() => require('../data/hubspot-previous.js
 // Opcional pelo mesmo motivo dos outros: repo recém-clonado pode não ter o arquivo — aí
 // o template cai no fallback mínimo e mostra "régua não configurada" em vez de inventar.
 const cadencias = requireOpcional(() => require('../data/cadencias.json'));
+/* Régua da temperatura (data/temperatura.json). CONFIGURAÇÃO, como cadencias: o robô
+   calcula a nota com ela e a tela ESCREVE a fórmula a partir dela. Duas cópias da
+   frase (uma no JSON, uma no template) divergiriam no primeiro ajuste de peso. */
+const temperaturaRegua = requireOpcional(() => require('../data/temperatura.json'));
 
 const USUARIOS = Array.isArray(usuariosRaw) ? usuariosRaw : (usuariosRaw.usuarios || []);
 
@@ -356,6 +360,12 @@ function montarDadosCompletos() {
     // Configuração da régua de cadência — igual pros dois papéis (é política do canal,
     // não dado de cliente), por isso passa intacta pelo filtrarParaPapel.
     cadencias: cadencias || null,
+    /* CADÊNCIA DIÁRIA (08/09/26): atividade por executivo por dia útil, do robô.
+       DADO, não configuração — o filtro por papel abaixo corta para o executivo. */
+    cadenciaDiaria: hubspot.cadenciaDiaria || null,
+    /* A RÉGUA DA TEMPERATURA vai inteira para os dois papéis: é política de
+       priorização, e a tela precisa dela para escrever de onde a nota vem. */
+    temperaturaRegua: temperaturaRegua || null,
     usuarios: USUARIOS
   };
 }
@@ -520,6 +530,18 @@ function filtrarParaPapel(dados, usuario) {
   /* O EXECUTIVO RECEBE O PRÓPRIO HÁBITO E O NÚMERO DO TIME — nunca o porRep inteiro.
      O spread de ...dados levaria o mapa com todo mundo, que é exatamente o vazamento
      silencioso que o corte de snapshotReps fechou em 07/08. */
+  /* CADÊNCIA DIÁRIA DO EXECUTIVO: só a linha dele. O heatmap do time é da tela do
+     gestor; mandar `porOwner` inteiro para o executivo entregaria a atividade diária
+     de cada colega no payload dele — o oposto do corte de 07/08/26. Os `dias` vão
+     junto porque sem eles o sparkline não sabe a que dia cada barra pertence. */
+  const cadenciaMinha = (dados.cadenciaDiaria && dados.cadenciaDiaria.porOwner) ? {
+    dias: dados.cadenciaDiaria.dias || [],
+    porOwner: { [meuId]: dados.cadenciaDiaria.porOwner[meuId] || null },
+    fonte: dados.cadenciaDiaria.fonte || null,
+    naoConta: dados.cadenciaDiaria.naoConta || null,
+    truncado: dados.cadenciaDiaria.truncado || [],
+    geradoEm: dados.cadenciaDiaria.geradoEm || null
+  } : null;
   const habitosMeu = (dados.habitosTime && dados.habitosTime.porRep && dados.habitosTime.porRep[meuId]) || null;
   const habitosTime = dados.habitosTime ? {
     meu: habitosMeu,
@@ -530,6 +552,10 @@ function filtrarParaPapel(dados, usuario) {
   return {
     ...dados,
     habitosTime,
+    /* SEM ESTA LINHA o spread acima entregaria cadenciaDiaria.porOwner INTEIRO ao
+       executivo — a atividade diária de cada colega no payload dele. Declarar
+       cadenciaMinha e esquecer de usá-la é o vazamento em silêncio de sempre. */
+    cadenciaDiaria: cadenciaMinha,
     reps,
     kpiDetalhe: {
       leadsCriados: soMeu(dados.kpiDetalhe.leadsCriados),
