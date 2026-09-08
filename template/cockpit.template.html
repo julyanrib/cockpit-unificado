@@ -1226,6 +1226,27 @@
      tela projetada da reunião e a mesa da diretoria nunca tiveram hover nem foco
      visível nas abas Time, Pessoas, Rotas e Semana. Nada reprovava: a regra existe, o
      seletor casa, e só o estilo computado na largura real mostra. */
+  /* ══ O AVISO DO FAROL (08/09/26) ═══════════════════════════════════════════════
+     Aparece so quando o dado novo chegou e NAO deu para aplicar (ficha aberta, campo
+     em foco, gravacao em curso). Acima da barra de abas no celular, e nunca em cima
+     do que a pessoa esta lendo: canto inferior direito, discreto, um gesto so. */
+  .farol-aviso{position:fixed;right:16px;bottom:84px;z-index:60;display:flex;align-items:center;gap:9px;
+    padding:10px 14px;min-height:44px;border:1px solid var(--line);border-radius:var(--r-pill);
+    background:var(--panel);box-shadow:var(--shadow);cursor:pointer;font:inherit;
+    transition:border-color var(--t-base) var(--ease),transform var(--t-base) var(--ease);}
+  .farol-aviso:hover{border-color:var(--ink);transform:translateY(-1px);}
+  .farol-aviso b{font:800 11px var(--font-body);color:var(--ink);letter-spacing:.02em;}
+  .farol-aviso span{font:800 11px var(--font-body);color:var(--red);white-space:nowrap;}
+  .farol-aviso:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  /* A VARIANTE QUE MORA NA LINHA DE FRESCOR — o caso normal. Solta do canto fixo, ela
+     não tapa cartão nenhum; fica ao lado da frase que o farol acabou de deixar velha.
+     Continua com 44px de área de toque via padding, e não `min-height`: aqui ela é um
+     elemento em linha e uma altura fixa empurraria a linha do topo para baixo. */
+  .farol-aviso--linha{position:static;right:auto;bottom:auto;z-index:auto;
+    display:inline-flex;vertical-align:middle;margin:0 0 0 10px;padding:7px 12px;min-height:0;
+    box-shadow:none;background:var(--panel);}
+  .farol-aviso--linha b{font-size:10px;}
+  .farol-aviso--linha span{font-size:10px;}
   /* ══ DAILY DO GESTOR v4 (08/09/26) — os dois hovers da prancha ══════════════════
      Fora de qualquer @media, como os das outras abas depois do conserto de hoje: hover
      e gesto de mouse, e por dois dias essas regras valeram so no celular. */
@@ -12421,6 +12442,9 @@ async function aplicarSessao(email) {
     Object.assign(DATA, corpo.dados);
     sessaoAtual = corpo.sessao;
     hidratadoPara = email;
+    /* A PARTIR DAQUI A ABA ESCUTA O SNAPSHOT (08/09/26). Depois da sessao existir, e
+       nao antes: a politica de leitura do farol e para `authenticated`. */
+    if (typeof farolLigar === 'function') farolLigar();
     reidratarPosLogin();
     mostrarApp();
     return;
@@ -12802,6 +12826,228 @@ function repintarTelaAtivaDoNegocio() {
      cancelava a gravacao no HubSpot antes de ela sair). */
   try { fn(); }
   catch (e) { if (typeof console !== 'undefined' && console.error) console.error('[movimento] ' + nome + ' nao repintou:', e); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   A TELA ESCUTA O FAROL (08/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "eu quero que a tela atualize toda hora que for possível... pq precisamos
+   esperar alguma janela se ele ja ta todo instantaneo? tudo na tela tem q ser instantaneo
+   pelo supabase".
+
+   O QUE JÁ ERA VERDADE, medido em 08/09: o webhook do HubSpot dispara o robô com cooldown
+   de 5 min — 37 disparos naquele dia. O snapshot não espera janela nenhuma; ele se
+   atualiza a cada 10–20 min com o time mexendo.
+
+   O QUE FALTAVA: a aba lia /api/dados UMA vez, no login. Aba aberta desde as 9h mostrava
+   dado das 9h por mais fresco que o Supabase estivesse — e era exatamente isso que ele
+   estava sentindo.
+
+   COMO FUNCIONA, e por que não é Realtime no snapshot: `cockpit_snapshot` tem RLS com zero
+   política de propósito (933 kB do CRM inteiro, lidos só pelo servidor com service_role), e
+   o Realtime respeita RLS — uma subscription nela do navegador não entregaria nada, e abrir
+   política de leitura ali entregaria o funil do time a qualquer sessão. Então o Realtime
+   escuta `snapshot_farol`: uma linha por chave, com hora e versão, SEM dado de negócio. Ao
+   mudar, a aba chama /api/dados, que continua sendo o único caminho para o dado.
+
+   A REGRA QUE NÃO SE NEGOCIA: nunca repintar por cima do que a pessoa está fazendo. Com
+   ficha aberta, campo em foco ou gravação em curso, o dado novo ESPERA e aparece como
+   aviso; ele entra quando ela terminar ou clicar. Repintar sob a mão de alguém no meio de
+   um registro é pior que dado velho — e dado velho, aqui, é de 10 minutos.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+/* versão do farol que a tela JÁ aplicou, por chave. Sem isto, reconexão do WebSocket
+   reentrega o último evento e a aba buscaria 933 kB de novo por nada. */
+const FAROL_VISTO = {};
+let FAROL_CANAL = null;
+let FAROL_PENDENTE = false;   /* mudou, mas não deu para aplicar ainda */
+let FAROL_BUSCANDO = false;   /* uma busca por vez */
+/* dado que chegou mas nao pode entrar ainda. Declarado AQUI, junto dos outros: em
+   runtime o TDZ nao morderia, mas a guarda de ordem de declaracao deste projeto existe
+   porque um nome lido antes da propria declaracao ja derrubou o script inteiro. */
+let FAROL_DADO_ESPERANDO = null;
+
+/* As chaves que mudam o que ESTA tela mostra. `sync-status` e `hubspot-previous` não
+   entram: a primeira é telemetria do robô e a segunda é a foto anterior, usada para
+   comparar — nenhuma das duas muda um número na tela, e buscar 933 kB por causa delas
+   seria tráfego por nada. */
+const FAROL_CHAVES = ['hubspot', 'narrativas', 'weekly-raw', 'resumo-semanal'];
+
+function farolLigar() {
+  if (FAROL_CANAL) return;
+  if (typeof supa === 'undefined' || !supa || !supa.channel) return;
+  if (!sessaoAtual) return;   /* só depois do login: a política do farol é para authenticated */
+  try {
+    FAROL_CANAL = supa
+      .channel('farol-do-snapshot')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'snapshot_farol' },
+        function (msg) { farolRecebeu(msg && msg.new); })
+      .subscribe(function (estado) {
+        /* O ESTADO DA SUBSCRIPTION VAI PARA O CONSOLE, e não para a tela: se o Realtime
+           não conectar (rede corporativa bloqueando WebSocket, por exemplo), a aba
+           continua funcionando exatamente como antes — dado da carga, atualizado no
+           próximo login. Um alarme na tela para isso assustaria sem dar o que fazer. */
+        if (estado === 'SUBSCRIBED') console.log('[farol] escutando mudanças do snapshot');
+        else if (estado === 'CHANNEL_ERROR' || estado === 'TIMED_OUT') {
+          console.log('[farol] sem realtime nesta rede (' + estado + ') — a tela segue com o dado da carga.');
+        }
+      });
+  } catch (e) {
+    console.log('[farol] não consegui escutar:', e && e.message);
+  }
+}
+
+function farolRecebeu(linha) {
+  if (!linha || !linha.chave) return;
+  const chave = String(linha.chave);
+  if (FAROL_CHAVES.indexOf(chave) < 0) return;
+  const versao = Number(linha.versao);
+  if (!Number.isFinite(versao)) return;
+  /* JÁ VI ESTA VERSÃO? A reconexão do WebSocket reentrega o último evento, e o robô
+     publica 7 chaves numa rodada — sem esta comparação, uma rodada viraria várias buscas
+     do mesmo payload. */
+  if (FAROL_VISTO[chave] != null && versao <= FAROL_VISTO[chave]) return;
+  FAROL_VISTO[chave] = versao;
+  farolBuscarEAplicar();
+}
+
+/* ══ A JANELA DE SEGURANÇA ═══════════════════════════════════════════════════════════
+   `false` aqui não perde o dado: ele fica pendente e o aviso aparece. */
+function farolPodeAplicar() {
+  try {
+    /* 1. ficha, menu de etapa ou qualquer overlay aberto — a pessoa está no meio de um ato */
+    if (document.querySelector('.overlay.show, #stageOverlay.show')) return false;
+    /* 2. gravação em curso no funil: repintar no meio desfaz a ordem otimista da tela */
+    if (typeof FN_GRAVANDO !== 'undefined' && FN_GRAVANDO && FN_GRAVANDO.size > 0) return false;
+    /* 3. alguém digitando. Um repinte apaga o que está no campo — e o campo pode ser o
+          motivo do perdido, que é obrigatório e não se recupera. */
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'
+      || a.isContentEditable)) return false;
+    /* 4. a condução da rodada, com o time olhando a tela projetada */
+    const cond = document.getElementById('conducaoOverlay');
+    if (cond && cond.classList.contains('show')) return false;
+  } catch (e) { return false; }
+  return true;
+}
+
+async function farolBuscarEAplicar() {
+  if (FAROL_BUSCANDO) { FAROL_PENDENTE = true; return; }
+  if (!farolPodeAplicar()) { FAROL_PENDENTE = true; farolAviso(true); return; }
+  FAROL_BUSCANDO = true;
+  try {
+    const { data } = await supa.auth.getSession();
+    const token = data && data.session ? data.session.access_token : null;
+    /* SEM SESSÃO, DIZ O QUE ACONTECEU — e isso não é firula. Medido no preview em
+       08/09/26: clicar no aviso sem sessão saía por aqui em silêncio, o chip continuava
+       na tela e NADA acontecia. Um clique que não faz nem diz nada é clique morto, e a
+       pessoa clica de novo achando que errou a mira. O aviso fica (o dado novo continua
+       existindo), mas agora com uma frase que manda fazer a única coisa que resolve. */
+    if (!token) {
+      FAROL_BUSCANDO = false;
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Sua sessão expirou, então não consigo buscar o dado novo. Recarregue a página para entrar de novo.', 'erro');
+      }
+      return;
+    }
+    const resp = await fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } });
+    if (!resp.ok) { console.log('[farol] /api/dados respondeu ' + resp.status + ' — mantendo o dado atual.'); FAROL_BUSCANDO = false; return; }
+    const corpo = await resp.json().catch(function () { return null; });
+    if (!corpo || !corpo.dados) { FAROL_BUSCANDO = false; return; }
+    /* CHECA A JANELA DE NOVO: a busca leva segundos e a pessoa pode ter aberto uma ficha
+       nesse meio. O dado fica guardado e entra no clique dela. */
+    if (!farolPodeAplicar()) {
+      FAROL_DADO_ESPERANDO = corpo.dados;
+      FAROL_PENDENTE = true;
+      farolAviso(true);
+      FAROL_BUSCANDO = false;
+      return;
+    }
+    farolAplicar(corpo.dados);
+  } catch (e) {
+    console.log('[farol] não consegui buscar o dado novo:', e && e.message);
+  }
+  FAROL_BUSCANDO = false;
+  if (FAROL_PENDENTE && farolPodeAplicar()) { FAROL_PENDENTE = false; farolBuscarEAplicar(); }
+}
+
+function farolAplicar(dados) {
+  /* Object.assign, e é o MESMO idioma do login (`Object.assign(DATA, corpo.dados)`):
+     `DATA` é const e há referências a ele espalhadas pela tela — trocar o objeto deixaria
+     metade do cockpit lendo o antigo. */
+  Object.assign(DATA, dados);
+  FAROL_DADO_ESPERANDO = null;
+  FAROL_PENDENTE = false;
+  farolAviso(false);
+  /* as dailies vêm do Supabase, não do snapshot: sem recarregar, o prometido×realizado
+     ficaria do horário do login enquanto o resto da tela é de agora. */
+  if (DATA.supabase && supa && typeof carregarDailies === 'function') {
+    dailiesCarregado = false;
+    Promise.resolve(carregarDailies())
+      .then(function () { repintarOndeONegocioAparece(); })
+      .catch(function (e) { console.log('[farol] dailies não recarregaram:', e && e.message); });
+  }
+  /* repinta pela MESMA máquina do movimento de etapa: a aba da frente agora, as outras
+     quando abrirem. Uma pintura por gesto, já coalescida lá. */
+  repintarOndeONegocioAparece();
+  /* E O CABEÇALHO TAMBÉM, que aquela máquina não cobre: ela repinta as seis telas que
+     mostram um negócio, e a linha de frescor não é uma delas. Medido no preview em
+     08/09/26: depois de aplicar, `DATA.hubspotUpdatedAtFmt` já era o novo e a linha
+     continuava dizendo "atualizado em 02/09 às 17:57" — a frase mais velha da tela
+     exatamente onde o aviso tinha acabado de sair. É o defeito que ele relatou, em
+     miniatura, e dentro do mecanismo feito para resolvê-lo. */
+  if (typeof preencherCabecalhoRodape === 'function') {
+    try { preencherCabecalhoRodape(); }
+    catch (e) { console.log('[farol] cabeçalho não repintou:', e && e.message); }
+  }
+  if (typeof mostrarToast === 'function') {
+    mostrarToast('Dados do CRM atualizados agora — o que você está vendo é desta rodada.', 'sucesso');
+  }
+}
+
+/* ══ O AVISO, quando não deu para aplicar ═════════════════════════════════════════════
+   Discreto e com um gesto só. Ele não some sozinho: quem está no meio de um registro
+   precisa achá-lo depois de terminar.
+
+   ELE MORA NA LINHA DE FRESCOR, e isso mudou depois de eu OLHAR a tela em 08/09/26.
+   Ele nasceu fixo no canto inferior direito, e eu tinha escrito no comentário que ele
+   "nunca fica em cima do que a pessoa está lendo". Medido a 1440×900: cobria o cartão do
+   Bruno Martins — nome, praça e "fech. mês" —, e a 800px cortava o título da seção do
+   funil no meio da palavra. Como ele NÃO some sozinho, de propósito, ficaria ali por cima
+   do colega o tempo que a pessoa levasse.
+
+   `#updatedLine` já diz "HubSpot atualizado automaticamente em ...", nos dois papéis. É
+   exatamente a frase que fica velha quando o farol toca — o aviso ao lado dela corrige a
+   frase no lugar onde ela é lida, e não tapa nada. O canto fixo continua como reserva
+   para qualquer tela que não tenha essa linha: sem ela, um aviso que não existe seria
+   pior que um aviso que atrapalha. */
+function farolAviso(mostrar) {
+  let el = document.getElementById('farolAviso');
+  if (!mostrar) { if (el) el.remove(); return; }
+  if (el) return;
+  el = document.createElement('button');
+  el.id = 'farolAviso';
+  el.type = 'button';
+  el.title = 'O CRM mudou desde que esta aba carregou. Clique para trazer o dado novo — nada do que você está fazendo é perdido.';
+  el.innerHTML = '<b>dados novos do CRM</b><span>atualizar ▸</span>';
+  el.addEventListener('click', function () {
+    if (FAROL_DADO_ESPERANDO) { farolAplicar(FAROL_DADO_ESPERANDO); return; }
+    FAROL_PENDENTE = false;
+    farolBuscarEAplicar();
+  });
+  const linha = document.getElementById('updatedLine');
+  if (linha && linha.parentNode) {
+    /* DEPOIS DA LINHA, E NÃO DENTRO DELA. A linha é escrita com
+       `updatedEl.textContent = ...` a cada pintura do topo, e atribuir textContent APAGA
+       os filhos: o aviso desapareceria em silêncio na primeira repintada, levando com ele
+       o único caminho para o dado que está esperando. Como irmão, ele sobrevive. */
+    el.className = 'farol-aviso farol-aviso--linha';
+    linha.parentNode.insertBefore(el, linha.nextSibling);
+  } else {
+    el.className = 'farol-aviso';
+    document.body.appendChild(el);
+  }
 }
 
 function saudacaoDoDia() {
@@ -13748,8 +13994,18 @@ function filaPwaResumo() {
    A CONSTANTE NÃO CITA OS HORÁRIOS de propósito. Antes desta mudança, doze lugares do
    template escreviam "08:56, 13h e 19h" à mão — quatro deles em texto que o usuário lê.
    Mudar a grade fez os doze mentirem de uma vez. O que o usuário precisa saber é a
-   frequência e a janela, não o minuto de cada rodada. */
-const SYNC_CADENCIA = 'a cada 2h no horário comercial (08:30 às 19h)';
+   frequência e a janela, não o minuto de cada rodada.
+
+   O TEXTO MUDOU EM 08/09/26, E A GRADE DE 2h NÃO É MAIS O QUE MANDA. Duas coisas
+   aconteceram desde que esta frase foi escrita: o webhook do HubSpot passou a disparar o
+   robô com cooldown de 5 min (api/hubspot-webhook.js — 37 disparos em 08/09, não "uma vez
+   por hora" como diz o parágrafo acima), e a aba passou a reler sozinha pelo farol
+   (snapshot_farol no Realtime). Quem lia "a cada 2h" numa tela que se atualiza em minutos
+   ficava esperando uma janela que não existe mais — e era exatamente essa a pergunta do
+   Julyan: "pq precisamos esperar alguma janela se ele ja ta todo instantaneo?".
+   A grade continua no ar, e por isso ela continua dita: ela é o PISO de quando o CRM não
+   muda nada, não o teto. */
+const SYNC_CADENCIA = 'em minutos, quando o CRM muda — e no mínimo a cada 2h no expediente';
 
 /* Os dois limites de "dado velho". Um limite fixo não serve para os dois mundos: no
    expediente o maior buraco legítimo é 2h, e de noite/fim de semana ele é grande de
@@ -25825,7 +26081,7 @@ function tm2Dados() {
         ? esc(ativ + ' atividades em ' + cad.serie.length + ' dias úteis'
           + (zeros ? ', ' + zeros + ' zerado(s) — a régua estoura quando o dia zera' : ' — sem dia zerado')
           + ' · ' + (DATA.cadenciaDiaria.fonte || ''))
-        : 'cadência não medida ainda — o sync com atividade do CRM roda a cada 2h',
+        : 'cadência não medida ainda — o sync com atividade do CRM roda ' + SYNC_CADENCIA,
       dCadLeiaCor: !cad ? '#A79C8A' : (zeros >= 2 ? '#6E1210' : '#5B667A'),
       dCriticos: (rSel.criticos || []).slice(0, 3).map(c => ({
         nome: esc(c.name || c.dealname || 'negócio sem nome'),
@@ -25970,7 +26226,7 @@ function tm2Dados() {
     /* O RODAPÉ DE FONTE, no lugar da anotação de design da prancha. Toda aba do cockpit
        diz de onde vem o número; esta tem de dizer também o que NÃO conta, porque duas das
        fontes são novas e uma delas exclui nota de propósito. */
-    rodapeFonte: esc('Funil, dias na etapa, valor e tarefa datada: HubSpot (pipeline 916011864, carga a cada 2h)'
+    rodapeFonte: esc('Funil, dias na etapa, valor e tarefa datada: HubSpot (pipeline 916011864, carga ' + SYNC_CADENCIA + ')'
       + ' · réguas por etapa: HubSpot stageMeta'
       + ' · temperatura: calculada no sync, régua em data/temperatura.json ('
       + ((DATA.temperaturaRegua || {}).formulaCurta || 'etapa + valor + recência') + ')'
@@ -26002,7 +26258,7 @@ function tm2Dados() {
       ? esc('Temperatura = ' + ((DATA.temperaturaRegua || {}).formulaCurta || 'etapa + valor + recência')
         + '. ' + fechadas.length + ' negócios com nota fechada'
         + (parciais ? ' · ' + parciais + ' fora do ranking por não ter último toque registrado (a nota não fecha sem ele)' : ''))
-      : 'Nenhuma nota de temperatura ainda: ela é calculada no sync, que roda a cada 2h. Sem ela este ranking ficaria por ordem de nada.',
+      : 'Nenhuma nota de temperatura ainda: ela é calculada no sync, que roda ' + SYNC_CADENCIA + '. Sem ela este ranking ficaria por ordem de nada.',
     cadDias, cadTime, cadLeitura,
     agenda
   }, dossie, deal);

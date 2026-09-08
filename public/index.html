@@ -894,6 +894,21 @@
     .praca-nums{flex-wrap:wrap;}
   }
 
+  .farol-aviso{position:fixed;right:16px;bottom:84px;z-index:60;display:flex;align-items:center;gap:9px;
+    padding:10px 14px;min-height:44px;border:1px solid var(--line);border-radius:var(--r-pill);
+    background:var(--panel);box-shadow:var(--shadow);cursor:pointer;font:inherit;
+    transition:border-color var(--t-base) var(--ease),transform var(--t-base) var(--ease);}
+  .farol-aviso:hover{border-color:var(--ink);transform:translateY(-1px);}
+  .farol-aviso b{font:800 11px var(--font-body);color:var(--ink);letter-spacing:.02em;}
+  .farol-aviso span{font:800 11px var(--font-body);color:var(--red);white-space:nowrap;}
+  .farol-aviso:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+
+  .farol-aviso--linha{position:static;right:auto;bottom:auto;z-index:auto;
+    display:inline-flex;vertical-align:middle;margin:0 0 0 10px;padding:7px 12px;min-height:0;
+    box-shadow:none;background:var(--panel);}
+  .farol-aviso--linha b{font-size:10px;}
+  .farol-aviso--linha span{font-size:10px;}
+
   [data-dg4-acao]{transition:background .16s ease,border-color .16s ease,filter .16s ease;}
   #dg4Raiz [data-dg4-hv]{cursor:pointer;}
   #dg4Raiz [data-dg4-hv="0"]:hover{border-color:#2B3440;}
@@ -8881,6 +8896,8 @@ async function aplicarSessao(email) {
     Object.assign(DATA, corpo.dados);
     sessaoAtual = corpo.sessao;
     hidratadoPara = email;
+
+    if (typeof farolLigar === 'function') farolLigar();
     reidratarPosLogin();
     mostrarApp();
     return;
@@ -9108,6 +9125,151 @@ function repintarTelaAtivaDoNegocio() {
 
   try { fn(); }
   catch (e) { if (typeof console !== 'undefined' && console.error) console.error('[movimento] ' + nome + ' nao repintou:', e); }
+}
+
+const FAROL_VISTO = {};
+let FAROL_CANAL = null;
+let FAROL_PENDENTE = false;
+let FAROL_BUSCANDO = false;
+
+let FAROL_DADO_ESPERANDO = null;
+
+const FAROL_CHAVES = ['hubspot', 'narrativas', 'weekly-raw', 'resumo-semanal'];
+
+function farolLigar() {
+  if (FAROL_CANAL) return;
+  if (typeof supa === 'undefined' || !supa || !supa.channel) return;
+  if (!sessaoAtual) return;
+  try {
+    FAROL_CANAL = supa
+      .channel('farol-do-snapshot')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'snapshot_farol' },
+        function (msg) { farolRecebeu(msg && msg.new); })
+      .subscribe(function (estado) {
+
+        if (estado === 'SUBSCRIBED') console.log('[farol] escutando mudanças do snapshot');
+        else if (estado === 'CHANNEL_ERROR' || estado === 'TIMED_OUT') {
+          console.log('[farol] sem realtime nesta rede (' + estado + ') — a tela segue com o dado da carga.');
+        }
+      });
+  } catch (e) {
+    console.log('[farol] não consegui escutar:', e && e.message);
+  }
+}
+
+function farolRecebeu(linha) {
+  if (!linha || !linha.chave) return;
+  const chave = String(linha.chave);
+  if (FAROL_CHAVES.indexOf(chave) < 0) return;
+  const versao = Number(linha.versao);
+  if (!Number.isFinite(versao)) return;
+
+  if (FAROL_VISTO[chave] != null && versao <= FAROL_VISTO[chave]) return;
+  FAROL_VISTO[chave] = versao;
+  farolBuscarEAplicar();
+}
+
+function farolPodeAplicar() {
+  try {
+
+    if (document.querySelector('.overlay.show, #stageOverlay.show')) return false;
+
+    if (typeof FN_GRAVANDO !== 'undefined' && FN_GRAVANDO && FN_GRAVANDO.size > 0) return false;
+
+    const a = document.activeElement;
+    if (a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT'
+      || a.isContentEditable)) return false;
+
+    const cond = document.getElementById('conducaoOverlay');
+    if (cond && cond.classList.contains('show')) return false;
+  } catch (e) { return false; }
+  return true;
+}
+
+async function farolBuscarEAplicar() {
+  if (FAROL_BUSCANDO) { FAROL_PENDENTE = true; return; }
+  if (!farolPodeAplicar()) { FAROL_PENDENTE = true; farolAviso(true); return; }
+  FAROL_BUSCANDO = true;
+  try {
+    const { data } = await supa.auth.getSession();
+    const token = data && data.session ? data.session.access_token : null;
+
+    if (!token) {
+      FAROL_BUSCANDO = false;
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Sua sessão expirou, então não consigo buscar o dado novo. Recarregue a página para entrar de novo.', 'erro');
+      }
+      return;
+    }
+    const resp = await fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } });
+    if (!resp.ok) { console.log('[farol] /api/dados respondeu ' + resp.status + ' — mantendo o dado atual.'); FAROL_BUSCANDO = false; return; }
+    const corpo = await resp.json().catch(function () { return null; });
+    if (!corpo || !corpo.dados) { FAROL_BUSCANDO = false; return; }
+
+    if (!farolPodeAplicar()) {
+      FAROL_DADO_ESPERANDO = corpo.dados;
+      FAROL_PENDENTE = true;
+      farolAviso(true);
+      FAROL_BUSCANDO = false;
+      return;
+    }
+    farolAplicar(corpo.dados);
+  } catch (e) {
+    console.log('[farol] não consegui buscar o dado novo:', e && e.message);
+  }
+  FAROL_BUSCANDO = false;
+  if (FAROL_PENDENTE && farolPodeAplicar()) { FAROL_PENDENTE = false; farolBuscarEAplicar(); }
+}
+
+function farolAplicar(dados) {
+
+  Object.assign(DATA, dados);
+  FAROL_DADO_ESPERANDO = null;
+  FAROL_PENDENTE = false;
+  farolAviso(false);
+
+  if (DATA.supabase && supa && typeof carregarDailies === 'function') {
+    dailiesCarregado = false;
+    Promise.resolve(carregarDailies())
+      .then(function () { repintarOndeONegocioAparece(); })
+      .catch(function (e) { console.log('[farol] dailies não recarregaram:', e && e.message); });
+  }
+
+  repintarOndeONegocioAparece();
+
+  if (typeof preencherCabecalhoRodape === 'function') {
+    try { preencherCabecalhoRodape(); }
+    catch (e) { console.log('[farol] cabeçalho não repintou:', e && e.message); }
+  }
+  if (typeof mostrarToast === 'function') {
+    mostrarToast('Dados do CRM atualizados agora — o que você está vendo é desta rodada.', 'sucesso');
+  }
+}
+
+function farolAviso(mostrar) {
+  let el = document.getElementById('farolAviso');
+  if (!mostrar) { if (el) el.remove(); return; }
+  if (el) return;
+  el = document.createElement('button');
+  el.id = 'farolAviso';
+  el.type = 'button';
+  el.title = 'O CRM mudou desde que esta aba carregou. Clique para trazer o dado novo — nada do que você está fazendo é perdido.';
+  el.innerHTML = '<b>dados novos do CRM</b><span>atualizar ▸</span>';
+  el.addEventListener('click', function () {
+    if (FAROL_DADO_ESPERANDO) { farolAplicar(FAROL_DADO_ESPERANDO); return; }
+    FAROL_PENDENTE = false;
+    farolBuscarEAplicar();
+  });
+  const linha = document.getElementById('updatedLine');
+  if (linha && linha.parentNode) {
+
+    el.className = 'farol-aviso farol-aviso--linha';
+    linha.parentNode.insertBefore(el, linha.nextSibling);
+  } else {
+    el.className = 'farol-aviso';
+    document.body.appendChild(el);
+  }
 }
 
 function saudacaoDoDia() {
@@ -9782,7 +9944,7 @@ function filaPwaResumo() {
   };
 }
 
-const SYNC_CADENCIA = 'a cada 2h no horário comercial (08:30 às 19h)';
+const SYNC_CADENCIA = 'em minutos, quando o CRM muda — e no mínimo a cada 2h no expediente';
 
 const SYNC_LIMITE_EXPEDIENTE_MIN = 150;
 const SYNC_LIMITE_FORA_MIN = 26 * 60;
@@ -18631,7 +18793,7 @@ function tm2Dados() {
         ? esc(ativ + ' atividades em ' + cad.serie.length + ' dias úteis'
           + (zeros ? ', ' + zeros + ' zerado(s) — a régua estoura quando o dia zera' : ' — sem dia zerado')
           + ' · ' + (DATA.cadenciaDiaria.fonte || ''))
-        : 'cadência não medida ainda — o sync com atividade do CRM roda a cada 2h',
+        : 'cadência não medida ainda — o sync com atividade do CRM roda ' + SYNC_CADENCIA,
       dCadLeiaCor: !cad ? '#A79C8A' : (zeros >= 2 ? '#6E1210' : '#5B667A'),
       dCriticos: (rSel.criticos || []).slice(0, 3).map(c => ({
         nome: esc(c.name || c.dealname || 'negócio sem nome'),
@@ -18761,7 +18923,7 @@ function tm2Dados() {
     nEsteiras: String(m.porRep.length),
     formulaTemp: esc((DATA.temperaturaRegua || {}).formulaCurta || 'etapa + valor + recência'),
 
-    rodapeFonte: esc('Funil, dias na etapa, valor e tarefa datada: HubSpot (pipeline 916011864, carga a cada 2h)'
+    rodapeFonte: esc('Funil, dias na etapa, valor e tarefa datada: HubSpot (pipeline 916011864, carga ' + SYNC_CADENCIA + ')'
       + ' · réguas por etapa: HubSpot stageMeta'
       + ' · temperatura: calculada no sync, régua em data/temperatura.json ('
       + ((DATA.temperaturaRegua || {}).formulaCurta || 'etapa + valor + recência') + ')'
@@ -18790,7 +18952,7 @@ function tm2Dados() {
       ? esc('Temperatura = ' + ((DATA.temperaturaRegua || {}).formulaCurta || 'etapa + valor + recência')
         + '. ' + fechadas.length + ' negócios com nota fechada'
         + (parciais ? ' · ' + parciais + ' fora do ranking por não ter último toque registrado (a nota não fecha sem ele)' : ''))
-      : 'Nenhuma nota de temperatura ainda: ela é calculada no sync, que roda a cada 2h. Sem ela este ranking ficaria por ordem de nada.',
+      : 'Nenhuma nota de temperatura ainda: ela é calculada no sync, que roda ' + SYNC_CADENCIA + '. Sem ela este ranking ficaria por ordem de nada.',
     cadDias, cadTime, cadLeitura,
     agenda
   }, dossie, deal);

@@ -70,6 +70,15 @@ if (!linhas.length || linhas.indexOf(null) > -1) {
   process.exit(1);
 }
 
+/* QUEM ESTÁ SEM POLÍTICA, LIDO DO PRÓPRIO MANIFESTO que acabou de vir do banco.
+   Ver a nota no parágrafo, mais abaixo, que usa esta lista. */
+const semPolitica = linhas.filter(function (l) { return l.indexOf('= (nenhuma)') > -1; })
+  .map(function (l) { return l.split('=')[0].trim(); });
+function nomeDoNumero(n) {
+  const nomes = ['nenhuma', 'uma', 'duas', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito'];
+  return nomes[n] || String(n);
+}
+
 const cabecalho = [
   '# QUE COMANDO CADA TABELA AUTORIZA — o contrato que a guarda 24 cobra do front.',
   '#',
@@ -87,11 +96,21 @@ const cabecalho = [
   '# e passe o JSON de volta para este script. Nunca edite à mão: à mão este arquivo',
   '# passa a descrever o que eu queria e não o que o banco faz.',
   '#',
-  '# `(nenhuma)` é legítimo em três tabelas: cockpit_snapshot, novidades_mercado e',
-  '# restaurantes_osm são lidas SÓ pelo servidor (api/, com service_role). RLS ligada com',
-  '# zero política é exatamente a proteção que elas precisam — cockpit_snapshot guarda o',
-  '# CRM inteiro. Se o front passar a ler qualquer uma delas, a guarda reprova, e a',
-  '# resposta certa é uma rota em api/, nunca uma política de leitura aqui.',
+  /* ESTA LISTA VEM DO DADO, E NÃO DA MINHA MEMÓRIA (08/09/26). O parágrafo estava
+     cravado em "três tabelas: cockpit_snapshot, novidades_mercado e restaurantes_osm".
+     O banco tem CINCO: webhook_cooldown e backup_donos_sp_20260901 entraram em 07/09/26,
+     quando estavam com RLS DESLIGADA e grant ao anon — e a chave anon viaja dentro do
+     bundle público. Quem corrigiu aquilo editou o ARQUIVO à mão e o gerador ficou com a
+     frase velha, então rodar o gerador hoje DESFAZIA a correção e voltava a dizer três.
+     É o mesmo defeito que este arquivo existe para impedir — descrever o que eu queria
+     em vez do que o banco faz —, com o agravante de que prosa errada não reprova guarda
+     nenhuma. */
+  '# `(nenhuma)` é legítimo em ' + nomeDoNumero(semPolitica.length) + ' tabelas, lidas SÓ',
+  '# pelo servidor (api/, com service_role): ' + semPolitica.join(', ') + '.',
+  '# RLS ligada com zero política é exatamente a proteção que elas precisam —',
+  '# cockpit_snapshot, por exemplo, guarda o CRM inteiro. Se o front passar a ler',
+  '# qualquer uma delas, a guarda 24 reprova, e a resposta certa é uma rota em api/,',
+  '# nunca uma política de leitura aqui.',
   '#',
   '# gerado por scripts/ler-politicas-do-banco.js em ' +
     new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
