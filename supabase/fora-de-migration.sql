@@ -121,3 +121,15 @@ update auth.users set banned_until = 'infinity' where id in (select id from alvo
 -- jsonb longa e de uma vez só. O estado que ela produziu: 11 reps na chave 'narrativas',
 -- origem 'ajuste-manual-07-09-owner-real'. O arquivo data/narrativas.json do repo foi
 -- atualizado no mesmo commit, então a próxima rodada do robô mantém os 11.
+
+-- ══ 5. A CONTA DE TESTE FOI BLOQUEADA — JÁ APLICADO EM 07/09/26 ══════════════════════
+-- `test-recon@proton.me`: conta de autenticação que nunca fez parte do time, ausente das
+-- quatro fontes. Não alcançava dado nenhum (api/dados.js devolve 403 e toda tabela
+-- devolve vazio), mas autenticava. Julyan autorizou limpar.
+--
+-- Bloqueio, não delete, pelo mesmo motivo dos três que saíram: reversível e preserva o
+-- registro. A conta `julyan@takeat.com.br` NÃO foi tocada — é dele, e bloquear poderia
+-- ser o contrário do que ele quer.
+with alvo as (select id from auth.users where lower(email) = 'test-recon@proton.me')
+, mortas as (delete from auth.sessions where user_id in (select id from alvo) returning 1)
+update auth.users set banned_until = 'infinity' where id in (select id from alvo);
