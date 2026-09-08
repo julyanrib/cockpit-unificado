@@ -94,3 +94,30 @@ update auth.users set banned_until = 'infinity' where id in (select id from alvo
 -- a segunda porque é dele e bloquear pode ser o contrário do que ele quer. Se for para
 -- limpar a de teste:
 --   update auth.users set banned_until = 'infinity' where lower(email) = 'test-recon@proton.me';
+
+-- ══ 4. O SNAPSHOT DE NARRATIVAS GANHOU OS CINCO — JÁ APLICADO EM 07/09/26 ════════════
+-- POR QUE NO SNAPSHOT, e não só no arquivo do repo: `montar-dados.js` lê
+-- data/narrativas.json do disco MAS sobrescreve com a chave 'narrativas' do snapshot
+-- quando ela existe (linha 96). Corrigir só o repo não muda produção — o snapshot ganha.
+--
+-- Este foi o ÚLTIMO elo do "Não encontrei seu cadastro no cockpit" que o Julyan viu no
+-- login da Renata. Ela já tinha owner real, já estava fora do portão aComecar, já estava
+-- em mapa_usuarios e já aparecia no snapshot do HubSpot com 11 reps — e ainda assim não
+-- existia, porque `DATA.reps` sai de `Object.keys(narrativas.reps)`.
+--
+-- O time vivia em QUATRO lugares, e este era o que decidia quem existe:
+--   data/usuarios.json          o que a tela sabe, e o que api/dados.js autoriza
+--   mapa_usuarios (Supabase)    o que o banco deixa entrar, via RLS
+--   REPS em fetch-hubspot.js    de onde o funil é montado        (agora derivada do json)
+--   narrativas.reps             QUEM EXISTE no cockpit            <-- este
+-- A guarda 25 agora cobra os quatro.
+--
+-- A narrativa do Ricardo (escrita pelo robô de IA) foi preservada na troca de chave: o
+-- valor seguiu de 'pendente_ricardo2' para o owner real. Os quatro novos entraram com o
+-- mínimo verdadeiro — sem gargalo, boa prática ou compromisso inventado, porque isso é
+-- texto que o gestor lê como diagnóstico e quem escreve é o robô semanal.
+--
+-- O SQL exato está no histórico desta sessão; não repito aqui porque é uma manipulação
+-- jsonb longa e de uma vez só. O estado que ela produziu: 11 reps na chave 'narrativas',
+-- origem 'ajuste-manual-07-09-owner-real'. O arquivo data/narrativas.json do repo foi
+-- atualizado no mesmo commit, então a próxima rodada do robô mantém os 11.

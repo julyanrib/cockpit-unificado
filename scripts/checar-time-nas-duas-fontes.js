@@ -92,6 +92,48 @@ const dividaVista = [];
    Agora ela é derivada de data/usuarios.json. Esta checagem existe para o dia em que
    alguém "resolver rápido" cravando um id de volta: uma lista de owners no robô passa a
    ser uma quarta fonte, e ninguém percebe até um rep novo abrir a tela vazia. */
+/* A QUARTA FONTE, E A QUE DECIDE QUEM EXISTE (07/09/26).
+
+   `montar-dados.js` monta DATA.reps de `Object.keys(narrativas.reps)` — não do HubSpot,
+   não do json de usuários. Quem não está em data/narrativas.json NÃO EXISTE no cockpit:
+   a tela responde "Não encontrei seu cadastro no cockpit. Fale com seu gestor.".
+
+   Foi a causa final do que o Julyan viu no login da Renata. Ela já tinha owner real, já
+   estava fora do portão aComecar, já estava em mapa_usuarios e já aparecia no snapshot
+   do HubSpot — e ainda assim não existia, porque faltava aqui.
+
+   Esta checagem compara as CHAVES de narrativas.reps com os ownerId de rep do json. O
+   conteúdo (gargalo, boasPraticas, compromissos) é do robô semanal e não é cobrado — o
+   que não pode faltar é a pessoa. */
+const narrPath = path.join(root, 'data', 'narrativas.json');
+if (!fs.existsSync(narrPath)) {
+  problemas.push('falta data/narrativas.json — é dele que sai DATA.reps, e sem ele nenhum'
+    + ' executivo existe no cockpit.');
+} else {
+  let narr = null;
+  try { narr = JSON.parse(fs.readFileSync(narrPath, 'utf8')); }
+  catch (e) { problemas.push('data/narrativas.json não é JSON válido: ' + e.message); }
+  if (narr && narr.reps) {
+    const noNarr = Object.keys(narr.reps);
+    const repsDoJson = Object.keys(tela)
+      .filter(function (e) { return tela[e].role === 'rep' && tela[e].ownerId; })
+      .map(function (e) { return String(tela[e].ownerId); });
+    repsDoJson.forEach(function (id) {
+      if (noNarr.indexOf(id) > -1) return;
+      problemas.push('o owner ' + id + ' está em data/usuarios.json e NÃO está em '
+        + 'data/narrativas.json — DATA.reps sai das chaves de narrativas, então essa '
+        + 'pessoa não existe no cockpit e a tela dela diz "não encontrei seu cadastro".');
+    });
+    noNarr.forEach(function (id) {
+      if (repsDoJson.indexOf(id) > -1) return;
+      problemas.push('o owner ' + id + ' está em data/narrativas.json e NÃO é rep em '
+        + 'data/usuarios.json — ou é alguém que saiu, ou um placeholder que sobrou.');
+    });
+  } else if (narr) {
+    problemas.push('data/narrativas.json não tem .reps — DATA.reps sai daí.');
+  }
+}
+
 const robo = fs.readFileSync(path.join(root, 'scripts', 'fetch-hubspot.js'), 'utf8');
 const iReps = robo.indexOf('const REPS =');
 if (iReps < 0) {
