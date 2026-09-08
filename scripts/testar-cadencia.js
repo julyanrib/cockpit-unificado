@@ -356,6 +356,67 @@ conferir('farol que falha nao derruba a publicacao',
     cortadas.length + ' linha(s): ' + cortadas.map(function (l) { return l.trim().slice(0, 60); }).join(' || '));
 }
 
+/* ── 9. O ALARME NAO PODE VIRAR ENXURRADA, E TEM QUE SABER FECHAR (08/09/26) ──────
+   O passo de falha chamava issues.create() direto, sem procurar nada antes: em 08/09/26
+   foram 75 issues identicas em UM dia, de 89 abertas no repositorio - todas alarme,
+   nenhuma assunto de verdade. A falha real daquele dia (guarda 25 exigindo arquivo
+   gitignored, corrigida no PR #452) ficou invisivel no meio do ruido. E ninguem fechava
+   o que abria: havia alarme de JULHO ainda aberto.
+
+   Estas guardas medem o MECANISMO, nao a prosa: que a busca acontece ANTES do create,
+   que existe o caminho de comentar, que existe o passo que fecha em rodada verde, e que
+   ha exatamente UM create no arquivo inteiro. Anexar mais um create em outro passo e
+   exatamente como a enxurrada volta. */
+{
+  /* SEM COMENTARIO NA MEDICAO. A primeira versao desta guarda contou 'issues.create('
+     no arquivo inteiro e deu vermelho por causa do COMENTARIO que explica o incidente -
+     texto, nao chamada. Aqui o yml perde as linhas de comentario antes de qualquer
+     medicao, para o que sobra ser so o que o GitHub executa. */
+  const ymlVivo = yml.split(String.fromCharCode(10)).filter(function (l) {
+    const t = l.trim();
+    return t.charAt(0) !== '#' && t.slice(0, 2) !== '//';
+  }).join(String.fromCharCode(10));
+  const passos = ymlVivo.split(/^      - name: /m);
+  const passoFalha = passos.find(function (p) { return /^Avisar sobre falha/.test(p); }) || '';
+  const passoVerde = passos.find(function (p) { return /if: success\(\)/.test(p) && /issues\.update/.test(p); }) || '';
+
+  conferir('o passo de falha existe e roda so em falha',
+    passoFalha.length > 0 && /if: failure\(\)/.test(passoFalha),
+    'sem o passo de alarme, falha do robo vira silencio');
+
+  conferir('o alarme PROCURA um alarme aberto antes de abrir outro',
+    passoFalha.indexOf('issues.listForRepo') > -1 &&
+    passoFalha.indexOf('issues.listForRepo') < passoFalha.indexOf('issues.create('),
+    'create() sem busca antes foi o que rendeu 75 issues identicas num dia');
+
+  conferir('achando alarme aberto, o robo COMENTA nele em vez de abrir outro',
+    /issues\.createComment/.test(passoFalha) &&
+    passoFalha.indexOf('issues.createComment') < passoFalha.indexOf('issues.create('),
+    'sem o caminho de comentar, a busca nao serve para nada');
+
+  conferir('o alarme sai rotulado, para o filtro nao depender do texto do titulo',
+    /alarme-robo/.test(passoFalha) && /labels:/.test(passoFalha),
+    'titulo tem data dentro: casar por titulo abre um alarme novo por dia de falha');
+
+  conferir('existe o passo que fecha o alarme quando a rodada volta a passar',
+    passoVerde.length > 0 && /state: 'closed'/.test(passoVerde),
+    'alarme que ninguem fecha acumula - havia issue de julho aberta em 08/09/26');
+
+  conferir('ao fechar, o robo diz QUAL rodada voltou a passar',
+    /issues\.createComment/.test(passoVerde) && /context\.runId/.test(passoVerde),
+    'fechar calado obriga quem le a cacar o log para saber o que aconteceu');
+
+  conferir('fechar o alarme nao pode derrubar a rodada',
+    /try \{/.test(passoVerde) && /catch \(/.test(passoVerde),
+    'o dado do dia ja esta publicado quando este passo roda: perder a rodada pela faxina do aviso seria pior');
+
+  const quantosCreate = ymlVivo.split('issues.create(').length - 1;
+  conferir('o workflow inteiro tem exatamente UM issues.create(',
+    quantosCreate === 1,
+    'sao ' + quantosCreate + ' - cada create a mais e uma issue a mais por rodada falha');
+}
+
+
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  · ' + f));
