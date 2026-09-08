@@ -774,15 +774,16 @@ async function fetchAgenda() {
    outra pergunta. Sem esta função a prancha só poderia ser preenchida com a agenda
    (reuniões e follow-ups), que é um subconjunto, ou com número inventado.
 
-   QUATRO TIPOS: calls, meetings, tasks, emails. NOTA FICA FORA porque a nota do App
-   Outbound chega sem hubspot_owner_id — está medido no comentário de fetchAgenda,
-   acima. `fonte` viaja no payload para a tela poder escrever exatamente isto em vez
-   de "atividades do CRM", que sugeriria tudo.
+   TRÊS TIPOS, E SÃO OS QUE ESTE TIME USA: tarefa (visita, revisita e follow-up do app
+   de campo), reunião e nota do App Outbound. A primeira versão desta função também
+   consultava `calls` e `emails` e pedia dois escopos novos no HubSpot por causa deles;
+   o Julyan avisou que ninguém liga nem manda e-mail pelo CRM, e a medição confirmou:
+   456 tarefas, 9 reuniões, 63 notas, ZERO ligações, ZERO e-mails na janela.
 
-   CADA TIPO TEM O SEU CAMPO DE DATA: meeting usa hs_meeting_start_time (quando a
-   reunião acontece) e os outros usam hs_timestamp. Usar hs_createdate em tudo daria
-   "quando o registro foi criado", e uma reunião de terça agendada na segunda cairia
-   no dia errado — o heatmap existe para dizer em que dia a pessoa esteve em campo. */
+   A NOTA ENTRA, e é 12% do que o time registra: ela chega sem hubspot_owner_id, e o
+   dono sai da associação com o negócio, que enriquecerAgendaComNegocio já resolve.
+   `fonte` viaja no payload para a tela escrever exatamente isto — nunca "atividades
+   do CRM", que sugeriria tudo, inclusive o que não é contado. */
 const CADENCIA_DIAS_UTEIS = 10;
 
 /* Os N últimos dias úteis terminando HOJE (Brasília), em ordem cronológica. */
@@ -805,75 +806,63 @@ function diaBrasiliaDe(valor) {
   return new Date(ms - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
-async function fetchCadenciaDiaria() {
+/* Recebe os ITENS DA AGENDA já buscados e enriquecidos por fetchAgenda(). Não faz
+   consulta nenhuma: a primeira versão desta função pedia calls e emails ao HubSpot, e
+   o Julyan mediu o óbvio antes de mim — este time não liga nem manda e-mail pelo CRM.
+   Medido na janela real: 456 tarefas, 9 reuniões, 63 notas, 0 ligações, 0 e-mails. */
+function fetchCadenciaDiaria(itensDaAgenda) {
   const dias = ultimosDiasUteisBrasilia(CADENCIA_DIAS_UTEIS);
-  const owners = REPS.map(r => r.ownerId);
-  /* a janela de BUSCA é por dia corrido a partir do primeiro dia útil da lista: o
-     fim de semana no meio não tem coluna, mas atividade de sábado não pode ser
-     contada no dia útil vizinho — ela simplesmente não entra em coluna nenhuma. */
-  const ini = String(Date.parse(dias[0] + 'T00:00:00-03:00'));
-  const fim = String(Date.now() + 60 * 60 * 1000);
-
-  const TIPOS = [
-    { objeto: 'calls', campo: 'hs_timestamp', rotulo: 'ligações' },
-    { objeto: 'meetings', campo: 'hs_meeting_start_time', rotulo: 'reuniões' },
-    { objeto: 'tasks', campo: 'hs_timestamp', rotulo: 'tarefas' },
-    { objeto: 'emails', campo: 'hs_timestamp', rotulo: 'e-mails' }
-  ];
-
-  const porOwner = {};
-  owners.forEach(o => { porOwner[String(o)] = dias.map(() => 0); });
-  const porTipo = {};
-  const truncado = [];
+  const owners = REPS.map(r => String(r.ownerId));
   const indiceDoDia = {};
   dias.forEach((d, i) => { indiceDoDia[d] = i; });
 
-  for (const tp of TIPOS) {
-    let itens = [];
-    try {
-      itens = await hsSearchTipoAll(tp.objeto, {
-        filterGroups: [{ filters: [
-          { propertyName: 'hubspot_owner_id', operator: 'IN', values: owners },
-          { propertyName: tp.campo, operator: 'BETWEEN', value: ini, highValue: fim }
-        ] }],
-        properties: [tp.campo, 'hubspot_owner_id'],
-        sorts: [{ propertyName: tp.campo, direction: 'ASCENDING' }]
-      });
-    } catch (e) {
-      /* UM TIPO QUE FALHA NÃO DERRUBA A CADÊNCIA INTEIRA, e também não passa calado:
-         entra em `truncado` e a tela diz que a leitura está incompleta. Um heatmap
-         silenciosamente sem ligações mostraria dia zerado onde a pessoa ligou. */
-      console.log('Aviso: cadência — ' + tp.objeto + ' falhou (' + e.message.slice(0, 120) + ')');
-      truncado.push(tp.objeto + ' (falhou)');
-      continue;
-    }
-    /* 20 páginas × 100 é o teto de hsSearchTipoAll. Bater exatamente nele é sinal de
-       corte, não de coincidência. */
-    if (itens.length >= 2000) truncado.push(tp.objeto + ' (2000+ no período)');
-    porTipo[tp.objeto] = itens.length;
-    itens.forEach(it => {
-      const p = it.properties || {};
-      const dono = String(p.hubspot_owner_id || '');
-      if (!porOwner[dono]) return;
-      const dia = diaBrasiliaDe(p[tp.campo]);
-      const i = dia == null ? undefined : indiceDoDia[dia];
-      if (i === undefined) return;   /* sábado, domingo, ou fora da janela */
-      porOwner[dono][i]++;
-    });
-  }
+  const porOwner = {};
+  owners.forEach(o => { porOwner[o] = dias.map(() => 0); });
+  const porTipo = { tarefa: 0, reuniao: 0, nota: 0 };
+  let semDono = 0, foraDaJanela = 0;
+
+  (itensDaAgenda || []).forEach(it => {
+    /* CADA TIPO TEM O SEU CAMPO DE DATA. Reunião usa hs_meeting_start_time (quando
+       ela acontece); tarefa e nota usam hs_timestamp. hs_createdate daria "quando o
+       registro foi criado", e a reunião de terça marcada na segunda cairia no dia
+       errado — o heatmap existe para dizer em que dia a pessoa esteve em campo. */
+    let quando = null, tipo = null;
+    if (it.hs_meeting_start_time !== undefined && it.hs_meeting_start_time) { quando = it.hs_meeting_start_time; tipo = 'reuniao'; }
+    else if (it.hs_task_subject !== undefined) { quando = it.hs_timestamp; tipo = 'tarefa'; }
+    else if (it.hs_note_body !== undefined) { quando = it.hs_timestamp; tipo = 'nota'; }
+    if (!quando || !tipo) return;
+
+    /* O DONO DA NOTA VEM DO NEGÓCIO. As 63 notas do App Outbound chegam sem
+       hubspot_owner_id — está medido no comentário de enriquecerAgendaComNegocio, que
+       é justamente quem resolve isso e grava lead_owner_id. Sem esta linha, um terço
+       dos follow-ups do time não entraria na cadência de ninguém. */
+    const dono = String(it.hubspot_owner_id || it.lead_owner_id || '');
+    if (!porOwner[dono]) { semDono++; return; }
+
+    const dia = diaBrasiliaDe(quando);
+    const i = dia == null ? undefined : indiceDoDia[dia];
+    if (i === undefined) { foraDaJanela++; return; }   /* sábado, domingo, ou fora dos 10 dias */
+    porOwner[dono][i]++;
+    porTipo[tipo]++;
+  });
 
   return {
     geradoEm: new Date().toISOString(),
     dias,
     porOwner,
     porTipo,
-    truncado,
-    fonte: 'atividades do HubSpot: ligações, reuniões, tarefas e e-mails',
-    naoConta: 'notas do App Outbound (chegam sem dono no HubSpot)'
+    semDono,
+    foraDaJanela,
+    truncado: [],
+    /* A FONTE, palavra por palavra, porque a tela escreve isto no rodapé. Não cita
+       ligação nem e-mail: o time não usa, e prometer contagem que não existe é pior
+       do que não contar. */
+    fonte: 'atividades registradas no HubSpot: visitas e follow-ups do app (tarefas), reuniões e notas do App Outbound',
+    naoConta: 'ligações e e-mails — este time não os registra pelo CRM (medido: 0 na janela)'
   };
 }
 
-// Visita/revisita no app agora vira TAREFA no HubSpot — e a Daily conta a TAREFA criada
+// Visita/revisita no app agora vira TAREFA no HubSpot// Visita/revisita no app agora vira TAREFA no HubSpot — e a Daily conta a TAREFA criada
 // hoje (a ação de registrar a visita), não mais a entrada do negócio na etapa "Visita".
 // Motivo: revisitar um cliente pra falar com o decisor é visita de verdade e não move
 // etapa nenhuma — no modelo antigo ela simplesmente não contava.
@@ -1672,23 +1661,27 @@ async function main() {
   }
 
   /* CADÊNCIA DIÁRIA (08/09/26) — atividade por executivo por dia útil, para o
-     sparkline e o heatmap da aba Time v2. Mesma proteção da agenda: sem os escopos de
-     calls/emails isso avisa e segue, e a tela escreve "cadência não medida" — que é
-     diferente de dez dias zerados, e a diferença é a acusação errada de um executivo. */
+     sparkline e o heatmap da aba Time v2. Conta os itens que a agenda ACABOU de
+     trazer: nenhuma consulta nova, nenhum escopo novo. Se a agenda falhou acima,
+     `cadenciaDiaria` fica null e a tela escreve "não medida" — que é diferente de
+     dez dias zerados, e a diferença é a acusação errada de um executivo. */
   let cadenciaDiaria = null;
-  try {
-    cadenciaDiaria = await fetchCadenciaDiaria();
-    const somaCad = Object.values(cadenciaDiaria.porOwner || {})
-      .reduce((tot, arr) => tot + arr.reduce((a, b) => a + b, 0), 0);
-    console.log('Cadência: ' + somaCad + ' atividades em ' + cadenciaDiaria.dias.length
-      + ' dias úteis (' + cadenciaDiaria.fonte + ')'
-      + (cadenciaDiaria.truncado.length ? ' — INCOMPLETA: ' + cadenciaDiaria.truncado.join(', ') : ''));
-  } catch (e) {
-    console.log('Aviso: cadência diária não veio — ' + String(e.message).slice(0, 160));
-    console.log('Se o erro for 403, adicione os escopos crm.objects.calls.read e crm.objects.emails.read no Private App do HubSpot.');
+  if (agenda && Array.isArray(agenda.itens)) {
+    try {
+      cadenciaDiaria = fetchCadenciaDiaria(agenda.itens);
+      const somaCad = Object.values(cadenciaDiaria.porOwner || {})
+        .reduce((tot, arr) => tot + arr.reduce((a, b) => a + b, 0), 0);
+      console.log('Cadência: ' + somaCad + ' atividades de ' + REPS.length + ' executivos em '
+        + cadenciaDiaria.dias.length + ' dias úteis (' + JSON.stringify(cadenciaDiaria.porTipo) + ')'
+        + (cadenciaDiaria.semDono ? ' · ' + cadenciaDiaria.semDono + ' item(ns) sem dono no time' : ''));
+    } catch (e) {
+      console.log('Aviso: cadência diária não saiu — ' + String(e.message).slice(0, 160));
+    }
+  } else {
+    console.log('Cadência: sem agenda nesta rodada, então a aba Time mostra "não medida".');
   }
 
-  console.log('Buscando dados no HubSpot...');
+  console.log('Buscando dados no HubSpot...');  console.log('Buscando dados no HubSpot...');
 
   // ---- Funil geral (donut) ----
   // Uma chamada de cada vez (não em paralelo) pra não estourar o limite de velocidade do HubSpot

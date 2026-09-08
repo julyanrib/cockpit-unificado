@@ -25559,6 +25559,25 @@ function tm2Dados() {
     };
   });
 
+  /* ── a leitura de perdas: uma linha, e a fatia de "Outros" declarada ─────────────
+     Volta da v1 com a MESMA conta (escolha (b) do Julyan em 08/09/26). "Outros" sai
+     do ranking porque não é motivo: em 06/09, 41% das 974 perdas vinham assim, e
+     nomeá-lo como o principal aprendizado do time seria anunciar a própria
+     ignorância com cara de diagnóstico. Ele volta no fim da frase, como recado de
+     preenchimento. */
+  const perdaLeitura = (function () {
+    const pm = (DATA.motivosPerda && DATA.motivosPerda.porMotivo) || {};
+    const tot = Object.keys(pm).reduce((acc, k) => acc + (Number(pm[k]) || 0), 0);
+    const janela = (DATA.motivosPerda && DATA.motivosPerda.dias) || 90;
+    const nomeados = Object.keys(pm).filter(k => !/^outros?$/i.test(k));
+    if (!nomeados.length || !tot) return 'sem motivo de perda classificado nos últimos ' + janela + ' dias.';
+    const top = nomeados.sort((a, b) => pm[b] - pm[a])[0];
+    const outros = Object.keys(pm).filter(k => /^outros?$/i.test(k)).reduce((acc, k) => acc + pm[k], 0);
+    return '"' + top + '" é o maior motivo classificado: ' + Math.round(pm[top] / tot * 100)
+      + '% das ' + tot + ' perdas dos últimos ' + janela + ' dias'
+      + (outros ? ' — e ' + Math.round(outros / tot * 100) + '% saíram como "Outros", sem motivo escolhido.' : '.');
+  }());
+
   /* ── o painel "quem tem o quê" da etapa aberta ──────────────────────────────────── */
   const etapaAberta = s.etapa ? m.etapas.find(e => e.id === s.etapa) : null;
   const etapaLista = etapaAberta
@@ -25887,6 +25906,7 @@ function tm2Dados() {
        lugares para a mesma mensagem, e o de erro é justamente o que não pode se perder. */
     temToast: !!TL5_ESTADO.toast, toast: esc(TL5_ESTADO.toast || ''),
     funilTime,
+    perdaLeitura: esc(perdaLeitura),
     temEtapa: !!etapaAberta,
     etapaNome: etapaAberta ? esc(etapaAberta.rot) : '',
     etapaResto: etapaAberta && etapaLista.length > TETO_ETAPA
@@ -25962,7 +25982,7 @@ function tm2TelaHTML(d) {
     dSub, dUm1, dUm1Rot, dlCbBg, dlCbBorda, dlCbCor, dlCbRot, dlCobrar, dlDias, dlDiasCor, dlDono, 
     dlEtapa, dlEtapaCor, dlFechar, dlHubspot, dlNome, dlProx, dlProxCor, dlTemp, dlTempCor, 
     dlTempPct, dlTl, dlUlt, dlVCor, dlValor, etapaDeals, etapaFechar, etapaNome, etapaResto, 
-    execs, filtroRot, formulaTemp, funilTime, kpis, limparFiltro, linhaTopo, manchete, nEsteiras, 
+    execs, filtroRot, formulaTemp, funilTime, kpis, limparFiltro, linhaTopo, manchete, nEsteiras, perdaLeitura, 
     quentesNota, quentesTime, rodapeFonte, saudacao, temDeal, temDossie, temEtapa, temFiltro, 
     temToast, toast
   } = d;
@@ -26009,6 +26029,7 @@ function tm2TelaHTML(d) {
               </button>
             `).join('')}
           </div>
+          <p style="margin:9px 0 0;font:700 10.5px/1.5 'Manrope',sans-serif;color:#8E3B5C;background:#FBF5F7;border:1px solid #EBD9E1;border-radius:9px;padding:8px 12px;">▸ ${perdaLeitura}</p>
           ${(temEtapa) ? `
             <div style="margin-top:10px;background:#FBFAF6;border:1.5px solid #2B3440;border-radius:12px;padding:13px 16px;">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px;">

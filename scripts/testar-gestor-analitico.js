@@ -619,7 +619,12 @@ checar('o nome do executivo abre algo em todas as abas do gestor',
 checar('nenhuma informacao dos blocos antigos sumiu com eles',
   /* tabela por executivo -> bloco 2, um cartao por pessoa com criticos por nome */
   templateCodigo.indexOf('execs,') > 0 &&
-  templateCodigo.indexOf('criticos: (r.criticos || [])') > 0 &&
+  /* NA v2 OS CRITICOS POR NOME ESTAO NO DOSSIE, e nao na face do cartao (08/09/26):
+     o cartao do board mostra os quatro numeros, o mini-funil e a cadencia, e o clique
+     abre o dossie com o kanban dele em modo leitura e os criticos listados. A
+     informacao nao sumiu, mudou de endereco — e e isso que esta checagem cobra. A
+     cobranca gravada tambem leva os criticos por nome no detalhe, em tm2Executar. */
+  templateCodigo.indexOf('dCriticos: (rSel.criticos || [])') > 0 &&
   /* vendas do mes -> KPI Novo MRR no cabecalho */
   templateCodigo.indexOf('Novo MRR no mês') > 0 &&
   templateCodigo.indexOf('DATA.vendasMes') > 0 &&
