@@ -122,7 +122,10 @@ checar('sincronização a confirmar é categoria própria, do time e não da pes
    alguem decidir na quarta com o dado de segunda. */
 checar('as abas do gestor declaram a hora da carga que estao lendo',
   (function () {
-    const notas = (templateCodigo.match(/notaDeFonte:/g) || []).length;
+    /* `rodapeFonte` e o nome do campo na aba Time v2 (08/09/26); as outras tres
+       seguem com `notaDeFonte`. O que a checagem cobra e que as QUATRO declarem a
+       fonte, nao como o campo se chama. */
+    const notas = (templateCodigo.match(/notaDeFonte:|rodapeFonte:/g) || []).length;
     const carimbos = (templateCodigo.match(/DATA\.hubspotUpdatedAtFmt/g) || []).length;
     return notas >= 4 && carimbos >= 4;
   }()),
@@ -164,8 +167,11 @@ checar('linha sem destino não entra na fila',
    o nome que ele acabou de clicar. */
 checar('o destino leva a pessoa junto, nao so troca de aba',
   templateCodigo.indexOf('function gxFocarExecutivo(') > 0 &&
-  templateCodigo.indexOf('TL5_ESTADO.funil = oid') > 0 &&
-  templateCodigo.indexOf('TL5_ESTADO.sel = oid') > 0,
+  /* NA v2 O ESTADO E UM SO: a v1 tinha 'funil dele' separado do cartao selecionado, e
+     o dossie da v2 ja abre com o kanban dele em modo leitura. Cobrar os dois estados
+     antigos exigiria manter um deles vazio so para a suite passar. */
+  templateCodigo.indexOf('TM2_ESTADO.sel = oid') > 0 &&
+  templateCodigo.indexOf("querySelector('#tm2Raiz [data-tm2-acao=") > 0,
   'destino sem pessoa faz o gestor procurar de novo o nome que acabou de clicar');
 /* TROCAR DE ABA CLICA O BOTAO REAL, nunca activateTab a mao: cada aba tem render e
    efeito colateral proprios no clique, e reproduzir isso a mao cria um segundo caminho
