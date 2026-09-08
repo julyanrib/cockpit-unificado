@@ -28038,12 +28038,23 @@ function pl6CandidatosDaRota(regiaoChave, todos, jaNaGrade) {
 
 /* Para o PICKER DO SLOT: prioridade primeiro, regiao como desempate. Ver a nota acima
    sobre por que a sugestao de rota usa outra ordem. */
-function pl6Candidatos(regiaoChave, todos, jaNaGrade) {
+/* `comReciclagem` (08/09/26): os executivos pediram liberdade de por no slot o lead que
+   eles quiserem, e a reciclagem e metade do estoque — 48 das 91 contas livres do Bruno,
+   medido na base. Sem o parametro ela nao aparecia nem na busca.
+
+   O PADRAO CONTINUA SEM ELA, e de proposito: quem chama sem o parametro sao as TRES
+   SUGESTOES, e sugerir e dizer "comece por aqui". Reciclagem marca `sla: true` por
+   definicao, o ranqueador poe SLA primeiro, e sem o corte ela encabecava todo dia
+   sugerido. Com o parametro, ela entra no fim — reachable por rolagem e por busca,
+   sem empurrar a carteira para baixo. */
+function pl6Candidatos(regiaoChave, todos, jaNaGrade, comReciclagem) {
   const usados = new Set(jaNaGrade || []);
   const naRegiao = l => (l.regiao && l.regiao === regiaoChave) ? 1 : 0;
-  /* SEM RECICLAGEM, pelo mesmo motivo de pl6CandidatosDaRota — ver a nota lá. */
-  return pl6SemReciclagem(todos).filter(l => !usados.has(l.id)).sort((a, b) =>
-    (pl6Prioridade(b) - pl6Prioridade(a))
+  const base = comReciclagem ? (todos || []) : pl6SemReciclagem(todos);
+  return base.filter(l => !usados.has(l.id)).sort((a, b) =>
+    /* reciclagem por ultimo quando ela entra: o `sla: true` dela venceria a carteira */
+    ((a.reciclagem ? 1 : 0) - (b.reciclagem ? 1 : 0))
+    || (pl6Prioridade(b) - pl6Prioridade(a))
     || (naRegiao(b) - naRegiao(a))
     || ((a.km == null ? 1e9 : a.km) - (b.km == null ? 1e9 : b.km)));
 }
@@ -28099,6 +28110,10 @@ let pl6UI = {
   toast: null, salvando: false
 };
 let pl6Plano = null;   /* a linha de planos_semanais da semana em foco */
+/* A MINHA DAILY CARREGA O SEMANAL UMA VEZ POR SESSAO (08/09/26) — ver o bloco em
+   renderDaily. Bandeira propria porque `pl6Plano` fica null tambem para quem nao tem
+   plano da semana, e guardar por ele faria uma consulta por clique. */
+let d7PreCargaFeita = false;
 
 /* Quantos bairros a faixa de Territorio mostra antes do "ver todos". 12 e ~2 fileiras
    na largura de desktop; o Marco tem 23, e 23 chips empurram o botao de FECHAR o
@@ -28855,7 +28870,13 @@ function renderPlanejamento6a(rep) {
             + '<span style="color:' + cor + ';">' + esc(pq) + '</span></button>';
         };
         const tres = cands.slice(0, 3);
-        const resto = cands.slice(3);
+        /* AS TRES SUGESTOES vem de `cands` (sem reciclagem). A LISTA DE BAIXO, que a
+           busca filtra, vem completa — carteira, lote novo e reciclagem — porque os
+           executivos pediram liberdade de escolher o lead que quiserem, e a
+           reciclagem e metade do estoque livre deles. */
+        const idsSugeridos = new Set(tres.map(l => l.id));
+        const todosLivres = pl6Candidatos(rota, todos, naGrade, true);
+        const resto = todosLivres.filter(l => !idsSugeridos.has(l.id));
         return '<div class="pl6-sug">'
           + '<div class="pl6-sug-topo"><span class="pl6-sug-rot">' + hora + ' · escolher lead'
           + (nomeRegiao(rota) ? ' · ' + esc(nomeRegiao(rota)) : '') + '</span>'
@@ -28874,8 +28895,13 @@ function renderPlanejamento6a(rep) {
               + (tres.length ? '<div class="pl6-sug-topn">' + tres.map(opcao).join('') + '</div>' : '')
               + (resto.length
                 ? '<div class="pl6-sug-resto">' + resto.map(opcao).join('') + '</div>'
-                  + '<span class="pl6-sug-nota">' + cands.length + ' conta(s) livres — as 3 primeiras são as melhores'
-                  + (nomeRegiao(rota) ? ' pra ' + esc(nomeRegiao(rota)) : '') + '; role ou busque pelo nome</span>'
+                  /* conta a lista INTEIRA, que e o que ele pode escolher — antes dizia o
+                     numero de `cands` e a lista mostrava outro, desde que a reciclagem
+                     passou a entrar. Numero que nao bate com a lista e o jeito mais rapido
+                     de ele desconfiar da tela. */
+                  + '<span class="pl6-sug-nota">' + (tres.length + resto.length) + ' conta(s) livres — as 3 primeiras são as melhores'
+                  + (nomeRegiao(rota) ? ' pra ' + esc(nomeRegiao(rota)) : '')
+                  + '; role ou busque pelo nome. Reciclagem entra no fim da lista.</span>'
                 : '')
             : '<div class="pl6-sug-vazio">Nada livre na carteira nem no lote — todos já estão na semana.</div>')
           /* AQUI A HORA SUBSTITUI A DA FAIXA: ele abriu as 15:00 porque e a faixa da
@@ -47848,6 +47874,46 @@ async function renderDaily() {
      sintaxe pegou antes de qualquer commit.) */
   try { if (typeof carregarPlaybookProgresso === 'function') await carregarPlaybookProgresso(); }
   catch (e) { console.error('[Daily] progresso do playbook não carregou, estudo fica em 0:', e); }
+
+  /* ══ O PLANO DA SEMANA E O LOTE DE CONTAS, ANTES DE MONTAR (08/09/26) ═══════════
+     DEFEITO QUE OS EXECUTIVOS REPORTARAM NO PRIMEIRO DIA: "travar promessa que não
+     trava". A causa não estava no botão nem no banco — as duas gravações do travar
+     passam a RLS (conferi virando o Bruno, com rollback, nos dois upserts).
+
+     `pl6Plano` é cache de SESSÃO e começa null, e `pl6GradeDoPlano()` cai em grade
+     vazia quando ele é null. `pl6Carregar` só era chamada pela aba Planejamento e
+     pela gravação de um passo — a Minha Daily não chamava. Quem abre a Daily primeiro
+     (o caminho natural às 8h30) via os 7 slots do dia como LIVRES, `d7PlanoDeHoje`
+     devolvia zero visita, e o botão recusava com "seu plano de hoje está vazio".
+     E o dia não estava vazio: medido no banco no mesmo dia, Bruno com 7 de 7 slots
+     preenchidos para hoje, Marco com 5, Wericles com 7.
+
+     `carregarProspeccao` vem junto porque pl6Novos lê `prospeccaoCache`: o dia do
+     Bruno é 7 de 7 contas de prospecção, e sem esse cache elas não resolvem nem para
+     órfã.
+
+     UMA VEZ POR SESSÃO: renderDaily roda de novo a cada ato da tela, e recarregar as
+     duas em cada ato seria uma consulta por clique. Quem chega pelo Planejamento
+     primeiro não paga nada. E falha aqui NÃO derruba a Daily — o dia aparece vazio,
+     como aparecia antes, mas com o motivo no console em vez de silêncio. */
+  if (!d7PreCargaFeita && sessaoAtual && sessaoAtual.role === 'rep' && sessaoAtual.ownerId) {
+    d7PreCargaFeita = true;
+    const repPreCarga = (DATA.reps || []).find(function (x) {
+      return String(x.ownerId) === String(sessaoAtual.ownerId);
+    });
+    if (repPreCarga && typeof pl6Carregar === 'function') {
+      try { await pl6Carregar(repPreCarga); }
+      catch (e) { console.error('[Daily] plano da semana não carregou — o dia pode aparecer vazio:', e && e.message); }
+    }
+    const semLote = (typeof prospeccaoCache === 'undefined') || !Array.isArray(prospeccaoCache) || !prospeccaoCache.length;
+    if (semLote && typeof carregarProspeccao === 'function') {
+      try {
+        await carregarProspeccao();
+        /* a aba Planejamento usa esta bandeira para não buscar de novo */
+        if (typeof agendaProspeccaoPronta !== 'undefined') agendaProspeccaoPronta = true;
+      } catch (e) { console.error('[Daily] lote de contas-alvo não carregou:', e && e.message); }
+    }
+  }
   const el = document.getElementById('dailyContent');
   // BLOCO 2 (10/08/26) — ORDEM IMPORTA: os blocos que vieram do Cockpit ("Onde agir hoje"
   // e "Planos do dia do time") vivem DENTRO de #dailyContent depois do 1º render. Qualquer
