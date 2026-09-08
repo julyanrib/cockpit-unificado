@@ -15293,7 +15293,6 @@ function h8CadenciaHTML(r, diag) {
 function buildGatesDoDiaHTML(r, diag) {
   const cobravel = diag.contexto.fresco.confiavel;
   const janela = checagensDaJanela(r, diag);
-  const pct = Math.round((diag.prontos / diag.total) * 100);
 
   /* PORTÕES EM UMA LINHA CADA (v3, 31/08/26). Prancha: "5 checks compactos, 1 linha cada".
      Cada portão aberto ocupava um bloco de duas linhas com fundo colorido, pílula e botão —
@@ -15309,12 +15308,15 @@ function buildGatesDoDiaHTML(r, diag) {
     <div class="xv3-card" data-gates-owner="${r.ownerId}" style="border-color:${diag.pronto ? 'var(--green-line)' : 'var(--red-line)'};">
       <div class="xv3-card-head">
         <span class="k" style="color:${diag.pronto ? 'var(--green)' : 'var(--red-dk)'};">${diag.pronto ? 'SEU DIA ESTÁ PRONTO PARA A RUA' : 'SEU DIA ESTÁ PRONTO PARA A RUA?'}</span>
-        <span class="lk" style="cursor:default;font-family:var(--font-display);font-weight:800;font-size:15px;color:var(--ink);">${diag.prontos}<span style="font-size:11px;color:var(--muted);">/${diag.total}</span></span>
       </div>
       <div style="padding:0 15px 2px;">
-        <div style="height:5px;border-radius:var(--r-pill);background:var(--sunk);overflow:hidden;">
-          <span style="display:block;height:100%;width:${pct}%;border-radius:var(--r-pill);background:${diag.pronto ? 'var(--green)' : 'var(--red)'};"></span>
-        </div>
+        <!-- A BARRA E O CONTADOR NAO VOLTARAM (08/09/26), e e o unico pedaco que ficou
+             fora quando os portoes voltaram. A nota da remocao de 04/09 era precisa:
+             este cartao vive na MESMA coluna do h9DailyHTML, que ja tem a sua barra do
+             dia. Duas barras com numeros diferentes sobre o mesmo dia e o jeito mais
+             rapido de o executivo parar de acreditar nas duas.
+             As sete LINHAS voltaram, e sobreposicao de linha nomeada com chip do Daily
+             e legivel — cada linha diz o que e. Dois totais nao. -->
         ${h8CadenciaHTML(r, diag)}
         ${h8EncerramentoHTML(r, diag)}
         <div class="gi-note" style="margin-top:6px;font-size:10px;">
@@ -16537,13 +16539,21 @@ async function renderMeuPainel() {
            grade de 2 colunas, e o do mês descia sozinho para uma segunda linha. -->
       <div class="h9-dir">
       ${h9DailyHTML(r, diagDia)}
-      <!-- O PAINEL DE PORTÕES SAIU DAQUI (04/09/26). Ele trazia a SEGUNDA barra da mesma
-           coluna — "seu dia está pronto para a rua? 0/7" logo abaixo do "4/7" — e os
-           mesmos dois checks com outro nome: "régua priorizada" é a cadência quebrada,
-           "quentes protegidos" é a visita. Duas barras com números diferentes sobre o
-           mesmo dia é o jeito mais rápido de o executivo parar de acreditar nas duas.
-           Os três portões que ele tinha de exclusivo (rota, agenda, carga) continuam,
-           como os chips ✓ de h9DailyHTML. -->
+      <!-- ══ OS SETE PORTÕES VOLTARAM (08/09/26, pedido do Julyan) ═══════════════════
+           Eles saíram em 04/09 e a nota daqui dizia por quê: traziam a SEGUNDA barra
+           desta coluna ("seu dia está pronto para a rua? 0/7" logo abaixo do "4/7"),
+           e dois dos checks repetiam a cadência e a visita com outro nome.
+
+           A parte da nota que continua valendo é a das DUAS BARRAS, e ela foi
+           respeitada: o cartão voltou SEM o contador e SEM a barra de progresso — só
+           as sete linhas, com a pílula que distingue "não fiz" de "não sei ainda" e o
+           CTA que age. Sobreposição entre uma linha nomeada e um chip do Daily é
+           legível; dois totais diferentes sobre o mesmo dia não é.
+
+           E isto religa o ouvinte também: a classe .gate-cta tinha um forEach vivo em
+           wireHojeExecucao e ZERO nós no DOM — medido com dado real. O clique estava
+           morto desde 04/09. -->
+      ${buildGatesDoDiaHTML(r, diagDia)}
       ${h9ScriptHTML(r, diagDia)}
       <div class="chart-card hoje-yesterday-card">
         <div class="hoje-yesterday-head"><h3>Último dia na rua · ${ontemLabel}</h3><span>comprovado no HubSpot</span></div>
@@ -25698,6 +25708,39 @@ function renderTimeLider() {
                 `).join('')}
               </div>
               <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">modo leitura: você não move cartão de ninguém — cobra o movimento na Daily · vinho = régua da etapa estourada · âmbar = sem valor de MRR no CRM</span>
+
+              <!-- ══ A ANÁLISE DELE, DE VOLTA (08/09/26) ═══════════════════════════════
+                   O espelho acima responde "onde estão os negócios dele". Estes blocos
+                   respondem "por que eles não andam" — e é essa a pergunta que o gestor
+                   faz às 8h40. Eles existiam, com o CSS pronto e o comentário da série
+                   ainda no arquivo, mas pararam de renderizar quando o montador do painel
+                   e o bloco 1 foram removidos: as funções ficaram sem chamador, e nada
+                   quebrou — a tela só passou a mostrar menos.
+
+                   O wrapper .gx não é decoração: as variáveis --gx-* são declaradas no
+                   seletor .gx e escopadas de propósito. Sem ele os blocos saem sem fundo
+                   nem borda, e nenhuma guarda pega isso.
+
+                   E NADA DE BACKTICK AQUI DENTRO: este comentário vive dentro de um
+                   template literal. A primeira versão dele citava o seletor entre
+                   backticks, fechou a string, e o resto virou template tag — o render
+                   inteiro da aba Time estourou com ".gx is not a function". Segunda vez
+                   neste projeto. -->
+              <div class="gx" style="margin-top:14px;">
+                ${(function () {
+                  const rep = (DATA.reps || []).find(function (x) { return String(x.ownerId) === String(TL5_ESTADO.funil); });
+                  if (!rep) return '';
+                  /* um bloco que estoura não pode levar o espelho do funil junto: ele
+                     funciona, e é o que o gestor está olhando quando clica aqui. */
+                  return [gxBlocoIdadeHTML, gxBlocoDinheiroHTML, gxBlocoMetaHTML,
+                          gxBlocoPromessaHTML, gxBlocoMixHTML, gxBlocoConversaoHTML]
+                    .map(function (f) {
+                      if (typeof f !== 'function') return '';
+                      try { return f(rep) || ''; }
+                      catch (e) { console.error('[Time] bloco da análise não desenhou:', e && e.message); return ''; }
+                    }).join('');
+                }())}
+              </div>
             </div>
           ` : ''}
         </div>

@@ -80,9 +80,30 @@ checar('e nenhum balde inventado sobrou',
    "0/7"), porque o painel de portões trazia a sua. */
 checar('o denominador é tipos + portões, o que está na tela',
   template.indexOf('const total = H9_TIPOS.length + fixos.length;') > -1);
-checar('o painel de portões não voltou para a coluna',
-  template.indexOf('${buildGatesDoDiaHTML(r, diagDia)}') < 0,
-  'ele traz uma segunda barra e repete dois checks com outro nome');
+/* OS PORTÕES VOLTARAM EM 08/09/26, a pedido do Julyan — e a regra desta seção continua
+   valendo, porque eles voltaram SEM o contador e SEM a barra, que era a razão da
+   remoção de 04/09.
+
+   A checagem antiga media um ATALHO: proibia a chamada de buildGatesDoDiaHTML, porque a
+   chamada trazia a barra. Proibir a chamada é proibir a feature — e deixava um buraco,
+   porque alguém podia religar o cartão com a barra e ela não veria.
+
+   Agora ela olha o CORPO do cartão e cobra a ausência das duas coisas. Mais estrita, e
+   ancorada no que a regra realmente diz. */
+const corpoPortoes = (function () {
+  const i = template.indexOf('function buildGatesDoDiaHTML');
+  if (i < 0) return null;
+  const j = template.indexOf('\nfunction ', i + 1);
+  return template.slice(i, j > i ? j : i + 4000);
+}());
+checar('o cartão de portões existe para poder ser medido', corpoPortoes !== null,
+  'sem ele, as duas checagens abaixo passariam por ausência');
+checar('o cartão de portões NÃO traz barra de progresso',
+  !!corpoPortoes && corpoPortoes.indexOf('width:${pct}%') < 0 && corpoPortoes.indexOf('const pct =') < 0,
+  'duas barras com números diferentes sobre o mesmo dia é o jeito mais rápido de o executivo parar de acreditar nas duas');
+checar('nem o contador prontos/total no cabeçalho dele',
+  !!corpoPortoes && corpoPortoes.indexOf('${diag.prontos}<span') < 0,
+  'o "0/7" logo abaixo do "4/7" era metade do problema');
 
 /* ── 5. O SCRIPT DA DAILY ────────────────────────────────────────────────────────
    Definir e não chamar é o defeito que mais aparece nesta base — o próprio h8LigarFila

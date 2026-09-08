@@ -1824,3 +1824,22 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ══ GUARDA 26 — BACKTICK EM COMENTÁRIO DENTRO DE <script> (08/09/26) ═════════════════
+   Aconteceu TRÊS vezes numa noite, e é o defeito mais silencioso deste projeto: citar
+   código entre backticks num comentário que vive dentro de um template literal fecha a
+   string, e o markup depois dele vira código.
+
+   Nada mais pega: o JS segue sintaticamente válido (vira template tag), o build passa,
+   os guards passam, as suites passam. O erro aparece em runtime — "ReferenceError: cta
+   is not defined", "X.gx is not a function" — e a tela que aquele render desenhava fica
+   VAZIA, sem uma linha de erro para quem usa. Em 08/09 apagou a aba Time e a tela Hoje.
+
+   Vale só dentro de <script>, de propósito: comentário no markup pode citar seletor
+   entre backticks, e cita. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-backtick-em-comentario.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
