@@ -4765,8 +4765,27 @@
     border-radius:var(--r-pill);min-height:38px;padding:0 14px;cursor:pointer;
     font:800 11.5px var(--font-body);color:var(--muted);}
   .fn3-perdidos-cta:hover{color:var(--ink);border-color:var(--ink);}
-  .fn3-perdidos-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));
+
+  .fn3-perdidos-lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
     gap:8px;}
+
+  .fn3-perdido-linha{display:flex;align-items:center;gap:8px;min-height:44px;
+    padding:0 10px;background:var(--panel);border:1px solid var(--line);
+    border-left:3px solid var(--red);border-radius:10px;cursor:pointer;text-align:left;
+    transition:border-color var(--t-base) var(--ease),background var(--t-base) var(--ease);}
+  .fn3-perdido-linha:hover{border-color:var(--line-btn);background:var(--panel-2,var(--panel));}
+  .fn3-perdido-linha:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  .fn3-perdido-nome{flex:1;min-width:0;font:800 11.5px var(--font-body);color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fn3-perdido-quando{flex:none;font:700 9.5px var(--font-body);color:var(--muted2);white-space:nowrap;}
+  .fn3-perdido-motivo{flex:none;font:700 9.5px var(--font-body);color:var(--red);white-space:nowrap;
+    max-width:120px;overflow:hidden;text-overflow:ellipsis;}
+  .fn3-perdido-valor{flex:none;font:800 10px var(--font-body);color:var(--muted2);
+    white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .fn3-perdido-mais{flex:none;display:inline-flex;align-items:center;justify-content:center;
+    width:28px;height:28px;border:1px solid var(--line);border-radius:8px;
+    background:transparent;color:var(--muted2);cursor:pointer;font:800 12px var(--font-body);}
+  .fn3-perdido-mais:hover{border-color:var(--ink);color:var(--ink);}
 
   .fn3-card.is-voando{opacity:.9;transform:rotate(-2.5deg);cursor:grabbing;
     border:1.5px solid var(--ink);box-shadow:0 26px 48px -18px rgba(20,17,13,.5);}
@@ -13282,6 +13301,28 @@ function fn3Cabecalho(col, daEtapa) {
   </button>`;
 }
 
+function fn3CardPerdido(item) {
+  const l = item.lead || {};
+  const id = esc(String(l.id || ''));
+
+  const quandoCheio = l.perdidoEm ? (fn2Quando(l.perdidoEm) || l.perdidoEm) : null;
+  const quando = quandoCheio ? String(quandoCheio).split(' (')[0] : null;
+  const motivo = String(l.motivo_do_perdido || '').trim();
+  const mrr = Number(l.mrr || l.valor_de_mrr) || 0;
+  const valor = mrr ? ('R$ ' + mrr.toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + '/mês')
+    : (Number(l.valor) ? (typeof tl5Mil === 'function' ? tl5Mil(Number(l.valor)) : 'R$ ' + l.valor) : null);
+  return `<div class="fn3-perdido-linha" data-fn3-card="${id}" role="button" tabindex="0"
+    aria-label="Abrir a ficha de ${esc(l.name || 'negócio')}"
+    title="Abrir a ficha de ${esc(l.name || 'negócio')}">
+    <b class="fn3-perdido-nome" title="${esc(l.name || '')}">${esc(l.name || 'sem nome')}</b>
+    ${quando ? `<span class="fn3-perdido-quando">${esc(quando)}</span>` : ''}
+    <span class="fn3-perdido-motivo">${motivo ? esc(motivo) : 'sem motivo registrado'}</span>
+    ${valor ? `<span class="fn3-perdido-valor">${esc(valor)}</span>` : ''}
+    <button type="button" class="fn3-perdido-mais" data-fn3-menu="${id}"
+      aria-label="mais ações de ${esc(l.name || 'negócio')}">⌄</button>
+  </div>`;
+}
+
 function fn3Card(item, aceso) {
   const l = item.lead;
   const e = item.est;
@@ -13545,7 +13586,7 @@ function fn3Perdidos(perdidos) {
         <button type="button" class="fn3-perdidos-cta" data-fn3-aba="ativos">voltar aos ativos ⌃</button>
       </div>
       <div class="fn3-perdidos-lista" style="margin-top:10px;">
-        ${perdidos.map(x => fn3Card(x, true)).join('')}
+        ${perdidos.map(x => fn3CardPerdido(x)).join('')}
       </div>
     </div>`;
   }
@@ -19437,7 +19478,11 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   } catch (e) { conhecido = false; }
   if (!conhecido) return { foraDaMunicao: true };
 
-  try { await pl6Carregar(rep); } catch (e) { return { erro: 'não consegui ler seu plano da semana' }; }
+  let leu;
+  try { leu = await pl6Carregar(rep); } catch (e) { leu = { ok: false, motivo: (e && e.message) || 'erro' }; }
+  if (leu && leu.ok === false) {
+    return { erro: 'não consegui ler seu plano da semana (' + (leu.motivo || 'motivo não informado') + ')' };
+  }
   const grade = pl6GradeDoPlano();
 
   let tirouDe = null;
@@ -20841,12 +20886,16 @@ function pl6RegioesDoPlano() {
 
 async function pl6Carregar(rep) {
   pl6Plano = null;
-  if (!DATA.supabase || !supa) return;
+  if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem Supabase nesta sessão' };
   const segunda = pl6SegundaDaSemana();
   const { data, error } = await supa.from('planos_semanais').select('*')
     .eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
-  if (error) { console.error('Plano semanal, leitura:', error.message); return; }
+  if (error) {
+    console.error('Plano semanal, leitura:', error.message);
+    return { ok: false, motivo: error.message || 'o banco recusou a leitura' };
+  }
   pl6Plano = (data && data[0]) ? data[0] : null;
+  return { ok: true, tinhaLinha: !!pl6Plano };
 }
 
 async function pl6Gravar(rep, campos) {
@@ -31997,43 +32046,29 @@ function d7ColunaDeHoje() {
 async function h8AgendarNaSemana(rep, leadId, dataISO) {
   if (!DATA.supabase || !supa) return { ok: false, motivo: 'esta sessão está sem Supabase' };
   if (!rep || rep.ownerId == null) return { ok: false, motivo: 'sem dono na sessão' };
-  const di = pl6ColunaDaData(dataISO);
-  if (di < 0) return { ok: false, motivo: 'a data cai fora desta semana útil' };
-
-  const segunda = pl6SegundaDaSemana();
-  const { data: linhas, error: erroLeitura } = await supa.from('planos_semanais')
-    .select('*').eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
-  if (erroLeitura) return { ok: false, motivo: 'não consegui ler o seu plano da semana' };
-  const linha = Array.isArray(linhas) && linhas[0];
-  if (!linha) return { ok: false, motivo: 'você ainda não montou a semana no Planejamento' };
-
-  const grade = Array.from({ length: PL6_DIAS_UTEIS }, function (_, ci) {
-    const col = (linha.grade && linha.grade[ci]) || [];
-    const arr = Array.isArray(col) ? col.slice(0, PL6_SLOTS) : [];
-    while (arr.length < PL6_SLOTS) arr.push(null);
-    return arr;
-  });
-
-  const alvo = String(leadId);
-  for (let c = 0; c < PL6_DIAS_UTEIS; c++) {
-    for (let s = 0; s < PL6_SLOTS; s++) if (String(grade[c][s] || '') === alvo) {
-      return { ok: true, jaEstava: true, dia: c, slot: s };
-    }
+  if (typeof espelharPassoNoPlanoSemanal !== 'function') {
+    return { ok: false, motivo: 'o espelho do plano não carregou nesta aba' };
   }
-  let vaga = -1;
-  for (let s = 0; s < PL6_SLOTS; s++) if (!grade[di][s]) { vaga = s; break; }
-  if (vaga < 0) return { ok: false, motivo: 'esse dia já está com os ' + PL6_SLOTS + ' horários ocupados' };
 
-  grade[di][vaga] = alvo;
-  const { error: erroEscrita } = await supa.from('planos_semanais').upsert({
-    owner_id: String(rep.ownerId),
-    data_segunda: segunda,
-    regioes: linha.regioes,
-    grade: grade,
-    atualizado_em: new Date().toISOString()
-  }, { onConflict: 'owner_id,data_segunda' }).select();
-  if (erroEscrita) return { ok: false, motivo: 'o banco recusou: ' + erroEscrita.message };
-  return { ok: true, dia: di, slot: vaga, hora: PL6_HORAS[vaga] };
+  let lead = null;
+  const alvo = String(leadId);
+  Object.keys(DATA.funilLeads || {}).some(function (k) {
+    return ((DATA.funilLeads || {})[k] || []).some(function (l) {
+      if (String(l.id) === alvo) { lead = l; return true; }
+      return false;
+    });
+  });
+  if (!lead) return { ok: false, motivo: 'não achei este negócio na carga desta sessão' };
+
+  const r = await espelharPassoNoPlanoSemanal(lead, dataISO, null, String(rep.ownerId));
+  if (!r || r.nada) return { ok: false, motivo: 'não consegui escrever no plano' };
+  if (r.ok) return { ok: true, hora: r.hora, dia: r.dia, mudouDeLugar: !!r.mudouDeLugar };
+  if (r.fora) return { ok: false, motivo: 'a data cai fora desta semana útil' };
+  if (r.cheio) return { ok: false, motivo: 'o dia ' + (r.dia || '') + ' já está com todos os horários ocupados' };
+  if (r.foraDaMunicao) {
+    return { ok: false, motivo: 'este negócio não está na sua munição do Planejamento (região não escolhida, ou ele saiu da sua base)' };
+  }
+  return { ok: false, motivo: r.erro || 'o plano da semana recusou' };
 }
 
 function d7RotaDeHoje(rep, regioesDe) {
@@ -40669,9 +40704,11 @@ function rt7NaoComecaram() {
   return (DATA.usuarios || []).filter(u => u.role === 'rep' && u.aComecar);
 }
 function rt7Nome(ownerId) {
-  const u = (DATA.usuarios || []).find(x => String(x.ownerId) === String(ownerId));
+
+  if (ownerId == null || ownerId === '' || ownerId === 'undefined') return 'sem dono';
+  const u = (DATA.usuarios || []).find(x => x.ownerId != null && String(x.ownerId) === String(ownerId));
   if (u) return u.nome || u.name || String(ownerId);
-  const r = (DATA.reps || []).find(x => String(x.ownerId) === String(ownerId));
+  const r = (DATA.reps || []).find(x => x.ownerId != null && String(x.ownerId) === String(ownerId));
   return r ? r.name : String(ownerId);
 }
 
@@ -41417,12 +41454,14 @@ function sm3Acoes(P) {
         if (!Number.isFinite(t) || t < 70) return;
 
         if (!Number.isFinite(dias) || dias < 5) return;
-        quentes.push(l);
+
+        quentes.push({ l: l, ownerId: it.ownerId, dono: it.dono });
       }(it.l));
     });
     if (!quentes.length) return;
-    quentes.sort((a, b) => (Number(b.temp) || 0) - (Number(a.temp) || 0));
-    const l = quentes[0];
+    quentes.sort((a, b) => (Number(b.l.temp) || 0) - (Number(a.l.temp) || 0));
+    const q = quentes[0];
+    const l = q.l;
     const din = sm3Dinheiro([l]);
     lista.push({
       id: 'geladeira:' + l.id,
@@ -41432,9 +41471,9 @@ function sm3Acoes(P) {
       por: 'quente de verdade esfriando por silêncio'
         + (quentes.length > 1 ? ' — e outros ' + (quentes.length - 1) + ' na mesma faixa' : '')
         + '. Liga hoje ou perde a semana.',
-      valor: din.txt + ' · ' + nomeDe(l.ownerId),
+      valor: din.txt + ' · ' + (q.dono ? String(q.dono).split(' ')[0] : nomeDe(q.ownerId)),
       rot: 'destravar hoje ▸',
-      ownerId: String(l.ownerId || ''),
+      ownerId: String(q.ownerId || ''),
       peso: 90 + Number(l.temp)
     });
   }());
