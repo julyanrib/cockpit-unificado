@@ -56512,7 +56512,10 @@ function sm3Acoes(P) {
   const leads = sm3AbertosPorEtapa();
   const daEtapa = id => (leads[id] || []).slice();
   const nomeDe = o => (typeof rt7Nome === 'function' ? String(rt7Nome(o)).split(' ')[0] : 'sem dono');
-  const nomeDoNegocio = l => l.name || l.dealname || 'negócio sem nome';
+  /* TRIM: o nome vem do HubSpot e chega com espaco sobrando ('DONNA MARIA  '), o que
+     saia como dois espacos antes do travessao na manchete. Nao se toca no CRM — a
+     nossa tela e que se ajusta. */
+  const nomeDoNegocio = l => String(l.name || l.dealname || 'negócio sem nome').trim().replace(/s+/g, ' ');
 
   /* ── 1 · destravar dinheiro: o cliente PEDIU a proposta e ela não saiu ─────────── */
   (function () {
@@ -56597,7 +56600,8 @@ function sm3Acoes(P) {
     lista.push({
       id: 'janela:' + it.l.id,
       tipo: 'fechar na semana',
-      titulo: nomeDoNegocio(it.l) + ' — janela fecha em ' + it.faltam + ' dia(s)',
+      titulo: nomeDoNegocio(it.l) + ' — janela fecha '
+        + (it.faltam === 0 ? 'hoje' : it.faltam === 1 ? 'amanhã' : 'em ' + it.faltam + ' dias'),
       por: 'há reunião marcada no CRM e o prazo é esta semana. Garante que acontece.',
       valor: din.txt + ' · ' + nomeDe(it.l.ownerId),
       rot: 'confirmar na Daily ▸',
@@ -57395,7 +57399,17 @@ function sm3Ligar() {
 
    A LARGURA FIXA DE 1780px virou 100%: a prancha é uma tela de canvas, e a aba já vive
    dentro de #sm9Raiz, que faz min(1780px, 100% - 64px). Duas larguras fixas aninhadas
-   é barra de rolagem lateral em qualquer monitor menor. */
+   é barra de rolagem lateral em qualquer monitor menor.
+
+   `margin-top:10px` NA BARRA DE PACE (08/09/26): o rótulo "onde deveria estar" é absoluto
+   em top:-17px e sobe ACIMA da barra. A linha é um flex com gap de 12px, e medido EM
+   PRODUÇÃO o rótulo invadia 5px da linha "meta da semana: ..." — as duas frases impressas
+   uma sobre a outra na faixa preta. Não é problema de largura: acontece em qualquer
+   janela, porque é empilhamento vertical, e foi por isso que passou pelas minhas medições
+   de 375px e 1440px. Dez pixels dão a folga dos 17px sem mexer no gap dos vizinhos.
+
+   (A nota mora aqui, e não como comentário HTML dentro do template literal: comentário
+   multilinha ali dentro derrubou a guarda de corte de comentário do build.) */
 function sm3TelaHTML(d) {
   const { contexto, manchete, kpis, metaSemanaRot, paceFeito, paceEsperado, paceRot, paceCor,
     temToast, toast, acoes5, tituloAcoes, gargalos, legenda, execs, roteiro, cbTitulo, cbJust,
@@ -57424,7 +57438,7 @@ function sm3TelaHTML(d) {
           </div>
           <div style="display:flex;align-items:center;gap:12px;margin-top:22px;flex-wrap:wrap;">
             <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;flex:none;">${metaSemanaRot}</span>
-            <span style="flex:1;min-width:220px;position:relative;height:10px;border-radius:999px;background:#2A2E36;">
+            <span style="flex:1;min-width:220px;margin-top:10px;position:relative;height:10px;border-radius:999px;background:#2A2E36;">
               <span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${paceFeito};background:${paceCor};border-radius:999px;"></span></span>
               <span style="position:absolute;top:-4px;left:${paceEsperado};width:2px;height:18px;background:#F0B45C;border-radius:2px;"></span>
               <span style="position:absolute;top:-17px;left:${paceEsperado};transform:translateX(-50%);font:800 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#F0B45C;white-space:nowrap;">onde deveria estar</span>
