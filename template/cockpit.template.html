@@ -9192,7 +9192,13 @@
   .pba .oqfa-card li::before{content:"";position:absolute;left:0;top:6px;width:17px;height:17px;border:2px solid var(--v6-amber);border-radius:var(--r-xs);}
   .pba .oqfa-card li.cb{margin-left:0;padding-left:27px;}
   /* referência cruzada entre páginas: pílula, nunca o cinza do navegador */
-  .pba .pb-ir{display:inline-block;margin:0 2px;border:1px solid rgba(229,26,49,.35);border-radius:var(--r-pill);padding:3px 13px;background:#FFF7F4;color:var(--v6-red);font:700 13px var(--font-body);cursor:pointer;position:relative;}
+  /* OS TOKENS QUE A PILULA USA, DENTRO DA CAIXA DA OBJECAO (08/09/26).
+     A paleta --v6-* e declarada em .pb9-ler, nao em :root. Nesta caixa ela nao existe,
+     entao `color:var(--v6-red)` virava var() invalido: cor herdada (medido: quase
+     preto onde devia ser o vermelho da Takeat) e nenhum erro em lugar nenhum. */
+  #prcObjecaoResposta{--v6-red:#E51A31; --v6-muted2:#988D7B; --v6-dark:#14110D;}
+  .pba .pb-ir,
+  #prcObjecaoResposta .pb-ir{display:inline-block;margin:0 2px;border:1px solid rgba(229,26,49,.35);border-radius:var(--r-pill);padding:3px 13px;background:#FFF7F4;color:var(--v6-red);font:700 13px var(--font-body);cursor:pointer;position:relative;}
   /* ── O SELO DO LINK EXTERNO (05/09/26) ─────────────────────────────────────────
      A pilula vermelha com "→" acima significa "continua no playbook". Esta aqui e a outra
      metade: o link que TIRA a pessoa do Cockpit. Ela nao pode ter a mesma cara, senao o
@@ -9253,7 +9259,8 @@
      nao vou fingir que chega: chegar aos 44 aqui e decisao de CONTEUDO, nao de CSS — por
      a referencia em linha propria (como as 10 que ja usam "Aprofundar:") em vez de no meio
      da frase. Fica anotado para o Julyan decidir. */
-  .pba .pb-ir{padding:7px 14px;}   /* em toda largura: 34px, e o teto sem invadir a linha */
+  .pba .pb-ir,
+  #prcObjecaoResposta .pb-ir{padding:7px 14px;}   /* em toda largura: 34px, e o teto sem invadir a linha */
   /* Num paragrafo que e SO atalho, a pilula ganha o piso de 44px: nao ha entrelinha de
      prosa para ela esticar, e esse paragrafo e justamente o que se usa com o cliente na
      frente — o indice de 52 modulos do catalogo. A classe e posta pelo transformador, a
@@ -9600,8 +9607,10 @@
     transition:color var(--t-base) var(--ease),border-color var(--t-base) var(--ease);}
   .pb7-toc-sec button.is-aqui{border-left-color:var(--dark-amber);
     color:var(--dark-amber);font-weight:800;}
-  .pba .pb-ir:hover{background:var(--v6-red);color:var(--dark-ink);}
-  .pba .pb-ir.is-morto{border-style:solid;color:var(--v6-muted2);background:none;cursor:default;}
+  .pba .pb-ir:hover,
+  #prcObjecaoResposta .pb-ir:hover{background:var(--v6-red);color:var(--dark-ink);}
+  .pba .pb-ir.is-morto,
+  #prcObjecaoResposta .pb-ir.is-morto{border-style:solid;color:var(--v6-muted2);background:none;cursor:default;}
   .pba .fa-body .pb-ir{background:rgba(224,166,74,.12);border-color:rgba(224,166,74,.45);color:var(--v6-amber-claro);}
   .pba .fa-body .pb-ir:hover{background:var(--v6-amber-claro);color:var(--v6-dark);}
 
@@ -21270,14 +21279,34 @@ function renderPrecificacaoConfigurador() {
         : `<p>Resposta não encontrada na página compilada do playbook.</p><button type="button" class="p4-so-voce-ir" data-prc-objecao-ir="">ABRIR NO PLAYBOOK →</button>`;
       respObj.hidden = false;
       respObj.scrollTop = 0;
+      /* MESMA REGRA DO LEITOR: pagina inexistente perde o clique e fica apagada, em
+         vez de virar um botao que nao vai a lugar nenhum. O clique dos que sobram e
+         tratado no delegado acima. */
+      respObj.querySelectorAll('[data-pb-ir]').forEach(pil => {
+        const d = (typeof playbookPilulaDestino === 'function') ? playbookPilulaDestino(pil) : null;
+        if (!d) { pil.classList.add('is-morto'); pil.disabled = true; return; }
+        pil.title = 'Abrir no Playbook: ' + d.pagina.titulo;
+      });
     });
   });
   if (respObj) {
     respObj.addEventListener('click', ev => {
       const ir = ev.target.closest('[data-prc-objecao-ir]');
-      if (!ir) return;
+      if (ir) {
+        activateTab('viewPlaybook');
+        if (typeof abrirPaginaPlaybook === 'function') abrirPaginaPlaybook('objecoes', ir.dataset.prcObjecaoIr || null);
+        return;
+      }
+      /* A PILULA DE REFERENCIA CRUZADA (08/09/26). Ela vem DENTRO do compilado da
+         objecao, e ate hoje nascia sem ouvinte: 1 clique morto medido na aba.
+         Entra aqui, e nao por playbookLigarBotoesPagina, porque abrirPaginaPlaybook
+         NAO troca de aba — ligada por lá, a pagina abriria numa aba invisivel. */
+      const pil = ev.target.closest('[data-pb-ir]');
+      if (!pil || pil.disabled) return;
+      const d = (typeof playbookPilulaDestino === 'function') ? playbookPilulaDestino(pil) : null;
+      if (!d) return;
       activateTab('viewPlaybook');
-      if (typeof abrirPaginaPlaybook === 'function') abrirPaginaPlaybook('objecoes', ir.dataset.prcObjecaoIr || null);
+      if (typeof abrirPaginaPlaybook === 'function') abrirPaginaPlaybook(d.id, d.ancora);
     });
   }
 
@@ -22182,15 +22211,28 @@ function playbookLigarBotoesPagina(raiz) {
      um texto sem link. A ancora e validada tambem, e quando ela nao existe abre a
      pagina certa no topo, que e melhor que nao ir a lugar nenhum. */
   raiz.querySelectorAll('[data-pb-ir]').forEach(btn => {
-    const pb = playbookDados();
-    const destino = btn.dataset.pbIr;
-    const pagina = pb && (pb.paginas || []).find(x => x.id === destino);
-    if (!pagina) { btn.classList.add('is-morto'); btn.disabled = true; return; }
-    const querAncora = btn.dataset.pbAncora || '';
-    const anc = querAncora && (pagina.headings || []).some(h => h.id === querAncora) ? querAncora : null;
-    btn.title = 'Abrir: ' + pagina.titulo;
-    btn.addEventListener('click', () => abrirPaginaPlaybook(destino, anc));
+    const d = playbookPilulaDestino(btn);
+    if (!d) { btn.classList.add('is-morto'); btn.disabled = true; return; }
+    btn.title = 'Abrir: ' + d.pagina.titulo;
+    btn.addEventListener('click', () => abrirPaginaPlaybook(d.id, d.ancora));
   });
+}
+
+/* A REGRA DO DESTINO DA PILULA, EM UM LUGAR SO (08/09/26).
+   Ela era inline no laco acima, e por isso o segundo lugar que mostra compilado do
+   playbook — a caixa de objecao da aba Propostas — nao tinha regra nenhuma: a pilula
+   nascia sem ouvinte e sem is-morto, e o clique morria em silencio.
+   Devolve null quando a pagina nao existe (id errado no markdown, pagina renomeada);
+   a ancora e validada tambem, e ancora inexistente abre a pagina no topo, que e
+   melhor que nao ir a lugar nenhum. */
+function playbookPilulaDestino(btn) {
+  const pb = playbookDados();
+  const destino = btn.dataset.pbIr;
+  const pagina = pb && (pb.paginas || []).find(x => x.id === destino);
+  if (!pagina) return null;
+  const querAncora = btn.dataset.pbAncora || '';
+  const anc = querAncora && (pagina.headings || []).some(h => h.id === querAncora) ? querAncora : null;
+  return { id: destino, pagina: pagina, ancora: anc };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════
@@ -47484,7 +47526,7 @@ function dg2TelaHTML(ctx) {
     <h2 style="font:900 12px 'Archivo',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#988D7B;margin:0;">O dia, executivo por executivo</h2>
     <small style="font:700 12px 'Manrope',sans-serif;color:#988D7B;">cada cartão responde: o que ele prometeu · onde atua · quem ficou de fora e por quê · a prospecção continua?</small>
   </div>
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(470px,1fr));gap:12px;margin-top:12px;">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(470px,100%),1fr));gap:12px;margin-top:12px;">
     ${(board||[]).map(e => `
       <div data-dg2-card="${e.i - 1}" style="background:#FFFDF8;border:1px solid ${e.borda};border-top:3px solid ${e.tom};border-radius:14px;padding:15px 17px;opacity:${e.op};display:flex;flex-direction:column;gap:11px;">
         <div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;">
@@ -47547,7 +47589,7 @@ function dg2TelaHTML(ctx) {
               ${(e.quentes||[]).map(q => `
                 <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#F4F1EA;border:1px solid #EEE9DE;border-radius:8px;padding:6px 10px;">
                   <span style="font:700 11.5px/1.4 'Manrope',sans-serif;color:#1A1613;flex:1;min-width:160px;overflow-wrap:anywhere;">${q.cliente} <b style="color:#C7142A;font-variant-numeric:tabular-nums;">${q.dias}</b> <span style="font-weight:400;color:#6B6254;">· ${q.motivo}</span></span>
-                  <button data-dg2-acao="${q.fazer}" style="display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:1px solid ${q.borda};border-radius:999px;background:${q.bg};font:800 10px 'Manrope',sans-serif;color:${q.cor};cursor:pointer;white-space:nowrap;" data-dg2-hv="4">${q.btn}</button>
+                  ${dg2Gesto(q.fazer, q.btn, `display:inline-flex;align-items:center;min-height:32px;padding:0 12px;border:1px solid ${q.borda};border-radius:999px;background:${q.bg};font:800 10px 'Manrope',sans-serif;color:${q.cor};white-space:nowrap;`, 4)}
                 </div>
               `).join('')}
             </div>
@@ -47574,7 +47616,7 @@ function dg2TelaHTML(ctx) {
               ${(e.painelItens||[]).map(pi => `
                 <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFFDF8;border:1px solid #EEE9DE;border-radius:8px;padding:8px 12px;">
                   <span style="font-size:12px;color:#1A1613;line-height:1.45;flex:1;min-width:200px;overflow-wrap:anywhere;">${pi.txt}</span>
-                  <button data-dg2-acao="${pi.fazer}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid ${pi.borda};border-radius:999px;background:${pi.bg};font:800 10.5px 'Manrope',sans-serif;color:${pi.cor};cursor:pointer;white-space:nowrap;" data-dg2-hv="4">${pi.btn}</button>
+                  ${dg2Gesto(pi.fazer, pi.btn, `display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid ${pi.borda};border-radius:999px;background:${pi.bg};font:800 10.5px 'Manrope',sans-serif;color:${pi.cor};white-space:nowrap;`, 4)}
                 </div>
               `).join('')}
             </div>
@@ -47640,7 +47682,7 @@ function dg2TelaHTML(ctx) {
         ${(etapaItens||[]).map(it => `
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:#FFFDF8;border:1px solid #EEE9DE;border-radius:8px;padding:8px 12px;">
             <span style="font-size:12px;color:#1A1613;flex:1;min-width:200px;overflow-wrap:anywhere;"><b>${it.cliente}</b> · ${it.exec} · <b style="color:#C7142A;">${it.dias}</b></span>
-            <button data-dg2-acao="${it.cobrar}" style="display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid ${it.borda};border-radius:999px;background:${it.bg};font:800 10.5px 'Manrope',sans-serif;color:${it.cor};cursor:pointer;white-space:nowrap;" data-dg2-hv="4">${it.btn}</button>
+            ${dg2Gesto(it.cobrar, it.btn, `display:inline-flex;align-items:center;min-height:38px;padding:0 14px;border:1px solid ${it.borda};border-radius:999px;background:${it.bg};font:800 10.5px 'Manrope',sans-serif;color:${it.cor};white-space:nowrap;`, 4)}
           </div>
         `).join('')}
       </div>
@@ -47675,6 +47717,23 @@ const DG2_TAREFAS_DESTA_SESSAO = {};
 
 /* VERBO DA TELA -> BASE DO BANCO. A tela fala 'cobrar'; o banco guarda 'cobranca'
    desde o board antigo, e mudar isso agora orfanaria as linhas que ja estao lá. */
+/* BOTAO OU SELO, EM UM LUGAR SO (08/09/26).
+   Acao vazia significa "ja foi feito" nos tres construtores da v2. Enquanto isso
+   saia como <button>, era um clique morto de desenho perfeito: pilula verde, cursor
+   de clique, e o despacho saindo no primeiro if. Aqui a decisao e uma:
+     com acao  -> <button data-dg2-acao=...>   (o gesto)
+     sem acao  -> <span>                        (o estado)
+   O estilo vem de fora inteiro, para o selo ficar identico ao botao cumprido que o
+   gestor ja conhece — muda o elemento e o cursor, nao a aparencia. */
+function dg2Gesto(acao, rotulo, estilo, hv) {
+  const base = String(estilo || '');
+  if (!acao) {
+    /* default: o cursor de clique sai; sem isso o selo continua convidando */
+    return `<span style="${base}cursor:default;" title="já registrado nesta rodada">${rotulo}</span>`;
+  }
+  return `<button type="button" data-dg2-acao="${acao}" data-dg2-hv="${hv == null ? 4 : hv}" style="${base}cursor:pointer;">${rotulo}</button>`;
+}
+
 const DG2_BASES = { cobrar: 'cobranca', alinhar: 'alinhar', ajuste: 'ajuste' };
 
 function dg2Feito(base, ownerId, extra) {
@@ -49264,25 +49323,58 @@ async function renderDaily() {
       e.inicio && isoDate(e.inicio) < hojeISOFup && e.ownerId
     ).sort((a, b) => a.inicio - b.inicio);
     if (pendentes.length) {
+      /* AGRUPA POR OWNER, e nao pelo primeiro nome: o primeiro nome nao serve de
+         chave (o time tem dois Ricardos) e, principalmente, e o ownerId que o botao
+         da linha precisa levar. */
       const porOwnerFup = {};
       pendentes.forEach(e => {
         const rep = repsDaily.find(r => String(r.ownerId) === String(e.ownerId));
-        const nome = rep ? rep.name.split(' ')[0] : 'Sem dono no time';
-        (porOwnerFup[nome] = porOwnerFup[nome] || []).push(e);
+        const chave = rep ? String(rep.ownerId) : 'sem-dono';
+        if (!porOwnerFup[chave]) {
+          porOwnerFup[chave] = {
+            nome: rep ? rep.name.split(' ')[0] : 'Sem dono no time',
+            ownerId: rep ? String(rep.ownerId) : null,
+            lista: []
+          };
+        }
+        porOwnerFup[chave].lista.push(e);
       });
-      const linhasFup = Object.entries(porOwnerFup)
-        .sort((a, b) => b[1].length - a[1].length)
-        .map(([nome, lista]) => `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);">
-            <b style="min-width:90px;">${esc(nome)}</b>
-            <span style="font-size:12px;color:var(--muted2);flex:1;">${lista.slice(0, 3).map(e => esc(e.cliente || 'Sem nome')).join(', ')}${lista.length > 3 ? ` +${lista.length - 3}` : ''}</span>
-            <span style="font-weight:800;color:var(--amber-ink,var(--amber));">${lista.length}</span>
-          </div>`).join('');
+      const linhasFup = Object.values(porOwnerFup)
+        .sort((a, b) => b.lista.length - a.lista.length)
+        .map(g => {
+          const lista = g.lista;
+          /* pendentes ja vem ordenado por data crescente, entao o primeiro do grupo
+             e o mais antigo. Tres pendentes nao decide nada; o mais antigo desde
+             05/08 decide. */
+          const maisAntigoFup = (function () {
+            const d = lista[0] && lista[0].inicio ? new Date(lista[0].inicio) : null;
+            if (!d || isNaN(d.getTime())) return null;
+            return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+          }());
+          /* CAMINHO, com o verbo que a v2 JA despacha: abre a rodada naquela pessoa,
+             que e onde vivem os controles de cobranca. Sem dono no time nao ha quem
+             conduzir — ali vai a razao escrita, e nao um botao inerte. */
+          const acaoFup = g.ownerId
+            ? `<button type="button" data-dg2-acao="conduzir:${esc(g.ownerId)}" data-dg2-hv="4" title="abre a rodada nesta pessoa, onde estão os controles de cobrança" style="display:inline-flex;align-items:center;min-height:38px;padding:0 13px;border:1px solid var(--line);border-radius:999px;background:var(--paper);font:800 10.5px var(--font-body);color:var(--ink);cursor:pointer;white-space:nowrap;">cobrar na rodada ▸</button>`
+            : '<span style="font:700 10.5px var(--font-body);color:var(--muted2);white-space:nowrap;">sem dono no time — reatribuir no HubSpot</span>';
+          return `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap;">
+            <b style="min-width:90px;">${esc(g.nome)}</b>
+            <span style="font-size:12px;color:var(--muted2);flex:1;min-width:150px;">${lista.slice(0, 3).map(e => esc(e.cliente || 'Sem nome')).join(', ')}${lista.length > 3 ? ` +${lista.length - 3}` : ''}${maisAntigoFup ? ` · mais antigo desde ${esc(maisAntigoFup)}` : ''}</span>
+            <span style="font-weight:800;color:var(--amber-ink,var(--amber));font-variant-numeric:tabular-nums;">${lista.length}</span>
+            ${acaoFup}
+          </div>`;
+        }).join('');
+      /* RAIZ PROPRIA DA v2: o despacho de data-dg2-acao exige closest([data-dg2-raiz]),
+         e este cartao vive FORA da raiz do board de proposito — dg2Repintar reescreve
+         o innerHTML dela a cada clique e apagaria este cartao. */
       followUpsSemConfirmacaoHtml = `
+      <div data-dg2-raiz="1">
       <div class="sec-k"><b>Follow-ups sem confirmação</b><span>agendados pelo App Outbound, data já passou, sem tarefa concluída correspondente</span></div>
       <div class="chart-card">
         <div class="chart-subtitle" style="margin-bottom:10px;">${pendentes.length} follow-up${pendentes.length === 1 ? '' : 's'} não confirmado${pendentes.length === 1 ? '' : 's'} — não contam como visita feita até alguém confirmar no HubSpot.</div>
         ${linhasFup}
+      </div>
       </div>`;
     }
   }
@@ -50316,10 +50408,16 @@ async function renderDaily() {
      com dois desenhos diferentes. Para o EXECUTIVO nada muda: a v2 e so do gestor. */
   if (souRepDaily) {
     html += quentesGiHtml;
-    html += followUpsSemConfirmacaoHtml;
     html += cadenciaHojeHtml;
     html += coberturaFunilHtml;
   }
+  /* OS FOLLOW-UPS SEM CONFIRMACAO SAO DO GESTOR (08/09/26) — e ficavam invisiveis.
+     O bloco e montado em 'if (!souRepDaily)' e era anexado aqui, em 'if (souRepDaily)',
+     onde a variavel vale sempre string vazia. Medido na sessao do gestor: 111
+     follow-ups com data passada e sem confirmacao, e nenhuma mencao a eles na tela.
+     O append fica FORA do if da v2 de proposito: html e REATRIBUIDO la em cima (nao
+     somado), entao tudo que o gestor ve depois da v2 tem de ser somado depois dela. */
+  if (!souRepDaily) html += followUpsSemConfirmacaoHtml;
   if (!souRepDaily) {
     html += `
     <details class="gi-ref" style="margin-top:14px;">
