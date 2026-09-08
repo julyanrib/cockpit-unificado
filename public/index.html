@@ -972,6 +972,16 @@
   #sm9Raiz [data-sm9-hv="2"]:hover{filter:brightness(1.05);}
   #sm9Raiz [data-sm9-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
 
+  #sm9Raiz [data-sm3-hv]{cursor:pointer;}
+  #sm9Raiz [data-sm3-hv="0"]:hover{filter:brightness(1.08);}
+  #sm9Raiz [data-sm3-hv="1"]:hover{filter:brightness(1.06);}
+  #sm9Raiz [data-sm3-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
+
+  @media (max-width: 640px) {
+    #sm9Raiz [data-sm3-raiz] span[style*="flex:none"]{flex:0 1 auto !important;min-width:0;}
+    #sm9Raiz [data-sm3-raiz] button[style*="white-space:nowrap"]{white-space:normal !important;text-align:center;}
+  }
+
   @media (pointer:coarse){
     .vm-editar,.gi-cell-btn{min-height:44px;display:inline-flex;align-items:center;justify-content:center;}
     .gi-cell-btn{justify-content:flex-end;width:100%;}
@@ -9094,7 +9104,9 @@ const TELAS_QUE_MOSTRAM_NEGOCIO = {
   viewAgenda: 'renderAgenda',
   viewMeuPainel: 'renderMeuPainel',
   viewCockpit: 'renderTimeLider',
-  viewRotas: 'renderRotas'
+  viewRotas: 'renderRotas',
+
+  viewResumo: 'renderSemana'
 };
 
 let REPINTE_AGENDADO = null;
@@ -18401,13 +18413,18 @@ function tl5MrrDaEtapa(e) {
 const TL5_ESTADO = { toast: null, pauta: {}, agenda: [], carregou: false };
 
 function tl5Semana(d) {
+
+  if (!d && typeof pl6SegundaDaSemana === 'function') {
+    const seg = pl6SegundaDaSemana();
+    if (seg) return seg;
+  }
   const base = d ? new Date(d) : new Date();
   const dow = (base.getDay() + 6) % 7;
   const seg = new Date(base.getFullYear(), base.getMonth(), base.getDate() - dow);
   return seg.getFullYear() + '-' + String(seg.getMonth() + 1).padStart(2, '0') + '-' + String(seg.getDate()).padStart(2, '0');
 }
 
-const TL5_RITUAL = { cobranca_daily: 'daily', cobranca_negocio: 'daily', um_a_um: 'um_a_um', boa_pratica: 'semanal', combinado: 'semanal' };
+const TL5_RITUAL = { cobranca_daily: 'daily', cobranca_negocio: 'daily', um_a_um: 'um_a_um', boa_pratica: 'semanal', combinado: 'semanal', acao_semana: 'semanal', modo_agir: 'semanal' };
 
 async function tl5CarregarPauta() {
   TL5_ESTADO.pauta = {};
@@ -18425,19 +18442,6 @@ async function tl5CarregarPauta() {
       TL5_ESTADO.pauta[String(l.chave).slice(0, -(semana.length + 1))] = l;
     });
 
-    TL5_ESTADO.combinadosAnteriores = linhas
-      .filter(l => l.tipo === 'combinado' && !String(l.chave || '').endsWith(':' + semana))
-      .slice(0, 3)
-      .map(l => ({
-        txt: l.titulo,
-        st: l.feito ? 'resolvido ✓' : 'em aberto',
-        stCor: l.feito ? '#1E9E7B' : '#B07C1F',
-        rot: l.feito ? 'reabrir' : 'marcar resolvido ✓',
-        bg: l.feito ? '#FDFEFF' : '#EAF6F1',
-        cor: l.feito ? '#7A8494' : '#1E9E7B',
-        borda: l.feito ? '#DCE1EA' : '#CBE8DD',
-        toggle: 'resolver:' + l.id
-      }));
     const nDaily = Object.keys(TL5_ESTADO.pauta).filter(k => k.indexOf('cobranca_daily:') === 0).length;
 
     const negocios = Object.keys(TL5_ESTADO.pauta)
@@ -18901,15 +18905,7 @@ function tm2Dados() {
   const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
     'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
-  const semanaISO = (function () {
-    const d = new Date(Date.UTC(agora.getFullYear(), agora.getMonth(), agora.getDate()));
-    const dow = (d.getUTCDay() + 6) % 7;
-    d.setUTCDate(d.getUTCDate() - dow + 3);
-    const primeiraQuinta = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-    const dowPQ = (primeiraQuinta.getUTCDay() + 6) % 7;
-    primeiraQuinta.setUTCDate(primeiraQuinta.getUTCDate() - dowPQ + 3);
-    return 1 + Math.round((d - primeiraQuinta) / (7 * 86400000));
-  }());
+  const semanaISO = numeroDaSemanaISO(agora);
   const linhaTopo = esc(DIAS_SEM[agora.getDay()] + ', ' + String(agora.getDate()).padStart(2, '0')
     + ' de ' + MESES[agora.getMonth()] + ' · semana ' + semanaISO
     + ' · HubSpot ' + (DATA.hubspotUpdatedAtFmt ? 'atualizado ' + DATA.hubspotUpdatedAtFmt : 'sem carga registrada')
@@ -41281,6 +41277,1025 @@ const SM9 = {
   carregou: false
 };
 
+const SM3_MODOS = {
+  cobrar:      { rot: 'cobrar',            cor: '#FDFEFF', bg: '#6E1210' },
+  destravar:   { rot: 'destravar junto',   cor: '#8A6516', bg: '#FDF6E7' },
+  campo:       { rot: 'ir a campo junto',  cor: '#FDFEFF', bg: '#8E3B5C' },
+  acompanhar:  { rot: 'acompanhar',        cor: '#2B3440', bg: '#F2F4F8' },
+  reconhecer:  { rot: 'reconhecer',        cor: '#1E9E7B', bg: '#EAF6F1' }
+};
+
+const SM3_ESTADO = { combinados: [], cumprimento: {}, modos: {}, toast: null, carregado: false };
+let SM3_OUVINTE = false;
+let SM3_GRAVANDO = false;
+
+function sm3SegundaPassada() {
+  const seg = sm9Segunda();
+  if (!seg) return null;
+  const p = seg.split('-').map(Number);
+  const d = new Date(p[0], p[1] - 1, p[2] - 7);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0')
+    + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+const SM3_ETAPAS_ABERTAS = [
+  '1395880469',
+  '1396005401',
+  '1395880470',
+  '1395880471',
+  '1395880472',
+  '1395880473'
+];
+
+function sm3AbertosPorEtapa() {
+  const leads = DATA.funilLeads || {};
+  const fora = {};
+  SM3_ETAPAS_ABERTAS.forEach(function (id) { fora[id] = (leads[id] || []).slice(); });
+  return fora;
+}
+
+function sm3NegociosDoTime() {
+  const vistos = new Set();
+  const fora = [];
+  (DATA.usuarios || []).filter(u => u.role === 'rep').forEach(u => {
+    const rep = (DATA.reps || []).find(r => String(r.ownerId) === String(u.ownerId));
+    if (!rep) return;
+    [].concat(rep.criticos || [], rep.quentes || []).forEach(l => {
+      if (!l || l.id == null) return;
+      const id = String(l.id);
+      if (vistos.has(id)) return;
+      vistos.add(id);
+      fora.push({ l: l, dono: u.nome || rep.name || 'sem dono', ownerId: String(u.ownerId) });
+    });
+  });
+  return fora;
+}
+
+function sm3Dinheiro(itens) {
+  let soma = 0, com = 0, sem = 0;
+  itens.forEach(it => {
+    const l = it.l || it;
+    const mrr = Number(l && (l.mrr || l.valor_de_mrr)) || 0;
+    if (mrr) { soma += mrr; com++; } else { sem++; }
+  });
+  return {
+    soma, com, sem,
+    txt: com ? tl5Mil(soma) + '/mês' : 'sem valor no CRM',
+    frase: com
+      ? tl5Mil(soma) + '/mês nos ' + com + ' com valor'
+        + (sem ? ' · ' + sem + ' sem valor no CRM' : '')
+      : 'nenhum dos ' + sem + ' tem valor preenchido no CRM'
+  };
+}
+
+function sm3Cadencia(ownerId) {
+  const c = (typeof tm2CadenciaDe === 'function') ? tm2CadenciaDe(ownerId) : null;
+  if (!c || !c.serie.length) return { medido: false, zeros: null, dias: 0, total: 0, queda: false };
+  const serie = c.serie.map(x => Number(x) || 0);
+  const zeros = serie.filter(x => x === 0).length;
+
+  let queda = false;
+  if (serie.length >= 4) {
+    const meio = Math.floor(serie.length / 2);
+    const antes = serie.slice(0, meio).reduce((t, x) => t + x, 0);
+    const depois = serie.slice(meio).reduce((t, x) => t + x, 0);
+    queda = antes > 0 && depois * 2 < antes;
+  }
+  return {
+    medido: true, zeros, dias: serie.length,
+    total: serie.reduce((t, x) => t + x, 0), queda
+  };
+}
+
+function sm3DescumpriuSemanas(ownerId) {
+  const porSemana = {};
+  SM3_ESTADO.combinados.forEach(cb => {
+    const marcas = SM3_ESTADO.cumprimento[cb.id] || {};
+    const m = marcas[String(ownerId)];
+    if (m && m.cumpriu === false) porSemana[cb.data_segunda] = true;
+  });
+  return Object.keys(porSemana).length;
+}
+
+function sm3Acoes(P) {
+  const lista = [];
+
+  const leads = sm3AbertosPorEtapa();
+  const daEtapa = id => (leads[id] || []).slice();
+  const nomeDe = o => (typeof rt7Nome === 'function' ? String(rt7Nome(o)).split(' ')[0] : 'sem dono');
+  const nomeDoNegocio = l => l.name || l.dealname || 'negócio sem nome';
+
+  (function () {
+    const sem = daEtapa('1395880471')
+      .filter(l => !String(l.plano_apresentado || '').trim())
+      .sort((a, b) => (Number(b.dias) || 0) - (Number(a.dias) || 0));
+    if (!sem.length) return;
+    const l = sem[0];
+    const din = sm3Dinheiro([l]);
+    lista.push({
+      id: 'proposta:' + l.id,
+      tipo: 'destravar dinheiro',
+      titulo: nomeDoNegocio(l) + ' — proposta pedida e não enviada',
+      por: 'está em Demo/Proposta há ' + (Number(l.dias) || 0) + ' dia(s) sem plano apresentado no CRM'
+        + (sem.length > 1 ? '. Mais ' + (sem.length - 1) + ' na mesma situação' : '')
+        + '. É o fechamento mais barato da semana.',
+      valor: din.txt + ' · ' + nomeDe(l.ownerId),
+      rot: 'fazer hoje com ' + nomeDe(l.ownerId) + ' ▸',
+      ownerId: String(l.ownerId || ''),
+      peso: 100 + (Number(l.dias) || 0)
+    });
+  }());
+
+  (function () {
+
+    const quentes = [];
+    sm3NegociosDoTime().forEach(it => {
+      (function (l) {
+        const t = Number(l.temp);
+        const dias = Number(l.tempDiasSemToque);
+        if (!Number.isFinite(t) || t < 70) return;
+
+        if (!Number.isFinite(dias) || dias < 5) return;
+        quentes.push(l);
+      }(it.l));
+    });
+    if (!quentes.length) return;
+    quentes.sort((a, b) => (Number(b.temp) || 0) - (Number(a.temp) || 0));
+    const l = quentes[0];
+    const din = sm3Dinheiro([l]);
+    lista.push({
+      id: 'geladeira:' + l.id,
+      tipo: 'salvar da geladeira',
+      titulo: nomeDoNegocio(l) + ' — ' + Math.round(Number(l.temp)) + '° com '
+        + Number(l.tempDiasSemToque) + 'd sem toque',
+      por: 'quente de verdade esfriando por silêncio'
+        + (quentes.length > 1 ? ' — e outros ' + (quentes.length - 1) + ' na mesma faixa' : '')
+        + '. Liga hoje ou perde a semana.',
+      valor: din.txt + ' · ' + nomeDe(l.ownerId),
+      rot: 'destravar hoje ▸',
+      ownerId: String(l.ownerId || ''),
+      peso: 90 + Number(l.temp)
+    });
+  }());
+
+  (function () {
+    const comPrazo = [];
+    Object.keys(leads).forEach(id => {
+      (leads[id] || []).forEach(l => {
+        const quando = l.data_da_reuniao || l.reuniao_agendada || l.proximaReuniao;
+        if (!quando) return;
+        const d = new Date(quando);
+        if (isNaN(d.getTime())) return;
+        const faltam = Math.ceil((d - new Date()) / 86400000);
+        if (faltam < 0 || faltam > 7) return;
+        comPrazo.push({ l: l, faltam: faltam });
+      });
+    });
+    if (!comPrazo.length) return;
+    comPrazo.sort((a, b) => a.faltam - b.faltam);
+    const it = comPrazo[0];
+    const din = sm3Dinheiro([it.l]);
+    lista.push({
+      id: 'janela:' + it.l.id,
+      tipo: 'fechar na semana',
+      titulo: nomeDoNegocio(it.l) + ' — janela fecha em ' + it.faltam + ' dia(s)',
+      por: 'há reunião marcada no CRM e o prazo é esta semana. Garante que acontece.',
+      valor: din.txt + ' · ' + nomeDe(it.l.ownerId),
+      rot: 'confirmar na Daily ▸',
+      ownerId: String(it.l.ownerId || ''),
+      peso: 95 - it.faltam
+    });
+  }());
+
+  (function () {
+    const elenco = sm9Elenco();
+    let pior = null, piorN = 0;
+    elenco.forEach(u => {
+      const n = sm3DescumpriuSemanas(u.ownerId);
+      if (n > piorN) { piorN = n; pior = u; }
+    });
+    if (!pior || piorN < 1) return;
+    const meus = [];
+    Object.keys(leads).forEach(id => {
+      (leads[id] || []).forEach(l => {
+        if (String(l.ownerId) === String(pior.ownerId) && l.slaBreach) meus.push(l);
+      });
+    });
+    const din = sm3Dinheiro(meus);
+    lista.push({
+      id: 'combinado:' + pior.ownerId,
+      tipo: 'cobrar combinado',
+      titulo: (pior.nome || '').split(' ')[0] + ' — combinado descumprido em '
+        + piorN + ' semana(s)',
+      por: meus.length
+        ? meus.length + ' régua(s) estourada(s) nascem do mesmo hábito. Cobrança com prazo, em 1:1.'
+        : 'o combinado não foi cumprido. Cobrança com prazo, em 1:1.',
+      valor: (meus.length ? din.txt + ' parados' : 'sem valor no CRM') + ' · ' + (pior.nome || '').split(' ')[0],
+      rot: 'marcar 1:1 hoje ▸',
+      ownerId: String(pior.ownerId),
+      peso: 85 + piorN
+    });
+  }());
+
+  (function () {
+    const estourados = [];
+    Object.keys(leads).forEach(id => {
+      (leads[id] || []).forEach(l => { if (l.slaBreach) estourados.push(l); });
+    });
+    if (!estourados.length) return;
+    estourados.sort((a, b) => (Number(b.dias) || 0) - (Number(a.dias) || 0));
+    const l = estourados[0];
+    const din = sm3Dinheiro(estourados);
+    const etapa = (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[String(l.stageId)]) || 'etapa';
+    lista.push({
+      id: 'regua:' + l.id,
+      tipo: 'ensinar em campo',
+      titulo: nomeDoNegocio(l) + ' — ' + (Number(l.dias) || 0) + ' dias em ' + etapa,
+      por: 'é o negócio mais tempo acima da régua do time, de ' + estourados.length
+        + ' estourados. ' + din.frase + '.',
+      valor: din.txt + ' · ' + nomeDe(l.ownerId),
+      rot: 'ir a campo com ' + nomeDe(l.ownerId) + ' ▸',
+      ownerId: String(l.ownerId || ''),
+      peso: 70 + Math.min(20, (Number(l.dias) || 0) / 5)
+    });
+  }());
+
+  return lista.sort((a, b) => b.peso - a.peso).slice(0, 5);
+}
+
+function sm3ModoDe(u, P) {
+  const oid = String(u.ownerId);
+  const cum = sm9Cumprido(oid);
+  const prom = (SM9.promessas || {})[oid];
+  const p = (prom && prom.promessa) || null;
+  const cad = sm3Cadencia(oid);
+  const desc = sm3DescumpriuSemanas(oid);
+
+  const fe = cum.fechamentos.v;
+  const promFe = p && Number(p.fechamentos) > 0 ? Number(p.fechamentos) : null;
+  const vis = cum.visitas.medido ? cum.visitas.v : null;
+  const promVis = p && Number(p.visitas) > 0 ? Number(p.visitas) : null;
+
+  const pcCadencia = cad.medido
+    ? (cad.zeros ? cad.zeros + ' dia(s) zerado(s) no CRM em ' + cad.dias : 'cadência sem dia zerado em ' + cad.dias + ' dias')
+    : 'cadência não medida (sem série de atividade nesta janela)';
+  const pcFech = promFe != null ? fe + ' de ' + promFe + ' fechamento(s) prometido(s)'
+    : fe + ' fechamento(s) — promessa da semana não travada';
+  const pcVis = vis != null
+    ? (promVis != null ? vis + ' de ' + promVis + ' visita(s)' : vis + ' visita(s) sem promessa travada')
+    : 'visitas não medidas (nenhuma daily registrada nesta semana)';
+
+  let modo, diag;
+
+  if (desc >= 2) {
+    modo = 'cobrar';
+    diag = 'combinado não cumprido em ' + desc + ' semanas seguidas · ' + pcCadencia
+      + ' — aqui é cobrança direta, com prazo.';
+  } else if (cad.medido && cad.queda) {
+    modo = 'destravar';
+    diag = 'a cadência caiu para menos da metade na segunda metade da janela (' + pcCadencia
+      + ') e ' + pcFech + ' — algo trava fora dos números: pergunta antes de cobrar.';
+  } else if (cad.medido && cad.zeros === 0 && fe === 0 && promFe != null) {
+    modo = 'destravar';
+    diag = 'esforço constante (' + pcCadencia + ') e resultado preso em ' + pcFech
+      + ' — o problema não é falta de trabalho: destrava junto.';
+  } else if (vis != null && vis >= 5 && fe === 0) {
+    modo = 'campo';
+    diag = pcVis + ' e nenhum fechamento — a visita não vira próximo passo. '
+      + 'Problema de skill de fechamento: vai junto e mostra.';
+  } else if (promFe != null && fe >= promFe && fe > 0) {
+    modo = 'reconhecer';
+    diag = 'cumpriu a promessa da semana (' + pcFech + ') — reconhece em público e extrai o hábito para a Semanal.';
+  } else if (promFe == null && fe > 0) {
+    modo = 'reconhecer';
+    diag = pcFech + ' · ' + pcCadencia + ' — entregou sem promessa travada: reconhece e pede a promessa na Semanal.';
+  } else {
+    modo = 'acompanhar';
+    diag = pcFech + ' · ' + pcVis + ' · ' + pcCadencia + ' — nada pede intervenção agora: acompanha o ritmo.';
+  }
+
+  const ov = SM3_ESTADO.modos[oid];
+  if (ov && ov.modo && SM3_MODOS[ov.modo]) {
+    const sug = modo;
+    modo = ov.modo;
+    if (sug !== modo) {
+      diag = 'você escolheu ' + SM3_MODOS[modo].rot + ' (o sistema sugeria '
+        + SM3_MODOS[sug].rot + ') · ' + diag;
+    }
+  }
+  return { modo, diag, sugerido: ov && ov.modo ? null : modo, cum, p, cad };
+}
+
+function sm3Gargalos(P) {
+  const leads = sm3AbertosPorEtapa();
+  const nomeDe = o => (typeof rt7Nome === 'function' ? String(rt7Nome(o)).split(' ')[0] : 'sem dono');
+  const fora = [];
+
+  (function () {
+    const porEtapa = {};
+    Object.keys(leads).forEach(id => {
+      (leads[id] || []).forEach(l => {
+        if (!l.slaBreach) return;
+        const k = String(l.stageId || id);
+        (porEtapa[k] = porEtapa[k] || []).push(l);
+      });
+    });
+    const ids = Object.keys(porEtapa);
+    if (!ids.length) {
+      fora.push({
+        rot: 'gargalo nº 1 — etapa', n: '—', un: 'nenhum negócio acima da régua',
+        leitura: 'nenhuma etapa tem negócio passado da régua nesta foto do CRM. É a melhor notícia da semana.',
+        acao: 'manter a régua e usar a Semanal para a boa prática', dono: 'time todo',
+        tipo: 'etapa'
+      });
+      return;
+    }
+    const pior = ids.sort((a, b) => porEtapa[b].length - porEtapa[a].length)[0];
+    const nela = porEtapa[pior];
+    const din = sm3Dinheiro(nela);
+    const etapa = (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[pior]) || 'etapa ' + pior;
+
+    const porDono = {};
+    nela.forEach(l => { const k = String(l.ownerId || ''); porDono[k] = (porDono[k] || 0) + 1; });
+    const donos = Object.keys(porDono).sort((a, b) => porDono[b] - porDono[a]);
+    fora.push({
+      rot: 'gargalo nº 1 — etapa ' + etapa,
+      n: String(nela.length), un: 'negócios acima da régua · ' + din.txt,
+      leitura: 'a etapa ' + etapa + ' é onde o funil para: ' + nela.length
+        + ' negócio(s) passaram do tempo de régua. ' + din.frase + '.',
+      acao: 'combinado da semana (ao lado) + tema da Semanal',
+      dono: donos.length > 1
+        ? nomeDe(donos[0]) + ' (' + porDono[donos[0]] + ') e mais ' + (donos.length - 1)
+        : (donos.length ? nomeDe(donos[0]) : 'time todo'),
+      tipo: 'etapa'
+    });
+  }());
+
+  (function () {
+    const elenco = sm9Elenco();
+    const comZero = [];
+    let semSerie = 0;
+    elenco.forEach(u => {
+      const c = sm3Cadencia(u.ownerId);
+      if (!c.medido) { semSerie++; return; }
+      if (c.zeros > 0) comZero.push({ u, c });
+    });
+    if (!comZero.length) {
+      fora.push({
+        rot: 'gargalo nº 2 — cadência',
+        n: semSerie === elenco.length ? '—' : '0',
+        un: semSerie === elenco.length ? 'cadência não medida' : 'executivos com dia zerado',
+        leitura: semSerie === elenco.length
+          ? 'não há série de atividade nesta janela para ' + elenco.length
+            + ' pessoa(s) — o gargalo de cadência não pode ser afirmado nem descartado.'
+          : 'ninguém do time zerou um dia no CRM nesta janela. A cadência não é o gargalo desta semana.',
+        acao: semSerie === elenco.length
+          ? 'conferir se as atividades estão sendo registradas no HubSpot'
+          : 'manter — e olhar o gargalo nº 1',
+        dono: 'você', tipo: 'cadencia'
+      });
+      return;
+    }
+    comZero.sort((a, b) => b.c.zeros - a.c.zeros);
+    fora.push({
+      rot: 'gargalo nº 2 — cadência',
+      n: String(comZero.length), un: 'executivos com dias zerados',
+      leitura: comZero.slice(0, 3).map(x => (x.u.nome || '').split(' ')[0]
+        + ' (' + x.c.zeros + ' de ' + x.c.dias + ')').join(' e ')
+        + ' — as réguas estouradas deles nascem aqui, não no pitch.'
+        + (semSerie ? ' Outros ' + semSerie + ' sem série medida.' : ''),
+      acao: 'destravar quem caiu de ritmo + cobrar quem zerou seguido',
+      dono: comZero.slice(0, 2).map(x => (x.u.nome || '').split(' ')[0]).join(' · '),
+      tipo: 'cadencia'
+    });
+  }());
+
+  (function () {
+    const elenco = sm9Elenco();
+    let feitas = 0, prometidas = 0, medido = false, zerados = [];
+    elenco.forEach(u => {
+      const c = sm9Cumprido(u.ownerId);
+      if (c.prospeccao.medido) {
+        medido = true;
+        feitas += c.prospeccao.v;
+        if (c.prospeccao.v === 0) zerados.push((u.nome || '').split(' ')[0]);
+      }
+      const p = (SM9.promessas || {})[String(u.ownerId)];
+      if (p && p.promessa && Number(p.promessa.prospeccao) > 0) prometidas += Number(p.promessa.prospeccao);
+    });
+    if (!medido) {
+      fora.push({
+        rot: 'gargalo nº 3 — boca do funil', n: '—', un: 'prospecção não medida',
+        leitura: 'o resumo semanal não trouxe a janela de leads criados — sem ela, prospecção nova da semana não se afirma.',
+        acao: 'conferir a rodada do resumo semanal', dono: 'você', tipo: 'boca_do_funil'
+      });
+      return;
+    }
+    fora.push({
+      rot: 'gargalo nº 3 — boca do funil',
+      n: String(feitas),
+      un: prometidas ? 'prosp. novas de ' + prometidas + ' prometidas' : 'prosp. novas · nenhuma promessa travada',
+      leitura: (zerados.length
+        ? zerados.slice(0, 3).join(' e ') + ' com 0 na semana — '
+        : 'a boca do funil está alimentada — ')
+        + 'o mês que vem se decide agora: sem boca, não há fim de funil.',
+      acao: 'mínimo 1 prospecção nova por dia no plano da Daily',
+      dono: zerados.length ? zerados.slice(0, 2).join(' · ') : 'time todo',
+      tipo: 'boca_do_funil'
+    });
+  }());
+
+  return fora;
+}
+
+function sm3Dados() {
+  const P = sm9Projecao();
+  const pace = sm9Pace();
+  const elenco = sm9Elenco();
+  const acoes = sm3Acoes(P);
+  const gargalos = sm3Gargalos(P);
+  const seg = sm9Segunda();
+  const segPassada = sm3SegundaPassada();
+
+  const agora = (typeof agendaAgora === 'function') ? agendaAgora() : new Date();
+  const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+    'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const contexto = DIAS[agora.getDay()] + ', ' + String(agora.getDate()).padStart(2, '0')
+    + ' de ' + MESES[agora.getMonth()]
+    + ' · semana ' + numeroDaSemanaISO(agora)
+    + ' · ' + (P.comecou ? 'dia ' + P.dia + ' de ' + P.de + ' úteis' : 'véspera — a semana começa segunda')
+    + ' · HubSpot ' + (DATA.hubspotUpdatedAtFmt || 'sem carimbo');
+
+  const dinAcoes = sm3Dinheiro(acoes.map(a => {
+    const leads = DATA.funilLeads || {};
+    let achado = null;
+    Object.keys(leads).forEach(id => {
+      (leads[id] || []).forEach(l => { if ('proposta:' + l.id === a.id || 'geladeira:' + l.id === a.id
+        || 'janela:' + l.id === a.id || 'regua:' + l.id === a.id) achado = l; });
+    });
+    return achado || {};
+  }).filter(x => x && x.id));
+
+  const manchete = !P.comecou
+    ? 'A semana começa segunda. As ' + acoes.length + ' ações abaixo são o que já está na mesa — '
+      + (acoes.length ? 'comece por ' + acoes[0].titulo.split('—')[0].trim() + '.' : 'nada pede ação hoje.')
+    : 'No ritmo atual a semana fecha com ' + (P.projecao == null ? '—' : P.projecao)
+      + ' de ' + P.meta + ' — as ' + acoes.length + ' ações abaixo '
+      + (dinAcoes.com
+        ? 'destravam ' + dinAcoes.txt + ' (' + dinAcoes.com + ' de ' + acoes.length
+          + ' com valor no CRM) e ' + (P.atras ? 'recuperam o gap' : 'sustentam o ritmo')
+
+        : (P.atras ? 'são o caminho para recuperar o gap' : 'sustentam o ritmo')
+          + ' (nenhuma com valor preenchido no CRM)')
+      + (acoes.length ? '. Comece por ' + acoes[0].titulo.split('—')[0].trim() + '.' : '.');
+
+  const visitasTime = elenco.reduce((t, u) => {
+    const v = sm9VisitasDaSemana(u.ownerId);
+    return { soma: t.soma + (v.medido ? v.v : 0), medido: t.medido || v.medido };
+  }, { soma: 0, medido: false });
+  const promVisitas = elenco.reduce((t, u) => {
+    const p = (SM9.promessas || {})[String(u.ownerId)];
+    return t + ((p && p.promessa && Number(p.promessa.visitas)) || 0);
+  }, 0);
+  const estourados = [];
+  Object.keys(DATA.funilLeads || {}).forEach(id => {
+    ((DATA.funilLeads || {})[id] || []).forEach(l => { if (l.slaBreach) estourados.push(l); });
+  });
+  const dinEstourado = sm3Dinheiro(estourados);
+  const gEtapa = gargalos.find(g => g.tipo === 'etapa');
+
+  const kpis = [
+    { rot: 'Fechamentos', v: P.comecou ? P.feitos + '/' + P.meta : '—',
+      de: P.comecou ? (P.metaEhPrometida ? 'prometidos ' + P.meta : 'meta derivada da mensal') : 'a semana não começou',
+      cor: !P.comecou ? '#8B93A3' : (P.feitos >= P.meta * 0.4 ? '#7FD9BE' : '#FF8D9A') },
+    { rot: 'Projeção da semana', v: P.projecao == null ? '—' : String(P.projecao),
+      de: P.comecou ? 'no ritmo atual' : 'sem dia útil decorrido', cor: '#F0B45C' },
+    { rot: 'Dinheiro nas ações', v: dinAcoes.com ? dinAcoes.txt : '—',
+      de: dinAcoes.com ? dinAcoes.com + ' de ' + acoes.length + ' com valor' : 'nenhuma ação com valor no CRM',
+      cor: dinAcoes.com ? '#7FD9BE' : '#8B93A3' },
+    { rot: 'Visitas na semana', v: visitasTime.medido ? visitasTime.soma + (promVisitas ? '/' + promVisitas : '') : '—',
+      de: visitasTime.medido ? (promVisitas ? 'prometidas' : 'nenhuma promessa travada') : 'nenhuma daily registrada',
+      cor: '#FFFDF8' },
+    { rot: 'Acima da régua', v: String(estourados.length),
+      de: gEtapa ? 'pior: ' + String(gEtapa.rot).replace('gargalo nº 1 — etapa ', '') + ' · ' + dinEstourado.txt
+        : dinEstourado.txt,
+      cor: estourados.length ? '#FF8D9A' : '#7FD9BE' }
+  ];
+
+  const acoes5 = acoes.map((a, i) => {
+    const chave = 'semana_acao:' + a.id;
+    const ok = !!TL5_ESTADO.pauta[chave];
+    return {
+      pos: String(i + 1), tipo: a.tipo, titulo: a.titulo, por: a.por, valor: a.valor,
+      tCor: '#8E3B5C', tBg: '#FBF5F8',
+      bg: ok ? '#F4FBF8' : '#FDFEFF', borda: ok ? '#CBE8DD' : '#E2E6EE',
+      rot: ok ? '✓ na pauta' : a.rot,
+      cbBg: ok ? '#EAF6F1' : '#E51A31', cbCor: ok ? '#1E9E7B' : '#FFFDF8',
+      cbBorda: ok ? '#CBE8DD' : '#E51A31',
+      on: 'acao:' + a.id
+    };
+  });
+
+  const legenda = Object.keys(SM3_MODOS).map(k => ({
+    rot: SM3_MODOS[k].rot, cor: SM3_MODOS[k].cor, bg: SM3_MODOS[k].bg
+  }));
+
+  const execs = elenco.map(u => {
+    const oid = String(u.ownerId);
+    const m = sm3ModoDe(u, P);
+    const cum = m.cum;
+    const p = m.p;
+    const promFe = p && Number(p.fechamentos) > 0 ? Number(p.fechamentos) : null;
+    const promVis = p && Number(p.visitas) > 0 ? Number(p.visitas) : null;
+    const promPr = p && Number(p.prospeccao) > 0 ? Number(p.prospeccao) : null;
+    const cor3 = (feito, prometido, medido) => {
+      if (!medido) return '#8B93A3';
+      if (prometido == null) return feito > 0 ? '#1E9E7B' : '#7A8494';
+      if (feito >= prometido * 0.4) return '#1E9E7B';
+      return feito > 0 ? '#B07C1F' : '#E51A31';
+    };
+    const par = (feito, prometido, medido) => !medido ? '—'
+      : (prometido == null ? String(feito) + '/—' : feito + '/' + prometido);
+
+    let pct = 0;
+    if (promFe) pct = Math.round(cum.fechamentos.v / promFe * 100);
+    else if (promVis && cum.visitas.medido) pct = Math.round(cum.visitas.v / promVis * 100);
+    const mo = SM3_MODOS[m.modo];
+    const chaveAgir = 'semana_modo:' + oid;
+    const naPauta = !!TL5_ESTADO.pauta[chaveAgir];
+    const ACAO = {
+      cobrar: 'marcar 1:1 hoje', destravar: 'conversa de destravamento',
+      campo: 'acompanhar 2 visitas', acompanhar: 'check na Daily', reconhecer: 'reconhecer na Daily'
+    };
+    return {
+      ini: String(u.nome || '?').split(' ').filter(Boolean).map(x => x[0]).slice(0, 2).join(''),
+      nome: u.nome || 'sem nome',
+      fe: par(cum.fechamentos.v, promFe, true), feCor: cor3(cum.fechamentos.v, promFe, true),
+      vis: par(cum.visitas.v, promVis, cum.visitas.medido), visCor: cor3(cum.visitas.v, promVis, cum.visitas.medido),
+      pr: par(cum.prospeccao.v, promPr, cum.prospeccao.medido), prCor: cor3(cum.prospeccao.v, promPr, cum.prospeccao.medido),
+      pct: Math.min(Math.max(pct, 3), 100) + '%',
+      pctCor: pct >= 40 ? '#1E9E7B' : (pct > 0 ? '#E8A23D' : '#E51A31'),
+      modo: mo.rot, mCor: mo.cor, mBg: mo.bg,
+      bg: m.modo === 'cobrar' ? '#FDF7F7' : '#FDFEFF',
+      borda: m.modo === 'cobrar' ? '#E3C6C6' : '#E2E6EE',
+      avBg: m.modo === 'cobrar' ? '#6E1210' : '#E51A31',
+      diag: m.diag,
+      cbRot: naPauta ? '✓ na pauta' : ACAO[m.modo] + ' ▸',
+      cbBg: naPauta ? '#EAF6F1' : (m.modo === 'reconhecer' ? '#1E9E7B' : m.modo === 'cobrar' ? '#E51A31' : '#FDFEFF'),
+      cbCor: naPauta ? '#1E9E7B' : ((m.modo === 'reconhecer' || m.modo === 'cobrar') ? '#FFFDF8' : '#8E3B5C'),
+      cbBorda: naPauta ? '#CBE8DD' : (m.modo === 'reconhecer' ? '#1E9E7B' : m.modo === 'cobrar' ? '#E51A31' : '#8E3B5C'),
+      agir: 'modo:' + oid
+    };
+  });
+
+  const nA = acoes5.filter(a => a.rot === '✓ na pauta').length;
+  const nG = execs.filter(e => e.cbRot === '✓ na pauta').length;
+  const roteiro = [
+    { t: '0–5 min', rot: 'O placar', txt: 'prometido × confirmado da semana que fechou — sem opinião, só HubSpot' },
+    { t: '5–12 min', rot: 'O gargalo', txt: (gEtapa ? String(gEtapa.rot).replace('gargalo nº 1 — ', '') : 'o gargalo nº 1') + ' com números + o combinado novo (um só, com dono e prazo)' },
+    { t: '12–20 min', rot: 'A boa prática', txt: 'quem puxou a semana mostra o hábito' },
+    { t: '20–27 min', rot: 'As promessas', txt: 'cada um trava a promessa em voz alta — fechamentos, visitas, prospecções' },
+    { t: '27–30 min', rot: 'Combinados', txt: 'status dos combinados anteriores — cobrar antes de combinar de novo' }
+  ];
+
+  const oCombinado = SM3_ESTADO.combinados.find(c => c.data_segunda === seg) || null;
+  const sugestao = sm3CombinadoSugerido(gEtapa);
+  const cbTitulo = oCombinado ? oCombinado.titulo : sugestao.titulo;
+  const cbJust = oCombinado
+    ? [oCombinado.justificativa, oCombinado.dono_rotulo ? 'Dono: ' + oCombinado.dono_rotulo : null,
+       oCombinado.prazo ? 'prazo: ' + tm2DataCurta(oCombinado.prazo) : null,
+       oCombinado.playbook_pagina ? 'playbook pág. ' + oCombinado.playbook_pagina : null]
+      .filter(Boolean).join(' · ')
+    : sugestao.just;
+  const cbNa = !!(oCombinado && oCombinado.na_semanal);
+
+  const combinados = SM3_ESTADO.combinados
+    .filter(c => c.data_segunda === segPassada)
+    .slice(0, 3)
+    .map(c => {
+      const marcas = SM3_ESTADO.cumprimento[c.id] || {};
+      const alvos = (c.alvo_owner_ids && c.alvo_owner_ids.length)
+        ? c.alvo_owner_ids.map(String) : elenco.map(u => String(u.ownerId));
+      const marcados = alvos.filter(o => marcas[o] != null);
+      const cumpriram = alvos.filter(o => marcas[o] && marcas[o].cumpriu === true);
+      const nao = alvos.filter(o => marcas[o] && marcas[o].cumpriu === false)
+        .map(o => (typeof rt7Nome === 'function' ? String(rt7Nome(o)).split(' ')[0] : o));
+      const resolvido = c.status !== 'aberto';
+
+      const st = resolvido
+        ? (c.status === 'cumprido' ? 'cumprido ✓' : 'não cumprido')
+        : (marcados.length
+          ? cumpriram.length + ' de ' + alvos.length + ' cumpriram'
+            + (nao.length ? ' · cobrar ' + nao.slice(0, 3).join(', ') : '')
+          : 'ninguém marcado ainda — ' + alvos.length + ' na lista');
+      return {
+        txt: c.titulo, st: st,
+        stCor: resolvido ? (c.status === 'cumprido' ? '#1E9E7B' : '#8A3B3B')
+          : (marcados.length ? (nao.length ? '#B07C1F' : '#1E9E7B') : '#7A8494'),
+        rot: resolvido ? 'reabrir' : 'marcar resolvido ✓',
+        bg: resolvido ? '#FDFEFF' : '#EAF6F1',
+        cor: resolvido ? '#7A8494' : '#1E9E7B',
+        borda: resolvido ? '#DCE1EA' : '#CBE8DD',
+        toggle: 'resolver:' + c.id
+      };
+    });
+
+  const nomesModo = execs.filter(e => e.cbRot === '✓ na pauta').map(e => e.nome.split(' ')[0]);
+  const nomesCampo = execs.filter(e => e.modo === SM3_MODOS.campo.rot).map(e => e.nome.split(' ')[0]);
+  const agenda = [
+    { hora: 'hoje', rot: (nA || nG)
+      ? nA + ' ação(ões) + ' + nG + ' modo(s) de agir na sua pauta'
+        + (nomesModo.length ? ' — ' + nomesModo.slice(0, 4).join(', ') : '')
+      : 'nada na pauta ainda — clique numa ação ou num executivo acima' },
+    { hora: 'esta semana', rot: nomesCampo.length
+      ? 'campo com ' + nomesCampo.slice(0, 3).join(', ') + ' — foco: sair da visita com próximo passo agendado'
+      : 'nenhum campo indicado pelos números nesta semana' },
+    { hora: 'seg 8h30', rot: 'Semanal — roteiro pronto: placar + '
+      + (gEtapa ? String(gEtapa.rot).replace('gargalo nº 1 — ', '') : 'gargalo')
+      + ' + combinado' + (cbNa ? ' ✓' : '') }
+  ];
+
+  return {
+    contexto, manchete, kpis,
+    metaSemanaRot: 'meta da semana: ' + P.meta + ' fechamentos'
+      + (P.metaEhPrometida ? ' (soma das promessas de ' + P.quantasPromessas + ' de ' + P.totalElenco + ')'
+        : ' (derivada da meta mensal — ninguém prometeu ainda)'),
+    paceFeito: pace.feitoPct + '%', paceEsperado: pace.esperadoPct + '%',
+    paceRot: P.comecou
+      ? P.feitos + ' feitos · deveria ter ' + Math.round(P.meta * P.dia / P.de)
+        + ' no dia ' + P.dia + ' de ' + P.de
+        + ' · projeção ' + (P.projecao == null ? '—' : P.projecao) + ' de ' + P.meta
+      : 'a semana começa segunda — nada medido ainda',
+    paceCor: P.atras ? '#E51A31' : '#1E9E7B',
+    temToast: !!SM3_ESTADO.toast, toast: SM3_ESTADO.toast || '',
+    acoes5, gargalos, legenda, execs, roteiro,
+
+    tituloAcoes: acoes.length === 5 ? 'As 5 ações que viram a semana'
+      : (acoes.length === 1 ? 'A ação que vira a semana'
+        : (acoes.length === 0 ? 'Nenhuma ação com evidência de número hoje'
+          : 'As ' + acoes.length + ' ações que viram a semana')),
+    cbTitulo, cbJust,
+    cbRot: cbNa ? '✓ combinado fechado — na pauta da Semanal' : 'fechar este combinado na Semanal ▸',
+    cbBg: cbNa ? '#EAF6F1' : '#8E3B5C', cbCor: cbNa ? '#1E9E7B' : '#FFFDF8',
+    cbBorda: cbNa ? '#CBE8DD' : '#8E3B5C',
+    cbFechar: 'combinado:fechar',
+    combinados, agenda,
+    notaDeFonte: sm3NotaDeFonte(P, dinAcoes, estourados.length)
+  };
+}
+
+function sm3CombinadoSugerido(gEtapa) {
+  if (!gEtapa || gEtapa.n === '—') {
+    return {
+      titulo: 'Sem gargalo de etapa nesta semana — combinado livre',
+      just: 'nenhuma etapa está acima da régua. Dono: time todo · prazo: sexta.'
+    };
+  }
+  const etapa = String(gEtapa.rot).replace('gargalo nº 1 — etapa ', '');
+  const POR_ETAPA = {
+    'Visita': { t: 'Visita só conta com próximo passo agendado antes de ir embora', pag: 14 },
+    'Demo/Proposta': { t: 'Proposta pedida sai no mesmo dia, com plano apresentado no CRM', pag: null },
+    'Negociação': { t: 'Negociação sem data de decisão volta para o decisor nesta semana', pag: null },
+    'Conversa com Decisor': { t: 'Conversa com decisor termina com demonstração marcada', pag: null },
+    'Prospecção': { t: 'Prospecção nova entra no CRM no dia em que acontece', pag: null }
+  };
+  const base = POR_ETAPA[etapa] || { t: 'Nenhum negócio passa da régua em ' + etapa, pag: null };
+  return {
+    titulo: base.t,
+    just: 'ataca os ' + gEtapa.n + ' negócios acima da régua em ' + etapa
+      + '. Dono: ' + gEtapa.dono + ' · prazo: sexta'
+      + (base.pag ? ' · playbook pág. ' + base.pag : '') + '.',
+    pag: base.pag, etapa: etapa
+  };
+}
+
+function sm3NotaDeFonte(P, dinAcoes, estourados) {
+  return 'Fechamentos e réguas: HubSpot ao vivo (' + (DATA.hubspotUpdatedAtFmt || 'sem carimbo')
+    + '). Visitas: dailies.realizado_visitas, da tarefa de visita que nasce no Expogo. '
+    + 'Prospecção: janela do resumo semanal. Prometido: Supabase planos_semanais, dado por '
+    + 'cada um no Meu Funil — ' + P.quantasPromessas + ' de ' + P.totalElenco
+    + ' travaram promessa nesta semana. Temperatura: régua em data/temperatura.json. '
+    + 'Cadência: atividades registradas no HubSpot (tarefa, reunião e nota). '
+    + 'Combinados e modos de agir: Supabase combinados_semana, combinados_cumprimento e '
+    + 'modos_de_agir. Valor: ' + (dinAcoes.com ? dinAcoes.com + ' das ' : 'nenhuma das ')
+    + 'ações tem valor preenchido no CRM' + (dinAcoes.sem ? ' e ' + dinAcoes.sem + ' não têm' : '')
+    + ' — onde não há, a tela mostra travessão e não zero. Nenhum texto desta aba é gerado por IA.';
+}
+
+async function sm3Carregar() {
+  SM3_ESTADO.combinados = [];
+  SM3_ESTADO.cumprimento = {};
+  SM3_ESTADO.modos = {};
+  if (typeof supa === 'undefined' || !supa) { SM3_ESTADO.carregado = true; return; }
+  const seg = sm9Segunda();
+  const passada = sm3SegundaPassada();
+  if (!seg) { SM3_ESTADO.carregado = true; return; }
+  try {
+    const { data: cbs, error: e1 } = await supa.from('combinados_semana')
+      .select('*').in('data_segunda', [seg, passada].filter(Boolean))
+      .order('criado_em', { ascending: false });
+    if (e1) throw e1;
+    SM3_ESTADO.combinados = cbs || [];
+
+    if (SM3_ESTADO.combinados.length) {
+      const ids = SM3_ESTADO.combinados.map(c => c.id);
+      const { data: cps, error: e2 } = await supa.from('combinados_cumprimento')
+        .select('*').in('combinado_id', ids);
+      if (e2) throw e2;
+      (cps || []).forEach(l => {
+        const m = SM3_ESTADO.cumprimento[l.combinado_id] = SM3_ESTADO.cumprimento[l.combinado_id] || {};
+        m[String(l.owner_id)] = l;
+      });
+    }
+
+    const { data: mds, error: e3 } = await supa.from('modos_de_agir')
+      .select('*').eq('data_segunda', seg);
+    if (e3) throw e3;
+    (mds || []).forEach(l => { SM3_ESTADO.modos[String(l.owner_id)] = l; });
+  } catch (e) {
+
+    console.log('semana v3: nao consegui ler combinados/modos - ' + (e && e.message));
+  }
+  SM3_ESTADO.carregado = true;
+}
+
+async function sm3Executar(acao) {
+  if (!acao) return;
+  if (SM3_GRAVANDO) return;
+  const seg = sm9Segunda();
+
+  if (acao.indexOf('acao:') === 0) {
+    const id = acao.slice(5);
+    const d = sm3Dados();
+    const i = d.acoes5.findIndex(a => a.on === acao);
+    if (i < 0) return;
+    const a = d.acoes5[i];
+    SM3_GRAVANDO = true;
+    await tl5Alternar('acao_semana', null, a.titulo, a.por, 'semana_acao:' + id);
+    SM3_ESTADO.toast = TL5_ESTADO.toast;
+    SM3_GRAVANDO = false;
+    await tl5CarregarPauta();
+    renderSemana();
+    return;
+  }
+
+  if (acao.indexOf('modo:') === 0) {
+    const oid = acao.slice(5);
+    const u = sm9Elenco().find(x => String(x.ownerId) === oid);
+    if (!u) return;
+    const m = sm3ModoDe(u, sm9Projecao());
+    SM3_GRAVANDO = true;
+    await tl5Alternar('modo_agir', oid,
+      SM3_MODOS[m.modo].rot + ': ' + (u.nome || ''), m.diag, 'semana_modo:' + oid);
+    SM3_ESTADO.toast = TL5_ESTADO.toast;
+    SM3_GRAVANDO = false;
+    await tl5CarregarPauta();
+    renderSemana();
+    return;
+  }
+
+  if (acao === 'combinado:fechar') {
+    if (!supa || !seg) { SM3_ESTADO.toast = 'sem conexão com o Supabase aqui — nada foi gravado'; renderSemana(); return; }
+    const existente = SM3_ESTADO.combinados.find(c => c.data_segunda === seg);
+    SM3_GRAVANDO = true;
+    try {
+      if (existente) {
+
+        const { error } = await supa.from('combinados_semana').delete().eq('id', existente.id);
+        if (error) throw error;
+        SM3_ESTADO.toast = 'combinado removido da pauta';
+      } else {
+        const g = sm3Gargalos(sm9Projecao()).find(x => x.tipo === 'etapa');
+        const s = sm3CombinadoSugerido(g);
+        const { error } = await supa.from('combinados_semana').insert({
+          data_segunda: seg,
+          titulo: s.titulo,
+          justificativa: s.just,
+          origem_gargalo: 'etapa',
+          alvo_owner_ids: [],
+          dono_rotulo: (g && g.dono) || 'time todo',
+          prazo: sm3SextaDaSemana(),
+          playbook_pagina: s.pag || null,
+          status: 'aberto',
+          na_semanal: true,
+          criado_por: (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || null
+        });
+        if (error) throw error;
+        SM3_ESTADO.toast = 'combinado da semana na pauta da Semanal ✓ — dono: '
+          + ((g && g.dono) || 'time todo') + ' · prazo: sexta';
+      }
+    } catch (e) {
+      SM3_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
+    }
+    SM3_GRAVANDO = false;
+    await sm3Carregar();
+    renderSemana();
+    return;
+  }
+
+  if (acao.indexOf('resolver:') === 0) {
+    const id = acao.slice(9);
+    const c = SM3_ESTADO.combinados.find(x => String(x.id) === id);
+    if (!c) return;
+    if (!supa) { SM3_ESTADO.toast = 'sem conexão com o Supabase aqui — nada foi gravado'; renderSemana(); return; }
+    SM3_GRAVANDO = true;
+    try {
+      const novo = c.status === 'aberto' ? 'cumprido' : 'aberto';
+      const { error } = await supa.from('combinados_semana')
+        .update({ status: novo, atualizado_em: new Date().toISOString() }).eq('id', c.id);
+      if (error) throw error;
+      SM3_ESTADO.toast = novo === 'cumprido' ? 'combinado marcado como cumprido ✓' : 'combinado reaberto';
+    } catch (e) {
+      SM3_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
+    }
+    SM3_GRAVANDO = false;
+    await sm3Carregar();
+    renderSemana();
+    return;
+  }
+}
+
+function sm3SextaDaSemana() {
+  const seg = sm9Segunda();
+  if (!seg || typeof addDays !== 'function') return null;
+  return addDays(seg, 4);
+}
+
+function sm3Ligar() {
+  if (SM3_OUVINTE) return;
+  SM3_OUVINTE = true;
+  document.addEventListener('click', function (ev) {
+    const alvo = ev.target.closest && ev.target.closest('[data-sm3-acao]');
+    if (!alvo) return;
+    if (!alvo.closest('[data-sm3-raiz]')) return;
+    const acao = alvo.getAttribute('data-sm3-acao');
+    if (!acao) return;
+    ev.preventDefault();
+    sm3Executar(acao);
+  });
+}
+
+function sm3TelaHTML(d) {
+  const { contexto, manchete, kpis, metaSemanaRot, paceFeito, paceEsperado, paceRot, paceCor,
+    temToast, toast, acoes5, tituloAcoes, gargalos, legenda, execs, roteiro, cbTitulo, cbJust,
+    cbRot, cbBg, cbCor, cbBorda, cbFechar, combinados, agenda, notaDeFonte } = d;
+  return `
+<section data-sm3-raiz style="display:flex;flex-direction:column;gap:56px;padding:0 0 8px;align-items:stretch;">
+  <div id="s3" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
+    <div style="width:100%;flex:none;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="background:#E51A31;color:#FFFDF8;font:900 12px 'Archivo',sans-serif;border-radius:6px;padding:4px 9px;">SEMANA V3</span>
+        <span style="font:800 13px 'Archivo',sans-serif;color:#2B3440;">Semana (gestor) — a semana corrente em modo ação: as 5 ações que viram a semana, os 3 gargalos com dono, e como agir com cada executivo (cobrar, destravar, ir junto, reconhecer)</span>
+      </div>
+      <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
+
+        <div style="background:#16181D;color:#FFFDF8;padding:18px 24px 16px;">
+          <div style="display:flex;align-items:flex-start;gap:28px;flex-wrap:wrap;">
+            <div style="min-width:0;flex:1;">
+              <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${contexto}</span>
+              <b style="display:block;font:900 24px/1.2 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;max-width:980px;text-wrap:balance;">${manchete}</b>
+            </div>
+            <div style="display:flex;gap:28px;flex-wrap:wrap;">
+              ${(kpis||[]).map(k => `
+                <span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${k.rot}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 26px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span></span>
+              `).join('')}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:22px;flex-wrap:wrap;">
+            <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;flex:none;">${metaSemanaRot}</span>
+            <span style="flex:1;min-width:220px;position:relative;height:10px;border-radius:999px;background:#2A2E36;">
+              <span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${paceFeito};background:${paceCor};border-radius:999px;"></span></span>
+              <span style="position:absolute;top:-4px;left:${paceEsperado};width:2px;height:18px;background:#F0B45C;border-radius:2px;"></span>
+              <span style="position:absolute;top:-17px;left:${paceEsperado};transform:translateX(-50%);font:800 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#F0B45C;white-space:nowrap;">onde deveria estar</span>
+            </span>
+            <span style="font:700 10.5px 'Manrope',sans-serif;color:#C6CDDA;flex:none;">${paceRot}</span>
+            ${(temToast) ? `
+              <span style="flex:none;font:700 10.5px 'Manrope',sans-serif;color:#7FD9BE;background:rgba(30,158,123,.15);border:1px solid rgba(127,217,190,.4);border-radius:999px;padding:5px 12px;max-width:460px;overflow-wrap:anywhere;">${toast}</span>
+            ` : ''}
+          </div>
+        </div>
+
+        <div style="padding:16px 24px 6px;">
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · ${tituloAcoes} <span style="color:#7A8494;">— priorizadas por dinheiro × prazo · se você fizer só isso, a semana fecha</span></span>
+          <div style="display:grid;grid-template-columns:repeat(${Math.min(Math.max((acoes5||[]).length,1),5)},minmax(0,1fr));gap:10px;margin-top:10px;">
+            ${(acoes5||[]).map(a5 => `
+              <div style="background:${a5.bg};border:1.5px solid ${a5.borda};border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:6px;min-width:0;">
+                <span style="display:flex;align-items:center;gap:8px;"><b style="font:900 18px 'Archivo',sans-serif;color:#E51A31;">${a5.pos}</b><span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:${a5.tCor};background:${a5.tBg};border-radius:5px;padding:3px 8px;">${a5.tipo}</span></span>
+                <b style="font:800 12.5px/1.35 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;">${a5.titulo}</b>
+                <span style="font:700 10px/1.5 'Manrope',sans-serif;color:#5B667A;flex:1;">${a5.por}</span>
+                <span style="font:800 10px 'Manrope',sans-serif;color:#8E3B5C;">${a5.valor}</span>
+                <button data-sm3-acao="${a5.on}" style="align-self:flex-start;display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:1px solid ${a5.cbBorda};border-radius:999px;background:${a5.cbBg};font:800 10px 'Manrope',sans-serif;color:${a5.cbCor};cursor:pointer;white-space:nowrap;" data-sm3-hv="0">${a5.rot}</button>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="padding:16px 24px 6px;">
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#6E1210;">2 · Os gargalos da semana <span style="color:#7A8494;">— onde o dinheiro está parado · cada um já com dono e ação</span></span>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px;">
+            ${(gargalos||[]).map(g => `
+              <div style="background:#FDF7F7;border:1px solid #E3C6C6;border-radius:12px;padding:12px 15px;display:flex;flex-direction:column;gap:6px;min-width:0;">
+                <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#6E1210;">${g.rot}</span>
+                <span style="display:flex;align-items:baseline;gap:8px;"><b style="font:900 26px 'Archivo',sans-serif;color:#6E1210;font-variant-numeric:tabular-nums;">${g.n}</b><span style="font:800 11px 'Manrope',sans-serif;color:#8A3B3B;">${g.un}</span></span>
+                <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;flex:1;">${g.leitura}</span>
+                <span style="font:800 10px 'Manrope',sans-serif;color:#2B3440;">▸ ação: ${g.acao} <b style="color:#8E3B5C;">· dono: ${g.dono}</b></span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="padding:16px 24px 6px;">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">3 · Como agir com cada um <span style="color:#7A8494;">— o placar da semana + o modo de gestão certo pra cada executivo · clique na ação e ela vira pauta</span></span>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;">
+              ${(legenda||[]).map(lg => `
+                <span style="display:inline-flex;align-items:center;gap:5px;font:800 8.5px 'Archivo',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:${lg.cor};background:${lg.bg};border-radius:5px;padding:3px 8px;white-space:nowrap;">${lg.rot}</span>
+              `).join('')}
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;">
+            ${(execs||[]).map(e => `
+              <div style="background:${e.bg};border:1.5px solid ${e.borda};border-radius:12px;min-width:0;overflow:hidden;">
+                <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;min-width:0;flex-wrap:wrap;">
+                  <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${e.avBg};color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">${e.ini}</span>
+                  <b style="font:800 13px 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;width:190px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.nome}</b>
+                  <span style="display:flex;gap:16px;flex-wrap:wrap;flex:none;">
+                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">fechamentos</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.feCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.fe}</b></span>
+                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">visitas</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.visCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.vis}</b></span>
+                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">prosp. novas</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.prCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.pr}</b></span>
+                  </span>
+                  <span style="flex:1;min-width:120px;max-width:240px;position:relative;height:8px;border-radius:999px;background:#EDEBE5;">
+                    <span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${e.pct};background:${e.pctCor};border-radius:999px;"></span></span>
+                    <span style="position:absolute;top:-3px;left:40%;width:2px;height:14px;background:#E0A64A;border-radius:2px;"></span>
+                  </span>
+                  <span style="flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${e.mCor};background:${e.mBg};border-radius:6px;padding:4px 10px;white-space:nowrap;">${e.modo}</span>
+                  <span style="font:700 10.5px/1.45 'Manrope',sans-serif;color:#5B667A;min-width:200px;flex:2;">▸ ${e.diag}</span>
+                  <button data-sm3-acao="${e.agir}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${e.cbBorda};border-radius:999px;background:${e.cbBg};font:800 10px 'Manrope',sans-serif;color:${e.cbCor};cursor:pointer;white-space:nowrap;" data-sm3-hv="0">${e.cbRot}</button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">placar = prometido na segunda (travado na Semanal) × confirmado no HubSpot até agora · traço âmbar = onde deveria estar no dia 2 de 5 · o modo de agir é recalculado por semana: resultado × esforço (cadência) × tendência</span>
+        </div>
+
+        <div style="padding:16px 24px 6px;">
+          <div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;">
+            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
+              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8E3B5C;">4 · A Semanal de segunda <span style="color:#7A8494;">— 30 minutos · o roteiro se monta sozinho com a semana</span></span>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+                ${(roteiro||[]).map(rt => `
+                  <div style="display:flex;align-items:center;gap:11px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:9px 13px;min-width:0;flex-wrap:wrap;">
+                    <span style="font:800 9.5px 'Manrope',sans-serif;color:#8E3B5C;flex:none;width:52px;font-variant-numeric:tabular-nums;">${rt.t}</span>
+                    <b style="font:800 12px 'Archivo',sans-serif;color:#2B3440;flex:none;">${rt.rot}</b>
+                    <span style="font:700 10.5px/1.45 'Manrope',sans-serif;color:#5B667A;min-width:0;flex:1;">${rt.txt}</span>
+                  </div>
+                `).join('')}
+              </div>
+              <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">tudo que você clicou nesta tela (ações, gargalos, modos de agir) já entra no passo certo do roteiro</span>
+            </div>
+            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
+              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#1E9E7B;">O combinado da semana <span style="color:#7A8494;">— um por vez, com dono e prazo</span></span>
+              <div style="margin-top:10px;background:#FBF5F8;border:1.5px solid #E9D9E1;border-radius:10px;padding:11px 14px;">
+                <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8E3B5C;">desta semana — sai do gargalo nº 1</span>
+                <b style="display:block;font:800 13px/1.35 'Archivo',sans-serif;color:#2B3440;margin-top:4px;">${cbTitulo}</b>
+                <span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;margin-top:4px;">${cbJust}</span>
+                <button data-sm3-acao="${cbFechar}" style="margin-top:8px;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${cbBorda};border-radius:999px;background:${cbBg};font:800 10px 'Manrope',sans-serif;color:${cbCor};cursor:pointer;white-space:nowrap;" data-sm3-hv="0">${cbRot}</button>
+              </div>
+              <span style="display:block;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;margin-top:10px;">da semana passada — cobre antes de criar novo</span>
+              <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;">
+                ${(combinados||[]).map(cb => `
+                  <span style="display:flex;align-items:center;gap:8px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:9px;padding:7px 11px;min-width:0;flex-wrap:wrap;">
+                    <span style="font:700 10.5px/1.4 'Manrope',sans-serif;color:#5B667A;min-width:0;flex:1;">${cb.txt} <b style="color:${cb.stCor};">${cb.st}</b></span>
+                    <button data-sm3-acao="${cb.toggle}" style="flex:none;display:inline-flex;align-items:center;min-height:28px;padding:0 11px;border:1px solid ${cb.borda};border-radius:999px;background:${cb.bg};font:800 9.5px 'Manrope',sans-serif;color:${cb.cor};cursor:pointer;white-space:nowrap;" data-sm3-hv="1">${cb.rot}</button>
+                  </span>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 24px 18px;">
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Sua semana de líder <span style="color:#7A8494;">— tudo que você clicou virou pauta, nada se perde</span></span>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
+            ${(agenda||[]).map(ag => `
+              <span style="display:flex;align-items:flex-start;gap:9px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:9px 13px;min-width:0;">
+                <span style="font:800 9px 'Manrope',sans-serif;color:#8E3B5C;flex:none;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;">${ag.hora}</span>
+                <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;overflow-wrap:anywhere;">${ag.rot}</span>
+              </span>
+            `).join('')}
+          </div>
+        </div>
+
+        <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 24px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${notaDeFonte}</p>
+      </div>
+    </div>
+
+  </div>
+</section>
+`;
+}
+
 function sm9Segunda() {
   return (typeof pl6SegundaDaSemana === 'function') ? pl6SegundaDaSemana() : null;
 }
@@ -41959,137 +42974,9 @@ async function sm9Executar(acao) {
   renderSemana();
 }
 
-function renderSemana() {
-  const raiz = document.getElementById('sm9Raiz');
-  if (!raiz) return;
-  if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
-  const d = sm9Dados();
-  const { contexto, manchete, kpis, prazoDaSemana, metaSemanaRot, paceFeito, paceEsperado, paceRot, paceCor, temToast, toast, execs, atras, noRitmo, metaCorrigida, acoes, progresso, pauta, fechar, fRot, fBg, fCor, fBorda, metas, leituras, notaDeFonte } = d;
-  raiz.innerHTML = `<div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
-
-        <div style="background:#16181D;color:#FFFDF8;padding:18px 22px 16px;">
-          <div style="display:flex;align-items:flex-start;gap:28px;flex-wrap:wrap;">
-            <div style="min-width:0;flex:1;">
-              <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${contexto}</span>
-              <b style="display:block;font:900 24px/1.2 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;max-width:980px;text-wrap:balance;">${manchete}</b>
-            </div>
-            <div style="display:flex;gap:26px;flex-wrap:wrap;">
-              ${(kpis||[]).map(k => `
-                <span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${k.rot}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 24px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span></span>
-              `).join('')}
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px;margin-top:20px;flex-wrap:wrap;">
-            <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;flex:none;">${metaSemanaRot}</span>
-            <span style="flex:1;min-width:220px;position:relative;height:10px;border-radius:999px;background:#2A2E36;">
-              <span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${paceFeito};background:${paceCor};border-radius:999px;"></span></span>
-              <span style="position:absolute;top:-4px;left:${paceEsperado};width:2px;height:18px;background:#F0B45C;border-radius:2px;"></span>
-              <span style="position:absolute;top:-17px;left:${paceEsperado};transform:translateX(-50%);font:800 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#F0B45C;white-space:nowrap;">onde deveria estar</span>
-            </span>
-            <span style="font:700 10.5px 'Manrope',sans-serif;color:#C6CDDA;flex:none;">${paceRot}</span>
-          </div>
-        </div>
-
-        <div style="padding:16px 22px 6px;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · O placar vivo <span style="color:#7A8494;">— promessa dada pelo executivo no Meu Funil (seg ${prazoDaSemana}) · travada na Semanal · cumprido medido no HubSpot, nunca auto-relato · traço âmbar = onde deveria estar hoje</span></span>
-            ${(temToast) ? `
-              <span style="font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:5px 12px;overflow-wrap:anywhere;">${toast}</span>
-            ` : ''}
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            ${(execs||[]).map(e => `
-              <div style="background:${e.bg};border:1.5px solid ${e.borda};border-radius:12px;min-width:0;overflow:hidden;">
-                <button data-sm9-acao="${e.abrir}" style="text-align:left;display:flex;align-items:center;gap:14px;width:100%;border:0;background:transparent;padding:10px 15px;cursor:pointer;min-width:0;flex-wrap:wrap;" data-sm9-hv="0">
-                  <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${e.avBg};color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">${e.ini}</span>
-                  <b style="font:800 13px 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;width:180px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.nome}</b>
-                  <span style="display:flex;gap:16px;flex-wrap:wrap;min-width:0;">
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">fechamentos</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.feCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.fe}</b></span>
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">visitas</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.visCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.vis}</b></span>
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">prosp. novas</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.prCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.pr}</b></span>
-                  </span>
-                  <span style="flex:1;min-width:140px;max-width:300px;position:relative;height:8px;border-radius:999px;background:#EDEBE5;">
-                    <span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${e.pct};background:${e.pctCor};border-radius:999px;"></span></span>
-                    <span style="position:absolute;top:-3px;left:${e.esperado};width:2px;height:14px;background:#E0A64A;border-radius:2px;"></span>
-                  </span>
-                  <span style="margin-left:auto;flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${e.stCor};background:${e.stBg};border-radius:6px;padding:4px 9px;white-space:nowrap;">${e.status}</span>
-                </button>
-                ${(e.aberto) ? `
-                  <div style="border-top:1px dashed #E3DDD0;background:#FBFAF6;padding:10px 15px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                    <span style="font:700 11px/1.5 'Manrope',sans-serif;color:${e.leiaCor};min-width:0;flex:1;">▸ ${e.leitura}</span>
-                    <span style="flex:none;font:700 9px 'Manrope',sans-serif;color:#B4AC9C;">${e.prov}</span>
-                    <button data-sm9-acao="${e.cobrar}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${e.cbBorda};border-radius:999px;background:${e.cbBg};font:800 10px 'Manrope',sans-serif;color:${e.cbCor};cursor:pointer;white-space:nowrap;" data-sm9-hv="1">${e.cbRot}</button>
-                  </div>
-                ` : ''}
-              </div>
-            `).join('')}${execs.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nenhum executivo de campo ativo no elenco desta semana.</span>`}
-          </div>
-        </div>
-
-        <div style="padding:16px 22px 6px;">
-          ${(atras) ? `
-            <div style="border:1.5px solid #E3C6C6;border-radius:14px;overflow:hidden;">
-              <div style="background:#6E1210;color:#FFFDF8;padding:12px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-                <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#FF8D9A;flex:none;">2 · Acelerar agora</span>
-                <b style="font:800 13px/1.45 'Manrope',sans-serif;color:#FFFDF8;min-width:0;">${metaCorrigida}</b>
-              </div>
-              <div style="background:#FDF9F8;padding:12px 15px 15px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px;">
-                ${(acoes||[]).map(ac => `
-                  <div style="background:#FDFEFF;border:1px solid ${ac.borda};border-radius:11px;padding:11px 14px;display:flex;flex-direction:column;gap:7px;min-width:0;">
-                    <span style="display:flex;align-items:center;gap:8px;"><span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#FDFEFF;background:${ac.tagBg};border-radius:5px;padding:3px 8px;flex:none;">${ac.tag}</span><b style="font:800 12px 'Archivo',sans-serif;color:#2B3440;min-width:0;">${ac.titulo}</b></span>
-                    <span style="font:700 10.5px/1.55 'Manrope',sans-serif;color:#5B667A;">${ac.evid}</span>
-                    <span style="display:flex;align-items:center;gap:8px;margin-top:auto;flex-wrap:wrap;">
-                      <span style="font:800 9.5px 'Manrope',sans-serif;color:#7A8494;">dono: ${ac.dono}</span>
-                      <button data-sm9-acao="${ac.agir}" style="margin-left:auto;flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${ac.btBorda};border-radius:999px;background:${ac.btBg};font:800 10px 'Manrope',sans-serif;color:${ac.btCor};cursor:pointer;white-space:nowrap;" data-sm9-hv="1">${ac.btRot}</button>
-                    </span>
-                  </div>
-                `).join('')}${acoes.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nenhuma alavanca com evidência agora — as cinco só aparecem quando existe número que as justifique. Cartão sem evidência seria prioridade inventada.</span>`}
-              </div>
-            </div>
-          ` : ''}
-          ${(noRitmo) ? `
-            <div style="background:#EAF6F1;border:1.5px solid #CBE8DD;border-radius:14px;padding:13px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#1E9E7B;flex:none;">2 · Nada a acelerar</span>
-              <span style="font:700 12px/1.5 'Manrope',sans-serif;color:#256B51;">${manchete} Mantenha o combinado ("visita só conta com próximo passo agendado") e não invente prioridade nova no meio da semana.</span>
-            </div>
-          ` : ''}
-        </div>
-
-        <div style="padding:16px 22px 6px;">
-          <div style="display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px;">
-            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
-              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8E3B5C;">3 · A Semanal de segunda — 30 minutos <span style="color:#7A8494;">· o roteiro se monta sozinho com a semana</span></span>
-                <span style="margin-left:auto;font:800 10px 'Manrope',sans-serif;color:#1E9E7B;font-variant-numeric:tabular-nums;">${progresso}</span>
-              </div>
-              <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
-                ${(pauta||[]).map(pa => `
-                  <div style="background:${pa.bg};border:1.5px solid ${pa.borda};border-radius:10px;padding:9px 13px;display:flex;align-items:flex-start;gap:11px;min-width:0;">
-                    <span style="flex:none;font:800 9px 'Manrope',sans-serif;color:#8E3B5C;font-variant-numeric:tabular-nums;margin-top:2px;width:74px;">${pa.hora}</span>
-                    <span style="min-width:0;flex:1;"><b style="display:block;font:800 12px 'Archivo',sans-serif;color:#2B3440;">${pa.titulo}</b><span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;">${pa.sub}</span></span>
-                    <button data-sm9-acao="${pa.marcar}" style="flex:none;display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:1px solid ${pa.btBorda};border-radius:999px;background:${pa.btBg};font:800 9.5px 'Manrope',sans-serif;color:${pa.btCor};cursor:pointer;white-space:nowrap;" data-sm9-hv="1">${pa.btRot}</button>
-                  </div>
-                `).join('')}
-              </div>
-              <button data-sm9-acao="${fechar}" style="margin-top:10px;display:flex;align-items:center;justify-content:center;width:100%;min-height:40px;border:1px solid ${fBorda};border-radius:10px;background:${fBg};font:900 11px 'Archivo',sans-serif;letter-spacing:.02em;color:${fCor};cursor:pointer;" data-sm9-hv="2">${fRot}</button>
-            </div>
-            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
-              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#1E9E7B;">Promessas travadas na sala <span style="color:#7A8494;">— dadas por cada um no Meu Funil, travadas aqui; o placar vivo cobra durante a semana</span></span>
-              <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px;">
-                ${(metas||[]).map(mt => `
-                  <span style="display:flex;align-items:center;gap:10px;background:${mt.bg};border:1px solid ${mt.borda};border-radius:9px;padding:7px 11px;min-width:0;flex-wrap:wrap;">
-                    <b style="font:800 11px 'Archivo',sans-serif;color:#2B3440;width:150px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${mt.nome}</b>
-                    <span style="font:700 10px 'Manrope',sans-serif;color:#5B667A;white-space:nowrap;">${mt.alvo}</span>
-                    <button data-sm9-acao="${mt.travar}" style="margin-left:auto;flex:none;display:inline-flex;align-items:center;min-height:28px;padding:0 11px;border:1px solid ${mt.btBorda};border-radius:999px;background:${mt.btBg};font:800 9.5px 'Manrope',sans-serif;color:${mt.btCor};cursor:pointer;white-space:nowrap;" data-sm9-hv="1">${mt.btRot}</button>
-                  </span>
-                `).join('')}${metas.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nenhuma promessa registrada — cada um dá a dele no Meu Funil, e o gestor não escreve no lugar de ninguém.</span>`}
-              </div>
-              <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">o executivo dá a promessa no Meu Funil (seg até ${prazoDaSemana}, sugestão = gap da meta ÷ dias úteis + funil dele) · sem promessa até 8h30 = "promessa não dada" no placar · cumprido medido só no HubSpot</span>
-            </div>
-          </div>
-        </div>
-
-        <div style="padding:16px 22px 18px;">
+function sm9LeiturasHTML(d) {
+  const { leituras } = d;
+  return `<div style="padding:16px 22px 18px;">
           <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#7A8494;">4 · Mais leituras <span style="color:#B4AC9C;">— nada morreu: escada, tempos, praças, pessoa × etapa e ciclo moram aqui, fora da leitura principal</span></span>
           <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
             ${(leituras||[]).map(lt => `
@@ -42118,12 +43005,15 @@ function renderSemana() {
               </div>
             `).join('')}
           </div>
-        </div>
+        </div>`;
+}
 
-        <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 22px 14px;font-size:10px;line-height:1.5;color:#7A8494;">Semana v2 = painel vivo consultado todo dia: <b>projeção no centro</b> (no ritmo atual a semana fecha com X vs meta Y; traço âmbar = onde deveria estar) → <b>placar vivo</b> (promessa dada pelo executivo no Meu Funil seg ${prazoDaSemana}, travada na Semanal, cumprido medido no HubSpot — nunca auto-relato; a Daily só fatia a promessa em compromissos do dia) → <b>acelerar agora</b> (só aparece atrás da meta: mutirão do dinheiro parado, cobrança de quebra, redistribuição de rota, aula no gargalo, leads quentes do radar — cada botão grava e vira tarefa com dono) → <b>Semanal de segunda fixa</b> (roteiro + promessas) → <b>mais leituras</b> (escada, tempos, praças, pessoa × etapa, ciclo) · dados HubSpot × Supabase, zero digitado · <b style="color:#E51A31;">takeat</b> — vender mais servindo com excelência.</p>
-      </div>
+function renderSemana() {
+  const raiz = document.getElementById('sm9Raiz');
+  if (!raiz) return;
+  if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
 
-<p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 22px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${notaDeFonte}</p>`;
+  raiz.innerHTML = sm3TelaHTML(sm3Dados()) + sm9LeiturasHTML(sm9Dados());
 }
 
 document.addEventListener('click', ev => {
@@ -42135,8 +43025,15 @@ document.addEventListener('click', ev => {
 
 async function sm9Iniciar() {
   if (!sessaoAtual || sessaoAtual.role !== 'manager') return;
+
+  if (typeof sm3Ligar === 'function') sm3Ligar();
   renderSemana();
-  await sm9Carregar();
+
+  await Promise.allSettled([
+    sm9Carregar(),
+    (typeof tl5CarregarPauta === 'function' ? tl5CarregarPauta() : Promise.resolve()),
+    sm3Carregar()
+  ]);
   renderSemana();
 }
 
