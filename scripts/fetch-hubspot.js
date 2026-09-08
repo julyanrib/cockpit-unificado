@@ -196,6 +196,53 @@ const STAGE_RANK = {
   [STAGES.agPagamento]: 6
 };
 
+/* ══ A TEMPERATURA TEM UMA CONTA, E ELA MORA FORA DAQUI (08/09/26) ══════════════════
+   A regra inteira está em lib/temperatura.js e a régua em data/temperatura.json.
+   Aqui só se aplica.
+
+   STAGE_RANK CONTINUA ACIMA porque outras cinco contas do robô a usam (histórico de
+   etapas, porta de entrada, avanço). O rank que a TEMPERATURA usa é o da config, de
+   propósito: inserir etapa no pipeline não pode obrigar a mexer em código. A guarda
+   logo abaixo é o preço disso. */
+const { temperaturaDoNegocio } = require('../lib/temperatura.js');
+const CONFIG_TEMPERATURA = require('../data/temperatura.json');
+
+/* AS DUAS FONTES DE RANK TÊM DE CONCORDAR. STAGE_RANK (código) e a config da
+   temperatura (JSON) descrevem a mesma ordem do funil. Editar uma e não a outra faria
+   a temperatura ranquear por uma ordem que o resto do robô não usa — sem erro, sem
+   aviso, só com o ranking errado na TV da sala. Reprova no sync, e falhar aqui é
+   barato: o robô roda a cada 2h e o snapshot anterior continua no ar. */
+Object.keys(STAGE_RANK).forEach(function (idEtapa) {
+  const naConfig = (CONFIG_TEMPERATURA.etapa || {})[idEtapa];
+  if (Number(naConfig) !== Number(STAGE_RANK[idEtapa])) {
+    throw new Error('data/temperatura.json e STAGE_RANK discordam na etapa ' + idEtapa
+      + ' (config=' + naConfig + ', codigo=' + STAGE_RANK[idEtapa] + ')'
+      + ' — a temperatura ranquearia por uma ordem que o resto do robo nao usa.');
+  }
+});
+
+/* Decora um negócio ABERTO com a temperatura. Etapa fora do funil de Field Sales
+   (Backlog, Perdido, Reciclagem, Onboarding) volta INTACTA: negócio perdido não tem
+   temperatura, e dar 12° a ele encheria o ranking do gestor de coisa morta. */
+function comTemperatura(lead, stageIdExplicito) {
+  const id = String(stageIdExplicito || (lead && lead.stageId) || '');
+  if (!(CONFIG_TEMPERATURA.etapa || {})[id]) return lead;
+  const medida = temperaturaDoNegocio({
+    stageId: id,
+    mrr: lead.mrr != null ? lead.mrr : lead.valor_de_mrr,
+    valor: lead.valor,
+    ultimaInteracao: lead.ultimaInteracao
+  }, { config: CONFIG_TEMPERATURA });
+  lead.temp = medida.nota;
+  lead.tempFaixa = medida.faixa;
+  lead.tempParcial = medida.parcial;
+  lead.tempDiasSemToque = medida.diasSemToque;
+  /* A PALAVRA DERIVA DA NOTA. Manter as duas independentes seria a mesma doença com
+     nome novo: a tela mostraria "82°" ao lado de um selo "morno". */
+  lead.temperatura = medida.faixa;
+  return lead;
+}
+
 // Descrições curtas de cada etapa, usadas nos tooltips do painel
 const STAGE_DESCRIPTIONS = {
   [STAGES.prospeccao]: 'Primeiro contato feito (PAP). Deveria avançar ou virar decisão em até 5 dias.',
@@ -718,6 +765,112 @@ async function fetchAgenda() {
 
   await enriquecerAgendaComNegocio(itens);
   return { geradoEm: new Date().toISOString(), itens };
+}
+
+/* ══ CADÊNCIA DIÁRIA: ATIVIDADE POR EXECUTIVO POR DIA ÚTIL (08/09/26) ═══════════════
+   Pedido do Julyan para a aba Time v2: sparkline por executivo e heatmap do time.
+   Antes disto o cockpit não tinha atividade por dia em lugar nenhum — o número
+   chamado "cadência" em habitosTime é o percentual de abertos não travados, que é
+   outra pergunta. Sem esta função a prancha só poderia ser preenchida com a agenda
+   (reuniões e follow-ups), que é um subconjunto, ou com número inventado.
+
+   QUATRO TIPOS: calls, meetings, tasks, emails. NOTA FICA FORA porque a nota do App
+   Outbound chega sem hubspot_owner_id — está medido no comentário de fetchAgenda,
+   acima. `fonte` viaja no payload para a tela poder escrever exatamente isto em vez
+   de "atividades do CRM", que sugeriria tudo.
+
+   CADA TIPO TEM O SEU CAMPO DE DATA: meeting usa hs_meeting_start_time (quando a
+   reunião acontece) e os outros usam hs_timestamp. Usar hs_createdate em tudo daria
+   "quando o registro foi criado", e uma reunião de terça agendada na segunda cairia
+   no dia errado — o heatmap existe para dizer em que dia a pessoa esteve em campo. */
+const CADENCIA_DIAS_UTEIS = 10;
+
+/* Os N últimos dias úteis terminando HOJE (Brasília), em ordem cronológica. */
+function ultimosDiasUteisBrasilia(n) {
+  const dias = [];
+  const b = agoraBrasilia();
+  const cursor = new Date(Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate()));
+  while (dias.length < n) {
+    const dow = cursor.getUTCDay();
+    if (dow !== 0 && dow !== 6) dias.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() - 1);
+  }
+  return dias.reverse();
+}
+
+/* Dia civil de Brasília de um instante qualquer — a mesma convenção -3h do arquivo. */
+function diaBrasiliaDe(valor) {
+  const ms = Date.parse(valor);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+async function fetchCadenciaDiaria() {
+  const dias = ultimosDiasUteisBrasilia(CADENCIA_DIAS_UTEIS);
+  const owners = REPS.map(r => r.ownerId);
+  /* a janela de BUSCA é por dia corrido a partir do primeiro dia útil da lista: o
+     fim de semana no meio não tem coluna, mas atividade de sábado não pode ser
+     contada no dia útil vizinho — ela simplesmente não entra em coluna nenhuma. */
+  const ini = String(Date.parse(dias[0] + 'T00:00:00-03:00'));
+  const fim = String(Date.now() + 60 * 60 * 1000);
+
+  const TIPOS = [
+    { objeto: 'calls', campo: 'hs_timestamp', rotulo: 'ligações' },
+    { objeto: 'meetings', campo: 'hs_meeting_start_time', rotulo: 'reuniões' },
+    { objeto: 'tasks', campo: 'hs_timestamp', rotulo: 'tarefas' },
+    { objeto: 'emails', campo: 'hs_timestamp', rotulo: 'e-mails' }
+  ];
+
+  const porOwner = {};
+  owners.forEach(o => { porOwner[String(o)] = dias.map(() => 0); });
+  const porTipo = {};
+  const truncado = [];
+  const indiceDoDia = {};
+  dias.forEach((d, i) => { indiceDoDia[d] = i; });
+
+  for (const tp of TIPOS) {
+    let itens = [];
+    try {
+      itens = await hsSearchTipoAll(tp.objeto, {
+        filterGroups: [{ filters: [
+          { propertyName: 'hubspot_owner_id', operator: 'IN', values: owners },
+          { propertyName: tp.campo, operator: 'BETWEEN', value: ini, highValue: fim }
+        ] }],
+        properties: [tp.campo, 'hubspot_owner_id'],
+        sorts: [{ propertyName: tp.campo, direction: 'ASCENDING' }]
+      });
+    } catch (e) {
+      /* UM TIPO QUE FALHA NÃO DERRUBA A CADÊNCIA INTEIRA, e também não passa calado:
+         entra em `truncado` e a tela diz que a leitura está incompleta. Um heatmap
+         silenciosamente sem ligações mostraria dia zerado onde a pessoa ligou. */
+      console.log('Aviso: cadência — ' + tp.objeto + ' falhou (' + e.message.slice(0, 120) + ')');
+      truncado.push(tp.objeto + ' (falhou)');
+      continue;
+    }
+    /* 20 páginas × 100 é o teto de hsSearchTipoAll. Bater exatamente nele é sinal de
+       corte, não de coincidência. */
+    if (itens.length >= 2000) truncado.push(tp.objeto + ' (2000+ no período)');
+    porTipo[tp.objeto] = itens.length;
+    itens.forEach(it => {
+      const p = it.properties || {};
+      const dono = String(p.hubspot_owner_id || '');
+      if (!porOwner[dono]) return;
+      const dia = diaBrasiliaDe(p[tp.campo]);
+      const i = dia == null ? undefined : indiceDoDia[dia];
+      if (i === undefined) return;   /* sábado, domingo, ou fora da janela */
+      porOwner[dono][i]++;
+    });
+  }
+
+  return {
+    geradoEm: new Date().toISOString(),
+    dias,
+    porOwner,
+    porTipo,
+    truncado,
+    fonte: 'atividades do HubSpot: ligações, reuniões, tarefas e e-mails',
+    naoConta: 'notas do App Outbound (chegam sem dono no HubSpot)'
+  };
 }
 
 // Visita/revisita no app agora vira TAREFA no HubSpot — e a Daily conta a TAREFA criada
@@ -1518,6 +1671,23 @@ async function main() {
     console.log('Se o erro for 403, adicione os escopos crm.objects.tasks.read e crm.objects.meetings.read no Private App do HubSpot.');
   }
 
+  /* CADÊNCIA DIÁRIA (08/09/26) — atividade por executivo por dia útil, para o
+     sparkline e o heatmap da aba Time v2. Mesma proteção da agenda: sem os escopos de
+     calls/emails isso avisa e segue, e a tela escreve "cadência não medida" — que é
+     diferente de dez dias zerados, e a diferença é a acusação errada de um executivo. */
+  let cadenciaDiaria = null;
+  try {
+    cadenciaDiaria = await fetchCadenciaDiaria();
+    const somaCad = Object.values(cadenciaDiaria.porOwner || {})
+      .reduce((tot, arr) => tot + arr.reduce((a, b) => a + b, 0), 0);
+    console.log('Cadência: ' + somaCad + ' atividades em ' + cadenciaDiaria.dias.length
+      + ' dias úteis (' + cadenciaDiaria.fonte + ')'
+      + (cadenciaDiaria.truncado.length ? ' — INCOMPLETA: ' + cadenciaDiaria.truncado.join(', ') : ''));
+  } catch (e) {
+    console.log('Aviso: cadência diária não veio — ' + String(e.message).slice(0, 160));
+    console.log('Se o erro for 403, adicione os escopos crm.objects.calls.read e crm.objects.emails.read no Private App do HubSpot.');
+  }
+
   console.log('Buscando dados no HubSpot...');
 
   // ---- Funil geral (donut) ----
@@ -1627,7 +1797,9 @@ async function main() {
         tarefas: tarefasPorDeal[d.id] || [],
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };
-    }).sort((a, b) => b.dias - a.dias);
+    /* TEMPERATURA AQUI TAMBÉM (08/09/26): este é o mapa que a tela do gestor desenha
+       negócio por negócio, e até hoje era o único sem nota. */
+    }).map(l => comTemperatura(l, stageId)).sort((a, b) => b.dias - a.dias);
   }
 
   // ---- A coluna PERDIDO do kanban: só as perdas dentro do corte + janela ----
@@ -1981,15 +2153,17 @@ async function main() {
       const slaDaEtapa = SLA_DAYS[stageId] || 999;
       const slaRatio = dias / slaDaEtapa;
 
-      // Temperatura: SLA estourado = frio/travado (precisa limpar o funil).
-      // Etapa avançada (Demo+) e dentro do prazo (não estourou) = quente — é isso que fecha.
-      // Antes exigia ter usado até metade do prazo (slaRatio <= 0.5); isso escondia negócio
-      // avançado e saudável só porque já tinha passado da metade do SLA sem estourar — um
-      // negócio em Negociação com 5 de 7 dias é tão prioritário quanto um com 2 de 7, os
-      // dois ainda estão dentro do prazo. Ampliado pra cobrir toda a faixa não estourada.
-      let temperatura = 'morno';
-      if (slaBreach) temperatura = 'frio';
-      else if (rank >= 4) temperatura = 'quente';
+      /* ══ A TEMPERATURA SAIU DESTE LAÇO (08/09/26) ═══════════════════════════════
+         Aqui viviam as três linhas que eram a única definição de temperatura do
+         cockpit: frio se a régua estourou, quente se rank>=4, morno no resto. Sem
+         valor e sem recência — um negócio em Ag. Pagamento com a régua no limite e
+         nenhum toque em duas semanas contava como QUENTE e ia para o topo da lista
+         que o gestor cobra na Daily.
+
+         Agora a conta é uma só (lib/temperatura.js, régua em data/temperatura.json) e
+         a palavra deriva da nota — comTemperatura entra na cadeia, no fim do laço.
+         Medido no snapshot de 02/09: a lista de quentes cai de 16 para 6, e 13 dos 16
+         antigos estavam sem toque há mais de uma semana. */
 
       // Mesma coordenada real do check-in via Expogo — ver comentário em funilLeads acima.
       const lat = coordenadaValida(d.properties.latitude);
@@ -2005,7 +2179,8 @@ async function main() {
         slaBreach,
         slaRatio: Math.round(slaRatio * 100),
         rank,
-        temperatura,
+        /* `temperatura` não é mais escrita aqui: comTemperatura a define a partir da
+           nota, na cadeia no fim deste laço. */
         proximaReuniao,
         proximaAtividade,
         ultimaInteracao: d.properties.notes_last_updated || null,
@@ -2023,7 +2198,9 @@ async function main() {
         tarefas: tarefasPorDealDoRep[d.id] || [],
         lng: (lng != null && !isNaN(lng)) ? lng : null
       };
-    }).sort((a, b) => b.dias - a.dias);
+    /* a nota e a faixa entram aqui, uma vez, para todos os recortes deste rep
+       (travados, criticos, quentes) — que são fatias desta mesma lista. */
+    }).map(l => comTemperatura(l)).sort((a, b) => b.dias - a.dias);
 
     const leadsTravados = withDays.filter(l => l.slaBreach).length;
 
@@ -2139,6 +2316,9 @@ async function main() {
 
   const output = {
     updatedAt: new Date().toISOString(),
+    /* CADÊNCIA DIÁRIA: atividade por executivo por dia útil (aba Time v2). `null`
+       quando a leitura falhou — a tela distingue isso de zero. */
+    cadenciaDiaria,
     /* O QUE CADA OPÇÃO SE CHAMA NO CRM. A tela grava o valor e mostra o rótulo; sem
        isto ela mostrava o valor cru e divergia do HubSpot em oito opções. Vai junto do
        snapshot porque é dado do CRM, não configuração nossa. */
