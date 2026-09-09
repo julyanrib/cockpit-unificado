@@ -56030,13 +56030,52 @@ function rt7MetaDoLead(l) {
 }
 
 /* a praça do executivo, com as regiões que o prewarm conhece */
+/* ══ A PRAÇA DE UM EXECUTIVO VEM DA DECLARAÇÃO, NÃO DOS LEADS DE EXEMPLO ══════════════
+   Até 09/09/26 esta função derivava a praça dos BAIRROS DOS LEADS DE EXEMPLO em
+   leads-referencia.json — um arquivo de contas-modelo, não de território. Três defeitos
+   vinham disso, os três medidos:
+
+     · quem não tinha lead de exemplo não tinha praça. Quatro dos onze executivos, os que
+       entraram em 01/09, e por isso não podiam receber carga por esta tela;
+     · a "região" de alguém era o bairro dos leads que alguém pôs no arquivo, não a rota
+       dele. O André aparecia com Taquara e Tijuca, que não são dele;
+     · o nome da praça ali é grafia livre ("Vila Velha/ES" ao lado de "Rio de Janeiro").
+
+   AGORA LÊ data/territorios.json, que é a MESMA fonte que a busca semanal usa. Território
+   é declarado, não inferido — e é declarado num lugar só.
+
+   O FALLBACK CONTINUA porque um executivo sem linha no territorios.json ainda tem que
+   aparecer na tela, e aparecer DIZENDO que não tem rota declarada é a informação certa.
+   `areas: []` (o caso do Bruno hoje) devolve null de propósito. */
 function rt7PracaDoRep(u) {
   const nome = String(u.nome || u.name || '');
+  const alvo = nome.toLowerCase();
+  const decl = (DATA.territorios || []).find(x => String(x && x.rep || '').toLowerCase() === alvo);
+  if (decl) {
+    const areas = (decl.areas || []).filter(a => a && a.municipio);
+    if (!areas.length) return null;   /* rota não declarada — a tela diz o nome dele */
+    /* A PRIMEIRA ÁREA É A PRAÇA PRINCIPAL, e é a que o fluxo de abastecer usa. Quem tem
+       mais de um município (a Renata tem cinco) aparece com todos em `municipios`, para
+       a tela poder mostrar o resto em vez de fingir que ela cobre uma cidade só. */
+    const a = areas[0];
+    const bairros = a.todoOMunicipio
+      ? (a.nomeados || []).slice(0, 8)
+      : (a.bairros || []).slice(0, 8);
+    return {
+      nome: a.municipio + '/' + a.uf,
+      regioes: bairros,
+      municipios: areas.map(x => x.municipio + '/' + x.uf),
+      todoOMunicipio: !!a.todoOMunicipio,
+      exceto: a.exceto || []
+    };
+  }
+  /* sem declaração: o arquivo de leads de exemplo ainda responde, para não perder as
+     praças antigas enquanto a declaração não cobrir todo mundo */
   const ref = (DATA.leadsReferencia && DATA.leadsReferencia.length ? DATA.leadsReferencia : []);
-  const p = ref.find(x => (x.responsaveis || []).some(r => String(r).toLowerCase() === nome.toLowerCase()));
+  const p = ref.find(x => (x.responsaveis || []).some(r => String(r).toLowerCase() === alvo));
   if (!p) return null;
   const bairros = [...new Set((p.leads || []).map(l => l.bairro).filter(Boolean))];
-  return { nome: p.nome, regioes: bairros.slice(0, 8) };
+  return { nome: p.nome, regioes: bairros.slice(0, 8), municipios: [p.nome] };
 }
 
 /* ── LER A TORNEIRA E A RUA ────────────────────────────────────────────────────── */
@@ -56333,6 +56372,25 @@ function rt7Dados() {
     : 'ver todas as ' + todasNot.length + ' ▸';
 
   /* ── cargas desta sessão ─────────────────────────────────────────────────────────── */
+  /* ── praça declarada que o radar ainda não mediu ─────────────────────────────────── */
+  const noRadar = new Set(linhas.map(r => rt7MunicipioDaPraca(r.praca)));
+  const declaradasFora = [];
+  (DATA.territorios || []).forEach(tr => {
+    if (tr && tr.ativo === false) return;
+    (tr.areas || []).forEach(a => {
+      if (!a || !a.municipio) return;
+      const k = rt7MunicipioDaPraca(a.municipio);
+      if (noRadar.has(k) || declaradasFora.some(x => x.k === k)) return;
+      declaradasFora.push({ k, nome: a.municipio + '/' + a.uf, quem: [] });
+    });
+  });
+  (DATA.territorios || []).forEach(tr => {
+    (tr.areas || []).forEach(a => {
+      const achado = declaradasFora.find(x => a && a.municipio && x.k === rt7MunicipioDaPraca(a.municipio));
+      if (achado && achado.quem.indexOf(tr.rep) < 0) achado.quem.push(tr.rep);
+    });
+  });
+
   const cargas = (s.cargas || []).map(c => ({ rot: c }));
 
   /* ── KPIs e manchete ────────────────────────────────────────────────────────────── */
@@ -56404,8 +56462,14 @@ function rt7Dados() {
     envBorda: podeEnviar ? '#E51A31' : '#DCE1EA',
     envCor: podeEnviar ? '#FFFDF8' : '#9AA3B2',
     carteiras,
+    /* dita em uma frase, com quem depende dela: rota sem medida é rota sem munição */
+    pracasSemRadar: declaradasFora.length
+      ? declaradasFora.length + ' praça(s) com rota declarada e ainda SEM linha no radar: '
+        + declaradasFora.map(x => x.nome + ' (' + x.quem.map(q => String(q).split(' ')[0]).join(', ') + ')').join(' · ')
+        + '. O job de segunda mede o TAM delas na próxima rodada; até lá elas não aparecem no bloco 1 e não recebem carga por aqui.'
+      : '',
     semPraca: semPraca.length
-      ? semPraca.length + ' executivo(s) sem praça mapeada em leads-referencia.json — '
+      ? semPraca.length + ' executivo(s) sem rota declarada em data/territorios.json — '
         + semPraca.map(u => String(u.nome || '').split(' ')[0]).join(', ')
         + '. Eles aparecem aqui com a carteira, mas NÃO podem receber carga: o passo 3 só lista quem tem praça. O conserto é uma linha no JSON, e quem cobre o quê é decisão sua.'
       : '',
@@ -56817,6 +56881,7 @@ function renderRotasProspeccao() {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin-top:10px;">${carteirasHTML}</div>
       <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">carteira ativa = negócio ABERTO com interação registrada há menos de 30d no HubSpot (as seis etapas abertas; Perdido, Ganho e Onboarding ficam fora) · teto saudável = 75% de ${RT7_CAPACIDADE} (traço âmbar) — acima disso o envio é bloqueado · abaixo de 50% pede carga</span>
       ${d.semPraca ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:9px;padding:8px 12px;margin-top:8px;">${esc(d.semPraca)}</span>` : ''}
+      ${d.pracasSemRadar ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A3B5C;background:#FDF7FA;border:1px solid #E8CBD8;border-radius:9px;padding:8px 12px;margin-top:6px;">${esc(d.pracasSemRadar)}</span>` : ''}
     </div>
 
     <div style="padding:18px 24px 4px;">

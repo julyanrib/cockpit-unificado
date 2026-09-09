@@ -42,35 +42,84 @@ const DIAS_MINIMO_ABERTURA = 90;
 // que rotearTerritorio usa lá no endpoint (mantido em sincronia manual — se mudar um
 // lado, mudar o outro).
 // Cidades de executivo único (1 rep por município) só precisam do objetivoMinimo geral.
-const CIDADES = [
-  { municipio: 'Vila Velha', uf: 'ES', objetivoMinimo: 30, tetoMaximo: 150 }, // Marco Filho
-  { municipio: 'Vitória', uf: 'ES', objetivoMinimo: 30, tetoMaximo: 150 }, // Amanda Pardim
-  {
-    municipio: 'Rio de Janeiro', uf: 'RJ', objetivoMinimo: 120, tetoMaximo: 500,
-    metaBairros: [
-      { nome: 'Bruno Martins (Jacarepaguá e Zona Oeste)', minimo: 30, teste: b => /taquara|jacarepagua|freguesia|anil|campo grande|bangu|santa cruz|realengo|valqueire/.test(b) },
-      { nome: 'Sandro Brito (Grande Tijuca)', minimo: 30, teste: b => /tijuca|vila isabel|maracana|andarai|grajau|meier|cachambi/.test(b) },
-      /* os dois que entraram em 01/09/26 — sem sub-cota, a cidade cumpre a meta geral
-         com contas de uma zona so e a zona nova nasce vazia */
-      { nome: 'André Gomes (Zona Sul e Centro)', minimo: 30, teste: b => /copacabana|ipanema|leblon|botafogo|laranjeiras|catete|flamengo|gloria|humaita|gavea|lapa|centro/.test(b) },
-      { nome: 'Luiz Pimentel (Zona Norte e Ilha)', minimo: 30, teste: b => /olaria|penha|braz de pina|bras de pina|cordovil|del castilho|mare|bonsucesso|ramos|pavuna|madureira|iraja|jardim carioca|jardim guanabara|cacuia|portuguesa|taua/.test(b) }
-      // Michel Carvalho (Campo Grande) removido em 20/08/26 — desligado. Campo Grande
-      // fica sem sub-cota dedicada até o Julyan reatribuir o território a alguém.
-    ]
-  },
-  {
-    municipio: 'São Paulo', uf: 'SP', objetivoMinimo: 90, tetoMaximo: 400,
-    /* Whell + Renata + Sergio a partir de 01/09/26. SP tinha 42 contas na base INTEIRA
-       para tres pessoas — com objetivoMinimo 30 a busca parava na primeira leva. */
-    metaBairros: [
-      { nome: 'Wericles Andrade (Zona Sul e Oeste)', minimo: 30, teste: b => /morumbi|santo amaro|itaim|vila olimpia|brooklin|moema|campo belo|jardim paulista|pinheiros|vila madalena|perdizes|butanta/.test(b) },
-      { nome: 'Renata Pessoa (Centro, Zona Leste e Vila Mariana)', minimo: 30, teste: b => /bela vista|consolacao|republica|liberdade|bom retiro|bras|mooca|tatuape|ipiranga|vila prudente|itaquera|penha|vila mariana|saude|jabaquara|centro/.test(b) },
-      { nome: 'Sérgio Caetano (Zona Norte)', minimo: 30, teste: b => /santana|tucuruvi|casa verde|freguesia do o|lapa|barra funda|vila guilherme|vila maria|jacana|pirituba|imirim|mandaqui|limao/.test(b) }
-    ]
-  },
-  { municipio: 'Porto Alegre', uf: 'RS', objetivoMinimo: 30, tetoMaximo: 150 }, // Kelly Travieso (Moinhos de Vento/Auxiliadora/Cidade Baixa)
-  { municipio: 'Canoas', uf: 'RS', objetivoMinimo: 30, tetoMaximo: 150 } // também roteia pra Kelly
+/* ══ AS CIDADES E AS SUB-COTAS SAEM DE data/territorios.json (09/09/26) ═══════════════
+   ESTE ARRAY ERA A SEGUNDA CÓPIA DA MESMA REGRA. A tela do gestor decidia a praça de cada
+   executivo por um caminho (os bairros dos leads de exemplo em leads-referencia.json) e
+   esta busca decidia por outro (as metaBairros em regex, aqui). As duas divergiam calada,
+   e o preço foi medido em 09/09: quatro dos onze executivos não apareciam em praça
+   nenhuma na tela, e cinco municípios de rota real — Mogi das Cruzes, Biritiba Mirim,
+   Salesópolis, Suzano e Guarulhos — não eram buscados por ninguém. Gente com rota e sem
+   munição.
+
+   AGORA A DECLARAÇÃO É UMA. O território de cada pessoa está em data/territorios.json, e
+   tanto a tela quanto esta busca leem de lá. Mexer no bairro de alguém é mexer naquele
+   arquivo, e é decisão do Julyan.
+
+   O QUE ESTA DERIVAÇÃO FAZ:
+   · junta os municípios de todos os territórios, um por cidade;
+   · monta uma sub-cota por executivo em cada cidade que tem mais de um dono, com o teste
+     de bairro vindo dos bairros DECLARADOS (e não de uma regex escrita à mão);
+   · quem tem `todoOMunicipio` não gera sub-cota de bairro — ele cobre a cidade, menos o
+     que estiver em `exceto`;
+   · objetivo e teto por cidade escalam com quanta gente ela tem, porque cidade com três
+     donos precisa de mais lead que cidade com um. */
+const TERRITORIOS = (() => {
+  try { return require('../data/territorios.json').territorios || []; }
+  catch (e) {
+    console.log('[backfill-casa-dos-dados] AVISO: nao li data/territorios.json — ' + e.message);
+    return [];
+  }
+})();
+
+const semAcentoBairro = s => String(s || '').toLowerCase().normalize('NFD')
+  .replace(new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g'), '')
+  .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
+const CIDADES = (() => {
+  const porCidade = new Map();
+  TERRITORIOS.forEach(tr => {
+    if (tr && tr.ativo === false) return;   /* Amanda, em transicao para Inside */
+    (tr.areas || []).forEach(a => {
+      if (!a || !a.municipio) return;
+      const k = a.municipio + '|' + (a.uf || '');
+      if (!porCidade.has(k)) porCidade.set(k, { municipio: a.municipio, uf: a.uf, donos: [] });
+      porCidade.get(k).donos.push({ rep: tr.rep, area: a });
+    });
+  });
+
+  return [...porCidade.values()].map(c => {
+    /* 30 contas por dono é o objetivo que já vigorava; o teto é cinco vezes isso, para a
+       busca poder passar do mínimo quando um bairro rende pouco e outro rende muito. */
+    const n = c.donos.length;
+    const cfg = { municipio: c.municipio, uf: c.uf, objetivoMinimo: 30 * n, tetoMaximo: 150 * n };
+
+    /* SUB-COTA SÓ ONDE HÁ MAIS DE UM DONO E OS BAIRROS ESTÃO DECLARADOS. Sem isso, a
+       cidade cumpre a meta geral com contas de uma zona só e a zona do colega nasce
+       vazia — foi o motivo pelo qual as sub-cotas existem desde 01/09. */
+    const comBairro = c.donos.filter(d => !d.area.todoOMunicipio && (d.area.bairros || []).length);
+    if (n > 1 && comBairro.length > 1) {
+      cfg.metaBairros = comBairro.map(d => {
+        const chaves = (d.area.bairros || []).map(semAcentoBairro).filter(Boolean);
+        return {
+          nome: d.rep + ' (' + (d.area.bairros || []).slice(0, 3).join(', ') + '…)',
+          minimo: 30,
+          teste: b => chaves.some(k => String(b || '').indexOf(k) > -1)
+        };
+      });
+    }
+    return cfg;
+  });
+})();
+
+/* PRAÇA SEM NENHUM TERRITÓRIO DECLARADO AINDA PRECISA SER BUSCADA. Vitória é o caso de
+   hoje: a Amanda foi para Inside e ninguém assumiu, mas a praça existe no radar e o
+   estoque dela não pode secar em silêncio enquanto o Julyan não reatribui. */
+const CIDADES_SEM_DONO = [
+  { municipio: 'Vitória', uf: 'ES', objetivoMinimo: 30, tetoMaximo: 150 }
 ];
+CIDADES_SEM_DONO.forEach(c => {
+  if (!CIDADES.some(x => x.municipio === c.municipio)) CIDADES.push(c);
+});
 
 const CNAE_FOODSERVICE = [
   '5611201', '5611202', '5611203', '5611204', '5620104', '4721102', '1091102'

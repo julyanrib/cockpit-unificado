@@ -169,9 +169,17 @@ conferir('e a seleção visual da praça também',
   /rt7MunicipioDaPraca\(r\.praca\) === rt7MunicipioDaPraca\(pracaSel\)/.test(dados),
   'clicar na carteira punha "Rio de Janeiro" e nenhum cartão acendia, porque eles se chamam "Rio de Janeiro/RJ"');
 
-conferir('quem não tem praça mapeada aparece com nome na tela',
-  /function rt7SemPraca\(\)/.test(tpl) && /sem praça mapeada em leads-referencia\.json/.test(tpl),
-  'quatro dos onze executivos não estão no JSON e NÃO podem receber carga — calar sobre isso é o defeito');
+conferir('quem não tem rota declarada aparece com nome na tela',
+  /function rt7SemPraca\(\)/.test(tpl) && /sem rota declarada em data\/territorios\.json/.test(tpl),
+  'em 09/09 eram quatro dos onze; depois das rotas do Julyan sobrou o Bruno. Quem não tem rota NÃO recebe carga, e calar sobre isso é o defeito');
+
+/* ESTA CHECAGEM NASCEU DO CONSERTO ANTERIOR. Passei a declaração para
+   data/territorios.json e as cinco cidades da Renata mais a metade de Guarulhos do
+   Sérgio ficaram com rota e SEM linha no radar — então simplesmente não apareciam no
+   bloco 1. Ausência é o mesmo silêncio que deixou quatro executivos invisíveis. */
+conferir('praça com rota e sem linha no radar aparece dizendo isso',
+  /pracasSemRadar/.test(tpl) && /ainda SEM linha no radar/.test(tpl),
+  'rota que o radar não mediu não aparece no bloco 1 e não recebe carga — e some da tela sem avisar');
 
 /* ── 6 · O ANTI-SUJEIRA ───────────────────────────────────────────────────────────── */
 const sujeira = corpoDe('rt7Sujeira');

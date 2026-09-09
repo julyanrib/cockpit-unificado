@@ -40787,11 +40787,30 @@ function rt7MetaDoLead(l) {
 
 function rt7PracaDoRep(u) {
   const nome = String(u.nome || u.name || '');
+  const alvo = nome.toLowerCase();
+  const decl = (DATA.territorios || []).find(x => String(x && x.rep || '').toLowerCase() === alvo);
+  if (decl) {
+    const areas = (decl.areas || []).filter(a => a && a.municipio);
+    if (!areas.length) return null;
+
+    const a = areas[0];
+    const bairros = a.todoOMunicipio
+      ? (a.nomeados || []).slice(0, 8)
+      : (a.bairros || []).slice(0, 8);
+    return {
+      nome: a.municipio + '/' + a.uf,
+      regioes: bairros,
+      municipios: areas.map(x => x.municipio + '/' + x.uf),
+      todoOMunicipio: !!a.todoOMunicipio,
+      exceto: a.exceto || []
+    };
+  }
+
   const ref = (DATA.leadsReferencia && DATA.leadsReferencia.length ? DATA.leadsReferencia : []);
-  const p = ref.find(x => (x.responsaveis || []).some(r => String(r).toLowerCase() === nome.toLowerCase()));
+  const p = ref.find(x => (x.responsaveis || []).some(r => String(r).toLowerCase() === alvo));
   if (!p) return null;
   const bairros = [...new Set((p.leads || []).map(l => l.bairro).filter(Boolean))];
-  return { nome: p.nome, regioes: bairros.slice(0, 8) };
+  return { nome: p.nome, regioes: bairros.slice(0, 8), municipios: [p.nome] };
 }
 
 async function rt7Carregar() {
@@ -41032,6 +41051,24 @@ function rt7Dados() {
     ? 'mostrar só as 8 melhores ◂'
     : 'ver todas as ' + todasNot.length + ' ▸';
 
+  const noRadar = new Set(linhas.map(r => rt7MunicipioDaPraca(r.praca)));
+  const declaradasFora = [];
+  (DATA.territorios || []).forEach(tr => {
+    if (tr && tr.ativo === false) return;
+    (tr.areas || []).forEach(a => {
+      if (!a || !a.municipio) return;
+      const k = rt7MunicipioDaPraca(a.municipio);
+      if (noRadar.has(k) || declaradasFora.some(x => x.k === k)) return;
+      declaradasFora.push({ k, nome: a.municipio + '/' + a.uf, quem: [] });
+    });
+  });
+  (DATA.territorios || []).forEach(tr => {
+    (tr.areas || []).forEach(a => {
+      const achado = declaradasFora.find(x => a && a.municipio && x.k === rt7MunicipioDaPraca(a.municipio));
+      if (achado && achado.quem.indexOf(tr.rep) < 0) achado.quem.push(tr.rep);
+    });
+  });
+
   const cargas = (s.cargas || []).map(c => ({ rot: c }));
 
   const magras = carteiras.filter(c => c.st === 'precisa de carga').length;
@@ -41095,8 +41132,14 @@ function rt7Dados() {
     envBorda: podeEnviar ? '#E51A31' : '#DCE1EA',
     envCor: podeEnviar ? '#FFFDF8' : '#9AA3B2',
     carteiras,
+
+    pracasSemRadar: declaradasFora.length
+      ? declaradasFora.length + ' praça(s) com rota declarada e ainda SEM linha no radar: '
+        + declaradasFora.map(x => x.nome + ' (' + x.quem.map(q => String(q).split(' ')[0]).join(', ') + ')').join(' · ')
+        + '. O job de segunda mede o TAM delas na próxima rodada; até lá elas não aparecem no bloco 1 e não recebem carga por aqui.'
+      : '',
     semPraca: semPraca.length
-      ? semPraca.length + ' executivo(s) sem praça mapeada em leads-referencia.json — '
+      ? semPraca.length + ' executivo(s) sem rota declarada em data/territorios.json — '
         + semPraca.map(u => String(u.nome || '').split(' ')[0]).join(', ')
         + '. Eles aparecem aqui com a carteira, mas NÃO podem receber carga: o passo 3 só lista quem tem praça. O conserto é uma linha no JSON, e quem cobre o quê é decisão sua.'
       : '',
@@ -41429,6 +41472,7 @@ function renderRotasProspeccao() {
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin-top:10px;">${carteirasHTML}</div>
       <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">carteira ativa = negócio ABERTO com interação registrada há menos de 30d no HubSpot (as seis etapas abertas; Perdido, Ganho e Onboarding ficam fora) · teto saudável = 75% de ${RT7_CAPACIDADE} (traço âmbar) — acima disso o envio é bloqueado · abaixo de 50% pede carga</span>
       ${d.semPraca ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:9px;padding:8px 12px;margin-top:8px;">${esc(d.semPraca)}</span>` : ''}
+      ${d.pracasSemRadar ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A3B5C;background:#FDF7FA;border:1px solid #E8CBD8;border-radius:9px;padding:8px 12px;margin-top:6px;">${esc(d.pracasSemRadar)}</span>` : ''}
     </div>
 
     <div style="padding:18px 24px 4px;">
