@@ -1,0 +1,56 @@
+name: Radar semanal do setor e das praças
+
+# Julyan (09/09/26), para a aba Rotas & Prospecção: "pode colocar fontes reais da abrasel
+# brasil inteiro, infomoney, fontes relevantes, coloque semanalmente para eu saber de tudo".
+#
+# DUAS METADES INDEPENDENTES, no mesmo processo:
+#   1. as manchetes do setor da semana (Food Connection, Sebrae, Hotelier, InfoMoney,
+#      Agência Brasil + quatro consultas por tema no índice de notícias, que é o caminho
+#      pelo qual a Abrasel chega — o robots.txt deles proíbe o nosso robô de ler o site,
+#      e a manchete no índice de busca é o que eles autorizam);
+#   2. o radar das seis praças: tamanho do mercado food da cidade, quanto já está no CRM,
+#      e a leitura da semana em uma frase.
+#
+# O script não aborta na primeira falha: feed fora do ar não impede o radar de gravar, e
+# a Casa dos Dados fora do ar não apaga as manchetes. O que faltou vai para o resumo da
+# execução, e o job só falha se NENHUMA das duas metades gravou.
+#
+# ESCREVE SÓ NO SUPABASE, com service_role. As duas tabelas têm RLS com SELECT para quem
+# está logado e ZERO política de escrita, de propósito: nenhuma sessão de navegador
+# inventa uma notícia ou um TAM. Nada é escrito no HubSpot — somos espelho dele.
+
+on:
+  schedule:
+    # Segunda às 6h em Brasília (09:00 UTC). O robô do HubSpot já rodou de madrugada,
+    # então o `tocado` de cada praça sai do snapshot fresco — e o gestor abre a aba com
+    # a semana já montada.
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  radar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Conferir as regras do radar antes de gravar
+        # A suite roda sem rede e sem segredo: ela mede a REGRA de contagem numa fixture
+        # que reproduz os defeitos reais do campo `cidade` do CRM. Rodar antes evita
+        # gravar uma semana inteira de números com a regra quebrada.
+        run: node scripts/testar-radar-semanal.js
+
+      - name: Coletar notícias do setor e medir as praças
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CASADOSDADOS_TOKEN: ${{ secrets.CASADOSDADOS_TOKEN }}
+        run: node scripts/radar-semanal.js
