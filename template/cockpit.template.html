@@ -2331,10 +2331,39 @@
      (.pl6-slot-hora, acima). As duas regras conviviam e a última ganhava — mas a antiga
      ainda pintava o `border-bottom` por baixo da pill, e a guarda de classe sem markup
      foi quem me contou que ela tinha ficado órfã. */
-  /* O CAMPO `--:--` + ✓ SAIU (09/09/26, prancha kanban-planejamento): "Remove o input
-     --:-- + botão ✓". Ele virou os sete chips (.pl6-hora-chip), que é um toque em vez de
-     digitar quatro dígitos. A hora ARBITRÁRIA não se perdeu — ela continua no painel de
-     "+ escolher conta", que esta cirurgia não toca. */
+  /* ══ O MARCADOR DE RELÓGIO (09/09/26) ══════════════════════════════════════════════
+     Julyan: "coloque um mini marcador de relogio BONITO, por favor."
+
+     De manhã a prancha do kanban mandou remover o campo `--:--` e eu removi; sobraram os
+     sete chips, que são um toque. Mas sete janelas num dia de quinze visitas deixa a
+     oitava sem hora, e ele pediu a hora livre de volta — como MARCADOR, não como campo:
+     o mostrador aponta a hora e os ponteiros seguem o que ele digita.
+
+     MESMA FAMÍLIA VISUAL dos chips: 26px de altura, pill de 999px, tabular-nums, a linha
+     #DCE1EA e o ink #2B3440. O ponteiro dos minutos é o único vermelho Takeat da caixa —
+     é o detalhe que faz o mostrador ser lido como relógio em 34px. */
+  .pl6-relogio-linha{display:flex;align-items:center;gap:8px;margin-top:8px;
+    padding-top:8px;border-top:1px dashed #E4E0D6;}
+  .pl6-relogio{flex:none;width:34px;height:34px;display:block;}
+  .pl6-relogio-face{fill:#FDFEFF;stroke:#DCE1EA;stroke-width:1.5;}
+  .pl6-relogio-tick{stroke:#C8CFDA;stroke-width:1.4;stroke-linecap:round;}
+  .pl6-relogio-h{stroke:#2B3440;stroke-width:2.2;stroke-linecap:round;}
+  .pl6-relogio-m{stroke:#E51A31;stroke-width:1.6;stroke-linecap:round;}
+  .pl6-relogio-eixo{fill:#2B3440;}
+  .pl6-relogio-in{flex:1;min-width:0;height:26px;padding:0 8px;border:1px solid #DCE1EA;
+    border-radius:999px;background:#FDFEFF;font:800 11px var(--font-body);
+    font-variant-numeric:tabular-nums;color:#2B3440;}
+  .pl6-relogio-in:focus{outline:none;border-color:#2B3440;}
+  .pl6-relogio-ok{flex:none;display:inline-flex;align-items:center;min-height:26px;
+    padding:0 11px;border:1px solid #2B3440;border-radius:999px;background:#2B3440;
+    font:800 10px var(--font-body);color:#FFFDF8;cursor:pointer;}
+  .pl6-relogio-ok:hover{background:#E51A31;border-color:#E51A31;}
+  .pl6-relogio-ok:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
+  @media (max-width:760px){
+    /* piso de toque: o ✓ do relógio é alvo de dedo na rua */
+    .pl6-relogio-in,.pl6-relogio-ok{min-height:44px;}
+    .pl6-relogio-in{height:44px;}
+  }
   .pl6-slot-quem{display:block;margin-top:2px;font:800 12.5px/1.3 var(--font-body);
     color:var(--ink);overflow-wrap:anywhere;}
   .pl6-slot-onde{display:block;margin-top:1px;font:700 9.5px/1.3 var(--font-body);color:var(--muted2);}
@@ -29488,6 +29517,34 @@ function pl6SlotRua(v) {
    A HORA ARBITRÁRIA NÃO SE PERDEU: ela continua no painel de "+ escolher conta"
    (pl6HoraLivreHTML), que esta cirurgia não toca — é lá que ele digita 15:40, e é de lá
    que veio o `{id, hora:"14:20"}` que já está no banco. */
+/* ══ O MOSTRADOR, EM SVG DE 34px ═════════════════════════════════════════════════════
+   Ponteiros calculados da hora: o das horas anda 30° por hora MAIS meio grau por minuto
+   (senão às 10:59 ele aponta 10:00 cravado, e um relógio que mente em 34px é pior que
+   nenhum); o dos minutos, 6° por minuto.
+
+   SEM HORA os ponteiros ficam em 12:00 e o mostrador é cinza — não é um horário, é a
+   ausência dele, e é o mesmo princípio de "sem hora" ser rótulo honesto na Daily. */
+function pl6RelogioSVG(hora) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hora || '').trim());
+  const hh = m ? Number(m[1]) % 12 : 0;
+  const mm = m ? Number(m[2]) : 0;
+  const angH = hh * 30 + mm * 0.5;
+  const angM = mm * 6;
+  const ticks = [0, 90, 180, 270].map(function (a) {
+    return '<line class="pl6-relogio-tick" x1="17" y1="4.5" x2="17" y2="7"'
+      + ' transform="rotate(' + a + ' 17 17)"/>';
+  }).join('');
+  return '<svg class="pl6-relogio" viewBox="0 0 34 34" aria-hidden="true" focusable="false">'
+    + '<circle class="pl6-relogio-face" cx="17" cy="17" r="14.5"/>'
+    + ticks
+    + '<line class="pl6-relogio-h" data-pl6-ponteiro="h" x1="17" y1="17" x2="17" y2="10"'
+    +   ' transform="rotate(' + angH + ' 17 17)"/>'
+    + '<line class="pl6-relogio-m" data-pl6-ponteiro="m" x1="17" y1="17" x2="17" y2="6.5"'
+    +   ' transform="rotate(' + angM + ' 17 17)"/>'
+    + '<circle class="pl6-relogio-eixo" cx="17" cy="17" r="1.7"/>'
+    + '</svg>';
+}
+
 function pl6ChipsDeHora(di, si, hora, horasTomadas) {
   if (pl6UI.horaEdit !== di + '.' + si) return '';
   const tomadas = horasTomadas || {};
@@ -29504,6 +29561,20 @@ function pl6ChipsDeHora(di, si, hora, horasTomadas) {
       + ' title="' + (escolhida ? h + ' já é o horário desta visita' : 'agendar às ' + h) + '">'
       + h + '</button>';
   }).join('');
+  /* ══ E A HORA QUE NÃO ESTÁ NOS CHIPS ═══════════════════════════════════════════════
+     Sete janelas cobrem sete visitas; o dia tem quinze. E cliente marca 11:15, não 10:30.
+     O mostrador mostra a hora atual da visita e recebe qualquer outra — `step="300"` para
+     o seletor do sistema andar de 5 em 5 minutos em vez de 1 em 1. */
+  const ref = di + '.' + si;
+  const relogio = '<div class="pl6-relogio-linha">'
+    + '<span data-pl6-relogio="' + ref + '">' + pl6RelogioSVG(hora) + '</span>'
+    + '<input type="time" step="300" class="pl6-relogio-in"'
+    +   ' data-pl6-relogio-in="' + ref + '" value="' + esc(hora || '') + '"'
+    +   ' aria-label="Horário desta visita">'
+    + '<button type="button" class="pl6-relogio-ok" data-pl6-hora-livre="' + ref + '"'
+    +   ' title="Marcar esta visita no horário do mostrador">marcar ▸</button>'
+    + '</div>';
+
   return '<div class="pl6-hora-chips">'
     + '<span class="pl6-hora-chips-rot">que horário?</span>'
     + '<div class="pl6-hora-chips-grade">' + chips
@@ -29511,6 +29582,7 @@ function pl6ChipsDeHora(di, si, hora, horasTomadas) {
           + ' data-pl6-hora-limpar="' + di + '.' + si + '"'
           + ' title="Tirar o horário desta visita">sem hora</button>' : '')
     + '</div>'
+    + relogio
     + '</div>';
 }
 
@@ -29678,12 +29750,54 @@ const PL6_ETAPAS_FICHA = [
 /* UM CAMPO DA FICHA. Vazio nao desaparece e nao vira CTA na lista: vira o aviso ambar da
    prancha, DENTRO da ficha. "— nao veio da fonte · preencher na visita" diz duas coisas
    que o executivo precisa: nao e falha dele, e onde isso se resolve e na rua. */
-function pl6FichaCampo(rot, valor, porque) {
+/* ══ CAMPO QUE SÓ EXISTE QUANDO TEM CONTEÚDO (09/09/26) ══════════════════════════════
+   Julyan: "mais informação, preservando a identidade visual".
+
+   Campo de preenchimento baixo — horário (12%), nota (15%), categoria (15%), sistema
+   atual (21%) — não pode ganhar linha fixa: dez linhas dizendo "não veio da fonte"
+   ocupam a tela inteira para informar nada, e empurram para baixo os campos que têm
+   conteúdo. Alto preenchimento continua em pl6FichaCampo, com a nota honesta quando
+   falta; baixo passa por aqui e simplesmente não nasce.
+
+   MESMO MARKUP, mesma classe, mesmo rótulo de 104px: a diferença é existir ou não. */
+function pl6FichaCampoSeTem(rot, valor) {
+  if (valor == null || String(valor).trim() === '') return '';
+  return pl6FichaCampo(rot, valor, '');
+}
+
+/* O MAPA E A BUSCA, que é o que resolve a falta de telefone. `lat/lng` existe em 100%
+   das contas-alvo (medido) e o endereço também — então estes dois cliques sempre têm
+   para onde ir. `noopener` porque a aba nova não tem por que alcançar esta. */
+function pl6FichaLinks(l, bruto) {
+  const b = bruto || {};
+  const partes = [b.nome || l.nome, b.endereco || '', b.bairro || '', b.cidade || ''];
+  const busca = encodeURIComponent(partes.filter(Boolean).join(' '));
+  const temPonto = l.lat != null && l.lng != null && isFinite(l.lat) && isFinite(l.lng);
+  const links = [];
+  links.push('<a class="pl6-fi-link" target="_blank" rel="noopener noreferrer"'
+    + ' href="https://www.google.com/search?q=' + busca + '">buscar no Google ↗</a>');
+  if (temPonto) {
+    links.push('<a class="pl6-fi-link" target="_blank" rel="noopener noreferrer"'
+      + ' href="https://www.google.com/maps/dir/?api=1&destination='
+      + encodeURIComponent(l.lat + ',' + l.lng) + '">traçar rota ↗</a>');
+  } else {
+    links.push('<a class="pl6-fi-link" target="_blank" rel="noopener noreferrer"'
+      + ' href="https://www.google.com/maps/search/?api=1&query=' + busca + '">abrir no mapa ↗</a>');
+  }
+  return links.join(' · ');
+}
+
+/* `notaEhHtml` existe porque a nota do campo VAZIO passou a carregar links (09/09/26):
+   sem este parâmetro o `esc` imprimia `<a href=...>` como texto no meio da ficha, e foi
+   assim que saiu na tela. O padrão continua ESCAPANDO — só escapa de escapar quem pede,
+   e quem pede monta o link com o texto fixo e a URL por encodeURIComponent. */
+function pl6FichaCampo(rot, valor, porque, notaEhHtml) {
   const vazio = valor == null || String(valor).trim() === '';
+  const nota = porque || '— não veio da fonte · preencher na visita';
   return '<div class="pl6-fi-campo' + (vazio ? ' is-vazio' : '') + '">'
     + '<span class="pl6-fi-rot">' + esc(rot) + '</span>'
     + '<span class="pl6-fi-v">' + (vazio
-        ? esc(porque || '— não veio da fonte · preencher na visita')
+        ? (notaEhHtml ? nota : esc(nota))
         : valor) + '</span>'
     + '</div>';
 }
@@ -29973,19 +30087,98 @@ function pl6FichaHTML(rep, l, dias, grade, regioes) {
       + pl6FichaCampo('Próximo passo', l.proximaAtividade
           ? esc((typeof fn2Quando === 'function' ? fn2Quando(l.proximaAtividade) : l.proximaAtividade))
           : null, '— sem tarefa datada · é isso que segura o negócio')
-    /* CONTA-ALVO: o que a FONTE trouxe. */
-    : pl6FichaCampo('Telefone', telHtml, '— não veio da fonte · preencher na visita')
-      + pl6FichaCampo('Endereço', esc(bruto.endereco || endereco), '— não veio da fonte')
-      + pl6FichaCampo(l.grupo === 'casa' ? 'CNPJ' : 'Nota pública',
-          l.grupo === 'casa'
-            ? esc(bruto.cnpj || '')
-            : (l.nota != null ? esc('★ ' + l.nota.toFixed(1).replace('.', ',')
-                + (l.avaliacoes != null ? ' · ' + l.avaliacoes.toLocaleString('pt-BR') + ' avaliações' : '')) : null),
-          '— não veio da fonte')
-      + pl6FichaCampo(l.grupo === 'casa' ? 'Aberta há' : 'Categoria',
-          l.grupo === 'casa'
-            ? (l.mesesAberto != null ? esc(l.mesesAberto + ' meses') : null)
-            : esc(bruto.categoria || ''), '— não veio da fonte');
+      /* ══ O QUE ELE JÁ DESCOBRIU SOBRE ESTA CONTA (09/09/26) ═══════════════════════
+         Estes campos existem no negócio e nunca apareceram aqui — ele abria a ficha e
+         ia ao HubSpot para lembrar do que ele mesmo escreveu. Preenchimento medido nos
+         146 negócios do snapshot: gargalo 37%, sistema atual 21%, plano apresentado
+         18%, MRR 14%, origem 12%, maior desafio 8%.
+
+         SÓ NASCEM QUANDO EXISTEM: sete linhas de "não preenchido" empurrariam para
+         baixo o telefone e o próximo passo, que são o que ele usa na ligação. */
+      + pl6FichaCampoSeTem('Sistema hoje', esc(bruto.nome_do_sistema || ''))
+      + pl6FichaCampoSeTem('Gargalo', esc(bruto.gargalo_operacional || ''))
+      + pl6FichaCampoSeTem('Maior desafio', esc(bruto.qual_maior_desafio_
+          || bruto.informacoes_sobre_o_maior_desafio || ''))
+      + pl6FichaCampoSeTem('Plano apresentado', esc(bruto.plano_apresentado || ''))
+      /* MENSALIDADE é `mrr` ou `valor_de_mrr`; o valor de CONTRATO é outro campo e não
+         se soma com este. Duas grandezas no mesmo rótulo já fizeram a tela dizer que um
+         negócio de R$ 300/mês valia R$ 3.900. */
+      + pl6FichaCampoSeTem('Mensalidade', (function () {
+          const m = Number(bruto.mrr || bruto.valor_de_mrr || 0);
+          return m > 0 ? esc('R$ ' + m.toLocaleString('pt-BR') + '/mês') : null;
+        }()))
+      + pl6FichaCampoSeTem('Origem', esc(bruto.origem_do_lead || ''))
+      + pl6FichaCampoSeTem('E-mail', bruto.email
+          ? '<a class="pl6-fi-link" href="mailto:' + esc(bruto.email) + '">' + esc(bruto.email) + '</a>'
+          : null)
+      /* COMO CHEGAR também na carteira: 79% dos negócios têm coordenada, e quem não tem
+         cai na busca por nome e endereço. É o mesmo par de links da conta-alvo. */
+      + pl6FichaCampo('Como chegar', pl6FichaLinks(l, Object.assign({}, bruto, {
+          endereco: [bruto.logradouro || bruto.endereco || '', bruto.numero || ''].filter(Boolean).join(', ')
+        })), '')
+    /* ══ CONTA-ALVO: o que a FONTE trouxe, e o que resolve o que ela não trouxe ══════
+       Eram quatro campos. Agora são os mesmos quatro de preenchimento alto — telefone,
+       endereço, CNPJ, aberta há — mais os de preenchimento baixo que só nascem quando
+       existem, mais duas coisas que a ficha tinha e não dizia: desde quando a conta está
+       na fila sem ninguém trabalhar, e o que a fonte dela garante.
+
+       A LINHA DO TELEFONE VAZIA GANHOU CAMINHO. Ela falta em 86% destas contas porque a
+       API da Casa dos Dados não devolve número (medido na documentação hoje: telefone
+       existe lá só como filtro de busca). "Preencher na visita" descrevia o problema e
+       deixava ele sem saída; agora a mesma linha oferece buscar no Google e traçar a
+       rota — o número aparece em dez segundos, antes de ele bater na porta. */
+    : pl6FichaCampo('Telefone', telHtml,
+        '— não veio da fonte · ' + pl6FichaLinks(l, bruto), true)
+      + pl6FichaCampo('Endereço',
+          esc([bruto.endereco || null, bruto.bairro || null, bruto.cidade || null]
+            .filter(Boolean).join(' · ')) || esc(endereco), '— não veio da fonte')
+      /* SÓ QUANDO HÁ TELEFONE: sem ele, os mesmos dois links já estão na linha de cima,
+         e duas linhas idênticas na mesma ficha é moldura, não informação. */
+      + (tel ? pl6FichaCampo('Como chegar', pl6FichaLinks(l, bruto), '') : '')
+      + pl6FichaCampoSeTem('CNPJ', esc(bruto.cnpj || ''))
+      /* ABERTA HÁ, EM DIAS QUANDO É RECENTE: "2 meses" e "38 dias" descrevem a mesma
+         conta, e a segunda é a que diz que ela abriu ONTEM em termos comerciais — que é
+         o motivo de ela estar nesta lista. */
+      + pl6FichaCampoSeTem('Aberta há', (function () {
+          if (!bruto.data_abertura) return null;
+          const d = Math.floor((Date.now() - new Date(bruto.data_abertura).getTime()) / 86400000);
+          if (!isFinite(d) || d < 0) return null;
+          return esc(d < 90 ? d + ' dias — recém-aberta, ainda escolhendo sistema'
+            : (l.mesesAberto != null ? l.mesesAberto + ' meses' : d + ' dias'));
+        }()))
+      + pl6FichaCampoSeTem('Nota pública', l.nota != null
+          ? esc('★ ' + l.nota.toFixed(1).replace('.', ',')
+            + (l.avaliacoes != null ? ' · ' + l.avaliacoes.toLocaleString('pt-BR') + ' avaliações' : ''))
+          : null)
+      + pl6FichaCampoSeTem('Categoria', esc(bruto.categoria || ''))
+      /* HORÁRIO: 12% das linhas o têm, e quando têm é o que evita a visita na porta
+         fechada — a informação mais barata de usar que esta tela tem. */
+      + pl6FichaCampoSeTem('Funcionamento', esc(bruto.horario_funcionamento || ''))
+      /* NA FILA DESDE: 100% preenchido e nunca mostrado. Conta parada há 40 dias na
+         munição não é conta nova — e essa diferença muda a ordem do dia dele. */
+      + pl6FichaCampoSeTem('Na fila desde', (function () {
+          if (!bruto.created_at) return null;
+          const d = Math.floor((Date.now() - new Date(bruto.created_at).getTime()) / 86400000);
+          if (!isFinite(d) || d < 0) return null;
+          return esc(d === 0 ? 'entrou hoje'
+            : d + (d === 1 ? ' dia' : ' dias') + ' na sua munição, ainda sem visita');
+        }()))
+      /* ══ A FONTE EXPLICA OS VAZIOS DESTA CONTA, e não os da fonte em geral ══════════
+         A primeira versão desta linha dizia sempre "esta fonte não traz nota nem
+         telefone" — e eu a vi na tela de uma conta que TINHA nota e telefone (algumas
+         linhas da Casa dos Dados têm: 3 em 1.682 com número, e há as que o executivo
+         completou). A ficha ficava se contradizendo no mesmo quadro: telefone escrito
+         em cima, "não traz telefone" embaixo.
+         Agora a frase nomeia o que falta AQUI. Faltando nada, ela é só a fonte. */
+      + pl6FichaCampoSeTem('Fonte', (function () {
+          const chip = (PL6_FONTES[l.grupo] || {}).chip || 'lote novo';
+          if (l.grupo !== 'casa') return esc(chip);
+          const faltam = [];
+          if (!tel) faltam.push('telefone');
+          if (l.nota == null) faltam.push('nota');
+          return esc('Casa dos Dados · CNPJ ativo na Receita'
+            + (faltam.length ? ' — esta fonte não traz ' + faltam.join(' nem ') : ''));
+        }()));
 
   /* ── agendar: 1 · que dia, com o nº de livres ────────────────────────────────── */
   const diasBtns = dias.map(function (d, di) {
@@ -31296,6 +31489,19 @@ function pl6Ligar(box, rep) {
        Mesma tecnica: filtra no DOM sem redesenhar. As opcoes fora das 8 primeiras
        nascem com `hidden` e a busca as revela — assim a lista inteira esta no DOM (a
        busca alcanca os 104 bairros) sem virar parede de botoes na abertura. */
+    /* ══ OS PONTEIROS SEGUEM O QUE ELE DIGITA ══════════════════════════════════════
+       Escreve no DOM e não redesenha, pela mesma razão da busca de região logo abaixo:
+       redesenhar recria o campo e o cursor sai dele no meio da digitação. Aqui só mudam
+       dois atributos de transform — o estado (a hora da visita) continua sendo gravado
+       apenas quando ele confirma no "marcar ▸". */
+    const relIn = ev.target.closest('[data-pl6-relogio-in]');
+    if (relIn) {
+      const casca = box.querySelector('[data-pl6-relogio="'
+        + relIn.getAttribute('data-pl6-relogio-in') + '"]');
+      if (casca) casca.innerHTML = pl6RelogioSVG(relIn.value);
+      return;
+    }
+
     const buscaReg = ev.target.closest('[data-pl6-regiao-busca]');
     if (buscaReg) {
       const q = pl6ChaveBairro(buscaReg.value || '');
@@ -31460,7 +31666,10 @@ function pl6Ligar(box, rep) {
       /* definir hora na grade (09/09/26): sem estes quatro o botão novo é clique morto */
       /* definir hora na grade: o chip (hora-set), o botão que abre o painel (hora-slot) e
          o "sem hora" (hora-limpar). `hora-campo`/`hora-salvar` saíram com o input --:--. */
-      + '[data-pl6-hora-slot],[data-pl6-hora-set],[data-pl6-hora-limpar],'
+      /* `hora-livre` é o "marcar ▸" do mostrador de relógio (09/09/26). Sem este alvo o
+         botão existe, tem hover, e não faz nada — o clique morto que esta lista existe
+         para não ter. */
+      + '[data-pl6-hora-slot],[data-pl6-hora-set],[data-pl6-hora-limpar],[data-pl6-hora-livre],'
       + '[data-pl6-abrir-regiao],[data-pl6-regiao],[data-pl6-mais-regioes],[data-pl6-sugerir],'
       /* `[data-pl6-fechar]` e `[data-pl6-reabrir]` sairam em 04/09/26 junto com
          `[data-pl6-end-abrir]`: os dois primeiros nao tinham handler NEM markup desde que
@@ -31712,12 +31921,12 @@ function pl6Ligar(box, rep) {
       if (chip) chip.focus();
       return;
     }
-    if (d.pl6HoraSet || d.pl6HoraLimpar) {
+    if (d.pl6HoraSet || d.pl6HoraLimpar || d.pl6HoraLivre) {
       /* O CHIP CARREGA A HORA NO PRÓPRIO ATRIBUTO: "di.si.HH:MM". Ler o valor de um campo
          não serve mais — não há campo. E a hora tem ":" dentro, então o split é por
          posição e não por "pegue o resto": `di` e `si` são os dois primeiros pedaços e a
          hora é o que vem depois do segundo ponto. */
-      const bruto = String(d.pl6HoraSet || d.pl6HoraLimpar);
+      const bruto = String(d.pl6HoraSet || d.pl6HoraLimpar || d.pl6HoraLivre);
       const partes = bruto.split('.');
       const ref = partes[0] + '.' + partes[1];
       const di = Number(partes[0]), si = Number(partes[1]);
@@ -31727,7 +31936,22 @@ function pl6Ligar(box, rep) {
       if (!id) { pl6UI.horaEdit = null; await redesenhar(); return; }
       /* A HORA VEM DO ATRIBUTO DO CHIP, não de um campo: um toque escolhe. "sem hora"
          manda string vazia e o slot volta a ser id puro. */
-      const nova = d.pl6HoraSet ? partes.slice(2).join('.').trim() : '';
+      /* ══ TRÊS ORIGENS, UMA GRAVAÇÃO ═══════════════════════════════════════════════
+         chip: a hora vem no atributo. "sem hora": string vazia. MOSTRADOR: vem do campo
+         ao lado dele, e aí precisa de validação — hora inválida NÃO pode virar a hora da
+         faixa em silêncio, porque ele sai para a rua num horário e o cliente espera em
+         outro. Reclama e não grava nada. */
+      let nova = d.pl6HoraSet ? partes.slice(2).join('.').trim() : '';
+      if (d.pl6HoraLivre) {
+        const campo = box.querySelector('[data-pl6-relogio-in="' + ref + '"]');
+        nova = campo ? String(campo.value || '').trim() : '';
+        if (!/^\d{1,2}:\d{2}$/.test(nova)) {
+          if (typeof mostrarToast === 'function') {
+            mostrarToast('Escreva o horário no formato 14:30 — não mudei nada.', 'atencao');
+          }
+          return;
+        }
+      }
       /* SEM HORA volta a string simples: um objeto `{ id, hora: '' }` seria um terceiro
          estado que os acessores tratariam como "sem hora" — igual, mas com uma forma a
          mais para a próxima pessoa entender. */

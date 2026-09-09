@@ -590,11 +590,41 @@ function pl6RegraCSS(nome) {
   /* A HORA VEM DO ATRIBUTO DO CHIP, e o split é POR POSIÇÃO. "di.si.HH:MM" tem ponto no
      meio e dois-pontos na hora: `split('.').slice(2).join('.')` devolve a hora inteira,
      e um `split('.')[2]` cru devolveria "10" de "10:30" se alguém trocasse o separador. */
-  checar('a hora vem do chip, não de um campo',
-    ramo.indexOf("const bruto = String(d.pl6HoraSet || d.pl6HoraLimpar);") > -1
+  /* A PREMISSA DESTA GUARDA MUDOU EM 09/09, POR PEDIDO DELE: "o executivo tem q poder
+     escolher o horário, coloque um mini marcador de relogio BONITO". Voltou a existir um
+     campo — só para o mostrador, ao lado dos chips.
+     O que ela protege continua igual em duas coisas, e ganha uma terceira:
+       · a hora do CHIP vem do atributo dele, não de campo nenhum;
+       · o split é POR POSIÇÃO, senão "10:30" perde os minutos;
+       · e a hora DIGITADA é validada antes de gravar — hora inválida virando a hora da
+         faixa em silêncio manda ele para a rua num horário e deixa o cliente em outro. */
+  checar('a hora do chip vem do atributo, e a do mostrador é validada',
+    ramo.indexOf("const bruto = String(d.pl6HoraSet || d.pl6HoraLimpar || d.pl6HoraLivre);") > -1
     && ramo.indexOf("partes.slice(2).join('.')") > -1
+    && /if \(d\.pl6HoraLivre\) \{[\s\S]{0,400}data-pl6-relogio-in[\s\S]{0,300}\{1,2\}:\\d\{2\}\$\/\.test\(nova\)/.test(ramo)
     && ramo.indexOf('data-pl6-hora-campo') < 0,
-    'não há mais campo para ler: o chip carrega a escolha no próprio atributo');
+    'o chip carrega a escolha no próprio atributo; o mostrador tem campo, e campo sem'
+    + ' validação grava a hora errada em silêncio');
+
+  /* ══ O MOSTRADOR DE RELÓGIO ═══════════════════════════════════════════════════════
+     Julyan: "coloque um mini marcador de relogio BONITO, por favor." Três coisas o
+     fazem ser um marcador e não um campo, e as três são medíveis. */
+  checar('o mostrador existe e o ponteiro das horas anda com os minutos',
+    /function pl6RelogioSVG\(hora\)/.test(tpl)
+    && /const angH = hh \* 30 \+ mm \* 0\.5;/.test(tpl),
+    'ponteiro que pula de hora em hora aponta 10:00 às 10:59 — relógio que mente em 34px'
+    + ' é pior que nenhum');
+
+  checar('os ponteiros seguem a digitação sem redesenhar a tela',
+    /const relIn = ev\.target\.closest\('\[data-pl6-relogio-in\]'\);/.test(tpl)
+    && /casca\.innerHTML = pl6RelogioSVG\(relIn\.value\)/.test(tpl),
+    'redesenhar recria o campo e o cursor sai dele no meio da digitação — a mesma razão'
+    + ' pela qual a busca de região filtra no DOM');
+
+  checar('e o "marcar ▸" do mostrador está no seletor delegado',
+    /\[data-pl6-hora-livre\]/.test(tpl) && /data-pl6-hora-livre="' \+ ref \+ '"/.test(tpl),
+    'botão fora da lista de alvos tem hover e não faz nada: é o clique morto que essa'
+    + ' lista existe para não ter');
 
   checar('"sem hora" volta a string simples, não um objeto com hora vazia',
     /g\[di\]\[si\] = nova \? \{ id: id, hora: nova \} : id;/.test(tpl),
@@ -738,6 +768,65 @@ function pl6RegraCSS(nome) {
       && /mais ' \+ semJanela\.length \+ ' vagas sem hora marcada/.test(tpl),
     'quinze linhas "livre" idênticas num dia em branco escondem a visita real no meio'
     + ' delas — é o cromo de vaga vazia que saiu do kanban e da Daily do gestor');
+}());
+
+/* ══ A FICHA DO CARD ═══════════════════════════════════════════════════════════════
+   Julyan: "o ideal é deixar todas as fichas dos cards com mais informação, preservando
+   a identidade visual dos cards".
+
+   As duas regras que fazem "mais informação" não virar "mais altura": campo de
+   preenchimento alto tem linha fixa com nota honesta; campo de preenchimento baixo só
+   nasce com conteúdo. Medido nas 1.985 linhas de leads_prospeccao antes de decidir:
+   nome/endereço/bairro/cidade/coordenada 100%, CNPJ e abertura 82%, categoria/nota/
+   horário 13-15%, telefone 14%, socio 3 LINHAS, delivery ZERO. */
+(function () {
+  const ficha = pegarFn('pl6FichaHTML');
+
+  checar('a ficha tem campo que só nasce com conteúdo',
+    /function pl6FichaCampoSeTem\(rot, valor\) \{\s*\n\s*if \(valor == null \|\| String\(valor\)\.trim\(\) === ''\) return '';/.test(tpl),
+    'dez linhas de "não veio da fonte" ocupam a ficha inteira para informar nada, e'
+    + ' empurram para baixo o telefone e o próximo passo, que são o que ele usa');
+
+  /* ══ HTML NA NOTA SÓ QUANDO QUEM CHAMA DECLARA ═══════════════════════════════════
+     Em 09/09 eu pus os links do Google e da rota na nota do campo vazio e a nota passa
+     por esc(): a ficha imprimiu <a class="pl6-fi-link" ...>buscar no Google</a> como
+     TEXTO, no meio da gaveta. Build e 37 suítes verdes — nenhuma abre a ficha. Quem
+     contou foi ler o innerText no navegador. */
+  checar('a nota do campo vazio escapa por padrão, e só não escapa quem declara',
+    /function pl6FichaCampo\(rot, valor, porque, notaEhHtml\)/.test(tpl)
+      && /\? \(notaEhHtml \? nota : esc\(nota\)\)/.test(tpl),
+    'markup impresso como texto na ficha; e escapar de escapar por padrão abriria a'
+    + ' porta para o nome do lead virar HTML');
+
+  checar('e a linha do telefone é quem declara',
+    /pl6FichaCampo\('Telefone', telHtml,\s*\n\s*'— não veio da fonte · ' \+ pl6FichaLinks\(l, bruto\), true\)/.test(ficha),
+    'sem o quarto argumento os dois links do telefone vazio saem como texto cru');
+
+  checar('os links do telefone vazio existem e levam a algum lugar',
+    /function pl6FichaLinks\(l, bruto\)/.test(tpl)
+      && /google\.com\/search\?q=' \+ busca/.test(tpl)
+      && /google\.com\/maps\/dir\/\?api=1&destination='/.test(tpl)
+      && /encodeURIComponent/.test(tpl),
+    'o telefone falta em 86% das contas-alvo porque a API da fonte não devolve número —'
+    + ' "preencher na visita" sozinho descreve o problema e deixa ele sem saída');
+
+  checar('e eles não aparecem duas vezes na mesma ficha',
+    /\(tel \? pl6FichaCampo\('Como chegar', pl6FichaLinks\(l, bruto\), ''\) : ''\)/.test(ficha),
+    'os mesmos dois links na linha do telefone e na de baixo é moldura, não informação');
+
+  /* ══ RÓTULO QUE VIVE VAZIO NÃO ENTRA ═════════════════════════════════════════════
+     `socio` tem 3 linhas preenchidas em 1.985 e `delivery` tem zero (medido). Um campo
+     desses na ficha é o zero que tranquiliza: o executivo lê "sem sócio informado" e
+     entende que a conta não tem sócio, quando a fonte é que não conta. */
+  checar('a ficha não ganha rótulo de campo que vive vazio',
+    !/pl6FichaCampo(?:SeTem)?\('Sócio'/.test(ficha) && !/pl6FichaCampo(?:SeTem)?\('Delivery'/.test(ficha),
+    'socio 3 linhas em 1.985 e delivery zero: rótulo vazio informa menos que ausência');
+
+  checar('a frase da fonte fala do que falta NESTA conta',
+    /if \(!tel\) faltam\.push\('telefone'\);/.test(ficha)
+      && /if \(l\.nota == null\) faltam\.push\('nota'\);/.test(ficha),
+    'a primeira versão dizia sempre "esta fonte não traz nota nem telefone" — e eu vi'
+    + ' isso numa ficha que mostrava nota e telefone logo acima');
 }());
 
 if (falhas) {
