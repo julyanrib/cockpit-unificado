@@ -215,6 +215,45 @@ conferir("e os bairros nomeados de Guarulhos continuam certos",
   quem("guarulhos", "vila augusta") === "Sérgio" && quem("guarulhos", "macedo") === "Renata",
   "a sobra não pode atropelar quem nomeou o bairro");
 
+/* ── 9 · A CIDADE DIVIDIDA POR MERIDIANO (09/09/26) ─────────────────────────────────
+   Julyan: "pode dividir de acordo com a proximidade dos bairros... ja pode colocar que
+   vou importar tudo". Guarulhos tem DOIS donos e ~140 bairros, dos quais 18 nomeados —
+   sem esta regra, 83% do que a busca traz volta a cair sem dono na próxima importação.
+
+   NÃO usei donoPorProximidade, que já existia: MEDIDO, os centróides dos dois estão a
+   1,8 km um do outro e os órfãos a ~12 km de ambos. Proximidade a centróides colados é
+   moeda ao ar com cara de critério. O eixo vem de onde cada um já trabalha (Sérgio a
+   oeste, Renata a leste) e o corte é a mediana dos órfãos, que equilibra 154 x 145. */
+const q = function (c, b, la, lo) { return primeiroNome(terr.rotearTerritorio(c, b, la, lo)); };
+
+conferir("bairro NOMEADO ganha do meridiano",
+  q("guarulhos", "vila augusta", -23.45, -46.50) === "Sérgio" &&
+  q("guarulhos", "macedo", -23.47, -46.56) === "Renata",
+  "quem nomeou a rua manda; o meridiano é para o bairro que ninguém nomeou");
+
+conferir("e bairro novo cai pelo lado do meridiano",
+  q("guarulhos", "jardim cumbica", -23.43, -46.45) === "Renata" &&
+  q("guarulhos", "vila rosalia", -23.46, -46.55) === "Sérgio",
+  "sem isso a próxima importação de Guarulhos volta a ser 83% de lead sem dono");
+
+/* A COORDENADA MENTIROSA NÃO DECIDE TERRITÓRIO. Medido: 38 dos 247 leads de Guarulhos
+   tinham ponto entre -51,4 e -45,6 de longitude, para uma cidade de 30 km — o
+   geocodificador falha e devolve outra cidade, às vezes outro estado. */
+conferir("ponto fora da caixa da cidade não decide nada",
+  !q("guarulhos", "bairro x", -24.2, -51.4) && !q("guarulhos", "bairro y", null, null),
+  "coordenada de outro estado escolhendo dono é o pior caso: o lead entra com dono errado e ninguém percebe");
+
+conferir("e o divisor não vaza para outras cidades",
+  q("sao paulo", "mooca", -23.55, -46.60) === "Renata" &&
+  q("suzano", "jardim cacique", null, null) === "Renata" &&
+  q("guarulhos", "vila augusta", -23.55, -46.60) === "Sérgio",
+  "o meridiano de Guarulhos aplicado em São Paulo cortaria a cidade errada");
+
+conferir("o divisor mora na declaração, não cravado no código",
+  (terr.DIVISORES || []).length > 0 &&
+  (terr.DIVISORES || []).every(function (d) { return d.municipio && d.corte && d.oeste && d.leste && d.caixa && d.porque; }),
+  "divisor sem o porque escrito é numero que ninguem sabe de onde veio");
+
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');
