@@ -56166,6 +56166,48 @@ const RT7_FONTES = [
   { id: 'tripadvisor', rot: 'TripAdvisor', ativa: false, porque: 'fora da allowlist de rede e o ToS proíbe coleta automatizada — não é "ainda não", é por este caminho nunca' }
 ];
 
+/* ══ A PRÉ-ESCOLHA DOS PASSOS 1 E 2 ═══════════════════════════════════════════════════
+   MEDIDO em 09/09: a aba abre com praça, fonte e executivo nulos, e o rótulo do botão de
+   buscar aponta para o passo errado ("escolha a fonte" quando falta a praça). Cinco
+   cliques antes de a primeira conta entrar na fila.
+
+   AS DUAS FUNÇÕES SÃO A ÚNICA FONTE DO DEFAULT, e existem porque `s.fonte` e `s.praca`
+   são lidos em DOIS lugares — rt7Dados, que pinta o botão, e rt7Disparar, que age. Dois
+   defaults escritos à mão divergiriam, e o sintoma seria o botão dizendo "buscar em São
+   Paulo" e o clique respondendo "escolha a fonte": exatamente o clique morto que o Julyan
+   encontrou.
+
+   A FONTE: default só enquanto houver UMA ativa. Com duas, a escolha volta a ser escolha —
+   a tela não decide por ele quando há de fato o que decidir.
+
+   A PRAÇA: a que tem mais PORTAS NÃO BATIDAS entre as que têm dono declarado. O filtro de
+   dono existe porque praça sem dono não pode receber carga (o passo 3 não lista ninguém),
+   e abrir apontando para lá seria oferecer um caminho que termina em bloqueio. */
+function rt7FonteEscolhida() {
+  const s = RT7_ESTADO;
+  if (s.fonte) return s.fonte;
+  const ativas = RT7_FONTES.filter(f => f.ativa);
+  return ativas.length === 1 ? ativas[0].id : null;
+}
+
+function rt7PracaEscolhida(execsPorPraca) {
+  const s = RT7_ESTADO;
+  if (s.praca) return s.praca;
+  const linhas = s.radar || [];
+  if (!linhas.length) return null;
+  const mapa = execsPorPraca || rt7ExecsPorPraca();
+  const naoBatidas = function (r) {
+    const medido = r.tam_fonte === 'contagem_api' && Number(r.tam) > 0;
+    return medido ? (Number(r.tam) || 0) - (Number(r.tocado) || 0) : -1;
+  };
+  const comDono = linhas.filter(function (r) {
+    return (mapa[rt7MunicipioDaPraca(r.praca)] || []).length;
+  });
+  const alvo = (comDono.length ? comDono : linhas).slice()
+    .sort(function (a, b) { return naoBatidas(b) - naoBatidas(a); })[0];
+  return alvo ? alvo.praca : null;
+}
+
 /* ══ RADAR E NOTÍCIAS: O QUE O JOB DE SEGUNDA ESCREVEU ════════════════════════════════
    Duas tabelas com SELECT para quem está logado e ZERO política de escrita — só o job
    escreve, com service_role. A tela LÊ, e é por isso que estas duas leituras podem ir
@@ -56507,7 +56549,9 @@ function rt7Dados() {
      falhou, ou praça criada depois) entra com o TAM não medido, dizendo isso — porque
      esconder a praça seria pior: o gestor não veria que existe território sem medida. */
   const linhas = s.radar || [];
-  const pracaSel = s.praca || (linhas.length ? linhas[0].praca : null);
+  /* era `linhas[0].praca` (a de maior TAM) e só quando algo já estava escolhido —
+     com nada escolhido, a tela não selecionava nada. Ver rt7PracaEscolhida. */
+  const pracaSel = rt7PracaEscolhida(execsPorPraca);
 
   const pracas = linhas.map(r => {
     const execs = execsPorPraca[rt7MunicipioDaPraca(r.praca)] || [];
@@ -56552,10 +56596,22 @@ function rt7Dados() {
       st, stCor, stBg,
       dono: execs.length ? execs.map(u => String(u.nome || '').split(' ')[0]).join(', ') : 'sem dono na praça',
       tam: medido ? Number(r.tam).toLocaleString('pt-BR') : 'não medido',
+      /* ══ O NÚMERO GRANDE É O QUE DIFERE ENTRE AS PRAÇAS ═══════════════════════════
+         Era o percentual tocado, e MEDIDO ele vai de 0,00% a 0,39% em 15 das 16 praças:
+         um número igual em toda a tela não ajuda a escolher praça. Portas não batidas vai
+         de 142.340 (São Paulo) a 132 (Salesópolis) — é ele que decide para onde mandar
+         carga, e é o mesmo número que a manchete do bloco já usa.
+
+         O PERCENTUAL NÃO SE PERDE: desce para a linha de baixo, com o tocado ao lado,
+         onde é contexto. E "não medido" continua sendo dito quando o TAM não foi contado —
+         com denominador ausente, portas não batidas não existe, e não é zero. */
+      naoBatidas: medido
+        ? ((Number(r.tam) || 0) - (Number(r.tocado) || 0)).toLocaleString('pt-BR')
+        : 'não medido',
+      nbCor: !medido ? '#8A6516' : '#E51A31',
       tocado: pct == null ? '—' : String(pct).replace('.', ',') + '%',
       tocCor: !medido ? '#8A6516' : pct < 25 ? '#1E9E7B' : '#2B3440',
       largura: Math.round(((Number(r.tocado) || 0) / maiorToc) * 100) + '%',
-      clientes: r.clientes == null ? 'não medido' : Number(r.clientes).toLocaleString('pt-BR'),
       radar: r.leitura || 'sem leitura nesta rodada'
     };
   });
@@ -56641,7 +56697,8 @@ function rt7Dados() {
     };
   });
 
-  const fonteAtiva = RT7_FONTES.find(f => f.id === s.fonte && f.ativa);
+  const fonteSel = rt7FonteEscolhida();
+  const fonteAtiva = RT7_FONTES.find(f => f.id === fonteSel && f.ativa);
   const podeBuscar = !!pracaSel && !!fonteAtiva && !s.importando;
   const podeEnviar = !!execSel && !cheiaSel && nSel > 0 && !s.enviando;
   const envRot = s.enviando ? 'enviando…'
@@ -56843,9 +56900,13 @@ function rt7Dados() {
 
        DESABILITADO SEM FONTE ATIVA ESCOLHIDA, e o rótulo diz o que falta em vez de ficar
        cinza sem explicação. */
+    /* O RÓTULO DIZ O PASSO QUE FALTA DE VERDADE. Lendo `s.fonte` cru, ele dizia
+       "escolha a fonte" sobre uma fonte já pré-escolhida — e o clique funcionava.
+       Rótulo que descreve um bloqueio inexistente é o que faz alguém concluir que a
+       tela não importa nada. */
     buscRot: s.importando ? 'buscando…'
-      : !pracaSel ? 'escolha uma praça'
-        : !s.fonte ? 'escolha a fonte pra buscar'
+      : !pracaSel ? 'nenhuma praça no radar desta semana'
+        : !fonteSel ? 'escolha a fonte pra buscar'
           : 'buscar em ' + (municipioSel || '?') + ' ▸',
     buscBg: podeBuscar ? '#2B3440' : '#EDEFF4',
     buscBorda: podeBuscar ? '#2B3440' : '#DCE1EA',
@@ -56949,8 +57010,12 @@ function rt7HoraDoSync() {
    responderia 401, e o gestor veria "a importação falhou" sem saber por quê. */
 async function rt7Disparar() {
   const s = RT7_ESTADO;
-  if (!s.praca) { s.toast = 'escolha uma praça no bloco 1 antes de buscar'; return; }
-  const fonte = RT7_FONTES.find(f => f.id === s.fonte);
+  /* A PRAÇA E A FONTE DA AÇÃO SÃO AS DA TELA, pelas mesmas duas funções. Com defaults
+     separados, o botão prometia uma coisa e o clique reclamava de outra. */
+  const praca = rt7PracaEscolhida();
+  if (!praca) { s.toast = 'nenhuma praça no radar desta semana — o job de segunda não escreveu'; return; }
+  s.praca = praca;
+  const fonte = RT7_FONTES.find(f => f.id === rt7FonteEscolhida());
   if (!fonte) { s.toast = 'escolha a fonte no passo 2'; return; }
   if (!fonte.ativa) { s.toast = fonte.rot + ': ' + fonte.porque; return; }
 
@@ -57198,7 +57263,7 @@ function renderRotasProspeccao() {
       <span style="display:flex;gap:14px;flex-wrap:wrap;">
         <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">TAM food</span><b style="font:900 16px 'Archivo',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;">${esc(pc.tam)}</b></span>
         <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">tocado</span><b style="font:900 16px 'Archivo',sans-serif;color:${pc.tocCor};font-variant-numeric:tabular-nums;">${esc(pc.tocado)}</b></span>
-        <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">clientes</span><b style="font:900 16px 'Archivo',sans-serif;color:#1E9E7B;font-variant-numeric:tabular-nums;">${esc(pc.clientes)}</b></span>
+        <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">não batidas</span><b style="font:900 16px 'Archivo',sans-serif;color:${pc.nbCor};font-variant-numeric:tabular-nums;">${esc(pc.naoBatidas)}</b></span>
       </span>
       <span style="position:relative;display:block;height:8px;border-radius:999px;background:#EDEBE5;overflow:hidden;"><span style="display:block;height:100%;width:${pc.largura};background:${pc.tocCor};border-radius:999px;"></span></span>
       <span style="font:700 9.5px/1.5 'Manrope',sans-serif;color:#5B667A;">📡 <b style="color:#8E3B5C;">radar seg:</b> ${esc(pc.radar)}</span>
@@ -57297,7 +57362,7 @@ function renderRotasProspeccao() {
     <div style="padding:18px 24px 4px;">
       <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">3 · A carteira de cada executivo <span style="color:#7A8494;">— quem aguenta carga e quem precisa · clique pra escolher no passo 3</span></span>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin-top:10px;">${carteirasHTML}</div>
-      <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">carteira ativa = negócio ABERTO com interação registrada há menos de 30d no HubSpot (as seis etapas abertas; Perdido, Ganho e Onboarding ficam fora) · teto saudável = 75% de ${RT7_CAPACIDADE} (traço âmbar) — acima disso o envio é bloqueado · abaixo de 50% pede carga</span>
+      <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">clientes ativos por praça não entram aqui: o Cockpit não tem essa base — o snapshot é o funil de Field Sales, e o mais perto de "cliente" é a etapa Enviado Onboarding, com 6 negócios no Brasil inteiro · carteira ativa = negócio ABERTO com interação registrada há menos de 30d no HubSpot (as seis etapas abertas; Perdido, Ganho e Onboarding ficam fora) · teto saudável = 75% de ${RT7_CAPACIDADE} (traço âmbar) — acima disso o envio é bloqueado · abaixo de 50% pede carga</span>
       ${d.semPraca ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:9px;padding:8px 12px;margin-top:8px;">${esc(d.semPraca)}</span>` : ''}
       ${d.pracasSemRadar ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A3B5C;background:#FDF7FA;border:1px solid #E8CBD8;border-radius:9px;padding:8px 12px;margin-top:6px;">${esc(d.pracasSemRadar)}</span>` : ''}
     </div>

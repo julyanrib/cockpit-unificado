@@ -128,6 +128,57 @@ conferir('escolher a fonte NÃO dispara a busca — são dois cliques',
 
 /* ── 4 · O NÚMERO NUNCA MENTE ─────────────────────────────────────────────────────── */
 const dados = corpoDe('rt7Dados');
+/* O MARKUP DA ABA, para cobrar o que ESTA na tela e nao so o que o provedor entrega.
+   As duas metades importam: campo que sai do provedor e fica no markup imprime undefined;
+   campo que fica no provedor e sai do markup e dado morto que volta na proxima leitura. */
+const tela = corpoDe('renderRotasProspeccao');
+
+/* ══ 3b · A PRÉ-ESCOLHA DOS PASSOS 1 E 2 ═════════════════════════════════════════════
+   Julyan: "eu nao consigo importar nada". MEDIDO dirigindo a tela: a aba abre com
+   `praca: null`, `fonte: null`, `exec: null` — cinco cliques antes de a primeira conta
+   entrar na fila — e o rótulo do botão dizia "escolha a fonte pra buscar" quando o passo
+   que faltava primeiro era a PRAÇA. O rótulo apontava para o passo errado.
+
+   E A FONTE TEM UMA OPÇÃO SÓ: das três, apenas a Casa dos Dados está ativa. Pedir que ele
+   escolha entre uma opção é clique sem alternativa. */
+conferir('a pré-escolha existe, e numa declaração só',
+  (tpl.match(/function rt7FonteEscolhida\(/g) || []).length === 1 &&
+  (tpl.match(/function rt7PracaEscolhida\(/g) || []).length === 1,
+  '`s.fonte` e `s.praca` são lidos em rt7Dados (que pinta) e em rt7Disparar (que age): dois '
+  + 'defaults à mão divergem, e o sintoma é o botão prometer "buscar em São Paulo" e o clique '
+  + 'responder "escolha a fonte"');
+
+conferir('a TELA usa a pré-escolha',
+  /const pracaSel = rt7PracaEscolhida\(execsPorPraca\);/.test(dados) &&
+  /const fonteSel = rt7FonteEscolhida\(\);/.test(dados),
+  'sem isso a aba volta a abrir com os três passos vazios');
+
+conferir('e a AÇÃO usa a MESMA pré-escolha',
+  /rt7PracaEscolhida\(\)/.test(corpoDe('rt7Disparar')) &&
+  /rt7FonteEscolhida\(\)/.test(corpoDe('rt7Disparar')),
+  'a tela e a ação lendo defaults diferentes é o clique morto que o Julyan encontrou');
+
+conferir('o default de fonte só existe enquanto houver UMA ativa',
+  /ativas\.length === 1 \? ativas\[0\]\.id : null/.test(corpoDe('rt7FonteEscolhida')),
+  'com duas fontes ativas a escolha volta a ser escolha — a tela não decide por ele quando há '
+  + 'de fato o que decidir');
+
+/* COBRA O FILTRO, e não a presença do nome `comDono`: renomeei a declaração numa
+   sabotagem e a checagem passou VERDE, porque a variável antiga ainda aparecia nas linhas
+   de baixo. O que prova o mecanismo é a CONSULTA ao mapa de executivos dentro do filtro. */
+conferir('a praça sugerida é a que mais precisa, e tem dono',
+  /naoBatidas\(b\) - naoBatidas\(a\)/.test(corpoDe('rt7PracaEscolhida')) &&
+  /mapa\[rt7MunicipioDaPraca\(r\.praca\)\] \|\| \[\]\)\.length/.test(corpoDe('rt7PracaEscolhida')),
+  'praça sem dono não pode receber carga (o passo 3 não lista ninguém): abrir apontando para '
+  + 'lá é oferecer um caminho que termina em bloqueio');
+
+conferir('o rótulo do botão lê a fonte pré-escolhida, não s.fonte cru',
+  /: !fonteSel \? 'escolha a fonte pra buscar'/.test(dados) &&
+  !/: !s\.fonte \? 'escolha a fonte pra buscar'/.test(dados),
+  'lendo s.fonte cru, ele dizia "escolha a fonte" sobre uma fonte já escolhida — e o clique '
+  + 'funcionava. Rótulo que descreve um bloqueio inexistente faz alguém concluir que a tela não '
+  + 'importa nada');
+
 conferir('TAM não medido não vira zero na tela',
   /medido \? Number\(r\.tam\)\.toLocaleString\('pt-BR'\) : 'não medido'/.test(dados),
   'TAM zero numa cidade com restaurantes faz a tela dizer "0% tocado"');
@@ -141,12 +192,51 @@ conferir('o rótulo de território também espera o denominador',
   /const st = !medido \? 'não medido'/.test(dados),
   '"território virgem" sobre TAM não medido manda o time para a rua por um número que não existe');
 
-/* A checagem procurava `clientes: null` NO TEMPLATE. Aquele literal é do COLETOR
-   (scripts/radar-semanal.js): a tela só lê o que a linha do radar trouxe. Cobrar do
-   template o que é do job é cobrar no lugar errado — e reprovava código correto. */
-conferir('clientes fica "não medido" — não existe base de clientes no cockpit',
-  /r\.clientes == null \? 'não medido'/.test(dados),
-  'o mais perto de cliente no snapshot é Enviado Onboarding, com 6 no Brasil inteiro: escrever 6 numa praça é inventar');
+/* ══ A AUSÊNCIA DE "CLIENTES ATIVOS" É DITA UMA VEZ, E NÃO DEZESSEIS ═════════════════
+   ESTA CHECAGEM MUDOU DE LADO EM 09/09/26, e o motivo é medição na tela: "essa tela de
+   TAM tbm ficou confusa" (Julyan).
+
+   `clientes` é NULL em 16 de 16 praças e é null POR PROJETO — radar-semanal.js grava
+   `clientes: null` porque não existe base de clientes ativos no Cockpit. Consequência que
+   eu só vi injetando o radar real na tela: o cartão exibia "não medido" nos DEZESSEIS
+   cartões, dezesseis selos âmbar repetindo a mesma ausência, no lugar de 16px onde
+   deveria estar o número que decide para onde mandar carga.
+
+   Repetir a ausência dezesseis vezes não é a disciplina de "não medido ≠ zero" — é ruído
+   com cara de honestidade. A ausência continua dita, uma vez, no rodapé de fonte do
+   bloco; o lugar no cartão passou a ser PORTAS NÃO BATIDAS.
+
+   A CHECAGEM COBRA AS DUAS COISAS: que o campo morto não voltou ao cartão, e que a
+   ausência está escrita em algum lugar. Só a primeira metade deixaria alguém apagar a
+   explicação e ficar verde. */
+conferir('o campo morto não ocupa o cartão da praça',
+  !/r\.clientes/.test(dados) && !/pc\.clientes/.test(tela),
+  '`clientes` é null em 16 de 16 por projeto: no cartão ele era "não medido" dezesseis vezes, '
+  + 'no lugar do número que decide');
+
+conferir('e a ausência de base de clientes continua dita, uma vez',
+  /não tem essa base/.test(tela) && /Enviado Onboarding/.test(tela),
+  'tirar o campo E a explicação esconderia que o Cockpit não sabe quantos clientes há na praça');
+
+/* AS TRES METRICAS DO CARTAO, e nenhuma morta: TAM (contexto) - nao batidas (a decisao) -
+   tocado (cobertura). Eu tirei o  por descuido quando removi o : a ancora
+   do patch pegou os DOIS spans e o substituto tinha um. So apareceu olhando a tela. */
+conferir('o cartao mantem as tres metricas reais',
+  /* indexOf e nao regex: a barra invertida de `<\/span>` morre no caminho ate o arquivo,
+     e sem ela a expressao nem compila. Quinta vez nesta base. */
+  tela.indexOf('não batidas</span>') > -1 && tela.indexOf('tocado</span>') > -1
+  && tela.indexOf('TAM food</span>') > -1,
+  'tirar o campo morto nao pode levar o numero que funciona — o tocado e cobertura de verdade');
+
+conferir('o número grande do cartão é portas não batidas',
+  /naoBatidas: medido/.test(dados) && /\$\{esc\(pc\.naoBatidas\)\}/.test(tela)
+  && /não batidas<\/span>/.test(tela),
+  'MEDIDO: a cobertura vai de 0,00% a 0,39% em 15 das 16 praças — um número igual em toda a '
+  + 'tela não ajuda a escolher praça. Não batidas vai de 142.340 a 132');
+
+conferir('e não batidas diz "não medido" sem denominador',
+  /naoBatidas: medido\s*\n?\s*\?/.test(dados) && /: 'não medido'/.test(dados),
+  'sem TAM contado, portas não batidas não existe — e não é zero');
 
 conferir('a barra da praça não usa o percentual cru',
   /largura: Math\.round/.test(dados) && /maiorToc/.test(dados),
