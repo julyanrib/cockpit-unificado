@@ -98,14 +98,46 @@ const CIDADES = (() => {
        vazia — foi o motivo pelo qual as sub-cotas existem desde 01/09. */
     const comBairro = c.donos.filter(d => !d.area.todoOMunicipio && (d.area.bairros || []).length);
     if (n > 1 && comBairro.length > 1) {
-      cfg.metaBairros = comBairro.map(d => {
-        const chaves = (d.area.bairros || []).map(semAcentoBairro).filter(Boolean);
-        return {
-          nome: d.rep + ' (' + (d.area.bairros || []).slice(0, 3).join(', ') + '…)',
-          minimo: 30,
-          teste: b => chaves.some(k => String(b || '').indexOf(k) > -1)
-        };
-      });
+      /* ══ UM BAIRRO, UM DONO ═══════════════════════════════════════════════════════
+         O resolvedor é compartilhado pelas metas desta cidade, e é ele que decide de
+         quem é o bairro — em vez de cada meta responder por si e o mesmo lead contar
+         duas vezes.
+
+         BORDA DE PALAVRA, e não substring: 'vila mariana' NÃO é 'vila maria'. Sem a
+         borda, um bairro órfão entra na rota do vizinho de nome parecido — foi o que
+         aconteceu com a Vila Mariana, que está sem dono, caindo no Sérgio.
+
+         O CONTAINMENT existe porque o CRM guarda o bairro com apêndice digitado à mão
+         ("Freguesia (Jacarepaguá, entorno imediato de Taquara)", "Tijuca (Shopping
+         45)"). E é por isso que a POSIÇÃO decide: o bairro é o que vem primeiro, o
+         resto é contexto. Em empate, ganha a chave mais longa, que é a mais específica. */
+      const donosDoBairro = comBairro.map(d => ({
+        rep: d.rep,
+        chaves: (d.area.bairros || []).map(semAcentoBairro).filter(Boolean)
+      }));
+      const cache = new Map();
+      const donoDoBairro = b => {
+        const alvo = ' ' + String(b || '') + ' ';
+        if (cache.has(alvo)) return cache.get(alvo);
+        let melhor = null;
+        donosDoBairro.forEach(d => {
+          d.chaves.forEach(k => {
+            const pos = alvo.indexOf(' ' + k + ' ');
+            if (pos < 0) return;
+            if (!melhor || pos < melhor.pos || (pos === melhor.pos && k.length > melhor.tam)) {
+              melhor = { rep: d.rep, pos: pos, tam: k.length };
+            }
+          });
+        });
+        const quem = melhor ? melhor.rep : null;
+        cache.set(alvo, quem);
+        return quem;
+      };
+      cfg.metaBairros = comBairro.map(d => ({
+        nome: d.rep + ' (' + (d.area.bairros || []).slice(0, 3).join(', ') + '…)',
+        minimo: 30,
+        teste: b => donoDoBairro(b) === d.rep
+      }));
     }
     return cfg;
   });

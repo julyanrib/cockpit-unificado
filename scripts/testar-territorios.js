@@ -125,6 +125,42 @@ conferir('e a cidade com mais de um dono ganha sub-cota por bairro',
   CIDADES.some(c => c.municipio === 'Guarulhos' && c.metaBairros && c.metaBairros.length === 2),
   'sem sub-cota a cidade cumpre a meta com contas de uma zona só e a zona do colega nasce vazia');
 
+/* ══ OS DOIS DEFEITOS DO CASAMENTO DE BAIRRO (09/09/26) ═══════════════════════════════
+   Os dois só apareceram quando eu derivei as sub-cotas da declaração e fui conferir
+   bairro por bairro. A regex antiga tinha o primeiro e ninguém sabia.
+
+   1. SUBSTRING CASAVA VIZINHO. 'vila mariana' — que está na lista de zonas SEM DONO da
+      capital — caía na rota do Sérgio, porque ele tem 'Vila Maria' e uma é prefixo da
+      outra. Terceira vez nesta semana que casamento solto me morde.
+   2. O MESMO LEAD CONTAVA PARA DOIS DONOS. O CRM guarda "Freguesia (Jacarepaguá, entorno
+      imediato de Taquara)"; aquilo casava com o André (Freguesia) e com o Bruno
+      (Taquara), e as duas sub-cotas pareciam mais cheias do que estão. */
+function donosDe(municipio, bairro) {
+  const c = CIDADES.find(x => x.municipio === municipio);
+  if (!c || !c.metaBairros) return [];
+  return c.metaBairros.filter(m => m.teste(bairro)).map(m => m.nome.split(' (')[0]);
+}
+
+conferir('bairro de nome parecido não entra na rota do vizinho',
+  donosDe('São Paulo', 'vila maria').join() === 'Sérgio Caetano' &&
+  donosDe('São Paulo', 'vila mariana').length === 0,
+  'Vila Mariana está sem dono e caía no Sérgio por causa de Vila Maria — substring casa vizinho, borda de palavra não');
+
+conferir('e o bairro com apêndice do CRM continua casando',
+  donosDe('Rio de Janeiro', 'tijuca shopping 45').join() === 'Bruno Martins' &&
+  donosDe('Rio de Janeiro', 'curicica entorno imediato de taquara').join() === 'Bruno Martins',
+  'o CRM guarda bairro com contexto digitado à mão; igualdade pura perderia esses leads');
+
+conferir('nenhum bairro conta para dois donos',
+  ['taquara', 'freguesia jacarepagua entorno imediato de taquara', 'tijuca shopping 45',
+    'anil', 'copacabana', 'cachambi'].every(b => donosDe('Rio de Janeiro', b).length <= 1) &&
+  ['vila maria', 'santana', 'lapa', 'morumbi'].every(b => donosDe('São Paulo', b).length <= 1),
+  'lead contado em duas sub-cotas faz as duas parecerem cheias e a busca para antes de trazer o que falta');
+
+conferir('e quem ganha é o bairro que vem primeiro no texto',
+  donosDe('Rio de Janeiro', 'freguesia jacarepagua entorno imediato de taquara').join() === 'André Gomes',
+  'o bairro é o que vem primeiro; o resto é contexto que alguém digitou — Freguesia é do André, Taquara é do Bruno');
+
 /* ── 7 · UMA FONTE SÓ ─────────────────────────────────────────────────────────────── */
 const semNota = backfill.replace(/\/\*[\s\S]*?\*\//g, ' ');
 conferir('o backfill NÃO tem mais lista de bairro escrita à mão',
