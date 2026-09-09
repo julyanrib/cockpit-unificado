@@ -29586,6 +29586,56 @@ function pl6ChipsDeHora(di, si, hora, horasTomadas) {
     + '</div>';
 }
 
+/* ══ ESTE NEGÓCIO NASCEU NO PLANEJAMENTO? (09/09/26) ═════════════════════════════════
+   `leads_prospeccao.hubspot_deal_id` é gravado por quem cria o negócio a partir daqui
+   (abrirPassagemContaAlvoProFunil → api/criar-negocio). Ele é a ÚNICA prova de que o
+   negócio nasceu deste clique — e por isso é o que autoriza desfazer.
+
+   DOIS FORMATOS DE SLOT chegam aqui, e os dois apontam para a mesma conta:
+     "n-<uuid>"    a conta-alvo, que continua sendo o id do slot depois de criar;
+     "c-<dealId>"  a conta já na carteira, quando o negócio entrou na carga.
+   Procuro pelos dois lados, senão o desfazer só funcionaria na metade dos casos.
+
+   Devolve null para tudo o mais — cartão da carteira que veio do robô não tem o que
+   desfazer, e o ✕ dele continua sendo um clique só. */
+function pl6NegocioNascidoAqui(v) {
+  const cru = (v && typeof v === 'object') ? v.id : v;
+  const id = cru ? String(cru) : '';
+  if (!id) return null;
+  const fila = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache))
+    ? prospeccaoCache : [];
+  let lead = null;
+  if (id.indexOf('n-') === 0) {
+    const uuid = id.slice(2);
+    lead = fila.find(function (l) { return String(l.id) === uuid; }) || null;
+  } else if (id.indexOf('c-') === 0) {
+    const deal = id.slice(2);
+    lead = fila.find(function (l) { return String(l.hubspot_deal_id || '') === deal; }) || null;
+  }
+  if (!lead || !lead.hubspot_deal_id) return null;
+  return { leadId: String(lead.id), dealId: String(lead.hubspot_deal_id), nome: lead.nome || 'esta conta' };
+}
+
+/* CHAMA A ROTA QUE ARQUIVA. Ela é quem julga se pode: aqui eu só levo o par (negócio,
+   conta) e devolvo o que ela disse, sem interpretar. Recusa dela vem com motivo, e a
+   tela mostra o motivo — "não deu" sem dizer por que é o que faz alguém tentar de novo. */
+async function pl6DesfazerNegocio(nascido) {
+  try {
+    const token = (typeof tokenDeSessaoGlobal === 'function') ? await tokenDeSessaoGlobal() : null;
+    const resp = await fetch('/api/desfazer-negocio', {
+      method: 'POST',
+      headers: Object.assign({ 'Content-Type': 'application/json' },
+        token ? { Authorization: 'Bearer ' + token } : {}),
+      body: JSON.stringify({ dealId: nascido.dealId, leadId: nascido.leadId })
+    });
+    const d = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) return { ok: false, erro: d.erro || ('o servidor recusou (HTTP ' + resp.status + ')') };
+    return { ok: true, jaNaoExistia: !!d.jaNaoExistia, filaLimpa: d.filaLimpa !== false };
+  } catch (e) {
+    return { ok: false, erro: (e && e.message) ? e.message : 'sem resposta do servidor' };
+  }
+}
+
 function pl6SlotHora(v, si) {
   if (v && typeof v === 'object' && v.hora) return String(v.hora);
   return '';
@@ -31971,6 +32021,73 @@ function pl6Ligar(box, rep) {
       const [di, si] = d.pl6Remover.split('.').map(Number);
       const g = pl6GradeDoPlano();
       const era = g[di][si];
+
+      /* ══ A TRAVA (09/09/26) ═══════════════════════════════════════════════════════
+         Julyan: "se eu coloquei sem querer o lead em prospecção no planejamento e
+         retirei, ele tem que sair do funil, tem que ter uma trava, ele tem q confirmar".
+
+         Só abre quando há o que desfazer — negócio que nasceu DESTE clique. Para todo o
+         resto o ✕ continua sendo um clique só. */
+      const nascido = (typeof pl6NegocioNascidoAqui === 'function') ? pl6NegocioNascidoAqui(era) : null;
+      if (nascido && typeof abrirModalConfirmacao === 'function') {
+        const dias0 = pl6Dias(pl6SegundaDaSemana());
+        const quando = (dias0[di] && dias0[di].rot) || 'o dia';
+        abrirModalConfirmacao({
+          titulo: 'Tirar do plano — e do funil?',
+          corpoHTML: '<p style="margin:0 0 10px;"><b>' + esc(nascido.nome) + '</b> tem um negócio'
+            + ' criado <b>aqui no Planejamento</b>. Se ele entrou por engano, tirar do plano'
+            + ' sozinho deixa o negócio no funil para sempre — aparecendo na tela do gestor'
+            + ' como "0D · sem próximo passo".</p>'
+            + '<p style="margin:0 0 10px;">Arquivar manda o negócio para a <b>lixeira do'
+            + ' HubSpot</b>, de onde ele é restaurável por 90 dias. Só funciona se ele'
+            + ' continuar em Prospecção, sem valor e sem nenhuma atividade — se alguém já'
+            + ' trabalhou este negócio, o servidor recusa e explica.</p>'
+            + '<button type="button" id="pl6SoDoPlano" class="btn-sec"'
+            + ' style="padding:8px 14px;font-size:12px;">só tirar do plano ' + esc(quando)
+            + ' — o negócio fica no funil</button>'
+            + '<div id="pl6TravaStatus" style="margin-top:10px;font-size:12px;min-height:16px;"></div>',
+          confirmarLabel: 'tirar do plano e arquivar o negócio ▸',
+          aoConfirmar: async function (ov, fechar) {
+            const st = ov.querySelector('#pl6TravaStatus');
+            const ok = ov.querySelector('#modalConfirmacaoOk');
+            ok.disabled = true; ok.textContent = 'arquivando…';
+            const r = await pl6DesfazerNegocio(nascido);
+            if (!r.ok) {
+              /* RECUSA DO SERVIDOR NÃO TIRA DO PLANO. Se o negócio continua no funil, o
+                 cartão continua no dia: tirar o cartão aqui esconderia da tela dele um
+                 negócio que existe e é dele. */
+              st.innerHTML = '<b style="color:var(--red);">' + esc(r.erro) + '</b>';
+              ok.disabled = false; ok.textContent = 'tirar do plano e arquivar o negócio ▸';
+              return;
+            }
+            const g2 = pl6GradeDoPlano();
+            g2[di][si] = null;
+            fechar();
+            await mutar({ grade: g2 }, esc(nascido.nome) + ' saiu do plano e o negócio foi'
+              + ' arquivado no HubSpot ✓ — está na lixeira, restaurável por 90 dias'
+              + (r.filaLimpa ? '. A conta voltou para a sua munição.'
+                : '. ATENÇÃO: não consegui limpar a marca na fila, então o botão de criar'
+                  + ' negócio pode não reaparecer — me avise.'));
+            if (typeof carregarProspeccao === 'function') { try { await carregarProspeccao(); } catch (e) {} }
+          }
+        });
+        /* A SEGUNDA SAÍDA: sai do plano e o negócio fica. É o comportamento de antes, e
+           ele continua alcançável — trava que só oferece o gesto novo obriga a escolher
+           entre confirmar algo que ele não quer e desistir do que queria. */
+        const modal = document.getElementById('modalConfirmacao');
+        const so = modal && modal.querySelector('#pl6SoDoPlano');
+        if (so) {
+          so.addEventListener('click', async function () {
+            modal.remove();
+            const g3 = pl6GradeDoPlano();
+            g3[di][si] = null;
+            await mutar({ grade: g3 }, esc(nascido.nome) + ' saiu do plano · Supabase —'
+              + ' o negócio continua no funil, em Prospecção');
+          });
+        }
+        return;
+      }
+
       g[di][si] = null;
       const dias = pl6Dias(pl6SegundaDaSemana());
       /* O COMPROMISSO NO HUBSPOT NAO E APAGADO DAQUI, e a tela diz isso. Apagar tarefa do
