@@ -94,9 +94,35 @@ conferir('bairro sem dono não aparece atribuído a alguém',
   contradicao.length === 0,
   contradicao.join(' · ') + ' — a lista de órfãos é para o Julyan reatribuir; ela mentindo é pior que não existir');
 
-conferir('e cada bloco sem dono diz a cidade, os bairros e de onde veio',
-  orfaos.length > 0 && orfaos.every(o => o.porque && o.municipio && o.bairros && o.bairros.length),
+/* NÃO EXIGE QUE EXISTAM ÓRFÃOS. A primeira versão pedia `orfaos.length > 0`, e reprovou
+   no dia em que o Julyan atribuiu tudo — a suite cobrando um buraco que ele acabou de
+   fechar. Lista vazia aqui é a melhor notícia possível; o que importa é que o bloco que
+   EXISTIR esteja completo o bastante para ser reatribuído. */
+conferir('cada bloco sem dono diz a cidade, os bairros e de onde veio',
+  orfaos.every(o => o.porque && o.municipio && o.bairros && o.bairros.length),
   'zona órfã sem cidade não dá para reatribuir, e sem motivo ninguém sabe se foi esquecida ou desativada de propósito');
+
+/* ══ DISPENSADA ≠ ESQUECIDA ═══════════════════════════════════════════════════════════
+   "zona oeste no momento nao precisa" não é a mesma coisa que zona que alguém esqueceu de
+   atribuir. A lista de sem-dono existe para o Julyan REATRIBUIR; deixar ali algo que ele
+   já dispensou é a tela cobrando todo dia uma decisão tomada. Então há duas listas, e
+   nenhum bairro pode estar nas duas nem ter dono estando em qualquer uma. */
+const fora = decl._fora_de_rota || [];
+conferir('zona dispensada mora em lista própria, com a decisão registrada',
+  fora.every(o => o.porque && o.municipio && (o.bairros || []).length && /nao precisa|não precisa/.test(o.porque)),
+  'sem a palavra dele registrada, na próxima leitura isto parece esquecimento e alguém "conserta"');
+
+const dobrado = [];
+fora.forEach(o => (o.bairros || []).forEach(b => {
+  const k = (o.municipio || '') + '|' + chave(b);
+  if (dono.has(k)) dobrado.push(b + ' em ' + o.municipio + ': dispensado E com ' + dono.get(k));
+  if (orfaos.some(x => x.municipio === o.municipio && (x.bairros || []).some(y => chave(y) === chave(b)))) {
+    dobrado.push(b + ' em ' + o.municipio + ': dispensado E sem dono');
+  }
+}));
+conferir('bairro dispensado não está também atribuído nem também órfão',
+  dobrado.length === 0,
+  dobrado.join(' · ') + ' — as três listas têm que ser disjuntas, senão nenhuma delas quer dizer nada');
 
 /* ── 5 · EXCLUSÃO SÓ EXISTE COM O DONO DO EXCLUÍDO ────────────────────────────────── */
 const semDestino = [];
@@ -141,10 +167,14 @@ function donosDe(municipio, bairro) {
   return c.metaBairros.filter(m => m.teste(bairro)).map(m => m.nome.split(' (')[0]);
 }
 
-conferir('bairro de nome parecido não entra na rota do vizinho',
+/* O TESTE FICOU MELHOR DO QUE ERA. Quando eu o escrevi, a Vila Mariana estava SEM DONO e
+   a checagem era "ela não pode cair no Sérgio". Agora ela é da Renata — então dá para
+   cobrar a coisa certa: dois bairros de nome parecido, no mesmo município, vão para
+   pessoas DIFERENTES. Com substring, os dois iriam para o Sérgio. */
+conferir('bairros de nome parecido vão para donos diferentes',
   donosDe('São Paulo', 'vila maria').join() === 'Sérgio Caetano' &&
-  donosDe('São Paulo', 'vila mariana').length === 0,
-  'Vila Mariana está sem dono e caía no Sérgio por causa de Vila Maria — substring casa vizinho, borda de palavra não');
+  donosDe('São Paulo', 'vila mariana').join() === 'Renata Pessoa',
+  'Vila Maria é do Sérgio e Vila Mariana é da Renata; substring manda as duas para o Sérgio, e a Renata perde a rota dela em silêncio');
 
 conferir('e o bairro com apêndice do CRM continua casando',
   donosDe('Rio de Janeiro', 'tijuca shopping 45').join() === 'Bruno Martins' &&
