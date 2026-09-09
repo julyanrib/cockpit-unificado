@@ -47910,6 +47910,66 @@ function dg4MinutosParaTrava() {
    lista estruturada. Casa por HORA quando ela existe.
 
    Devolve sempre os 7 slots, na ordem de PL6_HORAS — a grade é a mesma da tela dele. */
+/* ══ OS SLOTS DE HOJE VINDOS DA GRADE DA SEMANA (09/09/26) ════════════════════════════
+   Devolve a MESMA forma que dg4SlotsDoPlano — {horas, porHora, semHora} — para o resto de
+   dg4Dados não precisar saber de onde veio. O que muda é o rótulo, e ele muda porque as
+   duas coisas são gestos diferentes: preencher a grade da semana é PLANEJAR, e travar o
+   plano do dia é PROMETER. O gestor precisa saber qual dos dois está olhando.
+
+   O ID É O DO PRODUTO: 'c-<dealId>' para conta da carteira, 'n-<uuid>' para conta nova da
+   prospecção, '__rua' para volta de rua e '__b' para bloqueio. As constantes são as
+   mesmas que a aba do executivo usa (PL6_RUA, PL6_BLOQUEADO) — não uma segunda cópia.
+
+   NOME DA CONTA: sai do funil pelo dealId. Quando o negócio não está no snapshot (conta
+   nova que ainda não virou deal, ou negócio fechado depois), o slot entra com o id e o
+   selo diz que a origem não foi registrada — nunca com um nome inventado. */
+function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
+  const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
+    ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
+  const vazio = { horas: horas, porHora: {}, semHora: [], daGrade: false, planejados: 0 };
+  const g = linhaSemana && Array.isArray(linhaSemana.grade) ? linhaSemana.grade : null;
+  if (!g || !g.length || !diaISO) return vazio;
+
+  /* O ÍNDICE DO DIA sai da diferença entre o dia em foco e a segunda daquela semana — a
+     mesma conta que a grade usa para se desenhar (segunda = 0, sexta = 4). Sábado e
+     domingo não têm coluna: a grade é seg→sex. */
+  const seg = String(linhaSemana.data_segunda || '').slice(0, 10);
+  if (!seg) return vazio;
+  const dif = Math.round((new Date(diaISO + 'T12:00:00') - new Date(seg + 'T12:00:00')) / 86400000);
+  if (!(dif >= 0 && dif < g.length)) return vazio;
+
+  const coluna = Array.isArray(g[dif]) ? g[dif] : [];
+  const RUA = (typeof PL6_RUA !== 'undefined') ? PL6_RUA : '__rua';
+  const BLOQ = (typeof PL6_BLOQUEADO !== 'undefined') ? PL6_BLOQUEADO : '__b';
+
+  const porHora = {};
+  let planejados = 0;
+  coluna.forEach(function (v, si) {
+    if (!v) return;
+    const cru = (typeof v === 'object') ? (v.id || null) : v;
+    if (!cru || cru === BLOQ) return;
+    const hora = (v && typeof v === 'object' && v.hora) ? String(v.hora) : (horas[si] || '');
+    if (!hora) return;
+    if (cru === RUA) {
+      porHora[hora] = { id: null, dealId: null, nome: 'volta de rua', hora: hora, acao: '',
+        origem: 'rua', _daGrade: true };
+      planejados += 1;
+      return;
+    }
+    const dealId = String(cru).indexOf('c-') === 0 ? String(cru).slice(2) : null;
+    const doFunil = dealId ? (mapaFunil || {})[dealId] : null;
+    porHora[hora] = {
+      id: String(cru), dealId: dealId, hora: hora, acao: '',
+      nome: doFunil ? doFunil.nome : (String(cru).indexOf('n-') === 0 ? 'conta nova da prospecção' : String(cru)),
+      origem: String(cru).indexOf('n-') === 0 ? 'lote' : null,
+      _daGrade: true
+    };
+    planejados += 1;
+  });
+
+  return { horas: horas, porHora: porHora, semHora: [], daGrade: true, planejados: planejados };
+}
+
 function dg4SlotsDoPlano(plano) {
   const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
     ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
@@ -48042,9 +48102,24 @@ function dg4Dados(ctx) {
   const medidos = reps.map(function (r) {
     const oid = String(r.ownerId);
     const plano = planos[oid] || null;
-    const grade = dg4SlotsDoPlano(plano);
+    /* ══ PLANO DO DIA PRIMEIRO, GRADE DA SEMANA DEPOIS (09/09/26) ══════════════════
+       Medido nesta quarta: sete pessoas com 38 visitas na grade e UMA com plano do dia.
+       A Daily do gestor lia só planos_diarios e abria vazia com o time todo planejado.
+       Quem tem plano do dia continua sendo lido de lá — é mais recente e mais
+       específico; quem não tem cai na coluna de hoje da grade dele. */
+    const doPlano = dg4SlotsDoPlano(plano);
+    const temDoPlano = doPlano.horas.some(function (h) { return doPlano.porHora[h]; })
+      || doPlano.semHora.length > 0;
+    const daGrade = temDoPlano
+      ? { horas: doPlano.horas, porHora: {}, semHora: [], daGrade: false, planejados: 0 }
+      : dg4SlotsDaGrade((c.grades || {})[oid] || null, c.diaEmFoco || hoje, mapaFunil);
+    const grade = temDoPlano ? doPlano : daGrade;
     const preenchidos = grade.horas.filter(function (h) { return grade.porHora[h]; });
-    const temPlano = !!plano && (preenchidos.length > 0 || grade.semHora.length > 0);
+    /* "TEM PLANO" passa a valer para os dois: planejar na grade é planejar. O que a tela
+       distingue é a PALAVRA — prometeu (travou o dia) x planejou (grade da semana). */
+    const veioDaGrade = !temDoPlano && preenchidos.length > 0;
+    const temPlano = (!!plano && (preenchidos.length > 0 || grade.semHora.length > 0))
+      || veioDaGrade;
     const travada = !!plano && plano.status === 'plano_fechado';
     const daily = (typeof getDaily === 'function') ? (getDaily(oid, (typeof dailyRefDate !== 'undefined') ? dailyRefDate : hoje) || {}) : {};
 
@@ -48074,7 +48149,10 @@ function dg4Dados(ctx) {
 
     return { r: r, oid: oid, plano: plano, grade: grade, preenchidos: preenchidos,
       temPlano: temPlano, travada: travada, daily: daily, quentes: quentes,
-      novas: novas, origemRegistrada: origemRegistrada };
+      novas: novas, origemRegistrada: origemRegistrada,
+      /* de onde vieram os slots desta pessoa: o plano do dia dela, ou a coluna de hoje
+         na grade da semana. É o que separa "prometeu" de "planejou" na tela. */
+      veioDaGrade: veioDaGrade };
   });
 
   /* ══ A ORDEM DA RODADA: sem plano → promessa aberta → travada ════════════════════════
@@ -48090,11 +48168,20 @@ function dg4Dados(ctx) {
   const semPlano = medidos.filter(function (x) { return !x.temPlano; });
   const abertas = medidos.filter(function (x) { return x.temPlano && !x.travada; });
   const travadas = medidos.filter(function (x) { return x.travada; });
+  /* quem apareceu pela GRADE e não pelo plano do dia: o KPI diz isso, senão
+     "7/7 planos montados" esconde que seis deles nunca travaram o dia. */
+  const naGrade = medidos.filter(function (x) { return x.veioDaGrade; });
   const minutos = dg4MinutosParaTrava();
   const antesDaTrava = ehHoje && minutos > 0;
 
   /* ══ os 5 KPIs ══════════════════════════════════════════════════════════════════════ */
   const somaVisitas = medidos.reduce(function (t, x) { return t + (Number(x.daily.prometido_visitas) || 0); }, 0);
+  /* A PROMESSA E O PLANEJADO SÃO DOIS NÚMEROS, e os dois vão para a tela. Medido em
+     09/09: promessa 2 (uma pessoa preencheu prometido_visitas) e planejado 38 (sete
+     pessoas na grade). Mostrar só a promessa faz o gestor abrir a reunião achando que o
+     time vai fazer duas visitas; mostrar só o planejado apagaria a diferença entre
+     encaixar conta na grade e dar a palavra. */
+  const somaPlanejadas = medidos.reduce(function (t, x) { return t + x.preenchidos.length; }, 0);
   const somaNovas = medidos.reduce(function (t, x) { return t + x.novas; }, 0);
   const somaQuentes = medidos.reduce(function (t, x) { return t + x.quentes.length; }, 0);
   const algumSemOrigem = medidos.some(function (x) { return x.temPlano && !x.origemRegistrada; });
@@ -48108,11 +48195,16 @@ function dg4Dados(ctx) {
     { rot: 'prospecções novas', v: 'não medido', de: '', cor: '#A79C8A' },
     { rot: 'quentes fora do plano', v: String(somaQuentes), de: 'do HubSpot, esse número vale', cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
   ] : [
-    { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length,
+    { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length
+        + (naGrade.length ? ' (' + naGrade.length + ' pela grade)' : ''),
       de: semPlano.length ? (semPlano.length + ' sem montar') : 'todo mundo montou', cor: semPlano.length ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'promessas travadas', v: travadas.length + '/' + medidos.length,
       de: antesDaTrava ? (abertas.length + ' ainda editável(is)') : 'janela fechada', cor: travadas.length === medidos.length ? '#7FD9BE' : '#F0B45C' },
-    { rot: 'visitas prometidas', v: String(somaVisitas), de: 'soma do time', cor: '#FFFDF8' },
+    { rot: 'visitas prometidas', v: String(somaVisitas),
+      de: somaPlanejadas > somaVisitas
+        ? somaPlanejadas + ' planejadas na grade'
+        : 'soma do time',
+      cor: '#FFFDF8' },
     { rot: 'prospecções novas', v: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
       de: algumSemOrigem ? 'origem não registrada em algum plano' : 'contas do lote nos slots', cor: somaNovas ? '#7FD9BE' : '#F0B45C' },
     { rot: 'quentes fora do plano', v: String(somaQuentes),
@@ -48135,12 +48227,14 @@ function dg4Dados(ctx) {
   /* ══ os chips da rodada ═════════════════════════════════════════════════════════════ */
   const rodada = medidos.map(function (x, i) {
     const sel = s.foco === x.oid;
-    const st = !x.temPlano ? 'sem plano' : (x.travada ? '✓' : 'aberta');
+    const st = !x.temPlano ? 'sem plano'
+      : (x.travada ? '✓' : (x.veioDaGrade ? 'na grade' : 'aberta'));
     return {
       pos: (i + 1) + 'º',
       nome: esc(String(x.r.name || '').split(' ')[0]),
       st: st,
-      stCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#8A6516'),
+      stCor: !x.temPlano ? '#6E1210'
+        : (x.travada ? '#1E9E7B' : (x.veioDaGrade ? '#2B3440' : '#8A6516')),
       bg: sel ? '#2B3440' : '#FDFEFF',
       cor: sel ? '#FDFEFF' : '#2B3440',
       nCor: sel ? '#FF8D9A' : '#8E3B5C',
@@ -48250,7 +48344,9 @@ function dg4Dados(ctx) {
     /* O BOTÃO MUDA COM O ESTADO — e os dois ramos GRAVAM no mesmo registros_rodada que o
        painel da v2 usava (decisão (C)): cobrança e reconhecimento não se perderam. */
     const acao = (!x.temPlano || !x.travada)
-      ? { on: 'cobrar:' + oid, rot: cobrado ? '✓ cobrado nesta rodada' : (x.temPlano ? 'cobrar a trava ▸' : 'cobrar o plano agora ▸'),
+      ? { on: 'cobrar:' + oid, rot: cobrado ? '✓ cobrado nesta rodada'
+        : (!x.temPlano ? 'cobrar o plano agora ▸'
+          : (x.veioDaGrade ? 'pedir para travar o dia ▸' : 'cobrar a trava ▸')),
         bg: cobrado ? '#EAF6F1' : '#E51A31', cor: cobrado ? '#1E9E7B' : '#FFFDF8', borda: cobrado ? '#CBE8DD' : '#E51A31' }
       : { on: 'reconhecer:' + oid, rot: reconhecido ? '✓ reconhecimento registrado' : 'mandar reconhecimento ▸',
         bg: reconhecido ? '#EAF6F1' : '#1E9E7B', cor: reconhecido ? '#1E9E7B' : '#FFFDF8', borda: reconhecido ? '#CBE8DD' : '#1E9E7B' };
@@ -48261,9 +48357,13 @@ function dg4Dados(ctx) {
       praca: esc((r.praca || 'praça não declarada')
         + ' · ' + ((x.plano && x.plano.local_atuacao) ? x.plano.local_atuacao : 'sem rota escolhida')),
       rota: esc((x.plano && x.plano.local_atuacao) || 'sem rota escolhida'),
-      status: !x.temPlano ? 'SEM PLANO' : (x.travada ? 'TRAVADA ✓' : 'PROMESSA ABERTA'),
-      stBg: !x.temPlano ? '#6E1210' : (x.travada ? '#EAF6F1' : '#FDF6E7'),
-      stCor: !x.temPlano ? '#FDFEFF' : (x.travada ? '#1E9E7B' : '#8A6516'),
+      /* PLANEJOU NA GRADE não é PROMESSA ABERTA: a promessa é um gesto de travar o dia,
+         e a grade da semana é o roteiro. Dizer "promessa aberta" sobre quem só encaixou
+         contas na grade seria a tela afirmando um gesto que ninguém fez. */
+      status: !x.temPlano ? 'SEM PLANO'
+        : (x.travada ? 'TRAVADA ✓' : (x.veioDaGrade ? 'PLANEJOU NA GRADE' : 'PROMESSA ABERTA')),
+      stBg: !x.temPlano ? '#6E1210' : (x.travada ? '#EAF6F1' : (x.veioDaGrade ? '#EDEFF4' : '#FDF6E7')),
+      stCor: !x.temPlano ? '#FDFEFF' : (x.travada ? '#1E9E7B' : (x.veioDaGrade ? '#2B3440' : '#8A6516')),
       avBg: !x.temPlano ? '#6E1210' : '#E51A31',
       bg: !x.temPlano ? '#FDF7F7' : '#FDFEFF',
       borda: focado ? '#2B3440' : (!x.temPlano ? '#E3C6C6' : '#E2E6EE'),
@@ -48653,6 +48753,10 @@ async function renderDaily() {
      nao abrir a reuniao dizendo "0 de 7 travaram a promessa" por causa de um erro de
      leitura — acusacao contra sete pessoas produzida por RLS ou rede. */
   let planosLidos = true;
+  /* a grade 5×7 da semana em foco, por executivo — é o "planejamento feito" que sete
+     pessoas preencheram hoje e que a Daily do gestor não lia. Mesma bandeira de erro:
+     falha de leitura não pode virar acusação de time parado. */
+  let gradePorOwner = {}, gradeLida = true;
   /* CONTAS NOVAS EM ROTA (28/08/26) — o pedido do Julyan de "quantas prospecções
      novas eles vão fazer", respondido com um gesto que JÁ EXISTE no produto em vez
      de indicador novo: marcar uma conta da Prospecção com data_rota é o executivo
@@ -48689,6 +48793,23 @@ async function renderDaily() {
       planosLidos = false;
     } else {
       (planosData || []).forEach(p => { planosPorOwner[String(p.owner_id)] = p; });
+    }
+
+    /* ══ A GRADE DA SEMANA, PARA QUEM NÃO TEM PLANO DO DIA (09/09/26) ═══════════════
+       Medido no banco nesta quarta: sete pessoas com 38 visitas planejadas para hoje em
+       planos_semanais, e a Daily do gestor mostrando zero porque lia só planos_diarios.
+       Uma consulta a mais, na mesma volta. Falha aqui NÃO vira "ninguém planejou": a
+       bandeira viaja e a tela diz que não conseguiu ler. */
+    const segundaDoFoco = addDays(dailyRefDate,
+      -(((new Date(dailyRefDate + 'T12:00:00').getDay()) === 0 ? 7 : (new Date(dailyRefDate + 'T12:00:00').getDay())) - 1));
+    const { data: gradeData, error: gradeErro } = await supa.from('planos_semanais')
+      .select('owner_id,data_segunda,grade,regioes,fechado_em')
+      .eq('data_segunda', segundaDoFoco);
+    if (gradeErro) {
+      console.error('Daily — grade da semana:', gradeErro.message);
+      gradeLida = false;
+    } else {
+      (gradeData || []).forEach(function (l) { gradePorOwner[String(l.owner_id)] = l; });
     }
 
     const dowRota = new Date(dailyRefDate + 'T12:00:00').getDay();
@@ -50928,6 +51049,7 @@ async function renderDaily() {
        pode refazer as consultas desta função — ela é a mais pesada da sessão. */
     DG4_CTX = {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
+      grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
       frescor: frescorDaily
     };
     html = '<div id="dg4Raiz" data-dg4-raiz="1">'
