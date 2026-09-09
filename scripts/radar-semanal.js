@@ -106,6 +106,14 @@ function baixar(url, saltos) {
   });
 }
 
+/* Sem acento, sem caixa e sem pontuação. As DUAS metades do radar dependem disto — o
+   filtro de época e o dedupe por história, aqui; e o casamento de cidade, mais abaixo. A
+   substituição usa String.fromCharCode porque a faixa de acentos escrita literalmente já
+   morreu duas vezes atravessando patch e shell nesta base. */
+const semAcento = t => String(t || '').toLowerCase().normalize('NFD')
+  .replace(new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g'), '')
+  .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+
 const limpar = s => String(s || '')
   .replace(/<!\[CDATA\[|\]\]>/g, '')
   .replace(/<[^>]+>/g, ' ')
@@ -139,6 +147,138 @@ function ehDoSetor(txt) {
   });
 }
 
+/* ══ UM VEÍCULO, UM NOME (09/09/26) ════════════════════════════════════════════════════
+   O índice devolve o veículo às vezes pelo nome ("Food Connection") e às vezes pelo
+   domínio ("foodconnection.com.br"). Na primeira rodada os dois apareceram como fontes
+   SEPARADAS, e a tela creditaria o mesmo site duas vezes com nomes diferentes.
+
+   A lista de fora é derivada de FEEDS, para o nome que a tela mostra ser o mesmo que a
+   fonte já tem — sem uma segunda tabela de nomes para divergir. O que não estiver nela e
+   vier como domínio recebe o domínio limpo, sem www e sem .com.br: melhor "gazetasp" do
+   que "gazetasp.com.br", e nunca um nome inventado por mim para um site que eu não sei
+   como se chama. */
+const DOMINIO_DO_FEED = FEEDS.reduce((m, f) => {
+  try { m[new URL(f.url).host.replace(/^www\./, '')] = f.fonte; } catch (e) { /* ignora */ }
+  return m;
+}, {});
+
+function nomeDoVeiculo(bruto) {
+  const t = String(bruto || '').trim();
+  if (!t) return '';
+  if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(t)) return t;   // já é nome de gente
+  const host = t.toLowerCase().replace(/^www\./, '');
+  if (DOMINIO_DO_FEED[host]) return DOMINIO_DO_FEED[host];
+  const curto = host.replace(/\.(com|net|org|gov|edu|inf|jor)?\.?br$/, '').replace(/\.(com|net|org)$/, '');
+  /* maiúscula na primeira letra: "abrasel" na tela ao lado de "Estadão" parece erro
+     nosso, e é só o índice tendo mandado o domínio em vez do nome. O que não se faz é
+     tentar adivinhar o resto — "bemparana" não vira "Bem Paraná" por chute. */
+  return curto.charAt(0).toUpperCase() + curto.slice(1);
+}
+
+/* ══ A MANCHETE DE OUTRA ÉPOCA ═════════════════════════════════════════════════════════
+   Medido na primeira rodada: o gazetasp veio com pubDate DESTA semana e conteúdo de 9 de
+   julho ("esperam faturar no feriado de 9 de Julho"). O índice reindexou uma matéria
+   velha, e o filtro de data — que só olha a data do índice — deixou passar.
+
+   A REGRA OLHA A DIREÇÃO DO TEMPO, e isto foi um conserto: a primeira versão media
+   distância CIRCULAR e reprovou "Os Restaurantes Estão Preparados Para a Corrida até
+   Dezembro?", do Food Connection, publicado em setembro. Aquilo é matéria olhando para
+   FRENTE, e a regra jogou fora notícia boa — exatamente o erro que eu tinha escrito no
+   comentário que queria evitar. Descobri porque apliquei a regra nas linhas da rodada
+   anterior e olhei o que ela reprovava.
+
+   ENTÃO: mês no PASSADO, entre 2 e 6 meses atrás, reprova — "feriado de 9 de Julho" numa
+   notícia de setembro é matéria reindexada. Mês à frente passa, mês vizinho passa, e
+   passado além de 6 meses passa também, porque aí "março" numa notícia de setembro se lê
+   mais naturalmente como o março que vem. A regra para de adivinhar onde a leitura fica
+   ambígua, em vez de chutar. */
+const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho',
+  'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+function ehDeOutraEpoca(titulo, quando) {
+  const t = ' ' + semAcento(titulo) + ' ';
+  const mesPub = quando.getUTCMonth();
+  for (let i = 0; i < MESES.length; i++) {
+    if (new RegExp('(^|[^a-z])' + MESES[i] + '([^a-z]|$)').test(t)) {
+      /* quantos meses ATRÁS da publicação o mês citado está; dezembro visto de janeiro
+         dá 1, e não 11, porque a volta do ano é vizinhança e não distância */
+      const atras = (mesPub - i + 12) % 12;
+      if (atras >= 2 && atras <= 6) return true;
+    }
+  }
+  return false;
+}
+
+/* ══ RANQUEAR, NÃO FILTRAR MAIS (09/09/26) ═════════════════════════════════════════════
+   Depois de consertar os cinco defeitos da primeira rodada, sobraram 33 manchetes de 32
+   veículos — e eu li as 33. As boas são MUITO boas: "lucro chega a só 32% dos bares do
+   RN", "alimentação fora do lar movimenta R$ 287,9 bilhões", "metade dos bares gaúchos
+   com faturamento em alta" (a praça da Kelly), o Magalu entrando em delivery contra o
+   iFood, a briga do vale-refeição em cinco veículos.
+
+   Só que ao lado delas ficaram: "morango cravejado", "Dia do Açaí", "Prefeitura de
+   Valença busca investimentos", o Salão Abrasel em três matérias diferentes, e um texto
+   do Estúdio Folha — que é conteúdo patrocinado. Nenhum é falso positivo de palavra:
+   todos citam gastronomia ou restaurante de verdade. Filtro de palavra não separa
+   "notícia que muda meu mês" de "evento regional" e "release".
+
+   ENTÃO NADA MAIS É JOGADO FORA POR JULGAMENTO DE ASSUNTO — É RANQUEADO, e o motivo do
+   lugar vai gravado ao lado da nota. A tela mostra as primeiras e guarda o resto atrás de
+   "ver todas": quem quiser conferir o que eu rebaixei, confere. Filtro escondido decide
+   pelo gestor; nota com motivo deixa ele discordar de mim.
+
+   OS TRÊS SINAIS, e por que cada um:
+   · NÚMERO NO TÍTULO vale mais que tudo. Manchete com R$, % ou "32%" carrega fato
+     verificável; sem número é quase sempre opinião, evento ou anúncio.
+   · VEÍCULO QUE PESA no setor: entidade (Abrasel, Sebrae), imprensa econômica e os
+     grandes. Não é esnobismo com a imprensa regional — o Agora RN tem a melhor manchete
+     desta semana e sobe pelo número. É que release republicado sai em dez sites pequenos.
+   · MARCA DE RELEASE derruba: "Salão", "Feira", "Encontro", "Prefeitura", "oferece
+     desconto", "Estúdio". São textos escritos para divulgar, não para informar. */
+const VEICULOS_QUE_PESAM = ['abrasel', 'sebrae', 'exame', 'infomoney', 'valor', 'estadao',
+  'folha', 'globo', 'g1', 'cnn', 'terra', 'monitor mercantil', 'food connection',
+  'hotelier news', 'seu dinheiro', 'veja', 'agencia brasil', 'canaltech', 'tecnoblog'];
+
+const MARCAS_DE_RELEASE = ['salao', 'feira', 'encontro', 'congresso', 'prefeitura',
+  'estudio', 'patrocinado', 'oferece desconto', 'promove', 'reune negocios', 'workshop',
+  'oficina', 'lanca campanha', 'comemorar'];
+
+function relevancia(titulo, fonte) {
+  const t = semAcento(titulo);
+  const f = semAcento(fonte);
+  let nota = 0;
+  const motivos = [];
+
+  /* R$ e % precisam do título CRU: semAcento come a pontuação */
+  if (/R\$|\d+%|\d+,\d+\s*%/.test(String(titulo))) { nota += 3; motivos.push('número no título'); }
+  else if (/\b\d{2,}\b/.test(t)) { nota += 1; motivos.push('quantidade no título'); }
+
+  if (VEICULOS_QUE_PESAM.some(v => f.indexOf(v) > -1)) { nota += 2; motivos.push('veículo de peso no setor'); }
+
+  const release = MARCAS_DE_RELEASE.filter(m => t.indexOf(m) > -1);
+  if (release.length) { nota -= 3; motivos.push('cara de divulgação ("' + release[0] + '")'); }
+
+  /* ══ E A MARCA PODE ESTAR NO NOME DA FONTE ═══════════════════════════════════════════
+     "Estúdio Folha" é o braço de conteúdo PATROCINADO da Folha, e o item dele ("99Food
+     ajuda restaurantes a vender mais") subiu para 3 na primeira medição do ranking, acima
+     de matéria editorial de verdade. "Sala da Notícia" é plataforma de distribuição de
+     release. O texto pode até ter número; o que ele não tem é jornalista.
+     A LISTA É CURTA E VAI PRECISAR CRESCER — e isso está ok justamente porque a nota e o
+     motivo aparecem na tela: quando um release passar na frente, o Julyan vê o motivo e
+     me diz o nome, em vez de perder a confiança no bloco todo. */
+  const FONTES_DE_RELEASE = ['sala da noticia', 'estudio', 'assessoria', 'press'];
+  const fr = FONTES_DE_RELEASE.filter(m => f.indexOf(m) > -1);
+  if (fr.length) { nota -= 4; motivos.push('conteúdo patrocinado ou release ("' + fr[0] + '")'); }
+
+  /* o que o gestor vende: quem fala de margem, custo, imposto e app está falando do
+     problema que o PDV resolve */
+  if (/\b(lucro|margem|faturamento|custo|custos|imposto|tributaria|inadimplencia|endividamento|ticket medio|delivery|ifood|rappi|maquininha|vale refeicao)\b/.test(t)) {
+    nota += 2; motivos.push('fala de dinheiro do dono');
+  }
+
+  return { nota, motivo: motivos.length ? motivos.join(' · ') : 'sem sinal forte' };
+}
+
 function segundaDaSemana(d) {
   const base = d ? new Date(d) : new Date();
   const dow = (base.getUTCDay() + 6) % 7;
@@ -161,10 +301,12 @@ async function coletarNoticias(semana) {
       const quando = it.publicado ? new Date(it.publicado) : null;
       if (!quando || isNaN(quando.getTime()) || quando.getTime() < limite) return;
       if (f.filtro && !ehDoSetor(it.titulo + ' ' + it.descricao)) return;
+      const rel = relevancia(it.titulo, f.fonte);
       achados.push({
         titulo: it.titulo, fonte: f.fonte, origem: 'feed_setorial', url: it.url,
         publicado_em: quando.toISOString(), tema: f.filtro ? 'setor na imprensa' : 'food service',
-        praca: null, data_semana: semana
+        praca: null, data_semana: semana,
+        relevancia: rel.nota, relevancia_motivo: rel.motivo
       });
       entraram++;
     });
@@ -178,28 +320,73 @@ async function coletarNoticias(semana) {
     const r = await baixar(url);
     const itens = itensDoXml(r.corpo);
     let entraram = 0;
-    itens.slice(0, MAX_POR_TEMA).forEach(it => {
+    let candidatos = 0;
+    itens.forEach(it => {
+      if (entraram >= MAX_POR_TEMA) return;
       if (!it.titulo || !it.url) return;
       const quando = it.publicado ? new Date(it.publicado) : null;
       if (!quando || isNaN(quando.getTime()) || quando.getTime() < limite) return;
+      const titulo = it.titulo.replace(/ - [^-]{3,40}$/, '');
+      candidatos += 1;
+      /* ══ O TEMA TAMBÉM PASSA PELO FILTRO DO SETOR (09/09/26) ═══════════════════════
+         Eu aplicava `ehDoSetor` só nos feeds, supondo que uma consulta por assunto já
+         devolvia assunto. MEDIDO nas 36 da primeira rodada: doze eram ruído — "morango
+         cravejado", "TikTok ClubHouse desembarca no Brasil", "Dia do Açaí", "Connecta
+         Minas", "Prefeitura de Valença busca investimentos". A consulta é OR de termos
+         largos; quem garante o assunto é o filtro, não a pergunta. */
+      if (!ehDoSetor(titulo + ' ' + it.descricao)) return;
+      /* ══ E A MANCHETE NÃO PODE SER DE OUTRA ÉPOCA ═════════════════════════════════
+         O gazetasp entrou com pubDate desta semana e conteúdo de 9 de JULHO: "hotéis,
+         bares e restaurantes esperam faturar no feriado de 9 de Julho". O filtro de data
+         olhava a data do índice; o texto dizia outra coisa. */
+      if (ehDeOutraEpoca(titulo, quando)) return;
       /* o veículo vem no <source> do item; sem ele, o tema responde pela procedência */
+      const veiculo = nomeDoVeiculo(it.veiculo) || 'imprensa';
+      const rel = relevancia(titulo, veiculo);
       achados.push({
-        titulo: it.titulo.replace(/ - [^-]{3,40}$/, ''),
-        fonte: it.veiculo || 'imprensa',
+        titulo: titulo, fonte: veiculo,
         origem: 'consulta_tema', url: it.url,
-        publicado_em: quando.toISOString(), tema: t.tema, praca: null, data_semana: semana
+        publicado_em: quando.toISOString(), tema: t.tema, praca: null, data_semana: semana,
+        relevancia: rel.nota, relevancia_motivo: rel.motivo
       });
       entraram++;
     });
-    porFonte['tema: ' + t.tema] = { itens: itens.length, entraram, http: r.status };
+    porFonte['tema: ' + t.tema] = { itens: itens.length, candidatos, entraram, http: r.status };
   }
 
-  /* dedupe por url ANTES de gravar: duas consultas de tema trazem a mesma matéria com
-     frequência, e o unique da tabela recusaria o lote inteiro em vez de a linha. */
-  const vistos = new Set();
-  const unicos = achados.filter(a => {
-    if (vistos.has(a.url)) return false;
-    vistos.add(a.url);
+  /* ══ DEDUPE EM DUAS CAMADAS ═════════════════════════════════════════════════════════
+     POR URL, antes de gravar: duas consultas de tema trazem a mesma matéria com
+     frequência, e o unique da tabela recusaria o LOTE inteiro em vez de a linha.
+
+     E POR HISTÓRIA, que a de URL não pega: "Cármen Lúcia mantém teto para taxas do
+     vale-refeição em ação no STF" entrou pela Folha PE e pelo O GLOBO na primeira
+     rodada — dois links, duas fontes, uma notícia. Na tela do gestor isso é a mesma
+     linha duas vezes. A chave é o título sem acento, sem pontuação e sem as palavras
+     de ligação.
+
+     QUEM FICA É A DE MAIOR NOTA, não a primeira que apareceu. A ordem de coleta é
+     acidental — depende de qual tema respondeu antes —, e deixar o acidente escolher
+     entre o O GLOBO e um agregador é deixar o sorteio decidir o que o gestor lê. */
+  const LIGACAO = ['a', 'o', 'as', 'os', 'de', 'da', 'do', 'das', 'dos', 'e', 'em', 'no',
+    'na', 'nos', 'nas', 'para', 'por', 'com', 'que', 'ao', 'aos', 'um', 'uma', 'se'];
+  const chaveDaHistoria = t => semAcento(t).split(' ')
+    .filter(p => p.length > 2 && LIGACAO.indexOf(p) < 0).slice(0, 8).join(' ');
+
+  const porNota = achados.slice().sort((a, b) => {
+    if (b.relevancia !== a.relevancia) return b.relevancia - a.relevancia;
+    /* empate: o feed do veículo especializado ganha do índice, e depois a mais nova */
+    if (a.origem !== b.origem) return a.origem === 'feed_setorial' ? -1 : 1;
+    return String(b.publicado_em).localeCompare(String(a.publicado_em));
+  });
+
+  const urlsVistas = new Set();
+  const historiasVistas = new Set();
+  const unicos = porNota.filter(a => {
+    if (urlsVistas.has(a.url)) return false;
+    const h = chaveDaHistoria(a.titulo);
+    if (h && historiasVistas.has(h)) return false;
+    urlsVistas.add(a.url);
+    if (h) historiasVistas.add(h);
     return true;
   });
   return { noticias: unicos, porFonte };
@@ -211,10 +398,6 @@ async function coletarNoticias(semana) {
    escrita em dois lugares, divergindo em silêncio. O require é seguro — aquele arquivo
    tem guarda `require.main === module` e não roda nada ao ser importado. */
 const { CIDADES } = require('./backfill-casa-dos-dados');
-
-const semAcento = t => String(t || '').toLowerCase().normalize('NFD')
-  .replace(new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g'), '')
-  .replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 
 /* ══ O TAM DE UMA PRAÇA, PELO CAMINHO BARATO ═══════════════════════════════════════════
    A Casa dos Dados é paga por consulta. Contar a cidade inteira paginando custaria
@@ -380,16 +563,25 @@ function tocadoDaPraca(contagem, municipio) {
 /* ══ A LEITURA DA SEMANA ═══════════════════════════════════════════════════════════════
    Montada dos números DESTA linha, sem IA e sem adjetivo que os números não sustentem.
    Quem decide a palavra é `tam_fonte`, não a existência do número. */
+/* ══ O NOME DO DENOMINADOR (09/09/26) ══════════════════════════════════════════════════
+   A primeira versão escrevia "estabelecimentos food da cidade". EXAGERA, e o exagero
+   muda a decisão: são 142.319 em São Paulo, contra as 40 a 50 mil que o setor estima de
+   restaurante OPERANDO. A diferença é MEI parado, CNPJ registrado e não aberto, padaria
+   de varejo — tudo ativo na Receita e nada disso um cliente possível.
+   Com o nome certo, o 0,01% é o que é: fatia da base de CNPJ. Com o nome errado, faz
+   parecer que o time não começou. */
+const NOME_DO_TAM = 'CNPJs food ativos na Receita';
+
 function leituraDaPraca(linha, semCidade) {
   const partes = [];
   if (linha.tam_fonte === 'contagem_api' && linha.tam > 0) {
     const pct = linha.pct_tocado == null ? null : String(linha.pct_tocado).replace('.', ',');
-    partes.push(linha.tocado + ' de ' + linha.tam.toLocaleString('pt-BR')
-      + ' estabelecimentos food da cidade já estão no CRM'
+    partes.push(linha.tocado + ' de ' + linha.tam.toLocaleString('pt-BR') + ' '
+      + NOME_DO_TAM + ' já estão no CRM'
       + (pct == null ? '' : ' (' + pct + '%)'));
   } else if (linha.tam_fonte === 'piso_paginado' && linha.tam > 0) {
     partes.push(linha.tocado + ' no CRM, contra pelo menos '
-      + linha.tam.toLocaleString('pt-BR') + ' estabelecimentos food na cidade');
+      + linha.tam.toLocaleString('pt-BR') + ' ' + NOME_DO_TAM);
   } else {
     partes.push(linha.tocado + ' contas da praça no CRM · tamanho do mercado não medido nesta rodada');
   }
@@ -557,4 +749,5 @@ if (require.main === module) {
 
 module.exports = { coletarNoticias, segundaDaSemana, ehDoSetor, itensDoXml, tamDaPraca,
   acharTotal, contarTocado, tocadoDaPraca, semUfNoFim, leituraDaPraca, gravar, rodar,
+  nomeDoVeiculo, ehDeOutraEpoca, NOME_DO_TAM, relevancia,
   FEEDS, TEMAS, JANELA_DIAS, CNAE_FOODSERVICE, CAMPOS_DE_TOTAL };
