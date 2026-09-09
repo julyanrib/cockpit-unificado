@@ -49,7 +49,10 @@ const primeiroNome = id => {
 const quem = (cidade, bairro) => primeiroNome(terr.rotearTerritorio(cidade, bairro, null, null));
 const via = (cidade, bairro) => {
   const r = terr.regraDoTerritorio(cidade, bairro, null, null);
-  return r ? (r.declarado ? 'declarado' : (r.sobra ? 'sobra' : 'lista antiga')) : 'sem dono';
+  if (!r) return 'sem dono';
+  if (r.sobraDeclarada) return 'sobra declarada';
+  if (r.declarado) return 'declarado';
+  return r.sobra ? 'sobra' : 'lista antiga';
 };
 
 /* ── 1 · NENHUM ID FALSO SAI DAQUI ───────────────────────────────────────────────────
@@ -172,6 +175,45 @@ conferir('o roteador lê data/territorios.json',
 conferir('e a declaração é consultada ANTES das listas antigas',
   via('rio de janeiro', 'copacabana') === 'declarado',
   'se a lista antiga vier primeiro, a decisão de hoje não chega ao lead');
+
+/* ── 8 · A SOBRA DA CIDADE DE UM DONO SÓ (09/09/26) ─────────────────────────────────
+   Julyan: "preciso que todos os executivos estejam com leads na carteira, todas as
+   regiões". Medido: 301 leads sem dono nenhum, porque a rota é declarada por BAIRRO e a
+   busca varre o MUNICÍPIO — Guarulhos 247 em 106 bairros que ninguém nomeou (a cidade
+   tem ~140), Suzano 29, Mogi 19, Salesópolis 5. */
+conferir("cidade com um dono só entrega a sobra a ele",
+  quem("suzano", "jardim cacique") === "Renata" &&
+  quem("mogi das cruzes", "jundiapeba") === "Renata" &&
+  quem("salesopolis", "fartura") === "Renata",
+  "a Renata é a única pessoa que anda nessas cidades; bairro que ela não nomeou é dela de qualquer jeito");
+
+/* O MECANISMO, E NÃO O RESULTADO. A primeira versão só comparava os dois roteamentos, e
+   passava mesmo com o filtro removido — porque as regras de sobra entram no FIM do array
+   e o .find() acha as nomeadas antes de qualquer jeito. O acerto vinha da ordem do push,
+   não da regra. Então a checagem exige as DUAS garantias: o filtro no código e a sobra
+   depois das nomeadas no array. */
+conferir("e o bairro NOMEADO ainda vem antes da sobra",
+  via("suzano", "centro") === "declarado" && via("suzano", "jardim cacique") === "sobra declarada"
+  && fonteRoteador.indexOf('!x.sobraDeclarada && cid.includes(x.cidade)') > -1
+  && (function () {
+       const rs = terr.DECLARADOS || [];
+       const primeiraSobra = rs.findIndex(function (r) { return r.sobraDeclarada; });
+       const ultimaNomeada = rs.reduce(function (a, r, i) { return r.sobraDeclarada ? a : i; }, -1);
+       return primeiraSobra === -1 || primeiraSobra > ultimaNomeada;
+     }()),
+  "consultar a sobra primeiro faria a cidade inteira cair no primeiro dono mesmo onde outro tem bairro nomeado");
+
+/* E A CIDADE DE DOIS DONOS NÃO GANHA SOBRA AUTOMÁTICA. Dividir 247 leads em 106 bairros
+   entre a Renata e o Sérgio é decisão de território, e ela é do Julyan. Até ele dizer,
+   aqueles leads ficam SEM DONO e visíveis na fila da praça, onde ele distribui — sem
+   dono e visível é melhor que com dono errado. */
+conferir("cidade com dois donos NÃO ganha sobra automática",
+  !quem("guarulhos", "jardim cumbica"),
+  "escolher entre a Renata e o Sérgio para 106 bairros é decisão de território, não de código");
+
+conferir("e os bairros nomeados de Guarulhos continuam certos",
+  quem("guarulhos", "vila augusta") === "Sérgio" && quem("guarulhos", "macedo") === "Renata",
+  "a sobra não pode atropelar quem nomeou o bairro");
 
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
