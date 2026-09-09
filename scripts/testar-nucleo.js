@@ -366,15 +366,48 @@ teste('proposta em Demo/Negociação sem tarefa = proposta sem data de decisão'
 
 console.log('\n== Fila de follow-up (Escopo 7) ==');
 
-teste('os oito baldes existem e o mesmo negócio não duplica na fila ordenada', () => {
+/* NOVE BALDES desde 08/09/26: entrou `vencido`, para o passo datado que passou. Ele não
+   existia e o comentário do balde `hoje` já prometia "prazo hoje (ou vencido)" — o ramo
+   era inalcançável, porque proximoPassoDoLead descarta dia anterior de propósito. */
+teste('os nove baldes existem e o mesmo negócio não duplica na fila ordenada', () => {
   const quenteSemNada = lead({ id: 'Q1', name: 'Quente Sem Nada', stageId: '1395880472', ultimaInteracao: diasAtras(8).toISOString() });
   const c = novoContexto(dados({ funilLeads: { '1395880472': [quenteSemNada] } }), { ownerId: OWNER, role: 'rep' });
   const fila = c.filaDeFollowUp(OWNER);
-  igual(Object.keys(fila.baldes).length, 8, 'oito baldes');
+  igual(Object.keys(fila.baldes).length, 9, 'nove baldes');
   verdade(fila.baldes.quente_sem_tarefa.length === 1, 'cai em quentes sem tarefa');
   verdade(fila.baldes.cadencia.length === 1, 'cai também em cadência atrasada');
   igual(fila.ordenada.length, 1, 'aparece uma única vez na fila ordenada');
   igual(fila.negociosAfetados, 1, 'um negócio afetado');
+});
+
+/* ══ O PASSO VENCIDO ACENDE, E NÃO ACENDE QUANDO ELE JÁ REMARCOU ═══════════════════════
+   Os dois lados importam: sem o primeiro, a promessa quebrada continua invisível; sem o
+   segundo, a tela cobra uma promessa que ele já substituiu por outra data. */
+teste('passo datado que passou cai no balde do vencido, com o atraso em dias', () => {
+  const l = lead({ id: 'V1', name: 'Venceu', stageId: '1396005401',
+    ultimaInteracao: diasAtras(9).toISOString(),
+    tarefas: [{ subject: 'Follow-up - combinado', timestamp: diasAtras(5).toISOString() }] });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const st = c.estadoDoNegocio(l);
+  verdade(!st.temProximoPasso, 'passo vencido NÃO conta como próximo passo válido');
+  verdade(!!st.passoVencido, 'mas o vencido é lido');
+  igual(st.passoVencido.atrasoDias, 5, 'cinco dias de atraso');
+  const fila = c.filaDeFollowUp(OWNER);
+  igual(fila.baldes.vencido.length, 1, 'entra no balde do vencido');
+  igual(fila.ordenada[0].balde, 'vencido', 'e ganha o negócio na deduplicação, por vir primeiro');
+});
+
+teste('quem remarcou para o futuro NÃO aparece como vencido', () => {
+  const l = lead({ id: 'V2', name: 'Remarcou', stageId: '1396005401',
+    ultimaInteracao: diasAtras(9).toISOString(),
+    tarefas: [{ subject: 'Follow-up - antigo', timestamp: diasAtras(5).toISOString() },
+              { subject: 'Follow-up - novo', timestamp: diasAFrente(2).toISOString() }] });
+  const c = novoContexto(dados({ funilLeads: { '1396005401': [l] } }), { ownerId: OWNER, role: 'rep' });
+  const st = c.estadoDoNegocio(l);
+  verdade(st.temProximoPasso, 'tem passo válido no futuro');
+  verdade(!!st.passoVencido, 'o vencido continua sendo um fato');
+  const fila = c.filaDeFollowUp(OWNER);
+  igual(fila.baldes.vencido.length, 0, 'mas a fila não cobra: ele já remarcou');
 });
 
 teste('negócio com tudo em ordem não entra na fila', () => {
