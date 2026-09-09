@@ -224,6 +224,26 @@ conferir('e a regra é estreita — mês vizinho e mês da própria publicação
     new Date('2026-01-05T00:00:00Z')) === false,
   'regra larga joga fora notícia boa, que é o erro pior: dezembro e janeiro são vizinhos');
 
+/* A REGRA OLHA A DIREÇÃO DO TEMPO, e este teste existe porque a primeira versão media
+   distância circular e reprovou "Os Restaurantes Estão Preparados Para a Corrida até
+   Dezembro?" — matéria do Food Connection publicada em setembro, olhando para a frente.
+   Eu só vi porque apliquei a regra nas linhas da rodada anterior e li o que ela cortava. */
+conferir('mês À FRENTE passa: matéria que planeja não é matéria velha',
+  radar.ehDeOutraEpoca('Os Restaurantes Estão Preparados Para a Corrida até Dezembro?',
+    new Date('2026-09-04T00:00:00Z')) === false &&
+  radar.ehDeOutraEpoca('O que esperar do Natal e de dezembro no food service',
+    new Date('2026-10-01T00:00:00Z')) === false,
+  'a regra existe contra matéria reindexada, não contra planejamento — cortar isso é jogar fora notícia boa');
+
+conferir('e mês no passado recente reprova, que é o caso real',
+  radar.ehDeOutraEpoca('esperam faturar no feriado de 9 de Julho', new Date('2026-09-08T00:00:00Z')) === true &&
+  radar.ehDeOutraEpoca('O balanço de maio dos bares', new Date('2026-09-08T00:00:00Z')) === true,
+  'dois a seis meses atrás é a janela onde matéria reindexada aparece');
+
+conferir('passado longe demais para ter direção clara não é chutado',
+  radar.ehDeOutraEpoca('As metas de março do setor', new Date('2026-10-01T00:00:00Z')) === false,
+  'março visto de outubro se lê mais como o março que vem; onde a leitura é ambígua a regra para de adivinhar');
+
 conferir('e ela não reprova manchete que não nomeia mês',
   radar.ehDeOutraEpoca('Ticket médio sustenta alta de 3,24% na panificação',
     new Date('2026-09-08T00:00:00Z')) === false,

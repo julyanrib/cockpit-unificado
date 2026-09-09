@@ -180,11 +180,18 @@ function nomeDoVeiculo(bruto) {
    julho ("esperam faturar no feriado de 9 de Julho"). O índice reindexou uma matéria
    velha, e o filtro de data — que só olha a data do índice — deixou passar.
 
-   A REGRA É ESTREITA DE PROPÓSITO: só reprova quando o título NOMEIA um mês, e esse mês
-   está a mais de um mês de distância da publicação. "feriado de 7 de setembro" numa
-   notícia de setembro passa; "feriado de 9 de julho" numa de setembro, não. Mês citado
-   por acaso é raro em manchete, e uma regra mais larga começaria a jogar fora notícia
-   boa — que é o erro pior aqui. */
+   A REGRA OLHA A DIREÇÃO DO TEMPO, e isto foi um conserto: a primeira versão media
+   distância CIRCULAR e reprovou "Os Restaurantes Estão Preparados Para a Corrida até
+   Dezembro?", do Food Connection, publicado em setembro. Aquilo é matéria olhando para
+   FRENTE, e a regra jogou fora notícia boa — exatamente o erro que eu tinha escrito no
+   comentário que queria evitar. Descobri porque apliquei a regra nas linhas da rodada
+   anterior e olhei o que ela reprovava.
+
+   ENTÃO: mês no PASSADO, entre 2 e 6 meses atrás, reprova — "feriado de 9 de Julho" numa
+   notícia de setembro é matéria reindexada. Mês à frente passa, mês vizinho passa, e
+   passado além de 6 meses passa também, porque aí "março" numa notícia de setembro se lê
+   mais naturalmente como o março que vem. A regra para de adivinhar onde a leitura fica
+   ambígua, em vez de chutar. */
 const MESES = ['janeiro', 'fevereiro', 'marco', 'abril', 'maio', 'junho', 'julho',
   'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 
@@ -193,9 +200,10 @@ function ehDeOutraEpoca(titulo, quando) {
   const mesPub = quando.getUTCMonth();
   for (let i = 0; i < MESES.length; i++) {
     if (new RegExp('(^|[^a-z])' + MESES[i] + '([^a-z]|$)').test(t)) {
-      /* distância circular: dezembro e janeiro são vizinhos */
-      const d = Math.abs(i - mesPub);
-      if (Math.min(d, 12 - d) > 1) return true;
+      /* quantos meses ATRÁS da publicação o mês citado está; dezembro visto de janeiro
+         dá 1, e não 11, porque a volta do ano é vizinhança e não distância */
+      const atras = (mesPub - i + 12) % 12;
+      if (atras >= 2 && atras <= 6) return true;
     }
   }
   return false;
