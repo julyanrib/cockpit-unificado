@@ -13818,6 +13818,10 @@ function estadoDoNegocioSemCache(lead) {
     touchpoints: tps,
     proximoPasso: passo,
     temProximoPasso: !!passo,
+    /* O VENCIDO É FATO SEPARADO (08/09/26): temProximoPasso continua querendo dizer
+       FUTURO, e este campo diz que houve uma promessa datada que passou. Ver
+       passoVencidoDoLead. */
+    passoVencido: (typeof passoVencidoDoLead === 'function') ? passoVencidoDoLead(lead) : null,
     cadencia: cad,
     ultimaVisita,
     visitaSemDesfecho,
@@ -14212,8 +14216,21 @@ function h8Insight(item) {
     : 'follow';
 
   /* ── O SELO DE PRAZO: o que vence, e quando ──────────────────────────────────── */
+  /* ══ O VENCIDO VEM PRIMEIRO NO SELO (08/09/26) ═════════════════════════════════════
+     O ramo "passou do prazo" abaixo exige `est.proximoPasso`, e proximoPassoDoLead
+     descarta dia anterior de propósito — então ele nunca disparava. A linha da DONNA
+     MARIA, com tarefa datada 03/09 e cinco dias de atraso, dizia "sem prazo marcado":
+     verdadeiro pela definição de "próximo passo" e enganoso para quem lê, porque o prazo
+     existiu e foi quebrado.
+
+     E ELE VEM ANTES DE TUDO: régua estourada é o tempo passando, promessa vencida é uma
+     data que ELE deu ao cliente. A segunda dói mais e é mais fácil de resolver. */
   let venc = 'sem prazo marcado';
-  if (est.proximoPasso && est.proximoPasso.quando) {
+  if (est.passoVencido && !est.temProximoPasso) {
+    venc = 'venceu ' + ((typeof fn2Quando === 'function')
+      ? fn2Quando(est.passoVencido.dia) : est.passoVencido.dia)
+      + ' · ' + est.passoVencido.atrasoDias + 'd de atraso';
+  } else if (est.proximoPasso && est.proximoPasso.quando) {
     const q = est.proximoPasso.quando;
     const k = (typeof isoDate === 'function') ? isoDate(q) : String(q).slice(0, 10);
     const hoje = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
@@ -14231,6 +14248,26 @@ function h8Insight(item) {
   if (item.semNegocio) {
     oQue = 'visitada e sem negócio no funil — sem negócio não há onde gravar o desfecho';
     melhor = 'criar';
+  } else if (est.passoVencido && !est.temProximoPasso) {
+    /* A PROMESSA QUEBRADA NA FRENTE DE TODAS AS OUTRAS LEITURAS (08/09/26). Ela não é
+       uma leitura sobre o negócio — é uma data que ELE combinou e não cumpriu. Antes
+       disto, a linha da DONNA MARIA abria com "proposta na mão e nenhuma data de
+       decisão", que é verdade e é mais fraco: o cliente não lembra da régua da etapa,
+       lembra do dia em que a ligação não veio. */
+    /* SEM REPETIR A DATA: o selo de prazo ao lado já diz "venceu 03/09 · 5d de atraso".
+       Medido na linha da DONNA MARIA, a primeira versão desta frase repetia os dois na
+       mesma linha — o mesmo dado duas vezes rouba o espaço do que fazer.
+
+       E A FRASE SEGUE O TELEFONE, porque o bloco "a melhor ação não pode ser impossível"
+       mais abaixo rebaixa `ligar` para `visitar` quando não há número — e aí a minha
+       primeira versão dizia "ligar hoje" ao lado de um botão estrelado escrito "agendar
+       visita". Medido na própria DONNA MARIA, que está sem celular no CRM: palavra e
+       botão discordando na mesma linha. */
+    const temTelAqui = !!String(lead.celular || lead.telefone || '').replace(/[^0-9]/g, '');
+    oQue = temTelAqui
+      ? 'a data que você marcou passou — ligar hoje e sair com data nova combinada'
+      : 'a data que você marcou passou — sem telefone no CRM, então é visita com data nova na saída';
+    melhor = temTelAqui ? 'ligar' : 'visitar';
   } else if (est.propostaSemDataDeDecisao) {
     oQue = 'proposta na mão e nenhuma data de decisão — cobrar por telefone, não por texto';
     melhor = 'ligar';
@@ -14285,7 +14322,11 @@ function h8Insight(item) {
   };
 }
 
+/*  PRIMEIRO, e com prio 0 (08/09/26): a deduplicação da fila usa a ORDEM deste
+   array, então quem vem antes ganha o negócio. Promessa datada que passou vale mais que
+   qualquer outra pendência — inclusive que a de hoje, porque essa ainda dá tempo. */
 const FILA_BALDES = [
+  { id: 'vencido',         rotulo: 'Promessas que venceram',            prio: 0 },
   { id: 'hoje',            rotulo: 'Follow-ups para hoje',              prio: 1 },
   { id: 'visita_sem_passo',rotulo: 'Visitas sem próximo passo',         prio: 2 },
   { id: 'cadencia',        rotulo: 'Cadências atrasadas',               prio: 3 },
@@ -14324,7 +14365,23 @@ function filaDeFollowUp(ownerId) {
     const st = estadoDoNegocio(lead);
     const item = { lead, estado: st, quente: quentesIds.has(String(lead.id)) };
 
-    // 1. follow-up com prazo hoje (ou vencido) — tarefa datada do HubSpot
+    /* 0. A PROMESSA QUE VENCEU (08/09/26). Este balde não existia, e o comentário do
+       balde 1 dizia "prazo hoje (ou vencido)" prometendo o que não fazia: ele exige
+       `st.proximoPasso`, e proximoPassoDoLead descarta dia anterior de propósito — o
+       ramo do vencido era inalcançável.
+
+       SÓ ENTRA QUEM NÃO REMARCOU: com um passo válido no futuro, ele já resolveu, e
+       cobrar a promessa antiga seria cobrar coisa feita. */
+    if (st.passoVencido && !st.temProximoPasso) {
+      baldes.vencido.push({
+        ...item,
+        motivo: 'prometeu ' + (typeof fmtDailyLabel === 'function'
+          ? fmtDailyLabel(st.passoVencido.dia) : st.passoVencido.dia)
+          + ' e não fez — ' + st.passoVencido.atrasoDias + 'd de atraso',
+        prazo: st.passoVencido.dia
+      });
+    }
+    // 1. follow-up com prazo hoje — tarefa datada do HubSpot para o dia de hoje
     if (st.proximoPasso) {
       const dia = isoDate(st.proximoPasso.quando);
       if (dia <= hojeK) baldes.hoje.push({ ...item, motivo: 'próximo passo vence hoje', prazo: dia });
@@ -15205,6 +15262,43 @@ function proximoPassoDoLead(lead) {
 }
 
 function leadTemProximoPasso(lead) { return !!proximoPassoDoLead(lead); }
+
+/* ══ O PASSO QUE VENCEU (08/09/26) ═════════════════════════════════════════════════════
+   Julyan: "acende o passo vencido".
+
+   POR QUE ELE ERA INVISÍVEL, e por que a função acima está certa em não devolvê-lo:
+   `proximoPassoDoLead` descarta dia anterior de propósito — passo vencido NÃO é um
+   próximo passo válido, e contá-lo faria o "0/37 com próximo passo" mentir dizendo que o
+   negócio está coberto. Mas o balde 1 da fila prometia "prazo hoje (ou vencido)" e exigia
+   um passo válido: o ramo do vencido era inalcançável. Medido na carteira do Bruno: a
+   DONNA MARIA tinha tarefa datada 03/09 e o executivo nunca lia que ela venceu.
+
+   ENTÃO O VENCIDO GANHOU LEITOR PRÓPRIO, e as duas leituras convivem: "tem próximo passo"
+   continua querendo dizer futuro, e "venceu" é um fato separado — que é exatamente o
+   empurrão mais forte que a tela pode dar, porque é uma promessa datada que não foi
+   cumprida.
+
+   O MAIS RECENTE, e não o mais antigo: com tarefas em 01/09 e 03/09, a promessa que ele
+   quebrou é a de 03/09. A mais antiga já tinha sido substituída pela seguinte. */
+function passoVencidoDoLead(lead) {
+  if (!lead) return null;
+  const candidatos = [];
+  if (lead.proximaAtividade) candidatos.push({ data: lead.proximaAtividade, rotulo: 'atividade' });
+  if (lead.proximaReuniao) candidatos.push({ data: lead.proximaReuniao, rotulo: 'reunião' });
+  (Array.isArray(lead.tarefas) ? lead.tarefas : []).forEach(t => {
+    if (t && t.timestamp) candidatos.push({ data: t.timestamp, rotulo: t.subject || 'tarefa' });
+  });
+  const hojeK = isoDate(new Date());
+  const vencidos = candidatos
+    .map(x => ({ ...x, quando: new Date(x.data) }))
+    .filter(x => !Number.isNaN(x.quando.getTime()) && isoDate(x.quando) < hojeK)
+    .sort((a, b) => b.quando - a.quando);
+  if (!vencidos.length) return null;
+  const p = vencidos[0];
+  const dia = isoDate(p.quando);
+  const atrasoDias = Math.max(1, Math.round((new Date(hojeK) - new Date(dia)) / 86400000));
+  return { ...p, dia, atrasoDias };
+}
 
 // Ordem real do pipeline. MOVIDA para dentro do @nucleo em 28/08/26: gargaloDoRep e
 // destravarFunil dependem dela, e constante de domínio fora dos marcadores obrigaria
@@ -28386,6 +28480,7 @@ function pl5FaixaHTML(o) {
 function pl4RiscoDoBalde(id) {
   /* O RISCO, não o rótulo. Cada frase responde "o que eu perco se não fizer isto hoje?" */
   return ({
+    vencido: 'você marcou uma data e ela passou — é a promessa quebrada que o cliente lembra',
     hoje: 'promessas com data — quebrar aqui custa a confiança do lead',
     visita_sem_passo: 'visita feita e nada marcado — o toque morre aqui',
     cadencia: 'o ritmo combinado por etapa não foi cumprido',
@@ -28400,6 +28495,7 @@ function pl4RiscoDoBalde(id) {
 /* Rótulos curtos do balde, na voz da prancha v4 */
 function pl4RotuloDoBalde(id, rotuloPadrao) {
   return ({
+    vencido: 'Promessas que já venceram',
     hoje: 'Follow-ups que vencem hoje',
     quente_sem_tarefa: 'Quentes sem próximo passo',
     cadencia: 'Cadências atrasadas',

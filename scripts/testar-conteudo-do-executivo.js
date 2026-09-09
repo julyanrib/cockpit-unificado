@@ -99,7 +99,25 @@ conferir('e ele aparece dito como contrato, não como /mês',
   (tpl.match(/' contrato'/g) || []).length >= 2,
   'a palavra é o que separa R$ 8.000 de contrato de R$ 8.000 por mês');
 
-/* ── 4 · O QUE NÃO SE TOCA ────────────────────────────────────────────────────────── */
+/* ── 4 · O PASSO VENCIDO ACESO (08/09/26) ─────────────────────────────────────────
+   Julyan: "acende o passo vencido". O comportamento está provado em testar-nucleo.js,
+   que RODA a fila com um lead de tarefa vencida; aqui ficam as três propriedades de
+   TELA, que aquele harness não vê. */
+const insight = corpoDe('h8Insight');
+conferir('o selo de prazo diz que venceu, em vez de "sem prazo marcado"',
+  /est\.passoVencido && !est\.temProximoPasso/.test(insight) && /venceu '/.test(insight),
+  'a linha da DONNA MARIA dizia "sem prazo marcado" com tarefa datada 03/09 — verdadeiro pela definição e enganoso para quem lê');
+
+conferir('e a frase da ação não repete a data que o selo já deu',
+  !/você marcou ' \+/.test(insight),
+  'a primeira versão punha data e atraso duas vezes na mesma linha, roubando o espaço do que fazer');
+
+conferir('a frase segue o telefone, como a estrela segue',
+  /const temTelAqui = /.test(insight) &&
+  /temTelAqui \? 'ligar' : 'visitar'/.test(insight),
+  'sem número o código rebaixa a ★ para visita; a frase dizia "ligar hoje" ao lado de um botão escrito "agendar visita"');
+
+/* ── 5 · O QUE NÃO SE TOCA ────────────────────────────────────────────────────────── */
 conferir('nada foi escrito no HubSpot por causa disto',
   !/from\(['"]?hubspot/.test(valor) && !/api\/criar/.test(valor),
   'amount e mrr são o que o RPA/ASAAS lê para gerar o link de cobrança: aqui só se lê');

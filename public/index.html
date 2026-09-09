@@ -9805,6 +9805,8 @@ function estadoDoNegocioSemCache(lead) {
     touchpoints: tps,
     proximoPasso: passo,
     temProximoPasso: !!passo,
+
+    passoVencido: (typeof passoVencidoDoLead === 'function') ? passoVencidoDoLead(lead) : null,
     cadencia: cad,
     ultimaVisita,
     visitaSemDesfecho,
@@ -10080,7 +10082,11 @@ function h8Insight(item) {
     : 'follow';
 
   let venc = 'sem prazo marcado';
-  if (est.proximoPasso && est.proximoPasso.quando) {
+  if (est.passoVencido && !est.temProximoPasso) {
+    venc = 'venceu ' + ((typeof fn2Quando === 'function')
+      ? fn2Quando(est.passoVencido.dia) : est.passoVencido.dia)
+      + ' · ' + est.passoVencido.atrasoDias + 'd de atraso';
+  } else if (est.proximoPasso && est.proximoPasso.quando) {
     const q = est.proximoPasso.quando;
     const k = (typeof isoDate === 'function') ? isoDate(q) : String(q).slice(0, 10);
     const hoje = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
@@ -10097,6 +10103,13 @@ function h8Insight(item) {
   if (item.semNegocio) {
     oQue = 'visitada e sem negócio no funil — sem negócio não há onde gravar o desfecho';
     melhor = 'criar';
+  } else if (est.passoVencido && !est.temProximoPasso) {
+
+    const temTelAqui = !!String(lead.celular || lead.telefone || '').replace(/[^0-9]/g, '');
+    oQue = temTelAqui
+      ? 'a data que você marcou passou — ligar hoje e sair com data nova combinada'
+      : 'a data que você marcou passou — sem telefone no CRM, então é visita com data nova na saída';
+    melhor = temTelAqui ? 'ligar' : 'visitar';
   } else if (est.propostaSemDataDeDecisao) {
     oQue = 'proposta na mão e nenhuma data de decisão — cobrar por telefone, não por texto';
     melhor = 'ligar';
@@ -10142,6 +10155,7 @@ function h8Insight(item) {
 }
 
 const FILA_BALDES = [
+  { id: 'vencido',         rotulo: 'Promessas que venceram',            prio: 0 },
   { id: 'hoje',            rotulo: 'Follow-ups para hoje',              prio: 1 },
   { id: 'visita_sem_passo',rotulo: 'Visitas sem próximo passo',         prio: 2 },
   { id: 'cadencia',        rotulo: 'Cadências atrasadas',               prio: 3 },
@@ -10168,6 +10182,16 @@ function filaDeFollowUp(ownerId) {
   leads.forEach(lead => {
     const st = estadoDoNegocio(lead);
     const item = { lead, estado: st, quente: quentesIds.has(String(lead.id)) };
+
+    if (st.passoVencido && !st.temProximoPasso) {
+      baldes.vencido.push({
+        ...item,
+        motivo: 'prometeu ' + (typeof fmtDailyLabel === 'function'
+          ? fmtDailyLabel(st.passoVencido.dia) : st.passoVencido.dia)
+          + ' e não fez — ' + st.passoVencido.atrasoDias + 'd de atraso',
+        prazo: st.passoVencido.dia
+      });
+    }
 
     if (st.proximoPasso) {
       const dia = isoDate(st.proximoPasso.quando);
@@ -10746,6 +10770,26 @@ function proximoPassoDoLead(lead) {
 }
 
 function leadTemProximoPasso(lead) { return !!proximoPassoDoLead(lead); }
+
+function passoVencidoDoLead(lead) {
+  if (!lead) return null;
+  const candidatos = [];
+  if (lead.proximaAtividade) candidatos.push({ data: lead.proximaAtividade, rotulo: 'atividade' });
+  if (lead.proximaReuniao) candidatos.push({ data: lead.proximaReuniao, rotulo: 'reunião' });
+  (Array.isArray(lead.tarefas) ? lead.tarefas : []).forEach(t => {
+    if (t && t.timestamp) candidatos.push({ data: t.timestamp, rotulo: t.subject || 'tarefa' });
+  });
+  const hojeK = isoDate(new Date());
+  const vencidos = candidatos
+    .map(x => ({ ...x, quando: new Date(x.data) }))
+    .filter(x => !Number.isNaN(x.quando.getTime()) && isoDate(x.quando) < hojeK)
+    .sort((a, b) => b.quando - a.quando);
+  if (!vencidos.length) return null;
+  const p = vencidos[0];
+  const dia = isoDate(p.quando);
+  const atrasoDias = Math.max(1, Math.round((new Date(hojeK) - new Date(dia)) / 86400000));
+  return { ...p, dia, atrasoDias };
+}
 
 const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191'];
 
@@ -20328,6 +20372,7 @@ function pl5FaixaHTML(o) {
 function pl4RiscoDoBalde(id) {
 
   return ({
+    vencido: 'você marcou uma data e ela passou — é a promessa quebrada que o cliente lembra',
     hoje: 'promessas com data — quebrar aqui custa a confiança do lead',
     visita_sem_passo: 'visita feita e nada marcado — o toque morre aqui',
     cadencia: 'o ritmo combinado por etapa não foi cumprido',
@@ -20341,6 +20386,7 @@ function pl4RiscoDoBalde(id) {
 
 function pl4RotuloDoBalde(id, rotuloPadrao) {
   return ({
+    vencido: 'Promessas que já venceram',
     hoje: 'Follow-ups que vencem hoje',
     quente_sem_tarefa: 'Quentes sem próximo passo',
     cadencia: 'Cadências atrasadas',
