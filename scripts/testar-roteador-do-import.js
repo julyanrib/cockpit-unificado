@@ -1,0 +1,183 @@
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   O ROTEADOR DO IMPORT LÊ A DECLARAÇÃO (09/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "e pq nao ta puxando nada de guarulhos? guarulhos é gigante e tem o field".
+
+   ══ TRÊS CAUSAS, TODAS MEDIDAS ANTES DE MEXER ═══════════════════════════════════════
+   1. A BUSCA NUNCA RODOU COM GUARULHOS. Cron do backfill é segunda 01:00 UTC, a última
+      rodada foi 07/09, e Guarulhos entrou na lista de cidades hoje. Zero lead de
+      Guarulhos em leads_prospeccao — só as seis cidades antigas.
+
+   2. E SE RODASSE, O LEAD VIRIA SEM DONO. `lib/territorios.js` era a QUARTA cópia da
+      regra de território, e não conhecia nenhuma das nove cidades novas:
+
+        guarulhos/centro SEM DONO · guarulhos/vila augusta SEM DONO · mogi SEM DONO
+        duque de caxias SEM DONO · sao joao de meriti SEM DONO · nilopolis SEM DONO
+
+   3. E AS ROTAS DE HOJE NÃO CHEGAVAM AQUI:
+        copacabana -> André (a declaração diz Sandro) · cachambi -> Sandro (diz Luiz)
+      Pior: quatro regras tinham `owner: 'pendente_*'` — id de espera que NINGUÉM resolve
+      (o fetch-hubspot só sabe filtrá-lo). Lead roteado por elas gravaria id falso em
+      responsavel_owner_id e ficaria invisível para todo mundo.
+
+   ══ A ORDEM QUE ESTA SUITE PROTEGE ══════════════════════════════════════════════════
+   Declaração primeiro (a decisão dele de hoje), listas largas depois (a cobertura de
+   01/09 que ele nunca revogou), e só então zona escrita, coordenada e sobra. As listas
+   antigas NÃO foram apagadas de propósito: elas têm ~30 bairros por pessoa contra os que
+   ele nomeou, e trocar uma pela outra jogaria a maior parte do Rio na sobra — mover
+   bairro que ele não citou é decisão de território, e é dele.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+const path = require('path');
+const raiz = path.join(__dirname, '..');
+const terr = require(path.join(raiz, 'lib', 'territorios.js'));
+const usuarios = require(path.join(raiz, 'data', 'usuarios.json'));
+const decl = require(path.join(raiz, 'data', 'territorios.json'));
+
+let ok = 0;
+const falhas = [];
+function conferir(nome, condicao, porque) {
+  if (condicao) { ok += 1; return; }
+  falhas.push('  · ' + nome + ': ' + porque);
+}
+
+const reps = (Array.isArray(usuarios) ? usuarios : (usuarios.usuarios || []))
+  .filter(u => u.role === 'rep');
+const primeiroNome = id => {
+  const r = reps.find(x => String(x.ownerId) === String(id));
+  return r ? String(r.nome).split(' ')[0] : (id || null);
+};
+const quem = (cidade, bairro) => primeiroNome(terr.rotearTerritorio(cidade, bairro, null, null));
+const via = (cidade, bairro) => {
+  const r = terr.regraDoTerritorio(cidade, bairro, null, null);
+  return r ? (r.declarado ? 'declarado' : (r.sobra ? 'sobra' : 'lista antiga')) : 'sem dono';
+};
+
+/* ── 1 · NENHUM ID FALSO SAI DAQUI ───────────────────────────────────────────────────
+   É o defeito mais silencioso dos três: o lead entra, tem dono no papel, e o dono não
+   existe. Ele não aparece na Daily de ninguém nem como conta alvo no Expogo. */
+const amostra = [
+  ['rio de janeiro', 'copacabana'], ['rio de janeiro', 'olaria'], ['rio de janeiro', 'tijuca'],
+  ['rio de janeiro', 'bairro que nao existe'], ['sao paulo', 'mooca'], ['sao paulo', 'santana'],
+  ['sao paulo', 'bairro que nao existe'], ['guarulhos', 'centro'], ['duque de caxias', 'centro']
+];
+const comPlaceholder = amostra.filter(function (c) {
+  const d = terr.rotearTerritorio(c[0], c[1], null, null);
+  return d && String(d).startsWith('pendente_');
+});
+conferir('nenhum roteamento devolve id de espera',
+  comPlaceholder.length === 0,
+  'placeholder em: ' + comPlaceholder.map(c => c.join('/')).join(', ')
+    + ' — lead com id falso não aparece na Daily de ninguém e ninguém descobre por quê');
+
+/* TESTA O FILTRO, não só o resultado. A primeira versão só olhava se as regras de hoje
+   têm id — e como TODOS os declarados têm, ela ficava verde mesmo quando eu removia o
+   filtro. Sabotagem que passa é guarda que mede nada. */
+const fonteRoteador = require('fs').readFileSync(path.join(raiz, 'lib', 'territorios.js'), 'utf8');
+conferir('e nenhuma regra declarada nasce sem id',
+  (terr.DECLARADOS || []).every(r => r.owner && !String(r.owner).startsWith('pendente_')) &&
+  /return regras\.filter\(function \(r\) \{ return !!r\.owner; \}\);/.test(fonteRoteador),
+  'regra sem id de gente real é pior que ausência de regra: ela captura o lead e o esconde');
+
+conferir('todo executivo declarado e ativo tem id no roteador',
+  (decl.territorios || []).filter(x => x && x.ativo !== false && (x.areas || []).length)
+    .every(x => (terr.DECLARADOS || []).some(r => r.nome === x.rep)),
+  'quem tem rota declarada e não aparece aqui recebe lead de ninguém');
+
+/* ── 2 · AS NOVE CIDADES NOVAS TÊM DONO ─────────────────────────────────────────────── */
+conferir('Guarulhos routeia, e para as duas metades certas',
+  quem('guarulhos', 'vila augusta') === 'Sérgio' && quem('guarulhos', 'macedo') === 'Renata',
+  'Guarulhos tem 14.172 CNPJs food e zero conta no CRM; sem dono o lead entra e desaparece');
+
+conferir('a Baixada inteira vai para o Luiz',
+  ['duque de caxias', 'sao joao de meriti', 'nilopolis', 'mesquita']
+    .every(c => quem(c, 'centro') === 'Luiz'),
+  'foram declarados como município inteiro porque o Julyan não nomeou bairro ali');
+
+conferir('o Alto Tietê vai para a Renata',
+  ['mogi das cruzes', 'suzano', 'salesopolis', 'biritiba mirim']
+    .every(c => quem(c, 'centro') === 'Renata'),
+  'cinco municípios que nunca foram buscados por ninguém antes de 09/09');
+
+/* ── 3 · A DECLARAÇÃO GANHA DAS LISTAS ANTIGAS ──────────────────────────────────────
+   As três trocas de hoje, uma a uma. Sem a precedência, o lead ia para quem saiu da zona. */
+conferir('Copacabana é do Sandro, que mudou para a Zona Sul',
+  quem('rio de janeiro', 'copacabana') === 'Sandro' && via('rio de janeiro', 'copacabana') === 'declarado',
+  'a lista antiga a dava ao André, que saiu da Zona Sul hoje');
+
+conferir('Cachambi é do Luiz',
+  quem('rio de janeiro', 'cachambi') === 'Luiz' && via('rio de janeiro', 'cachambi') === 'declarado',
+  'a lista antiga a dava ao Sandro, junto com a Grande Tijuca que ele deixou');
+
+conferir('a Grande Tijuca é do Bruno',
+  quem('rio de janeiro', 'tijuca') === 'Bruno' && quem('rio de janeiro', 'vila isabel') === 'Bruno',
+  'era do Sandro até hoje; o Julyan passou para o Bruno junto com Taquara e região');
+
+conferir('e Anil e Freguesia são do André',
+  quem('rio de janeiro', 'anil') === 'André' && quem('rio de janeiro', 'freguesia') === 'André',
+  'eram a sub-cota do Bruno; o André assumiu a parte de Jacarepaguá e Barra');
+
+/* ── 4 · A COBERTURA ANTIGA NÃO FOI PERDIDA ─────────────────────────────────────────── */
+conferir('bairro que o Julyan não citou continua com quem tinha',
+  quem('rio de janeiro', 'olaria') === 'Luiz' && via('rio de janeiro', 'olaria') === 'lista antiga',
+  'apagar as listas largas jogaria a maior parte do Rio na sobra — e mover bairro que ele não citou é decisão dele');
+
+conferir('e a sobra do município continua existindo',
+  !!quem('rio de janeiro', 'um bairro inventado qualquer'),
+  'bairro novo sem regra tem que cair em alguém conhecido, senão fica invisível para sempre');
+
+/* ── 5 · O CASAMENTO É POR BORDA DE PALAVRA ─────────────────────────────────────────
+   Mesmo defeito que a derivação das sub-cotas do backfill pegou hoje: 'vila mariana'
+   caindo em quem tem 'Vila Maria'. As duas são declaradas e são de pessoas diferentes. */
+conferir('Vila Maria e Vila Mariana vão para pessoas diferentes',
+  quem('sao paulo', 'vila maria') === 'Sérgio' && quem('sao paulo', 'vila mariana') === 'Renata',
+  'substring manda as duas para o Sérgio e a Renata perde a rota dela em silêncio');
+
+/* E ISSO NÃO PODE DEPENDER DA ORDEM DA DECLARAÇÃO. Medido: com substring o par acima
+   ACERTA por acidente, porque a Renata está declarada antes do Sérgio e a chave dela
+   ('vila mariana') casa primeiro. Se alguém trocar a ordem das pessoas no JSON, o
+   acidente desaparece. Então a checagem vai direto na regra do Sérgio e exige que ela
+   RECUSE 'vila mariana' — isso é a borda de palavra, e não a sorte. */
+const regraSergioSP = (terr.DECLARADOS || []).find(r =>
+  r.nome === 'Sérgio Caetano' && r.cidade === 'sao paulo');
+conferir('a regra do Sérgio recusa "vila mariana" por si só',
+  !!regraSergioSP && regraSergioSP.teste('sao paulo vila mariana') === false
+    && regraSergioSP.teste('sao paulo vila maria') === true,
+  'sem borda de palavra a regra dele captura a rua da Renata, e a ordem do JSON é que decide quem perde');
+
+/* ── 6 · A EXCLUSÃO DO RICARDO VALE ─────────────────────────────────────────────────── */
+conferir('a Cidade Baixa é da Kelly, não do Ricardo',
+  quem('porto alegre', 'cidade baixa') === 'Kelly' && quem('porto alegre', 'moinhos de vento') === 'Kelly',
+  'foi o "só n pega cidade baixa" dele que definiu isso por exclusão');
+
+conferir('e o resto de Porto Alegre é do Ricardo',
+  quem('porto alegre', 'farroupilha') === 'Ricardo' && quem('porto alegre', 'centro historico') === 'Ricardo',
+  'ele é município inteiro menos os três da Kelly; sem a exceção funcionando, um dos dois perde a rua');
+
+/* A EXCEÇÃO TAMBÉM É TESTADA NA REGRA, e não pela ordem. Medido: com o `exceto`
+   desligado a Cidade Baixa AINDA cai na Kelly, porque as regras de bairro vêm antes das
+   de município inteiro — o acerto vinha da ordem, não da exceção. Se um dia a Kelly sair
+   de Porto Alegre, a Cidade Baixa passaria a ser do Ricardo sem ninguém decidir isso. */
+const regraRicardo = (terr.DECLARADOS || []).find(r =>
+  r.nome === 'Ricardo Antunes' && r.cidade === 'porto alegre');
+conferir('a regra do Ricardo recusa a Cidade Baixa por si só',
+  !!regraRicardo && regraRicardo.teste('porto alegre cidade baixa') === false
+    && regraRicardo.teste('porto alegre farroupilha') === true,
+  'o "só n pega cidade baixa" tem que estar NA REGRA dele, não depender de a Kelly vir antes na lista');
+
+/* ── 7 · UMA FONTE SÓ ───────────────────────────────────────────────────────────────── */
+conferir('o roteador lê data/territorios.json',
+  (terr.DECLARADOS || []).length > 0,
+  'era a quarta cópia da regra; sem ler a declaração ela volta a divergir na próxima rota nova');
+
+conferir('e a declaração é consultada ANTES das listas antigas',
+  via('rio de janeiro', 'copacabana') === 'declarado',
+  'se a lista antiga vier primeiro, a decisão de hoje não chega ao lead');
+
+/* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
+if (falhas.length) {
+  console.error('FALHAS (' + falhas.length + '):');
+  falhas.forEach(l => console.error(l));
+  process.exit(1);
+}
+console.log('roteador do import: ' + ok + ' checagens ok — as nove cidades novas têm dono, a'
+  + ' declaração ganha das listas antigas, e nenhum id de espera sai daqui.');
