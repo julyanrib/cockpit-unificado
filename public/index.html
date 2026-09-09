@@ -1749,12 +1749,33 @@
   .pl6-slot-cheio:hover{border-color:var(--line-btn);}
   .pl6-slot-l1{display:flex;align-items:center;gap:6px;min-width:0;}
   .pl6-slot-hora{font:900 11px var(--font-display);font-variant-numeric:tabular-nums;color:var(--ink);flex:none;}
+
+  .pl6-slot-hora-btn,.pl6-slot-hora-vazia{background:none;border:none;padding:0;
+    cursor:pointer;font-family:inherit;}
+  .pl6-slot-hora-btn{border-bottom:1px dashed var(--line);}
+  .pl6-slot-hora-btn:hover{border-bottom-color:var(--ink);}
+  .pl6-slot-hora-vazia{font:800 9.5px var(--font-body);color:var(--red);
+    border:1px dashed var(--red);border-radius:5px;padding:1px 6px;letter-spacing:.02em;}
+  .pl6-slot-hora-vazia:hover{background:var(--red);color:#FFFDF8;}
+  .pl6-slot-hora-btn:focus-visible,.pl6-slot-hora-vazia:focus-visible{
+    outline:2px solid var(--ink);outline-offset:2px;}
+
+  .pl6-hora-edit{display:flex;align-items:center;gap:4px;flex:none;}
+  .pl6-hora-edit input{width:74px;min-height:26px;padding:0 5px;border:1px solid var(--ink);
+    border-radius:5px;font:800 11px var(--font-body);color:var(--ink);background:var(--panel);}
+  .pl6-hora-edit button{min-height:26px;padding:0 7px;border:1px solid var(--ink);
+    border-radius:5px;background:var(--ink);color:#FFFDF8;font:800 10px var(--font-body);
+    cursor:pointer;}
+  .pl6-hora-edit .pl6-hora-limpar{background:var(--panel);color:var(--muted2);
+    border-color:var(--line);}
   .pl6-slot-quem{display:block;margin-top:2px;font:800 12.5px/1.3 var(--font-body);
     color:var(--ink);overflow-wrap:anywhere;}
   .pl6-slot-onde{display:block;margin-top:1px;font:700 9.5px/1.3 var(--font-body);color:var(--muted2);}
 
   .pl6-slot-nome{font:800 10.5px var(--font-body);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
-  .pl6-slot-tag{font:800 8.5px var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);
+
+  .pl6-slot-tag{display:block;margin-top:1px;
+    font:800 8.5px var(--font-display);letter-spacing:.04em;text-transform:uppercase;color:var(--muted2);
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .pl6-slot-x{margin-left:auto;flex:none;width:38px;height:38px;border:0;background:none;color:var(--muted2);
     cursor:pointer;font-size:13px;border-radius:var(--r-sm);}
@@ -20815,9 +20836,13 @@ function pl6SlotRua(v) {
   if (!v) return false;
   return ((typeof v === 'object') ? v.id : v) === PL6_RUA;
 }
-function pl6SlotHora(v, si) {
 
+function pl6SlotHora(v, si) {
   if (v && typeof v === 'object' && v.hora) return String(v.hora);
+  return '';
+}
+
+function pl6HoraDaFaixa(si) {
   return PL6_HORAS[si] || '';
 }
 function pl6SlotBloqueado(v) {
@@ -21344,26 +21369,41 @@ function renderPlanejamento6a(rep) {
     const cands = pl6Candidatos(rota, todos, naGrade);
     const tomo = n >= 4 ? ' is-coberto' : (n ? ' is-meio' : '');
 
+    const vaziosDoDia = [];
+    for (let k = 0; k < PL6_SLOTS; k++) {
+      const vv = col[k];
+      if (!pl6SlotBloqueado(vv) && !pl6SlotRua(vv) && !pl6SlotId(vv)) vaziosDoDia.push(k);
+    }
+    const primeiroVazio = vaziosDoDia.length ? vaziosDoDia[0] : -1;
+    const vagasDoDia = vaziosDoDia.length;
+
     const slots = PL6_HORAS.map((horaFaixa, si) => {
       const v = col[si];
 
       const hora = pl6SlotHora(v, si);
       if (pl6SlotBloqueado(v)) {
+
+        const rotBloq = 'Desbloquear' + (hora ? ' ' + hora : ' esta vaga de ' + esc(dias[di].rot));
         return '<div class="pl6-slot-cheio pl6-slot-1l pl6-slot-bloq">'
-          + '<span class="pl6-slot-hora">' + hora + '</span>'
+          + (hora ? '<span class="pl6-slot-hora">' + esc(hora) + '</span>' : '')
           + '<span class="pl6-slot-nome">bloqueado</span>'
           + ('<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
-            + '" title="Desbloquear ' + hora + '" aria-label="Desbloquear ' + hora + '">✕</button>')
+            + '" title="' + rotBloq + '" aria-label="' + rotBloq + '">✕</button>')
           + '</div>';
       }
 
       if (pl6SlotRua(v)) {
+
+        const rotRua = 'Tirar a prospecção de rua' + (hora ? ' das ' + hora : ' de ' + esc(dias[di].rot));
         return '<div class="pl6-slot-cheio pl6-slot-1l" style="border-left:5px solid ' + PL6_RUA_COR + ';">'
-          + '<span class="pl6-slot-hora">' + hora + '</span>'
+          + (hora
+            ? '<button type="button" class="pl6-slot-hora pl6-slot-hora-btn" data-pl6-hora-slot="' + di + '.' + si
+              + '" title="Mudar o horário da volta de rua">' + esc(hora) + '</button>'
+            : '<button type="button" class="pl6-slot-hora pl6-slot-hora-vazia" data-pl6-hora-slot="' + di + '.' + si
+              + '" title="Definir o horário da volta de rua">＋ hora</button>')
           + '<span class="pl6-slot-nome" style="color:' + PL6_RUA_COR + ';">prospecção de rua</span>'
           + ('<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
-            + '" title="Tirar a prospecção de rua das ' + hora + '"'
-            + ' aria-label="Tirar a prospecção de rua das ' + hora + '">✕</button>')
+            + '" title="' + rotRua + '" aria-label="' + rotRua + '">✕</button>')
           + '</div>';
       }
       if (pl6SlotId(v)) {
@@ -21390,13 +21430,31 @@ function renderPlanejamento6a(rep) {
           + ' data-pl6-slot-ficha="' + esc(l.id) + '" role="button" tabindex="0"'
           + ' title="Abrir a ficha de ' + esc(l.nome) + '">'
           + '<span class="pl6-slot-l1">'
-          +   '<span class="pl6-slot-hora">' + hora + '</span>'
-          +   '<span class="pl6-slot-tag" style="color:' + cor + ';">' + esc(tag) + '</span>'
+
+          +   (pl6UI.horaEdit === di + '.' + si
+
+              ? '<span class="pl6-hora-edit">'
+                + '<input type="time" step="300" value="' + esc(hora) + '"'
+                +   ' data-pl6-hora-campo="' + di + '.' + si + '"'
+                +   ' aria-label="Horário de ' + esc(l.nome) + '">'
+                + '<button type="button" data-pl6-hora-salvar="' + di + '.' + si + '" title="Salvar o horário">✓</button>'
+                + (hora ? '<button type="button" class="pl6-hora-limpar" data-pl6-hora-limpar="' + di + '.' + si + '" title="Tirar o horário">sem hora</button>' : '')
+                + '</span>'
+              : (hora
+                ? '<button type="button" class="pl6-slot-hora pl6-slot-hora-btn"'
+                  + ' data-pl6-hora-slot="' + di + '.' + si + '"'
+                  + ' title="Mudar o horário de ' + esc(l.nome) + '">' + esc(hora) + '</button>'
+
+                : '<button type="button" class="pl6-slot-hora pl6-slot-hora-vazia"'
+                  + ' data-pl6-hora-slot="' + di + '.' + si + '"'
+                  + ' title="Definir o horário de ' + esc(l.nome) + '">＋ hora</button>'))
 
           +   '<button type="button" class="pl6-slot-x" data-pl6-remover="' + di + '.' + si
-          +     '" title="Tirar ' + esc(l.nome) + ' deste horário" aria-label="Tirar deste horário">✕</button>'
+          +     '" title="Tirar ' + esc(l.nome) + ' do plano" aria-label="Tirar do plano">✕</button>'
           + '</span>'
+
           + '<b class="pl6-slot-quem">' + esc(l.nome) + '</b>'
+          + '<span class="pl6-slot-tag" style="color:' + cor + ';">' + esc(tag) + '</span>'
 
           + '<span class="pl6-slot-onde">' + (ondeKm ? esc(ondeKm) + ' · ' : '')
           +   (l.semEndereco ? 'sem endereço no CRM · ' : '') + 'ficha ▸</span>'
@@ -21452,8 +21510,11 @@ function renderPlanejamento6a(rep) {
           + '</div>';
       }
 
+      if (si !== primeiroVazio) return '';
       return '<button type="button" class="pl6-slot-livre" data-pl6-abrir-sug="' + di + '.' + si + '">'
-        + '<span class="pl6-slot-livre-h">' + hora + ' · livre</span>'
+        + '<span class="pl6-slot-livre-h">+ escolher conta'
+        +   (vagasDoDia > 1 ? ' <small>· ' + vagasDoDia + ' vagas no dia</small>' : ' <small>· última vaga</small>')
+        + '</span>'
         + '</button>';
     }).join('');
 
@@ -21664,8 +21725,13 @@ function renderPlanejamento6a(rep) {
     + '</div>'
     + '<div class="pl6-corpo">'
     +   '<div class="pl6-semana">'
-    +     '<div class="pl6-sec"><span class="pl6-sec-rot">A semana — 5 dias · 9h→19h</span>'
-    +       '<span class="pl6-sec-n">' + (vagas ? vagas + ' horários livres' : 'semana cheia ✓') + '</span>'
+
+    +     '<div class="pl6-sec"><span class="pl6-sec-rot">A semana — 5 dias</span>'
+
+    +       '<span class="pl6-sec-n">'
+    +         (total ? total + ' visita(s) no plano' : 'nenhuma visita no plano ainda')
+    +         (vagas ? ' · ' + vagas + ' vaga(s)' : ' · semana cheia ✓')
+    +       '</span>'
     +       '<small class="pl6-sec-dica">1º passo: escolha a <b style="color:var(--pl6-territorio);">região de ataque</b> de cada dia</small></div>'
     +     '<div class="pl6-grade">' + colunas + '</div>'
     +     (terrChips
@@ -22124,6 +22190,8 @@ function pl6Ligar(box, rep) {
       + '[data-pl6-mais-terr],'
       + '[data-pl6-sugerir-dia],'
       + '[data-pl6-agendar],[data-pl6-abrir-sug],[data-pl6-fechar-sug],[data-pl6-bloquear],[data-pl6-remover],'
+
+      + '[data-pl6-hora-slot],[data-pl6-hora-salvar],[data-pl6-hora-limpar],'
       + '[data-pl6-abrir-regiao],[data-pl6-regiao],[data-pl6-mais-regioes],[data-pl6-sugerir],'
 
       + '[data-pl6-end-salvar],'
@@ -22303,6 +22371,40 @@ function pl6Ligar(box, rep) {
       return mutar({ grade: g },
         dias[di].rot + ' ' + PL6_HORAS[si] + ' bloqueado — compromisso fora da rua · Supabase');
     }
+
+    if (d.pl6HoraSlot) {
+      pl6UI.horaEdit = String(d.pl6HoraSlot);
+
+      await redesenhar();
+
+      const c = document.querySelector('[data-pl6-hora-campo="' + d.pl6HoraSlot + '"]');
+      if (c) { c.focus(); if (c.select) c.select(); }
+      return;
+    }
+    if (d.pl6HoraSalvar || d.pl6HoraLimpar) {
+      const ref = String(d.pl6HoraSalvar || d.pl6HoraLimpar);
+      const [di, si] = ref.split('.').map(Number);
+      const g = pl6GradeDoPlano();
+      const atual = Array.isArray(g[di]) ? g[di][si] : null;
+      const id = (atual && typeof atual === 'object') ? atual.id : atual;
+      if (!id) { pl6UI.horaEdit = null; await redesenhar(); return; }
+
+      let nova = '';
+      if (d.pl6HoraSalvar) {
+        const campo = document.querySelector('[data-pl6-hora-campo="' + ref + '"]');
+        nova = campo ? String(campo.value || '').trim() : '';
+      }
+
+      g[di][si] = nova ? { id: id, hora: nova } : id;
+      pl6UI.horaEdit = null;
+      const diasSem = pl6Dias(pl6SegundaDaSemana());
+      const qual = (diasSem[di] && diasSem[di].rot) || 'o dia';
+
+      await mutar({ grade: g }, nova
+        ? qual + ' às ' + nova + ' · Supabase'
+        : qual + ' sem horário definido · Supabase');
+      return;
+    }
     if (d.pl6Remover) {
       const [di, si] = d.pl6Remover.split('.').map(Number);
       const g = pl6GradeDoPlano();
@@ -22314,7 +22416,8 @@ function pl6Ligar(box, rep) {
         ? dias[di].rot + ' ' + PL6_HORAS[si] + ' desbloqueado · Supabase'
         : pl6SlotRua(era)
 
-        ? dias[di].rot + ' ' + pl6SlotHora(era, si) + ' — prospecção de rua saiu do plano · Supabase'
+        ? dias[di].rot + (pl6SlotHora(era, si) ? ' ' + pl6SlotHora(era, si) : '')
+          + ' — prospecção de rua saiu do plano · Supabase'
         : 'saiu da semana e voltou para a lista · Supabase — se a visita já estava marcada no HubSpot, desmarque na Agenda';
       return mutar({ grade: g }, msg);
     }
@@ -32118,7 +32221,7 @@ function d7PlanoDeHoje(rep, gradeDe) {
   return D7_HORAS.map(function (horaFaixa, si) {
     const v = coluna[si];
 
-    const hora = pl6SlotHora(v, si);
+    const hora = pl6SlotHora(v, si) || pl6HoraDaFaixa(si);
     if (pl6SlotBloqueado(v)) return { hora: hora, si: si, tipo: 'bloqueado' };
     if (pl6SlotRua(v)) return { hora: hora, si: si, tipo: 'rua' };
     if (!pl6SlotId(v)) return { hora: hora, si: si, tipo: 'livre' };
@@ -36247,7 +36350,7 @@ async function renderDaily() {
 
           const acaoFup = g.ownerId
 
-            ? `<button type="button" data-dg4-acao="foco:${esc(g.ownerId)}" data-dg2-hv="4" title="destaca o cartão desta pessoa na rodada, com o plano e o botão de cobrar" style="display:inline-flex;align-items:center;min-height:38px;padding:0 13px;border:1px solid var(--line);border-radius:999px;background:var(--paper);font:800 10.5px var(--font-body);color:var(--ink);cursor:pointer;white-space:nowrap;">ver na rodada ▸</button>`
+            ? `<button type="button" data-dg4-acao="foco:${esc(g.ownerId)}" data-dg2-hv="4" title="destaca o cartão desta pessoa na rodada, com o plano e o botão de cobrar" style="display:inline-flex;align-items:center;min-height:38px;padding:0 13px;border:1px solid var(--line);border-radius:999px;background:var(--panel);font:800 10.5px var(--font-body);color:var(--ink);cursor:pointer;white-space:nowrap;">ver na rodada ▸</button>`
             : '<span style="font:700 10.5px var(--font-body);color:var(--muted2);white-space:nowrap;">sem dono no time — reatribuir no HubSpot</span>';
           return `
           <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line-soft);flex-wrap:wrap;">
