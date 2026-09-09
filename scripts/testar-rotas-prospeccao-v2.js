@@ -98,9 +98,28 @@ conferir('o botão desabilitado de enviar TAMBÉM responde, dizendo o que falta'
   verbos.indexOf('enviarbloq') > -1 && /enviarbloq/.test(tpl),
   'botão cinza que não diz nada é clique morto com aparência de proibição');
 
+/* OS MOTIVOS DE DESCARTE MUDARAM EM 09/09, E A REGRA NÃO: o cartão apagado é a única
+   linha da lista que não muda estado, então ela tem de responder por que está apagada.
+   "Sem telefone" saiu da lista de motivos — a Casa dos Dados devolve telefone em 0,2%
+   dos leads (medido), e barrar por isso reprovava a fonte mais fresca inteira; virou
+   aviso âmbar num cartão que continua selecionável. Ficaram os três que estragam o
+   trabalho de verdade, e cada um tem a sua frase. */
 conferir('o cartão descartado explica por que está apagado',
-  /verbo === 'sujo'/.test(exec) && /já está no CRM/.test(exec) && /sem telefone válido/.test(exec),
+  /verbo === 'sujo'/.test(exec) && /já está no CRM/.test(exec)
+    && /já foi trabalhada e perdida/.test(exec) && /linha sem nome/.test(exec),
   'é a única linha da lista que não muda estado — então ela tem que responder a pergunta');
+
+/* ══ SEM TELEFONE NÃO BARRA O ENVIO ═════════════════════════════════════════════════
+   Esta é a segunda das duas travas que deixaram o gestor sem conseguir enviar nada.
+   Medido no banco em 09/09: Renata 467 leads e 467 sem telefone; Casa dos Dados 3 de
+   1.682 com número. Com a régua de 10 dígitos reprovando, a lista limpa era vazia em
+   toda praça — e a tela dizia "nenhum lead limpo marcado" sem dizer que a régua era a
+   causa. */
+conferir('sem telefone é aviso, não reprovação',
+  /if \(tel\.length < 10\) \{\s*\n\s*return \{ ok: true, aviso: true/.test(tpl)
+    && !/if \(tel\.length < 10\) return \{ ok: false/.test(tpl),
+  'CNPJ recém-aberto quase nunca tem telefone na fonte, e a visita dele é na porta — '
+  + 'reprovar por telefone barrava a fonte mais fresca inteira');
 
 conferir('o clique na carteira leva a pessoa para o passo 2 E rola até lá',
   /_rolarPara = 'rt7Passo2'/.test(exec) && /id="rt7Passo2"/.test(tpl),
@@ -430,6 +449,70 @@ conferir('as duas tabelas do radar são só LIDAS pela tela',
 conferir('a semana mostrada é a mais recente que EXISTE, não a de hoje',
   /const semana = \(pr && pr\.length\) \? pr\[0\]\.data_semana : null/.test(tpl),
   'se o job de segunda falhar, mostrar em branco pareceria que a praça não tem mercado');
+
+/* ══ A FILA DO GESTOR EXISTE, E É A MESMA NAS DUAS PONTAS ══════════════════════════
+   Julyan, 09/09: "na aba do gestor prospecção, eu não consigo importar nenhuma conta pra
+   nenhum executivo, preciso de revisão disso urgente."
+
+   MEDIDO NO BANCO NAQUELE DIA: `status = 'pendente'` existia em UM lead da tabela
+   inteira; os outros 1.985 estavam 'atribuido' ou 'na_rota'. E a lista, o contador e o
+   envio filtravam só 'pendente'. Não era falha de consulta: api/importar-leads grava
+   `dono ? 'atribuido' : 'pendente'` e o roteador de território acha dono para quase
+   tudo — mais ainda depois de o mapa do Rio ser fechado ("nao deixa sem dono"). A tela
+   distribuía uma fila que o produto havia parado de produzir.
+
+   O RISCO DO CONSERTO, e é o que estas guardas travam: a lista e o envio decidirem
+   "o que dá para enviar" cada um por conta própria. Duas cópias da mesma regra é como a
+   tela mostra 40 contas e o botão envia zero — pior que o defeito original, porque
+   parece funcionando. */
+(function () {
+  /* SEM OS COMENTÁRIOS. `corpoDe` devolve o template cru, e o comentário que documenta
+     esta correção CITA `status === 'pendente'` para explicar o que saiu — a primeira
+     versão desta guarda reprovou o arquivo já consertado lendo a própria explicação.
+     Sétima vez neste projeto; a suíte até já tem um `codigo` sem comentários no topo,
+     e eu não o usei aqui. */
+  const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const enviar = semCom(corpoDe('rt7Enviar'));
+  const dados = semCom(corpoDe('rt7Dados'));
+
+  conferir('a fila da praça é uma função, e não um filtro copiado',
+    /function rt7FilaDaPraca\(leads, municipio, ownerSel\)/.test(tpl)
+      && /const RT7_MOVIVEIS = \['pendente', 'atribuido'\];/.test(tpl),
+    'o filtro morava na tela E no envio; enquanto os dois diziam pendente ninguém via, e'
+    + ' consertar um só faria a tela prometer 40 contas e o botão enviar zero');
+
+  conferir('a tela e o envio leem a MESMA fila',
+    /rt7FilaDaPraca\(s\.leads, municipioSel, s\.exec\)/.test(dados)
+      && /rt7FilaDaPraca\(s\.leads, municipio, s\.exec\)/.test(enviar),
+    'o número no botão tem de ser o número que vai — e continuar sendo quando a regra mudar');
+
+  conferir('e nenhuma das duas volta a filtrar só pendente',
+    !/status === 'pendente'/.test(dados) && !/status === 'pendente'/.test(enviar),
+    'o banco tinha 1 pendente em 1.986 linhas: essa lista deixa a tela vazia em toda praça');
+
+  conferir('a conta que já tem dono nasce DESMARCADA',
+    /function rt7Marcado\(sel, l\) \{[\s\S]{0,220}return v === undefined \? rt7SemDono\(l\) : !!v;/.test(tpl)
+      && /const marcado = l => rt7Marcado\(s\.sel, l\);/.test(dados),
+    'marcar tudo por padrão, com a lista incluindo quem tem dono, faria UM clique tirar'
+    + ' 467 contas da Renata — tirar da carteira de alguém é ato explícito');
+
+  conferir('o cartão diz de quem a conta é hoje',
+    /const donoHoje = semDono\(l\) \? null : rt7Nome\(l\.responsavel_owner_id\);/.test(dados)
+      && /' · hoje de ' \+ String\(donoHoje\)\.split\(' '\)\[0\]/.test(dados),
+    'transferir 40 contas da carteira de alguém fica indistinguível de distribuir 40'
+    + ' livres, e as duas coisas mudam a segunda-feira de gente diferente');
+
+  conferir('e a confirmação nomeia quem perde as contas',
+    /const transferidas = escolhidos\.filter/.test(enviar)
+      && /já tem dono e MUDA de mão/.test(enviar)
+      && /porDono\[k\] \+ ' de ' \+ k/.test(enviar),
+    '"Enviar 40 contas para o André?" esconderia que 31 eram do Luiz');
+
+  conferir('na_rota fica fora da fila',
+    /RT7_MOVIVEIS = \['pendente', 'atribuido'\]/.test(tpl)
+      && !/RT7_MOVIVEIS = \[[^\]]*na_rota/.test(tpl),
+    'conta em rota está no dia de alguém; tirá-la de lá desmonta o plano dele sem avisar');
+}());
 
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
