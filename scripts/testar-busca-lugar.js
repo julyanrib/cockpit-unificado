@@ -62,7 +62,13 @@ const checar = (nome, cond, detalhe) => {
 const INI = '/* ════════════════════════════════════════════════════════════════════════════════════════\n   PLANEJAMENTO v5 — A BUSCA DE LUGAR';
 const iniAlt = html.indexOf('PLANEJAMENTO v5 — A BUSCA DE LUGAR');
 const a = html.lastIndexOf('/*', iniAlt);
-const b = html.indexOf('function pl4RiscoDoBalde(', a);
+/* A ÂNCORA DE FIM ERA `function pl4RiscoDoBalde(` — uma função de OUTRA feature, o deck
+   de baldes da fila, que saiu em 08/09/26 por ser código órfão. A suite quebrou com
+   "não achei o bloco", e não porque a v5 mudou: âncora cravada no nome de coisa alheia
+   morre quando aquela coisa sai, e antes disso mede um recorte que não é o seu.
+   Agora ela fecha onde a família pl6 começa — o Planejamento vivo, que é o vizinho
+   estável deste bloco. */
+const b = html.indexOf('/* ══ A NORMALIZACAO DE BAIRRO, NA LEITURA', a);
 if (iniAlt < 0 || a < 0 || b < 0) {
   console.error('FALHA: não achei o bloco das funções da v5 no template.');
   process.exit(1);

@@ -3497,17 +3497,6 @@
     .cond-btn.is-primaria{margin-left:0;}
   }
 
-  .fila-chips{display:flex;flex-wrap:wrap;gap:6px;margin:13px 0 12px;}
-  .fila-chip{background:var(--panel);border:1px solid var(--line-btn);color:var(--muted);border-radius:var(--r-pill);padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
-  .fila-chip:hover:not(:disabled){border-color:var(--ink);color:var(--ink);}
-  .fila-chip.on{background:var(--ink);border-color:var(--ink);color:var(--panel);}
-
-  .fila-chip.is-vazio{cursor:default;border-style:solid;border-color:var(--line-btn);background:none;color:var(--muted2);}
-  .fila-chip.is-vazio .n{color:var(--ter);}
-  .fila-chip .n{font-variant-numeric:tabular-nums;font-weight:800;}
-  .fila-chip.on .n{color:var(--panel);}
-
-  .fila-lista{display:grid;gap:4px;}
   .fila-item{border:1px solid var(--line-soft);border-radius:var(--r-md);background:var(--panel);}
   .fila-item[open]{border-color:var(--line-btn);background:var(--panel2);}
   .fila-linha{display:flex;align-items:center;gap:10px;padding:9px 12px;cursor:pointer;list-style:none;}
@@ -7150,7 +7139,7 @@
   .prosp2-dw-x:hover{border-color:var(--ink);color:var(--ink);}
 
   @media (max-width:760px){
-    .fila-chip,.fila-cta,.prosp2-loc-chip,.prosp2-fonte{min-height:44px;}
+    .fila-cta,.prosp2-loc-chip,.prosp2-fonte{min-height:44px;}
     .prosp2-loc-btn,.prosp2-add,.prosp2-ver,.prosp2-funil,.prosp2-devolver{min-height:44px;}
     .prosp2-ordenar select{min-height:44px;}
     .prosp2-dw-x{width:44px;height:44px;}
@@ -7636,14 +7625,14 @@
     .xv3-plan-a,.xv3-plan-b{max-height:none;overflow:visible;}
   }
 
-  #viewAgenda .fila-chip,#viewAgenda .fila-cta,#viewAgenda .acao-canal,
+  #viewAgenda .fila-cta,#viewAgenda .acao-canal,
   #viewAgenda .prosp2-loc-btn,#viewAgenda .ag-plan-btn,#viewAgenda .prosp2-fonte,
   #viewAgenda .prosp2-ver,#viewAgenda .prosp2-add,
   #viewAgenda .prosp2-dia,#viewAgenda .prosp2-tray-cta,#viewAgenda .prosp2-devolver-card{min-height:38px;display:inline-flex;align-items:center;justify-content:center;}
 
   #viewAgenda .prosp2-dw-x{min-width:38px;min-height:38px;}
   @media (pointer:coarse){
-    #viewAgenda .fila-chip,#viewAgenda .fila-cta,#viewAgenda .acao-canal,
+    #viewAgenda .fila-cta,#viewAgenda .acao-canal,
     #viewAgenda .prosp2-loc-btn,#viewAgenda .ag-plan-btn,#viewAgenda .prosp2-fonte,
     #viewAgenda .prosp2-ver,#viewAgenda .prosp2-add,
     #viewAgenda .prosp2-dia,#viewAgenda .prosp2-tray-cta,#viewAgenda .prosp2-devolver-card{min-height:44px;}
@@ -10697,10 +10686,9 @@ function indicadoresDoExecutivo(r) {
 
 let planejamentoFocoInicial = null;
 
-function irParaPlanejamento(bloco, baldePedido) {
+function irParaPlanejamento(bloco) {
   planejamentoFocoInicial = bloco || null;
-  filaFocoInicial = null;
-  if (baldePedido) filaFocoInicial = baldePedido;
+
   if (typeof agendaEstado !== 'undefined') agendaEstado.subview = 'hoje';
   activateTab('viewAgenda');
   if (typeof renderAgenda === 'function') { try { renderAgenda(); } catch (e) {} }
@@ -10721,17 +10709,21 @@ function irParaMeuFunilVisao(visao) {
   if (typeof renderMeuFunil === 'function') { try { renderMeuFunil(); } catch (e) {} }
 }
 
-let filaFocoInicial = null;
 function irParaFila(balde) {
-  filaFocoInicial = balde || null;
-  activateTab('viewMeuFunil');
-  if (typeof renderMeuFunil === 'function') { try { renderMeuFunil(); } catch (e) {} }
+  const FILTRO_DO_BALDE = { quente_sem_tarefa: 'quente' };
+  const filtro = FILTRO_DO_BALDE[String(balde || '')] || 'todas';
+  activateTab('viewMeuPainel');
+  if (typeof renderMeuPainel === 'function') { try { renderMeuPainel(); } catch (e) {} }
   setTimeout(() => {
-    const alvo = document.getElementById('filaFollowUp');
-    if (alvo && typeof smoothScrollTo === 'function') smoothScrollTo(alvo);
-    const chip = document.querySelector(`[data-fila-balde="${balde}"]`);
+    const chip = document.querySelector('[data-h8-filtro="' + filtro + '"]');
     if (chip) chip.click();
-  }, 140);
+
+    setTimeout(() => {
+      const alvo = document.querySelector('.h8-card');
+      if (alvo && typeof smoothScrollTo === 'function') smoothScrollTo(alvo);
+      else if (alvo && alvo.scrollIntoView) alvo.scrollIntoView({ block: 'start' });
+    }, 120);
+  }, 160);
 }
 
 function abrirRegistroDeDesfechoDaUltimaVisita(lead, st) {
@@ -11864,13 +11856,13 @@ function wireHojeExecucao(rootEl, r, diag) {
   });
 
   rootEl.querySelectorAll('[data-hoje-ir="carteira-descoberta"]').forEach(btn => {
-    btn.addEventListener('click', () => irParaPlanejamento('carteira', 'visita_sem_passo'));
+    btn.addEventListener('click', () => irParaPlanejamento('carteira'));
   });
 
   rootEl.querySelectorAll('[data-hoje-stat]').forEach(btn => {
     btn.addEventListener('click', () => {
       const qual = btn.dataset.hojeStat;
-      if (qual === 'datar') return irParaPlanejamento('carteira', 'visita_sem_passo');
+      if (qual === 'datar') return irParaPlanejamento('carteira');
       if (qual === 'fechamento') return irParaMeuFunilVisao('quentes');
       if (qual === 'sla') return irParaMeuFunilVisao('sla');
       if (qual === 'pendente') {
@@ -20367,130 +20359,6 @@ function pl5FaixaHTML(o) {
     + ' tem ' + o.nNoRaio + ' no raio de ' + String(o.raioKm).replace('.', ',') + ' km do caminho</span>'
     + '<button type="button" class="xv3-ghost" data-pl4-onde="rota">usar a rota de ' + esc(pl4RotuloDoDia(o.rota.diaISO).split(' ')[0]) + ' →</button>'
     + '</div>';
-}
-
-function pl4RiscoDoBalde(id) {
-
-  return ({
-    vencido: 'você marcou uma data e ela passou — é a promessa quebrada que o cliente lembra',
-    hoje: 'promessas com data — quebrar aqui custa a confiança do lead',
-    visita_sem_passo: 'visita feita e nada marcado — o toque morre aqui',
-    cadencia: 'o ritmo combinado por etapa não foi cumprido',
-    quente_sem_tarefa: 'interesse real sem tarefa — a carteira vaza por aqui',
-    proposta: 'proposta na mão do cliente e nenhum retorno combinado',
-    decisor: 'sem o decisor, a proposta não tem quem assine',
-    segunda_tentativa: 'não atendeu na primeira — a segunda tem regra própria',
-    reativacao: 'esfriou há mais de 60 dias — é telefone antes de rua'
-  })[id] || '';
-}
-
-function pl4RotuloDoBalde(id, rotuloPadrao) {
-  return ({
-    vencido: 'Promessas que já venceram',
-    hoje: 'Follow-ups que vencem hoje',
-    quente_sem_tarefa: 'Quentes sem próximo passo',
-    cadencia: 'Cadências atrasadas',
-    visita_sem_passo: 'Visitas sem próximo passo',
-    proposta: 'Propostas sem retorno combinado',
-    decisor: 'Decisores não alcançados',
-    segunda_tentativa: '2ª tentativa',
-    reativacao: 'Reativação'
-  })[id] || rotuloPadrao;
-}
-
-let pl4BaseDosBaldes = null;
-let pl4BaldeAberto = null;
-
-let pl4TodasAsLinhas = false;
-const PL4_LINHAS_VISIVEIS = 8;
-
-function pl4NotaDoDossie(it) {
-  const st = it.estado || {};
-  const partes = [];
-  if (st.ultimaVisita && st.ultimaVisita.occurred_at) {
-    partes.push('última visita ' + new Date(st.ultimaVisita.occurred_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
-  }
-  if (st.toques && st.toques.ultimo) {
-    const d = Math.floor((Date.now() - new Date(st.toques.ultimo).getTime()) / 86400000);
-    partes.push(`último toque há ${d}d`);
-  }
-  if (st.toques && st.toques.n != null) partes.push(`${st.toques.parcial ? '≥' : ''}${st.toques.n}º toque`);
-  if (st.cadencia && st.cadencia.nome) partes.push('régua ' + st.cadencia.nome);
-  return partes.length ? partes.join(' · ') : 'sem histórico de toque registrado neste negócio';
-}
-
-function filaDeFollowUpHTML(r, contexto) {
-  const fila = filaDeFollowUp(r.ownerId);
-  const baldeAtivo = filaFocoInicial && fila.baldes[filaFocoInicial] && fila.baldes[filaFocoInicial].length > 0
-    ? filaFocoInicial : null;
-
-  const itens = baldeAtivo
-    ? fila.baldes[baldeAtivo].map((x, i) => ({ ...x, balde: baldeAtivo, baldeRotulo: (FILA_BALDES.find(b => b.id === baldeAtivo) || {}).rotulo, prio: 0 }))
-    : fila.ordenada;
-
-  return `
-    <div id="filaFollowUp" class="chart-card" style="margin:0 0 18px;">
-      <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-        <h3 style="margin:0;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>${esc((contexto && contexto.titulo) || 'Fila de follow-up')}</h3>
-        <span style="font-size:11px;font-weight:700;color:${fila.negociosAfetados > 0 ? 'var(--red)' : 'var(--green)'};">${fila.negociosAfetados} negócio${fila.negociosAfetados === 1 ? '' : 's'} pedindo ação</span>
-      </div>
-      <div class="chart-subtitle" style="margin:4px 0 0;">${esc((contexto && contexto.subtitulo) || 'Cada item é um negócio do HubSpot. Nenhum CTA aqui é decorativo: todos abrem ou criam a atividade oficial.')}</div>
-
-      <div class="fila-chips" role="tablist">
-        <button type="button" class="fila-chip${baldeAtivo ? '' : ' on'}" data-fila-balde="">Tudo <span class="n">${fila.negociosAfetados}</span></button>
-        ${FILA_BALDES.map(b => `<button type="button" class="fila-chip${baldeAtivo === b.id ? ' on' : ''}${fila.baldes[b.id].length === 0 ? ' is-vazio' : ''}" data-fila-balde="${b.id}"${fila.baldes[b.id].length === 0 ? ' disabled' : ''}>${esc(b.rotulo)} <span class="n">${fila.baldes[b.id].length}</span></button>`).join('')}
-      </div>
-
-      ${itens.length === 0
-        ? `<div class="empty-state" style="padding:18px 0;">Nada pendente: toda visita saiu com próximo passo, nenhum quente está sem tarefa e nenhuma cadência está atrasada.</div>`
-        : `<div class="fila-lista">${itens.map((it, i) => itemDaFilaHTML(it, i)).join('')}</div>`}
-
-      ${legendaEstadosHTML()}
-      <div style="margin-top:10px;">${frescorTarjaHTML()}</div>
-    </div>`;
-}
-
-function wireFilaDeFollowUp(rootEl, r) {
-  const fila = filaDeFollowUp(r.ownerId);
-  const baldeAtivo = filaFocoInicial && fila.baldes[filaFocoInicial] && fila.baldes[filaFocoInicial].length > 0
-    ? filaFocoInicial : null;
-  const itens = baldeAtivo
-    ? fila.baldes[baldeAtivo].map(x => ({ ...x, balde: baldeAtivo }))
-    : fila.ordenada;
-
-  rootEl.querySelectorAll('#filaFollowUp .fila-item').forEach(el => {
-    const it = itens[Number(el.dataset.filaIdx)];
-    if (!it) return;
-    const ctas = ctasDoItemDaFila(it);
-    el.querySelectorAll('[data-fila-cta]').forEach(btn => {
-      const c = ctas.find(x => x.id === btn.dataset.filaCta);
-      if (c && typeof c.acao === 'function') btn.addEventListener('click', ev => {
-
-        ev.preventDefault(); ev.stopPropagation();
-        c.acao();
-      });
-    });
-
-    el.querySelectorAll('summary a.fila-cta').forEach(a => a.addEventListener('click', ev => ev.stopPropagation()));
-
-  });
-
-  rootEl.querySelectorAll('#filaFollowUp .fila-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
-      filaFocoInicial = chip.dataset.filaBalde || null;
-
-      const alvo = rootEl.querySelector('#filaFollowUp');
-      if (!alvo) return;
-      const contexto = { titulo: alvo.dataset.filaTitulo, subtitulo: alvo.dataset.filaSubtitulo };
-      const tmp = document.createElement('div');
-      tmp.innerHTML = filaDeFollowUpHTML(r, contexto);
-      const novo = tmp.firstElementChild;
-      novo.dataset.filaTitulo = contexto.titulo || '';
-      novo.dataset.filaSubtitulo = contexto.subtitulo || '';
-      alvo.replaceWith(novo);
-      wireFilaDeFollowUp(rootEl, r);
-    });
-  });
 }
 
 const PL6_HORAS = ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
