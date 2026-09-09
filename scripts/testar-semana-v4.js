@@ -101,8 +101,7 @@ conferir('o alvo do link da aba Funil sobreviveu',
 /* ── 3. O GUARDA DE PAPEL, ANTES DE DESENHAR ─────────────────────────────────────── */
 const render = corpoDe('renderSemana');
 conferir('o render tem guarda de papel antes de desenhar',
-  /role !== 'manager'/.test(render) &&
-  render.indexOf("role !== 'manager'") < render.indexOf('sm4TelaHTML'),
+  antesDe(render, "role !== 'manager'", 'sm4TelaHTML'),
   'esta aba mostra o placar de todo mundo; render é função global e basta alguém chamá-la');
 
 conferir('a fiação liga a v4',
@@ -302,6 +301,85 @@ conferir('a semana ISO tem uma implementação só',
   (tpl.match(/function numeroDaSemanaISO\(/g) || []).length === 1,
   'cópia inline cujo comentário dizia ser "a mesma conta" — conferidas em 2.352 dias');
 
+/* ── 9b. O COMBINADO DA SEMANA NASCE NA FAIXA DA PAUTA ──────────────────────────── */
+/* Julyan em 09/09: "na pauta dessa tela mesmo, com destino Semanal". Ele existe porque a
+   jogada nº 2 ("combinado descumprido ≥2 semanas") lê combinados_cumprimento, que só tem
+   linha se alguém CRIOU um combinado — e o único caminho de criação do produto tinha saído
+   com a tela da v3, deixando aquela regra escrita e morta para sempre. */
+(function () {
+  const g = corpoDe('sm4GargaloDaEtapa');
+  const s = corpoDe('sm4CombinadoSugerido');
+  conferir('o combinado tem motor próprio, e não sm3Gargalos de volta',
+    quantas(tpl, 'function sm4GargaloDaEtapa(') === 1 &&
+    quantas(tpl, 'function sm4CombinadoSugerido(') === 1 &&
+    quantas(tpl, 'function sm4SextaDaSemana(') === 1 &&
+    tpl.indexOf('function sm3Gargalos(') < 0,
+    'sm3Gargalos devolvia TRÊS gargalos e a v4 usa um: reviver 120 linhas para ler um terço '
+    + 'delas é código morto nascendo');
+
+  conferir('o gargalo varre só as etapas abertas',
+    /sm3AbertosPorEtapa\(\)/.test(g),
+    'funilLeads traz Perdido e Ganho: o combinado da semana mandaria o time cobrar um enterro');
+
+  conferir('a régua do gargalo vem da configuração',
+    /DATA\.stageMeta \|\| \{\}\)\.slaDays/.test(g),
+    'dia de SLA cravado no template divergiria de data/stageMeta no próximo ajuste');
+
+  conferir('gargalo vazio é resultado, não ausência de dado',
+    /if \(!ids\.length\) return \{ vazio: true, n: 0 \};/.test(g) &&
+    /Nenhuma etapa acima da régua nesta semana — combinado livre/.test(s),
+    'zero negócio acima da régua é a melhor notícia da semana; sugerir tema inventado ali '
+    + 'seria a tela fabricando um problema');
+
+  conferir('o combinado sugerido cita o número que ataca',
+    /ataca os ' \+ g\.n \+ ' negócio/.test(s),
+    'combinado sem número é slogan, e slogan não se cobra na segunda seguinte');
+
+  const exec4 = corpoDe('sm4Executar');
+  conferir('o combinado grava em combinados_semana, e não na pauta',
+    /from\('combinados_semana'\)\.insert/.test(exec4) &&
+    exec4.indexOf("tl5Alternar('combinado'") < 0,
+    'ele tem dono, prazo, playbook, alvos e CUMPRIMENTO POR PESSOA — nada disso cabe num '
+    + 'item de pauta, e modelá-lo duas vezes é a divergência que ninguém olha');
+
+  conferir('desfazer apaga a linha, não marca na_semanal=false',
+    /from\('combinados_semana'\)\.delete\(\)\.eq\('id', existente\.id\)/.test(exec4),
+    'combinado que não foi fechado não é combinado meio-fechado: é combinado que não existe, '
+    + 'e a linha fantasma apareceria no histórico da semana seguinte');
+
+  conferir('os alvos ficam vazios de propósito',
+    /alvo_owner_ids: \[\],/.test(exec4) && /o time todo/.test(exec4),
+    'nomear os donos congelaria a lista de quem segura negócio parado HOJE, e na sexta o '
+    + 'combinado cobraria as pessoas erradas');
+
+  conferir('o combinado também confere na fonte',
+    /const agora = \(SM3_ESTADO\.combinados \|\| \[\]\)\.some/.test(exec4) &&
+    /NÃO GRAVOU: o banco aceitou sem erro mas o combinado/.test(exec4),
+    'é a única gravação desta tela fora de tl5Alternar, então precisa da própria conferência '
+    + '— e ela é na lista relida, porque TL5_ESTADO.pauta nunca teria notícia dele');
+
+  conferir('a conferência do combinado vem depois de reler',
+    antesDe(exec4, 'await sm3Carregar();', 'const agora = (SM3_ESTADO.combinados'),
+    'conferir antes de reler mediria o cache, que é o próprio defeito');
+
+  conferir('o destino declarado é a Semanal',
+    /const cbDest = SM4_DESTINOS\.semanal;/.test(provedor) &&
+    /passa a valer para a jogada/.test(provedor),
+    'foi o destino que ele pediu, e a linha embaixo do botão tem de dizer isso');
+
+  conferir('falha de leitura não vira "não existe combinado"',
+    /naoLeu: cbFalhou && !oCombinado,/.test(provedor) &&
+    /const cbFalhou = !!SM3_ESTADO.falhouLeitura;/.test(provedor) &&
+    /esta linha NÃO diz que/.test(provedor),
+    'afirmar ausência quando houve erro de rede é a pior mentira da tela: ninguém desconfia dela');
+
+  conferir('o combinado abre a prova dele',
+    /prova: 'lista:combsemana'/.test(provedor) &&
+    corpoDe('sm4Consulta').indexOf("verbo === 'combsemana'") > -1,
+    'ele AFIRMA "ataca os N acima da régua em X" — sem a consulta, seria a única afirmação '
+    + 'desta tela sem prova atrás');
+}());
+
 /* ── 10. O CLIQUE OU FAZ OU DIZ ──────────────────────────────────────────────────── */
 conferir('o ouvinte é escopado na raiz da aba',
   /closest\('\[data-sm4-raiz\]'\)/.test(corpoDe('sm4Ligar')),
@@ -331,6 +409,14 @@ conferir('gravação que falha aparece na tela',
 function quantas(texto, trecho) {
   return texto.split(trecho).length - 1;
 }
+/* ORDEM COM AS DUAS PRESENCAS EXIGIDAS. `a.indexOf(x) < a.indexOf(y)` devolve TRUE
+   quando x NAO EXISTE, porque indexOf da -1 e -1 e menor que tudo — sabotei removendo a
+   chamada que a ordem protege e a suite passou VERDE. Quatro checagens minhas estavam
+   cegas por isto. */
+function antesDe(texto, a, b) {
+  const ia = texto.indexOf(a), ib = texto.indexOf(b);
+  return ia > -1 && ib > -1 && ia < ib;
+}
 conferir('a gravação é conferida na fonte, não no eco',
   quantas(tpl, 'function sm4Confirmar(') === 1 &&
   quantas(exec, 'sm4Confirmar(') === 4,
@@ -341,7 +427,7 @@ conferir('a conferência sabe o que o clique pedia',
   'sem guardar o estado anterior, não há contra o que conferir depois — e toggle confere nos dois sentidos');
 
 conferir('a conferência vem depois de reler o banco',
-  exec.indexOf('await tl5CarregarPauta();') < exec.indexOf('sm4Confirmar('),
+  antesDe(exec, 'await tl5CarregarPauta();', 'sm4Confirmar('),
   'conferir o cache antes de reler mediria o que eu acho que gravei, que é o próprio defeito');
 
 conferir('a conferência não engole o erro mais específico',
@@ -374,7 +460,7 @@ conferir('verbo desconhecido reclama em vez de sair calado',
   const markup = tela.slice(tela.indexOf('return `'));
   /* os verbos que o markup pode emitir, pelos nomes que o provedor entrega */
   const VERBOS = ['lista', 'fechar', 'abrir', 'dossie', 'dossienome', 'acao', 'modo',
-    'rec', 'tirar', 'pautaver'];
+    'rec', 'tirar', 'pautaver', 'combinado'];
   const semRamo = VERBOS.filter(function (v) {
     if (v === 'pautaver' || v === 'fechar') return exec.indexOf("verbo === '" + v + "'") < 0;
     return exec.indexOf("verbo === '" + v + "'") < 0;
@@ -399,9 +485,23 @@ conferir('o dossiê navega por gxFocarExecutivo',
 conferir('não sobrou nome de função inventada',
   tpl.indexOf('tm2AbrirDossie') < 0 && tpl.indexOf("activateTab('viewTime')") < 0,
   'nome que eu supus em vez de conferir é clique morto com aparência de clique vivo');
-conferir('o dossiê fecha o painel antes de trocar de aba',
-  exec.indexOf('SM4_ESTADO.painel = null;') < exec.indexOf('gxFocarExecutivo'),
-  'o overlay escuro fica pendurado sobre a aba nova, e o gestor vê a Time atrás de um véu');
+/* MEDE DENTRO DO RAMO, e não no executor inteiro: `SM4_ESTADO.painel = null;` também
+   existe no ramo de 'fechar', que vem ANTES — então a checagem no texto todo casava aquela
+   ocorrência e passava verde mesmo com o ramo do dossiê sem a linha. Âncora que casa em
+   mais de um lugar não sabota nada: ela só finge medir. */
+(function () {
+  /* DELIMITA PELA INDENTAÇÃO DE DOIS ESPAÇOS, que é a dos ramos de primeiro nível: dentro
+     deste ramo existe um `if (verbo === 'dossienome')` ANINHADO (indentado com quatro), e
+     procurar 'if (verbo ===' cru fechava o recorte 105 bytes depois do início — o recorte
+     ficava sem a linha que eu queria medir e a checagem reprovava o código CERTO. */
+  const ABRE = "  if (verbo === 'dossie' || verbo === 'dossienome') {";
+  const i = exec.indexOf(ABRE);
+  const fim = i > -1 ? exec.indexOf('\n  if (verbo === ', i + ABRE.length) : -1;
+  const ramo = (i > -1) ? exec.slice(i, fim > -1 ? fim : exec.length) : '';
+  conferir('o dossiê fecha o painel antes de trocar de aba',
+    ramo.length > 0 && antesDe(ramo, 'SM4_ESTADO.painel = null;', 'gxFocarExecutivo'),
+    'o overlay escuro fica pendurado sobre a aba nova, e o gestor vê a Time atrás de um véu');
+}());
 conferir('sem a função, o clique DIZ que não foi',
   /o dossiê da aba Time não respondeu nesta sessão/.test(exec),
   'em vez de parecer que foi — que é o defeito, não a falha');
