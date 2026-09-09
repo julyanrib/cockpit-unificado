@@ -1,154 +1,242 @@
-// scripts/testar-territorios.js
-// Testa lib/territorios.js — quem é o dono de cada conta-alvo.
-//
-// POR QUE EXISTE (01/09/26): este módulo passou a ser lido por três lugares (a importação
-// que dá dono a lead novo, a redistribuição da base e o backfill semanal), e ele decide
-// para QUEM uma conta aparece. Errar aqui não quebra tela nenhuma: a conta simplesmente
-// aparece na fila de quem está do outro lado da cidade — ou não aparece para ninguém, que
-// é o defeito que a auditoria de 01/09 encontrou (283 contas invisíveis).
-//
-// O que ele protege, e que nenhuma revisão de tela alcança:
-//   1. a TRAVA DE CIDADE: Lapa, Saúde, Higienópolis, Jardim Botânico e Penha existem no
-//      Rio e em São Paulo; sem a trava, conta paulistana cai para executivo do Rio;
-//   2. a ORDEM da decisão: nome conhecido, depois a zona escrita no nome, depois a
-//      coordenada, depois a sobra — cada passo existe porque o anterior não sabe;
-//   3. COBERTURA TOTAL: nenhuma conta dos municípios cobertos fica sem dono;
-//   4. a zona escrita no nome vence a coordenada, porque a coordenada, quando o
-//      geocodificador falha, vira o centróide do município e mente com precisão;
-//   5. zona que não atravessa a cidade: o par (executivo, bairro) tem que ser vizinho.
-//
-// Uso: node scripts/testar-territorios.js   (da raiz do repositório)
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   QUEM COBRE O QUÊ — a declaração única de território (09/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   O Julyan ditou as rotas em 09/09 e elas revelaram que a mesma regra vivia em DOIS
+   lugares:
 
-const T = require('../lib/territorios.js');
+     · a tela do gestor derivava a praça de cada executivo dos BAIRROS DOS LEADS DE
+       EXEMPLO em data/leads-referencia.json — um arquivo de contas-modelo, não de
+       território;
+     · a busca semanal tinha a própria cópia, em regex escrita à mão (as metaBairros de
+       scripts/backfill-casa-dos-dados.js).
+
+   AS DUAS DIVERGIAM CALADA, e o preço foi medido: quatro dos onze executivos não
+   apareciam em praça nenhuma na tela (e por isso não podiam receber carga), e cinco
+   municípios de rota real — Mogi das Cruzes, Biritiba Mirim, Salesópolis, Suzano e
+   Guarulhos — não eram buscados por ninguém. Gente com rota e sem munição.
+
+   Agora a declaração é uma: data/territorios.json. Esta suite existe para ela continuar
+   sendo uma, e para o que ficou sem dono continuar VISÍVEL em vez de virar silêncio.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+const fs = require('fs');
+const path = require('path');
+
+const raiz = path.join(__dirname, '..');
+const decl = require(path.join(raiz, 'data', 'territorios.json'));
+const usuarios = require(path.join(raiz, 'data', 'usuarios.json'));
+const { CIDADES } = require(path.join(raiz, 'scripts', 'backfill-casa-dos-dados.js'));
+const backfill = fs.readFileSync(path.join(raiz, 'scripts', 'backfill-casa-dos-dados.js'), 'utf8');
+const tpl = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
+const montar = fs.readFileSync(path.join(raiz, 'scripts', 'montar-dados.js'), 'utf8');
 
 let ok = 0;
 const falhas = [];
-function eDoDono(rotulo, cidade, bairro, lat, lng, esperado, viaEsperada) {
-  const r = T.regraDoTerritorio(cidade, bairro, lat, lng);
-  const nome = r ? r.nome : 'SEM DONO';
-  const via = !r ? '—' : r.porZonaEscrita ? 'zona escrita' : r.porCoordenada ? 'coordenada' : 'nome';
-  if (nome !== esperado) { falhas.push(rotulo + ': esperava ' + esperado + ', veio ' + nome); return; }
-  if (viaEsperada && via !== viaEsperada) {
-    falhas.push(rotulo + ': dono certo (' + nome + ') mas por ' + via + ', esperava ' + viaEsperada);
-    return;
+function conferir(nome, condicao, porque) {
+  if (condicao) { ok += 1; return; }
+  falhas.push('  · ' + nome + ': ' + porque);
+}
+
+const chave = s => String(s || '').toLowerCase().normalize('NFD')
+  .replace(new RegExp('[' + String.fromCharCode(0x300) + '-' + String.fromCharCode(0x36f) + ']', 'g'), '')
+  .replace(/[^a-z0-9]+/g, ' ').trim();
+
+const TERR = decl.territorios || [];
+const reps = (Array.isArray(usuarios) ? usuarios : (usuarios.usuarios || []))
+  .filter(u => u.role === 'rep');
+
+/* ── 1 · TODO EXECUTIVO ATIVO ESTÁ NA DECLARAÇÃO ──────────────────────────────────── */
+const semLinha = reps.filter(u => !TERR.some(t => chave(t.rep) === chave(u.nome)));
+conferir('todo executivo do time tem linha na declaração',
+  semLinha.length === 0,
+  'sem linha: ' + semLinha.map(u => u.nome).join(', ')
+    + ' — quem não está aqui não aparece em praça nenhuma na aba Rotas e não pode receber carga');
+
+/* ── 2 · E QUEM ESTÁ SEM ROTA DIZ QUE ESTÁ ────────────────────────────────────────── */
+const vazios = TERR.filter(t => !(t.areas || []).length);
+conferir('rota vazia vem com o motivo escrito',
+  vazios.every(t => t._pendente),
+  'sem motivo: ' + vazios.filter(t => !t._pendente).map(t => t.rep).join(', ')
+    + ' — array vazio sem nota é indistinguível de esquecimento meu');
+
+/* ── 3 · NINGUÉM DIVIDE BAIRRO COM NINGUÉM ────────────────────────────────────────── */
+const dono = new Map();
+const colisoes = [];
+TERR.forEach(t => {
+  if (t.ativo === false) return;
+  (t.areas || []).forEach(a => {
+    (a.bairros || []).forEach(b => {
+      const k = (a.municipio || '') + '|' + chave(b);
+      if (dono.has(k) && dono.get(k) !== t.rep) {
+        colisoes.push(b + ' em ' + a.municipio + ': ' + dono.get(k) + ' e ' + t.rep);
+      }
+      dono.set(k, t.rep);
+    });
+  });
+});
+conferir('nenhum bairro tem dois donos',
+  colisoes.length === 0,
+  colisoes.join(' · ') + ' — dois executivos na mesma rua é visita repetida e cliente irritado');
+
+/* ── 4 · O QUE FICOU SEM DONO NÃO ESTÁ TAMBÉM ATRIBUÍDO ───────────────────────────── */
+/* DENTRO DO MUNICÍPIO, e isto foi um conserto: a primeira versão comparava só o nome do
+   bairro e acusou "Centro está sem dono E com Renata Pessoa" — porque Centro existe em
+   Mogi, Biritiba, Salesópolis, Suzano, Guarulhos E na lista órfã da capital. Comparação
+   de bairro sem a cidade é comparação errada, e ela reprovava dado correto. */
+const orfaos = decl._sem_dono || [];
+const contradicao = [];
+orfaos.forEach(o => {
+  (o.bairros || []).forEach(b => {
+    const k = (o.municipio || '') + '|' + chave(b);
+    if (dono.has(k)) contradicao.push(b + ' em ' + o.municipio + ': sem dono E com ' + dono.get(k));
+  });
+});
+conferir('bairro sem dono não aparece atribuído a alguém',
+  contradicao.length === 0,
+  contradicao.join(' · ') + ' — a lista de órfãos é para o Julyan reatribuir; ela mentindo é pior que não existir');
+
+/* NÃO EXIGE QUE EXISTAM ÓRFÃOS. A primeira versão pedia `orfaos.length > 0`, e reprovou
+   no dia em que o Julyan atribuiu tudo — a suite cobrando um buraco que ele acabou de
+   fechar. Lista vazia aqui é a melhor notícia possível; o que importa é que o bloco que
+   EXISTIR esteja completo o bastante para ser reatribuído. */
+conferir('cada bloco sem dono diz a cidade, os bairros e de onde veio',
+  orfaos.every(o => o.porque && o.municipio && o.bairros && o.bairros.length),
+  'zona órfã sem cidade não dá para reatribuir, e sem motivo ninguém sabe se foi esquecida ou desativada de propósito');
+
+/* ══ DISPENSADA ≠ ESQUECIDA ═══════════════════════════════════════════════════════════
+   "zona oeste no momento nao precisa" não é a mesma coisa que zona que alguém esqueceu de
+   atribuir. A lista de sem-dono existe para o Julyan REATRIBUIR; deixar ali algo que ele
+   já dispensou é a tela cobrando todo dia uma decisão tomada. Então há duas listas, e
+   nenhum bairro pode estar nas duas nem ter dono estando em qualquer uma. */
+const fora = decl._fora_de_rota || [];
+conferir('zona dispensada mora em lista própria, com a decisão registrada',
+  fora.every(o => o.porque && o.municipio && (o.bairros || []).length && /nao precisa|não precisa/.test(o.porque)),
+  'sem a palavra dele registrada, na próxima leitura isto parece esquecimento e alguém "conserta"');
+
+const dobrado = [];
+fora.forEach(o => (o.bairros || []).forEach(b => {
+  const k = (o.municipio || '') + '|' + chave(b);
+  if (dono.has(k)) dobrado.push(b + ' em ' + o.municipio + ': dispensado E com ' + dono.get(k));
+  if (orfaos.some(x => x.municipio === o.municipio && (x.bairros || []).some(y => chave(y) === chave(b)))) {
+    dobrado.push(b + ' em ' + o.municipio + ': dispensado E sem dono');
   }
-  ok++;
+}));
+conferir('bairro dispensado não está também atribuído nem também órfão',
+  dobrado.length === 0,
+  dobrado.join(' · ') + ' — as três listas têm que ser disjuntas, senão nenhuma delas quer dizer nada');
+
+/* ── 5 · EXCLUSÃO SÓ EXISTE COM O DONO DO EXCLUÍDO ────────────────────────────────── */
+const semDestino = [];
+TERR.forEach(t => {
+  (t.areas || []).forEach(a => {
+    (a.exceto || []).forEach(b => {
+      const k = (a.municipio || '') + '|' + chave(b);
+      if (!dono.has(k)) semDestino.push(b + ' em ' + a.municipio + ' (tirado de ' + t.rep + ')');
+    });
+  });
+});
+conferir('bairro excluído de uma rota é de outra pessoa, não de ninguém',
+  semDestino.length === 0,
+  semDestino.join(' · ') + ' — "só não pega X" só faz sentido se X for de alguém; senão é zona que ninguém visita e ninguém sabe');
+
+/* ── 6 · A DERIVAÇÃO COBRE TODO MUNICÍPIO DECLARADO ──────────────────────────────── */
+const municipios = new Set();
+TERR.forEach(t => { if (t.ativo !== false) (t.areas || []).forEach(a => a.municipio && municipios.add(a.municipio)); });
+const foraDaBusca = [...municipios].filter(m => !CIDADES.some(c => c.municipio === m));
+conferir('todo município com rota entra na busca semanal',
+  foraDaBusca.length === 0,
+  'fora da busca: ' + foraDaBusca.join(', ') + ' — rota sem munição foi exatamente o buraco de 09/09');
+
+conferir('e a cidade com mais de um dono ganha sub-cota por bairro',
+  CIDADES.filter(c => c.metaBairros).every(c => c.metaBairros.length > 1) &&
+  CIDADES.some(c => c.municipio === 'Guarulhos' && c.metaBairros && c.metaBairros.length === 2),
+  'sem sub-cota a cidade cumpre a meta com contas de uma zona só e a zona do colega nasce vazia');
+
+/* ══ OS DOIS DEFEITOS DO CASAMENTO DE BAIRRO (09/09/26) ═══════════════════════════════
+   Os dois só apareceram quando eu derivei as sub-cotas da declaração e fui conferir
+   bairro por bairro. A regex antiga tinha o primeiro e ninguém sabia.
+
+   1. SUBSTRING CASAVA VIZINHO. 'vila mariana' — que está na lista de zonas SEM DONO da
+      capital — caía na rota do Sérgio, porque ele tem 'Vila Maria' e uma é prefixo da
+      outra. Terceira vez nesta semana que casamento solto me morde.
+   2. O MESMO LEAD CONTAVA PARA DOIS DONOS. O CRM guarda "Freguesia (Jacarepaguá, entorno
+      imediato de Taquara)"; aquilo casava com o André (Freguesia) e com o Bruno
+      (Taquara), e as duas sub-cotas pareciam mais cheias do que estão. */
+function donosDe(municipio, bairro) {
+  const c = CIDADES.find(x => x.municipio === municipio);
+  if (!c || !c.metaBairros) return [];
+  return c.metaBairros.filter(m => m.teste(bairro)).map(m => m.nome.split(' (')[0]);
 }
 
-/* ── 1. a trava de cidade: os homônimos entre Rio e São Paulo ─────────────────────────
-   Cada um destes nomes existe nas duas cidades. Sem a trava, a regra do Rio casaria com
-   a chave paulistana e o lead entraria na fila de quem trabalha a 400 km. */
-eDoDono('Lapa do Rio', 'Rio de Janeiro', 'LAPA', -22.9130, -43.1800, 'André Gomes');
-/* a Lapa é administrativamente Zona Oeste e ainda assim é do Sérgio: o centro de zona
-   dele está a 8 km dela e o do Wericles a 14 km, e ela faz fronteira com Casa Verde e
-   Freguesia do Ó pela ponte do Tietê. Foi este teste que achou o rótulo mentindo — dizia
-   'Zona Norte de São Paulo' enquanto a fila entregava conta da Lapa. O rótulo mudou. */
-eDoDono('Lapa de SP', 'São Paulo', 'LAPA', -23.5254, -46.7031, 'Sérgio Caetano');
-eDoDono('Saúde do Rio', 'Rio de Janeiro', 'SAUDE', -22.8970, -43.1900, 'André Gomes');
-eDoDono('Saúde de SP', 'São Paulo', 'SAUDE', -23.6230, -46.6170, 'Renata Pessoa');
-eDoDono('Higienópolis do Rio', 'Rio de Janeiro', 'HIGIENOPOLIS', -22.8760, -43.2680, 'Luiz Pimentel');
-eDoDono('Higienópolis de SP', 'São Paulo', 'HIGIENOPOLIS', -23.5501, -46.6604, 'Renata Pessoa');
-eDoDono('Penha do Rio', 'Rio de Janeiro', 'PENHA', -22.8420, -43.2790, 'Luiz Pimentel');
-eDoDono('Penha de França/SP', 'São Paulo', 'PENHA DE FRANCA', -23.5278, -46.5363, 'Renata Pessoa');
+/* O TESTE FICOU MELHOR DO QUE ERA. Quando eu o escrevi, a Vila Mariana estava SEM DONO e
+   a checagem era "ela não pode cair no Sérgio". Agora ela é da Renata — então dá para
+   cobrar a coisa certa: dois bairros de nome parecido, no mesmo município, vão para
+   pessoas DIFERENTES. Com substring, os dois iriam para o Sérgio. */
+conferir('bairros de nome parecido vão para donos diferentes',
+  donosDe('São Paulo', 'vila maria').join() === 'Sérgio Caetano' &&
+  donosDe('São Paulo', 'vila mariana').join() === 'Renata Pessoa',
+  'Vila Maria é do Sérgio e Vila Mariana é da Renata; substring manda as duas para o Sérgio, e a Renata perde a rota dela em silêncio');
 
-/* ── 2. a ordem da decisão ───────────────────────────────────────────────────────────
-   Bairro conhecido pelo nome vem primeiro porque a fronteira real não é um raio: a
-   Grande Tijuca é um corredor e a Ilha do Governador é separada por água — em linha reta
-   a Ilha é mais perto de Botafogo do que da Penha, e por terra não é. */
-eDoDono('Grande Tijuca pelo nome', 'Rio de Janeiro', 'MARACANA', -22.9120, -43.2300, 'Sandro Brito', 'nome');
-eDoDono('Ilha pelo nome', 'Rio de Janeiro', 'JARDIM CARIOCA', -22.8080, -43.1900, 'Luiz Pimentel', 'nome');
-eDoDono('Santana pelo nome', 'São Paulo', 'SANTANA', -23.5010, -46.6370, 'Sérgio Caetano', 'nome');
-eDoDono('Bela Vista pelo nome', 'São Paulo', 'BELA VISTA', -23.5601, -46.6500, 'Renata Pessoa', 'nome');
+conferir('e o bairro com apêndice do CRM continua casando',
+  donosDe('Rio de Janeiro', 'tijuca shopping 45').join() === 'Bruno Martins' &&
+  donosDe('Rio de Janeiro', 'curicica entorno imediato de taquara').join() === 'Bruno Martins',
+  'o CRM guarda bairro com contexto digitado à mão; igualdade pura perderia esses leads');
 
-/* a cauda: bairro que nenhuma lista cobre, decidido pela coordenada. São Paulo tem 96
-   distritos e enumerar todos de cabeça é como se erra território. */
-eDoDono('Parque Cisper pela coordenada', 'São Paulo', 'PARQUE CISPER', -23.4909, -46.4979, 'Renata Pessoa', 'coordenada');
-/* Vila Constança fica na Zona Norte (-23.47,-46.59) — e é assim que ela tem que rotear.
-   No banco, as 5 contas dela vieram com -23.5072,-46.4872, que é Zona Leste: outro
-   geocode ruim, dentro do município e por isso indetectável pelo raio. O roteador manda
-   para a Renata, que é a dona daquela coordenada — certo para o dado que existe. */
-eDoDono('Vila Constança pela coordenada', 'São Paulo', 'VILA CONSTANCA', -23.4700, -46.5900, 'Sérgio Caetano', 'coordenada');
-eDoDono('a mesma com coordenada de Zona Leste segue a coordenada', 'São Paulo', 'VILA CONSTANCA', -23.5072, -46.4872, 'Renata Pessoa', 'coordenada');
-eDoDono('Vila Suzana pela coordenada', 'São Paulo', 'VILA SUZANA', -23.6163, -46.7386, 'Wericles Andrade', 'coordenada');
-/* Gericinó não está em lista nenhuma do Rio: quem decide é a coordenada, e ela devolve
-   o Bruno, que é o executivo da Zona Oeste. É o comportamento que faltava em 01/09, quando
-   bairro fora das cinco listas do Rio simplesmente ficava sem dono. */
-eDoDono('Gericinó pela coordenada', 'Rio de Janeiro', 'GERICINO', -22.8700, -43.4600, 'Bruno Martins', 'coordenada');
+conferir('nenhum bairro conta para dois donos',
+  ['taquara', 'freguesia jacarepagua entorno imediato de taquara', 'tijuca shopping 45',
+    'anil', 'copacabana', 'cachambi'].every(b => donosDe('Rio de Janeiro', b).length <= 1) &&
+  ['vila maria', 'santana', 'lapa', 'morumbi'].every(b => donosDe('São Paulo', b).length <= 1),
+  'lead contado em duas sub-cotas faz as duas parecerem cheias e a busca para antes de trazer o que falta');
 
-/* ── 3. a zona escrita no nome vence a coordenada ────────────────────────────────────
-   Estas quatro têm coordenada -23.5507,-46.6334: o centróide de São Paulo, que é o que o
-   geocodificador devolve quando NÃO acha o bairro. Dezenas de bairros diferentes
-   compartilham essa coordenada. Ela não diz onde a conta está, diz "não sei" — e o
-   parêntese no nome diz a zona. */
-eDoDono('(ZONA NORTE) vence o centróide', 'São Paulo', 'JARDIM SANTA CRUZ (ZONA NORTE)',
-  -23.5507, -46.6334, 'Sérgio Caetano', 'zona escrita');
-eDoDono('(ZONA LESTE) vence o centróide', 'São Paulo', 'VILA PROGRESSO (ZONA LESTE)',
-  -23.5507, -46.6334, 'Renata Pessoa', 'zona escrita');
-eDoDono('(Z SUL) também é abreviada assim na fonte', 'São Paulo', 'VILA GUARANI (Z SUL)',
-  -23.6724, -46.4985, 'Wericles Andrade', 'zona escrita');
-eDoDono('(ZONA OESTE) com coordenada de outro município', 'São Paulo', 'JARDIM IPANEMA (ZONA OESTE)',
-  -20.7785, -49.7012, 'Wericles Andrade', 'zona escrita');
-/* e a dica NÃO atravessa para o Rio, que não usa esse parêntese e tem outras quatro zonas */
-eDoDono('a dica de zona não vale no Rio', 'Rio de Janeiro', 'FREGUESIA (ILHA DO GOVERNADOR)',
-  -22.8000, -43.2100, 'Luiz Pimentel', 'nome');
+conferir('e quem ganha é o bairro que vem primeiro no texto',
+  donosDe('Rio de Janeiro', 'freguesia jacarepagua entorno imediato de taquara').join() === 'André Gomes',
+  'o bairro é o que vem primeiro; o resto é contexto que alguém digitou — Freguesia é do André, Taquara é do Bruno');
 
-/* ── 3b. fronteira de palavra: nome curto vazando para o bairro vizinho ──────────────
-   O casador testava includes cru sobre a chave "cidade bairro". Com isso o nome de duas
-   letras da Sé casava "vila sao JOSE" e "SERralheiro", e o do Brás casava "BRASilandia" —
-   e como o passo do nome vem antes da coordenada, essas contas iam para a zona errada: 7 das
-   400 de São Paulo. Estes casos são o vazamento, virados do avesso. */
-eDoDono('Vila São José não é da Sé', 'São Paulo', 'VILA SAO JOSE (CIDADE DUTRA)',
-  -23.7491, -46.7094, 'Wericles Andrade', 'coordenada');
-eDoDono('Serralheiro não é da Sé', 'São Paulo', 'VILA SERRALHEIRO', -23.4689, -46.6967, 'Sérgio Caetano', 'coordenada');
-eDoDono('Brasilândia não é o Brás', 'São Paulo', 'VILA BRASILANDIA', -23.4469, -46.7105, 'Sérgio Caetano', 'nome');
-/* e os dois nomes curtos continuam casando quando são o bairro de verdade */
-eDoDono('a Sé é da Renata', 'São Paulo', 'SE', -23.5521, -46.6283, 'Renata Pessoa', 'nome');
-eDoDono('o Brás é da Renata', 'São Paulo', 'BRAS', -23.5430, -46.6173, 'Renata Pessoa', 'nome');
-/* nome composto dentro de rótulo sujo continua casando: parêntese é fronteira */
-eDoDono('Freguesia do Ó com o Ó sem acento', 'São Paulo', 'FREGUESIA DO O', -23.5000, -46.6900, 'Sérgio Caetano', 'nome');
-eDoDono('Penha Circular casa penha', 'Rio de Janeiro', 'PENHA CIRCULAR', -22.8400, -43.2800, 'Luiz Pimentel', 'nome');
+/* ── 7 · UMA FONTE SÓ ─────────────────────────────────────────────────────────────── */
+const semNota = backfill.replace(/\/\*[\s\S]*?\*\//g, ' ');
+conferir('o backfill NÃO tem mais lista de bairro escrita à mão',
+  !/teste: b => \//.test(semNota) && !/copacabana\|ipanema/.test(semNota),
+  'a regex por rep aqui era a segunda cópia da mesma regra, e foi ela que divergiu da tela');
 
-/* ── 4. cobertura total: ninguém fica sem dono ───────────────────────────────────────
-   Este é o teste que a auditoria de 01/09 gostaria de ter tido: 252 contas sem dono
-   nenhum, e o cron semanal continuava despejando lá. */
-const MUNICIPIOS = ['Rio de Janeiro', 'RIO DE JANEIRO', 'São Paulo', 'SAO PAULO',
-  'Vila Velha', 'Vitória', 'Porto Alegre', 'Canoas'];
-for (const m of MUNICIPIOS) {
-  const semCoord = T.regraDoTerritorio(m, 'BAIRRO QUE NAO EXISTE EM LUGAR NENHUM');
-  if (!semCoord) falhas.push('cobertura de ' + m + ': bairro desconhecido sem coordenada ficou sem dono');
-  else ok++;
-  const comCoord = T.regraDoTerritorio(m, 'OUTRO BAIRRO INVENTADO', -23.0, -46.0);
-  if (!comCoord) falhas.push('cobertura de ' + m + ': bairro desconhecido com coordenada ficou sem dono');
-  else ok++;
-}
+conferir('e as cidades dele saem da declaração',
+  /require\('\.\.\/data\/territorios\.json'\)/.test(semNota) && /const CIDADES = \(\(\) => \{/.test(semNota),
+  'lista de cidade cravada aqui volta a divergir na primeira rota nova');
 
-/* ── 5. zona que não atravessa a cidade ──────────────────────────────────────────────
-   A 1ª versão da tabela dava ao Sérgio "Zona Norte e Vila Mariana": Santana ao norte do
-   centro e Vila Mariana ao sul, 12 km e a cidade inteira entre as duas. Zona que
-   atravessa a cidade é zona que ninguém roda — o dia vira trânsito. */
-eDoDono('Vila Mariana é da Renata, não do Sérgio', 'São Paulo', 'VILA MARIANA',
-  -23.5893, -46.6287, 'Renata Pessoa');
-eDoDono('Jabaquara segue a Vila Mariana', 'São Paulo', 'JABAQUARA', -23.6344, -46.6432, 'Renata Pessoa');
-/* e a distância entre o centro de zona do dono e o bairro tem que ser rodável a pé/carro */
-for (const c of T.CENTROS_DE_ZONA) {
-  if (!Number.isFinite(c.lat) || !Number.isFinite(c.lng)) falhas.push('centro de zona sem coordenada: ' + c.nome);
-  else ok++;
-}
+conferir('a tela do gestor lê a MESMA declaração',
+  /DATA\.territorios \|\| \[\]/.test(tpl) && /function rt7PracaDoRep\(u\)/.test(tpl),
+  'a tela derivava a praça dos bairros dos leads de exemplo, que não são território de ninguém');
 
-/* ── 6. o owner é o mesmo em rotearTerritorio e regraDoTerritorio ─────────────────────
-   Duas funções que respondem a mesma pergunta são duas verdades esperando divergir. */
-for (const caso of [['São Paulo', 'PARQUE CISPER', -23.4909, -46.4979],
-                    ['Rio de Janeiro', 'COPACABANA', -22.9700, -43.1850],
-                    ['São Paulo', 'JARDIM SANTA CRUZ (ZONA NORTE)', -23.5507, -46.6334]]) {
-  const a = T.rotearTerritorio(...caso);
-  const b = T.regraDoTerritorio(...caso);
-  if (a !== (b && b.owner)) falhas.push('roteador divergiu da regra em ' + caso[1]);
-  else ok++;
-}
+conferir('e a declaração chega às duas telas pelo montador',
+  /require\('\.\.\/data\/territorios\.json'\)/.test(montar) &&
+  /territorios: territorios\.territorios \|\| \[\]/.test(montar),
+  'sem passar pelo payload, DATA.territorios fica undefined e a tela cai no fallback em silêncio');
 
+/* ── 8 · PRIVACIDADE: A ROTA DO COLEGA NÃO VAZA ──────────────────────────────────── */
+conferir('o executivo recebe só a própria rota',
+  /const meuTerritorio = \(dados\.territorios \|\| \[\]\)\.filter\(x => x && x\.rep === meuNome\)/.test(montar) &&
+  /territorios: meuTerritorio,/.test(montar),
+  'o mapa inteiro diz por onde cada colega anda — mesma regra que cortou snapshotReps em 07/08');
+
+/* ── 9 · QUEM SAIU DE CAMPO NÃO RECEBE CARGA, E A PRAÇA DELE NÃO SECA ────────────── */
+const amanda = TERR.find(t => chave(t.rep) === chave('Amanda Pardim'));
+conferir('quem está em transição para Inside fica marcado como inativo',
+  amanda && amanda.ativo === false && amanda._nota,
+  'rt7Ativos() já a exclui pelo fieldStatus; a declaração precisa concordar, senão Vitória aparece com dona que não trabalha ali');
+
+conferir('e a praça sem dono continua sendo buscada',
+  CIDADES.some(c => c.municipio === 'Vitória'),
+  'praça sem executivo não pode secar em silêncio enquanto o Julyan não reatribui');
+
+/* ── 10 · O CUSTO ESTÁ ESCRITO ────────────────────────────────────────────────────── */
+conferir('o custo dos municípios novos está dito no próprio arquivo',
+  decl._municipios_sem_busca && decl._municipios_sem_busca.custo &&
+  /consulta paga/.test(decl._municipios_sem_busca.custo),
+  'cinco municípios novos são dez consultas pagas a mais por semana; quem decide cortar precisa ver o número');
+
+/* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');
-  falhas.forEach(f => console.error('  · ' + f));
+  falhas.forEach(l => console.error(l));
   process.exit(1);
 }
-console.log('territórios: ' + ok + ' checagens ok.');
+console.log('territórios: ' + ok + ' checagens ok — ' + TERR.length + ' executivos declarados, '
+  + municipios.size + ' municípios, ' + (decl._sem_dono || []).length + ' zonas sem dono ditas em voz alta.');

@@ -42,6 +42,13 @@ const usuariosRaw = require('../data/usuarios.json');
 // pelos primeiros requires, e declaracao de function sobe por hoisting mas fica confusa
 // de ler — ver o bloco no inicio do arquivo.)
 const leadsReferencia = requireOpcional(() => require('../data/leads-referencia.json')) || { pracas: [] };
+/* QUEM COBRE O QUÊ (09/09/26) — a declaração única de território.
+   ANTES DISTO A MESMA REGRA VIVIA EM DOIS LUGARES: a tela do gestor derivava a praça de
+   cada executivo dos BAIRROS DOS LEADS DE EXEMPLO em leads-referencia.json, e a busca
+   semanal tinha a própria cópia em regex (as metaBairros do backfill). As duas divergiam
+   calada, e o preço foi medido em 09/09: quatro dos onze executivos não apareciam em
+   praça nenhuma, e por isso não podiam receber carga de prospecção. */
+const territorios = requireOpcional(() => require('../data/territorios.json')) || { territorios: [] };
 const supabaseConfig = requireOpcional(() => require('../data/supabase-config.json'));
 const maptilerConfig = requireOpcional(() => require('../data/maptiler-config.json'));
 let resumoSemanal = requireOpcional(() => require('../data/resumo-semanal.json'));
@@ -327,6 +334,11 @@ function montarDadosCompletos() {
        conta. Nenhum nome, nenhum ownerId de colega, nenhuma lista. */
     habitosTime: habitosDoTime(hubspot.reps || {}, ownerIds),
     leadsReferencia: leadsReferencia.pracas || [],
+    /* O MAPA INTEIRO É DO GESTOR: é com ele que a aba Rotas sabe de quem é cada praça,
+       quem está sem rota declarada e o que ficou sem dono. O recorte do executivo está
+       mais abaixo — ele recebe só a rota dele. */
+    territorios: territorios.territorios || [],
+    territoriosSemDono: territorios._sem_dono || [],
     footerText: `Fonte: HubSpot (pipeline 916011864, atualizado a cada 2h no horário comercial) + Daily (prometido/realizado) · Leads críticos = mais antigos sem avanço de etapa.`,
     // AUTOMAÇÃO 3 (13/08/26) — status da última rodada do robô: se alguma escrita de
     // realizado_visitas/avancos/propostas falhou ou não bateu na conferência pós-escrita.
@@ -527,6 +539,12 @@ function filtrarParaPapel(dados, usuario) {
     (Array.isArray(p.responsaveis) && p.responsaveis.includes(meuNome)) || p.nome === (meuRep && meuRep.praca)
   );
 
+  /* A ROTA DELE, E SÓ A DELE. O mapa completo diz por onde cada colega anda, e território
+     de quem está ao lado não é informação do executivo — mesma regra que cortou
+     snapshotReps em 07/08. O que ele PRECISA é a própria rota, porque é ela que define
+     onde a prospecção dele acontece. */
+  const meuTerritorio = (dados.territorios || []).filter(x => x && x.rep === meuNome);
+
   /* O EXECUTIVO RECEBE O PRÓPRIO HÁBITO E O NÚMERO DO TIME — nunca o porRep inteiro.
      O spread de ...dados levaria o mapa com todo mundo, que é exatamente o vazamento
      silencioso que o corte de snapshotReps fechou em 07/08. */
@@ -604,6 +622,7 @@ function filtrarParaPapel(dados, usuario) {
     resumoSemanal: resumoSemanalFiltrado,
     agenda,
     leadsReferencia,
+    territorios: meuTerritorio,
     // AUTOMAÇÃO 3 — o relatório BRUTO do robô (falhas por executivo, verificação de
     // escrita) continua sendo do gestor. Mas o executivo precisa saber se a carga que
     // está na tela dele é confiável: recomendação em cima de snapshot velho, ou visita

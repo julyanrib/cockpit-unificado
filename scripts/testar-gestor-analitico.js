@@ -606,7 +606,13 @@ checar('o nome do executivo abre algo em todas as abas do gestor',
       "abrir: 'sel:' + r.ownerId",      /* Time: abre o dossie */
       "abrir: 'sel:' + p.ownerId",      /* Pessoas: abre a pauta do 1:1 */
       "abrir: 'abrir:' + oid",          /* Semana: expande o placar */
-      "on: 'sel:' + oid"                /* Rotas: troca a fila */
+      /* ROTAS v2 (09/09/26): a fila deixou de ser "por executivo" e virou "por praça",
+         então não existe mais `sel:` ali. O NOME CONTINUA ABRINDO ALGO, que é a regra
+         desta checagem: clicar na carteira de alguém no bloco 3 seleciona a praça dele E
+         ele mesmo no fluxo do bloco 2, e rola até lá. Cravar o endereço antigo faria esta
+         suite reprovar o desenho novo em vez de proteger o gestor — foi o que acabou de
+         acontecer, e é a mesma lição do pl4RiscoDoBalde. */
+      "on: 'carteira:' + u.ownerId"     /* Rotas: leva a pessoa para o passo 3 */
     ];
     return ACOES.every(function (a) { return templateCodigo.indexOf(a) > 0; });
   }()),
