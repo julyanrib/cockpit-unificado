@@ -453,6 +453,115 @@ function pl6RegraCSS(nome) {
     'caixa ' + iCaixa + ' fecha ' + iFecha + ' rodape ' + iRodape);
 })();
 
+/* ══ A SEMANA SEM HORÁRIO PRÉ-DEFINIDO (09/09/26) ═══════════════════════════════════
+   Julyan: "não queor horários pré definidos, eles tem q definir o horario no
+   planejamento" · "olha como ta hoje, deixar isso perfeito".
+
+   MEDIDO na tela antes de mexer: numa semana vazia a grade rendia 35 linhas de
+   "HH:MM · livre" — 1.330px somados, 100% cromo. E o crachá de etapa recebia 11px numa
+   linha de 131 (precisava de 80), saindo "PROSPE…", "NEGOCI…" na foto dele. */
+(function () {
+  function ter(s) { return tpl.indexOf(s) > -1; }
+
+  /* A HORA NÃO SE INVENTA. Era `return PL6_HORAS[si]` quando não havia hora escolhida:
+     a tela anunciava 10:30 para uma visita que ninguém marcou às 10:30. */
+  const hora = pegarFn('pl6SlotHora');
+  checar('pl6SlotHora não cai na faixa quando não há hora escolhida',
+    /if \(v && typeof v === 'object' && v\.hora\) return String\(v\.hora\);/.test(hora)
+    && /return '';/.test(hora) && hora.indexOf('PL6_HORAS[si]') < 0,
+    'hora inventada parece combinada, e o executivo chega às 10:30 onde esperam por ele às 14:00');
+
+  /* e a faixa continua disponível, com nome próprio, para as duas Dailies — que ainda
+     organizam o dia por posição e são o próximo passo */
+  checar('a faixa vira relógio só em pl6HoraDaFaixa',
+    ter('function pl6HoraDaFaixa(si) {')
+    && /pl6SlotHora\(v, si\) \|\| pl6HoraDaFaixa\(si\)/.test(tpl),
+    'as Dailies leem a grade por posição; sem este fallback elas perdem o horário do dia');
+
+  /* OS VAZIOS COLAPSAM: só o primeiro de cada dia desenha */
+  checar('os slots vazios colapsam numa linha por dia',
+    ter("if (si !== primeiroVazio) return '';")
+    && ter('+ escolher conta')
+    && ter('const primeiroVazio = vaziosDoDia.length ? vaziosDoDia[0] : -1;'),
+    'eram 35 linhas de "HH:MM · livre" e 1.330px de cromo numa semana vazia');
+
+  checar('e a contagem de vazios é feita antes do laço, não dentro',
+    tpl.indexOf('const vaziosDoDia = []') > -1
+    && tpl.indexOf('const vaziosDoDia = []') < tpl.indexOf('const slots = PL6_HORAS.map'),
+    '"é o primeiro vazio?" resolvido dentro do laço é a conta que sai errada quando alguém reordena');
+
+  /* O HORÁRIO É DELE: botão, campo e gravação */
+  checar('a hora é um botão que abre campo no próprio cartão',
+    ter('data-pl6-hora-slot=') && ter('data-pl6-hora-campo=')
+    && ter('data-pl6-hora-salvar=') && ter('data-pl6-hora-limpar='),
+    '"eles tem q definir o horario no planejamento" — e sem gaveta, que tiraria a semana da frente');
+
+  checar('os quatro verbos da hora estão no seletor da delegação',
+    ter('[data-pl6-hora-slot],[data-pl6-hora-salvar],[data-pl6-hora-limpar],'),
+    'verbo fora do seletor é clique morto: o botão existe e o handler nunca roda');
+
+  /* ESTA CHECAGEM NASCEU DE UM DEFEITO MEU. Eu chamei `renderPlanejamento6a()` sem
+     argumento no handler; a função é `renderPlanejamento6a(rep)` e sem o rep ela morre
+     dentro de pl6Regioes. O clique disparava, o handler entrava, a exceção subia, e nada
+     acontecia. Guarda nenhuma pegaria — a chamada existe e o nome está certo. */
+  const iHora = tpl.indexOf('if (d.pl6HoraSlot) {');
+  const iFim = tpl.indexOf('if (d.pl6Remover) {', iHora);
+  /* SEM OS COMENTÁRIOS: o meu próprio comentário no ramo CITA
+     "renderPlanejamento6a()" como o que não se deve fazer, e a checagem reprovava o
+     conserto por causa da nota que o explica. Sexta vez nesta base — por isso a suite
+     inteira devia ler `codigo` e não `tpl`, e é o que este recorte faz localmente. */
+  const ramo = (iHora > -1 && iFim > iHora)
+    ? tpl.slice(iHora, iFim).replace(/\/\*[\s\S]*?\*\//g, ' ') : '';
+  checar('o handler da hora redesenha pelos ganchos da tela',
+    ramo.length > 0 && ramo.indexOf('await redesenhar()') > -1
+    && ramo.indexOf('await mutar(') > -1
+    && ramo.indexOf('renderPlanejamento6a()') < 0,
+    'renderPlanejamento6a() sem o rep estoura dentro de pl6Regioes — clique vivo, nada acontecendo');
+
+  /* AS DUAS PRESENÇAS EXIGIDAS. `a.indexOf(x) < a.indexOf(y)` devolve TRUE quando x NÃO
+     EXISTE, porque indexOf dá -1 e -1 é menor que tudo: sabotei trocando a leitura do
+     campo por `nova = ''` e a checagem passou VERDE. Terceira vez que este mesmo erro me
+     pega hoje. */
+  const antesDe = function (texto, a, b) {
+    const ia = texto.indexOf(a), ib = texto.indexOf(b);
+    return ia > -1 && ib > -1 && ia < ib;
+  };
+  checar('e o campo é lido ANTES de qualquer redesenho',
+    ramo.indexOf('data-pl6-hora-campo="\' + ref + \'"') > -1
+    && antesDe(ramo, 'nova = campo', 'await mutar('),
+    'o campo vive dentro do cartão: o primeiro innerHTML novo o destrói com o valor digitado');
+
+  checar('"sem hora" volta a string simples, não um objeto com hora vazia',
+    /g\[di\]\[si\] = nova \? \{ id: id, hora: nova \} : id;/.test(tpl),
+    'um { id, hora: "" } seria um terceiro estado equivalente, com uma forma a mais para entender');
+
+  /* O CRACHÁ NÃO É MAIS ESMAGADO. Medido com estilo computado: 11px de 80 necessários. */
+  checar('o crachá de etapa saiu da linha da hora',
+    ter('.pl6-slot-tag{display:block;margin-top:1px;')
+    && tpl.indexOf("'<b class=\"pl6-slot-quem\">' + esc(l.nome) + '</b>'\n          + '<span class=\"pl6-slot-tag\"") > -1,
+    'na linha 1 ele dividia 131px com a hora (70) e o ✕ (38) e recebia 11 — saía "PROSPE…"');
+
+  /* O CABEÇALHO FALA DE VAGAS, NÃO DE HORÁRIOS */
+  checar('o cabeçalho não promete horários',
+    !ter('A semana — 5 dias · 9h→19h') && !ter(" horários livres'")
+    && ter('A semana — 5 dias'),
+    'a semana tem VAGAS; o horário de cada visita é o que ele combina com o cliente');
+
+  /* E O `+` DUPLO NÃO VOLTA. Aconteceu nesta entrega: uma junção quebrada em duas linhas,
+     a segunda começando com `+`, virou MAIS UNÁRIO sobre string — e o cabeçalho saiu
+     "nenhuma visita no plano aindaNaN". Build verde, 37 suites verdes, só a tela mostrou. */
+  const linhas = tpl.split('\n');
+  const duplos = [];
+  for (let i = 1; i < linhas.length; i++) {
+    const ant = linhas[i - 1].trimEnd();
+    const cur = linhas[i].trim();
+    if (ant.endsWith('+') && /^\+\s*\(/.test(cur)) duplos.push(i + 1);
+  }
+  checar('nenhuma junção com "+" duplo (mais unário sobre string = NaN)',
+    duplos.length === 0,
+    'linha(s) ' + duplos.join(', ') + ' — foi assim que o cabeçalho saiu "...aindaNaN"');
+}());
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);
