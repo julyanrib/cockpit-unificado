@@ -117,7 +117,46 @@ conferir('a frase segue o telefone, como a estrela segue',
   /temTelAqui \? 'ligar' : 'visitar'/.test(insight),
   'sem número o código rebaixa a ★ para visita; a frase dizia "ligar hoje" ao lado de um botão escrito "agendar visita"');
 
-/* ── 5 · O QUE NÃO SE TOCA ────────────────────────────────────────────────────────── */
+/* ── 5 · O DECK ÓRFÃO DA FILA SAIU, E OS CTAs LEVAM PARA A FILA QUE EXISTE ─────────
+   `filaDeFollowUpHTML` e `wireFilaDeFollowUp` desenhavam chips de balde e só se chamavam
+   entre si; `pl4RiscoDoBalde` e `pl4RotuloDoBalde` apareciam uma única vez no arquivo — a
+   própria definição. Três CTAs vivos ("Fazer follow-ups pendentes", "Proteger meus
+   quentes", "Confirmar próximo contato") chamavam `irParaFila`, que rolava até
+   `#filaFollowUp` e clicava em `[data-fila-balde]`: os dois nós nunca existiram. O clique
+   ia para o kanban do Meu funil, sem rolagem e sem foco. */
+['filaDeFollowUpHTML', 'wireFilaDeFollowUp', 'pl4RiscoDoBalde', 'pl4RotuloDoBalde',
+ 'pl4NotaDoDossie', 'pl4BaseDosBaldes', 'pl4BaldeAberto', 'pl4TodasAsLinhas',
+ 'PL4_LINHAS_VISIVEIS', 'filaFocoInicial'].forEach(nome => {
+  /* fora de comentário: as notas desta mudança citam os nomes de propósito */
+  const semNota = tpl.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  conferir('o deck órfão não voltou: ' + nome,
+    (semNota.match(new RegExp('\\b' + nome + '\\b', 'g')) || []).length === 0,
+    'ele desenhava uma tela sem chamador, e três CTAs vivos apontavam para ela');
+});
+
+const ir = corpoDe('irParaFila');
+conferir('irParaFila leva para a fila VIVA, na aba Hoje',
+  /activateTab\('viewMeuPainel'\)/.test(ir) && /data-h8-filtro="/.test(ir),
+  'ela ia para o Meu funil e procurava #filaFollowUp, que nunca existiu');
+
+/* COBRA O CONTEÚDO DO MAPA, e não só o fallback: a primeira versão desta checagem
+   aprovou uma sabotagem que acrescentou `hoje: 'sla'` — um mapeamento que ESCONDE item,
+   porque um follow-up de hoje que não estourou a régua não aparece no filtro `sla`.
+   Mapear balde em filtro é decisão de produto e cada entrada nova pede revisão. */
+conferir('e não promete recorte que possa esconder o item',
+  /FILTRO_DO_BALDE\[String\(balde \|\| ''\)\] \|\| 'todas'/.test(ir) &&
+  /const FILTRO_DO_BALDE = \{ quente_sem_tarefa: 'quente' \};/.test(ir),
+  'a categoria da linha é por NEGÓCIO (sla/quente/follow); balde não mapeia 1-para-1 nela');
+
+conferir('a rolagem acontece DEPOIS do filtro',
+  ir.indexOf('chip.click()') < ir.indexOf('smoothScrollTo'),
+  'clicar repinta a fila; rolar antes aterrissa onde o cartão estava');
+
+conferir('.fila-cta sobreviveu — ela tem uso vivo',
+  /\.fila-cta\{/.test(tpl) && (tpl.match(/class="[^"]*fila-cta/g) || []).length >= 1,
+  'só os chips de balde saíram; a CTA da linha da fila continua em uso');
+
+/* ── 6 · O QUE NÃO SE TOCA ────────────────────────────────────────────────────────── */
 conferir('nada foi escrito no HubSpot por causa disto',
   !/from\(['"]?hubspot/.test(valor) && !/api\/criar/.test(valor),
   'amount e mrr são o que o RPA/ASAAS lê para gerar o link de cobrança: aqui só se lê');
