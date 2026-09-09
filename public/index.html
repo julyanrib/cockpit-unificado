@@ -34543,6 +34543,50 @@ function dg4MinutosParaTrava() {
   return Math.round((trava - agora) / 60000);
 }
 
+function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
+  const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
+    ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
+  const vazio = { horas: horas, porHora: {}, semHora: [], daGrade: false, planejados: 0 };
+  const g = linhaSemana && Array.isArray(linhaSemana.grade) ? linhaSemana.grade : null;
+  if (!g || !g.length || !diaISO) return vazio;
+
+  const seg = String(linhaSemana.data_segunda || '').slice(0, 10);
+  if (!seg) return vazio;
+  const dif = Math.round((new Date(diaISO + 'T12:00:00') - new Date(seg + 'T12:00:00')) / 86400000);
+  if (!(dif >= 0 && dif < g.length)) return vazio;
+
+  const coluna = Array.isArray(g[dif]) ? g[dif] : [];
+  const RUA = (typeof PL6_RUA !== 'undefined') ? PL6_RUA : '__rua';
+  const BLOQ = (typeof PL6_BLOQUEADO !== 'undefined') ? PL6_BLOQUEADO : '__b';
+
+  const porHora = {};
+  let planejados = 0;
+  coluna.forEach(function (v, si) {
+    if (!v) return;
+    const cru = (typeof v === 'object') ? (v.id || null) : v;
+    if (!cru || cru === BLOQ) return;
+    const hora = (v && typeof v === 'object' && v.hora) ? String(v.hora) : (horas[si] || '');
+    if (!hora) return;
+    if (cru === RUA) {
+      porHora[hora] = { id: null, dealId: null, nome: 'volta de rua', hora: hora, acao: '',
+        origem: 'rua', _daGrade: true };
+      planejados += 1;
+      return;
+    }
+    const dealId = String(cru).indexOf('c-') === 0 ? String(cru).slice(2) : null;
+    const doFunil = dealId ? (mapaFunil || {})[dealId] : null;
+    porHora[hora] = {
+      id: String(cru), dealId: dealId, hora: hora, acao: '',
+      nome: doFunil ? doFunil.nome : (String(cru).indexOf('n-') === 0 ? 'conta nova da prospecção' : String(cru)),
+      origem: String(cru).indexOf('n-') === 0 ? 'lote' : null,
+      _daGrade: true
+    };
+    planejados += 1;
+  });
+
+  return { horas: horas, porHora: porHora, semHora: [], daGrade: true, planejados: planejados };
+}
+
 function dg4SlotsDoPlano(plano) {
   const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
     ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
@@ -34641,9 +34685,19 @@ function dg4Dados(ctx) {
   const medidos = reps.map(function (r) {
     const oid = String(r.ownerId);
     const plano = planos[oid] || null;
-    const grade = dg4SlotsDoPlano(plano);
+
+    const doPlano = dg4SlotsDoPlano(plano);
+    const temDoPlano = doPlano.horas.some(function (h) { return doPlano.porHora[h]; })
+      || doPlano.semHora.length > 0;
+    const daGrade = temDoPlano
+      ? { horas: doPlano.horas, porHora: {}, semHora: [], daGrade: false, planejados: 0 }
+      : dg4SlotsDaGrade((c.grades || {})[oid] || null, c.diaEmFoco || hoje, mapaFunil);
+    const grade = temDoPlano ? doPlano : daGrade;
     const preenchidos = grade.horas.filter(function (h) { return grade.porHora[h]; });
-    const temPlano = !!plano && (preenchidos.length > 0 || grade.semHora.length > 0);
+
+    const veioDaGrade = !temDoPlano && preenchidos.length > 0;
+    const temPlano = (!!plano && (preenchidos.length > 0 || grade.semHora.length > 0))
+      || veioDaGrade;
     const travada = !!plano && plano.status === 'plano_fechado';
     const daily = (typeof getDaily === 'function') ? (getDaily(oid, (typeof dailyRefDate !== 'undefined') ? dailyRefDate : hoje) || {}) : {};
 
@@ -34667,7 +34721,9 @@ function dg4Dados(ctx) {
 
     return { r: r, oid: oid, plano: plano, grade: grade, preenchidos: preenchidos,
       temPlano: temPlano, travada: travada, daily: daily, quentes: quentes,
-      novas: novas, origemRegistrada: origemRegistrada };
+      novas: novas, origemRegistrada: origemRegistrada,
+
+      veioDaGrade: veioDaGrade };
   });
 
   const peso = function (x) { return !x.temPlano ? 0 : (x.travada ? 2 : 1); };
@@ -34680,10 +34736,14 @@ function dg4Dados(ctx) {
   const semPlano = medidos.filter(function (x) { return !x.temPlano; });
   const abertas = medidos.filter(function (x) { return x.temPlano && !x.travada; });
   const travadas = medidos.filter(function (x) { return x.travada; });
+
+  const naGrade = medidos.filter(function (x) { return x.veioDaGrade; });
   const minutos = dg4MinutosParaTrava();
   const antesDaTrava = ehHoje && minutos > 0;
 
   const somaVisitas = medidos.reduce(function (t, x) { return t + (Number(x.daily.prometido_visitas) || 0); }, 0);
+
+  const somaPlanejadas = medidos.reduce(function (t, x) { return t + x.preenchidos.length; }, 0);
   const somaNovas = medidos.reduce(function (t, x) { return t + x.novas; }, 0);
   const somaQuentes = medidos.reduce(function (t, x) { return t + x.quentes.length; }, 0);
   const algumSemOrigem = medidos.some(function (x) { return x.temPlano && !x.origemRegistrada; });
@@ -34695,11 +34755,16 @@ function dg4Dados(ctx) {
     { rot: 'prospecções novas', v: 'não medido', de: '', cor: '#A79C8A' },
     { rot: 'quentes fora do plano', v: String(somaQuentes), de: 'do HubSpot, esse número vale', cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
   ] : [
-    { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length,
+    { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length
+        + (naGrade.length ? ' (' + naGrade.length + ' pela grade)' : ''),
       de: semPlano.length ? (semPlano.length + ' sem montar') : 'todo mundo montou', cor: semPlano.length ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'promessas travadas', v: travadas.length + '/' + medidos.length,
       de: antesDaTrava ? (abertas.length + ' ainda editável(is)') : 'janela fechada', cor: travadas.length === medidos.length ? '#7FD9BE' : '#F0B45C' },
-    { rot: 'visitas prometidas', v: String(somaVisitas), de: 'soma do time', cor: '#FFFDF8' },
+    { rot: 'visitas prometidas', v: String(somaVisitas),
+      de: somaPlanejadas > somaVisitas
+        ? somaPlanejadas + ' planejadas na grade'
+        : 'soma do time',
+      cor: '#FFFDF8' },
     { rot: 'prospecções novas', v: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
       de: algumSemOrigem ? 'origem não registrada em algum plano' : 'contas do lote nos slots', cor: somaNovas ? '#7FD9BE' : '#F0B45C' },
     { rot: 'quentes fora do plano', v: String(somaQuentes),
@@ -34720,12 +34785,14 @@ function dg4Dados(ctx) {
 
   const rodada = medidos.map(function (x, i) {
     const sel = s.foco === x.oid;
-    const st = !x.temPlano ? 'sem plano' : (x.travada ? '✓' : 'aberta');
+    const st = !x.temPlano ? 'sem plano'
+      : (x.travada ? '✓' : (x.veioDaGrade ? 'na grade' : 'aberta'));
     return {
       pos: (i + 1) + 'º',
       nome: esc(String(x.r.name || '').split(' ')[0]),
       st: st,
-      stCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#8A6516'),
+      stCor: !x.temPlano ? '#6E1210'
+        : (x.travada ? '#1E9E7B' : (x.veioDaGrade ? '#2B3440' : '#8A6516')),
       bg: sel ? '#2B3440' : '#FDFEFF',
       cor: sel ? '#FDFEFF' : '#2B3440',
       nCor: sel ? '#FF8D9A' : '#8E3B5C',
@@ -34822,7 +34889,9 @@ function dg4Dados(ctx) {
             : 'travou ' + x.preenchidos.length + ' de ' + x.grade.horas.length + ' horários e nenhum quente ficou fora: reconheça na rodada');
 
     const acao = (!x.temPlano || !x.travada)
-      ? { on: 'cobrar:' + oid, rot: cobrado ? '✓ cobrado nesta rodada' : (x.temPlano ? 'cobrar a trava ▸' : 'cobrar o plano agora ▸'),
+      ? { on: 'cobrar:' + oid, rot: cobrado ? '✓ cobrado nesta rodada'
+        : (!x.temPlano ? 'cobrar o plano agora ▸'
+          : (x.veioDaGrade ? 'pedir para travar o dia ▸' : 'cobrar a trava ▸')),
         bg: cobrado ? '#EAF6F1' : '#E51A31', cor: cobrado ? '#1E9E7B' : '#FFFDF8', borda: cobrado ? '#CBE8DD' : '#E51A31' }
       : { on: 'reconhecer:' + oid, rot: reconhecido ? '✓ reconhecimento registrado' : 'mandar reconhecimento ▸',
         bg: reconhecido ? '#EAF6F1' : '#1E9E7B', cor: reconhecido ? '#1E9E7B' : '#FFFDF8', borda: reconhecido ? '#CBE8DD' : '#1E9E7B' };
@@ -34833,9 +34902,11 @@ function dg4Dados(ctx) {
       praca: esc((r.praca || 'praça não declarada')
         + ' · ' + ((x.plano && x.plano.local_atuacao) ? x.plano.local_atuacao : 'sem rota escolhida')),
       rota: esc((x.plano && x.plano.local_atuacao) || 'sem rota escolhida'),
-      status: !x.temPlano ? 'SEM PLANO' : (x.travada ? 'TRAVADA ✓' : 'PROMESSA ABERTA'),
-      stBg: !x.temPlano ? '#6E1210' : (x.travada ? '#EAF6F1' : '#FDF6E7'),
-      stCor: !x.temPlano ? '#FDFEFF' : (x.travada ? '#1E9E7B' : '#8A6516'),
+
+      status: !x.temPlano ? 'SEM PLANO'
+        : (x.travada ? 'TRAVADA ✓' : (x.veioDaGrade ? 'PLANEJOU NA GRADE' : 'PROMESSA ABERTA')),
+      stBg: !x.temPlano ? '#6E1210' : (x.travada ? '#EAF6F1' : (x.veioDaGrade ? '#EDEFF4' : '#FDF6E7')),
+      stCor: !x.temPlano ? '#FDFEFF' : (x.travada ? '#1E9E7B' : (x.veioDaGrade ? '#2B3440' : '#8A6516')),
       avBg: !x.temPlano ? '#6E1210' : '#E51A31',
       bg: !x.temPlano ? '#FDF7F7' : '#FDFEFF',
       borda: focado ? '#2B3440' : (!x.temPlano ? '#E3C6C6' : '#E2E6EE'),
@@ -35146,6 +35217,8 @@ async function renderDaily() {
 
   let planosLidos = true;
 
+  let gradePorOwner = {}, gradeLida = true;
+
   let rotaHojePorOwner = {}, rotaSemanaTotal = null, rotaHojeTotal = null;
   if (!souRepDailyPre) {
 
@@ -35157,6 +35230,18 @@ async function renderDaily() {
       planosLidos = false;
     } else {
       (planosData || []).forEach(p => { planosPorOwner[String(p.owner_id)] = p; });
+    }
+
+    const segundaDoFoco = addDays(dailyRefDate,
+      -(((new Date(dailyRefDate + 'T12:00:00').getDay()) === 0 ? 7 : (new Date(dailyRefDate + 'T12:00:00').getDay())) - 1));
+    const { data: gradeData, error: gradeErro } = await supa.from('planos_semanais')
+      .select('owner_id,data_segunda,grade,regioes,fechado_em')
+      .eq('data_segunda', segundaDoFoco);
+    if (gradeErro) {
+      console.error('Daily — grade da semana:', gradeErro.message);
+      gradeLida = false;
+    } else {
+      (gradeData || []).forEach(function (l) { gradePorOwner[String(l.owner_id)] = l; });
     }
 
     const dowRota = new Date(dailyRefDate + 'T12:00:00').getDay();
@@ -36626,6 +36711,7 @@ async function renderDaily() {
 
     DG4_CTX = {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
+      grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
       frescor: frescorDaily
     };
     html = '<div id="dg4Raiz" data-dg4-raiz="1">'
