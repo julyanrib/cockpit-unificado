@@ -10154,7 +10154,11 @@ const FILA_BALDES = [
 
 function filaDeFollowUp(ownerId) {
   const hojeK = isoDate(new Date());
-  const leads = meusNegociosAbertos(ownerId);
+
+  const FILA_ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470',
+    '1395880471', '1395880472', '1395880473'];
+  const leads = meusNegociosAbertos(ownerId)
+    .filter(l => FILA_ETAPAS_ABERTAS.indexOf(String(l.stageId)) > -1);
   const quentesIds = new Set((typeof agendaQuentes === 'function'
     ? agendaQuentes([{ ownerId }]) : []).map(l => String(l.id)));
 
@@ -11925,7 +11929,10 @@ async function renderMeuPainel() {
   const meusQuentesCount = agendaQuentes([r]).length;
   const acimaDoSlaCount = (r.travados || []).length;
 
-  const negociosDoRep = meusNegociosAbertos(r.ownerId);
+  const FUNIL_ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470',
+    '1395880471', '1395880472', '1395880473'];
+  const negociosDoRep = meusNegociosAbertos(r.ownerId)
+    .filter(l => FUNIL_ETAPAS_ABERTAS.indexOf(String(l.stageId)) > -1);
   const comPassoCount = negociosDoRep.filter(l => leadTemProximoPasso(l)).length;
 
   const ontemDados = h9Ontem(r)
@@ -12655,7 +12662,12 @@ function fn2Prazo(etapa) {
 }
 
 function fn2Valor(lead) {
-  const n = Number((lead && (lead.valor || lead.mrr || lead.amount)) || 0);
+  const n = Number((lead && (lead.mrr || lead.valor_de_mrr)) || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+function fn2ValorContrato(lead) {
+  const n = Number((lead && (lead.valor || lead.amount)) || 0);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
@@ -13201,7 +13213,9 @@ function fn3Estado(lead, stageId) {
   if (stageId === '1395880473') {
 
     const quando = lead.dias === 0 ? 'HOJE' : lead.dias === 1 ? 'ONTEM' : 'HÁ ' + lead.dias + 'D';
-    const rs = fn2Valor(lead) > 0 ? fn2Rs(fn2Valor(lead)) + '/mês' : null;
+
+    const rs = fn2Valor(lead) > 0 ? fn2Rs(fn2Valor(lead)) + '/mês'
+      : (fn2ValorContrato(lead) > 0 ? fn2Rs(fn2ValorContrato(lead)) + ' contrato' : null);
     return {
       ...base, pagto: true,
       chip: 'ASSINOU ' + quando + ' 🎉',
@@ -13255,8 +13269,10 @@ function fn3Contexto(lead) {
   if (lead.origem_do_lead) partes.push(esc(String(lead.origem_do_lead).toLowerCase()));
   const dor = lead.gargalo_operacional || lead.qual_maior_desafio_;
   if (dor) partes.push('dor: ' + esc(dor));
+
   const v = fn2Valor(lead);
   if (v > 0) partes.push('<b>' + fn2Rs(v) + '/mês</b>');
+  else { const c = fn2ValorContrato(lead); if (c > 0) partes.push('<b>' + fn2Rs(c) + ' contrato</b>'); }
   if (!partes.length && lead.ultimaInteracao) {
     const q = fn2Quando(lead.ultimaInteracao);
     if (q) partes.push('último toque ' + esc(q));

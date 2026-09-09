@@ -14298,7 +14298,22 @@ const FILA_BALDES = [
 
 function filaDeFollowUp(ownerId) {
   const hojeK = isoDate(new Date());
-  const leads = meusNegociosAbertos(ownerId);
+  /* ══ A FILA DO DIA NÃO OFERECE NEGÓCIO FECHADO (08/09/26) ═══════════════════════════
+     `meusNegociosAbertos` não filtra etapa, apesar do nome — ela varre todas as chaves de
+     DATA.funilLeads, e ali estão Perdido, Ganho, Enviado Onboarding e Reciclagem. Medido
+     na carga do Bruno: o "UAU UNIDADE PENHA", PERDIDO em 02/09, entrava no balde
+     "visitada e sem próximo passo" e aparecia na fila de trabalho do dia. A tela mandava
+     ele datar o próximo passo de um negócio que ele já perdeu — e isso não é um número
+     errado, é uma tarefa falsa no dia dele.
+
+     OS CINCO BALDES SÃO TODOS DE AÇÃO (follow-up de hoje, visita sem passo, cadência
+     atrasada, quente sem tarefa, proposta sem data de decisão). Nenhum deles significa
+     coisa nenhuma para um negócio fechado, então o corte é na entrada e vale para os
+     cinco. */
+  const FILA_ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470',
+    '1395880471', '1395880472', '1395880473'];
+  const leads = meusNegociosAbertos(ownerId)
+    .filter(l => FILA_ETAPAS_ABERTAS.indexOf(String(l.stageId)) > -1);
   const quentesIds = new Set((typeof agendaQuentes === 'function'
     ? agendaQuentes([{ ownerId }]) : []).map(l => String(l.id)));
 
@@ -16779,7 +16794,28 @@ async function renderMeuPainel() {
   // deixou de ter denominador. No lugar dele entra o sinal que responde à mesma
   // preocupação sem depender de declaração: quantos dos seus negócios abertos têm um
   // próximo passo datado no HubSpot.
-  const negociosDoRep = meusNegociosAbertos(r.ownerId);
+  /* ══ O DENOMINADOR CONTAVA NEGÓCIO FECHADO (08/09/26) ═══════════════════════════════
+     `meusNegociosAbertos` NÃO filtra etapa, apesar do nome: ela varre todas as chaves de
+     DATA.funilLeads, e ali estão também Perdido, Ganho, Enviado Onboarding e Reciclagem.
+     Medido na carga do Bruno: 38 negócios, sendo 37 abertos + 1 Perdido — e o tile dizia
+     "0/38 com próximo passo · Datar os 37 visitados", cobrando próximo passo de um
+     negócio que ele já perdeu. O próprio tile se contradizia: 38 no denominador, 37 no
+     CTA ao lado.
+
+     NÃO CONSERTEI DENTRO DA FUNÇÃO, e isso foi medido antes: filtrando na fonte, o filtro
+     "todas · 37" da fila virava 36 (ele já subtrai por outro caminho) e a lista de
+     perdidos do Meu funil ficava VAZIA — ela precisa dos fechados. São 23 pontos de
+     chamada, cada um com intenção própria; mexer na fonte consertaria um número e
+     quebraria dois. O corte mora aqui, onde o número é exibido.
+
+     O NOME DA FUNÇÃO CONTINUA MENTINDO, e é dela que nasce esta classe de defeito. Os
+     outros 22 usos ficam como estão até cada um ser conferido de perto — trocar o
+     comportamento de todos de uma vez é exatamente o que a medição acima mostrou ser
+     errado. */
+  const FUNIL_ETAPAS_ABERTAS = ['1395880469', '1396005401', '1395880470',
+    '1395880471', '1395880472', '1395880473'];
+  const negociosDoRep = meusNegociosAbertos(r.ownerId)
+    .filter(l => FUNIL_ETAPAS_ABERTAS.indexOf(String(l.stageId)) > -1);
   const comPassoCount = negociosDoRep.filter(l => leadTemProximoPasso(l)).length;
 
   // ÚLTIMO DIA NA RUA (27/08/26) — este card era "Último compromisso · prometido ×
@@ -17957,8 +17993,34 @@ function fn2Prazo(etapa) {
   return 'régua: ' + etapa.prazo + ' ' + quanto;
 }
 
+/* ══ O DINHEIRO DO FUNIL É MENSAL, E FALTAVA UM CAMPO (08/09/26) ═══════════════════════
+   Ela lia `lead.valor || lead.mrr || lead.amount`, e os dois lugares que exibem este
+   número escrevem "/mês" ao lado dele. Dois defeitos nisso, os dois medidos no snapshot
+   ao vivo (158 negócios abertos do time):
+
+     1. `valor_de_mrr` NÃO ESTAVA NA LISTA. São 17 negócios com esse campo preenchido, e
+        8 deles não têm nenhum dos outros três — o dinheiro deles era invisível. Na
+        carteira do Bruno isso aparecia como "R$ 1,2k em jogo (3 de 37 com valor)" quando
+        são 4 negócios e R$ 1.703: a DONNA MARIA, de R$ 549, guarda o valor em
+        `valor_de_mrr` e sumia da conta.
+
+     2. UNIDADES MISTURADAS. `valor` é total de contrato e `mrr` é mensalidade; ela pegava
+        `valor` PRIMEIRO e o rótulo dizia "/mês". São 5 negócios com os dois campos, e o
+        "em jogo" somava contrato de uns com mensalidade de outros.
+
+   AGORA ELA É MENSAL, e só. O total de contrato não desaparece: `fn2ValorContrato` o
+   devolve para as duas linhas que mostram um negócio, com a palavra "contrato" —
+   exatamente o que `tm2ValorDoNegocio` já fazia na aba Time. Nada é escrito no HubSpot:
+   `amount` e `mrr` são o que o RPA/ASAAS lê, e aqui só se lê. */
 function fn2Valor(lead) {
-  const n = Number((lead && (lead.valor || lead.mrr || lead.amount)) || 0);
+  const n = Number((lead && (lead.mrr || lead.valor_de_mrr)) || 0);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/* o total de contrato, para quando não há mensalidade — some do "em jogo" (que é mensal)
+   e aparece na linha do negócio, dito como contrato. */
+function fn2ValorContrato(lead) {
+  const n = Number((lead && (lead.valor || lead.amount)) || 0);
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
@@ -18723,7 +18785,10 @@ function fn3Estado(lead, stageId) {
     /* PAGAMENTO: o contrato foi assinado e a cobrança do ASAAS saiu quando o negócio
        entrou aqui. Quem falta é o cliente, não o dado. */
     const quando = lead.dias === 0 ? 'HOJE' : lead.dias === 1 ? 'ONTEM' : 'HÁ ' + lead.dias + 'D';
-    const rs = fn2Valor(lead) > 0 ? fn2Rs(fn2Valor(lead)) + '/mês' : null;
+    /* aqui o contrato JA foi assinado: se nao ha mensalidade, o total de contrato e a
+       informacao que existe — dita como contrato, nao como '/mes'. */
+    const rs = fn2Valor(lead) > 0 ? fn2Rs(fn2Valor(lead)) + '/mês'
+      : (fn2ValorContrato(lead) > 0 ? fn2Rs(fn2ValorContrato(lead)) + ' contrato' : null);
     return {
       ...base, pagto: true,
       chip: 'ASSINOU ' + quando + ' 🎉',
@@ -18818,8 +18883,11 @@ function fn3Contexto(lead) {
   if (lead.origem_do_lead) partes.push(esc(String(lead.origem_do_lead).toLowerCase()));
   const dor = lead.gargalo_operacional || lead.qual_maior_desafio_;
   if (dor) partes.push('dor: ' + esc(dor));
+  /* MENSALIDADE OU CONTRATO, com a palavra certa em cada caso. Antes o total de
+     contrato saia rotulado '/mês' — ver a nota em fn2Valor. */
   const v = fn2Valor(lead);
   if (v > 0) partes.push('<b>' + fn2Rs(v) + '/mês</b>');
+  else { const c = fn2ValorContrato(lead); if (c > 0) partes.push('<b>' + fn2Rs(c) + ' contrato</b>'); }
   if (!partes.length && lead.ultimaInteracao) {
     const q = fn2Quando(lead.ultimaInteracao);
     if (q) partes.push('último toque ' + esc(q));
