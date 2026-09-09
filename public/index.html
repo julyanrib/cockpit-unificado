@@ -972,14 +972,27 @@
   #sm9Raiz [data-sm9-hv="2"]:hover{filter:brightness(1.05);}
   #sm9Raiz [data-sm9-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
 
-  #sm9Raiz [data-sm3-hv]{cursor:pointer;}
-  #sm9Raiz [data-sm3-hv="0"]:hover{filter:brightness(1.08);}
-  #sm9Raiz [data-sm3-hv="1"]:hover{filter:brightness(1.06);}
-  #sm9Raiz [data-sm3-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
+  #sm9Raiz [data-sm4-hv]{cursor:pointer;}
+  #sm9Raiz [data-sm4-hv="0"]:hover{opacity:.85;}
+  #sm9Raiz [data-sm4-hv="1"]:hover{border-color:#8E3B5C;color:#8E3B5C;}
+  #sm9Raiz [data-sm4-hv="2"]:hover{filter:brightness(1.08);}
+  #sm9Raiz [data-sm4-hv="3"]:hover{filter:brightness(1.05);}
+  #sm9Raiz [data-sm4-hv="4"]:hover{background:#FBFAF6;}
+  #sm9Raiz [data-sm4-hv="5"]:hover{border-color:#8E3B5C;}
+  #sm9Raiz [data-sm4-hv="6"]:hover{background:#F4F1EA;}
+  #sm9Raiz [data-sm4-hv="7"]:hover{filter:brightness(1.06);}
+  #sm9Raiz [data-sm4-hv="8"]:hover{filter:brightness(1.04);}
+  #sm9Raiz [data-sm4-hv="9"]:hover{color:#E51A31;}
+  #sm9Raiz [data-sm4-hv="10"]:hover{background:#E51A31;border-color:#E51A31;}
+  #sm9Raiz [data-sm4-hv="11"]:hover{background:#8E3B5C;color:#FDFEFF;}
+  #sm9Raiz [data-sm4-acao]{cursor:pointer;}
+  #sm9Raiz [data-sm4-acao]:focus-visible{outline:2px solid #2B3440;outline-offset:2px;}
 
-  @media (max-width: 640px) {
-    #sm9Raiz [data-sm3-raiz] span[style*="flex:none"]{flex:0 1 auto !important;min-width:0;}
-    #sm9Raiz [data-sm3-raiz] button[style*="white-space:nowrap"]{white-space:normal !important;text-align:center;}
+  @media (max-width: 1240px){
+    #sm9Raiz [data-sm4-raiz] [style*="1.25fr"]{grid-template-columns:minmax(0,1fr) !important;}
+  }
+  @media (max-width: 1050px){
+    #sm9Raiz [data-sm4-raiz] [style*="repeat(3,minmax(0,1fr))"]{grid-template-columns:minmax(0,1fr) !important;}
   }
 
   @media (pointer:coarse){
@@ -18051,7 +18064,7 @@ function kpiDeltaHtml(key) {
 
 function preencherCabecalhoRodape() {
 
-  const repsCadastrados = (DATA.usuarios || []).filter(u => u.role === 'rep');
+  const repsCadastrados = (DATA.usuarios || []).filter(u => u.role === 'rep' && u.fieldStatus !== 'transicao_inside');
   const emPreparacao = repsCadastrados.filter(u => u.aComecar).length;
   const ativos = repsCadastrados.length
     ? repsCadastrados.length - emPreparacao
@@ -18528,7 +18541,7 @@ function tl5Semana(d) {
   return seg.getFullYear() + '-' + String(seg.getMonth() + 1).padStart(2, '0') + '-' + String(seg.getDate()).padStart(2, '0');
 }
 
-const TL5_RITUAL = { cobranca_daily: 'daily', cobranca_negocio: 'daily', um_a_um: 'um_a_um', boa_pratica: 'semanal', combinado: 'semanal', acao_semana: 'semanal', modo_agir: 'semanal' };
+const TL5_RITUAL = { cobranca_daily: 'daily', cobranca_negocio: 'daily', um_a_um: 'um_a_um', boa_pratica: 'semanal', combinado: 'semanal', acao_semana: 'semanal', modo_agir: 'semanal', campo_semana: 'campo' };
 
 async function tl5CarregarPauta() {
   TL5_ESTADO.pauta = {};
@@ -18573,7 +18586,7 @@ async function tl5CarregarPauta() {
 
 function tl5Chave(chaveDaTela) { return chaveDaTela + ':' + tl5Semana(); }
 
-async function tl5Alternar(tipo, alvoOwnerId, titulo, detalhe, chaveDaTela) {
+async function tl5Alternar(tipo, alvoOwnerId, titulo, detalhe, chaveDaTela, ritualDoItem) {
   if (typeof supa === 'undefined' || !supa) {
     TL5_ESTADO.toast = 'sem conexão com o Supabase aqui — nada foi gravado';
     return;
@@ -18589,7 +18602,7 @@ async function tl5Alternar(tipo, alvoOwnerId, titulo, detalhe, chaveDaTela) {
     } else {
       const linha = {
         tipo, alvo_owner_id: alvoOwnerId || null, titulo, detalhe: detalhe || null,
-        ritual: TL5_RITUAL[tipo] || 'daily',
+        ritual: ritualDoItem || TL5_RITUAL[tipo] || 'daily',
         chave: tl5Chave(chaveDaTela),
         criado_por: (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || null
       };
@@ -40262,9 +40275,15 @@ function wireFocoDeHabilidade(rootEl) {
   });
 }
 
+function ehDeCampo(u) {
+  return !!u && u.role === 'rep' && !u.aComecar && u.fieldStatus !== 'transicao_inside';
+}
+function elencoDeCampo() {
+  return (DATA.usuarios || []).filter(ehDeCampo);
+}
+
 function ps6Ativos() {
-  const us = (DATA.usuarios || []).filter(u => u.role === 'rep' && !u.aComecar && u.fieldStatus !== 'transicao_inside');
-  return us.map(u => String(u.ownerId));
+  return elencoDeCampo().map(u => String(u.ownerId));
 }
 function ps6Rampa() {
   return (DATA.usuarios || []).filter(u => u.role === 'rep' && u.aComecar);
@@ -41771,7 +41790,7 @@ const SM3_MODOS = {
   reconhecer:  { rot: 'reconhecer',        cor: '#1E9E7B', bg: '#EAF6F1' }
 };
 
-const SM3_ESTADO = { combinados: [], cumprimento: {}, modos: {}, toast: null, carregado: false };
+const SM3_ESTADO = { combinados: [], cumprimento: {}, modos: {}, falhouLeitura: false, carregado: false };
 let SM3_OUVINTE = false;
 let SM3_GRAVANDO = false;
 
@@ -41803,7 +41822,8 @@ function sm3AbertosPorEtapa() {
 function sm3NegociosDoTime() {
   const vistos = new Set();
   const fora = [];
-  (DATA.usuarios || []).filter(u => u.role === 'rep').forEach(u => {
+
+  elencoDeCampo().forEach(u => {
     const rep = (DATA.reps || []).find(r => String(r.ownerId) === String(u.ownerId));
     if (!rep) return;
     [].concat(rep.criticos || [], rep.quentes || []).forEach(l => {
@@ -42076,407 +42096,1332 @@ function sm3ModoDe(u, P) {
   return { modo, diag, sugerido: ov && ov.modo ? null : modo, cum, p, cad };
 }
 
-function sm3Gargalos(P) {
-  const leads = sm3AbertosPorEtapa();
-  const nomeDe = o => (typeof rt7Nome === 'function' ? String(rt7Nome(o)).split(' ')[0] : 'sem dono');
+const SM4_ESTADO = { abertos: {}, painel: null, pautaAberta: false, toast: null };
+let SM4_OUVINTE = false;
+let SM4_GRAVANDO = false;
+
+const SM4_DESTINOS = {
+  daily:   { rot: 'Daily de amanhã',    bg: '#B07C1F' },
+  um_a_um: { rot: 'sua agenda · 1:1',   bg: '#6E1210' },
+  semanal: { rot: 'Semanal · seg 8h30', bg: '#1E9E7B' },
+  campo:   { rot: 'sua agenda · campo', bg: '#8E3B5C' }
+};
+function sm4Destino(tipo) {
+  const r = (typeof TL5_RITUAL !== 'undefined' && TL5_RITUAL[tipo]) || 'daily';
+  return SM4_DESTINOS[r] || SM4_DESTINOS.daily;
+}
+
+const SM4_ETAPA_COR = {
+  '1395880469': { cor: '#5B667A', bg: '#F2F4F8' },
+  '1396005401': { cor: '#8A6516', bg: '#FDF6E7' },
+  '1395880470': { cor: '#8A6516', bg: '#FDF6E7' },
+  '1395880471': { cor: '#2B3440', bg: '#F2F4F8' },
+  '1395880472': { cor: '#8E3B5C', bg: '#FBF5F8' },
+  '1395880473': { cor: '#8E3B5C', bg: '#FBF5F8' }
+};
+const SM4_ATIV = { cor: '#5B667A', bg: '#F2F4F8' };
+const SM4_GANHO = { cor: '#1E9E7B', bg: '#EAF6F1' };
+
+function sm4EtapaDe(l) {
+  const id = String((l && (l.stageId || l.stage)) || '');
+  const est = SM4_ETAPA_COR[id] || SM4_ATIV;
+  const rot = (l && l.stage) || ((DATA.stageMeta || {})[id] || {}).label || 'etapa não informada';
+  return { rot: rot, cor: est.cor, bg: est.bg };
+}
+
+function sm4Valor(l) {
+  const m = Number(l && (l.mrr || l.valor_de_mrr)) || 0;
+  if (!m) return 'sem valor no CRM';
+  return (typeof tl5Mil === 'function') ? tl5Mil(m) + '/mês' : 'R$ ' + m + '/mês';
+}
+
+function sm4Toque(l) {
+  const iso = l && l.ultimaInteracao;
+  if (!iso) return { txt: 'sem registro de toque no CRM', ruim: false };
+  const dt = new Date(iso);
+  if (isNaN(dt)) return { txt: 'sem registro de toque no CRM', ruim: false };
+  const agora = (typeof agendaAgora === 'function') ? agendaAgora() : new Date();
+  const dias = Math.floor((agora - dt) / 86400000);
+  const curta = (typeof tm2DataCurta === 'function') ? tm2DataCurta(iso) : String(iso).slice(0, 10);
+  if (dias <= 0) return { txt: 'hoje', ruim: false };
+  if (dias === 1) return { txt: 'ontem', ruim: false };
+  return { txt: 'há ' + dias + ' dias (' + curta + ')', ruim: dias >= 5 };
+}
+
+function sm4Prox(l) {
+  const a = l && l.proximaAtividade;
+  if (a) {
+    const curta = (typeof tm2DataCurta === 'function') ? tm2DataCurta(a) : String(a).slice(0, 10);
+    return { txt: 'próximo passo: ' + curta, ruim: false };
+  }
+  return { txt: '— nenhum agendado', ruim: !!(l && l.slaBreach) };
+}
+
+function sm4Linha(l, nota) {
+  const e = sm4EtapaDe(l);
+  const tq = sm4Toque(l);
+  const px = sm4Prox(l);
+  return {
+    nome: (l && (l.name || l.dealname)) || 'negócio sem nome no CRM',
+    etapa: e.rot, eCor: e.cor, eBg: e.bg,
+    valor: sm4Valor(l),
+    toque: tq.txt, tCor: tq.ruim ? '#E51A31' : '#2B3440',
+    prox: px.txt, pCor: px.ruim ? '#E51A31' : '#1E9E7B',
+    temNota: !!nota, nota: nota || ''
+  };
+}
+
+function sm4LinhaTexto(nome, valor, toque, ruim, prox, nota) {
+  return {
+    nome: nome, etapa: 'Atividade', eCor: SM4_ATIV.cor, eBg: SM4_ATIV.bg,
+    valor: valor, toque: toque || '', tCor: ruim ? '#E51A31' : '#2B3440',
+    prox: prox || '—', pCor: ruim ? '#E51A31' : '#1E9E7B',
+    temNota: !!nota, nota: nota || ''
+  };
+}
+
+function sm4LinhaGanho(nome, valor, quando, nota) {
+  return {
+    nome: nome, etapa: 'Fechado-ganho', eCor: SM4_GANHO.cor, eBg: SM4_GANHO.bg,
+    valor: valor, toque: quando || 'nesta semana', tCor: '#2B3440',
+    prox: 'fechado ✓', pCor: '#1E9E7B',
+    temNota: !!nota, nota: nota || ''
+  };
+}
+
+function sm4AbertosDe(ownerId) {
   const fora = [];
-
-  (function () {
-    const porEtapa = {};
-    Object.keys(leads).forEach(id => {
-      (leads[id] || []).forEach(l => {
-        if (!l.slaBreach) return;
-        const k = String(l.stageId || id);
-        (porEtapa[k] = porEtapa[k] || []).push(l);
-      });
+  const porEtapa = sm3AbertosPorEtapa();
+  Object.keys(porEtapa).forEach(function (id) {
+    (porEtapa[id] || []).forEach(function (l) {
+      if (String(l.ownerId) === String(ownerId)) fora.push(l);
     });
-    const ids = Object.keys(porEtapa);
-    if (!ids.length) {
-      fora.push({
-        rot: 'gargalo nº 1 — etapa', n: '—', un: 'nenhum negócio acima da régua',
-        leitura: 'nenhuma etapa tem negócio passado da régua nesta foto do CRM. É a melhor notícia da semana.',
-        acao: 'manter a régua e usar a Semanal para a boa prática', dono: 'time todo',
-        tipo: 'etapa'
-      });
-      return;
-    }
-    const pior = ids.sort((a, b) => porEtapa[b].length - porEtapa[a].length)[0];
-    const nela = porEtapa[pior];
-    const din = sm3Dinheiro(nela);
-    const etapa = (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[pior]) || 'etapa ' + pior;
-
-    const porDono = {};
-    nela.forEach(l => { const k = String(l.ownerId || ''); porDono[k] = (porDono[k] || 0) + 1; });
-    const donos = Object.keys(porDono).sort((a, b) => porDono[b] - porDono[a]);
-    fora.push({
-      rot: 'gargalo nº 1 — etapa ' + etapa,
-      n: String(nela.length), un: 'negócios acima da régua · ' + din.txt,
-      leitura: 'a etapa ' + etapa + ' é onde o funil para: ' + nela.length
-        + ' negócio(s) passaram do tempo de régua. ' + din.frase + '.',
-      acao: 'combinado da semana (ao lado) + tema da Semanal',
-      dono: donos.length > 1
-        ? nomeDe(donos[0]) + ' (' + porDono[donos[0]] + ') e mais ' + (donos.length - 1)
-        : (donos.length ? nomeDe(donos[0]) : 'time todo'),
-      tipo: 'etapa'
-    });
-  }());
-
-  (function () {
-    const elenco = sm9Elenco();
-    const comZero = [];
-    let semSerie = 0;
-    elenco.forEach(u => {
-      const c = sm3Cadencia(u.ownerId);
-      if (!c.medido) { semSerie++; return; }
-      if (c.zeros > 0) comZero.push({ u, c });
-    });
-    if (!comZero.length) {
-      fora.push({
-        rot: 'gargalo nº 2 — cadência',
-        n: semSerie === elenco.length ? '—' : '0',
-        un: semSerie === elenco.length ? 'cadência não medida' : 'executivos com dia zerado',
-        leitura: semSerie === elenco.length
-          ? 'não há série de atividade nesta janela para ' + elenco.length
-            + ' pessoa(s) — o gargalo de cadência não pode ser afirmado nem descartado.'
-          : 'ninguém do time zerou um dia no CRM nesta janela. A cadência não é o gargalo desta semana.',
-        acao: semSerie === elenco.length
-          ? 'conferir se as atividades estão sendo registradas no HubSpot'
-          : 'manter — e olhar o gargalo nº 1',
-        dono: 'você', tipo: 'cadencia'
-      });
-      return;
-    }
-    comZero.sort((a, b) => b.c.zeros - a.c.zeros);
-    fora.push({
-      rot: 'gargalo nº 2 — cadência',
-      n: String(comZero.length), un: 'executivos com dias zerados',
-      leitura: comZero.slice(0, 3).map(x => (x.u.nome || '').split(' ')[0]
-        + ' (' + x.c.zeros + ' de ' + x.c.dias + ')').join(' e ')
-        + ' — as réguas estouradas deles nascem aqui, não no pitch.'
-        + (semSerie ? ' Outros ' + semSerie + ' sem série medida.' : ''),
-      acao: 'destravar quem caiu de ritmo + cobrar quem zerou seguido',
-      dono: comZero.slice(0, 2).map(x => (x.u.nome || '').split(' ')[0]).join(' · '),
-      tipo: 'cadencia'
-    });
-  }());
-
-  (function () {
-    const elenco = sm9Elenco();
-    let feitas = 0, prometidas = 0, medido = false, zerados = [];
-    elenco.forEach(u => {
-      const c = sm9Cumprido(u.ownerId);
-      if (c.prospeccao.medido) {
-        medido = true;
-        feitas += c.prospeccao.v;
-        if (c.prospeccao.v === 0) zerados.push((u.nome || '').split(' ')[0]);
-      }
-      const p = (SM9.promessas || {})[String(u.ownerId)];
-      if (p && p.promessa && Number(p.promessa.prospeccao) > 0) prometidas += Number(p.promessa.prospeccao);
-    });
-    if (!medido) {
-      fora.push({
-        rot: 'gargalo nº 3 — boca do funil', n: '—', un: 'prospecção não medida',
-        leitura: 'o resumo semanal não trouxe a janela de leads criados — sem ela, prospecção nova da semana não se afirma.',
-        acao: 'conferir a rodada do resumo semanal', dono: 'você', tipo: 'boca_do_funil'
-      });
-      return;
-    }
-    fora.push({
-      rot: 'gargalo nº 3 — boca do funil',
-      n: String(feitas),
-      un: prometidas ? 'prosp. novas de ' + prometidas + ' prometidas' : 'prosp. novas · nenhuma promessa travada',
-      leitura: (zerados.length
-        ? zerados.slice(0, 3).join(' e ') + ' com 0 na semana — '
-        : 'a boca do funil está alimentada — ')
-        + 'o mês que vem se decide agora: sem boca, não há fim de funil.',
-      acao: 'mínimo 1 prospecção nova por dia no plano da Daily',
-      dono: zerados.length ? zerados.slice(0, 2).join(' · ') : 'time todo',
-      tipo: 'boca_do_funil'
-    });
-  }());
-
+  });
   return fora;
 }
 
-function sm3Dados() {
+function sm4NegocioPorId(id) {
+  const porEtapa = sm3AbertosPorEtapa();
+  let achado = null;
+  Object.keys(porEtapa).forEach(function (k) {
+    (porEtapa[k] || []).forEach(function (l) { if (String(l.id) === String(id)) achado = l; });
+  });
+  if (achado) return achado;
+  sm3NegociosDoTime().forEach(function (it) { if (String(it.l.id) === String(id)) achado = it.l; });
+  return achado;
+}
+
+function sm4CorteQuente() {
+  return Number(((DATA.temperaturaRegua || {}).faixas || {}).quente) || 70;
+}
+function sm4CorteProvavel() {
+  return Math.max(80, sm4CorteQuente() + 10);
+}
+
+function sm4Projecao() {
   const P = sm9Projecao();
+  const fechados = P.comecou ? P.feitos : null;
+  const corte = sm4CorteProvavel();
+  const todos = sm3NegociosDoTime();
+  const comNota = todos.filter(function (it) { return Number.isFinite(Number(it.l.temp)); });
+  const medido = comNota.length > 0;
+  const provaveis = medido
+    ? comNota.filter(function (it) { return Number(it.l.temp) >= corte; })
+    : [];
+  return {
+    P: P, corte: corte, medido: medido,
+    fechados: fechados,
+    provaveis: provaveis,
+    nProvaveis: medido ? provaveis.length : null,
+    total: (fechados == null || !medido) ? null : fechados + provaveis.length,
+    semNota: todos.length - comNota.length, deTotal: todos.length
+  };
+}
+
+function sm4Veredito() {
+  const pr = sm4Projecao();
+  const P = pr.P;
   const pace = sm9Pace();
+  if (!P.comecou) {
+    return { chave: 'vespera', rot: 'por começar', cor: '#F0B45C', pr: pr, pace: pace,
+      frase: 'A semana começa na segunda. As jogadas abaixo são o que já está na mesa — a '
+        + 'promessa de cada um se trava na Semanal.' };
+  }
+  if (!pr.medido) {
+    return { chave: 'nao_medido', rot: 'ainda sem projeção', cor: '#F0B45C', pr: pr, pace: pace,
+      frase: 'O time fechou ' + P.feitos + ' de ' + P.meta + '. A projeção precisa da '
+        + 'temperatura dos negócios, calculada no sync, e ela não chegou neste snapshot ('
+        + (pr.deTotal ? 'nenhum dos ' + pr.deTotal + ' negócios em foco tem nota'
+            : 'não há negócio em foco') + '). As jogadas abaixo não dependem dela.' };
+  }
+  const proj = pr.total;
+  if (proj >= P.meta) {
+    return { chave: 'ganha', rot: 'ganha', cor: '#7FD9BE', pr: pr, pace: pace, frase: null };
+  }
+  if (proj >= P.meta - 1 && pace.feitoPct >= pace.esperadoPct) {
+    return { chave: 'ritmo', rot: 'no ritmo', cor: '#F0B45C', pr: pr, pace: pace, frase: null };
+  }
+  return { chave: 'risco', rot: 'em risco', cor: '#FF8D9A', pr: pr, pace: pace, frase: null };
+}
+
+function sm4Consulta(id) {
+  const partes = String(id || '').split(':');
+  const verbo = partes[0];
+  const arg = partes.slice(1).join(':');
+  const elenco = sm9Elenco();
+  const nomeDe = function (oid) {
+    const u = elenco.find(function (x) { return String(x.ownerId) === String(oid); });
+    if (u) return u.nome || 'sem nome';
+    return (typeof rt7Nome === 'function') ? String(rt7Nome(oid)) : String(oid);
+  };
+  const vazio = function (titulo, sub, fonte, porque, dossieDe) {
+    return { titulo: titulo, sub: sub, fonte: fonte, dossieDe: dossieDe || null,
+      linhas: [sm4LinhaTexto('nada a mostrar', '—', porque, false, '—', null)] };
+  };
+
+  if (verbo === 'fechados') {
+    const det = ((DATA.resumoSemanal || {}).ganhosSemanaDetalhe || [])
+      .filter(function (g) { return elenco.some(function (u) { return String(u.ownerId) === String(g.ownerId); }); });
+    const P = sm9Projecao();
+    const fonte = 'CRM · fechado-ganho na janela semanal do robô · dono no elenco de campo';
+    if (!det.length) {
+      return vazio('Fechados na semana', P.comecou ? P.feitos + ' no placar' : 'a semana não começou', fonte,
+        P.comecou && P.feitos ? 'o placar conta ' + P.feitos + ', mas o detalhe por negócio não veio neste snapshot'
+          : 'nenhum fechamento na semana ainda');
+    }
+    return {
+      titulo: 'Fechados na semana (' + det.length + ')',
+      sub: 'fechado-ganho · ' + (P.comecou ? 'dia ' + P.dia + ' de ' + P.de : 'semana por começar'),
+      dossieDe: null, fonte: fonte,
+      linhas: det.map(function (g) {
+        const m = Number(g.mrr) || 0;
+        return sm4LinhaGanho(g.nome || 'negócio sem nome no CRM',
+          m ? ((typeof tl5Mil === 'function' ? tl5Mil(m) : 'R$ ' + m) + '/mês') : 'sem valor no CRM',
+          'nesta semana', nomeDe(g.ownerId));
+      })
+    };
+  }
+
+  if (verbo === 'projecao') {
+    const pr = sm4Projecao();
+    const fonte = 'CRM · fechado-ganho da semana + negócios com temperatura ≥ ' + pr.corte
+      + '° (régua em data/temperatura.json, aplicada no sync)';
+    if (!pr.medido) {
+      return vazio('Projeção — ainda sem temperatura', 'a conta precisa da nota dos negócios', fonte,
+        'nenhum dos ' + pr.deTotal + ' negócios em foco tem nota de temperatura neste snapshot — '
+        + 'ela é calculada no sync. Isto NÃO significa zero prováveis.');
+    }
+    const fech = sm4Consulta('fechados').linhas.filter(function (x) { return x.etapa === 'Fechado-ganho'; });
+    const prov = pr.provaveis.map(function (it) {
+      return sm4Linha(it.l, it.dono + ' · ' + Number(it.l.temp) + '° — provável no corte de ' + pr.corte + '°');
+    });
+    return {
+      titulo: 'Projeção: ' + pr.total + ' de ' + pr.P.meta + ' — de onde vem',
+      sub: (pr.fechados || 0) + ' fechado(s) + ' + pr.nProvaveis + ' provável(eis) ≥ ' + pr.corte + '°'
+        + (pr.semNota ? ' · ' + pr.semNota + ' de ' + pr.deTotal + ' sem nota, fora da conta' : ''),
+      dossieDe: null, fonte: fonte,
+      linhas: fech.concat(prov)
+    };
+  }
+
+  if (verbo === 'emjogo') {
+    const acoes = sm3Acoes(sm9Projecao());
+    const vistos = {};
+    const linhas = [];
+    acoes.forEach(function (a) {
+      const idDeal = String(a.id || '').split(':')[1];
+      if (!idDeal || vistos[idDeal]) return;
+      const l = sm4NegocioPorId(idDeal);
+      if (!l) return;
+      vistos[idDeal] = true;
+      linhas.push(sm4Linha(l, a.titulo));
+    });
+    const din = sm3Dinheiro(linhas.length ? acoes.map(function (a) {
+      return sm4NegocioPorId(String(a.id || '').split(':')[1]) || {};
+    }).filter(function (x) { return x && x.id; }) : []);
+    const fonte = 'CRM · os negócios citados pelas jogadas desta tela · mensal = mrr || valor_de_mrr';
+    if (!linhas.length) {
+      return vazio('R$ em jogo', 'nenhuma jogada com negócio nomeado', fonte,
+        'as jogadas de hoje não nascem de um negócio específico — ou nenhuma regra teve evidência');
+    }
+    return {
+      titulo: 'Em jogo nas jogadas: ' + din.txt,
+      sub: din.frase,
+      dossieDe: null, fonte: fonte, linhas: linhas
+    };
+  }
+
+  if (verbo === 'deal') {
+    const l = sm4NegocioPorId(arg);
+    const fonte = 'CRM · negócio ' + arg + ' · pipeline Field Sales';
+    if (!l) {
+      return vazio('Negócio não encontrado', 'id ' + arg, fonte,
+        'este negócio não está entre os abertos do snapshot atual — pode ter fechado, sido perdido ou trocado de etapa desde o último sync');
+    }
+    const e = sm4EtapaDe(l);
+    return {
+      titulo: (l.name || l.dealname || 'negócio sem nome no CRM'),
+      sub: nomeDe(l.ownerId) + ' · etapa ' + e.rot + ' · ' + sm4Valor(l)
+        + (l.dias != null ? ' · ' + l.dias + 'd na etapa' : ''),
+      dossieDe: nomeDe(l.ownerId), fonte: fonte,
+      linhas: [sm4Linha(l, l.description || null)]
+    };
+  }
+
+  if (verbo === 'parados') {
+    const meus = sm4AbertosDe(arg).filter(function (l) { return l.slaBreach && !l.proximaAtividade; });
+    const fonte = 'CRM · dono = ' + nomeDe(arg) + ' · acima da régua da etapa (data/stageMeta) E sem próxima atividade';
+    const din = sm3Dinheiro(meus);
+    if (!meus.length) {
+      return vazio('Negócios parados de ' + nomeDe(arg).split(' ')[0], 'nenhum', fonte,
+        'todo negócio acima da régua dele(a) tem próxima atividade agendada', nomeDe(arg));
+    }
+    return {
+      titulo: 'Negócios parados de ' + nomeDe(arg).split(' ')[0] + ' (' + meus.length + ')',
+      sub: 'acima da régua e sem próximo passo · ' + din.frase,
+      dossieDe: nomeDe(arg), fonte: fonte,
+      linhas: meus
+        .sort(function (a, b) { return (Number(b.dias) || 0) - (Number(a.dias) || 0); })
+        .map(function (l) { return sm4Linha(l, (l.dias != null ? l.dias + ' dias na etapa' : null)); })
+    };
+  }
+
+  if (verbo === 'reguas') {
+    const meus = sm4AbertosDe(arg).filter(function (l) { return l.slaBreach; });
+    const sla = (DATA.stageMeta || {}).slaDays || {};
+    const fonte = 'CRM · dono = ' + nomeDe(arg) + ' · dias na etapa acima do SLA de data/stageMeta';
+    if (!meus.length) {
+      return vazio('Réguas de ' + nomeDe(arg).split(' ')[0], 'nenhuma estourada', fonte,
+        'o funil dele(a) está inteiro dentro da régua de cada etapa', nomeDe(arg));
+    }
+    return {
+      titulo: 'Réguas estouradas de ' + nomeDe(arg).split(' ')[0] + ' (' + meus.length + ')',
+      sub: 'negócios acima do tempo máximo da etapa · ' + sm3Dinheiro(meus).frase,
+      dossieDe: nomeDe(arg), fonte: fonte,
+      linhas: meus
+        .sort(function (a, b) { return (Number(b.dias) || 0) - (Number(a.dias) || 0); })
+        .map(function (l) {
+          const r = Number(sla[String(l.stageId)]) || null;
+          return sm4Linha(l, (l.dias != null
+            ? l.dias + 'd na etapa' + (r ? ' (régua: ' + r + 'd)' : ' (régua da etapa não configurada)')
+            : null));
+        })
+    };
+  }
+
+  if (verbo === 'ativ') {
+    const cd = (typeof tm2CadenciaDe === 'function') ? tm2CadenciaDe(arg) : null;
+    const fonte = 'CRM · atividades por dia útil (ligação, reunião, tarefa, e-mail) · '
+      + 'nota fica fora: chega sem dono no HubSpot';
+    if (!cd || !cd.serie || !cd.serie.length) {
+      return vazio('Cadência de ' + nomeDe(arg).split(' ')[0], 'não medida', fonte,
+        'não há série de atividade para ele(a) neste snapshot — a cadência diária vem do '
+        + 'sync e ainda não chegou. Isto não é zero atividade.', nomeDe(arg));
+    }
+    const serie = cd.serie.map(function (x) { return Number(x) || 0; });
+    const total = serie.reduce(function (a, b) { return a + b; }, 0);
+    const zeros = serie.filter(function (x) { return x === 0; }).length;
+    const media = serie.length ? (total / serie.length) : 0;
+
+    let somaTime = 0, diasTime = 0;
+    elenco.forEach(function (u) {
+      const s = (typeof tm2CadenciaDe === 'function') ? tm2CadenciaDe(u.ownerId) : null;
+      if (!s || !s.serie) return;
+      s.serie.forEach(function (x) { somaTime += Number(x) || 0; diasTime++; });
+    });
+    const mediaTime = diasTime ? (somaTime / diasTime) : null;
+    const linhas = serie.map(function (v, i) {
+      const dia = (cd.dias && cd.dias[i]) ? String(cd.dias[i]) : 'dia ' + (i + 1);
+
+      const pareceISO = dia.length >= 10 && dia.charAt(4) === '-' && dia.charAt(7) === '-';
+      const curta = (typeof tm2DataCurta === 'function' && pareceISO) ? tm2DataCurta(dia) : dia;
+      return sm4LinhaTexto(curta, v + ' atividade(s)', v === 0 ? '— dia zerado' : '', v === 0, '—', null);
+    });
+    linhas.push(sm4LinhaTexto('média dele(a) na janela',
+      media.toFixed(1).replace('.', ',') + '/dia',
+      mediaTime == null ? 'média do time não medida' : 'time: ' + mediaTime.toFixed(1).replace('.', ',') + '/dia',
+      mediaTime != null && media < mediaTime, '—',
+      zeros ? zeros + ' de ' + serie.length + ' dias sem nenhuma atividade registrada' : null));
+    return {
+      titulo: 'Cadência de ' + nomeDe(arg).split(' ')[0] + ' — ' + serie.length + ' dias úteis',
+      sub: total + ' atividade(s) · ' + zeros + ' dia(s) zerado(s)',
+      dossieDe: nomeDe(arg), fonte: fonte, linhas: linhas
+    };
+  }
+
+  if (verbo === 'visitas') {
+    const v = sm9VisitasDaSemana(arg);
+    const seg = sm9Segunda();
+    const fonte = 'CRM · tarefa de visita (registro do Expogo), por dia · ' + v.fonte;
+    if (!seg || typeof addDays !== 'function' || typeof getDaily !== 'function') {
+      return vazio('Visitas de ' + nomeDe(arg).split(' ')[0], 'não medidas', fonte,
+        'o cache de dailies não está disponível nesta sessão', nomeDe(arg));
+    }
+    const hoje = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
+      ? agendaChave(agendaAgora()) : null;
+    const DIAS = ['seg', 'ter', 'qua', 'qui', 'sex'];
+    const linhas = [];
+    for (let i = 0; i < 5; i++) {
+      const dia = addDays(seg, i);
+      if (hoje && dia > hoje) {
+        linhas.push(sm4LinhaTexto(DIAS[i] + ' ' + String(dia).slice(8, 10) + '/' + String(dia).slice(5, 7),
+          'ainda não aconteceu', '', false, '—', null));
+        continue;
+      }
+      const linha = getDaily(String(arg), dia);
+      linhas.push(sm4LinhaTexto(DIAS[i] + ' ' + String(dia).slice(8, 10) + '/' + String(dia).slice(5, 7),
+        linha ? (Number(linha.realizado_visitas) || 0) + ' visita(s)' : 'sem daily registrada',
+        linha ? '' : '— não é zero visita: é dia sem registro', false, '—', null));
+    }
+    return {
+      titulo: 'Visitas de ' + nomeDe(arg).split(' ')[0] + ' nesta semana',
+      sub: v.medido ? v.v + ' visita(s) em ' + v.dias + ' dia(s) com daily' : 'nenhuma daily registrada nesta semana',
+      dossieDe: nomeDe(arg), fonte: fonte, linhas: linhas
+    };
+  }
+
+  if (verbo === 'criados') {
+    const rs = DATA.resumoSemanal || {};
+    const det = (rs.leadsCriadosSemanaDetalhe || [])
+      .filter(function (x) { return String(x.ownerId) === String(arg); });
+    const fonte = 'CRM · negócios criados por ' + nomeDe(arg) + ' na janela '
+      + ((rs.janela && rs.janela.atual) || 'semanal do robô');
+    const prom = (SM9.promessas || {})[String(arg)];
+    const pp = prom && prom.promessa && Number(prom.promessa.prospeccao) > 0 ? Number(prom.promessa.prospeccao) : null;
+    if (!rs.leadsCriadosSemanaDetalhe) {
+      return vazio('Prospecções de ' + nomeDe(arg).split(' ')[0], 'não medidas', fonte,
+        'o resumo semanal não trouxe o detalhe de negócios criados neste snapshot', nomeDe(arg));
+    }
+    if (!det.length) {
+      return { titulo: 'Prospecções de ' + nomeDe(arg).split(' ')[0] + ' — nenhuma nesta semana',
+        sub: pp ? 'prometeu ' + pp + ' na Semanal' : 'sem promessa travada nesta semana',
+        dossieDe: nomeDe(arg), fonte: fonte,
+        linhas: [sm4LinhaTexto('negócios criados', '0',
+          pp ? 'prometido: ' + pp : 'sem promessa travada', !!pp, '—',
+          'a boca do funil dele(a) não foi reposta nesta semana — medido, não estimado')] };
+    }
+    return {
+      titulo: 'Prospecções de ' + nomeDe(arg).split(' ')[0] + ' (' + det.length + ')',
+      sub: pp ? det.length + ' de ' + pp + ' prometidas na Semanal' : 'sem promessa travada nesta semana',
+      dossieDe: nomeDe(arg), fonte: fonte,
+      linhas: det.map(function (x) {
+        const l = sm4NegocioPorId(x.id);
+        if (l) return sm4Linha(l, 'criado nesta semana');
+        return sm4LinhaTexto(x.nome || 'negócio sem nome no CRM', 'criado nesta semana', '', false, '—', null);
+      })
+    };
+  }
+
+  if (verbo === 'funil') {
+    const porEtapa = sm3AbertosPorEtapa();
+    const fonte = 'CRM · negócios abertos por etapa · dono = ' + nomeDe(arg);
+    const linhas = [];
+    let total = 0;
+    SM3_ETAPAS_ABERTAS.forEach(function (id) {
+      const nela = (porEtapa[id] || []).filter(function (l) { return String(l.ownerId) === String(arg); });
+      total += nela.length;
+      const rot = ((DATA.stageMeta || {})[id] || {}).label || (nela[0] && nela[0].stage) || id;
+      const din = sm3Dinheiro(nela);
+      const acima = nela.filter(function (l) { return l.slaBreach; }).length;
+      linhas.push({
+        nome: rot,
+        etapa: nela.length ? rot : 'Atividade',
+        eCor: (SM4_ETAPA_COR[id] || SM4_ATIV).cor, eBg: (SM4_ETAPA_COR[id] || SM4_ATIV).bg,
+        valor: nela.length + ' negócio(s)',
+        toque: nela.length ? din.txt : 'vazia',
+        tCor: nela.length ? '#2B3440' : '#7A8494',
+        prox: acima ? acima + ' acima da régua' : (nela.length ? 'todos dentro da régua' : '—'),
+        pCor: acima ? '#E51A31' : '#1E9E7B',
+        temNota: false, nota: ''
+      });
+    });
+    return {
+      titulo: 'Funil de ' + nomeDe(arg).split(' ')[0] + ' por etapa',
+      sub: total + ' negócio(s) aberto(s)',
+      dossieDe: nomeDe(arg), fonte: fonte, linhas: linhas
+    };
+  }
+
+  if (verbo === 'quentes') {
+    const corte = sm4CorteQuente();
+    const meus = sm3NegociosDoTime().filter(function (it) { return String(it.ownerId) === String(arg); });
+    const comNota = meus.filter(function (it) { return Number.isFinite(Number(it.l.temp)); });
+    const fonte = 'CRM · dono = ' + nomeDe(arg) + ' · temperatura ≥ ' + corte + '° (régua em data/temperatura.json)';
+    if (!comNota.length) {
+      return vazio('Quentes de ' + nomeDe(arg).split(' ')[0], 'temperatura não medida', fonte,
+        'nenhum dos ' + meus.length + ' negócios em foco dele(a) tem nota de temperatura neste '
+        + 'snapshot — ela é calculada no sync', nomeDe(arg));
+    }
+    const quentes = comNota.filter(function (it) { return Number(it.l.temp) >= corte; });
+    if (!quentes.length) {
+      return vazio('Quentes de ' + nomeDe(arg).split(' ')[0], 'nenhum acima de ' + corte + '°', fonte,
+        'os ' + comNota.length + ' negócios dele(a) com nota estão todos abaixo do corte de quente', nomeDe(arg));
+    }
+    return {
+      titulo: 'Quentes de ' + nomeDe(arg).split(' ')[0] + ' (' + quentes.length + ')',
+      sub: 'acima de ' + corte + '° · ' + sm3Dinheiro(quentes.map(function (it) { return it.l; })).frase
+        + (comNota.length < meus.length ? ' · ' + (meus.length - comNota.length) + ' sem nota, fora da conta' : ''),
+      dossieDe: nomeDe(arg), fonte: fonte,
+      linhas: quentes
+        .sort(function (a, b) { return Number(b.l.temp) - Number(a.l.temp); })
+        .map(function (it) { return sm4Linha(it.l, Number(it.l.temp) + '° de temperatura'); })
+    };
+  }
+
+  if (verbo === 'fechou') {
+    const det = ((DATA.resumoSemanal || {}).ganhosSemanaDetalhe || [])
+      .filter(function (g) { return String(g.ownerId) === String(arg); });
+    const rep = (DATA.reps || []).find(function (r) { return String(r.ownerId) === String(arg); }) || {};
+    const fonte = 'CRM · fechado-ganho na janela semanal · dono = ' + nomeDe(arg);
+    if (!det.length) {
+      return { titulo: 'Fechamentos de ' + nomeDe(arg).split(' ')[0] + ' nesta semana',
+        sub: (Number(rep.ganhosSemana) || 0) + ' no placar',
+        dossieDe: nomeDe(arg), fonte: fonte,
+        linhas: [sm4LinhaTexto('fechamentos na semana', String(Number(rep.ganhosSemana) || 0),
+          Number(rep.ganhosSemana) ? 'o detalhe por negócio não veio neste snapshot' : '',
+          !Number(rep.ganhosSemana), '—', null)] };
+    }
+    return {
+      titulo: 'Fechamentos de ' + nomeDe(arg).split(' ')[0] + ' (' + det.length + ')',
+      sub: 'nesta semana',
+      dossieDe: nomeDe(arg), fonte: fonte,
+      linhas: det.map(function (g) {
+        const m = Number(g.mrr) || 0;
+        return sm4LinhaGanho(g.nome || 'negócio sem nome no CRM',
+          m ? ((typeof tl5Mil === 'function' ? tl5Mil(m) : 'R$ ' + m) + '/mês') : 'sem valor no CRM',
+          'nesta semana', null);
+      })
+    };
+  }
+
+  if (verbo === 'comb') {
+    const fonte = 'Supabase · combinados travados na Semanal + marcação de cumprimento por pessoa';
+    const cbs = (SM3_ESTADO.combinados || []);
+    if (!cbs.length) {
+      return vazio('Combinados de ' + nomeDe(arg).split(' ')[0], 'nenhum registro ainda', fonte,
+        'não existe combinado gravado em nenhuma semana — nem para ele(a) nem para o time. '
+        + 'Isto não é 100% de cumprimento: é ausência de registro. O combinado da semana se '
+        + 'cria na pauta desta tela, com destino Semanal.', nomeDe(arg));
+    }
+    const linhas = cbs.map(function (cb) {
+      const marcas = (SM3_ESTADO.cumprimento || {})[cb.id] || {};
+      const m = marcas[String(arg)];
+      const alvos = (cb.alvo_owner_ids && cb.alvo_owner_ids.length) ? cb.alvo_owner_ids.map(String) : null;
+      const eDele = !alvos || alvos.indexOf(String(arg)) > -1;
+      const st = !eDele ? 'não era alvo deste combinado'
+        : (m == null ? 'ninguém marcou o cumprimento' : (m.cumpriu === false ? 'descumprido' : 'cumprido ✓'));
+      return sm4LinhaTexto('Semanal ' + (typeof tm2DataCurta === 'function' ? tm2DataCurta(cb.data_segunda) : cb.data_segunda)
+        + ' — ' + (cb.titulo || 'combinado sem título'),
+        st, cb.prazo ? 'prazo: ' + (typeof tm2DataCurta === 'function' ? tm2DataCurta(cb.prazo) : cb.prazo) : '',
+        eDele && m && m.cumpriu === false, '—', cb.dono_rotulo ? 'dono: ' + cb.dono_rotulo : null);
+    });
+    return {
+      titulo: 'Combinados de ' + nomeDe(arg).split(' ')[0] + ' — histórico',
+      sub: sm3DescumpriuSemanas(arg) + ' semana(s) com combinado descumprido',
+      dossieDe: nomeDe(arg), fonte: fonte, linhas: linhas
+    };
+  }
+
+  return vazio('Consulta não reconhecida', String(id || '(vazia)'),
+    'nenhuma — este painel não sabe responder a este pedido',
+    'o botão pediu a consulta "' + String(id) + '", que não existe nesta tela');
+}
+
+const SM4_TIPO_POR_ACAO = {
+  'destravar dinheiro':  { tipo: 'um_a_um',       ritual: 'um_a_um' },
+  'salvar da geladeira': { tipo: 'cobranca_negocio', ritual: 'daily' },
+  'fechar na semana':    { tipo: 'cobranca_negocio', ritual: 'daily' },
+  'cobrar combinado':    { tipo: 'um_a_um',       ritual: 'um_a_um' },
+  'ensinar em campo':    { tipo: 'campo_semana',  ritual: 'campo' }
+};
+const SM4_TIPO_POR_MODO = {
+  cobrar:     { tipo: 'um_a_um',      ritual: 'um_a_um' },
+  destravar:  { tipo: 'um_a_um',      ritual: 'um_a_um' },
+  campo:      { tipo: 'campo_semana', ritual: 'campo' },
+  reconhecer: { tipo: 'boa_pratica',  ritual: 'daily' },
+  acompanhar: { tipo: 'cobranca_daily', ritual: 'daily' }
+};
+
+function sm4Botao(chave, rotulo, ritual, primario) {
+  const ok = !!TL5_ESTADO.pauta[chave];
+  const d = SM4_DESTINOS[ritual] || SM4_DESTINOS.daily;
+  return {
+    rot: ok ? '✓ na pauta' : rotulo,
+    dRot: ok ? '✓ está em: ' + d.rot : '→ vai para: ' + d.rot,
+    dCor: ok ? '#1E9E7B' : '#7A8494',
+    cbBg: ok ? '#EAF6F1' : (primario ? '#E51A31' : '#FDFEFF'),
+    cbCor: ok ? '#1E9E7B' : (primario ? '#FFFDF8' : '#8E3B5C'),
+    cbBorda: ok ? '#CBE8DD' : (primario ? '#E51A31' : '#8E3B5C'),
+    ok: ok
+  };
+}
+
+function sm4Provas(u, m) {
+  const oid = String(u.ownerId);
+  const cand = {};
+
+  const parados = sm4AbertosDe(oid).filter(function (l) { return l.slaBreach && !l.proximaAtividade; });
+  if (parados.length) {
+    const din = sm3Dinheiro(parados);
+    cand.parados = { n: String(parados.length),
+      txt: 'negócio(s) acima da régua e sem próximo passo agendado — ' + din.txt,
+      cor: '#6E1210', ver: 'lista:parados:' + oid };
+  }
+
+  const meus = sm4AbertosDe(oid);
+  const acima = meus.filter(function (l) { return l.slaBreach; });
+  if (acima.length) {
+    cand.reguas = { n: acima.length + (meus.length ? '/' + meus.length : ''),
+      txt: 'negócio(s) acima do tempo máximo da etapa (' + Math.round(acima.length / meus.length * 100) + '% do funil dele(a))',
+      cor: acima.length >= meus.length * 0.5 ? '#6E1210' : '#B07C1F', ver: 'lista:reguas:' + oid };
+  }
+
+  const cad = m.cad;
+  if (cad && cad.medido) {
+    if (cad.zeros) {
+      cand.cadencia = { n: String(cad.zeros),
+        txt: 'dia(s) sem nenhuma atividade registrada nos ' + cad.dias + ' dias úteis da janela',
+        cor: '#6E1210', ver: 'lista:ativ:' + oid };
+    } else if (cad.queda) {
+      cand.cadencia = { n: '↓',
+        txt: 'a cadência caiu para menos da metade na segunda metade da janela — sem nenhum dia zerado',
+        cor: '#B07C1F', ver: 'lista:ativ:' + oid };
+    } else {
+      cand.cadencia = { n: String(cad.total),
+        txt: 'atividades em ' + cad.dias + ' dias úteis, sem dia zerado',
+        cor: '#1E9E7B', ver: 'lista:ativ:' + oid };
+    }
+  } else {
+    cand.cadencia = { n: '—',
+      txt: 'cadência não medida: a série de atividade por dia não veio neste snapshot',
+      cor: '#7A8494', ver: 'lista:ativ:' + oid };
+  }
+
+  const desc = sm3DescumpriuSemanas(oid);
+  if (desc >= 1) {
+    cand.comb = { n: desc + 'x', txt: 'semana(s) com o combinado da Semanal descumprido',
+      cor: '#6E1210', ver: 'lista:comb:' + oid };
+  } else if (!(SM3_ESTADO.combinados || []).length) {
+    cand.comb = { n: '—', txt: 'nenhum combinado registrado em nenhuma semana ainda — sem histórico para cobrar',
+      cor: '#7A8494', ver: 'lista:comb:' + oid };
+  }
+
+  const cum = m.cum;
+  const promFe = m.p && Number(m.p.fechamentos) > 0 ? Number(m.p.fechamentos) : null;
+  cand.fechou = { n: String(cum.fechamentos.v),
+    txt: 'fechamento(s) nesta semana' + (promFe != null ? ' de ' + promFe + ' prometido(s) na Semanal' : ' — sem promessa travada nesta semana'),
+    cor: cum.fechamentos.v > 0 ? '#1E9E7B' : (promFe ? '#6E1210' : '#7A8494'),
+    ver: 'lista:fechou:' + oid };
+  const promVis = m.p && Number(m.p.visitas) > 0 ? Number(m.p.visitas) : null;
+  if (cum.visitas.medido) {
+    cand.visitas = { n: String(cum.visitas.v),
+      txt: 'visita(s) registradas em ' + cum.visitas.dias + ' dia(s) de daily'
+        + (promVis != null ? ' · prometeu ' + promVis : ''),
+      cor: (promVis != null && cum.visitas.v < promVis * 0.4) ? '#B07C1F' : '#1E9E7B',
+      ver: 'lista:visitas:' + oid };
+  } else {
+    cand.visitas = { n: '—', txt: 'visitas não medidas: nenhuma daily registrada nesta semana',
+      cor: '#7A8494', ver: 'lista:visitas:' + oid };
+  }
+
+  const promPr = m.p && Number(m.p.prospeccao) > 0 ? Number(m.p.prospeccao) : null;
+  if (cum.prospeccao.medido) {
+    cand.criados = { n: String(cum.prospeccao.v),
+      txt: 'negócio(s) novo(s) criado(s) nesta semana'
+        + (promPr != null ? ' de ' + promPr + ' prometido(s)' : ' — sem promessa travada'),
+      cor: (promPr != null && cum.prospeccao.v === 0) ? '#6E1210'
+        : (cum.prospeccao.v === 0 ? '#B07C1F' : '#1E9E7B'),
+      ver: 'lista:criados:' + oid };
+  }
+
+  const porEtapa = sm3AbertosPorEtapa();
+  const emNegociacao = (porEtapa['1395880472'] || []).filter(function (l) { return String(l.ownerId) === oid; }).length;
+  if (meus.length && !emNegociacao) {
+    cand.funil = { n: '0', txt: 'negócios em Negociação, com ' + meus.length + ' aberto(s) abaixo — o funil dele(a) não avança',
+      cor: '#B07C1F', ver: 'lista:funil:' + oid };
+  } else if (meus.length) {
+    cand.funil = { n: String(meus.length), txt: 'negócio(s) aberto(s), ' + emNegociacao + ' em Negociação',
+      cor: '#1E9E7B', ver: 'lista:funil:' + oid };
+  }
+
+  const corte = sm4CorteQuente();
+  const seus = sm3NegociosDoTime().filter(function (it) { return String(it.ownerId) === oid; });
+  const comNota = seus.filter(function (it) { return Number.isFinite(Number(it.l.temp)); });
+  if (comNota.length) {
+    const q = comNota.filter(function (it) { return Number(it.l.temp) >= corte; });
+    if (q.length) {
+      cand.quentes = { n: String(q.length), txt: 'negócio(s) acima de ' + corte + '° — ' + sm3Dinheiro(q.map(function (it) { return it.l; })).txt,
+        cor: '#B07C1F', ver: 'lista:quentes:' + oid };
+    }
+  }
+
+  const ORDEM = {
+    cobrar:     ['comb', 'parados', 'cadencia', 'reguas'],
+    destravar:  ['cadencia', 'funil', 'quentes', 'parados'],
+    campo:      ['visitas', 'fechou', 'funil', 'parados'],
+    reconhecer: ['fechou', 'criados', 'quentes', 'cadencia'],
+    acompanhar: ['fechou', 'visitas', 'criados', 'reguas']
+  };
+  const ordem = ORDEM[m.modo] || ORDEM.acompanhar;
+  const fora = [];
+  ordem.forEach(function (k) { if (cand[k] && fora.length < 4) fora.push(cand[k]); });
+
+  if (!fora.length) {
+    fora.push({ n: '—', txt: 'nenhum número dele(a) foi medido neste snapshot — nem funil, nem cadência, nem daily',
+      cor: '#7A8494', ver: 'lista:funil:' + oid });
+  }
+  return fora;
+}
+
+function sm4Dados() {
+  const ver = sm4Veredito();
+  const P = ver.pr.P;
+  const pace = ver.pace;
   const elenco = sm9Elenco();
   const acoes = sm3Acoes(P);
-  const gargalos = sm3Gargalos(P);
-  const seg = sm9Segunda();
-  const segPassada = sm3SegundaPassada();
 
   const agora = (typeof agendaAgora === 'function') ? agendaAgora() : new Date();
   const DIAS = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
   const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const syncTxt = 'sincronizados ' + (DATA.hubspotUpdatedAtFmt ? 'em ' + DATA.hubspotUpdatedAtFmt : 'sem carimbo no snapshot');
   const contexto = DIAS[agora.getDay()] + ', ' + String(agora.getDate()).padStart(2, '0')
     + ' de ' + MESES[agora.getMonth()]
     + ' · semana ' + numeroDaSemanaISO(agora)
     + ' · ' + (P.comecou ? 'dia ' + P.dia + ' de ' + P.de + ' úteis' : 'véspera — a semana começa segunda')
-    + ' · HubSpot ' + (DATA.hubspotUpdatedAtFmt || 'sem carimbo');
+    + ' · dados ' + syncTxt;
 
-  const dinAcoes = sm3Dinheiro(acoes.map(a => {
-    const leads = DATA.funilLeads || {};
-    let achado = null;
-    Object.keys(leads).forEach(id => {
-      (leads[id] || []).forEach(l => { if ('proposta:' + l.id === a.id || 'geladeira:' + l.id === a.id
-        || 'janela:' + l.id === a.id || 'regua:' + l.id === a.id) achado = l; });
-    });
-    return achado || {};
-  }).filter(x => x && x.id));
+  const jog = acoes.slice(0, 3);
+  const ext = acoes.slice(3, 5);
+  const primeira = jog.length ? String(jog[0].titulo).split('—')[0].trim() : null;
+  const fechaX = ver.pr.total == null
+    ? '—'
+    : ver.pr.total + ' de ' + P.meta;
+  const fraseB = ver.frase ? ver.frase : (
+    jog.length
+      ? (ver.chave === 'risco' ? 'As ' + jog.length + ' jogada(s) abaixo são o caminho para recuperar o gap'
+          : 'As ' + jog.length + ' jogada(s) abaixo sustentam o ritmo')
+        + ' — comece por ' + primeira + '.'
+      : 'Nenhuma regra de jogada teve evidência de número hoje: nada nesta tela pede ação sua agora.'
+  );
 
-  const manchete = !P.comecou
-    ? 'A semana começa segunda. As ' + acoes.length + ' ações abaixo são o que já está na mesa — '
-      + (acoes.length ? 'comece por ' + acoes[0].titulo.split('—')[0].trim() + '.' : 'nada pede ação hoje.')
-    : 'No ritmo atual a semana fecha com ' + (P.projecao == null ? '—' : P.projecao)
-      + ' de ' + P.meta + ' — as ' + acoes.length + ' ações abaixo '
-      + (dinAcoes.com
-        ? 'destravam ' + dinAcoes.txt + ' (' + dinAcoes.com + ' de ' + acoes.length
-          + ' com valor no CRM) e ' + (P.atras ? 'recuperam o gap' : 'sustentam o ritmo')
-
-        : (P.atras ? 'são o caminho para recuperar o gap' : 'sustentam o ritmo')
-          + ' (nenhuma com valor preenchido no CRM)')
-      + (acoes.length ? '. Comece por ' + acoes[0].titulo.split('—')[0].trim() + '.' : '.');
-
-  const visitasTime = elenco.reduce((t, u) => {
-    const v = sm9VisitasDaSemana(u.ownerId);
-    return { soma: t.soma + (v.medido ? v.v : 0), medido: t.medido || v.medido };
-  }, { soma: 0, medido: false });
-  const promVisitas = elenco.reduce((t, u) => {
-    const p = (SM9.promessas || {})[String(u.ownerId)];
-    return t + ((p && p.promessa && Number(p.promessa.visitas)) || 0);
-  }, 0);
-  const estourados = [];
-  Object.keys(DATA.funilLeads || {}).forEach(id => {
-    ((DATA.funilLeads || {})[id] || []).forEach(l => { if (l.slaBreach) estourados.push(l); });
-  });
-  const dinEstourado = sm3Dinheiro(estourados);
-  const gEtapa = gargalos.find(g => g.tipo === 'etapa');
-
-  const kpis = [
-    { rot: 'Fechamentos', v: P.comecou ? P.feitos + '/' + P.meta : '—',
-      de: P.comecou ? (P.metaEhPrometida ? 'prometidos ' + P.meta : 'meta derivada da mensal') : 'a semana não começou',
-      cor: !P.comecou ? '#8B93A3' : (P.feitos >= P.meta * 0.4 ? '#7FD9BE' : '#FF8D9A') },
-    { rot: 'Projeção da semana', v: P.projecao == null ? '—' : String(P.projecao),
-      de: P.comecou ? 'no ritmo atual' : 'sem dia útil decorrido', cor: '#F0B45C' },
-    { rot: 'Dinheiro nas ações', v: dinAcoes.com ? dinAcoes.txt : '—',
-      de: dinAcoes.com ? dinAcoes.com + ' de ' + acoes.length + ' com valor' : 'nenhuma ação com valor no CRM',
-      cor: dinAcoes.com ? '#7FD9BE' : '#8B93A3' },
-    { rot: 'Visitas na semana', v: visitasTime.medido ? visitasTime.soma + (promVisitas ? '/' + promVisitas : '') : '—',
-      de: visitasTime.medido ? (promVisitas ? 'prometidas' : 'nenhuma promessa travada') : 'nenhuma daily registrada',
-      cor: '#FFFDF8' },
-    { rot: 'Acima da régua', v: String(estourados.length),
-      de: gEtapa ? 'pior: ' + String(gEtapa.rot).replace('gargalo nº 1 — etapa ', '') + ' · ' + dinEstourado.txt
-        : dinEstourado.txt,
-      cor: estourados.length ? '#FF8D9A' : '#7FD9BE' }
+  const dinJog = sm3Dinheiro(jog.concat(ext).map(function (a) {
+    return sm4NegocioPorId(String(a.id || '').split(':')[1]) || {};
+  }).filter(function (x) { return x && x.id; }));
+  const placar = [
+    { rot: 'fechados', v: P.comecou ? String(P.feitos) : '—',
+      de: P.comecou ? 'de ' + P.meta + (P.metaEhPrometida ? ' prometidos' : ' (meta derivada da mensal)') : 'a semana não começou',
+      cor: !P.comecou ? '#8B93A3' : (P.feitos >= P.meta * 0.4 ? '#7FD9BE' : '#FF8D9A'),
+      on: 'lista:fechados' },
+    { rot: 'projeção', v: ver.pr.total == null ? '—' : String(ver.pr.total),
+      de: ver.pr.medido ? 'fechados + ' + ver.pr.nProvaveis + ' provável(eis) ≥ ' + ver.pr.corte + '°'
+        : 'temperatura não medida neste snapshot',
+      cor: ver.pr.medido ? '#F0B45C' : '#8B93A3', on: 'lista:projecao' },
+    { rot: 'R$ em jogo (7d)', v: dinJog.com ? dinJog.txt.replace('/mês', '') : '—',
+      de: dinJog.com ? dinJog.com + ' de ' + (jog.length + ext.length) + ' com valor no CRM'
+        : 'nenhuma jogada com valor preenchido no CRM',
+      cor: dinJog.com ? '#7FD9BE' : '#8B93A3', on: 'lista:emjogo' }
   ];
 
-  const acoes5 = acoes.map((a, i) => {
+  const esperadoAbs = P.comecou ? Math.round(P.meta * P.dia / P.de) : 0;
+  const paceLinha = P.comecou
+    ? P.feitos + ' fechado(s) de ' + P.meta + ' · deveriam ser ' + esperadoAbs + ' até hoje'
+    : 'a semana começa segunda — nada medido ainda';
+
+  const nomeCurto = function (oid) {
+    const u = elenco.find(function (x) { return String(x.ownerId) === String(oid); });
+    const nm = u ? (u.nome || '') : ((typeof rt7Nome === 'function') ? String(rt7Nome(oid)) : '');
+    return String(nm).split(' ')[0] || 'sem dono';
+  };
+  const jogadas = jog.map(function (a, i) {
     const chave = 'semana_acao:' + a.id;
-    const ok = !!TL5_ESTADO.pauta[chave];
+    const dest = SM4_TIPO_POR_ACAO[a.tipo] || { tipo: 'acao_semana', ritual: 'semanal' };
+    const b = sm4Botao(chave, a.rot, dest.ritual, true);
+    const idDeal = String(a.id || '').split(':')[1];
+    const eDeNegocio = a.tipo !== 'cobrar combinado';
     return {
-      pos: String(i + 1), tipo: a.tipo, titulo: a.titulo, por: a.por, valor: a.valor,
-      tCor: '#8E3B5C', tBg: '#FBF5F8',
-      bg: ok ? '#F4FBF8' : '#FDFEFF', borda: ok ? '#CBE8DD' : '#E2E6EE',
-      rot: ok ? '✓ na pauta' : a.rot,
-      cbBg: ok ? '#EAF6F1' : '#E51A31', cbCor: ok ? '#1E9E7B' : '#FFFDF8',
-      cbBorda: ok ? '#CBE8DD' : '#E51A31',
+      n: String(i + 1), tipo: a.tipo, titulo: a.titulo,
+      por: a.por + ' · ' + a.valor,
+      pessoa: nomeCurto(a.ownerId),
+      dealRot: eDeNegocio ? 'ver o negócio' : 'ver os negócios parados dele(a)',
+      verDeal: eDeNegocio ? 'lista:deal:' + idDeal : 'lista:parados:' + a.ownerId,
+      verPessoa: 'dossie:' + a.ownerId,
+      bg: b.ok ? '#F4FBF8' : '#FDFEFF', borda: b.ok ? '#CBE8DD' : '#E2E6EE',
+      rot: b.rot, dRot: b.dRot, dCor: b.dCor,
+      cbBg: b.cbBg, cbCor: b.cbCor, cbBorda: b.cbBorda,
       on: 'acao:' + a.id
     };
   });
 
-  const legenda = Object.keys(SM3_MODOS).map(k => ({
-    rot: SM3_MODOS[k].rot, cor: SM3_MODOS[k].cor, bg: SM3_MODOS[k].bg
-  }));
-
-  const execs = elenco.map(u => {
-    const oid = String(u.ownerId);
-    const m = sm3ModoDe(u, P);
-    const cum = m.cum;
-    const p = m.p;
-    const promFe = p && Number(p.fechamentos) > 0 ? Number(p.fechamentos) : null;
-    const promVis = p && Number(p.visitas) > 0 ? Number(p.visitas) : null;
-    const promPr = p && Number(p.prospeccao) > 0 ? Number(p.prospeccao) : null;
-    const cor3 = (feito, prometido, medido) => {
-      if (!medido) return '#8B93A3';
-      if (prometido == null) return feito > 0 ? '#1E9E7B' : '#7A8494';
-      if (feito >= prometido * 0.4) return '#1E9E7B';
-      return feito > 0 ? '#B07C1F' : '#E51A31';
-    };
-    const par = (feito, prometido, medido) => !medido ? '—'
-      : (prometido == null ? String(feito) + '/—' : feito + '/' + prometido);
-
-    let pct = 0;
-    if (promFe) pct = Math.round(cum.fechamentos.v / promFe * 100);
-    else if (promVis && cum.visitas.medido) pct = Math.round(cum.visitas.v / promVis * 100);
-    const mo = SM3_MODOS[m.modo];
-    const chaveAgir = 'semana_modo:' + oid;
-    const naPauta = !!TL5_ESTADO.pauta[chaveAgir];
-    const ACAO = {
-      cobrar: 'marcar 1:1 hoje', destravar: 'conversa de destravamento',
-      campo: 'acompanhar 2 visitas', acompanhar: 'check na Daily', reconhecer: 'reconhecer na Daily'
-    };
+  const extras = ext.map(function (a) {
+    const chave = 'semana_acao:' + a.id;
+    const dest = SM4_TIPO_POR_ACAO[a.tipo] || { tipo: 'acao_semana', ritual: 'daily' };
+    const b = sm4Botao(chave, a.rot, dest.ritual, false);
+    const d = SM4_DESTINOS[dest.ritual] || SM4_DESTINOS.daily;
     return {
-      ini: String(u.nome || '?').split(' ').filter(Boolean).map(x => x[0]).slice(0, 2).join(''),
-      nome: u.nome || 'sem nome',
-      fe: par(cum.fechamentos.v, promFe, true), feCor: cor3(cum.fechamentos.v, promFe, true),
-      vis: par(cum.visitas.v, promVis, cum.visitas.medido), visCor: cor3(cum.visitas.v, promVis, cum.visitas.medido),
-      pr: par(cum.prospeccao.v, promPr, cum.prospeccao.medido), prCor: cor3(cum.prospeccao.v, promPr, cum.prospeccao.medido),
-      pct: Math.min(Math.max(pct, 3), 100) + '%',
-      pctCor: pct >= 40 ? '#1E9E7B' : (pct > 0 ? '#E8A23D' : '#E51A31'),
-      modo: mo.rot, mCor: mo.cor, mBg: mo.bg,
-      bg: m.modo === 'cobrar' ? '#FDF7F7' : '#FDFEFF',
-      borda: m.modo === 'cobrar' ? '#E3C6C6' : '#E2E6EE',
-      avBg: m.modo === 'cobrar' ? '#6E1210' : '#E51A31',
-      diag: m.diag,
-      cbRot: naPauta ? '✓ na pauta' : ACAO[m.modo] + ' ▸',
-      cbBg: naPauta ? '#EAF6F1' : (m.modo === 'reconhecer' ? '#1E9E7B' : m.modo === 'cobrar' ? '#E51A31' : '#FDFEFF'),
-      cbCor: naPauta ? '#1E9E7B' : ((m.modo === 'reconhecer' || m.modo === 'cobrar') ? '#FFFDF8' : '#8E3B5C'),
-      cbBorda: naPauta ? '#CBE8DD' : (m.modo === 'reconhecer' ? '#1E9E7B' : m.modo === 'cobrar' ? '#E51A31' : '#8E3B5C'),
-      agir: 'modo:' + oid
+      rot: (b.ok ? '✓ ' : '') + a.titulo,
+      destino: b.ok ? 'está em: ' + d.rot : d.rot,
+      dCor: b.ok ? '#1E9E7B' : '#8E3B5C',
+      bg: b.ok ? '#EAF6F1' : '#FDFEFF', cor: b.ok ? '#1E9E7B' : '#5B667A',
+      borda: b.ok ? '#CBE8DD' : '#DCE1EA',
+      on: 'acao:' + a.id
     };
   });
 
-  const nA = acoes5.filter(a => a.rot === '✓ na pauta').length;
-  const nG = execs.filter(e => e.cbRot === '✓ na pauta').length;
-  const roteiro = [
-    { t: '0–5 min', rot: 'O placar', txt: 'prometido × confirmado da semana que fechou — sem opinião, só HubSpot' },
-    { t: '5–12 min', rot: 'O gargalo', txt: (gEtapa ? String(gEtapa.rot).replace('gargalo nº 1 — ', '') : 'o gargalo nº 1') + ' com números + o combinado novo (um só, com dono e prazo)' },
-    { t: '12–20 min', rot: 'A boa prática', txt: 'quem puxou a semana mostra o hábito' },
-    { t: '20–27 min', rot: 'As promessas', txt: 'cada um trava a promessa em voz alta — fechamentos, visitas, prospecções' },
-    { t: '27–30 min', rot: 'Combinados', txt: 'status dos combinados anteriores — cobrar antes de combinar de novo' }
-  ];
+  const MODO_ATENCAO = { cobrar: 1, destravar: 1, campo: 1 };
+  const avaliados = elenco.map(function (u) {
+    const m = sm3ModoDe(u, P);
+    return { u: u, m: m, provas: sm4Provas(u, m) };
+  });
+  const iniciais = function (nm) { return String(nm || '?').split(' ').filter(Boolean).map(function (x) { return x[0]; }).slice(0, 2).join(''); };
 
-  const oCombinado = SM3_ESTADO.combinados.find(c => c.data_segunda === seg) || null;
-  const sugestao = sm3CombinadoSugerido(gEtapa);
-  const cbTitulo = oCombinado ? oCombinado.titulo : sugestao.titulo;
-  const cbJust = oCombinado
-    ? [oCombinado.justificativa, oCombinado.dono_rotulo ? 'Dono: ' + oCombinado.dono_rotulo : null,
-       oCombinado.prazo ? 'prazo: ' + tm2DataCurta(oCombinado.prazo) : null,
-       oCombinado.playbook_pagina ? 'playbook pág. ' + oCombinado.playbook_pagina : null]
-      .filter(Boolean).join(' · ')
-    : sugestao.just;
-  const cbNa = !!(oCombinado && oCombinado.na_semanal);
-
-  const combinados = SM3_ESTADO.combinados
-    .filter(c => c.data_segunda === segPassada)
-    .slice(0, 3)
-    .map(c => {
-      const marcas = SM3_ESTADO.cumprimento[c.id] || {};
-      const alvos = (c.alvo_owner_ids && c.alvo_owner_ids.length)
-        ? c.alvo_owner_ids.map(String) : elenco.map(u => String(u.ownerId));
-      const marcados = alvos.filter(o => marcas[o] != null);
-      const cumpriram = alvos.filter(o => marcas[o] && marcas[o].cumpriu === true);
-      const nao = alvos.filter(o => marcas[o] && marcas[o].cumpriu === false)
-        .map(o => (typeof rt7Nome === 'function' ? String(rt7Nome(o)).split(' ')[0] : o));
-      const resolvido = c.status !== 'aberto';
-
-      const st = resolvido
-        ? (c.status === 'cumprido' ? 'cumprido ✓' : 'não cumprido')
-        : (marcados.length
-          ? cumpriram.length + ' de ' + alvos.length + ' cumpriram'
-            + (nao.length ? ' · cobrar ' + nao.slice(0, 3).join(', ') : '')
-          : 'ninguém marcado ainda — ' + alvos.length + ' na lista');
-      return {
-        txt: c.titulo, st: st,
-        stCor: resolvido ? (c.status === 'cumprido' ? '#1E9E7B' : '#8A3B3B')
-          : (marcados.length ? (nao.length ? '#B07C1F' : '#1E9E7B') : '#7A8494'),
-        rot: resolvido ? 'reabrir' : 'marcar resolvido ✓',
-        bg: resolvido ? '#FDFEFF' : '#EAF6F1',
-        cor: resolvido ? '#7A8494' : '#1E9E7B',
-        borda: resolvido ? '#DCE1EA' : '#CBE8DD',
-        toggle: 'resolver:' + c.id
-      };
-    });
-
-  const nomesModo = execs.filter(e => e.cbRot === '✓ na pauta').map(e => e.nome.split(' ')[0]);
-  const nomesCampo = execs.filter(e => e.modo === SM3_MODOS.campo.rot).map(e => e.nome.split(' ')[0]);
-  const agenda = [
-    { hora: 'hoje', rot: (nA || nG)
-      ? nA + ' ação(ões) + ' + nG + ' modo(s) de agir na sua pauta'
-        + (nomesModo.length ? ' — ' + nomesModo.slice(0, 4).join(', ') : '')
-      : 'nada na pauta ainda — clique numa ação ou num executivo acima' },
-    { hora: 'esta semana', rot: nomesCampo.length
-      ? 'campo com ' + nomesCampo.slice(0, 3).join(', ') + ' — foco: sair da visita com próximo passo agendado'
-      : 'nenhum campo indicado pelos números nesta semana' },
-    { hora: 'seg 8h30', rot: 'Semanal — roteiro pronto: placar + '
-      + (gEtapa ? String(gEtapa.rot).replace('gargalo nº 1 — ', '') : 'gargalo')
-      + ' + combinado' + (cbNa ? ' ✓' : '') }
-  ];
-
-  return {
-    contexto, manchete, kpis,
-    metaSemanaRot: 'meta da semana: ' + P.meta + ' fechamentos'
-      + (P.metaEhPrometida ? ' (soma das promessas de ' + P.quantasPromessas + ' de ' + P.totalElenco + ')'
-        : ' (derivada da meta mensal — ninguém prometeu ainda)'),
-    paceFeito: pace.feitoPct + '%', paceEsperado: pace.esperadoPct + '%',
-    paceRot: P.comecou
-      ? P.feitos + ' feitos · deveria ter ' + Math.round(P.meta * P.dia / P.de)
-        + ' no dia ' + P.dia + ' de ' + P.de
-        + ' · projeção ' + (P.projecao == null ? '—' : P.projecao) + ' de ' + P.meta
-      : 'a semana começa segunda — nada medido ainda',
-    paceCor: P.atras ? '#E51A31' : '#1E9E7B',
-    temToast: !!SM3_ESTADO.toast, toast: SM3_ESTADO.toast || '',
-    acoes5, gargalos, legenda, execs, roteiro,
-
-    tituloAcoes: acoes.length === 5 ? 'As 5 ações que viram a semana'
-      : (acoes.length === 1 ? 'A ação que vira a semana'
-        : (acoes.length === 0 ? 'Nenhuma ação com evidência de número hoje'
-          : 'As ' + acoes.length + ' ações que viram a semana')),
-    cbTitulo, cbJust,
-    cbRot: cbNa ? '✓ combinado fechado — na pauta da Semanal' : 'fechar este combinado na Semanal ▸',
-    cbBg: cbNa ? '#EAF6F1' : '#8E3B5C', cbCor: cbNa ? '#1E9E7B' : '#FFFDF8',
-    cbBorda: cbNa ? '#CBE8DD' : '#8E3B5C',
-    cbFechar: 'combinado:fechar',
-    combinados, agenda,
-    notaDeFonte: sm3NotaDeFonte(P, dinAcoes, estourados.length)
+  const par = function (feito, prometido, medido) {
+    if (!medido) return '—';
+    return prometido == null ? String(feito) + '/—' : feito + '/' + prometido;
   };
-}
+  const cor3 = function (feito, prometido, medido) {
+    if (!medido) return '#8B93A3';
+    if (prometido == null) return feito > 0 ? '#1E9E7B' : '#7A8494';
+    if (feito >= prometido * 0.4) return '#1E9E7B';
+    return feito > 0 ? '#B07C1F' : '#E51A31';
+  };
 
-function sm3CombinadoSugerido(gEtapa) {
-  if (!gEtapa || gEtapa.n === '—') {
+  const ROT_ACAO = {
+    cobrar: 'marcar 1:1 hoje ▸', destravar: 'conversa de destravamento ▸',
+    campo: 'bloquear campo com ele(a) ▸', acompanhar: 'check na Daily ▸',
+    reconhecer: 'reconhecer na Daily ▸'
+  };
+
+  const atencao = avaliados.filter(function (a) { return MODO_ATENCAO[a.m.modo]; }).map(function (a) {
+    const oid = String(a.u.ownerId);
+    const mo = SM3_MODOS[a.m.modo];
+    const dest = SM4_TIPO_POR_MODO[a.m.modo] || { tipo: 'modo_agir', ritual: 'semanal' };
+    const b = sm4Botao('semana_modo:' + oid, ROT_ACAO[a.m.modo] || 'levar para a pauta ▸', dest.ritual, a.m.modo === 'cobrar');
+    const cum = a.m.cum;
+    const promFe = a.m.p && Number(a.m.p.fechamentos) > 0 ? Number(a.m.p.fechamentos) : null;
+    const promVis = a.m.p && Number(a.m.p.visitas) > 0 ? Number(a.m.p.visitas) : null;
+    const promPr = a.m.p && Number(a.m.p.prospeccao) > 0 ? Number(a.m.p.prospeccao) : null;
     return {
-      titulo: 'Sem gargalo de etapa nesta semana — combinado livre',
-      just: 'nenhuma etapa está acima da régua. Dono: time todo · prazo: sexta.'
+      ini: iniciais(a.u.nome), nome: a.u.nome || 'sem nome',
+      modo: mo.rot, mCor: mo.cor, mBg: mo.bg,
+      borda: a.m.modo === 'cobrar' ? '#E3C6C6' : '#E2E6EE',
+      avBg: a.m.modo === 'cobrar' ? '#6E1210' : (a.m.modo === 'campo' ? '#8E3B5C' : '#E51A31'),
+      motivo: a.m.diag,
+      f: par(cum.fechamentos.v, promFe, true), fCor: cor3(cum.fechamentos.v, promFe, true),
+      v: par(cum.visitas.v, promVis, cum.visitas.medido), vCor: cor3(cum.visitas.v, promVis, cum.visitas.medido),
+      pp: par(cum.prospeccao.v, promPr, cum.prospeccao.medido), pCor: cor3(cum.prospeccao.v, promPr, cum.prospeccao.medido),
+      aberto: !!SM4_ESTADO.abertos[oid], seta: SM4_ESTADO.abertos[oid] ? '▴ fechar a prova' : 'ver a prova ▾',
+      abrir: 'abrir:' + oid, provas: a.provas, verPessoa: 'dossie:' + oid,
+      rot: b.rot, dRot: b.dRot, dCor: b.dCor, cbBg: b.cbBg, cbCor: b.cbCor, cbBorda: b.cbBorda,
+      on: 'modo:' + oid
     };
-  }
-  const etapa = String(gEtapa.rot).replace('gargalo nº 1 — etapa ', '');
-  const POR_ETAPA = {
-    'Visita': { t: 'Visita só conta com próximo passo agendado antes de ir embora', pag: 14 },
-    'Demo/Proposta': { t: 'Proposta pedida sai no mesmo dia, com plano apresentado no CRM', pag: null },
-    'Negociação': { t: 'Negociação sem data de decisão volta para o decisor nesta semana', pag: null },
-    'Conversa com Decisor': { t: 'Conversa com decisor termina com demonstração marcada', pag: null },
-    'Prospecção': { t: 'Prospecção nova entra no CRM no dia em que acontece', pag: null }
-  };
-  const base = POR_ETAPA[etapa] || { t: 'Nenhum negócio passa da régua em ' + etapa, pag: null };
+  });
+
+  const ritmo = avaliados.filter(function (a) { return !MODO_ATENCAO[a.m.modo]; }).map(function (a) {
+    const oid = String(a.u.ownerId);
+    const cum = a.m.cum;
+    const promPr = a.m.p && Number(a.m.p.prospeccao) > 0 ? Number(a.m.p.prospeccao) : null;
+    const meus = sm4AbertosDe(oid);
+    const acima = meus.filter(function (l) { return l.slaBreach; }).length;
+    const bocaSeca = cum.prospeccao.medido && promPr != null && cum.prospeccao.v === 0;
+    const funilSujo = meus.length >= 4 && acima >= meus.length * 0.5;
+    let tag, tCor, tBg;
+    if (a.m.modo === 'reconhecer') { tag = 'reconhecer'; tCor = '#1E9E7B'; tBg = '#EAF6F1'; }
+    else if (bocaSeca || funilSujo) { tag = 'de olho'; tCor = '#8A6516'; tBg = '#FDF6E7'; }
+    else { tag = 'no ritmo'; tCor = '#2B3440'; tBg = '#F2F4F8'; }
+    const promFe = a.m.p && Number(a.m.p.fechamentos) > 0 ? Number(a.m.p.fechamentos) : null;
+    const promVis = a.m.p && Number(a.m.p.visitas) > 0 ? Number(a.m.p.visitas) : null;
+    return {
+      ini: iniciais(a.u.nome), nome: a.u.nome || 'sem nome',
+      linha: a.m.diag,
+      mini: par(cum.fechamentos.v, promFe, true) + ' F · '
+        + par(cum.visitas.v, promVis, cum.visitas.medido) + ' V · '
+        + par(cum.prospeccao.v, promPr, cum.prospeccao.medido) + ' P',
+      tag: tag, tCor: tCor, tBg: tBg,
+      aberto: !!SM4_ESTADO.abertos[oid], seta: SM4_ESTADO.abertos[oid] ? '▴' : '▾',
+      abrir: 'abrir:' + oid, provas: a.provas, verPessoa: 'dossie:' + oid
+    };
+  });
+
+  const comCadencia = avaliados.filter(function (a) { return a.m.cad && a.m.cad.medido; }).length;
+  const comVisitas = avaliados.filter(function (a) { return a.m.cum.visitas.medido; }).length;
+  const comPromessa = avaliados.filter(function (a) { return !!a.m.p; }).length;
+  const semBase = !comCadencia && !comVisitas && !comPromessa;
+  const atencaoVaziaTxt = !avaliados.length
+    ? 'nenhum executivo de campo no elenco desta semana.'
+    : (semBase
+      ? 'Não consegui medir quem precisa de você. As cinco regras de intervenção pedem '
+        + 'cadência de atividade, visita registrada na daily ou promessa travada na Semanal — '
+        + 'e nos ' + avaliados.length + ' executivos nenhuma das três chegou nesta semana. '
+        + 'Isto NÃO quer dizer que o time está bem: quer dizer que a tela não sabe.'
+      : 'Ninguém exige intervenção sua nesta semana pelos números medidos ('
+        + comCadencia + ' com cadência, ' + comVisitas + ' com visita registrada, '
+        + comPromessa + ' com promessa travada). Gaste a semana nas jogadas acima.');
+  const ritmoVazioTxt = !avaliados.length
+    ? 'nenhum executivo de campo no elenco desta semana.'
+    : 'todo mundo está na coluna da esquerda — nesta semana não há ninguém andando sozinho.';
+
+  const comFech = avaliados.filter(function (a) { return a.m.cum.fechamentos.v > 0; })
+    .sort(function (x, y) { return y.m.cum.fechamentos.v - x.m.cum.fechamentos.v; });
+  const heroi = comFech[0] || null;
+  const recChave = heroi ? 'semana_rec:' + heroi.u.ownerId : 'semana_rec:ninguem';
+  const recB = sm4Botao(recChave, 'colocar na Daily de amanhã ▸', 'daily', false);
+  const recFrase = heroi
+    ? 'Reconheça ' + String(heroi.u.nome).split(' ')[0] + ' em público na Daily de amanhã — '
+      + heroi.m.cum.fechamentos.v + ' fechamento(s) nesta semana'
+      + (comFech.length > 1 ? ', o maior do time' : ', o único do time') + '.'
+    : 'Ninguém fechou nesta semana ainda — não há reconhecimento a fazer, e inventar um '
+      + 'esvazia o próximo. Reconhecimento sem número é elogio, e elogio não ensina hábito.';
+
+  const chaves = Object.keys(TL5_ESTADO.pauta)
+    .filter(function (k) { return k.indexOf('semana_') === 0; });
+  const pautaItens = chaves.map(function (k) {
+    const linha = TL5_ESTADO.pauta[k] || {};
+    const d = SM4_DESTINOS[linha.ritual] || SM4_DESTINOS.daily;
+    return {
+      destino: d.rot, dBg: d.bg,
+      txt: (linha.titulo || k) + (linha.detalhe ? ' — ' + linha.detalhe : ''),
+      remover: 'tirar:' + k
+    };
+  });
+
+  const pid = SM4_ESTADO.painel;
+  const painel = pid ? sm4Consulta(pid) : null;
+
   return {
-    titulo: base.t,
-    just: 'ataca os ' + gEtapa.n + ' negócios acima da régua em ' + etapa
-      + '. Dono: ' + gEtapa.dono + ' · prazo: sexta'
-      + (base.pag ? ' · playbook pág. ' + base.pag : '') + '.',
-    pag: base.pag, etapa: etapa
+
+    temToast: !!SM4_ESTADO.toast, toast: SM4_ESTADO.toast || '',
+    contexto: contexto, syncTxt: syncTxt,
+    veredito: ver.rot, verCor: ver.cor,
+    fechaX: fechaX, fraseB: fraseB,
+    feitoPct: String(pace.feitoPct), esperadoPct: String(pace.esperadoPct),
+    paceCor: P.atras ? '#E51A31' : '#1E9E7B',
+    diaAbrev: DIAS[agora.getDay()], paceLinha: paceLinha,
+    placar: placar, jogadas: jogadas, extras: extras,
+    nAtencao: String(atencao.length), nRitmo: String(ritmo.length),
+    atencao: atencao, ritmo: ritmo,
+    atencaoVazia: atencao.length === 0, atencaoVaziaTxt: atencaoVaziaTxt,
+    ritmoVazio: ritmo.length === 0, ritmoVazioTxt: ritmoVazioTxt,
+    subPlacar: 'placar = prometido na Semanal × confirmado no CRM · '
+      + (P.quantasPromessas ? P.quantasPromessas + ' de ' + P.totalElenco + ' travaram promessa nesta semana'
+          : 'ninguém travou promessa nesta semana — o denominador aparece como “—”, nunca como 0')
+      + ' · clique no card e veja a prova de cada afirmação',
+    recFrase: recFrase,
+    recOn: heroi ? 'rec:' + heroi.u.ownerId : 'rec:ninguem',
+    recRot: heroi ? recB.rot : 'nada a reconhecer nesta semana',
+    recBg: heroi ? recB.cbBg : '#F2F4F8', recCor: heroi ? recB.cbCor : '#7A8494',
+    recBorda: heroi ? (recB.ok ? '#CBE8DD' : '#1E9E7B') : '#DCE1EA',
+    recDRot: heroi ? recB.dRot : 'nenhum destino: não há decisão a tomar aqui hoje',
+    recDCor: heroi ? recB.dCor : '#7A8494',
+    pautaAberta: SM4_ESTADO.pautaAberta,
+    pautaToggle: 'pautaver',
+    pautaBtnRot: (SM4_ESTADO.pautaAberta ? 'fechar' : 'ver') + ' pauta (' + pautaItens.length + ') '
+      + (SM4_ESTADO.pautaAberta ? '▴' : '▾'),
+    pautaItens: pautaItens, pautaVazia: pautaItens.length === 0,
+    pautaLinha: pautaItens.length
+      ? pautaItens.length + ' decisão(ões) tomadas — cada uma com destino: sua agenda, a Daily de amanhã ou a Semanal de segunda.'
+      : 'Cada botão desta tela cai aqui com destino declarado — sua agenda, a Daily ou a Semanal de segunda. Nada nesta pauta é lembrete: tudo já está gravado onde o ritual vai lê-lo.',
+    temPainel: !!painel,
+    painelTitulo: painel ? painel.titulo : '',
+    painelSub: painel ? painel.sub : '',
+    painelLinhas: painel ? painel.linhas : [],
+    painelFonte: painel ? painel.fonte : '',
+    painelFechar: 'fechar',
+    painelDossieRot: (painel && painel.dossieDe)
+      ? 'dossiê de ' + String(painel.dossieDe).split(' ')[0] + ' · aba Time ▸' : 'fechar',
+    painelDossie: (painel && painel.dossieDe)
+      ? 'dossienome:' + painel.dossieDe : 'fechar'
   };
 }
 
-function sm3NotaDeFonte(P, dinAcoes, estourados) {
-  return 'Fechamentos e réguas: HubSpot ao vivo (' + (DATA.hubspotUpdatedAtFmt || 'sem carimbo')
-    + '). Visitas: dailies.realizado_visitas, da tarefa de visita que nasce no Expogo. '
-    + 'Prospecção: janela do resumo semanal. Prometido: Supabase planos_semanais, dado por '
-    + 'cada um no Meu Funil — ' + P.quantasPromessas + ' de ' + P.totalElenco
-    + ' travaram promessa nesta semana. Temperatura: régua em data/temperatura.json. '
-    + 'Cadência: atividades registradas no HubSpot (tarefa, reunião e nota). '
-    + 'Combinados e modos de agir: Supabase combinados_semana, combinados_cumprimento e '
-    + 'modos_de_agir. Valor: ' + (dinAcoes.com ? dinAcoes.com + ' das ' : 'nenhuma das ')
-    + 'ações tem valor preenchido no CRM' + (dinAcoes.sem ? ' e ' + dinAcoes.sem + ' não têm' : '')
-    + ' — onde não há, a tela mostra travessão e não zero. Nenhum texto desta aba é gerado por IA.';
+function sm4TelaHTML(d) {
+  const { contexto, syncTxt, veredito, verCor, fechaX, fraseB, feitoPct, esperadoPct, paceCor, diaAbrev, paceLinha, placar, jogadas, extras, nAtencao, nRitmo, subPlacar, atencao, ritmo, atencaoVazia, atencaoVaziaTxt, ritmoVazio, ritmoVazioTxt, recFrase, recOn, recRot, recBg, recCor, recBorda, recDRot, recDCor, pautaAberta, pautaToggle, pautaBtnRot, pautaItens, pautaVazia, pautaLinha, temPainel, painelTitulo, painelSub, painelLinhas, painelFonte, painelFechar, painelDossieRot, painelDossie, temToast, toast } = d;
+  return `
+<section data-sm4-raiz style="display:flex;flex-direction:column;gap:24px;padding:0 0 8px;align-items:stretch;">
+  ${temToast ? `<div role="status" style="align-self:flex-start;background:#16181D;color:#FFFDF8;border-radius:10px;padding:9px 15px;font:700 12px 'Manrope',sans-serif;">${esc(toast)}</div>` : ''}
+  <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
+    <div style="width:100%;flex:none;">
+      <div style="position:relative;background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
+
+        <div style="background:#16181D;color:#FFFDF8;padding:28px 32px 26px;">
+          <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${esc(contexto)}</span>
+          <div style="display:flex;gap:40px;align-items:flex-end;flex-wrap:wrap;margin-top:10px;">
+            <div style="flex:1;min-width:420px;">
+              <b style="display:block;font:900 38px/1.12 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;text-wrap:balance;">A semana está <span style="color:${esc(verCor)};">${esc(veredito)}</span>.</b>
+              <span style="display:block;font:600 16px/1.5 'Manrope',sans-serif;color:#C6CDDA;margin-top:8px;max-width:640px;text-wrap:pretty;">No ritmo atual o time fecha <b style="color:#FFFDF8;">${esc(fechaX)}</b>. ${esc(fraseB)}</span>
+            </div>
+            <div style="display:flex;gap:36px;flex-wrap:wrap;padding-bottom:4px;">
+              ${(placar||[]).map(k => `
+                <button data-sm4-acao="${esc(k.on)}" style="background:none;border:none;padding:0;text-align:left;cursor:pointer;" data-sm4-hv="0"><span style="display:block;font:900 10px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${esc(k.rot)} ▸</span><span style="display:flex;align-items:baseline;gap:7px;margin-top:2px;"><b style="font:900 40px/1 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${esc(k.cor)};">${esc(k.v)}</b><span style="font:700 11px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${esc(k.de)}</span></span></button>
+              `).join('')}
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:14px;margin-top:24px;flex-wrap:wrap;">
+            <span style="flex:1;min-width:260px;position:relative;height:12px;border-radius:999px;background:#2A2E36;">
+              <span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${esc(feitoPct)}%;background:${esc(paceCor)};border-radius:999px;"></span></span>
+              <span style="position:absolute;top:-4px;left:${esc(esperadoPct)}%;width:2px;height:20px;background:#F0B45C;border-radius:2px;"></span>
+              <span style="position:absolute;top:-18px;left:${esc(esperadoPct)}%;transform:translateX(-50%);font:800 9px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#F0B45C;white-space:nowrap;">onde deveria estar (${esc(diaAbrev)})</span>
+            </span>
+            <span style="flex:none;font:700 12px 'Manrope',sans-serif;color:#C6CDDA;">${esc(paceLinha)}</span>
+          </div>
+        </div>
+
+        <div style="padding:26px 32px 8px;">
+          <span style="font:900 13px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">Suas 3 jogadas da semana</span>
+          <span style="font:700 12px 'Manrope',sans-serif;color:#7A8494;margin-left:10px;">se você fizer só isso, a semana fecha · ordenadas por dinheiro × prazo</span>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:14px;">
+            ${(jogadas||[]).map(j => `
+              <div style="background:${esc(j.bg)};border:1.5px solid ${esc(j.borda)};border-radius:14px;padding:20px 22px;display:flex;flex-direction:column;gap:10px;min-width:0;">
+                <span style="display:flex;align-items:center;gap:10px;"><b style="font:900 30px/1 'Archivo',sans-serif;color:#E51A31;">${esc(j.n)}</b><span style="font:900 9.5px 'Archivo',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#8E3B5C;background:#FBF5F8;border-radius:6px;padding:4px 10px;">${esc(j.tipo)}</span></span>
+                <b style="font:800 19px/1.3 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.015em;text-wrap:balance;">${esc(j.titulo)}</b>
+                <span style="font:600 13px/1.55 'Manrope',sans-serif;color:#5B667A;flex:1;text-wrap:pretty;">${esc(j.por)}</span>
+                <span style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button data-sm4-acao="${esc(j.verDeal)}" style="display:inline-flex;align-items:center;min-height:28px;padding:0 11px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:700 10.5px 'Manrope',sans-serif;color:#5B667A;cursor:pointer;white-space:nowrap;" data-sm4-hv="1">${esc(j.dealRot)} ▸</button>
+                  <button data-sm4-acao="${esc(j.verPessoa)}" style="display:inline-flex;align-items:center;min-height:28px;padding:0 11px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:700 10.5px 'Manrope',sans-serif;color:#5B667A;cursor:pointer;white-space:nowrap;" data-sm4-hv="1">dossiê de ${esc(j.pessoa)} · aba Time ▸</button>
+                </span>
+                <div>
+                  <button data-sm4-acao="${esc(j.on)}" style="display:inline-flex;align-items:center;min-height:40px;padding:0 18px;border:1px solid ${esc(j.cbBorda)};border-radius:999px;background:${esc(j.cbBg)};font:800 13px 'Manrope',sans-serif;color:${esc(j.cbCor)};cursor:pointer;white-space:nowrap;" data-sm4-hv="2">${esc(j.rot)}</button>
+                  <span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:${esc(j.dCor)};margin-top:6px;">${esc(j.dRot)}</span>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;">
+            <span style="font:900 9.5px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;align-self:center;flex:none;">se sobrar fôlego:</span>
+            ${(extras||[]).map(x => `
+              <button data-sm4-acao="${esc(x.on)}" style="display:inline-flex;align-items:center;gap:8px;min-height:34px;padding:0 14px;border:1px solid ${esc(x.borda)};border-radius:999px;background:${esc(x.bg)};font:700 12px 'Manrope',sans-serif;color:${esc(x.cor)};cursor:pointer;" data-sm4-hv="3">${esc(x.rot)} <b style="font:800 10px 'Manrope',sans-serif;color:${esc(x.dCor)};">→ ${esc(x.destino)}</b></button>
+            `).join('')}
+          </div>
+        </div>
+
+        <div style="padding:26px 32px 24px;">
+          <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+            <span style="font:900 13px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">O time, um por um</span>
+            <span style="font:700 12px 'Manrope',sans-serif;color:#7A8494;">${esc(subPlacar)}</span>
+          </div>
+          <div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px;margin-top:12px;">
+            <div style="min-width:0;">
+              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#6E1210;">Precisam de você (${esc(nAtencao)})</span>
+              ${(atencaoVazia) ? `<span style="display:block;font:600 12px/1.55 'Manrope',sans-serif;color:#7A8494;margin-top:8px;background:#FBFAF6;border:1px solid #E2E6EE;border-radius:10px;padding:11px 14px;">${esc(atencaoVaziaTxt)}</span>` : ''}
+              <div style="display:flex;flex-direction:column;gap:10px;margin-top:10px;">
+                ${(atencao||[]).map(e => `
+                  <div style="background:#FDFEFF;border:1.5px solid ${esc(e.borda)};border-radius:12px;min-width:0;overflow:hidden;">
+                    <button data-sm4-acao="${esc(e.abrir)}" style="width:100%;background:none;border:none;padding:14px 18px;display:flex;align-items:center;gap:16px;cursor:pointer;text-align:left;min-width:0;flex-wrap:wrap;" data-sm4-hv="4">
+                      <span style="width:38px;height:38px;border-radius:999px;display:grid;place-items:center;background:${esc(e.avBg)};color:#FDFEFF;font:900 13px 'Archivo',sans-serif;flex:none;">${esc(e.ini)}</span>
+                      <span style="flex:1;min-width:200px;">
+                        <span style="display:flex;align-items:center;gap:10px;"><b style="font:800 15px 'Archivo',sans-serif;color:#2B3440;">${esc(e.nome)}</b><span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:${esc(e.mCor)};background:${esc(e.mBg)};border-radius:5px;padding:3px 9px;">${esc(e.modo)}</span></span>
+                        <span style="display:block;font:600 12.5px/1.5 'Manrope',sans-serif;color:#5B667A;margin-top:3px;text-wrap:pretty;">${esc(e.motivo)}</span>
+                      </span>
+                      <span style="display:flex;gap:14px;flex:none;">
+                        <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">fech.</span><b style="font:800 13px 'Manrope',sans-serif;color:${esc(e.fCor)};font-variant-numeric:tabular-nums;">${esc(e.f)}</b></span>
+                        <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">visitas</span><b style="font:800 13px 'Manrope',sans-serif;color:${esc(e.vCor)};font-variant-numeric:tabular-nums;">${esc(e.v)}</b></span>
+                        <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">prosp.</span><b style="font:800 13px 'Manrope',sans-serif;color:${esc(e.pCor)};font-variant-numeric:tabular-nums;">${esc(e.pp)}</b></span>
+                      </span>
+                      <span style="flex:none;font:800 12px 'Manrope',sans-serif;color:#8E3B5C;">${esc(e.seta)}</span>
+                    </button>
+                    ${(e.aberto) ? `
+                      <div style="border-top:1px dashed #E2E6EE;background:#FBFAF6;padding:13px 18px 15px;">
+                        <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#6E1210;">a prova — números do CRM</span>
+                        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+                          ${(e.provas||[]).map(pv => `
+                            <div style="display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap;">
+                              <b style="flex:none;width:64px;font:900 16px 'Archivo',sans-serif;color:${esc(pv.cor)};font-variant-numeric:tabular-nums;text-align:right;">${esc(pv.n)}</b>
+                              <span style="flex:1;min-width:200px;font:600 12px/1.45 'Manrope',sans-serif;color:#3E382F;">${esc(pv.txt)}</span>
+                              <button data-sm4-acao="${esc(pv.ver)}" style="flex:none;display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:700 10px 'Manrope',sans-serif;color:#5B667A;cursor:pointer;white-space:nowrap;" data-sm4-hv="1">abrir no cockpit ▸</button>
+                            </div>
+                          `).join('')}
+                        </div>
+                        <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;align-items:center;">
+                          <button data-sm4-acao="${esc(e.on)}" style="display:inline-flex;align-items:center;min-height:36px;padding:0 15px;border:1px solid ${esc(e.cbBorda)};border-radius:999px;background:${esc(e.cbBg)};font:800 12px 'Manrope',sans-serif;color:${esc(e.cbCor)};cursor:pointer;white-space:nowrap;" data-sm4-hv="2">${esc(e.rot)}</button>
+                          <span style="font:700 10.5px 'Manrope',sans-serif;color:${esc(e.dCor)};">${esc(e.dRot)}</span>
+                          <button data-sm4-acao="${esc(e.verPessoa)}" style="margin-left:auto;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:700 11px 'Manrope',sans-serif;color:#8E3B5C;cursor:pointer;white-space:nowrap;" data-sm4-hv="5">dossiê completo · aba Time ▸</button>
+                        </div>
+                      </div>
+                    ` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            <div style="min-width:0;">
+              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#1E9E7B;">Caminhando sozinhos (${esc(nRitmo)})</span>
+              ${(ritmoVazio) ? `<span style="display:block;font:600 12px/1.55 'Manrope',sans-serif;color:#7A8494;margin-top:8px;background:#FBFAF6;border:1px solid #E2E6EE;border-radius:10px;padding:11px 14px;">${esc(ritmoVazioTxt)}</span>` : ''}
+              <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;">
+                ${(ritmo||[]).map(r => `
+                  <div style="background:#FBFAF6;border:1px solid #E4E0D6;border-radius:11px;min-width:0;overflow:hidden;">
+                    <button data-sm4-acao="${esc(r.abrir)}" style="width:100%;background:none;border:none;padding:11px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;text-align:left;min-width:0;" data-sm4-hv="6">
+                      <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:#2B3440;color:#FDFEFF;font:900 10.5px 'Archivo',sans-serif;flex:none;">${esc(r.ini)}</span>
+                      <span style="flex:1;min-width:0;"><b style="font:800 13.5px 'Archivo',sans-serif;color:#2B3440;">${esc(r.nome)}</b><span style="display:block;font:600 11.5px/1.45 'Manrope',sans-serif;color:#5B667A;text-wrap:pretty;">${esc(r.linha)}</span></span>
+                      <b style="flex:none;font:800 11px 'Manrope',sans-serif;color:#5B667A;font-variant-numeric:tabular-nums;white-space:nowrap;">${esc(r.mini)}</b>
+                      <span style="flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${esc(r.tCor)};background:${esc(r.tBg)};border-radius:5px;padding:3px 9px;white-space:nowrap;">${esc(r.tag)}</span>
+                      <span style="flex:none;font:800 12px 'Manrope',sans-serif;color:#8E3B5C;">${esc(r.seta)}</span>
+                    </button>
+                    ${(r.aberto) ? `
+                      <div style="border-top:1px dashed #E4E0D6;padding:11px 16px 13px;">
+                        <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#1E9E7B;">a prova — números do CRM</span>
+                        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+                          ${(r.provas||[]).map(pv => `
+                            <div style="display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap;">
+                              <b style="flex:none;width:52px;font:900 15px 'Archivo',sans-serif;color:${esc(pv.cor)};font-variant-numeric:tabular-nums;text-align:right;">${esc(pv.n)}</b>
+                              <span style="flex:1;min-width:160px;font:600 11.5px/1.45 'Manrope',sans-serif;color:#3E382F;">${esc(pv.txt)}</span>
+                              <button data-sm4-acao="${esc(pv.ver)}" style="flex:none;display:inline-flex;align-items:center;min-height:24px;padding:0 9px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:700 9.5px 'Manrope',sans-serif;color:#5B667A;cursor:pointer;white-space:nowrap;" data-sm4-hv="1">abrir no cockpit ▸</button>
+                            </div>
+                          `).join('')}
+                        </div>
+                        <button data-sm4-acao="${esc(r.verPessoa)}" style="margin-top:10px;display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:700 10.5px 'Manrope',sans-serif;color:#8E3B5C;cursor:pointer;white-space:nowrap;" data-sm4-hv="5">dossiê completo · aba Time ▸</button>
+                      </div>
+                    ` : ''}
+                  </div>
+                `).join('')}
+              </div>
+              <div style="margin-top:12px;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:11px;padding:12px 16px;">
+                <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#1E9E7B;">30 segundos que valem a semana</span>
+                <span style="display:block;font:600 12.5px/1.5 'Manrope',sans-serif;color:#2B3440;margin-top:3px;">${esc(recFrase)}</span>
+                <button data-sm4-acao="${esc(recOn)}" style="margin-top:8px;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${esc(recBorda)};border-radius:999px;background:${esc(recBg)};font:800 11.5px 'Manrope',sans-serif;color:${esc(recCor)};cursor:pointer;white-space:nowrap;" data-sm4-hv="7">${esc(recRot)}</button>
+                <span style="display:block;font:700 10px 'Manrope',sans-serif;color:${esc(recDCor)};margin-top:5px;">${esc(recDRot)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="border-top:1px solid #E2E6EE;background:#FBFAF6;padding:14px 32px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#8E3B5C;flex:none;">sua pauta desta tela</span>
+          <span style="font:700 12.5px/1.5 'Manrope',sans-serif;color:#5B667A;flex:1;min-width:260px;">${esc(pautaLinha)}</span>
+          <button data-sm4-acao="${esc(pautaToggle)}" style="flex:none;display:inline-flex;align-items:center;min-height:36px;padding:0 16px;border:1px solid #CBE8DD;border-radius:999px;background:#EAF6F1;font:800 12px 'Manrope',sans-serif;color:#1E9E7B;cursor:pointer;white-space:nowrap;" data-sm4-hv="8">${esc(pautaBtnRot)}</button>
+        </div>
+        ${(pautaAberta) ? `
+          <div style="border-top:1px solid #E2E6EE;background:#FDFEFF;padding:16px 32px 18px;">
+            <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#2B3440;">Pra onde cada decisão foi</span>
+            <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
+              ${(pautaItens||[]).map(pi => `
+                <div style="display:flex;align-items:center;gap:12px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:9px 14px;min-width:0;flex-wrap:wrap;">
+                  <span style="flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#FDFEFF;background:${esc(pi.dBg)};border-radius:5px;padding:4px 9px;white-space:nowrap;">${esc(pi.destino)}</span>
+                  <span style="flex:1;min-width:200px;font:700 12px/1.45 'Manrope',sans-serif;color:#2B3440;">${esc(pi.txt)}</span>
+                  <button data-sm4-acao="${esc(pi.remover)}" style="flex:none;background:none;border:none;padding:2px 6px;font:800 11px 'Manrope',sans-serif;color:#7A8494;cursor:pointer;" data-sm4-hv="9">remover ✕</button>
+                </div>
+              `).join('')}
+            </div>
+            ${(pautaVazia) ? `
+              <span style="display:block;font:600 12px 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">Nada ainda — cada botão da tela cai aqui, já no destino certo (sua agenda, a Daily ou a Semanal de segunda).</span>
+            ` : ''}
+          </div>
+        ` : ''}
+
+        <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 32px 14px;font-size:10px;line-height:1.5;color:#7A8494;">Semana v4 = 3 perguntas do gestor · nenhum clique morto, nenhuma afirmação sem prova e <b>nada abre fora do cockpit</b>: provas, funis e negócios abrem em painel interno (HubSpot e Supabase são só backend, ${esc(syncTxt)}) · decisões caem na pauta com destino declarado (agenda de hoje · Daily de amanhã · Semanal de segunda) · <b style="color:#E51A31;">takeat</b> — vender mais servindo com excelência.</p>
+
+        ${(temPainel) ? `
+          <div style="position:absolute;inset:0;background:rgba(22,24,29,.45);display:flex;justify-content:flex-end;z-index:10;">
+            <div style="width:560px;max-width:92%;background:#FDFEFF;height:100%;box-shadow:-16px 0 48px rgba(22,24,29,.3);display:flex;flex-direction:column;min-width:0;">
+              <div style="background:#16181D;color:#FFFDF8;padding:18px 24px;display:flex;align-items:flex-start;gap:12px;">
+                <div style="flex:1;min-width:0;">
+                  <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#7FD9BE;">dentro do cockpit · dados do CRM</span>
+                  <b style="display:block;font:900 19px/1.25 'Archivo',sans-serif;letter-spacing:-.015em;margin-top:3px;text-wrap:balance;">${esc(painelTitulo)}</b>
+                  <span style="display:block;font:600 12px/1.5 'Manrope',sans-serif;color:#C6CDDA;margin-top:3px;">${esc(painelSub)}</span>
+                </div>
+                <button data-sm4-acao="${esc(painelFechar)}" style="flex:none;width:34px;height:34px;border-radius:999px;border:1px solid #3A3F49;background:#2A2E36;color:#FFFDF8;font:800 14px 'Manrope',sans-serif;cursor:pointer;" data-sm4-hv="10">✕</button>
+              </div>
+              <div style="flex:1;overflow:auto;padding:18px 24px;display:flex;flex-direction:column;gap:8px;">
+                ${(painelLinhas||[]).map(ln => `
+                  <div style="background:#FBFAF6;border:1px solid #E4E0D6;border-radius:11px;padding:12px 15px;min-width:0;">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                      <b style="font:800 13.5px 'Archivo',sans-serif;color:#2B3440;flex:1;min-width:140px;">${esc(ln.nome)}</b>
+                      <span style="flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${esc(ln.eCor)};background:${esc(ln.eBg)};border-radius:5px;padding:3px 9px;white-space:nowrap;">${esc(ln.etapa)}</span>
+                      <b style="flex:none;font:800 12.5px 'Manrope',sans-serif;color:#8E3B5C;font-variant-numeric:tabular-nums;">${esc(ln.valor)}</b>
+                    </div>
+                    <div style="display:flex;gap:16px;margin-top:6px;flex-wrap:wrap;">
+                      <span style="font:600 11px 'Manrope',sans-serif;color:#5B667A;">último toque: <b style="color:${esc(ln.tCor)};">${esc(ln.toque)}</b></span>
+                      <span style="font:600 11px 'Manrope',sans-serif;color:#5B667A;">próximo passo: <b style="color:${esc(ln.pCor)};">${esc(ln.prox)}</b></span>
+                    </div>
+                    ${(ln.temNota) ? `
+                      <span style="display:block;font:600 11px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:5px;border-top:1px dashed #E4E0D6;padding-top:5px;">${esc(ln.nota)}</span>
+                    ` : ''}
+                  </div>
+                `).join('')}
+              </div>
+              <div style="border-top:1px solid #E2E6EE;background:#FBFAF6;padding:12px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                <span style="font:700 11px 'Manrope',sans-serif;color:#7A8494;flex:1;min-width:200px;">${esc(painelFonte)}</span>
+                <button data-sm4-acao="${esc(painelDossie)}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid #8E3B5C;border-radius:999px;background:#FDFEFF;font:800 11px 'Manrope',sans-serif;color:#8E3B5C;cursor:pointer;white-space:nowrap;" data-sm4-hv="11">${esc(painelDossieRot)}</button>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  </div>
+</section>`;
+}
+
+function sm4Confirmar(chave, queria) {
+  const esta = !!TL5_ESTADO.pauta[chave];
+  if (esta === queria) return true;
+  const jaReclamou = String(SM4_ESTADO.toast || '').indexOf('não gravou') === 0
+    || String(SM4_ESTADO.toast || '').indexOf('sem conexão') === 0;
+  if (!jaReclamou) {
+    SM4_ESTADO.toast = queria
+      ? 'NÃO GRAVOU: o banco aceitou sem erro mas a pauta voltou sem o item (' + chave + ') — '
+        + 'clique de novo ou avise; "sem erro" não é "gravou"'
+      : 'NÃO SAIU: o item (' + chave + ') continua na pauta depois do clique de remover';
+  }
+  return false;
+}
+
+async function sm4Executar(acao) {
+  if (SM4_GRAVANDO) return;
+  const verbo = String(acao || '').split(':')[0];
+  const arg = String(acao || '').split(':').slice(1).join(':');
+
+  if (verbo === 'lista') {
+    SM4_ESTADO.painel = arg;
+    renderSemana();
+    return;
+  }
+  if (verbo === 'fechar') {
+    SM4_ESTADO.painel = null;
+    renderSemana();
+    return;
+  }
+  if (verbo === 'abrir') {
+    SM4_ESTADO.abertos[arg] = !SM4_ESTADO.abertos[arg];
+    renderSemana();
+    return;
+  }
+  if (verbo === 'pautaver') {
+    SM4_ESTADO.pautaAberta = !SM4_ESTADO.pautaAberta;
+    renderSemana();
+    return;
+  }
+
+  if (verbo === 'dossie' || verbo === 'dossienome') {
+    SM4_ESTADO.painel = null;
+    let oid = arg;
+    if (verbo === 'dossienome') {
+      const u = sm9Elenco().find(function (x) { return String(x.nome) === String(arg); });
+      oid = u ? String(u.ownerId) : '';
+    }
+    if (!oid) {
+      SM4_ESTADO.toast = 'não achei essa pessoa no elenco de campo — o dossiê não abriu';
+      renderSemana();
+      return;
+    }
+
+    if (typeof gxFocarExecutivo === 'function') { gxFocarExecutivo(oid); return; }
+
+    SM4_ESTADO.toast = 'o dossiê da aba Time não respondeu nesta sessão — nada abriu';
+    renderSemana();
+    return;
+  }
+
+  if (verbo === 'acao') {
+    const acoes = sm3Acoes(sm9Projecao());
+    const a = acoes.find(function (x) { return String(x.id) === String(arg); });
+    if (!a) {
+      SM4_ESTADO.toast = 'essa jogada saiu da lista no último sync — recarregue a aba';
+      renderSemana();
+      return;
+    }
+    const dest = SM4_TIPO_POR_ACAO[a.tipo] || { tipo: 'acao_semana', ritual: 'semanal' };
+
+    const jaEstava = !!TL5_ESTADO.pauta['semana_acao:' + a.id];
+    SM4_GRAVANDO = true;
+    await tl5Alternar(dest.tipo, a.ownerId || null, a.titulo,
+      a.por + ' · ' + a.valor, 'semana_acao:' + a.id, dest.ritual);
+    SM4_ESTADO.toast = TL5_ESTADO.toast;
+    SM4_GRAVANDO = false;
+    await tl5CarregarPauta();
+    sm4Confirmar('semana_acao:' + a.id, !jaEstava);
+    renderSemana();
+    return;
+  }
+
+  if (verbo === 'modo') {
+    const u = sm9Elenco().find(function (x) { return String(x.ownerId) === String(arg); });
+    if (!u) {
+      SM4_ESTADO.toast = 'essa pessoa não está no elenco de campo desta semana';
+      renderSemana();
+      return;
+    }
+    const m = sm3ModoDe(u, sm9Projecao());
+    const dest = SM4_TIPO_POR_MODO[m.modo] || { tipo: 'modo_agir', ritual: 'semanal' };
+    const jaEstava = !!TL5_ESTADO.pauta['semana_modo:' + u.ownerId];
+    SM4_GRAVANDO = true;
+    await tl5Alternar(dest.tipo, String(u.ownerId),
+      SM3_MODOS[m.modo].rot + ': ' + (u.nome || ''), m.diag, 'semana_modo:' + u.ownerId, dest.ritual);
+    SM4_ESTADO.toast = TL5_ESTADO.toast;
+    SM4_GRAVANDO = false;
+    await tl5CarregarPauta();
+    sm4Confirmar('semana_modo:' + u.ownerId, !jaEstava);
+    renderSemana();
+    return;
+  }
+
+  if (verbo === 'rec') {
+    if (arg === 'ninguem') {
+      SM4_ESTADO.toast = 'ninguém fechou nesta semana — não há reconhecimento a levar para a Daily';
+      renderSemana();
+      return;
+    }
+    const u = sm9Elenco().find(function (x) { return String(x.ownerId) === String(arg); });
+    if (!u) {
+      SM4_ESTADO.toast = 'essa pessoa não está no elenco de campo desta semana';
+      renderSemana();
+      return;
+    }
+    const cum = sm9Cumprido(String(u.ownerId));
+    const jaEstava = !!TL5_ESTADO.pauta['semana_rec:' + u.ownerId];
+    SM4_GRAVANDO = true;
+    await tl5Alternar('boa_pratica', String(u.ownerId),
+      'Reconhecer ' + String(u.nome).split(' ')[0] + ' na Daily',
+      cum.fechamentos.v + ' fechamento(s) nesta semana — extrair o hábito e levar para a Semanal',
+      'semana_rec:' + u.ownerId, 'daily');
+    SM4_ESTADO.toast = TL5_ESTADO.toast;
+    SM4_GRAVANDO = false;
+    await tl5CarregarPauta();
+    sm4Confirmar('semana_rec:' + u.ownerId, !jaEstava);
+    renderSemana();
+    return;
+  }
+
+  if (verbo === 'tirar') {
+    const linha = TL5_ESTADO.pauta[arg];
+    if (!linha) {
+      SM4_ESTADO.toast = 'esse item já não está na pauta';
+      renderSemana();
+      return;
+    }
+    SM4_GRAVANDO = true;
+    await tl5Alternar(linha.tipo || 'acao_semana', linha.alvo_owner_id || null,
+      linha.titulo || arg, linha.detalhe || null, arg, linha.ritual || null);
+    SM4_ESTADO.toast = TL5_ESTADO.toast;
+    SM4_GRAVANDO = false;
+    await tl5CarregarPauta();
+
+    sm4Confirmar(arg, false);
+    renderSemana();
+    return;
+  }
+
+  SM4_ESTADO.toast = 'clique sem destino nesta tela: “' + String(acao) + '” — é defeito meu, e está nomeado';
+  renderSemana();
+}
+
+function sm4Ligar() {
+  if (SM4_OUVINTE) return;
+  SM4_OUVINTE = true;
+  document.addEventListener('click', function (ev) {
+    const alvo = ev.target.closest && ev.target.closest('[data-sm4-acao]');
+    if (!alvo) return;
+    if (!alvo.closest('[data-sm4-raiz]')) return;
+    const acao = alvo.getAttribute('data-sm4-acao');
+    if (!acao) return;
+    ev.preventDefault();
+    sm4Executar(acao);
+  });
 }
 
 async function sm3Carregar() {
   SM3_ESTADO.combinados = [];
   SM3_ESTADO.cumprimento = {};
   SM3_ESTADO.modos = {};
+  SM3_ESTADO.falhouLeitura = false;
   if (typeof supa === 'undefined' || !supa) { SM3_ESTADO.carregado = true; return; }
   const seg = sm9Segunda();
   const passada = sm3SegundaPassada();
@@ -42505,285 +43450,12 @@ async function sm3Carregar() {
     (mds || []).forEach(l => { SM3_ESTADO.modos[String(l.owner_id)] = l; });
   } catch (e) {
 
-    console.log('semana v3: nao consegui ler combinados/modos - ' + (e && e.message));
+    SM3_ESTADO.falhouLeitura = true;
+    SM4_ESTADO.toast = 'não consegui ler os combinados no Supabase (' + (e && e.message ? e.message : 'erro desconhecido')
+      + ') — as provas de combinado desta tela estão sem fonte, e não vazias';
+    console.log('semana v4: nao consegui ler combinados/modos - ' + (e && e.message));
   }
   SM3_ESTADO.carregado = true;
-}
-
-async function sm3Executar(acao) {
-  if (!acao) return;
-  if (SM3_GRAVANDO) return;
-  const seg = sm9Segunda();
-
-  if (acao.indexOf('acao:') === 0) {
-    const id = acao.slice(5);
-    const d = sm3Dados();
-    const i = d.acoes5.findIndex(a => a.on === acao);
-    if (i < 0) return;
-    const a = d.acoes5[i];
-    SM3_GRAVANDO = true;
-    await tl5Alternar('acao_semana', null, a.titulo, a.por, 'semana_acao:' + id);
-    SM3_ESTADO.toast = TL5_ESTADO.toast;
-    SM3_GRAVANDO = false;
-    await tl5CarregarPauta();
-    renderSemana();
-    return;
-  }
-
-  if (acao.indexOf('modo:') === 0) {
-    const oid = acao.slice(5);
-    const u = sm9Elenco().find(x => String(x.ownerId) === oid);
-    if (!u) return;
-    const m = sm3ModoDe(u, sm9Projecao());
-    SM3_GRAVANDO = true;
-    await tl5Alternar('modo_agir', oid,
-      SM3_MODOS[m.modo].rot + ': ' + (u.nome || ''), m.diag, 'semana_modo:' + oid);
-    SM3_ESTADO.toast = TL5_ESTADO.toast;
-    SM3_GRAVANDO = false;
-    await tl5CarregarPauta();
-    renderSemana();
-    return;
-  }
-
-  if (acao === 'combinado:fechar') {
-    if (!supa || !seg) { SM3_ESTADO.toast = 'sem conexão com o Supabase aqui — nada foi gravado'; renderSemana(); return; }
-    const existente = SM3_ESTADO.combinados.find(c => c.data_segunda === seg);
-    SM3_GRAVANDO = true;
-    try {
-      if (existente) {
-
-        const { error } = await supa.from('combinados_semana').delete().eq('id', existente.id);
-        if (error) throw error;
-        SM3_ESTADO.toast = 'combinado removido da pauta';
-      } else {
-        const g = sm3Gargalos(sm9Projecao()).find(x => x.tipo === 'etapa');
-        const s = sm3CombinadoSugerido(g);
-        const { error } = await supa.from('combinados_semana').insert({
-          data_segunda: seg,
-          titulo: s.titulo,
-          justificativa: s.just,
-          origem_gargalo: 'etapa',
-          alvo_owner_ids: [],
-          dono_rotulo: (g && g.dono) || 'time todo',
-          prazo: sm3SextaDaSemana(),
-          playbook_pagina: s.pag || null,
-          status: 'aberto',
-          na_semanal: true,
-          criado_por: (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || null
-        });
-        if (error) throw error;
-        SM3_ESTADO.toast = 'combinado da semana na pauta da Semanal ✓ — dono: '
-          + ((g && g.dono) || 'time todo') + ' · prazo: sexta';
-      }
-    } catch (e) {
-      SM3_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
-    }
-    SM3_GRAVANDO = false;
-    await sm3Carregar();
-    renderSemana();
-    return;
-  }
-
-  if (acao.indexOf('resolver:') === 0) {
-    const id = acao.slice(9);
-    const c = SM3_ESTADO.combinados.find(x => String(x.id) === id);
-    if (!c) return;
-    if (!supa) { SM3_ESTADO.toast = 'sem conexão com o Supabase aqui — nada foi gravado'; renderSemana(); return; }
-    SM3_GRAVANDO = true;
-    try {
-      const novo = c.status === 'aberto' ? 'cumprido' : 'aberto';
-      const { error } = await supa.from('combinados_semana')
-        .update({ status: novo, atualizado_em: new Date().toISOString() }).eq('id', c.id);
-      if (error) throw error;
-      SM3_ESTADO.toast = novo === 'cumprido' ? 'combinado marcado como cumprido ✓' : 'combinado reaberto';
-    } catch (e) {
-      SM3_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
-    }
-    SM3_GRAVANDO = false;
-    await sm3Carregar();
-    renderSemana();
-    return;
-  }
-}
-
-function sm3SextaDaSemana() {
-  const seg = sm9Segunda();
-  if (!seg || typeof addDays !== 'function') return null;
-  return addDays(seg, 4);
-}
-
-function sm3Ligar() {
-  if (SM3_OUVINTE) return;
-  SM3_OUVINTE = true;
-  document.addEventListener('click', function (ev) {
-    const alvo = ev.target.closest && ev.target.closest('[data-sm3-acao]');
-    if (!alvo) return;
-    if (!alvo.closest('[data-sm3-raiz]')) return;
-    const acao = alvo.getAttribute('data-sm3-acao');
-    if (!acao) return;
-    ev.preventDefault();
-    sm3Executar(acao);
-  });
-}
-
-function sm3TelaHTML(d) {
-  const { contexto, manchete, kpis, metaSemanaRot, paceFeito, paceEsperado, paceRot, paceCor,
-    temToast, toast, acoes5, tituloAcoes, gargalos, legenda, execs, roteiro, cbTitulo, cbJust,
-    cbRot, cbBg, cbCor, cbBorda, cbFechar, combinados, agenda, notaDeFonte } = d;
-  return `
-<section data-sm3-raiz style="display:flex;flex-direction:column;gap:56px;padding:0 0 8px;align-items:stretch;">
-  <div id="s3" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;">
-    <div style="width:100%;flex:none;">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
-        <span style="background:#E51A31;color:#FFFDF8;font:900 12px 'Archivo',sans-serif;border-radius:6px;padding:4px 9px;">SEMANA V3</span>
-        <span style="font:800 13px 'Archivo',sans-serif;color:#2B3440;">Semana (gestor) — a semana corrente em modo ação: as 5 ações que viram a semana, os 3 gargalos com dono, e como agir com cada executivo (cobrar, destravar, ir junto, reconhecer)</span>
-      </div>
-      <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
-
-        <div style="background:#16181D;color:#FFFDF8;padding:18px 24px 16px;">
-          <div style="display:flex;align-items:flex-start;gap:28px;flex-wrap:wrap;">
-            <div style="min-width:0;flex:1;">
-              <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${contexto}</span>
-              <b style="display:block;font:900 24px/1.2 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;max-width:980px;text-wrap:balance;">${manchete}</b>
-            </div>
-            <div style="display:flex;gap:28px;flex-wrap:wrap;">
-              ${(kpis||[]).map(k => `
-                <span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${k.rot}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 26px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span></span>
-              `).join('')}
-            </div>
-          </div>
-          <div style="display:flex;align-items:center;gap:12px;margin-top:22px;flex-wrap:wrap;">
-            <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;flex:none;">${metaSemanaRot}</span>
-            <span style="flex:1;min-width:220px;margin-top:10px;position:relative;height:10px;border-radius:999px;background:#2A2E36;">
-              <span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${paceFeito};background:${paceCor};border-radius:999px;"></span></span>
-              <span style="position:absolute;top:-4px;left:${paceEsperado};width:2px;height:18px;background:#F0B45C;border-radius:2px;"></span>
-              <span style="position:absolute;top:-17px;left:${paceEsperado};transform:translateX(-50%);font:800 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#F0B45C;white-space:nowrap;">onde deveria estar</span>
-            </span>
-            <span style="font:700 10.5px 'Manrope',sans-serif;color:#C6CDDA;flex:none;">${paceRot}</span>
-            ${(temToast) ? `
-              <span style="flex:none;font:700 10.5px 'Manrope',sans-serif;color:#7FD9BE;background:rgba(30,158,123,.15);border:1px solid rgba(127,217,190,.4);border-radius:999px;padding:5px 12px;max-width:460px;overflow-wrap:anywhere;">${toast}</span>
-            ` : ''}
-          </div>
-        </div>
-
-        <div style="padding:16px 24px 6px;">
-          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · ${tituloAcoes} <span style="color:#7A8494;">— priorizadas por dinheiro × prazo · se você fizer só isso, a semana fecha</span></span>
-          <div style="display:grid;grid-template-columns:repeat(${Math.min(Math.max((acoes5||[]).length,1),5)},minmax(0,1fr));gap:10px;margin-top:10px;">
-            ${(acoes5||[]).map(a5 => `
-              <div style="background:${a5.bg};border:1.5px solid ${a5.borda};border-radius:12px;padding:11px 13px;display:flex;flex-direction:column;gap:6px;min-width:0;">
-                <span style="display:flex;align-items:center;gap:8px;"><b style="font:900 18px 'Archivo',sans-serif;color:#E51A31;">${a5.pos}</b><span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:${a5.tCor};background:${a5.tBg};border-radius:5px;padding:3px 8px;">${a5.tipo}</span></span>
-                <b style="font:800 12.5px/1.35 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;">${a5.titulo}</b>
-                <span style="font:700 10px/1.5 'Manrope',sans-serif;color:#5B667A;flex:1;">${a5.por}</span>
-                <span style="font:800 10px 'Manrope',sans-serif;color:#8E3B5C;">${a5.valor}</span>
-                <button data-sm3-acao="${a5.on}" style="align-self:flex-start;display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:1px solid ${a5.cbBorda};border-radius:999px;background:${a5.cbBg};font:800 10px 'Manrope',sans-serif;color:${a5.cbCor};cursor:pointer;white-space:nowrap;" data-sm3-hv="0">${a5.rot}</button>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <div style="padding:16px 24px 6px;">
-          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#6E1210;">2 · Os gargalos da semana <span style="color:#7A8494;">— onde o dinheiro está parado · cada um já com dono e ação</span></span>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:10px;">
-            ${(gargalos||[]).map(g => `
-              <div style="background:#FDF7F7;border:1px solid #E3C6C6;border-radius:12px;padding:12px 15px;display:flex;flex-direction:column;gap:6px;min-width:0;">
-                <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#6E1210;">${g.rot}</span>
-                <span style="display:flex;align-items:baseline;gap:8px;"><b style="font:900 26px 'Archivo',sans-serif;color:#6E1210;font-variant-numeric:tabular-nums;">${g.n}</b><span style="font:800 11px 'Manrope',sans-serif;color:#8A3B3B;">${g.un}</span></span>
-                <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;flex:1;">${g.leitura}</span>
-                <span style="font:800 10px 'Manrope',sans-serif;color:#2B3440;">▸ ação: ${g.acao} <b style="color:#8E3B5C;">· dono: ${g.dono}</b></span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <div style="padding:16px 24px 6px;">
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
-            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">3 · Como agir com cada um <span style="color:#7A8494;">— o placar da semana + o modo de gestão certo pra cada executivo · clique na ação e ela vira pauta</span></span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;margin-left:auto;">
-              ${(legenda||[]).map(lg => `
-                <span style="display:inline-flex;align-items:center;gap:5px;font:800 8.5px 'Archivo',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:${lg.cor};background:${lg.bg};border-radius:5px;padding:3px 8px;white-space:nowrap;">${lg.rot}</span>
-              `).join('')}
-            </div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px;">
-            ${(execs||[]).map(e => `
-              <div style="background:${e.bg};border:1.5px solid ${e.borda};border-radius:12px;min-width:0;overflow:hidden;">
-                <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;min-width:0;flex-wrap:wrap;">
-                  <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${e.avBg};color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">${e.ini}</span>
-                  <b style="font:800 13px 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;width:190px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.nome}</b>
-                  <span style="display:flex;gap:16px;flex-wrap:wrap;flex:none;">
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">fechamentos</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.feCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.fe}</b></span>
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">visitas</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.visCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.vis}</b></span>
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">prosp. novas</span><b style="font:800 12px 'Manrope',sans-serif;color:${e.prCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${e.pr}</b></span>
-                  </span>
-                  <span style="flex:1;min-width:120px;max-width:240px;position:relative;height:8px;border-radius:999px;background:#EDEBE5;">
-                    <span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${e.pct};background:${e.pctCor};border-radius:999px;"></span></span>
-                    <span style="position:absolute;top:-3px;left:40%;width:2px;height:14px;background:#E0A64A;border-radius:2px;"></span>
-                  </span>
-                  <span style="flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${e.mCor};background:${e.mBg};border-radius:6px;padding:4px 10px;white-space:nowrap;">${e.modo}</span>
-                  <span style="font:700 10.5px/1.45 'Manrope',sans-serif;color:#5B667A;min-width:200px;flex:2;">▸ ${e.diag}</span>
-                  <button data-sm3-acao="${e.agir}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${e.cbBorda};border-radius:999px;background:${e.cbBg};font:800 10px 'Manrope',sans-serif;color:${e.cbCor};cursor:pointer;white-space:nowrap;" data-sm3-hv="0">${e.cbRot}</button>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-          <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">placar = prometido na segunda (travado na Semanal) × confirmado no HubSpot até agora · traço âmbar = onde deveria estar no dia 2 de 5 · o modo de agir é recalculado por semana: resultado × esforço (cadência) × tendência</span>
-        </div>
-
-        <div style="padding:16px 24px 6px;">
-          <div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;">
-            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
-              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8E3B5C;">4 · A Semanal de segunda <span style="color:#7A8494;">— 30 minutos · o roteiro se monta sozinho com a semana</span></span>
-              <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
-                ${(roteiro||[]).map(rt => `
-                  <div style="display:flex;align-items:center;gap:11px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:9px 13px;min-width:0;flex-wrap:wrap;">
-                    <span style="font:800 9.5px 'Manrope',sans-serif;color:#8E3B5C;flex:none;width:52px;font-variant-numeric:tabular-nums;">${rt.t}</span>
-                    <b style="font:800 12px 'Archivo',sans-serif;color:#2B3440;flex:none;">${rt.rot}</b>
-                    <span style="font:700 10.5px/1.45 'Manrope',sans-serif;color:#5B667A;min-width:0;flex:1;">${rt.txt}</span>
-                  </div>
-                `).join('')}
-              </div>
-              <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">tudo que você clicou nesta tela (ações, gargalos, modos de agir) já entra no passo certo do roteiro</span>
-            </div>
-            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
-              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#1E9E7B;">O combinado da semana <span style="color:#7A8494;">— um por vez, com dono e prazo</span></span>
-              <div style="margin-top:10px;background:#FBF5F8;border:1.5px solid #E9D9E1;border-radius:10px;padding:11px 14px;">
-                <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8E3B5C;">desta semana — sai do gargalo nº 1</span>
-                <b style="display:block;font:800 13px/1.35 'Archivo',sans-serif;color:#2B3440;margin-top:4px;">${cbTitulo}</b>
-                <span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;margin-top:4px;">${cbJust}</span>
-                <button data-sm3-acao="${cbFechar}" style="margin-top:8px;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${cbBorda};border-radius:999px;background:${cbBg};font:800 10px 'Manrope',sans-serif;color:${cbCor};cursor:pointer;white-space:nowrap;" data-sm3-hv="0">${cbRot}</button>
-              </div>
-              <span style="display:block;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;margin-top:10px;">da semana passada — cobre antes de criar novo</span>
-              <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px;">
-                ${(combinados||[]).map(cb => `
-                  <span style="display:flex;align-items:center;gap:8px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:9px;padding:7px 11px;min-width:0;flex-wrap:wrap;">
-                    <span style="font:700 10.5px/1.4 'Manrope',sans-serif;color:#5B667A;min-width:0;flex:1;">${cb.txt} <b style="color:${cb.stCor};">${cb.st}</b></span>
-                    <button data-sm3-acao="${cb.toggle}" style="flex:none;display:inline-flex;align-items:center;min-height:28px;padding:0 11px;border:1px solid ${cb.borda};border-radius:999px;background:${cb.bg};font:800 9.5px 'Manrope',sans-serif;color:${cb.cor};cursor:pointer;white-space:nowrap;" data-sm3-hv="1">${cb.rot}</button>
-                  </span>
-                `).join('')}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="padding:16px 24px 18px;">
-          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Sua semana de líder <span style="color:#7A8494;">— tudo que você clicou virou pauta, nada se perde</span></span>
-          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
-            ${(agenda||[]).map(ag => `
-              <span style="display:flex;align-items:flex-start;gap:9px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:9px 13px;min-width:0;">
-                <span style="font:800 9px 'Manrope',sans-serif;color:#8E3B5C;flex:none;font-variant-numeric:tabular-nums;margin-top:2px;white-space:nowrap;">${ag.hora}</span>
-                <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;overflow-wrap:anywhere;">${ag.rot}</span>
-              </span>
-            `).join('')}
-          </div>
-        </div>
-
-        <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 24px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${notaDeFonte}</p>
-      </div>
-    </div>
-
-  </div>
-</section>
-`;
 }
 
 function sm9Segunda() {
@@ -42840,7 +43512,7 @@ function sm9Cumprido(ownerId) {
 }
 
 function sm9Elenco() {
-  return (DATA.usuarios || []).filter(u => u.role === 'rep' && !u.aComecar);
+  return elencoDeCampo();
 }
 
 function sm9Projecao() {
@@ -43503,7 +44175,7 @@ function renderSemana() {
   if (!raiz) return;
   if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
 
-  raiz.innerHTML = sm3TelaHTML(sm3Dados()) + sm9LeiturasHTML(sm9Dados());
+  raiz.innerHTML = sm4TelaHTML(sm4Dados()) + sm9LeiturasHTML(sm9Dados());
 }
 
 document.addEventListener('click', ev => {
@@ -43516,7 +44188,7 @@ document.addEventListener('click', ev => {
 async function sm9Iniciar() {
   if (!sessaoAtual || sessaoAtual.role !== 'manager') return;
 
-  if (typeof sm3Ligar === 'function') sm3Ligar();
+  if (typeof sm4Ligar === 'function') sm4Ligar();
   renderSemana();
 
   await Promise.allSettled([
