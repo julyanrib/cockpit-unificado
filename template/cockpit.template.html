@@ -58507,6 +58507,33 @@ function sm4Consulta(id) {
     };
   }
 
+  /* ── A PROVA DO COMBINADO DA SEMANA ───────────────────────────────────────────
+     O combinado AFIRMA "ataca os N negócios acima da régua em X". Esta consulta abre
+     os N, um por um, com os dias na etapa contra a régua. Sem ela, o combinado seria
+     a única afirmação desta tela sem prova atrás. */
+  if (verbo === 'combsemana') {
+    const g = sm4GargaloDaEtapa();
+    const fonte = 'CRM · negócios abertos acima do SLA da etapa (data/stageMeta) · a etapa com mais casos';
+    if (g.vazio) {
+      return vazio('O combinado desta semana', 'nenhuma etapa acima da régua', fonte,
+        'nenhum negócio aberto do time passou do tempo de régua da etapa — não há gargalo de '
+        + 'etapa para o combinado atacar nesta semana');
+    }
+    const sla = ((DATA.stageMeta || {}).slaDays || {})[g.stageId];
+    return {
+      titulo: 'O gargalo do combinado: ' + g.etapa + ' (' + g.n + ')',
+      sub: g.n + ' negócio(s) acima da régua' + (g.regua != null ? ' de ' + g.regua + 'd' : '')
+        + ' · ' + g.din.frase,
+      dossieDe: null, fonte: fonte,
+      linhas: g.negocios.slice()
+        .sort(function (a, b) { return (Number(b.dias) || 0) - (Number(a.dias) || 0); })
+        .map(function (l) {
+          return sm4Linha(l, (l.dias != null
+            ? l.dias + 'd na etapa' + (sla ? ' (régua: ' + sla + 'd)' : '')
+            : null));
+        })
+    };
+  }
   /* ── O HISTÓRICO DE COMBINADOS ────────────────────────────────────────────────
      Do Supabase (combinados_semana + combinados_cumprimento). MEDIDO em 09/09: ZERO
      linhas nas duas tabelas. Esta consulta diz isso com o motivo — "0 combinados
@@ -58733,6 +58760,85 @@ function sm4Provas(u, m) {
    O markup convertido não sabe de onde vem nada — ele só lê nomes. Esta função é o
    único lugar em que dado de CRM encosta no desenho, e por isso toda divergência
    entre a prancha e a realidade fica AQUI, cada uma com o motivo escrito. */
+/* ── A ETAPA ONDE O FUNIL PARA ─────────────────────────────────────────────────────
+   Conta negócio ABERTO acima da régua por etapa. A régua sai de `DATA.stageMeta.slaDays`,
+   que é configuração — o template não hardcoda dia de SLA. Devolve também QUEM segura
+   mais negócio parado ali, porque combinado sem dono nomeado é observação, não
+   combinado.
+
+   NÃO É sm3Gargalos DE VOLTA: aquela devolvia três gargalos e a v4 usa um. Reviver 120
+   linhas para ler um terço delas é código morto nascendo. */
+function sm4GargaloDaEtapa() {
+  const porEtapa = sm3AbertosPorEtapa();
+  const acumulado = {};
+  Object.keys(porEtapa).forEach(function (id) {
+    (porEtapa[id] || []).forEach(function (l) {
+      if (!l.slaBreach) return;
+      const k = String(l.stageId || id);
+      (acumulado[k] = acumulado[k] || []).push(l);
+    });
+  });
+  const ids = Object.keys(acumulado);
+  /* NENHUM NEGÓCIO ACIMA DA RÉGUA é resultado, não ausência de dado: o combinado da
+     semana fica livre e a tela diz isso, em vez de sugerir um tema inventado. */
+  if (!ids.length) return { vazio: true, n: 0 };
+  const pior = ids.sort(function (a, b) { return acumulado[b].length - acumulado[a].length; })[0];
+  const nela = acumulado[pior];
+  const porDono = {};
+  nela.forEach(function (l) { const k = String(l.ownerId || ''); porDono[k] = (porDono[k] || 0) + 1; });
+  const donos = Object.keys(porDono).sort(function (a, b) { return porDono[b] - porDono[a]; });
+  const nomeDe = function (o) { return (typeof rt7Nome === 'function') ? String(rt7Nome(o)).split(' ')[0] : 'sem dono'; };
+  const sla = ((DATA.stageMeta || {}).slaDays || {})[pior];
+  return {
+    vazio: false, stageId: pior, n: nela.length, negocios: nela,
+    etapa: (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[pior]) || ('etapa ' + pior),
+    regua: sla != null ? Number(sla) : null,
+    din: sm3Dinheiro(nela),
+    dono: donos.length > 1
+      ? nomeDe(donos[0]) + ' (' + porDono[donos[0]] + ') e mais ' + (donos.length - 1)
+      : (donos.length ? nomeDe(donos[0]) : 'time todo')
+  };
+}
+
+/* ── a sexta desta semana, prazo padrão de um combinado semanal ──────────────────- */
+function sm4SextaDaSemana() {
+  const seg = sm9Segunda();
+  if (!seg || typeof addDays !== 'function') return null;
+  return addDays(seg, 4);
+}
+
+/* ── O COMBINADO QUE O GARGALO SUGERE ─────────────────────────────────────────────
+   Um combinado por etapa, porque o hábito que destrava cada etapa é diferente. A
+   frase cita o NÚMERO que ela ataca — combinado sem número é slogan, e slogan não se
+   cobra na segunda seguinte. */
+const SM4_COMBINADO_POR_ETAPA = {
+  'Visita': { t: 'Visita só conta com próximo passo agendado antes de ir embora', pag: 14 },
+  'Demo/Proposta': { t: 'Proposta pedida sai no mesmo dia, com plano apresentado no CRM', pag: null },
+  'Negociação': { t: 'Negociação sem data de decisão volta para o decisor nesta semana', pag: null },
+  'Conversa com Decisor': { t: 'Conversa com decisor termina com demonstração marcada', pag: null },
+  'Prospecção': { t: 'Prospecção nova entra no CRM no dia em que acontece', pag: null }
+};
+function sm4CombinadoSugerido(g) {
+  if (!g || g.vazio) {
+    return {
+      titulo: 'Nenhuma etapa acima da régua nesta semana — combinado livre',
+      just: 'nenhum negócio aberto passou do tempo de régua da etapa. É a melhor notícia da '
+        + 'semana, e o combinado fica para o hábito que vocês quiserem levar. Dono: time todo · prazo: sexta.',
+      pag: null, etapa: null
+    };
+  }
+  const base = SM4_COMBINADO_POR_ETAPA[g.etapa]
+    || { t: 'Nenhum negócio passa da régua em ' + g.etapa, pag: null };
+  return {
+    titulo: base.t,
+    just: 'ataca os ' + g.n + ' negócio(s) acima da régua em ' + g.etapa
+      + (g.regua != null ? ' (régua de ' + g.regua + 'd)' : ' (régua da etapa não configurada)')
+      + ' · ' + (g.din.com ? g.din.txt + ' parados ali' : 'nenhum deles com valor no CRM')
+      + '. Dono: ' + g.dono + ' · prazo: sexta'
+      + (base.pag ? ' · playbook pág. ' + base.pag : '') + '.',
+    pag: base.pag, etapa: g.etapa
+  };
+}
 function sm4Dados() {
   const ver = sm4Veredito();
   const P = ver.pr.P;
@@ -58997,6 +59103,51 @@ function sm4Dados() {
     };
   });
 
+  /* ── O COMBINADO DESTA SEMANA, NA FAIXA DA PAUTA ──────────────────────────────
+     Julyan em 09/09: "na pauta dessa tela mesmo, com destino Semanal". Ele mora em
+     combinados_semana (tem dono, prazo, alvos e cumprimento por pessoa — nada disso
+     cabe num item de pauta), e a faixa o mostra ao lado dos itens dizendo de onde vem.
+
+     SE A LEITURA DO SUPABASE FALHOU, a linha NÃO diz "nenhum combinado ainda": ela diz
+     que não conseguiu ler. A diferença é a mesma da prova de combinados de cada pessoa
+     — afirmar ausência quando o que houve foi erro de rede é a pior das mentiras da
+     tela, porque ninguém desconfia dela. */
+  const gargalo = sm4GargaloDaEtapa();
+  const sugestao = sm4CombinadoSugerido(gargalo);
+  const seg = sm9Segunda();
+  const oCombinado = (SM3_ESTADO.combinados || []).find(function (x) { return x.data_segunda === seg; }) || null;
+  const cbFalhou = !!SM3_ESTADO.falhouLeitura;
+  const cbDest = SM4_DESTINOS.semanal;
+  const combinado = {
+    fechado: !!oCombinado,
+    naoLeu: cbFalhou && !oCombinado,
+    titulo: oCombinado ? (oCombinado.titulo || sugestao.titulo) : sugestao.titulo,
+    just: cbFalhou && !oCombinado
+      ? 'não consegui ler os combinados desta semana no Supabase — esta linha NÃO diz que '
+        + 'não existe combinado, diz que não sei. A sugestão abaixo é do gargalo medido agora.'
+      : (oCombinado
+        ? [oCombinado.justificativa,
+           oCombinado.dono_rotulo ? 'Dono: ' + oCombinado.dono_rotulo : null,
+           oCombinado.prazo ? 'prazo: ' + ((typeof tm2DataCurta === 'function') ? tm2DataCurta(oCombinado.prazo) : oCombinado.prazo) : null,
+           oCombinado.playbook_pagina ? 'playbook pág. ' + oCombinado.playbook_pagina : null]
+          .filter(Boolean).join(' · ')
+        : sugestao.just),
+    destino: cbDest.rot, dBg: cbDest.bg,
+    rot: oCombinado ? '✓ fechado — desfazer' : 'fechar este combinado na Semanal ▸',
+    bg: oCombinado ? '#EAF6F1' : '#8E3B5C',
+    cor: oCombinado ? '#1E9E7B' : '#FFFDF8',
+    borda: oCombinado ? '#CBE8DD' : '#8E3B5C',
+    dRot: oCombinado
+      ? '✓ está em: ' + cbDest.rot + ' — e o cumprimento se marca lá, por pessoa'
+      : '→ vai para: ' + cbDest.rot + ' · e passa a valer para a jogada “combinado descumprido”',
+    dCor: oCombinado ? '#1E9E7B' : '#7A8494',
+    on: 'combinado',
+    provaRot: gargalo.vazio
+      ? 'nenhuma etapa acima da régua'
+      : 'ver os ' + gargalo.n + ' negócios em ' + gargalo.etapa + ' ▸',
+    prova: 'lista:combsemana',
+    temProva: !gargalo.vazio
+  };
   /* ── o painel lateral ─────────────────────────────────────────────────────────- */
   const pid = SM4_ESTADO.painel;
   const painel = pid ? sm4Consulta(pid) : null;
@@ -59033,9 +59184,14 @@ function sm4Dados() {
     pautaBtnRot: (SM4_ESTADO.pautaAberta ? 'fechar' : 'ver') + ' pauta (' + pautaItens.length + ') '
       + (SM4_ESTADO.pautaAberta ? '▴' : '▾'),
     pautaItens: pautaItens, pautaVazia: pautaItens.length === 0,
+    combinado: combinado,
     pautaLinha: pautaItens.length
       ? pautaItens.length + ' decisão(ões) tomadas — cada uma com destino: sua agenda, a Daily de amanhã ou a Semanal de segunda.'
-      : 'Cada botão desta tela cai aqui com destino declarado — sua agenda, a Daily ou a Semanal de segunda. Nada nesta pauta é lembrete: tudo já está gravado onde o ritual vai lê-lo.',
+        + (combinado.fechado ? ' O combinado da semana está fechado.' : ' O combinado da semana ainda não foi fechado.')
+      : 'Cada botão desta tela cai aqui com destino declarado — sua agenda, a Daily ou a Semanal '
+        + 'de segunda. Nada nesta pauta é lembrete: tudo já está gravado onde o ritual vai lê-lo.'
+        + (combinado.fechado ? ' O combinado da semana já está fechado.'
+            : ' O combinado da semana está aqui dentro, ainda não fechado.'),
     temPainel: !!painel,
     painelTitulo: painel ? painel.titulo : '',
     painelSub: painel ? painel.sub : '',
@@ -59071,7 +59227,7 @@ function sm4Dados() {
    min(1780px, 100% - 64px). Duas larguras fixas aninhadas é barra de rolagem
    lateral em qualquer monitor menor. */
 function sm4TelaHTML(d) {
-  const { contexto, syncTxt, veredito, verCor, fechaX, fraseB, feitoPct, esperadoPct, paceCor, diaAbrev, paceLinha, placar, jogadas, extras, nAtencao, nRitmo, subPlacar, atencao, ritmo, atencaoVazia, atencaoVaziaTxt, ritmoVazio, ritmoVazioTxt, recFrase, recOn, recRot, recBg, recCor, recBorda, recDRot, recDCor, pautaAberta, pautaToggle, pautaBtnRot, pautaItens, pautaVazia, pautaLinha, temPainel, painelTitulo, painelSub, painelLinhas, painelFonte, painelFechar, painelDossieRot, painelDossie, temToast, toast } = d;
+  const { contexto, syncTxt, veredito, verCor, fechaX, fraseB, feitoPct, esperadoPct, paceCor, diaAbrev, paceLinha, placar, jogadas, extras, nAtencao, nRitmo, subPlacar, atencao, ritmo, atencaoVazia, atencaoVaziaTxt, ritmoVazio, ritmoVazioTxt, recFrase, recOn, recRot, recBg, recCor, recBorda, recDRot, recDCor, pautaAberta, pautaToggle, pautaBtnRot, pautaItens, pautaVazia, pautaLinha, combinado, temPainel, painelTitulo, painelSub, painelLinhas, painelFonte, painelFechar, painelDossieRot, painelDossie, temToast, toast } = d;
   return `
 <section data-sm4-raiz style="display:flex;flex-direction:column;gap:24px;padding:0 0 8px;align-items:stretch;">
   ${temToast ? `<div role="status" style="align-self:flex-start;background:#16181D;color:#FFFDF8;border-radius:10px;padding:9px 15px;font:700 12px 'Manrope',sans-serif;">${esc(toast)}</div>` : ''}
@@ -59235,6 +59391,19 @@ function sm4TelaHTML(d) {
                   <button data-sm4-acao="${esc(pi.remover)}" style="flex:none;background:none;border:none;padding:2px 6px;font:800 11px 'Manrope',sans-serif;color:#7A8494;cursor:pointer;" data-sm4-hv="9">remover ✕</button>
                 </div>
               `).join('')}
+            </div>
+            <div style="display:flex;align-items:flex-start;gap:12px;background:#FBF5F8;border:1px solid #E8D5DE;border-radius:11px;padding:12px 15px;margin-top:12px;flex-wrap:wrap;">
+              <span style="flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#FDFEFF;background:${esc(combinado.dBg)};border-radius:5px;padding:4px 9px;white-space:nowrap;margin-top:2px;">${esc(combinado.destino)}</span>
+              <span style="flex:1;min-width:240px;">
+                <span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8E3B5C;">o combinado desta semana · um só, com dono e prazo</span>
+                <b style="display:block;font:800 13px/1.4 'Manrope',sans-serif;color:#2B3440;margin-top:3px;">${esc(combinado.titulo)}</b>
+                <span style="display:block;font:600 11.5px/1.5 'Manrope',sans-serif;color:#5B667A;margin-top:3px;">${esc(combinado.just)}</span>
+                <span style="display:flex;align-items:center;gap:9px;margin-top:9px;flex-wrap:wrap;">
+                  <button data-sm4-acao="${esc(combinado.on)}" style="display:inline-flex;align-items:center;min-height:34px;padding:0 14px;border:1px solid ${esc(combinado.borda)};border-radius:999px;background:${esc(combinado.bg)};font:800 12px 'Manrope',sans-serif;color:${esc(combinado.cor)};cursor:pointer;white-space:nowrap;" data-sm4-hv="7">${esc(combinado.rot)}</button>
+                  ${(combinado.temProva) ? `<button data-sm4-acao="${esc(combinado.prova)}" style="display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:700 10.5px 'Manrope',sans-serif;color:#5B667A;cursor:pointer;white-space:nowrap;" data-sm4-hv="1">${esc(combinado.provaRot)}</button>` : ''}
+                </span>
+                <span style="display:block;font:700 10px 'Manrope',sans-serif;color:${esc(combinado.dCor)};margin-top:6px;">${esc(combinado.dRot)}</span>
+              </span>
             </div>
             ${(pautaVazia) ? `
               <span style="display:block;font:600 12px 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">Nada ainda — cada botão da tela cai aqui, já no destino certo (sua agenda, a Daily ou a Semanal de segunda).</span>
@@ -59460,6 +59629,82 @@ async function sm4Executar(acao) {
     return;
   }
 
+  /* ── FECHAR (OU DESFAZER) O COMBINADO DA SEMANA ──────────────────────────────
+     Grava em combinados_semana, com dono, prazo e página de playbook. É a linha que a
+     jogada nº 2 vai poder cobrar na semana seguinte, e é a única gravação desta tela
+     que NÃO passa por tl5Alternar — porque não é item de pauta, é combinado do time.
+
+     DESFAZER APAGA A LINHA, e não marca na_semanal=false: combinado que não foi fechado
+     não é combinado meio-fechado, é combinado que não existe. Linha fantasma apareceria
+     no histórico da semana seguinte como se alguém tivesse combinado algo.
+
+     E CONFERE NA FONTE, como as outras quatro: relê e checa se a linha está lá. "Sem
+     erro" não é "gravou" — foi assim que o toast desta tela já mentiu uma vez hoje. */
+  if (verbo === 'combinado') {
+    const seg = sm9Segunda();
+    if (typeof supa === 'undefined' || !supa || !seg) {
+      SM4_ESTADO.toast = 'sem conexão com o Supabase aqui — nada foi gravado';
+      renderSemana();
+      return;
+    }
+    const existente = (SM3_ESTADO.combinados || []).find(function (x) { return x.data_segunda === seg; });
+    const queria = !existente;
+    SM4_GRAVANDO = true;
+    try {
+      if (existente) {
+        const { error } = await supa.from('combinados_semana').delete().eq('id', existente.id);
+        if (error) throw error;
+        SM4_ESTADO.toast = 'combinado removido da pauta da Semanal';
+      } else {
+        const g = sm4GargaloDaEtapa();
+        const s = sm4CombinadoSugerido(g);
+        const { error } = await supa.from('combinados_semana').insert({
+          data_segunda: seg,
+          titulo: s.titulo,
+          justificativa: s.just,
+          origem_gargalo: 'etapa',
+          /* ALVOS VAZIO = o time todo, e isto tem DUAS razões — a segunda eu só vi lendo
+             a política do banco:
+               1. nomear os donos congelaria a lista de quem segura negócio parado HOJE, e
+                  na sexta o combinado cobraria as pessoas erradas;
+               2. a policy de SELECT é `role = manager OR cardinality(alvo_owner_ids) = 0
+                  OR owner_id = ANY(alvo_owner_ids)`. Com a lista vazia, TODO EXECUTIVO
+                  enxerga o combinado. Se alguém "melhorar" isto nomeando os donos, o
+                  combinado da semana fica invisível para o resto do time — sem erro, sem
+                  aviso, e o gestor cobra na Semanal um combinado que metade não leu.
+             Quem cumpriu se marca por pessoa, em combinados_cumprimento. */
+          alvo_owner_ids: [],
+          dono_rotulo: (g && !g.vazio && g.dono) || 'time todo',
+          prazo: sm4SextaDaSemana(),
+          playbook_pagina: s.pag || null,
+          status: 'aberto',
+          na_semanal: true,
+          criado_por: (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || null
+        });
+        if (error) throw error;
+        SM4_ESTADO.toast = 'combinado da semana na pauta da Semanal ✓ — dono: '
+          + ((g && !g.vazio && g.dono) || 'time todo') + ' · prazo: sexta';
+      }
+    } catch (e) {
+      SM4_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
+    }
+    SM4_GRAVANDO = false;
+    await sm3Carregar();
+    /* a conferência do combinado é na lista relida, e não na pauta: ele mora em
+       combinados_semana, então TL5_ESTADO.pauta nunca teria notícia dele */
+    const agora = (SM3_ESTADO.combinados || []).some(function (x) { return x.data_segunda === seg; });
+    if (agora !== queria) {
+      const jaReclamou = String(SM4_ESTADO.toast || '').indexOf('não gravou') === 0
+        || String(SM4_ESTADO.toast || '').indexOf('sem conexão') === 0;
+      if (!jaReclamou) {
+        SM4_ESTADO.toast = queria
+          ? 'NÃO GRAVOU: o banco aceitou sem erro mas o combinado da semana voltou ausente — "sem erro" não é "gravou"'
+          : 'NÃO SAIU: o combinado continua gravado nesta semana depois do clique de desfazer';
+      }
+    }
+    renderSemana();
+    return;
+  }
   /* ── o ✕ do rodapé: tira da pauta pela chave que ESTÁ no banco ───────────────
      Apaga pela chave e não pelo id, pelo mesmo motivo de tl5Alternar: chave é
      determinística e única, e id pode voltar vazio de um insert que não devolveu a
