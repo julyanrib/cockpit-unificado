@@ -131,10 +131,61 @@ conferir('o KPI de planos montados diz quantos vieram pela grade',
    `prometido_visitas` a até 200 caracteres de `veioDaGrade` e reprovou porque as duas
    coisas ficam perto NO ARQUIVO — a declaração de `naGrade` é seguida da soma das
    promessas. Janela de caracteres não mede acoplamento; ler a expressão, sim. */
+/* A CONTAGEM DA GRADE MUDOU DE `preenchidos` PARA `visitas` (09/09/26), e a REGRA desta
+   checagem não: as duas somas continuam separadas, e é isso que ela protege.
+   O motivo da troca: `preenchidos` são as chaves de `porHora`, ou seja as visitas COM
+   horário. Depois de "pode colocar 15 contas no dia uai" e de a hora passar a ser escolha
+   do executivo, um dia com onze visitas e três horas marcadas somava três — o número do
+   topo deixou de descrever o dia. `visitas` é a lista inteira, com hora e sem. */
 conferir('a promessa em número vem de dailies, e o planejado é uma conta separada',
   /const somaVisitas = medidos\.reduce\(function \(t, x\) \{ return t \+ \(Number\(x\.daily\.prometido_visitas\) \|\| 0\); \}, 0\);/.test(codigo) &&
-  /const somaPlanejadas = medidos\.reduce\(function \(t, x\) \{ return t \+ x\.preenchidos\.length; \}, 0\);/.test(codigo),
+  /const somaPlanejadas = medidos\.reduce\(function \(t, x\) \{ return t \+ x\.visitas\.length; \}, 0\);/.test(codigo),
   'somar slot da grade dentro de "visitas prometidas" inventaria promessa que ninguém deu');
+
+/* ══ A VISITA SEM HORA EXISTE, E APARECE ═════════════════════════════════════════════
+   Julyan: "pode colocar 15 contas no dia uai, não so 7!" + "conserte a daily do gestor
+   junto, tudo na mesma sincronia".
+
+   São 15 vagas por dia e 7 janelas de horário. Logo um dia pode ter oito visitas SEM
+   hora — e antes desta rodada elas: (1) eram descartadas por `if (!hora) return`, (2)
+   depois, na minha primeira tentativa, colidiam todas na chave vazia de `porHora` e só a
+   última sobrava, e (3) mesmo contadas, não eram DESENHADAS, porque o laço da tela
+   iterava as sete horas. Três formas de a mesma visita não existir. */
+conferir('a visita sem hora vai para semHora, que é lista',
+  /const semHora = \[\];/.test(codigo) &&
+  /if \(!hora \|\| porHora\[hora\]\) semHora\.push\(item\);/.test(codigo) &&
+  /return \{ horas: horas, porHora: porHora, semHora: semHora, daGrade: true/.test(codigo),
+  'com 8 visitas sem hora, um objeto indexado por hora colide todas na chave vazia — '
+  + '"some" viraria "some, menos uma"');
+
+conferir('e a tela do gestor desenha as visitas, não as sete horas',
+  /const visitas = preenchidos\.map\(function \(h\) \{ return grade\.porHora\[h\]; \}\)\s*\n?\s*\.concat\(grade\.semHora \|\| \[\]\);/.test(codigo) &&
+  /const slots = x\.visitas\.map\(function \(sl\) \{/.test(codigo),
+  'o laço iterava grade.horas: sete linhas fixas para um dia de quinze, e as sem hora em '
+  + 'nenhuma delas');
+
+/* ══ DEPOIS DA HORA, NADA ABORTA A VISITA ══════════════════════════════════════════
+   Esta guarda nasceu de uma sabotagem que PASSOU: eu recoloquei `if (!hora) return;` no
+   laço da grade — o defeito original de hoje, o que fazia a visita sem horário sumir da
+   tela do gestor — e as quatro checagens acima ficaram verdes. Elas medem o balde
+   (existe, é lista, é devolvido) e o laço da tela (itera visitas); nenhuma media se a
+   visita CHEGA ao balde.
+
+   O `return {` da IIFE que monta o item é legítimo, e é por isso que a busca é por
+   `return;` com ponto e vírgula: no trecho que vai da hora ao `planejados += 1`, um
+   return seco é a única forma de a visita não entrar em nenhuma das duas saídas. */
+const laco = codigo.slice(codigo.indexOf('coluna.forEach(function (v, si)'));
+const depoisDaHora = laco.slice(laco.indexOf('const hora ='), laco.indexOf('planejados += 1;'));
+conferir('depois de a hora ser calculada, nada aborta a visita',
+  laco.indexOf('coluna.forEach') === 0
+    && depoisDaHora.length > 40
+    && depoisDaHora.indexOf('return;') === -1,
+  'um return seco entre a hora e a contagem descarta a visita sem horário — o defeito de 09/09 que sumiu com as 8 últimas do dia na tela do gestor');
+
+conferir('a hora ausente é rótulo honesto, não relógio inventado',
+  /h: sl\.hora \|\| 'sem hora',/.test(codigo),
+  'ele planejou a visita e não marcou a hora — escrever um relógio ali inventa o horário '
+  + 'que ele não deu');
 
 /* ESTE NÚMERO IA ENGANAR ELE, e só apareceu quando eu fui conferir a checagem acima.
    Medido em 09/09: promessa 2, planejado 38. Sozinho, o "2" faz o gestor abrir a reunião
@@ -149,6 +200,60 @@ conferir('esta leitura não grava em planos_semanais',
   !/from\('planos_semanais'\)[\s\S]{0,160}\.(insert|update|upsert|delete)\(/.test(
     codigo.slice(codigo.indexOf('segundaDoFoco') - 400, codigo.indexOf('segundaDoFoco') + 900)),
   'a Daily do gestor é espelho; escrever no plano de alguém a partir dela é mexer no trabalho dele sem ele saber');
+
+/* ══ O CONTRATO DE dg4TelaHTML É FECHADO ══════════════════════════════════════════
+   Em 09/09 a Daily do gestor ficou INTEIRA em "Carregando...": `avisoForaDoCampo` era
+   calculado em dg4Dados e lido dentro do markup de dg4TelaHTML. Duas funções — o nome
+   não existia no escopo de quem escrevia o HTML, e o ReferenceError levou a aba toda.
+
+   Build e 37 suítes passaram: nenhuma executa dg4TelaHTML, e a guarda de ordem de
+   declaração vigia uso-antes-de-declarar DENTRO de uma função, que é outra pergunta.
+   Quem pegou foi abrir a tela. Esta guarda existe para a próxima vez não depender disso.
+
+   COMO ELA MEDE: todo `${nome}` do corpo de dg4TelaHTML que seja um identificador nu
+   (sem ponto) tem de ser um nome que EXISTE ali — declarado dentro da função, parâmetro
+   dela, ou global conhecido do template. Qualquer outro só pode chegar por `d.`.
+   Ela não julga o valor; julga a existência, que é exatamente o que estourou. */
+const telaDg4 = corpoDe('dg4TelaHTML');
+const semComentario = telaDg4.replace(/\/\*[\s\S]*?\*\//g, ' ');
+const declaradosDg4 = new Set(['d', 'esc', 'DATA', 'PL6_SLOTS', 'PL6_HORAS', 'Math', 'String',
+  'Number', 'Object', 'Array', 'JSON', 'Date', 'Boolean', 'window', 'document']);
+/* nomes que nascem dentro da função: const/let/var, parâmetros de callback, o for e
+   — o que eu esqueci na primeira versão desta guarda — a DESESTRUTURAÇÃO do contrato,
+   que é justamente como dg4TelaHTML recebe os quinze nomes que usa. Sem ela a guarda
+   acusava quinze falsos e escondia o único verdadeiro. */
+const reDestr = /(?:const|let|var)\s*\{([^}]*)\}\s*=/g;
+let md;
+while ((md = reDestr.exec(semComentario)) !== null) {
+  md[1].split(',').forEach(function (a) {
+    const nome = a.split(':').pop().trim().split(/[\s=]/)[0];
+    if (/^[A-Za-z_$][\w$]*$/.test(nome)) declaradosDg4.add(nome);
+  });
+}
+/* nomes que nascem dentro da função: const/let/var, parâmetros de callback e o for */
+let m;
+const reDecl = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)|function\s*\(([^)]*)\)|\(([^)]*)\)\s*=>|for\s*\(\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g;
+while ((m = reDecl.exec(semComentario)) !== null) {
+  [m[1], m[4]].forEach(function (nome) { if (nome) declaradosDg4.add(nome); });
+  [m[2], m[3]].forEach(function (lista) {
+    if (!lista) return;
+    lista.split(',').forEach(function (a) {
+      const nome = a.trim().split(/[\s=]/)[0];
+      if (/^[A-Za-z_$][\w$]*$/.test(nome)) declaradosDg4.add(nome);
+    });
+  });
+}
+const forasDoContrato = [];
+const reUso = /\$\{\s*([A-Za-z_$][\w$]*)\s*([^\w$.(]|$)/g;
+while ((m = reUso.exec(semComentario)) !== null) {
+  if (!declaradosDg4.has(m[1]) && forasDoContrato.indexOf(m[1]) === -1) forasDoContrato.push(m[1]);
+}
+conferir('todo nome que o markup do gestor lê existe no escopo dele',
+  telaDg4.length > 2000 && forasDoContrato.length === 0,
+  forasDoContrato.length
+    ? ('dg4TelaHTML lê ' + forasDoContrato.join(', ') + ' sem receber pelo contrato — '
+      + 'ReferenceError leva a aba inteira para "Carregando...", como avisoForaDoCampo em 09/09')
+    : 'não consegui ler o corpo de dg4TelaHTML — sem corpo não há medição, e verde aqui seria falso');
 
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {

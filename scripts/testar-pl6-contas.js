@@ -485,20 +485,81 @@ function pl6RegraCSS(nome) {
     && ter('const primeiroVazio = vaziosDoDia.length ? vaziosDoDia[0] : -1;'),
     'eram 35 linhas de "HH:MM · livre" e 1.330px de cromo numa semana vazia');
 
-  checar('e a contagem de vazios é feita antes do laço, não dentro',
-    tpl.indexOf('const vaziosDoDia = []') > -1
-    && tpl.indexOf('const vaziosDoDia = []') < tpl.indexOf('const slots = PL6_HORAS.map'),
-    '"é o primeiro vazio?" resolvido dentro do laço é a conta que sai errada quando alguém reordena');
+  /* A expressão mudou em 09/09 (as vagas passaram a ter duas espécies: limpa e órfã, e a
+     órfã entra por último), e a REGRA não: a conta é feita UMA vez, antes do laço.
+     Duas correções de cegueira nesta guarda, além da expressão:
+       · ela cravava `const vaziosDoDia = []`, o texto exato de ontem;
+       · `indexOf(a) < indexOf(b)` é VERDADE quando `a` não existe (-1 < qualquer coisa),
+         então ela passava sem medir nada se a âncora se perdesse. Agora as duas posições
+         precisam existir. */
+  (function () {
+    const iVazios = tpl.indexOf('const vaziosDoDia =');
+    const iLaco = tpl.indexOf('const slots = ordem.map');
+    checar('e a contagem de vazios é feita antes do laço, não dentro',
+      iVazios > -1 && iLaco > -1 && iVazios < iLaco
+        && /const limpos = \[\];[\s\S]{0,600}const vaziosDoDia = limpos\.concat\(orfaos\);/.test(tpl),
+      '"é o primeiro vazio?" resolvido dentro do laço é a conta que sai errada quando alguém reordena');
 
-  /* O HORÁRIO É DELE: botão, campo e gravação */
-  checar('a hora é um botão que abre campo no próprio cartão',
-    ter('data-pl6-hora-slot=') && ter('data-pl6-hora-campo=')
-    && ter('data-pl6-hora-salvar=') && ter('data-pl6-hora-limpar='),
-    '"eles tem q definir o horario no planejamento" — e sem gaveta, que tiraria a semana da frente');
+    /* ══ A CONTA FORA DA CARGA É VAGA, NÃO CARTÃO ═══════════════════════════════════
+       Julyan, olhando a tela: "nao quero esse nome 'conta saiu da sua base' nao precisa,
+       só os slots vazios" — e o mockup do kanban não tem esse cartão nem linha de vaga
+       vazia: cartões, e depois um "+ escolher conta". */
+    checar('conta fora desta carga não desenha cartão no kanban',
+      !/pl6-slot-quem">conta saiu da sua base/.test(tpl)
+        && !/pl6-slot-tag" style="color:var\(--pl6-bloqueio\);">saiu da base/.test(tpl),
+      'a casca do cartão ocupava a altura de uma visita para dizer que ali não há visita');
 
-  checar('os quatro verbos da hora estão no seletor da delegação',
-    ter('[data-pl6-hora-slot],[data-pl6-hora-salvar],[data-pl6-hora-limpar],'),
+    checar('e ela também não conta como ocupação do dia',
+      /const n = col\.filter\(x => \{ const id = pl6SlotId\(x\); return id && porId\.has\(id\); \}\)\.length;/.test(tpl),
+      'contador em 11/15 com nove cartões na tela é diferença sem explicação visível');
+
+    checar('a vaga de conta fora da carga é a última a ser preenchida',
+      /if \(!id\) limpos\.push\(k\);\s*\n\s*else if \(!porId\.has\(id\)\) orfaos\.push\(k\);/.test(tpl),
+      'trocar a região de ataque transforma visita planejada em órfã; sobrescrevê-la antes'
+      + ' das vagas limpas apagaria um plano que volta na próxima carga');
+  }());
+
+/* ══ O KANBAN REDESENHADO (09/09/26, prancha kanban-planejamento) ════════════════════
+   "Cirurgia visual: redesenhe APENAS o kanban semanal do Planejamento." As checagens
+   abaixo substituem as do desenho de algumas horas antes — o input `--:--` + ✓ virou
+   sete chips, e o crachá de etapa VOLTOU para a linha da hora, porque a geometria mudou:
+   a pill da hora é estreita e o ✕ encolheu de 38px para 20. */
+
+  /* O HORÁRIO É DELE, EM UM TOQUE: os sete chips no lugar do input */
+  checar('o seletor de hora é chip, não input de relógio',
+    ter('data-pl6-hora-slot=') && ter('data-pl6-hora-set=') && ter('data-pl6-hora-limpar=')
+    && !ter('data-pl6-hora-campo=') && !ter('data-pl6-hora-salvar='),
+    'a prancha manda remover o input --:-- + ✓: digitar quatro dígitos onde um toque resolve');
+
+  checar('e as sete janelas do chip saem de PL6_HORAS',
+    /const chips = PL6_HORAS\.map\(function \(h\)/.test(tpl),
+    'segunda lista de horários é a divergência que ninguém vê — as janelas são uma declaração só');
+
+  /* OCUPADO NO DIA = APAGADO E SEM CLIQUE. Sem isto ele marca dois clientes às 10:30 e
+     descobre na rua. E "sem clique" é `<span>`, não botão apagado: botão desabilitado que
+     ainda dispara é o que produz a visita dupla. */
+  checar('a janela já tomada no dia não é clicável',
+    /const horasTomadas = \{\};/.test(tpl)
+    && /const ocupada = ocupadaPor != null && ocupadaPor !== si;/.test(tpl)
+    && /if \(ocupada\) \{\s*\n\s*return '<span class="pl6-hora-chip is-ocupado"/.test(tpl),
+    'a prancha pede "ocupado no dia = apagado (sem clique)" — dois clientes na mesma hora '
+    + 'só aparecem na rua');
+
+  checar('e só a hora ESCOLHIDA ocupa janela',
+    /const h = pl6SlotHora\(col\[k\], k\);\s*\n\s*if \(h\) horasTomadas\[h\] = k;/.test(tpl),
+    'posição sem hora não ocupa relógio nenhum desde que a faixa deixou de ser hora — '
+    + 'contá-la apagaria as sete janelas de um dia com sete visitas sem hora');
+
+  checar('os verbos da hora estão no seletor da delegação',
+    ter('[data-pl6-hora-slot],[data-pl6-hora-set],[data-pl6-hora-limpar],'),
     'verbo fora do seletor é clique morto: o botão existe e o handler nunca roda');
+
+  /* A HORA LIVRE NÃO SE PERDEU. Os chips são atalho, não prisão: o painel de
+     "+ escolher conta" continua com o campo de hora arbitrária, e é de lá que veio o
+     {id, hora:"14:20"} que já está no banco. Se ele sair, 14:20 deixa de ser possível. */
+  checar('a hora arbitrária continua possível pelo painel de conta',
+    ter('function pl6HoraLivreHTML(') && ter("pl6HoraLivreHTML('__slot'"),
+    'os chips cobrem as sete janelas; 15:40 se digita no painel, e há hora fora da grade no banco');
 
   /* ESTA CHECAGEM NASCEU DE UM DEFEITO MEU. Eu chamei `renderPlanejamento6a()` sem
      argumento no handler; a função é `renderPlanejamento6a(rep)` e sem o rep ela morre
@@ -526,20 +587,81 @@ function pl6RegraCSS(nome) {
     const ia = texto.indexOf(a), ib = texto.indexOf(b);
     return ia > -1 && ib > -1 && ia < ib;
   };
-  checar('e o campo é lido ANTES de qualquer redesenho',
-    ramo.indexOf('data-pl6-hora-campo="\' + ref + \'"') > -1
-    && antesDe(ramo, 'nova = campo', 'await mutar('),
-    'o campo vive dentro do cartão: o primeiro innerHTML novo o destrói com o valor digitado');
+  /* A HORA VEM DO ATRIBUTO DO CHIP, e o split é POR POSIÇÃO. "di.si.HH:MM" tem ponto no
+     meio e dois-pontos na hora: `split('.').slice(2).join('.')` devolve a hora inteira,
+     e um `split('.')[2]` cru devolveria "10" de "10:30" se alguém trocasse o separador. */
+  checar('a hora vem do chip, não de um campo',
+    ramo.indexOf("const bruto = String(d.pl6HoraSet || d.pl6HoraLimpar);") > -1
+    && ramo.indexOf("partes.slice(2).join('.')") > -1
+    && ramo.indexOf('data-pl6-hora-campo') < 0,
+    'não há mais campo para ler: o chip carrega a escolha no próprio atributo');
 
   checar('"sem hora" volta a string simples, não um objeto com hora vazia',
     /g\[di\]\[si\] = nova \? \{ id: id, hora: nova \} : id;/.test(tpl),
     'um { id, hora: "" } seria um terceiro estado equivalente, com uma forma a mais para entender');
 
-  /* O CRACHÁ NÃO É MAIS ESMAGADO. Medido com estilo computado: 11px de 80 necessários. */
-  checar('o crachá de etapa saiu da linha da hora',
-    ter('.pl6-slot-tag{display:block;margin-top:1px;')
-    && tpl.indexOf("'<b class=\"pl6-slot-quem\">' + esc(l.nome) + '</b>'\n          + '<span class=\"pl6-slot-tag\"") > -1,
-    'na linha 1 ele dividia 131px com a hora (70) e o ✕ (38) e recebia 11 — saía "PROSPE…"');
+  /* ══ O CRACHÁ VOLTOU PARA A LINHA DA HORA, e isto NÃO desfaz o conserto de hoje ═════
+     De manhã eu o desci porque ele recebia 11px de 80 numa linha de 131 — medido com
+     estilo computado. A prancha o põe de volta ao lado da hora, e agora cabe porque a
+     GEOMETRIA mudou: a pill da hora é estreita (era o botão "definir hora" de 70px) e o ✕
+     encolheu de 38px para 20. O que resolveu foi a aritmética da linha, não o lugar do
+     crachá — por isso a checagem cobra o corte por reticência, que é o que impede o
+     "PROSPE…" voltar se alguém alargar a hora outra vez. */
+  checar('o crachá de etapa está na linha 1 e corta por reticência',
+    tpl.indexOf("'<span class=\"pl6-slot-tag\" style=\"color:' + cor + ';\">' + esc(tag) + '</span>'\n"
+      + "          /* O ✕ PARA A PROPAGACAO na fiacao") > -1
+    && /\.pl6-slot-tag\{[^}]*text-overflow:ellipsis/.test(tpl),
+    'ele cabe porque a pill da hora é estreita e o ✕ foi de 38px para 20 — sem a reticência, '
+    + 'basta alguém alargar a hora para voltar o "PROSPE…"');
+
+  checar('o ✕ do card é 20px, não 38',
+    /\.pl6-slot-x\{[^}]*width:20px/.test(tpl),
+    'é o que abriu espaço para o crachá voltar à linha 1');
+
+  /* O TRILHO DE ETAPA É FAIXA INTERNA, e não border-left: borda não respeita o raio, e os
+     5px vazavam nos cantos do card. */
+  checar('o trilho de etapa é faixa interna, dentro do raio',
+    ter('.pl6-slot-trilho{') && ter('<span class="pl6-slot-trilho" aria-hidden="true"></span>')
+    && !/\.pl6-slot-cheio\{[^}]*border-left:5px/.test(tpl),
+    'border-left não respeita border-radius: os 5px vazavam e o card parecia ter um bico');
+
+  checar('e a cor da etapa chega por variável, para o hover usá-la',
+    ter("style=\"--pl6-et:' + cor + ';\"")
+    && /\.pl6-slot-cheio:hover\{border-color:var\(--pl6-et/.test(tpl),
+    'seis etapas em seis classes seria o de/para espalhado; a cor é dado e vem inline');
+
+  /* ══ A BARRA DE CAPACIDADE ═══════════════════════════════════════════════════════ */
+  /* o nome dizia "7 segmentos" e o mecanismo sempre foi PL6_SLOTS — depois de "pode
+     colocar 15 contas no dia uai" o número no nome passou a mentir sobre o que a guarda
+     mede. Nome cravado em número envelhece; o mecanismo não. */
+  checar('a capacidade é uma barra com um segmento por vaga, e o contador ao lado',
+    ter('.pl6-cap-seg{') && ter('.pl6-cap-seg.is-cheio{')
+    && /for \(let k = 0; k < PL6_SLOTS; k\+\+\) \{\s*\n\s*capSegs\.push/.test(tpl),
+    'substitui o "0/7" solto: a barra diz a forma, que é o que se lê de longe em 5 colunas');
+
+  checar('e o contador tem três estados, sem zero acusatório',
+    /const cntCls = n >= PL6_SLOTS \? ' is-cheio' : \(n > 0 \? ' is-parcial' : ''\);/.test(tpl)
+    && /\.pl6-col-cnt\{[^}]*color:#B4AC9C/.test(tpl),
+    'dia vazio é cinza — é segunda de manhã, não falha; começado é âmbar, cheio é verde');
+
+  /* ══ A ORDEM DE LEITURA ══════════════════════════════════════════════════════════ */
+  checar('os cards com hora vêm primeiro, em ordem',
+    /const ordem = \[\];/.test(tpl) && /ordem\.sort\(function \(a, b\)/.test(tpl)
+    && /if \(ha && hb && ha !== ha\.constructor/.test(tpl) === false
+    && /if \(ha && hb && ha !== hb\) return ha < hb \? -1 : 1;/.test(tpl),
+    'desde que a posição deixou de ser relógio, a ordem de ARMAZENAMENTO não é a do dia: '
+    + '14:20 na posição 0 e 09:00 na 3 mostrariam a tarde antes da manhã');
+
+  checar('e a ordenação é da LEITURA, não da grade gravada',
+    /const slots = ordem\.map\(\(si\) => \{/.test(tpl)
+    && !/grade\[di\]\s*=\s*ordem/.test(tpl),
+    'reordenar a grade mudaria o que a Daily e a tela do gestor leem por posição — a ordem '
+    + 'é "não mexa em nenhuma lógica de dados"');
+
+  checar('o dia cheio troca o botão por "dia cheio ✓"',
+    ter('<span class="pl6-dia-cheio">dia cheio ✓</span>')
+    && /vagasDoDia === 0 \?/.test(tpl),
+    'sem vaga não há o que clicar, e botão que não faz nada é clique morto');
 
   /* O CABEÇALHO FALA DE VAGAS, NÃO DE HORÁRIOS */
   checar('o cabeçalho não promete horários',
@@ -560,6 +682,62 @@ function pl6RegraCSS(nome) {
   checar('nenhuma junção com "+" duplo (mais unário sobre string = NaN)',
     duplos.length === 0,
     'linha(s) ' + duplos.join(', ') + ' — foi assim que o cabeçalho saiu "...aindaNaN"');
+}());
+
+/* ══ A HORA É ESCOLHA DELE, E A FAIXA É OFERTA ═════════════════════════════════════
+   Julyan: "não queor horários pré definidos, eles tem q definir o horario no
+   planejamento" + "pode colocar 15 contas no dia uai" + "tudo na mesma sincronia".
+
+   O defeito que estas guardas travam entrou por CINCO portas no mesmo dia, sempre com
+   build e 37 suítes verdes: a posição na coluna voltando a valer como horário. Kanban,
+   Daily do gestor, Minha Daily, os caminhos de gravação e os toasts. Cada porta parecia
+   um detalhe; juntas, faziam três telas discordarem do mesmo dia — e quem apanha na
+   rodada é o executivo, que vê "+ hora" enquanto o gestor lê 19:00 em voz alta. */
+(function () {
+  /* OS COMENTÁRIOS SAEM ANTES DA CONTAGEM. Três blocos de comentário CITAM o trecho
+     `PL6_HORAS[si]` para explicar por que ele saiu do código — e a primeira versão desta
+     guarda contava as citações como ocorrências, reprovando o arquivo correto. É a sexta
+     vez neste projeto que uma guarda minha lê o próprio comentário; a correção é sempre a
+     mesma e é esta linha. Detectar "está em comentário" por marcador na mesma linha não
+     funciona: dentro de um bloco de comentário as linhas do meio não têm marcador nenhum
+     — e escrever o par de marcadores aqui para explicar isso fecharia este comentário no
+     meio, que é como esta linha derrubou a suíte na primeira tentativa. */
+  const semCom = tpl.replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const cruas = (semCom.match(/(?:PL6_HORAS|D7_HORAS)\[si\]/g) || []).length;
+  checar('a posição só vira relógio dentro de pl6HoraDaFaixa',
+    /function pl6HoraDaFaixa\(si\) \{\s*return PL6_HORAS\[si\] \|\| '';/.test(semCom)
+      && cruas === 1,
+    cruas + ' indexação(ões) crua(s) da lista de faixas (a legítima é a de dentro de'
+    + ' pl6HoraDaFaixa) — fora dela a lista devolve undefined para si >= 7'
+    + ' ("qui 11/09 undefined bloqueado") e reinventa hora que ninguém escolheu');
+
+  checar('o slot ocupado só tem a hora que ele escolheu',
+    /const ocupado = !!pl6SlotId\(v\) \|\| pl6SlotBloqueado\(v\) \|\| pl6SlotRua\(v\);/.test(tpl)
+      && /const hora = ocupado \? pl6SlotHora\(v, si\) : pl6HoraDaFaixa\(si\);/.test(tpl),
+    'era pl6SlotHora(v,si) || pl6HoraDaFaixa(si): a Minha Daily dizia 19:00 onde o kanban'
+    + ' dele dizia "+ hora" para a mesma visita');
+
+  checar('a Minha Daily percorre as vagas do dia, não as sete faixas',
+    /const totalSlots = \(typeof PL6_SLOTS !== 'undefined'\) \? PL6_SLOTS : D7_HORAS\.length;/.test(tpl)
+      && !/return D7_HORAS\.map\(function \(horaFaixa, si\)/.test(tpl),
+    'com capacidade 15 e laço de 7, ele monta 11 contas no kanban e abre a Daily com 7');
+
+  checar('a hora escolhida vai para o banco sem comparar com a faixa',
+    /grade\[di\]\[si\] = hora \? \{ id: idNaGrade, hora: String\(hora\) \} : idNaGrade;/.test(tpl)
+      && /const valorDoSlot = horaEscolhida \? \{ id: l\.id, hora: horaEscolhida \} : l\.id;/.test(tpl),
+    'gravar a hora só quando difere da faixa apaga a hora de quem escolheu 10:30 na'
+    + ' posição cuja faixa era 10:30 — e nenhuma tela a reinventa de volta agora');
+
+  checar('a capacidade do dia é uma constante, não o tamanho da lista de janelas',
+    /const PL6_SLOTS = 15;/.test(tpl) && !/const PL6_SLOTS = PL6_HORAS\.length;/.test(tpl),
+    'amarrar capacidade à lista de janelas fez "7 contas por dia" parecer regra de'
+    + ' produto quando era o tamanho de um array');
+
+  checar('a vaga sem janela não desenha linha própria na Minha Daily',
+    /if \(!l\.hora\) return '';[\s\S]{0,200}data-d7-abrir/.test(tpl)
+      && /mais ' \+ semJanela\.length \+ ' vagas sem hora marcada/.test(tpl),
+    'quinze linhas "livre" idênticas num dia em branco escondem a visita real no meio'
+    + ' delas — é o cromo de vaga vazia que saiu do kanban e da Daily do gestor');
 }());
 
 if (falhas) {
