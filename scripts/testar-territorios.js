@@ -176,9 +176,12 @@ conferir('bairros de nome parecido vão para donos diferentes',
   donosDe('São Paulo', 'vila mariana').join() === 'Renata Pessoa',
   'Vila Maria é do Sérgio e Vila Mariana é da Renata; substring manda as duas para o Sérgio, e a Renata perde a rota dela em silêncio');
 
+/* O SEGUNDO CASO TROCOU DE DONO EM 09/09, e o par ficou MELHOR do que era: "curicica
+   entorno imediato de taquara" tem Curicica (André) e Taquara (Bruno) no mesmo texto,
+   de pessoas DIFERENTES. Antes os dois eram do Bruno e o teste não distinguia nada. */
 conferir('e o bairro com apêndice do CRM continua casando',
   donosDe('Rio de Janeiro', 'tijuca shopping 45').join() === 'Bruno Martins' &&
-  donosDe('Rio de Janeiro', 'curicica entorno imediato de taquara').join() === 'Bruno Martins',
+  donosDe('Rio de Janeiro', 'curicica entorno imediato de taquara').join() === 'André Gomes',
   'o CRM guarda bairro com contexto digitado à mão; igualdade pura perderia esses leads');
 
 conferir('nenhum bairro conta para dois donos',
@@ -187,9 +190,14 @@ conferir('nenhum bairro conta para dois donos',
   ['vila maria', 'santana', 'lapa', 'morumbi'].every(b => donosDe('São Paulo', b).length <= 1),
   'lead contado em duas sub-cotas faz as duas parecerem cheias e a busca para antes de trazer o que falta');
 
+/* AGORA OS DOIS SÃO DO BRUNO (ele ficou com Barra da Tijuca, Freguesia e Taquara em
+   09/09), então este par não prova mais nada sobre a REGRA — provaria por coincidência.
+   Troquei por um par de donos diferentes: Curicica é do André e Taquara é do Bruno, e o
+   texto tem os dois. Se a regra deixar de ser "o primeiro no texto", ele cai no Bruno. */
 conferir('e quem ganha é o bairro que vem primeiro no texto',
-  donosDe('Rio de Janeiro', 'freguesia jacarepagua entorno imediato de taquara').join() === 'André Gomes',
-  'o bairro é o que vem primeiro; o resto é contexto que alguém digitou — Freguesia é do André, Taquara é do Bruno');
+  donosDe('Rio de Janeiro', 'curicica proximo de taquara').join() === 'André Gomes' &&
+  donosDe('Rio de Janeiro', 'taquara proximo de curicica').join() === 'Bruno Martins',
+  'o bairro é o que vem primeiro; o resto é contexto que alguém digitou — Curicica é do André, Taquara é do Bruno');
 
 /* ── 7 · UMA FONTE SÓ ─────────────────────────────────────────────────────────────── */
 const semNota = backfill.replace(/\/\*[\s\S]*?\*\//g, ' ');

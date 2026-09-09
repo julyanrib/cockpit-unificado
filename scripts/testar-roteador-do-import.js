@@ -115,14 +115,126 @@ conferir('a Grande Tijuca é do Bruno',
   quem('rio de janeiro', 'tijuca') === 'Bruno' && quem('rio de janeiro', 'vila isabel') === 'Bruno',
   'era do Sandro até hoje; o Julyan passou para o Bruno junto com Taquara e região');
 
-conferir('e Anil e Freguesia são do André',
-  quem('rio de janeiro', 'anil') === 'André' && quem('rio de janeiro', 'freguesia') === 'André',
-  'eram a sub-cota do Bruno; o André assumiu a parte de Jacarepaguá e Barra');
+conferir('Anil e Barra Olímpica são do André',
+  quem('rio de janeiro', 'anil') === 'André'
+  && quem('rio de janeiro', 'barra olimpica') === 'André'
+  && quem('rio de janeiro', 'recreio dos bandeirantes') === 'André',
+  'ele leva o eixo Barra/Jacarepaguá — "ou seja toda a zona SUDOESTE do RJ"');
+
+/* ── FREGUESIA E BARRA DA TIJUCA SÃO DO BRUNO ───────────────────────────────────────
+   Julyan em 09/09, corrigindo: "FREGUESIA NO RIO DE JANEIRO É DO BRUNO, NAO DO ANDRE!!
+   bruno: taquara, freguesia e barra da tijuca!!!". A lista que ele mesmo ditou para o
+   André meia hora antes incluía "freguesia" — a correção é posterior e vence. */
+conferir('Taquara, Freguesia e Barra da Tijuca são do Bruno',
+  quem('rio de janeiro', 'taquara') === 'Bruno'
+  && quem('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno'
+  && quem('rio de janeiro', 'barra da tijuca') === 'Bruno',
+  'correção dele em 09/09, contra a lista que ele mesmo tinha dado ao André');
+
+/* ══ FREGUESIA É DOIS BAIRROS COM O MESMO NOME ═══════════════════════════════════════
+   Uma em Jacarepaguá (do Bruno) e uma na Ilha do Governador (do Luiz), a 30 km. MEDIDO no
+   banco em 09/09: as duas existem no dado, grafadas "FREGUESIA (JACAREPAGUA)",
+   "FREGUESIA (ILHA DO GOVERNADOR)" e "FREGUESIA (ILHA)". Casamento por trecho entrega as
+   duas ao mesmo dono, e foi o que eu já paguei uma vez nesta base. */
+conferir('a Freguesia da Ilha é do Luiz, não do Bruno',
+  quem('rio de janeiro', 'freguesia (ilha do governador)') === 'Luiz'
+  && quem('rio de janeiro', 'freguesia (ilha)') === 'Luiz',
+  'um nome, dois bairros, 30 km de distância');
+
+/* ══ O BAIRRO QUE É SUFIXO DE OUTRO ══════════════════════════════════════════════════
+   ESTE É O DEFEITO QUE PÔS 107 LEADS NA CARTEIRA ERRADA. "Barra da Tijuca" contém
+   " tijuca " com espaço na frente: o casamento por trecho fazia o "Tijuca" do Bruno levar
+   qualquer coisa terminada em Tijuca, e o `.find` entrega ao primeiro que casa — ou seja,
+   a quem aparece antes no JSON. Mesma família do vila maria/vila mariana, no caso em que
+   um bairro é o FIM do outro.
+
+   HOJE OS DOIS SÃO DO BRUNO, então a checagem usa um par que NÃO é dele: Penha (do Luiz)
+   e Penha Circular (do Luiz) provariam nada. Uso Jacarepaguá (André) contra
+   Freguesia (Jacarepaguá) (Bruno) — se o casamento voltar a ser por trecho, a Freguesia
+   cai no André pelo " jacarepagua " que está dentro do parêntese. */
+conferir('bairro não casa por pedaço do nome de outro',
+  quem('rio de janeiro', 'jacarepagua') === 'André'
+  && quem('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno',
+  'por trecho, a Freguesia (Jacarepaguá) cairia no André pelo "jacarepagua" do parêntese');
+
+/* ══ O BAIRRO DENTRO DO CAMPO SUJO ═══════════════════════════════════════════════════
+   MEDIDO: a coluna `bairro` carrega endereço com o bairro no fim — "Lj B - Tijuca",
+   "Loja A B C D - Barra da Tijuca", "SUC 0028 - Tijuca". Comparar a string inteira faria
+   nenhum deles casar, e são 14 leads só no Rio. */
+conferir('o bairro é extraído do endereço grudado',
+  quem('rio de janeiro', 'Lj B - Tijuca') === 'Bruno'
+  && quem('rio de janeiro', 'Loja A B C D - Barra da Tijuca') === 'Bruno'
+  && quem('rio de janeiro', 'Lj D - Rio Comprido') === 'Luiz',
+  'o que vem depois do último " - " é o bairro; o resto é número de loja');
+
+/* ══ O EXTREMO OESTE VOLTOU, COM DONO ════════════════════════════════════════════════
+   Em 08/09 ele disse "zona oeste no momento nao precisa" e eu tirei 12 bairros da rota.
+   Em 09/09: "nao deixa sem dono". A zona volta para o André, que já é Jacarepaguá — dá
+   para fazer Taquara→Realengo→Bangu→Campo Grande num dia de rua. */
+conferir('o extremo oeste é do André',
+  quem('rio de janeiro', 'campo grande') === 'André'
+  && quem('rio de janeiro', 'bangu') === 'André'
+  && quem('rio de janeiro', 'santa cruz') === 'André',
+  'ele revogou o fora-de-rota em 09/09 com "nao deixa sem dono"');
+
+conferir('e o mecanismo de fora-de-rota continua vivo, só vazio',
+  Array.isArray(terr.FORA_DE_ROTA) && typeof terr.estaForaDeRota === 'function',
+  'ele revogou a zona, não o direito de tirar uma zona da rota — se quiser de novo, é uma '
+  + 'linha em _fora_de_rota, sem deploy');
 
 /* ── 4 · A COBERTURA ANTIGA NÃO FOI PERDIDA ─────────────────────────────────────────── */
-conferir('bairro que o Julyan não citou continua com quem tinha',
-  quem('rio de janeiro', 'olaria') === 'Luiz' && via('rio de janeiro', 'olaria') === 'lista antiga',
-  'apagar as listas largas jogaria a maior parte do Rio na sobra — e mover bairro que ele não citou é decisão dele');
+/* ══ ESTA DECISÃO MUDOU EM 09/09, E O MOTIVO FOI MEDIÇÃO DELE ════════════════════════
+   "hoje na aba planejhamento deles está puxando os leads errados."
+
+   As listas largas de 01/09 dizem "André = Zona Sul e Centro" e "Bruno = Jacarepaguá e
+   Zona Oeste" — o INVERSO do mapa que ele ditou depois. Elas eram cobertura para bairro
+   que ele não tinha nomeado; quando ele nomeou bairro em todas as praças do Rio,
+   "cobertura" virou "atribuição errada com cara de regra". Provado antes do conserto:
+     CENTRO       -> André  (regra "RJ · Zona Sul e Centro", de quando ele era da Zona Sul)
+     OLARIA       -> Luiz   (regra "RJ · Zona Norte e Ilha")
+     CAMPO GRANDE -> Bruno  (regra "RJ · Jacarepaguá e Zona Oeste")
+   E o resultado no banco: 107 leads de Copacabana, Botafogo e Centro na carteira do André,
+   que trabalha na Barra.
+
+   E A GUARDA ANTIGA ESTAVA COM O NÚMERO ERRADO. Ela dizia "apagar as listas jogaria a
+   MAIOR PARTE do Rio na sobra". Medido nos 553 leads do Rio depois do conserto: 553 têm
+   dono e ZERO ficam sem. Eu tinha SUPOSTO a magnitude em vez de medi-la, e a suposição
+   sustentou a decisão errada por um dia. */
+conferir('numa cidade com bairro nomeado, as listas antigas não decidem mais',
+  via('rio de janeiro', 'centro') !== 'lista antiga'
+  && via('rio de janeiro', 'olaria') !== 'lista antiga',
+  'elas são o mapa de 01/09 e dizem o inverso do de hoje — foi o que pôs 107 leads na carteira errada');
+
+/* ══ NADA SEM DONO — E ISSO É REGRA, NÃO LISTA COMPLETA ══════════════════════════════
+   Julyan em 09/09: "nao deixa sem dono". O Rio tem 163 bairros oficiais e o dado real traz
+   grafia livre, inclusive endereço puro no lugar do bairro ("Av. Lúcio Costa",
+   "R. Des. Izidro" — 14 casos medidos). Enquanto a garantia dependesse de eu ter listado
+   tudo, ela era promessa. `sobraDoMunicipio: true` na área do Luiz a torna regra. */
+conferir('bairro que ninguém nomeou cai na sobra declarada',
+  quem('rio de janeiro', 'um bairro inventado qualquer') === 'Luiz'
+  && via('rio de janeiro', 'um bairro inventado qualquer') === 'declarado',
+  '"nao deixa sem dono" tem de valer para o bairro que eu não listei e para o registro que '
+  + 'veio com endereço no lugar do bairro — senão é promessa, não regra');
+
+conferir('e a sobra NÃO atropela o bairro nomeado de ninguém',
+  quem('rio de janeiro', 'copacabana') === 'Sandro'
+  && quem('rio de janeiro', 'taquara') === 'Bruno'
+  && quem('rio de janeiro', 'anil') === 'André',
+  'se a sobra entrasse antes do bairro nomeado, o dono dela levaria a cidade inteira');
+
+conferir('a sobra é declarada no JSON, não escolhida pelo código',
+  Array.isArray(terr.SOBRAS_DE_MUNICIPIO) && terr.SOBRAS_DE_MUNICIPIO.length === 1
+  && terr.SOBRAS_DE_MUNICIPIO[0].nome === 'Luiz Pimentel',
+  'quem herda o resto de uma cidade é decisão do Julyan; código que escolhe sozinho escolhe '
+  + 'pela ordem do laço, ou seja por acidente');
+
+/* A COBERTURA CONTINUA VALENDO ONDE ELE NÃO DETALHOU: Vila Velha, Vitória, Canoas e Porto
+   Alegre são declaradas por MUNICÍPIO inteiro e ali nada mudou. Sem esta checagem, o
+   conserto do Rio teria orfanado o ES e o RS de calado. */
+conferir('a praça declarada por município inteiro não foi afetada',
+  quem('vila velha', 'praia da costa') === 'Marco'
+  && quem('canoas', 'um bairro qualquer de canoas') === 'Kelly',
+  'o corte é só onde ele nomeou BAIRRO; município inteiro continua respondendo por tudo');
 
 conferir('e a sobra do município continua existindo',
   !!quem('rio de janeiro', 'um bairro inventado qualquer'),
