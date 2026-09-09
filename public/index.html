@@ -34738,6 +34738,17 @@ function dg4Dados(ctx) {
   const travadas = medidos.filter(function (x) { return x.travada; });
 
   const naGrade = medidos.filter(function (x) { return x.veioDaGrade; });
+
+  const avisoForaDoCampo = (function () {
+    const f = c.foraDoCampo;
+    if (!f || !f.n) return '';
+    const mrr = f.mrr > 0
+      ? ' — R$ ' + Math.round(f.mrr).toLocaleString('pt-BR') + '/mês entre eles'
+      : '';
+    return f.n + ' negócio(s) aberto(s) seguem no nome de ' + f.nomes.join(', ')
+      + ', que saiu do campo' + mrr + '. Não entram nas contas por pessoa acima; '
+      + 'dar dono novo ou encerrar é no HubSpot.';
+  })();
   const minutos = dg4MinutosParaTrava();
   const antesDaTrava = ehHoje && minutos > 0;
 
@@ -34991,6 +35002,7 @@ function dg4TelaHTML(d) {
 
         <div style="display:flex;align-items:center;gap:16px;padding:15px 24px 13px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
           <h1 style="font:900 24px/1.2 'Archivo',sans-serif;letter-spacing:-.02em;color:#2B3440;margin:0;text-wrap:balance;flex:1;min-width:480px;">${manchete}</h1>
+          ${avisoForaDoCampo ? `<span style="flex:none;font:700 10px/1.45 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:9px;padding:7px 12px;max-width:520px;">${avisoForaDoCampo}</span>` : ''}
           ${(temToast) ? `
             <span style="flex:none;font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:6px 13px;max-width:520px;overflow-wrap:anywhere;">${toast}</span>
           ` : ''}
@@ -35259,9 +35271,29 @@ async function renderDaily() {
   }
 
   const yesterdayISO = addBusinessDays(dailyRefDate, -1);
+
   const repsDaily = (sessaoAtual && sessaoAtual.role === 'rep')
     ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
-    : DATA.reps;
+    : DATA.reps.filter(r => (typeof ownerAtivoNoField !== 'function') || ownerAtivoNoField(r.ownerId));
+
+  const foraDoCampo = (sessaoAtual && sessaoAtual.role === 'manager')
+    ? (DATA.usuarios || []).filter(u => u.role === 'rep' && u.fieldStatus === 'transicao_inside')
+    : [];
+  const abertoDeQuemSaiu = (() => {
+    if (!foraDoCampo.length) return null;
+    const ids = foraDoCampo.map(u => String(u.ownerId));
+    const ETAPAS = (typeof ORDEM_FIELD_SALES !== 'undefined') ? ORDEM_FIELD_SALES : [];
+    let n = 0, mrr = 0;
+    ETAPAS.forEach(function (st) {
+      ((DATA.funilLeads || {})[st] || []).forEach(function (d) {
+        if (ids.indexOf(String(d.ownerId)) < 0) return;
+        n += 1;
+        mrr += Number(d.valor_de_mrr || d.mrr || 0) || 0;
+      });
+    });
+    if (!n) return null;
+    return { n: n, mrr: mrr, nomes: foraDoCampo.map(u => String(u.nome || '').split(' ')[0]) };
+  })();
 
   const souRepDaily = sessaoAtual && sessaoAtual.role === 'rep';
   let repsParaFichas = repsDaily;
@@ -36712,6 +36744,7 @@ async function renderDaily() {
     DG4_CTX = {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
       grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
+      foraDoCampo: abertoDeQuemSaiu,
       frescor: frescorDaily
     };
     html = '<div id="dg4Raiz" data-dg4-raiz="1">'

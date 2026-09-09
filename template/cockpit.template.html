@@ -48147,6 +48147,8 @@ function dg4Dados(ctx) {
     const novas = comOrigem.filter(function (sl) { return sl.origem === 'lote'; }).length;
     const origemRegistrada = comOrigem.length > 0 || preenchidos.length === 0;
 
+    /* devolvido logo abaixo em avisoForaDoCampo — declarado aqui em cima porque o
+       laço de medidos roda antes do retorno do contrato */
     return { r: r, oid: oid, plano: plano, grade: grade, preenchidos: preenchidos,
       temPlano: temPlano, travada: travada, daily: daily, quentes: quentes,
       novas: novas, origemRegistrada: origemRegistrada,
@@ -48171,6 +48173,22 @@ function dg4Dados(ctx) {
   /* quem apareceu pela GRADE e não pelo plano do dia: o KPI diz isso, senão
      "7/7 planos montados" esconde que seis deles nunca travaram o dia. */
   const naGrade = medidos.filter(function (x) { return x.veioDaGrade; });
+  /* ══ O QUE FICOU NO NOME DE QUEM SAIU DO CAMPO ═════════════════════════════════════
+     A linha da pessoa sai das telas de time quando ela vai para o Inside — mas os
+     negócios dela continuam no HubSpot, e reatribuir é lá, não aqui. Sem esta frase, a
+     soma das pessoas passa a divergir do total do funil sem explicação, e o dinheiro
+     fica sem ninguém olhando. Medido em 09/09: 20 abertos e R$ 1.245/mês em Negociação
+     no nome da Amanda. */
+  const avisoForaDoCampo = (function () {
+    const f = c.foraDoCampo;
+    if (!f || !f.n) return '';
+    const mrr = f.mrr > 0
+      ? ' — R$ ' + Math.round(f.mrr).toLocaleString('pt-BR') + '/mês entre eles'
+      : '';
+    return f.n + ' negócio(s) aberto(s) seguem no nome de ' + f.nomes.join(', ')
+      + ', que saiu do campo' + mrr + '. Não entram nas contas por pessoa acima; '
+      + 'dar dono novo ou encerrar é no HubSpot.';
+  })();
   const minutos = dg4MinutosParaTrava();
   const antesDaTrava = ehHoje && minutos > 0;
 
@@ -48458,6 +48476,7 @@ function dg4TelaHTML(d) {
 
         <div style="display:flex;align-items:center;gap:16px;padding:15px 24px 13px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
           <h1 style="font:900 24px/1.2 'Archivo',sans-serif;letter-spacing:-.02em;color:#2B3440;margin:0;text-wrap:balance;flex:1;min-width:480px;">${manchete}</h1>
+          ${avisoForaDoCampo ? `<span style="flex:none;font:700 10px/1.45 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:9px;padding:7px 12px;max-width:520px;">${avisoForaDoCampo}</span>` : ''}
           ${(temToast) ? `
             <span style="flex:none;font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:6px 13px;max-width:520px;overflow-wrap:anywhere;">${toast}</span>
           ` : ''}
@@ -48829,9 +48848,42 @@ async function renderDaily() {
   }
 
   const yesterdayISO = addBusinessDays(dailyRefDate, -1);
+  /* ══ QUEM SAIU DO CAMPO NÃO É LINHA AQUI (09/09/26) ══════════════════════════════
+     Julyan: "pode tirar a amanda do cockpit que ela tá no inside e ta confundindo".
+     Esta era a única tela do gestor que montava as linhas do time com DATA.reps cru — as
+     outras quatro já passavam por ownerAtivoNoField. O efeito era uma linha a mais todo
+     dia, sem plano e sem promessa, indistinguível de quem esqueceu de planejar.
+
+     O EXECUTIVO CONTINUA VENDO A PRÓPRIA LINHA mesmo em transição: a Daily dele é a
+     ferramenta do dia dele, e enquanto tiver negócio no nome ele precisa dela. O corte é
+     só na visão de TIME. */
   const repsDaily = (sessaoAtual && sessaoAtual.role === 'rep')
     ? DATA.reps.filter(r => r.ownerId === sessaoAtual.ownerId)
-    : DATA.reps;
+    : DATA.reps.filter(r => (typeof ownerAtivoNoField !== 'function') || ownerAtivoNoField(r.ownerId));
+
+  /* ══ O QUE FICOU NO NOME DE QUEM SAIU ═══════════════════════════════════════════════
+     Medido em 09/09: a Amanda tem 20 negócios abertos e R$ 1.245/mês em Negociação. Sem
+     esta conta, a soma das pessoas passa a divergir do total do funil e ninguém sabe por
+     quê — e o dinheiro dela fica sem dono olhando. Reatribuir é no HubSpot, que não se
+     toca por aqui; o aviso existe para o Julyan não esquecer. */
+  const foraDoCampo = (sessaoAtual && sessaoAtual.role === 'manager')
+    ? (DATA.usuarios || []).filter(u => u.role === 'rep' && u.fieldStatus === 'transicao_inside')
+    : [];
+  const abertoDeQuemSaiu = (() => {
+    if (!foraDoCampo.length) return null;
+    const ids = foraDoCampo.map(u => String(u.ownerId));
+    const ETAPAS = (typeof ORDEM_FIELD_SALES !== 'undefined') ? ORDEM_FIELD_SALES : [];
+    let n = 0, mrr = 0;
+    ETAPAS.forEach(function (st) {
+      ((DATA.funilLeads || {})[st] || []).forEach(function (d) {
+        if (ids.indexOf(String(d.ownerId)) < 0) return;
+        n += 1;
+        mrr += Number(d.valor_de_mrr || d.mrr || 0) || 0;
+      });
+    });
+    if (!n) return null;
+    return { n: n, mrr: mrr, nomes: foraDoCampo.map(u => String(u.nome || '').split(' ')[0]) };
+  })();
 
   const souRepDaily = sessaoAtual && sessaoAtual.role === 'rep';
   let repsParaFichas = repsDaily; // gestor: reordenado abaixo pela ordem do placar (atenção primeiro)
@@ -51050,6 +51102,7 @@ async function renderDaily() {
     DG4_CTX = {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
       grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
+      foraDoCampo: abertoDeQuemSaiu,
       frescor: frescorDaily
     };
     html = '<div id="dg4Raiz" data-dg4-raiz="1">'
