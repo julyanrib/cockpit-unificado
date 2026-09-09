@@ -69,6 +69,14 @@ const fonte = [
   "const FN2_ETAPAS = [{ id: '1395880469', rot: 'PROSPECÇÃO' },"
     + " { id: '1396006164', rot: 'PERDIDO', saiu: true }];",
   pegarConst('PL6_ETAPAS_QUE_SAIRAM'),
+  /* "ESTÁ NA CARTEIRA DELE" PASSOU A TER UMA DEFINIÇÃO SÓ (09/09/26). Antes, `pl6Novos`
+     repetia à mão os dois status resolvidos e as leituras de rota usavam uma lista de
+     PERMITIDOS que esquecia `pendente` — MEDIDO: 553 leads com dono e status `pendente`,
+     invisíveis para os donos deles.
+     A FUNÇÃO REAL entra no escopo, e não um stub: stub daria verde sobre a definição que
+     eu quero justamente exercer. */
+  pegarConst('PROSPECCAO_RESOLVIDOS'),
+  pegarFn('prospeccaoNaCarteira'),
   'let pl6TerrLivres = [];',
   // pl6SemearTerrLivres lê o plano da semana; no cenário não há plano, e o `typeof` dela
   // já cobre isso. O stub existe para a chamada não estourar por identificador ausente.

@@ -29088,7 +29088,7 @@ function pl6GrupoDaFonte(fonte) {
 function pl6Novos(rep, regioes) {
   const contas = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
     .filter(l => String(l.responsavel_owner_id) === String(rep.ownerId))
-    .filter(l => l.status !== 'criado_hubspot' && l.status !== 'sem_fit');
+    .filter(prospeccaoNaCarteira);
   const porChave = new Map((regioes || []).map(r => [r.chave, r]));
   return contas.map(l => {
     /* A MESMA REGRA DAS OUTRAS DUAS FONTES (04/09/26): a regiao do lead e a DELE, pela
@@ -37796,7 +37796,7 @@ async function carregarRotasDoTime() {
   // Buscada de uma vez para o time inteiro, não uma consulta por pessoa.
   const { data: carteira, error: e3 } = await supa.from('leads_prospeccao')
     .select('id,nome,bairro,cidade,lat,lng,avaliacoes,fonte,status,data_rota,responsavel_owner_id')
-    .in('status', ['atribuido', 'na_rota']);
+    .not('status', 'in', '("criado_hubspot","sem_fit")');
   if (e3) console.error('Rotas: erro ao carregar carteira —', e3.message);
   (carteira || []).forEach(l => {
     const chave = String(l.responsavel_owner_id);
@@ -38570,7 +38570,7 @@ async function montarListaAdicionar() {
   const { data, error } = await supa.from('leads_prospeccao')
     .select('id,nome,categoria,bairro,cidade,lat,lng,avaliacoes,status,data_rota')
     .eq('responsavel_owner_id', rotaDrawerOwner)
-    .in('status', ['atribuido', 'na_rota']);
+    .not('status', 'in', '("criado_hubspot","sem_fit")');
   if (error) {
     slot.innerHTML = '<div style="margin-top:14px;font-size:12px;color:var(--red);">Erro ao buscar contas: ' + esc(error.message) + '</div>';
     return;
@@ -52981,6 +52981,25 @@ function prospeccaoFazSentido(l) {
   const nomeEvidenciaFoodservice = /\b(restaurante|restaurant|cafe|cafeteria|bar|pub|bistro|burger|hamburg|pizza|pizzaria|churrasc|lanch|doceria|padaria|confeitaria|cozinha|cantina|choperia|grill|comida|food|sushi|temakeria|sorvet|acai)\b/.test(nome);
   if (nomeEvidenciaFoodservice) return true;
   return !categoria || !PROSPECCAO_FORA_FOODSERVICE.has(categoria);
+}
+
+/* ══ O QUE É "RESOLVIDO", E POR QUE A LISTA É DE EXCLUÍDOS ═══════════════════════════
+   Lead do executivo é lead com o owner dele que ainda NÃO foi resolvido. Resolvido é
+   `criado_hubspot` (virou empresa no CRM) e `sem_fit` (fora do ICP).
+
+   ERA UMA LISTA DE PERMITIDOS — `.in(status, [atribuido, na_rota])` — em dois lugares, e
+   `pendente` ficava fora. MEDIDO em 09/09: 553 leads com dono e status `pendente`,
+   invisíveis para os donos deles. Eles nasceram de uma redistribuição por SQL que
+   gravou o dono e não o status; o import sempre fez certo.
+
+   POR EXCLUSÃO E NÃO POR INCLUSÃO, de propósito: lista de permitidos esquece o status
+   novo que alguém acrescentar, e o esquecimento aparece como lead invisível — o defeito
+   de hoje. Lista de excluídos falha do lado seguro: status novo aparece na carteira,
+   alguém vê e reclama. */
+const PROSPECCAO_RESOLVIDOS = ['criado_hubspot', 'sem_fit'];
+
+function prospeccaoNaCarteira(l) {
+  return !!l && PROSPECCAO_RESOLVIDOS.indexOf(String(l.status || '')) < 0;
 }
 
 function prospeccaoRotuloStatus(status) {
