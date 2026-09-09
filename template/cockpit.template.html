@@ -2106,6 +2106,21 @@
   /* A FONTE DE CADA NUMERO, em 10px, como a lei 3 da prancha exige. */
   .pl6-kpi-fonte{display:block;font-size:10px;line-height:1.4;color:var(--muted2);margin-top:1px;}
 
+  /* ── o radar da praça dele (09/09/26) ────────────────────────────────────────────
+     Contexto para montar a rota: o tamanho do mercado de cada cidade da rota dele
+     contra o que já está no CRM. Fica ANTES da grade porque contexto depois da decisão
+     não serve para nada. */
+  .pl6-praca{margin:14px 0 2px;padding:12px 14px;background:var(--pl6-creme,#FBFAF6);border:1px solid var(--line);border-radius:12px;}
+  .pl6-praca-topo{margin-bottom:9px;}
+  .pl6-praca-titulo{display:block;font:900 10px var(--font-display);letter-spacing:.12em;text-transform:uppercase;color:var(--ter);}
+  .pl6-praca-sub{display:block;font-size:10px;line-height:1.4;color:var(--muted2);margin-top:2px;}
+  .pl6-praca-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;}
+  .pl6-praca-card{min-width:0;padding:9px 11px;background:var(--panel);border:1px solid var(--line);border-radius:10px;}
+  .pl6-praca-nome{display:block;font:800 11.5px var(--font-display);color:var(--ink);}
+  .pl6-praca-n{display:block;font:900 21px var(--font-display);font-variant-numeric:tabular-nums;color:var(--red);line-height:1.15;}
+  .pl6-praca-rot{display:block;font:900 8.5px var(--font-display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted2);}
+  .pl6-praca-fonte{display:block;font-size:10px;line-height:1.4;color:var(--muted2);margin-top:4px;}
+
   /* ── o corpo: semana | abastecimento ─────────────────────────────────────────── */
   .pl6-corpo{display:grid;grid-template-columns:minmax(0,1.72fr) minmax(0,1fr);align-items:stretch;}
   .pl6-semana{padding:14px 18px 16px 22px;border-right:1px solid var(--line);min-width:0;}
@@ -27223,7 +27238,12 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
      explícita: a tarefa já está no HubSpot e na agenda, então perder o espelho é um
      complemento a menos; apagar a semana dele seria um estrago. */
   let leu;
-  try { leu = await pl6Carregar(rep); } catch (e) { leu = { ok: false, motivo: (e && e.message) || 'erro' }; }
+  /* AS DUAS EM PARALELO: o plano da semana e o radar da praça não dependem um do outro,
+     e em série a aba levaria o dobro para ficar completa. */
+  try {
+    const [r1] = await Promise.all([pl6Carregar(rep), pl6CarregarRadar(rep)]);
+    leu = r1;
+  } catch (e) { leu = { ok: false, motivo: (e && e.message) || 'erro' }; }
   if (leu && leu.ok === false) {
     return { erro: 'não consegui ler seu plano da semana (' + (leu.motivo || 'motivo não informado') + ')' };
   }
@@ -29307,6 +29327,36 @@ function pl6RegioesDoPlano() {
 
    Agora ela devolve `{ ok }`. Os três chamadores antigos ignoram o retorno e continuam
    funcionando; quem ESCREVE depois é que precisa conferir. */
+/* ══ O RADAR DA PRAÇA DELE ═══════════════════════════════════════════════════════════
+   Uma linha por município da rota dele, da semana mais recente que existir. Falha de
+   leitura NÃO vira praça sem mercado: fica null e o bloco não desenha, em vez de dizer
+   "0 estabelecimentos" sobre uma cidade cheia de restaurante. */
+let pl6Radar = null;
+
+async function pl6CarregarRadar(rep) {
+  pl6Radar = null;
+  if (!DATA.supabase || !supa) return;
+  /* os municípios da rota DELE, da declaração que o montador já recortou */
+  const meus = [];
+  ((DATA.territorios || [])).forEach(function (tr) {
+    if (!tr || String(tr.rep || '').toLowerCase() !== String(rep && (rep.nome || rep.name) || '').toLowerCase()) return;
+    (tr.areas || []).forEach(function (a) { if (a && a.municipio) meus.push(a.municipio); });
+  });
+  if (!meus.length) return;
+  try {
+    const { data, error } = await supa.from('radar_pracas')
+      .select('praca,municipio,uf,data_semana,tam,tam_fonte,tocado,pct_tocado,leitura')
+      .in('municipio', meus)
+      .order('data_semana', { ascending: false });
+    if (error) throw error;
+    /* só a semana mais recente que voltou — a tabela guarda histórico */
+    const semana = (data && data.length) ? data[0].data_semana : null;
+    pl6Radar = { semana: semana, linhas: (data || []).filter(function (l) { return l.data_semana === semana; }) };
+  } catch (e) {
+    console.log('radar da praça: nao consegui ler - ' + (e && e.message));
+  }
+}
+
 async function pl6Carregar(rep) {
   pl6Plano = null;
   if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem Supabase nesta sessão' };
@@ -29884,6 +29934,47 @@ function renderPlanejamento6a(rep) {
       cor: 'var(--ter)' }
   ];
 
+  /* ══ O RADAR DA PRAÇA DELE ═════════════════════════════════════════════════════════
+     Uma linha por município da rota. O que ele precisa saber para montar a semana é
+     QUANTAS PORTAS AINDA NÃO FORAM BATIDAS — o percentual é a fatia, e a fatia de 0,09%
+     não diz nada sozinha; o volume diz.
+
+     "não medido" NUNCA vira zero, e o percentual só aparece com denominador contado —
+     os mesmos cuidados da tela do gestor, porque o número é o mesmo. */
+  const radarPracaHTML = (function () {
+    const r = (typeof pl6Radar !== 'undefined') ? pl6Radar : null;
+    if (!r || !r.linhas || !r.linhas.length) return '';
+    const dia = String(r.semana || '').slice(8, 10) + '/' + String(r.semana || '').slice(5, 7);
+    const cartoes = r.linhas.slice()
+      .sort(function (a, b) {
+        const na = (Number(a.tam) || 0) - (Number(a.tocado) || 0);
+        const nb = (Number(b.tam) || 0) - (Number(b.tocado) || 0);
+        return nb - na;
+      })
+      .map(function (l) {
+        const medido = l.tam_fonte === 'contagem_api' && Number(l.tam) > 0;
+        const naoTocado = medido ? (Number(l.tam) || 0) - (Number(l.tocado) || 0) : null;
+        const pct = (medido && l.pct_tocado != null) ? String(l.pct_tocado).replace('.', ',') + '%' : null;
+        return '<div class="pl6-praca-card">'
+          + '<span class="pl6-praca-nome">' + esc(l.praca) + '</span>'
+          + '<span class="pl6-praca-n">' + (naoTocado == null ? 'não medido' : naoTocado.toLocaleString('pt-BR')) + '</span>'
+          + '<span class="pl6-praca-rot">portas que ninguém bateu</span>'
+          + '<span class="pl6-praca-fonte">'
+          + (medido ? Number(l.tam).toLocaleString('pt-BR') + ' CNPJs food na cidade · '
+              + (Number(l.tocado) || 0) + ' no CRM' + (pct ? ' (' + pct + ')' : '')
+            : 'a contagem da cidade não veio nesta rodada — o número acima não existe, não é zero')
+          + '</span>'
+          + '</div>';
+      }).join('');
+    return '<div class="pl6-praca">'
+      + '<div class="pl6-praca-topo">'
+      +   '<span class="pl6-praca-titulo">A sua praça, medida na segunda ' + esc(dia) + '</span>'
+      +   '<span class="pl6-praca-sub">tamanho do mercado food de cada cidade da sua rota, contra o que já está no CRM · Casa dos Dados × HubSpot</span>'
+      + '</div>'
+      + '<div class="pl6-praca-grid">' + cartoes + '</div>'
+      + '</div>';
+  })();
+
   const nomeRegiao = ch => (porChave.get(ch) || {}).nome || null;
 
   /* ══ QUAL COLUNA E HOJE (04/09/26) ══════════════════════════════════════════════
@@ -30344,6 +30435,7 @@ function renderPlanejamento6a(rep) {
     + '<div class="pl6-cabeca">'
     +   '<div><span class="pl6-kicker">A decisão dos primeiros 3 segundos</span>'
     +   '<h1 class="pl6-manchete">' + esc(manchete) + '</h1></div>'
+    +   radarPracaHTML
     +   '<div class="pl6-kpis">' + kpis.map(k =>
           '<div class="pl6-kpi"><span class="pl6-kpi-rot">' + esc(k.rot) + '</span>'
           + '<span class="pl6-kpi-n"><b style="color:' + k.cor + ';">' + esc(k.v) + '</b>'
