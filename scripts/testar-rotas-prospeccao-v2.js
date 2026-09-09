@@ -181,6 +181,63 @@ conferir('praça com rota e sem linha no radar aparece dizendo isso',
   /pracasSemRadar/.test(tpl) && /ainda SEM linha no radar/.test(tpl),
   'rota que o radar não mediu não aparece no bloco 1 e não recebe carga — e some da tela sem avisar');
 
+/* ══ OS TRÊS DEFEITOS VISTOS NA PRODUÇÃO, COM O JULYAN LOGADO (09/09/26) ══════════════
+   As 34 suites e as 26 guardas estavam verdes com os três dentro, e o preview não os
+   mostrava: os dois primeiros só aparecem com a declaração de território completa e com
+   o TAM real medido, e o terceiro é uma frase.
+
+   1. NOVE DAS QUINZE PRAÇAS DIZIAM "sem dono na praça" TENDO DONO. rt7PracaDoRep devolve
+      UMA praça (a primária, que o fluxo de abastecer usa) e eu indexava o mapa por ela —
+      a Renata tem seis municípios e aparecia só em São Paulo, o Luiz tem cinco e aparecia
+      só no Rio. A manchete abria com "Duque de Caxias tem 9.644 CNPJs food — Ninguém está
+      nessa praça ainda", sobre uma praça que é do Luiz.
+   2. O SELO DA PRAÇA NÃO INFORMAVA NADA. Os limiares da prancha (virgem < 25%, maduro
+      ≥ 35%) foram desenhados antes de alguém medir o TAM: a cobertura real vai de 0% a
+      0,39%, então TREZE cartões diziam "território virgem" — e o único que escapava era o
+      pior, Biritiba Mirim, que com TAM de QUATRO dizia "em expansão".
+   3. A MANCHETE ERA SORTEIO, e depois virou constante. Ordenar pelo menor percentual
+      empatava nove praças em zero; ordenar por volume fazia São Paulo ganhar para sempre.
+      O que é notícia é a praça que NÃO COMEÇOU: Guarulhos, 14.172 estabelecimentos, dois
+      donos e zero conta. */
+
+conferir('o mapa de praças registra TODAS as áreas de cada executivo',
+  /\(DATA\.territorios \|\| \[\]\)\.forEach\(tr => \{/.test(corpoDe('rt7ExecsPorPraca')) &&
+  /\(tr\.areas \|\| \[\]\)\.forEach\(a => \{/.test(corpoDe('rt7ExecsPorPraca')),
+  'indexar pela praça primária fez nove das quinze praças dizerem "sem dono" tendo dono');
+
+/* A primeira versão desta checagem proibia rt7PracaDoRep dentro de rt7ExecsPorPraca e
+   reprovou o FALLBACK LEGÍTIMO: quem ainda não tem linha na declaração precisa entrar
+   pela praça que o arquivo de leads de exemplo conhece, senão a praça perde o dono na
+   transição. O que se cobra é que o fallback seja SÓ para esse caso. */
+conferir('o fallback pela praça primária só vale para quem não tem declaração',
+  /const temDecl = \(DATA\.territorios \|\| \[\]\)\.some\(tr =>/.test(corpoDe('rt7ExecsPorPraca')) &&
+  /if \(temDecl\) return;/.test(corpoDe('rt7ExecsPorPraca')),
+  'sem esse corte, quem tem declaração entraria duas vezes — uma por área e outra pela primária');
+
+conferir('o selo da praça fala de tamanho de mercado, não de maturidade inventada',
+  /quase sem mercado/.test(tpl) && /mercado grande/.test(tpl) &&
+  !/território virgem/.test(codigo) && !/'em expansão'/.test(codigo),
+  'com a cobertura real entre 0% e 0,39%, treze de quinze cartões diziam "território virgem" e o de TAM 4 dizia "em expansão"');
+
+conferir('e o selo avisa quando quase não há mercado',
+  /r\.tam < 200 \? 'quase sem mercado'/.test(tpl),
+  'Biritiba Mirim tem QUATRO estabelecimentos e Salesópolis 132: é a informação que evita mandar alguém para lá');
+
+conferir('a manchete prefere a praça que NÃO COMEÇOU',
+  /const naoComecou = candidatas\.filter\(r => \(Number\(r\.tocado\) \|\| 0\) === 0\)/.test(dados) &&
+  /NENHUMA conta no CRM/.test(dados),
+  'menor percentual empata nove praças em zero, e maior volume faz São Paulo ganhar para sempre — nenhuma das duas é notícia');
+
+conferir('e ela só aponta praça que tem dono',
+  /const comDono = linhas\.filter\(r =>/.test(dados) &&
+  /execsPorPraca\[rt7MunicipioDaPraca\(r\.praca\)\] \|\| \[\]\)\.length > 0/.test(dados),
+  '"comece por" numa praça sem executivo é uma ordem sem destinatário');
+
+conferir('os nomes da praça se ligam como gente escreve',
+  /function rt7DonosDaPraca\(praca\)/.test(tpl) &&
+  /nomes\.slice\(0, -1\)\.join\(', '\) \+ ' e ' \+ nomes\[nomes\.length - 1\]/.test(tpl),
+  'join(" e ") dava "Wericles e Renata e Sérgio" numa frase que o gestor lê');
+
 /* ── 6 · O ANTI-SUJEIRA ───────────────────────────────────────────────────────────── */
 const sujeira = corpoDe('rt7Sujeira');
 conferir('lead sem nome não é lead limpo',
