@@ -55882,14 +55882,44 @@ function rt7MunicipioDaPraca(nome) {
   return rt7ChaveNome(String(nome || '').split('/')[0]);
 }
 
+/* TODAS AS ÁREAS, NÃO SÓ A PRIMEIRA — e isto foi um conserto visto na produção com o
+   Julyan logado. `rt7PracaDoRep` devolve UMA praça (a primária, que é a que o fluxo de
+   abastecer usa), e eu indexava o mapa por ela. Quem tem mais de um município só existia
+   no primeiro: a Renata tem seis e aparecia só em São Paulo; o Luiz tem cinco e aparecia
+   só no Rio. NOVE DAS QUINZE PRAÇAS DIZIAM "sem dono na praça" TENDO DONO, e a manchete
+   abria com "Duque de Caxias tem 9.644 CNPJs food — Ninguém está nessa praça ainda",
+   sobre uma praça que é do Luiz.
+
+   Ler a declaração direto resolve, e é a mesma fonte: cada área declarada põe a pessoa
+   naquele município. `rt7PracaDoRep` continua existindo para o fluxo — a diferença é que
+   "de quem é esta praça" e "qual é a praça principal dele" são perguntas diferentes, e eu
+   tinha respondido as duas com a mesma função. */
 function rt7ExecsPorPraca() {
   const mapa = {};
-  rt7Ativos().forEach(u => {
+  const ativos = rt7Ativos();
+  (DATA.territorios || []).forEach(tr => {
+    if (!tr || tr.ativo === false) return;
+    const u = ativos.find(x => String(x.nome || x.name || '').toLowerCase()
+      === String(tr.rep || '').toLowerCase());
+    if (!u) return;   /* declarado mas fora de campo: rt7Ativos já o excluiu */
+    (tr.areas || []).forEach(a => {
+      const k = a && a.municipio ? rt7MunicipioDaPraca(a.municipio) : '';
+      if (!k) return;
+      if (!mapa[k]) mapa[k] = [];
+      if (!mapa[k].some(x => String(x.ownerId) === String(u.ownerId))) mapa[k].push(u);
+    });
+  });
+  /* quem não tem declaração ainda entra pela praça que o arquivo de leads de exemplo
+     conhece, para nenhuma praça antiga perder o dono na transição */
+  ativos.forEach(u => {
+    const temDecl = (DATA.territorios || []).some(tr =>
+      String(tr && tr.rep || '').toLowerCase() === String(u.nome || '').toLowerCase());
+    if (temDecl) return;
     const p = rt7PracaDoRep(u);
     const k = p ? rt7MunicipioDaPraca(p.nome) : '';
     if (!k) return;
     if (!mapa[k]) mapa[k] = [];
-    mapa[k].push(u);
+    if (!mapa[k].some(x => String(x.ownerId) === String(u.ownerId))) mapa[k].push(u);
   });
   return mapa;
 }
@@ -56154,9 +56184,26 @@ function rt7Dados() {
     /* O RÓTULO DE STATUS SÓ EXISTE COM DENOMINADOR MEDIDO. "território virgem" sobre TAM
        não medido é a frase que faria o gestor mandar o time para uma praça por causa de
        um número que não existe. */
-    const st = !medido ? 'não medido' : pct < 25 ? 'território virgem' : pct < 35 ? 'em expansão' : 'maduro';
-    const stCor = !medido ? '#8A6516' : pct < 25 ? '#1E9E7B' : pct < 35 ? '#2B3440' : '#7A8494';
-    const stBg = !medido ? '#FDF6E7' : pct < 25 ? '#EAF6F1' : pct < 35 ? '#EDEFF4' : '#F2F1EC';
+    /* ══ O SELO DIZ O TAMANHO, NÃO A MATURIDADE — E ISSO FOI MEDIDO ═══════════════════
+       A prancha pedia "território virgem < 25% / em expansão / maduro ≥ 35%". Aqueles
+       limiares foram desenhados ANTES de alguém medir o TAM, e a medição de 09/09 os
+       inutilizou: a cobertura real do time vai de 0% a 0,39%, então TREZE dos quinze
+       cartões diziam "território virgem" — o mesmo selo em quase toda a tela não informa
+       nada. E o único que escapava era o pior de todos: Biritiba Mirim, com TAM de QUATRO
+       estabelecimentos e um cliente, dizia "em expansão" com 25%.
+
+       O QUE DE FATO DIFERE ENTRE AS PRAÇAS É O TAMANHO: São Paulo tem 142.336 e Biritiba
+       tem 4. Então o selo diz isso, e o percentual real fica do lado, no número. Com TAM
+       abaixo de 200 o selo avisa que ali quase não há mercado — é a informação que faz o
+       gestor não mandar ninguém para Salesópolis. */
+    const st = !medido ? 'não medido'
+      : r.tam < 200 ? 'quase sem mercado'
+        : r.tam < 5000 ? 'mercado pequeno'
+          : r.tam < 20000 ? 'mercado médio' : 'mercado grande';
+    const stCor = !medido ? '#8A6516' : r.tam < 200 ? '#8A3B3B'
+      : r.tam < 5000 ? '#7A8494' : r.tam < 20000 ? '#2B3440' : '#1E9E7B';
+    const stBg = !medido ? '#FDF6E7' : r.tam < 200 ? '#FDF7F7'
+      : r.tam < 5000 ? '#F2F1EC' : r.tam < 20000 ? '#EDEFF4' : '#EAF6F1';
     /* por MUNICÍPIO: pracaSel pode vir do radar ("Rio de Janeiro/RJ") ou de um clique
        na carteira, que traz o nome do leads-referencia ("Rio de Janeiro") */
     const sel = rt7MunicipioDaPraca(r.praca) === rt7MunicipioDaPraca(pracaSel);
@@ -56311,8 +56358,29 @@ function rt7Dados() {
     .reduce((a, r) => a + (Number(r.tam) || 0), 0);
   const somaToc = linhas.reduce((a, r) => a + (Number(r.tocado) || 0), 0);
   const semMedida = linhas.filter(r => r.tam_fonte !== 'contagem_api').length;
-  const maisVirgem = linhas.filter(r => r.tam_fonte === 'contagem_api' && r.pct_tocado != null)
-    .slice().sort((a, b) => Number(a.pct_tocado) - Number(b.pct_tocado))[0];
+  /* ══ "A PRAÇA QUE RENDE MAIS" É VOLUME NÃO TOCADO, NÃO O MENOR PERCENTUAL ══════════
+     A primeira versão ordenava pelo pct_tocado mais baixo. Com a cobertura real medida
+     em 09/09 — todas as quinze entre 0% e 0,39% — isso virou SORTEIO entre nove praças
+     empatadas em zero, e a manchete abriu com Duque de Caxias por acaso.
+
+     E ELA TEM QUE TER DONO. Praça sem executivo declarado não pode ser "comece por": não
+     há por quem começar, e foi o que a manchete disse — "Ninguém está nessa praça ainda"
+     sobre uma praça que era do Luiz, por causa do defeito do mapa de praças.
+
+     Volume não tocado é o número que responde à pergunta do bloco: onde uma hora de rua
+     encontra mais porta que ninguém bateu. */
+  const comDono = linhas.filter(r =>
+    (execsPorPraca[rt7MunicipioDaPraca(r.praca)] || []).length > 0);
+  const naoTocado = r => (Number(r.tam) || 0) - (Number(r.tocado) || 0);
+  const candidatas = (comDono.length ? comDono : linhas)
+    .filter(r => r.tam_fonte === 'contagem_api' && Number(r.tam) > 0);
+  /* NÃO COMEÇOU ainda: zero conta no CRM. É o que dá para agir hoje, e é o que muda de
+     uma semana para a outra — diferente de "São Paulo é grande", que é sempre verdade. */
+  const naoComecou = candidatas.filter(r => (Number(r.tocado) || 0) === 0)
+    .slice().sort((a, b) => naoTocado(b) - naoTocado(a));
+  const maisVirgem = naoComecou[0]
+    || candidatas.slice().sort((a, b) => naoTocado(b) - naoTocado(a))[0];
+  const virgemNaoComecou = !!naoComecou.length;
   const semCidade = (() => {
     const m = String((linhas[0] || {}).leitura || '').match(/(\d+)\s+neg[óo]cios? do time/);
     return m ? Number(m[1]) : null;
@@ -56333,9 +56401,12 @@ function rt7Dados() {
         + (semCidade ? ' · ' + semCidade + ' negócios sem cidade ficam fora de toda praça, então isto é piso' : ''),
       fonte: 'HubSpot × Casa dos Dados · ' + quandoRadar },
     maisVirgem
-      ? { n: String(maisVirgem.pct_tocado).replace('.', ',') + '%', rot: 'a praça mais virgem', nCor: '#E51A31',
+      ? { n: naoTocado(maisVirgem).toLocaleString('pt-BR'), rot: virgemNaoComecou ? 'portas na praça que não começou' : 'portas não batidas na maior praça', nCor: '#E51A31',
         txt: maisVirgem.praca + ' tem ' + Number(maisVirgem.tam).toLocaleString('pt-BR')
-          + ' CNPJs food e só ' + maisVirgem.tocado + ' no CRM — é onde a torneira rende mais por hora de rua.',
+          + ' CNPJs food e ' + (virgemNaoComecou ? 'NENHUMA conta no CRM' : maisVirgem.tocado + ' no CRM')
+          + (rt7DonosDaPraca(maisVirgem.praca)
+            ? ' — é de ' + rt7DonosDaPraca(maisVirgem.praca) + '.'
+            : ' — e ainda sem executivo declarado.'),
         fonte: fonteCdd }
       : { n: '—', rot: 'a praça mais virgem', nCor: '#8A6516',
         txt: 'sem praça com TAM medido nesta rodada — o job de segunda não conseguiu contar.',
@@ -56410,10 +56481,15 @@ function rt7Dados() {
     }
     if (maisVirgem) {
       const dele = (execsPorPraca[rt7MunicipioDaPraca(maisVirgem.praca)] || [])[0];
-      return maisVirgem.praca + ' tem ' + Number(maisVirgem.tam).toLocaleString('pt-BR')
-        + ' CNPJs food e só ' + String(maisVirgem.pct_tocado).replace('.', ',') + '% tocado'
-        + (magras ? ' — ' + magras + ' carteira(s) abaixo de 50% precisam de carga esta semana.' : '.')
-        + (dele ? ' Comece por ' + String(dele.nome).split(' ')[0] + '.' : ' Ninguém está nessa praça ainda.');
+      /* O NÚMERO DA FRASE É O VOLUME, não o percentual: 0,01% e 0% não distinguem nada
+         entre quinze praças, e o que muda a decisão é quantas portas ninguém bateu. */
+      return maisVirgem.praca + (virgemNaoComecou
+        ? ' tem ' + Number(maisVirgem.tam).toLocaleString('pt-BR')
+          + ' estabelecimentos food e NENHUMA conta no CRM'
+        : ' tem ' + naoTocado(maisVirgem).toLocaleString('pt-BR')
+          + ' estabelecimentos food que ninguém tocou, de ' + Number(maisVirgem.tam).toLocaleString('pt-BR'))
+        + (magras ? ' — e ' + magras + ' carteira(s) abaixo de 50% precisam de carga esta semana.' : '.')
+        + (dele ? ' Comece por ' + String(dele.nome).split(' ')[0] + '.' : ' Essa praça ainda não tem executivo declarado.');
     }
     return 'Nenhuma praça com TAM medido nesta rodada — o número que falta é o denominador, e sem ele % tocado é chute.';
   })();
@@ -56484,6 +56560,16 @@ function rt7Dados() {
     cargas,
     semCargas: (s.cargas || []).length === 0
   };
+}
+
+/* Os nomes de uma praça escritos como gente escreve: vírgula até o penúltimo e "e" no
+   último. O join(' e ') dava "Wericles e Renata e Sérgio". */
+function rt7DonosDaPraca(praca) {
+  const nomes = (rt7ExecsPorPraca()[rt7MunicipioDaPraca(praca)] || [])
+    .map(u => String(u.nome || '').split(' ')[0]);
+  if (!nomes.length) return '';
+  if (nomes.length === 1) return nomes[0];
+  return nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1];
 }
 
 /* datas curtas, no formato que o resto do cockpit usa */

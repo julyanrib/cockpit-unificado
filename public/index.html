@@ -40687,12 +40687,29 @@ function rt7MunicipioDaPraca(nome) {
 
 function rt7ExecsPorPraca() {
   const mapa = {};
-  rt7Ativos().forEach(u => {
+  const ativos = rt7Ativos();
+  (DATA.territorios || []).forEach(tr => {
+    if (!tr || tr.ativo === false) return;
+    const u = ativos.find(x => String(x.nome || x.name || '').toLowerCase()
+      === String(tr.rep || '').toLowerCase());
+    if (!u) return;
+    (tr.areas || []).forEach(a => {
+      const k = a && a.municipio ? rt7MunicipioDaPraca(a.municipio) : '';
+      if (!k) return;
+      if (!mapa[k]) mapa[k] = [];
+      if (!mapa[k].some(x => String(x.ownerId) === String(u.ownerId))) mapa[k].push(u);
+    });
+  });
+
+  ativos.forEach(u => {
+    const temDecl = (DATA.territorios || []).some(tr =>
+      String(tr && tr.rep || '').toLowerCase() === String(u.nome || '').toLowerCase());
+    if (temDecl) return;
     const p = rt7PracaDoRep(u);
     const k = p ? rt7MunicipioDaPraca(p.nome) : '';
     if (!k) return;
     if (!mapa[k]) mapa[k] = [];
-    mapa[k].push(u);
+    if (!mapa[k].some(x => String(x.ownerId) === String(u.ownerId))) mapa[k].push(u);
   });
   return mapa;
 }
@@ -40866,9 +40883,14 @@ function rt7Dados() {
     const medido = r.tam_fonte === 'contagem_api' && Number(r.tam) > 0;
     const pct = r.pct_tocado == null ? null : Number(r.pct_tocado);
 
-    const st = !medido ? 'não medido' : pct < 25 ? 'território virgem' : pct < 35 ? 'em expansão' : 'maduro';
-    const stCor = !medido ? '#8A6516' : pct < 25 ? '#1E9E7B' : pct < 35 ? '#2B3440' : '#7A8494';
-    const stBg = !medido ? '#FDF6E7' : pct < 25 ? '#EAF6F1' : pct < 35 ? '#EDEFF4' : '#F2F1EC';
+    const st = !medido ? 'não medido'
+      : r.tam < 200 ? 'quase sem mercado'
+        : r.tam < 5000 ? 'mercado pequeno'
+          : r.tam < 20000 ? 'mercado médio' : 'mercado grande';
+    const stCor = !medido ? '#8A6516' : r.tam < 200 ? '#8A3B3B'
+      : r.tam < 5000 ? '#7A8494' : r.tam < 20000 ? '#2B3440' : '#1E9E7B';
+    const stBg = !medido ? '#FDF6E7' : r.tam < 200 ? '#FDF7F7'
+      : r.tam < 5000 ? '#F2F1EC' : r.tam < 20000 ? '#EDEFF4' : '#EAF6F1';
 
     const sel = rt7MunicipioDaPraca(r.praca) === rt7MunicipioDaPraca(pracaSel);
 
@@ -41000,8 +41022,18 @@ function rt7Dados() {
     .reduce((a, r) => a + (Number(r.tam) || 0), 0);
   const somaToc = linhas.reduce((a, r) => a + (Number(r.tocado) || 0), 0);
   const semMedida = linhas.filter(r => r.tam_fonte !== 'contagem_api').length;
-  const maisVirgem = linhas.filter(r => r.tam_fonte === 'contagem_api' && r.pct_tocado != null)
-    .slice().sort((a, b) => Number(a.pct_tocado) - Number(b.pct_tocado))[0];
+
+  const comDono = linhas.filter(r =>
+    (execsPorPraca[rt7MunicipioDaPraca(r.praca)] || []).length > 0);
+  const naoTocado = r => (Number(r.tam) || 0) - (Number(r.tocado) || 0);
+  const candidatas = (comDono.length ? comDono : linhas)
+    .filter(r => r.tam_fonte === 'contagem_api' && Number(r.tam) > 0);
+
+  const naoComecou = candidatas.filter(r => (Number(r.tocado) || 0) === 0)
+    .slice().sort((a, b) => naoTocado(b) - naoTocado(a));
+  const maisVirgem = naoComecou[0]
+    || candidatas.slice().sort((a, b) => naoTocado(b) - naoTocado(a))[0];
+  const virgemNaoComecou = !!naoComecou.length;
   const semCidade = (() => {
     const m = String((linhas[0] || {}).leitura || '').match(/(\d+)\s+neg[óo]cios? do time/);
     return m ? Number(m[1]) : null;
@@ -41022,9 +41054,12 @@ function rt7Dados() {
         + (semCidade ? ' · ' + semCidade + ' negócios sem cidade ficam fora de toda praça, então isto é piso' : ''),
       fonte: 'HubSpot × Casa dos Dados · ' + quandoRadar },
     maisVirgem
-      ? { n: String(maisVirgem.pct_tocado).replace('.', ',') + '%', rot: 'a praça mais virgem', nCor: '#E51A31',
+      ? { n: naoTocado(maisVirgem).toLocaleString('pt-BR'), rot: virgemNaoComecou ? 'portas na praça que não começou' : 'portas não batidas na maior praça', nCor: '#E51A31',
         txt: maisVirgem.praca + ' tem ' + Number(maisVirgem.tam).toLocaleString('pt-BR')
-          + ' CNPJs food e só ' + maisVirgem.tocado + ' no CRM — é onde a torneira rende mais por hora de rua.',
+          + ' CNPJs food e ' + (virgemNaoComecou ? 'NENHUMA conta no CRM' : maisVirgem.tocado + ' no CRM')
+          + (rt7DonosDaPraca(maisVirgem.praca)
+            ? ' — é de ' + rt7DonosDaPraca(maisVirgem.praca) + '.'
+            : ' — e ainda sem executivo declarado.'),
         fonte: fonteCdd }
       : { n: '—', rot: 'a praça mais virgem', nCor: '#8A6516',
         txt: 'sem praça com TAM medido nesta rodada — o job de segunda não conseguiu contar.',
@@ -41087,10 +41122,14 @@ function rt7Dados() {
     }
     if (maisVirgem) {
       const dele = (execsPorPraca[rt7MunicipioDaPraca(maisVirgem.praca)] || [])[0];
-      return maisVirgem.praca + ' tem ' + Number(maisVirgem.tam).toLocaleString('pt-BR')
-        + ' CNPJs food e só ' + String(maisVirgem.pct_tocado).replace('.', ',') + '% tocado'
-        + (magras ? ' — ' + magras + ' carteira(s) abaixo de 50% precisam de carga esta semana.' : '.')
-        + (dele ? ' Comece por ' + String(dele.nome).split(' ')[0] + '.' : ' Ninguém está nessa praça ainda.');
+
+      return maisVirgem.praca + (virgemNaoComecou
+        ? ' tem ' + Number(maisVirgem.tam).toLocaleString('pt-BR')
+          + ' estabelecimentos food e NENHUMA conta no CRM'
+        : ' tem ' + naoTocado(maisVirgem).toLocaleString('pt-BR')
+          + ' estabelecimentos food que ninguém tocou, de ' + Number(maisVirgem.tam).toLocaleString('pt-BR'))
+        + (magras ? ' — e ' + magras + ' carteira(s) abaixo de 50% precisam de carga esta semana.' : '.')
+        + (dele ? ' Comece por ' + String(dele.nome).split(' ')[0] + '.' : ' Essa praça ainda não tem executivo declarado.');
     }
     return 'Nenhuma praça com TAM medido nesta rodada — o número que falta é o denominador, e sem ele % tocado é chute.';
   })();
@@ -41154,6 +41193,14 @@ function rt7Dados() {
     cargas,
     semCargas: (s.cargas || []).length === 0
   };
+}
+
+function rt7DonosDaPraca(praca) {
+  const nomes = (rt7ExecsPorPraca()[rt7MunicipioDaPraca(praca)] || [])
+    .map(u => String(u.nome || '').split(' ')[0]);
+  if (!nomes.length) return '';
+  if (nomes.length === 1) return nomes[0];
+  return nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1];
 }
 
 function rt7DataCurta(iso) {
