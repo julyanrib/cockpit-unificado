@@ -15016,7 +15016,13 @@ function passoVencidoDoLead(lead) {
 // stub no harness — o mesmo caminho que deixou o bug do "próximo passo às 9h01"
 // passar. Ela vivia ~3.800 linhas abaixo; subir a declaração é seguro (nada que já
 // funcionava passa a ler antes da inicialização).
-const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191'];
+/* GANHO NO FIM (10/09/26), e não entre Ag. Pagamento e Onboarding: esta lista é a
+   ESCADA que fn2PodeMover usa (`iPara <= iDe + 1`). Inserir no meio empurraria o
+   Onboarding para o índice 7 e faria 'Ag. Pagamento → Onboarding' virar pulo de fase —
+   quebrando um caminho que existe desde 15/08. No fim, sair de Ganho para qualquer
+   etapa anterior é permitido (é o desfazer de um ganho errado) e entrar em Ganho pelo
+   Cockpit continua barrado, que é a decisão de 15/08: quem move para lá é o ASAAS. */
+const ORDEM_ETAPAS_FUNIL = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191', '1396006162'];
 
 /* @nucleo:fim */
 
@@ -18577,6 +18583,9 @@ function etapaPedeProximoPasso(etapaId) {
   const id = String(etapaId || '');
   if (id === ETAPA_PERDIDO_ID) return false;
   if (id === FN3_ETAPA_ONBOARDING) return false;
+  /* GANHO TAMBÉM NÃO (10/09/26): a venda está feita. Tarefa datada aqui seria lixo na
+     agenda de quem acabou de vender — o mesmo motivo do Onboarding e do Perdido. */
+  if (id === '1396006162') return false;
   return true;
 }
 
@@ -18599,6 +18608,10 @@ const FN3_COLUNAS = [
   { id: '1395880471', rot: 'DEMO', pleno: 'Demo/Proposta', prazo: 'proposta', dinheiro: true, curto: true },
   { id: '1395880472', rot: 'NEGOCIAÇÃO', pleno: 'Negociação', prazo: 'retorno', dinheiro: true, curto: true },
   { id: '1395880473', rot: 'PAGAMENTO', pleno: 'Aguardando pagamento', prazo: 'confirmar', dinheiro: true, pagto: true, curto: true },
+  /* GANHO entra aqui na ordem VISUAL (entre pagar e entregar, que é a leitura do
+     funil), e no FIM de ORDEM_ETAPAS_FUNIL, que é a escada da regra de pulo — as duas
+     listas respondem perguntas diferentes. */
+  { id: '1396006162', rot: 'GANHO', pleno: 'Ganho — pago, falta enviar', prazo: 'enviar', dinheiro: true, ganho: true },
   { id: FN3_ETAPA_ONBOARDING, rot: 'ONBOARDING', pleno: 'Enviado onboarding', dinheiro: true, onb: true }
 ];
 
@@ -28733,8 +28746,17 @@ function pl6RegiaoDoLead(l, regioes, porChave) {
 
    Reciclagem NAO entra nesta lista: ela nao saiu do funil, ela esta parada — e continua
    sendo municao, pelo chip proprio dela. */
+/* ══ QUEM SAIU DO FUNIL DE VENDA (10/09/26) ═══════════════════════════════════════
+   Eram só as etapas com `saiu: true` — na prática, Perdido. MEDIDO na produção, na
+   carteira do Marco: 3 dos 25 cards da munição dele eram negócios em ENVIADO
+   ONBOARDING (NGW Serviços e Refeição, Gujorebar, Kokai Gran Park) — clientes já
+   entregues aparecendo como conta para visitar. Com a etapa Ganho descendo agora,
+   a venda de ontem entraria na mesma lista.
+   FN2_POS_VENDA é a lista que o próprio arquivo já mantinha para isso: Ganho,
+   Onboarding e Backlog são acompanhamento de entrega, não venda a fazer. */
 const PL6_ETAPAS_QUE_SAIRAM = (typeof FN2_ETAPAS !== 'undefined' ? FN2_ETAPAS : [])
-  .filter(e => e.saiu).map(e => String(e.id));
+  .filter(e => e.saiu).map(e => String(e.id))
+  .concat(typeof FN2_POS_VENDA !== 'undefined' ? FN2_POS_VENDA.map(String) : []);
 
 function pl6Carteira(rep, regioes) {
   const abertos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
@@ -35314,7 +35336,9 @@ let stageModalVoltarPara = null; // função pra "← voltar" quando a ficha abr
 // Onboarding alcançável, Ganho fora (só automação).
 // ATUALIZAÇÃO (17/08/26, Julyan): Reciclagem também entrou — mesmo motivo do
 // ORDEM_ETAPAS_FUNIL acima.
-const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191'];
+/* MESMA ORDEM DA ESCADA, com Ganho no fim pelo mesmo motivo: os campos da ficha são
+   revelados por índice (`desde`), e mexer no meio mudaria o que aparece em cada etapa. */
+const ORDEM_FUNIL_FICHA = ['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1396006163', '1398311191', '1396006162'];
 
 // BLOCO 50 (14/08/26) — validação de UM campo isolado, usada pela edição inline da
 // ficha (§6 do handoff). Mesmas regras de tipo de coletarCamposPassagem, mas sem

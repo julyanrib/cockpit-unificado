@@ -56,6 +56,13 @@ const OPEN_STAGES = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGE
 // pergunta é 'o que saiu da minha carteira desde que o Cockpit passou a registrar'.
 const CORTE_PERDIDO_ISO = '2026-09-01';
 
+// GANHO A PARTIR DESTA SEMANA (10/09/26, Julyan: "traga os ganhos só dessa semana e a
+// partir dela seja contabilizado 1 a 1"). A segunda-feira desta semana, e fixa como as
+// outras duas: janela que anda sozinha faria o ganho de sexta desaparecer na segunda.
+// São 24 negócios em Ganho neste pipeline, o mais antigo de março — o histórico fica no
+// HubSpot, que é onde ele já está.
+const CORTE_GANHO_ISO = '2026-09-07';
+
 // ENVIADO ONBOARDING A PARTIR DE HOJE (02/09/26, Julyan: "NÃO QUERO NENHUM RETROATIVO
 // VAI SER A PARTIR DE HOJE TB").
 // Medido no CRM antes de escrever: 431 negócios já estão na etapa Onboarding do pipeline
@@ -147,6 +154,9 @@ async function todasAsPropriedadesDeNegocio() {
 }
 function inicioDoPerdidoVisivel() {
   return Date.parse(CORTE_PERDIDO_ISO + 'T00:00:00-03:00');
+}
+function inicioDoGanhoVisivel() {
+  return Date.parse(CORTE_GANHO_ISO + 'T00:00:00-03:00');
 }
 
 // Meta mensal de negócios fechados do time inteiro — combinada com o Julyan em 27/07/2026.
@@ -1917,6 +1927,65 @@ async function main() {
         celular: d.properties.celular || null,
         ...Object.fromEntries(FIELD_SALES_STAGE_PROPS.map(prop => [prop, d.properties[prop] || null])),
         tarefas: tarefasPerdido[d.id] || []
+      };
+    }).sort((a, b) => a.dias - b.dias);
+  }
+
+  /* ══ GANHO: A VENDA CONTINUA VISÍVEL DEPOIS DE PAGA ═══════════════════════════════
+     O corte vai no FILTRO do HubSpot, como no Perdido — a etapa inteira tem 24
+     negócios e 23 deles são histórico que o CRM já guarda.
+     `closedate` é a data em que a venda fechou, e é por ela que a janela corta: o
+     `hs_lastmodifieddate` mexe quando alguém edita qualquer campo, e usá-lo faria uma
+     venda de março reaparecer só porque alguém abriu o negócio. */
+  const ganhosDaSemana = (await hsSearchAll({
+    filterGroups: [{
+      filters: [
+        { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+        { propertyName: 'dealstage', operator: 'EQ', value: STAGES.ganho1 },
+        { propertyName: 'hubspot_owner_id', operator: 'IN', values: REPS.map(r => r.ownerId) },
+        { propertyName: 'closedate', operator: 'GTE', value: String(inicioDoGanhoVisivel()) }
+      ]
+    }],
+    properties: ['dealname', 'dealstage', 'createdate', 'hubspot_owner_id', 'notes_last_updated',
+      'notes_next_activity_date', 'amount', 'mrr', 'valor_de_mrr', 'closedate', 'latitude', 'longitude',
+      'cep', 'bairro', 'cidade', 'logradouro', 'numero', 'celular', ...FIELD_SALES_STAGE_PROPS]
+  })).filter(d => !isExcludedDeal(d));
+  console.log(`Ganho: ${ganhosDaSemana.length} venda(s) do time fechadas a partir de ` +
+    `${CORTE_GANHO_ISO} — o histórico anterior fica no HubSpot e não desce para o Cockpit.`);
+
+  {
+    const tarefasGanho = await hsTarefasAbertasDosNegocios(ganhosDaSemana.map(d => d.id));
+    funilLeads[STAGES.ganho1] = ganhosDaSemana.map(d => {
+      const lat = coordenadaValida(d.properties.latitude);
+      const lng = coordenadaValida(d.properties.longitude);
+      const fechou = Date.parse(d.properties.closedate || '');
+      return {
+        name: d.properties.dealname,
+        dealname: d.properties.dealname,
+        id: d.id,
+        /* dias = há quantos dias FECHOU. Na coluna Ganho a pergunta não é "quanto tempo
+           parado" — o negócio não está parado, está vendido: é "quando foi", que é o que
+           decide se ele já devia ter ido para o Onboarding. */
+        dias: Number.isFinite(fechou) ? Math.max(0, Math.floor((Date.now() - fechou) / 86400000)) : 0,
+        slaBreach: false,
+        ganhoEm: Number.isFinite(fechou) ? new Date(fechou).toISOString().slice(0, 10) : null,
+        proximaAtividade: d.properties.notes_next_activity_date || null,
+        ultimaInteracao: d.properties.notes_last_updated || null,
+        valor: Math.round(parseFloat(d.properties.amount) || 0),
+        mrr: Math.round(parseFloat(d.properties.mrr) || 0),
+        valor_de_mrr: d.properties.valor_de_mrr || null,
+        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
+        ownerId: d.properties.hubspot_owner_id || null,
+        lat: lat,
+        lng: lng,
+        cep: d.properties.cep || null,
+        bairro: d.properties.bairro || null,
+        cidade: d.properties.cidade || null,
+        logradouro: d.properties.logradouro || null,
+        numero: d.properties.numero || null,
+        celular: d.properties.celular || null,
+        ...Object.fromEntries(FIELD_SALES_STAGE_PROPS.map(prop => [prop, d.properties[prop] || null])),
+        tarefas: tarefasGanho[d.id] || []
       };
     }).sort((a, b) => a.dias - b.dias);
   }

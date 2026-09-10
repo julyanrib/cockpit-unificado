@@ -70,13 +70,37 @@ if (escadaServidor && escadaTela) {
     'servidor=[' + escadaServidor.join(',') + '] tela=[' + escadaTela.join(',') + ']');
   checar('Perdido NÃO está na escada (senão viraria degrau e bloquearia como pulo de fase)',
     escadaServidor.indexOf(PERDIDO) < 0 && escadaTela.indexOf(PERDIDO) < 0);
-  checar('Ganho continua fora da escada (quem move para lá é o ASAAS, não uma pessoa)',
-    escadaServidor.indexOf(GANHO) < 0);
+  /* ══ GANHO ENTROU NA ESCADA, E A REGRA DELE MUDOU DE LUGAR (10/09/26) ══════════════
+     Esta checagem exigia `escadaServidor.indexOf(GANHO) < 0`. A INTENÇÃO era "ninguém
+     move para Ganho à mão — quem move é o ASAAS na confirmação do pagamento" (decisão do
+     Julyan em 15/08), e ela continua valendo: o que mudou é o mecanismo.
+
+     Julyan, 10/09: "o lumiere pagou e ele nao foi pra aba ganho, nao tem no cockpit,
+     preciso dela lá, pra enviar pra onboarding". Medido no CRM: o negócio ESTAVA em Ganho
+     desde 09/09 20:40 — o ASAAS moveu. O que faltava era o Cockpit mostrar a etapa e
+     deixar SAIR dela para o Onboarding.
+
+     Para a régua de pulo calcular a origem de quem sai de Ganho, ele precisa ser um
+     degrau (fora da escada, `indexOf` devolve -1 e a tela recusa qualquer movimento).
+     Então ele entra na escada — NO FIM, para não deslocar ninguém — e sai de
+     ETAPAS_DESTINO, que é onde a proibição de mover para lá agora vive.
+
+     A CHECAGEM PASSA A SER A INTENÇÃO: Ganho é degrau e NÃO é destino. */
+  checar('Ganho é degrau da escada, mas NÃO é destino (quem move para lá é o ASAAS)',
+    escadaServidor.indexOf(GANHO) === escadaServidor.length - 1
+      && escadaTela.indexOf(GANHO) === escadaTela.length - 1
+      && servidor.indexOf('ETAPAS_ABERTAS.filter(e => e !== ETAPA_GANHO).concat([ETAPA_PERDIDO])') > -1,
+    'Ganho no MEIO da escada faria "Ag. Pagamento → Onboarding" virar pulo de fase, e Ganho'
+    + ' como destino faria uma pessoa poder afirmar que o cliente pagou');
 }
 
 /* ── 2. a porteira aceita Perdido, dos dois lados ─────────────────────────────────── */
-const porteiraServidor = servidor.match(/const\s+ETAPAS_DESTINO\s*=\s*ETAPAS_ABERTAS\.concat\(\[\s*ETAPA_PERDIDO\s*\]\)/);
-checar('servidor: ETAPAS_DESTINO = escada + Perdido', !!porteiraServidor);
+/* A PORTEIRA É A ESCADA MENOS O GANHO, MAIS O PERDIDO (10/09/26). Era escada + Perdido;
+   Ganho passou a ser degrau (para a régua de pulo ler a origem de quem sai dele) e sai da
+   porteira, porque mover um negócio para Ganho é afirmar que o cliente pagou — e quem
+   afirma isso é o ASAAS. */
+const porteiraServidor = servidor.match(/const\s+ETAPAS_DESTINO\s*=\s*ETAPAS_ABERTAS\.filter\(e => e !== ETAPA_GANHO\)\.concat\(\[\s*ETAPA_PERDIDO\s*\]\)/);
+checar('servidor: ETAPAS_DESTINO = escada − Ganho + Perdido', !!porteiraServidor);
 checar('servidor: a validação de destino usa ETAPAS_DESTINO, não ETAPAS_ABERTAS',
   /if \(!ETAPAS_DESTINO\.includes\(String\(novaEtapa\)\)\)/.test(servidor));
 checar('servidor: ETAPA_PERDIDO é o id real do pipeline Field Sales',
@@ -454,7 +478,12 @@ checar('o estado de Perdido é decidido ANTES do bloco de "sem próximo passo"',
    a regex fica VÁLIDA e errada, e a guarda passa verde protegendo nada. */
 const iGrade = template.indexOf('const FN3_COLUNAS = [');
 const grade = iGrade > 0 ? template.slice(iGrade, template.indexOf('];', iGrade)) : '';
-checar('a grade tem 7 colunas', (grade.match(/id: /g) || []).length === 7,
+/* OITO COLUNAS DESDE 10/09/26: GANHO entrou. Julyan: "o lumiere pagou e ele nao foi pra
+   aba ganho, nao tem no cockpit, preciso dela lá, pra enviar pra onboarding".
+   MEDIDO no CRM: o negócio ESTAVA em Ganho (o ASAAS moveu em 20 min) e o robô não trazia
+   a etapa — a venda desaparecia do Cockpit no momento em que virava venda, e não havia de
+   onde mandá-la para o Onboarding. */
+checar('a grade tem 8 colunas', (grade.match(/id: /g) || []).length === 8,
   'achado ' + (grade.match(/id: /g) || []).length);
 checar('Perdido NÃO é coluna da grade', grade.length > 0 && grade.indexOf('1396006164') < 0);
 checar('Enviado Onboarding é a última coluna da grade',
@@ -1093,6 +1122,85 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     rotaNota.indexOf('a trava e uma rede, nao uma porteira') > -1,
     'deixar de criar o próximo passo por causa de uma leitura é trocar duplicata por'
     + ' negócio sem próximo passo — o furo que o gestor cobra às 8h30');
+}());
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   A ETAPA GANHO NO COCKPIT, SÓ A PARTIR DESTA SEMANA (10/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "o lumiere pagou e ele nao foi pra aba ganho, nao tem no cockpit, preciso dela
+   lá, pra enviar pra onboadding? ag pagamento -> ganho -> enviado onb" — e depois: "quero
+   que voce traga os ganhos só dessa semana e a partir dela seja contabilizado 1 a 1".
+
+   MEDIDO NO CRM ANTES DE ESCREVER: o LUMIERE (64903734418) já estava em Ganho desde 09/09
+   20:40 — o ASAAS moveu, como sempre. O defeito era o Cockpit: o robô buscava 8 etapas e
+   nenhuma era 1396006162, então a venda desaparecia da tela no exato momento em que virava
+   venda, e não havia de onde mandá-la para o Onboarding.
+
+   E SÃO 24 NEGÓCIOS EM GANHO neste pipeline, o mais antigo de março. Trazer todos sujaria
+   o Cockpit com histórico que o CRM já guarda — daí o corte fixo na segunda desta semana,
+   igual ao que o Perdido (01/09) e o Onboarding (02/09) já usam. Hoje desce UM.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const GANHO_ID = '1396006162';
+
+  /* ── 1 · O ROBÔ TRAZ A ETAPA, COM JANELA E PELO closedate ────────────────────────── */
+  checar('o robô busca a etapa Ganho e a põe em funilLeads',
+    robo.indexOf('funilLeads[STAGES.ganho1] = ganhosDaSemana.map(') > -1
+      && robo.indexOf("{ propertyName: 'dealstage', operator: 'EQ', value: STAGES.ganho1 }") > -1,
+    'sem isso a venda desaparece do Cockpit no momento em que fecha — foi o caso do Lumière');
+
+  checar('e o corte é fixo, na segunda desta semana',
+    robo.indexOf("const CORTE_GANHO_ISO = '2026-09-07';") > -1
+      && robo.indexOf('function inicioDoGanhoVisivel() {') > -1,
+    'janela que anda sozinha faria o ganho de sexta desaparecer na segunda; sem corte,'
+    + ' descem 24 negócios, o mais antigo de março');
+
+  /* O CORTE VAI NO FILTRO DO HUBSPOT, não num .filter() depois — é o mesmo cuidado que o
+     Perdido documenta: a etapa inteira paginada de 100 em 100 para descartar 99% em JS. */
+  checar('o corte do Ganho vai no filtro do HubSpot, por closedate',
+    /dealstage', operator: 'EQ', value: STAGES\.ganho1 \}[\s\S]{0,400}closedate', operator: 'GTE', value: String\(inicioDoGanhoVisivel\(\)\)/
+      .test(robo),
+    'cortar em JS traz a etapa inteira sete vezes por dia útil; e cortar por'
+    + ' hs_lastmodifieddate faria uma venda de março reaparecer porque alguém abriu o card');
+
+  /* ── 2 · A COLUNA EXISTE, E A ORDEM VISUAL NÃO É A ESCADA ────────────────────────── */
+  checar('a coluna GANHO fica entre PAGAMENTO e ONBOARDING na ordem visual',
+    grade.indexOf("rot: 'GANHO'") > grade.indexOf("rot: 'PAGAMENTO'")
+      && grade.indexOf("rot: 'GANHO'") < grade.indexOf("rot: 'ONBOARDING'"),
+    'a leitura do funil é pagar → ganhar → entregar; a ESCADA é outra lista, e é por isso'
+    + ' que Ganho está no fim dela e no meio daqui');
+
+  /* ── 3 · VENDA GANHA NÃO PEDE PRÓXIMO PASSO ──────────────────────────────────────── */
+  checar('Ganho não pede próximo passo, como Onboarding e Perdido',
+    template.indexOf("  if (id === '1396006162') return false;") > -1,
+    'tarefa datada em cima de venda fechada é lixo na agenda de quem acabou de vender');
+
+  /* ── 4 · PÓS-VENDA NÃO É CONTA PARA VISITAR ──────────────────────────────────────────
+     MEDIDO na produção, na carteira do Marco: 3 dos 25 cards da munição dele eram negócios
+     em Enviado Onboarding — NGW Serviços e Refeição, Gujorebar e Kokai Gran Park, clientes
+     já entregues aparecendo como conta para visitar. Com o Ganho descendo agora, a venda de
+     ontem entraria na mesma lista. */
+  checar('a munição do Planejamento exclui o pós-venda inteiro',
+    template.indexOf(".concat(typeof FN2_POS_VENDA !== 'undefined' ? FN2_POS_VENDA.map(String) : [])") > -1,
+    'cliente entregue na munição é o executivo indo visitar quem já comprou — e foi o que'
+    + ' estava acontecendo com três contas do Marco');
+
+  /* ── 5 · O CAMINHO ATÉ O ONBOARDING CONTINUA ABERTO ─────────────────────────────────
+     É o que ele pediu: "ag pagamento -> ganho -> enviado onb". As duas pontas têm de
+     passar na régua de pulo, e a de Ag. Pagamento existe desde 15/08. */
+  const iPag = escadaServidor ? escadaServidor.indexOf(PAGAMENTO) : -1;
+  const iOnb = escadaServidor ? escadaServidor.indexOf('1396006163') : -1;
+  const iGanho = escadaServidor ? escadaServidor.indexOf(GANHO_ID) : -1;
+  checar('de Ag. Pagamento para Onboarding continua sendo um degrau só',
+    iPag >= 0 && iOnb >= 0 && iOnb <= iPag + 1,
+    'inserir Ganho no MEIO da escada empurraria o Onboarding e quebraria um caminho que'
+    + ' existe desde 15/08 — o executivo perderia o "enviar pra onboarding"');
+  checar('e de Ganho para Onboarding é permitido',
+    iGanho >= 0 && iOnb >= 0 && iOnb <= iGanho + 1,
+    'sem isso a venda fica presa em Ganho e não há como enviá-la para a entrega');
+  checar('mas de Ag. Pagamento para Ganho NÃO é',
+    iGanho > iPag + 1,
+    'mover à mão para Ganho é afirmar que o cliente pagou; quem afirma isso é o ASAAS');
 }());
 
 if (falhas.length) {
