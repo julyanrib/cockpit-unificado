@@ -512,8 +512,11 @@ checar('sem histórico suficiente o degrau não inventa etapa',
   template.indexOf('histórico curto para apontar onde o funil vaza') > 0);
 /* A CONVERSÃO SAIU DO HEADER e foi para o title do hover: três linhas de estatística no
    header afogavam o nome da etapa, que é o defeito nº 2 do print que o Julyan mandou. */
+/* GANHO ENTROU NA ISENÇÃO (10/09/26): etapa ganha não tem próxima etapa para converter, e
+   taxa em cima de venda fechada é número que não responde pergunta nenhuma — o mesmo
+   motivo de Ag. Pagamento e Onboarding já estarem de fora. */
 checar('a conversão não ocupa linha do header — vive no title do hover',
-  template.indexOf('const conv = (col.pagto || col.onb) ? null : fn2Conversao(col.id, fn2OwnerAtual);') > 0 &&
+  template.indexOf('const conv = (col.pagto || col.onb || col.ganho) ? null : fn2Conversao(col.id, fn2OwnerAtual);') > 0 &&
   template.indexOf('title="${dica}"') > 0);
 /* O card de Perdido dizia "31/08 (segunda)" para uma perda de 01/09 (terça): 'YYYY-MM-DD'
    é meia-noite UTC pela especificação, e em Brasília (UTC−3) isso é o dia anterior. Errava
