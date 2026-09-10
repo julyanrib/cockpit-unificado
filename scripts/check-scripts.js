@@ -1718,7 +1718,124 @@ function checarPropriedadesEspelhadas() {
     + ' sao aceitas pela rota de etapa.');
   return true;
 }
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   O QUE A ROTA EXIGE, A TELA TEM DE PEDIR (10/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   A guarda vizinha (propriedades espelhadas) confere PERMISSAO: tudo que a tela coleta e
+   aceito pela rota. Esta confere EXIGENCIA, e na direcao que dói: toda propriedade que
+   PROPS_OBRIGATORIAS_POR_ETAPA exige numa etapa tem de estar em CAMPOS_POR_ETAPA daquela
+   etapa. Sem isso o executivo preenche o formulario inteiro, clica, e leva um 400 do
+   servidor pedindo um campo que a tela nunca mostrou — na rua, depois da visita.
+
+   POR QUE NASCE AGORA: em 10/09 o `celular` saiu da criacao em Prospecao (medido: 40 dos
+   85 negocios de la estao sem ele) e entrou na porteira da Conversa com Decisor (13
+   negocios, ZERO sem celular). Mexer nas duas listas e o momento exato em que elas podem
+   divergir — e eu escrevi num comentario que "a guarda 19 compara as duas listas"
+   ANTES de conferir. Ela nao comparava. Esta compara.
+
+   SO NESTA DIRECAO, DE PROPOSITO. A tela ser MAIS exigente que a rota e desenho
+   deliberado e documentado: a Visita pede sistema e dor que a rota nao exige, porque os
+   dois se aprendem DENTRO da visita e pedi-los no Decisor obriga o executivo a lembrar de
+   uma visita de dias atras. Tela mais exigente custa um campo; rota mais exigente custa a
+   acao inteira.
+
+   O RECORTE E POR CHAVES BALANCEADAS, e nao por `\n  ]`: a primeira versao desta medicao
+   usou essa ancora e as faixas escorregaram — ela acusou divergencia em duas etapas que
+   estavam iguais, e eu quase escrevi guarda em cima do artefato. */
+function checarObrigatoriasEspelhadas() {
+  const arquivo = 'template/cockpit.template.html';
+  const rota = 'lib/acoes-negocio/mudar-etapa-negocio.js';
+  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  const rotaTxt = fs.readFileSync(path.join(root, rota), 'utf8');
+  /* comentario nao conta pelos dois lados: os comentarios desta casa citam nomes de
+     propriedade ao contar a historia, e foi assim que a guarda 10 deu verde sobre o
+     defeito que existia para pegar. */
+  const semCom = t => t
+    .replace(/\/\*[\s\S]*?\*\//g, x => x.replace(/[^\n]/g, ' '))
+    .replace(/^\s*\/\/.*$/gm, '');
+
+  function blocoBalanceado(txt, decl) {
+    const i = txt.indexOf(decl);
+    if (i < 0) return null;
+    let d = 0, j = txt.indexOf('{', i), viu = false;
+    for (; j < txt.length; j++) {
+      const c = txt[j];
+      if (c === '{') { d++; viu = true; }
+      else if (c === '}') { d--; if (viu && d === 0) return txt.slice(i, j + 1); }
+    }
+    return null;
+  }
+
+  const bCli = blocoBalanceado(cru, 'const CAMPOS_POR_ETAPA = {');
+  const bSrv = blocoBalanceado(rotaTxt, 'const PROPS_OBRIGATORIAS_POR_ETAPA = {');
+  if (!bCli || !bSrv) {
+    console.error('OBRIGATORIAS ESPELHADAS: nao achei ' + (!bCli ? 'CAMPOS_POR_ETAPA' : 'PROPS_OBRIGATORIAS_POR_ETAPA') + ' -');
+    console.error('  a guarda perdeu o alvo. Ensine o lugar novo aqui: guarda que nao acha o alvo reprova.');
+    return false;
+  }
+
+  /* uma entrada por etapa, recortada por colchetes balanceados */
+  function porEtapa(bloco, extrai) {
+    const fora = {};
+    const re = /'(\d{9,})':\s*\[/g;
+    let m;
+    while ((m = re.exec(bloco)) !== null) {
+      let d = 0, j = bloco.indexOf('[', m.index), viu = false, fim = -1;
+      for (; j < bloco.length; j++) {
+        const c = bloco[j];
+        if (c === '[') { d++; viu = true; }
+        else if (c === ']') { d--; if (viu && d === 0) { fim = j; break; } }
+      }
+      if (fim < 0) continue;
+      fora[m[1]] = extrai(bloco.slice(bloco.indexOf('[', m.index), fim + 1));
+    }
+    return fora;
+  }
+
+  const cli = porEtapa(semCom(bCli), function (trecho) {
+    /* cada campo e um objeto {…}; obrigatorio de verdade e `obrigatorio: true`.
+       `obrigatorioSe` NAO conta: e condicional, e a rota nao o exige sempre. */
+    return [...trecho.matchAll(/\{[^{}]*\}/g)]
+      .filter(x => /obrigatorio:\s*true/.test(x[0]))
+      .map(x => (x[0].match(/prop:\s*'([a-z0-9_]+)'/) || [])[1])
+      .filter(Boolean);
+  });
+  const srv = porEtapa(semCom(bSrv), function (trecho) {
+    return [...trecho.matchAll(/'([a-z0-9_]+)'/g)].map(x => x[1]);
+  });
+
+  if (!Object.keys(srv).length || !Object.keys(cli).length) {
+    console.error('OBRIGATORIAS ESPELHADAS: extracao vazia -');
+    console.error('  nenhuma etapa lida e resultado conveniente demais para ser verdade.');
+    return false;
+  }
+
+  const buracos = [];
+  Object.keys(srv).forEach(function (etapa) {
+    const pedidos = cli[etapa] || [];
+    (srv[etapa] || []).forEach(function (p) {
+      if (pedidos.indexOf(p) < 0) buracos.push({ etapa: etapa, prop: p });
+    });
+  });
+
+  if (buracos.length) {
+    console.error('A ROTA EXIGE O QUE A TELA NAO PEDE:');
+    buracos.forEach(function (b) {
+      console.error('  etapa ' + b.etapa + ': ' + b.prop
+        + ' - o servidor recusa a passagem e o formulario nunca mostrou o campo');
+    });
+    console.error('  O executivo preenche tudo, clica, e leva um 400 pedindo um campo que');
+    console.error('  ele nao tinha como preencher. Na rua, depois da visita.');
+    return false;
+  }
+  const n = Object.keys(srv).reduce((t2, e) => t2 + (srv[e] || []).length, 0);
+  console.log('OK obrigatorias espelhadas - as ' + n + ' exigencias da rota (em '
+    + Object.keys(srv).length + ' etapas) tem campo no formulario.');
+  return true;
+}
+
 if (!checarPropriedadesEspelhadas()) process.exit(1);
+if (!checarObrigatoriasEspelhadas()) process.exit(1);
 
 /* ══ GUARDA 20 — VARIAVEL USADA ANTES DE EXISTIR (04/09/26) ═══════════════════════════
    Ela vive em arquivo proprio porque le o template com outro metodo (mascara comentarios e

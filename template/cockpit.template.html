@@ -17204,7 +17204,28 @@ const CAMPOS_POR_ETAPA = {
     { prop: 'nome_do_sistema', label: 'Sistema que ele usa hoje', tipo: 'texto', obrigatorio: true },
     { prop: 'gargalo_operacional', label: 'Dor que ele te contou', tipo: 'selecao', opcoes: OP_GARGALO, obrigatorio: true }
   ],
+  /* O CELULAR ENTRA AQUI, E SAIU DA CRIAÇÃO EM PROSPECÇÃO (10/09/26) ════════════════
+     Julyan: "às vezes ele tá prospectando e não tem o telefone ainda do decisor".
+     MEDIDO no funil desta carga, e é o que põe o gate nesta etapa e não antes:
+
+       etapa                   negócios   sem celular
+       Prospecção                  85         40  (47%)
+       Visita                      46         18  (39%)
+       Conversa com Decisor        13          0  (0%)
+       Demo/Proposta em diante     31          1
+
+     Quem chega no Decisor JÁ TEM o número — a exigência aqui não cobra nada de novo de
+     ninguém, e é a última etapa em que ela ainda é de graça. Na Prospecção ela cobrava
+     um dado que 47% dos negócios não têm: número exigido na tela não é número que
+     existe, é número inventado ou negócio que não nasceu.
+
+     E É AQUI QUE O CONTATO IMPORTA: o RPA do Asaas parte do CONTATO e procura o negócio
+     dele (está documentado em api/criar-negocio.js, medido em auditoria). O contato
+     continua sendo criado na criação do negócio, como sempre foi — nada de automação,
+     gatilho ou fluxo do Asaas foi tocado nesta mudança. */
   '1395880470': [
+    { prop: 'celular', label: 'Celular do decisor', tipo: 'tel', obrigatorio: true,
+      dica: 'é o número que o contato do Asaas usa — daqui pra frente ele é exigido' },
     { prop: 'gargalo_operacional', label: 'Gargalo Operacional', tipo: 'selecao', opcoes: OP_GARGALO, obrigatorio: true },
     { prop: 'nome_do_sistema', label: 'Nome do Sistema', tipo: 'texto', obrigatorio: true }
   ],
@@ -35538,8 +35559,8 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
         <small class="erro" hidden></small>
       </div>
       <div class="pe-campo" data-campo="__telefone">
-        <label for="peTelefone">Telefone / celular<i title="obrigatório"> *</i></label>
-        <input id="peTelefone" type="tel" maxlength="20" autocomplete="off" placeholder="(27) 99999-9999">
+        <label for="peTelefone">Telefone / celular</label>
+        <input id="peTelefone" type="tel" maxlength="20" autocomplete="off" placeholder="opcional aqui — obrigatório na Conversa com Decisor">
         <small class="erro" hidden></small>
       </div>
       ${campos.map(c => campoPassagemHTML(c, '')).join('')}
@@ -35580,23 +35601,23 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
       inputNome.focus();
       return;
     }
-    // BUG REAL ENCONTRADO E CORRIGIDO (15/08/26) — pedido explícito: "criar um negócio
-    // com o nome e número (nº obrigatório)". Este formulário nem tinha campo de
-    // telefone antes — `telefone: coleta.propriedades.celular` sempre mandava null,
-    // porque 'celular' não faz parte de CAMPOS_POR_ETAPA[Prospecção]. Agora valida
-    // como campo obrigatório de verdade, igual ao nome.
+    /* ══ O TELEFONE DEIXA DE SER OBRIGATÓRIO AQUI (10/09/26) ═══════════════════════
+       Julyan: "às vezes ele tá prospectando e não tem o telefone ainda do decisor".
+       Ele foi exigido aqui em 15/08 por pedido explícito ("criar um negócio com o nome e
+       número"), e o efeito medido hoje é este: na Prospecção há 85 negócios e 40 (47%)
+       SEM celular — número exigido na tela não é número que existe; é número inventado
+       ou negócio que não nasceu.
+       A EXIGÊNCIA NÃO SUMIU, MUDOU DE ETAPA: passa a ser pedida na entrada da Conversa
+       com Decisor, onde a medição mostra que ela não custa nada — 13 negócios lá, ZERO
+       sem celular. Quem chega no Decisor já tem o número.
+       Continua indo para o HubSpot quando ele digita (a linha `coleta.propriedades.
+       celular` abaixo só entra se houver valor), e a criação do contato NÃO MUDA: a rota
+       já cria o contato com o nome quando não há número — é código anterior a esta
+       mudança, e nenhuma automação de ASAAS foi tocada. */
     const inputTelefone = document.getElementById('peTelefone');
     const divTelefone = stageModalBody.querySelector('.pe-campo[data-campo="__telefone"]');
     const telefone = (inputTelefone.value || '').trim();
     divTelefone.classList.remove('erro');
-    if (!telefone) {
-      divTelefone.classList.add('erro');
-      const avisoTel = divTelefone.querySelector('small.erro');
-      avisoTel.textContent = 'Telefone é obrigatório pra criar a conta.';
-      avisoTel.hidden = false;
-      inputTelefone.focus();
-      return;
-    }
     const coleta = coletarCamposPassagem(stageModalBody, campos);
     if (!coleta.ok) {
       status.style.color = 'var(--red)';
@@ -35614,7 +35635,10 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
        campo ausente: ele promete. `celular` ja e permitido pela rota (PROPS_PERMITIDAS
        em api/criar-negocio.js), e continua indo na descricao tambem — quem le o negocio
        na tela do HubSpot ve o telefone sem abrir a aba de propriedades. */
-    coleta.propriedades.celular = telefone;
+    /* SÓ ENTRA SE ELE DIGITOU. String vazia é escrita VÁLIDA nesta rota e significa
+       LIMPAR a propriedade (está documentado em limparPropriedades) — mandar '' num
+       negócio novo escreveria vazio de propósito num campo que ninguém preencheu. */
+    if (telefone) coleta.propriedades.celular = telefone;
 
     btnCriar.disabled = true;
     btnCriar.textContent = 'Criando no HubSpot…';
