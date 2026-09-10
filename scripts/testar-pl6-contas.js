@@ -509,9 +509,22 @@ console.log('');
       && /pl6ItensDoDia\(coluna, porId\)/.test(semCom(pegarFn('d7PlanoDeHoje'))),
     'duas leituras do mesmo dia é duas rotas: ele monta o dia numa tela e trabalha na outra');
 
+  /* O COMPARADOR TEM NOME E DOIS USUÁRIOS (10/09/26). Enquanto a ordem morava dentro do
+     leitor, a Minha Daily concatenava as vagas livres DEPOIS de tudo — e a prospecção de
+     rua das 16:00 aparecia acima da vaga das 13:30, embaixo de um título que diz "em
+     ordem de hora". Visto na tela, não medido. */
+  const ordem = semCom(pegarFn('pl6PorHora'));
   checar('a ordem é hora ascendente, e sem hora no fim',
-    /if \(!a\.hora\) return 1;/.test(leitor) && /if \(!b\.hora\) return -1;/.test(leitor),
+    /if \(!a\.hora\) return 1;/.test(ordem) && /if \(!b\.hora\) return -1;/.test(ordem)
+      && /return a\.hora < b\.hora \? -1 :/.test(ordem),
     '14:20 na casa 0 e 09:00 na casa 3 mostrariam a tarde antes da manhã');
+
+  checar('e há UM comparador, usado pelo leitor e pela Daily',
+    /itens\.sort\(pl6PorHora\);/.test(leitor)
+      && /\.concat\(livres\)\.sort\(pl6PorHora\)/.test(semCom(pegarFn('d7PlanoDeHoje')))
+      && (codigo.match(/if \(!a\.hora && !b\.hora\) return a\.si - b\.si;/g) || []).length === 1,
+    'duas cópias da ordem do dia é como uma tela mostra a tarde antes da manhã e a outra'
+    + ' não — e nenhuma das duas parece errada sozinha');
 
   checar('e o si viaja com o item, porque a grade gravada não se reordena',
     /itens\.push\(\{ si: si, hora: hora, id: id, tipo: l \? 'visita' : 'orfa', lead: l \}\);/.test(leitor),

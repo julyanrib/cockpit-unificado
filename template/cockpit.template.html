@@ -1715,6 +1715,12 @@
 
   @media (max-width:1050px){
   }
+  /* A LARGURA DO BOTÃO SÓ-ÍCONE MORA AQUI, E NÃO NO INLINE (10/09/26). Estava inline
+     (width:24px) e o inline vence a folha: a regra de 44px do celular NUNCA aplicou, e
+     o ✕ foi alvo de 24px de largura na rua desde que existe. Visto a 375px — medir
+     altura não acha isto. */
+  [data-d7-raiz] [data-d7-so-icone]{width:24px;}
+
   @media (max-width:760px){
     /* ══ ALVO DE 44px NO CELULAR — é onde esta tela mais é usada, na rua ═════════════
        A lista cita ATRIBUTO e não classe (09/09/26): a Minha Daily passou a ser inline,
@@ -1725,7 +1731,8 @@
        O `grid-template-columns` saiu com o layout de grade da linha antiga; o que vale
        agora é altura mínima de alvo. */
     [data-d7-raiz] [data-d7-proposta],[data-d7-raiz] [data-d7-fechou],
-    [data-d7-raiz] [data-d7-retorno],[data-d7-raiz] [data-d7-bloquear],
+    [data-d7-raiz] [data-d7-retorno],[data-d7-raiz] [data-d7-nao-rolou],
+    [data-d7-raiz] [data-d7-bloquear],
     [data-d7-raiz] [data-d7-travar],[data-d7-raiz] [data-d7-reabrir],
     [data-d7-raiz] [data-d7-aposta],[data-d7-raiz] [data-d7-q-agendar],
     [data-d7-raiz] [data-d7-q-tarefa],[data-d7-raiz] [data-d7-m-abrir],
@@ -1736,9 +1743,12 @@
     [data-d7-raiz] [data-d7-acao-in],[data-d7-raiz] [data-d7-acao-ok],
     [data-d7-raiz] [data-d7-nova-conta],[data-d7-raiz] [data-d7-fechar-card],
     [data-d7-raiz] [data-d7-hora-in],[data-d7-raiz] [data-d7-hora-ok]{min-height:44px;}
-    /* o ✕ também cresce na largura: alvo de 44 de altura e 24 de largura continua sendo
-       alvo de 24 para quem erra o toque para o lado. */
-    [data-d7-raiz] [data-d7-tirar],[data-d7-raiz] [data-d7-fechar-card]{width:44px;}
+    /* o botão SÓ-ÍCONE também cresce na largura: alvo de 44 de altura e 24 de largura
+       continua sendo alvo de 24 para quem erra o toque para o lado.
+       CITA data-d7-so-icone, E NÃO data-d7-tirar: o `remarcar ▸` carrega o mesmo ato e
+       o mesmo atributo de propósito, e a regra antiga o esmagava em 44px de largura com
+       o texto cortado. Visto na tela a 375px, não medido. */
+    [data-d7-raiz] [data-d7-so-icone],[data-d7-raiz] [data-d7-fechar-card]{width:44px;}
   }
 
   /* ══════════════ DAILY DO GESTOR 14a (04/09/26) ══════════════════════════════════
@@ -29049,6 +29059,21 @@ function pl6SlotBloqueado(v) {
 
    `porId` é opcional: sem ele, item de visita vem com `lead: null` e tipo 'orfa' — quem
    chama decide o que fazer com conta que saiu da carga. */
+/* ══ A ORDEM DO DIA, UMA REGRA SÓ (10/09/26) ═════════════════════════════════════════
+   Hora ascendente; sem hora vai para o fim; empate desempata pelo slot, porque a grade
+   gravada não se reordena e a posição é o que dá estabilidade à lista.
+   ELA VIROU FUNÇÃO COM NOME porque passou a ter dois usuários: o leitor do dia
+   (pl6ItensDoDia, que ordena o que está OCUPADO) e a Minha Daily, que junta as vagas
+   livres aos ocupados. Enquanto a ordem morava dentro do leitor, a Daily concatenava as
+   vagas DEPOIS de tudo — e a prospecção de rua das 16:00 aparecia acima da vaga das
+   13:30, embaixo de um título que diz "em ordem de hora". */
+function pl6PorHora(a, b) {
+  if (!a.hora && !b.hora) return a.si - b.si;
+  if (!a.hora) return 1;
+  if (!b.hora) return -1;
+  return a.hora < b.hora ? -1 : (a.hora > b.hora ? 1 : a.si - b.si);
+}
+
 function pl6ItensDoDia(coluna, porId) {
   const col = Array.isArray(coluna) ? coluna : [];
   const itens = [];
@@ -29064,12 +29089,7 @@ function pl6ItensDoDia(coluna, porId) {
   }
   /* HORA ASCENDENTE, SEM HORA NO FIM, e a posição só desempata. Ele planejou a visita e
      não marcou hora: ela existe e vai depois das marcadas. */
-  itens.sort(function (a, b) {
-    if (!a.hora && !b.hora) return a.si - b.si;
-    if (!a.hora) return 1;
-    if (!b.hora) return -1;
-    return a.hora < b.hora ? -1 : (a.hora > b.hora ? 1 : a.si - b.si);
-  });
+  itens.sort(pl6PorHora);
   return itens;
 }
 
@@ -44101,7 +44121,10 @@ function d7PlanoDeHoje(rep, gradeDe) {
     if (pl6SlotId(v) || pl6SlotBloqueado(v) || pl6SlotRua(v)) continue;
     livres.push({ hora: pl6HoraDaFaixa(si), si: si, tipo: 'livre' });
   }
-  return ocupados.concat(livres);
+  /* O CONJUNTO INTEIRO NA MESMA ORDEM: o título da seção diz "em ordem de hora", e uma
+     vaga das 13:30 abaixo de um compromisso das 16:00 faz o dia parecer fora de ordem
+     justamente para quem está olhando a tela para saber o que vem agora. */
+  return ocupados.concat(livres).sort(pl6PorHora);
 }
 
 /* ══ A PROMESSA, DERIVADA DO PLANO ═════════════════════════════════════════════════════
@@ -44381,7 +44404,15 @@ function d7LinhaVisita(l, soLeitura, planoDia) {
   /* O ESTADO DIZ O QUE FALTA E ONDE SE FAZ. "aguardando check-in no Expogo" é
      informação; linha muda não é. E "sem tarefa no CRM" é o furo que o gestor cobra: a
      grade tem a visita e a agenda não. */
-  const est = l.estado === 'feita'
+  /* ══ O SELO ✓✓ FECHOU (10/09/26) ════════════════════════════════════════════════
+     A prancha v2 pede o selo do resultado na visita resolvida. O RESULTADO NÃO É
+     INVENTADO NA TELA: "fechou" é o negócio estar em Ag. Pagamento, que é onde o botão
+     `✓ fechou!` o coloca e de onde o RPA/ASAAS gera o link. Se eu guardasse o desfecho
+     num estado da tela, o selo sumiria no F5 e discordaria do CRM. */
+  const fechou = isC && String(lead.stageId) === '1395880473';
+  const est = fechou
+    ? { txt: '✓✓ FECHOU', cor: '#FFFDF8', bg: '#1E9E7B', borda: '#1E9E7B' }
+    : l.estado === 'feita'
     ? { txt: '✓ registrada no Expogo', cor: '#1E9E7B', bg: '#EAF6F1', borda: '#CBE8DD' }
     : (l.naAgenda
       ? { txt: '⊙ aguardando check-in', cor: '#7A8494', bg: '#F7F5F0', borda: '#E4E0D6' }
@@ -44411,15 +44442,35 @@ function d7LinhaVisita(l, soLeitura, planoDia) {
       + ';padding:4px 10px;font:800 9.5px \'Manrope\',sans-serif;color:' + corTxt
       + ';cursor:pointer;white-space:nowrap;"';
   };
+  /* ══ A RÉGUA "COMO FOI?" — OS CINCO DESFECHOS DA PRANCHA v2 (10/09/26) ═══════════
+     Eram três. Faltavam os dois que fechavam o dia sem saída:
+
+     NÃO ROLOU — a Daily não registrava perda. A visita que não deu em nada ficava
+     pendente para sempre, e o gestor lia como "não visitou". Vai pela MESMA porteira de
+     etapa dos outros dois (abrirPassagemDeEtapa), que já exige motivo_do_perdido: os
+     motivos são os do HubSpot, não quatro que eu inventaria aqui.
+
+     REMARCAR — o ato já existia como o ✕ do canto, sem nome. É a mesma fiação
+     (data-d7-tirar, que também apaga a tarefa no CRM); o que muda é que ele agora tem
+     rótulo e diz para onde a visita foi. O ✕ sai da visita pendente e fica só na visita
+     JÁ REGISTRADA, para que nada fique preso no dia por engano.
+
+     E "sem avanço · datar" virou "conversa boa — voltar": é o mesmo ato (tarefa de
+     retorno no próximo dia útil às 10:30), com o nome que descreve o que aconteceu na
+     porta em vez do que o sistema faz. */
   const desfechos = (soLeitura || l.estado === 'feita') ? ''
     : ('<span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed #E4E0D6;">'
-      + '<span style="font:900 8px \'Archivo\',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#B4AC9C;">depois da visita</span>'
+      + '<span style="font:900 8px \'Archivo\',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#B4AC9C;">como foi?</span>'
       + '<button type="button" data-d7-proposta="' + esc(lead.id) + '"'
-        + estiloDesf('#9C5BD6', '#DCC9EE', '#FDFEFF') + '>virou proposta ▸</button>'
+        + estiloDesf('#9C5BD6', '#DCC9EE', '#FDFEFF') + '>✓ virou proposta</button>'
       + '<button type="button" data-d7-fechou="' + esc(lead.id) + '"'
-        + estiloDesf('#1E9E7B', '#CBE8DD', '#EAF6F1') + '>fechou · contrato ▸</button>'
+        + estiloDesf('#1E9E7B', '#CBE8DD', '#EAF6F1') + '>✓ fechou!</button>'
       + '<button type="button" data-d7-retorno="' + esc(lead.id) + '"'
-        + estiloDesf('#7A8494', '#DCE1EA', '#FDFEFF') + '>sem avanço · datar ▸</button>'
+        + estiloDesf('#B07C1F', '#F0DFB6', '#FDF6E7') + '>conversa boa — voltar</button>'
+      + '<button type="button" data-d7-nao-rolou="' + esc(lead.id) + '"'
+        + estiloDesf('#D6497E', '#F0A9B2', '#FDF3F4') + '>não rolou</button>'
+      + '<button type="button" data-d7-tirar="' + l.si + '"'
+        + estiloDesf('#7A8494', '#DCE1EA', '#FDFEFF') + '>remarcar ▸</button>'
       + '</span>');
 
   return '<div style="display:flex;min-width:0;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);">'
@@ -44435,9 +44486,13 @@ function d7LinhaVisita(l, soLeitura, planoDia) {
     +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:3px;">' + esc(obj) + '</span>'
     +   acaoHTML + desfechos
     + '</div>'
-    + (soLeitura ? ''
-      : '<button type="button" data-d7-tirar="' + l.si + '" title="Tirar ' + esc(lead.nome) + ' do plano"'
-        + ' aria-label="Tirar do plano" style="flex:none;width:24px;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>')
+    /* O ✕ FICA SÓ NA VISITA JÁ REGISTRADA (10/09/26). Na pendente, quem tira do dia é o
+       `remarcar ▸` da régua, com nome e com toast que diz para onde ela foi. Na
+       registrada não há régua — e sem o ✕ uma visita marcada por engano ficaria presa no
+       dia sem nenhuma saída. */
+    + ((soLeitura || l.estado !== 'feita') ? ''
+      : '<button type="button" data-d7-tirar="' + l.si + '" data-d7-so-icone="1" title="Tirar ' + esc(lead.nome) + ' do plano"'
+        + ' aria-label="Tirar do plano" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>')
     + '</div>';
 }
 
@@ -44475,7 +44530,7 @@ function d7CartaoSimples(si, cor, titulo, sub, rotX, comX) {
     +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;">' + esc(titulo) + '</b>'
     +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:2px;">' + esc(sub) + '</span>'
     + '</div>'
-    + (comX ? '<button type="button" data-d7-tirar="' + si + '" title="' + esc(rotX) + '" aria-label="' + esc(rotX) + '" style="flex:none;width:24px;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>' : '')
+    + (comX ? '<button type="button" data-d7-tirar="' + si + '" data-d7-so-icone="1" title="' + esc(rotX) + '" aria-label="' + esc(rotX) + '" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>' : '')
     + '</div>';
 }
 
@@ -44545,13 +44600,18 @@ function minhaDaily7aHTML(rep) {
       /* CONTA QUE SAIU DA BASE não vira linha muda: diz o que houve e oferece a única
          ação que resolve — liberar a vaga. */
       return d7CartaoSimples(l.si, '#B4AC9C', 'a conta saiu da sua base',
-        'virou cliente, mudou de dono ou foi perdida', 'Liberar a vaga', true);
+        'virou cliente, mudou de dono ou foi perdida' + (l.hora ? ' · ' + l.hora : ''),
+        'Liberar a vaga', true);
     }
     if (l.tipo === 'rua') {
       /* SEM TAREFA NO HUBSPOT, e o cartão diz isso: não existe negócio para pendurar a
-         tarefa. O que prova a rua é o check-in do Expogo e as contas que ele registrar. */
+         tarefa. O que prova a rua é o check-in do Expogo e as contas que ele registrar.
+         E DIZ A HORA (visto na tela em 10/09/26): o bloqueio mostrava "· 13:00" e a rua
+         das 16:00 não mostrava nada. A hora é a única coisa que esta tela existe para ele
+         escolher — o cartão que a esconde faz o dia parecer fora de ordem. */
       return d7CartaoSimples(l.si, PL6_RUA_COR, 'Prospecção de rua',
-        'porta a porta · sem conta definida · registre as contas no Expogo',
+        'porta a porta · sem conta definida' + (l.hora ? ' · ' + l.hora : '')
+        + ' · registre as contas no Expogo',
         'Tirar a prospecção de rua do plano', true);
     }
     if (d7UI.slot !== l.si) {
@@ -44652,6 +44712,10 @@ function minhaDaily7aHTML(rep) {
   /* ══ QUENTES FORA DO PLANO — a pergunta da rodada ══════════════════════════════════ */
   const cardsQuentes = quentes.length
     ? quentes.map(function (q) {
+        /* O NÚMERO VEM DO NEGÓCIO, não do resumo: `q` é o card do quente e não carrega
+           telefone. brutoDoNegocio é a mesma busca única que a ficha usa. */
+        const bq = typeof brutoDoNegocio === 'function' ? brutoDoNegocio(q.dealId) : null;
+        const telQ = String((bq && (bq.celular || bq.telefone)) || q.telefone || '').trim();
         return '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;padding:9px 11px;min-width:0;">'
           + '<span style="min-width:0;flex:1;">'
           +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;overflow-wrap:anywhere;">' + esc(q.nome) + '</b>'
@@ -44659,7 +44723,22 @@ function minhaDaily7aHTML(rep) {
           +     esc(q.etapa + (q.dias != null ? ' · há ' + q.dias + 'd' : '') + ' · sem tarefa futura no CRM') + '</span>'
           + '</span>'
           + '<button type="button" data-d7-q-agendar="' + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:0;border-radius:999px;background:#E51A31;color:#FFFDF8;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;cursor:pointer;">agendo hoje ▸</button>'
-          + '<button type="button" data-d7-q-tarefa="' + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;color:#2B3440;cursor:pointer;">dato tarefa ▸</button>'
+          /* ══ LIGAR AGORA — E SÓ QUANDO HÁ NÚMERO (10/09/26) ═══════════════════════
+             A prancha v2 pede `ligar agora ▸`. MEDIDO na carga: 156 dos 245 negócios
+             (64%) têm celular ou telefone — nos outros 36% o botão prometeria uma
+             ligação que não dá, e "quente sem número" é justamente o que o dia dele tem
+             de resolver de outro jeito.
+             É UM <a href="tel:">, e não um botão que chama JS: quem disca é o aparelho.
+             E ele carrega o MESMO data-d7-q-tarefa, então o clique também data a tarefa
+             no CRM — o ouvinte desta tela não chama preventDefault (conferido), então o
+             discar e o registro acontecem no mesmo toque. O time não liga pelo HubSpot;
+             o que fica no CRM é a tarefa, que é como esta casa registra atividade. */
+          + (telQ
+            ? '<a href="tel:' + esc(telQ.replace(/[^0-9+]/g, '')) + '" data-d7-q-tarefa="'
+              + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:0;border-radius:999px;'
+              + 'background:#1E9E7B;color:#FFFDF8;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;'
+              + 'cursor:pointer;text-decoration:none;">ligar agora ▸</a>'
+            : '<button type="button" data-d7-q-tarefa="' + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;color:#2B3440;cursor:pointer;">dato tarefa ▸</button>')
           + '</div>';
       }).join('')
     : '<span style="display:block;font:800 10.5px \'Manrope\',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:10px;padding:10px 13px;">0 quentes fora do plano — a pergunta da rodada não existe hoje ✓</span>';
@@ -44770,6 +44849,17 @@ function minhaDaily7aHTML(rep) {
     +     '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">' + filtros + '</div>'
     +     '<div style="display:flex;flex-direction:column;gap:6px;">' + cardsMun + '</div>'
     +   '</div>'
+    + '</div>'
+
+    /* ══ O RODAPÉ DE COMPORTAMENTO, ANTES DO DE PROCEDÊNCIA (10/09/26) ══════════════
+       A prancha v2 pede esta linha, e ela responde a três perguntas que a régua nova
+       levanta: o registro vai para o CRM na hora, "remarcar" não perde a visita, e a
+       visita resolvida conta na promessa. O rodapé de baixo continua dizendo DE ONDE vem
+       cada número — são coisas diferentes e cada uma fica na sua linha. */
+    + '<div style="padding:10px 28px;background:#FDFEFF;border-top:1px solid #E7E3DA;font:800 9.5px/1.6 \'Manrope\',sans-serif;color:#2B3440;">'
+    +   '▸ tudo que você registra aqui grava direto no HubSpot · '
+    +   '<b>remarcar</b> manda a visita de volta pro Planejamento, ela não morre · '
+    +   'a visita resolvida conta na sua promessa do dia.'
     + '</div>'
 
     + '<div style="padding:12px 28px 16px;background:#FBFAF6;border-top:1px solid #E7E3DA;font:700 9.5px/1.6 \'Manrope\',sans-serif;color:#7A8494;">'
@@ -45120,6 +45210,7 @@ function d7Ligar(box, rep) {
   box.addEventListener('click', async function (ev) {
     const alvo = ev.target.closest('[data-d7-abrir],[data-d7-fechar-card],[data-d7-por],'
       + '[data-d7-bloquear],[data-d7-tirar],[data-d7-proposta],[data-d7-fechou],'
+      + '[data-d7-nao-rolou],'
       + '[data-d7-retorno],[data-d7-q-agendar],[data-d7-q-tarefa],[data-d7-filtro],'
       + '[data-d7-m-abrir],[data-d7-m-hora],[data-d7-hora-ok],[data-d7-rua],'
       + '[data-d7-aposta],[data-d7-travar],[data-d7-reabrir],'
@@ -45269,7 +45360,12 @@ function d7Ligar(box, rep) {
           }
         }
       }
-      return mutar({ grade: g }, (l ? l.nome + ' saiu' : (pl6HoraDaFaixa(si) || 'a vaga') + ' liberada') + ' do plano de hoje · Supabase');
+      /* O TOAST DIZ PARA ONDE ELA FOI. Este é o ato do `remarcar ▸`, e "saiu do plano de
+         hoje" deixava a pergunta no ar: some? perdi? A visita volta para a munição do
+         Planejamento, que é onde ele escolhe outro dia e outra hora. */
+      return mutar({ grade: g }, l
+        ? l.nome + ' saiu do dia — está na munição do Planejamento pra você escolher outro dia e hora · Supabase'
+        : (pl6HoraDaFaixa(si) || 'a vaga') + ' liberada no plano de hoje · Supabase');
     }
 
     /* ══ A ACAO DO DIA (04/09/26) ═══════════════════════════════════════════════════
@@ -45326,9 +45422,14 @@ function d7Ligar(box, rep) {
       }, {});
     }
 
-    /* ── os tres desfechos ────────────────────────────────────────────────────────── */
-    if (d.d7Proposta || d.d7Fechou) {
-      const id = d.d7Proposta || d.d7Fechou;
+    /* ── os desfechos que mudam a etapa: proposta, fechou e "nao rolou" ───────────────
+       OS TRES PELA MESMA PORTEIRA. `abrirPassagemDeEtapa` e o painel que exige as
+       propriedades obrigatorias da etapa de destino — e a de Perdido exige
+       motivo_do_perdido, com as opcoes que o HubSpot tem. Um seletor de motivo escrito
+       aqui seria uma segunda lista de motivos, que divergiria do CRM no primeiro ajuste
+       que alguem fizesse la. */
+    if (d.d7Proposta || d.d7Fechou || d.d7NaoRolou) {
+      const id = d.d7Proposta || d.d7Fechou || d.d7NaoRolou;
       const l = acharLead(id);
       if (!l || l.tipo !== 'c') {
         /* CAMINHO, NAO BECO. Conta nova ainda nao e negocio no HubSpot, e o desfecho
@@ -45367,7 +45468,11 @@ function d7Ligar(box, rep) {
          Pagamento, que e onde o executivo preenche MRR e Valor — e e disso que o
          RPA/ASAAS gera o link. Chamar a passagem de etapa em vez de mudar a etapa na
          mao e o que garante que ele preencha. */
-      const destino = d.d7Fechou ? '1395880473' : '1395880471';
+      /* 1395880473 = Ag. Pagamento · 1395880471 = Proposta · FN2_ETAPA_PERDIDO = Perdido,
+         a mesma constante que o rodapé do Meu funil usa — dois literais para a mesma
+         etapa é como uma tela move o negócio para um lugar que a outra não conhece. */
+      const destino = d.d7Fechou ? '1395880473'
+        : (d.d7NaoRolou ? FN2_ETAPA_PERDIDO : '1395880471');
       return abrirPassagemDeEtapa(bruto, destino, async function () { await redesenhar(); });
     }
     if (d.d7Retorno || d.d7QTarefa) {

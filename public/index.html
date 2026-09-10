@@ -1261,10 +1261,14 @@
 
   @media (max-width:1050px){
   }
+
+  [data-d7-raiz] [data-d7-so-icone]{width:24px;}
+
   @media (max-width:760px){
 
     [data-d7-raiz] [data-d7-proposta],[data-d7-raiz] [data-d7-fechou],
-    [data-d7-raiz] [data-d7-retorno],[data-d7-raiz] [data-d7-bloquear],
+    [data-d7-raiz] [data-d7-retorno],[data-d7-raiz] [data-d7-nao-rolou],
+    [data-d7-raiz] [data-d7-bloquear],
     [data-d7-raiz] [data-d7-travar],[data-d7-raiz] [data-d7-reabrir],
     [data-d7-raiz] [data-d7-aposta],[data-d7-raiz] [data-d7-q-agendar],
     [data-d7-raiz] [data-d7-q-tarefa],[data-d7-raiz] [data-d7-m-abrir],
@@ -1276,7 +1280,7 @@
     [data-d7-raiz] [data-d7-nova-conta],[data-d7-raiz] [data-d7-fechar-card],
     [data-d7-raiz] [data-d7-hora-in],[data-d7-raiz] [data-d7-hora-ok]{min-height:44px;}
 
-    [data-d7-raiz] [data-d7-tirar],[data-d7-raiz] [data-d7-fechar-card]{width:44px;}
+    [data-d7-raiz] [data-d7-so-icone],[data-d7-raiz] [data-d7-fechar-card]{width:44px;}
   }
 
   .g14{background:var(--panel);}
@@ -20297,6 +20301,13 @@ function pl6SlotBloqueado(v) {
   return ((typeof v === 'object') ? v.id : v) === PL6_BLOQUEADO;
 }
 
+function pl6PorHora(a, b) {
+  if (!a.hora && !b.hora) return a.si - b.si;
+  if (!a.hora) return 1;
+  if (!b.hora) return -1;
+  return a.hora < b.hora ? -1 : (a.hora > b.hora ? 1 : a.si - b.si);
+}
+
 function pl6ItensDoDia(coluna, porId) {
   const col = Array.isArray(coluna) ? coluna : [];
   const itens = [];
@@ -20311,12 +20322,7 @@ function pl6ItensDoDia(coluna, porId) {
     itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l });
   }
 
-  itens.sort(function (a, b) {
-    if (!a.hora && !b.hora) return a.si - b.si;
-    if (!a.hora) return 1;
-    if (!b.hora) return -1;
-    return a.hora < b.hora ? -1 : (a.hora > b.hora ? 1 : a.si - b.si);
-  });
+  itens.sort(pl6PorHora);
   return itens;
 }
 
@@ -31329,7 +31335,8 @@ function d7PlanoDeHoje(rep, gradeDe) {
     if (pl6SlotId(v) || pl6SlotBloqueado(v) || pl6SlotRua(v)) continue;
     livres.push({ hora: pl6HoraDaFaixa(si), si: si, tipo: 'livre' });
   }
-  return ocupados.concat(livres);
+
+  return ocupados.concat(livres).sort(pl6PorHora);
 }
 
 function d7PromessaDerivada(rep, plano) {
@@ -31515,7 +31522,10 @@ function d7LinhaVisita(l, soLeitura, planoDia) {
     ? (lead.etapa + (lead.sla ? ' · SLA!' : ''))
     : ('prospecção nova · ' + ((PL6_FONTES[lead.grupo] || {}).chip || 'lote novo'));
 
-  const est = l.estado === 'feita'
+  const fechou = isC && String(lead.stageId) === '1395880473';
+  const est = fechou
+    ? { txt: '✓✓ FECHOU', cor: '#FFFDF8', bg: '#1E9E7B', borda: '#1E9E7B' }
+    : l.estado === 'feita'
     ? { txt: '✓ registrada no Expogo', cor: '#1E9E7B', bg: '#EAF6F1', borda: '#CBE8DD' }
     : (l.naAgenda
       ? { txt: '⊙ aguardando check-in', cor: '#7A8494', bg: '#F7F5F0', borda: '#E4E0D6' }
@@ -31534,15 +31544,20 @@ function d7LinhaVisita(l, soLeitura, planoDia) {
       + ';padding:4px 10px;font:800 9.5px \'Manrope\',sans-serif;color:' + corTxt
       + ';cursor:pointer;white-space:nowrap;"';
   };
+
   const desfechos = (soLeitura || l.estado === 'feita') ? ''
     : ('<span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed #E4E0D6;">'
-      + '<span style="font:900 8px \'Archivo\',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#B4AC9C;">depois da visita</span>'
+      + '<span style="font:900 8px \'Archivo\',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#B4AC9C;">como foi?</span>'
       + '<button type="button" data-d7-proposta="' + esc(lead.id) + '"'
-        + estiloDesf('#9C5BD6', '#DCC9EE', '#FDFEFF') + '>virou proposta ▸</button>'
+        + estiloDesf('#9C5BD6', '#DCC9EE', '#FDFEFF') + '>✓ virou proposta</button>'
       + '<button type="button" data-d7-fechou="' + esc(lead.id) + '"'
-        + estiloDesf('#1E9E7B', '#CBE8DD', '#EAF6F1') + '>fechou · contrato ▸</button>'
+        + estiloDesf('#1E9E7B', '#CBE8DD', '#EAF6F1') + '>✓ fechou!</button>'
       + '<button type="button" data-d7-retorno="' + esc(lead.id) + '"'
-        + estiloDesf('#7A8494', '#DCE1EA', '#FDFEFF') + '>sem avanço · datar ▸</button>'
+        + estiloDesf('#B07C1F', '#F0DFB6', '#FDF6E7') + '>conversa boa — voltar</button>'
+      + '<button type="button" data-d7-nao-rolou="' + esc(lead.id) + '"'
+        + estiloDesf('#D6497E', '#F0A9B2', '#FDF3F4') + '>não rolou</button>'
+      + '<button type="button" data-d7-tirar="' + l.si + '"'
+        + estiloDesf('#7A8494', '#DCE1EA', '#FDFEFF') + '>remarcar ▸</button>'
       + '</span>');
 
   return '<div style="display:flex;min-width:0;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);">'
@@ -31558,9 +31573,10 @@ function d7LinhaVisita(l, soLeitura, planoDia) {
     +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:3px;">' + esc(obj) + '</span>'
     +   acaoHTML + desfechos
     + '</div>'
-    + (soLeitura ? ''
-      : '<button type="button" data-d7-tirar="' + l.si + '" title="Tirar ' + esc(lead.nome) + ' do plano"'
-        + ' aria-label="Tirar do plano" style="flex:none;width:24px;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>')
+
+    + ((soLeitura || l.estado !== 'feita') ? ''
+      : '<button type="button" data-d7-tirar="' + l.si + '" data-d7-so-icone="1" title="Tirar ' + esc(lead.nome) + ' do plano"'
+        + ' aria-label="Tirar do plano" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>')
     + '</div>';
 }
 
@@ -31571,7 +31587,7 @@ function d7CartaoSimples(si, cor, titulo, sub, rotX, comX) {
     +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;">' + esc(titulo) + '</b>'
     +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:2px;">' + esc(sub) + '</span>'
     + '</div>'
-    + (comX ? '<button type="button" data-d7-tirar="' + si + '" title="' + esc(rotX) + '" aria-label="' + esc(rotX) + '" style="flex:none;width:24px;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>' : '')
+    + (comX ? '<button type="button" data-d7-tirar="' + si + '" data-d7-so-icone="1" title="' + esc(rotX) + '" aria-label="' + esc(rotX) + '" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>' : '')
     + '</div>';
 }
 
@@ -31637,12 +31653,14 @@ function minhaDaily7aHTML(rep) {
     if (l.tipo === 'orfa') {
 
       return d7CartaoSimples(l.si, '#B4AC9C', 'a conta saiu da sua base',
-        'virou cliente, mudou de dono ou foi perdida', 'Liberar a vaga', true);
+        'virou cliente, mudou de dono ou foi perdida' + (l.hora ? ' · ' + l.hora : ''),
+        'Liberar a vaga', true);
     }
     if (l.tipo === 'rua') {
 
       return d7CartaoSimples(l.si, PL6_RUA_COR, 'Prospecção de rua',
-        'porta a porta · sem conta definida · registre as contas no Expogo',
+        'porta a porta · sem conta definida' + (l.hora ? ' · ' + l.hora : '')
+        + ' · registre as contas no Expogo',
         'Tirar a prospecção de rua do plano', true);
     }
     if (d7UI.slot !== l.si) {
@@ -31729,6 +31747,9 @@ function minhaDaily7aHTML(rep) {
 
   const cardsQuentes = quentes.length
     ? quentes.map(function (q) {
+
+        const bq = typeof brutoDoNegocio === 'function' ? brutoDoNegocio(q.dealId) : null;
+        const telQ = String((bq && (bq.celular || bq.telefone)) || q.telefone || '').trim();
         return '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;padding:9px 11px;min-width:0;">'
           + '<span style="min-width:0;flex:1;">'
           +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;overflow-wrap:anywhere;">' + esc(q.nome) + '</b>'
@@ -31736,7 +31757,13 @@ function minhaDaily7aHTML(rep) {
           +     esc(q.etapa + (q.dias != null ? ' · há ' + q.dias + 'd' : '') + ' · sem tarefa futura no CRM') + '</span>'
           + '</span>'
           + '<button type="button" data-d7-q-agendar="' + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:0;border-radius:999px;background:#E51A31;color:#FFFDF8;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;cursor:pointer;">agendo hoje ▸</button>'
-          + '<button type="button" data-d7-q-tarefa="' + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;color:#2B3440;cursor:pointer;">dato tarefa ▸</button>'
+
+          + (telQ
+            ? '<a href="tel:' + esc(telQ.replace(/[^0-9+]/g, '')) + '" data-d7-q-tarefa="'
+              + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:0;border-radius:999px;'
+              + 'background:#1E9E7B;color:#FFFDF8;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;'
+              + 'cursor:pointer;text-decoration:none;">ligar agora ▸</a>'
+            : '<button type="button" data-d7-q-tarefa="' + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;color:#2B3440;cursor:pointer;">dato tarefa ▸</button>')
           + '</div>';
       }).join('')
     : '<span style="display:block;font:800 10.5px \'Manrope\',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:10px;padding:10px 13px;">0 quentes fora do plano — a pergunta da rodada não existe hoje ✓</span>';
@@ -31836,6 +31863,12 @@ function minhaDaily7aHTML(rep) {
     +     '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">' + filtros + '</div>'
     +     '<div style="display:flex;flex-direction:column;gap:6px;">' + cardsMun + '</div>'
     +   '</div>'
+    + '</div>'
+
+    + '<div style="padding:10px 28px;background:#FDFEFF;border-top:1px solid #E7E3DA;font:800 9.5px/1.6 \'Manrope\',sans-serif;color:#2B3440;">'
+    +   '▸ tudo que você registra aqui grava direto no HubSpot · '
+    +   '<b>remarcar</b> manda a visita de volta pro Planejamento, ela não morre · '
+    +   'a visita resolvida conta na sua promessa do dia.'
     + '</div>'
 
     + '<div style="padding:12px 28px 16px;background:#FBFAF6;border-top:1px solid #E7E3DA;font:700 9.5px/1.6 \'Manrope\',sans-serif;color:#7A8494;">'
@@ -32087,6 +32120,7 @@ function d7Ligar(box, rep) {
   box.addEventListener('click', async function (ev) {
     const alvo = ev.target.closest('[data-d7-abrir],[data-d7-fechar-card],[data-d7-por],'
       + '[data-d7-bloquear],[data-d7-tirar],[data-d7-proposta],[data-d7-fechou],'
+      + '[data-d7-nao-rolou],'
       + '[data-d7-retorno],[data-d7-q-agendar],[data-d7-q-tarefa],[data-d7-filtro],'
       + '[data-d7-m-abrir],[data-d7-m-hora],[data-d7-hora-ok],[data-d7-rua],'
       + '[data-d7-aposta],[data-d7-travar],[data-d7-reabrir],'
@@ -32224,7 +32258,10 @@ function d7Ligar(box, rep) {
           }
         }
       }
-      return mutar({ grade: g }, (l ? l.nome + ' saiu' : (pl6HoraDaFaixa(si) || 'a vaga') + ' liberada') + ' do plano de hoje · Supabase');
+
+      return mutar({ grade: g }, l
+        ? l.nome + ' saiu do dia — está na munição do Planejamento pra você escolher outro dia e hora · Supabase'
+        : (pl6HoraDaFaixa(si) || 'a vaga') + ' liberada no plano de hoje · Supabase');
     }
 
     if (d.d7Acao) {
@@ -32273,8 +32310,8 @@ function d7Ligar(box, rep) {
       }, {});
     }
 
-    if (d.d7Proposta || d.d7Fechou) {
-      const id = d.d7Proposta || d.d7Fechou;
+    if (d.d7Proposta || d.d7Fechou || d.d7NaoRolou) {
+      const id = d.d7Proposta || d.d7Fechou || d.d7NaoRolou;
       const l = acharLead(id);
       if (!l || l.tipo !== 'c') {
 
@@ -32305,7 +32342,8 @@ function d7Ligar(box, rep) {
         return;
       }
 
-      const destino = d.d7Fechou ? '1395880473' : '1395880471';
+      const destino = d.d7Fechou ? '1395880473'
+        : (d.d7NaoRolou ? FN2_ETAPA_PERDIDO : '1395880471');
       return abrirPassagemDeEtapa(bruto, destino, async function () { await redesenhar(); });
     }
     if (d.d7Retorno || d.d7QTarefa) {
