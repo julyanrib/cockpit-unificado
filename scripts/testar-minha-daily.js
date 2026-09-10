@@ -346,6 +346,90 @@ conferir('o piso de 44px cita os atributos que a tela nova emite',
   'lista de toque vazia dos botões da tela nova — e é no dedo, na rua, que esta tela é'
   + ' usada');
 
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   O SLOT LIVRE (10/09/26, itens 28 a 31 e leis 1, 1b e 1c do contrato)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   POR QUE ESTAS GUARDAS EXISTEM: a troca de 10/09 pela prancha v2 DESLIGOU o slot livre
+   sem que nada reprovasse. `d7PlanoDeHoje` continuou calculando as vagas livres e
+   `d7TelaFinalHTML` passou a mapear so `ocupados` — e o resultado foi que `data-d7-abrir`
+   e `data-d7-por` ficaram citados em dois lugares do arquivo (o piso de toque e a cadeia
+   do closest) e emitidos em NENHUM. A guarda de clique morto nao pega isso: ela pergunta
+   'todo atributo desenhado tem ouvinte?', e a resposta era sim — zero atributos
+   desenhados, zero sem ouvinte. A pergunta que faltava e a INVERSA: todo ouvinte desta
+   tela tem quem o emita? */
+(function () {
+  /* ── 1 · O CARTAO DO SLOT E DESENHADO, E NAO SO ESCUTADO ────────────────────────── */
+  conferir('o slot livre e desenhado no markup, nao so escutado',
+    tela.indexOf('data-d7-abrir="') > -1 && dados.indexOf('slot: livres.length') > -1,
+    'a tela calculava as vagas livres e nao desenhava nenhuma: a oferta de encaixe'
+    + ' desapareceu da Daily e o atributo virou ouvinte sem emissor');
+
+  /* A PERGUNTA INVERSA DA GUARDA DE CLIQUE MORTO: ouvinte sem emissor. Ela nao acusa
+     codigo morto em geral — acusa os verbos que ESTA tela promete e nao entrega. */
+  const semEmissor = ['abrir', 'm-abrir', 'q-agendar', 'rua', 'rel', 'relogio', 'ficha']
+    .filter(function (v) {
+      return cadeia.indexOf('data-d7-' + v + ']') > -1
+        && (tela + cartao + relogio + painelFicha).indexOf('data-d7-' + v) === -1;
+    });
+  conferir('nenhum verbo da cadeia ficou sem quem o emita',
+    semEmissor.length === 0,
+    'ouvinte sem emissor e funcionalidade que sumiu da tela em silencio: ' + semEmissor.join(', '));
+
+  /* ── 2 · A HORA E SEMPRE DO EXECUTIVO (lei 1c) ───────────────────────────────────── */
+  conferir('o slot nasce sem hora — o pill diz "— : —"',
+    tela.indexOf('— : —') > -1,
+    'hora impressa no slot e o sistema propondo horario, e a lei 1c diz que ele nunca impoe');
+  conferir('o quente passa pelo relogio em vez de agendar na primeira vaga',
+    ligar.indexOf('d7QAgendar') > -1
+      && !/d7QAgendar[\s\S]{0,700}?pl6AgendarNoSlot/.test(ligar),
+    'o "encaixar hoje" agendava na primeira vaga vazia sem perguntar: o sistema escolhia'
+    + ' o horario do dia dele, contra o item 35 e a lei 1c');
+
+  /* ── 3 · O FOCO SOBREVIVE ATE A CONFIRMACAO ──────────────────────────────────────── */
+  conferir('escolher um lead nao apaga o slot em foco',
+    !/d7MAbrir\)\s*\{[\s\S]{0,220}?d7UI\.slot = null/.test(ligar),
+    'apagar o foco ao escolher o lead faz o relogio abrir sem saber que e um slot sendo'
+    + ' preenchido — a frase da barra e o toast saem os de um encaixe comum');
+  conferir('e o cancelar da barra cancela o relogio E o foco',
+    /* `[^}]` E NAO `[\s\S]`: com o coringa largo a sabotagem passou verde — tirando a
+       linha de dentro do ramo, a regex atravessava a chave de fechamento e casava com o
+       `d7UI.horas = null` do ramo SEGUINTE (o do filtro da municao). Guarda que atravessa
+       o fim do bloco mede outro bloco. */
+    /d7FecharCard\)\s*\{[^}]{0,220}?d7UI\.horas = null/.test(ligar),
+    'limpando so o slot, o cancelar nao fazia NADA com o relogio aberto — clique morto'
+    + ' num botao cuja unica funcao e sair');
+
+  /* ── 4 · O SLOT NAO CONTA NO PLACAR ENQUANTO ESTA VAZIO (lei 1b) ─────────────────── */
+  conferir('o placar conta so o que esta ocupado',
+    dados.indexOf("const ocupados = plano.filter(x => x.tipo !== 'livre');") > -1
+      && dados.indexOf("const visitasReais = ocupados.filter(x => x.tipo === 'visita');") > -1,
+    'vaga livre contada como visita infla o X/N e a promessa que o gestor cobra');
+
+  /* ── 5 · O VERBO DA MUNICAO DIZ PARA ONDE O LEAD VAI (item 29) ───────────────────── */
+  conferir('com o slot em foco, os botoes da municao dizem que ocupam o slot',
+    /* PINADO NA LINHA `acao:` DA MUNICAO, e nao na frase solta: ela aparece TAMBEM no
+       rotulo do quente, e por isso a sabotagem que a tirou so da municao passou verde. */
+    /acao: sel \? 'escolha a hora ▸' : \(emFoco \? 'colocar no slot livre ▸'/.test(dados)
+      && dados.indexOf('const emFoco =') > -1,
+    'sem trocar o verbo, o foco do slot e um estado invisivel: ele clica em "encaixar no'
+    + ' dia" sem saber que esta preenchendo o slot');
+
+  /* ── 6 · O TOAST DO SLOT EXISTE DE VERDADE ───────────────────────────────────────────
+     Eu passei `selo` nos ganchos de pl6AgendarNoSlot e escrevi no comentario que o toast
+     diria "ocupou o slot livre" — e a funcao nao lia essa chave. Opcao que ninguem le e
+     comentario que mente, e o verde seria identico ao legitimo. */
+  const agendar = semCom(corpoDe('pl6AgendarNoSlot'));
+  conferir('o selo do slot chega ao toast de quem gravou',
+    ligar.indexOf("selo: eraSlot ? 'ocupou o slot livre' : ''") > -1
+      /* EXIGE QUE ELE LEIA `gk.selo`: pedir só "const selo =" aceitava
+         `const selo = '';`, que é exatamente a forma de o gancho continuar sendo
+         ignorado — a sabotagem passou verde com essa versão. */
+      && agendar.indexOf("const selo = String(gk.selo || '').trim();") > -1
+      && /mutar\(\{ grade: g \}[\s\S]{0,220}?selo \?/.test(agendar),
+    'gancho passado e nunca lido: o toast sairia o comum e o comentario estaria mentindo');
+}());
+
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');
