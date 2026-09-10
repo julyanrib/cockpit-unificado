@@ -94,11 +94,28 @@ checar('nenhum toast promete "reconcilia na próxima rodada"',
 /* ── 5. o endereço gravado entra em região na hora ──────────────────────────────── */
 // A região saía de coordenada e por isso dependia do robô; desde o #307 a chave de lugar é
 // bairro → CEP → cidade, e o bairro que ele acabou de digitar já basta.
-const iEnd = codigo.indexOf('if (d.pl6EndSalvar)');
-const corpoEnd = iEnd > 0 ? codigo.slice(iEnd, iEnd + 3400) : '';
-checar('o endereço espelha no DATA local',
-  /aplicarPropsNoDataLocal\(/.test(corpoEnd),
-  'sem o espelho o card continua "sem endereço no CRM" até o robô rodar');
+//
+// ══ O CAMPO DE ENDEREÇO SAIU DA FICHA EM 09/09/26, E ISTO NÃO É CONSERTO ═══════════════
+// A prancha final do Planejamento (planejamento-final-v2) desenha o endereço como LEITURA:
+// "endereço (ou 'sem endereço no CRM — confirmar na rua')". O campo editável, com os três
+// inputs e o "Salvar no negócio ▸", morava na ficha antiga e saiu com ela.
+//
+// A CAPACIDADE QUE FOI EMBORA, medida em 04/09: 50 das 86 contas do Bruno estavam sem
+// endereço, e sem endereço o negócio não entra em região nenhuma — não casa com o dia da
+// rota, não entra no ✨, não aparece no território. Consertar isso pelo cockpit era um
+// clique; agora é o HubSpot.
+//
+// FICA REGISTRADO AQUI porque a próxima pessoa que ler esta suíte vai perguntar onde foi
+// parar a checagem — e a resposta não é "não importa mais": é que a prancha nova não tem
+// o campo, e devolvê-lo é decisão do Julyan, não minha.
+//
+// O QUE CONTINUA MEDIDO: os outros três espelhos locais (valor do funil, próximo passo e
+// a grade semanal), logo abaixo e acima. A regra "não mande ele esperar o robô" vale para
+// todos, e é ela que esta suíte protege.
+checar('o toast do endereço não sobreviveu ao campo que saiu',
+  codigo.indexOf('if (d.pl6EndSalvar)') < 0 && !/Salvar no negócio/.test(tpl),
+  'ramo ou botão de salvar endereço sem o campo que os alimenta é clique morto — e um'
+  + ' deles ficou no arquivo depois do redesenho');
 checar('e o toast não manda esperar a carga para a região',
   !/entra em região na próxima carga/.test(tpl),
   'a região sai de bairro/CEP desde o #307 — só o km depende da coordenada');
