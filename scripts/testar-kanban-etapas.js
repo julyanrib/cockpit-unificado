@@ -266,9 +266,23 @@ checar('a reversão devolve etapa, dias e propriedades',
    mesma etapa grava propriedade sem mover o negocio; e bairro, cep e logradouro ja
    estavam na whitelist dela. Zero rota nova, zero whitelist nova — que e precisamente o
    que esta assercao existe para garantir. */
-checar('nenhuma chamada nova a /api/negocio-acao fora das tres conhecidas',
-  (template.match(/op: 'mudar-etapa'/g) || []).length === 3,
-  'esperado 3 (edição inline + função compartilhada + endereço da prancha 6a), achado ' +
+/* ══ SÃO DUAS DESDE 09/09/26, E A QUE SAIU FOI A DO ENDEREÇO ══════════════════════════
+   A terceira chamada era o campo de endereço da ficha do Planejamento. A prancha final
+   (planejamento-final-v2) desenha o endereço como LEITURA — "sem endereço no CRM —
+   confirmar na rua" — e o campo editável saiu com a ficha antiga.
+
+   O NÚMERO CAIU DE PROPÓSITO, e o que esta checagem protege continua igual: nenhuma
+   chamada NOVA a esta rota aparece sem alguém decidir. Ela é a rota que grava propriedade
+   no HubSpot, e a regra da casa é que o CRM é a fonte — cada caminho novo até ela é uma
+   decisão, não um detalhe de implementação.
+
+   A capacidade perdida está registrada em scripts/testar-espelho-local.js, com a medição
+   que a justificava (50 das 86 contas do Bruno sem endereço). Devolvê-la é decisão do
+   Julyan. */
+checar('nenhuma chamada nova a /api/negocio-acao fora das duas conhecidas',
+  (template.match(/op: 'mudar-etapa'/g) || []).length === 2,
+  'esperado 2 (edição inline + função compartilhada; a terceira era o endereço da ficha'
+  + ' antiga, que saiu na prancha final), achado ' +
   (template.match(/op: 'mudar-etapa'/g) || []).length);
 
 
