@@ -374,9 +374,25 @@ checar('e ele diz o que NÃO é instantâneo',
    E O CORTE DE 3 POR COLUNA VIROU TETO DE 60: com a coluna rolando, esconder 28 cartões
    atrás de um botão é o oposto do pedido. O 60 existe só para uma carga anômala não montar
    500 nós; a maior coluna medida tem 37. */
-checar('o kanban encaixa as sete etapas e NÃO rola na horizontal',
-  /\.fn3-grade\{display:grid;grid-template-columns:repeat\(7,minmax\(0,1fr\)\)/.test(template)
-  && !/\.fn3-grade\{[^}]*overflow-x:auto/.test(template),
+/* O NUMERO SAIU DO GUARDA (10/09/26). Ele exigia repeat(7,...) e por isso ficou VERDE
+   durante o dia em que a oitava coluna (Ganho) entrou em FN3_COLUNAS: a grade continuou
+   declarando sete trilhas e a oitava caiu numa SEGUNDA LINHA do grid, sozinha, com o
+   painel largo e vazio ao lado. Guarda com numero cravado se descola da lista que ele
+   deveria vigiar, e o verde e identico ao legitimo. Agora ele CONTA as colunas do
+   template e cobra a grade de bater com elas. */
+const iCols = template.indexOf('const FN3_COLUNAS = [');
+const listaCols = iCols > 0 ? template.slice(iCols, template.indexOf('];', iCols)) : '';
+/* SEM A APÓSTROFO: a coluna de Onboarding usa a constante (FN3_ETAPA_ONBOARDING) e não um
+   literal, então contar por "{ id: '" achava sete onde há oito — e o guarda ficaria verde
+   pelo mesmo motivo que o antigo ficou. */
+const nColunas = (listaCols.match(/\{ id: /g) || []).length;
+checar('a grade declara uma trilha por coluna de FN3_COLUNAS (hoje ' + nColunas + ')',
+  nColunas >= 7
+  && new RegExp('\\.fn3-grade\\{display:grid;grid-template-columns:repeat\\('
+    + nColunas + ',minmax\\(0,1fr\\)\\)').test(template),
+  'grade e lista de colunas divergiram — a coluna sobrando cai numa segunda linha do grid');
+checar('e o kanban NÃO rola na horizontal',
+  !/\.fn3-grade\{[^}]*overflow-x:auto/.test(template),
   'a grade voltou a rolar de lado — Pagamento e Onboarding saem da tela');
 checar('a coluna rola VERTICALMENTE, com altura em vh',
   /\.fn3-col\{[\s\S]{0,400}?max-height:min\(68vh,780px\);overflow-y:auto/.test(template));
@@ -1204,6 +1220,101 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
   checar('mas de Ag. Pagamento para Ganho NÃO é',
     iGanho > iPag + 1,
     'mover à mão para Ganho é afirmar que o cliente pagou; quem afirma isso é o ASAAS');
+}());
+
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   A PELE DO MEU FUNIL (10/09/26, prancha meu-funil-v2-STANDALONE)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   A regra numero zero do pedido: "NENHUMA mudanca de logica, gatilho, automacao, handler,
+   query ou integracao. Este trabalho e 100% de estilo". Estas guardas vigiam o LADO
+   VISUAL — a fiacao em si e comparada atributo por atributo contra origin/main antes de
+   cada merge, e o que mede o comportamento sao as 209 checagens acima, que nao mudaram.
+
+   Cada uma aqui existe porque a coisa que ela cobra JA voltou atras uma vez, ou porque a
+   medicao normal nao a acha: o hero escuro era o unico do produto, os tokens de creme
+   nasceram fora de :root (e o painel ficou transparente com CSS valido), e os quatro
+   numeros nao quebravam linha no celular sem transbordar nada. */
+(function () {
+  /* ── 1 · O HERO E BRANCO, E NAO SOBRA PALETA ESCURA NO FUNIL ───────────────────── */
+  const iFn = template.indexOf('MEU FUNIL v2');
+  const iFim = template.indexOf('.fn3-reg-status.is-erro');
+  const cssFunil = iFn > 0 && iFim > iFn ? template.slice(iFn, iFim) : '';
+  checar('o hero do Meu funil e o card branco padrao, sem gradiente escuro',
+    cssFunil.indexOf('.fn2-hero{background:var(--panel)') > -1
+      && cssFunil.indexOf('var(--hero-grad)') === -1,
+    'era o unico header escuro da tela do executivo — e com ele volta a paleta --dark-*,'
+    + ' que impede numero vermelho/verde/vinho de significar o que significa no resto');
+  /* --dark-ink FICA FORA DESTA LISTA, e a primeira versao da guarda reprovou por causa
+     dele: ele e o BRANCO-QUENTE que quatro botoes usam como TEXTO quando o hover pinta o
+     fundo de ink (.fn2-ctx-x, .fn2-gaveta-x, .fn3-cta). Uso legitimo, e o unico nome
+     escuro que sobrevive a um hero claro. Os cinco abaixo nao: eles sao fundo, borda e
+     texto secundario de superficie escura, e nenhum deles le sobre o card branco. */
+  checar('e nenhuma regra do funil usa a paleta escura de superficie',
+    !/var\(--dark-(mut|fill|line|red|amber)\)/.test(cssFunil)
+      && cssFunil.indexOf('rgba(253,251,240,') === -1,
+    'token de superficie escura sobrando pinta texto quase invisivel no card branco');
+
+  /* ── 2 · OS TOKENS DE CREME SAO DA RAIZ ─────────────────────────────────────────────
+     ESTE FOI O DEFEITO REAL: eu usei --dv-neutro3 no painel do kanban, que existe SO
+     dentro de `body.exec-v3 #viewPDIs`. A regra ficou valida, o build passou, a guarda de
+     alcance passou (a variavel ESTA declarada em seletor que o markup gera) e o painel
+     creme nasceu transparente. Quem achou foi estilo computado no navegador. */
+  checar('o creme e o trilho do funil vem de token de :root',
+    /--creme:#FBFAF6;\s*--creme-linha:#E4E0D6;\s*--trilho:#EDEBE5;/.test(template)
+      && !/\.fn(2|3)-[a-z-]*\{[^}]*var\(--dv-neutro/.test(cssFunil),
+    'variavel de outra aba dentro do funil e regra valida que nao pinta nada');
+
+  /* ── 3 · OS QUATRO NUMEROS, E O DO GANHO DIZENDO DESDE QUANDO ───────────────────────
+     A prancha pede "Fechados no mes". A janela do Ganho no Cockpit comeca na segunda
+     desta semana, entao "no mes" seria afirmacao que o dado nao sustenta. */
+  checar('o hero tem os quatro numeros da prancha',
+    /kpi\('var\(--ink\)', total, 'na esteira'/.test(template)
+      && /kpi\('var\(--red\)', semPasso, 'sem próximo passo'/.test(template)
+      && /kpi\('var\(--green\)', nGanho, 'ganho'/.test(template)
+      && /kpi\('#8E3B5C', nReciclagem, 'reciclagem'/.test(template),
+    'os quatro sao a leitura de esguelha da aba — e cada um na cor do que ele pede');
+  checar('e o numero do Ganho diz a data do corte, nao "no mes"',
+    template.indexOf("desdeGanho ? 'pago, desde ' + desdeGanho") > -1,
+    'a janela do Ganho comeca nesta semana; dizer "no mes" e numero sem procedencia');
+
+  /* ── 4 · OS NUMEROS PODEM ENCOLHER (achado a 375px, no screenshot) ──────────────────
+     `flex:none` dava largura de conteudo a caixa, o flex-wrap de dentro nunca disparava e
+     o quarto numero ficava FORA do card — escondido pelo overflow:hidden que a faixa
+     creme precisa. Nem transbordo de corpo, nem alvo pequeno, nem regra faltando. */
+  checar('a caixa dos quatro numeros encolhe, senao o quarto sai do card no celular',
+    /\.fn2-kpis\{flex:0 1 auto;min-width:0;[^}]*flex-wrap:wrap/.test(cssFunil),
+    'com flex:none a caixa fica em max-content e o wrap nunca dispara');
+
+  /* ── 5 · A ESTEIRA NUM PAINEL CREME, COM A BOLINHA NO CABECALHO ─────────────────── */
+  checar('o kanban vive num painel creme',
+    /\.fn3-grade\{[^}]*background:var\(--creme\)/.test(cssFunil),
+    'sem o painel as colunas voltam a flutuar soltas no fundo da pagina');
+  checar('e a etapa se identifica pela bolinha, nao por um fio sobre o creme',
+    cssFunil.indexOf('.fn3-cab-bola{') > -1
+      && template.indexOf('<i class="fn3-cab-bola"></i>') > -1,
+    'cabecalho branco com fio colorido dentro do painel e moldura em cima de moldura');
+
+  /* ── 6 · VERMELHO SO PARA O ACIONAVEL (regra 2 da prancha) ────────────────────────── */
+  checar('alimentar o funil nao e vermelho — nao e pendencia, e convite',
+    /\.fn3-alimentar\{[^}]*dashed var\(--line-btn\)/.test(cssFunil),
+    'enquanto era vermelho ele disputava a esguelha com os cartoes em violacao de regua');
+
+  /* ── 7 · OS DOIS PILLS PADRAO EM TODO CARTAO ──────────────────────────────────────── */
+  checar('avancar e pill verde claro e perder e pill branco',
+    /\.fn3-passo\.is-ava\{color:var\(--green\);background:var\(--green-soft\)/.test(cssFunil)
+      && /\.fn3-passo\.is-per\{color:var\(--muted2\);background:var\(--panel\)/.test(cssFunil),
+    'transparentes eles liam como dois links a 158px de coluna');
+  checar('e os rotulos usam o ▸ da casa, sem seta longa nem ✕',
+    template.indexOf('">avançar ▸</button>') > -1
+      && template.indexOf('">perder</button>') > -1,
+    'a prancha fecha a lista de simbolos em ✓ ⚠ ▸');
+
+  /* ── 8 · O QUARTO PAINEL DO PE NAO DEIXA FILEIRA MEIO VAZIA ─────────────────────── */
+  checar('o quarto painel do trio ocupa a fileira inteira',
+    cssFunil.indexOf('.fn2-trio > .fn2-painel.is-registro:last-child{grid-column:1 / -1;}') > -1,
+    'sao tres colunas e quatro paineis: o quarto cai sozinho com dois tercos de creme'
+    + ' vazio ao lado, e isso ficou visivel quando o painel virou creme');
 }());
 
 if (falhas.length) {
