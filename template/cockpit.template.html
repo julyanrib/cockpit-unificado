@@ -18780,11 +18780,17 @@ function fn3Cabecalho(col, daEtapa) {
   const n = daEtapa.length;
   const estourados = daEtapa.filter(x => x.est.estourou).length;
   const soma = daEtapa.reduce((a, x) => a + x.valor, 0);
-  const conv = (col.pagto || col.onb) ? null : fn2Conversao(col.id, fn2OwnerAtual);
+  /* nem Ganho: não há próxima etapa para converter, e taxa em cima de venda fechada é
+     número que não responde pergunta nenhuma. */
+  const conv = (col.pagto || col.onb || col.ganho) ? null : fn2Conversao(col.id, fn2OwnerAtual);
 
-  const regua = col.onb
-    ? 'a partir de ' + (DATA.onboardingVisivel && DATA.onboardingVisivel.corte
-        ? esc(fn2Quando(DATA.onboardingVisivel.corte) || DATA.onboardingVisivel.corte) : 'hoje')
+  /* GANHO E ONBOARDING dizem DESDE QUANDO, não uma régua de SLA: os dois têm corte e
+     nenhum dos dois tem prazo a cumprir. "enviar sem régua" foi o que a coluna disse
+     na primeira ida à produção. */
+  const janela = col.onb ? DATA.onboardingVisivel : (col.ganho ? DATA.ganhoVisivel : null);
+  const regua = janela
+    ? 'a partir de ' + (janela && janela.corte
+        ? esc(fn2Quando(janela.corte) || janela.corte) : 'hoje')
     : (() => {
       const sla = fn2Sla(col.id);
       const quanto = sla == null ? 'sem régua' : sla === 2 ? '48h' : sla + 'd';

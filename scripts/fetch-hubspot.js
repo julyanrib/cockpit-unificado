@@ -2398,6 +2398,13 @@ async function main() {
       labels: STAGE_LABELS
     },
     funilLeads,
+    /* A JANELA DO GANHO, como as outras duas: a tela diz DESDE QUANDO a coluna mostra,
+       em vez de fingir uma régua de SLA que não existe para venda fechada. */
+    ganhoVisivel: {
+      corte: CORTE_GANHO_ISO,
+      desde: new Date(inicioDoGanhoVisivel()).toISOString().slice(0, 10),
+      visiveis: ganhosDaSemana.length
+    },
     onboardingVisivel: {
       corte: CORTE_ONBOARDING_ISO,
       desde: new Date(inicioDoOnboardingVisivel()).toISOString().slice(0, 10),
