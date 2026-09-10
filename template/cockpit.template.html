@@ -12121,11 +12121,26 @@ function mostrarFormulario(idParaMostrar) {
 // (SIGNED_IN, TOKEN_REFRESHED...); sem esta trava, cada evento refaria o fetch de dados.
 let hidratadoPara = null;
 
+/* A HIDRATAÇÃO EM VOO: os três caminhos de boot chegam quase juntos, e sem isto cada um
+   abre o seu /api/dados. Quem chega durante a hidratação espera A MESMA promessa.
+   A CHAVE É O E-MAIL: entrar como outra pessoa durante o voo tem de hidratar de novo,
+   senão a segunda sessão ficaria com o dado da primeira. */
+let hidratando = null;
+
 async function aplicarSessao(email) {
   if (hidratadoPara && sessaoAtual && hidratadoPara.toLowerCase() === String(email).toLowerCase()) {
     mostrarApp();
     return;
   }
+  const chaveH = String(email || '').toLowerCase();
+  if (hidratando && hidratando.chave === chaveH) return hidratando.promessa;
+  const promessaH = hidratarSessao(email);
+  hidratando = { chave: chaveH, promessa: promessaH };
+  try { return await promessaH; }
+  finally { if (hidratando && hidratando.promessa === promessaH) hidratando = null; }
+}
+
+async function hidratarSessao(email) {
 
   if (DATA.shellProtegido) {
     // ETAPA 1b: o HTML público não carrega mais nenhum dado do CRM. Depois que o Supabase
