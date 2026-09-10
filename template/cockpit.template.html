@@ -30993,7 +30993,7 @@ function pl6Ligar(box, rep) {
          lendo; e o executivo desmarca de verdade na Agenda, que e onde o cliente foi
          avisado. O ✕ devolve a conta para a lista — nao desmarca a visita. */
       const msg = pl6SlotBloqueado(era)
-        ? dias[di].rot + (pl6HoraDaFaixa(si) ? ' ' + pl6HoraDaFaixa(si) : '') + ' desbloqueado · Supabase'
+        ? dias[di].rot + (pl6SlotHora(era, si) ? ' ' + pl6SlotHora(era, si) : '') + ' desbloqueado · Supabase'
         : pl6SlotRua(era)
         /* A HORA SÓ ENTRA NA FRASE SE ELE A DEFINIU. Sem isto o toast sairia
            "ter  — prospecção de rua saiu do plano", com dois espaços onde havia um
@@ -45747,7 +45747,17 @@ function d7Ligar(box, rep) {
          Planejamento, que é onde ele escolhe outro dia e outra hora. */
       return mutar({ grade: g }, l
         ? l.nome + ' saiu do dia — está na munição do Planejamento pra você escolher outro dia e hora · Supabase'
-        : (pl6HoraDaFaixa(si) || 'a vaga') + ' liberada no plano de hoje · Supabase');
+        /* A HORA É A QUE ELE ESCOLHEU (pl6SlotHora), e não a faixa da posição: testado
+           em produção, tirar o bloco das 16:30 dizia "10:30 liberada", que é a faixa do
+           slot 1. Mesma armadilha que morreu em cinco lugares em 09/09.
+           E O BLOCO TEM NOME: "a vaga liberada" não diz o que saiu do dia. */
+        : (function () {
+            const quando = pl6SlotHora(era, si);
+            const oQue = pl6SlotRel(era) ? 'a visita de relacionamento'
+              : (pl6SlotRua(era) ? 'a prospecção de rua' : 'a vaga');
+            return (quando ? quando + ' · ' : '') + oQue
+              + ' saiu do plano de hoje · Supabase';
+          }()));
     }
 
     /* ── d7Relogio ── as duas peças da hora e o confirmar ─────────────────────────
