@@ -497,22 +497,42 @@ console.log('');
     + ' que foi medida');
 
   /* ── 10 · A AGENDA DO DIA SE LÊ POR HORA, E A GRADE NÃO SE REORDENA ─────────────── */
-  checar('os cards do dia saem em ordem de hora, e sem hora no fim',
-    /if \(!a\.hora\) return 1;/.test(dadosCod) && /if \(!b\.hora\) return -1;/.test(dadosCod),
-    'a posição no array deixou de ser a ordem do dia: 14:20 na casa 0 e 09:00 na casa 3'
-    + ' mostrariam a tarde antes da manhã');
+  /* A ORDEM E O si MUDARAM DE CASA (09/09/26): as duas telas do executivo passaram a ler
+     o dia pela MESMA função, pl6ItensDoDia. Antes o kanban ordenava por hora e a Minha
+     Daily lia em ordem de POSIÇÃO — a mesma manhã em duas ordens, nas duas telas de quem
+     vai para a rua. A regra é a mesma; agora ela existe uma vez, e a checagem exige que
+     as duas chamem. */
+  const leitor = semCom(pegarFn('pl6ItensDoDia'));
+  checar('o dia se lê por uma função só, e as duas telas a chamam',
+    /function pl6ItensDoDia\(coluna, porId\)/.test(codigo)
+      && /const itens = pl6ItensDoDia\(col, porId\)/.test(dadosCod)
+      && /pl6ItensDoDia\(coluna, porId\)/.test(semCom(pegarFn('d7PlanoDeHoje'))),
+    'duas leituras do mesmo dia é duas rotas: ele monta o dia numa tela e trabalha na outra');
+
+  checar('a ordem é hora ascendente, e sem hora no fim',
+    /if \(!a\.hora\) return 1;/.test(leitor) && /if \(!b\.hora\) return -1;/.test(leitor),
+    '14:20 na casa 0 e 09:00 na casa 3 mostrariam a tarde antes da manhã');
 
   checar('e o si viaja com o item, porque a grade gravada não se reordena',
-    /itens\.push\(\{ si: si, hora: hora, l: l, rua: pl6SlotRua\(v\), id: id \}\);/.test(dadosCod),
-    'reordenar a grade mudaria o que a Daily e a tela do gestor leem por posição');
+    /itens\.push\(\{ si: si, hora: hora, id: id, tipo: l \? 'visita' : 'orfa', lead: l \}\);/.test(leitor),
+    'reordenar a grade mudaria o que a Daily do gestor e o g14 leem por posição');
 
   /* ── 11 · CONTA FORA DA CARGA É VAGA, NÃO CARTÃO ─────────────────────────────────
      Decisão dele, de hoje: "nao quero esse nome conta saiu da sua base nao precisa, só os
      slots vazios". A prancha não fala dela — e prancha silenciosa não revoga ordem dele. */
   checar('conta fora desta carga não desenha cartão',
-    /if \(!l && !pl6SlotRua\(v\)\) continue;/.test(dadosCod)
+    /\.filter\(x => x\.tipo !== 'orfa'\)/.test(dadosCod)
       && telaCod.indexOf('conta fora desta carga') < 0,
     'a casca do cartão ocupava a altura de uma visita para dizer que ali não há visita');
+
+  /* BLOQUEIO E RUA APARECEM NO KANBAN desde que as duas telas leem a mesma função. Um dia
+     com três bloqueios dizendo "livre" era a tela escondendo compromisso que ele marcou.
+     Mas bloqueio NÃO conta como visita: dizer "3 visitas" incluindo um dentista faria o
+     gestor cobrar visita que ninguém prometeu. */
+  checar('bloqueio aparece no dia e não conta como visita',
+    /const n = itens\.filter\(x => x\.tipo === 'visita' \|\| x\.tipo === 'rua'\)\.length;/.test(dadosCod)
+      && /it\.tipo === 'bloqueado' \? 'bloqueado'/.test(dadosCod),
+    'dia com bloqueio dizendo "livre" esconde o que ele já combinou');
 
   /* ── 12 · A PRÓXIMA MELHOR AÇÃO TEM UMA FONTE ────────────────────────────────────── */
   checar('o card e a ficha leem pl6Motivo, e não uma cópia da frase',
