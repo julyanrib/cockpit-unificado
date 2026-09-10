@@ -18504,6 +18504,39 @@ const FN3_ETAPA_ONBOARDING = '1396006163';
    um dos dois é lixo na agenda do executivo e na Daily do gestor.
    Enquanto forem dois `if`, a próxima etapa que sair do funil nasce certa numa porta e
    errada na outra — e só se descobre quando alguém recebe a tarefa. */
+/* ══ O PRÓXIMO PASSO ABERTO QUE O NEGÓCIO JÁ TEM (10/09/26) ═══════════════════════════
+   Julyan: "cada vez que eu passo o lead de etapa ele fica marcando na aba hoje do
+   executivo... fiz a venda na hora, passando por todos os kanbans e ficou lá várias
+   atividades pra ele fazer".
+
+   MEDIDO, e o caso dele está no banco: o LUMIERE BISTRO & CAFE (negócio 64903734418,
+   Marco) recebeu CINCO tarefas em menos de três minutos em 09/09 — 19:19:44, 19:19:47,
+   19:19:58, 19:20:04 e 19:22:43 — uma por kanban atravessado, todas NOT_STARTED e todas
+   datadas naquele mesmo dia. Duas delas com o texto IDÊNTICO.
+
+   POR QUE DUAS IGUAIS: a cadência é indexada por SITUAÇÃO, não por etapa
+   (cadencias.json: `acesso_decisor`, toque 1, dia 0). Duas passagens seguidas caem na
+   mesma régua e sugerem a mesma ação — e o `dia: 0` do primeiro toque é o que faz tudo
+   vencer HOJE, que é por isso que ele viu a aba "Hoje" enchendo.
+
+   A DIMENSÃO NA BASE INTEIRA: 333 tarefas abertas em 136 negócios; 102 negócios com uma
+   (o saudável), 24 com duas ou três, 11 com QUATRO OU MAIS. 196 dessas 333 são
+   excedente, e 21 são duplicatas idênticas. A "Hoje" do time está inflada ~2,4x.
+
+   A REGRA QUE FALTAVA: um negócio, UM próximo passo aberto. `lead.tarefas` já é
+   exatamente a lista do que está aberto — o robô só traz NOT_STARTED (ver
+   hsTarefasAbertasDosNegocios) —, então a tela sabe disso sem perguntar nada ao HubSpot.
+   Esta função é o único lugar que responde "ele já tem um?". */
+function fn3PassoAbertoDoLead(lead) {
+  const ts = Array.isArray(lead && lead.tarefas) ? lead.tarefas : [];
+  const abertas = ts.filter(t => t && t.subject);
+  if (!abertas.length) return null;
+  /* a mais próxima primeiro: é a que o executivo vai encontrar na agenda de hoje */
+  return abertas.slice().sort(function (a, b) {
+    return String(a.timestamp || '9999') < String(b.timestamp || '9999') ? -1 : 1;
+  })[0];
+}
+
 function etapaPedeProximoPasso(etapaId) {
   const id = String(etapaId || '');
   if (id === ETAPA_PERDIDO_ID) return false;
@@ -19325,6 +19358,10 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
      de venda. A regra é uma só e mora em etapaPedeProximoPasso — aqui ela era `!paraOnb`,
      e marcar perdido criava tarefa datada para um negócio morto. */
   const exigePasso = etapaPedeProximoPasso(para);
+  /* JÁ TEM UM ABERTO? Então a passagem não planta outro — ver fn3PassoAbertoDoLead. Sem
+     isto, atravessar quatro kanbans numa venda fechada na hora deixava quatro tarefas
+     vencendo hoje, e três delas já não descreviam nada (medido no Lumière, 09/09). */
+  const passoAberto = exigePasso ? fn3PassoAbertoDoLead(lead) : null;
   const sugerido = (() => {
     if (!exigePasso) return null;
     try {
@@ -19374,11 +19411,19 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
       ${campos.length ? `<div id="fn3Campos" class="pe-campos">${campos.map(c =>
         campoPassagemHTML(c, valorAtualDoCampo(lead, c))).join('')}</div>` : ''}
 
-      ${exigePasso ? `<div class="fn3-passo">
+      ${exigePasso && passoAberto ? `<div class="fn3-reg-aviso">
+        Este negócio <b>já tem um próximo passo aberto</b>: «${esc(passoAberto.subject)}»${
+          passoAberto.timestamp ? ' · <b>' + esc(fmtDailyLabel(isoDate(new Date(passoAberto.timestamp)))) + '</b>' : ''}.
+        <b>Não vou criar outro</b> — um negócio, um próximo passo. Se ele não descreve mais
+        o que vem agora, troque o texto na ficha do negócio.
+        <button type="button" id="fn3PassoOutro" class="btn-txt">preciso de mais um passo, além desse</button>
+      </div>` : ''}
+
+      ${exigePasso ? `<div class="fn3-passo" id="fn3PassoBox"${passoAberto ? ' style="display:none;"' : ''}>
         <span>próximo passo:</span>
         <input type="text" id="fn3PassoAcao" placeholder="o que você vai fazer"
-          value="${esc(sugerido ? sugerido.acao : '')}">
-        <input type="date" id="fn3PassoData" value="${esc(sugerido ? sugerido.data : '')}">
+          value="${esc(passoAberto ? '' : (sugerido ? sugerido.acao : ''))}">
+        <input type="date" id="fn3PassoData" value="${esc(passoAberto ? '' : (sugerido ? sugerido.data : ''))}">
       </div>` : ''}
     </div>
 
@@ -19409,6 +19454,20 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
     btn.setAttribute('aria-pressed', String(escolhas[i]));
     btn.textContent = evid[i].t + (escolhas[i] ? ' ✓' : '');
   }));
+
+  /* "PRECISO DE MAIS UM PASSO" abre a caixa por style.display, e não por `hidden`:
+     .fn3-passo tem display:flex na folha, e o atributo `hidden` perde dessa regra — foi
+     assim que o seletor de região do Planejamento nasceu aberto em 09/09. */
+  const btnOutro = fundo.querySelector('#fn3PassoOutro');
+  if (btnOutro) btnOutro.addEventListener('click', () => {
+    const caixa = fundo.querySelector('#fn3PassoBox');
+    if (!caixa) return;
+    caixa.style.display = 'flex';
+    btnOutro.disabled = true;
+    btnOutro.textContent = 'ok — descreva o passo a mais abaixo';
+    const campo = caixa.querySelector('#fn3PassoAcao');
+    if (campo) campo.focus();
+  });
 
   const fechar = () => {
     fundo.remove();
@@ -19441,12 +19500,21 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
       return;
     }
     let passoAcao = '', passoData = '';
-    if (exigePasso) {
+    /* COM UM PASSO ABERTO E A CAIXA FECHADA, a passagem não cria tarefa: `passoAcao` e
+       `passoData` saem vazios e `gravarPassagemDeEtapa` decide por eles
+       (`exigePasso = !!(opts.passoAcao && opts.passoData)`). E a exigência de preencher
+       NÃO se aplica aqui — cobrar ação e data de quem já tem um próximo passo aberto era
+       justamente o que empilhava tarefa. */
+    const caixaPasso = fundo.querySelector('#fn3PassoBox');
+    const pedindoOutro = !!(caixaPasso && caixaPasso.style.display !== 'none');
+    if (exigePasso && (!passoAberto || pedindoOutro)) {
       passoAcao = (fundo.querySelector('#fn3PassoAcao').value || '').trim();
       passoData = fundo.querySelector('#fn3PassoData').value || '';
       if (!passoAcao || !passoData) {
         status.className = 'fn3-reg-status is-erro';
-        status.textContent = 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
+        status.textContent = passoAberto
+          ? 'Você pediu um passo a mais: escreva a ação e a data, ou feche esta caixa e siga com o passo que já existe.'
+          : 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
         return;
       }
     }
@@ -19495,6 +19563,13 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} ✓ — a resposta do HubSpot demorou`
           + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
           + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
+      } else if (passoOk && !passoData) {
+        /* SEM TAREFA NOVA porque o negócio já tinha uma aberta. Cair no ramo de baixo
+           diria "próximo passo em Invalid Date" — o mesmo defeito que o Perdido teve
+           quando passou a ser isento. O toast diz o que ficou valendo. */
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''}`
+          + ` · o próximo passo que já existia continua valendo: «${esc(passoAberto ? passoAberto.subject : '')}»`
+          + ` — nenhuma tarefa nova foi criada.`, 'sucesso');
       } else if (passoOk) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''} · próximo passo em ${fmtDailyLabel(passoData)}.`, 'sucesso');
       } else {
