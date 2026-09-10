@@ -21292,6 +21292,8 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
   const mutar = gk.mutar;
   const redesenhar = gk.redesenhar || function () {};
   const box = gk.box || document;
+
+  const selo = String(gk.selo || '').trim();
   if (typeof mutar !== 'function') {
     console.error('pl6AgendarNoSlot chamada sem o gancho mutar — nada foi gravado.');
     return;
@@ -21384,6 +21386,7 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
 
     if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
     return mutar({ grade: g }, l.nome + ' · agendado ' + dias[di].rot + ' ' + dias[di].data + ' ' + hora
+      + (selo ? ' — ' + selo : '')
       + ' — tarefa no HubSpot ✓ · slot no Supabase ✓');
 }
 
@@ -31855,6 +31858,9 @@ function d7DadosFinal(rep) {
     : null;
 
   const ocupados = plano.filter(x => x.tipo !== 'livre');
+
+  const livres = plano.filter(x => x.tipo === 'livre');
+  const emFoco = d7UI.slot != null && !d7UI.horas;
   const visitasReais = ocupados.filter(x => x.tipo === 'visita');
   const feitas = visitasReais.filter(x => x.estado === 'feita').length;
   const proxima = visitasReais.find(x => x.estado !== 'feita') || null;
@@ -31915,15 +31921,24 @@ function d7DadosFinal(rep) {
       ? ('promessa travada' + (horaTrava ? ' às ' + horaTrava : '') + ' ✓')
       : (minTrava > 0 ? ('travar a promessa — faltam ' + minTrava + ' min') : 'travar a promessa (fora da hora)'),
 
-    temAviso: !!(d7UI.horas || d7UI.toast),
-    temSel: !!d7UI.horas,
+    temAviso: !!(d7UI.horas || d7UI.slot != null || d7UI.toast),
+    temSel: !!(d7UI.horas || d7UI.slot != null),
     aviso: d7UI.horas
-      ? ('▸ ' + d7NomeDaMunicao(rep, d7UI.horas) + ' — escolha a hora e confirme')
-      : (d7UI.toast || ''),
-    avisoBg: d7UI.horas ? '#FDF3F4' : '#EAF6F1',
-    avisoCor: d7UI.horas ? '#E51A31' : '#1E9E7B',
+      ? ('▸ ' + d7NomeDaMunicao(rep, d7UI.horas)
+        + (d7UI.slot != null ? ' ocupa o slot livre — escolha a hora e confirme'
+          : ' — escolha a hora e confirme'))
+      : (emFoco
+        ? '▸ slot livre — escolha quem entra: um lead da munição, um quente ou um bloco'
+          + ' livre. A hora é você quem define'
+        : (d7UI.toast || '')),
+    avisoBg: (d7UI.horas || emFoco) ? '#FDF3F4' : '#EAF6F1',
+    avisoCor: (d7UI.horas || emFoco) ? '#E51A31' : '#1E9E7B',
 
     visitas: ocupados.map(function (l) { return d7CartaoDoItem(l, false, null); }),
+
+    slot: livres.length
+      ? { si: livres[0].si, n: livres.length, foco: emFoco }
+      : null,
 
     encaixando: !!d7UI.horas,
     horaRot: d7UI.hSel + ':' + d7UI.mSel,
@@ -31949,7 +31964,10 @@ function d7DadosFinal(rep) {
         tCor: (q.temp != null && q.temp >= 85) ? '#E51A31' : '#F2542D',
         tel: tel ? tel.replace(/[^0-9+]/g, '') : '',
         ligarId: String(q.dealId || q.nome),
-        encaixarId: String(q.dealId || q.nome)
+        encaixarId: String(q.dealId || q.nome),
+        encaixarRot: emFoco ? 'colocar no slot livre ▸' : 'encaixar hoje ▸',
+        encaixarCor: emFoco ? '#E51A31' : '#8E3B5C',
+        encaixarBorda: emFoco ? '#F0A9B2' : '#E9D9E1'
       };
     }),
 
@@ -31968,6 +31986,8 @@ function d7DadosFinal(rep) {
     }),
     fichaAcao: esc(ficha ? pl6Motivo(ficha) : ''),
     fichaAgendar: ficha ? String(ficha.id) : '',
+
+    blocoRot: emFoco ? ' · ocupa o slot livre' : '',
     municaoCriterio: mun.criterio,
     municao: (mun.lista || []).map(function (l) {
       const sel = d7UI.horas === l.id;
@@ -31980,10 +32000,11 @@ function d7DadosFinal(rep) {
         tagBg: l.tipo === 'c' ? '#2B3440' : (fonte.bg || '#FDF6E7'),
         bg: sel ? '#FDF3F4' : '#FDFEFF',
         borda: sel ? '#E51A31' : '#E7E3DA',
-        acao: sel ? 'escolha a hora ▸' : 'encaixar no dia ▸',
-        acaoCor: sel ? '#FFFDF8' : '#8E3B5C',
+
+        acao: sel ? 'escolha a hora ▸' : (emFoco ? 'colocar no slot livre ▸' : 'encaixar no dia ▸'),
+        acaoCor: sel ? '#FFFDF8' : (emFoco ? '#E51A31' : '#8E3B5C'),
         acaoBg: sel ? '#E51A31' : '#FDFEFF',
-        acaoBorda: sel ? '#E51A31' : '#E9D9E1',
+        acaoBorda: sel ? '#E51A31' : (emFoco ? '#F0A9B2' : '#E9D9E1'),
         id: String(l.id)
       };
     })
@@ -32013,6 +32034,29 @@ function d7TelaFinalHTML(d) {
 
   const relogioHTML = d.encaixando ? pfRelogioHTML(d, 'data-d7-relogio', 'encaixar', 'dia') : '';
 
+  const s = d.slot;
+  const slotHTML = !s ? '' :
+    '<button type="button" data-d7-abrir="' + esc(String(s.si)) + '"'
+    + ' style="display:flex;align-items:center;gap:11px;width:100%;text-align:left;'
+    + 'border:1.5px dashed ' + (s.foco ? '#E51A31' : '#D8D2C4') + ';border-radius:12px;'
+    + 'background:' + (s.foco ? '#FDF3F4' : '#FDFEFF') + ';padding:11px 13px;cursor:pointer;'
+    + 'min-width:0;">'
+    +   '<span style="flex:none;border:1.5px dashed ' + (s.foco ? '#E51A31' : '#D8D2C4')
+    +     ';border-radius:999px;padding:3px 11px;font:900 11px \'Archivo\',sans-serif;'
+    +     'color:' + (s.foco ? '#E51A31' : '#B4AC9C') + ';font-variant-numeric:tabular-nums;'
+    +     'white-space:nowrap;">— : —</span>'
+    +   '<span style="flex:1;min-width:0;">'
+    +     '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:'
+    +       (s.foco ? '#E51A31' : '#8E3B5C') + ';">'
+    +       (s.foco ? 'escolha quem entra ▸' : 'slot livre — você escolhe quem e a hora') + '</b>'
+    +     '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;'
+    +       'margin-top:2px;">'
+    +       (s.n === 1 ? 'é o último espaço livre do seu dia'
+          : s.n + ' espaços livres hoje · um lead da munição, um quente ou um bloco livre')
+    +     '</span>'
+    +   '</span>'
+    + '</button>';
+
   const quentesHTML = (d.quentes || []).map(function (q) {
 
     const ligar = q.tel
@@ -32035,9 +32079,9 @@ function d7TelaFinalHTML(d) {
       + '</span>'
       + ligar
       + '<button type="button" data-d7-q-agendar="' + esc(q.encaixarId) + '"'
-      +   ' style="flex:none;border:1px solid #E9D9E1;border-radius:999px;background:#FDFEFF;'
-      +   'padding:5px 13px;font:800 10px \'Manrope\',sans-serif;color:#8E3B5C;cursor:pointer;">'
-      +   'encaixar hoje ▸</button>'
+      +   ' style="flex:none;border:1px solid ' + q.encaixarBorda + ';border-radius:999px;'
+      +   'background:#FDFEFF;padding:5px 13px;font:800 10px \'Manrope\',sans-serif;color:'
+      +   q.encaixarCor + ';cursor:pointer;">' + esc(q.encaixarRot) + '</button>'
       + '</span>';
   }).join('');
 
@@ -32139,9 +32183,11 @@ function d7TelaFinalHTML(d) {
     +       '<span style="font-weight:700;text-transform:none;letter-spacing:0;">'
     +       '· veio do seu Planejamento · registre o resultado em 1 clique</span></span>'
     +     '<div style="display:flex;flex-direction:column;gap:8px;">'
-    +       (visitasHTML || '<span style="text-align:center;font:700 10px/1.5 \'Manrope\',sans-serif;'
+    +       (visitasHTML || (slotHTML ? '' : '<span style="text-align:center;font:700 10px/1.5 \'Manrope\',sans-serif;'
           + 'color:#B4AC9C;border:1.5px dashed #D8D2C4;border-radius:10px;padding:14px 12px;">'
-          + 'nenhuma hora ocupada hoje — pegue uma conta na munição e escolha a hora</span>')
+          + 'o dia está cheio — tire algo antes de encaixar</span>'))
+
+    +       slotHTML
     +       relogioHTML
     +     '</div>'
     +     '<span style="display:block;font:700 10px/1.6 \'Manrope\',sans-serif;color:#7A8494;margin-top:12px;">'
@@ -32172,9 +32218,10 @@ function d7TelaFinalHTML(d) {
     +       'cursor:pointer;text-align:center;margin-bottom:6px;">+ visita de rua — cria o lead na hora</button>'
     +     '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">'
     +       blocoHTML('data-d7-rua="1"', '⌖ prospectar contas novas',
-              'bloco livre na região — sem conta definida; as que criar entram na hora')
+              'bloco livre na região — sem conta definida; as que criar entram na hora'
+              + d.blocoRot)
     +       blocoHTML('data-d7-rel="1"', '♥ visita de relacionamento',
-              'cliente da base — presença, indicação e upsell')
+              'cliente da base — presença, indicação e upsell' + d.blocoRot)
     +     '</div>'
     +     '<div style="display:flex;flex-direction:column;gap:6px;">'
     +       (munHTML || '<span style="font:700 10px/1.5 \'Manrope\',sans-serif;color:#B4AC9C;">'
@@ -32459,14 +32506,21 @@ function d7Ligar(box, rep) {
     const d = alvo.dataset;
 
     if (d.d7Abrir != null && d.d7Abrir !== '') {
-      d7UI.slot = Number(d.d7Abrir); d7UI.horas = null;
+      const si = Number(d.d7Abrir);
+      d7UI.slot = (d7UI.slot === si) ? null : si;
+      d7UI.horas = null;
       return redesenhar();
     }
-    if (d.d7FecharCard) { d7UI.slot = null; return redesenhar(); }
+
+    if (d.d7FecharCard) {
+      d7UI.slot = null;
+      d7UI.horas = null;
+      return redesenhar();
+    }
     if (d.d7Filtro) { d7UI.filtro = d.d7Filtro; d7UI.horas = null; return redesenhar(); }
+
     if (d.d7MAbrir) {
       d7UI.horas = (d7UI.horas === d.d7MAbrir) ? null : d.d7MAbrir;
-      d7UI.slot = null;
       return redesenhar();
     }
 
@@ -32544,14 +32598,6 @@ function d7Ligar(box, rep) {
           mostrarToast('Hoje é fim de semana — a semana em foco é a próxima.', 'atencao');
         }
         return;
-      }
-      const si = Number(d.d7Rua);
-      const g = pl6GradeDoPlano();
-      if (g[di][si]) {
-        if (typeof mostrarToast === 'function') {
-          mostrarToast('Esse horário encheu enquanto você escolhia. Escolha outro.', 'atencao');
-        }
-        return redesenhar();
       }
 
       d7UI.horas = (d7UI.horas === PL6_RUA) ? null : PL6_RUA;
@@ -32634,9 +32680,13 @@ function d7Ligar(box, rep) {
         if (typeof mostrarToast === 'function') mostrarToast('O dia está cheio — tire algo antes de encaixar.', 'atencao');
         return;
       }
+
+      const eraSlot = d7UI.slot != null;
       d7UI.horas = null;
+      d7UI.slot = null;
       return pl6AgendarNoSlot(rep, alvo, di, si2, {
-        mutar: mutar, redesenhar: redesenhar, box: box, hora: hora
+        mutar: mutar, redesenhar: redesenhar, box: box, hora: hora,
+        selo: eraSlot ? 'ocupou o slot livre' : ''
       });
     }
 
@@ -32795,14 +32845,6 @@ function d7Ligar(box, rep) {
 
     if (d.d7QAgendar) {
       if (di < 0) return;
-      const g = pl6GradeDoPlano();
-      const si = g[di].findIndex(x => !x);
-      if (si < 0) {
-        if (typeof mostrarToast === 'function') {
-          mostrarToast('Seu dia está cheio — tire alguém do plano ou date uma tarefa.', 'atencao');
-        }
-        return;
-      }
       const naCarteira = pl6Carteira(rep, pl6Regioes(rep)).find(x => String(x.dealId) === String(d.d7QAgendar));
       if (!naCarteira) {
         if (typeof mostrarToast === 'function') {
@@ -32810,7 +32852,9 @@ function d7Ligar(box, rep) {
         }
         return;
       }
-      return pl6AgendarNoSlot(rep, naCarteira.id, di, si, { mutar: mutar, redesenhar: redesenhar, box: box });
+      d7UI.horas = (d7UI.horas === String(naCarteira.id)) ? null : String(naCarteira.id);
+      d7UI.ficha = null;
+      return redesenhar();
     }
 
     if (d.d7Travar) {
