@@ -29546,6 +29546,71 @@ function pl6Motivo(l) {
 const PF_HORAS_OPT = ['08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19'];
 const PF_MINS_OPT = ['00', '15', '30', '45'];
 
+/* ══ O RELÓGIO, UMA REGRA PARA AS DUAS TELAS (10/09/26) ══════════════════════════════
+   Regra 5 da prancha da Daily: "mesmo relógio bonito do Planejamento — nunca
+   input[type=time] nativo". Ele nasceu no Planejamento e a Daily tinha pílulas próprias;
+   dois relógios são duas réguas de hora, e esta casa já teve dois padrões de hora
+   convivendo (a faixa lida como relógio, corrigida em 09/09).
+
+   A REGRA É UMA, A GEOMETRIA É DE CADA PRANCHA — e isso é medição, não gosto: as duas
+   pranchas do Julyan especificam tamanhos DIFERENTES. A do Planejamento desenha as horas
+   numa grade de 6 colunas com 24px de altura e fonte 10px; a da Daily desenha em linha
+   que quebra, 26px e 10.5px, com os minutos limitados a 70px. A coluna da Daily é mais
+   larga, então o chip cabe maior. Unificar os dois números mudaria uma das telas para
+   longe da prancha dela — por isso `variante`, e não um número cravado.
+
+   O ATRIBUTO É DE QUEM CHAMA: o Planejamento emite `data-pl6-acao` e a Daily a família
+   dela. A fiação é de cada tela, o desenho é um.
+
+   `d` é o contrato: { horaRot, horasOpt:[{rot,on,bg,cor,borda}], minsOpt:[…], agendar }. */
+function pfRelogioHTML(d, attr, rotBotao, variante) {
+  const dia = variante === 'dia';
+  const alt = dia ? '26px' : '24px';
+  const fonte = dia ? '10.5px' : '10px';
+  const horas = (d.horasOpt || []).map(function (h) {
+    return '<button type="button" ' + attr + '="' + esc(h.on) + '"'
+      + ' style="border:1px solid ' + h.borda + ';border-radius:7px;background:' + h.bg
+      + ';min-height:' + alt + (dia ? ';min-width:34px' : '')
+      + ';font:800 ' + fonte + ' \'Manrope\',sans-serif;color:' + h.cor
+      + ';cursor:pointer;font-variant-numeric:tabular-nums;padding:0' + (dia ? ' 6px' : '')
+      + ';">' + esc(h.rot) + '</button>';
+  }).join('');
+  const mins = (d.minsOpt || []).map(function (m) {
+    return '<button type="button" ' + attr + '="' + esc(m.on) + '"'
+      + ' style="flex:1;' + (dia ? 'max-width:70px;' : '') + 'border:1px solid ' + m.borda
+      + ';border-radius:7px;background:' + m.bg + ';min-height:' + alt
+      + ';font:800 ' + fonte + ' \'Manrope\',sans-serif;color:' + m.cor
+      + ';cursor:pointer;font-variant-numeric:tabular-nums;padding:0;">' + esc(m.rot) + '</button>';
+  }).join('');
+  const caixaHoras = dia
+    ? '<div style="display:flex;gap:3px;flex-wrap:wrap;">' + horas + '</div>'
+    : '<div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;">' + horas + '</div>';
+  const confirmar = dia
+    ? '<button type="button" ' + attr + '="' + esc(d.agendar) + '"'
+      + ' style="flex:none;margin-left:auto;border:0;border-radius:999px;background:#E51A31;'
+      + 'color:#FFFDF8;min-height:30px;padding:0 18px;font:800 11px \'Manrope\',sans-serif;'
+      + 'cursor:pointer;">' + esc(rotBotao) + ' ' + esc(d.horaRot) + ' ▸</button>'
+    : '';
+  const abaixo = dia
+    ? ''
+    : '<button type="button" ' + attr + '="' + esc(d.agendar) + '"'
+      + ' style="display:block;width:100%;margin-top:8px;border:0;border-radius:999px;'
+      + 'background:#E51A31;color:#FFFDF8;min-height:34px;font:800 11.5px \'Manrope\',sans-serif;'
+      + 'cursor:pointer;">' + esc(rotBotao) + ' ' + esc(d.horaRot) + ' ▸</button>';
+  return '<div style="border:1.5px solid #E51A31;border-radius:12px;background:#FDFEFF;'
+    + 'padding:11px;box-shadow:0 10px 26px rgba(229,26,49,.14);">'
+    + '<span style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">'
+    +   '<span style="font:900 8.5px \'Archivo\',sans-serif;letter-spacing:.07em;'
+    +     'text-transform:uppercase;color:#E51A31;">que horas?</span>'
+    +   '<b style="margin-left:auto;font:900 20px \'Archivo\',sans-serif;color:#2B3440;'
+    +     'font-variant-numeric:tabular-nums;letter-spacing:-.01em;">' + esc(d.horaRot) + '</b>'
+    + '</span>'
+    + caixaHoras
+    + '<div style="display:flex;gap:3px;margin-top:5px;">' + mins + confirmar + '</div>'
+    + abaixo
+    + '</div>';
+}
+
 /* A cor do trilho do card agendado, por etapa — a paleta da prancha. Conta sem negócio
    ainda entra como Prospecção, que é onde ela nasceria. */
 const PF_ET_COR = {
@@ -30065,12 +30130,6 @@ function pl6TelaFinalHTML(d) {
     const regOptsHTML = (dia.regOpts || []).map(ro => `
       <button type="button" data-pl6-regiao="${ro.on}" data-nome="${ro.chave}" style="display:flex;align-items:center;gap:5px;border:0;border-radius:7px;background:transparent;padding:6px 8px;cursor:pointer;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;min-width:0;text-align:left;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ro.nome}</span><span style="margin-left:auto;flex:none;font:700 9px 'Manrope',sans-serif;color:#7A8494;font-variant-numeric:tabular-nums;">${ro.n} contas</span></button>`).join('');
 
-    const horasHTML = (dia.horasOpt || []).map(ho => `
-      <button type="button" data-pl6-acao="${ho.on}" style="border:1px solid ${ho.borda};border-radius:7px;background:${ho.bg};min-height:24px;font:800 10px 'Manrope',sans-serif;color:${ho.cor};cursor:pointer;font-variant-numeric:tabular-nums;padding:0;">${ho.rot}</button>`).join('');
-
-    const minsHTML = (dia.minsOpt || []).map(mo => `
-      <button type="button" data-pl6-acao="${mo.on}" style="flex:1;border:1px solid ${mo.borda};border-radius:7px;background:${mo.bg};min-height:24px;font:800 10px 'Manrope',sans-serif;color:${mo.cor};cursor:pointer;font-variant-numeric:tabular-nums;padding:0;">${mo.rot}</button>`).join('');
-
     return `
     <div data-pl6-dia-drop="${dia.di}" style="background:${dia.bg};border:1.5px solid ${dia.borda};border-radius:13px;min-width:0;overflow:hidden;">
       <div style="padding:11px 12px 10px;background:${dia.headBg};border-bottom:1px solid ${dia.borda};">
@@ -30091,13 +30150,7 @@ function pl6TelaFinalHTML(d) {
       <div style="padding:9px;display:flex;flex-direction:column;gap:6px;">
         ${agendaHTML}
         ${dia.convite ? `<button type="button" data-pl6-acao="${dia.abrirDia}" style="display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF6F7;cursor:pointer;font:800 10px 'Manrope',sans-serif;color:#E51A31;padding:6px 10px;">+ colocar aqui</button>` : ''}
-        ${dia.colocando ? `
-        <div style="border:1.5px solid #E51A31;border-radius:12px;background:#FDFEFF;padding:11px;box-shadow:0 10px 26px rgba(229,26,49,.14);">
-          <span style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;"><span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#E51A31;">que horas?</span><b style="margin-left:auto;font:900 20px 'Archivo',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;letter-spacing:-.01em;">${dia.horaRot}</b></span>
-          <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:3px;">${horasHTML}</div>
-          <div style="display:flex;gap:3px;margin-top:5px;">${minsHTML}</div>
-          <button type="button" data-pl6-acao="${dia.agendar}" style="display:block;width:100%;margin-top:8px;border:0;border-radius:999px;background:#E51A31;color:#FFFDF8;min-height:34px;font:800 11.5px 'Manrope',sans-serif;cursor:pointer;">agendar ${dia.horaRot} ▸</button>
-        </div>` : ''}
+        ${dia.colocando ? pfRelogioHTML(dia, 'data-pl6-acao', 'agendar') : ''}
         ${dia.vazio ? `<span style="text-align:center;font:700 9.5px/1.5 'Manrope',sans-serif;color:#B4AC9C;border:1.5px dashed #D8D2C4;border-radius:10px;padding:12px 10px;">${dia.vazioRot}</span>` : ''}
         ${dia.passou && d.temSel ? `<span style="text-align:center;font:800 9.5px/1.5 'Manrope',sans-serif;color:#B4AC9C;">este dia já passou</span>` : ''}
       </div>
