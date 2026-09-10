@@ -12675,6 +12675,16 @@ function fn2Gaveta(itens) {
 
 const FN3_ETAPA_ONBOARDING = '1396006163';
 
+function fn3PassoAbertoDoLead(lead) {
+  const ts = Array.isArray(lead && lead.tarefas) ? lead.tarefas : [];
+  const abertas = ts.filter(t => t && t.subject);
+  if (!abertas.length) return null;
+
+  return abertas.slice().sort(function (a, b) {
+    return String(a.timestamp || '9999') < String(b.timestamp || '9999') ? -1 : 1;
+  })[0];
+}
+
 function etapaPedeProximoPasso(etapaId) {
   const id = String(etapaId || '');
   if (id === ETAPA_PERDIDO_ID) return false;
@@ -13269,6 +13279,8 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
   const prontos = voltando ? 0 : todosOsCampos.length - campos.length;
 
   const exigePasso = etapaPedeProximoPasso(para);
+
+  const passoAberto = exigePasso ? fn3PassoAbertoDoLead(lead) : null;
   const sugerido = (() => {
     if (!exigePasso) return null;
     try {
@@ -13318,11 +13330,19 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
       ${campos.length ? `<div id="fn3Campos" class="pe-campos">${campos.map(c =>
         campoPassagemHTML(c, valorAtualDoCampo(lead, c))).join('')}</div>` : ''}
 
-      ${exigePasso ? `<div class="fn3-passo">
+      ${exigePasso && passoAberto ? `<div class="fn3-reg-aviso">
+        Este negócio <b>já tem um próximo passo aberto</b>: «${esc(passoAberto.subject)}»${
+          passoAberto.timestamp ? ' · <b>' + esc(fmtDailyLabel(isoDate(new Date(passoAberto.timestamp)))) + '</b>' : ''}.
+        <b>Não vou criar outro</b> — um negócio, um próximo passo. Se ele não descreve mais
+        o que vem agora, troque o texto na ficha do negócio.
+        <button type="button" id="fn3PassoOutro" class="btn-txt">preciso de mais um passo, além desse</button>
+      </div>` : ''}
+
+      ${exigePasso ? `<div class="fn3-passo" id="fn3PassoBox"${passoAberto ? ' style="display:none;"' : ''}>
         <span>próximo passo:</span>
         <input type="text" id="fn3PassoAcao" placeholder="o que você vai fazer"
-          value="${esc(sugerido ? sugerido.acao : '')}">
-        <input type="date" id="fn3PassoData" value="${esc(sugerido ? sugerido.data : '')}">
+          value="${esc(passoAberto ? '' : (sugerido ? sugerido.acao : ''))}">
+        <input type="date" id="fn3PassoData" value="${esc(passoAberto ? '' : (sugerido ? sugerido.data : ''))}">
       </div>` : ''}
     </div>
 
@@ -13353,6 +13373,17 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
     btn.setAttribute('aria-pressed', String(escolhas[i]));
     btn.textContent = evid[i].t + (escolhas[i] ? ' ✓' : '');
   }));
+
+  const btnOutro = fundo.querySelector('#fn3PassoOutro');
+  if (btnOutro) btnOutro.addEventListener('click', () => {
+    const caixa = fundo.querySelector('#fn3PassoBox');
+    if (!caixa) return;
+    caixa.style.display = 'flex';
+    btnOutro.disabled = true;
+    btnOutro.textContent = 'ok — descreva o passo a mais abaixo';
+    const campo = caixa.querySelector('#fn3PassoAcao');
+    if (campo) campo.focus();
+  });
 
   const fechar = () => {
     fundo.remove();
@@ -13385,12 +13416,17 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
       return;
     }
     let passoAcao = '', passoData = '';
-    if (exigePasso) {
+
+    const caixaPasso = fundo.querySelector('#fn3PassoBox');
+    const pedindoOutro = !!(caixaPasso && caixaPasso.style.display !== 'none');
+    if (exigePasso && (!passoAberto || pedindoOutro)) {
       passoAcao = (fundo.querySelector('#fn3PassoAcao').value || '').trim();
       passoData = fundo.querySelector('#fn3PassoData').value || '';
       if (!passoAcao || !passoData) {
         status.className = 'fn3-reg-status is-erro';
-        status.textContent = 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
+        status.textContent = passoAberto
+          ? 'Você pediu um passo a mais: escreva a ação e a data, ou feche esta caixa e siga com o passo que já existe.'
+          : 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
         return;
       }
     }
@@ -13423,6 +13459,11 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} ✓ — a resposta do HubSpot demorou`
           + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
           + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
+      } else if (passoOk && !passoData) {
+
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''}`
+          + ` · o próximo passo que já existia continua valendo: «${esc(passoAberto ? passoAberto.subject : '')}»`
+          + ` — nenhuma tarefa nova foi criada.`, 'sucesso');
       } else if (passoOk) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''} · próximo passo em ${fmtDailyLabel(passoData)}.`, 'sucesso');
       } else {

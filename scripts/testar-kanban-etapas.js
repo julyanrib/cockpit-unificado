@@ -972,6 +972,129 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
 })();
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   UM NEGÓCIO, UM PRÓXIMO PASSO ABERTO (10/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "cada vez que eu passo o lead de etapa ele fica marcando na aba hoje do
+   executivo... fiz a venda na hora, passando por todos os kanbans e ficou lá várias
+   atividades pra ele fazer".
+
+   O CASO DELE ESTÁ NO CRM: o LUMIERE BISTRO & CAFE (negócio 64903734418, Marco) recebeu
+   CINCO tarefas em menos de três minutos em 09/09 — 19:19:44, 19:19:47, 19:19:58,
+   19:20:04 e 19:22:43 — uma por kanban atravessado, todas NOT_STARTED e todas vencendo
+   naquele mesmo dia. Duas com o texto idêntico, porque a cadência é indexada por
+   SITUAÇÃO (cadencias.json) e duas passagens seguidas caem na mesma régua.
+
+   NA BASE INTEIRA, medido no snapshot: 333 tarefas abertas em 136 negócios — 102 com uma
+   (o saudável), 24 com duas ou três, 11 com QUATRO OU MAIS; 196 das 333 são excedente e
+   21 são duplicatas idênticas. A aba "Hoje" do time estava inflada ~2,4x.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const rotaNota = fs.readFileSync(path.join(raiz, 'lib', 'acoes-negocio', 'criar-nota-negocio.js'), 'utf8');
+  /* comentário não conta: a nota que explica o defeito cita a forma errada, e a
+     checagem ingênua acusa a explicação (a suíte já tropeçou nisso no semanal). */
+  const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+  function corpoDe(fonte, nome) {
+    const i = fonte.indexOf('function ' + nome + '(');
+    if (i < 0) return '';
+    let d = 0, j = i, viu = false;
+    for (; j < fonte.length; j++) {
+      const c = fonte[j];
+      if (c === '{') { d++; viu = true; }
+      else if (c === '}') { d--; if (viu && d === 0) return fonte.slice(i, j + 1); }
+    }
+    return '';
+  }
+  const aberto = semCom(corpoDe(template, 'fn3PassoAbertoDoLead'));
+  const painel = semCom(corpoDe(template, 'fn3AbrirRegistro'));
+  const rota = semCom(rotaNota);
+
+  checar('um passo aberto: as duas metades existem com corpo',
+    aberto.length > 200 && painel.length > 3000 && rota.length > 3000,
+    'âncora perdida: sem corpo não há medição, e verde aqui seria falso');
+
+  /* ── 1 · UM LUGAR RESPONDE "ELE JÁ TEM UM?" ────────────────────────────────────── */
+  checar('quem responde se já existe passo aberto é fn3PassoAbertoDoLead',
+    /Array\.isArray\(lead && lead\.tarefas\)/.test(aberto)
+      && template.indexOf('function fn3PassoAbertoDoLead(lead)') > -1,
+    'duas respostas para "ele já tem próximo passo" é a tela pedindo tarefa que o CRM já'
+    + ' tem — foi o que empilhou cinco no Lumière');
+
+  checar('e o robô continua trazendo só tarefa NÃO iniciada',
+    robo.indexOf("hs_task_status === 'NOT_STARTED'") > -1,
+    'se o robô passar a trazer tarefa concluída, a tela vai achar que há passo aberto'
+    + ' onde não há — e o negócio fica descoberto sem ninguém ver');
+
+  /* ── 2 · A PASSAGEM NÃO PLANTA UM SEGUNDO PASSO ────────────────────────────────── */
+  checar('a passagem calcula o passo já aberto antes de sugerir outro',
+    painel.indexOf('const passoAberto = exigePasso ? fn3PassoAbertoDoLead(lead) : null;') > -1,
+    'sem esta linha cada kanban atravessado planta uma tarefa nova vencendo hoje');
+
+  checar('e com um aberto os campos nascem vazios e a caixa fechada',
+    painel.indexOf('style="display:none;"') > -1
+      && painel.indexOf("esc(passoAberto ? '' : (sugerido ? sugerido.acao : ''))") > -1,
+    'campo pré-preenchido com a caixa fechada grava tarefa que ninguém pediu');
+
+  /* display:none E NÃO `hidden`: .fn3-passo tem display:flex na folha, e o atributo
+     hidden perde dessa regra — foi assim que o seletor de região nasceu aberto. */
+  checar('a caixa abre por style.display, e não por hidden',
+    painel.indexOf("caixa.style.display = 'flex';") > -1
+      && !/id="fn3PassoBox"[^>]*\shidden/.test(painel),
+    'hidden perde para display:flex da folha: a caixa nasceria aberta e a trava não'
+    + ' existiria');
+
+  /* ── 3 · A VALIDAÇÃO SEGUE A REGRA ───────────────────────────────────────────────
+     Cobrar ação e data de quem já tem passo aberto era o que empilhava tarefa: o
+     executivo preenchia porque a tela exigia. */
+  checar('quem já tem passo aberto não é cobrado a criar outro',
+    painel.indexOf('if (exigePasso && (!passoAberto || pedindoOutro)) {') > -1
+      && painel.indexOf("caixaPasso.style.display !== 'none'") > -1,
+    'a exigência de preencher é o que faz a tarefa nascer — sem esta condição a trava'
+    + ' não vale nada');
+
+  checar('e quem pediu um passo a mais é cobrado',
+    painel.indexOf('Você pediu um passo a mais') > -1,
+    'abrir a caixa e confirmar vazio criaria passagem sem o passo que ele mesmo pediu');
+
+  /* ── 4 · O TOAST NÃO INVENTA DATA ────────────────────────────────────────────────
+     Sem tarefa nova, `passoData` é '' e o ramo antigo diria "próximo passo em Invalid
+     Date" — o mesmo defeito que o Perdido teve quando passou a ser isento. */
+  checar('sem tarefa nova, o toast diz qual passo ficou valendo',
+    painel.indexOf('passoOk && !passoData') > -1 && painel.indexOf('continua valendo') > -1,
+    '"próximo passo em Invalid Date" foi o defeito do Perdido, e ele volta por aqui');
+
+  /* ── 5 · A ROTA RECUSA A GÊMEA, E SÓ LÊ ─────────────────────────────────────────
+     A trava mora onde a escrita acontece: são SEIS os lugares que criam próximo passo.
+     E a busca é por ASSOCIAÇÃO ao negócio — "Follow-up - Identificar o nome e o horário
+     do decisor" é assunto que existe em vários negócios ao mesmo tempo. */
+  /* PINA O CAMINHO DO DADO, e não os textos (10/09/26). A primeira versão desta
+     checagem procurava 'associations/tasks' e 'jaExistia: true' no arquivo; a sabotagem
+     trocou `const ids = (dAssoc.results...)` por `const ids = []` — a trava virou letra
+     morta com todos os textos no lugar, e a guarda deu VERDE. */
+  checar('a rota procura a gêmea pelas tarefas ASSOCIADAS ao negócio',
+    rota.indexOf('associations/tasks') > -1
+      && rota.indexOf('(dAssoc.results || []).map(x => String(x.toObjectId || x.id))') > -1
+      && rota.indexOf('inputs: ids.slice(0, 100)') > -1
+      && rota.indexOf("'hs_task_subject', 'hs_task_status', 'hs_timestamp'") > -1
+      && rota.indexOf("!== 'NOT_STARTED'") > -1
+      && rota.indexOf('jaExistia: true') > -1,
+    'casar por assunto solto no portal recusaria a tarefa legítima de outro negócio —'
+    + ' e trava que não recebe os ids da associação é trava que não mede nada');
+
+  checar('e a rota não altera nem apaga tarefa nenhuma',
+    rota.indexOf("hs_task_status: 'COMPLETED'") < 0
+      && !/objects\/tasks\/[^\n]*\n?[^\n]*method: 'DELETE'/.test(rota),
+    'fechar ou apagar tarefa existente é escrita que o Julyan não autorizou — a trava é'
+    + ' recusar criar, não mexer no que está lá');
+
+  /* LEITURA QUE FALHA NÃO IMPEDE A CRIAÇÃO: trocar duplicata por negócio descoberto é
+     pior. O catch vazio é deliberado. */
+  checar('e se a leitura falhar, o passo é criado do mesmo jeito',
+    rotaNota.indexOf('a trava e uma rede, nao uma porteira') > -1,
+    'deixar de criar o próximo passo por causa de uma leitura é trocar duplicata por'
+    + ' negócio sem próximo passo — o furo que o gestor cobra às 8h30');
+}());
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
