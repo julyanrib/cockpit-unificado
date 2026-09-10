@@ -430,6 +430,98 @@ conferir('o piso de 44px cita os atributos que a tela nova emite',
     'gancho passado e nunca lido: o toast sairia o comum e o comentario estaria mentindo');
 }());
 
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   OS DOIS BLOCOS NAS DUAS TELAS (10/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "o executivo pode escolher fazer prospeccoes novas, visitas de relacionamento e
+   colocar na daily... mesma coisa no planejamento, sem perder nada visual, e sempre
+   sabendo que as duas telas se conversam".
+
+   MEDIDO NO NAVEGADOR ANTES DE ESCREVER, e era pior que "falta o botao no Planejamento":
+     rua no Planejamento ..... desenha
+     bloqueado ............... desenha
+     REL no Planejamento ..... TypeError: Cannot read properties of undefined ('nome')
+     os tres na Daily ........ desenham
+   O bloco de relacionamento que a Daily aprendeu a criar entra na MESMA grade que o
+   Planejamento le, e o mapeador dela nao tinha o ramo 'rel'. Quem marcasse relacionamento
+   na Daily e abrisse o Planejamento perdia a aba inteira. */
+(function () {
+  const pl6Bloco = semCom(corpoDe('pl6BlocoDoSlot'));
+  const pl6Dados = semCom(corpoDe('pl6DadosFinal'));
+  const pl6Tela = semCom(corpoDe('pl6TelaFinalHTML'));
+  const pl6Fi = semCom(corpoDe('pl6Ligar'));
+  const munNome = semCom(corpoDe('d7NomeDaMunicao'));
+
+  /* ── 1 · UM LUGAR DESCREVE OS DOIS BLOCOS ───────────────────────────────────────── */
+  conferir('os dois blocos são descritos numa função só',
+    /* EXIGE O `id:` DE CADA UM, e não a menção ao nome da constante: a primeira versão
+       aceitava a função com `id: 'x'` no ramo do relacionamento, porque PL6_REL continuava
+       citado no `if` acima. Sabotagem passou verde. O que importa é o que ela DEVOLVE —
+       é o id devolvido que a grade grava e as duas telas leem. */
+    /id: PL6_RUA, tipo: 'rua'/.test(pl6Bloco) && /id: PL6_REL, tipo: 'rel'/.test(pl6Bloco)
+      && pl6Bloco.indexOf('cor:') > -1,
+    'nome, subtítulo e cor viviam escritos na Daily e no Planejamento, e foi a segunda'
+    + ' cópia que nasceu conhecendo só um dos dois blocos');
+  conferir('e nenhuma das duas telas repete o nome deles à mão',
+    munNome.indexOf("'Prospecção de rua'") === -1
+      && pl6Dados.indexOf("'Visita de relacionamento'") === -1,
+    'nome cravado numa tela é o que faz as duas divergirem sem ninguém notar');
+
+  /* ── 2 · O PLANEJAMENTO LÊ OS DOIS — INCLUSIVE O QUE O DERRUBAVA ────────────────── */
+  conferir('o mapeador do Planejamento trata rel, e não cai no lead que não existe',
+    /const bl = it\.tipo === 'rua' \? pl6BlocoDoSlot\(PL6_RUA\)[\s\S]{0,120}?it\.tipo === 'rel'/
+      .test(pl6Dados),
+    'sem o ramo rel ele cai em it.lead.nome de um item sem lead: TypeError e a aba do'
+    + ' Planejamento não desenha — medido no navegador em 10/09');
+
+  /* ── 3 · O PLANEJAMENTO CRIA OS DOIS, PELO GESTO QUE JÁ EXISTIA ─────────────────── */
+  conferir('o Planejamento desenha os dois blocos na munição',
+    pl6Tela.indexOf('data-pl6-acao="${bl.on}"') > -1 && pl6Dados.indexOf("on: 'bloco:' + id") > -1,
+    'a Daily criava os dois e o Planejamento só sabia ler — o executivo montava a semana'
+    + ' sem poder reservar hora para rua nem para relacionamento');
+  conferir('e o verbo bloco usa a mesma fiação da conta',
+    /if \(verbo === 'bloco'\)/.test(pl6Fi) && /s\.sel = mesma \? null : \{ lead: \{ id: bl\.id/.test(pl6Fi),
+    'fiação nova para o mesmo gesto seria uma segunda forma de escolher o que vai na hora');
+
+  /* ── 4 · BLOCO NÃO GERA TAREFA ÓRFÃ NO CRM ───────────────────────────────────────── */
+  conferir('o bloco grava direto na grade, sem passar pelo criador de tarefa',
+    /if \(s\.sel\.bloco\) \{[^}]{0,400}?g\[di\]\[destino\] = \{ id: bl\.id, hora: hora \}/.test(pl6Fi),
+    'pl6AgendarNoSlot cria a TAREFA pendurada no negócio, e bloco não tem negócio:'
+    + ' tarefa sem deal é tarefa órfã no HubSpot');
+
+  /* ── 5 · AS DUAS TELAS EXPLICAM A MESMA COISA ────────────────────────────────────── */
+  const frase = 'o que prova a visita é o check-in do Expogo';
+  conferir('as duas telas dizem a mesma frase sobre o que prova a visita',
+    (tpl.split(frase).length - 1) >= 2,
+    'quem lê o registro depois tem de ver a mesma explicação nas duas telas, não duas');
+  conferir('e o Planejamento diz de onde vem cada número',
+    pl6Tela.indexOf('Supabase planos_semanais') > -1 && pl6Tela.indexOf('Expogo') > -1
+      && pl6Tela.indexOf('a MESMA linha que a') > -1,
+    'a Daily tinha rodapé de procedência e o Planejamento não tinha nenhum, e as duas'
+    + ' escrevem no mesmo lugar');
+
+  /* ── 6 · A PRANCHA CABE NO CELULAR — AS DUAS CAUSAS ──────────────────────────────────
+     Varredura das sete abas do executivo a 375px com estilo computado. Duas causas
+     diferentes, as duas invisíveis para transbordo de corpo e para piso de toque:
+       grade com coluna fixa em px .... o minmax(0,1fr) colapsa a ZERO e a fixa transborda
+       min-width fixo no cabeçalho .... a caixa se recusa a encolher e o H1 é cortado
+     No Desenvolvimento as duas juntas cortavam o H1 no meio da palavra. */
+  const css = tpl.slice(0, tpl.indexOf('</style>'));
+  conferir('as grades de coluna fixa empilham no celular, nas três telas',
+    css.indexOf('[data-d7-raiz] > div[style*="grid-template-columns:minmax(0,1fr) 330px"]') > -1
+      && css.indexOf('#agendaContent > div > div[style*="grid-template-columns:minmax(0,1fr) 330px"]') > -1
+      && css.indexOf('#viewPDIs div[style*="grid-template-columns:minmax(0,1fr) 430px"]') > -1,
+    'coluna fixa em px esmaga a flexível a zero: a 375px sobram ~20px para o conteúdo e'
+    + ' um ancestral com overflow:hidden corta o texto sem a página rolar de lado');
+  conferir('e nenhum cabeçalho se recusa a encolher no celular',
+    css.indexOf('#agendaContent div[style*="min-width:320px"]') > -1
+      && css.indexOf('#viewPDIs div[style*="min-width:300px"]') > -1
+      && css.indexOf('{min-width:0 !important;}') > -1,
+    'min-width:300px num pai de 282px são 18px de texto cortado dentro de um card com'
+    + ' overflow:hidden — foi o H1 do Desenvolvimento, e achou o screenshot');
+}());
+
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');

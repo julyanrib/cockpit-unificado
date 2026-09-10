@@ -1294,6 +1294,17 @@
     [data-d7-raiz] > div[style*="grid-template-columns:minmax(0,1fr) 330px"] > div:last-child{
       border-left:0 !important;border-top:1px solid #E7E3DA;
     }
+
+    #agendaContent > div > div[style*="grid-template-columns:minmax(0,1fr) 330px"],
+    #viewPDIs div[style*="grid-template-columns:minmax(0,1fr) 430px"]{
+      display:block !important;
+    }
+    #agendaContent > div > div[style*="grid-template-columns:minmax(0,1fr) 330px"] > div:last-child{
+      border-left:0 !important;border-top:1px solid #E7E3DA;
+    }
+
+    #agendaContent div[style*="min-width:320px"],
+    #viewPDIs div[style*="min-width:300px"]{min-width:0 !important;}
   }
 
   .g14{background:var(--panel);}
@@ -20455,6 +20466,20 @@ function pl6PrimeiraVaga(grade, di) {
   }
   return -1;
 }
+
+function pl6BlocoDoSlot(id) {
+  const s = String(id || '');
+  if (s === PL6_RUA) {
+    return { id: PL6_RUA, tipo: 'rua', nome: 'Prospecção de rua',
+      sub: 'porta a porta · sem conta definida', cor: PL6_RUA_COR };
+  }
+  if (s === PL6_REL) {
+    return { id: PL6_REL, tipo: 'rel', nome: 'Visita de relacionamento',
+      sub: 'cliente da base · presença, indicação e upsell', cor: PL6_REL_COR };
+  }
+  return null;
+}
+
 function pl6ItensDoDia(coluna, porId) {
   const col = Array.isArray(coluna) ? coluna : [];
   const itens = [];
@@ -20879,16 +20904,19 @@ function pl6DadosFinal(rep) {
         vazioRot: 'dia livre — escolha uma conta na munição e coloque na hora que quiser',
         agenda: itens.map(function (it) {
           const movendo = !!(s.sel && s.sel.deDi === di && s.sel.deSi === it.si);
-          const nome = it.tipo === 'rua' ? 'prospecção de rua'
+
+          const bl = it.tipo === 'rua' ? pl6BlocoDoSlot(PL6_RUA)
+            : (it.tipo === 'rel' ? pl6BlocoDoSlot(PL6_REL) : null);
+          const nome = bl ? bl.nome.toLowerCase()
             : (it.tipo === 'bloqueado' ? 'bloqueado' : it.lead.nome);
-          const sub = it.tipo === 'rua' ? 'porta a porta · sem conta definida'
+          const sub = bl ? bl.sub
             : (it.tipo === 'bloqueado' ? 'compromisso fora da rua'
               : [it.lead.etapa || (it.lead.tipo === 'n' ? 'sem negócio' : null),
                 it.lead.regiaoNome || null].filter(Boolean).join(' · '));
           return {
             hora: esc(it.hora || 'sem hora'),
             nome: esc(nome), sub: esc(sub),
-            etCor: it.tipo === 'rua' ? PL6_RUA_COR
+            etCor: bl ? bl.cor
               : (it.tipo === 'bloqueado' ? '#B4AC9C' : pfEtCor(it.lead ? it.lead.etapa : '')),
             cardBorda: movendo ? '#E51A31' : '#E7E3DA',
             mover: 'mover:' + di + ':' + it.si,
@@ -20896,6 +20924,21 @@ function pl6DadosFinal(rep) {
             arraste: di + ':' + it.si
           };
         })
+      };
+    }),
+
+    blocos: [PL6_RUA, PL6_REL].map(function (id) {
+      const bl = pl6BlocoDoSlot(id);
+      const sel = !!(pl6UI.sel && pl6UI.sel.bloco === id);
+      return {
+        on: 'bloco:' + id,
+        rot: esc((id === PL6_RUA ? '⌖ ' : '♥ ') + bl.nome.toLowerCase()
+          + (sel ? ' — escolha o horário ▸' : '')),
+        sub: esc(bl.sub + ' · sem negócio no HubSpot; o que prova a visita é o Expogo'),
+        cor: sel ? '#E51A31' : bl.cor,
+        borda: sel ? '#E51A31' : '#D8D2C4',
+        bg: sel ? '#FDF3F4' : '#FDFEFF',
+        sel: sel
       };
     }),
     filtros: [['todas', 'todas'], ['carteira', 'minha carteira'], ['casa', 'casa dos dados'],
@@ -21252,7 +21295,7 @@ function pl6TelaFinalHTML(d) {
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:stretch;">
       <div style="padding:18px 22px 24px;min-width:0;">
         <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start;">${diasHTML}</div>
-        <span style="display:block;font:700 10px/1.6 'Manrope',sans-serif;color:#7A8494;margin-top:12px;">▸ agendou aqui = o lead entra <b style="color:#E51A31;">automaticamente na sua Daily</b> do dia, com hora — sem redigitar nada · ✕ devolve pra munição · clique num card agendado pra movê-lo de horário</span>
+        <span style="display:block;font:700 10px/1.6 'Manrope',sans-serif;color:#7A8494;margin-top:12px;">▸ agendou aqui = o lead entra <b style="color:#E51A31;">automaticamente na sua Daily</b> do dia, com hora — sem redigitar nada · ✕ devolve pra munição · clique num card agendado pra movê-lo de horário · os dois blocos da munição (prospecção de rua e visita de relacionamento) ocupam hora do mesmo jeito e aparecem na Daily junto das visitas</span>
 
         <div style="margin-top:14px;background:#FBFAF6;border:1px solid #E7E3DA;border-radius:12px;padding:12px 16px;">
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:9px;">
@@ -21267,13 +21310,36 @@ function pl6TelaFinalHTML(d) {
       <div data-pl6-municao="1" style="border-left:1px solid #E7E3DA;background:#FBFAF6;padding:18px 18px 20px;min-width:0;overflow:auto;max-height:1200px;">
         <span style="display:block;font:900 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#7A8494;margin-bottom:4px;">Munição da semana</span>
         <span style="display:block;font:700 10px 'Manrope',sans-serif;color:#7A8494;margin-bottom:10px;">clique na conta → clique no horário livre</span>
-        <button type="button" data-pl6-novo-lead="1" style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF3F4;padding:9px 12px;font:800 10.5px 'Manrope',sans-serif;color:#E51A31;cursor:pointer;text-align:center;margin-bottom:10px;">+ criar lead novo — Instagram, Maps, rua</button>
+        <button type="button" data-pl6-novo-lead="1" style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF3F4;padding:9px 12px;font:800 10.5px 'Manrope',sans-serif;color:#E51A31;cursor:pointer;text-align:center;margin-bottom:6px;">+ criar lead novo — Instagram, Maps, rua</button>
+        <!-- ══ OS DOIS BLOCOS, IGUAIS AOS DA DAILY (10/09/26) ══════════════════════════
+             A Daily criava os dois e o Planejamento só sabia LER um deles. O gesto aqui é
+             o mesmo da conta — escolher e clicar no horário do dia — e por isso eles usam
+             data-pl6-acao, a mesma fiação, com o verbo "bloco".
+             SELECIONADO ELE FICA VERMELHO, igual à conta escolhida: é o mesmo estado de
+             "estou com isto na mão", e dois códigos de cor para o mesmo estado seriam
+             duas linguagens na mesma tela. -->
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
+          ${(d.blocos || []).map(bl => `
+          <button type="button" data-pl6-acao="${bl.on}" style="display:block;width:100%;text-align:left;border:1.5px ${bl.sel ? 'solid' : 'dashed'} ${bl.borda};border-radius:10px;background:${bl.bg};padding:8px 12px;cursor:pointer;min-width:0;">
+            <b style="display:block;font:800 10.5px 'Manrope',sans-serif;color:${bl.cor};">${bl.rot}</b>
+            <span style="display:block;font:700 9px/1.4 'Manrope',sans-serif;color:#7A8494;margin-top:2px;">${bl.sub}</span>
+          </button>`).join('')}
+        </div>
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
           ${d.municaoVazia ? `<span style="font:700 10.5px 'Manrope',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;">nada neste filtro.</span>` : ''}
         </div>
       </div>
+    </div>
+
+    <div style="padding:12px 28px 16px;background:#FBFAF6;border-top:1px solid #E7E3DA;font:700 9.5px/1.6 'Manrope',sans-serif;color:#7A8494;">
+      A semana que você monta aqui: <b>Supabase planos_semanais</b> — a MESMA linha que a
+      sua Minha Daily abre de manhã, com dia e hora · contas, etapas e tarefas:
+      <b>HubSpot</b>, e agendar aqui cria a tarefa lá · contas-alvo novas:
+      <b>leads_prospeccao</b> · a visita feita: <b>Expogo</b>, o app de campo — é o
+      check-in dele que prova a rua e a visita de relacionamento, porque nenhuma das duas
+      tem negócio para pendurar tarefa no CRM.
     </div>
 
     ${d.temFicha ? pl6FichaPainelHTML(d, fichaCamposHTML, fichaEtapasHTML,
@@ -21831,6 +21897,17 @@ function pl6Ligar(box, rep) {
         return redesenhar();
       }
 
+      if (verbo === 'bloco') {
+        const bl = pl6BlocoDoSlot(arg);
+        if (!bl) return redesenhar();
+        const mesma = s.sel && s.sel.bloco === bl.id;
+        s.sel = mesma ? null : { lead: { id: bl.id, nome: bl.nome }, bloco: bl.id };
+        s.diaAtivo = null;
+        pl6Ficha = null;
+        s.toast = null;
+        return redesenhar();
+      }
+
       if (verbo === 'soltar') { s.sel = null; s.diaAtivo = null; s.toast = null; return redesenhar(); }
 
       if (verbo === 'abrirdia') {
@@ -21880,6 +21957,19 @@ function pl6Ligar(box, rep) {
         if (destino < 0) {
           s.toast = dias0[di].rot + ' está com ' + PL6_SLOTS + ' contas — tire uma para pôr outra';
           return redesenhar();
+        }
+
+        if (s.sel.bloco) {
+          const bl = pl6BlocoDoSlot(s.sel.bloco);
+          const g = pl6GradeDoPlano();
+          g[di][destino] = { id: bl.id, hora: hora };
+          s.sel = null; s.diaAtivo = null;
+          return mutar({ grade: g }, dias0[di].rot + ' ' + hora + ' · '
+            + (bl.id === PL6_RUA
+              ? 'prospecção de rua no plano ✓ Supabase — sem tarefa no CRM (não há negócio);'
+                + ' registre as contas visitadas no Expogo'
+              : 'visita de relacionamento no plano ✓ Supabase — cliente da base, sem negócio'
+                + ' novo no CRM; o que prova a visita é o check-in do Expogo'));
         }
         const idSel = s.sel.lead.id;
         s.sel = null; s.diaAtivo = null;
@@ -31815,8 +31905,9 @@ function d7CartaoDoDiaHTML(v, soLeitura) {
 
 function d7NomeDaMunicao(rep, id) {
   if (!id) return '';
-  if (id === PL6_RUA) return 'Prospecção de rua';
-  if (id === PL6_REL) return 'Visita de relacionamento';
+
+  const bl = (typeof pl6BlocoDoSlot === 'function') ? pl6BlocoDoSlot(id) : null;
+  if (bl) return bl.nome;
   const l = pl6TodasAsContas(rep, pl6Regioes(rep)).find(x => String(x.id) === String(id));
   return l ? l.nome : 'esta conta';
 }
