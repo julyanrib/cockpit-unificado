@@ -1,29 +1,30 @@
 /* ══════════════════════════════════════════════════════════════════════════════════════
-   A MINHA DAILY — A TELA QUE ELE ABRE NA RUA (09/09/26)
+   A MINHA DAILY — A PRANCHA v2 (10/09/26)
    ══════════════════════════════════════════════════════════════════════════════════════
-   Julyan: "sabendo que a aba daily deles se conversam e voce ja pegou toda a identidade
-   visual da aba planejamento, voce consegue redesenhar a aba daily? ... sem clique morto,
-   tudo fazendo sentido".
+   Julyan: "vamos repaginar a aba daily, lembrando que a gente ja tem todas as ligações
+   possiveis, quero tudo perfeito" — com daily-final-v2-STANDALONE.html como fonte da
+   verdade.
 
-   ══ POR QUE ESTA SUÍTE NASCE AGORA ═════════════════════════════════════════════════
-   A Minha Daily tinha UMA suíte (testar-d7-acao.js) e ela cobre a lógica da AÇÃO — de
-   quem é a promessa, qual atalho a etapa sugere, o retorno que não cai no passado. O
-   DESENHO e a FIAÇÃO não tinham guarda nenhuma. E este é o aparelho onde a tela é de
-   fato usada: telefone, na rua, com uma mão.
+   ══ O QUE ESTA SUÍTE MEDIA ANTES, E POR QUE MUDOU ═══════════════════════════════════
+   Ela media a casca de 09/09: `minhaDaily7aHTML` desenhava as 298 linhas de markup, o
+   cartão da visita era `d7LinhaVisita` e o resto do dia era `d7CartaoSimples`. Com a
+   prancha v2 a montagem passou a DELEGAR (contrato + markup, como o Planejamento) e os
+   dois cartões viraram UM — d7CartaoDoDiaHTML, alimentado por d7CartaoDoItem, usado
+   também pelo roteiro do gestor.
 
-   O redesenho de hoje provou a falta em cinco minutos: a casca nova não tinha a classe
-   `.d7`, que é por onde `renderDaily` acha o nó para ligar o ouvinte. A tela desenharia
-   inteira e NENHUM clique funcionaria. Foi a guarda do build que pegou — e ela pega o
-   seletor, não a regra. Aqui a regra tem nome.
+   Dezessete checagens desta suíte reprovaram na troca. Nenhuma delas estava errada: elas
+   fixavam a forma antiga. O que era regra continua medido aqui, na forma nova; o que era
+   forma saiu com a forma. Está tudo dito nas notas de cada bloco — suíte que muda sem
+   dizer o que saiu é suíte que ninguém confia na próxima vez.
    ══════════════════════════════════════════════════════════════════════════════════════ */
 const fs = require('fs');
 const path = require('path');
 
 const raiz = path.join(__dirname, '..');
 const tpl = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
-/* sem os comentários: sete vezes neste projeto uma guarda minha leu a nota que documenta
+/* sem os comentários: oito vezes neste projeto uma guarda minha leu a nota que documenta
    o conserto e reprovou o conserto */
-const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ');
+const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
 const codigo = semCom(tpl);
 
 let ok = 0;
@@ -45,17 +46,21 @@ function corpoDe(nome) {
   return '';
 }
 
-const tela = semCom(corpoDe('minhaDaily7aHTML'));
-const cartao = semCom(corpoDe('d7LinhaVisita'));
-const acao = semCom(corpoDe('d7AcaoHTML'));
+const dados = semCom(corpoDe('d7DadosFinal'));
+const tela = semCom(corpoDe('d7TelaFinalHTML'));
+const cartao = semCom(corpoDe('d7CartaoDoDiaHTML'));
+const mapa = semCom(corpoDe('d7CartaoDoItem'));
 const ligar = semCom(corpoDe('d7Ligar'));
+const relogio = semCom(corpoDe('pfRelogioHTML'));
+const painelFicha = semCom(corpoDe('pl6FichaPainelHTML'));
 
-conferir('as quatro funções da tela existem',
-  tela.length > 3000 && cartao.length > 800 && acao.length > 600 && ligar.length > 2000,
+conferir('as funções da prancha existem com corpo',
+  dados.length > 3000 && tela.length > 3000 && cartao.length > 800
+    && mapa.length > 800 && ligar.length > 2000,
   'âncora perdida: sem corpo não há medição, e verde aqui seria falso');
 
 /* ── 1 · A RAIZ TEM O GANCHO, E QUEM PROCURA USA O MESMO ─────────────────────────────
-   Foi o defeito de hoje: casca nova sem a classe que a fiação procurava. A tela desenha
+   Foi o defeito de 09/09: casca nova sem a classe que a fiação procurava. A tela desenha
    bonita e nenhum clique funciona — e nada estoura. */
 conferir('a raiz da tela carrega data-d7-raiz',
   /data-d7-raiz="1"/.test(tela),
@@ -66,178 +71,253 @@ conferir('e quem liga o ouvinte procura por esse gancho',
     && codigo.indexOf("querySelector('.d7')") < 0,
   'gancho de um lado e busca do outro é tela inteira sem fiação, sem erro no console');
 
-/* ── 2 · NENHUM CLIQUE MORTO ─────────────────────────────────────────────────────────
-   Todo verbo que a tela desenha tem de ter alvo no seletor delegado OU ramo próprio.
-   Verbo desenhado sem ouvinte é botão com hover que não faz nada — e o build só olha o
-   arquivo inteiro; aqui a conta é da Minha Daily. */
-/* d7-raiz é o gancho da fiação, d7-municao é âncora de scroll e d7-so-icone é gancho de
-   LARGURA no CSS — nenhum dos três é verbo, e cobrar ouvinte deles seria falso positivo. */
-const desenhados = [...new Set([...(tela + cartao + acao + semCom(corpoDe('d7HorasHTML')))
-  .matchAll(/data-(d7-[a-z-]+)=/g)].map(m => m[1]))]
-  .filter(v => v !== 'd7-raiz' && v !== 'd7-municao' && v !== 'd7-so-icone');
+/* ── 2 · O CONTRATO É FECHADO, NOS DOIS SENTIDOS ─────────────────────────────────────
+   Todo `d.X` que o markup lê tem de ser chave devolvida por d7DadosFinal, e toda chave
+   devolvida tem de ser lida. Foi assim que a Daily do GESTOR amanheceu em branco em
+   09/09: um nome calculado numa função e lido no markup de outra.
 
-/* A CADEIA DO closest É A FIAÇÃO DESTA TELA, e ela é montada por concatenação em várias
-   linhas — por isso o recorte vai do `ev.target.closest(` até o `);`, e não por regex de
-   uma linha (a primeira versão não casou nada e deu 26 verbos "fora da cadeia"). */
+   O MARKUP É A TELA MAIS O QUE ELA DELEGA: o relógio (pfRelogioHTML) e a ficha
+   (pl6FichaPainelHTML) recebem o mesmo `d` e leem 11 dos nomes. Medir só o corpo da tela
+   acusaria os 11 — foi o que aconteceu na suíte do Planejamento hoje. */
+const markup = tela + relogio + painelFicha;
+const lidos = [...new Set([...markup.matchAll(/\bd\.([A-Za-z][A-Za-z0-9_]*)/g)].map(m => m[1]))];
+const iRet = dados.lastIndexOf('\n  return {');
+const entregues = new Set([...dados.slice(iRet > -1 ? iRet : 0)
+  .matchAll(/^\s{4}([A-Za-z][A-Za-z0-9_]*):/gm)].map(m => m[1]));
+const semEntrega = lidos.filter(n => !entregues.has(n));
+const semLeitura = [...entregues].filter(n => lidos.indexOf(n) < 0);
+
+conferir('todo nome que o markup lê é entregue pelo contrato',
+  lidos.length > 15 && semEntrega.length === 0,
+  'o markup lê ' + semEntrega.join(', ') + ' e o contrato não entrega — ReferenceError'
+  + ' leva a aba para "Carregando..." sem dizer por quê');
+
+conferir('e todo nome entregue é lido pelo markup',
+  entregues.size > 15 && semLeitura.length === 0,
+  'o contrato entrega ' + semLeitura.join(', ') + ' e ninguém lê — contrato aberto é o'
+  + ' começo de dois desenhos discordando de qual dado existe');
+
+/* ── 3 · NENHUM CLIQUE MORTO ─────────────────────────────────────────────────────────
+   Todo verbo que a tela desenha tem de estar na cadeia do closest — a fiação desta tela.
+   Presença do atributo em outro lugar do arquivo NÃO conta: em 09/09 uma sabotagem tirou
+   um alvo da cadeia e esta suíte deu verde, porque o atributo ainda aparecia no CSS do
+   piso de toque. */
+const desenhados = [...new Set([...(tela + cartao + relogio + painelFicha
+  + semCom(corpoDe('d7AcaoHTML')))
+  .matchAll(/data-(d7-[a-z-]+)=/g)].map(m => m[1]))]
+  .filter(v => v !== 'd7-raiz' && v !== 'd7-municao' && v !== 'd7-so-icone'
+    && v !== 'd7-dia-drop' && v !== 'd7-arraste');
 const iCadeia = ligar.indexOf('ev.target.closest(');
 const cadeia = iCadeia < 0 ? '' : ligar.slice(iCadeia, ligar.indexOf(');', iCadeia));
 conferir('a cadeia do closest foi encontrada',
   cadeia.length > 300,
   'sem a cadeia esta checagem não mede nada, e o verde seria falso');
 
-/* OS DOIS CAMPOS DE TEXTO são a única exceção: eles não são clicados, são digitados —
-   os ouvintes de input/keydown os leem por querySelector com o valor. Exceção NOMEADA,
-   porque "aceita qualquer coisa que apareça no arquivo" foi exatamente o furo. */
-const DIGITADOS = ['d7-acao-in', 'd7-hora-in'];
+/* os dois campos de texto não são clicados, são digitados — exceção NOMEADA */
+const DIGITADOS = ['d7-acao-in'];
 const semOuvinte = desenhados.filter(function (v) {
   if (DIGITADOS.indexOf(v) > -1) return ligar.indexOf('[data-' + v + '="') < 0;
-  return cadeia.indexOf('[data-' + v + ']') < 0
-    && ligar.indexOf("querySelectorAll('[data-" + v + "]')") < 0;
+  return cadeia.indexOf('[data-' + v + ']') < 0;
 });
-conferir('todo verbo desenhado na Daily tem quem o escute',
-  desenhados.length >= 15 && semOuvinte.length === 0,
+conferir('todo verbo desenhado na Daily está na cadeia do ouvinte',
+  desenhados.length >= 12 && semOuvinte.length === 0,
   'sem ouvinte: ' + semOuvinte.join(', ') + ' — botão com hover que não faz nada é o que'
   + ' faz ele tocar duas vezes e desistir');
 
-/* ── 3 · AS DUAS TELAS DELE FALAM A MESMA COISA ──────────────────────────────────────
-   O cartão de uma visita é desenhado por UMA função e usado em dois lugares: a Minha
-   Daily e o roteiro que o gestor lê. E o dia vem da mesma leitura do Planejamento. */
-conferir('o cartão da visita é o mesmo na tela dele e na leitura do gestor',
-  /d7LinhaVisita\(l\)/.test(tela)
-    && /d7LinhaVisita\(l, true, linha\.planoDia \|\| null\)/.test(codigo),
-  'duas linguagens de cartão para "uma visita do dia" fazem o gestor e o executivo'
-  + ' descreverem a mesma manhã de dois jeitos na rodada');
+/* ── 4 · A IDENTIDADE É A DA PRANCHA v2 ──────────────────────────────────────────────
+   Medido no daily-final-v2-STANDALONE: painel de 16px com a sombra, kicker vermelho,
+   manchete Archivo 900 25px, faixa da promessa em #FBFAF6, e a grade de duas colunas com
+   a munição em 330px. */
+conferir('a casca é o painel da prancha',
+  /* os dois pedaços vêm em linhas concatenadas diferentes do markup — medir texto de
+     código exige olhar como o código escreve, não como eu leria */
+  /border:1px solid #DCE1EA;border-radius:16px;/.test(tela)
+    && /box-shadow:0 12px 40px rgba\(43,52,64,\.12\)/.test(tela),
+  'painel diferente da prancha é a mesma pessoa em dois produtos');
 
-conferir('e o dia vem da leitura compartilhada com o Planejamento',
-  /pl6ItensDoDia\(coluna, porId\)/.test(semCom(corpoDe('d7PlanoDeHoje'))),
-  'a Minha Daily lia o dia em ordem de POSIÇÃO e o kanban em ordem de HORA: a mesma manhã'
-  + ' em duas ordens, nas duas telas de quem vai para a rua');
-
-/* ── 4 · A IDENTIDADE É A DA PRANCHA DO PLANEJAMENTO ─────────────────────────────────
-   Ele pediu a mesma identidade visual. Não é gosto: quem sai de uma tela e entra na outra
-   não deve trocar de idioma no meio do dia. */
-conferir('a casca é o painel da prancha (16px, sombra, linha #DCE1EA)',
-  /border-radius:16px;box-shadow:0 12px 40px rgba\(43,52,64,\.12\)/.test(tela)
-    && /border:1px solid #DCE1EA/.test(tela),
-  'painel diferente do Planejamento é a mesma pessoa em dois produtos');
-
-/* A ASPA VEM ESCAPADA no markup por concatenação (\'Archivo\'), diferente do template
-   literal do Planejamento. A primeira versão desta checagem procurava a aspa nua e
-   reprovou o arquivo correto — medir texto de código exige olhar como o código escreve,
-   não como eu leria. */
 conferir('o cabeçalho tem o kicker vermelho e a manchete Archivo 900 25px',
-  /letter-spacing:\.14em;text-transform:uppercase;color:#E51A31/.test(tela)
+  /letter-spacing:\.14em;'\s*\n?\s*\+\s*'text-transform:uppercase;color:#E51A31/.test(tela)
     && /font:900 25px\/1\.25 \\?'Archivo\\?'/.test(tela),
   'o cabeçalho é a assinatura das duas telas — kicker, manchete e três números');
 
 conferir('a faixa da promessa usa o fundo e o rótulo da prancha',
-  /padding:13px 28px;background:#FBFAF6;border-bottom:1px solid #E7E3DA/.test(tela)
-    && /letter-spacing:\.12em;text-transform:uppercase;color:#E51A31;">A sua promessa de hoje/.test(tela),
+  /background:#FBFAF6;border-bottom:1px solid #E7E3DA/.test(tela)
+    && />A promessa de hoje</.test(tela),
   'a faixa é onde as duas telas dizem "a sua palavra" — mesma forma, mesmo lugar');
 
-conferir('e o cartão da visita tem trilho de 3px e pill de hora ink',
-  /flex:none;width:3px;background:' \+ cor/.test(cartao)
-    && /color:#FFFDF8;background:#2B3440;border-radius:999px/.test(cartao),
-  'o trilho na cor da etapa e a pill escura da hora são o cartão do Planejamento');
+conferir('a munição é a coluna de 330px da prancha',
+  /grid-template-columns:minmax\(0,1fr\) 330px/.test(tela)
+    && /border-left:1px solid #E7E3DA;background:#FBFAF6/.test(tela),
+  'a prancha desenha o dia e a munição lado a lado, e a largura é dela');
 
-/* ── 5 · A PROMESSA É DERIVADA, NUNCA DIGITADA ───────────────────────────────────────
-   Lei 3 da prancha original desta tela, e a razão de ela existir: a Daily antiga tinha
-   contadores com −/+ e ele digitava números que não correspondiam ao dia dele — e o
-   gestor cobrava número digitado, não plano. */
+/* O CARTÃO GANHOU TRILHO DE 4px NA v2 (era 3px na casca de 09/09) e o nome subiu para
+   14px. É medição da prancha, não gosto. */
+conferir('o cartão do dia tem trilho de 4px e pill de hora ink',
+  /flex:none;width:4px;background:' \+ v\.trilho/.test(cartao)
+    && /color:#FFFDF8;background:' \+ v\.horaBg/.test(cartao)
+    && /font:800 14px \\?'Manrope\\?'/.test(cartao),
+  'o trilho na cor da etapa e a pill escura da hora são o cartão da prancha');
+
+/* ── 5 · A PROMESSA É DERIVADA, E A TRAVA CONTINUA AQUI ──────────────────────────────
+   A prancha v2 NÃO desenha a trava; ela fica porque o ramo dela é o que grava
+   planos_diarios (plano_fechado + os quatro prometido_*), que é a linha que o GESTOR lê.
+   Há uma guarda no build sobre isso; esta diz por quê. */
 conferir('os números da promessa saem do plano, e não de um campo',
-  /const prom = d7PromessaDerivada\(rep, plano\);/.test(tela)
+  /const prom = d7PromessaDerivada\(rep, plano\);/.test(dados)
     && !/type="number"/.test(tela),
-  'contador digitável faz o gestor cobrar número que ninguém cumpriu — e a promessa'
-  + ' deixa de descrever o dia');
+  'contador digitável faz o gestor cobrar número que ninguém cumpriu');
 
-conferir('a volta de rua tem chip próprio, e só quando existe',
-  /prom\.ruas \? \[\{ t: prom\.ruas \+ ' volta\(s\) de rua'/.test(tela),
-  'rua não é visita (não tem cliente com nome) e não é prospecção nova (não tem conta):'
-  + ' somar em qualquer um dos dois faz o gestor cobrar o número errado');
+conferir('a trava da promessa continua na tela, apesar de a prancha não a desenhar',
+  /data-d7-travar="1"/.test(tela) && /travaRot/.test(dados),
+  'sem a trava o executivo não fecha o plano e a Daily do gestor passa a dizer'
+  + ' "sem cliente nomeado" para o time todo, todos os dias');
 
-conferir('e a aposta só aparece quando há negociação no dia',
-  /\(apostas\s*\n?\s*\?/.test(tela) && /D7_ETAPAS_DE_MESA\.indexOf/.test(tela),
-  '"palavra dada" sem contrato na mesa é número inventado, e o gestor cobra número'
-  + ' inventado na mesma moeda');
+conferir('e o ritmo é medido contra a hora de Brasília, não contra um número fixo',
+  /agendaAgora\(\)/.test(dados) && /17 - horaAgora/.test(dados),
+  'ritmo cravado num número não é ritmo: às 9h e às 16h a mesma conta significa coisas'
+  + ' diferentes, e new Date() cru erra o dia das 21h à meia-noite');
 
-/* ── 6 · NENHUMA VISITA SEM DESFECHO ────────────────────────────────────────────────
-   Os três desfechos não ficam escondidos atrás do check-in do Expogo: se o Expogo não for
-   usado naquele dia, ele nunca registraria o que aconteceu. */
-/* CINCO ATOS, não três (10/09/26). Faltavam os dois que fechavam o dia sem saída: a
-   Daily não registrava PERDA (a visita que não deu em nada ficava pendente para sempre,
-   e o gestor lia como "não visitou") e não tinha REMARCAR com nome — o ato existia como
-   o ✕ do canto, sem dizer para onde a visita ia. */
-conferir('a régua "como foi?" tem os cinco atos da prancha v2',
-  /const desfechos = \(soLeitura \|\| l\.estado === 'feita'\) \? ''/.test(cartao)
-    && />como foi\?</.test(cartao)
-    && /data-d7-proposta/.test(cartao) && /data-d7-fechou/.test(cartao)
-    && /data-d7-retorno/.test(cartao) && /data-d7-nao-rolou/.test(cartao)
-    && /data-d7-tirar="' \+ l\.si \+ '"'\s*\n?\s*\+ estiloDesf/.test(cartao),
-  'visita sem desfecho é o dia dele sem registro; e sem "não rolou" a perda não tem'
-  + ' onde ser registrada, então ela fica pendente para sempre');
+/* ── 6 · A RÉGUA "COMO FOI?" — CINCO ATOS LITERAIS ──────────────────────────────── */
+conferir('a régua tem os cinco atos da prancha',
+  />como foi\?</.test(cartao)
+    && /data-d7-proposta="/.test(cartao) && /data-d7-fechou="/.test(cartao)
+    && /data-d7-retorno="/.test(cartao) && /data-d7-nao-rolou="/.test(cartao)
+    && /data-d7-tirar="/.test(cartao),
+  'sem "não rolou" a perda não tem onde ser registrada e a visita fica pendente para'
+  + ' sempre; sem "remarcar" ela não tem como voltar ao Planejamento');
 
-/* O DESTINO DE "nao rolou" E A ETAPA PERDIDO, e pela MESMA porteira dos outros dois:
-   ela exige motivo_do_perdido com as opcoes do HubSpot. Um seletor de motivo escrito na
-   tela seria uma segunda lista, que divergiria do CRM no primeiro ajuste feito lá. */
-conferir('e "não rolou" move para Perdido pela porteira de etapa',
-  /d\.d7NaoRolou \? FN2_ETAPA_PERDIDO/.test(ligar)
-    && /if \(d\.d7Proposta \|\| d\.d7Fechou \|\| d\.d7NaoRolou\)/.test(ligar),
-  'perda gravada sem a porteira entra no CRM sem motivo — e motivo de perda é o que o'
-  + ' gestor lê para decidir o que treinar');
+conferir('e os cinco são escritos um por um, não a partir de uma lista',
+  (cartao.match(/data-d7-(?:proposta|fechou|retorno|nao-rolou|tirar)="/g) || []).length >= 5
+    && cartao.indexOf("'data-d7-' +") < 0,
+  'atributo montado a partir do dado cega a guarda de clique morto — aconteceu em 09/09');
 
-/* O SELO DO RESULTADO SAI DA ETAPA, não de um estado da tela: guardado na tela, ele
-   sumiria no F5 e discordaria do CRM. */
 conferir('o selo ✓✓ FECHOU é derivado da etapa Ag. Pagamento',
-  /const fechou = isC && String\(lead\.stageId\) === '1395880473';/.test(cartao)
-    && /'✓✓ FECHOU'/.test(cartao),
+  /String\(lead\.stageId\) === '1395880473'/.test(mapa) && /'✓✓ FECHOU'/.test(mapa),
   'selo guardado na tela sobrevive a um F5 dizendo o contrário do HubSpot');
 
-/* MEDE A INTENÇÃO, NÃO A FORMA (10/09/26). A primeira versão desta checagem fixava o
-   texto exato do ✕ (`soLeitura ? '' : '<button ... data-d7-tirar`) e reprovou o dia em
-   que o ✕ mudou de lugar — sendo que a regra continuava valendo. Agora: os DOIS blocos
-   que escrevem são travados por soLeitura, e a contagem de verbos de escrita fecha com
-   o que esses blocos desenham. Verbo novo fora deles quebra a conta.
-   O ✕ SÓ NA VISITA REGISTRADA: na pendente quem tira do dia é o `remarcar ▸`, e sem o ✕
-   na registrada uma visita marcada por engano ficaria presa no dia sem saída. */
-const verbosDeEscrita = (cartao.match(/data-d7-(?:proposta|fechou|retorno|nao-rolou|tirar)=/g) || []).length;
-conferir('e o gestor não ganha os atos do executivo',
-  /soLeitura \? d7AcaoLeituraHTML\(lead, planoDia\) : d7AcaoHTML\(lead\)/.test(cartao)
-    && /const desfechos = \(soLeitura \|\| l\.estado === 'feita'\) \? ''/.test(cartao)
-    && /\(\(soLeitura \|\| l\.estado !== 'feita'\) \? ''/.test(cartao)
-    && verbosDeEscrita === 6,
-  'o gestor lê a promessa; escrever na promessa de outra pessoa é tirar o dono dela'
-  + ' (verbos de escrita no cartão: ' + verbosDeEscrita + ', esperados 6)');
+/* ── 7 · O DIA MOSTRA TUDO QUE OCUPA HORA ────────────────────────────────────────────
+   A prancha tem cinco visitas de dado inventado. A grade real também tem prospecção de
+   rua, bloqueio e conta que saiu da base: desenhar só visita faria o dia parecer mais
+   vazio do que é, e deixaria o "tirar do dia" sem casa nos outros três. */
+conferir('o dia desenha todo item que ocupa hora, e não só visita',
+  /const ocupados = plano\.filter\(x => x\.tipo !== 'livre'\);/.test(dados)
+    && /ehVisita/.test(mapa),
+  'hora reservada que a tela não mostra é dia que parece vazio — e o gestor cobra um'
+  + ' buraco que não existe');
 
-/* A PRANCHA v2 PEDE `ligar agora ▸`, e ele só pode existir onde há número: medido na
-   carga, 156 dos 245 negócios (64%) têm telefone. Nos outros 36% o botão prometeria uma
-   ligação impossível — e é um <a href="tel:">, porque quem disca é o aparelho, não o
-   CRM (o time não liga pelo HubSpot; o que fica lá é a tarefa). */
+conferir('visita sem hora escolhida mostra "sem hora"',
+  /l\.hora \|\| 'sem hora'/.test(mapa),
+  'escrever um relógio ali inventa o horário que ele não deu');
+
+/* ── 8 · O RELÓGIO E A FICHA SÃO OS DO PLANEJAMENTO ──────────────────────────────────
+   Regra 5 da prancha ("mesmo relógio bonito do Planejamento") e o mapa de interações
+   ("clique no corpo do card = FICHA do lead (mesma ficha)"). */
+conferir('o relógio é o compartilhado, na variante do dia',
+  /pfRelogioHTML\(d, 'data-d7-relogio', 'encaixar', 'dia'\)/.test(tela)
+    && !/input[^>]*type="time"/.test(tela),
+  'dois relógios são duas réguas de hora, e input[type=time] nativo é o que a prancha'
+  + ' proíbe em letra maiúscula');
+
+/* O VERBO DO RELÓGIO NÃO APARECE LITERAL NO MARKUP: pfRelogioHTML monta o atributo a
+   partir do parâmetro (`attr + '="'`), porque o painel serve as duas telas. Então ele é
+   INVISÍVEL para a varredura de clique morto acima — provado por sabotagem: tirei
+   `[data-d7-relogio]` da cadeia e esta suíte deu verde. Aqui ele é cobrado por nome. */
+conferir('e o verbo do relógio está na cadeia do ouvinte',
+  cadeia.indexOf('[data-d7-relogio]') > -1 && /if \(d\.d7Relogio\)/.test(ligar),
+  'o relógio desenha 17 botões e nenhum deles seria escutado — e a varredura por atributo'
+  + ' literal não vê isto, porque o atributo é montado dentro do painel compartilhado');
+
+/* E A TELA NÃO DESENHA FICHA PRÓPRIA: o painel de 360px é do compartilhado, então esse
+   número não pode aparecer no markup da Daily. Provado por sabotagem: eu montei uma ficha
+   local ao lado da chamada e a checagem de baixo (que só procura a chamada) deu verde. */
+conferir('a tela não monta ficha própria',
+  tela.indexOf('width:360px') < 0
+    /* PINA A FORMA DO TERNÁRIO, e não a presença da chamada: a sabotagem montou uma
+       ficha local e deixou a chamada compartilhada dentro de um `(0 ? …)`, e a checagem
+       que só procurava o nome da função deu verde. */
+    && /temFicha\s*\n?\s*\? pl6FichaPainelHTML\(d, fichaCamposHTML/.test(tela),
+  'duas fichas são dois lugares dizendo o telefone e o endereço da mesma conta — e foi'
+  + ' isso que fez a linha da fonte contradizer a ficha em 09/09');
+
+conferir('e a ficha é o painel compartilhado, com a fiação desta tela',
+  /pl6FichaPainelHTML\(d, fichaCamposHTML, fichaEtapasHTML,/.test(tela)
+    && /'data-d7-fi-fechar', 'data-d7-fi-etapa', 'data-d7-fi-agendar'/.test(tela),
+  'duas fichas são dois lugares dizendo o telefone da mesma conta');
+
+conferir('e mover etapa pela ficha é a mesma regra das duas telas',
+  /pl6MoverPelaFicha\(rep, idFi, destinoFi, async function/.test(ligar)
+    && /async function pl6MoverPelaFicha\(rep, idFi, destino, fechar\)/.test(codigo),
+  'dois lugares decidindo como um negócio muda de etapa é o começo de duas regras de'
+  + ' pipeline');
+
+/* ── 9 · O BLOCO DE RELACIONAMENTO EXISTE DE PONTA A PONTA ───────────────────────────
+   A prancha pede dois blocos tracejados. Desenhar o segundo sem ele existir na grade
+   seria botão morto; e sem o leitor do GESTOR reconhecê-lo, o gestor veria buraco onde o
+   executivo reservou uma hora. */
+/* PINA O `if`, E NÃO A EXPRESSÃO DENTRO DELE. Provado por sabotagem: trocar
+   `if (d.d7Rel)` por `if (false)` deixava o corpo intacto — e a checagem que só procurava
+   `d7UI.horas === PL6_REL` dava verde sobre um botão morto. Terceira vez que eu escrevo
+   uma guarda assim nesta casa. */
+conferir('o bloco de relacionamento é desenhado e escutado',
+  /data-d7-rel="1"/.test(tela) && cadeia.indexOf('[data-d7-rel]') > -1
+    && /if \(d\.d7Rel\) \{/.test(ligar)
+    && /d7UI\.horas === PL6_REL/.test(ligar),
+  'botão de bloco sem ouvinte é clique morto na munição');
+
+conferir('e ele existe na grade, no leitor do dia e no leitor do gestor',
+  /const PL6_REL = '__rel';/.test(codigo)
+    && /function pl6SlotRel\(v\)/.test(codigo)
+    && /pl6SlotRel\(v\)\) \{ itens\.push\(\{ si: si, hora: hora, tipo: 'rel' \}\)/.test(codigo)
+    && /origem: 'rel'/.test(codigo),
+  'hora reservada que uma das telas não reconhece é buraco na leitura do gestor');
+
+conferir('e o sentinela dele não é tratado como lead',
+  /id === PL6_BLOQUEADO \|\| id === PL6_RUA \|\| id === PL6_REL\) return null;/.test(codigo),
+  'sentinela virando id de lead faz porId.get() falhar e o slot virar "conta fora da'
+  + ' carga desta sessão"');
+
+/* ── 10 · LIGAR AGORA SÓ COM NÚMERO ─────────────────────────────────────────────── */
 conferir('ligar agora ▸ só aparece com telefone, e cai para datar tarefa sem ele',
-  /\(telQ\s*\n?\s*\? '<a href="tel:'/.test(tela)
+  /q\.tel\s*\n?\s*\? '<a href="tel:'/.test(tela)
     && />ligar agora ▸<\/a>/.test(tela)
-    && />dato tarefa ▸<\/button>/.test(tela),
+    /* o `>` do fallback fica na linha anterior da concatenação */
+    && /'dato tarefa ▸<\/button>'/.test(tela),
   'botão de ligar em quente sem número é clique que não liga para ninguém, na rua');
 
-conferir('e o rodapé diz o que o registro faz',
-  /tudo que você registra aqui grava direto no HubSpot/.test(tela)
-    && /manda a visita de volta pro Planejamento/.test(tela),
-  '"remarcar" sem explicação lê como "perdi a visita" — e ela não morre');
+/* ── 11 · OS DOIS RODAPÉS ───────────────────────────────────────────────────────── */
+conferir('o rodapé diz o que o registro faz, e o de baixo de onde vem cada número',
+  /tudo que você registra aqui grava/.test(tela)
+    && /remarcar manda de volta pro Planejamento/.test(tela)
+    && /Supabase planos_semanais/.test(tela),
+  '"remarcar" sem explicação lê como "perdi a visita"; e número sem procedência é número'
+  + ' que ninguém confere');
 
-/* ── 7 · SEM HORA INVENTADA ─────────────────────────────────────────────────────────── */
-conferir('visita sem hora escolhida mostra "sem hora"',
-  /esc\(l\.hora \|\| 'sem hora'\)/.test(cartao),
-  'escrever um relógio ali inventa o horário que ele não deu — as três telas pararam de'
-  + ' fazer isso hoje, e esta é a última');
+/* ── 12 · O PISO DE TOQUE SEGUE A TELA ──────────────────────────────────────────────
+   Quarta vez que esta lista envelhece. Ela cita ATRIBUTO, que é a mesma fiação do
+   ouvinte — os dois envelhecem juntos. */
+/* ══ E A GRADE EMPILHA NO TELEFONE ═══════════════════════════════════════════════════
+   A prancha é de 1460px e reserva 330px FIXOS para a munição. A 375px sobra ~20px para a
+   coluna do dia: medi o botão "+ o que você vai fazer aí?" em 22px de caixa com 35px de
+   texto. A página não transborda e nenhuma medição de ALTURA acha isto — a tela só fica
+   ilegível, no aparelho em que ela mais é usada. */
+conferir('a grade empilha no celular, em vez de esmagar a coluna do dia',
+  /\[data-d7-raiz\] > div\[style\*="grid-template-columns:minmax\(0,1fr\) 330px"\]\{\s*\n?\s*display:block !important;/.test(tpl),
+  '330px fixos numa tela de 375 deixam ~20px para o dia — o cartão fica ilegível sem a'
+  + ' página acusar nada');
 
-/* ── 8 · O PISO DE TOQUE SEGUE A TELA ───────────────────────────────────────────────
-   Terceira vez neste arquivo que uma lista de 44px envelheceu: ela cita ATRIBUTO agora,
-   que é a mesma fiação do ouvinte. */
-conferir('o piso de 44px cita os atributos que a tela emite',
-  /\[data-d7-raiz\] \[data-d7-travar\]/.test(tpl)
-    && /\[data-d7-raiz\] \[data-d7-acao-in\]/.test(tpl)
-    && !/\.d7-b-prop,\.d7-b-fech/.test(tpl),
-  'lista de toque cheia de seletor morto e vazia dos botões da tela nova — e é no dedo,'
-  + ' na rua, que esta tela é usada');
+/* E O `cancelar` DA BARRA NÃO É ÍCONE: a regra de largura cita o só-ícone, e não o ato.
+   O mesmo defeito apareceu hoje cedo no `remarcar ▸`, na outra ponta desta lista. */
+conferir('a regra de largura de 44px cita o só-ícone, e não o ato',
+  /\[data-d7-raiz\] \[data-d7-so-icone\]\{width:44px;\}/.test(tpl)
+    && tpl.indexOf('[data-d7-raiz] [data-d7-fechar-card]{width:44px;}') < 0,
+  'quem carrega data-d7-fechar-card tem rótulo ("cancelar") e a regra o esmagava em 44px');
+
+conferir('o piso de 44px cita os atributos que a tela nova emite',
+  /\[data-d7-raiz\] \[data-d7-relogio\]/.test(tpl)
+    && /\[data-d7-raiz\] \[data-d7-rel\]/.test(tpl)
+    && /\[data-d7-raiz\] \[data-d7-ficha\]/.test(tpl),
+  'lista de toque vazia dos botões da tela nova — e é no dedo, na rua, que esta tela é'
+  + ' usada');
 
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
@@ -245,6 +325,6 @@ if (falhas.length) {
   falhas.forEach(l => console.error(l));
   process.exit(1);
 }
-console.log('minha daily: ' + ok + ' checagens ok — a tela tem fiação, fala a língua do'
-  + ' Planejamento, e a promessa continua saindo do plano (' + desenhados.length
+console.log('minha daily v2: ' + ok + ' checagens ok — contrato fechado, fiação na cadeia,'
+  + ' cartão e relógio e ficha compartilhados com o Planejamento (' + desenhados.length
   + ' verbos conferidos).');

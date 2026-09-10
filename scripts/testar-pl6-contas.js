@@ -334,7 +334,14 @@ console.log('');
   const tela = pegarFn('pl6TelaFinalHTML');
   const ligar = pegarFn('pl6Ligar');
   const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ');
-  const telaCod = semCom(tela);
+  /* O MARKUP É A TELA MAIS O QUE ELA DELEGA (10/09/26). pl6TelaFinalHTML passou a
+     chamar pl6FichaPainelHTML com o mesmo `d`, e ler só o corpo da tela fez esta guarda
+     acusar sete nomes bons (fichaNome, fichaSub, fichaTag…). Contrato que atravessa duas
+     funções tem de ser medido nas duas.
+     SE UMA DELAS DEIXAR DE EXISTIR, pegarFn aborta a suíte dizendo o nome — é o
+     comportamento que se quer: âncora perdida reprova, não passa. */
+  const painelFicha = pegarFn('pl6FichaPainelHTML');
+  const telaCod = semCom(tela) + semCom(painelFicha);
   const dadosCod = semCom(dados);
   const ligarCod = semCom(ligar);
   /* O TEMPLATE SEM COMENTÁRIO, com o nome desta suíte. Eu escrevi `codigo` — que é o nome
@@ -709,24 +716,35 @@ console.log('');
 (function () {
   const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ');
   const rot = semCom(pegarFn('g14RoteiroHTML'));
-  const cartao = semCom(pegarFn('d7CartaoSimples'));
-  const daily = semCom(pegarFn('minhaDaily7aHTML'));
+  /* O CARTÃO É UM SÓ DESDE A PRANCHA v2 (10/09/26): antes eram dois (d7LinhaVisita para
+     a visita e d7CartaoSimples para o resto). Agora d7CartaoDoDiaHTML desenha tudo que
+     ocupa hora e d7CartaoDoItem traduz o item do plano para ele. */
+  const cartao = semCom(pegarFn('d7CartaoDoDiaHTML'));
+  const mapa = semCom(pegarFn('d7CartaoDoItem'));
+  const daily = semCom(pegarFn('d7TelaFinalHTML'));
 
-  checar('o cartao do que nao e visita e funcao de cima, nao closure de uma tela',
-    cartao.length > 600 && daily.indexOf('const cartaoSimples = function') < 0,
+  checar('o cartao do dia e funcao de cima, nao closure de uma tela',
+    cartao.length > 800 && mapa.length > 800
+      && daily.indexOf('const cartaoSimples = function') < 0,
     'closure dentro de uma tela e o que obrigou o gestor a ter markup proprio');
 
-  checar('as duas telas desenham os tres ramos por ele',
-    (rot.match(/d7CartaoSimples\(/g) || []).length === 3
-      && (daily.match(/d7CartaoSimples\(l\.si,/g) || []).length === 3,
-    'ramo com markup proprio volta a descrever a mesma manha em dois idiomas');
+  /* UMA CHAMADA CADA, e não uma por tipo de item: os quatro ramos do roteiro (visita,
+     bloqueado, rua, órfã) viraram um, porque o cartão já sabe desenhar os quatro. */
+  checar('as duas telas desenham o dia pelo mesmo cartao',
+    /d7CartaoDoDiaHTML\(d7CartaoDoItem\(l, true, linha\.planoDia \|\| null\), true\)/.test(rot)
+      && /d7CartaoDoDiaHTML\(v, false\)/.test(daily)
+      && /d7CartaoDoItem\(l, false, null\)/.test(semCom(pegarFn('d7DadosFinal'))),
+    'markup proprio em uma das duas volta a descrever a mesma manha em dois idiomas');
 
   /* O ✕ E ATO DO EXECUTIVO. No roteiro do gestor os tres cartoes passam comX falso: ele
      le a promessa, e escrever na promessa de outra pessoa e tirar o dono dela. */
-  checar('o gestor nao ganha o ✕ nos tres cartoes',
-    (rot.match(/, '', false\)/g) || []).length === 3
-      && rot.indexOf('data-d7-tirar') < 0,
-    'o ✕ na tela do gestor tira do plano de outra pessoa');
+  /* O GESTOR PASSA soLeitura=true NOS DOIS: no mapeador (que troca a ação pela leitura
+     dela) e no cartão (que esconde a régua de desfecho e o ✕). Ele lê a promessa. */
+  checar('o gestor le, e nao escreve, na promessa de outra pessoa',
+    /d7CartaoDoItem\(l, true,/.test(rot)
+      && rot.indexOf('data-d7-tirar') < 0 && rot.indexOf('data-d7-proposta') < 0
+      && /if \(soLeitura \|\| !v\.pendente\) return/.test(cartao),
+    'o ✕ ou a régua na tela do gestor tira do plano de outra pessoa');
 
   checar('a vaga livre do roteiro esta na linguagem da prancha',
     /border:1\.5px ' \+ \(aberto \? 'solid' : 'dashed'\) \+ ' #F0A9B2/.test(rot)
