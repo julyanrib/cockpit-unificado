@@ -295,6 +295,19 @@ conferir('o rodapé diz o que o registro faz, e o de baixo de onde vem cada núm
 /* ── 12 · O PISO DE TOQUE SEGUE A TELA ──────────────────────────────────────────────
    Quarta vez que esta lista envelhece. Ela cita ATRIBUTO, que é a mesma fiação do
    ouvinte — os dois envelhecem juntos. */
+/* ══ O PAINEL NÃO SE ANINHA DENTRO DE SI ═════════════════════════════════════════════
+   MEDIDO EM PRODUÇÃO, logado como executivo: depois da primeira ação havia DOIS painéis
+   aninhados — 949px por fora e 947px por dentro, cada um com border 0.8px e o mesmo
+   box-shadow. `box` é a raiz e a montagem devolve um painel que também carrega a raiz,
+   então `box.innerHTML = montagem()` desenhava moldura dentro de moldura.
+   Não acumulava, e a primeira pintura era correta: a moldura só dobrava depois do
+   primeiro clique. Nenhuma suíte e nenhuma medição de altura pega isso. */
+conferir('o redesenho põe o CONTEÚDO do painel, e não o painel dentro de si',
+  ligar.indexOf('box.innerHTML = painel ? painel.innerHTML : molde.innerHTML;') > -1
+    && ligar.indexOf('box.innerHTML = minhaDaily7aHTML(rep);') < 0,
+  'painel dentro de painel dobra a borda, o raio e a sombra — e a primeira pintura é'
+  + ' correta, então isso só aparece depois de um clique');
+
 /* ══ E A GRADE EMPILHA NO TELEFONE ═══════════════════════════════════════════════════
    A prancha é de 1460px e reserva 330px FIXOS para a munição. A 375px sobra ~20px para a
    coluna do dia: medi o botão "+ o que você vai fazer aí?" em 22px de caixa com 35px de
