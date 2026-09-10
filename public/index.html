@@ -1234,24 +1234,6 @@
 
   .pl6{display:flex;flex-direction:column;min-width:0;}
 
-  .d7-linha{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:10px;align-items:center;
-    border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px 8px 10px;margin-bottom:6px;
-    background:var(--panel);text-align:left;width:100%;box-sizing:border-box;}
-  .d7-linha.is-visita{border-left-width:4px;border-left-style:solid;}
-  .d7-linha.is-bloq{background:var(--sunk);border-color:var(--line-btn);
-    border-left:4px solid var(--muted2);}
-  .d7-linha.is-livre{border:1.5px dashed var(--line-btn);background:transparent;cursor:pointer;
-    grid-template-columns:46px minmax(0,1fr);}
-  .d7-linha.is-livre:hover{border-color:var(--red);background:var(--panel);}
-  .d7-hora{font:900 11px var(--font-display);color:var(--ink);font-variant-numeric:tabular-nums;}
-  .d7-linha.is-livre .d7-hora{color:var(--muted2);}
-  .d7-corpo{min-width:0;}
-  .d7-tit{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
-  .d7-tit b{font:800 12.5px var(--font-display);color:var(--ink);letter-spacing:-.01em;overflow-wrap:anywhere;}
-  .d7-tag{font:800 8.5px var(--font-display);letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;}
-
-  .d7-obj{display:block;font:700 10.5px/1.45 var(--font-body);color:var(--muted);margin-top:1px;overflow-wrap:anywhere;}
-
   .d7-horas{margin-top:5px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;
     background:var(--sunk);border:1px solid var(--line-soft);border-radius:var(--r-sm);padding:5px 7px;}
   .d7-h{display:inline-flex;align-items:center;min-height:30px;padding:0 9px;
@@ -1376,20 +1358,9 @@
 
   .g14-abre{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);
     border-top:1px solid var(--line);}
-  .g14-roteiro{padding:12px 16px 14px 14px;border-right:1px solid var(--line);min-width:0;}
-  .g14-lado{padding:12px 16px 14px;background:var(--panel2);min-width:0;}
-  .g14-vazio{font:700 11.5px var(--font-body);color:var(--muted2);padding:6px 0 2px;}
 
-  .g14-livre{display:grid;grid-template-columns:46px minmax(0,1fr);gap:10px;align-items:center;
-    width:100%;box-sizing:border-box;text-align:left;border:1.5px dashed var(--red);
-    border-radius:var(--r-md);background:transparent;padding:8px 12px 8px 10px;margin-bottom:6px;
-    cursor:pointer;font:inherit;}
-  .g14-livre:hover{background:var(--red-soft);}
-  .g14-livre.is-aberto{border-style:solid;background:var(--red-soft);}
-  .g14-livre-hora{font:900 12px var(--font-display);color:var(--muted2);font-variant-numeric:tabular-nums;}
-  .g14-livre-cta{font:800 11.5px var(--font-body);color:var(--red);}
-
-  .g14-picker{border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);
+  .g14-roteiro{display:flex;flex-direction:column;gap:6px;
+    padding:12px 16px 14px 14px;border-right:1px solid var(--line);min-width:0;}
     padding:9px 11px 10px;margin:-2px 0 8px;}
   .g14-picker-rot{display:block;font:800 10px var(--font-body);color:var(--muted2);margin-bottom:6px;}
   .g14-op{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;
@@ -1574,6 +1545,11 @@
     #agendaContent [data-pl6-fi-fechar],
     #agendaContent [data-pl6-reg-in],
     #agendaContent [data-pl6-busca-bairro],
+
+    #agendaContent [data-pl6-end-rua],
+    #agendaContent [data-pl6-end-bairro],
+    #agendaContent [data-pl6-end-cidade],
+    #agendaContent [data-pl6-end-gravar],
 
     #agendaContent [data-pl6-arraste],
 
@@ -20768,6 +20744,41 @@ function pfCampo(rot, valor, cor, html) {
   return { rot: esc(rot), v: html ? String(valor) : esc(String(valor)), cor: cor || '#2B3440' };
 }
 
+function pl6EnderecoDoNegocio(l, bruto) {
+  const b = bruto || {};
+  const rua = [b.logradouro || b.endereco || null, b.numero || null].filter(Boolean).join(', ');
+  const jaTem = [rua || null, b.bairro || null, b.cidade || null,
+    b.cep ? 'CEP ' + b.cep : null].filter(Boolean).join(' · ');
+
+  if (rua) return pfCampo('endereço', jaTem, '#2B3440');
+
+  if (l.tipo !== 'c' || !l.dealId) {
+    return pfCampo('endereço', jaTem
+      ? jaTem + ' · sem a rua — confirmar na visita'
+      : 'sem endereço no CRM — confirmar na rua', '#8A6516');
+  }
+
+  const est = 'width:100%;box-sizing:border-box;margin-top:6px;border:1px solid #DCE1EA;'
+    + 'border-radius:8px;background:#FFFDF8;padding:9px 11px;min-height:38px;'
+    + 'font:700 11.5px \'Manrope\',sans-serif;color:#2B3440;';
+  const campo = function (attr, dica) {
+    return '<input type="text" ' + attr + '="' + esc(l.dealId) + '" placeholder="' + esc(dica) + '"'
+      + ' autocomplete="off" style="' + est + '" value="">';
+  };
+
+  let form = '<span style="display:block;font:700 10.5px/1.5 \'Manrope\',sans-serif;color:#8A6516;">'
+    + (jaTem ? esc(jaTem) + ' — falta a rua, e ' : 'sem endereço no CRM — ')
+    + 'sem ela este negócio não entra em região nenhuma</span>'
+    + campo('data-pl6-end-rua', 'rua e número');
+  if (!b.bairro) form += campo('data-pl6-end-bairro', 'bairro');
+  if (!b.cidade) form += campo('data-pl6-end-cidade', 'cidade');
+  form += '<button type="button" data-pl6-end-gravar="' + esc(l.dealId) + '"'
+    + ' style="display:block;width:100%;margin-top:8px;border:0;border-radius:999px;'
+    + 'background:#2B3440;color:#FFFDF8;min-height:40px;font:800 11.5px \'Manrope\',sans-serif;'
+    + 'cursor:pointer;">gravar endereço no HubSpot ▸</button>';
+  return pfCampo('endereço', form, '#8A6516', true);
+}
+
 function pl6FichaCamposFinal(l) {
   const bruto = l._bruto || (l.dealId && typeof brutoDoNegocio === 'function'
     ? brutoDoNegocio(l.dealId) : null) || {};
@@ -20784,13 +20795,7 @@ function pl6FichaCamposFinal(l) {
     ? pfCampo('telefone', telHtml, '#E51A31', true)
     : pfCampo('telefone', 'não veio da fonte · ' + pl6FichaLinks(l, bruto), '#8A6516', true));
 
-  const endereco = [
-    [bruto.logradouro || bruto.endereco || null, bruto.numero || null].filter(Boolean).join(', ') || null,
-    bruto.bairro || null, bruto.cidade || null,
-    bruto.cep ? 'CEP ' + bruto.cep : null
-  ].filter(Boolean).join(' · ');
-  linhas.push(pfCampo('endereço', endereco || 'sem endereço no CRM — confirmar na rua',
-    endereco ? '#2B3440' : '#8A6516'));
+  linhas.push(pl6EnderecoDoNegocio(l, bruto));
 
   if (telHtml) linhas.push(pfCampo('como chegar', pl6FichaLinks(l, bruto), '#2B3440', true));
 
@@ -21366,6 +21371,7 @@ function pl6Ligar(box, rep) {
     const alvo = ev.target.closest('[data-pl6-acao]')
       || ev.target.closest('[data-pl6-remover]')
       || ev.target.closest('[data-pl6-fi-etapa]')
+      || ev.target.closest('[data-pl6-end-gravar]')
       || ev.target.closest('[data-pl6-fi-fechar]')
       || ev.target.closest('[data-pl6-regiao]')
       || ev.target.closest('[data-pl6-terr]')
@@ -21387,6 +21393,50 @@ function pl6Ligar(box, rep) {
     if (d.pl6Terr) {
       pl6UI.terr = (pl6UI.terr === d.pl6Terr) ? null : d.pl6Terr;
       pl6UI.pickerDia = null;
+      return redesenhar();
+    }
+
+    if (d.pl6EndGravar) {
+      const dealEnd = String(d.pl6EndGravar);
+      const valorDe = function (attr) {
+        const el = box.querySelector('[' + attr + '="' + dealEnd + '"]');
+        return el ? String(el.value || '').trim() : '';
+      };
+      const ruaEnd = valorDe('data-pl6-end-rua');
+      if (!ruaEnd) {
+        const elRua = box.querySelector('[data-pl6-end-rua="' + dealEnd + '"]');
+        if (elRua) { elRua.style.borderColor = '#E51A31'; elRua.focus(); }
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Escreva a rua e o número — é o que faz o negócio entrar em região.', 'atencao');
+        }
+        return;
+      }
+      const lEnd = pl6TodasAsContas(rep, pl6Regioes(rep)).find(x => String(x.dealId) === dealEnd);
+      if (!lEnd || !lEnd.stageId) {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Não achei este negócio na carga desta sessão — recarregue a aba.', 'atencao');
+        }
+        return;
+      }
+
+      const propsEnd = { logradouro: ruaEnd };
+      const baiEnd = valorDe('data-pl6-end-bairro');
+      const cidEnd = valorDe('data-pl6-end-cidade');
+      if (baiEnd) propsEnd.bairro = baiEnd;
+      if (cidEnd) propsEnd.cidade = cidEnd;
+      alvo.disabled = true;
+      alvo.textContent = 'gravando…';
+      const rEnd = await gravarPropriedadesDoNegocio(
+        { id: dealEnd, stageId: lEnd.stageId, dias: lEnd.dias != null ? lEnd.dias : null }, propsEnd);
+      if (!rEnd.ok) {
+        alvo.disabled = false;
+        alvo.textContent = 'gravar endereço no HubSpot ▸';
+        if (typeof mostrarToast === 'function') mostrarToast(rEnd.erro, 'erro');
+        return;
+      }
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Endereço gravado no HubSpot ✓ — este negócio já entra na região.', 'sucesso');
+      }
       return redesenhar();
     }
 
@@ -24768,6 +24818,28 @@ function propsFichaHTML(lead, idxAtual) {
   </div>`;
 }
 
+async function gravarPropriedadesDoNegocio(lead, props) {
+  try {
+    const token = await tokenDeSessaoGlobal();
+    const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
+      method: 'POST', signal,
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
+      body: JSON.stringify({
+        op: 'mudar-etapa', dealId: lead.id, novaEtapa: lead.stageId, propriedades: props
+      })
+    }), 8000, 'mudar-etapa-negocio');
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || !data.ok) {
+      return { ok: false, erro: (data && data.erro) || 'Não consegui gravar essa propriedade.' };
+    }
+    Object.keys(props).forEach(function (k) { lead[k] = props[k]; });
+    aplicarEtapaNoDataLocal(lead.id, lead.stageId, props, lead.dias != null ? lead.dias : null);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, erro: 'Falha ao falar com o HubSpot: ' + String((e && e.message) || e) };
+  }
+}
+
 function ligarPropsFichaEditaveis(container, lead) {
 
   container.querySelectorAll('.ficha-prop').forEach(card => {
@@ -24816,30 +24888,18 @@ function ligarPropsFichaEditaveis(container, lead) {
         v.valor = limpoUnico.valor;
         const btn = card.querySelector('.ficha-prop-salvar');
         btn.disabled = true; btn.textContent = '…';
-        try {
-          const token = await tokenDeSessaoGlobal();
-          const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
-            method: 'POST', signal,
-            headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-            body: JSON.stringify({ op: 'mudar-etapa', dealId: lead.id, novaEtapa: lead.stageId, propriedades: { [propNome]: v.valor } })
-          }), 8000, 'mudar-etapa-negocio');
-          const data = await resp.json().catch(() => ({}));
-          if (!resp.ok || !data.ok) {
-            mostrarToast((data && data.erro) || 'Não consegui gravar essa propriedade.', 'erro');
-            btn.disabled = false; btn.textContent = '✓';
-            return;
-          }
-          lead[propNome] = v.valor;
-          aplicarEtapaNoDataLocal(lead.id, lead.stageId, { [propNome]: v.valor });
-          const idxAtual = ORDEM_FUNIL_FICHA.indexOf(lead.stageId);
-          const grade = card.parentElement;
-          grade.outerHTML = propsFichaHTML(lead, idxAtual);
-          ligarPropsFichaEditaveis(container, lead);
-          mostrarToast(`${config.label} gravado no HubSpot ✓`, 'sucesso');
-        } catch (e) {
-          mostrarToast('Falha ao falar com o HubSpot: ' + String((e && e.message) || e), 'erro');
+
+        const grav = await gravarPropriedadesDoNegocio(lead, { [propNome]: v.valor });
+        if (!grav.ok) {
+          mostrarToast(grav.erro, 'erro');
           btn.disabled = false; btn.textContent = '✓';
+          return;
         }
+        const idxAtual = ORDEM_FUNIL_FICHA.indexOf(lead.stageId);
+        const grade = card.parentElement;
+        grade.outerHTML = propsFichaHTML(lead, idxAtual);
+        ligarPropsFichaEditaveis(container, lead);
+        mostrarToast(`${config.label} gravado no HubSpot ✓`, 'sucesso');
       };
       card.querySelector('.ficha-prop-salvar').addEventListener('click', (ev2) => { ev2.stopPropagation(); salvar(); });
       campoEl.addEventListener('keydown', (ev2) => {
@@ -31504,6 +31564,17 @@ function d7LinhaVisita(l, soLeitura, planoDia) {
     + '</div>';
 }
 
+function d7CartaoSimples(si, cor, titulo, sub, rotX, comX) {
+  return '<div style="display:flex;min-width:0;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);">'
+    + '<span style="flex:none;width:3px;background:' + cor + ';"></span>'
+    + '<div style="flex:1;min-width:0;padding:9px 10px 9px 11px;">'
+    +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;">' + esc(titulo) + '</b>'
+    +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:2px;">' + esc(sub) + '</span>'
+    + '</div>'
+    + (comX ? '<button type="button" data-d7-tirar="' + si + '" title="' + esc(rotX) + '" aria-label="' + esc(rotX) + '" style="flex:none;width:24px;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>' : '')
+    + '</div>';
+}
+
 function minhaDaily7aHTML(rep) {
   const dias = pl6Dias(pl6SegundaDaSemana());
   const di = d7ColunaDeHoje();
@@ -31557,31 +31628,20 @@ function minhaDaily7aHTML(rep) {
       + '<b style="flex:none;font:900 10px \'Archivo\',sans-serif;color:#E51A31;font-variant-numeric:tabular-nums;">' + esc(rot) + '</b>'
       + '<span style="font:800 10px \'Manrope\',sans-serif;color:#E51A31;">' + esc(sub) + '</span></button>';
   };
-  const cartaoSimples = function (si, cor, titulo, sub, rotX, comX) {
-    return '<div style="display:flex;min-width:0;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);">'
-      + '<span style="flex:none;width:3px;background:' + cor + ';"></span>'
-      + '<div style="flex:1;min-width:0;padding:9px 10px 9px 11px;">'
-      +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;">' + esc(titulo) + '</b>'
-      +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:2px;">' + esc(sub) + '</span>'
-      + '</div>'
-      + (comX ? '<button type="button" data-d7-tirar="' + si + '" title="' + esc(rotX) + '" aria-label="' + esc(rotX) + '" style="flex:none;width:24px;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>' : '')
-      + '</div>';
-  };
-
   const linhas = plano.map(function (l) {
     if (l.tipo === 'visita') return d7LinhaVisita(l);
     if (l.tipo === 'bloqueado') {
-      return cartaoSimples(l.si, '#B4AC9C', 'bloqueado',
+      return d7CartaoSimples(l.si, '#B4AC9C', 'bloqueado',
         'compromisso fora da rua' + (l.hora ? ' · ' + l.hora : ''), 'Desbloquear', true);
     }
     if (l.tipo === 'orfa') {
 
-      return cartaoSimples(l.si, '#B4AC9C', 'a conta saiu da sua base',
+      return d7CartaoSimples(l.si, '#B4AC9C', 'a conta saiu da sua base',
         'virou cliente, mudou de dono ou foi perdida', 'Liberar a vaga', true);
     }
     if (l.tipo === 'rua') {
 
-      return cartaoSimples(l.si, PL6_RUA_COR, 'Prospecção de rua',
+      return d7CartaoSimples(l.si, PL6_RUA_COR, 'Prospecção de rua',
         'porta a porta · sem conta definida · registre as contas no Expogo',
         'Tirar a prospecção de rua do plano', true);
     }
@@ -32668,30 +32728,32 @@ function g14RoteiroHTML(linha) {
   return linha.plano.map(function (l) {
 
     if (l.tipo === 'visita') return d7LinhaVisita(l, true, linha.planoDia || null);
+
     if (l.tipo === 'bloqueado') {
-      return '<div class="d7-linha is-bloq"><span class="d7-hora">' + l.hora + '</span>'
-        + '<div class="d7-corpo"><div class="d7-tit"><b>bloqueado</b>'
-        + '<span class="d7-tag">ele reservou este horário no Planejamento</span></div></div></div>';
+      return d7CartaoSimples(l.si, '#B4AC9C', 'bloqueado',
+        'ele reservou este horário no Planejamento' + (l.hora ? ' · ' + l.hora : ''), '', false);
     }
     if (l.tipo === 'rua') {
 
-      return '<div class="d7-linha is-visita" style="border-left-color:' + PL6_RUA_COR + ';">'
-        + '<span class="d7-hora">' + l.hora + '</span>'
-        + '<div class="d7-corpo"><div class="d7-tit"><b>Prospecção de rua</b>'
-        + '<span class="d7-tag" style="color:' + PL6_RUA_COR + ';">porta a porta · sem conta definida</span></div>'
-        + '<span class="d7-obj">vira horas de rua e contas visitadas — não tem tarefa no CRM</span></div></div>';
+      return d7CartaoSimples(l.si, PL6_RUA_COR, 'Prospecção de rua',
+        'porta a porta · sem conta definida' + (l.hora ? ' · ' + l.hora : '')
+        + ' · vira horas de rua, não tarefa no CRM', '', false);
     }
     if (l.tipo === 'orfa') {
-      return '<div class="d7-linha is-bloq"><span class="d7-hora">' + l.hora + '</span>'
-        + '<div class="d7-corpo"><div class="d7-tit"><b>conta fora da carga desta sessão</b>'
-        + '<span class="d7-tag">no plano dele, mas não no funil carregado aqui</span></div></div></div>';
+      return d7CartaoSimples(l.si, '#B4AC9C', 'conta fora da carga desta sessão',
+        'no plano dele, mas não no funil carregado aqui' + (l.hora ? ' · ' + l.hora : ''), '', false);
     }
     const aberto = g14UI.picker && g14UI.picker.owner === linha.ownerId && g14UI.picker.si === l.si;
-    return '<button type="button" class="g14-livre' + (aberto ? ' is-aberto' : '') + '"'
-      + ' data-g14-slot="' + esc(linha.ownerId) + '" data-g14-si="' + l.si + '">'
 
-      + '<span class="g14-livre-hora">' + (l.hora || 'vaga livre') + '</span>'
-      + '<span class="g14-livre-cta">' + (aberto ? 'fechar ✕' : 'escolher lead ou prospecção ▾') + '</span>'
+    return '<button type="button" data-g14-slot="' + esc(linha.ownerId) + '"'
+      + ' data-g14-si="' + l.si + '"'
+      + ' style="display:flex;align-items:center;gap:8px;min-height:38px;width:100%;'
+      + 'border:1.5px ' + (aberto ? 'solid' : 'dashed') + ' #F0A9B2;border-radius:10px;'
+      + 'background:#FDF6F7;cursor:pointer;padding:6px 11px;text-align:left;">'
+      + '<b style="flex:none;font:900 10px \'Archivo\',sans-serif;color:#E51A31;'
+      + 'font-variant-numeric:tabular-nums;">' + esc(l.hora || 'vaga livre') + '</b>'
+      + '<span style="font:800 10px \'Manrope\',sans-serif;color:#E51A31;">'
+      + (aberto ? 'fechar ✕' : 'escolher lead ou prospecção ▾') + '</span>'
       + '</button>'
       + (aberto ? g14PickerHTML(linha, l.si) : '');
   }).join('');
