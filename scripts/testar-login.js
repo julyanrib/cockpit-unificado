@@ -152,6 +152,49 @@ checar('o briefing de quatro abas decorativas não voltou',
   template.indexOf('login-brief') < 0,
   'quatro cliques que só trocavam uma frase — a prancha os removeu');
 
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   UMA HIDRATAÇÃO POR CARGA (10/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   MEDIDO na produção, logado como executivo: cada carga fazia TRÊS GET /api/dados com a
+   mesma URL (1,0s + 1,4s + 1,6s). Não havia caminho inútil — são três caminhos legítimos
+   de boot, cada um para um caso real: o `getSession()` da partida, o
+   `onAuthStateChange` com INITIAL_SESSION, e o mesmo com SIGNED_IN/TOKEN_REFRESHED.
+
+   A trava `hidratadoPara` já existia, com um comentário dizendo exatamente que o
+   onAuthStateChange dispara mais de uma vez. Ela era LIDA no topo e só MARCADA depois do
+   `await` — e os três chegam antes de qualquer um marcar. Trava depois do await não é
+   trava para eventos simultâneos.
+
+   Provado fora do navegador antes de mexer no login: com a lógica antiga, três chamadas
+   simultâneas davam 3 buscas; com a porteira, 1. Trocar de pessoa durante o voo rehidrata,
+   e falhar não tranca a próxima tentativa.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/^\s*\/\/.*$/gm, ' ');
+  const i = template.indexOf('async function aplicarSessao(email) {');
+  const corpo = i < 0 ? '' : semCom(template.slice(i, template.indexOf('\n}', i)));
+
+  checar('a hidratação tem porteira, e ela vale DURANTE o voo',
+    corpo.indexOf('if (hidratando && hidratando.chave === chaveH) return hidratando.promessa;') > -1
+      && corpo.indexOf('hidratando = { chave: chaveH, promessa: promessaH };') > -1,
+    'sem a promessa em voo, os três caminhos de boot abrem três /api/dados — medido em'
+    + ' produção: 1,0s + 1,4s + 1,6s por carga, por pessoa, no 4G da rua');
+
+  checar('e a porteira solta a vez quando a hidratação termina',
+    /finally \{ if \(hidratando && hidratando\.promessa === promessaH\) hidratando = null; \}/.test(corpo),
+    'porteira que não solta tranca o login depois de uma falha de rede — e ninguém entra');
+
+  checar('a chave da porteira é o e-mail, não um booleano',
+    corpo.indexOf("const chaveH = String(email || '').toLowerCase();") > -1,
+    'entrar como outra pessoa durante o voo daria a ela o dado da primeira sessão, que é o'
+    + ' pior defeito possível neste arquivo');
+
+  checar('e o trabalho de hidratar mora numa função própria',
+    template.indexOf('async function hidratarSessao(email) {') > -1,
+    'porteira e trabalho no mesmo corpo é o que fez a trava antiga ser lida antes e'
+    + ' marcada depois do await');
+}());
+
 if (falhas) {
   console.error('\nlogin: ' + falhas + ' checagem(ns) reprovada(s) de ' + (ok + falhas) + '.');
   process.exit(1);
