@@ -205,6 +205,20 @@ conferir('o dia desenha todo item que ocupa hora, e não só visita',
   'hora reservada que a tela não mostra é dia que parece vazio — e o gestor cobra um'
   + ' buraco que não existe');
 
+/* ══ A FAIXA DA POSIÇÃO NÃO É RELÓGIO, NEM NO TOAST ══════════════════════════════════
+   Testado em produção: tirei o bloco de relacionamento das 16:30 e a barra disse "10:30
+   liberada" — 10:30 é a faixa do slot 1, e 16:30 é a hora que o executivo escolheu. É a
+   mesma armadilha que morreu em cinco lugares em 09/09; sobreviveu no ramo genérico do ✕,
+   que só passou a ser alcançado quando o bloco de relacionamento nasceu.
+   O QUE A GUARDA MEDE: o ramo do ✕ fala da hora ESCOLHIDA (pl6SlotHora), e o que ele
+   liberou tem nome — "a vaga liberada" não diz o que saiu do dia. */
+conferir('o toast do ✕ cita a hora escolhida, e não a faixa da posição',
+  ligar.indexOf('const quando = pl6SlotHora(era, si);') > -1
+    && ligar.indexOf("(pl6HoraDaFaixa(si) || 'a vaga') + ' liberada no plano de hoje") < 0
+    && /pl6SlotRel\(era\) \? 'a visita de relacionamento'/.test(ligar),
+  'a posição virando relógio faz a tela confirmar uma hora que ele nunca deu — e ele'
+  + ' confere no CRM uma hora que não existe');
+
 conferir('visita sem hora escolhida mostra "sem hora"',
   /l\.hora \|\| 'sem hora'/.test(mapa),
   'escrever um relógio ali inventa o horário que ele não deu');
