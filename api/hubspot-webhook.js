@@ -72,7 +72,20 @@ const WORKFLOW_FILE = 'daily-refresh.yml';
 // E O QUE JÁ É INSTANTÂNEO NÃO DEPENDE DISTO: ação feita DENTRO do Cockpit espelha no DATA
 // em memória e re-renderiza na hora, sem esperar carga nenhuma. Este cooldown governa só a
 // ação feita direto no HubSpot ou no PWA, que o Cockpit não tem como saber sem perguntar.
-const COOLDOWN_MINUTOS = 5;
+// COOLDOWN 5 -> 30 MINUTOS (10/09/26). O GitHub bloqueou as Actions por cobrança e o
+// Julyan perguntou por quê. MEDIDO, e a conta acima estava otimista:
+//    114 rodadas boas em 23h (09/09 13:55 -> 10/09 12:54), intervalo MEDIANO de 6 min
+//    -> ~376 min/dia -> ~8.300 min/mês, contra 2.000 grátis -> ~US$ 76/mês de excedente.
+// A trava de 5 min estava FUNCIONANDO (mínimo respeitado, só 4 corridas concorrentes em
+// 113 intervalos): o volume é o time trabalhando, e a cada 5 min o robô podia acordar de
+// novo. A previsão de "~18 rodadas/dia" assumia evento esparso; com evento denso o dia
+// inteiro, a janela satura.
+// A distribuição por hora de Brasília está sã (7h-21h, nada de madrugada — 13 das 114
+// fora do expediente), então não havia desperdício a cortar: o que sobra é escolher a
+// frequência. 30 min = ~28 rodadas/dia = ~2.000 min/mês, que é a franquia inteira.
+// E O QUE JÁ ERA INSTANTÂNEO CONTINUA: ação feita DENTRO do cockpit espelha na memória e
+// redesenha na hora. Isto governa só o que é feito direto no HubSpot ou no PWA.
+const COOLDOWN_MINUTOS = 30;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
