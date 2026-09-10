@@ -858,7 +858,21 @@ function checarAtoDoPlanoNaDaily() {
   }
   const depois = cru.slice(iF + 8);
   const fimF = depois.search(/\n(?:async )?function /);
-  const corpo = fimF > 0 ? depois.slice(0, fimF) : depois;
+  let corpo = fimF > 0 ? depois.slice(0, fimF) : depois;
+
+  /* SEGUE UM NIVEL DE DELEGACAO (10/09/26). A montagem da prancha v2 e
+     `return d7TelaFinalHTML(d7DadosFinal(rep));` — corpo que so delega nao emite gancho,
+     e sem isto a guarda reprovaria o desenho certo dizendo que a tela nao tem ato.
+     Por `return X(`, e nao por qualquer chamada: e a delegacao DA MONTAGEM. */
+  const mDeleg = /return ([a-zA-Z0-9_$]+)\(/.exec(corpo);
+  if (mDeleg) {
+    const iD = cru.indexOf('function ' + mDeleg[1] + '(');
+    if (iD > -1) {
+      const dep2 = cru.slice(iD + 8);
+      const fim2 = dep2.search(/\n(?:async )?function /);
+      corpo += (fim2 > 0 ? dep2.slice(0, fim2) : dep2);
+    }
+  }
 
   /* 2. OS GANCHOS QUE A MONTAGEM EMITE. O caminho comeca na tela, nao na gravacao:
         `status: 'plano_fechado'` aparece DUAS vezes no arquivo (o Planejamento e a

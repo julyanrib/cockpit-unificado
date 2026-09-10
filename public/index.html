@@ -1278,9 +1278,20 @@
     [data-d7-raiz] [data-d7-acao],[data-d7-raiz] [data-d7-acao-set],
     [data-d7-raiz] [data-d7-acao-in],[data-d7-raiz] [data-d7-acao-ok],
     [data-d7-raiz] [data-d7-nova-conta],[data-d7-raiz] [data-d7-fechar-card],
+
+    [data-d7-raiz] [data-d7-relogio],[data-d7-raiz] [data-d7-rel],
+    [data-d7-raiz] [data-d7-ficha],[data-d7-raiz] [data-d7-fi-fechar],
+    [data-d7-raiz] [data-d7-fi-etapa],[data-d7-raiz] [data-d7-fi-agendar],
     [data-d7-raiz] [data-d7-hora-in],[data-d7-raiz] [data-d7-hora-ok]{min-height:44px;}
 
-    [data-d7-raiz] [data-d7-so-icone],[data-d7-raiz] [data-d7-fechar-card]{width:44px;}
+    [data-d7-raiz] [data-d7-so-icone]{width:44px;}
+
+    [data-d7-raiz] > div[style*="grid-template-columns:minmax(0,1fr) 330px"]{
+      display:block !important;
+    }
+    [data-d7-raiz] > div[style*="grid-template-columns:minmax(0,1fr) 330px"] > div:last-child{
+      border-left:0 !important;border-top:1px solid #E7E3DA;
+    }
   }
 
   .g14{background:var(--panel);}
@@ -19057,7 +19068,7 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   }
 
   const livre = sl => !pl6SlotId(grade[di][sl]) && !pl6SlotBloqueado(grade[di][sl])
-    && !pl6SlotRua(grade[di][sl]);
+    && !pl6SlotRua(grade[di][sl]) && !pl6SlotRel(grade[di][sl]);
   let si = -1;
   if (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) {
 
@@ -19883,6 +19894,9 @@ const PL6_DIAS_UTEIS = 5;
 const PL6_BLOQUEADO = '__b';
 
 const PL6_RUA = '__rua';
+
+const PL6_REL = '__rel';
+const PL6_REL_COR = '#8E3B5C';
 const PL6_RUA_COR = '#A44E1B';
 
 const PL6_COR_ETAPA = {
@@ -20293,12 +20307,16 @@ function pl6SlotId(v) {
   if (!v) return null;
   const id = (typeof v === 'object') ? (v.id || null) : v;
 
-  if (id === PL6_BLOQUEADO || id === PL6_RUA) return null;
+  if (id === PL6_BLOQUEADO || id === PL6_RUA || id === PL6_REL) return null;
   return id;
 }
 function pl6SlotRua(v) {
   if (!v) return false;
   return ((typeof v === 'object') ? v.id : v) === PL6_RUA;
+}
+function pl6SlotRel(v) {
+  if (!v) return false;
+  return ((typeof v === 'object') ? v.id : v) === PL6_REL;
 }
 
 function pl6NegocioNascidoAqui(v) {
@@ -20356,6 +20374,14 @@ function pl6PorHora(a, b) {
   return a.hora < b.hora ? -1 : (a.hora > b.hora ? 1 : a.si - b.si);
 }
 
+function pl6PrimeiraVaga(grade, di) {
+  const col = (grade && grade[di]) || [];
+  for (let si = 0; si < col.length; si++) {
+    const v = col[si];
+    if (!pl6SlotId(v) && v !== PL6_BLOQUEADO && !pl6SlotRua(v) && !pl6SlotRel(v)) return si;
+  }
+  return -1;
+}
 function pl6ItensDoDia(coluna, porId) {
   const col = Array.isArray(coluna) ? coluna : [];
   const itens = [];
@@ -20364,6 +20390,7 @@ function pl6ItensDoDia(coluna, porId) {
     const hora = pl6SlotHora(v, si);
     if (pl6SlotBloqueado(v)) { itens.push({ si: si, hora: hora, tipo: 'bloqueado' }); continue; }
     if (pl6SlotRua(v)) { itens.push({ si: si, hora: hora, tipo: 'rua' }); continue; }
+    if (pl6SlotRel(v)) { itens.push({ si: si, hora: hora, tipo: 'rel' }); continue; }
     const id = pl6SlotId(v);
     if (!id) continue;
     const l = porId ? (porId.get(id) || null) : null;
@@ -21018,6 +21045,39 @@ function pl6PromessaSelo() {
     + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ' ✓';
 }
 
+function pl6FichaPainelHTML(d, campos, etapas, attrFechar, attrEtapa, attrAgendar) {
+  return '<div style="position:absolute;top:0;right:0;bottom:0;width:360px;background:#FDFEFF;'
+    + 'border-left:1.5px solid #2B3440;box-shadow:-16px 0 40px rgba(43,52,64,.18);'
+    + 'padding:20px 22px;overflow:auto;z-index:20;">'
+    + '<div style="display:flex;align-items:flex-start;gap:10px;">'
+    +   '<div style="min-width:0;flex:1;">'
+    +     '<b style="display:block;font:900 18px \'Archivo\',sans-serif;color:#2B3440;'
+    +       'letter-spacing:-.01em;overflow-wrap:anywhere;">' + d.fichaNome + '</b>'
+    +     '<span style="font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;">' + d.fichaSub + '</span>'
+    +   '</div>'
+    +   '<button type="button" ' + attrFechar + '="1" data-pl6-so-icone="1" aria-label="Fechar"'
+    +     ' style="flex:none;height:28px;border:1px solid #DCE1EA;border-radius:999px;'
+    +     'background:#FDFEFF;color:#7A8494;font:800 13px \'Manrope\',sans-serif;cursor:pointer;'
+    +     'line-height:1;padding:0;">✕</button>'
+    + '</div>'
+    + '<span style="display:inline-block;margin-top:10px;font:900 8px \'Archivo\',sans-serif;'
+    +   'letter-spacing:.05em;text-transform:uppercase;color:' + d.fichaTagCor + ';background:'
+    +   d.fichaTagBg + ';border-radius:5px;padding:4px 9px;">' + d.fichaTag + '</span>'
+    + '<div style="margin-top:14px;display:flex;flex-direction:column;gap:1px;'
+    +   'border:1px solid #E7E3DA;border-radius:11px;overflow:hidden;">' + campos + '</div>'
+    + '<span style="display:block;margin-top:14px;font:900 9px \'Archivo\',sans-serif;'
+    +   'letter-spacing:.09em;text-transform:uppercase;color:#8E3B5C;">'
+    +   'etapa — clique pra mover no HubSpot</span>'
+    + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:7px;">' + etapas + '</div>'
+    + '<p style="margin:14px 0 0;font:700 10.5px/1.55 \'Manrope\',sans-serif;color:#8A6516;'
+    +   'background:#FDF6E7;border:1px solid #F0DFB6;border-radius:10px;padding:10px 13px;">▸ '
+    +   d.fichaAcao + '</p>'
+    + '<button type="button" ' + attrAgendar + '="' + d.fichaAgendar + '"'
+    +   ' style="display:block;width:100%;margin-top:12px;border:0;border-radius:999px;'
+    +   'background:#E51A31;color:#FFFDF8;min-height:40px;font:800 12px \'Manrope\',sans-serif;'
+    +   'cursor:pointer;">agendar visita — escolher dia e hora ▸</button>'
+    + '</div>';
+}
 function pl6TelaFinalHTML(d) {
   const kpisHTML = (d.kpis || []).map(k => `
     <span><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;">${k.rot}</span><b style="font:900 28px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};letter-spacing:-.02em;">${k.v}</b></span>`).join('');
@@ -21143,22 +21203,8 @@ function pl6TelaFinalHTML(d) {
       </div>
     </div>
 
-    ${d.temFicha ? `
-    <div style="position:absolute;top:0;right:0;bottom:0;width:360px;background:#FDFEFF;border-left:1.5px solid #2B3440;box-shadow:-16px 0 40px rgba(43,52,64,.18);padding:20px 22px;overflow:auto;z-index:20;">
-      <div style="display:flex;align-items:flex-start;gap:10px;">
-        <div style="min-width:0;flex:1;">
-          <b style="display:block;font:900 18px 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;overflow-wrap:anywhere;">${d.fichaNome}</b>
-          <span style="font:700 10.5px 'Manrope',sans-serif;color:#7A8494;">${d.fichaSub}</span>
-        </div>
-        <button type="button" data-pl6-fi-fechar="1" data-pl6-so-icone="1" aria-label="Fechar" style="flex:none;height:28px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 13px 'Manrope',sans-serif;cursor:pointer;line-height:1;padding:0;">✕</button>
-      </div>
-      <span style="display:inline-block;margin-top:10px;font:900 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${d.fichaTagCor};background:${d.fichaTagBg};border-radius:5px;padding:4px 9px;">${d.fichaTag}</span>
-      <div style="margin-top:14px;display:flex;flex-direction:column;gap:1px;border:1px solid #E7E3DA;border-radius:11px;overflow:hidden;">${fichaCamposHTML}</div>
-      <span style="display:block;margin-top:14px;font:900 9px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#8E3B5C;">etapa — clique pra mover no HubSpot</span>
-      <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:7px;">${fichaEtapasHTML}</div>
-      <p style="margin:14px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #F0DFB6;border-radius:10px;padding:10px 13px;">▸ ${d.fichaAcao}</p>
-      <button type="button" data-pl6-acao="${d.fichaAgendar}" style="display:block;width:100%;margin-top:12px;border:0;border-radius:999px;background:#E51A31;color:#FFFDF8;min-height:40px;font:800 12px 'Manrope',sans-serif;cursor:pointer;">agendar visita — escolher dia e hora ▸</button>
-    </div>` : ''}
+    ${d.temFicha ? pl6FichaPainelHTML(d, fichaCamposHTML, fichaEtapasHTML,
+      'data-pl6-fi-fechar', 'data-pl6-fi-etapa', 'data-pl6-acao') : ''}
   </div>`;
 }
 
@@ -21315,6 +21361,44 @@ function pl6GravarRegiaoDigitada(rep, di, texto, mutar) {
     + (doMapa ? ' — sugestões recalculadas' : ' — do jeito que você escreveu') + ' · Supabase');
 }
 
+async function pl6MoverPelaFicha(rep, idFi, destino, fechar) {
+    const lFi = pl6TodasAsContas(rep, pl6Regioes(rep)).find(x => x.id === idFi);
+    if (!lFi) {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não achei esta conta na carga desta sessão — recarregue.', 'atencao');
+      }
+      return;
+    }
+
+    if (lFi.tipo !== 'c') {
+      if (typeof abrirPassagemContaAlvoProFunil !== 'function') {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('O fluxo de criar negócio não carregou nesta aba.', 'erro');
+        }
+        return;
+      }
+      pl6Ficha = null;
+      await redesenhar();
+      return abrirPassagemContaAlvoProFunil(lFi._bruto || lFi, function () { redesenhar(); });
+    }
+
+    const brutoFi = Object.entries(DATA.funilLeads || {})
+      .flatMap(([sid, ls]) => (ls || []).map(x => Object.assign({}, x, { stageId: sid })))
+      .find(x => String(x.id) === String(lFi.dealId))
+      || (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [])
+        .find(x => String(x.id) === String(lFi.dealId));
+    if (!brutoFi || typeof abrirPassagemDeEtapa !== 'function') {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não achei o negócio de ' + lFi.nome + ' na carga desta sessão.', 'atencao');
+      }
+      return;
+    }
+
+    await fechar();
+    return abrirPassagemDeEtapa(Object.assign({}, brutoFi,
+      { stageId: String(brutoFi.stageId || lFi.stageId) }), destino,
+      function () { redesenhar(); });
+}
 function pl6Ligar(box, rep) {
   if (!box || box.dataset.pl6Ligado === '1') return;
   box.dataset.pl6Ligado = '1';
@@ -21351,15 +21435,7 @@ function pl6Ligar(box, rep) {
     });
   };
 
-  const primeiraVaga = function (di) {
-    const g = pl6GradeDoPlano();
-    const col = g[di] || [];
-    for (let si = 0; si < col.length; si++) {
-      const v = col[si];
-      if (!pl6SlotId(v) && v !== PL6_BLOQUEADO && !pl6SlotRua(v)) return si;
-    }
-    return -1;
-  };
+  const primeiraVaga = di => pl6PrimeiraVaga(pl6GradeDoPlano(), di);
 
   let ultimoArraste = 0;
   box.addEventListener('dragstart', function (ev) {
@@ -21534,43 +21610,10 @@ function pl6Ligar(box, rep) {
       const p = String(d.pl6FiEtapa).split('|');
       const destino = p.pop();
       const idFi = p.join('|');
-      const lFi = pl6TodasAsContas(rep, pl6Regioes(rep)).find(x => x.id === idFi);
-      if (!lFi) {
-        if (typeof mostrarToast === 'function') {
-          mostrarToast('Não achei esta conta na carga desta sessão — recarregue.', 'atencao');
-        }
-        return;
-      }
-
-      if (lFi.tipo !== 'c') {
-        if (typeof abrirPassagemContaAlvoProFunil !== 'function') {
-          if (typeof mostrarToast === 'function') {
-            mostrarToast('O fluxo de criar negócio não carregou nesta aba.', 'erro');
-          }
-          return;
-        }
+      return pl6MoverPelaFicha(rep, idFi, destino, async function () {
         pl6Ficha = null;
         await redesenhar();
-        return abrirPassagemContaAlvoProFunil(lFi._bruto || lFi, function () { redesenhar(); });
-      }
-
-      const brutoFi = Object.entries(DATA.funilLeads || {})
-        .flatMap(([sid, ls]) => (ls || []).map(x => Object.assign({}, x, { stageId: sid })))
-        .find(x => String(x.id) === String(lFi.dealId))
-        || (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [])
-          .find(x => String(x.id) === String(lFi.dealId));
-      if (!brutoFi || typeof abrirPassagemDeEtapa !== 'function') {
-        if (typeof mostrarToast === 'function') {
-          mostrarToast('Não achei o negócio de ' + lFi.nome + ' na carga desta sessão.', 'atencao');
-        }
-        return;
-      }
-
-      pl6Ficha = null;
-      await redesenhar();
-      return abrirPassagemDeEtapa(Object.assign({}, brutoFi,
-        { stageId: String(brutoFi.stageId || lFi.stageId) }), destino,
-        function () { redesenhar(); });
+      });
     }
 
     if (d.pl6Regiao) {
@@ -31408,7 +31451,7 @@ function d7PlanoDeHoje(rep, gradeDe) {
   const livres = [];
   for (let si = 0; si < totalSlots; si++) {
     const v = coluna[si];
-    if (pl6SlotId(v) || pl6SlotBloqueado(v) || pl6SlotRua(v)) continue;
+    if (pl6SlotId(v) || pl6SlotBloqueado(v) || pl6SlotRua(v) || pl6SlotRel(v)) continue;
     livres.push({ hora: pl6HoraDaFaixa(si), si: si, tipo: 'livre' });
   }
 
@@ -31496,6 +31539,10 @@ let d7UI = {
   apostas: {},
   acoes: {},
   acaoAberta: null,
+
+  hSel: '10',
+  mSel: '00',
+  ficha: null,
   toast: null,
   salvando: false
 };
@@ -31589,85 +31636,133 @@ function d7AcaoLeituraHTML(lead, planoDia) {
     + '</span>';
 }
 
-function d7LinhaVisita(l, soLeitura, planoDia) {
-  const lead = l.lead;
-  const isC = lead.tipo === 'c';
-  const cor = isC ? (PL6_COR_ETAPA[lead.stageId] || '#7A8494')
-    : ((PL6_FONTES[lead.grupo] || {}).cor || '#7A8494');
-  const tag = isC
-    ? (lead.etapa + (lead.sla ? ' · SLA!' : ''))
-    : ('prospecção nova · ' + ((PL6_FONTES[lead.grupo] || {}).chip || 'lote novo'));
+function d7SeloEtapa(l) {
+  return l.tipo === 'c' ? String(l.etapa || '') : 'PROSPECÇÃO';
+}
+function d7CorEtapa(l) {
+  return l.tipo === 'c'
+    ? (PL6_COR_ETAPA[l.stageId] || '#7A8494')
+    : ((PL6_FONTES[l.grupo] || {}).cor || '#E51A31');
+}
 
-  const fechou = isC && String(lead.stageId) === '1395880473';
-  const est = fechou
-    ? { txt: '✓✓ FECHOU', cor: '#FFFDF8', bg: '#1E9E7B', borda: '#1E9E7B' }
-    : l.estado === 'feita'
-    ? { txt: '✓ registrada no Expogo', cor: '#1E9E7B', bg: '#EAF6F1', borda: '#CBE8DD' }
-    : (l.naAgenda
-      ? { txt: '⊙ aguardando check-in', cor: '#7A8494', bg: '#F7F5F0', borda: '#E4E0D6' }
-      : { txt: '⚠ sem tarefa no CRM', cor: '#8A6516', bg: '#FDF6E7', borda: '#F0DFB6' });
-  const obj = isC
-    ? (lead.dias != null ? ('parado há ' + lead.dias + 'd — ' + (lead.sla ? 'acima do SLA' : 'dentro do prazo')) : 'dias não medidos')
-    : (lead.nota != null
-      ? ('★ ' + lead.nota.toFixed(1).replace('.', ',')
-        + (lead.avaliacoes != null ? ' · ' + lead.avaliacoes.toLocaleString('pt-BR') + ' avaliações' : ''))
-      : (lead.mesesAberto != null ? ('CNPJ aberto há ' + lead.mesesAberto + ' meses') : 'sinal não medido'));
+function d7CartaoDoItem(l, soLeitura, planoDia) {
+    const ehVisita = l.tipo === 'visita';
+    const lead = ehVisita ? l.lead : null;
+    const feito = ehVisita && l.estado === 'feita';
+    const fechou = ehVisita && lead.tipo === 'c' && String(lead.stageId) === '1395880473';
+    const corBase = ehVisita ? d7CorEtapa(lead)
+      : (l.tipo === 'rua' ? PL6_RUA_COR : (l.tipo === 'rel' ? '#8E3B5C' : '#B4AC9C'));
+    const nome = ehVisita ? lead.nome
+      : (l.tipo === 'rua' ? 'Prospecção de rua'
+        : (l.tipo === 'rel' ? 'Visita de relacionamento'
+          : (l.tipo === 'bloqueado' ? 'bloqueado' : 'a conta saiu da sua base')));
+    const sub = ehVisita ? d7SubDaVisita(l)
+      : (l.tipo === 'rua' ? 'porta a porta · sem conta definida · registre as contas no Expogo'
+        : (l.tipo === 'rel' ? 'cliente da base — presença, indicação e upsell'
+          : (l.tipo === 'bloqueado' ? 'compromisso fora da rua'
+            : 'virou cliente, mudou de dono ou foi perdida')));
+    return {
+      si: l.si,
+      hora: l.hora || 'sem hora',
+      nome: nome,
+      sub: sub,
+      etapa: ehVisita ? d7SeloEtapa(lead).toUpperCase() : l.tipo.toUpperCase(),
+      etCor: corBase,
+      trilho: feito ? '#1E9E7B' : corBase,
+      bg: feito ? '#F6FBF8' : '#FDFEFF',
+      borda: feito ? '#CBE8DD' : '#E7E3DA',
+      horaBg: feito ? '#1E9E7B' : '#2B3440',
+      nomeCor: feito ? '#7A8494' : '#2B3440',
+      risco: feito ? 'text-decoration:line-through;' : '',
+      feito: feito,
+      pendente: ehVisita && !feito,
+      resultado: fechou ? '✓✓ FECHOU' : (feito ? '✓ registrada no Expogo' : ''),
+      resCor: fechou ? '#FFFDF8' : '#1E9E7B',
+      resBg: fechou ? '#1E9E7B' : '#EAF6F1',
 
-  const acaoHTML = soLeitura ? d7AcaoLeituraHTML(lead, planoDia) : d7AcaoHTML(lead);
+        acaoHTML: ehVisita
+        ? (soLeitura ? d7AcaoLeituraHTML(lead, planoDia || null) : d7AcaoHTML(lead))
+          : '',
+      id: ehVisita ? String(lead.id) : '',
+      ehVisita: ehVisita
+    };
+}
 
-  const estiloDesf = function (corTxt, corBorda, corBg) {
-    return ' style="border:1px solid ' + corBorda + ';border-radius:999px;background:' + corBg
-      + ';padding:4px 10px;font:800 9.5px \'Manrope\',sans-serif;color:' + corTxt
-      + ';cursor:pointer;white-space:nowrap;"';
+function d7CartaoDoDiaHTML(v, soLeitura) {
+  const regua = function () {
+    if (soLeitura || !v.pendente) return '';
+    const b = function (attrEval, rot, cor, bg, borda) {
+      return '<button type="button" ' + attrEval
+        + ' style="border:1px solid ' + borda + ';border-radius:999px;background:' + bg
+        + ';padding:5px 12px;font:800 10px \'Manrope\',sans-serif;color:' + cor
+        + ';cursor:pointer;white-space:nowrap;">' + rot + '</button>';
+    };
+    return '<div style="display:flex;align-items:center;gap:6px;margin-top:9px;flex-wrap:wrap;">'
+      + '<span style="font:900 8.5px \'Archivo\',sans-serif;letter-spacing:.07em;'
+      + 'text-transform:uppercase;color:#7A8494;margin-right:2px;">como foi?</span>'
+      + b('data-d7-proposta="' + esc(v.id) + '"', '✓ virou proposta', '#9C5BD6', '#FDFEFF', '#DCC9EE')
+      + b('data-d7-fechou="' + esc(v.id) + '"', '✓ fechou!', '#FDFEFF', '#1E9E7B', '#1E9E7B')
+      + b('data-d7-retorno="' + esc(v.id) + '"', 'conversa boa — voltar', '#8A6516', '#FDF6E7', '#F0DFB6')
+      + b('data-d7-nao-rolou="' + esc(v.id) + '"', 'não rolou', '#8A3B3B', '#FDF3F4', '#F0A9B2')
+      + b('data-d7-tirar="' + v.si + '"', 'remarcar ▸', '#7A8494', '#FDFEFF', '#DCE1EA')
+      + '</div>';
   };
-
-  const desfechos = (soLeitura || l.estado === 'feita') ? ''
-    : ('<span style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed #E4E0D6;">'
-      + '<span style="font:900 8px \'Archivo\',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#B4AC9C;">como foi?</span>'
-      + '<button type="button" data-d7-proposta="' + esc(lead.id) + '"'
-        + estiloDesf('#9C5BD6', '#DCC9EE', '#FDFEFF') + '>✓ virou proposta</button>'
-      + '<button type="button" data-d7-fechou="' + esc(lead.id) + '"'
-        + estiloDesf('#1E9E7B', '#CBE8DD', '#EAF6F1') + '>✓ fechou!</button>'
-      + '<button type="button" data-d7-retorno="' + esc(lead.id) + '"'
-        + estiloDesf('#B07C1F', '#F0DFB6', '#FDF6E7') + '>conversa boa — voltar</button>'
-      + '<button type="button" data-d7-nao-rolou="' + esc(lead.id) + '"'
-        + estiloDesf('#D6497E', '#F0A9B2', '#FDF3F4') + '>não rolou</button>'
-      + '<button type="button" data-d7-tirar="' + l.si + '"'
-        + estiloDesf('#7A8494', '#DCE1EA', '#FDFEFF') + '>remarcar ▸</button>'
-      + '</span>');
-
-  return '<div style="display:flex;min-width:0;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);">'
-    + '<span style="flex:none;width:3px;background:' + cor + ';"></span>'
-    + '<div style="flex:1;min-width:0;padding:8px 10px 9px 11px;">'
-    +   '<span style="display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap;">'
-    +     '<b style="flex:none;font:900 10.5px \'Archivo\',sans-serif;color:#FFFDF8;background:#2B3440;border-radius:999px;padding:3px 8px;font-variant-numeric:tabular-nums;">'
-    +       esc(l.hora || 'sem hora') + '</b>'
-    +     '<b style="font:800 12px \'Manrope\',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + esc(lead.nome) + '</b>'
-    +     '<span style="flex:none;font:900 8.5px \'Archivo\',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:' + cor + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;">' + esc(tag) + '</span>'
-    +     '<span style="flex:none;margin-left:auto;font:700 9px \'Manrope\',sans-serif;color:' + est.cor + ';background:' + est.bg + ';border:1px solid ' + est.borda + ';border-radius:999px;padding:2px 8px;white-space:nowrap;">' + est.txt + '</span>'
-    +   '</span>'
-    +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:3px;">' + esc(obj) + '</span>'
-    +   acaoHTML + desfechos
+  return '<div data-d7-dia-drop="' + v.si + '" style="display:flex;min-width:0;background:' + v.bg
+    + ';border:1.5px solid ' + v.borda + ';border-radius:12px;overflow:hidden;">'
+    + '<span style="flex:none;width:4px;background:' + v.trilho + ';"></span>'
+    + '<div style="flex:1;min-width:0;padding:11px 14px;">'
+    +   '<div style="display:flex;align-items:center;gap:9px;min-width:0;flex-wrap:wrap;">'
+    +     '<b style="flex:none;font:900 12px \'Archivo\',sans-serif;color:#FFFDF8;background:' + v.horaBg
+    +       ';border-radius:999px;padding:4px 11px;font-variant-numeric:tabular-nums;">' + esc(v.hora) + '</b>'
+    +     '<b style="font:800 14px \'Manrope\',sans-serif;color:' + v.nomeCor
+    +       ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;' + v.risco + '">'
+    +       esc(v.nome) + '</b>'
+    +     '<span style="flex:none;font:900 8px \'Archivo\',sans-serif;letter-spacing:.05em;'
+    +       'text-transform:uppercase;color:#FFFDF8;background:' + v.etCor
+    +       ';border-radius:999px;padding:3px 9px;white-space:nowrap;">' + esc(v.etapa) + '</span>'
+    +     '<span style="font:700 10px \'Manrope\',sans-serif;color:#7A8494;white-space:nowrap;'
+    +       'overflow:hidden;text-overflow:ellipsis;">' + esc(v.sub) + '</span>'
+    +     (v.feito
+      ? '<span style="margin-left:auto;flex:none;font:800 10.5px \'Manrope\',sans-serif;color:' + v.resCor
+        + ';background:' + v.resBg + ';border-radius:999px;padding:4px 12px;white-space:nowrap;">'
+        + esc(v.resultado) + '</span>'
+      : (v.ehVisita ? '' : '<button type="button" data-d7-tirar="' + v.si + '"'
+        + ' title="tirar do dia" aria-label="tirar do dia" data-d7-so-icone="1"'
+        + ' style="margin-left:auto;flex:none;border:0;background:transparent;color:#B4AC9C;'
+        + 'font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>'))
+    +   '</div>'
+    +   v.acaoHTML
+    +   regua(v)
     + '</div>'
-
-    + ((soLeitura || l.estado !== 'feita') ? ''
-      : '<button type="button" data-d7-tirar="' + l.si + '" data-d7-so-icone="1" title="Tirar ' + esc(lead.nome) + ' do plano"'
-        + ' aria-label="Tirar do plano" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>')
     + '</div>';
 }
 
-function d7CartaoSimples(si, cor, titulo, sub, rotX, comX) {
-  return '<div style="display:flex;min-width:0;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);">'
-    + '<span style="flex:none;width:3px;background:' + cor + ';"></span>'
-    + '<div style="flex:1;min-width:0;padding:9px 10px 9px 11px;">'
-    +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;">' + esc(titulo) + '</b>'
-    +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:2px;">' + esc(sub) + '</span>'
-    + '</div>'
-    + (comX ? '<button type="button" data-d7-tirar="' + si + '" data-d7-so-icone="1" title="' + esc(rotX) + '" aria-label="' + esc(rotX) + '" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px \'Manrope\',sans-serif;cursor:pointer;padding:0;">✕</button>' : '')
-    + '</div>';
+function d7NomeDaMunicao(rep, id) {
+  if (!id) return '';
+  if (id === PL6_RUA) return 'Prospecção de rua';
+  if (id === PL6_REL) return 'Visita de relacionamento';
+  const l = pl6TodasAsContas(rep, pl6Regioes(rep)).find(x => String(x.id) === String(id));
+  return l ? l.nome : 'esta conta';
 }
 
-function minhaDaily7aHTML(rep) {
+function d7SubDaVisita(l) {
+  const lead = l.lead;
+  const onde = (typeof pl6TextoDaRegiao === 'function' ? pl6TextoDaRegiao(lead) : '')
+    || lead.bairro || lead.cidade || '';
+  if (lead.tipo === 'c') {
+    const parado = lead.dias != null
+      ? ('há ' + lead.dias + 'd na etapa' + (lead.sla ? ' · acima do SLA' : ''))
+      : 'dias não medidos';
+    return [onde, parado].filter(Boolean).join(' · ');
+  }
+  const sinal = lead.nota != null
+    ? ('★ ' + lead.nota.toFixed(1).replace('.', ',')
+      + (lead.avaliacoes != null ? ' · ' + lead.avaliacoes.toLocaleString('pt-BR') + ' avaliações' : ''))
+    : (lead.mesesAberto != null ? ('CNPJ aberto há ' + lead.mesesAberto + ' meses') : 'sinal não medido');
+  return [onde, sinal].filter(Boolean).join(' · ');
+}
+
+function d7DadosFinal(rep) {
   const dias = pl6Dias(pl6SegundaDaSemana());
   const di = d7ColunaDeHoje();
   const iso = dias[di >= 0 ? di : 0].iso;
@@ -31677,284 +31772,362 @@ function minhaDaily7aHTML(rep) {
   const prom = d7PromessaDerivada(rep, plano);
   const quentes = d7QuentesForaDoPlano(rep, plano);
   const mun = d7Municao(rep, plano, d7UI.filtro);
-  const min = d7MinutosParaTrava();
-  const travada = d7Travada();
   const linhaDia = (typeof getDaily === 'function') ? (getDaily(rep.ownerId, iso) || {}) : {};
   const jaTravou = String(linhaDia.status || '') === 'plano_fechado';
   const horaTrava = linhaDia.fechado_em ? String(linhaDia.fechado_em).slice(11, 16) : '';
+  const minTrava = d7MinutosParaTrava();
 
-  const manchete = jaTravou
-    ? (quentes.length
-      ? ('Promessa travada — mas ' + quentes.length + ' quente(s) seu(s) está(ão) fora do plano.'
-        + ' O gestor vai perguntar às 8h30: agende ou date antes.')
-      : 'Agora é rua — check-in na porta pelo Expogo, e o desfecho em 1 clique aqui.')
-    : (prom.visitas
-      ? ('Seu Planejamento deixou ' + prom.visitas + ' visita(s) prontas pra hoje.'
-        + (prom.livres ? ' Complete as ' + prom.livres + ' vaga(s) livre(s),' : '')
-        + (quentes.length ? ' responda ' + quentes.length + ' quente(s)' : '')
-        + ' e trave sua promessa' + (travada ? ' — o prazo das ' + d7HoraDaTravaRot() + ' passou.' : ' — faltam ' + min + ' min.'))
-      : ('Hoje está em branco. Monte o dia pelas vagas livres ou pela munição'
-        + (rota ? ' da sua rota em ' + rota.nome : '') + ', e trave a promessa'
-        + (travada ? ' — o prazo das ' + d7HoraDaTravaRot() + ' passou.' : ' — faltam ' + min + ' min.')));
+  const ficha = d7UI.ficha
+    ? (pl6TodasAsContas(rep, pl6Regioes(rep)).find(x => String(x.id) === String(d7UI.ficha)) || null)
+    : null;
 
-  const kpis = [
-    { rot: 'Seu plano de hoje', v: String(prom.visitas), de: 'visita(s)', cor: '#2B3440' },
-    { rot: 'Sua promessa', v: jaTravou ? '✓' : '—',
-      de: jaTravou ? ('travada ' + horaTrava)
-        : (travada ? ('passou das ' + d7HoraDaTravaRot()) : ('até ' + d7HoraDaTravaRot())),
-      cor: jaTravou ? '#1E9E7B' : '#B07C1F' },
-    { rot: 'Quentes fora do plano', v: String(quentes.length), de: 'sem resposta',
-      cor: quentes.length ? '#8E3B5C' : '#1E9E7B' },
-    { rot: 'Na mesa hoje', v: String(prom.naMesa), de: 'proposta/negociação', cor: '#9C5BD6' }
-  ];
-  const kpisHTML = kpis.map(function (k) {
-    return '<span><span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;">'
-      + esc(k.rot) + '</span><span style="display:flex;align-items:baseline;gap:6px;">'
-      + '<b style="font:900 28px \'Archivo\',sans-serif;font-variant-numeric:tabular-nums;color:' + k.cor + ';letter-spacing:-.02em;">'
-      + esc(k.v) + '</b><span style="font:700 10px \'Manrope\',sans-serif;color:#8B93A3;white-space:nowrap;">'
-      + esc(k.de) + '</span></span></span>';
-  }).join('');
+  const ocupados = plano.filter(x => x.tipo !== 'livre');
+  const visitasReais = ocupados.filter(x => x.tipo === 'visita');
+  const feitas = visitasReais.filter(x => x.estado === 'feita').length;
+  const proxima = visitasReais.find(x => x.estado !== 'feita') || null;
 
-  const vagaLinha = function (si, rot, sub) {
-    return '<button type="button" data-d7-abrir="' + si + '" style="display:flex;align-items:center;gap:8px;min-height:38px;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF6F7;cursor:pointer;padding:6px 11px;text-align:left;">'
-      + '<b style="flex:none;font:900 10px \'Archivo\',sans-serif;color:#E51A31;font-variant-numeric:tabular-nums;">' + esc(rot) + '</b>'
-      + '<span style="font:800 10px \'Manrope\',sans-serif;color:#E51A31;">' + esc(sub) + '</span></button>';
-  };
-  const linhas = plano.map(function (l) {
-    if (l.tipo === 'visita') return d7LinhaVisita(l);
-    if (l.tipo === 'bloqueado') {
-      return d7CartaoSimples(l.si, '#B4AC9C', 'bloqueado',
-        'compromisso fora da rua' + (l.hora ? ' · ' + l.hora : ''), 'Desbloquear', true);
-    }
-    if (l.tipo === 'orfa') {
-
-      return d7CartaoSimples(l.si, '#B4AC9C', 'a conta saiu da sua base',
-        'virou cliente, mudou de dono ou foi perdida' + (l.hora ? ' · ' + l.hora : ''),
-        'Liberar a vaga', true);
-    }
-    if (l.tipo === 'rua') {
-
-      return d7CartaoSimples(l.si, PL6_RUA_COR, 'Prospecção de rua',
-        'porta a porta · sem conta definida' + (l.hora ? ' · ' + l.hora : '')
-        + ' · registre as contas no Expogo',
-        'Tirar a prospecção de rua do plano', true);
-    }
-    if (d7UI.slot !== l.si) {
-
-      if (!l.hora) return '';
-      return vagaLinha(l.si, l.hora, 'livre — o que você coloca aqui?');
-    }
-
-    const sug = function (verbo, chave, nome, motivo, selo, corSelo, bgSelo) {
-      return '<button type="button" data-d7-por="' + esc(verbo + ':' + chave) + '.' + l.si + '"'
-        + ' style="display:block;width:100%;text-align:left;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;padding:8px 10px;cursor:pointer;min-width:0;">'
-        + '<span style="display:flex;align-items:center;gap:6px;min-width:0;">'
-        + '<b style="font:800 11.5px \'Manrope\',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + esc(nome) + '</b>'
-        + '<span style="flex:none;margin-left:auto;font:900 7.5px \'Archivo\',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:' + corSelo + ';background:' + bgSelo + ';border-radius:5px;padding:3px 7px;">' + esc(selo) + '</span>'
-        + '</span>'
-        + '<span style="display:block;font:700 9px \'Manrope\',sans-serif;color:#7A8494;margin-top:2px;">' + esc(motivo) + '</span>'
-        + '</button>';
-    };
-    const sugQ = quentes.slice(0, 5).map(function (q) {
-      return sug('q', String(q.dealId || q.nome), q.nome,
-        q.etapa + (q.dias != null ? ' · há ' + q.dias + 'd' : '') + ' — fora do plano, o gestor vai perguntar',
-        'quente', '#FDFEFF', '#8E3B5C');
-    }).join('');
-    const sugM = (mun.lista || []).slice(0, 6).map(function (c) {
-      const isC = c.tipo === 'c';
-
-      return sug('m', String(c.id), c.nome, pl6Motivo(c),
-        isC ? 'carteira' : ((PL6_FONTES[c.grupo] || {}).chip || 'lote novo'),
-        isC ? '#FDFEFF' : '#8A6516', isC ? '#2B3440' : '#FDF6E7');
-    }).join('');
-    return '<div style="border:1.5px solid #E51A31;border-radius:12px;background:#FDFEFF;padding:11px;box-shadow:0 10px 26px rgba(229,26,49,.14);">'
-      + '<span style="display:flex;align-items:baseline;gap:6px;margin-bottom:8px;">'
-      +   '<span style="font:900 8.5px \'Archivo\',sans-serif;letter-spacing:.07em;text-transform:uppercase;color:#E51A31;">'
-      +     esc((l.hora ? l.hora + ' · ' : '') + 'o que você coloca aqui?') + '</span>'
-      +   '<button type="button" data-d7-fechar-card="1" aria-label="Fechar" style="margin-left:auto;flex:none;width:22px;height:22px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 11px \'Manrope\',sans-serif;cursor:pointer;line-height:1;padding:0;">✕</button>'
-      + '</span>'
-      + '<div style="display:flex;flex-direction:column;gap:5px;">' + sugQ + sugM + '</div>'
-      + ((sugQ + sugM) ? ''
-        : '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#B4AC9C;padding:8px 2px;">Nada livre na carteira nem no lote — tudo já está na semana.</span>')
-
-      + '<button type="button" data-d7-rua="' + l.si + '" style="display:block;width:100%;margin-top:7px;border:1.5px dashed ' + PL6_RUA_COR + ';border-radius:10px;background:#FDF6F0;padding:7px 10px;font:800 10px \'Manrope\',sans-serif;color:' + PL6_RUA_COR + ';cursor:pointer;">+ prospecção de rua · porta a porta<span style="display:block;font:700 9px \'Manrope\',sans-serif;color:#B4AC9C;margin-top:1px;">sem conta definida — vira horas de rua e contas visitadas</span></button>'
-      + '<button type="button" data-d7-bloquear="' + l.si + '" style="display:block;width:100%;margin-top:5px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 10px;font:800 9.5px \'Manrope\',sans-serif;color:#7A8494;cursor:pointer;">⊘ bloquear — compromisso fora da rua</button>'
-      + '</div>';
-  }).join('')
-
-  + (function () {
-      const semJanela = plano.filter(function (x) { return x.tipo === 'livre' && !x.hora; });
-      if (!semJanela.length || d7UI.slot === semJanela[0].si) return '';
-      return vagaLinha(semJanela[0].si, '+' + semJanela.length,
-        (semJanela.length === 1 ? 'mais 1 vaga sem hora marcada' : 'mais ' + semJanela.length + ' vagas sem hora marcada')
-        + ' — o dia cabe ' + String((typeof PL6_SLOTS !== 'undefined') ? PL6_SLOTS : 15) + ' contas');
-    }());
-
-  const chips = [
-    { t: prom.visitas + ' visita(s)', c: '#2B3440' },
-    { t: prom.prospeccoes + ' prospecção(ões) nova(s)', c: '#B07C1F' },
-    { t: prom.naMesa + ' na mesa', c: '#9C5BD6' }
-  ]
-
-    .concat(prom.ruas ? [{ t: prom.ruas + ' volta(s) de rua', c: PL6_RUA_COR }] : [])
-    .concat(prom.semTarefa ? [{ t: prom.semTarefa + ' sem tarefa no CRM', c: '#8E3B5C' }] : [])
-    .concat(quentes.length ? [{ t: quentes.length + ' quente(s) sem resposta', c: '#B07C1F' }] : []);
-  const chipsHTML = chips.map(function (c) {
-    return '<span style="display:inline-flex;align-items:center;font:800 10.5px \'Manrope\',sans-serif;color:'
-      + c.c + ';background:#FDFEFF;border:1px solid #E2E6EE;border-radius:999px;padding:5px 12px;white-space:nowrap;">'
-      + esc(c.t) + '</span>';
-  }).join('');
-
-  const naMesa = plano.filter(x => x.tipo === 'visita' && x.lead.tipo === 'c'
+  const naMesa = visitasReais.filter(x => x.lead.tipo === 'c'
     && D7_ETAPAS_DE_MESA.indexOf(String(x.lead.stageId)) >= 0);
   const mrrDe = x => (typeof mrrDoNegocio === 'function') ? mrrDoNegocio(x.lead._bruto || x.lead) : null;
-  const apostas = naMesa.map(function (x) {
-    const on = !!d7UI.apostas[x.lead.id];
-    const m = mrrDe(x);
-    return '<button type="button" data-d7-aposta="' + esc(x.lead.id) + '"'
-      + ' style="border:1px solid ' + (on ? '#1E9E7B' : '#DCE1EA') + ';border-radius:999px;background:'
-      + (on ? '#EAF6F1' : '#FDFEFF') + ';padding:5px 11px;font:800 10px \'Manrope\',sans-serif;color:'
-      + (on ? '#1E9E7B' : '#2B3440') + ';cursor:pointer;white-space:nowrap;">'
-      + (on ? '✓ ' : '') + esc(x.lead.nome) + ' · '
-      + (m != null ? 'R$ ' + m.toLocaleString('pt-BR') : 'MRR não medido') + '</button>';
+  const fechamento = naMesa.slice().sort((a, b) => (mrrDe(b) || 0) - (mrrDe(a) || 0))[0] || null;
+
+  const agora = (typeof agendaAgora === 'function') ? agendaAgora() : new Date();
+  const horaAgora = agora.getHours() + (agora.getMinutes() / 60);
+  const faltam = visitasReais.length - feitas;
+  const horasUteis = Math.max(0, 17 - horaAgora);
+  const apertado = faltam > 0 && horasUteis > 0 && faltam > horasUteis;
+  const semTempo = faltam > 0 && horasUteis <= 0;
+
+  return {
+
+    kicker: 'Minha Daily · ' + hojeRot + ' · região: ' + (rota ? rota.nome : 'sem rota escolhida'),
+    manchete: jaTravou
+      ? ('Promessa travada' + (horaTrava ? ' às ' + horaTrava : '') + ' — agora é rua. '
+        + feitas + ' de ' + visitasReais.length + ' registradas.')
+      : (faltam === 0 && visitasReais.length > 0
+        ? ('Dia completo: ' + visitasReais.length + ' visita(s) registrada(s) ✓ — amanhã já está montado no Planejamento.')
+        : (visitasReais.length === 0
+          ? 'O seu dia está vazio — pegue uma conta na munição e escolha a hora.'
+          : (visitasReais.length + ' visita(s) hoje, ' + feitas + ' registrada(s) — a próxima é '
+            + (proxima ? proxima.lead.nome : '—') + (proxima && proxima.hora ? ' às ' + proxima.hora : '')
+            + (fechamento ? '. O ' + fechamento.lead.nome + (fechamento.hora ? ' às ' + fechamento.hora : '')
+              + ' é o fechamento do dia.' : '.')))),
+    kpis: [
+      { rot: 'Plano de hoje', v: feitas + '/' + visitasReais.length, sub: 'visitas registradas',
+        cor: (visitasReais.length > 0 && feitas === visitasReais.length) ? '#1E9E7B' : '#2B3440' },
+      { rot: 'Fechamento na mesa', v: String(naMesa.length),
+        sub: fechamento ? (fechamento.lead.nome + ' · ' + d7SeloEtapa(fechamento.lead)) : 'nenhum contrato na mesa',
+        cor: '#D6497E' },
+      { rot: 'Quentes fora do plano', v: String(quentes.length),
+        sub: quentes.length ? 'resolver por telefone' : 'nenhum sem resposta',
+        cor: quentes.length ? '#E51A31' : '#1E9E7B' }
+    ],
+
+    metasHoje: [
+      { v: prom.visitas + ' visita(s)', rot: 'no plano · ' + feitas + ' feita(s)', cor: '#2B3440' },
+      { v: naMesa.length + ' fechamento(s)',
+        rot: fechamento ? (fechamento.lead.nome + (fechamento.hora ? ' às ' + fechamento.hora : '')) : 'sem contrato na mesa',
+        cor: '#D6497E' },
+      { v: prom.prospeccoes + ' conta(s) nova(s)', rot: 'prospecção no plano de hoje', cor: '#1E9E7B' }
+    ].concat(prom.ruas ? [{ v: prom.ruas + ' volta(s) de rua', rot: 'porta a porta', cor: PL6_RUA_COR }] : []),
+    ritmo: semTempo ? ('passou das 17h — ' + faltam + ' visita(s) sem registro')
+      : (apertado ? ('ritmo: apertado — ' + faltam + ' visita(s) até 17h')
+        : (faltam === 0 ? 'ritmo: no prazo ✓' : 'ritmo: no prazo ✓ — ' + faltam + ' até 17h')),
+    ritmoCor: (apertado || semTempo) ? '#8A6516' : '#1E9E7B',
+    ritmoBg: (apertado || semTempo) ? '#FDF6E7' : '#EAF6F1',
+    ritmoBorda: (apertado || semTempo) ? '#F0DFB6' : '#CBE8DD',
+
+    travaJaFeita: jaTravou,
+    travaRot: jaTravou
+      ? ('promessa travada' + (horaTrava ? ' às ' + horaTrava : '') + ' ✓')
+      : (minTrava > 0 ? ('travar a promessa — faltam ' + minTrava + ' min') : 'travar a promessa (fora da hora)'),
+
+    temAviso: !!(d7UI.horas || d7UI.toast),
+    temSel: !!d7UI.horas,
+    aviso: d7UI.horas
+      ? ('▸ ' + d7NomeDaMunicao(rep, d7UI.horas) + ' — escolha a hora e confirme')
+      : (d7UI.toast || ''),
+    avisoBg: d7UI.horas ? '#FDF3F4' : '#EAF6F1',
+    avisoCor: d7UI.horas ? '#E51A31' : '#1E9E7B',
+
+    visitas: ocupados.map(function (l) { return d7CartaoDoItem(l, false, null); }),
+
+    encaixando: !!d7UI.horas,
+    horaRot: d7UI.hSel + ':' + d7UI.mSel,
+    horasOpt: PF_HORAS_OPT.map(function (h) {
+      const on = d7UI.hSel === h;
+      return { rot: h, on: 'hora:' + h, bg: on ? '#2B3440' : '#FDFEFF',
+        cor: on ? '#FFFDF8' : '#2B3440', borda: on ? '#2B3440' : '#E2E6EE' };
+    }),
+    minsOpt: PF_MINS_OPT.map(function (m) {
+      const on = d7UI.mSel === m;
+      return { rot: ':' + m, on: 'min:' + m, bg: on ? '#2B3440' : '#FDFEFF',
+        cor: on ? '#FFFDF8' : '#2B3440', borda: on ? '#2B3440' : '#E2E6EE' };
+    }),
+    agendar: 'encaixar',
+
+    quentes: quentes.map(function (q) {
+      const bq = (typeof brutoDoNegocio === 'function') ? brutoDoNegocio(q.dealId) : null;
+      const tel = String((bq && (bq.celular || bq.telefone)) || q.telefone || '').trim();
+      return {
+        nome: q.nome,
+        sub: (q.etapa || '') + (q.dias != null ? ' · há ' + q.dias + 'd' : '') + ' · sem tarefa futura no CRM',
+        temp: q.temp != null ? String(q.temp) : '—',
+        tCor: (q.temp != null && q.temp >= 85) ? '#E51A31' : '#F2542D',
+        tel: tel ? tel.replace(/[^0-9+]/g, '') : '',
+        ligarId: String(q.dealId || q.nome),
+        encaixarId: String(q.dealId || q.nome)
+      };
+    }),
+
+    temFicha: !!ficha,
+    fichaNome: esc(ficha ? ficha.nome : ''),
+    fichaSub: esc(ficha ? pl6SubDoCard(ficha) : ''),
+    fichaTag: esc(ficha ? pfTag(ficha).tag : ''),
+    fichaTagCor: ficha ? pfTag(ficha).cor : '#2B3440',
+    fichaTagBg: ficha ? pfTag(ficha).bg : '#FBFAF6',
+    fichaCampos: ficha ? pl6FichaCamposFinal(ficha) : [],
+    fichaEtapas: PL6_ETAPAS_FICHA.map(function (e) {
+      const aqui = !!(ficha && ficha.tipo === 'c' && String(ficha.stageId) === e.id);
+      return { rot: esc(e.rot), on: ficha ? (ficha.id + '|' + e.id) : '',
+        bg: aqui ? '#2B3440' : '#FDFEFF', cor: aqui ? '#FDFEFF' : '#2B3440',
+        borda: aqui ? '#2B3440' : '#DCE1EA' };
+    }),
+    fichaAcao: esc(ficha ? pl6Motivo(ficha) : ''),
+    fichaAgendar: ficha ? String(ficha.id) : '',
+    municaoCriterio: mun.criterio,
+    municao: (mun.lista || []).map(function (l) {
+      const sel = d7UI.horas === l.id;
+      const fonte = PL6_FONTES[l.grupo] || {};
+      return {
+        nome: l.nome,
+        sub: pl6SubDoCard(l),
+        tag: l.tipo === 'c' ? 'carteira' : (fonte.chip || 'lote novo'),
+        tagCor: l.tipo === 'c' ? '#FDFEFF' : (fonte.cor || '#8A6516'),
+        tagBg: l.tipo === 'c' ? '#2B3440' : (fonte.bg || '#FDF6E7'),
+        bg: sel ? '#FDF3F4' : '#FDFEFF',
+        borda: sel ? '#E51A31' : '#E7E3DA',
+        acao: sel ? 'escolha a hora ▸' : 'encaixar no dia ▸',
+        acaoCor: sel ? '#FFFDF8' : '#8E3B5C',
+        acaoBg: sel ? '#E51A31' : '#FDFEFF',
+        acaoBorda: sel ? '#E51A31' : '#E9D9E1',
+        id: String(l.id)
+      };
+    })
+  };
+}
+
+function d7TelaFinalHTML(d) {
+  const kpisHTML = (d.kpis || []).map(function (k) {
+    return '<span><span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
+      + 'text-transform:uppercase;color:#7A8494;">' + esc(k.rot) + '</span>'
+      + '<b style="font:900 28px \'Archivo\',sans-serif;font-variant-numeric:tabular-nums;color:'
+      + k.cor + ';letter-spacing:-.02em;">' + esc(k.v) + '</b>'
+      + '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#7A8494;">'
+      + esc(k.sub) + '</span></span>';
   }).join('');
-  const escolhidas = naMesa.filter(x => d7UI.apostas[x.lead.id]);
-  const somaAposta = escolhidas.reduce(function (t2, x) { return t2 + (mrrDe(x) || 0); }, 0);
 
-  const cardsQuentes = quentes.length
-    ? quentes.map(function (q) {
-
-        const bq = typeof brutoDoNegocio === 'function' ? brutoDoNegocio(q.dealId) : null;
-        const telQ = String((bq && (bq.celular || bq.telefone)) || q.telefone || '').trim();
-        return '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:10px;padding:9px 11px;min-width:0;">'
-          + '<span style="min-width:0;flex:1;">'
-          +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;overflow-wrap:anywhere;">' + esc(q.nome) + '</b>'
-          +   '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:2px;">'
-          +     esc(q.etapa + (q.dias != null ? ' · há ' + q.dias + 'd' : '') + ' · sem tarefa futura no CRM') + '</span>'
-          + '</span>'
-          + '<button type="button" data-d7-q-agendar="' + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:0;border-radius:999px;background:#E51A31;color:#FFFDF8;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;cursor:pointer;">agendo hoje ▸</button>'
-
-          + (telQ
-            ? '<a href="tel:' + esc(telQ.replace(/[^0-9+]/g, '')) + '" data-d7-q-tarefa="'
-              + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:0;border-radius:999px;'
-              + 'background:#1E9E7B;color:#FFFDF8;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;'
-              + 'cursor:pointer;text-decoration:none;">ligar agora ▸</a>'
-            : '<button type="button" data-d7-q-tarefa="' + esc(String(q.dealId || q.nome)) + '" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 13px;font:800 10px \'Manrope\',sans-serif;color:#2B3440;cursor:pointer;">dato tarefa ▸</button>')
-          + '</div>';
-      }).join('')
-    : '<span style="display:block;font:800 10.5px \'Manrope\',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:10px;padding:10px 13px;">0 quentes fora do plano — a pergunta da rodada não existe hoje ✓</span>';
-
-  const filtros = [['todas', 'todas'], ['carteira', 'minha carteira'], ['casa', 'casa dos dados'],
-    ['aval', 'mais avaliados']].map(function (par) {
-    const on = (d7UI.filtro || 'todas') === par[0];
-    return '<button type="button" data-d7-filtro="' + par[0] + '"'
-      + ' style="border:1px solid ' + (on ? '#2B3440' : '#DCE1EA') + ';border-radius:999px;background:'
-      + (on ? '#2B3440' : '#FDFEFF') + ';padding:5px 11px;font:800 9.5px \'Manrope\',sans-serif;color:'
-      + (on ? '#FDFEFF' : '#2B3440') + ';cursor:pointer;white-space:nowrap;">' + esc(par[1]) + '</button>';
+  const metasHTML = (d.metasHoje || []).map(function (m) {
+    return '<span style="display:inline-flex;align-items:center;gap:7px;">'
+      + '<b style="font:900 16px \'Archivo\',sans-serif;color:' + m.cor
+      + ';font-variant-numeric:tabular-nums;">' + esc(m.v) + '</b>'
+      + '<span style="font:800 10.5px \'Manrope\',sans-serif;color:#7A8494;">' + esc(m.rot) + '</span></span>';
   }).join('');
-  const cardsMun = (mun.lista || []).length
-    ? mun.lista.map(function (c) {
-        const isC = c.tipo === 'c';
-        const tg = isC ? { rot: 'carteira', cor: '#FDFEFF', bg: '#2B3440' }
-          : { rot: ((PL6_FONTES[c.grupo] || {}).chip || 'lote novo'), cor: '#8A6516', bg: '#FDF6E7' };
-        return '<div style="background:#FDFEFF;border:1.5px solid #E7E3DA;border-radius:11px;padding:9px 11px;min-width:0;">'
-          + '<span style="display:flex;align-items:center;gap:7px;min-width:0;">'
-          +   '<b style="font:800 12px \'Manrope\',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + esc(c.nome) + '</b>'
-          +   '<span style="margin-left:auto;flex:none;font:900 7.5px \'Archivo\',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:' + tg.cor + ';background:' + tg.bg + ';border-radius:5px;padding:3px 7px;white-space:nowrap;">' + esc(tg.rot) + '</span>'
-          + '</span>'
-          + '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:3px;">' + esc(pl6Motivo(c)) + '</span>'
-          + '<button type="button" data-d7-m-abrir="' + esc(c.id) + '" style="margin-top:6px;border:1px solid #E9D9E1;border-radius:999px;background:#FDFEFF;padding:4px 11px;font:800 9.5px \'Manrope\',sans-serif;color:#8E3B5C;cursor:pointer;">'
-          + (isC ? 'colocar no dia ▸' : 'criar negócio + colocar no dia ▸') + '</button>'
-          + (d7UI.horas === c.id ? d7HorasHTML(plano, c.id) : '')
-          + '</div>';
-      }).join('')
-    : '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;">Nada livre'
-      + (rota ? ' em ' + esc(rota.nome) : '') + ' — tudo já está na semana.</span>';
 
-  return '<div data-d7-raiz="1" style="position:relative;background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">'
+  const visitasHTML = (d.visitas || []).map(function (v) {
+    return d7CartaoDoDiaHTML(v, false);
+  }).join('');
 
-    + '<div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;padding:22px 28px 18px;border-bottom:1px solid #E7E3DA;">'
-    +   '<div style="flex:1;min-width:320px;">'
-    +     '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#E51A31;">'
-    +       esc('Minha Daily · ' + hojeRot + (rota ? ' · rota em ' + rota.nome : ' · sem rota escolhida')) + '</span>'
-    +     '<h1 style="margin:6px 0 0;font:900 25px/1.25 \'Archivo\',sans-serif;letter-spacing:-.02em;color:#2B3440;text-wrap:balance;">' + esc(manchete) + '</h1>'
+  const relogioHTML = d.encaixando ? pfRelogioHTML(d, 'data-d7-relogio', 'encaixar', 'dia') : '';
+
+  const quentesHTML = (d.quentes || []).map(function (q) {
+
+    const ligar = q.tel
+      ? '<a href="tel:' + esc(q.tel) + '" data-d7-q-tarefa="' + esc(q.ligarId) + '"'
+        + ' style="flex:none;border:1px solid #CBE8DD;border-radius:999px;background:#EAF6F1;'
+        + 'padding:5px 13px;font:800 10px \'Manrope\',sans-serif;color:#1E9E7B;cursor:pointer;'
+        + 'text-decoration:none;">ligar agora ▸</a>'
+      : '<button type="button" data-d7-q-tarefa="' + esc(q.ligarId) + '"'
+        + ' style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;'
+        + 'padding:5px 13px;font:800 10px \'Manrope\',sans-serif;color:#2B3440;cursor:pointer;">'
+        + 'dato tarefa ▸</button>';
+    return '<span style="display:flex;align-items:center;gap:10px;min-width:0;background:#FDFEFF;'
+      + 'border:1px solid #E9D9E1;border-radius:10px;padding:9px 13px;flex-wrap:wrap;">'
+      + '<b style="flex:none;font:900 12px \'Archivo\',sans-serif;color:' + q.tCor
+      +   ';font-variant-numeric:tabular-nums;">' + esc(q.temp) + '°</b>'
+      + '<span style="flex:1;min-width:160px;">'
+      +   '<b style="display:block;font:800 12px \'Manrope\',sans-serif;color:#2B3440;'
+      +     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(q.nome) + '</b>'
+      +   '<span style="font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;">' + esc(q.sub) + '</span>'
+      + '</span>'
+      + ligar
+      + '<button type="button" data-d7-q-agendar="' + esc(q.encaixarId) + '"'
+      +   ' style="flex:none;border:1px solid #E9D9E1;border-radius:999px;background:#FDFEFF;'
+      +   'padding:5px 13px;font:800 10px \'Manrope\',sans-serif;color:#8E3B5C;cursor:pointer;">'
+      +   'encaixar hoje ▸</button>'
+      + '</span>';
+  }).join('');
+
+  const munHTML = (d.municao || []).map(function (m) {
+    return '<div draggable="true" data-d7-arraste="' + esc(m.id) + '" data-d7-ficha="' + esc(m.id) + '"'
+      + ' title="arraste pro dia · clique pra abrir a ficha"'
+      + ' style="background:' + m.bg + ';border:1.5px solid ' + m.borda
+      + ';border-radius:11px;padding:10px 12px;cursor:grab;min-width:0;">'
+      + '<span style="display:flex;align-items:center;gap:7px;min-width:0;">'
+      +   '<span style="flex:none;color:#B4AC9C;font:800 11px \'Manrope\',sans-serif;letter-spacing:1px;">⠿</span>'
+      +   '<b style="font:800 12px \'Manrope\',sans-serif;color:#2B3440;white-space:nowrap;'
+      +     'overflow:hidden;text-overflow:ellipsis;min-width:0;">' + esc(m.nome) + '</b>'
+      +   '<span style="margin-left:auto;flex:none;font:900 7.5px \'Archivo\',sans-serif;'
+      +     'letter-spacing:.05em;text-transform:uppercase;color:' + m.tagCor + ';background:' + m.tagBg
+      +     ';border-radius:5px;padding:3px 7px;white-space:nowrap;">' + esc(m.tag) + '</span>'
+      + '</span>'
+      + '<span style="display:block;font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;margin-top:3px;'
+      +   'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(m.sub) + '</span>'
+      + '<button type="button" data-d7-m-abrir="' + esc(m.id) + '"'
+      +   ' style="margin-top:5px;border:1px solid ' + m.acaoBorda + ';border-radius:999px;background:'
+      +   m.acaoBg + ';padding:4px 11px;font:800 9.5px \'Manrope\',sans-serif;color:' + m.acaoCor
+      +   ';cursor:pointer;white-space:nowrap;">' + esc(m.acao) + '</button>'
+      + '</div>';
+  }).join('');
+
+  const fichaCamposHTML = (d.fichaCampos || []).map(function (fc) {
+    return '<span style="display:flex;align-items:baseline;gap:10px;padding:9px 12px;'
+      + 'background:#FDFEFF;border-bottom:1px solid #F1EEE7;">'
+      + '<span style="flex:none;width:82px;font:900 8px \'Archivo\',sans-serif;'
+      +   'letter-spacing:.07em;text-transform:uppercase;color:#B4AC9C;">' + fc.rot + '</span>'
+      + '<span style="flex:1;min-width:0;font:700 10.5px/1.45 \'Manrope\',sans-serif;color:'
+      +   fc.cor + ';overflow-wrap:anywhere;">' + fc.v + '</span></span>';
+  }).join('');
+
+  const fichaEtapasHTML = (d.fichaEtapas || []).map(function (fe) {
+    return '<button type="button" data-d7-fi-etapa="' + esc(fe.on) + '"'
+      + ' style="border:1px solid ' + fe.borda + ';border-radius:999px;background:' + fe.bg
+      + ';padding:5px 11px;font:800 9.5px \'Manrope\',sans-serif;color:' + fe.cor
+      + ';cursor:pointer;white-space:nowrap;">' + fe.rot + '</button>';
+  }).join('');
+
+  const blocoHTML = function (attrEval, rot, sub) {
+    return '<button type="button" ' + attrEval
+      + ' style="display:block;width:100%;text-align:left;border:1.5px dashed #D8D2C4;'
+      + 'border-radius:10px;background:#FDFEFF;padding:8px 12px;cursor:pointer;min-width:0;">'
+      + '<b style="display:block;font:800 10.5px \'Manrope\',sans-serif;color:#8E3B5C;">' + esc(rot) + '</b>'
+      + '<span style="display:block;font:700 9px/1.4 \'Manrope\',sans-serif;color:#7A8494;margin-top:2px;">'
+      + esc(sub) + '</span></button>';
+  };
+
+  return '<div data-d7-raiz="1" style="position:relative;background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;'
+    + 'box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">'
+
+    + '<div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;padding:22px 28px 18px;'
+    +   'border-bottom:1px solid #E7E3DA;">'
+    +   '<div style="flex:1;min-width:280px;">'
+    +     '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.14em;'
+    +       'text-transform:uppercase;color:#E51A31;">' + esc(d.kicker) + '</span>'
+    +     '<h1 style="margin:6px 0 0;font:900 25px/1.25 \'Archivo\',sans-serif;letter-spacing:-.02em;'
+    +       'color:#2B3440;text-wrap:balance;">' + esc(d.manchete) + '</h1>'
     +   '</div>'
     +   '<div style="display:flex;gap:32px;flex-wrap:wrap;">' + kpisHTML + '</div>'
     + '</div>'
 
-    + '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:13px 28px;background:#FBFAF6;border-bottom:1px solid #E7E3DA;">'
-    +   '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#E51A31;">A sua promessa de hoje</span>'
-    +   chipsHTML
-    +   (jaTravou
-        ? '<span style="margin-left:auto;font:700 10px \'Manrope\',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:4px 11px;">'
-          + esc('travada' + (horaTrava ? ' às ' + horaTrava : '') + ' ✓') + '</span>'
-          + (travada
-            ? '<span style="font:700 9.5px \'Manrope\',sans-serif;color:#B4AC9C;">passou das ' + esc(d7HoraDaTravaRot()) + ' — não reabre mais</span>'
-            : '<button type="button" data-d7-reabrir="1" style="border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 14px;font:800 10px \'Manrope\',sans-serif;color:#2B3440;cursor:pointer;">reabrir e ajustar ▸</button>')
-        : '<button type="button" data-d7-travar="1" style="margin-left:auto;border:0;border-radius:999px;background:#E51A31;color:#FFFDF8;min-height:36px;padding:0 18px;font:800 11.5px \'Manrope\',sans-serif;cursor:pointer;">travar minha promessa ▸</button>')
+    + '<div style="display:flex;align-items:center;gap:22px;flex-wrap:wrap;padding:13px 28px;'
+    +   'background:#FBFAF6;border-bottom:1px solid #E7E3DA;">'
+    +   '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;'
+    +     'text-transform:uppercase;color:#E51A31;">A promessa de hoje</span>'
+    +   metasHTML
+    +   '<span style="margin-left:auto;display:flex;align-items:center;gap:8px;">'
+    +     '<span style="font:800 11px \'Manrope\',sans-serif;color:' + d.ritmoCor + ';background:'
+    +       d.ritmoBg + ';border:1px solid ' + d.ritmoBorda + ';border-radius:999px;padding:5px 13px;">'
+    +       esc(d.ritmo) + '</span>'
+    +     '<button type="button" data-d7-travar="1"'
+    +       ' style="border:1px solid ' + (d.travaJaFeita ? '#CBE8DD' : '#2B3440') + ';border-radius:999px;'
+    +       'background:' + (d.travaJaFeita ? '#EAF6F1' : '#2B3440') + ';color:'
+    +       (d.travaJaFeita ? '#1E9E7B' : '#FFFDF8') + ';padding:5px 14px;'
+    +       'font:800 11px \'Manrope\',sans-serif;cursor:pointer;">' + esc(d.travaRot) + '</button>'
+    +   '</span>'
     + '</div>'
 
-    + (apostas
-      ? '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:11px 28px;background:#FDFEFF;border-bottom:1px solid #E7E3DA;">'
-        + '<span style="font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;">palavra do dia — o que você aposta que fecha</span>'
-        + apostas
-        + '<span style="font:700 9.5px \'Manrope\',sans-serif;color:' + (escolhidas.length ? '#1E9E7B' : '#B4AC9C') + ';">'
-        + (escolhidas.length
-          ? esc(escolhidas.length + ' aposta(s) · R$ ' + somaAposta.toLocaleString('pt-BR') + ' na mesa')
-          : 'sem aposta hoje — tudo bem, palavra só quando há contrato na mesa')
-        + '</span></div>'
-      : '')
-
-    + (d7UI.toast
-      ? '<div style="padding:11px 28px;background:#EAF6F1;border-bottom:1px solid #E7E3DA;font:800 12px \'Manrope\',sans-serif;color:#1E9E7B;">'
-        + esc(d7UI.toast) + '</div>'
+    + (d.temAviso
+      ? '<div style="display:flex;align-items:center;gap:10px;padding:11px 28px;background:' + d.avisoBg
+        + ';border-bottom:1px solid #E7E3DA;">'
+        + '<b style="font:800 12.5px \'Manrope\',sans-serif;color:' + d.avisoCor + ';">' + esc(d.aviso) + '</b>'
+        + (d.temSel
+          ? '<button type="button" data-d7-fechar-card="1"'
+            + ' style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;'
+            + 'padding:4px 12px;font:800 10px \'Manrope\',sans-serif;color:#7A8494;cursor:pointer;">'
+            + 'cancelar</button>'
+          : '')
+        + '</div>'
       : '')
 
     + '<div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:stretch;">'
     +   '<div style="padding:18px 22px 24px;min-width:0;">'
-    +     '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px;">'
-    +       '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8E3B5C;">O dia de hoje — em ordem de hora</span>'
-    +       '<span style="font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;">o mesmo dia que você montou no Planejamento · ajuste, complete e trave</span>'
+    +     '<span style="display:block;font:900 10px \'Archivo\',sans-serif;letter-spacing:.13em;'
+    +       'text-transform:uppercase;color:#7A8494;margin-bottom:10px;">O dia de hoje — em ordem de hora '
+    +       '<span style="font-weight:700;text-transform:none;letter-spacing:0;">'
+    +       '· veio do seu Planejamento · registre o resultado em 1 clique</span></span>'
+    +     '<div style="display:flex;flex-direction:column;gap:8px;">'
+    +       (visitasHTML || '<span style="text-align:center;font:700 10px/1.5 \'Manrope\',sans-serif;'
+          + 'color:#B4AC9C;border:1.5px dashed #D8D2C4;border-radius:10px;padding:14px 12px;">'
+          + 'nenhuma hora ocupada hoje — pegue uma conta na munição e escolha a hora</span>')
+    +       relogioHTML
     +     '</div>'
-    +     '<div style="display:flex;flex-direction:column;gap:6px;">' + linhas + '</div>'
-    +     '<span style="display:block;font:700 10px/1.6 \'Manrope\',sans-serif;color:#7A8494;margin-top:12px;">▸ o check-in na porta é no <b style="color:#E51A31;">Expogo</b>; o desfecho é aqui, em 1 clique · ✕ devolve a conta para a munição · sem visita sem desfecho</span>'
-
-    +     '<div style="margin-top:14px;background:#FBFAF6;border:1px solid #E7E3DA;border-radius:12px;padding:12px 16px;">'
-    +       '<div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px;">'
-    +         '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8E3B5C;">Quentes fora do plano</span>'
-    +         '<span style="font:700 9.5px \'Manrope\',sans-serif;color:#7A8494;">etapa ≥ Visita e sem tarefa futura · o gestor vai perguntar por quê</span>'
+    +     '<span style="display:block;font:700 10px/1.6 \'Manrope\',sans-serif;color:#7A8494;margin-top:12px;">'
+    +       '▸ tudo que você registra aqui grava <b style="color:#E51A31;">direto no HubSpot</b>'
+    +       ' (etapa + nota + próxima tarefa) · remarcar manda de volta pro Planejamento'
+    +       ' · a visita riscada conta na promessa</span>'
+    +     '<div style="margin-top:14px;background:#FBF5F8;border:1.5px solid #E9D9E1;border-radius:12px;'
+    +       'padding:12px 16px;">'
+    +       '<span style="display:block;font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;'
+    +         'text-transform:uppercase;color:#8E3B5C;margin-bottom:8px;">Quentes fora do plano de hoje '
+    +         '<span style="font-weight:700;text-transform:none;letter-spacing:0;">'
+    +         '· dá pra resolver por telefone entre uma visita e outra</span></span>'
+    +       '<div style="display:flex;flex-direction:column;gap:6px;">'
+    +         (quentesHTML || '<span style="font:800 10.5px \'Manrope\',sans-serif;color:#1E9E7B;">'
+          + 'ninguém quente fora do plano — o dia cobre a sua carteira ✓</span>')
     +       '</div>'
-    +       '<div style="display:flex;flex-direction:column;gap:6px;">' + cardsQuentes + '</div>'
     +     '</div>'
     +   '</div>'
 
-    +   '<div data-d7-municao="1" style="border-left:1px solid #E7E3DA;background:#FBFAF6;padding:18px 18px 20px;min-width:0;overflow:auto;max-height:1200px;">'
-    +     '<span style="display:block;font:900 10px \'Archivo\',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#7A8494;margin-bottom:4px;">Munição pra completar o dia</span>'
-    +     '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#7A8494;margin-bottom:10px;">' + esc(mun.criterio || 'as contas livres da sua rota') + '</span>'
-
-    +     '<button type="button" data-d7-nova-conta="1" style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF3F4;padding:9px 12px;font:800 10.5px \'Manrope\',sans-serif;color:#E51A31;cursor:pointer;text-align:center;margin-bottom:10px;">'
-    +       '+ conta nova — Instagram, Maps, indicação, rua'
-    +       '<span style="display:block;font:700 9px \'Manrope\',sans-serif;color:#B4AC9C;margin-top:2px;">nasce em Prospecção no HubSpot e entra na munição de hoje</span>'
-    +     '</button>'
-    +     '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">' + filtros + '</div>'
-    +     '<div style="display:flex;flex-direction:column;gap:6px;">' + cardsMun + '</div>'
+    +   '<div style="border-left:1px solid #E7E3DA;background:#FBFAF6;padding:18px 18px 20px;min-width:0;">'
+    +     '<span style="display:block;font:900 10px \'Archivo\',sans-serif;letter-spacing:.13em;'
+    +       'text-transform:uppercase;color:#7A8494;margin-bottom:4px;">Munição pra completar o dia</span>'
+    +     '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#7A8494;margin-bottom:10px;">'
+    +       esc(d.municaoCriterio) + '</span>'
+    +     '<button type="button" data-d7-nova-conta="1"'
+    +       ' style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;'
+    +       'background:#FDF3F4;padding:9px 12px;font:800 10.5px \'Manrope\',sans-serif;color:#E51A31;'
+    +       'cursor:pointer;text-align:center;margin-bottom:6px;">+ visita de rua — cria o lead na hora</button>'
+    +     '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">'
+    +       blocoHTML('data-d7-rua="1"', '⌖ prospectar contas novas',
+              'bloco livre na região — sem conta definida; as que criar entram na hora')
+    +       blocoHTML('data-d7-rel="1"', '♥ visita de relacionamento',
+              'cliente da base — presença, indicação e upsell')
+    +     '</div>'
+    +     '<div style="display:flex;flex-direction:column;gap:6px;">'
+    +       (munHTML || '<span style="font:700 10px/1.5 \'Manrope\',sans-serif;color:#B4AC9C;">'
+          + 'a munição desta região acabou — troque a região no Planejamento ou crie uma conta nova</span>')
+    +     '</div>'
     +   '</div>'
     + '</div>'
 
-    + '<div style="padding:10px 28px;background:#FDFEFF;border-top:1px solid #E7E3DA;font:800 9.5px/1.6 \'Manrope\',sans-serif;color:#2B3440;">'
-    +   '▸ tudo que você registra aqui grava direto no HubSpot · '
-    +   '<b>remarcar</b> manda a visita de volta pro Planejamento, ela não morre · '
-    +   'a visita resolvida conta na sua promessa do dia.'
-    + '</div>'
-
-    + '<div style="padding:12px 28px 16px;background:#FBFAF6;border-top:1px solid #E7E3DA;font:700 9.5px/1.6 \'Manrope\',sans-serif;color:#7A8494;">'
+    + '<div style="padding:12px 28px 16px;background:#FBFAF6;border-top:1px solid #E7E3DA;'
+    +   'font:700 9.5px/1.6 \'Manrope\',sans-serif;color:#7A8494;">'
     +   'Plano de hoje: <b>Supabase planos_semanais</b> (escrito no seu Planejamento, lido pela mesma função) · '
     +   'promessa e alinhamento: <b>Supabase planos_diarios</b> — o mesmo registro que o gestor lê · '
     +   'etapas, tarefas, quentes e carteira: <b>HubSpot</b> · '
     +   'visita registrada: <b>Expogo</b>, o app de campo · '
     +   'lote novo: <b>leads_prospeccao</b>.'
     + '</div>'
+
+    + (d.temFicha
+      ? pl6FichaPainelHTML(d, fichaCamposHTML, fichaEtapasHTML,
+        'data-d7-fi-fechar', 'data-d7-fi-etapa', 'data-d7-fi-agendar')
+      : '')
     + '</div>';
+}
+
+function minhaDaily7aHTML(rep) {
+  return d7TelaFinalHTML(d7DadosFinal(rep));
 }
 
 function d7HorasHTML(plano, leadId) {
@@ -32201,7 +32374,10 @@ function d7Ligar(box, rep) {
       + '[data-d7-m-abrir],[data-d7-m-hora],[data-d7-hora-ok],[data-d7-rua],'
       + '[data-d7-aposta],[data-d7-travar],[data-d7-reabrir],'
 
-      + '[data-d7-acao],[data-d7-acao-set],[data-d7-acao-ok],[data-d7-nova-conta]');
+      + '[data-d7-acao],[data-d7-acao-set],[data-d7-acao-ok],[data-d7-nova-conta],'
+
+      + '[data-d7-relogio],[data-d7-rel],[data-d7-ficha],[data-d7-fi-fechar],'
+      + '[data-d7-fi-etapa],[data-d7-fi-agendar]');
     if (!alvo) return;
     const d = alvo.dataset;
 
@@ -32300,10 +32476,10 @@ function d7Ligar(box, rep) {
         }
         return redesenhar();
       }
-      g[di][si] = PL6_RUA;
-      d7UI.slot = null;
-      return mutar({ grade: g }, (pl6HoraDaFaixa(si) || 'vaga sem hora') + ' · prospecção de rua no plano ✓ Supabase —'
-        + ' sem tarefa no CRM (não há negócio); registre as contas visitadas no Expogo');
+
+      d7UI.horas = (d7UI.horas === PL6_RUA) ? null : PL6_RUA;
+      d7UI.ficha = null;
+      return redesenhar();
     }
     if (d.d7Bloquear != null && d.d7Bloquear !== '') {
       if (di < 0) return;
@@ -32338,6 +32514,77 @@ function d7Ligar(box, rep) {
       return mutar({ grade: g }, l
         ? l.nome + ' saiu do dia — está na munição do Planejamento pra você escolher outro dia e hora · Supabase'
         : (pl6HoraDaFaixa(si) || 'a vaga') + ' liberada no plano de hoje · Supabase');
+    }
+
+    if (d.d7Relogio) {
+      const v = String(d.d7Relogio);
+      if (v.indexOf('hora:') === 0) { d7UI.hSel = v.slice(5); return redesenhar(); }
+      if (v.indexOf('min:') === 0) { d7UI.mSel = v.slice(4); return redesenhar(); }
+      if (v !== 'encaixar') return;
+      if (!d7UI.horas) return;
+      if (di < 0) {
+        if (typeof mostrarToast === 'function') mostrarToast('Hoje é fim de semana — o plano é de dia útil.', 'atencao');
+        return;
+      }
+      const hora = d7UI.hSel + ':' + d7UI.mSel;
+      const alvo = d7UI.horas;
+
+      if (alvo === PL6_RUA || alvo === PL6_REL) {
+        const g = pl6GradeDoPlano();
+        const si = pl6PrimeiraVaga(g, di);
+        if (si < 0) {
+          if (typeof mostrarToast === 'function') mostrarToast('O dia está cheio — tire algo antes de encaixar.', 'atencao');
+          return;
+        }
+        g[di][si] = { id: alvo, hora: hora };
+        d7UI.horas = null;
+        return mutar({ grade: g }, hora + ' · ' + (alvo === PL6_RUA
+          ? 'prospecção de rua no plano ✓ Supabase — sem tarefa no CRM (não há negócio);'
+            + ' registre as contas visitadas no Expogo'
+          : 'visita de relacionamento no plano ✓ Supabase — cliente da base, sem negócio'
+            + ' novo no CRM; o que prova a visita é o check-in do Expogo'));
+      }
+      const g2 = pl6GradeDoPlano();
+      const si2 = pl6PrimeiraVaga(g2, di);
+      if (si2 < 0) {
+        if (typeof mostrarToast === 'function') mostrarToast('O dia está cheio — tire algo antes de encaixar.', 'atencao');
+        return;
+      }
+      d7UI.horas = null;
+      return pl6AgendarNoSlot(rep, alvo, di, si2, {
+        mutar: mutar, redesenhar: redesenhar, box: box, hora: hora
+      });
+    }
+
+    if (d.d7Rel) {
+      d7UI.horas = (d7UI.horas === PL6_REL) ? null : PL6_REL;
+      d7UI.ficha = null;
+      return redesenhar();
+    }
+
+    if (d.d7Ficha) {
+      d7UI.ficha = (d7UI.ficha === d.d7Ficha) ? null : d.d7Ficha;
+      return redesenhar();
+    }
+    if (d.d7FiFechar) {
+      d7UI.ficha = null;
+      return redesenhar();
+    }
+
+    if (d.d7FiEtapa) {
+      const pf = String(d.d7FiEtapa).split('|');
+      const destinoFi = pf.pop();
+      const idFi = pf.join('|');
+      return pl6MoverPelaFicha(rep, idFi, destinoFi, async function () {
+        d7UI.ficha = null;
+        await redesenhar();
+      });
+    }
+
+    if (d.d7FiAgendar) {
+      d7UI.horas = d.d7FiAgendar;
+      d7UI.ficha = null;
+      return redesenhar();
     }
 
     if (d.d7Acao) {
@@ -32841,21 +33088,8 @@ function g14RoteiroHTML(linha) {
   }
   return linha.plano.map(function (l) {
 
-    if (l.tipo === 'visita') return d7LinhaVisita(l, true, linha.planoDia || null);
-
-    if (l.tipo === 'bloqueado') {
-      return d7CartaoSimples(l.si, '#B4AC9C', 'bloqueado',
-        'ele reservou este horário no Planejamento' + (l.hora ? ' · ' + l.hora : ''), '', false);
-    }
-    if (l.tipo === 'rua') {
-
-      return d7CartaoSimples(l.si, PL6_RUA_COR, 'Prospecção de rua',
-        'porta a porta · sem conta definida' + (l.hora ? ' · ' + l.hora : '')
-        + ' · vira horas de rua, não tarefa no CRM', '', false);
-    }
-    if (l.tipo === 'orfa') {
-      return d7CartaoSimples(l.si, '#B4AC9C', 'conta fora da carga desta sessão',
-        'no plano dele, mas não no funil carregado aqui' + (l.hora ? ' · ' + l.hora : ''), '', false);
+    if (l.tipo !== 'livre') {
+      return d7CartaoDoDiaHTML(d7CartaoDoItem(l, true, linha.planoDia || null), true);
     }
     const aberto = g14UI.picker && g14UI.picker.owner === linha.ownerId && g14UI.picker.si === l.si;
 
@@ -34023,6 +34257,7 @@ function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
 
   const coluna = Array.isArray(g[dif]) ? g[dif] : [];
   const RUA = (typeof PL6_RUA !== 'undefined') ? PL6_RUA : '__rua';
+  const REL = (typeof PL6_REL !== 'undefined') ? PL6_REL : '__rel';
   const BLOQ = (typeof PL6_BLOQUEADO !== 'undefined') ? PL6_BLOQUEADO : '__b';
 
   const porHora = {};
@@ -34038,6 +34273,9 @@ function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
     const item = (cru === RUA)
       ? { id: null, dealId: null, nome: 'volta de rua', hora: hora, acao: '',
           origem: 'rua', _daGrade: true }
+      : (cru === REL)
+      ? { id: null, dealId: null, nome: 'visita de relacionamento', hora: hora, acao: '',
+          origem: 'rel', _daGrade: true }
       : (function () {
           const dealId = String(cru).indexOf('c-') === 0 ? String(cru).slice(2) : null;
           const doFunil = dealId ? (mapaFunil || {})[dealId] : null;
