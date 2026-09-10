@@ -509,9 +509,22 @@ console.log('');
       && /pl6ItensDoDia\(coluna, porId\)/.test(semCom(pegarFn('d7PlanoDeHoje'))),
     'duas leituras do mesmo dia é duas rotas: ele monta o dia numa tela e trabalha na outra');
 
+  /* O COMPARADOR TEM NOME E DOIS USUÁRIOS (10/09/26). Enquanto a ordem morava dentro do
+     leitor, a Minha Daily concatenava as vagas livres DEPOIS de tudo — e a prospecção de
+     rua das 16:00 aparecia acima da vaga das 13:30, embaixo de um título que diz "em
+     ordem de hora". Visto na tela, não medido. */
+  const ordem = semCom(pegarFn('pl6PorHora'));
   checar('a ordem é hora ascendente, e sem hora no fim',
-    /if \(!a\.hora\) return 1;/.test(leitor) && /if \(!b\.hora\) return -1;/.test(leitor),
+    /if \(!a\.hora\) return 1;/.test(ordem) && /if \(!b\.hora\) return -1;/.test(ordem)
+      && /return a\.hora < b\.hora \? -1 :/.test(ordem),
     '14:20 na casa 0 e 09:00 na casa 3 mostrariam a tarde antes da manhã');
+
+  checar('e há UM comparador, usado pelo leitor e pela Daily',
+    /itens\.sort\(pl6PorHora\);/.test(leitor)
+      && /\.concat\(livres\)\.sort\(pl6PorHora\)/.test(semCom(pegarFn('d7PlanoDeHoje')))
+      && (codigo.match(/if \(!a\.hora && !b\.hora\) return a\.si - b\.si;/g) || []).length === 1,
+    'duas cópias da ordem do dia é como uma tela mostra a tarde antes da manhã e a outra'
+    + ' não — e nenhuma das duas parece errada sozinha');
 
   checar('e o si viaja com o item, porque a grade gravada não se reordena',
     /itens\.push\(\{ si: si, hora: hora, id: id, tipo: l \? 'visita' : 'orfa', lead: l \}\);/.test(leitor),
@@ -582,6 +595,159 @@ console.log('');
     + ' existe para ele escolher');
 }());
 
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   O ENDERECO QUE FALTA, E O UNICO ESCRITOR DE PROPRIEDADE (09/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   MEDIDO na carga desta sessao: dos 234 negocios abertos, 72 sem logradouro e 70 sem
+   logradouro NEM bairro NEM coordenada — fora do mecanismo de regiao para sempre, em 7
+   das 8 carteiras. O campo existe por causa desse numero, e estas guardas existem para
+   que ele nao volte a ser somente-leitura sem ninguem notar.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const end = semCom(pegarFn('pl6EnderecoDoNegocio'));
+  const pegarAsync = function (nome) {
+    const re = new RegExp('\\nasync function ' + nome + '\\([\\s\\S]*?\\n\\}');
+    const m = re.exec(tpl);
+    if (!m) { console.error('nao achei async function ' + nome + ' — ancora perdida.'); process.exit(1); }
+    return m[0];
+  };
+  const escritor = semCom(pegarAsync('gravarPropriedadesDoNegocio'));
+  const ficha = semCom(pegarFn('pl6FichaCamposFinal'));
+  const ligarPl6 = semCom(pegarFn('pl6Ligar'));
+  const props = semCom(pegarFn('ligarPropsFichaEditaveis'));
+
+  checar('as tres funcoes novas existem com corpo',
+    end.length > 900 && escritor.length > 500 && ficha.length > 3000,
+    'ancora perdida: sem corpo nao ha medicao, e verde aqui seria falso');
+
+  /* ── 1 · A FICHA TEM UMA FONTE DE ENDERECO ───────────────────────────────────────
+     Antes a linha era montada dentro de pl6FichaCamposFinal. Se ela voltar a montar,
+     passam a existir duas respostas para "qual e o endereco" e uma delas nao oferece o
+     campo — foi assim que a promessa, a hora e a ficha ja se partiram nesta tela. */
+  checar('o endereco da ficha sai de pl6EnderecoDoNegocio, e so dela',
+    /linhas\.push\(pl6EnderecoDoNegocio\(l, bruto\)\);/.test(ficha)
+      && ficha.indexOf("pfCampo('endereço'") < 0,
+    'endereco montado em dois lugares: um deles nao oferece o campo, e ninguem descobre'
+    + ' qual dos dois a tela mostrou');
+
+  /* ── 2 · O CAMPO SO APARECE ONDE PODE GRAVAR ─────────────────────────────────────
+     Conta-alvo de prospecção tem endereco em 100% dos 1.985 leads e nao tem negocio para
+     receber a escrita. Desenhar o formulario ali e clique morto com cara de zelo. */
+  checar('o formulario exige negocio da carteira com dealId',
+    /if \(l\.tipo !== 'c' \|\| !l\.dealId\)/.test(end)
+      && /return pfCampo\('endereço', form, '#8A6516', true\);/.test(end),
+    'formulario em conta que nao tem negocio e botao que sempre falha');
+
+  /* ── 3 · O ATRIBUTO LEVA O dealId ────────────────────────────────────────────────
+     O item do Planejamento tem id 'c-<dealId>'. Mandar l.id para a rota e 404 no
+     HubSpot — e o toast diria "falha ao falar com o HubSpot" sobre um negocio que
+     existe. */
+  checar('os quatro atributos carregam l.dealId, nunca l.id',
+    /data-pl6-end-gravar="' \+ esc\(l\.dealId\)/.test(end)
+      && /esc\(l\.dealId\)/.test(end)
+      && !/data-pl6-end-[a-z]+="' \+ esc\(l\.id\)/.test(end),
+    'id do card no lugar do id do negocio da 404 com mensagem de rede');
+
+  /* ── 4 · PEDE SO O QUE FALTA ─────────────────────────────────────────────────────
+     Medido: 73 dos 234 tambem sem cidade. Eu ia cravar "cidade quase sempre existe"
+     (chutei 8) — e por isso os campos sao montados a partir do que esta vazio. */
+  checar('bairro e cidade so entram quando o CRM nao tem',
+    /if \(!b\.bairro\) form \+= campo\('data-pl6-end-bairro'/.test(end)
+      && /if \(!b\.cidade\) form \+= campo\('data-pl6-end-cidade'/.test(end),
+    'formulario que pede o que ja existe e o formulario que ninguem preenche');
+
+  /* ── 5 · A RUA E OBRIGATORIA ─────────────────────────────────────────────────────
+     A falta da rua e o que traz o formulario. Gravar so o bairro deixaria o negocio
+     ainda sem rua e a ficha dizendo que esta resolvido. */
+  checar('gravar sem a rua nao chama o HubSpot',
+    /const ruaEnd = valorDe\('data-pl6-end-rua'\);/.test(ligarPl6)
+      && /if \(!ruaEnd\) \{/.test(ligarPl6)
+      && ligarPl6.indexOf('gravarPropriedadesDoNegocio') > ligarPl6.indexOf('if (!ruaEnd) {'),
+    'sem a trava, o botao grava bairro e a ficha passa a dizer que o endereco existe');
+
+  checar('e o negocio tem de estar na carga desta sessao',
+    /if \(!lEnd \|\| !lEnd\.stageId\) \{/.test(ligarPl6),
+    'sem etapa a rota recebe novaEtapa vazio e responde 400 — erro de tela virando erro'
+    + ' de HubSpot na frente dele');
+
+  /* ── 6 · UM ESCRITOR SO ──────────────────────────────────────────────────────────
+     Duas telas gravam propriedade de negocio. Se cada uma montar o fetch, uma fica sem
+     o espelho local e mostra o valor velho depois de gravar com sucesso. */
+  checar('as duas telas gravam pelo mesmo escritor',
+    /await gravarPropriedadesDoNegocio\(/.test(ligarPl6)
+      && /await gravarPropriedadesDoNegocio\(/.test(props)
+      && props.indexOf("fetch('/api/negocio-acao'") < 0,
+    'a ficha do funil voltou a montar o proprio fetch: uma das duas vai perder o espelho'
+    + ' local e a tela mentira sobre o que gravou');
+
+  checar('o escritor manda a etapa ATUAL, para escrever sem mover',
+    /novaEtapa: lead\.stageId/.test(escritor)
+      && /op: 'mudar-etapa'/.test(escritor),
+    'etapa diferente da atual faz a rota exigir as propriedades da etapa — e mover o'
+    + ' negocio de lugar sem ninguem pedir');
+
+  /* ── 7 · O RELOGIO DA ETAPA NAO ZERA AO GRAVAR CAMPO ─────────────────────────────
+     aplicarEtapaNoDataLocal assume dias: 0 quando ninguem passa o quarto argumento — ele
+     foi escrito para MOVER. A ficha do funil chamava sem ele: salvar o celular de um
+     negocio parado ha 41 dias fazia a tela dizer "hoje" ate a proxima rodada do robo. */
+  checar('gravar propriedade preserva o "ha Xd na etapa"',
+    /aplicarEtapaNoDataLocal\(lead\.id, lead\.stageId, props, lead\.dias != null \? lead\.dias : null\)/
+      .test(escritor),
+    'sem o quarto argumento o espelho local zera os dias na etapa, e o gestor le SLA'
+    + ' que nao existe');
+}());
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   A LEITURA DO GESTOR FALA A LINGUA DA PRANCHA (09/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   O cartao de VISITA ja era compartilhado desde o redesenho da Daily. Os tres ramos que
+   nao sao visita — bloqueado, rua e orfa — tinham markup proprio com as classes antigas:
+   a mesma coluna com dois idiomas de cartao.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+(function () {
+  const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const rot = semCom(pegarFn('g14RoteiroHTML'));
+  const cartao = semCom(pegarFn('d7CartaoSimples'));
+  const daily = semCom(pegarFn('minhaDaily7aHTML'));
+
+  checar('o cartao do que nao e visita e funcao de cima, nao closure de uma tela',
+    cartao.length > 600 && daily.indexOf('const cartaoSimples = function') < 0,
+    'closure dentro de uma tela e o que obrigou o gestor a ter markup proprio');
+
+  checar('as duas telas desenham os tres ramos por ele',
+    (rot.match(/d7CartaoSimples\(/g) || []).length === 3
+      && (daily.match(/d7CartaoSimples\(l\.si,/g) || []).length === 3,
+    'ramo com markup proprio volta a descrever a mesma manha em dois idiomas');
+
+  /* O ✕ E ATO DO EXECUTIVO. No roteiro do gestor os tres cartoes passam comX falso: ele
+     le a promessa, e escrever na promessa de outra pessoa e tirar o dono dela. */
+  checar('o gestor nao ganha o ✕ nos tres cartoes',
+    (rot.match(/, '', false\)/g) || []).length === 3
+      && rot.indexOf('data-d7-tirar') < 0,
+    'o ✕ na tela do gestor tira do plano de outra pessoa');
+
+  checar('a vaga livre do roteiro esta na linguagem da prancha',
+    /border:1\.5px ' \+ \(aberto \? 'solid' : 'dashed'\) \+ ' #F0A9B2/.test(rot)
+      && rot.indexOf("class=\"g14-livre") < 0,
+    'vaga com o estilo antigo ao lado de cartoes novos e a mesma coluna em dois produtos');
+
+  /* AS CLASSES MORTAS SAEM. Regra que ninguem cita envelhece calada, e foi assim que a
+     lista de piso de toque desta casa ficou cheia de seletor morto tres vezes. */
+  checar('as classes .d7-linha* e .g14-livre* sairam do CSS e do markup',
+    /* SEM COMENTARIO: a primeira versao desta checagem leu a propria nota que
+       documenta a remocao (ela cita as classes por nome) e reprovou o conserto. */
+    semCom(tpl).indexOf('d7-linha') < 0
+      && semCom(tpl).indexOf('g14-livre') < 0,
+    'CSS de classe que ninguem mais desenha: a proxima leitura acha que a tela usa aquilo');
+
+  /* O CARTAO NOVO NAO TEM MARGEM (o antigo tinha margin-bottom:6px). Sem gap no
+     container, os tres cartoes e as vagas ficam encostados. */
+  checar('o container do roteiro da o espaco que o cartao novo nao carrega',
+    /\.g14-roteiro\{display:flex;flex-direction:column;gap:6px;/.test(tpl),
+    'cartao sem margem em container sem gap: a leitura do gestor vira um bloco unico');
+}());
 
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');

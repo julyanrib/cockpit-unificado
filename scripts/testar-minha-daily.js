@@ -70,15 +70,29 @@ conferir('e quem liga o ouvinte procura por esse gancho',
    Todo verbo que a tela desenha tem de ter alvo no seletor delegado OU ramo próprio.
    Verbo desenhado sem ouvinte é botão com hover que não faz nada — e o build só olha o
    arquivo inteiro; aqui a conta é da Minha Daily. */
+/* d7-raiz é o gancho da fiação, d7-municao é âncora de scroll e d7-so-icone é gancho de
+   LARGURA no CSS — nenhum dos três é verbo, e cobrar ouvinte deles seria falso positivo. */
 const desenhados = [...new Set([...(tela + cartao + acao + semCom(corpoDe('d7HorasHTML')))
   .matchAll(/data-(d7-[a-z-]+)=/g)].map(m => m[1]))]
-  .filter(v => v !== 'd7-raiz' && v !== 'd7-municao');
+  .filter(v => v !== 'd7-raiz' && v !== 'd7-municao' && v !== 'd7-so-icone');
+
+/* A CADEIA DO closest É A FIAÇÃO DESTA TELA, e ela é montada por concatenação em várias
+   linhas — por isso o recorte vai do `ev.target.closest(` até o `);`, e não por regex de
+   uma linha (a primeira versão não casou nada e deu 26 verbos "fora da cadeia"). */
+const iCadeia = ligar.indexOf('ev.target.closest(');
+const cadeia = iCadeia < 0 ? '' : ligar.slice(iCadeia, ligar.indexOf(');', iCadeia));
+conferir('a cadeia do closest foi encontrada',
+  cadeia.length > 300,
+  'sem a cadeia esta checagem não mede nada, e o verde seria falso');
+
+/* OS DOIS CAMPOS DE TEXTO são a única exceção: eles não são clicados, são digitados —
+   os ouvintes de input/keydown os leem por querySelector com o valor. Exceção NOMEADA,
+   porque "aceita qualquer coisa que apareça no arquivo" foi exatamente o furo. */
+const DIGITADOS = ['d7-acao-in', 'd7-hora-in'];
 const semOuvinte = desenhados.filter(function (v) {
-  /* no seletor delegado, ou num closest próprio, ou num ramo por dataset */
-  const camel = 'd7' + v.slice(3).replace(/-([a-z])/g, (m, c) => c.toUpperCase());
-  return ligar.indexOf('[data-' + v + ']') < 0
-    && ligar.indexOf('d.' + camel) < 0
-    && codigo.indexOf('[data-' + v + ']') < 0;
+  if (DIGITADOS.indexOf(v) > -1) return ligar.indexOf('[data-' + v + '="') < 0;
+  return cadeia.indexOf('[data-' + v + ']') < 0
+    && ligar.indexOf("querySelectorAll('[data-" + v + "]')") < 0;
 });
 conferir('todo verbo desenhado na Daily tem quem o escute',
   desenhados.length >= 15 && semOuvinte.length === 0,
@@ -149,16 +163,65 @@ conferir('e a aposta só aparece quando há negociação no dia',
 /* ── 6 · NENHUMA VISITA SEM DESFECHO ────────────────────────────────────────────────
    Os três desfechos não ficam escondidos atrás do check-in do Expogo: se o Expogo não for
    usado naquele dia, ele nunca registraria o que aconteceu. */
-conferir('os três desfechos aparecem em visita que ainda não foi registrada',
+/* CINCO ATOS, não três (10/09/26). Faltavam os dois que fechavam o dia sem saída: a
+   Daily não registrava PERDA (a visita que não deu em nada ficava pendente para sempre,
+   e o gestor lia como "não visitou") e não tinha REMARCAR com nome — o ato existia como
+   o ✕ do canto, sem dizer para onde a visita ia. */
+conferir('a régua "como foi?" tem os cinco atos da prancha v2',
   /const desfechos = \(soLeitura \|\| l\.estado === 'feita'\) \? ''/.test(cartao)
-    && /data-d7-proposta/.test(cartao) && /data-d7-fechou/.test(cartao) && /data-d7-retorno/.test(cartao),
-  'visita sem desfecho é o dia dele sem registro — e a regra desta tela é nenhuma visita'
-  + ' sem desfecho');
+    && />como foi\?</.test(cartao)
+    && /data-d7-proposta/.test(cartao) && /data-d7-fechou/.test(cartao)
+    && /data-d7-retorno/.test(cartao) && /data-d7-nao-rolou/.test(cartao)
+    && /data-d7-tirar="' \+ l\.si \+ '"'\s*\n?\s*\+ estiloDesf/.test(cartao),
+  'visita sem desfecho é o dia dele sem registro; e sem "não rolou" a perda não tem'
+  + ' onde ser registrada, então ela fica pendente para sempre');
 
+/* O DESTINO DE "nao rolou" E A ETAPA PERDIDO, e pela MESMA porteira dos outros dois:
+   ela exige motivo_do_perdido com as opcoes do HubSpot. Um seletor de motivo escrito na
+   tela seria uma segunda lista, que divergiria do CRM no primeiro ajuste feito lá. */
+conferir('e "não rolou" move para Perdido pela porteira de etapa',
+  /d\.d7NaoRolou \? FN2_ETAPA_PERDIDO/.test(ligar)
+    && /if \(d\.d7Proposta \|\| d\.d7Fechou \|\| d\.d7NaoRolou\)/.test(ligar),
+  'perda gravada sem a porteira entra no CRM sem motivo — e motivo de perda é o que o'
+  + ' gestor lê para decidir o que treinar');
+
+/* O SELO DO RESULTADO SAI DA ETAPA, não de um estado da tela: guardado na tela, ele
+   sumiria no F5 e discordaria do CRM. */
+conferir('o selo ✓✓ FECHOU é derivado da etapa Ag. Pagamento',
+  /const fechou = isC && String\(lead\.stageId\) === '1395880473';/.test(cartao)
+    && /'✓✓ FECHOU'/.test(cartao),
+  'selo guardado na tela sobrevive a um F5 dizendo o contrário do HubSpot');
+
+/* MEDE A INTENÇÃO, NÃO A FORMA (10/09/26). A primeira versão desta checagem fixava o
+   texto exato do ✕ (`soLeitura ? '' : '<button ... data-d7-tirar`) e reprovou o dia em
+   que o ✕ mudou de lugar — sendo que a regra continuava valendo. Agora: os DOIS blocos
+   que escrevem são travados por soLeitura, e a contagem de verbos de escrita fecha com
+   o que esses blocos desenham. Verbo novo fora deles quebra a conta.
+   O ✕ SÓ NA VISITA REGISTRADA: na pendente quem tira do dia é o `remarcar ▸`, e sem o ✕
+   na registrada uma visita marcada por engano ficaria presa no dia sem saída. */
+const verbosDeEscrita = (cartao.match(/data-d7-(?:proposta|fechou|retorno|nao-rolou|tirar)=/g) || []).length;
 conferir('e o gestor não ganha os atos do executivo',
   /soLeitura \? d7AcaoLeituraHTML\(lead, planoDia\) : d7AcaoHTML\(lead\)/.test(cartao)
-    && /soLeitura \? ''\s*\n?\s*: '<button type="button" data-d7-tirar/.test(cartao),
-  'o gestor lê a promessa; escrever na promessa de outra pessoa é tirar o dono dela');
+    && /const desfechos = \(soLeitura \|\| l\.estado === 'feita'\) \? ''/.test(cartao)
+    && /\(\(soLeitura \|\| l\.estado !== 'feita'\) \? ''/.test(cartao)
+    && verbosDeEscrita === 6,
+  'o gestor lê a promessa; escrever na promessa de outra pessoa é tirar o dono dela'
+  + ' (verbos de escrita no cartão: ' + verbosDeEscrita + ', esperados 6)');
+
+/* A PRANCHA v2 PEDE `ligar agora ▸`, e ele só pode existir onde há número: medido na
+   carga, 156 dos 245 negócios (64%) têm telefone. Nos outros 36% o botão prometeria uma
+   ligação impossível — e é um <a href="tel:">, porque quem disca é o aparelho, não o
+   CRM (o time não liga pelo HubSpot; o que fica lá é a tarefa). */
+conferir('ligar agora ▸ só aparece com telefone, e cai para datar tarefa sem ele',
+  /\(telQ\s*\n?\s*\? '<a href="tel:'/.test(tela)
+    && />ligar agora ▸<\/a>/.test(tela)
+    && />dato tarefa ▸<\/button>/.test(tela),
+  'botão de ligar em quente sem número é clique que não liga para ninguém, na rua');
+
+conferir('e o rodapé diz o que o registro faz',
+  /tudo que você registra aqui grava direto no HubSpot/.test(tela)
+    && /manda a visita de volta pro Planejamento/.test(tela),
+  '"remarcar" sem explicação lê como "perdi a visita" — e ela não morre');
 
 /* ── 7 · SEM HORA INVENTADA ─────────────────────────────────────────────────────────── */
 conferir('visita sem hora escolhida mostra "sem hora"',
