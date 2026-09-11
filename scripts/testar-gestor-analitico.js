@@ -1124,7 +1124,11 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
     /function pe4PiorLead\(p\)/.test(tela)
       && /o pior é o . \+ \(pior\.name \|\| pior\.dealname\)/.test(tela.replace(/'/g, '.')));
   checar('os avisos seguem a prioridade fixa da prancha',
-    /rot: .mrr travado./.test(tela.replace(/'/g, '.'))
+    /* O PRIMEIRO AVISO TEM DOIS ROTULOS desde a correcao do zero: "mrr travado" quando
+       ha valor, "negocios travados" quando nenhum dos travados tem MRR no CRM. A guarda
+       cobra os dois, porque o que importa e o aviso existir — foi justamente ele que
+       desapareceu para quem tem 10 travados e zero valor preenchido. */
+    /rot: semValor \? .negócios travados. : .mrr travado./.test(tela.replace(/'/g, '.'))
       && /rot: .proposta na mesa./.test(tela.replace(/'/g, '.'))
       && /rot: .carga esfriando./.test(tela.replace(/'/g, '.'))
       && /rot: .funil secando./.test(tela.replace(/'/g, '.'))
@@ -1163,6 +1167,19 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
   checar('so o gestor desenha a Pessoas',
     /function renderPessoas\(\) \{[\s\S]{0,600}?sessaoAtual\.role !== .manager.\) \{ raiz\.innerHTML = ../
       .test(tela.replace(/'/g, '.')));
+
+  /* ── 10 · ZERO DE MRR NAO ESCONDE NEGOCIO TRAVADO (10/09/26) ────────────────────────
+     MEDIDO na producao: o Marco tem DEZ travados e ZERO deles com valor_de_mrr
+     preenchido. Eu havia condicionado o aviso a mrrTravado > 0, e o aviso mais
+     importante da tela nao aparecia para ele. O defeito do "zero que tranquiliza": R$ 0
+     ao lado de 10 travados le como "nada em jogo", quando o que houve foi valor nao
+     preenchido no CRM. */
+  checar('o aviso de travado dispara pela contagem, nao pelo MRR',
+    tela.indexOf('if (p.travados > 0 && pior) {') > -1
+      && tela.indexOf('const semValor = p.mrrTravado === 0;') > -1
+      && tela.indexOf('MRR não preenchido no CRM em nenhum deles') > -1);
+  checar('e o diagnostico nao escreve R$ 0 parados',
+    tela.indexOf("(nenhum com MRR preenchido no CRM)") > -1);
 }());
 
 if (falhas.length) {
