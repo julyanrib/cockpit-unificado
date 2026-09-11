@@ -255,16 +255,42 @@ function montarDadosCompletos() {
       .slice(0, 3);
   }
 
-  // ---- Vendas do mês (clientes + MRR por executivo) ----
+  // ---- Vendas do mês: as TRÊS medidas por executivo (10/09/26) ------------------
+  //  Antes daqui saíam clientes e MRR. A receita (o valor TOTAL do plano negociado,
+  //  `amount`) não vinha, e por isso duas das três metas do Julyan não tinham
+  //  realizado nenhum na tela.
+  //
+  //  E O MÊS DE CADA VENDA PASSA A SER O DE COMPETÊNCIA, não o do closedate. Julyan,
+  //  10/09: "uma venda do marco foi no mes passado, é q o boleto compensou na virada
+  //  pro dia 1". O CRM não sabe disso — o único campo de data do ganho é o closedate.
+  //  Quem sabe é ele, e a decisão está registrada em data/metas.json, negócio por
+  //  negócio, com motivo. Aqui a venda ajustada SAI do mês e o ajuste viaja no payload
+  //  para a tela poder dizer que houve — divergir do CRM em silêncio seria pior que o
+  //  número errado.
   let vendasMes = null;
   if (Array.isArray(hubspot.vendasMes)) {
+    const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+    const agoraBr = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const mesCorrente = agoraBr.toISOString().slice(0, 7);
     const porOwnerMes = {};
+    const ajustadas = [];
     hubspot.vendasMes.forEach(d => {
       if (!d.ownerId || !narrativas.reps[d.ownerId]) return; // dono fora do time ativo
-      if (!porOwnerMes[d.ownerId]) porOwnerMes[d.ownerId] = { count: 0, mrrTotal: 0, clientes: [] };
+      // A venda cujo mês de competência não é o corrente sai da conta do mês, e fica
+      // registrada para a tela mostrar.
+      const mes = d.mesDeCompetencia || mesCorrente;
+      if (mes !== mesCorrente) {
+        ajustadas.push({ id: d.id || null, nome: d.nome, ownerId: d.ownerId,
+          name: narrativas.reps[d.ownerId].name, mrr: d.mrr || 0, receita: d.receita || 0,
+          closedate: d.closedate || null, contaEm: mes, motivo: d.ajustado || null });
+        return;
+      }
+      if (!porOwnerMes[d.ownerId]) porOwnerMes[d.ownerId] = { count: 0, mrrTotal: 0, receitaTotal: 0, clientes: [] };
       porOwnerMes[d.ownerId].count += 1;
       porOwnerMes[d.ownerId].mrrTotal += d.mrr || 0;
-      porOwnerMes[d.ownerId].clientes.push({ id: d.id || null, nome: d.nome, mrr: d.mrr || 0, closedate: d.closedate || null });
+      porOwnerMes[d.ownerId].receitaTotal += d.receita || 0;
+      porOwnerMes[d.ownerId].clientes.push({ id: d.id || null, nome: d.nome, mrr: d.mrr || 0,
+        receita: d.receita || 0, closedate: d.closedate || null });
     });
     const porRepMes = Object.entries(porOwnerMes).map(([ownerId, v]) => ({
       ownerId,
@@ -272,16 +298,19 @@ function montarDadosCompletos() {
       praca: narrativas.reps[ownerId].praca || '—',
       count: v.count,
       mrrTotal: v.mrrTotal,
+      receitaTotal: v.receitaTotal,
       clientes: v.clientes.sort((a, b) => (b.mrr || 0) - (a.mrr || 0))
     })).sort((a, b) => (b.count - a.count) || (b.mrrTotal - a.mrrTotal));
 
-    const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-    const agoraBr = new Date(Date.now() - 3 * 60 * 60 * 1000);
     vendasMes = {
       mesLabel: `${MESES_PT[agoraBr.getUTCMonth()]}/${agoraBr.getUTCFullYear()}`,
+      mes: mesCorrente,
       totalClientes: porRepMes.reduce((s, r) => s + r.count, 0),
       totalMrr: porRepMes.reduce((s, r) => s + r.mrrTotal, 0),
-      porRep: porRepMes
+      totalReceita: porRepMes.reduce((s, r) => s + r.receitaTotal, 0),
+      porRep: porRepMes,
+      // as vendas que saíram do mês por competência, com o motivo de cada uma
+      ajustadas: ajustadas
     };
   }
 

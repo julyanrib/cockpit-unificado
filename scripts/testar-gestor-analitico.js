@@ -890,13 +890,65 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
     /function renderTimeLider\(\) \{[\s\S]{0,400}?sessaoAtual\.role !== .manager.\) return;/
       .test(tela.replace(/'/g, '.')));
 
-  /* ── 10 · O MRR FECHADO DIZ DE QUANTOS ELE SAI ──────────────────────────────────────
-     MEDIDO: reps[].fechadosNoMes soma 6 e vendasMes.totalClientes diz 2 — o segundo conta
-     so quem tem MRR preenchido. A contagem usa o completo, o dinheiro usa o que sabe de
-     dinheiro, e o rodape do KPI diz a diferenca. Sem essa linha seriam dois numeros de
-     fechamento na mesma tela sem explicacao. */
-  checar('o KPI de fechados diz quantos deles tem MRR no CRM',
-    /prov\.fechComMrr \+ . de . \+ prov\.fechN \+ . com MRR no CRM/.test(tela.replace(/'/g, '.')));
+  /* ── 10 · AS TRES METAS (10/09/26, planilha do Julyan) ──────────────────────────────
+     A planilha dele mede o mes em TRES eixos — clientes, MRR e receita — em DOIS
+     patamares (8/3.000/9.000 para cinco pessoas, 2/750/2.250 para as outras cinco). A
+     tela mostrava UM eixo, contra uma meta cravada de 80 que nao existe, e com meta
+     individual de 10 para todo mundo.
+
+     AQUI MORAVA UMA GUARDA MINHA COM A CAUSA ERRADA, e ela fica registrada: eu vi
+     fechadosNoMes somar 6 e vendasMes.totalClientes dizer 2 e escrevi que o segundo
+     "conta so quem tem MRR preenchido". Lendo montar-dados, o filtro e
+     narrativas.reps[ownerId] — dono fora do time ativo. E na leitura seguinte os dois
+     deram 6: o 2 era snapshot velho e nao havia divergencia nenhuma. Guarda que protege
+     uma explicacao inventada e pior que guarda nenhuma. */
+  checar('as tres metas do time chegam do snapshot e aparecem na tela',
+    /metaMrrTime = Number\(\(DATA\.kpisHub \|\| \{\}\)\.metaMrrTime\)/.test(tela)
+      && /metaReceitaTime = Number\(\(DATA\.kpisHub \|\| \{\}\)\.metaReceitaTime\)/.test(tela)
+      && /\[\[.clientes., pv\.fechN, pv\.meta, pv\.pctClientes, false\]/.test(tela.replace(/'/g, '.')));
+  checar('o ranking mede cada um contra a meta DELE',
+    /const pct = r\.meta \? Math\.round\(r\.fech \/ r\.meta \* 100\) : null;/.test(tela)
+      && /r\.meta \? r\.fech \+ ./g.test(tela.replace(/'/g, '.')));
+  checar('e meta zero aparece como — em vez de 0% vermelho',
+    /cor: pct == null \? .#B4AC9C./.test(tela.replace(/'/g, '.'))
+      && /if \(\(a\.pct == null\) !== \(b\.pct == null\)\) return a\.pct == null \? 1 : -1;/.test(tela));
+  checar('o MRR e a receita de cada um aparecem contra a meta dele',
+    tela.indexOf('r.mrrMeta ? esc(tm10Rs(r.mrrFeito))') > -1
+      && tela.indexOf('r.receitaMeta ? esc(tm10Rs(r.receitaFeita))') > -1);
+
+  /* ── 11 · A META NAO MORA MAIS EM CONSTANTE CRAVADA ─────────────────────────────── */
+  checar('as metas saem de data/metas.json, nao de constante',
+    /const METAS = \(function \(\) \{/.test(robo)
+      && /const META_MENSAL_FECHADOS = \(METAS\.time && METAS\.time\.clientes\) \|\| 0;/.test(robo)
+      && !/const META_MENSAL_FECHADOS = \d+;/.test(robo)
+      && !/const META_MENSAL_POR_EXECUTIVO = \d+;/.test(robo));
+  checar('e o robo falha alto se a soma dos individuais nao bater com o total do time',
+    /a soma de . \+ k \+ . da . \+ soma\[k\]/.test(robo.replace(/'/g, '.')));
+  checar('a meta de cada rep vai no payload, com os tres eixos',
+    /metaMensal: metaDe\(r\.ownerId\)\.clientes,/.test(robo)
+      && /metaMrr: metaDe\(r\.ownerId\)\.mrr,/.test(robo)
+      && /metaReceita: metaDe\(r\.ownerId\)\.receita,/.test(robo));
+
+  /* ── 12 · A RECEITA E O AJUSTE DE COMPETENCIA ───────────────────────────────────────
+     Receita e o valor TOTAL do plano (`amount`), que o executivo preenche na passagem
+     para Enviado Onboarding — e ela simplesmente nao vinha. E o mes de uma venda passa a
+     ser o de COMPETENCIA: Julyan, 10/09, "uma venda do marco foi no mes passado, e q o
+     boleto compensou na virada pro dia 1". O CRM nao tem como saber isso, entao a decisao
+     e registrada negocio por negocio no arquivo, com motivo — e a tela DIZ que houve
+     ajuste, em vez de divergir do CRM em silencio. */
+  checar('a receita (amount) vem nas vendas do mes',
+    /properties: \[.dealname., .hubspot_owner_id., .valor_de_mrr., .amount., .closedate.\]/
+      .test(robo.replace(/'/g, '.'))
+      && /receita: Math\.round\(parseFloat\(d\.properties\.amount\) \|\| 0\)/.test(robo));
+  checar('o ajuste de competencia e por negocio, vem do arquivo, e nao e uma regra chutada',
+    /function competenciaDe\(dealId, mesDoClosedate\)/.test(robo)
+      && /const COMPETENCIA = \{\};/.test(robo)
+      && !/getUTCDate\(\) === 1/.test(robo));
+  checar('a venda ajustada sai do mes e o motivo viaja para a tela',
+    /if \(mes !== mesCorrente\) \{/.test(montar)
+      && /ajustadas: ajustadas/.test(montar));
+  checar('e a tela mostra que houve ajuste de competencia',
+    tela.indexOf('venda fora do mês por competência') > -1);
 }());
 
 if (falhas.length) {

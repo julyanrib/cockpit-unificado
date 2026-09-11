@@ -26214,9 +26214,26 @@ function tm10Provavel(m, etapas) {
   const vm = DATA.vendasMes || {};
   const fechMrr = Number(vm.totalMrr) || 0;
   const fechComMrr = Number(vm.totalClientes) || 0;
+  /* ══ AS TRES METAS (10/09/26, planilha do Julyan) ═════════════════════════════════
+     Ele mede o mes em TRES eixos e a tela mostrava um: clientes contra uma meta cravada
+     de 80 (a real e 50) e nada de MRR nem de receita. Agora os tres vem do snapshot,
+     que le data/metas.json.
+     RECEITA E O VALOR TOTAL DO PLANO, MRR E A MENSALIDADE: para o Sandro, R$ 800/mes
+     viraram R$ 9.600 porque o plano e anual — e por isso ele esta em 106% de receita com
+     1 de 8 clientes. Um eixo so esconderia exatamente isso. */
+  const fechReceita = Number(vm.totalReceita) || 0;
+  const metaMrrTime = Number((DATA.kpisHub || {}).metaMrrTime) || 0;
+  const metaReceitaTime = Number((DATA.kpisHub || {}).metaReceitaTime) || 0;
+  const ajustadas = Array.isArray(vm.ajustadas) ? vm.ajustadas : [];
   const clientes = m.time.fech + pag.n + quentes.length * TM10_PESO_QUENTE;
   return {
     fechN: m.time.fech, fechMrr: fechMrr, fechComMrr: fechComMrr,
+    fechReceita: fechReceita,
+    metaMrrTime: metaMrrTime, metaReceitaTime: metaReceitaTime,
+    pctClientes: m.time.meta ? Math.round(m.time.fech / m.time.meta * 100) : null,
+    pctMrr: metaMrrTime ? Math.round(fechMrr / metaMrrTime * 100) : null,
+    pctReceita: metaReceitaTime ? Math.round(fechReceita / metaReceitaTime * 100) : null,
+    ajustadas: ajustadas,
     mesLabel: vm.mesLabel || '',
     pagN: pag.n, pagMrr: pag.mrr,
     quentesN: quentes.length, quentesMrr: mrrQuentes,
@@ -26501,12 +26518,28 @@ function tm10Ranking(m) {
         tq += tm10Tq(l.id).n; n += 1;
       });
     });
-    const pct = r.meta ? Math.round(r.fech / r.meta * 100) : 0;
+    /* ══ CADA UM CONTRA A META DELE (10/09/26) ════════════════════════════════════════
+       Antes o ranking media todo mundo contra 10, porque era isso que o robo mandava. Com
+       os dois patamares da planilha (8 e 2), cinco pessoas apareciam em 0% de uma meta que
+       nao e a delas — e a Amanda, que saiu da planilha, entrava com meta 10.
+       META ZERO NAO E 0%: quem esta fora da planilha aparece com "—", nao com vermelho. */
+    const pct = r.meta ? Math.round(r.fech / r.meta * 100) : null;
+    const rep = (DATA.reps || []).filter(function (x) {
+      return String(x.ownerId) === String(r.ownerId); })[0] || {};
+    const vendas = ((DATA.vendasMes || {}).porRep || []).filter(function (x) {
+      return String(x.ownerId) === String(r.ownerId); })[0] || {};
     return { ownerId: r.ownerId, nome: tm10NomeCurto(r.nome), fech: r.fech, meta: r.meta,
       pct: pct, mrr: r.mrr, travados: r.acima,
+      patamar: rep.patamarMeta || null,
+      mrrFeito: Number(vendas.mrrTotal) || 0, mrrMeta: Number(rep.metaMrr) || 0,
+      receitaFeita: Number(vendas.receitaTotal) || 0, receitaMeta: Number(rep.metaReceita) || 0,
       tqMed: n ? tq / n : null,
-      cor: pct >= 70 ? '#1E9E7B' : (pct >= 50 ? '#B07C1F' : '#E51A31') };
-  }).sort(function (a, b) { return b.pct - a.pct || b.fech - a.fech; });
+      cor: pct == null ? '#B4AC9C' : (pct >= 70 ? '#1E9E7B' : (pct >= 50 ? '#B07C1F' : '#E51A31')) };
+  }).sort(function (a, b) {
+    /* QUEM NAO TEM META VAI PARA O FIM, e nao para o topo com pct nulo. */
+    if ((a.pct == null) !== (b.pct == null)) return a.pct == null ? 1 : -1;
+    return (b.pct || 0) - (a.pct || 0) || b.fech - a.fech;
+  });
 }
 
 /* ── O FLUXO DA SEMANA (bloco 3) ──────────────────────────────────────────────────────
@@ -26586,11 +26619,15 @@ function tm10Dados() {
     kicker: 'Time · o mês do negócio' + (hoje ? ' · ' + hoje : ''),
     manchete: manchete,
     kpis: [
-      /* O SUB DIZ DE QUANTOS O R$ SAI: a contagem é a soma dos reps (completa) e o MRR
-         só conhece quem tem MRR preenchido no CRM. Ver a nota em tm10Provavel. */
+      /* ══ EU ESCREVI UM MOTIVO ERRADO AQUI, E ELE FICA REGISTRADO (10/09/26) ═══════
+         Na primeira versao desta tela eu vi fechadosNoMes somar 6 e vendasMes.totalClientes
+         dizer 2, e comentei que o segundo "conta so quem tem MRR preenchido". Errado: lendo
+         montar-dados, o filtro e `narrativas.reps[ownerId]` — dono fora do time ativo. E na
+         leitura seguinte os dois deram 6, ou seja, o 2 era snapshot velho e nao havia
+         divergencia nenhuma. O aviso saiu junto com a causa inventada.
+         O sub agora diz o que o numero E: o MRR das vendas do mes. */
       { rot: 'Clientes fechados', v: prov.fechN + '/' + prov.meta, cor: '#1E9E7B',
-        sub: tm10Rs(prov.fechMrr) + (prov.fechN > prov.fechComMrr
-          ? ' · ' + prov.fechComMrr + ' de ' + prov.fechN + ' com MRR no CRM' : '') },
+        sub: tm10Rs(prov.fechMrr) + ' de MRR' },
       { rot: 'Prováveis', v: String(prov.clientes), cor: '#2B3440', sub: tm10Rs(prov.mrr) },
       { rot: 'Gap', v: prov.gap > 0 ? prov.gap + ' clientes' : 'zero ✓',
         cor: prov.gap > 0 ? '#E51A31' : '#1E9E7B',
@@ -26701,6 +26738,36 @@ function tm10TelaHTML(d, cauda) {
     +   seg(pv.quentesPondN, '#8E3B5C', Math.round(pv.quentesPondN) + ' quentes')
     +   '<span title="meta do mês" style="position:absolute;right:0;top:0;bottom:0;width:3px;'
     +     'background:#2B3440;"></span>'
+    + '</div>'
+    /* ══ OS TRES EIXOS, LADO A LADO (10/09/26) ════════════════════════════════════════
+       A barra empilhada continua sendo de CLIENTES, que e a pergunta do bloco. Os outros
+       dois eixos entram como linha propria porque MRR e receita tem metas proprias e
+       porcentagens que divergem muito entre si: em 10/09 o time estava em 12% de clientes,
+       13% de MRR e 20% de receita. Uma porcentagem so faria tres verdades parecerem uma. */
+    + '<div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin-top:10px;'
+    +   'padding-top:10px;border-top:1px solid #E7E3DA;">'
+    +   [['clientes', pv.fechN, pv.meta, pv.pctClientes, false],
+        ['MRR', pv.fechMrr, pv.metaMrrTime, pv.pctMrr, true],
+        ['receita', pv.fechReceita, pv.metaReceitaTime, pv.pctReceita, true]]
+      .map(function (x) {
+        const rot = x[0], feito = x[1], meta = x[2], pct = x[3], dinheiro = x[4];
+        const cor = pct == null ? '#B4AC9C' : (pct >= 100 ? '#1E9E7B' : (pct >= 60 ? '#B07C1F' : '#E51A31'));
+        return '<span style="display:inline-flex;align-items:baseline;gap:7px;">'
+          + '<b style="font:900 17px \'Archivo\',sans-serif;color:' + cor + ';'
+          +   'font-variant-numeric:tabular-nums;">' + (pct == null ? '—' : pct + '%') + '</b>'
+          + '<span style="font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;">' + esc(rot)
+          +   ' · ' + esc(dinheiro ? tm10Rs(feito) + ' de ' + tm10Rs(meta)
+              : feito + ' de ' + meta) + '</span></span>';
+      }).join('')
+    +   (pv.ajustadas.length
+        ? '<span style="margin-left:auto;font:700 9.5px \'Manrope\',sans-serif;color:#8A6516;'
+          + 'background:#FDF6E7;border:1px solid #F0DFB6;border-radius:999px;padding:4px 11px;"'
+          + ' title="' + esc(pv.ajustadas.map(function (a) {
+            return a.nome + ' (' + a.name + ') — ' + (a.motivo || 'ajuste'); }).join(' · '))
+          + '">' + pv.ajustadas.length + (pv.ajustadas.length === 1
+            ? ' venda fora do mês por competência' : ' vendas fora do mês por competência')
+          + '</span>'
+        : '')
     + '</div>'
     + '<div style="display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;margin-top:10px;">'
     +   leg(pv.fechN + ' clientes', '#1E9E7B', 'fechados · ' + tm10Rs(pv.fechMrr))
@@ -27085,10 +27152,17 @@ function tm10CaudaHTML(d) {
       + '<span style="flex:1;min-width:26px;height:14px;background:#EDEBE5;border-radius:999px;'
       +   'overflow:hidden;"><i style="display:block;height:100%;width:'
       +   Math.min(100, r.pct) + '%;background:' + r.cor + ';border-radius:999px;"></i></span>'
-      + '<b style="flex:none;width:34px;text-align:right;font:900 11px \'Archivo\',sans-serif;'
-      +   'color:' + r.cor + ';">' + r.fech + '/' + r.meta + '</b>'
-      + '<span style="flex:none;width:52px;text-align:right;font:800 10px \'Manrope\',sans-serif;'
-      +   'color:#1E9E7B;">' + esc(tm10Rs(r.mrr)) + '</span>'
+      + '<b style="flex:none;width:38px;text-align:right;font:900 11px \'Archivo\',sans-serif;'
+      +   'color:' + r.cor + ';">' + (r.meta ? r.fech + '/' + r.meta : '—') + '</b>'
+      /* MRR E RECEITA DELE CONTRA A META DELE, e o cinza quando a meta e zero: a coluna
+         que dizia so o MRR aberto no funil nao respondia "ele esta batendo a meta de
+         dinheiro?", que e a pergunta que a planilha do Julyan faz. */
+      + '<span style="flex:none;width:88px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
+      +   'color:' + (r.mrrMeta && r.mrrFeito >= r.mrrMeta ? '#1E9E7B' : '#5B667A') + ';">'
+      +   (r.mrrMeta ? esc(tm10Rs(r.mrrFeito)) + '/' + esc(tm10Rs(r.mrrMeta)) : '—') + '</span>'
+      + '<span style="flex:none;width:96px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
+      +   'color:' + (r.receitaMeta && r.receitaFeita >= r.receitaMeta ? '#1E9E7B' : '#5B667A') + ';">'
+      +   (r.receitaMeta ? esc(tm10Rs(r.receitaFeita)) + '/' + esc(tm10Rs(r.receitaMeta)) : '—') + '</span>'
       + '<span style="flex:none;width:64px;text-align:right;font:800 9px \'Manrope\',sans-serif;'
       +   'color:#5B667A;">' + (r.tqMed == null ? '—' : r.tqMed.toFixed(1).replace('.', ',') + ' tq/lead') + '</span>'
       + '<span style="flex:none;width:60px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
@@ -27102,9 +27176,11 @@ function tm10CaudaHTML(d) {
     +   'text-transform:none;">· clique → o dossiê da pessoa</span></span>'
     + '<div style="display:flex;flex-direction:column;gap:2px;margin-top:8px;">' + rankHTML + '</div>'
     + '<span style="display:block;font:700 9.5px/1.5 \'Manrope\',sans-serif;color:#7A8494;margin-top:8px;">'
-    +   'barra e X/META = clientes fechados no mês sobre a meta dele · MRR = o que ele tem'
-    +   ' aberto no funil · tq/lead = toques por negócio na janela de ' + d.janelaToques
-    +   ' dias · travados = régua da etapa estourada</span></div>';
+    +   'barra e X/META = clientes que chegaram a GANHO no mês sobre a meta dele (8 para os'
+    +   ' plenos, 2 para quem está em rampa) · as duas colunas de R$ são MRR e receita'
+    +   ' feitos sobre as metas dele — receita é o valor total do plano, MRR é a'
+    +   ' mensalidade · tq/lead = toques por negócio na janela de ' + d.janelaToques
+    +   ' dias · travados = régua da etapa estourada · "—" = sem meta na planilha do mês</span></div>';
 
   return '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">'
     +   bloco4 + bloco5 + bloco6 + '</div>'
