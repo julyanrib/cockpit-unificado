@@ -68,24 +68,39 @@ function respostaFalsa() {
   return r;
 }
 
-/* Dublê de rede: sessão válida, busca de duplicata vazia, criação capturada. */
-async function chamar(corpoDoPedido) {
-  const enviado = { criacao: null, patch: null };
+/* Dublê de rede: sessão válida, busca de duplicata vazia, criação capturada.
+   `opcoesDoCaso.tarefaExistente` faz a busca devolver uma tarefa igual, para exercitar o
+   caminho do REAGENDAMENTO; `opcoesDoCaso.associacaoFalha` faz o PUT da associação
+   recusar, para provar que a falha volta na resposta em vez de sumir. */
+async function chamar(corpoDoPedido, opcoesDoCaso) {
+  const caso = opcoesDoCaso || {};
+  const enviado = { criacao: null, patch: null, associacoes: [] };
   global.fetch = async function (url, opcoes) {
     const u = String(url);
+    const metodo = (opcoes && opcoes.method) || 'GET';
     if (u.indexOf('/auth/v1/user') > -1) {
       return { ok: true, status: 200, json: async () => ({ email: REP.email }) };
     }
     if (u.indexOf('/tasks/search') > -1) {
-      return { ok: true, status: 200, json: async () => ({ results: [] }) };
+      return {
+        ok: true, status: 200,
+        json: async () => ({ results: caso.tarefaExistente || [] })
+      };
     }
-    if (u.indexOf('/objects/tasks') > -1 && opcoes && opcoes.method === 'POST') {
+    /* A ASSOCIAÇÃO: PUT em .../tasks/<id>/associations/deals/<id>/task_to_deal */
+    if (metodo === 'PUT' && u.indexOf('/associations/') > -1) {
+      enviado.associacoes.push(u);
+      return caso.associacaoFalha
+        ? { ok: false, status: 409, json: async () => ({ message: 'recusado' }) }
+        : { ok: true, status: 200, json: async () => ({}) };
+    }
+    if (u.indexOf('/objects/tasks') > -1 && metodo === 'POST') {
       enviado.criacao = JSON.parse(opcoes.body);
       return { ok: true, status: 201, json: async () => ({ id: '555' }) };
     }
-    if (opcoes && opcoes.method === 'PATCH') {
+    if (metodo === 'PATCH') {
       enviado.patch = JSON.parse(opcoes.body);
-      return { ok: true, status: 200, json: async () => ({ id: '555' }) };
+      return { ok: true, status: 200, json: async () => ({ id: '777' }) };
     }
     return { ok: true, status: 200, json: async () => ({ results: [] }) };
   };
@@ -238,7 +253,69 @@ async function main() {
     tpl.indexOf('esc(e.obs)') < 0,
     'achei `esc(e.obs)` — corpo de tarefa indo direto para a tela');
 
-  /* ── 7 · E O NAVEGADOR DECLARA A ORIGEM ────────────────────────────────────────────
+  /* ── 7 · A TAREFA ENTRA NA TIMELINE DO NEGÓCIO ─────────────────────────────────────
+     Julyan, 11/09: "associa a tarefa ao negócio tbm". Antes disto o objeto nascia solto e
+     a visita planejada não aparecia na ficha do negócio no HubSpot. Estas checagens medem
+     a CHAMADA que sai para a rede, não a presença do texto no arquivo. */
+  global.fetch = fetchOriginal;
+  const comDeal = await chamar({
+    nome: 'Bar Associado', ownerId: String(REP.ownerId), horaPrevista: '10:00',
+    data: '2026-09-17', origem: 'planejamento', dealId: '31415926'
+  });
+  checar('a tarefa criada é associada ao negócio',
+    comDeal.enviado.associacoes.length === 1
+      && /\/objects\/tasks\/555\/associations\/deals\/31415926\/task_to_deal$/.test(comDeal.enviado.associacoes[0]),
+    'associações: ' + JSON.stringify(comDeal.enviado.associacoes));
+  checar('e a resposta declara que associou',
+    comDeal.res.corpo && comDeal.res.corpo.associadaAoNegocio === true
+      && !comDeal.res.corpo.associacaoFalhou,
+    JSON.stringify(comDeal.res.corpo || {}));
+
+  /* SEM NEGÓCIO não se inventa associação — e nem por isso a tarefa falha. */
+  const semNegocio = await chamar({
+    nome: 'Bar Solto', ownerId: String(REP.ownerId), horaPrevista: '10:00',
+    data: '2026-09-17', origem: 'planejamento'
+  });
+  checar('sem dealId não sai chamada de associação, e a tarefa é criada assim mesmo',
+    semNegocio.enviado.associacoes.length === 0
+      && semNegocio.res.statusCode === 200
+      && semNegocio.res.corpo.associadaAoNegocio === false,
+    'associações: ' + semNegocio.enviado.associacoes.length
+      + ' · corpo: ' + JSON.stringify(semNegocio.res.corpo || {}));
+
+  /* A FALHA DA ASSOCIAÇÃO NÃO DERRUBA A TAREFA, E NÃO SOME.
+     O compromisso já existe e o executivo tem de vê-lo na Agenda. Mas associação que some
+     calada dá no mesmo que não existir, só que descoberta tarde — foi assim que negócio
+     chegou em Ag. Pagamento sem contato e a cobrança do Asaas falhou depois de o cliente
+     ter assinado. */
+  const assocRuim = await chamar({
+    nome: 'Bar Teimoso', ownerId: String(REP.ownerId), horaPrevista: '10:00',
+    data: '2026-09-17', origem: 'planejamento', dealId: '31415926'
+  }, { associacaoFalha: true });
+  checar('associação recusada NÃO derruba a tarefa',
+    assocRuim.res.statusCode === 200 && assocRuim.res.corpo.ok === true,
+    'HTTP ' + assocRuim.res.statusCode + ' — ' + JSON.stringify(assocRuim.res.corpo || {}));
+  checar('e a recusa volta na resposta em vez de sumir',
+    !!assocRuim.res.corpo.associacaoFalhou
+      && assocRuim.res.corpo.associadaAoNegocio === false,
+    JSON.stringify(assocRuim.res.corpo || {}));
+
+  /* O REAGENDAMENTO CONSERTA O PASSADO: tarefa criada antes desta mudança nasceu sem
+     vínculo nenhum. O PUT é idempotente, então movê-la de horário a associa. */
+  const reagendou = await chamar({
+    nome: 'Bar Antigo', ownerId: String(REP.ownerId), horaPrevista: '16:00',
+    data: '2026-09-17', origem: 'planejamento', dealId: '27182818'
+  }, { tarefaExistente: [{ id: '777', properties: { hs_task_subject: 'Visita - Bar Antigo' } }] });
+  checar('reagendar tarefa antiga também a associa ao negócio',
+    reagendou.res.corpo && reagendou.res.corpo.reagendada === true
+      && reagendou.enviado.associacoes.length === 1
+      && /\/tasks\/777\/associations\/deals\/27182818\/task_to_deal$/.test(reagendou.enviado.associacoes[0]),
+    'corpo: ' + JSON.stringify(reagendou.res.corpo || {})
+      + ' · associações: ' + JSON.stringify(reagendou.enviado.associacoes));
+
+  global.fetch = fetchOriginal;
+
+  /* ── 8 · E O NAVEGADOR DECLARA A ORIGEM ────────────────────────────────────────────
      As checagens de 1 a 5 chamam o SERVIDOR direto, com a origem no corpo do pedido —
      então elas não sabem se a tela manda a origem. Medido na sabotagem: apagar o
      `origem` da chamada do Planejamento deixava as vinte verdes, e o marcador em
