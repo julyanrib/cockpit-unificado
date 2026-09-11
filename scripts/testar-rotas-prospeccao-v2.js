@@ -69,6 +69,21 @@ checar('e quem não foi medido não vira urgência',
     && aba.indexOf('consumo ?') > 0,
   'consumo zero daria estoque infinito ou urgência falsa — as duas mentem sobre a mesma pessoa');
 
+/* VISTO NA PRODUÇÃO em 11/09/26: Kelly com 166 contas e 0,25 em rota por semana dava
+   "≈ 664 sem" de estoque. A conta certa, a informação invertida — o problema dela não é
+   estoque, é que ela quase não põe conta em rota. Acima de 8 semanas o rótulo troca de
+   assunto, e o KPI diz quantos não têm consumo medido: "backlog seco 0" com 7 de 11 sem
+   medida nenhuma é o zero que tranquiliza. */
+checar('estoque absurdo vira leitura de consumo',
+  /x\.e\.semanas > 8 \? \(.só . \+ Math\.round\(x\.e\.consumo \* 4\) \+ . em 4 sem.\)/.test(aba.replace(/'/g, '.')),
+  '"≈ 664 sem" é um número certo que não ajuda ninguém a decidir nada');
+
+checar('e o backlog seco declara quem não foi medido',
+  /const semConsumo = estoques\.filter\(function \(x\) \{ return x\.e\.semanas == null; \}\)\.length;/.test(aba)
+    && aba.indexOf('sem consumo medido') > 0
+    && aba.indexOf('sem pôr conta em rota nas últimas 4 semanas') > 0,
+  'ninguém aparece seco quando o consumo é zero — e aí a tela fica calada sobre munição parada');
+
 console.log('\n── 2 · A FILA QUE A TELA MOSTRA É A FILA QUE O ESCRITOR ENVIA');
 
 checar('existe UMA função de fila, e as duas pontas a chamam',
