@@ -42015,8 +42015,11 @@ function rt7Dados() {
       pct: Math.round((x.e.contas / maiorEstoque) * 100) + '%',
       cor: cor,
       n: String(x.e.contas),
-      sem: x.e.semanas == null ? 'consumo ?' : ('≈ ' + (Math.round(x.e.semanas * 10) / 10).toString().replace('.', ',') + ' sem'),
-      semCor: x.e.semanas == null ? '#8A6516' : x.e.semanas < 1 ? '#6E1210' : '#7A8494',
+
+      sem: x.e.semanas == null ? 'consumo ?'
+        : x.e.semanas > 8 ? ('só ' + Math.round(x.e.consumo * 4) + ' em 4 sem')
+          : ('≈ ' + (Math.round(x.e.semanas * 10) / 10).toString().replace('.', ',') + ' sem'),
+      semCor: x.e.semanas == null ? '#8A6516' : x.e.semanas < 1 ? '#6E1210' : x.e.semanas > 8 ? '#8A6516' : '#7A8494',
       btRot: s.importando && String(s.imp) === String(x.u.ownerId) ? 'buscando…'
         : (x.e.semanas != null && x.e.semanas < 1 ? '⤓ importar AGORA' : '⤓ importar'),
       btBg: (x.e.semanas != null && x.e.semanas < 1) ? '#E51A31' : '#FDFEFF',
@@ -42170,13 +42173,17 @@ function rt7Dados() {
   });
   const viraramLead = doMes.filter(function (l) { return !!l.hubspot_deal_id || l.ja_existe_hubspot; }).length;
   const secos = estoques.filter(function (x) { return x.seco; }).length;
+  const semConsumo = estoques.filter(function (x) { return x.e.semanas == null; }).length;
   const kpisFinal = [
     { rot: 'importado nas últimas 24h', v: String(novas24h),
       de: novas24h ? 'entrou na fila' : 'nada entrou — o gatilho é seu', cor: novas24h ? '#F0B45C' : '#8B93A3' },
     { rot: 'contas sem dono ativo', v: String(orf.paradas),
       de: orf.paradas ? (orf.cidades.join(', ') || 'donos fora do campo') : 'nenhuma parada', cor: orf.paradas ? '#FF5F6E' : '#7FD9BE' },
+
     { rot: 'backlog seco', v: String(secos),
-      de: secos ? 'menos de 1 semana de munição' : 'ninguém abaixo de 1 semana', cor: secos ? '#FF5F6E' : '#7FD9BE' },
+      de: (secos ? secos + ' com menos de 1 semana' : 'ninguém abaixo de 1 semana')
+        + (semConsumo ? ' · ' + semConsumo + ' sem consumo medido' : ''),
+      cor: secos ? '#FF5F6E' : (semConsumo ? '#F0B45C' : '#7FD9BE') },
 
     { rot: 'rotas cumpridas', v: 'não medido', de: 'check-in do Expogo fora do snapshot', cor: '#8B93A3' },
     { rot: 'novas → lead', v: doMes.length ? (Math.round((viraramLead / doMes.length) * 1000) / 10).toString().replace('.', ',') + '%' : '—',
@@ -42191,6 +42198,8 @@ function rt7Dados() {
     if (orf.paradas) partes.push(orf.paradas + ' conta(s) parada(s) no nome de quem saiu do campo');
     const semSemana = ativos.filter(function (u) { return !rt7Semana(u.ownerId).existe; }).length;
     if (semSemana) partes.push(semSemana + ' sem a semana montada');
+
+    if (semConsumo) partes.push(semConsumo + ' sem pôr conta em rota nas últimas 4 semanas');
     if (!partes.length) return 'Munição em dia, semanas montadas e nenhuma conta órfã. A torneira pode esperar.';
     const primeiro = estoques[0];
     return partes.join(' · ') + '.' + (primeiro ? ' Comece por ' + String(primeiro.u.nome).split(' ')[0] + '.' : '');
