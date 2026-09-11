@@ -58309,6 +58309,23 @@ function rt7FilaDoExec(ownerId, todas) {
   return todas ? lista : lista.slice(0, RT7_FILA_VISIVEL);
 }
 
+/* ══ A PRÓXIMA SEGUNDA, UMA VEZ ══════════════════════════════════════════════════════
+   Os dois gestos que põem conta na rua usam o mesmo dia: "aprovar selecionadas" e
+   "travar N contas na segunda". Duas contas de data divergiriam no primeiro feriado, e o
+   executivo veria metade das contas num dia e metade noutro.
+   NUNCA HOJE: `|| 7` faz a segunda-feira cair na segunda SEGUINTE. Marcar para hoje
+   atropelaria o dia que ele já montou — e o dia de hoje é gesto dele, não do gestor. */
+function rt7ProximaSegunda() {
+  const d = new Date();
+  const falta = (8 - d.getDay()) % 7 || 7;
+  const s = new Date(d.getTime() + falta * 86400000);
+  return s.getFullYear() + '-' + String(s.getMonth() + 1).padStart(2, '0')
+    + '-' + String(s.getDate()).padStart(2, '0');
+}
+function rt7DiaCurto(iso) {
+  return String(iso || '').split('-').reverse().slice(0, 2).join('/');
+}
+
 /* ══ O QUE JÁ FOI FEITO NESTA SESSÃO ════════════════════════════════════════════════
    O botão de cada linha da rua muda para "✓ <efeito>" depois de executar, e o estado
    disso é o próprio log da sessão — não um segundo mapa de booleanos que poderia
@@ -59304,10 +59321,11 @@ async function rt7Enviar() {
     : '';
 
   const ok = (typeof confirm === 'function')
-    ? confirm('Aprovar ' + ids.length + ' conta(s) para a rua de ' + u.nome + '?\n'
+    ? confirm('Pôr ' + ids.length + ' conta(s) na rota de ' + u.nome + ' na segunda?\n'
       + frasePerde
-      + '\nElas ficam com ele como dono em leads_prospeccao e marcadas para a rua, então\n'
-      + 'aparecem no Planejamento e na munição da Daily dele. Nada é criado no HubSpot por isto,\n'
+      + '\nElas JÁ ESTÃO na munição dele desde o import (aparecem no Planejamento como\n'
+      + '"Disponível"). Isto marca o DIA: status na_rota + data_rota na próxima segunda,\n'
+      + 'que é o que o Planejamento e a rota dele leem. Nada é criado no HubSpot por isto,\n'
       + 'e o rodapé desta tela tem desfazer.')
     : false;
   if (!ok) { s.toast = 'nada foi enviado'; return; }
@@ -59331,8 +59349,12 @@ async function rt7Enviar() {
     const voltar = escolhidos.map(function (l) {
       return { id: String(l.id), dono: String(l.responsavel_owner_id || ''), status: String(l.status) };
     });
+    /* O PAR COMPLETO: status e dia. Sem o dia, os nove leitores de `data_rota` (todos
+       comparam com HOJE) não acham a conta em rota nenhuma, e o rótulo "Na rota" fica
+       descrevendo uma rota que não existe. */
+    const seg = rt7ProximaSegunda();
     const { data: gravadas, error } = await supa.from('leads_prospeccao')
-      .update({ status: 'na_rota', responsavel_owner_id: String(u.ownerId), updated_at: new Date().toISOString() })
+      .update({ status: 'na_rota', data_rota: seg, responsavel_owner_id: String(u.ownerId), updated_at: new Date().toISOString() })
       .in('id', ids)
       .select('id');
     if (error) throw error;
@@ -59356,18 +59378,21 @@ async function rt7Enviar() {
     const confirmadas = (Array.isArray(gravadas) && gravadas.length)
       ? gravadas.map(x => String(x.id)) : ids;
     s.leads.forEach(l => {
-      if (confirmadas.indexOf(String(l.id)) >= 0) { l.status = 'na_rota'; l.responsavel_owner_id = String(u.ownerId); }
+      if (confirmadas.indexOf(String(l.id)) >= 0) {
+        l.status = 'na_rota'; l.data_rota = seg; l.responsavel_owner_id = String(u.ownerId);
+      }
     });
     s.sel = {};
     const quantas = confirmadas.length;
     rt7Registrar({ chave: 'aprov:' + u.ownerId + ':' + Date.now(), tipo: 'Carteira', bg: '#1E9E7B',
       desfazivel: true, voltar: voltar.filter(function (v) { return confirmadas.indexOf(v.id) >= 0; }),
-      txt: quantas + ' conta(s) aprovadas para a rua de ' + String(u.nome).split(' ')[0]
-        + ' — ficha completa no Supabase, aparecem no Planejamento e na munição da Daily dele' });
+      txt: quantas + ' conta(s) na rota de ' + String(u.nome).split(' ')[0] + ' na segunda ('
+        + rt7DiaCurto(seg) + ') — a ficha inteira já estava na munição dele; isto marca o dia' });
     /* o aviso de escrita parcial, quando existe, MANDA: ele diz algo que o "✓" apagaria */
     if (!s.toast || s.toast.indexOf('atenção:') !== 0) {
-      s.toast = '✓ ' + quantas + ' leads com dono ' + String(u.nome).split(' ')[0]
-        + ' — já aparecem na munição da Daily dele e como contas alvo no Expogo';
+      s.toast = '✓ ' + quantas + ' conta(s) na rota de ' + String(u.nome).split(' ')[0]
+        + ' na segunda (' + rt7DiaCurto(seg) + ') — no Planejamento dele naquele dia.'
+        + ' A conta importada já estava na munição dele desde o import; o que isto marca é o dia.';
     }
   } catch (e) {
     s.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
@@ -59398,12 +59423,7 @@ async function rt7AcaoDaRua(verbo, ownerId) {
     if (typeof supa === 'undefined' || !supa) { RT7_ESTADO.toast = 'sem conexão aqui — nada foi gravado'; return; }
     const alvos = rt7FilaDoExec(ownerId, true).slice(0, 3).map(function (x) { return x.l; });
     if (!alvos.length) { RT7_ESTADO.toast = 'a munição dele está vazia — importe antes de travar'; return; }
-    const seg = (function () {
-      const d = new Date();
-      const falta = (8 - d.getDay()) % 7 || 7;   /* próxima segunda, nunca hoje */
-      const s = new Date(d.getTime() + falta * 86400000);
-      return s.getFullYear() + '-' + String(s.getMonth() + 1).padStart(2, '0') + '-' + String(s.getDate()).padStart(2, '0');
-    }());
+    const seg = rt7ProximaSegunda();
     try {
       const ids = alvos.map(function (l) { return String(l.id); });
       const { data, error } = await supa.from('leads_prospeccao')
@@ -59418,7 +59438,8 @@ async function rt7AcaoDaRua(verbo, ownerId) {
       alvos.forEach(function (l) { l.status = 'na_rota'; l.data_rota = seg; });
       rt7Registrar({ chave: chave, tipo: 'Rota', bg: '#8E3B5C', voltar: voltar, desfazivel: false,
         porque: 'para soltar, é no Planejamento dele',
-        txt: data.length + ' conta(s) de ' + primeiro + ' marcadas para segunda (' + seg.split('-').reverse().slice(0, 2).join('/') + ') — aparecem no Planejamento dele' });
+        txt: data.length + ' conta(s) de ' + primeiro + ' marcadas para a rota de segunda ('
+          + rt7DiaCurto(seg) + ') — aparecem no Planejamento dele naquele dia' });
       RT7_ESTADO.toast = data.length + ' conta(s) travadas na segunda de ' + primeiro + ' ✓ — aparecem no Planejamento dele';
     } catch (e) {
       RT7_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
@@ -59643,7 +59664,7 @@ function rt7TelaHTML(d) {
               `).join('')}
               ${(d.semFila) ? `<span style="font:700 10.5px/1.6 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:10px;padding:9px 12px;">${d.semFilaTxt}</span>` : ''}
             </div>
-            <p style="margin:8px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;">▸ <b style="color:#2B3440;">nada entra sozinho</b>: a importação é disparada por você no painel ao lado · score = nota × volume de avaliações · o dono é automático pelo território oficial · aprovar grava a ficha inteira no Supabase e a conta entra na munição da Daily dele · sem telefone não bloqueia: a visita é na porta</p>
+            <p style="margin:8px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;">▸ <b style="color:#2B3440;">nada entra sozinho</b>: a importação é disparada por você no painel ao lado · o dono é automático pelo território oficial, e a conta aparece no <b style="color:#2B3440;">Planejamento dele como "Disponível" no instante do import</b> · score = nota × volume de avaliações · aprovar aqui marca o DIA (rota da próxima segunda), não é o que a faz aparecer · sem telefone não bloqueia: a visita é na porta</p>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:12px;min-width:0;">

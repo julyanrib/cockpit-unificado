@@ -178,10 +178,30 @@ checar('o disparo exige cidade e avisa que é consulta paga',
     && aba.indexOf('cada uma é uma busca paga') > 0,
   'disparar sem escolha gasta crédito do Julyan sem decisão dele');
 
-checar('aprovar marca para a RUA e guarda o estado de antes',
-  /\.update\(\{ status: .na_rota., responsavel_owner_id: String\(u\.ownerId\)/.test(aba.replace(/'/g, '.'))
+/* ══ `na_rota` SEM `data_rota` É UM ESTADO QUE NINGUÉM LÊ (11/09/26) ═════════════════
+   Varridos os leitores: os nove lugares que olham `data_rota` comparam com HOJE, e o
+   gesto inverso do produto escreve { status: 'atribuido', data_rota: null } — os dois
+   campos viajam em par. Aprovar escrevia só o status, e o rótulo "Na rota" descrevia uma
+   rota que não existia nem hoje nem segunda.
+
+   E O DIA VEM DE UMA FUNÇÃO SÓ: aprovar e "travar N contas na segunda" põem conta na rua
+   pelo mesmo caminho; duas contas de data divergem no primeiro feriado e o executivo vê
+   metade das contas num dia e metade noutro. */
+checar('aprovar grava o PAR status+dia, e guarda o estado de antes',
+  /\.update\(\{ status: .na_rota., data_rota: seg, responsavel_owner_id: String\(u\.ownerId\)/.test(aba.replace(/'/g, '.'))
     && /const voltar = escolhidos\.map/.test(aba),
-  'sem o estado de antes, o desfazer devolve todas as contas para o mesmo dono');
+  'sem o dia, os nove leitores de data_rota não acham a conta em rota nenhuma; sem o estado de antes, o desfazer devolve todas ao mesmo dono');
+
+checar('e o dia da rota sai de UMA função',
+  /function rt7ProximaSegunda\(\)/.test(aba)
+    && (aba.match(/rt7ProximaSegunda\(\)/g) || []).length === 3
+    && /const falta = \(8 - d\.getDay\(\)\) % 7 \|\| 7;/.test(aba),
+  'duas contas da próxima segunda divergem no primeiro feriado, e metade das contas cai noutro dia');
+
+checar('e a tela diz que a conta já está na munição dele desde o import',
+  aba.indexOf('no instante do import') > 0
+    && aba.indexOf('aprovar aqui marca o DIA') > 0,
+  'o gestor pensar que sem o clique dele a conta não chega no executivo é o oposto do que acontece');
 
 checar('e continua exigindo a linha de volta do banco',
   aba.indexOf('o banco aceitou o pedido e não mudou nenhuma linha') > 0
