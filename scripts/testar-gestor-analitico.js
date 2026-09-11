@@ -170,8 +170,12 @@ checar('o destino leva a pessoa junto, nao so troca de aba',
   /* NA v2 O ESTADO E UM SO: a v1 tinha 'funil dele' separado do cartao selecionado, e
      o dossie da v2 ja abre com o kanban dele em modo leitura. Cobrar os dois estados
      antigos exigiria manter um deles vazio so para a suite passar. */
-  templateCodigo.indexOf('TM2_ESTADO.sel = oid') > 0 &&
-  templateCodigo.indexOf("querySelector('#tm2Raiz [data-tm2-acao=") > 0,
+  /* O DESTINO MUDOU EM 10/09/26, E A REGRA NAO: gxFocarExecutivo levava a aba Time e
+     abria o dossie embutido nela; agora leva a Pessoas v4, que e a aba do dossie completo
+     ("a Time aponta quem cobrar, a Pessoas mostra TUDO daquela pessoa"). O que a guarda
+     cobra continua sendo o mesmo: chegar na aba COM a pessoa aberta. */
+  templateCodigo.indexOf('PS6_ESTADO.sel = oid') > 0 &&
+  templateCodigo.indexOf("querySelector('#ps6Raiz [data-ps6-acao=") > 0,
   'destino sem pessoa faz o gestor procurar de novo o nome que acabou de clicar');
 /* TROCAR DE ABA CLICA O BOTAO REAL, nunca activateTab a mao: cada aba tem render e
    efeito colateral proprios no clique, e reproduzir isso a mao cria um segundo caminho
@@ -183,7 +187,11 @@ checar('trocar de aba usa o botao de aba real, nunca activateTab a mao',
     const i = templateCodigo.indexOf('function gxFocarExecutivo(');
     if (i < 0) return false;
     const bloco = templateCodigo.slice(i, i + 1400);
-    return bloco.indexOf("getElementById('tabBtnCockpit')") > 0
+    /* A ABA PASSOU A SER tabBtnPDIs (10/09/26): ela e "Desenvolvimento" para o executivo
+       e "Pessoas" para o gestor, no mesmo no, e e onde o dossie completo vive. A regra
+       que a guarda protege nao mudou: clicar o BOTAO de aba, nunca activateTab a mao —
+       cada aba tem render e efeito colateral proprios no clique. */
+    return bloco.indexOf("getElementById('tabBtnPDIs')") > 0
       && bloco.indexOf('aba.click()') > 0
       && bloco.indexOf('activateTab(') < 0;
   }()),
@@ -1023,6 +1031,138 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
   checar('e o fechado de cada um no ranking tambem',
     tela.indexOf('const fechDele = vendasDele ? Number(vendasDele.count) : r.fech;') > -1
       && tela.indexOf('fech: fechDele,') > -1);
+}());
+
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   A ABA PESSOAS v4 (10/09/26, prancha pessoas-v4-STANDALONE)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Regra zero do prompt: "NENHUM clique morto e NENHUM dado inventado". E a regra 1:
+   "toques do MESMO lead identicos em todas as abas — uma funcao so, um cache so".
+
+   ESTA ABA NAO MEDE NADA DE NOVO, e as guardas cobram isso: ela filtra por pessoa o que
+   a Time ja mede. Se alguem escrever uma segunda contagem de toques aqui, a suite
+   reprova — porque o numero na Pessoas e o numero na Time tem de ser o mesmo numero,
+   nao dois numeros iguais por coincidencia.
+
+   O QUE A PRANCHA PEDE E O DADO NAO TEM, e por isso a tela diz outra coisa:
+     tempo de casa ......... nao existe em campo nenhum -> a tela mostra o PATAMAR da meta
+     validade da proposta .. nao existe como propriedade -> mesma regra da Time (tarefa futura)
+     motivo de perda por pessoa -> o robo agrega por motivo (time) e por dono (total) */
+(function () {
+  const tela = templateCodigo;
+
+  /* ── 1 · UMA FONTE DE TOQUES, COMPARTILHADA COM A TIME (regra 1) ─────────────────── */
+  checar('a Pessoas usa a MESMA funcao de toques da Time',
+    /function pe4Sla\([\s\S]{0,400}?tm10Tq\(l\.id\)/.test(tela)
+      && !/function pe4Toques/.test(tela)
+      /* MEDE A FAMILIA, e nao o arquivo: lead_deal_id tem usos legitimos na agenda do
+         gestor e na do executivo. O que a regra 1 proibe e uma SEGUNDA contagem de
+         toques — e ela existiria dentro de uma funcao pe4. A primeira versao desta
+         guarda exigia 2 no arquivo inteiro e reprovou codigo certo, pela terceira vez
+         hoje que eu escrevo guarda larga. */
+      && !/function pe4[A-Za-z]*\([\s\S]{0,900}?lead_deal_id/.test(tela));
+  checar('e reusa o funil, o gargalo e a meta que ja existiam',
+    tela.indexOf('const etapas = tm10Etapas();') > -1
+      && tela.indexOf('const gargalo = tm10Gargalo(dele);') > -1
+      && tela.indexOf('meta: metaClientesDoRep(r),') > -1);
+
+  /* ── 2 · UM ESTADO SO PARA A SELECAO ────────────────────────────────────────────────
+     A prancha tem deep-link (?exec=) e clique no rail. Dois estados para a mesma selecao
+     fariam o deep-link mexer num e a tela ler o outro. */
+  checar('a selecao da pessoa usa o estado que ja existia',
+    tela.indexOf('PS6_ESTADO.sel') > -1 && !/let PE4_SEL/.test(tela));
+  checar('e o rail nunca abre sem ninguem',
+    /\|\| pessoas\[0\] \|\| null;/.test(tela));
+
+  /* ── 3 · O FUNIL NUNCA ABRE SEM ETAPA, E A ETAPA E POR PESSOA (regra 4) ──────────── */
+  checar('a etapa default e o gargalo dela, e nunca fica vazia',
+    /e\.id === PE4_ETAPA\[sel\.ownerId\] && e\.n > 0/.test(tela)
+      && /\|\| gargalo \|\| dele\[0\] \|\| null/.test(tela)
+      && tela.indexOf('nenhum lead nesta etapa agora.') > -1);
+  checar('e trocar de pessoa nao herda a etapa da anterior',
+    /PE4_ETAPA\[a\] = b;/.test(tela) && !/let PE4_ETAPA = null/.test(tela));
+
+  /* ── 4 · NENHUMA FIACAO NOVA, E NENHUM ESCRITOR NOVO ────────────────────────────────
+     Os dois gestos que a prancha acrescenta entram no ouvinte que ja existia
+     (data-ps6-acao) e o carimbo chama ps6Carimbar, que grava na MESMA linha de
+     pdi_compromissos que o executivo marca. */
+  checar('os gestos novos usam a fiacao que ja existia',
+    /* indexOf LITERAL, e nao regex com `.` no lugar da apostrofa: renomeando o verbo para
+       'etapaX' a sabotagem passou verde, porque o `.` do padrao casava o X. Terceira
+       coringa larga minha hoje — onde o texto e exato, medir exato. */
+    (tela.match(/data-pe4-acao/g) || []).length === 0
+      /* E PINADO NO PAR, porque "if (verbo === 'etapa')" existe DUAS vezes no arquivo —
+         uma na aba Time, outra aqui. A guarda achava a da Time e dava verde com a minha
+         renomeada. O que identifica esta e a linha seguinte, que escreve PE4_ETAPA. */
+      && tela.indexOf("if (verbo === 'etapa') {\n    if (a && b) PE4_ETAPA[a] = b;") > -1
+      && tela.indexOf("if (verbo === 'combinado') {") > -1);
+  checar('o carimbo do combinado grava pelo escritor que ja existia',
+    /await ps6Carimbar\(a, i, .validar.\)/.test(tela.replace(/'/g, '.'))
+      && /await ps6Carimbar\(a, i, .devolver./.test(tela.replace(/'/g, '.'))
+      && /function pe4LimparCarimbo\(/.test(tela));
+  checar('e devolver continua exigindo motivo',
+    /* A FRASE EXISTE DUAS VEZES — no verbo `devolver` antigo e no ciclo novo do combinado.
+       A guarda larga dava verde com a minha metade removida. Pina no ramo do combinado. */
+    /if \(verbo === .combinado.\)[\s\S]{0,1200}?devolver exige um motivo/
+      .test(tela.replace(/'/g, '.')));
+
+  /* ── 5 · O NOME DO LEAD ABRE O NEGOCIO, PELA FUNCAO UNICA DE URL ─────────────────── */
+  checar('o nome do lead abre o negocio no HubSpot',
+    /* PINADO DENTRO DE pe4TelaHTML: hsUrl(l.id) tem QUATRO usos legítimos no arquivo, em
+       quatro telas, e a guarda larga deu verde com o link desta quebrado — a sabotagem
+       passou. O que importa é que o nome do lead DESTA tela abra o negócio. */
+    (function () {
+      const i = tela.indexOf('function pe4TelaHTML(d) {');
+      if (i < 0) return false;
+      const bloco = tela.slice(i, tela.indexOf('function tm2SobreviventesHTML', i));
+      return /hsUrl\(l\.id\)/.test(bloco) && /hsUrl\(x\.id\)/.test(bloco);
+    }()));
+
+  /* ── 6 · DIAGNOSTICO, AVISOS E ALAVANCAS CITAM NUMERO E NOME (regra 6) ────────────── */
+  checar('o diagnostico cita o pior lead por nome',
+    /function pe4PiorLead\(p\)/.test(tela)
+      && /o pior é o . \+ \(pior\.name \|\| pior\.dealname\)/.test(tela.replace(/'/g, '.')));
+  checar('os avisos seguem a prioridade fixa da prancha',
+    /rot: .mrr travado./.test(tela.replace(/'/g, '.'))
+      && /rot: .proposta na mesa./.test(tela.replace(/'/g, '.'))
+      && /rot: .carga esfriando./.test(tela.replace(/'/g, '.'))
+      && /rot: .funil secando./.test(tela.replace(/'/g, '.'))
+      && /rot: .dinheiro escorrendo./.test(tela.replace(/'/g, '.'))
+      && /rot: .funil limpo./.test(tela.replace(/'/g, '.')));
+  checar('e as alavancas saem do mesmo gargalo do diagnostico',
+    /function pe4Alavancas\(p, time, conv, diag, props\)/.test(tela)
+      && /diag\.gargalo === .destravar./.test(tela.replace(/'/g, '.')));
+
+  /* ── 7 · NAO MEDIDO NAO E ZERO, EM TRES LUGARES ─────────────────────────────────────
+     SLA de quem tem menos de 3 negocios com data de criacao, cadencia que nao veio, e
+     ticket/ritmo do time quando ninguem fechou. Os tres dizem que nao sabem. */
+  checar('o SLA de quem nao foi medido nao vira 0%',
+    /if \(comData\.length < PE4_SLA_MIN\) return \{ pct: null/.test(tela)
+      && tela.indexOf('não medido — só ') > -1);
+  checar('a cadencia ausente diz que nao veio',
+    tela.indexOf('a cadência não veio nesta carga do robô') > -1);
+  checar('e o ticket do time sai de medicao, nao de constante',
+    /ticket: somaFech > 0 \? Math\.round\(somaMrr \/ somaFech\) : null/.test(tela)
+      && tela.indexOf('1.180') === -1);
+
+  /* ── 8 · O QUE A PRANCHA PEDE E O DADO NAO TEM ──────────────────────────────────────
+     A prancha crava "14 meses de casa". Nao existe campo de admissao em lugar nenhum —
+     conferido no snapshot e no banco. A tela mostra o patamar da meta, que e real. */
+  checar('nao inventa tempo de casa',
+    tela.indexOf('meses de casa') === -1
+      && /sel\.patamar \? . \u00b7 . \+ \(sel\.patamar === .pleno./.test(tela.replace(/'/g, '.')));
+  checar('e a proposta vencendo usa a MESMA regra da Time',
+    /function pe4Propostas\(p\)[\s\S]{0,600}?tarefas\.map\(function \(x\) \{ return Date\.parse\(x\.timestamp\)/
+      .test(tela));
+
+  /* ── 9 · SO O GESTOR DESENHA A TELA DO GESTOR ────────────────────────────────────────
+     Esta view e compartilhada: "Desenvolvimento" para o executivo, "Pessoas" para o
+     gestor, no mesmo no desde 06/09. Sem a porteira, um executivo desenharia o dossie do
+     time inteiro. */
+  checar('so o gestor desenha a Pessoas',
+    /function renderPessoas\(\) \{[\s\S]{0,600}?sessaoAtual\.role !== .manager.\) \{ raiz\.innerHTML = ../
+      .test(tela.replace(/'/g, '.')));
 }());
 
 if (falhas.length) {

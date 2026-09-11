@@ -27816,6 +27816,934 @@ function tm2DataCurta(iso) {
    lugar foi só quem chama. Os verbos (`cobrar`, `um1`, `dealcob`, `sel`, `deal`) seguem
    caindo no mesmo tm2Executar.
    ══════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   PESSOAS v4 — O DOSSIE 1:1 DE CADA EXECUTIVO  (10/09/26, prancha pessoas-v4-STANDALONE)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "aba pessoas, que se conecta a aba time, so que em um olhar individual
+   completo... quero todos os dados plausiveis, reais, puxado do hubspot".
+
+   ESTA ABA NAO MEDE NADA DE NOVO, e isso e o ponto. Ela filtra por pessoa o que a Time
+   ja mede: tm10Tq (a fonte unica de toques), tl5Medir (o funil por rep), tm10Etapas,
+   tm10Gargalo, metaClientesDoRep, stageColor, hsUrl. A regra 1 da prancha exige que os
+   toques de um lead sejam identicos aqui e na Time — e a unica forma de garantir isso e
+   nao ter uma segunda contagem.
+
+   O QUE EU MEDI ANTES DE DESENHAR (producao, 10/09 as 22:45):
+     criadoEm ............ 149 de 228 negocios (o SLA de 1o toque virou mensuravel hoje)
+     conversao por pessoa  historicoEtapas.porOwner[id].etapas com chegaram/avancaram
+     habitos do time ..... habitosTime.porRep + benchmark
+     compromissos ........ reps[].compromissos (3 por pessoa) + pdi_compromissos no banco
+     tempo de casa ....... NAO EXISTE em campo nenhum
+     validade da proposta  NAO EXISTE como propriedade no portal
+
+   As duas ultimas mudaram o desenho: onde a prancha escreve "14 meses de casa" a tela
+   escreve o PATAMAR da meta (pleno/rampa), que e real e diz mais para o gestor; e
+   "proposta vencendo" usa a MESMA regra da Time (negocio em Demo/Negociacao sem tarefa
+   futura = sem reuniao), porque inventar uma data de validade seria numero fake.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── AS PESSOAS DO RAIL, ORDENADAS POR QUEM MAIS PRECISA DO GESTOR ────────────────────
+   Score da prancha, ao pe da letra:
+     (1 − fechados/meta) × 3 + travados × 0,6 + (100 − SLA%) / 40
+   Ele nao e um ranking de desempenho: e uma FILA DE ATENDIMENTO. Quem esta longe da
+   meta, com muito negocio travado e carga esfriando sobe — nessa ordem de peso.
+   QUEM NAO TEM META NAO VAI PARA O TOPO: com meta 0 o primeiro termo daria 1×3 e a
+   pessoa lideraria a fila sem ter alvo nenhum. Sem meta, o termo e 0. */
+function pe4Score(p) {
+  const faltaPct = p.meta > 0 ? Math.max(0, 1 - p.fech / p.meta) : 0;
+  const slaPct = p.sla == null ? 100 : p.sla;   /* sem medicao nao penaliza ninguem */
+  return faltaPct * 3 + p.travados * 0.6 + (100 - slaPct) / 40;
+}
+
+/* O STATUS do rail sai do MESMO gargalo que o diagnostico usa — dois rotulos para a
+   mesma pessoa seriam duas leituras da mesma conversa. */
+const PE4_STATUS = {
+  destravar: { rot: 'destravar', cor: '#E51A31' },
+  volume:    { rot: 'volume',    cor: '#B07C1F' },
+  rampa:     { rot: 'rampa',     cor: '#8E3B5C' },
+  ticket:    { rot: 'ticket',    cor: '#B07C1F' },
+  sla:       { rot: 'carga fria', cor: '#E51A31' },
+  ritmo:     { rot: 'ritmo',     cor: '#B07C1F' },
+  ok:        { rot: 'no ritmo',  cor: '#1E9E7B' }
+};
+
+/* ── O SLA DE 1º TOQUE DE UMA PESSOA ─────────────────────────────────────────────────
+   % dos negocios COM DATA DE CRIACAO cujo primeiro toque veio em 48h. Depende de
+   `criadoEm`, que entrou no robo hoje — quem tem menos de 3 negocios com data devolve
+   null, e null NAO e 0%: a tela escreve "nao medido" em vez de pintar vermelho em quem
+   nao foi medido. */
+const PE4_SLA_MIN = 3;
+function pe4Sla(leads) {
+  const comData = leads.filter(function (l) { return l.criadoEm; });
+  if (comData.length < PE4_SLA_MIN) return { pct: null, n: comData.length, estourados: 0 };
+  let emDia = 0, estourados = 0;
+  comData.forEach(function (l) {
+    const tq = tm10Tq(l.id);
+    const nasceu = Date.parse(l.criadoEm);
+    const ok = tq.ultimo != null && Number.isFinite(nasceu)
+      && (tq.ultimo - nasceu) <= 48 * 3600000;
+    if (ok) emDia += 1; else estourados += 1;
+  });
+  return { pct: Math.round(emDia / comData.length * 100), n: comData.length, estourados: estourados };
+}
+
+/* ── A CONVERSAO DELE CONTRA A DO TIME ───────────────────────────────────────────────
+   historicoEtapas.porOwner[id].etapas traz chegaram/avancaram por etapa, e a escada do
+   time traz o agregado — o traco da prancha. Etapa com menos de PE4_N_MIN chegadas fica
+   fora: 1 de 2 nao e 50%, e uma barra dessas manda o gestor treinar o que nao existe. */
+const PE4_N_MIN = 5;
+function pe4Conversao(ownerId) {
+  const he = DATA.historicoEtapas || {};
+  const dele = ((he.porOwner || {})[String(ownerId)] || {}).etapas || [];
+  if (!dele.length) return { medivel: false };
+  /* O TIME: o mes mais recente da escada, que e o mesmo numero que a aba Time usa. */
+  const esc = he.escada || {};
+  const meses = Object.keys(esc).sort();
+  const doTime = ((esc[meses[meses.length - 1]] || {}).etapas) || [];
+  const taxa = function (e) { return e && e.chegaram >= PE4_N_MIN ? e.avancaram / e.chegaram * 100 : null; };
+  const linhas = dele.slice(0, 5).map(function (e, i) {
+    const prox = dele[i + 1];
+    const meu = taxa(e);
+    const doT = taxa(doTime.find(function (x) { return x.id === e.id; }));
+    if (meu == null) return null;
+    const dif = doT == null ? null : meu - doT;
+    return {
+      rot: (e.nome || '').replace('Conversa com ', '') + ' → '
+        + (prox ? (prox.nome || '').replace('Conversa com ', '') : 'fechado'),
+      pct: Math.round(meu), time: doT == null ? null : Math.round(doT),
+      /* verde ≥ time · ambar ate 8pp abaixo · vermelho abaixo disso (prancha) */
+      cor: dif == null ? '#7A8494' : (dif >= 0 ? '#1E9E7B' : (dif >= -8 ? '#B07C1F' : '#E51A31')),
+      dif: dif == null ? null : Math.round(dif)
+    };
+  }).filter(Boolean);
+  const pior = linhas.filter(function (l) { return l.dif != null; })
+    .sort(function (a, b) { return a.dif - b.dif; })[0] || null;
+  return { medivel: linhas.length > 0, linhas: linhas, pior: pior };
+}
+
+/* ── O CONTRATO DE UMA PESSOA ────────────────────────────────────────────────────────── */
+/* NAO EXISTE UM PE4_SEL: a selecao da pessoa e PS6_ESTADO.sel, o estado que esta aba
+   ja tinha. Eu declarei um aqui e ele ficou morto por 20 minutos — a guarda da propria
+   Pessoas pegou, exigindo que nao exista um segundo estado para a mesma selecao. */
+let PE4_ETAPA = {};     /* etapa escolhida, por pessoa: trocar de pessoa nao herda a etapa */
+
+function pe4Pessoas() {
+  const m = tl5Medir();
+  const etapas = tm10Etapas();
+  const vm = DATA.vendasMes || {};
+  const cad = tm10Cadencia();
+  return (DATA.reps || []).map(function (r) {
+    const oid = String(r.ownerId);
+    const meus = {};
+    let abertos = 0, travados = 0, mrrTravado = 0, tq = 0, nAtivos = 0;
+    const pos = ['1396006162', '1396006163', '1396006164', '1398311191'];
+    etapas.forEach(function (e) {
+      const dele = e.leads.filter(function (l) { return String(l.ownerId) === oid; });
+      meus[e.id] = dele;
+      abertos += dele.length;
+      if (pos.indexOf(e.id) < 0) {
+        dele.forEach(function (l) { tq += tm10Tq(l.id).n; nAtivos += 1; });
+        dele.forEach(function (l) { if (l.slaBreach) { travados += 1; mrrTravado += tm10MrrDo(l); } });
+      }
+    });
+    const vendas = (vm.porRep || []).filter(function (x) { return String(x.ownerId) === oid; })[0] || null;
+    const fech = vendas ? Number(vendas.count) : 0;
+    const mrrFeito = vendas ? Number(vendas.mrrTotal) : 0;
+    const receitaFeita = vendas ? Number(vendas.receitaTotal) : 0;
+    const todosDele = [];
+    Object.keys(meus).forEach(function (k) { if (pos.indexOf(k) < 0) todosDele.push.apply(todosDele, meus[k]); });
+    const sla = pe4Sla(todosDele);
+    const linhaCad = cad.medivel
+      ? cad.linhas.filter(function (l) { return String(l.ownerId) === oid; })[0] || null : null;
+    const p = {
+      ownerId: oid, nome: r.name, curto: tm10NomeCurto(r.name),
+      iniciais: String(r.name || '?').split(/\s+/).map(function (x) { return x.charAt(0); })
+        .slice(0, 2).join('').toUpperCase(),
+      praca: r.praca || '—', patamar: r.patamarMeta || null,
+      meta: metaClientesDoRep(r), metaMrr: Number(r.metaMrr) || 0,
+      metaReceita: Number(r.metaReceita) || 0,
+      fech: fech, mrrFeito: mrrFeito, receitaFeita: receitaFeita,
+      ticket: fech > 0 ? Math.round(mrrFeito / fech) : null,
+      abertos: abertos, travados: travados, mrrTravado: mrrTravado,
+      quentes: (r.quentes || []).length,
+      tqMed: nAtivos ? tq / nAtivos : null, nAtivos: nAtivos,
+      sla: sla.pct, slaEstourados: sla.estourados, slaN: sla.n,
+      cad: linhaCad, leads: meus,
+      compromissos: r.compromissos || [],
+      pctMeta: metaClientesDoRep(r) > 0 ? Math.round(fech / metaClientesDoRep(r) * 100) : null
+    };
+    p.score = pe4Score(p);
+    return p;
+  }).sort(function (a, b) { return b.score - a.score; });
+}
+
+/* ── O TICKET E O RITMO DO TIME, para as comparacoes "vs time" ───────────────────────
+   Os dois saem de medicao, nunca de constante: a prancha cravou "time: R$ 1.180" e
+   "time: 12 visitas", que eram numeros do mockup. */
+function pe4Time(pessoas) {
+  const comFech = pessoas.filter(function (p) { return p.fech > 0; });
+  const somaMrr = comFech.reduce(function (s, p) { return s + p.mrrFeito; }, 0);
+  const somaFech = comFech.reduce(function (s, p) { return s + p.fech; }, 0);
+  const comCad = pessoas.filter(function (p) { return p.cad; });
+  const semana = comCad.map(function (p) {
+    return p.cad.celulas.slice(-5).reduce(function (a, c) { return a + c.n; }, 0); });
+  const comSla = pessoas.filter(function (p) { return p.sla != null; });
+  return {
+    ticket: somaFech > 0 ? Math.round(somaMrr / somaFech) : null,
+    ritmo: semana.length ? Math.round(semana.reduce(function (a, b) { return a + b; }, 0) / semana.length) : null,
+    sla: comSla.length ? Math.round(comSla.reduce(function (s, p) { return s + p.sla; }, 0) / comSla.length) : null,
+    abaixoDeMeio: pessoas.filter(function (p) { return p.pctMeta != null && p.pctMeta < 50; }).length,
+    travados: pessoas.reduce(function (s, p) { return s + p.travados; }, 0),
+    fech: pessoas.reduce(function (s, p) { return s + p.fech; }, 0),
+    meta: pessoas.reduce(function (s, p) { return s + p.meta; }, 0)
+  };
+}
+
+
+/* ══ O PIOR LEAD DE UMA PESSOA, QUE E O QUE DA NOME AO DIAGNOSTICO ═══════════════════
+   A regra 6 da prancha: "diagnostico, avisos e alavancas SEMPRE citam numero + nome de
+   lead real — nunca frase generica". Sem isto a tela viraria "melhore seu funil", que e
+   exatamente o que o gestor nao consegue usar numa conversa. */
+function pe4PiorLead(p) {
+  const pos = ['1396006162', '1396006163', '1396006164', '1398311191'];
+  const cands = [];
+  Object.keys(p.leads).forEach(function (k) {
+    if (pos.indexOf(k) >= 0) return;
+    p.leads[k].forEach(function (l) { if (l.slaBreach) cands.push(l); });
+  });
+  return cands.sort(function (a, b) {
+    const d = tm10MrrDo(b) - tm10MrrDo(a);
+    return d !== 0 ? d : (b.dias || 0) - (a.dias || 0);
+  })[0] || null;
+}
+
+/* ══ AS PROPOSTAS DELE ════════════════════════════════════════════════════════════════
+   A MESMA regra da aba Time, e de proposito: negocio em Demo ou Negociacao sem tarefa
+   futura = proposta sem reuniao. Nao existe propriedade de "validade da proposta" no
+   portal — conferido —, entao a data que a tela mostra e a da PROXIMA TAREFA quando ela
+   existe, e os dias parados quando nao existe. Duas regras de "proposta vencendo" em
+   duas abas seriam dois numeros para a mesma cobranca. */
+function pe4Propostas(p) {
+  const hoje = Date.now();
+  const linhas = [];
+  ['1395880471', '1395880472'].forEach(function (k) {
+    (p.leads[k] || []).forEach(function (l) {
+      const tarefas = Array.isArray(l.tarefas) ? l.tarefas : [];
+      const futura = tarefas.map(function (x) { return Date.parse(x.timestamp); })
+        .filter(function (ms) { return Number.isFinite(ms) && ms >= hoje; }).sort()[0] || null;
+      linhas.push({
+        id: String(l.id), nome: l.name || l.dealname || 'sem nome',
+        temReuniao: futura != null,
+        quando: futura != null ? tm10DiaCurtoMs(futura)
+          : (l.dias != null ? l.dias + 'd parado' : 'sem data'),
+        nota: futura != null ? 'reunião marcada ✓' : 'sem reunião marcada',
+        mrr: tm10MrrDo(l)
+      });
+    });
+  });
+  return linhas.sort(function (a, b) {
+    if (a.temReuniao !== b.temReuniao) return a.temReuniao ? 1 : -1;
+    return b.mrr - a.mrr;
+  }).slice(0, 3);
+}
+
+/* ══ AS PERDAS DELE NO MES ════════════════════════════════════════════════════════════
+   motivosPerda.porOwner e mrrPorOwner existem no snapshot; o detalhe por MOTIVO de UMA
+   pessoa nao — o robo agrega por motivo (time) e por dono (total). Entao esta tela
+   mostra o que existe: quantas perdas sao dele e quanto MRR, com a janela no rotulo.
+   Inventar a distribuicao por motivo dele a partir do agregado do time seria estatistica
+   travestida de dado. */
+function pe4Perdas(p) {
+  const mp = DATA.motivosPerda || {};
+  const n = (mp.porOwner || {})[p.ownerId] || 0;
+  const mrr = (mp.mrrPorOwner || {})[p.ownerId] || 0;
+  return { n: n, mrr: mrr, dias: mp.dias || null,
+    /* os motivos do TIME ficam como referencia, rotulados como do time */
+    doTime: Object.keys(mp.porMotivo || {}).map(function (k) {
+      return { rot: k, n: mp.porMotivo[k] };
+    }).sort(function (a, b) { return b.n - a.n; }).slice(0, 3) };
+}
+
+/* ══ O DIAGNOSTICO, POR REGRA ═════════════════════════════════════════════════════════
+   Uma frase, com numero e nome. A ORDEM das regras e a hierarquia do que dói mais no mes
+   — e ela e a MESMA que ordena os avisos e as alavancas, para a tela nao dizer que o
+   problema e um no diagnostico e outro na alavanca. */
+function pe4Diagnostico(p, time, conv) {
+  const pior = pe4PiorLead(p);
+  const etapaTravada = (function () {
+    let melhor = null;
+    Object.keys(p.leads).forEach(function (k) {
+      const n = p.leads[k].filter(function (l) { return l.slaBreach; }).length;
+      if (!melhor || n > melhor.n) melhor = { id: k, n: n };
+    });
+    return melhor && melhor.n > 0 ? melhor : null;
+  }());
+  const nomeEtapa = function (id) {
+    const e = tm10Etapas().filter(function (x) { return x.id === id; })[0];
+    return e ? e.rot : 'etapa';
+  };
+
+  if (p.travados >= 3 && pior) {
+    return { gargalo: 'destravar',
+      txt: p.curto + ' perde o jogo no meio do funil: ' + p.travados
+        + (p.travados === 1 ? ' negócio travado' : ' negócios travados')
+        + ' com ' + tm10Rs(p.mrrTravado) + ' parados — ' + etapaTravada.n + ' em '
+        + nomeEtapa(etapaTravada.id) + ', e o pior é o ' + (pior.name || pior.dealname)
+        + ' há ' + (pior.dias != null ? pior.dias + 'd' : 'muito tempo') + '.' };
+  }
+  if (p.sla != null && p.sla < 70) {
+    return { gargalo: 'sla',
+      txt: p.curto + ' recebe carga e não toca: SLA de 1º toque em ' + p.sla + '%, '
+        + p.slaEstourados + (p.slaEstourados === 1 ? ' lead passou' : ' leads passaram')
+        + ' de 48h sem o primeiro contato. Carga fria é carga desperdiçada.' };
+  }
+  if (p.meta > 0 && p.pctMeta != null && p.pctMeta < 50 && p.abertos < p.meta * 2) {
+    return { gargalo: 'volume',
+      txt: p.curto + ' está em ' + p.pctMeta + '% da meta com só ' + p.abertos
+        + ' negócios abertos — não é conversão, é volume: para fechar ' + p.meta
+        + ' precisa de mais entrada no topo.' };
+  }
+  if (conv.medivel && conv.pior && conv.pior.dif != null && conv.pior.dif < -8) {
+    return { gargalo: 'conversao',
+      txt: p.curto + ' trava em ' + conv.pior.rot + ': passa ' + conv.pior.pct
+        + '% onde o time passa ' + conv.pior.time + '% — '
+        + Math.abs(conv.pior.dif) + ' pontos abaixo, e é aí que o treino rende mais.' };
+  }
+  if (p.ticket != null && time.ticket && p.ticket < time.ticket * 0.8) {
+    return { gargalo: 'ticket',
+      txt: p.curto + ' fecha, mas fecha pequeno: ticket de R$ ' + p.ticket
+        + ' contra R$ ' + time.ticket + ' do time — o problema é ancoragem, não esforço.' };
+  }
+  if (p.tqMed != null && p.tqMed < 2 && p.nAtivos >= 3) {
+    return { gargalo: 'ritmo',
+      txt: p.curto + ' tem ' + p.nAtivos + ' leads ativos com '
+        + p.tqMed.toFixed(1).replace('.', ',') + ' toques por lead — abaixo de 2 o lead'
+        + ' está abandonado, não trabalhado.' };
+  }
+  if (p.meta > 0 && p.pctMeta != null && p.pctMeta >= 70) {
+    return { gargalo: 'ok',
+      txt: p.curto + ' está em ' + p.pctMeta + '% da meta com ' + p.travados
+        + ' travados e ' + tm10Rs(p.mrrFeito) + ' de MRR fechado — aqui a conversa é'
+        + ' multiplicar o que já funciona.' };
+  }
+  return { gargalo: 'rampa',
+    txt: p.curto + ' tem ' + p.abertos + ' negócios abertos, ' + p.fech + ' de '
+      + (p.meta || '—') + ' fechados e nada travado o suficiente para ser o gargalo —'
+      + ' a conversa aqui é de rampa: volume e cadência.' };
+}
+
+/* ══ OS TRES AVISOS, NA PRIORIDADE FIXA DA PRANCHA ════════════════════════════════════
+   Sete regras, no maximo tres cartoes, e a ordem e a da prancha (item 3). Nenhum aviso
+   sem numero, e nenhum sem nome quando a regra permite nomear. Se nada dispara, o cartao
+   verde de funil limpo — que e informacao, nao enfeite. */
+function pe4Avisos(p, time, conv, props) {
+  const av = [];
+  const pior = pe4PiorLead(p);
+  if (p.mrrTravado > 0 && pior) {
+    av.push({ tom: 'vermelho', rot: 'mrr travado', valor: tm10Rs(p.mrrTravado) + ' parados',
+      txt: p.travados + (p.travados === 1 ? ' lead com régua estourada' : ' leads com régua estourada')
+        + ' · pior: ' + (pior.name || pior.dealname)
+        + (pior.dias != null ? ' há ' + pior.dias + 'd' : '') });
+  }
+  const semReuniao = props.filter(function (x) { return !x.temReuniao; })[0];
+  if (semReuniao) {
+    av.push({ tom: 'ambar', rot: 'proposta na mesa', valor: semReuniao.nome,
+      txt: 'proposta sem reunião marcada · ' + tm10Rs(semReuniao.mrr)
+        + ' — cobrar data na conversa' });
+  }
+  if (p.sla != null && p.sla < 70) {
+    av.push({ tom: 'vermelho', rot: 'carga esfriando', valor: 'SLA 1º toque: ' + p.sla + '%',
+      txt: p.slaEstourados + (p.slaEstourados === 1 ? ' lead de carga passou' : ' leads de carga passaram')
+        + ' de 48h sem o 1º toque (de ' + p.slaN + ' medidos)' });
+  }
+  const topo = (p.leads['1395880469'] || []).length + (p.leads['1396005401'] || []).length;
+  const fim = (p.leads['1395880471'] || []).length + (p.leads['1395880472'] || []).length;
+  if (topo >= 3 && fim <= 1) {
+    av.push({ tom: 'ambar', rot: 'funil secando', valor: topo + ' no topo, ' + fim + ' no fim',
+      txt: 'entra e não avança — o gargalo está na passagem, não na entrada' });
+  }
+  const pagTrav = (p.leads['1395880473'] || []).filter(function (l) { return l.slaBreach; });
+  if (pagTrav.length) {
+    av.push({ tom: 'vinho', rot: 'dinheiro escorrendo',
+      valor: pagTrav.length + ' em Ag. Pagamento',
+      txt: 'venda ganha com régua estourada · ' + (pagTrav[0].name || pagTrav[0].dealname)
+        + ' — é o ASAAS ou é cobrança?' });
+  }
+  if (p.cad && time.ritmo != null) {
+    const semana = p.cad.celulas.slice(-5).reduce(function (a, c) { return a + c.n; }, 0);
+    if (semana < time.ritmo * 0.7) {
+      av.push({ tom: 'ambar', rot: 'ritmo abaixo do time',
+        valor: semana + ' na semana', txt: 'o time faz ' + time.ritmo
+          + ' em média — menos toque é menos funil na semana que vem' });
+    }
+  }
+  if (!av.length) {
+    av.push({ tom: 'verde', rot: 'funil limpo', valor: 'nada travado ✓',
+      txt: p.abertos + ' negócios abertos, nenhum com régua estourada e '
+        + (p.tqMed == null ? 'sem toque medido' : p.tqMed.toFixed(1).replace('.', ',') + ' toques por lead') });
+  }
+  return av.slice(0, 3);
+}
+
+/* ══ AS TRES ALAVANCAS ════════════════════════════════════════════════════════════════
+   Tag + acao imperativa + prova com numero. Elas saem do MESMO gargalo do diagnostico,
+   e a primeira alavanca sempre ataca ele — "leve isso pra conversa" so vale se as tres
+   frases forem sobre a mesma pessoa que o diagnostico descreveu. */
+const PE4_TAGS = {
+  conversao: '#E51A31', tecnica: '#8E3B5C', ritmo: '#B07C1F', sla: '#E51A31',
+  ticket: '#B07C1F', carteira: '#7A8494', multiplicar: '#1E9E7B', fechamento: '#E51A31'
+};
+function pe4Alavancas(p, time, conv, diag, props) {
+  const pior = pe4PiorLead(p);
+  const al = [];
+  const semReuniao = props.filter(function (x) { return !x.temReuniao; });
+  if (diag.gargalo === 'destravar' && pior) {
+    al.push({ tag: 'fechamento', acao: 'Destravar os ' + p.travados + ' travados nesta semana, começando pelo ' + (pior.name || pior.dealname),
+      prova: tm10Rs(p.mrrTravado) + ' de MRR parados · ' + semReuniao.length + ' das propostas sem reunião marcada' });
+  }
+  if (diag.gargalo === 'sla' || (p.sla != null && p.sla < 70)) {
+    al.push({ tag: 'sla', acao: 'Fechar a régua de 48h no primeiro toque da carga',
+      prova: p.slaEstourados + ' de ' + p.slaN + ' leads de carga passaram de 48h · SLA em ' + p.sla + '%' });
+  }
+  if (conv.medivel && conv.pior && conv.pior.dif != null && conv.pior.dif < 0) {
+    al.push({ tag: 'conversao', acao: 'Treinar ' + conv.pior.rot + ' — é o maior buraco dele',
+      prova: 'passa ' + conv.pior.pct + '% onde o time passa ' + conv.pior.time + '% ('
+        + Math.abs(conv.pior.dif) + 'pp abaixo)' });
+  }
+  if (p.tqMed != null && p.tqMed < 2 && p.nAtivos >= 3) {
+    al.push({ tag: 'ritmo', acao: 'Subir a cadência: 2 toques por lead é o piso',
+      prova: p.nAtivos + ' leads ativos com ' + p.tqMed.toFixed(1).replace('.', ',') + ' toques por lead' });
+  }
+  if (p.ticket != null && time.ticket && p.ticket < time.ticket * 0.9) {
+    al.push({ tag: 'ticket', acao: 'Ancorar no plano completo antes de falar preço',
+      prova: 'ticket de R$ ' + p.ticket + ' contra R$ ' + time.ticket + ' do time' });
+  }
+  if (p.meta > 0 && p.abertos < p.meta * 2) {
+    al.push({ tag: 'carteira', acao: 'Abastecer o topo: a carteira não sustenta a meta',
+      prova: p.abertos + ' abertos para uma meta de ' + p.meta + ' — a régua da casa é 2 por cliente' });
+  }
+  if (p.compromissos.length) {
+    al.push({ tag: 'tecnica', acao: p.compromissos[0],
+      prova: 'combinado da última análise · ' + p.compromissos.length + ' no total' });
+  }
+  if (p.pctMeta != null && p.pctMeta >= 70) {
+    al.push({ tag: 'multiplicar', acao: 'Transformar o que ele faz em roteiro para o time',
+      prova: p.pctMeta + '% da meta com ' + tm10Rs(p.mrrFeito) + ' fechado' });
+  }
+  return al.slice(0, 3);
+}
+
+
+/* ══ O CONTRATO DA TELA PESSOAS v4 ═══════════════════════════════════════════════════
+   Um lugar monta tudo, o markup nao calcula nada — a disciplina das outras pranchas.
+   ELE REUSA O ESTADO QUE JA EXISTIA: PS6_ESTADO.sel e a pessoa selecionada e
+   PS6_ESTADO.compromissos as linhas de pdi_compromissos. Criar um PE4_SEL ao lado seria
+   dois estados para a mesma selecao, e o deep-link ?exec= mexeria em um e a tela leria o
+   outro. */
+function pe4Dados() {
+  const pessoas = pe4Pessoas();
+  const time = pe4Time(pessoas);
+  /* O RAIL NUNCA ABRE SEM NINGUEM: o `sel` do ps6 alterna (clicar de novo solta), e a
+     prancha exige uma pessoa sempre aberta. Sem selecao, e o primeiro da fila — que e
+     quem o score diz que mais precisa do gestor, e a manchete cita o mesmo nome. */
+  const sel = pessoas.filter(function (p) { return p.ownerId === String(PS6_ESTADO.sel); })[0]
+    || pessoas[0] || null;
+  const primeiro = pessoas[0] || null;
+
+  const etapas = tm10Etapas();
+  let dossie = null;
+  if (sel) {
+    /* A ETAPA DEFAULT E O GARGALO DELE (regra 4): mais travados, empate por MRR parado.
+       E ela e por PESSOA — trocar de pessoa nao herda a etapa da anterior, que foi
+       exatamente o defeito que a prancha chama de "flash de dado antigo". */
+    const dele = etapas.map(function (e) {
+      const ls = sel.leads[e.id] || [];
+      const tq = ls.reduce(function (s, l) { return s + tm10Tq(l.id).n; }, 0);
+      return { id: e.id, rot: e.rot, cor: e.cor, regua: e.regua, leads: ls, n: ls.length,
+        mrr: ls.reduce(function (s, l) { return s + tm10MrrDo(l); }, 0),
+        travados: ls.filter(function (l) { return l.slaBreach; }).length,
+        tqMed: ls.length ? tq / ls.length : null };
+    });
+    const gargalo = tm10Gargalo(dele);
+    const escolhida = dele.filter(function (e) {
+      return e.id === PE4_ETAPA[sel.ownerId] && e.n > 0; })[0] || gargalo || dele[0] || null;
+    const maxN = Math.max(1, ...dele.map(function (e) { return e.n; }));
+    const conv = pe4Conversao(sel.ownerId);
+    const props = pe4Propostas(sel);
+    const diag = pe4Diagnostico(sel, time, conv);
+    const linha = (PS6_ESTADO.compromissos || {})[sel.ownerId] || null;
+    dossie = {
+      nome: sel.nome, praca: sel.praca,
+      /* A PRANCHA ESCREVE "14 meses de casa" E ISSO NAO EXISTE em campo nenhum do
+         HubSpot nem do Supabase — conferido. No lugar vai o PATAMAR da meta, que e real
+         e diz mais numa conversa: pleno cobra 8, rampa cobra 2. */
+      sub: sel.praca + (sel.patamar ? ' · ' + (sel.patamar === 'pleno' ? 'meta de pleno' : 'em rampa') : ''),
+      fech: sel.fech, meta: sel.meta, pctMeta: sel.pctMeta,
+      metaCor: sel.pctMeta == null ? '#B4AC9C'
+        : (sel.pctMeta >= 70 ? '#1E9E7B' : (sel.pctMeta >= 50 ? '#B07C1F' : '#E51A31')),
+      diagnostico: diag.txt,
+      avisos: pe4Avisos(sel, time, conv, props),
+      etapas: dele.map(function (e) {
+        return { id: e.id, rot: e.rot, cor: e.cor, n: e.n, travados: e.travados,
+          pct: Math.round(e.n / maxN * 100),
+          tqMed: e.tqMed == null ? null : e.tqMed.toFixed(1).replace('.', ','),
+          sel: !!(escolhida && e.id === escolhida.id),
+          on: 'etapa:' + sel.ownerId + ':' + e.id };
+      }),
+      numeros: [
+        { v: tm10Rs(sel.mrrFeito), rot: 'MRR fechado no mês', cor: '#1E9E7B' },
+        { v: sel.ticket == null ? '—' : 'R$ ' + sel.ticket,
+          rot: 'ticket médio' + (time.ticket ? ' (time: R$ ' + time.ticket + ')' : ' (time não medido)'),
+          cor: '#2B3440' },
+        { v: sel.cad ? (sel.cad.celulas.slice(-5).reduce(function (a, c) { return a + c.n; }, 0) + '/sem') : 'não medido',
+          rot: 'atividades na semana' + (time.ritmo != null ? ' (time: ' + time.ritmo + ')' : ''),
+          cor: sel.cad && time.ritmo != null
+            ? (sel.cad.celulas.slice(-5).reduce(function (a, c) { return a + c.n; }, 0) >= time.ritmo ? '#1E9E7B' : '#B07C1F')
+            : '#B4AC9C' },
+        { v: String(sel.quentes), rot: 'quentes na mesa', cor: sel.quentes ? '#1E9E7B' : '#B4AC9C' },
+        { v: String(sel.travados), rot: 'leads travados (régua estourada)', cor: sel.travados ? '#E51A31' : '#1E9E7B' },
+        { v: sel.tqMed == null ? 'não medido' : sel.tqMed.toFixed(1).replace('.', ','),
+          rot: 'toques por lead ativo (régua: 2+)',
+          cor: sel.tqMed == null ? '#B4AC9C' : tm10TqCor(Math.round(sel.tqMed)) },
+        { v: sel.sla == null ? 'não medido' : sel.sla + '%',
+          rot: sel.sla == null ? 'SLA 1º toque (só ' + sel.slaN + ' com data de criação)' : 'SLA 1º toque em 48h',
+          cor: sel.sla == null ? '#B4AC9C' : (sel.sla >= 85 ? '#1E9E7B' : (sel.sla >= 65 ? '#B07C1F' : '#E51A31')) },
+        { v: String(sel.fech), rot: 'clientes fechados no mês', cor: '#2B3440' }
+      ],
+      etapaSel: escolhida ? { rot: escolhida.rot, n: escolhida.n, regua: escolhida.regua } : null,
+      leads: escolhida ? escolhida.leads.slice().sort(function (a, b) {
+        return (b.dias || 0) - (a.dias || 0); }).slice(0, 8).map(function (l) {
+        const tq = tm10Tq(l.id);
+        return { id: String(l.id), nome: l.name || l.dealname || 'sem nome',
+          onde: l.bairro || l.cidade || l.origem_do_lead || '',
+          dias: l.dias != null ? l.dias : null, estourou: !!l.slaBreach,
+          tqRot: tm10TqRot(tq.n), tqCor: tm10TqCor(tq.n), ultimo: tm10Ultimo(tq.ultimo),
+          mrr: tm10MrrDo(l),
+          porque: l.slaBreach
+            ? ('passou da régua de ' + (escolhida.regua || '—') + 'd'
+              + (tq.n <= 1 ? ' e tem ' + tm10TqRot(tq.n) + ' — ninguém voltou nesse' : ' com ' + tm10TqRot(tq.n)))
+            : (tq.n <= 1 ? 'dentro da régua, mas com ' + tm10TqRot(tq.n) : 'dentro da régua ✓') };
+      }) : [],
+      cad: sel.cad,
+      cadDias: tm10Cadencia().medivel ? tm10Cadencia().dias : [],
+      cadNota: (function () {
+        if (!sel.cad) return 'a cadência não veio nesta carga do robô';
+        const zerados = sel.cad.celulas.filter(function (c) { return c.n === 0; }).length;
+        const semana = sel.cad.celulas.slice(-5).reduce(function (a, c) { return a + c.n; }, 0);
+        return (zerados >= 3
+          ? zerados + ' dias zerados em 10 — dia zerado no CRM é a origem de régua estourada'
+          : zerados + (zerados === 1 ? ' dia zerado' : ' dias zerados') + ' em 10')
+          + ' · ' + semana + ' na semana'
+          + (time.ritmo != null ? ' (time: ' + time.ritmo + ')' : '');
+      }()),
+      cadAlarme: !!(sel.cad && sel.cad.celulas.filter(function (c) { return c.n === 0; }).length >= 3),
+      sla: sel.sla, slaEstourados: sel.slaEstourados, slaN: sel.slaN,
+      conv: conv, props: props, perdas: pe4Perdas(sel),
+      alavancas: pe4Alavancas(sel, time, conv, diag, props),
+      /* OS COMBINADOS: o texto vem da analise (reps[].compromissos) e o STATUS vem de
+         pdi_compromissos — checked[] do executivo, validado_em[] e devolvido_em[] do
+         gestor. Tres colunas que ja existiam viram os tres estados da prancha. */
+      combinados: sel.compromissos.map(function (txt, i) {
+        const feito = !!(linha && (linha.validado_em || [])[i]);
+        const furou = !!(linha && (linha.devolvido_em || [])[i]);
+        const marcou = !!(linha && (linha.checked || [])[i]);
+        const st = furou ? 'furou' : (feito ? 'feito' : 'pendente');
+        return { txt: txt, st: st, marcou: marcou,
+          motivo: furou ? ((linha.devolvido_motivo || [])[i] || '') : '',
+          on: linha ? ('combinado:' + sel.ownerId + ':' + i) : '' };
+      }),
+      temLinha: !!linha,
+      dataUm: linha && linha.data_um_a_um ? linha.data_um_a_um : null,
+      versao: linha ? linha.versao_analise : null,
+      ownerId: sel.ownerId
+    };
+  }
+
+  return {
+    kicker: 'Pessoas · acelerar quem vende',
+    manchete: time.abaixoDeMeio > 0 && primeiro
+      ? (time.abaixoDeMeio + (time.abaixoDeMeio === 1 ? ' pessoa do time abaixo' : ' do time abaixo')
+        + ' de 50% da meta — comece por ' + primeiro.curto
+        + ': é onde 1 conversa destrava mais MRR.')
+      : 'O time inteiro acima de 50% da meta — a conversa aqui é multiplicar, não destravar.',
+    kpis: [
+      { rot: 'Meta do time', v: time.fech + '/' + time.meta, cor: '#2B3440' },
+      { rot: 'Abaixo de 50%', v: String(time.abaixoDeMeio), cor: time.abaixoDeMeio ? '#E51A31' : '#1E9E7B' },
+      { rot: 'Travados no time', v: String(time.travados), cor: time.travados ? '#E51A31' : '#1E9E7B' },
+      { rot: 'SLA 1º toque', v: time.sla == null ? 'não medido' : time.sla + '%',
+        cor: time.sla == null ? '#B4AC9C' : (time.sla >= 85 ? '#1E9E7B' : (time.sla >= 65 ? '#B07C1F' : '#E51A31')) }
+    ],
+    rail: pessoas.map(function (p) {
+      const st = PE4_STATUS[p.travados >= 3 ? 'destravar'
+        : (p.sla != null && p.sla < 70 ? 'sla'
+          : (p.meta > 0 && p.pctMeta != null && p.pctMeta < 50 && p.abertos < p.meta * 2 ? 'volume'
+            : (p.ticket != null && time.ticket && p.ticket < time.ticket * 0.8 ? 'ticket'
+              : (p.pctMeta != null && p.pctMeta >= 70 ? 'ok' : 'rampa'))))];
+      return { ownerId: p.ownerId, iniciais: p.iniciais, nome: p.nome,
+        statusRot: st.rot, statusCor: st.cor,
+        sub: p.praca + ' · meta ' + p.fech + '/' + (p.meta || '—')
+          + ' · ' + p.travados + (p.travados === 1 ? ' travado' : ' travados')
+          + ' · ' + (p.tqMed == null ? '— tq/lead' : p.tqMed.toFixed(1).replace('.', ',') + ' tq/lead'),
+        sel: !!(dossie && p.ownerId === dossie.ownerId),
+        on: 'sel:' + p.ownerId };
+    }),
+    dossie: dossie,
+    toast: PS6_ESTADO.toast || null
+  };
+}
+
+
+/* ══ O MARKUP DA PRANCHA PESSOAS v4 ══════════════════════════════════════════════════
+   Tipografia e cores LIDAS DO DOM da prancha, nao estimadas: abri o standalone no
+   navegador e extrai estilo computado de cada folha de texto. Dai vem 13.5px no nome do
+   rail, 9.5px nos rotulos e 22px no numero do aviso. */
+const PE4_TONS = {
+  vermelho: { bg: '#FDF3F4', borda: '#F0A9B2', cor: '#E51A31' },
+  ambar:    { bg: '#FDF6E7', borda: '#F0DFB6', cor: '#B07C1F' },
+  vinho:    { bg: '#FBF5F8', borda: '#E9D9E1', cor: '#8E3B5C' },
+  verde:    { bg: '#EAF6F1', borda: '#CBE8DD', cor: '#1E9E7B' }
+};
+const PE4_ST = {
+  feito:    { bg: '#1E9E7B', rot: 'feito' },
+  pendente: { bg: '#B07C1F', rot: 'pendente' },
+  furou:    { bg: '#E51A31', rot: 'furou' }
+};
+
+function pe4TelaHTML(d) {
+  const A = "'Archivo',sans-serif";
+  const M = "'Manrope',sans-serif";
+
+  const kpis = d.kpis.map(function (k) {
+    return '<span style="display:block;min-width:0;">'
+      + '<span style="display:block;font:900 9px ' + A + ';letter-spacing:.1em;'
+      +   'text-transform:uppercase;color:#7A8494;">' + esc(k.rot) + '</span>'
+      + '<b style="display:block;font:900 30px ' + A + ';letter-spacing:-.02em;'
+      +   'font-variant-numeric:tabular-nums;color:' + k.cor + ';">' + esc(k.v) + '</b></span>';
+  }).join('');
+
+  /* ── O RAIL ──────────────────────────────────────────────────────────────────────── */
+  const rail = d.rail.map(function (p) {
+    return '<button type="button" data-ps6-acao="' + p.on + '" data-ps6-hv="0"'
+      + ' title="Abrir o dossiê de ' + esc(p.nome) + '"'
+      + ' style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;'
+      + 'border-left:3px solid ' + (p.sel ? '#E51A31' : 'transparent') + ';background:'
+      + (p.sel ? '#FDFEFF' : 'transparent') + ';padding:10px 14px;cursor:pointer;min-width:0;">'
+      + '<span style="flex:none;width:26px;height:26px;border-radius:999px;display:grid;'
+      +   'place-items:center;background:' + (p.sel ? '#E51A31' : '#2B3440')
+      +   ';color:#FDFEFF;font:900 10px ' + A + ';">' + esc(p.iniciais) + '</span>'
+      + '<span style="flex:1;min-width:0;">'
+      +   '<span style="display:flex;align-items:baseline;gap:6px;min-width:0;">'
+      +     '<b style="font:800 13.5px ' + A + ';letter-spacing:-.01em;color:#2B3440;'
+      +       'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">'
+      +       esc(p.nome) + '</b>'
+      +     '<span style="margin-left:auto;flex:none;font:800 9px ' + A + ';letter-spacing:.04em;'
+      +       'text-transform:uppercase;color:' + p.statusCor + ';">' + esc(p.statusRot) + '</span>'
+      +   '</span>'
+      +   '<span style="display:block;font:700 10px ' + M + ';color:#7A8494;margin-top:2px;'
+      +     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(p.sub) + '</span>'
+      + '</span></button>';
+  }).join('');
+
+  if (!d.dossie) {
+    return '<div data-pe4-raiz="1" style="background:#FDFEFF;border:1px solid #DCE1EA;'
+      + 'border-radius:16px;padding:28px;box-shadow:0 12px 40px rgba(43,52,64,.12);'
+      + 'font:700 12px ' + M + ';color:#7A8494;">'
+      + 'nenhum executivo no time desta carga — a aba Pessoas precisa de alguém para abrir.</div>';
+  }
+  const o = d.dossie;
+
+  /* ── 3 AVISOS ────────────────────────────────────────────────────────────────────── */
+  const avisos = o.avisos.map(function (a) {
+    const tom = PE4_TONS[a.tom] || PE4_TONS.ambar;
+    return '<span style="display:block;background:' + tom.bg + ';border:1px solid ' + tom.borda
+      + ';border-radius:14px;padding:12px 15px;min-width:0;">'
+      + '<span style="display:block;font:900 10px ' + A + ';letter-spacing:.11em;'
+      +   'text-transform:uppercase;color:' + tom.cor + ';">' + esc(a.rot) + '</span>'
+      + '<b style="display:block;font:900 22px ' + A + ';letter-spacing:-.02em;color:' + tom.cor
+      +   ';margin:2px 0 3px;overflow-wrap:anywhere;">' + esc(a.valor) + '</b>'
+      + '<span style="display:block;font:700 12px/1.4 ' + M + ';color:#3E382F;">'
+      +   esc(a.txt) + '</span></span>';
+  }).join('');
+
+  /* ── FUNIL DELE ──────────────────────────────────────────────────────────────────── */
+  const funil = o.etapas.map(function (e) {
+    return '<button type="button" data-ps6-acao="' + e.on + '" data-ps6-hv="0"'
+      + ' title="Ver os leads de ' + esc(e.rot) + '"'
+      + ' style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;'
+      + 'border:1px solid ' + (e.sel ? '#2B3440' : 'transparent') + ';background:'
+      + (e.sel ? '#FBFAF6' : 'transparent') + ';border-radius:8px;padding:4px 7px;'
+      + 'cursor:pointer;min-height:30px;">'
+      + '<span style="flex:none;width:118px;font:800 10.5px ' + M + ';color:'
+      +   (e.sel ? '#2B3440' : '#5B667A') + ';overflow:hidden;text-overflow:ellipsis;'
+      +   'white-space:nowrap;">' + esc(e.rot) + '</span>'
+      + '<span style="flex:1;min-width:26px;height:15px;background:#EDEBE5;border-radius:999px;'
+      +   'overflow:hidden;display:flex;align-items:center;">'
+      +   '<i style="display:flex;align-items:center;justify-content:flex-end;height:100%;'
+      +     'width:' + e.pct + '%;background:' + e.cor + ';border-radius:999px;padding:0 5px;'
+      +     'box-sizing:border-box;font:900 9.5px ' + A + ';color:#FFFDF8;font-style:normal;">'
+      +     (e.n > 0 ? e.n : '') + '</i></span>'
+      + (e.n === 0 ? '<span style="flex:none;width:12px;font:900 9.5px ' + A + ';color:#B4AC9C;">0</span>' : '')
+      + '<span style="flex:none;width:66px;text-align:right;font:800 9.5px ' + M + ';color:#5B667A;">'
+      +   (e.tqMed == null ? '—' : esc(e.tqMed) + ' tq/lead') + '</span>'
+      + '<span style="flex:none;width:62px;text-align:right;font:800 9.5px ' + M + ';color:'
+      +   (e.travados ? '#E51A31' : '#B4AC9C') + ';">'
+      +   (e.travados ? e.travados + (e.travados === 1 ? ' travado' : ' travados') : '—') + '</span>'
+      + '</button>';
+  }).join('');
+
+  const numeros = o.numeros.map(function (x) {
+    return '<span style="display:block;min-width:0;">'
+      + '<b style="display:block;font:900 19px ' + A + ';letter-spacing:-.01em;'
+      +   'font-variant-numeric:tabular-nums;color:' + x.cor + ';">' + esc(x.v) + '</b>'
+      + '<span style="display:block;font:700 9.5px/1.35 ' + M + ';color:#7A8494;">'
+      +   esc(x.rot) + '</span></span>';
+  }).join('');
+
+  /* ── LEADS DA ETAPA ──────────────────────────────────────────────────────────────── */
+  const leads = o.leads.length
+    ? o.leads.map(function (l) {
+      return '<div data-ps6-hv="0" style="display:flex;align-items:center;gap:10px;min-width:0;'
+        + 'background:#FDFEFF;border:1px solid ' + (l.estourou ? '#F0A9B2' : '#E7E3DA')
+        + ';border-radius:9px;padding:8px 11px;">'
+        + '<b style="flex:none;width:34px;font:900 13px ' + A + ';color:'
+        +   (l.estourou ? '#E51A31' : '#7A8494') + ';font-variant-numeric:tabular-nums;">'
+        +   (l.dias == null ? '—' : l.dias + 'd') + '</b>'
+        + '<span style="flex:1;min-width:0;">'
+        +   '<a href="' + hsUrl(l.id) + '" target="_blank" rel="noopener"'
+        +     ' title="Abrir ' + esc(l.nome) + ' no HubSpot"'
+        +     ' style="display:block;font:800 12.5px ' + M + ';color:#2B3440;text-decoration:none;'
+        +     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(l.nome) + '</a>'
+        +   (l.onde ? '<span style="display:block;font:700 9.5px ' + M + ';color:#7A8494;">'
+            + esc(l.onde) + '</span>' : '')
+        + '</span>'
+        + '<span style="flex:none;width:74px;text-align:right;">'
+        +   '<b style="display:block;font:900 11px ' + A + ';color:' + l.tqCor + ';">'
+        +     esc(l.tqRot) + '</b>'
+        +   '<span style="display:block;font:700 8.5px ' + M + ';color:#7A8494;">'
+        +     esc(l.ultimo) + '</span></span>'
+        + '<b style="flex:none;width:56px;text-align:right;font:900 12px ' + A + ';color:#2B3440;">'
+        +   esc(tm10Rs(l.mrr)) + '</b>'
+        + '<span style="flex:none;width:210px;font:700 10.5px/1.35 ' + M + ';color:'
+        +   (l.estourou ? '#8A3B3B' : '#7A8494') + ';">' + esc(l.porque) + '</span>'
+        + '</div>';
+    }).join('')
+    : '<span style="display:block;font:700 10.5px ' + M + ';color:#B4AC9C;padding:10px 2px;">'
+      + 'nenhum lead nesta etapa agora.</span>';
+
+  /* ── RITMO · ONDE PERDE · PROPOSTAS ──────────────────────────────────────────────── */
+  const heat = !o.cad
+    ? '<span style="display:block;font:700 10px ' + M + ';color:#8A6516;background:#FDF6E7;'
+      + 'border:1px solid #F0DFB6;border-radius:9px;padding:9px 11px;">' + esc(o.cadNota) + '</span>'
+    : '<span style="display:flex;gap:3px;">'
+      + o.cadDias.map(function (r, i) {
+        const c = o.cad.celulas[i] || { n: 0, bg: '#FDECEC', cor: '#C24A4A' };
+        return '<span style="flex:1;text-align:center;">'
+          + '<span style="display:block;font:800 8px ' + A + ';color:#7A8494;">' + esc(r) + '</span>'
+          + '<span style="display:grid;place-items:center;height:22px;margin-top:2px;'
+          +   'background:' + c.bg + ';color:' + c.cor + ';border-radius:4px;'
+          +   'font:800 10.5px ' + M + ';font-variant-numeric:tabular-nums;">' + c.n + '</span></span>';
+      }).join('')
+      + '</span>';
+  const slaBarra = '<span style="display:flex;align-items:center;gap:8px;margin-top:9px;">'
+    + '<span style="flex:none;font:800 9px ' + A + ';letter-spacing:.08em;text-transform:uppercase;'
+    +   'color:#7A8494;">SLA 1º toque</span>'
+    + (o.sla == null
+      ? '<span style="font:700 9.5px ' + M + ';color:#B4AC9C;">não medido — só '
+        + o.slaN + ' negócios com data de criação</span>'
+      : '<span style="flex:1;min-width:20px;height:12px;background:#EDEBE5;border-radius:999px;'
+        + 'overflow:hidden;"><i style="display:block;height:100%;width:' + o.sla + '%;background:'
+        + (o.sla >= 85 ? '#1E9E7B' : (o.sla >= 65 ? '#B07C1F' : '#E51A31')) + ';border-radius:999px;"></i></span>'
+        + '<b style="flex:none;font:900 11px ' + A + ';color:'
+        + (o.sla >= 85 ? '#1E9E7B' : (o.sla >= 65 ? '#B07C1F' : '#E51A31')) + ';">' + o.sla + '%</b>'
+        + '<span style="flex:none;font:800 9px ' + M + ';color:'
+        + (o.slaEstourados ? '#E51A31' : '#1E9E7B') + ';">'
+        + (o.slaEstourados ? o.slaEstourados + (o.slaEstourados === 1 ? ' estourado' : ' estourados') : 'em dia ✓')
+        + '</span>')
+    + '</span>';
+  const conv = !o.conv.medivel
+    ? '<span style="display:block;font:700 10px ' + M + ';color:#B4AC9C;">'
+      + 'sem histórico de etapa suficiente para medir a conversão dele.</span>'
+    : o.conv.linhas.map(function (x) {
+      return '<span style="display:flex;align-items:center;gap:7px;min-width:0;">'
+        + '<span style="flex:none;width:112px;font:800 9.5px ' + M + ';color:#5B667A;'
+        +   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(x.rot) + '</span>'
+        + '<span style="flex:1;min-width:20px;height:13px;background:#EDEBE5;border-radius:999px;'
+        +   'overflow:hidden;position:relative;">'
+        +   '<i style="display:block;height:100%;width:' + Math.min(100, x.pct) + '%;background:'
+        +     x.cor + ';border-radius:999px;"></i>'
+        +   (x.time == null ? '' : '<i title="time: ' + x.time + '%" style="position:absolute;'
+            + 'top:0;bottom:0;left:' + Math.min(100, x.time) + '%;width:2px;background:#2B3440;"></i>')
+        + '</span>'
+        + '<b style="flex:none;width:32px;text-align:right;font:900 11px ' + A + ';color:' + x.cor + ';">'
+        +   x.pct + '%</b></span>';
+    }).join('');
+  const convNota = o.conv.medivel && o.conv.pior && o.conv.pior.dif != null && o.conv.pior.dif < 0
+    ? o.conv.pior.rot + ': ' + Math.abs(o.conv.pior.dif) + 'pp abaixo do time — é aqui que o treino desta semana rende mais'
+    : (o.conv.medivel ? 'acima do time em todas as etapas medidas ✓' : '');
+  const props = o.props.length
+    ? o.props.map(function (x) {
+      return '<span style="display:flex;align-items:center;gap:7px;min-width:0;">'
+        + '<b style="flex:none;width:52px;font:900 10px ' + A + ';color:'
+        +   (x.temReuniao ? '#1E9E7B' : '#E51A31') + ';">' + esc(x.quando) + '</b>'
+        + '<span style="flex:1;min-width:0;">'
+        +   '<a href="' + hsUrl(x.id) + '" target="_blank" rel="noopener"'
+        +     ' style="display:block;font:800 11px ' + M + ';color:#2B3440;text-decoration:none;'
+        +     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(x.nome) + '</a>'
+        +   '<span style="display:block;font:700 8.5px ' + M + ';color:'
+        +     (x.temReuniao ? '#7A8494' : '#8A3B3B') + ';">' + esc(x.nota) + '</span></span>'
+        + '<b style="flex:none;font:900 11px ' + A + ';color:#2B3440;">' + esc(tm10Rs(x.mrr)) + '</b>'
+        + '</span>';
+    }).join('')
+    : '<span style="display:block;font:700 10px ' + M + ';color:#1E9E7B;">'
+      + 'nenhuma proposta aberta em Demo ou Negociação ✓</span>';
+  const perdas = o.perdas.n
+    ? '<span style="display:block;font:700 10px/1.45 ' + M + ';color:#7A8494;">'
+      + '<b style="color:#E51A31;font:900 14px ' + A + ';">' + o.perdas.n + '</b> '
+      + (o.perdas.n === 1 ? 'perda dele' : 'perdas dele') + ' · ' + esc(tm10Rs(o.perdas.mrr))
+      + ' nos últimos ' + (o.perdas.dias || '—') + ' dias<br>'
+      + '<span style="color:#B4AC9C;">o motivo por pessoa não vem do robô — os do time são '
+      + esc(o.perdas.doTime.map(function (x) { return x.rot.toLowerCase() + ' (' + x.n + ')'; }).join(', '))
+      + '</span></span>'
+    : '<span style="display:block;font:700 10px ' + M + ';color:#1E9E7B;">'
+      + 'zero perdas dele na janela ✓</span>';
+
+  /* ── COMBINADOS ──────────────────────────────────────────────────────────────────── */
+  const comb = !o.combinados.length
+    ? '<span style="display:block;font:700 10.5px ' + M + ';color:#B4AC9C;">'
+      + 'nenhum combinado registrado para ' + esc(o.nome) + ' ainda — eles nascem da análise semanal.</span>'
+    : o.combinados.map(function (c) {
+      const st = PE4_ST[c.st];
+      return '<span style="display:flex;align-items:flex-start;gap:8px;min-width:0;'
+        + (c.st === 'furou' ? 'background:#FDF3F4;border:1px solid #F0A9B2;border-radius:9px;padding:7px 9px;' : '')
+        + '">'
+        + (c.on
+          ? '<button type="button" data-ps6-acao="' + c.on + '" data-ps6-hv="0"'
+            + ' title="Alterna feito → furou → pendente. Grava na mesma linha que o executivo marcou."'
+            + ' style="flex:none;border:0;cursor:pointer;background:' + st.bg + ';color:#FFFDF8;'
+            + 'border-radius:999px;padding:3px 9px;font:900 8.5px ' + A + ';letter-spacing:.05em;'
+            + 'text-transform:uppercase;">' + st.rot + '</button>'
+          : '<span style="flex:none;background:' + st.bg + ';color:#FFFDF8;border-radius:999px;'
+            + 'padding:3px 9px;font:900 8.5px ' + A + ';letter-spacing:.05em;text-transform:uppercase;"'
+            + ' title="sem linha em pdi_compromissos para gravar — ela nasce quando ele abre o Desenvolvimento">'
+            + st.rot + '</span>')
+        + '<span style="flex:1;min-width:0;font:700 11px/1.4 ' + M + ';color:#3E382F;">'
+        +   esc(c.txt)
+        +   (c.motivo ? '<span style="display:block;font:700 9px ' + M + ';color:#8A3B3B;">devolvido: '
+            + esc(c.motivo) + '</span>' : '')
+        + '</span></span>';
+    }).join('');
+
+  /* ── ALAVANCAS ───────────────────────────────────────────────────────────────────── */
+  const alav = o.alavancas.map(function (a) {
+    return '<span style="display:block;background:#FDFEFF;border:1px solid #E7E3DA;'
+      + 'border-radius:12px;padding:12px 15px;min-width:0;">'
+      + '<span style="display:block;font:900 9px ' + A + ';letter-spacing:.09em;'
+      +   'text-transform:uppercase;color:' + (PE4_TAGS[a.tag] || '#7A8494') + ';">'
+      +   esc(a.tag) + '</span>'
+      + '<b style="display:block;font:800 13px/1.35 ' + M + ';color:#2B3440;margin:3px 0 4px;">'
+      +   esc(a.acao) + '</b>'
+      + '<span style="display:block;font:700 10.5px/1.4 ' + M + ';color:#5B667A;">'
+      +   esc(a.prova) + '</span></span>';
+  }).join('');
+
+  const bloco = function (titulo, sub, corpo, bg) {
+    return '<div style="background:' + (bg || '#FDFEFF') + ';border:1px solid #E7E3DA;'
+      + 'border-radius:12px;padding:14px 18px;min-width:0;">'
+      + '<span style="font:900 10px ' + A + ';letter-spacing:.12em;text-transform:uppercase;'
+      +   'color:#7A8494;">' + esc(titulo)
+      +   (sub ? ' <span style="font-weight:700;letter-spacing:0;text-transform:none;">'
+          + esc(sub) + '</span>' : '') + '</span>'
+      + '<div style="margin-top:9px;">' + corpo + '</div></div>';
+  };
+
+  return '<div data-pe4-raiz="1" style="background:#FDFEFF;border:1px solid #DCE1EA;'
+    + 'border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">'
+    + '<div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;'
+    +   'padding:22px 28px 18px;border-bottom:1px solid #E7E3DA;">'
+    +   '<div style="flex:1;min-width:0;">'
+    +     '<span style="font:900 10px ' + A + ';letter-spacing:.14em;text-transform:uppercase;'
+    +       'color:#E51A31;">' + esc(d.kicker) + '</span>'
+    +     '<h1 style="margin:6px 0 0;font:900 26px/1.25 ' + A + ';letter-spacing:-.02em;'
+    +       'color:#2B3440;text-wrap:balance;">' + esc(d.manchete) + '</h1>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:32px;flex-wrap:wrap;">' + kpis + '</div>'
+    + '</div>'
+    + (d.toast
+      ? '<div style="padding:10px 28px;background:#EAF6F1;border-bottom:1px solid #CBE8DD;'
+        + 'font:800 11.5px ' + M + ';color:#1E9E7B;">' + esc(d.toast) + '</div>'
+      : '')
+    + '<div style="display:grid;grid-template-columns:330px minmax(0,1fr);align-items:start;">'
+    +   '<div style="background:#FBFAF6;border-right:1px solid #E7E3DA;padding:18px 0 20px;'
+    +     'min-width:0;">'
+    +     '<span style="display:block;padding:0 14px 9px;font:900 10px ' + A + ';'
+    +       'letter-spacing:.12em;text-transform:uppercase;color:#7A8494;">O time '
+    +       '<span style="font-weight:700;letter-spacing:0;text-transform:none;">'
+    +       '· ordenado por quem mais precisa de você</span></span>'
+    +     rail
+    +     '<span style="display:block;padding:12px 14px 0;font:700 9.5px/1.5 ' + M + ';'
+    +       'color:#B4AC9C;">a ordem é (1 − fechados/meta) × 3 + travados × 0,6 +'
+    +       ' (100 − SLA) / 40 — quem está longe da meta, com negócio travado e carga'
+    +       ' esfriando sobe. Não é ranking de desempenho: é fila de atendimento.</span>'
+    +   '</div>'
+    +   '<div style="padding:18px 22px 24px;min-width:0;display:flex;flex-direction:column;gap:14px;">'
+    +     '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">'
+    +       '<b style="font:900 18px ' + A + ';letter-spacing:-.01em;color:#2B3440;">'
+    +         esc(o.nome) + '</b>'
+    +       '<span style="font:700 11px ' + M + ';color:#7A8494;">' + esc(o.sub) + '</span>'
+    +       '<span style="margin-left:auto;display:flex;align-items:baseline;gap:7px;">'
+    +         '<span style="font:800 10px ' + A + ';letter-spacing:.06em;text-transform:uppercase;'
+    +           'color:#7A8494;">meta do mês</span>'
+    +         '<b style="font:900 13px ' + A + ';color:' + o.metaCor + ';">'
+    +           o.fech + '/' + (o.meta || '—') + '</b>'
+    +         '<span style="width:90px;height:9px;background:#EDEBE5;border-radius:999px;'
+    +           'overflow:hidden;"><i style="display:block;height:100%;width:'
+    +           Math.min(100, o.pctMeta || 0) + '%;background:' + o.metaCor + ';border-radius:999px;"></i></span>'
+    +       '</span></div>'
+    +     '<div style="background:#FBFAF6;border:1px solid #E7E3DA;border-left:4px solid #E51A31;'
+    +       'border-radius:12px;padding:15px 19px;">'
+    +       '<b style="font:800 17px/1.4 ' + M + ';color:#2B3440;">' + esc(o.diagnostico) + '</b></div>'
+    +     '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">'
+    +       avisos + '</div>'
+    +     '<div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;">'
+    +       bloco('Funil de ' + o.nome.split(' ')[0],
+            '· ' + o.etapas.reduce(function (s, e) { return s + e.n; }, 0) + ' em aberto · clique na etapa',
+            '<div style="display:flex;flex-direction:column;gap:1px;">' + funil + '</div>')
+    +       bloco('O mês em números', '',
+            '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;">'
+            + numeros + '</div>', '#FBFAF6')
+    +     '</div>'
+    +     bloco((o.etapaSel ? o.etapaSel.rot : 'etapa') + ' · '
+          + (o.etapaSel ? o.etapaSel.n : 0) + (o.etapaSel && o.etapaSel.n === 1 ? ' lead' : ' leads'),
+          '— por que ainda estão aqui? do mais parado pro mais novo · vermelho = cobre na conversa',
+          '<div style="display:flex;flex-direction:column;gap:5px;">' + leads + '</div>')
+    +     '<div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);gap:12px;">'
+    +       bloco('O ritmo de ' + o.nome.split(' ')[0], '· atividades no CRM por dia útil',
+            heat + '<span style="display:block;font:700 9.5px/1.45 ' + M + ';margin-top:8px;color:'
+            + (o.cadAlarme ? '#E51A31' : '#7A8494') + ';">' + esc(o.cadNota) + '</span>' + slaBarra)
+    +       bloco('Onde ' + o.nome.split(' ')[0] + ' perde', '· conversão vs time (traço)',
+            '<div style="display:flex;flex-direction:column;gap:5px;">' + conv + '</div>'
+            + (convNota ? '<span style="display:block;font:700 9.5px/1.45 ' + M + ';color:#7A8494;'
+              + 'margin-top:8px;">' + esc(convNota) + '</span>' : ''))
+    +       bloco('Propostas e perdas', '',
+            '<div style="display:flex;flex-direction:column;gap:6px;">' + props + '</div>'
+            + '<span style="display:block;font:900 9px ' + A + ';letter-spacing:.09em;'
+            + 'text-transform:uppercase;color:#7A8494;margin:11px 0 6px;">Perdas</span>' + perdas,
+            '#FBFAF6')
+    +     '</div>'
+    +     bloco('Combinados da última conversa',
+          o.temLinha
+            ? ('· ' + (o.dataUm ? '1:1 de ' + o.dataUm : 'análise de ' + (o.versao || '—'))
+              + ' · clique no status para carimbar')
+            : '· sem linha no banco ainda',
+          '<div style="display:flex;flex-direction:column;gap:7px;">' + comb + '</div>')
+    +     bloco('Como acelerar', '— leve isso pra conversa',
+          '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">'
+          + alav + '</div>', '#FBFAF6')
+    +   '</div>'
+    + '</div></div>';
+}
+
 function tm2SobreviventesHTML(d) {
   const {
     acoes, agenda, dCad, dCadDias, dCadLeia, dCadLeiaCor, dCbBg, dCbBorda, dCbCor, dCbRot, dCobrar, dCols, dCriticos, dFechar, dIni, dLeitura, dNome, dQuentes, dSub, dUm1, dUm1Rot, dlCbBg, dlCbBorda, dlCbCor, dlCbRot, dlCobrar, dlDias, dlDiasCor, dlDono, dlEtapa, dlEtapaCor, dlFechar, dlHubspot, dlNome, dlProx, dlProxCor, dlTemp, dlTempCor, dlTempPct, dlTl, dlUlt, dlVCor, dlValor, rodapeFonte, temDeal, temDossie
@@ -43603,24 +44531,31 @@ function gxDinheiroDoGestor() {
 function gxFocarExecutivo(ownerId) {
   if (!ownerId) return;
   const oid = String(ownerId);
-  const aba = document.getElementById('tabBtnCockpit');
+  /* ══ ELE ABRE A PESSOAS, NAO A TIME (10/09/26) ═══════════════════════════════════
+     "Focar um executivo" levava a aba Time e abria o dossie embutido nela. A prancha
+     pessoas-v4 diz o contrario, e e a divisao certa: "a Time aponta quem cobrar, a
+     Pessoas mostra TUDO daquela pessoa". O dossie da Time continua alcancavel de dentro
+     da Time — o que mudou e para onde o atalho leva.
+     A ABA E tabBtnPDIs: ela e "Desenvolvimento" para o executivo e "Pessoas" para o
+     gestor, no mesmo no, desde 06/09. */
+  const aba = document.getElementById('tabBtnPDIs');
   if (!aba) return;
   /* clica a ABA de verdade, e não activateTab: cada aba tem render e efeito colateral
      próprios no clique, e reproduzir isso à mão cria um segundo caminho de navegação. */
   aba.click();
   let tentativas = 0;
   const abrirFunil = () => {
-    if (typeof TL5_ESTADO === 'undefined' || typeof renderTimeLider !== 'function') {
+    if (typeof PS6_ESTADO === 'undefined' || typeof renderPessoas !== 'function') {
       if (++tentativas < 40) { setTimeout(abrirFunil, 110); return; }
       return;
     }
     /* NA v2 O DOSSIÊ DO EXECUTIVO É O QUE ESTA CHAMADA QUERIA ABRIR (08/09/26): a v1
        tinha um "funil dele" separado do cartão selecionado, e a v2 juntou os dois —
        o dossiê já abre com o kanban em modo leitura. Um estado só, então. */
-    TM2_ESTADO.sel = oid;
-    TM2_ESTADO.deal = null;
-    renderTimeLider();
-    const alvo = document.querySelector('#tm2Raiz [data-tm2-acao="cobrar:' + oid + '"]');
+    PS6_ESTADO.sel = oid;
+    PS6_ESTADO.toast = null;
+    renderPessoas();
+    const alvo = document.querySelector('#ps6Raiz [data-ps6-acao="sel:' + oid + '"]');
     if (alvo) {
       const y = alvo.getBoundingClientRect().top + window.scrollY - 110;
       window.scrollTo({ top: y, behavior: 'auto' });
@@ -57604,8 +58539,77 @@ async function ps6Travar(ownerId) {
   if (gravado) PS6_ESTADO.pauta['um_a_um:' + ownerId] = PS6_ESTADO.pauta['um_a_um:' + ownerId] || gravado;
 }
 
+/* ══ VOLTAR UM COMBINADO PARA PENDENTE (10/09/26) ════════════════════════════════════
+   ps6Carimbar sabe validar e devolver, e nao sabe desfazer — porque a tela antiga nao
+   tinha esse gesto. O ciclo da prancha tem: furou → pendente. Isto limpa as quatro
+   colunas naquele indice, na MESMA linha, com o mesmo cuidado de tamanho de array.
+   Nao e um segundo escritor: e a operacao que faltava no mesmo lugar. */
+async function pe4LimparCarimbo(ownerId, indice) {
+  if (typeof supa === 'undefined' || !supa) { PS6_ESTADO.toast = 'sem conexão aqui — nada foi gravado'; return; }
+  const linha = (PS6_ESTADO.compromissos || {})[ownerId];
+  if (!linha) { PS6_ESTADO.toast = 'não achei o acordo para limpar'; return; }
+  const tam = (linha.checked || []).length;
+  const limpa = function (orig) {
+    const arr = (orig || []).slice();
+    while (arr.length < tam) arr.push(null);
+    arr[indice] = null;
+    return arr;
+  };
+  const patch = {
+    validado_em: limpa(linha.validado_em), validado_por: limpa(linha.validado_por),
+    devolvido_em: limpa(linha.devolvido_em), devolvido_motivo: limpa(linha.devolvido_motivo)
+  };
+  try {
+    const { error } = await supa.from('pdi_compromissos').update(patch).eq('id', linha.id);
+    if (error) throw error;
+    Object.keys(patch).forEach(function (k) { linha[k] = patch[k]; });
+    PS6_ESTADO.toast = 'de volta para pendente — o carimbo saiu da linha dele';
+  } catch (e) {
+    PS6_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
+  }
+}
+
 async function ps6Executar(acao) {
   const [verbo, a, b] = String(acao).split(':');
+
+  /* ══ OS DOIS VERBOS DA PESSOAS v4 (10/09/26) ═══════════════════════════════════════
+     A prancha pede dois gestos que esta aba nao tinha: escolher a etapa do funil da
+     pessoa e carimbar um combinado ciclando o status. Os dois entram AQUI, no mesmo
+     ouvinte e com a mesma familia de atributo (data-ps6-acao) — fiacao nova para gesto
+     novo numa tela que ja tem ouvinte seria a segunda forma de escutar o mesmo clique.
+
+     A ETAPA E POR PESSOA: PE4_ETAPA[ownerId]. Guardar uma etapa global faria trocar de
+     pessoa herdar a etapa da anterior, que e o "flash de dado antigo" que a prancha
+     proibe no proprio checklist de aceite. */
+  if (verbo === 'etapa') {
+    if (a && b) PE4_ETAPA[a] = b;
+    PS6_ESTADO.toast = null;
+    return renderPessoas();
+  }
+
+  /* O CICLO DO COMBINADO: pendente → feito → furou → pendente. Ele NAO grava numa tabela
+     nova: chama ps6Carimbar, que carimba a MESMA linha de pdi_compromissos que o
+     executivo marcou — `validado_em[i]` e o feito do gestor, `devolvido_em[i]` e o furou.
+     Voltar para pendente limpa as duas colunas naquele indice.
+     DEVOLVER EXIGE MOTIVO e isso e regra antiga desta tela: o executivo ve o texto. */
+  if (verbo === 'combinado') {
+    const i = Number(b);
+    const linha = (PS6_ESTADO.compromissos || {})[a];
+    if (!linha) { PS6_ESTADO.toast = 'sem linha no banco para carimbar — ela nasce quando ele abre o Desenvolvimento'; return renderPessoas(); }
+    const feito = !!(linha.validado_em || [])[i];
+    const furou = !!(linha.devolvido_em || [])[i];
+    if (!feito && !furou) { await ps6Carimbar(a, i, 'validar'); return renderPessoas(); }
+    if (feito) {
+      const motivo = (typeof prompt === 'function') ? prompt('Por que está devolvendo? O executivo vê este texto.') : null;
+      if (motivo === null) return;
+      if (!String(motivo).trim()) { PS6_ESTADO.toast = 'devolver exige um motivo — ele precisa saber o que refazer'; return renderPessoas(); }
+      await ps6Carimbar(a, i, 'devolver', String(motivo).trim());
+      return renderPessoas();
+    }
+    await pe4LimparCarimbo(a, i);
+    return renderPessoas();
+  }
+
   if (verbo === 'sel') { PS6_ESTADO.sel = (!a || PS6_ESTADO.sel === a) ? null : a; PS6_ESTADO.aba = 'pauta'; PS6_ESTADO.toast = null; }
   else if (verbo === 'aba') { PS6_ESTADO.aba = a === 'dossie' ? 'dossie' : 'pauta'; }
   else if (verbo === 'travar') { if (a) await ps6Travar(a); }
@@ -57624,138 +58628,23 @@ async function ps6Executar(acao) {
 
 /* ── DESENHA A ABA PESSOAS ───────────────────────────────────────────────────────
    HTML convertido mecanicamente da prancha; estilos byte a byte. Dado de ps6Dados(). */
+/* ── DESENHA A ABA PESSOAS ────────────────────────────────────────────────────────────
+   A PRANCHA v4 ASSUMIU AQUI (10/09/26). O desenho anterior era a pessoas-final de
+   06/09: header escuro, abas pauta/dossiê e um cartão por pessoa. A v4 troca por rail +
+   dossiê completo, e o que ela acrescenta de verdade nao e visual — e o funil dele
+   clicavel, os leads com TOQUES (a mesma contagem da aba Time), o SLA de 1o toque, a
+   conversao dele contra o time e as tres alavancas por regra.
+
+   O QUE NAO MUDOU, de proposito: o ESTADO (PS6_ESTADO.sel), o OUVINTE (data-ps6-acao) e
+   os ESCRITORES (ps6Carimbar, ps6Travar, que gravam em pdi_compromissos e um_a_um). Uma
+   tela nova com estado novo faria o deep-link ?exec= mexer num e a tela ler o outro. */
 function renderPessoas() {
   const raiz = document.getElementById('ps6Raiz');
   if (!raiz) return;
+  /* SÓ O GESTOR DESENHA A TELA DO GESTOR — a regra menos negociável da suíte, e esta
+     view é compartilhada com o Desenvolvimento do executivo. */
   if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
-  const d = ps6Dados();
-  const { quando, titulo, kpis, temToast, toast, execs, temPauta, pNome, verPauta, verDossie, tabPautaBg, tabPautaCor, tabDossieBg, tabDossieCor, pTravar, pTravarRot, pFechar, mostraPauta, mostraDossie, pItens, pDossie, pProva, validacoes, pdis, pdiAviso, agenda, notaDeFonte } = d;
-  raiz.innerHTML = `<div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
-
-        <div style="background:#16181D;color:#FFFDF8;padding:16px 22px;display:flex;align-items:center;gap:28px;flex-wrap:wrap;">
-          <div style="min-width:0;">
-            <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${quando}</span>
-            <b style="display:block;font:900 22px 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;">${titulo}</b>
-          </div>
-          <div style="display:flex;gap:26px;flex-wrap:wrap;margin-left:auto;">
-            ${(kpis||[]).map(k => `
-              <span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${k.rot}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 24px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span></span>
-            `).join('')}
-          </div>
-        </div>
-
-        <div style="padding:16px 22px 6px;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
-            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · Quem precisa de você primeiro <span style="color:#7A8494;">— ordenado por urgência real: acordo vencido + PDI + gargalo · clique prepara o 1:1</span></span>
-            ${(temToast) ? `
-              <span style="font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:5px 12px;overflow-wrap:anywhere;">${toast}</span>
-            ` : ''}
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;">
-            ${(execs||[]).map(e => `
-              <div style="border:1.5px solid ${e.borda};border-top:4px solid ${e.topo};border-radius:12px;background:${e.bg};padding:12px 14px;min-width:0;display:flex;flex-direction:column;gap:7px;">
-                <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-                  <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${e.avBg};color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">${e.ini}</span>
-                  <span style="min-width:0;"><b style="display:block;font:800 12.5px 'Archivo',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.nome}</b><span style="font:700 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">${e.praca}</span></span>
-                </div>
-                <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${e.stCor};background:${e.stBg};border-radius:6px;padding:3px 8px;align-self:flex-start;white-space:nowrap;">${e.status}</span>
-                <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;"><b style="color:#2B3440;">${e.tipoRot}</b> ${e.leitura}</span>
-                <span style="font:700 9.5px 'Manrope',sans-serif;color:${e.metaCor};">${e.meta}</span>
-                <button data-ps6-acao="${e.abrir}" style="margin-top:auto;display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:0 12px;border:1.5px solid ${e.btBorda};border-radius:999px;background:${e.btBg};font:800 10px 'Manrope',sans-serif;color:${e.btCor};cursor:pointer;white-space:nowrap;" data-ps6-hv="0">${e.btRot}</button>
-              </div>
-            `).join('')}
-          </div>
-
-          ${(temPauta) ? `
-            <div style="margin-top:12px;background:#FDFEFF;border:1.5px solid #2B3440;border-radius:13px;padding:13px 16px;box-shadow:0 10px 28px rgba(43,52,64,.14);">
-              <div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:9px;">
-                <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#2B3440;">1:1 de ${pNome}</span>
-                <span style="display:inline-flex;gap:4px;background:#F4F1EA;border-radius:999px;padding:3px;">
-                  <button data-ps6-acao="${verPauta}" style="border:0;cursor:pointer;min-height:28px;padding:0 13px;border-radius:999px;background:${tabPautaBg};font:800 10px 'Manrope',sans-serif;color:${tabPautaCor};white-space:nowrap;">pauta do 1:1</button>
-                  <button data-ps6-acao="${verDossie}" style="border:0;cursor:pointer;min-height:28px;padding:0 13px;border-radius:999px;background:${tabDossieBg};font:800 10px 'Manrope',sans-serif;color:${tabDossieCor};white-space:nowrap;">dossiê · números reais</button>
-                </span>
-                <span style="font:700 10px 'Manrope',sans-serif;color:#7A8494;">o dossiê é a prova da pauta — cada item cita um número daqui</span>
-                <button data-ps6-acao="${pTravar}" style="margin-left:auto;display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border:0;border-radius:999px;background:#1E9E7B;font:800 10.5px 'Manrope',sans-serif;color:#FFFDF8;cursor:pointer;white-space:nowrap;" data-ps6-hv="1">${pTravarRot}</button>
-                <button data-ps6-acao="${pFechar}" style="flex:none;width:26px;height:26px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 13px 'Manrope',sans-serif;cursor:pointer;line-height:1;padding:0;" data-ps6-hv="2">✕</button>
-              </div>
-              ${(mostraPauta) ? `
-                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;">
-                  ${(pItens||[]).map(pi => `
-                    <div style="background:#FBFAF6;border:1px solid #E4E0D6;border-top:3px solid ${pi.cor};border-radius:10px;padding:10px 12px;min-width:0;">
-                      <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:${pi.cor};">${pi.rot}</span>
-                      <p style="margin:5px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#2B3440;">${pi.txt}</p>
-                    </div>
-                  `).join('')}
-                </div>
-              ` : ''}
-              ${(mostraDossie) ? `
-                <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;">
-                  ${(pDossie||[]).map(pn => `
-                    <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:10px;padding:10px 12px;min-width:0;">
-                      <b style="display:block;font:900 19px 'Archivo',sans-serif;color:${pn.cor};font-variant-numeric:tabular-nums;">${pn.v}</b>
-                      <span style="display:block;font:700 9px/1.4 'Manrope',sans-serif;color:#7A8494;">${pn.rot}</span>
-                    </div>
-                  `).join('')}
-                </div>
-                <p style="margin:9px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#2B3440;background:#F4F1EA;border:1px solid #E3DDD0;border-radius:9px;padding:8px 12px;">▸ ${pProva}</p>
-              ` : ''}
-            </div>
-          ` : ''}
-        </div>
-
-        <div style="padding:16px 22px 6px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;">
-          <div style="background:#FDF6E7;border:1px solid #F0DFB6;border-radius:12px;padding:13px 16px;">
-            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#B07C1F;">2 · Aguardando a sua validação <span style="color:#7A8494;">— o executivo marcou como feito; só fecha quando você valida (aqui ou na aba Time)</span></span>
-            <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;">
-              ${(validacoes||[]).map(va => `
-                <div style="display:flex;align-items:center;gap:10px;background:${va.bg};border:1px solid ${va.borda};border-radius:10px;padding:8px 12px;min-width:0;">
-                  <span style="width:24px;height:24px;border-radius:999px;display:grid;place-items:center;background:${va.avBg};color:#FDFEFF;font:900 9px 'Archivo',sans-serif;flex:none;">${va.ini}</span>
-                  <span style="min-width:0;flex:1;"><span style="display:block;font:700 11px/1.4 'Manrope',sans-serif;color:#2B3440;">${va.txt}</span><span style="font:800 9px 'Manrope',sans-serif;color:${va.evCor};">${va.evid}</span></span>
-                  <button data-ps6-acao="${va.ok}" style="flex:none;display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:0;border-radius:999px;background:${va.okBg};font:800 10px 'Manrope',sans-serif;color:${va.okCor};cursor:pointer;white-space:nowrap;" data-ps6-hv="0">${va.okRot}</button>
-                  <button data-ps6-acao="${va.dev}" style="flex:none;display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:800 10px 'Manrope',sans-serif;color:#7A8494;cursor:pointer;white-space:nowrap;" data-ps6-hv="2">devolver</button>
-                </div>
-              `).join('')}${validacoes.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nada aguardando você — todo acordo que o time marcou como feito já foi validado ou devolvido. Quando alguém marcar um, ele aparece aqui com a evidência do HubSpot ao lado.</span>`}
-            </div>
-            <p style="margin:8px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#8A6516;">▸ a evidência vem do HubSpot/Supabase — você valida o resultado, não a palavra. Validar aqui acende o mesmo ✓ na aba Time e no Desenvolvimento do executivo.</p>
-          </div>
-
-          <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
-            <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8E3B5C;">3 · PDIs do time <span style="color:#7A8494;">— metas quantitativas calculadas do HubSpot, sem depoimento</span></span>
-            <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;">
-              ${(pdis||[]).map(pd => `
-                <span style="display:flex;align-items:center;gap:9px;padding:2px 4px;min-width:0;">
-                  <span style="font:800 10.5px 'Manrope',sans-serif;color:#2B3440;width:96px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pd.nome}</span>
-                  <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;width:170px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${pd.foco}</span>
-                  <span style="flex:1;height:8px;border-radius:999px;background:#EDEBE5;overflow:hidden;"><span style="display:block;height:100%;width:${pd.pct};background:${pd.cor};border-radius:999px;"></span></span>
-                  <b style="font:900 10.5px 'Archivo',sans-serif;color:${pd.cor};font-variant-numeric:tabular-nums;flex:none;width:56px;text-align:right;">${pd.v}</b>
-                  <span style="font:800 9px 'Manrope',sans-serif;color:${pd.vcCor};flex:none;width:86px;text-align:right;white-space:nowrap;">${pd.vence}</span>
-                </span>
-              `).join('')}${pdis.length ? '' : `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#7A8494;padding:8px 4px;">Nenhum executivo de campo ativo na régua agora.</span>`}
-            </div>
-            <div style="margin-top:8px;background:#FBF5F8;border:1px solid #E9D9E1;border-radius:9px;padding:8px 12px;">
-              <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#8E3B5C;">▸ <b>${pdiAviso}</b> — a revisão entra na pauta do 1:1 automaticamente. PDI sem revisão em 30d aparece aqui em vermelho.</span>
-            </div>
-          </div>
-        </div>
-
-        <div style="padding:16px 22px 18px;">
-          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Sua agenda de 1:1 <span style="color:#7A8494;">— travar a pauta acima marca aqui · o combinado de cada 1:1 vira acordo com prazo</span></span>
-          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:9px;">
-            ${(agenda||[]).map(ag => `
-              <div style="background:${ag.bg};border:1px solid ${ag.borda};border-radius:11px;padding:10px 13px;min-width:0;">
-                <span style="font:900 8.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:${ag.qCor};">${ag.quando}</span>
-                <b style="display:block;font:800 12px 'Archivo',sans-serif;color:#2B3440;margin-top:2px;">${ag.rot}</b>
-                <span style="display:block;font:700 9.5px/1.45 'Manrope',sans-serif;color:#5B667A;margin-top:2px;">${ag.sub}</span>
-              </div>
-            `).join('')}
-          </div>
-        </div>
-
-        <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 22px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${notaDeFonte}</p>
-      </div>
-    
-  
-</section>`;
+  raiz.innerHTML = pe4TelaHTML(pe4Dados());
 }
 
 document.addEventListener('click', ev => {
