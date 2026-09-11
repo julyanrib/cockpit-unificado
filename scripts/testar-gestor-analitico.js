@@ -1197,6 +1197,35 @@ checar('a porta que instala a Daily do gestor pergunta por um nome dela',
   }()),
   'a condicao que instala esta tela ja perguntou pelo nome de OUTRA tela, e quando aquela saiu do arquivo o gestor voltou para o board antigo sem nenhum erro');
 
+
+/* ══ AS PERDAS POR PESSOA (11/09/26) ══════════════════════════════════════════════════
+   VISTO NA PRODUCAO, na sessao do gestor, na ficha de CADA executivo:
+     "[object Object] perdas dele · R$ 5,4k nos ultimos 90 dias"
+
+   `motivosPerda.porOwner[ownerId]` NAO e um numero: e o mapa de motivos daquela pessoa
+   ({"Outros":54,"Reembolso":1,"Sem retorno":2,...}). pe4Perdas devolvia o objeto como
+   `n` e a tela o imprimia como contagem — entao o gestor NUNCA viu quantas perdas cada
+   executivo teve. O R$ ao lado estava certo, o que tornava a linha convincente.
+
+   E a frase seguinte dizia "o motivo por pessoa nao vem do robo" — e vinha: estava no
+   mesmo campo que a tela estragava. A tela declarava nao ter um dado que tinha na mao. */
+(function () {
+  const cod = template;
+  checar('as perdas por pessoa somam o mapa de motivos, em vez de imprimir o objeto',
+    cod.indexOf('const mapa = (mp.porOwner || {})[p.ownerId];') > 0
+      && cod.indexOf('Object.keys(porMotivo).reduce(') > 0,
+    'porOwner[ownerId] e o mapa de motivos: imprimi-lo da [object Object] e esconde a contagem');
+
+  checar('e a tela mostra os motivos DELE, nao so os do time',
+    cod.indexOf('motivos dele: ') > 0
+      && cod.indexOf('porMotivo: Object.keys(porMotivo)') > 0,
+    'comparar 58 perdas de uma pessoa com 395 do time nao e conversa de coaching');
+
+  checar('e sem motivo medido a tela diz isso, em vez de inventar',
+    cod.indexOf('motivo por pessoa não medido nesta carga') > 0,
+    'zero por falta de medicao nao pode virar zero de verdade');
+}());
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
