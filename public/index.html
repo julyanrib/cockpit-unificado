@@ -925,6 +925,12 @@
     #dg4Raiz [style*="width:1780px"]{width:100%!important;}
   }
 
+  @media (max-width:760px){
+    #dg4Raiz h1{min-width:0!important;}
+    #dg4Raiz > div > div > span{flex:1 1 100%!important;min-width:0!important;
+      margin-left:0!important;white-space:normal!important;text-align:left!important;}
+  }
+
   [data-tm2-acao]{transition:background .16s ease,border-color .16s ease,filter .16s ease;}
   #tm2Raiz [data-tm2-hv]{cursor:pointer;}
   #tm2Raiz [data-tm2-hv="0"]:hover{opacity:.85;}
@@ -8521,7 +8527,8 @@ function aplicarVisaoPorPapel() {
   }
 
   const lblDaily = document.querySelector('#tabBtnDaily .tab-btn-label');
-  if (lblDaily) lblDaily.textContent = souRep ? 'Minha Daily' : 'Daily & Ritmo';
+
+  if (lblDaily) lblDaily.textContent = souRep ? 'Minha Daily' : 'Daily';
   document.getElementById('tabBtnDaily').style.display = emOnboarding ? 'none' : 'flex';
   const lblAgenda = document.querySelector('#tabBtnAgenda .tab-btn-label');
 
@@ -36192,6 +36199,84 @@ function dg4OrigemDoSlot(slot, mapaFunil) {
   return { rot: 'ORIGEM NÃO REGISTRADA', bg: '#FBFAF6', cor: '#7A8494', borda: '#E4E0D6' };
 }
 
+function dg4Plural(n, sing, plur) {
+  return n + ' ' + (Number(n) === 1 ? sing : plur);
+}
+
+function dg4Ontem(ownerId, ontemISO) {
+  if (!ontemISO) return { p: null, f: null, medido: false, furou: false };
+  const d = (typeof getDaily === 'function') ? getDaily(ownerId, ontemISO) : null;
+  const p = (d && d.prometido_visitas != null) ? Number(d.prometido_visitas) : null;
+  const real = (typeof atividadesComprovadasNoDia === 'function')
+    ? atividadesComprovadasNoDia(ownerId, ontemISO) : null;
+  const f = (real && Array.isArray(real.visitas)) ? real.visitas.length : null;
+  const medido = p != null && f != null;
+  return { p: p, f: f, medido: medido, furou: medido ? f < p : false };
+}
+
+function dg4CadenciaDe(ownerId, diaISO) {
+  const cd = (typeof tm2CadenciaDe === 'function') ? tm2CadenciaDe(ownerId) : null;
+  if (!cd || !Array.isArray(cd.dias) || !diaISO) return null;
+  const i = cd.dias.indexOf(diaISO);
+  if (i < 0) return null;
+  const v = Number((cd.serie || [])[i]);
+  return Number.isFinite(v) ? v : null;
+}
+
+function dg4Combinado(ownerId, textos) {
+  if (typeof PS6_ESTADO === 'undefined' || !PS6_ESTADO.compromissos) return null;
+  const linha = PS6_ESTADO.compromissos[String(ownerId)];
+  if (!linha) return null;
+  const ch = Array.isArray(linha.checked) ? linha.checked : [];
+  const abertos = [];
+  ch.forEach(function (v, i) { if (!v) abertos.push(i); });
+  if (!abertos.length) return null;
+  const versao = String(linha.versao_analise || '');
+  const mesma = !!versao && versao === String(DATA.versaoAnalise || '');
+  return { n: abertos.length, versao: versao, mesma: mesma,
+    texto: mesma ? String((textos || [])[abertos[0]] || '') : '' };
+}
+
+const DG4_PROPOSTAS_MAX = 2;
+function dg4SinaisDe(x, pessoa, ontem, combinado) {
+  const out = [];
+
+  if (!ontem.medido) {
+    out.push({ tipo: 'ontem', ruim: false, neutro: true,
+      rot: ontem.p == null ? 'ontem: sem promessa registrada' : 'ontem: feito não medido' });
+  } else {
+    out.push({ tipo: 'ontem', ruim: ontem.furou,
+      rot: 'ontem: ' + ontem.f + '/' + ontem.p + ' ' + (ontem.p === 1 ? 'visita' : 'visitas')
+        + ' ' + (ontem.furou ? '✗' : '✓') });
+  }
+
+  if (pessoa && pessoa.slaEstourados > 0) {
+    out.push({ tipo: 'sla', ruim: true,
+      rot: 'SLA: ' + pessoa.slaEstourados + ' sem 1º toque em 48h' });
+  }
+
+  if (x.cadOntem != null && x.cadOntem <= 1) {
+    out.push({ tipo: 'cad', ruim: true,
+      rot: 'cadência ontem: ' + x.cadOntem + (x.cadOntem === 1 ? ' atividade' : ' atividades') });
+  }
+
+  (x.propostas || []).slice(0, DG4_PROPOSTAS_MAX).forEach(function (pr) {
+    out.push({ tipo: 'prop-' + pr.id, ruim: true,
+      rot: 'proposta sem data: ' + pr.nome + ' (' + pr.quando + ')' });
+  });
+
+  if (combinado) {
+    const frase = String(combinado.texto || '');
+    out.push({ tipo: 'comb', ruim: true,
+      rot: combinado.mesma
+        ? ('combinado furado: ' + (frase.length > 56 ? frase.slice(0, 55) + '…' : frase))
+        : ('combinado da análise de '
+          + String(combinado.versao).split('-').reverse().slice(0, 2).join('/')
+          + ' sem marcação (' + combinado.n + ')') });
+  }
+  return out;
+}
+
 function dg4Dados(ctx) {
   const c = ctx || {};
   const reps = (c.reps || []).filter(function (r) { return r && r.ownerId; });
@@ -36201,6 +36286,13 @@ function dg4Dados(ctx) {
   const tv = document.body.classList.contains('tv');
   const hoje = isoDate(new Date());
   const ehHoje = (typeof dailyRefDate === 'undefined') || dailyRefDate === hoje;
+
+  const ontemISO = c.ontem || ((typeof addBusinessDays === 'function')
+    ? addBusinessDays(c.diaEmFoco || hoje, -1) : null);
+
+  const pessoas = (typeof pe4Pessoas === 'function') ? pe4Pessoas() : [];
+  const pessoaPorOid = {};
+  pessoas.forEach(function (p) { pessoaPorOid[String(p.ownerId)] = p; });
 
   const mapaFunil = {};
   Object.keys(DATA.funilLeads || {}).forEach(function (stageId) {
@@ -36269,23 +36361,39 @@ function dg4Dados(ctx) {
 
     const visitas = preenchidos.map(function (h) { return grade.porHora[h]; })
       .concat(grade.semHora || []);
+
+    const pessoa = pessoaPorOid[oid] || null;
+    const ontem = dg4Ontem(oid, ontemISO);
+    const cadOntem = dg4CadenciaDe(oid, ontemISO);
+    const propostas = (pessoa && typeof pe4Propostas === 'function')
+      ? pe4Propostas(pessoa).filter(function (pr) { return !pr.temReuniao; }) : [];
+    const combinado = dg4Combinado(oid, (r.compromissos || []));
+
     return { r: r, oid: oid, plano: plano, grade: grade, preenchidos: preenchidos,
       visitas: visitas,
+      pessoa: pessoa, ontem: ontem, cadOntem: cadOntem, propostas: propostas,
+      combinado: combinado,
       temPlano: temPlano, travada: travada, daily: daily, quentes: quentes,
       novas: novas, origemRegistrada: origemRegistrada,
 
       veioDaGrade: veioDaGrade };
   });
 
-  const peso = function (x) { return !x.temPlano ? 0 : (x.travada ? 2 : 1); };
+  const peso = function (x) {
+    if (!x.temPlano) return 0;
+    if (x.travada && x.ontem.furou) return 1;
+    if (!x.travada) return 2;
+    return 3;
+  };
   medidos.sort(function (a, b) {
     return peso(a) - peso(b)
       || (b.quentes.length - a.quentes.length)
       || String(a.r.name || '').localeCompare(String(b.r.name || ''));
   });
 
-  const semPlano = medidos.filter(function (x) { return !x.temPlano; });
-  const abertas = medidos.filter(function (x) { return x.temPlano && !x.travada; });
+  const semPlano = medidos.filter(function (x) { return peso(x) === 0; });
+  const furouOntem = medidos.filter(function (x) { return peso(x) === 1; });
+  const abertas = medidos.filter(function (x) { return peso(x) === 2; });
   const travadas = medidos.filter(function (x) { return x.travada; });
 
   const naGrade = medidos.filter(function (x) { return x.veioDaGrade; });
@@ -36296,7 +36404,7 @@ function dg4Dados(ctx) {
     const mrr = f.mrr > 0
       ? ' — R$ ' + Math.round(f.mrr).toLocaleString('pt-BR') + '/mês entre eles'
       : '';
-    return f.n + ' negócio(s) aberto(s) seguem no nome de ' + f.nomes.join(', ')
+    return dg4Plural(f.n, 'negócio aberto segue', 'negócios abertos seguem') + ' no nome de ' + f.nomes.join(', ')
       + ', que saiu do campo' + mrr + '. Não entram nas contas por pessoa acima; '
       + 'dar dono novo ou encerrar é no HubSpot.';
   })();
@@ -36310,25 +36418,42 @@ function dg4Dados(ctx) {
   const somaQuentes = medidos.reduce(function (t, x) { return t + x.quentes.length; }, 0);
   const algumSemOrigem = medidos.some(function (x) { return x.temPlano && !x.origemRegistrada; });
 
+  const comPromessa = medidos.filter(function (x) { return x.ontem.medido; });
+  const promOntem = comPromessa.reduce(function (s, x) { return s + x.ontem.p; }, 0);
+  const feitOntem = comPromessa.reduce(function (s, x) { return s + x.ontem.f; }, 0);
+  const nFurou = comPromessa.filter(function (x) { return x.ontem.furou; }).length;
+  const semPromessaOntem = medidos.length - comPromessa.length;
+
+  const sinaisPorOid = {};
+  medidos.forEach(function (x) {
+    sinaisPorOid[x.oid] = dg4SinaisDe(x, x.pessoa, x.ontem, x.combinado);
+  });
+  const somaCobrancas = medidos.reduce(function (s, x) {
+    return s + sinaisPorOid[x.oid].filter(function (sn) { return sn.ruim; }).length;
+  }, 0);
+
   const kpis = !planosLidos ? [
-    { rot: 'planos montados', v: 'não medido', de: 'a leitura de planos_diarios falhou', cor: '#A79C8A' },
-    { rot: 'promessas travadas', v: 'não medido', de: 'recarregue a aba', cor: '#A79C8A' },
-    { rot: 'visitas prometidas', v: 'não medido', de: '', cor: '#A79C8A' },
-    { rot: 'prospecções novas', v: 'não medido', de: '', cor: '#A79C8A' },
+    { rot: 'ontem: feito/prometido', v: 'não medido', de: 'a leitura de planos_diarios falhou', cor: '#A79C8A' },
+    { rot: 'planos montados', v: 'não medido', de: 'recarregue a aba', cor: '#A79C8A' },
+    { rot: 'promessas travadas', v: 'não medido', de: '', cor: '#A79C8A' },
+    { rot: 'cobranças do dia', v: String(somaCobrancas), de: 'do HubSpot, esse número vale', cor: somaCobrancas ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'quentes fora do plano', v: String(somaQuentes), de: 'do HubSpot, esse número vale', cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
   ] : [
+
+    { rot: 'ontem: feito/prometido',
+      v: comPromessa.length ? (feitOntem + '/' + promOntem) : 'sem promessa',
+      de: comPromessa.length
+        ? (nFurou + (nFurou === 1 ? ' furou' : ' furaram')
+          + (semPromessaOntem ? ' · ' + semPromessaOntem + ' sem promessa' : ''))
+        : 'ninguém registrou promessa ontem',
+      cor: !comPromessa.length ? '#A79C8A' : (feitOntem >= promOntem ? '#7FD9BE' : '#FF8D9A') },
     { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length
         + (naGrade.length ? ' (' + naGrade.length + ' pela grade)' : ''),
       de: semPlano.length ? (semPlano.length + ' sem montar') : 'todo mundo montou', cor: semPlano.length ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'promessas travadas', v: travadas.length + '/' + medidos.length,
       de: antesDaTrava ? (abertas.length + ' ainda editável(is)') : 'janela fechada', cor: travadas.length === medidos.length ? '#7FD9BE' : '#F0B45C' },
-    { rot: 'visitas prometidas', v: String(somaVisitas),
-      de: somaPlanejadas > somaVisitas
-        ? somaPlanejadas + ' planejadas na grade'
-        : 'soma do time',
-      cor: '#FFFDF8' },
-    { rot: 'prospecções novas', v: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
-      de: algumSemOrigem ? 'origem não registrada em algum plano' : 'contas do lote nos slots', cor: somaNovas ? '#7FD9BE' : '#F0B45C' },
+    { rot: 'cobranças do dia', v: String(somaCobrancas),
+      de: 'SLA · cadência · proposta · combinado', cor: somaCobrancas ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'quentes fora do plano', v: String(somaQuentes),
       de: temNota ? ('etapa avançada ou ' + corteQuente + '°+, sem tarefa') : 'etapa avançada, sem tarefa · temperatura chega no sync',
       cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
@@ -36336,25 +36461,62 @@ function dg4Dados(ctx) {
 
   const manchete = (function () {
     if (!planosLidos) return 'Não consegui ler os planos do dia — nenhum número desta faixa acusa ninguém até a leitura voltar.';
-    const partes = [];
-    if (semPlano.length) partes.push(semPlano.length + ' sem plano montado');
-    if (abertas.length) partes.push(abertas.length + ' com promessa aberta' + (antesDaTrava ? ' a ' + minutos + ' min da trava' : ''));
-    if (somaQuentes) partes.push(somaQuentes + ' quentes esfriando fora dos planos');
-    if (!partes.length) return 'Os ' + medidos.length + ' montaram e travaram, e nenhum quente ficou fora dos planos. A rodada hoje é de reconhecimento.';
-    const primeiro = (semPlano[0] || abertas[0] || medidos[0]);
-    return partes.join(' e ') + '. Comece por ' + String((primeiro.r.name || '').split(' ')[0]) + '.';
+    const ontemFrase = !comPromessa.length
+      ? 'Ontem ninguém registrou promessa — o placar de hoje começa em branco.'
+      : ('Ontem ' + (comPromessa.length === medidos.length ? 'o time' : comPromessa.length + ' prometeram e')
+        + ' prometeu ' + dg4Plural(promOntem, 'visita', 'visitas') + ' e fez ' + feitOntem
+        + (nFurou ? ' — ' + nFurou + (nFurou === 1 ? ' furou' : ' furaram') + ' a palavra.' : ' — palavra cumprida ✓.'));
+    const hoje2 = [];
+    if (semPlano.length) hoje2.push(semPlano.length + ' sem plano' + (antesDaTrava ? ' a ' + minutos + ' min da trava' : ''));
+    if (somaCobrancas) hoje2.push(somaCobrancas + (somaCobrancas === 1 ? ' cobrança' : ' cobranças') + ' no dia');
+    if (somaQuentes) hoje2.push(somaQuentes + (somaQuentes === 1 ? ' quente' : ' quentes') + ' fora dos planos');
+
+    const hojeFrase = hoje2.length <= 1 ? hoje2.join('')
+      : hoje2.slice(0, -1).join(', ') + ' e ' + hoje2[hoje2.length - 1];
+    const primeiro = medidos[0];
+    return ontemFrase
+      + (hoje2.length ? ' Hoje: ' + hojeFrase + '.' : ' Hoje o time está montado e sem cobrança pendente.')
+      + (primeiro ? ' Comece por ' + String((primeiro.r.name || '').split(' ')[0]) + '.' : '');
   }());
+
+  const placar = reps.map(function (r) {
+    const x = medidos.filter(function (m) { return m.oid === String(r.ownerId); })[0];
+    const o = x ? x.ontem : { medido: false };
+    if (!o.medido) {
+      return { nome: esc(String(r.name || '').split(' ')[0]), rot: '—',
+        cor: '#A79C8A', bg: '#FBFAF6', borda: '#E4E0D6' };
+    }
+    return { nome: esc(String(r.name || '').split(' ')[0]), rot: o.f + '/' + o.p,
+      cor: o.furou ? '#E51A31' : '#1E9E7B',
+      bg: o.furou ? '#FDF3F4' : '#FDFEFF',
+      borda: o.furou ? '#F0A9B2' : '#DCE1EA' };
+  });
+  const placarNota = !planosLidos ? 'a leitura das promessas falhou — este placar não está medindo ninguém'
+    : (nFurou
+      ? (nFurou + (nFurou === 1 ? ' furou' : ' furaram') + ' a palavra de ontem — falam logo depois dos sem plano')
+      : (comPromessa.length
+        ? 'todo mundo que prometeu cumpriu ✓'
+        : 'ninguém registrou promessa ontem — nada a cobrar aqui, e nada a comemorar'))
+    + (semPromessaOntem && planosLidos
+      ? ' · ' + semPromessaOntem + ' sem promessa registrada (não é furo)' : '');
+  const placarNotaCor = nFurou ? '#8A3B3B' : (comPromessa.length ? '#1E9E7B' : '#7A8494');
 
   const rodada = medidos.map(function (x, i) {
     const sel = s.foco === x.oid;
-    const st = !x.temPlano ? 'sem plano'
-      : (x.travada ? '✓' : (x.veioDaGrade ? 'na grade' : 'aberta'));
+
+    const pz = peso(x);
+    const st = pz === 0 ? 'sem plano'
+      : pz === 1 ? 'furou ontem'
+      : pz === 2 ? (x.veioDaGrade ? 'na grade' : 'aberta')
+      : '✓';
     return {
       pos: (i + 1) + 'º',
       nome: esc(String(x.r.name || '').split(' ')[0]),
       st: st,
-      stCor: !x.temPlano ? '#6E1210'
-        : (x.travada ? '#1E9E7B' : (x.veioDaGrade ? '#2B3440' : '#8A6516')),
+      stCor: pz === 0 ? '#6E1210'
+        : pz === 1 ? '#E51A31'
+        : pz === 2 ? (x.veioDaGrade ? '#2B3440' : '#8A6516')
+        : '#1E9E7B',
       bg: sel ? '#2B3440' : '#FDFEFF',
       cor: sel ? '#FDFEFF' : '#2B3440',
       nCor: sel ? '#FF8D9A' : '#8E3B5C',
@@ -36377,8 +36539,24 @@ function dg4Dados(ctx) {
   const execs = medidos.map(function (x) {
     const r = x.r, oid = x.oid;
     const focado = s.foco === oid;
-    const cobrado = (typeof dg2Feito === 'function') ? dg4Feito('cobranca', oid) : false;
-    const reconhecido = (typeof dg2Feito === 'function') ? dg4Feito('ajuste', oid) : false;
+
+    const sinais = (sinaisPorOid[oid] || []).map(function (sn) {
+      const naPauta = dg4Feito('sinal', oid, sn.tipo);
+      if (!sn.ruim) {
+
+        return { rot: esc(sn.rot), on: '',
+          cor: sn.neutro ? '#7A8494' : '#1E9E7B',
+          bg: sn.neutro ? '#FBFAF6' : '#EAF6F1',
+          borda: sn.neutro ? '#E4E0D6' : '#CBE8DD',
+          cursor: 'default' };
+      }
+      return { rot: esc(naPauta ? ('✓ ' + sn.rot) : (sn.rot + (tv ? '' : ' ▸'))),
+        on: tv ? '' : ('sinal:' + oid + ':' + sn.tipo),
+        cor: naPauta ? '#1E9E7B' : '#8A3B3B',
+        bg: naPauta ? '#EAF6F1' : '#FDF3F4',
+        borda: naPauta ? '#CBE8DD' : '#F0A9B2',
+        cursor: tv ? 'default' : 'pointer' };
+    });
     const naMesa = Number(x.daily.prometido_propostas) || 0;
     const aposta = Number(x.daily.prometido_fechamentos) || 0;
     const visitas = Number(x.daily.prometido_visitas) || 0;
@@ -36429,7 +36607,7 @@ function dg4Dados(ctx) {
     }
 
     const quentes = x.quentes.slice(0, 3).map(function (d) {
-      const perguntado = (typeof dg2Feito === 'function') ? dg4Feito('alinhar', oid, d.nome) : false;
+      const perguntado = dg4Feito('alinhar', oid, d.nome);
       return {
         nome: esc(d.nome || 'negócio sem nome'),
         issue: esc((d.dias != null ? d.dias + 'd em ' + d.etapa : d.etapa)
@@ -36442,37 +36620,38 @@ function dg4Dados(ctx) {
       };
     });
 
+    const abre = (x.ontem.medido && x.ontem.furou)
+      ? ('prometeu ' + x.ontem.p + ' ontem e fez ' + x.ontem.f + '; ') : '';
     const leitura = !planosLidos ? 'não consegui ler o plano dele nesta rodada'
-      : !x.temPlano
+      : abre + (!x.temPlano
         ? (antesDaTrava
           ? 'não montou o dia ainda — faltam ' + minutos + ' min para a trava, dá tempo se você cobrar agora'
           : 'passou a trava sem montar o dia: a promessa de hoje não existe e o placar de amanhã vai medir zero prometido')
 
         : !x.travada
           ? ((x.visitas.length
-              ? x.visitas.length + ' visita(s) no dia'
+              ? dg4Plural(x.visitas.length, 'visita', 'visitas') + ' no dia'
                 + (x.preenchidos.length ? ' · ' + x.preenchidos.length + ' com hora' : '')
               : 'plano começado')
-            + (antesDaTrava ? ', e a promessa ainda está aberta — cobrar a trava é o gesto' : ', e a janela fechou sem travar'))
-          : (x.quentes.length
-            ? 'travou ' + x.visitas.length + ' visita(s), e ' + x.quentes.length + ' quente(s) dele ficaram fora do dia — pergunte por quê, não cobre'
-            : 'travou ' + x.visitas.length + ' visita(s)'
-              + (x.preenchidos.length ? ' (' + x.preenchidos.length + ' com hora)' : '')
-              + ' e nenhum quente ficou fora: reconheça na rodada');
 
-    const acao = (!x.temPlano || !x.travada)
-      ? { on: 'cobrar:' + oid, rot: cobrado ? '✓ cobrado nesta rodada'
-        : (!x.temPlano ? 'cobrar o plano agora ▸'
-          : (x.veioDaGrade ? 'pedir para travar o dia ▸' : 'cobrar a trava ▸')),
-        bg: cobrado ? '#EAF6F1' : '#E51A31', cor: cobrado ? '#1E9E7B' : '#FFFDF8', borda: cobrado ? '#CBE8DD' : '#E51A31' }
-      : { on: 'reconhecer:' + oid, rot: reconhecido ? '✓ reconhecimento registrado' : 'mandar reconhecimento ▸',
-        bg: reconhecido ? '#EAF6F1' : '#1E9E7B', cor: reconhecido ? '#1E9E7B' : '#FFFDF8', borda: reconhecido ? '#CBE8DD' : '#1E9E7B' };
+            + (antesDaTrava
+              ? (x.veioDaGrade
+                ? ', e isso é a grade da semana, não a promessa do dia — pedir para travar o dia é o gesto'
+                : ', e a promessa ainda está aberta — cobrar a trava é o gesto')
+              : ', e a janela fechou sem travar'))
+          : (x.quentes.length
+            ? 'travou ' + dg4Plural(x.visitas.length, 'visita', 'visitas') + ', e '
+              + dg4Plural(x.quentes.length, 'quente dele ficou', 'quentes dele ficaram')
+              + ' fora do dia — pergunte por quê, não cobre'
+            : 'travou ' + dg4Plural(x.visitas.length, 'visita', 'visitas')
+              + (x.preenchidos.length ? ' (' + x.preenchidos.length + ' com hora)' : '')
+              + ' e nenhum quente ficou fora: reconheça na rodada'));
 
     return {
       ini: esc(String(r.name || '').split(' ').map(function (p) { return p[0]; }).slice(0, 2).join('')),
       nome: esc(r.name || 'sem nome'),
-      praca: esc((r.praca || 'praça não declarada')
-        + ' · ' + ((x.plano && x.plano.local_atuacao) ? x.plano.local_atuacao : 'sem rota escolhida')),
+
+      praca: esc(r.praca || 'praça não declarada'),
       rota: esc((x.plano && x.plano.local_atuacao) || 'sem rota escolhida'),
 
       status: !x.temPlano ? 'SEM PLANO'
@@ -36488,22 +36667,28 @@ function dg4Dados(ctx) {
       temQuentes: quentes.length > 0,
       quentes: quentes,
       semQuentes: x.temPlano && quentes.length === 0,
+      sinais: sinais,
       leitura: esc(leitura),
-      leiaCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#B0552F'),
-      cobrar: acao.on, cbRot: acao.rot, cbBg: acao.bg, cbCor: acao.cor, cbBorda: acao.borda
+      leiaCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#B0552F')
     };
   });
 
-  const nCobrados = medidos.filter(function (x) { return (typeof dg2Feito === 'function') && dg4Feito('cobranca', x.oid); }).length;
-  const nPerguntas = medidos.reduce(function (t, x) {
-    return t + x.quentes.filter(function (d) { return (typeof dg2Feito === 'function') && dg4Feito('alinhar', x.oid, d.nome); }).length;
+  const nSinais = medidos.reduce(function (s, x) {
+    return s + (sinaisPorOid[x.oid] || []).filter(function (sn) {
+      return sn.ruim && dg4Feito('sinal', x.oid, sn.tipo);
+    }).length;
+  }, 0);
+  const nPerguntas = medidos.reduce(function (s, x) {
+    return s + x.quentes.filter(function (d) { return dg4Feito('alinhar', x.oid, d.nome); }).length;
   }, 0);
   const agenda = [
-    { hora: 'agora', rot: nCobrados ? (nCobrados + ' executivo(s) cobrado(s) nesta rodada — o registro fica na Semana e no Time')
-      : 'nenhuma cobrança registrada ainda — o botão de cada cartão grava aqui' },
     { hora: Math.floor(dg4MinutosDaTrava() / 60) + 'h',
       rot: 'as promessas travam; o que estiver escrito vira o placar de amanhã, medido no HubSpot — zero auto-relato' },
-    { hora: 'rodada', rot: nPerguntas ? (nPerguntas + ' quente(s) fora do plano anotado(s) para perguntar por quê, por nome')
+    { hora: 'rodada', rot: nSinais
+      ? (nSinais + (nSinais === 1 ? ' sinal anotado' : ' sinais anotados')
+        + ' — SLA, cadência, proposta e combinado, por nome, olho no olho')
+      : ('nenhum sinal anotado ainda — de ' + somaCobrancas + (somaCobrancas === 1 ? ' cobrança' : ' cobranças') + ' do dia, clique no chip vermelho para levar à rodada') },
+    { hora: 'rodada', rot: nPerguntas ? (dg4Plural(nPerguntas, 'quente fora do plano anotado', 'quentes fora do plano anotados') + ' para perguntar por quê, por nome')
       : 'nenhum quente anotado — "perguntar por quê" em cada um deixa a pergunta pronta' }
   ];
 
@@ -36532,22 +36717,36 @@ function dg4Dados(ctx) {
 
     avisoForaDoCampo: avisoForaDoCampo ? esc(avisoForaDoCampo) : '',
     temToast: !!s.toast, toast: esc(s.toast || ''),
+
+    placar: placar,
+    placarNota: esc(placarNota), placarNotaCor: placarNotaCor,
     rodada: rodada,
     origAlvo: String(origAlvo), origCart: String(origCart), origNova: String(origNova),
+
+    somaVisitas: String(somaVisitas),
+    somaPlanejadas: String(somaPlanejadas),
+    somaNovas: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
     execs: execs,
 
     acoes: !tv,
     agenda: agenda,
-    rodapeFonte: esc('Plano, promessa e trava: Supabase planos_diarios + dailies, escritos pelo próprio executivo na Minha Daily'
+    rodapeFonte: esc('Daily do gestor: a palavra de ontem é cobrada primeiro — prometido de dailies.prometido_visitas (o que ele travou ontem)'
+      + ' contra feito medido no HubSpot (visita com desfecho), nunca auto-relato'
+      + ' · plano, promessa e trava: Supabase planos_diarios, escritos pelo próprio executivo na Minha Daily'
+      + ' · SLA de 1º toque, cadência de ontem e toques: as MESMAS funções das abas Time e Pessoas'
+      + ' · não existe propriedade de validade de proposta no HubSpot, então o sinal é o parente medível — proposta na mesa sem data marcada'
+      + ' · combinado do 1:1: pdi_compromissos, a mesma linha que ele marca no Desenvolvimento e você carimba na Pessoas'
       + ' · etapa, dias e quentes: HubSpot (' + frescor + ')'
-      + ' · a origem de cada conta é gravada no slot desde 08/09/26; registro anterior aparece como "origem não registrada", nunca chutada'
-      + ' · cobrança, pergunta e reconhecimento: Supabase registros_rodada, os mesmos que a Semana e o Time leem'
+      + ' · sinal anotado e pergunta: Supabase registros_rodada, os mesmos que a Semana e o Time leem'
+      + ' · sem botão de cobrar: a cobrança acontece na rodada, olho no olho'
       + ' · o gestor não edita plano de ninguém, e depois da trava a promessa é somente leitura.')
   };
 }
 
 function dg4TelaHTML(d) {
-  const { acoes, agenda, contagem, execs, kpis, linhaTopo, manchete, origAlvo, origCart, origNova, rodada, rodapeFonte, temToast, tituloTrava, toast } = d;
+  const { acoes, agenda, contagem, execs, kpis, linhaTopo, manchete, origAlvo, origCart, origNova,
+    placar, placarNota, placarNotaCor, rodada, rodapeFonte, somaNovas, somaPlanejadas, somaVisitas,
+    temToast, tituloTrava, toast } = d;
   return `
       <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
 
@@ -36571,6 +36770,16 @@ function dg4TelaHTML(d) {
           ` : ''}
         </div>
 
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
+          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;flex:none;">O placar de ontem <span style="font-weight:700;text-transform:none;letter-spacing:0;color:#7A8494;">· prometido → feito, medido no HubSpot, não auto-relato</span></span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">
+            ${(placar||[]).map(pl => `
+              <span style="display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:0 12px;border:1.5px solid ${pl.borda};border-radius:999px;background:${pl.bg};font:800 10.5px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;">${pl.nome}<b style="font:900 11px 'Archivo',sans-serif;color:${pl.cor};font-variant-numeric:tabular-nums;">${pl.rot}</b></span>
+            `).join('')}
+          </div>
+          <span style="margin-left:auto;flex:none;font:700 10px 'Manrope',sans-serif;color:${placarNotaCor};">${placarNota}</span>
+        </div>
+
         <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;background:#FBFAF6;">
           <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#E51A31;flex:none;">A rodada — quem fala primeiro</span>
           <div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">
@@ -36578,7 +36787,7 @@ function dg4TelaHTML(d) {
               <button data-dg4-acao="${r.on}" style="display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border:1.5px solid ${r.borda};border-radius:999px;background:${r.bg};font:800 10.5px 'Manrope',sans-serif;color:${r.cor};cursor:pointer;white-space:nowrap;" data-dg4-hv="0"><b style="font:900 10px 'Archivo',sans-serif;color:${r.nCor};">${r.pos}</b>${r.nome}<span style="font:800 8.5px 'Archivo',sans-serif;color:${r.stCor};">${r.st}</span></button>
             `).join('')}
           </div>
-          <span style="margin-left:auto;flex:none;font:700 10px 'Manrope',sans-serif;color:#7A8494;">ordem: sem plano → promessa aberta → travadas · de onde vêm os planos de hoje: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${origNova} prospecção nova</b></span>
+          <span style="margin-left:auto;flex:none;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;text-align:right;">ordem: sem plano → furou ontem → promessa aberta → travadas ✓<br>hoje: <b style="color:#2B3440;">${somaVisitas} visitas prometidas</b> · ${somaPlanejadas} planejadas na grade · origem dos planos: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${somaNovas} prospecção nova</b></span>
         </div>
 
         <div style="padding:16px 24px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
@@ -36595,6 +36804,12 @@ function dg4TelaHTML(d) {
                   <span style="display:inline-flex;align-items:center;gap:5px;border:1.5px ${pm.estilo} ${pm.borda};border-radius:999px;padding:4px 11px;font:800 10.5px 'Manrope',sans-serif;color:${pm.cor};background:${pm.bg};white-space:nowrap;"><b style="font:900 12px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;">${pm.n}</b>${pm.rot}</span>
                 `).join('')}
                 <span style="flex:none;font:800 9.5px 'Manrope',sans-serif;color:${e.promStCor};">${e.promSt}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;padding:9px 16px 0;flex-wrap:wrap;">
+                <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#7A8494;flex:none;">sinais do dia</span>
+                ${(e.sinais||[]).map(sn => `
+                  <button${sn.on ? ' data-dg4-acao="' + sn.on + '" data-dg4-hv="0"' : ' disabled'} style="display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:0 10px;border:1px solid ${sn.borda};border-radius:999px;background:${sn.bg};font:800 9.5px 'Manrope',sans-serif;color:${sn.cor};cursor:${sn.cursor};white-space:nowrap;">${sn.rot}</button>
+                `).join('')}
               </div>
               <div style="padding:10px 16px 0;">
                 <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#2B3440;">o plano dele — montado por ele, conta a conta</span>
@@ -36632,16 +36847,13 @@ function dg4TelaHTML(d) {
               </div>
               <div style="display:flex;align-items:center;gap:8px;padding:10px 16px 13px;flex-wrap:wrap;">
                 <span style="font:700 10px/1.5 'Manrope',sans-serif;color:${e.leiaCor};min-width:0;flex:1;">▸ ${e.leitura}</span>
-                ${(acoes) ? `
-                  <button data-dg4-acao="${e.cobrar}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${e.cbBorda};border-radius:999px;background:${e.cbBg};font:800 10px 'Manrope',sans-serif;color:${e.cbCor};cursor:pointer;white-space:nowrap;" data-dg4-hv="1">${e.cbRot}</button>
-                ` : ''}
               </div>
             </div>
           `).join('')}
         </div>
 
         <div style="padding:10px 24px 18px;">
-          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Sua rodada <span style="color:#7A8494;">— tudo que você clicou vira a pauta de agora</span></span>
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">A pauta da sua rodada <span style="color:#7A8494;">— tudo que você clicou vira pauta, nada se perde</span></span>
           <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
             ${(agenda||[]).map(ag => `
               <span style="display:flex;align-items:flex-start;gap:9px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:9px 13px;min-width:0;">
@@ -36665,7 +36877,7 @@ function dg4Repintar() {
 
 let DG4_CTX = null;
 
-async function dg4Executar(acao) {
+async function dg4Executar(acao, rotulo) {
   const partes = String(acao || '').split(':');
   const verbo = partes[0];
   const resto = partes.slice(1).join(':');
@@ -36686,15 +36898,18 @@ async function dg4Executar(acao) {
     return r ? String(r.name || '').split(' ')[0] : 'ele';
   };
 
-  if (verbo === 'cobrar' || verbo === 'reconhecer') {
-    const base = verbo === 'cobrar' ? 'cobranca' : 'ajuste';
-    const r = await g14Registrar(base, resto);
+  if (verbo === 'sinal') {
+    const ps = resto.split(':');
+    const oid = ps[0];
+    const tipo = ps.slice(1).join('-');
+    if (!oid || !tipo) { DG4_ESTADO.toast = 'esse sinal chegou sem endereço — não gravei'; return dg4Repintar(); }
+
+    const chip = String(rotulo || tipo).replace(/^✓ /, '').replace(/ ▸$/, '').trim() || tipo;
+    const r = await g14Registrar('sinal', oid, tipo, chip);
     if (r && r.error) { DG4_ESTADO.toast = 'não gravei: ' + r.error.message; return dg4Repintar(); }
     DG4_ESTADO.toast = r && r.desfeito
-      ? ('registro desfeito — ' + nomeDoRep(resto) + ' saiu da rodada')
-      : (verbo === 'cobrar'
-        ? (nomeDoRep(resto) + ' cobrado ✓ — o registro fica na Semana e no Time')
-        : ('reconhecimento de ' + nomeDoRep(resto) + ' registrado ✓'));
+      ? ('sinal saiu da pauta — ' + nomeDoRep(oid))
+      : ('anotado para a rodada de ' + nomeDoRep(oid) + ': ' + chip + ' ✓');
     return dg4Repintar();
   }
 
@@ -36723,7 +36938,8 @@ function dg4Ligar() {
     if (!alvo.closest('[data-dg4-raiz]')) return;
     const acao = alvo.getAttribute('data-dg4-acao');
     if (!acao) return;
-    dg4Executar(acao);
+
+    dg4Executar(acao, alvo.textContent || '');
   });
 }
 
@@ -36784,7 +37000,11 @@ async function renderDaily() {
   if (!souRepDailyPre) {
     await Promise.all([
       (typeof g14CarregarSemanais === 'function') ? g14CarregarSemanais() : Promise.resolve(),
-      (typeof g14CarregarFeitos === 'function') ? g14CarregarFeitos(dailyRefDate) : Promise.resolve()
+      (typeof g14CarregarFeitos === 'function') ? g14CarregarFeitos(dailyRefDate) : Promise.resolve(),
+
+      (typeof ps6Carregar === 'function' && typeof PS6_ESTADO !== 'undefined' && !PS6_ESTADO.carregou)
+        ? ps6Carregar().catch(function (e) { console.error('Daily — combinados do 1:1:', e && e.message); })
+        : Promise.resolve()
     ]);
   }
 
@@ -38308,6 +38528,8 @@ async function renderDaily() {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
       grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
       foraDoCampo: abertoDeQuemSaiu,
+
+      ontem: yesterdayISO,
       frescor: frescorDaily
     };
     html = '<div id="dg4Raiz" data-dg4-raiz="1">'
