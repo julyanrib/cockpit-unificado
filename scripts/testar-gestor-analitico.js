@@ -990,30 +990,25 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
       && montar.indexOf('metaMrr: h.metaMrr != null') > -1
       && montar.indexOf('metaReceita: r.metaReceita,') > -1);
 
-  /* ── 14 · TIRAR ALGUEM DO TIME NAO PODE ESCONDER O PIPELINE DELE (10/09/26) ─────────
-     MEDIDO, e foi o achado mais serio do dia: a Amanda saiu do usuarios.json e os 21
-     negocios abertos dela DESAPARECERAM do Cockpit — o funil do gestor foi de 249 para
-     228 sem uma palavra na tela. A causa e que stageDealsTeamWide filtra o dono na
-     propria consulta ao HubSpot, entao negocio de quem saiu nunca entra no snapshot.
-     Eles nao voltam para o funil de proposito (toda leitura da tela assume que lead tem
-     dono do time), mas o NUMERO nao pode sumir. */
-  checar('o robo conta os abertos de quem nao esta no time',
-    robo.indexOf('async function abertosDeQuemSaiu()') > -1
-      && robo.indexOf("operator: 'NOT_IN', values: donos") > -1
-      && robo.indexOf('foraDoTime: await abertosDeQuemSaiu(),') > -1);
-  checar('e a tela le essa contagem em vez de varrer o funil',
-    /* LE DE kpisHub: o topo do payload tem lista branca de chaves e descartava a minha
-       passagem em silencio — medido na producao, DATA.foraDoTime chegava undefined com o
-       valor sentado em DATA.kpisHub.foraDoTime. */
-    tela.indexOf('const ft = (DATA.kpisHub && DATA.kpisHub.foraDoTime) || null;') > -1
-      /* O " · " saiu desta string quando o pill passou a dizer quantos DONOS são: a
-         contagem de donos entra entre o rótulo e o MRR. Ancorar no rótulo, não na
-         pontuação que veio depois. */
-      && tela.indexOf("' negócios fora do time'") > -1
-      && tela.indexOf("d.semDonoDonos + ' donos'") > -1);
-  checar('nao medido nao e zero nem neste bloco',
-    tela.indexOf('const semDono = ft ? (Number(ft.n) || 0) : null;') > -1
-      && tela.indexOf('negócios de quem saiu: não medido nesta carga') > -1);
+  /* ── 14 · O COCKPIT OLHA OS LEADS DO TIME DE AGORA (10/09/26) ──────────────────────
+     Existiu aqui, por 40 minutos, uma guarda exigindo que o robo contasse os abertos de
+     quem saiu do time — 251 negocios de 14 donos. Julyan cortou: "foca nesses leads de
+     agora, nao precisa puxar aqueles, vamos deixar limpo".
+
+     A guarda passa a vigiar a DECISAO, e nao a implementacao que saiu: se alguem voltar
+     a puxar negocio de fora do time, isto reprova e a conversa acontece de novo em vez
+     de a busca voltar sozinha num refactor. Guarda de decisao dura mais que guarda de
+     codigo. */
+  checar('o Cockpit nao puxa negocio de quem nao esta no time',
+    /* MEDE O CODIGO SEM COMENTARIO, e isto nao e detalhe: a primeira versao desta guarda
+       reprovou por causa do MEU PROPRIO comentario no robo, que cita o nome da busca
+       removida para quem precisar refaze-la. Comentario que explica a decisao nao pode
+       disparar a guarda da decisao — segunda vez hoje que um comentario meu vira ancora
+       por acidente. */
+    soCodigo(robo).indexOf('abertosDeQuemSaiu') === -1
+      && !/operator: .NOT_IN., values: donos/.test(soCodigo(robo).replace(/'/g, '.'))
+      && templateCodigo.indexOf('foraDoTime') === -1
+      && templateCodigo.indexOf('negócios fora do time') === -1);
 
   /* ── 15 · UMA FONTE PARA CLIENTES FECHADOS NO MES (10/09/26) ───────────────────────
      A tela dizia 6 e o pill de competencia dizia 5, os dois ao mesmo tempo: reps[].
