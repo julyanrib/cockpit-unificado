@@ -614,13 +614,10 @@ checar('o nome do executivo abre algo em todas as abas do gestor',
       "abrir: 'sel:' + r.ownerId",      /* Time: abre o dossie */
       "abrir: 'sel:' + p.ownerId",      /* Pessoas: abre a pauta do 1:1 */
       "abrir: 'abrir:' + oid",          /* Semana: expande o placar */
-      /* ROTAS v2 (09/09/26): a fila deixou de ser "por executivo" e virou "por praça",
-         então não existe mais `sel:` ali. O NOME CONTINUA ABRINDO ALGO, que é a regra
-         desta checagem: clicar na carteira de alguém no bloco 3 seleciona a praça dele E
-         ele mesmo no fluxo do bloco 2, e rola até lá. Cravar o endereço antigo faria esta
-         suite reprovar o desenho novo em vez de proteger o gestor — foi o que acabou de
-         acontecer, e é a mesma lição do pl4RiscoDoBalde. */
-      "on: 'carteira:' + u.ownerId"     /* Rotas: leva a pessoa para o passo 3 */
+      /* ROTAS FINAL (11/09/26): a fila voltou a ser POR EXECUTIVO, e o nome dele no
+         painel de estoque é o botão que a troca. O endereço anterior (`carteira:` +
+         rolagem até o passo 2) morreu com o fluxo de três passos. */
+      "ver: 'verfila:' + x.u.ownerId"   /* Rotas: troca a fila para a dele */
     ];
     return ACOES.every(function (a) { return templateCodigo.indexOf(a) > 0; });
   }()),
@@ -689,10 +686,19 @@ checar('as abas do gestor leem o mesmo motor, e nao recalculam por conta',
   templateCodigo.indexOf('function tl5Medir(') > 0 &&
   (function () {
     const iPessoas = templateCodigo.indexOf('function ps6Pessoas()');
-    const iRotas = templateCodigo.indexOf('function rt7Dados()');
-    if (iPessoas < 0 || iRotas < 0) return false;
+    /* NA ROTAS FINAL o motor entra por rt7Carteira, que é o ÚNICO lugar da aba que mede
+       carteira — e ele chama tl5Medir. O provedor da aba deixou de medir funil por conta
+       própria em 11/09: ele lê leads_prospeccao e planos_semanais, e o que é do funil
+       pede a quem já mede. Cravar `tl5Medir()` dentro de rt7Dados reprovaria justamente
+       a versão que parou de recalcular. */
+    const iCart = templateCodigo.indexOf('function rt7Carteira(ownerId, medicao)');
+    if (iPessoas < 0 || iCart < 0) return false;
+    const cart = templateCodigo.slice(iCart, iCart + 400);
+    const rotas = templateCodigo.slice(templateCodigo.indexOf('function rt7Dados()'),
+      templateCodigo.indexOf('function rt7TelaHTML'));
     return templateCodigo.slice(iPessoas, iPessoas + 300).indexOf('tl5Medir()') > 0
-      && templateCodigo.slice(iRotas, iRotas + 300).indexOf('tl5Medir()') > 0;
+      && cart.indexOf('tl5Medir()') > 0
+      && (rotas.match(/tl5Medir\(\)/g) || []).length === 0;
   }()) &&
   templateCodigo.split('function tl5Medir(').length - 1 === 1,
   'motor duplicado = duas telas do mesmo gestor discordando do mesmo numero');

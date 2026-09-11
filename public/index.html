@@ -41586,17 +41586,171 @@ async function ps6Iniciar() {
 
 const RT7_ESTADO = {
 
-  praca: null,
-  fonte: null,
-  exec: null,
   sel: {},
   cargas: [],
-  verTodas: false, verNoticias: false,
+  verTodas: false,
   toast: null, importando: false, enviando: false,
   leads: [], estoqueSemana: {}, semanas: {}, carregou: false,
-  radar: [], radarSemana: null, noticias: [], noticiasSemana: null, radarCarregou: false,
-  _indice: null, _rolarPara: null
+  _indice: null, _rolarPara: null,
+
+  filaExec: null,
+  leadAberto: null,
+  imp: null,
+  impCidades: {},
+  impQtd: 50,
+  lidoEm: null,
+  orfaoDono: null,
+  logAberto: false
 };
+
+function rt7Registrar(entrada) {
+  RT7_ESTADO.cargas = (RT7_ESTADO.cargas || []).concat([entrada]);
+}
+async function rt7Desfazer(indice) {
+  const c = (RT7_ESTADO.cargas || [])[Number(indice)];
+  if (!c) { RT7_ESTADO.toast = 'essa linha já não está no registro'; return; }
+  if (!c.desfazivel) { RT7_ESTADO.toast = c.porque || 'esta ação não tem volta'; return; }
+  if (c.tipo === 'Carteira' && Array.isArray(c.voltar) && c.voltar.length) {
+    if (typeof supa === 'undefined' || !supa) { RT7_ESTADO.toast = 'sem conexão aqui — nada foi desfeito'; return; }
+    try {
+
+      for (let k = 0; k < c.voltar.length; k++) {
+        const v = c.voltar[k];
+        const { data, error } = await supa.from('leads_prospeccao')
+          .update({ responsavel_owner_id: v.dono, status: v.status, updated_at: new Date().toISOString() })
+          .eq('id', v.id).select('id');
+        if (error) throw error;
+        if (!Array.isArray(data) || !data.length) throw new Error('o banco não devolveu a linha ' + v.id);
+        (RT7_ESTADO.leads || []).forEach(function (l) {
+          if (String(l.id) === String(v.id)) { l.responsavel_owner_id = v.dono; l.status = v.status; }
+        });
+      }
+      RT7_ESTADO.toast = c.voltar.length + ' conta(s) de volta para o dono e o status de antes ✓';
+    } catch (e) {
+      RT7_ESTADO.toast = 'não desfiz: ' + (e && e.message ? e.message : 'erro desconhecido');
+      return;
+    }
+  }
+  if (c.tipo === 'Território') { RT7_ESTADO.orfaoDono = null; RT7_ESTADO.toast = 'decisão do território desfeita — segue sem dono'; }
+  RT7_ESTADO.cargas = (RT7_ESTADO.cargas || []).filter(function (x, k) { return k !== Number(indice); });
+}
+
+const RT7_FILA_VISIVEL = 8;
+function rt7FilaDoExec(ownerId, todas) {
+  const k = String(ownerId || '');
+  if (!k) return [];
+  const lista = (RT7_ESTADO.leads || []).filter(function (l) {
+    return String(l.responsavel_owner_id || '') === k
+      && RT7_MOVIVEIS.indexOf(String(l.status)) >= 0
+      && rt7Sujeira(l).ok;
+  }).map(function (l) { return { l: l, sc: rt7Score(l) }; });
+  lista.sort(function (a, b) { return (b.sc == null ? -1 : b.sc) - (a.sc == null ? -1 : a.sc); });
+  return todas ? lista : lista.slice(0, RT7_FILA_VISIVEL);
+}
+
+function rt7Feito(chave) {
+  return (RT7_ESTADO.cargas || []).some(function (c) { return c && c.chave === chave; });
+}
+
+function rt7LinhaTopo() {
+  const DIAS = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado'];
+  const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho',
+    'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const d = new Date();
+  return DIAS[d.getDay()] + ', ' + String(d.getDate()).padStart(2, '0') + ' de ' + MESES[d.getMonth()]
+    + ' · Supabase leads_prospeccao ' + (RT7_ESTADO.carregou ? 'lido às ' + (RT7_ESTADO.lidoEm || '--:--') : 'carregando…')
+    + ' · funil do HubSpot ' + (DATA.hubspotUpdatedAtFmt ? String(DATA.hubspotUpdatedAtFmt) : 'sem carga registrada');
+}
+
+function rt7Semana(ownerId) {
+  const l = (RT7_ESTADO.semanas || {})[String(ownerId)];
+  if (!l) return { existe: false, dias: 0, slots: 0, total: 35, fechada: false, segunda: null };
+  const g = Array.isArray(l.grade) ? l.grade : [];
+  let dias = 0, slots = 0;
+  g.slice(0, 5).forEach(function (col) {
+    const ocupados = (Array.isArray(col) ? col : []).filter(function (v) {
+      if (!v) return false;
+      const id = (typeof v === 'object') ? v.id : v;
+      return !!id && String(id) !== (typeof PL6_BLOQUEADO !== 'undefined' ? PL6_BLOQUEADO : '__b');
+    }).length;
+    if (ocupados > 0) dias += 1;
+    slots += ocupados;
+  });
+  return { existe: true, dias: dias, slots: slots, total: 35,
+    fechada: !!l.fechado_em, segunda: l.data_segunda || null };
+}
+
+function rt7Alvos(ownerId) {
+  const k = String(ownerId);
+  let naRota = 0, parados = 0;
+  (RT7_ESTADO.leads || []).forEach(function (l) {
+    if (String(l.responsavel_owner_id || '') !== k) return;
+    if (String(l.status) === 'na_rota') naRota += 1;
+    else if (RT7_MOVIVEIS.indexOf(String(l.status)) >= 0) parados += 1;
+  });
+  return { naRota: naRota, parados: parados };
+}
+
+function rt7Estoque(ownerId) {
+  const a = rt7Alvos(ownerId);
+  const c = Number((RT7_ESTADO.estoqueSemana || {})[String(ownerId)]);
+  if (!isFinite(c) || c <= 0) return { contas: a.parados, consumo: null, semanas: null };
+  return { contas: a.parados, consumo: c, semanas: a.parados / c };
+}
+
+function rt7SinaisDoLead(l) {
+  const out = [];
+  const av = Number(l.avaliacoes);
+  if (isFinite(av) && av >= 1000) out.push(Math.round(av / 1000) + ' mil avaliações');
+  else if (isFinite(av) && av > 0) out.push(av + ' avaliações');
+  const nota = Number(l.nota);
+  if (isFinite(nota) && nota >= 4.7) out.push('nota ' + String(nota).replace('.', ',') + ' — casa bem avaliada');
+  if (l.data_abertura) {
+    const dias = Math.floor((Date.now() - new Date(l.data_abertura).getTime()) / 86400000);
+    if (Number.isFinite(dias) && dias >= 0 && dias <= 365) out.push('aberta há ' + dias + 'd');
+  }
+  if (l.delivery === true) out.push('faz delivery');
+  if (l.presencial === false) out.push('só delivery');
+  if (!String(l.telefone || '').replace(/\D/g, '')) out.push('sem telefone na base');
+  return out.slice(0, 3);
+}
+
+function rt7Orfao() {
+  const ativos = {};
+  rt7Ativos().forEach(function (u) { ativos[String(u.ownerId)] = String(u.nome || ''); });
+
+  const cidades = [];
+  (DATA.territorios || []).forEach(function (tr) {
+    const dono = (DATA.usuarios || []).filter(function (u) {
+      return String(u.nome || '') === String(tr.rep || '');
+    })[0];
+    const donoAtivo = dono && ativos[String(dono.ownerId)];
+    if (donoAtivo) return;
+    (tr.areas || []).forEach(function (a) {
+      if (!a || !a.municipio) return;
+      const nome = a.municipio + '/' + (a.uf || '');
+
+      const cobertaPorAtivo = (DATA.territorios || []).some(function (t2) {
+        const d2 = (DATA.usuarios || []).filter(function (u) { return String(u.nome || '') === String(t2.rep || ''); })[0];
+        if (!d2 || !ativos[String(d2.ownerId)]) return false;
+        return (t2.areas || []).some(function (a2) { return a2 && rt7ChaveNome(a2.municipio) === rt7ChaveNome(a.municipio); });
+      });
+      if (cobertaPorAtivo) return;
+      if (cidades.indexOf(nome) < 0) cidades.push(nome);
+    });
+  });
+
+  let paradas = 0;
+  const donosFora = {};
+  (RT7_ESTADO.leads || []).forEach(function (l) {
+    const k = String(l.responsavel_owner_id || '');
+    if (!k) { paradas += 1; donosFora['(sem dono)'] = (donosFora['(sem dono)'] || 0) + 1; return; }
+    if (ativos[k]) return;
+    paradas += 1;
+    donosFora[k] = (donosFora[k] || 0) + 1;
+  });
+  return { cidades: cidades, paradas: paradas, donosFora: donosFora };
+}
 
 function rt7Ativos() {
   return (DATA.usuarios || []).filter(u => u.role === 'rep' && !u.aComecar && u.fieldStatus !== 'transicao_inside');
@@ -41623,93 +41777,6 @@ const RT7_FONTES = [
   { id: 'google_places', rot: 'Google Places', ativa: false, porque: 'falta a chave GOOGLE_PLACES_API_KEY nas env vars da Vercel — hoje ela só existe no GitHub, então o mensal roda e o botão não' },
   { id: 'tripadvisor', rot: 'TripAdvisor', ativa: false, porque: 'fora da allowlist de rede e o ToS proíbe coleta automatizada — não é "ainda não", é por este caminho nunca' }
 ];
-
-function rt7FonteEscolhida() {
-  const s = RT7_ESTADO;
-  if (s.fonte) return s.fonte;
-  const ativas = RT7_FONTES.filter(f => f.ativa);
-  return ativas.length === 1 ? ativas[0].id : null;
-}
-
-function rt7PracaEscolhida(execsPorPraca) {
-  const s = RT7_ESTADO;
-  if (s.praca) return s.praca;
-  const linhas = s.radar || [];
-  if (!linhas.length) return null;
-  const mapa = execsPorPraca || rt7ExecsPorPraca();
-  const naoBatidas = function (r) {
-    const medido = r.tam_fonte === 'contagem_api' && Number(r.tam) > 0;
-    return medido ? (Number(r.tam) || 0) - (Number(r.tocado) || 0) : -1;
-  };
-  const comDono = linhas.filter(function (r) {
-    return (mapa[rt7MunicipioDaPraca(r.praca)] || []).length;
-  });
-  const alvo = (comDono.length ? comDono : linhas).slice()
-    .sort(function (a, b) { return naoBatidas(b) - naoBatidas(a); })[0];
-  return alvo ? alvo.praca : null;
-}
-
-async function rt7CarregarRadar() {
-  if (typeof supa === 'undefined' || !supa) { RT7_ESTADO.radarCarregou = true; return; }
-  try {
-
-    const { data: pr } = await supa.from('radar_pracas')
-      .select('praca,municipio,uf,data_semana,tam,tam_fonte,tam_detalhe,tocado,pct_tocado,clientes,leitura')
-      .order('data_semana', { ascending: false }).limit(40);
-    const semana = (pr && pr.length) ? pr[0].data_semana : null;
-    RT7_ESTADO.radar = (pr || []).filter(l => l.data_semana === semana);
-    RT7_ESTADO.radarSemana = semana;
-
-    const { data: nt } = await supa.from('noticias_setor')
-      .select('titulo,fonte,url,publicado_em,tema,relevancia,relevancia_motivo,data_semana')
-      .order('data_semana', { ascending: false })
-      .order('relevancia', { ascending: false, nullsFirst: false })
-      .order('publicado_em', { ascending: false }).limit(80);
-    const semNot = (nt && nt.length) ? nt[0].data_semana : null;
-    RT7_ESTADO.noticias = (nt || []).filter(l => l.data_semana === semNot);
-    RT7_ESTADO.noticiasSemana = semNot;
-  } catch (e) {
-    console.log('rotas: nao consegui ler o radar - ' + (e && e.message));
-  }
-  RT7_ESTADO.radarCarregou = true;
-}
-
-function rt7MunicipioDaPraca(nome) {
-  return rt7ChaveNome(String(nome || '').split('/')[0]);
-}
-
-function rt7ExecsPorPraca() {
-  const mapa = {};
-  const ativos = rt7Ativos();
-  (DATA.territorios || []).forEach(tr => {
-    if (!tr || tr.ativo === false) return;
-    const u = ativos.find(x => String(x.nome || x.name || '').toLowerCase()
-      === String(tr.rep || '').toLowerCase());
-    if (!u) return;
-    (tr.areas || []).forEach(a => {
-      const k = a && a.municipio ? rt7MunicipioDaPraca(a.municipio) : '';
-      if (!k) return;
-      if (!mapa[k]) mapa[k] = [];
-      if (!mapa[k].some(x => String(x.ownerId) === String(u.ownerId))) mapa[k].push(u);
-    });
-  });
-
-  ativos.forEach(u => {
-    const temDecl = (DATA.territorios || []).some(tr =>
-      String(tr && tr.rep || '').toLowerCase() === String(u.nome || '').toLowerCase());
-    if (temDecl) return;
-    const p = rt7PracaDoRep(u);
-    const k = p ? rt7MunicipioDaPraca(p.nome) : '';
-    if (!k) return;
-    if (!mapa[k]) mapa[k] = [];
-    if (!mapa[k].some(x => String(x.ownerId) === String(u.ownerId))) mapa[k].push(u);
-  });
-  return mapa;
-}
-
-function rt7SemPraca() {
-  return rt7Ativos().filter(u => !rt7PracaDoRep(u));
-}
 
 const RT7_CAPACIDADE = 60;
 const RT7_TETO = 0.75;
@@ -41757,16 +41824,6 @@ const RT7_PERDIDO = '1396006164';
 
 const RT7_MOVIVEIS = ['pendente', 'atribuido'];
 function rt7SemDono(l) { return !String((l && l.responsavel_owner_id) || ''); }
-
-function rt7FilaDaPraca(leads, municipio, ownerSel) {
-  const chave = rt7ChaveNome(municipio);
-  if (!chave) return [];
-  return (leads || []).filter(function (l) {
-    return RT7_MOVIVEIS.indexOf(String(l.status)) >= 0
-      && rt7ChaveNome(l.cidade) === chave
-      && !(ownerSel && String(l.responsavel_owner_id || '') === String(ownerSel));
-  }).sort(function (a, b) { return (rt7SemDono(a) ? 0 : 1) - (rt7SemDono(b) ? 0 : 1); });
-}
 
 function rt7Marcado(sel, l) {
   const v = (sel || {})[String(l.id)];
@@ -41879,415 +41936,387 @@ async function rt7Carregar() {
   } catch (e) {
     console.log('rotas: nao consegui ler - ' + (e && e.message));
   }
+  RT7_ESTADO.lidoEm = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   RT7_ESTADO.carregou = true;
 }
 
 function rt7Dados() {
   const s = RT7_ESTADO;
 
-  const medicao = tl5Medir();
-  const execsPorPraca = rt7ExecsPorPraca();
-  const semPraca = rt7SemPraca();
+  const ativos = rt7Ativos();
+  const estoques = ativos.map(function (u) {
+    const e = rt7Estoque(u.ownerId);
+    return { u: u, e: e, seco: e.semanas != null && e.semanas < 1 };
+  }).sort(function (a, b) {
 
-  const linhas = s.radar || [];
+    const sa = a.e.semanas == null ? 999 : a.e.semanas;
+    const sb = b.e.semanas == null ? 999 : b.e.semanas;
+    return sa - sb || a.e.contas - b.e.contas;
+  });
+  const filaOwner = s.filaExec || (estoques[0] && String(estoques[0].u.ownerId)) || null;
+  const filaU = ativos.filter(function (u) { return String(u.ownerId) === String(filaOwner); })[0] || null;
 
-  const pracaSel = rt7PracaEscolhida(execsPorPraca);
+  const naMunicao = (s.leads || []).filter(function (l) {
+    return String(l.responsavel_owner_id || '') === String(filaOwner || '')
+      && RT7_MOVIVEIS.indexOf(String(l.status)) >= 0;
+  }).length;
+  const todasEle = rt7FilaDoExec(filaOwner, true);
+  const limposEle = todasEle;
+  const sujosEle = naMunicao - todasEle.length;
 
-  const pracas = linhas.map(r => {
-    const execs = execsPorPraca[rt7MunicipioDaPraca(r.praca)] || [];
-    const medido = r.tam_fonte === 'contagem_api' && Number(r.tam) > 0;
-    const pct = r.pct_tocado == null ? null : Number(r.pct_tocado);
-
-    const st = !medido ? 'não medido'
-      : r.tam < 200 ? 'quase sem mercado'
-        : r.tam < 5000 ? 'mercado pequeno'
-          : r.tam < 20000 ? 'mercado médio' : 'mercado grande';
-    const stCor = !medido ? '#8A6516' : r.tam < 200 ? '#8A3B3B'
-      : r.tam < 5000 ? '#7A8494' : r.tam < 20000 ? '#2B3440' : '#1E9E7B';
-    const stBg = !medido ? '#FDF6E7' : r.tam < 200 ? '#FDF7F7'
-      : r.tam < 5000 ? '#F2F1EC' : r.tam < 20000 ? '#EDEFF4' : '#EAF6F1';
-
-    const sel = rt7MunicipioDaPraca(r.praca) === rt7MunicipioDaPraca(pracaSel);
-
-    const maiorToc = Math.max.apply(null, linhas.map(x => Number(x.tocado) || 0).concat([1]));
+  const visiveis = s.verTodas ? todasEle : todasEle.slice(0, RT7_FILA_VISIVEL);
+  const marcadoF = function (l) { return rt7Marcado(s.sel, l); };
+  const selN = visiveis.filter(function (x) { return marcadoF(x.l); }).length;
+  const fila = visiveis.map(function (x) {
+    const l = x.l;
+    const on = marcadoF(l);
+    const ab = String(s.leadAberto || '') === String(l.id);
+    const tel = String(l.telefone || '').replace(/\D/g, '');
+    const semTel = tel.length < 10;
+    const naRota = String(l.status) === 'na_rota';
     return {
-      on: 'praca:' + r.praca,
-      bg: sel ? '#F2F1EC' : '#FDFEFF',
-      borda: sel ? '#2B3440' : '#E2E6EE',
-      nome: r.praca,
-      st, stCor, stBg,
-      dono: execs.length ? execs.map(u => String(u.nome || '').split(' ')[0]).join(', ') : 'sem dono na praça',
-      tam: medido ? Number(r.tam).toLocaleString('pt-BR') : 'não medido',
-
-      naoBatidas: medido
-        ? ((Number(r.tam) || 0) - (Number(r.tocado) || 0)).toLocaleString('pt-BR')
-        : 'não medido',
-      nbCor: !medido ? '#8A6516' : '#E51A31',
-      tocado: pct == null ? '—' : String(pct).replace('.', ',') + '%',
-      tocCor: !medido ? '#8A6516' : pct < 25 ? '#1E9E7B' : '#2B3440',
-      largura: Math.round(((Number(r.tocado) || 0) / maiorToc) * 100) + '%',
-      radar: r.leitura || 'sem leitura nesta rodada'
+      marcar: 'marcar:' + l.id,
+      abrir: 'abrir:' + l.id,
+      ck: on ? '✓' : '',
+      ckBg: on ? '#2B3440' : '#FDFEFF',
+      ckBorda: on ? '#2B3440' : '#C9CFDA',
+      bg: naRota ? '#EAF6F1' : '#FDFEFF',
+      borda: naRota ? '#CBE8DD' : '#E2E6EE',
+      score: x.sc == null ? '—' : String(x.sc),
+      scCor: x.sc == null ? '#7A8494' : x.sc >= 90 ? '#1E9E7B' : x.sc >= 80 ? '#B07C1F' : '#7A8494',
+      nome: esc(l.nome || 'sem nome'),
+      tipo: esc(prospeccaoRotuloCategoria ? prospeccaoRotuloCategoria(l.categoria, l.nome) : (l.categoria || 'food')),
+      seta: ab ? '▴' : '▾',
+      motivo: esc(rt7MetaDoLead(l)),
+      nota: l.nota != null ? String(l.nota).replace('.', ',') : '—',
+      avals: l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') + ' aval.' : 'sem nota na base',
+      semTel: semTel,
+      fonte: esc(prospeccaoRotuloFonte ? prospeccaoRotuloFonte(l.fonte) : (l.fonte || 'fonte?')),
+      dono: naRota ? 'já na rota ✓' : esc(String(rt7Nome(l.responsavel_owner_id) || '').split(' ')[0] || 'sem dono'),
+      donoCor: naRota ? '#1E9E7B' : '#2B3440',
+      aberto: ab,
+      end: esc([l.endereco, l.bairro, l.cidade].filter(Boolean).join(' · ') || 'endereço não veio na ficha'),
+      tel: semTel ? 'sem telefone — o robô completa pelo CNPJ' : esc(l.telefone),
+      telCor: semTel ? '#8A3B3B' : '#1E9E7B'
     };
   });
 
-  const fontes = RT7_FONTES.map(fo => {
-    const sel = s.fonte === fo.id;
+  const maiorEstoque = Math.max.apply(null, estoques.map(function (x) { return x.e.contas; }).concat([1]));
+  const estoque = estoques.map(function (x) {
+    const sel = String(x.u.ownerId) === String(filaOwner);
+    const cor = x.e.semanas == null ? '#7A8494' : x.e.semanas < 1 ? '#6E1210' : x.e.semanas < 1.5 ? '#B07C1F' : '#1E9E7B';
+    const p = rt7PracaDoRep(x.u);
     return {
-      on: fo.ativa ? 'fonte:' + fo.id : 'fonteoff:' + fo.id,
-      rot: fo.rot + (fo.ativa ? ' ▸' : ''),
-      sub: fo.ativa ? (sel ? ' · escolhida' : '') : ' · indisponível',
-      subCor: fo.ativa ? (sel ? '#FDFEFF' : '#7A8494') : '#8A6516',
-      bg: !fo.ativa ? '#F7F5EF' : sel ? '#2B3440' : '#FDFEFF',
-      borda: !fo.ativa ? '#E3DDCC' : sel ? '#2B3440' : '#DCE1EA',
-      cor: !fo.ativa ? '#8A6516' : sel ? '#FDFEFF' : '#2B3440'
+      ver: 'verfila:' + x.u.ownerId,
+      on: 'imp:' + x.u.ownerId,
+      rot: esc(String(x.u.nome || '').split(' ')[0] + ' · ' + (p ? p.nome : 'sem praça')),
+      nomeCor: sel ? '#E51A31' : '#2B3440',
+      selBg: sel ? '#F4F1EA' : 'transparent',
+      pct: Math.round((x.e.contas / maiorEstoque) * 100) + '%',
+      cor: cor,
+      n: String(x.e.contas),
+      sem: x.e.semanas == null ? 'consumo ?' : ('≈ ' + (Math.round(x.e.semanas * 10) / 10).toString().replace('.', ',') + ' sem'),
+      semCor: x.e.semanas == null ? '#8A6516' : x.e.semanas < 1 ? '#6E1210' : '#7A8494',
+      btRot: s.importando && String(s.imp) === String(x.u.ownerId) ? 'buscando…'
+        : (x.e.semanas != null && x.e.semanas < 1 ? '⤓ importar AGORA' : '⤓ importar'),
+      btBg: (x.e.semanas != null && x.e.semanas < 1) ? '#E51A31' : '#FDFEFF',
+      btCor: (x.e.semanas != null && x.e.semanas < 1) ? '#FFFDF8' : '#2B3440',
+      btBorda: (x.e.semanas != null && x.e.semanas < 1) ? '#E51A31' : '#DCE1EA'
     };
   });
 
-  const municipioSel = pracaSel ? String(pracaSel).split('/')[0].trim() : null;
-  const semDono = rt7SemDono;
-  const daPraca = rt7FilaDaPraca(s.leads, municipioSel, s.exec);
-
-  const julgados = daPraca.map(l => ({ l, j: rt7Sujeira(l) }));
-  const limpos = julgados.filter(x => x.j.ok);
-  const sujos = julgados.length - limpos.length;
-
-  const marcado = l => rt7Marcado(s.sel, l);
-  const nSel = limpos.filter(x => marcado(x.l)).length;
-  const nTransf = limpos.filter(x => marcado(x.l) && !semDono(x.l)).length;
-
-  const leads = julgados.slice(0, s.verTodas ? 400 : 60).map(({ l, j }) => {
-    const on = marcado(l);
-    if (!j.ok) {
-      return {
-        on: 'sujo:' + j.tipo, cursor: 'default', op: '.62',
-        bg: j.tipo === 'semtel' ? '#FDF6E7' : '#FDF7F7',
-        borda: j.tipo === 'semtel' ? '#EBD9AE' : '#E3C6C6',
-        ck: '×', ckBorda: j.tipo === 'semtel' ? '#EBD9AE' : '#E3C6C6', ckBg: 'transparent',
-        nome: l.nome,
-        meta: rt7MetaDoLead(l) + (j.dono ? ' · dono: ' + String(j.dono).split(' ')[0] : ''),
-        st: j.st,
-        stCor: '#FDFEFF',
-        stBg: j.tipo === 'crm' ? '#6E1210' : j.tipo === 'perdido' ? '#8E3B5C' : '#B07C1F'
-      };
-    }
-
-    const donoHoje = semDono(l) ? null : rt7Nome(l.responsavel_owner_id);
-    const aviso = !!j.aviso;
-    return {
-      on: 'marcar:' + l.id, cursor: 'pointer', op: '1',
-
-      bg: on ? '#EAF6F1' : (aviso ? '#FDF6E7' : '#FDFEFF'),
-      borda: on ? '#CBE8DD' : (aviso ? '#EBD9AE' : '#E2E6EE'),
-      ck: on ? '✓' : '', ckBorda: on ? '#1E9E7B' : '#C8CFDA', ckBg: on ? '#1E9E7B' : 'transparent',
-      nome: l.nome,
-      meta: rt7MetaDoLead(l) + (donoHoje ? ' · hoje de ' + String(donoHoje).split(' ')[0] : ' · sem dono'),
-      st: j.st,
-      stCor: aviso ? '#8A6516' : '#1E9E7B',
-      stBg: aviso ? '#FDF6E7' : '#EAF6F1'
-    };
+  const impU = s.imp ? ativos.filter(function (u) { return String(u.ownerId) === String(s.imp); })[0] : null;
+  const impTerr = impU ? (DATA.territorios || []).filter(function (tr) {
+    return String(tr.rep || '') === String(impU.nome || '');
+  })[0] : null;
+  const impCidadesLista = impTerr ? (impTerr.areas || []).map(function (a) {
+    return a.municipio + '/' + (a.uf || '');
+  }) : [];
+  const impRegioes = impCidadesLista.map(function (c) {
+    const on = !!s.impCidades[c];
+    return { on: 'impcid:' + c, rot: on ? c + ' ✓' : c,
+      bg: on ? '#2B3440' : '#FDFEFF', cor: on ? '#FDFEFF' : '#5B667A', borda: on ? '#2B3440' : '#DCE1EA' };
+  });
+  const impFontes = RT7_FONTES.map(function (fo) {
+    const on = fo.ativa;
+    return { on: on ? 'impfonte:' + fo.id : 'fonteoff:' + fo.id,
+      rot: fo.rot + (on ? ' ✓' : ' — indisponível'),
+      bg: on ? '#2B3440' : '#F7F5EF', cor: on ? '#FDFEFF' : '#8A6516',
+      borda: on ? '#2B3440' : '#E3DDCC' };
+  });
+  const impQtds = [25, 50, 100].map(function (q) {
+    const on = Number(s.impQtd) === q;
+    return { on: 'impqtd:' + q, rot: String(q),
+      bg: on ? '#2B3440' : '#FDFEFF', cor: on ? '#FDFEFF' : '#5B667A', borda: on ? '#2B3440' : '#DCE1EA' };
   });
 
-  const execsDaPraca = execsPorPraca[rt7MunicipioDaPraca(pracaSel)] || [];
-  const execSel = s.exec ? execsDaPraca.find(u => String(u.ownerId) === String(s.exec)) : null;
-  const carteiraSel = execSel ? rt7Carteira(execSel.ownerId, medicao) : null;
-  const cheiaSel = carteiraSel ? (carteiraSel.ativas / carteiraSel.cap) >= RT7_TETO : false;
+  const orf = rt7Orfao();
+  const orfaoTem = orf.cidades.length > 0 || orf.paradas > 0;
+  const orfaoTitulo = orfaoTem
+    ? ((orf.cidades.length ? orf.cidades.join(' + ') + (orf.cidades.length === 1 ? ' está' : ' estão') + ' sem dono' : 'contas sem dono ativo')
+      + (orf.paradas ? ' — ' + orf.paradas + ' conta(s) validada(s) parada(s)' : ''))
+    : 'Nenhum território sem dono ✓';
+  const orfaoTexto = orfaoTem
+    ? ('As contas continuam no nome de quem saiu do campo, então não entram em rota nenhuma'
+      + ' e o Cockpit não conta como carteira de ninguém. Dar dono é aqui; reatribuir negócio do'
+      + ' funil continua sendo no HubSpot.')
+    : 'Todo território declarado tem executivo ativo e toda conta da fila tem dono. Nada parado.';
+  const orfaoOpcoes = !orfaoTem ? [] : ativos.map(function (u) {
+    const k = String(u.ownerId);
+    const escolhido = String(s.orfaoDono || '') === k;
+    return { on: 'orfao:' + k,
+      rot: (escolhido ? 'dar pro ' + String(u.nome).split(' ')[0] + ' ✓' : 'dar pro ' + String(u.nome).split(' ')[0]),
+      bg: escolhido ? '#6E1210' : '#FDFEFF',
+      cor: escolhido ? '#FFFDF8' : '#6E1210',
+      borda: escolhido ? '#6E1210' : '#E3C6C6' };
+  }).slice(0, 4);
 
-  const execsSel = execsDaPraca.map(u => {
-    const c = rt7Carteira(u.ownerId, medicao);
-    const pct = c.ativas / c.cap;
-    const cheia = pct >= RT7_TETO;
-    const sel = execSel && String(execSel.ownerId) === String(u.ownerId);
-    return {
-      on: 'exec:' + u.ownerId,
-      nome: String(u.nome || '').split(' ')[0],
-      cap: c.ativas + '/' + c.cap + (cheia ? ' · cheia ⚠' : ''),
-      capCor: sel ? '#FDFEFF' : cheia ? '#8A3B3B' : pct < 0.5 ? '#1E9E7B' : '#7A8494',
-      bg: sel ? '#2B3440' : '#FDFEFF',
-      borda: sel ? '#2B3440' : cheia ? '#E3C6C6' : '#DCE1EA',
-      cor: sel ? '#FDFEFF' : '#2B3440'
-    };
-  });
-
-  const fonteSel = rt7FonteEscolhida();
-  const fonteAtiva = RT7_FONTES.find(f => f.id === fonteSel && f.ativa);
-  const podeBuscar = !!pracaSel && !!fonteAtiva && !s.importando;
-  const podeEnviar = !!execSel && !cheiaSel && nSel > 0 && !s.enviando;
-  const envRot = s.enviando ? 'enviando…'
-    : !execSel ? 'enviar ' + nSel + ' leads ▸ (escolha o executivo)'
-      : cheiaSel ? 'bloqueado — carteira de ' + String(execSel.nome).split(' ')[0] + ' cheia'
-        : nSel === 0 ? 'nenhum lead marcado'
-          : 'enviar ' + nSel + ' leads pra ' + String(execSel.nome).split(' ')[0] + ' ▸';
-
-  const carteiras = rt7Ativos().map(u => {
-    const c = rt7Carteira(u.ownerId, medicao);
-    const pct = c.ativas / c.cap;
+  const ruas = ativos.map(function (u) {
+    const oid = String(u.ownerId);
+    const sem = rt7Semana(oid);
+    const al = rt7Alvos(oid);
+    const est = rt7Estoque(oid);
     const p = rt7PracaDoRep(u);
-    const cheia = pct >= RT7_TETO, magra = pct < 0.5;
-    const st = cheia ? 'cheia' : magra ? 'precisa de carga' : 'saudável';
-    const espaco = Math.floor(c.cap * RT7_TETO - c.ativas);
 
-    const nota = c.semMedida > 0 ? ' · ' + c.semMedida + ' aberta(s) sem data de interação, fora desta conta' : '';
+    const nivel = (!sem.existe || sem.slots === 0 || (est.semanas != null && est.semanas < 1)) ? 2
+      : (!sem.fechada || sem.slots < 15) ? 1 : 0;
+    const N = [['#1E9E7B', '#FDFEFF', '#E2E6EE'], ['#B07C1F', '#FDFEFF', '#E2E6EE'], ['#6E1210', '#FDF7F7', '#E3C6C6']][nivel];
+    const quadrados = [0, 1, 2, 3, 4].map(function (k) {
+      const aceso = k < sem.dias;
+      return '<span style="width:11px;height:11px;border-radius:3px;display:inline-block;background:'
+        + (aceso ? (nivel === 2 ? '#6E1210' : nivel === 1 ? '#B07C1F' : '#1E9E7B') : '#EDEBE5') + ';"></span>';
+    }).join('');
+    const leitura = !sem.existe
+      ? 'não montou a semana no Planejamento — sem grade não há rota, e a semana dele começa no improviso'
+      : (sem.slots === 0
+        ? 'grade criada e vazia: 0 de 35 vagas preenchidas'
+        : (est.semanas != null && est.semanas < 1
+          ? sem.slots + ' de 35 vagas e só ' + est.contas + ' contas na munição — ele fica sem conta antes de sexta'
+          : (!sem.fechada
+            ? sem.slots + ' de 35 vagas preenchidas, semana ainda não fechada — fechar é o gesto que vira rota'
+            : sem.slots + ' de 35 vagas, semana fechada ✓ · ' + al.naRota + ' conta(s)-alvo na rota'
+              + (al.parados ? ' e ' + al.parados + ' na munição' : ''))));
+
+    const acao = !sem.existe
+      ? { on: 'cobrar:' + oid, rot: 'cobrar a semana ▸', efeito: 'na sua pauta' }
+      : (est.semanas != null && est.semanas < 1
+        ? { on: 'travar:' + oid, rot: 'travar ' + Math.min(3, est.contas) + ' contas na segunda ▸', efeito: 'no Planejamento dele' }
+        : (!sem.fechada
+          ? { on: 'cobrar:' + oid, rot: 'cobrar o fechamento ▸', efeito: 'na sua pauta' }
+          : { on: 'case:' + oid, rot: 'levar como case pra Semanal ▸', efeito: 'na pauta da Semanal' }));
+    const feito = rt7Feito(acao.on);
     return {
-      on: 'carteira:' + u.ownerId,
-      nome: String(u.nome || ''),
-      st,
-      stCor: cheia ? '#FDFEFF' : magra ? '#8A6516' : '#1E9E7B',
-      stBg: cheia ? '#6E1210' : magra ? '#FDF6E7' : '#EAF6F1',
-      ativas: String(c.ativas), cap: String(c.cap),
-      praca: p ? p.nome : 'sem praça',
-      pct: Math.min(100, Math.round(pct * 100)) + '%',
-      pctCor: cheia ? '#E51A31' : magra ? '#E8A23D' : '#1E9E7B',
-      leitura: (cheia ? 'acima do teto de 75% — sem carga nova; foco em limpar (reciclar/perder)'
-        : magra ? 'abaixo de 50% — priorize carga esta semana'
-          : 'espaço pra ' + espaco + ' contas até o teto') + nota,
-      leiaCor: cheia ? '#8A3B3B' : magra ? '#8A6516' : '#1E9E7B',
-      bg: s.exec && String(s.exec) === String(u.ownerId) ? '#F2F1EC' : '#FDFEFF',
-      borda: s.exec && String(s.exec) === String(u.ownerId) ? '#2B3440' : '#E2E6EE'
+      ini: esc(String(u.nome || '?').split(/\s+/).map(function (x) { return x.charAt(0); }).slice(0, 2).join('').toUpperCase()),
+      nome: esc(u.nome || 'sem nome'), praca: esc(p ? p.nome : 'praça não declarada'),
+      avBg: N[0], bg: N[1], borda: N[2],
+      grade: quadrados,
+      gradeCor: nivel === 2 ? '#6E1210' : nivel === 1 ? '#8A6516' : '#1E9E7B',
+      slots: sem.existe ? (sem.slots + '/35') : 'sem grade',
+      rota: sem.existe ? (sem.fechada ? 'semana fechada ✓' : 'não fechada') : '—',
+      rotaCor: sem.fechada ? '#1E9E7B' : '#6E1210',
+
+      cump: 'não medido',
+      cumpCor: '#8A6516',
+      alvo: String(al.naRota) + ' na rota',
+      alvoCor: al.naRota ? '#2B3440' : '#6E1210',
+      leitura: esc(leitura),
+      leiaCor: nivel === 2 ? '#8A3B3B' : nivel === 1 ? '#8A6516' : '#1E9E7B',
+      acao: acao.on,
+      btRot: esc(feito ? '✓ ' + acao.efeito : acao.rot),
+      btBg: feito ? '#EAF6F1' : (nivel === 2 ? '#E51A31' : '#FDFEFF'),
+      btCor: feito ? '#1E9E7B' : (nivel === 2 ? '#FFFDF8' : '#2B3440'),
+      btBorda: feito ? '#CBE8DD' : (nivel === 2 ? '#E51A31' : '#DCE1EA')
+    };
+  }).sort(function (a, b) { return String(a.btBg === '#E51A31' ? 0 : 1) + a.nome < String(b.btBg === '#E51A31' ? 0 : 1) + b.nome ? -1 : 1; });
+
+  const idxCrm = rt7IndiceDoCrm();
+  const comScore = (s.leads || []).map(function (l) { return { l: l, sc: rt7Score(l) }; })
+    .filter(function (x) { return x.sc != null; })
+    .sort(function (a, b) { return b.sc - a.sc; });
+  const tops = comScore.slice(0, 6).map(function (x) {
+    const l = x.l;
+    const noCrm = idxCrm.get(rt7ChaveNome(l.nome));
+    const donoNome = String(rt7Nome(l.responsavel_owner_id) || '').split(' ')[0];
+    const donoAtivo = rt7Ativos().some(function (u) { return String(u.ownerId) === String(l.responsavel_owner_id); });
+    const etapaRot = noCrm && DATA.stageMeta && DATA.stageMeta.labels
+      ? (DATA.stageMeta.labels[noCrm.etapa] || 'no funil') : null;
+    const naRota = String(l.status) === 'na_rota';
+    return {
+      cor: !donoAtivo ? '#6E1210' : x.sc >= 90 ? '#1E9E7B' : x.sc >= 80 ? '#B07C1F' : '#2B3440',
+      score: String(x.sc),
+      nome: esc(l.nome || 'sem nome'),
+      nota: l.nota != null ? String(l.nota).replace('.', ',') : '—',
+      avals: l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') : '—',
+      sinais: rt7SinaisDoLead(l).map(function (sn) { return esc(sn); }),
+      motivo: esc(rt7MetaDoLead(l)),
+      dono: esc(donoAtivo ? donoNome : (donoNome ? donoNome + ' · fora do campo' : 'sem dono')),
+      status: esc(etapaRot ? 'no funil · ' + etapaRot : (naRota ? 'na rota desta semana' : 'na munição')),
+      stCor: !donoAtivo ? '#FDFEFF' : etapaRot ? '#1E9E7B' : naRota ? '#5B667A' : '#8A6516',
+      stBg: !donoAtivo ? '#6E1210' : etapaRot ? '#EAF6F1' : naRota ? '#F4F1EA' : '#FDF6E7',
+      prox: esc(!donoAtivo ? 'decidir dono — está parado' : etapaRot ? 'seguir no funil' : naRota ? '1ª visita na rota' : 'pôr na rota'),
+      proxCor: !donoAtivo ? '#8A3B3B' : etapaRot ? '#1E9E7B' : '#7A8494'
     };
   });
 
-  const somaTam = linhas.filter(r => r.tam_fonte === 'contagem_api')
-    .reduce((a, r) => a + (Number(r.tam) || 0), 0);
-  const somaToc = linhas.reduce((a, r) => a + (Number(r.tocado) || 0), 0);
-  const semMedida = linhas.filter(r => r.tam_fonte !== 'contagem_api').length;
+  const agora = Date.now();
+  const novas24h = (s.leads || []).filter(function (l) {
+    const q = new Date(l.created_at).getTime();
+    return isFinite(q) && (agora - q) < 24 * 3600000;
+  }).length;
+  const doMes = (s.leads || []).filter(function (l) {
+    const d = new Date(l.created_at);
+    const h = new Date();
+    return d.getMonth() === h.getMonth() && d.getFullYear() === h.getFullYear();
+  });
+  const viraramLead = doMes.filter(function (l) { return !!l.hubspot_deal_id || l.ja_existe_hubspot; }).length;
+  const secos = estoques.filter(function (x) { return x.seco; }).length;
+  const kpisFinal = [
+    { rot: 'importado nas últimas 24h', v: String(novas24h),
+      de: novas24h ? 'entrou na fila' : 'nada entrou — o gatilho é seu', cor: novas24h ? '#F0B45C' : '#8B93A3' },
+    { rot: 'contas sem dono ativo', v: String(orf.paradas),
+      de: orf.paradas ? (orf.cidades.join(', ') || 'donos fora do campo') : 'nenhuma parada', cor: orf.paradas ? '#FF5F6E' : '#7FD9BE' },
+    { rot: 'backlog seco', v: String(secos),
+      de: secos ? 'menos de 1 semana de munição' : 'ninguém abaixo de 1 semana', cor: secos ? '#FF5F6E' : '#7FD9BE' },
 
-  const comDono = linhas.filter(r =>
-    (execsPorPraca[rt7MunicipioDaPraca(r.praca)] || []).length > 0);
-  const naoTocado = r => (Number(r.tam) || 0) - (Number(r.tocado) || 0);
-  const candidatas = (comDono.length ? comDono : linhas)
-    .filter(r => r.tam_fonte === 'contagem_api' && Number(r.tam) > 0);
-
-  const naoComecou = candidatas.filter(r => (Number(r.tocado) || 0) === 0)
-    .slice().sort((a, b) => naoTocado(b) - naoTocado(a));
-  const maisVirgem = naoComecou[0]
-    || candidatas.slice().sort((a, b) => naoTocado(b) - naoTocado(a))[0];
-  const virgemNaoComecou = !!naoComecou.length;
-  const semCidade = (() => {
-    const m = String((linhas[0] || {}).leitura || '').match(/(\d+)\s+neg[óo]cios? do time/);
-    return m ? Number(m[1]) : null;
-  })();
-  const quandoRadar = s.radarSemana ? rt7DataCurta(s.radarSemana) : 'sem rodada';
-  const fonteCdd = 'Casa dos Dados · seg ' + quandoRadar;
-
-  const radar = [
-    { n: somaTam ? somaTam.toLocaleString('pt-BR') : 'não medido', rot: 'TAM food somado',
-      nCor: somaTam ? '#2B3440' : '#8A6516',
-      txt: 'CNPJs food ativos na Receita nas ' + linhas.length + ' praças'
-        + (semMedida ? ' — ' + semMedida + ' praça(s) sem medida nesta rodada, fora da soma' : '')
-        + '. É base de CNPJ, não restaurante operando: inclui MEI parado e padaria de varejo.',
-      fonte: fonteCdd },
-    { n: somaTam ? (Math.round((somaToc / somaTam) * 10000) / 100).toString().replace('.', ',') + '%' : '—',
-      rot: '% tocado pelo time', nCor: '#1E9E7B',
-      txt: somaToc + ' contas da base já estão no CRM'
-        + (semCidade ? ' · ' + semCidade + ' negócios sem cidade ficam fora de toda praça, então isto é piso' : ''),
-      fonte: 'HubSpot × Casa dos Dados · ' + quandoRadar },
-    maisVirgem
-      ? { n: naoTocado(maisVirgem).toLocaleString('pt-BR'), rot: virgemNaoComecou ? 'portas na praça que não começou' : 'portas não batidas na maior praça', nCor: '#E51A31',
-        txt: maisVirgem.praca + ' tem ' + Number(maisVirgem.tam).toLocaleString('pt-BR')
-          + ' CNPJs food e ' + (virgemNaoComecou ? 'NENHUMA conta no CRM' : maisVirgem.tocado + ' no CRM')
-          + (rt7DonosDaPraca(maisVirgem.praca)
-            ? ' — é de ' + rt7DonosDaPraca(maisVirgem.praca) + '.'
-            : ' — e ainda sem executivo declarado.'),
-        fonte: fonteCdd }
-      : { n: '—', rot: 'a praça mais virgem', nCor: '#8A6516',
-        txt: 'sem praça com TAM medido nesta rodada — o job de segunda não conseguiu contar.',
-        fonte: 'sem dado · ' + quandoRadar },
-    { n: String((s.noticias || []).length), rot: 'notícias do setor', nCor: '#8E3B5C',
-      txt: (s.noticias || []).length
-        ? 'manchetes do setor na semana, ranqueadas por relevância — as melhores no bloco 5, com a fonte e o link.'
-        : 'nenhuma manchete gravada nesta semana. O job de segunda não rodou ou as fontes não trouxeram nada do setor.',
-      fonte: s.noticiasSemana ? 'índice de notícias + feeds · seg ' + rt7DataCurta(s.noticiasSemana) : 'sem rodada' }
+    { rot: 'rotas cumpridas', v: 'não medido', de: 'check-in do Expogo fora do snapshot', cor: '#8B93A3' },
+    { rot: 'novas → lead', v: doMes.length ? (Math.round((viraramLead / doMes.length) * 1000) / 10).toString().replace('.', ',') + '%' : '—',
+      de: doMes.length ? viraramLead + ' de ' + doMes.length + ' no mês' : 'nada importado no mês',
+      cor: doMes.length ? (viraramLead / doMes.length >= 0.1 ? '#7FD9BE' : '#F0B45C') : '#8B93A3' }
   ];
 
-  const todasNot = s.noticias || [];
-  const noticias = (s.verNoticias ? todasNot : todasNot.slice(0, 8)).map(n => ({
-    on: 'noticia:' + n.url,
-    titulo: n.titulo,
-    fonte: n.fonte,
-    quando: n.publicado_em ? rt7DataCurta(n.publicado_em) : 'sem data',
-    tema: n.tema || 'setor',
-    nota: n.relevancia == null ? '—' : String(n.relevancia),
-    notaCor: Number(n.relevancia) >= 4 ? '#1E9E7B' : Number(n.relevancia) > 0 ? '#7A8494' : '#8A6516',
-    motivo: n.relevancia_motivo || 'sem motivo gravado'
-  }));
-  const verNotRot = s.verNoticias
-    ? 'mostrar só as 8 melhores ◂'
-    : 'ver todas as ' + todasNot.length + ' ▸';
-
-  const noRadar = new Set(linhas.map(r => rt7MunicipioDaPraca(r.praca)));
-  const declaradasFora = [];
-  (DATA.territorios || []).forEach(tr => {
-    if (tr && tr.ativo === false) return;
-    (tr.areas || []).forEach(a => {
-      if (!a || !a.municipio) return;
-      const k = rt7MunicipioDaPraca(a.municipio);
-      if (noRadar.has(k) || declaradasFora.some(x => x.k === k)) return;
-      declaradasFora.push({ k, nome: a.municipio + '/' + a.uf, quem: [] });
-    });
+  const mancheteFinal = (function () {
+    if (!s.carregou) return 'Lendo a fila de leads_prospeccao…';
+    const partes = [];
+    if (secos) partes.push(secos + (secos === 1 ? ' executivo fica' : ' executivos ficam') + ' sem munição antes de sexta');
+    if (orf.paradas) partes.push(orf.paradas + ' conta(s) parada(s) no nome de quem saiu do campo');
+    const semSemana = ativos.filter(function (u) { return !rt7Semana(u.ownerId).existe; }).length;
+    if (semSemana) partes.push(semSemana + ' sem a semana montada');
+    if (!partes.length) return 'Munição em dia, semanas montadas e nenhuma conta órfã. A torneira pode esperar.';
+    const primeiro = estoques[0];
+    return partes.join(' · ') + '.' + (primeiro ? ' Comece por ' + String(primeiro.u.nome).split(' ')[0] + '.' : '');
+  }());
+  const log = (s.cargas || []);
+  const logItens = log.map(function (c, k) {
+    return { tipo: esc(c.tipo || 'ação'), bg: c.bg || '#2B3440', txt: esc(c.txt || ''),
+      desfazer: c.desfazivel ? ('desfazer:' + k) : '', porque: esc(c.porque || '') };
   });
-  (DATA.territorios || []).forEach(tr => {
-    (tr.areas || []).forEach(a => {
-      const achado = declaradasFora.find(x => a && a.municipio && x.k === rt7MunicipioDaPraca(a.municipio));
-      if (achado && achado.quem.indexOf(tr.rep) < 0) achado.quem.push(tr.rep);
-    });
-  });
-
-  const cargas = (s.cargas || []).map(c => ({ rot: c }));
-
-  const magras = carteiras.filter(c => c.st === 'precisa de carga').length;
-
-  const estoqueLimpo = (s.leads || []).filter(l => semDono(l)
-    && RT7_MOVIVEIS.indexOf(String(l.status)) >= 0).length;
-
-  const moviveisNaPraca = limpos.length;
-  const kpis = [
-    { rot: 'TAM food somado', v: somaTam ? Math.round(somaTam / 1000) + 'k' : '—', de: 'CNPJs ativos', cor: '#FFFDF8' },
-    { rot: '% tocado', v: somaTam ? (Math.round((somaToc / somaTam) * 1000) / 10).toString().replace('.', ',') + '%' : '—', de: 'do TAM', cor: '#7FD8BC' },
-    { rot: 'contas sem dono', v: String(estoqueLimpo),
-      de: moviveisNaPraca + ' movível(is) na praça escolhida', cor: '#FFFDF8' },
-    { rot: 'carteiras < 50%', v: String(magras), de: 'precisam de carga', cor: magras ? '#E0A64A' : '#7FD8BC' },
-    { rot: 'cargas na sessão', v: String((s.cargas || []).length), de: 'enviadas por você', cor: '#FFFDF8' }
-  ];
-
-  const manchete = (() => {
-    if (!linhas.length) {
-      return 'O radar ainda não rodou — sem TAM por praça, esta tela não sabe onde a torneira rende mais.';
-    }
-    if (maisVirgem) {
-      const dele = (execsPorPraca[rt7MunicipioDaPraca(maisVirgem.praca)] || [])[0];
-
-      return maisVirgem.praca + (virgemNaoComecou
-        ? ' tem ' + Number(maisVirgem.tam).toLocaleString('pt-BR')
-          + ' estabelecimentos food e NENHUMA conta no CRM'
-        : ' tem ' + naoTocado(maisVirgem).toLocaleString('pt-BR')
-          + ' estabelecimentos food que ninguém tocou, de ' + Number(maisVirgem.tam).toLocaleString('pt-BR'))
-        + (magras ? ' — e ' + magras + ' carteira(s) abaixo de 50% precisam de carga esta semana.' : '.')
-        + (dele ? ' Comece por ' + String(dele.nome).split(' ')[0] + '.' : ' Essa praça ainda não tem executivo declarado.');
-    }
-    return 'Nenhuma praça com TAM medido nesta rodada — o número que falta é o denominador, e sem ele % tocado é chute.';
-  })();
 
   return {
-    kpis, manchete,
-    temToast: !!s.toast, toast: s.toast || '',
-    pracas,
-    abPraca: pracaSel || 'escolha no bloco 1',
-    abBorda: s.fonte ? '#2B3440' : '#E3DDCC',
-    fontes,
-    temLeads: julgados.length > 0,
-    semLeads: julgados.length === 0,
+    kpis: kpisFinal.map(function (k) { return { rot: esc(k.rot), v: esc(k.v), de: esc(k.de), cor: k.cor }; }),
+    linhaTopo: esc(rt7LinhaTopo()),
+    manchete: esc(mancheteFinal),
+    temToast: !!s.toast, toast: esc(s.toast || ''),
 
-    buscRot: s.importando ? 'buscando…'
-      : !pracaSel ? 'nenhuma praça no radar desta semana'
-        : !fonteSel ? 'escolha a fonte pra buscar'
-          : 'buscar em ' + (municipioSel || '?') + ' ▸',
-    buscBg: podeBuscar ? '#2B3440' : '#EDEFF4',
-    buscBorda: podeBuscar ? '#2B3440' : '#DCE1EA',
-    buscCor: podeBuscar ? '#FFFDF8' : '#9AA3B2',
-    semLeadsTxt: !pracaSel
-      ? 'escolha uma praça no bloco 1 — é ela que diz onde buscar.'
-      : !s.fonte
-        ? 'escolha a fonte acima. A Casa dos Dados busca CNPJs food da praça por CNAE; as outras duas estão apagadas e o clique nelas diz por quê. O anti-sujeira roda no servidor, antes de você ver a lista.'
-        : 'a fila de ' + municipioSel + ' está vazia. Aperte "buscar" — a Casa dos Dados procura CNPJs food da cidade e o dedupe contra o CRM roda antes de a lista aparecer.',
-    temMais: julgados.length > 60,
-    verTodasRot: s.verTodas ? 'mostrar só os 60 primeiros ◂' : 'ver todos os ' + julgados.length + ' ▸',
-    resumoImport: julgados.length + ' na fila desta praça → ' + limpos.length
-      + ' limpos e selecionáveis · ' + nSel + ' marcados pra envio',
-    resumoSujos: sujos === 1
-      ? '1 descartado pelo anti-sujeira — nunca entra'
-      : sujos + ' descartados pelo anti-sujeira — nunca entram',
-    leads,
-    execsSel,
-    enviar: podeEnviar ? 'enviar' : 'enviarbloq',
-    envRot,
-    envBg: podeEnviar ? '#E51A31' : '#EDEFF4',
-    envBorda: podeEnviar ? '#E51A31' : '#DCE1EA',
-    envCor: podeEnviar ? '#FFFDF8' : '#9AA3B2',
-    carteiras,
+    filaTitulo: esc(filaU ? ('Fila de ' + String(filaU.nome).split(' ')[0]) : 'Nenhum executivo ativo'),
+    filaSub: esc(filaU
+      ? (limposEle.length + ' conta(s) na munição dele · por score'
+        + (sujosEle ? ' · ' + sujosEle + ' fora pelo anti-sujeira (já no CRM, perdido ou sem nome)' : ''))
+      : 'sem ninguém de campo em usuarios.json'),
+    verTodas: 'vertodas',
+    verTodasRot: esc(s.verTodas ? 'mostrar só as 8 melhores ◂' : ('ver todas as ' + limposEle.length + ' ▸')),
+    aprovarLote: selN > 0 ? 'aprovar' : 'aprovarbloq',
+    selN: String(selN),
+    fila: fila,
+    temFila: fila.length > 0,
+    semFila: fila.length === 0,
+    semFilaTxt: esc(!filaU ? 'sem executivo selecionado.'
+      : (naMunicao
+        ? ('as ' + naMunicao + ' contas dele estão todas fora do corte do anti-sujeira — já no CRM, perdidas ou sem nome.')
+        : 'a munição dele está vazia. Dispare uma importação no painel ao lado — nada entra sozinho.')),
 
-    pracasSemRadar: declaradasFora.length
-      ? declaradasFora.length + ' praça(s) com rota declarada e ainda SEM linha no radar: '
-        + declaradasFora.map(x => x.nome + ' (' + x.quem.map(q => String(q).split(' ')[0]).join(', ') + ')').join(' · ')
-        + '. O job de segunda mede o TAM delas na próxima rodada; até lá elas não aparecem no bloco 1 e não recebem carga por aqui.'
-      : '',
-    semPraca: semPraca.length
-      ? semPraca.length + ' executivo(s) sem rota declarada em data/territorios.json — '
-        + semPraca.map(u => String(u.nome || '').split(' ')[0]).join(', ')
-        + '. Eles aparecem aqui com a carteira, mas NÃO podem receber carga: o passo 3 só lista quem tem praça. O conserto é uma linha no JSON, e quem cobre o quê é decisão sua.'
-      : '',
-    radar,
-    noticias,
-    temNoticias: noticias.length > 0,
-    semNoticias: noticias.length === 0,
-    verNotRot,
-    verNotOn: 'vernoticias',
-    quando: (s.radarSemana ? 'radar de seg ' + rt7DataCurta(s.radarSemana) : 'radar não rodou')
-      + ' · HubSpot ' + rt7HoraDoSync(),
-    cargas,
-    semCargas: (s.cargas || []).length === 0
+    estoque: estoque,
+    temImp: !!impU,
+    impExecNome: esc(impU ? String(impU.nome || '') : ''),
+    impFechar: 'impfechar',
+    impRegioes: impRegioes,
+    impSemCidade: impRegioes.length === 0,
+    impFontes: impFontes,
+    impQtds: impQtds,
+    impDisparar: 'impdisparar',
+
+    orfaoTem: orfaoTem,
+    orfaoTitulo: esc(orfaoTitulo),
+    orfaoTexto: esc(orfaoTexto),
+    orfao: orfaoOpcoes,
+
+    ruas: ruas,
+    tops: tops,
+    temTops: tops.length > 0,
+    semTopsTxt: esc('nenhuma conta da fila tem nota: a Casa dos Dados entrega CNPJ sem nota nem telefone,'
+      + ' e sem nota não existe score. O radar enche quando uma rodada do Google Places ou do'
+      + ' Outscraper trouxer avaliação.'),
+
+    logLinha: esc(log.length
+      ? (log.length + ' ação(ões) nesta sessão — o que grava no Supabase fica aqui, com desfazer quando dá para desfazer.')
+      : 'Cada ação desta tela executa de verdade e fica registrada aqui.'),
+    logToggle: 'log',
+    logBtnRot: esc((s.logAberto ? 'fechar' : 'ver') + ' ações (' + log.length + ') ' + (s.logAberto ? '▴' : '▾')),
+    logAberto: !!s.logAberto,
+    logItens: logItens,
+    logVazio: log.length === 0,
+
+    rodapeFonte: esc('Fila e carteira: Supabase leads_prospeccao (importação por /api/buscar-leads → /api/importar-leads, Casa dos Dados por CNAE food na Receita)'
+      + ' · dono automático pelos territórios oficiais de data/leads-referencia.json'
+      + ' · semana 5×7 e fechamento: planos_semanais, escritos pelo próprio executivo no Planejamento'
+      + ' · score = nota × volume de avaliações; os 1.677 leads da Casa dos Dados chegam SEM nota e SEM telefone, e a tela mostra isso em vez de um score inventado'
+      + ' · sinais de dor por review NÃO são coletados pelo robô — os chips mostram os sinais que existem na ficha'
+      + ' · check-in do Expogo não chega ao snapshot (o export é manual), então "cumprido" diz não medido e nunca zero'
+      + ' · TripAdvisor está fora por ToS e o Google Places tem chave só nos Secrets do GitHub — os dois chips dizem isso no clique'
+      + ' · cobrança e case gravam em pauta_do_lider, a mesma pauta que a Daily e a Semana leem; travar contas escreve data_rota, que é o que o Planejamento dele lê'
+      + ' · esta aba substitui as antigas Rotas e Prospecção.')
   };
-}
-
-function rt7DonosDaPraca(praca) {
-  const nomes = (rt7ExecsPorPraca()[rt7MunicipioDaPraca(praca)] || [])
-    .map(u => String(u.nome || '').split(' ')[0]);
-  if (!nomes.length) return '';
-  if (nomes.length === 1) return nomes[0];
-  return nomes.slice(0, -1).join(', ') + ' e ' + nomes[nomes.length - 1];
-}
-
-function rt7DataCurta(iso) {
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return String(iso || '');
-  return String(d.getUTCDate()).padStart(2, '0') + '/' + String(d.getUTCMonth() + 1).padStart(2, '0');
-}
-
-function rt7HoraDoSync() {
-  const m = String((DATA && DATA.hubspotUpdatedAtFmt) || '').match(/às\s*(\d{2}):(\d{2})/);
-  return m ? m[1] + ':' + m[2] : 'sem hora';
 }
 
 async function rt7Disparar() {
   const s = RT7_ESTADO;
-
-  const praca = rt7PracaEscolhida();
-  if (!praca) { s.toast = 'nenhuma praça no radar desta semana — o job de segunda não escreveu'; return; }
-  s.praca = praca;
-  const fonte = RT7_FONTES.find(f => f.id === rt7FonteEscolhida());
-  if (!fonte) { s.toast = 'escolha a fonte no passo 2'; return; }
-  if (!fonte.ativa) { s.toast = fonte.rot + ': ' + fonte.porque; return; }
-
-  const municipio = String(s.praca).split('/')[0].trim();
+  const u = rt7Ativos().filter(function (x) { return String(x.ownerId) === String(s.imp); })[0];
+  if (!u) { s.toast = 'escolha um executivo no painel de estoque'; return; }
+  const cidades = Object.keys(s.impCidades || {}).filter(function (c) { return s.impCidades[c]; });
+  if (!cidades.length) { s.toast = 'escolha pelo menos uma cidade antes de disparar — cada uma é uma busca paga'; return; }
+  const fonte = RT7_FONTES.filter(function (f) { return f.ativa; })[0];
+  if (!fonte) { s.toast = 'nenhuma fonte está disponível para busca sob demanda'; return; }
+  const qtd = Number(s.impQtd) || 50;
   s.importando = true;
-  s.toast = 'buscando em ' + municipio + '… o dedupe contra o CRM roda antes de a lista aparecer';
+  s.toast = 'buscando em ' + cidades.join(', ') + '… o dedupe contra o CRM roda no servidor, antes de a lista aparecer';
   renderRotasProspeccao();
-  try {
-    const token = (typeof tokenDeSessaoGlobal === 'function') ? await tokenDeSessaoGlobal() : null;
-    const resp = await fetch('/api/buscar-leads', {
-      method: 'POST',
-      headers: Object.assign({ 'Content-Type': 'application/json' },
-        token ? { Authorization: 'Bearer ' + token } : {}),
-      body: JSON.stringify({ municipio: municipio, quantidade: 25 })
-    });
-    const d = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(d.erro || ('HTTP ' + resp.status));
-
-    s.toast = d.inseridos
-      ? d.inseridos + ' conta(s) nova(s) em ' + municipio + ' — na fila abaixo, já limpas contra o CRM'
-      : (d.aviso || 'a busca rodou e não trouxe conta nova em ' + municipio + ' — a praça já está varrida nesta faixa');
-    await rt7Carregar();
-  } catch (e) {
-    s.toast = 'a busca falhou: ' + (e && e.message ? e.message : 'erro desconhecido');
+  let inseridos = 0;
+  const falhas = [];
+  for (let k = 0; k < cidades.length; k++) {
+    const municipio = String(cidades[k]).split('/')[0].trim();
+    try {
+      const token = (typeof tokenDeSessaoGlobal === 'function') ? await tokenDeSessaoGlobal() : null;
+      const resp = await fetch('/api/buscar-leads', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' },
+          token ? { Authorization: 'Bearer ' + token } : {}),
+        body: JSON.stringify({ municipio: municipio, quantidade: qtd })
+      });
+      const resposta = await resp.json().catch(function () { return {}; });
+      if (!resp.ok) throw new Error(resposta.erro || ('HTTP ' + resp.status));
+      inseridos += Number(resposta.inseridos) || 0;
+    } catch (e) {
+      falhas.push(municipio + ': ' + (e && e.message ? e.message : 'erro'));
+    }
   }
+  await rt7Carregar();
   s.importando = false;
+  s.imp = null;
+
+  rt7Registrar({ chave: 'imp:' + u.ownerId + ':' + Date.now(), tipo: 'Importação', bg: '#2B3440',
+    desfazivel: false, porque: 'busca já paga — não há como cancelar',
+    txt: 'Importação disparada — ' + String(u.nome).split(' ')[0] + ' · ' + cidades.join(', ')
+      + ' · top ' + qtd + ' após o corte · ' + inseridos + ' conta(s) nova(s)'
+      + (falhas.length ? ' · ' + falhas.length + ' cidade(s) falharam' : '') });
+  s.toast = (inseridos
+    ? inseridos + ' conta(s) nova(s) na fila de ' + String(u.nome).split(' ')[0] + ' — já limpas contra o CRM'
+    : 'a busca rodou e não trouxe conta nova — essas cidades já estão varridas nesta faixa')
+    + (falhas.length ? ' · falhou em: ' + falhas.join(' | ') : '');
 }
 
 async function rt7Enviar() {
   const s = RT7_ESTADO;
-  const d = rt7Dados();
-  const execs = rt7ExecsPorPraca()[rt7MunicipioDaPraca(s.praca)] || [];
-  const u = execs.find(x => String(x.ownerId) === String(s.exec));
-  if (!u) { s.toast = 'escolha o executivo no passo 3'; return; }
+  const u = rt7Ativos().filter(function (x) { return String(x.ownerId) === String(s.filaExec || ''); })[0];
+  if (!u) { s.toast = 'escolha o executivo no painel de estoque — a fila é dele'; return; }
 
   const c = rt7Carteira(u.ownerId);
   if (c.ativas / c.cap >= RT7_TETO) {
@@ -42296,13 +42325,12 @@ async function rt7Enviar() {
     return;
   }
 
-  const municipio = String(s.praca || '').split('/')[0].trim();
-
-  const escolhidos = rt7FilaDaPraca(s.leads, municipio, s.exec)
-    .filter(function (l) { return rt7Sujeira(l).ok && rt7Marcado(s.sel, l); });
+  const escolhidos = rt7FilaDoExec(u.ownerId, !!s.verTodas)
+    .filter(function (x) { return rt7Marcado(s.sel, x.l); })
+    .map(function (x) { return x.l; });
   const ids = escolhidos.map(function (l) { return String(l.id); });
 
-  if (!ids.length) { s.toast = 'nenhuma conta marcada nesta praça'; return; }
+  if (!ids.length) { s.toast = 'marque ao menos uma conta na fila dele'; return; }
 
   const transferidas = escolhidos.filter(function (l) { return !rt7SemDono(l); });
   const porDono = {};
@@ -42317,10 +42345,11 @@ async function rt7Enviar() {
     : '';
 
   const ok = (typeof confirm === 'function')
-    ? confirm('Enviar ' + ids.length + ' conta(s) para ' + u.nome + '?\n'
+    ? confirm('Aprovar ' + ids.length + ' conta(s) para a rua de ' + u.nome + '?\n'
       + frasePerde
-      + '\nElas ficam com ele como dono na lista leads_prospeccao, entram na munição da Daily\n'
-      + 'e viram conta alvo na rota do Expogo. Nada é criado no HubSpot por isto.')
+      + '\nElas ficam com ele como dono em leads_prospeccao e marcadas para a rua, então\n'
+      + 'aparecem no Planejamento e na munição da Daily dele. Nada é criado no HubSpot por isto,\n'
+      + 'e o rodapé desta tela tem desfazer.')
     : false;
   if (!ok) { s.toast = 'nada foi enviado'; return; }
 
@@ -42329,8 +42358,11 @@ async function rt7Enviar() {
   renderRotasProspeccao();
   try {
 
+    const voltar = escolhidos.map(function (l) {
+      return { id: String(l.id), dono: String(l.responsavel_owner_id || ''), status: String(l.status) };
+    });
     const { data: gravadas, error } = await supa.from('leads_prospeccao')
-      .update({ status: 'atribuido', responsavel_owner_id: String(u.ownerId), updated_at: new Date().toISOString() })
+      .update({ status: 'na_rota', responsavel_owner_id: String(u.ownerId), updated_at: new Date().toISOString() })
       .in('id', ids)
       .select('id');
     if (error) throw error;
@@ -42350,11 +42382,14 @@ async function rt7Enviar() {
     const confirmadas = (Array.isArray(gravadas) && gravadas.length)
       ? gravadas.map(x => String(x.id)) : ids;
     s.leads.forEach(l => {
-      if (confirmadas.indexOf(String(l.id)) >= 0) { l.status = 'atribuido'; l.responsavel_owner_id = String(u.ownerId); }
+      if (confirmadas.indexOf(String(l.id)) >= 0) { l.status = 'na_rota'; l.responsavel_owner_id = String(u.ownerId); }
     });
     s.sel = {};
     const quantas = confirmadas.length;
-    s.cargas = (s.cargas || []).concat([quantas + ' leads (' + (s.fonte === 'casa_dos_dados' ? 'Casa dos Dados' : 'fila') + ' · ' + s.praca + ') → ' + String(u.nome).split(' ')[0]]);
+    rt7Registrar({ chave: 'aprov:' + u.ownerId + ':' + Date.now(), tipo: 'Carteira', bg: '#1E9E7B',
+      desfazivel: true, voltar: voltar.filter(function (v) { return confirmadas.indexOf(v.id) >= 0; }),
+      txt: quantas + ' conta(s) aprovadas para a rua de ' + String(u.nome).split(' ')[0]
+        + ' — ficha completa no Supabase, aparecem no Planejamento e na munição da Daily dele' });
 
     if (!s.toast || s.toast.indexOf('atenção:') !== 0) {
       s.toast = '✓ ' + quantas + ' leads com dono ' + String(u.nome).split(' ')[0]
@@ -42366,18 +42401,117 @@ async function rt7Enviar() {
   s.enviando = false;
 }
 
+async function rt7AcaoDaRua(verbo, ownerId) {
+  const u = rt7Ativos().filter(function (x) { return String(x.ownerId) === String(ownerId); })[0];
+  if (!u) { RT7_ESTADO.toast = 'não achei esse executivo na lista de campo'; return; }
+  const primeiro = String(u.nome || '').split(' ')[0];
+  const chave = verbo + ':' + ownerId;
+  if (rt7Feito(chave)) { RT7_ESTADO.toast = 'já registrado nesta sessão'; return; }
+
+  if (verbo === 'travar') {
+    if (typeof supa === 'undefined' || !supa) { RT7_ESTADO.toast = 'sem conexão aqui — nada foi gravado'; return; }
+    const alvos = rt7FilaDoExec(ownerId, true).slice(0, 3).map(function (x) { return x.l; });
+    if (!alvos.length) { RT7_ESTADO.toast = 'a munição dele está vazia — importe antes de travar'; return; }
+    const seg = (function () {
+      const d = new Date();
+      const falta = (8 - d.getDay()) % 7 || 7;
+      const s = new Date(d.getTime() + falta * 86400000);
+      return s.getFullYear() + '-' + String(s.getMonth() + 1).padStart(2, '0') + '-' + String(s.getDate()).padStart(2, '0');
+    }());
+    try {
+      const ids = alvos.map(function (l) { return String(l.id); });
+      const { data, error } = await supa.from('leads_prospeccao')
+        .update({ status: 'na_rota', data_rota: seg, updated_at: new Date().toISOString() })
+        .in('id', ids).select('id');
+      if (error) throw error;
+      if (!Array.isArray(data) || !data.length) {
+        RT7_ESTADO.toast = 'o banco aceitou e não mudou nenhuma linha — nada foi travado';
+        return;
+      }
+      const voltar = alvos.map(function (l) { return { id: String(l.id), dono: String(l.responsavel_owner_id || ''), status: String(l.status) }; });
+      alvos.forEach(function (l) { l.status = 'na_rota'; l.data_rota = seg; });
+      rt7Registrar({ chave: chave, tipo: 'Rota', bg: '#8E3B5C', voltar: voltar, desfazivel: false,
+        porque: 'para soltar, é no Planejamento dele',
+        txt: data.length + ' conta(s) de ' + primeiro + ' marcadas para segunda (' + seg.split('-').reverse().slice(0, 2).join('/') + ') — aparecem no Planejamento dele' });
+      RT7_ESTADO.toast = data.length + ' conta(s) travadas na segunda de ' + primeiro + ' ✓ — aparecem no Planejamento dele';
+    } catch (e) {
+      RT7_ESTADO.toast = 'não gravou: ' + (e && e.message ? e.message : 'erro desconhecido');
+    }
+    return;
+  }
+
+  const titulo = verbo === 'case'
+    ? ('Case da semana: ' + primeiro + ' — semana montada e fechada')
+    : ('Cobrar ' + primeiro + ' — semana do Planejamento');
+  const detalhe = verbo === 'case'
+    ? 'levar a semana dele como padrão na Semanal de segunda'
+    : 'a semana dele não está montada ou não foi fechada; sem grade não há rota';
+  if (typeof tl5Alternar !== 'function') { RT7_ESTADO.toast = 'o escritor da pauta não carregou nesta aba — recarregue'; return; }
+  try {
+
+    await tl5Alternar(verbo === 'case' ? 'boa_pratica' : 'cobranca_rota', String(ownerId), titulo, detalhe, 'rotas:' + chave);
+    rt7Registrar({ chave: chave, tipo: verbo === 'case' ? 'Pauta da Semanal' : 'Pauta',
+      bg: verbo === 'case' ? '#1E9E7B' : '#B07C1F', desfazivel: false,
+      porque: 'para tirar, é na pauta da Daily',
+      txt: titulo + ' — na pauta que a Daily e a Semana leem' });
+    RT7_ESTADO.toast = titulo + ' ✓ — está na sua pauta, junto com a da Daily e da Semanal';
+  } catch (e) {
+    RT7_ESTADO.toast = 'não gravou na pauta: ' + (e && e.message ? e.message : 'erro desconhecido');
+  }
+}
+
 async function rt7Executar(acao) {
   const i = String(acao).indexOf(':');
   const verbo = i < 0 ? acao : String(acao).slice(0, i);
   const a = i < 0 ? '' : String(acao).slice(i + 1);
   const s = RT7_ESTADO;
 
-  if (verbo === 'praca') {
+  if (verbo === 'verfila') {
+    s.filaExec = a; s.sel = {}; s.leadAberto = null; s.verTodas = false; s.toast = null;
+  } else if (verbo === 'abrir') {
+    s.leadAberto = (String(s.leadAberto || '') === String(a)) ? null : a;
+    s.toast = null;
+  } else if (verbo === 'imp') {
 
-    s.praca = a; s.fonte = null; s.sel = {}; s.exec = null; s.verTodas = false;
-    s.toast = 'praça: ' + a + ' — escolha a fonte no passo 2';
-  } else if (verbo === 'fonte') {
-    s.fonte = a; s.toast = null;
+    s.imp = (String(s.imp || '') === String(a)) ? null : a;
+    if (s.imp) { s.filaExec = a; s.sel = {}; s.impCidades = {}; }
+    s.toast = null;
+  } else if (verbo === 'impfechar') {
+    s.imp = null; s.toast = null;
+  } else if (verbo === 'impcid') {
+    s.impCidades[a] = !s.impCidades[a]; s.toast = null;
+  } else if (verbo === 'impfonte') {
+    const fo = RT7_FONTES.filter(function (x) { return x.id === a; })[0];
+    s.toast = fo ? (fo.rot + ' é a fonte ativa da busca sob demanda — as outras duas dizem no clique por que não dá') : null;
+  } else if (verbo === 'impqtd') {
+    s.impQtd = Number(a) || 50; s.toast = null;
+  } else if (verbo === 'impdisparar') {
+    await rt7Disparar();
+  } else if (verbo === 'aprovar') {
+    await rt7Enviar();
+  } else if (verbo === 'aprovarbloq') {
+    s.toast = 'marque ao menos uma conta da fila — o quadradinho de cada linha';
+  } else if (verbo === 'cobrar' || verbo === 'case' || verbo === 'travar') {
+    await rt7AcaoDaRua(verbo, a);
+  } else if (verbo === 'orfao') {
+    const uo = rt7Ativos().filter(function (x) { return String(x.ownerId) === String(a); })[0];
+    const orf = rt7Orfao();
+    if (!uo) { s.toast = 'não achei esse executivo'; }
+    else {
+
+      s.orfaoDono = a;
+      rt7Registrar({ chave: 'orfao:' + a, tipo: 'Território', bg: '#6E1210', desfazivel: true,
+        txt: 'Decisão registrada: ' + (orf.cidades.join(' + ') || 'as contas sem dono ativo')
+          + ' passam a ser de ' + String(uo.nome).split(' ')[0]
+          + ' — a transferência das ' + orf.paradas + ' contas se faz na fila dele, com confirmação' });
+      s.toast = 'decisão registrada: ' + (orf.cidades.join(' + ') || 'contas sem dono')
+        + ' → ' + String(uo.nome).split(' ')[0]
+        + '. Para mover as contas, abra a fila dele e aprove — o aviso de quantas mudam de mão aparece lá.';
+    }
+  } else if (verbo === 'log') {
+    s.logAberto = !s.logAberto; s.toast = null;
+  } else if (verbo === 'desfazer') {
+    await rt7Desfazer(a);
   } else if (verbo === 'fonteoff') {
 
     const f = RT7_FONTES.find(x => x.id === a);
@@ -42386,60 +42520,10 @@ async function rt7Executar(acao) {
     const k = String(a);
     s.sel[k] = (s.sel[k] === undefined ? false : !s.sel[k]);
     s.toast = null;
-  } else if (verbo === 'sujo') {
 
-    s.toast = a === 'crm' ? 'já está no CRM: o dedupe do servidor achou esta conta no HubSpot. Enviar de novo criaria a segunda cópia da mesma conta.'
-      : a === 'perdido' ? 'já foi trabalhada e perdida: voltar para a rua agora é gastar visita em quem acabou de dizer não.'
-
-        : a === 'semnome' ? 'linha sem nome: não dá para visitar nem para o dedupe reconhecer depois — veio suja da fonte.'
-          : 'esta conta não entra na carga; o selo do cartão diz o motivo.';
-  } else if (verbo === 'exec') {
-    const u = rt7Ativos().find(x => String(x.ownerId) === String(a));
-    const c = u ? rt7Carteira(u.ownerId) : null;
-    const cheia = c ? (c.ativas / c.cap) >= RT7_TETO : false;
-    s.exec = a;
-    s.toast = !u ? null
-      : cheia ? '⚠ carteira de ' + String(u.nome).split(' ')[0] + ' em '
-        + Math.round((c.ativas / c.cap) * 100) + '% — acima do teto saudável, envio bloqueado'
-        : null;
-  } else if (verbo === 'carteira') {
-
-    const u = rt7Ativos().find(x => String(x.ownerId) === String(a));
-    const p = u ? rt7PracaDoRep(u) : null;
-    if (p) {
-      const noRadar = (s.radar || []).find(r => rt7MunicipioDaPraca(r.praca) === rt7MunicipioDaPraca(p.nome));
-      s.praca = noRadar ? noRadar.praca : p.nome;
-      s.sel = {}; s.fonte = null;
-    }
-    s.exec = a;
-    s.toast = (u ? String(u.nome).split(' ')[0] : 'executivo') + ' selecionado'
-      + (p ? ' · praça ' + p.nome : ' · sem praça em leads-referencia.json')
-      + ' — escolha a fonte no passo 2';
-    RT7_ESTADO._rolarPara = 'rt7Passo2';
   } else if (verbo === 'vertodas') {
     s.verTodas = !s.verTodas; s.toast = null;
-  } else if (verbo === 'vernoticias') {
-    s.verNoticias = !s.verNoticias; s.toast = null;
-  } else if (verbo === 'noticia') {
-
-    if (/^https?:\/\//i.test(a)) {
-      window.open(a, '_blank', 'noopener,noreferrer');
-      s.toast = 'abrindo a matéria no site do veículo';
-    } else {
-      s.toast = 'esta manchete não tem link válido gravado';
-    }
-  } else if (verbo === 'disparar') {
-    await rt7Disparar();
-  } else if (verbo === 'enviar') {
-    await rt7Enviar();
-  } else if (verbo === 'enviarbloq') {
-
-    const d = rt7Dados();
-    s.toast = d.envRot.indexOf('bloqueado') === 0 ? d.envRot + ' — escolha outro executivo ou limpe a carteira dele primeiro'
-      : d.envRot.indexOf('nenhum lead') === 0 ? 'marque ao menos um lead limpo na lista acima'
-        : 'escolha o executivo no passo 3';
   }
-
   renderRotasProspeccao();
   if (RT7_ESTADO._rolarPara) {
     const alvo = document.getElementById(RT7_ESTADO._rolarPara);
@@ -42460,140 +42544,180 @@ function renderRotasProspeccao() {
   raiz.style.display = '';
 
   const d = rt7Dados();
+  raiz.innerHTML = rt7TelaHTML(d);
+}
 
-  const kpisHTML = d.kpis.map(k => `<span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${esc(k.rot)}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 26px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${esc(k.v)}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${esc(k.de)}</span></span></span>`).join('');
+function rt7TelaHTML(d) {
+  return `
+    <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
 
-  const pracasHTML = d.pracas.map(pc => `<button type="button" data-rt7-acao="${esc(pc.on)}" data-rt7-hv="1" style="text-align:left;background:${pc.bg};border:1.5px solid ${pc.borda};border-radius:13px;padding:12px 14px;min-width:0;display:flex;flex-direction:column;gap:7px;">
-      <span style="display:flex;align-items:center;gap:8px;min-width:0;">
-        <b style="font:800 14px 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(pc.nome)}</b>
-        <span style="margin-left:auto;flex:none;font:800 8.5px 'Archivo',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:${pc.stCor};background:${pc.stBg};border-radius:5px;padding:3px 8px;white-space:nowrap;">${esc(pc.st)}</span>
-      </span>
-      <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">dono: <b style="color:#2B3440;">${esc(pc.dono)}</b></span>
-      <span style="display:flex;gap:14px;flex-wrap:wrap;">
-        <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">TAM food</span><b style="font:900 16px 'Archivo',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;">${esc(pc.tam)}</b></span>
-        <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">tocado</span><b style="font:900 16px 'Archivo',sans-serif;color:${pc.tocCor};font-variant-numeric:tabular-nums;">${esc(pc.tocado)}</b></span>
-        <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">não batidas</span><b style="font:900 16px 'Archivo',sans-serif;color:${pc.nbCor};font-variant-numeric:tabular-nums;">${esc(pc.naoBatidas)}</b></span>
-      </span>
-      <span style="position:relative;display:block;height:8px;border-radius:999px;background:#EDEBE5;overflow:hidden;"><span style="display:block;height:100%;width:${pc.largura};background:${pc.tocCor};border-radius:999px;"></span></span>
-      <span style="font:700 9.5px/1.5 'Manrope',sans-serif;color:#5B667A;">📡 <b style="color:#8E3B5C;">radar seg:</b> ${esc(pc.radar)}</span>
-    </button>`).join('');
-
-  const fontesHTML = d.fontes.map(fo => `<button type="button" data-rt7-acao="${esc(fo.on)}" data-rt7-hv="1" style="display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 15px;border:1.5px solid ${fo.borda};border-radius:999px;background:${fo.bg};font:800 11px 'Manrope',sans-serif;color:${fo.cor};white-space:nowrap;">${esc(fo.rot)}<span style="font:700 9px 'Manrope',sans-serif;color:${fo.subCor};">${esc(fo.sub)}</span></button>`).join('');
-
-  const leadsHTML = d.leads.map(ld => `<button type="button" data-rt7-acao="${esc(ld.on)}" data-rt7-hv="1" style="text-align:left;display:flex;align-items:center;gap:9px;background:${ld.bg};border:1.5px solid ${ld.borda};border-radius:9px;padding:8px 11px;cursor:${ld.cursor};min-width:0;opacity:${ld.op};">
-      <span style="flex:none;width:18px;height:18px;border-radius:5px;border:1.5px solid ${ld.ckBorda};background:${ld.ckBg};display:grid;place-items:center;color:#FDFEFF;font:900 11px 'Manrope',sans-serif;line-height:1;">${esc(ld.ck)}</span>
-      <span style="min-width:0;flex:1;">
-        <b style="display:block;font:800 11.5px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(ld.nome)}</b>
-        <span style="font:700 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">${esc(ld.meta)}</span>
-      </span>
-      <span style="flex:none;font:800 8.5px 'Archivo',sans-serif;letter-spacing:.03em;text-transform:uppercase;color:${ld.stCor};background:${ld.stBg};border-radius:4px;padding:3px 7px;white-space:nowrap;">${esc(ld.st)}</span>
-    </button>`).join('');
-
-  const execsHTML = d.execsSel.map(ex => `<button type="button" data-rt7-acao="${esc(ex.on)}" data-rt7-hv="1" style="display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 13px;border:1.5px solid ${ex.borda};border-radius:999px;background:${ex.bg};font:800 10.5px 'Manrope',sans-serif;color:${ex.cor};white-space:nowrap;">${esc(ex.nome)}<span style="font:700 9px 'Manrope',sans-serif;color:${ex.capCor};">${esc(ex.cap)}</span></button>`).join('');
-
-  const carteirasHTML = d.carteiras.map(ca => `<button type="button" data-rt7-acao="${esc(ca.on)}" data-rt7-hv="1" style="text-align:left;background:${ca.bg};border:1.5px solid ${ca.borda};border-radius:12px;padding:11px 14px;min-width:0;display:flex;flex-direction:column;gap:6px;">
-      <span style="display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap;">
-        <b style="font:800 12.5px 'Archivo',sans-serif;color:#2B3440;">${esc(ca.nome)}</b>
-        <span style="margin-left:auto;flex:none;font:800 8.5px 'Archivo',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:${ca.stCor};background:${ca.stBg};border-radius:5px;padding:3px 8px;white-space:nowrap;">${esc(ca.st)}</span>
-      </span>
-      <span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 18px 'Archivo',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;">${esc(ca.ativas)}</b><span style="font:700 10px 'Manrope',sans-serif;color:#7A8494;">de ${esc(ca.cap)} contas ativas · ${esc(ca.praca)}</span></span>
-      <span style="position:relative;display:block;height:8px;border-radius:999px;background:#EDEBE5;"><span style="position:absolute;inset:0;border-radius:999px;overflow:hidden;"><span style="display:block;height:100%;width:${ca.pct};background:${ca.pctCor};border-radius:999px;"></span></span><span style="position:absolute;top:-3px;left:75%;width:2px;height:14px;background:#E0A64A;border-radius:2px;" title="teto saudável: 75%"></span></span>
-      <span style="font:700 9.5px/1.5 'Manrope',sans-serif;color:${ca.leiaCor};">${esc(ca.leitura)}</span>
-    </button>`).join('');
-
-  const radarHTML = d.radar.map(rd => `<div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:11px 14px;display:flex;flex-direction:column;gap:5px;min-width:0;">
-      <span style="display:flex;align-items:center;gap:7px;"><b style="font:900 16px 'Archivo',sans-serif;color:${rd.nCor};font-variant-numeric:tabular-nums;">${esc(rd.n)}</b><span style="font:800 9px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#7A8494;">${esc(rd.rot)}</span></span>
-      <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;flex:1;">${esc(rd.txt)}</span>
-      <span style="font:700 9px 'Manrope',sans-serif;color:#B4AC9C;">${esc(rd.fonte)}</span>
-    </div>`).join('');
-
-  const noticiasHTML = d.noticias.map(n => `<button type="button" data-rt7-acao="${esc(n.on)}" data-rt7-hv="1" style="text-align:left;display:flex;align-items:flex-start;gap:10px;background:#FDFEFF;border:1px solid #E2E6EE;border-radius:11px;padding:10px 13px;min-width:0;">
-      <b style="flex:none;min-width:26px;text-align:center;font:900 13px 'Archivo',sans-serif;color:${n.notaCor};font-variant-numeric:tabular-nums;" title="nota de relevância">${esc(n.nota)}</b>
-      <span style="min-width:0;flex:1;display:flex;flex-direction:column;gap:3px;">
-        <b style="font:800 11.5px/1.45 'Manrope',sans-serif;color:#2B3440;">${esc(n.titulo)}</b>
-        <span style="font:700 9px 'Manrope',sans-serif;color:#7A8494;">${esc(n.fonte)} · ${esc(n.quando)} · ${esc(n.tema)}</span>
-        <span style="font:700 8.5px 'Manrope',sans-serif;color:#B4AC9C;">${esc(n.motivo)}</span>
-      </span>
-      <span style="flex:none;font:800 9px 'Archivo',sans-serif;color:#8E3B5C;">ler ▸</span>
-    </button>`).join('');
-
-  const cargasHTML = d.cargas.map(cg => `<span style="display:inline-flex;align-items:center;gap:8px;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:10px;padding:8px 13px;font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;">✓ ${esc(cg.rot)}</span>`).join('');
-
-  raiz.innerHTML = `<div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
-
-    <div style="background:#16181D;color:#FFFDF8;padding:18px 24px;display:flex;align-items:center;gap:30px;flex-wrap:wrap;">
-      <div style="min-width:0;">
-        <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${esc(d.quando)}</span>
-        <b style="display:block;font:900 22px 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;">Rotas &amp; Prospecção <span style="color:#8B93A3;">— a torneira e a rua</span></b>
-      </div>
-      <div style="display:flex;gap:28px;flex-wrap:wrap;margin-left:auto;">${kpisHTML}</div>
-    </div>
-
-    <div style="display:flex;align-items:center;gap:16px;padding:15px 24px 13px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
-      <h1 style="font:900 23px/1.2 'Archivo',sans-serif;letter-spacing:-.02em;color:#2B3440;margin:0;text-wrap:balance;flex:1;min-width:min(480px,100%);">${esc(d.manchete)}</h1>
-      ${d.temToast ? `<span style="flex:none;font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:6px 13px;max-width:560px;overflow-wrap:anywhere;">${esc(d.toast)}</span>` : ''}
-    </div>
-
-    <div style="padding:16px 24px 4px;">
-      <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · As praças <span style="color:#7A8494;">— TAM, % tocado e o radar food de cada uma · clique na praça pra importar leads dela</span></span>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:10px;">${pracasHTML || '<span style="font:700 11px \'Manrope\',sans-serif;color:#B4AC9C;">o radar de segunda ainda não gravou nenhuma praça — sem TAM, esta tela não sabe onde a torneira rende mais.</span>'}</div>
-    </div>
-
-    <div style="padding:18px 24px 4px;">
-      <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">2 · Abastecer <span style="color:#7A8494;">— importa, o sistema limpa contra o CRM, você escolhe o executivo e envia · em 3 passos</span></span>
-      <div id="rt7Passo2" style="margin-top:10px;background:#FBFAF6;border:1.5px solid ${d.abBorda};border-radius:13px;padding:14px 17px;">
-        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
-          <span style="display:inline-flex;align-items:center;gap:8px;"><b style="width:24px;height:24px;border-radius:999px;display:grid;place-items:center;background:#E51A31;color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">1</b><span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#2B3440;">praça: <b style="color:#E51A31;">${esc(d.abPraca)}</b></span></span>
-          <span style="display:inline-flex;align-items:center;gap:8px;"><b style="width:24px;height:24px;border-radius:999px;display:grid;place-items:center;background:#E51A31;color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">2</b><span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#2B3440;">fonte:</span></span>
-          ${fontesHTML}
-          <button type="button" data-rt7-acao="disparar" data-rt7-hv="2" style="margin-left:auto;flex:none;display:inline-flex;align-items:center;min-height:36px;padding:0 17px;border:1px solid ${d.buscBorda};border-radius:999px;background:${d.buscBg};font:800 11px 'Manrope',sans-serif;color:${d.buscCor};white-space:nowrap;">${esc(d.buscRot)}</button>
+      <div style="background:#16181D;color:#FFFDF8;padding:16px 22px;display:flex;align-items:center;gap:28px;flex-wrap:wrap;">
+        <div style="min-width:0;">
+          <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${d.linhaTopo}</span>
+          <b style="display:block;font:900 22px 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;">Rotas &amp; Prospecção — a torneira e a rua, numa tela só</b>
         </div>
-        ${d.temLeads ? `<div style="display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap;">
-          <span style="font:800 11px 'Manrope',sans-serif;color:#2B3440;">${esc(d.resumoImport)}</span>
-          <span style="font:700 10px 'Manrope',sans-serif;color:#8A3B3B;background:#FDF7F7;border:1px solid #E3C6C6;border-radius:999px;padding:4px 11px;">${esc(d.resumoSujos)}</span>
-          ${d.temMais ? `<button type="button" data-rt7-acao="vertodas" data-rt7-hv="4" style="background:none;border:0;padding:0;font:800 10px 'Manrope',sans-serif;color:#8E3B5C;text-decoration:underline;">${esc(d.verTodasRot)}</button>` : ''}
+        <div style="display:flex;gap:26px;flex-wrap:wrap;margin-left:auto;">
+          ${(d.kpis||[]).map(k => `
+            <span style="min-width:0;"><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#8B93A3;">${k.rot}</span><span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 24px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span></span>
+          `).join('')}
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:7px;margin-top:9px;">${leadsHTML}</div>
-        <div style="display:flex;align-items:center;gap:12px;margin-top:13px;flex-wrap:wrap;">
-          <span style="display:inline-flex;align-items:center;gap:8px;"><b style="width:24px;height:24px;border-radius:999px;display:grid;place-items:center;background:#E51A31;color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">3</b><span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#2B3440;">pra quem vai:</span></span>
-          ${execsHTML || '<span style="font:700 10px \'Manrope\',sans-serif;color:#8A6516;">nenhum executivo mapeado nesta praça em leads-referencia.json — sem dono, o envio não tem destino</span>'}
-          <button type="button" data-rt7-acao="${esc(d.enviar)}" data-rt7-hv="2" style="margin-left:auto;flex:none;display:inline-flex;align-items:center;min-height:40px;padding:0 20px;border:1px solid ${d.envBorda};border-radius:999px;background:${d.envBg};font:800 12px 'Manrope',sans-serif;color:${d.envCor};white-space:nowrap;">${esc(d.envRot)}</button>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:14px;padding:14px 22px 10px;flex-wrap:wrap;">
+        <h1 style="font:900 20px/1.25 'Archivo',sans-serif;letter-spacing:-.02em;color:#2B3440;margin:0;text-wrap:balance;flex:1;min-width:320px;">${d.manchete}</h1>
+        ${(d.temToast) ? `<span style="flex:none;font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:5px 12px;max-width:560px;overflow-wrap:anywhere;">${d.toast}</span>` : ''}
+      </div>
+
+      <div style="padding:0 22px 6px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · Abastecer <span style="color:#7A8494;">— você dispara, aprova, e cai na carteira do dono da praça · sem aprovação nada chega no executivo</span></span>
+          <span style="font:800 9.5px 'Manrope',sans-serif;color:#5B667A;background:#F4F1EA;border-radius:999px;padding:5px 12px;white-space:nowrap;">nada entra sozinho — o gatilho é seu, no painel de estoque →</span>
         </div>
-        <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">ao enviar: as contas ficam com dono definido na lista <b>leads_prospeccao</b> → entram na <b>munição da Daily</b> do executivo e como <b>contas alvo no Expogo</b> · vinho = descartado pelo anti-sujeira (já no CRM, perdido ou sem contato) — nunca entra na carteira de ninguém</span>`
-        : `<span style="display:block;font:700 11px/1.6 'Manrope',sans-serif;color:#7A8494;margin-top:10px;">${esc(d.semLeadsTxt)}</span>`}
+
+        <div style="display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:12px;">
+          <div style="background:#FBFAF6;border:1px solid #E4E0D6;border-radius:12px;padding:12px 15px;min-width:0;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#2B3440;">${d.filaTitulo} <span style="color:#7A8494;text-transform:none;letter-spacing:0;font:700 9.5px 'Manrope',sans-serif;">· ${d.filaSub}</span></span>
+              <button type="button" data-rt7-acao="${d.verTodas}" data-rt7-hv="1" style="margin-left:auto;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;font:800 10px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;white-space:nowrap;">${d.verTodasRot}</button>
+              <button type="button" data-rt7-acao="${d.aprovarLote}" data-rt7-hv="2" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 14px;border:0;border-radius:999px;background:#1E9E7B;font:800 10.5px 'Manrope',sans-serif;color:#FFFDF8;cursor:pointer;white-space:nowrap;">aprovar selecionadas (${d.selN}) →</button>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:5px;margin-top:9px;">
+              ${(d.fila||[]).map(f => `
+                <div style="background:${f.bg};border:1px solid ${f.borda};border-radius:10px;padding:7px 11px;min-width:0;">
+                  <div style="display:flex;align-items:center;gap:9px;min-width:0;">
+                    <button type="button" data-rt7-acao="${f.marcar}" style="flex:none;width:20px;height:20px;border-radius:6px;border:1.5px solid ${f.ckBorda};background:${f.ckBg};color:#FFFDF8;font:900 11px 'Archivo',sans-serif;cursor:pointer;line-height:1;padding:0;">${f.ck}</button>
+                    <span style="flex:none;width:34px;text-align:center;"><b style="display:block;font:900 14px 'Archivo',sans-serif;color:${f.scCor};font-variant-numeric:tabular-nums;line-height:1;">${f.score}</b><span style="font:900 6.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">score</span></span>
+                    <button type="button" data-rt7-acao="${f.abrir}" data-rt7-hv="3" style="text-align:left;border:0;background:transparent;cursor:pointer;padding:0;min-width:0;flex:1;"><b style="font:800 11.5px 'Archivo',sans-serif;color:#2B3440;">${f.nome}</b> <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">· ${f.tipo} ${f.seta}</span><span style="display:block;font:700 9px/1.4 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.motivo}</span></button>
+                    <span style="flex:none;font:800 10px 'Manrope',sans-serif;color:#B07C1F;white-space:nowrap;">★ ${f.nota} <span style="color:#7A8494;">· ${f.avals}</span></span>
+                    ${(f.semTel) ? `<span style="flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#8A3B3B;background:#FDF7F7;border:1px solid #E3C6C6;border-radius:5px;padding:2px 6px;white-space:nowrap;">sem telefone</span>` : ''}
+                    <span style="flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#5B667A;background:#F4F1EA;border-radius:5px;padding:2px 7px;white-space:nowrap;">${f.fonte}</span>
+                    <span style="flex:none;font:800 9.5px 'Manrope',sans-serif;color:${f.donoCor};white-space:nowrap;">→ ${f.dono}</span>
+                  </div>
+                  ${(f.aberto) ? `
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;border-top:1px dashed #E3DDD0;margin-top:7px;padding-top:7px;">
+                      <span style="font:700 10px/1.5 'Manrope',sans-serif;color:#2B3440;min-width:0;">📍 ${f.end}</span>
+                      <span style="font:700 10px 'Manrope',sans-serif;color:${f.telCor};white-space:nowrap;font-variant-numeric:tabular-nums;">✆ ${f.tel}</span>
+                      <span style="margin-left:auto;font:700 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">a ficha inteira vai junto quando você aprova</span>
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')}
+              ${(d.semFila) ? `<span style="font:700 10.5px/1.6 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:10px;padding:9px 12px;">${d.semFilaTxt}</span>` : ''}
+            </div>
+            <p style="margin:8px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;">▸ <b style="color:#2B3440;">nada entra sozinho</b>: a importação é disparada por você no painel ao lado · score = nota × volume de avaliações · o dono é automático pelo território oficial · aprovar grava a ficha inteira no Supabase e a conta entra na munição da Daily dele · sem telefone não bloqueia: a visita é na porta</p>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px;min-width:0;">
+            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:12px 15px;min-width:0;">
+              <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#B07C1F;">Quem precisa de contas — o gatilho é seu <span style="color:#7A8494;text-transform:none;letter-spacing:0;font:700 9.5px 'Manrope',sans-serif;">· estoque = contas na munição ÷ contas que ele põe em rota por semana</span></span>
+              <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;">
+                ${(d.estoque||[]).map(es => `
+                  <span style="display:flex;align-items:center;gap:9px;padding:3px 6px;min-width:0;background:${es.selBg};border-radius:8px;">
+                    <button type="button" data-rt7-acao="${es.ver}" data-rt7-hv="4" title="ver a fila deste executivo" style="text-align:left;border:0;background:transparent;cursor:pointer;font:800 10.5px 'Manrope',sans-serif;color:${es.nomeCor};width:148px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0;">${es.rot} ▸</button>
+                    <span style="flex:1;height:8px;border-radius:999px;background:#EDEBE5;overflow:hidden;min-width:40px;"><span style="display:block;height:100%;width:${es.pct};background:${es.cor};border-radius:999px;"></span></span>
+                    <b style="font:900 10.5px 'Archivo',sans-serif;color:${es.cor};font-variant-numeric:tabular-nums;flex:none;width:26px;text-align:right;">${es.n}</b>
+                    <span style="font:800 9px 'Manrope',sans-serif;color:${es.semCor};flex:none;width:72px;text-align:right;white-space:nowrap;">${es.sem}</span>
+                    <button type="button" data-rt7-acao="${es.on}" data-rt7-hv="5" style="flex:none;display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border:1.5px solid ${es.btBorda};border-radius:999px;background:${es.btBg};font:800 9px 'Manrope',sans-serif;color:${es.btCor};cursor:pointer;white-space:nowrap;">${es.btRot}</button>
+                  </span>
+                `).join('')}
+              </div>
+              ${(d.temImp) ? `
+                <div style="margin-top:9px;background:#F4F1EA;border:1.5px solid #2B3440;border-radius:10px;padding:10px 12px;">
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#2B3440;">Disparar importação — ${d.impExecNome}</span>
+                    <button type="button" data-rt7-acao="${d.impFechar}" data-rt7-hv="0" style="margin-left:auto;flex:none;width:22px;height:22px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 11px 'Manrope',sans-serif;cursor:pointer;line-height:1;padding:0;">✕</button>
+                  </div>
+                  <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;margin-top:7px;">cidades do território dele <span style="text-transform:none;letter-spacing:0;font:700 9px 'Manrope',sans-serif;">— cada uma marcada é uma busca na Receita</span></span>
+                  <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">
+                    ${(d.impRegioes||[]).map(rg => `
+                      <button type="button" data-rt7-acao="${rg.on}" data-rt7-hv="1" style="display:inline-flex;align-items:center;min-height:26px;padding:0 11px;border:1.5px solid ${rg.borda};border-radius:999px;background:${rg.bg};font:800 9.5px 'Manrope',sans-serif;color:${rg.cor};cursor:pointer;white-space:nowrap;">${rg.rot}</button>
+                    `).join('')}
+                    ${(d.impSemCidade) ? `<span style="font:700 9.5px 'Manrope',sans-serif;color:#8A3B3B;">ele não tem território declarado em data/leads-referencia.json — sem cidade não há busca, e a atribuição é decisão sua</span>` : ''}
+                  </div>
+                  <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;">
+                    <span style="min-width:0;"><span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">fontes</span><span style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px;">${(d.impFontes||[]).map(ft => `<button type="button" data-rt7-acao="${ft.on}" data-rt7-hv="1" style="display:inline-flex;align-items:center;min-height:26px;padding:0 11px;border:1.5px solid ${ft.borda};border-radius:999px;background:${ft.bg};font:800 9.5px 'Manrope',sans-serif;color:${ft.cor};cursor:pointer;white-space:nowrap;">${ft.rot}</button>`).join('')}</span></span>
+                    <span style="min-width:0;"><span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">quantas (após o corte)</span><span style="display:flex;gap:4px;margin-top:4px;">${(d.impQtds||[]).map(q => `<button type="button" data-rt7-acao="${q.on}" data-rt7-hv="1" style="display:inline-flex;align-items:center;min-height:26px;padding:0 11px;border:1.5px solid ${q.borda};border-radius:999px;background:${q.bg};font:800 9.5px 'Manrope',sans-serif;color:${q.cor};cursor:pointer;white-space:nowrap;">${q.rot}</button>`).join('')}</span></span>
+                    <button type="button" data-rt7-acao="${d.impDisparar}" data-rt7-hv="2" style="margin-left:auto;align-self:flex-end;display:inline-flex;align-items:center;min-height:32px;padding:0 15px;border:0;border-radius:999px;background:#E51A31;font:900 10.5px 'Archivo',sans-serif;letter-spacing:.02em;color:#FFFDF8;cursor:pointer;white-space:nowrap;">⤓ disparar importação →</button>
+                  </div>
+                </div>
+              ` : ''}
+              <p style="margin:8px 0 0;font:700 10px/1.5 'Manrope',sans-serif;color:#8A6516;">▸ consumo medido: contas que ele mesmo pôs em rota nas últimas 4 semanas · regra: <b>abaixo de 1 semana de estoque, importe hoje</b> · você escolhe executivo, cidades, fonte e quantidade</p>
+            </div>
+            <div style="background:${d.orfaoTem ? '#FDF7F7' : '#EAF6F1'};border:1.5px solid ${d.orfaoTem ? '#6E1210' : '#CBE8DD'};border-radius:12px;padding:12px 15px;min-width:0;">
+              <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#FDFEFF;background:${d.orfaoTem ? '#6E1210' : '#1E9E7B'};border-radius:5px;padding:3px 8px;">território órfão — decisão sua</span>
+              <b style="display:block;font:900 15px 'Archivo',sans-serif;color:${d.orfaoTem ? '#6E1210' : '#1E9E7B'};margin-top:7px;">${d.orfaoTitulo}</b>
+              <p style="margin:5px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#2B3440;">${d.orfaoTexto}</p>
+              ${(d.orfaoTem) ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px;">${(d.orfao||[]).map(of => `<button type="button" data-rt7-acao="${of.on}" data-rt7-hv="6" style="display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1.5px solid ${of.borda};border-radius:999px;background:${of.bg};font:800 10px 'Manrope',sans-serif;color:${of.cor};cursor:pointer;white-space:nowrap;">${of.rot}</button>`).join('')}</div>` : ''}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
 
-    <div style="padding:18px 24px 4px;">
-      <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">3 · A carteira de cada executivo <span style="color:#7A8494;">— quem aguenta carga e quem precisa · clique pra escolher no passo 3</span></span>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin-top:10px;">${carteirasHTML}</div>
-      <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">clientes ativos por praça não entram aqui: o Cockpit não tem essa base — o snapshot é o funil de Field Sales, e o mais perto de "cliente" é a etapa Enviado Onboarding, com 6 negócios no Brasil inteiro · carteira ativa = negócio ABERTO com interação registrada há menos de 30d no HubSpot (as seis etapas abertas; Perdido, Ganho e Onboarding ficam fora) · teto saudável = 75% de ${RT7_CAPACIDADE} (traço âmbar) — acima disso o envio é bloqueado · abaixo de 50% pede carga</span>
-      ${d.semPraca ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:9px;padding:8px 12px;margin-top:8px;">${esc(d.semPraca)}</span>` : ''}
-      ${d.pracasSemRadar ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A3B5C;background:#FDF7FA;border:1px solid #E8CBD8;border-radius:9px;padding:8px 12px;margin-top:6px;">${esc(d.pracasSemRadar)}</span>` : ''}
-    </div>
-
-    <div style="padding:18px 24px 4px;">
-      <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8E3B5C;">4 · Radar food das praças <span style="color:#7A8494;">— o job de segunda 06h, com a fonte de cada número</span></span>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:10px;">${radarHTML}</div>
-    </div>
-
-    <div style="padding:18px 24px 4px;">
-      <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8E3B5C;">5 · O setor nesta semana <span style="color:#7A8494;">— manchete, veículo e data · o número é a nota de relevância, e a linha cinza diz por que ela é essa</span></span>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:8px;margin-top:10px;">${noticiasHTML || '<span style="font:700 11px \'Manrope\',sans-serif;color:#B4AC9C;">nenhuma manchete nesta semana — o job de segunda não rodou, ou as fontes não trouxeram nada do setor.</span>'}</div>
-      ${d.temNoticias ? `<button type="button" data-rt7-acao="${esc(d.verNotOn)}" data-rt7-hv="4" style="margin-top:9px;background:none;border:0;padding:0;font:800 10px 'Manrope',sans-serif;color:#8E3B5C;text-decoration:underline;">${esc(d.verNotRot)}</button>
-      <span style="display:block;font:700 9px/1.5 'Manrope',sans-serif;color:#B4AC9C;margin-top:6px;">o clique abre a matéria no site do veículo — é o único link para fora desta tela, e existe porque guardamos manchete e link, nunca o texto: a Abrasel, por exemplo, proíbe coleta automatizada no robots.txt e autoriza o índice de busca.</span>` : ''}
-    </div>
-
-    <div style="padding:18px 24px 18px;">
-      <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Cargas de hoje <span style="color:#7A8494;">— tudo que você enviou nesta tela · já na munição da Daily de cada um</span></span>
-      <div style="display:flex;gap:10px;margin-top:9px;flex-wrap:wrap;">
-        ${cargasHTML}
-        ${d.semCargas ? '<span style="font:700 10.5px \'Manrope\',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:10px;padding:8px 13px;">nenhuma carga enviada ainda — escolha uma praça no bloco 1</span>' : ''}
+      <div style="padding:16px 22px 6px;">
+        <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">2 · A rua de cada executivo <span style="color:#7A8494;">— semana montada no Planejamento (grade 5×7), fechamento e contas-alvo na rota · cada ação executa e diz onde aparece</span></span>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;">
+          ${(d.ruas||[]).map(r => `
+            <div style="display:flex;align-items:center;gap:14px;background:${r.bg};border:1.5px solid ${r.borda};border-radius:12px;padding:10px 15px;min-width:0;flex-wrap:wrap;">
+              <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${r.avBg};color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">${r.ini}</span>
+              <span style="width:190px;flex:none;min-width:0;"><b style="display:block;font:800 13px 'Archivo',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.nome}</b><span style="font:700 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">${r.praca}</span></span>
+              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">semana 5×7</span><span style="display:flex;align-items:center;gap:5px;"><span style="display:flex;gap:2px;">${r.grade}</span><b style="font:800 11px 'Manrope',sans-serif;color:${r.gradeCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.slots}</b></span></span>
+              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">semana fechada</span><b style="font:800 11px 'Manrope',sans-serif;color:${r.rotaCor};white-space:nowrap;">${r.rota}</b></span>
+              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">cumprido na semana</span><b style="font:800 11px 'Manrope',sans-serif;color:${r.cumpCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.cump}</b></span>
+              <span style="min-width:0;"><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">contas-alvo</span><b style="font:800 11px 'Manrope',sans-serif;color:${r.alvoCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${r.alvo}</b></span>
+              <span style="flex:1;min-width:140px;font:700 10.5px/1.45 'Manrope',sans-serif;color:${r.leiaCor};">▸ ${r.leitura}</span>
+              <button type="button" data-rt7-acao="${r.acao}" data-rt7-hv="5" style="margin-left:auto;flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1.5px solid ${r.btBorda};border-radius:999px;background:${r.btBg};font:800 10px 'Manrope',sans-serif;color:${r.btCor};cursor:pointer;white-space:nowrap;">${r.btRot}</button>
+            </div>
+          `).join('')}
+        </div>
       </div>
-    </div>
 
-    <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 24px 14px;font-size:10px;line-height:1.5;color:#7A8494;">Rotas &amp; Prospecção v2 = a mesa do diretor: <b>praças com TAM e radar</b> (job de segunda 06h) → <b>abastecer em 3 passos</b> (praça → fonte → executivo) com <b>anti-sujeira obrigatório</b> (o dedupe roda no servidor, contra o CRM inteiro; descartado nunca entra) → <b>carteiras com teto saudável</b> (75%; acima disso o envio é bloqueado) → enviado fica com dono na lista leads_prospeccao, munição da Daily e conta alvo no Expogo · <b style="color:#E51A31;">takeat</b> — vender mais servindo com excelência.</p>
-  </div>`;
+      <div style="padding:16px 22px 18px;">
+        <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#1E9E7B;">3 · Radar de leads — os maiores scores em jogo <span style="color:#7A8494;">— score = nota × volume de avaliações · onde cada um está e qual o próximo gesto</span></span>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
+          ${(d.tops||[]).map(tp => `
+            <div style="background:#FBFAF6;border:1px solid #E4E0D6;border-left:4px solid ${tp.cor};border-radius:11px;padding:10px 13px;min-width:0;">
+              <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                <span style="flex:none;text-align:center;"><b style="display:block;font:900 17px 'Archivo',sans-serif;color:${tp.cor};font-variant-numeric:tabular-nums;line-height:1;">${tp.score}</b><span style="font:900 6.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;">score</span></span>
+                <b style="font:800 12px 'Archivo',sans-serif;color:#2B3440;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${tp.nome}</b>
+                <span style="margin-left:auto;flex:none;font:800 10px 'Manrope',sans-serif;color:#B07C1F;white-space:nowrap;">★ ${tp.nota} · ${tp.avals}</span>
+              </div>
+              <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">
+                ${(tp.sinais||[]).map(sn => `<span style="font:800 8.5px 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #F0DFB6;border-radius:999px;padding:2px 8px;white-space:nowrap;">${sn}</span>`).join('')}
+              </div>
+              <span style="display:block;font:700 9.5px/1.45 'Manrope',sans-serif;color:#5B667A;margin-top:5px;">${tp.motivo}</span>
+              <div style="display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap;">
+                <span style="font:800 9px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">${tp.dono}</span>
+                <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${tp.stCor};background:${tp.stBg};border-radius:5px;padding:2px 7px;white-space:nowrap;">${tp.status}</span>
+                <span style="margin-left:auto;font:700 9px 'Manrope',sans-serif;color:${tp.proxCor};white-space:nowrap;">${tp.prox}</span>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        ${(d.temTops) ? '' : `<span style="display:block;margin-top:9px;font:700 10.5px/1.6 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:10px;padding:9px 12px;">${d.semTopsTxt}</span>`}
+      </div>
+
+      <div style="border-top:1px solid #E2E6EE;background:#FBFAF6;padding:12px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+        <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.11em;text-transform:uppercase;color:#8E3B5C;flex:none;">ações desta sessão</span>
+        <span style="font:700 12px/1.5 'Manrope',sans-serif;color:#5B667A;flex:1;min-width:260px;">${d.logLinha}</span>
+        <button type="button" data-rt7-acao="${d.logToggle}" data-rt7-hv="5" style="flex:none;display:inline-flex;align-items:center;min-height:34px;padding:0 15px;border:1px solid #CBE8DD;border-radius:999px;background:#EAF6F1;font:800 11.5px 'Manrope',sans-serif;color:#1E9E7B;cursor:pointer;white-space:nowrap;">${d.logBtnRot}</button>
+      </div>
+      ${(d.logAberto) ? `
+        <div style="border-top:1px solid #E2E6EE;background:#FDFEFF;padding:14px 22px 16px;display:flex;flex-direction:column;gap:6px;">
+          ${(d.logItens||[]).map(li => `
+            <div style="display:flex;align-items:center;gap:12px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:8px 13px;min-width:0;flex-wrap:wrap;">
+              <span style="flex:none;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#FDFEFF;background:${li.bg};border-radius:5px;padding:4px 9px;white-space:nowrap;">${li.tipo}</span>
+              <span style="flex:1;min-width:200px;font:700 11.5px/1.45 'Manrope',sans-serif;color:#2B3440;">${li.txt}</span>
+              ${li.desfazer ? `<button type="button" data-rt7-acao="${li.desfazer}" data-rt7-hv="4" style="flex:none;background:none;border:none;padding:2px 6px;font:800 10.5px 'Manrope',sans-serif;color:#7A8494;cursor:pointer;">desfazer ✕</button>`
+                : `<span style="flex:none;font:700 9.5px 'Manrope',sans-serif;color:#8A6516;">${li.porque}</span>`}
+            </div>
+          `).join('')}
+          ${(d.logVazio) ? `<span style="font:600 11.5px 'Manrope',sans-serif;color:#7A8494;">Nada ainda — aprovar contas, disparar importação, decidir território e cobranças caem aqui.</span>` : ''}
+        </div>
+      ` : ''}
+
+      <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 22px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${d.rodapeFonte} · <b style="color:#E51A31;">takeat</b> — vender mais servindo com excelência.</p>
+    </div>
+  `;
 }
 
 document.addEventListener('click', ev => {
@@ -42608,7 +42732,7 @@ async function rt7Iniciar() {
 
   renderRotasProspeccao();
 
-  await Promise.all([rt7Carregar(), rt7CarregarRadar()]);
+  await rt7Carregar();
   renderRotasProspeccao();
 }
 
