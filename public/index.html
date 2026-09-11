@@ -11314,6 +11314,9 @@ function fn3ChipPasso(l, e) {
     + '<span class="fn3-passo-livre">'
     +   '<input type="date" class="fn3-passo-in" data-fn3-passo-in="' + id + '"'
     +     ' value="' + esc(fn3DataISO(1)) + '" min="' + esc(fn3DataISO(0)) + '">'
+
+    +   '<input type="time" step="900" class="fn3-passo-in" data-fn3-passo-hora="' + id + '"'
+    +     ' title="hora (opcional) — sem ela o compromisso entra às 9h">'
     +   '<button type="button" class="fn3-passo-ok" data-fn3-passo-ok="' + id + '">datar ▸</button>'
     + '</span>'
     + '<span class="fn3-passo-pe">cria a tarefa de ' + esc(FN3_PASSO_TIPO[et])
@@ -11919,7 +11922,15 @@ function fn3Ligar(el, redesenhar) {
     redesenhar();
   }));
 
-  const gravarPasso = async function (id, dataISO, botao) {
+  const gravarPasso = async function (id, dataISO, botao, horaCrua) {
+    const hora = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(String(horaCrua || '').trim())
+      ? String(horaCrua).trim() : '';
+    if (horaCrua && !hora) {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('A hora precisa estar no formato HH:MM — não datei nada.', 'atencao');
+      }
+      return;
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dataISO || ''))) {
       if (typeof mostrarToast === 'function') {
         mostrarToast('Escolha uma data — não datei nada.', 'atencao');
@@ -11939,7 +11950,9 @@ function fn3Ligar(el, redesenhar) {
     const texto = String(est.cta || 'Próximo passo').replace(/\s*→\s*$/, '');
     if (botao) { botao.disabled = true; botao.textContent = 'datando…'; }
 
-    const quando = dataISO + 'T12:00:00.000Z';
+    const quando = hora
+      ? (dataISO + 'T' + String(Number(hora.slice(0, 2)) + 3).padStart(2, '0') + ':' + hora.slice(3, 5) + ':00.000Z')
+      : (dataISO + 'T12:00:00.000Z');
     let ok = false, erro = null;
     try {
       const token = (typeof tokenDeSessaoGlobal === 'function') ? await tokenDeSessaoGlobal() : null;
@@ -11947,6 +11960,7 @@ function fn3Ligar(el, redesenhar) {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
         body: JSON.stringify({ op: 'nota', dealId: String(lead.id), texto: texto,
+          ...(hora ? { hora: hora } : {}),
           data: dataISO, tipo: tipo, tipoAcao: 'proximo-passo' })
       }), 9000, 'fn3-proximo-passo');
       const d = await resp.json().catch(() => ({}));
@@ -11992,7 +12006,10 @@ function fn3Ligar(el, redesenhar) {
     const id = btn.dataset.fn3PassoOk;
 
     const campo = el.querySelector('[data-fn3-passo-in="' + id + '"]');
-    await gravarPasso(id, campo ? String(campo.value || '').trim() : '', btn);
+
+    const campoH = el.querySelector('[data-fn3-passo-hora="' + id + '"]');
+    await gravarPasso(id, campo ? String(campo.value || '').trim() : '', btn,
+      campoH ? String(campoH.value || '').trim() : '');
   }));
 
   el.querySelectorAll('[data-fn3-valor]').forEach(btn => btn.addEventListener('click', ev => {
@@ -31493,8 +31510,8 @@ function d7NomeDaMunicao(rep, id) {
 
 function d7SubDaVisita(l) {
   const lead = l.lead;
-  const onde = (typeof pl6TextoDaRegiao === 'function' ? pl6TextoDaRegiao(lead) : '')
-    || lead.bairro || lead.cidade || '';
+
+  const onde = lead.regiaoNome || lead.bairro || lead.cidade || '';
   if (lead.tipo === 'c') {
     const parado = lead.dias != null
       ? ('há ' + lead.dias + 'd na etapa' + (lead.sla ? ' · acima do SLA' : ''))
