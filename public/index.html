@@ -20702,6 +20702,8 @@ function pl6DadosFinal(rep) {
 
     buscaQ: String(s.q || ''),
     buscaN: municaoOrd.length,
+
+    cargaDe: String((typeof DATA !== 'undefined' && DATA && DATA.hubspotUpdatedAtFmt) || ''),
     municao: municaoOrd.slice(0, 60).map(function (l) {
       const sel = !!(selLead && selLead.id === l.id);
       const tg = pfTag(l);
@@ -21106,7 +21108,14 @@ function pl6TelaFinalHTML(d) {
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
-          ${d.municaoVazia ? `<span style="font:700 10.5px 'Manrope',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;">nada neste filtro.</span>` : ''}
+          ${d.municaoVazia ? (d.buscaQ
+
+            ? `<span style="display:block;font:700 10.5px/1.6 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #F0DFB6;border-radius:9px;padding:10px 12px;">
+                 Nenhuma conta com <b>"${esc(d.buscaQ)}"</b> nesta carga${d.cargaDe ? ' <b>de ' + esc(d.cargaDe) + '</b>' : ''}.<br>
+                 Conta criada depois disso entra na próxima leitura do HubSpot — se acabaram de cadastrar, busque o dado novo.
+                 <button type="button" data-pl6-buscar-dado-novo="1" style="display:inline-flex;align-items:center;min-height:30px;margin-top:8px;padding:0 13px;border:1px solid #8A6516;border-radius:999px;background:#FDFEFF;font:800 10.5px 'Manrope',sans-serif;color:#8A6516;cursor:pointer;">buscar dado novo do HubSpot ↻</button>
+               </span>`
+            : `<span style="font:700 10.5px 'Manrope',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;">nada neste filtro.</span>`) : ''}
         </div>
       </div>
     </div>
@@ -21669,6 +21678,21 @@ function pl6Ligar(box, rep) {
       return mutar({ grade: g }, msg);
     }
 
+    if (d.pl6BuscarDadoNovo) {
+      const botao = ev.target.closest('[data-pl6-buscar-dado-novo]');
+      if (botao) { botao.disabled = true; botao.textContent = 'buscando…'; }
+      if (typeof farolBuscarEAplicar !== 'function') {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('A busca de dado novo não está disponível nesta sessão — recarregue a página.', 'atencao');
+        }
+        return;
+      }
+      try { await farolBuscarEAplicar(); } catch (e) {
+        console.error('Planejamento, buscar dado novo:', e && e.message);
+      }
+
+      return redesenhar();
+    }
     if (d.pl6NovoLead) {
       pl6UI.novoLead = { nome: '', bairro: '', telefone: '', fonte: 'rua', erro: '', salvando: false };
       pl6UI.sel = null;

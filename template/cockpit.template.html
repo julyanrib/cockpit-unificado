@@ -31015,6 +31015,9 @@ function pl6DadosFinal(rep) {
        contagem a coluna passaria a mentir sobre o tamanho da munição. */
     buscaQ: String(s.q || ''),
     buscaN: municaoOrd.length,
+    /* DE QUANDO É ESTA CARGA. Sem isto, "0 contas" afirma que a conta não existe, quando
+       a verdade pode ser que ela nasceu depois desta leitura do robô. */
+    cargaDe: String((typeof DATA !== 'undefined' && DATA && DATA.hubspotUpdatedAtFmt) || ''),
     municao: municaoOrd.slice(0, 60).map(function (l) {
       const sel = !!(selLead && selLead.id === l.id);
       const tg = pfTag(l);
@@ -31512,7 +31515,18 @@ function pl6TelaFinalHTML(d) {
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
-          ${d.municaoVazia ? `<span style="font:700 10.5px 'Manrope',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;">nada neste filtro.</span>` : ''}
+          ${d.municaoVazia ? (d.buscaQ
+            /* ══ O VAZIO DA BUSCA EXPLICA O VAZIO (11/09/26) ══════════════════════════
+               "0 contas com «barr»" afirmava que a conta não existe. Medido no caso da
+               Barraca Dubiel: ela existia, estava no snapshot, e a carga DAQUELA ABA era
+               anterior à publicação do robô. Conta criada agora entra na próxima leitura —
+               e isso tem de estar escrito, com a hora da carga e com o botão que resolve. */
+            ? `<span style="display:block;font:700 10.5px/1.6 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #F0DFB6;border-radius:9px;padding:10px 12px;">
+                 Nenhuma conta com <b>"${esc(d.buscaQ)}"</b> nesta carga${d.cargaDe ? ' <b>de ' + esc(d.cargaDe) + '</b>' : ''}.<br>
+                 Conta criada depois disso entra na próxima leitura do HubSpot — se acabaram de cadastrar, busque o dado novo.
+                 <button type="button" data-pl6-buscar-dado-novo="1" style="display:inline-flex;align-items:center;min-height:30px;margin-top:8px;padding:0 13px;border:1px solid #8A6516;border-radius:999px;background:#FDFEFF;font:800 10.5px 'Manrope',sans-serif;color:#8A6516;cursor:pointer;">buscar dado novo do HubSpot ↻</button>
+               </span>`
+            : `<span style="font:700 10.5px 'Manrope',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;">nada neste filtro.</span>`) : ''}
         </div>
       </div>
     </div>
@@ -32290,6 +32304,27 @@ function pl6Ligar(box, rep) {
        lançava ReferenceError dentro do ouvinte e morria ali: botão com cursor, com
        hover, e sem efeito nenhum. Julyan, 11/09: "ele não consegue criar lead novo na
        tela de planejamento". */
+    /* ── pl6BuscarDadoNovo ── o botão do vazio da busca ───────────────────────────────
+       Ele existe porque "0 contas com «barr»" mentia: a Barraca Dubiel existia, estava no
+       snapshot, e a carga DAQUELA ABA era anterior à publicação do robô. Este é o único
+       gesto que resolve, e é a MESMA recarga que o farol dispara sozinho quando o robô
+       publica — não um segundo caminho de leitura. */
+    if (d.pl6BuscarDadoNovo) {
+      const botao = ev.target.closest('[data-pl6-buscar-dado-novo]');
+      if (botao) { botao.disabled = true; botao.textContent = 'buscando…'; }
+      if (typeof farolBuscarEAplicar !== 'function') {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('A busca de dado novo não está disponível nesta sessão — recarregue a página.', 'atencao');
+        }
+        return;
+      }
+      try { await farolBuscarEAplicar(); } catch (e) {
+        console.error('Planejamento, buscar dado novo:', e && e.message);
+      }
+      /* REDESENHA DE QUALQUER JEITO: se veio dado novo, a lista muda; se não veio, o
+         botão volta ao normal em vez de ficar "buscando…" para sempre. */
+      return redesenhar();
+    }
     if (d.pl6NovoLead) {
       pl6UI.novoLead = { nome: '', bairro: '', telefone: '', fonte: 'rua', erro: '', salvando: false };
       pl6UI.sel = null;
