@@ -20703,6 +20703,27 @@ function pl6DadosFinal(rep) {
     buscaQ: String(s.q || ''),
     buscaN: municaoOrd.length,
 
+    buscaNoPlano: !alvoBusca ? [] : (function () {
+      const achados = [];
+      todos.forEach(function (l) {
+        if (naGrade.indexOf(l.id) < 0) return;
+        if (pl6ChaveBairro(l.nome || '').indexOf(alvoBusca) < 0) return;
+        for (let di = 0; di < grade.length; di++) {
+          for (let si = 0; si < grade[di].length; si++) {
+            if (pl6SlotId(grade[di][si]) !== l.id) continue;
+            achados.push({
+              nome: esc(l.nome),
+              quando: esc((dias[di] ? (dias[di].rot + ' ' + dias[di].data) : 'no plano')
+                + ' · ' + (pl6SlotHora(grade[di][si], si) || pl6HoraDaFaixa(si) || '')),
+              ir: di + '.' + si
+            });
+            return;
+          }
+        }
+      });
+      return achados;
+    }()),
+
     cargaDe: String((typeof DATA !== 'undefined' && DATA && DATA.hubspotUpdatedAtFmt) || ''),
     municao: municaoOrd.slice(0, 60).map(function (l) {
       const sel = !!(selLead && selLead.id === l.id);
@@ -21105,6 +21126,14 @@ function pl6TelaFinalHTML(d) {
         </div>
         <input type="search" data-pl6-busca-nome="1" value="${esc(d.buscaQ || '')}" placeholder="achar conta pelo nome — ex.: Coliseu" style="display:block;width:100%;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:8px 14px;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;outline:none;margin-bottom:8px;">
         ${d.buscaQ ? `<span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-bottom:8px;">${d.buscaN} conta${d.buscaN === 1 ? '' : 's'} com "${esc(d.buscaQ)}" — arraste o card para o dia, ou clique nele e no horário</span>` : ''}
+        <!-- O QUE A BUSCA ACHOU E JA ESTA NO PLANO (11/09/26). A municao e o que FALTA
+             planejar, entao quem ja esta na grade nao aparece nela — e a busca herdava
+             esse corte sem a explicacao: o Marco digitou "barr", leu "0 contas" e
+             concluiu que a conta sumira. Ela estava no plano dele, tres colunas ao lado. -->
+        ${(d.buscaNoPlano || []).length ? `<div style="margin-bottom:8px;border:1px solid #CFE3D6;border-radius:9px;background:#F1F8F3;padding:8px 11px;">
+          <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#1F7A4D;margin-bottom:5px;">já no seu plano</span>
+          ${d.buscaNoPlano.map(p => `<button type="button" data-pl6-ir-no-plano="${p.ir}" style="display:block;width:100%;text-align:left;border:0;background:transparent;padding:3px 0;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;">${p.nome} <span style="font-weight:700;color:#1F7A4D;">· ${p.quando} ▸</span></button>`).join('')}
+        </div>` : ''}
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
@@ -21676,6 +21705,19 @@ function pl6Ligar(box, rep) {
           + ' — prospecção de rua saiu do plano · Supabase'
         : 'saiu da semana e voltou para a lista · Supabase — se a visita já estava marcada no HubSpot, desmarque na Agenda';
       return mutar({ grade: g }, msg);
+    }
+
+    if (d.pl6IrNoPlano) {
+      const [di] = String(d.pl6IrNoPlano).split('.').map(Number);
+      pl6UI.diaAtivo = isFinite(di) ? di : null;
+      pl6UI.q = '';
+      await redesenhar();
+      const col = box.querySelector('[data-pl6-dia="' + di + '"]')
+        || box.querySelector('[data-pl6-dia-drop="' + di + '"]');
+      if (col && typeof col.scrollIntoView === 'function') {
+        col.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
     }
 
     if (d.pl6BuscarDadoNovo) {
