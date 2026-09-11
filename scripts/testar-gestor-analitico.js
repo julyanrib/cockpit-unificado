@@ -1021,7 +1021,10 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
      lista de onde o ajuste sai. Os tres eixos tem de falar da MESMA venda. */
   checar('clientes do mes sai de vendasMes, que e quem aplica a competencia',
     tela.indexOf('const fechClientes = vm.totalClientes != null ? Number(vm.totalClientes) : m.time.fech;') > -1
-      && tela.indexOf('fechN: fechClientes,') > -1);
+      && tela.indexOf('fechN: fechClientes,') > -1
+      /* E A PORCENTAGEM TAMBEM: ela foi o ultimo lugar onde a contagem velha sobreviveu,
+         mostrando 12% (6/50) ao lado de um KPI que dizia 5/50. */
+      && tela.indexOf('pctClientes: m.time.meta ? Math.round(fechClientes / m.time.meta * 100) : null,') > -1);
   checar('e o fechado de cada um no ranking tambem',
     tela.indexOf('const fechDele = vendasDele ? Number(vendasDele.count) : r.fech;') > -1
       && tela.indexOf('fech: fechDele,') > -1);
