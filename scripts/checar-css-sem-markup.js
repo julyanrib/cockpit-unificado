@@ -58,7 +58,6 @@ const DIVIDA = {
      do Meu funil pode estar na mesma situacao em que o do Planejamento estava — lista cheia
      de botao que nao existe. Isso se mede quando a aba for revista, nao por palpite. */
   'fn3-cta': 'Meu funil — CTA do card antigo; ainda citada no piso de 44px do celular',
-  'fn3-card-valor': 'Meu funil — o chip de MRR nasceu com outro nome de classe (fn3-chip-*)',
 
   /* ══ AS 15 DA ABA HOJE, achadas em 04/09/26 ao ADICIONAR o prefixo `hoje-` a esta guarda.
      Elas não vieram da prancha 8b: são de redesenhos anteriores da aba (a faixa `hoje-hero`
@@ -73,20 +72,7 @@ const DIVIDA = {
      arquivo.
      A `.hoje-actions-card`, que era MINHA (o cartão de 3 ações), saiu de verdade no mesmo
      commit — a diferença é que dela eu sabia a origem e o alcance. */
-  'hoje-fechamentos-label': 'Hoje — bloco de fechamentos de um redesenho anterior',
-  'hoje-fechamentos-row': 'Hoje — bloco de fechamentos de um redesenho anterior',
-  'hoje-fechamentos-val': 'Hoje — bloco de fechamentos de um redesenho anterior',
-  'hoje-grid': 'Hoje — layout de dois paineis que a v3 substituiu',
-  'hoje-hero': 'Hoje — faixa antiga do hero, hoje xv3-hero',
-  'hoje-hero-date': 'Hoje — faixa antiga do hero',
-  'hoje-hero-greet': 'Hoje — faixa antiga do hero',
   'hoje-hero-stats': 'Hoje — faixa antiga do hero',
-  'hoje-hero-top': 'Hoje — faixa antiga do hero',
-  'hoje-month-card': 'Hoje — card do mes que virou o anel de 58px do hero em 31/08',
-  'hoje-month-rank': 'Hoje — card do mes que virou o anel do hero',
-  'hoje-month-track': 'Hoje — card do mes que virou o anel do hero',
-  'hoje-month-value': 'Hoje — card do mes que virou o anel do hero',
-  'hoje-panel': 'Hoje — layout de dois paineis que a v3 substituiu',
   'hoje-panel-title': 'Hoje — layout de dois paineis que a v3 substituiu'
 };
 
