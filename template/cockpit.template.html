@@ -11254,7 +11254,25 @@ async function hidratarSessao(email) {
       const resp = await fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } });
       corpo = await resp.json().catch(() => ({}));
       if (!resp.ok) {
-        if (resp.status === 403 && supa) await supa.auth.signOut().catch(() => {});
+        /* ══ SAIR AQUI É SAIR DESTE APARELHO (11/09/26) ══════════════════════════════
+           `signOut()` sem argumento é GLOBAL no supabase-js: apaga a sessão do usuário
+           em TODOS os aparelhos. Estava no ramo de 403 desta carga — uma falha numa aba
+           derrubava o executivo do celular dele, na rua, no meio do dia.
+           MEDIDO na sessão do Marco: token válido por mais 52 minutos, /api/dados em 401,
+           e o Supabase explicando — "session_not_found: Session from session_id claim in
+           JWT does not exist". A sessão não tinha vencido; tinha sido revogada. */
+        if (resp.status === 403 && supa) {
+          await supa.auth.signOut({ scope: 'local' }).catch(() => {});
+        }
+        /* ══ E O TOKEN MORTO SAI DE CENA ═════════════════════════════════════════════
+           Com 401 o token que está guardado é um token que o servidor recusa — e ele
+           continuava no localStorage, então CADA reload tentava de novo com ele e caía
+           no mesmo login. Limpar aqui faz o próximo carregamento começar limpo.
+           Só no 401: 403 é "você não pode", e aí o problema é de permissão, não de
+           credencial podre. */
+        if (resp.status === 401 && supa) {
+          await supa.auth.signOut({ scope: 'local' }).catch(() => {});
+        }
         mostrarLogin(corpo.erro || 'Não foi possível carregar seus dados. Tente entrar de novo.');
         return;
       }
@@ -53312,7 +53330,10 @@ function abrirPerfilDrawer() {
 }
 
 document.getElementById('perfilSairBtn').addEventListener('click', async () => {
-  if (supa) await supa.auth.signOut();
+  /* `scope: 'local'` (11/09/26): ninguém que clica em "sair" no computador espera cair
+     no celular. O padrão do supabase-js é global, e era esse padrão que fazia o time
+     perder a sessão da rua por causa de um clique no escritório. */
+  if (supa) await supa.auth.signOut({ scope: 'local' }).catch(() => {});
   location.reload();
 });
 
