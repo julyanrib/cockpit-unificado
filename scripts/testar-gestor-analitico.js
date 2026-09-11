@@ -1003,7 +1003,11 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
        passagem em silencio — medido na producao, DATA.foraDoTime chegava undefined com o
        valor sentado em DATA.kpisHub.foraDoTime. */
     tela.indexOf('const ft = (DATA.kpisHub && DATA.kpisHub.foraDoTime) || null;') > -1
-      && tela.indexOf('negócios fora do time · ') > -1);
+      /* O " · " saiu desta string quando o pill passou a dizer quantos DONOS são: a
+         contagem de donos entra entre o rótulo e o MRR. Ancorar no rótulo, não na
+         pontuação que veio depois. */
+      && tela.indexOf("' negócios fora do time'") > -1
+      && tela.indexOf("d.semDonoDonos + ' donos'") > -1);
   checar('nao medido nao e zero nem neste bloco',
     tela.indexOf('const semDono = ft ? (Number(ft.n) || 0) : null;') > -1
       && tela.indexOf('negócios de quem saiu: não medido nesta carga') > -1);
