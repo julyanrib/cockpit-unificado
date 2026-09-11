@@ -1026,6 +1026,45 @@ console.log('');
     'o total da munição some quando ele digita; sem a contagem a coluna passa a mentir sobre o tamanho dela');
 }());
 
+
+/* ══ O VAZIO DA BUSCA EXPLICA O VAZIO (11/09/26) ══════════════════════════════════════
+   Julyan: "marco cadastrou no cockpit o lead barraca do biel e eu tento pesquisar ele e
+   nao aparece".
+
+   MEDIDO, e a busca NAO estava quebrada: o negocio existia (Barraca Dubiel, dono
+   86100505, Conversa com Decisor, criado as 14:28), ESTAVA no snapshot que a producao
+   serve, e reproduzindo a regra da carteira sobre esse snapshot ele aparece — 26 contas,
+   uma casa com "barr".
+
+   O que falhou foi o FRESCOR: o negocio nasceu as 14:28 e entrou no snapshot as 15:45.
+   Quem tinha a aba aberta antes disso procurou numa carga onde ele nao podia estar — e a
+   tela dizia "0 contas com barr", uma afirmacao sobre o MUNDO, quando a verdade era "nao
+   esta NESTA carga". */
+(function () {
+  const semCom4 = function (s) { return String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' '); };
+  const cod = semCom4(tpl);
+
+  checar('a busca sem resultado diz de quando e a carga',
+    cod.indexOf('cargaDe: String(') > 0
+      /* AMARRADA NA CONDICAO, e nao so na presenca do texto: sabotagem que trocava
+         `d.buscaQ` por `false` deixava a frase no arquivo e o vazio mudo de novo. */
+      && cod.indexOf('d.municaoVazia ? (d.buscaQ') > 0
+      && cod.indexOf('hubspotUpdatedAtFmt') > 0
+      && cod.indexOf('Nenhuma conta com') > 0
+      && cod.indexOf('nesta carga') > 0,
+    'zero sem data afirma que a conta nao existe, quando ela so nasceu depois desta leitura');
+
+  checar('e oferece o gesto que resolve, ligado no farol que ja existe',
+    cod.indexOf('data-pl6-buscar-dado-novo="1"') > 0
+      && /if \(d\.pl6BuscarDadoNovo\) \{/.test(cod)
+      && /await farolBuscarEAplicar\(\);/.test(cod),
+    'botao no vazio sem ouvinte seria o clique morto que esta tela existe para nao ter');
+
+  checar('e o vazio SEM busca continua curto',
+    cod.indexOf('nada neste filtro.') > 0,
+    'quando ele so trocou de filtro, a frase longa seria ruido');
+}());
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);
