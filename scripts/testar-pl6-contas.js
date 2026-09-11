@@ -857,6 +857,116 @@ console.log('');
     'planejar o dia errado é o erro caro desta tela, e a data resolve isso antes do clique');
 }());
 
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   CRIAR LEAD NOVO NO PLANEJAMENTO (11/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "ele não consegue criar lead novo na tela de planejamento".
+
+   O BOTÃO EXISTIA DESDE 04/09 E ESTAVA MORTO: o handler era
+       if (d.pl6NovoLead) { criarLead(null); return; }
+   e `criarLead` não existe no arquivo — zero ocorrências fora daquela linha. O clique
+   lançava ReferenceError dentro do ouvinte e morria ali. Botão com cursor, com hover, com
+   piso de 44px no celular, e sem efeito nenhum.
+
+   NENHUMA GUARDA PEGAVA: o atributo estava no markup, o ouvinte estava ligado, o CSS
+   estava lá. É "listener não é comportamento" no estado puro — e é por isso que a
+   primeira checagem abaixo mede CHAMADA CONTRA DECLARAÇÃO, e não presença de botão. */
+(function () {
+  const semCom2 = s => String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' ');
+  const cod = semCom2(tpl);
+
+  /* ── 1 · NENHUM HANDLER DESTA TELA CHAMA FUNÇÃO QUE NÃO EXISTE ──────────────────── */
+  checar('todo handler do Planejamento chama função que existe',
+    (function () {
+      const i = cod.indexOf('function pl6Ligar(box, rep) {');
+      if (i < 0) return false;
+      let d = 0, j = i, viu = false;
+      while (j < cod.length) {
+        const c = cod[j];
+        if (c === '{') { d++; viu = true; }
+        else if (c === '}') { d--; if (viu && d === 0) { j++; break; } }
+        j++;
+      }
+      const corpo = cod.slice(i, j);
+      /* as funções que o corpo CHAMA, pelo padrão `nome(` */
+      const chamadas = [...new Set((corpo.match(/\b([a-z][A-Za-z0-9_]{3,})\(/g) || [])
+        .map(function (s) { return s.slice(0, -1); }))];
+      /* o que é declarado em algum lugar do arquivo, ou é local do próprio bloco, ou é
+         API do navegador — a lista de ignorados é curta de propósito */
+      const nativas = ['function', 'catch', 'return', 'typeof', 'await', 'String', 'Number',
+        'Boolean', 'Array', 'Object', 'Math', 'Date', 'JSON', 'parseInt', 'parseFloat',
+        'setTimeout', 'clearTimeout', 'confirm', 'alert', 'prompt', 'console', 'isNaN',
+        'decodeURIComponent', 'encodeURIComponent', 'requestAnimationFrame'];
+      const faltando = chamadas.filter(function (nome) {
+        if (nativas.indexOf(nome) > -1) return false;
+        if (new RegExp('(?:async )?function ' + nome + '\\s*\\(').test(cod)) return false;
+        if (new RegExp('(?:const|let|var) ' + nome + '\\s*=').test(cod)) return false;
+        if (new RegExp('\\.' + nome + '\\(').test(corpo)) return false;   /* método de objeto */
+        return true;
+      });
+      if (faltando.length) console.log('      ↳ sem declaração: ' + faltando.join(', '));
+      return faltando.length === 0;
+    }()),
+    'o botão de criar lead chamou `criarLead` por sete dias, e criarLead nunca existiu — ReferenceError no ouvinte é clique morto que nenhuma guarda de markup enxerga');
+
+  /* ── 2 · O FORMULÁRIO EXISTE, E PEDE O MÍNIMO ───────────────────────────────────── */
+  checar('o botão abre um formulário com nome, bairro, telefone e fonte',
+    /pl6UI\.novoLead = \{ nome: '', bairro: '', telefone: '', fonte: 'rua'/.test(cod)
+      && cod.indexOf('data-pl6-novo-campo="nome"') > 0
+      && cod.indexOf('data-pl6-novo-campo="bairro"') > 0
+      && cod.indexOf('data-pl6-novo-campo="telefone"') > 0
+      && /\[\['instagram', 'Instagram'\], \['mapa', 'Maps'\], \['rua', 'rua'\]\]/.test(cod),
+    'a fonte é chip e não texto livre porque ela é medida depois — "novas → lead" por origem só existe com origem de nome fechado');
+
+  /* ── 3 · O QUE ELE DIGITOU SOBREVIVE AO REDESENHO ───────────────────────────────── */
+  checar('o que ele digitou sobrevive ao clique no chip',
+    /const lerCamposNovoLead = function \(\) \{/.test(cod)
+      && /if \(d\.pl6NovoFonte\) \{[\s\S]{0,120}?lerCamposNovoLead\(\);/.test(cod)
+      && /if \(d\.pl6NovoGravar\) \{[\s\S]{0,200}?lerCamposNovoLead\(\);/.test(cod),
+    'o chip redesenha a coluna e o redesenho reconstrói os inputs pelo estado: sem isto, digitar o nome e clicar em Instagram apaga o nome');
+
+  /* ── 4 · UM ESCRITOR SÓ, COM DOIS DESTINOS ──────────────────────────────────────── */
+  checar('a conta nova nasce pelo MESMO insert do mapa',
+    /async function materializarLeadDoMapa\(poi, ownerId, fonte, destino\)/.test(cod)
+      && /const r = await materializarLeadDoMapa\(poi, rep\.ownerId, fonte, 'municao'\);/.test(cod)
+      && (cod.match(/from\('leads_prospeccao'\)\.insert/g) || []).length === 1,
+    'dois inserts para a mesma tabela divergem nos campos na primeira mudança — e o dedupe vive nos campos');
+
+  checar('e na munição ela nasce sem dia, não em rota sem dia',
+    /status: paraMunicao \? 'atribuido' : 'na_rota',/.test(cod)
+      && /data_rota: paraMunicao \? null : isoDate\(new Date\(\)\),/.test(cod),
+    '`na_rota` sem `data_rota` é o estado que ninguém lê: os nove leitores comparam com HOJE');
+
+  /* ── 5 · NÃO CRIA A MESMA CONTA DUAS VEZES ──────────────────────────────────────── */
+  checar('a conta digitada é conferida contra a munição dele',
+    /já está na sua munição/.test(cod)
+      && /prospeccaoNormalizarTexto\(nome\)/.test(cod),
+    'a conta digitada não passa pelo dedupe do servidor — sem a checagem, ele cria a mesma padaria toda vez que passar na porta dela');
+
+  /* ── 6 · A CIDADE VEM DO TERRITÓRIO, E O CAMPO DO REP É `name` ──────────────────── */
+  checar('a cidade sai do território dele, lendo o campo certo',
+    /const nomeDoRep = String\(\(rep && \(rep\.name \|\| rep\.nome\)\) \|\| ''\);/.test(cod)
+      && /String\(x\.rep \|\| ''\) === nomeDoRep/.test(cod),
+    'DATA.reps usa `name` e DATA.usuarios usa `nome`: ler só `nome` fazia a conta nascer sem cidade, com o território dele declarado no arquivo');
+
+  /* ── 7 · A LISTA RECARREGA, SENÃO ELE CRIA DE NOVO ──────────────────────────────────
+     A primeira versão desta guarda media o arquivo INTEIRO: `typeof carregarProspeccao`
+     aparece em outros quatro pontos do template, então ela dava verde com a recarga
+     apagada daqui. A sabotagem pegou. Agora ela mede DENTRO de pl6CriarLead. */
+  const corpoCriar = (function () {
+    const i = cod.indexOf('async function pl6CriarLead(rep, campos) {');
+    if (i < 0) return '';
+    const f = cod.indexOf('\nasync function pl6Carregar(', i);
+    return f < 0 ? '' : cod.slice(i, f);
+  }());
+  checar('a munição recarrega depois de criar, dentro do escritor',
+    corpoCriar.length > 200
+      && /if \(typeof carregarProspeccao === 'function'\) \{[\s\S]{0,200}?await carregarProspeccao\(\);/.test(corpoCriar)
+      && /está na sua munição/.test(cod),
+    'sem recarregar, a conta gravada não aparece na lista e ele cria a mesma de novo');
+}());
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);
