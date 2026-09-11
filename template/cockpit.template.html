@@ -13086,7 +13086,14 @@ function h8Insight(item) {
     /* A FRASE: o que está parado e o que fazer. Os dois pedaços vêm de números
        diferentes do MESMO negócio, e é isso que faz duas linhas não dizerem a mesma
        coisa — medido: 37 negócios, 1 frase antes, 16 depois. */
-    motivo: parado + ' · ' + oQue
+    motivo: parado + ' · ' + oQue,
+    /* E A AÇÃO SOZINHA (11/09/26). `motivo` é para a TELA: o diagnóstico explica por que
+       aquela linha está na fila. Quando ele virava o assunto da tarefa no HubSpot, o CRM
+       ganhava 29 tarefas chamadas "Visita - 4d na Visita — régua é 5d · ..." — nenhuma
+       dizendo de que cliente era, várias idênticas entre si, em cinco executivos.
+       Assunto de tarefa é o que a pessoa lê daqui a três dias; diagnóstico não serve
+       para isso, e é por isso que a ação tem campo próprio. */
+    acao: oQue
   };
 }
 
@@ -15092,9 +15099,13 @@ function h8LigarFila(el, r, redesenhar) {
       const ins = h8Insight(it);
       /* A AÇÃO DO PASSO sai do insight — é a frase que a tela já mostrou para ele, então
          a tarefa no HubSpot diz a mesma coisa que a tela dizia. */
+      /* `ins.acao` E NÃO `ins.motivo` (11/09/26): este texto vira o ASSUNTO da tarefa no
+         HubSpot, e `motivo` carrega o diagnóstico junto ("4d na Visita — régua é 5d · ").
+         Medido no CRM: 29 tarefas com o diagnóstico no nome, nenhuma identificando o
+         cliente. O diagnóstico continua na tela e na nota de registro logo abaixo. */
       const acao = (typeof proximaAcaoSugerida === 'function' && desfId)
-        ? ((proximaAcaoSugerida(desfId, lead) || {}).acao || ins.motivo)
-        : ins.motivo;
+        ? ((proximaAcaoSugerida(desfId, lead) || {}).acao || ins.acao || ins.motivo)
+        : (ins.acao || ins.motivo);
 
       /* ══ OTIMISTA, COM REVERSÃO (a decisão de 04/09) ═══════════════════════════════
          A linha vira ✓ agora e a escrita vai atrás. Se o HubSpot recusar, ela VOLTA — a
@@ -31614,13 +31625,18 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
       pl6UI.slotPicker = null;
       /* O painel de criacao ja coleta os campos obrigatorios da etapa e grava. Quando ele
          concluir, agendamos — nao antes: negocio que falhou nao pode virar compromisso. */
-      abrirPassagemContaAlvoProFunil(l._bruto, async () => {
+      abrirPassagemContaAlvoProFunil(l._bruto, async (dealNovo) => {
         try {
           if (typeof criarTarefaVisitaNoHubspot === 'function') {
-            /* SEM dealId: o negocio acabou de nascer no painel de criacao e o id dele nao
-               volta ate aqui. O marcador sai com `-` e quem le casa por nome + dono +
-               dia — nunca com `l._bruto.id`, que e o id da leads_prospeccao. */
-            await criarTarefaVisitaNoHubspot(l._bruto, rep.ownerId, hora, { silencioso: true, origem: 'planejamento' }, diaISO);
+            /* O dealId VEM DO PAINEL DE CRIAÇÃO (11/09/26). Antes daqui saía `-` no
+               marcador e a tarefa ficava solta, fora da timeline do negócio que este
+               mesmo gesto acabou de criar — medido no CRM: as visitas de conta nova de
+               hoje saíram todas com `:-`.
+               `dealNovo` é o id que /api/criar-negocio devolveu, e NUNCA `l._bruto.id`,
+               que é o id da leads_prospeccao: os dois são números, e trocar um pelo
+               outro gravaria o id da tabela errada num campo que um robô vai ler. */
+            await criarTarefaVisitaNoHubspot(l._bruto, rep.ownerId, hora,
+              { silencioso: true, origem: 'planejamento', ...(dealNovo ? { dealId: dealNovo } : {}) }, diaISO);
           }
           if (typeof registrarAgendamentoLocal === 'function') {
             registrarAgendamentoLocal(l._bruto, diaISO, hora, rep.ownerId);
@@ -37013,7 +37029,13 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
       /* A FRASE PARA DE MANDAR ESPERAR: a reconciliacao continua acontecendo, mas ele
          nao precisa dela para ver o negocio. */
       mostrarToast(`"${nome}" criado em Prospecção no HubSpot — já está no seu kanban e na munição do Planejamento ✓`, 'sucesso');
-      if (typeof aoConcluir === 'function') aoConcluir();
+      /* O ID DO NEGOCIO VAI PARA QUEM CHAMOU (11/09/26). Era aoConcluir() sem argumento,
+         e o id que a rota acabou de devolver morria aqui. Quem agenda no mesmo gesto — o
+         Planejamento — precisava dele para associar a tarefa ao negocio; sem ele, a visita
+         de toda conta nova nascia solta, fora da timeline do negocio que ela mesma acabou
+         de criar. MEDIDO no CRM: as visitas de conta nova de hoje sairam todas com `:-` no
+         marcador. Chamador que ignora o argumento continua funcionando igual. */
+      if (typeof aoConcluir === 'function') aoConcluir(data && data.id ? String(data.id) : null);
     } catch (e) {
       status.style.color = 'var(--red)';
       status.textContent = 'Falha ao falar com o HubSpot: ' + String((e && e.message) || e);
@@ -37144,7 +37166,13 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
           + (entrou ? ' — já está no seu Meu funil e na munição do Planejamento ✓' : '')
           + '.', 'sucesso');
       }
-      if (typeof aoConcluir === 'function') aoConcluir();
+      /* O ID DO NEGOCIO VAI PARA QUEM CHAMOU (11/09/26). Era aoConcluir() sem argumento,
+         e o id que a rota acabou de devolver morria aqui. Quem agenda no mesmo gesto — o
+         Planejamento — precisava dele para associar a tarefa ao negocio; sem ele, a visita
+         de toda conta nova nascia solta, fora da timeline do negocio que ela mesma acabou
+         de criar. MEDIDO no CRM: as visitas de conta nova de hoje sairam todas com `:-` no
+         marcador. Chamador que ignora o argumento continua funcionando igual. */
+      if (typeof aoConcluir === 'function') aoConcluir(data && data.id ? String(data.id) : null);
     } catch (e) {
       status.style.color = 'var(--red)';
       status.textContent = 'Falha ao falar com o HubSpot: ' + String((e && e.message) || e);

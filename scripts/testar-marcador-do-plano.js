@@ -324,6 +324,25 @@ async function main() {
     /\.\.\.\(opcoes && opcoes\.origem \? \{ origem: opcoes\.origem \} : \{\}\),/.test(tpl)
       && /\.\.\.\(opcoes && opcoes\.dealId \? \{ dealId: String\(opcoes\.dealId\) \} : \{\}\),/.test(tpl),
     'criarTarefaVisitaNoHubspot não manda o que o marcador precisa');
+  /* ── 9 · A CONTA NOVA AGENDADA TAMBÉM LEVA O NEGÓCIO ───────────────────────────────
+     MEDIDO NO CRM em 11/09/26, nas visitas que o Bruno pôs na semana:
+       COCKPIT:PLANO:v1:86100506:2026-09-14:17:00:visita:planejamento:64291499415  ← carteira
+       COCKPIT:PLANO:v1:86100506:2026-09-15:16:00:visita:planejamento:-            ← conta nova
+     As da carteira saíam associadas ao negócio (conferido: aparecem na busca por tarefas
+     associadas àqueles deals). As de conta nova saíam soltas — e não por falta de negócio:
+     o gesto CRIA o negócio primeiro e jogava o id fora, chamando `aoConcluir()` sem
+     argumento. A visita de toda conta nova ficava fora da timeline do negócio que ela
+     mesma acabou de criar. */
+  checar('quem cria o negócio devolve o id para quem pediu',
+    (tpl.match(/if \(typeof aoConcluir === 'function'\) aoConcluir\(data && data\.id \? String\(data\.id\) : null\);/g) || []).length === 2,
+    'os dois criadores de negócio (conta nova e passagem da conta-alvo) têm de entregar o id');
+
+  checar('e o Planejamento usa esse id na visita da conta nova',
+    /abrirPassagemContaAlvoProFunil\(l\._bruto, async \(dealNovo\) => \{/.test(tpl)
+      && /\.\.\.\(dealNovo \? \{ dealId: dealNovo \} : \{\}\)/.test(tpl)
+      && tpl.indexOf('dealId: l._bruto.id') < 0,
+    'sem isto a conta nova agendada vira tarefa solta; e o id NUNCA pode ser o da leads_prospeccao');
+
   checar('e o Planejamento assina as visitas que põe na semana',
     (tpl.match(/origem: 'planejamento'/g) || []).length >= 2,
     'achei ' + (tpl.match(/origem: 'planejamento'/g) || []).length

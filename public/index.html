@@ -7928,7 +7928,9 @@ function h8Insight(item) {
 
     ultimo: ultimoTxt,
 
-    motivo: parado + ' · ' + oQue
+    motivo: parado + ' · ' + oQue,
+
+    acao: oQue
   };
 }
 
@@ -9323,8 +9325,8 @@ function h8LigarFila(el, r, redesenhar) {
       const ins = h8Insight(it);
 
       const acao = (typeof proximaAcaoSugerida === 'function' && desfId)
-        ? ((proximaAcaoSugerida(desfId, lead) || {}).acao || ins.motivo)
-        : ins.motivo;
+        ? ((proximaAcaoSugerida(desfId, lead) || {}).acao || ins.acao || ins.motivo)
+        : (ins.acao || ins.motivo);
 
       const resumoOtimista = como + (desfId && TP_DESFECHOS[desfId] ? ' · ' + TP_DESFECHOS[desfId].rotulo : '')
         + ' · próximo passo ' + ((typeof fmtDailyLabel === 'function') ? fmtDailyLabel(dataISO) : dataISO)
@@ -21164,11 +21166,12 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
       }
       pl6UI.slotPicker = null;
 
-      abrirPassagemContaAlvoProFunil(l._bruto, async () => {
+      abrirPassagemContaAlvoProFunil(l._bruto, async (dealNovo) => {
         try {
           if (typeof criarTarefaVisitaNoHubspot === 'function') {
 
-            await criarTarefaVisitaNoHubspot(l._bruto, rep.ownerId, hora, { silencioso: true, origem: 'planejamento' }, diaISO);
+            await criarTarefaVisitaNoHubspot(l._bruto, rep.ownerId, hora,
+              { silencioso: true, origem: 'planejamento', ...(dealNovo ? { dealId: dealNovo } : {}) }, diaISO);
           }
           if (typeof registrarAgendamentoLocal === 'function') {
             registrarAgendamentoLocal(l._bruto, diaISO, hora, rep.ownerId);
@@ -25216,7 +25219,8 @@ function abrirNovaContaProspeccao(aoConcluir, semente) {
       stageOverlay.classList.remove('show');
 
       mostrarToast(`"${nome}" criado em Prospecção no HubSpot — já está no seu kanban e na munição do Planejamento ✓`, 'sucesso');
-      if (typeof aoConcluir === 'function') aoConcluir();
+
+      if (typeof aoConcluir === 'function') aoConcluir(data && data.id ? String(data.id) : null);
     } catch (e) {
       status.style.color = 'var(--red)';
       status.textContent = 'Falha ao falar com o HubSpot: ' + String((e && e.message) || e);
@@ -25327,7 +25331,8 @@ function abrirPassagemContaAlvoProFunil(lead, aoConcluir) {
           + (entrou ? ' — já está no seu Meu funil e na munição do Planejamento ✓' : '')
           + '.', 'sucesso');
       }
-      if (typeof aoConcluir === 'function') aoConcluir();
+
+      if (typeof aoConcluir === 'function') aoConcluir(data && data.id ? String(data.id) : null);
     } catch (e) {
       status.style.color = 'var(--red)';
       status.textContent = 'Falha ao falar com o HubSpot: ' + String((e && e.message) || e);
