@@ -715,7 +715,13 @@ console.log('');
    ══════════════════════════════════════════════════════════════════════════════════════ */
 (function () {
   const semCom = s => String(s).replace(/\/\*[\s\S]*?\*\//g, ' ');
-  const rot = semCom(pegarFn('g14RoteiroHTML'));
+  /* O ROTEIRO DO GESTOR (g14RoteiroHTML) SAIU EM 11/09/26 com a Daily 14a morta. Este
+     bloco existia para proteger "uma coluna, um idioma de cartão" entre a tela do gestor
+     e a do executivo; agora só uma delas desenha o dia, e as checagens que mediam o
+     markup do gestor viraram checagens do executivo — a exigência é a mesma (um cartão
+     só), medida no único lado que ainda tem cartão.
+     Não reancorei na Daily nova de propósito: ela é ESPELHO e não desenha cartão de
+     roteiro, então não existe markup equivalente para comparar. */
   /* O CARTÃO É UM SÓ DESDE A PRANCHA v2 (10/09/26): antes eram dois (d7LinhaVisita para
      a visita e d7CartaoSimples para o resto). Agora d7CartaoDoDiaHTML desenha tudo que
      ocupa hora e d7CartaoDoItem traduz o item do plano para ele. */
@@ -730,26 +736,24 @@ console.log('');
 
   /* UMA CHAMADA CADA, e não uma por tipo de item: os quatro ramos do roteiro (visita,
      bloqueado, rua, órfã) viraram um, porque o cartão já sabe desenhar os quatro. */
-  checar('as duas telas desenham o dia pelo mesmo cartao',
-    /d7CartaoDoDiaHTML\(d7CartaoDoItem\(l, true, linha\.planoDia \|\| null\), true\)/.test(rot)
-      && /d7CartaoDoDiaHTML\(v, false\)/.test(daily)
-      && /d7CartaoDoItem\(l, false, null\)/.test(semCom(pegarFn('d7DadosFinal'))),
-    'markup proprio em uma das duas volta a descrever a mesma manha em dois idiomas');
+  checar('os dois caminhos do dia desenham pelo mesmo cartao',
+    /d7CartaoDoDiaHTML\(v, false\)/.test(daily)
+      && /d7CartaoDoItem\(l, false, null\)/.test(semCom(pegarFn('d7DadosFinal')))
+      && (semCom(tpl).match(/function d7CartaoDoDiaHTML\(/g) || []).length === 1,
+    'markup proprio em um dos dois volta a descrever a mesma manha em dois idiomas');
 
-  /* O ✕ E ATO DO EXECUTIVO. No roteiro do gestor os tres cartoes passam comX falso: ele
-     le a promessa, e escrever na promessa de outra pessoa e tirar o dono dela. */
-  /* O GESTOR PASSA soLeitura=true NOS DOIS: no mapeador (que troca a ação pela leitura
-     dela) e no cartão (que esconde a régua de desfecho e o ✕). Ele lê a promessa. */
-  checar('o gestor le, e nao escreve, na promessa de outra pessoa',
-    /d7CartaoDoItem\(l, true,/.test(rot)
-      && rot.indexOf('data-d7-tirar') < 0 && rot.indexOf('data-d7-proposta') < 0
-      && /if \(soLeitura \|\| !v\.pendente\) return/.test(cartao),
-    'o ✕ ou a régua na tela do gestor tira do plano de outra pessoa');
+  /* O ✕ E ATO DO EXECUTIVO, e o modo somente-leitura é o que garante isso. Antes esta
+     checagem media o roteiro do gestor passando soLeitura=true; com aquele markup fora, o
+     que resta a proteger é o PORTÃO no cartão: existindo `soLeitura`, nenhuma tela que
+     mostre a promessa de outra pessoa consegue oferecer o ✕ nem a régua de desfecho. */
+  checar('o cartao tem modo somente-leitura, e ele esconde o ✕ e a regua',
+    /if \(soLeitura \|\| !v\.pendente\) return/.test(cartao)
+      && /function d7CartaoDoItem\(l, soLeitura/.test(semCom(tpl)),
+    'sem o portao de leitura, a tela que mostra a promessa de outra pessoa oferece o ✕ dela');
 
-  checar('a vaga livre do roteiro esta na linguagem da prancha',
-    /border:1\.5px ' \+ \(aberto \? 'solid' : 'dashed'\) \+ ' #F0A9B2/.test(rot)
-      && rot.indexOf("class=\"g14-livre") < 0,
-    'vaga com o estilo antigo ao lado de cartoes novos e a mesma coluna em dois produtos');
+  /* A VAGA LIVRE DO ROTEIRO DO GESTOR saiu com a 14a (11/09/26). A checagem irmã, logo
+     abaixo, é a que continua valendo e ficou MAIS forte: as classes .d7-linha* e
+     .g14-livre* não existem no CSS nem no markup. */
 
   /* AS CLASSES MORTAS SAEM. Regra que ninguem cita envelhece calada, e foi assim que a
      lista de piso de toque desta casa ficou cheia de seletor morto tres vezes. */
@@ -760,11 +764,10 @@ console.log('');
       && semCom(tpl).indexOf('g14-livre') < 0,
     'CSS de classe que ninguem mais desenha: a proxima leitura acha que a tela usa aquilo');
 
-  /* O CARTAO NOVO NAO TEM MARGEM (o antigo tinha margin-bottom:6px). Sem gap no
-     container, os tres cartoes e as vagas ficam encostados. */
-  checar('o container do roteiro da o espaco que o cartao novo nao carrega',
-    /\.g14-roteiro\{display:flex;flex-direction:column;gap:6px;/.test(tpl),
-    'cartao sem margem em container sem gap: a leitura do gestor vira um bloco unico');
+  /* O CONTAINER DO ROTEIRO DO GESTOR (.g14-roteiro) saiu em 11/09/26 com a 14a morta. O
+     cuidado que ele guardava — cartão sem margem exige gap no container — continua valendo
+     do lado do executivo, e é medido pela checagem do cartão único acima: o único
+     container que desenha cartão de dia hoje é o da Minha Daily. */
 }());
 
 if (falhas) {

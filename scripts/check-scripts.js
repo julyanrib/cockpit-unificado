@@ -1557,87 +1557,85 @@ function checarHojeDaAgenda() {
 }
 if (!checarHojeDaAgenda()) process.exit(1);
 
-/* == 18. A DAILY DO GESTOR NAO INVENTA ZERO (04/09/26) =============================
-   Nasceu de um defeito MEU, achado ao olhar a tela recem-construida: g14GradeDe devolvia
-   grade VAZIA quando o executivo nao tinha linha em planos_semanais. A tela somava 0
-   visitas e anunciava, ao lado do numero, "derivado do roteiro de cada um" — zero com
-   procedencia de dado medido. Numa reuniao isso nao e bug de exibicao: e o gestor
-   cobrando sete pessoas por um numero que ninguem mediu.
+/* == 18. A DAILY DO GESTOR NAO INVENTA ZERO (04/09/26, reancorada em 11/09/26) ====
+   Nasceu de um defeito MEU, achado ao olhar a tela recem-construida: a leitura da grade
+   devolvia grade VAZIA quando o executivo nao tinha linha em planos_semanais. A tela
+   somava 0 visitas e anunciava, ao lado do numero, "derivado do roteiro de cada um" —
+   zero com procedencia de dado medido. Numa reuniao isso nao e bug de exibicao: e o
+   gestor cobrando sete pessoas por um numero que ninguem mediu.
 
    O pedido, literal: "nao posso apresentar nenhum dado errado na tela".
 
-   (a) sem linha e null, nao grade vazia
-   (b) todo KPI diz de onde vem (o 4o argumento de g14KpiHTML)
-   (c) os tres caminhos de "nao medido" continuam existindo
+   REANCORADA EM 11/09/26, quando a Daily 14a morta foi removida: as ancoras eram
+   g14GradeDe, g14KpiHTML e duas frases daquela tela. A tela saiu; a exigencia fica, e
+   agora ela mede a Daily que esta no ar (familia dg4):
 
-   NAO CRAVA O NOME DA TELA: acha a montagem pelo que ela FAZ (a funcao que monta a
-   Daily do gestor e chamada em renderDaily), como a guarda 11. */
+     (a) leitura de grade que falha ou nao existe NAO vira dia vazio — a bandeira
+         `planosLidos`/`gradeLida` tem de chegar na tela e produzir "nao medido";
+     (b) todo KPI diz de onde vem — cada item do array `kpis` tem `rot` E `de`;
+     (c) os caminhos de "nao medido" continuam existindo, por frase.
+
+   E ela reprova se PERDER o alvo, em vez de passar medindo nada — foi assim que a versao
+   anterior morreu em silencio por dois dias. */
 function checarGestorSemZeroInventado() {
   const arquivo = 'template/cockpit.template.html';
   const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
   const falhas = [];
 
-  /* (a) o caso "nao montou a semana" */
-  const iG = cru.indexOf('function g14GradeDe(');
+  /* (a) O CASO "NAO MONTOU A SEMANA" e o caso "a consulta falhou", que sao diferentes.
+     dg4SlotsDaGrade devolve a MESMA forma sempre, com a bandeira `daGrade` dizendo se
+     aquilo veio da grade ou e o vazio — e dg4Dados carrega `planosLidos` para que erro de
+     leitura nao vire acusacao. Os dois tem de estar la. */
+  const iG = cru.indexOf('function dg4SlotsDaGrade(');
   if (iG < 0) {
-    falhas.push('g14GradeDe nao existe - a guarda perdeu o alvo. Se a leitura da grade');
+    falhas.push('dg4SlotsDaGrade nao existe - a guarda perdeu o alvo. Se a leitura da grade');
     falhas.push('  mudou de lugar, esta checagem tem de mudar com ela.');
   } else {
     const corpo = cru.slice(iG, cru.indexOf('\n}', iG));
-    if (corpo.indexOf('if (!p) return null;') < 0) {
-      falhas.push('g14GradeDe nao distingue "sem linha em planos_semanais" de "grade vazia" -'
+    if (corpo.indexOf('daGrade: false') < 0 || corpo.indexOf('return vazio;') < 0) {
+      falhas.push('dg4SlotsDaGrade nao distingue "sem linha na grade" de "grade vazia" -'
         + ' a tela volta a somar 0 visitas dizendo que o numero vem do roteiro');
     }
   }
+  const iD = cru.indexOf('function dg4Dados(');
+  if (iD < 0) {
+    falhas.push('dg4Dados nao existe - a guarda perdeu o alvo do provedor da Daily');
+  } else if (cru.indexOf('const planosLidos = c.planosLidos === undefined ? true : !!c.planosLidos;', iD) < 0) {
+    falhas.push('a bandeira planosLidos nao chega mais ao provedor - erro de leitura volta'
+      + ' a ser impresso como "ninguem travou", que e uma acusacao produzida por RLS');
+  }
 
-  /* (b) todo KPI com fonte. Le as chamadas de g14KpiHTML e conta os argumentos: a fonte
-     e o 4o. Contar parenteses em vez de dividir por virgula porque os argumentos tem
-     chamadas dentro (toLocaleString, concatenacao) e split(',') quebraria neles. */
-  const iRot = cru.indexOf('function g14KpiHTML(');
-  if (iRot < 0) {
-    falhas.push('g14KpiHTML nao existe - a guarda perdeu o alvo');
+  /* (b) TODO KPI DIZ DE ONDE VEM. Na tela viva os KPIs sao literais de objeto num array
+     `kpis`, e a procedencia e o campo `de`. A conta e simples e dura: dentro dos arrays
+     de KPI, quantos `rot:` existem e quantos `de:` existem — se um KPI nascer sem `de`,
+     os dois numeros divergem. Contar `rot:`/`de:` em vez de parsear o array porque os
+     valores tem ternarios e concatenacao dentro, e qualquer split quebraria neles. */
+  const iK = cru.indexOf('const kpis = !planosLidos ? [', iD);
+  if (iK < 0) {
+    falhas.push('nao achei o array de KPIs da Daily do gestor - eles sairam de outro lugar'
+      + ' e esta guarda parou de olhar onde nascem');
   } else {
-    let de = 0, chamadas = 0, semFonte = 0;
-    for (;;) {
-      const i = cru.indexOf('g14KpiHTML(', de);
-      if (i < 0) break;
-      de = i + 11;
-      if (i === iRot + 9) continue;              /* a declaracao */
-      /* RECORTA O TEXTO de cada argumento, e nao o tamanho dele: a primeira versao
-         contava caracteres, e a indentacao do argumento contava como conteudo — passar
-         '' como fonte media 18 caracteres e a guarda dava verde. Achado testando-a
-         vermelha. */
-      let d = 1, k = de, args = [], ini = de;
-      while (k < cru.length && d > 0) {
-        const c = cru[k];
-        if (c === '(' || c === '[') d++;
-        else if (c === ')' || c === ']') { d--; if (d === 0) break; }
-        else if (c === ',' && d === 1) { args.push(cru.slice(ini, k)); ini = k + 1; }
-        k++;
-      }
-      args.push(cru.slice(ini, k));
-      chamadas++;
-      /* o 4o argumento e a fonte: tem de existir e nao ser string vazia */
-      const fonte = (args[3] || '').replace(/\s+/g, ' ').trim();
-      const vazia = !fonte || fonte === "''" || fonte === '\"\"' || fonte === 'null'
-        || fonte === 'undefined' || fonte === "' '";
-      if (args.length < 4 || vazia) semFonte++;
-    }
-    if (!chamadas) {
-      falhas.push('nenhuma chamada de g14KpiHTML - os KPIs do gestor sairam de outro lugar'
-        + ' e esta guarda parou de olhar onde eles nascem');
-    }
-    if (semFonte) {
-      falhas.push(semFonte + ' KPI(s) da Daily do gestor sem FONTE (4o argumento de'
-        + ' g14KpiHTML) - numero sem procedencia na TV vira discussao sobre o numero');
+    /* recorta do inicio do array ate o `];` que o fecha */
+    const fimK = cru.indexOf('\n  ];', iK);
+    const bloco = fimK > iK ? cru.slice(iK, fimK) : '';
+    const nRot = (bloco.match(/\brot:/g) || []).length;
+    const nDe = (bloco.match(/\bde:/g) || []).length;
+    if (!nRot) {
+      falhas.push('o array de KPIs da Daily do gestor esta vazio para esta guarda -'
+        + ' ancora perdida, e guarda sem ancora mede o arquivo errado em silencio');
+    } else if (nDe < nRot) {
+      falhas.push((nRot - nDe) + ' KPI(s) da Daily do gestor sem FONTE (campo `de`) -'
+        + ' numero sem procedencia na TV vira discussao sobre o numero');
     }
   }
 
-  /* (c) os tres caminhos de nao medido */
+  /* (c) OS CAMINHOS DE "NAO MEDIDO", por frase. As duas primeiras sao do placar de ontem
+     (prancha daily-gestor-final): promessa que ninguem registrou e feito que nao deu para
+     medir. A terceira e a faixa inteira quando a consulta de planos falha. */
   [
-    ['sem plano da semana', 'sem plano da semana'],
-    ['palavra nao registrada', 'palavra não registrada'],
-    ['realizado nao medido', 'realizado não medido']
+    ['promessa nao registrada', 'sem promessa registrada'],
+    ['feito nao medido', 'feito não medido'],
+    ['planos nao lidos', 'a leitura de planos_diarios falhou']
   ].forEach(function (par) {
     if (cru.indexOf(par[1]) < 0) {
       falhas.push('sumiu o caminho de "' + par[0] + '" - sem ele o vazio volta a ser'
@@ -1645,13 +1643,21 @@ function checarGestorSemZeroInventado() {
     }
   });
 
+  /* (d) E O FURO EXIGE PROMESSA. A regra que o placar inteiro protege: quem nao prometeu
+     nao furou. Sem isto, oito das dez pessoas aparecem devendo a palavra por causa de um
+     campo vazio — medido em 10/09/26, 2 dos 10 tinham promessa registrada. */
+  if (cru.indexOf('furou: medido ? f < p : false') < 0) {
+    falhas.push('o furo de ontem deixou de exigir promessa registrada - vazio virando furo'
+      + ' e a pior acusacao que esta tela pode fazer, e ela acontece na frente do time');
+  }
+
   if (falhas.length) {
     console.error('DAILY DO GESTOR COM ZERO INVENTADO em ' + arquivo + ':');
     falhas.forEach(function (f) { console.error('  ' + f); });
     console.error('  "Nao posso apresentar nenhum dado errado na tela" - Julyan, 04/09/26.');
     return false;
   }
-  console.log('OK daily do gestor - sem linha e null, todo KPI tem fonte, nao medido nao e zero.');
+  console.log('OK daily do gestor - grade nao lida nao e dia vazio, todo KPI tem fonte, nao medido nao e zero.');
   return true;
 }
 if (!checarGestorSemZeroInventado()) process.exit(1);

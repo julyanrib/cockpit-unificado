@@ -275,8 +275,13 @@ checar('o carregador do plano diz se conseguiu ler',
     const corpo = fim > 0 ? resto.slice(0, fim) : resto;
     if (/\bgrade\b/.test(corpo)) nomes.push(nome);
   }
-  checar('só os dois escritores conhecidos tocam a GRADE da semana',
-    nomes.length === 2 && nomes.indexOf('pl6Gravar') > -1 && nomes.indexOf('g14AgendarNoHorarioLivre') > -1,
+  /* ERAM DOIS ATÉ 11/09/26: `pl6Gravar` (o Planejamento e o espelho) e
+     `g14AgendarNoHorarioLivre` (a Daily 14a do gestor). A 14a ficou inalcançável em 04/09
+     — um `html = ...` em renderDaily passou a descartar o markup do gestor — e saiu do
+     arquivo em 11/09. Sobrou UM escritor, e a lista continua FECHADA: escritor novo
+     reprova. Lista que só cresce é guarda morta; lista que encolhe com o arquivo é guarda. */
+  checar('só o escritor conhecido toca a GRADE da semana',
+    nomes.length === 1 && nomes.indexOf('pl6Gravar') > -1,
     'são ' + nomes.length + ' (' + nomes.join(', ') + ') — escritor novo na grade tem de passar pelo espaço de id (c- / n- / __rua); um dealId cru vira slot órfão');
 }());
 

@@ -717,60 +717,46 @@ checar('a comparacao de time e a pauta do 1:1 nao chegam ao executivo',
 checar('o que abre lista no dossie cumpre o piso de 38px no desktop',
   template.indexOf('.coach-funil-etapa.is-abre{min-height:38px;}') > 0);
 
-/* ══ AGENDAR NO HORARIO LIVRE — REALOJADO NO CARTAO (07/09/26) ═══════════════════════
-   Ele ja morreu uma vez: vivia na linha expandida do board antigo do gestor e saiu com a
-   linha, sem nada reprovar. O Julyan pediu de volta e ele voltou para o cartao da Daily
-   v2 — estas quatro travam o que faz dele um agendamento de verdade. */
+/* ══ "AGENDAR NO HORARIO LIVRE" SAIU DO PRODUTO (11/09/26) ══════════════════════════
+   AS QUATRO CHECAGENS QUE VIVIAM AQUI mediam um controle — o gestor preenchendo um
+   horario vago da grade do executivo a partir da Daily — e deram VERDE por tres dias
+   sobre um controle que ninguem alcancava: o board g14 onde ele morava ficou inalcancavel
+   em 04/09, quando renderDaily passou a descartar o markup do gestor com um `html = ...`.
+   A funcao existia, a checagem achava a funcao, e a tela nao abria. E a versao de
+   "listener nao e comportamento" no nivel da guarda: presenca de codigo prova presenca
+   de codigo, e mais nada.
 
-/* A DAILY v4 NAO EDITA PLANO DE NINGUEM (08/09/26). O prompt dela e explicito: "o gestor
-   NUNCA edita o plano — so cobra/pergunta/reconhece". Entao o agendamento no horario livre
-   saiu do primeiro plano junto com o cartao da v2, e sobrou UM dono: o board g14, na
-   Referencia da aba. A regra que esta checagem sempre guardou continua a mesma — o
-   controle nao pode sumir sem alguem decidir. Ele nao sumiu: mudou de casa, e agora tem
-   uma casa so. */
-checar('o agendamento no horario livre existe, e num lugar so',
-  templateCodigo.indexOf('g14UI.picker') > 0 &&
-  (templateCodigo.match(/function g14PickerHTML\(/g) || []).length === 1 &&
-  template.indexOf('o que entra às') > 0,
-  'este controle ja sumiu uma vez junto com a linha em que ele morava');
+   POR QUE NAO REANCOREI NA DAILY NOVA: a prancha FINAL proibe, com estas palavras — "O
+   gestor NAO edita o plano — e espelho do que o executivo montou". Trazer o controle de
+   volta contraria a decisao mais recente dele sobre esta tela. Entao a capacidade sai do
+   produto nomeadamente, em vez de seguir existindo como codigo que a suite protege e
+   ninguem alcanca.
 
-/* UMA GRAVACAO, DUAS TELAS. Sao sete cuidados (dia util, plano da semana dele, releitura
-   do slot, planos_semanais.grade, id da carteira e nao dealId cru, linha de volta
-   conferida, e nao passar por pl6Gravar). Uma segunda copia seria a primeira a divergir. */
-checar('a gravacao do horario livre tem uma implementacao so',
-  (templateCodigo.match(/async function g14AgendarNoHorarioLivre\(/g) || []).length === 1 &&
-  /* >=2 e nao >=3: a v2 era o terceiro ponto (declaracao + os dois cartoes). Com ela
-     fora, sobram a declaracao e o board g14. O que a checagem cobra e que exista UMA
-     implementacao e que ela seja chamada — nao quantas telas a chamam. */
-  (templateCodigo.match(/g14AgendarNoHorarioLivre\(/g) || []).length >= 2 &&
-  templateCodigo.indexOf("from('planos_semanais').upsert") > 0,
-  'duas copias desta gravacao divergem na primeira mudanca de regra');
+   SE ELE PEDIR DE VOLTA (ja pediu uma vez, em 07/09): o escritor da grade que sobrou e
+   `pl6Gravar`, e a recusa de dia nao util tem de voltar com ele — ela morava dentro de
+   g14AgendarNoHorarioLivre (motivo 'dia-nao-util') e saiu junto. */
 
-/* O CANDIDATO SAI DA MESMA REGRA. g14OpcoesDoSlot poe quentes primeiro e RESOLVE o id na
-   carteira ('c-'+dealId): dealId cru gravado na grade vira "conta fora da carga desta
-   sessao" na tela dele amanha — agendamento que grava sem erro e nao existe no dia
-   seguinte. */
-checar('o picker do cartao usa a mesma regra de candidatos, sem segunda lista',
-  /* `g14OpcoesDoSlot(linha, si)` e a chamada do board g14; a forma `(l, si)` era a da v2.
-     A funcao continua UMA — e e isso que impede a segunda lista de candidatos. */
-  templateCodigo.indexOf('g14OpcoesDoSlot(linha, si)') > 0 &&
-  (templateCodigo.match(/function g14OpcoesDoSlot\(/g) || []).length === 1,
-  'segunda lista de candidatos ofereceria conta que a grade dele nao aceita');
-
-/* DIA NAO UTIL NAO TEM CONVITE. d7PlanoDeHoje devolve coluna vazia no fim de semana, e
-   os sete horarios voltam 'livre': o cartao ofereceria sete botoes que todos recusam.
-   Medido em 07/09 (segunda) so por sorte — apareceria no primeiro sabado. */
-/* DIA NAO UTIL: A RECUSA MUDOU DE CAMADA (08/09/26), e a que importa ficou.
-   A v2 escondia a fileira de horarios no fim de semana (`livres: diaUtilDeHoje`) — camada
-   de cortesia, e ela saiu com o cartao da v2. A camada que PROTEGE continua, e e mais
-   forte: a propria gravacao recusa com motivo 'dia-nao-util' e a tela diz a frase.
-   FICA ANOTADO O QUE SE PERDEU: no board g14 os horarios ainda sao oferecidos no sabado, e
-   a recusa acontece no clique em vez de antes dele. Nao inventei uma checagem nova com o
-   nome antigo — esta mede a recusa real. */
-checar('em dia nao util a gravacao do horario livre recusa, com motivo',
-  templateCodigo.indexOf("motivo: 'dia-nao-util'") > 0 &&
-  template.indexOf('Hoje não é dia útil — o roteiro é de segunda a sexta.') > 0,
-  'agendar em dia que o roteiro nao tem grava lixo no plano dele');
+/* E FICA UMA EXIGENCIA NOVA NO LUGAR DAS QUATRO: nenhuma tela do gestor pode escrever na
+   grade da semana de ninguem. Antes isso era garantido por acidente (o unico escritor
+   vivia numa tela inalcancavel); agora e medido. */
+/* `planos_semanais` tem DOIS escritores legitimos, os dois do lado do executivo:
+   pl6Gravar (a grade) e pm8Confirmar (a promessa da semana, outras colunas). Contar
+   upserts no arquivo inteiro reprovaria os dois. O que esta checagem mede e o ESCOPO:
+   dentro do bloco da Daily do gestor nao existe escrita nenhuma naquelas tabelas — e
+   ancora perdida REPROVA, em vez de passar medindo nada. */
+checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
+  (function () {
+    const i = templateCodigo.indexOf('const DG4_ESTADO');
+    const f = templateCodigo.indexOf('let DG4_RELOGIO');
+    if (i < 0 || f <= i) return false;
+    const bloco = templateCodigo.slice(i, f);
+    /* `from('planos_` E O ACESSO A TABELA. Medir a PALAVRA reprovava a tela por dizer de
+       onde o dado vem: o rotulo do KPI, o kicker e o rodape citam planos_diarios de
+       proposito, e essa procedencia e a virtude da aba, nao o defeito. */
+    return bloco.indexOf("from('planos_") < 0
+      && /function pl6Gravar\(/.test(templateCodigo);
+  }()),
+  'o gestor nao edita o plano de ninguem — a Daily dele e espelho, e quem escreve a grade e o pl6Gravar do executivo');
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 
