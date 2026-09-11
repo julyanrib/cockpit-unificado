@@ -140,8 +140,20 @@ checar('o próximo passo do cartão espelha e vai para as telas',
 /* E A GRADE NÃO PODE VOLTAR A ESPERAR O ROBÔ: o espelho dela grava em planos_semanais na
    hora, e é dessa linha que o Planejamento e a Daily leem no render seguinte. */
 checar('o espelho da grade semanal grava na hora, sem esperar carga',
-  /async function espelharPassoNoPlanoSemanal[\s\S]{0,4000}await pl6Gravar\(rep, \{ grade: grade \}\)/.test(codigo),
+  /async function espelharPassoNoPlanoSemanal[\s\S]{0,4500}await pl6Gravar\(rep, \{ grade: grade \}, semanaDaTarefa\)/.test(codigo),
   'sem o pl6Gravar a visita ficaria só na sessão e sumiria no próximo login');
+
+/* ══ E GRAVA NA SEMANA DA TAREFA, NÃO NA QUE A TELA ESTÁ MOSTRANDO (11/09/26) ═══════
+   Desde que o Planejamento ganhou o botão "próxima semana", `pl6Carregar`/`pl6Gravar`
+   sem argumento usam a semana EM FOCO. Este espelho indexa os dias com
+   pl6SegundaDaSemana() — a semana corrente —, então tem de ler e gravar a MESMA: um
+   passo de hoje, com a tela na semana que vem, entraria na linha errada e no dia errado.
+   A Minha Daily tem o mesmo cuidado, pelo mesmo motivo. */
+checar('e na semana da TAREFA, não na que a tela mostra',
+  /const semanaDaTarefa = pl6SegundaDaSemana\(\);/.test(codigo)
+    && /pl6Carregar\(rep, semanaDaTarefa\)/.test(codigo)
+    && /pl6Gravar\(rep, campos, pl6SegundaDaSemana\(\)\)/.test(codigo),
+  'herdar o foco da tela faria o passo de hoje cair na linha da semana que vem, no dia errado');
 
 /* ── 7. e "todas as contas" continua vindo de um lugar ──────────────────────────── */
 const naMao = (codigo.match(/pl6Carteira\(rep, regioes\)\s*\n?\s*\.concat\(pl6Novos/g) || []).length;

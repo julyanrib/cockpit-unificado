@@ -770,6 +770,93 @@ console.log('');
      container que desenha cartão de dia hoje é o da Minha Daily. */
 }());
 
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   PLANEJAR A PRÓXIMA SEMANA (11/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "meu time está já planejando a semana que vem, eu quero que dê a opção de já
+   planejar a próxima semana".
+
+   A SEMANA CORRENTE CONTINUA SENDO DECIDIDA PELO RELÓGIO (pl6SegundaDaSemana, que vira
+   na sexta às 17h). O que nasceu foi um FOCO de tela — pl6SegundaEmFoco() — e o risco
+   desta mudança não é o botão: é o foco vazar para quem fala do dia de hoje.
+
+   QUEM PODE ANDAR COM O BOTÃO: só o caminho da tela de Planejamento (ler, gravar, montar
+   os 5 dias, os handlers).
+   QUEM NÃO PODE, e por quê:
+     d7DadosFinal / d7Ligar ... a Minha Daily mostra o dia de HOJE
+     pl6ColunaDaData .......... responde 'em que coluna cai esta data' na semana corrente
+     espelharPassoNoPlanoSemanal  escreve a tarefa na semana DELA
+     pm8Segunda / sm9Segunda .. a promessa e a Semanal são da semana corrente
+     renderDaily .............. a pré-carga do plano é para o dia de hoje */
+(function () {
+  const semCom = s => String(s).replace(/[/][*][sS]*?[*][/]/g, ' ');
+  const cod = semCom(tpl);
+
+  checar('a semana corrente e a semana em foco são funções diferentes',
+    /function pl6SegundaDaSemana\(agora\)/.test(cod)
+      && /function pl6SegundaEmFoco\(\)/.test(cod)
+      && /return addDays\(pl6SegundaDaSemana\(\), \(Number\(PL6_SEMANA\) \|\| 0\) \* 7\);/.test(cod),
+    'uma função só faria o botão mover a Daily, a promessa e a Semanal junto');
+
+  /* A CHECAGEM QUE IMPORTA: nenhuma das funções de fora usa a semana EM FOCO. */
+  checar('o foco da tela não vaza para quem fala de hoje',
+    (function () {
+      /* EXTRATOR PRÓPRIO: o pegarFn desta suíte só casa `function NOME(`, e metade destas
+         é `async function` — ele sairia do processo dizendo que perdeu a âncora. */
+      const donos = ['d7DadosFinal', 'd7Ligar', 'pl6ColunaDaData', 'espelharPassoNoPlanoSemanal',
+        'pm8Segunda', 'sm9Segunda', 'tl5Semana', 'renderDaily'];
+      return donos.every(function (nome) {
+        const i = cod.search(new RegExp('(?:async )?function ' + nome + '\\('));
+        if (i < 0) return false;   /* âncora perdida reprova */
+        let d = 0, j = i, viu = false;
+        while (j < cod.length) {
+          const c = cod[j];
+          if (c === '{') { d++; viu = true; }
+          else if (c === '}') { d--; if (viu && d === 0) { j++; break; } }
+          j++;
+        }
+        return cod.slice(i, j).indexOf('pl6SegundaEmFoco') < 0;
+      });
+    }()),
+    'o executivo abriria a Minha Daily e veria o dia da semana que vem — sem nada dizer');
+
+  checar('e quem escreve fora da tela diz qual semana',
+    /const semanaDaTarefa = pl6SegundaDaSemana\(\);/.test(cod)
+      && /pl6Carregar\(rep, semanaDaTarefa\)/.test(cod)
+      && /pl6Gravar\(rep, \{ grade: grade \}, semanaDaTarefa\)/.test(cod)
+      && /pl6Gravar\(rep, campos, pl6SegundaDaSemana\(\)\)/.test(cod)
+      && /pl6Carregar\(repPreCarga, pl6SegundaDaSemana\(\)\)/.test(cod),
+    'sem o argumento, um passo de hoje entraria na linha da semana que vem, no dia errado');
+
+  /* TROCAR DE SEMANA RECARREGA. pl6Plano é a linha de UMA semana; desenhar com a linha
+     da outra mostra a grade errada com o rótulo certo. */
+  checar('trocar de semana recarrega a linha antes de desenhar',
+    /if \(d\.pl6Semana\) \{[\s\S]{0,500}?const leu = await pl6Carregar\(rep\);/.test(cod)
+      && /PL6_SEMANA = 0;[\s\S]{0,300}?Continuo na semana atual/.test(cod),
+    'a grade de uma semana embaixo do rótulo da outra é o pior dos dois mundos; e leitura que falha não pode deixar a tela num foco que ela não conseguiu ler');
+
+  /* HOJE É UMA DATA, NÃO UMA POSIÇÃO — visto na foto: com a semana que vem aberta, a
+     sexta aparecia marcada como HOJE, porque sexta é a quinta coluna nas duas semanas. */
+  checar('a marca de HOJE compara a data, não a coluna',
+    /hoje: d\.iso === hojeISOPl6,/.test(cod)
+      && cod.indexOf('hoje: di === diHoje') < 0,
+    'comparar índice marca a sexta da semana que vem como hoje, em vermelho, na tela dele');
+
+  /* E A TELA AVISA. Montar a segunda que vem achando que é hoje é o erro caro aqui. */
+  checar('e a tela diz em voz alta quando não é a semana atual',
+    cod.indexOf('Você está montando a semana de ') > 0
+      && cod.indexOf('A sua Daily de hoje continua lendo a semana atual.') > 0
+      && /semanaFora: \(Number\(PL6_SEMANA\) \|\| 0\) !== 0,/.test(cod),
+    'sem o aviso, o dia montado no lugar errado só aparece na segunda-feira seguinte');
+
+  checar('e o botão mostra o intervalo, não só a palavra',
+    /function pl6RotuloSemana\(offset\)/.test(cod)
+      && /rot: \(off === 0 \? .esta semana. : .próxima.\) \+ . · . \+ pl6RotuloSemana\(off\)/
+        .test(cod.replace(/'/g, '.')),
+    'planejar o dia errado é o erro caro desta tela, e a data resolve isso antes do clique');
+}());
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);

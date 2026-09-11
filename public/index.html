@@ -1412,6 +1412,7 @@
     #agendaContent [data-pl6-fonte],
     #agendaContent [data-pl6-remover],
     #agendaContent [data-pl6-novo-lead],
+    #agendaContent [data-pl6-semana],
     #agendaContent [data-pl6-fi-etapa],
     #agendaContent [data-pl6-fi-fechar],
     #agendaContent [data-pl6-reg-in],
@@ -20594,8 +20595,9 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
 
   let leu;
 
+  const semanaDaTarefa = pl6SegundaDaSemana();
   try {
-    const [r1] = await Promise.all([pl6Carregar(rep), pl6CarregarRadar(rep)]);
+    const [r1] = await Promise.all([pl6Carregar(rep, semanaDaTarefa), pl6CarregarRadar(rep)]);
     leu = r1;
   } catch (e) { leu = { ok: false, motivo: (e && e.message) || 'erro' }; }
   if (leu && leu.ok === false) {
@@ -20632,7 +20634,7 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
 
   grade[di][si] = hora ? { id: idNaGrade, hora: String(hora) } : idNaGrade;
 
-  const r = await pl6Gravar(rep, { grade: grade });
+  const r = await pl6Gravar(rep, { grade: grade }, semanaDaTarefa);
   if (r.error) return { erro: r.error.message || 'o Supabase recusou' };
 
   return { ok: true, dia: dias[di].rot, data: dias[di].data,
@@ -21491,6 +21493,17 @@ function pl6SegundaDaSemana(agora) {
   return semanaVirou ? addDays(segundaAtual, 7) : segundaAtual;
 }
 
+let PL6_SEMANA = 0;
+function pl6SegundaEmFoco() {
+  return addDays(pl6SegundaDaSemana(), (Number(PL6_SEMANA) || 0) * 7);
+}
+
+function pl6RotuloSemana(offset) {
+  const seg = addDays(pl6SegundaDaSemana(), (Number(offset) || 0) * 7);
+  const dias = pl6Dias(seg);
+  return dias[0].data + ' a ' + dias[4].data;
+}
+
 function pl6Dias(segunda) {
   const rot = ['seg', 'ter', 'qua', 'qui', 'sex'];
   return [0, 1, 2, 3, 4].map(i => {
@@ -22002,10 +22015,10 @@ async function pl6CarregarRadar(rep) {
   }
 }
 
-async function pl6Carregar(rep) {
+async function pl6Carregar(rep, segundaPedida) {
   pl6Plano = null;
   if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem Supabase nesta sessão' };
-  const segunda = pl6SegundaDaSemana();
+  const segunda = segundaPedida || pl6SegundaEmFoco();
   const { data, error } = await supa.from('planos_semanais').select('*')
     .eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
   if (error) {
@@ -22016,9 +22029,9 @@ async function pl6Carregar(rep) {
   return { ok: true, tinhaLinha: !!pl6Plano };
 }
 
-async function pl6Gravar(rep, campos) {
+async function pl6Gravar(rep, campos, segundaPedida) {
   if (!DATA.supabase || !supa) return { error: new Error('Sem Supabase nesta sessão.') };
-  const segunda = pl6SegundaDaSemana();
+  const segunda = segundaPedida || pl6SegundaEmFoco();
   const linha = Object.assign({
     owner_id: String(rep.ownerId),
     data_segunda: segunda,
@@ -22251,14 +22264,16 @@ function pfTag(l) {
 
 function pl6DadosFinal(rep) {
   const s = pl6UI;
-  const dias = pl6Dias(pl6SegundaDaSemana());
+  const dias = pl6Dias(pl6SegundaEmFoco());
   const regioes = pl6Regioes(rep);
   const todos = pl6TodasAsContas(rep, regioes);
   const porId = new Map(todos.map(l => [l.id, l]));
   const grade = pl6GradeDoPlano();
   const rotas = pl6RegioesDoPlano();
 
-  const diHoje = (typeof d7ColunaDeHoje === 'function') ? d7ColunaDeHoje() : -1;
+  const hojeISOPl6 = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
+    ? agendaChave(agendaAgora())
+    : (typeof isoDate === 'function' ? isoDate(new Date()) : '');
   const naGrade = grade.flat().map(pl6SlotId).filter(Boolean);
   const livres = todos.filter(l => naGrade.indexOf(l.id) < 0);
   const agendadas = naGrade.length;
@@ -22281,7 +22296,19 @@ function pl6DadosFinal(rep) {
 
   const ficha = (typeof pl6Ficha !== 'undefined' && pl6Ficha) ? porId.get(pl6Ficha) : null;
 
+  const semanas = [0, 1].map(function (off) {
+    return {
+      on: String(off),
+      rot: (off === 0 ? 'esta semana' : 'próxima') + ' · ' + pl6RotuloSemana(off),
+      sel: (Number(PL6_SEMANA) || 0) === off
+    };
+  });
   return {
+    semanas: semanas,
+
+    semanaFora: (Number(PL6_SEMANA) || 0) !== 0,
+    semanaForaTxt: esc('Você está montando a semana de ' + pl6RotuloSemana(1)
+      + '. A sua Daily de hoje continua lendo a semana atual.'),
     manchete: esc(livres.length + ' contas na munição — escolha a conta, escolha o dia e a'
       + ' HORA que você quiser: a semana é sua.'),
     kpis: [
@@ -22327,10 +22354,10 @@ function pl6DadosFinal(rep) {
       const cheio = col.filter(v => pl6SlotId(v) || v === PL6_BLOQUEADO).length >= PL6_SLOTS;
       return {
 
-        rot: esc(d.rot), data: esc(d.data), hoje: di === diHoje,
-        bg: s.dragHover === di ? '#FDF3F4' : (di === diHoje ? '#FFFDF8' : '#F7F5F0'),
-        headBg: di === diHoje ? '#FDF3F4' : '#F1EEE7',
-        borda: s.dragHover === di ? '#E51A31' : (di === diHoje ? '#F0A9B2' : '#E4E0D6'),
+        rot: esc(d.rot), data: esc(d.data), hoje: d.iso === hojeISOPl6,
+        bg: s.dragHover === di ? '#FDF3F4' : (d.iso === hojeISOPl6 ? '#FFFDF8' : '#F7F5F0'),
+        headBg: d.iso === hojeISOPl6 ? '#FDF3F4' : '#F1EEE7',
+        borda: s.dragHover === di ? '#E51A31' : (d.iso === hojeISOPl6 ? '#F0A9B2' : '#E4E0D6'),
         di: String(di),
 
         cnt: n === 0 ? 'livre' : (n + ' visita' + (n > 1 ? 's' : '')),
@@ -22734,7 +22761,11 @@ function pl6TelaFinalHTML(d) {
     <div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;padding:22px 28px 18px;border-bottom:1px solid #E7E3DA;">
       <div style="flex:1;min-width:320px;">
         <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#E51A31;">Planejamento · sua semana, suas escolhas</span>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;">
+          ${(d.semanas || []).map(sm => `<button type="button" data-pl6-semana="${sm.on}" style="display:inline-flex;align-items:center;min-height:30px;padding:0 13px;border:1.5px solid ${sm.sel ? '#2B3440' : '#DCE1EA'};border-radius:999px;background:${sm.sel ? '#2B3440' : '#FDFEFF'};font:800 10.5px 'Manrope',sans-serif;color:${sm.sel ? '#FDFEFF' : '#5B667A'};cursor:pointer;white-space:nowrap;">${sm.rot}</button>`).join('')}
+        </div>
         <h1 style="margin:6px 0 0;font:900 25px/1.25 'Archivo',sans-serif;letter-spacing:-.02em;color:#2B3440;text-wrap:balance;">${d.manchete}</h1>
+        ${d.semanaFora ? `<span style="display:inline-flex;align-items:center;gap:6px;margin-top:8px;font:700 11px/1.5 'Manrope',sans-serif;color:#8A6516;background:#FDF6E7;border:1px solid #EBD9AE;border-radius:10px;padding:7px 12px;">▸ ${d.semanaForaTxt}</span>` : ''}
       </div>
       <div style="display:flex;gap:32px;flex-wrap:wrap;">${kpisHTML}</div>
     </div>
@@ -22843,7 +22874,7 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
       }
       return redesenhar();
     }
-    const dias = pl6Dias(pl6SegundaDaSemana());
+    const dias = pl6Dias(pl6SegundaEmFoco());
     const diaISO = dias[di].iso;
 
     if (pl6DiaPassou(diaISO)) {
@@ -22949,7 +22980,7 @@ function pl6GravarRegiaoDigitada(rep, di, texto, mutar) {
   if (!t) {
     if (!antes) return;
     const novas = atual.slice(); novas[di] = null;
-    const dias0 = pl6Dias(pl6SegundaDaSemana());
+    const dias0 = pl6Dias(pl6SegundaEmFoco());
     return mutar({ regioes: novas }, dias0[di].rot + ' · sem região de ataque · Supabase');
   }
   const chaveDigitada = pl6ChaveBairro(t);
@@ -22957,7 +22988,7 @@ function pl6GravarRegiaoDigitada(rep, di, texto, mutar) {
   const nova = doMapa ? doMapa.chave : (PL6_TERR_PREFIXO + chaveDigitada);
   if (String(antes || '') === String(nova)) return;
   const novas = atual.slice(); novas[di] = nova;
-  const dias0 = pl6Dias(pl6SegundaDaSemana());
+  const dias0 = pl6Dias(pl6SegundaEmFoco());
   const rot = doMapa ? doMapa.nome : pl6RotuloBairro(chaveDigitada);
   return mutar({ regioes: novas }, dias0[di].rot + ' · região de ataque agora é ' + rot
     + (doMapa ? ' — sugestões recalculadas' : ' — do jeito que você escreveu') + ' · Supabase');
@@ -23144,13 +23175,33 @@ function pl6Ligar(box, rep) {
       || ev.target.closest('[data-pl6-regiao]')
       || ev.target.closest('[data-pl6-terr]')
       || ev.target.closest('[data-pl6-fonte]')
-      || ev.target.closest('[data-pl6-novo-lead]');
+      || ev.target.closest('[data-pl6-novo-lead]')
+      || ev.target.closest('[data-pl6-semana]');
     if (!alvo || !box.contains(alvo)) return;
     ev.preventDefault();
     ev.stopPropagation();
     const d = alvo.dataset;
 
     if (d.pl6Acao && String(d.pl6Acao).indexOf('ficha:') === 0 && Date.now() - ultimoArraste < 250) return;
+
+    if (d.pl6Semana) {
+      const nova = Number(d.pl6Semana) || 0;
+      if (nova === (Number(PL6_SEMANA) || 0)) return;
+      PL6_SEMANA = nova;
+      pl6UI.sel = null; pl6UI.pickerDia = null; pl6UI.toast = null;
+      const leu = await pl6Carregar(rep);
+      if (leu && leu.ok === false) {
+        PL6_SEMANA = 0;
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Não consegui ler essa semana: ' + (leu.motivo || 'erro') + '. Continuo na semana atual.', 'erro');
+        }
+        return redesenhar();
+      }
+      pl6UI.toast = nova === 0
+        ? 'de volta para a semana atual'
+        : 'montando a semana de ' + pl6RotuloSemana(1) + ' — a sua Daily de hoje continua na atual';
+      return redesenhar();
+    }
 
     if (d.pl6Fonte) {
       pl6UI.fonte = d.pl6Fonte;
@@ -23226,7 +23277,7 @@ function pl6Ligar(box, rep) {
       const nome = (regioes.find(r => r.chave === chave) || {}).nome || chave;
       const novas = pl6RegioesDoPlano(); novas[di] = chave;
       pl6UI.rotaPicker = null;
-      const dias = pl6Dias(pl6SegundaDaSemana());
+      const dias = pl6Dias(pl6SegundaEmFoco());
       return mutar({ regioes: novas },
         dias[di].rot + ' · região de ataque agora é ' + nome + ' — sugestões recalculadas · Supabase');
     }
@@ -23238,7 +23289,7 @@ function pl6Ligar(box, rep) {
 
       const nascido = (typeof pl6NegocioNascidoAqui === 'function') ? pl6NegocioNascidoAqui(era) : null;
       if (nascido && typeof abrirModalConfirmacao === 'function') {
-        const dias0 = pl6Dias(pl6SegundaDaSemana());
+        const dias0 = pl6Dias(pl6SegundaEmFoco());
         const quando = (dias0[di] && dias0[di].rot) || 'o dia';
         abrirModalConfirmacao({
           titulo: 'Tirar do plano — e do funil?',
@@ -23293,7 +23344,7 @@ function pl6Ligar(box, rep) {
       }
 
       g[di][si] = null;
-      const dias = pl6Dias(pl6SegundaDaSemana());
+      const dias = pl6Dias(pl6SegundaEmFoco());
 
       const msg = pl6SlotBloqueado(era)
         ? dias[di].rot + (pl6SlotHora(era, si) ? ' ' + pl6SlotHora(era, si) : '') + ' desbloqueado · Supabase'
@@ -23381,7 +23432,7 @@ function pl6Ligar(box, rep) {
       if (verbo === 'min') { s.mSel = arg; return redesenhar(); }
 
       if (verbo === 'cheio') {
-        const dias0 = pl6Dias(pl6SegundaDaSemana());
+        const dias0 = pl6Dias(pl6SegundaEmFoco());
         s.toast = (dias0[Number(arg)] || {}).rot + ' já está com ' + PL6_SLOTS
           + ' contas — tire uma para pôr outra';
         return redesenhar();
@@ -23391,7 +23442,7 @@ function pl6Ligar(box, rep) {
         const di = Number(arg);
         if (!s.sel) { s.toast = 'escolha primeiro a conta na munição'; return redesenhar(); }
         const hora = s.hSel + ':' + s.mSel;
-        const dias0 = pl6Dias(pl6SegundaDaSemana());
+        const dias0 = pl6Dias(pl6SegundaEmFoco());
         if (typeof pl6DiaPassou === 'function' && pl6DiaPassou(dias0[di].iso)) {
           s.toast = dias0[di].rot + ' ' + dias0[di].data + ' já passou — compromisso é para frente';
           return redesenhar();
@@ -33918,7 +33969,8 @@ function d7Ligar(box, rep) {
   const mutar = async function (campos, textoOk) {
     if (d7UI.salvando) return false;
     d7UI.salvando = true;
-    const { error } = await pl6Gravar(rep, campos);
+
+    const { error } = await pl6Gravar(rep, campos, pl6SegundaDaSemana());
     d7UI.salvando = false;
     if (error) {
       d7UI.toast = null;
@@ -36102,7 +36154,8 @@ async function renderDaily() {
       return String(x.ownerId) === String(sessaoAtual.ownerId);
     });
     if (repPreCarga && typeof pl6Carregar === 'function') {
-      try { await pl6Carregar(repPreCarga); }
+
+      try { await pl6Carregar(repPreCarga, pl6SegundaDaSemana()); }
       catch (e) { console.error('[Daily] plano da semana não carregou — o dia pode aparecer vazio:', e && e.message); }
     }
     const semLote = (typeof prospeccaoCache === 'undefined') || !Array.isArray(prospeccaoCache) || !prospeccaoCache.length;
