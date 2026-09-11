@@ -18153,6 +18153,11 @@ function fn3ChipPasso(l, e) {
     + '<span class="fn3-passo-livre">'
     +   '<input type="date" class="fn3-passo-in" data-fn3-passo-in="' + id + '"'
     +     ' value="' + esc(fn3DataISO(1)) + '" min="' + esc(fn3DataISO(0)) + '">'
+    /* A HORA (11/09/26). Opcional, do mesmo jeito que na ficha: vazia, o servidor põe
+       09:00, que é a convenção de "compromisso do dia" desta casa. Preenchida, a reunião
+       das 15h nasce às 15h no CRM e cai na faixa das 15h do Planejamento e da Daily. */
+    +   '<input type="time" step="900" class="fn3-passo-in" data-fn3-passo-hora="' + id + '"'
+    +     ' title="hora (opcional) — sem ela o compromisso entra às 9h">'
     +   '<button type="button" class="fn3-passo-ok" data-fn3-passo-ok="' + id + '">datar ▸</button>'
     + '</span>'
     + '<span class="fn3-passo-pe">cria a tarefa de ' + esc(FN3_PASSO_TIPO[et])
@@ -18894,7 +18899,18 @@ function fn3Ligar(el, redesenhar) {
     redesenhar();
   }));
 
-  const gravarPasso = async function (id, dataISO, botao) {
+  /* A HORA CHEGA COMO TERCEIRO ARGUMENTO e é validada aqui também, não só no servidor:
+     hora malformada num compromisso com cliente é pior do que hora nenhuma, e recusar na
+     tela diz o que está errado antes de a pessoa achar que gravou. */
+  const gravarPasso = async function (id, dataISO, botao, horaCrua) {
+    const hora = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(String(horaCrua || '').trim())
+      ? String(horaCrua).trim() : '';
+    if (horaCrua && !hora) {
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('A hora precisa estar no formato HH:MM — não datei nada.', 'atencao');
+      }
+      return;
+    }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dataISO || ''))) {
       if (typeof mostrarToast === 'function') {
         mostrarToast('Escolha uma data — não datei nada.', 'atencao');
@@ -18913,9 +18929,14 @@ function fn3Ligar(el, redesenhar) {
     const est = fn3Estado(lead, et);
     const texto = String(est.cta || 'Próximo passo').replace(/\s*→\s*$/, '');
     if (botao) { botao.disabled = true; botao.textContent = 'datando…'; }
-    /* A HORA E 12:00Z (09:00 de Brasilia): a convencao do servidor. Outra hora fazia o
-       passo desaparecer da tela dele durante o dia util — o bug do "9h01". */
-    const quando = dataISO + 'T12:00:00.000Z';
+    /* A HORA DO ESPELHO SEGUE A ESCOLHIDA (11/09/26). Sem hora escolhida continua 12:00Z
+       — 09:00 de Brasília, a convenção do servidor; outra hora fazia o passo desaparecer
+       da tela dele durante o dia útil (o bug do "9h01"). Com hora, o espelho tem de dizer
+       a MESMA coisa que o CRM: espelho em 9h para um compromisso das 15h é o mesmo erro,
+       só do lado de cá. */
+    const quando = hora
+      ? (dataISO + 'T' + String(Number(hora.slice(0, 2)) + 3).padStart(2, '0') + ':' + hora.slice(3, 5) + ':00.000Z')
+      : (dataISO + 'T12:00:00.000Z');
     let ok = false, erro = null;
     try {
       const token = (typeof tokenDeSessaoGlobal === 'function') ? await tokenDeSessaoGlobal() : null;
@@ -18923,6 +18944,7 @@ function fn3Ligar(el, redesenhar) {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
         body: JSON.stringify({ op: 'nota', dealId: String(lead.id), texto: texto,
+          ...(hora ? { hora: hora } : {}),
           data: dataISO, tipo: tipo, tipoAcao: 'proximo-passo' })
       }), 9000, 'fn3-proximo-passo');
       const d = await resp.json().catch(() => ({}));
@@ -18970,7 +18992,10 @@ function fn3Ligar(el, redesenhar) {
     const id = btn.dataset.fn3PassoOk;
     /* le o campo NA HORA do clique: guardar por tecla redesenharia o cartao */
     const campo = el.querySelector('[data-fn3-passo-in="' + id + '"]');
-    await gravarPasso(id, campo ? String(campo.value || '').trim() : '', btn);
+    /* e a HORA tambem na hora do clique, pelo mesmo motivo (11/09/26) */
+    const campoH = el.querySelector('[data-fn3-passo-hora="' + id + '"]');
+    await gravarPasso(id, campo ? String(campo.value || '').trim() : '', btn,
+      campoH ? String(campoH.value || '').trim() : '');
   }));
 
   el.querySelectorAll('[data-fn3-valor]').forEach(btn => btn.addEventListener('click', ev => {
@@ -45845,8 +45870,14 @@ function d7NomeDaMunicao(rep, id) {
    "não medido" é escrito quando não foi medido — nunca zero. */
 function d7SubDaVisita(l) {
   const lead = l.lead;
-  const onde = (typeof pl6TextoDaRegiao === 'function' ? pl6TextoDaRegiao(lead) : '')
-    || lead.bairro || lead.cidade || '';
+  /* O NOME DA REGIÃO JÁ VEM PRONTO NO ITEM (11/09/26). Antes daqui saía
+       `pl6TextoDaRegiao(lead)` — e aquela função recebe uma CHAVE de lugar, não o lead:
+       `String({...})` virava "[object Object]", e como isso é string não vazia, o
+       `|| lead.bairro` que existia para este caso nunca era alcançado. Estava na cara do
+       Bruno em três cartões do dia, sem um erro no console.
+       `regiaoNome` é montado por pl6Carteira e pl6Novos ao lado de `regiao`, exatamente
+       para quem só quer o texto — sem chave e sem lista, não há tipo para errar. */
+  const onde = lead.regiaoNome || lead.bairro || lead.cidade || '';
   if (lead.tipo === 'c') {
     const parado = lead.dias != null
       ? ('há ' + lead.dias + 'd na etapa' + (lead.sla ? ' · acima do SLA' : ''))

@@ -1997,3 +1997,19 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ══ GUARDA 28 — FUNÇÃO QUE PEDE CHAVE RECEBENDO O OBJETO (11/09/26) ══════════════════
+   Achada revisando a PRODUÇÃO com a sessão do Bruno: três cartões do dia dele diziam
+   "LA BOLARIA ... · [object Object] · CNPJ aberto há 3 meses". `pl6TextoDaRegiao(chave)`
+   recebia o lead inteiro, `String({...})` virou "[object Object]", e como isso é string
+   NÃO vazia o `|| lead.bairro` que existia para o caso nunca foi alcançado.
+
+   Build, 42 suítes e 27 guardas, todos verdes: o defeito não muda geometria, não quebra
+   sintaxe e não some do DOM — ele TROCA uma palavra por outra, na aba que o executivo
+   abre de manhã. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-chave-com-objeto.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
