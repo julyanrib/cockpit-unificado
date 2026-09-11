@@ -1109,6 +1109,40 @@ console.log('');
     'texto que informa e nao resolve e exatamente o que esta tela existe para nao ter');
 }());
 
+
+/* ══ A ETIQUETA DIZ DE ONDE A CONTA VEIO (11/09/26) ═══════════════════════════════════
+   Visto NA PRODUCAO, testando o fluxo inteiro com a sessao do Marco: criei uma conta
+   pelo formulario novo com fonte "rua", e o card saiu marcado "mais avaliados" — a
+   etiqueta de quem veio do Google Places COM nota e avaliacoes. A conta nao tem nota
+   nenhuma: foi digitada na rua.
+
+   Causa minha, do mesmo dia: o formulario grava instagram/mapa/rua e pl6GrupoDaFonte so
+   conhecia casa/ifood/trip — todo o resto caia no padrao `aval`. O padrao existe por um
+   bom motivo (fonte nova aparece em vez de sumir da tela), e eu criei tres fontes novas
+   sem declara-las.
+
+   Etiqueta que mente sobre a origem muda a PRIORIDADE que o executivo da ao card. */
+(function () {
+  const semCom6 = function (s) { return String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' '); };
+  const cod = semCom6(tpl);
+
+  checar('as tres fontes do formulario tem etiqueta propria',
+    /instagram: \{ tag: 'achei no Instagram'/.test(cod)
+      && /mapa: \{ tag: 'achei no Maps'/.test(cod)
+      && /rua: \{ tag: 'achei na rua'/.test(cod),
+    'sem etiqueta propria elas caem em "mais avaliados", que e de quem tem nota do Places');
+
+  checar('e o agrupador as reconhece ANTES do padrao',
+    cod.indexOf("if (f === 'instagram') return 'instagram';") > 0
+      && cod.indexOf("if (f === 'rua') return 'rua';") > 0
+      && cod.indexOf("if (f === 'rua') return 'rua';") < cod.indexOf("return 'aval';"),
+    'declarada depois do padrao e o mesmo que nao declarada');
+
+  checar('e o padrao continua existindo para a proxima fonte',
+    cod.indexOf("return 'aval';") > 0,
+    'fonte nova que ninguem declarou tem de aparecer, nao sumir da tela');
+}());
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);
