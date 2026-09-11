@@ -765,6 +765,140 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
   'agendar em dia que o roteiro nao tem grava lixo no plano dele');
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   A ABA TIME v10 (10/09/26, prancha time-v10-STANDALONE)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   A regra zero do prompt: "NENHUM clique morto e NENHUM dado inventado — se a integracao
+   falhar, mostre estado de erro/carregando, nunca numero fake". Estas guardas vigiam
+   exatamente as duas metades dessa frase.
+
+   O QUE EU ERREI ESCREVENDO ESTA TELA, e por isso tres delas existem: assumi a FORMA de
+   tres campos do snapshot sem medir. `DATA.vendasMes` e objeto e nao lista (a aba do
+   gestor nao desenhou: TypeError no primeiro render), `DATA.kpiDeltas.X` e
+   { sinal, valor } e nao numero (os quatro cartoes de fluxo cairiam em "nao medido" com
+   o dado presente), e `DATA.agenda` e { geradoEm, itens } e nao lista. */
+(function () {
+  const tela = templateCodigo;
+
+  /* ── 1 · UMA FONTE SO DE TOQUES (regra 1 da prancha) ────────────────────────────── */
+  checar('toques por lead vem de UMA funcao, com cache por repintura',
+    /function tm10ToquesPorNegocio\(\)/.test(tela)
+      /* O COMENTARIO NAO SERVE DE ANCORA AQUI: templateCodigo tira comentario antes de
+         medir, e a primeira versao desta guarda procurava justamente a frase do
+         comentario do cache. Terceira vez que isso me pega neste projeto. */
+      && /function tm10Dados\(\)\s*\{\s*TM10_TQ = null;/.test(tela)
+      && (tela.match(/function tm10Tq\(/g) || []).length === 1);
+  /* O CAMPO CRU SO E LIDO DENTRO DA FONTE UNICA. Ele aparece tambem na agenda do gestor
+     (outra tela, outro uso legitimo), entao a guarda mede a FAMILIA tm10: o campo vive
+     dentro de tm10ToquesPorNegocio e nenhuma outra funcao tm10 o toca. */
+  checar('nenhum bloco da Time conta toque por conta propria',
+    (function () {
+      const i = tela.indexOf('function tm10ToquesPorNegocio()');
+      const f = tela.indexOf('function tm10Tq(');
+      if (i < 0 || f < i) return false;
+      /* A FRONTEIRA DA FAMILIA, e nao "o resto do arquivo": `lead_deal_id` tem um uso
+         legitimo na agenda do gestor, noutra tela. A primeira versao desta guarda
+         proibia o campo em qualquer lugar depois de tm10Tq e reprovou por causa dele —
+         guarda larga acusa codigo certo, que e tao ruim quanto deixar passar o errado. */
+      const fim = tela.indexOf('function tm2CorTemp(');
+      if (fim < f) return false;
+      const dentro = tela.slice(i, f);
+      const restoDaFamilia = tela.slice(f, fim);
+      return dentro.indexOf('lead_deal_id') > -1
+        && restoDaFamilia.indexOf('lead_deal_id') === -1;
+    }()));
+
+  /* ── 2 · PLURALIZACAO (regra 2) ─────────────────────────────────────────────────── */
+  checar('a pluralizacao de toque, travado e estourado sai de um lugar',
+    /return n === 1 \? .1 toque. : n \+ . toques./.test(tela.replace(/'/g, '.'))
+      && tela.indexOf("' travado' : ' travados'") > -1
+      && tela.indexOf("' estourado' : ' estourados'") > -1);
+
+  /* ── 3 · O FUNIL NUNCA ABRE VAZIO (regra 4) ─────────────────────────────────────── */
+  checar('o funil abre no gargalo e a etapa escolhida cai fora se esvaziou',
+    /function tm10Gargalo\(/.test(tela)
+      && /e\.id === TM10_ETAPA && e\.n > 0/.test(tela)
+      && /\|\| gargalo \|\| etapas\[0\] \|\| null/.test(tela));
+  checar('e o verbo da etapa SELECIONA em vez de alternar',
+    /if \(verbo === .tm10etapa.\) \{[^}]{0,160}TM10_ETAPA = resto \|\| null/
+      .test(tela.replace(/'/g, '.')));
+  checar('o painel de detalhe tem frase para etapa vazia',
+    tela.indexOf('nenhum negócio nesta etapa agora.') > -1);
+
+  /* ── 4 · NENHUM CLIQUE MORTO, E NENHUM CLIQUE NOVO ──────────────────────────────────
+     Os tres gestos da prancha caem em fiacao que JA existia: o nome do lead e um link
+     para o negocio no HubSpot (hsUrl, a funcao unica que monta essa URL), e o nome de
+     vendedor cai no verbo `sel`, que e o dossie desta aba. Verbo novo: UM. */
+  checar('o nome do lead abre o negocio no HubSpot pela funcao unica de URL',
+    /function tm10NomeLead\([^)]*\) \{[\s\S]{0,200}hsUrl\(id\)/.test(tela));
+  checar('o nome do vendedor cai no verbo sel, que e o dossie que ja existia',
+    /function tm10Dono\([\s\S]{0,300}data-tm2-acao="sel:/.test(tela));
+  checar('e a v10 criou UM verbo novo, nao uma fiacao nova',
+    (tela.match(/data-tm10-acao/g) || []).length === 0);
+
+  /* ── 5 · NENHUM DADO INVENTADO: AS TRES FORMAS QUE EU ASSUMI ERRADO ─────────────── */
+  checar('vendasMes e lida como objeto, e o MRR fechado vem de totalMrr',
+    tela.indexOf('const fechMrr = Number(vm.totalMrr) || 0;') > -1
+      && !/DATA\.vendasMes \|\| \[\]/.test(tela));
+  checar('o delta do fluxo le .valor, e nao o objeto inteiro',
+    /const v = o && typeof o === .object. \? o\.valor : o;/.test(tela.replace(/'/g, '.')));
+  checar('a agenda e lida de DATA.agenda.itens',
+    /DATA\.agenda && Array\.isArray\(DATA\.agenda\.itens\)/.test(tela));
+
+  /* ── 6 · NAO MEDIDO NAO E ZERO, NEM 100% ────────────────────────────────────────────
+     Tres blocos podem nao ter dado nesta carga, e os tres dizem isso em vez de imprimir
+     numero: o SLA de 1o toque (depende de `criadoEm`, que entrou no robo hoje), a
+     cadencia e o fluxo da semana. */
+  checar('o SLA de 1o toque tem estado honesto quando nao da para medir',
+    /return \{ medivel: false, comData: comData\.length, ativos: ativos \};/.test(tela)
+      && tela.indexOf('ainda não dá para medir.') > -1
+      && tela.indexOf('Preferi dizer isso a imprimir uma porcentagem inventada.') > -1);
+  checar('a cadencia tambem, em vez de heatmap vazio',
+    tela.indexOf('a cadência não veio nesta carga do robô') > -1);
+  checar('e o cartao de fluxo diz "nao medido" em vez de 0',
+    /c\.v == null \? .não medido./.test(tela.replace(/'/g, '.')));
+
+  /* ── 7 · A JANELA VAI NO ROTULO ─────────────────────────────────────────────────────
+     A prancha pede "perdas do mes" e "media de 6 meses"; o robo mede 90 dias e 3 meses
+     (medido na producao). O rotulo diz o que o dado e — e derivado do proprio dado, para
+     acompanhar sozinho se o robo mudar a janela. */
+  checar('a janela das perdas sai do dado, nao de uma palavra cravada',
+    /últimos . \+ \(pe\.dias \|\| .—.\) \+ . dias, a janela do robô/.test(tela.replace(/'/g, '.')));
+  checar('e a media da conversao diz quantos meses tem',
+    /* O CONCATENADOR CAI NA LINHA SEGUINTE no markup, então o \s* tem de vir ANTES do
+       mais, e não depois de um espaço literal. */
+    /traço = média de .\s*\+\s*\(cv\.medivel \? cv\.meses : 0\)/.test(tela.replace(/'/g, '.')));
+
+  /* ── 8 · AS OITO ETAPAS SAO A LISTA DO EXECUTIVO ────────────────────────────────────
+     Manter uma segunda ordem de etapas aqui e o que fez a grade do kanban declarar sete
+     trilhas para oito colunas em 10/09. O gestor cobra a etapa que o executivo ve. */
+  checar('as etapas da aba Time saem de FN3_COLUNAS',
+    /const cols = \(typeof FN3_COLUNAS !== .undefined.\) \? FN3_COLUNAS : \[\];/
+      .test(tela.replace(/'/g, '.')));
+  checar('e a cor da etapa sai de stageColor, a tabela unica',
+    /cor: \(typeof stageColor === .function.\) \? stageColor\(c\.id\)/.test(tela.replace(/'/g, '.')));
+
+  /* ── 9 · O QUE A PRANCHA NAO DESENHOU E QUE NAO PODE SUMIR ──────────────────────────
+     Dossie, dossie de negocio, pauta do lider e rodape de procedencia continuam, porque
+     tira-los seria remover gravacao (pauta_do_lider) e o destino dos cliques de nome. */
+  checar('as quatro pecas da v2 sobreviveram, e o render as desenha',
+    /function tm2SobreviventesHTML\(d\)/.test(tela)
+      && /raiz\.innerHTML = tm10TelaHTML\(tm10Dados\(\), tm2SobreviventesHTML\(tm2Dados\(\)\)\);/.test(tela)
+      && tela.indexOf('Sua pauta de líder') > -1);
+  checar('e so o gestor desenha a tela do gestor',
+    /function renderTimeLider\(\) \{[\s\S]{0,400}?sessaoAtual\.role !== .manager.\) return;/
+      .test(tela.replace(/'/g, '.')));
+
+  /* ── 10 · O MRR FECHADO DIZ DE QUANTOS ELE SAI ──────────────────────────────────────
+     MEDIDO: reps[].fechadosNoMes soma 6 e vendasMes.totalClientes diz 2 — o segundo conta
+     so quem tem MRR preenchido. A contagem usa o completo, o dinheiro usa o que sabe de
+     dinheiro, e o rodape do KPI diz a diferenca. Sem essa linha seriam dois numeros de
+     fechamento na mesma tela sem explicacao. */
+  checar('o KPI de fechados diz quantos deles tem MRR no CRM',
+    /prov\.fechComMrr \+ . de . \+ prov\.fechN \+ . com MRR no CRM/.test(tela.replace(/'/g, '.')));
+}());
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));

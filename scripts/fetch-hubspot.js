@@ -1760,6 +1760,14 @@ async function main() {
         slaBreach: dias > (SLA_DAYS[stageId] || 999),
         proximaAtividade: d.properties.notes_next_activity_date || null,
         ultimaInteracao: d.properties.notes_last_updated || null,
+        /* ══ QUANDO O NEGOCIO NASCEU (10/09/26) ══════════════════════════════════
+           `createdate` JA era pedido na busca (stageDealsTeamWide) e este mapeador
+           simplesmente nao o repassava — medido na producao: 8 de 249 negocios do
+           funil chegavam com data de criacao, e os 8 vinham por outro caminho.
+           Sem ele, o SLA de 1o toque da aba Time e incalculavel: ele e o delta entre
+           a criacao do negocio (a carga) e o primeiro engajamento. Pedir custava zero
+           porque a propriedade ja vinha na resposta; o que faltava era esta linha. */
+        criadoEm: d.properties.createdate || null,
         valor: Math.round(parseFloat(d.properties.amount) || 0),
         vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
         ownerId: d.properties.hubspot_owner_id || null,
