@@ -26237,9 +26237,19 @@ function tm10Provavel(m, etapas) {
   const metaMrrTime = Number((DATA.kpisHub || {}).metaMrrTime) || 0;
   const metaReceitaTime = Number((DATA.kpisHub || {}).metaReceitaTime) || 0;
   const ajustadas = Array.isArray(vm.ajustadas) ? vm.ajustadas : [];
-  const clientes = m.time.fech + pag.n + quentes.length * TM10_PESO_QUENTE;
+  /* ══ UMA FONTE PARA CLIENTES FECHADOS NO MES, E E A QUE SABE DA COMPETENCIA ════════
+     A tela dizia 6 e o ajuste de competencia dizia 5 — os dois na mesma tela. Sao duas
+     contagens diferentes do mesmo mes:
+       reps[].fechadosNoMes .... uma busca por dono no HubSpot, que NAO sabe do ajuste
+       vendasMes.totalClientes . a lista de vendas, de onde o ajuste de competencia sai
+     A segunda e a unica que pode estar certa: e nela que o NGW sai do mes. A primeira
+     continua no payload porque outras telas a leem, mas aqui o numero de clientes do mes
+     passa a vir de vendasMes — a mesma lista que produz o MRR e a receita, entao os tres
+     eixos falam da mesma venda. */
+  const fechClientes = vm.totalClientes != null ? Number(vm.totalClientes) : m.time.fech;
+  const clientes = fechClientes + pag.n + quentes.length * TM10_PESO_QUENTE;
   return {
-    fechN: m.time.fech, fechMrr: fechMrr, fechComMrr: fechComMrr,
+    fechN: fechClientes, fechMrr: fechMrr, fechComMrr: fechComMrr,
     fechReceita: fechReceita,
     metaMrrTime: metaMrrTime, metaReceitaTime: metaReceitaTime,
     pctClientes: m.time.meta ? Math.round(m.time.fech / m.time.meta * 100) : null,
@@ -26535,12 +26545,17 @@ function tm10Ranking(m) {
        os dois patamares da planilha (8 e 2), cinco pessoas apareciam em 0% de uma meta que
        nao e a delas — e a Amanda, que saiu da planilha, entrava com meta 10.
        META ZERO NAO E 0%: quem esta fora da planilha aparece com "—", nao com vermelho. */
-    const pct = r.meta ? Math.round(r.fech / r.meta * 100) : null;
+    /* O FECHADO DELE TAMBEM SAI DE vendasMes, pelo mesmo motivo do total: e a lista que
+       aplica a competencia. Sem isto o Marco apareceria com 4 no ranking e 3 na planilha. */
+    const vendasDele = ((DATA.vendasMes || {}).porRep || []).filter(function (x) {
+      return String(x.ownerId) === String(r.ownerId); })[0] || null;
+    const fechDele = vendasDele ? Number(vendasDele.count) : r.fech;
+    const pct = r.meta ? Math.round(fechDele / r.meta * 100) : null;
     const rep = (DATA.reps || []).filter(function (x) {
       return String(x.ownerId) === String(r.ownerId); })[0] || {};
     const vendas = ((DATA.vendasMes || {}).porRep || []).filter(function (x) {
       return String(x.ownerId) === String(r.ownerId); })[0] || {};
-    return { ownerId: r.ownerId, nome: tm10NomeCurto(r.nome), fech: r.fech, meta: r.meta,
+    return { ownerId: r.ownerId, nome: tm10NomeCurto(r.nome), fech: fechDele, meta: r.meta,
       pct: pct, mrr: r.mrr, travados: r.acima,
       patamar: rep.patamarMeta || null,
       mrrFeito: Number(vendas.mrrTotal) || 0, mrrMeta: Number(rep.metaMrr) || 0,
