@@ -328,6 +328,34 @@ checar('uma leitura só na abertura da aba',
   'consulta cujo resultado ninguém lê é trabalho jogado fora em toda abertura');
 
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
+
+/* ══ AS NOVIDADES POR PRACA SAO BUSCADAS UMA VEZ POR SESSAO (11/09/26) ════════════════
+   MEDIDO NA PRODUCAO, na sessao do gestor, com o fetch instrumentado: aprovar duas
+   contas na fila disparou CINCO POST /api/novidades-mercado. Uma auditoria de poucos
+   minutos somou 42 chamadas.
+
+   O laco vive dentro do render da Prospeccao, e a tela redesenha a cada gesto — marcar,
+   aprovar, trocar de executivo. Sao cinco pracas, em serie, 25s de prazo cada, para
+   escolher a cidade de um SELO. O dado e semanal na origem: nao muda entre dois
+   cliques. */
+(function () {
+  const cod = template;
+  checar('as novidades por praca so sao buscadas uma vez por sessao',
+    cod.indexOf('let cddNovidadesEstado = null;') > 0
+      && cod.indexOf("if (cddNovidadesEstado === 'buscando') return;") > 0
+      && cod.indexOf('if (Array.isArray(cddNovidadesEstado)) return;') > 0,
+    '5 chamadas a Casa dos Dados por redesenho; 42 em poucos minutos de cliques');
+
+  checar('e a trava e posta ANTES da primeira espera',
+    cod.indexOf("cddNovidadesEstado = 'buscando';") < cod.indexOf('const token = await tokenDeSessaoGlobal();\n      if (!token) { cddNovidadesEstado = null; return; }'),
+    'trava marcada depois do await deixa passar os simultaneos');
+
+  checar('e o resultado VAZIO tambem fica guardado',
+    cod.indexOf('cddNovidadesEstado = totaisCdd;') > 0
+      && cod.indexOf('cddNovidadesEstado = totaisCdd;') < cod.indexOf('if (totaisCdd.length) {'),
+    'vazio nao guardado faz o laco inteiro rodar de novo a cada redesenho, para sempre');
+}());
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(function (f) { console.error(f); });
