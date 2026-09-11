@@ -26050,6 +26050,1068 @@ const TM2_ESTADO = { filtro: null, sel: null, etapa: null, deal: null, toast: nu
 /* Cor da temperatura — os cortes são os da prancha, e o número deles vem da régua
    (data/temperatura.json via DATA.temperaturaRegua). Sem a régua, cai nos cortes da
    prancha, que são os mesmos: 85 / 70 / 55. */
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   TIME v10 — A LEITURA DO MÊS DO NEGÓCIO  (10/09/26, prancha time-v10-STANDALONE)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Julyan: "vamos refazer a aba Time... só fazer exatamente igual, tudo tem q se
+   conversar, 0 cliques mortos". E a regra zero do prompt: "NENHUM clique morto e NENHUM
+   dado inventado — se a integração falhar, mostre estado de erro, nunca número fake".
+
+   O QUE EU MEDI NA PRODUÇÃO ANTES DE DESENHAR (10/09 às 20:50, dado fresco):
+     agenda .............. 1.075 itens, 430 negócios com pelo menos um engajamento
+     funil aberto ........ 249 negócios
+     toques por negócio .. 99 com ZERO, 88 com um, 46 com 2–4, 16 com 5+
+     cadência ............ 10 dias úteis × 11 pessoas, 510 atividades
+     motivos de perda .... 983 perdas na janela de NOVENTA dias (não do mês)
+     escada de etapas .... TRÊS meses medidos (2026-07/08/09), não seis
+     data de criação ..... 8 de 249 — o mapeador do funil não repassava "createdate"
+
+   As três últimas linhas mudaram o desenho, e é por isso que estão escritas aqui:
+   a janela das perdas e a da conversão vão NO RÓTULO (esta casa não escreve "do mês"
+   sobre 90 dias), e o SLA de 1º toque nasce com estado honesto — o campo entrou no robô
+   hoje e a medição começa na próxima carga. Inventar 100% ou 0% seria pior que dizer
+   que ainda não dá para medir.
+
+   187 DE 249 NEGÓCIOS EM ≤1 TOQUE é a leitura mais forte desta tela, e não era visível
+   em nenhum lugar do produto até agora.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── A FONTE ÚNICA DE TOQUES (regra 1 da prancha) ─────────────────────────────────────
+   "Toques do MESMO lead idênticos em todos os blocos e em todas as abas — uma função
+   só, um cache só." O cache é obrigatório e não é otimização: a tela lê toques em seis
+   blocos, e recontar 1.075 itens seis vezes por repintura é o que fez a Daily antiga
+   recalcular o funil três vezes por tela.
+
+   O QUE CONTA, palavra por palavra do que o robô já grava: tarefa (visita e follow-up
+   do app), reunião e nota do App Outbound. Ligação e e-mail NÃO contam — medido: zero
+   na janela, este time não os registra pelo CRM. É a MESMA régua da cadência, de
+   propósito: dois critérios de "toque" na mesma tela seriam dois números para a mesma
+   pergunta.
+
+   A JANELA É A DA AGENDA — 60 dias. Ela não é escolha minha nem da prancha: é o que o
+   robô busca. O rótulo da tela diz isso. */
+let TM10_TQ = null;
+function tm10ToquesPorNegocio() {
+  if (TM10_TQ) return TM10_TQ;
+  const m = new Map();
+  const itens = (DATA.agenda && Array.isArray(DATA.agenda.itens)) ? DATA.agenda.itens : [];
+  itens.forEach(function (it) {
+    const id = it && it.lead_deal_id ? String(it.lead_deal_id) : null;
+    if (!id) return;
+    /* CADA TIPO TEM O SEU CAMPO DE DATA, a mesma regra do robô: reunião usa o início
+       dela (quando acontece), tarefa e nota usam o timestamp. hs_createdate diria
+       "quando o registro foi criado", e a reunião de terça marcada na segunda contaria
+       como toque de segunda. */
+    const quando = it.hs_meeting_start_time || it.hs_timestamp || null;
+    const ms = quando ? Date.parse(quando) : NaN;
+    const at = m.get(id) || { n: 0, ultimo: null };
+    at.n += 1;
+    if (Number.isFinite(ms) && (at.ultimo == null || ms > at.ultimo)) at.ultimo = ms;
+    m.set(id, at);
+  });
+  TM10_TQ = m;
+  return m;
+}
+function tm10Tq(id) {
+  const at = tm10ToquesPorNegocio().get(String(id));
+  return at || { n: 0, ultimo: null };
+}
+/* PLURALIZAÇÃO É REGRA 2 DA PRANCHA: "0 toques", "1 toque", "N toques". */
+function tm10TqRot(n) { return n === 1 ? '1 toque' : n + ' toques'; }
+/* ≤1 vermelho · 2–3 âmbar · 4+ verde. O vermelho aqui é cobrança: abaixo de 2 toques o
+   lead está abandonado, não trabalhado. */
+function tm10TqCor(n) { return n <= 1 ? '#E51A31' : (n <= 3 ? '#B07C1F' : '#1E9E7B'); }
+function tm10Ultimo(ms) {
+  if (ms == null) return 'sem toque';
+  const hoje = (typeof isoDate === 'function') ? isoDate(new Date()) : new Date().toISOString().slice(0, 10);
+  const dia = new Date(ms - 3 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  if (dia === hoje) return 'hoje';
+  const dif = Math.round((Date.parse(hoje) - Date.parse(dia)) / 86400000);
+  if (dif === 1) return 'ontem';
+  return 'há ' + dif + 'd';
+}
+
+/* ── DINHEIRO NA GRAMÁTICA DA PRANCHA: R$ X,Xk ──────────────────────────────────────── */
+function tm10Rs(n) {
+  const v = Number(n) || 0;
+  if (v === 0) return 'R$ 0';
+  return 'R$ ' + (v / 1000).toFixed(1).replace('.', ',') + 'k';
+}
+function tm10MrrDo(l) {
+  return Number((l && (l.mrr || l.valor_de_mrr)) || 0) || Number((l && l.valor) || 0) || 0;
+}
+/* O PRIMEIRO NOME + INICIAL, como a prancha escreve ("Kelly T.", "Marco F."): nome
+   inteiro numa coluna de 100px é o que fazia o ranking cortar no meio. */
+function tm10NomeCurto(nome) {
+  const p = String(nome || '').trim().split(/\s+/);
+  if (!p[0]) return '—';
+  return p.length > 1 ? p[0] + ' ' + p[p.length - 1].charAt(0) + '.' : p[0];
+}
+
+/* ── AS OITO ETAPAS: a MESMA lista do kanban do executivo ─────────────────────────────
+   FN3_COLUNAS é a lista que a esteira do Meu funil desenha, e ela ganhou o Ganho hoje.
+   Ler dela em vez de manter uma segunda ordem aqui é o que garante que a etapa que o
+   gestor cobra seja a etapa que o executivo vê — foi exatamente por ter duas listas
+   que a grade do kanban ficou declarando sete trilhas para oito colunas. */
+function tm10Etapas() {
+  const labels = (DATA.stageMeta && DATA.stageMeta.labels) || {};
+  const slas = (DATA.stageMeta && DATA.stageMeta.slaDays) || {};
+  const cols = (typeof FN3_COLUNAS !== 'undefined') ? FN3_COLUNAS : [];
+  return cols.map(function (c) {
+    const ls = ((DATA.funilLeads && DATA.funilLeads[c.id]) || []).filter(Boolean);
+    const tq = ls.reduce(function (s, l) { return s + tm10Tq(l.id).n; }, 0);
+    return {
+      id: String(c.id),
+      rot: labels[c.id] || c.pleno || c.rot,
+      cor: (typeof stageColor === 'function') ? stageColor(c.id) : '#7A8494',
+      regua: slas[c.id] || null,
+      n: ls.length,
+      mrr: ls.reduce(function (s, l) { return s + tm10MrrDo(l); }, 0),
+      travados: ls.filter(function (l) { return l.slaBreach; }).length,
+      tqMed: ls.length ? tq / ls.length : null,
+      leads: ls
+    };
+  });
+}
+
+/* ── O GARGALO, que é o default do funil clicável (regra 4) ───────────────────────────
+   "mais travados; empate → mais MRR parado". Etapa cheia pode ser topo de funil
+   saudável; etapa com régua estourada é dinheiro parado. E o painel NUNCA abre vazio:
+   sem nenhum travado no time, o default é a etapa com mais negócio. */
+function tm10Gargalo(etapas) {
+  const comAlgo = etapas.filter(function (e) { return e.n > 0; });
+  if (!comAlgo.length) return null;
+  const ord = comAlgo.slice().sort(function (a, b) {
+    if (b.travados !== a.travados) return b.travados - a.travados;
+    return b.mrr - a.mrr;
+  });
+  return ord[0];
+}
+let TM10_ETAPA = null;
+
+/* ── O PROVÁVEL DO MÊS ────────────────────────────────────────────────────────────────
+   Fórmula da prancha, em clientes E em MRR: fechados + ag. pagamento + quentes × 0,6.
+   A ponderação de 60% é da prancha e está escrita na legenda, porque número ponderado
+   sem a conta à vista é número que ninguém confere. */
+const TM10_PESO_QUENTE = 0.6;
+function tm10Provavel(m, etapas) {
+  const pag = etapas.find(function (e) { return e.id === '1395880473'; }) || { n: 0, mrr: 0 };
+  const quentes = ((DATA.temperatura && DATA.temperatura.quentes) || []).filter(Boolean);
+  const mrrQuentes = quentes.reduce(function (s, q) { return s + tm10MrrDo(q); }, 0);
+  /* ══ vendasMes É OBJETO, NÃO LISTA — E ELA ME DEU DUAS VERDADES (10/09/26) ══════════
+     Eu escrevi `(DATA.vendasMes || []).reduce(...)` de cabeça e a aba do gestor não
+     desenhou: TypeError no primeiro render. A forma real é
+     { mesLabel, totalClientes, totalMrr, porRep }.
+
+     E ao olhar a forma apareceu uma DIVERGÊNCIA que importa mais que o erro: o robô
+     mede "fechados no mês" de dois jeitos — `reps[].fechadosNoMes` soma 6 e
+     `vendasMes.totalClientes` diz 2. Não é bug de nenhum dos dois: vendasMes conta só
+     os negócios COM MRR preenchido (é o que o log do robô diz, "com MRR"). Então a
+     CONTAGEM de clientes usa a soma dos reps, que é completa, e o MRR usa vendasMes,
+     que é o único que sabe de dinheiro — com a procedência escrita no rodapé do KPI,
+     porque "R$ 0,7k" ao lado de "6 fechados" sem dizer que o R$ é de 2 deles seria
+     exatamente o número sem procedência que esta casa não escreve. */
+  const vm = DATA.vendasMes || {};
+  const fechMrr = Number(vm.totalMrr) || 0;
+  const fechComMrr = Number(vm.totalClientes) || 0;
+  const clientes = m.time.fech + pag.n + quentes.length * TM10_PESO_QUENTE;
+  return {
+    fechN: m.time.fech, fechMrr: fechMrr, fechComMrr: fechComMrr,
+    mesLabel: vm.mesLabel || '',
+    pagN: pag.n, pagMrr: pag.mrr,
+    quentesN: quentes.length, quentesMrr: mrrQuentes,
+    quentesPondN: quentes.length * TM10_PESO_QUENTE,
+    quentesPondMrr: mrrQuentes * TM10_PESO_QUENTE,
+    clientes: Math.round(clientes),
+    mrr: fechMrr + pag.mrr + mrrQuentes * TM10_PESO_QUENTE,
+    meta: m.time.meta,
+    gap: Math.max(0, m.time.meta - Math.round(clientes)),
+    quentes: quentes
+  };
+}
+
+
+/* ── OS QUENTES DA SEMANA (bloco 2) ───────────────────────────────────────────────────
+   Vêm do score de temperatura do cockpit, a MESMA fonte que a Daily e o Meu funil leem.
+   A recomendação por lead é a do próprio dado (o texto que o robô já escreve); sem ela,
+   a linha diz o que a etapa manda, nunca uma frase inventada. */
+function tm10Quentes(prov) {
+  return prov.quentes.slice()
+    .sort(function (a, b) { return (Number(b.temp) || 0) - (Number(a.temp) || 0); })
+    .slice(0, 5).map(function (q, i) {
+      const tq = tm10Tq(q.id);
+      return {
+        rank: i + 1, id: String(q.id), nome: q.name || q.dealname || 'sem nome',
+        dono: tm10NomeCurto(q.vendedor || (DATA.reps || []).filter(function (r) {
+          return String(r.ownerId) === String(q.ownerId); }).map(function (r) { return r.name; })[0]),
+        ownerId: String(q.ownerId || ''),
+        etapa: q.stage || '', etapaCor: (typeof stageColor === 'function') ? stageColor(q.stageId) : '#7A8494',
+        tqN: tq.n, tqRot: tm10TqRot(tq.n), tqCor: tm10TqCor(tq.n), ultimo: tm10Ultimo(tq.ultimo),
+        temp: Number(q.temp) || 0,
+        tempCor: (Number(q.temp) || 0) >= 85 ? '#E51A31' : ((Number(q.temp) || 0) >= 75 ? '#F2542D' : '#B07C1F'),
+        mrr: tm10MrrDo(q)
+      };
+    });
+}
+
+/* ── O RESGATE DOS TRAVADOS (bloco 2) ─────────────────────────────────────────────────
+   Os cinco MAIORES MRR com régua estourada. Régua é do HubSpot (stageMeta.slaDays) e
+   `slaBreach` já vem calculado pelo robô — recalcular aqui seria a segunda régua. */
+function tm10Travados(etapas) {
+  const pos = ['1396006162', '1396006163', '1396006164', '1398311191'];
+  const todos = [];
+  etapas.forEach(function (e) {
+    if (pos.indexOf(e.id) >= 0) return;   /* pós-venda e perdido não se resgata */
+    e.leads.forEach(function (l) { if (l.slaBreach) todos.push({ l: l, e: e }); });
+  });
+  return todos.sort(function (a, b) {
+    const d = tm10MrrDo(b.l) - tm10MrrDo(a.l);
+    return d !== 0 ? d : (b.l.dias || 0) - (a.l.dias || 0);
+  }).slice(0, 5).map(function (x, i) {
+    const tq = tm10Tq(x.l.id);
+    /* O PORQUÊ SAI DO DADO, nunca de uma frase pronta: o que trava é sempre uma das
+       três — não tem toque, tem toque velho, ou passou da régua com tarefa vencida. */
+    const porque = tq.n === 0 ? 'nenhum toque na janela — ninguém voltou nesse'
+      : (tq.n <= 1 ? 'um toque só desde que entrou — cadência abaixo da régua'
+        : 'régua de ' + (x.e.regua || '—') + 'd estourada com ' + tm10TqRot(tq.n));
+    return {
+      rank: i + 1, id: String(x.l.id), nome: x.l.name || x.l.dealname || 'sem nome',
+      dono: tm10NomeCurto(x.l.vendedor), ownerId: String(x.l.ownerId || ''),
+      etapa: x.e.rot, etapaCor: x.e.cor, porque: porque,
+      tqRot: tm10TqRot(tq.n), tqCor: tm10TqCor(tq.n), ultimo: tm10Ultimo(tq.ultimo),
+      dias: x.l.dias != null ? x.l.dias : null, mrr: tm10MrrDo(x.l)
+    };
+  });
+}
+
+/* ── A COBERTURA DE TOQUES (bloco 4) — a leitura mais forte desta tela ────────────────
+   Medido na produção em 10/09: de 249 negócios abertos, 99 com ZERO toque e 88 com um.
+   187 em ≤1, que é 75% do funil. Nenhuma tela do produto dizia isso.
+   "Leads ativos" exclui pós-venda e perdido: cobrar toque de quem já comprou ou já
+   saiu é cobrar o que não existe. */
+function tm10Cobertura(etapas) {
+  const pos = ['1396006162', '1396006163', '1396006164', '1398311191'];
+  const ativos = [];
+  etapas.forEach(function (e) {
+    if (pos.indexOf(e.id) >= 0) return;
+    e.leads.forEach(function (l) { ativos.push({ l: l, e: e }); });
+  });
+  const faixa = function (n) { return n <= 1 ? 0 : (n <= 4 ? 1 : 2); };
+  const caixas = [
+    { rot: '0–1 toque', cor: '#E51A31', n: 0, mrr: 0 },
+    { rot: '2–4 toques', cor: '#B07C1F', n: 0, mrr: 0 },
+    { rot: '5+ toques', cor: '#1E9E7B', n: 0, mrr: 0 }
+  ];
+  let somaTq = 0;
+  ativos.forEach(function (x) {
+    const tq = tm10Tq(x.l.id); somaTq += tq.n;
+    const c = caixas[faixa(tq.n)]; c.n += 1; c.mrr += tm10MrrDo(x.l);
+  });
+  const abandonados = ativos.filter(function (x) { return tm10Tq(x.l.id).n <= 1; })
+    .sort(function (a, b) { return tm10MrrDo(b.l) - tm10MrrDo(a.l); })
+    .slice(0, 5).map(function (x) {
+      const tq = tm10Tq(x.l.id);
+      return { id: String(x.l.id), nome: x.l.name || x.l.dealname || 'sem nome',
+        dono: tm10NomeCurto(x.l.vendedor), ownerId: String(x.l.ownerId || ''),
+        etapa: x.e.rot, dias: x.l.dias != null ? x.l.dias : null,
+        tqRot: tm10TqRot(tq.n), mrr: tm10MrrDo(x.l) };
+    });
+  const maxN = Math.max(1, caixas[0].n, caixas[1].n, caixas[2].n);
+  caixas.forEach(function (c) { c.pct = Math.round(c.n / maxN * 100); });
+  return { caixas: caixas, ativos: ativos.length,
+    media: ativos.length ? somaTq / ativos.length : 0, abandonados: abandonados };
+}
+
+/* ── O SLA DE 1º TOQUE (bloco 5) ──────────────────────────────────────────────────────
+   A conta é o delta entre a CRIAÇÃO do negócio e o primeiro engajamento dele. Ela
+   depende de `criadoEm`, que o mapeador do funil do robô não repassava — medido na
+   produção em 10/09: 8 de 249 negócios chegavam com data de criação. A linha entrou no
+   robô hoje, e por isso esta função tem DOIS estados e nenhum número inventado:
+     medivel = false  ->  a tela diz que a medição começa na próxima carga
+     medivel = true   ->  a barra por vendedor, como a prancha desenha
+   Escrever "100% em dia" sobre dado ausente seria o mesmo defeito do "0 avaliações"
+   sobre 1032 linhas sem nota. */
+const TM10_SLA_HORAS = 48;
+function tm10Sla(etapas) {
+  const pos = ['1396006162', '1396006163', '1396006164', '1398311191'];
+  const comData = [];
+  etapas.forEach(function (e) {
+    if (pos.indexOf(e.id) >= 0) return;
+    e.leads.forEach(function (l) { if (l.criadoEm) comData.push(l); });
+  });
+  const ativos = etapas.reduce(function (s, e) {
+    return s + (pos.indexOf(e.id) >= 0 ? 0 : e.n); }, 0);
+  if (comData.length < 5) {
+    return { medivel: false, comData: comData.length, ativos: ativos };
+  }
+  const porOwner = {};
+  comData.forEach(function (l) {
+    const o = String(l.ownerId || '');
+    if (!porOwner[o]) porOwner[o] = { n: 0, emDia: 0, estourados: 0, nome: l.vendedor };
+    const p = porOwner[o]; p.n += 1;
+    const tq = tm10Tq(l.id);
+    const nasceu = Date.parse(l.criadoEm);
+    const ok = tq.ultimo != null && Number.isFinite(nasceu)
+      && (tq.ultimo - nasceu) <= TM10_SLA_HORAS * 3600000;
+    if (ok) p.emDia += 1; else p.estourados += 1;
+  });
+  const linhas = Object.keys(porOwner).map(function (o) {
+    const p = porOwner[o];
+    const pct = p.n ? Math.round(p.emDia / p.n * 100) : 0;
+    return { ownerId: o, nome: tm10NomeCurto(p.nome), pct: pct, n: p.n, estourados: p.estourados,
+      cor: pct >= 85 ? '#1E9E7B' : (pct >= 65 ? '#B07C1F' : '#E51A31') };
+  }).sort(function (a, b) { return b.pct - a.pct; });
+  const estourados = linhas.reduce(function (s, l) { return s + l.estourados; }, 0);
+  return { medivel: true, linhas: linhas, estourados: estourados, comData: comData.length };
+}
+
+/* ── AS PROPOSTAS VENCENDO (sub-bloco 5) ──────────────────────────────────────────────
+   "Sem reunião" sai das TAREFAS do negócio, que o robô já traz: proposta em Demo ou
+   Negociação cuja próxima tarefa não existe (ou já venceu) é proposta sem reunião — e é
+   o que o gestor cobra hoje. Não há propriedade de "validade da proposta" no portal, e
+   inventar uma data de vencimento seria número fake; a semana aqui é a régua da etapa. */
+function tm10Propostas(etapas) {
+  const alvo = ['1395880471', '1395880472'];
+  const hoje = Date.now();
+  const linhas = [];
+  etapas.forEach(function (e) {
+    if (alvo.indexOf(e.id) < 0) return;
+    e.leads.forEach(function (l) {
+      const tarefas = Array.isArray(l.tarefas) ? l.tarefas : [];
+      const futura = tarefas.map(function (x) { return Date.parse(x.timestamp); })
+        .filter(function (ms) { return Number.isFinite(ms) && ms >= hoje; }).sort()[0] || null;
+      linhas.push({
+        id: String(l.id), nome: l.name || l.dealname || 'sem nome',
+        dono: tm10NomeCurto(l.vendedor), ownerId: String(l.ownerId || ''),
+        temReuniao: futura != null,
+        quando: futura != null ? tm10DiaCurtoMs(futura) : (l.dias != null ? l.dias + 'd parado' : 'sem data'),
+        nota: futura != null ? 'reunião marcada ✓' : 'sem reunião — cobrar HOJE',
+        mrr: tm10MrrDo(l)
+      });
+    });
+  });
+  /* sem reunião primeiro, e dentro disso o maior MRR: é a ordem da cobrança */
+  return linhas.sort(function (a, b) {
+    if (a.temReuniao !== b.temReuniao) return a.temReuniao ? 1 : -1;
+    return b.mrr - a.mrr;
+  }).slice(0, 5);
+}
+function tm10DiaCurtoMs(ms) {
+  const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  const d = new Date(ms - 3 * 60 * 60 * 1000);
+  return dias[d.getUTCDay()] + ' ' + String(d.getUTCDate()).padStart(2, '0');
+}
+
+/* ── POR QUE PERDEMOS (bloco 6) ───────────────────────────────────────────────────────
+   A JANELA É DE 90 DIAS E O RÓTULO DIZ ISSO. A prancha pede "do mês"; `motivosPerda`
+   do robô mede 90 dias (medido: DATA.motivosPerda.dias === 90, 983 perdas). Escrever
+   "do mês" em cima de 90 dias seria número sem procedência, que é o defeito que este
+   produto mais combate. Se o robô passar a medir o mês, o rótulo acompanha sozinho. */
+function tm10Perdas() {
+  const mp = DATA.motivosPerda || {};
+  const porMotivo = mp.porMotivo || {};
+  const mrrPorMotivo = mp.mrrPorMotivo || {};
+  const corDe = function (nome) {
+    const n = String(nome).toLowerCase();
+    if (n.indexOf('preço') >= 0 || n.indexOf('preco') >= 0) return '#E51A31';
+    if (n.indexOf('sem retorno') >= 0) return '#B07C1F';
+    return '#7A8494';
+  };
+  const linhas = Object.keys(porMotivo).map(function (k) {
+    return { rot: k, n: porMotivo[k] || 0, mrr: mrrPorMotivo[k] || 0, cor: corDe(k) };
+  }).sort(function (a, b) { return b.n - a.n; }).slice(0, 5);
+  const max = Math.max(1, ...linhas.map(function (l) { return l.n; }));
+  linhas.forEach(function (l) { l.pct = Math.round(l.n / max * 100); });
+  const total = linhas.reduce(function (s, l) { return s + l.n; }, 0);
+  const mrrTotal = linhas.reduce(function (s, l) { return s + l.mrr; }, 0);
+  const lider = linhas[0] || null;
+  return { linhas: linhas, total: total, mrr: mrrTotal, dias: mp.dias || null, lider: lider };
+}
+
+/* ── CONVERSÃO ETAPA → ETAPA (bloco 6) ────────────────────────────────────────────────
+   `historicoEtapas.escada` traz, por mês, quantos CHEGARAM e quantos AVANÇARAM em cada
+   etapa — a conversão é avancaram/chegaram. A prancha pede o traço da média de SEIS
+   meses; o robô mede TRÊS (medido: 2026-07, 08 e 09). O rótulo diz quantos meses a
+   média tem, em vez de prometer seis. */
+function tm10Conversao() {
+  const esc = (DATA.historicoEtapas && DATA.historicoEtapas.escada) || {};
+  const meses = Object.keys(esc).sort();
+  if (meses.length < 2) return { medivel: false, meses: meses.length };
+  const atual = esc[meses[meses.length - 1]];
+  const antes = meses.slice(0, -1);
+  const taxa = function (et) { return et && et.chegaram ? et.avancaram / et.chegaram * 100 : null; };
+  const linhas = ((atual && atual.etapas) || []).slice(0, 5).map(function (et, i) {
+    const prox = ((atual && atual.etapas) || [])[i + 1];
+    const agora = taxa(et);
+    const hist = antes.map(function (mm) {
+      const e2 = ((esc[mm] && esc[mm].etapas) || []).find(function (x) { return x.id === et.id; });
+      return taxa(e2);
+    }).filter(function (v) { return v != null; });
+    const media = hist.length ? hist.reduce(function (a, b) { return a + b; }, 0) / hist.length : null;
+    return {
+      rot: et.nome + ' → ' + (prox ? prox.nome : 'fechamento'),
+      pct: agora == null ? null : Math.round(agora),
+      media: media == null ? null : Math.round(media),
+      cor: (agora != null && media != null && agora >= media) ? '#1E9E7B' : '#E51A31'
+    };
+  }).filter(function (l) { return l.pct != null; });
+  return { medivel: true, linhas: linhas, meses: antes.length };
+}
+
+/* ── A CADÊNCIA (bloco 7) ─────────────────────────────────────────────────────────────
+   O heatmap do robô, sem recontar nada: `cadenciaDiaria` já vem com os 10 dias úteis e
+   a contagem por pessoa. As cores são as da prancha; a nota do pé cita a fonte que o
+   próprio robô escreve (`fonte` e `naoConta`), porque prometer "atividades do CRM"
+   sugeriria ligação e e-mail, que não contam. */
+function tm10Cadencia() {
+  const c = DATA.cadenciaDiaria;
+  if (!c || !Array.isArray(c.dias) || !c.dias.length) return { medivel: false };
+  const rotDia = function (iso) {
+    const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    const d = new Date(iso + 'T12:00:00Z');
+    return dias[d.getUTCDay()] + ' ' + String(d.getUTCDate()).padStart(2, '0');
+  };
+  const cor = function (n) {
+    if (!n) return { bg: '#FDECEC', cor: '#C24A4A' };
+    if (n <= 2) return { bg: '#FDF6E7', cor: '#3E382F' };
+    if (n <= 4) return { bg: '#D9F0E7', cor: '#3E382F' };
+    return { bg: '#1E9E7B', cor: '#FFFDF8' };
+  };
+  const linhas = (DATA.reps || []).map(function (r) {
+    const arr = (c.porOwner && c.porOwner[String(r.ownerId)]) || [];
+    const total = arr.reduce(function (a, b) { return a + b; }, 0);
+    return { ownerId: String(r.ownerId), nome: tm10NomeCurto(r.name),
+      celulas: c.dias.map(function (_, i) { const n = arr[i] || 0; const k = cor(n); return { n: n, bg: k.bg, cor: k.cor }; }),
+      total: total,
+      totalCor: total < 20 ? '#E51A31' : (total < 40 ? '#B07C1F' : '#1E9E7B') };
+  }).sort(function (a, b) { return b.total - a.total; });
+  return { medivel: true, dias: c.dias.map(rotDia), linhas: linhas,
+    fonte: c.fonte || '', naoConta: c.naoConta || '' };
+}
+
+/* ── QUEM PUXA, QUEM ATRASA (bloco 8) ─────────────────────────────────────────────────
+   `tl5Medir().porRep` já mede fechados, meta, abertos, acima e MRR de cada um — este
+   bloco só acrescenta a coluna de toques por lead, da mesma fonte única. */
+function tm10Ranking(m) {
+  return m.porRep.map(function (r) {
+    let tq = 0, n = 0;
+    m.etapas.forEach(function (e) {
+      e.leads.forEach(function (l) {
+        if (String(l.ownerId) !== String(r.ownerId)) return;
+        tq += tm10Tq(l.id).n; n += 1;
+      });
+    });
+    const pct = r.meta ? Math.round(r.fech / r.meta * 100) : 0;
+    return { ownerId: r.ownerId, nome: tm10NomeCurto(r.nome), fech: r.fech, meta: r.meta,
+      pct: pct, mrr: r.mrr, travados: r.acima,
+      tqMed: n ? tq / n : null,
+      cor: pct >= 70 ? '#1E9E7B' : (pct >= 50 ? '#B07C1F' : '#E51A31') };
+  }).sort(function (a, b) { return b.pct - a.pct || b.fech - a.fech; });
+}
+
+/* ── O FLUXO DA SEMANA (bloco 3) ──────────────────────────────────────────────────────
+   `kpiDeltas` é a variação que o robô já calcula. NÃO MEDIDO NÃO É ZERO: quando um
+   delta não vem, o cartão diz "não medido" em vez de imprimir 0 — zero nesta tela lê
+   como "ninguém avançou", que é uma acusação, e a diferença entre as duas coisas é o
+   que faz o gestor cobrar a pessoa errada. */
+function tm10Fluxo() {
+  const d = DATA.kpiDeltas || {};
+  /* CADA DELTA É { sinal, valor } — não um número. Lido do dado, não assumido: a
+     primeira versão desta função fazia Number(d.leadsCriados) e os quatro cartões
+     cairiam no estado "não medido" com o dado presente, que é o pior dos dois erros
+     (esconder medição que existe). */
+  const num = function (o) {
+    const v = o && typeof o === 'object' ? o.valor : o;
+    return (v == null || v === '' || Number.isNaN(Number(v))) ? null : Number(v);
+  };
+  const vm = DATA.vendasMes || {};
+  const mrrGanhos = Number(vm.totalMrr) || 0;
+  return [
+    { rot: 'entraram', v: num(d.leadsCriados), cor: '#2B3440',
+      sub: 'negócios novos na janela do robô — cargas e prospecção de rua' },
+    { rot: 'avançaram', v: num(d.taxaAvanco), cor: '#1E9E7B', pct: true,
+      sub: 'taxa de avanço que o robô mede na janela dele' },
+    { rot: 'fecharam', v: num(d.ganhos), cor: '#1E9E7B',
+      sub: (Number(vm.totalClientes) || 0) + ' com MRR no mês · ' + tm10Rs(mrrGanhos) + ' novo' },
+    { rot: 'morreram', v: num(d.perdidos), cor: '#E51A31',
+      sub: 'saíram do funil na janela — o porquê está no bloco 6' }
+  ];
+}
+
+/* ══ O CONTRATO DA TELA ═══════════════════════════════════════════════════════════════
+   Um lugar monta tudo o que a tela desenha, e o markup não calcula nada — a mesma
+   disciplina das outras seis pranchas deste arquivo. */
+function tm10Dados() {
+  TM10_TQ = null;   /* uma contagem por repintura: o cache é do render, não da sessão */
+  const m = tl5Medir();
+  const etapas = tm10Etapas();
+  const prov = tm10Provavel(m, etapas);
+  const gargalo = tm10Gargalo(etapas);
+  /* REGRA 4: o funil nunca abre sem etapa, e a etapa escolhida à mão só vale se ainda
+     existir com negócio — carga nova pode ter esvaziado a etapa que ele clicou. */
+  const escolhida = etapas.find(function (e) { return e.id === TM10_ETAPA && e.n > 0; })
+    || gargalo || etapas[0] || null;
+  const cob = tm10Cobertura(etapas);
+  const cad = tm10Cadencia();
+  /* TOQUES NA SEMANA = soma dos últimos 5 dias úteis da cadência, que é a mesma régua
+     do heatmap. Somar a janela inteira de 60 dias daria um número que não é semanal. */
+  const tqSemana = cad.medivel
+    ? cad.linhas.reduce(function (s, l) {
+      return s + l.celulas.slice(-5).reduce(function (a, c) { return a + c.n; }, 0); }, 0)
+    : null;
+  const maxEt = Math.max(1, ...etapas.map(function (e) { return e.n; }));
+  const detalhe = escolhida ? escolhida.leads.slice().sort(function (a, b) {
+    return (b.dias || 0) - (a.dias || 0); }).slice(0, 12).map(function (l) {
+    const tq = tm10Tq(l.id);
+    return { id: String(l.id), nome: l.name || l.dealname || 'sem nome',
+      bairro: l.bairro || l.cidade || '', dias: l.dias != null ? l.dias : null,
+      estourou: !!l.slaBreach, dono: tm10NomeCurto(l.vendedor), ownerId: String(l.ownerId || ''),
+      tqRot: tm10TqRot(tq.n), tqCor: tm10TqCor(tq.n), ultimo: tm10Ultimo(tq.ultimo),
+      mrr: tm10MrrDo(l),
+      porque: l.slaBreach
+        ? ('passou da régua de ' + (escolhida.regua || '—') + 'd — cobre o dono')
+        : (tq.n <= 1 ? 'pouco toque para a etapa' : 'dentro da régua ✓') };
+  }) : [];
+
+  const hoje = (typeof fmtDailyLabel === 'function' && typeof isoDate === 'function')
+    ? fmtDailyLabel(isoDate(new Date())) : '';
+  const manchete = prov.gap > 0
+    ? ('Provável do mês: ' + prov.clientes + ' de ' + prov.meta + ' clientes ('
+      + tm10Rs(prov.mrr) + ') — faltam ' + prov.gap + '. Eles saem dos ' + prov.quentesN
+      + ' quentes e do resgate dos ' + m.time.acima + ' travados.')
+    : ('Meta de ' + prov.meta + ' coberta. Agora é proteger os ' + prov.quentesN
+      + ' quentes e limpar os ' + m.time.acima + ' travados.');
+
+  return {
+    kicker: 'Time · o mês do negócio' + (hoje ? ' · ' + hoje : ''),
+    manchete: manchete,
+    kpis: [
+      /* O SUB DIZ DE QUANTOS O R$ SAI: a contagem é a soma dos reps (completa) e o MRR
+         só conhece quem tem MRR preenchido no CRM. Ver a nota em tm10Provavel. */
+      { rot: 'Clientes fechados', v: prov.fechN + '/' + prov.meta, cor: '#1E9E7B',
+        sub: tm10Rs(prov.fechMrr) + (prov.fechN > prov.fechComMrr
+          ? ' · ' + prov.fechComMrr + ' de ' + prov.fechN + ' com MRR no CRM' : '') },
+      { rot: 'Prováveis', v: String(prov.clientes), cor: '#2B3440', sub: tm10Rs(prov.mrr) },
+      { rot: 'Gap', v: prov.gap > 0 ? prov.gap + ' clientes' : 'zero ✓',
+        cor: prov.gap > 0 ? '#E51A31' : '#1E9E7B',
+        sub: prov.gap > 0 ? tm10Rs(Math.max(0, prov.meta - prov.clientes) * (prov.clientes ? prov.mrr / prov.clientes : 0)) : 'meta coberta' },
+      { rot: 'Toques na semana', v: tqSemana == null ? 'não medido' : String(tqSemana), cor: '#2B3440',
+        sub: (tqSemana == null || !cob.ativos) ? 'a cadência não veio nesta carga'
+          : (tqSemana / cob.ativos).toFixed(1).replace('.', ',') + ' por lead ativo' }
+    ],
+    prov: prov,
+    etapas: etapas.map(function (e) {
+      return { id: e.id, rot: e.rot, cor: e.cor, n: e.n, mrr: e.mrr, travados: e.travados,
+        pct: Math.round(e.n / maxEt * 100), sel: !!(escolhida && e.id === escolhida.id),
+        tqMed: e.tqMed == null ? null : e.tqMed.toFixed(1).replace('.', ','),
+        on: 'tm10etapa:' + e.id };
+    }),
+    fluxo: tm10Fluxo(),
+    etapaSel: escolhida ? { rot: escolhida.rot, n: escolhida.n, mrr: escolhida.mrr } : null,
+    detalhe: detalhe,
+    quentes: tm10Quentes(prov),
+    travados: tm10Travados(etapas),
+    travadosN: m.time.acima,
+    travadosMrr: tm10Travados(etapas).reduce(function (s, x) { return s + x.mrr; }, 0),
+    cobertura: cob,
+    sla: tm10Sla(etapas),
+    propostas: tm10Propostas(etapas),
+    perdas: tm10Perdas(),
+    conversao: tm10Conversao(),
+    cadencia: cad,
+    ranking: tm10Ranking(m),
+    janelaToques: 60
+  };
+}
+
+
+/* ══ O MARKUP DA PRANCHA v10 ══════════════════════════════════════════════════════════
+   A tipografia e as cores foram LIDAS DO DOM da prancha, nao estimadas do print: abri o
+   time-v10-STANDALONE no navegador e extrai estilo computado de cada folha de texto.
+   E por isso que os tamanhos sao 9.5px e 10.5px em vez de 10 e 11 — sao os da prancha.
+
+   NADA AQUI CALCULA: todo numero chega pronto de tm10Dados(). Markup que calcula e a
+   segunda fonte do mesmo numero, e foi assim que o gestor leu 16:30 para uma visita sem
+   hora. */
+function tm10Pill(rot, cor) {
+  return '<span style="flex:none;font:900 8px \'Archivo\',sans-serif;letter-spacing:.06em;'
+    + 'text-transform:uppercase;color:#FFFDF8;background:' + cor + ';border-radius:999px;'
+    + 'padding:3px 8px;white-space:nowrap;">' + esc(rot) + '</span>';
+}
+/* O NOME DO LEAD ABRE O NEGOCIO NO HUBSPOT (item 53 do mapa de interacoes). hsUrl e a
+   funcao unica que monta essa URL neste arquivo — o portal nao se repete aqui. */
+function tm10NomeLead(id, nome) {
+  return '<a href="' + hsUrl(id) + '" target="_blank" rel="noopener"'
+    + ' title="Abrir ' + esc(nome) + ' no HubSpot"'
+    + ' style="font:800 12px \'Manrope\',sans-serif;color:#2B3440;text-decoration:none;'
+    + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + esc(nome) + '</a>';
+}
+/* O DONO ABRE O DOSSIE DELE — e o verbo `sel` que esta aba ja tinha. A prancha chama
+   isso de "abrir a Pessoas com ?exec="; neste produto o dossie da pessoa vive DENTRO
+   da aba Time, e reusar o verbo existente e o que evita uma segunda navegacao para o
+   mesmo lugar. */
+function tm10Dono(ownerId, nome, cor) {
+  if (!ownerId) return '<span style="font:700 9px \'Manrope\',sans-serif;color:' + cor + ';">' + esc(nome) + '</span>';
+  return '<button type="button" data-tm2-acao="sel:' + esc(ownerId) + '" data-tm2-hv="0"'
+    + ' title="Abrir o dossiê de ' + esc(nome) + '"'
+    + ' style="border:0;background:transparent;padding:0;cursor:pointer;'
+    + 'font:700 9px \'Manrope\',sans-serif;color:' + cor + ';text-decoration:underline;'
+    + 'text-underline-offset:2px;">' + esc(nome) + '</button>';
+}
+
+function tm10TelaHTML(d, cauda) {
+  const kpisHTML = d.kpis.map(function (k) {
+    return '<span style="display:block;min-width:0;">'
+      + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
+      +   'text-transform:uppercase;color:#7A8494;">' + esc(k.rot) + '</span>'
+      + '<b style="display:block;font:900 30px \'Archivo\',sans-serif;letter-spacing:-.02em;'
+      +   'font-variant-numeric:tabular-nums;color:' + k.cor + ';">' + esc(k.v) + '</b>'
+      + '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#7A8494;">'
+      +   esc(k.sub) + '</span></span>';
+  }).join('');
+
+  /* ── 1 · A BARRA EMPILHADA EM CLIENTES ─────────────────────────────────────────────
+     Tres segmentos e o traco da meta no fim. O denominador e a META, e nao a soma dos
+     tres: barra que se normaliza pelo proprio total sempre parece cheia, e a pergunta
+     do bloco e justamente quanto falta. */
+  const pv = d.prov;
+  const base = Math.max(pv.meta, pv.fechN + pv.pagN + pv.quentesPondN, 1);
+  const seg = function (n, cor, rot) {
+    const w = n / base * 100;
+    if (w <= 0) return '';
+    return '<span title="' + esc(rot) + '" style="flex:0 0 ' + w.toFixed(2) + '%;display:grid;'
+      + 'place-items:center;background:' + cor + ';font:900 11px \'Archivo\',sans-serif;'
+      + 'color:#FFFDF8;overflow:hidden;white-space:nowrap;">' + esc(rot) + '</span>';
+  };
+  const leg = function (v, cor, rot) {
+    return '<span style="display:inline-flex;align-items:baseline;gap:6px;">'
+      + '<span style="width:8px;height:8px;border-radius:999px;background:' + cor + ';flex:none;"></span>'
+      + '<b style="font:900 17px \'Archivo\',sans-serif;font-variant-numeric:tabular-nums;'
+      +   'color:#2B3440;">' + esc(v) + '</b>'
+      + '<span style="font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;">' + esc(rot) + '</span></span>';
+  };
+  const bloco1 = '<div style="background:#FBFAF6;border:1px solid #E7E3DA;border-radius:14px;padding:16px 20px;">'
+    + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +   'color:#7A8494;">1 · Vamos bater a meta? <span style="font-weight:700;letter-spacing:0;'
+    +   'text-transform:none;">· em CLIENTES — fechados + ag. pagamento + quentes × 60%</span></span>'
+    + '<div style="display:flex;height:34px;border-radius:8px;overflow:hidden;background:#EDEBE5;'
+    +   'margin-top:10px;position:relative;">'
+    +   seg(pv.fechN, '#1E9E7B', pv.fechN + ' fechados')
+    +   seg(pv.pagN, '#4CBF95', pv.pagN + ' ag. pag.')
+    +   seg(pv.quentesPondN, '#8E3B5C', Math.round(pv.quentesPondN) + ' quentes')
+    +   '<span title="meta do mês" style="position:absolute;right:0;top:0;bottom:0;width:3px;'
+    +     'background:#2B3440;"></span>'
+    + '</div>'
+    + '<div style="display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;margin-top:10px;">'
+    +   leg(pv.fechN + ' clientes', '#1E9E7B', 'fechados · ' + tm10Rs(pv.fechMrr))
+    +   leg(String(pv.pagN), '#4CBF95', 'ag. pagamento · ' + tm10Rs(pv.pagMrr))
+    +   leg(String(Math.round(pv.quentesPondN)), '#8E3B5C', 'quentes × 60% (' + pv.quentesN
+        + ' na mesa · ' + tm10Rs(pv.quentesMrr) + ')')
+    +   leg(String(pv.meta), '#2B3440', 'meta do mês (traço)')
+    +   '<b style="margin-left:auto;font:900 17px \'Archivo\',sans-serif;color:'
+    +     (pv.gap > 0 ? '#E51A31' : '#1E9E7B') + ';">'
+    +     (pv.gap > 0 ? 'gap: ' + pv.gap + ' clientes' : 'meta coberta ✓') + '</b>'
+    + '</div></div>';
+
+  /* ── 2 · OS QUENTES E OS TRAVADOS ──────────────────────────────────────────────────
+     A linha dos dois blocos e a MESMA anatomia: rank, nome + dono + porque, pill de
+     etapa, toques + ultimo, um numero proprio (temperatura ou dias) e o MRR. Uma
+     funcao, dois blocos — duas anatomias para a mesma linha e o que faz o mesmo lead
+     parecer dois leads diferentes em dois lugares da tela. */
+  const linhaLead = function (x, corSub, numRot, numCor, hoverBorda) {
+    return '<div data-tm2-hv="0" style="display:flex;align-items:center;gap:10px;min-width:0;'
+      + 'background:#FDFEFF;border:1px solid ' + hoverBorda + ';border-radius:10px;padding:8px 11px;">'
+      + '<b style="flex:none;width:12px;font:900 12px \'Archivo\',sans-serif;color:#E51A31;">' + x.rank + '</b>'
+      + '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
+      +   '<span style="display:flex;min-width:0;">' + tm10NomeLead(x.id, x.nome) + '</span>'
+      +   '<span style="display:flex;align-items:baseline;gap:5px;min-width:0;">'
+      +     tm10Dono(x.ownerId, x.dono, corSub)
+      +     '<span style="font:700 9px \'Manrope\',sans-serif;color:' + corSub + ';overflow:hidden;'
+      +       'text-overflow:ellipsis;white-space:nowrap;min-width:0;">· ' + esc(x.porque || '') + '</span>'
+      +   '</span>'
+      + '</span>'
+      + tm10Pill(x.etapa, x.etapaCor)
+      + '<span style="flex:none;width:76px;text-align:right;">'
+      +   '<b style="display:block;font:900 11px \'Archivo\',sans-serif;color:' + x.tqCor + ';">'
+      +     esc(x.tqRot) + '</b>'
+      +   '<span style="display:block;font:700 8.5px \'Manrope\',sans-serif;color:' + corSub + ';">'
+      +     esc(x.ultimo) + '</span></span>'
+      + '<b style="flex:none;width:36px;text-align:right;font:900 12px \'Archivo\',sans-serif;'
+      +   'color:' + numCor + ';font-variant-numeric:tabular-nums;">' + esc(numRot(x)) + '</b>'
+      + '<b style="flex:none;width:58px;text-align:right;font:900 12px \'Archivo\',sans-serif;'
+      +   'color:#2B3440;font-variant-numeric:tabular-nums;">' + esc(tm10Rs(x.mrr)) + '</b>'
+      + '</div>';
+  };
+  const vazio = function (txt) {
+    return '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#1E9E7B;'
+      + 'background:#EAF6F1;border:1px solid #CBE8DD;border-radius:10px;padding:10px 12px;">'
+      + esc(txt) + '</span>';
+  };
+  const bloco2 = '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;">'
+    + '<div style="background:#FDFEFF;border:1px solid #E9D9E1;border-radius:12px;padding:14px 18px;">'
+    +   '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +     'color:#8E3B5C;">2 · De onde sai o gap — os quentes da semana</span>'
+    +   '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;margin:3px 0 9px;">'
+    +     esc(d.prov.quentesN + ' clientes prováveis · ' + tm10Rs(d.prov.quentesMrr)
+          + ' na mesa — se ninguém vacilar, o gap fecha aqui') + '</span>'
+    +   '<div style="display:flex;flex-direction:column;gap:6px;">'
+    +     (d.quentes.length
+          ? d.quentes.map(function (x) { return linhaLead(x, '#7A8494',
+            function (y) { return String(y.temp) + '°'; }, x.tempCor, '#EBD9DC'); }).join('')
+          : vazio('nenhum quente na carteira agora — o gap sai do resgate dos travados'))
+    +   '</div></div>'
+    + '<div style="background:#FDF3F4;border:1px solid #F0A9B2;border-radius:12px;padding:14px 18px;">'
+    +   '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +     'color:#E51A31;">…e do resgate dos travados</span>'
+    +   '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#8A3B3B;margin:3px 0 9px;">'
+    +     esc(d.travadosN + ' clientes parados com régua estourada · os 5 maiores são '
+          + tm10Rs(d.travadosMrr)) + '</span>'
+    +   '<div style="display:flex;flex-direction:column;gap:6px;">'
+    +     (d.travados.length
+          ? d.travados.map(function (x) { return linhaLead(x, '#8A3B3B',
+            function (y) { return y.dias == null ? '—' : y.dias + 'd'; }, '#E51A31', '#F0A9B2'); }).join('')
+          : vazio('nenhum negócio com régua estourada no time — o funil está limpo ✓'))
+    +   '</div></div></div>';
+
+  /* ── 3 · O FUNIL CLICAVEL ──────────────────────────────────────────────────────────
+     A barra e PORTA: a linha inteira e botao, e o painel de baixo troca. Default =
+     gargalo (regra 4), decidido em tm10Dados — o markup so pinta quem veio marcado. */
+  const fluxoHTML = d.fluxo.map(function (c) {
+    return '<span style="display:block;background:#FBFAF6;border:1px solid #E7E3DA;'
+      + 'border-radius:10px;padding:10px 13px;min-width:0;">'
+      + '<b style="display:block;font:900 24px \'Archivo\',sans-serif;letter-spacing:-.02em;'
+      +   'font-variant-numeric:tabular-nums;color:' + (c.v == null ? '#B4AC9C' : c.cor) + ';">'
+      +   (c.v == null ? 'não medido' : (c.pct ? c.v + '%' : String(c.v))) + '</b>'
+      + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.08em;'
+      +   'text-transform:uppercase;color:' + (c.v == null ? '#B4AC9C' : c.cor) + ';">' + esc(c.rot) + '</span>'
+      + '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#5B667A;margin-top:3px;">'
+      +   esc(c.sub) + '</span></span>';
+  }).join('');
+  const etapasHTML = d.etapas.map(function (e) {
+    return '<button type="button" data-tm2-acao="' + e.on + '" data-tm2-hv="0"'
+      + ' title="Ver os negócios de ' + esc(e.rot) + '"'
+      + ' style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;'
+      + 'border:1px solid ' + (e.sel ? '#2B3440' : 'transparent') + ';background:'
+      + (e.sel ? '#FBFAF6' : 'transparent') + ';border-radius:8px;padding:5px 8px;cursor:pointer;'
+      + 'min-height:34px;">'
+      + '<span style="flex:none;width:132px;font:800 10px \'Manrope\',sans-serif;color:#5B667A;'
+      +   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(e.rot) + '</span>'
+      + '<span style="flex:1;min-width:40px;height:16px;background:#EDEBE5;border-radius:999px;'
+      +   'overflow:hidden;display:flex;align-items:center;">'
+      +   '<i style="display:flex;align-items:center;justify-content:flex-end;height:100%;'
+      +     'width:' + e.pct + '%;background:' + e.cor + ';border-radius:999px;padding:0 6px;'
+      +     'box-sizing:border-box;font:900 9.5px \'Archivo\',sans-serif;color:#FFFDF8;'
+      +     'font-style:normal;">' + (e.n > 0 ? e.n : '') + '</i></span>'
+      + (e.n === 0 ? '<span style="flex:none;width:14px;font:900 9.5px \'Archivo\',sans-serif;'
+        + 'color:#B4AC9C;">0</span>' : '')
+      + '<span style="flex:none;width:62px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
+      +   'color:#7A8494;">' + esc(tm10Rs(e.mrr)) + '</span>'
+      + '<span style="flex:none;width:68px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
+      +   'color:#5B667A;">' + (e.tqMed == null ? '—' : esc(e.tqMed) + ' tq/lead') + '</span>'
+      + '<span style="flex:none;width:64px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
+      +   'color:' + (e.travados ? '#E51A31' : '#B4AC9C') + ';">'
+      +   (e.travados ? e.travados + (e.travados === 1 ? ' travado' : ' travados') : '—') + '</span>'
+      + '</button>';
+  }).join('');
+  const detalheHTML = d.detalhe.length
+    ? d.detalhe.map(function (x) {
+      return '<div data-tm2-hv="0" style="display:flex;align-items:center;gap:10px;min-width:0;'
+        + 'background:#FDFEFF;border:1px solid ' + (x.estourou ? '#F0A9B2' : '#E7E3DA')
+        + ';border-radius:9px;padding:7px 11px;">'
+        + '<b style="flex:none;width:34px;font:900 12px \'Archivo\',sans-serif;'
+        +   'color:' + (x.estourou ? '#E51A31' : '#7A8494') + ';font-variant-numeric:tabular-nums;">'
+        +   (x.dias == null ? '—' : x.dias + 'd') + '</b>'
+        + '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
+        +   '<span style="display:flex;min-width:0;">' + tm10NomeLead(x.id, x.nome) + '</span>'
+        +   '<span style="font:700 9px \'Manrope\',sans-serif;color:#7A8494;">'
+        +     esc((x.bairro ? x.bairro + ' · ' : '') + x.porque) + '</span></span>'
+        + '<span style="flex:none;width:76px;text-align:right;">'
+        +   '<b style="display:block;font:900 11px \'Archivo\',sans-serif;color:' + x.tqCor + ';">'
+        +     esc(x.tqRot) + '</b>'
+        +   '<span style="display:block;font:700 8.5px \'Manrope\',sans-serif;color:#7A8494;">'
+        +     esc(x.ultimo) + '</span></span>'
+        + '<b style="flex:none;width:58px;text-align:right;font:900 12px \'Archivo\',sans-serif;'
+        +   'color:#2B3440;">' + esc(tm10Rs(x.mrr)) + '</b>'
+        + '<span style="flex:none;">' + tm10Dono(x.ownerId, x.dono, '#8E3B5C') + '</span>'
+        + '</div>';
+    }).join('')
+    : '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#B4AC9C;'
+      + 'padding:10px 2px;">nenhum negócio nesta etapa agora.</span>';
+  const bloco3 = '<div style="background:#FDFEFF;border:1px solid #E7E3DA;border-radius:12px;padding:14px 18px;">'
+    + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +   'color:#E51A31;">3 · O funil do time <span style="font-weight:700;letter-spacing:0;'
+    +   'text-transform:none;color:#7A8494;">· clientes primeiro, MRR junto · clique na etapa'
+    +   ' pra ver os leads dela</span></span>'
+    + '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 12px;">'
+    +   fluxoHTML + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:2px;">' + etapasHTML + '</div>'
+    + '<div style="margin-top:12px;border:1.5px solid #2B3440;border-radius:11px;padding:11px 13px;">'
+    +   '<span style="display:block;font:900 9.5px \'Archivo\',sans-serif;letter-spacing:.1em;'
+    +     'text-transform:uppercase;color:#2B3440;margin-bottom:8px;">'
+    +     esc(d.etapaSel ? d.etapaSel.rot + ' · ' + d.etapaSel.n + ' clientes · ' + tm10Rs(d.etapaSel.mrr)
+          : 'sem etapa') + '</span>'
+    +   '<div style="display:flex;flex-direction:column;gap:5px;">' + detalheHTML + '</div>'
+    + '</div></div>';
+
+  return '<div data-tm10-raiz="1" style="background:#FDFEFF;border:1px solid #DCE1EA;'
+    + 'border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">'
+    + '<div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;'
+    +   'padding:22px 28px 18px;border-bottom:1px solid #E7E3DA;">'
+    +   '<div style="flex:1;min-width:0;">'
+    +     '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.14em;'
+    +       'text-transform:uppercase;color:#E51A31;">' + esc(d.kicker) + '</span>'
+    +     '<h1 style="margin:6px 0 0;font:900 26px/1.25 \'Archivo\',sans-serif;'
+    +       'letter-spacing:-.02em;color:#2B3440;text-wrap:balance;">' + esc(d.manchete) + '</h1>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:32px;flex-wrap:wrap;">' + kpisHTML + '</div>'
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:16px;padding:20px 28px 26px;">'
+    +   bloco1 + bloco2 + bloco3 + tm10CaudaHTML(d)
+    + '</div>'
+    + (cauda || '')
+    + '</div>';
+}
+
+
+/* ══ OS BLOCOS 4 A 8 ══════════════════════════════════════════════════════════════════
+   Separados de tm10TelaHTML so para as duas funcoes continuarem legiveis — e uma so
+   tela, e o contrato e o mesmo objeto `d`. */
+function tm10CaudaHTML(d) {
+  /* barra horizontal com a contagem DENTRO, a mesma gramatica do funil e do Comando de
+     vendas do Meu funil: um codigo de barra para toda a casa. */
+  const barra = function (rot, n, pct, cor, cauda) {
+    return '<span style="display:flex;align-items:center;gap:9px;min-width:0;">'
+      + '<span style="flex:none;width:80px;font:800 10px \'Manrope\',sans-serif;color:#5B667A;'
+      +   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(rot) + '</span>'
+      + '<span style="flex:1;min-width:30px;height:16px;background:#EDEBE5;border-radius:999px;'
+      +   'overflow:hidden;display:flex;align-items:center;">'
+      +   '<i style="display:flex;align-items:center;justify-content:flex-end;height:100%;'
+      +     'width:' + pct + '%;background:' + cor + ';border-radius:999px;padding:0 6px;'
+      +     'box-sizing:border-box;font:900 9.5px \'Archivo\',sans-serif;color:#FFFDF8;'
+      +     'font-style:normal;">' + (n > 0 ? n : '') + '</i></span>'
+      + '<span style="flex:none;width:62px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
+      +   'color:#7A8494;">' + esc(cauda) + '</span></span>';
+  };
+
+  /* ── 4 · COBERTURA DE TOQUES ───────────────────────────────────────────────────────
+     O histograma e a lista de abandonados. Medido na producao: 187 de 249 negocios do
+     funil em <=1 toque. E a unica leitura desta tela que nenhuma outra aba dava. */
+  const cob = d.cobertura;
+  const abandHTML = cob.abandonados.length
+    ? cob.abandonados.map(function (x) {
+      return '<div data-tm2-hv="0" style="display:flex;align-items:center;gap:9px;min-width:0;'
+        + 'background:#FDF9F9;border:1px solid #F0DADA;border-radius:9px;padding:7px 10px;">'
+        + '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
+        +   '<span style="display:flex;min-width:0;">' + tm10NomeLead(x.id, x.nome) + '</span>'
+        +   '<span style="display:flex;align-items:baseline;gap:4px;min-width:0;">'
+        +     tm10Dono(x.ownerId, x.dono, '#8A3B3B')
+        +     '<span style="font:700 8.5px \'Manrope\',sans-serif;color:#8A3B3B;overflow:hidden;'
+        +       'text-overflow:ellipsis;white-space:nowrap;">· ' + esc(x.etapa)
+        +       (x.dias == null ? '' : ' · há ' + x.dias + 'd') + '</span></span></span>'
+        + '<b style="flex:none;font:900 11px \'Archivo\',sans-serif;color:#E51A31;">' + esc(x.tqRot) + '</b>'
+        + '<b style="flex:none;width:56px;text-align:right;font:900 11px \'Archivo\',sans-serif;'
+        +   'color:#2B3440;">' + esc(tm10Rs(x.mrr)) + '</b></div>';
+    }).join('')
+    : '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#1E9E7B;">'
+      + 'nenhum lead ativo com 1 toque ou menos — o time está tocando a carteira ✓</span>';
+  const bloco4 = '<div style="background:#FDFEFF;border:1px solid #E9D9E1;border-radius:12px;padding:14px 18px;">'
+    + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +   'color:#8E3B5C;">4 · Cobertura de toques</span>'
+    + '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;margin:3px 0 9px;">'
+    +   esc(cob.ativos + ' leads ativos · ' + cob.media.toFixed(1).replace('.', ',')
+        + ' toques por lead nos últimos ' + d.janelaToques + ' dias — abaixo de 2 toques o lead'
+        + ' está abandonado, não trabalhado') + '</span>'
+    + '<div style="display:flex;flex-direction:column;gap:5px;">'
+    +   cob.caixas.map(function (c) { return barra(c.rot, c.n, c.pct, c.cor, tm10Rs(c.mrr)); }).join('')
+    + '</div>'
+    + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
+    +   'text-transform:uppercase;color:#E51A31;margin:12px 0 6px;">abandonados — ≤1 toque · cobre o dono</span>'
+    + '<div style="display:flex;flex-direction:column;gap:5px;">' + abandHTML + '</div></div>';
+
+  /* ── 5 · SLA DE 1º TOQUE ───────────────────────────────────────────────────────────
+     DOIS ESTADOS, e o honesto e o que estava valendo quando escrevi: o campo `criadoEm`
+     entrou no robo hoje e a medicao comeca na proxima carga. A prancha pede a barra por
+     vendedor; a regra zero do prompt proibe numero fake, e as duas coisas so convivem
+     dizendo o que falta. */
+  const sla = d.sla;
+  const slaHTML = sla.medivel
+    ? sla.linhas.map(function (x) {
+      return '<span style="display:flex;align-items:center;gap:9px;min-width:0;">'
+        + '<span style="flex:none;width:74px;">' + tm10Dono(x.ownerId, x.nome, '#2B3440') + '</span>'
+        + '<span style="flex:1;min-width:30px;height:14px;background:#EDEBE5;border-radius:999px;'
+        +   'overflow:hidden;"><i style="display:block;height:100%;width:' + x.pct + '%;'
+        +   'background:' + x.cor + ';border-radius:999px;"></i></span>'
+        + '<b style="flex:none;width:38px;text-align:right;font:900 11px \'Archivo\',sans-serif;'
+        +   'color:' + x.cor + ';">' + x.pct + '%</b>'
+        + '<span style="flex:none;width:84px;text-align:right;font:800 9px \'Manrope\',sans-serif;'
+        +   'color:' + (x.estourados ? '#E51A31' : '#1E9E7B') + ';">'
+        +   (x.estourados ? x.estourados + (x.estourados === 1 ? ' estourado' : ' estourados') : 'em dia ✓')
+        + '</span></span>';
+    }).join('')
+    : '<span style="display:block;font:700 10.5px/1.55 \'Manrope\',sans-serif;color:#8A6516;'
+      + 'background:#FDF6E7;border:1px solid #F0DFB6;border-radius:10px;padding:10px 12px;">'
+      + '<b>ainda não dá para medir.</b> O SLA é o intervalo entre a criação do negócio e o'
+      + ' primeiro toque, e a data de criação não vinha no funil — só ' + sla.comData + ' de '
+      + sla.ativos + ' negócios a tinham. O campo entrou no robô em 10/09 e a medição começa'
+      + ' na próxima carga. Preferi dizer isso a imprimir uma porcentagem inventada.</span>';
+  const propHTML = d.propostas.length
+    ? d.propostas.map(function (x) {
+      return '<div style="display:flex;align-items:center;gap:8px;min-width:0;">'
+        + '<b style="flex:none;width:46px;font:900 9.5px \'Archivo\',sans-serif;'
+        +   'color:' + (x.temReuniao ? '#1E9E7B' : '#E51A31') + ';">' + esc(x.quando) + '</b>'
+        + '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
+        +   '<span style="display:flex;min-width:0;">' + tm10NomeLead(x.id, x.nome) + '</span>'
+        +   '<span style="display:flex;align-items:baseline;gap:4px;min-width:0;">'
+        +     tm10Dono(x.ownerId, x.dono, x.temReuniao ? '#7A8494' : '#8A3B3B')
+        +     '<span style="font:700 8.5px \'Manrope\',sans-serif;color:'
+        +       (x.temReuniao ? '#7A8494' : '#E51A31') + ';">· ' + esc(x.nota) + '</span></span></span>'
+        + '<b style="flex:none;font:900 10.5px \'Archivo\',sans-serif;color:#2B3440;">'
+        +   esc(tm10Rs(x.mrr)) + '</b></div>';
+    }).join('')
+    : '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#1E9E7B;">'
+      + 'nenhuma proposta aberta em Demo ou Negociação — nada vencendo ✓</span>';
+  const bloco5 = '<div style="background:#FDFEFF;border:1px solid #E7E3DA;border-radius:12px;padding:14px 18px;">'
+    + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +   'color:#7A8494;">5 · SLA de 1º toque <span style="font-weight:700;letter-spacing:0;'
+    +   'text-transform:none;">· carga nova tocada em 48h</span></span>'
+    + (sla.medivel
+      ? '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;margin:3px 0 9px;">'
+        + esc(sla.estourados
+          ? sla.estourados + ' leads de carga ficaram >48h sem o 1º toque — carga fria é carga desperdiçada'
+          : 'todo mundo tocando a carga em 48h ✓') + '</span>'
+      : '<span style="display:block;height:6px;"></span>')
+    + '<div style="display:flex;flex-direction:column;gap:5px;">' + slaHTML + '</div>'
+    + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
+    +   'text-transform:uppercase;color:#7A8494;margin:12px 0 6px;">propostas na mesa · sem reunião primeiro</span>'
+    + '<div style="display:flex;flex-direction:column;gap:5px;">' + propHTML + '</div></div>';
+
+  /* ── 6 · POR QUE PERDEMOS ──────────────────────────────────────────────────────────
+     A JANELA VAI NO ROTULO. A prancha diz "mes corrente"; o robo mede 90 dias. Escrever
+     o que o dado e custa uma palavra e vale a confianca de todos os outros numeros. */
+  const pe = d.perdas;
+  const cv = d.conversao;
+  const convHTML = cv.medivel
+    ? cv.linhas.map(function (x) {
+      return '<span style="display:flex;align-items:center;gap:8px;min-width:0;">'
+        + '<span style="flex:none;width:112px;font:800 9.5px \'Manrope\',sans-serif;color:#5B667A;'
+        +   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(x.rot) + '</span>'
+        + '<span style="flex:1;min-width:30px;height:14px;background:#EDEBE5;border-radius:999px;'
+        +   'overflow:hidden;position:relative;">'
+        +   '<i style="display:block;height:100%;width:' + Math.min(100, x.pct) + '%;'
+        +     'background:' + x.cor + ';border-radius:999px;"></i>'
+        +   (x.media == null ? '' : '<i style="position:absolute;top:0;bottom:0;left:'
+            + Math.min(100, x.media) + '%;width:2px;background:#2B3440;"></i>')
+        + '</span>'
+        + '<b style="flex:none;width:34px;text-align:right;font:900 11px \'Archivo\',sans-serif;'
+        +   'color:' + x.cor + ';">' + x.pct + '%</b>'
+        + '<span style="flex:none;width:58px;text-align:right;font:800 8.5px \'Manrope\',sans-serif;'
+        +   'color:#7A8494;">' + (x.media == null ? '—' : 'média ' + x.media + '%') + '</span></span>';
+    }).join('')
+    : '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#B4AC9C;">'
+      + 'a conversão precisa de pelo menos dois meses medidos — o robô tem ' + cv.meses + '.</span>';
+  const bloco6 = '<div style="background:#FBFAF6;border:1px solid #E7E3DA;border-radius:12px;padding:14px 18px;">'
+    + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +   'color:#7A8494;">6 · Por que perdemos <span style="font-weight:700;letter-spacing:0;'
+    +   'text-transform:none;">· últimos ' + (pe.dias || '—') + ' dias, a janela do robô</span></span>'
+    + '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;margin:3px 0 9px;">'
+    +   esc(pe.total + ' perdas · ' + tm10Rs(pe.mrr)
+        + (pe.lider ? ' — ' + String(pe.lider.rot).toLowerCase() + ' lidera' : '')) + '</span>'
+    + '<div style="display:flex;flex-direction:column;gap:5px;">'
+    +   pe.linhas.map(function (x) { return barra(x.rot, x.n, x.pct, x.cor, tm10Rs(x.mrr)); }).join('')
+    + '</div>'
+    + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
+    +   'text-transform:uppercase;color:#7A8494;margin:12px 0 6px;">conversão etapa → etapa · traço = média de '
+    +   (cv.medivel ? cv.meses : 0) + ' mes' + (cv.medivel && cv.meses === 1 ? '' : 'es') + '</span>'
+    + '<div style="display:flex;flex-direction:column;gap:5px;">' + convHTML + '</div></div>';
+
+  /* ── 7 · CADENCIA DO TIME ──────────────────────────────────────────────────────────
+     O heatmap do robo. O NOME E CLICAVEL (item 54 do mapa) e cai no dossie — o mesmo
+     verbo `sel` de todos os outros nomes desta tela. */
+  const cad = d.cadencia;
+  const cadHTML = !cad.medivel
+    ? '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#8A6516;'
+      + 'background:#FDF6E7;border:1px solid #F0DFB6;border-radius:10px;padding:10px 12px;">'
+      + 'a cadência não veio nesta carga do robô — sem ela eu não invento o heatmap.</span>'
+    : '<div style="display:flex;flex-direction:column;gap:3px;">'
+      + '<span style="display:flex;align-items:center;gap:3px;">'
+      +   '<span style="flex:none;width:74px;"></span>'
+      +   cad.dias.map(function (r) {
+        return '<span style="flex:1;text-align:center;font:800 8.5px \'Archivo\',sans-serif;'
+          + 'letter-spacing:.02em;color:#7A8494;">' + esc(r) + '</span>'; }).join('')
+      +   '<span style="flex:none;width:34px;"></span></span>'
+      + cad.linhas.map(function (l) {
+        return '<span style="display:flex;align-items:center;gap:3px;">'
+          + '<span style="flex:none;width:74px;overflow:hidden;">'
+          +   '<button type="button" data-tm2-acao="sel:' + esc(l.ownerId) + '" data-tm2-hv="0"'
+          +   ' title="Abrir o dossiê de ' + esc(l.nome) + '"'
+          +   ' style="border:0;background:transparent;padding:0;cursor:pointer;text-align:left;'
+          +   'font:800 11px \'Manrope\',sans-serif;color:#2B3440;">' + esc(l.nome) + '</button></span>'
+          + l.celulas.map(function (c) {
+            return '<span style="flex:1;height:22px;display:grid;place-items:center;'
+              + 'background:' + c.bg + ';color:' + c.cor + ';border-radius:4px;'
+              + 'font:800 10.5px \'Manrope\',sans-serif;font-variant-numeric:tabular-nums;">'
+              + c.n + '</span>'; }).join('')
+          + '<b style="flex:none;width:34px;text-align:right;font:900 10.5px \'Archivo\',sans-serif;'
+          +   'color:' + l.totalCor + ';">' + l.total + '</b></span>';
+      }).join('')
+      + '</div>';
+  const legenda = [['#FDECEC', 'dia zerado'], ['#FDF6E7', '1–2'], ['#D9F0E7', '3–4'], ['#1E9E7B', '5+']]
+    .map(function (p) {
+      return '<span style="display:inline-flex;align-items:center;gap:5px;font:700 9px '
+        + '\'Manrope\',sans-serif;color:#7A8494;"><span style="width:12px;height:12px;'
+        + 'border-radius:4px;background:' + p[0] + ';flex:none;"></span>' + esc(p[1]) + '</span>';
+    }).join('');
+  const bloco7 = '<div style="background:#FDFEFF;border:1px solid #E7E3DA;border-radius:12px;padding:14px 18px;">'
+    + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +   'color:#7A8494;">7 · Cadência do time <span style="font-weight:700;letter-spacing:0;'
+    +   'text-transform:none;">· atividades no CRM por dia útil · clique no nome</span></span>'
+    + '<div style="margin-top:9px;">' + cadHTML + '</div>'
+    + '<span style="display:block;font:700 9.5px/1.5 \'Manrope\',sans-serif;color:#7A8494;margin-top:9px;">'
+    +   'dia zerado no CRM é a causa de régua estourada e de "sem retorno". '
+    +   (cad.medivel ? esc('Conta: ' + cad.fonte + '. Não conta: ' + cad.naoConta + '.') : '')
+    + '</span>'
+    + '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">' + legenda + '</div></div>';
+
+  /* ── 8 · QUEM PUXA, QUEM ATRASA ────────────────────────────────────────────────────
+     A linha inteira e porta para o dossie. `tq/lead` vem da fonte unica de toques, e e
+     por isso que o numero do ranking bate com o da etapa e com o do card do lead. */
+  const rankHTML = d.ranking.map(function (r) {
+    return '<button type="button" data-tm2-acao="sel:' + esc(r.ownerId) + '" data-tm2-hv="0"'
+      + ' title="Abrir o dossiê de ' + esc(r.nome) + '"'
+      + ' style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;'
+      + 'background:transparent;border-radius:8px;padding:5px 6px;cursor:pointer;min-height:32px;">'
+      + '<span style="flex:none;width:78px;font:800 11.5px \'Archivo\',sans-serif;color:#2B3440;'
+      +   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(r.nome) + '</span>'
+      + '<span style="flex:1;min-width:26px;height:14px;background:#EDEBE5;border-radius:999px;'
+      +   'overflow:hidden;"><i style="display:block;height:100%;width:'
+      +   Math.min(100, r.pct) + '%;background:' + r.cor + ';border-radius:999px;"></i></span>'
+      + '<b style="flex:none;width:34px;text-align:right;font:900 11px \'Archivo\',sans-serif;'
+      +   'color:' + r.cor + ';">' + r.fech + '/' + r.meta + '</b>'
+      + '<span style="flex:none;width:52px;text-align:right;font:800 10px \'Manrope\',sans-serif;'
+      +   'color:#1E9E7B;">' + esc(tm10Rs(r.mrr)) + '</span>'
+      + '<span style="flex:none;width:64px;text-align:right;font:800 9px \'Manrope\',sans-serif;'
+      +   'color:#5B667A;">' + (r.tqMed == null ? '—' : r.tqMed.toFixed(1).replace('.', ',') + ' tq/lead') + '</span>'
+      + '<span style="flex:none;width:60px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
+      +   'color:' + (r.travados ? '#E51A31' : '#B4AC9C') + ';">'
+      +   (r.travados ? r.travados + (r.travados === 1 ? ' travado' : ' travados') : '—') + '</span>'
+      + '</button>';
+  }).join('');
+  const bloco8 = '<div style="background:#FBFAF6;border:1px solid #E7E3DA;border-radius:12px;padding:14px 18px;">'
+    + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
+    +   'color:#7A8494;">8 · Quem puxa, quem atrasa <span style="font-weight:700;letter-spacing:0;'
+    +   'text-transform:none;">· clique → o dossiê da pessoa</span></span>'
+    + '<div style="display:flex;flex-direction:column;gap:2px;margin-top:8px;">' + rankHTML + '</div>'
+    + '<span style="display:block;font:700 9.5px/1.5 \'Manrope\',sans-serif;color:#7A8494;margin-top:8px;">'
+    +   'barra e X/META = clientes fechados no mês sobre a meta dele · MRR = o que ele tem'
+    +   ' aberto no funil · tq/lead = toques por negócio na janela de ' + d.janelaToques
+    +   ' dias · travados = régua da etapa estourada</span></div>';
+
+  return '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;">'
+    +   bloco4 + bloco5 + bloco6 + '</div>'
+    + '<div style="display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:14px;">'
+    +   bloco7 + bloco8 + '</div>';
+}
+
 function tm2CorTemp(t) {
   const f = (DATA.temperaturaRegua && DATA.temperaturaRegua.faixas) || {};
   const quente = Number(f.quente) || 70;
@@ -26617,125 +27679,27 @@ function tm2DataCurta(iso) {
    {{x}} -> ${x}, sc-camel-on-click -> data-tm2-acao, style-hover -> classe).
    Editar estilo aqui é legítimo; inventar número aqui é o que o provedor existe
    para impedir. */
-function tm2TelaHTML(d) {
+/* ══ O QUE SOBREVIVEU DA TIME v2 (10/09/26) ═══════════════════════════════════════════
+   A prancha v10 refez os BLOCOS da aba Time — funil, quentes, cadência, ranking. Quatro
+   peças da v2 NÃO estavam na prancha e continuam aqui, porque tirá-las seria remover
+   gravação e não redesenhar:
+
+     o dossiê da pessoa .... é a "aba Pessoas" que a prancha manda abrir no clique do nome
+     o dossiê do negócio ... abre do dossiê da pessoa, e é de onde ele cobra um negócio
+     Sua pauta de líder .... o que ele clicou virou pauta_do_lider, a MESMA tabela que a
+                             Daily e a Semana do gestor leem
+     o rodapé de procedência
+
+   O markup das quatro é o da v2, copiado sem uma vírgula de diferença — o que mudou de
+   lugar foi só quem chama. Os verbos (`cobrar`, `um1`, `dealcob`, `sel`, `deal`) seguem
+   caindo no mesmo tm2Executar.
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+function tm2SobreviventesHTML(d) {
   const {
-    acoes, agenda, cadDias, cadLeitura, cadTime, dCad, dCadDias, dCadLeia, dCadLeiaCor, dCbBg, 
-    dCbBorda, dCbCor, dCbRot, dCobrar, dCols, dCriticos, dFechar, dIni, dLeitura, dNome, dQuentes, 
-    dSub, dUm1, dUm1Rot, dlCbBg, dlCbBorda, dlCbCor, dlCbRot, dlCobrar, dlDias, dlDiasCor, dlDono, 
-    dlEtapa, dlEtapaCor, dlFechar, dlHubspot, dlNome, dlProx, dlProxCor, dlTemp, dlTempCor, 
-    dlTempPct, dlTl, dlUlt, dlVCor, dlValor, etapaDeals, etapaFechar, etapaNome, etapaResto, 
-    execs, filtroRot, formulaTemp, funilTime, kpis, limparFiltro, linhaTopo, manchete, nEsteiras, perdaLeitura, 
-    quentesNota, quentesTime, rodapeFonte, saudacao, temDeal, temDossie, temEtapa, temFiltro, 
-    temToast, toast
+    acoes, agenda, dCad, dCadDias, dCadLeia, dCadLeiaCor, dCbBg, dCbBorda, dCbCor, dCbRot, dCobrar, dCols, dCriticos, dFechar, dIni, dLeitura, dNome, dQuentes, dSub, dUm1, dUm1Rot, dlCbBg, dlCbBorda, dlCbCor, dlCbRot, dlCobrar, dlDias, dlDiasCor, dlDono, dlEtapa, dlEtapaCor, dlFechar, dlHubspot, dlNome, dlProx, dlProxCor, dlTemp, dlTempCor, dlTempPct, dlTl, dlUlt, dlVCor, dlValor, rodapeFonte, temDeal, temDossie
   } = d;
   return `
-      <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
-
-        <div style="background:#16181D;color:#FFFDF8;padding:18px 24px;display:flex;align-items:center;gap:30px;flex-wrap:wrap;">
-          <div style="min-width:0;">
-            <span style="font:800 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#8B93A3;">${linhaTopo}</span>
-            <b style="display:block;font:900 24px 'Archivo',sans-serif;letter-spacing:-.02em;color:#FFFDF8;">${saudacao}</b>
-          </div>
-          <div style="display:flex;gap:28px;flex-wrap:wrap;margin-left:auto;">
-            ${(kpis||[]).map(k => `
-              <${k.on ? 'button' : 'span'} ${k.on ? 'data-tm2-acao="' + k.on + '" data-tm2-hv="0"' : ''} style="display:block;border:0;background:transparent;padding:0;text-align:left;cursor:${k.cursor};min-width:0;">
-                <span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:${k.rotCor};">${k.rot}</span>
-                <span style="display:flex;align-items:baseline;gap:6px;"><b style="font:900 26px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};">${k.v}</b><span style="font:700 10px 'Manrope',sans-serif;color:#8B93A3;white-space:nowrap;">${k.de}</span></span>
-              </${k.on ? 'button' : 'span'}>
-            `).join('')}
-          </div>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:16px;padding:15px 24px 13px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
-          <h1 style="font:900 24px/1.2 'Archivo',sans-serif;letter-spacing:-.02em;color:#2B3440;margin:0;text-wrap:balance;flex:1;min-width:480px;">${manchete}</h1>
-          ${(temFiltro) ? `
-            <button data-tm2-acao="${limparFiltro}" style="flex:none;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 14px;border:1px solid #8E3B5C;border-radius:999px;background:#8E3B5C;font:800 10.5px 'Manrope',sans-serif;color:#FDFEFF;cursor:pointer;" data-tm2-hv="1">filtrando: ${filtroRot} ✕</button>
-          ` : ''}
-          ${(temToast) ? `
-            <span style="flex:none;font:700 10.5px 'Manrope',sans-serif;color:#1E9E7B;background:#EAF6F1;border:1px solid #CBE8DD;border-radius:999px;padding:6px 13px;max-width:520px;overflow-wrap:anywhere;">${toast}</span>
-          ` : ''}
-        </div>
-
-        <div style="padding:16px 24px 4px;">
-          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">1 · O funil do time <span style="color:#7A8494;">— ${nEsteiras} esteiras somadas · clique numa etapa pra ver os negócios dela, executivo por executivo</span></span>
-          <div style="display:flex;flex-direction:column;gap:6px;margin-top:10px;">
-            ${(funilTime||[]).map(ft => `
-              <button data-tm2-acao="${ft.on}" style="display:flex;align-items:center;gap:12px;border:1.5px solid ${ft.borda};border-radius:11px;background:${ft.bg};padding:8px 14px;cursor:pointer;min-width:0;text-align:left;" data-tm2-hv="2">
-                <span style="font:800 12px 'Manrope',sans-serif;color:#2B3440;width:160px;flex:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ft.rot}</span>
-                <b style="font:900 16px 'Archivo',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;flex:none;width:34px;text-align:right;">${ft.n}</b>
-                <span style="flex:1;height:12px;border-radius:999px;background:#EDEBE5;overflow:hidden;"><span style="display:block;height:100%;width:${ft.pct};background:${ft.cor};border-radius:999px;"></span></span>
-                <span style="font:800 11px 'Manrope',sans-serif;color:#5B667A;font-variant-numeric:tabular-nums;flex:none;width:86px;text-align:right;white-space:nowrap;">${ft.mrr}</span>
-                <span style="font:800 10px 'Manrope',sans-serif;color:${ft.acCor};flex:none;width:130px;text-align:right;white-space:nowrap;">${ft.acima}</span>
-                <span style="flex:none;font:800 9px 'Archivo',sans-serif;color:#8E3B5C;background:#FBF5F8;border:1px solid #E9D9E1;border-radius:5px;padding:2px 6px;white-space:nowrap;">régua ${ft.regua}d</span>
-                <span style="flex:none;color:#B4AC9C;">▸</span>
-              </button>
-            `).join('')}
-          </div>
-          <p style="margin:9px 0 0;font:700 10.5px/1.5 'Manrope',sans-serif;color:#8E3B5C;background:#FBF5F7;border:1px solid #EBD9E1;border-radius:9px;padding:8px 12px;">▸ ${perdaLeitura}</p>
-          ${(temEtapa) ? `
-            <div style="margin-top:10px;background:#FBFAF6;border:1.5px solid #2B3440;border-radius:12px;padding:13px 16px;">
-              <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:9px;">
-                <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#2B3440;">${etapaNome} — quem tem o quê <span style="color:#7A8494;">· ordenado por dias na etapa · clique no negócio pra abrir o dossiê dele</span></span>
-                <button data-tm2-acao="${etapaFechar}" style="margin-left:auto;flex:none;width:26px;height:26px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 13px 'Manrope',sans-serif;cursor:pointer;line-height:1;padding:0;" data-tm2-hv="3">✕</button>
-              </div>
-              <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;">
-                ${(etapaDeals||[]).map(ed => `
-                  <button data-tm2-acao="${ed.on}" style="text-align:left;background:#FDFEFF;border:1px solid ${ed.borda};border-left:3px solid ${ed.cor};border-radius:9px;padding:8px 11px;cursor:pointer;min-width:0;" data-tm2-hv="2">
-                    <span style="display:flex;align-items:baseline;gap:7px;min-width:0;"><b style="font:800 12px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ed.nome}</b><span style="margin-left:auto;flex:none;font:800 10px 'Manrope',sans-serif;color:${ed.vCor};font-variant-numeric:tabular-nums;">${ed.valor}</span></span>
-                    <span style="display:flex;align-items:center;gap:7px;margin-top:3px;flex-wrap:wrap;"><span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">${ed.dono}</span><span style="font:800 8.5px 'Archivo',sans-serif;letter-spacing:.03em;text-transform:uppercase;color:${ed.dCor};background:${ed.dBg};border-radius:4px;padding:2px 6px;white-space:nowrap;">${ed.diasRot}</span></span>
-                  </button>
-                `).join('')}
-              </div>
-              <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:8px;">${etapaResto}</span>
-            </div>
-          ` : ''}
-        </div>
-
-        <div style="padding:18px 24px 4px;">
-          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#E51A31;">2 · Executivo por executivo <span style="color:#7A8494;">— funil, quentes e cadência de cada um · clique no cartão pra abrir o dossiê completo</span></span>
-          <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:10px;">
-            ${(execs||[]).map(e => `
-              <div style="background:${e.bg};border:1.5px solid ${e.borda};border-radius:13px;min-width:0;overflow:hidden;display:flex;flex-direction:column;">
-                <button data-tm2-acao="${e.abrir}" style="text-align:left;display:block;width:100%;border:0;background:transparent;padding:11px 13px 8px;cursor:pointer;min-width:0;" data-tm2-hv="4">
-                  <div style="display:flex;align-items:center;gap:8px;min-width:0;">
-                    <span style="width:30px;height:30px;border-radius:999px;display:grid;place-items:center;background:${e.avBg};color:#FDFEFF;font:900 11px 'Archivo',sans-serif;flex:none;">${e.ini}</span>
-                    <span style="min-width:0;"><b style="display:block;font:800 12.5px 'Archivo',sans-serif;color:#2B3440;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${e.nome}</b><span style="font:700 9px 'Manrope',sans-serif;color:#7A8494;">${e.praca}</span></span>
-                    <span style="margin-left:auto;flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.04em;text-transform:uppercase;color:${e.stCor};background:${e.stBg};border-radius:6px;padding:3px 8px;">${e.status}</span>
-                  </div>
-                  <div style="display:flex;gap:11px;flex-wrap:wrap;margin-top:8px;">
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">negócios · mrr</span><b style="font:900 13.5px 'Archivo',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;white-space:nowrap;">${e.aberto}</b></span>
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">sem próx.</span><b style="font:900 13.5px 'Archivo',sans-serif;color:${e.spCor};font-variant-numeric:tabular-nums;">${e.semProx}</b></span>
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">régua</span><b style="font:900 13.5px 'Archivo',sans-serif;color:${e.slaCor};font-variant-numeric:tabular-nums;">${e.sla}</b></span>
-                    <span><span style="display:block;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#7A8494;">fech. mês</span><b style="font:900 13.5px 'Archivo',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;">${e.fech}</b></span>
-                  </div>
-                  <div style="display:flex;align-items:center;gap:2px;margin-top:8px;" title="funil por etapa: Prospecção → Ag. pagamento">
-                    ${(e.mini||[]).map(mn => `
-                      <span style="height:9px;flex:${mn.f};min-width:5px;background:${mn.cor};border-radius:3px;opacity:${mn.op};" title="${mn.tip}"></span>
-                    `).join('')}
-                  </div>
-                  <span style="display:block;font:700 9.5px 'Manrope',sans-serif;color:${e.alimCor};margin-top:4px;">${e.alim}</span>
-                </button>
-                <div style="padding:0 13px 10px;display:flex;flex-direction:column;gap:5px;">
-                  <span style="font:900 7.5px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#B0552F;">${e.quentesRot}</span>
-                  ${(e.quentes||[]).map(q => `
-                    <button data-tm2-acao="${q.on}" style="text-align:left;display:flex;align-items:center;gap:7px;background:#FDFEFF;border:1px solid #EDE4D8;border-radius:8px;padding:5px 9px;cursor:pointer;min-width:0;" data-tm2-hv="5">
-                      <span style="flex:none;width:7px;height:7px;border-radius:999px;background:${q.cor};"></span>
-                      <b style="font:800 10.5px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${q.nome}</b>
-                      <span style="margin-left:auto;flex:none;font:800 9.5px 'Manrope',sans-serif;color:#5B667A;font-variant-numeric:tabular-nums;white-space:nowrap;">${q.valor}</span>
-                      <span style="flex:none;font:800 8.5px 'Archivo',sans-serif;color:${q.tCor};font-variant-numeric:tabular-nums;">${q.temp}°</span>
-                    </button>
-                  `).join('')}
-                  <div style="display:flex;align-items:flex-end;gap:2px;margin-top:2px;height:22px;" title="atividades por dia útil — últimos 10 dias">
-                    ${(e.cad||[]).map(cd => `
-                      <span style="flex:1;height:${cd.h};background:${cd.cor};border-radius:2px 2px 0 0;min-height:2px;" title="${cd.tip}"></span>
-                    `).join('')}
-                  </div>
-                  <span style="font:700 9px 'Manrope',sans-serif;color:${e.cadCor};">${e.cadRot}</span>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-
+      <div style="border-top:1px solid #E7E3DA;">
           ${(temDossie) ? `
             <div style="margin-top:12px;background:#FDFEFF;border:1.5px solid #2B3440;border-radius:13px;padding:14px 17px;box-shadow:0 10px 28px rgba(43,52,64,.14);">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
@@ -26811,7 +27775,6 @@ function tm2TelaHTML(d) {
               </div>
             </div>
           ` : ''}
-
           ${(temDeal) ? `
             <div style="margin-top:12px;background:#16181D;border-radius:13px;padding:15px 18px;box-shadow:0 12px 32px rgba(22,24,29,.3);color:#F2F4F9;">
               <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:11px;">
@@ -26852,61 +27815,6 @@ function tm2TelaHTML(d) {
               </div>
             </div>
           ` : ''}
-        </div>
-
-        <div style="padding:18px 24px 4px;">
-          <div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px;">
-            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
-              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#B0552F;">3 · Os mais quentes do time <span style="color:#7A8494;">— temperatura = ${formulaTemp} · clique pra abrir</span></span>
-              <div style="display:flex;flex-direction:column;gap:5px;margin-top:10px;">
-                ${(quentesTime||[]).map(qt => `
-                  <button data-tm2-acao="${qt.on}" style="text-align:left;display:flex;align-items:center;gap:10px;background:#FBFAF6;border:1px solid ${qt.borda};border-radius:9px;padding:7px 12px;cursor:pointer;min-width:0;" data-tm2-hv="5">
-                    <b style="font:900 10px 'Archivo',sans-serif;color:#B0552F;flex:none;width:20px;font-variant-numeric:tabular-nums;">${qt.pos}</b>
-                    <b style="font:800 12px 'Manrope',sans-serif;color:#2B3440;flex:none;width:170px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${qt.nome}</b>
-                    <span style="font:700 10px 'Manrope',sans-serif;color:#7A8494;flex:none;width:96px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${qt.dono}</span>
-                    <span style="font:800 8.5px 'Archivo',sans-serif;letter-spacing:.03em;text-transform:uppercase;color:#16181D;background:${qt.eCor};border-radius:4px;padding:2px 7px;flex:none;white-space:nowrap;">${qt.etapa}</span>
-                    <span style="flex:1;min-width:60px;height:7px;border-radius:999px;background:#EDEBE5;overflow:hidden;"><span style="display:block;height:100%;width:${qt.tempPct};background:${qt.tCor};border-radius:999px;"></span></span>
-                    <b style="font:800 10.5px 'Archivo',sans-serif;color:${qt.tCor};flex:none;font-variant-numeric:tabular-nums;">${qt.temp}°</b>
-                    <span style="font:800 10.5px 'Manrope',sans-serif;color:#2B3440;flex:none;width:80px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;">${qt.valor}</span>
-                    <span style="font:700 9.5px 'Manrope',sans-serif;color:${qt.pCor};flex:none;width:150px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${qt.prox}</span>
-                  </button>
-                `).join('')}
-              </div>
-              <p style="margin:9px 0 0;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;">${quentesNota}</p>
-            </div>
-            <div style="background:#FDFEFF;border:1px solid #E2E6EE;border-radius:12px;padding:13px 16px;">
-              <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">4 · Cadência do time <span style="color:#7A8494;">— atividades no CRM por dia útil · clique no nome pra abrir o dossiê</span></span>
-              <div style="display:flex;flex-direction:column;gap:4px;margin-top:10px;">
-                <div style="display:flex;align-items:center;gap:6px;">
-                  <span style="width:104px;flex:none;"></span>
-                  ${(cadDias||[]).map(cdd => `
-                    <span style="flex:1;text-align:center;font:700 8px 'Manrope',sans-serif;color:#B4AC9C;white-space:nowrap;">${cdd.d}</span>
-                  `).join('')}
-                  <span style="width:56px;flex:none;"></span>
-                </div>
-                ${(cadTime||[]).map(ct => `
-                  <div style="display:flex;align-items:center;gap:6px;min-width:0;">
-                    <button data-tm2-acao="${ct.on}" style="width:104px;flex:none;border:0;background:transparent;padding:0;text-align:left;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" data-tm2-hv="10">${ct.nome}</button>
-                    ${(ct.cells||[]).map(cl => `
-                      <span style="flex:1;height:22px;border-radius:5px;background:${cl.bg};display:grid;place-items:center;font:800 9.5px 'Archivo',sans-serif;color:${cl.cor};font-variant-numeric:tabular-nums;" title="${cl.tip}">${cl.n}</span>
-                    `).join('')}
-                    <span style="width:56px;flex:none;text-align:right;font:800 10px 'Manrope',sans-serif;color:${ct.totCor};font-variant-numeric:tabular-nums;white-space:nowrap;">${ct.tot}</span>
-                  </div>
-                `).join('')}
-              </div>
-              <div style="margin-top:9px;background:#FDF7F7;border:1px solid #E3C6C6;border-radius:9px;padding:8px 12px;">
-                <span style="font:700 10.5px/1.5 'Manrope',sans-serif;color:#8A3B3B;">▸ ${cadLeitura}</span>
-              </div>
-              <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
-                <span style="display:flex;align-items:center;gap:5px;font:700 9px 'Manrope',sans-serif;color:#7A8494;"><span style="width:12px;height:12px;border-radius:4px;background:#F5D9DC;flex:none;"></span>dia zerado</span>
-                <span style="display:flex;align-items:center;gap:5px;font:700 9px 'Manrope',sans-serif;color:#7A8494;"><span style="width:12px;height:12px;border-radius:4px;background:#FDF6E7;flex:none;"></span>1–2 atividades</span>
-                <span style="display:flex;align-items:center;gap:5px;font:700 9px 'Manrope',sans-serif;color:#7A8494;"><span style="width:12px;height:12px;border-radius:4px;background:#DFF0E9;flex:none;"></span>3–4</span>
-                <span style="display:flex;align-items:center;gap:5px;font:700 9px 'Manrope',sans-serif;color:#7A8494;"><span style="width:12px;height:12px;border-radius:4px;background:#1E9E7B;flex:none;"></span>5+</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <div style="padding:18px 24px 18px;">
           <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Sua pauta de líder <span style="color:#7A8494;">— tudo que você clicou virou pauta · nada se perde</span></span>
           <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
@@ -26918,9 +27826,9 @@ function tm2TelaHTML(d) {
             `).join('')}
           </div>
         </div>
+
         <p style="margin:0;border-top:1px solid #E2E6EE;padding:10px 24px 14px;font-size:10px;line-height:1.5;color:#7A8494;">${rodapeFonte}</p>
       </div>
-
 `;
 }
 
@@ -26947,7 +27855,10 @@ function renderTimeLider() {
   if (!sessaoAtual || sessaoAtual.role !== 'manager') return;
   const raiz = document.getElementById('tm2Raiz');
   if (!raiz) return;
-  raiz.innerHTML = tm2TelaHTML(tm2Dados());
+  /* A TELA E A PRANCHA v10, e a cauda da v2 vai DENTRO do mesmo card: dois cards
+     empilhados fariam a tela parecer duas telas, e o dossie que abre no clique do nome
+     tem de aparecer colado no bloco que tem o nome. */
+  raiz.innerHTML = tm10TelaHTML(tm10Dados(), tm2SobreviventesHTML(tm2Dados()));
 }
 
 async function tm2Executar(acao) {
@@ -26962,6 +27873,18 @@ async function tm2Executar(acao) {
   if (verbo === 'filtro') {
     TL5_ESTADO.toast = null;
     TM2_ESTADO.filtro = (resto && TM2_ESTADO.filtro !== resto) ? resto : null;
+    return renderTimeLider();
+  }
+  /* ══ A ETAPA DA v10 SELECIONA, E NUNCA DESLIGA (regra 4 da prancha) ════════════════
+     "O funil NUNCA abre sem etapa selecionada (default = gargalo) e o painel nunca fica
+     em branco." O verbo `etapa` da v2 ALTERNA — clicar na etapa aberta a fechava, e com
+     a v10 isso deixaria o painel de detalhe vazio, que e exatamente o que a regra
+     proibe. Por isso um verbo proprio em vez de reaproveitar aquele: dois
+     comportamentos diferentes com o mesmo nome e o que faz o proximo a mexer escolher o
+     errado. */
+  if (verbo === 'tm10etapa') {
+    TL5_ESTADO.toast = null;
+    TM10_ETAPA = resto || null;
     return renderTimeLider();
   }
   if (verbo === 'etapa') {
