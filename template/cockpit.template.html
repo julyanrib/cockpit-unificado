@@ -28086,9 +28086,11 @@ function pe4Diagnostico(p, time, conv) {
 
   if (p.travados >= 3 && pior) {
     return { gargalo: 'destravar',
+      /* O MESMO CUIDADO DO AVISO: "com R$ 0 parados" le como "nada em jogo". */
       txt: p.curto + ' perde o jogo no meio do funil: ' + p.travados
         + (p.travados === 1 ? ' negócio travado' : ' negócios travados')
-        + ' com ' + tm10Rs(p.mrrTravado) + ' parados — ' + etapaTravada.n + ' em '
+        + (p.mrrTravado > 0 ? ' com ' + tm10Rs(p.mrrTravado) + ' parados'
+          : ' (nenhum com MRR preenchido no CRM)') + ' — ' + etapaTravada.n + ' em '
         + nomeEtapa(etapaTravada.id) + ', e o pior é o ' + (pior.name || pior.dealname)
         + ' há ' + (pior.dias != null ? pior.dias + 'd' : 'muito tempo') + '.' };
   }
@@ -28140,9 +28142,21 @@ function pe4Diagnostico(p, time, conv) {
 function pe4Avisos(p, time, conv, props) {
   const av = [];
   const pior = pe4PiorLead(p);
-  if (p.mrrTravado > 0 && pior) {
-    av.push({ tom: 'vermelho', rot: 'mrr travado', valor: tm10Rs(p.mrrTravado) + ' parados',
-      txt: p.travados + (p.travados === 1 ? ' lead com régua estourada' : ' leads com régua estourada')
+  /* ══ O AVISO DISPARA PELA CONTAGEM, NAO PELO MRR (10/09/26) ═══════════════════════
+     Eu condicionei este aviso a mrrTravado > 0 e ele DESAPARECEU para o Marco, que tem
+     DEZ negocios travados — medido na producao: 0 de 10 com valor_de_mrr preenchido no
+     CRM. O aviso mais importante da tela nao aparecia porque a soma era zero.
+     E o defeito do "zero que tranquiliza", que este projeto ja pagou: R$ 0 ao lado de 10
+     travados le como "nada em jogo", quando o que houve foi valor nao preenchido. Agora
+     o gatilho e ter travado, e o texto diz qual dos dois casos e. */
+  if (p.travados > 0 && pior) {
+    const semValor = p.mrrTravado === 0;
+    av.push({ tom: 'vermelho', rot: semValor ? 'negócios travados' : 'mrr travado',
+      valor: semValor ? (p.travados + (p.travados === 1 ? ' travado' : ' travados'))
+        : tm10Rs(p.mrrTravado) + ' parados',
+      txt: (semValor
+        ? 'MRR não preenchido no CRM em nenhum deles — não dá para dizer quanto para aí'
+        : p.travados + (p.travados === 1 ? ' lead com régua estourada' : ' leads com régua estourada'))
         + ' · pior: ' + (pior.name || pior.dealname)
         + (pior.dias != null ? ' há ' + pior.dias + 'd' : '') });
   }

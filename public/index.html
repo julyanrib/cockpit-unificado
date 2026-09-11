@@ -19832,9 +19832,11 @@ function pe4Diagnostico(p, time, conv) {
 
   if (p.travados >= 3 && pior) {
     return { gargalo: 'destravar',
+
       txt: p.curto + ' perde o jogo no meio do funil: ' + p.travados
         + (p.travados === 1 ? ' negócio travado' : ' negócios travados')
-        + ' com ' + tm10Rs(p.mrrTravado) + ' parados — ' + etapaTravada.n + ' em '
+        + (p.mrrTravado > 0 ? ' com ' + tm10Rs(p.mrrTravado) + ' parados'
+          : ' (nenhum com MRR preenchido no CRM)') + ' — ' + etapaTravada.n + ' em '
         + nomeEtapa(etapaTravada.id) + ', e o pior é o ' + (pior.name || pior.dealname)
         + ' há ' + (pior.dias != null ? pior.dias + 'd' : 'muito tempo') + '.' };
   }
@@ -19882,9 +19884,15 @@ function pe4Diagnostico(p, time, conv) {
 function pe4Avisos(p, time, conv, props) {
   const av = [];
   const pior = pe4PiorLead(p);
-  if (p.mrrTravado > 0 && pior) {
-    av.push({ tom: 'vermelho', rot: 'mrr travado', valor: tm10Rs(p.mrrTravado) + ' parados',
-      txt: p.travados + (p.travados === 1 ? ' lead com régua estourada' : ' leads com régua estourada')
+
+  if (p.travados > 0 && pior) {
+    const semValor = p.mrrTravado === 0;
+    av.push({ tom: 'vermelho', rot: semValor ? 'negócios travados' : 'mrr travado',
+      valor: semValor ? (p.travados + (p.travados === 1 ? ' travado' : ' travados'))
+        : tm10Rs(p.mrrTravado) + ' parados',
+      txt: (semValor
+        ? 'MRR não preenchido no CRM em nenhum deles — não dá para dizer quanto para aí'
+        : p.travados + (p.travados === 1 ? ' lead com régua estourada' : ' leads com régua estourada'))
         + ' · pior: ' + (pior.name || pior.dealname)
         + (pior.dias != null ? ' há ' + pior.dias + 'd' : '') });
   }
