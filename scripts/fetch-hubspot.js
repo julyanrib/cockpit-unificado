@@ -159,9 +159,63 @@ function inicioDoGanhoVisivel() {
   return Date.parse(CORTE_GANHO_ISO + 'T00:00:00-03:00');
 }
 
-// Meta mensal de negócios fechados do time inteiro — combinada com o Julyan em 27/07/2026.
-// Configurável aqui até existir um lugar melhor pra isso (ex.: data/config.json).
-const META_MENSAL_FECHADOS = 80;
+// ══════════════════════════════════════════════════════════════════════════════════
+//  AS TRES METAS MENSAIS (10/09/26) — e por que duas constantes nao davam conta
+// ══════════════════════════════════════════════════════════════════════════════════
+//  Aqui viviam META_MENSAL_FECHADOS = 80 e META_MENSAL_POR_EXECUTIVO = 10, "combinada
+//  com o Julyan em 27/07/2026", com o proprio comentario admitindo "configuravel aqui
+//  ate existir um lugar melhor". A planilha de metas dele, vista em 10/09, mostra que
+//  as duas estavam erradas de tres formas:
+//
+//    1. a meta do time e 50, nao 80
+//    2. a meta individual nao e 10 para todo mundo: sao DOIS PATAMARES, 8 e 2
+//    3. nao existe UMA meta — existem TRES: clientes, MRR e receita
+//
+//  E havia um quarto erro que so apareceu ao somar: a Amanda saiu da planilha e
+//  continuava no snapshot com meta 10, inflando a meta do time em 10 clientes.
+//
+//  Agora o numero mora em data/metas.json, versionado: mudar a meta de alguem e mudar
+//  o arquivo, sem tocar em codigo. A tabela metas_mensais no Supabase (que o prompt da
+//  Time v10 citava e que NUNCA existiu) e o proximo passo, quando o Julyan quiser
+//  editar sem PR — precisa do ok dele para o DDL.
+const METAS = (function () {
+  try {
+    const bruto = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'metas.json'), 'utf8'));
+    const soma = Object.values(bruto.metas || {}).reduce(function (s, m) {
+      return { clientes: s.clientes + (m.clientes || 0), mrr: s.mrr + (m.mrr || 0),
+        receita: s.receita + (m.receita || 0) };
+    }, { clientes: 0, mrr: 0, receita: 0 });
+    // A SOMA TEM DE BATER COM O TOTAL DA PLANILHA. Meta de time que nao e a soma das
+    // metas das pessoas e o tipo de numero que ninguem explica na reuniao — e foi
+    // exatamente o que aconteceu com os 80.
+    ['clientes', 'mrr', 'receita'].forEach(function (k) {
+      const esperado = (bruto.time || {})[k];
+      if (esperado != null && soma[k] !== esperado) {
+        throw new Error('data/metas.json: a soma de ' + k + ' da ' + soma[k]
+          + ' e o total do time diz ' + esperado);
+      }
+    });
+    return bruto;
+  } catch (e) {
+    console.error('METAS: nao consegui ler data/metas.json — ' + e.message);
+    throw e;   // meta errada em tela e pior que robo que nao roda
+  }
+}());
+const META_MENSAL_FECHADOS = (METAS.time && METAS.time.clientes) || 0;
+const META_MRR_TIME = (METAS.time && METAS.time.mrr) || 0;
+const META_RECEITA_TIME = (METAS.time && METAS.time.receita) || 0;
+function metaDe(ownerId) {
+  return (METAS.metas && METAS.metas[String(ownerId)])
+    || { clientes: 0, mrr: 0, receita: 0, patamar: 'sem meta' };
+}
+// O AJUSTE DE COMPETENCIA, por negocio. Ver a nota _competencia no arquivo: o CRM nao
+// tem como saber que um boleto compensado no dia 1 e venda do mes anterior.
+const COMPETENCIA = {};
+(METAS.competencia || []).forEach(function (c) { COMPETENCIA[String(c.dealId)] = c; });
+function competenciaDe(dealId, mesDoClosedate) {
+  const c = COMPETENCIA[String(dealId)];
+  return c ? c.contaEm : mesDoClosedate;
+}
 
 // CLONAGEM DE LEITURA (15/08/26) — Julyan: "clonar o pipeline do field sales pro
 // cockpit... contas alvo, reciclagem, enviado onboarding e perdidos". Só rótulo e cor
@@ -1521,9 +1575,8 @@ function daysInCurrentStage(properties) {
 
 // Busca os negócios que UM executivo fechou (Negócio Fechado) nos últimos 7 dias,
 // usando closedate — mesmo critério validado pro Ganhos (7d) geral.
-// Meta mensal INDIVIDUAL de cada executivo — 10 fechamentos/mês, igual ao design
-// (8 executivos ativos × 10 = 80, bate com a meta do time inteiro combinada com o Julyan).
-const META_MENSAL_POR_EXECUTIVO = 10;
+// A META INDIVIDUAL VEM DE metaDe(ownerId) — ver o bloco METAS no topo. A constante que
+// morava aqui dava 10 para todo mundo, inclusive para quem tem meta 2.
 
 async function stageTotalThisMonthByOwner(stageIdOuLista, ownerId) {
   const now = new Date();
@@ -1567,15 +1620,29 @@ async function vendasDoMesDetalhe() {
         { propertyName: 'closedate', operator: 'BETWEEN', value: String(inicioMes.getTime()), highValue: String(now.getTime()) }
       ]
     }],
-    properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'closedate']
+    /* `amount` E A RECEITA: o valor TOTAL do plano negociado, que o executivo preenche
+       na passagem para Enviado Onboarding (palavra do Julyan, 10/09). Ela nao vinha,
+       e por isso duas das tres metas nao tinham realizado nenhum na tela. MRR e receita
+       nunca se somam: para o Sandro, R$ 800/mes viraram R$ 9.600 porque o plano e anual. */
+    properties: ['dealname', 'hubspot_owner_id', 'valor_de_mrr', 'amount', 'closedate']
   });
-  return results.filter(d => !isExcludedDeal(d)).map(d => ({
-    id: d.id,
-    nome: d.properties.dealname,
-    ownerId: d.properties.hubspot_owner_id ? String(d.properties.hubspot_owner_id) : null,
-    mrr: Math.round(parseFloat(d.properties.valor_de_mrr) || 0),
-    closedate: d.properties.closedate || null
-  }));
+  return results.filter(d => !isExcludedDeal(d)).map(d => {
+    const fechou = d.properties.closedate || null;
+    const mesCru = fechou ? String(diaBrasiliaDe(fechou) || '').slice(0, 7) : null;
+    const conta = competenciaDe(d.id, mesCru);
+    return {
+      id: d.id,
+      nome: d.properties.dealname,
+      ownerId: d.properties.hubspot_owner_id ? String(d.properties.hubspot_owner_id) : null,
+      mrr: Math.round(parseFloat(d.properties.valor_de_mrr) || 0),
+      receita: Math.round(parseFloat(d.properties.amount) || 0),
+      closedate: fechou,
+      /* `mesDeCompetencia` e o mes em que esta venda CONTA, e `ajustado` diz que a
+         decisao foi humana — a tela mostra o ajuste em vez de divergir do CRM calada. */
+      mesDeCompetencia: conta,
+      ajustado: conta !== mesCru ? (COMPETENCIA[String(d.id)] || {}).motivo || 'ajuste de competência' : null
+    };
+  });
 }
 
 // Conta quantos negócios de Ganho (Negócio Fechado + Enviado Onboarding) fecharam HOJE
@@ -2311,7 +2378,12 @@ async function main() {
       avancosHojeNomes: avancosHojeNomes.slice(0, 12),
       propostasHojeNomes: propostasHojeNomes.slice(0, 12),
       fechadosNoMes: fechadosNoMesRep,
-      metaMensal: META_MENSAL_POR_EXECUTIVO,
+      /* AS TRES METAS DELE. `metaMensal` continua com o nome antigo porque quatro telas
+         o leem; as duas novas vao ao lado. */
+      metaMensal: metaDe(r.ownerId).clientes,
+      metaMrr: metaDe(r.ownerId).mrr,
+      metaReceita: metaDe(r.ownerId).receita,
+      patamarMeta: metaDe(r.ownerId).patamar || null,
       visitasHubspotHoje,
       avancosHubspotHoje,
       propostasHubspotHoje,
@@ -2378,6 +2450,10 @@ async function main() {
       leadsTravados: leadsTravadosTime,
       fechadosNoMes,
       metaMensalFechados: META_MENSAL_FECHADOS,
+      metaMrrTime: META_MRR_TIME,
+      metaReceitaTime: META_RECEITA_TIME,
+      metasVersao: METAS.versao || null,
+      metasMes: METAS.mes || null,
       taxaAvanco: emAbertoTime > 0 ? Math.round((avancaramSemanaTime / emAbertoTime) * 100) : 0
     },
     kpiDetalhe: {
