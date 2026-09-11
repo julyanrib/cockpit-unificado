@@ -907,7 +907,10 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
       && /metaReceitaTime = Number\(\(DATA\.kpisHub \|\| \{\}\)\.metaReceitaTime\)/.test(tela)
       && /\[\[.clientes., pv\.fechN, pv\.meta, pv\.pctClientes, false\]/.test(tela.replace(/'/g, '.')));
   checar('o ranking mede cada um contra a meta DELE',
-    /const pct = r\.meta \? Math\.round\(r\.fech \/ r\.meta \* 100\) : null;/.test(tela)
+    /* O NUMERADOR MUDOU DE r.fech PARA fechDele quando o mes passou a sair de vendasMes
+       (a lista que aplica a competencia). A guarda cobra as duas coisas: o denominador e
+       a meta DELE, e o numerador e a contagem que sabe do ajuste. */
+    /const pct = r\.meta \? Math\.round\(fechDele \/ r\.meta \* 100\) : null;/.test(tela)
       && /r\.meta \? r\.fech \+ ./g.test(tela.replace(/'/g, '.')));
   checar('e meta zero aparece como — em vez de 0% vermelho',
     /cor: pct == null \? .#B4AC9C./.test(tela.replace(/'/g, '.'))
@@ -1011,6 +1014,17 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
   checar('nao medido nao e zero nem neste bloco',
     tela.indexOf('const semDono = ft ? (Number(ft.n) || 0) : null;') > -1
       && tela.indexOf('negócios de quem saiu: não medido nesta carga') > -1);
+
+  /* ── 15 · UMA FONTE PARA CLIENTES FECHADOS NO MES (10/09/26) ───────────────────────
+     A tela dizia 6 e o pill de competencia dizia 5, os dois ao mesmo tempo: reps[].
+     fechadosNoMes vem de uma busca por dono que nao sabe do ajuste, e vendasMes e a
+     lista de onde o ajuste sai. Os tres eixos tem de falar da MESMA venda. */
+  checar('clientes do mes sai de vendasMes, que e quem aplica a competencia',
+    tela.indexOf('const fechClientes = vm.totalClientes != null ? Number(vm.totalClientes) : m.time.fech;') > -1
+      && tela.indexOf('fechN: fechClientes,') > -1);
+  checar('e o fechado de cada um no ranking tambem',
+    tela.indexOf('const fechDele = vendasDele ? Number(vendasDele.count) : r.fech;') > -1
+      && tela.indexOf('fech: fechDele,') > -1);
 }());
 
 if (falhas.length) {
