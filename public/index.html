@@ -18913,7 +18913,8 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
       nome: lead.name || lead.nome || '',
       bairro: lead.bairro || null, cidade: lead.cidade || null,
       lat: lead.lat != null ? lead.lat : null, lng: lead.lng != null ? lead.lng : null
-    }, dataISO, '09:00', ownerId, tipo);
+
+    }, dataISO, (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) ? String(hora) : '09:00', ownerId, tipo);
   } catch (e) { console.error('espelho do proximo passo na agenda:', e); }
 
   if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
@@ -20008,6 +20009,8 @@ let pl6UI = {
 
   fonte: 'todas', pickerDia: null,
 
+  q: '',
+
   terr: null,
 
   verTodosTerr: false,
@@ -20498,9 +20501,15 @@ function pl6DadosFinal(rep) {
     if (filtro === 'carteira') return l.tipo === 'c';
     return l.tipo === 'n' && l.grupo === filtro;
   });
-  const munFilt = s.terr
+  const porBairro = s.terr
     ? daOrigem.filter(l => String(l.regiao || '') === String(s.terr))
     : daOrigem;
+
+  const alvoBusca = pl6ChaveBairro(String(s.q || '').trim());
+  const munFilt = !alvoBusca ? porBairro : porBairro.filter(function (l) {
+    return pl6ChaveBairro(l.nome || '').indexOf(alvoBusca) >= 0
+      || pl6ChaveBairro((l._bruto && l._bruto.bairro) || '').indexOf(alvoBusca) >= 0;
+  });
 
   const municaoOrd = munFilt.slice().sort((a, b) => pl6Prioridade(a) - pl6Prioridade(b));
 
@@ -20671,6 +20680,9 @@ function pl6DadosFinal(rep) {
         bg: on ? '#2B3440' : '#FDFEFF', cor: on ? '#FDFEFF' : '#2B3440',
         borda: on ? '#2B3440' : '#DCE1EA' };
     }),
+
+    buscaQ: String(s.q || ''),
+    buscaN: municaoOrd.length,
     municao: municaoOrd.slice(0, 60).map(function (l) {
       const sel = !!(selLead && selLead.id === l.id);
       const tg = pfTag(l);
@@ -21070,6 +21082,8 @@ function pl6TelaFinalHTML(d) {
             <span style="display:block;font:700 9px/1.4 'Manrope',sans-serif;color:#7A8494;margin-top:2px;">${bl.sub}</span>
           </button>`).join('')}
         </div>
+        <input type="search" data-pl6-busca-nome="1" value="${esc(d.buscaQ || '')}" placeholder="achar conta pelo nome — ex.: Coliseu" style="display:block;width:100%;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:8px 14px;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;outline:none;margin-bottom:8px;">
+        ${d.buscaQ ? `<span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-bottom:8px;">${d.buscaN} conta${d.buscaN === 1 ? '' : 's'} com "${esc(d.buscaQ)}" — arraste o card para o dia, ou clique nele e no horário</span>` : ''}
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
@@ -21384,6 +21398,27 @@ function pl6Ligar(box, rep) {
       });
 
       lista.style.display = visiveis === 0 ? 'none' : 'flex';
+      return;
+    }
+
+    const buscaNome = ev.target.closest && ev.target.closest('[data-pl6-busca-nome]');
+    if (buscaNome) {
+      pl6UI.q = buscaNome.value || '';
+      const pos = buscaNome.selectionStart;
+      redesenhar();
+
+      let tentativas = 0;
+      const devolverFoco = function () {
+        const novo = box.querySelector('[data-pl6-busca-nome]');
+        if (novo && document.activeElement !== novo) {
+          novo.focus();
+          try { novo.setSelectionRange(pos, pos); } catch (e) {   }
+        }
+        tentativas += 1;
+
+        if (tentativas < 6 && (!novo || document.activeElement !== novo)) setTimeout(devolverFoco, 80);
+      };
+      setTimeout(devolverFoco, 0);
       return;
     }
     const busca = ev.target.closest && ev.target.closest('[data-pl6-busca-bairro]');
@@ -24986,7 +25021,9 @@ function fichaLeadFunilBodyHTML(l) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <input type="text" class="ficha-passo-texto" placeholder="Ex.: ligar cobrando a proposta" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;">
           <input type="date" class="ficha-passo-data" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;">
+          <input type="time" class="ficha-passo-hora" step="900" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;font-variant-numeric:tabular-nums;">
         </div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:6px;line-height:1.5;">A hora é opcional — sem ela o compromisso entra às 9h, como sempre. Com ela, ele cai na faixa daquele horário no seu Planejamento e na sua Daily.</div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:7px;">
           <button type="button" class="ficha-passo-salvar btn-prim" style="padding:8px 16px;">Salvar próximo passo</button>
           <span class="ficha-passo-status" style="font-size:11px;color:var(--muted2);"></span>
@@ -25944,10 +25981,18 @@ function wireFichaLeadFunilEdicao(container, l) {
   if (btnPasso) btnPasso.addEventListener('click', async () => {
     const campoTexto = container.querySelector('.ficha-passo-texto');
     const campoData = container.querySelector('.ficha-passo-data');
+    const campoHora = container.querySelector('.ficha-passo-hora');
     const statusEl = container.querySelector('.ficha-passo-status');
     const textoCru = (campoTexto.value || '').trim();
     const texto = textoCru;
     const data = campoData.value || '';
+
+    const horaCrua = String((campoHora && campoHora.value) || '').trim();
+    const horaEscolhida = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(horaCrua) ? horaCrua : '';
+    if (horaCrua && !horaEscolhida) {
+      statusEl.textContent = 'A hora precisa estar no formato HH:MM.';
+      statusEl.style.color = 'var(--red)'; return;
+    }
     if (!texto || !data) { statusEl.textContent = 'Preencha o texto e a data antes de salvar.'; statusEl.style.color = 'var(--red)'; return; }
 
     const boxQualif = container.querySelector('.ficha-qualif');
@@ -25982,7 +26027,8 @@ function wireFichaLeadFunilEdicao(container, l) {
       const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ op: 'nota', dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo', ...(qualifPayload ? { qualificacao: qualifPayload } : {}) })
+
+        body: JSON.stringify({ op: 'nota', dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo', ...(horaEscolhida ? { hora: horaEscolhida } : {}), ...(qualifPayload ? { qualificacao: qualifPayload } : {}) })
       }), 8000, 'criar-nota-negocio-proximo-passo');
       const respData = await resp.json().catch(() => ({}));
       if (!resp.ok || !respData.ok) {
@@ -25998,17 +26044,20 @@ function wireFichaLeadFunilEdicao(container, l) {
       }
       campoTexto.value = '';
       campoData.value = '';
+      if (campoHora) campoHora.value = '';
       if (respData.aviso) {
         statusEl.textContent = respData.aviso;
         statusEl.style.color = 'var(--amber-ink)';
         mostrarToast(respData.aviso, 'atencao');
       } else {
 
-        espelharPassoNasTelas({ id: dealId, name: l.name, bairro: l.bairro, cidade: l.cidade, lat: l.lat, lng: l.lng }, data, passoTipoAtivo, l.ownerId);
+        espelharPassoNasTelas({ id: dealId, name: l.name, bairro: l.bairro, cidade: l.cidade, lat: l.lat, lng: l.lng }, data, passoTipoAtivo, l.ownerId, horaEscolhida);
         const dataBRPasso = String(data).split('-').reverse().join('/');
-        statusEl.textContent = `Próximo passo salvo — já está na sua Agenda em ${dataBRPasso}.`;
+
+        const quandoBR = dataBRPasso + (horaEscolhida ? ' às ' + horaEscolhida : ' às 9h');
+        statusEl.textContent = `Próximo passo salvo — ${quandoBR}, já no seu Planejamento e na Agenda.`;
         statusEl.style.color = 'var(--green)';
-        mostrarToast(`Próximo passo de "${l.name}" datado pra ${dataBRPasso} — entra na sua Agenda como follow-up.`, 'sucesso');
+        mostrarToast(`Próximo passo de "${l.name}" marcado pra ${quandoBR} — entra no seu Planejamento, na Agenda e na sua Daily do dia.`, 'sucesso');
       }
       btnPasso.disabled = false;
     } catch (e) {

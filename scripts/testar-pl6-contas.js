@@ -967,6 +967,65 @@ console.log('');
     'sem recarregar, a conta gravada não aparece na lista e ele cria a mesma de novo');
 }());
 
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   BUSCA POR NOME NA MUNIÇÃO (11/09/26)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Bruno, planejando: "montei terça com leads novos na Taquara mas queria colocar uma
+   visita no Coliseu, era só colocar o nome que ia aparecer o lead e eu levava o card até
+   lá".
+
+   A TELA JÁ TINHA UM CAMPO DE BUSCA, e ele não servia: `data-pl6-busca-bairro` filtra os
+   CHIPS de bairro escondendo nós no DOM, e não toca na lista de contas.
+
+   E ESCONDER NÓS NÃO SERVIRIA AQUI: a coluna desenha `municaoOrd.slice(0, 60)` de uma
+   munição que hoje tem 254. Filtrar o DOM alcançaria só os 60 já desenhados — e a conta
+   procurada é, quase por definição, uma que não está à vista. */
+(function () {
+  const semCom3 = s => String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' ');
+  const cod = semCom3(tpl);
+
+  checar('a munição tem busca por nome, e ela filtra ANTES do corte de 60',
+    cod.indexOf('data-pl6-busca-nome="1"') > 0
+      && /const alvoBusca = pl6ChaveBairro\(String\(s\.q \|\| ''\)\.trim\(\)\);/.test(cod)
+      && cod.indexOf('const munFilt = !alvoBusca ? porBairro : porBairro.filter') > 0
+      && cod.indexOf('const alvoBusca') < cod.indexOf('municaoOrd.slice(0, 60)'),
+    'filtrar depois do corte acharia só o que já estava desenhado — e o que ele procura é justamente o que não está');
+
+  checar('ela casa por pedaço do nome, sem acento e sem caixa',
+    /pl6ChaveBairro\(l\.nome \|\| ''\)\.indexOf\(alvoBusca\) >= 0/.test(cod)
+      && /pl6ChaveBairro\(\(l\._bruto && l\._bruto\.bairro\) \|\| ''\)\.indexOf\(alvoBusca\) >= 0/.test(cod),
+    '"coliseu" tem de achar "Restaurante Coliseu"; e quem digita o bairro quer a rua inteira');
+
+  checar('o texto buscado vive no estado, não só no DOM',
+    /^\s*q: '',$/m.test(cod) && /pl6UI\.q = buscaNome\.value \|\| '';/.test(cod)
+      && /buscaQ: String\(s\.q \|\| ''\),/.test(cod),
+    'sem estado, o redesenho da coluna apagaria o que ele digitou');
+
+  /* A GUARDA QUE CUSTOU MAIS CARO PARA APRENDER ─────────────────────────────────────
+     A primeira versão devolvia o foco encadeada na promessa do redesenho:
+         Promise.resolve(redesenhar()).then(function () { ... focus() ... })
+     e o `then` NUNCA executava. O redesenho desta casa espera um requestAnimationFrame,
+     e em aba de segundo plano o navegador não dispara frame nenhum: o DOM trocava, o
+     campo perdia o foco, e a segunda letra ia para o nada. Medido com MutationObserver +
+     focusin: uma mutação, zero focusin. */
+  checar('o foco volta ao campo por tempo, e NÃO por frame de animação',
+    /const devolverFoco = function \(\) \{/.test(cod)
+      && /setTimeout\(devolverFoco, 0\);/.test(cod)
+      && /setTimeout\(devolverFoco, 80\)/.test(cod)
+      && !/Promise\.resolve\(redesenhar\(\)\)\.then/.test(cod),
+    'requestAnimationFrame não dispara em aba oculta: o foco nunca voltava e a 2a letra sumia');
+
+  checar('e ele para de insistir quando o campo já está com o foco',
+    /if \(tentativas < 6 && \(!novo \|\| document\.activeElement !== novo\)\) setTimeout/.test(cod),
+    'insistir para sempre roubaria o foco de quem já clicou em outro lugar');
+
+  checar('a coluna diz quantas contas a busca achou',
+    /buscaN: municaoOrd\.length,/.test(cod)
+      && cod.indexOf('conta${d.buscaN === 1') > 0,
+    'o total da munição some quando ele digita; sem a contagem a coluna passa a mentir sobre o tamanho dela');
+}());
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);
