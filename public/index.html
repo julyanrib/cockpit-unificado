@@ -1412,6 +1412,8 @@
     #agendaContent [data-pl6-fonte],
     #agendaContent [data-pl6-remover],
     #agendaContent [data-pl6-novo-lead],
+    #agendaContent [data-pl6-novo-fonte],
+    #agendaContent [data-pl6-novo-gravar],
     #agendaContent [data-pl6-semana],
     #agendaContent [data-pl6-fi-etapa],
     #agendaContent [data-pl6-fi-fechar],
@@ -21847,6 +21849,8 @@ let pl6UI = {
 
   verTodosTerr: false,
   slotPicker: null, rotaPicker: null, verTodasRegioes: false,
+
+  novoLead: null,
   toast: null, salvando: false
 };
 let pl6Plano = null;
@@ -22013,6 +22017,52 @@ async function pl6CarregarRadar(rep) {
   } catch (e) {
     console.log('radar da praça: nao consegui ler - ' + (e && e.message));
   }
+}
+
+async function pl6CriarLead(rep, campos) {
+  const nome = String((campos && campos.nome) || '').trim();
+  if (!nome) return { erro: 'escreva o nome da conta' };
+  if (typeof supa === 'undefined' || !supa) return { erro: 'sem conexão aqui — nada foi gravado' };
+
+  const nomeDoRep = String((rep && (rep.name || rep.nome)) || '');
+  const terr = (DATA.territorios || []).filter(function (x) {
+    return x && x.ativo !== false && String(x.rep || '') === nomeDoRep;
+  })[0];
+  const area = terr && (terr.areas || [])[0];
+  const cidade = (campos && campos.cidade) || (area ? area.municipio : null);
+
+  const chave = (typeof prospeccaoNormalizarTexto === 'function')
+    ? prospeccaoNormalizarTexto(nome) : nome.toLowerCase().trim();
+  const jaTem = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
+    .filter(function (l) {
+      if (String(l.responsavel_owner_id || '') !== String(rep.ownerId)) return false;
+      const k = (typeof prospeccaoNormalizarTexto === 'function')
+        ? prospeccaoNormalizarTexto(l.nome) : String(l.nome || '').toLowerCase().trim();
+      return k === chave;
+    })[0];
+  if (jaTem) {
+    return { erro: '"' + nome + '" já está na sua munição'
+      + (jaTem.bairro ? ' (' + jaTem.bairro + ')' : '') + ' — procure na lista em vez de criar de novo' };
+  }
+
+  const poi = {
+    nome: nome,
+    categoria: null,
+    bairro: (campos && String(campos.bairro || '').trim()) || null,
+    cidade: cidade,
+    endereco: null,
+    telefone: (campos && String(campos.telefone || '').trim()) || null,
+    lat: null, lng: null
+  };
+  const fonte = (campos && campos.fonte) || 'manual';
+  const r = await materializarLeadDoMapa(poi, rep.ownerId, fonte, 'municao');
+  if (r && r.error) return { erro: 'não gravou: ' + (r.error.message || 'erro desconhecido') };
+  if (!r || !r.lead) return { erro: 'o banco aceitou e não devolveu a linha — não dá para confirmar' };
+
+  if (typeof carregarProspeccao === 'function') {
+    try { await carregarProspeccao(); } catch (e) {   }
+  }
+  return { lead: r.lead, cidade: cidade };
 }
 
 async function pl6Carregar(rep, segundaPedida) {
@@ -22303,7 +22353,29 @@ function pl6DadosFinal(rep) {
       sel: (Number(PL6_SEMANA) || 0) === off
     };
   });
+
+  const nl = s.novoLead;
+  const fontesNovo = [['instagram', 'Instagram'], ['mapa', 'Maps'], ['rua', 'rua']]
+    .map(function (par) {
+      return { on: par[0], rot: par[1], sel: nl && nl.fonte === par[0] };
+    });
   return {
+    novoAberto: !!nl,
+    novoNome: esc((nl && nl.nome) || ''),
+    novoBairro: esc((nl && nl.bairro) || ''),
+    novoTel: esc((nl && nl.telefone) || ''),
+    novoFontes: fontesNovo,
+    novoErro: esc((nl && nl.erro) || ''),
+    novoSalvando: !!(nl && nl.salvando),
+
+    novoCidade: esc((function () {
+      const nomeR = String((rep && (rep.name || rep.nome)) || '');
+      const tr = (DATA.territorios || []).filter(function (x) {
+        return x && x.ativo !== false && String(x.rep || '') === nomeR;
+      })[0];
+      const a = tr && (tr.areas || [])[0];
+      return a ? (a.municipio + '/' + (a.uf || '')) : 'sem praça declarada';
+    }())),
     semanas: semanas,
 
     semanaFora: (Number(PL6_SEMANA) || 0) !== 0,
@@ -22801,7 +22873,26 @@ function pl6TelaFinalHTML(d) {
       <div data-pl6-municao="1" style="border-left:1px solid #E7E3DA;background:#FBFAF6;padding:18px 18px 20px;min-width:0;overflow:auto;max-height:1200px;">
         <span style="display:block;font:900 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#7A8494;margin-bottom:4px;">Munição da semana</span>
         <span style="display:block;font:700 10px 'Manrope',sans-serif;color:#7A8494;margin-bottom:10px;">clique na conta → clique no horário livre</span>
-        <button type="button" data-pl6-novo-lead="1" style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF3F4;padding:9px 12px;font:800 10.5px 'Manrope',sans-serif;color:#E51A31;cursor:pointer;text-align:center;margin-bottom:6px;">+ criar lead novo — Instagram, Maps, rua</button>
+        ${d.novoAberto ? `
+          <div style="border:1.5px solid #E51A31;border-radius:10px;background:#FDFEFF;padding:10px 12px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+              <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#E51A31;">conta nova · ${d.novoCidade}</span>
+              <button type="button" data-pl6-novo-fechar="1" style="margin-left:auto;flex:none;width:22px;height:22px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 11px 'Manrope',sans-serif;cursor:pointer;line-height:1;padding:0;">✕</button>
+            </div>
+            <input type="text" data-pl6-novo-campo="nome" value="${d.novoNome}" placeholder="nome da conta (obrigatório)" style="display:block;width:100%;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:8px;padding:8px 10px;font:700 11px 'Manrope',sans-serif;color:#2B3440;margin-bottom:6px;">
+            <div style="display:flex;gap:6px;margin-bottom:7px;">
+              <input type="text" data-pl6-novo-campo="bairro" value="${d.novoBairro}" placeholder="bairro" style="flex:1;min-width:0;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:8px;padding:8px 10px;font:700 11px 'Manrope',sans-serif;color:#2B3440;">
+              <input type="tel" data-pl6-novo-campo="telefone" value="${d.novoTel}" placeholder="telefone" style="flex:1;min-width:0;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:8px;padding:8px 10px;font:700 11px 'Manrope',sans-serif;color:#2B3440;">
+            </div>
+            <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;margin-bottom:4px;">onde você achou</span>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;">
+              ${(d.novoFontes || []).map(f => `<button type="button" data-pl6-novo-fonte="${f.on}" style="display:inline-flex;align-items:center;min-height:28px;padding:0 11px;border:1.5px solid ${f.sel ? '#2B3440' : '#DCE1EA'};border-radius:999px;background:${f.sel ? '#2B3440' : '#FDFEFF'};font:800 10px 'Manrope',sans-serif;color:${f.sel ? '#FDFEFF' : '#5B667A'};cursor:pointer;">${f.rot}</button>`).join('')}
+            </div>
+            ${d.novoErro ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A3B3B;background:#FDF3F4;border:1px solid #F0A9B2;border-radius:8px;padding:7px 10px;margin-bottom:8px;">${d.novoErro}</span>` : ''}
+            <button type="button" data-pl6-novo-gravar="1" style="display:block;width:100%;border:0;border-radius:999px;background:${d.novoSalvando ? '#B4AC9C' : '#E51A31'};padding:9px 12px;font:800 11px 'Manrope',sans-serif;color:#FFFDF8;cursor:pointer;">${d.novoSalvando ? 'criando…' : 'criar na munição →'}</button>
+            <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:6px;">a conta entra na sua munição — você escolhe o dia depois, clicando nela e no horário livre</span>
+          </div>
+        ` : `<button type="button" data-pl6-novo-lead="1" style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF3F4;padding:9px 12px;font:800 10.5px 'Manrope',sans-serif;color:#E51A31;cursor:pointer;text-align:center;margin-bottom:6px;">+ criar lead novo — Instagram, Maps, rua</button>`}
         <!-- ══ OS DOIS BLOCOS, IGUAIS AOS DA DAILY (10/09/26) ══════════════════════════
              A Daily criava os dois e o Planejamento só sabia LER um deles. O gesto aqui é
              o mesmo da conta — escolher e clicar no horário do dia — e por isso eles usam
@@ -23176,6 +23267,9 @@ function pl6Ligar(box, rep) {
       || ev.target.closest('[data-pl6-terr]')
       || ev.target.closest('[data-pl6-fonte]')
       || ev.target.closest('[data-pl6-novo-lead]')
+      || ev.target.closest('[data-pl6-novo-fechar]')
+      || ev.target.closest('[data-pl6-novo-fonte]')
+      || ev.target.closest('[data-pl6-novo-gravar]')
       || ev.target.closest('[data-pl6-semana]');
     if (!alvo || !box.contains(alvo)) return;
     ev.preventDefault();
@@ -23356,7 +23450,43 @@ function pl6Ligar(box, rep) {
       return mutar({ grade: g }, msg);
     }
 
-    if (d.pl6NovoLead) { criarLead(null); return; }
+    if (d.pl6NovoLead) {
+      pl6UI.novoLead = { nome: '', bairro: '', telefone: '', fonte: 'rua', erro: '', salvando: false };
+      pl6UI.sel = null;
+      return redesenhar();
+    }
+
+    const lerCamposNovoLead = function () {
+      if (!pl6UI.novoLead) return;
+      Array.prototype.forEach.call(box.querySelectorAll('[data-pl6-novo-campo]'), function (el) {
+        pl6UI.novoLead[el.getAttribute('data-pl6-novo-campo')] = el.value;
+      });
+    };
+    if (d.pl6NovoFechar) { pl6UI.novoLead = null; return redesenhar(); }
+    if (d.pl6NovoFonte) {
+      lerCamposNovoLead();
+      if (pl6UI.novoLead) pl6UI.novoLead.fonte = d.pl6NovoFonte;
+      return redesenhar();
+    }
+    if (d.pl6NovoGravar) {
+      const nl = pl6UI.novoLead;
+      if (!nl || nl.salvando) return;
+      lerCamposNovoLead();
+      nl.erro = '';
+      nl.salvando = true;
+      await redesenhar();
+      const r = await pl6CriarLead(rep, nl);
+      if (r && r.erro) {
+        if (pl6UI.novoLead) { pl6UI.novoLead.salvando = false; pl6UI.novoLead.erro = r.erro; }
+        return redesenhar();
+      }
+      const nomeCriado = (r && r.lead && r.lead.nome) ? r.lead.nome : nl.nome;
+      pl6UI.novoLead = null;
+      pl6UI.toast = '"' + nomeCriado + '" está na sua munição'
+        + (r && r.cidade ? ' (' + r.cidade + ')' : '')
+        + ' — clique nela e no horário livre para pôr no dia';
+      return redesenhar();
+    }
 
     if (d.pl6FiFechar) { pl6Ficha = null; return redesenhar(); }
 
@@ -29934,7 +30064,8 @@ async function buscarRestaurantesNoMapa(lat, lng) {
   }
 }
 
-async function materializarLeadDoMapa(poi, ownerId, fonte) {
+async function materializarLeadDoMapa(poi, ownerId, fonte, destino) {
+  const paraMunicao = String(destino || 'rota') === 'municao';
   const linha = {
     nome: poi.nome,
     categoria: poi.categoria || null,
@@ -29948,8 +30079,10 @@ async function materializarLeadDoMapa(poi, ownerId, fonte) {
     avaliacoes: null,
     fonte: fonte || 'mapa',
     responsavel_owner_id: String(ownerId),
-    status: 'na_rota',
-    data_rota: isoDate(new Date()),
+
+    status: paraMunicao ? 'atribuido' : 'na_rota',
+    data_rota: paraMunicao ? null : isoDate(new Date()),
+    criado_por: (typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.email) || null,
     updated_at: new Date().toISOString()
   };
   const { data, error } = await supa.from('leads_prospeccao').insert(linha).select();

@@ -2233,6 +2233,8 @@
     #agendaContent [data-pl6-fonte],
     #agendaContent [data-pl6-remover],
     #agendaContent [data-pl6-novo-lead],
+    #agendaContent [data-pl6-novo-fonte],
+    #agendaContent [data-pl6-novo-gravar],
     #agendaContent [data-pl6-semana],
     #agendaContent [data-pl6-fi-etapa],
     #agendaContent [data-pl6-fi-fechar],
@@ -31140,6 +31142,10 @@ let pl6UI = {
   /* o "ver todos os N bairros" da faixa de Territorio */
   verTodosTerr: false,
   slotPicker: null, rotaPicker: null, verTodasRegioes: false,
+  /* O FORMULÁRIO DE CONTA NOVA (11/09/26). `null` = fechado. Os campos ficam no estado
+     porque o formulário vive dentro da coluna que é redesenhada a cada clique da tela —
+     guardá-los só no DOM perderia o que ele digitou no primeiro redesenho. */
+  novoLead: null,
   toast: null, salvando: false
 };
 let pl6Plano = null;   /* a linha de planos_semanais da semana em foco */
@@ -31458,6 +31464,71 @@ async function pl6CarregarRadar(rep) {
 /* `segunda` EXPLÍCITA para quem não é a tela. O espelho de tarefa (Meu funil, Agenda)
    escreve na semana da TAREFA, e ele indexa os dias por pl6SegundaDaSemana(); se herdasse
    o foco da tela, uma tarefa de hoje entraria na linha da semana que vem, no dia errado. */
+/* ══ CRIAR UMA CONTA NA MÃO, DA TELA DE PLANEJAMENTO (11/09/26) ═════════════════════
+   O que o executivo acha no Instagram, no Maps ou andando na rua não passa por nenhuma
+   importação — e era isso que o botão prometia desde 04/09 sem cumprir.
+
+   O QUE ELE PRECISA DIGITAR: só o NOME. Bairro e telefone entram se ele tiver; a cidade
+   vem da praça dele (data/territorios.json, a mesma declaração que roteia o import), e a
+   fonte é o chip que ele escolher — 'instagram', 'maps' ou 'rua' — porque saber de onde a
+   conta veio é o que permite medir qual caminho rende.
+
+   DUPLICATA: a conta digitada não passa pelo dedupe do servidor, então a checagem é aqui,
+   contra a munição que ele já tem — mesmo nome normalizado na mesma cidade. Sem isso ele
+   cria a mesma padaria duas vezes na semana em que passar duas vezes na porta dela. */
+async function pl6CriarLead(rep, campos) {
+  const nome = String((campos && campos.nome) || '').trim();
+  if (!nome) return { erro: 'escreva o nome da conta' };
+  if (typeof supa === 'undefined' || !supa) return { erro: 'sem conexão aqui — nada foi gravado' };
+
+  /* A CIDADE SAI DO TERRITÓRIO DELE. Sem cidade a conta não entra em praça nenhuma e some
+     das telas que agrupam por cidade — e o roteador do import usa a mesma declaração. */
+  /* DATA.reps usa `name`; DATA.usuarios usa `nome`. Ler só `nome` aqui devolvia undefined
+     e a conta nascia sem cidade — "sem praça declarada" na tela, com o território dele
+     declarado no arquivo. É a mesma pegadinha que a memória do projeto já registrava. */
+  const nomeDoRep = String((rep && (rep.name || rep.nome)) || '');
+  const terr = (DATA.territorios || []).filter(function (x) {
+    return x && x.ativo !== false && String(x.rep || '') === nomeDoRep;
+  })[0];
+  const area = terr && (terr.areas || [])[0];
+  const cidade = (campos && campos.cidade) || (area ? area.municipio : null);
+
+  const chave = (typeof prospeccaoNormalizarTexto === 'function')
+    ? prospeccaoNormalizarTexto(nome) : nome.toLowerCase().trim();
+  const jaTem = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
+    .filter(function (l) {
+      if (String(l.responsavel_owner_id || '') !== String(rep.ownerId)) return false;
+      const k = (typeof prospeccaoNormalizarTexto === 'function')
+        ? prospeccaoNormalizarTexto(l.nome) : String(l.nome || '').toLowerCase().trim();
+      return k === chave;
+    })[0];
+  if (jaTem) {
+    return { erro: '"' + nome + '" já está na sua munição'
+      + (jaTem.bairro ? ' (' + jaTem.bairro + ')' : '') + ' — procure na lista em vez de criar de novo' };
+  }
+
+  const poi = {
+    nome: nome,
+    categoria: null,
+    bairro: (campos && String(campos.bairro || '').trim()) || null,
+    cidade: cidade,
+    endereco: null,
+    telefone: (campos && String(campos.telefone || '').trim()) || null,
+    lat: null, lng: null
+  };
+  const fonte = (campos && campos.fonte) || 'manual';
+  const r = await materializarLeadDoMapa(poi, rep.ownerId, fonte, 'municao');
+  if (r && r.error) return { erro: 'não gravou: ' + (r.error.message || 'erro desconhecido') };
+  if (!r || !r.lead) return { erro: 'o banco aceitou e não devolveu a linha — não dá para confirmar' };
+
+  /* A MUNIÇÃO DA TELA SAI DE prospeccaoCache: sem recarregar, a conta gravada não
+     apareceria na lista e ele criaria de novo. */
+  if (typeof carregarProspeccao === 'function') {
+    try { await carregarProspeccao(); } catch (e) { /* a conta está gravada; a lista atualiza no próximo render */ }
+  }
+  return { lead: r.lead, cidade: cidade };
+}
+
 async function pl6Carregar(rep, segundaPedida) {
   pl6Plano = null;
   if (!DATA.supabase || !supa) return { ok: false, motivo: 'sem Supabase nesta sessão' };
@@ -31898,7 +31969,32 @@ function pl6DadosFinal(rep) {
       sel: (Number(PL6_SEMANA) || 0) === off
     };
   });
+  /* ══ O FORMULÁRIO DE CONTA NOVA ═══════════════════════════════════════════════════
+     A fonte é chip e não texto livre porque ela é medida depois: "novas → lead" por
+     origem só existe se a origem tiver um nome fechado. */
+  const nl = s.novoLead;
+  const fontesNovo = [['instagram', 'Instagram'], ['mapa', 'Maps'], ['rua', 'rua']]
+    .map(function (par) {
+      return { on: par[0], rot: par[1], sel: nl && nl.fonte === par[0] };
+    });
   return {
+    novoAberto: !!nl,
+    novoNome: esc((nl && nl.nome) || ''),
+    novoBairro: esc((nl && nl.bairro) || ''),
+    novoTel: esc((nl && nl.telefone) || ''),
+    novoFontes: fontesNovo,
+    novoErro: esc((nl && nl.erro) || ''),
+    novoSalvando: !!(nl && nl.salvando),
+    /* A CIDADE NÃO É CAMPO: ela vem do território dele, que é a mesma declaração que
+       roteia o import. Mostrar qual é evita a conta nascer na cidade errada em silêncio. */
+    novoCidade: esc((function () {
+      const nomeR = String((rep && (rep.name || rep.nome)) || '');
+      const tr = (DATA.territorios || []).filter(function (x) {
+        return x && x.ativo !== false && String(x.rep || '') === nomeR;
+      })[0];
+      const a = tr && (tr.areas || [])[0];
+      return a ? (a.municipio + '/' + (a.uf || '')) : 'sem praça declarada';
+    }())),
     semanas: semanas,
     /* O AVISO SÓ EXISTE FORA DA SEMANA CORRENTE, e ele é o que impede o executivo de
        montar a segunda que vem achando que está montando hoje. */
@@ -32519,7 +32615,26 @@ function pl6TelaFinalHTML(d) {
       <div data-pl6-municao="1" style="border-left:1px solid #E7E3DA;background:#FBFAF6;padding:18px 18px 20px;min-width:0;overflow:auto;max-height:1200px;">
         <span style="display:block;font:900 10px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#7A8494;margin-bottom:4px;">Munição da semana</span>
         <span style="display:block;font:700 10px 'Manrope',sans-serif;color:#7A8494;margin-bottom:10px;">clique na conta → clique no horário livre</span>
-        <button type="button" data-pl6-novo-lead="1" style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF3F4;padding:9px 12px;font:800 10.5px 'Manrope',sans-serif;color:#E51A31;cursor:pointer;text-align:center;margin-bottom:6px;">+ criar lead novo — Instagram, Maps, rua</button>
+        ${d.novoAberto ? `
+          <div style="border:1.5px solid #E51A31;border-radius:10px;background:#FDFEFF;padding:10px 12px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+              <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#E51A31;">conta nova · ${d.novoCidade}</span>
+              <button type="button" data-pl6-novo-fechar="1" style="margin-left:auto;flex:none;width:22px;height:22px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;font:800 11px 'Manrope',sans-serif;cursor:pointer;line-height:1;padding:0;">✕</button>
+            </div>
+            <input type="text" data-pl6-novo-campo="nome" value="${d.novoNome}" placeholder="nome da conta (obrigatório)" style="display:block;width:100%;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:8px;padding:8px 10px;font:700 11px 'Manrope',sans-serif;color:#2B3440;margin-bottom:6px;">
+            <div style="display:flex;gap:6px;margin-bottom:7px;">
+              <input type="text" data-pl6-novo-campo="bairro" value="${d.novoBairro}" placeholder="bairro" style="flex:1;min-width:0;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:8px;padding:8px 10px;font:700 11px 'Manrope',sans-serif;color:#2B3440;">
+              <input type="tel" data-pl6-novo-campo="telefone" value="${d.novoTel}" placeholder="telefone" style="flex:1;min-width:0;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:8px;padding:8px 10px;font:700 11px 'Manrope',sans-serif;color:#2B3440;">
+            </div>
+            <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A8494;margin-bottom:4px;">onde você achou</span>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;">
+              ${(d.novoFontes || []).map(f => `<button type="button" data-pl6-novo-fonte="${f.on}" style="display:inline-flex;align-items:center;min-height:28px;padding:0 11px;border:1.5px solid ${f.sel ? '#2B3440' : '#DCE1EA'};border-radius:999px;background:${f.sel ? '#2B3440' : '#FDFEFF'};font:800 10px 'Manrope',sans-serif;color:${f.sel ? '#FDFEFF' : '#5B667A'};cursor:pointer;">${f.rot}</button>`).join('')}
+            </div>
+            ${d.novoErro ? `<span style="display:block;font:700 10px/1.5 'Manrope',sans-serif;color:#8A3B3B;background:#FDF3F4;border:1px solid #F0A9B2;border-radius:8px;padding:7px 10px;margin-bottom:8px;">${d.novoErro}</span>` : ''}
+            <button type="button" data-pl6-novo-gravar="1" style="display:block;width:100%;border:0;border-radius:999px;background:${d.novoSalvando ? '#B4AC9C' : '#E51A31'};padding:9px 12px;font:800 11px 'Manrope',sans-serif;color:#FFFDF8;cursor:pointer;">${d.novoSalvando ? 'criando…' : 'criar na munição →'}</button>
+            <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:6px;">a conta entra na sua munição — você escolhe o dia depois, clicando nela e no horário livre</span>
+          </div>
+        ` : `<button type="button" data-pl6-novo-lead="1" style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF3F4;padding:9px 12px;font:800 10.5px 'Manrope',sans-serif;color:#E51A31;cursor:pointer;text-align:center;margin-bottom:6px;">+ criar lead novo — Instagram, Maps, rua</button>`}
         <!-- ══ OS DOIS BLOCOS, IGUAIS AOS DA DAILY (10/09/26) ══════════════════════════
              A Daily criava os dois e o Planejamento só sabia LER um deles. O gesto aqui é
              o mesmo da conta — escolher e clicar no horário do dia — e por isso eles usam
@@ -33046,6 +33161,9 @@ function pl6Ligar(box, rep) {
       || ev.target.closest('[data-pl6-terr]')
       || ev.target.closest('[data-pl6-fonte]')
       || ev.target.closest('[data-pl6-novo-lead]')
+      || ev.target.closest('[data-pl6-novo-fechar]')
+      || ev.target.closest('[data-pl6-novo-fonte]')
+      || ev.target.closest('[data-pl6-novo-gravar]')
       || ev.target.closest('[data-pl6-semana]');
     if (!alvo || !box.contains(alvo)) return;
     ev.preventDefault();
@@ -33261,8 +33379,51 @@ function pl6Ligar(box, rep) {
       return mutar({ grade: g }, msg);
     }
 
-    /* ── pl6NovoLead ── */
-    if (d.pl6NovoLead) { criarLead(null); return; }
+    /* ── pl6NovoLead ── a conta que ele achou no Instagram, no Maps ou na rua ─────────
+       ESTE BOTÃO ESTAVA MORTO desde 04/09/26: o handler chamava `criarLead(null)`, e
+       `criarLead` NÃO EXISTE no arquivo — zero ocorrências fora desta linha. O clique
+       lançava ReferenceError dentro do ouvinte e morria ali: botão com cursor, com
+       hover, e sem efeito nenhum. Julyan, 11/09: "ele não consegue criar lead novo na
+       tela de planejamento". */
+    if (d.pl6NovoLead) {
+      pl6UI.novoLead = { nome: '', bairro: '', telefone: '', fonte: 'rua', erro: '', salvando: false };
+      pl6UI.sel = null;
+      return redesenhar();
+    }
+    /* O QUE ESTÁ NO CAMPO AGORA É A VERDADE. O chip de fonte redesenha a coluna, e o
+       redesenho reconstrói os inputs a partir do estado: sem esta leitura, digitar o nome
+       e clicar em "Instagram" apagava o nome. Vale para todo clique do formulário. */
+    const lerCamposNovoLead = function () {
+      if (!pl6UI.novoLead) return;
+      Array.prototype.forEach.call(box.querySelectorAll('[data-pl6-novo-campo]'), function (el) {
+        pl6UI.novoLead[el.getAttribute('data-pl6-novo-campo')] = el.value;
+      });
+    };
+    if (d.pl6NovoFechar) { pl6UI.novoLead = null; return redesenhar(); }
+    if (d.pl6NovoFonte) {
+      lerCamposNovoLead();
+      if (pl6UI.novoLead) pl6UI.novoLead.fonte = d.pl6NovoFonte;
+      return redesenhar();
+    }
+    if (d.pl6NovoGravar) {
+      const nl = pl6UI.novoLead;
+      if (!nl || nl.salvando) return;
+      lerCamposNovoLead();
+      nl.erro = '';
+      nl.salvando = true;
+      await redesenhar();
+      const r = await pl6CriarLead(rep, nl);
+      if (r && r.erro) {
+        if (pl6UI.novoLead) { pl6UI.novoLead.salvando = false; pl6UI.novoLead.erro = r.erro; }
+        return redesenhar();
+      }
+      const nomeCriado = (r && r.lead && r.lead.nome) ? r.lead.nome : nl.nome;
+      pl6UI.novoLead = null;
+      pl6UI.toast = '"' + nomeCriado + '" está na sua munição'
+        + (r && r.cidade ? ' (' + r.cidade + ')' : '')
+        + ' — clique nela e no horário livre para pôr no dia';
+      return redesenhar();
+    }
 
     if (d.pl6FiFechar) { pl6Ficha = null; return redesenhar(); }
 
@@ -41964,7 +42125,11 @@ async function buscarRestaurantesNoMapa(lat, lng) {
 
 // No momento em que ele escolhe visitar, o POI do mapa vira conta-alvo de verdade.
 // Antes disso não gravamos nada — mapa cheio de lead fantasma é pior que mapa vazio.
-async function materializarLeadDoMapa(poi, ownerId, fonte) {
+/* `destino` (11/09/26): 'rota' — o gesto do mapa, "vou visitar esta agora", cai no dia de
+   hoje — ou 'municao' — o gesto do Planejamento, "achei esta conta, escolho o dia depois".
+   Um insert só para os dois: campos, dedupe e rastro de fonte no mesmo lugar. */
+async function materializarLeadDoMapa(poi, ownerId, fonte, destino) {
+  const paraMunicao = String(destino || 'rota') === 'municao';
   const linha = {
     nome: poi.nome,
     categoria: poi.categoria || null,
@@ -41979,8 +42144,13 @@ async function materializarLeadDoMapa(poi, ownerId, fonte) {
     avaliacoes: null,
     fonte: fonte || 'mapa',        // rastreável: 'mapa' (OSM), 'manual' (achou na rua) ou ranking mensal
     responsavel_owner_id: String(ownerId),
-    status: 'na_rota',
-    data_rota: isoDate(new Date()),
+    /* NA MUNIÇÃO O PAR VIAJA VAZIO: 'atribuido' + data_rota null é exatamente o que o
+       gesto inverso do produto escreve quando alguém tira a conta do dia. Gravar
+       'na_rota' sem dia seria o estado que ninguém lê — os nove leitores de data_rota
+       comparam com HOJE. */
+    status: paraMunicao ? 'atribuido' : 'na_rota',
+    data_rota: paraMunicao ? null : isoDate(new Date()),
+    criado_por: (typeof sessaoAtual !== 'undefined' && sessaoAtual && sessaoAtual.email) || null,
     updated_at: new Date().toISOString()
   };
   const { data, error } = await supa.from('leads_prospeccao').insert(linha).select();
