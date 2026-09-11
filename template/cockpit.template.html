@@ -31015,6 +31015,34 @@ function pl6DadosFinal(rep) {
        contagem a coluna passaria a mentir sobre o tamanho da munição. */
     buscaQ: String(s.q || ''),
     buscaN: municaoOrd.length,
+    /* ══ O QUE A BUSCA ACHA E JÁ ESTÁ NO PLANO (11/09/26) ════════════════════════════
+       A munição é `todos` MENOS quem está na grade, e isso está certo: ela é o que falta
+       planejar. Mas a busca herdava o corte sem a explicação — o Marco digitou "barr",
+       leu "0 contas" e concluiu que a Barraca Dubiel tinha sumido. Ela estava no plano
+       dele, três colunas ao lado.
+       Aqui a busca olha `todos` e devolve, à parte, o que já está agendado, com o dia e
+       a hora. Fora da lista de arrastar de propósito: arrastar de novo o que já está no
+       dia é que seria o erro. */
+    buscaNoPlano: !alvoBusca ? [] : (function () {
+      const achados = [];
+      todos.forEach(function (l) {
+        if (naGrade.indexOf(l.id) < 0) return;
+        if (pl6ChaveBairro(l.nome || '').indexOf(alvoBusca) < 0) return;
+        for (let di = 0; di < grade.length; di++) {
+          for (let si = 0; si < grade[di].length; si++) {
+            if (pl6SlotId(grade[di][si]) !== l.id) continue;
+            achados.push({
+              nome: esc(l.nome),
+              quando: esc((dias[di] ? (dias[di].rot + ' ' + dias[di].data) : 'no plano')
+                + ' · ' + (pl6SlotHora(grade[di][si], si) || pl6HoraDaFaixa(si) || '')),
+              ir: di + '.' + si
+            });
+            return;
+          }
+        }
+      });
+      return achados;
+    }()),
     /* DE QUANDO É ESTA CARGA. Sem isto, "0 contas" afirma que a conta não existe, quando
        a verdade pode ser que ela nasceu depois desta leitura do robô. */
     cargaDe: String((typeof DATA !== 'undefined' && DATA && DATA.hubspotUpdatedAtFmt) || ''),
@@ -31512,6 +31540,14 @@ function pl6TelaFinalHTML(d) {
         </div>
         <input type="search" data-pl6-busca-nome="1" value="${esc(d.buscaQ || '')}" placeholder="achar conta pelo nome — ex.: Coliseu" style="display:block;width:100%;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:8px 14px;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;outline:none;margin-bottom:8px;">
         ${d.buscaQ ? `<span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-bottom:8px;">${d.buscaN} conta${d.buscaN === 1 ? '' : 's'} com "${esc(d.buscaQ)}" — arraste o card para o dia, ou clique nele e no horário</span>` : ''}
+        <!-- O QUE A BUSCA ACHOU E JA ESTA NO PLANO (11/09/26). A municao e o que FALTA
+             planejar, entao quem ja esta na grade nao aparece nela — e a busca herdava
+             esse corte sem a explicacao: o Marco digitou "barr", leu "0 contas" e
+             concluiu que a conta sumira. Ela estava no plano dele, tres colunas ao lado. -->
+        ${(d.buscaNoPlano || []).length ? `<div style="margin-bottom:8px;border:1px solid #CFE3D6;border-radius:9px;background:#F1F8F3;padding:8px 11px;">
+          <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#1F7A4D;margin-bottom:5px;">já no seu plano</span>
+          ${d.buscaNoPlano.map(p => `<button type="button" data-pl6-ir-no-plano="${p.ir}" style="display:block;width:100%;text-align:left;border:0;background:transparent;padding:3px 0;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;">${p.nome} <span style="font-weight:700;color:#1F7A4D;">· ${p.quando} ▸</span></button>`).join('')}
+        </div>` : ''}
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
@@ -32304,6 +32340,23 @@ function pl6Ligar(box, rep) {
        lançava ReferenceError dentro do ouvinte e morria ali: botão com cursor, com
        hover, e sem efeito nenhum. Julyan, 11/09: "ele não consegue criar lead novo na
        tela de planejamento". */
+    /* ── pl6IrNoPlano ── a conta achada pela busca que JÁ está no dia ────────────────
+       Ela aparece fora da lista de arrastar de propósito (arrastar de novo o que já está
+       no dia é que seria o erro), então o gesto aqui é LEVAR OS OLHOS até ela: acende o
+       dia dela e rola a grade. Sem isto, a linha seria um texto que informa e não resolve
+       — e a tela inteira existe para não ter disso. */
+    if (d.pl6IrNoPlano) {
+      const [di] = String(d.pl6IrNoPlano).split('.').map(Number);
+      pl6UI.diaAtivo = isFinite(di) ? di : null;
+      pl6UI.q = '';
+      await redesenhar();
+      const col = box.querySelector('[data-pl6-dia="' + di + '"]')
+        || box.querySelector('[data-pl6-dia-drop="' + di + '"]');
+      if (col && typeof col.scrollIntoView === 'function') {
+        col.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
     /* ── pl6BuscarDadoNovo ── o botão do vazio da busca ───────────────────────────────
        Ele existe porque "0 contas com «barr»" mentia: a Barraca Dubiel existia, estava no
        snapshot, e a carga DAQUELA ABA era anterior à publicação do robô. Este é o único

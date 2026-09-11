@@ -897,7 +897,10 @@ console.log('');
       const nativas = ['function', 'catch', 'return', 'typeof', 'await', 'String', 'Number',
         'Boolean', 'Array', 'Object', 'Math', 'Date', 'JSON', 'parseInt', 'parseFloat',
         'setTimeout', 'clearTimeout', 'confirm', 'alert', 'prompt', 'console', 'isNaN',
-        'decodeURIComponent', 'encodeURIComponent', 'requestAnimationFrame'];
+        'decodeURIComponent', 'encodeURIComponent', 'requestAnimationFrame',
+        /* isFinite entrou em 11/09/26: a guarda acusou o meu proprio handler novo. Falso
+           positivo dela, nao defeito do codigo — global legitimo que faltava na lista. */
+        'isFinite'];
       const faltando = chamadas.filter(function (nome) {
         if (nativas.indexOf(nome) > -1) return false;
         if (new RegExp('(?:async )?function ' + nome + '\\s*\\(').test(cod)) return false;
@@ -1063,6 +1066,47 @@ console.log('');
   checar('e o vazio SEM busca continua curto',
     cod.indexOf('nada neste filtro.') > 0,
     'quando ele so trocou de filtro, a frase longa seria ruido');
+}());
+
+
+/* ══ A BUSCA ACHA TAMBEM O QUE JA ESTA NO PLANO (11/09/26) ═══════════════════════════
+   A causa do "nao acha a Barraca Dubiel", medida NA TELA do Marco com a sessao dele:
+
+     barracaNaCarteira : ["Barraca Dubiel · c-64890304628"]   ← esta na carteira
+     barracaEmTodas    : ["Barraca Dubiel"]                   ← esta em pl6TodasAsContas
+     naGradeAgora      : true                                 ← E JA ESTA NA GRADE
+
+   A municao e `todos` MENOS quem esta na grade — por desenho, e o desenho esta certo:
+   ela e o que ainda falta planejar. Mas a BUSCA herdou o corte sem herdar a explicacao.
+   Ele digitou o nome, leu "0 contas", e concluiu que a conta sumiu do sistema; ela
+   estava no plano dele, tres colunas ao lado.
+
+   (Diferente do vazio que nao dizia de quando era a carga — aquele tambem era real e
+   continua consertado. A causa DESTE caso e esta.) */
+(function () {
+  const semCom5 = function (s) { return String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' '); };
+  const cod = semCom5(tpl);
+
+  checar('a busca olha TODAS as contas, e nao so as que faltam planejar',
+    cod.indexOf('buscaNoPlano: !alvoBusca ? [] : (function () {') > 0
+      && cod.indexOf('if (naGrade.indexOf(l.id) < 0) return;') > 0,
+    'a municao corta quem ja esta na grade; a busca herdava o corte e dizia que a conta nao existe');
+
+  checar('e diz o dia e a hora em que ela ja esta',
+    /quando: esc\(\(dias\[di\] \? \(dias\[di\]\.rot \+ ' ' \+ dias\[di\]\.data\)/.test(cod)
+      && cod.indexOf('pl6SlotHora(grade[di][si], si)') > 0
+      && cod.indexOf('já no seu plano') > 0,
+    '"esta no plano" sem dia e hora manda ele procurar na grade inteira');
+
+  checar('o card achado no plano NAO volta para a lista de arrastar',
+    cod.indexOf('const livres = todos.filter(l => naGrade.indexOf(l.id) < 0);') > 0,
+    'arrastar de novo o que ja esta no dia e que seria o erro');
+
+  checar('e a linha leva os olhos ate o dia, em vez de so informar',
+    cod.indexOf('data-pl6-ir-no-plano=') > 0
+      && /if \(d\.pl6IrNoPlano\) \{/.test(cod)
+      && cod.indexOf('scrollIntoView') > 0,
+    'texto que informa e nao resolve e exatamente o que esta tela existe para nao ter');
 }());
 
 if (falhas) {
