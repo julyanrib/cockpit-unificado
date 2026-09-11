@@ -91,10 +91,16 @@ conferir('Guarulhos routeia, e para as duas metades certas',
   quem('guarulhos', 'vila augusta') === 'Sérgio' && quem('guarulhos', 'macedo') === 'Renata',
   'Guarulhos tem 14.172 CNPJs food e zero conta no CRM; sem dono o lead entra e desaparece');
 
-conferir('a Baixada inteira vai para o Luiz',
-  ['duque de caxias', 'sao joao de meriti', 'nilopolis', 'mesquita']
-    .every(c => quem(c, 'centro') === 'Luiz'),
-  'foram declarados como município inteiro porque o Julyan não nomeou bairro ali');
+/* 11/09/26, Julyan: "do Luiz Pimentel, coloca só nova iguaçu por enquanto". As outras
+   quatro cidades da Baixada saíram do território dele e não foram para ninguém — saem
+   também da busca semanal, porque ela lê os municípios deste mesmo arquivo. O bloco
+   inteiro (com os 94 bairros do Rio) está em _fora_de_rota_historico, para voltar num
+   colar só quando ele quiser. */
+conferir('Nova Iguaçu é do Luiz, e o resto da Baixada saiu da rota',
+  quem('nova iguacu', 'centro') === 'Luiz'
+  && ['duque de caxias', 'sao joao de meriti', 'nilopolis', 'mesquita']
+    .every(c => quem(c, 'centro') === null),
+  'ele pediu o Luiz só em Nova Iguaçu; as outras quatro não podem cair em quem não as pediu');
 
 conferir('o Alto Tietê vai para a Renata',
   ['mogi das cruzes', 'suzano', 'salesopolis', 'biritiba mirim']
@@ -107,9 +113,12 @@ conferir('Copacabana é do Sandro, que mudou para a Zona Sul',
   quem('rio de janeiro', 'copacabana') === 'Sandro' && via('rio de janeiro', 'copacabana') === 'declarado',
   'a lista antiga a dava ao André, que saiu da Zona Sul hoje');
 
-conferir('Cachambi é do Luiz',
-  quem('rio de janeiro', 'cachambi') === 'Luiz' && via('rio de janeiro', 'cachambi') === 'declarado',
-  'a lista antiga a dava ao Sandro, junto com a Grande Tijuca que ele deixou');
+/* Cachambi era do Luiz por declaração; com ele fora do Rio, ela não é de ninguém — e
+   NÃO PODE voltar para o Sandro pela lista de 01/09, que é o mapa antigo. É isto que
+   esta checagem protege agora: a lista velha não reassume o bairro órfão. */
+conferir('Cachambi ficou sem dono, e a lista antiga não a reassume',
+  quem('rio de janeiro', 'cachambi') === null,
+  'a lista de 01/09 a dava ao Sandro; deixá-la reassumir poria o lead na carteira de quem não pediu');
 
 conferir('a Grande Tijuca é do Bruno',
   quem('rio de janeiro', 'tijuca') === 'Bruno' && quem('rio de janeiro', 'vila isabel') === 'Bruno',
@@ -136,10 +145,15 @@ conferir('Taquara, Freguesia e Barra da Tijuca são do Bruno',
    banco em 09/09: as duas existem no dado, grafadas "FREGUESIA (JACAREPAGUA)",
    "FREGUESIA (ILHA DO GOVERNADOR)" e "FREGUESIA (ILHA)". Casamento por trecho entrega as
    duas ao mesmo dono, e foi o que eu já paguei uma vez nesta base. */
-conferir('a Freguesia da Ilha é do Luiz, não do Bruno',
-  quem('rio de janeiro', 'freguesia (ilha do governador)') === 'Luiz'
-  && quem('rio de janeiro', 'freguesia (ilha)') === 'Luiz',
-  'um nome, dois bairros, 30 km de distância');
+/* A REGRA QUE IMPORTA AQUI NÃO É O DONO, É A DISTINÇÃO: Freguesia da Ilha e Freguesia de
+   Jacarepaguá são dois bairros a 30 km, e casamento por trecho entrega os dois ao mesmo.
+   Com o Luiz fora do Rio, a da Ilha ficou sem dono — e a de Jacarepaguá continua do
+   Bruno. Se a distinção sumir, a da Ilha passa a cair no Bruno e a checagem reprova. */
+conferir('a Freguesia da Ilha continua sendo outro bairro que a de Jacarepaguá',
+  quem('rio de janeiro', 'freguesia (ilha do governador)') === null
+  && quem('rio de janeiro', 'freguesia (ilha)') === null
+  && quem('rio de janeiro', 'freguesia (jacarepagua)') === 'Bruno',
+  'um nome, dois bairros, 30 km de distância — sem a distinção, a da Ilha cai no dono da outra');
 
 /* ══ O BAIRRO QUE É SUFIXO DE OUTRO ══════════════════════════════════════════════════
    ESTE É O DEFEITO QUE PÔS 107 LEADS NA CARTEIRA ERRADA. "Barra da Tijuca" contém
@@ -161,10 +175,13 @@ conferir('bairro não casa por pedaço do nome de outro',
    MEDIDO: a coluna `bairro` carrega endereço com o bairro no fim — "Lj B - Tijuca",
    "Loja A B C D - Barra da Tijuca", "SUC 0028 - Tijuca". Comparar a string inteira faria
    nenhum deles casar, e são 14 leads só no Rio. */
+/* O terceiro exemplo era "Lj D - Rio Comprido" (do Luiz). Rio Comprido saiu com ele em
+   11/09; troquei por Copacabana, que tem dono e prova a mesma coisa: o que vem depois do
+   último " - " é o bairro. */
 conferir('o bairro é extraído do endereço grudado',
   quem('rio de janeiro', 'Lj B - Tijuca') === 'Bruno'
   && quem('rio de janeiro', 'Loja A B C D - Barra da Tijuca') === 'Bruno'
-  && quem('rio de janeiro', 'Lj D - Rio Comprido') === 'Luiz',
+  && quem('rio de janeiro', 'Lj D - Copacabana') === 'Sandro',
   'o que vem depois do último " - " é o bairro; o resto é número de loja');
 
 /* ══ O EXTREMO OESTE VOLTOU, COM DONO ════════════════════════════════════════════════
@@ -210,11 +227,31 @@ conferir('numa cidade com bairro nomeado, as listas antigas não decidem mais',
    grafia livre, inclusive endereço puro no lugar do bairro ("Av. Lúcio Costa",
    "R. Des. Izidro" — 14 casos medidos). Enquanto a garantia dependesse de eu ter listado
    tudo, ela era promessa. `sobraDoMunicipio: true` na área do Luiz a torna regra. */
-conferir('bairro que ninguém nomeou cai na sobra declarada',
-  quem('rio de janeiro', 'um bairro inventado qualquer') === 'Luiz'
-  && via('rio de janeiro', 'um bairro inventado qualquer') === 'declarado',
-  '"nao deixa sem dono" tem de valer para o bairro que eu não listei e para o registro que '
-  + 'veio com endereço no lugar do bairro — senão é promessa, não regra');
+/* ══ "NAO DEIXA SEM DONO" (Julyan, 09/09) × "SÓ NOVA IGUAÇU" (Julyan, 11/09) ═══════
+   As duas frases são dele e hoje elas se cruzam: a sobra do Rio era do Luiz, e o Luiz
+   saiu do Rio. Quem herda o resto de uma cidade é decisão DELE — o código escolhendo
+   sozinho escolhe pela ordem do laço, ou seja por acidente.
+
+   Então esta checagem não afirma um herdeiro nem finge que o buraco não existe: ela
+   EXIGE que toda cidade sem herdeiro esteja nesta lista, com data e motivo. Cidade que
+   perder o dono e não for declarada aqui reprova — que é o alarme que eu quero. */
+const SEM_HERDEIRO_DECLARADO = [
+  { cidade: 'rio de janeiro',
+    desde: '11/09/2026',
+    porque: 'a sobra era do Luiz e ele passou a cobrir só Nova Iguaçu. Bruno, André e '
+      + 'Sandro continuam com os bairros nomeados deles; os 94 do Luiz e qualquer bairro '
+      + 'novo ficam SEM DONO e visíveis na aba Rotas (card de território órfão), onde o '
+      + 'Julyan distribui. Uma linha em territorios.json fecha isso quando ele decidir.' }
+];
+conferir('cidade sem herdeiro para o bairro não nomeado está declarada',
+  (function () {
+    const semDono = quem('rio de janeiro', 'um bairro inventado qualquer') === null;
+    const declarada = SEM_HERDEIRO_DECLARADO.some(x => x.cidade === 'rio de janeiro');
+    /* ou tem herdeiro, ou está declarada — nunca as duas nem nenhuma */
+    return semDono === declarada;
+  }()),
+  'cidade que perdeu o dono da sobra sem ser declarada aqui esconde a consequência de uma '
+  + 'troca de território; e declarar uma que TEM dono deixa a lista mentir ao contrário');
 
 conferir('e a sobra NÃO atropela o bairro nomeado de ninguém',
   quem('rio de janeiro', 'copacabana') === 'Sandro'
@@ -223,8 +260,8 @@ conferir('e a sobra NÃO atropela o bairro nomeado de ninguém',
   'se a sobra entrasse antes do bairro nomeado, o dono dela levaria a cidade inteira');
 
 conferir('a sobra é declarada no JSON, não escolhida pelo código',
-  Array.isArray(terr.SOBRAS_DE_MUNICIPIO) && terr.SOBRAS_DE_MUNICIPIO.length === 1
-  && terr.SOBRAS_DE_MUNICIPIO[0].nome === 'Luiz Pimentel',
+  Array.isArray(terr.SOBRAS_DE_MUNICIPIO)
+  && terr.SOBRAS_DE_MUNICIPIO.every(s => !!s.nome && !!s.cidade),
   'quem herda o resto de uma cidade é decisão do Julyan; código que escolhe sozinho escolhe '
   + 'pela ordem do laço, ou seja por acidente');
 
@@ -236,8 +273,13 @@ conferir('a praça declarada por município inteiro não foi afetada',
   && quem('canoas', 'um bairro qualquer de canoas') === 'Kelly',
   'o corte é só onde ele nomeou BAIRRO; município inteiro continua respondendo por tudo');
 
-conferir('e a sobra do município continua existindo',
-  !!quem('rio de janeiro', 'um bairro inventado qualquer'),
+/* A GARANTIA CONTINUA ONDE ELA PODE EXISTIR: cidade com UM dono declarado por bairro
+   segue com sobra — é a regra que pôs 301 leads de Guarulhos e do Alto Tietê na carteira
+   certa em 09/09, e ela não mudou. O Rio saiu dessa lista por decisão de território, não
+   por defeito de código. */
+conferir('e a sobra do município continua existindo onde há um dono só',
+  !!quem('nova iguacu', 'um bairro inventado qualquer')
+  && !!quem('vila velha', 'um bairro inventado qualquer'),
   'bairro novo sem regra tem que cair em alguém conhecido, senão fica invisível para sempre');
 
 /* ── 5 · O CASAMENTO É POR BORDA DE PALAVRA ─────────────────────────────────────────

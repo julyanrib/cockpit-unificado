@@ -102,7 +102,7 @@ checar('o contador do botão conta as VISÍVEIS',
    rt7Sujeira — os três motivos de recusa e o filtro na fila. */
 checar('o anti-sujeira continua entre a fonte e a fila',
   /function rt7Sujeira\(l\)/.test(aba)
-    && /&& rt7Sujeira\(l\)\.ok;/.test(aba)
+    && /if \(!rt7Sujeira\(l\)\.ok\) return false;/.test(aba)
     && /tipo: .crm./.test(aba.replace(/'/g, '.'))
     && /tipo: .perdido./.test(aba.replace(/'/g, '.'))
     && /tipo: .semnome./.test(aba.replace(/'/g, '.'))
@@ -115,8 +115,32 @@ checar('a conta que já tem dono nasce DESMARCADA',
   'marcar tudo por padrão, com a lista incluindo quem tem dono, faria UM clique tirar centenas de contas de outra pessoa');
 
 checar('e o cartão diz de quem a conta é hoje',
-  /dono: naRota \? .já na rota ✓. : esc\(String\(rt7Nome\(l\.responsavel_owner_id\)/.test(aba.replace(/'/g, '.')),
+  /dono: naRota \? .já na rota ✓./.test(aba.replace(/'/g, '.'))
+    && /x\.orfa \? .de quem saiu — aprovar transfere./.test(aba.replace(/'/g, '.'))
+    && /esc\(String\(rt7Nome\(l\.responsavel_owner_id\)/.test(aba),
   'transferir da carteira de alguém fica indistinguível de distribuir conta livre');
+
+/* ══ A ORDEM DA FILA (11/09/26) ═══════════════════════════════════════════════════════
+   Julyan: "na tela do luiz pimentel, tbm aparecer de munição os leads de nova iguaçu".
+   MEDIDO: o Luiz tem 326 contas e 5 com nota. Ordenar só por score punha as 5 no topo e
+   as 39 de Nova Iguaçu — a praça que ele passou a cobrir naquele dia — fora das 8
+   visíveis. Com 85% da base sem nota, ordenar por score é ordenar por fonte. */
+checar('a fila põe a praça que ele cobre hoje na frente',
+  /function rt7CidadesDoRep\(ownerId\)/.test(aba)
+    && /if \(a\.praca !== b\.praca\) return a\.praca \? -1 : 1;/.test(aba)
+    && /return b\.quando - a\.quando;/.test(aba)
+    && aba.indexOf('a praça que ele cobre hoje primeiro, depois score, depois as mais novas') > 0,
+  'com 85% da base sem nota, ordenar só por score esconde a praça que ele vai visitar');
+
+checar('e a praça sai da MESMA declaração que roteia o import',
+  /\(DATA\.territorios \|\| \[\]\)\.filter\(function \(x\) \{[\s\S]{0,200}?String\(x\.rep \|\| ..\) === String\(u\.nome \|\| ..\)/
+    .test(aba.replace(/'/g, '.')),
+  'segunda lista de cidades divergiria de data/territorios.json em silêncio, como já divergiu em 09/09');
+
+checar('a conta sem dono ativo entra na fila de quem você escolheu',
+  /const levaOrfas = String\(RT7_ESTADO\.orfaoDono \|\| ..\) === k;/.test(aba.replace(/'/g, '.'))
+    && /return levaOrfas && \(!dono \|\| !ativos\[dono\]\);/.test(aba),
+  'o card de território prometia "a transferência se faz na fila dele" e a fila filtrava por dono — a promessa não tinha caminho');
 
 console.log('\n── 3 · O QUE A PRANCHA PEDE E O DADO NÃO TEM');
 

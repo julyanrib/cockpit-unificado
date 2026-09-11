@@ -41636,15 +41636,54 @@ async function rt7Desfazer(indice) {
 }
 
 const RT7_FILA_VISIVEL = 8;
+
+function rt7CidadesDoRep(ownerId) {
+  const u = (DATA.usuarios || []).filter(function (x) { return String(x.ownerId) === String(ownerId); })[0];
+  if (!u) return [];
+  const tr = (DATA.territorios || []).filter(function (x) {
+    return x && x.ativo !== false && String(x.rep || '') === String(u.nome || '');
+  });
+  const out = [];
+  tr.forEach(function (x) {
+    (x.areas || []).forEach(function (a) {
+      const c = rt7ChaveNome(a.municipio);
+      if (c && out.indexOf(c) < 0) out.push(c);
+    });
+  });
+  return out;
+}
+
 function rt7FilaDoExec(ownerId, todas) {
   const k = String(ownerId || '');
   if (!k) return [];
+
+  const levaOrfas = String(RT7_ESTADO.orfaoDono || '') === k;
+  const ativos = {};
+  if (levaOrfas) rt7Ativos().forEach(function (u) { ativos[String(u.ownerId)] = true; });
+  const cidades = rt7CidadesDoRep(k);
+  const daPraca = function (l) {
+    if (!cidades.length) return false;
+    const c = rt7ChaveNome(l.cidade);
+    return !!c && cidades.indexOf(c) > -1;
+  };
   const lista = (RT7_ESTADO.leads || []).filter(function (l) {
-    return String(l.responsavel_owner_id || '') === k
-      && RT7_MOVIVEIS.indexOf(String(l.status)) >= 0
-      && rt7Sujeira(l).ok;
-  }).map(function (l) { return { l: l, sc: rt7Score(l) }; });
-  lista.sort(function (a, b) { return (b.sc == null ? -1 : b.sc) - (a.sc == null ? -1 : a.sc); });
+    if (RT7_MOVIVEIS.indexOf(String(l.status)) < 0) return false;
+    if (!rt7Sujeira(l).ok) return false;
+    const dono = String(l.responsavel_owner_id || '');
+    if (dono === k) return true;
+    return levaOrfas && (!dono || !ativos[dono]);
+  }).map(function (l) {
+    return { l: l, sc: rt7Score(l), praca: daPraca(l),
+      orfa: String(l.responsavel_owner_id || '') !== k,
+      quando: Date.parse(l.created_at) || 0 };
+  });
+
+  lista.sort(function (a, b) {
+    if (a.praca !== b.praca) return a.praca ? -1 : 1;
+    const d = (b.sc == null ? -1 : b.sc) - (a.sc == null ? -1 : a.sc);
+    if (d) return d;
+    return b.quando - a.quando;
+  });
   return todas ? lista : lista.slice(0, RT7_FILA_VISIVEL);
 }
 
@@ -41964,6 +42003,7 @@ function rt7Dados() {
   const limposEle = todasEle;
   const sujosEle = naMunicao - todasEle.length;
 
+  const orfasNaFila = todasEle.filter(function (x) { return x.orfa; }).length;
   const visiveis = s.verTodas ? todasEle : todasEle.slice(0, RT7_FILA_VISIVEL);
   const marcadoF = function (l) { return rt7Marcado(s.sel, l); };
   const selN = visiveis.filter(function (x) { return marcadoF(x.l); }).length;
@@ -41992,8 +42032,9 @@ function rt7Dados() {
       avals: l.avaliacoes != null ? Number(l.avaliacoes).toLocaleString('pt-BR') + ' aval.' : 'sem nota na base',
       semTel: semTel,
       fonte: esc(prospeccaoRotuloFonte ? prospeccaoRotuloFonte(l.fonte) : (l.fonte || 'fonte?')),
-      dono: naRota ? 'já na rota ✓' : esc(String(rt7Nome(l.responsavel_owner_id) || '').split(' ')[0] || 'sem dono'),
-      donoCor: naRota ? '#1E9E7B' : '#2B3440',
+      dono: naRota ? 'já na rota ✓'
+        : (x.orfa ? 'de quem saiu — aprovar transfere' : esc(String(rt7Nome(l.responsavel_owner_id) || '').split(' ')[0] || 'sem dono')),
+      donoCor: naRota ? '#1E9E7B' : (x.orfa ? '#8A3B3B' : '#2B3440'),
       aberto: ab,
       end: esc([l.endereco, l.bairro, l.cidade].filter(Boolean).join(' · ') || 'endereço não veio na ficha'),
       tel: semTel ? 'sem telefone — o robô completa pelo CNPJ' : esc(l.telefone),
@@ -42218,7 +42259,8 @@ function rt7Dados() {
 
     filaTitulo: esc(filaU ? ('Fila de ' + String(filaU.nome).split(' ')[0]) : 'Nenhum executivo ativo'),
     filaSub: esc(filaU
-      ? (limposEle.length + ' conta(s) na munição dele · por score'
+      ? (limposEle.length + ' conta(s) · a praça que ele cobre hoje primeiro, depois score, depois as mais novas'
+        + (orfasNaFila ? ' · ' + orfasNaFila + ' sem dono ativo, que você mandou para ele' : '')
         + (sujosEle ? ' · ' + sujosEle + ' fora pelo anti-sujeira (já no CRM, perdido ou sem nome)' : ''))
       : 'sem ninguém de campo em usuarios.json'),
     verTodas: 'vertodas',
@@ -42526,8 +42568,10 @@ async function rt7Executar(acao) {
     const f = RT7_FONTES.find(x => x.id === a);
     s.toast = f ? f.rot + ': ' + f.porque : 'fonte indisponível';
   } else if (verbo === 'marcar') {
+
     const k = String(a);
-    s.sel[k] = (s.sel[k] === undefined ? false : !s.sel[k]);
+    const lead = (s.leads || []).filter(function (x) { return String(x.id) === k; })[0];
+    s.sel[k] = lead ? !rt7Marcado(s.sel, lead) : !s.sel[k];
     s.toast = null;
 
   } else if (verbo === 'vertodas') {
