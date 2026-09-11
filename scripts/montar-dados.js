@@ -361,6 +361,9 @@ function montarDadosCompletos() {
     funil: hubspot.funil,
     /* SEM ISTO A TRILHA DE ETAPAS DA FICHA NAO DESENHA — ver comEtapaNoLead. */
     funilLeads: comEtapaNoLead(hubspot.funilLeads),
+    /* quantos abertos ficaram com quem saiu do time — ver a nota em abertosDeQuemSaiu:
+       eles nao entram no funil, mas o numero nao pode sumir. */
+    foraDoTime: hubspot.kpisHub ? hubspot.kpisHub.foraDoTime : null,
     /* O CORTE DA COLUNA PERDIDO desce para os dois papeis. Sem ele a tela nao tem como
        dizer 'nada saiu da carteira desde 01/09' e a coluna vazia leria como 'nunca perdi
        nada' — mentira por omissao, com 1.811 perdas no CRM. */

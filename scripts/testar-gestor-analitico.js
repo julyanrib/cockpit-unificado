@@ -986,6 +986,24 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
     montar.indexOf('metaMensal: h.metaMensal != null ? h.metaMensal : 10,') > -1
       && montar.indexOf('metaMrr: h.metaMrr != null') > -1
       && montar.indexOf('metaReceita: r.metaReceita,') > -1);
+
+  /* ── 14 · TIRAR ALGUEM DO TIME NAO PODE ESCONDER O PIPELINE DELE (10/09/26) ─────────
+     MEDIDO, e foi o achado mais serio do dia: a Amanda saiu do usuarios.json e os 21
+     negocios abertos dela DESAPARECERAM do Cockpit — o funil do gestor foi de 249 para
+     228 sem uma palavra na tela. A causa e que stageDealsTeamWide filtra o dono na
+     propria consulta ao HubSpot, entao negocio de quem saiu nunca entra no snapshot.
+     Eles nao voltam para o funil de proposito (toda leitura da tela assume que lead tem
+     dono do time), mas o NUMERO nao pode sumir. */
+  checar('o robo conta os abertos de quem nao esta no time',
+    robo.indexOf('async function abertosDeQuemSaiu()') > -1
+      && robo.indexOf("operator: 'NOT_IN', values: donos") > -1
+      && robo.indexOf('foraDoTime: await abertosDeQuemSaiu(),') > -1);
+  checar('e a tela le essa contagem em vez de varrer o funil',
+    tela.indexOf('const ft = DATA.foraDoTime || null;') > -1
+      && tela.indexOf('negócios fora do time · ') > -1);
+  checar('nao medido nao e zero nem neste bloco',
+    tela.indexOf('const semDono = ft ? (Number(ft.n) || 0) : null;') > -1
+      && tela.indexOf('negócios de quem saiu: não medido nesta carga') > -1);
 }());
 
 if (falhas.length) {
