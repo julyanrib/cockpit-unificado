@@ -26612,16 +26612,16 @@ function tm10Dados() {
      projeto ja pagou uma vez.
      Conta quem nao esta em DATA.reps, e nao 'quem nao e a Amanda': se amanha sair outra
      pessoa, o numero acompanha sozinho. */
-  const donosAtivos = {};
-  (DATA.reps || []).forEach(function (r) { donosAtivos[String(r.ownerId)] = true; });
-  let semDono = 0, semDonoMrr = 0;
-  etapas.forEach(function (e) {
-    if (['1396006164', '1398311191'].indexOf(e.id) >= 0) return;   /* perdido e reciclagem nao se cobra */
-    e.leads.forEach(function (l) {
-      if (donosAtivos[String(l.ownerId)]) return;
-      semDono += 1; semDonoMrr += tm10MrrDo(l);
-    });
-  });
+  /* ══ E ELES NAO CHEGAM AO FUNIL — POR ISSO O NUMERO VEM DO ROBO (10/09/26) ═════════
+     A primeira versao desta contagem varria funilLeads procurando dono fora de DATA.reps,
+     e media ZERO. Motivo: o robo filtra hubspot_owner_id IN REPS na CONSULTA ao HubSpot,
+     entao negocio de quem saiu do time nunca entra no snapshot. A Amanda saiu e os 21
+     abertos dela desapareceram — o funil do gestor foi de 249 para 228 sem uma palavra.
+     Agora o robo conta com uma busca propria (abertosDeQuemSaiu) e a tela le a contagem.
+     NULL E DIFERENTE DE ZERO: se a busca falhar, a tela diz que nao sabe. */
+  const ft = DATA.foraDoTime || null;
+  const semDono = ft ? (Number(ft.n) || 0) : null;
+  const semDonoMrr = ft ? (Number(ft.mrr) || 0) : 0;
   const maxEt = Math.max(1, ...etapas.map(function (e) { return e.n; }));
   const detalhe = escolhida ? escolhida.leads.slice().sort(function (a, b) {
     return (b.dias || 0) - (a.dias || 0); }).slice(0, 12).map(function (l) {
@@ -26943,11 +26943,24 @@ function tm10TelaHTML(d, cauda) {
     /* VERMELHO PORQUE E ACIONAVEL: negocio sem dono e negocio que ninguem vai tocar, e a
        acao e reatribuir no HubSpot. Zero nao desenha nada — nada a cobrar nao precisa de
        linha na tela. */
-    + (d.semDono
+    + (d.semDono == null
+      ? '<span style="float:right;font:800 9.5px \'Manrope\',sans-serif;color:#8A6516;'
+        + 'background:#FDF6E7;border:1px solid #F0DFB6;border-radius:999px;padding:4px 11px;"'
+        + ' title="A busca dos negócios de quem saiu do time falhou nesta carga do robô.'
+        + ' Não medido não é zero — pode haver pipeline sem dono que esta tela não viu.">'
+        + 'negócios de quem saiu: não medido nesta carga</span>'
+      : d.semDono
       ? '<span style="float:right;font:800 9.5px \'Manrope\',sans-serif;color:#E51A31;'
         + 'background:#FDF3F4;border:1px solid #F0A9B2;border-radius:999px;padding:4px 11px;"'
-        + ' title="Negócios de quem não está mais no time. Eles seguem no funil, contam nos totais e ninguém os cobra — reatribuir é no HubSpot.">'
-        + d.semDono + (d.semDono === 1 ? ' negócio sem dono ativo · ' : ' negócios sem dono ativo · ')
+        /* O TEXTO DIZ A VERDADE NOVA: eles NÃO seguem no funil. A primeira versão deste
+           title dizia "seguem no funil, contam nos totais", que era a minha suposição
+           antes de medir — e o medido é o contrário: o robô não os busca, então eles não
+           entram em nenhum número desta tela. Este pill é o único lugar onde eles
+           existem no Cockpit, e é por isso que ele fica no bloco do funil. */
+        + ' title="Negócios abertos no HubSpot de quem não está mais no time. Eles NÃO'
+        + ' entram em nenhum número desta tela — o robô só busca negócio de quem está no'
+        + ' time. Este é o único lugar onde eles aparecem. Reatribuir é no HubSpot.">'
+        + d.semDono + (d.semDono === 1 ? ' negócio fora do time · ' : ' negócios fora do time · ')
         + tm10Rs(d.semDonoMrr) + '</span>'
       : '')
     + '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 12px;">'

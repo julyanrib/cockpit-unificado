@@ -1462,6 +1462,52 @@ async function repOpenDeals(ownerId) {
 // pro time ativo, mesmo escopo do stageTotal(..., filtroTimeAtivo) usado pras barras.
 // Sem isso, a barra mostrava um total (já filtrado) e o modal abria com uma lista maior
 // (incluindo donos fora do time, tipo o achado do "Gabriel Amaral") — inconsistente.
+/* ══ O PIPELINE DE QUEM SAIU DO TIME (10/09/26) ══════════════════════════════════════
+   MEDIDO, e foi um susto: a Amanda saiu do usuarios.json e os 21 negocios abertos dela
+   DESAPARECERAM do Cockpit — o funil do gestor foi de 249 para 228 sem uma palavra. A
+   causa esta na linha de baixo: stageDealsTeamWide filtra `hubspot_owner_id IN REPS` na
+   propria consulta ao HubSpot, entao tirar alguem do time nao deixa os negocios dele sem
+   dono na tela — deixa o CRM com negocio que o Cockpit nao ve.
+
+   Nao trago os negocios para dentro do funil: todas as leituras da tela (regua, travados,
+   toques, ranking) assumem que todo lead tem um dono do time, e um lead sem dono viraria
+   a decima primeira pessoa invisivel do ranking. O que trago e a CONTAGEM, com o nome de
+   quem era o dono — o suficiente para o gestor reatribuir no HubSpot, que e a acao real.
+
+   Uma consulta so, contando: e o mesmo custo de qualquer outra busca deste arquivo. */
+async function abertosDeQuemSaiu() {
+  const donos = REPS.map(r => String(r.ownerId));
+  try {
+    const todos = await hsSearchAll({
+      filterGroups: [{
+        filters: [
+          { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_ID },
+          { propertyName: 'dealstage', operator: 'IN', values: OPEN_STAGES },
+          { propertyName: 'hubspot_owner_id', operator: 'NOT_IN', values: donos }
+        ]
+      }],
+      properties: ['dealname', 'dealstage', 'hubspot_owner_id', 'valor_de_mrr', 'amount']
+    });
+    const abertos = todos.filter(d => !isExcludedDeal(d));
+    const porDono = {};
+    let mrr = 0;
+    abertos.forEach(d => {
+      const o = String(d.properties.hubspot_owner_id || 'sem dono');
+      porDono[o] = (porDono[o] || 0) + 1;
+      mrr += Math.round(parseFloat(d.properties.valor_de_mrr) || 0);
+    });
+    console.log('Fora do time: ' + abertos.length + ' negocio(s) aberto(s) de '
+      + Object.keys(porDono).length + ' dono(s) que nao estao no time — o Cockpit nao os',
+      'desenha, e a aba Time diz o numero para o gestor reatribuir.');
+    return { n: abertos.length, mrr: mrr, porDono: porDono };
+  } catch (e) {
+    /* NAO MEDIDO NAO E ZERO: se a busca falhar, a tela diz que nao sabe, em vez de
+       afirmar que nao ha negocio orfao. */
+    console.error('Fora do time: nao consegui medir — ' + e.message);
+    return null;
+  }
+}
+
 async function stageDealsTeamWide(stageId) {
   const todos = await hsSearchAll({
     filterGroups: [{
@@ -2449,6 +2495,7 @@ async function main() {
       emReciclagem: reciclagem,
       leadsTravados: leadsTravadosTime,
       fechadosNoMes,
+      foraDoTime: await abertosDeQuemSaiu(),
       metaMensalFechados: META_MENSAL_FECHADOS,
       metaMrrTime: META_MRR_TIME,
       metaReceitaTime: META_RECEITA_TIME,
