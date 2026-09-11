@@ -39735,6 +39735,16 @@ let agendaOwnerAlvo = null;
 // Variável de módulo pelo mesmo motivo de agendaOwnerAlvo: um re-render precisa achar
 // o valor pronto sem precisar re-buscar a Casa dos Dados de novo.
 let cddLiderCidade = null;
+/* ══ AS NOVIDADES SÃO BUSCADAS UMA VEZ POR SESSÃO (11/09/26) ════════════════════════
+   O laço que as busca vive dentro do render da Prospecção, e a tela redesenha a cada
+   gesto do gestor. MEDIDO em produção com o fetch instrumentado: aprovar duas contas
+   disparou 5 POSTs para /api/novidades-mercado, e uma auditoria de poucos minutos
+   somou 42. São cinco praças, em série, 25s de prazo cada — para escolher a cidade de
+   um selo.
+   O dado é semanal na origem (abertura de CNPJ na Casa dos Dados): ele não muda entre
+   dois cliques. `null` = ainda não buscamos; `'buscando'` = alguém já está buscando
+   (duas abas do mesmo render não podem disparar dois laços); array = pronto. */
+let cddNovidadesEstado = null;
 // BLOCO 29 (12/08/26) — Julyan: "inspire-se em grandes gestões como salesforce maps...
 // tem q aparecer leads pra eles, onde ele escolher a rota, os mais pertos, pra economizar
 // tempo e esforço". A distância já aparecia em cada card, mas nunca foi o CRITÉRIO de
@@ -55571,8 +55581,15 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
   if (souGestorProsp) {
     const UF_DA_PRACA = { 'Vitória': 'ES', 'Vila Velha': 'ES', 'São Paulo': 'SP', 'Porto Alegre': 'RS', 'Rio de Janeiro': 'RJ' };
     (async () => {
+      /* JÁ BUSCAMOS NESTA SESSÃO? Então nada de rede. E se alguém já está buscando,
+         este render espera o resultado dele em vez de abrir um segundo laço — é a
+         mesma regra da trava que guarda a promessa em voo, não um booleano marcado no
+         fim (ver a nota sobre de-duplicação em outras telas desta casa). */
+      if (cddNovidadesEstado === 'buscando') return;
+      if (Array.isArray(cddNovidadesEstado)) return;
+      cddNovidadesEstado = 'buscando';
       const token = await tokenDeSessaoGlobal();
-      if (!token) return;
+      if (!token) { cddNovidadesEstado = null; return; }
       const totaisCdd = []; // BLOCO 35/36 — acumula pro ranking do insight + selo 🔥
       // BLOCO 36 — antes iterava `el.querySelectorAll('[data-novidades]')`, mas esse
       // nó morreu junto com o texto de novidade por card (cortado do redesenho —
@@ -55593,6 +55610,10 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
           totaisCdd.push({ cid, total: j.total });
         } catch (e) { /* novidade é bônus: falhar não estraga o insight */ }
       }
+      /* GUARDA O RESULTADO — inclusive vazio. Vazio guardado é "já perguntei e não
+         havia", que é diferente de "ainda não perguntei": sem isto, praça sem novidade
+         faria o laço inteiro rodar de novo a cada redesenho, para sempre. */
+      cddNovidadesEstado = totaisCdd;
       if (totaisCdd.length) {
         totaisCdd.sort((a, b) => b.total - a.total);
         const lider = totaisCdd[0];
