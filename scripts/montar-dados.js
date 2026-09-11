@@ -168,7 +168,7 @@ function montarDadosCompletos() {
 
   const reps = ownerIds.map(ownerId => {
     const n = narrativas.reps[ownerId];
-    const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 10, visitasHubspotHoje: 0, avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0 };
+    const h = hubspot.reps[ownerId] || { open: 0, stages: {}, criticos: [], travados: [], leadsTravados: 0, ganhosSemana: 0, ganhosSemanaNomes: [], fechadosNoMes: 0, metaMensal: 10, metaMrr: null, metaReceita: null, patamarMeta: null, visitasHubspotHoje: 0, avancosHubspotHoje: 0, propostasHubspotHoje: 0, fechamentosHubspotHoje: 0 };
 
     return {
       ownerId,
@@ -188,7 +188,20 @@ function montarDadosCompletos() {
       ganhosSemana: h.ganhosSemana || 0,
       ganhosSemanaNomes: h.ganhosSemanaNomes || [],
       fechadosNoMes: h.fechadosNoMes || 0,
-      metaMensal: h.metaMensal || 10,
+      /* ══ AS TRES METAS PASSAM, E ZERO E ZERO (10/09/26) ══════════════════════════
+         Duas coisas estavam erradas nesta linha, e as duas apareceram medindo a tela
+         depois da rodada do robo:
+
+         1. ESTE OBJETO E UM FILTRO. `metaMrr` e `metaReceita` chegavam do robo e
+            morriam aqui, porque nao estavam na lista — a tela recebia undefined nas
+            duas metas novas.
+         2. `|| 10` TRANSFORMA ZERO EM DEZ. A Amanda saiu da planilha e tem meta 0; a
+            tela mostrava 10 para ela, que e exatamente o numero que este trabalho veio
+            tirar. Zero e falsy, e `|| ` nao distingue "nao tem meta" de "meta zero". */
+      metaMensal: h.metaMensal != null ? h.metaMensal : 10,
+      metaMrr: h.metaMrr != null ? h.metaMrr : null,
+      metaReceita: h.metaReceita != null ? h.metaReceita : null,
+      patamarMeta: h.patamarMeta || null,
       visitasHubspotHoje: h.visitasHubspotHoje || 0,
       // BLOCO 15: nomes de quem avancou de etapa e de quem recebeu proposta hoje, pra
       // Daily & Ritmo. Vem do fetch-hubspot; enquanto o cron nao roda, chega vazio e a
@@ -480,6 +493,9 @@ function resumoDeColega(r) {
     praca: r.praca,
     fechadosNoMes: r.fechadosNoMes,
     metaMensal: r.metaMensal,
+    metaMrr: r.metaMrr,
+    metaReceita: r.metaReceita,
+    patamarMeta: r.patamarMeta,
     ganhosSemana: r.ganhosSemana,
     // Estruturas vazias mas bem-tipadas: o template varre .criticos/.travados/.stages de
     // todos os reps em alguns pontos — vazio renderiza estado vazio, undefined quebraria.

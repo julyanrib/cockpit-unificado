@@ -16688,7 +16688,7 @@ async function renderMeuPainel() {
   if (DATA.supabase && supa && !dailiesCarregado) await carregarDailies();
   if (DATA.supabase && supa && !pdiCarregado) await carregarPdiCompromissos();
 
-  const metaMensal = r.metaMensal || 10;
+  const metaMensal = metaClientesDoRep(r);
   const fechadosMes = r.fechadosNoMes || 0;
   const pctMeta = metaMensal > 0 ? Math.min(100, Math.round((fechadosMes / metaMensal) * 100)) : 0;
   const faltam = Math.max(0, metaMensal - fechadosMes);
@@ -20461,7 +20461,7 @@ function pm8DiasUteisRestantesNoMes() {
 function pm8Sugestao() {
   const r = (DATA.reps || []).find(x => sessaoAtual && String(x.ownerId) === String(sessaoAtual.ownerId));
   if (!r) return null;
-  const meta = Number(r.metaMensal) || 10;
+  const meta = metaClientesDoRep(r);
   const feitos = Number(r.fechadosNoMes) || 0;
   const gap = Math.max(0, meta - feitos);
   const semanas = Math.max(1, Math.ceil(pm8DiasUteisRestantesNoMes() / 5));
@@ -25795,7 +25795,7 @@ function tl5Medir() {
       etapas: meus, abertos, acima, mrr, prospeccao,
       semTarefa: semTarefaDele,
       fech: Number(r.fechadosNoMes) || 0,
-      meta: Number(r.metaMensal) || 10,
+      meta: metaClientesDoRep(r),
       criticos: r.criticos || [],
       /* PROPORÇÃO, NÃO CONTAGEM. Kelly tem 22 estouros em 45 negócios (49%) e a Amanda
          tem 18 em 20 (90%) — pela contagem crua a Kelly parece o problema, e não é ela. */
@@ -26091,6 +26091,18 @@ const TM2_ESTADO = { filtro: null, sel: null, etapa: null, deal: null, toast: nu
    A JANELA É A DA AGENDA — 60 dias. Ela não é escolha minha nem da prancha: é o que o
    robô busca. O rótulo da tela diz isso. */
 let TM10_TQ = null;
+/* ══ A META DE CLIENTES DE UMA PESSOA, NUM LUGAR SO (10/09/26) ═══════════════════════
+   `Number(r.metaMensal) || 10` aparecia em CINCO lugares deste arquivo, e as cinco
+   copias tinham o mesmo defeito: zero e falsy, entao quem tem meta 0 (a Amanda, que
+   saiu da planilha do mes) aparecia com meta 10 — o numero que este trabalho veio
+   justamente tirar. Cinco copias da mesma regra e cinco chances de a regra divergir;
+   aqui ela existe uma vez e distingue "nao tem meta" de "nao veio no snapshot".
+   O 10 sobrevive como ultimo recurso para snapshot velho, que nao tem o campo. */
+function metaClientesDoRep(r) {
+  const v = r && r.metaMensal;
+  return v != null && v !== '' ? Number(v) : 10;
+}
+
 function tm10ToquesPorNegocio() {
   if (TM10_TQ) return TM10_TQ;
   const m = new Map();
@@ -26592,6 +26604,24 @@ function tm10Dados() {
     ? cad.linhas.reduce(function (s, l) {
       return s + l.celulas.slice(-5).reduce(function (a, c) { return a + c.n; }, 0); }, 0)
     : null;
+  /* ══ OS NEGOCIOS SEM DONO ATIVO (10/09/26) ═══════════════════════════════════════
+     Tirar alguem do time nao tira os negocios dele do funil: eles continuam nas etapas,
+     contam nos totais e nos travados, e passam a aparecer com vendedor '—'. A Amanda
+     saiu em 10/09 com 21 abertos. Sem esta contagem eles ficariam no funil sem que
+     ninguem soubesse que nao tem quem cobrar — a familia do 'status orfao' que este
+     projeto ja pagou uma vez.
+     Conta quem nao esta em DATA.reps, e nao 'quem nao e a Amanda': se amanha sair outra
+     pessoa, o numero acompanha sozinho. */
+  const donosAtivos = {};
+  (DATA.reps || []).forEach(function (r) { donosAtivos[String(r.ownerId)] = true; });
+  let semDono = 0, semDonoMrr = 0;
+  etapas.forEach(function (e) {
+    if (['1396006164', '1398311191'].indexOf(e.id) >= 0) return;   /* perdido e reciclagem nao se cobra */
+    e.leads.forEach(function (l) {
+      if (donosAtivos[String(l.ownerId)]) return;
+      semDono += 1; semDonoMrr += tm10MrrDo(l);
+    });
+  });
   const maxEt = Math.max(1, ...etapas.map(function (e) { return e.n; }));
   const detalhe = escolhida ? escolhida.leads.slice().sort(function (a, b) {
     return (b.dias || 0) - (a.dias || 0); }).slice(0, 12).map(function (l) {
@@ -26657,6 +26687,7 @@ function tm10Dados() {
     conversao: tm10Conversao(),
     cadencia: cad,
     ranking: tm10Ranking(m),
+    semDono: semDono, semDonoMrr: semDonoMrr,
     janelaToques: 60
   };
 }
@@ -26909,6 +26940,16 @@ function tm10TelaHTML(d, cauda) {
     +   'color:#E51A31;">3 · O funil do time <span style="font-weight:700;letter-spacing:0;'
     +   'text-transform:none;color:#7A8494;">· clientes primeiro, MRR junto · clique na etapa'
     +   ' pra ver os leads dela</span></span>'
+    /* VERMELHO PORQUE E ACIONAVEL: negocio sem dono e negocio que ninguem vai tocar, e a
+       acao e reatribuir no HubSpot. Zero nao desenha nada — nada a cobrar nao precisa de
+       linha na tela. */
+    + (d.semDono
+      ? '<span style="float:right;font:800 9.5px \'Manrope\',sans-serif;color:#E51A31;'
+        + 'background:#FDF3F4;border:1px solid #F0A9B2;border-radius:999px;padding:4px 11px;"'
+        + ' title="Negócios de quem não está mais no time. Eles seguem no funil, contam nos totais e ninguém os cobra — reatribuir é no HubSpot.">'
+        + d.semDono + (d.semDono === 1 ? ' negócio sem dono ativo · ' : ' negócios sem dono ativo · ')
+        + tm10Rs(d.semDonoMrr) + '</span>'
+      : '')
     + '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 12px;">'
     +   fluxoHTML + '</div>'
     + '<div style="display:flex;flex-direction:column;gap:2px;">' + etapasHTML + '</div>'
@@ -61774,7 +61815,7 @@ function sm9Projecao() {
   });
   const derivada = elenco.reduce((t, u) => {
     const rep = (DATA.reps || []).find(r => String(r.ownerId) === String(u.ownerId)) || {};
-    return t + Math.ceil((Number(rep.metaMensal) || 10) / 4);
+    return t + Math.ceil(metaClientesDoRep(rep) / 4);
   }, 0);
   const meta = quantasPromessas ? metaPrometida : derivada;
 
@@ -62758,7 +62799,7 @@ async function renderPDIs() {
     const abertosRep = Number(r && r.open) || 0;
     const travadosRep = Number(r && r.leadsTravados) || 0;
     const fechadosRep = Number(r && r.fechadosNoMes) || 0;
-    const metaRep = Number(r && r.metaMensal) || 10;
+    const metaRep = metaClientesDoRep(r);
     const ganhosSemRep = Number(r && r.ganhosSemana) || 0;
     const rotuloEtapa = (id) => ((DATA.stageMeta && DATA.stageMeta.labels && DATA.stageMeta.labels[id]) || id || '—');
     // ORDEM_ETAPAS_FUNIL é a ordem canônica já usada no "Meu funil por etapa" — as duas
