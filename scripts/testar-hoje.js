@@ -295,6 +295,26 @@ checar('quando a semana não recebe, o toast diz por quê',
 checar('a falha na semana não devolve a linha para a fila',
   template.indexOf('nunca devolve a linha para a fila: seria desfazer um registro que existe') > -1,
   'o HubSpot já gravou neste ponto — desfazer na tela criaria divergência com o CRM');
+/* ══ O ASSUNTO DA TAREFA NO CRM É A AÇÃO, NUNCA O DIAGNÓSTICO (11/09/26) ═══════════════
+   MEDIDO NO CRM DE PRODUÇÃO: 29 tarefas, de cinco executivos, com assunto do tipo
+     "Visita - 4d na Visita — régua é 5d · a data que você marcou passou — sem telefone
+      no CRM, então é visita com data nova na saída"
+   Nenhuma dizia de que cliente era, e várias eram idênticas entre si.
+
+   A fila do Hoje mandava `ins.motivo` como texto do próximo passo, e `motivo` é por
+   construção `parado + ' · ' + oQue`: o diagnóstico colado na ação. O diagnóstico é para a
+   TELA, onde explica por que aquela linha está na fila; o assunto da tarefa é o que a
+   pessoa lê no CRM daqui a três dias. */
+checar('a tarefa criada pela fila leva a AÇÃO, e não o diagnóstico da linha',
+  template.indexOf('acao: oQue') > -1
+  && template.indexOf("|| ins.acao || ins.motivo)") > -1
+  && template.indexOf("(ins.acao || ins.motivo);") > -1,
+  'com ins.motivo o CRM ganha "Visita - 4d na Visita — régua é 5d · ..." e ninguém sabe de quem é');
+checar('e o diagnóstico continua inteiro na tela e na nota',
+  template.indexOf("motivo: parado + ' · ' + oQue,") > -1
+  && template.indexOf("observacao: 'Registrado pela fila do dia (Hoje) — ' + ins.motivo") > -1,
+  'a frase que explica a linha não pode sumir de onde ela serve');
+
 /* UM CALENDÁRIO SÓ: d7ColunaDeHoje passou a derivar da função geral */
 checar('a coluna da semana é calculada num lugar só',
   template.indexOf('function pl6ColunaDaData(iso)') > -1
