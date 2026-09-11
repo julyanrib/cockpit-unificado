@@ -26853,9 +26853,23 @@ function pe4Propostas(p) {
    travestida de dado. */
 function pe4Perdas(p) {
   const mp = DATA.motivosPerda || {};
-  const n = (mp.porOwner || {})[p.ownerId] || 0;
+  /* ══ `porOwner[ownerId]` É O MAPA DE MOTIVOS DELE, NÃO UM NÚMERO (11/09/26) ═══════
+     {"Outros":54,"Reembolso":1,"Sem retorno":2,...}. Esta função devolvia esse objeto
+     como `n`, a tela o imprimia como contagem, e o gestor lia "[object Object] perdas
+     dele · R$ 5,4k". O R$ ao lado estava certo, o que tornava a linha convincente — e
+     a contagem de perdas por pessoa nunca existiu na tela.
+     Agora `n` é o TOTAL somado e o mapa tem nome próprio. */
+  const mapa = (mp.porOwner || {})[p.ownerId];
+  const porMotivo = (mapa && typeof mapa === 'object') ? mapa : {};
+  const n = (mapa && typeof mapa === 'object')
+    ? Object.keys(porMotivo).reduce(function (s, k) { return s + Number(porMotivo[k] || 0); }, 0)
+    : Number(mapa || 0);
   const mrr = (mp.mrrPorOwner || {})[p.ownerId] || 0;
   return { n: n, mrr: mrr, dias: mp.dias || null,
+    /* OS MOTIVOS DELE, ordenados — o dado que a tela dizia não ter. */
+    porMotivo: Object.keys(porMotivo).map(function (k) {
+      return { rot: k, n: Number(porMotivo[k] || 0) };
+    }).sort(function (a, b) { return b.n - a.n; }),
     /* os motivos do TIME ficam como referencia, rotulados como do time */
     doTime: Object.keys(mp.porMotivo || {}).map(function (k) {
       return { rot: k, n: mp.porMotivo[k] };
@@ -27413,8 +27427,18 @@ function pe4TelaHTML(d) {
       + '<b style="color:#E51A31;font:900 14px ' + A + ';">' + o.perdas.n + '</b> '
       + (o.perdas.n === 1 ? 'perda dele' : 'perdas dele') + ' · ' + esc(tm10Rs(o.perdas.mrr))
       + ' nos últimos ' + (o.perdas.dias || '—') + ' dias<br>'
-      + '<span style="color:#B4AC9C;">o motivo por pessoa não vem do robô — os do time são '
-      + esc(o.perdas.doTime.map(function (x) { return x.rot.toLowerCase() + ' (' + x.n + ')'; }).join(', '))
+      /* OS MOTIVOS DELE PRIMEIRO (11/09/26). A frase antiga dizia "o motivo por pessoa
+         não vem do robô" — e vinha: estava no mesmo campo que a tela estragava. Falar
+         dos motivos do TIME com uma pessoa é comparar 58 perdas dela com 395 de todo
+         mundo, que não é conversa de coaching. Os do time ficam depois, como referência. */
+      + '<span style="color:#B4AC9C;">'
+      + ((o.perdas.porMotivo && o.perdas.porMotivo.length)
+          ? 'motivos dele: ' + esc(o.perdas.porMotivo.slice(0, 3).map(function (x) {
+              return x.rot.toLowerCase() + ' (' + x.n + ')'; }).join(', '))
+            + ' · no time: ' + esc(o.perdas.doTime.map(function (x) {
+              return x.rot.toLowerCase() + ' (' + x.n + ')'; }).join(', '))
+          : 'motivo por pessoa não medido nesta carga — no time: ' + esc(o.perdas.doTime.map(function (x) {
+              return x.rot.toLowerCase() + ' (' + x.n + ')'; }).join(', ')))
       + '</span></span>'
     : '<span style="display:block;font:700 10px ' + M + ';color:#1E9E7B;">'
       + 'zero perdas dele na janela ✓</span>';
