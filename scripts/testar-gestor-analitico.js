@@ -999,7 +999,10 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
       && robo.indexOf("operator: 'NOT_IN', values: donos") > -1
       && robo.indexOf('foraDoTime: await abertosDeQuemSaiu(),') > -1);
   checar('e a tela le essa contagem em vez de varrer o funil',
-    tela.indexOf('const ft = DATA.foraDoTime || null;') > -1
+    /* LE DE kpisHub: o topo do payload tem lista branca de chaves e descartava a minha
+       passagem em silencio — medido na producao, DATA.foraDoTime chegava undefined com o
+       valor sentado em DATA.kpisHub.foraDoTime. */
+    tela.indexOf('const ft = (DATA.kpisHub && DATA.kpisHub.foraDoTime) || null;') > -1
       && tela.indexOf('negócios fora do time · ') > -1);
   checar('nao medido nao e zero nem neste bloco',
     tela.indexOf('const semDono = ft ? (Number(ft.n) || 0) : null;') > -1

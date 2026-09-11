@@ -26619,7 +26619,11 @@ function tm10Dados() {
      abertos dela desapareceram — o funil do gestor foi de 249 para 228 sem uma palavra.
      Agora o robo conta com uma busca propria (abertosDeQuemSaiu) e a tela le a contagem.
      NULL E DIFERENTE DE ZERO: se a busca falhar, a tela diz que nao sabe. */
-  const ft = DATA.foraDoTime || null;
+  /* LE DE kpisHub, E NAO DO TOPO DO PAYLOAD: o recorte por papel tem LISTA BRANCA de
+     chaves de primeiro nivel, entao a minha passagem em montar-dados nao sobrevivia —
+     medido na producao, DATA.foraDoTime chegava undefined enquanto o valor estava em
+     DATA.kpisHub.foraDoTime. Mesma armadilha que engoliu metaMrr duas horas antes. */
+  const ft = (DATA.kpisHub && DATA.kpisHub.foraDoTime) || null;
   const semDono = ft ? (Number(ft.n) || 0) : null;
   const semDonoMrr = ft ? (Number(ft.mrr) || 0) : 0;
   const maxEt = Math.max(1, ...etapas.map(function (e) { return e.n; }));
@@ -26688,6 +26692,7 @@ function tm10Dados() {
     cadencia: cad,
     ranking: tm10Ranking(m),
     semDono: semDono, semDonoMrr: semDonoMrr,
+    semDonoDonos: ft && ft.porDono ? Object.keys(ft.porDono).length : 0,
     janelaToques: 60
   };
 }
@@ -26960,7 +26965,8 @@ function tm10TelaHTML(d, cauda) {
         + ' title="Negócios abertos no HubSpot de quem não está mais no time. Eles NÃO'
         + ' entram em nenhum número desta tela — o robô só busca negócio de quem está no'
         + ' time. Este é o único lugar onde eles aparecem. Reatribuir é no HubSpot.">'
-        + d.semDono + (d.semDono === 1 ? ' negócio fora do time · ' : ' negócios fora do time · ')
+        + d.semDono + (d.semDono === 1 ? ' negócio fora do time' : ' negócios fora do time')
+        + (d.semDonoDonos ? ' · ' + d.semDonoDonos + ' donos' : '') + ' · '
         + tm10Rs(d.semDonoMrr) + '</span>'
       : '')
     + '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 12px;">'
