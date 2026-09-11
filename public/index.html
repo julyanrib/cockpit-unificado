@@ -9014,7 +9014,8 @@ function touchpointsDoLead(lead) {
       outcome: null,
       decision_maker_reached: e.decisor,
       pain: null, objection: null, product_interest: null,
-      notes: e.obs || null,
+
+      notes: agendaObsSemMarcador(e.obs) || null,
       source: origem,
 
       sync_status: e.recemAgendado ? 'enviando' : 'sincronizado',
@@ -20778,8 +20779,13 @@ function agendaSugestaoGestor(obs) {
   return m ? { pendente: true, gestorNome: m[1] || 'seu gestor' } : null;
 }
 
+const AGENDA_RE_MARCADOR_PLANO = /^COCKPIT:PLANO:v\d+:.*$/m;
+
 function agendaObsSemMarcador(obs) {
-  return String(obs || '').replace(AGENDA_RE_MARCADOR_GESTOR, '').trim();
+  return String(obs || '')
+    .replace(AGENDA_RE_MARCADOR_GESTOR, '')
+    .replace(AGENDA_RE_MARCADOR_PLANO, '')
+    .trim();
 }
 
 function agendaMotivoSemLead(texto) {
@@ -22990,7 +22996,8 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
       abrirPassagemContaAlvoProFunil(l._bruto, async () => {
         try {
           if (typeof criarTarefaVisitaNoHubspot === 'function') {
-            await criarTarefaVisitaNoHubspot(l._bruto, rep.ownerId, hora, { silencioso: true }, diaISO);
+
+            await criarTarefaVisitaNoHubspot(l._bruto, rep.ownerId, hora, { silencioso: true, origem: 'planejamento' }, diaISO);
           }
           if (typeof registrarAgendamentoLocal === 'function') {
             registrarAgendamentoLocal(l._bruto, diaISO, hora, rep.ownerId);
@@ -23014,7 +23021,7 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
     try {
       if (typeof criarTarefaVisitaNoHubspot === 'function') {
         await criarTarefaVisitaNoHubspot({ id: l.dealId, name: l.nome, nome: l.nome },
-          rep.ownerId, hora, { silencioso: true }, diaISO);
+          rep.ownerId, hora, { silencioso: true, origem: 'planejamento', dealId: l.dealId }, diaISO);
       }
       if (typeof registrarAgendamentoLocal === 'function') {
         registrarAgendamentoLocal({ id: l.dealId, nome: l.nome }, diaISO, hora, rep.ownerId);
@@ -26610,7 +26617,8 @@ function abrirFichaCompromisso(e) {
   stageModalName.textContent = e.cliente || 'Compromisso';
   stageModalMeta.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:' + tipoDef.cor + ';"></span>' + tipoDef.rotulo + '</span> · ' + quandoTxt + (repNome ? ' · ' + esc(repNome) : '') + (e.contato ? ' · contato: ' + esc(e.contato) : '');
   stageModalBody.innerHTML = tempHTML + cadenciaHTML +
-    (e.obs ? '<div style="margin-top:14px;font-size:12px;color:var(--muted);line-height:1.55;background:var(--panel2);border-radius:var(--r-md);padding:11px 14px;"><b style="color:var(--ink);">Observações:</b> ' + esc(e.obs) + '</div>' : '') +
+
+    (agendaObsSemMarcador(e.obs) ? '<div style="margin-top:14px;font-size:12px;color:var(--muted);line-height:1.55;background:var(--panel2);border-radius:var(--r-md);padding:11px 14px;"><b style="color:var(--ink);">Observações:</b> ' + esc(agendaObsSemMarcador(e.obs)) + '</div>' : '') +
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;">' +
 
     ((sessaoAtual && sessaoAtual.role === 'rep' && e.cliente && lead && lead.lat != null && lead.lng != null)
@@ -34461,7 +34469,7 @@ function d7Ligar(box, rep) {
       try {
         if (typeof criarTarefaVisitaNoHubspot === 'function') {
           await criarTarefaVisitaNoHubspot({ id: l.dealId, name: l.nome, nome: l.nome, bairro: l.bairro },
-            rep.ownerId, '10:30', { silencioso: true, tipo: 'follow_up' }, alvoISO);
+            rep.ownerId, '10:30', { silencioso: true, tipo: 'follow_up', origem: 'daily', dealId: l.dealId }, alvoISO);
         }
       } catch (e) {
         console.error('Minha Daily 7a, datar retorno:', e && e.message);
@@ -38956,6 +38964,8 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, d
       body: JSON.stringify({ op: 'tarefa-rota', nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista,
         ...(opcoes && opcoes.tipo ? { tipo: opcoes.tipo } : {}),
         ...(opcoes && opcoes.sugeridoPorGestor ? { sugeridoPorGestor: true } : {}),
+        ...(opcoes && opcoes.origem ? { origem: opcoes.origem } : {}),
+        ...(opcoes && opcoes.dealId ? { dealId: String(opcoes.dealId) } : {}),
         ...(dataISO ? { data: dataISO } : {}) })
     }), 8000, 'criar-tarefa-rota');
     const data = await resp.json().catch(() => ({}));

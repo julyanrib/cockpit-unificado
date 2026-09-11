@@ -13313,7 +13313,10 @@ function touchpointsDoLead(lead) {
       outcome: null,
       decision_maker_reached: e.decisor,
       pain: null, objection: null, product_interest: null,
-      notes: e.obs || null,
+      // SEM O TEXTO DE MAQUINA. O marcador do plano contem a palavra "visita", e este
+      // campo alimenta a analise de pontos de contato — onde TP_NOTA_DE_CONTATO procura
+      // exatamente essas palavras. Marcador entrando aqui viraria toque que nao houve.
+      notes: agendaObsSemMarcador(e.obs) || null,
       source: origem,
       // SINCRONIZAÇÃO ≠ DESFECHO — duas coisas que é fácil confundir e que
       // significam problemas opostos:
@@ -29329,6 +29332,10 @@ const AGENDA_ROTULOS = /^((follow[\s-]*up|revisita|visita|rota|ligar|liga[çc][�
 // Títulos que são compromisso interno do time, não visita a cliente.
 const AGENDA_INTERNOS = /^(daily|reuni[ãa]o\s*interna|interno|treinamento|roleplay|1:1|feedback|alinhamento)\b/i;
 
+/* @nucleo4:inicio — lido por scripts/testar-nucleo.js. Não remover.
+   Comeca AQUI, e nao na funcao que limpa, porque ela cita
+   AGENDA_RE_MARCADOR_GESTOR: recorte que deixa a declaracao de fora entrega ao sandbox
+   uma funcao que nao roda. */
 // BLOCO 34 (13/08/26) — "sugestão do gestor, pendente até o executivo confirmar"
 // (decisão do Julyan). O marcador vive na 1ª linha do corpo da tarefa no HubSpot —
 // nunca no assunto, pra não quebrar AGENDA_RE_TITULO/agendaTipoDoTexto, que dependem
@@ -29341,9 +29348,28 @@ function agendaSugestaoGestor(obs) {
 }
 // Pra exibir a nota sem o marcador de máquina no meio — mesma régua do "[Reagendada]"
 // que a ficha do compromisso já esconde.
+/*
+   O export de touchpoint (dentro de @nucleo) limpa o corpo da tarefa por esta função.
+   Ela entra no sandbox DE VERDADE, e não como stub: um stub que não limpasse deixaria a
+   suíte verde justamente no caso que ela mede — texto de máquina indo para um campo de
+   análise. */
+/* O MARCADOR DE PLANO que criar-tarefa-rota.js grava na ULTIMA linha do corpo, para o
+   PWA puxar o plano do HubSpot (11/09/26). Formato:
+     COCKPIT:PLANO:v1:<ownerId>:<AAAA-MM-DD>:<HH:MM>:<tipo>:<origem>:<dealId|->
+   A regex aceita QUALQUER versao (`v` + digitos) de proposito: quando o formato crescer,
+   a tela velha continua limpando a linha em vez de mostrar texto de maquina ao executivo
+   — que e exatamente o defeito que ela existe para impedir. */
+const AGENDA_RE_MARCADOR_PLANO = /^COCKPIT:PLANO:v\d+:.*$/m;
+/* TIRA TODO TEXTO DE MAQUINA do que vai para os olhos dele. Os dois marcadores moram
+   aqui e em lugar nenhum mais: leitor que limpe um e esqueca o outro e como o corpo da
+   tarefa vaza na ficha da Agenda. */
 function agendaObsSemMarcador(obs) {
-  return String(obs || '').replace(AGENDA_RE_MARCADOR_GESTOR, '').trim();
+  return String(obs || '')
+    .replace(AGENDA_RE_MARCADOR_GESTOR, '')
+    .replace(AGENDA_RE_MARCADOR_PLANO, '')
+    .trim();
 }
+/* @nucleo4:fim */
 
 // Devolve SÓ o nome do lead, ou null quando o título não carrega nome nenhum.
 // Por que o compromisso não tem nome de lead: 'interno' (é reunião do time, normal) ou
@@ -32793,7 +32819,10 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
       abrirPassagemContaAlvoProFunil(l._bruto, async () => {
         try {
           if (typeof criarTarefaVisitaNoHubspot === 'function') {
-            await criarTarefaVisitaNoHubspot(l._bruto, rep.ownerId, hora, { silencioso: true }, diaISO);
+            /* SEM dealId: o negocio acabou de nascer no painel de criacao e o id dele nao
+               volta ate aqui. O marcador sai com `-` e quem le casa por nome + dono +
+               dia — nunca com `l._bruto.id`, que e o id da leads_prospeccao. */
+            await criarTarefaVisitaNoHubspot(l._bruto, rep.ownerId, hora, { silencioso: true, origem: 'planejamento' }, diaISO);
           }
           if (typeof registrarAgendamentoLocal === 'function') {
             registrarAgendamentoLocal(l._bruto, diaISO, hora, rep.ownerId);
@@ -32822,7 +32851,7 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
     try {
       if (typeof criarTarefaVisitaNoHubspot === 'function') {
         await criarTarefaVisitaNoHubspot({ id: l.dealId, name: l.nome, nome: l.nome },
-          rep.ownerId, hora, { silencioso: true }, diaISO);
+          rep.ownerId, hora, { silencioso: true, origem: 'planejamento', dealId: l.dealId }, diaISO);
       }
       if (typeof registrarAgendamentoLocal === 'function') {
         registrarAgendamentoLocal({ id: l.dealId, nome: l.nome }, diaISO, hora, rep.ownerId);
@@ -37606,7 +37635,10 @@ function abrirFichaCompromisso(e) {
   stageModalName.textContent = e.cliente || 'Compromisso';
   stageModalMeta.innerHTML = '<span style="display:inline-flex;align-items:center;gap:6px;"><span style="width:9px;height:9px;border-radius:50%;background:' + tipoDef.cor + ';"></span>' + tipoDef.rotulo + '</span> · ' + quandoTxt + (repNome ? ' · ' + esc(repNome) : '') + (e.contato ? ' · contato: ' + esc(e.contato) : '');
   stageModalBody.innerHTML = tempHTML + cadenciaHTML +
-    (e.obs ? '<div style="margin-top:14px;font-size:12px;color:var(--muted);line-height:1.55;background:var(--panel2);border-radius:var(--r-md);padding:11px 14px;"><b style="color:var(--ink);">Observações:</b> ' + esc(e.obs) + '</div>' : '') +
+    /* `agendaObsSemMarcador` E NAO `e.obs` CRU: o corpo da tarefa carrega marcadores de
+       maquina (SUGESTAO_GESTOR na primeira linha, COCKPIT:PLANO na ultima) e este e o
+       unico lugar do cockpit que mostrava o corpo inteiro ao executivo. */
+    (agendaObsSemMarcador(e.obs) ? '<div style="margin-top:14px;font-size:12px;color:var(--muted);line-height:1.55;background:var(--panel2);border-radius:var(--r-md);padding:11px 14px;"><b style="color:var(--ink);">Observações:</b> ' + esc(agendaObsSemMarcador(e.obs)) + '</div>' : '') +
     '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;">' +
     // O RODAPÉ DESTE POPUP (28/08/26). Duas correções, medindo o que o clique fazia:
     //
@@ -48427,7 +48459,7 @@ function d7Ligar(box, rep) {
       try {
         if (typeof criarTarefaVisitaNoHubspot === 'function') {
           await criarTarefaVisitaNoHubspot({ id: l.dealId, name: l.nome, nome: l.nome, bairro: l.bairro },
-            rep.ownerId, '10:30', { silencioso: true, tipo: 'follow_up' }, alvoISO);
+            rep.ownerId, '10:30', { silencioso: true, tipo: 'follow_up', origem: 'daily', dealId: l.dealId }, alvoISO);
         }
       } catch (e) {
         console.error('Minha Daily 7a, datar retorno:', e && e.message);
@@ -54940,9 +54972,18 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, d
       // BLOCO 34 — tipo ('visita'|'reuniao') e sugeridoPorGestor viajam até aqui via
       // `opcoes` (mesmo parâmetro que já carregava `silencioso`); omitidos, o servidor
       // já assume 'visita' + false — chamadas antigas não mudam de comportamento.
+      // `origem` e `dealId` viajam pelo mesmo `opcoes` que ja carregava tipo e
+      // silencioso, e os dois sao DECLARADOS por quem chama — nunca deduzidos daqui.
+      // O `lead` destas 18 chamadas as vezes e um negocio e as vezes e uma conta da
+      // municao: ler `lead.id` gravaria o id da leads_prospeccao dentro de um marcador
+      // que um robo le como id de negocio, e os dois sao numeros (ninguem notaria).
+      // Sem declaracao, o servidor grava `-` e quem le casa por nome + dono + dia,
+      // exatamente como ja faz hoje.
       body: JSON.stringify({ op: 'tarefa-rota', nome: lead.nome, ownerId, bairro: lead.bairro, cidade: lead.cidade, horaPrevista,
         ...(opcoes && opcoes.tipo ? { tipo: opcoes.tipo } : {}),
         ...(opcoes && opcoes.sugeridoPorGestor ? { sugeridoPorGestor: true } : {}),
+        ...(opcoes && opcoes.origem ? { origem: opcoes.origem } : {}),
+        ...(opcoes && opcoes.dealId ? { dealId: String(opcoes.dealId) } : {}),
         ...(dataISO ? { data: dataISO } : {}) })
     }), 8000, 'criar-tarefa-rota');
     const data = await resp.json().catch(() => ({}));

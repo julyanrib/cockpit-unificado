@@ -37,7 +37,11 @@ const codigoNucleo = recortar('/* @nucleo:inicio', '/* @nucleo:fim */')
   + '\n' + recortar('/* @nucleo2:inicio', '/* @nucleo2:fim */')
   // @nucleo3: as funções que espelham escrita no DATA em memória. Entram porque a
   // ordem "escreve → invalida → re-deriva" é contrato, e é fácil de quebrar.
-  + '\n' + recortar('/* @nucleo3:inicio', '/* @nucleo3:fim */');
+  + '\n' + recortar('/* @nucleo3:inicio', '/* @nucleo3:fim */')
+  // @nucleo4: os marcadores de máquina do corpo da tarefa e a função que os tira. O
+  // export de touchpoint chama essa função, e ela precisa ser a real — ver o comentário
+  // na própria região.
+  + '\n' + recortar('/* @nucleo4:inicio', '/* @nucleo4:fim */');
 
 // ---------------------------------------------------------------------------
 // Entorno mínimo. Cada stub reproduz o CONTRATO da função real do template,
