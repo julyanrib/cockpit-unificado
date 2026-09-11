@@ -218,8 +218,14 @@ checar('sem bullets reconhecíveis, a seção FICA no corpo',
 /* A v8 fechou a coluna em 640px (medida de revista da prancha nova) e subiu o corpo de
    13px para 15.5px, que era o defeito real: o critério de aceite dela é nada de corpo
    abaixo de 15px. A checagem passa a guardar os dois. */
+/* A ÂNCORA ESTAVA NUMA CLASSE MORTA (11/09/26). A checagem media `.pb7-artigo`, a coluna
+   do leitor v7 — e o leitor v7 não existe mais: o artigo é desenhado por `.pb9-art-col`
+   desde a v9, e `.pb7-artigo` não era aplicada a markup nenhum. A regra continuava no CSS,
+   a checagem continuava verde, e nenhuma das duas tinha efeito sobre a tela.
+   O 640px de verdade está em `.pb9-art-col`, que é o que a coluna do leitor usa hoje. */
 checar('a coluna de leitura tem a medida de revista (640px) e corpo acima de 15px',
-  template.indexOf('.pb7-artigo{max-width:640px') > 0
+  template.indexOf('.pb9-art-col{max-width:640px') > 0
+  && template.indexOf('class="pb9-art-col"') > 0
   && template.indexOf('.pba{font-size:15.5px') > 0);
 checar('nenhuma tabela sobrevive: virou card com rótulo do cabeçalho',
   template.indexOf('pb8-cards') > 0 && template.indexOf('pb8-campo-rot') > 0

@@ -152,9 +152,18 @@ conferir('a rolagem acontece DEPOIS do filtro',
   ir.indexOf('chip.click()') < ir.indexOf('smoothScrollTo'),
   'clicar repinta a fila; rolar antes aterrissa onde o cartão estava');
 
-conferir('.fila-cta sobreviveu — ela tem uso vivo',
-  /\.fila-cta\{/.test(tpl) && (tpl.match(/class="[^"]*fila-cta/g) || []).length >= 1,
-  'só os chips de balde saíram; a CTA da linha da fila continua em uso');
+/* ESTA CHECAGEM DIZIA O CONTRÁRIO, e estava errada desde que foi escrita.
+   Ela exigia que `.fila-cta` SOBREVIVESSE "porque tem uso vivo" — e os usos que ela
+   contava estavam todos dentro de `itemDaFilaHTML`, uma função que nenhum caminho da tela
+   chamava. Contar `class="..."` não distingue markup vivo de markup de código morto, e é
+   assim que uma guarda passa a proteger justamente o que deveria acusar.
+   Com a função fora (11/09/26), a regra correta é a oposta: classe sem emissor não fica no
+   CSS — muito menos nas listas de piso de toque, que são o que diz se dá para usar isto na
+   rua, com o celular na mão. Eram três listas citando este botão. */
+conferir('a CTA da fila saiu do CSS junto com quem a desenhava',
+  !/\.fila-cta\{/.test(tpl) && (tpl.match(/class="[^"]*fila-cta/g) || []).length === 0
+    && !/\.fila-cta,/.test(tpl),
+  'itemDaFilaHTML saiu; classe sem emissor no piso de 44px reserva dedo para botão que não existe');
 
 /* ── 6 · O QUE NÃO SE TOCA ────────────────────────────────────────────────────────── */
 conferir('nada foi escrito no HubSpot por causa disto',

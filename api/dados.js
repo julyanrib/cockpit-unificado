@@ -12,6 +12,15 @@
 // Variáveis de ambiente na Vercel (as mesmas das outras rotas): SUPABASE_URL, SUPABASE_ANON_KEY.
 
 const { montarDadosCompletos, filtrarParaPapel, USUARIOS, usarSnapshot, temSnapshot, faltandoNoSnapshot } = require('../scripts/montar-dados.js');
+
+/* O SNAPSHOT JÁ BAIXADO POR ESTA INSTÂNCIA. Vive fora do handler de propósito: é o que a
+   Vercel preserva entre chamadas da mesma instância quente. Some quando ela reciclar, e
+   isso não é problema — cache frio é a chamada de antes, não um erro.
+   NÃO guarda o DATA montado, só as FONTES cruas: montar custa 3,6 ms (medido) e guardar
+   o resultado montado criaria um segundo lugar onde o recorte por papel poderia divergir
+   do primeiro — e recorte por papel é o que impede um executivo de ver a carteira do
+   colega. Economia de 3,6 ms não paga esse risco. */
+const CACHE = { assinatura: null, fontes: null, atualizadoEm: null };
 const PLAYBOOK = require('../data/field-sales-playbook.compiled.json');
 /* O único capítulo que não desce para executivo — ver o corte na rota do playbook. O nome
    é o da categoria no JSON compilado: se ela for renomeada lá, esta linha vai junto, e a
@@ -211,6 +220,47 @@ function removerNulosRecursivo(valor) {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 6000);
     try {
+      /* ══ PERGUNTA BARATA ANTES DA CARA (11/09/26) ═══════════════════════════════════
+         Medido: montar o DATA custa 3,6 ms e serializar a resposta 2,6 ms — a CPU não é o
+         custo desta rota. O custo é esta leitura: `conteudo` das seis chaves são ~1,2 MB
+         (hubspot.json sozinho tem 880 KB), baixados a cada login e a cada vez que o farol
+         pede dado novo, mesmo quando nada mudou.
+
+         Então primeiro se pergunta só a ASSINATURA — chave + atualizado_em, algumas
+         centenas de bytes. Igual à da última chamada NESTA instância? O conteúdo que já
+         está na memória do módulo serve, e ele é o mesmo dado, não um dado mais velho:
+         a validade foi conferida agora, contra a tabela. Diferente? Baixa tudo, pelo
+         caminho de sempre.
+
+         NÃO É TTL de propósito. Cache com prazo serve dado velho por definição, e esta
+         rota é o que a tela mostra depois de 'carregando seus dados' — servir o funil de
+         um minuto atrás porque o prazo não venceu seria mentir sobre frescor num produto
+         cuja primeira lei é que todo número diz de onde vem. */
+      const assinatura = await (async function () {
+        try {
+          const a = await fetch(`${supaUrl}/rest/v1/cockpit_snapshot?select=chave,atualizado_em`, {
+            signal: ctrl.signal,
+            headers: { apikey: servico, Authorization: `Bearer ${servico}` }
+          });
+          if (!a.ok) return null;
+          const ls = await a.json();
+          if (!Array.isArray(ls) || !ls.length) return null;
+          return ls.map(l => String(l.chave) + '@' + String(l.atualizado_em)).sort().join('|');
+        } catch (e) { return null; }   /* qualquer tropeço aqui cai no caminho completo */
+      }());
+
+      if (assinatura && CACHE.assinatura === assinatura && CACHE.fontes) {
+        /* `usarSnapshot` é o que efetivamente instala as fontes no módulo de montagem, e
+           ele precisa rodar de novo: a instância é a mesma, mas o estado do módulo pode
+           ter sido trocado por outra chamada no meio. É barato — são referências. */
+        const trocadasC = usarSnapshot(CACHE.fontes);
+        const temHubspotC = trocadasC.indexOf('hubspot') >= 0;
+        return {
+          fonte: !trocadasC.length ? 'arquivo' : (temHubspotC ? (trocadasC.length === 6 ? 'supabase' : 'supabase-parcial') : 'misto'),
+          motivo: null, chaves: trocadasC, atualizadoEm: CACHE.atualizadoEm, reaproveitado: true
+        };
+      }
+
       const r = await fetch(`${supaUrl}/rest/v1/cockpit_snapshot?select=chave,conteudo,atualizado_em`, {
         signal: ctrl.signal,
         headers: { apikey: servico, Authorization: `Bearer ${servico}` }
@@ -228,6 +278,10 @@ function removerNulosRecursivo(valor) {
         if (!maisRecente || String(l.atualizado_em) > maisRecente) maisRecente = String(l.atualizado_em);
       });
       const trocadas = usarSnapshot(fontes);
+      /* guardado SÓ depois de a leitura completa ter dado certo, e com a assinatura que
+         a produziu — assinatura sem conteúdo, ou conteúdo sem assinatura, é cache que
+         responde por um dado que não tem. */
+      if (assinatura) { CACHE.assinatura = assinatura; CACHE.fontes = fontes; CACHE.atualizadoEm = maisRecente; }
       /* A FONTE E DECIDIDA PELO 'hubspot', nao por 'alguma chave'. Ele e o snapshot do
          CRM: os outros cinco sao complementos (texto da IA, comparativo semanal, status
          da rodada). Dizer 'supabase' porque o sync-status de 90 bytes veio da tabela,

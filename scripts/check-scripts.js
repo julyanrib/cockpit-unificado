@@ -1980,3 +1980,20 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ══ GUARDA 27 — ARRASTE ANUNCIADO SEM OUVINTE (11/09/26) ═════════════════════════════
+   Achada na varredura de código morto: os cartões da munição da Minha Daily saíam com
+   `draggable="true"`, `cursor:grab`, a alça `⠿` e o título "arraste pro dia", e as faixas
+   de horário saíam com `data-d7-dia-drop` — sem UM ouvinte de dragstart, dragover ou drop
+   naquela tela. O gesto era anunciado em três lugares e não tinha destino.
+
+   Arraste morto é pior que botão morto: botão morto você clica e desconfia; arraste morto
+   falha em silêncio e a pessoa conclui que errou a mira — e tenta de novo, na rua.
+   Nenhuma outra guarda alcançava isto: a de clique morto olha `data-*` contra ouvinte de
+   click, a 21 olha CSS contra markup, e `draggable` não é nem uma coisa nem outra. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-arraste-sem-ouvinte.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
