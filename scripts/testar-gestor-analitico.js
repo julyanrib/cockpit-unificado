@@ -1168,6 +1168,29 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
     tela.indexOf("(nenhum com MRR preenchido no CRM)") > -1);
 }());
 
+
+/* ══ A PORTA DA DAILY DO GESTOR NOMEIA A DAILY DO GESTOR (11/09/26) ════════════════
+   renderDaily monta o board de fichas do gestor e DEPOIS o descarta, substituindo tudo
+   pela prancha: `html = '<div id="dg4Raiz">' + dg4TelaHTML(...)`. Essa substituição vive
+   dentro de um if, e o if perguntava `typeof dailyGestor14aHTML === 'function'` — o nome
+   de uma TERCEIRA tela, morta desde 04/09.
+
+   Quando aquela tela saiu do arquivo (11/09), a condição virou falsa e a aba do gestor
+   voltou calada para o board antigo de fichas. Sem erro de JS. Com build verde e 39
+   suítes verdes, porque nenhuma delas executa um render — só apareceu ao ABRIR a tela.
+
+   Esta guarda exige as duas metades no mesmo lugar: a condição pergunta por um nome dg4
+   E a atribuição instala o dg4Raiz. Perder a âncora reprova. */
+checar('a porta que instala a Daily do gestor pergunta por um nome dela',
+  (function () {
+    const i = templateCodigo.indexOf("if (!souRepDaily && typeof dg4TelaHTML === 'function') {");
+    if (i < 0) return false;
+    const bloco = templateCodigo.slice(i, i + 900);
+    return bloco.indexOf('id="dg4Raiz" data-dg4-raiz="1"') > -1
+      && bloco.indexOf('dg4TelaHTML(dg4Dados(DG4_CTX))') > -1;
+  }()),
+  'a condicao que instala esta tela ja perguntou pelo nome de OUTRA tela, e quando aquela saiu do arquivo o gestor voltou para o board antigo sem nenhum erro');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
