@@ -1275,6 +1275,23 @@
     #dg4Raiz [style*="grid-template-columns"]{grid-template-columns:minmax(0,1fr)!important;}
     #dg4Raiz [style*="width:1780px"]{width:100%!important;}
   }
+  /* ══ AS QUATRO LINHAS QUE SAÍAM DA TELA A 375px (10/09/26) ═════════════════════
+     Medido: a 375px de viewport, quatro elementos tinham entre 403px e 576px de largura
+     dentro de um cartão com overflow:hidden — a página NÃO rolava de lado (scrollWidth
+     igual ao viewport), então nenhuma medição de transbordo acusava nada, e o texto
+     simplesmente não existia para quem lê no celular: a manchete (min-width:480px
+     inline), o rótulo do placar e as duas notas de rodapé das faixas (flex:none com
+     margin-left:auto).
+
+     O ALVO É PRECISO de propósito: `#dg4Raiz > div > div > span` são os rótulos e as
+     notas das FAIXAS, filhos diretos do cartão branco. Soltar `flex:none` em todo span
+     da aba desmancharia as pílulas da promessa e o selo de origem de cada slot, que
+     dependem de não crescer. */
+  @media (max-width:760px){
+    #dg4Raiz h1{min-width:0!important;}
+    #dg4Raiz > div > div > span{flex:1 1 100%!important;min-width:0!important;
+      margin-left:0!important;white-space:normal!important;text-align:left!important;}
+  }
   /* ══ ABA TIME DO GESTOR v2 (08/09/26) ═══════════════════════════════════════
      A prancha declara hover em style-hover=, atributo do dc-runtime que não existe
      fora dele. As ONZE regras viram CSS de verdade aqui, com o MESMO valor, na
@@ -12470,7 +12487,11 @@ function aplicarVisaoPorPapel() {
   // por ora — virar "Pessoas"/"Semana" só pro rep exigiria decidir se ele mantém acesso
   // a essas abas, o que é decisão de produto pendente, não renomeação de texto.
   const lblDaily = document.querySelector('#tabBtnDaily .tab-btn-label');
-  if (lblDaily) lblDaily.textContent = souRep ? 'Minha Daily' : 'Daily & Ritmo';
+  /* O NOME DA ABA DO GESTOR É SÓ "Daily" (10/09/26, prancha daily-gestor-final: "O nome
+     da aba é só Daily"). Era "Daily & Ritmo", nome de 15/08 de quando esta aba tinha duas
+     almas — o placar do dia e a agenda inteira. A prancha FINAL tem uma alma: a rodada de
+     15 minutos. O do executivo continua "Minha Daily", que é o nome do gesto dele. */
+  if (lblDaily) lblDaily.textContent = souRep ? 'Minha Daily' : 'Daily';
   document.getElementById('tabBtnDaily').style.display = emOnboarding ? 'none' : 'flex';
   const lblAgenda = document.querySelector('#tabBtnAgenda .tab-btn-label');
   // "Prospecção" → "Planejamento" (Escopo 3, 27/08/26). O nome antigo descrevia só
@@ -50760,6 +50781,152 @@ function dg4OrigemDoSlot(slot, mapaFunil) {
      tela diz que não sabe, e é assim que ela continua confiável. */
   return { rot: 'ORIGEM NÃO REGISTRADA', bg: '#FBFAF6', cor: '#7A8494', borda: '#E4E0D6' };
 }
+/* ══ PLURAL DE VERDADE ══════════════════════════════════════════════════════════════
+   Regra 3 da prancha, literal: "1 atividade, N atividades". Esta tela é lida em voz alta
+   numa rodada de 15 minutos — "3 visita(s)" é a tela pedindo para o gestor traduzir. */
+function dg4Plural(n, sing, plur) {
+  return n + ' ' + (Number(n) === 1 ? sing : plur);
+}
+
+/* ══ A PALAVRA DE ONTEM, DESCRITA UMA VEZ ═══════════════════════════════════════════
+   A prancha FINAL põe o placar de ontem antes de tudo: "primeiro cobra a palavra de
+   ontem, depois o plano de hoje". Os dois lados do placar vêm de fontes diferentes de
+   propósito, e é isso que o torna honesto:
+
+     PROMETIDO  `dailies.prometido_visitas` do dia útil anterior — o que ELE escreveu ao
+                travar. Escrito pela tela dele, lido aqui, nunca editado aqui.
+     FEITO      atividadesComprovadasNoDia(), que conta visita com desfecho no HubSpot —
+                a MESMA função que a Minha Daily dele usa para dizer o que ele fez.
+
+   QUEM NÃO PROMETEU NÃO FUROU. Medido em 10/09/26 para ontem: 2 dos 10 tinham promessa
+   registrada. Se `furou` fosse `f < p` com p=null virando 0, oito pessoas apareceriam
+   como devedoras da palavra na frente do time por causa de um campo vazio — a acusação
+   por ausência de medição, que é o defeito que esta tela existe para não cometer.
+
+   E A MEDIÇÃO DO FEITO É DURA DE PROPÓSITO: das 63 atividades de ontem no time, 11
+   tinham desfecho. Tarefa aberta não é visita feita; o chip de cadência mostra o volume
+   (e é outro número, com outro nome), o placar mostra a palavra cumprida. */
+function dg4Ontem(ownerId, ontemISO) {
+  if (!ontemISO) return { p: null, f: null, medido: false, furou: false };
+  const d = (typeof getDaily === 'function') ? getDaily(ownerId, ontemISO) : null;
+  const p = (d && d.prometido_visitas != null) ? Number(d.prometido_visitas) : null;
+  const real = (typeof atividadesComprovadasNoDia === 'function')
+    ? atividadesComprovadasNoDia(ownerId, ontemISO) : null;
+  const f = (real && Array.isArray(real.visitas)) ? real.visitas.length : null;
+  const medido = p != null && f != null;
+  return { p: p, f: f, medido: medido, furou: medido ? f < p : false };
+}
+
+/* ══ A CADÊNCIA DE ONTEM: A MESMA SÉRIE DO MAPA DE CALOR DA ABA TIME ════════════════
+   tm2CadenciaDe devolve { dias, serie } — a mesma função, a mesma contagem, o mesmo
+   número que o gestor viu na Time. Procura o DIA na lista, e não a penúltima posição:
+   a série pula fim de semana e feriado, e a posição -2 seria o dia certo só por acaso.
+   Dia fora da janela devolve null, e null vira "não medido" na tela — nunca 0. */
+function dg4CadenciaDe(ownerId, diaISO) {
+  const cd = (typeof tm2CadenciaDe === 'function') ? tm2CadenciaDe(ownerId) : null;
+  if (!cd || !Array.isArray(cd.dias) || !diaISO) return null;
+  const i = cd.dias.indexOf(diaISO);
+  if (i < 0) return null;
+  const v = Number((cd.serie || [])[i]);
+  return Number.isFinite(v) ? v : null;
+}
+
+/* ══ O COMBINADO DA ÚLTIMA ANÁLISE QUE FICOU SEM MARCA ══════════════════════════════
+   A prancha pede `daily_combinados`. ESSA TABELA NÃO EXISTE, e não vai existir: o
+   combinado do 1:1 já mora em `pdi_compromissos` — o executivo marca `checked[i]` na aba
+   Desenvolvimento e o gestor carimba `validado_em[i]` na aba Pessoas, na MESMA linha.
+   Criar uma segunda casa para o mesmo acordo faria o ✓ da Pessoas não aparecer aqui.
+
+   O TEXTO SÓ APARECE SE FOR O TEXTO DELE. `reps[].compromissos` são os combinados da
+   análise DE AGORA; a linha do banco guarda a versão em que ele marcou. Medido hoje: a
+   única linha com item aberto é da análise de 05/09 e a análise corrente é de 08/09 —
+   parear os dois mostraria ao gestor um texto que o executivo nunca viu para marcar.
+   Quando as versões divergem o chip existe (o acordo continua devendo) e diz a data,
+   sem texto. Silenciar seria o zero que tranquiliza; inventar o texto seria pior. */
+function dg4Combinado(ownerId, textos) {
+  if (typeof PS6_ESTADO === 'undefined' || !PS6_ESTADO.compromissos) return null;
+  const linha = PS6_ESTADO.compromissos[String(ownerId)];
+  if (!linha) return null;
+  const ch = Array.isArray(linha.checked) ? linha.checked : [];
+  const abertos = [];
+  ch.forEach(function (v, i) { if (!v) abertos.push(i); });
+  if (!abertos.length) return null;
+  const versao = String(linha.versao_analise || '');
+  const mesma = !!versao && versao === String(DATA.versaoAnalise || '');
+  return { n: abertos.length, versao: versao, mesma: mesma,
+    texto: mesma ? String((textos || [])[abertos[0]] || '') : '' };
+}
+
+/* ══ OS SINAIS DO DIA DE UMA PESSOA ═════════════════════════════════════════════════
+   A regra 1 do prompt: "SLA, cadência e toques têm de ser a MESMA função das abas Time e
+   Pessoas". Por isso esta função não mede nada: ela FILTRA o que já foi medido.
+
+     ontem ..... dg4Ontem (dailies + atividadesComprovadasNoDia)
+     sla ....... pessoa.slaEstourados, que sai de pe4Sla — a função da Pessoas
+     cadência .. dg4CadenciaDe, que sai de tm2CadenciaDe — a série da Time
+     proposta .. pe4Propostas, a MESMA regra da Time e da Pessoas
+     combinado . dg4Combinado (pdi_compromissos)
+
+   O QUE A PRANCHA PEDE E O CRM NÃO TEM: "vence HOJE: {conta}". Não existe propriedade de
+   VALIDADE DE PROPOSTA no portal — conferido duas vezes hoje. O parente medível é o que a
+   Pessoas e a Time já mostram: proposta na mesa SEM data marcada. É cobrança de verdade,
+   é o mesmo cálculo das outras duas abas, e o rótulo diz o que é.
+
+   CHIP VERDE E CHIP NEUTRO NÃO SÃO COBRANÇA: só `ruim` entra no contador de cobranças do
+   dia e só `ruim` é clicável. É a regra 5 da prancha — vermelho é cobrança acionável. */
+const DG4_PROPOSTAS_MAX = 2;
+function dg4SinaisDe(x, pessoa, ontem, combinado) {
+  const out = [];
+
+  /* 1 · A PALAVRA DE ONTEM — SEMPRE o primeiro chip, cumprida ou não. É o único chip que
+     aparece quando está bom: a prancha quer o ✓ à vista porque a rodada começa nele. */
+  if (!ontem.medido) {
+    out.push({ tipo: 'ontem', ruim: false, neutro: true,
+      rot: ontem.p == null ? 'ontem: sem promessa registrada' : 'ontem: feito não medido' });
+  } else {
+    out.push({ tipo: 'ontem', ruim: ontem.furou,
+      rot: 'ontem: ' + ontem.f + '/' + ontem.p + ' ' + (ontem.p === 1 ? 'visita' : 'visitas')
+        + ' ' + (ontem.furou ? '✗' : '✓') });
+  }
+
+  /* 2 · SLA DE 1º TOQUE. `slaEstourados` é quem NÃO foi tocado em 48h — inclui quem foi
+     tocado depois, e o rótulo diz isso. "Sem 1º toque" seria outro número. */
+  if (pessoa && pessoa.slaEstourados > 0) {
+    out.push({ tipo: 'sla', ruim: true,
+      rot: 'SLA: ' + pessoa.slaEstourados + ' sem 1º toque em 48h' });
+  }
+
+  /* 3 · CADÊNCIA DE ONTEM. Chip só quando ≤1, que é a régua da prancha. Null não entra:
+     dia fora da série não é dia parado. */
+  if (x.cadOntem != null && x.cadOntem <= 1) {
+    out.push({ tipo: 'cad', ruim: true,
+      rot: 'cadência ontem: ' + x.cadOntem + (x.cadOntem === 1 ? ' atividade' : ' atividades') });
+  }
+
+  /* 4 · PROPOSTA NA MESA SEM DATA. Duas no máximo: o cartão tem seis chips de orçamento e
+     uma pessoa com dez propostas paradas entupiria o cartão e esconderia o resto. */
+  (x.propostas || []).slice(0, DG4_PROPOSTAS_MAX).forEach(function (pr) {
+    out.push({ tipo: 'prop-' + pr.id, ruim: true,
+      rot: 'proposta sem data: ' + pr.nome + ' (' + pr.quando + ')' });
+  });
+
+  /* 5 · COMBINADO DO 1:1 SEM MARCA. O texto é uma FRASE, não um nome de conta: corta em
+     56 caracteres aqui mesmo. tm10NomeCurto existe para nome de pessoa e devolveria
+     "Registre H." para "Registre no HubSpot a decisão final...".
+     A data sai do próprio ISO por fatia, e não de new Date(): '2026-09-05' parseado como
+     UTC e lido em Brasília volta 04/09 — um dia a menos na cara do gestor. */
+  if (combinado) {
+    const frase = String(combinado.texto || '');
+    out.push({ tipo: 'comb', ruim: true,
+      rot: combinado.mesma
+        ? ('combinado furado: ' + (frase.length > 56 ? frase.slice(0, 55) + '…' : frase))
+        : ('combinado da análise de '
+          + String(combinado.versao).split('-').reverse().slice(0, 2).join('/')
+          + ' sem marcação (' + combinado.n + ')') });
+  }
+  return out;
+}
+
 /* ══ O PROVEDOR DA DAILY v4 ═════════════════════════════════════════════════════════
    O markup convertido só lê nomes. Aqui é o único lugar onde dado encosta no desenho, e
    por isso toda divergência entre a prancha e a realidade fica aqui, com o motivo escrito.
@@ -50780,6 +50947,23 @@ function dg4Dados(ctx) {
   const tv = document.body.classList.contains('tv');
   const hoje = isoDate(new Date());
   const ehHoje = (typeof dailyRefDate === 'undefined') || dailyRefDate === hoje;
+
+  /* ══ ONTEM VEM PRONTO DO renderDaily ═════════════════════════════════════════════
+     `yesterdayISO` já é calculado lá (addBusinessDays(dailyRefDate, -1)) e entregue a
+     esta aba no contexto. Recalcular aqui daria duas definições de "ontem" na mesma
+     tela — e o placar de ontem é a única coisa que esta Daily afirma sobre o passado. */
+  const ontemISO = c.ontem || ((typeof addBusinessDays === 'function')
+    ? addBusinessDays(c.diaEmFoco || hoje, -1) : null);
+
+  /* ══ AS PESSOAS SAEM DA ABA PESSOAS, INTEIRAS ════════════════════════════════════
+     pe4Pessoas() já devolve por pessoa o SLA (pe4Sla), a cadência (tm10Cadencia), os
+     leads por etapa e os toques (tm10Tq). Chamá-la aqui é o que garante o item do
+     checklist: "SLA/cadência/toques idênticos aos das abas Time e Pessoas (mesma
+     função)". Escrever uma segunda contagem aqui daria dois números iguais por
+     coincidência — e um dia eles divergiriam sem ninguém saber por quê. */
+  const pessoas = (typeof pe4Pessoas === 'function') ? pe4Pessoas() : [];
+  const pessoaPorOid = {};
+  pessoas.forEach(function (p) { pessoaPorOid[String(p.ownerId)] = p; });
 
   /* mapa dos negócios abertos por id, para o selo do slot e para os quentes */
   const mapaFunil = {};
@@ -50876,8 +51060,20 @@ function dg4Dados(ctx) {
        visitas sem horário — e antes desta lista elas não apareciam na tela do gestor. */
     const visitas = preenchidos.map(function (h) { return grade.porHora[h]; })
       .concat(grade.semHora || []);
+    /* ══ O QUE A DAILY FINAL ACRESCENTOU A CADA LINHA (10/09/26) ══════════════════
+       Nada disto é medido aqui: `pessoa` é a linha da aba Pessoas, `ontem` sai de
+       dg4Ontem, a cadência da série da Time e as propostas de pe4Propostas. */
+    const pessoa = pessoaPorOid[oid] || null;
+    const ontem = dg4Ontem(oid, ontemISO);
+    const cadOntem = dg4CadenciaDe(oid, ontemISO);
+    const propostas = (pessoa && typeof pe4Propostas === 'function')
+      ? pe4Propostas(pessoa).filter(function (pr) { return !pr.temReuniao; }) : [];
+    const combinado = dg4Combinado(oid, (r.compromissos || []));
+
     return { r: r, oid: oid, plano: plano, grade: grade, preenchidos: preenchidos,
       visitas: visitas,
+      pessoa: pessoa, ontem: ontem, cadOntem: cadOntem, propostas: propostas,
+      combinado: combinado,
       temPlano: temPlano, travada: travada, daily: daily, quentes: quentes,
       novas: novas, origemRegistrada: origemRegistrada,
       /* de onde vieram os slots desta pessoa: o plano do dia dela, ou a coluna de hoje
@@ -50885,18 +51081,34 @@ function dg4Dados(ctx) {
       veioDaGrade: veioDaGrade };
   });
 
-  /* ══ A ORDEM DA RODADA: sem plano → promessa aberta → travada ════════════════════════
-     Elogio fecha a rodada, e quem não montou fala primeiro porque é o único que ainda dá
-     para resolver antes da trava. */
-  const peso = function (x) { return !x.temPlano ? 0 : (x.travada ? 2 : 1); };
+  /* ══ A ORDEM DA RODADA É LEI (regra 1 da prancha FINAL) ══════════════════════════════
+       sem plano → furou ontem (travou e não cumpriu) → promessa aberta → travadas ✓
+
+     Elogio fecha a rodada; quem não montou fala primeiro porque é o único que ainda dá
+     para resolver antes da trava; e quem travou mas furou a palavra de ontem fala antes
+     de quem só não travou ainda — a palavra dada vale mais que o clique pendente.
+
+     OS QUATRO DEGRAUS SÃO EXCLUSIVOS POR CONSTRUÇÃO, e isso não é detalhe: a prancha
+     monta os grupos com quatro filtros independentes, e quem fechou um plano VAZIO
+     (travada sem slot, que existe no banco) cairia em dois grupos e apareceria duas vezes
+     na tela. Um peso por pessoa não tem esse buraco. */
+  const peso = function (x) {
+    if (!x.temPlano) return 0;
+    if (x.travada && x.ontem.furou) return 1;
+    if (!x.travada) return 2;
+    return 3;
+  };
   medidos.sort(function (a, b) {
     return peso(a) - peso(b)
       || (b.quentes.length - a.quentes.length)
       || String(a.r.name || '').localeCompare(String(b.r.name || ''));
   });
 
-  const semPlano = medidos.filter(function (x) { return !x.temPlano; });
-  const abertas = medidos.filter(function (x) { return x.temPlano && !x.travada; });
+  /* OS GRUPOS SAEM DO MESMO `peso` QUE ORDENOU A TELA. Derivar de novo com filtros
+     próprios é como a ordem e a contagem passam a discordar. */
+  const semPlano = medidos.filter(function (x) { return peso(x) === 0; });
+  const furouOntem = medidos.filter(function (x) { return peso(x) === 1; });
+  const abertas = medidos.filter(function (x) { return peso(x) === 2; });
   const travadas = medidos.filter(function (x) { return x.travada; });
   /* quem apareceu pela GRADE e não pelo plano do dia: o KPI diz isso, senão
      "7/7 planos montados" esconde que seis deles nunca travaram o dia. */
@@ -50913,7 +51125,7 @@ function dg4Dados(ctx) {
     const mrr = f.mrr > 0
       ? ' — R$ ' + Math.round(f.mrr).toLocaleString('pt-BR') + '/mês entre eles'
       : '';
-    return f.n + ' negócio(s) aberto(s) seguem no nome de ' + f.nomes.join(', ')
+    return dg4Plural(f.n, 'negócio aberto segue', 'negócios abertos seguem') + ' no nome de ' + f.nomes.join(', ')
       + ', que saiu do campo' + mrr + '. Não entram nas contas por pessoa acima; '
       + 'dar dono novo ou encerrar é no HubSpot.';
   })();
@@ -50934,55 +51146,136 @@ function dg4Dados(ctx) {
   const somaQuentes = medidos.reduce(function (t, x) { return t + x.quentes.length; }, 0);
   const algumSemOrigem = medidos.some(function (x) { return x.temPlano && !x.origemRegistrada; });
 
-  /* PLANOS NÃO LIDOS NÃO SÃO PLANOS AUSENTES. Com a bandeira em false, os cinco KPIs
-     dizem "não medido" — nenhum deles pode virar acusação por causa de uma consulta. */
+  /* ══ O PLACAR DE ONTEM, SOMADO ═══════════════════════════════════════════════════
+     SÓ QUEM PROMETEU ENTRA NA CONTA. Somar o feito de quem não prometeu inflaria o lado
+     esquerdo ("fez 24" com metade do time sem promessa) e somar zero no prometido de quem
+     não registrou inventaria uma dívida. Os não medidos viram um número próprio, que a
+     tela mostra ao lado — porque "3 sem promessa registrada" é cobrança de rotina, não
+     quebra de palavra. */
+  const comPromessa = medidos.filter(function (x) { return x.ontem.medido; });
+  const promOntem = comPromessa.reduce(function (s, x) { return s + x.ontem.p; }, 0);
+  const feitOntem = comPromessa.reduce(function (s, x) { return s + x.ontem.f; }, 0);
+  const nFurou = comPromessa.filter(function (x) { return x.ontem.furou; }).length;
+  const semPromessaOntem = medidos.length - comPromessa.length;
+
+  /* ══ AS COBRANÇAS DO DIA ═════════════════════════════════════════════════════════
+     É a soma dos chips RUINS de todos os cartões — o mesmo dg4SinaisDe que cada cartão
+     desenha. Contar aqui com uma regra própria faria o KPI discordar dos chips na mesma
+     tela, que é o defeito mais fácil de cometer nesta aba e o mais difícil de notar. */
+  const sinaisPorOid = {};
+  medidos.forEach(function (x) {
+    sinaisPorOid[x.oid] = dg4SinaisDe(x, x.pessoa, x.ontem, x.combinado);
+  });
+  const somaCobrancas = medidos.reduce(function (s, x) {
+    return s + sinaisPorOid[x.oid].filter(function (sn) { return sn.ruim; }).length;
+  }, 0);
+
+  /* PLANOS NÃO LIDOS NÃO SÃO PLANOS AUSENTES. Com a bandeira em false, os KPIs que saem
+     de planos_diarios dizem "não medido" — nenhum deles pode virar acusação por causa de
+     uma consulta. Os dois que saem do HubSpot (cobranças e quentes) continuam valendo, e
+     o rótulo deles diz de onde vêm. */
   const kpis = !planosLidos ? [
-    { rot: 'planos montados', v: 'não medido', de: 'a leitura de planos_diarios falhou', cor: '#A79C8A' },
-    { rot: 'promessas travadas', v: 'não medido', de: 'recarregue a aba', cor: '#A79C8A' },
-    { rot: 'visitas prometidas', v: 'não medido', de: '', cor: '#A79C8A' },
-    { rot: 'prospecções novas', v: 'não medido', de: '', cor: '#A79C8A' },
+    { rot: 'ontem: feito/prometido', v: 'não medido', de: 'a leitura de planos_diarios falhou', cor: '#A79C8A' },
+    { rot: 'planos montados', v: 'não medido', de: 'recarregue a aba', cor: '#A79C8A' },
+    { rot: 'promessas travadas', v: 'não medido', de: '', cor: '#A79C8A' },
+    { rot: 'cobranças do dia', v: String(somaCobrancas), de: 'do HubSpot, esse número vale', cor: somaCobrancas ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'quentes fora do plano', v: String(somaQuentes), de: 'do HubSpot, esse número vale', cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
   ] : [
+    /* O PRIMEIRO KPI É A PALAVRA DE ONTEM — a prancha FINAL trocou "visitas prometidas"
+       por isto de propósito: o número de hoje é promessa, o de ontem é fato. */
+    { rot: 'ontem: feito/prometido',
+      v: comPromessa.length ? (feitOntem + '/' + promOntem) : 'sem promessa',
+      de: comPromessa.length
+        ? (nFurou + (nFurou === 1 ? ' furou' : ' furaram')
+          + (semPromessaOntem ? ' · ' + semPromessaOntem + ' sem promessa' : ''))
+        : 'ninguém registrou promessa ontem',
+      cor: !comPromessa.length ? '#A79C8A' : (feitOntem >= promOntem ? '#7FD9BE' : '#FF8D9A') },
     { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length
         + (naGrade.length ? ' (' + naGrade.length + ' pela grade)' : ''),
       de: semPlano.length ? (semPlano.length + ' sem montar') : 'todo mundo montou', cor: semPlano.length ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'promessas travadas', v: travadas.length + '/' + medidos.length,
       de: antesDaTrava ? (abertas.length + ' ainda editável(is)') : 'janela fechada', cor: travadas.length === medidos.length ? '#7FD9BE' : '#F0B45C' },
-    { rot: 'visitas prometidas', v: String(somaVisitas),
-      de: somaPlanejadas > somaVisitas
-        ? somaPlanejadas + ' planejadas na grade'
-        : 'soma do time',
-      cor: '#FFFDF8' },
-    { rot: 'prospecções novas', v: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
-      de: algumSemOrigem ? 'origem não registrada em algum plano' : 'contas do lote nos slots', cor: somaNovas ? '#7FD9BE' : '#F0B45C' },
+    { rot: 'cobranças do dia', v: String(somaCobrancas),
+      de: 'SLA · cadência · proposta · combinado', cor: somaCobrancas ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'quentes fora do plano', v: String(somaQuentes),
       de: temNota ? ('etapa avançada ou ' + corteQuente + '°+, sem tarefa') : 'etapa avançada, sem tarefa · temperatura chega no sync',
       cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
   ];
 
   /* ══ a manchete ═════════════════════════════════════════════════════════════════════ */
+  /* A MANCHETE DA PRANCHA FINAL tem duas frases e uma ordem: a palavra de ONTEM primeiro,
+     o dia de HOJE depois, e o nome de quem abre a rodada no fim. Cada pedaço só entra se
+     tiver medição atrás — a primeira frase muda inteira quando ninguém prometeu ontem,
+     porque "o time prometeu 0 e fez 0" leria como time parado. */
   const manchete = (function () {
     if (!planosLidos) return 'Não consegui ler os planos do dia — nenhum número desta faixa acusa ninguém até a leitura voltar.';
-    const partes = [];
-    if (semPlano.length) partes.push(semPlano.length + ' sem plano montado');
-    if (abertas.length) partes.push(abertas.length + ' com promessa aberta' + (antesDaTrava ? ' a ' + minutos + ' min da trava' : ''));
-    if (somaQuentes) partes.push(somaQuentes + ' quentes esfriando fora dos planos');
-    if (!partes.length) return 'Os ' + medidos.length + ' montaram e travaram, e nenhum quente ficou fora dos planos. A rodada hoje é de reconhecimento.';
-    const primeiro = (semPlano[0] || abertas[0] || medidos[0]);
-    return partes.join(' e ') + '. Comece por ' + String((primeiro.r.name || '').split(' ')[0]) + '.';
+    const ontemFrase = !comPromessa.length
+      ? 'Ontem ninguém registrou promessa — o placar de hoje começa em branco.'
+      : ('Ontem ' + (comPromessa.length === medidos.length ? 'o time' : comPromessa.length + ' prometeram e')
+        + ' prometeu ' + dg4Plural(promOntem, 'visita', 'visitas') + ' e fez ' + feitOntem
+        + (nFurou ? ' — ' + nFurou + (nFurou === 1 ? ' furou' : ' furaram') + ' a palavra.' : ' — palavra cumprida ✓.'));
+    const hoje2 = [];
+    if (semPlano.length) hoje2.push(semPlano.length + ' sem plano' + (antesDaTrava ? ' a ' + minutos + ' min da trava' : ''));
+    if (somaCobrancas) hoje2.push(somaCobrancas + (somaCobrancas === 1 ? ' cobrança' : ' cobranças') + ' no dia');
+    if (somaQuentes) hoje2.push(somaQuentes + (somaQuentes === 1 ? ' quente' : ' quentes') + ' fora dos planos');
+    /* UMA CONJUNÇÃO SÓ. Três pedaços unidos por ' e ' davam "10 sem plano e 9 cobranças e
+       26 quentes" — a frase que a regra 3 da prancha proíbe por outro nome ("1 atividade,
+       N atividades"): a manchete é lida em voz alta na rodada. */
+    const hojeFrase = hoje2.length <= 1 ? hoje2.join('')
+      : hoje2.slice(0, -1).join(', ') + ' e ' + hoje2[hoje2.length - 1];
+    const primeiro = medidos[0];
+    return ontemFrase
+      + (hoje2.length ? ' Hoje: ' + hojeFrase + '.' : ' Hoje o time está montado e sem cobrança pendente.')
+      + (primeiro ? ' Comece por ' + String((primeiro.r.name || '').split(' ')[0]) + '.' : '');
   }());
+
+  /* ══ O PLACAR DE ONTEM, CHIP POR CHIP ════════════════════════════════════════════
+     EM OUTRA ORDEM QUE A RODADA, de propósito: a rodada se reordena ao vivo (travou →
+     desce), e um placar que dança junto obrigaria o gestor a reprocurar a mesma pessoa
+     duas vezes na mesma tela. Aqui a ordem é a do time, estável.
+
+     Quem não prometeu leva um chip cinza com "—", e NÃO leva vermelho: a prancha pinta
+     rosa quem furou, e furar exige ter prometido. */
+  const placar = reps.map(function (r) {
+    const x = medidos.filter(function (m) { return m.oid === String(r.ownerId); })[0];
+    const o = x ? x.ontem : { medido: false };
+    if (!o.medido) {
+      return { nome: esc(String(r.name || '').split(' ')[0]), rot: '—',
+        cor: '#A79C8A', bg: '#FBFAF6', borda: '#E4E0D6' };
+    }
+    return { nome: esc(String(r.name || '').split(' ')[0]), rot: o.f + '/' + o.p,
+      cor: o.furou ? '#E51A31' : '#1E9E7B',
+      bg: o.furou ? '#FDF3F4' : '#FDFEFF',
+      borda: o.furou ? '#F0A9B2' : '#DCE1EA' };
+  });
+  const placarNota = !planosLidos ? 'a leitura das promessas falhou — este placar não está medindo ninguém'
+    : (nFurou
+      ? (nFurou + (nFurou === 1 ? ' furou' : ' furaram') + ' a palavra de ontem — falam logo depois dos sem plano')
+      : (comPromessa.length
+        ? 'todo mundo que prometeu cumpriu ✓'
+        : 'ninguém registrou promessa ontem — nada a cobrar aqui, e nada a comemorar'))
+    + (semPromessaOntem && planosLidos
+      ? ' · ' + semPromessaOntem + ' sem promessa registrada (não é furo)' : '');
+  const placarNotaCor = nFurou ? '#8A3B3B' : (comPromessa.length ? '#1E9E7B' : '#7A8494');
 
   /* ══ os chips da rodada ═════════════════════════════════════════════════════════════ */
   const rodada = medidos.map(function (x, i) {
     const sel = s.foco === x.oid;
-    const st = !x.temPlano ? 'sem plano'
-      : (x.travada ? '✓' : (x.veioDaGrade ? 'na grade' : 'aberta'));
+    /* O STATUS SAI DO MESMO `peso` QUE ORDENOU A FILA — o chip não pode dizer "✓" para
+       quem está na posição de quem furou. */
+    const pz = peso(x);
+    const st = pz === 0 ? 'sem plano'
+      : pz === 1 ? 'furou ontem'
+      : pz === 2 ? (x.veioDaGrade ? 'na grade' : 'aberta')
+      : '✓';
     return {
       pos: (i + 1) + 'º',
       nome: esc(String(x.r.name || '').split(' ')[0]),
       st: st,
-      stCor: !x.temPlano ? '#6E1210'
-        : (x.travada ? '#1E9E7B' : (x.veioDaGrade ? '#2B3440' : '#8A6516')),
+      stCor: pz === 0 ? '#6E1210'
+        : pz === 1 ? '#E51A31'
+        : pz === 2 ? (x.veioDaGrade ? '#2B3440' : '#8A6516')
+        : '#1E9E7B',
       bg: sel ? '#2B3440' : '#FDFEFF',
       cor: sel ? '#FDFEFF' : '#2B3440',
       nCor: sel ? '#FF8D9A' : '#8E3B5C',
@@ -51010,8 +51303,33 @@ function dg4Dados(ctx) {
   const execs = medidos.map(function (x) {
     const r = x.r, oid = x.oid;
     const focado = s.foco === oid;
-    const cobrado = (typeof dg2Feito === 'function') ? dg4Feito('cobranca', oid) : false;
-    const reconhecido = (typeof dg2Feito === 'function') ? dg4Feito('ajuste', oid) : false;
+    /* ══ OS SINAIS DO DIA, CLICÁVEIS (10/09/26) ═══════════════════════════════════
+       Já calculados uma vez lá em cima (sinaisPorOid) porque o KPI "cobranças do dia"
+       soma os mesmos chips: dois cálculos dariam um KPI discordando dos chips embaixo.
+
+       `dg4Feito` diz se o sinal JÁ ESTÁ NA PAUTA — e essa leitura estava quebrada em
+       produção até hoje: os cinco lugares que a chamavam a protegiam com
+       `typeof dg2Feito === 'function'`, e dg2Feito deixou de existir no dia em que a v2
+       saiu (08/09). Resultado: o gestor clicava, o Supabase gravava, o toast dizia ✓, e o
+       repinte devolvia o botão ao estado inicial com o contador da pauta em 0. Guarda
+       presa a um nome morto é pior que guarda nenhuma — ela dá verde e apaga a função. */
+    const sinais = (sinaisPorOid[oid] || []).map(function (sn) {
+      const naPauta = dg4Feito('sinal', oid, sn.tipo);
+      if (!sn.ruim) {
+        /* chip bom ou não medido: informativo, cursor default, e NÃO clicável (regra 5) */
+        return { rot: esc(sn.rot), on: '',
+          cor: sn.neutro ? '#7A8494' : '#1E9E7B',
+          bg: sn.neutro ? '#FBFAF6' : '#EAF6F1',
+          borda: sn.neutro ? '#E4E0D6' : '#CBE8DD',
+          cursor: 'default' };
+      }
+      return { rot: esc(naPauta ? ('✓ ' + sn.rot) : (sn.rot + (tv ? '' : ' ▸'))),
+        on: tv ? '' : ('sinal:' + oid + ':' + sn.tipo),
+        cor: naPauta ? '#1E9E7B' : '#8A3B3B',
+        bg: naPauta ? '#EAF6F1' : '#FDF3F4',
+        borda: naPauta ? '#CBE8DD' : '#F0A9B2',
+        cursor: tv ? 'default' : 'pointer' };
+    });
     const naMesa = Number(x.daily.prometido_propostas) || 0;
     const aposta = Number(x.daily.prometido_fechamentos) || 0;
     const visitas = Number(x.daily.prometido_visitas) || 0;
@@ -51082,7 +51400,7 @@ function dg4Dados(ctx) {
     }
 
     const quentes = x.quentes.slice(0, 3).map(function (d) {
-      const perguntado = (typeof dg2Feito === 'function') ? dg4Feito('alinhar', oid, d.nome) : false;
+      const perguntado = dg4Feito('alinhar', oid, d.nome);
       return {
         nome: esc(d.nome || 'negócio sem nome'),
         issue: esc((d.dias != null ? d.dias + 'd em ' + d.etapa : d.etapa)
@@ -51097,8 +51415,13 @@ function dg4Dados(ctx) {
 
     /* A LEITURA: cobra, pergunta ou reconhece — nunca genérica, e cada ramo nomeia a
        evidência que a justifica. */
+    /* A FRASE ABRE PELO QUE ONTEM PROVOU, quando houve prova: "prometeu 4 e fez 1" muda a
+       conversa de hoje inteira, e a prancha põe essa informação na leitura de propósito.
+       Sem promessa registrada ontem a frase não menciona ontem — não há o que dizer. */
+    const abre = (x.ontem.medido && x.ontem.furou)
+      ? ('prometeu ' + x.ontem.p + ' ontem e fez ' + x.ontem.f + '; ') : '';
     const leitura = !planosLidos ? 'não consegui ler o plano dele nesta rodada'
-      : !x.temPlano
+      : abre + (!x.temPlano
         ? (antesDaTrava
           ? 'não montou o dia ainda — faltam ' + minutos + ' min para a trava, dá tempo se você cobrar agora'
           : 'passou a trava sem montar o dia: a promessa de hoje não existe e o placar de amanhã vai medir zero prometido')
@@ -51110,31 +51433,45 @@ function dg4Dados(ctx) {
            transformar uma escolha dele em falha. */
         : !x.travada
           ? ((x.visitas.length
-              ? x.visitas.length + ' visita(s) no dia'
+              ? dg4Plural(x.visitas.length, 'visita', 'visitas') + ' no dia'
                 + (x.preenchidos.length ? ' · ' + x.preenchidos.length + ' com hora' : '')
               : 'plano começado')
-            + (antesDaTrava ? ', e a promessa ainda está aberta — cobrar a trava é o gesto' : ', e a janela fechou sem travar'))
+            /* O GESTO CERTO PARA CADA UM DOS DOIS. Quem só encaixou contas na grade da
+               semana não tem promessa aberta: tem roteiro. Pedir "a trava" a ele é
+               cobrar um passo que ele nem começou — e este texto era o rótulo do botão
+               de cobrar, que saiu com a prancha FINAL. A frase ficou; o botão não. */
+            + (antesDaTrava
+              ? (x.veioDaGrade
+                ? ', e isso é a grade da semana, não a promessa do dia — pedir para travar o dia é o gesto'
+                : ', e a promessa ainda está aberta — cobrar a trava é o gesto')
+              : ', e a janela fechou sem travar'))
           : (x.quentes.length
-            ? 'travou ' + x.visitas.length + ' visita(s), e ' + x.quentes.length + ' quente(s) dele ficaram fora do dia — pergunte por quê, não cobre'
-            : 'travou ' + x.visitas.length + ' visita(s)'
+            ? 'travou ' + dg4Plural(x.visitas.length, 'visita', 'visitas') + ', e '
+              + dg4Plural(x.quentes.length, 'quente dele ficou', 'quentes dele ficaram')
+              + ' fora do dia — pergunte por quê, não cobre'
+            : 'travou ' + dg4Plural(x.visitas.length, 'visita', 'visitas')
               + (x.preenchidos.length ? ' (' + x.preenchidos.length + ' com hora)' : '')
-              + ' e nenhum quente ficou fora: reconheça na rodada');
+              + ' e nenhum quente ficou fora: reconheça na rodada'));
 
-    /* O BOTÃO MUDA COM O ESTADO — e os dois ramos GRAVAM no mesmo registros_rodada que o
-       painel da v2 usava (decisão (C)): cobrança e reconhecimento não se perderam. */
-    const acao = (!x.temPlano || !x.travada)
-      ? { on: 'cobrar:' + oid, rot: cobrado ? '✓ cobrado nesta rodada'
-        : (!x.temPlano ? 'cobrar o plano agora ▸'
-          : (x.veioDaGrade ? 'pedir para travar o dia ▸' : 'cobrar a trava ▸')),
-        bg: cobrado ? '#EAF6F1' : '#E51A31', cor: cobrado ? '#1E9E7B' : '#FFFDF8', borda: cobrado ? '#CBE8DD' : '#E51A31' }
-      : { on: 'reconhecer:' + oid, rot: reconhecido ? '✓ reconhecimento registrado' : 'mandar reconhecimento ▸',
-        bg: reconhecido ? '#EAF6F1' : '#1E9E7B', cor: reconhecido ? '#1E9E7B' : '#FFFDF8', borda: reconhecido ? '#CBE8DD' : '#1E9E7B' };
+    /* ══ O BOTÃO DE COBRAR SAIU (10/09/26) ════════════════════════════════════════
+       Regra 6 da prancha FINAL, literal: "SEM botão de cobrar/mandar mensagem — a
+       cobrança acontece NA rodada, olho no olho; o que vira registro são os sinais e
+       quentes anotados". Os dois verbos (`cobrar` → registros_rodada 'cobranca' e
+       `reconhecer` → 'ajuste') saíram junto com ele, e o gesto não se perdeu: virou o
+       chip de sinal, que grava na MESMA tabela com base 'sinal' e nomeia O QUE está
+       sendo cobrado — que é mais do que o botão antigo registrava.
+
+       Ninguém mais lê 'cobranca' nem 'ajuste' no arquivo: a tela que os lia (a 14a) foi
+       descartada em 04/09 e o painel .dae junto dela. Conferido antes de tirar. */
 
     return {
       ini: esc(String(r.name || '').split(' ').map(function (p) { return p[0]; }).slice(0, 2).join('')),
       nome: esc(r.name || 'sem nome'),
-      praca: esc((r.praca || 'praça não declarada')
-        + ' · ' + ((x.plano && x.plano.local_atuacao) ? x.plano.local_atuacao : 'sem rota escolhida')),
+      /* A PRAÇA É SÓ A PRAÇA. O markup escreve `${e.praca} · ${e.rota}`, e este campo já
+         vinha com a rota colada dentro: a linha saía "Porto Alegre · sem rota escolhida ·
+         sem rota escolhida" para as dez pessoas. Visto na foto, não medido — nenhuma
+         guarda vê repetição de texto que o markup produz em dois pedaços certos. */
+      praca: esc(r.praca || 'praça não declarada'),
       rota: esc((x.plano && x.plano.local_atuacao) || 'sem rota escolhida'),
       /* PLANEJOU NA GRADE não é PROMESSA ABERTA: a promessa é um gesto de travar o dia,
          e a grade da semana é o roteiro. Dizer "promessa aberta" sobre quem só encaixou
@@ -51152,23 +51489,33 @@ function dg4Dados(ctx) {
       temQuentes: quentes.length > 0,
       quentes: quentes,
       semQuentes: x.temPlano && quentes.length === 0,
+      sinais: sinais,
       leitura: esc(leitura),
-      leiaCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#B0552F'),
-      cobrar: acao.on, cbRot: acao.rot, cbBg: acao.bg, cbCor: acao.cor, cbBorda: acao.borda
+      leiaCor: !x.temPlano ? '#6E1210' : (x.travada ? '#1E9E7B' : '#B0552F')
     };
   });
 
-  /* ══ o rodapé reativo ═══════════════════════════════════════════════════════════════ */
-  const nCobrados = medidos.filter(function (x) { return (typeof dg2Feito === 'function') && dg4Feito('cobranca', x.oid); }).length;
-  const nPerguntas = medidos.reduce(function (t, x) {
-    return t + x.quentes.filter(function (d) { return (typeof dg2Feito === 'function') && dg4Feito('alinhar', x.oid, d.nome); }).length;
+  /* ══ A PAUTA DA RODADA: TRÊS CARTÕES, DOIS CONTADORES AO VIVO ════════════════════
+     Os dois contadores somam o que ESTÁ na pauta agora (registros_rodada de hoje), e não
+     o que foi clicado nesta sessão — recarregar a página não pode zerar a pauta da
+     reunião que está acontecendo. É por isso que eles leem dg4Feito e não um estado de
+     tela. O primeiro cartão é a trava, e a hora sai da constante do produto. */
+  const nSinais = medidos.reduce(function (s, x) {
+    return s + (sinaisPorOid[x.oid] || []).filter(function (sn) {
+      return sn.ruim && dg4Feito('sinal', x.oid, sn.tipo);
+    }).length;
+  }, 0);
+  const nPerguntas = medidos.reduce(function (s, x) {
+    return s + x.quentes.filter(function (d) { return dg4Feito('alinhar', x.oid, d.nome); }).length;
   }, 0);
   const agenda = [
-    { hora: 'agora', rot: nCobrados ? (nCobrados + ' executivo(s) cobrado(s) nesta rodada — o registro fica na Semana e no Time')
-      : 'nenhuma cobrança registrada ainda — o botão de cada cartão grava aqui' },
     { hora: Math.floor(dg4MinutosDaTrava() / 60) + 'h',
       rot: 'as promessas travam; o que estiver escrito vira o placar de amanhã, medido no HubSpot — zero auto-relato' },
-    { hora: 'rodada', rot: nPerguntas ? (nPerguntas + ' quente(s) fora do plano anotado(s) para perguntar por quê, por nome')
+    { hora: 'rodada', rot: nSinais
+      ? (nSinais + (nSinais === 1 ? ' sinal anotado' : ' sinais anotados')
+        + ' — SLA, cadência, proposta e combinado, por nome, olho no olho')
+      : ('nenhum sinal anotado ainda — de ' + somaCobrancas + (somaCobrancas === 1 ? ' cobrança' : ' cobranças') + ' do dia, clique no chip vermelho para levar à rodada') },
+    { hora: 'rodada', rot: nPerguntas ? (dg4Plural(nPerguntas, 'quente fora do plano anotado', 'quentes fora do plano anotados') + ' para perguntar por quê, por nome')
       : 'nenhum quente anotado — "perguntar por quê" em cada um deixa a pergunta pronta' }
   ];
 
@@ -51205,17 +51552,32 @@ function dg4Dados(ctx) {
        Já vem pronto para o HTML (esc() na origem, no texto que a função monta). */
     avisoForaDoCampo: avisoForaDoCampo ? esc(avisoForaDoCampo) : '',
     temToast: !!s.toast, toast: esc(s.toast || ''),
+    /* O PLACAR DE ONTEM atravessa o contrato inteiro: chips + nota + cor da nota. */
+    placar: placar,
+    placarNota: esc(placarNota), placarNotaCor: placarNotaCor,
     rodada: rodada,
     origAlvo: String(origAlvo), origCart: String(origCart), origNova: String(origNova),
+    /* OS DOIS NÚMEROS QUE SAÍRAM DA FAIXA DE KPIs continuam na tela, na faixa da rodada:
+       a prancha FINAL tem cinco KPIs e dois deles são novos, mas "visitas prometidas" e
+       "prospecções novas" são informação que o gestor já usava — tirar da tela seria
+       perder dado para caber num desenho. */
+    somaVisitas: String(somaVisitas),
+    somaPlanejadas: String(somaPlanejadas),
+    somaNovas: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
     execs: execs,
     /* MODO TV esconde só o que grava — status, plano e promessa continuam à vista, que é
        o que a projeção existe para mostrar. */
     acoes: !tv,
     agenda: agenda,
-    rodapeFonte: esc('Plano, promessa e trava: Supabase planos_diarios + dailies, escritos pelo próprio executivo na Minha Daily'
+    rodapeFonte: esc('Daily do gestor: a palavra de ontem é cobrada primeiro — prometido de dailies.prometido_visitas (o que ele travou ontem)'
+      + ' contra feito medido no HubSpot (visita com desfecho), nunca auto-relato'
+      + ' · plano, promessa e trava: Supabase planos_diarios, escritos pelo próprio executivo na Minha Daily'
+      + ' · SLA de 1º toque, cadência de ontem e toques: as MESMAS funções das abas Time e Pessoas'
+      + ' · não existe propriedade de validade de proposta no HubSpot, então o sinal é o parente medível — proposta na mesa sem data marcada'
+      + ' · combinado do 1:1: pdi_compromissos, a mesma linha que ele marca no Desenvolvimento e você carimba na Pessoas'
       + ' · etapa, dias e quentes: HubSpot (' + frescor + ')'
-      + ' · a origem de cada conta é gravada no slot desde 08/09/26; registro anterior aparece como "origem não registrada", nunca chutada'
-      + ' · cobrança, pergunta e reconhecimento: Supabase registros_rodada, os mesmos que a Semana e o Time leem'
+      + ' · sinal anotado e pergunta: Supabase registros_rodada, os mesmos que a Semana e o Time leem'
+      + ' · sem botão de cobrar: a cobrança acontece na rodada, olho no olho'
       + ' · o gestor não edita plano de ninguém, e depois da trava a promessa é somente leitura.')
   };
 }
@@ -51224,7 +51586,9 @@ function dg4Dados(ctx) {
    daily-gestor-v4 convertida por script (sc-for -> map, sc-if -> ternário,
    {{x}} -> ${x}, sc-camel-on-click -> data-dg4-acao, style-hover -> classe). */
 function dg4TelaHTML(d) {
-  const { acoes, agenda, contagem, execs, kpis, linhaTopo, manchete, origAlvo, origCart, origNova, rodada, rodapeFonte, temToast, tituloTrava, toast } = d;
+  const { acoes, agenda, contagem, execs, kpis, linhaTopo, manchete, origAlvo, origCart, origNova,
+    placar, placarNota, placarNotaCor, rodada, rodapeFonte, somaNovas, somaPlanejadas, somaVisitas,
+    temToast, tituloTrava, toast } = d;
   return `
       <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
 
@@ -51248,6 +51612,16 @@ function dg4TelaHTML(d) {
           ` : ''}
         </div>
 
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
+          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;flex:none;">O placar de ontem <span style="font-weight:700;text-transform:none;letter-spacing:0;color:#7A8494;">· prometido → feito, medido no HubSpot, não auto-relato</span></span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">
+            ${(placar||[]).map(pl => `
+              <span style="display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:0 12px;border:1.5px solid ${pl.borda};border-radius:999px;background:${pl.bg};font:800 10.5px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;">${pl.nome}<b style="font:900 11px 'Archivo',sans-serif;color:${pl.cor};font-variant-numeric:tabular-nums;">${pl.rot}</b></span>
+            `).join('')}
+          </div>
+          <span style="margin-left:auto;flex:none;font:700 10px 'Manrope',sans-serif;color:${placarNotaCor};">${placarNota}</span>
+        </div>
+
         <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;background:#FBFAF6;">
           <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#E51A31;flex:none;">A rodada — quem fala primeiro</span>
           <div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">
@@ -51255,7 +51629,7 @@ function dg4TelaHTML(d) {
               <button data-dg4-acao="${r.on}" style="display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border:1.5px solid ${r.borda};border-radius:999px;background:${r.bg};font:800 10.5px 'Manrope',sans-serif;color:${r.cor};cursor:pointer;white-space:nowrap;" data-dg4-hv="0"><b style="font:900 10px 'Archivo',sans-serif;color:${r.nCor};">${r.pos}</b>${r.nome}<span style="font:800 8.5px 'Archivo',sans-serif;color:${r.stCor};">${r.st}</span></button>
             `).join('')}
           </div>
-          <span style="margin-left:auto;flex:none;font:700 10px 'Manrope',sans-serif;color:#7A8494;">ordem: sem plano → promessa aberta → travadas · de onde vêm os planos de hoje: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${origNova} prospecção nova</b></span>
+          <span style="margin-left:auto;flex:none;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;text-align:right;">ordem: sem plano → furou ontem → promessa aberta → travadas ✓<br>hoje: <b style="color:#2B3440;">${somaVisitas} visitas prometidas</b> · ${somaPlanejadas} planejadas na grade · origem dos planos: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${somaNovas} prospecção nova</b></span>
         </div>
 
         <div style="padding:16px 24px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
@@ -51272,6 +51646,12 @@ function dg4TelaHTML(d) {
                   <span style="display:inline-flex;align-items:center;gap:5px;border:1.5px ${pm.estilo} ${pm.borda};border-radius:999px;padding:4px 11px;font:800 10.5px 'Manrope',sans-serif;color:${pm.cor};background:${pm.bg};white-space:nowrap;"><b style="font:900 12px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;">${pm.n}</b>${pm.rot}</span>
                 `).join('')}
                 <span style="flex:none;font:800 9.5px 'Manrope',sans-serif;color:${e.promStCor};">${e.promSt}</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;padding:9px 16px 0;flex-wrap:wrap;">
+                <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#7A8494;flex:none;">sinais do dia</span>
+                ${(e.sinais||[]).map(sn => `
+                  <button${sn.on ? ' data-dg4-acao="' + sn.on + '" data-dg4-hv="0"' : ' disabled'} style="display:inline-flex;align-items:center;gap:5px;min-height:26px;padding:0 10px;border:1px solid ${sn.borda};border-radius:999px;background:${sn.bg};font:800 9.5px 'Manrope',sans-serif;color:${sn.cor};cursor:${sn.cursor};white-space:nowrap;">${sn.rot}</button>
+                `).join('')}
               </div>
               <div style="padding:10px 16px 0;">
                 <span style="font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;text-transform:uppercase;color:#2B3440;">o plano dele — montado por ele, conta a conta</span>
@@ -51309,16 +51689,13 @@ function dg4TelaHTML(d) {
               </div>
               <div style="display:flex;align-items:center;gap:8px;padding:10px 16px 13px;flex-wrap:wrap;">
                 <span style="font:700 10px/1.5 'Manrope',sans-serif;color:${e.leiaCor};min-width:0;flex:1;">▸ ${e.leitura}</span>
-                ${(acoes) ? `
-                  <button data-dg4-acao="${e.cobrar}" style="flex:none;display:inline-flex;align-items:center;min-height:32px;padding:0 13px;border:1px solid ${e.cbBorda};border-radius:999px;background:${e.cbBg};font:800 10px 'Manrope',sans-serif;color:${e.cbCor};cursor:pointer;white-space:nowrap;" data-dg4-hv="1">${e.cbRot}</button>
-                ` : ''}
               </div>
             </div>
           `).join('')}
         </div>
 
         <div style="padding:10px 24px 18px;">
-          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">Sua rodada <span style="color:#7A8494;">— tudo que você clicou vira a pauta de agora</span></span>
+          <span style="font:900 11px 'Archivo',sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#2B3440;">A pauta da sua rodada <span style="color:#7A8494;">— tudo que você clicou vira pauta, nada se perde</span></span>
           <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:9px;">
             ${(agenda||[]).map(ag => `
               <span style="display:flex;align-items:flex-start;gap:9px;background:#FBFAF6;border:1px solid #E4E0D6;border-radius:10px;padding:9px 13px;min-width:0;">
@@ -51358,7 +51735,7 @@ function dg4Repintar() {
    ao banco. Mesma razão pela qual a v2 guardava DG2.ctx. */
 let DG4_CTX = null;
 
-async function dg4Executar(acao) {
+async function dg4Executar(acao, rotulo) {
   const partes = String(acao || '').split(':');
   const verbo = partes[0];
   const resto = partes.slice(1).join(':');
@@ -51379,15 +51756,33 @@ async function dg4Executar(acao) {
     return r ? String(r.name || '').split(' ')[0] : 'ele';
   };
 
-  if (verbo === 'cobrar' || verbo === 'reconhecer') {
-    const base = verbo === 'cobrar' ? 'cobranca' : 'ajuste';
-    const r = await g14Registrar(base, resto);
+  /* ══ O SINAL DO DIA VAI PARA A PAUTA (10/09/26) ═══════════════════════════════════
+     Este verbo substituiu `cobrar` e `reconhecer`, que morreram com o botão do cartão
+     (regra 6 da prancha: a cobrança acontece na rodada, olho no olho). O gesto não se
+     perdeu — ficou melhor: o registro antigo dizia "cobrei o Marco", e este diz O QUE
+     foi cobrado, porque `tipo` do sinal viaja como `extra` da chave.
+
+     A TABELA É A MESMA (registros_rodada, por g14Registrar), que é o que a Semana e o
+     Time leem. A prancha pede uma `daily_pauta`; uma segunda tabela para a mesma pauta
+     faria o sinal anotado aqui não existir nas outras duas abas.
+
+     `extra` NÃO PODE TER ':' — g14CarregarFeitos corta a chave no primeiro dois-pontos
+     para separar base de extra. Os tipos são slugs (ontem, sla, cad, comb, prop-<id>), e
+     esta guarda existe porque um nome de conta no lugar do slug truncaria a chave e o ✓
+     voltaria no chip do negócio errado depois do reload. */
+  if (verbo === 'sinal') {
+    const ps = resto.split(':');
+    const oid = ps[0];
+    const tipo = ps.slice(1).join('-');
+    if (!oid || !tipo) { DG4_ESTADO.toast = 'esse sinal chegou sem endereço — não gravei'; return dg4Repintar(); }
+    /* O RÓTULO VAI COMO DETALHE: quem abrir registros_rodada amanhã tem de conseguir ler
+       o que foi cobrado sem reconstruir a tela daquele dia. */
+    const chip = String(rotulo || tipo).replace(/^✓ /, '').replace(/ ▸$/, '').trim() || tipo;
+    const r = await g14Registrar('sinal', oid, tipo, chip);
     if (r && r.error) { DG4_ESTADO.toast = 'não gravei: ' + r.error.message; return dg4Repintar(); }
     DG4_ESTADO.toast = r && r.desfeito
-      ? ('registro desfeito — ' + nomeDoRep(resto) + ' saiu da rodada')
-      : (verbo === 'cobrar'
-        ? (nomeDoRep(resto) + ' cobrado ✓ — o registro fica na Semana e no Time')
-        : ('reconhecimento de ' + nomeDoRep(resto) + ' registrado ✓'));
+      ? ('sinal saiu da pauta — ' + nomeDoRep(oid))
+      : ('anotado para a rodada de ' + nomeDoRep(oid) + ': ' + chip + ' ✓');
     return dg4Repintar();
   }
 
@@ -51417,7 +51812,10 @@ function dg4Ligar() {
     if (!alvo.closest('[data-dg4-raiz]')) return;
     const acao = alvo.getAttribute('data-dg4-acao');
     if (!acao) return;
-    dg4Executar(acao);
+    /* O TEXTO DO NÓ VAI JUNTO: é o que o gestor leu antes de clicar, e é o que fica em
+       registros_rodada.detalhe. Reconstruir o rótulo no handler custaria a varredura do
+       funil inteira por clique. */
+    dg4Executar(acao, alvo.textContent || '');
   });
 }
 
@@ -51526,7 +51924,21 @@ async function renderDaily() {
   if (!souRepDailyPre) {
     await Promise.all([
       (typeof g14CarregarSemanais === 'function') ? g14CarregarSemanais() : Promise.resolve(),
-      (typeof g14CarregarFeitos === 'function') ? g14CarregarFeitos(dailyRefDate) : Promise.resolve()
+      (typeof g14CarregarFeitos === 'function') ? g14CarregarFeitos(dailyRefDate) : Promise.resolve(),
+      /* ══ O COMBINADO DO 1:1, LIDO PELO LEITOR DA ABA PESSOAS (10/09/26) ═════════
+         O sinal "combinado furado" sai de pdi_compromissos, e quem sabe ler essa tabela
+         é ps6Carregar — a MESMA função e o MESMO cache (PS6_ESTADO.compromissos) que a
+         aba Pessoas usa para mostrar o ✓ dele e o carimbo do gestor.
+
+         POR QUE AQUI E NÃO SOB DEMANDA: a memória do projeto tem a lição na forma de um
+         defeito pago — "cache de sessão mente na outra aba": quem abria a Daily antes do
+         Planejamento via o dia vazio com sete slots no banco. Se esta leitura dependesse
+         de o gestor ter passado pela Pessoas primeiro, o chip de combinado sumiria em
+         silêncio para quem abre a Daily de manhã — e sumir em silêncio é o pior estado
+         desta tela. Só carrega se ainda não carregou nesta sessão. */
+      (typeof ps6Carregar === 'function' && typeof PS6_ESTADO !== 'undefined' && !PS6_ESTADO.carregou)
+        ? ps6Carregar().catch(function (e) { console.error('Daily — combinados do 1:1:', e && e.message); })
+        : Promise.resolve()
     ]);
   }
 
@@ -53869,6 +54281,10 @@ async function renderDaily() {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
       grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
       foraDoCampo: abertoDeQuemSaiu,
+      /* ONTEM VEM DAQUI e não é recalculado na v4: `yesterdayISO` é o dia útil anterior
+         ao dia em foco, e o placar de ontem é a única afirmação desta tela sobre o
+         passado — duas definições de "ontem" dariam dois placares. */
+      ontem: yesterdayISO,
       frescor: frescorDaily
     };
     html = '<div id="dg4Raiz" data-dg4-raiz="1">'

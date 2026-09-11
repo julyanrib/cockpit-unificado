@@ -118,9 +118,14 @@ conferir('o cartão diz PLANEJOU NA GRADE, e não PROMESSA ABERTA',
   /x\.veioDaGrade \? 'PLANEJOU NA GRADE' : 'PROMESSA ABERTA'/.test(codigo),
   'dizer "promessa" sobre quem só encaixou contas na grade é a tela afirmando um gesto que ninguém fez');
 
-conferir('e a cobrança pede a coisa certa',
-  /x\.veioDaGrade \? 'pedir para travar o dia ▸' : 'cobrar a trava ▸'/.test(codigo),
-  '"cobrar a trava" de quem não tem plano do dia manda o gestor cobrar o passo errado');
+/* O BOTÃO DE COBRAR SAIU EM 10/09/26 (prancha daily-gestor-final, regra 6: "a cobrança
+   acontece NA rodada, olho no olho"). A EXIGÊNCIA NÃO SAIU: a tela continua tendo de
+   pedir o gesto certo a cada um, e agora quem diz isso é a LEITURA do cartão. A guarda
+   foi reancorada, não afrouxada — se alguém apagar a distinção, ela reprova de novo. */
+conferir('e a leitura pede a coisa certa',
+  /\? ', e isso é a grade da semana, não a promessa do dia — pedir para travar o dia é o gesto'/.test(codigo)
+    && /: ', e a promessa ainda está aberta — cobrar a trava é o gesto'/.test(codigo),
+  'pedir "a trava" a quem só encaixou contas na grade manda o gestor cobrar o passo errado');
 
 conferir('o KPI de planos montados diz quantos vieram pela grade',
   /naGrade\.length \? ' \(' \+ naGrade\.length \+ ' pela grade\)' : ''/.test(codigo) &&
@@ -190,9 +195,16 @@ conferir('a hora ausente é rótulo honesto, não relógio inventado',
 /* ESTE NÚMERO IA ENGANAR ELE, e só apareceu quando eu fui conferir a checagem acima.
    Medido em 09/09: promessa 2, planejado 38. Sozinho, o "2" faz o gestor abrir a reunião
    achando que o time vai fazer duas visitas no dia. */
+/* OS DOIS NÚMEROS SAÍRAM DA FAIXA DE KPIs em 10/09/26 — a prancha FINAL tem cinco KPIs e
+   dois deles são novos (a palavra de ontem e as cobranças do dia). Eles NÃO saíram da
+   tela: desceram para a faixa da rodada, cada um com o nome do seu gesto. A guarda confere
+   os DOIS lados — o provedor entrega e o markup escreve —, porque contrato com o número e
+   markup sem ele é exatamente como um dado desaparece em silêncio. */
 conferir('e a tela mostra os dois, com o nome do gesto de cada um',
-  /somaPlanejadas > somaVisitas/.test(codigo) &&
-  /somaPlanejadas \+ ' planejadas na grade'/.test(codigo),
+  /somaVisitas: String\(somaVisitas\),/.test(codigo) &&
+  /somaPlanejadas: String\(somaPlanejadas\),/.test(codigo) &&
+  /\$\{somaVisitas\} visitas prometidas/.test(codigo) &&
+  /\$\{somaPlanejadas\} planejadas na grade/.test(codigo),
   'promessa 2 com 38 planejadas, sem dizer as duas, é o número certo levando à conclusão errada');
 
 /* ── 5 · NADA É ESCRITO ─────────────────────────────────────────────────────────────── */
@@ -256,6 +268,140 @@ conferir('todo nome que o markup do gestor lê existe no escopo dele',
     : 'não consegui ler o corpo de dg4TelaHTML — sem corpo não há medição, e verde aqui seria falso');
 
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   A DAILY FINAL DO GESTOR (10/09/26, prancha daily-gestor-final-STANDALONE)
+   ══════════════════════════════════════════════════════════════════════════════════════
+   Regra zero do prompt: "NENHUM clique morto e NENHUM dado inventado". E a regra 2, que
+   é a razão desta tela existir: "o placar de ontem compara SEMPRE promessa travada
+   (Supabase) vs medido (HubSpot) — nunca auto-relato".
+
+   O QUE ESTAS GUARDAS PROTEGEM, em uma frase cada:
+     1. quem não prometeu não furou (o zero que ACUSA, irmão do zero que tranquiliza);
+     2. SLA, cadência, toques e propostas saem das MESMAS funções da Time e da Pessoas;
+     3. a ordem da rodada é lei e os grupos saem do mesmo peso que ordenou a fila;
+     4. chip ruim é clicável e persiste; chip bom e chip não medido não são clicáveis;
+     5. nenhuma tabela nova: sinal e pergunta vão para registros_rodada;
+     6. o que a prancha pede e o CRM não tem aparece com o nome do que existe.
+
+   O QUE A PRANCHA PEDE E NÃO EXISTE, e por isso a tela diz outra coisa:
+     vence HOJE ......... não há propriedade de validade de proposta no portal -> o sinal
+                          é "proposta sem data", a MESMA regra da Time e da Pessoas
+     daily_pauta ........ tabela inexistente -> registros_rodada, que a Semana e o Time leem
+     daily_combinados ... tabela inexistente -> pdi_compromissos, a linha que ele marca */
+(function () {
+  /* O BLOCO DA DAILY DO GESTOR, FATIADO. `cbRot` e os verbos cobrar/reconhecer existem
+     de propósito na aba Time e na Semana; medir o arquivo inteiro reprovaria código
+     correto de outras telas — e foi o que a primeira versão destas guardas fez. */
+  const iDg = codigo.indexOf('const DG4_ESTADO');
+  const fDg = codigo.indexOf('let DG4_RELOGIO');
+  if (iDg < 0 || fDg <= iDg) {
+    falhas.push('as guardas da Daily FINAL não acharam o bloco dg4 — âncora perdida, e uma guarda sem âncora mede o arquivo errado em silêncio');
+    return;
+  }
+  const tela = codigo.slice(iDg, fDg);
+
+  /* ── 1 · QUEM NÃO PROMETEU NÃO FUROU ───────────────────────────────────────────────
+     Medido em 10/09/26 para ontem: 2 dos 10 tinham promessa registrada. Com `furou`
+     calculado em cima de um null virando 0, oito pessoas apareceriam devendo a palavra na
+     frente do time por causa de um campo vazio. */
+  conferir('a palavra de ontem só acusa quem prometeu',
+    /const medido = p != null && f != null;/.test(tela)
+      && /furou: medido \? f < p : false/.test(tela)
+      && tela.indexOf('sem promessa registrada') > -1,
+    'furo calculado sobre promessa ausente é acusação produzida por campo vazio');
+  conferir('e a soma do placar só conta quem prometeu',
+    /const comPromessa = medidos\.filter\(function \(x\) \{ return x\.ontem\.medido; \}\);/.test(tela)
+      && /const promOntem = comPromessa\.reduce/.test(tela)
+      && /const feitOntem = comPromessa\.reduce/.test(tela)
+      && tela.indexOf('sem promessa registrada (não é furo)') > -1,
+    'somar o feito de quem não prometeu infla um lado do placar e inventa dívida no outro');
+
+  /* ── 2 · OS DOIS LADOS DO PLACAR VÊM DE FONTES DIFERENTES (regra 2) ──────────────── */
+  conferir('o prometido sai do Supabase e o feito sai do HubSpot',
+    /function dg4Ontem\(ownerId, ontemISO\)[\s\S]{0,700}?getDaily\(ownerId, ontemISO\)/.test(tela)
+      && /atividadesComprovadasNoDia\(ownerId, ontemISO\)/.test(tela),
+    'os dois lados vindos da mesma fonte transformam o placar em auto-relato');
+
+  /* ── 3 · NADA É MEDIDO DE NOVO AQUI (regra 1 do prompt) ─────────────────────────── */
+  conferir('SLA, cadência, toques e propostas saem das funções da Time e da Pessoas',
+    /const pessoas = \(typeof pe4Pessoas === .function.\) \? pe4Pessoas\(\) : \[\];/.test(tela.replace(/'/g, '.'))
+      && /pessoa\.slaEstourados > 0/.test(tela)
+      && /tm2CadenciaDe\(ownerId\)/.test(tela)
+      && /pe4Propostas\(pessoa\)/.test(tela)
+      && !/function dg4Sla|function dg4Toques/.test(tela),
+    'uma segunda contagem aqui daria dois números iguais por coincidência — e um dia divergiriam');
+  conferir('e a cadência procura o DIA na série, não a penúltima posição',
+    /const i = cd\.dias\.indexOf\(diaISO\);/.test(tela)
+      && /if \(i < 0\) return null;/.test(tela),
+    'a série pula fim de semana e feriado: a posição -2 seria o dia certo por acaso');
+
+  /* ── 4 · A ORDEM DA RODADA É LEI, E OS GRUPOS SAEM DELA ─────────────────────────── */
+  conferir('a ordem é sem plano → furou ontem → aberta → travada ✓',
+    /if \(!x\.temPlano\) return 0;[\s\S]{0,200}?if \(x\.travada && x\.ontem\.furou\) return 1;[\s\S]{0,120}?if \(!x\.travada\) return 2;[\s\S]{0,60}?return 3;/.test(tela)
+      && tela.indexOf('sem plano → furou ontem → promessa aberta → travadas ✓') > -1,
+    'a ordem da rodada decide quem fala primeiro — é a regra 1 da prancha');
+  conferir('e os quatro grupos saem do MESMO peso que ordenou a fila',
+    /return peso\(x\) === 0;/.test(tela) && /return peso\(x\) === 1;/.test(tela)
+      && /return peso\(x\) === 2;/.test(tela)
+      && /const pz = peso\(x\);/.test(tela),
+    'filtros próprios por grupo é como a ordem e a contagem passam a discordar — e quem fecha plano vazio aparece duas vezes');
+
+  /* ── 5 · CHIP RUIM É CLICÁVEL E PERSISTE; CHIP BOM NÃO É CLICÁVEL ───────────────── */
+  conferir('o chip de sinal ruim grava, e o bom não é clicável',
+    /* O RAMO DO CHIP BOM TEM DE ENTREGAR VERBO VAZIO, e não só cursor de seta: um chip
+       informativo com verbo é um clique que grava escondido atrás da aparência certa. */
+    /if \(!sn\.ruim\) \{[\s\S]{0,400}?on: ..,[\s\S]{0,400}?cursor: .default.[\s\S]{0,40}?\}/.test(tela.replace(/'/g, '.'))
+      && /on: tv \? .. : \(.sinal:. \+ oid \+ .:. \+ sn\.tipo\)/.test(tela.replace(/'/g, '.'))
+      && /cursor: tv \? .default. : .pointer./.test(tela.replace(/'/g, '.')),
+    'chip informativo com verbo é clique que grava numa tela projetada na parede');
+  conferir('e o estado do chip vem do banco, não da sessão',
+    /const naPauta = dg4Feito\(.sinal., oid, sn\.tipo\);/.test(tela.replace(/'/g, '.'))
+      && /sn\.ruim && dg4Feito\(.sinal., x\.oid, sn\.tipo\)/.test(tela.replace(/'/g, '.')),
+    'recarregar a página no meio da reunião não pode zerar a pauta da rodada');
+
+  /* ── 6 · A GUARDA PRESA A UM NOME MORTO (o defeito que estava em produção) ───────── */
+  conferir('nenhum leitor da pauta está protegido por um nome que não existe',
+    codigo.indexOf('dg2Feito') === -1,
+    'os cinco leitores da pauta estavam atrás de typeof dg2Feito, que saiu em 08/09: o gestor clicava, gravava, e o repinte devolvia o botão ao estado inicial com o contador em 0');
+
+  /* ── 7 · NENHUMA TABELA NOVA, NENHUM ESCRITOR NOVO ──────────────────────────────── */
+  conferir('o sinal e a pergunta gravam em registros_rodada',
+    /g14Registrar\(.sinal., oid, tipo, chip\)/.test(tela.replace(/'/g, '.'))
+      && /g14Registrar\(.alinhar., oid, cliente\)/.test(tela.replace(/'/g, '.'))
+      && tela.indexOf('daily_pauta') === -1
+      && tela.indexOf('daily_combinados') === -1,
+    'tabela nova para a mesma pauta faz o sinal anotado aqui não existir na Semana nem no Time');
+  conferir('e o combinado vem de pdi_compromissos pelo leitor da Pessoas',
+    /ps6Carregar\(\)\.catch/.test(codigo)
+      && /PS6_ESTADO\.compromissos\[String\(ownerId\)\]/.test(tela),
+    'ler a tabela do combinado com um segundo leitor faria o ✓ da Pessoas não aparecer aqui');
+
+  /* ── 8 · O QUE A PRANCHA PEDE E O CRM NÃO TEM ───────────────────────────────────── */
+  conferir('não existe "vence HOJE" inventado',
+    tela.indexOf('vence HOJE') === -1
+      && tela.indexOf('proposta sem data: ') > -1,
+    'não há propriedade de validade de proposta no portal — o chip mostra o parente medível, com o nome certo');
+  conferir('e o texto do combinado só aparece se for o texto que ele viu',
+    /const mesma = !!versao && versao === String\(DATA\.versaoAnalise \|\| ..\);/.test(tela)
+      && /texto: mesma \?/.test(tela)
+      && tela.indexOf('sem marcação (') > -1,
+    'parear o combinado de hoje com o que ele marcou em outra análise mostra ao gestor um texto que o executivo nunca viu');
+
+  /* ── 9 · O BOTÃO DE COBRAR SAIU, E COM ELE OS DOIS VERBOS ───────────────────────── */
+  conferir('não há botão de cobrar nem verbo de cobrança no cartão',
+    tela.indexOf('cbRot') === -1 && tela.indexOf('mandar reconhecimento') === -1
+      && !/verbo === .cobrar./.test(tela.replace(/'/g, '.'))
+      && !/verbo === .reconhecer./.test(tela.replace(/'/g, '.')),
+    'regra 6 da prancha: a cobrança acontece NA rodada, olho no olho, e o registro é o sinal anotado');
+
+  /* ── 10 · O DETALHE GRAVADO É O TEXTO QUE ELE LEU ───────────────────────────────── */
+  conferir('o detalhe do registro é o rótulo do chip, vindo do ouvinte',
+    /dg4Executar\(acao, alvo\.textContent \|\| ..\);/.test(tela)
+      && /async function dg4Executar\(acao, rotulo\)/.test(tela),
+    'reconstruir o rótulo no handler custa a varredura do funil inteira por clique — e o registro tem de dizer o que foi cobrado');
+}());
+
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');
   falhas.forEach(l => console.error(l));
