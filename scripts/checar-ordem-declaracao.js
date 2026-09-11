@@ -40,7 +40,10 @@ const tpl = fs.readFileSync(T, 'utf8');
 const VIGIADAS = [
   'renderPlanejamento6a',
   'minhaDaily7aHTML',
-  'dailyGestor14aHTML',
+  /* dailyGestor14aHTML saiu em 11/09/26 com a Daily 14a morta. O lugar dela na lista e
+     dg4Dados: e a funcao que monta a Daily do gestor a partir de muitos locais, que e onde
+     este defeito aparece. */
+  'dg4Dados',
   'fn2ShellHTML',
   'pl6Reciclagem',
   'pl6Carteira',
