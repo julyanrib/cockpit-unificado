@@ -28082,7 +28082,13 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
       nome: lead.name || lead.nome || '',
       bairro: lead.bairro || null, cidade: lead.cidade || null,
       lat: lead.lat != null ? lead.lat : null, lng: lead.lng != null ? lead.lng : null
-    }, dataISO, '09:00', ownerId, tipo);
+      /* A HORA COMBINADA, e 09:00 só quando não houve escolha (11/09/26). Esta linha
+         cravava '09:00' com um comentário correto para a época: "é a hora que o Cockpit
+         grava toda tarefa datada". Desde que a ficha ganhou campo de hora, deixá-la
+         cravada faria a Agenda mostrar 9h para um compromisso que o servidor gravou às
+         15h — o espelho divergindo do dado real por seis horas. O padrão continua sendo
+         o mesmo, e continua morando no servidor; aqui ele é só o eco. */
+    }, dataISO, (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) ? String(hora) : '09:00', ownerId, tipo);
   } catch (e) { console.error('espelho do proximo passo na agenda:', e); }
   /* E AS TELAS ACOMPANHAM (08/09/26). O espelho acima ja punha o passo no plano da
      semana e na agenda local; nenhuma tela era repintada, entao o Planejamento e a
@@ -29930,6 +29936,12 @@ let pl6UI = {
      agendar DENTRO da ficha. `picker` e `endereco` saíram com o painel em 04/09/26 —
      eram escritos em nove lugares e lidos em um. */
   fonte: 'todas', pickerDia: null,
+  /* O QUE ELE DIGITOU NA BUSCA DA MUNIÇÃO (11/09/26). Ao contrário da busca de bairro
+     logo abaixo, ESTE texto precisa estar no estado: ele filtra a lista ANTES do corte de
+     60 cards, e a conta procurada é quase sempre uma que não está desenhada. O preço é
+     redesenhar a cada letra — e o handler devolve foco e cursor, porque redesenho que
+     come o que se digita é o mesmo defeito do formulário de criar lead. */
+  q: '',
   /* o bairro escolhido na faixa de Territorio (chave normalizada) ou null. O texto do
      campo de busca NAO fica aqui de proposito: ele filtra os chips no DOM, sem
      redesenhar — se estivesse no estado, o cursor sairia do campo a cada letra. */
@@ -30738,9 +30750,20 @@ function pl6DadosFinal(rep) {
     if (filtro === 'carteira') return l.tipo === 'c';
     return l.tipo === 'n' && l.grupo === filtro;
   });
-  const munFilt = s.terr
+  const porBairro = s.terr
     ? daOrigem.filter(l => String(l.regiao || '') === String(s.terr))
     : daOrigem;
+  /* ══ E O NOME, QUE É O TERCEIRO FILTRO (11/09/26) ═══════════════════════════════
+     Bruno: "era só colocar o nome que ia aparecer o lead e eu levava o card até lá".
+     Casa por PEDAÇO do nome, sem acento e sem caixa, pela mesma normalização que o
+     resto da prospecção usa — "coliseu" tem de achar "Restaurante Coliseu". Também
+     olha o bairro do card, porque quem digita "taquara" quer a rua inteira e não
+     precisa saber que aquilo é um chip de território do outro bloco. */
+  const alvoBusca = pl6ChaveBairro(String(s.q || '').trim());
+  const munFilt = !alvoBusca ? porBairro : porBairro.filter(function (l) {
+    return pl6ChaveBairro(l.nome || '').indexOf(alvoBusca) >= 0
+      || pl6ChaveBairro((l._bruto && l._bruto.bairro) || '').indexOf(alvoBusca) >= 0;
+  });
   /* A ORDEM É A DA PRIORIDADE que já existe: SLA estourado primeiro, depois parado,
      depois ★, depois distância. A prancha não pede ordem nenhuma, e inventar uma aqui
      desfaria a única que foi medida. */
@@ -30952,6 +30975,10 @@ function pl6DadosFinal(rep) {
         bg: on ? '#2B3440' : '#FDFEFF', cor: on ? '#FDFEFF' : '#2B3440',
         borda: on ? '#2B3440' : '#DCE1EA' };
     }),
+    /* O QUE A BUSCA ACHOU, dito em número: "254" some quando ele digita, e sem esta
+       contagem a coluna passaria a mentir sobre o tamanho da munição. */
+    buscaQ: String(s.q || ''),
+    buscaN: municaoOrd.length,
     municao: municaoOrd.slice(0, 60).map(function (l) {
       const sel = !!(selLead && selLead.id === l.id);
       const tg = pfTag(l);
@@ -31444,6 +31471,8 @@ function pl6TelaFinalHTML(d) {
             <span style="display:block;font:700 9px/1.4 'Manrope',sans-serif;color:#7A8494;margin-top:2px;">${bl.sub}</span>
           </button>`).join('')}
         </div>
+        <input type="search" data-pl6-busca-nome="1" value="${esc(d.buscaQ || '')}" placeholder="achar conta pelo nome — ex.: Coliseu" style="display:block;width:100%;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:8px 14px;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;outline:none;margin-bottom:8px;">
+        ${d.buscaQ ? `<span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-bottom:8px;">${d.buscaN} conta${d.buscaN === 1 ? '' : 's'} com "${esc(d.buscaQ)}" — arraste o card para o dia, ou clique nele e no horário</span>` : ''}
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
@@ -31900,6 +31929,43 @@ function pl6Ligar(box, rep) {
       /* SEM SUGESTÃO A LISTA NÃO FICA ABERTA COM SÓ O TÍTULO: ele digitou um bairro que
          o mapa não conhece, e isso é permitido — "vale o que ele digitar". */
       lista.style.display = visiveis === 0 ? 'none' : 'flex';
+      return;
+    }
+    /* ══ A BUSCA POR NOME NA MUNIÇÃO (11/09/26) ═════════════════════════════════════
+       Bruno: "era só colocar o nome que ia aparecer o lead e eu levava o card até lá".
+
+       Esta é a única busca desta tela que REDESENHA, e redesenhar é obrigatório: ela
+       filtra antes do corte de 60 cards, e a conta procurada quase nunca está entre os
+       60 desenhados. O preço é que o input é reconstruído a cada letra.
+
+       ENTÃO O FOCO E O CURSOR VOLTAM NA MÃO. Sem isto, a segunda letra não chega ao
+       campo — é o mesmo defeito que o formulário de criar lead teve, e o tipo de coisa
+       que passa em toda medição e aparece no primeiro uso de verdade. */
+    const buscaNome = ev.target.closest && ev.target.closest('[data-pl6-busca-nome]');
+    if (buscaNome) {
+      pl6UI.q = buscaNome.value || '';
+      const pos = buscaNome.selectionStart;
+      redesenhar();
+      /* O FOCO VOLTA POR TENTATIVA, e não encadeado na promessa do redesenho.
+         MEDIDO: `Promise.resolve(redesenhar()).then(...)` NUNCA executava — o redesenho
+         desta casa espera um `requestAnimationFrame`, e com a aba em segundo plano o
+         navegador não dispara frame nenhum. O DOM trocava, o campo perdia o foco e a
+         segunda letra ia para o nada. O `then` não era lento: ele não chegava.
+         `setTimeout` dispara em aba oculta (estrangulado, mas dispara), e a tentativa
+         repetida cobre o caso de o redesenho demorar mais do que o primeiro tique. */
+      let tentativas = 0;
+      const devolverFoco = function () {
+        const novo = box.querySelector('[data-pl6-busca-nome]');
+        if (novo && document.activeElement !== novo) {
+          novo.focus();
+          try { novo.setSelectionRange(pos, pos); } catch (e) { /* type=search em navegador velho */ }
+        }
+        tentativas += 1;
+        /* para assim que o campo está com o foco, ou depois de meio segundo: insistir
+           para sempre roubaria o foco de quem já clicou em outro lugar. */
+        if (tentativas < 6 && (!novo || document.activeElement !== novo)) setTimeout(devolverFoco, 80);
+      };
+      setTimeout(devolverFoco, 0);
       return;
     }
     const busca = ev.target.closest && ev.target.closest('[data-pl6-busca-bairro]');
@@ -36689,7 +36755,9 @@ function fichaLeadFunilBodyHTML(l) {
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
           <input type="text" class="ficha-passo-texto" placeholder="Ex.: ligar cobrando a proposta" style="flex:1;min-width:200px;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;">
           <input type="date" class="ficha-passo-data" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;">
+          <input type="time" class="ficha-passo-hora" step="900" style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-md);padding:8px 11px;font:inherit;font-size:12px;font-variant-numeric:tabular-nums;">
         </div>
+        <div style="font-size:10px;color:var(--muted2);margin-top:6px;line-height:1.5;">A hora é opcional — sem ela o compromisso entra às 9h, como sempre. Com ela, ele cai na faixa daquele horário no seu Planejamento e na sua Daily.</div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:7px;">
           <button type="button" class="ficha-passo-salvar btn-prim" style="padding:8px 16px;">Salvar próximo passo</button>
           <span class="ficha-passo-status" style="font-size:11px;color:var(--muted2);"></span>
@@ -37999,10 +38067,20 @@ function wireFichaLeadFunilEdicao(container, l) {
   if (btnPasso) btnPasso.addEventListener('click', async () => {
     const campoTexto = container.querySelector('.ficha-passo-texto');
     const campoData = container.querySelector('.ficha-passo-data');
+    const campoHora = container.querySelector('.ficha-passo-hora');
     const statusEl = container.querySelector('.ficha-passo-status');
     const textoCru = (campoTexto.value || '').trim();
     const texto = textoCru;
     const data = campoData.value || '';
+    /* A HORA É OPCIONAL, e por isso ela só passa daqui quando está NO FORMATO. O input
+       `type="time"` já entrega HH:MM ou vazio, mas navegador antigo cai para texto livre —
+       e hora inventada num compromisso com cliente é pior do que hora nenhuma. */
+    const horaCrua = String((campoHora && campoHora.value) || '').trim();
+    const horaEscolhida = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(horaCrua) ? horaCrua : '';
+    if (horaCrua && !horaEscolhida) {
+      statusEl.textContent = 'A hora precisa estar no formato HH:MM.';
+      statusEl.style.color = 'var(--red)'; return;
+    }
     if (!texto || !data) { statusEl.textContent = 'Preencha o texto e a data antes de salvar.'; statusEl.style.color = 'var(--red)'; return; }
 
     /* QUALIFICAÇÃO no MESMO gesto (28/08/26). O bloco .ficha-qualif só existe quando
@@ -38049,7 +38127,10 @@ function wireFichaLeadFunilEdicao(container, l) {
       const resp = await comPrazoGlobal(async (signal) => fetch('/api/negocio-acao', {
         method: 'POST', signal,
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) },
-        body: JSON.stringify({ op: 'nota', dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo', ...(qualifPayload ? { qualificacao: qualifPayload } : {}) })
+        /* A HORA VIAJA SÓ QUANDO ELE ESCOLHEU UMA. Campo vazio não vira '09:00' aqui: o
+           padrão é do SERVIDOR, num lugar só, e mandar o padrão daqui criaria um segundo
+           lugar onde a convenção do "compromisso do dia" poderia divergir. */
+        body: JSON.stringify({ op: 'nota', dealId, texto, data, tipo: passoTipoAtivo, tipoAcao: 'proximo-passo', ...(horaEscolhida ? { hora: horaEscolhida } : {}), ...(qualifPayload ? { qualificacao: qualifPayload } : {}) })
       }), 8000, 'criar-nota-negocio-proximo-passo');
       const respData = await resp.json().catch(() => ({}));
       if (!resp.ok || !respData.ok) {
@@ -38066,6 +38147,7 @@ function wireFichaLeadFunilEdicao(container, l) {
       }
       campoTexto.value = '';
       campoData.value = '';
+      if (campoHora) campoHora.value = '';
       if (respData.aviso) {
         statusEl.textContent = respData.aviso;
         statusEl.style.color = 'var(--amber-ink)';
@@ -38099,11 +38181,19 @@ function wireFichaLeadFunilEdicao(container, l) {
            HORA 09:00 porque e a hora que o Cockpit grava toda tarefa datada (12:00 UTC,
            ver api/criar-nota-negocio.js) — inventar outra faria o espelho e o dado real
            divergirem por um dia inteiro na grade horaria. */
-        espelharPassoNasTelas({ id: dealId, name: l.name, bairro: l.bairro, cidade: l.cidade, lat: l.lat, lng: l.lng }, data, passoTipoAtivo, l.ownerId);
+        /* A HORA CHEGA AO ESPELHO (11/09/26). O quinto argumento existia desde que o
+           espelho nasceu e NUNCA foi passado por este site — por isso o passo das 15h
+           caía na primeira faixa livre do dia. Com ele, `espelharPassoNoPlanoSemanal`
+           escolhe a faixa que contém a hora combinada, e a Daily vem de graça porque ela
+           lê a mesma grade. */
+        espelharPassoNasTelas({ id: dealId, name: l.name, bairro: l.bairro, cidade: l.cidade, lat: l.lat, lng: l.lng }, data, passoTipoAtivo, l.ownerId, horaEscolhida);
         const dataBRPasso = String(data).split('-').reverse().join('/');
-        statusEl.textContent = `Próximo passo salvo — já está na sua Agenda em ${dataBRPasso}.`;
+        /* A CONFIRMAÇÃO DIZ A HORA quando houve escolha — senão ela promete uma precisão
+           que não existe, e o executivo vai procurar às 15h o que está às 9h. */
+        const quandoBR = dataBRPasso + (horaEscolhida ? ' às ' + horaEscolhida : ' às 9h');
+        statusEl.textContent = `Próximo passo salvo — ${quandoBR}, já no seu Planejamento e na Agenda.`;
         statusEl.style.color = 'var(--green)';
-        mostrarToast(`Próximo passo de "${l.name}" datado pra ${dataBRPasso} — entra na sua Agenda como follow-up.`, 'sucesso');
+        mostrarToast(`Próximo passo de "${l.name}" marcado pra ${quandoBR} — entra no seu Planejamento, na Agenda e na sua Daily do dia.`, 'sucesso');
       }
       btnPasso.disabled = false;
     } catch (e) {
