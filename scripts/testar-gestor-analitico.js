@@ -965,6 +965,27 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
       && /ajustadas: ajustadas/.test(montar));
   checar('e a tela mostra que houve ajuste de competencia',
     tela.indexOf('venda fora do mês por competência') > -1);
+
+  /* ── 13 · ZERO E ZERO (10/09/26) ────────────────────────────────────────────────────
+     `Number(r.metaMensal) || 10` vivia em CINCO lugares do template e num sexto em
+     montar-dados. Zero e falsy, entao a Amanda — que saiu da planilha e tem meta 0 —
+     aparecia com meta 10, que e exatamente o numero que este trabalho veio tirar. E o
+     objeto de reps do montar-dados e um FILTRO: metaMrr e metaReceita chegavam do robo
+     e morriam ali. As duas coisas so apareceram medindo a tela depois da rodada. */
+  /* As regexes desta guarda nasceram sem as barras de escape: eu as passei por `node -e`
+     e o shell comeu os \. Verde e errado, do jeito que a lição já está registrada — por
+     isso estas três estão escritas com indexOf onde o escape é frágil. */
+  checar('a meta de clientes de uma pessoa sai de uma funcao so',
+    tela.indexOf('function metaClientesDoRep(r) {') > -1
+      && tela.indexOf('Number(r.metaMensal) || 10') === -1
+      && tela.indexOf('r.metaMensal || 10') === -1
+      && tela.indexOf('Number(rep.metaMensal) || 10') === -1);
+  checar('e ela distingue meta zero de campo ausente',
+    tela.indexOf("return v != null && v !== '' ? Number(v) : 10;") > -1);
+  checar('as tres metas atravessam o montar-dados sem virar undefined',
+    montar.indexOf('metaMensal: h.metaMensal != null ? h.metaMensal : 10,') > -1
+      && montar.indexOf('metaMrr: h.metaMrr != null') > -1
+      && montar.indexOf('metaReceita: r.metaReceita,') > -1);
 }());
 
 if (falhas.length) {

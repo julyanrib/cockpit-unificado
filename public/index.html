@@ -8152,7 +8152,7 @@
   </div>
 
 <script id="cockpit-data" type="application/json">
-{"shellProtegido":true,"supabase":{"url":"https://xitmahwxncpdzopmdook.supabase.co","anonKey":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpdG1haHd4bmNwZHpvcG1kb29rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5MDM5ODksImV4cCI6MjEwMDQ3OTk4OX0.gbYOpSbej7Pd_3JHLrp0vQFux5Z-Cep_21tnHB8e5Mk"},"maptiler":"cLN2yn0R4MZg5nQ7wabE","hubspotUpdatedAtFmt":"","hubspotUpdatedAtISO":null,"versaoAnalise":"v1","kpisHub":{},"kpiDetalhe":{"leadsCriados":[],"perdidos":[]},"kpiDeltas":null,"funil":{"labels":[],"valores":[],"cores":[]},"funilLeads":{},"vendasMes":null,"temperatura":{"quentes":[],"frios":[]},"stageMeta":{"slaDays":{},"descriptions":{},"labels":{}},"saude":null,"reps":[],"leadsReferencia":[],"footerText":"","resumoSemanal":null,"agenda":null,"cadencias":null,"syncStatus":null,"usuarios":[],"timeNoField":{"ativos":11,"emPreparacao":0}}
+{"shellProtegido":true,"supabase":{"url":"https://xitmahwxncpdzopmdook.supabase.co","anonKey":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhpdG1haHd4bmNwZHpvcG1kb29rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5MDM5ODksImV4cCI6MjEwMDQ3OTk4OX0.gbYOpSbej7Pd_3JHLrp0vQFux5Z-Cep_21tnHB8e5Mk"},"maptiler":"cLN2yn0R4MZg5nQ7wabE","hubspotUpdatedAtFmt":"","hubspotUpdatedAtISO":null,"versaoAnalise":"v1","kpisHub":{},"kpiDetalhe":{"leadsCriados":[],"perdidos":[]},"kpiDeltas":null,"funil":{"labels":[],"valores":[],"cores":[]},"funilLeads":{},"vendasMes":null,"temperatura":{"quentes":[],"frios":[]},"stageMeta":{"slaDays":{},"descriptions":{},"labels":{}},"saude":null,"reps":[],"leadsReferencia":[],"footerText":"","resumoSemanal":null,"agenda":null,"cadencias":null,"syncStatus":null,"usuarios":[],"timeNoField":{"ativos":10,"emPreparacao":0}}
 </script>
 <!-- A PREPARACAO DA TELA DE LOGIN VEM DEPOIS DO BLOCO DE DADOS (07/09/26).
      Ela ficava logo abaixo do markup do login, onde estava a do briefing antigo — e ali
@@ -11441,7 +11441,7 @@ async function renderMeuPainel() {
   if (DATA.supabase && supa && !dailiesCarregado) await carregarDailies();
   if (DATA.supabase && supa && !pdiCarregado) await carregarPdiCompromissos();
 
-  const metaMensal = r.metaMensal || 10;
+  const metaMensal = metaClientesDoRep(r);
   const fechadosMes = r.fechadosNoMes || 0;
   const pctMeta = metaMensal > 0 ? Math.min(100, Math.round((fechadosMes / metaMensal) * 100)) : 0;
   const faltam = Math.max(0, metaMensal - fechadosMes);
@@ -14034,7 +14034,7 @@ function pm8DiasUteisRestantesNoMes() {
 function pm8Sugestao() {
   const r = (DATA.reps || []).find(x => sessaoAtual && String(x.ownerId) === String(sessaoAtual.ownerId));
   if (!r) return null;
-  const meta = Number(r.metaMensal) || 10;
+  const meta = metaClientesDoRep(r);
   const feitos = Number(r.fechadosNoMes) || 0;
   const gap = Math.max(0, meta - feitos);
   const semanas = Math.max(1, Math.ceil(pm8DiasUteisRestantesNoMes() / 5));
@@ -18059,7 +18059,7 @@ function tl5Medir() {
       etapas: meus, abertos, acima, mrr, prospeccao,
       semTarefa: semTarefaDele,
       fech: Number(r.fechadosNoMes) || 0,
-      meta: Number(r.metaMensal) || 10,
+      meta: metaClientesDoRep(r),
       criticos: r.criticos || [],
 
       ratio: abertos ? acima / abertos : 0
@@ -18199,6 +18199,12 @@ async function tl5Alternar(tipo, alvoOwnerId, titulo, detalhe, chaveDaTela, ritu
 const TM2_ESTADO = { filtro: null, sel: null, etapa: null, deal: null, toast: null };
 
 let TM10_TQ = null;
+
+function metaClientesDoRep(r) {
+  const v = r && r.metaMensal;
+  return v != null && v !== '' ? Number(v) : 10;
+}
+
 function tm10ToquesPorNegocio() {
   if (TM10_TQ) return TM10_TQ;
   const m = new Map();
@@ -18600,6 +18606,17 @@ function tm10Dados() {
     ? cad.linhas.reduce(function (s, l) {
       return s + l.celulas.slice(-5).reduce(function (a, c) { return a + c.n; }, 0); }, 0)
     : null;
+
+  const donosAtivos = {};
+  (DATA.reps || []).forEach(function (r) { donosAtivos[String(r.ownerId)] = true; });
+  let semDono = 0, semDonoMrr = 0;
+  etapas.forEach(function (e) {
+    if (['1396006164', '1398311191'].indexOf(e.id) >= 0) return;
+    e.leads.forEach(function (l) {
+      if (donosAtivos[String(l.ownerId)]) return;
+      semDono += 1; semDonoMrr += tm10MrrDo(l);
+    });
+  });
   const maxEt = Math.max(1, ...etapas.map(function (e) { return e.n; }));
   const detalhe = escolhida ? escolhida.leads.slice().sort(function (a, b) {
     return (b.dias || 0) - (a.dias || 0); }).slice(0, 12).map(function (l) {
@@ -18659,6 +18676,7 @@ function tm10Dados() {
     conversao: tm10Conversao(),
     cadencia: cad,
     ranking: tm10Ranking(m),
+    semDono: semDono, semDonoMrr: semDonoMrr,
     janelaToques: 60
   };
 }
@@ -18882,6 +18900,14 @@ function tm10TelaHTML(d, cauda) {
     +   'color:#E51A31;">3 · O funil do time <span style="font-weight:700;letter-spacing:0;'
     +   'text-transform:none;color:#7A8494;">· clientes primeiro, MRR junto · clique na etapa'
     +   ' pra ver os leads dela</span></span>'
+
+    + (d.semDono
+      ? '<span style="float:right;font:800 9.5px \'Manrope\',sans-serif;color:#E51A31;'
+        + 'background:#FDF3F4;border:1px solid #F0A9B2;border-radius:999px;padding:4px 11px;"'
+        + ' title="Negócios de quem não está mais no time. Eles seguem no funil, contam nos totais e ninguém os cobra — reatribuir é no HubSpot.">'
+        + d.semDono + (d.semDono === 1 ? ' negócio sem dono ativo · ' : ' negócios sem dono ativo · ')
+        + tm10Rs(d.semDonoMrr) + '</span>'
+      : '')
     + '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 12px;">'
     +   fluxoHTML + '</div>'
     + '<div style="display:flex;flex-direction:column;gap:2px;">' + etapasHTML + '</div>'
@@ -44450,7 +44476,7 @@ function sm9Projecao() {
   });
   const derivada = elenco.reduce((t, u) => {
     const rep = (DATA.reps || []).find(r => String(r.ownerId) === String(u.ownerId)) || {};
-    return t + Math.ceil((Number(rep.metaMensal) || 10) / 4);
+    return t + Math.ceil(metaClientesDoRep(rep) / 4);
   }, 0);
   const meta = quantasPromessas ? metaPrometida : derivada;
 
@@ -45302,7 +45328,7 @@ async function renderPDIs() {
     const abertosRep = Number(r && r.open) || 0;
     const travadosRep = Number(r && r.leadsTravados) || 0;
     const fechadosRep = Number(r && r.fechadosNoMes) || 0;
-    const metaRep = Number(r && r.metaMensal) || 10;
+    const metaRep = metaClientesDoRep(r);
     const ganhosSemRep = Number(r && r.ganhosSemana) || 0;
     const rotuloEtapa = (id) => ((DATA.stageMeta && DATA.stageMeta.labels && DATA.stageMeta.labels[id]) || id || '—');
 
