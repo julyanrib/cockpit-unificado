@@ -346,7 +346,11 @@ checar('o cartão em voo é tracejado e diz que pode voltar',
   const semComentario = template
     .replace(/<!--[\s\S]*?-->/g, ' ')
     .replace(/\/\*[\s\S]*?\*\//g, ' ');
-  checar('o selo do hero não promete Supabase realtime',
+  /* O SELO VIROU O KICKER DO BANNER ESCURO (11/09/26, repaginação da prancha). A frase é
+     a mesma e a intenção é a mesma: não existe realtime, e prometer tempo real seria
+     promessa que a tela não cumpre. O que mudou é o lugar — antes uma caixa própria, agora
+     a primeira linha do banner, como a prancha desenha. */
+  checar('o kicker do banner não promete Supabase realtime',
     semComentario.indexOf('Supabase realtime') < 0
     && semComentario.indexOf('suas ações são instantâneas') > 0,
     semComentario.indexOf('Supabase realtime') >= 0
@@ -1268,23 +1272,40 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
   /* ── 3 · OS QUATRO NUMEROS, E O DO GANHO DIZENDO DESDE QUANDO ───────────────────────
      A prancha pede "Fechados no mes". A janela do Ganho no Cockpit comeca na segunda
      desta semana, entao "no mes" seria afirmacao que o dado nao sustenta. */
-  checar('o hero tem os quatro numeros da prancha',
-    /kpi\('var\(--ink\)', total, 'na esteira'/.test(template)
-      && /kpi\('var\(--red\)', semPasso, 'sem próximo passo'/.test(template)
-      && /kpi\('var\(--green\)', nGanho, 'ganho'/.test(template)
-      && /kpi\('#8E3B5C', nReciclagem, 'reciclagem'/.test(template),
-    'os quatro sao a leitura de esguelha da aba — e cada um na cor do que ele pede');
-  checar('e o numero do Ganho diz a data do corte, nao "no mes"',
-    template.indexOf("desdeGanho ? 'pago, desde ' + desdeGanho") > -1,
+  /* CINCO KPIs, NÃO QUATRO (11/09/26). A prancha do redesenho pede: em aberto · MRR em
+     jogo · sem próx. passo · na régua · ganho+onboarding, cada um na cor dela. É a mesma
+     leitura de esguelha da aba, com o MRR promovido a número grande e a reciclagem saindo
+     do topo (ela vive no painel dela, no rodapé). */
+  checar('o banner tem os cinco KPIs da prancha, nas cores dela',
+    /kpiP\('em aberto', total/.test(template)
+      && /kpiP\('MRR em jogo'/.test(template)
+      && /kpiP\('sem próx\. passo', semPasso/.test(template)
+      && /kpiP\('na régua', nEstourados/.test(template)
+      && /kpiP\('ganho \+ onboarding', nGanho \+ nOnb/.test(template)
+      && template.indexOf("'#FF5F6E'") > -1
+      && template.indexOf("'#F0B45C'") > -1
+      && template.indexOf("'#7FD9BE'") > -1,
+    'os cinco sao a leitura de esguelha da aba — e cada um na cor do que ele pede');
+  checar('e o KPI sem valor no CRM diz isso, em vez de afirmar R$ 0',
+    template.indexOf("valorTotal > 0 ? fn2Rs(valorTotal) : 'sem valor'") > -1
+      && template.indexOf("mrrSemPasso > 0 ? fn2Rs(mrrSemPasso) : 'sem valor no CRM'") > -1,
+    'a maioria dos negocios da base nao tem valor preenchido: R$ 0 seria afirmacao falsa');
+  checar('e o Ganho continua dizendo desde quando, quando nao ha MRR',
+    template.indexOf("desdeGanho ? 'desde ' + desdeGanho") > -1,
     'a janela do Ganho comeca nesta semana; dizer "no mes" e numero sem procedencia');
 
   /* ── 4 · OS NUMEROS PODEM ENCOLHER (achado a 375px, no screenshot) ──────────────────
      `flex:none` dava largura de conteudo a caixa, o flex-wrap de dentro nunca disparava e
      o quarto numero ficava FORA do card — escondido pelo overflow:hidden que a faixa
      creme precisa. Nem transbordo de corpo, nem alvo pequeno, nem regra faltando. */
-  checar('a caixa dos quatro numeros encolhe, senao o quarto sai do card no celular',
-    /\.fn2-kpis\{flex:0 1 auto;min-width:0;[^}]*flex-wrap:wrap/.test(cssFunil),
-    'com flex:none a caixa fica em max-content e o wrap nunca dispara');
+  /* A CAIXA DOS KPIs ENCOLHE (achado a 375px no screenshot, e continua valendo).
+     `flex:none` dava largura de conteudo a caixa, o flex-wrap de dentro nunca disparava e
+     o ultimo numero ficava FORA do card. Na prancha nova a caixa e inline com
+     `flex-wrap:wrap` e cada KPI com `min-width:0` — mesmo remedio, outro desenho. */
+  checar('a caixa dos KPIs encolhe, senao o ultimo sai do card no celular',
+    template.indexOf('display:flex;gap:26px;flex-wrap:wrap;margin-left:auto;') > -1
+      && template.indexOf(String.fromCharCode(39) + '<span style="min-width:0;">' + String.fromCharCode(39)) > -1,
+    'sem wrap na caixa e min-width:0 no KPI, o quinto numero sai do card a 375px');
 
   /* ── 5 · A ESTEIRA NUM PAINEL CREME, COM A BOLINHA NO CABECALHO ─────────────────── */
   checar('o kanban vive num painel creme',
