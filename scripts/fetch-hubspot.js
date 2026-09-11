@@ -2380,10 +2380,10 @@ async function main() {
       fechadosNoMes: fechadosNoMesRep,
       /* AS TRES METAS DELE. `metaMensal` continua com o nome antigo porque quatro telas
          o leem; as duas novas vao ao lado. */
-      metaMensal: metaDe(r.ownerId).clientes,
-      metaMrr: metaDe(r.ownerId).mrr,
-      metaReceita: metaDe(r.ownerId).receita,
-      patamarMeta: metaDe(r.ownerId).patamar || null,
+      metaMensal: metaDe(rep.ownerId).clientes,
+      metaMrr: metaDe(rep.ownerId).mrr,
+      metaReceita: metaDe(rep.ownerId).receita,
+      patamarMeta: metaDe(rep.ownerId).patamar || null,
       visitasHubspotHoje,
       avancosHubspotHoje,
       propostasHubspotHoje,

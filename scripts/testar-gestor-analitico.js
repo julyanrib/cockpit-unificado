@@ -925,9 +925,25 @@ checar('em dia nao util a gravacao do horario livre recusa, com motivo',
   checar('e o robo falha alto se a soma dos individuais nao bater com o total do time',
     /a soma de . \+ k \+ . da . \+ soma\[k\]/.test(robo.replace(/'/g, '.')));
   checar('a meta de cada rep vai no payload, com os tres eixos',
-    /metaMensal: metaDe\(r\.ownerId\)\.clientes,/.test(robo)
-      && /metaMrr: metaDe\(r\.ownerId\)\.mrr,/.test(robo)
-      && /metaReceita: metaDe\(r\.ownerId\)\.receita,/.test(robo));
+    /metaMensal: metaDe\(rep\.ownerId\)\.clientes,/.test(robo)
+      && /metaMrr: metaDe\(rep\.ownerId\)\.mrr,/.test(robo)
+      && /metaReceita: metaDe\(rep\.ownerId\)\.receita,/.test(robo));
+
+  /* ── 11b · O NOME DA VARIAVEL DO LACO, E POR QUE ISTO E UMA GUARDA ──────────────────
+     EU QUEBREI O ROBO EM PRODUCAO com esta linha. Escrevi `metaDe(r.ownerId)` dentro do
+     literal de repsData, onde a variavel do laco chama `rep` — e `node --check` passa,
+     porque sintaxe esta certa e o erro so aparece ao EXECUTAR. A rodada das Actions
+     morreu com "r is not defined" depois de 90 segundos de HubSpot, e o Cockpit ia
+     ficar velho sem erro na tela (o defeito de 10/09 que eu ja tinha registrado).
+     A guarda cobra o unico nome que existe naquele escopo. Custa uma linha e cobre a
+     familia inteira: nenhuma variavel de uma letra dentro do payload do rep. */
+  checar('o payload do rep usa a variavel do laco, que se chama rep',
+    (function () {
+      const i = robo.indexOf('repsData[rep.ownerId] = {');
+      if (i < 0) return false;
+      const bloco = robo.slice(i, robo.indexOf(String.fromCharCode(10) + '    };', i));
+      return bloco.length > 200 && !/[^A-Za-z0-9_.]r\./.test(bloco);
+    }()));
 
   /* ── 12 · A RECEITA E O AJUSTE DE COMPETENCIA ───────────────────────────────────────
      Receita e o valor TOTAL do plano (`amount`), que o executivo preenche na passagem
