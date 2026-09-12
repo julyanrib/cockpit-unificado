@@ -320,6 +320,25 @@ checar('planos e períodos em 4 colunas que podem encolher',
     atalho + ' leitura(s) de dataset.prcPasso para ' + viaRegra + ' uso(s) da regra');
 }());
 
+/* ══ A PROPOSTA APARECE NO CELULAR (12/09/26, auditoria) ═══════════════════════════
+   MEDIDO em producao a 375px, na sessao do Marco: o palco resolvia para 279x0 e a peca
+   ficava em tamanho natural (760px) dentro dele, com overflow:hidden por cima — a aba
+   mostrava o formulario, os planos, e um VAZIO onde vai a proposta. Ele escolhe o plano
+   sem ver o que vai mostrar ao dono do restaurante, na aba que existe para isso.
+
+   Duas causas, duas checagens. A primeira e a mais traicoeira: a conta desistia de
+   escalar quando nao havia altura medivel — guarda que, ao falhar, produz exatamente o
+   defeito que deveria evitar. */
+checar('a escala da peca nao desiste quando o palco nao tem altura',
+  /alturaUtil > 0 \? alturaUtil \/ natural : Infinity/.test(template),
+  'restricao que nao se mede nao restringe: com a altura zerando a conta, a peca fica '
+    + 'em tamanho natural dentro de uma janela que corta');
+checar('e o empilhado solta a cadeia de flex que zerava o palco',
+  /@media \(max-width:1240px\)[\s\S]{0,1800}\.p4-palco\{flex:none/.test(template)
+    && /@media \(max-width:1240px\)[\s\S]{0,2200}#viewPrecificacao\.active \.prc-shell\{flex:none/.test(template),
+  'no desktop as duas colunas dividem a altura da tela; empilhado nao ha o que dividir '
+    + 'e a cadeia toda resolve para zero');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));

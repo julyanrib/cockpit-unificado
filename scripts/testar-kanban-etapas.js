@@ -1355,6 +1355,20 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     'com → e ✕ o glifo virou o rotulo visivel: sem aria-label quem usa leitor de tela '
       + 'ouve "botao" duas vezes e nao sabe qual arruina o negocio');
 
+  /* ── 8b · O NOME DO CARTAO NAO SE FATIA (12/09/26) ──────────────────────────────
+     Em 11/09 eu pus o nome e os tres botoes-icone na mesma linha, copiando a prancha —
+     que desenha colunas de 213px. As nossas tem 144 a 1280px, e o nome ficou com uma
+     letra por linha na carteira do Andre: "BAM OR MIN am O". O nome do restaurante e a
+     unica coisa que identifica o cartao.
+     A guarda prende as DUAS metades: linha inteira para o nome, e quebra so entre
+     palavras. Ja havia um comentario avisando disso desde 02/09 — e comentario nao
+     reprova build. */
+  checar('o nome do cartao tem a linha inteira e nunca quebra dentro da palavra',
+    /\.fn3-nome\{[^}]*flex:1 1 100%/.test(cssFunil)
+      && /\.fn3-nome\{[^}]*overflow-wrap:normal/.test(cssFunil),
+    'com o nome dividindo a linha com os botoes a coluna estreita fatia a palavra letra '
+      + 'a letra — medido a 1280px, e visto na foto do funil do Andre');
+
   /* ── 9 · ACOES DESTA SESSAO (11/09/26, prancha FINAL) ───────────────────────────── */
   /* MEDIR PROXIMIDADE NAO SERVE AQUI: a primeira versao desta checagem procurava o
      unshift dentro de 400 caracteres depois do 'if (r.ok) {' — e passou VERDE com o push
