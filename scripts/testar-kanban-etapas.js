@@ -1343,11 +1343,23 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
      os dois continuam DISTINGUIVEIS um do outro (nao dois iconzinhos cinza iguais) e
      continuam TENDO ROTULO — glifo sozinho nao e rotulo para leitor de tela, e por isso
      a segunda passou a exigir aria-label em vez de exigir a palavra no botao. */
-  checar('avancar e perder se distinguem um do outro no cartao',
-    /\.fn3-passo\.is-ava\{color:#1E9E7B/.test(cssFunil)
-      && /\.fn3-passo\.is-per\{color:var\(--muted2\)/.test(cssFunil),
-    'dois botoes-icone da mesma cor a 22px sao dois alvos iguais lado a lado, e o '
-      + 'errado deles marca o negocio como perdido');
+  /* REESCRITA EM 12/09/26, e a razao e a de sempre: ela cravava as duas cores exatas
+     (#1E9E7B e var(--muted2)) e reprovou o desenho novo, em que avancar passou a ser
+     PREENCHIDO de verde claro com o glifo em verde escuro — porque com ~40px de largura
+     em vez de 22 o glifo de 10px se perdia na moldura. A intencao nunca foi a cor: e que
+     os dois NAO SEJAM O MESMO BOTAO duas vezes, porque um deles move o negocio e o outro
+     o mata. Agora ela compara as duas declaracoes em vez de exigir valores. */
+  (function () {
+    const ava = (cssFunil.match(/\.fn3-passo\.is-ava\{([^}]*)\}/) || [])[1] || '';
+    const per = (cssFunil.match(/\.fn3-passo\.is-per\{([^}]*)\}/) || [])[1] || '';
+    const cor = css => (css.match(/(?:^|;)\s*color:([^;]+)/) || [])[1];
+    const temFundo = css => /background:(?!none|transparent)/.test(css);
+    checar('avancar e perder se distinguem um do outro no cartao',
+      !!cor(ava) && !!cor(per) && cor(ava) !== cor(per) && temFundo(ava) !== temFundo(per),
+      'dois botoes iguais lado a lado sao dois alvos iguais, e o errado deles marca o '
+        + 'negocio como perdido — a cor de cada um e o preenchimento de so um dos dois '
+        + 'sao o que os separa sem ler o glifo');
+  })();
   checar('e os dois tem rotulo de verdade, nao so o glifo',
     /aria-label="Avançar para /.test(template)
       && template.indexOf('aria-label="Marcar como perdido"') > -1
@@ -1368,6 +1380,61 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
       && /\.fn3-nome\{[^}]*overflow-wrap:normal/.test(cssFunil),
     'com o nome dividindo a linha com os botoes a coluna estreita fatia a palavra letra '
       + 'a letra — medido a 1280px, e visto na foto do funil do Andre');
+
+  /* ── 8c · O CARTAO E O MESMO CARTAO EM TODA COLUNA (12/09/26) ───────────────────
+     PEDIDO: "os botoes de avancar, perder, cancelar tem q estar centralizados,
+     alinhados". MEDIDO a 1280px na carteira do Bruno, 37 cartoes: eles tinham DUAS
+     alturas (133 e 151) e a fileira de gestos aparecia em duas posicoes diferentes,
+     porque a fileira do chip QUEBRAVA quando o chip trazia a regua (75px de chip mais
+     66 de botoes em 126 de coluna). Duas metades prendem o conserto:
+       a) os tres gestos tem fileira propria, em colunas iguais — assim eles ficam na
+          mesma posicao em todo cartao por construcao, e nao por caber;
+       b) o espaco da barra de rolagem e reservado em TODA coluna: sem isso a coluna que
+          rola tem 10px menos de largura por dentro, e o mesmo cartao mede 116 la e 126
+          aqui — foi essa diferenca de 10px que sobrou depois do primeiro conserto. */
+  checar('os tres gestos do cartao tem fileira propria de colunas iguais',
+    /\.fn3-card-acoes\{[^}]*grid-auto-flow:column/.test(cssFunil)
+      && /\.fn3-card-acoes\{[^}]*grid-auto-columns:minmax\(0,1fr\)/.test(cssFunil)
+      && template.indexOf('<div class="fn3-card-acoes">') > -1,
+    'na fileira do chip eles quebravam para uma segunda linha em 2 de cada 3 cartoes, e '
+      + 'o cartao crescia 18px — a grade virava serra e o gesto mudava de lugar');
+  checar('a largura de dentro da coluna nao depende de ela rolar',
+    /\.fn3-col\{[^}]*scrollbar-gutter:stable/.test(cssFunil),
+    'a coluna cheia perde 10px para a barra e desenha um cartao menor que o da coluna '
+      + 'vazia: mesma carteira, dois tamanhos de cartao, e a fileira de estado quebrando '
+      + 'so na coluna que rola');
+
+  /* ── 8d · O CABECALHO DAS OITO COLUNAS TEM UMA ALTURA (12/09/26) ────────────────
+     MEDIDO: os oito tinham CINCO alturas (22, 34, 40, 51, 52) porque a linha 1 quebra
+     quando o chip da regua nao cabe e a linha 2 so existe quando ha dinheiro ou
+     estourado. O cabecalho e o PRIMEIRO filho da coluna, entao o primeiro cartao de
+     cada coluna comecava numa altura diferente: a fileira nascia em degrau.
+     `min-height` e nao `height` de proposito — nome de etapa mais longo continua
+     crescendo em vez de ser cortado. */
+  checar('os oito cabecalhos reservam a mesma altura',
+    /\.fn3-cab\{[^}]*min-height:52px/.test(cssFunil)
+      && !/\.fn3-cab\{[^}]*[^-]height:52px/.test(cssFunil),
+    'sem altura reservada o primeiro cartao de cada coluna comeca num lugar diferente, '
+      + 'e com altura CRAVADA o nome de etapa mais longo sai cortado');
+
+  /* ── 8e · AS DUAS GAVETAS DO CARTAO CABEM NA COLUNA (12/09/26) ──────────────────
+     Nao e defeito desta sessao — e anterior, e era CLIQUE MORTO. Medido com teste de
+     acerto (elementFromPoint, porque retangulo nao sabe de corte): a gaveta de datas
+     abria com 261px dentro de uma coluna de 144 e vazava 139 para cima da coluna
+     vizinha, onde o overflow da coluna corta. Tres dos sete controles ficavam
+     inalcancaveis, entre eles o "datar ▸" — o botao que grava a tarefa no HubSpot.
+     A de valor abria com 138: quem tinha proposta fora da tabela (o "outro" existe
+     porque R$ 420 acontece) nao alcancava o "gravar ▸".
+     A CAUSA E `min-width:auto` DO FLEX: a linha data+hora+datar e um flex nowrap de
+     247px de conteudo, e o flex-basis:100% da gaveta nao encolhe abaixo disso. A guarda
+     prende o `min-width:0` das duas gavetas e a quebra das duas linhas livres. */
+  checar('a gaveta de datas e a de valor cabem na largura da coluna',
+    /\.fn3-passo-pick\{[^}]*min-width:0/.test(cssFunil)
+      && /\.fn3-valor-pick\{[^}]*min-width:0/.test(cssFunil)
+      && /\.fn3-passo-livre\{[^}]*flex-wrap:wrap/.test(cssFunil)
+      && /\.fn3-valor-outro\{[^}]*flex-wrap:wrap/.test(cssFunil),
+    'sem isso as duas gavetas abrem mais largas que a coluna, e o que vaza e cortado '
+      + 'pelo overflow dela: o botao que grava fica fora do alcance do dedo');
 
   /* ── 9 · ACOES DESTA SESSAO (11/09/26, prancha FINAL) ───────────────────────────── */
   /* MEDIR PROXIMIDADE NAO SERVE AQUI: a primeira versao desta checagem procurava o
