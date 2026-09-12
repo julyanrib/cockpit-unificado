@@ -188,13 +188,25 @@ checar('ela se atualiza a cada clique, e não congela no primeiro estado',
    que o dono recebe; no modo cliente ela não pode existir. A checagem media ORDEM no
    arquivo, e reprovou quando a mensagem mudou de coluna — ordem de código não é lugar
    na tela. Agora mede as duas regras de verdade. */
-checar('a mensagem não é desenhada dentro da peça', (function () {
+/* DUAS METADES (12/09/26). A primeira sempre esteve aqui: dentro do cartao a mensagem
+   viraria parte do documento que o dono recebe — e do PNG. A segunda custou a tela do
+   Julyan: mesmo FORA do cartao, na mesma COLUNA ela tira altura da peca, porque as duas
+   dividem os mesmos pixels verticais. MEDIDO a 1534x746 (notebook com Windows a 125%):
+   com ela embaixo do cartao o palco tinha 299px para uma peca de 687 e a escala caia
+   para 0,43 (cartao de 185x295); com ela na coluna da esquerda, 521px de palco, escala
+   0,75 e cartao de 324x517 — tres vezes a area. */
+checar('a mensagem nao mora na coluna da peca (nem dentro do cartao)', (function () {
   const i = template.indexOf('function prcCartaoHTML()');
   const f = template.indexOf(NL + '}', i);
-  return i > -1 && f > i
-    && template.slice(i, f).indexOf('prcMensagemJunto') === -1;
+  const foraDoCartao = i > -1 && f > i && template.slice(i, f).indexOf('prcMensagemJunto') === -1;
+  /* e fora da coluna da peca: o trecho entre <div class="p4-peca"> e o fim dela */
+  const ip = template.indexOf('<div class="p4-peca">');
+  const fp = template.indexOf('</div>' + NL + '    </div>', ip);
+  const foraDaColuna = ip > -1 && fp > ip && template.slice(ip, fp).indexOf('prcMensagemJunto') === -1;
+  return foraDoCartao && foraDaColuna;
 }()),
-  'dentro do cartão ela viraria parte do documento que o dono recebe — e do PNG');
+  'dentro do cartao ela vira parte do que o dono recebe; na coluna do cartao ela come a '
+    + 'altura da peca — 299px de palco em vez de 521, e o cartao cai para 0,43 de escala');
 checar('e ela some quando a tela vira para o cliente',
   template.indexOf("${prcModoCliente ? '' : prcMensagemJuntoHTML()}") > -1,
   'é o texto que o executivo manda, não parte da proposta que o dono lê');
