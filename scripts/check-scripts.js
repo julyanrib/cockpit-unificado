@@ -705,6 +705,7 @@ function checarPisoDeToque() {
   return false;
 }
 if (!checarPisoDeToque()) process.exit(1);
+if (!checarChavesDoEstilo()) process.exit(1);
 
 /* ══ VARIÁVEL DECLARADA ONDE O MARKUP NÃO CHEGA (02/09/26) ═══════════════════════════
    A página de leitura do Playbook tinha 46 usos de var(--v6-*) e a paleta inteira estava
@@ -1865,6 +1866,49 @@ if (!checarObrigatoriasEspelhadas()) process.exit(1);
    O CASO: usei `semRecic` na linha do filtro e declarei 200 linhas abaixo. `const` em TDZ
    estoura, o Planejamento morria inteiro — e build, as 19 guardas e as 22 suites ficaram
    verdes, porque nenhuma delas avalia as funcoes de render. */
+
+/* ── GUARDA: REGRA DEIXADA ABERTA NO BLOCO DE ESTILO ──────────────────────────────
+   Ver o comentario do topo desta funcao: sintaxe de CSS quebrada nao da erro, o parser
+   engole o resto da folha e a tela fica errada em silencio. Foi assim que a cadeia de
+   100vh da aba Propostas desapareceu em 12/09/26 sem nenhuma guarda reclamar. */
+function checarChavesDoEstilo() {
+  /* o mesmo alvo das outras guardas de CSS desta bateria */
+  const cru = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
+  const ini = cru.indexOf('<style>');
+  const fim = cru.indexOf('</style>', ini);
+  if (ini < 0 || fim < 0) { console.log('OK chaves do estilo — sem bloco de estilo para conferir.'); return true; }
+  const css = mascararComentarios(cru.slice(ini + 7, fim));
+  /* SALDO CRU, SEM A RECUPERACAO DE ERRO (12/09/26). A primeira versao desta guarda
+     zerava a profundidade a cada fechamento orfao — e PASSOU VERDE na sabotagem: comer o
+     fechamento de um @media apenas movia a contagem de uma coluna para a outra. O que
+     nao mente e a diferenca bruta entre abre e fecha: qualquer regra deixada aberta a
+     empurra para cima, e e a abertura sobrando que faz o navegador engolir o resto. */
+  const abre = (css.match(/{/g) || []).length;
+  const fecha = (css.match(/}/g) || []).length;
+  const d = abre - fecha;
+  let prof = 0, sobrando = 0;
+  for (let i = 0; i < css.length; i++) {
+    const ch = css[i];
+    if (ch === '{') prof++;
+    else if (ch === '}') { prof--; if (prof < 0) { sobrando++; prof = 0; } }
+  }
+  /* O TETO E O ESTADO MEDIDO DE HOJE, e nao zero: as tres chaves orfas e o saldo -2 sao
+     heranca de limpezas anteriores, conferidos no navegador (as ultimas regras do bloco
+     continuam sendo parseadas). O que nao pode e PIORAR — abertura sobrando come regra. */
+  const TETO_SALDO = -2;
+  const TETO_SOBRANDO = 3;
+  if (d > TETO_SALDO || sobrando > TETO_SOBRANDO) {
+    console.error('GUARD REPROVADO — o bloco de estilo tem regra deixada aberta.');
+    console.error('  saldo abre-fecha: ' + d + ' (teto ' + TETO_SALDO + ')');
+    console.error('  fechamentos sobrando: ' + sobrando + ' (teto ' + TETO_SOBRANDO + ')');
+    console.error('  O navegador NAO da erro: ele descarta as regras depois do ponto do');
+    console.error('  problema. Foi assim que a aba Propostas perdeu a cadeia de 100vh.');
+    return false;
+  }
+  console.log('OK chaves do estilo — saldo ' + d + ' e ' + sobrando + ' fechamento(s) orfao(s), dentro do medido.');
+  return true;
+}
+
 const { execFileSync } = require('child_process');
 try {
   execFileSync(process.execPath, [require('path').join(__dirname, 'checar-ordem-declaracao.js')],

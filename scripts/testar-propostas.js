@@ -12,6 +12,7 @@
    ============================================================================ */
 
 const fs = require('fs');
+const { mascararComentarios } = require('./mascarar.js');
 const path = require('path');
 
 const raiz = path.join(__dirname, '..');
@@ -66,29 +67,51 @@ const checar = (nome, cond, detalhe) => { if (cond) { ok++; return; } falhas.pus
    `rotuloOficial` é "Completo"/"Delivery": o rótulo curto do botão, feito para caber
    num segmented de duas colunas. O produto se chama "Delivery, Balcão e Mesas". O
    cabeçalho usava o rótulo curto, e o dono recebia um documento dizendo "COMPLETO". */
-checar('o cabeçalho do documento usa o nome comercial da operação',
-  template.indexOf('${esc(String(tipo.nome || tipo.rotuloOficial).toUpperCase())}') > -1,
-  'com rotuloOficial na frente, a peça que sai da empresa diz "COMPLETO" em vez do nome do produto');
-checar('e o botão continua com o rótulo curto',
-  template.indexOf("const curto = (t.rotuloOficial || t.nome).split(',')[0].trim().toUpperCase();") > -1);
+/* REESCRITA EM 12/09/26 (repaginação): a checagem exigia a expressão exata
+   `tipo.nome || tipo.rotuloOficial` dentro do documento. No cartão novo o cabeçalho é
+   `esc(String(tipo.nome))` — sem fallback, porque a tabela oficial sempre tem nome. A
+   intenção é a que fica: o cartão que sai da empresa diz o nome do PRODUTO, e o rótulo
+   curto ("COMPLETO") existe só no botão, onde ele cabe. */
+(function () {
+  const i = template.indexOf('function prcCartaoHTML()');
+  const f = template.indexOf(NL + '}', i);
+  const cartao = i > -1 && f > i ? template.slice(i, f) : '';
+  checar('o cartão usa o nome comercial da operação, não o rótulo curto',
+    cartao.indexOf('esc(String(tipo.nome))') > -1 && cartao.indexOf('rotuloOficial') === -1,
+    'com rotuloOficial no cartão, a peça que sai da empresa diz "COMPLETO" em vez do nome do produto');
+  checar('e o botão de operação continua com o rótulo curto',
+    /const curto = \(tp\.rotuloOficial \|\| tp\.nome\)\.split\(',',?\)\[0\]/.test(template),
+    'o nome inteiro não cabe num segmented de duas colunas — foi por isso que o curto existe');
+}());
 
 /* ── 3. QUEM RECEBE E QUEM ASSINA, NA MESMA LINHA ────────────────────────────────── */
-checar('o documento diz para quem é e quem preparou',
-  template.indexOf('<div class="p4-doc-para">para <b>${esc(cliente)}</b>${executivo ? ` · preparada por <b>${esc(executivo)}</b>` : \'\'}</div>') > -1);
+/* A classe .p4-doc-para não existe mais (o cartão é estilo inline, copiado da
+   prancha). A regra é a mesma: as duas coisas na mesma linha, e o "preparada por" só
+   aparece quando a sessão tem nome — nunca "preparada por Equipe Takeat". */
+checar('o cartão diz para quem é e quem preparou',
+  template.indexOf('para ${esc(cliente)}${executivo ? \' · preparada por \' + esc(executivo) : \'\'}') > -1);
 
 /* ── 4. O RODAPÉ: O PASSO COMBINADO E O QUE A TAKEAT ENTREGA ─────────────────────
    O passo é a única frase da proposta que o dono vai COBRAR do executivo — ela estava
    no meio do selo de validade, em caixa alta de 9px, junto com o ano. E a linha de
    entrega responde "e depois que eu assino?" antes de ele perguntar: é a única parte
    da peça que fala de serviço em vez de funcionalidade. */
-checar('o próximo passo tem linha própria no documento',
-  /class="p4-doc-passo"/.test(template)
+/* As três continuam medindo o mesmo rodapé; o que mudou são as palavras, que agora são
+   as da prancha ("treinamento incluso · suporte humano 7 dias/semana" em vez de
+   "treinamento da equipe incluso · suporte humano 7 dias por semana") e o selo, que
+   passou a dizer a DATA de validade em vez do número de dias — é a data que o dono
+   confere. O próximo passo continua em linha própria, fora do selo. */
+checar('o próximo passo tem linha própria no cartão',
+  /Próximo passo combinado: \$\{esc\(passo\.dia/.test(template)
   && /fechamento marcado, não pedido/.test(template),
   'dentro do selo de validade ele vira letra miúda');
-checar('o documento promete a implantação assistida',
-  /implantação assistida por 30 dias · treinamento da equipe incluso · suporte humano 7 dias por semana/.test(template));
+checar('o cartão promete a implantação assistida, o treinamento e o suporte',
+  /implantação assistida por 30 dias/.test(template)
+  && /treinamento incluso/.test(template)
+  && /suporte humano 7 dias\/semana/.test(template),
+  'é a única parte da peça que fala de serviço em vez de funcionalidade');
 checar('e o selo de validade ficou só com validade e ano',
-  /PROPOSTA VÁLIDA POR \$\{Number\(precificacaoCache\.validadeDias/.test(template)
+  /proposta válida até \$\{esc\(prcDataValidade\(\)\)\} · takeat \$\{new Date\(\)\.getFullYear\(\)\}/.test(template)
   && template.indexOf('· PRÓXIMO PASSO: ${diaPasso}') < 0);
 /* A VALIDADE É TERMO COMERCIAL E VEM DA TABELA — nunca de um literal na tela. */
 checar('a validade sai de precificacao.json, não do template',
@@ -100,18 +123,26 @@ checar('a validade sai de precificacao.json, não do template',
    "Total: R$ 549,00" no mensal repete o número que está logo acima em corpo 28, e um
    "total" num plano sem prazo sugere compromisso que não existe. */
 checar('o total aparece só em período parcelado',
-  /\$\{per\.meses > 1[\s\S]{0,200}Total: \$\{prcMoedaCentavos\(c\.total\)\}/.test(template)
-  && /'preço de tabela, por mês'/.test(template));
+  /\$\{per\.meses > 1 \? 'Total: ' \+ prcMoedaCentavos\(c\.total\) : 'preço de tabela, por mês'\}/.test(template),
+  '"Total: R$ 549,00" no mensal repete o número que está logo acima em corpo 26');
+/* O ▭ saiu da string e virou prefixo no markup (é assim na prancha), então as duas
+   checagens medem a frase sem ele — e uma terceira garante que o símbolo continua lá. */
 checar('o mensal diz boleto ou cartão, e sem fidelidade',
-  template.indexOf("'▭ no boleto ou cartão · sem fidelidade'") > -1);
+  template.indexOf("'no boleto ou cartão · sem fidelidade'") > -1);
 checar('e o parcelado continua dizendo cartão de crédito',
-  template.indexOf("'▭ no cartão de crédito'") > -1);
+  template.indexOf("'no cartão de crédito'") > -1);
+checar('a forma de pagamento continua marcada com o ▭ da prancha',
+  /▭ \$\{nParcelas > 1/.test(template));
 
 /* ── 6. TODO PERÍODO COM DESCONTO MOSTRA O DESCONTO ──────────────────────────────
    O selo ficava só no de maior desconto. Quem escolhe período compara os três; ver
    −10% e −15% é o que faz o de 12 meses parecer o que ele é. */
+/* A classe .p4-selo não existe mais; o selo é o pill verde inline da prancha. A regra
+   é a mesma: ele aparece em TODO período com desconto, e não só no de maior desconto —
+   quem escolhe compara os três, e ver −10% e −15% é o que faz o de 12 meses parecer o
+   que ele é. */
 checar('o selo aparece em todo período com desconto',
-  template.indexOf('${per.desconto ? `<span class="p4-selo is-escuro">−${per.desconto}%</span>` : \'\'}') > -1);
+  /\$\{per\.desconto \? `<span style="[^"]*background:#1E9E7B[^"]*">−\$\{per\.desconto\}%<\/span>`/.test(template));
 checar('e a nota diz quanto economiza no período',
   /economiza ' \+ prcMoeda\(c\.economia\) \+ '\/período'/.test(template));
 /* FRAÇÃO PEQUENA NÃO VIRA "MÊS GRÁTIS": o trimestral dá 0,3 mês, e chamar isso de
@@ -120,26 +151,32 @@ checar('e a nota diz quanto economiza no período',
    'trimestral', e no dia em que entrou 'trimestral-parcelado' o cartão novo passou a
    anunciar "≈ 0,3 mês grátis" — a regra estava presa ao NOME e o nome mudou. Agora ela
    mede o corte numérico, que é o que a regra sempre quis dizer. */
+/* A checagem procurava a palavra "truque" perto do corte, porque era assim que o
+   comentário justificava o piso. O comentário foi reescrito na repaginação; o que ela
+   tem de garantir é que o corte exista e saia do NÚMERO — nunca do id do período, que
+   foi o defeito de 05/09 (entrou 'trimestral-parcelado' e o cartão novo passou a
+   anunciar "≈ 0,3 mês grátis"). */
 checar('a fração de mês grátis tem piso, e ele sai do número',
   /meses < 0\.5/.test(template)
-  && /truque/.test(template.slice(Math.max(0, template.indexOf('meses < 0.5') - 500),
-       template.indexOf('meses < 0.5') + 200)),
+  && !/per\.id === 'trimestral'/.test(template),
   'preso ao id do período, o corte não alcança um período novo com o mesmo prazo');
 
 /* ── 7. A OPERAÇÃO DIZ O QUE ELA É ──────────────────────────────────────────────
    O botão lia "COMPLETO" e, embaixo, "Completo": duas linhas para a mesma palavra,
    no lugar da única informação que faz o dono escolher junto. */
 checar('a segunda linha da operação é legenda, não o rótulo repetido',
-  template.indexOf("${t.id === 'mesas' ? 'salão + delivery + caixa' : 'só operação de entrega'}") > -1
-  && template.indexOf('${esc(curto)}<span>${esc(t.rotuloOficial || t.nome)}</span>') < 0);
+  template.indexOf("${tp.id === 'mesas' ? 'salão + delivery + caixa' : 'só operação de entrega'}") > -1
+  && template.indexOf('${esc(curto)}<span>${esc(tp.rotuloOficial || tp.nome)}</span>') < 0);
 
 /* ── 8. A MENSAGEM QUE VAI JUNTO ────────────────────────────────────────────────
    O PNG não viaja sozinho: o WhatsApp leva imagem + texto, e o texto é o que faz o
    dono abrir a imagem. Ele já existia e não aparecia em lugar nenhum antes de enviar —
    o executivo mandava para o cliente uma frase que ele nunca tinha lido. */
+/* O rótulo deixou de ser caixa alta no markup (a prancha escreve "Mensagem que vai
+   junto" e o text-transform faz o resto), então a checagem mede o texto, não a caixa. */
 checar('a mensagem que acompanha o PNG é mostrada',
   template.indexOf('id="prcMensagemJunto"') > -1
-  && template.indexOf('MENSAGEM QUE VAI JUNTO') > -1);
+  && /Mensagem que vai junto/i.test(template));
 checar('e ela é a MESMA função que o CTA envia',
   template.indexOf('${esc(textoPropostaPrecificacao())}') > -1,
   'um segundo texto aqui faria a prévia mostrar uma frase e o WhatsApp levar outra');
@@ -152,7 +189,7 @@ checar('ela se atualiza a cada clique, e não congela no primeiro estado',
    arquivo, e reprovou quando a mensagem mudou de coluna — ordem de código não é lugar
    na tela. Agora mede as duas regras de verdade. */
 checar('a mensagem não é desenhada dentro da peça', (function () {
-  const i = template.indexOf('function prcPreviewHTML()');
+  const i = template.indexOf('function prcCartaoHTML()');
   const f = template.indexOf(NL + '}', i);
   return i > -1 && f > i
     && template.slice(i, f).indexOf('prcMensagemJunto') === -1;
@@ -201,21 +238,45 @@ checar('o aviso da dor continua visível na coluna',
    Ele abriu a aba e viu duas: a peça pequena no meio de um palco largo, e o modo
    cliente com uma faixa preta de 397px empurrando o cartão para baixo da tela. */
 
-/* A peça é desenhada na proporção do PNG que o dono recebe. Desenhar estreito num
-   palco largo joga largura fora, porque a altura da peça quase não muda com a
-   largura — o que a faz alta é o número de funcionalidades. */
-checar('a peça é desenhada na proporção do PNG, lida do próprio gerador',
-  template.indexOf('function prcLarguraDeDesenho(') > -1
-  && /prcLarguraDeDesenho\([\s\S]{0,400}TakeatPropostaPNG\.razao/.test(template)
-  && /window\.TakeatPropostaPNG = \{[\s\S]{0,120}razao: H \/ W/.test(template),
-  'proporção copiada à mão diverge do PNG em silêncio — a prévia deixa de ter a forma do que é enviado');
+/* ══ A PRÉVIA E O PNG SÃO O MESMO NÓ (12/09/26) ══════════════════════════════════
+   A checagem anterior media a PROPORÇÃO: a peça era desenhada na razão 4:5 do PNG para
+   que a prévia tivesse a forma da imagem enviada. Ela existia porque havia DOIS
+   desenhos da mesma peça — o HTML da tela e um pintor de canvas de 1080x1350 —, e a
+   proporção era a única coisa que dava para conferir entre eles.
 
-/* position:static no cartão do palco o devolve ao fluxo: 930px de peça empurrando a
-   grade. A regra é do layout v3, que usa a MESMA classe, e vencia por especificidade. */
-checar('nenhuma regra devolve o cartão do palco ao fluxo',
-  template.indexOf('.prc-shell.modo-cliente .prc-proposal{position:static') === -1
-  && /\.p4-palco > \.prc-proposal\{position:absolute/.test(template),
-  'foi assim que o cartão apareceu solto embaixo da faixa preta no modo cliente');
+   A repaginação mata a causa: o PNG virou uma FOTO do nó da prévia (html2canvas), e o
+   pintor saiu. Não há mais proporção para conferir — há uma coisa só. A guarda passa a
+   prender exatamente isso, que é mais forte do que o que ela media antes. */
+checar('o PNG é a foto do MESMO nó que a prévia mostra',
+  /const node = document\.getElementById\('cartao-proposta'\);/.test(template)
+  && /const clone = node\.cloneNode\(true\);/.test(template)
+  /* O NOME APARECE NO COMENTARIO QUE EXPLICA A REMOCAO (12/09/26): a primeira versao
+     desta checagem procurava a string e reprovou por causa da propria prosa que
+     documenta a saida do pintor. Guarda que le codigo tem de medir CODIGO — aqui, a
+     ATRIBUICAO que criava o pintor, e nao a mencao ao nome dele. */
+  && template.indexOf('window.TakeatPropostaPNG = {') === -1
+  && template.indexOf('function prcDadosDaPeca(') === -1,
+  'com um segundo desenho da peça (o pintor de canvas), o que o dono recebe diverge do '
+    + 'que o executivo conferiu na tela — e a divergência só aparece depois de enviada');
+checar('e a captura é a 430px, sem o transform da prévia, em scale 3',
+  /clone\.style\.transform = 'none';/.test(template)
+  && /clone\.style\.width = '430px';/.test(template)
+  && /html2canvas\(clone, \{ scale: 3/.test(template),
+  'capturar o nó com transform rasteriza o tamanho escalado e sai borrado; sem scale 3 '
+    + 'chega pixelado no celular do dono');
+/* O cartão continua ABSOLUTO e centrado no palco — devolvê-lo ao fluxo empurrava a
+   grade com 900px de peça. Agora a posição é inline (é o nó que o PNG fotografa), e o
+   que a folha guarda é só a origem do transform. */
+checar('o cartão do palco continua absoluto e centrado',
+  /id="cartao-proposta" style="position:absolute;top:50%;left:50%;width:430px/.test(template)
+  && /\.p4-palco > #cartao-proposta\{transform-origin:center center;\}/.test(template),
+  'no fluxo, a peça de ~700px empurra a grade e a aba volta a rolar');
+checar('o cartão existe UMA vez no DOM, e o overlay não redigita uma segunda versão',
+  /\$\{prcModoCliente \? '' : `<div id="cartao-proposta"/.test(template)
+  && (template.match(/id="cartao-proposta"/g) || []).length === 2
+  && (template.match(/prcCartaoHTML\(\)/g) || []).length >= 3,
+  'foi uma segunda versão redigitada que fez o cartão sair "parecido mas não igual" — '
+    + 'o handoff proíbe isso em letra maiúscula');
 
 /* Grade sem template de linhas divide a SOBRA entre as fileiras automáticas. Fora do
    modo cliente não há sobra e ninguém vê; com os controles escondidos, a barra de
@@ -232,9 +293,12 @@ checar('a casca diz quais fileiras crescem',
 checar('os cinco passos ficam num cartão só, na largura inteira',
   /\.p4-controles\{display:flex;flex-direction:column/.test(template),
   'em duas colunas o cartão de plano fica com 68px e o nome do plano corta');
+/* As grades de plano e período agora são inline (a prancha), então a checagem mede o
+   par que resolve o corte onde ele está: quatro trilhas com piso ZERO e min-width:0 no
+   cartão. Sem esse par, dividir a largura não cria espaço — troca altura por corte. */
 checar('planos e períodos em 4 colunas que podem encolher',
-  /\.p4-planos,\.p4-periodos\{display:grid;grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/.test(template)
-  && /\.p4-plano,\.p4-periodo\{[^}]*min-width:0/.test(template),
+  (template.match(/grid-template-columns:repeat\(4,minmax\(0,1fr\)\)/g) || []).length >= 2
+  && (template.match(/cursor:pointer;min-width:0;">/g) || []).length >= 2,
   'minmax(0,1fr) e min-width:0 são o par que deixa o cartão encolher em vez de cortar');
 
 /* ── 15. O CHIP DO PRÓXIMO PASSO LEVA A UM PASSO VÁLIDO ──────────────────────────
@@ -330,7 +394,8 @@ checar('planos e períodos em 4 colunas que podem encolher',
    escalar quando nao havia altura medivel — guarda que, ao falhar, produz exatamente o
    defeito que deveria evitar. */
 checar('a escala da peca nao desiste quando o palco nao tem altura',
-  /alturaUtil > 0 \? alturaUtil \/ natural : Infinity/.test(template),
+  /alturaUtil > 0 \? alturaUtil \/ natural : Infinity/.test(template)
+  && /palco\.style\.minHeight = alturaUtil \+ 'px';/.test(template),
   'restricao que nao se mede nao restringe: com a altura zerando a conta, a peca fica '
     + 'em tamanho natural dentro de uma janela que corta');
 checar('e o empilhado solta a cadeia de flex que zerava o palco',
@@ -338,6 +403,72 @@ checar('e o empilhado solta a cadeia de flex que zerava o palco',
     && /@media \(max-width:1240px\)[\s\S]{0,2200}#viewPrecificacao\.active \.prc-shell\{flex:none/.test(template),
   'no desktop as duas colunas dividem a altura da tela; empilhado nao ha o que dividir '
     + 'e a cadeia toda resolve para zero');
+
+
+/* ══ 16. A ORDEM QUE FAZ A IMAGEM CHEGAR NO WHATSAPP (12/09/26) ═══════════════════
+   Esta é a falha 2 do handoff, e ela já aconteceu duas vezes. `wa.me` NÃO ANEXA
+   ARQUIVO: no desktop o único caminho é PNG no clipboard e Ctrl+V. Três coisas quebram
+   isso, cada uma sozinha:
+     1. `await` do blob antes de `clipboard.write` → o gesto do usuário expira e o write
+        falha em silêncio. A PROMESSA vai DENTRO do ClipboardItem;
+     2. `window.open` depois de um await → bloqueado como popup, e nem o texto vai;
+     3. o gerador baixado no clique → o blob leva segundos e o clipboard expira.
+   As três são mecânicas de navegador, não gosto: por isso são guarda. */
+/* A PRIMEIRA VERSAO DESTA CHECAGEM PASSOU VERDE COM A SABOTAGEM (12/09/26): ela
+   procurava o await dentro de 400 caracteres antes do clipboard.write, e o ramo do
+   compartilhamento no celular joga a distancia para mais de 400 — medir PROXIMIDADE
+   outra vez. Agora a regra e categorica: NENHUM await no corpo do envio. */
+(function () {
+  const i = template.indexOf('function abrirWhatsappProposta()');
+  const f = template.indexOf(NL + '}', i);
+  /* SEM COMENTARIO: o unico 'await' ali dentro e a prosa que explica por que o
+     compartilhamento no celular pode aguardar. Medir codigo, nao prosa. */
+  const corpo = i > -1 && f > i ? mascararComentarios(template.slice(i, f)) : '';
+  checar('o clipboard recebe a PROMESSA do blob, e nada e aguardado no envio',
+    /new ClipboardItem\(\{ 'image\/png': blobP \}\)/.test(corpo)
+      && corpo.indexOf('await ') === -1,
+    'com await antes do write o gesto do usuário expira (NotAllowedError silencioso, '
+      + 'nada no clipboard); com await antes do open, popup bloqueado e nem o texto vai');
+}());
+checar('e a função de envio não é assíncrona, para o window.open sair no gesto',
+  /\nfunction abrirWhatsappProposta\(\) \{/.test(template)
+    && !/async function abrirWhatsappProposta/.test(template),
+  'window.open depois de um await é tratado como popup e bloqueado — nem o texto chega');
+checar('o gerador de imagem é baixado quando a aba abre, não no clique',
+  /renderPrecificacaoConfigurador\(\);[\s\S]{0,600}carregarHtml2Canvas\(\)\.catch/.test(template),
+  'baixando no clique, o blob leva segundos e o clipboard expira antes de resolver');
+
+/* ══ 17. O PISO DE TOQUE NUMA ABA DE ESTILO INLINE ════════════════════════════════
+   A prancha é toda estilo inline, e INLINE VENCE A FOLHA. Sem !important, a regra de
+   44px no celular não aplica em nada desta aba — e foi exatamente assim que ela já
+   falhou aqui antes: o chip de 28px continuava com 28px no dedo. */
+checar('o piso de toque desta aba vence o estilo inline',
+  /@media \(max-width:760px\)\{[\s\S]{0,200}\.prc5-toque\{min-height:44px!important;\}/.test(template)
+    && (template.match(/class="prc5-toque"/g) || []).length >= 4,
+  'sem !important a regra existe e não aplica; sem a classe nos controles, não alcança nada');
+
+
+/* ══ 18. A CADEIA QUE PRENDE A ABA EM 100vh ═══════════════════════════════════════
+   Cada elo faz uma coisa e nenhum sozinho resolve:
+     · body sem rolagem — a rede: se sobrar 1px ele e recortado em vez de devolver a
+       barra que este trabalho inteiro veio tirar;
+     · altura FIXA no topo da cadeia (height:100vh, nao min-height) — com min-height o
+       conteudo empurra e a pagina cresce;
+     · flex:1 1 0 com min-height:0 na aba, no conteudo e na grade — e o min-height:0
+       que deixa o elo ENCOLHER abaixo do conteudo, que e o que faz a peca caber;
+     · fileiras explicitas na casca — grade sem template distribui a sobra e, no modo
+       cliente, a barra virou uma faixa de 397px empurrando o cartao para fora da tela.
+   MEDIDO em 12/09/26, com a cadeia descartada por um erro de sintaxe: body rolando,
+   pagina de 1246px numa janela de 900 e a peca em tamanho natural. */
+checar('a cadeia que prende a aba em 100vh esta inteira',
+  /body:has\(#viewPrecificacao\.active\)\{overflow:hidden;\}/.test(template)
+    && /#appRoot:has\(#viewPrecificacao\.active\) > div\{height:100vh;min-height:0;\}/.test(template)
+    && /\.app-main > #viewPrecificacao\.active\{flex:1 1 0;min-height:0;/.test(template)
+    && /#viewPrecificacao\.active > #precificacaoContent\{flex:1 1 0;min-height:0;/.test(template)
+    && /#viewPrecificacao\.active \.prc-shell\{flex:1 1 0;min-height:0;/.test(template)
+    && /#viewPrecificacao\.active \.p4-grid\{flex:1 1 0;min-height:0;\}/.test(template),
+  'sem um dos elos a aba volta a rolar e a peca sai em tamanho natural — e o navegador '
+    + 'nao reclama: foi assim que a cadeia inteira desapareceu em silencio hoje');
 
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
