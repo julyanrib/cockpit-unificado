@@ -43,11 +43,11 @@ function checar(nome, cond, dica) {
   falhas.push(nome + (dica ? '  — ' + dica : ''));
 }
 
-/* ══ 1 · OS 31 ATRIBUTOS DE GESTO VIVOS ══════════════════════════════════════════════════════
+/* ══ 1 · OS 32 ATRIBUTOS DE GESTO VIVOS ══════════════════════════════════════════════════════
    Cada um é um caminho que o executivo tem hoje. Emitir sem ler é clique morto; deixar de
    emitir é gesto perdido — e esta lista pega as duas coisas, porque exige emissão E
    leitura de cada um. */
-const GESTOS = [   /* 31 vivos; os 2 mortos estao explicados abaixo da lista */
+const GESTOS = [   /* 32 vivos; os 2 mortos estao explicados abaixo da lista */
   'data-fn2-acao', 'data-fn2-etapa', 'data-fn2-lead', 'data-fn2-mov', 'data-fn2-ordem',
   'data-fn2-pulsa', 'data-fn2-reabrir', 'data-fn2-reciclar',
   'data-fn3-aba', 'data-fn3-alimentar', 'data-fn3-alvo', 'data-fn3-avancar', 'data-fn3-card',
@@ -58,7 +58,9 @@ const GESTOS = [   /* 31 vivos; os 2 mortos estao explicados abaixo da lista */
   /* TRES ENTRARAM em 11/09/26 com o bloco 'Acoes desta sessao' da prancha FINAL. Lista
      que so encolhe deixa de medir o que a repaginacao ACRESCENTOU — e gesto novo sem
      contrato e o proximo a se perder na repaginacao seguinte. */
-  'data-fn3-sessao', 'data-fn3-voltar', 'data-fn3-voltar-para'
+  'data-fn3-sessao', 'data-fn3-voltar', 'data-fn3-voltar-para',
+  /* e o quarto, na etapa 4: o pedido de contas ao lider, no pe da Prospeccao. */
+  'data-fn3-pedir'
 ];
 /* DOIS SAIRAM DESTA LISTA no mesmo commit que a criou, com o motivo — e a mensagem de
    falha desta suite manda fazer exatamente isso:
@@ -81,7 +83,7 @@ GESTOS.forEach(function (a) {
     || tpl.indexOf('[' + a) > -1;
   if (!lido) semLeitor.push(a);
 });
-checar('os 31 gestos vivos da aba continuam sendo EMITIDOS', semEmissor.length === 0,
+checar('os 32 gestos vivos da aba continuam sendo EMITIDOS', semEmissor.length === 0,
   'sumiram do markup: ' + semEmissor.join(', '));
 checar('e todos continuam sendo LIDOS por alguém', semLeitor.length === 0,
   'emitidos e sem leitor (clique morto): ' + semLeitor.join(', '));
@@ -158,4 +160,4 @@ if (falhas.length) {
   console.error('  com o motivo escrito: lista que nao encolhe deixa de medir o que sobrou.');
   process.exit(1);
 }
-console.log('contrato do Meu funil: ' + ok + ' checagens — os 31 gestos, os 12 motores e as 11 listas de regra seguem de pé.');
+console.log('contrato do Meu funil: ' + ok + ' checagens — os 32 gestos, os 12 motores e as 11 listas de regra seguem de pé.');

@@ -5919,6 +5919,20 @@
   .fn3-ver.is-viol{border-color:#E3C6C6;color:#E51A31;}
   .fn3-ver.is-viol:hover{background:#FDECEA;}
 
+  /* ── PEDIR CONTAS AO LÍDER (11/09/26, prancha FINAL) ───────────────────────────
+     Tracejado VERMELHO, e aqui o vermelho é regra 2 e não exceção: diferente do
+     "+ alimentar o funil", que é convite e por isso é cinza, este é o botão de quem
+     ficou SEM o que prospectar — a coluna vazia é a pendência. Depois de pedido ele
+     vira verde sólido e discreto: o pedido está de pé, não há o que fazer de novo. */
+  .fn3-pedir{display:flex;align-items:center;justify-content:center;gap:6px;min-height:34px;
+    border:1.5px dashed var(--red);border-radius:10px;background:transparent;
+    font:800 9px var(--font-body);color:var(--red);cursor:pointer;padding:0 8px;
+    transition:background var(--t-base) var(--ease),border-color var(--t-base) var(--ease);}
+  .fn3-pedir:hover{background:var(--red-soft);border-style:solid;}
+  .fn3-pedir.is-feito{border:1px solid var(--green);background:var(--green-soft);
+    color:var(--green);}
+  .fn3-pedir:disabled{opacity:.55;cursor:progress;}
+
   /* ── AÇÕES DESTA SESSÃO (11/09/26, prancha FINAL) ──────────────────────────────── */
   .fn3-ses{border-top:1px solid var(--line-soft);background:var(--creme);
     border-radius:0 0 12px 12px;padding:10px 0 12px;}
@@ -18339,11 +18353,24 @@ function fn3Coluna(col, itens, idsAcesos) {
      nome — para isso existe o "＋ Novo negocio" do cabecalho, que diz o que faz.
      E O ROTULO CITA SO AS FONTES COM DADO: medido em 03/09 na leads_prospeccao, Casa
      dos Dados 1032 e Places/outscraper 303; TripAdvisor e iFood tem ZERO linha. */
+  /* ══ OS DOIS PÉS DA PROSPECÇÃO, e são coisas diferentes ══════════════════════════
+     "+ alimentar o funil" é o que ELE pode fazer sozinho agora: abre o Planejamento,
+     onde estão a carteira, a reciclagem e o lote novo.
+     "+ pedir contas ao Julyan" é o que ele faz quando essas fontes NÃO bastam — põe o
+     pedido na pauta do líder, que é onde o Julyan lê o time toda manhã. Um é ação, o
+     outro é pedido, e por isso os dois ficam: tirar o primeiro faria o executivo pedir
+     conta que ele mesmo poderia ter buscado. */
+  const jaPediu = fn3PedidoDeContas();
   const alimentar = col.id === '1395880469'
     ? `<button type="button" class="fn3-alimentar" data-fn3-alimentar="1"
         title="Abrir o Planejamento, onde ficam a carteira, a reciclagem e o lote novo">
         + alimentar o funil<span>carteira · reciclagem · casa dos dados · mais avaliados</span>
-      </button>`
+      </button>
+      <button type="button" class="fn3-pedir${jaPediu ? ' is-feito' : ''}" data-fn3-pedir="1"
+        title="${jaPediu
+          ? 'Já está na pauta desta semana — clicar de novo tira o pedido'
+          : 'Põe na pauta do líder um pedido de contas-alvo para você. O Julyan lê a pauta no ritual, e o pedido vale para esta semana'}">${
+        jaPediu ? 'pedido na pauta ✓ · tirar' : '+ pedir contas ao Julyan ▸'}</button>`
     : '';
 
   /* NASCE ABERTA QUEM TEM SLA ESTOURADO (04/09/26): no toque toda coluna recolhe, entao
@@ -18889,6 +18916,31 @@ function fn3AbrirMenu(lead, redesenhar) {
   }));
 }
 
+/* ── PEDIR CONTAS AO LÍDER ────────────────────────────────────────────────────────────
+   A chave é uma por executivo por SEMANA (`tl5Chave` gruda a semana no fim): pedir conta
+   é pedido de reabastecimento, e reabastecimento se resolve na semana. Duas vezes na
+   mesma semana seria a mesma linha, e é por isso que o botão é toggle e não contador. */
+function fn3ChavePedido() {
+  return 'pedido_contas:' + String(fn2OwnerAtual || (sessaoAtual && sessaoAtual.ownerId) || '');
+}
+
+function fn3PedidoDeContas() {
+  return !!(typeof TL5_ESTADO !== 'undefined' && TL5_ESTADO.pauta
+    && TL5_ESTADO.pauta[fn3ChavePedido()]);
+}
+
+/* A TRANCA ANTES DO AWAIT, e não depois: booleano marcado no fim deixa passar os
+   simultâneos, que foi como /api/dados virou três chamadas por carga. */
+let fn3PautaCarregando = false;
+async function fn3CarregarPautaUmaVez(redesenhar) {
+  if (fn3PautaCarregando) return;
+  if (typeof TL5_ESTADO === 'undefined' || TL5_ESTADO.carregou) return;
+  if (typeof tl5CarregarPauta !== 'function') return;
+  fn3PautaCarregando = true;
+  try { await tl5CarregarPauta(); } catch (e) { /* a pauta é acessório: a aba não depende dela */ }
+  if (typeof redesenhar === 'function') redesenhar();
+}
+
 /* ── AÇÕES DESTA SESSÃO ───────────────────────────────────────────────────────────────
    O que ele mexeu desde que abriu a aba, com a volta quando a volta é possível.
    Ver o cabeçalho do patch de 11/09 para o porquê de o desfazer ser o REGISTRO da volta
@@ -18946,6 +18998,41 @@ function fn3SessaoHTML() {
 
 /* ── A FIAÇÃO DA ESTEIRA ─────────────────────────────────────────────────────────────── */
 function fn3Ligar(el, redesenhar) {
+  /* a pauta chega depois e a tela se repinta: o botão nasce sem saber o estado, e
+     saber depois é melhor que perguntar ao banco a cada desenho. */
+  fn3CarregarPautaUmaVez(redesenhar);
+
+  el.querySelectorAll('[data-fn3-pedir]').forEach(b => b.addEventListener('click', async () => {
+    const dono = String(fn2OwnerAtual || (sessaoAtual && sessaoAtual.ownerId) || '');
+    if (!dono) { mostrarToast('Não sei de quem é este funil — recarregue a aba.', 'erro'); return; }
+    if (typeof tl5Alternar !== 'function') {
+      mostrarToast('O gravador da pauta não carregou nesta aba.', 'erro');
+      return;
+    }
+    b.disabled = true;
+    /* SEM O ESTADO CARREGADO O TOGGLE SÓ SABE INSERIR, e o segundo clique bateria na
+       unique(chave) como duplicata. Espero a leitura antes de escrever. */
+    if (typeof TL5_ESTADO !== 'undefined' && !TL5_ESTADO.carregou
+        && typeof tl5CarregarPauta === 'function') {
+      try { await tl5CarregarPauta(); } catch (e) {}
+    }
+    const nome = (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || 'O executivo';
+    const emProsp = (typeof meusNegociosAbertos === 'function'
+      ? meusNegociosAbertos(dono).filter(l => String(l.stageId) === '1395880469').length : 0);
+    await tl5Alternar(
+      'pedido_do_executivo', dono,
+      nome + ' pediu contas-alvo para prospectar',
+      emProsp + ' negócio' + (emProsp === 1 ? '' : 's') + ' em Prospecção agora'
+        + ' · pedido feito por ele na aba Meu funil',
+      fn3ChavePedido(), 'daily');
+    b.disabled = false;
+    /* O TOAST É O DA PAUTA, inclusive quando ela NÃO gravou: tl5Alternar escreve
+       "não gravou: …" ali, e engolir isso seria o clique que "deu certo" sem gravar. */
+    const msg = (typeof TL5_ESTADO !== 'undefined' && TL5_ESTADO.toast) || '';
+    if (msg) mostrarToast(msg, /^não gravou|^sem conexão/.test(msg) ? 'erro' : 'sucesso');
+    redesenhar();
+  }));
+
   el.querySelectorAll('[data-fn3-sessao]').forEach(b => b.addEventListener('click', () => {
     fn3SessaoAberta = !fn3SessaoAberta;
     redesenhar();
