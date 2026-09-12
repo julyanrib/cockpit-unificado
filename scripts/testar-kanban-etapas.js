@@ -1375,11 +1375,34 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
      A guarda prende as DUAS metades: linha inteira para o nome, e quebra so entre
      palavras. Ja havia um comentario avisando disso desde 02/09 — e comentario nao
      reprova build. */
-  checar('o nome do cartao tem a linha inteira e nunca quebra dentro da palavra',
+  /* REESCRITA EM 12/09/26, medindo em producao: `overflow-wrap:normal` nao era a
+     intencao, era o remedio de 02/09 contra uma caixa de 64px. Com a linha inteira ele
+     virou outro defeito — "CHURRASQUINHO" mede 105px numa linha de 93 e, sem poder
+     quebrar, TRANSBORDAVA o cartao e era cortado pelo overflow da coluna no meio de uma
+     letra. `break-word` quebra so a palavra que nao cabe sozinha na linha.
+     A intencao, que fica: o nome nao divide a linha com ninguem, e palavra que cabe
+     nunca e fatiada. E `anywhere` continua reprovado — esse fatia qualquer palavra. */
+  checar('o nome tem a linha inteira, e so quebra a palavra que nao cabe nela',
     /\.fn3-nome\{[^}]*flex:1 1 100%/.test(cssFunil)
-      && /\.fn3-nome\{[^}]*overflow-wrap:normal/.test(cssFunil),
-    'com o nome dividindo a linha com os botoes a coluna estreita fatia a palavra letra '
-      + 'a letra — medido a 1280px, e visto na foto do funil do Andre');
+      && /\.fn3-nome\{[^}]*overflow-wrap:break-word/.test(cssFunil)
+      && !/\.fn3-nome\{[^}]*overflow-wrap:anywhere/.test(cssFunil)
+      && /\.fn3-nome\{[^}]*word-break:normal/.test(cssFunil),
+    'nome dividindo a linha com os chips fatia a palavra letra a letra (a foto do funil '
+      + 'do Andre, "BAM OR MIN am O"), e palavra que nao pode quebrar transborda o '
+      + 'cartao e e cortada pela coluna — os dois perdem o nome do restaurante');
+
+  /* ── 8f · A DATA UMA VEZ SO (12/09/26, medido na carteira do Marco) ──────────────
+     O diag escrevia "atividade · 17/09 (quinta) ✓" e o chip, na linha de baixo,
+     "✓ pp · 17/09 (quinta)". A mesma data duas vezes, 30px de altura em 3 dos 18
+     cartoes — e o desalinhamento que sobrou depois do primeiro conserto.
+     A regra de 11/09 esta escrita no template ("o diagnostico so aparece quando o chip
+     nao o diz") e a implementacao fazia o contrario no caso datado: `e.passo ? diag`
+     mostra o diag JUSTAMENTE quando o chip existe. A guarda prende a condicao. */
+  checar('o diag nao repete o que o chip de proximo passo ja diz',
+    /const higiene = \(e\.passo && !chipPasso \?/.test(template),
+    'com o chip datado ao lado, o diag escreve a mesma data de novo: 30px de altura e '
+      + 'uma leitura duplicada, no cartao onde cada linha foi disputada a px');
+
 
   /* ── 8c · O CARTAO E O MESMO CARTAO EM TODA COLUNA (12/09/26) ───────────────────
      PEDIDO: "os botoes de avancar, perder, cancelar tem q estar centralizados,

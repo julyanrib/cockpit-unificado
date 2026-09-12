@@ -5661,6 +5661,15 @@
      moldura em cima de moldura. O grid em si não muda: oito frações com piso zero,
      contadas de FN3_COLUNAS pela guarda — número cravado se descola da lista em
      silêncio, e já se descolou uma vez quando o Ganho entrou. */
+  /* ══ SEM PISO DE LARGURA, E ISSO É UMA DECISÃO, NÃO UM ESQUECIMENTO ══════════════
+     Eu tentei pôr piso de 144px por coluna em 12/09/26, porque abaixo de ~1250px as
+     oito encolhem até ~97px e o cartão não cabe nesse espaço. Duas guardas reprovaram,
+     e uma delas diz com todas as letras: "o kanban NÃO rola na horizontal — Pagamento e
+     Onboarding saem da tela". Ver o funil inteiro de uma vez vale mais que ver cada
+     cartão confortável, e essa escolha é do Julyan, não minha.
+     Fica registrado o que ainda dói: entre 760 e ~1250px de janela (notebook com uma
+     janela ao lado) o cartão é esmagado. As saídas são rolar de lado ou mostrar menos
+     colunas por vez — as duas trocam algo que ele já decidiu. */
   .fn3-grade{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;
     align-items:start;}
 
@@ -5832,15 +5841,31 @@
      altura em todos os cartoes — e o nome curto simplesmente respira. Custa ~14px no
      cartao de nome curto, e alinhamento em kanban vale isso: o olho compara colunas, e
      so compara o que esta na mesma linha. */
+  /* ══ TRÊS LINHAS RESERVADAS, E A PALAVRA GIGANTE QUEBRA (12/09/26) ══════════════
+     MEDIDO na carteira do Marco: "Vila Rusticana - Pizza…" e "ENJOY ROOFTOP & BISTRO"
+     ocupam TRÊS linhas na coluna de 144px, e com duas reservadas o cartão crescia 14px
+     e desalinhava a fileira. Três é o que a base pede.
+     E "CHURRASQUINHO" sozinho mede 105px numa linha de 93: com `overflow-wrap:normal`
+     ele não quebrava — transbordava o cartão e o overflow da coluna o cortava no meio
+     de uma letra, que é pior do que quebrar. `break-word` quebra SÓ a palavra que não
+     cabe sozinha na linha: "Tumucumaque" (70px) continua inteira.
+     Isto não é a volta do defeito de 02/09 — lá a caixa tinha 64px e fatiava palavra
+     comum porque o nome dividia a linha com os chips; aqui a linha é inteira. */
   .fn3-nome{flex:1 1 100%;min-width:0;font:800 11px/1.25 var(--font-display);
-    min-height:27px;letter-spacing:-.01em;word-break:normal;overflow-wrap:normal;
+    min-height:41px;letter-spacing:-.01em;word-break:normal;overflow-wrap:break-word;
     hyphens:none;color:var(--ink);}
   /* ══ A FILEIRA DE ESTADO: dias na esquerda, dinheiro na direita ═════════════════
      Altura reservada para que a fileira exista igual mesmo quando o chip de valor não
      vem (Onboarding não define MRR), e o cartão não encurte por isso. */
-  .fn3-card-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;
-    min-height:24px;}
-  .fn3-card-chips .fn3-valor{margin-left:auto;}
+  /* GRADE, E NÃO FLEX COM QUEBRA: flex quebra a linha antes de encolher o item, então
+     bastavam 3px de falta (chip de dois dígitos: "13D" mede 29 contra 24) para os dois
+     chips virarem duas fileiras e o cartão crescer 18px. Em grade de duas colunas eles
+     NÃO QUEBRAM por construção, e a segunda coluna encolhe se precisar. */
+  .fn3-card-chips{display:grid;grid-template-columns:auto minmax(0,1fr);
+    align-items:center;gap:4px 5px;margin-top:4px;min-height:24px;}
+  .fn3-card-chips .fn3-valor{justify-self:end;}
+  /* a gaveta de preços ocupa as duas colunas, embaixo dos dois chips */
+  .fn3-card-chips .fn3-valor-pick{grid-column:1/-1;}
   /* ══ A FILEIRA DOS TRÊS GESTOS: colunas iguais, sempre ══════════════════════════
      `grid-auto-flow:column` com `grid-auto-columns:1fr` divide a largura pelo número
      de botões que REALMENTE vieram — três na maioria das etapas, e só o ⌄ em Ganho e
@@ -6238,6 +6263,10 @@
        dentro de uma tela de 68vh é rolagem dentro de rolagem, e o dedo não sabe qual
        das duas está movendo. */
     .fn3-grade{grid-template-columns:minmax(0,1fr);gap:8px;overflow-x:visible;padding:8px;}
+    /* no toque a coluna ocupa a tela inteira e o nome cabe em UMA linha: as tres linhas
+       reservadas no desktop (que existem para os oito cartoes lado a lado comecarem na
+       mesma altura) viram 28px de vazio em cima de cada cartao. */
+    .fn3-nome{min-height:0;}
     .fn3-col{max-height:none;overflow-y:visible;padding-right:0;}
     /* ══ O CABEÇALHO FICA, TAMBÉM NO TOQUE (04/09/26) ═══════════════════════════════
        Era `position:static` aqui, e por um motivo real: `overflow:hidden` na coluna
@@ -18299,9 +18328,17 @@ function fn3Card(item, aceso) {
     : chipDias.toLowerCase() + ' nesta etapa' + (chipRegua ? '' : ', dentro da régua');
   /* A HIGIENE SÓ EXISTE QUANDO TEM O QUE DIZER: com o chip de valor subindo para a
      linha dos dias, um cartão de Onboarding ficaria com uma fileira vazia de 5px. */
-  const higiene = (e.passo ? `<span class="fn3-diag ${e.diagCls || ''}">${esc(e.diag)}</span>` : '')
+  /* ══ A DATA UMA VEZ SÓ (12/09/26, medido na carteira do Marco) ═══════════════════
+     O diag escrevia "atividade · 17/09 (quinta) ✓" e o chip, na linha de baixo,
+     "✓ pp · 17/09 (quinta)" — a mesma data duas vezes, custando 30px de altura em 3
+     dos 18 cartões. A regra de 11/09 está escrita aqui embaixo e a implementação fazia
+     o contrário: mostrava o diag JUSTAMENTE quando o chip existe.
+     Agora é o chip que fala. O diag sobra para as etapas sem chip (Ganho, Onboarding,
+     e qualquer etapa fora de FN3_PASSO_TIPO), onde ele é a única frase do cartão. */
+  const chipPasso = fn3ChipPasso(l, e);
+  const higiene = (e.passo && !chipPasso ? `<span class="fn3-diag ${e.diagCls || ''}">${esc(e.diag)}</span>` : '')
     + (e.ctx ? `<span class="fn3-ctx">${e.ctx}</span>` : '')
-    + fn3ChipPasso(l, e);
+    + chipPasso;
   return `<div class="fn3-card${e.estourou ? ' is-viol' : ''}${e.pagto ? ' is-pagto' : ''}${e.onb ? ' is-onb' : ''}${aceso === false ? ' is-fora' : ''}${gravando ? ' is-gravando' : ''}${recemMovido && !gravando ? ' is-recem' : ''}"
     style="--cor:${stageColor(item.stageId)}"
     data-fn3-card="${id}" data-fn3-de="${esc(item.stageId)}"${arrastavel ? ' draggable="true"' : ''}
@@ -18541,7 +18578,9 @@ function fn3ChipValor(l) {
        passo", porque e a mesma natureza — falta um dado que o CRM precisa. */
     : '<button type="button" class="fn3-valor is-sem" data-fn3-valor="' + id + '"'
       + ' title="Sem MRR no HubSpot: este negócio não entra na conta do dinheiro em jogo">'
-      + 'R$ ? definir</button>';
+      /* "definir R$" e não "R$ ? definir": o "?" era decoração ao lado de um verbo, e
+         custava 9px de largura numa fileira onde a falta de 3px quebrava a linha. */
+      + 'definir R$</button>';
   if (!aberto) return chip;
   return chip
     + '<div class="fn3-valor-pick">'
