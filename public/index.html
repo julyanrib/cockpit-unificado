@@ -3449,6 +3449,15 @@
   .fn3-ver.is-viol{border-color:#E3C6C6;color:#E51A31;}
   .fn3-ver.is-viol:hover{background:#FDECEA;}
 
+  .fn3-pedir{display:flex;align-items:center;justify-content:center;gap:6px;min-height:34px;
+    border:1.5px dashed var(--red);border-radius:10px;background:transparent;
+    font:800 9px var(--font-body);color:var(--red);cursor:pointer;padding:0 8px;
+    transition:background var(--t-base) var(--ease),border-color var(--t-base) var(--ease);}
+  .fn3-pedir:hover{background:var(--red-soft);border-style:solid;}
+  .fn3-pedir.is-feito{border:1px solid var(--green);background:var(--green-soft);
+    color:var(--green);}
+  .fn3-pedir:disabled{opacity:.55;cursor:progress;}
+
   .fn3-ses{border-top:1px solid var(--line-soft);background:var(--creme);
     border-radius:0 0 12px 12px;padding:10px 0 12px;}
   .fn3-ses-cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
@@ -11415,11 +11424,17 @@ function fn3Coluna(col, itens, idsAcesos) {
       + (col.pagto ? `<div class="fn3-slot">pagamento confirmado sai daqui direto pro
           onboarding — <b>e credita +200 na sua Daily</b></div>` : '');
 
+  const jaPediu = fn3PedidoDeContas();
   const alimentar = col.id === '1395880469'
     ? `<button type="button" class="fn3-alimentar" data-fn3-alimentar="1"
         title="Abrir o Planejamento, onde ficam a carteira, a reciclagem e o lote novo">
         + alimentar o funil<span>carteira · reciclagem · casa dos dados · mais avaliados</span>
-      </button>`
+      </button>
+      <button type="button" class="fn3-pedir${jaPediu ? ' is-feito' : ''}" data-fn3-pedir="1"
+        title="${jaPediu
+          ? 'Já está na pauta desta semana — clicar de novo tira o pedido'
+          : 'Põe na pauta do líder um pedido de contas-alvo para você. O Julyan lê a pauta no ritual, e o pedido vale para esta semana'}">${
+        jaPediu ? 'pedido na pauta ✓ · tirar' : '+ pedir contas ao Julyan ▸'}</button>`
     : '';
 
   return `<div class="fn3-col${estourados ? ' is-aberta' : ''}" style="--cor:${stageColor(col.id)}"
@@ -11877,6 +11892,25 @@ function fn3AbrirMenu(lead, redesenhar) {
   }));
 }
 
+function fn3ChavePedido() {
+  return 'pedido_contas:' + String(fn2OwnerAtual || (sessaoAtual && sessaoAtual.ownerId) || '');
+}
+
+function fn3PedidoDeContas() {
+  return !!(typeof TL5_ESTADO !== 'undefined' && TL5_ESTADO.pauta
+    && TL5_ESTADO.pauta[fn3ChavePedido()]);
+}
+
+let fn3PautaCarregando = false;
+async function fn3CarregarPautaUmaVez(redesenhar) {
+  if (fn3PautaCarregando) return;
+  if (typeof TL5_ESTADO === 'undefined' || TL5_ESTADO.carregou) return;
+  if (typeof tl5CarregarPauta !== 'function') return;
+  fn3PautaCarregando = true;
+  try { await tl5CarregarPauta(); } catch (e) {   }
+  if (typeof redesenhar === 'function') redesenhar();
+}
+
 function fn3SessaoHTML() {
   const n = FN3_SESSAO.length;
   const cab = `<div class="fn3-ses-cab">
@@ -11927,6 +11961,38 @@ function fn3SessaoHTML() {
 }
 
 function fn3Ligar(el, redesenhar) {
+
+  fn3CarregarPautaUmaVez(redesenhar);
+
+  el.querySelectorAll('[data-fn3-pedir]').forEach(b => b.addEventListener('click', async () => {
+    const dono = String(fn2OwnerAtual || (sessaoAtual && sessaoAtual.ownerId) || '');
+    if (!dono) { mostrarToast('Não sei de quem é este funil — recarregue a aba.', 'erro'); return; }
+    if (typeof tl5Alternar !== 'function') {
+      mostrarToast('O gravador da pauta não carregou nesta aba.', 'erro');
+      return;
+    }
+    b.disabled = true;
+
+    if (typeof TL5_ESTADO !== 'undefined' && !TL5_ESTADO.carregou
+        && typeof tl5CarregarPauta === 'function') {
+      try { await tl5CarregarPauta(); } catch (e) {}
+    }
+    const nome = (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || 'O executivo';
+    const emProsp = (typeof meusNegociosAbertos === 'function'
+      ? meusNegociosAbertos(dono).filter(l => String(l.stageId) === '1395880469').length : 0);
+    await tl5Alternar(
+      'pedido_do_executivo', dono,
+      nome + ' pediu contas-alvo para prospectar',
+      emProsp + ' negócio' + (emProsp === 1 ? '' : 's') + ' em Prospecção agora'
+        + ' · pedido feito por ele na aba Meu funil',
+      fn3ChavePedido(), 'daily');
+    b.disabled = false;
+
+    const msg = (typeof TL5_ESTADO !== 'undefined' && TL5_ESTADO.toast) || '';
+    if (msg) mostrarToast(msg, /^não gravou|^sem conexão/.test(msg) ? 'erro' : 'sucesso');
+    redesenhar();
+  }));
+
   el.querySelectorAll('[data-fn3-sessao]').forEach(b => b.addEventListener('click', () => {
     fn3SessaoAberta = !fn3SessaoAberta;
     redesenhar();
