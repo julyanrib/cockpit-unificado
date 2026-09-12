@@ -270,18 +270,26 @@ checar('o PNG é a foto do MESMO nó que a prévia mostra',
   && template.indexOf('function prcDadosDaPeca(') === -1,
   'com um segundo desenho da peça (o pintor de canvas), o que o dono recebe diverge do '
     + 'que o executivo conferiu na tela — e a divergência só aparece depois de enviada');
-checar('e a captura é a 430px, sem o transform da prévia, em scale 3',
+/* REESCRITA EM 12/09/26: a checagem exigia o clone a 430px cravados. A largura de
+   desenho passou a SEGUIR o palco (430 a 600, escolhida por area medida) porque a 430
+   fixos o cartao ocupava 67% da largura da coluna no notebook do Julyan. A intencao
+   nunca foi o numero: e que a captura aconteca SEM o transform da previa e na largura de
+   desenho DO NO — clonar numa constante faria o PNG divergir do que ele conferiu. */
+checar('a captura é sem o transform da prévia, na largura de desenho do nó, em scale 3',
   /clone\.style\.transform = 'none';/.test(template)
-  && /clone\.style\.width = '430px';/.test(template)
-  && /html2canvas\(clone, \{ scale: 3/.test(template),
-  'capturar o nó com transform rasteriza o tamanho escalado e sai borrado; sem scale 3 '
-    + 'chega pixelado no celular do dono');
+    && /clone\.style\.width = \(node\.style\.width \|\| '430px'\);/.test(template)
+    && /html2canvas\(clone, \{ scale: 3/.test(template),
+  'capturar o nó com transform rasteriza o tamanho escalado e sai borrado; clonar numa '
+    + 'largura fixa faz o PNG divergir da prévia; sem scale 3 chega pixelado no celular');
 /* O cartão continua ABSOLUTO e centrado no palco — devolvê-lo ao fluxo empurrava a
    grade com 900px de peça. Agora a posição é inline (é o nó que o PNG fotografa), e o
    que a folha guarda é só a origem do transform. */
+/* a largura deixou de ser 430 cravado e virou ${prcLarguraDesenho} — o que a checagem
+   tem de garantir e que o cartao siga ABSOLUTO e centrado no palco, que e o que impede
+   a peca de ~700px de empurrar a grade e devolver a rolagem da aba. */
 checar('o cartão do palco continua absoluto e centrado',
-  /id="cartao-proposta" style="position:absolute;top:50%;left:50%;width:430px/.test(template)
-  && /\.p4-palco > #cartao-proposta\{transform-origin:center center;\}/.test(template),
+  /id="cartao-proposta" style="position:absolute;top:50%;left:50%;width:\$\{prcLarguraDesenho\}px/.test(template)
+    && /\.p4-palco > #cartao-proposta\{transform-origin:center center;\}/.test(template),
   'no fluxo, a peça de ~700px empurra a grade e a aba volta a rolar');
 checar('o cartão existe UMA vez no DOM, e o overlay não redigita uma segunda versão',
   /\$\{prcModoCliente \? '' : `<div id="cartao-proposta"/.test(template)
@@ -405,8 +413,11 @@ checar('planos e períodos em 4 colunas que podem encolher',
    Duas causas, duas checagens. A primeira e a mais traicoeira: a conta desistia de
    escalar quando nao havia altura medivel — guarda que, ao falhar, produz exatamente o
    defeito que deveria evitar. */
+/* a conta passou a rodar dentro do laco das larguras, e a altura natural de cada largura
+   e medida ali — por isso o nome da variavel mudou. A regra e a mesma, e e a que
+   consertou a proposta invisivel no celular: altura so limita quando e MEDIVEL. */
 checar('a escala da peca nao desiste quando o palco nao tem altura',
-  /alturaUtil > 0 \? alturaUtil \/ natural : Infinity/.test(template)
+  /alturaUtil > 0 \? alturaUtil \/ alturaNatural : Infinity/.test(template)
   && /palco\.style\.minHeight = alturaUtil \+ 'px';/.test(template),
   'restricao que nao se mede nao restringe: com a altura zerando a conta, a peca fica '
     + 'em tamanho natural dentro de uma janela que corta');
@@ -481,6 +492,30 @@ checar('a cadeia que prende a aba em 100vh esta inteira',
     && /#viewPrecificacao\.active \.p4-grid\{flex:1 1 0;min-height:0;\}/.test(template),
   'sem um dos elos a aba volta a rolar e a peca sai em tamanho natural — e o navegador '
     + 'nao reclama: foi assim que a cadeia inteira desapareceu em silencio hoje');
+
+
+/* ══ 19. A LARGURA DE DESENHO SEGUE O PALCO, MEDIDA ═══════════════════════════════
+   Pedido do Julyan apontando o vazio dos dois lados do cartao: "pode preencher isso
+   tudo uai". MEDIDO na tela dele (palco de 480x521): a 430px de desenho o cartao ocupa
+   67% da largura e 99% da altura; a 600px, 99% e 99%. A altura natural quase nao muda
+   com a largura (687 -> 654) porque o que faz a peca alta e o NUMERO de funcionalidades.
+   A escolha e por AREA medida entre as cinco larguras — em tela alta a vencedora continua
+   sendo 430 com escala acima de 1, no notebook vence a de 600. Numero cravado por tela e
+   o que esta guarda impede. */
+/* SEM REGEX AQUI, de proposito: as duas primeiras versoes destas checagens passaram pelo
+   shell e chegaram sem as barras de escape — validas, erradas e vermelhas. E o defeito que
+   ja esta anotado ("barra invertida morre no patch"). Busca literal resolve. */
+checar('a largura de desenho e escolhida por area medida, e nao cravada',
+  template.indexOf('const PRC_LARGURAS = [430, 480, 520, 560, 600];') > -1
+    && template.indexOf('const area = (largura * escala) * (alturaNatural * escala);') > -1
+    && template.indexOf('area > melhor.area') > -1,
+  'com largura cravada, um terco da coluna fica vazio no notebook (medido) ou a peca nao '
+    + 'usa a altura da tela grande');
+checar('e o cartao do overlay usa a MESMA largura da previa',
+  template.indexOf('width:${prcLarguraDesenho}px;background:#1E2228') > -1
+    && template.indexOf('let prcLarguraDesenho = 430;') > -1,
+  'larguras diferentes nos dois lugares fazem o PNG sair diferente dependendo de onde foi '
+    + 'capturado — mesma proposta, duas imagens');
 
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
