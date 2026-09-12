@@ -5676,6 +5676,13 @@
     border-top:4px solid var(--cor,var(--muted2));border-radius:12px;padding:9px 8px;
     transition:opacity var(--t-base) var(--ease),border-color var(--t-base) var(--ease);
     max-height:min(68vh,780px);overflow-y:auto;overflow-x:hidden;
+    /* ══ O ESPAÇO DA BARRA É RESERVADO EM TODAS (12/09/26) ═════════════════════════
+       MEDIDO a 1280px: a Visita tem 31 cartões e rola, e a barra comia 10px de dentro
+       dela — cartão de 116px lá contra 126 na Prospecção, que não rola. Mesma carteira,
+       cartões de dois tamanhos, e a fileira de estado quebrando só na coluna cheia.
+       Com o espaço reservado em todas, as oito têm a mesma largura de dentro e o cartão
+       é o mesmo cartão em qualquer uma delas. */
+    scrollbar-gutter:stable;
     scrollbar-width:thin;overscroll-behavior-y:contain;}
   /* o cabeçalho gruda no topo da coluna que rola, e o creme dela vai junto: sem fundo
      próprio os cartões passariam POR BAIXO e apareceriam através do cabeçalho. */
@@ -5717,8 +5724,18 @@
      moldura. A etapa passa a se identificar por uma bolinha de 8px e pelo contador, e o
      cabecalho fica transparente deixando o creme aparecer: a coluna e um TRILHO do
      painel, nao um cartao dentro de um cartao. */
+  /* ══ UMA ALTURA PARA OS OITO CABEÇALHOS (12/09/26) ═══════════════════════════════
+     MEDIDO a 1280px: os oito tinham CINCO alturas — 22, 34, 40, 51 e 52px. O cabeçalho
+     é o primeiro filho da coluna, então o primeiro cartão de cada coluna começava numa
+     altura diferente e a fileira nascia em degrau. As duas causas são legítimas e
+     ficam: a linha 1 quebra quando o chip da régua não cabe ao lado do nome, e a linha
+     2 só existe quando há dinheiro na pilha ou alguém estourado.
+     Reservar a altura das duas linhas resolve sem cortar nada — a coluna sem dinheiro
+     só fica com um respiro embaixo do nome, e as oito começam juntas.
+     `min-height`, e não `height`: nome de etapa mais longo ou régua maior continua
+     crescendo em vez de ser cortado. */
   .fn3-cab{background:transparent;color:var(--ink);border-radius:8px;padding:1px 2px 4px;
-    width:100%;text-align:left;border:0;cursor:pointer;display:block;
+    width:100%;min-height:52px;text-align:left;border:0;cursor:pointer;display:block;
     transition:background var(--t-base) var(--ease);}
   .fn3-cab:hover{background:var(--panel);}
   /* LINHA 1 · o nome não quebra: a coluna tem ~160px a 1440px e nome de etapa em duas
@@ -5818,9 +5835,21 @@
   .fn3-nome{flex:1 1 100%;min-width:0;font:800 11px/1.25 var(--font-display);
     min-height:27px;letter-spacing:-.01em;word-break:normal;overflow-wrap:normal;
     hyphens:none;color:var(--ink);}
-  .fn3-card-chips{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:3px;}
-  /* os tres gestos viajam juntos e encostam na direita da linha do chip */
-  .fn3-card-gestos{display:flex;align-items:center;gap:4px;margin-left:auto;flex:none;}
+  /* ══ A FILEIRA DE ESTADO: dias na esquerda, dinheiro na direita ═════════════════
+     Altura reservada para que a fileira exista igual mesmo quando o chip de valor não
+     vem (Onboarding não define MRR), e o cartão não encurte por isso. */
+  .fn3-card-chips{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;
+    min-height:24px;}
+  .fn3-card-chips .fn3-valor{margin-left:auto;}
+  /* ══ A FILEIRA DOS TRÊS GESTOS: colunas iguais, sempre ══════════════════════════
+     `grid-auto-flow:column` com `grid-auto-columns:1fr` divide a largura pelo número
+     de botões que REALMENTE vieram — três na maioria das etapas, e só o ⌄ em Ganho e
+     Onboarding, onde não há avançar nem perder. Grade de 3 colunas cravadas deixaria
+     o ⌄ sozinho ocupando um terço e dois buracos do lado. */
+  .fn3-card-acoes{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);
+    gap:5px;margin-top:5px;}
+  .fn3-card-acoes .fn3-passo,
+  .fn3-card-acoes .fn3-mais{width:100%;height:26px;}
   /* O CHIP DE DIAS DA PRANCHA: caixinha de raio 5, e o estourado é VINHO SÓLIDO —
      ele é o único elemento cheio do cartão, porque é a única coisa ali que pede hoje. */
   .fn3-chip{flex:none;white-space:nowrap;background:var(--sunk);color:var(--muted);
@@ -5864,15 +5893,29 @@
      CRM precisa. O pulso e o que a prancha pede a mais: data que falta e a coisa que
      segura o funil, e o chip nao pode ficar quieto. */
   .fn3-card-higiene{display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin:5px 0 0;}
-  .fn3-passo-chip{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;
+  /* ══ O PRÓXIMO PASSO OCUPA A LARGURA CHEIA (12/09/26) ═══════════════════════════
+     Ele e o chip de valor dividiam esta fileira, e a largura de cada um vinha do
+     TEXTO: "Agendar 1ª visita ▸" pede 95px, "Ligar e datar ▸" pede 78 — dois cartões
+     vizinhos nunca tinham o chip do mesmo tamanho, e os dois juntos (95+65) não cabiam
+     nos 126px da coluna, então quebravam em duas fileiras desalinhadas.
+     Em largura cheia ele é o mesmo retângulo em todo cartão, e é o alvo mais fácil da
+     coluna — que é o certo, porque datar é o gesto mais frequente desta tela. */
+  .fn3-passo-chip{display:inline-flex;align-items:center;justify-content:center;
+    flex:1 1 100%;min-height:26px;padding:0 8px;
     border-radius:var(--r-pill);cursor:pointer;font:800 8.5px var(--font-body);
-    white-space:nowrap;}
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .fn3-passo-chip.is-sem{border:1.5px dashed var(--red);background:var(--red-soft);
     color:var(--red);animation:fn3PulsaVermelho 1.8s ease-in-out infinite;}
   .fn3-passo-chip.is-sem:hover{border-style:solid;}
   .fn3-passo-chip.is-tem{border:1px solid var(--green);background:var(--green-soft);
     color:var(--green);}
-  .fn3-passo-pick{flex-basis:100%;display:flex;flex-wrap:wrap;gap:4px;padding:6px;
+  /* ══ A GAVETA DE DATAS CABE NA COLUNA (12/09/26) ═════════════════════════════════
+     `min-width:0` é o que falta para o `flex-basis:100%` valer: sem ele o mínimo de
+     conteúdo (247px da linha data+hora+datar) ganha, a gaveta abre com 261px numa
+     coluna de 144 e o que vaza é cortado pelo overflow da coluna. Medido com teste de
+     acerto: três dos sete controles ficavam inalcançáveis, entre eles o "datar ▸". */
+  .fn3-passo-pick{flex-basis:100%;min-width:0;display:flex;flex-wrap:wrap;gap:4px;
+    padding:6px 5px;
     border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);}
   .fn3-passo-rot{flex-basis:100%;font:800 9px var(--font-body);color:var(--muted2);
     text-transform:uppercase;letter-spacing:.05em;}
@@ -5880,14 +5923,18 @@
     border-radius:var(--r-pill);background:var(--panel);color:var(--ink);cursor:pointer;
     font:800 10.5px var(--font-body);}
   .fn3-passo-op:hover{border-color:var(--green);color:var(--green);}
-  .fn3-passo-livre{display:flex;gap:4px;align-items:center;}
-  .fn3-passo-in{min-height:30px;padding:0 7px;border:1px solid var(--line-btn);
+  /* data, hora e "datar ▸" empilham em largura cheia: lado a lado eles pedem 247px,
+     e a coluna tem 93 de conteúdo. Empilhados, cada um tem 81 — e 81 é mais do que os
+     79 que "14/09/2026" precisa na fonte computada, conferido campo por campo. */
+  .fn3-passo-livre{display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+    flex-basis:100%;min-width:0;}
+  .fn3-passo-in{min-height:30px;padding:0 4px;border:1px solid var(--line-btn);
     border-radius:var(--r-sm);background:var(--panel);color:var(--ink);
-    font:800 10.5px var(--font-body);}
+    font:800 9.5px var(--font-body);flex:1 1 100%;width:100%;min-width:0;}
   .fn3-passo-in:focus{outline:none;border-color:var(--green);}
   .fn3-passo-ok{min-height:30px;padding:0 10px;border:1px solid var(--green);
     border-radius:var(--r-pill);background:var(--green);color:var(--panel);cursor:pointer;
-    font:800 10.5px var(--font-body);}
+    font:800 10.5px var(--font-body);flex:1 1 100%;}
   .fn3-passo-pe{flex-basis:100%;font:700 9px var(--font-body);color:var(--muted2);
     line-height:1.4;}
 
@@ -5898,27 +5945,36 @@
   }
 
 
-  .fn3-valor{min-height:24px;padding:0 8px;border-radius:var(--r-pill);cursor:pointer;
-    font:800 8.5px var(--font-body);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  /* `min-width:0` para ele ENCURTAR em vez de empurrar a fileira de estado para uma
+     segunda linha: quebra ali é o degrau de 18px que desalinhava a grade. Com reticências
+     ele continua legível e a fileira continua uma só. */
+  .fn3-valor{min-height:24px;padding:0 6px;border-radius:var(--r-pill);cursor:pointer;
+    font:800 8.5px var(--font-body);font-variant-numeric:tabular-nums;white-space:nowrap;
+    min-width:0;overflow:hidden;text-overflow:ellipsis;}
   .fn3-valor.is-sem{border:1.5px dashed var(--amber);background:var(--amber-soft);
     color:var(--amber-ink);}
   .fn3-valor.is-sem:hover{border-style:solid;}
   .fn3-valor.is-tem{border:1px solid var(--green);background:var(--green-soft);color:var(--green);}
-  .fn3-valor-pick{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding:6px;
+  .fn3-valor-pick{flex-basis:100%;min-width:0;display:flex;flex-wrap:wrap;gap:4px;margin-top:5px;padding:6px 5px;
     border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);}
-  .fn3-valor-op{min-height:30px;padding:0 8px;border:1px solid var(--line-btn);
+  .fn3-valor-op{flex:1 1 100%;min-width:0;min-height:30px;padding:0 8px;border:1px solid var(--line-btn);
     border-radius:var(--r-sm);background:var(--panel);color:var(--ink);cursor:pointer;
     font:800 11px var(--font-body);font-variant-numeric:tabular-nums;text-align:left;}
   .fn3-valor-op:hover{border-color:var(--green);color:var(--green);}
   .fn3-valor-op span{display:block;font:700 8.5px var(--font-body);color:var(--muted2);}
-  .fn3-valor-outro{display:flex;gap:4px;align-items:center;}
-  .fn3-valor-in{width:66px;min-height:30px;padding:0 7px;border:1px solid var(--line-btn);
+  /* o campo "outro" e o "gravar ▸" empilham, pela mesma razão da gaveta de datas:
+     lado a lado eles não cabem nos 93px de conteúdo da coluna, e o que não cabe é
+     cortado pelo overflow dela — não fica só apertado, fica inalcançável. */
+  .fn3-valor-outro{display:flex;flex-wrap:wrap;gap:4px;align-items:center;
+    flex-basis:100%;min-width:0;}
+  .fn3-valor-in{width:100%;flex:1 1 100%;min-width:0;min-height:30px;padding:0 6px;
+    border:1px solid var(--line-btn);
     border-radius:var(--r-sm);background:var(--panel);color:var(--ink);
     font:800 11px var(--font-body);font-variant-numeric:tabular-nums;}
   .fn3-valor-in:focus{outline:none;border-color:var(--green);}
   .fn3-valor-ok{min-height:30px;padding:0 10px;border:1px solid var(--green);
     border-radius:var(--r-sm);background:var(--green);color:var(--panel);cursor:pointer;
-    font:800 10.5px var(--font-body);}
+    font:800 10.5px var(--font-body);flex:1 1 100%;}
   .fn3-valor-pe{flex-basis:100%;font:700 9px var(--font-body);color:var(--muted2);}
   /* 22px QUADRADO, igual aos outros dois da linha (prancha FINAL). Ele era um circulo
      de 38px numa linha exclusiva. No toque a regra de <=760px o leva de volta a 44px —
@@ -5926,7 +5982,7 @@
   .fn3-mais{flex:none;width:22px;height:22px;border-radius:7px;
     border:1px solid var(--line);background:var(--panel);cursor:pointer;
     display:grid;place-items:center;padding:0;
-    font:900 11px var(--font-body);color:var(--ter);
+    font:900 13px var(--font-body);color:var(--ter);
     transition:background var(--t-base) var(--ease),color var(--t-base) var(--ease);}
   .fn3-mais:hover{background:var(--panel2);color:var(--ink);}
 
@@ -5945,9 +6001,17 @@
      verde) e perder e pill BRANCO cinza que fica vermelho no hover. Preenchido nao
      briga com a hierarquia do cartao — o verde claro tem menos peso que o chip vermelho
      de "sem proximo passo", que continua sendo a coisa mais forte ali dentro. */
-  .fn3-passo.is-ava{color:#1E9E7B;font:900 11px/1 var(--font-body);}
+  /* ══ O PESO DOS TRÊS, OLHADO A 2,4x (12/09/26) ═══════════════════════════════════
+     Com 22px de largura os três eram quadradinhos e a cor do glifo bastava. Com ~40px
+     a moldura cresceu e o glifo de 10px ficou perdido no meio dela: três caixas vazias
+     iguais, sendo que uma delas MOVE O NEGÓCIO e outra o mata.
+     Avançar é o único preenchido — verde claro, a mesma gramática do chip de valor já
+     datado. Perder é branco e só vira vermelho debaixo do dedo. O ⌄ é o mais apagado:
+     ele não faz nada sozinho, só abre a lista. */
+  .fn3-passo.is-ava{color:#157A5C;font:900 14px/1 var(--font-body);
+    background:#EAF6F1;border-color:#CBE8DD;}
   .fn3-passo.is-ava:hover{background:var(--green);border-color:var(--green);color:var(--panel);}
-  .fn3-passo.is-per{color:var(--muted2);font:800 10px/1 var(--font-body);}
+  .fn3-passo.is-per{color:var(--ter);font:800 12px/1 var(--font-body);}
   .fn3-passo.is-per:hover{background:#FDF3F4;border-color:#F0A9B2;color:#E51A31;}
 
   /* os cards de Pagamento: a vitória tem cor própria */
@@ -5964,8 +6028,16 @@
   .fn3-card.is-onb .fn3-diag{color:#157A5C;}
 
   /* o slot vazio da coluna Pagamento: promessa, não branco */
-  .fn3-slot{border:1.5px dashed #BFE3D3;border-radius:16px;padding:16px;text-align:center;
-    font-size:12px;color:#6E8A7C;font-weight:700;line-height:1.6;}
+  /* ══ A COLUNA VAZIA OCUPA O LUGAR DE UM CARTÃO (12/09/26) ════════════════════════
+     MEDIDO: 110px no Ganho, 187 no Pagamento, 264 no Onboarding — a altura vinha do
+     TAMANHO DO TEXTO, então três colunas vazias lado a lado tinham três alturas. Ao
+     lado das colunas cujo cartão tem 133px, era o que sobrava de torto na fileira.
+     Piso de 133 (a altura exata do cartão) e o texto centrado dentro: a coluna vazia
+     reserva o espaço de um cartão, que é exatamente o que ela está dizendo que falta.
+     Texto mais longo que isso continua crescendo — o piso não corta ninguém. */
+  .fn3-slot{border:1.5px dashed #BFE3D3;border-radius:16px;padding:14px 12px;text-align:center;
+    min-height:133px;display:flex;flex-direction:column;justify-content:center;
+    font-size:12px;color:#6E8A7C;font-weight:700;line-height:1.55;}
   .fn3-slot b{color:#157A5C;}
   .fn3-slot.is-neutro{border-color:var(--line-btn);color:var(--muted2);}
   .fn3-slot.is-neutro b{color:var(--ink);}
@@ -6197,6 +6269,11 @@
     .fn3-cta,.fn3-mais,.fn3-ver,.fn3-alt button,.fn3-perdidos-cta,.fn3-toggle,
     .fn3-reg-ok,.fn3-reg-x,.fn3-cab{min-height:44px;}
     .fn3-mais{width:44px;height:44px;}
+    /* a fileira de ações do cartão vence `.fn3-mais` por especificidade (0,2,0 contra
+       0,1,0), então o piso de toque tem de ser repetido AQUI ou os três gestos ficariam
+       com 26px de altura no celular. Largura sobra: a coluna ocupa a tela inteira. */
+    .fn3-card-acoes .fn3-passo,
+    .fn3-card-acoes .fn3-mais{height:44px;}
     .fn3-topo-nota{flex:1 1 100%;}
     .fn3-reg-fundo{padding:12px;align-items:flex-end;}
     .fn3-reg{max-height:92vh;}
@@ -18208,6 +18285,23 @@ function fn3Card(item, aceso) {
      `is-recem` é a moldura de quem acabou de se mover: some no próximo carregamento. */
   const gravando = typeof estaGravando === 'function' && estaGravando(l.id);
   const recemMovido = typeof FN3_RECEM !== 'undefined' && FN3_RECEM.has(String(l.id));
+  /* ══ A RÉGUA SAI DO CHIP E VAI PARA O TITLE (12/09/26) ═══════════════════════════
+     "9D · RÉGUA 5D" mede 75px numa coluna de 144, e com ele a linha dos três botões
+     quebrava em 2 de cada 3 cartões (medido: 125px de altura contra 141). E a régua é
+     a regra da COLUNA: o cabeçalho a escreve uma vez e cada cartão da pilha repetia o
+     mesmo número — vinte vezes na Prospecção do Bruno.
+     No chip fica o que é do cartão: quantos dias ELE tem nesta etapa. O vinho sólido
+     continua dizendo que estourou, e o hover diz de quanto era a régua. */
+  const chipDias = String(e.chip || '').split(' · ')[0];
+  const chipRegua = (String(e.chip || '').split(' · RÉGUA ')[1] || '').toLowerCase();
+  const chipDica = e.estourou && chipRegua
+    ? chipDias.toLowerCase() + ' nesta etapa — estourou a régua de ' + chipRegua
+    : chipDias.toLowerCase() + ' nesta etapa' + (chipRegua ? '' : ', dentro da régua');
+  /* A HIGIENE SÓ EXISTE QUANDO TEM O QUE DIZER: com o chip de valor subindo para a
+     linha dos dias, um cartão de Onboarding ficaria com uma fileira vazia de 5px. */
+  const higiene = (e.passo ? `<span class="fn3-diag ${e.diagCls || ''}">${esc(e.diag)}</span>` : '')
+    + (e.ctx ? `<span class="fn3-ctx">${e.ctx}</span>` : '')
+    + fn3ChipPasso(l, e);
   return `<div class="fn3-card${e.estourou ? ' is-viol' : ''}${e.pagto ? ' is-pagto' : ''}${e.onb ? ' is-onb' : ''}${aceso === false ? ' is-fora' : ''}${gravando ? ' is-gravando' : ''}${recemMovido && !gravando ? ' is-recem' : ''}"
     style="--cor:${stageColor(item.stageId)}"
     data-fn3-card="${id}" data-fn3-de="${esc(item.stageId)}"${arrastavel ? ' draggable="true"' : ''}
@@ -18232,13 +18326,14 @@ function fn3Card(item, aceso) {
     <div class="fn3-card-l1">
       <b class="fn3-nome" title="${esc(l.name || '')}">${esc(l.name || 'sem nome')}</b>
     </div>
+    <!-- FILEIRA 2 · O ESTADO DO NEGÓCIO EM DOIS CANTOS: há quantos dias ele está aqui,
+         e quanto ele vale. São as duas leituras de estado do cartão, e agora estão na
+         mesma fileira em todos eles — o chip de valor morava embaixo, ao lado do chip
+         de próximo passo, e os dois disputavam a largura com texto de tamanho sorteado. -->
     <div class="fn3-card-chips">
-      <span class="fn3-chip${e.estourou ? ' is-viol' : ''}${e.pagto ? ' is-pagto' : ''}">${esc(e.chip)}</span>
-      <span class="fn3-card-gestos">
-        ${fn3PassosHTML(item, id)}
-        <button type="button" class="fn3-mais" data-fn3-menu="${id}"
-          aria-label="mais ações de ${esc(l.name || 'negócio')}">⌄</button>
-      </span>
+      <span class="fn3-chip${e.estourou ? ' is-viol' : ''}${e.pagto ? ' is-pagto' : ''}"
+        title="${esc(chipDica)}">${esc(chipDias)}</span>
+      ${fn3ChipValor(l)}
     </div>
     <!-- ══ A HIGIENE NO PROPRIO CARTAO (prancha 12b) ═══════════════════════════════
          Os dois chips ficam juntos porque sao a mesma pergunta em duas metades: este
@@ -18248,17 +18343,26 @@ function fn3Card(item, aceso) {
     <!-- O PÉ DA PRANCHA: uma fileira só, com o diagnóstico em texto miúdo e os dois
          chips de higiene. Eram três linhas separadas (diag, higiene, ctx) para dizer
          coisas do mesmo tamanho. -->
-    <div class="fn3-card-higiene">
-      <!-- O DIAGNOSTICO SO APARECE QUANDO O CHIP NAO O DIZ (11/09/26, medido).
-           MEDIDO no funil do Bruno, 14 de 14 cartoes: o diag escrevia "sem proximo
-           passo" e o chip logo ao lado escrevia "Agendar 1a visita" — a mesma frase
-           duas vezes, custando uma linha inteira que quebrava no pe do cartao.
-           Na prancha o CTA tracejado E o diagnostico: quando falta datar, o botao de
-           datar diz isso melhor do que uma frase ao lado dele. Com passo datado o
-           diag volta, porque ai ele diz o estado e nao a falta. -->
-      ${e.passo ? `<span class="fn3-diag ${e.diagCls || ''}">${esc(e.diag)}</span>` : ''}
-      ${e.ctx ? `<span class="fn3-ctx">${e.ctx}</span>` : ''}
-      ${fn3ChipPasso(l, e)}${fn3ChipValor(l)}
+    <!-- FILEIRA 3 · O PRÓXIMO PASSO, EM LARGURA CHEIA.
+         O DIAGNOSTICO SO APARECE QUANDO O CHIP NAO O DIZ (11/09/26, medido).
+         MEDIDO no funil do Bruno, 14 de 14 cartoes: o diag escrevia "sem proximo
+         passo" e o chip logo ao lado escrevia "Agendar 1a visita" — a mesma frase
+         duas vezes, custando uma linha inteira que quebrava no pe do cartao.
+         Na prancha o CTA tracejado E o diagnostico: quando falta datar, o botao de
+         datar diz isso melhor do que uma frase ao lado dele. Com passo datado o
+         diag volta, porque ai ele diz o estado e nao a falta. -->
+    ${higiene ? `<div class="fn3-card-higiene">${higiene}</div>` : ''}
+    <!-- ══ FILEIRA 4 · OS TRÊS GESTOS, EM COLUNAS IGUAIS (12/09/26) ════════════════
+         Eles moravam encostados na direita da fileira do chip, e o chip com a régua
+         empurrava os três para uma linha nova em 2 de cada 3 cartões — daí o degrau
+         de 16px que ele viu na foto. Numa fileira própria de colunas iguais eles
+         ficam na MESMA posição em todo cartão, de todas as colunas, e o alvo cresce
+         de 22×22 para ~40×26. Os três botões são os mesmos, com os mesmos atributos
+         e os mesmos aria-label: nenhum clique muda de lugar no código. -->
+    <div class="fn3-card-acoes">
+      ${fn3PassosHTML(item, id)}
+      <button type="button" class="fn3-mais" data-fn3-menu="${id}"
+        aria-label="mais ações de ${esc(l.name || 'negócio')}">⌄</button>
     </div>
   </div>`;
 }
