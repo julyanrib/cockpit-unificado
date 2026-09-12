@@ -706,6 +706,7 @@ function checarPisoDeToque() {
 }
 if (!checarPisoDeToque()) process.exit(1);
 if (!checarChavesDoEstilo()) process.exit(1);
+if (!checarComentarioAbertoNoEstilo()) process.exit(1);
 
 /* ══ VARIÁVEL DECLARADA ONDE O MARKUP NÃO CHEGA (02/09/26) ═══════════════════════════
    A página de leitura do Playbook tinha 46 usos de var(--v6-*) e a paleta inteira estava
@@ -1906,6 +1907,58 @@ function checarChavesDoEstilo() {
     return false;
   }
   console.log('OK chaves do estilo — saldo ' + d + ' e ' + sobrando + ' fechamento(s) orfao(s), dentro do medido.');
+  return true;
+}
+
+
+/* ── GUARDA: COMENTARIO ABERTO NO BLOCO DE ESTILO ────────────────────────────────
+   Ver a nota longa no topo desta funcao. Em uma linha: comentario de CSS que nao fecha
+   engole regra, o navegador nao reclama, e a tela quebra em silencio — foi assim que a
+   tela de LOGIN ficou sem layout em producao em 12/09/26.
+   A guarda conta os abre e os fecha, e depois ANDA pelo bloco para achar onde um
+   comentario ficou aberto. Nao mascara nada: mascarar comentario para conferir
+   comentario e o erro que deixou a guarda 31 cega para este defeito. */
+function checarComentarioAbertoNoEstilo() {
+  const cru = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'), 'utf8');
+  const ini = cru.indexOf('<style>');
+  const fim = cru.indexOf('</style>', ini);
+  if (ini < 0 || fim < 0) { console.log('OK comentario no estilo — sem bloco de estilo.'); return true; }
+  const css = cru.slice(ini + 7, fim);
+  const off = cru.slice(0, ini).split('\n').length;
+  const nAbre = (css.match(/\/\*/g) || []).length;
+  const nFecha = (css.match(/\*\//g) || []).length;
+  /* O ANDAR: cada abre consome ate o proximo fecha. Se um abre nao tem fecha nenhum
+     depois dele, ele engole o resto do arquivo — e esse e o caso fatal. Se o texto
+     engolido contem uma DECLARACAO de verdade (prop:valor;) ou uma chave, o comentario
+     comeu regra: tambem reprova, porque e o caso que quebrou a producao. */
+  const suspeitos = [];
+  let i = 0;
+  while (i < css.length) {
+    const a = css.indexOf('/*', i);
+    if (a < 0) break;
+    const f = css.indexOf('*/', a + 2);
+    const linha = css.slice(0, a).split('\n').length + off - 1;
+    if (f < 0) {
+      suspeitos.push('linha ' + linha + ': comentario SEM fechamento — engole o resto da folha');
+      break;
+    }
+    const corpo = css.slice(a + 2, f);
+    /* declaracao de verdade dentro do comentario: um { seguido de prop:valor e ; */
+    if (/\{[a-z-]+:[^;{}]*;/.test(corpo) && !/\*/.test(corpo.slice(0, 2))) {
+      suspeitos.push('linha ' + linha + ': comentario com REGRA dentro -> ' + corpo.slice(0, 90).replace(/\n/g, ' | '));
+    }
+    i = f + 2;
+  }
+  if (nAbre !== nFecha || suspeitos.length) {
+    console.error('GUARD REPROVADO — comentario aberto no bloco de estilo.');
+    console.error('  abre: ' + nAbre + '  fecha: ' + nFecha + '  (tem de ser igual)');
+    suspeitos.slice(0, 6).forEach(function (s) { console.error('  ' + s); });
+    console.error('  Comentario que nao fecha engole tudo ate o proximo fechamento,');
+    console.error('  inclusive a chave de um @media. O navegador NAO reclama: ele');
+    console.error('  simplesmente para de aplicar as regras seguintes.');
+    return false;
+  }
+  console.log('OK comentario no estilo — ' + nAbre + ' comentarios, todos fechados, nenhum com regra dentro.');
   return true;
 }
 
