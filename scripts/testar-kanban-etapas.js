@@ -1307,14 +1307,21 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
       && template.indexOf(String.fromCharCode(39) + '<span style="min-width:0;">' + String.fromCharCode(39)) > -1,
     'sem wrap na caixa e min-width:0 no KPI, o quinto numero sai do card a 375px');
 
-  /* ── 5 · A ESTEIRA NUM PAINEL CREME, COM A BOLINHA NO CABECALHO ─────────────────── */
-  checar('o kanban vive num painel creme',
-    /\.fn3-grade\{[^}]*background:var\(--creme\)/.test(cssFunil),
-    'sem o painel as colunas voltam a flutuar soltas no fundo da pagina');
-  checar('e a etapa se identifica pela bolinha, nao por um fio sobre o creme',
-    cssFunil.indexOf('.fn3-cab-bola{') > -1
-      && template.indexOf('<i class="fn3-cab-bola"></i>') > -1,
-    'cabecalho branco com fio colorido dentro do painel e moldura em cima de moldura');
+  /* ── 5 · CADA COLUNA E UM CARTAO CREME, COM O FIO DA ETAPA EM CIMA ───────────────
+     Invertido em 11/09/26 pela prancha FINAL: o creme era da GRADE e as colunas eram
+     transparentes com uma bolinha de 8px no cabecalho. Agora o creme e da COLUNA e a
+     etapa volta a se identificar pelo fio de 4px.
+     A intencao das duas checagens nao mudou — coluna com corpo proprio, e etapa que se
+     le sem precisar ler o nome. */
+  checar('cada coluna e um cartao creme, e nao uma pilha solta no fundo da pagina',
+    /\.fn3-col\{[^}]*background:var\(--panel2\)/.test(cssFunil)
+      && /\.fn3-col\{[^}]*border:1\.5px solid var\(--creme-linha\)/.test(cssFunil),
+    'sem corpo proprio as oito colunas voltam a flutuar soltas no fundo da pagina');
+  checar('e a etapa se identifica pelo fio de 4px, que RECEBE a cor',
+    /\.fn3-col\{[^}]*border-top:4px solid var\(--cor/.test(cssFunil)
+      && /class="fn3-col\$\{[^`]*\}" style="--cor:\$\{stageColor\(col\.id\)\}/.test(template),
+    'regra que pinta var(--cor) numa caixa que nao recebe a variavel cai no cinza do '
+      + 'fallback e as oito colunas ficam identicas — a cor da etapa some sem erro nenhum');
 
   /* ── 6 · VERMELHO SO PARA O ACIONAVEL (regra 2 da prancha) ────────────────────────── */
   checar('alimentar o funil nao e vermelho — nao e pendencia, e convite',
