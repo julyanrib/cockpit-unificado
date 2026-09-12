@@ -7803,7 +7803,11 @@
      fonte disso continua escrita no rodapé, que fica. Nas outras sete abas ela
      permanece onde sempre esteve. */
   body:has(#viewPrecificacao.active) #updatedLine{display:none;}
-  body:has(#viewPrecificacao.active) #footerText{margin-top:4px;font-size:10.5px;}
+  /* O RODAPÉ DO APP SAI DESTA ABA (12/09/26), pelo mesmo motivo pelo qual a linha
+     "HubSpot atualizado" já saía: ele diz "Fonte: HubSpot (pipeline 916011864…)" e aqui
+     nenhum número vem do HubSpot — preço é tabela oficial, e a fonte disso está escrita
+     no rodapé da própria aba. São 29px medidos, e nesta tela 29px são altura de cartão. */
+  body:has(#viewPrecificacao.active) #footerText{display:none;}
   #appRoot:has(#viewPrecificacao.active) > div{height:100vh;min-height:0;}
   #appRoot:has(#viewPrecificacao.active) > div > div{min-height:0;}
   /* O PADDING DO .app-main VIRA PALCO. Ele reserva 26px em cima e 44 embaixo — folga boa
@@ -7831,7 +7835,7 @@
      menores: com menos que isso os cinco passos em duas colunas comecam a quebrar o CTA,
      que foi o defeito que me fez voltar de tres colunas para duas. */
   .p4-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(430px,480px);gap:18px;
-    padding:12px 22px;align-items:stretch;}
+    padding:8px 22px;align-items:stretch;}
   /* ══ UM CARTÃO SÓ, CINCO PASSOS EMPILHADOS (05/09/26) ═══════════════════════════
      As duas colunas foram uma tentativa de economizar altura e cobraram a conta na
      LARGURA: o passo 2 recebia uma célula de 335px e cada cartão de plano ficava com
@@ -7928,8 +7932,8 @@
      transform e não zoom: zoom muda o layout e o cartão deixaria de ser 430px reais —
      e é o nó de 430px, sem transform, que o PNG precisa capturar para sair nítido. */
   .p4-palco{position:relative;flex:1 1 0;min-height:0;overflow:hidden;}
-  .p4-rodape{flex:none;margin:0;padding:7px 22px 10px;
-    font:700 10px/1.4 var(--font-body);color:#7A8494;}
+  .p4-rodape{flex:none;margin:0;padding:4px 22px 6px;
+    font:700 9.5px/1.35 var(--font-body);color:#7A8494;}
   /* ══ O PISO DE TOQUE, E POR QUE ELE PRECISA DE !important (12/09/26) ═══════════════
      A prancha é toda estilo inline, e INLINE VENCE A FOLHA. Sem !important, a regra de
      44px no celular não aplica em nada desta aba — foi exatamente assim que ela já
@@ -20401,7 +20405,16 @@ function prcAjustarPeca() {
   }
   /* Infinity, e não 0, quando não há altura medível: é o que faz a largura mandar em vez
      de a conta desistir e devolver o tamanho natural. */
-  const s = Math.min(1, larguraLivre > 0 ? larguraLivre / 430 : 1,
+  /* ══ O TETO DA PREVIA SUBIU DE 1 PARA 1,2 (12/09/26) ════════════════════════════
+     MEDIDO a 1920x1080: com teto 1 o cartao parava em 430x687 dentro de um palco de
+     480x855 — 168px de altura e 50 de largura sobrando, e o pedido era "pode preencher
+     mais a tela". A prancha trava a previa em 1 porque o palco dela e menor; o overlay
+     do cliente ela mesma deixa ir a 1,15.
+     SUBIR A PREVIA NAO MEXE NO PNG: a captura acontece num clone SEM transform, a
+     430px reais, e sai sempre em 1290px. Texto escalado por transform continua nitido
+     — nao e imagem ampliada. Onde a ALTURA manda (o notebook dele, 0,75) o teto nem e
+     alcancado. */
+  const s = Math.min(1.2, larguraLivre > 0 ? larguraLivre / 430 : 1,
     alturaUtil > 0 ? alturaUtil / natural : Infinity);
   cartao.style.transform = 'translate(-50%,-50%) scale(' + (s > 0 ? s : 1) + ')';
   /* O OBSERVADOR SEGUE O ALVO (lição de 11/09/26): o palco é recriado a cada render, e um
@@ -20909,7 +20922,7 @@ function prcBlocoAdicionaisHTML() {
    (A linha de comentário do PERÍODO estava duplicada aqui, órfã em cima do PLANO,
    desde antes desta mudança; saiu junto.) */
 function prcMensagemJuntoHTML() {
-  return `<div id="prcMensagemJunto" style="flex:none;max-height:22vh;overflow:auto;background:#FDFEFF;border:1px solid #E2E6EE;border-radius:11px;padding:10px 14px;">
+  return `<div id="prcMensagemJunto" style="flex:none;background:#FDFEFF;border:1px solid #E2E6EE;border-radius:11px;padding:10px 14px;">
     <span style="font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;">Mensagem que vai junto <span style="color:#1E9E7B;">· o PNG acima vai COLADO na conversa (Ctrl+V) — o wa.me não anexa arquivo</span></span>
     <p class="p4-msg-corpo" style="margin:4px 0 0;font:700 10.5px/1.55 'Manrope',sans-serif;color:#5B667A;white-space:pre-line;">“${esc(textoPropostaPrecificacao())}”</p>
   </div>`;
@@ -20958,6 +20971,12 @@ function renderPrecificacaoConfigurador() {
              sobre a proposta que está montada AGORA, e só ocupa altura quando existe.
              Nenhuma das duas no modo cliente — nem atrás do véu. -->
         ${prcModoCliente ? '' : prcBlocoDorHTML()}
+        <!-- A MENSAGEM MORA AQUI, e não embaixo do cartão (medido na tela do Julyan,
+             12/09/26): na coluna da direita ela tirava 164px da altura da peça, e a peça
+             encolhe na razão direta do que sobra — cartão de 185px de largura. Ela é o
+             texto DO EXECUTIVO, então pertence ao lado dele, embaixo do botão que envia.
+             A prancha a desenha embaixo do cartão porque desenha numa tela de 900px. -->
+        ${prcModoCliente ? '' : prcMensagemJuntoHTML()}
         ${prcModoCliente ? '' : prcCaixaObjecoesHTML()}
       </div>
       <div class="p4-peca">
@@ -20969,7 +20988,6 @@ function renderPrecificacaoConfigurador() {
                overlay e este palco fica vazio — nunca duas versões do mesmo cartão. -->
           ${prcModoCliente ? '' : `<div id="cartao-proposta" style="position:absolute;top:50%;left:50%;width:430px;transform:translate(-50%,-50%);background:#1E2228;font:400 14px/1.5 'Manrope',sans-serif;color:#3E382F;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(30,34,40,.35);">${prcCartaoHTML()}</div>`}
         </div>
-        ${prcModoCliente ? '' : prcMensagemJuntoHTML()}
       </div>
     </div>
     <p class="p4-rodape">Fonte: tabela oficial de preços (conferida em ${esc(String(precificacaoCache.conferidoEm || '—'))}) · o desconto do período vale para os adicionais · enviar = PNG do cartão no clipboard + WhatsApp aberto com a mensagem (você cola o PNG com Ctrl+V) · objeções do Playbook</p>
