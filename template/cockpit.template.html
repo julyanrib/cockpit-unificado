@@ -20693,6 +20693,15 @@ function prcCartaoHTML() {
    RECALCULA nos três momentos do handoff: resize do palco (ResizeObserver), fontes
    carregadas (texto em fonte de sistema mede outra altura) e cada troca de plano,
    adicional ou período — essa terceira vem de quem redesenha o cartão. */
+/* AS CINCO LARGURAS DE DESENHO. 430 e a do handoff (e a que vence em tela alta); 600 e o
+   teto medido — acima disso as duas colunas de funcionalidades ficam largas demais para
+   o corpo de 9,5px, que foi a razao do teto de 760 da versao antiga. */
+const PRC_LARGURAS = [430, 480, 520, 560, 600];
+/* A LARGURA QUE VENCEU, para os dois lugares em que o cartao e desenhado: o palco e o
+   overlay do modo cliente. Sem isto o overlay desenharia em 430 enquanto a previa
+   desenha em 600, e o PNG sairia diferente dependendo de onde fosse capturado — mesma
+   proposta, duas imagens. 430 e o valor inicial porque e a largura do handoff. */
+let prcLarguraDesenho = 430;
 function prcAjustarPeca() {
   const cartao = document.getElementById('cartao-proposta');
   if (!cartao) return;
@@ -20701,7 +20710,7 @@ function prcAjustarPeca() {
   const palco = cartao.closest('.p4-palco');
   const natural = cartao.offsetHeight || 620;
   if (!palco) {
-    const s = Math.min(1.15, (window.innerWidth * 0.9) / 430, (window.innerHeight * 0.86 - 70) / natural);
+    const s = Math.min(1.15, (window.innerWidth * 0.9) / prcLarguraDesenho, (window.innerHeight * 0.86 - 70) / natural);
     const caixa = cartao.parentElement;
     if (caixa) caixa.style.transform = 'scale(' + (s > 0 ? s : 1) + ')';
     return;
@@ -20724,20 +20733,44 @@ function prcAjustarPeca() {
     palco.style.minHeight = '';
     if (palco.parentElement) palco.parentElement.style.minHeight = '';
   }
-  /* Infinity, e não 0, quando não há altura medível: é o que faz a largura mandar em vez
-     de a conta desistir e devolver o tamanho natural. */
-  /* ══ O TETO DA PREVIA SUBIU DE 1 PARA 1,2 (12/09/26) ════════════════════════════
-     MEDIDO a 1920x1080: com teto 1 o cartao parava em 430x687 dentro de um palco de
-     480x855 — 168px de altura e 50 de largura sobrando, e o pedido era "pode preencher
-     mais a tela". A prancha trava a previa em 1 porque o palco dela e menor; o overlay
-     do cliente ela mesma deixa ir a 1,15.
-     SUBIR A PREVIA NAO MEXE NO PNG: a captura acontece num clone SEM transform, a
-     430px reais, e sai sempre em 1290px. Texto escalado por transform continua nitido
-     — nao e imagem ampliada. Onde a ALTURA manda (o notebook dele, 0,75) o teto nem e
-     alcancado. */
-  const s = Math.min(1.2, larguraLivre > 0 ? larguraLivre / 430 : 1,
-    alturaUtil > 0 ? alturaUtil / natural : Infinity);
-  cartao.style.transform = 'translate(-50%,-50%) scale(' + (s > 0 ? s : 1) + ')';
+  /* ══ A LARGURA DE DESENHO SEGUE O PALCO, E O TETO DA PREVIA E 1,2 (12/09/26) ═════
+     Pedido, apontando o vazio dos dois lados do cartao: "pode preencher isso tudo uai".
+     MEDIDO na tela dele (palco de 480x521), com a proposta real:
+       430px de desenho -> altura natural 687 -> cartao 324x517 -> 67% da largura, 99% da altura
+       480 ............. -> 668 ............. -> 371x517 ...... -> 77% / 99%
+       520 ............. -> 668 ............. -> 402x517 ...... -> 84% / 99%
+       560 ............. -> 668 ............. -> 433x517 ...... -> 90% / 99%
+       600 ............. -> 654 ............. -> 474x517 ...... -> 99% / 99%  (preenche)
+     A altura natural quase NAO muda com a largura: o que faz a peca alta e o NUMERO de
+     funcionalidades, nao a quebra de linha. Alargar o desenho e quase de graca em altura
+     e paga tudo em largura — e por isso 430 fixos deixavam um terco da coluna vazio.
+     A ESCOLHA E POR AREA MEDIDA, e nao por formula: experimenta as cinco larguras, ve
+     quanto cartao aparece em cada uma e fica com a maior. Numa tela alta (1920x1080) a
+     vencedora continua sendo 430 com escala acima de 1 (476x761 = 362 mil px2 contra 245
+     mil da de 600); no notebook dele vence a de 600. Uma regra, os dois casos.
+     O teto de 1,2 na previa e o que usa a altura sobrando nas telas grandes; a prancha
+     trava em 1 porque o palco dela e menor, e o overlay do cliente ela mesma deixa ir a
+     1,15. Texto escalado por transform continua nitido — nao e imagem ampliada.
+     offsetHeight e a medida certa porque transform nao a afeta; o laco zera o transform
+     antes de medir para nao ler a peca ja reduzida. */
+  cartao.style.transform = 'none';
+  let melhor = null;
+  for (let k = 0; k < PRC_LARGURAS.length; k++) {
+    const largura = PRC_LARGURAS[k];
+    cartao.style.width = largura + 'px';
+    const alturaNatural = cartao.offsetHeight || natural;
+    /* Infinity, e nao 0, quando nao ha altura medivel: e o que faz a largura mandar em
+       vez de a conta desistir e devolver o tamanho natural (defeito medido em 11/09). */
+    const escala = Math.min(1.2,
+      larguraLivre > 0 ? larguraLivre / largura : 1,
+      alturaUtil > 0 ? alturaUtil / alturaNatural : Infinity);
+    const area = (largura * escala) * (alturaNatural * escala);
+    if (!melhor || area > melhor.area) melhor = { largura: largura, escala: escala, area: area };
+  }
+  const s = melhor && melhor.escala > 0 ? melhor.escala : 1;
+  prcLarguraDesenho = melhor ? melhor.largura : 430;
+  cartao.style.width = prcLarguraDesenho + 'px';
+  cartao.style.transform = 'translate(-50%,-50%) scale(' + s + ')';
   /* O OBSERVADOR SEGUE O ALVO (lição de 11/09/26): o palco é recriado a cada render, e um
      observador preso ao nó antigo continua vivo observando um elemento fora do documento
      — deixa de disparar sem nunca dar erro. */
@@ -21307,7 +21340,7 @@ function renderPrecificacaoConfigurador() {
                da prancha porque é ELE que html2canvas fotografa; a prévia mostra uma
                redução por transform. Com o overlay aberto, quem desenha o cartão é o
                overlay e este palco fica vazio — nunca duas versões do mesmo cartão. -->
-          ${prcModoCliente ? '' : `<div id="cartao-proposta" style="position:absolute;top:50%;left:50%;width:430px;transform:translate(-50%,-50%);background:#1E2228;font:400 14px/1.5 'Manrope',sans-serif;color:#3E382F;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(30,34,40,.35);">${prcCartaoHTML()}</div>`}
+          ${prcModoCliente ? '' : `<div id="cartao-proposta" style="position:absolute;top:50%;left:50%;width:${prcLarguraDesenho}px;transform:translate(-50%,-50%);background:#1E2228;font:400 14px/1.5 'Manrope',sans-serif;color:#3E382F;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(30,34,40,.35);">${prcCartaoHTML()}</div>`}
         </div>
       </div>
     </div>
@@ -21316,7 +21349,7 @@ function renderPrecificacaoConfigurador() {
          mesmo id) — o palco acima não o desenha enquanto isto está aberto. -->
     <div style="position:fixed;inset:0;background:rgba(10,12,16,.94);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;">
       <div style="transform-origin:center;flex:none;">
-        <div id="cartao-proposta" style="width:430px;background:#1E2228;font:400 14px/1.5 'Manrope',sans-serif;color:#3E382F;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);">${prcCartaoHTML()}</div>
+        <div id="cartao-proposta" style="width:${prcLarguraDesenho}px;background:#1E2228;font:400 14px/1.5 'Manrope',sans-serif;color:#3E382F;border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.6);">${prcCartaoHTML()}</div>
       </div>
       <div style="flex:none;display:flex;gap:10px;align-items:center;">
         <button type="button" id="prcCopiarPng" style="height:42px;padding:0 20px;border:0;border-radius:999px;background:#1E9E7B;font:900 12px 'Archivo',sans-serif;color:#FFFDF8;cursor:pointer;">⧉ Copiar PNG pra colar no WhatsApp</button>
@@ -21823,7 +21856,10 @@ async function gerarBlobPropostaPrecificacao() {
   clone.style.position = 'fixed';
   clone.style.top = '0';
   clone.style.left = '-9999px';
-  clone.style.width = '430px';
+  /* A LARGURA DE DESENHO DO PROPRIO NO (12/09/26): ela deixou de ser 430 fixos e passou
+     a seguir o palco (ver prcAjustarPeca). Clonar numa constante faria o PNG divergir da
+     previa — e "o que ele ve e o que o dono recebe" e a regra de ouro do handoff. */
+  clone.style.width = (node.style.width || '430px');
   clone.style.boxShadow = 'none';
   document.body.appendChild(clone);
   try {
