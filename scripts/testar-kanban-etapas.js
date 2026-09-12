@@ -1307,14 +1307,21 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
       && template.indexOf(String.fromCharCode(39) + '<span style="min-width:0;">' + String.fromCharCode(39)) > -1,
     'sem wrap na caixa e min-width:0 no KPI, o quinto numero sai do card a 375px');
 
-  /* ── 5 · A ESTEIRA NUM PAINEL CREME, COM A BOLINHA NO CABECALHO ─────────────────── */
-  checar('o kanban vive num painel creme',
-    /\.fn3-grade\{[^}]*background:var\(--creme\)/.test(cssFunil),
-    'sem o painel as colunas voltam a flutuar soltas no fundo da pagina');
-  checar('e a etapa se identifica pela bolinha, nao por um fio sobre o creme',
-    cssFunil.indexOf('.fn3-cab-bola{') > -1
-      && template.indexOf('<i class="fn3-cab-bola"></i>') > -1,
-    'cabecalho branco com fio colorido dentro do painel e moldura em cima de moldura');
+  /* ── 5 · CADA COLUNA E UM CARTAO CREME, COM O FIO DA ETAPA EM CIMA ───────────────
+     Invertido em 11/09/26 pela prancha FINAL: o creme era da GRADE e as colunas eram
+     transparentes com uma bolinha de 8px no cabecalho. Agora o creme e da COLUNA e a
+     etapa volta a se identificar pelo fio de 4px.
+     A intencao das duas checagens nao mudou — coluna com corpo proprio, e etapa que se
+     le sem precisar ler o nome. */
+  checar('cada coluna e um cartao creme, e nao uma pilha solta no fundo da pagina',
+    /\.fn3-col\{[^}]*background:var\(--panel2\)/.test(cssFunil)
+      && /\.fn3-col\{[^}]*border:1\.5px solid var\(--creme-linha\)/.test(cssFunil),
+    'sem corpo proprio as oito colunas voltam a flutuar soltas no fundo da pagina');
+  checar('e a etapa se identifica pelo fio de 4px, que RECEBE a cor',
+    /\.fn3-col\{[^}]*border-top:4px solid var\(--cor/.test(cssFunil)
+      && /class="fn3-col\$\{[^`]*\}" style="--cor:\$\{stageColor\(col\.id\)\}/.test(template),
+    'regra que pinta var(--cor) numa caixa que nao recebe a variavel cai no cinza do '
+      + 'fallback e as oito colunas ficam identicas — a cor da etapa some sem erro nenhum');
 
   /* ── 6 · VERMELHO SO PARA O ACIONAVEL (regra 2 da prancha) ────────────────────────── */
   checar('alimentar o funil nao e vermelho — nao e pendencia, e convite',
@@ -1331,11 +1338,56 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
       && template.indexOf('">perder</button>') > -1,
     'a prancha fecha a lista de simbolos em ✓ ⚠ ▸');
 
-  /* ── 8 · O QUARTO PAINEL DO PE NAO DEIXA FILEIRA MEIO VAZIA ─────────────────────── */
-  checar('o quarto painel do trio ocupa a fileira inteira',
-    cssFunil.indexOf('.fn2-trio > .fn2-painel.is-registro:last-child{grid-column:1 / -1;}') > -1,
-    'sao tres colunas e quatro paineis: o quarto cai sozinho com dois tercos de creme'
-    + ' vazio ao lado, e isso ficou visivel quando o painel virou creme');
+  /* ── 9 · ACOES DESTA SESSAO (11/09/26, prancha FINAL) ───────────────────────────── */
+  /* MEDIR PROXIMIDADE NAO SERVE AQUI: a primeira versao desta checagem procurava o
+     unshift dentro de 400 caracteres depois do 'if (r.ok) {' — e passou VERDE com o push
+     sabotado, porque a distancia continuava a mesma. O que importa e ONDE ele esta na
+     maquina de estados: depois do ok e antes do ramo do "nao sei se gravou", que e o
+     unico intervalo em que a gravacao esta confirmada. Posicao no fluxo, nao no texto. */
+  (function () {
+    const ok = template.indexOf('if (r.ok) {');
+    const push = template.indexOf('FN3_SESSAO.unshift(');
+    const naoSei = template.indexOf('const naoSei =');
+    checar('so entra no registro da sessao o que o HubSpot ACEITOU',
+      ok > -1 && push > -1 && naoSei > -1 && push > ok && push < naoSei,
+      'o FN3_SESSAO.unshift tem de estar DENTRO do ramo do ok: fora dele a lista mistura o '
+        + 'gravado com o recusado, e o executivo acreditaria ter movido um negocio que '
+        + 'continua na etapa antiga');
+  }());
+
+  /* A PROMESSA QUE O CRM NAO CUMPRE. A prancha escreve "desfazer reverte a tela e o
+     HubSpot — e devolve os dias que o cartao tinha". A segunda metade e falsa: os dias
+     saem da data de entrada na etapa, que e propriedade do HubSpot, e este projeto nao
+     reescreve propriedade do CRM (ver "so mexemos no cockpit"). A tela diz o contrario
+     — que os dias RECOMECAM — e e isso que esta checagem prende. */
+  checar('e a tela nao promete devolver os dias na etapa: ela avisa que recomecam',
+    template.indexOf('recomeçam no HubSpot quando o cartão volta') > -1
+      && !/devolve os dias que o cart[aã]o tinha/.test(template),
+    'a frase da prancha promete um efeito que o Cockpit nao tem como produzir');
+
+  checar('Onboarding e Ganho nao ganham botao de desfazer',
+    template.indexOf('a automação de WhatsApp já disparou e o card nasceu no pipe de Onboarding') > -1
+      && template.indexOf("sem volta — quem move o Ganho é o ASAAS") > -1,
+    'a passagem para Onboarding disparou automacao de outro time e o Ganho e do ASAAS: '
+      + 'botao de voltar ali prometeria desfazer o que ja saiu da mao dele');
+
+  /* ── 8 · O PE NAO DEIXA FILEIRA MEIO VAZIA ──────────────────────────────────────
+     Media a regra de excecao que esticava o quarto painel numa grade de TRES colunas.
+     Em 11/09/26 a prancha FINAL passou o pe para DUAS colunas e os quatro paineis
+     caem 2x2 — a excecao saiu, e com ela a checagem que a exigia.
+     A INTENCAO E A MESMA e agora e medida onde o defeito nasce: na divisao. Painel
+     sozinho na fileira e resto de divisao, e e por isso que eu conto os dois lados em
+     vez de procurar a regra que remendava um caso especifico. */
+  (function () {
+    const cols = (cssFunil.match(/\.fn2-trio\{[^}]*grid-template-columns:([^;]+);/) || [])[1] || '';
+    const nCols = (cols.match(/minmax\(/g) || []).length;
+    const pe = (template.match(/<div class="fn2-trio">([\s\S]*?)<\/div>\s*\n\s*(?:<!--[\s\S]*?-->\s*)?<div class="fn2-pe"|<div class="fn2-trio">([\s\S]*?)\$\{fn3SessaoHTML/) || [])[0] || '';
+    const nPaineis = (pe.match(/\$\{fn2(?:Comando|DinheiroPara|PerdidosPainel|RecicladosPainel)\(/g) || []).length;
+    checar('o pe nao deixa painel sozinho numa fileira meio vazia',
+      nCols >= 2 && nPaineis >= 2 && nPaineis % nCols === 0,
+      nPaineis + ' paineis em ' + nCols + ' colunas deixa ' + (nPaineis % nCols)
+        + ' sozinho(s) na ultima fileira, com o resto da largura em creme vazio');
+  }());
 }());
 
 if (falhas.length) {
