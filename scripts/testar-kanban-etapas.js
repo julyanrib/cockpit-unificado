@@ -1328,15 +1328,32 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     /\.fn3-alimentar\{[^}]*dashed var\(--line-btn\)/.test(cssFunil),
     'enquanto era vermelho ele disputava a esguelha com os cartoes em violacao de regua');
 
-  /* ── 7 · OS DOIS PILLS PADRAO EM TODO CARTAO ──────────────────────────────────────── */
-  checar('avancar e pill verde claro e perder e pill branco',
-    /\.fn3-passo\.is-ava\{color:var\(--green\);background:var\(--green-soft\)/.test(cssFunil)
-      && /\.fn3-passo\.is-per\{color:var\(--muted2\);background:var\(--panel\)/.test(cssFunil),
-    'transparentes eles liam como dois links a 158px de coluna');
-  checar('e os rotulos usam o ▸ da casa, sem seta longa nem ✕',
-    template.indexOf('">avançar ▸</button>') > -1
-      && template.indexOf('">perder</button>') > -1,
-    'a prancha fecha a lista de simbolos em ✓ ⚠ ▸');
+  /* ── 7 · OS DOIS GESTOS DO CARTAO ─────────────────────────────────────────────────
+     REVERTIDO EM 11/09/26 pela prancha FINAL, e vale registrar o que mudou:
+
+       10/09 — avancar e perder eram PILLS COM TEXTO ("avancar ▸", "perder") numa linha
+               propria do cartao, e havia regra desta casa fechando os simbolos em ✓ ⚠ ▸,
+               sem seta longa nem ✕;
+       11/09 — a prancha FINAL os desenha como dois BOTOES-ICONE de 22px na linha do
+               nome, com → e ✕. Medido em producao antes de trocar: a linha exclusiva
+               deles custava 32px e o ⌄ sozinho outros 44, num cartao de 206px contra os
+               ~90 da prancha.
+
+     Prancha nova ganha da antiga. O QUE NAO PODE MUDAR e a intencao das duas checagens:
+     os dois continuam DISTINGUIVEIS um do outro (nao dois iconzinhos cinza iguais) e
+     continuam TENDO ROTULO — glifo sozinho nao e rotulo para leitor de tela, e por isso
+     a segunda passou a exigir aria-label em vez de exigir a palavra no botao. */
+  checar('avancar e perder se distinguem um do outro no cartao',
+    /\.fn3-passo\.is-ava\{color:#1E9E7B/.test(cssFunil)
+      && /\.fn3-passo\.is-per\{color:var\(--muted2\)/.test(cssFunil),
+    'dois botoes-icone da mesma cor a 22px sao dois alvos iguais lado a lado, e o '
+      + 'errado deles marca o negocio como perdido');
+  checar('e os dois tem rotulo de verdade, nao so o glifo',
+    /aria-label="Avançar para /.test(template)
+      && template.indexOf('aria-label="Marcar como perdido"') > -1
+      && /title="Marcar perdido — o motivo é obrigatório"/.test(template),
+    'com → e ✕ o glifo virou o rotulo visivel: sem aria-label quem usa leitor de tela '
+      + 'ouve "botao" duas vezes e nao sabe qual arruina o negocio');
 
   /* ── 9 · ACOES DESTA SESSAO (11/09/26, prancha FINAL) ───────────────────────────── */
   /* MEDIR PROXIMIDADE NAO SERVE AQUI: a primeira versao desta checagem procurava o
