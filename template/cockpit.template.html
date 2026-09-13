@@ -19591,7 +19591,7 @@ function prcCartaoHTML() {
   const nParcelas = Number(per.parcelas || 1);
   return `
     <div style="padding:16px 18px 10px;text-align:center;">
-      <img src="assets/logo-takeat.png" alt="Takeat" style="height:30px;width:auto;">
+      <img src="assets/logo-takeat.png" alt="Takeat" width="103" height="30" style="height:30px;width:auto;">
       <span style="display:block;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#9AA3B2;margin-top:4px;">${esc(String(tipo.nome))} · ${esc(String(per.nome))}${per.desconto ? ' (−' + per.desconto + '%)' : ''}</span>
       <b style="display:block;font:900 21px 'Archivo',sans-serif;color:#FDFEFF;letter-spacing:-.01em;margin-top:1px;">${esc(plano.nome)}</b>
       <span style="display:block;font:700 9.5px 'Manrope',sans-serif;color:#9AA3B2;margin-top:2px;">para ${esc(cliente)}${executivo ? ' · preparada por ' + esc(executivo) : ''}</span>
@@ -19646,6 +19646,11 @@ function prcCartaoHTML() {
    teto medido — acima disso as duas colunas de funcionalidades ficam largas demais para
    o corpo de 9,5px, que foi a razao do teto de 760 da versao antiga. */
 const PRC_LARGURAS = [430, 480, 520, 560, 600];
+/* ══ A LARGURA DE REFERENCIA DA MEDIDA (13/09/26) ══════════════════════════════════
+   430 e a largura do handoff, e ja aparecia CRAVADA no meio da conta de `alturaUtil`
+   (`larguraLivre / 430`). Ganha nome porque agora ela e usada em dois lugares que TEM
+   de concordar: a conta e a medida. Ver prcAjustarPeca. */
+const PRC_LARGURA_BASE = 430;
 /* A LARGURA QUE VENCEU, para os dois lugares em que o cartao e desenhado: o palco e o
    overlay do modo cliente. Sem isto o overlay desenharia em 430 enquanto a previa
    desenha em 600, e o PNG sairia diferente dependendo de onde fosse capturado — mesma
@@ -19657,7 +19662,38 @@ function prcAjustarPeca() {
   /* MODO CLIENTE: o cartão está dentro do overlay, e a escala é a dele — até 1,15, porque
      ali a tela é do dono do restaurante e a peça pode passar do tamanho de desenho. */
   const palco = cartao.closest('.p4-palco');
-  const natural = cartao.offsetHeight || 620;
+  /* ══ A ENTRADA NAO PODE SER A SAIDA DA PASSADA ANTERIOR (13/09/26) ═══════════════
+     MEDIDO: a mesma proposta, no mesmo arquivo, sem mudanca nenhuma, alternava entre
+     654 e 668px de altura a cada vez que a aba era aberta. Nao era font loading nem
+     corrida: era REALIMENTACAO.
+
+     `natural` era `cartao.offsetHeight` — a altura na largura que ESTA FUNCAO deixou
+     escrita na ultima vez que rodou. Dela sai `alturaUtil`, que decide qual largura
+     vence o laco de area. Entao a saida de uma passada virava a entrada da seguinte, e
+     o sistema caia num ciclo de dois pontos: 430 mede 687 -> vence a de 600; 600 mede
+     654 -> vence outra; e assim por diante, para sempre. O ResizeObserver do palco
+     realimentava o ciclo a cada escrita de minHeight.
+
+     E NAO ERA SO INSTABILIDADE, era conta errada: `alturaUtil` e `natural * min(1,
+     larguraLivre/430)` — a formula ja assume que `natural` e a altura A 430. Medir em
+     outra largura fazia os dois lados falarem de coisas diferentes.
+
+     Zerar o transform antes de medir tambem sobe para ca: `offsetHeight` nao sofre com
+     transform, mas a largura escrita sofre, e medir tem de ser um estado so. */
+  /* MEDIR SEM DEIXAR RASTRO: a primeira versao disto escrevia largura e transform no
+     cartao e seguia em frente — e o ramo do MODO CLIENTE, logo abaixo, retorna antes de
+     qualquer restauracao. O overlay ficava com a peca em 430px em vez da largura de
+     desenho. Medir e uma pergunta, nao uma mudanca de estado. */
+  const alturaNaBase = function () {
+    const t0 = cartao.style.transform, w0 = cartao.style.width;
+    cartao.style.transform = 'none';
+    cartao.style.width = PRC_LARGURA_BASE + 'px';
+    const h = cartao.offsetHeight;
+    cartao.style.transform = t0;
+    cartao.style.width = w0;
+    return h;
+  };
+  const natural = alturaNaBase() || 620;
   if (!palco) {
     const s = Math.min(1.15, (window.innerWidth * 0.9) / prcLarguraDesenho, (window.innerHeight * 0.86 - 70) / natural);
     const caixa = cartao.parentElement;
@@ -19670,13 +19706,16 @@ function prcAjustarPeca() {
     && window.matchMedia('(max-width:1240px)').matches;
   let alturaUtil = palco.clientHeight - 4;
   if (empilhado) {
-    const sLargura = larguraLivre > 0 ? Math.min(1, larguraLivre / 430) : 1;
+    const sLargura = larguraLivre > 0 ? Math.min(1, larguraLivre / PRC_LARGURA_BASE) : 1;
     alturaUtil = Math.ceil(natural * sLargura);
     /* MIN-HEIGHT, e não HEIGHT: o palco é flex e o flex-basis:0 vence o height no eixo
        principal — medido, a altura inline era escrita e ignorada. */
-    if (alturaUtil > 0) {
-      palco.style.minHeight = alturaUtil + 'px';
-      if (palco.parentElement) palco.parentElement.style.minHeight = alturaUtil + 'px';
+    /* E SO ESCREVE QUANDO MUDA: escrever o mesmo valor de novo ainda dispara o
+       ResizeObserver em alguns navegadores, e era ele que mantinha o ciclo girando. */
+    const alvoMin = alturaUtil + 'px';
+    if (alturaUtil > 0 && palco.style.minHeight !== alvoMin) {
+      palco.style.minHeight = alvoMin;
+      if (palco.parentElement) palco.parentElement.style.minHeight = alvoMin;
     }
   } else if (palco.style.minHeight) {
     palco.style.minHeight = '';
@@ -19700,8 +19739,10 @@ function prcAjustarPeca() {
      O teto de 1,2 na previa e o que usa a altura sobrando nas telas grandes; a prancha
      trava em 1 porque o palco dela e menor, e o overlay do cliente ela mesma deixa ir a
      1,15. Texto escalado por transform continua nitido — nao e imagem ampliada.
-     offsetHeight e a medida certa porque transform nao a afeta; o laco zera o transform
-     antes de medir para nao ler a peca ja reduzida. */
+     offsetHeight e a medida certa porque transform nao a afeta; o transform ja foi
+     zerado aqui, uma vez, antes do laco. A medida de referencia la em cima usa
+     `alturaNaBase`, que zera e RESTAURA — sao dois usos diferentes e nenhum deles
+     pode vazar estado para o outro. */
   cartao.style.transform = 'none';
   let melhor = null;
   for (let k = 0; k < PRC_LARGURAS.length; k++) {

@@ -12550,7 +12550,7 @@ function prcCartaoHTML() {
   const nParcelas = Number(per.parcelas || 1);
   return `
     <div style="padding:16px 18px 10px;text-align:center;">
-      <img src="assets/logo-takeat.png" alt="Takeat" style="height:30px;width:auto;">
+      <img src="assets/logo-takeat.png" alt="Takeat" width="103" height="30" style="height:30px;width:auto;">
       <span style="display:block;font:900 8.5px 'Archivo',sans-serif;letter-spacing:.18em;text-transform:uppercase;color:#9AA3B2;margin-top:4px;">${esc(String(tipo.nome))} · ${esc(String(per.nome))}${per.desconto ? ' (−' + per.desconto + '%)' : ''}</span>
       <b style="display:block;font:900 21px 'Archivo',sans-serif;color:#FDFEFF;letter-spacing:-.01em;margin-top:1px;">${esc(plano.nome)}</b>
       <span style="display:block;font:700 9.5px 'Manrope',sans-serif;color:#9AA3B2;margin-top:2px;">para ${esc(cliente)}${executivo ? ' · preparada por ' + esc(executivo) : ''}</span>
@@ -12589,13 +12589,25 @@ function prcCartaoHTML() {
 
 const PRC_LARGURAS = [430, 480, 520, 560, 600];
 
+const PRC_LARGURA_BASE = 430;
+
 let prcLarguraDesenho = 430;
 function prcAjustarPeca() {
   const cartao = document.getElementById('cartao-proposta');
   if (!cartao) return;
 
   const palco = cartao.closest('.p4-palco');
-  const natural = cartao.offsetHeight || 620;
+
+  const alturaNaBase = function () {
+    const t0 = cartao.style.transform, w0 = cartao.style.width;
+    cartao.style.transform = 'none';
+    cartao.style.width = PRC_LARGURA_BASE + 'px';
+    const h = cartao.offsetHeight;
+    cartao.style.transform = t0;
+    cartao.style.width = w0;
+    return h;
+  };
+  const natural = alturaNaBase() || 620;
   if (!palco) {
     const s = Math.min(1.15, (window.innerWidth * 0.9) / prcLarguraDesenho, (window.innerHeight * 0.86 - 70) / natural);
     const caixa = cartao.parentElement;
@@ -12608,12 +12620,13 @@ function prcAjustarPeca() {
     && window.matchMedia('(max-width:1240px)').matches;
   let alturaUtil = palco.clientHeight - 4;
   if (empilhado) {
-    const sLargura = larguraLivre > 0 ? Math.min(1, larguraLivre / 430) : 1;
+    const sLargura = larguraLivre > 0 ? Math.min(1, larguraLivre / PRC_LARGURA_BASE) : 1;
     alturaUtil = Math.ceil(natural * sLargura);
 
-    if (alturaUtil > 0) {
-      palco.style.minHeight = alturaUtil + 'px';
-      if (palco.parentElement) palco.parentElement.style.minHeight = alturaUtil + 'px';
+    const alvoMin = alturaUtil + 'px';
+    if (alturaUtil > 0 && palco.style.minHeight !== alvoMin) {
+      palco.style.minHeight = alvoMin;
+      if (palco.parentElement) palco.parentElement.style.minHeight = alvoMin;
     }
   } else if (palco.style.minHeight) {
     palco.style.minHeight = '';
