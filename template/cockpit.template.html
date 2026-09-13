@@ -28325,9 +28325,32 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   /* A SEMANA EM FOCO, pela mesma regra de todo mundo: pl6SegundaDaSemana vira na sexta
      às 17h de Brasília. Um passo para segunda que vem, marcado numa sexta à noite, cai
      DENTRO da semana em foco — e é isso que se quer. */
-  const dias = pl6Dias(pl6SegundaDaSemana());
-  const di = dias.findIndex(d => String(d.iso) === String(dataISO));
-  if (di < 0) return { fora: true, semana: dias[0] && dias[0].data };
+  /* A SEMANA DA TAREFA E A QUE CONTEM A DATA (13/09/26). Ela era sempre a semana em
+     foco, de segunda a sexta — entao TODO passo marcado para a semana seguinte caia
+     em `fora` e nunca chegava ao Planejamento. Medido na producao com a carteira do
+     Marco: um passo para 21/09, marcado num domingo 13/09, recusado em silencio.
+     O Planejamento anda duas semanas (PL6_SEMANA 0 e 1) e pl6Carregar/pl6Gravar ja
+     recebem a semana por argumento — entao o espelho procura a data nas DUAS. Fora
+     delas ele continua recusando, porque escrever numa semana que a tela nao abre
+     seria esconder o compromisso em vez de mostra-lo; a diferenca e que agora a
+     recusa diz o motivo em vez de sumir. */
+  const pl6SegundaAtual = pl6SegundaDaSemana();
+  let semanaDaTarefa = null, dias = null, di = -1;
+  for (let k = 0; k <= 1 && di < 0; k++) {
+    const seg = addDays(pl6SegundaAtual, k * 7);
+    const ds = pl6Dias(seg);
+    const i = ds.findIndex(d => String(d.iso) === String(dataISO));
+    if (i >= 0) { semanaDaTarefa = seg; dias = ds; di = i; }
+  }
+  if (di < 0) {
+    /* POR QUE NAO ENTROU, para quem clicou poder decidir. Sem isto a tela diria so
+       "nao entrou", que e a mesma coisa que nao dizer nada. */
+    const dow = new Date(String(dataISO) + 'T12:00:00').getDay();
+    const motivo = (dow === 0 || dow === 6) ? 'fimDeSemana'
+      : (String(dataISO) < String(pl6SegundaAtual)) ? 'passado' : 'longe';
+    return { fora: true, motivo: motivo, data: String(dataISO).split('-').reverse().join('/'),
+      semana: pl6Dias(pl6SegundaAtual)[0].data };
+  }
 
   const idNaGrade = 'c-' + String(lead.id);
   /* A MUNIÇÃO TEM DE CONHECER O ID: pl6TodasAsContas monta os ids da grade, e slot com
@@ -28349,11 +28372,10 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   let leu;
   /* AS DUAS EM PARALELO: o plano da semana e o radar da praça não dependem um do outro,
      e em série a aba levaria o dobro para ficar completa. */
-  /* A SEMANA DA TAREFA, DITA EM VOZ ALTA: os `dias` acima vêm de pl6SegundaDaSemana(), e
-     a leitura tem de ser da MESMA semana. Sem o argumento, esta função herdaria o foco da
-     tela de Planejamento — e um passo de hoje, marcado com a tela na semana que vem,
-     entraria na linha errada, no dia errado. */
-  const semanaDaTarefa = pl6SegundaDaSemana();
+  /* A SEMANA DA TAREFA, DITA EM VOZ ALTA: `semanaDaTarefa` foi escolhida la em cima,
+     junto com os `dias`, e a leitura tem de ser da MESMA semana. Sem o argumento, esta
+     funcao herdaria o foco da tela de Planejamento — e um passo de hoje, marcado com a
+     tela na semana que vem, entraria na linha errada, no dia errado. */
   try {
     const [r1] = await Promise.all([pl6Carregar(rep, semanaDaTarefa), pl6CarregarRadar(rep)]);
     leu = r1;
@@ -28422,16 +28444,84 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
    A GUARDA 11 é o que faz isso valer para sempre: ela varre todo site com
    `tipoAcao: 'proximo-passo'` e reprova o build se ele não chamar esta função. Um site
    novo não tem como esquecer nenhum dos dois espelhos. */
+/* ══ O DONO DO NEGOCIO, QUANDO QUEM CHAMOU NAO O TROUXE (13/09/26) ══════════════════
+   Julyan: "fiz um teste e nao foi pro planejamento o proximo passo".
+
+   MEDIDO na producao, logado como o Marco: o botao "Salvar proximo passo" da ficha
+   chama espelharPassoNasTelas com `l.ownerId` UNDEFINED, porque o objeto que o cartao
+   do Meu funil entrega vem de `rep.quentes`/`rep.travados` — e nenhum item dessas duas
+   listas carrega ownerId (medido: 0 de 12). A primeira linha do espelho era
+   `if (!lead || !dataISO || !ownerId) return;`, entao ele saia CALADO: nem plano da
+   semana, nem agenda local, nem repintura. E a frase da ficha dizia, na mesma hora,
+   "entra no seu Planejamento, na Agenda e na sua Daily do dia".
+
+   Quatro dos cinco sites do passo dependem de `lead.ownerId`, entao o conserto e AQUI,
+   num lugar so — e nao em quatro chamadas que a proxima pessoa esqueceria de novo.
+
+   A FONTE E `DATA.funilLeads`: e a unica lista da tela em que TODO item traz ownerId
+   (medido: 26 de 26). Nao ha queda para `sessaoAtual`: o gestor abre ficha de negocio
+   alheio, e espelhar o passo do Marco no plano do gestor seria pior do que nao
+   espelhar. Sem dono resolvido, a tela DIZ que nao espelhou. */
+function donoDoNegocioNaTela(lead) {
+  const id = lead && lead.id != null ? String(lead.id) : '';
+  if (!id) return '';
+  const fl = (typeof DATA !== 'undefined' && DATA.funilLeads) || {};
+  const etapas = Object.keys(fl);
+  for (let k = 0; k < etapas.length; k++) {
+    const achado = (fl[etapas[k]] || []).find(l => String(l.id) === id);
+    if (achado && achado.ownerId != null && String(achado.ownerId) !== '') return String(achado.ownerId);
+  }
+  return '';
+}
+
 function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
-  if (!lead || !dataISO || !ownerId) return;
+  if (!lead || !dataISO) return;
+  const dono = (ownerId != null && String(ownerId) !== '') ? String(ownerId) : donoDoNegocioNaTela(lead);
+  if (!dono) {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('A tarefa está no HubSpot ✓, mas não descobri de quem é este negócio '
+        + 'nesta tela — por isso ela não entrou no Planejamento nem na Agenda. Recarregue '
+        + 'e ponha o dia pelo Planejamento.', 'atencao');
+    }
+    return;
+  }
   /* A GRADE, SEM SEGURAR QUEM CHAMOU. Espelhar é complemento: a tarefa já está no CRM,
      e travar o retorno do passo numa escrita do Supabase transformaria o complemento em
-     requisito. Falha só fala quando é falha de verdade — os casos `fora`, `cheio` e
-     `foraDaMunicao` são recusas legítimas e silenciosas: a agenda e o CRM têm o dado. */
-  Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId))
+     requisito. */
+  /* ══ E O ESPELHO E QUEM FALA DO PLANEJAMENTO (13/09/26) ═══════════════════════════
+     As recusas `fora`, `cheio` e `foraDaMunicao` eram silenciosas de proposito — "a
+     agenda e o CRM tem o dado". So que quem clicou acabou de LER que o passo entrou no
+     Planejamento: o silencio nao era neutro, era a promessa ficando de pe sozinha. A
+     partir daqui o Planejamento tem UMA voz, esta, e ela diz o que aconteceu de
+     verdade — inclusive quando deu certo. Os sites do passo pararam de prometer. */
+  Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, dono))
     .then(function (r) {
-      if (!r || !r.erro) return;
-      if (typeof mostrarToast === 'function') {
+      if (!r || typeof mostrarToast !== 'function') return;
+      if (r.ok) {
+        mostrarToast('No seu Planejamento: ' + r.dia + ' ' + r.data
+          + (r.hora ? ' às ' + r.hora : '') + (r.mudouDeLugar ? ' — mudou de dia na grade.' : '.'), 'sucesso');
+        return;
+      }
+      if (r.fora) {
+        const porque = r.motivo === 'fimDeSemana'
+          ? 'a grade do Planejamento é de segunda a sexta'
+          : r.motivo === 'passado' ? 'a data já passou'
+          : 'o Planejamento só abre esta semana e a próxima';
+        mostrarToast('A tarefa está no HubSpot ✓ e na sua Agenda. No Planejamento ela não '
+          + 'entra: ' + porque + '.', 'atencao');
+        return;
+      }
+      if (r.cheio) {
+        mostrarToast('A tarefa está no HubSpot ✓ e na sua Agenda, mas ' + r.dia + ' está sem '
+          + 'faixa livre no seu Planejamento — abra o Planejamento e escolha o lugar.', 'atencao');
+        return;
+      }
+      if (r.foraDaMunicao) {
+        mostrarToast('A tarefa está no HubSpot ✓ e na sua Agenda. Este negócio não está na '
+          + 'munição da sua semana, então não dá pra pôr na grade do Planejamento.', 'atencao');
+        return;
+      }
+      if (r.erro) {
         mostrarToast('A tarefa está no HubSpot ✓, mas não entrou no seu plano da semana ('
           + r.erro + '). Ponha a visita no dia pelo Planejamento.', 'atencao');
       }
@@ -28453,7 +28543,7 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
          cravada faria a Agenda mostrar 9h para um compromisso que o servidor gravou às
          15h — o espelho divergindo do dado real por seis horas. O padrão continua sendo
          o mesmo, e continua morando no servidor; aqui ele é só o eco. */
-    }, dataISO, (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) ? String(hora) : '09:00', ownerId, tipo);
+    }, dataISO, (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) ? String(hora) : '09:00', dono, tipo);
   } catch (e) { console.error('espelho do proximo passo na agenda:', e); }
   /* E AS TELAS ACOMPANHAM (08/09/26). O espelho acima ja punha o passo no plano da
      semana e na agenda local; nenhuma tela era repintada, entao o Planejamento e a
@@ -38689,9 +38779,14 @@ function wireFichaLeadFunilEdicao(container, l) {
         /* A CONFIRMAÇÃO DIZ A HORA quando houve escolha — senão ela promete uma precisão
            que não existe, e o executivo vai procurar às 15h o que está às 9h. */
         const quandoBR = dataBRPasso + (horaEscolhida ? ' às ' + horaEscolhida : ' às 9h');
-        statusEl.textContent = `Próximo passo salvo — ${quandoBR}, já no seu Planejamento e na Agenda.`;
+        /* A FRASE DIZ O QUE ESTA CONFERIDO (13/09/26). Ela prometia o Planejamento sem
+           ter olhado para o espelho — e o espelho estava saindo calado por falta do
+           ownerId. Quem escreve sobre o Planejamento agora e espelharPassoNasTelas, que
+           e quem sabe se entrou, em que dia e em que faixa. Aqui fica o que este handler
+           realmente conferiu: a resposta do HubSpot. */
+        statusEl.textContent = `Próximo passo salvo no HubSpot — ${quandoBR}.`;
         statusEl.style.color = 'var(--green)';
-        mostrarToast(`Próximo passo de "${l.name}" marcado pra ${quandoBR} — entra no seu Planejamento, na Agenda e na sua Daily do dia.`, 'sucesso');
+        mostrarToast(`Próximo passo de "${l.name}" marcado pra ${quandoBR} — está no HubSpot e na sua Agenda.`, 'sucesso');
       }
       btnPasso.disabled = false;
     } catch (e) {

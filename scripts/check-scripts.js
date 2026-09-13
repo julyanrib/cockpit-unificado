@@ -636,15 +636,28 @@ function checarEspelhoDoProximoPasso() {
     console.error('  volta a nao receber o passo, e a Daily com ela (d7PlanoDeHoje le a grade).');
     return false;
   }
-  /* Sem regex: a distancia entre a assinatura e a chamada e o que importa, e `indexOf`
-     mede isso sem depender de escape — foi um patch com barra invertida comida que
-     produziu esta linha errada na primeira tentativa. */
+  /* Sem regex: `indexOf` mede sem depender de escape — foi um patch com barra invertida
+     comida que produziu esta linha errada na primeira tentativa. */
   const iAssin = cru.indexOf('function espelharPassoNasTelas(');
   /* A BUSCA COMECA NA ASSINATURA, e nao no inicio do arquivo: a DEFINICAO de
      espelharPassoNoPlanoSemanal fica ACIMA dela, e um indexOf ingenuo achava a definicao,
      concluia "esta antes" e reprovava um codigo correto. */
   const iChama = iAssin < 0 ? -1 : cru.indexOf('espelharPassoNoPlanoSemanal(', iAssin);
-  if (iAssin < 0 || iChama < 0 || iChama - iAssin > 900) {
+  /* ══ O CORPO DA FUNCAO, E NAO 900 CARACTERES (13/09/26) ═══════════════════════════
+     O teto era `iChama - iAssin > 900`. A intencao sempre foi "a chamada esta DENTRO
+     de espelharPassoNasTelas"; a distancia era um substituto barato disso, e o
+     substituto REPROVOU codigo correto no dia em que o comentario que explica o
+     conserto do ownerId entrou entre a assinatura e a chamada. Guarda que mede o
+     tamanho do comentario esta medindo a coisa errada.
+     O fim do corpo e a proxima `}` sozinha na coluna 0 — a convencao deste arquivo
+     para funcao de topo. As duas quebras de linha porque o template e LF e o
+     public/index.html pode chegar CRLF; medir so uma delas daria -1 num dos dois
+     arquivos e reprovaria por engano. Sem `}` de topo, a guarda reprova em vez de
+     adivinhar. */
+  const fimLF = iAssin < 0 ? -1 : cru.indexOf('\n}\n', iAssin);
+  const fimCRLF = iAssin < 0 ? -1 : cru.indexOf('\n}\r\n', iAssin);
+  const iFim = (fimLF < 0) ? fimCRLF : (fimCRLF < 0 ? fimLF : Math.min(fimLF, fimCRLF));
+  if (iAssin < 0 || iChama < 0 || iFim < 0 || iChama > iFim) {
     console.error('PROXIMO PASSO: espelharPassoNasTelas nao chama o espelho da grade.');
     console.error('  Os dois espelhos moram juntos de proposito: um sexto lugar para lembrar');
     console.error('  seria a sexta chance de esquecer.');

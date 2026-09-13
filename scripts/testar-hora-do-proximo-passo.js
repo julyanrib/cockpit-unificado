@@ -78,8 +78,13 @@ checar('o espelho das telas recebe a hora',
   /espelharPassoNasTelas\(\{ id: dealId,[^)]*\}, data, passoTipoAtivo, l\.ownerId, horaEscolhida\);/.test(tpl),
   'o parâmetro existia desde que o espelho nasceu e este site nunca o passou');
 
+/* REESCRITA EM 13/09/26: o ultimo argumento deixou de se chamar `ownerId`. O dono
+   passou a ser RESOLVIDO dentro de espelharPassoNasTelas (`dono`), porque quatro dos
+   cinco sites do passo o entregavam undefined e o espelho saia calado — foi esse o
+   defeito que fez o proximo passo nao chegar ao Planejamento. A intencao da checagem
+   e a hora, e ela continua inteira: 09:00 so quando NAO houve escolha. */
 checar('e o eco na Agenda deixou de cravar 09:00',
-  /\}, dataISO, \(hora && \/\^\\d\{1,2\}:\\d\{2\}\$\/\.test\(String\(hora\)\)\) \? String\(hora\) : '09:00', ownerId, tipo\);/.test(tpl),
+  /\}, dataISO, \(hora && \/\^\\d\{1,2\}:\\d\{2\}\$\/\.test\(String\(hora\)\)\) \? String\(hora\) : '09:00', dono, tipo\);/.test(tpl),
   'espelho cravado em 09:00 diverge do dado real por seis horas num compromisso das 15h');
 
 /* O PLANO SEMANAL já sabia usar a hora — a guarda existe para ele continuar sabendo. */
