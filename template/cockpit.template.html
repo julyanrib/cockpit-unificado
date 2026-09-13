@@ -28316,6 +28316,31 @@ let agwNovoAberto = null;
      `foraDaMunicao` — o negócio não está em pl6TodasAsContas (um Perdido, por exemplo).
                 Slot com id que a munição não conhece é a "órfã" que a grade já desenha;
                 fabricar uma de propósito seria criar o defeito. */
+/* ══ E SAI DA OUTRA SEMANA (13/09/26) ═══════════════════════════════════════════════
+   O laco "SAI DE ONDE ESTAVA" varre a grade DA SEMANA QUE ESTA SENDO ESCRITA, e por
+   anos isso bastou: so a semana em foco recebia passo. Desde que o espelho passou a
+   escrever tambem na semana seguinte, remarcar 16/09 para 22/09 punha o negocio na
+   semana que vem e DEIXAVA o slot da quarta de pe — medido na producao. A grade
+   mostraria uma visita que nao existe mais, que e exatamente o tipo de compromisso
+   fantasma que esta tela existe para nao ter.
+
+   So le e so grava quando ACHA: uma remarcacao dentro da mesma semana nao paga leitura
+   nenhuma a mais, e semana sem o negocio nao e reescrita a toa. */
+async function pl6TirarDaSemana(rep, semana, idNaGrade) {
+  const leu = await pl6Carregar(rep, semana);
+  if (!leu || leu.ok === false) return false;
+  const g = pl6GradeDoPlano();
+  let tirou = false;
+  for (let d = 0; d < g.length; d++) {
+    for (let sl = 0; sl < g[d].length; sl++) {
+      if (pl6SlotId(g[d][sl]) === idNaGrade) { g[d][sl] = null; tirou = true; }
+    }
+  }
+  if (!tirou) return false;
+  const r = await pl6Gravar(rep, { grade: g }, semana);
+  return !r.error;
+}
+
 async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   if (!lead || !dataISO || !ownerId) return { nada: true };
   if (typeof pl6Dias !== 'function' || typeof pl6Gravar !== 'function') return { nada: true };
@@ -28369,6 +28394,14 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
      grade VAZIA da sessão por cima da semana real dele. Agora ela diz `{ok}` e a recusa é
      explícita: a tarefa já está no HubSpot e na agenda, então perder o espelho é um
      complemento a menos; apagar a semana dele seria um estrago. */
+  /* A OUTRA SEMANA PRIMEIRO, porque pl6Carregar troca o `pl6Plano` do modulo: limpar
+     depois de escrever deixaria a tela com a grade da semana errada na memoria. */
+  const outraSemana = String(semanaDaTarefa) === String(pl6SegundaAtual)
+    ? addDays(pl6SegundaAtual, 7) : pl6SegundaAtual;
+  let saiuDaOutra = false;
+  try { saiuDaOutra = await pl6TirarDaSemana(rep, outraSemana, idNaGrade); }
+  catch (e) { console.error('Espelho: limpar a outra semana:', e && e.message); }
+
   let leu;
   /* AS DUAS EM PARALELO: o plano da semana e o radar da praça não dependem um do outro,
      e em série a aba levaria o dobro para ficar completa. */
@@ -28433,7 +28466,9 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
      escolhida, e anunciava um horário que o slot não guardava. */
   return { ok: true, dia: dias[di].rot, data: dias[di].data,
     hora: hora ? String(hora) : '',
-    mudouDeLugar: !!tirouDe };
+    /* trocar de SEMANA tambem e mudar de lugar — sem isto a confirmacao ficaria muda
+       justamente no caso em que o executivo mais precisa saber que a quarta esvaziou. */
+    mudouDeLugar: !!tirouDe || saiuDaOutra };
 }
 
 /* ══ O ESPELHO DAS TELAS ══════════════════════════════════════════════════════════════

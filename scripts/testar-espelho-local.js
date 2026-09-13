@@ -247,6 +247,39 @@ checar('e a recusa diz o motivo em vez de sumir',
     && /: \(String\(dataISO\) < String\(pl6SegundaAtual\)\) \? 'passado' : 'longe'/.test(codigo),
   '"não entrou" sem o porquê é a mesma coisa que não dizer nada');
 
+/* ══ 11. UM NEGOCIO, UMA SEMANA (13/09/26) ═══════════════════════════════════════════
+   Defeito que o conserto de hoje criou e que eu peguei medindo na producao: com o
+   espelho escrevendo tambem na semana seguinte, remarcar o Rico Caipira Parque de 16/09
+   para 22/09 pos o negocio na semana que vem e DEIXOU o slot da quarta de pe. O laco
+   "sai de onde estava" varre so a grade que esta sendo escrita — bastava enquanto so a
+   semana em foco recebia passo.
+
+   A ordem importa: `pl6Carregar` troca o `pl6Plano` do modulo, entao limpar a outra
+   semana DEPOIS de escrever deixaria a tela com a grade errada na memoria. */
+checar('o passo remarcado sai da outra semana',
+  /async function pl6TirarDaSemana\(rep, semana, idNaGrade\)/.test(codigo)
+    && /saiuDaOutra = await pl6TirarDaSemana\(rep, outraSemana, idNaGrade\)/.test(codigo),
+  'sem isto o mesmo negócio fica em duas semanas e a grade mostra uma visita que não existe');
+
+checar('e sai ANTES de a semana da tarefa ser lida',
+  (function () {
+    const iLimpa = codigo.indexOf('pl6TirarDaSemana(rep, outraSemana');
+    const iLe = codigo.indexOf('pl6Carregar(rep, semanaDaTarefa)');
+    return iLimpa > -1 && iLe > -1 && iLimpa < iLe;
+  }()),
+  'pl6Carregar troca o pl6Plano do módulo — limpar depois deixaria a tela com a grade da '
+    + 'semana errada na memória');
+
+checar('e a limpeza só grava quando achou',
+  (function () {
+    const i = codigo.indexOf('async function pl6TirarDaSemana(');
+    if (i < 0) return false;
+    const corpo = codigo.slice(i, codigo.indexOf('\n}', i));
+    return /if \(!tirou\) return false;/.test(corpo)
+      && corpo.indexOf('if (!tirou) return false;') < corpo.indexOf('pl6Gravar(');
+  }()),
+  'reescrever a semana que não tinha o negócio é escrita à toa em cima do plano dele');
+
 console.log('');
 if (falhas) {
   console.error(falhas + ' falha(s) — alguma escrita voltou a esperar o robô.');

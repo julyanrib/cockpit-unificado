@@ -18941,6 +18941,21 @@ let agendaAgendadosLocal = [];
 
 let agwNovoAberto = null;
 
+async function pl6TirarDaSemana(rep, semana, idNaGrade) {
+  const leu = await pl6Carregar(rep, semana);
+  if (!leu || leu.ok === false) return false;
+  const g = pl6GradeDoPlano();
+  let tirou = false;
+  for (let d = 0; d < g.length; d++) {
+    for (let sl = 0; sl < g[d].length; sl++) {
+      if (pl6SlotId(g[d][sl]) === idNaGrade) { g[d][sl] = null; tirou = true; }
+    }
+  }
+  if (!tirou) return false;
+  const r = await pl6Gravar(rep, { grade: g }, semana);
+  return !r.error;
+}
+
 async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   if (!lead || !dataISO || !ownerId) return { nada: true };
   if (typeof pl6Dias !== 'function' || typeof pl6Gravar !== 'function') return { nada: true };
@@ -18971,6 +18986,12 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
     conhecido = pl6TodasAsContas(rep, pl6Regioes(rep)).some(l => l.id === idNaGrade);
   } catch (e) { conhecido = false; }
   if (!conhecido) return { foraDaMunicao: true };
+
+  const outraSemana = String(semanaDaTarefa) === String(pl6SegundaAtual)
+    ? addDays(pl6SegundaAtual, 7) : pl6SegundaAtual;
+  let saiuDaOutra = false;
+  try { saiuDaOutra = await pl6TirarDaSemana(rep, outraSemana, idNaGrade); }
+  catch (e) { console.error('Espelho: limpar a outra semana:', e && e.message); }
 
   let leu;
 
@@ -19017,7 +19038,8 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
 
   return { ok: true, dia: dias[di].rot, data: dias[di].data,
     hora: hora ? String(hora) : '',
-    mudouDeLugar: !!tirouDe };
+
+    mudouDeLugar: !!tirouDe || saiuDaOutra };
 }
 
 function donoDoNegocioNaTela(lead) {
