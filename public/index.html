@@ -18947,9 +18947,22 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
   const rep = (DATA.reps || []).find(x => String(x.ownerId) === String(ownerId));
   if (!rep) return { nada: true };
 
-  const dias = pl6Dias(pl6SegundaDaSemana());
-  const di = dias.findIndex(d => String(d.iso) === String(dataISO));
-  if (di < 0) return { fora: true, semana: dias[0] && dias[0].data };
+  const pl6SegundaAtual = pl6SegundaDaSemana();
+  let semanaDaTarefa = null, dias = null, di = -1;
+  for (let k = 0; k <= 1 && di < 0; k++) {
+    const seg = addDays(pl6SegundaAtual, k * 7);
+    const ds = pl6Dias(seg);
+    const i = ds.findIndex(d => String(d.iso) === String(dataISO));
+    if (i >= 0) { semanaDaTarefa = seg; dias = ds; di = i; }
+  }
+  if (di < 0) {
+
+    const dow = new Date(String(dataISO) + 'T12:00:00').getDay();
+    const motivo = (dow === 0 || dow === 6) ? 'fimDeSemana'
+      : (String(dataISO) < String(pl6SegundaAtual)) ? 'passado' : 'longe';
+    return { fora: true, motivo: motivo, data: String(dataISO).split('-').reverse().join('/'),
+      semana: pl6Dias(pl6SegundaAtual)[0].data };
+  }
 
   const idNaGrade = 'c-' + String(lead.id);
 
@@ -18961,7 +18974,6 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
 
   let leu;
 
-  const semanaDaTarefa = pl6SegundaDaSemana();
   try {
     const [r1] = await Promise.all([pl6Carregar(rep, semanaDaTarefa), pl6CarregarRadar(rep)]);
     leu = r1;
@@ -19008,13 +19020,58 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
     mudouDeLugar: !!tirouDe };
 }
 
-function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
-  if (!lead || !dataISO || !ownerId) return;
+function donoDoNegocioNaTela(lead) {
+  const id = lead && lead.id != null ? String(lead.id) : '';
+  if (!id) return '';
+  const fl = (typeof DATA !== 'undefined' && DATA.funilLeads) || {};
+  const etapas = Object.keys(fl);
+  for (let k = 0; k < etapas.length; k++) {
+    const achado = (fl[etapas[k]] || []).find(l => String(l.id) === id);
+    if (achado && achado.ownerId != null && String(achado.ownerId) !== '') return String(achado.ownerId);
+  }
+  return '';
+}
 
-  Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId))
+function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
+  if (!lead || !dataISO) return;
+  const dono = (ownerId != null && String(ownerId) !== '') ? String(ownerId) : donoDoNegocioNaTela(lead);
+  if (!dono) {
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('A tarefa está no HubSpot ✓, mas não descobri de quem é este negócio '
+        + 'nesta tela — por isso ela não entrou no Planejamento nem na Agenda. Recarregue '
+        + 'e ponha o dia pelo Planejamento.', 'atencao');
+    }
+    return;
+  }
+
+  Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, dono))
     .then(function (r) {
-      if (!r || !r.erro) return;
-      if (typeof mostrarToast === 'function') {
+      if (!r || typeof mostrarToast !== 'function') return;
+      if (r.ok) {
+        mostrarToast('No seu Planejamento: ' + r.dia + ' ' + r.data
+          + (r.hora ? ' às ' + r.hora : '') + (r.mudouDeLugar ? ' — mudou de dia na grade.' : '.'), 'sucesso');
+        return;
+      }
+      if (r.fora) {
+        const porque = r.motivo === 'fimDeSemana'
+          ? 'a grade do Planejamento é de segunda a sexta'
+          : r.motivo === 'passado' ? 'a data já passou'
+          : 'o Planejamento só abre esta semana e a próxima';
+        mostrarToast('A tarefa está no HubSpot ✓ e na sua Agenda. No Planejamento ela não '
+          + 'entra: ' + porque + '.', 'atencao');
+        return;
+      }
+      if (r.cheio) {
+        mostrarToast('A tarefa está no HubSpot ✓ e na sua Agenda, mas ' + r.dia + ' está sem '
+          + 'faixa livre no seu Planejamento — abra o Planejamento e escolha o lugar.', 'atencao');
+        return;
+      }
+      if (r.foraDaMunicao) {
+        mostrarToast('A tarefa está no HubSpot ✓ e na sua Agenda. Este negócio não está na '
+          + 'munição da sua semana, então não dá pra pôr na grade do Planejamento.', 'atencao');
+        return;
+      }
+      if (r.erro) {
         mostrarToast('A tarefa está no HubSpot ✓, mas não entrou no seu plano da semana ('
           + r.erro + '). Ponha a visita no dia pelo Planejamento.', 'atencao');
       }
@@ -19031,7 +19088,7 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
       bairro: lead.bairro || null, cidade: lead.cidade || null,
       lat: lead.lat != null ? lead.lat : null, lng: lead.lng != null ? lead.lng : null
 
-    }, dataISO, (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) ? String(hora) : '09:00', ownerId, tipo);
+    }, dataISO, (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) ? String(hora) : '09:00', dono, tipo);
   } catch (e) { console.error('espelho do proximo passo na agenda:', e); }
 
   if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
@@ -26256,9 +26313,10 @@ function wireFichaLeadFunilEdicao(container, l) {
         const dataBRPasso = String(data).split('-').reverse().join('/');
 
         const quandoBR = dataBRPasso + (horaEscolhida ? ' às ' + horaEscolhida : ' às 9h');
-        statusEl.textContent = `Próximo passo salvo — ${quandoBR}, já no seu Planejamento e na Agenda.`;
+
+        statusEl.textContent = `Próximo passo salvo no HubSpot — ${quandoBR}.`;
         statusEl.style.color = 'var(--green)';
-        mostrarToast(`Próximo passo de "${l.name}" marcado pra ${quandoBR} — entra no seu Planejamento, na Agenda e na sua Daily do dia.`, 'sucesso');
+        mostrarToast(`Próximo passo de "${l.name}" marcado pra ${quandoBR} — está no HubSpot e na sua Agenda.`, 'sucesso');
       }
       btnPasso.disabled = false;
     } catch (e) {

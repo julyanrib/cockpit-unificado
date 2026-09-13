@@ -149,9 +149,17 @@ checar('o espelho da grade semanal grava na hora, sem esperar carga',
    pl6SegundaDaSemana() — a semana corrente —, então tem de ler e gravar a MESMA: um
    passo de hoje, com a tela na semana que vem, entraria na linha errada e no dia errado.
    A Minha Daily tem o mesmo cuidado, pelo mesmo motivo. */
+/* REESCRITA EM 13/09/26: a checagem exigia a linha `const semanaDaTarefa =
+   pl6SegundaDaSemana();`. A semana da tarefa deixou de ser sempre a corrente — passou
+   a ser a que CONTEM a data do passo (esta ou a proxima), porque todo passo marcado
+   para a semana seguinte estava sendo recusado em silencio. O que a checagem tem de
+   garantir nunca foi a linha: e que a leitura e a escrita recebam a semana POR
+   ARGUMENTO, a mesma nas duas, e que ela venha do RELOGIO (pl6SegundaDaSemana) e nao
+   do foco da tela (pl6SegundaEmFoco). */
 checar('e na semana da TAREFA, não na que a tela mostra',
-  /const semanaDaTarefa = pl6SegundaDaSemana\(\);/.test(codigo)
-    && /pl6Carregar\(rep, semanaDaTarefa\)/.test(codigo)
+  /pl6Carregar\(rep, semanaDaTarefa\)/.test(codigo)
+    && /pl6Gravar\(rep, \{ grade: grade \}, semanaDaTarefa\)/.test(codigo)
+    && /const pl6SegundaAtual = pl6SegundaDaSemana\(\);/.test(codigo)
     && /pl6Gravar\(rep, campos, pl6SegundaDaSemana\(\)\)/.test(codigo),
   'herdar o foco da tela faria o passo de hoje cair na linha da semana que vem, no dia errado');
 
@@ -160,6 +168,84 @@ const naMao = (codigo.match(/pl6Carteira\(rep, regioes\)\s*\n?\s*\.concat\(pl6No
 checar('ninguém monta "todas as contas" na mão',
   naMao === 0,
   naMao + ' lugar(es) — foi o defeito de #307, em 10 de 13 consumidores');
+
+/* ══ 8. O DONO NAO PODE SUMIR NO CAMINHO (13/09/26) ══════════════════════════════════
+   Julyan: "fiz um teste e nao foi pro planejamento o proximo passo".
+
+   Medido na producao, logado como o Marco: o botao da ficha chamava o espelho com
+   `l.ownerId` UNDEFINED — o objeto do cartao vem de rep.quentes/rep.travados, e nenhum
+   item dessas listas tem ownerId (0 de 12). A primeira linha do espelho era
+   `if (!lead || !dataISO || !ownerId) return;`: ele saia calado, sem plano, sem agenda
+   e sem repintura, enquanto a ficha dizia "ja no seu Planejamento".
+
+   Esta e a MESMA FORMA dos tres casos do topo deste arquivo: a escrita acontece e a
+   tela nao sabe. Por isso mora aqui. */
+checar('o espelho resolve o dono quando quem chamou não trouxe',
+  /function donoDoNegocioNaTela\(/.test(codigo)
+    && /const dono = \(ownerId != null && String\(ownerId\) !== ''\) \? String\(ownerId\) : donoDoNegocioNaTela\(lead\);/.test(codigo)
+    && !/if \(!lead \|\| !dataISO \|\| !ownerId\) return;/.test(codigo),
+  'quatro dos cinco sites do passo entregam lead.ownerId undefined — sem a resolução o '
+    + 'espelho sai calado e o Planejamento fica sem a visita que ele acabou de datar');
+
+/* A FONTE do dono e `DATA.funilLeads`: e a unica lista da tela em que todo item traz
+   ownerId (26 de 26, medido). E NAO PODE cair para `sessaoAtual`: o gestor abre ficha de
+   negocio alheio, e espelhar o passo do Marco no plano do gestor e pior do que nao
+   espelhar — seria um compromisso inventado na semana de quem nao vai fazer a visita. */
+checar('e a resolução vem do funil, nunca da sessão',
+  (function () {
+    const i = codigo.indexOf('function donoDoNegocioNaTela(');
+    if (i < 0) return false;
+    const corpo = codigo.slice(i, codigo.indexOf('\n}', i));
+    return corpo.indexOf('DATA.funilLeads') > -1 && corpo.indexOf('sessaoAtual') < 0;
+  }()),
+  'cair para a sessão poria o passo do executivo na semana do gestor que abriu a ficha');
+
+/* ══ 9. E QUEM FALA DO PLANEJAMENTO E QUEM OLHOU ═════════════════════════════════════
+   A frase da ficha prometia o Planejamento sem ter lido o resultado do espelho — e as
+   recusas do espelho (`fora`, `cheio`, `foraDaMunicao`) eram silenciosas de proposito.
+   Promessa de um lado e silencio do outro e como o defeito passou tres dias de pe.
+   O Planejamento tem UMA voz: espelharPassoNasTelas, que e quem sabe se entrou. */
+checar('nenhum site do passo promete o Planejamento por conta própria',
+  !/já no seu Planejamento/.test(codigo)
+    && !/entra no seu Planejamento, na Agenda/.test(codigo),
+  'prometer sem conferir é o que fez o Julyan clicar, ler que entrou, e não estar lá');
+
+/* RAMO A RAMO, e nao no total: a primeira versao desta checagem contava `mostrarToast(`
+   no corpo inteiro e exigia cinco. Calar o ramo do dia cheio deixou cinco toasts em pe
+   (o de dono nao resolvido entra na conta) e a sabotagem passou VERDE. Contar o total
+   nao mede "cada saida fala" — mede outra coisa. */
+checar('e o espelho fala nas cinco saídas, inclusive quando dá certo',
+  (function () {
+    const i = codigo.indexOf('function espelharPassoNasTelas(');
+    if (i < 0) return false;
+    const corpo = codigo.slice(i, codigo.indexOf('\n}', i));
+    const saidas = ['r.ok', 'r.fora', 'r.cheio', 'r.foraDaMunicao', 'r.erro'];
+    const onde = saidas.map(k => corpo.indexOf('if (' + k + ')'));
+    if (onde.some(j => j < 0)) return false;
+    /* o ramo de cada saida vai ate o comeco do ramo seguinte (o ultimo, ate o fim do
+       corpo) — e e ali DENTRO que o toast dela tem de estar. Medir o total nao serve. */
+    return onde.every(function (j) {
+      const depois = onde.filter(x => x > j);
+      const fim = depois.length ? Math.min.apply(null, depois) : corpo.length;
+      return corpo.slice(j, fim).indexOf('mostrarToast(') > -1;
+    });
+  }()),
+  'recusa muda deixa a promessa da tela de pé sozinha — foi assim que o passo sumiu');
+
+/* ══ 10. A GRADE E DE DUAS SEMANAS, E O ESPELHO PROCURA NAS DUAS ════════════════════
+   O espelho indexava so a semana em foco, de segunda a sexta. Todo passo marcado para a
+   semana seguinte caia em `fora` — e o Planejamento anda duas semanas (PL6_SEMANA 0 e 1),
+   entao a segunda existia e ninguem escrevia nela. Medido: passo para 21/09, marcado em
+   13/09, recusado calado. */
+checar('o espelho procura a data nas duas semanas que o Planejamento abre',
+  /for \(let k = 0; k <= 1 && di < 0; k\+\+\)/.test(codigo)
+    && /if \(i >= 0\) \{ semanaDaTarefa = seg; dias = ds; di = i; \}/.test(codigo),
+  'a semana que vem é metade do que o Planejamento mostra e não recebia passo nenhum');
+
+checar('e a recusa diz o motivo em vez de sumir',
+  /motivo = \(dow === 0 \|\| dow === 6\) \? 'fimDeSemana'/.test(codigo)
+    && /: \(String\(dataISO\) < String\(pl6SegundaAtual\)\) \? 'passado' : 'longe'/.test(codigo),
+  '"não entrou" sem o porquê é a mesma coisa que não dizer nada');
 
 console.log('');
 if (falhas) {

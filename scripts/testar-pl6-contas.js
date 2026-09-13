@@ -821,10 +821,14 @@ console.log('');
     }()),
     'o executivo abriria a Minha Daily e veria o dia da semana que vem — sem nada dizer');
 
+  /* REESCRITA EM 13/09/26, mesmo motivo da irma em testar-espelho-local: a semana da
+     tarefa virou a que CONTEM a data (esta ou a proxima), entao a linha cravada saiu.
+     A exigencia continua sendo a que importa — semana POR ARGUMENTO nas quatro
+     escritas, vinda do relogio e nao do foco da tela. */
   checar('e quem escreve fora da tela diz qual semana',
-    /const semanaDaTarefa = pl6SegundaDaSemana\(\);/.test(cod)
-      && /pl6Carregar\(rep, semanaDaTarefa\)/.test(cod)
+    /pl6Carregar\(rep, semanaDaTarefa\)/.test(cod)
       && /pl6Gravar\(rep, \{ grade: grade \}, semanaDaTarefa\)/.test(cod)
+      && /const pl6SegundaAtual = pl6SegundaDaSemana\(\);/.test(cod)
       && /pl6Gravar\(rep, campos, pl6SegundaDaSemana\(\)\)/.test(cod)
       && /pl6Carregar\(repPreCarga, pl6SegundaDaSemana\(\)\)/.test(cod),
     'sem o argumento, um passo de hoje entraria na linha da semana que vem, no dia errado');
