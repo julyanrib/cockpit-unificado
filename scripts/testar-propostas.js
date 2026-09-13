@@ -416,11 +416,58 @@ checar('planos e períodos em 4 colunas que podem encolher',
 /* a conta passou a rodar dentro do laco das larguras, e a altura natural de cada largura
    e medida ali — por isso o nome da variavel mudou. A regra e a mesma, e e a que
    consertou a proposta invisivel no celular: altura so limita quando e MEDIVEL. */
+/* REESCRITA EM 13/09/26: a segunda metade exigia a atribuicao LITERAL
+   `palco.style.minHeight = alturaUtil + 'px';`. Ela passou a escrever por uma variavel
+   e SO QUANDO O VALOR MUDA — reescrever o mesmo valor redisparava o ResizeObserver do
+   palco, e era ele que mantinha girando o ciclo que fazia a peca oscilar entre 654 e
+   668px. A intencao nunca foi a forma da linha: e que o empilhado DE altura ao palco
+   (senao a conta nao tem o que limitar) e que a altura so limite quando e medivel. */
 checar('a escala da peca nao desiste quando o palco nao tem altura',
   /alturaUtil > 0 \? alturaUtil \/ alturaNatural : Infinity/.test(template)
-  && /palco\.style\.minHeight = alturaUtil \+ 'px';/.test(template),
+    && /palco\.style\.minHeight = alvoMin;/.test(template)
+    && /const alvoMin = alturaUtil \+ 'px';/.test(template),
   'restricao que nao se mede nao restringe: com a altura zerando a conta, a peca fica '
     + 'em tamanho natural dentro de uma janela que corta');
+
+/* ══ E A ENTRADA DA CONTA NAO E A SAIDA DELA MESMA (13/09/26) ══════════════════════
+   Medido na producao: a mesma proposta, no mesmo arquivo, sem mudanca nenhuma,
+   alternava entre 654 e 668px de altura a cada abertura da aba. `natural` era
+   `cartao.offsetHeight` na largura que a PASSADA ANTERIOR desta funcao deixou escrita;
+   dela sai `alturaUtil`, que decide qual largura vence o laco de area. Saida virando
+   entrada — ciclo de dois pontos, realimentado pelo ResizeObserver do palco.
+
+   E a conta ja estava errada por tabela: `alturaUtil` e `natural * min(1, larguraLivre
+   / PRC_LARGURA_BASE)`, formula que assume `natural` medido NA BASE. Medir em outra
+   largura fazia os dois lados falarem de coisas diferentes.
+
+   Uma medida so, sempre na mesma largura, e o que torna a funcao repetivel. */
+checar('a altura de referencia e medida sempre na mesma largura',
+  template.indexOf('const PRC_LARGURA_BASE = 430;') > -1
+    && template.indexOf('const natural = alturaNaBase() || 620;') > -1
+    && template.indexOf('larguraLivre / PRC_LARGURA_BASE') > -1,
+  'medir na largura que a passada anterior deixou faz a mesma proposta sair em dois '
+    + 'tamanhos diferentes dependendo de quando a aba foi aberta');
+
+/* ══ E A MEDIDA RESTAURA O QUE TOCOU (13/09/26) ═════════════════════════════════════
+   A primeira versao desta correcao escrevia largura e transform no cartao e seguia em
+   frente. O ramo do MODO CLIENTE retorna logo depois, sem restaurar nada — e a peca do
+   overlay ficava presa em 430px em vez da largura de desenho, ou seja, o PNG do cliente
+   sairia menor que a previa. Eu mesmo produzi esse defeito ao consertar o outro.
+
+   Medir e uma PERGUNTA, nao uma mudanca de estado: `alturaNaBase` guarda os dois
+   valores, mede, e devolve tudo como estava. */
+checar('e a medida de referencia devolve o cartao como estava',
+  (function () {
+    const i = template.indexOf('const alturaNaBase = function ()');
+    if (i < 0) return false;
+    const corpo = template.slice(i, template.indexOf('  };', i));
+    return corpo.indexOf('const t0 = cartao.style.transform, w0 = cartao.style.width;') > -1
+      && corpo.indexOf('cartao.style.transform = t0;') > -1
+      && corpo.indexOf('cartao.style.width = w0;') > -1
+      && corpo.indexOf('cartao.style.transform = t0;') > corpo.indexOf('const h = cartao.offsetHeight;');
+  }()),
+  'sem restaurar, o modo cliente desenha a peça na largura de MEDIÇÃO — o PNG do dono '
+    + 'sai diferente da prévia que o executivo conferiu');
 checar('e o empilhado solta a cadeia de flex que zerava o palco',
   /@media \(max-width:1240px\)[\s\S]{0,1800}\.p4-palco\{flex:none/.test(template)
     && /@media \(max-width:1240px\)[\s\S]{0,2200}#viewPrecificacao\.active \.prc-shell\{flex:none/.test(template),
