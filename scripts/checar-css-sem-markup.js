@@ -72,8 +72,11 @@ const DIVIDA = {
      arquivo.
      A `.hoje-actions-card`, que era MINHA (o cartão de 3 ações), saiu de verdade no mesmo
      commit — a diferença é que dela eu sabia a origem e o alcance. */
-  'hoje-hero-stats': 'Hoje — faixa antiga do hero',
-  'hoje-panel-title': 'Hoje — layout de dois paineis que a v3 substituiu'
+  /* `hoje-panel-title` SAIU DA LISTA EM 13/09/26 porque saiu do arquivo: a passada de
+     CSS morto (scripts/css-morto.js) levou a regra dela junto com outras 422. A guarda
+     reprovou o build pedindo esta linha de volta — que e exatamente o que ela promete
+     fazer quando uma divida e paga, e a razao de a lista ter de encolher. */
+  'hoje-hero-stats': 'Hoje — faixa antiga do hero'
 };
 
 /* As classes que o arquivo REALMENTE gera. Mesmo levantamento da guarda 7 — as quatro
