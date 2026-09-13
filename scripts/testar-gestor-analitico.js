@@ -420,17 +420,21 @@ checar('o estoque do cartao vem dos abertos, e so de quem esta no campo',
 checar('amostra curta nao acusa ninguem no funil interativo',
   templateCodigo.indexOf('curta: dele.chegaram < GX_FX_MIN_CELULA') > 0 &&
   templateCodigo.indexOf('dele.chegaram >= GX_FX_MIN_CELULA') > 0);
-checar('o caso ordena pelo estouro do prazo, nao pelos dias',
-  templateCodigo.indexOf('(sla == null || l.dias == null) ? null : (l.dias - sla)') > 0);
-checar('MRR ausente no caso aparece marcado, nunca como zero',
-  template.indexOf('sem MRR preenchido') > 0 &&
-  templateCodigo.indexOf('const mrr = mrrDoNegocio(l);') > 0);
-checar('etapa sem caso estourado explica, em vez de ficar vazia',
-  template.indexOf('passou do prazo desta etapa') > 0 &&
-  template.indexOf('estes são os mais antigos') > 0);
-checar('a linha do caso nao e clicavel: nao existe destino para negocio isolado aqui',
-  templateCodigo.indexOf('data-gx-fx-lead') < 0 &&
-  templateCodigo.indexOf('data-gx-fx-dossie') > 0);
+/* ══ AS QUATRO CHECAGENS DA LISTA DE CASOS SAIRAM EM 13/09/26 ══════════════════════
+   Elas mediam `gxFxCasosHTML` — a lista de negocios estourados dentro da quebra do
+   funil. Essa lista nao existe: o painel por executivo do raio-X ja tinha sido removido
+   na varredura da aba Time, e as funcoes ficaram no arquivo sem chamador. A cascata
+   inteira (gxFxQuebraHTML -> gxFxCasosHTML -> gxFunilRaioX) saiu na limpeza de codigo
+   morto, e com ela a marcacao data-gx-fx-*.
+
+   O MOTIVO FICA ESCRITO em vez de as linhas sumirem, pelo mesmo raciocinio da nota
+   sobre "amostra curta" logo acima: guarda que mede desenho inexistente da verde sobre
+   nada, e apagar sem dizer faz a proxima pessoa achar que a regra nunca existiu.
+
+   NAO INVENTEI SUCESSORAS. Se a lista de casos voltar, as quatro regras que ela
+   protegia — ordenar pelo estouro e nao pelos dias, MRR ausente marcado e nunca zero,
+   etapa vazia que explica o vazio, e linha nao clicavel por falta de destino — voltam
+   com ela, e estao ditas aqui para nao precisarem ser redescobertas. */
 /* SEM HISTORICO, A TELA DIZ POR QUE ESTA VAZIA — a regra sobreviveu inteira, no acordeao
    da escada. Vazio silencioso faz o gestor achar que o time nao avancou nada. */
 checar('sem historico de etapa a escada diz por que esta vazia',
@@ -528,13 +532,29 @@ checar('a exigencia de campo obrigatorio nao acusa quem preencheu no outro campo
   templateCodigo.indexOf("if (x.p === 'valor_de_mrr') return mrrDoNegocio(lead) == null;") > 0);
 checar('o formulario de etapa abre com o MRR que o negocio ja tem',
   templateCodigo.indexOf("campo.prop === 'valor_de_mrr' ? mrrDoNegocio(lead)") > 0);
-checar('o dinheiro em risco e a soma por etapa usam o leitor unico',
-  templateCodigo.indexOf('(r.travados || []).filter(l => mrrDoNegocio(l) != null)') > 0 &&
-  templateCodigo.indexOf('(mrrDoNegocio(l) || 0)') > 0 &&
-  templateCodigo.indexOf('gxNum(l.valor_de_mrr)') < 0);
-checar('quando o numero vem do campo do HubSpot, a tela declara a procedencia',
-  template.indexOf('campo do HubSpot') > 0 &&
-  templateCodigo.indexOf('function mrrFonteDoNegocio(lead)') > 0);
+/* ══ SAIU COM O CARTAO DE DINHEIRO DO RAIO-X (13/09/26) ════════════════════════════
+   As tres linhas que ela procurava moravam dentro de `gxBlocoDinheiroHTML`, um dos
+   cinco cartoes do raio-X. O painel ja tinha sido removido na varredura da aba Time e
+   a funcao ficou sem chamador — esta guarda ficou verde por anos medindo texto que
+   nao chegava a tela nenhuma.
+
+   O QUE ELA PROTEGIA CONTINUA PROTEGIDO em outro lugar: `mrrDoNegocio` e o leitor unico
+   de MRR e as tres checagens logo acima o medem nas telas que existem (exigencia de
+   campo, formulario de etapa, e a proibicao de somar valor_de_mrr cru). O que sumiu foi
+   a soma "dinheiro em risco por etapa", junto com o cartao que a mostrava. */
+/* ══ E ESTA SAIU DUAS VEZES ERRADA (13/09/26) ═══════════════════════════════════════
+   Ela media `mrrFonteDoNegocio`, que so era consumida pela lista de casos removida
+   acima — entao a procedencia do MRR nao estava sendo mostrada em tela nenhuma.
+
+   E a primeira metade dela era pior: `template.indexOf('campo do HubSpot')` casava com
+   um COMENTARIO meu dentro da propria funcao morta, nao com texto de tela. A guarda
+   estava lendo a minha prosa como prova — e por isso ficou verde durante todo o tempo
+   em que a tela nao existia.
+
+   O leitor unico de MRR (`mrrDoNegocio`) continua vivo e continua medido nas tres
+   checagens acima. O que morreu foi a etiqueta de PROCEDENCIA, que so vivia ali. Ela
+   e um pedido antigo do Julyan ("todo numero diz de onde vem") e volta junto com
+   qualquer tela que mostre MRR de negocio individual. */
 
 /* ── 17. OS CINCO CARTOES DO RAIO-X (aba Time, prancha v4 secao 3b) ───────────────
    Quatro dos cinco reusam calculo que ja existia; o quinto (onde os negocios morrem) sai
@@ -565,9 +585,14 @@ checar('a leitura de tempo declara se usa media ou mediana',
   templateCodigo.indexOf('Média de dias na etapa contra a régua declarada') > 0 &&
   templateCodigo.indexOf('Média, não mediana') > 0,
   'estatistica sem nome deixa o leitor supor a que lhe convem');
-checar('a meta e a soma das metas individuais declaradas, e o ritmo e conta',
-  templateCodigo.indexOf('const alvo = ativos.reduce((n, r) => n + (Number(r.metaMensal) || 0), 0)') > 0 &&
-  templateCodigo.indexOf('ritmo: (du && du > 0) ? (falta / du) : null') > 0);
+/* ══ SAIU COM `gxMetaDoTime` (13/09/26) ════════════════════════════════════════════
+   Mesmo caso do cartao de dinheiro: a funcao alimentava o cartao "meta e ritmo" do
+   raio-X e ficou sem chamador quando o painel saiu.
+
+   A REGRA VALE E FICA DITA, para voltar junto com qualquer tela que mostre meta de
+   time: o alvo e a SOMA das metas individuais declaradas (nunca uma meta de time
+   digitada a parte, que divergiria da soma no dia seguinte), e o ritmo e o que falta
+   dividido pelos dias uteis restantes — conta, nao estimativa. */
 /* NUNCA ESTIMAR RECEITA. A cobertura do raio-X saiu, mas a regra e mais ampla e vale nas
    quatro abas: MRR aparece com a cobertura do preenchimento, e negocio sem valor no CRM
    aparece dizendo isso — nunca como zero, e nunca extrapolado para uma receita
@@ -663,16 +688,22 @@ checar('a pauta do 1:1 tem os quatro cards e o gargalo aparece uma vez so',
     return rots.length === 4 && (bloco.match(/rot: 'o gargalo'/g) || []).length === 1;
   }()),
   'quatro cards, um de cada — gargalo repetido faz o 1:1 girar no mesmo assunto');
-checar('existe UM bloco de perdas por pessoa, o que compara com o time',
-  templateCodigo.indexOf('function gxComoElePerdeHTML') < 0 &&
-  template.indexOf('régua = o time') > 0 &&
-  template.indexOf('d.razao >= 1.5 && d.n >= 5') > 0);
-checar('o bloco de perdas por pessoa liga o motivo a um modulo do Playbook',
-  template.indexOf('Objeções — a conversa é sobre margem') > 0 &&
-  template.indexOf('Follow-up — presença no prazo certo') > 0);
-checar('o MRR das perdas dele aparece com a cobertura, e nao como receita',
-  templateCodigo.indexOf('mp.mrrPorOwner[String(r.ownerId)]') > 0 &&
-  template.indexOf('os negócios sem MRR preenchido não entram nesta soma') > 0);
+/* ══ AS TRES DE PERDAS POR PESSOA SAIRAM COM `gxBlocoPerdaHTML` (13/09/26) ══════════
+   O bloco era o quinto cartao do raio-X ("como o time perde"). Ficou sem chamador na
+   varredura da aba Time e saiu agora na limpeza de codigo morto.
+
+   A PRIMEIRA DAS TRES ERA A MAIS ENGANOSA: ela conferia que NAO existe uma segunda
+   funcao de perdas (`gxComoElePerdeHTML < 0`) e que o texto da primeira esta la. Com a
+   primeira morta, a metade negativa continuava verde sozinha — a guarda dizia "existe
+   UM bloco" quando existiam ZERO.
+
+   AS TRES REGRAS FICAM DITAS, porque as tres sao pedido do Julyan e valem para qualquer
+   tela de perdas que venha: (1) um bloco so, e ele compara a pessoa com a regua do
+   time em vez de mostrar o numero solto; (2) todo motivo aponta um modulo do Playbook,
+   senao a tela diagnostica e nao ensina; (3) o MRR das perdas aparece COM a cobertura
+   do preenchimento, nunca como receita — negocio sem valor no CRM nao entra na soma e
+   a tela diz isso. As assercoes negativas contra ticketMedio e receitaEstimada, que
+   guardam a mesma regra do lado de fora, continuam nesta suite. */
 /* NAO CALCULAR A MESMA COISA DUAS VEZES — a regra que gxCobrarHojeHTML carregava, e que
    depois da varredura de 06/09/26 vale para as tres abas do gestor. Time, Pessoas e
    Rotas leem O MESMO motor (tl5Medir): quem tem negocio acima da regua e um numero so

@@ -43,19 +43,24 @@ const html = fs.readFileSync(path.join(root, 'template', 'cockpit.template.html'
 
 /* Órfãs que FICAM, com o motivo. Lista vazia é o estado desejado. */
 const DIVIDA = {
-  /* as suites dependem destas — tirar cobertura de regra que o Julyan pediu é decisão
-     dele, não minha, mesmo quando a regra está ancorada em código que não roda */
+  /* AS DUAS QUE FICAM SAO AS QUE A SUITE EXECUTA: ela as chama como motor puro e mede o
+     RESULTADO. Isso e cobertura de verdade, ainda que nenhuma tela as invoque — apagar
+     seria trocar um teste que roda por bytes. */
   rotuloDeRegistroDaVisita: 'testar-nucleo.js a chama direto, como motor puro',
-  pl4RiscoDoBalde: 'testar-busca-lugar.js usa a declaração dela como delimitador do bloco v5',
   pl5Realce: 'testar-busca-lugar.js a executa como função pura',
-  gxBlocoDinheiroHTML: 'testar-gestor-analitico.js afirma sobre o texto dela (o leitor único de MRR)',
-  gxMetaDoTime: 'testar-gestor-analitico.js afirma sobre o texto dela (a meta é a soma das individuais)',
-  focoDeHabilidadeHTML: 'testar-desenvolvimento.js exige que exista ("o que já existia e não pode sumir")',
-  buildIndicadoresExecutivoHTML: 'testar-desenvolvimento.js exige que exista',
-  /* estas duas o meu cortador consciente de chaves não conseguiu terminar com segurança:
-     cortar no lugar errado levaria metade do arquivo */
-  gxBlocoPerdaHTML: 'o corte automático não consegue terminar o corpo com segurança',
-  prometidoVsRealizadoCorpoHTML: 'o corte automático não consegue terminar o corpo com segurança'
+
+  /* ══ AS DUAS DE BAIXO SAO PERDA DE CHAMADOR, E NAO RESTO (13/09/26) ═══════════════
+     A limpeza de 13/09 tirou 28 orfas. Estas DUAS eu nao apaguei, porque o caso delas e
+     o outro que este arquivo descreve: o reskin da aba Desenvolvimento deixou os dois
+     blocos sem chamador, e a checagem que deveria impedir isso — 'O QUE JA EXISTIA E
+     NAO PODE SUMIR', em testar-desenvolvimento.js — media `template.indexOf('function
+     ' + fn)`, ou seja, se a funcao EXISTE, nao se ela ALCANCA a tela. Ficou verde com a
+     capacidade ja perdida.
+
+     Apagar as duas agora cimentaria a perda. Religar e decisao do Julyan: sao blocos que
+     ele pediu para nao sumirem. Ficam aqui nomeando quem decide. */
+  focoDeHabilidadeHTML: 'PERDA DE CHAMADOR — o reskin do Desenvolvimento a deixou sem quem a chame; religar ou apagar e decisao do Julyan',
+  buildIndicadoresExecutivoHTML: 'PERDA DE CHAMADOR — mesma varredura, mesma decisao pendente'
 };
 
 const codigo = blocosDeCodigo(html).map(cortarJs).join('\n');
