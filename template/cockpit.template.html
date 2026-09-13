@@ -14418,9 +14418,27 @@ function desfechoNotaEstruturada(dados) {
 
 // Data sugerida para o próximo passo: hoje + D do passo da régua, empurrada pro
 // próximo dia útil (tarefa caindo no sábado é tarefa que ninguém faz).
+/* ══ COMPROMISSO NAO NASCE VENCIDO (13/09/26) ═══════════════════════════════════════
+   Medido na producao num DOMINGO: abrir "Mover de etapa" trazia o proximo passo
+   obrigatorio ja preenchido com 11/09 — dois dias no passado. A culpa era de
+   `nearestBusinessDay`, que anda PARA TRAS ate o ultimo dia util. Isso esta certo onde
+   ela nasceu (a Daily mostra o ultimo dia util FECHADO) e errado aqui: os quatro sites
+   que chamam esta funcao — desfecho de visita, cartao do funil, passagem de etapa —
+   estao todos marcando algo que AINDA VAI ACONTECER.
+
+   Um passo sugerido no passado nao e so feio: a regua encurta sozinha (D+5 caindo no
+   domingo virava D+3), o negocio ja entra "em atraso" na Hoje, e o espelho do plano
+   recusa a data — o executivo clica no caminho de menor esforco e colhe uma recusa.
+
+   nearestBusinessDay FICA COMO ESTA: a Daily depende dela andar para tras. */
+function proximoDiaUtil(dateISO) {
+  let d = dateISO;
+  while (isWeekend(d)) d = addDays(d, 1);
+  return d;
+}
 function desfechoDataSugerida(diasFrente) {
   const base = addDays(isoDate(new Date()), Math.max(0, Number(diasFrente) || 0));
-  return typeof nearestBusinessDay === 'function' ? nearestBusinessDay(base) : base;
+  return typeof proximoDiaUtil === 'function' ? proximoDiaUtil(base) : base;
 }
 
 let desfechoEstado = null;
