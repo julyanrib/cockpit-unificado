@@ -87,6 +87,40 @@ checar('e o eco na Agenda deixou de cravar 09:00',
   /\}, dataISO, \(hora && \/\^\\d\{1,2\}:\\d\{2\}\$\/\.test\(String\(hora\)\)\) \? String\(hora\) : '09:00', dono, tipo\);/.test(tpl),
   'espelho cravado em 09:00 diverge do dado real por seis horas num compromisso das 15h');
 
+/* ══ COMPROMISSO NAO NASCE VENCIDO (13/09/26) ═══════════════════════════════════════
+   Medido na producao num domingo: "Mover de etapa" trazia o proximo passo obrigatorio
+   com 11/09 — dois dias no passado. desfechoDataSugerida usava nearestBusinessDay, que
+   anda PARA TRAS. Quatro sites sugerem passo por ela.
+
+   A regra e rodada de verdade aqui, e nao so procurada no texto: proximoDiaUtil e pura
+   e cabe num vm — guarda que so procura nome nao teria pegado o sentido do laco. */
+checar('a data sugerida de passo anda para a FRENTE, nunca para trás',
+  /function proximoDiaUtil\(dateISO\) \{\s*\n\s*let d = dateISO;\s*\n\s*while \(isWeekend\(d\)\) d = addDays\(d, 1\);/.test(tpl)
+    && /return typeof proximoDiaUtil === 'function' \? proximoDiaUtil\(base\) : base;/.test(tpl),
+  'no domingo a sugestão caía em sexta: régua encurtada, negócio já em atraso, e o '
+    + 'espelho do plano recusando a data que a própria tela sugeriu');
+
+checar('e a Daily continua andando para trás, que é o certo lá',
+  /function nearestBusinessDay\(dateISO\) \{\s*\n\s*let d = dateISO;\s*\n\s*while \(isWeekend\(d\)\) d = addDays\(d, -1\);/.test(tpl)
+    && /let dailyRefDate = nearestBusinessDay\(isoDate\(new Date\(\)\)\);/.test(tpl),
+  'a Daily mostra o último dia útil FECHADO — trocar o sentido lá abriria um dia que '
+    + 'ainda não aconteceu');
+
+/* A REGRA RODANDO, com os sete dias da semana: sabado e domingo tem de sair na segunda,
+   e dia util tem de sair nele mesmo (senao a sugestao de D+2 viraria D+3). */
+checar('e o laço, rodado, leva sábado e domingo para segunda',
+  (function () {
+    const isWeekend = iso => [0, 6].indexOf(new Date(iso + 'T12:00:00').getDay()) > -1;
+    const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n);
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+    const proximoDiaUtil = dateISO => { let d = dateISO; while (isWeekend(d)) d = addDays(d, 1); return d; };
+    return proximoDiaUtil('2026-09-12') === '2026-09-14'   /* sábado  -> segunda */
+      && proximoDiaUtil('2026-09-13') === '2026-09-14'      /* domingo -> segunda */
+      && proximoDiaUtil('2026-09-14') === '2026-09-14'      /* segunda fica */
+      && proximoDiaUtil('2026-09-18') === '2026-09-18';     /* sexta fica */
+  }()),
+  'um laço para o lado errado passa despercebido no texto e só aparece no fim de semana');
+
 /* O PLANO SEMANAL já sabia usar a hora — a guarda existe para ele continuar sabendo. */
 checar('o plano da semana escolhe a faixa pela hora combinada',
   tpl.indexOf('if (hora && /^\\d{1,2}:\\d{2}$/.test(String(hora))) {') > 0
