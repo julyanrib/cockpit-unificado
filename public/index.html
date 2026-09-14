@@ -12006,6 +12006,12 @@ function fn2Ligar(el, r) {
         return;
       }
 
+      if (fn2GavetaEtapa) {
+        fn2GavetaEtapa = null;
+        fn2GavetaTudo = false;
+        renderMeuFunil();
+      }
+
       if (acao === 'mover') { abrirEscolhaDeEtapa(lead, depoisDeMover); return; }
       const foco = (acao === 'passo' || acao === 'proposta') ? 'passo' : null;
       if (typeof abrirFichaLeadFunilDrawer === 'function') abrirFichaLeadFunilDrawer(lead, null, foco);
@@ -18569,8 +18575,39 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
   if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
 }
 
+function espelharPassoNoFunilLocal(dealId, dataISO, hora, rotulo) {
+  const alvo = String(dealId == null ? '' : dealId);
+  if (!/^[0-9]+$/.test(alvo) || !dataISO) return;
+  const h = (hora && /^\d{1,2}:\d{2}$/.test(String(hora))) ? String(hora) : '';
+  const quando = h
+    ? (dataISO + 'T' + String(Number(h.slice(0, 2)) + 3).padStart(2, '0') + ':' + h.slice(3, 5) + ':00.000Z')
+    : (dataISO + 'T12:00:00.000Z');
+  const subject = String(rotulo || 'Próximo passo');
+  const aplicar = function (l) {
+    if (!l || String(l.id) !== alvo) return;
+    if (!Array.isArray(l.tarefas)) l.tarefas = [];
+    const jaTem = l.tarefas.some(function (x) {
+      return x && String(x.timestamp) === quando && String(x.subject || '') === subject;
+    });
+    if (!jaTem) l.tarefas.push({ subject: subject, timestamp: quando });
+  };
+  Object.values((typeof DATA !== 'undefined' && DATA.funilLeads) || {})
+    .forEach(function (lista) { (lista || []).forEach(aplicar); });
+  ((typeof DATA !== 'undefined' && DATA.reps) || []).forEach(function (r) {
+    ['travados', 'criticos', 'quentes'].forEach(function (k) { (r[k] || []).forEach(aplicar); });
+  });
+  if (typeof DATA !== 'undefined' && DATA.temperatura) {
+    (DATA.temperatura.quentes || []).forEach(aplicar);
+    (DATA.temperatura.frios || []).forEach(aplicar);
+  }
+}
+
 function registrarAgendamentoLocal(lead, dataISO, hora, ownerId, tipo) {
   const chaveLead = lead.id != null ? String(lead.id) : 'nome:' + prospeccaoNormalizarTexto(lead.nome || '');
+
+  const rot = tipo === 'rota' ? 'Visita' : tipo === 'reuniao' ? 'Reunião' : 'Follow-up';
+  try { espelharPassoNoFunilLocal(lead.id, dataISO, hora, rot); }
+  catch (e) { console.error('espelho do passo no cartão do funil:', e && e.message); }
   const jaTem = agendaAgendadosLocal.some(a => String(a.leadId) === chaveLead && a.dataISO === dataISO && a.hora === hora);
   if (jaTem) return;
   agendaAgendadosLocal.push({
@@ -20618,7 +20655,7 @@ function pl6TelaFinalHTML(d) {
     <button type="button" data-pl6-fonte="${ft.on}" style="border:1px solid ${ft.borda};border-radius:999px;background:${ft.bg};padding:5px 11px;font:800 9.5px 'Manrope',sans-serif;color:${ft.cor};cursor:pointer;white-space:nowrap;">${ft.rot}</button>`).join('');
 
   const municaoHTML = (d.municao || []).map(m => `
-    <div draggable="true" data-pl6-arraste="${m.arraste}" data-pl6-acao="${m.abrirFicha}" title="arraste pro dia · clique pra abrir a ficha" style="background:${m.bg};border:1.5px solid ${m.borda};border-radius:11px;padding:10px 12px;cursor:grab;min-width:0;">
+    <div draggable="true" data-pl6-arraste="${m.arraste}" data-pl6-acao="${m.abrirFicha}" title="arraste pro dia · clique abre a ficha do negócio" style="background:${m.bg};border:1.5px solid ${m.borda};border-radius:11px;padding:10px 12px;cursor:grab;min-width:0;">
       <span style="display:flex;align-items:center;gap:7px;min-width:0;">
         <span style="flex:none;color:#B4AC9C;font:800 11px 'Manrope',sans-serif;letter-spacing:1px;">⠿</span>
         <b style="font:800 12px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">${m.nome}</b>
@@ -21401,6 +21438,16 @@ function pl6Ligar(box, rep) {
       }
 
       if (verbo === 'ficha') {
+        const dealId = arg.indexOf('c-') === 0 ? arg.slice(2) : null;
+        const doFunil = dealId && typeof buscarLeadFunilPorId === 'function'
+          ? buscarLeadFunilPorId(dealId) : null;
+        if (doFunil && typeof abrirFichaLeadFunilDrawer === 'function') {
+          s.sel = null;
+          s.diaAtivo = null;
+          pl6Ficha = null;
+          abrirFichaLeadFunilDrawer(doFunil, null, null);
+          return redesenhar();
+        }
         pl6Ficha = arg;
         s.sel = null;
         s.diaAtivo = null;

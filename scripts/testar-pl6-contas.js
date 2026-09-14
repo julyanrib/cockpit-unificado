@@ -1147,6 +1147,34 @@ console.log('');
     'fonte nova que ninguem declarou tem de aparecer, nao sumir da tela');
 }());
 
+
+(function () {
+  const cod = tpl;
+  /* ══ O CARD ABRE A FICHA DO NEGOCIO (14/09/26) ═══════════════════════════════════
+     Julyan: "o executivo quando clicar no card do lead na aba planejamento, tem q abrir
+     a ficha do card". Ate aqui o clique abria um painel interno do Planejamento — util,
+     mas dali nao da para datar o proximo passo, mover de etapa nem gerar proposta.
+
+     SO PARA CARD DE NEGOCIO: a municao tem `c-<dealId>` (tem ficha) e `n-<uuid>` (conta
+     da prospeccao que ainda nao virou negocio, e nao tem). Para a segunda, e para negocio
+     que a carga desta sessao nao conhece, o painel interno continua sendo a resposta — e
+     isso e o oposto de abrir uma ficha vazia. */
+  checar('o card de negócio do Planejamento abre a ficha de verdade',
+    cod.indexOf("const dealId = arg.indexOf('c-') === 0 ? arg.slice(2) : null;") > -1
+      && cod.indexOf("if (doFunil && typeof abrirFichaLeadFunilDrawer === 'function')") > -1,
+    'o painel interno não data próximo passo nem move etapa — quem vem do Meu funil '
+      + 'procura um botão que existe em outro lugar');
+
+  checar('e a conta nova, que não tem negócio, continua no painel interno',
+    (function () {
+      const i = cod.indexOf("if (verbo === 'ficha') {");
+      if (i < 0) return false;
+      const corpo = cod.slice(i, i + 900);
+      return corpo.indexOf('pl6Ficha = arg;') > corpo.indexOf('abrirFichaLeadFunilDrawer(');
+    }()),
+    'abrir uma ficha vazia para conta sem negócio seria pior que o painel');
+}());
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);

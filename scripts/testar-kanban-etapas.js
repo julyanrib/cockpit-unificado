@@ -1511,7 +1511,34 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
   }());
 }());
 
+checar('o CTA da gaveta fecha a gaveta antes de abrir a ficha',
+  (function () {
+    /* `template`, e nao `fonte`: `fonte` aqui e parametro de outra funcao e esta guarda
+       media OUTRO arquivo — a sabotagem passou VERDE na primeira tentativa. */
+    const i = template.indexOf("const acao = btn.getAttribute('data-fn2-acao');");
+    if (i < 0) return false;
+    /* ate o fim do ouvinte, e nao 1800 caracteres: `abrirFichaLeadFunilDrawer` fica
+       mais longe do que isso, e a comparacao virava 'N < -1' — sempre falsa. */
+    const corpo = template.slice(i, template.indexOf('\n  });', i));
+    return corpo.indexOf('if (fn2GavetaEtapa) {') > -1
+      && corpo.indexOf('fn2GavetaEtapa = null;') > -1
+      && corpo.indexOf('if (fn2GavetaEtapa) {') < corpo.indexOf('abrirFichaLeadFunilDrawer(');
+  }()),
+  'a ficha abria atrás da lista, e o clique parecia morto');
+
 if (falhas.length) {
+/* ══ A GAVETA SAI DA FRENTE ANTES DA FICHA (14/09/26) ══════════════════════════════
+   Julyan: "quando eu clico em agendar 1 visita, essa tela nao sai, tipo um erro de
+   frontend, ja tem q jogar direto na ficha".
+
+   A gaveta da etapa e markup DENTRO do Meu funil; a ficha e um overlay fixo. A ficha
+   SEMPRE abriu — atras da gaveta, que continuava cobrindo a tela. Quem clicou via a
+   mesma lista de antes e concluia que o botao nao fez nada.
+
+   Conferido no navegador: antes do clique gaveta no DOM e ficha fechada; depois,
+   gaveta fora do DOM e ficha aberta. */
+
+
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
   console.error('\n' + ok + ' ok, ' + falhas.length + ' falha(s).');
