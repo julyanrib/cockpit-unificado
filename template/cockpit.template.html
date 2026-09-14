@@ -14098,7 +14098,12 @@ function h8LinhaHTML(item, i, ins) {
       + bt('visitar', 'agendar retorno ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
     : bt('ligar', 'ligar', 'data-h8-desfecho="' + id + '" data-h8-como="ligação"')
       + bt('whats', 'WhatsApp', 'data-h8-desfecho="' + id + '" data-h8-como="WhatsApp"')
-      + bt('visitar', 'agendar visita ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"');
+      + bt('visitar', 'agendar visita ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
+      /* ══ E A DECISAO, QUE FALTAVA (14/09/26) ══════════════════════════════════
+         Os tres acima sao TOQUE. Para o negocio de 21 dias sem telefone, tocar de novo
+         nao e a acao — decidir e. Nunca vem com a ★: a melhor acao continua saindo de
+         h8Insight, que mede o negocio; este botao e a porta, nao a recomendacao. */
+      + '<button type="button" class="h8-bt is-fraco" data-h8-decidir="' + id + '">decidir ⌄</button>';
 
   /* ── o painel inline, nas duas fases ─────────────────────────────────────────── */
   let painel = '';
@@ -14114,6 +14119,18 @@ function h8LinhaHTML(item, i, ins) {
          seria a tela decidindo por ele. */
       +   '<button type="button" class="h8-op is-fraco" data-h8-completo="' + id + '">'
       +     'outro desfecho ▸</button>'
+      + '</div></div>';
+  } else if (pn && pn.fase === 'decidir') {
+    /* DUAS DECISOES E UMA SAIDA. Avancar e perder sao os gestos do Meu funil, com as
+       MESMAS travas: a passagem de etapa cobra as propriedades da etapa e o proximo
+       passo datado; o Perdido cobra o motivo. Nenhum atalho novo, nenhuma trava a
+       menos — o que muda e so o lugar de onde se alcanca. */
+    painel = '<div class="h8-painel">'
+      + '<span class="h8-painel-rot">decidir o que fazer com este negócio</span>'
+      + '<div class="h8-painel-linha">'
+      +   '<button type="button" class="h8-op" data-h8-avancar="' + id + '">avançar etapa ▸</button>'
+      +   '<button type="button" class="h8-op" data-h8-perder="' + id + '">marcar perdido ▸</button>'
+      +   '<button type="button" class="h8-op is-fraco" data-h8-ficha="' + id + '">abrir a ficha ▸</button>'
       + '</div></div>';
   } else if (pn && pn.fase === 'datar') {
     const chips = h8ChipsDeData();
@@ -14260,7 +14277,8 @@ function h8LigarFila(el, r, redesenhar) {
   card.addEventListener('click', async function (ev) {
     const alvo = ev.target.closest('[data-h8-filtro],[data-h8-desfecho],[data-h8-op],'
       + '[data-h8-datar],[data-h8-quando],[data-h8-criar],[data-h8-completo],'
-      + '[data-h8-desfazer],[data-h8-fechar]');
+      + '[data-h8-desfazer],[data-h8-fechar],'
+      + '[data-h8-decidir],[data-h8-avancar],[data-h8-perder],[data-h8-ficha]');
     if (!alvo || !card.contains(alvo)) return;
     ev.preventDefault();
     ev.stopPropagation();
@@ -14282,6 +14300,38 @@ function h8LigarFila(el, r, redesenhar) {
     if (d.h8Datar) {
       h8Painel = { id: d.h8Datar, fase: 'datar', como: d.h8Como || 'visita' };
       return redesenhar();
+    }
+    if (d.h8Decidir) {
+      h8Painel = { id: d.h8Decidir, fase: 'decidir' };
+      return redesenhar();
+    }
+
+    /* ══ AS DUAS DECISOES E A FICHA (14/09/26) ════════════════════════════════════
+       Chamam os MESMOS gestos do Meu funil, com as mesmas travas. `achar` devolve o
+       item da fila; sem ele a tela diz que nao achou em vez de abrir formulario vazio.
+       O painel fecha ANTES de abrir a gaveta — a licao de hoje de manha, quando a ficha
+       abria atras da lista da etapa e o clique parecia morto. */
+    if (d.h8Avancar || d.h8Perder || d.h8Ficha) {
+      const qual = d.h8Avancar || d.h8Perder || d.h8Ficha;
+      const it = achar(qual);
+      if (!it || !it.lead) {
+        if (typeof mostrarToast === 'function') mostrarToast('Não achei este negócio na carga desta sessão — recarregue.', 'atencao');
+        return;
+      }
+      h8Painel = null;
+      redesenhar();
+      const doFunil = (typeof buscarLeadFunilPorId === 'function')
+        ? (buscarLeadFunilPorId(it.lead.id) || it.lead) : it.lead;
+      if (d.h8Avancar && typeof abrirEscolhaDeEtapa === 'function') {
+        return abrirEscolhaDeEtapa(doFunil, redesenhar);
+      }
+      if (d.h8Perder && typeof fn3AbrirRegistro === 'function') {
+        return fn3AbrirRegistro(doFunil, FN2_ETAPA_PERDIDO, redesenhar);
+      }
+      if (typeof abrirFichaLeadFunilDrawer === 'function') {
+        return abrirFichaLeadFunilDrawer(doFunil, redesenhar, null);
+      }
+      return;
     }
     /* O DESFAZER É DA TELA, e o texto do botão diz isso. Ele não apaga a nota nem a
        tarefa: apagar registro por um clique seria destruir evidência que o gestor pode
