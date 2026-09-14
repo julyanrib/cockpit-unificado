@@ -321,6 +321,51 @@ checar('a coluna da semana é calculada num lugar só',
   && template.indexOf('return pl6ColunaDaData(agendaChave(agendaAgora()));') > -1,
   'dois calendários é como duas telas passam a discordar sobre qual dia é quinta');
 
+
+/* ══ A HOJE PASSA A DECIDIR, E NAO SO A TOCAR (14/09/26) ═══════════════════════════
+   Julyan: "aqui em hoje, as acoes tem que ser: mover de etapa? perdido? ... isso tem q
+   ser melhor".
+
+   A fila so tinha verbos de TOQUE — ligar, WhatsApp, datar, criar negocio. Medido na
+   tela da Kelly: 26 leads acima do SLA, 0 em fechamento, e o primeiro da fila com 21
+   dias em Prospeccao, SEM telefone no CRM e SEM nenhum toque registrado — para quem a
+   melhor acao oferecida era "agendar visita" pela enesima vez. Para um negocio assim as
+   opcoes honestas sao ir na porta ou enterrar com motivo, e a tela nao tinha nenhuma.
+
+   E E O MESMO MECANISMO DO PDI DELA: 174 negocios perdidos, nenhum com motivo — porque
+   o gesto que COBRA o motivo so existia no Meu funil, e a tela onde ela passa o dia nao
+   o alcancava.
+
+   OS GESTOS SAO OS MESMOS, com as mesmas travas: `abrirEscolhaDeEtapa` cobra as
+   propriedades da etapa e o proximo passo datado; `fn3AbrirRegistro(..., PERDIDO)` cobra
+   o motivo. Nenhum atalho novo — o que muda e o lugar de onde se alcanca. */
+checar('o cartao da Hoje oferece decidir, e nao so tocar',
+  template.indexOf('data-h8-decidir="') > -1
+    && template.indexOf('data-h8-avancar="') > -1
+    && template.indexOf('data-h8-perder="') > -1,
+  'sem decisão, o negócio de 21 dias sem telefone só recebe "agendar visita" de novo');
+
+checar('e as decisoes usam os mesmos gestos do Meu funil, com as mesmas travas',
+  template.indexOf('return abrirEscolhaDeEtapa(doFunil, redesenhar);') > -1
+    && template.indexOf('return fn3AbrirRegistro(doFunil, FN2_ETAPA_PERDIDO, redesenhar);') > -1,
+  'atalho próprio na Hoje seria um segundo caminho para mudar etapa — e um deles '
+    + 'esqueceria o motivo, que é exatamente o que já aconteceu 174 vezes');
+
+checar('e o decidir nunca rouba a estrela da melhor acao',
+  template.indexOf('data-h8-decidir="\' + id + \'">decidir ⌄') > -1
+    && !/ins\.melhor === 'decidir'/.test(template),
+  'a melhor ação sai de h8Insight, que mede o negócio; o decidir é porta, não recomendação');
+
+checar('e o painel da fila fecha antes de a gaveta abrir',
+  (function () {
+    const i = template.indexOf('if (d.h8Avancar || d.h8Perder || d.h8Ficha) {');
+    if (i < 0) return false;
+    const corpo = template.slice(i, i + 1400);
+    return corpo.indexOf('h8Painel = null;') > -1
+      && corpo.indexOf('h8Painel = null;') < corpo.indexOf('abrirEscolhaDeEtapa(');
+  }()),
+  'a lição de hoje de manhã: gaveta aberta atrás de painel faz o clique parecer morto');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));

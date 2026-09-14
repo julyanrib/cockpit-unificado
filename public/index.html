@@ -8646,7 +8646,9 @@ function h8LinhaHTML(item, i, ins) {
       + bt('visitar', 'agendar retorno ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
     : bt('ligar', 'ligar', 'data-h8-desfecho="' + id + '" data-h8-como="ligação"')
       + bt('whats', 'WhatsApp', 'data-h8-desfecho="' + id + '" data-h8-como="WhatsApp"')
-      + bt('visitar', 'agendar visita ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"');
+      + bt('visitar', 'agendar visita ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
+
+      + '<button type="button" class="h8-bt is-fraco" data-h8-decidir="' + id + '">decidir ⌄</button>';
 
   let painel = '';
   if (pn && pn.fase === 'desfecho') {
@@ -8660,6 +8662,15 @@ function h8LinhaHTML(item, i, ins) {
 
       +   '<button type="button" class="h8-op is-fraco" data-h8-completo="' + id + '">'
       +     'outro desfecho ▸</button>'
+      + '</div></div>';
+  } else if (pn && pn.fase === 'decidir') {
+
+    painel = '<div class="h8-painel">'
+      + '<span class="h8-painel-rot">decidir o que fazer com este negócio</span>'
+      + '<div class="h8-painel-linha">'
+      +   '<button type="button" class="h8-op" data-h8-avancar="' + id + '">avançar etapa ▸</button>'
+      +   '<button type="button" class="h8-op" data-h8-perder="' + id + '">marcar perdido ▸</button>'
+      +   '<button type="button" class="h8-op is-fraco" data-h8-ficha="' + id + '">abrir a ficha ▸</button>'
       + '</div></div>';
   } else if (pn && pn.fase === 'datar') {
     const chips = h8ChipsDeData();
@@ -8775,7 +8786,8 @@ function h8LigarFila(el, r, redesenhar) {
   card.addEventListener('click', async function (ev) {
     const alvo = ev.target.closest('[data-h8-filtro],[data-h8-desfecho],[data-h8-op],'
       + '[data-h8-datar],[data-h8-quando],[data-h8-criar],[data-h8-completo],'
-      + '[data-h8-desfazer],[data-h8-fechar]');
+      + '[data-h8-desfazer],[data-h8-fechar],'
+      + '[data-h8-decidir],[data-h8-avancar],[data-h8-perder],[data-h8-ficha]');
     if (!alvo || !card.contains(alvo)) return;
     ev.preventDefault();
     ev.stopPropagation();
@@ -8796,6 +8808,33 @@ function h8LigarFila(el, r, redesenhar) {
     if (d.h8Datar) {
       h8Painel = { id: d.h8Datar, fase: 'datar', como: d.h8Como || 'visita' };
       return redesenhar();
+    }
+    if (d.h8Decidir) {
+      h8Painel = { id: d.h8Decidir, fase: 'decidir' };
+      return redesenhar();
+    }
+
+    if (d.h8Avancar || d.h8Perder || d.h8Ficha) {
+      const qual = d.h8Avancar || d.h8Perder || d.h8Ficha;
+      const it = achar(qual);
+      if (!it || !it.lead) {
+        if (typeof mostrarToast === 'function') mostrarToast('Não achei este negócio na carga desta sessão — recarregue.', 'atencao');
+        return;
+      }
+      h8Painel = null;
+      redesenhar();
+      const doFunil = (typeof buscarLeadFunilPorId === 'function')
+        ? (buscarLeadFunilPorId(it.lead.id) || it.lead) : it.lead;
+      if (d.h8Avancar && typeof abrirEscolhaDeEtapa === 'function') {
+        return abrirEscolhaDeEtapa(doFunil, redesenhar);
+      }
+      if (d.h8Perder && typeof fn3AbrirRegistro === 'function') {
+        return fn3AbrirRegistro(doFunil, FN2_ETAPA_PERDIDO, redesenhar);
+      }
+      if (typeof abrirFichaLeadFunilDrawer === 'function') {
+        return abrirFichaLeadFunilDrawer(doFunil, redesenhar, null);
+      }
+      return;
     }
 
     if (d.h8Desfazer) {
