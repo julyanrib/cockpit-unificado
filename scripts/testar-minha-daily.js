@@ -522,6 +522,49 @@ conferir('o piso de 44px cita os atributos que a tela nova emite',
     + ' overflow:hidden — foi o H1 do Desenvolvimento, e achou o screenshot');
 }());
 
+
+/* ══ A MUNIÇÃO DEITA E ROLA (14/09/26) ═════════════════════════════════════════════
+   Julyan: "em seguida quero um scroll lateral ali so dos leads".
+
+   A munição traz até 60 contas. Empilhadas, as de baixo empurram para fora da tela o
+   rodapé de procedência e, no celular — onde esta tela mais é usada —, tudo que vem
+   depois. Deitada, ele passa o dedo e vê dez sem perder de vista o dia.
+
+   MEDIDO a 375px: fita de 282px com 3.018px de conteúdo, rolando por dentro, e
+   `documentElement.scrollWidth` IGUAL à janela — a fileira rola dentro dela mesma sem
+   empurrar a página para o lado. É esse o risco de deitar uma lista. */
+(function () {
+  conferir('a munição da Daily deita numa fita que rola',
+    /class="d7-mun-fita"[^']*display:flex;gap:6px;overflow-x:auto;/.test(codigo),
+    'lista de 60 contas empilhada empurra o resto da tela para baixo do dedo');
+
+  conferir('o cartão da munição tem largura própria e não encolhe',
+    /width:210px;flex:none;scroll-snap-align:start;/.test(codigo),
+    'com min-width:0 num flex-row o cartão colapsa no tamanho do texto e a fileira vira'
+    + ' uma tira ilegível; sem flex:none nenhum cartão tem largura própria');
+
+  conferir('o snap usa a palavra que o CSS entende',
+    codigo.indexOf('scroll-snap-type:x proximity;') > -1 && codigo.indexOf('proximate') < 0,
+    '"proximate" não existe: o navegador descarta a linha em silêncio e o dedo para no'
+    + ' meio de um cartão — medi isso com estilo computado, não com o olho');
+
+  /* SÓ OS LEADS: prospectar rua e visita de relacionamento não são leads, são dois botões
+     fixos. Deitá-los junto poria os dois na frente da lista que ele quer percorrer. */
+  conferir('os dois blocos continuam empilhados, e só os leads deitam',
+    (function () {
+      const i = codigo.indexOf("blocoHTML('data-d7-rua=\"1\"'");
+      if (i < 0) return false;
+      return /flex-direction:column;gap:6px;margin-bottom:10px;/.test(codigo.slice(Math.max(0, i - 400), i));
+    }()),
+    'os dois blocos deitados junto poriam botão fixo na frente da lista');
+
+  conferir('o rótulo diz que rola, e quantas são',
+    codigo.indexOf('arraste pra o lado ▸') > -1
+      && /\(d\.municao \|\| \[\]\)\.length > 1/.test(codigo),
+    'overflow-x sem nada visível é um gesto que ninguém descobre — a barra fina some no'
+    + ' celular, e a contagem é a única dica que sobra');
+}());
+
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('FALHAS (' + falhas.length + '):');
