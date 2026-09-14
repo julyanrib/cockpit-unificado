@@ -130,6 +130,12 @@ async function buscarBairro(chave, consulta, local) {
 
 async function buscarCidade(cfg, chave) {
   const { municipio, uf, bairros, objetivoMinimo, tetoMaximo } = cfg;
+  /* ══ RODADA QUE FALHA EM TUDO NAO PODE FICAR VERDE (14/09/26) ══════════════════
+     Aconteceu: 33 bairros, todos com 400 do Serper, 0 contas importadas, e a Action
+     marcada como SUCESSO. Verde escondendo no-op e pior que vermelho — vermelho
+     alguem ve. O backfill da Casa dos Dados ja tinha esta licao escrita no arquivo
+     dele; eu nao a apliquei aqui. */
+  let bairrosQueFalharam = 0;
   const porPlaceId = new Map();
   for (const bairro of bairros) {
     if (porPlaceId.size >= tetoMaximo) break;
@@ -143,6 +149,7 @@ async function buscarCidade(cfg, chave) {
       /* Um bairro que falha nao derruba a praca: o resto da cidade continua valendo, e o
          log diz qual caiu. Silenciar seria pior — a proxima rodada nao saberia. */
       console.error(`[places] ${municipio}/${bairro} falhou: ${e.message}`);
+      bairrosQueFalharam++;
       continue;
     }
     let aceitos = 0;
@@ -176,6 +183,7 @@ async function buscarCidade(cfg, chave) {
     console.warn(`[places] ${municipio}/${uf}: ${finais.length} conta(s), abaixo do objetivo de ${objetivoMinimo}.`
       + ' Isso costuma ser lista de bairros curta para a praça — não é erro de execução.');
   }
+  buscarCidade.ultimaFalha = { bairros: bairros.length, falharam: bairrosQueFalharam };
   return finais;
 }
 
@@ -281,6 +289,15 @@ async function principal() {
 
   console.log(`[places] total da rodada: ${todos.length} conta(s) em ${daRodada.length} praça(s).`);
   if (!todos.length) {
+    /* ZERO POR FALHA E ZERO POR AUSENCIA SAO COISAS OPOSTAS. Se a API recusou todas as
+       consultas, a rodada FALHOU e tem de ficar vermelha; se ela respondeu e nao havia
+       nada no corte, a rodada funcionou e o zero e informacao. */
+    const f = buscarCidade.ultimaFalha;
+    if (f && f.falharam > 0 && f.falharam === f.bairros) {
+      console.error('[places] NENHUMA consulta foi respondida — a rodada falhou, não é praça vazia.');
+      console.error('  Os ' + f.falharam + ' bairros da última praça devolveram erro. Veja as linhas acima.');
+      process.exit(1);
+    }
     console.warn('[places] nada para importar. Saindo sem chamar o importador.');
     return;
   }
