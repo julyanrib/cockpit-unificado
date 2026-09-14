@@ -523,46 +523,88 @@ conferir('o piso de 44px cita os atributos que a tela nova emite',
 }());
 
 
-/* ══ A MUNIÇÃO DEITA E ROLA (14/09/26) ═════════════════════════════════════════════
-   Julyan: "em seguida quero um scroll lateral ali so dos leads".
+/* ══ A MUNIÇÃO OCUPA A COLUNA E ROLA POR DENTRO (14/09/26) ═════════════════════════
+   HISTÓRIA CURTA, porque ela explica as duas regras: de manhã eu deitei esta lista a
+   pedido dele ("scroll lateral só dos leads"). O print dele à tarde mostrou o erro —
+   duas fichas na tira e a coluna inteira vazia embaixo. Medido: coluna de 1.111px,
+   tira de 125px. Ele mesmo desfez o pedido: "n faz sentido nenhum né?".
 
-   A munição traz até 60 contas. Empilhadas, as de baixo empurram para fora da tela o
-   rodapé de procedência e, no celular — onde esta tela mais é usada —, tudo que vem
-   depois. Deitada, ele passa o dedo e vê dez sem perder de vista o dia.
+   E NÃO É "VOLTAR ATRÁS": antes de deitar, a lista era vertical de altura LIVRE, e por
+   isso as 60 contas empurravam o rodapé e tudo depois dele para fora da tela. Agora ela
+   é vertical E LIMITADA À COLUNA — absorve a sobra e rola por dentro.
 
-   MEDIDO a 375px: fita de 282px com 3.018px de conteúdo, rolando por dentro, e
-   `documentElement.scrollWidth` IGUAL à janela — a fileira rola dentro dela mesma sem
-   empurrar a página para o lado. É esse o risco de deitar uma lista. */
+   MEDIDO a 1440x900: coluna 1.496px, lista 1.243px, as 14 fichas visíveis, zero vazio,
+   e a página sem vazamento. Com a coluna forçada a 420px, a lista encolheu para 166px,
+   `scrollHeight` continuou 1.243 e ela rolou por dentro SEM a coluna crescer. */
 (function () {
-  conferir('a munição da Daily deita numa fita que rola',
-    /class="d7-mun-fita"[^']*display:flex;gap:6px;overflow-x:auto;/.test(codigo),
-    'lista de 60 contas empilhada empurra o resto da tela para baixo do dedo');
+  conferir('a lista da munição absorve a sobra da coluna',
+    /class="d7-mun-fita"[^']*flex-direction:column;gap:6px;/.test(codigo)
+      && /overflow-y:auto;flex:1;min-height:0;/.test(codigo),
+    'altura livre faz as 60 contas empurrarem o rodapé para fora da tela; sem flex:1 a'
+    + ' lista não ocupa o vazio que ele apontou no print');
 
-  conferir('o cartão da munição tem largura própria e não encolhe',
-    /width:210px;flex:none;scroll-snap-align:start;/.test(codigo),
-    'com min-width:0 num flex-row o cartão colapsa no tamanho do texto e a fileira vira'
-    + ' uma tira ilegível; sem flex:none nenhum cartão tem largura própria');
+  /* `min-height:0` É A LINHA QUE FAZ O OVERFLOW EXISTIR. Sem ela o item flex não encolhe
+     abaixo do conteúdo, a lista cresce sem limite e volta a empurrar a página — o
+     defeito some do CSS e reaparece no layout, que é o pior lugar para procurar. */
+  conferir('o min-height:0 está lá, e é ele que faz o overflow valer',
+    /overflow-y:auto;flex:1;min-height:0;/.test(codigo),
+    'item flex sem min-height:0 não encolhe abaixo do conteúdo: o overflow nunca dispara'
+    + ' e a lista volta a empurrar o rodapé');
 
-  conferir('o snap usa a palavra que o CSS entende',
-    codigo.indexOf('scroll-snap-type:x proximity;') > -1 && codigo.indexOf('proximate') < 0,
-    '"proximate" não existe: o navegador descarta a linha em silêncio e o dedo para no'
-    + ' meio de um cartão — medi isso com estilo computado, não com o olho');
+  /* O MARKUP DESTA TELA E ESCRITO EM CONCATENACAO DE STRING, entao a declaracao da
+     coluna esta partida entre linhas com comentario no meio. Um [^']* nao atravessa
+     isso — minha primeira versao reprovou codigo correto. Leio o TRECHO. */
+  conferir('a coluna da munição é flex vertical, senão não há sobra para absorver',
+    (function () {
+      /* A MESMA string de estilo existe DUAS vezes: a coluna da municao do Planejamento
+         (Munição da semana) e a da Daily (Munição pra completar o dia). A minha guarda
+         pegou a primeira e reprovou a segunda, que estava certa. Ancoro no titulo, que e
+         o unico pedaco que distingue as duas telas. */
+      const t = codigo.indexOf('Munição pra completar o dia');
+      if (t < 0) return false;
+      const i = codigo.lastIndexOf('background:#FBFAF6;padding:18px 18px 20px;min-width:0;', t);
+      if (i < 0) return false;
+      const trecho = codigo.slice(i, i + 600);
+      return /display:flex;flex-direction:column;/.test(trecho);
+    }()),
+    'a altura da coluna vem do grid do board; sem flex aqui a lista não tem como saber'
+    + ' quanto sobrou');
 
-  /* SÓ OS LEADS: prospectar rua e visita de relacionamento não são leads, são dois botões
-     fixos. Deitá-los junto poria os dois na frente da lista que ele quer percorrer. */
-  conferir('os dois blocos continuam empilhados, e só os leads deitam',
+  /* LARGURA FIXA E LEGITIMA EM OUTRAS TELAS — tem um rotulo de grafico na linha 61113
+     com `width:210px;flex:none`, correto. A guarda tem de olhar O CARTAO DA MUNICAO, e
+     nao o arquivo: procurar no arquivo inteiro foi o que a fez reprovar o certo. */
+  conferir('o cartão da munição volta a ocupar a largura da coluna',
+    (function () {
+      const i = codigo.indexOf('data-d7-ficha="\' + esc(m.id)');
+      if (i < 0) return false;
+      const cartao = codigo.slice(i, i + 900);
+      return /min-width:0;flex:none;scroll-snap-align:start;/.test(cartao)
+        && !/width:\d+px;flex:none/.test(cartao);
+    }()),
+    'largura fixa era da versão deitada — em pé ela deixa um corredor vazio à direita'
+    + ' de cada ficha');
+
+  conferir('o snap acompanha o eixo da lista',
+    codigo.indexOf('scroll-snap-type:y proximity;') > -1
+      && codigo.indexOf('proximate') < 0,
+    'snap no eixo X numa lista vertical não faz nada — e "proximate" não existe: o'
+    + ' navegador descarta a linha em silêncio (ver guarda 33 do build)');
+
+  /* SÓ OS LEADS ROLAM: prospectar rua e visita de relacionamento não são leads, são dois
+     botões fixos. Eles ficam ACIMA da lista e não entram na área que rola. */
+  conferir('os dois blocos ficam fora da área que rola',
     (function () {
       const i = codigo.indexOf("blocoHTML('data-d7-rua=\"1\"'");
       if (i < 0) return false;
       return /flex-direction:column;gap:6px;margin-bottom:10px;/.test(codigo.slice(Math.max(0, i - 400), i));
     }()),
-    'os dois blocos deitados junto poriam botão fixo na frente da lista');
+    'botão fixo dentro da lista que rola sai de vista justo quando ele precisa dele');
 
-  conferir('o rótulo diz que rola, e quantas são',
-    codigo.indexOf('arraste pra o lado ▸') > -1
-      && /\(d\.municao \|\| \[\]\)\.length > 1/.test(codigo),
-    'overflow-x sem nada visível é um gesto que ninguém descobre — a barra fina some no'
-    + ' celular, e a contagem é a única dica que sobra');
+  conferir('o rótulo conta as contas sem ensinar gesto que não existe mais',
+    codigo.indexOf('contas</b> na lista') > -1
+      && codigo.indexOf('arraste pra o lado') < 0,
+    '"arraste pra o lado" era da versão deitada: texto que ensina um gesto morto é pior'
+    + ' que texto nenhum');
 }());
 
 /* ── RESULTADO ───────────────────────────────────────────────────────────────────── */
