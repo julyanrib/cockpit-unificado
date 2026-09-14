@@ -280,6 +280,52 @@ checar('e a limpeza só grava quando achou',
   }()),
   'reescrever a semana que não tinha o negócio é escrita à toa em cima do plano dele');
 
+/* ══ 12. O CARTAO DO FUNIL SABE DO PASSO NA HORA (14/09/26) ═══════════════════════
+   Julyan: "rincon que estava no planejamento, aparece na aba meu funil sem proximo
+   passo, sendo q ja tem a visita marcada na aba planejamento, todo o sistema tem que
+   se conversar, ser coerente".
+
+   MEDIDO nos tres lugares, e os tres concordavam entre si:
+     grade     : c-64890302080, quarta 16/09 as 10:30
+     HubSpot   : tarefa COCKPIT:PLANO:...:2026-09-16:10:30:...:64890302080, criada 14:49
+     snapshot  : atualizado as 13:13 — 1h36 ANTES de a tarefa existir
+   Ninguem estava errado: o cartao do funil le uma FOTO, e a foto era velha. E ele e
+   justamente a tela que ACUSA a ausencia ("visita feita, sem proximo passo") e oferece
+   o gesto de novo. A que mais precisa saber era a que menos sabia.
+
+   E a mesma forma dos casos do topo deste arquivo: a escrita acontece e a tela nao
+   sabe. Por isso a guarda mora aqui. */
+checar('marcar visita poe a tarefa no cartao do funil, sem esperar o robo',
+  /function espelharPassoNoFunilLocal\(dealId, dataISO, hora, rotulo\)/.test(codigo)
+    && /try \{ espelharPassoNoFunilLocal\(lead\.id, dataISO, hora, rot\); \}/.test(codigo),
+  'o cartão continuava dizendo "sem próximo passo" para um negócio com visita marcada '
+    + 'para quarta — e oferecendo o gesto que a pessoa acabou de fazer');
+
+/* O LUGAR IMPORTA: `registrarAgendamentoLocal` e o unico funil por onde passam os SETE
+   gestos de agendamento — inclusive o arraste do Planejamento, que e o gesto do Rincon.
+   `espelharPassoNasTelas` cobriria so os cinco do proximo passo. */
+checar('e o espelho entra no funil comum dos sete gestos, nao no dos cinco',
+  (function () {
+    const i = codigo.indexOf('function registrarAgendamentoLocal(');
+    if (i < 0) return false;
+    const corpo = codigo.slice(i, codigo.indexOf('\n}', i));
+    return corpo.indexOf('espelharPassoNoFunilLocal(') > -1
+      && corpo.indexOf('espelharPassoNoFunilLocal(') < corpo.indexOf('if (jaTem) return;');
+  }()),
+  'depois do return de duplicata, o segundo clique ficaria de fora');
+
+/* NAO MEXE EM `proximaAtividade`: o campo e do servidor e `proximoPassoDoLead` ja soma
+   a lista `tarefas` a ele. Escrever menos e o que garante que o espelho nao discorde do
+   dado real quando a carga chegar. */
+checar('e o espelho so acrescenta a tarefa, sem reescrever campo do servidor',
+  (function () {
+    const i = codigo.indexOf('function espelharPassoNoFunilLocal(');
+    if (i < 0) return false;
+    const corpo = codigo.slice(i, codigo.indexOf('\n}\nfunction', i));
+    return corpo.indexOf('l.tarefas.push(') > -1 && corpo.indexOf('proximaAtividade') < 0;
+  }()),
+  'sobrescrever proximaAtividade faria o espelho brigar com a carga do robô');
+
 console.log('');
 if (falhas) {
   console.error(falhas + ' falha(s) — alguma escrita voltou a esperar o robô.');
