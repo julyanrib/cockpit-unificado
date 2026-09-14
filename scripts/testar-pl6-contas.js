@@ -1175,6 +1175,42 @@ console.log('');
     'abrir uma ficha vazia para conta sem negócio seria pior que o painel');
 }());
 
+
+/* ══ O PAINEL DA MUNIÇÃO CONHECE A TELA (14/09/26) ═════════════════════════════════
+   Julyan pediu "o mesmo tratamento" que a Daily recebeu. Eu NÃO apliquei, e a medição
+   é a razão: o truque da Daily foi a lista absorver a altura da coluna irmã, e aqui a
+   irmã tem 328px NATURAIS (cinco dias em grade + a faixa de bairros) contra 2.313px de
+   munição. Absorver daria um painel de 38px — medido na tela real, com a carteira do
+   Marco. Aplicar o pedido ao pé da letra destruiria a tela.
+
+   O QUE O 1200px CRAVADO TEM DE ERRADO é outra coisa: ele não sabe o tamanho da tela.
+   Num 1440x900, que é notebook comum, deixava 687px do painel ABAIXO DA DOBRA, com a
+   barra de rolagem interna disputando com a da página. Com min(), 267px.
+
+   `min()` nunca fica pior que o número cravado: em monitor alto escolhe os 1200px, em
+   tela baixa escolhe o que cabe. */
+(function () {
+  const semComentario = String(tpl).replace(/\/\*[\s\S]*?\*\//g, ' ');
+  const i = semComentario.indexOf('data-pl6-municao="1"');
+  const painel = i < 0 ? '' : semComentario.slice(i, i + 420);
+
+  checar('o painel da munição é limitado pela TELA, não por um número cravado',
+    /max-height:min\(1200px, calc\(100vh - 120px\)\)/.test(painel),
+    'max-height cravado não sabe o tamanho da tela: num 1440x900 deixava 687px do painel '
+      + 'abaixo da dobra, e a barra interna disputava com a da página');
+
+  /* A ROLAGEM CONTINUA NO PRÓPRIO ELEMENTO, e isso não é detalhe: `[data-pl6-municao]`
+     é a âncora de redesenharPreservandoRolagem — é dele que o código lê o scrollTop para
+     a tela não pular 44px no redesenho — e é ele que a folha estiliza com a barra fina.
+     Mover a rolagem para uma div interna, como foi feito na Daily, quebraria as duas
+     coisas em silêncio. */
+  checar('e a rolagem continua no elemento que serve de âncora',
+    /data-pl6-municao="1"[^>]*overflow:auto;/.test(painel)
+      && semComentario.indexOf("'[data-pl6-municao]'") > -1,
+    'mover a rolagem para dentro tira o scrollTop da âncora: o salto de 44px no redesenho '
+      + 'volta e a barra fina estilizada desaparece — as duas em silêncio');
+}());
+
 if (falhas) {
   console.error(falhas + ' falha(s) — a cadeia de contas do Planejamento está errada.');
   process.exit(1);
