@@ -452,8 +452,66 @@ checar('e nenhum literal antigo sobrou decidindo por conta propria',
   && template.indexOf('const exigePasso = para !== ETAPA_PERDIDO_ID;') < 0);
 checar('a seção do próximo passo só é renderizada quando exigePasso',
   /\$\{!exigePasso \? '' :/.test(template));
-checar('a validação do próximo passo respeita exigePasso',
-  /if \(exigePasso && \(!passoAcao \|\| !passoData\)\) \{/.test(template));
+/* ══ O PASSO DEIXOU DE SER PORTEIRA (14/09/26, Julyan) ═════════════════════════════
+   "ele nao precisa ser obrigatório pra passar de etapa, ele pode fazer sem proximo
+   passo, vai q ele vende na hora."
+
+   A regra antiga ("sem passo nao passa") nasceu de um problema real e continua sendo o
+   caminho recomendado — o campo continua na tela e continua sugerido. O que a tela nao
+   faz mais e TRAVAR: quem fechou na hora nao fica preso pedindo tarefa para um negocio
+   que acabou de virar cliente.
+
+   O QUE NAO AFROUXOU, e e isto que esta guarda mede agora: METADE preenchida continua
+   travando. Acao sem data vira tarefa vencendo HOJE — foi o que pos 196 tarefas
+   excedentes nesta base e inflou a aba Hoje em 2,4x. Os DOIS, ou NENHUM. */
+/* ══ A RAIZ DO "(null)" QUE O MARCO VIU (14/09/26) ═════════════════════════════════
+   Ele mandou a "Adega 12" para Pagamento e a tela devolveu, em vermelho: "o próximo
+   passo NÃO foi criado (null)". Não havia erro nenhum — não havia sequer tentativa.
+
+   `gravarPassagemDeEtapa` tinha DUAS respostas para a mesma pergunta:
+     const exigePasso = !!(opts.passoAcao && opts.passoData);   → vai criar tarefa?
+     saida.passoOk = !opts.exigePasso;                          → a flag do CHAMADOR
+
+   Elas discordam no caso mais comum de todos: negócio que JÁ TEM passo aberto, onde a
+   tela manda os campos vazios de propósito para não empilhar tarefa. O bloco de criação
+   é pulado (certo), `passoOk` nasce false (errado) e `erroPasso` nunca é preenchido —
+   daí o literal "(null)". E o ramo de toast escrito para exatamente esse caso ("o
+   próximo passo que já existia continua valendo") era INALCANÇÁVEL.
+
+   A guarda mede a identidade das duas: uma pergunta, uma resposta. */
+checar('passoOk nasce da MESMA condição que decide criar a tarefa',
+  /const saida = \{ ok: false, erro: null, passoOk: !exigePasso, erroPasso: null, notaOk: true \};/
+    .test(template)
+    && !/passoOk: !opts\.exigePasso/.test(template),
+  'duas verdades sobre a mesma pergunta: o negócio com passo aberto passava bem e a tela '
+    + 'dizia em vermelho que falhou, citando um erro que não existia');
+
+/* ══ O ESPELHO NUNCA DERRUBA A PASSAGEM (14/09/26, Julyan) ═════════════════════════
+   "o proximo passo tem q ir pro planejamento/daily nunca travar mudança de etapa."
+
+   Quando o espelho roda, a tarefa JÁ está no HubSpot. Se ele falhar — Supabase fora,
+   semana cheia, negócio fora da munição — isso não pode virar "o próximo passo NÃO foi
+   criado": ele foi. Antes, um estouro ali caía no catch de baixo e preenchia `erroPasso`
+   com um erro que não era da tarefa. E desde que ele passou a devolver promessa, uma
+   recusa sem `.catch` virava rejeição não tratada e sumia no console. */
+checar('o espelho do passo é isolado do resultado da passagem',
+  (function () {
+    const i = template.indexOf('if (rp.ok && dp.ok) {');
+    if (i < 0) return false;
+    const ramo = template.slice(i, i + 1400);
+    return ramo.indexOf('espelharPassoNasTelas(') > -1
+      && ramo.indexOf('try {') > -1
+      && /espelho\.catch\(/.test(ramo);
+  }()),
+  'a tarefa já está gravada quando o espelho roda: falha dele virando erro da tarefa faz '
+    + 'a tela acusar um problema que não existe — e foi assim que nasceu o (null)');
+
+checar('metade do próximo passo trava; os dois vazios passam',
+  /const metade = \(!!passoAcao\) !== \(!!passoData\);/.test(template)
+    && /const metadeDoPasso = exigePasso && \(\(!!passoAcao\) !== \(!!passoData\)\);/.test(template)
+    && !/Falta o próximo passo: ação e data/.test(template),
+  'ação sem data vira tarefa vencendo hoje — e a trava antiga, se sobrar em uma das duas '
+    + 'telas, faz o executivo aprender que depende da porta que ele usou');
 checar('a criação da tarefa respeita exigePasso (dentro da função compartilhada)',
   template.indexOf("const exigePasso = !!(opts.passoAcao && opts.passoData);") > 0 &&
   template.indexOf("tipoAcao: 'proximo-passo'") > 0);
@@ -957,7 +1015,11 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
 
   /* O TOAST SEM PASSO: sem este ramo, o de baixo formata uma data que não existe. */
   const iCard = template.indexOf('function fn3AbrirRegistro(');
-  const corpo = iCard > 0 ? template.slice(iCard, iCard + 14000) : '';
+  /* 20000 e nao 14000 desde 14/09/26: os ramos novos de toast ("passou sem próximo
+     passo") empurraram a linha da data para fora da janela, e a guarda reprovou uma
+     correcao correta. Janela cravada em tamanho e a mesma armadilha de testar-d7-acao:
+     o que ela mede continua valendo, o numero e que nao pode ser apertado. */
+  const corpo = iCard > 0 ? template.slice(iCard, iCard + 20000) : '';
   checar('o registro do card existe para ser medido', iCard > 0 && corpo.length > 3000);
   checar('o card tem ramo de toast para etapa sem próximo passo',
     corpo.indexOf('} else if (!exigePasso) {') > -1,
@@ -1104,9 +1166,14 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     'a exigência de preencher é o que faz a tarefa nascer — sem esta condição a trava'
     + ' não vale nada');
 
-  checar('e quem pediu um passo a mais é cobrado',
-    painel.indexOf('Você pediu um passo a mais') > -1,
-    'abrir a caixa e confirmar vazio criaria passagem sem o passo que ele mesmo pediu');
+  /* ANTES: abrir a caixa e confirmar VAZIO era cobrado. Desde 14/09 o vazio passa de
+     propósito em qualquer caso — inclusive com a caixa aberta, porque insistir ali seria
+     a mesma porteira entrando por outra porta. O que continua cobrado é a METADE, e por
+     um motivo que não mudou: ação sem data vira tarefa vencendo hoje. */
+  checar('quem abre a caixa e preenche metade é cobrado',
+    painel.indexOf('Escreva a data do próximo passo') > -1
+      && painel.indexOf('ou deixe os dois em branco para passar sem ele') > -1,
+    'a caixa aberta com só a ação escrita criaria tarefa sem data — vencendo hoje');
 
   /* ── 4 · O TOAST NÃO INVENTA DATA ────────────────────────────────────────────────
      Sem tarefa nova, `passoData` é '' e o ramo antigo diria "próximo passo em Invalid
