@@ -199,6 +199,43 @@ async function principal() {
      Entao existe este modo: UMA busca, e imprime o registro CRU ao lado do TRADUZIDO,
      mais o veredito de categoria de cada resultado. Rodar isto antes da primeira carga
      e o que separa "integrei" de "achei que integrei". Nada e importado aqui. */
+  /* ══ COMPARA OS DOIS ENDPOINTS (14/09/26) ════════════════════════════════════════
+     A amostra mostrou telefone null e contagem de avaliacoes de um digito na area mais
+     densa de Vitoria. Antes de mexer no piso ou na lista de categorias eu preciso saber
+     se o problema e o endpoint. Uma consulta em cada, lado a lado. */
+  if (process.argv.includes('--comparar')) {
+    const consulta = process.env.AMOSTRA_CONSULTA || 'restaurantes em Praia do Canto, Vitória ES';
+    const local = process.env.AMOSTRA_LOCAL || 'Vitória, ES, Brazil';
+    for (const caminho of ['places', 'maps']) {
+      console.log('');
+      console.log('══════ /' + caminho + ' ══════ consulta: ' + consulta);
+      try {
+        const resp = await fetch('https://google.serper.dev/' + caminho, {
+          method: 'POST',
+          headers: { 'X-API-KEY': chave, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ q: consulta, gl: 'br', hl: 'pt-br', location: local })
+        });
+        console.log('  HTTP ' + resp.status);
+        const d = await resp.json();
+        console.log('  chaves de topo: ' + Object.keys(d).join(', '));
+        const lista = d.places || d.local_results || d.results || [];
+        console.log('  itens: ' + lista.length);
+        if (lista.length) {
+          console.log('  PRIMEIRO ITEM CRU:');
+          console.log(JSON.stringify(lista[0], null, 2).split('\n').map(function (l) { return '    ' + l; }).join('\n'));
+          console.log('  RESUMO DOS ' + lista.length + ':');
+          lista.forEach(function (x) {
+            console.log('    ' + String(x.title || x.name || '?').slice(0, 30).padEnd(30)
+              + ' cat=' + String(x.category || x.type || '-').slice(0, 18).padEnd(18)
+              + ' aval=' + String(x.ratingCount != null ? x.ratingCount : (x.reviews != null ? x.reviews : '-')).padEnd(7)
+              + ' tel=' + String(x.phoneNumber || x.phone || '-'));
+          });
+        }
+      } catch (e) { console.error('  falhou: ' + (e && e.message)); }
+    }
+    return;
+  }
+
   if (process.argv.includes('--amostra')) {
     const { buscarPagina, normalizarLugar, categoriaDeRestaurante } = require('../lib/serper-places.js');
     const consulta = process.env.AMOSTRA_CONSULTA || 'restaurantes em Praia do Canto, Vitória ES';
