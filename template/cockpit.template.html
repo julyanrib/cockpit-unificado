@@ -65,6 +65,9 @@
     /* Tinta escura pro âmbar quando o fundo é --amber-soft: o par --amber/--amber-soft
        dá 3.37:1 em texto pequeno, abaixo do mínimo AA. */
     --amber-ink:#8A6516;
+    /* E a tinta escura do verde, pelo mesmo motivo: --green sobre --green-soft da
+       3.04:1, medido no selo de "ja na sua agenda". Este da 4.83:1. */
+    --green-ink:#15795D;
     /* O painel escuro deixa de ser igual à tinta (#1A1613): separando os dois, o hero
        escuro para de "colar" no texto preto de quem está ao lado dele. */
     --dark:#2B3440; --dark-ink:#FDFEFF; --dark-mut:#8E99AC; --dark-fill:rgba(253,254,255,.08);
@@ -3046,6 +3049,14 @@
   .h8-encerra-pe{font-size:9.5px;color:var(--muted2);line-height:1.45;}
   @media (prefers-reduced-motion:reduce){ .h8-encerra-cta{animation:none!important;} }
   @media (max-width:760px){ .h8-cad-cta,.h8-encerra-cta{min-height:44px;} }
+  /* ══ O SELO DE JA AGENDADO ══════════════════════════════════════════════════════
+     Verde e discreto porque e boa noticia, nao alerta: este negocio ja tem dia. A
+     linha inteira perde a tarja de SLA junto — ver h8LinhaHTML. */
+  .h8-selo-agendado{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+    border:1px solid var(--green);border-radius:var(--r-pill);background:var(--green-soft);
+    color:var(--green-ink);font:800 9.5px 'Manrope',sans-serif;white-space:nowrap;}
+  .h8-linha.is-agendado{opacity:.72;}
+  .h8-linha.is-agendado:hover{opacity:1;}
 
   /* FEITAS HOJE. Verde é o único lugar da tela onde ele aparece: é a cor da prova. */
   .h8-feitas{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:11px;
@@ -3328,7 +3339,6 @@
     .sign-row{flex-direction:column;align-items:flex-start;gap:10px;}
     .sign-row input{width:100%;}
   }
-  @media (max-width:640px){ .hoje-hero-stats{grid-template-columns:1fr!important;gap:16px!important;text-align:left!important;} .hoje-hero-stats > div{align-items:flex-start!important;text-align:left!important;} }
   @media (max-width:420px){
     .kpi-strip, .kpi-strip.exp{grid-template-columns:1fr 1fr;}
     .kpi .v{font-size:20px;}
@@ -14093,6 +14103,17 @@ function h8LinhaHTML(item, i, ins) {
       + (eMelhor ? ' <i>— melhor ação</i>' : '') + '</button>';
   };
 
+  /* ══ O SELO DE JA AGENDADO (14/09/26) ════════════════════════════════════════════
+     Verde e discreto: e uma boa noticia, nao um alerta. Diz o DIA e a hora quando ela
+     existe — "sem hora" e um estado legitimo e a tela nao inventa relogio. */
+  const selo = item.agendado
+    ? '<span class="h8-selo-agendado">✓ já na sua agenda · '
+      + esc(String(item.agendado.rot || item.agendado.iso))
+      + (item.agendado.data ? ' ' + esc(String(item.agendado.data)) : '')
+      + (item.agendado.hora ? ' às ' + esc(String(item.agendado.hora)) : '')
+      + '</span>'
+    : '';
+
   const botoes = ins.melhor === 'criar'
     ? bt('criar', 'criar negócio + gravar visita ▸', 'data-h8-criar="' + id + '"')
       + bt('visitar', 'agendar retorno ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
@@ -14151,8 +14172,11 @@ function h8LinhaHTML(item, i, ins) {
       + '</div>';
   }
 
-  return '<div class="h8-linha' + (ins.cat === 'sla' ? ' is-sla' : '')
-    + (ins.cat === 'quente' ? ' is-quente' : '') + '" data-h8-linha="' + id + '">'
+  /* A LINHA JA AGENDADA PERDE A COR DE ALERTA. Ela desceu no ranking e diz quando vai
+     acontecer; manter a tarja vermelha de SLA nela seria a tela cobrando o que ele ja
+     resolveu — que e a queixa que originou este conserto. */
+  return '<div class="h8-linha' + (item.agendado ? ' is-agendado' : (ins.cat === 'sla' ? ' is-sla' : ''))
+    + (!item.agendado && ins.cat === 'quente' ? ' is-quente' : '') + '" data-h8-linha="' + id + '">'
     + '<span class="h8-rank' + (ins.cat === 'sla' ? ' is-sla' : '')
     +   (ins.cat === 'quente' ? ' is-quente' : '') + '">' + (i + 1) + '</span>'
     + '<div class="h8-corpo">'
@@ -14162,6 +14186,7 @@ function h8LinhaHTML(item, i, ins) {
     +       esc(etapa) + (dias != null ? ' · há ' + dias + 'd' : '') + '</span>'
     +     '<span class="h8-venc' + (ins.cat === 'sla' ? ' is-sla' : '') + '">'
     +       esc(ins.venc) + '</span>'
+    +     selo
     +   '</div>'
     +   '<div class="h8-motivo">' + esc(ins.motivo) + '</div>'
     +   '<div class="h8-ultimo">' + esc(ins.ultimo) + (tel ? '' : ' · sem telefone no CRM') + '</div>'
@@ -14179,6 +14204,43 @@ function h8LinhaHTML(item, i, ins) {
    OS EXTRAS SÃO AS VISITAS DE HOJE, e vêm na frente porque a razão do código antigo
    continua valendo: "sem desfecho, o resto da cadeia não tem de onde partir". A visita
    aconteceu hoje; é o dado mais fresco e o único que se perde se não for registrado no dia. */
+/* ══ O QUE JA ESTA NA AGENDA DELE, POR NEGOCIO (14/09/26) ══════════════════════════
+   Le a MESMA grade do Planejamento, pela mesma funcao (`pl6GradeDoPlano`), para nao
+   haver duas leituras do mesmo dia discordando. Devolve `null` — e nao um mapa vazio —
+   quando o plano nao esta carregado: quem chama distingue "nao planejou" de "nao
+   consegui ler", e so o primeiro justifica mexer no ranking. */
+function h8AgendadoNaSemana() {
+  if (typeof pl6Plano === 'undefined' || !pl6Plano) return null;
+  if (typeof pl6GradeDoPlano !== 'function' || typeof pl6Dias !== 'function') return null;
+  let dias, grade;
+  try {
+    dias = pl6Dias(typeof pl6SegundaDaSemana === 'function' ? pl6SegundaDaSemana() : null);
+    grade = pl6GradeDoPlano();
+  } catch (e) { return null; }
+  if (!Array.isArray(grade) || !Array.isArray(dias)) return null;
+  const hoje = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
+    ? agendaChave(agendaAgora())
+    : (typeof isoDate === 'function' ? isoDate(new Date()) : '');
+  const mapa = {};
+  grade.forEach(function (col, di) {
+    const dia = dias[di];
+    if (!dia || !dia.iso) return;
+    /* SO O FUTURO: hoje e trabalho de hoje, e dia passado e promessa quebrada — as duas
+       continuam competindo pela atencao dele. */
+    if (String(dia.iso) <= String(hoje)) return;
+    (Array.isArray(col) ? col : []).forEach(function (v, si) {
+      const id = (typeof pl6SlotId === 'function') ? pl6SlotId(v) : null;
+      if (!id || String(id).indexOf('c-') !== 0) return;
+      const hora = (typeof pl6SlotHora === 'function') ? pl6SlotHora(v, si) : '';
+      const dealId = String(id).slice(2);
+      if (!mapa[dealId] || String(dia.iso) < String(mapa[dealId].iso)) {
+        mapa[dealId] = { iso: dia.iso, rot: dia.rot || dia.data || dia.iso, data: dia.data || null, hora: hora };
+      }
+    });
+  });
+  return mapa;
+}
+
 function h8Fila(r, diag) {
   const d = diag || gatesDoDia(r);
   const base = (d.fila && d.fila.ordenada) ? d.fila.ordenada.slice() : [];
@@ -14246,7 +14308,29 @@ function h8Fila(r, diag) {
     });
   });
 
-  return extras.concat(base);
+  const lista = extras.concat(base);
+
+  /* ══ QUEM JA ESTA NA AGENDA DELE DESCE, E DIZ QUANDO (14/09/26) ═══════════════════
+     Decisao do Julyan: "descer no ranking com o selo". Sumir da fila faria o executivo
+     achar que perdeu o negocio — foi exatamente esse tipo de sumico que produziu o
+     "nao esta caindo pra mim" de hoje de manha.
+
+     `null` do mapa significa PLANO NAO LIDO, e ai nada muda: a fila fica como sempre
+     foi. Tratar isso como "nao planejou" derrubaria no fim da fila exatamente quem
+     planejou a semana inteira. */
+  const agenda = h8AgendadoNaSemana();
+  if (!agenda) return lista;
+
+  const agora = [], depois = [];
+  lista.forEach(function (item) {
+    const id = item && item.lead ? String(item.lead.id) : null;
+    const quando = id ? agenda[id] : null;
+    if (!quando) { agora.push(item); return; }
+    item.agendado = quando;
+    depois.push(item);
+  });
+  /* a ordem DENTRO de cada metade e a do ranking de risco, intacta */
+  return agora.concat(depois);
 }
 
 /* ══ O CARTÃO INTEIRO: filtros, fila e as feitas de hoje ══════════════════════════════ */
@@ -14870,6 +14954,18 @@ async function renderMeuPainel() {
     el.innerHTML = `<div class="empty-state">Não encontrei seu cadastro no cockpit. Fale com seu gestor.</div>`;
     return;
   }
+  /* ══ A GRADE DA SEMANA, PARA A FILA PODER RESPEITA-LA (14/09/26) ═════════════════
+     A fila desce quem ja tem dia marcado, e para isso precisa da grade. `d7PreCargaFeita`
+     e a MESMA bandeira da Minha Daily: quem abrir qualquer uma das duas primeiro paga a
+     leitura, e a outra chega pronta. Falha aqui nao derruba a Hoje — sem grade,
+     `h8AgendadoNaSemana` devolve null e a fila fica como sempre foi, com o motivo no
+     console em vez de silencio. */
+  if (!d7PreCargaFeita && sessaoAtual && sessaoAtual.role === 'rep' && typeof pl6Carregar === 'function') {
+    d7PreCargaFeita = true;
+    try { await pl6Carregar(r, pl6SegundaDaSemana()); }
+    catch (e) { console.error('[Hoje] plano da semana não carregou — a fila não vai saber o que já está agendado:', e && e.message); }
+  }
+
   // "!carregado", não "cache vazio" — ver a nota em carregarDailies/carregarPdiCompromissos.
   if (DATA.supabase && supa && !dailiesCarregado) await carregarDailies();
   if (DATA.supabase && supa && !pdiCarregado) await carregarPdiCompromissos();
