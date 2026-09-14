@@ -193,6 +193,41 @@ checar('o briefing de quatro abas decorativas não voltou',
     template.indexOf('async function hidratarSessao(email) {') > -1,
     'porteira e trabalho no mesmo corpo é o que fez a trava antiga ser lida antes e'
     + ' marcada depois do await');
+
+  /* ══ ESPERA SEM PRAZO NAO E ERRO: E UMA TELA PARADA (14/09/26) ══════════════════
+     Julyan: "meu sistema nao entra mais... ta travando". A foto: a tela parada em
+     "Entrando... carregando seus dados", sem mensagem e sem botao.
+
+     A autenticacao estava FUNCIONANDO — o last_sign_in_at dele era de 1min27s antes,
+     o mais recente do time. O que parava era a carga: `getSession()` e o
+     `fetch(/api/dados)` eram as UNICAS chamadas de rede deste arquivo sem deadline, e
+     /api/dados baixa ~1,2 MB de snapshot e monta o DATA inteiro. Tres pessoas tentaram
+     entrar de novo em 80 segundos achando que tinham errado a senha.
+
+     O prazo e LOCAL de proposito: `comPrazoGlobal` mora ~42 mil linhas abaixo e a carga
+     inicial pode chamar `hidratarSessao` antes daquele bloco de script existir —
+     trocar um travamento por um ReferenceError no login seria piorar. */
+  /* O CORPO CERTO: `corpo` acima e o de `aplicarSessao` (a porteira). Isto mora em
+     `hidratarSessao` (o trabalho), e medir no corpo errado da verde sobre nada. */
+  const iHid = template.indexOf('async function hidratarSessao(email) {');
+  const corpoHid = iHid < 0 ? '' : semCom(template.slice(iHid, template.indexOf('\n}', iHid)));
+  checar('as duas esperas do login têm prazo',
+    /const \{ data \} = await prazoDoLogin\(supa\.auth\.getSession\(\), PRAZO_DA_CARGA/.test(corpoHid) &&
+    /const resp = await prazoDoLogin\(\s*\n?\s*fetch\('\/api\/dados'/.test(corpoHid),
+    'sem prazo, lentidão do servidor vira tela parada para sempre — sem mensagem, sem '
+    + 'botão, e a pessoa passa a duvidar da própria senha');
+
+  checar('e o prazo é local, não a função do fim do arquivo',
+    template.indexOf('function prazoDoLogin(promessa, ms, rotulo) {') > -1 &&
+    template.indexOf('function prazoDoLogin') < template.indexOf('async function hidratarSessao'),
+    'comPrazoGlobal é declarada depois, e a carga inicial pode rodar antes do bloco dela '
+    + 'existir: seria um ReferenceError no login, que é pior que o travamento');
+
+  checar('e o estouro de prazo diz que a senha está certa',
+    /const estourou = e && e\.name === 'PrazoDoLogin';/.test(corpoHid) &&
+    template.indexOf('Sua senha está certa — quem demorou foi o servidor') > -1,
+    'uma falha de servidor escrita como "falha ao carregar" faz a pessoa trocar a senha '
+    + 'de quem não errou nada');
 }());
 
 if (falhas) {

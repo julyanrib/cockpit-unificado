@@ -10400,6 +10400,23 @@ async function aplicarSessao(email) {
   finally { if (hidratando && hidratando.promessa === promessaH) hidratando = null; }
 }
 
+/* ══ ESPERA COM PRAZO, PORQUE ESPERA SEM PRAZO NAO E ERRO: E UMA TELA PARADA ══════
+   (14/09/26) Deliberadamente LOCAL e minusculo. A irma global `comPrazoGlobal` mora no
+   fim do arquivo e a carga inicial pode chamar `hidratarSessao` antes daquele bloco de
+   script existir — trocar travamento por ReferenceError no login seria piorar.
+   Nao aborta o pedido: so garante que a espera TERMINA. O abort de um fetch ja em voo
+   nao devolve o tempo, e o que falta aqui e o fim, nao a economia. */
+function prazoDoLogin(promessa, ms, rotulo) {
+  return Promise.race([
+    promessa,
+    new Promise(function (_, rej) {
+      setTimeout(function () {
+        rej(Object.assign(new Error('demorou demais: ' + rotulo), { name: 'PrazoDoLogin' }));
+      }, ms);
+    })
+  ]);
+}
+
 async function hidratarSessao(email) {
 
   if (DATA.shellProtegido) {
@@ -10410,11 +10427,20 @@ async function hidratarSessao(email) {
     const st = document.getElementById('loginStatus');
     if (st) st.textContent = 'Entrando... carregando seus dados.';
     let corpo = null;
+    /* 45s e generoso de proposito: e muito mais do que a rota jamais levou, entao o
+       prazo so dispara quando algo esta REALMENTE errado. O objetivo nao e cortar
+       rapido — e garantir que existe um fim, e que o fim tem palavra.
+       getSession() tambem entra: ele renova o token contra o servidor de auth e pode
+       pendurar antes mesmo do fetch. O rotulo diz QUAL das duas parou, senao a proxima
+       pessoa a investigar isto comeca de onde eu comecei hoje. */
+    const PRAZO_DA_CARGA = 45000;
     try {
-      const { data } = await supa.auth.getSession();
+      const { data } = await prazoDoLogin(supa.auth.getSession(), PRAZO_DA_CARGA, 'a sessão');
       const token = data && data.session ? data.session.access_token : null;
       if (!token) { mostrarLogin('Sessão não encontrada. Tente entrar de novo.'); return; }
-      const resp = await fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } });
+      const resp = await prazoDoLogin(
+        fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } }),
+        PRAZO_DA_CARGA, 'a carga dos seus dados');
       corpo = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         /* ══ SAIR AQUI É SAIR DESTE APARELHO (11/09/26) ══════════════════════════════
@@ -10440,7 +10466,15 @@ async function hidratarSessao(email) {
         return;
       }
     } catch (e) {
-      mostrarLogin('Falha ao carregar os dados (' + String(e && e.message || e) + '). Verifique a conexão e tente entrar de novo.');
+      /* O ESTOURO DE PRAZO TEM TEXTO PROPRIO. "Falha ao carregar os dados (demorou
+         demais)" e verdade mas nao ajuda: quem le precisa saber que a SENHA ESTA CERTA,
+         que o problema e do servidor e que tentar de novo costuma resolver — senao ele
+         passa a duvidar da propria credencial, que foi exatamente o que aconteceu hoje
+         com tres pessoas em 80 segundos. */
+      const estourou = e && e.name === 'PrazoDoLogin';
+      mostrarLogin(estourou
+        ? 'Sua senha está certa — quem demorou foi o servidor ao montar seus dados (' + String(e.message || '') + '). Tente entrar de novo; se repetir, avise o Julyan.'
+        : 'Falha ao carregar os dados (' + String(e && e.message || e) + '). Verifique a conexão e tente entrar de novo.');
       return;
     }
     // Fora do try de propósito: um erro de RENDERIZAÇÃO aqui é bug de tela (vai pro
