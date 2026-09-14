@@ -156,12 +156,21 @@ checar('supabase/migrations/*.sql e ignoravel, lib/*.sql nao',
     /\(b\.avaliacoes \|\| 0\) - \(a\.avaliacoes \|\| 0\)/.test(places),
     'sem a ordem, o teto cortaria ao acaso em vez de cortar pelo fim da fila');
 
-  checar('cada cidade tem teto de lote',
-    (places.match(/tetoMaximo:/g) || []).length >= 6 && /porPlaceId\.size >= tetoMaximo/.test(places),
+  /* ══ O TETO VIROU CONTA, E AS DUAS GUARDAS ESTAVAM CRAVADAS NO LITERAL (14/09/26)
+     Elas contavam `tetoMaximo: <numero>` no texto. Desde que as pracas passaram a ser
+     derivadas de territorios.json, o teto e calculado por quantos executivos a cidade
+     atende — nao ha literal para contar, e as duas reprovaram mudanca correta.
+     A REGRA continua inteira; o que muda e como se mede. */
+  checar('cada cidade tem teto de lote, e o laco para nele',
+    /tetoMaximo: \d+ \* c\.reps/.test(places) && /porPlaceId\.size >= tetoMaximo/.test(places),
     'sem teto a fila cresce ate ninguem ler');
 
-  checar('o teto do Places e menor que o da Casa dos Dados',
-    Math.max(...(places.match(/tetoMaximo: (\d+)/g) || []).map(x => Number(x.replace(/\D/g, '')))) <= 60,
+  checar('o teto por executivo do Places e menor que o da Casa dos Dados',
+    (function () {
+      const m = places.match(/tetoMaximo: (\d+) \* c\.reps/);
+      if (!m) return false;
+      return Number(m[1]) <= 60;
+    }()),
     'conta madura tem ciclo mais longo: cinquenta de uma vez enterram o que ele ia fazer hoje');
 
   checar('o Places manda a fonte com a chave que o importador conhece',

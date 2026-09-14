@@ -1404,17 +1404,29 @@ function checarGeradosForaDoGit() {
      e passavam invisíveis — a guarda dizia OK sobre dois arquivos gerados e versionados.
      Achei olhando o código dos produtores, não confiando no verde dela.
      Agora ela resolve as constantes primeiro e depois pergunta quais são escritas. */
+  /* ══ ARQUIVO POR ARQUIVO, E NAO O TEXTO TODO (14/09/26) ════════════════════════
+     Esta funcao lia `codigo`, que e a concatenacao de todos os scripts. A regra (b)
+     casa "const NOME = ...arquivo..." com "writeFileSync(NOME" em qualquer lugar — e
+     num texto que junta 50 arquivos, dois `arq` sem relacao viram prova de escrita.
+     Foi assim que ela reprovou o build acusando data/usuarios.json de ser gerado:
+     a declaracao estava em fetch-hubspot.js (uma LEITURA) e o writeFileSync em outra
+     suite, sobre um `arq` que era um arquivo temporario.
+
+     Olhar por arquivo nao afrouxa nada: escrita de verdade mora no mesmo arquivo que
+     a declaracao dela — variavel nao atravessa modulo. */
   const escrito = base => {
     const esc = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    /* (a) caminho citado dentro da própria chamada */
-    if (new RegExp('writeFileSync\\([^)]{0,160}' + esc).test(codigo)) return true;
-    /* (b) constante que aponta para o arquivo, e que é passada ao writeFileSync */
-    const decl = new RegExp('(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=[^;\\n]{0,200}' + esc, 'g');
-    let m;
-    while ((m = decl.exec(codigo)) !== null) {
-      if (new RegExp('writeFileSync\\(\\s*' + m[1] + '\\b').test(codigo)) return true;
-    }
-    return false;
+    return fonte.some(function (umArquivo) {
+      /* (a) caminho citado dentro da própria chamada */
+      if (new RegExp('writeFileSync\\([^)]{0,160}' + esc).test(umArquivo)) return true;
+      /* (b) constante que aponta para o arquivo, e que é passada ao writeFileSync */
+      const decl = new RegExp('(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=[^;\\n]{0,200}' + esc, 'g');
+      let m;
+      while ((m = decl.exec(umArquivo)) !== null) {
+        if (new RegExp('writeFileSync\\(\\s*' + m[1] + '\\b').test(umArquivo)) return true;
+      }
+      return false;
+    });
   };
 
   const versionadosEEscritos = rastreados.filter(f => {
