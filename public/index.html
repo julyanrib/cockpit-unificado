@@ -32305,7 +32305,8 @@ function dg4MinutosParaTrava() {
 function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
   const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
     ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
-  const vazio = { horas: horas, porHora: {}, semHora: [], daGrade: false, planejados: 0 };
+
+  const vazio = { horas: [], porHora: {}, semHora: [], daGrade: false, planejados: 0 };
   const g = linhaSemana && Array.isArray(linhaSemana.grade) ? linhaSemana.grade : null;
   if (!g || !g.length || !diaISO) return vazio;
 
@@ -32351,7 +32352,8 @@ function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
     planejados += 1;
   });
 
-  return { horas: horas, porHora: porHora, semHora: semHora, daGrade: true, planejados: planejados };
+  const horasNoDia = Object.keys(porHora).sort();
+  return { horas: horasNoDia, porHora: porHora, semHora: semHora, daGrade: true, planejados: planejados };
 }
 
 function dg4SlotsDoPlano(plano) {
@@ -32387,7 +32389,7 @@ function dg4SlotsDoPlano(plano) {
   const semHora = contas.filter(function (c) { return c && !c.hora; })
     .concat(daFrase.filter(function (f) { return !f.hora; }));
 
-  return { horas: horas, porHora: porHora, semHora: semHora };
+  return { horas: Object.keys(porHora).sort(), porHora: porHora, semHora: semHora };
 }
 
 function dg4OrigemDoSlot(slot, mapaFunil) {
@@ -32769,9 +32771,11 @@ function dg4Dados(ctx) {
         borda: naPauta ? '#CBE8DD' : '#F0A9B2',
         cursor: tv ? 'default' : 'pointer' };
     });
+
+    const travouNumero = x.daily.prometido_visitas != null;
     const naMesa = Number(x.daily.prometido_propostas) || 0;
     const aposta = Number(x.daily.prometido_fechamentos) || 0;
-    const visitas = Number(x.daily.prometido_visitas) || 0;
+    const visitas = travouNumero ? (Number(x.daily.prometido_visitas) || 0) : (x.visitas || []).length;
 
     const pillCor = x.travada ? { bg: '#EAF6F1', cor: '#1E9E7B', borda: '#CBE8DD' }
       : { bg: '#FDF6E7', cor: '#8A6516', borda: '#EAD9B4' };
@@ -32784,7 +32788,10 @@ function dg4Dados(ctx) {
           ? { n: String(x.novas), rot: x.novas === 1 ? 'prosp. nova' : 'prosp. novas',
             bg: pillCor.bg, cor: x.novas === 0 ? '#E51A31' : pillCor.cor, borda: pillCor.borda, estilo: 'solid' }
           : { n: '?', rot: 'origem não registrada', bg: '#FBFAF6', cor: '#7A8494', borda: '#E4E0D6', estilo: 'dashed' },
-        { n: String(naMesa), rot: 'na mesa', bg: pillCor.bg, cor: pillCor.cor, borda: pillCor.borda, estilo: 'solid' }
+
+        travouNumero
+          ? { n: String(naMesa), rot: 'na mesa', bg: pillCor.bg, cor: pillCor.cor, borda: pillCor.borda, estilo: 'solid' }
+          : { n: '—', rot: 'na mesa · não prometeu', bg: '#FBFAF6', cor: '#7A8494', borda: '#E4E0D6', estilo: 'dashed' }
       ].concat(aposta ? [{ n: String(aposta), rot: aposta === 1 ? 'palavra dada' : 'palavras dadas',
         bg: '#FDECEF', cor: '#B0184B', borda: '#F0C9D5', estilo: 'solid' }] : []);
 

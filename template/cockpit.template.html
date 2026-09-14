@@ -47184,7 +47184,9 @@ function dg4MinutosParaTrava() {
 function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
   const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
     ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
-  const vazio = { horas: horas, porHora: {}, semHora: [], daGrade: false, planejados: 0 };
+  /* dia sem nada tem eixo VAZIO, e nao sete janelas em branco — quem consome conta
+     `horas.filter(...)`, e sete janelas vazias davam o mesmo zero por outro caminho. */
+  const vazio = { horas: [], porHora: {}, semHora: [], daGrade: false, planejados: 0 };
   const g = linhaSemana && Array.isArray(linhaSemana.grade) ? linhaSemana.grade : null;
   if (!g || !g.length || !diaISO) return vazio;
 
@@ -47257,7 +47259,14 @@ function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
      aparecem" que eu consertei hoje, entrando por outra porta.
      O balde já existia na forma de retorno e já é consumido lá embaixo; o que faltava era
      alguém pôr algo nele. */
-  return { horas: horas, porHora: porHora, semHora: semHora, daGrade: true, planejados: planejados };
+  /* ══ O EIXO E A HORA QUE ELE ESCOLHEU, NAO AS SETE JANELAS (14/09/26) ═══════════
+     `horas` voltava PL6_HORAS — as sete janelas do desenho antigo — enquanto `porHora`
+     e indexado pela hora digitada. Como todo consumidor faz
+     `horas.filter(h => porHora[h])`, o compromisso das 11:30 nao existia para a Daily
+     do gestor. Medido hoje: Marco 1 de 5, Andre 0 de 3 ("SEM PLANO" com o dia cheio).
+     O eixo passa a ser o que EXISTE, em ordem. */
+  const horasNoDia = Object.keys(porHora).sort();
+  return { horas: horasNoDia, porHora: porHora, semHora: semHora, daGrade: true, planejados: planejados };
 }
 
 function dg4SlotsDoPlano(plano) {
@@ -47300,7 +47309,10 @@ function dg4SlotsDoPlano(plano) {
   const semHora = contas.filter(function (c) { return c && !c.hora; })
     .concat(daFrase.filter(function (f) { return !f.hora; }));
 
-  return { horas: horas, porHora: porHora, semHora: semHora };
+  /* MESMO CONSERTO DO EIXO (14/09/26, ver dg4SlotsDaGrade): as contas_alvo do plano
+     travado tambem guardam a hora escolhida, e o plano de quem travou as 11:30 perdia
+     a visita pelo mesmo filtro. Uma regra, os dois leitores. */
+  return { horas: Object.keys(porHora).sort(), porHora: porHora, semHora: semHora };
 }
 
 /* ══ O SELO DE ORIGEM DO SLOT ════════════════════════════════════════════════════════
@@ -47879,9 +47891,23 @@ function dg4Dados(ctx) {
         borda: naPauta ? '#CBE8DD' : '#F0A9B2',
         cursor: tv ? 'default' : 'pointer' };
     });
+  /* ══ O SLOT E A PROMESSA (14/09/26) ═══════════════════════════════════════════════
+     Julyan: "eles nem precisam travar daily, so de colocar no slot, ja tem q aparecer
+     pra mim". Ate hoje estes tres numeros saiam SO de `dailies`, que e escrito no ato
+     de travar — entao o cartao listava cinco visitas e, do lado, o chip dizia
+     "0 visitas". Duas afirmacoes opostas sobre a mesma pessoa no mesmo cartao.
+
+     VISITAS passa a cair na contagem dos clientes nomeados do dia quando nao ha numero
+     travado. `!= null` e nao `||`: quem travou prometendo ZERO visitas disse alguma
+     coisa, e isso nao pode ser substituido pela grade.
+
+     NA MESA e APOSTA nao: a grade nao carrega proposta nem fechamento. Sem promessa
+     travada eles viram "—", porque 0 ali le como "ele disse que nao vai propor nada" e
+     a verdade e que ninguem perguntou — o zero que tranquiliza, de novo. */
+    const travouNumero = x.daily.prometido_visitas != null;
     const naMesa = Number(x.daily.prometido_propostas) || 0;
     const aposta = Number(x.daily.prometido_fechamentos) || 0;
-    const visitas = Number(x.daily.prometido_visitas) || 0;
+    const visitas = travouNumero ? (Number(x.daily.prometido_visitas) || 0) : (x.visitas || []).length;
 
     /* AS PÍLULAS DA PROMESSA. A prancha desenha três; aqui elas são um ARRAY, então a
        APOSTA entra como quarta quando existe — e ela é a promessa mais forte do produto
@@ -47899,7 +47925,13 @@ function dg4Dados(ctx) {
           ? { n: String(x.novas), rot: x.novas === 1 ? 'prosp. nova' : 'prosp. novas',
             bg: pillCor.bg, cor: x.novas === 0 ? '#E51A31' : pillCor.cor, borda: pillCor.borda, estilo: 'solid' }
           : { n: '?', rot: 'origem não registrada', bg: '#FBFAF6', cor: '#7A8494', borda: '#E4E0D6', estilo: 'dashed' },
-        { n: String(naMesa), rot: 'na mesa', bg: pillCor.bg, cor: pillCor.cor, borda: pillCor.borda, estilo: 'solid' }
+        /* SEM PROMESSA TRAVADA, "na mesa" NAO E ZERO — e nao medido. A grade da semana
+           nao carrega proposta, entao o 0 que aparecia aqui era o zero que tranquiliza:
+           lia como "ele nao vai propor nada hoje" quando a verdade e que ninguem
+           perguntou. Tracejado e cinza, como as outras nao-medidas desta tela. */
+        travouNumero
+          ? { n: String(naMesa), rot: 'na mesa', bg: pillCor.bg, cor: pillCor.cor, borda: pillCor.borda, estilo: 'solid' }
+          : { n: '—', rot: 'na mesa · não prometeu', bg: '#FBFAF6', cor: '#7A8494', borda: '#E4E0D6', estilo: 'dashed' }
       ].concat(aposta ? [{ n: String(aposta), rot: aposta === 1 ? 'palavra dada' : 'palavras dadas',
         bg: '#FDECEF', cor: '#B0184B', borda: '#F0C9D5', estilo: 'solid' }] : []);
 
