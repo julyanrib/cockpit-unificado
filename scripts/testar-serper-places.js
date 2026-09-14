@@ -161,6 +161,59 @@ checar('existe um modo que mostra o registro cru sem importar nada',
   'a primeira rodada tem de provar a grafia dos campos ANTES de gravar na carteira de '
     + 'alguém — é o que separa "integrei" de "achei que integrei"');
 
+
+/* ══ O ENDPOINT, MEDIDO E NÃO SUPOSTO (14/09/26) ═══════════════════════════════════
+   Eu escolhi `/places` pelo nome. O diagnóstico bateu os dois na MESMA consulta:
+
+     campo         /places                 /maps
+     ratingCount   6                       6703
+     phoneNumber   ausente                 +55 27 3100-0011
+     endereço      "R. Aleixo Netto, 577"  "… - Praia do Canto, Vitória - ES, 29055-145"
+
+   Com o /places o piso de 100 avaliações zeraria TODA rodada — verde, e trazendo nada.
+   Esta guarda existe para ninguém trocar de volta por achar que "places" combina mais. */
+checar('a fonte é /maps, que é a que traz avaliação, telefone e bairro',
+  /const SERPER_URL = 'https:\/\/google\.serper\.dev\/maps';/.test(fonteLib),
+  '/places devolve ratingCount de um dígito — com o piso de 100, a rodada importa zero '
+    + 'sem erro nenhum');
+
+/* ══ O BAIRRO É QUEM DECIDE O DONO ═════════════════════════════════════════════════
+   `api/importar-leads.js` roteia por rotearTerritorio(cidade, bairro, lat, lng) e o
+   BAIRRO ganha de tudo — é nele que o Julyan nomeou executivo por executivo. Sem bairro
+   o lead cai na coordenada, que é a última regra da escada. */
+checar('a tradução entrega bairro, cidade e estado para o roteador',
+  (function () {
+    const l = lib.normalizarLugar({
+      title: 'Mahai', ratingCount: 6703, type: 'Restaurante',
+      address: 'R. Aleixo Netto, 577 - Praia do Canto, Vitória - ES, 29055-145, Brasil'
+    });
+    return l && l.bairro === 'Praia do Canto' && l.cidade === 'Vitória' && l.estado === 'ES';
+  }()),
+  'sem bairro o lead não respeita a fronteira de rota que ele desenhou');
+
+checar('endereço sem bairro devolve null, e não um chute',
+  (function () {
+    const l = lib.normalizarLugar({ title: 'X', ratingCount: 10, type: 'Restaurante', address: 'R. Aleixo Netto, 577' });
+    return l && l.bairro === null && l.cidade === null;
+  }()),
+  'chutar bairro é pior que não ter: "Tijuca" dentro de "Barra da Tijuca" já pôs lead '
+    + 'na carteira errada');
+
+/* ══ AS COZINHAS SÃO RESTAURANTE ═══════════════════════════════════════════════════
+   A primeira lista saiu da minha cabeça e cortou três de dez na amostra da Praia do
+   Canto — Brasileira, Bife e Bufê — todos cliente óbvio da Takeat. O Google nomeia a
+   COZINHA, não o tipo de casa. */
+checar('as cozinhas que o Google escreve entram',
+  ['Brasileira', 'Italiana', 'Japonesa', 'Frutos do mar', 'Bife', 'Bufê', 'Mineira',
+    'Restaurante brasileira', 'Carnes'].every(c => lib.categoriaDeRestaurante(c).aceito),
+  'cortar por categoria parece praça sem restaurante — some sem deixar rastro');
+
+checar('e o veto continua ganhando delas',
+  !lib.categoriaDeRestaurante('Hotel').aceito
+    && !lib.categoriaDeRestaurante('Padaria').aceito
+    && !lib.categoriaDeRestaurante('Restaurante do Hotel Praia').aceito,
+  'ampliar a lista de aceitas não pode abrir a porta para hotel e padaria');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
