@@ -159,9 +159,57 @@ conferir('a promessa em número vem de dailies, e o planejado é uma conta separ
 conferir('a visita sem hora vai para semHora, que é lista',
   /const semHora = \[\];/.test(codigo) &&
   /if \(!hora \|\| porHora\[hora\]\) semHora\.push\(item\);/.test(codigo) &&
-  /return \{ horas: horas, porHora: porHora, semHora: semHora, daGrade: true/.test(codigo),
+  /return \{ horas: horasNoDia, porHora: porHora, semHora: semHora, daGrade: true/.test(codigo),
   'com 8 visitas sem hora, um objeto indexado por hora colide todas na chave vazia — '
   + '"some" viraria "some, menos uma"');
+
+/* ══ O EIXO E A HORA QUE ELE ESCOLHEU, NAO AS SETE JANELAS (14/09/26) ══════════════
+   URGENTE do Julyan: "a galera esta prometendo no planejamento/daily, nao esta caindo
+   para mim na minha daily aqui de gestor".
+
+   As duas funcoes indexam por `porHora[hora]` com a hora DIGITADA pelo executivo e
+   devolviam como eixo as SETE JANELAS de PL6_HORAS. Todo consumidor faz
+   `horas.filter(h => porHora[h])` — entao so sobrevivia o compromisso que caisse
+   exatamente em 09:00, 10:30, 13:30, 15:00, 16:30, 18:00 ou 19:00.
+
+   MEDIDO no banco em 14/09, rodando dg4Dados() contra o dado real do dia:
+     Marco (5 slots: 14:00, 15:00, 10:00, 11:30, 15:30) -> a tela lia 1
+     Andre (3 slots: 10:00, 14:00, 16:00)               -> a tela lia 0, "SEM PLANO"
+   Depois do conserto: 5 e 3, e a soma planejada do time foi de 1 para 8.
+
+   Quando a POSICAO na coluna era a janela isso nao podia acontecer. A hora virou livre
+   e o eixo ficou para tras — e quanto mais o time usava a hora real, mais o gestor via
+   o time parado. E um defeito que PIORA com o uso correto do produto. */
+conferir('o eixo das horas sai do que existe no dia, e nao das sete janelas fixas',
+  /const horasNoDia = Object\.keys\(porHora\)\.sort\(\);/.test(codigo) &&
+  /* declarar nao e usar: a sabotagem que trocou so o retorno passou por esta guarda e
+     foi pega por outra. Guarda que aceita a declaracao mede a intencao pela metade. */
+  /return \{ horas: horasNoDia, porHora: porHora/.test(codigo) &&
+  /return \{ horas: Object\.keys\(porHora\)\.sort\(\), porHora: porHora, semHora: semHora \};/.test(codigo),
+  'indexar por hora livre e devolver as sete janelas descarta em silêncio toda visita '
+  + 'fora delas — o gestor vê o time parado quanto mais o time usa a hora de verdade');
+
+conferir('e o dia sem nada tem eixo vazio, não sete janelas em branco',
+  /const vazio = \{ horas: \[\], porHora: \{\}, semHora: \[\], daGrade: false, planejados: 0 \};/.test(codigo),
+  'sete janelas vazias dão o mesmo zero por outro caminho');
+
+/* ══ O SLOT E A PROMESSA (14/09/26) ═══════════════════════════════════════════════
+   Julyan, no mesmo pedido: "eles nem precisam travar daily, so de colocar no slot, ja
+   tem q aparecer pra mim". O chip de visitas saia so de `dailies.prometido_visitas`,
+   escrito no ato de TRAVAR — entao o cartao listava cinco visitas e o chip do lado
+   dizia "0 visitas": duas afirmacoes opostas sobre a mesma pessoa no mesmo cartao.
+
+   `!= null` e nao `||`: quem travou prometendo ZERO disse alguma coisa, e a grade nao
+   pode sobrescrever isso. E "na mesa" NAO cai na grade — a grade nao carrega proposta,
+   entao sem promessa travada ele e "—" e nao 0. */
+conferir('sem promessa travada, o chip de visitas conta o slot da grade',
+  /const travouNumero = x\.daily\.prometido_visitas != null;/.test(codigo) &&
+  /const visitas = travouNumero \? \(Number\(x\.daily\.prometido_visitas\) \|\| 0\) : \(x\.visitas \|\| \[\]\)\.length;/.test(codigo),
+  'listar cinco visitas e escrever "0 visitas" ao lado é a tela discordando de si mesma');
+
+conferir('e "na mesa" sem promessa é não medido, não zero',
+  /: \{ n: '—', rot: 'na mesa · não prometeu'/.test(codigo),
+  'zero ali lê como "ele disse que não vai propor nada" quando ninguém perguntou');
 
 conferir('e a tela do gestor desenha as visitas, não as sete horas',
   /const visitas = preenchidos\.map\(function \(h\) \{ return grade\.porHora\[h\]; \}\)\s*\n?\s*\.concat\(grade\.semHora \|\| \[\]\);/.test(codigo) &&
