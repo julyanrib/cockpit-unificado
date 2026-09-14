@@ -243,8 +243,55 @@ async function main() {
 
   // Reaproveita o snapshot de hoje (já buscado pelo job diário) — dá contexto de gargalo
   // por executivo e a lista de "quentes" já calculada (sem precisar buscar de novo)
+  /* ══ DISCO PRIMEIRO, DEPOIS A TABELA (14/09/26) ═══════════════════════════════════
+     `data/hubspot.json` esta no .gitignore: existe na maquina de quem desenvolve e
+     NUNCA num checkout do Actions. Este script lia so o disco, entao em producao
+     `hubspotSnapshot` era sempre null e o resumo saia sem board e sem quentes — toda
+     semana, em silencio, com a Action verde. Medido no snapshot de hoje: porRep {}.
+
+     A tabela e a MESMA em que este script ja publica o weekly-raw, com as mesmas
+     credenciais. Nenhuma dependencia nova. */
   const hubspotPath = path.join(__dirname, '..', 'data', 'hubspot.json');
-  const hubspotSnapshot = fs.existsSync(hubspotPath) ? JSON.parse(fs.readFileSync(hubspotPath, 'utf8')) : null;
+  let hubspotSnapshot = fs.existsSync(hubspotPath)
+    ? JSON.parse(fs.readFileSync(hubspotPath, 'utf8'))
+    : null;
+  let deOndeVeioOSnapshot = hubspotSnapshot ? 'disco' : null;
+
+  if (!hubspotSnapshot && process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_KEY) {
+    try {
+      const r = await fetch(
+        `${process.env.SUPABASE_URL}/rest/v1/cockpit_snapshot?chave=eq.hubspot&select=conteudo`,
+        { headers: {
+          apikey: process.env.SUPABASE_SERVICE_KEY,
+          Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}`
+        } });
+      if (r.ok) {
+        const linhas = await r.json();
+        if (Array.isArray(linhas) && linhas[0] && linhas[0].conteudo) {
+          hubspotSnapshot = linhas[0].conteudo;
+          deOndeVeioOSnapshot = 'tabela cockpit_snapshot';
+        }
+      } else {
+        console.error('AVISO: a tabela recusou a leitura do snapshot hubspot — HTTP ' + r.status);
+      }
+    } catch (e) { console.error('AVISO: nao consegui ler o snapshot hubspot da tabela: ' + (e && e.message)); }
+  }
+
+  /* SEM O SNAPSHOT NAO HA BOARD NEM QUENTES, e um resumo assim parece completo: os KPIs
+     do topo vem da API e enchem a tela. Foi exatamente essa aparencia que escondeu o
+     defeito por semanas. Entao para aqui. */
+  const repsNoSnapshot = hubspotSnapshot && hubspotSnapshot.reps
+    ? Object.keys(hubspotSnapshot.reps).length : 0;
+  if (!repsNoSnapshot) {
+    console.error('ERRO: sem o snapshot do HubSpot nao ha board por executivo nem quentes.');
+    console.error('  disco: ' + (fs.existsSync(hubspotPath) ? 'existe mas sem reps' : 'data/hubspot.json ausente (gitignored)'));
+    console.error('  tabela: ' + (process.env.SUPABASE_URL ? 'consultada e sem resultado util' : 'SUPABASE_URL ausente neste passo'));
+    console.error('  Publicar assim geraria um resumo que PARECE completo — os KPIs do topo');
+    console.error('  vem da API e enchem a tela — com porRep {} e quentes []. Foi assim que');
+    console.error('  isto ficou quebrado sem ninguem ver.');
+    process.exit(1);
+  }
+  console.log('Snapshot do HubSpot: ' + repsNoSnapshot + ' executivo(s), lido do ' + deOndeVeioOSnapshot + '.');
 
   // "Quentes" pra essa aba: só quem está em Demo/Proposta ou Negociação (a definição
   // mais ampla, que inclui Ag.Pagamento, fica só no Cockpit geral)
