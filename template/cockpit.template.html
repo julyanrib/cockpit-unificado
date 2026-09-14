@@ -27623,7 +27623,13 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
       semana: pl6Dias(pl6SegundaAtual)[0].data };
   }
 
-  const idNaGrade = 'c-' + String(lead.id);
+  /* ══ O PREFIXO SAI DA FORMA DO ID (14/09/26) ═════════════════════════════════
+     Era 'c-' cravado, porque so negocio chegava aqui. Desde que a rota do mapa passou
+     a ocupar slot, chega tambem conta de prospeccao — e ela e `n-<uuid>` na municao
+     (ver pl6TodasAsContas). Prefixo errado nao da erro: da slot ORFAO, que a grade
+     desenha e ninguem consegue abrir. Ja existe um desses vivo, achado no plano da
+     Kelly. dealId do HubSpot e sempre numerico; id de leads_prospeccao e uuid. */
+  const idNaGrade = (/^[0-9]+$/.test(String(lead.id)) ? 'c-' : 'n-') + String(lead.id);
   /* A MUNIÇÃO TEM DE CONHECER O ID: pl6TodasAsContas monta os ids da grade, e slot com
      id desconhecido é órfão. */
   let conhecido = false;
@@ -27755,16 +27761,20 @@ function donoDoNegocioNaTela(lead) {
   return '';
 }
 
-function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
-  if (!lead || !dataISO) return;
+/* `opcoes.silencioso` existe para o ENVIO EM LOTE da rota: seis paradas renderiam seis
+   toasts em fila, e quem chamou soma os resultados numa frase so. Fora do lote o padrao
+   continua sendo falar — foi o silencio das recusas que criou o defeito de 13/09. */
+function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora, opcoes) {
+  const calado = !!(opcoes && opcoes.silencioso);
+  if (!lead || !dataISO) return Promise.resolve({ nada: true });
   const dono = (ownerId != null && String(ownerId) !== '') ? String(ownerId) : donoDoNegocioNaTela(lead);
   if (!dono) {
-    if (typeof mostrarToast === 'function') {
+    if (typeof mostrarToast === 'function' && !calado) {
       mostrarToast('A tarefa está no HubSpot ✓, mas não descobri de quem é este negócio '
         + 'nesta tela — por isso ela não entrou no Planejamento nem na Agenda. Recarregue '
         + 'e ponha o dia pelo Planejamento.', 'atencao');
     }
-    return;
+    return Promise.resolve({ erro: 'não descobri de quem é este negócio nesta tela' });
   }
   /* A GRADE, SEM SEGURAR QUEM CHAMOU. Espelhar é complemento: a tarefa já está no CRM,
      e travar o retorno do passo numa escrita do Supabase transformaria o complemento em
@@ -27775,9 +27785,9 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
      Planejamento: o silencio nao era neutro, era a promessa ficando de pe sozinha. A
      partir daqui o Planejamento tem UMA voz, esta, e ela diz o que aconteceu de
      verdade — inclusive quando deu certo. Os sites do passo pararam de prometer. */
-  Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, dono))
+  const promessaDoPlano = Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, dono))
     .then(function (r) {
-      if (!r || typeof mostrarToast !== 'function') return;
+      if (!r || typeof mostrarToast !== 'function' || calado) return r;
       if (r.ok) {
         mostrarToast('No seu Planejamento: ' + r.dia + ' ' + r.data
           + (r.hora ? ' às ' + r.hora : '') + (r.mudouDeLugar ? ' — mudou de dia na grade.' : '.'), 'sucesso');
@@ -27806,8 +27816,14 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
         mostrarToast('A tarefa está no HubSpot ✓, mas não entrou no seu plano da semana ('
           + r.erro + '). Ponha a visita no dia pelo Planejamento.', 'atencao');
       }
+      /* SEMPRE DEVOLVE: sem esta linha o lote recebe undefined em todo ramo que
+         avisou, e a contagem dele fica mentindo por omissao. */
+      return r;
     })
-    .catch(function (e) { console.error('Espelho do passo no plano semanal:', e && e.message); });
+    .catch(function (e) {
+      console.error('Espelho do passo no plano semanal:', e && e.message);
+      return { erro: (e && e.message) || 'erro no espelho' };
+    });
   const rot = String(tipoPasso || '').toLowerCase();
   const tipo = (rot.indexOf('reuni') >= 0 || rot.indexOf('demo') >= 0) ? 'reuniao'
     : rot.indexOf('visita') >= 0 ? 'rota'
@@ -27831,6 +27847,9 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
      Daily so mostravam a visita depois de a pessoa trocar de aba e voltar. Mesmo
      conserto do movimento de etapa, e pelo mesmo motivo. */
   if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
+  /* QUEM CHAMOU DECIDE O QUE FAZER COM O RESULTADO. Os oito sites antigos ignoram a
+     promessa e continuam funcionando igual; o lote da rota a usa para contar. */
+  return promessaDoPlano;
 }
 
 /* ══ E O CARTAO DO FUNIL SABE NA HORA (14/09/26) ═══════════════════════════════════
@@ -38858,10 +38877,14 @@ async function adicionarNaRotaDoRep(leadId, nome, botao, bairro, cidade) {
   const horaPrevista = String(Math.floor(minutosBase / 60)).padStart(2, '0') + ':' + String(minutosBase % 60).padStart(2, '0');
   try {
     await criarTarefaVisitaNoHubspot({ id: leadId, nome: nome, bairro: bairro || null, cidade: cidade || null }, rotaDrawerOwner, horaPrevista, { silencioso: true }, hoje);
-    /* espelho de sessao: sem ele a faixa da Hoje diz "agenda vazia" ate o robo passar */
-    if (typeof registrarAgendamentoLocal === 'function') {
-      try { registrarAgendamentoLocal({ id: leadId, nome: nome, bairro: bairro || null, cidade: cidade || null }, hoje, horaPrevista, rotaDrawerOwner, 'rota'); }
-      catch (e) { console.error('espelho da rota na sessao:', e && e.message); }
+    /* A PARADA VIRA SLOT NA GRADE (14/09/26, Julyan: "ate pra gente combater se ele vai
+       mesmo ou nao"). O slot e a promessa; o desfecho no HubSpot e a evidencia. Sem ele a
+       rota vivia so em leads_prospeccao, que a Daily do gestor nao le — quem montava seis
+       paradas aparecia para o gestor como "na mesa · nao prometeu".
+       Este espelho ja faz o de sessao por dentro; chamar os dois registraria em dobro. */
+    if (typeof espelharPassoNasTelas === 'function') {
+      try { espelharPassoNasTelas({ id: leadId, nome: nome, name: nome, bairro: bairro || null, cidade: cidade || null }, hoje, 'Visita', rotaDrawerOwner, horaPrevista); }
+      catch (e) { console.error('espelho da rota:', e && e.message); }
     }
   } catch (e) {
     await supa.from('leads_prospeccao').update({ status: 'atribuido', data_rota: null, updated_at: new Date().toISOString() }).eq('id', leadId);
@@ -40738,8 +40761,15 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       const horaMapa = String(Math.floor(minMapa / 60)).padStart(2, '0') + ':' + String(minMapa % 60).padStart(2, '0');
       try {
         await criarTarefaVisitaNoHubspot(lead, r.ownerId, horaMapa, { silencioso: true }, hoje);
-        /* espelho de sessao — ver a nota em adicionarNaRotaDoRep */
-        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(lead, hoje, horaMapa, r.ownerId, 'rota');
+        /* A CONTA ACABOU DE NASCER: ela nao esta em prospeccaoCache, e a municao do
+           Planejamento sai de la — sem esta linha o espelho recusaria com "fora da
+           municao" uma conta que o proprio clique criou. */
+        if (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache)
+            && !prospeccaoCache.some(function (x) { return String(x.id) === String(lead.id); })) {
+          prospeccaoCache.push(lead);
+        }
+        /* vira slot na grade — ver a nota em adicionarNaRotaDoRep */
+        if (typeof espelharPassoNasTelas === 'function') espelharPassoNasTelas(lead, hoje, 'Visita', r.ownerId, horaMapa);
       } catch (e) {
         await atualizarLeadProspeccao(lead.id, { status: 'atribuido', data_rota: null });
         mostrarToast('A conta não entrou na rota porque o HubSpot não confirmou a tarefa.', 'erro');
@@ -40783,8 +40813,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       const horaPrevista = String(Math.floor(minutosBase / 60)).padStart(2, '0') + ':' + String(minutosBase % 60).padStart(2, '0');
       try {
         await criarTarefaVisitaNoHubspot(l, r.ownerId, horaPrevista, { silencioso: true }, hoje);
-        /* espelho de sessao — ver a nota em adicionarNaRotaDoRep */
-        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(l, hoje, horaPrevista, r.ownerId, 'rota');
+        /* vira slot na grade — ver a nota em adicionarNaRotaDoRep */
+        if (typeof espelharPassoNasTelas === 'function') espelharPassoNasTelas(l, hoje, 'Visita', r.ownerId, horaPrevista);
       } catch (e) {
         await supa.from('leads_prospeccao').update({ status: 'atribuido', data_rota: null, updated_at: new Date().toISOString() }).eq('id', l.id);
         mostrarToast('A conta não entrou na rota porque o HubSpot não confirmou a tarefa.', 'erro');
@@ -41154,6 +41184,11 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     btnEnviarAgenda.disabled = true;
     const total = blocosHorario.length;
     let ok = 0, falhou = 0;
+    /* quantas viraram slot no Planejamento, e quais nao viraram — o gestor so ve na
+       Daily o que esta na grade, entao esta contagem e a diferenca entre "prometeu" e
+       "nao prometeu" na tela dele. */
+    let naGrade = 0;
+    const foraDaGrade = [];
     // SEQUENCIAL de propósito: 6 chamadas simultâneas ao HubSpot rendem 429 e metade
     // das paradas ficaria sem horário, sem ninguém perceber.
     for (let i = 0; i < total; i++) {
@@ -41163,19 +41198,37 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       btnEnviarAgenda.textContent = `Enviando ${i + 1} de ${total}…`;
       try {
         await criarTarefaVisitaNoHubspot(b.lead, r.ownerId, horaFinal, { silencioso: true });
-        /* espelho de sessao — ver a nota em adicionarNaRotaDoRep. `hoje` e o dia desta
-           tela, o mesmo que criarTarefaVisitaNoHubspot assume quando a data e omitida. */
-        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(b.lead, hoje, horaFinal, r.ownerId, 'rota');
+        /* VIRA SLOT NA GRADE, e AQUI DENTRO do laco sequencial de proposito: o espelho
+           le a grade inteira, muda um slot e grava a grade inteira de volta. Seis desses
+           em paralelo seriam cinco paradas perdidas com sucesso em todas as chamadas.
+           CALADO porque sao seis: a frase do fim conta por todas. */
+        if (typeof espelharPassoNasTelas === 'function') {
+          const res = await espelharPassoNasTelas(b.lead, hoje, 'Visita', r.ownerId, horaFinal, { silencioso: true });
+          if (res && res.ok) naGrade++; else if (res && !res.nada) foraDaGrade.push(b.lead.nome || b.lead.name || 'sem nome');
+        }
         ok++;
       } catch (e) { falhou++; console.error('Falha ao agendar ' + b.lead.nome + ':', e); }
     }
     btnEnviarAgenda.textContent = falhou
       ? `${ok} de ${total} na agenda — ${falhou} falhou`
       : `✓ ${ok} ${ok === 1 ? 'parada' : 'paradas'} na agenda`;
-    mostrarToast(falhou
+    /* ══ A FRASE DIZ AS DUAS COISAS (14/09/26) ═════════════════════════════════════
+       "na agenda" e "no Planejamento" nao sao a mesma coisa, e e a segunda que o gestor
+       ve na Daily dele. Dizer so a primeira deixaria o executivo achando que prometeu
+       quando o dia dele nao entrou na grade — que e exatamente o mal-entendido que este
+       commit existe para acabar. Quando as duas contagens batem, a frase nao repete: ela
+       diz "e no seu Planejamento" e pronto. */
+    const sobreAGrade = (naGrade === 0 && foraDaGrade.length === 0)
+      ? ''
+      : (foraDaGrade.length === 0 ? ' E no seu Planejamento, ' + naGrade + (naGrade === 1 ? ' visita' : ' visitas') + '.'
+        : ' No seu Planejamento entraram ' + naGrade + ' de ' + (naGrade + foraDaGrade.length)
+          + ' — ' + foraDaGrade.slice(0, 3).join(', ') + (foraDaGrade.length > 3 ? ' e outras' : '')
+          + ' ficaram de fora; abra o Planejamento e escolha o lugar.');
+    mostrarToast((falhou
       ? `${ok} de ${total} paradas foram pra agenda. ${falhou} não consegui — tente de novo em instantes.`
-      : `Rota na agenda: ${ok} ${ok === 1 ? 'visita' : 'visitas'} de ${blocosHorario[0].hora} às ${blocosHorario[total - 1].hora}.`,
-      falhou ? 'erro' : 'sucesso');
+      : `Rota na agenda: ${ok} ${ok === 1 ? 'visita' : 'visitas'} de ${blocosHorario[0].hora} às ${blocosHorario[total - 1].hora}.`)
+      + sobreAGrade,
+      falhou ? 'erro' : (foraDaGrade.length ? 'atencao' : 'sucesso'));
     btnEnviarAgenda.dataset.enviando = '0';
   });
   const countEl = document.getElementById('planoMapaRotaCount');
@@ -53574,8 +53627,8 @@ async function adicionarProspeccaoNaRota(lead, botaoEl, msgEl) {
   const horaPrevista = String(Math.floor(minutos / 60)).padStart(2, '0') + ':' + String(minutos % 60).padStart(2, '0');
   try {
     await criarTarefaVisitaNoHubspot(lead, lead.responsavel_owner_id, horaPrevista, { silencioso: true }, hoje);
-    /* espelho de sessao — ver a nota em adicionarNaRotaDoRep */
-    if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(lead, hoje, horaPrevista, lead.responsavel_owner_id, 'rota');
+    /* vira slot na grade — ver a nota em adicionarNaRotaDoRep */
+    if (typeof espelharPassoNasTelas === 'function') espelharPassoNasTelas(lead, hoje, 'Visita', lead.responsavel_owner_id, horaPrevista);
   } catch (e) {
     // Compensação: sem tarefa no HubSpot, a conta não pode continuar parecendo parte
     // da rota no Cockpit. O CRM é o cérebro; o Supabase volta ao estado anterior.

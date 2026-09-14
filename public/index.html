@@ -18604,7 +18604,7 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
       semana: pl6Dias(pl6SegundaAtual)[0].data };
   }
 
-  const idNaGrade = 'c-' + String(lead.id);
+  const idNaGrade = (/^[0-9]+$/.test(String(lead.id)) ? 'c-' : 'n-') + String(lead.id);
 
   let conhecido = false;
   try {
@@ -18679,21 +18679,22 @@ function donoDoNegocioNaTela(lead) {
   return '';
 }
 
-function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
-  if (!lead || !dataISO) return;
+function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora, opcoes) {
+  const calado = !!(opcoes && opcoes.silencioso);
+  if (!lead || !dataISO) return Promise.resolve({ nada: true });
   const dono = (ownerId != null && String(ownerId) !== '') ? String(ownerId) : donoDoNegocioNaTela(lead);
   if (!dono) {
-    if (typeof mostrarToast === 'function') {
+    if (typeof mostrarToast === 'function' && !calado) {
       mostrarToast('A tarefa está no HubSpot ✓, mas não descobri de quem é este negócio '
         + 'nesta tela — por isso ela não entrou no Planejamento nem na Agenda. Recarregue '
         + 'e ponha o dia pelo Planejamento.', 'atencao');
     }
-    return;
+    return Promise.resolve({ erro: 'não descobri de quem é este negócio nesta tela' });
   }
 
-  Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, dono))
+  const promessaDoPlano = Promise.resolve(espelharPassoNoPlanoSemanal(lead, dataISO, hora, dono))
     .then(function (r) {
-      if (!r || typeof mostrarToast !== 'function') return;
+      if (!r || typeof mostrarToast !== 'function' || calado) return r;
       if (r.ok) {
         mostrarToast('No seu Planejamento: ' + r.dia + ' ' + r.data
           + (r.hora ? ' às ' + r.hora : '') + (r.mudouDeLugar ? ' — mudou de dia na grade.' : '.'), 'sucesso');
@@ -18722,8 +18723,13 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
         mostrarToast('A tarefa está no HubSpot ✓, mas não entrou no seu plano da semana ('
           + r.erro + '). Ponha a visita no dia pelo Planejamento.', 'atencao');
       }
+
+      return r;
     })
-    .catch(function (e) { console.error('Espelho do passo no plano semanal:', e && e.message); });
+    .catch(function (e) {
+      console.error('Espelho do passo no plano semanal:', e && e.message);
+      return { erro: (e && e.message) || 'erro no espelho' };
+    });
   const rot = String(tipoPasso || '').toLowerCase();
   const tipo = (rot.indexOf('reuni') >= 0 || rot.indexOf('demo') >= 0) ? 'reuniao'
     : rot.indexOf('visita') >= 0 ? 'rota'
@@ -18739,6 +18745,8 @@ function espelharPassoNasTelas(lead, dataISO, tipoPasso, ownerId, hora) {
   } catch (e) { console.error('espelho do proximo passo na agenda:', e); }
 
   if (typeof repintarOndeONegocioAparece === 'function') repintarOndeONegocioAparece();
+
+  return promessaDoPlano;
 }
 
 function espelharPassoNoFunilLocal(dealId, dataISO, hora, rotulo) {
@@ -26534,9 +26542,9 @@ async function adicionarNaRotaDoRep(leadId, nome, botao, bairro, cidade) {
   try {
     await criarTarefaVisitaNoHubspot({ id: leadId, nome: nome, bairro: bairro || null, cidade: cidade || null }, rotaDrawerOwner, horaPrevista, { silencioso: true }, hoje);
 
-    if (typeof registrarAgendamentoLocal === 'function') {
-      try { registrarAgendamentoLocal({ id: leadId, nome: nome, bairro: bairro || null, cidade: cidade || null }, hoje, horaPrevista, rotaDrawerOwner, 'rota'); }
-      catch (e) { console.error('espelho da rota na sessao:', e && e.message); }
+    if (typeof espelharPassoNasTelas === 'function') {
+      try { espelharPassoNasTelas({ id: leadId, nome: nome, name: nome, bairro: bairro || null, cidade: cidade || null }, hoje, 'Visita', rotaDrawerOwner, horaPrevista); }
+      catch (e) { console.error('espelho da rota:', e && e.message); }
     }
   } catch (e) {
     await supa.from('leads_prospeccao').update({ status: 'atribuido', data_rota: null, updated_at: new Date().toISOString() }).eq('id', leadId);
@@ -27972,7 +27980,12 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       try {
         await criarTarefaVisitaNoHubspot(lead, r.ownerId, horaMapa, { silencioso: true }, hoje);
 
-        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(lead, hoje, horaMapa, r.ownerId, 'rota');
+        if (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache)
+            && !prospeccaoCache.some(function (x) { return String(x.id) === String(lead.id); })) {
+          prospeccaoCache.push(lead);
+        }
+
+        if (typeof espelharPassoNasTelas === 'function') espelharPassoNasTelas(lead, hoje, 'Visita', r.ownerId, horaMapa);
       } catch (e) {
         await atualizarLeadProspeccao(lead.id, { status: 'atribuido', data_rota: null });
         mostrarToast('A conta não entrou na rota porque o HubSpot não confirmou a tarefa.', 'erro');
@@ -28012,7 +28025,7 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       try {
         await criarTarefaVisitaNoHubspot(l, r.ownerId, horaPrevista, { silencioso: true }, hoje);
 
-        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(l, hoje, horaPrevista, r.ownerId, 'rota');
+        if (typeof espelharPassoNasTelas === 'function') espelharPassoNasTelas(l, hoje, 'Visita', r.ownerId, horaPrevista);
       } catch (e) {
         await supa.from('leads_prospeccao').update({ status: 'atribuido', data_rota: null, updated_at: new Date().toISOString() }).eq('id', l.id);
         mostrarToast('A conta não entrou na rota porque o HubSpot não confirmou a tarefa.', 'erro');
@@ -28289,6 +28302,9 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
     const total = blocosHorario.length;
     let ok = 0, falhou = 0;
 
+    let naGrade = 0;
+    const foraDaGrade = [];
+
     for (let i = 0; i < total; i++) {
       const b = blocosHorario[i];
 
@@ -28297,17 +28313,28 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       try {
         await criarTarefaVisitaNoHubspot(b.lead, r.ownerId, horaFinal, { silencioso: true });
 
-        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(b.lead, hoje, horaFinal, r.ownerId, 'rota');
+        if (typeof espelharPassoNasTelas === 'function') {
+          const res = await espelharPassoNasTelas(b.lead, hoje, 'Visita', r.ownerId, horaFinal, { silencioso: true });
+          if (res && res.ok) naGrade++; else if (res && !res.nada) foraDaGrade.push(b.lead.nome || b.lead.name || 'sem nome');
+        }
         ok++;
       } catch (e) { falhou++; console.error('Falha ao agendar ' + b.lead.nome + ':', e); }
     }
     btnEnviarAgenda.textContent = falhou
       ? `${ok} de ${total} na agenda — ${falhou} falhou`
       : `✓ ${ok} ${ok === 1 ? 'parada' : 'paradas'} na agenda`;
-    mostrarToast(falhou
+
+    const sobreAGrade = (naGrade === 0 && foraDaGrade.length === 0)
+      ? ''
+      : (foraDaGrade.length === 0 ? ' E no seu Planejamento, ' + naGrade + (naGrade === 1 ? ' visita' : ' visitas') + '.'
+        : ' No seu Planejamento entraram ' + naGrade + ' de ' + (naGrade + foraDaGrade.length)
+          + ' — ' + foraDaGrade.slice(0, 3).join(', ') + (foraDaGrade.length > 3 ? ' e outras' : '')
+          + ' ficaram de fora; abra o Planejamento e escolha o lugar.');
+    mostrarToast((falhou
       ? `${ok} de ${total} paradas foram pra agenda. ${falhou} não consegui — tente de novo em instantes.`
-      : `Rota na agenda: ${ok} ${ok === 1 ? 'visita' : 'visitas'} de ${blocosHorario[0].hora} às ${blocosHorario[total - 1].hora}.`,
-      falhou ? 'erro' : 'sucesso');
+      : `Rota na agenda: ${ok} ${ok === 1 ? 'visita' : 'visitas'} de ${blocosHorario[0].hora} às ${blocosHorario[total - 1].hora}.`)
+      + sobreAGrade,
+      falhou ? 'erro' : (foraDaGrade.length ? 'atencao' : 'sucesso'));
     btnEnviarAgenda.dataset.enviando = '0';
   });
   const countEl = document.getElementById('planoMapaRotaCount');
@@ -36930,7 +36957,7 @@ async function adicionarProspeccaoNaRota(lead, botaoEl, msgEl) {
   try {
     await criarTarefaVisitaNoHubspot(lead, lead.responsavel_owner_id, horaPrevista, { silencioso: true }, hoje);
 
-    if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(lead, hoje, horaPrevista, lead.responsavel_owner_id, 'rota');
+    if (typeof espelharPassoNasTelas === 'function') espelharPassoNasTelas(lead, hoje, 'Visita', lead.responsavel_owner_id, horaPrevista);
   } catch (e) {
 
     await atualizarLeadProspeccao(lead.id, estadoAnterior);
