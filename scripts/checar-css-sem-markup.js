@@ -76,7 +76,9 @@ const DIVIDA = {
      CSS morto (scripts/css-morto.js) levou a regra dela junto com outras 422. A guarda
      reprovou o build pedindo esta linha de volta — que e exatamente o que ela promete
      fazer quando uma divida e paga, e a razao de a lista ter de encolher. */
-  'hoje-hero-stats': 'Hoje — faixa antiga do hero'
+  /* `hoje-hero-stats` SAIU DA LISTA EM 14/09/26 porque saiu do arquivo: era a última
+     das 15, uma @media de uma linha sobrada do hero de três redesenhos atrás. A família
+     `hoje-` está zerada — o que resta aqui é só a `fn3-cta`, que ainda tem uso vivo. */
 };
 
 /* As classes que o arquivo REALMENTE gera. Mesmo levantamento da guarda 7 — as quatro

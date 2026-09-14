@@ -366,6 +366,64 @@ checar('e o painel da fila fecha antes de a gaveta abrir',
   }()),
   'a lição de hoje de manhã: gaveta aberta atrás de painel faz o clique parecer morto');
 
+
+/* ══ A FILA RESPEITA O QUE ELE JÁ PLANEJOU (14/09/26) ══════════════════════════════
+   Julyan: "descer no ranking com o selo". O negócio que ele já pôs na grade da semana
+   parava de ser urgência e continuava no topo da fila de hoje, disputando atenção com
+   quem não tem dia nenhum. As cinco travas abaixo cobrem as três regras da decisão —
+   e a terceira é a que já custou caro nesta casa: o zero que tranquiliza. */
+
+const h8Agenda = (function () {
+  const i = template.indexOf('function h8AgendadoNaSemana()');
+  if (i < 0) return '';
+  const fim = template.indexOf('\n}\n', i);
+  return fim < 0 ? '' : template.slice(i, fim);
+}());
+
+checar('a fila de hoje lê a MESMA grade que o Planejamento',
+  h8Agenda.indexOf('pl6GradeDoPlano()') > -1
+    && h8Agenda.indexOf('pl6Dias(') > -1
+    && template.indexOf('const agenda = h8AgendadoNaSemana();') > -1,
+  'uma segunda leitura do mesmo dia é como duas telas passam a discordar sobre o que '
+    + 'está marcado na quinta');
+
+checar('só dia FUTURO desce — hoje e passado continuam competindo',
+  /if \(String\(dia\.iso\) <= String\(hoje\)\) return;/.test(h8Agenda),
+  'agendado para HOJE é o trabalho de hoje, e dia que já passou é promessa quebrada: '
+    + 'rebaixar qualquer um dos dois é a tela escondendo o que mais precisa doer');
+
+checar('plano NÃO LIDO não vira "nada agendado"',
+  /if \(typeof pl6Plano === 'undefined' \|\| !pl6Plano\) return null;/.test(h8Agenda)
+    && template.indexOf('if (!agenda) return lista;') > -1,
+  'mapa vazio no lugar de null derrubaria para o fim da fila exatamente quem planejou '
+    + 'a semana inteira — e ninguém contesta uma fila que parece normal');
+
+checar('a ordem do ranking de risco sobrevive à descida',
+  template.indexOf('return agora.concat(depois);') > -1
+    && (function () {
+      const i = template.indexOf('const agora = [], depois = [];');
+      if (i < 0) return false;
+      return !/\.sort\(/.test(template.slice(i, i + 900));
+    }()),
+  'reordenar aqui joga fora a medida de risco que h8Insight levou a tela inteira para fazer');
+
+/* A TINTA DO SELO EXISTE — eu escrevi `var(--green-dk, var(--green))` e o --green-dk
+   nunca existiu em lugar nenhum: caiu no padrao sem erro, sem aviso, e saiu na tela com
+   3.04:1 num texto de 9.5px (medido no navegador). Token inexistente nao reclama; o que
+   reclama e esta linha. */
+checar('a tinta do selo é um token que existe de verdade',
+  /\.h8-selo-agendado[\s\S]{0,400}?color:var\(--green-ink\)/.test(template)
+    && /--green-ink:#[0-9A-Fa-f]{6};/.test(template),
+  'var(--nao-existe) cai no fallback em silêncio — foi assim que o selo saiu com '
+    + '3.04:1, abaixo do mínimo de texto pequeno');
+
+checar('o selo diz QUANDO, e a linha perde a tarja de alerta',
+  template.indexOf('h8-selo-agendado') > -1
+    && template.indexOf('item.agendado.rot') > -1
+    && template.indexOf("(item.agendado ? ' is-agendado' :") > -1,
+  'selo sem dia não responde "então quando?", e tarja vermelha em negócio já agendado '
+    + 'é a tela cobrando o que ele já resolveu');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));

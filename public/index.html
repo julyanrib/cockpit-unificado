@@ -34,6 +34,8 @@
 
     --amber-ink:#8A6516;
 
+    --green-ink:#15795D;
+
     --dark:#2B3440; --dark-ink:#FDFEFF; --dark-mut:#8E99AC; --dark-fill:rgba(253,254,255,.08);
 
     --nm-ink:#7A8494; --nm-bg:#F4F1EA; --nm-line:#DCE1EA;
@@ -1911,6 +1913,12 @@
   @media (prefers-reduced-motion:reduce){ .h8-encerra-cta{animation:none!important;} }
   @media (max-width:760px){ .h8-cad-cta,.h8-encerra-cta{min-height:44px;} }
 
+  .h8-selo-agendado{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
+    border:1px solid var(--green);border-radius:var(--r-pill);background:var(--green-soft);
+    color:var(--green-ink);font:800 9.5px 'Manrope',sans-serif;white-space:nowrap;}
+  .h8-linha.is-agendado{opacity:.72;}
+  .h8-linha.is-agendado:hover{opacity:1;}
+
   .h8-feitas{display:flex;flex-direction:column;gap:6px;margin-top:12px;padding-top:11px;
     border-top:1px solid var(--line-soft);}
   .h8-feitas-rot{font:800 9px var(--font-body);letter-spacing:.07em;text-transform:uppercase;
@@ -2049,7 +2057,6 @@
     .sign-row{flex-direction:column;align-items:flex-start;gap:10px;}
     .sign-row input{width:100%;}
   }
-  @media (max-width:640px){ .hoje-hero-stats{grid-template-columns:1fr!important;gap:16px!important;text-align:left!important;} .hoje-hero-stats > div{align-items:flex-start!important;text-align:left!important;} }
   @media (max-width:420px){
     .kpi-strip, .kpi-strip.exp{grid-template-columns:1fr 1fr;}
     .kpi .v{font-size:20px;}
@@ -8641,6 +8648,14 @@ function h8LinhaHTML(item, i, ins) {
       + (eMelhor ? ' <i>— melhor ação</i>' : '') + '</button>';
   };
 
+  const selo = item.agendado
+    ? '<span class="h8-selo-agendado">✓ já na sua agenda · '
+      + esc(String(item.agendado.rot || item.agendado.iso))
+      + (item.agendado.data ? ' ' + esc(String(item.agendado.data)) : '')
+      + (item.agendado.hora ? ' às ' + esc(String(item.agendado.hora)) : '')
+      + '</span>'
+    : '';
+
   const botoes = ins.melhor === 'criar'
     ? bt('criar', 'criar negócio + gravar visita ▸', 'data-h8-criar="' + id + '"')
       + bt('visitar', 'agendar retorno ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
@@ -8690,8 +8705,8 @@ function h8LinhaHTML(item, i, ins) {
       + '</div>';
   }
 
-  return '<div class="h8-linha' + (ins.cat === 'sla' ? ' is-sla' : '')
-    + (ins.cat === 'quente' ? ' is-quente' : '') + '" data-h8-linha="' + id + '">'
+  return '<div class="h8-linha' + (item.agendado ? ' is-agendado' : (ins.cat === 'sla' ? ' is-sla' : ''))
+    + (!item.agendado && ins.cat === 'quente' ? ' is-quente' : '') + '" data-h8-linha="' + id + '">'
     + '<span class="h8-rank' + (ins.cat === 'sla' ? ' is-sla' : '')
     +   (ins.cat === 'quente' ? ' is-quente' : '') + '">' + (i + 1) + '</span>'
     + '<div class="h8-corpo">'
@@ -8701,6 +8716,7 @@ function h8LinhaHTML(item, i, ins) {
     +       esc(etapa) + (dias != null ? ' · há ' + dias + 'd' : '') + '</span>'
     +     '<span class="h8-venc' + (ins.cat === 'sla' ? ' is-sla' : '') + '">'
     +       esc(ins.venc) + '</span>'
+    +     selo
     +   '</div>'
     +   '<div class="h8-motivo">' + esc(ins.motivo) + '</div>'
     +   '<div class="h8-ultimo">' + esc(ins.ultimo) + (tel ? '' : ' · sem telefone no CRM') + '</div>'
@@ -8708,6 +8724,37 @@ function h8LinhaHTML(item, i, ins) {
     +   painel
     + '</div>'
     + '</div>';
+}
+
+function h8AgendadoNaSemana() {
+  if (typeof pl6Plano === 'undefined' || !pl6Plano) return null;
+  if (typeof pl6GradeDoPlano !== 'function' || typeof pl6Dias !== 'function') return null;
+  let dias, grade;
+  try {
+    dias = pl6Dias(typeof pl6SegundaDaSemana === 'function' ? pl6SegundaDaSemana() : null);
+    grade = pl6GradeDoPlano();
+  } catch (e) { return null; }
+  if (!Array.isArray(grade) || !Array.isArray(dias)) return null;
+  const hoje = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
+    ? agendaChave(agendaAgora())
+    : (typeof isoDate === 'function' ? isoDate(new Date()) : '');
+  const mapa = {};
+  grade.forEach(function (col, di) {
+    const dia = dias[di];
+    if (!dia || !dia.iso) return;
+
+    if (String(dia.iso) <= String(hoje)) return;
+    (Array.isArray(col) ? col : []).forEach(function (v, si) {
+      const id = (typeof pl6SlotId === 'function') ? pl6SlotId(v) : null;
+      if (!id || String(id).indexOf('c-') !== 0) return;
+      const hora = (typeof pl6SlotHora === 'function') ? pl6SlotHora(v, si) : '';
+      const dealId = String(id).slice(2);
+      if (!mapa[dealId] || String(dia.iso) < String(mapa[dealId].iso)) {
+        mapa[dealId] = { iso: dia.iso, rot: dia.rot || dia.data || dia.iso, data: dia.data || null, hora: hora };
+      }
+    });
+  });
+  return mapa;
 }
 
 function h8Fila(r, diag) {
@@ -8770,7 +8817,21 @@ function h8Fila(r, diag) {
     });
   });
 
-  return extras.concat(base);
+  const lista = extras.concat(base);
+
+  const agenda = h8AgendadoNaSemana();
+  if (!agenda) return lista;
+
+  const agora = [], depois = [];
+  lista.forEach(function (item) {
+    const id = item && item.lead ? String(item.lead.id) : null;
+    const quando = id ? agenda[id] : null;
+    if (!quando) { agora.push(item); return; }
+    item.agendado = quando;
+    depois.push(item);
+  });
+
+  return agora.concat(depois);
 }
 
 function h8LigarFila(el, r, redesenhar) {
@@ -9225,6 +9286,12 @@ async function renderMeuPainel() {
   if (!r) {
     el.innerHTML = `<div class="empty-state">Não encontrei seu cadastro no cockpit. Fale com seu gestor.</div>`;
     return;
+  }
+
+  if (!d7PreCargaFeita && sessaoAtual && sessaoAtual.role === 'rep' && typeof pl6Carregar === 'function') {
+    d7PreCargaFeita = true;
+    try { await pl6Carregar(r, pl6SegundaDaSemana()); }
+    catch (e) { console.error('[Hoje] plano da semana não carregou — a fila não vai saber o que já está agendado:', e && e.message); }
   }
 
   if (DATA.supabase && supa && !dailiesCarregado) await carregarDailies();
