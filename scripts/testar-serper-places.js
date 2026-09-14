@@ -366,6 +366,31 @@ checar('e o veto continua ganhando delas',
   }
 }());
 
+
+/* ══ A IMPORTAÇÃO VAI EM LOTES (14/09/26) ══════════════════════════════════════════
+   A rodada com as 12 praças derivadas achou 651 contas e o importador recusou tudo:
+   "Máximo 500 leads por importação". Nada entrou — e o teto dele não é capricho: 651
+   inserts numa transação só estoura tempo de função no meio e deixa metade gravada.
+
+   LOTES DE 200, e não de 499: o objetivo não é raspar o teto, é cada lote falhar
+   sozinho. Uma recusa custa 200 contas e as outras entram — e o log diz qual caiu. */
+checar('a importação vai em lotes menores que o teto do endpoint',
+  /const TAMANHO_DO_LOTE = (\d+);/.test(coletor)
+    && Number(coletor.match(/const TAMANHO_DO_LOTE = (\d+);/)[1]) <= 400,
+  'acima do teto de 500 o importador recusa a chamada inteira e a rodada não traz nada');
+
+checar('os lotes vão um de cada vez',
+  /for \(let i = 0; i < lotes\.length; i\+\+\)/.test(coletor)
+    && /await fetch\(`\$\{COCKPIT_URL\}\/api\/importar-leads`/.test(coletor),
+  'chamadas simultâneas no mesmo endpoint de escrita fazem o dedup dele decidir por '
+    + 'ordem de chegada');
+
+checar('lote recusado aparece, e rodada sem NENHUM lote fica vermelha',
+  /lotesQueFalharam\+\+/.test(coletor)
+    && /lotesQueFalharam === lotes\.length/.test(coletor)
+    && /NENHUM lote entrou/.test(coletor),
+  'lote que cai sumindo no verde é a rodada dizendo que importou o que não importou');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
