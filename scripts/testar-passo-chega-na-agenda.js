@@ -86,6 +86,60 @@ checar('os dois espelhos existem com o nome que a regra cita',
   'se um deles foi renomeado, a checagem acima reprova o arquivo inteiro por um motivo '
     + 'que não é o verdadeiro');
 
+
+/* ══ A ROTA OCUPA SLOT NA GRADE (14/09/26) ═════════════════════════════════════════
+   Julyan: "rota do mapa tem q ocupar slot na grade, até pra gente combater se ele vai
+   mesmo ou não né". O slot é a PROMESSA e o desfecho no HubSpot é a evidência — sem o
+   slot não há o que cobrar. Antes a rota vivia só em leads_prospeccao, que a Daily do
+   gestor não lê: quem montava seis paradas aparecia para ele como "não prometeu". */
+
+checar('as portas da rota põem a parada na GRADE, não só na sessão',
+  (function () {
+    /* registrarAgendamentoLocal sozinho é espelho de sessão: resolve a faixa de agenda
+       da Hoje e não resolve a Daily do gestor. As cinco portas têm de passar pelo
+       espelho completo, que escreve no plano da semana. */
+    const portas = ['adicionarNaRotaDoRep', 'adicionarProspeccaoNaRota'];
+    return portas.every(function (fn) {
+      const i = corpo.indexOf('function ' + fn);
+      if (i < 0) return false;
+      return corpo.slice(i, i + 4000).indexOf('espelharPassoNasTelas(') > -1;
+    });
+  }()),
+  'sem o plano da semana, a parada não chega na Daily do gestor e o executivo aparece '
+    + 'como "na mesa · não prometeu" com o dia cheio de visitas');
+
+checar('o id da grade sai da FORMA do id, não cravado em "c-"',
+  /const idNaGrade = \(\/\^\[0-9\]\+\$\/\.test\(String\(lead\.id\)\) \? 'c-' : 'n-'\) \+ String\(lead\.id\);/
+    .test(corpo),
+  'conta de prospecção é n-<uuid> na munição; gravar c-<uuid> não dá erro — dá slot '
+    + 'órfão, que a grade desenha e ninguém consegue abrir');
+
+checar('o envio em lote grava uma parada por vez',
+  (function () {
+    const i = corpo.indexOf('btnEnviarAgenda.textContent = `Enviando');
+    if (i < 0) return false;
+    const trecho = corpo.slice(i, i + 1600);
+    return /await espelharPassoNasTelas\(/.test(trecho);
+  }()),
+  'o espelho lê a grade inteira, muda um slot e grava a grade inteira de volta — seis '
+    + 'em paralelo são cinco paradas perdidas, com sucesso em todas as chamadas');
+
+checar('e o lote não dispara um aviso por parada',
+  /await espelharPassoNasTelas\([^;]*\{ silencioso: true \}\)/.test(corpo)
+    && /const calado = !!\(opcoes && opcoes\.silencioso\);/.test(corpo),
+  'seis toasts em fila é a tela empurrando o executivo para fora dela');
+
+checar('a frase do lote diz quantas entraram no Planejamento',
+  corpo.indexOf('const sobreAGrade = (naGrade === 0 && foraDaGrade.length === 0)') > -1
+    && corpo.indexOf('No seu Planejamento entraram ') > -1,
+  '"na agenda" e "no Planejamento" não são a mesma coisa, e é a segunda que o gestor vê '
+    + 'na Daily dele');
+
+checar('a conta recém-criada pelo mapa entra na munição antes de virar slot',
+  /prospeccaoCache\.push\(lead\);/.test(corpo),
+  'a munição do Planejamento sai de prospeccaoCache — sem isso o espelho recusaria com '
+    + '"fora da munição" uma conta que o próprio clique acabou de criar');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
