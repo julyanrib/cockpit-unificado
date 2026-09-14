@@ -169,7 +169,11 @@ checar('supabase/migrations/*.sql e ignoravel, lib/*.sql nao',
     'rotulo novo quebra a metrica por origem em mais um pedaco');
 
   checar('sem chave o script FALHA em vez de rodar calado',
-    /GOOGLE_PLACES_API_KEY ausente/.test(places) && /process\.exit\(1\)/.test(places),
+    /* A REGRA E "falha e avisa", NAO o nome da chave (14/09/26). Esta linha dizia
+       GOOGLE_PLACES_API_KEY e reprovou a troca da fonte para o Serper — mudanca correta,
+       reprovada por grafia. O nome da chave e conferido contra o workflow em
+       testar-serper-places.js, que e onde essa pergunta mora. */
+    (function () { const j = places.indexOf('ausente. Esta rodada não tem como buscar nada'); if (j < 0) return false; const ramo = places.slice(j, j + 700); return /process\.exit\(1\)/.test(ramo); }()),
     'rodada silenciosa que nao importa nada e pior que rodada que falha e avisa');
 
   checar('sem avaliacoes o lead nao entra (ausencia nao vira zero)',
