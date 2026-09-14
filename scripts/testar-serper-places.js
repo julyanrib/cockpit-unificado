@@ -25,6 +25,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 const raiz = path.join(__dirname, '..');
 const lib = require(path.join(raiz, 'lib', 'serper-places.js'));
@@ -255,6 +256,114 @@ checar('e o veto continua ganhando delas',
     erros.length === 0,
     erros.length + ' de ' + casos.length + ' endereços reais saem errados — '
       + erros.map(function (c) { return String(c[0]).slice(0, 40); }).join(' | '));
+}());
+
+
+/* ══ SÓ SE BUSCA ONDE TEM DONO (14/09/26, Julyan) ══════════════════════════════════
+   "quero só apenas para os executivos que temos e o que voce ja sabe do bairro de cada um."
+
+   A lista de praças era escrita à mão e já divergia do mapa real: trazia SALVADOR (39
+   contas boas importadas sem dono) e bairros de São Paulo que ninguém nomeou, e NÃO
+   trazia Nova Iguaçu, Canoas, Mogi, Suzano, Guarulhos — que têm dono e ficavam sem
+   munição nova.
+
+   Duas listas para a mesma pergunta divergem em silêncio. Agora é uma: o MESMO
+   territorios.json que o importador usa para decidir de quem é o lead. */
+(function () {
+  const cidadesDoColetor = (function () {
+    const m = coletor.match(/const CIDADES = \(function[\s\S]*?\}\(\)\);/);
+    if (!m) return null;
+    const corpo = m[0].replace("require('../data/territorios.json')",
+      'require(' + JSON.stringify(path.join(raiz, 'data', 'territorios.json')) + ')');
+    try {
+      return new Function('require', corpo + ' return CIDADES;')(require);
+    } catch (e) { return null; }
+  }());
+
+  checar('a lista de praças é DERIVADA de territorios.json, não escrita à mão',
+    /require\('\.\.\/data\/territorios\.json'\)/.test(coletor)
+      && !/municipio: 'Salvador'/.test(coletor),
+    'lista paralela envelhece: a de 03/09 buscava Salvador, onde não há executivo, e '
+      + 'ignorava cinco cidades que têm');
+
+  checar('a derivação produz praças de verdade',
+    Array.isArray(cidadesDoColetor) && cidadesDoColetor.length >= 8,
+    'sem isto as checagens abaixo mediriam uma lista vazia e passariam verdes');
+
+  if (Array.isArray(cidadesDoColetor) && cidadesDoColetor.length) {
+    const territorios = require(path.join(raiz, 'data', 'territorios.json')).territorios || [];
+    const ativos = territorios.filter(function (t) { return t && t.ativo !== false; });
+
+    /* toda praça buscada tem de ter pelo menos um rep ATIVO declarado nela */
+    const semDono = cidadesDoColetor.filter(function (c) {
+      return !ativos.some(function (t) {
+        return (t.areas || []).some(function (a) {
+          return a && a.municipio === c.municipio && a.uf === c.uf;
+        });
+      });
+    });
+    checar('nenhuma praça é buscada sem executivo ativo declarado nela',
+      semDono.length === 0,
+      semDono.map(function (c) { return c.municipio; }).join(', ')
+        + ' — foi assim que 39 restaurantes do Rio Vermelho entraram sem dono');
+
+    /* rep inativo não gera praça: é a trava que mantém a Amanda fora */
+    const inativos = territorios.filter(function (t) { return t && t.ativo === false; });
+    const soDeInativo = cidadesDoColetor.filter(function (c) {
+      const deAtivo = ativos.some(function (t) {
+        return (t.areas || []).some(function (a) { return a && a.municipio === c.municipio; });
+      });
+      const deInativo = inativos.some(function (t) {
+        return (t.areas || []).some(function (a) { return a && a.municipio === c.municipio; });
+      });
+      return deInativo && !deAtivo;
+    });
+    /* ══ ESTA CHECAGEM PRECISA DE TERRITÓRIO FABRICADO ═══════════════════════════
+       Contra o arquivo real ela não tem dente: hoje Vitória tem a Amanda (inativa) E o
+       Marco (ativo), então "cidade só de inativo" não existe, e tirar a trava do código
+       passava verde. Medi isso com sabotagem antes de deixar assim.
+
+       Então a derivação é exercitada contra um mapa inventado onde o ÚNICO rep daquela
+       cidade está inativo. É o caso que a trava existe para cobrir, e é o caso que vai
+       acontecer no dia em que alguém sair e ninguém assumir a praça — que já aconteceu
+       uma vez aqui, com Vitória. */
+    checar('praça que só tem rep inativo não é buscada',
+      (function () {
+        const fixture = { territorios: [
+          { rep: 'Quem Saiu', ativo: false,
+            areas: [{ municipio: 'Cidade Fantasma', uf: 'XX', bairros: ['Centro'] }] },
+          { rep: 'Quem Ficou',
+            areas: [{ municipio: 'Cidade Viva', uf: 'XX', bairros: ['Centro'] }] }
+        ] };
+        const arq = path.join(os.tmpdir(), 'territorios-fixture-' + process.pid + '.json');
+        fs.writeFileSync(arq, JSON.stringify(fixture));
+        try {
+          const m = coletor.match(/const CIDADES = \(function[\s\S]*?\}\(\)\);/);
+          if (!m) return false;
+          const corpo = m[0].replace("require('../data/territorios.json')",
+            'require(' + JSON.stringify(arq) + ')');
+          const lista = new Function('require', corpo + ' return CIDADES;')(require);
+          const temFantasma = lista.some(function (c) { return c.municipio === 'Cidade Fantasma'; });
+          const temViva = lista.some(function (c) { return c.municipio === 'Cidade Viva'; });
+          return !temFantasma && temViva;
+        } finally { try { fs.unlinkSync(arq); } catch (e) {} }
+      }()),
+      'carregar munição para quem saiu é enchê-la numa carteira que ninguém abre — e a praça fica parecendo atendida');
+
+    /* cidade inteira de um rep é consultada pelo nome da cidade */
+    const inteiras = ativos.reduce(function (acc, t) {
+      (t.areas || []).forEach(function (a) { if (a && a.todoOMunicipio) acc.push(a.municipio); });
+      return acc;
+    }, []);
+    const faltando = inteiras.filter(function (mun) {
+      const c = cidadesDoColetor.find(function (x) { return x.municipio === mun; });
+      return !c || c.bairros.indexOf(mun) < 0;
+    });
+    checar('cidade inteira de alguém é consultada pelo nome da cidade',
+      faltando.length === 0,
+      faltando.join(', ') + ' — sem a consulta da cidade, quem tem o município todo só '
+        + 'recebe o que cair nos bairros que OUTRO rep nomeou');
+  }
 }());
 
 if (falhas.length) {
