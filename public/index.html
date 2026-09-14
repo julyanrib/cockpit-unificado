@@ -11551,11 +11551,13 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
     if (exigePasso && (!passoAberto || pedindoOutro)) {
       passoAcao = (fundo.querySelector('#fn3PassoAcao').value || '').trim();
       passoData = fundo.querySelector('#fn3PassoData').value || '';
-      if (!passoAcao || !passoData) {
+
+      const metade = (!!passoAcao) !== (!!passoData);
+      if (metade) {
         status.className = 'fn3-reg-status is-erro';
-        status.textContent = passoAberto
-          ? 'Você pediu um passo a mais: escreva a ação e a data, ou feche esta caixa e siga com o passo que já existe.'
-          : 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
+        status.textContent = passoAcao
+          ? 'Escreva a data do próximo passo — ação sem data vira tarefa vencendo hoje.'
+          : 'Escreva o que é o próximo passo, ou deixe os dois em branco para passar sem ele.';
         return;
       }
     }
@@ -11588,11 +11590,15 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} ✓ — a resposta do HubSpot demorou`
           + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
           + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
-      } else if (passoOk && !passoData) {
+      } else if (passoOk && !passoData && passoAberto) {
 
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''}`
           + ` · o próximo passo que já existia continua valendo: «${esc(passoAberto ? passoAberto.subject : '')}»`
           + ` — nenhuma tarefa nova foi criada.`, 'sucesso');
+      } else if (passoOk && !passoData) {
+
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''}`
+          + ` · SEM próximo passo. Se não fechou agora, date na ficha — negócio descoberto some da sua fila.`, 'atencao');
       } else if (passoOk) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''} · próximo passo em ${fmtDailyLabel(passoData)}.`, 'sucesso');
       } else {
@@ -24968,7 +24974,8 @@ async function gravarPassagemDeEtapa(opts) {
   const para = String(opts.para);
   const propriedades = opts.propriedades || {};
   const exigePasso = !!(opts.passoAcao && opts.passoData);
-  const saida = { ok: false, erro: null, passoOk: !opts.exigePasso, erroPasso: null, notaOk: true };
+
+  const saida = { ok: false, erro: null, passoOk: !exigePasso, erroPasso: null, notaOk: true };
 
   const token = await tokenDeSessaoGlobal();
   const cab = { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
@@ -25031,7 +25038,13 @@ async function gravarPassagemDeEtapa(opts) {
       const dp = await rp.json().catch(() => ({}));
       if (rp.ok && dp.ok) {
         saida.passoOk = true;
-        espelharPassoNasTelas(lead, opts.passoData, opts.passoTipo || 'Follow-up', lead.ownerId);
+
+        try {
+          const espelho = espelharPassoNasTelas(lead, opts.passoData, opts.passoTipo || 'Follow-up', lead.ownerId);
+          if (espelho && typeof espelho.catch === 'function') {
+            espelho.catch(function (e) { console.error('Espelho do passo na passagem de etapa:', e && e.message); });
+          }
+        } catch (e) { console.error('Espelho do passo na passagem de etapa:', e && e.message); }
       }
       else saida.erroPasso = (dp && dp.erro) || 'o HubSpot recusou a criação da tarefa';
     } catch (e) { saida.erroPasso = String((e && e.message) || e); }
@@ -25185,8 +25198,12 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
     const passoCanal = exigePasso ? (campoPasso('.pe-passo-canal').value || 'ligacao') : null;
     const passoAcao = exigePasso ? (campoPasso('.pe-passo-acao').value || '').trim() : '';
     const passoData = exigePasso ? (campoPasso('.pe-passo-data').value || '') : '';
-    if (exigePasso && (!passoAcao || !passoData)) {
-      status.textContent = 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
+
+    const metadeDoPasso = exigePasso && ((!!passoAcao) !== (!!passoData));
+    if (metadeDoPasso) {
+      status.textContent = passoAcao
+        ? 'Escreva a data do próximo passo — ação sem data vira tarefa vencendo hoje.'
+        : 'Escreva o que é o próximo passo, ou deixe os dois em branco para passar sem ele.';
       status.style.color = 'var(--red)';
       return;
     }
@@ -25222,6 +25239,10 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} ✓ — a resposta do HubSpot demorou`
           + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
           + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
+      } else if (passoOk && !passoData) {
+
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''}`
+          + ` · SEM próximo passo. Se não fechou agora, date na ficha — negócio descoberto some da sua fila.`, 'atencao');
       } else if (passoOk) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''} · próximo passo em ${fmtDailyLabel(passoData)}.`, 'sucesso');
       } else {

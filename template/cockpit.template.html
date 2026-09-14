@@ -18328,11 +18328,24 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
     if (exigePasso && (!passoAberto || pedindoOutro)) {
       passoAcao = (fundo.querySelector('#fn3PassoAcao').value || '').trim();
       passoData = fundo.querySelector('#fn3PassoData').value || '';
-      if (!passoAcao || !passoData) {
+      /* ══ OS DOIS, OU NENHUM (14/09/26, Julyan) ═══════════════════════════════════
+         "ele nao precisa ser obrigatório pra passar de etapa, ele pode fazer sem
+         proximo passo, vai q ele vende na hora."
+
+         Vazio PASSA: quem fechou na hora nao fica preso numa tela pedindo tarefa para
+         um negocio que acabou de virar cliente. O aviso do resultado diz que passou
+         descoberto, e os contadores de "com proximo passo" continuam contando — o
+         passo deixou de ser porteira, nao deixou de ser medido.
+
+         METADE preenchida continua travando, e esta e a parte que nao afrouxa: acao
+         sem data vira tarefa vencendo HOJE, que foi o que pos 196 tarefas excedentes
+         nesta base e inflou a aba Hoje em 2,4x. */
+      const metade = (!!passoAcao) !== (!!passoData);
+      if (metade) {
         status.className = 'fn3-reg-status is-erro';
-        status.textContent = passoAberto
-          ? 'Você pediu um passo a mais: escreva a ação e a data, ou feche esta caixa e siga com o passo que já existe.'
-          : 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
+        status.textContent = passoAcao
+          ? 'Escreva a data do próximo passo — ação sem data vira tarefa vencendo hoje.'
+          : 'Escreva o que é o próximo passo, ou deixe os dois em branco para passar sem ele.';
         return;
       }
     }
@@ -18381,13 +18394,22 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} ✓ — a resposta do HubSpot demorou`
           + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
           + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
-      } else if (passoOk && !passoData) {
+      } else if (passoOk && !passoData && passoAberto) {
         /* SEM TAREFA NOVA porque o negócio já tinha uma aberta. Cair no ramo de baixo
            diria "próximo passo em Invalid Date" — o mesmo defeito que o Perdido teve
-           quando passou a ser isento. O toast diz o que ficou valendo. */
+           quando passou a ser isento. O toast diz o que ficou valendo.
+           ESTE ERA O RAMO INALCANÇÁVEL até 14/09: `passoOk` nascia da flag errada e
+           todo negócio com passo aberto caía no vermelho dizendo "(null)". */
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''}`
           + ` · o próximo passo que já existia continua valendo: «${esc(passoAberto ? passoAberto.subject : '')}»`
           + ` — nenhuma tarefa nova foi criada.`, 'sucesso');
+      } else if (passoOk && !passoData) {
+        /* PASSOU SEM PRÓXIMO PASSO, de propósito (14/09/26, Julyan: "vai q ele vende na
+           hora"). Não é erro e não leva tarja vermelha — mas também não passa calado:
+           o negócio está descoberto, e quem acabou de mover é quem pode resolver isso
+           em dez segundos. Opcional não é invisível. */
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''}`
+          + ` · SEM próximo passo. Se não fechou agora, date na ficha — negócio descoberto some da sua fila.`, 'atencao');
       } else if (passoOk) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]}${notaOk && linhas.length ? ' · evidência registrada' : ''} · próximo passo em ${fmtDailyLabel(passoData)}.`, 'sucesso');
       } else {
@@ -36798,7 +36820,15 @@ async function gravarPassagemDeEtapa(opts) {
   const para = String(opts.para);
   const propriedades = opts.propriedades || {};
   const exigePasso = !!(opts.passoAcao && opts.passoData);
-  const saida = { ok: false, erro: null, passoOk: !opts.exigePasso, erroPasso: null, notaOk: true };
+  /* ══ A MESMA CONDICAO, NAO DUAS (14/09/26) ══════════════════════════════════════
+     Era `!opts.exigePasso` — a flag do CHAMADOR, que diz "esta etapa pede passo". O
+     bloco que cria a tarefa usa o `exigePasso` local, que diz "ha acao E data para
+     criar". As duas discordam no caso mais comum de todos: negocio que JA TEM passo
+     aberto, onde a tela de proposito manda os campos vazios para nao empilhar tarefa.
+     Resultado: bloco pulado (certo), passoOk false (errado), erroPasso nunca
+     preenchido — e a tela dizia ao Marco "o proximo passo NAO foi criado (null)"
+     sobre uma tarefa que ninguem tentou criar, num negocio que ja tinha uma. */
+  const saida = { ok: false, erro: null, passoOk: !exigePasso, erroPasso: null, notaOk: true };
 
   const token = await tokenDeSessaoGlobal();
   const cab = { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) };
@@ -36870,7 +36900,22 @@ async function gravarPassagemDeEtapa(opts) {
       const dp = await rp.json().catch(() => ({}));
       if (rp.ok && dp.ok) {
         saida.passoOk = true;
-        espelharPassoNasTelas(lead, opts.passoData, opts.passoTipo || 'Follow-up', lead.ownerId);
+        /* ══ O ESPELHO E COMPLEMENTO, E FICA ISOLADO (14/09/26) ══════════════════
+           Julyan: "o proximo passo tem q ir pro planejamento/daily nunca travar
+           mudança de etapa".
+
+           A tarefa JA foi criada no HubSpot quando esta linha roda. Se o espelho
+           falhar — Supabase fora, semana cheia, negocio fora da municao — isso nao
+           pode virar "o proximo passo NAO foi criado": ele foi. Antes, um estouro
+           aqui caia no catch de baixo e preenchia `erroPasso` com um erro que nao
+           era da tarefa. E desde 14/09 ela devolve promessa: sem o catch, uma recusa
+           virava rejeicao nao tratada no console e sumia. */
+        try {
+          const espelho = espelharPassoNasTelas(lead, opts.passoData, opts.passoTipo || 'Follow-up', lead.ownerId);
+          if (espelho && typeof espelho.catch === 'function') {
+            espelho.catch(function (e) { console.error('Espelho do passo na passagem de etapa:', e && e.message); });
+          }
+        } catch (e) { console.error('Espelho do passo na passagem de etapa:', e && e.message); }
       }
       else saida.erroPasso = (dp && dp.erro) || 'o HubSpot recusou a criação da tarefa';
     } catch (e) { saida.erroPasso = String((e && e.message) || e); }
@@ -37046,8 +37091,14 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
     const passoCanal = exigePasso ? (campoPasso('.pe-passo-canal').value || 'ligacao') : null;
     const passoAcao = exigePasso ? (campoPasso('.pe-passo-acao').value || '').trim() : '';
     const passoData = exigePasso ? (campoPasso('.pe-passo-data').value || '') : '';
-    if (exigePasso && (!passoAcao || !passoData)) {
-      status.textContent = 'Falta o próximo passo: ação e data. Etapa movida sem próximo passo é negócio que para na etapa nova.';
+    /* OS DOIS, OU NENHUM — a mesma regra do registro rápido do Meu funil, e pelo mesmo
+       motivo (ver a nota longa lá). Duas telas movem etapa; se só uma afrouxar, o
+       executivo aprende que "depende da porta que eu usei". */
+    const metadeDoPasso = exigePasso && ((!!passoAcao) !== (!!passoData));
+    if (metadeDoPasso) {
+      status.textContent = passoAcao
+        ? 'Escreva a data do próximo passo — ação sem data vira tarefa vencendo hoje.'
+        : 'Escreva o que é o próximo passo, ou deixe os dois em branco para passar sem ele.';
       status.style.color = 'var(--red)';
       return;
     }
@@ -37095,6 +37146,11 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} ✓ — a resposta do HubSpot demorou`
           + ` e eu confirmei depois. A etapa e os campos foram gravados; a evidência em nota NÃO`
           + ` foi (a sequência parou no meio). Se ela importa, escreva na ficha.`, 'atencao');
+      } else if (passoOk && !passoData) {
+        /* PASSOU SEM PRÓXIMO PASSO (14/09/26). Sem este ramo, a linha de baixo escrevia
+           "próximo passo em Invalid Date" — a data vazia chegando no formatador. */
+        mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''}`
+          + ` · SEM próximo passo. Se não fechou agora, date na ficha — negócio descoberto some da sua fila.`, 'atencao');
       } else if (passoOk) {
         mostrarToast(`"${lead.name}" está em ${STAGE_LABELS[para]} no HubSpot${quantos ? ` · ${quantos} propriedade${quantos === 1 ? '' : 's'}` : ''} · próximo passo em ${fmtDailyLabel(passoData)}.`, 'sucesso');
       } else {
