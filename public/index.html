@@ -32302,7 +32302,7 @@ function dg4MinutosParaTrava() {
   return Math.round((trava - agora) / 60000);
 }
 
-function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
+function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil, novasPorId) {
   const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
     ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
 
@@ -32339,9 +32339,14 @@ function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
       : (function () {
           const dealId = String(cru).indexOf('c-') === 0 ? String(cru).slice(2) : null;
           const doFunil = dealId ? (mapaFunil || {})[dealId] : null;
+
+          const ehNova = String(cru).indexOf('n-') === 0;
+          const daProspeccao = ehNova ? ((novasPorId || {})[String(cru).slice(2)] || null) : null;
           return {
             id: String(cru), dealId: dealId, hora: hora, acao: '',
-            nome: doFunil ? doFunil.nome : (String(cru).indexOf('n-') === 0 ? 'conta nova da prospecção' : String(cru)),
+            nome: doFunil ? doFunil.nome
+              : daProspeccao && daProspeccao.nome ? daProspeccao.nome
+              : (ehNova ? 'conta nova da prospecção' : String(cru)),
             origem: String(cru).indexOf('n-') === 0 ? 'lote' : null,
             _daGrade: true
           };
@@ -32545,7 +32550,7 @@ function dg4Dados(ctx) {
       || doPlano.semHora.length > 0;
     const daGrade = temDoPlano
       ? { horas: doPlano.horas, porHora: {}, semHora: [], daGrade: false, planejados: 0 }
-      : dg4SlotsDaGrade((c.grades || {})[oid] || null, c.diaEmFoco || hoje, mapaFunil);
+      : dg4SlotsDaGrade((c.grades || {})[oid] || null, c.diaEmFoco || hoje, mapaFunil, c.novas);
     const grade = temDoPlano ? doPlano : daGrade;
     const preenchidos = grade.horas.filter(function (h) { return grade.porHora[h]; });
 
@@ -33233,6 +33238,8 @@ async function renderDaily() {
 
   let gradePorOwner = {}, gradeLida = true;
 
+  const novasPorId = {};
+
   let rotaHojePorOwner = {}, rotaSemanaTotal = null, rotaHojeTotal = null;
   if (!souRepDailyPre) {
 
@@ -33256,6 +33263,24 @@ async function renderDaily() {
       gradeLida = false;
     } else {
       (gradeData || []).forEach(function (l) { gradePorOwner[String(l.owner_id)] = l; });
+    }
+
+    const idsNovas = [];
+    Object.keys(gradePorOwner).forEach(function (k) {
+      const g = gradePorOwner[k] && gradePorOwner[k].grade;
+      if (!Array.isArray(g)) return;
+      g.forEach(function (col) {
+        (Array.isArray(col) ? col : []).forEach(function (v) {
+          const cru = v && (typeof v === "object" ? v.id : v);
+          if (typeof cru === "string" && cru.indexOf("n-") === 0) idsNovas.push(cru.slice(2));
+        });
+      });
+    });
+    if (idsNovas.length) {
+      const { data: novasData, error: novasErro } = await supa.from('leads_prospeccao')
+        .select('id,nome,bairro').in('id', [...new Set(idsNovas)]);
+      if (novasErro) console.error('Daily — nomes das contas novas:', novasErro.message);
+      else (novasData || []).forEach(function (l) { novasPorId[String(l.id)] = l; });
     }
 
     const dowRota = new Date(dailyRefDate + 'T12:00:00').getDay();
@@ -34746,6 +34771,7 @@ async function renderDaily() {
     DG4_CTX = {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
       grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
+      novas: novasPorId,
       foraDoCampo: abertoDeQuemSaiu,
 
       ontem: yesterdayISO,

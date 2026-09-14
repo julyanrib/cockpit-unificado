@@ -47181,7 +47181,7 @@ function dg4MinutosParaTrava() {
    NOME DA CONTA: sai do funil pelo dealId. Quando o negócio não está no snapshot (conta
    nova que ainda não virou deal, ou negócio fechado depois), o slot entra com o id e o
    selo diz que a origem não foi registrada — nunca com um nome inventado. */
-function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
+function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil, novasPorId) {
   const horas = (typeof PL6_HORAS !== 'undefined' && Array.isArray(PL6_HORAS))
     ? PL6_HORAS : ['09:00', '10:30', '13:30', '15:00', '16:30', '18:00', '19:00'];
   /* dia sem nada tem eixo VAZIO, e nao sete janelas em branco — quem consome conta
@@ -47237,9 +47237,17 @@ function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil) {
       : (function () {
           const dealId = String(cru).indexOf('c-') === 0 ? String(cru).slice(2) : null;
           const doFunil = dealId ? (mapaFunil || {})[dealId] : null;
+          /* A CONTA NOVA TEM NOME, e ele vem de leads_prospeccao (ver a consulta em
+             renderDaily). O rotulo generico continua existindo para quando a leitura
+             falhar ou o registro sumir — dizer "conta nova da prospecção" e honesto;
+             inventar um nome nao seria. */
+          const ehNova = String(cru).indexOf('n-') === 0;
+          const daProspeccao = ehNova ? ((novasPorId || {})[String(cru).slice(2)] || null) : null;
           return {
             id: String(cru), dealId: dealId, hora: hora, acao: '',
-            nome: doFunil ? doFunil.nome : (String(cru).indexOf('n-') === 0 ? 'conta nova da prospecção' : String(cru)),
+            nome: doFunil ? doFunil.nome
+              : daProspeccao && daProspeccao.nome ? daProspeccao.nome
+              : (ehNova ? 'conta nova da prospecção' : String(cru)),
             origem: String(cru).indexOf('n-') === 0 ? 'lote' : null,
             _daGrade: true
           };
@@ -47577,7 +47585,7 @@ function dg4Dados(ctx) {
       || doPlano.semHora.length > 0;
     const daGrade = temDoPlano
       ? { horas: doPlano.horas, porHora: {}, semHora: [], daGrade: false, planejados: 0 }
-      : dg4SlotsDaGrade((c.grades || {})[oid] || null, c.diaEmFoco || hoje, mapaFunil);
+      : dg4SlotsDaGrade((c.grades || {})[oid] || null, c.diaEmFoco || hoje, mapaFunil, c.novas);
     const grade = temDoPlano ? doPlano : daGrade;
     const preenchidos = grade.horas.filter(function (h) { return grade.porHora[h]; });
     /* "TEM PLANO" passa a valer para os dois: planejar na grade é planejar. O que a tela
@@ -48535,6 +48543,9 @@ async function renderDaily() {
      pessoas preencheram hoje e que a Daily do gestor não lia. Mesma bandeira de erro:
      falha de leitura não pode virar acusação de time parado. */
   let gradePorOwner = {}, gradeLida = true;
+  /* nome e bairro das contas da prospeccao que estao na grade do dia, por id — ver
+     "O NOME DA CONTA NOVA" logo abaixo. */
+  const novasPorId = {};
   /* CONTAS NOVAS EM ROTA (28/08/26) — o pedido do Julyan de "quantas prospecções
      novas eles vão fazer", respondido com um gesto que JÁ EXISTE no produto em vez
      de indicador novo: marcar uma conta da Prospecção com data_rota é o executivo
@@ -48588,6 +48599,36 @@ async function renderDaily() {
       gradeLida = false;
     } else {
       (gradeData || []).forEach(function (l) { gradePorOwner[String(l.owner_id)] = l; });
+    }
+
+    /* ══ O NOME DA CONTA NOVA (14/09/26) ═══════════════════════════════════════════
+       A grade guarda `c-<dealId>` para negocio do HubSpot e `n-<uuid>` para conta da
+       prospeccao. O primeiro a Daily resolve pelo funil; o segundo nao tinha fonte
+       nenhuma e virava o rotulo generico "conta nova da prospecção".
+
+       Medido na foto do Julyan: o cartao do Andre com TRES linhas assim — o dia inteiro
+       dele sem um nome para cobrar. E quem abre praca planeja so conta nova, entao o
+       defeito atinge exatamente quem mais precisa aparecer.
+
+       So os ids QUE ESTAO NA GRADE DO DIA: a tabela tem milhares de linhas e trazer
+       todas para nomear meia duzia seria a consulta mais cara da tela. Falha aqui NAO
+       inventa nome — o rotulo generico continua sendo o padrao. */
+    const idsNovas = [];
+    Object.keys(gradePorOwner).forEach(function (k) {
+      const g = gradePorOwner[k] && gradePorOwner[k].grade;
+      if (!Array.isArray(g)) return;
+      g.forEach(function (col) {
+        (Array.isArray(col) ? col : []).forEach(function (v) {
+          const cru = v && (typeof v === "object" ? v.id : v);
+          if (typeof cru === "string" && cru.indexOf("n-") === 0) idsNovas.push(cru.slice(2));
+        });
+      });
+    });
+    if (idsNovas.length) {
+      const { data: novasData, error: novasErro } = await supa.from('leads_prospeccao')
+        .select('id,nome,bairro').in('id', [...new Set(idsNovas)]);
+      if (novasErro) console.error('Daily — nomes das contas novas:', novasErro.message);
+      else (novasData || []).forEach(function (l) { novasPorId[String(l.id)] = l; });
     }
 
     const dowRota = new Date(dailyRefDate + 'T12:00:00').getDay();
@@ -50870,6 +50911,7 @@ async function renderDaily() {
     DG4_CTX = {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
       grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
+      novas: novasPorId,
       foraDoCampo: abertoDeQuemSaiu,
       /* ONTEM VEM DAQUI e não é recalculado na v4: `yesterdayISO` é o dia útil anterior
          ao dia em foco, e o placar de ontem é a única afirmação desta tela sobre o
