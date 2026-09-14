@@ -6178,6 +6178,17 @@ async function aplicarSessao(email) {
   finally { if (hidratando && hidratando.promessa === promessaH) hidratando = null; }
 }
 
+function prazoDoLogin(promessa, ms, rotulo) {
+  return Promise.race([
+    promessa,
+    new Promise(function (_, rej) {
+      setTimeout(function () {
+        rej(Object.assign(new Error('demorou demais: ' + rotulo), { name: 'PrazoDoLogin' }));
+      }, ms);
+    })
+  ]);
+}
+
 async function hidratarSessao(email) {
 
   if (DATA.shellProtegido) {
@@ -6185,11 +6196,15 @@ async function hidratarSessao(email) {
     const st = document.getElementById('loginStatus');
     if (st) st.textContent = 'Entrando... carregando seus dados.';
     let corpo = null;
+
+    const PRAZO_DA_CARGA = 45000;
     try {
-      const { data } = await supa.auth.getSession();
+      const { data } = await prazoDoLogin(supa.auth.getSession(), PRAZO_DA_CARGA, 'a sessão');
       const token = data && data.session ? data.session.access_token : null;
       if (!token) { mostrarLogin('Sessão não encontrada. Tente entrar de novo.'); return; }
-      const resp = await fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } });
+      const resp = await prazoDoLogin(
+        fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } }),
+        PRAZO_DA_CARGA, 'a carga dos seus dados');
       corpo = await resp.json().catch(() => ({}));
       if (!resp.ok) {
 
@@ -6204,7 +6219,11 @@ async function hidratarSessao(email) {
         return;
       }
     } catch (e) {
-      mostrarLogin('Falha ao carregar os dados (' + String(e && e.message || e) + '). Verifique a conexão e tente entrar de novo.');
+
+      const estourou = e && e.name === 'PrazoDoLogin';
+      mostrarLogin(estourou
+        ? 'Sua senha está certa — quem demorou foi o servidor ao montar seus dados (' + String(e.message || '') + '). Tente entrar de novo; se repetir, avise o Julyan.'
+        : 'Falha ao carregar os dados (' + String(e && e.message || e) + '). Verifique a conexão e tente entrar de novo.');
       return;
     }
 
