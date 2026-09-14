@@ -424,6 +424,48 @@ checar('o selo diz QUANDO, e a linha perde a tarja de alerta',
   'selo sem dia não responde "então quando?", e tarja vermelha em negócio já agendado '
     + 'é a tela cobrando o que ele já resolveu');
 
+
+/* ══ A FAIXA DO DIA (14/09/26) ═════════════════════════════════════════════════════
+   Julyan: "a aba hoje deles tem que vir com as prioridades do dia obviamente". A aba
+   mostrava UM compromisso — o hero escolhe entre cinco casos e desenha um só. Quem
+   tinha três visitas marcadas via a das 15:00 e mais nada. */
+
+const h9DiaFonte = (function () {
+  const i = template.indexOf('const listaDeHoje = deHoje');
+  return i < 0 ? '' : template.slice(Math.max(0, i - 1200), i + 1600);
+}());
+
+checar('a faixa do dia sai da MESMA leitura da agenda, não de uma segunda',
+  h9DiaFonte.indexOf('agendaNormalizar(DATA.agenda)') > -1
+    && template.indexOf('const doDia = (hojeConta.lista || []);') > -1,
+  'um segundo levantamento do mesmo dia é uma quarta tela para discordar das outras três');
+
+checar('a faixa fica ACIMA da fila, não ao lado nem embaixo',
+  (function () {
+    const f = template.indexOf('<div class="h9-dia">');
+    const g = template.indexOf('<div class="h9-grade">');
+    return f > -1 && g > -1 && f < g;
+  }()),
+  'ver "por onde começar" antes de "o que eu já combinei" faz a tela recomendar contra '
+    + 'o próprio compromisso dele');
+
+checar('sem compromisso nenhum a faixa não aparece',
+  /if \(!doDia\.length\) return '';/.test(template),
+  'faixa vazia é ruído, e o hero já diz "sem compromisso agendado" nesse caso');
+
+checar('só UM compromisso é o "agora"',
+  template.indexOf('const proximoDaFaixa = listaDeHoje.find(') > -1
+    && template.indexOf('if (proximoDaFaixa) proximoDaFaixa.agora = true;') > -1
+    && /agora: false,/.test(template),
+  'três destaques é nenhum destaque — "e agora, onde eu vou?" tem resposta única');
+
+checar('o que passou da hora sem fechamento aparece marcado',
+  /vencido: !feito && min < agoraMin/.test(template)
+    && template.indexOf('is-vencido') > -1
+    && template.indexOf('sem fechamento') > -1,
+  'esse é o estado que sumia da leitura de "próximo compromisso" e por isso ficava '
+    + 'invisível — o oposto de agenda vazia');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));

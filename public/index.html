@@ -1718,6 +1718,26 @@
 
   .h9{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-xl);
     box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;}
+
+  .h9-dia{border-bottom:1px solid var(--line);background:var(--panel2);padding:12px 18px 13px;}
+  .h9-dia-cab{display:flex;align-items:baseline;gap:8px;margin-bottom:9px;}
+  .h9-dia-cab b{font:900 10px var(--font-display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+  .h9-dia-cab span{font-size:11px;color:var(--muted2);}
+  .h9-dia-fita{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;}
+  .h9-dia-item{flex:none;display:flex;align-items:center;gap:7px;padding:8px 12px;min-height:38px;
+    border:1px solid var(--line-btn);border-radius:var(--r-pill);background:var(--panel);
+    cursor:pointer;font-family:inherit;color:var(--ink);transition:border-color .12s,background .12s;}
+  .h9-dia-item:hover{border-color:var(--ink);}
+  .h9-dia-item b{font:900 12px var(--font-display);font-variant-numeric:tabular-nums;}
+  .h9-dia-item span{font-size:11.5px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .h9-dia-selo{font-style:normal;font-size:9.5px;font-weight:800;color:var(--green-ink);}
+  .h9-dia-selo.is-alerta{color:var(--red);}
+
+  .h9-dia-item.is-feito{opacity:.62;border-color:var(--green);}
+  .h9-dia-item.is-feito:hover{opacity:1;}
+  .h9-dia-item.is-agora{border-color:var(--ink);box-shadow:0 0 0 1px var(--ink);}
+  .h9-dia-item.is-vencido{border-color:var(--red);background:var(--red-soft);}
+  @media (max-width:760px){ .h9-dia{padding:11px 14px 12px;} .h9-dia-item{min-height:44px;} }
   .h9-grade{display:grid;grid-template-columns:minmax(0,1fr) 430px;}
   .h9-grade > *{min-width:0;}
 
@@ -9319,7 +9339,27 @@ async function renderMeuPainel() {
       .filter(e => AGENDA_TIPOS[e.tipo] && AGENDA_TIPOS[e.tipo].conta);
     const deHoje = meusDeRua.filter(e => agendaChave(e.inicio) === hojeK);
     const feitas = deHoje.filter(e => e.desfecho === 'COMPLETED').length;
-    hojeConta = { total: deHoje.length, feitas, pendentes: deHoje.length - feitas };
+
+    const agoraMin = agora.getUTCHours() * 60 + agora.getUTCMinutes();
+    const listaDeHoje = deHoje.slice().sort(function (a, b) { return a.inicio - b.inicio; })
+      .map(function (e) {
+        const min = e.inicio.getUTCHours() * 60 + e.inicio.getUTCMinutes();
+        const feito = e.desfecho === 'COMPLETED';
+        return {
+          hora: agendaHhmm(e.inicio),
+          cliente: String(e.cliente || e.titulo || 'sem nome').trim(),
+          tipo: e.tipo || 'rota',
+          feito: feito,
+
+          vencido: !feito && min < agoraMin,
+
+          agora: false,
+          minuto: min
+        };
+      });
+    const proximoDaFaixa = listaDeHoje.find(function (x) { return !x.feito && !x.vencido; });
+    if (proximoDaFaixa) proximoDaFaixa.agora = true;
+    hojeConta = { total: deHoje.length, feitas, pendentes: deHoje.length - feitas, lista: listaDeHoje };
 
     const futuros = meusDeRua
       .filter(e => e.inicio.getTime() >= agora.getTime() && e.desfecho !== 'COMPLETED')
@@ -9473,6 +9513,26 @@ async function renderMeuPainel() {
         <button class="xv3-btn is-light" id="meuPainelCtaDia" title="${esc(ctaDia.motivo)}">${esc(ctaDia.label)} →</button>
       </div>
     </div>
+
+    ${(() => {
+
+      const doDia = (hojeConta.lista || []);
+      if (!doDia.length) return '';
+      const oQueFalta = doDia.filter(x => !x.feito).length;
+      return `
+    <div class="h9-dia">
+      <div class="h9-dia-cab">
+        <b>seu dia</b>
+        <span>${doDia.length} ${doDia.length === 1 ? 'compromisso marcado' : 'compromissos marcados'}${oQueFalta < doDia.length ? ' · ' + (doDia.length - oQueFalta) + ' já fechado' + ((doDia.length - oQueFalta) === 1 ? '' : 's') : ''}</span>
+      </div>
+      <div class="h9-dia-fita">
+        ${doDia.map(x => `<button type="button" class="h9-dia-item${x.feito ? ' is-feito' : x.vencido ? ' is-vencido' : x.agora ? ' is-agora' : ''}" data-hoje-stat="agenda" title="${x.feito ? 'Fechado no HubSpot' : x.vencido ? 'O horário passou e ninguém fechou no HubSpot' : 'Ainda vai acontecer'} — abrir a Agenda">`
+          + `<b>${esc(x.hora)}</b><span>${esc(x.cliente)}</span>`
+          + `${x.feito ? '<i class="h9-dia-selo">✓</i>' : x.vencido ? '<i class="h9-dia-selo is-alerta">sem fechamento</i>' : ''}`
+          + `</button>`).join('')}
+      </div>
+    </div>`;
+    })()}
 
     <div class="h9-grade">
       <div class="h9-esq">
@@ -26473,6 +26533,11 @@ async function adicionarNaRotaDoRep(leadId, nome, botao, bairro, cidade) {
   const horaPrevista = String(Math.floor(minutosBase / 60)).padStart(2, '0') + ':' + String(minutosBase % 60).padStart(2, '0');
   try {
     await criarTarefaVisitaNoHubspot({ id: leadId, nome: nome, bairro: bairro || null, cidade: cidade || null }, rotaDrawerOwner, horaPrevista, { silencioso: true }, hoje);
+
+    if (typeof registrarAgendamentoLocal === 'function') {
+      try { registrarAgendamentoLocal({ id: leadId, nome: nome, bairro: bairro || null, cidade: cidade || null }, hoje, horaPrevista, rotaDrawerOwner, 'rota'); }
+      catch (e) { console.error('espelho da rota na sessao:', e && e.message); }
+    }
   } catch (e) {
     await supa.from('leads_prospeccao').update({ status: 'atribuido', data_rota: null, updated_at: new Date().toISOString() }).eq('id', leadId);
     botao.dataset.salvando = '';
@@ -27906,6 +27971,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       const horaMapa = String(Math.floor(minMapa / 60)).padStart(2, '0') + ':' + String(minMapa % 60).padStart(2, '0');
       try {
         await criarTarefaVisitaNoHubspot(lead, r.ownerId, horaMapa, { silencioso: true }, hoje);
+
+        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(lead, hoje, horaMapa, r.ownerId, 'rota');
       } catch (e) {
         await atualizarLeadProspeccao(lead.id, { status: 'atribuido', data_rota: null });
         mostrarToast('A conta não entrou na rota porque o HubSpot não confirmou a tarefa.', 'erro');
@@ -27944,6 +28011,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       const horaPrevista = String(Math.floor(minutosBase / 60)).padStart(2, '0') + ':' + String(minutosBase % 60).padStart(2, '0');
       try {
         await criarTarefaVisitaNoHubspot(l, r.ownerId, horaPrevista, { silencioso: true }, hoje);
+
+        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(l, hoje, horaPrevista, r.ownerId, 'rota');
       } catch (e) {
         await supa.from('leads_prospeccao').update({ status: 'atribuido', data_rota: null, updated_at: new Date().toISOString() }).eq('id', l.id);
         mostrarToast('A conta não entrou na rota porque o HubSpot não confirmou a tarefa.', 'erro');
@@ -28227,6 +28296,8 @@ async function montarPlanoMapa(r, hoje, planoFechado) {
       btnEnviarAgenda.textContent = `Enviando ${i + 1} de ${total}…`;
       try {
         await criarTarefaVisitaNoHubspot(b.lead, r.ownerId, horaFinal, { silencioso: true });
+
+        if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(b.lead, hoje, horaFinal, r.ownerId, 'rota');
         ok++;
       } catch (e) { falhou++; console.error('Falha ao agendar ' + b.lead.nome + ':', e); }
     }
@@ -31593,6 +31664,13 @@ function d7Ligar(box, rep) {
           mostrarToast('Não consegui criar a tarefa de retorno no HubSpot: ' + (e.message || 'erro') + '.', 'erro');
         }
         return;
+      }
+
+      if (typeof espelharPassoNasTelas === 'function') {
+        try {
+          espelharPassoNasTelas({ id: String(l.dealId), name: l.nome, nome: l.nome, bairro: l.bairro },
+            alvoISO, 'Follow-up', rep.ownerId, '10:30');
+        } catch (e) { console.error('Minha Daily 7a, espelho do retorno:', e && e.message); }
       }
 
       d7UI.toast = l.nome + ' · retorno datado ' + proximo.rot + ' ' + proximo.data
@@ -36851,6 +36929,8 @@ async function adicionarProspeccaoNaRota(lead, botaoEl, msgEl) {
   const horaPrevista = String(Math.floor(minutos / 60)).padStart(2, '0') + ':' + String(minutos % 60).padStart(2, '0');
   try {
     await criarTarefaVisitaNoHubspot(lead, lead.responsavel_owner_id, horaPrevista, { silencioso: true }, hoje);
+
+    if (typeof registrarAgendamentoLocal === 'function') registrarAgendamentoLocal(lead, hoje, horaPrevista, lead.responsavel_owner_id, 'rota');
   } catch (e) {
 
     await atualizarLeadProspeccao(lead.id, estadoAnterior);

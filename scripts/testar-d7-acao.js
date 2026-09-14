@@ -155,7 +155,10 @@ checar('e avançar não é recuo',
 // antes, com "latitude" dentro de um comentário. Mascarar é a correção, nas duas vezes.
 const iRet = tpl.indexOf("if (d.d7Retorno || d.d7QTarefa) {");
 const corpoRet = iRet > 0
-  ? tpl.slice(iRet, iRet + 3200).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
+  /* 4200 e nao 3200 desde 14/09/26: o espelho do passo nas telas entrou dentro deste
+     ramo e empurrou o aviso para fora da janela. A guarda reprovou uma correcao correta,
+     que e o que janela cravada em tamanho faz quando o bloco cresce. */
+  ? tpl.slice(iRet, iRet + 4200).replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ')
   : '';
 checar('o retorno de sexta não usa mais `iso` (hoje) como destino',
   !/const alvoISO = proximo \? proximo\.iso : iso;/.test(corpoRet),
