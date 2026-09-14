@@ -161,9 +161,22 @@ checar('supabase/migrations/*.sql e ignoravel, lib/*.sql nao',
      derivadas de territorios.json, o teto e calculado por quantos executivos a cidade
      atende — nao ha literal para contar, e as duas reprovaram mudanca correta.
      A REGRA continua inteira; o que muda e como se mede. */
-  checar('cada cidade tem teto de lote, e o laco para nele',
-    /tetoMaximo: \d+ \* c\.reps/.test(places) && /porPlaceId\.size >= tetoMaximo/.test(places),
-    'sem teto a fila cresce ate ninguem ler');
+  /* ══ O TETO VIROU COTA DE CADA UM (14/09/26) ══════════════════════════════════════
+     Esta guarda media "existe teto da cidade e o laco para nele". A regra continua, mas
+     o teto por CIDADE era ele mesmo um defeito: medido no log do Rio, os quatro
+     primeiros bairros do Bruno encheram as 120 vagas e o laco encerrou — os 42 bairros
+     do Andre nunca foram consultados, e ele ficou com ZERO contas do Google.
+     Agora a cota e por executivo, e e isso que se mede. */
+  checar('cada executivo tem cota propria, e o laco para na dele',
+    /teto: 40/.test(places)
+      && /\(porPlaceId\.size - antesDoDono\) >= dono\.teto/.test(places)
+      && /for \(const dono of donos\)/.test(places),
+    'teto por cidade numa lista em ordem de arquivo e fila em que o primeiro leva tudo — '
+      + 'e nada na tela diz que o ultimo ficou sem nada');
+
+  checar('e quem fica abaixo do objetivo aparece pelo NOME',
+    /\$\{dono\.rep\}: \$\{doDono\} conta\(s\), abaixo do/.test(places),
+    'objetivo nao batido sem dizer de QUEM e o zero que ninguem contesta');
 
   checar('o teto por executivo do Places e menor que o da Casa dos Dados',
     (function () {
