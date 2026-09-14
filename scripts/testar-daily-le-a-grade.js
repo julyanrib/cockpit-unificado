@@ -94,8 +94,15 @@ conferir('volta de rua conta, e aparece dita como rua',
   /nome: 'volta de rua'/.test(daGrade) && /origem: 'rua'/.test(daGrade),
   'rua é trabalho de campo planejado; sumir com ela é subestimar o dia dele');
 
+/* REESCRITA EM 14/09/26: a checagem exigia o ternario numa linha so
+   (`nome: doFunil ? doFunil.nome :`). A cadeia virou de TRES fontes quando a conta nova
+   ganhou nome de verdade — funil, depois leads_prospeccao, e so entao o rotulo
+   generico. A intencao nao era a forma da linha: e que a ULTIMA saida seja um rotulo
+   honesto e nunca um nome fabricado. */
 conferir('conta sem negócio no funil entra sem nome inventado',
-  /nome: doFunil \? doFunil\.nome :/.test(daGrade) && /conta nova da prospecção/.test(daGrade),
+  /nome: doFunil \? doFunil\.nome/.test(daGrade) &&
+  /: daProspeccao && daProspeccao\.nome \? daProspeccao\.nome/.test(daGrade) &&
+  /: \(ehNova \? 'conta nova da prospecção' : String\(cru\)\)/.test(daGrade),
   'o negócio pode não estar no snapshot; batizar o slot com um nome qualquer é pior que dizer o que se sabe');
 
 /* ── 3 · O PLANO DO DIA TEM PRECEDÊNCIA ─────────────────────────────────────────────── */
@@ -210,6 +217,30 @@ conferir('sem promessa travada, o chip de visitas conta o slot da grade',
 conferir('e "na mesa" sem promessa é não medido, não zero',
   /: \{ n: '—', rot: 'na mesa · não prometeu'/.test(codigo),
   'zero ali lê como "ele disse que não vai propor nada" quando ninguém perguntou');
+
+/* ══ A CONTA NOVA TEM NOME (14/09/26) ══════════════════════════════════════════════
+   A grade guarda `c-<dealId>` para negocio do HubSpot e `n-<uuid>` para conta da
+   prospeccao. O primeiro a Daily resolvia pelo funil; o segundo nao tinha fonte
+   nenhuma e virava o rotulo generico "conta nova da prospecção".
+
+   MEDIDO na foto que o Julyan mandou: o cartao do Andre com TRES linhas assim — o dia
+   inteiro dele sem um nome para cobrar. Os nomes estavam no banco o tempo todo:
+   SABOR MINEIRO, Sushi Delicia, Nhac Lanches. E quem abre praca planeja SO conta nova,
+   entao o defeito atingia exatamente quem mais precisa aparecer na rodada.
+
+   O rotulo generico continua existindo para quando a leitura falhar: dizer "conta nova
+   da prospecção" e honesto, inventar um nome nao seria. */
+conferir('o slot de conta nova mostra o nome, e não um rótulo genérico',
+  /const daProspeccao = ehNova \? \(\(novasPorId \|\| \{\}\)\[String\(cru\)\.slice\(2\)\] \|\| null\) : null;/.test(codigo) &&
+  /: daProspeccao && daProspeccao\.nome \? daProspeccao\.nome/.test(codigo) &&
+  /function dg4SlotsDaGrade\(linhaSemana, diaISO, mapaFunil, novasPorId\)/.test(codigo),
+  'quem planeja só conta nova aparecia para o gestor sem um único nome para cobrar');
+
+conferir('e os nomes são buscados só para os ids que estão na grade do dia',
+  /if \(typeof cru === "string" && cru\.indexOf\("n-"\) === 0\) idsNovas\.push\(cru\.slice\(2\)\);/.test(codigo) &&
+  /\.select\('id,nome,bairro'\)\.in\('id', \[\.\.\.new Set\(idsNovas\)\]\)/.test(codigo),
+  'leads_prospeccao tem milhares de linhas — trazer todas para nomear meia dúzia seria a '
+  + 'consulta mais cara da tela');
 
 conferir('e a tela do gestor desenha as visitas, não as sete horas',
   /const visitas = preenchidos\.map\(function \(h\) \{ return grade\.porHora\[h\]; \}\)\s*\n?\s*\.concat\(grade\.semHora \|\| \[\]\);/.test(codigo) &&
