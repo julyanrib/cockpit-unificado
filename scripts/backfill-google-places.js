@@ -121,12 +121,20 @@ const CIDADES = (function () {
       if (!a || !a.municipio || !a.uf) return;
       const chave = a.municipio + '/' + a.uf;
       if (!porCidade.has(chave)) {
-        porCidade.set(chave, { municipio: a.municipio, uf: a.uf, reps: 0, bairros: [], cidadeInteira: false });
+        porCidade.set(chave, { municipio: a.municipio, uf: a.uf, reps: 0, bairros: [], cidadeInteira: false, donos: [] });
       }
       const c = porCidade.get(chave);
       c.reps++;
       if (a.todoOMunicipio) c.cidadeInteira = true;
       (a.bairros || []).forEach(function (b) { if (b && c.bairros.indexOf(b) < 0) c.bairros.push(b); });
+      /* ══ POR DONO, E NAO SO POR CIDADE (14/09/26) ══════════════════════════════
+         O teto era da cidade e a lista era percorrida em ordem de arquivo: no Rio, os
+         quatro primeiros bairros do Bruno encheram as 120 vagas e o Andre ficou com
+         ZERO. Guardando por dono, cada um recebe a propria cota. */
+      c.donos.push({
+        rep: tr.rep,
+        alvos: a.todoOMunicipio ? [a.municipio] : (a.bairros || []).slice()
+      });
     });
   });
 
@@ -139,11 +147,16 @@ const CIDADES = (function () {
     c.bairros.forEach(function (b) { alvos.push(b); });
     return {
       municipio: c.municipio, uf: c.uf,
-      /* mesma conta do backfill da Casa dos Dados: a meta acompanha quantos executivos
-         a cidade atende, e o teto existe para nao virar fila que ninguem le. */
+      /* o total da cidade continua sendo a soma das cotas — e o que o log mostra */
       objetivoMinimo: 12 * c.reps,
       tetoMaximo: 40 * c.reps,
-      bairros: alvos
+      bairros: alvos,
+      /* A COTA DE CADA UM: 12 de objetivo e 40 de teto POR EXECUTIVO. O teto existe
+         para nao despejar conta que ninguem le; por cidade, ele virava fila em que o
+         primeiro da lista levava tudo. */
+      donos: c.donos.map(function (d) {
+        return { rep: d.rep, alvos: d.alvos, objetivo: 12, teto: 40 };
+      })
     };
   }).filter(function (c) { return c.bairros.length; });
 }());
@@ -176,35 +189,62 @@ async function buscarCidade(cfg, chave) {
      dele; eu nao a apliquei aqui. */
   let bairrosQueFalharam = 0;
   const porPlaceId = new Map();
-  for (const bairro of bairros) {
-    if (porPlaceId.size >= tetoMaximo) break;
-    const consulta = `restaurantes em ${bairro}, ${municipio} ${uf}`;
-    let achados = [];
-    try {
-      /* O LOCAL VAI JUNTO: o Google Maps responde conforme de onde a busca parte, e sem
-         ele "Centro" pode cair no Centro errado do pais. */
-      achados = await buscarBairro(chave, consulta, `${municipio}, ${uf}, Brazil`);
-    } catch (e) {
-      /* Um bairro que falha nao derruba a praca: o resto da cidade continua valendo, e o
-         log diz qual caiu. Silenciar seria pior — a proxima rodada nao saberia. */
-      console.error(`[places] ${municipio}/${bairro} falhou: ${e.message}`);
-      bairrosQueFalharam++;
-      continue;
+  /* ══ UM LACO POR EXECUTIVO, CADA UM COM A SUA COTA (14/09/26) ══════════════════
+     Julyan: "cada executivo com o seu?". Media no log do Rio de hoje: o teto de 120
+     era da CIDADE e a lista era percorrida em ordem de arquivo, entao os quatro
+     primeiros bairros do Bruno (Tijuca 57, Vila Isabel 36, Maracanã 26, Andaraí 1)
+     encheram as 120 vagas e o laco encerrou. Os 42 bairros do Andre e os 18 do Sandro
+     nunca foram consultados: Andre ficou com ZERO contas do Google.
+
+     O teto nao e o defeito — ele existe para nao despejar conta que ninguem vai ler.
+     O defeito era ele ser da cidade: virava fila em que o primeiro leva tudo, e nada
+     na tela dizia isso. Mais um zero que parece normal.
+
+     A DEDUPLICACAO CONTINUA GLOBAL: o mesmo restaurante nao entra duas vezes, mesmo
+     que bairros vizinhos de donos diferentes o devolvam. Quem consultou primeiro fica
+     com ele — o mesmo critério de sempre, e a fronteira de bairro resolve o resto. */
+  const donos = (cfg.donos && cfg.donos.length)
+    ? cfg.donos
+    : [{ rep: '(cidade)', alvos: bairros, objetivo: objetivoMinimo, teto: tetoMaximo }];
+
+  for (const dono of donos) {
+    const antesDoDono = porPlaceId.size;
+    for (const bairro of (dono.alvos || [])) {
+      /* a cota E DELE: o que os outros ja trouxeram nao consome a vaga dele */
+      if ((porPlaceId.size - antesDoDono) >= dono.teto) break;
+      const consulta = `restaurantes em ${bairro}, ${municipio} ${uf}`;
+      let achados = [];
+      try {
+        /* O LOCAL VAI JUNTO: o Google Maps responde conforme de onde a busca parte, e
+           sem ele "Centro" pode cair no Centro errado do pais. */
+        achados = await buscarBairro(chave, consulta, `${municipio}, ${uf}, Brazil`);
+      } catch (e) {
+        /* Um bairro que falha nao derruba a praca: o resto continua valendo, e o log
+           diz qual caiu. Silenciar seria pior — a proxima rodada nao saberia. */
+        console.error(`[places] ${municipio}/${bairro} falhou: ${e.message}`);
+        bairrosQueFalharam++;
+        continue;
+      }
+      let aceitos = 0;
+      for (const l of achados) {
+        /* avaliacoes null cai fora porque sem ela nao da para ORDENAR por mais avaliado
+           — e ausencia de medicao nao vira zero. nota null PASSA: o lugar pode ter
+           volume e nao ter media publicada, e isso nao o torna menos alvo. */
+        if (l.avaliacoes == null) continue;
+        if (l.avaliacoes < AVALIACOES_MINIMAS) continue;
+        if (porPlaceId.has(l.place_id)) continue;
+        porPlaceId.set(l.place_id, l);
+        aceitos++;
+        if ((porPlaceId.size - antesDoDono) >= dono.teto) break;
+      }
+      console.log(`[places] ${municipio}/${bairro} (${dono.rep}): ${achados.length} candidato(s),`
+        + ` ${aceitos} no corte — cota dele ${porPlaceId.size - antesDoDono}/${dono.teto}`);
     }
-    let aceitos = 0;
-    for (const l of achados) {
-      /* avaliacoes null cai fora porque sem ela nao da para ORDENAR por mais avaliado —
-         e ausencia de medicao nao vira zero. nota null PASSA: o lugar pode ter volume e
-         nao ter media publicada, e isso nao o torna menos alvo. */
-      if (l.avaliacoes == null) continue;
-      if (l.avaliacoes < AVALIACOES_MINIMAS) continue;
-      if (porPlaceId.has(l.place_id)) continue;
-      porPlaceId.set(l.place_id, l);
-      aceitos++;
-      if (porPlaceId.size >= tetoMaximo) break;
+    const doDono = porPlaceId.size - antesDoDono;
+    if (doDono < dono.objetivo) {
+      console.warn(`[places] ${municipio}/${uf} — ${dono.rep}: ${doDono} conta(s), abaixo do`
+        + ` objetivo de ${dono.objetivo}. Lista de bairros curta para ele, nao erro de execução.`);
     }
-    console.log(`[places] ${municipio}/${bairro}: ${achados.length} candidato(s), ${aceitos} no corte`
-      + ` (${AVALIACOES_MINIMAS}+ avaliações, sem corte de nota) — acumulado ${porPlaceId.size}/${tetoMaximo}`);
   }
   /* Os mais avaliados primeiro: quando o teto corta, corta pelo fim da fila. */
   /* O QUE CAIU, E POR QUE. Sem esta linha, praca que rende pouco parece praca sem
