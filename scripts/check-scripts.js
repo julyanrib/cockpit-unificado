@@ -2018,6 +2018,30 @@ try {
   process.exit(1);
 }
 
+/* ── 33. CSS QUE O NAVEGADOR DESCARTA EM SILÊNCIO (14/09/26) ──────────────────────────
+   Julyan: "não podemos mais ter nenhum erro igual teve hoje".
+
+   O erro do dia foi `scroll-snap-type: x proximate` — palavra que não existe. O
+   navegador joga a declaração fora no parse e não avisa ninguém: nem erro, nem warning,
+   nem nada na tela. O snap não acontecia, e eu só achei porque fui ler o estilo
+   COMPUTADO em vez de olhar a tela.
+
+   A varredura que fiz atrás dos irmãos dele — 17.259 declarações passadas pelo
+   CSS.supports do próprio navegador, contra o TEXTO-FONTE — achou um que já estava na
+   produção: `font: 700 12px inherit`, em quatro botões. Medido: a linha fazia o mesmo
+   que não escrever nada. Os quatro estavam em Arial, sem negrito, 1,3px maiores.
+
+   Arquivo próprio porque ela lê com outra gramática (declaração, não seletor) e porque
+   as três primeiras versões dela acusaram código CORRETO: prosa de comentário lida como
+   CSS, `overflow` casando dentro de `text-overflow`, e uma lista de `cursor` incompleta
+   que reprovava `cursor: copy`. Guarda que grita demais é guarda que alguém desliga. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-css-descartado.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
+
 /* ── 22. TODO BOTÃO DELEGADO TEM QUEM O ESCUTE (06/09/26) ─────────────────────────────
    Nasceu de um defeito meu no mesmo dia: a fiação da Daily v2 do gestor ficou pendurada
    no `if` que resolve o nó do board antigo, que a v2 havia substituído. 28 botões
