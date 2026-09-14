@@ -94,20 +94,59 @@ const MAX_PAGINAS_POR_CONSULTA = 3;   // 20 por pagina => ate 60 candidatos por 
    Os bairros de Vitoria e Vila Velha vem do sourcing que ja rodou (skill de contas-alvo);
    os das outras pracas foram escolhidos por densidade de foodservice e ficam aqui para
    serem corrigidos com o tempo — nome de bairro errado nao quebra nada, so devolve pouco. */
-const CIDADES = [
-  { municipio: 'Vila Velha', uf: 'ES', objetivoMinimo: 12, tetoMaximo: 40,
-    bairros: ['Centro de Vila Velha', 'Praia da Costa', 'Itapuã', 'Praia de Itaparica', 'Glória'] },
-  { municipio: 'Vitória', uf: 'ES', objetivoMinimo: 12, tetoMaximo: 40,
-    bairros: ['Centro', 'Praia do Canto', 'Jardim da Penha', 'Jardim Camburi', 'Mata da Praia'] },
-  { municipio: 'Rio de Janeiro', uf: 'RJ', objetivoMinimo: 20, tetoMaximo: 60,
-    bairros: ['Copacabana', 'Ipanema', 'Leblon', 'Botafogo', 'Barra da Tijuca', 'Tijuca', 'Centro'] },
-  { municipio: 'São Paulo', uf: 'SP', objetivoMinimo: 20, tetoMaximo: 60,
-    bairros: ['Mooca', 'Pinheiros', 'Vila Madalena', 'Itaim Bibi', 'Tatuapé', 'Moema'] },
-  { municipio: 'Porto Alegre', uf: 'RS', objetivoMinimo: 12, tetoMaximo: 40,
-    bairros: ['Moinhos de Vento', 'Cidade Baixa', 'Bom Fim', 'Auxiliadora', 'Petrópolis'] },
-  { municipio: 'Salvador', uf: 'BA', objetivoMinimo: 12, tetoMaximo: 40,
-    bairros: ['Rio Vermelho', 'Barra', 'Pituba', 'Itaigara', 'Pelourinho'] }
-];
+/* ══ AS PRACAS SAEM DO MAPA DE TERRITORIOS (14/09/26) ═════════════════════════════
+   Julyan: "quero só apenas para os executivos que temos e o que voce ja sabe do bairro
+   de cada um".
+
+   A lista anterior era minha, escrita a mao, e ja divergia do mapa real: trazia
+   SALVADOR (39 contas boas sem dono, ninguem declarado la), trazia bairros de Sao Paulo
+   que ninguem nomeou, e NAO trazia Nova Iguacu, Canoas, Mogi, Suzano e Guarulhos, que
+   tem dono. Duas listas para a mesma pergunta divergem em silencio.
+
+   Agora e uma so: data/territorios.json, o MESMO arquivo que o importador usa para
+   decidir de quem e o lead. Praca sem executivo deixa de ser buscada por construcao.
+
+   MUNICIPIO INTEIRO -> consulta pela CIDADE (qualquer resultado cai nele de qualquer
+   jeito). CIDADE DIVIDIDA -> consulta por BAIRRO NOMEADO, um a um: e a unica forma de
+   o resultado cair na pessoa certa. */
+const CIDADES = (function () {
+  let decl = [];
+  try { decl = require('../data/territorios.json').territorios || []; } catch (e) { decl = []; }
+  const porCidade = new Map();
+  decl.forEach(function (tr) {
+    /* rep inativo nao recebe carga — e a mesma trava que o backfill da Casa dos Dados
+       usa, e a razao de a Amanda nao aparecer aqui. */
+    if (!tr || tr.ativo === false) return;
+    (tr.areas || []).forEach(function (a) {
+      if (!a || !a.municipio || !a.uf) return;
+      const chave = a.municipio + '/' + a.uf;
+      if (!porCidade.has(chave)) {
+        porCidade.set(chave, { municipio: a.municipio, uf: a.uf, reps: 0, bairros: [], cidadeInteira: false });
+      }
+      const c = porCidade.get(chave);
+      c.reps++;
+      if (a.todoOMunicipio) c.cidadeInteira = true;
+      (a.bairros || []).forEach(function (b) { if (b && c.bairros.indexOf(b) < 0) c.bairros.push(b); });
+    });
+  });
+
+  return [...porCidade.values()].map(function (c) {
+    /* A CONSULTA DA CIDADE INTEIRA ENTRA PRIMEIRO e as nomeadas complementam: quando um
+       rep tem a cidade toda e outro tem bairros dentro dela (Ricardo e Kelly em Porto
+       Alegre), os dois precisam de municao. */
+    const alvos = [];
+    if (c.cidadeInteira) alvos.push(c.municipio);
+    c.bairros.forEach(function (b) { alvos.push(b); });
+    return {
+      municipio: c.municipio, uf: c.uf,
+      /* mesma conta do backfill da Casa dos Dados: a meta acompanha quantos executivos
+         a cidade atende, e o teto existe para nao virar fila que ninguem le. */
+      objetivoMinimo: 12 * c.reps,
+      tetoMaximo: 40 * c.reps,
+      bairros: alvos
+    };
+  }).filter(function (c) { return c.bairros.length; });
+}());
 
 const semAcento = s => String(s || '').normalize('NFD')
   .split('').filter(c => { const p = c.charCodeAt(0); return p < 0x300 || p > 0x36f; }).join('')
