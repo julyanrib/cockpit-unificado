@@ -355,26 +355,54 @@ async function principal() {
     return;
   }
 
-  const resp = await fetch(`${COCKPIT_URL}/api/importar-leads`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-import-secret': segredo },
-    /* fonte: 'google_places' — a chave que FONTES_ROTULO ja conhece. Escrever "Google
-       Places" com espaco criaria um QUARTO rotulo para a mesma fonte: a base ja tem
-       "Google Places", "google_places" e "outscraper + Google Places", e cada rotulo novo
-       quebra a metrica por origem em mais um pedaco. */
-    body: JSON.stringify({ fonte: 'google_places', leads: todos })
-  });
-  const dados = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    console.error(`[places] importador respondeu ${resp.status}: ${JSON.stringify(dados).slice(0, 400)}`);
+  /* ══ EM LOTES, E SEQUENCIAL (14/09/26) ════════════════════════════════════════════
+     O importador recusa acima de 500 por chamada, e a rodada das 12 pracas achou 651:
+     nada entrou. Lotes de 200 — nao de 499 — porque o objetivo nao e raspar o teto, e
+     sim cada lote falhar sozinho: uma recusa custa 200 contas e as outras entram.
+     Sequencial pela mesma razao do envio de paradas da rota: chamadas simultaneas no
+     mesmo endpoint de escrita fazem o dedup dele decidir por ordem de chegada. */
+  const TAMANHO_DO_LOTE = 200;
+  const somado = { criados: 0, duplicados: 0, reprovados_qualidade: 0, reprovados_fit: 0 };
+  const lotes = [];
+  for (let i = 0; i < todos.length; i += TAMANHO_DO_LOTE) lotes.push(todos.slice(i, i + TAMANHO_DO_LOTE));
+  let lotesQueFalharam = 0;
+
+  for (let i = 0; i < lotes.length; i++) {
+    const lote = lotes[i];
+    const resp = await fetch(`${COCKPIT_URL}/api/importar-leads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-import-secret': segredo },
+      /* fonte: 'google_places' — a chave que FONTES_ROTULO ja conhece. Escrever "Google
+         Places" com espaco criaria um QUARTO rotulo para a mesma fonte. */
+      body: JSON.stringify({ fonte: 'google_places', leads: lote })
+    });
+    const dados = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      lotesQueFalharam++;
+      console.error(`[places] lote ${i + 1}/${lotes.length} (${lote.length} contas) recusado`
+        + ` — ${resp.status}: ${JSON.stringify(dados).slice(0, 300)}`);
+      continue;
+    }
+    somado.criados += (dados.leadsCriados ? dados.leadsCriados.length : (dados.criados || 0));
+    somado.duplicados += (dados.duplicados || 0);
+    somado.reprovados_qualidade += (dados.reprovadosQualidade || dados.reprovados_qualidade || 0);
+    somado.reprovados_fit += (dados.reprovadosFit || dados.reprovados_fit || 0);
+    console.log(`[places] lote ${i + 1}/${lotes.length}: ${lote.length} enviadas, `
+      + `${dados.leadsCriados ? dados.leadsCriados.length : (dados.criados || 0)} criadas.`);
+  }
+
+  /* LOTE QUE CAI NAO PODE SUMIR NO VERDE: se TODOS falharam nada entrou, e a rodada e
+     uma falha; se alguns entraram, a rodada vale mas o aviso tem de aparecer. */
+  if (lotesQueFalharam) {
+    console.error(`[places] ${lotesQueFalharam} de ${lotes.length} lote(s) foram recusados — veja acima.`);
+  }
+  const dados = somado;
+  if (lotesQueFalharam === lotes.length) {
+    console.error('[places] NENHUM lote entrou. A rodada falhou.');
     process.exit(1);
   }
-  console.log('[places] importado: ' + JSON.stringify({
-    criados: dados.leadsCriados ? dados.leadsCriados.length : dados.criados,
-    duplicados: dados.duplicados,
-    reprovados_qualidade: dados.reprovados_qualidade,
-    reprovados_fit: dados.reprovados_fit
-  }));
+  /* o total da rodada inteira, somado lote a lote */
+  console.log('[places] importado: ' + JSON.stringify(dados));
 }
 
 principal().catch(e => {
