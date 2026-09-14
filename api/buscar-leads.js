@@ -18,10 +18,12 @@
 // neste produto (a mesma regra escrita em dois lugares, divergindo em silêncio).
 //
 // O QUE ESTA ROTA NÃO FAZ, e o motivo está na tela:
-//   · Google Places — o coletor existe (scripts/backfill-google-places.js) e roda mensal,
-//     mas GOOGLE_PLACES_API_KEY só existe nos Secrets do GitHub, não nas env vars da
-//     Vercel. Sem a chave aqui, disparar Places daqui devolveria erro. O chip fica
-//     desabilitado dizendo isso.
+//   · Google Places — o coletor existe (scripts/backfill-google-places.js) e roda mensal.
+//     A FONTE MUDOU PARA O SERPER em 14/09/26: a chave do Google nunca existiu — nem
+//     nos Secrets do GitHub, nem na Vercel (conferido nos dois). Agora e SERPER_API_KEY,
+//     e ela vive so nos Secrets do GitHub, nao nas env vars da Vercel. Sem ela aqui,
+//     disparar Places por esta rota devolveria erro, entao o chip continua desabilitado
+//     dizendo isso — o que mudou foi o nome da chave que falta, nao a situacao.
 //   · TripAdvisor — fora da allowlist de rede e o ToS proíbe coleta automatizada. Não é
 //     "ainda não fizemos": é uma fonte que não pode existir por este caminho.
 //

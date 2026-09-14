@@ -45,7 +45,15 @@
 const fs = require('fs');
 const path = require('path');
 
-const PLACES_URL = 'https://places.googleapis.com/v1/places:searchText';
+/* ══ A FONTE MUDOU PARA O SERPER (14/09/26) ═══════════════════════════════════════
+   A Places API (New) exige projeto no Google Cloud com billing ligado, e a chave nunca
+   existiu — conferido nos dois lugares: Secrets do GitHub e env vars da Vercel. Este
+   coletor esta escrito desde 03/09 e NUNCA rodou uma vez por causa disso.
+
+   O Serper devolve o mesmo dado do Google Maps por uma chave so. A busca e a traducao
+   moram em lib/serper-places.js — inclusive o filtro de "so restaurante", que e o
+   pedido do Julyan de hoje. Daqui para baixo nada mudou. */
+const { buscarLugares } = require('../lib/serper-places.js');
 const COCKPIT_URL = process.env.COCKPIT_URL || 'https://fieldsalestakeat.vercel.app';
 
 /* ══ O CORTE E DE VOLUME, NAO DE QUALIDADE (mudado em 03/09/26) ══════════════════════
@@ -105,61 +113,19 @@ const semAcento = s => String(s || '').normalize('NFD')
   .split('').filter(c => { const p = c.charCodeAt(0); return p < 0x300 || p > 0x36f; }).join('')
   .toLowerCase().trim();
 
-/* ══ DE/PARA: Places -> o formato que api/importar-leads.js ja aceita ═════════════════
-   O importador normaliza `rating`/`rating_count` tambem, mas eu mando `nota`/`avaliacoes`
-   explicitos: o de/para fica aqui, num lugar, e nao espalhado entre os dois arquivos. */
-function normalizarLugar(p) {
-  if (!p || !p.id || !p.displayName) return null;
-  const nota = p.rating != null ? Number(p.rating) : null;
-  const avaliacoes = p.userRatingCount != null ? Number(p.userRatingCount) : null;
-  const loc = p.location || {};
-  return {
-    place_id: p.id,
-    nome: String(p.displayName.text || '').trim().slice(0, 160),
-    categoria: Array.isArray(p.types)
-      ? p.types.filter(t => t !== 'point_of_interest' && t !== 'establishment' && t !== 'food' && t !== 'store')
-        .slice(0, 3).join(', ') || null
-      : null,
-    endereco: p.formattedAddress || null,
-    telefone: p.nationalPhoneNumber || p.internationalPhoneNumber || null,
-    nota: nota,
-    avaliacoes: avaliacoes,
-    lat: loc.latitude != null ? Number(loc.latitude) : null,
-    lng: loc.longitude != null ? Number(loc.longitude) : null
-  };
-}
+/* ══ A BUSCA DE UM BAIRRO ═════════════════════════════════════════════════════════
+   Era uma chamada direta a Places API com FieldMask e paginacao por pageToken. Agora
+   delega: lib/serper-places.js busca, traduz e ja devolve SO restaurante, com a conta
+   do que descartou e por que. O `local` vai junto porque o Google Maps responde
+   conforme de onde a busca parte — sem ele, "Centro" cai no Centro errado do pais. */
+let descartesDaPraca = {};
 
-async function buscarBairro(chave, consulta) {
-  const encontrados = [];
-  let token = null;
-  for (let pagina = 0; pagina < MAX_PAGINAS_POR_CONSULTA; pagina++) {
-    const corpo = { textQuery: consulta, languageCode: 'pt-BR', maxResultCount: 20 };
-    if (token) corpo.pageToken = token;
-    const resp = await fetch(PLACES_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': chave,
-        /* FieldMask e obrigatorio na Places API (New) e e o que se paga: pedir campo que
-           nao se usa custa dinheiro por consulta. Aqui esta o minimo que o card precisa. */
-        'X-Goog-FieldMask': [
-          'places.id', 'places.displayName', 'places.formattedAddress', 'places.location',
-          'places.rating', 'places.userRatingCount', 'places.types',
-          'places.nationalPhoneNumber', 'nextPageToken'
-        ].join(',')
-      },
-      body: JSON.stringify(corpo)
-    });
-    if (!resp.ok) {
-      const txt = (await resp.text()).slice(0, 300);
-      throw new Error(`Places respondeu ${resp.status}: ${txt}`);
-    }
-    const dados = await resp.json();
-    (dados.places || []).forEach(p => { const n = normalizarLugar(p); if (n) encontrados.push(n); });
-    token = dados.nextPageToken || null;
-    if (!token) break;
-  }
-  return encontrados;
+async function buscarBairro(chave, consulta, local) {
+  const r = await buscarLugares(chave, consulta, { local: local, maxPaginas: MAX_PAGINAS_POR_CONSULTA });
+  Object.keys(r.descartes || {}).forEach(function (m) {
+    descartesDaPraca[m] = (descartesDaPraca[m] || 0) + r.descartes[m];
+  });
+  return r.lugares;
 }
 
 async function buscarCidade(cfg, chave) {
@@ -170,7 +136,9 @@ async function buscarCidade(cfg, chave) {
     const consulta = `restaurantes em ${bairro}, ${municipio} ${uf}`;
     let achados = [];
     try {
-      achados = await buscarBairro(chave, consulta);
+      /* O LOCAL VAI JUNTO: o Google Maps responde conforme de onde a busca parte, e sem
+         ele "Centro" pode cair no Centro errado do pais. */
+      achados = await buscarBairro(chave, consulta, `${municipio}, ${uf}, Brazil`);
     } catch (e) {
       /* Um bairro que falha nao derruba a praca: o resto da cidade continua valendo, e o
          log diz qual caiu. Silenciar seria pior — a proxima rodada nao saberia. */
@@ -193,6 +161,15 @@ async function buscarCidade(cfg, chave) {
       + ` (${AVALIACOES_MINIMAS}+ avaliações, sem corte de nota) — acumulado ${porPlaceId.size}/${tetoMaximo}`);
   }
   /* Os mais avaliados primeiro: quando o teto corta, corta pelo fim da fila. */
+  /* O QUE CAIU, E POR QUE. Sem esta linha, praca que rende pouco parece praca sem
+     restaurante — e pode ser a minha lista de categorias cortando demais. */
+  const motivos = Object.keys(descartesDaPraca).sort((a, b) => descartesDaPraca[b] - descartesDaPraca[a]);
+  if (motivos.length) {
+    console.log(`[places] ${municipio}/${uf} — descartados por categoria: `
+      + motivos.slice(0, 6).map(m => `${descartesDaPraca[m]}x ${m}`).join(' · '));
+  }
+  descartesDaPraca = {};
+
   const lista = [...porPlaceId.values()].sort((a, b) => (b.avaliacoes || 0) - (a.avaliacoes || 0));
   const finais = lista.slice(0, tetoMaximo);
   if (finais.length < objetivoMinimo) {
@@ -203,14 +180,52 @@ async function buscarCidade(cfg, chave) {
 }
 
 async function principal() {
-  const chave = process.env.GOOGLE_PLACES_API_KEY;
+  const chave = process.env.SERPER_API_KEY;
   if (!chave) {
-    console.error('[places] GOOGLE_PLACES_API_KEY ausente. Esta rodada não tem como buscar nada.');
-    console.error('  Para ligar: Google Cloud → habilitar "Places API (New)" → criar chave →');
-    console.error('  GitHub → Settings → Secrets and variables → Actions → GOOGLE_PLACES_API_KEY.');
+    console.error('[places] SERPER_API_KEY ausente. Esta rodada não tem como buscar nada.');
+    console.error('  Para ligar: serper.dev → API keys → copiar a chave →');
+    console.error('  GitHub → Settings → Secrets and variables → Actions → SERPER_API_KEY.');
     console.error('  Sem a chave o script sai com erro de propósito: rodada silenciosa que não');
     console.error('  importa nada é pior que rodada que falha e avisa.');
     process.exit(1);
+  }
+
+  /* ══ MODO AMOSTRA: UMA CONSULTA, NADA IMPORTADO (14/09/26) ═══════════════════════
+     Eu escrevi a traducao dos campos do Serper SEM poder testar contra a API — a chave
+     nao e minha para ter. Escrever leitor contra formato suposto e como ja perdi um dia
+     nesta base: o codigo fica valido, a resposta chega, e todo registro sai null sem
+     ninguem reclamar.
+
+     Entao existe este modo: UMA busca, e imprime o registro CRU ao lado do TRADUZIDO,
+     mais o veredito de categoria de cada resultado. Rodar isto antes da primeira carga
+     e o que separa "integrei" de "achei que integrei". Nada e importado aqui. */
+  if (process.argv.includes('--amostra')) {
+    const { buscarPagina, normalizarLugar, categoriaDeRestaurante } = require('../lib/serper-places.js');
+    const consulta = process.env.AMOSTRA_CONSULTA || 'restaurantes em Praia do Canto, Vitória ES';
+    const local = process.env.AMOSTRA_LOCAL || 'Vitória, ES, Brazil';
+    console.log('[amostra] consulta: ' + consulta + '   ·   local: ' + local);
+    const { bruto } = await buscarPagina(chave, consulta, local, 1);
+    console.log('[amostra] a API devolveu ' + bruto.length + ' resultado(s).');
+    if (!bruto.length) return;
+    console.log('');
+    console.log('[amostra] ── REGISTRO CRU, como o Serper mandou ──────────────────');
+    console.log(JSON.stringify(bruto[0], null, 2));
+    console.log('');
+    console.log('[amostra] ── TRADUZIDO, como o cockpit gravaria ──────────────────');
+    console.log(JSON.stringify(normalizarLugar(bruto[0]), null, 2));
+    console.log('');
+    console.log('[amostra] ── QUEM ENTRA E QUEM SAI, pelo filtro de restaurante ───');
+    bruto.map(normalizarLugar).filter(Boolean).forEach(function (l) {
+      const v = categoriaDeRestaurante(l.categoria);
+      console.log('  ' + (v.aceito ? 'ENTRA' : 'sai  ') + '  '
+        + String(l.nome).slice(0, 32).padEnd(32) + '  '
+        + String(l.categoria || '(sem categoria)').slice(0, 26).padEnd(26) + '  '
+        + (l.avaliacoes == null ? 'sem avaliações' : l.avaliacoes + ' aval.').padEnd(16)
+        + '· ' + v.motivo);
+    });
+    console.log('');
+    console.log('[amostra] nada foi importado. Confira os campos e rode sem --amostra.');
+    return;
   }
 
   const pular = String(process.env.PULAR_CIDADES || '').split(',').map(semAcento).filter(Boolean);
