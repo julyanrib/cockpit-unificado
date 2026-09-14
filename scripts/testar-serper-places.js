@@ -214,6 +214,49 @@ checar('e o veto continua ganhando delas',
     && !lib.categoriaDeRestaurante('Restaurante do Hotel Praia').aceito,
   'ampliar a lista de aceitas não pode abrir a porta para hotel e padaria');
 
+
+/* ══ ENDEREÇO DE VERDADE TEM COMPLEMENTO (14/09/26) ════════════════════════════════
+   A primeira versão contava pedaço a partir do COMEÇO — `partes[1]` seria o bairro.
+   Isso só vale no endereço simples. Na carga real de 209 contas, sete saíram assim:
+
+     cidade "36"          bairro "R. Olávo Barreto Viana"
+     cidade "528"         bairro "Av. Rio Branco"
+     cidade "90570-040"   bairro "RS"
+
+   Porque cada complemento ("Loja 336", "Ground floor", "Ed. Danúbio") é mais um " - " e
+   empurra os índices. A âncora estável é a UF, perto do fim.
+
+   OS CASOS ABAIXO SÃO LITERAIS DA BASE, não inventados: é o único jeito de esta guarda
+   medir o que quebrou de verdade. */
+(function () {
+  const casos = [
+    ['R. Aleixo Netto, 577 - Praia do Canto, Vitória - ES, 29055-145, Brasil',
+      'Praia do Canto', 'Vitória', 'ES'],
+    ['Moinhos Shopping - R. Olávo Barreto Viana, 36 - Loja 336 - Moinhos de Vento, Porto Alegre - RS, 90570-070, Brasil',
+      'Moinhos de Vento', 'Porto Alegre', 'RS'],
+    ['Ground floor - Praça Dr. Maurício Cardoso, 49 - Moinhos de Vento, Porto Alegre - RS, 90570-010, Brasil',
+      'Moinhos de Vento', 'Porto Alegre', 'RS'],
+    ['Ed. Danúbio - R. Expedicionário Aquino Araújo, 90 - Lj 03 - Centro de Vila Velha, Vila Velha - ES, 29100-032, Brasil',
+      'Centro de Vila Velha', 'Vila Velha', 'ES'],
+    ['Edifício River Mall - Av. Rio Branco, 528 - loja 1 - Santa Lucia, Vitória - ES, 29056-560, Brasil',
+      'Santa Lucia', 'Vitória', 'ES'],
+    /* sem bairro informado: cidade sai certa e bairro fica NULL — chutar poria o lead
+       na carteira errada, e "Tijuca" dentro de "Barra da Tijuca" já fez isso aqui */
+    ['Dinarte Ribeiro, Street, 155, Porto Alegre - RS, 90570-040, Brasil',
+      null, 'Porto Alegre', 'RS'],
+    ['Rua Morás, 53 Pinheiros 05434-020, São Paulo - SP, 05419-001, Brasil',
+      null, 'São Paulo', 'SP']
+  ];
+  const erros = casos.filter(function (c) {
+    const l = lib.normalizarLugar({ title: 'x', ratingCount: 500, type: 'Restaurante', address: c[0] });
+    return !l || l.bairro !== c[1] || l.cidade !== c[2] || l.estado !== c[3];
+  });
+  checar('o endereço com complemento não vira lixo em cidade e bairro',
+    erros.length === 0,
+    erros.length + ' de ' + casos.length + ' endereços reais saem errados — '
+      + erros.map(function (c) { return String(c[0]).slice(0, 40); }).join(' | '));
+}());
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
