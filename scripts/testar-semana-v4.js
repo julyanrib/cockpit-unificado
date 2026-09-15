@@ -57,6 +57,17 @@ function corpoDe(nome) {
   return '';
 }
 
+/* ══ A PRANCHA v4 SAIU DO AR EM 14/09/26 ═══════════════════════════════════════════
+   `renderSemana` passou a desenhar a v5. `sm4Dados` e `sm4TelaHTML` continuam no
+   arquivo e ninguém mais as chama; `sm4Ligar` ainda é chamada por `sm9Iniciar`, mas
+   escopa o ouvinte numa raiz que a v5 não desenha. Ou seja: as checagens abaixo medem
+   o MOTOR — que a v5 usa, e que é o que elas de fato protegem — e um desenho que já
+   não está na tela.
+
+   NÃO APAGUEI NENHUMA, de propósito: remover a v4 são ~1.900 linhas e a cascata de
+   órfãs que isso abre já gutou este template uma vez. É decisão do Julyan, e está
+   reportada. Enquanto ela não vier, este cabeçalho é o que impede alguém (inclusive
+   eu) de ler o verde daqui como "a tela da Semana está medida". */
 /* ── 1. A ABA EXISTE, COM UM DONO SÓ ─────────────────────────────────────────────── */
 ['sm4Dados', 'sm4TelaHTML', 'sm4Executar', 'sm4Ligar', 'sm4Consulta', 'sm4Provas',
  'sm4Projecao', 'sm4Veredito', 'sm4Botao', 'sm4Linha', 'sm4Valor', 'sm4Toque', 'sm4Prox',
@@ -90,8 +101,18 @@ conferir('o CSS da v3 saiu com ela',
     'a v4 é desenho novo sobre o motor medido — reescrevê-lo é onde eu trocaria um sinal');
 });
 
-conferir('o render desenha a v4 e mantém as seis leituras',
-  /raiz\.innerHTML = sm4TelaHTML\(sm4Dados\(\)\) \+ sm9LeiturasHTML\(sm9Dados\(\)\);/.test(tpl),
+/* REESCRITA EM 14/09/26, QUANDO A v5 ENTROU — e não apagada. A regra que esta guarda
+   protege não é "a prancha se chama sm4": é que as SEIS LEITURAS ANALÍTICAS continuam
+   no fim da aba, porque a aba Funil tem um botão que aterrissa numa delas. A versão
+   anterior cravava o nome da prancha no literal, então reprovava o desenho novo sem
+   medir nada de errado — "guarda cravada no nome morre", nesta mesma base.
+
+   Agora mede no CORPO do render: a prancha, qualquer que seja o prefixo dela, e as
+   leituras DEPOIS dela, na mesma atribuição. */
+conferir('o render desenha a prancha e mantém as seis leituras no fim',
+  /raiz[.]innerHTML = sm[0-9]TelaHTML[(]sm[0-9]Dados[(][)][)] [+] sm9LeiturasHTML[(]sm9Dados[(][)][)];/
+    /* `render` só é declarada na seção 3, abaixo; aqui a leitura é direta. */
+    .test(corpoDe('renderSemana')),
   'as leituras ficam no fim (decisão de 08/09): a aba Funil tem um botão que aterrissa numa delas');
 
 conferir('o alvo do link da aba Funil sobreviveu',
@@ -101,7 +122,10 @@ conferir('o alvo do link da aba Funil sobreviveu',
 /* ── 3. O GUARDA DE PAPEL, ANTES DE DESENHAR ─────────────────────────────────────── */
 const render = corpoDe('renderSemana');
 conferir('o render tem guarda de papel antes de desenhar',
-  antesDe(render, "role !== 'manager'", 'sm4TelaHTML'),
+  /* A ÂNCORA É `sm9LeiturasHTML`, e não a prancha: é a parte do desenho que NÃO muda
+     de nome a cada repaginação, e está na MESMA atribuição — então se o papel for
+     conferido depois dela, o executivo já viu o placar do time inteiro. */
+  antesDe(render, "role !== 'manager'", 'sm9LeiturasHTML'),
   'esta aba mostra o placar de todo mundo; render é função global e basta alguém chamá-la');
 
 conferir('a fiação liga a v4',
