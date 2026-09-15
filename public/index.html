@@ -5465,6 +5465,18 @@ foi escrita para jogar o "0 de 27 resolvidos"
     .login-1b-arte #login1bManchete{font-size:26px !important;line-height:1.12 !important;margin-top:16px !important;}
     .login-1b-form{padding:22px 22px 28px;}
   }
+
+  .sm5-duo{display:grid;grid-template-columns:1.35fr 1fr;gap:18px;}
+  .sm5-quentes{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:13px;
+    font-size:12px;font-variant-numeric:tabular-nums;}
+  @media (max-width:900px){
+    .sm5-duo{grid-template-columns:1fr;}
+    .sm5-quentes{grid-template-columns:repeat(2,1fr);}
+  }
+
+  @media (max-width:640px){
+    .sm5-quentes{grid-template-columns:1fr;}
+  }
 </style>
 </head>
 <body>
@@ -42740,12 +42752,785 @@ function sm9LeiturasHTML(d) {
         </div>`;
 }
 
+let SM5_ANALISES = null;
+let SM5_CARREGANDO = null;
+
+async function sm5CarregarAnalises() {
+  if (SM5_ANALISES) return SM5_ANALISES;
+
+  if (SM5_CARREGANDO) return SM5_CARREGANDO;
+  if (!DATA.supabase || !supa) { SM5_ANALISES = {}; return SM5_ANALISES; }
+
+  SM5_CARREGANDO = (async () => {
+    try {
+      const { data, error } = await supa
+        .from('analise_individual_semanal')
+        .select('owner_id,gargalo_semana,como_agir,tendencia,created_at')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw new Error(error.message);
+      const porDono = {};
+
+      (data || []).forEach(function (linha) {
+        const id = String(linha.owner_id);
+        if (!porDono[id]) porDono[id] = linha;
+      });
+      SM5_ANALISES = porDono;
+    } catch (e) {
+      console.error('[semana v5] não consegui ler as análises individuais:', e && e.message);
+
+      SM5_ANALISES = {};
+    }
+    SM5_CARREGANDO = null;
+    return SM5_ANALISES;
+  })();
+  return SM5_CARREGANDO;
+}
+
+function sm5DiasDaJanela(texto) {
+
+  const m = String(texto || '').match(/^(\d{2})\/(\d{2})[–-](\d{2})\/(\d{2})\/(\d{4})$/);
+  if (!m) return null;
+  const ano = Number(m[5]);
+  const ini = Date.UTC(ano, Number(m[2]) - 1, Number(m[1]));
+  const fim = Date.UTC(ano, Number(m[4]) - 1, Number(m[3]));
+  if (!(fim >= ini)) return null;
+  return Math.round((fim - ini) / 86400000) + 1;
+}
+
+function sm5Janela() {
+  const rs = DATA.resumoSemanal || {};
+  const j = rs.janela || {};
+  const diasAtual = sm5DiasDaJanela(j.atual);
+
+  const atualFechou = diasAtual != null && diasAtual >= 5;
+  return atualFechou
+    ? { rotulo: j.atual || '—', comparacao: j.anterior || null, usouAnterior: false,
+        kpis: (rs.kpisComparativo || {}).atual || {}, kpisComp: (rs.kpisComparativo || {}).anterior || null }
+    : { rotulo: j.anterior || '—', comparacao: null, usouAnterior: true,
+        kpis: (rs.kpisComparativo || {}).anterior || {}, kpisComp: null,
+
+        aviso: j.atual ? 'a semana ' + j.atual + ' ainda não fechou' : null };
+}
+
+function sm5Serie(chave) {
+  const s = (DATA.resumoSemanal || {}).serieSemanal || {};
+  const vals = Array.isArray(s[chave]) ? s[chave] : [];
+  const jans = Array.isArray(s.janelas) ? s.janelas : [];
+
+  const porJanela = new Map();
+  jans.forEach(function (j, i) {
+    if (i < vals.length) porJanela.set(String(j), vals[i]);
+  });
+  const janelas = [...porJanela.keys()];
+  const valores = janelas.map(function (j) { return Number(porJanela.get(j)) || 0; });
+  return { janelas: janelas, valores: valores };
+}
+
+function sm5Barras(chave, corUltima) {
+  const { janelas, valores } = sm5Serie(chave);
+
+  if (valores.length < 2) return [];
+  const max = Math.max.apply(null, valores.concat([1]));
+  return valores.map(function (v, i) {
+    return {
+      h: Math.max(3, Math.round(v / max * 26)),
+      cor: i === valores.length - 1 ? corUltima : 'rgba(253,251,240,.28)',
+      tip: janelas[i] + ': ' + v
+    };
+  });
+}
+
+function sm5Delta(atual, anterior, subirEhBom) {
+
+  if (anterior == null) return null;
+  const d = Number(atual || 0) - Number(anterior || 0);
+  if (d === 0) return { txt: '—', cor: '#8A8072' };
+  const subiu = d > 0;
+  const bom = subirEhBom ? subiu : !subiu;
+  return {
+    txt: (subiu ? '▲' : '▼') + Math.abs(d),
+
+    cor: bom ? '#57C29A' : '#FF6B78'
+  };
+}
+
+function sm5Moeda(v) {
+  return 'R$ ' + Math.round(Number(v) || 0).toLocaleString('pt-BR');
+}
+
+function sm5RitmoDoMes() {
+  const hoje = (typeof agendaAgora === 'function') ? agendaAgora() : new Date();
+  const ano = hoje.getUTCFullYear ? hoje.getUTCFullYear() : hoje.getFullYear();
+  const mes = hoje.getUTCMonth ? hoje.getUTCMonth() : hoje.getMonth();
+  const diaHoje = hoje.getUTCDate ? hoje.getUTCDate() : hoje.getDate();
+  let uteis = 0, decorridos = 0;
+  const ultimo = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+  for (let d = 1; d <= ultimo; d++) {
+    const dow = new Date(Date.UTC(ano, mes, d)).getUTCDay();
+    if (dow === 0 || dow === 6) continue;
+    uteis++;
+    if (d <= diaHoje) decorridos++;
+  }
+  return { uteis: uteis, decorridos: decorridos, fracao: uteis ? decorridos / uteis : 0 };
+}
+
+function sm5Faixa(r) {
+  if (r.reun === 0 || r.trav >= 5 || (r.tend === 'down' && r.mesAtrasado)) return 'agir';
+  if (r.ganhos >= 1 && r.trav <= 2 && !r.mesAtrasado) return 'bem';
+  return 'olho';
+}
+
+function sm5Tendencia(snap, anterior) {
+
+  if (!snap || !anterior) return 'flat';
+  const travSubiu = Number(snap.leadsTravados || 0) > Number(anterior.leadsTravados || 0);
+  const travCaiu = Number(snap.leadsTravados || 0) < Number(anterior.leadsTravados || 0);
+  const ganhosSubiu = Number(snap.ganhosSemana || 0) > Number(anterior.ganhosSemana || 0);
+  const openCaiu = Number(snap.open || 0) < Number(anterior.open || 0);
+  if (travSubiu && !ganhosSubiu) return 'down';
+  if (ganhosSubiu || (travCaiu && !openCaiu)) return 'up';
+  return 'flat';
+}
+
+function sm5Roteiro(comoAgir) {
+  const txt = String(comoAgir == null ? '' : comoAgir).trim();
+  if (!txt) return null;
+
+  const frases = txt.split(/(?<=[.!?])\s+(?=[<A-ZÀ-Ú])/).map(function (s) { return s.trim(); })
+    .filter(Boolean);
+  if (frases.length < 2) return [{ tag: '', txt: txt }];
+  const TAGS = ['ABRIR', 'MANTER', 'COBRAR'];
+  const out = [];
+  frases.forEach(function (f, i) {
+    if (i < TAGS.length - 1) { out.push({ tag: TAGS[i], txt: f }); return; }
+    const ultimo = out[TAGS.length - 1];
+    if (ultimo) ultimo.txt += ' ' + f;
+    else out.push({ tag: TAGS[TAGS.length - 1], txt: f });
+  });
+  return out;
+}
+
+function sm5Dados() {
+  const rs = DATA.resumoSemanal || {};
+  const jan = sm5Janela();
+  const k = jan.kpis || {};
+  const kp = jan.kpisComp;
+
+  const mrrFechado = (rs.ganhosSemanaDetalhe || [])
+    .reduce(function (t, g) { return t + (Number(g.mrr) || 0); }, 0);
+
+  const kpis = [
+    { rotulo: 'ganhos', valor: String(k.ganhos == null ? '—' : k.ganhos),
+      delta: sm5Delta(k.ganhos, kp && kp.ganhos, true),
+      barras: sm5Barras('fechamentos', '#57C29A') },
+    { rotulo: 'reuniões marcadas', valor: String(k.reunioes == null ? '—' : k.reunioes),
+      delta: sm5Delta(k.reunioes, kp && kp.reunioes, true),
+      barras: sm5Barras('reunioes', '#57C29A') },
+    { rotulo: 'leads criados', valor: String(k.leadsCriados == null ? '—' : k.leadsCriados),
+      delta: sm5Delta(k.leadsCriados, kp && kp.leadsCriados, true),
+      barras: sm5Barras('criados', '#57C29A') },
+    { rotulo: 'perdidos', valor: String(k.perdidos == null ? '—' : k.perdidos),
+      delta: sm5Delta(k.perdidos, kp && kp.perdidos, false),
+      barras: [] },
+    { rotulo: 'MRR fechado', valor: sm5Moeda(mrrFechado), delta: null, barras: [] }
+  ];
+
+  const porRep = rs.porRep || {};
+  const analises = SM5_ANALISES || {};
+  const ganhosPorDono = {}, reunPorDono = {}, criadosPorDono = {};
+  (rs.ganhosSemanaDetalhe || []).forEach(function (g) {
+    const id = String(g.ownerId); ganhosPorDono[id] = (ganhosPorDono[id] || 0) + 1;
+  });
+  (rs.reunioesSemanaDetalhe || []).forEach(function (g) {
+    const id = String(g.ownerId); reunPorDono[id] = (reunPorDono[id] || 0) + 1;
+  });
+  (rs.leadsCriadosSemanaDetalhe || []).forEach(function (g) {
+    const id = String(g.ownerId); criadosPorDono[id] = (criadosPorDono[id] || 0) + 1;
+  });
+
+  const ritmo = sm5RitmoDoMes();
+  let metaDoTime = 0, fechadosDoTime = 0;
+
+  const linhas = Object.keys(porRep).map(function (id) {
+    const p = porRep[id] || {};
+    const snap = p.snap || {};
+    const rep = (DATA.reps || []).find(function (x) { return String(x.ownerId) === String(id); }) || {};
+    const meta = metaClientesDoRep(rep);
+
+    if (!(meta > 0)) return null;
+
+    const mes = Number(snap.fechadosNoMes || 0);
+    metaDoTime += meta; fechadosDoTime += mes;
+
+    const trav = Number(snap.leadsTravados || 0);
+
+    const ganhos = ganhosPorDono[id] != null ? ganhosPorDono[id] : Number(snap.ganhosSemana || 0);
+    const reun = reunPorDono[id] || 0;
+    const criados = criadosPorDono[id] || 0;
+    const pct = meta > 0 ? Math.min(100, Math.round(mes / meta * 100)) : 0;
+    const metaBatida = mes >= meta;
+    const mesAtrasado = !metaBatida && (mes / meta) < ritmo.fracao;
+    const tend = sm5Tendencia(snap, p.anterior);
+    const an = analises[String(id)] || {};
+
+    const base = {
+      id: String(id),
+      nome: p.name || rep.name || 'Sem nome',
+      ini: String(p.name || rep.name || '?').split(/\s+/).slice(0, 2)
+        .map(function (w) { return w.charAt(0); }).join('').toUpperCase(),
+      praca: rep.praca || '—',
+      patamar: (rep.patamarMeta ? rep.patamarMeta + ' · meta ' + meta : 'meta ' + meta),
+      criados: criados, reun: reun, ganhos: ganhos, trav: trav,
+      mes: mes, meta: meta, pct: pct, metaBatida: metaBatida, mesAtrasado: mesAtrasado,
+      tend: tend,
+
+      gargalo: an.gargalo_semana || p.resumoIndividual
+        || 'Sem leitura da IA nesta semana — números acima vêm do snapshot do dia.',
+      tendTexto: an.tendencia || '',
+      roteiro: sm5Roteiro(an.como_agir)
+        || (Array.isArray(p.comoAgirIndividual) && p.comoAgirIndividual.length
+          ? p.comoAgirIndividual.map(function (t, i) {
+            return { tag: ['ABRIR', 'MANTER', 'COBRAR'][i] || 'COBRAR', txt: t };
+          })
+          : [{ tag: '', txt: 'Análise indisponível essa semana — revisar manualmente neste 1:1' }]),
+      compromissos: Array.isArray(rep.compromissos) ? rep.compromissos : []
+    };
+    base.faixa = sm5Faixa(base);
+    return base;
+  }).filter(Boolean);
+
+  const ordenar = function (a, b) {
+    if (b.trav !== a.trav) return b.trav - a.trav;
+    return (a.mes / a.meta) - (b.mes / b.meta);
+  };
+  const FAIXAS = [
+    { chave: 'agir', titulo: 'AGIR AGORA', cor: '#E51A31',
+      desc: 'pararam de marcar ou acumularam SLA — 1:1 hoje, roteiro pronto' },
+    { chave: 'olho', titulo: 'DE OLHO', cor: '#B0782A',
+      desc: 'um degrau do funil travando — resolver no 1:1 da semana' },
+    { chave: 'bem', titulo: 'RODANDO BEM', cor: '#1E7A63',
+      desc: 'reconhecer e usar como exemplo — acelere o time pelos melhores' }
+  ];
+  const grupos = FAIXAS.map(function (f) {
+    const reps = linhas.filter(function (l) { return l.faixa === f.chave; }).sort(ordenar);
+    return { chave: f.chave, cor: f.cor, desc: f.desc, reps: reps,
+      titulo: f.titulo + ' · ' + reps.length };
+  }).filter(function (g) { return g.reps.length; });
+
+  const nParados = (grupos.find(function (g) { return g.chave === 'agir'; }) || { reps: [] }).reps.length;
+  const g = Number(k.ganhos || 0);
+  const criadosCairam = kp != null && Number(k.leadsCriados || 0) < Number(kp.leadsCriados || 0);
+
+  const semElenco = linhas.length === 0;
+  const veredito = semElenco ? {
+    inicio: 'o snapshot desta semana não trouxe ninguém com meta — ',
+    meio: '', vermelho: 'não há placar por pessoa para ler', fim: '.'
+  } : {
+    inicio: g + (g === 1 ? ' fechado' : ' fechados') + ' e '
+      + (criadosCairam ? 'funil esvaziando' : 'funil recarregado') + ' — ',
+    vermelho: nParados > 0
+      ? nParados + (nParados === 1 ? ' vendedor parado' : ' vendedores parados') : null,
+    fim: nParados > 0 ? '.' : 'nenhum vendedor parado esta semana.',
+    meio: nParados > 0 ? 'o risco ' + (nParados === 1 ? 'é ' : 'são ') : ''
+  };
+
+  const pctMes = metaDoTime > 0 ? Math.round(fechadosDoTime / metaDoTime * 100) : 0;
+  const pedia = Math.ceil(ritmo.fracao * metaDoTime);
+
+  const mesTexto = !(metaDoTime > 0) ? 'sem meta no snapshot — não medido'
+    : (fechadosDoTime >= metaDoTime ? 'meta batida'
+      : (fechadosDoTime >= pedia ? 'no ritmo'
+        : 'mês levemente atrás — ritmo pedia ' + pedia));
+  const mesCor = !(metaDoTime > 0) ? '#B0782A'
+    : (fechadosDoTime >= metaDoTime ? '#57C29A'
+      : (fechadosDoTime >= pedia ? '#57C29A' : '#B0782A'));
+
+  const quentes = (rs.quentesDemoOuNegociacao || []).map(function (q) {
+    const dias = Number(q.dias || 0);
+    return {
+      id: String(q.id || ''),
+      nome: q.dealname || q.name || 'Sem nome',
+      rep: String(q.vendedor || '').split(/\s+/)[0] || '—',
+      etapa: q.stage || '—',
+      mrrNum: Number(q.mrr || q.valor_de_mrr || 0),
+      dias: dias
+    };
+  }).sort(function (a, b) { return b.dias - a.dias; });
+  const quentesMrr = quentes.reduce(function (t, q) { return t + q.mrrNum; }, 0);
+  const quentesVelhos = quentes.filter(function (q) { return q.dias > 10; }).length;
+
+  return {
+    janela: jan, kpis: kpis, veredito: veredito,
+    mes: { feitos: fechadosDoTime, meta: metaDoTime, pct: pctMes,
+      ritmoPct: Math.round(ritmo.fracao * 100), texto: mesTexto, cor: mesCor,
+      diaRef: ritmo.decorridos + ' de ' + ritmo.uteis + ' dias úteis' },
+    leitura: rs.resumoGeral || '',
+
+    geradaEm: rs.geradoEmFmt || null,
+    jogadas: Array.isArray(rs.comoAgir) ? rs.comoAgir
+      : (rs.comoAgir ? [String(rs.comoAgir)] : []),
+    conversoes: {
+      criados: Number(k.leadsCriados || 0), reunioes: Number(k.reunioes || 0),
+      ganhos: Number(k.ganhos || 0), perdidos: Number(k.perdidos || 0),
+      reciclagem: Number(k.reciclagem || 0)
+    },
+    grupos: grupos,
+    quentes: { lista: quentes.slice(0, 6), total: quentes.length,
+      mrr: quentesMrr, velhos: quentesVelhos },
+    falhasIA: rs._falhasIA || null
+  };
+}
+
+let SM5_ABERTO;
+
+function sm5TelaHTML(d) {
+  const j = d.janela;
+  const kicker = 'O QUE PRECISO SABER · SEMANA ' + esc(j.rotulo)
+    + (j.comparacao ? ' vs ' + esc(j.comparacao) : '')
+    + (j.aviso ? ' · ' + esc(j.aviso) : '');
+
+  const kpisHTML = d.kpis.map(function (k) {
+    const barras = k.barras.map(function (b) {
+      return '<div style="width:13px;height:' + b.h + 'px;background:' + b.cor
+        + ';border-radius:2px 2px 0 0;" title="' + esc(b.tip) + '"></div>';
+    }).join('');
+    return '<div style="min-width:118px;">'
+      + '<div style="display:flex;align-items:baseline;gap:7px;">'
+      +   '<span style="font-family:Poppins;font-weight:800;font-size:27px;line-height:1.1;">'
+      +     esc(k.valor) + '</span>'
+      +   (k.delta ? '<span style="font-size:12px;font-weight:700;color:' + k.delta.cor + ';">'
+      +     esc(k.delta.txt) + '</span>' : '')
+      + '</div>'
+      + '<div style="font-size:11px;color:#8A8072;margin-top:2px;">' + esc(k.rotulo) + '</div>'
+
+      + (k.barras.length
+        ? '<div style="display:flex;align-items:flex-end;gap:3px;height:26px;margin-top:9px;">'
+          + barras + '</div>'
+          + '<div style="font-size:9px;color:#5C554A;margin-top:3px;">últimas '
+          + k.barras.length + ' semanas</div>'
+        : '')
+      + '</div>';
+  }).join('');
+
+  const placar = '<div style="background:#1A1613;color:#FDFBF0;padding:24px 32px 22px;">'
+    + '<div style="display:flex;align-items:flex-start;gap:36px;flex-wrap:wrap;'
+      + 'row-gap:20px;">'
+    +   '<div style="flex:1 1 260px;min-width:0;max-width:330px;">'
+    +     '<div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#8A8072;">'
+    +       kicker + '</div>'
+    +     '<div style="font-family:Poppins;font-weight:800;font-size:24px;line-height:1.25;'
+    +       'margin-top:6px;letter-spacing:-.01em;">'
+    +       esc(d.veredito.inicio) + esc(d.veredito.meio)
+    +       (d.veredito.vermelho
+            ? '<span style="color:#FF6B78;">' + esc(d.veredito.vermelho) + '</span>' : '')
+    +       esc(d.veredito.fim) + '</div>'
+    +     '<div style="margin-top:14px;">'
+    +       '<div style="display:flex;align-items:baseline;gap:8px;">'
+    +         '<span style="font-family:Poppins;font-weight:800;font-size:30px;'
+    +           'font-variant-numeric:tabular-nums;">' + d.mes.feitos
+    +           '<span style="font-size:16px;color:#8A8072;font-weight:700;">/' + d.mes.meta
+    +           '</span></span>'
+    +         '<span style="font-size:11.5px;color:' + d.mes.cor + ';font-weight:700;">'
+    +           esc(d.mes.texto) + '</span>'
+    +       '</div>'
+    +       '<div style="height:7px;background:rgba(253,251,240,.14);border-radius:99px;'
+    +         'margin-top:7px;position:relative;">'
+    +         '<div style="width:' + d.mes.pct + '%;height:100%;background:#57C29A;'
+    +           'border-radius:99px;"></div>'
+
+    +         '<div style="position:absolute;left:' + d.mes.ritmoPct + '%;top:-3px;width:2px;'
+    +           'height:13px;background:#B0782A;border-radius:2px;" title="ritmo ideal — '
+    +           esc(d.mes.diaRef) + '"></div>'
+    +       '</div>'
+    +       '<div style="font-size:10.5px;color:#8A8072;margin-top:5px;">clientes fechados no '
+    +         'mês · <span style="color:#B0782A;">▮</span> onde o ritmo pedia estar hoje ('
+    +         esc(d.mes.diaRef) + ')</div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<span style="width:1px;align-self:stretch;flex:none;'
+      + 'background:rgba(253,251,240,.12);"></span>'
+    +   '<div style="display:flex;gap:34px;row-gap:16px;flex-wrap:wrap;'
+      + 'font-variant-numeric:tabular-nums;flex:1 1 320px;min-width:0;">'
+    +     kpisHTML
+    +   '</div>'
+    +   '<span data-sm5-compartilhar="1" style="align-self:center;margin-left:auto;'
+      + 'display:flex;align-items:center;'
+    +     'gap:7px;border:1px solid rgba(253,251,240,.28);border-radius:999px;padding:8px 17px;'
+    +     'font-size:12px;font-weight:700;cursor:pointer;flex:none;">'
+    +     '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FDFBF0" '
+    +       'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
+    +       '<path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"></path></svg>'
+    +     'Compartilhar com o time'
+    +   '</span>'
+    + '</div>'
+    + '</div>';
+
+  const conv = d.conversoes;
+  const pctConv = function (a, b) { return b > 0 ? Math.round(a / b * 100) + '%' : '—'; };
+  const selo = d.falhasIA
+    ? '<span title="' + esc(String(d.falhasIA)) + '" style="font-size:10px;color:#B0782A;'
+      + 'border:1px solid #E4DBC6;border-radius:6px;padding:2px 7px;font-weight:700;">'
+      + 'geração parcial — ver detalhes</span>'
+    : '';
+
+  const jogadasHTML = d.jogadas.map(function (t, i) {
+    return '<div style="display:flex;gap:11px;background:#FBF6EC;border-radius:12px;'
+      + 'padding:11px 14px;align-items:flex-start;">'
+      + '<b style="font-family:Poppins;color:#E51A31;flex:none;">' + (i + 1) + '</b>'
+
+      + '<span style="flex:1;">' + t + '</span>'
+      + '</div>';
+  }).join('');
+
+  const leitura = '<div class="sm5-duo" style="padding:20px 32px 0;">'
+    + '<div style="background:#FDFBF0;border:1px solid #E4DBC6;border-radius:18px;'
+    +   'padding:22px 26px;box-shadow:0 1px 3px rgba(26,22,19,.05);">'
+    +   '<div style="display:flex;align-items:center;gap:9px;">'
+    +     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1A1613" '
+    +       'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
+    +       '<path d="M4 19.5A2.5 2.5 0 016.5 17H20"></path>'
+    +       '<path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"></path></svg>'
+    +     '<b style="font-family:Poppins;font-size:14px;">A leitura da semana</b>'
+    +     '<span style="font-size:10px;color:#A2937A;border:1px solid #E4DBC6;border-radius:6px;'
+    +       'padding:2px 7px;font-weight:700;">'
+    +       (d.geradaEm ? 'GERADA ' + esc(d.geradaEm) + ' · IA' : 'GERADA POR IA')
+    +       '</span>'
+    +     selo
+    +   '</div>'
+    +   '<div style="margin-top:12px;font-size:14px;line-height:1.7;color:#3D362E;">'
+    +     (d.leitura || 'A leitura desta semana não foi gerada.') + '</div>'
+    +   '<div style="display:flex;gap:22px;margin-top:14px;padding-top:13px;'
+    +     'border-top:1px dashed #E4DBC6;font-size:12px;font-variant-numeric:tabular-nums;">'
+    +     '<span><b style="color:#1E7A63;">' + conv.criados + ' criados</b> → <b>'
+    +       conv.reunioes + ' reuniões</b> <span style="color:#A2937A;">('
+    +       pctConv(conv.reunioes, conv.criados) + ')</span></span>'
+    +     '<span><b>' + conv.reunioes + ' reuniões</b> → <b style="color:#1E7A63;">'
+    +       conv.ganhos + ' ganhos</b> <span style="color:#A2937A;">('
+    +       pctConv(conv.ganhos, conv.reunioes) + ')</span></span>'
+    +     '<span style="color:#6E6558;">perdidos <b style="color:#E51A31;">' + conv.perdidos
+    +       '</b> · reciclagem <b>' + conv.reciclagem + '</b></span>'
+    +     '<span style="margin-left:auto;color:#A2937A;">conversões da semana</span>'
+    +   '</div>'
+    + '</div>'
+    + '<div style="background:#FDFBF0;border:1.5px solid #E51A31;border-radius:18px;'
+    +   'padding:20px 22px;box-shadow:0 4px 16px rgba(229,26,49,.1);">'
+    +   '<div style="display:flex;align-items:center;gap:9px;">'
+    +     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#E51A31" '
+    +       'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
+    +       '<path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>'
+    +     '<b style="font-family:Poppins;font-size:14px;color:#E51A31;">Suas '
+    +       d.jogadas.length + ' jogada' + (d.jogadas.length === 1 ? '' : 's')
+    +       ' da semana</b>'
+    +   '</div>'
+    +   '<div style="display:grid;gap:9px;margin-top:13px;font-size:12.5px;">'
+    +     (jogadasHTML || '<span style="color:#A2937A;">Nenhuma jogada veio na rodada desta '
++       'semana.</span>')
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+
+  return placar + leitura + sm5BoardHTML(d) + sm5QuentesHTML(d);
+}
+
+function sm5BoardHTML(d) {
+
+  if (SM5_ABERTO === undefined) {
+    const agir = d.grupos.find(function (g) { return g.chave === 'agir'; });
+    SM5_ABERTO = (agir && agir.reps.length) ? agir.reps[0].id : null;
+  }
+
+  const gruposHTML = d.grupos.map(function (g) {
+    const repsHTML = g.reps.map(function (r) {
+      const aberto = SM5_ABERTO === r.id;
+      const borda = g.chave === 'agir' ? '#EFC7CC' : '#E4DBC6';
+      const avatarBg = g.chave === 'agir' ? '#FBEEF0' : g.chave === 'bem' ? '#E7F3EE' : '#F7F0E0';
+      const avatarInk = g.chave === 'agir' ? '#E51A31' : g.chave === 'bem' ? '#1E7A63' : '#B0782A';
+      const reunCor = r.reun === 0 ? '#E51A31' : '#1A1613';
+      const ganhosCor = r.ganhos > 0 ? '#1E7A63' : '#1A1613';
+      const travCor = r.trav >= 5 ? '#E51A31' : r.trav > 0 ? '#B0782A' : '#A2937A';
+      const pctCor = r.metaBatida ? '#1E7A63' : r.mesAtrasado ? '#E51A31' : '#57C29A';
+      const paceTxt = r.metaBatida ? 'meta batida' : r.mesAtrasado ? 'atrás do ritmo' : 'no ritmo';
+      const paceCor = r.mesAtrasado ? '#E51A31' : '#1E7A63';
+      const tendCor = r.tend === 'up' ? '#1E7A63' : r.tend === 'down' ? '#E51A31' : '#6E6558';
+      const tendGlifo = r.tend === 'up' ? '▲' : r.tend === 'down' ? '▼' : '—';
+      const tendLabel = r.tend === 'up' ? 'melhorando' : r.tend === 'down' ? 'piorando' : 'estável';
+      const cta = g.chave === 'agir' ? '1:1 hoje' : g.chave === 'bem' ? 'usar na daily' : 'roteiro';
+      const ctaCor = g.chave === 'agir' ? '#E51A31' : '#B0782A';
+      const ctaBorda = g.chave === 'agir' ? '#E51A31' : '#D9CDB2';
+
+      const estado = (typeof getPdiState === 'function')
+        ? getPdiState(r.id, r.compromissos.length)
+        : { checked: r.compromissos.map(function () { return false; }) };
+
+      const roteiroHTML = r.roteiro.map(function (p) {
+        return '<div style="display:flex;gap:10px;font-size:12.5px;line-height:1.55;">'
+          + (p.tag ? '<b style="font-family:Poppins;font-size:10px;color:#B0782A;flex:none;'
+            + 'margin-top:3px;letter-spacing:.06em;">' + esc(p.tag) + '</b>' : '')
+          + '<span style="color:#3D362E;">' + p.txt + '</span></div>';
+      }).join('');
+
+      const compHTML = r.compromissos.map(function (c, i) {
+        const feito = !!estado.checked[i];
+        return '<div data-sm5-check="' + esc(r.id) + '" data-sm5-i="' + i + '"'
+          + ' style="display:flex;gap:9px;align-items:flex-start;background:#FDFBF0;'
+          + 'border:1px solid #E4DBC6;border-radius:10px;padding:9px 12px;font-size:12px;'
+          + 'cursor:pointer;">'
+          + '<span style="width:15px;height:15px;border-radius:5px;border:1.5px solid '
+          +   (feito ? '#1E7A63' : '#C9BFA8') + ';background:' + (feito ? '#1E7A63' : '#FDFBF0')
+          +   ';display:grid;place-items:center;flex:none;margin-top:1px;color:#fff;'
+          +   'font-size:10px;font-weight:800;">' + (feito ? '✓' : '') + '</span>'
+          + '<span style="color:' + (feito ? '#A2937A' : '#3D362E') + ';text-decoration:'
+          +   (feito ? 'line-through' : 'none') + ';line-height:1.5;">' + esc(c) + '</span>'
+          + '</div>';
+      }).join('');
+
+      const drawer = !aberto ? '' :
+        '<div style="border-top:1px dashed #E4DBC6;background:#FBF6EC;'
+        + 'padding:16px 18px 16px 68px;display:grid;grid-template-columns:1.25fr 1fr;gap:24px;">'
+        + '<div>'
+        +   '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#B0782A;">'
+        +     'ROTEIRO DO 1:1 · PRIVADO</div>'
+        +   '<div style="display:grid;gap:7px;margin-top:9px;">' + roteiroHTML + '</div>'
+        + '</div>'
+        + '<div>'
+        +   '<div style="display:flex;align-items:center;gap:8px;">'
+        +     '<span style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#1E7A63;">'
+        +       'COMPROMISSOS DA SEMANA</span>'
+        +     '<span style="font-size:10px;color:#A2937A;">ele vê e marca · você valida no '
+        +       'próximo 1:1</span>'
+        +   '</div>'
+        +   '<div style="display:grid;gap:6px;margin-top:9px;">'
+        +     (compHTML || '<span style="font-size:11px;color:#A2937A;">Sem compromissos '
+        +       'registrados para ele nesta semana.</span>')
+        +   '</div>'
+        +   '<div style="margin-top:9px;font-size:11px;">'
+        +     '<a data-sm5-crm="' + esc(r.id) + '" style="color:#B0782A;cursor:pointer;">'
+        +     'abrir os negócios dele no CRM →</a></div>'
+        + '</div>'
+        + '</div>';
+
+      return '<div style="background:#FDFBF0;border:1px solid ' + borda + ';border-radius:14px;'
+        + 'box-shadow:0 1px 3px rgba(26,22,19,.05);overflow:hidden;">'
+        + '<div data-sm5-linha="' + esc(r.id) + '" style="display:flex;align-items:center;'
+        +   'gap:16px;padding:13px 18px;cursor:pointer;">'
+        +   '<span style="width:34px;height:34px;border-radius:999px;background:' + avatarBg
+        +     ';color:' + avatarInk + ';font-family:Poppins;font-weight:800;font-size:12px;'
+        +     'display:grid;place-items:center;flex:none;">' + esc(r.ini) + '</span>'
+        +   '<span style="min-width:190px;">'
+        +     '<b style="font-size:13.5px;display:block;">' + esc(r.nome) + '</b>'
+        +     '<span style="font-size:10.5px;color:#A2937A;">' + esc(r.praca) + ' · '
+        +       esc(r.patamar) + '</span>'
+        +   '</span>'
+        +   '<span style="display:flex;gap:18px;font-variant-numeric:tabular-nums;'
+        +     'font-size:12px;min-width:270px;">'
+        +     sm5Numero(r.criados, '#1A1613', 'criados')
+        +     sm5Numero(r.reun, reunCor, 'reuniões')
+        +     sm5Numero(r.ganhos, ganhosCor, 'ganhos')
+        +     sm5Numero(r.trav, travCor, 'travados')
+        +   '</span>'
+        +   '<span style="min-width:150px;">'
+        +     '<span style="display:flex;justify-content:space-between;font-size:10.5px;'
+        +       'font-variant-numeric:tabular-nums;"><span style="color:#6E6558;">mês</span>'
+        +       '<b>' + r.mes + '/' + r.meta + '</b></span>'
+        +     '<span style="display:block;height:5px;background:#EFE9DC;border-radius:99px;'
+        +       'margin-top:4px;"><span style="display:block;height:100%;width:' + r.pct
+        +       '%;background:' + pctCor + ';border-radius:99px;"></span></span>'
+        +     '<span style="font-size:9.5px;color:' + paceCor + ';font-weight:700;">'
+        +       paceTxt + '</span>'
+        +   '</span>'
+        +   '<span title="' + esc(r.tendTexto) + '" style="font-size:11px;font-weight:700;'
+        +     'color:' + tendCor + ';min-width:86px;text-align:center;">' + tendGlifo + ' '
+        +     tendLabel + '</span>'
+        +   '<span style="flex:1;font-size:12px;color:#3D362E;line-height:1.45;">'
+        +     esc(r.gargalo) + '</span>'
+        +   '<span style="flex:none;display:flex;align-items:center;gap:6px;font-size:11px;'
+        +     'font-weight:700;color:' + ctaCor + ';border:1px solid ' + ctaBorda
+        +     ';border-radius:999px;padding:6px 13px;">' + cta
+        +     ' <span style="font-size:9px;">' + (aberto ? '▲' : '▼') + '</span></span>'
+        + '</div>'
+        + drawer
+        + '</div>';
+    }).join('');
+
+    return '<div style="margin-bottom:16px;">'
+      + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;">'
+      +   '<span style="width:8px;height:8px;border-radius:99px;background:' + g.cor
+      +     ';"></span>'
+      +   '<b style="font-family:Poppins;font-size:12px;letter-spacing:.08em;color:' + g.cor
+      +     ';">' + esc(g.titulo) + '</b>'
+      +   '<span style="font-size:11px;color:#A2937A;">' + esc(g.desc) + '</span>'
+      + '</div>'
+      + '<div style="display:grid;gap:8px;">' + repsHTML + '</div>'
+      + '</div>';
+  }).join('');
+
+  return '<div id="sm5Board" style="padding:20px 32px 0;">'
+    + '<div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px;">'
+    +   '<b style="font-family:Poppins;font-size:16px;">Como acelerar, um por um</b>'
+    +   '<span style="font-size:11.5px;color:#6E6558;">ordenado por quem mais precisa de '
+    +     'você · roteiro do 1:1 e compromissos prontos — só o gestor vê esta coluna</span>'
+
+    +   (d.janela.usouAnterior
+      ? '<span style="margin-left:auto;font-size:10.5px;color:#B0782A;font-weight:700;'
+        + 'border:1px solid #E4DBC6;border-radius:6px;padding:2px 8px;">números por '
+        + 'pessoa: semana em curso, não a do placar</span>'
+      : '')
+    + '</div>'
+    + (gruposHTML || '<div style="font-size:12px;color:#A2937A;">Nenhum executivo com meta '
+      + 'na planilha veio no snapshot desta semana.</div>')
+    + '</div>';
+}
+
+function sm5Numero(v, cor, rot) {
+  return '<span style="text-align:center;"><b style="font-family:Poppins;font-size:16px;'
+    + 'display:block;color:' + cor + ';">' + v + '</b>'
+    + '<span style="font-size:9.5px;color:#A2937A;">' + rot + '</span></span>';
+}
+
+function sm5QuentesHTML(d) {
+  const q = d.quentes;
+  const cards = q.lista.map(function (x) {
+    const velho = x.dias > 10;
+    return '<div data-sm5-quente="' + esc(x.id) + '" style="display:flex;'
+      + 'justify-content:space-between;align-items:center;gap:10px;background:#FBF6EC;'
+      + 'border-radius:10px;padding:9px 13px;cursor:pointer;">'
+      + '<span style="min-width:0;"><b style="display:block;white-space:nowrap;'
+      +   'overflow:hidden;text-overflow:ellipsis;">' + esc(x.nome) + '</b>'
+      +   '<span style="font-size:10.5px;color:#A2937A;">' + esc(x.rep) + ' · '
+      +   esc(x.etapa) + '</span></span>'
+      + '<span style="text-align:right;flex:none;">'
+      +   '<b style="color:#1E7A63;display:block;">' + sm5Moeda(x.mrrNum) + '</b>'
+      +   '<span style="font-size:10.5px;font-weight:700;color:'
+      +     (velho ? '#E51A31' : '#B0782A') + ';">' + x.dias + 'd'
+      +     (velho ? ' parado' : '') + '</span></span>'
+      + '</div>';
+  }).join('');
+
+  return '<div style="padding:4px 32px 30px;">'
+    + '<div style="background:#FDFBF0;border:1px solid #E4DBC6;border-radius:18px;'
+    +   'padding:18px 22px;box-shadow:0 1px 3px rgba(26,22,19,.05);">'
+    +   '<div style="display:flex;align-items:center;gap:9px;">'
+    +     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B0782A" '
+    +       'stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">'
+    +       '<circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>'
+    +     '<b style="font-family:Poppins;font-size:14px;">Dinheiro parado na mesa · '
+    +       q.total + ' quentes em demo/negociação</b>'
+    +     '<span style="font-size:12px;color:#6E6558;font-variant-numeric:tabular-nums;">'
+    +       sm5Moeda(q.mrr) + ' de MRR esperando decisão'
+
+    +       (q.velhos ? ' · <b style="color:#E51A31;">' + q.velhos + ' há mais de 10 dias</b>' : '')
+    +       '</span>'
+    +   '</div>'
+    +   '<div class="sm5-quentes">'
+    +     (cards || '<span style="font-size:12px;color:#A2937A;">Nenhum negócio em '
+      + 'demo ou negociação no snapshot desta semana.</span>')
+    +   '</div>'
+    +   (q.total > q.lista.length
+      ? '<div style="margin-top:10px;font-size:11px;color:#A2937A;">mostrando os '
+        + q.lista.length + ' mais antigos · <a data-sm5-verquentes="1" '
+        + 'style="color:#B0782A;cursor:pointer;">ver os ' + q.total + ' no funil →</a></div>'
+      : '')
+    + '</div>'
+    + '<div style="margin-top:14px;font-size:10.5px;color:#A2937A;line-height:1.6;">'
+    +   'De onde vêm os números: comparativo e detalhes por pessoa do robô semanal (semana '
+    +   'civil seg–sex, sem Conta Alvo, ganhos por closedate) · leitura e roteiros gerados '
+    +   'por IA na mesma rodada · metas por patamar (pleno 8 · rampa 2) da planilha de '
+    +   'metas · travados = SLA estourado no snapshot do dia.</div>'
+    + '</div>';
+}
+
+function sm5Ligar(raiz) {
+  if (!raiz || raiz.dataset.sm5Ligado === '1') return;
+  raiz.dataset.sm5Ligado = '1';
+
+  raiz.addEventListener('click', function (ev) {
+    const alvo = ev.target;
+
+    const linha = alvo.closest('[data-sm5-linha]');
+    const check = alvo.closest('[data-sm5-check]');
+    const crm = alvo.closest('[data-sm5-crm]');
+    const quente = alvo.closest('[data-sm5-quente]');
+
+    if (check) {
+
+      ev.stopPropagation();
+      const id = check.dataset.sm5Check;
+      const i = Number(check.dataset.sm5I);
+      const d = sm5Dados();
+      const rep = d.grupos.reduce(function (a, g) { return a.concat(g.reps); }, [])
+        .find(function (r) { return r.id === id; });
+      if (!rep) return;
+      const estado = getPdiState(id, rep.compromissos.length);
+      estado.checked[i] = !estado.checked[i];
+
+      savePdiState(id, estado.checked, estado.data);
+      renderSemana();
+      return;
+    }
+
+    if (crm) {
+      ev.stopPropagation();
+
+      const rep = (DATA.reps || []).find(function (x) {
+        return String(x.ownerId) === String(crm.dataset.sm5Crm);
+      });
+      if (rep && typeof openModal === 'function') return openModal(rep);
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Não achei esta pessoa na carga desta sessão — abra pela aba Pessoas.', 'atencao');
+      }
+      return;
+    }
+
+    if (quente) {
+      ev.stopPropagation();
+      const id = quente.dataset.sm5Quente;
+      if (id && typeof abrirFichaLeadFunilDrawer === 'function') {
+        const lead = (typeof buscarLeadFunilPorId === 'function') ? buscarLeadFunilPorId(id) : null;
+        if (lead) return abrirFichaLeadFunilDrawer(lead);
+      }
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Este negócio não está na carga desta sessão — abra pelo Meu funil.', 'atencao');
+      }
+      return;
+    }
+
+    if (alvo.closest('[data-sm5-compartilhar]')) {
+
+      if (typeof abrirAvisosDrawer === 'function') return abrirAvisosDrawer();
+      if (typeof mostrarToast === 'function') {
+        mostrarToast('Use a aba Avisos para fixar o resumo desta semana para o time.', 'atencao');
+      }
+      return;
+    }
+
+    if (alvo.closest('[data-sm5-verquentes]')) {
+      if (typeof irParaMeuFunilVisao === 'function') return irParaMeuFunilVisao('quentes');
+      return;
+    }
+
+    if (linha) {
+      const id = linha.dataset.sm5Linha;
+
+      SM5_ABERTO = (SM5_ABERTO === id) ? null : id;
+      renderSemana();
+    }
+  });
+}
+
 function renderSemana() {
   const raiz = document.getElementById('sm9Raiz');
   if (!raiz) return;
   if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
 
-  raiz.innerHTML = sm4TelaHTML(sm4Dados()) + sm9LeiturasHTML(sm9Dados());
+  raiz.innerHTML = sm5TelaHTML(sm5Dados()) + sm9LeiturasHTML(sm9Dados());
+  sm5Ligar(raiz);
+  if (!SM5_ANALISES) {
+    sm5CarregarAnalises().then(function () {
+
+      renderSemana();
+    });
+  }
 }
 
 document.addEventListener('click', ev => {

@@ -401,6 +401,10 @@ function montarDadosCompletos() {
       // builds antigas não tem o campo, daí o fallback pra null (a tela desenha 1 barra só).
       serieSemanal: resumoSemanal ? (resumoSemanal.serieSemanal || null) : null,
       porRep: resumoSemanal ? (resumoSemanal.porRep || {}) : {},
+      /* A aba Semana mostra um selo discreto quando a rodada da IA falhou em parte.
+         Sem repassar aqui, aquele selo seria codigo morto por construcao — o campo
+         existe no snapshot e nao existia nesta projecao. */
+      _falhasIA: resumoSemanal ? (resumoSemanal._falhasIA || null) : null,
       ganhosSemanaDetalhe: ganhosDetalheFresco,
       reunioesSemanaDetalhe: (weeklyRaw && weeklyRaw.reunioesSemanaDetalhe) || (resumoSemanal && resumoSemanal.reunioesSemanaDetalhe) || [],
       // BLOCO 41 — "criados" por pessoa na semana (board da Semana do gestor).
