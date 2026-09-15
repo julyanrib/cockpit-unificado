@@ -5477,6 +5477,24 @@ foi escrita para jogar o "0 de 27 resolvidos"
   @media (max-width:640px){
     .sm5-quentes{grid-template-columns:1fr;}
   }
+
+  .sm5-linha{display:flex;align-items:center;gap:16px;padding:13px 18px;cursor:pointer;}
+  .sm5-drawer{border-top:1px dashed #E4DBC6;background:#FBF6EC;
+    padding:16px 18px 16px 68px;display:grid;grid-template-columns:1.25fr 1fr;gap:24px;}
+  @media (max-width:900px){
+    .sm5-linha{flex-wrap:wrap;row-gap:10px;gap:12px;}
+    .sm5-linha > span{min-width:0 !important;}
+    .sm5-l-nome{flex:1 1 55%;}
+
+    .sm5-l-num{flex:1 1 100%;justify-content:space-between;
+      gap:8px !important;flex-wrap:wrap;}
+    .sm5-l-mes{flex:1 1 42%;}
+    .sm5-l-tend{flex:1 1 30%;text-align:left !important;}
+    .sm5-l-garg{flex:1 1 100% !important;}
+    .sm5-l-cta{margin-left:auto;}
+
+    .sm5-drawer{grid-template-columns:1fr;padding-left:18px;gap:16px;}
+  }
 </style>
 </head>
 <body>
@@ -42820,7 +42838,11 @@ function sm5Serie(chave) {
 
   const porJanela = new Map();
   jans.forEach(function (j, i) {
-    if (i < vals.length) porJanela.set(String(j), vals[i]);
+    if (i >= vals.length) return;
+
+    const dias = sm5DiasDaJanela(j);
+    if (dias == null || dias < 5) return;
+    porJanela.set(String(j), vals[i]);
   });
   const janelas = [...porJanela.keys()];
   const valores = janelas.map(function (j) { return Number(porJanela.get(j)) || 0; });
@@ -42855,6 +42877,16 @@ function sm5Delta(atual, anterior, subirEhBom) {
   };
 }
 
+function sm5Negrito(v) {
+
+  let s = esc(v);
+  [['&lt;b&gt;', '<b>'], ['&lt;/b&gt;', '</b>'],
+   ['&lt;strong&gt;', '<b>'], ['&lt;/strong&gt;', '</b>']].forEach(function (p) {
+    s = s.split(p[0]).join(p[1]);
+  });
+  return s;
+}
+
 function sm5Moeda(v) {
   return 'R$ ' + Math.round(Number(v) || 0).toLocaleString('pt-BR');
 }
@@ -42876,8 +42908,11 @@ function sm5RitmoDoMes() {
 }
 
 function sm5Faixa(r) {
-  if (r.reun === 0 || r.trav >= 5 || (r.tend === 'down' && r.mesAtrasado)) return 'agir';
-  if (r.ganhos >= 1 && r.trav <= 2 && !r.mesAtrasado) return 'bem';
+
+  const parouDeMarcar = r.reunMedida !== false && r.reun === 0;
+  if (parouDeMarcar || r.trav >= 5 || (r.tend === 'down' && r.mesAtrasado)) return 'agir';
+
+  if (r.temMeta !== false && r.ganhos >= 1 && r.trav <= 2 && !r.mesAtrasado) return 'bem';
   return 'olho';
 }
 
@@ -42917,8 +42952,11 @@ function sm5Dados() {
   const k = jan.kpis || {};
   const kp = jan.kpisComp;
 
-  const mrrFechado = (rs.ganhosSemanaDetalhe || [])
+  const mrrFechado = jan.usouAnterior ? null : (rs.ganhosSemanaDetalhe || [])
     .reduce(function (t, g) { return t + (Number(g.mrr) || 0); }, 0);
+
+  const ganhosSemValor = (rs.ganhosSemanaDetalhe || [])
+    .filter(function (g) { return !(Number(g.mrr) > 0); }).length;
 
   const kpis = [
     { rotulo: 'ganhos', valor: String(k.ganhos == null ? '—' : k.ganhos),
@@ -42933,7 +42971,9 @@ function sm5Dados() {
     { rotulo: 'perdidos', valor: String(k.perdidos == null ? '—' : k.perdidos),
       delta: sm5Delta(k.perdidos, kp && kp.perdidos, false),
       barras: [] },
-    { rotulo: 'MRR fechado', valor: sm5Moeda(mrrFechado), delta: null, barras: [] }
+    { rotulo: mrrFechado == null ? 'MRR fechado (só da semana em curso)'
+        : (ganhosSemValor ? 'MRR fechado · ' + ganhosSemValor + ' sem valor' : 'MRR fechado'),
+      valor: mrrFechado == null ? '—' : sm5Moeda(mrrFechado), delta: null, barras: [] }
   ];
 
   const porRep = rs.porRep || {};
@@ -42956,21 +42996,24 @@ function sm5Dados() {
     const p = porRep[id] || {};
     const snap = p.snap || {};
     const rep = (DATA.reps || []).find(function (x) { return String(x.ownerId) === String(id); }) || {};
-    const meta = metaClientesDoRep(rep);
 
-    if (!(meta > 0)) return null;
+    const metaBruta = rep.metaMensal;
+    const temMeta = metaBruta != null && metaBruta !== '' && Number(metaBruta) > 0;
+    const meta = temMeta ? Number(metaBruta) : 0;
 
     const mes = Number(snap.fechadosNoMes || 0);
-    metaDoTime += meta; fechadosDoTime += mes;
+
+    if (temMeta) { metaDoTime += meta; fechadosDoTime += mes; }
 
     const trav = Number(snap.leadsTravados || 0);
 
     const ganhos = ganhosPorDono[id] != null ? ganhosPorDono[id] : Number(snap.ganhosSemana || 0);
     const reun = reunPorDono[id] || 0;
     const criados = criadosPorDono[id] || 0;
-    const pct = meta > 0 ? Math.min(100, Math.round(mes / meta * 100)) : 0;
-    const metaBatida = mes >= meta;
-    const mesAtrasado = !metaBatida && (mes / meta) < ritmo.fracao;
+    const pct = temMeta ? Math.min(100, Math.round(mes / meta * 100)) : 0;
+
+    const metaBatida = temMeta && mes >= meta;
+    const mesAtrasado = temMeta && !metaBatida && (mes / meta) < ritmo.fracao;
     const tend = sm5Tendencia(snap, p.anterior);
     const an = analises[String(id)] || {};
 
@@ -42980,8 +43023,12 @@ function sm5Dados() {
       ini: String(p.name || rep.name || '?').split(/\s+/).slice(0, 2)
         .map(function (w) { return w.charAt(0); }).join('').toUpperCase(),
       praca: rep.praca || '—',
-      patamar: (rep.patamarMeta ? rep.patamarMeta + ' · meta ' + meta : 'meta ' + meta),
+      patamar: !temMeta ? 'sem meta na planilha'
+        : (rep.patamarMeta ? rep.patamarMeta + ' · meta ' + meta : 'meta ' + meta),
+      temMeta: temMeta,
       criados: criados, reun: reun, ganhos: ganhos, trav: trav,
+
+      reunMedida: !jan.usouAnterior,
       mes: mes, meta: meta, pct: pct, metaBatida: metaBatida, mesAtrasado: mesAtrasado,
       tend: tend,
 
@@ -43006,7 +43053,10 @@ function sm5Dados() {
   };
   const FAIXAS = [
     { chave: 'agir', titulo: 'AGIR AGORA', cor: '#E51A31',
-      desc: 'pararam de marcar ou acumularam SLA — 1:1 hoje, roteiro pronto' },
+
+      desc: jan.usouAnterior
+        ? 'acumularam SLA — 1:1 hoje, roteiro pronto (reuniões da semana só quando ela fechar)'
+        : 'pararam de marcar ou acumularam SLA — 1:1 hoje, roteiro pronto' },
     { chave: 'olho', titulo: 'DE OLHO', cor: '#B0782A',
       desc: 'um degrau do funil travando — resolver no 1:1 da semana' },
     { chave: 'bem', titulo: 'RODANDO BEM', cor: '#1E7A63',
@@ -43027,8 +43077,10 @@ function sm5Dados() {
     inicio: 'o snapshot desta semana não trouxe ninguém com meta — ',
     meio: '', vermelho: 'não há placar por pessoa para ler', fim: '.'
   } : {
-    inicio: g + (g === 1 ? ' fechado' : ' fechados') + ' e '
-      + (criadosCairam ? 'funil esvaziando' : 'funil recarregado') + ' — ',
+    inicio: g + (g === 1 ? ' fechado' : ' fechados')
+
+      + (kp == null ? '' : ' e ' + (criadosCairam ? 'funil esvaziando' : 'funil recarregado'))
+      + ' — ',
     vermelho: nParados > 0
       ? nParados + (nParados === 1 ? ' vendedor parado' : ' vendedores parados') : null,
     fim: nParados > 0 ? '.' : 'nenhum vendedor parado esta semana.',
@@ -43053,12 +43105,16 @@ function sm5Dados() {
       nome: q.dealname || q.name || 'Sem nome',
       rep: String(q.vendedor || '').split(/\s+/)[0] || '—',
       etapa: q.stage || '—',
+
       mrrNum: Number(q.mrr || q.valor_de_mrr || 0),
+      temMrr: Number(q.mrr || q.valor_de_mrr || 0) > 0,
       dias: dias
     };
   }).sort(function (a, b) { return b.dias - a.dias; });
   const quentesMrr = quentes.reduce(function (t, q) { return t + q.mrrNum; }, 0);
   const quentesVelhos = quentes.filter(function (q) { return q.dias > 10; }).length;
+
+  const quentesSemValor = quentes.filter(function (q) { return !q.temMrr; }).length;
 
   return {
     janela: jan, kpis: kpis, veredito: veredito,
@@ -43077,7 +43133,7 @@ function sm5Dados() {
     },
     grupos: grupos,
     quentes: { lista: quentes.slice(0, 6), total: quentes.length,
-      mrr: quentesMrr, velhos: quentesVelhos },
+      mrr: quentesMrr, velhos: quentesVelhos, semValor: quentesSemValor },
     falhasIA: rs._falhasIA || null
   };
 }
@@ -43246,7 +43302,8 @@ function sm5BoardHTML(d) {
       const borda = g.chave === 'agir' ? '#EFC7CC' : '#E4DBC6';
       const avatarBg = g.chave === 'agir' ? '#FBEEF0' : g.chave === 'bem' ? '#E7F3EE' : '#F7F0E0';
       const avatarInk = g.chave === 'agir' ? '#E51A31' : g.chave === 'bem' ? '#1E7A63' : '#B0782A';
-      const reunCor = r.reun === 0 ? '#E51A31' : '#1A1613';
+
+      const reunCor = (r.reunMedida !== false && r.reun === 0) ? '#E51A31' : '#1A1613';
       const ganhosCor = r.ganhos > 0 ? '#1E7A63' : '#1A1613';
       const travCor = r.trav >= 5 ? '#E51A31' : r.trav > 0 ? '#B0782A' : '#A2937A';
       const pctCor = r.metaBatida ? '#1E7A63' : r.mesAtrasado ? '#E51A31' : '#57C29A';
@@ -43286,8 +43343,7 @@ function sm5BoardHTML(d) {
       }).join('');
 
       const drawer = !aberto ? '' :
-        '<div style="border-top:1px dashed #E4DBC6;background:#FBF6EC;'
-        + 'padding:16px 18px 16px 68px;display:grid;grid-template-columns:1.25fr 1fr;gap:24px;">'
+        '<div class="sm5-drawer">'
         + '<div>'
         +   '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#B0782A;">'
         +     'ROTEIRO DO 1:1 · PRIVADO</div>'
@@ -43312,24 +43368,23 @@ function sm5BoardHTML(d) {
 
       return '<div style="background:#FDFBF0;border:1px solid ' + borda + ';border-radius:14px;'
         + 'box-shadow:0 1px 3px rgba(26,22,19,.05);overflow:hidden;">'
-        + '<div data-sm5-linha="' + esc(r.id) + '" style="display:flex;align-items:center;'
-        +   'gap:16px;padding:13px 18px;cursor:pointer;">'
+        + '<div data-sm5-linha="' + esc(r.id) + '" class="sm5-linha">'
         +   '<span style="width:34px;height:34px;border-radius:999px;background:' + avatarBg
         +     ';color:' + avatarInk + ';font-family:Poppins;font-weight:800;font-size:12px;'
         +     'display:grid;place-items:center;flex:none;">' + esc(r.ini) + '</span>'
-        +   '<span style="min-width:190px;">'
+        +   '<span class="sm5-l-nome" style="min-width:190px;">'
         +     '<b style="font-size:13.5px;display:block;">' + esc(r.nome) + '</b>'
         +     '<span style="font-size:10.5px;color:#A2937A;">' + esc(r.praca) + ' · '
         +       esc(r.patamar) + '</span>'
         +   '</span>'
-        +   '<span style="display:flex;gap:18px;font-variant-numeric:tabular-nums;'
-        +     'font-size:12px;min-width:270px;">'
+        +   '<span class="sm5-l-num" style="display:flex;gap:18px;'
+        +     'font-variant-numeric:tabular-nums;font-size:12px;min-width:270px;">'
         +     sm5Numero(r.criados, '#1A1613', 'criados')
         +     sm5Numero(r.reun, reunCor, 'reuniões')
         +     sm5Numero(r.ganhos, ganhosCor, 'ganhos')
         +     sm5Numero(r.trav, travCor, 'travados')
         +   '</span>'
-        +   '<span style="min-width:150px;">'
+        +   '<span class="sm5-l-mes" style="min-width:150px;">'
         +     '<span style="display:flex;justify-content:space-between;font-size:10.5px;'
         +       'font-variant-numeric:tabular-nums;"><span style="color:#6E6558;">mês</span>'
         +       '<b>' + r.mes + '/' + r.meta + '</b></span>'
@@ -43339,12 +43394,15 @@ function sm5BoardHTML(d) {
         +     '<span style="font-size:9.5px;color:' + paceCor + ';font-weight:700;">'
         +       paceTxt + '</span>'
         +   '</span>'
-        +   '<span title="' + esc(r.tendTexto) + '" style="font-size:11px;font-weight:700;'
+        +   '<span class="sm5-l-tend" title="' + esc(r.tendTexto) + '"'
+        +     ' style="font-size:11px;font-weight:700;'
         +     'color:' + tendCor + ';min-width:86px;text-align:center;">' + tendGlifo + ' '
         +     tendLabel + '</span>'
-        +   '<span style="flex:1;font-size:12px;color:#3D362E;line-height:1.45;">'
-        +     esc(r.gargalo) + '</span>'
-        +   '<span style="flex:none;display:flex;align-items:center;gap:6px;font-size:11px;'
+        +   '<span class="sm5-l-garg" style="flex:1;font-size:12px;color:#3D362E;'
+        +     'line-height:1.45;">'
+        +     sm5Negrito(r.gargalo) + '</span>'
+        +   '<span class="sm5-l-cta" style="flex:none;display:flex;align-items:center;'
+        +     'gap:6px;font-size:11px;'
         +     'font-weight:700;color:' + ctaCor + ';border:1px solid ' + ctaBorda
         +     ';border-radius:999px;padding:6px 13px;">' + cta
         +     ' <span style="font-size:9px;">' + (aberto ? '▲' : '▼') + '</span></span>'
@@ -43392,7 +43450,8 @@ function sm5QuentesHTML(d) {
   const q = d.quentes;
   const cards = q.lista.map(function (x) {
     const velho = x.dias > 10;
-    return '<div data-sm5-quente="' + esc(x.id) + '" style="display:flex;'
+    return '<div data-sm5-quente="' + esc(x.id) + '" data-sm5-dono="' + esc(x.rep) + '"'
+      + ' style="display:flex;'
       + 'justify-content:space-between;align-items:center;gap:10px;background:#FBF6EC;'
       + 'border-radius:10px;padding:9px 13px;cursor:pointer;">'
       + '<span style="min-width:0;"><b style="display:block;white-space:nowrap;'
@@ -43400,7 +43459,9 @@ function sm5QuentesHTML(d) {
       +   '<span style="font-size:10.5px;color:#A2937A;">' + esc(x.rep) + ' · '
       +   esc(x.etapa) + '</span></span>'
       + '<span style="text-align:right;flex:none;">'
-      +   '<b style="color:#1E7A63;display:block;">' + sm5Moeda(x.mrrNum) + '</b>'
+      +   '<b style="color:' + (x.temMrr ? '#1E7A63' : '#A2937A') + ';display:block;"'
+      +     (x.temMrr ? '' : ' title="sem valor de MRR preenchido no HubSpot"') + '>'
+      +     (x.temMrr ? sm5Moeda(x.mrrNum) : '—') + '</b>'
       +   '<span style="font-size:10.5px;font-weight:700;color:'
       +     (velho ? '#E51A31' : '#B0782A') + ';">' + x.dias + 'd'
       +     (velho ? ' parado' : '') + '</span></span>'
@@ -43420,6 +43481,9 @@ function sm5QuentesHTML(d) {
     +       sm5Moeda(q.mrr) + ' de MRR esperando decisão'
 
     +       (q.velhos ? ' · <b style="color:#E51A31;">' + q.velhos + ' há mais de 10 dias</b>' : '')
+
+    +       (q.semValor ? ' · <span style="color:#B0782A;">' + q.semValor
+    +         ' sem valor preenchido</span>' : '')
     +       '</span>'
     +   '</div>'
     +   '<div class="sm5-quentes">'
@@ -43489,8 +43553,20 @@ function sm5Ligar(raiz) {
         const lead = (typeof buscarLeadFunilPorId === 'function') ? buscarLeadFunilPorId(id) : null;
         if (lead) return abrirFichaLeadFunilDrawer(lead);
       }
+
+      const primeiro = String(quente.dataset.sm5Dono || '');
+      const dono = (DATA.reps || []).find(function (x) {
+        return String(x.name || '').split(/\s+/)[0] === primeiro;
+      });
+      if (dono && typeof openModal === 'function') {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Este negócio não veio na carga desta sessão — abrindo o dossiê de '
+            + primeiro + '.', 'atencao');
+        }
+        return openModal(dono);
+      }
       if (typeof mostrarToast === 'function') {
-        mostrarToast('Este negócio não está na carga desta sessão — abra pelo Meu funil.', 'atencao');
+        mostrarToast('Este negócio não veio na carga desta sessão e eu não achei o dono dele.', 'atencao');
       }
       return;
     }
