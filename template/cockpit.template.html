@@ -9654,6 +9654,36 @@ foi escrita para jogar o "0 de 27 resolvidos"
   @media (max-width:640px){
     .sm5-quentes{grid-template-columns:1fr;}
   }
+
+  /* ══ A FILEIRA DO BOARD, QUE É A ALMA DA TELA ═══════════════════════════════════
+     Em 1460px a linha é uma fileira só, como na prancha. Estreitando, os `min-width`
+     inline (190 + 270 + 150 + 86, mais avatar, gaps e botão = ~906px de piso) punham
+     24 elementos fora da caixa de 190px a 375: o nome cortado, os contadores fora e o
+     botão "1:1 hoje" em x=931, sem rolagem horizontal para alcançá-lo.
+
+     `!important` NÃO É PREGUIÇA: os min-width vêm em atributo `style`, e inline vence
+     a folha. Sem ele a media query aplica e não muda nada — foi exatamente assim que a
+     regra de 44px de toque do login ficou inerte nesta base. */
+  .sm5-linha{display:flex;align-items:center;gap:16px;padding:13px 18px;cursor:pointer;}
+  .sm5-drawer{border-top:1px dashed #E4DBC6;background:#FBF6EC;
+    padding:16px 18px 16px 68px;display:grid;grid-template-columns:1.25fr 1fr;gap:24px;}
+  @media (max-width:900px){
+    .sm5-linha{flex-wrap:wrap;row-gap:10px;gap:12px;}
+    .sm5-linha > span{min-width:0 !important;}
+    .sm5-l-nome{flex:1 1 55%;}
+    /* OS QUATRO CONTADORES tambem nao cabem em 190px: "26 travados" passava 24px da
+       borda. O `gap:18px` e inline, entao o corte dele precisa de !important, pela
+       mesma razao dos min-width acima. Com wrap, o quarto desce em vez de sair. */
+    .sm5-l-num{flex:1 1 100%;justify-content:space-between;
+      gap:8px !important;flex-wrap:wrap;}
+    .sm5-l-mes{flex:1 1 42%;}
+    .sm5-l-tend{flex:1 1 30%;text-align:left !important;}
+    .sm5-l-garg{flex:1 1 100% !important;}
+    .sm5-l-cta{margin-left:auto;}
+    /* o recuo de 68px do drawer existe para alinhar com o avatar da linha; sem a
+       fileira alinhada ele é só 68px de margem perdida numa tela de 375 */
+    .sm5-drawer{grid-template-columns:1fr;padding-left:18px;gap:16px;}
+  }
 </style>
 </head>
 <body>
@@ -61268,7 +61298,14 @@ function sm5Serie(chave) {
      ÚLTIMA leitura de cada janela, que é a mais atual daquela semana. */
   const porJanela = new Map();
   jans.forEach(function (j, i) {
-    if (i < vals.length) porJanela.set(String(j), vals[i]);
+    if (i >= vals.length) return;
+    /* JANELA DE MENOS DE CINCO DIAS NÃO É SEMANA e não pode virar barra sob o rótulo
+       "últimas N semanas". O histórico de 14/09 tinha "07/09–07/09" e "14/09–14/09":
+       um dia cada, e a primeira desenhava como uma semana de zero fechamentos. Mesma
+       régua do `sm5Janela`, que é a única definição de semana desta tela. */
+    const dias = sm5DiasDaJanela(j);
+    if (dias == null || dias < 5) return;
+    porJanela.set(String(j), vals[i]);
   });
   const janelas = [...porJanela.keys()];
   const valores = janelas.map(function (j) { return Number(porJanela.get(j)) || 0; });
@@ -61308,6 +61345,23 @@ function sm5Delta(atual, anterior, subirEhBom) {
   };
 }
 
+/* ESCAPA TUDO E REABRE SÓ O NEGRITO. O robô marca os números com <b>, e a tela tem de
+   mostrar negrito — não a tag. Medido em 14/09: 38 tags literais no board, porque o
+   gargalo era o único texto do robô com `esc()` enquanto a leitura, as jogadas e o
+   roteiro renderizavam. Filtro estreito em vez de innerHTML cru: mesmo resultado
+   visível, muito menos superfície. */
+function sm5Negrito(v) {
+  /* SPLIT/JOIN E NÃO REGEX: a barra escapada dentro de um literal de regex derruba o
+     cortador de comentários do build ("Invalid regular expression flags"), e é a mesma
+     família de armadilha da barra invertida que já morreu em patch nesta base. */
+  let s = esc(v);
+  [['&lt;b&gt;', '<b>'], ['&lt;/b&gt;', '</b>'],
+   ['&lt;strong&gt;', '<b>'], ['&lt;/strong&gt;', '</b>']].forEach(function (p) {
+    s = s.split(p[0]).join(p[1]);
+  });
+  return s;
+}
+
 function sm5Moeda(v) {
   return 'R$ ' + Math.round(Number(v) || 0).toLocaleString('pt-BR');
 }
@@ -61338,8 +61392,20 @@ function sm5RitmoDoMes() {
    AGIR AGORA vence quando o rep se qualifica nas duas pontas: quem fechou mas está com
    11 travados continua sendo problema de hoje. */
 function sm5Faixa(r) {
-  if (r.reun === 0 || r.trav >= 5 || (r.tend === 'down' && r.mesAtrasado)) return 'agir';
-  if (r.ganhos >= 1 && r.trav <= 2 && !r.mesAtrasado) return 'bem';
+  /* `reunMedida` É A PERGUNTA ANTERIOR À REGRA: este zero foi apurado sobre uma
+     semana, ou sobre a segunda-feira de hoje? Os detalhes por pessoa descrevem sempre
+     `janela.atual`; quando ela não fechou, "zero reuniões" não é parada, é o dia não
+     ter acontecido. MEDIDO em 14/09: 8 de 9 vermelhos eram deste zero, contra 5
+     reuniões que o placar mostrava na mesma tela.
+
+     `trav` NÃO entra nessa ressalva: é estoque do snapshot do dia (SLA estourado),
+     não fluxo da semana — 26 travados são 26 travados numa segunda-feira. */
+  const parouDeMarcar = r.reunMedida !== false && r.reun === 0;
+  if (parouDeMarcar || r.trav >= 5 || (r.tend === 'down' && r.mesAtrasado)) return 'agir';
+  /* `!r.mesAtrasado` é verdadeiro também para quem não tem meta — e aí a pessoa sem
+     régua nenhuma entrava em RODANDO BEM por omissão, com o selo de exemplo para o
+     time. `temMeta` é o que separa "está no ritmo" de "não há ritmo para medir". */
+  if (r.temMeta !== false && r.ganhos >= 1 && r.trav <= 2 && !r.mesAtrasado) return 'bem';
   return 'olho';
 }
 
@@ -61395,8 +61461,17 @@ function sm5Dados() {
      Perdidos e MRR não têm série no snapshot: nesses dois, barras e rótulo "últimas
      semanas" somem. Desenhar cinco barras iguais às dos outros seria inventar
      histórico — o exemplo da prancha mostra cinco porque o dado dela é fake. */
-  const mrrFechado = (rs.ganhosSemanaDetalhe || [])
+  /* O DETALHE DESCREVE `janela.atual`, SEMPRE. Quando a tela cai para a semana
+     anterior (porque a atual não fechou), o detalhe é de outra semana e somá-lo aqui
+     põe "2 ganhos" e "R$ 857 MRR fechado" lado a lado na mesma faixa — os 857 sendo
+     de 4 negócios que não são os 2. Sem o dado da janela mostrada, o número é um
+     travessão: o robô não guarda MRR por semana anterior. */
+  const mrrFechado = jan.usouAnterior ? null : (rs.ganhosSemanaDetalhe || [])
     .reduce(function (t, g) { return t + (Number(g.mrr) || 0); }, 0);
+  /* quantos ganhos vieram SEM valor de MRR: sem isto um "R$ 857" de 4 negócios com
+     um deles zerado passa por soma completa */
+  const ganhosSemValor = (rs.ganhosSemanaDetalhe || [])
+    .filter(function (g) { return !(Number(g.mrr) > 0); }).length;
 
   const kpis = [
     { rotulo: 'ganhos', valor: String(k.ganhos == null ? '—' : k.ganhos),
@@ -61411,7 +61486,9 @@ function sm5Dados() {
     { rotulo: 'perdidos', valor: String(k.perdidos == null ? '—' : k.perdidos),
       delta: sm5Delta(k.perdidos, kp && kp.perdidos, false),
       barras: [] },
-    { rotulo: 'MRR fechado', valor: sm5Moeda(mrrFechado), delta: null, barras: [] }
+    { rotulo: mrrFechado == null ? 'MRR fechado (só da semana em curso)'
+        : (ganhosSemValor ? 'MRR fechado · ' + ganhosSemValor + ' sem valor' : 'MRR fechado'),
+      valor: mrrFechado == null ? '—' : sm5Moeda(mrrFechado), delta: null, barras: [] }
   ];
 
   /* ── o board ─────────────────────────────────────────────────────────────────────
@@ -61438,13 +61515,24 @@ function sm5Dados() {
     const p = porRep[id] || {};
     const snap = p.snap || {};
     const rep = (DATA.reps || []).find(function (x) { return String(x.ownerId) === String(id); }) || {};
-    const meta = metaClientesDoRep(rep);
-    /* SEM META NA PLANILHA NÃO ENTRA NO BOARD: é assim que a Amanda, que saiu para
-       Inside, para de aparecer como se fosse cobrável. */
-    if (!(meta > 0)) return null;
+    /* A META VEM DO CAMPO, E NÃO DO FALLBACK. `metaClientesDoRep` devolve 10 quando
+       `metaMensal` falta, e 10 não existe na planilha (os patamares são 8 e 2): a tela
+       inventaria uma meta e o mês do time daria 100 em vez de 50. Medido: com o
+       snapshot do disco, anterior à planilha de 10/09, foi exatamente isso.
+
+       QUEM NÃO TEM META CONTINUA NO BOARD, declarando a falta. Sumir com gente por
+       causa de campo vazio é a tela escondendo do gestor alguém de quem ele é
+       responsável — pior que o 10. Quem tira a Amanda do board é o `porRep` do robô,
+       não esta linha; a versão anterior deste comentário creditava a exclusão a um
+       `if` que o fallback tornava inalcançável. */
+    const metaBruta = rep.metaMensal;
+    const temMeta = metaBruta != null && metaBruta !== '' && Number(metaBruta) > 0;
+    const meta = temMeta ? Number(metaBruta) : 0;
 
     const mes = Number(snap.fechadosNoMes || 0);
-    metaDoTime += meta; fechadosDoTime += mes;
+    /* só soma no denominador do time quem tem meta: somar 0 mudaria o numerador sem
+       mudar o denominador e a régua de ritmo do time ficaria otimista */
+    if (temMeta) { metaDoTime += meta; fechadosDoTime += mes; }
 
     const trav = Number(snap.leadsTravados || 0);
     /* `ganhosSemana` do snap e a contagem do DETALHE podem divergir; o contrato manda
@@ -61452,9 +61540,11 @@ function sm5Dados() {
     const ganhos = ganhosPorDono[id] != null ? ganhosPorDono[id] : Number(snap.ganhosSemana || 0);
     const reun = reunPorDono[id] || 0;
     const criados = criadosPorDono[id] || 0;
-    const pct = meta > 0 ? Math.min(100, Math.round(mes / meta * 100)) : 0;
-    const metaBatida = mes >= meta;
-    const mesAtrasado = !metaBatida && (mes / meta) < ritmo.fracao;
+    const pct = temMeta ? Math.min(100, Math.round(mes / meta * 100)) : 0;
+    /* `mes >= meta` é VERDADEIRO com 0 >= 0, e sem meta a pessoa apareceria com "meta
+       batida" em verde. E `mes / 0` é Infinity ou NaN, que faz o atraso virar falso. */
+    const metaBatida = temMeta && mes >= meta;
+    const mesAtrasado = temMeta && !metaBatida && (mes / meta) < ritmo.fracao;
     const tend = sm5Tendencia(snap, p.anterior);
     const an = analises[String(id)] || {};
     /* `DATA.narrativas` NAO EXISTE no front: o snapshot de narrativas alimenta o
@@ -61467,8 +61557,13 @@ function sm5Dados() {
       ini: String(p.name || rep.name || '?').split(/\s+/).slice(0, 2)
         .map(function (w) { return w.charAt(0); }).join('').toUpperCase(),
       praca: rep.praca || '—',
-      patamar: (rep.patamarMeta ? rep.patamarMeta + ' · meta ' + meta : 'meta ' + meta),
+      patamar: !temMeta ? 'sem meta na planilha'
+        : (rep.patamarMeta ? rep.patamarMeta + ' · meta ' + meta : 'meta ' + meta),
+      temMeta: temMeta,
       criados: criados, reun: reun, ganhos: ganhos, trav: trav,
+      /* os três contadores de FLUXO (criados, reuniões, ganhos) vêm dos detalhes, que
+         descrevem `janela.atual`. Se ela não é semana fechada, eles medem um pedaço. */
+      reunMedida: !jan.usouAnterior,
       mes: mes, meta: meta, pct: pct, metaBatida: metaBatida, mesAtrasado: mesAtrasado,
       tend: tend,
       /* SEM ANÁLISE DA IA A PESSOA CONTINUA NO BOARD, com o gargalo do robô e o roteiro
@@ -61496,7 +61591,12 @@ function sm5Dados() {
   };
   const FAIXAS = [
     { chave: 'agir', titulo: 'AGIR AGORA', cor: '#E51A31',
-      desc: 'pararam de marcar ou acumularam SLA — 1:1 hoje, roteiro pronto' },
+      /* a descrição muda com o que a tela CONSEGUE medir hoje: prometer "pararam de
+         marcar" numa semana em curso seria a legenda afirmando o que a regra não
+         avaliou. */
+      desc: jan.usouAnterior
+        ? 'acumularam SLA — 1:1 hoje, roteiro pronto (reuniões da semana só quando ela fechar)'
+        : 'pararam de marcar ou acumularam SLA — 1:1 hoje, roteiro pronto' },
     { chave: 'olho', titulo: 'DE OLHO', cor: '#B0782A',
       desc: 'um degrau do funil travando — resolver no 1:1 da semana' },
     { chave: 'bem', titulo: 'RODANDO BEM', cor: '#1E7A63',
@@ -61524,8 +61624,12 @@ function sm5Dados() {
     inicio: 'o snapshot desta semana não trouxe ninguém com meta — ',
     meio: '', vermelho: 'não há placar por pessoa para ler', fim: '.'
   } : {
-    inicio: g + (g === 1 ? ' fechado' : ' fechados') + ' e '
-      + (criadosCairam ? 'funil esvaziando' : 'funil recarregado') + ' — ',
+    inicio: g + (g === 1 ? ' fechado' : ' fechados')
+      /* SEM `kp` NÃO HÁ DIREÇÃO PARA AFIRMAR. Dizer "funil recarregado" porque a
+         comparação não veio é a tela inventando boa notícia — e hoje ela diria isso
+         na semana em que os criados caíram de 120 para 47. */
+      + (kp == null ? '' : ' e ' + (criadosCairam ? 'funil esvaziando' : 'funil recarregado'))
+      + ' — ',
     vermelho: nParados > 0
       ? nParados + (nParados === 1 ? ' vendedor parado' : ' vendedores parados') : null,
     fim: nParados > 0 ? '.' : 'nenhum vendedor parado esta semana.',
@@ -61559,12 +61663,19 @@ function sm5Dados() {
       nome: q.dealname || q.name || 'Sem nome',
       rep: String(q.vendedor || '').split(/\s+/)[0] || '—',
       etapa: q.stage || '—',
+      /* `mrr` chega como STRING do snapshot ("560") e como null quando ninguém
+         preencheu. `temMrr` separa "não preenchido" de "zero" — sem isso a tela
+         escrevia "R$ 0" em verde, que lê como negócio de zero reais. */
       mrrNum: Number(q.mrr || q.valor_de_mrr || 0),
+      temMrr: Number(q.mrr || q.valor_de_mrr || 0) > 0,
       dias: dias
     };
   }).sort(function (a, b) { return b.dias - a.dias; });
   const quentesMrr = quentes.reduce(function (t, q) { return t + q.mrrNum; }, 0);
   const quentesVelhos = quentes.filter(function (q) { return q.dias > 10; }).length;
+  /* quantos entram na soma sem valor: "R$ 4.094 esperando decisão" com 3 de 13 sem
+     MRR preenchido é uma soma incompleta apresentada como total. */
+  const quentesSemValor = quentes.filter(function (q) { return !q.temMrr; }).length;
 
   return {
     janela: jan, kpis: kpis, veredito: veredito,
@@ -61586,7 +61697,7 @@ function sm5Dados() {
     },
     grupos: grupos,
     quentes: { lista: quentes.slice(0, 6), total: quentes.length,
-      mrr: quentesMrr, velhos: quentesVelhos },
+      mrr: quentesMrr, velhos: quentesVelhos, semValor: quentesSemValor },
     falhasIA: rs._falhasIA || null
   };
 }
@@ -61781,7 +61892,9 @@ function sm5BoardHTML(d) {
       const borda = g.chave === 'agir' ? '#EFC7CC' : '#E4DBC6';
       const avatarBg = g.chave === 'agir' ? '#FBEEF0' : g.chave === 'bem' ? '#E7F3EE' : '#F7F0E0';
       const avatarInk = g.chave === 'agir' ? '#E51A31' : g.chave === 'bem' ? '#1E7A63' : '#B0782A';
-      const reunCor = r.reun === 0 ? '#E51A31' : '#1A1613';
+      /* O ZERO VERMELHO É UMA ACUSAÇÃO. Sobre semana em curso ele não se sustenta:
+         fica cinza, com o título dizendo por quê. */
+      const reunCor = (r.reunMedida !== false && r.reun === 0) ? '#E51A31' : '#1A1613';
       const ganhosCor = r.ganhos > 0 ? '#1E7A63' : '#1A1613';
       const travCor = r.trav >= 5 ? '#E51A31' : r.trav > 0 ? '#B0782A' : '#A2937A';
       const pctCor = r.metaBatida ? '#1E7A63' : r.mesAtrasado ? '#E51A31' : '#57C29A';
@@ -61824,8 +61937,7 @@ function sm5BoardHTML(d) {
       }).join('');
 
       const drawer = !aberto ? '' :
-        '<div style="border-top:1px dashed #E4DBC6;background:#FBF6EC;'
-        + 'padding:16px 18px 16px 68px;display:grid;grid-template-columns:1.25fr 1fr;gap:24px;">'
+        '<div class="sm5-drawer">'
         + '<div>'
         +   '<div style="font-size:10px;font-weight:700;letter-spacing:.1em;color:#B0782A;">'
         +     'ROTEIRO DO 1:1 · PRIVADO</div>'
@@ -61850,24 +61962,23 @@ function sm5BoardHTML(d) {
 
       return '<div style="background:#FDFBF0;border:1px solid ' + borda + ';border-radius:14px;'
         + 'box-shadow:0 1px 3px rgba(26,22,19,.05);overflow:hidden;">'
-        + '<div data-sm5-linha="' + esc(r.id) + '" style="display:flex;align-items:center;'
-        +   'gap:16px;padding:13px 18px;cursor:pointer;">'
+        + '<div data-sm5-linha="' + esc(r.id) + '" class="sm5-linha">'
         +   '<span style="width:34px;height:34px;border-radius:999px;background:' + avatarBg
         +     ';color:' + avatarInk + ';font-family:Poppins;font-weight:800;font-size:12px;'
         +     'display:grid;place-items:center;flex:none;">' + esc(r.ini) + '</span>'
-        +   '<span style="min-width:190px;">'
+        +   '<span class="sm5-l-nome" style="min-width:190px;">'
         +     '<b style="font-size:13.5px;display:block;">' + esc(r.nome) + '</b>'
         +     '<span style="font-size:10.5px;color:#A2937A;">' + esc(r.praca) + ' · '
         +       esc(r.patamar) + '</span>'
         +   '</span>'
-        +   '<span style="display:flex;gap:18px;font-variant-numeric:tabular-nums;'
-        +     'font-size:12px;min-width:270px;">'
+        +   '<span class="sm5-l-num" style="display:flex;gap:18px;'
+        +     'font-variant-numeric:tabular-nums;font-size:12px;min-width:270px;">'
         +     sm5Numero(r.criados, '#1A1613', 'criados')
         +     sm5Numero(r.reun, reunCor, 'reuniões')
         +     sm5Numero(r.ganhos, ganhosCor, 'ganhos')
         +     sm5Numero(r.trav, travCor, 'travados')
         +   '</span>'
-        +   '<span style="min-width:150px;">'
+        +   '<span class="sm5-l-mes" style="min-width:150px;">'
         +     '<span style="display:flex;justify-content:space-between;font-size:10.5px;'
         +       'font-variant-numeric:tabular-nums;"><span style="color:#6E6558;">mês</span>'
         +       '<b>' + r.mes + '/' + r.meta + '</b></span>'
@@ -61877,12 +61988,15 @@ function sm5BoardHTML(d) {
         +     '<span style="font-size:9.5px;color:' + paceCor + ';font-weight:700;">'
         +       paceTxt + '</span>'
         +   '</span>'
-        +   '<span title="' + esc(r.tendTexto) + '" style="font-size:11px;font-weight:700;'
+        +   '<span class="sm5-l-tend" title="' + esc(r.tendTexto) + '"'
+        +     ' style="font-size:11px;font-weight:700;'
         +     'color:' + tendCor + ';min-width:86px;text-align:center;">' + tendGlifo + ' '
         +     tendLabel + '</span>'
-        +   '<span style="flex:1;font-size:12px;color:#3D362E;line-height:1.45;">'
-        +     esc(r.gargalo) + '</span>'
-        +   '<span style="flex:none;display:flex;align-items:center;gap:6px;font-size:11px;'
+        +   '<span class="sm5-l-garg" style="flex:1;font-size:12px;color:#3D362E;'
+        +     'line-height:1.45;">'
+        +     sm5Negrito(r.gargalo) + '</span>'
+        +   '<span class="sm5-l-cta" style="flex:none;display:flex;align-items:center;'
+        +     'gap:6px;font-size:11px;'
         +     'font-weight:700;color:' + ctaCor + ';border:1px solid ' + ctaBorda
         +     ';border-radius:999px;padding:6px 13px;">' + cta
         +     ' <span style="font-size:9px;">' + (aberto ? '▲' : '▼') + '</span></span>'
@@ -61934,7 +62048,8 @@ function sm5QuentesHTML(d) {
   const q = d.quentes;
   const cards = q.lista.map(function (x) {
     const velho = x.dias > 10;
-    return '<div data-sm5-quente="' + esc(x.id) + '" style="display:flex;'
+    return '<div data-sm5-quente="' + esc(x.id) + '" data-sm5-dono="' + esc(x.rep) + '"'
+      + ' style="display:flex;'
       + 'justify-content:space-between;align-items:center;gap:10px;background:#FBF6EC;'
       + 'border-radius:10px;padding:9px 13px;cursor:pointer;">'
       + '<span style="min-width:0;"><b style="display:block;white-space:nowrap;'
@@ -61942,7 +62057,9 @@ function sm5QuentesHTML(d) {
       +   '<span style="font-size:10.5px;color:#A2937A;">' + esc(x.rep) + ' · '
       +   esc(x.etapa) + '</span></span>'
       + '<span style="text-align:right;flex:none;">'
-      +   '<b style="color:#1E7A63;display:block;">' + sm5Moeda(x.mrrNum) + '</b>'
+      +   '<b style="color:' + (x.temMrr ? '#1E7A63' : '#A2937A') + ';display:block;"'
+      +     (x.temMrr ? '' : ' title="sem valor de MRR preenchido no HubSpot"') + '>'
+      +     (x.temMrr ? sm5Moeda(x.mrrNum) : '—') + '</b>'
       +   '<span style="font-size:10.5px;font-weight:700;color:'
       +     (velho ? '#E51A31' : '#B0782A') + ';">' + x.dias + 'd'
       +     (velho ? ' parado' : '') + '</span></span>'
@@ -61963,6 +62080,10 @@ function sm5QuentesHTML(d) {
     /* "N há mais de 10 dias" SOME quando é zero: dizer "0 há mais de 10 dias" gasta a
        linha para informar que não há nada a informar. */
     +       (q.velhos ? ' · <b style="color:#E51A31;">' + q.velhos + ' há mais de 10 dias</b>' : '')
+    /* A SOMA DIZ QUANTOS FICARAM DE FORA DELA. "R$ 4.094 esperando decisão" com 3 de
+       13 sem MRR preenchido é um total que não é total. */
+    +       (q.semValor ? ' · <span style="color:#B0782A;">' + q.semValor
+    +         ' sem valor preenchido</span>' : '')
     +       '</span>'
     +   '</div>'
     +   '<div class="sm5-quentes">'
@@ -62042,8 +62163,24 @@ function sm5Ligar(raiz) {
         const lead = (typeof buscarLeadFunilPorId === 'function') ? buscarLeadFunilPorId(id) : null;
         if (lead) return abrirFichaLeadFunilDrawer(lead);
       }
+      /* SEM FICHA, VAI PARA O DONO. `funilLeads` não tem todos os negócios do
+         snapshot (dívida conhecida) — medido hoje: 1 dos 6 quentes da tela. O toast
+         anterior mandava "abra pelo Meu funil", e Meu funil é aba do EXECUTIVO: para o
+         gestor era um beco. O dono vem no cartão, e o dossiê dele é o mesmo destino
+         que o link do CRM usa. */
+      const primeiro = String(quente.dataset.sm5Dono || '');
+      const dono = (DATA.reps || []).find(function (x) {
+        return String(x.name || '').split(/\s+/)[0] === primeiro;
+      });
+      if (dono && typeof openModal === 'function') {
+        if (typeof mostrarToast === 'function') {
+          mostrarToast('Este negócio não veio na carga desta sessão — abrindo o dossiê de '
+            + primeiro + '.', 'atencao');
+        }
+        return openModal(dono);
+      }
       if (typeof mostrarToast === 'function') {
-        mostrarToast('Este negócio não está na carga desta sessão — abra pelo Meu funil.', 'atencao');
+        mostrarToast('Este negócio não veio na carga desta sessão e eu não achei o dono dele.', 'atencao');
       }
       return;
     }

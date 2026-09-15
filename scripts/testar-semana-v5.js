@@ -104,7 +104,10 @@ sondados.forEach(function (fn) {
    atributo citado no CSS como prova de fiação, e a sabotagem passou. Aqui o leitor tem
    de estar no CORPO de sm5Ligar. */
 const atributos = [...new Set((tpl.match(/data-sm5-[a-z]+/g) || []))]
-  .filter(function (a) { return a !== 'data-sm5-i'; });   /* companheiro de data-sm5-check */
+  /* OS DOIS COMPANHEIROS: `data-sm5-i` viaja com o check e `data-sm5-dono` com o quente.
+     Nenhum dos dois é clicável por si — são carga do cartão que o ramo do irmão lê. Eles
+     têm checagem própria, logo abaixo, cobrando a LEITURA pelo dataset. */
+  .filter(function (a) { return a !== 'data-sm5-i' && a !== 'data-sm5-dono'; });
 conferir('a tela emite os atributos que eu penso que ela emite',
   atributos.length >= 5,
   'lista vazia faria o laço abaixo dar verde sem medir um único botão');
@@ -116,6 +119,13 @@ atributos.forEach(function (a) {
 conferir('data-sm5-i é lido junto do check',
   liga.indexOf('dataset.sm5I') > -1 && liga.indexOf('dataset.sm5Check') > -1,
   'o índice do compromisso vem no par; sem ele marcaria sempre o primeiro item');
+/* AS DUAS PONTAS, e não só o leitor: a primeira versão media `dataset.sm5Dono` na fiação
+   e ficou verde quando eu tirei o atributo do CARTÃO — o leitor continuava lá, lendo
+   undefined para sempre. Cobrar quem EMITE e quem LÊ. */
+conferir('data-sm5-dono é lido junto do quente',
+  liga.indexOf('dataset.sm5Dono') > -1 && liga.indexOf('dataset.sm5Quente') > -1
+    && corpoDe('sm5QuentesHTML').indexOf('data-sm5-dono=') > -1,
+  'é o dono que salva o clique quando o negócio não está em funilLeads — sem ele, beco');
 
 /* ── 4. A REGRA DA FAIXA É A DO CONTRATO ─────────────────────────────────────────── */
 /* É a alma da tela: ela decide quem o gestor vai visitar hoje. Mexer nela sem querer
@@ -126,10 +136,34 @@ const faixa = semProsa(corpoDe('sm5Faixa'));
    guarda ficou verde. Substring de número é a forma mais boba de guarda cega, e só a
    sabotagem mostra. */
 conferir('AGIR AGORA exige reunião zero, 5 travados ou queda com mês atrasado',
-  faixa.indexOf('r.reun === 0 ||') > -1 && faixa.indexOf('r.trav >= 5 ||') > -1
+  faixa.indexOf('r.reun === 0') > -1 && faixa.indexOf('r.trav >= 5 ||') > -1
     && faixa.indexOf("r.tend === 'down' && r.mesAtrasado") > -1
     && antesDe(faixa, "'agir'", "'bem'"),
   'o corte do vermelho é do contrato, e o vermelho tem de ser testado ANTES do verde');
+
+/* ── 4b. O ALARME NÃO TOCA PARA QUEM NÃO FOI MEDIDO ──────────────────────────────── */
+/* MEDIDO EM 14/09/26, e é o pior defeito que esta tela teve: o placar mostrava 5 reuniões
+   (semana fechada) e o board somava 1 entre as dez pessoas, porque os detalhes por pessoa
+   descrevem `janela.atual` — que hoje é "14/09–14/09", um dia. Oito dos nove vermelhos
+   eram vermelhos pelo único motivo "reunião zero", apurado sobre uma segunda-feira que
+   ainda não aconteceu; e o veredito anunciava "o risco são 9 vendedores parados" em 24px.
+   Alarme que toca para quase todo mundo ensina o gestor a ignorar a faixa vermelha. */
+conferir('"parou de marcar" só acende sobre semana fechada',
+  faixa.indexOf('r.reunMedida !== false && r.reun === 0') > -1,
+  'zero reuniões numa segunda-feira não é parada — é o dia não ter acontecido');
+conferir('o estoque de travados NÃO entra na ressalva',
+  faixa.indexOf('parouDeMarcar || r.trav >= 5') > -1,
+  '`trav` é SLA estourado no snapshot do dia: 26 travados são 26 travados numa segunda-feira');
+conferir('a linha carrega se a reunião foi medida sobre semana',
+  corpoDe('sm5Dados').indexOf('reunMedida: !jan.usouAnterior,') > -1,
+  'sem o campo a regra acima nunca sabe a resposta e volta a acusar todo mundo');
+conferir('a legenda da faixa vermelha não promete o que não mediu',
+  corpoDe('sm5Dados').indexOf('desc: jan.usouAnterior') > -1
+    && corpoDe('sm5Dados').indexOf('só quando ela fechar') > -1,
+  'dizer "pararam de marcar" na legenda de uma semana em curso é a tela afirmando o que a regra não avaliou');
+conferir('o zero de reuniões da linha não fica vermelho sem medida',
+  corpoDe('sm5BoardHTML').indexOf("(r.reunMedida !== false && r.reun === 0) ? '#E51A31'") > -1,
+  'o zero em vermelho é uma acusação, e sobre semana em curso ela não se sustenta');
 
 /* O 5 ESTÁ ESCRITO DUAS VEZES: na regra da faixa e na cor do contador de travados do
    board. São a mesma pergunta — "este número é grave?" — e duas verdades para uma
@@ -190,6 +224,21 @@ const roteiro = corpoDe('sm5Roteiro');
 conferir('o quebrador de frases conhece a ênfase do robô',
   roteiro.indexOf('(?=[<A-Z') > -1,
   'o robô escreve "<b>Abra o 1:1</b>"; sem o `<` o roteiro perde uma frase e o gestor perde o COBRAR');
+/* O <b> LITERAL NA TELA — medido em 14/09/26: 38 tags "<b>" e "</b>" aparecendo como
+   TEXTO, uma vez por marcação em cada uma das 10 linhas do board. O gargalo era o único
+   texto do robô passando por `esc()`, enquanto a leitura da semana, as jogadas e o
+   roteiro do 1:1 renderizavam o negrito. O gestor lia
+   "Kelly, a semana fechou com <b>1 negócio ganho (Coco e Tiny)</b> — esse...". */
+conferir('o gargalo do board mostra negrito, e não a tag',
+  corpoDe('sm5BoardHTML').indexOf('sm5Negrito(r.gargalo)') > -1
+    && corpoDe('sm5BoardHTML').indexOf('esc(r.gargalo)') < 0,
+  'o robô marca os números com <b>; escapar tudo põe a tag na tela em toda linha do board');
+conferir('o filtro reabre só negrito, e não o HTML inteiro',
+  quantas(tpl, 'function sm5Negrito(') === 1
+    && corpoDe('sm5Negrito').indexOf('esc(v)') > -1
+    && corpoDe('sm5Negrito').indexOf('&lt;b&gt;') > -1,
+  'innerHTML cru daria o mesmo visual com muito mais superfície — o filtro escapa e reabre');
+
 conferir('frase que não dá para quebrar sai sem rótulo inventado',
   semProsa(roteiro).indexOf("tag: ''") > -1,
   'rotular um parágrafo inteiro de "ABRIR" é a tela afirmando uma estrutura que o texto não tem');
@@ -225,9 +274,32 @@ conferir('a pessoa sem análise da IA continua no board',
   'sumir da lista por falta de texto é a tela escondendo gente de quem o gestor é responsável');
 
 /* ── 10. OS NÚMEROS POR PESSOA SAEM DO SNAPSHOT, E NÃO DE CONTA MINHA ────────────── */
-conferir('quem não tem meta na planilha não entra no board',
-  dados.indexOf('if (!(meta > 0)) return null;') > -1,
-  'é assim que quem saiu para o Inside para de aparecer como cobrável — foi pedido explícito');
+/* REESCRITA EM 14/09/26 (a regra mudou, e a antiga era inalcançável).
+   A versão anterior cobrava `if (!(meta > 0)) return null;` e dizia que era assim que
+   quem saiu para o Inside deixava de aparecer. MEDIDO: esse `if` nunca dispara, porque
+   `metaClientesDoRep` devolve **10** quando `metaMensal` falta — e 10 não existe na
+   planilha, cujos patamares são 8 e 2. Com o snapshot do disco (anterior à planilha de
+   10/09) a tela mostrou "meta 10" para as dez pessoas e mês do time 10/100; em produção
+   é 50. Quem tira a Amanda do board é o `porRep` do robô, não aquela linha.
+   A regra agora: ler o CAMPO, e declarar a falta sem sumir com a pessoa. */
+conferir('a meta sai do campo, e não do fallback de 10',
+  dados.indexOf('const metaBruta = rep.metaMensal;') > -1
+    && dados.indexOf('metaClientesDoRep(rep)') < 0,
+  'o fallback inventa uma meta que não existe na planilha e o mês do time vira 100 em vez de 50');
+conferir('quem não tem meta continua no board, declarando a falta',
+  dados.indexOf("'sem meta na planilha'") > -1
+    && semProsa(dados).indexOf('if (!(meta > 0)) return null;') < 0,
+  'sumir com gente por campo vazio é a tela escondendo do gestor alguém de quem ele responde');
+conferir('sem meta ninguém entra no denominador do time',
+  dados.indexOf('if (temMeta) { metaDoTime += meta; fechadosDoTime += mes; }') > -1,
+  'somar o fechado sem somar a meta deixa a régua de ritmo do time otimista');
+conferir('sem meta não há "meta batida" nem divisão por zero',
+  dados.indexOf('const metaBatida = temMeta && mes >= meta;') > -1
+    && dados.indexOf('const mesAtrasado = temMeta && !metaBatida') > -1,
+  '`0 >= 0` pintaria "meta batida" em verde, e `mes / 0` faz o atraso virar falso');
+conferir('sem meta a pessoa não entra em RODANDO BEM por omissão',
+  faixa.indexOf('r.temMeta !== false &&') > -1,
+  '`!mesAtrasado` é verdadeiro para quem não tem régua — a pessoa virava exemplo do time');
 conferir('praça e compromissos vêm do rep, e não de DATA.narrativas',
   dados.indexOf('rep.praca') > -1 && dados.indexOf('rep.compromissos') > -1
     && semProsa(dados).indexOf('DATA.narrativas') < 0,
@@ -256,6 +328,53 @@ conferir('sem ninguém no board a tela não afirma que ninguém está parado',
   dados.indexOf('const semElenco = linhas.length === 0;') > -1
     && antesDe(semProsa(dados), 'semElenco', "'nenhum vendedor parado esta semana.'"),
   'afirmar ausência sem ter medido é o pior defeito desta tela — e o mais tranquilizador');
+
+/* ── 10c. UMA SEMANA POR TELA: NADA DE NÚMERO DE OUTRA JANELA SEM DIZER ──────────── */
+/* ACHADO NA PASSADA DE CLIQUES COM O SNAPSHOT DE PRODUÇÃO, 14/09/26. O robô gravou
+   `janela.atual = "14/09–14/09"` — um dia — por causa do escorregão do cron de domingo.
+   A tela caiu para a semana fechada no placar, e os DETALHES por pessoa continuaram
+   sendo da rodada de hoje. Resultado medido: a faixa escura mostrava "2 ganhos" e
+   "R$ 857 MRR fechado" a 34px de distância, e os 857 eram de 4 negócios que não são
+   aqueles 2. */
+conferir('o MRR não soma detalhe de uma semana sob o rótulo de outra',
+  dados.indexOf('const mrrFechado = jan.usouAnterior ? null :') > -1,
+  'o detalhe descreve sempre a janela atual; sob o rótulo da fechada ele é número de outra semana');
+conferir('sem o dado da janela mostrada o MRR é travessão, e não zero',
+  dados.indexOf("mrrFechado == null ? '—'") > -1,
+  '"R$ 0" leria como mês sem faturar; o robô é que não guarda MRR da semana anterior');
+conferir('o MRR diz quantos ganhos vieram sem valor',
+  dados.indexOf('const ganhosSemValor =') > -1
+    && dados.indexOf("ganhosSemValor + ' sem valor'") > -1,
+  'soma com negócio zerado dentro é apresentada como total e não é');
+conferir('sem comparação a tela não afirma a direção do funil',
+  dados.indexOf("kp == null ? '' : ' e ' + (criadosCairam") > -1,
+  'hoje ela diria "funil recarregado" na semana em que os criados caíram de 120 para 47');
+
+/* ── 10d. O QUENTE SEM VALOR, E A JANELA DE UM DIA ───────────────────────────────── */
+conferir('a série recusa janela que não é semana',
+  semProsa(corpoDe('sm5Serie')).indexOf('dias == null || dias < 5') > -1,
+  'as três janelas de hoje têm UM dia: a primeira desenhava como semana de zero fechamentos');
+conferir('a régua de semana da série é a mesma do resto da tela',
+  semProsa(corpoDe('sm5Serie')).indexOf('sm5DiasDaJanela(') > -1,
+  'segunda definição de "semana" é a forma de os dois números divergirem sem ninguém ver');
+conferir('quente sem MRR preenchido não vira "R$ 0"',
+  dados.indexOf('temMrr: Number(q.mrr || q.valor_de_mrr || 0) > 0,') > -1
+    && corpoDe('sm5QuentesHTML').indexOf("(x.temMrr ? sm5Moeda(x.mrrNum) : '—')") > -1,
+  '3 dos 13 quentes de hoje vêm com mrr null; "R$ 0" em verde lê como negócio de zero reais');
+/* O MECANISMO, e não o nome da variável: `const quentesSemValor = 0;` contém
+   `'const quentesSemValor ='` e a primeira versão desta checagem passou com a contagem
+   zerada. Cobrar o filtro que conta de verdade. */
+conferir('o total dos quentes declara a soma incompleta',
+  dados.indexOf('quentes.filter(function (q) { return !q.temMrr; }).length') > -1
+    && corpoDe('sm5QuentesHTML').indexOf('q.semValor') > -1,
+  '"R$ 4.094 esperando decisão" com 3 sem valor é um total que não é total');
+/* `semProsa` E NÃO `liga`: a primeira versão reprovou o código CERTO, porque o meu
+   próprio comentário no ramo CITA "abra pelo Meu funil" como o texto que saiu. É a
+   armadilha nº 2 da lista de cegueiras desta base, e ela pega nas duas direções. */
+conferir('o quente fora do funilLeads cai no dossiê do dono',
+  semProsa(liga).indexOf('openModal(dono)') > -1
+    && semProsa(liga).indexOf('Meu funil') < 0,
+  'medido: 1 dos 6 quentes não está em funilLeads, e "abra pelo Meu funil" é aba do executivo');
 
 /* ── 11. A JANELA: "A SEMANA" É A QUE FECHOU ─────────────────────────────────────── */
 const janela = semProsa(corpoDe('sm5Janela'));
@@ -295,6 +414,32 @@ conferir('o primeiro da faixa vermelha abre sozinho, e só na primeira vez',
 conferir('faixa sem ninguém não desenha',
   dados.indexOf('return g.reps.length;') > -1,
   'um título "RODANDO BEM · 0" é a tela ocupando espaço para não dizer nada');
+
+/* ── 12b. O BOARD CABE NO TELEFONE ───────────────────────────────────────────────── */
+/* MEDIDO A 375px EM 14/09/26: 24 elementos da linha caíam FORA da caixa de 190px. O nome
+   terminava 68px depois da borda, os quatro contadores acabavam em 544px e o botão
+   "1:1 hoje" ficava em x=931 — inalcançável, com o documento SEM rolagem horizontal para
+   chegar nele. Os `min-width` inline somam ~906px de piso. O board, que é a alma da tela,
+   era inoperável no telefone e nada denunciava, porque nada transbordava o documento. */
+conferir('a fileira do board é uma classe, não estilo inline solto',
+  corpoDe('sm5BoardHTML').indexOf('class="sm5-linha"') > -1,
+  'media query não existe em atributo `style`; sem a classe não há como quebrar a fileira');
+conferir('a fileira quebra no estreito',
+  tpl.indexOf('.sm5-linha{flex-wrap:wrap;') > -1,
+  'sem wrap os ~906px de piso dos min-width jogam o botão do 1:1 para fora da tela');
+/* O `!important` É PARTE DA REGRA, e não estilo de escrita: os min-width estão em atributo
+   `style`, e inline vence a folha. Sem ele a media query aplica e não muda nada — foi
+   assim que a regra de 44px de toque do login ficou inerte nesta base. */
+conferir('o override dos min-width inline leva !important',
+  tpl.indexOf('.sm5-linha > span{min-width:0 !important;}') > -1,
+  'inline vence a folha: sem !important a media query aplica e a fileira continua sem caber');
+conferir('os quatro contadores também quebram',
+  tpl.indexOf('gap:8px !important;flex-wrap:wrap;}') > -1,
+  '"26 travados" passava 24px da borda com o gap de 18px, que também é inline');
+conferir('o drawer vira uma coluna e perde o recuo de 68px',
+  corpoDe('sm5BoardHTML').indexOf('class="sm5-drawer"') > -1
+    && tpl.indexOf('.sm5-drawer{grid-template-columns:1fr;padding-left:18px;') > -1,
+  'o recuo existe para alinhar com o avatar; sem fileira alinhada é margem perdida em 375');
 
 /* ── 13. NADA DE FIXTURE VAZADA ──────────────────────────────────────────────────── */
 const v5 = semProsa(tpl.slice(tpl.indexOf('async function sm5CarregarAnalises('),
