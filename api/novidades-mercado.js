@@ -237,8 +237,12 @@ module.exports = async function handler(req, res) {
      cliente no nosso banco para economizar nada. */
   if (req.body && req.body.cnpjReceita) {
     const r = await buscarCnpjNaReceita(req.body.cnpjReceita);
-    if (r.erro) return res.status(422).json({ ok: false, erro: r.erro });
-    return res.status(200).json({ ok: true, origem: 'receita', receita: r.dados });
+    /* QUEM RECUSOU VAI JUNTO no erro. O 403 que o Julyan levou em 16/09 dizia só "a
+       consulta respondeu 403", e isso e indistinguivel de "a nossa chamada esta errada" —
+       levou uma medicao fora da Vercel para descobrir que era limite de IP. Com a lista,
+       a proxima vez se diagnostica pela propria tela. */
+    if (r.erro) return res.status(422).json({ ok: false, erro: r.erro, tentativas: r.tentativas || null });
+    return res.status(200).json({ ok: true, origem: 'receita', receita: r.dados, tentativas: r.tentativas || null });
   }
 
   // ---- 2a. CONTATO SOB DEMANDA (uma empresa por vez) ----

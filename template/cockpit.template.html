@@ -16168,7 +16168,13 @@ async function buscarCnpjNaReceitaDoCampo(idDoCampo) {
       });
       const json = await resp.json().catch(function () { return {}; });
       if (!resp.ok || !json.ok || !json.receita) {
-        dizer(json.erro || 'Não consegui consultar a Receita — preencha à mão e siga.', 'erro');
+        /* QUEM RECUSOU, NA TELA. O primeiro 403 em produção dizia só o número, e isso é
+           indistinguível de "a nossa chamada está errada" — levou uma medição fora da
+           Vercel para descobrir que era limite de IP do provedor. Com a lista, o próximo
+           se diagnostica aqui mesmo. */
+        const quem = Array.isArray(json.tentativas) && json.tentativas.length
+          ? ' (' + json.tentativas.join(', ') + ')' : '';
+        dizer((json.erro || 'Não consegui consultar a Receita — preencha à mão e siga.') + quem, 'erro');
         return;
       }
       const r = json.receita;
