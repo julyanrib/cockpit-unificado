@@ -67,6 +67,11 @@ const CASA_URL = 'https://api.casadosdados.com.br/v5/cnpj/pesquisa?tipo_resultad
 // Extração de contato por FORMA do valor, não por nome de campo — ver o comentário
 // grande em lib/contato-cnpj.js e as 31 checagens em scripts/testar-contato-cnpj.js.
 const { extrairContato } = require('../lib/contato-cnpj');
+/* A CONSULTA DE ENDEREÇO é outra fonte e outro arquivo de propósito: a Casa dos Dados
+   cobra por empresa e sabe telefone e sócio; a Receita via BrasilAPI é pública, de
+   graça, e é quem tem endereço e situação cadastral. Ver o cabeçalho de
+   lib/cnpj-lookup.js para por que as duas continuam. */
+const { buscarCnpjNaReceita } = require('../lib/cnpj-lookup');
 
 function isoDiasAtras(dias) {
   const d = new Date(Date.now() - dias * 86400000);
@@ -184,12 +189,18 @@ module.exports = async function handler(req, res) {
   if (!supaUrl || !supaAnon) {
     return res.status(500).json({ erro: 'Servidor sem configuração (SUPABASE_URL e SUPABASE_ANON_KEY obrigatórios).' });
   }
-  if (!casaToken) {
-    return res.status(500).json({
+  /* A TRAVA DO TOKEN SAIU DAQUI (16/09/26) e foi para os dois ramos que consomem a
+     Casa dos Dados. Na porta, ela devolvia 500 para TODA chamada — inclusive para a
+     consulta de endereço na Receita, que é outra fonte e não usa este token. Porta
+     fechada por causa de credencial que o pedido nem toca é o tipo de acoplamento
+     que faz um recurso nascer quebrado sem ninguém entender por quê. */
+  const exigirCasa = function () {
+    if (casaToken) return null;
+    return {
       etapa: 'config',
-      erro: 'CASADOSDADOS_TOKEN não está configurada na Vercel — sem ela não dá para consultar novidades de mercado.'
-    });
-  }
+      erro: 'CASADOSDADOS_TOKEN não está configurada na Vercel — sem ela não dá para consultar a Casa dos Dados.'
+    };
+  };
 
   // ---- 1. sessão válida (fail-closed, mesmo padrão das outras rotas) ----
   const auth = req.headers.authorization || '';
@@ -211,6 +222,25 @@ module.exports = async function handler(req, res) {
     return res.status(403).json({ erro: 'E-mail logado não está cadastrado no time.' });
   }
 
+  // ---- 2. ENDEREÇO PELA RECEITA (grátis, público, sem crédito) ----
+  /* É o que o formulário de Ag. Pagamento chama quando o executivo clica na lupa do
+     CNPJ. Responde razão social, situação cadastral, CEP, número e logradouro.
+
+     NÃO DEVOLVE E-MAIL NEM TELEFONE, mesmo que a Receita traga: naquele cadastro
+     esses dois são muitas vezes do CONTADOR, e este formulário gera cobrança no
+     Asaas — link de pagamento para a pessoa errada é o defeito que ninguém percebe
+     até o cliente dizer que não recebeu. O corte está no lib, não aqui, para nenhuma
+     outra tela conseguir pedir diferente.
+
+     SEM CACHE, e de propósito: não custa crédito, a consulta é de uma empresa só e
+     acontece uma vez por contrato fechado. Cache aqui seria guardar endereço de
+     cliente no nosso banco para economizar nada. */
+  if (req.body && req.body.cnpjReceita) {
+    const r = await buscarCnpjNaReceita(req.body.cnpjReceita);
+    if (r.erro) return res.status(422).json({ ok: false, erro: r.erro });
+    return res.status(200).json({ ok: true, origem: 'receita', receita: r.dados });
+  }
+
   // ---- 2a. CONTATO SOB DEMANDA (uma empresa por vez) ----
   //
   // O schema da Pesquisa Avançada (CNPJPesquisaResposta) NÃO tem telefone nem e-mail —
@@ -223,6 +253,8 @@ module.exports = async function handler(req, res) {
   // empresa em que vai agir — 1 crédito, no momento em que vale a pena. O cache é
   // longo porque telefone de CNPJ não muda.
   if (req.body && req.body.cnpj) {
+    const faltaCasa = exigirCasa();
+    if (faltaCasa) return res.status(500).json(faltaCasa);
     const cnpjLimpo = String(req.body.cnpj).replace(/\D/g, '');
     if (cnpjLimpo.length !== 14) return res.status(400).json({ erro: 'CNPJ deve ter 14 dígitos.' });
     const chaveContato = 'contato|v' + VERSAO_FILTROS + '|' + cnpjLimpo;
@@ -333,7 +365,14 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  // ---- 2. parâmetros ----
+  // ---- 3. PESQUISA POR PRAÇA (Casa dos Dados, paga) ----
+  /* O SEGUNDO CONSUMIDOR DO TOKEN. Ele também precisa exigir a credencial por conta
+     própria agora que a trava saiu da porta — sem isto a busca por praça rodaria com
+     token nulo e a Casa dos Dados devolveria 401, que na tela vira "nenhuma novidade"
+     em vez de "falta configurar a chave". Erro de configuração tem de se dizer. */
+  const faltaCasaPraca = exigirCasa();
+  if (faltaCasaPraca) return res.status(500).json(faltaCasaPraca);
+
   const body = req.body || {};
   const municipio = String(body.municipio || '').trim();
   const uf = String(body.uf || '').trim().toUpperCase();

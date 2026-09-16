@@ -6852,6 +6852,30 @@
   .pe-campo input:focus,.pe-campo select:focus,.pe-campo textarea:focus{outline:0;border-color:var(--ink);
     box-shadow:0 0 0 3px color-mix(in srgb,var(--ink) 10%,transparent);}
   .pe-campo.erro input,.pe-campo.erro select,.pe-campo.erro textarea{border-color:var(--red);}
+  /* ══ O CNPJ COM LUPA (16/09/26) ══════════════════════════════════════════════
+     `flex:1` no input e `flex:none` no botão: o contrário deixava o botão espremer o
+     campo até o CNPJ não caber inteiro na vista. 38px é o piso de toque de botão
+     auxiliar desta casa, e a borda e o raio são os mesmos do input ao lado para os
+     dois lerem como uma peça só. */
+  .pe-comlupa{display:flex;gap:6px;align-items:stretch;}
+  .pe-comlupa input{flex:1;min-width:0;}
+  .pe-lupa{flex:none;width:38px;min-height:38px;display:grid;place-items:center;cursor:pointer;
+    background:var(--panel);border:1px solid var(--line);border-radius:var(--r-md);color:var(--muted);
+    transition:border-color var(--t-base) var(--ease),color var(--t-base) var(--ease);}
+  .pe-lupa:hover{border-color:var(--ink);color:var(--ink);}
+  .pe-lupa:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+  /* DESABILITADO DURANTE A BUSCA, e visivelmente: sem isto o executivo clica três
+     vezes achando que não pegou, e são três consultas. */
+  .pe-lupa[disabled]{cursor:progress;opacity:.55;}
+  .pe-lupa[disabled] svg{animation:peLupaGira 1s linear infinite;}
+  @keyframes peLupaGira{to{transform:rotate(360deg);}}
+  @media (prefers-reduced-motion:reduce){.pe-lupa[disabled] svg{animation:none;}}
+  /* a confirmação da Receita: verde quando a empresa está ativa, âmbar quando não,
+     vermelho quando a consulta falhou. Ela NUNCA ocupa o lugar do erro do campo. */
+  .pe-receita{display:block;margin-top:6px;font-size:10.5px;font-weight:700;line-height:1.45;}
+  .pe-receita[data-tom="ok"]{color:var(--green-ink,#15795D);}
+  .pe-receita[data-tom="atencao"]{color:var(--amber-ink,#8A6516);}
+  .pe-receita[data-tom="erro"]{color:var(--red);}
   .pe-multi{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);}
   .pe-multi label{display:flex;align-items:center;gap:6px;margin:0;padding:7px 8px;border-radius:var(--r-sm);background:var(--panel2);color:var(--muted);font-size:10px;font-weight:700;letter-spacing:0;text-transform:none;cursor:pointer;}
   .pe-multi label:has(input:checked){background:var(--green-soft);color:var(--green);}
@@ -16052,7 +16076,14 @@ function campoPassagemHTML(campo, valor) {
   } else {
     const tipoInput = campo.tipo === 'numero' ? 'number' : campo.tipo === 'data' ? 'date' : campo.tipo === 'tel' ? 'tel' : campo.tipo === 'email' ? 'email' : 'text';
     const extra = campo.tipo === 'numero' ? ` step="1" inputmode="numeric"${campo.min != null ? ` min="${campo.min}"` : ''}` : '';
-    controle = `<input id="${id}" type="${tipoInput}"${extra} data-prop="${campo.prop}" data-tipo="${campo.tipo}" value="${esc(valor)}" autocomplete="off">`;
+    const input = `<input id="${id}" type="${tipoInput}"${extra} data-prop="${campo.prop}" data-tipo="${campo.tipo}" value="${esc(valor)}" autocomplete="off">`;
+    /* A LUPA SÓ NO CNPJ (16/09/26). Botão de ícone e não de texto: "Buscar na Receita"
+       ao lado do campo comeria a largura do input no grid de duas colunas, e este
+       formulário já é apertado. 38px, que é o piso de toque desta casa para botão
+       auxiliar, com title e aria-label porque ícone sozinho não se explica. */
+    controle = campo.prop === 'cnpj_cpf'
+      ? `<div class="pe-comlupa">${input}<button type="button" class="pe-lupa" data-cnpjbuscar="${id}" title="Buscar endereço na Receita" aria-label="Buscar endereço na Receita"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg></button></div><small class="pe-receita" data-cnpjaviso="${id}" hidden></small>`
+      : input;
   }
   return `<div class="pe-campo${campo.largo || campo.tipo === 'texto_longo' || campo.tipo === 'multiselecao' ? ' is-wide' : ''}" data-campo="${campo.prop}">
     <label for="${id}">${esc(campo.label)}${req}</label>
@@ -16060,6 +16091,132 @@ function campoPassagemHTML(campo, valor) {
     ${campo.dica ? `<small>${esc(campo.dica)}</small>` : ''}
     <small class="erro" hidden></small>
   </div>`;
+}
+
+/* ══ A LUPA DO CNPJ: PREENCHE O ENDEREÇO, NUNCA O CONTATO (16/09/26) ═══════════════
+   Julyan: "qdo o executivo preencher o campo cnpj em aguardando pagamento, ja puxar os
+   dados de endereço, agilizando o processo".
+
+   O QUE ELA ESCREVE: `cep` e `numero`, que são os dois campos de endereço que a etapa
+   Ag. Pagamento tem. Razão social e situação cadastral aparecem como CONFIRMAÇÃO
+   embaixo do campo, sem virar valor de nada — é o que prova que o número digitado é a
+   empresa certa, e é o ganho real deste gesto.
+
+   O QUE ELA NÃO TOCA, e cada um por um motivo diferente:
+     · e-mail e celular — instrução dele, e porque na Receita esses dois são muitas
+       vezes do CONTADOR. Este formulário gera cobrança no Asaas: link de pagamento
+       para a pessoa errada é o defeito que só aparece quando o cliente reclama.
+     · `dealname` — é o nome do negócio no HubSpot, já preenchido desde o lead.
+       Sobrescrever com a razão social renomearia o negócio por um clique de
+       conveniência.
+     · `amount` e `mrr` — o RPA do Asaas parte deles, e esta base já parou o negócio
+       uma vez mexendo ali.
+
+   NÃO SOBRESCREVE O QUE JÁ ESTÁ PREENCHIDO. Se o executivo digitou o número do imóvel
+   à mão (o endereço de entrega costuma diferir do cadastro da Receita), o que ele
+   escreveu vale mais que o cadastro — a tela diz o que deixou de fora em vez de
+   trocar por baixo.
+
+   ERRO NUNCA TRAVA: a mensagem aparece e digitar tudo à mão segue sendo um caminho
+   inteiro. É a mesma regra da praça de novidades, onde a Casa dos Dados cair não pode
+   derrubar a rota do dia. */
+let peLupaEmVoo = null;
+
+async function buscarCnpjNaReceitaDoCampo(idDoCampo) {
+  const input = document.getElementById(idDoCampo);
+  const botao = document.querySelector('[data-cnpjbuscar="' + idDoCampo + '"]');
+  const aviso = document.querySelector('[data-cnpjaviso="' + idDoCampo + '"]');
+  if (!input || !aviso) return;
+
+  const dizer = function (texto, tom) {
+    aviso.textContent = texto;
+    aviso.setAttribute('data-tom', tom);
+    aviso.hidden = false;
+  };
+
+  const digitos = String(input.value || '').replace(/\D/g, '');
+  if (digitos.length !== 14) {
+    dizer(digitos.length === 11
+      ? 'Isso é um CPF — a consulta de endereço na Receita só existe para CNPJ.'
+      : 'Digite os 14 dígitos do CNPJ antes de buscar (você digitou ' + digitos.length + ').', 'erro');
+    return;
+  }
+  /* O DÍGITO VERIFICADOR ANTES DA REDE. `cnpjEhValido` já existe nesta tela porque o
+     RPA do Asaas recusa CNPJ inválido horas depois — conferir aqui economiza a ida e
+     dá o mesmo aviso na hora. */
+  if (typeof cnpjEhValido === 'function' && !cnpjEhValido(digitos)) {
+    dizer('Esse CNPJ não passa no dígito verificador — confira o número.', 'erro');
+    return;
+  }
+
+  /* UMA BUSCA POR VEZ, guardando a PROMESSA e não um booleano: dois cliques rápidos
+     disparavam duas consultas, e a segunda resposta sobrescrevia a primeira. Mesma
+     lição da de-duplicação de /api/dados. */
+  if (peLupaEmVoo) return peLupaEmVoo;
+
+  if (botao) { botao.disabled = true; botao.setAttribute('aria-busy', 'true'); }
+  dizer('Consultando a Receita…', 'atencao');
+
+  peLupaEmVoo = (async function () {
+    try {
+      const token = (typeof tokenDeSessaoGlobal === 'function') ? await tokenDeSessaoGlobal() : null;
+      if (!token) { dizer('Sessão expirada — entre de novo para buscar.', 'erro'); return; }
+      const resp = await fetch('/api/novidades-mercado', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ cnpjReceita: digitos })
+      });
+      const json = await resp.json().catch(function () { return {}; });
+      if (!resp.ok || !json.ok || !json.receita) {
+        dizer(json.erro || 'Não consegui consultar a Receita — preencha à mão e siga.', 'erro');
+        return;
+      }
+      const r = json.receita;
+
+      /* PREENCHE SÓ O QUE ESTÁ VAZIO, e conta o que fez. `input.value.trim()` e não
+         `!input.value`: campo com espaço em branco é campo vazio para quem olha. */
+      const escritos = [];
+      const mantidos = [];
+      const preencher = function (prop, valorNovo, rotulo) {
+        if (!valorNovo) return;
+        const alvo = document.getElementById('peCampo_' + prop);
+        if (!alvo) return;
+        if (String(alvo.value || '').trim()) { mantidos.push(rotulo); return; }
+        alvo.value = valorNovo;
+        /* o `input` é o que a validação e a máscara de dígitos desta tela escutam —
+           atribuir `value` sem disparar deixaria o campo preenchido e não validado */
+        alvo.dispatchEvent(new Event('input', { bubbles: true }));
+        escritos.push(rotulo);
+      };
+      preencher('cep', r.cep, 'CEP');
+      preencher('numero', r.numero, 'número');
+
+      /* A CONFIRMAÇÃO DA EMPRESA é o que mais importa aqui: razão social na tela prova
+         que o CNPJ digitado é quem o executivo pensa que é. E situação cadastral
+         diferente de ATIVA tem de aparecer ANTES de gerar cobrança, não depois. */
+      const nome = r.nomeFantasia && r.nomeFantasia !== r.razaoSocial
+        ? r.razaoSocial + ' (' + r.nomeFantasia + ')'
+        : r.razaoSocial;
+      const partes = [nome];
+      if (r.situacao) partes.push('situação: ' + r.situacao);
+      if (escritos.length) partes.push('preenchi ' + escritos.join(' e '));
+      if (mantidos.length) partes.push('mantive o que você digitou em ' + mantidos.join(' e '));
+      if (!escritos.length && !mantidos.length) partes.push('a Receita não trouxe CEP nem número');
+      dizer(partes.join(' · '), r.ativa ? 'ok' : 'atencao');
+
+      if (!r.ativa && typeof mostrarToast === 'function') {
+        mostrarToast('Atenção: na Receita esse CNPJ está "' + (r.situacao || 'sem situação')
+          + '" — confirme antes de gerar a cobrança.', 'atencao');
+      }
+    } catch (e) {
+      dizer('A consulta falhou — preencha à mão e siga.', 'erro');
+      console.error('[cnpj] consulta à Receita falhou:', e && e.message);
+    } finally {
+      if (botao) { botao.disabled = false; botao.removeAttribute('aria-busy'); }
+      peLupaEmVoo = null;
+    }
+  }());
+  return peLupaEmVoo;
 }
 
 // Lê o formulário, valida obrigatório/piso e devolve {ok, propriedades} — a validação
@@ -19486,6 +19643,24 @@ document.addEventListener('click', ev => {
     return;
   }
   if (acao === 'confirmar') pm8Confirmar().then(renderPromessaDaSemana);
+});
+
+/* ══ A FIAÇÃO DA LUPA DO CNPJ (16/09/26) ═══════════════════════════════════════════
+   DELEGADO NO DOCUMENTO, e não na raiz do formulário: o mesmo campo é desenhado por
+   TRÊS portas (a seta do kanban, o arrasto e a trilha da ficha), e cada uma monta o
+   HTML na sua própria caixa. Ouvinte por caixa seria a mesma fiação em três lugares —
+   e nesta base é assim que duas delas ficam para trás numa mudança.
+
+   Um `click` no documento inteiro é barato porque o `closest` sai no primeiro nó para
+   todo clique que não é na lupa. */
+document.addEventListener('click', function (ev) {
+  const lupa = ev.target.closest && ev.target.closest('[data-cnpjbuscar]');
+  if (!lupa) return;
+  /* o botão vive dentro do drawer de passagem, que tem os próprios ouvintes de clique:
+     sem parar aqui, buscar o CNPJ podia fechar o drawer embaixo do dedo */
+  ev.preventDefault();
+  ev.stopPropagation();
+  buscarCnpjNaReceitaDoCampo(lupa.getAttribute('data-cnpjbuscar'));
 });
 
 /* o que ele digita fica no rascunho: sem isso, qualquer redesenho zera os campos */
