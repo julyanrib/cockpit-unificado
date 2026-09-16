@@ -197,9 +197,27 @@ const barras = semProsa(corpoDe('sm5Barras'));
 conferir('menos de dois pontos não desenha série',
   barras.indexOf('valores.length < 2') > -1 && barras.indexOf('return []') > -1,
   'uma barra sozinha não mostra tendência e ocupa o lugar dizendo que mostra');
-conferir('perdidos e MRR saem sem barras',
-  quantas(semProsa(dados), 'barras: []') === 2,
-  'a prancha desenha cinco barras nos cinco KPIs porque o dado dela é fake; estes dois não têm série');
+/* REESCRITA EM 16/09/26. A regra anterior era "perdidos e MRR saem SEM barras", porque o
+   robô não tinha série para eles. Consertei o robô em vez da tela: `perdidos` já estava no
+   histórico e só faltava projetar, e `mrr` passou a ser gravado por semana. Agora os cinco
+   KPIs pedem série, como na prancha.
+
+   E A CAIXA DAS BARRAS É SEMPRE DESENHADA — esta é a checagem que vale, porque foi a
+   ausência dela que deformou a faixa: os dois KPIs sem histórico ficavam 38px mais baixos
+   que os outros três, e a fileira de cinco virou duas fileiras. Medido contra a prancha
+   desempacotada: 25 barrinhas e 1 fileira lá, 0 e 2 aqui. */
+['fechamentos', 'reunioes', 'criados', 'perdidos', 'mrr'].forEach(function (s) {
+  conferir('o KPI lê a série de ' + s,
+    dados.indexOf("sm5Barras('" + s + "'") > -1,
+    'a prancha desenha barra nos cinco; sem a série o KPI fica oco e a fileira desmonta');
+});
+conferir('a caixa das barras existe mesmo sem série',
+  corpoDe('sm5TelaHTML').indexOf('série começa nesta semana') > -1
+    && semProsa(corpoDe('sm5TelaHTML')).indexOf('k.barras.length\n        ?') < 0,
+  'sem a caixa o KPI fica 38px mais baixo que os vizinhos e a fileira de cinco vira duas');
+conferir('perdidos pinta a última barra de vermelho',
+  dados.indexOf("sm5Barras('perdidos', '#FF6B78')") > -1,
+  'neste KPI a barra alta é má notícia — é a inversão que a prancha faz nele');
 conferir('a série fica com uma leitura por janela',
   semProsa(corpoDe('sm5Serie')).indexOf('new Map()') > -1,
   'o robô acumula por execução: duas rodadas no dia repetem a janela e a última barra finge crescimento');
@@ -233,6 +251,24 @@ conferir('o gargalo do board mostra negrito, e não a tag',
   corpoDe('sm5BoardHTML').indexOf('sm5Negrito(r.gargalo)') > -1
     && corpoDe('sm5BoardHTML').indexOf('esc(r.gargalo)') < 0,
   'o robô marca os números com <b>; escapar tudo põe a tag na tela em toda linha do board');
+/* OS TRÊS TEXTOS DO ROBÔ NO BOARD, e não só o que eu tinha olhado. Em 16/09 o Julyan
+   mandou a captura da PRODUÇÃO com os compromissos mostrando "<b>3 leads com SLA
+   estourado</b>" e "<b>16/09/2026</b>" como texto. Eu tinha consertado só o gargalo,
+   porque a fixture com que revisei não tinha marcação nos compromissos — olhei onde o
+   defeito não estava. Esta checagem varre os três de uma vez.
+
+   `r.tendTexto` continua com `esc` de propósito: ele vai para dentro de um atributo
+   `title=`, onde tag não renderiza e aspas soltas quebrariam o markup. */
+['r.gargalo', 'c'].forEach(function (campo) {
+  conferir('o texto do robô em ' + campo + ' renderiza negrito',
+    semProsa(corpoDe('sm5BoardHTML')).indexOf('sm5Negrito(' + campo + ')') > -1
+      && semProsa(corpoDe('sm5BoardHTML')).indexOf('esc(' + campo + ')') < 0,
+    'o robô marca números e datas com <b>; escapar põe a tag na tela do gestor');
+});
+conferir('o texto do title continua escapado',
+  corpoDe('sm5BoardHTML').indexOf('esc(r.tendTexto)') > -1,
+  'dentro de atributo a tag não renderiza e aspa solta quebra o markup — ali `esc` é o certo');
+
 conferir('o filtro reabre só negrito, e não o HTML inteiro',
   quantas(tpl, 'function sm5Negrito(') === 1
     && corpoDe('sm5Negrito').indexOf('esc(v)') > -1
@@ -344,7 +380,7 @@ conferir('sem o dado da janela mostrada o MRR é travessão, e não zero',
   '"R$ 0" leria como mês sem faturar; o robô é que não guarda MRR da semana anterior');
 conferir('o MRR diz quantos ganhos vieram sem valor',
   dados.indexOf('const ganhosSemValor =') > -1
-    && dados.indexOf("ganhosSemValor + ' sem valor'") > -1,
+    && dados.indexOf('nota: ganhosSemValor ?') > -1,
   'soma com negócio zerado dentro é apresentada como total e não é');
 conferir('sem comparação a tela não afirma a direção do funil',
   dados.indexOf("kp == null ? '' : ' e ' + (criadosCairam") > -1,

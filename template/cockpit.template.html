@@ -15,7 +15,11 @@
      Poppins sai do carregamento no mesmo commit em que suas 240 declarações zeram: se
      saísse antes, os títulos cairiam em sans-serif genérico; se saísse depois, ficaria
      baixando ~30KB de fonte que ninguém mais usa. -->
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..900&family=Manrope:wght@400;500;600;700;800&display=swap">
+<!-- Poppins e DM Sans entram aqui, no MESMO pedido, porque a Semana do gestor é
+     desenhada nelas (prancha v5) e sem elas cada `font-family:Poppins` da tela cai em
+     Arial. Medido em 16/09/26 no canvas: Poppins e DM Sans desenhavam exatamente a
+     mesma largura que uma família inexistente. Uma requisição, não três. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400..900&family=DM+Sans:wght@400;500;700&family=Manrope:wght@400;500;600;700;800&family=Poppins:wght@600;700;800&display=swap">
 <style>
   :root{
     /* IDENTIDADE DO GESTOR (31/08/26). Migração de token da prancha de design: o canvas
@@ -9664,6 +9668,28 @@ foi escrita para jogar o "0 de 27 resolvidos"
      `!important` NÃO É PREGUIÇA: os min-width vêm em atributo `style`, e inline vence
      a folha. Sem ele a media query aplica e não muda nada — foi exatamente assim que a
      regra de 44px de toque do login ficou inerte nesta base. */
+  /* ══ A FAIXA ESCURA VAI DE PONTA A PONTA, COMO NA PRANCHA (16/09/26) ═══════════
+     A fileira de cinco KPIs pede 1437px; o cockpit oferecia 1321 numa janela de 1460.
+     Os 116 que faltavam não são do desenho: são calha desta casa — `#sm9Raiz` tem
+     `margin:0 32px` e `.app-main` tem `padding:0 30px`. 62 de cada lado, e é esse o
+     número negativo aqui. Na prancha a faixa é filha direta do container e sangra.
+
+     Só de 1240 para cima: abaixo disso a calha é o que separa a faixa da borda do
+     telefone, e sangrar ali criaria transbordo no documento. */
+  /* ══ A TIPOGRAFIA DA PRANCHA, ESCOPADA NA ABA ══════════════════════════════════
+     A prancha declara no corpo dela `font-family:'DM Sans'` e `color:#1A1613`; eu
+     copiei os estilos inline de cada bloco e não o corpo, então tudo que não tem cor
+     ou fonte inline herdava o Manrope e o #2B3440 do cockpit. Medido contra a prancha
+     desempacotada: seis blocos com a cor errada e quatro com a família errada.
+
+     Escopado em #sm9Raiz de propósito: as outras abas continuam com a tipografia
+     desta casa, e o dia em que a prancha da vez for outra família ninguém precisa
+     desfazer nada no resto do app. */
+  #sm9Raiz{font-family:'DM Sans',Manrope,system-ui,sans-serif;color:#1A1613;}
+  .sm5-placar{margin-left:0;margin-right:0;}
+  @media (min-width:1240px){
+    .sm5-placar{margin-left:-62px;margin-right:-62px;}
+  }
   .sm5-linha{display:flex;align-items:center;gap:16px;padding:13px 18px;cursor:pointer;}
   .sm5-drawer{border-top:1px dashed #E4DBC6;background:#FBF6EC;
     padding:16px 18px 16px 68px;display:grid;grid-template-columns:1.25fr 1fr;gap:24px;}
@@ -61485,10 +61511,16 @@ function sm5Dados() {
       barras: sm5Barras('criados', '#57C29A') },
     { rotulo: 'perdidos', valor: String(k.perdidos == null ? '—' : k.perdidos),
       delta: sm5Delta(k.perdidos, kp && kp.perdidos, false),
-      barras: [] },
-    { rotulo: mrrFechado == null ? 'MRR fechado (só da semana em curso)'
-        : (ganhosSemValor ? 'MRR fechado · ' + ganhosSemValor + ' sem valor' : 'MRR fechado'),
-      valor: mrrFechado == null ? '—' : sm5Moeda(mrrFechado), delta: null, barras: [] }
+      /* VERMELHO NA ÚLTIMA BARRA, e não verde: aqui a barra alta é má notícia. É a
+         mesma inversão que a prancha faz neste KPI. */
+      barras: sm5Barras('perdidos', '#FF6B78') },
+    { rotulo: 'MRR fechado', nota: ganhosSemValor ? ganhosSemValor + ' ganho'
+        + (ganhosSemValor === 1 ? '' : 's') + ' sem valor' : null,
+      valor: mrrFechado == null ? '—' : sm5Moeda(mrrFechado), delta: null,
+      /* A SÉRIE DE MRR COMEÇA AGORA: o robô passou a gravá-la em 16/09, e não há
+         retroativo. Enquanto houver menos de dois pontos, `sm5Barras` devolve vazio e
+         a caixa diz "série começa nesta semana" — a altura fica, a barra não vem. */
+      barras: sm5Barras('mrr', '#57C29A') }
   ];
 
   /* ── o board ─────────────────────────────────────────────────────────────────────
@@ -61722,9 +61754,12 @@ let SM5_ABERTO;
 
 function sm5TelaHTML(d) {
   const j = d.janela;
+  /* DUAS LINHAS, COMO NA PRANCHA. O aviso de semana não fechada estava emendado aqui
+     e levava o kicker a quatro linhas numa coluna de 330px, empurrando o veredito e a
+     barra do mês. Ele desce para baixo do bloco do mês, onde cabe sem deslocar nada —
+     e com a janela do robô consertada em 16/09 ele passa a ser caso raro. */
   const kicker = 'O QUE PRECISO SABER · SEMANA ' + esc(j.rotulo)
-    + (j.comparacao ? ' vs ' + esc(j.comparacao) : '')
-    + (j.aviso ? ' · ' + esc(j.aviso) : '');
+    + (j.comparacao ? ' vs ' + esc(j.comparacao) : '');
 
   /* ── o placar escuro ─────────────────────────────────────────────────────────── */
   const kpisHTML = d.kpis.map(function (k) {
@@ -61740,22 +61775,37 @@ function sm5TelaHTML(d) {
       +     esc(k.delta.txt) + '</span>' : '')
       + '</div>'
       + '<div style="font-size:11px;color:#8A8072;margin-top:2px;">' + esc(k.rotulo) + '</div>'
-      /* SEM SÉRIE, SEM CAIXA DE BARRAS E SEM O RÓTULO. A prancha mostra cinco barras em
-         todos os cinco KPIs porque o dado dela é inventado; perdidos e MRR não têm série
-         no snapshot, e desenhar barras ali seria inventar histórico. */
-      + (k.barras.length
-        ? '<div style="display:flex;align-items:flex-end;gap:3px;height:26px;margin-top:9px;">'
-          + barras + '</div>'
-          + '<div style="font-size:9px;color:#5C554A;margin-top:3px;">últimas '
-          + k.barras.length + ' semanas</div>'
-        : '')
+      /* A CAIXA EXISTE SEMPRE, com a altura da prancha (26px + 9 de respiro + a linha
+         do rótulo). Antes ela sumia quando não havia série, e os dois KPIs sem
+         histórico ficavam 38px mais baixos que os outros três — foi isso que desmontou
+         a fileira. Sem série a caixa não desenha barra nenhuma e o rótulo diz o
+         motivo: a geometria fica a da prancha e a tela continua sem inventar barra. */
+      + '<div style="display:flex;align-items:flex-end;gap:3px;height:26px;margin-top:9px;">'
+      +   barras + '</div>'
+      + '<div style="font-size:9px;color:#5C554A;margin-top:3px;">'
+      +   (k.barras.length ? 'últimas ' + k.barras.length + ' semanas'
+        : '<span style="color:#4A443B;">série começa nesta semana</span>')
+      +   (k.nota ? ' · <span style="color:#B0782A;">' + esc(k.nota) + '</span>' : '')
+      + '</div>'
       + '</div>';
   }).join('');
 
-  const placar = '<div style="background:#1A1613;color:#FDFBF0;padding:24px 32px 22px;">'
-    + '<div style="display:flex;align-items:flex-start;gap:36px;flex-wrap:wrap;'
-      + 'row-gap:20px;">'
-    +   '<div style="flex:1 1 260px;min-width:0;max-width:330px;">'
+  /* O ENVELOPE ROLA, O DESENHO NÃO MUDA. `overflow-x:auto` num contêiner de largura
+     total: em 1460 não aparece barra nenhuma e a faixa é a da prancha; abaixo disso
+     o gestor arrasta em vez de ver o desenho quebrado. É a mesma escolha que esta
+     base já faz com tabela larga. */
+  /* O ENVELOPE LEVA A TINTA CLARA JUNTO com o fundo escuro. Ele só existe para rolar,
+     mas herda a tinta escura da raiz da aba: qualquer texto que caísse direto nele
+     nasceria preto sobre preto. Fundo e tinta andam no mesmo par, sempre. */
+  const placar = '<div class="sm5-placar" style="background:#1A1613;color:#FDFBF0;overflow-x:auto;">'
+    + '<div style="background:#1A1613;color:#FDFBF0;padding:24px 32px 22px;">'
+    /* UMA FILEIRA, COMO NA PRANCHA. Ela declara `min-width:1440px` e o desenho conta
+       com isso: cinco KPIs, o divisor e o botão numa linha. Eu tinha posto
+       `flex-wrap` para matar um transbordo de 178px a 1280 — e com isso o MRR caiu
+       para uma segunda linha e a faixa deixou de ser a da prancha. A resposta certa
+       para a janela estreita é a rolagem do envelope, logo acima, não a quebra. */
+    + '<div style="display:flex;align-items:flex-start;gap:36px;min-width:max-content;">'
+    +   '<div style="min-width:330px;max-width:330px;">'
     +     '<div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#8A8072;">'
     +       kicker + '</div>'
     +     '<div style="font-family:Poppins;font-weight:800;font-size:24px;line-height:1.25;'
@@ -61786,12 +61836,15 @@ function sm5TelaHTML(d) {
     +       '<div style="font-size:10.5px;color:#8A8072;margin-top:5px;">clientes fechados no '
     +         'mês · <span style="color:#B0782A;">▮</span> onde o ritmo pedia estar hoje ('
     +         esc(d.mes.diaRef) + ')</div>'
+    /* o aviso, quando existe, fica AQUI: fora do título e sem empurrar a barra */
+    +       (j.aviso ? '<div style="font-size:10px;color:#B0782A;margin-top:6px;'
+      + 'border-top:1px solid rgba(253,251,240,.12);padding-top:6px;">' + esc(j.aviso)
+      + '</div>' : '')
     +     '</div>'
     +   '</div>'
     +   '<span style="width:1px;align-self:stretch;flex:none;'
       + 'background:rgba(253,251,240,.12);"></span>'
-    +   '<div style="display:flex;gap:34px;row-gap:16px;flex-wrap:wrap;'
-      + 'font-variant-numeric:tabular-nums;flex:1 1 320px;min-width:0;">'
+    +   '<div style="display:flex;gap:34px;font-variant-numeric:tabular-nums;flex:1;">'
     +     kpisHTML
     +   '</div>'
     +   '<span data-sm5-compartilhar="1" style="align-self:center;margin-left:auto;'
@@ -61804,6 +61857,7 @@ function sm5TelaHTML(d) {
     +     'Compartilhar com o time'
     +   '</span>'
     + '</div>'
+    + '</div>'
     + '</div>';
 
   /* ── a leitura da IA + as jogadas ────────────────────────────────────────────── */
@@ -61815,13 +61869,34 @@ function sm5TelaHTML(d) {
       + 'geração parcial — ver detalhes</span>'
     : '';
 
+  /* O DESTINO DE CADA JOGADA. A prancha põe um link à direita de cada uma — "ir aos
+     roteiros ↓", "virar aviso", "ver os N ↓" — e sem eles a coluna das jogadas fica
+     visivelmente diferente dela. O destino sai do TEXTO da jogada, porque é o robô
+     que escreve as jogadas e a ordem delas muda a cada semana: cravar "a 1ª vai para
+     os roteiros" seria amarrar o desenho a uma ordem que ninguém garante. */
+  const destinoDaJogada = function (txt) {
+    const s = String(txt || '').toLowerCase();
+    if (s.indexOf('1:1') > -1 || s.indexOf('roteiro') > -1) {
+      return { alvo: 'board', rot: 'ir aos roteiros ↓' };
+    }
+    if (s.indexOf('quente') > -1 || s.indexOf('negocia') > -1 || s.indexOf('demo') > -1) {
+      return { alvo: 'quentes', rot: 'ver os quentes ↓' };
+    }
+    if (s.indexOf('daily') > -1 || s.indexOf('aviso') > -1 || s.indexOf('time') > -1) {
+      return { alvo: 'avisos', rot: 'virar aviso' };
+    }
+    return null;
+  };
   const jogadasHTML = d.jogadas.map(function (t, i) {
+    const dest = destinoDaJogada(t);
     return '<div style="display:flex;gap:11px;background:#FBF6EC;border-radius:12px;'
       + 'padding:11px 14px;align-items:flex-start;">'
       + '<b style="font-family:Poppins;color:#E51A31;flex:none;">' + (i + 1) + '</b>'
       /* O TEXTO DO ROBÔ VEM COM <b> E É RENDERIZADO COMO HTML, como o contrato manda —
          é o mesmo tratamento que `resumoGeral` recebe. */
       + '<span style="flex:1;">' + t + '</span>'
+      + (dest ? '<span data-sm5-ir="' + dest.alvo + '" style="flex:none;font-size:10.5px;'
+        + 'font-weight:700;color:#B0782A;cursor:pointer;">' + dest.rot + '</span>' : '')
       + '</div>';
   }).join('');
 
@@ -61932,7 +62007,12 @@ function sm5BoardHTML(d) {
           +   ';display:grid;place-items:center;flex:none;margin-top:1px;color:#fff;'
           +   'font-size:10px;font-weight:800;">' + (feito ? '✓' : '') + '</span>'
           + '<span style="color:' + (feito ? '#A2937A' : '#3D362E') + ';text-decoration:'
-          +   (feito ? 'line-through' : 'none') + ';line-height:1.5;">' + esc(c) + '</span>'
+          /* O MESMO <b> DO GARGALO, na outra ponta do drawer. O robô marca as datas e os
+             números dos compromissos com <b>, e o esc() punha a tag na tela: o Julyan viu
+             "3 leads com SLA estourado</b> ... <b>16/09/2026</b>" em produção, 16/09/26.
+             Eu tinha consertado só o gargalo porque a fixture com que eu revisei não
+             tinha marcação nos compromissos — olhei onde o defeito não estava. */
+          +   (feito ? 'line-through' : 'none') + ';line-height:1.5;">' + sm5Negrito(c) + '</span>'
           + '</div>';
       }).join('');
 
@@ -62066,7 +62146,7 @@ function sm5QuentesHTML(d) {
       + '</div>';
   }).join('');
 
-  return '<div style="padding:4px 32px 30px;">'
+  return '<div id="sm5Quentes" style="padding:4px 32px 30px;">'
     + '<div style="background:#FDFBF0;border:1px solid #E4DBC6;border-radius:18px;'
     +   'padding:18px 22px;box-shadow:0 1px 3px rgba(26,22,19,.05);">'
     +   '<div style="display:flex;align-items:center;gap:9px;">'
@@ -62200,6 +62280,25 @@ function sm5Ligar(raiz) {
 
     if (alvo.closest('[data-sm5-verquentes]')) {
       if (typeof irParaMeuFunilVisao === 'function') return irParaMeuFunilVisao('quentes');
+      return;
+    }
+
+    /* A JOGADA COM DESTINO: rola até a seção, dentro da própria aba. `offsetTop` e
+       NÃO `scrollIntoView` — o cockpit tem cabeçalho fixo e o scrollIntoView deixaria
+       o alvo debaixo dele. O recuo de 70px é a altura do cabeçalho mais respiro. */
+    const ir = alvo.closest('[data-sm5-ir]');
+    if (ir) {
+      ev.stopPropagation();
+      const onde = ir.dataset.sm5Ir;
+      if (onde === 'avisos') {
+        if (typeof abrirAvisosDrawer === 'function') return abrirAvisosDrawer();
+        return;
+      }
+      const el = document.getElementById(onde === 'board' ? 'sm5Board' : 'sm5Quentes');
+      if (!el) return;
+      let topo = 0, n = el;
+      while (n) { topo += n.offsetTop; n = n.offsetParent; }
+      window.scrollTo({ top: Math.max(0, topo - 70), behavior: 'smooth' });
       return;
     }
 

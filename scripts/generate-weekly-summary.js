@@ -650,11 +650,28 @@ async function main() {
   // nunca inventar as que faltam (mesmo princípio do snapshot do Bloco 40). =====
   const ultimasSemanasFechadas = (historicoMes.semanas || [])
     .slice().sort((a, b) => a.numeroSemana - b.numeroSemana).slice(-4);
+  /* ══ CINCO SÉRIES, PORQUE A TELA TEM CINCO KPIs (16/09/26) ═════════════════════
+     Eram três, e os dois KPIs sem série (perdidos e MRR) ficavam ocos na faixa
+     escura do gestor — o que me levou a omitir a caixa das barras e deformar a
+     fileira inteira em relação à prancha.
+
+     PERDIDOS JÁ ESTAVA NO HISTÓRICO: `kpisSemana` é o objeto inteiro de
+     `kpisComparativo.atual`, e ele sempre carregou `perdidos`. Só faltava projetar.
+
+     MRR COMEÇA AGORA. `ganhosSemanaDetalhe` (que tem o mrr por negócio) vai para o
+     output e nunca entrou no acumulador do mês, então não há retroativo: a série
+     nasce com um ponto e enche nas próximas semanas. `?? null` e não `|| 0` — semana
+     antiga não tem o campo, e zero ali seria uma semana de MRR zero que ninguém
+     mediu. O front descarta os pontos nulos. */
+  const mrrDaSemana = (raw.ganhosSemanaDetalhe || [])
+    .reduce((soma, g) => soma + (Number(g.mrr) || 0), 0);
   const serieSemanal = {
     janelas: [...ultimasSemanasFechadas.map(s => s.janela.atual), raw.janela.atual],
     fechamentos: [...ultimasSemanasFechadas.map(s => s.kpisSemana.ganhos), raw.kpisComparativo.atual.ganhos],
     reunioes: [...ultimasSemanasFechadas.map(s => s.kpisSemana.reunioes), raw.kpisComparativo.atual.reunioes],
-    criados: [...ultimasSemanasFechadas.map(s => s.kpisSemana.leadsCriados), raw.kpisComparativo.atual.leadsCriados]
+    criados: [...ultimasSemanasFechadas.map(s => s.kpisSemana.leadsCriados), raw.kpisComparativo.atual.leadsCriados],
+    perdidos: [...ultimasSemanasFechadas.map(s => s.kpisSemana.perdidos), raw.kpisComparativo.atual.perdidos],
+    mrr: [...ultimasSemanasFechadas.map(s => (s.mrrSemana ?? null)), mrrDaSemana]
   };
 
   const output = {
@@ -689,6 +706,11 @@ async function main() {
       numeroSemana,
       janela: raw.janela,
       kpisSemana: raw.kpisComparativo.atual,
+      /* O MRR DA SEMANA, para a série do KPI de MRR poder existir daqui pra frente.
+         Fica fora de `kpisSemana` de propósito: aquele objeto é o contrato do
+         comparativo de time e é lido em outros lugares — acrescentar campo nele
+         mudaria a forma de um dado que outras telas já consomem. */
+      mrrSemana: mrrDaSemana,
       resumoGeral: output.resumoGeral,
       comoAgir: output.comoAgir,
       // BLOCO 40 — o snap entra junto: é ele que vira o `anterior` da semana que vem.
