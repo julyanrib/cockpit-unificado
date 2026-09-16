@@ -229,12 +229,35 @@ async function main() {
   // o que comparava 5 dias úteis contra 7 corridos — lead criado ou fechamento de sábado
   // inflava a semana anterior e a comparação nascia torta. Field sales é seg–sex; o
   // resultado semanal compara útil com útil (decisão do Julyan, 08/08/26).
-  const atualInicio = new Date(inicioSemanaBrasiliaMs());
-  // atualFim capado na SEXTA 23:59:59 BRT: rodando manual num sábado, a janela ia até
-  // "agora" e a tela mostrava "03/08–08/08" — resultado semanal é seg–sex, sempre.
-  const atualFim = new Date(Math.min(now.getTime(), atualInicio.getTime() + 5 * DAY - 1));
+  /* ══ A ÚLTIMA SEMANA FECHADA, EM QUALQUER DIA E HORA (16/09/26) ═══════════════
+     Era `inicioSemanaBrasiliaMs()` cru, com o fim capado em `min(agora, +5 dias)`.
+     Isso só dá seg–sex se o robô rodar DEPOIS da sexta e ANTES da segunda. O cron é
+     domingo 22h BRT — três horas da virada do calendário brasileiro — e atraso de
+     três horas no Actions é rotina. Medido com a própria função:
+
+       sexta 17h BRT         → 07/09–11/09   5 dias, certo
+       domingo 22h BRT       → 07/09–11/09   5 dias, certo
+       segunda 01h BRT (+3h) → 14/09–14/09   UM dia
+       quarta 10h BRT        → 14/09–16/09   três dias
+
+     E a janela parcial não fica no robô: ela vira o placar do gestor. A Semana v5
+     passou a semana toda se defendendo disso — MRR de outra semana ao lado dos
+     ganhos, "9 vendedores parados" sendo oito falsos, barras de histórico com
+     janelas de um dia. Sintomas, todos, desta linha.
+
+     AGORA: a semana reportada é a última que FECHOU. Se a sexta desta semana já
+     passou, é esta semana; senão, é a anterior. Rodar sexta à noite, domingo,
+     segunda de manhã ou quarta dá a MESMA resposta, e sempre 5 dias. */
+  const semanaCorrente = inicioSemanaBrasiliaMs();
+  const sextaDaCorrente = semanaCorrente + 5 * DAY - 1;   // sexta 23:59:59.999 BRT
+  const fechou = now.getTime() >= sextaDaCorrente;
+  const atualInicio = new Date(fechou ? semanaCorrente : semanaCorrente - 7 * DAY);
+  const atualFim = new Date(atualInicio.getTime() + 5 * DAY - 1);
   const anteriorInicio = new Date(atualInicio.getTime() - 7 * DAY);
   const anteriorFim = new Date(anteriorInicio.getTime() + 5 * DAY - 1); // sexta 23:59:59.999 BRT
+  console.log(fechou
+    ? 'semana corrente já fechou — reportando ela'
+    : 'semana corrente em curso — reportando a anterior, que é a última fechada');
 
   console.log('Buscando semana atual...');
   const atual = await windowCounts(atualInicio.getTime(), atualFim.getTime());
