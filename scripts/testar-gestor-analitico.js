@@ -861,8 +861,64 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
      Os tres gestos da prancha caem em fiacao que JA existia: o nome do lead e um link
      para o negocio no HubSpot (hsUrl, a funcao unica que monta essa URL), e o nome de
      vendedor cai no verbo `sel`, que e o dossie desta aba. Verbo novo: UM. */
-  checar('o nome do lead abre o negocio no HubSpot pela funcao unica de URL',
-    /function tm10NomeLead\([^)]*\) \{[\s\S]{0,200}hsUrl\(id\)/.test(tela));
+  /* ══ REESCRITA EM 17/09/26 — A LINHA DO LEAD NAO SAI MAIS DO COCKPIT ══════════════
+     A regra antiga era "o nome do lead abre o negocio no HubSpot por hsUrl". Julyan:
+     "eu preciso clicar nesses leads e ver o q eles colocaram na rua, tem q abrir o card
+     do lead, a ficha como em todos". O link para o CRM em outra aba era o contrario do
+     que ele precisa E contrariava a regra "nada abre fora do cockpit" desta tela.
+
+     A REGRA QUE VALE AGORA: a linha do lead abre a FICHA, dentro do cockpit, pelo drawer
+     compartilhado — e nao por um segundo drawer desta aba. `hsUrl` continua sendo a
+     funcao unica de URL do HubSpot onde ela ainda e usada (quatro telas), e a guarda de
+     pe4TelaHTML mais abaixo e quem cuida disso. */
+  checar('a linha do lead abre a ficha DENTRO do cockpit, e nao o HubSpot',
+    !/function tm10NomeLead\([^)]*\) \{[\s\S]{0,300}hsUrl/.test(tela)
+      && tela.indexOf('data-tm2-acao="tm10ficha:') > -1);
+
+  /* ══ AS QUATRO LISTAS, E NAO UMA ═══════════════════════════════════════════════════
+     `tm10NomeLead` tem QUATRO chamadores nesta aba (detalhe da etapa, quentes/travados,
+     abandonados e propostas). Na primeira versao eu liguei UM — e como o nome deixou de
+     ser link no mesmo commit, nos outros tres ele virou texto morto. Julyan: "a ficha
+     como em todos". Uma porta, quatro listas. */
+  checar('as quatro listas de lead usam o MESMO abridor de ficha',
+    /function tm10AbreFicha\(/.test(tela)
+      && (tela.match(/tm10AbreFicha\(x\.id, x\.nome\)/g) || []).length === 4);
+
+  /* ══ BOTAO DENTRO DE BOTAO EXPULSA O DE DENTRO — eu fiz isso e medi ════════════════
+     Estas linhas contem `tm10Dono`, que devolve um `<button>`. Quando eu tornei a LINHA
+     um `<button>`, o parser fechou o de fora e jogou o de dentro para FORA, como irmao:
+     o span ficava vazio e o nome do executivo caia solto embaixo da linha. Zero donos
+     dentro das 12 linhas, medido no navegador. A lista desmontava.
+
+     `div role="button"` e o que resolve — e a guarda pina justamente que o abridor NAO
+     emite um `<button>`, porque e para la que a proxima mao vai querer voltar. */
+  checar('o abridor NAO usa <button>, porque a linha contem o botao do dono',
+    /function tm10AbreFicha\([\s\S]{0,400}role="button"/.test(tela)
+      && !/function tm10AbreFicha\([\s\S]{0,400}<button/.test(tela));
+  /* `role="button"` E UMA PROMESSA: ele anuncia um botao ao teclado e ao leitor de tela.
+     `<button>` responde a Enter e Espaco de graca; um `div` nao responde a nenhum dos
+     dois. Sem o ouvinte, quem depende do teclado chega na linha e nao sai de la. */
+  checar('o papel de botao vem com tabindex e com teclado',
+    /function tm10AbreFicha\([\s\S]{0,400}tabindex="0"/.test(tela)
+      && /keydown[\s\S]{0,700}role=\\?"button\\?"\]\[data-tm2-acao\]/.test(tela)
+      && /keydown[\s\S]{0,900}ev\.preventDefault\(\)/.test(tela));
+  checar('e a ficha e a MESMA de todas as outras telas',
+    /if \(verbo === .tm10ficha.\)[\s\S]{0,1200}abrirFichaLeadFunilDrawer\(lead,/
+      .test(tela.replace(/'/g, '.'))
+      && /if \(verbo === .tm10ficha.\)[\s\S]{0,900}buscarLeadFunilPorId\(resto\)/
+        .test(tela.replace(/'/g, '.')));
+  /* `touchpointsDoLead(lead)` DENTRO DE tm10Registro, e nao no arquivo: a ficha tambem a
+     chama, e a guarda larga achava a ocorrencia dela — troquei a fonte do leitor por
+     DATA.agenda.itens e a checagem ficou verde. Mesma cegueira que apareceu tres vezes
+     hoje: medir o arquivo quando a regra vive numa funcao. */
+  checar('o ultimo registro da rua aparece na propria linha',
+    /function tm10Registro\([\s\S]{0,900}touchpointsDoLead\(lead\)/.test(tela)
+      && tela.indexOf('registro: (function () { const r = tm10Registro(l);') > -1);
+  /* A NOTA DO HUBSPOT VEM COM TAG — e ele que formata a observacao. Sem tirar o markup,
+     a linha mostraria "<p>Check-in em..." literal, que e exatamente o defeito dos <b>
+     literais que apareceu na Semana nesta mesma semana. */
+  checar('o registro sai sem markup na linha',
+    /function tm10Registro\([\s\S]{0,2200}replace\(\/<\[\^>\]\*>\/g/.test(tela));
   checar('o nome do vendedor cai no verbo sel, que e o dossie que ja existia',
     /function tm10Dono\([\s\S]{0,300}data-tm2-acao="sel:/.test(tela));
   checar('e a v10 criou UM verbo novo, nao uma fiacao nova',
