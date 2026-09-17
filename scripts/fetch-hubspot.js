@@ -1505,38 +1505,91 @@ async function stageDealsTeamWide(stageId) {
   return todos.filter(d => !isExcludedDeal(d));
 }
 
-// Busca as 2 notas/observações mais recentes de um negócio específico.
-// Requer o escopo crm.objects.notes.read no Private App do HubSpot (além do
-// crm.objects.deals.read que já usávamos) — se não tiver, retorna lista vazia sem quebrar nada.
-async function buscarNotasDoLead(dealId, limite = 2) {
-  try {
-    await sleep(350);
-    const assocRes = await fetch(`https://api.hubapi.com/crm/v3/objects/deals/${dealId}/associations/notes`, {
-      headers: { 'Authorization': `Bearer ${TOKEN}` }
-    });
-    if (!assocRes.ok) return [];
-    const assocData = await assocRes.json();
-    const noteIds = (assocData.results || []).map(r => r.id).slice(0, limite);
-    if (noteIds.length === 0) return [];
+/* ══ TODAS AS NOTAS DO APP DE CAMPO, DE UMA VEZ (17/09/26) ═════════════════════════
+   Substitui o laço de `buscarNotasDoLead`, que custava 3 chamadas e ~1s de espera POR
+   LEAD e por isso só rodava para ~74 negócios de destaque. Aqui são duas buscas
+   paginadas para o funil inteiro:
+     · a Search API de notes filtrando pela assinatura do app (619 notas hoje = 7
+       chamadas de 100);
+     · `hsAssociacoesEmLote`, que já existe e resolve 100 associações por chamada.
 
-    const notas = [];
-    for (const noteId of noteIds) {
-      await sleep(350);
-      const noteRes = await fetch(`https://api.hubapi.com/crm/v3/objects/notes/${noteId}?properties=hs_note_body,hs_timestamp`, {
-        headers: { 'Authorization': `Bearer ${TOKEN}` }
-      });
-      if (!noteRes.ok) continue;
-      const noteData = await noteRes.json();
-      notas.push({
-        texto: (noteData.properties.hs_note_body || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
-        data: noteData.properties.hs_timestamp
-      });
-    }
-    return notas.sort((a, b) => new Date(b.data) - new Date(a.data));
-  } catch (e) {
-    return [];
+   ORDENA POR DATA NA BUSCA e corta DEPOIS de agrupar — o oposto do que
+   `buscarNotasDoLead` fazia, que era cortar a lista de associações antes de ordenar e
+   por isso podia devolver uma nota velha escondendo a mais nova.
+
+   O TETO DE 5 POR NEGÓCIO existe pelo peso do snapshot, não pela API: 619 notas
+   inteiras são ~95 KB no payload de 1 MB, e o teto impede que um negócio muito
+   tocado leve o snapshot sozinho. Cinco é o que a ficha mostra sem rolar.
+
+   A JANELA É A MESMA DA AGENDA (60 dias atrás): observação de campo mais velha que
+   isso não muda decisão de hoje, e o app começou a rodar neste ano — medido, as 619
+   notas da janela são praticamente todas as 618 que existem. */
+const NOTAS_APP_POR_NEGOCIO = 5;
+
+async function buscarNotasDoAppEmLote(iniMs, fimMs) {
+  const achadas = await hsSearchTipoAll('notes', {
+    filterGroups: [{ filters: [
+      { propertyName: 'hs_timestamp', operator: 'BETWEEN', value: String(iniMs), highValue: String(fimMs) },
+      /* A ASSINATURA DO APP, e não "Agendado para". O filtro antigo da agenda pega só
+         o follow-up; a observação livre e o motivo da perda ficavam fora, e são 556
+         das 618 notas que o time escreveu. */
+      { propertyName: 'hs_note_body', operator: 'CONTAINS_TOKEN', value: '"via App Outbound"' }
+    ] }],
+    properties: ['hs_note_body', 'hs_timestamp', 'hubspot_owner_id', 'hs_createdate'],
+    sorts: [{ propertyName: 'hs_timestamp', direction: 'DESCENDING' }]
+  });
+  if (!achadas.length) {
+    console.log('Notas do app: nenhuma na janela.');
+    return {};
   }
+
+  const ids = achadas.map(function (n) { return n.id; });
+  const assoc = {};
+  for (let i = 0; i < ids.length; i += 100) {
+    const m = await hsAssociacoesEmLote('notes', 'deals', ids.slice(i, i + 100));
+    Object.entries(m).forEach(function (par) { assoc[par[0]] = par[1]; });
+  }
+
+  const porDeal = {};
+  let semNegocio = 0;
+  achadas.forEach(function (n) {
+    const dealId = assoc[String(n.id)];
+    /* NOTA SEM NEGÓCIO ASSOCIADO NÃO TEM ONDE APARECER. Conta e segue — inventar um
+       dono por nome aqui poria a observação de um restaurante na ficha de outro. */
+    if (!dealId) { semNegocio++; return; }
+    const texto = String(n.properties.hs_note_body || '')
+      .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!texto) return;
+    (porDeal[dealId] = porDeal[dealId] || []).push({
+      texto: texto, data: n.properties.hs_timestamp || n.properties.hs_createdate || null
+    });
+  });
+
+  /* desempate por data DEPOIS de agrupar, e só então o teto */
+  Object.keys(porDeal).forEach(function (id) {
+    porDeal[id] = porDeal[id]
+      .sort(function (a, b) { return new Date(b.data) - new Date(a.data); })
+      .slice(0, NOTAS_APP_POR_NEGOCIO);
+  });
+  console.log('Notas do app: ' + achadas.length + ' na janela, em '
+    + Object.keys(porDeal).length + ' negócios'
+    + (semNegocio ? ' (' + semNegocio + ' sem negócio associado)' : '') + '.');
+  return porDeal;
 }
+
+/* `buscarNotasDoLead` FOI REMOVIDA EM 17/09/26, e o motivo fica aqui porque a próxima
+   mão vai procurar por ela. Ela buscava as notas de UM negócio: 1 chamada de associação
+   + 1 por nota, cada uma com sleep(350). Por isso o robô só a chamava para ~74 leads de
+   destaque — 222 chamadas e ~78s de espera para cobrir uma fração do funil.
+
+   E ela tinha um defeito próprio: `.slice(0, limite)` cortava a lista de ASSOCIAÇÕES
+   antes de ordenar por data. O comentário prometia "as 2 mais recentes"; o código pegava
+   2 em ordem arbitrária e ordenava só aquelas duas — negócio com 5 notas podia mostrar a
+   velha e esconder a nova.
+
+   Quem faz o trabalho agora é `buscarNotasDoAppEmLote`, duas buscas paginadas para o
+   funil inteiro. Nenhum chamador ficou pendurado: a varredura de `buscarNotasDoLead` em
+   scripts/ e api/ devolveu só as citações em comentário. */
 
 // Dias ÚTEIS entre duas datas (exclui sábado e domingo) — pedido do Julyan (10/08):
 // final de semana não pode contar como "dia parado" pro lead, porque ninguém do time
@@ -2432,20 +2485,42 @@ async function main() {
   // Dedupe por id: um mesmo lead costuma estar em mais de uma lista, e cada busca de nota
   // custa 3 chamadas com pausa de rate limit — buscar 2x o mesmo lead era desperdício.
   // Requer escopo crm.objects.notes.read no Private App do HubSpot.
-  const travadosPorRep = Object.values(repsData).flatMap(r => (r.travados || []).slice(0, 5));
-  /* o orçamento de notas continua nos 12 quentes mais avançados: são os que aparecem no
-     cartão e no roteiro. Sem este corte, tirar o slice de cima triplicaria as chamadas. */
-  const leadsQuePrecisamDeNota = [...leadsQuentes.slice(0, 12), ...leadsFrios, ...travadosPorRep];
-  const idsUnicos = [...new Set(leadsQuePrecisamDeNota.map(l => l.id))];
+  /* ══ AS NOTAS VÊM EM LOTE, E PARA O FUNIL INTEIRO (17/09/26) ═══════════════════
+     Era um laço de `buscarNotasDoLead` sobre ~74 leads de destaque — 3 chamadas e ~1s
+     de espera por lead, e nos outros negócios a ficha abria SEM nada do que o
+     executivo escreveu na rua. O Julyan viu isso: 3 dos 15 negócios da etapa que ele
+     clicou não tinham registro nenhum.
 
-  console.log(`Buscando notas de campo de ${idsUnicos.length} leads em destaque...`);
-  const notasPorId = {};
-  for (const id of idsUnicos) {
-    notasPorId[id] = await buscarNotasDoLead(id);
-  }
-  // Aplica em TODOS os objetos que referenciam aquele lead (o mesmo negócio aparece em
-  // repsData[x].travados e em leadsFrios como objetos separados).
-  leadsQuePrecisamDeNota.forEach(lead => { lead.notas = notasPorId[lead.id] || []; });
+     Agora são ~14 chamadas paginadas para TODOS os negócios, contra 222 para 74.
+     Trinta vezes mais barato e sem corte arbitrário — ver buscarNotasDoAppEmLote. */
+  console.log('Buscando as notas do app de campo em lote...');
+  /* `agoraMs` existe só dentro de fetchAgenda — aqui o relógio é próprio. Eu tinha
+     escrito `agoraMs` e `funilPorEtapa` de cabeça; o segundo não existe em lugar
+     nenhum deste arquivo (o nome real é `funilLeads`). Medir os nomes no escopo antes
+     de escrever é o que separou isto de um ReferenceError em produção. */
+  const agoraParaNotas = Date.now();
+  const notasPorId = await buscarNotasDoAppEmLote(
+    agoraParaNotas - 60 * 86400000, agoraParaNotas + 86400000);
+
+  /* APLICA EM TODO OBJETO QUE REFERENCIA O NEGÓCIO. O mesmo negócio existe como
+     objetos SEPARADOS em repsData[x].travados, em repsData[x].quentes, nas listas do
+     time e no funil por etapa — atribuir num só deixaria a ficha com nota em uma tela
+     e sem nota na outra, para o mesmo lead. */
+  const todosOsLeads = [
+    ...leadsQuentes, ...leadsFrios,
+    ...Object.values(repsData).flatMap(function (r) {
+      return [...(r.travados || []), ...(r.quentes || []), ...(r.criticos || [])];
+    }),
+    ...Object.values(funilLeads || {}).flat()
+  ];
+  let comNota = 0;
+  todosOsLeads.forEach(function (lead) {
+    if (!lead || !lead.id) return;
+    lead.notas = notasPorId[String(lead.id)] || [];
+    if (lead.notas.length) comNota++;
+  });
+  console.log('Notas aplicadas: ' + comNota + ' de ' + todosOsLeads.length
+    + ' objetos de lead ficaram com ao menos uma observação do app.');
 
   const output = {
     updatedAt: new Date().toISOString(),
