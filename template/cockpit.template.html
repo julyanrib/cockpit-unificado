@@ -24744,6 +24744,67 @@ function tm10TqRot(n) { return n === 1 ? '1 toque' : n + ' toques'; }
 /* ≤1 vermelho · 2–3 âmbar · 4+ verde. O vermelho aqui é cobrança: abaixo de 2 toques o
    lead está abandonado, não trabalhado. */
 function tm10TqCor(n) { return n <= 1 ? '#E51A31' : (n <= 3 ? '#B07C1F' : '#1E9E7B'); }
+/* ══ O ÚLTIMO REGISTRO DO NEGÓCIO, EM TEXTO ════════════════════════════════════════
+   Julyan: "ver o q eles colocaram na rua". O que ele quer é o CONTEÚDO do último
+   toque, e a lista só mostrava a contagem e a data.
+
+   A FONTE É `touchpointsDoLead`, a MESMA que a ficha do lead usa — e não uma leitura
+   nova de `DATA.agenda.itens`. Duas leituras do mesmo histórico é como a lista e a
+   ficha passam a discordar sobre o mesmo negócio, e esta base já pagou por isso mais
+   de uma vez. Se a ficha mostra, a linha mostra igual.
+
+   MEDIDO: para os negócios desta etapa o último toque é o check-in do Expogo, com
+   `notes` = "Check-in em 05/08/2026, 17:58 · Visita nº 2 · Vendedor: Amanda Pardim" e
+   `type` = "Rota / PAP". O tipo vem primeiro porque é o que classifica o toque; a
+   nota vem depois porque é o que o executivo escreveu.
+
+   DEVOLVE `null` QUANDO NÃO HÁ, e não uma string vazia: quem chama decide não
+   desenhar, em vez de desenhar um travessão que ocupa linha para dizer que não sabe. */
+/* ══ A LINHA QUE ABRE A FICHA — UMA FORMA, QUATRO LISTAS (17/09/26) ════════════════
+   `div role="button"` e NÃO `<button>`: estas linhas contêm o botão do dono
+   (`tm10Dono`), e botão dentro de botão faz o parser expulsar o de dentro. Medido: o
+   `sel:` do dono saiu da linha e virou irmão dela, com o span de dentro vazio — a
+   lista desmontava com o nome do executivo solto embaixo de cada linha.
+
+   A DELEGAÇÃO RESOLVE SOZINHA a competição entre os dois cliques: o ouvinte usa
+   `closest('[data-tm2-acao]')`, que sobe do alvo — clique no nome do dono acha o
+   `sel:` dele primeiro, clique no resto da linha acha a linha. Sem stopPropagation.
+
+   O TECLADO É PARTE DO CONTRATO de `role="button"`: sem Enter e Espaço, o papel
+   promete um botão que o teclado não consegue apertar. */
+function tm10AbreFicha(id, nome) {
+  return ' role="button" tabindex="0" data-tm2-acao="tm10ficha:' + esc(id) + '"'
+    + ' data-tm2-hv="0" title="Abrir a ficha de ' + esc(nome) + '"';
+}
+
+function tm10Registro(lead) {
+  if (!lead || typeof touchpointsDoLead !== 'function') return null;
+  let tp = [];
+  try { tp = touchpointsDoLead(lead) || []; } catch (e) { return null; }
+  if (!tp.length) return null;
+  /* o mais recente: `occurred_at` é quando aconteceu, `completed_at` quando foi
+     fechado. Ordena pelo que existir, e não confia na ordem de chegada. */
+  const quando = function (x) {
+    return Date.parse(x && (x.occurred_at || x.completed_at || x.created_at) || 0) || 0;
+  };
+  const u = tp.slice().sort(function (a, b) { return quando(b) - quando(a); })[0];
+  if (!u) return null;
+  /* SEM TAG HTML NO TEXTO: a nota do HubSpot vem com markup (é ele que formata a
+     observação), e `esc` mostraria as tags na tela — foi exatamente o defeito dos
+     `<b>` literais que apareceu na Semana esta semana. Aqui a tag SAI. */
+  const limpo = function (v) {
+    return String(v == null ? '' : v).replace(/<[^>]*>/g, ' ')
+      .replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+  };
+  const tipo = limpo(u.type || u._rotulo || u.channel);
+  const nota = limpo(u.notes || u.outcome);
+  const cheio = [tipo, nota].filter(Boolean).join(' · ');
+  if (!cheio) return null;
+  /* 78 caracteres é o que cabe na linha sem empurrar as colunas de dinheiro e dono;
+     o resto vai no `title`, que é onde o texto inteiro fica sem custar largura. */
+  return { curto: cheio.length > 78 ? cheio.slice(0, 77) + '…' : cheio, cheio: cheio };
+}
+
 function tm10Ultimo(ms) {
   if (ms == null) return 'sem toque';
   const hoje = (typeof isoDate === 'function') ? isoDate(new Date()) : new Date().toISOString().slice(0, 10);
@@ -25253,6 +25314,9 @@ function tm10Dados() {
       estourou: !!l.slaBreach, dono: tm10NomeCurto(l.vendedor), ownerId: String(l.ownerId || ''),
       tqRot: tm10TqRot(tq.n), tqCor: tm10TqCor(tq.n), ultimo: tm10Ultimo(tq.ultimo),
       mrr: tm10MrrDo(l),
+      /* o texto do último toque, da mesma fonte que a ficha usa */
+      registro: (function () { const r = tm10Registro(l); return r ? r.curto : null; }()),
+      registroCheio: (function () { const r = tm10Registro(l); return r ? r.cheio : ''; }()),
       porque: l.slaBreach
         ? ('passou da régua de ' + (escolhida.regua || '—') + 'd — cobre o dono')
         : (tq.n <= 1 ? 'pouco toque para a etapa' : 'dentro da régua ✓') };
@@ -25330,11 +25394,17 @@ function tm10Pill(rot, cor) {
 }
 /* O NOME DO LEAD ABRE O NEGOCIO NO HUBSPOT (item 53 do mapa de interacoes). hsUrl e a
    funcao unica que monta essa URL neste arquivo — o portal nao se repete aqui. */
+/* O NOME NÃO SAI MAIS DO COCKPIT (17/09/26). Era `<a href>` para o HubSpot, em outra
+   aba — contra a regra "nada abre fora do cockpit" desta tela, e entregando o CRM
+   quando o que o Julyan quer é a FICHA, onde o registro da rua está legível.
+
+   Continua sendo só texto: quem abre a ficha é a LINHA inteira (ver o `data-tm2-acao`
+   no detalhe), e um botão dentro de um botão é markup inválido e clique que compete
+   com o clique de fora. */
 function tm10NomeLead(id, nome) {
-  return '<a href="' + hsUrl(id) + '" target="_blank" rel="noopener"'
-    + ' title="Abrir ' + esc(nome) + ' no HubSpot"'
-    + ' style="font:800 12px \'Manrope\',sans-serif;color:#2B3440;text-decoration:none;'
-    + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">' + esc(nome) + '</a>';
+  return '<span style="font:800 12px \'Manrope\',sans-serif;color:#2B3440;'
+    + 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">'
+    + esc(nome) + '</span>';
 }
 /* O DONO ABRE O DOSSIE DELE — e o verbo `sel` que esta aba ja tinha. A prancha chama
    isso de "abrir a Pessoas com ?exec="; neste produto o dossie da pessoa vive DENTRO
@@ -25439,7 +25509,10 @@ function tm10TelaHTML(d, cauda) {
      funcao, dois blocos — duas anatomias para a mesma linha e o que faz o mesmo lead
      parecer dois leads diferentes em dois lugares da tela. */
   const linhaLead = function (x, corSub, numRot, numCor, hoverBorda) {
-    return '<div data-tm2-hv="0" style="display:flex;align-items:center;gap:10px;min-width:0;'
+    /* A MESMA porta das outras três listas desta aba. O nome do lead deixou de ser
+       link para o HubSpot em 17/09, e sem isto ele ficaria texto morto aqui. */
+    return '<div' + tm10AbreFicha(x.id, x.nome)
+      + ' style="display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer;'
       + 'background:#FDFEFF;border:1px solid ' + hoverBorda + ';border-radius:10px;padding:8px 11px;">'
       + '<b style="flex:none;width:12px;font:900 12px \'Archivo\',sans-serif;color:#E51A31;">' + x.rank + '</b>'
       + '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
@@ -25535,7 +25608,10 @@ function tm10TelaHTML(d, cauda) {
   }).join('');
   const detalheHTML = d.detalhe.length
     ? d.detalhe.map(function (x) {
-      return '<div data-tm2-hv="0" style="display:flex;align-items:center;gap:10px;min-width:0;'
+      /* A LINHA INTEIRA É A PORTA, por `tm10AbreFicha` — ver lá por que é `div
+         role=button` e não `<button>` (ela contém o botão do dono). */
+      return '<div' + tm10AbreFicha(x.id, x.nome)
+        + ' style="display:flex;align-items:center;gap:10px;min-width:0;cursor:pointer;'
         + 'background:#FDFEFF;border:1px solid ' + (x.estourou ? '#F0A9B2' : '#E7E3DA')
         + ';border-radius:9px;padding:7px 11px;">'
         + '<b style="flex:none;width:34px;font:900 12px \'Archivo\',sans-serif;'
@@ -25543,8 +25619,18 @@ function tm10TelaHTML(d, cauda) {
         +   (x.dias == null ? '—' : x.dias + 'd') + '</b>'
         + '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
         +   '<span style="display:flex;min-width:0;">' + tm10NomeLead(x.id, x.nome) + '</span>'
-        +   '<span style="font:700 9px \'Manrope\',sans-serif;color:#7A8494;">'
-        +     esc((x.bairro ? x.bairro + ' · ' : '') + x.porque) + '</span></span>'
+        +   '<span style="font:700 9px \'Manrope\',sans-serif;color:#7A8494;'
+        +     'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+        +     esc((x.bairro ? x.bairro + ' · ' : '') + x.porque) + '</span>'
+        /* O QUE FOI REGISTRADO NA RUA, na própria linha. A linha já dizia QUANTOS
+           toques e QUANDO; o que faltava era O QUÊ — e é isso que o Julyan pediu.
+           Com 12 linhas, ler aqui evita 12 aberturas de ficha. Quando não há
+           registro, a linha NÃO desenha nada: "—" ocuparia altura para informar que
+           não há informação. */
+        +   (x.registro ? '<span style="font:600 9px \'Manrope\',sans-serif;'
+          + 'color:#5B667A;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"'
+          + ' title="' + esc(x.registroCheio) + '">' + esc(x.registro) + '</span>' : '')
+        +   '</span>'
         + '<span style="flex:none;width:76px;text-align:right;">'
         +   '<b style="display:block;font:900 11px \'Archivo\',sans-serif;color:' + x.tqCor + ';">'
         +     esc(x.tqRot) + '</b>'
@@ -25623,7 +25709,8 @@ function tm10CaudaHTML(d) {
   const cob = d.cobertura;
   const abandHTML = cob.abandonados.length
     ? cob.abandonados.map(function (x) {
-      return '<div data-tm2-hv="0" style="display:flex;align-items:center;gap:9px;min-width:0;'
+      return '<div' + tm10AbreFicha(x.id, x.nome)
+        + ' style="display:flex;align-items:center;gap:9px;min-width:0;cursor:pointer;'
         + 'background:#FDF9F9;border:1px solid #F0DADA;border-radius:9px;padding:7px 10px;">'
         + '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
         +   '<span style="display:flex;min-width:0;">' + tm10NomeLead(x.id, x.nome) + '</span>'
@@ -25680,7 +25767,8 @@ function tm10CaudaHTML(d) {
       + ' na próxima carga. Preferi dizer isso a imprimir uma porcentagem inventada.</span>';
   const propHTML = d.propostas.length
     ? d.propostas.map(function (x) {
-      return '<div style="display:flex;align-items:center;gap:8px;min-width:0;">'
+      return '<div' + tm10AbreFicha(x.id, x.nome)
+        + ' style="display:flex;align-items:center;gap:8px;min-width:0;cursor:pointer;">'
         + '<b style="flex:none;width:46px;font:900 9.5px \'Archivo\',sans-serif;'
         +   'color:' + (x.temReuniao ? '#1E9E7B' : '#E51A31') + ';">' + esc(x.quando) + '</b>'
         + '<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">'
@@ -27586,6 +27674,31 @@ async function tm2Executar(acao) {
     TM10_ETAPA = resto || null;
     return renderTimeLider();
   }
+  /* ══ A FICHA DO NEGÓCIO, A MESMA DE TODAS AS OUTRAS TELAS (17/09/26) ═════════════
+     Julyan: "tem q abrir o card do lead, a ficha como em todos". `a ficha como em
+     todos` é literal: é `abrirFichaLeadFunilDrawer`, o mesmo drawer que o kanban, os
+     quentes e a Semana abrem — e ele já mostra o histórico de toques com o registro
+     da rua dentro, o que é a outra metade do pedido.
+
+     `buscarLeadFunilPorId` acha para o gestor porque cai no `DATA.funilLeads`, que é
+     o funil do time inteiro — e os negócios desta lista SAEM de lá, então não existe
+     aqui o caso "clicou e não achou" que a lista de quentes da Semana tem. O toast
+     de consolo fica assim mesmo: `funilLeads` pode não ter tudo, e o dia em que não
+     tiver, a tela diz em vez de não fazer nada. */
+  if (verbo === 'tm10ficha') {
+    TL5_ESTADO.toast = null;
+    const lead = (typeof buscarLeadFunilPorId === 'function') ? buscarLeadFunilPorId(resto) : null;
+    if (lead && typeof abrirFichaLeadFunilDrawer === 'function') {
+      /* `voltarPara` devolve o gestor para a MESMA etapa aberta. Sem isso, fechar a
+         ficha o deixaria na aba Time com a etapa que era o default, e ele perderia o
+         lugar da lista em que estava. */
+      return abrirFichaLeadFunilDrawer(lead, function () { renderTimeLider(); });
+    }
+    if (typeof mostrarToast === 'function') {
+      mostrarToast('Este negócio não veio na carga desta sessão — recarregue para abrir a ficha.', 'atencao');
+    }
+    return;
+  }
   if (verbo === 'etapa') {
     TL5_ESTADO.toast = null;
     TM2_ESTADO.etapa = TM2_ESTADO.etapa === resto ? null : resto;
@@ -27658,6 +27771,29 @@ function tm2Ligar() {
     if (!alvo.closest('[data-tm2-raiz]')) return;
     const acao = alvo.getAttribute('data-tm2-acao');
     if (!acao) return;   /* estado desenhado como botão não existe nesta tela — ver dg2Gesto */
+    tm2Executar(acao);
+  });
+
+  /* ══ O TECLADO, QUE O `role="button"` PROMETE (17/09/26) ═══════════════════════════
+     As linhas de lead das quatro listas desta aba são `div role="button"` — têm de ser,
+     porque contêm o botão do dono e botão dentro de botão faz o parser expulsar o de
+     dentro (medido: o `sel:` saía da linha e virava irmão dela).
+
+     Só que `role="button"` é uma PROMESSA: ele diz ao leitor de tela e ao teclado que
+     ali existe um botão. `<button>` de verdade responde a Enter e Espaço de graça; um
+     `div` não responde a nenhum dos dois. Sem este ouvinte, o papel anuncia um botão
+     que o teclado não consegue apertar — pior que não ter papel nenhum, porque a pessoa
+     que depende do teclado chega até ele e não sai de lá.
+
+     `preventDefault` no Espaço porque, sem ele, a página rola sob o dedo. */
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    const alvo = ev.target.closest && ev.target.closest('[role="button"][data-tm2-acao]');
+    if (!alvo) return;
+    if (!alvo.closest('[data-tm2-raiz]')) return;
+    const acao = alvo.getAttribute('data-tm2-acao');
+    if (!acao) return;
+    ev.preventDefault();
     tm2Executar(acao);
   });
 }
