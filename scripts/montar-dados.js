@@ -393,6 +393,14 @@ function montarDadosCompletos() {
       geradoEmFmt: resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null,
       numerosAtualizadosEmFmt: weeklyRaw ? fmtDate(weeklyRaw.geradoEm) : (resumoSemanal ? fmtDate(resumoSemanal.geradoEm) : null),
       janela: (weeklyRaw && weeklyRaw.janela) || (resumoSemanal && resumoSemanal.janela),
+      /* A JANELA QUE O TEXTO DA IA DESCREVE (19/09/26), que NÃO é a de cima.
+         `janela` acima vem do weekly-raw, regravado a cada daily-refresh; `porRep` e
+         `comoAgir` logo abaixo vêm do resumo-semanal, escrito só no cron de domingo
+         22h. A janela do weekly-raw vira na sexta 23:59 e a do resumo só no domingo:
+         nesse fim de semana o placar é de uma semana e o board é da anterior. Sem
+         este campo a tela não tem como saber disso, e foi assim que "2 ganhos" e
+         "R$ 857 de MRR" de semanas diferentes ficaram lado a lado em 16/09. */
+      janelaDaLeitura: (resumoSemanal && resumoSemanal.janela && resumoSemanal.janela.atual) || null,
       kpisComparativo: (weeklyRaw && weeklyRaw.kpisComparativo) || (resumoSemanal && resumoSemanal.kpisComparativo),
       resumoGeral: resumoSemanal ? resumoSemanal.resumoGeral : null,
       comoAgir: resumoSemanal ? resumoSemanal.comoAgir : [],

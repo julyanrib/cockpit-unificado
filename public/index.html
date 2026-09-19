@@ -6774,6 +6774,14 @@ function cadenciaConfig() {
   return (c && c.cadencias && Object.keys(c.cadencias).length > 0) ? c : null;
 }
 
+function cadenciaMinimoToques() {
+  const c = DATA && DATA.cadencias;
+  const v = c ? c.minimoToques : null;
+  if (v == null || v === '') return 0;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
 function cadenciaDoLead(lead, ultimoDesfecho) {
   const cfg = cadenciaConfig();
   if (!cfg) return null;
@@ -7187,7 +7195,11 @@ function estadoDoNegocioSemCache(lead) {
 
   const followUpDescoberto = !!ultimaVisita && !passo;
 
-  const abandonadoNoPrimeiroToque = toques.total <= 1 && !passo &&
+  const minimoToques = (typeof cadenciaMinimoToques === 'function') ? cadenciaMinimoToques() : 0;
+  const abaixoDoMinimo = minimoToques > 0 && toques.total < minimoToques;
+  const toquesFaltando = abaixoDoMinimo ? minimoToques - toques.total : 0;
+
+  const abandonadoNoPrimeiroToque = abaixoDoMinimo && !passo &&
     (toques.ultimo ? Math.floor((Date.now() - new Date(toques.ultimo).getTime()) / 86400000) >= 3 : false);
 
   return {
@@ -7203,6 +7215,9 @@ function estadoDoNegocioSemCache(lead) {
     visitaSemDesfecho,
     visitasNaoConfirmadas: naoConfirmada,
     followUpDescoberto,
+    abaixoDoMinimo,
+    toquesFaltando,
+    minimoToques,
     abandonadoNoPrimeiroToque,
     aguardandoSincronizacao: aguardandoSync,
     decisorAlcancado: toques.decisorAlcancado,
@@ -7493,7 +7508,13 @@ function h8Insight(item) {
     oQue = 'você esteve lá e não ficou data — ligar e cravar dia e hora';
     melhor = 'ligar';
   } else if (est.abandonadoNoPrimeiroToque) {
-    oQue = 'um toque só e nada marcado — segunda tentativa antes de esfriar';
+
+    const faltam = est.toquesFaltando || 0;
+    oQue = faltam > 0
+      ? (est.toques.total === 0 ? 'nenhum toque registrado' : est.toques.total + ' de '
+          + est.minimoToques + ' toques') + ' e nada marcado — faltam ' + faltam
+          + (faltam === 1 ? ' contato' : ' contatos') + ' antes de poder desistir dele'
+      : 'pouco toque e nada marcado — segunda tentativa antes de esfriar';
     melhor = 'whats';
   } else if (est.cadencia && (est.cadencia.status === 'atrasada' || est.cadencia.status === 'quebrada')) {
     oQue = 'cadência ' + (est.cadencia.rotulo || '') + ' atrasada '
@@ -7536,7 +7557,7 @@ const FILA_BALDES = [
   { id: 'quente_sem_tarefa', rotulo: 'Quentes sem tarefa',              prio: 4 },
   { id: 'proposta',        rotulo: 'Propostas aguardando retorno',      prio: 5 },
   { id: 'decisor',         rotulo: 'Decisores ainda não alcançados',    prio: 6 },
-  { id: 'segunda_tentativa', rotulo: 'Clientes para segunda tentativa', prio: 7 },
+  { id: 'segunda_tentativa', rotulo: 'Clientes abaixo do mínimo de contatos', prio: 7 },
   { id: 'reativacao',      rotulo: 'Contatos que precisam de reativação', prio: 8 }
 ];
 
@@ -7593,7 +7614,12 @@ function filaDeFollowUp(ownerId) {
     }
 
     if (st.abandonadoNoPrimeiroToque) {
-      baldes.segunda_tentativa.push({ ...item, motivo: 'só 1 toque conhecido, nada marcado', prazo: hojeK });
+      const faltam = st.toquesFaltando || 0;
+      baldes.segunda_tentativa.push({ ...item, prazo: hojeK,
+        motivo: faltam > 0
+          ? st.toques.total + ' de ' + st.minimoToques + ' toques — faltam ' + faltam
+              + ', e nada marcado'
+          : 'pouco toque conhecido, nada marcado' });
     }
 
     const diasSemToque = st.toques.ultimo ? Math.floor((Date.now() - new Date(st.toques.ultimo).getTime()) / 86400000) : null;
@@ -16188,19 +16214,38 @@ function metaClientesDoRep(r) {
   return v != null && v !== '' ? Number(v) : 10;
 }
 
+function tm10QuandoDoItem(it) {
+  const quando = (it && (it.hs_meeting_start_time || it.hs_timestamp)) || null;
+  const ms = quando ? Date.parse(quando) : NaN;
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function tm10ToqueRealizado(it, agoraMs) {
+  const ms = tm10QuandoDoItem(it);
+  if (ms == null || ms > agoraMs) return false;
+
+  const ehTarefa = it.hs_task_status !== undefined || it.hs_task_subject !== undefined;
+  if (ehTarefa) return String(it.hs_task_status || '') === 'COMPLETED';
+  return true;
+}
+
 function tm10ToquesPorNegocio() {
   if (TM10_TQ) return TM10_TQ;
   const m = new Map();
   const itens = (DATA.agenda && Array.isArray(DATA.agenda.itens)) ? DATA.agenda.itens : [];
+  const agoraMs = Date.now();
   itens.forEach(function (it) {
     const id = it && it.lead_deal_id ? String(it.lead_deal_id) : null;
     if (!id) return;
 
-    const quando = it.hs_meeting_start_time || it.hs_timestamp || null;
-    const ms = quando ? Date.parse(quando) : NaN;
-    const at = m.get(id) || { n: 0, ultimo: null };
-    at.n += 1;
-    if (Number.isFinite(ms) && (at.ultimo == null || ms > at.ultimo)) at.ultimo = ms;
+    const at = m.get(id) || { n: 0, ultimo: null, abertos: 0 };
+    if (tm10ToqueRealizado(it, agoraMs)) {
+      const ms = tm10QuandoDoItem(it);
+      at.n += 1;
+      if (ms != null && (at.ultimo == null || ms > at.ultimo)) at.ultimo = ms;
+    } else {
+      at.abertos += 1;
+    }
     m.set(id, at);
   });
   TM10_TQ = m;
@@ -16208,7 +16253,7 @@ function tm10ToquesPorNegocio() {
 }
 function tm10Tq(id) {
   const at = tm10ToquesPorNegocio().get(String(id));
-  return at || { n: 0, ultimo: null };
+  return at || { n: 0, ultimo: null, abertos: 0 };
 }
 
 function tm10TqRot(n) { return n === 1 ? '1 toque' : n + ' toques'; }
@@ -16251,6 +16296,8 @@ function tm10Ultimo(ms) {
   if (dia === hoje) return 'hoje';
   const dif = Math.round((Date.parse(hoje) - Date.parse(dia)) / 86400000);
   if (dif === 1) return 'ontem';
+
+  if (dif < 0) return 'agendado';
   return 'há ' + dif + 'd';
 }
 
@@ -16372,8 +16419,10 @@ function tm10Travados(etapas) {
   }).slice(0, 5).map(function (x, i) {
     const tq = tm10Tq(x.l.id);
 
+    const minTq = (typeof cadenciaMinimoToques === 'function') ? cadenciaMinimoToques() : 0;
     const porque = tq.n === 0 ? 'nenhum toque na janela — ninguém voltou nesse'
-      : (tq.n <= 1 ? 'um toque só desde que entrou — cadência abaixo da régua'
+      : ((minTq > 0 && tq.n < minTq)
+        ? tm10TqRot(tq.n) + ' de ' + minTq + ' — abaixo do mínimo da política'
         : 'régua de ' + (x.e.regua || '—') + 'd estourada com ' + tm10TqRot(tq.n));
     return {
       rank: i + 1, id: String(x.l.id), nome: x.l.name || x.l.dealname || 'sem nome',
@@ -16403,18 +16452,26 @@ function tm10Cobertura(etapas) {
     const tq = tm10Tq(x.l.id); somaTq += tq.n;
     const c = caixas[faixa(tq.n)]; c.n += 1; c.mrr += tm10MrrDo(x.l);
   });
-  const abandonados = ativos.filter(function (x) { return tm10Tq(x.l.id).n <= 1; })
+
+  const minimoTq = (typeof cadenciaMinimoToques === 'function') ? cadenciaMinimoToques() : 0;
+  const fora = minimoTq > 0
+    ? ativos.filter(function (x) { return tm10Tq(x.l.id).n < minimoTq; })
+    : [];
+  const abandonados = fora.slice()
     .sort(function (a, b) { return tm10MrrDo(b.l) - tm10MrrDo(a.l); })
     .slice(0, 5).map(function (x) {
       const tq = tm10Tq(x.l.id);
       return { id: String(x.l.id), nome: x.l.name || x.l.dealname || 'sem nome',
         dono: tm10NomeCurto(x.l.vendedor), ownerId: String(x.l.ownerId || ''),
         etapa: x.e.rot, dias: x.l.dias != null ? x.l.dias : null,
-        tqRot: tm10TqRot(tq.n), mrr: tm10MrrDo(x.l) };
+        tqRot: tm10TqRot(tq.n), mrr: tm10MrrDo(x.l),
+
+        prometeu: tq.abertos > 0 };
     });
   const maxN = Math.max(1, caixas[0].n, caixas[1].n, caixas[2].n);
   caixas.forEach(function (c) { c.pct = Math.round(c.n / maxN * 100); });
-  return { caixas: caixas, ativos: ativos.length,
+  return { caixas: caixas, ativos: ativos.length, minimo: minimoTq,
+    fora: fora.length, foraMrr: fora.reduce(function (s, x) { return s + tm10MrrDo(x.l); }, 0),
     media: ativos.length ? somaTq / ativos.length : 0, abandonados: abandonados };
 }
 
@@ -16986,19 +17043,28 @@ function tm10CaudaHTML(d) {
         +   'color:#2B3440;">' + esc(tm10Rs(x.mrr)) + '</b></div>';
     }).join('')
     : '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#1E9E7B;">'
-      + 'nenhum lead ativo com 1 toque ou menos — o time está tocando a carteira ✓</span>';
+      + (cob.minimo > 0
+        ? 'nenhum lead ativo abaixo de ' + cob.minimo + ' toques — a carteira está dentro da política ✓'
+        : 'piso de pontos de contato desligado em data/cadencias.json — nada a cobrar aqui')
+      + '</span>';
   const bloco4 = '<div style="background:#FDFEFF;border:1px solid #E9D9E1;border-radius:12px;padding:14px 18px;">'
     + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
     +   'color:#8E3B5C;">4 · Cobertura de toques</span>'
     + '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;margin:3px 0 9px;">'
+
     +   esc(cob.ativos + ' leads ativos · ' + cob.media.toFixed(1).replace('.', ',')
-        + ' toques por lead nos últimos ' + d.janelaToques + ' dias — abaixo de 2 toques o lead'
-        + ' está abandonado, não trabalhado') + '</span>'
+        + ' toques por lead nos últimos ' + d.janelaToques + ' dias'
+        + (cob.minimo > 0 ? ' — a política pede ' + cob.minimo
+            + ' pontos de contato antes de desistir de um lead' : '')) + '</span>'
     + '<div style="display:flex;flex-direction:column;gap:5px;">'
     +   cob.caixas.map(function (c) { return barra(c.rot, c.n, c.pct, c.cor, tm10Rs(c.mrr)); }).join('')
     + '</div>'
     + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
-    +   'text-transform:uppercase;color:#E51A31;margin:12px 0 6px;">abandonados — ≤1 toque · cobre o dono</span>'
+    +   'text-transform:uppercase;color:#E51A31;margin:12px 0 6px;">'
+    +   esc(cob.minimo > 0
+      ? 'abaixo do mínimo de ' + cob.minimo + ' toques — ' + cob.fora + ' de ' + cob.ativos
+          + ' · ' + tm10Rs(cob.foraMrr) + ' parados · os 5 maiores, cobre o dono'
+      : 'piso de pontos de contato desligado na régua') + '</span>'
     + '<div style="display:flex;flex-direction:column;gap:5px;">' + abandHTML + '</div></div>';
 
   const sla = d.sla;
@@ -25327,6 +25393,28 @@ function abrirEscolhaDeEtapa(lead, aoConcluir) {
   });
 }
 
+function avisoDoMinimoHTML(lead) {
+  if (typeof estadoDoNegocio !== 'function') return '';
+  let est = null;
+
+  try { est = estadoDoNegocio(lead); } catch (e) { return ''; }
+  if (!est || !est.abaixoDoMinimo) return '';
+  const feitos = (est.toques && est.toques.total) || 0;
+  const faltam = est.toquesFaltando || 0;
+
+  const parcial = !!(est.toques && est.toques.parcial);
+  return '<div style="background:var(--amber-soft);color:var(--amber-ink);'
+    + 'border-radius:var(--r-md);padding:11px 13px;font-size:12px;line-height:1.5;'
+    + 'margin-bottom:14px;">'
+    + '<b>' + (parcial ? 'Pelo menos ' : '') + feitos + ' de ' + est.minimoToques
+    + ' pontos de contato registrados neste lead'
+    + (faltam > 0 ? ' — faltam ' + faltam : '') + '.</b> '
+    + 'A regra do time é no mínimo ' + est.minimoToques + ' antes de tirar um lead da mesa. '
+    + '<span style="font-weight:400;">Você pode seguir mesmo assim — mas se você foi lá e '
+    + 'não registrou, registrar agora é o que tira este lead da cobrança do 1:1.</span>'
+    + '</div>';
+}
+
 function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   const de = lead.stageId || null;
   const para = String(novaEtapaId);
@@ -25370,6 +25458,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       <div class="pe-etapa"><span>para</span><b style="color:${corPara};">${esc(STAGE_LABELS[para])}</b></div>
       <span class="pe-pulso" style="background:${corPara};color:${corPara};"></span>
     </div>
+    ${(para === ETAPA_PERDIDO_ID || para === '1398311191') ? avisoDoMinimoHTML(lead) : ''}
     ${para === ETAPA_PERDIDO_ID ? `<div style="background:var(--red-soft);color:var(--red);border-radius:var(--r-md);padding:11px 13px;font-size:12px;font-weight:700;line-height:1.5;margin-bottom:14px;">Sai do funil e entra na sua assinatura de perda — é assim que "Preço" e "Sem retorno" deixam de ser palpite na Daily. Perda por engano se desfaz: o negócio volta para qualquer etapa por aqui mesmo.</div>`
       : voltando ? `<div style="background:var(--amber-soft);color:var(--amber-ink);border-radius:var(--r-md);padding:11px 13px;font-size:12px;font-weight:700;line-height:1.5;margin-bottom:14px;">Voltar etapa é registro de realidade, não erro — mas o gestor vê o movimento na Semana. Se foi engano, feche aqui mesmo.</div>` : ''}
     ${campos.length ? `
@@ -43021,13 +43110,24 @@ function sm5Janela() {
   const diasAtual = sm5DiasDaJanela(j.atual);
 
   const atualFechou = diasAtual != null && diasAtual >= 5;
-  return atualFechou
-    ? { rotulo: j.atual || '—', comparacao: j.anterior || null, usouAnterior: false,
-        kpis: (rs.kpisComparativo || {}).atual || {}, kpisComp: (rs.kpisComparativo || {}).anterior || null }
-    : { rotulo: j.anterior || '—', comparacao: null, usouAnterior: true,
-        kpis: (rs.kpisComparativo || {}).anterior || {}, kpisComp: null,
+  const mostrada = atualFechou ? (j.atual || '—') : (j.anterior || '—');
 
-        aviso: j.atual ? 'a semana ' + j.atual + ' ainda não fechou' : null };
+  const avisos = [];
+  if (!atualFechou && j.atual) avisos.push('a semana ' + j.atual + ' ainda não fechou');
+
+  const leitura = rs.janelaDaLeitura || null;
+  if (leitura && mostrada !== '—' && leitura !== mostrada) {
+    avisos.push('os números acima são de ' + mostrada + ' · a leitura por pessoa e o '
+      + 'roteiro abaixo ainda são de ' + leitura);
+  }
+  const aviso = avisos.length ? avisos.join(' · ') : null;
+
+  return atualFechou
+    ? { rotulo: mostrada, comparacao: j.anterior || null, usouAnterior: false,
+        kpis: (rs.kpisComparativo || {}).atual || {},
+        kpisComp: (rs.kpisComparativo || {}).anterior || null, aviso: aviso }
+    : { rotulo: mostrada, comparacao: null, usouAnterior: true,
+        kpis: (rs.kpisComparativo || {}).anterior || {}, kpisComp: null, aviso: aviso };
 }
 
 function sm5Serie(chave) {
