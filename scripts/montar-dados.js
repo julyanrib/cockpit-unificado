@@ -354,7 +354,11 @@ function montarDadosCompletos() {
     },
     kpiDeltas,
     /* POR QUE PERDEMOS (30/08/26): motivo de perda dos ultimos 90 dias, por motivo e por
-       executivo. Vem do HubSpot em motivo_do_perdido, que o time preenche. */
+       executivo. Vem do HubSpot em motivo_do_perdido, que o time preenche.
+
+       DESDE 19/09 ELE CARREGA emLotePorMotivo: quanto de cada motivo foi marcado numa
+       sentada. O objeto vai INTEIRO para o gestor, então os campos novos viajam
+       sozinhos — não há lista de campos aqui que precise ser atualizada. */
     motivosPerda: hubspot.motivosPerda || null,
     /* Conversão por turma, velocidade de etapa e ciclo — o gestor recebe inteiro. */
     historicoEtapas: hubspot.historicoEtapas || null,

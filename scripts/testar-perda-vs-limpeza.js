@@ -65,13 +65,13 @@ function constante(fonte, nome) {
   return fonte.slice(i, fonte.indexOf('\n', i));
 }
 
-const NL = String.fromCharCode(10);
-const ctx = { Date: Date, Number: Number, Object: Object, String: String, console: console };
-vm.createContext(ctx);
-vm.runInContext(
-  constante(robo, 'LOTE_GAP_MIN') + NL + constante(robo, 'LOTE_MINIMO') + NL
-  + recortar(robo, 'lotesDePerda') + NL
-  + 'var __r = { gap: LOTE_GAP_MIN, min: LOTE_MINIMO };', ctx);
+/* A RÉGUA VIROU MÓDULO em 19/09, quando o gráfico de motivos (robô DIÁRIO) passou a
+   precisar dela — antes vivia dentro do robô semanal e esta suíte a recortava com vm.
+   Importar é mais forte que recortar: mede o que os dois robôs realmente carregam, e
+   não uma cópia do texto. O `vm` continua aqui só para a função de tela. */
+const LOTES = require(path.join(raiz, 'lib', 'lotes-de-perda.js'));
+const ctx = { lotesDePerda: LOTES.lotesDePerda,
+  __r: { gap: LOTES.LOTE_GAP_MIN, min: LOTES.LOTE_MINIMO } };
 
 const T0 = Date.parse('2026-09-18T13:00:00.000Z');
 const neg = (owner, minutos, nome) => ({ properties: {
@@ -82,6 +82,19 @@ const neg = (owner, minutos, nome) => ({ properties: {
 igual('a régua é 5 marcações em até 15 minutos', [ctx.__r.min, ctx.__r.gap], [5, 15],
   'calibrado nos 65 perdidos reais de 14–18/09; mudar aqui muda o número da tela, e a '
     + 'tela escreve a régua junto justamente por isso');
+
+/* FONTE ÚNICA. A régua serve ao KPI da Semana (robô semanal) e ao gráfico de motivos
+   (robô diário). Duas cópias seriam duas respostas para a mesma pergunta em duas
+   telas — este projeto já tem histórico disso com os ids de etapa e com o || 10 da
+   meta. Os dois robôs têm de IMPORTAR, nunca redefinir. */
+const diario = fs.readFileSync(path.join(raiz, 'scripts', 'fetch-hubspot.js'), 'utf8');
+checar('a régua existe uma vez só, na lib',
+  robo.indexOf('function lotesDePerda(') < 0 && diario.indexOf('function lotesDePerda(') < 0,
+  'redefinir num dos robôs faz a Semana e o gráfico de motivos discordarem sobre o que '
+    + 'é um lote, e ninguém percebe porque as duas telas parecem certas');
+checar('e os dois robôs a importam',
+  /require\(['"]\.\.\/lib\/lotes-de-perda\.js['"]\)/.test(robo)
+    && /require\(['"]\.\.\/lib\/lotes-de-perda\.js['"]\)/.test(diario));
 
 /* ══ 2. O AGRUPAMENTO ══════════════════════════════════════════════════════════════ */
 (function () {
@@ -187,6 +200,40 @@ const REAIS = [
       + 'a tela escreve a régra e diz "provável" em vez de afirmar');
 }());
 
+/* ══ 4b. OS DOIS FORMATOS QUE OS CHAMADORES TÊM EM MÃOS ════════════════════════════
+   O robô semanal passa o objeto CRU do HubSpot (com `properties`); quem tiver o
+   objeto já achatado não deve precisar remontá-lo só para chamar a régua — remontar é
+   onde o campo errado entra. */
+(function () {
+  const cru = [0, 1, 2, 3, 4].map(function (m) {
+    return { id: 'c' + m, properties: { hubspot_owner_id: 'A',
+      closedate: new Date(T0 + m * 60000).toISOString() } };
+  });
+  const achatado = [0, 1, 2, 3, 4].map(function (m) {
+    return { id: 'p' + m, ownerId: 'A', closedate: new Date(T0 + m * 60000).toISOString() };
+  });
+  igual('o objeto cru do HubSpot agrupa', ctx.lotesDePerda(cru).emLote, 5);
+  igual('e o objeto já achatado também', ctx.lotesDePerda(achatado).emLote, 5,
+    'sem isto, quem tem o lead do snapshot precisaria remontar properties à mão');
+
+  /* DOIS DONOS NO FORMATO ACHATADO, e esta é a fixture que PROVA que o campo é lido:
+     com cinco de um dono só, tirar o fallback de `ownerId` joga todos em 'sem-dono' e
+     eles continuam agrupando — o teste passava verde com o campo ignorado. Com três de
+     cada, ler o dono dá ZERO lotes e ignorá-lo dá um lote de seis. */
+  const doisDonos = ['A', 'A', 'A', 'B', 'B', 'B'].map(function (o, i) {
+    return { id: 'd' + i, ownerId: o, closedate: new Date(T0 + i * 60000).toISOString() };
+  });
+  igual('e o dono do objeto achatado é REALMENTE lido', ctx.lotesDePerda(doisDonos).emLote, 0,
+    'três de cada não fecham o mínimo; se o campo for ignorado, os seis viram um lote só');
+
+  /* O CONJUNTO DE IDS é o que permite quebrar o lote POR MOTIVO no gráfico: sem ele, o
+     robô diário teria que reimplementar o agrupamento para saber quem entrou. */
+  igual('a régua devolve quem entrou em lote, por id',
+    Object.keys(ctx.lotesDePerda(cru).ids).sort(), ['c0', 'c1', 'c2', 'c3', 'c4']);
+  igual('e não marca quem ficou de fora',
+    Object.keys(ctx.lotesDePerda([cru[0], cru[1]]).ids).length, 0);
+}());
+
 /* ══ 5. OS RAMOS DEFENSIVOS ════════════════════════════════════════════════════════ */
 (function () {
   igual('lista vazia não estoura', ctx.lotesDePerda([]).emLote, 0);
@@ -254,6 +301,67 @@ const REAIS = [
   checar('e o KPI de perdidos lê a nota',
     /nota: sm5NotaDeLimpeza\(k\)/.test(tpl),
     'campo emitido e nunca lido é a dívida que esta base já tem treze vezes');
+}());
+
+/* ══ 8. O GRÁFICO DE MOTIVOS ═══════════════════════════════════════════════════════
+   Julyan: "faz no gráfico de motivos também". "Outros" e "Não quer mudar de sistema"
+   lideram os 90 dias — e boa parte é o rótulo que sobra quando alguém descarta em
+   lote um lead que nunca recebeu contato. O gestor lia aquilo como objeção de
+   mercado. */
+checar('o robô diário quebra o lote POR MOTIVO',
+  /const lote = LOTES\.lotesDePerda\(validos\);/.test(diario)
+    && /emLotePorMotivo\[m\] = \(emLotePorMotivo\[m\] \|\| 0\) \+ 1;/.test(diario),
+  'sem a quebra por motivo, a tela só saberia o total e não daria para ver QUAL motivo '
+    + 'está inflado pela faxina');
+
+checar('e usa o conjunto de ids da régua, sem reimplementar o agrupamento',
+  /if \(!lote\.ids\[String\(d\.id\)\]\) return;/.test(diario),
+  'reimplementar aqui seria a segunda definição de lote');
+
+checar('o total de cada motivo NÃO é reduzido',
+  /porMotivo\[motivo\] = \(porMotivo\[motivo\] \|\| 0\) \+ 1;/.test(diario)
+    && diario.indexOf('porMotivo[motivo] -= ') < 0,
+  'a barra continua do tamanho que é; o lote é uma faixa DENTRO dela');
+
+checar('a régua usada viaja com os motivos',
+  /loteRegra: lote\.regra/.test(diario),
+  'a legenda escreve a régua; se ela não vier do robô, a frase pode divergir do medido');
+
+/* A TELA */
+checar('a barra sabe desenhar a faixa do lote',
+  /const barra = function \(rot, n, pct, cor, cauda, lote\) \{/.test(tpl)
+    && /const pctLote = \(lote > 0 && n > 0\)/.test(tpl),
+  'sem o parâmetro, o dado chega ao front e morre lá');
+
+checar('e o bloco 6 PASSA o lote para ela',
+  /return barra\(x\.rot, x\.n, x\.pct, x\.cor, tm10Rs\(x\.mrr\), x\.lote\);/.test(tpl),
+  'campo emitido e nunca lido é a dívida que esta base já tem treze vezes');
+
+checar('tm10Perdas lê emLotePorMotivo',
+  /const emLote = mp\.emLotePorMotivo \|\| \{\};/.test(tpl)
+    && /lote: emLote\[k\] \|\| 0/.test(tpl));
+
+checar('o total do lote vem do gráfico inteiro, não da soma das 5 linhas',
+  /emLote: Number\(mp\.emLoteTotal \|\| 0\)/.test(tpl),
+  'o gráfico mostra os 5 maiores motivos e a frase fala dos 90 dias todos — somar as '
+    + 'linhas daria um número menor sem ninguém perceber');
+
+(function () {
+  const ctx3 = { esc: function (s) { return String(s); }, console: console };
+  vm.createContext(ctx3);
+  vm.runInContext(recortar(tpl, 'tm10LegendaDeLimpeza'), ctx3);
+  igual('sem lote, não há legenda', ctx3.tm10LegendaDeLimpeza({ emLote: 0 }), '',
+    'legenda que aparece sempre explica o nada quando não há faixa na tela');
+  igual('sem dado nenhum, também não', ctx3.tm10LegendaDeLimpeza(null), '');
+  const leg = ctx3.tm10LegendaDeLimpeza({ emLote: 380, totalGeral: 972,
+    loteRegra: { gapMin: 15, minimo: 5 }, loteSessoes: 24 });
+  checar('a legenda diz quantos de quantos', /380 de 972 marcados em lote/.test(leg),
+    'veio: ' + leg);
+  checar('e a régua', /5\+ em 15 min/.test(leg), 'veio: ' + leg);
+  checar('e quantas sessões', /em 24 sessões/.test(leg), 'veio: ' + leg);
+  checar('e diz que é provável, e o que NÃO é',
+    /provável limpeza de base, não objeção de mercado/.test(leg),
+    'é essa a frase que muda a leitura do gráfico · veio: ' + leg);
 }());
 
 if (falhas.length) {
