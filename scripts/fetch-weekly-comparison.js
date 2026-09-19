@@ -249,7 +249,22 @@ async function main() {
      passou, é esta semana; senão, é a anterior. Rodar sexta à noite, domingo,
      segunda de manhã ou quarta dá a MESMA resposta, e sempre 5 dias. */
   const semanaCorrente = inicioSemanaBrasiliaMs();
-  const sextaDaCorrente = semanaCorrente + 5 * DAY - 1;   // sexta 23:59:59.999 BRT
+  /* ══ A SEMANA FECHA ÀS 20H DE SEXTA (19/09/26) ═══════════════════════════════
+     Era sexta 23:59:59.999, e o robô rodava domingo 22h. Julyan pediu o robô na
+     sexta às 20h — e com o corte antigo ele reportaria a semana RETRASADA, porque
+     às 20h de sexta `fechou` ainda seria falso. Medido antes de mexer: 07/09–11/09
+     em vez de 14/09–18/09.
+
+     20H NÃO É UM NÚMERO PARA CABER NO CRON: é quando o time para. A última rodada
+     de dia útil do daily-refresh é 19:00 BRT e os check-ins do app cessam antes.
+
+     E A JANELA DE DADOS NÃO ENCOLHE — ela continua indo até sexta 23:59:59.999,
+     logo abaixo. Encurtá-la para as 20h faria o negócio fechado na sexta à noite
+     cair em semana NENHUMA, porque a próxima janela só começa na segunda. Assim,
+     as quatro horas finais entram na contagem na rodada seguinte (sábado 09:00) e
+     o board da Semana, que desde 19/09 lê a fonte fresca, se completa sozinho. */
+  const HORA = 60 * 60 * 1000;
+  const sextaDaCorrente = semanaCorrente + 4 * DAY + 20 * HORA;   // sexta 20:00 BRT
   const fechou = now.getTime() >= sextaDaCorrente;
   const atualInicio = new Date(fechou ? semanaCorrente : semanaCorrente - 7 * DAY);
   const atualFim = new Date(atualInicio.getTime() + 5 * DAY - 1);
