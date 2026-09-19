@@ -364,6 +364,106 @@ checar('o total do lote vem do gráfico inteiro, não da soma das 5 linhas',
     'é essa a frase que muda a leitura do gráfico · veio: ' + leg);
 }());
 
+/* ══ 9. A ESCADA DE CONVERSÃO ══════════════════════════════════════════════════════
+   Julyan mandou medir se a limpeza distorce a conversão por etapa. Distorce, e a
+   distorção é ESTRUTURAL: conversao = avancaram/chegaram, e o descartado em lote conta
+   em `chegaram` sem contar em `avancaram` — entra no denominador como se tivesse sido
+   trabalhado e tivesse falhado. Quanto mais o time limpa, pior parece a etapa onde os
+   leads estavam parados. Medido na escada: a Visita é o ralo (agosto: 223 chegaram, 63
+   avançaram, 131 perderam ali). */
+checar('o robô mede a limpeza sobre a coorte INTEIRA, não por turma',
+  /const perdidosDaCoorte = negocios\.filter\(d => d\.perda != null && d\.closedate\);/.test(diario)
+    && /const loteDaCoorte = LOTES\.lotesDePerda\(perdidosDaCoorte\);/.test(diario),
+  'uma sessão de limpeza atravessa meses de entrada; agrupar por turma quebraria as'
+    + ' sessões ao meio e o número sairia menor');
+
+checar('a coorte carrega id e closedate, que a régua precisa',
+  /id: String\(d\.id \|\| \'\'\),/.test(diario) && /closedate: p\.closedate \|\| null,/.test(diario),
+  'a busca já os trazia; eram só eles que ficavam de fora do objeto');
+
+checar('cada etapa declara quantos pararam ali por faxina',
+  /const limpezaAqui = perderamAqui\.filter\(d => loteDaCoorte\.ids\[d\.id\]\);/.test(diario)
+    && /perderamAquiEmLote: limpezaAqui\.length,/.test(diario));
+
+checar('e o denominador sem a faxina viaja pronto',
+  /chegaramSemLimpeza: baseSemLimpeza,/.test(diario),
+  'calcular no front faria a conta existir em dois lugares');
+
+/* O NÚMERO PRIMÁRIO NÃO MUDA — terceira vez que esta decisão aparece hoje. */
+checar('chegaram e avancaram continuam intactos',
+  /chegaram: chegaram\.length,/.test(diario) && /avancaram: avancaram\.length,/.test(diario)
+    && diario.indexOf('chegaram: baseSemLimpeza') < 0,
+  'trocar o denominador no robô mudaria a conversão da tela em silêncio, por uma'
+    + ' inferência de horário');
+
+/* A TELA */
+(function () {
+  const ctx4 = { Math: Math, Number: Number, Object: Object, DATA: { historicoEtapas: { escada: {
+    '2026-08': { loteRegra: { gapMin: 15, minimo: 5 }, etapas: [
+      /* a Visita real de agosto: 223 chegaram, 63 avançaram, 131 perderam ali */
+      { rank: 1, id: 'v', nome: 'Visita', chegaram: 223, avancaram: 63,
+        perderamAqui: 131, perderamAquiEmLote: 110, chegaramSemLimpeza: 113 },
+      /* uma etapa em que a faxina quase não muda nada: a segunda taxa não deve sair */
+      { rank: 2, id: 'd', nome: 'Demo/Proposta', chegaram: 59, avancaram: 47,
+        perderamAqui: 4, perderamAquiEmLote: 1, chegaramSemLimpeza: 58 },
+      /* e uma em que a faxina levou tudo: sem denominador, sem taxa inventada */
+      { rank: 3, id: 'x', nome: 'Fantasma', chegaram: 6, avancaram: 0,
+        perderamAqui: 6, perderamAquiEmLote: 6, chegaramSemLimpeza: 0 }
+    ] },
+    '2026-07': { etapas: [{ rank: 1, id: 'v', nome: 'Visita', chegaram: 100, avancaram: 40 }] }
+  } } } };
+  vm.createContext(ctx4);
+  vm.runInContext(recortar(tpl, 'tm10Conversao'), ctx4);
+  const cv = ctx4.tm10Conversao();
+  const porNome = {};
+  cv.linhas.forEach(function (l) { porNome[l.rot.split(' ')[0]] = l; });
+
+  igual('a conversão CRUA da Visita continua sendo 28%', porNome.Visita.pct, 28,
+    '63 de 223 — é o número que a barra desenha');
+  igual('e a taxa sem a faxina é 56%', porNome.Visita.pctSemLimpeza, 56,
+    '63 de 113, tirando os 110 que foram descartados em lote');
+  igual('a linha carrega quantos foram faxina', porNome.Visita.limpeza, 110,
+    'o hover diz o porquê do segundo número');
+
+  igual('onde a faxina quase não muda nada, a segunda taxa não aparece',
+    porNome['Demo/Proposta'].pctSemLimpeza, null,
+    '80% contra 81% não muda decisão nenhuma e só polui a linha — o corte é 5 pontos');
+
+  /* SEM DENOMINADOR NÃO SE INVENTA TAXA — e vale registrar POR QUE esta checagem não
+     distingue as duas trancas que a protegem. `taxaLimpa` tem um `if
+     (chegaramSemLimpeza <= 0) return null`, e a comparação `(pctLimpa - pctCru) >= 5`
+     logo depois é um SUMIDOURO DE NaN: com NaN, ela dá falso e o campo sai null de
+     qualquer jeito. Medido por sabotagem: removendo a tranca explícita, esta checagem
+     continua verde.
+     Não é guarda cega por descuido — é que nenhum valor não-finito consegue chegar à
+     tela por este caminho, por construção. A tranca explícita fica porque diz a
+     intenção; o sumidouro fica porque é o que realmente protege. */
+  igual('e sem denominador não se inventa taxa', porNome.Fantasma.pctSemLimpeza, null,
+    'se a faxina levou a etapa inteira, 0/0 seria NaN ou Infinity na tela');
+  checar('e o sumidouro de NaN está no lugar',
+    /\(pctLimpa - pctCru\) >= 5/.test(tpl),
+    'é esta comparação que impede NaN e Infinity de chegarem à tela — tirá-la deixa a '
+      + 'tranca de cima como única defesa');
+
+  igual('a régua do lote chega à tela da conversão', cv.loteRegra, { gapMin: 15, minimo: 5 },
+    'a legenda escreve a régua; sem ela viria do nada');
+}());
+
+/* BUSCA LITERAL, e não regex: o trecho tem apóstrofo e barra, e escapar isso dentro de
+   uma expressão regular já me custou duas tentativas aqui. indexOf mede o mesmo. */
+checar('a tela desenha a segunda taxa',
+  tpl.indexOf("x.pctSemLimpeza + '% sem a faxina</b>')") > 0,
+  'campo emitido e nunca lido é a dívida que esta base já tem treze vezes');
+
+checar('e a legenda explica de onde ela vem',
+  /quem foi limpado\'\n        \+ \' não deixou de avançar, ele nunca foi trabalhado\'/.test(tpl)
+    || /não deixou de avançar, ele nunca foi trabalhado/.test(tpl),
+  'sem a frase, o segundo número parece uma taxa alternativa qualquer');
+
+checar('a legenda só existe quando alguma linha a usa',
+  /\(cv\.linhas \|\| \[\]\)\.some\(function \(x\) \{ return x\.pctSemLimpeza != null; \}\)/.test(tpl),
+  'explicar na tela uma coisa que não está na tela é ruído');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));

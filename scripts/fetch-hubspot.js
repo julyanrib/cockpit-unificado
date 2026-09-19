@@ -1250,7 +1250,11 @@ async function historicoDeEtapas() {
     const porta = ranks.length ? Math.min(...ranks.map(r => entrada[r])) : null;
     const rankMax = ranks.length ? Math.max(...ranks) : 0;
     return {
+      /* id e closedate entram para a régua de lote (19/09/26) — a busca já os traz,
+         eram só eles que ficavam de fora do objeto. */
+      id: String(d.id || ''),
       owner: String(p.hubspot_owner_id || '') || 'sem-dono',
+      closedate: p.closedate || null,
       etapaAtual: String(p.dealstage || ''),
       mrr: Number(p.valor_de_mrr) || 0,
       entrada, ganho, perda, porta, rankMax
@@ -1272,6 +1276,23 @@ async function historicoDeEtapas() {
      (openStageModal). Ligar por nome quebraria no dia em que alguém renomear a etapa. */
   const etapas = HIST_ORDEM.map((id, i) => ({ rank: i + 1, id, nome: STAGE_LABELS[id] }));
 
+  /* ══ QUANTO DE CADA ETAPA É FAXINA (19/09/26) ═══════════════════════════════════
+     conversao = avancaram/chegaram, e o descartado em lote conta em `chegaram` sem
+     contar em `avancaram` — entra no denominador como se tivesse sido trabalhado e
+     tivesse falhado. Quanto mais o time limpa, pior parece a etapa onde os leads
+     estavam parados.
+
+     A RÉGUA É A MESMA do KPI da Semana e do gráfico de motivos (lib/lotes-de-perda),
+     e roda sobre a coorte INTEIRA de uma vez: uma sessão de limpeza atravessa meses
+     de entrada, então agrupar por turma quebraria as sessões ao meio.
+
+     ZERO CHAMADA A MAIS: closedate e hubspot_owner_id já vinham na busca. */
+  const perdidosDaCoorte = negocios.filter(d => d.perda != null && d.closedate);
+  const loteDaCoorte = LOTES.lotesDePerda(perdidosDaCoorte);
+  console.log('Escada: ' + perdidosDaCoorte.length + ' perdidos na coorte de '
+    + HIST_DIAS + ' dias, ' + loteDaCoorte.emLote + ' marcados em lote ('
+    + loteDaCoorte.lotes.length + ' sessões).');
+
   const escada = {};
   Object.keys(turmas).forEach(m => {
     const lista = turmas[m];
@@ -1286,6 +1307,9 @@ async function historicoDeEtapas() {
       portas[nome] = (portas[nome] || 0) + 1;
     });
     escada[m] = {
+      /* a régua usada, para a tela escrever o que foi medido em vez de um número
+         cravado no front — mesma disciplina do KPI da Semana e dos motivos */
+      loteRegra: loteDaCoorte.regra,
       entraramNoFunil: lista.length,
       portas,
       ganharam: lista.filter(d => d.ganho != null).length,
@@ -1298,12 +1322,23 @@ async function historicoDeEtapas() {
            em todas as etapas por onde o negócio passou. */
         const perderamAqui = chegaram.filter(d => d.perda != null && d.rankMax === e.rank);
         const aindaAqui = chegaram.filter(d => d.etapaAtual === e.id);
+        /* A PARTE DA PERDA DESTA ETAPA QUE FOI MARCADA EM LOTE. Tirar esses do
+           denominador dá a taxa "sem a faxina" — e os DOIS números vão para a tela,
+           porque a régua é inferência de horário e o número primário não se troca em
+           silêncio. */
+        const limpezaAqui = perderamAqui.filter(d => loteDaCoorte.ids[d.id]);
+        const baseSemLimpeza = chegaram.length - limpezaAqui.length;
         return {
           rank: e.rank, id: e.id, nome: e.nome,
           chegaram: chegaram.length,
           avancaram: avancaram.length,
           ganharam: ganharam.length,
           perderamAqui: perderamAqui.length,
+          /* SEM DIVISÃO POR ZERO e sem taxa inventada: se a limpeza levou a etapa
+             inteira, não há denominador e o campo é null — a tela escreve isso em vez
+             de desenhar 0% ou Infinity. */
+          perderamAquiEmLote: limpezaAqui.length,
+          chegaramSemLimpeza: baseSemLimpeza,
           aindaAqui: aindaAqui.length
         };
       })
