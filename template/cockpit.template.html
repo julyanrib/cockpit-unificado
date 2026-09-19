@@ -25337,6 +25337,26 @@ function tm10DiaCurtoMs(ms) {
   return dias[d.getUTCDay()] + ' ' + String(d.getUTCDate()).padStart(2, '0');
 }
 
+/* A LEGENDA DA FAIXA CLARA. Vazia quando não há lote — legenda que aparece sempre é
+   legenda que ninguém lê, e sem faixa nenhuma na tela ela explicaria o nada.
+
+   ELA DIZ A RÉGUA, pelo mesmo motivo do KPI da Semana: "5+ em 15 min" deixa o gestor
+   julgar o número em vez de confiar nele. E diz "provável", porque marcação em rajada
+   é indício forte e não é prova — ver o cabeçalho de lib/lotes-de-perda.js. */
+function tm10LegendaDeLimpeza(pe) {
+  if (!pe || !pe.emLote) return '';
+  const r = pe.loteRegra || {};
+  const regra = (r.minimo && r.gapMin) ? r.minimo + '+ em ' + r.gapMin + ' min'
+    : 'marcados em sequência';
+  return '<span style="display:flex;align-items:center;gap:6px;margin-top:9px;'
+    + 'font:700 9.5px/1.5 \'Manrope\',sans-serif;color:#7A8494;">'
+    + '<span style="flex:none;width:14px;height:10px;border-radius:3px;background:#B7BDC9;'
+    +   'border:1px solid #DCE1EA;"></span>'
+    + esc(pe.emLote + ' de ' + pe.totalGeral + ' marcados em lote (' + regra + ')'
+      + (pe.loteSessoes ? ', em ' + pe.loteSessoes + ' sessões' : '')
+      + ' — provável limpeza de base, não objeção de mercado') + '</span>';
+}
+
 /* ── POR QUE PERDEMOS (bloco 6) ───────────────────────────────────────────────────────
    A JANELA É DE 90 DIAS E O RÓTULO DIZ ISSO. A prancha pede "do mês"; `motivosPerda`
    do robô mede 90 dias (medido: DATA.motivosPerda.dias === 90, 983 perdas). Escrever
@@ -25352,15 +25372,27 @@ function tm10Perdas() {
     if (n.indexOf('sem retorno') >= 0) return '#B07C1F';
     return '#7A8494';
   };
+  /* QUANTO DE CADA MOTIVO FOI MARCADO EM LOTE (19/09/26). "Outros" e "Não quer mudar
+     de sistema" lideram este gráfico, e boa parte é o rótulo que sobra quando alguém
+     descarta em lote um lead que nunca recebeu contato — o gestor lia aquilo como
+     objeção de mercado. O total do motivo NÃO muda: o lote é uma faixa DENTRO da
+     barra. Ver lib/lotes-de-perda.js para a régua e para o que ela não resolve. */
+  const emLote = mp.emLotePorMotivo || {};
   const linhas = Object.keys(porMotivo).map(function (k) {
-    return { rot: k, n: porMotivo[k] || 0, mrr: mrrPorMotivo[k] || 0, cor: corDe(k) };
+    return { rot: k, n: porMotivo[k] || 0, mrr: mrrPorMotivo[k] || 0, cor: corDe(k),
+      lote: emLote[k] || 0 };
   }).sort(function (a, b) { return b.n - a.n; }).slice(0, 5);
   const max = Math.max(1, ...linhas.map(function (l) { return l.n; }));
   linhas.forEach(function (l) { l.pct = Math.round(l.n / max * 100); });
   const total = linhas.reduce(function (s, l) { return s + l.n; }, 0);
   const mrrTotal = linhas.reduce(function (s, l) { return s + l.mrr; }, 0);
   const lider = linhas[0] || null;
-  return { linhas: linhas, total: total, mrr: mrrTotal, dias: mp.dias || null, lider: lider };
+  /* O TOTAL DO LOTE É O DO GRÁFICO INTEIRO (mp.emLoteTotal), e não a soma das cinco
+     linhas: o gráfico mostra os 5 maiores motivos e a frase fala dos 90 dias todos.
+     Somar as linhas daria um número menor sem ninguém perceber. */
+  return { linhas: linhas, total: total, mrr: mrrTotal, dias: mp.dias || null, lider: lider,
+    emLote: Number(mp.emLoteTotal || 0), totalGeral: Number(mp.total || 0),
+    loteRegra: mp.loteRegra || null, loteSessoes: Number(mp.loteSessoes || 0) };
 }
 
 /* ── CONVERSÃO ETAPA → ETAPA (bloco 6) ────────────────────────────────────────────────
@@ -25911,16 +25943,26 @@ function tm10TelaHTML(d, cauda) {
 function tm10CaudaHTML(d) {
   /* barra horizontal com a contagem DENTRO, a mesma gramatica do funil e do Comando de
      vendas do Meu funil: um codigo de barra para toda a casa. */
-  const barra = function (rot, n, pct, cor, cauda) {
+  /* `lote` é OPCIONAL e só o gráfico de motivos passa: quantos daqueles `n` foram
+     marcados numa sentada. Desenha uma faixa mais clara DENTRO da barra, na esquerda.
+
+     DENTRO, e não numa barra ao lado: são o mesmo negócio contado uma vez só. Duas
+     barras fariam parecer duas populações, e alguém somaria as duas. */
+  const barra = function (rot, n, pct, cor, cauda, lote) {
+    const pctLote = (lote > 0 && n > 0) ? Math.min(100, Math.round(lote / n * 100)) : 0;
     return '<span style="display:flex;align-items:center;gap:9px;min-width:0;">'
       + '<span style="flex:none;width:80px;font:800 10px \'Manrope\',sans-serif;color:#5B667A;'
       +   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(rot) + '</span>'
       + '<span style="flex:1;min-width:30px;height:16px;background:#EDEBE5;border-radius:999px;'
       +   'overflow:hidden;display:flex;align-items:center;">'
-      +   '<i style="display:flex;align-items:center;justify-content:flex-end;height:100%;'
-      +     'width:' + pct + '%;background:' + cor + ';border-radius:999px;padding:0 6px;'
-      +     'box-sizing:border-box;font:900 9.5px \'Archivo\',sans-serif;color:#FFFDF8;'
-      +     'font-style:normal;">' + (n > 0 ? n : '') + '</i></span>'
+      +   '<i style="position:relative;display:flex;align-items:center;justify-content:flex-end;'
+      +     'height:100%;width:' + pct + '%;background:' + cor + ';border-radius:999px;'
+      +     'padding:0 6px;box-sizing:border-box;font:900 9.5px \'Archivo\',sans-serif;'
+      +     'color:#FFFDF8;font-style:normal;">'
+      +     (pctLote ? '<b style="position:absolute;left:0;top:0;bottom:0;width:' + pctLote
+        + '%;background:rgba(253,254,255,.42);border-radius:999px 0 0 999px;" title="'
+        + esc(lote + ' de ' + n + ' marcados em lote — provável limpeza de base') + '"></b>' : '')
+      +     '<span style="position:relative;">' + (n > 0 ? n : '') + '</span></i></span>'
       + '<span style="flex:none;width:62px;text-align:right;font:800 9.5px \'Manrope\',sans-serif;'
       +   'color:#7A8494;">' + esc(cauda) + '</span></span>';
   };
@@ -26062,7 +26104,9 @@ function tm10CaudaHTML(d) {
     +   esc(pe.total + ' perdas · ' + tm10Rs(pe.mrr)
         + (pe.lider ? ' — ' + String(pe.lider.rot).toLowerCase() + ' lidera' : '')) + '</span>'
     + '<div style="display:flex;flex-direction:column;gap:5px;">'
-    +   pe.linhas.map(function (x) { return barra(x.rot, x.n, x.pct, x.cor, tm10Rs(x.mrr)); }).join('')
+    +   pe.linhas.map(function (x) {
+      return barra(x.rot, x.n, x.pct, x.cor, tm10Rs(x.mrr), x.lote); }).join('')
+    +   tm10LegendaDeLimpeza(pe)
     + '</div>'
     + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
     +   'text-transform:uppercase;color:#7A8494;margin:12px 0 6px;">conversão etapa → etapa · traço = média de '

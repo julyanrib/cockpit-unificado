@@ -10,6 +10,8 @@ const path = require('path');
    lib/realizado.js. A tela da Daily v2 pergunta "o que já foi cumprido agora" a cada
    minuto; este robô grava o mesmo número 3x por dia. Uma conta, dois transportes. */
 const REALIZADO = require('../lib/realizado.js');
+/* A RÉGUA DE LOTE, a mesma do robô semanal — ver o cabeçalho da lib. */
+const LOTES = require('../lib/lotes-de-perda.js');
 
 const TOKEN = process.env.HUBSPOT_TOKEN;
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -1148,9 +1150,36 @@ async function motivosDePerda() {
       semMrr += 1;
     }
   });
+  /* ══ QUANTO DE CADA MOTIVO É LIMPEZA EM LOTE (19/09/26) ═════════════════════════
+     Julyan: "faz no gráfico de motivos também". Hoje "Outros" e "Não quer mudar de
+     sistema" lideram este gráfico — e boa parte é o rótulo que sobra quando alguém
+     descarta em lote um lead que nunca recebeu contato. O gestor lê aquilo como
+     objeção de mercado.
+
+     ZERO CHAMADA A MAIS: a busca acima já traz hubspot_owner_id e closedate de todos
+     os perdidos de 90 dias. Só faltava aplicar a régua — que mora em lib e é a mesma
+     do KPI da Semana.
+
+     E O TOTAL DE CADA MOTIVO NÃO MUDA. porMotivo continua sendo a contagem inteira;
+     emLotePorMotivo vem AO LADO. A barra do gráfico continua do tamanho que é. */
+  const lote = LOTES.lotesDePerda(validos);
+  const emLotePorMotivo = {};
+  let emLoteTotal = 0;
+  validos.forEach(function (d) {
+    if (!lote.ids[String(d.id)]) return;
+    const m = String((d.properties || {}).motivo_do_perdido || '').trim() || 'Sem motivo preenchido';
+    emLotePorMotivo[m] = (emLotePorMotivo[m] || 0) + 1;
+    emLoteTotal += 1;
+  });
+  console.log('Motivos de perda: ' + validos.length + ' em 90 dias, ' + emLoteTotal
+    + ' marcados em lote (' + lote.lotes.length + ' sessões, régua '
+    + lote.regra.minimo + '+ em ' + lote.regra.gapMin + ' min).');
+
   return {
     total: validos.length, dias: 90, porMotivo, porOwner, exemplos,
-    totalMrrConhecido, comMrr, semMrr, mrrPorMotivo, mrrPorOwner
+    totalMrrConhecido, comMrr, semMrr, mrrPorMotivo, mrrPorOwner,
+    emLotePorMotivo: emLotePorMotivo, emLoteTotal: emLoteTotal,
+    loteRegra: lote.regra, loteSessoes: lote.lotes.length
   };
 }
 

@@ -4,6 +4,8 @@
 
 const fs = require('fs');
 const path = require('path');
+/* A RÉGUA DE LOTE É COMPARTILHADA com o robô diário — ver o cabeçalho da lib. */
+const { LOTE_GAP_MIN, LOTE_MINIMO, lotesDePerda } = require('../lib/lotes-de-perda.js');
 
 const TOKEN = process.env.HUBSPOT_TOKEN;
 if (!TOKEN) {
@@ -165,19 +167,16 @@ async function contagemComFiltro(stageId, startMs, endMs, propDaData) {
 
 /* ══ PERDA UMA A UMA x LIMPEZA EM LOTE (19/09/26) ══════════════════════════════════
    Julyan: "eles limparam o funil mesmo". O placar contava faxina como derrota — na
-   semana 14–18/09, 65 "perdidos" onde a maioria era descarte de base.
+   semana 14–18/09, 65 "perdidos" onde 45 eram descarte de base.
 
-   Não dá para criar um motivo "limpeza" no HubSpot: `motivo_do_perdido` é
-   configuração do CRM e a regra da casa é não tocar nela. O que dá é medir a CADÊNCIA:
-   perda de verdade acontece uma de cada vez, limpeza acontece numa sentada.
+   A RÉGUA VIVE EM lib/lotes-de-perda.js, e não aqui: no mesmo dia ela passou a ser
+   necessária no gráfico de motivos, que é do robô DIÁRIO. Duas cópias de "o que é um
+   lote" seriam duas respostas para a mesma pergunta em duas telas.
 
    CUSTO: esta busca SUBSTITUI a contagem que já existia (contagemComFiltro com
    limit:1). Uma página de 100 em vez de uma de 1 — mesma chamada, e nenhuma a mais.
    Acima de 100 perdidos na semana a contagem segue vindo de `total`, que é o número
    certo; só o detalhe do lote fica incompleto, e a tela diz isso. */
-const LOTE_GAP_MIN = 15;
-const LOTE_MINIMO = 5;
-
 async function perdidosNaJanela(startMs, endMs) {
   const data = await hsSearch({
     filterGroups: [{
@@ -196,58 +195,6 @@ async function perdidosNaJanela(startMs, endMs) {
   const total = data.total || 0;
   const deals = (data.results || []).filter(d => !isTestDeal(d.properties.dealname));
   return { total: total, deals: deals, completo: deals.length >= total };
-}
-
-/* AS RAJADAS. Agrupa por dono e encadeia marcações separadas por até LOTE_GAP_MIN;
-   grupo com LOTE_MINIMO ou mais é lote.
-
-   CALIBRADO nos 65 perdidos reais de 14–18/09 — e o honesto é que nenhum limiar
-   separa perfeitamente: 5min dá 37, 10min dá 40, 15min dá 45, 20min dá 47. Quinze
-   captura a sessão da Kelly de 16/09 (sete marcações numa hora, intervalos de 5 a 13
-   minutos) sem varrer junto as perdas isoladas. E ainda erra: três marcações do Bruno
-   em 32 segundos ficam de fora por serem só três.
-
-   POR ISSO NADA É RECLASSIFICADO. O total continua sendo o total; o lote sai ao lado
-   como leitura, com a regra escrita na tela e a palavra "provável". */
-function lotesDePerda(deals) {
-  const porDono = {};
-  deals.forEach(function (d) {
-    const o = String(d.properties.hubspot_owner_id || 'sem-dono');
-    const ms = Date.parse(d.properties.closedate || '');
-    if (!Number.isFinite(ms)) return;
-    (porDono[o] = porDono[o] || []).push({ ms: ms, nome: d.properties.dealname || 'sem nome' });
-  });
-  const lotes = [];
-  let emLote = 0;
-  Object.keys(porDono).forEach(function (o) {
-    const lista = porDono[o].sort(function (a, b) { return a.ms - b.ms; });
-    let grupo = [lista[0]];
-    const fechar = function () {
-      if (grupo.length >= LOTE_MINIMO) {
-        emLote += grupo.length;
-        /* A DATA SAI DEFENSIVA, e isto não é paranoia: new Date(NaN).toISOString()
-           LANÇA RangeError, e um throw aqui derruba o robô semanal inteiro por causa
-           de um closedate estranho num negócio. O filtro acima já impede que NaN chegue
-           neste ponto — esta é a segunda tranca, e ela existe porque a primeira é uma
-           linha que alguém pode mexer. Achado por sabotagem: invertendo o filtro, a
-           suíte ESTOUROU em vez de reprovar, que é o pior dos dois resultados. */
-        const iso = function (ms) {
-          const d = new Date(ms);
-          return Number.isFinite(d.getTime()) ? d.toISOString() : null;
-        };
-        lotes.push({ ownerId: o, n: grupo.length,
-          de: iso(grupo[0].ms),
-          ate: iso(grupo[grupo.length - 1].ms) });
-      }
-    };
-    for (let i = 1; i < lista.length; i++) {
-      if (lista[i].ms - lista[i - 1].ms <= LOTE_GAP_MIN * 60000) grupo.push(lista[i]);
-      else { fechar(); grupo = [lista[i]]; }
-    }
-    fechar();
-  });
-  lotes.sort(function (a, b) { return b.n - a.n; });
-  return { emLote: emLote, lotes: lotes };
 }
 
 // "Reuniões" = negócios que ENTRARAM em Demo/Proposta na janela (fazer uma demo pressupõe reunião)
