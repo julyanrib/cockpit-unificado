@@ -152,6 +152,56 @@ conferir('a decisão de qual semana usar é explícita',
   bloco.indexOf('const fechou = now.getTime() >= sextaDaCorrente;') > -1,
   'sem o portão a função volta a devolver a semana corrente, em curso');
 
+/* ── 6. A SEGUNDA-FEIRA DELE, COM AS DATAS QUE ELE PEDIU ─────────────────────────── */
+/* Julyan, 19/09/26: 'quero que a aba semana eu abra ela na segunda com os dados da
+   semana anterior (14/9 - 18/9)'. As checagens 1-5 cobrem a REGRA; esta cobre o CASO,
+   com as datas dele, porque é assim que ele vai conferir se está certo. O robô pode
+   acordar quatro vezes na segunda (cron de domingo 22h que atrasa, e as rodadas do
+   daily-refresh) e as quatro têm de dar a mesma semana. */
+const SEGUNDA_DELE = [
+  ['2026-09-21T01:00:00Z', 'o cron de domingo 22h BRT'],
+  ['2026-09-21T04:00:00Z', 'o cron atrasado 3h — segunda 01h BRT'],
+  ['2026-09-21T11:56:00Z', 'a rodada de segunda 08:56 BRT'],
+  ['2026-09-21T16:00:00Z', 'a rodada de segunda 13h BRT'],
+  ['2026-09-21T22:00:00Z', 'a rodada de segunda 19h BRT']
+];
+SEGUNDA_DELE.forEach(function (par) {
+  const j = janelaEm(par[0]);
+  conferir('abrindo a Semana na segunda 21/09 (' + par[1] + ') os números são de 14/09–18/09',
+    j.rotulo === '14/09–18/09',
+    'deu ' + j.rotulo + ' — era esta a semana que ele pediu para ver na segunda');
+  conferir('e a comparação é com 07/09–11/09 (' + par[1] + ')',
+    j.anterior === '07/09–11/09',
+    'deu ' + j.anterior + ' — útil contra útil, decisão de 08/08');
+});
+/* E NA SEXTA SEGUINTE ELA VIRA, não antes: é o que garante que ele passe a semana
+   inteira lendo 14/09–18/09 em vez de ver a janela mudar na quarta. */
+conferir('na quinta 24/09 a janela ainda é 14/09–18/09',
+  janelaEm('2026-09-24T18:00:00Z').rotulo === '14/09–18/09',
+  'deu ' + janelaEm('2026-09-24T18:00:00Z').rotulo + ' — a janela não pode virar no meio da semana');
+conferir('e na sexta 25/09 depois das 23:59 BRT ela passa a ser 21/09–25/09',
+  janelaEm('2026-09-26T03:30:00Z').rotulo === '21/09–25/09',
+  'deu ' + janelaEm('2026-09-26T03:30:00Z').rotulo + ' — a semana fecha na sexta 23:59');
+
+/* ── 7. OS NÚMEROS E A LEITURA DECLARAM SUAS JANELAS ─────────────────────────────── */
+/* Os dois lados vêm de snapshots com cadências diferentes (weekly-raw de 2 em 2 horas,
+   resumo-semanal só no domingo 22h). No fim de semana eles descrevem semanas diferentes,
+   e a tela não tinha como saber. Guarda dos DOIS lados: o emissor e o leitor. */
+const montarTxt = fs.readFileSync(path.join(raiz, 'scripts', 'montar-dados.js'), 'utf8');
+const tplTxt = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
+conferir('o snapshot publica a janela que a LEITURA por pessoa descreve',
+  montarTxt.indexOf('janelaDaLeitura: (resumoSemanal && resumoSemanal.janela && resumoSemanal.janela.atual)') > -1,
+  'sem o campo do resumo-semanal a tela só conhece a janela do weekly-raw');
+conferir('e a tela LÊ esse campo',
+  tplTxt.indexOf('rs.janelaDaLeitura') > -1,
+  'atributo emitido e nunca lido é o defeito que esta base já tem 13 vezes');
+conferir('e avisa quando as duas janelas divergem',
+  tplTxt.indexOf("avisos.push('os números acima são de ' + mostrada") > -1,
+  'divergir em silêncio é o defeito de 16/09 — placar de uma semana, board de outra');
+conferir('o aviso da semana nao fechada nao foi perdido na troca',
+  tplTxt.indexOf("avisos.push('a semana ' + j.atual + ' ainda não fechou')") > -1,
+  'eram dois motivos para o mesmo lugar da tela; trocar um pelo outro perde metade');
+
 if (falhas.length) {
   console.log('FALHAS (' + falhas.length + '):');
   falhas.forEach(function (f) { console.log(f); });

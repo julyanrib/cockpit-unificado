@@ -11405,6 +11405,23 @@ function cadenciaConfig() {
   return (c && c.cadencias && Object.keys(c.cadencias).length > 0) ? c : null;
 }
 
+/* O PISO DE PONTOS DE CONTATO (19/09/26). Vive em data/cadencias.json, como a régua —
+   e por o mesmo motivo: número de política não se escreve em código, senão vira cinco
+   cópias com o mesmo defeito (foi o que aconteceu com `|| 10` da meta de clientes).
+
+   ZERO E null SÃO DIFERENTES DE "NÃO VEIO". `Number(x) || 4` daria 4 para um piso
+   deliberadamente zerado, e zerar o piso é uma decisão legítima dele — é como se
+   desliga a regra sem mexer em código. Sem o campo no snapshot, 0: nenhum negócio
+   fica abaixo de zero, e a tela não passa a acusar o time inteiro por causa de um
+   snapshot velho. */
+function cadenciaMinimoToques() {
+  const c = DATA && DATA.cadencias;
+  const v = c ? c.minimoToques : null;
+  if (v == null || v === '') return 0;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
 // Qual régua vale para este negócio: o último desfecho registrado manda; sem
 // desfecho conhecido, a etapa do funil decide. Nunca chuta.
 function cadenciaDoLead(lead, ultimoDesfecho) {
@@ -11946,8 +11963,29 @@ function estadoDoNegocioSemCache(lead) {
 
   // "Follow-up descoberto": houve visita e não existe próximo passo datado.
   const followUpDescoberto = !!ultimaVisita && !passo;
-  // "Abandonado após um único toque": a regra que o Escopo 5 existe pra matar.
-  const abandonadoNoPrimeiroToque = toques.total <= 1 && !passo &&
+  /* ══ O PISO DE PONTOS DE CONTATO (19/09/26) ═══════════════════════════════════════
+     `abaixoDoMinimo` é FATO PURO: o negócio não recebeu o mínimo de toques que a
+     política manda. Não olha próximo passo nem dias parados, de propósito — é o que a
+     fila de trabalho e a recusa da perda precisam saber, e misturar "está atrasado"
+     com "não foi trabalhado o suficiente" é o que fazia o Cockpit dizer "tudo em dia"
+     sobre um lead visitado uma vez e esquecido.
+
+     PISO ZERO DESLIGA A REGRA, e isso é intencional: ele desliga a política editando
+     data/cadencias.json, sem deploy. `minimo > 0 &&` é o que impede a tela de acusar
+     todo negócio de estar "abaixo de zero".
+
+     E O NÚMERO É PISO, NÃO TOTAL: `toques.parcial` é sempre true (o HubSpot não
+     devolve histórico completo), então quem escreve na tela escreve "≥ N". Um negócio
+     pode estar aqui por falta de REGISTRO, não de trabalho — e é por isso que a ação
+     que isto habilita é cobrar o registro, nunca punir automaticamente. */
+  const minimoToques = (typeof cadenciaMinimoToques === 'function') ? cadenciaMinimoToques() : 0;
+  const abaixoDoMinimo = minimoToques > 0 && toques.total < minimoToques;
+  const toquesFaltando = abaixoDoMinimo ? minimoToques - toques.total : 0;
+
+  /* "Abandonado": abaixo do piso, SEM próximo passo datado e parado há 3 dias. Era
+     `toques.total <= 1` cravado; passou a sair do piso configurado para não haver dois
+     números de "pouco toque" no produto — o 1 daqui e o 4 da política. */
+  const abandonadoNoPrimeiroToque = abaixoDoMinimo && !passo &&
     (toques.ultimo ? Math.floor((Date.now() - new Date(toques.ultimo).getTime()) / 86400000) >= 3 : false);
 
   return {
@@ -11965,6 +12003,9 @@ function estadoDoNegocioSemCache(lead) {
     visitaSemDesfecho,
     visitasNaoConfirmadas: naoConfirmada,
     followUpDescoberto,
+    abaixoDoMinimo,
+    toquesFaltando,
+    minimoToques,
     abandonadoNoPrimeiroToque,
     aguardandoSincronizacao: aguardandoSync,
     decisorAlcancado: toques.decisorAlcancado,
@@ -12399,7 +12440,16 @@ function h8Insight(item) {
     oQue = 'você esteve lá e não ficou data — ligar e cravar dia e hora';
     melhor = 'ligar';
   } else if (est.abandonadoNoPrimeiroToque) {
-    oQue = 'um toque só e nada marcado — segunda tentativa antes de esfriar';
+    /* O NÚMERO VEM DA POLÍTICA, não da frase. "um toque só" estava cravado aqui e
+       ficaria mentindo no dia em que ele mudasse o piso em data/cadencias.json — e o
+       piso é 4 desde 19/09, então a frase antiga já estaria errada para o negócio com
+       dois ou três toques, que agora também entra neste ramo. */
+    const faltam = est.toquesFaltando || 0;
+    oQue = faltam > 0
+      ? (est.toques.total === 0 ? 'nenhum toque registrado' : est.toques.total + ' de '
+          + est.minimoToques + ' toques') + ' e nada marcado — faltam ' + faltam
+          + (faltam === 1 ? ' contato' : ' contatos') + ' antes de poder desistir dele'
+      : 'pouco toque e nada marcado — segunda tentativa antes de esfriar';
     melhor = 'whats';
   } else if (est.cadencia && (est.cadencia.status === 'atrasada' || est.cadencia.status === 'quebrada')) {
     oQue = 'cadência ' + (est.cadencia.rotulo || '') + ' atrasada '
@@ -12460,7 +12510,7 @@ const FILA_BALDES = [
   { id: 'quente_sem_tarefa', rotulo: 'Quentes sem tarefa',              prio: 4 },
   { id: 'proposta',        rotulo: 'Propostas aguardando retorno',      prio: 5 },
   { id: 'decisor',         rotulo: 'Decisores ainda não alcançados',    prio: 6 },
-  { id: 'segunda_tentativa', rotulo: 'Clientes para segunda tentativa', prio: 7 },
+  { id: 'segunda_tentativa', rotulo: 'Clientes abaixo do mínimo de contatos', prio: 7 },
   { id: 'reativacao',      rotulo: 'Contatos que precisam de reativação', prio: 8 }
 ];
 
@@ -12538,9 +12588,16 @@ function filaDeFollowUp(ownerId) {
     if (!st.decisorAlcancado && st.toques.total >= 2 && ['1396005401', '1395880470'].includes(String(lead.stageId))) {
       baldes.decisor.push({ ...item, motivo: `${st.toques.total} toques e nenhum registro de conversa com o decisor`, prazo: hojeK });
     }
-    // 7. um único toque conhecido e nada marcado — o que a régua existe pra impedir
+    /* 7. ABAIXO DO PISO DE PONTOS DE CONTATO e nada marcado — a regra que a política
+       de 19/09 existe para impedir. O motivo carrega o NÚMERO porque este texto vai
+       para a fila do dia e para o 1:1: "faltam 3" é acionável, "pouco toque" não. */
     if (st.abandonadoNoPrimeiroToque) {
-      baldes.segunda_tentativa.push({ ...item, motivo: 'só 1 toque conhecido, nada marcado', prazo: hojeK });
+      const faltam = st.toquesFaltando || 0;
+      baldes.segunda_tentativa.push({ ...item, prazo: hojeK,
+        motivo: faltam > 0
+          ? st.toques.total + ' de ' + st.minimoToques + ' toques — faltam ' + faltam
+              + ', e nada marcado'
+          : 'pouco toque conhecido, nada marcado' });
     }
     // 8. sem toque há 21 dias ou mais
     const diasSemToque = st.toques.ultimo ? Math.floor((Date.now() - new Date(st.toques.ultimo).getTime()) / 86400000) : null;
@@ -24695,9 +24752,14 @@ const TM2_ESTADO = { filtro: null, sel: null, etapa: null, deal: null, toast: nu
 
    O QUE CONTA, palavra por palavra do que o robô já grava: tarefa (visita e follow-up
    do app), reunião e nota do App Outbound. Ligação e e-mail NÃO contam — medido: zero
-   na janela, este time não os registra pelo CRM. É a MESMA régua da cadência, de
-   propósito: dois critérios de "toque" na mesma tela seriam dois números para a mesma
-   pergunta.
+   na janela, este time não os registra pelo CRM.
+
+   E CONTA SÓ O QUE JÁ ACONTECEU (19/09/26). Até aqui esta função contava a lista
+   inteira da agenda, que vai até +90 dias e traz tarefa em qualquer status: 62 itens
+   do snapshot são compromisso marcado e não cumprido, e 17 negócios apareciam com
+   toque tendo feito zero. Agora a régua é a mesma do núcleo do executivo, que sempre
+   foi essa — ver `toquesDoLead` e "Tarefas EM ABERTO não são toques realizados; são o
+   próximo passo". Antes eram dois números para a mesma pergunta conforme a tela.
 
    A JANELA É A DA AGENDA — 60 dias. Ela não é escolha minha nem da prancha: é o que o
    robô busca. O rótulo da tela diz isso. */
@@ -24714,22 +24776,51 @@ function metaClientesDoRep(r) {
   return v != null && v !== '' ? Number(v) : 10;
 }
 
+/* CADA TIPO TEM O SEU CAMPO DE DATA, a mesma regra do robô: reunião usa o início dela
+   (quando acontece), tarefa e nota usam o timestamp. hs_createdate diria "quando o
+   registro foi criado", e a reunião de terça marcada na segunda contaria como toque de
+   segunda. */
+function tm10QuandoDoItem(it) {
+  const quando = (it && (it.hs_meeting_start_time || it.hs_timestamp)) || null;
+  const ms = quando ? Date.parse(quando) : NaN;
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/* JÁ ACONTECEU? A régua por tipo, e o único lugar que a conhece deste lado da tela.
+   Tarefa é o caso que importa: ela nasce NOT_STARTED quando o executivo monta a rota,
+   e só vira COMPLETED quando ele faz o check-in — é a regra de lib/realizado.js.
+   Reunião futura não é toque de hoje. Nota conta: ela é escrita depois do contato. */
+function tm10ToqueRealizado(it, agoraMs) {
+  const ms = tm10QuandoDoItem(it);
+  if (ms == null || ms > agoraMs) return false;
+  /* `hs_task_status` E `hs_task_subject`: o HubSpot omite propriedade vazia, e sem os
+     dois testes uma tarefa sem assunto cairia no ramo da nota e voltaria a contar. */
+  const ehTarefa = it.hs_task_status !== undefined || it.hs_task_subject !== undefined;
+  if (ehTarefa) return String(it.hs_task_status || '') === 'COMPLETED';
+  return true;
+}
+
 function tm10ToquesPorNegocio() {
   if (TM10_TQ) return TM10_TQ;
   const m = new Map();
   const itens = (DATA.agenda && Array.isArray(DATA.agenda.itens)) ? DATA.agenda.itens : [];
+  const agoraMs = Date.now();
   itens.forEach(function (it) {
     const id = it && it.lead_deal_id ? String(it.lead_deal_id) : null;
     if (!id) return;
-    /* CADA TIPO TEM O SEU CAMPO DE DATA, a mesma regra do robô: reunião usa o início
-       dela (quando acontece), tarefa e nota usam o timestamp. hs_createdate diria
-       "quando o registro foi criado", e a reunião de terça marcada na segunda contaria
-       como toque de segunda. */
-    const quando = it.hs_meeting_start_time || it.hs_timestamp || null;
-    const ms = quando ? Date.parse(quando) : NaN;
-    const at = m.get(id) || { n: 0, ultimo: null };
-    at.n += 1;
-    if (Number.isFinite(ms) && (at.ultimo == null || ms > at.ultimo)) at.ultimo = ms;
+    /* O NEGÓCIO ENTRA NO MAPA DE QUALQUER JEITO, mesmo sem nenhum toque realizado:
+       sem esta linha o lead que só tem compromisso marcado sairia do Map e `tm10Tq`
+       devolveria o mesmo `{n:0}` do lead que a agenda nunca tocou. Os dois leem 0
+       toques, que é a verdade — mas o de cima tem promessa em aberto, e é dele que
+       `abertos` fala. */
+    const at = m.get(id) || { n: 0, ultimo: null, abertos: 0 };
+    if (tm10ToqueRealizado(it, agoraMs)) {
+      const ms = tm10QuandoDoItem(it);
+      at.n += 1;
+      if (ms != null && (at.ultimo == null || ms > at.ultimo)) at.ultimo = ms;
+    } else {
+      at.abertos += 1;
+    }
     m.set(id, at);
   });
   TM10_TQ = m;
@@ -24737,7 +24828,7 @@ function tm10ToquesPorNegocio() {
 }
 function tm10Tq(id) {
   const at = tm10ToquesPorNegocio().get(String(id));
-  return at || { n: 0, ultimo: null };
+  return at || { n: 0, ultimo: null, abertos: 0 };
 }
 /* PLURALIZAÇÃO É REGRA 2 DA PRANCHA: "0 toques", "1 toque", "N toques". */
 function tm10TqRot(n) { return n === 1 ? '1 toque' : n + ' toques'; }
@@ -24812,6 +24903,11 @@ function tm10Ultimo(ms) {
   if (dia === hoje) return 'hoje';
   const dif = Math.round((Date.parse(hoje) - Date.parse(dia)) / 86400000);
   if (dif === 1) return 'ontem';
+  /* PISO (19/09/26): esta conta é `hoje - dia` sem piso, e data no futuro saía como
+     "há -3d" na tela. Com `tm10ToqueRealizado` o futuro não chega mais aqui — este
+     ramo é a rede: se aparecer, a palavra denuncia que um item não realizado passou,
+     em vez de virar um número negativo que ninguém lê como defeito. */
+  if (dif < 0) return 'agendado';
   return 'há ' + dif + 'd';
 }
 
@@ -24984,8 +25080,10 @@ function tm10Travados(etapas) {
     const tq = tm10Tq(x.l.id);
     /* O PORQUÊ SAI DO DADO, nunca de uma frase pronta: o que trava é sempre uma das
        três — não tem toque, tem toque velho, ou passou da régua com tarefa vencida. */
+    const minTq = (typeof cadenciaMinimoToques === 'function') ? cadenciaMinimoToques() : 0;
     const porque = tq.n === 0 ? 'nenhum toque na janela — ninguém voltou nesse'
-      : (tq.n <= 1 ? 'um toque só desde que entrou — cadência abaixo da régua'
+      : ((minTq > 0 && tq.n < minTq)
+        ? tm10TqRot(tq.n) + ' de ' + minTq + ' — abaixo do mínimo da política'
         : 'régua de ' + (x.e.regua || '—') + 'd estourada com ' + tm10TqRot(tq.n));
     return {
       rank: i + 1, id: String(x.l.id), nome: x.l.name || x.l.dealname || 'sem nome',
@@ -25020,18 +25118,37 @@ function tm10Cobertura(etapas) {
     const tq = tm10Tq(x.l.id); somaTq += tq.n;
     const c = caixas[faixa(tq.n)]; c.n += 1; c.mrr += tm10MrrDo(x.l);
   });
-  const abandonados = ativos.filter(function (x) { return tm10Tq(x.l.id).n <= 1; })
+  /* ══ O PISO DA POLÍTICA, E O TAMANHO DA DÍVIDA (19/09/26) ══════════════════════
+     Era `n <= 1` e cinco linhas na tela. Duas coisas mudaram:
+       · o corte passou a ser o piso configurado (4 desde 19/09), porque ter duas
+         definições de "pouco toque" no produto — o 1 daqui e o 4 da política — é ter
+         duas verdades sobre o mesmo lead;
+       · a CONTAGEM sai junto. Medido em 19/09: 137 dos 140 negócios abertos estão
+         abaixo do piso. Mostrar 5 sem dizer 137 faz a tela parecer que o problema são
+         cinco leads, e é o funil inteiro. Os 5 continuam sendo os de maior MRR — são
+         os que se cobra primeiro no 1:1.
+     PISO ZERO NÃO ACUSA NINGUÉM: com a política desligada em data/cadencias.json a
+     lista fica vazia, e não com o funil todo dentro dela. */
+  const minimoTq = (typeof cadenciaMinimoToques === 'function') ? cadenciaMinimoToques() : 0;
+  const fora = minimoTq > 0
+    ? ativos.filter(function (x) { return tm10Tq(x.l.id).n < minimoTq; })
+    : [];
+  const abandonados = fora.slice()
     .sort(function (a, b) { return tm10MrrDo(b.l) - tm10MrrDo(a.l); })
     .slice(0, 5).map(function (x) {
       const tq = tm10Tq(x.l.id);
       return { id: String(x.l.id), nome: x.l.name || x.l.dealname || 'sem nome',
         dono: tm10NomeCurto(x.l.vendedor), ownerId: String(x.l.ownerId || ''),
         etapa: x.e.rot, dias: x.l.dias != null ? x.l.dias : null,
-        tqRot: tm10TqRot(tq.n), mrr: tm10MrrDo(x.l) };
+        tqRot: tm10TqRot(tq.n), mrr: tm10MrrDo(x.l),
+        /* a promessa em aberto é o agravante: não é "ninguém foi", é "alguém marcou
+           e não foi" — e essa é a cobrança mais direta que o gestor tem na mão */
+        prometeu: tq.abertos > 0 };
     });
   const maxN = Math.max(1, caixas[0].n, caixas[1].n, caixas[2].n);
   caixas.forEach(function (c) { c.pct = Math.round(c.n / maxN * 100); });
-  return { caixas: caixas, ativos: ativos.length,
+  return { caixas: caixas, ativos: ativos.length, minimo: minimoTq,
+    fora: fora.length, foraMrr: fora.reduce(function (s, x) { return s + tm10MrrDo(x.l); }, 0),
     media: ativos.length ? somaTq / ativos.length : 0, abandonados: abandonados };
 }
 
@@ -25724,19 +25841,30 @@ function tm10CaudaHTML(d) {
         +   'color:#2B3440;">' + esc(tm10Rs(x.mrr)) + '</b></div>';
     }).join('')
     : '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#1E9E7B;">'
-      + 'nenhum lead ativo com 1 toque ou menos — o time está tocando a carteira ✓</span>';
+      + (cob.minimo > 0
+        ? 'nenhum lead ativo abaixo de ' + cob.minimo + ' toques — a carteira está dentro da política ✓'
+        : 'piso de pontos de contato desligado em data/cadencias.json — nada a cobrar aqui')
+      + '</span>';
   const bloco4 = '<div style="background:#FDFEFF;border:1px solid #E9D9E1;border-radius:12px;padding:14px 18px;">'
     + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
     +   'color:#8E3B5C;">4 · Cobertura de toques</span>'
     + '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;margin:3px 0 9px;">'
+    /* O "2" DESTA FRASE ERA INVENTADO. Ele não saía de lugar nenhum — nem da régua,
+       nem da faixa do histograma (que corta em 1 e em 4). Desde 19/09 existe um piso
+       de verdade em data/cadencias.json e a frase passa a citá-LO. */
     +   esc(cob.ativos + ' leads ativos · ' + cob.media.toFixed(1).replace('.', ',')
-        + ' toques por lead nos últimos ' + d.janelaToques + ' dias — abaixo de 2 toques o lead'
-        + ' está abandonado, não trabalhado') + '</span>'
+        + ' toques por lead nos últimos ' + d.janelaToques + ' dias'
+        + (cob.minimo > 0 ? ' — a política pede ' + cob.minimo
+            + ' pontos de contato antes de desistir de um lead' : '')) + '</span>'
     + '<div style="display:flex;flex-direction:column;gap:5px;">'
     +   cob.caixas.map(function (c) { return barra(c.rot, c.n, c.pct, c.cor, tm10Rs(c.mrr)); }).join('')
     + '</div>'
     + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
-    +   'text-transform:uppercase;color:#E51A31;margin:12px 0 6px;">abandonados — ≤1 toque · cobre o dono</span>'
+    +   'text-transform:uppercase;color:#E51A31;margin:12px 0 6px;">'
+    +   esc(cob.minimo > 0
+      ? 'abaixo do mínimo de ' + cob.minimo + ' toques — ' + cob.fora + ' de ' + cob.ativos
+          + ' · ' + tm10Rs(cob.foraMrr) + ' parados · os 5 maiores, cobre o dono'
+      : 'piso de pontos de contato desligado na régua') + '</span>'
     + '<div style="display:flex;flex-direction:column;gap:5px;">' + abandHTML + '</div></div>';
 
   /* ── 5 · SLA DE 1º TOQUE ───────────────────────────────────────────────────────────
@@ -37374,6 +37502,41 @@ function abrirEscolhaDeEtapa(lead, aoConcluir) {
   });
 }
 
+/* ══ CIENTE DO PISO DE PONTOS DE CONTATO (19/09/26) ═══════════════════════════════════
+   Devolve '' quando não há nada a dizer — piso desligado na régua, negócio dentro da
+   política, ou destino que não é saída do funil. Nunca devolve um aviso "tudo certo":
+   caixa que aparece sempre é caixa que ninguém lê.
+
+   NÃO TRAVA NADA. É o pedido dele, palavra por palavra — "deixar eles ciente disso, nao
+   travar nada". Quem chama isto só concatena HTML; o botão de gravar não olha para cá. */
+function avisoDoMinimoHTML(lead) {
+  if (typeof estadoDoNegocio !== 'function') return '';
+  let est = null;
+  /* O ESTADO PODE ESTOURAR num negócio com dado incompleto, e um aviso NUNCA pode
+     derrubar o formulário de mudar etapa — a etapa é o que grava no CRM, o aviso é
+     acessório. Esta base já perdeu uma escrita no HubSpot porque um erro de pintura
+     subiu por cima dela (ver o comentário de gravarPassagemOtimista). */
+  try { est = estadoDoNegocio(lead); } catch (e) { return ''; }
+  if (!est || !est.abaixoDoMinimo) return '';
+  const feitos = (est.toques && est.toques.total) || 0;
+  const faltam = est.toquesFaltando || 0;
+  /* "≥" PORQUE A CONTAGEM É UM PISO. toques.parcial é sempre true: o HubSpot não
+     devolve o histórico completo de atividades, então o que a tela sabe é o MÍNIMO de
+     toques que houve. Escrever "1 toque" onde o certo é "pelo menos 1" seria a tela
+     acusando com um número que ela não tem. */
+  const parcial = !!(est.toques && est.toques.parcial);
+  return '<div style="background:var(--amber-soft);color:var(--amber-ink);'
+    + 'border-radius:var(--r-md);padding:11px 13px;font-size:12px;line-height:1.5;'
+    + 'margin-bottom:14px;">'
+    + '<b>' + (parcial ? 'Pelo menos ' : '') + feitos + ' de ' + est.minimoToques
+    + ' pontos de contato registrados neste lead'
+    + (faltam > 0 ? ' — faltam ' + faltam : '') + '.</b> '
+    + 'A regra do time é no mínimo ' + est.minimoToques + ' antes de tirar um lead da mesa. '
+    + '<span style="font-weight:400;">Você pode seguir mesmo assim — mas se você foi lá e '
+    + 'não registrou, registrar agora é o que tira este lead da cobrança do 1:1.</span>'
+    + '</div>';
+}
+
 function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
   const de = lead.stageId || null;
   const para = String(novaEtapaId);
@@ -37426,6 +37589,7 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
       <div class="pe-etapa"><span>para</span><b style="color:${corPara};">${esc(STAGE_LABELS[para])}</b></div>
       <span class="pe-pulso" style="background:${corPara};color:${corPara};"></span>
     </div>
+    ${(para === ETAPA_PERDIDO_ID || para === '1398311191') ? avisoDoMinimoHTML(lead) : ''}
     ${para === ETAPA_PERDIDO_ID ? `<div style="background:var(--red-soft);color:var(--red);border-radius:var(--r-md);padding:11px 13px;font-size:12px;font-weight:700;line-height:1.5;margin-bottom:14px;">Sai do funil e entra na sua assinatura de perda — é assim que "Preço" e "Sem retorno" deixam de ser palpite na Daily. Perda por engano se desfaz: o negócio volta para qualquer etapa por aqui mesmo.</div>`
       : voltando ? `<div style="background:var(--amber-soft);color:var(--amber-ink);border-radius:var(--r-md);padding:11px 13px;font-size:12px;font-weight:700;line-height:1.5;margin-bottom:14px;">Voltar etapa é registro de realidade, não erro — mas o gestor vê o movimento na Semana. Se foi engano, feche aqui mesmo.</div>` : ''}
     ${campos.length ? `
@@ -61618,14 +61782,33 @@ function sm5Janela() {
   /* CINCO DIAS É O QUE FAZ UMA SEMANA FECHADA nesta casa: field sales é seg–sex, e o
      próprio robô capa a janela na sexta 23:59. Menos que isso é semana em curso. */
   const atualFechou = diasAtual != null && diasAtual >= 5;
+  const mostrada = atualFechou ? (j.atual || '—') : (j.anterior || '—');
+
+  /* OS AVISOS SÃO UMA LISTA, e não um campo por motivo. São dois motivos diferentes
+     para o mesmo lugar da tela (o rodapé do bloco do mês, que a prancha reserva para
+     isto), e um `aviso` por motivo faria a tela escolher qual esconder. */
+  const avisos = [];
+  if (!atualFechou && j.atual) avisos.push('a semana ' + j.atual + ' ainda não fechou');
+
+  /* A LEITURA POR PESSOA PODE SER DE OUTRA SEMANA (19/09/26). Os KPIs vêm do
+     weekly-raw, regravado de 2 em 2 horas; o board e o roteiro vêm do resumo-semanal,
+     escrito no cron de domingo 22h. A janela do primeiro vira na sexta 23:59 e a do
+     segundo só no domingo — então no fim de semana as duas descrevem semanas
+     diferentes. Declarar é a única saída honesta: não existe board da semana nova
+     antes do robô de domingo, e somar os dois é o defeito de 16/09 de novo. */
+  const leitura = rs.janelaDaLeitura || null;
+  if (leitura && mostrada !== '—' && leitura !== mostrada) {
+    avisos.push('os números acima são de ' + mostrada + ' · a leitura por pessoa e o '
+      + 'roteiro abaixo ainda são de ' + leitura);
+  }
+  const aviso = avisos.length ? avisos.join(' · ') : null;
+
   return atualFechou
-    ? { rotulo: j.atual || '—', comparacao: j.anterior || null, usouAnterior: false,
-        kpis: (rs.kpisComparativo || {}).atual || {}, kpisComp: (rs.kpisComparativo || {}).anterior || null }
-    : { rotulo: j.anterior || '—', comparacao: null, usouAnterior: true,
-        kpis: (rs.kpisComparativo || {}).anterior || {}, kpisComp: null,
-        /* o motivo vai para a tela, não para o console: o gestor precisa saber por que
-           está lendo a semana retrasada quando isso acontece */
-        aviso: j.atual ? 'a semana ' + j.atual + ' ainda não fechou' : null };
+    ? { rotulo: mostrada, comparacao: j.anterior || null, usouAnterior: false,
+        kpis: (rs.kpisComparativo || {}).atual || {},
+        kpisComp: (rs.kpisComparativo || {}).anterior || null, aviso: aviso }
+    : { rotulo: mostrada, comparacao: null, usouAnterior: true,
+        kpis: (rs.kpisComparativo || {}).anterior || {}, kpisComp: null, aviso: aviso };
 }
 
 
