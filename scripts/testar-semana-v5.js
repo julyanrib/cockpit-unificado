@@ -488,6 +488,66 @@ conferir('nenhum ownerId cravado no código da v5',
   !/['"](8[5-9]|9[0-9])[0-9]{6}['"]/.test(v5),
   'id de dono em literal amarra a tela ao time de hoje e mente no dia que alguém entra');
 
+/* ══ OS NÚMEROS POR PESSOA SÃO DE AGORA, A PROSA É DA SEMANA FECHADA (19/09/26) ═════
+   Julyan: "a aba semana não está atualizada... a kelly aparece com muitos travados e
+   ela limpou o funil".
+
+   MEDIDO NOS SNAPSHOTS DE PRODUÇÃO, com o resumo-semanal de 14/09 e o weekly-raw de
+   19/09: sete das nove pessoas do board tinham número errado. Kelly 26 travados
+   (reais: 5), Luiz ZERO (reais: 11), Wericles 2 (reais: 5), Renata 0 (reais: 3),
+   Sérgio 0 (reais: 2). O do Luiz é o mais grave: número inflado alguém contesta, zero
+   por dado velho tira a pessoa da cobrança sem ninguém notar.
+
+   A causa era uma linha — `const snap = p.snap || {}` — lendo de dentro do `porRep`,
+   que é escrito uma vez por semana. A fonte fresca (`snapshotReps`, regravada a cada
+   daily-refresh) já estava no mesmo snapshot, usada só pelo card de praças. */
+const corpoDados = corpoDe('sm5Dados');
+
+conferir('os números de estado saem da fonte fresca, não do resumo de domingo',
+  /const snap = snapReps\[id\] \|\| p\.snap \|\| \{\};/.test(corpoDados)
+    && corpoDados.indexOf('const snap = p.snap || {};') < 0,
+  'porRep vem do cron de domingo 22h e a tela é lida a semana inteira — foi assim que a'
+    + ' Kelly ficou cinco dias com 26 travados tendo 5');
+
+conferir('e a fonte fresca é a do weekly-raw',
+  /const snapReps = rs\.snapshotReps \|\| \{\};/.test(corpoDados),
+  'snapshotReps é regravado a cada daily-refresh; porRep, uma vez por semana');
+
+conferir('a lista de pessoas é a UNIÃO das duas fontes',
+  /const idsDoBoard = Object\.keys\(porRep\);/.test(corpoDados)
+    && /Object\.keys\(snapReps\)\.forEach/.test(corpoDados)
+    && /const linhas = idsDoBoard\.map/.test(corpoDados),
+  'só porRep deixa de fora quem entrou depois de domingo; só snapshotReps perde quem tem'
+    + ' leitura da IA e saiu no meio da semana');
+
+conferir('a rede do snapshot antigo continua existindo',
+  /\|\| p\.snap \|\| \{\};/.test(corpoDados),
+  'no dia em que o weekly-raw falhar, um número de domingo é melhor que uma tela vazia');
+
+/* E O AVISO, QUANDO A REDE É USADA. Foi a AUSÊNCIA de um aviso assim que deixou o
+   defeito viver cinco dias: o número velho não tinha nada na tela dizendo que era
+   velho. Guarda dos DOIS lados — quem emite e quem lê. */
+conferir('a tela marca quando o número de estado veio da rede antiga',
+  /estadoFresco: !!snapReps\[id\],/.test(corpoDados),
+  'sem o campo, a tela não tem como distinguir o número de hoje do de domingo');
+
+conferir('e esse aviso APARECE na linha da pessoa',
+  /r\.estadoFresco \? '' : ' · <b style="color:#B0782A;">travados e mês do'/.test(tpl),
+  'campo emitido e nunca lido é a dívida que esta base já tem treze vezes');
+
+/* A PROSA CONTINUA SENDO DA SEMANA FECHADA, e isso NÃO é defeito: ela é a leitura
+   daquela semana. O que não podia era o NÚMERO envelhecer junto com o texto. */
+conferir('a leitura da IA continua vindo do resumo semanal',
+  /const p = porRep\[id\] \|\| \{\};/.test(corpoDados)
+    && /p\.resumoIndividual/.test(corpoDados),
+  'o gargalo e o roteiro descrevem a semana que fechou, e trocá-los por algo de hoje'
+    + ' seria inventar uma leitura que a IA não fez');
+
+conferir('e a tendência continua comparando com a semana anterior do resumo',
+  /sm5Tendencia\(snap, p\.anterior\)/.test(corpoDados),
+  'p.anterior é a semana retrasada; trocá-la pelo estado de hoje compararia coisas'
+    + ' diferentes');
+
 if (falhas.length) {
   console.log('FALHAS (' + falhas.length + '):');
   falhas.forEach(function (f) { console.log(f); });
