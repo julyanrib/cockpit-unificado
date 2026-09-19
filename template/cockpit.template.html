@@ -25407,22 +25407,45 @@ function tm10Conversao() {
   const atual = esc[meses[meses.length - 1]];
   const antes = meses.slice(0, -1);
   const taxa = function (et) { return et && et.chegaram ? et.avancaram / et.chegaram * 100 : null; };
+  /* ══ A MESMA TAXA, SEM OS DESCARTADOS EM LOTE (19/09/26) ═══════════════════════
+     conversao = avancaram/chegaram, e o negócio limpado em lote conta em `chegaram`
+     sem contar em `avancaram`: ele entra no denominador como se tivesse sido
+     trabalhado e tivesse falhado. Medido na escada de hoje, a Visita é o ralo —
+     223 chegaram, 63 avançaram e 131 perderam ali em agosto.
+
+     null QUANDO NÃO HÁ DENOMINADOR: se a faxina levou a etapa inteira, não existe
+     taxa, e a tela escreve isso em vez de desenhar 0% ou Infinity. */
+  const taxaLimpa = function (et) {
+    if (!et || et.chegaramSemLimpeza == null) return null;
+    if (et.chegaramSemLimpeza <= 0) return null;
+    return et.avancaram / et.chegaramSemLimpeza * 100;
+  };
   const linhas = ((atual && atual.etapas) || []).slice(0, 5).map(function (et, i) {
     const prox = ((atual && atual.etapas) || [])[i + 1];
     const agora = taxa(et);
+    const semLimpeza = taxaLimpa(et);
     const hist = antes.map(function (mm) {
       const e2 = ((esc[mm] && esc[mm].etapas) || []).find(function (x) { return x.id === et.id; });
       return taxa(e2);
     }).filter(function (v) { return v != null; });
     const media = hist.length ? hist.reduce(function (a, b) { return a + b; }, 0) / hist.length : null;
+    /* SÓ MOSTRA A SEGUNDA TAXA QUANDO ELA MUDA A LEITURA. Um ponto percentual de
+       diferença não muda decisão nenhuma e só polui a linha; o corte é 5. */
+    const pctLimpa = semLimpeza == null ? null : Math.round(semLimpeza);
+    const pctCru = agora == null ? null : Math.round(agora);
+    const vale = (pctLimpa != null && pctCru != null && (pctLimpa - pctCru) >= 5);
     return {
       rot: et.nome + ' → ' + (prox ? prox.nome : 'fechamento'),
-      pct: agora == null ? null : Math.round(agora),
+      pct: pctCru,
       media: media == null ? null : Math.round(media),
+      /* quantos daquela etapa foram faxina, para a tela poder dizer o porquê */
+      limpeza: Number(et.perderamAquiEmLote || 0),
+      pctSemLimpeza: vale ? pctLimpa : null,
       cor: (agora != null && media != null && agora >= media) ? '#1E9E7B' : '#E51A31'
     };
   }).filter(function (l) { return l.pct != null; });
-  return { medivel: true, linhas: linhas, meses: antes.length };
+  return { medivel: true, linhas: linhas, meses: antes.length,
+    loteRegra: (atual && atual.loteRegra) || null };
 }
 
 /* ── A CADÊNCIA (bloco 7) ─────────────────────────────────────────────────────────────
@@ -26091,11 +26114,29 @@ function tm10CaudaHTML(d) {
         + '</span>'
         + '<b style="flex:none;width:34px;text-align:right;font:900 11px \'Archivo\',sans-serif;'
         +   'color:' + x.cor + ';">' + x.pct + '%</b>'
+        /* A SEGUNDA TAXA, quando descontar a faxina muda a leitura. A barra e o % à
+           esquerda continuam sendo a conversão CRUA — o número primário não se troca
+           por uma inferência de horário. */
+        + (x.pctSemLimpeza == null ? ''
+          : '<b style="flex:none;font:900 10px \'Archivo\',sans-serif;color:#15795D;'
+            + 'background:#EAF6F1;border:1px solid #BFE3D6;border-radius:5px;padding:2px 5px;'
+            + 'white-space:nowrap;" title="' + esc(x.limpeza + ' dos que pararam aqui foram'
+              + ' marcados em lote — provável limpeza de base') + '">'
+            + x.pctSemLimpeza + '% sem a faxina</b>')
         + '<span style="flex:none;width:58px;text-align:right;font:800 8.5px \'Manrope\',sans-serif;'
         +   'color:#7A8494;">' + (x.media == null ? '—' : 'média ' + x.media + '%') + '</span></span>';
     }).join('')
     : '<span style="display:block;font:700 10px \'Manrope\',sans-serif;color:#B4AC9C;">'
       + 'a conversão precisa de pelo menos dois meses medidos — o robô tem ' + cv.meses + '.</span>';
+  /* A LEGENDA SÓ EXISTE SE ALGUMA LINHA MOSTROU A SEGUNDA TAXA. Explicar uma coisa
+     que não está na tela é ruído, e legenda que aparece sempre ninguém lê. */
+  const convNota = (cv.medivel && (cv.linhas || []).some(function (x) { return x.pctSemLimpeza != null; }))
+    ? '<span style="display:block;font:700 9.5px/1.5 \'Manrope\',sans-serif;color:#7A8494;'
+      + 'margin-top:8px;">' + esc('"sem a faxina" tira do denominador quem foi descartado em'
+        + ' lote (' + ((cv.loteRegra && cv.loteRegra.minimo) ? cv.loteRegra.minimo + '+ em '
+          + cv.loteRegra.gapMin + ' min' : 'marcados em sequência') + ') — quem foi limpado'
+        + ' não deixou de avançar, ele nunca foi trabalhado') + '</span>'
+    : '';
   const bloco6 = '<div style="background:#FBFAF6;border:1px solid #E7E3DA;border-radius:12px;padding:14px 18px;">'
     + '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
     +   'color:#7A8494;">6 · Por que perdemos <span style="font-weight:700;letter-spacing:0;'
@@ -26111,7 +26152,8 @@ function tm10CaudaHTML(d) {
     + '<span style="display:block;font:900 9px \'Archivo\',sans-serif;letter-spacing:.1em;'
     +   'text-transform:uppercase;color:#7A8494;margin:12px 0 6px;">conversão etapa → etapa · traço = média de '
     +   (cv.medivel ? cv.meses : 0) + ' mes' + (cv.medivel && cv.meses === 1 ? '' : 'es') + '</span>'
-    + '<div style="display:flex;flex-direction:column;gap:5px;">' + convHTML + '</div></div>';
+    + '<div style="display:flex;flex-direction:column;gap:5px;">' + convHTML + '</div>'
+    + convNota + '</div>';
 
   /* ── 7 · CADENCIA DO TIME ──────────────────────────────────────────────────────────
      O heatmap do robo. O NOME E CLICAVEL (item 54 do mapa) e cai no dossie — o mesmo
