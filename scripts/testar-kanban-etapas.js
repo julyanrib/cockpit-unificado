@@ -691,8 +691,22 @@ checar('semanal: ninguém monta hs_v2_date_entered_ + a etapa de Reciclagem (nã
   semanalCodigo.indexOf('hs_v2_date_entered_' + RECICLAGEM) < 0);
 checar('semanal: Reciclagem conta pela data de entrada na etapa ATUAL (propriedade global)',
   semanal.indexOf("'hs_v2_date_entered_current_stage'") > 0);
-checar('semanal: Perdido conta por closedate (etapa fechada), não por última modificação',
-  semanal.indexOf("contagemComFiltro(STAGES.perdido, startMs, endMs, 'closedate')") > 0);
+/* A CHECAGEM MEDE A REGRA, NÃO A CHAMADA. Ela cravava
+   `contagemComFiltro(STAGES.perdido, ..., 'closedate')` e reprovou em 19/09, quando
+   aquela contagem virou `perdidosNaJanela` — uma busca que traz os negócios para
+   separar perda uma a uma de marcação em lote. O código estava certo; a âncora é que
+   descrevia a implementação em vez da regra. O que não pode mudar é a DATA usada. */
+(function () {
+  const i = semanalCodigo.indexOf('async function perdidosNaJanela(');
+  const corpo = i > 0 ? semanalCodigo.slice(i, semanalCodigo.indexOf('\n}', i)) : '';
+  checar('semanal: Perdido conta por closedate (etapa fechada), não por última modificação',
+    corpo.indexOf("propertyName: 'closedate'") > 0
+      && corpo.indexOf('hs_lastmodifieddate') < 0
+      && corpo.indexOf('dealstage') > 0);
+  checar('semanal: e o total dos perdidos vem do servidor, não do tamanho da página',
+    corpo.indexOf('data.total || 0') > 0,
+    'semana com mais de 100 perdidos devolveria exatamente 100 — foi um defeito real de 02/09');
+}());
 checar('semanal: a contagem é o total do servidor, não o tamanho da página',
   semanalCodigo.indexOf('return data.total || 0;') > 0 &&
   semanalCodigo.indexOf('hs_lastmodifieddate') < 0);
