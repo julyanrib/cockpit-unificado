@@ -85,7 +85,15 @@ function janelaEm(iso) {
     /* dias de calendário BRT cobertos: o início é segunda 03:00 UTC e o fim é sábado
        02:59:59.999 UTC, que é sexta 23:59:59.999 BRT — cinco dias úteis. */
     dias: Math.round((r.af - r.ai + 1) / DAY),
-    diaDaSemanaDoInicio: new Date(r.ai - 3 * 3600000).getUTCDay()
+    diaDaSemanaDoInicio: new Date(r.ai - 3 * 3600000).getUTCDay(),
+    /* A HORA DO FIM, em BRT. Sem ela a checagem do tamanho da janela é CEGA: com o
+       fim às 20h de sexta, (af - ai + 1) / DAY da 4,83 e o Math.round devolve 5 — a
+       sabotagem que encurtava a janela passava verde. */
+    fimBRT: (function () {
+      const d = new Date(r.af - 3 * 3600000);
+      return String(d.getUTCHours()).padStart(2, '0') + ':'
+        + String(d.getUTCMinutes()).padStart(2, '0');
+    }())
   };
 }
 
@@ -201,6 +209,70 @@ conferir('e avisa quando as duas janelas divergem',
 conferir('o aviso da semana nao fechada nao foi perdido na troca',
   tplTxt.indexOf("avisos.push('a semana ' + j.atual + ' ainda não fechou')") > -1,
   'eram dois motivos para o mesmo lugar da tela; trocar um pelo outro perde metade');
+
+/* ── 8 · A SEMANA FECHA ÀS 20H DE SEXTA (19/09/26) ───────────────────────────────
+   Julyan: "o robo tem que rodar então sexta 20h". Com o corte antigo (sexta 23:59) o
+   robô das 20h reportaria a semana RETRASADA e escreveria a leitura da IA sobre ela —
+   medido antes de mexer: 07/09–11/09 no lugar de 14/09–18/09.
+
+   20H É QUANDO O TIME PARA, não um número para caber no cron: a última rodada de dia
+   útil do daily-refresh é 19:00 BRT. */
+conferir('às 19h de sexta a semana ainda NÃO fechou',
+  janelaEm('2026-09-18T22:00:00Z').rotulo === '07/09–11/09',
+  'deu ' + janelaEm('2026-09-18T22:00:00Z').rotulo + ' — antes das 20h o dia ainda corre,'
+    + ' e fechar cedo é o defeito que tirou o horário de sexta 16h em 05/09');
+
+conferir('às 20h de sexta ela fecha, e é a semana que acabou',
+  janelaEm('2026-09-18T23:00:00Z').rotulo === '14/09–18/09',
+  'deu ' + janelaEm('2026-09-18T23:00:00Z').rotulo + ' — é ESTE o instante em que o robô'
+    + ' novo roda, e ele tem que ver a semana dele');
+
+conferir('e a comparação dele é com 07/09–11/09',
+  janelaEm('2026-09-18T23:00:00Z').anterior === '07/09–11/09',
+  'deu ' + janelaEm('2026-09-18T23:00:00Z').anterior);
+
+/* NÃO OSCILA NO MEIO DA SEMANA: se a janela virasse de novo antes da sexta seguinte, o
+   histórico ganharia duas linhas para a mesma semana — foi assim que a série virou
+   "14/09–14/09" duas vezes em 16/09. */
+const DEPOIS_DO_FECHAMENTO = [
+  ['sábado 19/09 09h BRT', '2026-09-19T12:00:00Z'],
+  ['domingo 20/09 22h BRT (o horário velho)', '2026-09-20T01:00:00Z'],
+  ['segunda 21/09 08:30 BRT', '2026-09-21T11:30:00Z'],
+  ['quinta 24/09 15h BRT', '2026-09-24T18:00:00Z'],
+  ['sexta 25/09 19h BRT', '2026-09-25T22:00:00Z']
+];
+DEPOIS_DO_FECHAMENTO.forEach(function (par) {
+  conferir('a janela continua 14/09–18/09 na ' + par[0],
+    janelaEm(par[1]).rotulo === '14/09–18/09',
+    'deu ' + janelaEm(par[1]).rotulo + ' — a janela só pode virar na sexta seguinte às 20h');
+});
+
+conferir('e vira 21/09–25/09 só às 20h da sexta seguinte',
+  janelaEm('2026-09-25T23:00:00Z').rotulo === '21/09–25/09',
+  'deu ' + janelaEm('2026-09-25T23:00:00Z').rotulo);
+
+/* A JANELA DE DADOS NÃO ENCOLHEU COM O CORTE. Se ela terminasse às 20h, o negócio
+   fechado na sexta à noite cairia em semana NENHUMA — a próxima só começa na segunda.
+   Continua cinco dias cheios, e as quatro horas finais entram na rodada seguinte do
+   daily-refresh (sábado 09:00). */
+conferir('a janela continua com cinco dias cheios depois da mudança',
+  janelaEm('2026-09-18T23:00:00Z').dias === 5,
+  'deu ' + janelaEm('2026-09-18T23:00:00Z').dias + ' — encurtar a janela junto com o corte'
+    + ' perderia a sexta à noite para sempre');
+
+/* E O FIM É 23:59, NÃO 20:00 — esta é a checagem que pega de verdade. A de cima,
+   sozinha, era cega: o Math.round transforma 4,83 dias em 5 e a sabotagem que
+   encurtava a janela até as 20h passava verde. */
+conferir('e ela termina às 23:59 de sexta, não às 20:00',
+  janelaEm('2026-09-18T23:00:00Z').fimBRT === '23:59',
+  'terminou às ' + janelaEm('2026-09-18T23:00:00Z').fimBRT + ' — o corte da SEMANA foi'
+    + ' para as 20h, mas a JANELA DE DADOS não pode encolher junto: o negócio fechado na'
+    + ' sexta à noite cairia em semana nenhuma');
+
+conferir('o corte está declarado em dia e hora, e não em "5 dias menos 1ms"',
+  /const sextaDaCorrente = semanaCorrente \+ 4 \* DAY \+ 20 \* HORA;/.test(fonte),
+  'escrito assim, dá para comparar o corte com o cron do workflow — é o que'
+    + ' testar-robos-ia.js faz, e é o que impede os dois de andarem separados');
 
 if (falhas.length) {
   console.log('FALHAS (' + falhas.length + '):');

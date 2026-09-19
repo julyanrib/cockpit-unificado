@@ -116,13 +116,57 @@ checar('lista vazia não sobrescreve o compromisso',
   /if \(c\.compromissos\.length && narrativas\.reps\[ownerId\]\)/.test(robo),
   'sem a checagem de tamanho, um timeout apaga o plano da semana de alguém');
 
-/* ── 7. O HORÁRIO ────────────────────────────────────────────────────────────────
-   Domingo 22h de Brasília = 01:00 UTC de segunda. O compromisso é da semana e o
-   executivo abre a tela na segunda de manhã. */
+/* ── 7. O HORÁRIO, E ELE NÃO PODE ANDAR SOZINHO ──────────────────────────────────
+   Sexta 20h de Brasília = 23:00 UTC de sexta (pedido do Julyan, 19/09/26).
+
+   A VERSÃO ANTERIOR DESTA CHECAGEM CRAVAVA O DOMINGO, e foi ela que reprovou quando
+   eu mudei o dia — cumpriu o papel. Mas cravar o horário sozinho protege metade: o
+   que realmente quebra é o cron andar SEM o corte de "semana fechada" andar junto.
+   Medido antes de mexer: com o corte em sexta 23:59 e o robô às 20h, ele reportaria
+   07/09–11/09 — a semana RETRASADA — e escreveria a leitura da IA sobre ela. Seria o
+   defeito de 16/09 de novo.
+
+   Então a checagem passou a exigir os DOIS lados, e a comparar um com o outro. */
 (function () {
   const y = fs.readFileSync(path.join(raiz, '.github/workflows/weekly-summary.yml'), 'utf8');
-  checar('o robô roda domingo à noite', y.indexOf("cron: '0 1 * * 1'") > -1,
-    'o cron do GitHub é UTC: 01:00 de segunda é 22h de domingo em Brasília');
+  const cmp = fs.readFileSync(path.join(raiz, 'scripts/fetch-weekly-comparison.js'), 'utf8');
+
+  const mCron = /cron: '(\d+) (\d+) \* \* (\d)'/.exec(y);
+  checar('o robô tem um cron semanal declarado', !!mCron,
+    'sem cron ele só roda por disparo manual, e ninguém lembra de disparar');
+
+  checar('o robô roda sexta 20h de Brasília', !!mCron && mCron[0] === "cron: '0 23 * * 5'",
+    'o cron do GitHub é UTC: 23:00 de sexta é 20h de sexta em Brasília — veio '
+      + (mCron ? mCron[0] : 'nada'));
+
+  /* O CORTE DA SEMANA, LIDO DO CÓDIGO e convertido para a mesma unidade do cron. */
+  const mCorte = /const sextaDaCorrente = semanaCorrente \+ (\d+) \* DAY \+ (\d+) \* HORA;/.exec(cmp);
+  checar('o corte de semana fechada está declarado em dia e hora', !!mCorte,
+    'sem ele não dá para comparar o cron com a regra, e os dois andam separados');
+
+  if (mCron && mCorte) {
+    /* cron: minuto hora * * diaDaSemana(UTC, 5 = sexta) → hora BRT = hora UTC - 3 */
+    const horaCronBRT = (Number(mCron[2]) - 3 + 24) % 24;
+    const diaCron = Number(mCron[3]);
+    const diaCorte = Number(mCorte[1]);   /* 4 dias depois da segunda = sexta */
+    const horaCorte = Number(mCorte[2]);
+    checar('o cron cai no MESMO dia em que a semana fecha',
+      diaCron === diaCorte + 1,
+      'o corte é segunda+' + diaCorte + ' dias (dia ' + (diaCorte + 1) + ' da semana) e o '
+        + 'cron é no dia ' + diaCron + ' — rodar antes de fechar faz o robô escrever a '
+        + 'leitura da IA sobre a semana RETRASADA');
+    checar('e NÃO ANTES da hora em que ela fecha',
+      horaCronBRT >= horaCorte,
+      'o robô rodaria às ' + horaCronBRT + 'h BRT e a semana só fecha às ' + horaCorte
+        + 'h — foi exatamente isso que eu ia publicar antes de medir');
+  }
+
+  /* E A JANELA DE DADOS NÃO ENCOLHE COM O CORTE. Se ela terminasse às 20h, o negócio
+     fechado na sexta à noite cairia em semana NENHUMA — a próxima só começa na segunda. */
+  checar('a janela de dados continua indo até o fim da sexta',
+    /const atualFim = new Date\(atualInicio\.getTime\(\) \+ 5 \* DAY - 1\);/.test(cmp),
+    'encurtar a janela junto com o corte perderia as quatro horas finais de sexta para '
+      + 'sempre; do jeito que está, elas entram na rodada seguinte do daily-refresh');
   checar('o passo leva as chaves do Supabase',
     /run: node scripts\/generate-weekly-summary\.js/.test(y)
     && y.indexOf('SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}') > -1,
