@@ -43847,6 +43847,11 @@ function sm5Dados() {
   ];
 
   const porRep = rs.porRep || {};
+  const snapReps = rs.snapshotReps || {};
+  const idsDoBoard = Object.keys(porRep);
+  Object.keys(snapReps).forEach(function (id) {
+    if (idsDoBoard.indexOf(id) < 0) idsDoBoard.push(id);
+  });
   const analises = SM5_ANALISES || {};
   const ganhosPorDono = {}, reunPorDono = {}, criadosPorDono = {};
   (rs.ganhosSemanaDetalhe || []).forEach(function (g) {
@@ -43862,9 +43867,10 @@ function sm5Dados() {
   const ritmo = sm5RitmoDoMes();
   let metaDoTime = 0, fechadosDoTime = 0;
 
-  const linhas = Object.keys(porRep).map(function (id) {
+  const linhas = idsDoBoard.map(function (id) {
     const p = porRep[id] || {};
-    const snap = p.snap || {};
+
+    const snap = snapReps[id] || p.snap || {};
     const rep = (DATA.reps || []).find(function (x) { return String(x.ownerId) === String(id); }) || {};
 
     const metaBruta = rep.metaMensal;
@@ -43897,6 +43903,8 @@ function sm5Dados() {
         : (rep.patamarMeta ? rep.patamarMeta + ' · meta ' + meta : 'meta ' + meta),
       temMeta: temMeta,
       criados: criados, reun: reun, ganhos: ganhos, trav: trav,
+
+      estadoFresco: !!snapReps[id],
 
       reunMedida: !jan.usouAnterior,
       mes: mes, meta: meta, pct: pct, metaBatida: metaBatida, mesAtrasado: mesAtrasado,
@@ -44268,7 +44276,10 @@ function sm5BoardHTML(d) {
         +   '<span class="sm5-l-nome" style="min-width:190px;">'
         +     '<b style="font-size:13.5px;display:block;">' + esc(r.nome) + '</b>'
         +     '<span style="font-size:10.5px;color:#A2937A;">' + esc(r.praca) + ' · '
-        +       esc(r.patamar) + '</span>'
+        +       esc(r.patamar)
+
+        +       (r.estadoFresco ? '' : ' · <b style="color:#B0782A;">travados e mês do'
+        +         ' último domingo</b>') + '</span>'
         +   '</span>'
         +   '<span class="sm5-l-num" style="display:flex;gap:18px;'
         +     'font-variant-numeric:tabular-nums;font-size:12px;min-width:270px;">'

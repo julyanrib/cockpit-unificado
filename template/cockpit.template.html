@@ -62675,10 +62675,30 @@ function sm5Dados() {
   ];
 
   /* ── o board ─────────────────────────────────────────────────────────────────────
-     A lista de pessoas sai de `porRep` do snapshot, e quem não tem meta na planilha
-     não entra (ex-time). Os números por pessoa saem do `snap`, que é o snapshot do dia
-     — as contagens já vêm corrigidas do robô e NÃO se recalcula nada aqui. */
+     DUAS FONTES, COM CADÊNCIAS DIFERENTES, e é disso que vinha o defeito de 19/09.
+
+     · `porRep` (resumo-semanal) é escrito UMA VEZ por semana, no cron de domingo 22h.
+       É dele que sai a PROSA da IA, e ela é da semana fechada de propósito.
+     · `snapshotReps` (weekly-raw) é regravado a CADA daily-refresh, de 2 em 2 horas.
+
+     Os NÚMEROS DE ESTADO — travados e fechados no mês — passam a sair do segundo.
+     Antes saíam de `p.snap`, de dentro do porRep, e o comentário aqui dizia "o snap,
+     que é o snapshot do dia": era verdade no instante em que o robô da IA rodou, e
+     deixava de ser no dia seguinte. Medido em 19/09, com o resumo de 14/09: a Kelly
+     aparecia com 26 travados tendo 5, e o Luiz com ZERO tendo ONZE. Sete das nove
+     pessoas erradas. O zero do Luiz é o pior dos dois: número inflado alguém
+     contesta, zero por dado velho tira a pessoa da cobrança em silêncio.
+
+     A LISTA DE PESSOAS é a UNIÃO das duas. Só `porRep` deixava de fora quem entrou
+     no time depois de domingo; só `snapshotReps` perderia quem tem leitura da IA e
+     saiu do time no meio da semana. Quem não tem meta na planilha continua caindo
+     fora mais abaixo, pelo `temMeta`. */
   const porRep = rs.porRep || {};
+  const snapReps = rs.snapshotReps || {};
+  const idsDoBoard = Object.keys(porRep);
+  Object.keys(snapReps).forEach(function (id) {
+    if (idsDoBoard.indexOf(id) < 0) idsDoBoard.push(id);
+  });
   const analises = SM5_ANALISES || {};
   const ganhosPorDono = {}, reunPorDono = {}, criadosPorDono = {};
   (rs.ganhosSemanaDetalhe || []).forEach(function (g) {
@@ -62694,9 +62714,13 @@ function sm5Dados() {
   const ritmo = sm5RitmoDoMes();
   let metaDoTime = 0, fechadosDoTime = 0;
 
-  const linhas = Object.keys(porRep).map(function (id) {
+  const linhas = idsDoBoard.map(function (id) {
     const p = porRep[id] || {};
-    const snap = p.snap || {};
+    /* FRESCO PRIMEIRO, e o antigo só como rede. `snapshotReps` é superconjunto de
+       `p.snap` — tem os mesmos cinco campos e mais dezesseis — então a troca não
+       perde nada. A rede existe para o dia em que o weekly-raw falhar: melhor um
+       número de domingo do que uma tela vazia. */
+    const snap = snapReps[id] || p.snap || {};
     const rep = (DATA.reps || []).find(function (x) { return String(x.ownerId) === String(id); }) || {};
     /* A META VEM DO CAMPO, E NÃO DO FALLBACK. `metaClientesDoRep` devolve 10 quando
        `metaMensal` falta, e 10 não existe na planilha (os patamares são 8 e 2): a tela
@@ -62744,6 +62768,10 @@ function sm5Dados() {
         : (rep.patamarMeta ? rep.patamarMeta + ' · meta ' + meta : 'meta ' + meta),
       temMeta: temMeta,
       criados: criados, reun: reun, ganhos: ganhos, trav: trav,
+      /* DE ONDE VEIO O NÚMERO DE ESTADO. Quando o weekly-raw não trouxe a pessoa, o
+         board cai no snapshot de domingo — e isso precisa aparecer, senão volta a
+         acontecer o de 19/09: número velho sem nada na tela dizendo que é velho. */
+      estadoFresco: !!snapReps[id],
       /* os três contadores de FLUXO (criados, reuniões, ganhos) vêm dos detalhes, que
          descrevem `janela.atual`. Se ela não é semana fechada, eles medem um pedaço. */
       reunMedida: !jan.usouAnterior,
@@ -63200,7 +63228,12 @@ function sm5BoardHTML(d) {
         +   '<span class="sm5-l-nome" style="min-width:190px;">'
         +     '<b style="font-size:13.5px;display:block;">' + esc(r.nome) + '</b>'
         +     '<span style="font-size:10.5px;color:#A2937A;">' + esc(r.praca) + ' · '
-        +       esc(r.patamar) + '</span>'
+        +       esc(r.patamar)
+        /* O SELO DO DADO VELHO. Só aparece quando o weekly-raw não trouxe a pessoa e os
+           números de estado caíram na rede do snapshot de domingo. Foi a falta de um
+           aviso assim que deixou a Kelly com 26 travados (reais: 5) por cinco dias. */
+        +       (r.estadoFresco ? '' : ' · <b style="color:#B0782A;">travados e mês do'
+        +         ' último domingo</b>') + '</span>'
         +   '</span>'
         +   '<span class="sm5-l-num" style="display:flex;gap:18px;'
         +     'font-variant-numeric:tabular-nums;font-size:12px;min-width:270px;">'
