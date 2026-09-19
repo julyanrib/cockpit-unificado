@@ -306,20 +306,45 @@ conferir('a Cidade Baixa é da Kelly, não do Ricardo',
   quem('porto alegre', 'cidade baixa') === 'Kelly' && quem('porto alegre', 'moinhos de vento') === 'Kelly',
   'foi o "só n pega cidade baixa" dele que definiu isso por exclusão');
 
-conferir('e o resto de Porto Alegre é do Ricardo',
-  quem('porto alegre', 'farroupilha') === 'Ricardo' && quem('porto alegre', 'centro historico') === 'Ricardo',
-  'ele é município inteiro menos os três da Kelly; sem a exceção funcionando, um dos dois perde a rua');
+/* ══ O RICARDO SAIU EM 19/09/26, E PORTO ALEGRE NÃO MUDOU DE DONO SOZINHA ══════════
+   Ele cobria o município inteiro menos os três bairros da Kelly. Saiu por motivo
+   pessoal e o território dele ficou com `ativo: false` em data/territorios.json.
 
-/* A EXCEÇÃO TAMBÉM É TESTADA NA REGRA, e não pela ordem. Medido: com o `exceto`
-   desligado a Cidade Baixa AINDA cai na Kelly, porque as regras de bairro vêm antes das
-   de município inteiro — o acerto vinha da ordem, não da exceção. Se um dia a Kelly sair
-   de Porto Alegre, a Cidade Baixa passaria a ser do Ricardo sem ninguém decidir isso. */
+   ESTA É A CHECAGEM QUE IMPORTA AGORA, e ela substitui a que dizia "o resto de Porto
+   Alegre é do Ricardo": quando alguém sai, o território dele tem de ficar SEM DONO e
+   VISÍVEL, nunca escorregar para o vizinho. A Kelly é a única outra pessoa em Porto
+   Alegre; se a saída dele entregasse a cidade a ela, seria o Cockpit decidindo carga de
+   trabalho no lugar do Julyan — e ela já tem 19 negócios abertos, 15 sem um toque. */
 const regraRicardo = (terr.DECLARADOS || []).find(r =>
   r.nome === 'Ricardo Antunes' && r.cidade === 'porto alegre');
-conferir('a regra do Ricardo recusa a Cidade Baixa por si só',
-  !!regraRicardo && regraRicardo.teste('porto alegre cidade baixa') === false
-    && regraRicardo.teste('porto alegre farroupilha') === true,
-  'o "só n pega cidade baixa" tem que estar NA REGRA dele, não depender de a Kelly vir antes na lista');
+conferir('o território de quem saiu não é mais roteado',
+  !regraRicardo,
+  'territorio.ativo:false tem de tirar a regra do roteador; deixá-la viva mandaria lead '
+    + 'para quem não entra mais no Cockpit');
+
+/* E AQUI ESTÁ A CONSEQUÊNCIA QUE EU NÃO TINHA VISTO, cravada para ninguém a descobrir
+   por acidente: com o Ricardo fora, a Kelly vira a ÚNICA dona declarada de Porto Alegre,
+   e a regra da "sobra do município" (bloco 8, pedida pelo Julyan em 09/09 — "preciso que
+   todos os executivos estejam com leads na carteira, todas as regiões") entrega a cidade
+   INTEIRA para ela. Automaticamente, sem ninguém decidir.
+
+   Eu escrevi a primeira versão desta checagem exigindo o contrário — "fica sem dono" — e
+   ela reprovou. O código não está errado: a regra existe para que lead nenhum fique
+   órfão. O que estava errado era eu achar que tirar alguém do time é uma operação sem
+   efeito no território do vizinho. Fica a verdade medida, e o aviso vai para o Julyan. */
+conferir('com um dono só na cidade, a sobra entrega Porto Alegre inteira à Kelly',
+  quem('porto alegre', 'farroupilha') === 'Kelly'
+    && quem('porto alegre', 'centro historico') === 'Kelly'
+    && via('porto alegre', 'farroupilha') === 'sobra declarada',
+  'é a regra da sobra do município, e ela dobrou a praça dela no dia em que o Ricardo '
+    + 'saiu — se isso não for o desejado, o caminho é declarar outro dono em '
+    + 'data/territorios.json, não mexer no roteador');
+
+conferir('a Kelly continua com os três bairros dela, e só com eles',
+  quem('porto alegre', 'cidade baixa') === 'Kelly'
+    && quem('porto alegre', 'moinhos de vento') === 'Kelly'
+    && quem('porto alegre', 'auxiliadora') === 'Kelly',
+  'a saída dele não pode encolher o que já era dela');
 
 /* ── 7 · UMA FONTE SÓ ───────────────────────────────────────────────────────────────── */
 conferir('o roteador lê data/territorios.json',
