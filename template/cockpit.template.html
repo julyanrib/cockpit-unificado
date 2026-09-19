@@ -62628,6 +62628,24 @@ function sm5Roteiro(comoAgir) {
   return out;
 }
 
+/* A FRASE DA LIMPEZA. Devolve null quando não há lote — KPI que sempre carrega uma
+   nota vira KPI cuja nota ninguém lê.
+
+   ELA DIZ A REGRA, e é isso que a torna honesta: "5+ em 15 min" deixa o gestor
+   julgar o número em vez de confiar nele. O robô grava a régua que usou em
+   `loteRegra`, então a frase não pode divergir do que foi medido. */
+function sm5NotaDeLimpeza(k) {
+  if (!k || !k.perdidosEmLote) return null;
+  const r = k.loteRegra || {};
+  const regra = (r.minimo && r.gapMin)
+    ? r.minimo + '+ em ' + r.gapMin + ' min'
+    : 'marcados em sequência';
+  /* "PROVÁVEL", sempre. Marcação em rajada é forte indício de faxina e não é prova:
+     três perdas legítimas seguidas existem, e uma limpeza devagar também. */
+  return k.perdidosEmLote + ' em lote (' + regra + ') — provável limpeza de base'
+    + (k.perdidosDetalheCompleto === false ? ' · detalhe parcial acima de 100' : '');
+}
+
 function sm5Dados() {
   const rs = DATA.resumoSemanal || {};
   const jan = sm5Janela();
@@ -62661,6 +62679,16 @@ function sm5Dados() {
       delta: sm5Delta(k.leadsCriados, kp && kp.leadsCriados, true),
       barras: sm5Barras('criados', '#57C29A') },
     { rotulo: 'perdidos', valor: String(k.perdidos == null ? '—' : k.perdidos),
+      /* ══ PERDA UMA A UMA x LIMPEZA EM LOTE (19/09/26) ═══════════════════════════
+         Julyan: "eles limparam o funil mesmo". Na semana 14–18/09 o placar dizia 65
+         perdidos e a maioria era descarte de base — eu mesmo li a semana como um
+         desastre onde houve o melhor resultado recente.
+
+         O TOTAL CONTINUA SENDO O TOTAL: o lote aparece embaixo, como leitura, e a
+         nota diz a REGRA que o robô usou. Subtrair seria trocar um número errado por
+         outro, porque a inferência é por horário de marcação, não por intenção
+         declarada — não existe motivo "limpeza" no HubSpot e não se cria um. */
+      nota: sm5NotaDeLimpeza(k),
       delta: sm5Delta(k.perdidos, kp && kp.perdidos, false),
       /* VERMELHO NA ÚLTIMA BARRA, e não verde: aqui a barra alta é má notícia. É a
          mesma inversão que a prancha faz neste KPI. */
