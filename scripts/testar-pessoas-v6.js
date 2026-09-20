@@ -365,10 +365,21 @@ checar('a linha da cadência se reorganiza antes de esmagar o nome',
   'coluna fixa em px esmaga a flexível em silêncio — foi o que aconteceu na prancha de '
     + '1460 também');
 
-/* ÂNCORA ÚNICA: `min-width:0;` solto casava com outro trecho do mesmo bloco e a guarda
-   dava verde com o estilo do rail sem ele. Agora mede o literal do item do rail. */
+/* DUAS VEZES REESCRITA, e a segunda ensinou mais que a primeira. `min-width:0;` solto
+   casava com outro trecho do bloco (guarda cega); depois eu cravei o literal inteiro
+   `'border-radius:12px;min-width:0;'` e ele morreu na repintura, quando 12px virou
+   var(--r-md) — a proteção continuava inteira, só a grafia mudou. Agora a âncora é o
+   PEDAÇO que carrega a regra, sem o raio, que é decoração e muda de token. */
 checar('o item do rail encolhe em vez de transbordar',
-  tpl.indexOf("'border-radius:12px;min-width:0;'") > -1,
+  (function () {
+    /* recorte por FRONTEIRA SEMÂNTICA, não por contagem de caracteres: do início do item
+       do rail até a primeira coisa que ele desenha dentro (as iniciais no avatar). Janela
+       fixa em bytes é o outro jeito de a guarda morrer calada — já perdi uma assim. */
+    const i = tpl.indexOf('data-ps6-acao="\' + p.on + \'"');
+    const f = tpl.indexOf('esc(p.iniciais)', i);
+    if (i < 0 || f < 0) return false;
+    return tpl.slice(i, f).indexOf('min-width:0;') > -1;
+  }()),
   'filho de grid tem min-width:auto e não encolhe abaixo do conteúdo; sem isto o item '
     + 'ficava 30px mais largo que o cartão, medido');
 
@@ -377,6 +388,103 @@ checar('a tag do rail não cai sempre em destravar',
   /: \(noRitmo \? 'ritmo' : 'abordagem'\)\)\)\);/.test(tpl),
   'com o fallback em destravar, os nove do time apareciam com a mesma tag e a tela '
     + 'acusava todo mundo do mesmo problema — visto na tela');
+
+/* ══ 11. O QUE ELE PEDIU EM 20/09 ════════════════════════════════════════════════════ */
+
+/* O SCROLL. A Renata e o André têm 39 abertos cada; sem teto, o mapa empurra funil, PDI e
+   compromissos para fora do alcance e o dossiê vira uma lista com anexos. */
+checar('a lista do mapa de cadência tem teto e rola',
+  /max-height:480px;overflow-y:auto;/.test(tpl)
+    && /data-pv6-cad-lista/.test(tpl),
+  'a Renata tem 39 abertos — 2.100px de lista antes do resto do dossiê');
+
+checar('e o rodapé fica FORA da caixa que rola',
+  (function () {
+    /* o aviso de recorte incompleto do snapshot mora no rodapé. Dentro da caixa, ele só
+       apareceria para quem rolasse até o fim — aviso que ninguém lê. */
+    const i = tpl.indexOf('data-pv6-cad-lista');
+    const f = tpl.indexOf('lendo o recorte antigo do snapshot', i);
+    if (i < 0 || f < 0) return false;
+    return tpl.slice(i, f).indexOf("+ '</div>'") > -1
+      || tpl.slice(i, f).indexOf("'</div>'") > -1;
+  }()));
+
+checar('e o rodapé diz quantos negócios a lista tem',
+  /cad\.linhas\.length \+ \(cad\.linhas\.length === 1 \? ' negócio' : ' negócios'\)/.test(tpl),
+  'com a caixa rolando, o tamanho da lista deixa de ser visível de relance');
+
+/* A SINCRONIA. Este é o defeito que ele viu: "só ta aparecendo o do marco em todos".
+   `pessoaSelecionadaId` foi criada justamente para acabar com duas variáveis de seleção
+   sem sincronia — e a v6 recriou o problema por outra porta. */
+checar('o painel de Coaching segue a pessoa aberta no rail',
+  /pessoaSelecionadaId = alvo;/.test(tpl)
+    && /const alvo = dados\.dossie && dados\.dossie\.ownerId;/.test(tpl),
+  'sem isto o Coaching cai no fallback DATA.reps[0] e mostra o Marco para todo mundo');
+
+checar('e a sincronia mora no render, não no gesto',
+  (function () {
+    /* amarrar no verbo `sel` deixaria os outros caminhos de repintura fora de sincronia —
+       foi assim que este defeito nasceu das duas vezes anteriores. */
+    const i = tpl.indexOf('function renderPessoas()');
+    const f = tpl.indexOf('async function ps6Iniciar', i);
+    if (i < 0 || f < 0) return false;
+    return tpl.slice(i, f).indexOf('pessoaSelecionadaId = alvo;') > -1;
+  }()),
+  'a ligação tem de valer para qualquer caminho que repinte a aba, não só para o clique');
+
+checar('e ela segue o dossiê desenhado, não o sel cru',
+  !/pessoaSelecionadaId = PS6_ESTADO\.sel/.test(tpl),
+  'PS6_ESTADO.sel pode estar nulo enquanto a tela mostra o primeiro da fila — o Coaching '
+    + 'tem de mostrar esse mesmo');
+
+/* OS DOIS FUNIS. Um desenho, uma contagem. */
+checar('o funil é desenhado por uma função só',
+  /function pv6FunilHTML\(etapas, attrs\)/.test(tpl)
+    && (tpl.match(/pv6FunilHTML\(/g) || []).length >= 3,
+  'o dossiê e o painel de Coaching mostram o funil da MESMA pessoa um embaixo do outro; '
+    + 'dois desenhos é como os dois acabam diferentes');
+
+checar('e o funil do Coaching conta a mesma lista de abertos',
+  /pv6Funil\(\{ ownerId: r\.ownerId, cadencia: pv6Cadencia\(r\.ownerId\),/.test(tpl),
+  'antes ele saía de r.stages, a contagem agregada — outra fonte para o mesmo número');
+
+checar('e o clique da etapa do Coaching continua vivo nos dois desenhos',
+  /querySelectorAll\('\.coach-funil-etapa,\[data-coach-etapa\]'\)/.test(tpl),
+  'ouvinte que só casa com um dos dois markups é o clique morto que a guarda de fiação '
+    + 'não pega, porque o ouvinte existe');
+
+/* ══ 12. A IDENTIDADE É A DA CASA ════════════════════════════════════════════════════
+   Julyan, 20/09: "tudo tem que seguir a identidade visual do cockpit, o mockup é a ideia".
+   A prancha veio no mundo creme; a casa é Archivo + Manrope sobre os tokens do :root. */
+(function () {
+  const i = tpl.indexOf('const PV6_CANAL = {');
+  const f = tpl.indexOf('function tm2SobreviventesHTML', i);
+  /* SEM OS COMENTÁRIOS: eles CITAM a paleta antiga de propósito, para explicar a troca.
+     Medir o comentário junto faria a guarda exigir que a decisão ficasse sem registro. */
+  const bloco = tpl.slice(i, f).replace(/\/\*[\s\S]*?\*\//g, '');
+
+  checar('a fonte da aba sai dos tokens da casa',
+    /const PV6_P = 'var\(--font-display\)';/.test(bloco)
+      && /const PV6_D = 'var\(--font-body\)';/.test(bloco),
+    'Poppins + DM Sans é a prancha; Archivo + Manrope é o Cockpit');
+
+  /* O ÚNICO HEXADECIMAL TOLERADO é o vermelho clareado da faixa escura: #E51A31 sobre
+     #2B3440 são dois tons médios e o número some. Os outros quatro são tons de borda que
+     já existiam no arquivo antes desta aba. */
+  const TOLERADOS = ['#E51A31', '#FF6B78', '#F0DFB6', '#CBE8DD', '#E3C6C6', '#E0A73C', '#E9E5DC'];
+  const soltos = [...new Set((bloco.match(/#[0-9A-Fa-f]{6}/g) || [])
+    .filter(function (h) { return TOLERADOS.indexOf(h.toUpperCase()) < 0; }))];
+  igual('e nenhuma cor nova fica cravada fora dos tokens', soltos, [],
+    'cor cravada não acompanha a casa quando a casa muda — foi o que separou o que veio '
+      + 'junto do #E9E5DC global do que ficou para trás');
+
+  checar('a paleta creme da prancha não sobreviveu em lugar nenhum',
+    bloco.indexOf('#FDFBF0') < 0 && bloco.indexOf('#EFE9DC') < 0
+      && bloco.indexOf('#E4DBC6') < 0 && bloco.indexOf('#1A1613') < 0
+      && bloco.indexOf('Poppins') < 0 && bloco.indexOf('DM Sans') < 0,
+    'foi a emenda entre os dois mundos — a aba creme encostada no painel de Coaching — '
+      + 'que ficou feia na tela dele, não o desenho');
+}());
 
 console.log('');
 console.log('pessoas v6: ' + ok + ' verificações');
