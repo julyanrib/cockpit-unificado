@@ -179,10 +179,20 @@ function montarDadosCompletos() {
       gargalo: n.gargalo,
       boasPraticas: n.boasPraticas,
       compromissos: n.compromissos,
+      /* O PRAZO DE CADA COMPROMISSO, mesmo índice de `compromissos` (19/09/26). Sem ele a
+         aba Pessoas não consegue dizer o que VENCEU, que é a manchete do gestor na
+         segunda. Array irmão em vez de objeto porque cinco leitores indexam o texto e o
+         checked[] de pdi_compromissos guarda a POSIÇÃO. */
+      compromissosPrazo: Array.isArray(n.compromissosPrazo) ? n.compromissosPrazo : [],
       open: h.open,
       stages: h.stages,
       criticos: h.criticos,
       travados: h.travados || [],
+      /* TODOS os abertos, enxutos — o mapa de cadência precisa da régua de cada um, e os
+         recortes (criticos/travados/plotaveis) cobriam 124 dos 204 negócios do time.
+         ESTE OBJETO É UM FILTRO: campo que não está nesta lista não chega à tela, e foi
+         assim que metaMrr e metaReceita morreram em silêncio em 10/09. */
+      abertos: Array.isArray(h.abertos) ? h.abertos : [],
       quentes: h.quentes || [],
       leadsTravados: h.leadsTravados || 0,
       ganhosSemana: h.ganhosSemana || 0,

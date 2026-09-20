@@ -53,11 +53,99 @@ let narrativas = null;
 // mapa vazio em vez de derrubar o script inteiro (o pior caso é o texto cair pro fallback
 // "etapa <id>", não travar a geração).
 let STAGE_LABELS = {};
-try {
-  const hubspotData = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
-  STAGE_LABELS = (hubspotData.stageMeta && hubspotData.stageMeta.labels) || {};
-} catch (e) {
-  console.error(`Não deu pra ler data/hubspot.json pra mapear nomes de etapa (${e.message}) — textos vão usar o ID bruto como fallback.`);
+
+/* CARREGADO NO INÍCIO DO main(), ANTES de montarRepsContext — que é quem transforma
+   etapa dominante em contexto do prompt. Ordem: tabela primeiro (é o que o runner
+   tem), arquivo local depois (é o que a minha máquina tem).
+
+   E ABORTA se os dois falharem, em vez de seguir com o mapa vazio. Rodada que morre
+   se re-dispara; texto com "etapa 1395880469" vai para nove pessoas e não volta. */
+async function carregarStageLabels() {
+  try {
+    const snap = await lerSnapshot('hubspot');
+    const labels = snap && snap.stageMeta && snap.stageMeta.labels;
+    if (labels && Object.keys(labels).length) {
+      STAGE_LABELS = labels;
+      console.log(`Nomes de etapa: ${Object.keys(labels).length} do snapshot 'hubspot'.`);
+      return;
+    }
+  } catch (e) {
+    console.error(`Snapshot hubspot não deu os nomes de etapa (${e.message}) — tentando o arquivo local.`);
+  }
+  try {
+    const local = JSON.parse(fs.readFileSync(path.join(root, 'data', 'hubspot.json'), 'utf8'));
+    STAGE_LABELS = (local.stageMeta && local.stageMeta.labels) || {};
+  } catch (e) {
+    STAGE_LABELS = {};
+  }
+  if (!Object.keys(STAGE_LABELS).length) {
+    throw new Error('sem nomes de etapa: nem o snapshot hubspot nem data/hubspot.json'
+      + ' os trouxeram. Abortando — sem eles a IA escreve o ID cru da etapa no texto'
+      + ' que o time inteiro lê.');
+  }
+  console.log(`Nomes de etapa: ${Object.keys(STAGE_LABELS).length} de data/hubspot.json.`);
+}
+
+/* A REDE DE SEGURANÇA. Mesmo com o contexto certo a IA pode copiar um ID de algum
+   outro lugar do prompt, e instrução em prosa não segura isso — a regra do dia da
+   semana estava escrita e foi quebrada assim mesmo. Aqui é determinístico. */
+function trocarIdsDeEtapa(txt) {
+  if (typeof txt !== 'string' || !txt) return txt;
+  let saida = txt;
+  Object.keys(STAGE_LABELS).forEach(function (id) {
+    if (saida.indexOf(id) < 0) return;
+    saida = saida.split(id).join(STAGE_LABELS[id]);
+  });
+  /* "etapa Prospecção" é o que sobra quando a IA escreveu "etapa <id>", e lê bem.
+     "na etapa etapa Prospecção" não acontece porque o label não começa com "etapa". */
+  return saida;
+}
+
+const DIAS_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira',
+  'quinta-feira', 'sexta-feira', 'sábado'];
+
+/* O PRAZO PASSA A SER CAMPO, E O DIA DA SEMANA PASSA A SER CALCULADO.
+
+   O defeito do Sérgio ("quarta-feira, 24/09/2026" para uma quinta) é impossível aqui:
+   a IA escreve só a data, e quem escreve o dia da semana é esta função. Meio-dia UTC
+   é 09:00 em Brasília — mesma data civil nos dois, então getUTCDay não escorrega.
+
+   ACEITA AS DUAS FORMAS de propósito: se a IA devolver a string antiga, o compromisso
+   continua valendo, só fica sem prazo estruturado. Formato novo que derruba o texto de
+   alguém seria pior do que o defeito que ele corrige. */
+function normalizarCompromissos(lista, hojeISO) {
+  const textos = [];
+  const prazos = [];
+  (Array.isArray(lista) ? lista : []).forEach(function (item) {
+    if (typeof item === 'string') {
+      if (item.trim()) { textos.push(trocarIdsDeEtapa(item.trim())); prazos.push(null); }
+      return;
+    }
+    if (!item || typeof item !== 'object') return;
+    const acao = trocarIdsDeEtapa(String(item.acao || '').trim());
+    if (!acao) return;
+    const prazo = String(item.prazo || '').trim();
+    const d = new Date(prazo + 'T12:00:00Z');
+    const valido = /^\d{4}-\d{2}-\d{2}$/.test(prazo)
+      && !isNaN(d.getTime())
+      /* 2026-11-31 não é inválido para o Date: vira 01/12 em silêncio. A volta ao
+         ISO é a única checagem que pega o rollover. */
+      && d.toISOString().slice(0, 10) === prazo
+      && prazo >= hojeISO;
+    if (!valido) {
+      console.error(`Compromisso sem prazo utilizável (${prazo || 'vazio'}) — entra só com a ação:`
+        + ` ${acao.slice(0, 80)}`);
+      textos.push(acao);
+      prazos.push(null);
+      return;
+    }
+    const dia = String(d.getUTCDate()).padStart(2, '0');
+    const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const semPonto = acao.replace(/[.\s]+$/, '');
+    textos.push(`${semPonto} — até <b>${DIAS_PT[d.getUTCDay()]}, ${dia}/${mes}</b>.`);
+    prazos.push(prazo);
+  });
+  return { textos, prazos };
 }
 
 const CAMINHO_HISTORICO_MES = path.join(root, 'data', 'historico-semanal-mes.json');
@@ -396,7 +484,8 @@ Responda SOMENTE com um JSON válido, sem markdown, sem \`\`\`, no formato exato
   "gargaloSemana": "1-2 frases, PRO GESTOR, sobre o que está acontecendo com essa pessoa nesta semana especificamente, baseado nos números acima.",
   "comoAgirGestor": "Roteiro pro gestor conduzir o 1:1, em 2-4 frases curtas e NESTA ORDEM: (1) abrir revisitando a semana anterior — o compromisso combinado foi cumprido ou não, diga qual; (2) o que MANTER — elogiar nominalmente uma boa prática ou um ganho concreto da semana (cliente pelo nome, se houver); (3) o que cobrar agora, específico. Sem genérico.",
   "tendencia": "1 frase curta dizendo se essa pessoa está melhorando, piorando ou estável, com base no volume travado e nos ganhos.",
-  "compromissos": ["compromisso 1", "compromisso 2", "compromisso 3 (opcional)"]
+  "compromissos": [{"acao": "a ação, no imperativo, SEM escrever data nem dia da semana",
+    "prazo": "AAAA-MM-DD"}, {"acao": "...", "prazo": "AAAA-MM-DD"}]
 }
 
 REGRAS OBRIGATÓRIAS pro campo "compromissos" (elas vieram do robô de segunda-feira, que
@@ -406,8 +495,12 @@ foi fundido neste em 05/09/26 — cada uma nasceu de um defeito real na tela):
 - PROIBIDO pedir "enviar print do HubSpot" como evidência — a evidência tem que ser uma
   ação que já fica registrada sozinha no CRM: nota criada, tarefa concluída, etapa
   alterada, próximo passo com data, negócio reciclado, visita registrada.
-- Todo prazo é uma data FUTURA em relação a hoje (${hojeDiaSemanaLabel}), e o dia da
-  semana escrito tem que bater com a data escrita.
+- O prazo vai SÓ no campo "prazo", em AAAA-MM-DD, e tem que ser uma data futura em
+  relação a hoje (${hojeDiaSemanaLabel}). NÃO escreva data nem dia da semana dentro de
+  "acao": quem escreve isso é o robô, a partir do campo — foi assim que um prazo saiu
+  como "quarta-feira, 24/09" numa quinta.
+- Em "acao", cite a etapa pelo NOME ("Prospecção", "Conversa com Decisor"). O número
+  da etapa não significa nada para quem lê.
 - NUNCA retorne lista vazia. Sempre 2 ou 3 compromissos concretos e checáveis.
 - Se os da semana passada não foram cumpridos e ainda fazem sentido, repita-os quase
   literalmente. Se não havia nenhum, crie 2-3 do zero a partir do gargalo.
@@ -418,6 +511,7 @@ foi fundido neste em 05/09/26 — cada uma nasceu de um defeito real na tela):
 
 
 async function main() {
+  await carregarStageLabels();
   narrativas = (await carregarJsonOuTabela(narrativasPath, 'narrativas')).dado;
   /* SÓ AQUI: montarRepsContext lê narrativas, e narrativas acabou de chegar. */
   repsContext = montarRepsContext();
@@ -434,6 +528,9 @@ async function main() {
   const semanaAtualLabel = fmtRange(segundaDaSemana, domingoDaSemana);
   const DIAS_SEMANA_PT = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
   const hojeDiaSemanaLabel = `${DIAS_SEMANA_PT[hojeBRT.getDay()]}, ${hoje.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}`;
+  /* a data civil de hoje em Brasília, para o prazo do compromisso não ser aceito no
+     passado por causa do fuso do runner (que roda em UTC). */
+  const hojeISO = hoje.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
   // Mesma env var que .github/workflows/weekly-summary.yml já expõe pro outro robô
   // (sem efeito desde a fusao de 05/09/26) — mantida para nao quebrar disparo salvo,
@@ -540,16 +637,18 @@ async function main() {
       if (resultado.status === 'fulfilled') {
         porRep[rc.ownerId] = {
           name: rc.name,
-          resumoIndividual: resultado.value.resumoIndividual,
-          comoAgirIndividual: resultado.value.comoAgirIndividual || []
+          resumoIndividual: trocarIdsDeEtapa(resultado.value.resumoIndividual),
+          comoAgirIndividual: (resultado.value.comoAgirIndividual || []).map(trocarIdsDeEtapa)
         };
         /* A METADE DO GESTOR da mesma resposta (fusão de 05/09/26). Guardada aqui e
            gravada depois do loop, junto, para não intercalar rede com montagem. */
         coachingParaGravar[rc.ownerId] = {
-          gargaloSemana: resultado.value.gargaloSemana || null,
-          comoAgirGestor: resultado.value.comoAgirGestor || null,
-          tendencia: resultado.value.tendencia || null,
-          compromissos: Array.isArray(resultado.value.compromissos) ? resultado.value.compromissos.filter(Boolean) : []
+          /* trocarIdsDeEtapa em TODO texto da IA, não só no compromisso: o ID cru
+             vazava igual no gargalo e no roteiro do 1:1. */
+          gargaloSemana: trocarIdsDeEtapa(resultado.value.gargaloSemana || null),
+          comoAgirGestor: trocarIdsDeEtapa(resultado.value.comoAgirGestor || null),
+          tendencia: trocarIdsDeEtapa(resultado.value.tendencia || null),
+          compromissos: normalizarCompromissos(resultado.value.compromissos, hojeISO)
         };
       } else {
         console.error(`Falha ao gerar resumo individual de ${rc.name}: ${resultado.reason?.message || resultado.reason} — gravando fallback honesto.`);
@@ -594,8 +693,9 @@ async function main() {
       console.error(`Falha ao gravar o coaching de ${nome}: ${e.message}`);
       FALHAS_IA.push(`coaching ${nome}: ${String(e.message).slice(0, 160)}`);
     }
-    if (c.compromissos.length && narrativas.reps[ownerId]) {
-      narrativas.reps[ownerId].compromissos = c.compromissos;
+    if (c.compromissos.textos.length && narrativas.reps[ownerId]) {
+      narrativas.reps[ownerId].compromissos = c.compromissos.textos;
+      narrativas.reps[ownerId].compromissosPrazo = c.compromissos.prazos;
       compromissosMudaram = true;
     }
   }

@@ -1191,8 +1191,15 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
     /* PINADO DENTRO DE pe4TelaHTML: hsUrl(l.id) tem QUATRO usos legítimos no arquivo, em
        quatro telas, e a guarda larga deu verde com o link desta quebrado — a sabotagem
        passou. O que importa é que o nome do lead DESTA tela abra o negócio. */
+    /* RE-APONTADA EM 19/09 para o markup da v6 — a v4 saiu inteira. O recorte agora é o
+       BLOCO da v6 (do cabeçalho do markup até a próxima tela), e não uma função só: os
+       dois links vivem em funções diferentes desde que a lista virou duas (o mapa de
+       cadência e o drill dos cards). A regra medida é a mesma: nesta tela, o negócio
+       abre pela função única de URL. */
+    /* ÂNCORA DE CÓDIGO, NÃO DE COMENTÁRIO: `tela` é soCodigo(template), que corta os
+       comentários — eu ancorei no cabeçalho do bloco e a guarda deu falso vermelho. */
     (function () {
-      const i = tela.indexOf('function pe4TelaHTML(d) {');
+      const i = tela.indexOf('const PV6_P =');
       if (i < 0) return false;
       const bloco = tela.slice(i, tela.indexOf('function tm2SobreviventesHTML', i));
       return /hsUrl\(l\.id\)/.test(bloco) && /hsUrl\(x\.id\)/.test(bloco);
@@ -1220,9 +1227,15 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
   /* ── 7 · NAO MEDIDO NAO E ZERO, EM TRES LUGARES ─────────────────────────────────────
      SLA de quem tem menos de 3 negocios com data de criacao, cadencia que nao veio, e
      ticket/ritmo do time quando ninguem fechou. Os tres dizem que nao sabem. */
+  /* A GUARDA MEDIA O TEXTO EXATO da v4 ('não medido — só ') e reprovou quando a v6
+     reescreveu a frase. A REGRA é outra: quem não foi medido não pode virar 0% na tela.
+     Agora ela mede os dois lados — o emissor devolve null, e a tela tem um ramo que
+     depende desse null e escreve "não medido". Quarta guarda deste repo a morrer por
+     cravar a grafia de uma frase em vez do comportamento. */
   checar('o SLA de quem nao foi medido nao vira 0%',
     /if \(comData\.length < PE4_SLA_MIN\) return \{ pct: null/.test(tela)
-      && tela.indexOf('não medido — só ') > -1);
+      && /o\.slaPct == null \? .SLA não medido./.test(tela.replace(/'/g, '.'))
+      && /o\.slaPct == null \? .#A2937A./.test(tela.replace(/'/g, '.')));
   checar('a cadencia ausente diz que nao veio',
     tela.indexOf('a cadência não veio nesta carga do robô') > -1);
   checar('e o ticket do time sai de medicao, nao de constante',

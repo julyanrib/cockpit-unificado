@@ -1235,6 +1235,25 @@
     #tm2Raiz [style*="min-width:480px"]{min-width:0!important;}
   }
   /* ══ ABA PESSOAS DO GESTOR (06/09/26) — hovers que o dc-runtime resolvia ══ */
+  /* A PRANCHA DA v6 NASCEU EM 1440px (min-width no body dela). Aqui ela encolhe: a
+     grade de rail+dossiê e a de três colunas empilham antes de esmagar (1240 e 1050 saem da escala do build). Coluna fixa
+     em px esmaga a flexível sem transbordar, então o ponto de quebra é medido pelo
+     que cabe, não pelo breakpoint redondo. */
+  @media (max-width:1240px){
+    #ps6Raiz [data-pv6-colunas]{grid-template-columns:minmax(0,1fr) !important;}
+    /* MEDIDO: a 1240 de viewport o dossiê tem 697px e as cinco colunas fixas da linha
+       de cadência comem 478 — sobra 63px para o nome do negócio e 57 para a ação. As
+       duas colunas decorativas saem e o espaço volta para as duas que respondem a
+       pergunta da tela. O piso de toques continua escrito no subtítulo do nome. */
+    #ps6Raiz [data-pv6-cad]{
+      grid-template-columns:minmax(140px,1.4fr) 44px minmax(150px,1.6fr) 104px 52px !important;
+    }
+    #ps6Raiz [data-pv6-cad-regua],
+    #ps6Raiz [data-pv6-cad-passos]{display:none !important;}
+  }
+  @media (max-width:1050px){
+    #ps6Raiz [data-pv6-grade]{grid-template-columns:minmax(0,1fr) !important;}
+  }
   #ps6Raiz [data-ps6-hv]{cursor:pointer;}
   #ps6Raiz [data-ps6-hv="0"]:hover{filter:brightness(1.07);}
   #ps6Raiz [data-ps6-hv="1"]:hover{filter:brightness(1.08);}
@@ -27440,364 +27459,820 @@ function pe4Dados() {
 }
 
 
-/* ══ O MARKUP DA PRANCHA PESSOAS v4 ══════════════════════════════════════════════════
-   Tipografia e cores LIDAS DO DOM da prancha, nao estimadas: abri o standalone no
-   navegador e extrai estilo computado de cada folha de texto. Dai vem 13.5px no nome do
-   rail, 9.5px nos rotulos e 22px no numero do aviso. */
-const PE4_TONS = {
-  vermelho: { bg: '#FDF3F4', borda: '#F0A9B2', cor: '#E51A31' },
-  ambar:    { bg: '#FDF6E7', borda: '#F0DFB6', cor: '#B07C1F' },
-  vinho:    { bg: '#FBF5F8', borda: '#E9D9E1', cor: '#8E3B5C' },
-  verde:    { bg: '#EAF6F1', borda: '#CBE8DD', cor: '#1E9E7B' }
+/* ══ PESSOAS v6 · A CAMADA DE DADOS ═══════════════════════════════════════════════════
+   Prancha pessoas-v6, desempacotada e vista no navegador (scripts/desempacotar-prancha.js)
+   antes de uma linha ser escrita — foi ler sem ver que fez a Semana v5 sair diferente.
+
+   A v4 continua viva por baixo: pe4Dados() dá SLA, conversão, perdas, propostas,
+   diagnóstico e alavancas. A v6 acrescenta os três eixos de meta, o piso de toques, o
+   mapa de cadência e o prazo do compromisso. Nada é recalculado em dois lugares. */
+
+const PV6_CANAL = {
+  visita:   { rot: 'VIS', bg: '#1A1613', cor: '#FDFBF0', borda: '#1A1613' },
+  ligacao:  { rot: 'LIG', bg: '#FBF6EC', cor: '#B0782A', borda: '#EAD9B0' },
+  whatsapp: { rot: 'WPP', bg: '#E7F3EE', cor: '#1E7A63', borda: '#BFDCCE' }
 };
-const PE4_ST = {
-  feito:    { bg: '#1E9E7B', rot: 'feito' },
-  pendente: { bg: '#B07C1F', rot: 'pendente' },
-  furou:    { bg: '#E51A31', rot: 'furou' }
+const PV6_TAG = {
+  destravar: { rot: 'DESTRAVAR', cor: '#E51A31', bg: '#FBEEF0' },
+  /* âmbar, não vermelho: "falta abordar" é outro problema que "está travado", e duas
+     tags da mesma cor no rail voltam a parecer nove iguais. */
+  abordagem: { rot: 'ABORDAGEM', cor: '#B0782A', bg: '#FBF6EC' },
+  proposta:  { rot: 'PROPOSTA',  cor: '#B0782A', bg: '#FBF6EC' },
+  ritmo:     { rot: 'NO RITMO',  cor: '#1E7A63', bg: '#E7F3EE' },
+  case:      { rot: 'CASE',      cor: '#1E7A63', bg: '#E7F3EE' }
 };
 
-function pe4TelaHTML(d) {
-  const A = "'Archivo',sans-serif";
-  const M = "'Manrope',sans-serif";
+/* qual card do dossiê está aberto, POR PESSOA — trocar de pessoa não herda o card da
+   anterior, pelo mesmo motivo que PE4_ETAPA é por pessoa. */
+let PV6_CARD = {};
 
-  const kpis = d.kpis.map(function (k) {
-    return '<span style="display:block;min-width:0;">'
-      + '<span style="display:block;font:900 9px ' + A + ';letter-spacing:.1em;'
-      +   'text-transform:uppercase;color:#7A8494;">' + esc(k.rot) + '</span>'
-      + '<b style="display:block;font:900 30px ' + A + ';letter-spacing:-.02em;'
-      +   'font-variant-numeric:tabular-nums;color:' + k.cor + ';">' + esc(k.v) + '</b></span>';
-  }).join('');
+/* TODOS os abertos da pessoa, da lista nova do snapshot. Devolve também de onde veio,
+   porque a tela precisa DIZER quando está lendo o recorte antigo. */
+function pv6Abertos(ownerId) {
+  const r = (DATA.reps || []).filter(function (x) { return String(x.ownerId) === String(ownerId); })[0];
+  if (!r) return { lista: [], completa: false, recorte: 0 };
+  const todos = Array.isArray(r.abertos) ? r.abertos : [];
+  if (todos.length) return { lista: todos, completa: true, recorte: Number(r.open) || todos.length };
+  /* SEM A LISTA NOVA (snapshot anterior ao robô de 19/09): cai nos recortes que sempre
+     existiram, e a tela escreve quantos negócios ficaram de fora. */
+  const vistos = {};
+  const lista = [];
+  [].concat(r.travados || [], r.criticos || [], r.quentes || []).forEach(function (l) {
+    const id = String(l.id);
+    if (vistos[id]) return;
+    vistos[id] = 1;
+    lista.push({ id: id, name: l.name || l.dealname, stage: l.stage, stageId: String(l.stageId),
+      dias: l.dias, slaBreach: !!l.slaBreach, temperatura: l.temperatura, mrr: tm10MrrDo(l) });
+  });
+  return { lista: lista, completa: false, recorte: Number(r.open) || lista.length };
+}
 
-  /* ── O RAIL ──────────────────────────────────────────────────────────────────────── */
-  const rail = d.rail.map(function (p) {
-    return '<button type="button" data-ps6-acao="' + p.on + '" data-ps6-hv="0"'
-      + ' title="Abrir o dossiê de ' + esc(p.nome) + '"'
-      + ' style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;'
-      + 'border-left:3px solid ' + (p.sel ? '#E51A31' : 'transparent') + ';background:'
-      + (p.sel ? '#FDFEFF' : 'transparent') + ';padding:10px 14px;cursor:pointer;min-width:0;">'
-      + '<span style="flex:none;width:26px;height:26px;border-radius:999px;display:grid;'
-      +   'place-items:center;background:' + (p.sel ? '#E51A31' : '#2B3440')
-      +   ';color:#FDFEFF;font:900 10px ' + A + ';">' + esc(p.iniciais) + '</span>'
-      + '<span style="flex:1;min-width:0;">'
-      +   '<span style="display:flex;align-items:baseline;gap:6px;min-width:0;">'
-      +     '<b style="font:800 13.5px ' + A + ';letter-spacing:-.01em;color:#2B3440;'
-      +       'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;">'
-      +       esc(p.nome) + '</b>'
-      +     '<span style="margin-left:auto;flex:none;font:800 9px ' + A + ';letter-spacing:.04em;'
-      +       'text-transform:uppercase;color:' + p.statusCor + ';">' + esc(p.statusRot) + '</span>'
-      +   '</span>'
-      +   '<span style="display:block;font:700 10px ' + M + ';color:#7A8494;margin-top:2px;'
-      +     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(p.sub) + '</span>'
-      + '</span></button>';
-  }).join('');
+/* O PISO DE PONTOS DE CONTATO, sobre a lista que a tela realmente tem.
 
-  if (!d.dossie) {
-    return '<div data-pe4-raiz="1" style="background:#FDFEFF;border:1px solid #DCE1EA;'
-      + 'border-radius:16px;padding:28px;box-shadow:0 12px 40px rgba(43,52,64,.12);'
-      + 'font:700 12px ' + M + ';color:#7A8494;">'
-      + 'nenhum executivo no time desta carga — a aba Pessoas precisa de alguém para abrir.</div>';
-  }
-  const o = d.dossie;
+   O QUE "TOQUE" SIGNIFICA AQUI, e a tela escreve isso: a agenda do snapshot cobre 30
+   dias para trás. São toques REALIZADOS nos últimos 30 dias — não da vida do negócio.
+   Chamar isso de "piso de 4 toques" sem a régua ao lado transformaria um negócio velho e
+   bem trabalhado num abandonado. */
+/* A REGRA, UMA VEZ SÓ. Ela estava escrita aqui e de novo dentro de pv6Cadencia, e as
+   duas cópias respondiam à mesma pergunta em dois lugares da mesma tela — o card e a
+   lista que ele abre. Achado por sabotagem: mexer numa não mexia na outra. */
+function pv6AbaixoDoPiso(id, minimo) {
+  return minimo > 0 && tm10Tq(id).n < minimo;
+}
 
-  /* ── 3 AVISOS ────────────────────────────────────────────────────────────────────── */
-  const avisos = o.avisos.map(function (a) {
-    const tom = PE4_TONS[a.tom] || PE4_TONS.ambar;
-    return '<span style="display:block;background:' + tom.bg + ';border:1px solid ' + tom.borda
-      + ';border-radius:14px;padding:12px 15px;min-width:0;">'
-      + '<span style="display:block;font:900 10px ' + A + ';letter-spacing:.11em;'
-      +   'text-transform:uppercase;color:' + tom.cor + ';">' + esc(a.rot) + '</span>'
-      + '<b style="display:block;font:900 22px ' + A + ';letter-spacing:-.02em;color:' + tom.cor
-      +   ';margin:2px 0 3px;overflow-wrap:anywhere;">' + esc(a.valor) + '</b>'
-      + '<span style="display:block;font:700 12px/1.4 ' + M + ';color:#3E382F;">'
-      +   esc(a.txt) + '</span></span>';
-  }).join('');
+function pv6Piso(lista) {
+  const minimo = cadenciaMinimoToques();
+  if (!minimo) return { minimo: 0, abaixo: 0, total: lista.length, pct: null };
+  const abaixo = lista.filter(function (l) { return pv6AbaixoDoPiso(l.id, minimo); }).length;
+  return { minimo: minimo, abaixo: abaixo, total: lista.length,
+    pct: lista.length ? Math.round(abaixo / lista.length * 100) : null };
+}
 
-  /* ── FUNIL DELE ──────────────────────────────────────────────────────────────────── */
-  const funil = o.etapas.map(function (e) {
-    return '<button type="button" data-ps6-acao="' + e.on + '" data-ps6-hv="0"'
-      + ' title="Ver os leads de ' + esc(e.rot) + '"'
-      + ' style="display:flex;align-items:center;gap:9px;width:100%;text-align:left;'
-      + 'border:1px solid ' + (e.sel ? '#2B3440' : 'transparent') + ';background:'
-      + (e.sel ? '#FBFAF6' : 'transparent') + ';border-radius:8px;padding:4px 7px;'
-      + 'cursor:pointer;min-height:30px;">'
-      + '<span style="flex:none;width:118px;font:800 10.5px ' + M + ';color:'
-      +   (e.sel ? '#2B3440' : '#5B667A') + ';overflow:hidden;text-overflow:ellipsis;'
-      +   'white-space:nowrap;">' + esc(e.rot) + '</span>'
-      + '<span style="flex:1;min-width:26px;height:15px;background:#EDEBE5;border-radius:999px;'
-      +   'overflow:hidden;display:flex;align-items:center;">'
-      +   '<i style="display:flex;align-items:center;justify-content:flex-end;height:100%;'
-      +     'width:' + e.pct + '%;background:' + e.cor + ';border-radius:999px;padding:0 5px;'
-      +     'box-sizing:border-box;font:900 9.5px ' + A + ';color:#FFFDF8;font-style:normal;">'
-      +     (e.n > 0 ? e.n : '') + '</i></span>'
-      + (e.n === 0 ? '<span style="flex:none;width:12px;font:900 9.5px ' + A + ';color:#B4AC9C;">0</span>' : '')
-      + '<span style="flex:none;width:66px;text-align:right;font:800 9.5px ' + M + ';color:#5B667A;">'
-      +   (e.tqMed == null ? '—' : esc(e.tqMed) + ' tq/lead') + '</span>'
-      + '<span style="flex:none;width:62px;text-align:right;font:800 9.5px ' + M + ';color:'
-      +   (e.travados ? '#E51A31' : '#B4AC9C') + ';">'
-      +   (e.travados ? e.travados + (e.travados === 1 ? ' travado' : ' travados') : '—') + '</span>'
-      + '</button>';
-  }).join('');
+/* O MAPA DE CADÊNCIA. estadoDaCadencia() já existe e é o motor da régua — aqui ele só é
+   aplicado a cada aberto e a lista é ordenada pelo que a régua manda tocar primeiro. */
+function pv6Cadencia(ownerId) {
+  const ab = pv6Abertos(ownerId);
+  const minimo = cadenciaMinimoToques();
+  const linhas = ab.lista.map(function (l) {
+    const tq = tm10Tq(l.id);
+    const est = estadoDaCadencia(l, { total: tq.n, ultimo: tq.ultimo }, null, null);
+    const atraso = est && est.atrasoDias != null ? est.atrasoDias : null;
+    /* A ORDEM: o mais atrasado primeiro, depois quem nunca foi tocado, depois o resto.
+       Negócio sem toque nenhum não tem atraso calculável — e é o pior caso, não o
+       melhor. Ordenar só por atraso o mandaria para o fim da fila. */
+    const peso = est && est.status === 'nao_iniciada' ? 100000 + (l.dias || 0)
+      : (atraso != null && atraso >= 0 ? 200000 + atraso : (atraso != null ? atraso : -1));
+    return {
+      id: String(l.id), nome: l.name || 'sem nome',
+      etapa: l.stage || '—', stageId: String(l.stageId),
+      dias: l.dias, mrr: l.mrr,
+      toques: tq.n, ultimo: tm10Ultimo(tq.ultimo),
+      abaixoDoPiso: pv6AbaixoDoPiso(l.id, minimo), minimo: minimo,
+      regua: est ? est.rotulo : null,
+      passo: est ? est.passo : null, totalPassos: est ? est.totalPassos : null,
+      passos: pv6PassosDa(l),
+      proximo: est ? est.proximo : null,
+      status: est ? est.status : null, atraso: atraso,
+      peso: peso
+    };
+  }).sort(function (a, b) { return b.peso - a.peso; });
+  return { linhas: linhas, completa: ab.completa, recorte: ab.recorte, piso: pv6Piso(ab.lista) };
+}
 
-  const numeros = o.numeros.map(function (x) {
-    return '<span style="display:block;min-width:0;">'
-      + '<b style="display:block;font:900 19px ' + A + ';letter-spacing:-.01em;'
-      +   'font-variant-numeric:tabular-nums;color:' + x.cor + ';">' + esc(x.v) + '</b>'
-      + '<span style="display:block;font:700 9.5px/1.35 ' + M + ';color:#7A8494;">'
-      +   esc(x.rot) + '</span></span>';
-  }).join('');
+/* os passos da régua deste negócio, para as bolinhas. Sai da MESMA config que o motor
+   usa — duas leituras da régua seriam duas réguas. */
+function pv6PassosDa(lead) {
+  const r = cadenciaDoLead(lead, null);
+  return (r && Array.isArray(r.passos)) ? r.passos : [];
+}
 
-  /* ── LEADS DA ETAPA ──────────────────────────────────────────────────────────────── */
-  const leads = o.leads.length
-    ? o.leads.map(function (l) {
-      return '<div data-ps6-hv="0" style="display:flex;align-items:center;gap:10px;min-width:0;'
-        + 'background:#FDFEFF;border:1px solid ' + (l.estourou ? '#F0A9B2' : '#E7E3DA')
-        + ';border-radius:9px;padding:8px 11px;">'
-        + '<b style="flex:none;width:34px;font:900 13px ' + A + ';color:'
-        +   (l.estourou ? '#E51A31' : '#7A8494') + ';font-variant-numeric:tabular-nums;">'
-        +   (l.dias == null ? '—' : l.dias + 'd') + '</b>'
-        + '<span style="flex:1;min-width:0;">'
-        +   '<a href="' + hsUrl(l.id) + '" target="_blank" rel="noopener"'
-        +     ' title="Abrir ' + esc(l.nome) + ' no HubSpot"'
-        +     ' style="display:block;font:800 12.5px ' + M + ';color:#2B3440;text-decoration:none;'
-        +     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(l.nome) + '</a>'
-        +   (l.onde ? '<span style="display:block;font:700 9.5px ' + M + ';color:#7A8494;">'
-            + esc(l.onde) + '</span>' : '')
-        + '</span>'
-        + '<span style="flex:none;width:74px;text-align:right;">'
-        +   '<b style="display:block;font:900 11px ' + A + ';color:' + l.tqCor + ';">'
-        +     esc(l.tqRot) + '</b>'
-        +   '<span style="display:block;font:700 8.5px ' + M + ';color:#7A8494;">'
-        +     esc(l.ultimo) + '</span></span>'
-        + '<b style="flex:none;width:56px;text-align:right;font:900 12px ' + A + ';color:#2B3440;">'
-        +   esc(tm10Rs(l.mrr)) + '</b>'
-        + '<span style="flex:none;width:210px;font:700 10.5px/1.35 ' + M + ';color:'
-        +   (l.estourou ? '#8A3B3B' : '#7A8494') + ';">' + esc(l.porque) + '</span>'
-        + '</div>';
-    }).join('')
-    : '<span style="display:block;font:700 10.5px ' + M + ';color:#B4AC9C;padding:10px 2px;">'
-      + 'nenhum lead nesta etapa agora.</span>';
+/* 1:1 REGISTRADOS NO MÊS. Sai de pauta_do_lider tipo `um_a_um`, a MESMA tabela que a
+   Daily e a Semana leem e que o botão "preparar 1:1" desta aba grava. Medido em 19/09:
+   zero linhas — o contador abre 0/9, que é a verdade, e a tela diz o que ele mede. */
+function pv6UmAUmDoMes() {
+  const mes = new Date().toISOString().slice(0, 7);
+  const chaves = Object.keys((PS6_ESTADO && PS6_ESTADO.pauta) || {});
+  const feitos = {};
+  chaves.forEach(function (k) {
+    if (k.indexOf('um_a_um:') !== 0) return;
+    const linha = PS6_ESTADO.pauta[k];
+    const quando = linha && (linha.criado_em || linha.criadoEm);
+    if (quando && String(quando).slice(0, 7) !== mes) return;
+    feitos[k.slice('um_a_um:'.length)] = 1;
+  });
+  return Object.keys(feitos).length;
+}
 
-  /* ── RITMO · ONDE PERDE · PROPOSTAS ──────────────────────────────────────────────── */
-  const heat = !o.cad
-    ? '<span style="display:block;font:700 10px ' + M + ';color:#8A6516;background:#FDF6E7;'
-      + 'border:1px solid #F0DFB6;border-radius:9px;padding:9px 11px;">' + esc(o.cadNota) + '</span>'
-    : '<span style="display:flex;gap:3px;">'
-      + o.cadDias.map(function (r, i) {
-        const c = o.cad.celulas[i] || { n: 0, bg: '#FDECEC', cor: '#C24A4A' };
-        return '<span style="flex:1;text-align:center;">'
-          + '<span style="display:block;font:800 8px ' + A + ';color:#7A8494;">' + esc(r) + '</span>'
-          + '<span style="display:grid;place-items:center;height:22px;margin-top:2px;'
-          +   'background:' + c.bg + ';color:' + c.cor + ';border-radius:4px;'
-          +   'font:800 10.5px ' + M + ';font-variant-numeric:tabular-nums;">' + c.n + '</span></span>';
-      }).join('')
-      + '</span>';
-  const slaBarra = '<span style="display:flex;align-items:center;gap:8px;margin-top:9px;">'
-    + '<span style="flex:none;font:800 9px ' + A + ';letter-spacing:.08em;text-transform:uppercase;'
-    +   'color:#7A8494;">SLA 1º toque</span>'
-    + (o.sla == null
-      ? '<span style="font:700 9.5px ' + M + ';color:#B4AC9C;">não medido — só '
-        + o.slaN + ' negócios com data de criação</span>'
-      : '<span style="flex:1;min-width:20px;height:12px;background:#EDEBE5;border-radius:999px;'
-        + 'overflow:hidden;"><i style="display:block;height:100%;width:' + o.sla + '%;background:'
-        + (o.sla >= 85 ? '#1E9E7B' : (o.sla >= 65 ? '#B07C1F' : '#E51A31')) + ';border-radius:999px;"></i></span>'
-        + '<b style="flex:none;font:900 11px ' + A + ';color:'
-        + (o.sla >= 85 ? '#1E9E7B' : (o.sla >= 65 ? '#B07C1F' : '#E51A31')) + ';">' + o.sla + '%</b>'
-        + '<span style="flex:none;font:800 9px ' + M + ';color:'
-        + (o.slaEstourados ? '#E51A31' : '#1E9E7B') + ';">'
-        + (o.slaEstourados ? o.slaEstourados + (o.slaEstourados === 1 ? ' estourado' : ' estourados') : 'em dia ✓')
-        + '</span>')
-    + '</span>';
-  const conv = !o.conv.medivel
-    ? '<span style="display:block;font:700 10px ' + M + ';color:#B4AC9C;">'
-      + 'sem histórico de etapa suficiente para medir a conversão dele.</span>'
-    : o.conv.linhas.map(function (x) {
-      return '<span style="display:flex;align-items:center;gap:7px;min-width:0;">'
-        + '<span style="flex:none;width:112px;font:800 9.5px ' + M + ';color:#5B667A;'
-        +   'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(x.rot) + '</span>'
-        + '<span style="flex:1;min-width:20px;height:13px;background:#EDEBE5;border-radius:999px;'
-        +   'overflow:hidden;position:relative;">'
-        +   '<i style="display:block;height:100%;width:' + Math.min(100, x.pct) + '%;background:'
-        +     x.cor + ';border-radius:999px;"></i>'
-        +   (x.time == null ? '' : '<i title="time: ' + x.time + '%" style="position:absolute;'
-            + 'top:0;bottom:0;left:' + Math.min(100, x.time) + '%;width:2px;background:#2B3440;"></i>')
-        + '</span>'
-        + '<b style="flex:none;width:32px;text-align:right;font:900 11px ' + A + ';color:' + x.cor + ';">'
-        +   x.pct + '%</b></span>';
-    }).join('');
-  const convNota = o.conv.medivel && o.conv.pior && o.conv.pior.dif != null && o.conv.pior.dif < 0
-    ? o.conv.pior.rot + ': ' + Math.abs(o.conv.pior.dif) + 'pp abaixo do time — é aqui que o treino desta semana rende mais'
-    : (o.conv.medivel ? 'acima do time em todas as etapas medidas ✓' : '');
-  const props = o.props.length
-    ? o.props.map(function (x) {
-      return '<span style="display:flex;align-items:center;gap:7px;min-width:0;">'
-        + '<b style="flex:none;width:52px;font:900 10px ' + A + ';color:'
-        +   (x.temReuniao ? '#1E9E7B' : '#E51A31') + ';">' + esc(x.quando) + '</b>'
-        + '<span style="flex:1;min-width:0;">'
-        +   '<a href="' + hsUrl(x.id) + '" target="_blank" rel="noopener"'
-        +     ' style="display:block;font:800 11px ' + M + ';color:#2B3440;text-decoration:none;'
-        +     'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(x.nome) + '</a>'
-        +   '<span style="display:block;font:700 8.5px ' + M + ';color:'
-        +     (x.temReuniao ? '#7A8494' : '#8A3B3B') + ';">' + esc(x.nota) + '</span></span>'
-        + '<b style="flex:none;font:900 11px ' + A + ';color:#2B3440;">' + esc(tm10Rs(x.mrr)) + '</b>'
-        + '</span>';
-    }).join('')
-    : '<span style="display:block;font:700 10px ' + M + ';color:#1E9E7B;">'
-      + 'nenhuma proposta aberta em Demo ou Negociação ✓</span>';
-  const perdas = o.perdas.n
-    ? '<span style="display:block;font:700 10px/1.45 ' + M + ';color:#7A8494;">'
-      + '<b style="color:#E51A31;font:900 14px ' + A + ';">' + o.perdas.n + '</b> '
-      + (o.perdas.n === 1 ? 'perda dele' : 'perdas dele') + ' · ' + esc(tm10Rs(o.perdas.mrr))
-      + ' nos últimos ' + (o.perdas.dias || '—') + ' dias<br>'
-      /* OS MOTIVOS DELE PRIMEIRO (11/09/26). A frase antiga dizia "o motivo por pessoa
-         não vem do robô" — e vinha: estava no mesmo campo que a tela estragava. Falar
-         dos motivos do TIME com uma pessoa é comparar 58 perdas dela com 395 de todo
-         mundo, que não é conversa de coaching. Os do time ficam depois, como referência. */
-      + '<span style="color:#B4AC9C;">'
-      + ((o.perdas.porMotivo && o.perdas.porMotivo.length)
-          ? 'motivos dele: ' + esc(o.perdas.porMotivo.slice(0, 3).map(function (x) {
-              return x.rot.toLowerCase() + ' (' + x.n + ')'; }).join(', '))
-            + ' · no time: ' + esc(o.perdas.doTime.map(function (x) {
-              return x.rot.toLowerCase() + ' (' + x.n + ')'; }).join(', '))
-          : 'motivo por pessoa não medido nesta carga — no time: ' + esc(o.perdas.doTime.map(function (x) {
-              return x.rot.toLowerCase() + ' (' + x.n + ')'; }).join(', ')))
-      + '</span></span>'
-    : '<span style="display:block;font:700 10px ' + M + ';color:#1E9E7B;">'
-      + 'zero perdas dele na janela ✓</span>';
+/* O COMPROMISSO E O PRAZO. O texto vem de reps[].compromissos e o prazo do array irmão
+   reps[].compromissosPrazo, mesmo índice — ver o comentário em montar-dados.js. O status
+   continua saindo de pdi_compromissos (checked/validado/devolvido), como na v4. */
+function pv6Combinados(sel, combinadosV4) {
+  const r = (DATA.reps || []).filter(function (x) { return String(x.ownerId) === String(sel.ownerId); })[0] || {};
+  const prazos = Array.isArray(r.compromissosPrazo) ? r.compromissosPrazo : [];
+  const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  return (combinadosV4 || []).map(function (c, i) {
+    const prazo = prazos[i] || null;
+    /* VENCIDO É UMA CONTA, NÃO UMA LEITURA DE TEXTO: só existe com prazo estruturado e
+       com o combinado ainda em aberto. Sem prazo, a linha diz "sem prazo registrado" —
+       inventar um a partir da prosa foi o que eu recusei fazer. */
+    const vencido = !!(prazo && prazo < hoje && c.st === 'pendente');
+    return { txt: c.txt, st: c.st, marcou: c.marcou, motivo: c.motivo, on: c.on,
+      prazo: prazo, vencido: vencido };
+  });
+}
 
-  /* ── COMBINADOS ──────────────────────────────────────────────────────────────────── */
-  const comb = !o.combinados.length
-    ? '<span style="display:block;font:700 10.5px ' + M + ';color:#B4AC9C;">'
-      + 'nenhum combinado registrado para ' + esc(o.nome) + ' ainda — eles nascem da análise semanal.</span>'
-    : o.combinados.map(function (c) {
-      const st = PE4_ST[c.st];
-      return '<span style="display:flex;align-items:flex-start;gap:8px;min-width:0;'
-        + (c.st === 'furou' ? 'background:#FDF3F4;border:1px solid #F0A9B2;border-radius:9px;padding:7px 9px;' : '')
-        + '">'
-        + (c.on
-          ? '<button type="button" data-ps6-acao="' + c.on + '" data-ps6-hv="0"'
-            + ' title="Alterna feito → furou → pendente. Grava na mesma linha que o executivo marcou."'
-            + ' style="flex:none;border:0;cursor:pointer;background:' + st.bg + ';color:#FFFDF8;'
-            + 'border-radius:999px;padding:3px 9px;font:900 8.5px ' + A + ';letter-spacing:.05em;'
-            + 'text-transform:uppercase;">' + st.rot + '</button>'
-          : '<span style="flex:none;background:' + st.bg + ';color:#FFFDF8;border-radius:999px;'
-            + 'padding:3px 9px;font:900 8.5px ' + A + ';letter-spacing:.05em;text-transform:uppercase;"'
-            + ' title="sem linha em pdi_compromissos para gravar — ela nasce quando ele abre o Desenvolvimento">'
-            + st.rot + '</span>')
-        + '<span style="flex:1;min-width:0;font:700 11px/1.4 ' + M + ';color:#3E382F;">'
-        +   esc(c.txt)
-        +   (c.motivo ? '<span style="display:block;font:700 9px ' + M + ';color:#8A3B3B;">devolvido: '
-            + esc(c.motivo) + '</span>' : '')
-        + '</span></span>';
-    }).join('');
+function pv6Dados() {
+  const d = pe4Dados();
+  const pessoas = pe4Pessoas();
 
-  /* ── ALAVANCAS ───────────────────────────────────────────────────────────────────── */
-  const alav = o.alavancas.map(function (a) {
-    return '<span style="display:block;background:#FDFEFF;border:1px solid #E7E3DA;'
-      + 'border-radius:12px;padding:12px 15px;min-width:0;">'
-      + '<span style="display:block;font:900 9px ' + A + ';letter-spacing:.09em;'
-      +   'text-transform:uppercase;color:' + (PE4_TAGS[a.tag] || '#7A8494') + ';">'
-      +   esc(a.tag) + '</span>'
-      + '<b style="display:block;font:800 13px/1.35 ' + M + ';color:#2B3440;margin:3px 0 4px;">'
-      +   esc(a.acao) + '</b>'
-      + '<span style="display:block;font:700 10.5px/1.4 ' + M + ';color:#5B667A;">'
-      +   esc(a.prova) + '</span></span>';
-  }).join('');
+  /* ── O HERO: três números do TIME, cada um sobre a lista que ele abre ── */
+  let vencidosTime = 0;
+  let abaixoTime = 0, abertosMedidos = 0, listaCompleta = true, foraDaMedida = 0;
+  pessoas.forEach(function (p) {
+    const ab = pv6Abertos(p.ownerId);
+    const piso = pv6Piso(ab.lista);
+    abaixoTime += piso.abaixo;
+    abertosMedidos += ab.lista.length;
+    if (!ab.completa) { listaCompleta = false; foraDaMedida += Math.max(0, ab.recorte - ab.lista.length); }
+  });
+  pessoas.forEach(function (p) {
+    const r = (DATA.reps || []).filter(function (x) { return String(x.ownerId) === String(p.ownerId); })[0] || {};
+    const prazos = Array.isArray(r.compromissosPrazo) ? r.compromissosPrazo : [];
+    const hoje = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const linha = (PS6_ESTADO.compromissos || {})[p.ownerId] || null;
+    (p.compromissos || []).forEach(function (txt, i) {
+      const feito = !!(linha && (linha.validado_em || [])[i]);
+      const furou = !!(linha && (linha.devolvido_em || [])[i]);
+      if (feito || furou) return;
+      if (prazos[i] && prazos[i] < hoje) vencidosTime += 1;
+    });
+  });
 
-  const bloco = function (titulo, sub, corpo, bg) {
-    return '<div style="background:' + (bg || '#FDFEFF') + ';border:1px solid #E7E3DA;'
-      + 'border-radius:12px;padding:14px 18px;min-width:0;">'
-      + '<span style="font:900 10px ' + A + ';letter-spacing:.12em;text-transform:uppercase;'
-      +   'color:#7A8494;">' + esc(titulo)
-      +   (sub ? ' <span style="font-weight:700;letter-spacing:0;text-transform:none;">'
-          + esc(sub) + '</span>' : '') + '</span>'
-      + '<div style="margin-top:9px;">' + corpo + '</div></div>';
+  d.v6 = {
+    vencidos: vencidosTime,
+    pisoPct: abertosMedidos ? Math.round(abaixoTime / abertosMedidos * 100) : null,
+    pisoAbaixo: abaixoTime, pisoTotal: abertosMedidos,
+    minimo: cadenciaMinimoToques(),
+    umAUm: pv6UmAUmDoMes(), umAUmDe: pessoas.length,
+    listaCompleta: listaCompleta, foraDaMedida: foraDaMedida,
+    primeiro: pessoas[0] ? tm10NomeCurto(pessoas[0].nome) : null
   };
 
-  return '<div data-pe4-raiz="1" style="background:#FDFEFF;border:1px solid #DCE1EA;'
-    + 'border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">'
-    + '<div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap;'
-    +   'padding:22px 28px 18px;border-bottom:1px solid #E7E3DA;">'
-    +   '<div style="flex:1;min-width:0;">'
-    +     '<span style="font:900 10px ' + A + ';letter-spacing:.14em;text-transform:uppercase;'
-    +       'color:#E51A31;">' + esc(d.kicker) + '</span>'
-    +     '<h1 style="margin:6px 0 0;font:900 26px/1.25 ' + A + ';letter-spacing:-.02em;'
-    +       'color:#2B3440;text-wrap:balance;">' + esc(d.manchete) + '</h1>'
-    +   '</div>'
-    +   '<div style="display:flex;gap:32px;flex-wrap:wrap;">' + kpis + '</div>'
-    + '</div>'
-    + (d.toast
-      ? '<div style="padding:10px 28px;background:#EAF6F1;border-bottom:1px solid #CBE8DD;'
-        + 'font:800 11.5px ' + M + ';color:#1E9E7B;">' + esc(d.toast) + '</div>'
-      : '')
-    + '<div style="display:grid;grid-template-columns:330px minmax(0,1fr);align-items:start;">'
-    +   '<div style="background:#FBFAF6;border-right:1px solid #E7E3DA;padding:18px 0 20px;'
-    +     'min-width:0;">'
-    +     '<span style="display:block;padding:0 14px 9px;font:900 10px ' + A + ';'
-    +       'letter-spacing:.12em;text-transform:uppercase;color:#7A8494;">O time '
-    +       '<span style="font-weight:700;letter-spacing:0;text-transform:none;">'
-    +       '· ordenado por quem mais precisa de você</span></span>'
-    +     rail
-    +     '<span style="display:block;padding:12px 14px 0;font:700 9.5px/1.5 ' + M + ';'
-    +       'color:#B4AC9C;">a ordem é (1 − fechados/meta) × 3 + travados × 0,6 +'
-    +       ' (100 − SLA) / 40 — quem está longe da meta, com negócio travado e carga'
-    +       ' esfriando sobe. Não é ranking de desempenho: é fila de atendimento.</span>'
-    +   '</div>'
-    +   '<div style="padding:18px 22px 24px;min-width:0;display:flex;flex-direction:column;gap:14px;">'
-    +     '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;">'
-    +       '<b style="font:900 18px ' + A + ';letter-spacing:-.01em;color:#2B3440;">'
-    +         esc(o.nome) + '</b>'
-    +       '<span style="font:700 11px ' + M + ';color:#7A8494;">' + esc(o.sub) + '</span>'
-    +       '<span style="margin-left:auto;display:flex;align-items:baseline;gap:7px;">'
-    +         '<span style="font:800 10px ' + A + ';letter-spacing:.06em;text-transform:uppercase;'
-    +           'color:#7A8494;">meta do mês</span>'
-    +         '<b style="font:900 13px ' + A + ';color:' + o.metaCor + ';">'
-    +           o.fech + '/' + (o.meta || '—') + '</b>'
-    +         '<span style="width:90px;height:9px;background:#EDEBE5;border-radius:999px;'
-    +           'overflow:hidden;"><i style="display:block;height:100%;width:'
-    +           Math.min(100, o.pctMeta || 0) + '%;background:' + o.metaCor + ';border-radius:999px;"></i></span>'
-    +       '</span></div>'
-    +     '<div style="background:#FBFAF6;border:1px solid #E7E3DA;border-left:4px solid #E51A31;'
-    +       'border-radius:12px;padding:15px 19px;">'
-    +       '<b style="font:800 17px/1.4 ' + M + ';color:#2B3440;">' + esc(o.diagnostico) + '</b></div>'
-    +     '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">'
-    +       avisos + '</div>'
-    +     '<div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px;">'
-    +       bloco('Funil de ' + o.nome.split(' ')[0],
-            '· ' + o.etapas.reduce(function (s, e) { return s + e.n; }, 0) + ' em aberto · clique na etapa',
-            '<div style="display:flex;flex-direction:column;gap:1px;">' + funil + '</div>')
-    +       bloco('O mês em números', '',
-            '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;">'
-            + numeros + '</div>', '#FBFAF6')
-    +     '</div>'
-    +     bloco((o.etapaSel ? o.etapaSel.rot : 'etapa') + ' · '
-          + (o.etapaSel ? o.etapaSel.n : 0) + (o.etapaSel && o.etapaSel.n === 1 ? ' lead' : ' leads'),
-          '— por que ainda estão aqui? do mais parado pro mais novo · vermelho = cobre na conversa',
-          '<div style="display:flex;flex-direction:column;gap:5px;">' + leads + '</div>')
-    +     '<div style="display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);gap:12px;">'
-    +       bloco('O ritmo de ' + o.nome.split(' ')[0], '· atividades no CRM por dia útil',
-            heat + '<span style="display:block;font:700 9.5px/1.45 ' + M + ';margin-top:8px;color:'
-            + (o.cadAlarme ? '#E51A31' : '#7A8494') + ';">' + esc(o.cadNota) + '</span>' + slaBarra)
-    +       bloco('Onde ' + o.nome.split(' ')[0] + ' perde', '· conversão vs time (traço)',
-            '<div style="display:flex;flex-direction:column;gap:5px;">' + conv + '</div>'
-            + (convNota ? '<span style="display:block;font:700 9.5px/1.45 ' + M + ';color:#7A8494;'
-              + 'margin-top:8px;">' + esc(convNota) + '</span>' : ''))
-    +       bloco('Propostas e perdas', '',
-            '<div style="display:flex;flex-direction:column;gap:6px;">' + props + '</div>'
-            + '<span style="display:block;font:900 9px ' + A + ';letter-spacing:.09em;'
-            + 'text-transform:uppercase;color:#7A8494;margin:11px 0 6px;">Perdas</span>' + perdas,
-            '#FBFAF6')
-    +     '</div>'
-    +     bloco('Combinados da última conversa',
-          o.temLinha
-            ? ('· ' + (o.dataUm ? '1:1 de ' + o.dataUm : 'análise de ' + (o.versao || '—'))
-              + ' · clique no status para carimbar')
-            : '· sem linha no banco ainda',
-          '<div style="display:flex;flex-direction:column;gap:7px;">' + comb + '</div>')
-    +     bloco('Como acelerar', '— leve isso pra conversa',
-          '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;">'
-          + alav + '</div>', '#FBFAF6')
-    +   '</div>'
+  if (d.dossie) {
+    const sel = pessoas.filter(function (p) { return p.ownerId === d.dossie.ownerId; })[0];
+    if (sel) {
+      d.dossie.eixos = [
+        { rot: 'CLIENTES', feito: sel.fech, meta: sel.meta, txt: String(sel.fech),
+          metaTxt: '/' + (sel.meta || '—'),
+          pct: sel.meta > 0 ? Math.round(sel.fech / sel.meta * 100) : null },
+        { rot: 'MRR', feito: sel.mrrFeito, meta: sel.metaMrr, txt: tm10Rs(sel.mrrFeito),
+          metaTxt: '/' + tm10Rs(sel.metaMrr),
+          pct: sel.metaMrr > 0 ? Math.round(sel.mrrFeito / sel.metaMrr * 100) : null },
+        { rot: 'RECEITA', feito: sel.receitaFeita, meta: sel.metaReceita, txt: tm10Rs(sel.receitaFeita),
+          metaTxt: '/' + tm10Rs(sel.metaReceita),
+          pct: sel.metaReceita > 0 ? Math.round(sel.receitaFeita / sel.metaReceita * 100) : null }
+      ];
+      d.dossie.cadencia = pv6Cadencia(sel.ownerId);
+      d.dossie.combinados = pv6Combinados(sel, d.dossie.combinados);
+      d.dossie.patamar = sel.patamar;
+      d.dossie.slaPct = sel.sla;
+      d.dossie.card = PV6_CARD[sel.ownerId] || 'travados';
+    }
+  }
+  /* ── A TAG E A SUB DE CADA UM DO RAIL ──
+     d.rail já vem ordenado por pe4Score. A tag é lida dos números dele, e a sub cita
+     UM número — sub sem número no rail vira adjetivo, que é o que esta aba não pode
+     ser. */
+  const ultimo = (d.rail || []).length - 1;
+  (d.rail || []).forEach(function (linha, i) {
+    const p = pessoas.filter(function (x) { return x.ownerId === linha.ownerId; })[0];
+    if (!p) { linha.tagV6 = 'destravar'; linha.subV6 = ''; return; }
+    const ab = pv6Abertos(p.ownerId);
+    const cadLinhas = ab.lista;
+    const estourados = cadLinhas.filter(function (l) { return l.slaBreach; }).length;
+    const semToque = cadLinhas.filter(function (l) { return tm10Tq(l.id).n === 0; }).length;
+    const emFundo = cadLinhas.filter(function (l) {
+      return ['1395880471', '1395880472', '1395880473'].indexOf(String(l.stageId)) > -1; }).length;
+    const noRitmo = p.pctMeta != null && p.pctMeta >= 70;
+    /* A ORDEM É A DA CONVERSA, e o FALLBACK NÃO É "destravar": quem não tem nenhum
+       negócio com a régua estourada não tem o que destravar. Com os nove caindo no
+       fallback, a tela acusava o time inteiro do mesmo problema — e nove tags iguais
+       não orientam 1:1 nenhum. Visto na tela, não medido. */
+    linha.tagV6 = (i === ultimo && noRitmo) ? 'case'
+      : (estourados > 0 ? 'destravar'
+        : (semToque > 0 ? 'abordagem'
+          : (emFundo > 0 && p.fech === 0 ? 'proposta'
+            : (noRitmo ? 'ritmo' : 'abordagem'))));
+    linha.subV6 = (estourados
+      ? estourados + ' com a régua estourada'
+      : (semToque ? semToque + ' sem toque nenhum' : p.abertos + ' abertos'))
+      + ' · mês ' + p.fech + '/' + (p.meta || '—');
+  });
+
+  return d;
+}
+/* ══ PESSOAS v6 · O MARKUP ═══════════════════════════════════════════════════════════
+   Da prancha pessoas-v6, desempacotada e vista. Paleta creme (#EFE9DC/#FDFBF0/#E4DBC6,
+   Poppins + DM Sans) — a mesma da Semana v5, e deliberadamente diferente da Raio X, que
+   é do mundo #FDFEFF/Archivo. Foi o que o Julyan pediu ao mandar seguir o mockup. */
+const PV6_P = "'Poppins',sans-serif";
+const PV6_D = "'DM Sans',sans-serif";
+
+function pv6Pct(n) { return Math.max(0, Math.min(100, Number(n) || 0)); }
+function pv6CorDoPace(pct) {
+  if (pct == null) return '#A2937A';
+  return pct >= 70 ? '#1E7A63' : (pct >= 40 ? '#B0782A' : '#E51A31');
+}
+
+/* o cartão padrão da prancha: creme, borda fina, raio 18, sombra de 1px */
+function pv6Cartao(miolo, extra) {
+  return '<div style="background:#FDFBF0;border:1px solid #E4DBC6;border-radius:18px;'
+    + 'box-shadow:0 1px 3px rgba(26,22,19,.05);' + (extra || '') + '">' + miolo + '</div>';
+}
+function pv6Titulo(txt, sub) {
+  return '<div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;">'
+    + '<b style="font-family:' + PV6_P + ';font-size:13.5px;">' + esc(txt) + '</b>'
+    + (sub ? '<span style="font-size:10.5px;color:#A2937A;">' + esc(sub) + '</span>' : '')
+    + '</div>';
+}
+
+/* ── AS BOLINHAS DA RÉGUA ──────────────────────────────────────────────────────────
+   Feito = preenchido. O PRÓXIMO ganha borda vermelha quando está atrasado e âmbar
+   quando ainda não venceu. O title é D+n · canal · ação, direto da régua. */
+function pv6BolinhasHTML(l) {
+  return (l.passos || []).map(function (p) {
+    const feito = l.passo != null && p.toque <= l.passo;
+    const ehProximo = !!(l.proximo && l.proximo.toque === p.toque);
+    const alerta = l.atraso != null && l.atraso >= 0;
+    const borda = feito ? '#1E7A63' : (ehProximo ? (alerta ? '#E51A31' : '#B0782A') : '#D8CFBA');
+    const fundo = feito ? '#1E7A63' : '#FDFBF0';
+    const cor = feito ? '#FDFBF0' : '#A2937A';
+    const can = PV6_CANAL[p.canal] || { rot: String(p.canal || '?').slice(0, 3).toUpperCase() };
+    return '<span title="' + esc('D+' + p.dia + ' · ' + can.rot + ' · ' + (p.acao || '')) + '"'
+      + ' style="width:13px;height:13px;border-radius:99px;background:' + fundo
+      + ';border:1.5px solid ' + borda + ';display:grid;place-items:center;font-size:7.5px;'
+      + 'font-weight:800;color:' + cor + ';flex:none;">' + p.toque + '</span>';
+  }).join('');
+}
+
+/* ── UMA LINHA DO MAPA DE CADÊNCIA ─────────────────────────────────────────────────── */
+function pv6LinhaCadenciaHTML(l) {
+  const atrasado = l.atraso != null && l.atraso > 0;
+  const hoje = l.atraso === 0;
+  const naoIniciou = l.status === 'nao_iniciada';
+  const encerrou = l.status === 'encerrada';
+  const ruim = atrasado || naoIniciou || encerrou;
+  const bg = ruim ? '#FBEEF0' : (hoje ? '#FBF6EC' : '#FDFBF0');
+  const bd = ruim ? '#EFC7CC' : (hoje ? '#EAD9B0' : '#E4DBC6');
+  const st = encerrou
+    ? { rot: 'DECIDIR DESTINO', cor: '#E51A31' }
+    : (naoIniciou
+      ? { rot: 'SEM TOQUE', cor: '#E51A31' }
+      : (atrasado ? { rot: 'ATRASADO ' + l.atraso + 'D', cor: '#E51A31' }
+        : (hoje ? { rot: 'VENCE HOJE', cor: '#B0782A' }
+          : { rot: 'em dia', cor: '#1E7A63' })));
+  const can = l.proximo ? (PV6_CANAL[l.proximo.canal]
+    || { rot: String(l.proximo.canal || '?').slice(0, 3).toUpperCase(), bg: '#EFE9DC', cor: '#6E6558', borda: '#E4DBC6' })
+    : null;
+  const acao = encerrou ? 'a régua acabou — reciclar com data ou perder com motivo'
+    : (l.proximo ? (l.proximo.acao || '—') : '—');
+  return '<div data-pv6-cad="1" style="display:grid;'
+    + 'grid-template-columns:minmax(0,1.1fr) 140px minmax(0,128px) 46px '
+    + 'minmax(0,1fr) 112px 52px;gap:12px;align-items:center;background:' + bg + ';'
+    + 'border:1px solid ' + bd + ';border-radius:10px;padding:8px 13px;font-size:11.5px;'
+    + 'font-variant-numeric:tabular-nums;">'
+    + '<span style="min-width:0;"><b style="display:block;white-space:nowrap;overflow:hidden;'
+    +   'text-overflow:ellipsis;">' + esc(l.nome) + '</b>'
+    +   '<span style="font-size:10px;color:#A2937A;">' + esc(l.etapa)
+    +   ' · ' + (l.abaixoDoPiso ? esc('abaixo do piso (' + l.toques + '/' + l.minimo + ')')
+          : esc('piso ok · ' + l.toques + ' toques')) + '</span></span>'
+    + '<span data-pv6-cad-regua="1"><span style="font-size:10px;color:#6E6558;display:block;">'
+    +   (l.regua ? esc('régua: ' + l.regua) : 'sem régua para a etapa') + '</span>'
+    +   '<b style="font-size:10.5px;color:' + (ruim ? '#E51A31' : '#6E6558') + ';">'
+    +   (l.totalPassos ? esc('toque ' + l.passo + ' de ' + l.totalPassos) : '—') + '</b></span>'
+    + '<span data-pv6-cad-passos="1" style="display:flex;gap:4px;align-items:center;'
+    +   'flex-wrap:wrap;">' + pv6BolinhasHTML(l) + '</span>'
+    + (can
+      ? '<span style="font-size:8.5px;font-weight:800;letter-spacing:.04em;color:' + can.cor
+        + ';background:' + can.bg + ';border:1px solid ' + (can.borda || can.bg) + ';'
+        + 'border-radius:5px;padding:3px 0;text-align:center;">' + esc(can.rot) + '</span>'
+      : '<span></span>')
+    + '<span style="color:#3D362E;line-height:1.4;">' + esc(acao) + '</span>'
+    + '<span style="font-size:10px;font-weight:800;color:' + st.cor + ';text-align:right;">'
+    +   esc(st.rot) + '</span>'
+    + '<a href="' + hsUrl(l.id) + '" target="_blank" rel="noopener"'
+    +   ' style="font-size:11px;font-weight:700;text-align:right;color:#B0782A;">abrir →</a>'
+    + '</div>';
+}
+
+/* ── O DRILL-DOWN: todo número clicável abre a lista que ele conta ──────────────────
+   OS QUATRO CARDS LEEM A MESMA LISTA (`abertos` do snapshot), de propósito: a prancha
+   exige que a contagem bata exatamente com a lista, e misturar universos numa tela é
+   como dois números da mesma pergunta aparecem lado a lado.
+
+   O SLA DE 1º TOQUE FICA DE FORA DOS CARDS e vai para o cabeçalho, sem clique: ele é
+   medido sobre quem tem data de criação (slaN), que é outro conjunto. Número clicável
+   que abre uma lista de outro tamanho seria pior do que número sem clique. */
+function pv6ListaDoCard(d) {
+  const c = d.card;
+  const linhas = (d.cadencia && d.cadencia.linhas) || [];
+  if (c === 'etapa') {
+    /* A ETAPA ESCOLHIDA NO FUNIL, filtrando a MESMA lista de abertos. O funil nunca
+       abre sem etapa: sem clique, a primeira do funil dela. */
+    const alvo = String(PE4_ETAPA[d.ownerId] || (linhas[0] ? linhas[0].stageId : ''));
+    const dela = linhas.filter(function (l) { return String(l.stageId) === alvo; });
+    const rot = (dela[0] && dela[0].etapa) || '—';
+    return { titulo: 'na etapa ' + rot, itens: dela.map(function (l) {
+      return { id: l.id, nome: l.nome,
+        meio: (l.regua ? l.regua + ' · ' : '') + l.toques + ' toques · último ' + l.ultimo,
+        fim: l.dias != null ? l.dias + 'd' : '',
+        cor: (l.atraso != null && l.atraso > 0) ? '#E51A31' : '#6E6558' };
+    }),
+      vazioBom: 'nenhum lead nesta etapa agora.', vazioRuim: false };
+  }
+  if (c === 'mes') {
+    /* a lista das vendas do mês já vem montada por pessoa em vendasMes.porRep[].clientes
+       — a MESMA que o Cockpit conta no placar do mês. */
+    const linha = ((DATA.vendasMes || {}).porRep || [])
+      .filter(function (v) { return String(v.ownerId) === String(d.ownerId); })[0];
+    const vendas = (linha && linha.clientes) || [];
+    return { titulo: 'fechados no mês', itens: vendas.map(function (v) {
+      return { id: String(v.id || ''), nome: v.nome || v.name || 'sem nome',
+        meio: tm10Rs(v.mrr) + ' de MRR · ' + tm10Rs(v.receita) + ' de receita',
+        fim: '', cor: '#1E7A63' };
+    }),
+      vazioBom: 'nenhuma venda registrada no mês ainda', vazioRuim: true };
+  }
+  if (c === 'piso') {
+    const l = linhas.filter(function (x) { return x.abaixoDoPiso; });
+    return { titulo: 'abertos abaixo do piso de ' + d.cadencia.piso.minimo + ' toques',
+      itens: l.map(function (x) {
+        return { id: x.id, nome: x.nome, meio: x.etapa + ' · ' + x.toques + ' de ' + x.minimo
+          + ' toques · último ' + x.ultimo, fim: x.dias != null ? x.dias + 'd na etapa' : '',
+          cor: '#E51A31' };
+      }),
+      vazioBom: 'todos os abertos dela estão no piso — é o único lugar do time onde isso acontece',
+      vazioRuim: false };
+  }
+  if (c === 'semtoque') {
+    const l = linhas.filter(function (x) { return x.toques === 0; });
+    return { titulo: 'abertos sem nenhum toque registrado', itens: l.map(function (x) {
+      return { id: x.id, nome: x.nome, meio: x.etapa + ' · nenhum toque nos últimos 30 dias',
+        fim: x.dias != null ? x.dias + 'd na etapa' : '', cor: '#E51A31' };
+    }),
+      vazioBom: 'todo negócio aberto dela tem pelo menos um toque registrado', vazioRuim: false };
+  }
+  const l = linhas.filter(function (x) { return x.status && x.atraso != null && x.atraso > 0; });
+  return { titulo: 'negócios com a régua estourada', itens: l.map(function (x) {
+    return { id: x.id, nome: x.nome, meio: x.etapa + ' · ' + (x.regua || 'sem régua')
+      + ' · ' + x.toques + ' toques · último ' + x.ultimo,
+      fim: 'atrasado ' + x.atraso + 'd', cor: '#E51A31' };
+  }),
+    vazioBom: 'nenhum negócio dela passou da régua', vazioRuim: false };
+}
+
+function pv6DrillHTML(d) {
+  const dr = pv6ListaDoCard(d);
+  if (!dr.itens.length) {
+    const cor = dr.vazioRuim ? '#B0782A' : '#1E7A63';
+    const bg = dr.vazioRuim ? '#FBF6EC' : '#E7F3EE';
+    const bd = dr.vazioRuim ? '#EAD9B0' : '#BFDCCE';
+    return '<div style="background:' + bg + ';border:1px solid ' + bd + ';border-radius:12px;'
+      + 'padding:13px 16px;font-size:11.5px;color:' + cor + ';font-weight:700;">'
+      + esc(dr.vazioBom) + '</div>';
+  }
+  return '<div style="display:grid;gap:5px;">' + dr.itens.map(function (x) {
+    return '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) 96px 52px;'
+      + 'gap:12px;align-items:center;background:#FDFBF0;border:1px solid #E4DBC6;border-radius:10px;'
+      + 'padding:8px 13px;font-size:11.5px;font-variant-numeric:tabular-nums;">'
+      + '<b style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(x.nome) + '</b>'
+      + '<span style="color:#6E6558;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+      +   esc(x.meio) + '</span>'
+      + '<span style="font-size:10px;font-weight:800;color:' + x.cor + ';text-align:right;">'
+      +   esc(x.fim) + '</span>'
+      + '<a href="' + hsUrl(x.id) + '" target="_blank" rel="noopener"'
+      +   ' style="font-size:11px;font-weight:700;text-align:right;color:#B0782A;">abrir →</a>'
+      + '</div>';
+  }).join('') + '</div>';
+}
+
+function pv6CardsHTML(d) {
+  const cad = d.cadencia || { linhas: [], piso: { minimo: 0, abaixo: 0, total: 0 } };
+  const travados = cad.linhas.filter(function (x) { return x.atraso != null && x.atraso > 0; }).length;
+  const semToque = cad.linhas.filter(function (x) { return x.toques === 0; }).length;
+  const maisVelho = cad.linhas.reduce(function (m, x) {
+    return (x.dias != null && x.dias > m) ? x.dias : m; }, 0);
+  const cards = [
+    { k: 'travados', rot: 'RÉGUA ESTOURADA', v: String(travados), cor: '#E51A31',
+      sub: travados ? 'sem próximo passo na régua · o mais antigo há ' + maisVelho + 'd'
+        : 'nenhum negócio passou da régua' },
+    { k: 'semtoque', rot: 'SEM TOQUE NENHUM', v: String(semToque), cor: '#E51A31',
+      sub: 'abertos sem nenhum contato registrado nos últimos 30 dias' },
+    { k: 'piso', rot: 'ABAIXO DO PISO', v: String(cad.piso.abaixo), cor: '#E51A31',
+      sub: 'de ' + cad.piso.total + ' abertos, com menos de ' + cad.piso.minimo
+        + ' toques — proibido desistir antes do ' + cad.piso.minimo + 'º' },
+    { k: 'mes', rot: 'FECHADOS NO MÊS', v: d.fech + '/' + (d.meta || '—'), cor: '#B0782A',
+      sub: d.pctMeta == null ? 'sem meta registrada' : d.pctMeta + '% da meta de clientes' }
+  ];
+  return '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;'
+    + 'margin-top:16px;font-variant-numeric:tabular-nums;">'
+    + cards.map(function (c) {
+      const aberto = d.card === c.k;
+      const quente = c.cor === '#E51A31';
+      const bg = quente ? '#FBEEF0' : '#FBF6EC';
+      const bd = aberto ? '#1A1613' : (quente ? '#EFC7CC' : '#EAD9B0');
+      return '<div data-ps6-acao="card:' + d.ownerId + ':' + c.k + '" role="button" tabindex="0"'
+        + ' style="border:1.5px solid ' + bd + ';background:' + bg + ';border-radius:13px;'
+        + 'padding:12px 15px;cursor:pointer;">'
+        + '<div style="display:flex;align-items:center;gap:6px;">'
+        +   '<span style="font-size:9.5px;font-weight:800;letter-spacing:.08em;color:' + c.cor
+        +     ';flex:1;">' + esc(c.rot) + '</span>'
+        +   '<span style="font-size:9px;font-weight:700;color:#A2937A;">'
+        +     (aberto ? 'ABERTO ↓' : 'ver lista ↓') + '</span></div>'
+        + '<div style="font-family:' + PV6_P + ';font-weight:800;font-size:22px;margin-top:3px;'
+        +   'color:' + c.cor + ';">' + esc(c.v) + '</div>'
+        + '<div style="font-size:10.5px;color:#6E6558;margin-top:2px;line-height:1.45;">'
+        +   esc(c.sub) + '</div></div>';
+    }).join('') + '</div>';
+}
+
+/* ── ONDE ELE PERDE + O PDI ──────────────────────────────────────────────────────
+   OS MOTIVOS SÃO DELE, não os do time: comparar 58 perdas de uma pessoa com 395 do
+   time não é conversa de coaching. Quando o robô não mediu motivo por pessoa nesta
+   carga, a tela DIZ isso — zero por falta de medição não pode virar zero de verdade,
+   que é o zero que tranquiliza. */
+function pv6PerdasHTML(o) {
+  const pe = o.perdas || { n: 0, mrr: 0, porMotivo: [], doTime: [], dias: null };
+  const temMotivo = (pe.porMotivo || []).length > 0;
+  const miolo = '<div style="padding:16px 20px;">'
+    + pv6Titulo('Onde ' + o.nome.split(/\s+/)[0] + ' perde',
+        pe.dias ? 'motivos dele: ' + pe.n + ' perdas nos últimos ' + pe.dias + ' dias'
+          : 'motivos dele: ' + pe.n + ' perdas')
+    + (temMotivo
+      ? '<div style="display:grid;gap:4px;margin-top:10px;">' + pe.porMotivo.slice(0, 6)
+        .map(function (m) {
+          const pct = pe.n ? Math.round(m.n / pe.n * 100) : 0;
+          return '<div style="display:flex;align-items:center;gap:9px;font-size:11px;'
+            + 'font-variant-numeric:tabular-nums;">'
+            + '<span style="flex:none;width:118px;color:#6E6558;white-space:nowrap;'
+            +   'overflow:hidden;text-overflow:ellipsis;">' + esc(m.rot) + '</span>'
+            + '<span style="flex:1;height:11px;background:#EFE9DC;border-radius:99px;'
+            +   'overflow:hidden;"><span style="display:block;height:100%;width:' + pct
+            +   '%;background:#E51A31;border-radius:99px;"></span></span>'
+            + '<span style="flex:none;width:38px;text-align:right;font-weight:700;">'
+            +   m.n + '</span></div>';
+        }).join('') + '</div>'
+      : '<div style="margin-top:10px;background:#FBF6EC;border:1px solid #EAD9B0;'
+        + 'border-radius:12px;padding:12px 14px;font-size:11px;color:#B0782A;'
+        + 'line-height:1.5;">motivo por pessoa não medido nesta carga do robô — '
+        + 'a tela não transforma isso em zero.</div>')
+    + '<div style="margin-top:10px;font-size:10px;color:#A2937A;line-height:1.6;">'
+    +   'MRR perdido: ' + tm10Rs(pe.mrr)
+    +   ((pe.doTime || []).length ? ' · no time, o motivo mais comum é '
+        + esc(pe.doTime[0].rot) + ' (' + pe.doTime[0].n + ')' : '')
     + '</div></div>';
+  return pv6Cartao(miolo);
+}
+
+/* O FUNIL, CONTADO NA MESMA LISTA que os cards e o mapa de cadência. De `o.etapas`
+   aproveita só a ordem e a cor — contagem vinda de outra fonte foi o que pôs "45 em
+   aberto" ao lado de "26 abertos" na mesma tela. */
+function pv6Funil(o) {
+  const linhas = (o.cadencia && o.cadencia.linhas) || [];
+  const porEtapa = {};
+  linhas.forEach(function (l) {
+    const k = String(l.stageId);
+    if (!porEtapa[k]) porEtapa[k] = { id: k, rot: l.etapa || k, n: 0, travados: 0 };
+    porEtapa[k].n += 1;
+    if (l.atraso != null && l.atraso > 0) porEtapa[k].travados += 1;
+  });
+  const ordem = (o.etapas || []).map(function (e) { return String(e.id); });
+  const chaves = Object.keys(porEtapa).sort(function (a, b) {
+    const ia = ordem.indexOf(a), ib = ordem.indexOf(b);
+    return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib);
+  });
+  const maxN = chaves.reduce(function (m, k) { return Math.max(m, porEtapa[k].n); }, 1);
+  return chaves.map(function (k) {
+    const e = porEtapa[k];
+    return { id: k, rot: e.rot, n: e.n, travados: e.travados,
+      pct: Math.round(e.n / maxN * 100),
+      sel: String(PE4_ETAPA[o.ownerId] || '') === k,
+      on: 'etapa:' + o.ownerId + ':' + k };
+  });
+}
+
+function pv6TelaHTML(d) {
+  const v6 = d.v6;
+  const o = d.dossie;
+
+  /* ── O HERO ── */
+  const manchete = v6.vencidos > 0
+    ? (v6.vencidos + (v6.vencidos === 1 ? ' compromisso vencido' : ' compromissos vencidos')
+      + (v6.pisoPct != null ? ' e ' + v6.pisoPct + '% dos abertos abaixo do piso' : '')
+      + (v6.primeiro ? ' — comece por ' : ''))
+    : (v6.pisoPct != null && v6.pisoPct >= 50
+      ? (v6.pisoPct + '% dos abertos abaixo do piso de ' + v6.minimo + ' toques — comece por ')
+      : 'Nenhum compromisso vencido — a conversa aqui é multiplicar. Comece por ');
+  const heroKpis = [
+    { v: String(v6.vencidos), rot: 'compromissos vencidos com prazo registrado',
+      cor: v6.vencidos ? '#FF6B78' : '#FDFBF0' },
+    { v: v6.pisoPct == null ? '—' : v6.pisoPct + '%',
+      rot: 'dos abertos abaixo do piso de ' + v6.minimo + ' toques ('
+        + v6.pisoAbaixo + ' de ' + v6.pisoTotal + ')', cor: '#E0A64A' },
+    { v: v6.umAUm + '<span style="font-size:15px;color:#8A8072;font-weight:700;">/'
+        + v6.umAUmDe + '</span>', rot: '1:1 marcados no cockpit neste mês', cor: '#FDFBF0' }
+  ];
+  const hero = '<div style="background:#1A1613;color:#FDFBF0;padding:20px 26px;'
+    + 'border-radius:18px;display:flex;align-items:center;gap:26px;flex-wrap:wrap;">'
+    + '<div style="min-width:min(400px,100%);flex:1 1 340px;">'
+    +   '<div style="font-size:10px;font-weight:700;letter-spacing:.12em;color:#8A8072;">'
+    +     'PESSOAS · ACELERAR GENTE POR GENTE</div>'
+    +   '<div style="font-family:' + PV6_P + ';font-weight:800;font-size:22px;margin-top:3px;'
+    +     'letter-spacing:-.01em;line-height:1.3;">' + esc(manchete)
+    +     (v6.primeiro ? '<span style="color:#FF6B78;">' + esc(v6.primeiro) + '</span>.' : '')
+    +   '</div></div>'
+    + '<div style="display:flex;gap:30px;flex-wrap:wrap;font-variant-numeric:tabular-nums;">'
+    +   heroKpis.map(function (k) {
+        return '<div style="min-width:0;"><div style="font-family:' + PV6_P + ';font-weight:800;'
+          + 'font-size:28px;line-height:1.15;color:' + k.cor + ';">' + k.v + '</div>'
+          + '<div style="font-size:11px;color:#8A8072;margin-top:1px;max-width:24ch;">'
+          + esc(k.rot) + '</div></div>';
+      }).join('') + '</div>'
+    + '</div>';
+
+  /* ── O RAIL ── */
+  const rail = pv6Cartao(
+    '<div style="padding:14px;">'
+    + '<div style="display:flex;align-items:baseline;gap:8px;padding:2px 6px 10px;">'
+    +   '<b style="font-family:' + PV6_P + ';font-size:13px;">O time</b>'
+    +   '<span style="font-size:10.5px;color:#A2937A;">por quem mais precisa de você</span></div>'
+    + '<div style="display:grid;gap:5px;">' + d.rail.map(function (p) {
+      const tag = PV6_TAG[p.tagV6] || PV6_TAG.destravar;
+      return '<div data-ps6-acao="' + p.on + '" role="button" tabindex="0"'
+        /* min-width:0 É O QUE FAZ A ELIPSE FUNCIONAR: filho de grid tem min-width:auto
+           e não encolhe abaixo do conteúdo. Sem isto o item ficava 30px mais largo que
+           o cartão do rail, medido. Fica no MESMO literal do resto do estilo porque a
+           guarda precisa de uma âncora única — solto, ela casava com o min-width de
+           outro trecho do bloco e dava verde com o defeito. */
+        + ' style="display:flex;align-items:center;gap:10px;padding:9px 10px;'
+        + 'border-radius:12px;min-width:0;'
+        + 'cursor:pointer;background:' + (p.sel ? '#FBF6EC' : 'transparent') + ';'
+        + 'border:1px solid ' + (p.sel ? '#B0782A' : 'transparent') + ';">'
+        + '<span style="width:28px;height:28px;border-radius:99px;background:' + tag.cor
+        +   ';color:#fff;font-family:' + PV6_P + ';font-weight:800;font-size:10px;display:grid;'
+        +   'place-items:center;flex:none;">' + esc(p.iniciais) + '</span>'
+        + '<span style="min-width:0;flex:1;">'
+        +   '<b style="font-size:12.5px;display:block;white-space:nowrap;overflow:hidden;'
+        +     'text-overflow:ellipsis;">' + esc(p.nome) + '</b>'
+        +   '<span style="font-size:10px;color:#A2937A;display:block;white-space:nowrap;'
+        +     'overflow:hidden;text-overflow:ellipsis;">' + esc(p.subV6) + '</span></span>'
+        + '<span style="flex:none;font-size:8.5px;font-weight:800;letter-spacing:.07em;color:'
+        +   tag.cor + ';background:' + tag.bg + ';border-radius:6px;padding:3px 7px;">'
+        +   esc(tag.rot) + '</span></div>';
+    }).join('') + '</div>'
+    + '<div style="padding:11px 6px 3px;font-size:10px;color:#A2937A;line-height:1.6;">'
+    +   'ordem = compromisso vencido › régua estourada › distância da meta.</div>'
+    + '<div style="margin:8px 6px 3px;border-top:1px dashed #E4DBC6;padding-top:9px;'
+    +   'font-size:10px;color:#A2937A;line-height:1.6;">'
+    +   '<b style="color:#B0782A;">Fora do time:</b> Amanda (10/09) e Ricardo (19/09) — '
+    +   'as carteiras deles seguem <b>sem dono ativo</b> até serem reatribuídas no HubSpot.'
+    +   '</div></div>',
+    'position:sticky;top:12px;');
+
+  if (!o) {
+    return '<div style="background:#EFE9DC;color:#1A1613;font-family:' + PV6_D + ';'
+      + 'border-radius:18px;padding:18px;">' + hero
+      + '<div style="margin-top:16px;">' + rail + '</div></div>';
+  }
+
+  /* ── O CABEÇALHO DO SELECIONADO ── */
+  const eixos = (o.eixos || []).map(function (e) {
+    const cor = pv6CorDoPace(e.pct);
+    return '<span style="min-width:104px;">'
+      + '<span style="display:block;font-size:8.5px;font-weight:800;letter-spacing:.07em;'
+      +   'color:#A2937A;">' + esc(e.rot) + '</span>'
+      + '<span style="display:block;font-size:11.5px;font-variant-numeric:tabular-nums;'
+      +   'white-space:nowrap;margin-top:1px;"><b>' + esc(e.txt) + '</b>'
+      +   '<span style="color:#A2937A;font-size:10px;">' + esc(e.metaTxt) + '</span></span>'
+      + '<span style="display:block;height:5px;background:#EFE9DC;border-radius:99px;'
+      +   'margin-top:4px;"><span style="display:block;height:100%;width:'
+      +   pv6Pct(e.pct) + '%;background:' + cor + ';border-radius:99px;"></span></span></span>';
+  }).join('');
+
+  const cabecalho = pv6Cartao(
+    '<div style="padding:20px 24px;">'
+    + '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+    +   '<span style="width:44px;height:44px;border-radius:999px;background:#E51A31;color:#fff;'
+    +     'font-family:' + PV6_P + ';font-weight:800;font-size:15px;display:grid;place-items:center;'
+    +     'flex:none;">' + esc(o.nome.split(/\s+/).map(function (x) { return x.charAt(0); })
+          .slice(0, 2).join('').toUpperCase()) + '</span>'
+    +   '<span style="min-width:128px;">'
+    +     '<b style="font-family:' + PV6_P + ';font-size:18px;display:block;">' + esc(o.nome) + '</b>'
+    +     '<span style="font-size:11.5px;color:#A2937A;">' + esc(o.sub) + '</span></span>'
+    +   '<span style="width:1px;height:38px;background:#E4DBC6;margin:0 4px;"></span>'
+    +   '<span style="display:flex;gap:16px;flex-wrap:wrap;">' + eixos + '</span>'
+    +   '<span style="text-align:center;margin-left:4px;">'
+    +     '<span style="display:block;font-size:10px;font-weight:700;color:'
+    +       (o.slaPct == null ? '#A2937A' : (o.slaPct >= 85 ? '#1E7A63'
+          : (o.slaPct >= 65 ? '#B0782A' : '#E51A31'))) + ';">'
+    +       (o.slaPct == null ? 'SLA não medido' : 'SLA 1º toque ' + o.slaPct + '%') + '</span>'
+    +     '<span style="font-size:10.5px;color:#6E6558;">'
+    +       (o.slaN ? 'sobre ' + o.slaN + ' com data de criação' : 'sem base para medir') + '</span></span>'
+    +   '<span style="margin-left:auto;font-size:12.5px;line-height:1.55;color:#3D362E;'
+    +     'max-width:420px;background:#FBF6EC;border-radius:12px;padding:10px 14px;">'
+    +     '<b style="color:#E51A31;">Diagnóstico:</b> ' + esc(o.diagnostico) + '</span></div>'
+    + pv6CardsHTML(o)
+    + '<div style="margin-top:14px;border-top:1px dashed #E4DBC6;padding-top:13px;">'
+    +   pv6DrillHTML(o) + '</div></div>');
+
+  /* ── O MAPA DE CADÊNCIA ── */
+  const cad = o.cadencia;
+  const atrasados = cad.linhas.filter(function (x) { return x.atraso != null && x.atraso > 0; }).length;
+  const deHoje = cad.linhas.filter(function (x) { return x.atraso === 0; }).length;
+  const mapa = pv6Cartao(
+    '<div style="padding:16px 20px;">'
+    + pv6Titulo('Mapa de cadência de ' + o.nome.split(/\s+/)[0],
+        'quem a régua manda tocar agora — atrasado primeiro')
+    + '<div style="display:flex;align-items:center;gap:9px;margin-top:6px;font-size:10.5px;'
+    +   'flex-wrap:wrap;">'
+    +   '<span style="color:#A2937A;max-width:70ch;">piso de contato: '
+    +     '<b style="color:#E51A31;">proibido desistir antes do ' + cad.piso.minimo + 'º toque</b>'
+    +     ' — conta toque REALIZADO: visita, reunião feita ou nota. Compromisso marcado e '
+    +     'não cumprido, não. A agenda do snapshot cobre <b>30 dias para trás</b>, então '
+    +     'toque mais antigo que isso não é contado aqui.</span>'
+    +   '<span style="margin-left:auto;display:flex;align-items:center;gap:9px;'
+    +     'font-variant-numeric:tabular-nums;flex:none;">'
+    +     '<span style="color:#E51A31;font-weight:700;">' + cad.piso.abaixo + ' de '
+    +       cad.piso.total + ' abertos abaixo do piso</span>'
+    +     '<span style="width:120px;height:7px;background:#F3D7DB;border-radius:99px;'
+    +       'overflow:hidden;"><span style="display:block;height:100%;width:'
+    +       (cad.piso.total ? pv6Pct(100 - (cad.piso.abaixo / cad.piso.total * 100)) : 0)
+    +       '%;background:#1E7A63;border-radius:99px;"></span></span></span></div>'
+    + (cad.linhas.length
+      ? '<div style="display:grid;gap:5px;margin-top:12px;">'
+        + cad.linhas.map(pv6LinhaCadenciaHTML).join('') + '</div>'
+      : '<div style="margin-top:12px;background:#E7F3EE;border:1px solid #BFDCCE;'
+        + 'border-radius:12px;padding:13px 16px;font-size:11.5px;color:#1E7A63;font-weight:700;">'
+        + 'nenhum negócio aberto na carteira dela agora.</div>')
+    + '<div style="margin-top:11px;font-size:10px;color:#A2937A;line-height:1.6;">'
+    +   atrasados + ' atrasados · ' + deHoje + ' vencem hoje · régua de data/cadencias.json'
+    +   (cad.completa
+      ? ''
+      : ' · <b style="color:#B0782A;">lendo o recorte antigo do snapshot</b> — '
+        + (cad.recorte - cad.linhas.length) + ' abertos dela ainda não chegam com ficha; '
+        + 'a lista completa entra na próxima carga do robô')
+    + '</div></div>');
+
+  /* ── FUNIL + PDI ── */
+  const etapasV6 = pv6Funil(o);
+  const funil = etapasV6.map(function (e) {
+    return '<div data-ps6-acao="' + e.on + '" role="button" tabindex="0"'
+      + ' style="display:flex;align-items:center;gap:9px;padding:5px 2px;cursor:pointer;'
+      + 'font-size:11px;font-variant-numeric:tabular-nums;">'
+      + '<span style="flex:none;width:112px;color:' + (e.sel ? '#1A1613' : '#6E6558')
+      +   ';font-weight:' + (e.sel ? '800' : '700') + ';">' + esc(e.rot) + '</span>'
+      + '<span style="flex:1;height:15px;background:#EFE9DC;border-radius:99px;overflow:hidden;'
+      +   'display:flex;"><span style="display:block;height:100%;width:' + pv6Pct(e.pct)
+      +   '%;background:' + (e.travados ? '#E51A31' : '#B0782A') + ';border-radius:99px;"></span></span>'
+      + '<span style="flex:none;width:86px;text-align:right;font-size:10px;color:#6E6558;">'
+      +   e.n + (e.travados ? ' · <b style="color:#E51A31;">' + e.travados + ' travados</b>' : '')
+      + '</span></div>';
+  }).join('');
+
+  const pdi = (o.alavancas || []).slice(0, 3);
+  const cartaoPdi = '<div style="background:#1A1613;color:#FDFBF0;border-radius:18px;'
+    + 'padding:16px 20px;">'
+    + '<b style="font-family:' + PV6_P + ';font-size:13px;color:#E0A64A;">PDI · guiado pelos '
+    + 'resultados dela</b>'
+    + (pdi.length
+      ? '<div style="display:grid;gap:11px;margin-top:11px;">' + pdi.map(function (a, i) {
+        const rot = ['O NÚMERO QUE DÓI', 'FOCO DO MÊS', 'COMO TREINAR'][i] || 'PRÓXIMO PASSO';
+        return '<div><div style="font-size:9px;font-weight:800;letter-spacing:.1em;'
+          + 'color:#8A8072;">' + rot + '</div>'
+          + '<div style="font-size:12px;line-height:1.5;margin-top:2px;">' + esc(a.acao) + '</div>'
+          + (a.prova ? '<div style="font-size:10px;color:#8A8072;margin-top:2px;">'
+              + esc(a.prova) + '</div>' : '') + '</div>';
+      }).join('') + '</div>'
+      : '<div style="margin-top:10px;font-size:11.5px;color:#8A8072;line-height:1.55;">'
+        + 'Sem PDI firmado. O diagnóstico desta semana já dá a matéria-prima — '
+        + 'firme o PDI no 1:1 e ele passa a aparecer aqui.</div>')
+    + '</div>';
+
+  const colunas = '<div data-pv6-colunas="1" style="display:grid;'
+    + 'grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr);gap:14px;">'
+    + pv6Cartao('<div style="padding:16px 20px;">'
+        + pv6Titulo('Funil de ' + o.nome.split(/\s+/)[0],
+            etapasV6.reduce(function (s, e) { return s + e.n; }, 0)
+            + ' em aberto · clique na etapa para trocar a lista acima')
+        + '<div style="display:flex;flex-direction:column;gap:1px;margin-top:9px;">'
+        + funil + '</div></div>')
+    + pv6PerdasHTML(o) + cartaoPdi + '</div>';
+
+  /* ── COMPROMISSOS INEGOCIÁVEIS ── */
+  const comb = o.combinados || [];
+  const cumpridos = comb.filter(function (c) { return c.st === 'feito'; }).length;
+  const nVencidos = comb.filter(function (c) { return c.vencido; }).length;
+  const compromissos = '<div style="background:#FDFBF0;border:1.5px solid #E51A31;'
+    + 'border-radius:18px;box-shadow:0 4px 16px rgba(229,26,49,.1);overflow:hidden;">'
+    + '<div style="display:flex;align-items:center;gap:10px;background:#E51A31;color:#fff;'
+    +   'padding:11px 20px;flex-wrap:wrap;">'
+    +   '<b style="font-family:' + PV6_P + ';font-size:13.5px;letter-spacing:.02em;">'
+    +     'COMPROMISSOS INEGOCIÁVEIS</b>'
+    +   '<span style="font-size:10.5px;opacity:.85;">firmados no 1:1 · cada um nasce de um '
+    +     'número dela · vencido vira pauta obrigatória</span>'
+    +   '<span style="margin-left:auto;font-size:11px;font-weight:700;'
+    +     'background:rgba(255,255,255,.16);border-radius:999px;padding:4px 12px;">'
+    +     cumpridos + ' de ' + comb.length + ' cumpridos'
+    +     (nVencidos ? ' · ' + nVencidos + ' VENCIDO' + (nVencidos > 1 ? 'S' : '') : '')
+    +     '</span></div>'
+    + (comb.length
+      ? '<div style="padding:14px 20px;display:grid;gap:8px;">' + comb.map(function (c) {
+        const st = c.st === 'feito'
+          ? { rot: 'CUMPRIDO ✓', cor: '#1E7A63' }
+          : (c.st === 'furou' ? { rot: 'FUROU — PAUTA DO 1:1', cor: '#E51A31' }
+            : (c.vencido ? { rot: 'VENCEU — PAUTA DO 1:1', cor: '#E51A31' }
+              : { rot: c.prazo ? 'EM ABERTO · até ' + pv6DataCurta(c.prazo)
+                    : 'EM ABERTO · sem prazo registrado', cor: '#B0782A' }));
+        const ruim = c.vencido || c.st === 'furou';
+        return '<div' + (c.on ? ' data-ps6-acao="' + c.on + '" role="button" tabindex="0"' : '')
+          + ' style="display:grid;grid-template-columns:22px minmax(0,1fr) 180px 150px;gap:14px;'
+          + 'align-items:center;background:' + (ruim ? '#FBEEF0' : '#FDFBF0') + ';'
+          + 'border:1px solid ' + (ruim ? '#EFC7CC' : '#E4DBC6') + ';border-radius:12px;'
+          + 'padding:11px 15px;' + (c.on ? 'cursor:pointer;' : '') + '">'
+          + '<span style="width:17px;height:17px;border-radius:6px;border:1.5px solid '
+          +   (c.st === 'feito' ? '#1E7A63' : (ruim ? '#E51A31' : '#C9BFA8'))
+          +   ';background:' + (c.st === 'feito' ? '#1E7A63' : '#FDFBF0') + ';display:grid;'
+          +   'place-items:center;color:#fff;font-size:11px;font-weight:800;">'
+          +   (c.st === 'feito' ? '✓' : '') + '</span>'
+          + '<span style="font-size:12.5px;line-height:1.5;color:#1A1613;">' + c.txt + '</span>'
+          + '<span style="font-size:10.5px;color:#6E6558;line-height:1.45;">'
+          +   (c.marcou ? 'o executivo marcou como feito' : 'ainda não marcado por ele')
+          +   (c.motivo ? ' · ' + esc(c.motivo) : '') + '</span>'
+          + '<span style="font-size:10.5px;font-weight:800;color:' + st.cor
+          +   ';text-align:right;">' + esc(st.rot) + '</span></div>';
+      }).join('') + '</div>'
+      : '<div style="padding:16px 20px;font-size:11.5px;color:#B0782A;line-height:1.55;">'
+        + 'Nenhum compromisso firmado com ela ainda. Os três da semana nascem no robô '
+        + 'de sexta 20h, a partir do gargalo — se não apareceram, a rodada não rodou.</div>')
+    + '</div>';
+
+  /* ── ÚLTIMA CONVERSA ── */
+  const conversa = pv6Cartao('<div style="padding:16px 20px;">'
+    + pv6Titulo('Última conversa', 'o que foi combinado e o que aconteceu')
+    + '<div style="margin-top:9px;font-size:11.5px;color:#6E6558;line-height:1.6;">'
+    + (o.dataUm
+      ? esc('1:1 registrado em ' + o.dataUm + '. Os combinados dele estão acima, com o'
+          + ' status que você carimbou.')
+      : 'Nenhum 1:1 registrado para ela no cockpit — a tabela <code>um_a_um</code> está '
+        + 'vazia para todo o time. O que existe hoje são os compromissos acima, que '
+        + 'nascem do robô de sexta. Marcar o 1:1 pelo botão do rail passa a alimentar '
+        + 'este bloco.')
+    + '</div></div>');
+
+  const rodape = '<div style="font-size:10px;color:#A2937A;line-height:1.7;padding:2px 4px;">'
+    + '<b>de onde vem cada número:</b> funil, travados, dias parados e SLA — snapshot do '
+    + 'HubSpot · régua e piso de toques — data/cadencias.json · metas dos três eixos — '
+    + 'data/metas.json · diagnóstico e compromissos — robô de sexta 20h '
+    + '(analise_individual_semanal e narrativas) · status dos compromissos — '
+    + 'pdi_compromissos · 1:1 — pauta_do_lider.</div>';
+
+  return '<div style="background:#EFE9DC;color:#1A1613;font-family:' + PV6_D + ';'
+    + 'font-size:13px;border-radius:18px;padding:18px;">' + hero
+    + '<div data-pv6-grade="1" style="display:grid;grid-template-columns:308px minmax(0,1fr);'
+    +   'gap:18px;margin-top:18px;align-items:start;">'
+    +   rail
+    +   '<div style="min-width:0;display:grid;gap:16px;">'
+    +     cabecalho + mapa + colunas + compromissos + conversa + rodape
+    +   '</div></div></div>';
+}
+
+/* data ISO -> "sexta 25/09", que é como a prancha escreve o prazo */
+function pv6DataCurta(iso) {
+  const d = new Date(String(iso) + 'T12:00:00Z');
+  if (isNaN(d.getTime())) return String(iso);
+  const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  return dias[d.getUTCDay()] + ' ' + String(d.getUTCDate()).padStart(2, '0')
+    + '/' + String(d.getUTCMonth() + 1).padStart(2, '0');
 }
 
 function tm2SobreviventesHTML(d) {
@@ -56839,8 +57314,22 @@ async function ps6Executar(acao) {
      A ETAPA E POR PESSOA: PE4_ETAPA[ownerId]. Guardar uma etapa global faria trocar de
      pessoa herdar a etapa da anterior, que e o "flash de dado antigo" que a prancha
      proibe no proprio checklist de aceite. */
+  /* O CARD ABERTO DO DOSSIÊ (19/09/26, v6). Os quatro stat-cards trocam a lista logo
+     abaixo deles; clicar no card já aberto não fecha — a prancha nunca mostra o dossiê
+     sem lista, e lista vazia lá é um estado de conteúdo ("vazio bom" / "vazio ruim"), não
+     ausência de bloco. Por pessoa, pelo mesmo motivo de PE4_ETAPA. */
+  if (verbo === 'card') {
+    if (a && b) PV6_CARD[a] = b;
+    PS6_ESTADO.toast = null;
+    return renderPessoas();
+  }
+
   if (verbo === 'etapa') {
     if (a && b) PE4_ETAPA[a] = b;
+    /* E A LISTA DE BAIXO PASSA A SER A DESTA ETAPA. Sem isto o clique no funil
+       acendia a barra e não mudava nada abaixo — gesto que não muda estado é o
+       clique morto que a guarda de fiação não pega, porque o ouvinte existe. */
+    if (a) PV6_CARD[a] = 'etapa';
     PS6_ESTADO.toast = null;
     return renderPessoas();
   }
@@ -56902,7 +57391,7 @@ function renderPessoas() {
   /* SÓ O GESTOR DESENHA A TELA DO GESTOR — a regra menos negociável da suíte, e esta
      view é compartilhada com o Desenvolvimento do executivo. */
   if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
-  raiz.innerHTML = pe4TelaHTML(pe4Dados());
+  raiz.innerHTML = pv6TelaHTML(pv6Dados());
 }
 
 document.addEventListener('click', ev => {
