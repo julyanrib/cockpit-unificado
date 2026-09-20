@@ -498,6 +498,91 @@ const REPS = [{ ownerId: '86100506', name: 'Bruno Martins' },
       + 'botão marcado sem o resto concordar');
 }());
 
+/* ══ A IDENTIDADE VISUAL (20/09/26) ═══════════════════════════════════════════════════
+   Julyan pediu revisão de identidade visual da aba. O que dava para MEDIR, medi — e o
+   que apareceu foi contraste, não gosto.
+
+   O NÚMERO DE CADA ETAPA É ESCRITO DENTRO DA BARRA, em branco de 10px. Texto pequeno pede
+   4,5 de contraste. Medido com estilo computado no navegador, quatro das seis barras
+   reprovavam: as três do topo (--dark-mut) em 2,85, Negociação (--amber) em 3,62 e
+   Ag. Pagamento (--green) em 3,34. Só Demo/Proposta passava, com o vinho em 7,10.
+
+   A CORREÇÃO NÃO INVENTOU COR: os tons escuros irmãos já existiam no :root. Esta guarda
+   CALCULA o contraste a partir dos hexadecimais declarados no próprio arquivo — se alguém
+   trocar --amber-ink de volta por --amber, ela reprova com o número na mão. Checagem de
+   string diria só que o texto mudou. */
+(function () {
+  const raizCss = html.slice(html.indexOf(':root{'), html.indexOf(':root{') + 6000);
+  const tok = function (nome) {
+    const m = new RegExp('--' + nome + ':\\s*(#[0-9A-Fa-f]{6})').exec(html);
+    return m ? m[1] : null;
+  };
+  const lum = function (h) {
+    const c = [1, 3, 5].map(function (i) { return parseInt(h.substr(i, 2), 16) / 255; })
+      .map(function (v) { return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const cr = function (a, b) {
+    return (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  };
+
+  /* o recorte de quem pinta a barra — é lá que os quatro tokens são escolhidos */
+  const i = html.indexOf('const cor = e.fundo');
+  const trecho = html.slice(i, html.indexOf('rx-fl-caud', i));
+  const usados = (trecho.match(/var\(--([a-z0-9-]+)\)/g) || [])
+    .map(function (v) { return v.slice(6, -1); });
+
+  igual('a barra do funil usa quatro tons, um por papel', usados.length, 4,
+    'topo, Demo/Proposta, Negociação e Ag. Pagamento — veio ' + JSON.stringify(usados));
+
+  const branco = tok('dark-ink') || '#FDFEFF';
+  const ruins = [];
+  usados.forEach(function (nome) {
+    const hex = tok(nome);
+    if (!hex) { ruins.push(nome + ' (não declarado no :root)'); return; }
+    const r = cr(branco, hex);
+    if (r < 4.5) ruins.push(nome + ' ' + hex + ' -> ' + r.toFixed(2));
+  });
+  igual('e o número branco lê em TODAS elas (AA, 4,5 para texto pequeno)', ruins, [],
+    'o número vai DENTRO da barra: barra que não segura texto pequeno esconde o dado que '
+      + 'ela existe para mostrar. Medido no navegador antes de corrigir: 2,85 / 3,62 / 3,34');
+
+  /* O TOPO CONTINUA SENDO O LADO QUIETO. Corrigir contraste escurecendo tudo até virar
+     seis barras iguais mataria a hierarquia, que é o ponto da tela. */
+  checar('o topo do funil não usa cor de marca',
+    usados.indexOf('plum') < 0 || trecho.indexOf("'var(--muted)'") > -1,
+    'o topo é contexto: ardósia dessaturada, não vinho/âmbar/verde');
+}());
+
+/* AS DUAS DERIVAS DE BORDA, medidas no arquivo inteiro: #EEC9C9 existia UMA vez (só aqui)
+   contra 27 de #E3C6C6, e #BFE3D6 duas contra 48 de #CBE8DD. Um tom por papel. */
+checar('os chips usam os tons de borda da casa',
+  html.indexOf('.rx-chip.ruim{background:var(--red-soft);color:var(--red-dk);border-color:#E3C6C6;}') > -1
+    && html.indexOf('.rx-chip.bom{background:var(--green-soft);color:var(--green-ink);border-color:#CBE8DD;}') > -1,
+  'tom que existe uma vez no arquivo inteiro é deriva, não decisão');
+
+/* NENHUM LITERAL DE COR SOBRA NA ABA. O bloco já era quase todo var(); a revisão fechou
+   os cinco que faltavam apontando para tokens — três deles nomeados agora. */
+(function () {
+  const i = html.indexOf('const RX1_FUNDO =');
+  const f = html.indexOf('function rx1Iniciar');
+  const js = html.slice(i, f).replace(/\/\*[\s\S]*?\*\//g, '');
+  const soltos = [...new Set(js.match(/#[0-9A-Fa-f]{6}/g) || [])];
+  igual('o JS da aba não pinta com hexadecimal', soltos, [],
+    'cor cravada não acompanha a casa quando a casa muda');
+}());
+
+checar('e os tons que a aba usa têm nome no :root',
+  /--plum:#8E3B5C;/.test(html) && /--gold:#E0A73C;/.test(html)
+    && /--red-on-dark:#FF8A96;/.test(html),
+  'o vinho é escrito à mão 80 vezes no arquivo e o token dele (--pl6-territorio) tinha '
+    + 'ZERO usos — medido. Nome de dono para cor de casa é como a cor se espalha solta');
+
+checar('e o token duplicado do vermelho escuro saiu',
+  html.indexOf('--pl6-bloqueio:') < 0 && /--red-dk:#6E1210;/.test(html),
+  '--pl6-bloqueio era o MESMO #6E1210 de --red-dk, que tem 60 usos: dois nomes para a '
+    + 'mesma tinta é como duas telas divergem sem ninguém ver');
+
 if (falhas.length) {
   console.error('\nFALHAS (' + falhas.length + '):');
   falhas.forEach(f => console.error('  ✗ ' + f));
