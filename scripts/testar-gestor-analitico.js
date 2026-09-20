@@ -1234,8 +1234,12 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
      cravar a grafia de uma frase em vez do comportamento. */
   checar('o SLA de quem nao foi medido nao vira 0%',
     /if \(comData\.length < PE4_SLA_MIN\) return \{ pct: null/.test(tela)
+      /* A COR SAIU DA CHECAGEM em 20/09, na repintura para os tokens do Cockpit: eu
+         media `#A2937A` e ele virou var(--muted2). A proteção nunca foi a cor — é a tela
+         DIZER "não medido" em vez de escrever 0%. O ramo que depende do null é o que
+         importa; o tom dele é decoração. */
       && /o\.slaPct == null \? .SLA não medido./.test(tela.replace(/'/g, '.'))
-      && /o\.slaPct == null \? .#A2937A./.test(tela.replace(/'/g, '.')));
+      && tela.indexOf('SLA 1º toque \' + o.slaPct') > -1);
   checar('a cadencia ausente diz que nao veio',
     tela.indexOf('a cadência não veio nesta carga do robô') > -1);
   checar('e o ticket do time sai de medicao, nao de constante',
