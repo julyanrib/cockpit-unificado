@@ -112,8 +112,14 @@ checar('os compromissos vão para narrativas',
 
 /* ── 6. FALHA DE UM NÃO APAGA O PLANO DELE ───────────────────────────────────────
    Lista vazia por timeout não pode zerar o compromisso combinado da semana. */
+/* ESTA CHECAGEM CRAVAVA A ESCRITA EXATA `c.compromissos.length` e reprovou em 19/09,
+   quando o compromisso passou a sair normalizado ({textos, prazos}) e a expressão virou
+   `c.compromissos.textos.length`. A PROTEÇÃO CONTINUAVA INTEIRA — só a grafia mudou.
+   Agora ela mede a REGRA: existe uma condição de tamanho guardando a escrita em
+   narrativas, qualquer que seja o caminho até a lista. Terceira guarda deste repo a
+   morrer por cravar grafia em vez de comportamento. */
 checar('lista vazia não sobrescreve o compromisso',
-  /if \(c\.compromissos\.length && narrativas\.reps\[ownerId\]\)/.test(robo),
+  /if \(c\.compromissos(\.\w+)?\.length && narrativas\.reps\[ownerId\]\)/.test(robo),
   'sem a checagem de tamanho, um timeout apaga o plano da semana de alguém');
 
 /* ── 7. O HORÁRIO, E ELE NÃO PODE ANDAR SOZINHO ──────────────────────────────────

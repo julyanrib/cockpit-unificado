@@ -2465,6 +2465,23 @@ async function main() {
     // não só uma amostra de 5. Ordenado do mais travado pro menos travado.
     const travados = withDays.filter(l => l.slaBreach).map(l => ({ ...l, destaque: true }));
 
+    /* TODOS OS ABERTOS, ENXUTOS (19/09/26). `criticos`, `travados` e `plotaveis` são
+       três RECORTES: os 5 mais velhos, os que estouraram SLA, os que têm coordenada.
+       Medido no snapshot deste dia, os três juntos cobriam 124 dos 204 abertos do
+       time — o mapa de cadência da aba Pessoas precisa dos 204, porque a pergunta
+       dele é "qual é o próximo toque de cada negócio" e um negócio ausente vira
+       silêncio, não vira aviso.
+
+       Campos escolhidos um a um: são os que a linha do mapa de cadência e o
+       drill-down desenham. O negócio completo x204 são 800 KB no navegador de todo
+       gestor; estes nove campos são ~27 KB. */
+    const abertos = withDays.map(l => ({
+      id: l.id, name: l.name, stage: l.stage, stageId: l.stageId,
+      dias: l.dias, slaBreach: !!l.slaBreach, temperatura: l.temperatura,
+      mrr: (l.mrr == null ? null : l.mrr),
+      lat: l.lat, lng: l.lng
+    }));
+
     // Coleta pros rankings de temperatura do time inteiro (usado no Cockpit geral)
     withDays.forEach(l => {
       const comDono = { ...l, vendedor: rep.name, ownerId: rep.ownerId };
@@ -2483,6 +2500,8 @@ async function main() {
       stages,
       criticos,
       travados,
+      /* a lista completa; `open` continua sendo a contagem e tem de bater com ela */
+      abertos,
       quentes: withDays.filter(l => l.temperatura === 'quente'),
       // TODOS os negócios em aberto que dá pra plotar (Julyan, 11/08: "todos os leads
       // têm coordenadas, adicione no mapa").
@@ -2495,13 +2514,7 @@ async function main() {
       //
       // Campos enxutos de propósito: este objeto vai inteiro pro navegador de todo
       // gestor, e mandar o negócio completo x143 incharia o payload sem necessidade.
-      plotaveis: withDays
-        .filter(l => l.lat != null && l.lng != null)
-        .map(l => ({
-          id: l.id, name: l.name, stage: l.stage, stageId: l.stageId,
-          dias: l.dias, slaBreach: !!l.slaBreach, temperatura: l.temperatura,
-          lat: l.lat, lng: l.lng
-        })),
+      plotaveis: abertos.filter(l => l.lat != null && l.lng != null),
       leadsTravados,
       ganhosSemana: ganhosSemanaDeals.length,
       ganhosSemanaNomes: ganhosSemanaDeals.map(d => d.name),
