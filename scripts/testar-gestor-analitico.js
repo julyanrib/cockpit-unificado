@@ -1155,10 +1155,13 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
     /\|\| pessoas\[0\] \|\| null;/.test(tela));
 
   /* ── 3 · O FUNIL NUNCA ABRE SEM ETAPA, E A ETAPA E POR PESSOA (regra 4) ──────────── */
+  /* O ESTADO VAZIO SAIU DA CHECAGEM em 20/09: desde que o clique na barra passou a abrir
+     a GAVETA (o mesmo caminho das outras abas), quem mostra "nenhum lead" é o modal, que
+     tem o vazio dele. O que continua valendo é a regra desta função: a etapa escolhida
+     nunca é nula — sem clique, é o gargalo. */
   checar('a etapa default e o gargalo dela, e nunca fica vazia',
     /e\.id === PE4_ETAPA\[sel\.ownerId\] && e\.n > 0/.test(tela)
-      && /\|\| gargalo \|\| dele\[0\] \|\| null/.test(tela)
-      && tela.indexOf('nenhum lead nesta etapa agora.') > -1);
+      && /\|\| gargalo \|\| dele\[0\] \|\| null/.test(tela));
   checar('e trocar de pessoa nao herda a etapa da anterior',
     /PE4_ETAPA\[a\] = b;/.test(tela) && !/let PE4_ETAPA = null/.test(tela));
 
@@ -1174,7 +1177,11 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
       /* E PINADO NO PAR, porque "if (verbo === 'etapa')" existe DUAS vezes no arquivo —
          uma na aba Time, outra aqui. A guarda achava a da Time e dava verde com a minha
          renomeada. O que identifica esta e a linha seguinte, que escreve PE4_ETAPA. */
-      && tela.indexOf("if (verbo === 'etapa') {\n    if (a && b) PE4_ETAPA[a] = b;") > -1
+      /* TOLERA O QUE VIER ENTRE OS DOIS. A versão anterior exigia as duas linhas coladas
+         e reprovou em 20/09 quando um comentário entrou no meio — a fiação estava
+         intacta. O que identifica ESTE ramo (e não o `etapa` da aba Time) continua sendo
+         PE4_ETAPA logo em seguida, só que sem exigir adjacência de byte. */
+      && /if \(verbo === 'etapa'\) \{[\s\S]{0,900}?if \(a && b\) PE4_ETAPA\[a\] = b;/.test(tela)
       && tela.indexOf("if (verbo === 'combinado') {") > -1);
   checar('o carimbo do combinado grava pelo escritor que ja existia',
     /await ps6Carimbar\(a, i, .validar.\)/.test(tela.replace(/'/g, '.'))

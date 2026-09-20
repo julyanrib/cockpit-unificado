@@ -244,14 +244,17 @@ igual('o piso vem da configuração, não do código', ctx.cadenciaMinimoToques(
       + 'pegou');
   igual('e o funil tem as três etapas da fixture', fun.length, 3);
 
-  /* clicar numa etapa abre os negócios DAQUELA etapa, e o número bate */
-  ctx.PE4_ETAPA['91477292'] = '1395880469';
-  dossie.card = 'etapa';
-  const daEtapa = ctx.pv6ListaDoCard(dossie);
-  const naEtapa = fun.filter(function (e) { return e.id === '1395880469'; })[0];
-  igual('a lista da etapa bate com a barra da etapa', daEtapa.itens.length, naEtapa.n);
-  igual('e são os três de Prospecção', daEtapa.itens.length, 3);
-  delete ctx.PE4_ETAPA['91477292'];
+  /* A BARRA DA ETAPA ABRE A GAVETA (20/09), o mesmo caminho das outras abas — não troca
+     mais a lista de cima. Mas a CONTAGEM continua tendo de bater com o que a gaveta
+     mostra, e as duas leem fontes diferentes: a barra conta `abertos` e a gaveta lê
+     DATA.funilLeads. Medido no snapshot de 20/09, as duas só divergem em etapa FECHADA
+     (Perdido, Ganho, Enviado Onboarding) — que este funil não desenha, porque `abertos`
+     não as contém. Esta checagem prende essa condição: nenhuma barra é de etapa fechada. */
+  const FECHADAS = ['1396006162', '1396006163', '1396006164'];
+  igual('nenhuma barra do funil é de etapa fechada',
+    fun.filter(function (e) { return FECHADAS.indexOf(e.id) > -1; }).length, 0,
+    'a gaveta lê funilLeads, que INCLUI as fechadas; se uma delas virasse barra aqui, o '
+      + 'número da barra e o da gaveta discordariam');
 }());
 
 /* ══ 4. O COMPROMISSO VENCIDO É CONTA, NÃO LEITURA DE PROSA ══════════════════════════ */
@@ -345,10 +348,33 @@ checar('os cards usam o ouvinte que já existia',
   'fiação nova para gesto novo numa tela que já tem ouvinte é a segunda forma de escutar '
     + 'o mesmo clique');
 
-checar('clicar na etapa do funil TROCA a lista de baixo',
-  /if \(a\) PV6_CARD\[a\] = 'card'|if \(a\) PV6_CARD\[a\] = 'etapa';/.test(tpl),
-  'o gesto existia e não mudava estado nenhum — clique morto que a guarda de fiação não '
-    + 'pega, porque o ouvinte está lá');
+/* 20/09 — Julyan: "qdo clicar no funil tem que abrir os leads igual abrimos nas outras
+   abas, a tela ta jogando la pra baixo". Trocar a lista de cima fazia o efeito do clique
+   acontecer fora do campo de visão, e a repintura mudava a altura da página. */
+checar('clicar na etapa do funil abre a gaveta, como nas outras abas',
+  /if \(b && typeof gxAbrirEtapa === 'function'\) gxAbrirEtapa\(b, a \|\| null\);/.test(tpl),
+  'gxAbrirEtapa é o mesmo caminho do Meu Painel, do Coaching e do Cockpit');
+
+checar('e NÃO repinta a aba nesse clique',
+  (function () {
+    const i = tpl.indexOf("if (verbo === 'etapa') {\n    /* A GAVETA");
+    if (i < 0) return false;
+    const f = tpl.indexOf('\n  }', i);
+    return tpl.slice(i, f).indexOf('renderPessoas()') < 0;
+  }()),
+  'a repintura mudava a altura da página com o scrollTop guardado — era o salto que ele '
+    + 'viu');
+
+checar('e o ramo morto do drill por etapa não ficou para trás',
+  tpl.indexOf("if (c === 'etapa') {") < 0,
+  'código inalcançável é o que faz a varredura de código morto achar tela que não existe '
+    + 'e a guarda proteger o cadáver');
+
+/* O OUTRO SALTO, menor: trocar o stat-card repinta a aba inteira. */
+checar('a repintura devolve o scroll onde estava',
+  /const yAntes = window\.scrollY;/.test(tpl)
+    && /if \(window\.scrollY !== yAntes\) window\.scrollTo\(0, yAntes\);/.test(tpl),
+  'sem isto, trocar de card joga o leitor para outro ponto do dossiê');
 
 checar('e o card é por pessoa',
   !/let PV6_CARD = null/.test(tpl) && /let PV6_CARD = \{\};/.test(tpl),
