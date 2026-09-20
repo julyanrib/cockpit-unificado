@@ -18680,19 +18680,7 @@ function pv6LinhaCadenciaHTML(l) {
 function pv6ListaDoCard(d) {
   const c = d.card;
   const linhas = (d.cadencia && d.cadencia.linhas) || [];
-  if (c === 'etapa') {
 
-    const alvo = String(PE4_ETAPA[d.ownerId] || (linhas[0] ? linhas[0].stageId : ''));
-    const dela = linhas.filter(function (l) { return String(l.stageId) === alvo; });
-    const rot = (dela[0] && dela[0].etapa) || '—';
-    return { titulo: 'na etapa ' + rot, itens: dela.map(function (l) {
-      return { id: l.id, nome: l.nome,
-        meio: (l.regua ? l.regua + ' · ' : '') + l.toques + ' toques · último ' + l.ultimo,
-        fim: l.dias != null ? l.dias + 'd' : '',
-        cor: (l.atraso != null && l.atraso > 0) ? '#E51A31' : 'var(--muted)' };
-    }),
-      vazioBom: 'nenhum lead nesta etapa agora.', vazioRuim: false };
-  }
   if (c === 'mes') {
 
     const linha = ((DATA.vendasMes || {}).porRep || [])
@@ -19066,7 +19054,7 @@ function pv6TelaHTML(d) {
     + pv6Cartao('<div style="padding:16px 20px;">'
         + pv6Titulo('Funil de ' + o.nome.split(/\s+/)[0],
             etapasV6.reduce(function (s, e) { return s + e.n; }, 0)
-            + ' em aberto · clique na etapa para trocar a lista acima')
+            + ' em aberto · clique na etapa para abrir os negócios dela')
         + '<div style="margin-top:9px;">' + funil + '</div></div>')
     + pv6PerdasHTML(o) + cartaoPdi + '</div>';
 
@@ -39788,11 +39776,10 @@ async function ps6Executar(acao) {
   }
 
   if (verbo === 'etapa') {
-    if (a && b) PE4_ETAPA[a] = b;
 
-    if (a) PV6_CARD[a] = 'etapa';
-    PS6_ESTADO.toast = null;
-    return renderPessoas();
+    if (a && b) PE4_ETAPA[a] = b;
+    if (b && typeof gxAbrirEtapa === 'function') gxAbrirEtapa(b, a || null);
+    return;
   }
 
   if (verbo === 'combinado') {
@@ -39833,7 +39820,10 @@ function renderPessoas() {
 
   if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
   const dados = pv6Dados();
+
+  const yAntes = window.scrollY;
   raiz.innerHTML = pv6TelaHTML(dados);
+  if (window.scrollY !== yAntes) window.scrollTo(0, yAntes);
 
   const alvo = dados.dossie && dados.dossie.ownerId;
   if (alvo && String(pessoaSelecionadaId) !== String(alvo)) {

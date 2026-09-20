@@ -27814,20 +27814,10 @@ function pv6LinhaCadenciaHTML(l) {
 function pv6ListaDoCard(d) {
   const c = d.card;
   const linhas = (d.cadencia && d.cadencia.linhas) || [];
-  if (c === 'etapa') {
-    /* A ETAPA ESCOLHIDA NO FUNIL, filtrando a MESMA lista de abertos. O funil nunca
-       abre sem etapa: sem clique, a primeira do funil dela. */
-    const alvo = String(PE4_ETAPA[d.ownerId] || (linhas[0] ? linhas[0].stageId : ''));
-    const dela = linhas.filter(function (l) { return String(l.stageId) === alvo; });
-    const rot = (dela[0] && dela[0].etapa) || '—';
-    return { titulo: 'na etapa ' + rot, itens: dela.map(function (l) {
-      return { id: l.id, nome: l.nome,
-        meio: (l.regua ? l.regua + ' · ' : '') + l.toques + ' toques · último ' + l.ultimo,
-        fim: l.dias != null ? l.dias + 'd' : '',
-        cor: (l.atraso != null && l.atraso > 0) ? '#E51A31' : 'var(--muted)' };
-    }),
-      vazioBom: 'nenhum lead nesta etapa agora.', vazioRuim: false };
-  }
+  /* NÃO EXISTE MAIS UM MODO `etapa` AQUI: desde 20/09 o clique na barra do funil abre
+     a gaveta de leads, como nas outras abas, em vez de trocar esta lista. O ramo que
+     ficou inalcançável saiu junto — código morto aqui é o que faz a varredura achar
+     tela que não existe e a guarda proteger o cadáver. */
   if (c === 'mes') {
     /* a lista das vendas do mês já vem montada por pessoa em vendasMes.porRep[].clientes
        — a MESMA que o Cockpit conta no placar do mês. */
@@ -28228,7 +28218,7 @@ function pv6TelaHTML(d) {
     + pv6Cartao('<div style="padding:16px 20px;">'
         + pv6Titulo('Funil de ' + o.nome.split(/\s+/)[0],
             etapasV6.reduce(function (s, e) { return s + e.n; }, 0)
-            + ' em aberto · clique na etapa para trocar a lista acima')
+            + ' em aberto · clique na etapa para abrir os negócios dela')
         + '<div style="margin-top:9px;">' + funil + '</div></div>')
     + pv6PerdasHTML(o) + cartaoPdi + '</div>';
 
@@ -57369,13 +57359,16 @@ async function ps6Executar(acao) {
   }
 
   if (verbo === 'etapa') {
+    /* A GAVETA, o mesmo destino do Meu Painel, do Coaching e do Cockpit — e NADA de
+       repintar. A versão anterior trocava a lista que fica embaixo dos stat-cards,
+       muito acima do funil: o leitor clicava aqui, o conteúdo mudava fora do campo de
+       visão e a página saltava, porque a altura mudava com o scrollTop guardado.
+
+       PE4_ETAPA continua sendo marcada: pe4Dados a usa para escolher a etapa do
+       dossiê, e a barra clicada fica acesa na próxima repintura. */
     if (a && b) PE4_ETAPA[a] = b;
-    /* E A LISTA DE BAIXO PASSA A SER A DESTA ETAPA. Sem isto o clique no funil
-       acendia a barra e não mudava nada abaixo — gesto que não muda estado é o
-       clique morto que a guarda de fiação não pega, porque o ouvinte existe. */
-    if (a) PV6_CARD[a] = 'etapa';
-    PS6_ESTADO.toast = null;
-    return renderPessoas();
+    if (b && typeof gxAbrirEtapa === 'function') gxAbrirEtapa(b, a || null);
+    return;
   }
 
   /* O CICLO DO COMBINADO: pendente → feito → furou → pendente. Ele NAO grava numa tabela
@@ -57436,7 +57429,13 @@ function renderPessoas() {
      view é compartilhada com o Desenvolvimento do executivo. */
   if (!sessaoAtual || sessaoAtual.role !== 'manager') { raiz.innerHTML = ''; return; }
   const dados = pv6Dados();
+  /* O LUGAR DA LEITURA (20/09/26). Trocar o stat-card repinta a aba inteira, e a
+     altura muda junto: o navegador guarda o scrollTop e o leitor é jogado para outro
+     ponto do dossiê. Guardar e devolver custa duas linhas e é a diferença entre
+     trocar de lista e se perder na página. */
+  const yAntes = window.scrollY;
   raiz.innerHTML = pv6TelaHTML(dados);
+  if (window.scrollY !== yAntes) window.scrollTo(0, yAntes);
 
   /* ══ UMA SELEÇÃO SÓ (20/09/26) ═══════════════════════════════════════════════════
      O painel de Coaching que fica logo abaixo desta aba lê `pessoaSelecionadaId`, e o
