@@ -67,6 +67,12 @@ let hubspotPrevious = requireOpcional(() => require('../data/hubspot-previous.js
 // Opcional pelo mesmo motivo dos outros: repo recém-clonado pode não ter o arquivo — aí
 // o template cai no fallback mínimo e mostra "régua não configurada" em vez de inventar.
 const cadencias = requireOpcional(() => require('../data/cadencias.json'));
+/* Tabela do variável (data/comissionamento.json). CONFIGURAÇÃO pelo mesmo motivo das
+   outras: o valor de cada faixa é decisão do Julyan, não regra de código, e a tela
+   NUNCA escreve um número de dinheiro que não tenha saído daqui. Opcional como as
+   demais — sem o arquivo, a tela não mostra a caixa da comissão em vez de inventar
+   quanto alguém vai receber, que é o pior número errado possível. */
+const comissionamento = requireOpcional(() => require('../data/comissionamento.json'));
 /* Régua da temperatura (data/temperatura.json). CONFIGURAÇÃO, como cadencias: o robô
    calcula a nota com ela e a tela ESCREVE a fórmula a partir dela. Duas cópias da
    frase (uma no JSON, uma no template) divergiriam no primeiro ajuste de peso. */
@@ -443,6 +449,11 @@ function montarDadosCompletos() {
     // Configuração da régua de cadência — igual pros dois papéis (é política do canal,
     // não dado de cliente), por isso passa intacta pelo filtrarParaPapel.
     cadencias: cadencias || null,
+    /* A TABELA DO VARIÁVEL — igual para os dois papéis, como cadencias: é política de
+       remuneração, não dado de cliente. O que o filtro por papel corta é a LISTA de
+       vendas por pessoa (vendasMes), e é dela que sai quantos clientes cada um tem —
+       então o executivo calcula a comissão dele e não vê a do colega. */
+    comissionamento: comissionamento || null,
     /* CADÊNCIA DIÁRIA (08/09/26): atividade por executivo por dia útil, do robô.
        DADO, não configuração — o filtro por papel abaixo corta para o executivo. */
     cadenciaDiaria: hubspot.cadenciaDiaria || null,
