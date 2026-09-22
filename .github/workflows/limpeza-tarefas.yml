@@ -1,0 +1,56 @@
+name: Limpeza de tarefas excedentes (manual)
+
+# ══════════════════════════════════════════════════════════════════════════════════════
+# NÃO TEM CRON, DE PROPÓSITO. Isto remove tarefas no HubSpot, e remoção não se agenda:
+# roda quando o Julyan manda rodar, e o padrão é MEDIR sem remover nada.
+#
+# Um negócio com mais de uma tarefa aberta fica com a mais próxima de vencer; as outras
+# saem. A régua é a mesma que criar-tarefa-rota.js usa desde 22/09 — duas regras para a
+# mesma escolha fariam a limpeza brigar com a rota na semana seguinte.
+# ══════════════════════════════════════════════════════════════════════════════════════
+
+on:
+  workflow_dispatch:
+    inputs:
+      aplicar:
+        description: 'Remover de verdade? Deixe "nao" para só medir e gerar o log.'
+        required: true
+        default: 'nao'
+        type: choice
+        options:
+          - 'nao'
+          - 'sim'
+
+permissions:
+  contents: write
+
+jobs:
+  limpeza:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Medir (e remover, se pedido)
+        env:
+          HUBSPOT_TOKEN: ${{ secrets.HUBSPOT_TOKEN }}
+        run: |
+          if [ "${{ inputs.aplicar }}" = "sim" ]; then
+            node scripts/limpar-tarefas-excedentes.js --aplicar
+          else
+            node scripts/limpar-tarefas-excedentes.js
+          fi
+
+      # O LOG SOBE COMO ARTEFATO, não como commit: ele traz nome de negócio e dono, e
+      # data/ é ignorada no git justamente por isso. Sem o log não há como recriar o que
+      # saiu — remoção no HubSpot é irreversível.
+      - name: Guardar o log do que saiu
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: limpeza-tarefas
+          path: data/limpeza-tarefas-*.json
+          retention-days: 90
+          if-no-files-found: warn
