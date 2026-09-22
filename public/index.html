@@ -11889,13 +11889,17 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
       passoAcao = (fundo.querySelector('#fn3PassoAcao').value || '').trim();
       passoData = fundo.querySelector('#fn3PassoData').value || '';
 
-      const metade = (!!passoAcao) !== (!!passoData);
-      if (metade) {
+      const feito = completarMetadeDoPasso(passoAcao, passoData, sugerido);
+      passoAcao = feito.acao;
+      passoData = feito.data;
+      if (feito.semData) {
         status.className = 'fn3-reg-status is-erro';
-        status.textContent = passoAcao
-          ? 'Escreva a data do próximo passo — ação sem data vira tarefa vencendo hoje.'
-          : 'Escreva o que é o próximo passo, ou deixe os dois em branco para passar sem ele.';
+        status.textContent = 'Escolha a data do próximo passo — esta etapa não tem régua para sugerir uma, e sem data ele vira tarefa vencendo hoje.';
         return;
+      }
+
+      if (feito.completou && typeof mostrarToast === 'function') {
+        mostrarToast(avisoDoPassoCompletado(feito));
       }
     }
 
@@ -25783,6 +25787,30 @@ function estaGravando(leadId) {
   return FN_GRAVANDO.has(String(leadId));
 }
 
+function completarMetadeDoPasso(acao, data, sugerido) {
+  const a = String(acao || '').trim();
+  const d = String(data || '').trim();
+  if (!a && !d) return { acao: a, data: d, completou: null };
+  if (a && d) return { acao: a, data: d, completou: null };
+  if (d && !a) {
+    const texto = (sugerido && sugerido.acao) || 'Follow-up';
+    return { acao: texto, data: d, completou: 'acao' };
+  }
+
+  const dataRegua = (sugerido && sugerido.data)
+    || (typeof desfechoDataSugerida === 'function' ? desfechoDataSugerida(2) : '');
+  if (!dataRegua) return { acao: a, data: d, completou: null, semData: true };
+  return { acao: a, data: dataRegua, completou: 'data' };
+}
+
+function avisoDoPassoCompletado(r) {
+  if (!r || !r.completou) return '';
+  if (r.completou === 'acao') return 'próximo passo anotado como "' + r.acao + '" para '
+    + r.data + ' — a régua da etapa preencheu o texto que ficou em branco';
+  return 'próximo passo datado para ' + r.data + ' pela régua da etapa — sem data ele'
+    + ' viraria tarefa vencendo hoje';
+}
+
 async function gravarPassagemOtimista(opts) {
   const lead = opts.lead;
   const id = String(lead.id);
@@ -26129,14 +26157,21 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
 
     const campoPasso = sel => stageModalBody.querySelector(sel);
     const passoCanal = exigePasso ? (campoPasso('.pe-passo-canal').value || 'ligacao') : null;
-    const passoAcao = exigePasso ? (campoPasso('.pe-passo-acao').value || '').trim() : '';
-    const passoData = exigePasso ? (campoPasso('.pe-passo-data').value || '') : '';
+    let passoAcao = exigePasso ? (campoPasso('.pe-passo-acao').value || '').trim() : '';
+    let passoData = exigePasso ? (campoPasso('.pe-passo-data').value || '') : '';
 
-    const metadeDoPasso = exigePasso && ((!!passoAcao) !== (!!passoData));
-    if (metadeDoPasso) {
-      status.textContent = passoAcao
-        ? 'Escreva a data do próximo passo — ação sem data vira tarefa vencendo hoje.'
-        : 'Escreva o que é o próximo passo, ou deixe os dois em branco para passar sem ele.';
+    const passoFeito = exigePasso
+      ? completarMetadeDoPasso(passoAcao, passoData, passoSugerido)
+      : { acao: '', data: '', completou: null };
+    passoAcao = passoFeito.acao;
+    passoData = passoFeito.data;
+
+    if (passoFeito.completou && typeof mostrarToast === 'function') {
+      mostrarToast(avisoDoPassoCompletado(passoFeito));
+    }
+
+    if (passoFeito.semData) {
+      status.textContent = 'Escolha a data do próximo passo — esta etapa não tem régua para sugerir uma, e sem data ele vira tarefa vencendo hoje.';
       status.style.color = 'var(--red)';
       return;
     }
