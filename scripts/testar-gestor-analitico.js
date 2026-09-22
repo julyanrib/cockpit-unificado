@@ -969,9 +969,12 @@ checar('a Daily do gestor nao escreve na grade nem no plano de ninguem',
   /* ── 9 · O QUE A PRANCHA NAO DESENHOU E QUE NAO PODE SUMIR ──────────────────────────
      Dossie, dossie de negocio, pauta do lider e rodape de procedencia continuam, porque
      tira-los seria remover gravacao (pauta_do_lider) e o destino dos cliques de nome. */
+  /* A CAUDA GANHOU UM TERCEIRO BLOCO em 22/09 (a tabela do variável do time), e a guarda
+     cravava a chamada byte a byte — reprovou uma adição legítima. O que precisa ser
+     verdade é que as quatro peças continuem DESENHADAS, não que a linha seja idêntica. */
   checar('as quatro pecas da v2 sobreviveram, e o render as desenha',
     /function tm2SobreviventesHTML\(d\)/.test(tela)
-      && /raiz\.innerHTML = tm10TelaHTML\(tm10Dados\(\), tm2SobreviventesHTML\(tm2Dados\(\)\)\);/.test(tela)
+      && /raiz\.innerHTML = tm10TelaHTML\(tm10Dados\(\),[\s\S]{0,160}?tm2SobreviventesHTML\(tm2Dados\(\)\)/.test(tela)
       && tela.indexOf('Sua pauta de líder') > -1);
   checar('e so o gestor desenha a tela do gestor',
     /function renderTimeLider\(\) \{[\s\S]{0,400}?sessaoAtual\.role !== .manager.\) return;/
