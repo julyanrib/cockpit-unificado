@@ -18841,13 +18841,21 @@ function fn3AbrirRegistro(lead, para, redesenhar) {
          METADE preenchida continua travando, e esta e a parte que nao afrouxa: acao
          sem data vira tarefa vencendo HOJE, que foi o que pos 196 tarefas excedentes
          nesta base e inflou a aba Hoje em 2,4x. */
-      const metade = (!!passoAcao) !== (!!passoData);
-      if (metade) {
+      /* ══ A METADE COMPLETA, NÃO TRAVA (22/09/26) ══════════════════════════════════
+         A MESMA regra da porta da ficha, e ela muda junto de propósito: o comentário
+         de 14/09 logo acima já avisava que afrouxar uma só ensina o executivo que
+         "depende da porta que eu usei". */
+      const feito = completarMetadeDoPasso(passoAcao, passoData, sugerido);
+      passoAcao = feito.acao;
+      passoData = feito.data;
+      if (feito.semData) {
         status.className = 'fn3-reg-status is-erro';
-        status.textContent = passoAcao
-          ? 'Escreva a data do próximo passo — ação sem data vira tarefa vencendo hoje.'
-          : 'Escreva o que é o próximo passo, ou deixe os dois em branco para passar sem ele.';
+        status.textContent = 'Escolha a data do próximo passo — esta etapa não tem régua para sugerir uma, e sem data ele vira tarefa vencendo hoje.';
         return;
+      }
+      /* O QUE FOI COMPLETADO APARECE, pelo mesmo canal da outra porta. */
+      if (feito.completou && typeof mostrarToast === 'function') {
+        mostrarToast(avisoDoPassoCompletado(feito));
       }
     }
 
@@ -37988,6 +37996,45 @@ function estaGravando(leadId) {
   return FN_GRAVANDO.has(String(leadId));
 }
 
+/* ══ A METADE DO PRÓXIMO PASSO SE COMPLETA (22/09/26) ══════════════════════════════
+   Até hoje, ação-sem-data e data-sem-ação RECUSAVAM a passagem. Vazio total passava
+   desde 14/09 ("vai q ele vende na hora"), então a tela recusava justamente quem tinha
+   preenchido METADE — e a caixa já vem com a data da régua preenchida, o que faz da
+   metade o caso COMUM, não o raro.
+
+   Custou uma venda: o Sérgio não escreveu o texto, a passagem para Ag. Pagamento não
+   completou e o link de pagamento não saiu. Ele gerou no HubSpot na mão.
+
+   O MEDO ORIGINAL CONTINUA RESPEITADO: ação sem data vira tarefa vencendo HOJE, e foi
+   isso que pôs 198 tarefas excedentes nesta base. Por isso a data que entra é a da
+   RÉGUA (D+n), nunca hoje. A regra deixou de ser porteira sem virar bagunça.
+
+   Devolve o que completou para a tela poder dizer — completar em silêncio faria o
+   executivo achar que o cockpit engoliu o que ele digitou. */
+function completarMetadeDoPasso(acao, data, sugerido) {
+  const a = String(acao || '').trim();
+  const d = String(data || '').trim();
+  if (!a && !d) return { acao: a, data: d, completou: null };
+  if (a && d) return { acao: a, data: d, completou: null };
+  if (d && !a) {
+    const texto = (sugerido && sugerido.acao) || 'Follow-up';
+    return { acao: texto, data: d, completou: 'acao' };
+  }
+  /* AÇÃO SEM DATA: a data sai da régua, não de hoje. */
+  const dataRegua = (sugerido && sugerido.data)
+    || (typeof desfechoDataSugerida === 'function' ? desfechoDataSugerida(2) : '');
+  if (!dataRegua) return { acao: a, data: d, completou: null, semData: true };
+  return { acao: a, data: dataRegua, completou: 'data' };
+}
+
+function avisoDoPassoCompletado(r) {
+  if (!r || !r.completou) return '';
+  if (r.completou === 'acao') return 'próximo passo anotado como "' + r.acao + '" para '
+    + r.data + ' — a régua da etapa preencheu o texto que ficou em branco';
+  return 'próximo passo datado para ' + r.data + ' pela régua da etapa — sem data ele'
+    + ' viraria tarefa vencendo hoje';
+}
+
 async function gravarPassagemOtimista(opts) {
   const lead = opts.lead;
   const id = String(lead.id);
@@ -38428,16 +38475,29 @@ function abrirPassagemDeEtapa(lead, novaEtapaId, aoConcluir) {
     // ANTES de tocar no DOM, não depois.
     const campoPasso = sel => stageModalBody.querySelector(sel);
     const passoCanal = exigePasso ? (campoPasso('.pe-passo-canal').value || 'ligacao') : null;
-    const passoAcao = exigePasso ? (campoPasso('.pe-passo-acao').value || '').trim() : '';
-    const passoData = exigePasso ? (campoPasso('.pe-passo-data').value || '') : '';
+    let passoAcao = exigePasso ? (campoPasso('.pe-passo-acao').value || '').trim() : '';
+    let passoData = exigePasso ? (campoPasso('.pe-passo-data').value || '') : '';
     /* OS DOIS, OU NENHUM — a mesma regra do registro rápido do Meu funil, e pelo mesmo
        motivo (ver a nota longa lá). Duas telas movem etapa; se só uma afrouxar, o
        executivo aprende que "depende da porta que eu usei". */
-    const metadeDoPasso = exigePasso && ((!!passoAcao) !== (!!passoData));
-    if (metadeDoPasso) {
-      status.textContent = passoAcao
-        ? 'Escreva a data do próximo passo — ação sem data vira tarefa vencendo hoje.'
-        : 'Escreva o que é o próximo passo, ou deixe os dois em branco para passar sem ele.';
+    /* ══ A METADE COMPLETA, NÃO TRAVA (22/09/26) ════════════════════════════════════
+       Esta tela recusava data-sem-texto — e a data vem PREENCHIDA da régua, então o
+       caso comum era justamente o recusado. Foi o que impediu a passagem do Sérgio
+       para Ag. Pagamento e, com ela, o link de pagamento. */
+    const passoFeito = exigePasso
+      ? completarMetadeDoPasso(passoAcao, passoData, passoSugerido)
+      : { acao: '', data: '', completou: null };
+    passoAcao = passoFeito.acao;
+    passoData = passoFeito.data;
+    /* O QUE FOI COMPLETADO APARECE. Completar em silêncio faria o executivo achar que
+       o cockpit engoliu o que ele digitou — e mostrarToast já é o canal desta casa. */
+    if (passoFeito.completou && typeof mostrarToast === 'function') {
+      mostrarToast(avisoDoPassoCompletado(passoFeito));
+    }
+    /* o único caso que ainda não dá para resolver: texto sem data e sem régua nenhuma
+       para a etapa de destino. Aí a tela pede a data — e só a data. */
+    if (passoFeito.semData) {
+      status.textContent = 'Escolha a data do próximo passo — esta etapa não tem régua para sugerir uma, e sem data ele vira tarefa vencendo hoje.';
       status.style.color = 'var(--red)';
       return;
     }

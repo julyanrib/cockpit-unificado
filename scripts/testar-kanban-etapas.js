@@ -506,12 +506,42 @@ checar('o espelho do passo é isolado do resultado da passagem',
   'a tarefa já está gravada quando o espelho roda: falha dele virando erro da tarefa faz '
     + 'a tela acusar um problema que não existe — e foi assim que nasceu o (null)');
 
-checar('metade do próximo passo trava; os dois vazios passam',
-  /const metade = \(!!passoAcao\) !== \(!!passoData\);/.test(template)
-    && /const metadeDoPasso = exigePasso && \(\(!!passoAcao\) !== \(!!passoData\)\);/.test(template)
-    && !/Falta o próximo passo: ação e data/.test(template),
-  'ação sem data vira tarefa vencendo hoje — e a trava antiga, se sobrar em uma das duas '
-    + 'telas, faz o executivo aprender que depende da porta que ele usou');
+/* ══ A METADE COMPLETA, NÃO TRAVA MAIS (22/09/26) ═══════════════════════════════════════
+   Julyan: "hj deu bug com o sergio pra ele mudar de etapa, pq ele nao tinha colocado texto
+   em 'marcar proximo passo'... e isso travou na hora de gerar o boleto".
+
+   A caixa vem com a DATA preenchida pela régua, então data-sem-texto — a metade — era o
+   caso COMUM, e era justamente o recusado. A passagem para Ag. Pagamento não completou e
+   o link de pagamento não saiu.
+
+   O MOTIVO DA REGRA ANTIGA CONTINUA VALENDO e é medido logo abaixo: ação sem data vira
+   tarefa vencendo HOJE. O que mudou é que a tela RESOLVE em vez de recusar — a data que
+   entra é a da régua (D+n), nunca hoje. */
+checar('a metade do próximo passo se completa, nas duas portas',
+  /const feito = completarMetadeDoPasso\(passoAcao, passoData, sugerido\);/.test(template)
+    && /completarMetadeDoPasso\(passoAcao, passoData, passoSugerido\)/.test(template)
+    && !/const metade = \(!!passoAcao\) !== \(!!passoData\);/.test(template)
+    && !/const metadeDoPasso = exigePasso/.test(template),
+  'a trava, se sobrar em UMA das duas telas, faz o executivo aprender que depende da porta '
+    + 'que ele usou — e foi uma delas que segurou o boleto do Sérgio');
+
+checar('e a regra de completar existe uma vez só',
+  (template.match(/function completarMetadeDoPasso\(/g) || []).length === 1,
+  'duas portas movem etapa; duas cópias da regra é como elas divergem, e aqui a '
+    + 'divergência custa uma venda');
+
+checar('a data que a régua completa NUNCA é hoje',
+  /const dataRegua = \(sugerido && sugerido\.data\)/.test(template)
+    && /desfechoDataSugerida\(2\)/.test(template)
+    && !/completarMetadeDoPasso[\s\S]{0,700}isoDate\(new Date\(\)\)/.test(template),
+  'era este o medo que criou a trava: ação sem data vira tarefa vencendo hoje, e foi isso '
+    + 'que pôs 198 tarefas excedentes nesta base');
+
+checar('e o que foi completado aparece para o executivo',
+  /function avisoDoPassoCompletado\(/.test(template)
+    && (template.match(/mostrarToast\(avisoDoPassoCompletado\(/g) || []).length === 2,
+  'completar em silêncio faria ele achar que o cockpit engoliu o que digitou — e o aviso '
+    + 'tem de existir nas DUAS portas');
 checar('a criação da tarefa respeita exigePasso (dentro da função compartilhada)',
   template.indexOf("const exigePasso = !!(opts.passoAcao && opts.passoData);") > 0 &&
   template.indexOf("tipoAcao: 'proximo-passo'") > 0);
@@ -1180,14 +1210,19 @@ checar('semanal: a contagem é o total do servidor, não o tamanho da página',
     'a exigência de preencher é o que faz a tarefa nascer — sem esta condição a trava'
     + ' não vale nada');
 
-  /* ANTES: abrir a caixa e confirmar VAZIO era cobrado. Desde 14/09 o vazio passa de
-     propósito em qualquer caso — inclusive com a caixa aberta, porque insistir ali seria
-     a mesma porteira entrando por outra porta. O que continua cobrado é a METADE, e por
-     um motivo que não mudou: ação sem data vira tarefa vencendo hoje. */
-  checar('quem abre a caixa e preenche metade é cobrado',
-    painel.indexOf('Escreva a data do próximo passo') > -1
-      && painel.indexOf('ou deixe os dois em branco para passar sem ele') > -1,
-    'a caixa aberta com só a ação escrita criaria tarefa sem data — vencendo hoje');
+  /* ANTES: abrir a caixa e confirmar VAZIO era cobrado. Desde 14/09 o vazio passa. Desde
+     22/09 a METADE também passa — mas completada pela régua, não em branco. O único caso
+     que ainda pede algo é texto-sem-data numa etapa SEM régua: não há de onde tirar a
+     data, e sem data a tarefa nasce vencendo hoje. */
+  checar('a metade preenchida passa, completada pela régua',
+    painel.indexOf('completarMetadeDoPasso(passoAcao, passoData, sugerido)') > -1
+      && painel.indexOf('ou deixe os dois em branco para passar sem ele') < 0,
+    'a caixa vem com a data da régua preenchida: cobrar o texto ali era cobrar o caso '
+      + 'comum, e foi o que segurou a passagem do Sérgio para Ag. Pagamento');
+
+  checar('e só sobra pedido quando não há régua para sugerir a data',
+    painel.indexOf('esta etapa não tem régua') > -1,
+    'texto sem data e sem régua é o único caso que a tela não consegue resolver sozinha');
 
   /* ── 4 · O TOAST NÃO INVENTA DATA ────────────────────────────────────────────────
      Sem tarefa nova, `passoData` é '' e o ramo antigo diria "próximo passo em Invalid
