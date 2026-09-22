@@ -2051,6 +2051,11 @@
   @media (prefers-reduced-motion:reduce){ .h8-encerra-cta{animation:none!important;} }
   @media (max-width:760px){ .h8-cad-cta,.h8-encerra-cta{min-height:44px;} }
 
+  .h8-selo-excesso{
+    font:800 9.5px/1 var(--font-display);letter-spacing:.04em;text-transform:uppercase;
+    color:var(--amber-ink);background:var(--amber-soft);border:1px solid #F0DFB6;
+    border-radius:var(--r-xs);padding:4px 7px;white-space:nowrap;
+  }
   .h8-selo-agendado{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;
     border:1px solid var(--green);border-radius:var(--r-pill);background:var(--green-soft);
     color:var(--green-ink);font:800 9.5px 'Manrope',sans-serif;white-space:nowrap;}
@@ -8884,6 +8889,12 @@ function h8LinhaHTML(item, i, ins) {
       + '</span>'
     : '';
 
+  const nHoje = Number(item.compromissosHoje) || 0;
+  const seloExcesso = nHoje > 1
+    ? '<span class="h8-selo-excesso">' + nHoje + ' compromissos hoje neste negócio'
+      + ' · feche os que já não valem</span>'
+    : '';
+
   const botoes = ins.melhor === 'criar'
     ? bt('criar', 'criar negócio + gravar visita ▸', 'data-h8-criar="' + id + '"')
       + bt('visitar', 'agendar retorno ▸', 'data-h8-datar="' + id + '" data-h8-como="visita"')
@@ -8944,7 +8955,7 @@ function h8LinhaHTML(item, i, ins) {
     +       esc(etapa) + (dias != null ? ' · há ' + dias + 'd' : '') + '</span>'
     +     '<span class="h8-venc' + (ins.cat === 'sla' ? ' is-sla' : '') + '">'
     +       esc(ins.venc) + '</span>'
-    +     selo
+    +     selo + seloExcesso
     +   '</div>'
     +   '<div class="h8-motivo">' + esc(ins.motivo) + '</div>'
     +   '<div class="h8-ultimo">' + esc(ins.ultimo) + (tel ? '' : ' · sem telefone no CRM') + '</div>'
@@ -8998,6 +9009,8 @@ function h8Fila(r, diag) {
 
   const jaNaFila = new Set(base.map(function (x) { return String(x.lead.id); }));
 
+  const extraPorNegocio = {};
+
   pendentesDeHoje.forEach(function (e) {
     const negocio = e.dealId && typeof buscarLeadFunilPorId === 'function'
       ? buscarLeadFunilPorId(e.dealId) : null;
@@ -9011,7 +9024,13 @@ function h8Fila(r, diag) {
 
     if (!lead) {
 
-      extras.push({
+      const chaveSemNegocio = 'nome:' + String(e.cliente || '').trim().toLowerCase();
+      const jaSemNegocio = extraPorNegocio[chaveSemNegocio];
+      if (jaSemNegocio) {
+        jaSemNegocio.compromissosHoje = (jaSemNegocio.compromissosHoje || 1) + 1;
+        return;
+      }
+      const semNeg = {
         lead: {
           id: 'ev:' + e.id,
           name: e.cliente,
@@ -9022,10 +9041,13 @@ function h8Fila(r, diag) {
         estado: { toques: { total: 0 }, temProximoPasso: false },
         semNegocio: true,
         evento: e,
+        compromissosHoje: 1,
         balde: 'visita_de_hoje',
         baldeRotulo: 'Visitas de hoje sem registro',
         prio: 0
-      });
+      };
+      extraPorNegocio[chaveSemNegocio] = semNeg;
+      extras.push(semNeg);
       return;
     }
 
@@ -9033,16 +9055,28 @@ function h8Fila(r, diag) {
       const i = base.findIndex(function (x) { return String(x.lead.id) === String(lead.id); });
       if (i >= 0) base.splice(i, 1);
     }
+
+    const jaExtra = extraPorNegocio[String(lead.id)];
+    if (jaExtra) {
+      jaExtra.compromissosHoje = (jaExtra.compromissosHoje || 1) + 1;
+      if (e.inicio && jaExtra.evento && jaExtra.evento.inicio
+        && e.inicio.getTime() < jaExtra.evento.inicio.getTime()) jaExtra.evento = e;
+      return;
+    }
+
     const st = (typeof estadoDoNegocio === 'function') ? estadoDoNegocio(lead) : {};
-    extras.push({
+    const novo = {
       lead: lead,
       estado: st,
       semDesfechoHoje: true,
       evento: e,
+      compromissosHoje: 1,
       balde: 'visita_de_hoje',
       baldeRotulo: 'Visitas de hoje sem registro',
       prio: 0
-    });
+    };
+    extraPorNegocio[String(lead.id)] = novo;
+    extras.push(novo);
   });
 
   const lista = extras.concat(base);
