@@ -13,10 +13,21 @@ const PAGINAS = [
   { marker: 'GUIA PROSPECÇÃO 2/2', id: 'prospeccao-inteligente', categoria: 'Venda na rua', icone: '⌕', titulo: 'Prospecção com dados: escolha a porta antes de sair', resumo: 'Casa dos Dados, Google Maps, Instagram e a passagem do digital para o CRM.' },
   { marker: 'GUIA PROSPECÇÃO 1/2', id: 'prospeccao-porta-a-porta', categoria: 'Venda na rua', icone: '⌖', titulo: 'Porta a porta: a rua como sistema', resumo: 'Microrrotas, o scanner do salão, abordagem e registro em tempo real.' },
   { marker: 'COMO ACHAR O TD', id: 'acesso-decisor', categoria: 'Venda na rua', icone: '◇', titulo: 'Como chegar em quem assina', resumo: 'Como atravessar quem barra na porta e falar com quem decide.' },
+  /* ACHAR O DECISOR ANTES (22/09/26). O capítulo acima trata de ATRAVESSAR a barreira com
+     você já na porta; este trata do que vem antes (descobrir o nome em 5 minutos) e do que
+     vem depois (sair com nome e horário quando ele não está). Nasceu da escada de
+     conversão: a Visita converte 24% e 116 visitas por mês morrem antes de chegar em quem
+     assina — enquanto Demo/Proposta converte 91%. */
+  { arquivo: 'playbook-achar-decisor.md', id: 'achar-decisor', categoria: 'Venda na rua', icone: '⌂', titulo: 'Achar o decisor antes de bater na porta', resumo: 'Descobrir o nome em 5 minutos, ler o salão em 30 segundos e nunca sair sem nome, horário e data.' },
   { marker: 'FOLLOW UP', id: 'follow-up', categoria: 'Venda na rua', icone: '↻', titulo: 'Follow-up: presença no prazo certo', resumo: 'SLA por etapa, escada de escalonamento e presença sem perseguir o cliente.' },
   { marker: 'RUA x WHATSAPP', id: 'rua-whatsapp', categoria: 'Venda na rua', icone: '↔', titulo: 'WhatsApp conecta, o asfalto converte', resumo: 'Como usar mensagem e ligação para levar o cliente ao presencial — não para substituí-lo.' },
   { arquivo: 'playbook-mapa-dor-solucao.md', id: 'mapa-dor-solucao', categoria: 'Converter e fechar', icone: '⊕', titulo: 'Mapa dor → solução', resumo: 'As 6 dores reais traduzidas em módulo, plano e a frase que você fala na mesa.' },
   { marker: 'QUEBRA DE OBJEÇÕES', id: 'objecoes', categoria: 'Converter e fechar', icone: '◈', titulo: 'Objeções: a conversa é sobre margem', resumo: 'As 5 objeções de mesa e o fechamento por contraste, resposta por resposta.' },
+  /* "JÁ TENHO SISTEMA" GANHOU CAPÍTULO PRÓPRIO (22/09/26). Ela é uma das cinco na página
+     acima, em doze linhas — e é a SEGUNDA maior causa de perda do time: 243 em 90 dias,
+     contra 79 de preço. Os concorrentes citados aqui não são lista teórica: saíram dos 39
+     negócios perdidos por esse motivo que têm `nome_do_sistema` preenchido no CRM. */
+  { arquivo: 'playbook-objecao-ja-tenho-sistema.md', id: 'objecao-ja-tenho-sistema', categoria: 'Converter e fechar', icone: '⊘', titulo: '"Já tenho sistema": o manual da objeção', resumo: 'A objeção que mais custa: as três traduções dela, o diagnóstico em 3 perguntas e a conversa por tipo de concorrente.' },
   { marker: 'TÉCNICAS DE FECHAMENTO', id: 'fechamento', categoria: 'Converter e fechar', icone: '✓', titulo: 'Fechamento: o pagamento acontece na mesa', resumo: 'A transição da demo ao Asaas aberto, e como travar o setup sem enrolação.' },
   { marker: 'CLIENTES X MRR', id: 'clientes-mrr', categoria: 'Converter e fechar', icone: '△', titulo: 'Volume × valor: a conta da sua carteira', resumo: 'Território, mancha de bairro, MRR alvo e blindagem da receita recorrente.' },
   { marker: 'ECOSSISTEMA TAKEAT', occurrence: 0, id: 'ecossistema-takeat', categoria: 'Produto e mercado', icone: '⬡', titulo: 'O ecossistema e o comparativo contra a concorrência', resumo: 'Os 4 pilares, o produto módulo por módulo e como cruzar isso com a dor real.' },

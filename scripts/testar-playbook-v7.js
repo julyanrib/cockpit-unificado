@@ -118,8 +118,8 @@ checar('a estante da busca deriva da trilha, em vez de repetir a lista',
    de proposito: e ela que impede a ordem de mudar sem alguem decidir que mudou. */
 const ordemPaginas = [
   'excelencia', 'onboarding', 'metas-cadencia', 'rotina-executivo',
-  'prospeccao-inteligente', 'prospeccao-porta-a-porta', 'acesso-decisor', 'follow-up', 'rua-whatsapp',
-  'mapa-dor-solucao', 'objecoes', 'fechamento', 'clientes-mrr',
+  'prospeccao-inteligente', 'prospeccao-porta-a-porta', 'acesso-decisor', 'achar-decisor', 'follow-up', 'rua-whatsapp',
+  'mapa-dor-solucao', 'objecoes', 'objecao-ja-tenho-sistema', 'fechamento', 'clientes-mrr',
   'ecossistema-takeat', 'catalogo-solucoes', 'concorrencia', 'dark-kitchen', 'rota-inteligente',
   'conciliacao-ofx', 'multilojas', 'equipamentos', 'displays-comandas',
   'pipeline', 'dados-cadastro', 'faq', 'links-uteis', 'relacionamento', 'evitar-churn',
@@ -174,7 +174,22 @@ const semFormato = compilado.paginas.filter(p => FORMATOS.indexOf(p.formato) < 0
 checar('as 30 páginas têm um dos 4 formatos', !semFormato.length, semFormato.map(p => p.id).join(','));
 const semProva = compilado.paginas.filter(p => !p.prova || !p.prova.pergunta || (p.prova.alternativas || []).length !== 3);
 checar('as 30 páginas têm prova de 1 pergunta e 3 alternativas', !semProva.length, semProva.map(p => p.id).join(','));
-checar('o compilado tem as 30 páginas', compilado.paginas.length === 30, 'achado ' + compilado.paginas.length);
+/* O NÚMERO NÃO É CRAVADO (22/09/26): ele subiu para 32 quando entraram os capítulos
+   'já tenho sistema' e 'achar o decisor', e a guarda reprovou uma adição legítima. O
+   que precisa ser verdade é que o compilado tenha TUDO que o build declara — nem a
+   mais, nem a menos. */
+const declaradas = (fs.readFileSync(path.join(raiz, 'scripts', 'build-playbook.js'), 'utf8')
+  /* POR LINHA, e exigindo o "id:" nela — o build tem um `{ marker: ... }` interno no
+     fatiador que não é página, e contá-lo acusava uma página a mais que não existe. */
+  .split('\n')
+  .filter(function (l) {
+    return /^\s*\{ (?:marker|arquivo|gerado):/.test(l) && l.indexOf("id: '") > -1;
+  }).length);
+/* linha inutilizada, mantida vazia de propósito para não mexer no CRLF do arquivo */
+void 0;
+checar('o compilado tem todas as páginas que o build declara',
+  compilado.paginas.length === declaradas,
+  'build declara ' + declaradas + ', compilado tem ' + compilado.paginas.length);
 checar('a linha da biblioteca mostra formato e tempo', /class="pb7-fmt">\$\{esc\(p\.formato\)\}<\/i> · \$\{playbookMinutos\(p\)\} min/.test(template));
 
 /* Nenhuma resposta certa pode estar sempre na mesma posição: se estivesse, a prova
@@ -560,7 +575,9 @@ checar('o versao do playbook e o hash da SAIDA — saida igual nao gera commit n
   checar('o fatiador de paginas continua exigindo nivel 3 no marcador',
     /match\(\/\^#{3}\\s\+\(\.\+\)\$\/\)/.test(build) || /\^###\\s/.test(build),
     'se o fatiador mudar de nivel sem o markdown mudar junto, o build cai inteiro');
-  checar('as 30 paginas continuam sendo geradas', compilado.paginas.length === 30,
+  /* mesma razão da checagem de contagem lá em cima: o que importa é nenhuma página
+     sumir no fatiamento, não o total ser um número específico. */
+  checar('nenhuma pagina se perde no fatiamento', compilado.paginas.length >= 30,
     'achei ' + compilado.paginas.length);
 })();
 
