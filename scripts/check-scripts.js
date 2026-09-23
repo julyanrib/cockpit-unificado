@@ -2172,3 +2172,15 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* == GUARDA 30 - FONTE PEDIDA SEM USO, E FONTE USADA SEM PEDIDO (23/09/26) ===========
+   Poppins e DM Sans ficaram no <link> depois que a Semana do gestor deixou de usa-las.
+   O proprio arquivo tinha escrito a regra em 16/09 e ninguem voltou para cumpri-la.
+   O lado contrario e pior porque e silencioso: familia declarada e nao pedida cai em
+   Arial, e esta medido que a largura e a mesma - ninguem nota pela geometria. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-fonte-pedida-e-usada.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
