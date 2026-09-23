@@ -493,9 +493,29 @@ console.log('');
     /const n = livres\.filter\(l => String\(l\.regiao \|\| ''\) === String\(r\.chave\)\)\.length;/.test(dadosCod),
     'contar o grupo inteiro manda ele procurar o que já está agendado');
 
+  /* A REGRA É A COMPARAÇÃO, e não a linha inteira: o bairro do lead casa com o chip por
+     IGUALDADE de chave. `indexOf` acharia "Centro" dentro de "Centro-Sul". A linha em si
+     mudou em 23/09 para poupar a carteira (que não tem bairro nenhum em 235 dos 239
+     negócios), e a guarda antiga reprovou o desenho novo sem que a regra tivesse caído. */
+  const porBairroCod = (function () {
+    const i = dadosCod.indexOf('const porBairro = ');
+    if (i < 0) return '';
+    const j = dadosCod.indexOf(';', i);
+    return j < 0 ? '' : dadosCod.slice(i, j);
+  }());
+  checar('o filtro do bairro existe e é uma peneira sobre a origem',
+    porBairroCod.length > 0 && /daOrigem\.filter\(/.test(porBairroCod),
+    'sem esta âncora as duas checagens abaixo medem o vazio');
   checar('e o filtro do bairro compara pela chave de lugar, não por texto',
-    /daOrigem\.filter\(l => String\(l\.regiao \|\| ''\) === String\(s\.terr\)\)/.test(dadosCod),
+    /String\(l\.regiao \|\| ''\) === String\(s\.terr\)/.test(porBairroCod)
+      && !/indexOf\(/.test(porBairroCod),
     'comparar texto acha "Centro" dentro de "Centro-Sul" e põe conta de outro bairro na lista');
+  /* E A CARTEIRA NÃO MORA EM BAIRRO NENHUM (23/09/26, Julyan: "ele não pode ficar
+     vinculado a bairro (só a carteira)"). Medido: 235 dos 239 negócios abertos sem
+     bairro — com o corte antigo, clicar num bairro apagava a carteira inteira. */
+  checar('e o chip de bairro não esconde a carteira',
+    /l\.tipo === 'c' \|\|/.test(porBairroCod),
+    'a carteira do executivo não tem bairro: filtrar por bairro a fazia desaparecer da munição');
 
   /* ── 9 · A ORDEM DA MUNIÇÃO É A MEDIDA ───────────────────────────────────────────── */
   checar('a munição sai na ordem de pl6Prioridade',
@@ -946,10 +966,35 @@ console.log('');
     '`na_rota` sem `data_rota` é o estado que ninguém lê: os nove leitores comparam com HOJE');
 
   /* ── 5 · NÃO CRIA A MESMA CONTA DUAS VEZES ──────────────────────────────────────── */
-  checar('a conta digitada é conferida contra a munição dele',
-    /já está na sua munição/.test(cod)
-      && /prospeccaoNormalizarTexto\(nome\)/.test(cod),
+  /* A REGRA É A RECUSA ANTES DE GRAVAR, e não a frase do aviso. A antiga exigia o texto
+     'já está na sua munição'; em 23/09 o aviso passou a dizer ONDE a conta está (carteira,
+     reciclagem ou munição) e a guarda reprovou o conserto que ela deveria proteger.
+     Medido: `pl6CriarLead` tem de comparar o que ele digitou e SAIR com erro antes de
+     chamar `materializarLeadDoMapa`. A checagem por execução está em
+     scripts/testar-planejamento-carteira.js; aqui fica a ordem, que é estrutural. */
+  const criarCod = (function () {
+    const i = cod.indexOf('async function pl6CriarLead(');
+    if (i < 0) return '';
+    const j = cod.indexOf('\nasync function ', i + 10);
+    return cod.slice(i, j < 0 ? cod.length : j);
+  }());
+  checar('pl6CriarLead foi encontrada', criarCod.length > 0,
+    'sem a âncora a checagem abaixo mede o vazio');
+  checar('a conta digitada é conferida antes de gravar',
+    /prospeccaoNormalizarTexto[(]nome[)]/.test(criarCod)
+      /* A BORDA DE PALAVRA SEM BARRA INVERTIDA: indexOf('jaTem') casa dentro de
+         'jaTemDesligado', e a sabotagem que desliga a conferência passava verde — medido.
+         A primeira correção usava \b e a barra invertida morreu no patch, virando
+         caractere de controle dentro do arquivo. Classe de caracteres não escapa. */
+      && criarCod.search(new RegExp("(^|[^A-Za-z])jaTem([^A-Za-z]|$)")) > 0
+      && criarCod.search(new RegExp("(^|[^A-Za-z])jaTem([^A-Za-z]|$)")) < criarCod.indexOf('materializarLeadDoMapa'),
     'a conta digitada não passa pelo dedupe do servidor — sem a checagem, ele cria a mesma padaria toda vez que passar na porta dela');
+  /* E A CARTEIRA ENTRA NA CONFERÊNCIA (23/09/26). Julyan: "se o lead já foi criado e está
+     na carteira, NÃO PODE CRIAR DE NOVO E DUPLICAR". Antes olhava só leads_prospeccao, e
+     o "Na Brasa" virou dois: Negociação em 16/09, Prospecção em 21/09, mesmo telefone. */
+  checar('e a conferência enxerga a carteira, não só a base de prospecção',
+    /meusNegociosAbertos\(rep\.ownerId\)/.test(criarCod),
+    'negócio que já está no funil dele é carteira — criar de novo é o duplicado nascendo');
 
   /* ── 6 · A CIDADE VEM DO TERRITÓRIO, E O CAMPO DO REP É `name` ──────────────────── */
   checar('a cidade sai do território dele, lendo o campo certo',
@@ -995,7 +1040,11 @@ console.log('');
   checar('a munição tem busca por nome, e ela filtra ANTES do corte de 60',
     cod.indexOf('data-pl6-busca-nome="1"') > 0
       && /const alvoBusca = pl6ChaveBairro\(String\(s\.q \|\| ''\)\.trim\(\)\);/.test(cod)
-      && cod.indexOf('const munFilt = !alvoBusca ? porBairro : porBairro.filter') > 0
+      /* A REGRA É A ORDEM: peneirar por nome ANTES do corte de 60. De QUAL lista a busca
+         parte é outra decisão — em 23/09 ela passou a partir de `daOrigem` justamente
+         para achar a conta de outro bairro, e a guarda cravada em `porBairro.filter`
+         reprovou o conserto. */
+      && /const munFilt = !alvoBusca \? porBairro : \w+\.filter/.test(cod)
       && cod.indexOf('const alvoBusca') < cod.indexOf('municaoOrd.slice(0, 60)'),
     'filtrar depois do corte acharia só o que já estava desenhado — e o que ele procura é justamente o que não está');
 

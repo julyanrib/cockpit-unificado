@@ -31622,18 +31622,63 @@ async function pl6CriarLead(rep, campos) {
   const area = terr && (terr.areas || [])[0];
   const cidade = (campos && campos.cidade) || (area ? area.municipio : null);
 
+  /* ══ JÁ ESTÁ NA CARTEIRA? ENTÃO NÃO NASCE DE NOVO (23/09/26) ═════════════════════
+     Julyan: "se o lead já foi criado e está na carteira, NÃO PODE CRIAR DE NOVO E
+     DUPLICAR".
+     A checagem existia e olhava UMA base só: leads_prospeccao. O negócio que já está
+     no funil dele — que é a carteira — passava batido. Foi assim que o "Na Brasa"
+     virou dois: um em Negociação desde 16/09 e outro criado em Prospecção em 21/09,
+     com o MESMO telefone.
+     Agora olha as três bases que a munição mostra (carteira, reciclagem e prospecção)
+     e compara por DUAS chaves: o nome normalizado e os dígitos do telefone. O telefone
+     é a chave forte — 'na brasa' e 'NA BRASA' já casariam pelo nome, mas o mesmo
+     restaurante cadastrado com outro nome só casa pelo número. */
   const chave = (typeof prospeccaoNormalizarTexto === 'function')
     ? prospeccaoNormalizarTexto(nome) : nome.toLowerCase().trim();
-  const jaTem = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
-    .filter(function (l) {
-      if (String(l.responsavel_owner_id || '') !== String(rep.ownerId)) return false;
-      const k = (typeof prospeccaoNormalizarTexto === 'function')
-        ? prospeccaoNormalizarTexto(l.nome) : String(l.nome || '').toLowerCase().trim();
-      return k === chave;
-    })[0];
+  const soDigitos = function (v) { return String(v || '').replace(/[^0-9]/g, ''); };
+  const telNovo = soDigitos(campos && campos.telefone);
+  const mesmoTel = function (v) {
+    const d = soDigitos(v);
+    /* COMPARA PELOS 8 ÚLTIMOS DÍGITOS: o portal guarda o mesmo número como
+       '21999199791', '+55-21999199791' e '+55 21 99919-9791'. Comparar a string
+       inteira diz que são três telefones diferentes — e foi assim que o contato do
+       Salseiro virou três registros. */
+    return telNovo.length >= 8 && d.length >= 8 && d.slice(-8) === telNovo.slice(-8);
+  };
+  const mesmoNome = function (v) {
+    const k = (typeof prospeccaoNormalizarTexto === 'function')
+      ? prospeccaoNormalizarTexto(v) : String(v || '').toLowerCase().trim();
+    return !!k && k === chave;
+  };
+
+  const candidatos = [];
+  (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
+    .forEach(function (d) {
+      candidatos.push({ nome: d.name || d.dealname, tel: d.celular || d.telefone,
+        onde: 'na sua carteira' + (d.stage ? ', em ' + d.stage : '') });
+    });
+  (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [])
+    .filter(function (l) { return String(l.ownerId) === String(rep.ownerId); })
+    .forEach(function (l) {
+      candidatos.push({ nome: l.name || l.dealname, tel: l.celular || l.telefone,
+        onde: 'na sua reciclagem' });
+    });
+  (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
+    .filter(function (l) { return String(l.responsavel_owner_id || '') === String(rep.ownerId); })
+    .forEach(function (l) {
+      candidatos.push({ nome: l.nome, tel: l.telefone,
+        onde: 'na sua munição' + (l.bairro ? ' (' + l.bairro + ')' : '') });
+    });
+
+  const jaTem = candidatos.filter(function (c) {
+    return mesmoTel(c.tel) || mesmoNome(c.nome);
+  })[0];
   if (jaTem) {
-    return { erro: '"' + nome + '" já está na sua munição'
-      + (jaTem.bairro ? ' (' + jaTem.bairro + ')' : '') + ' — procure na lista em vez de criar de novo' };
+    /* O ERRO DIZ ONDE ESTÁ, e não só que não pode: "já existe" sem o lugar manda ele
+       procurar no escuro — que é exatamente o que produziu o duplicado. */
+    return { erro: '"' + String(jaTem.nome || nome) + '" já está ' + jaTem.onde
+      + ' — procure pelo nome na munição em vez de criar de novo'
+      + (mesmoTel(jaTem.tel) && !mesmoNome(jaTem.nome) ? ' (casou pelo telefone)' : '') };
   }
 
   const poi = {
@@ -32081,8 +32126,15 @@ function pl6DadosFinal(rep) {
     if (filtro === 'carteira') return l.tipo === 'c';
     return l.tipo === 'n' && l.grupo === filtro;
   });
+  /* ══ O BAIRRO FILTRA A PROSPECÇÃO, NUNCA A CARTEIRA (23/09/26) ═══════════════════
+     Julyan: "ele não pode ficar vinculado a bairro (só a carteira)". Medido: 235 dos
+     239 negócios abertos do time não têm bairro, e 125 não têm bairro, nem cidade, nem
+     CEP — a `regiao` deles é null. Com o filtro antigo, clicar num bairro escondia a
+     carteira inteira e sobrava só a base de prospecção, que é de onde os bairros vêm.
+     O chip continua servindo para montar rota de rua; ele só perdeu o poder de sumir
+     com o que o executivo já tem na mão. */
   const porBairro = s.terr
-    ? daOrigem.filter(l => String(l.regiao || '') === String(s.terr))
+    ? daOrigem.filter(l => l.tipo === 'c' || String(l.regiao || '') === String(s.terr))
     : daOrigem;
   /* ══ E O NOME, QUE É O TERCEIRO FILTRO (11/09/26) ═══════════════════════════════
      Bruno: "era só colocar o nome que ia aparecer o lead e eu levava o card até lá".
@@ -32090,8 +32142,13 @@ function pl6DadosFinal(rep) {
      resto da prospecção usa — "coliseu" tem de achar "Restaurante Coliseu". Também
      olha o bairro do card, porque quem digita "taquara" quer a rua inteira e não
      precisa saber que aquilo é um chip de território do outro bloco. */
+  /* ══ PROCURAR PELO NOME É PROCURAR EM TUDO (23/09/26) ════════════════════════════
+     A busca derivava de `porBairro`, então com um bairro escolhido ela só achava
+     dentro daquele bairro. O executivo digitava o nome, lia "0 contas", concluía que a
+     conta não existia e clicava em criar — e era assim que nascia o duplicado. Quem
+     digita um nome está procurando AQUELA conta, não uma conta daquele bairro. */
   const alvoBusca = pl6ChaveBairro(String(s.q || '').trim());
-  const munFilt = !alvoBusca ? porBairro : porBairro.filter(function (l) {
+  const munFilt = !alvoBusca ? porBairro : daOrigem.filter(function (l) {
     return pl6ChaveBairro(l.nome || '').indexOf(alvoBusca) >= 0
       || pl6ChaveBairro((l._bruto && l._bruto.bairro) || '').indexOf(alvoBusca) >= 0;
   });
