@@ -72,7 +72,7 @@ vm.createContext(ctx);
     if (!m) { console.error('FALHA: não achei ' + re); process.exit(1); }
     vm.runInContext(m[0], ctx);
   });
-['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead', 'pl6SlotProposito',
+['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead', 'pl6SlotProposito', 'pl6ResultadoDoSlot',
   'pl6SlotId', 'pl6SlotRua', 'pl6SlotRel', 'pl6SlotBloqueado', 'pl6SlotHora',
   'pl6PorHora', 'pl6ItensDoDia']
   .forEach(function (f) { vm.runInContext(recortar(f), ctx); });
