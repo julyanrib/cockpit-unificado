@@ -479,21 +479,33 @@ conferir('o piso de 44px cita os atributos que a tela nova emite',
     + ' Planejamento não desenha — medido no navegador em 10/09');
 
   /* ── 3 · O PLANEJAMENTO CRIA OS DOIS, PELO GESTO QUE JÁ EXISTIA ─────────────────── */
-  conferir('o Planejamento desenha os dois blocos na munição',
-    pl6Tela.indexOf('data-pl6-acao="${bl.on}"') > -1 && pl6Dados.indexOf("on: 'bloco:' + id") > -1,
-    'a Daily criava os dois e o Planejamento só sabia ler — o executivo montava a semana'
-    + ' sem poder reservar hora para rua nem para relacionamento');
-  conferir('e o verbo bloco usa a mesma fiação da conta',
-    /if \(verbo === 'bloco'\)/.test(pl6Fi) && /s\.sel = mesma \? null : \{ lead: \{ id: bl\.id/.test(pl6Fi),
-    'fiação nova para o mesmo gesto seria uma segunda forma de escolher o que vai na hora');
+  /* ══ A RUA CONTINUA SENDO OFERECIDA, PELO MESMO GESTO (23/09/26) ══════════════════
+   Duas checagens viviam aqui cravadas no botão tracejado que ficava no meio da coluna
+   da munição. Ele saiu: na prancha final, clicar no propósito "Prospecção de rua" JÁ
+   põe o bloco na mão, e a coluna vira o compositor de onde e quanto tempo.
+   As regras não mudaram e são estas: o Planejamento oferece a rua (senão o executivo
+   monta a semana sem poder reservar hora para bater porta), e ela usa a MESMA fiação
+   do gesto de escolher conta — fiação nova para o mesmo gesto seria uma segunda forma
+   de escolher o que vai na hora. */
+conferir('o Planejamento oferece o bloco de rua, e por dois caminhos',
+  /data-pl6-acao="\$\{d\.ruaPegar\}"/.test(tpl)
+    && /ruaPegar: 'bloco:' \+ PL6_RUA/.test(tpl)
+    && /if \(alvoProp === 'rua'\) s\.sel = pl6SelDeRua\(s\);/.test(tpl),
+  'sem ela o executivo monta a semana sem poder reservar hora para bater porta');
+
+conferir('e o verbo bloco continua sendo a mesma fiação da conta',
+  /if \(verbo === 'bloco'\) \{/.test(tpl) && /pl6BlocoDoSlot\(arg\)/.test(tpl),
+  'fiação nova para o mesmo gesto seria uma segunda forma de escolher o que vai na hora');
 
   /* ── 4 · BLOCO NÃO GERA TAREFA ÓRFÃ NO CRM ───────────────────────────────────────── */
   conferir('o bloco grava direto na grade, sem passar pelo criador de tarefa',
     /* A REGRA É O CAMINHO: dentro do ramo do bloco, a escrita é na grade e NÃO há
        chamada ao criador de tarefa. Cravar o objeto inteiro fez esta checagem reprovar
        quando o slot ganhou o propósito em 23/09. */
-    /if \(s\.sel\.bloco\) \{[\s\S]{0,400}?g\[di\]\[destino\] = \{ id: bl\.id,/.test(pl6Fi)
-      && !/if \(s\.sel\.bloco\) \{[\s\S]{0,400}?AgendarNoSlot/.test(pl6Fi),
+    /* O RAMO GANHOU O COMPOSITOR (onde e duração) e ficou mais longo; a regra é a
+       mesma e é o CAMINHO: escreve na grade, e não chama o criador de tarefa. */
+    /if \(s\.sel\.bloco\) \{[\s\S]{0,900}?g\[di\]\[destino\] = Object\.assign\(/.test(pl6Fi)
+      && !/if \(s\.sel\.bloco\) \{[\s\S]{0,900}?AgendarNoSlot/.test(pl6Fi),
     'pl6AgendarNoSlot cria a TAREFA pendurada no negócio, e bloco não tem negócio:'
     + ' tarefa sem deal é tarefa órfã no HubSpot');
 

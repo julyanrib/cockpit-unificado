@@ -1341,6 +1341,7 @@
     #agendaContent [data-pl6-fi-fechar],
     #agendaContent [data-pl6-reg-in],
 
+    #agendaContent [data-pl6-rua-onde],
     #agendaContent [data-pl6-end-rua],
     #agendaContent [data-pl6-end-bairro],
     #agendaContent [data-pl6-end-cidade],
@@ -20849,7 +20850,7 @@ const PL6_ETAPA_AG_PGTO = '1395880473';
 const PL6_PROPOSITOS = [
   { id: 'rua', nome: 'Prospecção de rua', etiqueta: 'RUA', cor: '#2B3440',
     selo: '#2B3440', seloBg: '#EEF0F3', tracejado: true,
-    pergunta: 'onde você vai bater porta?', fonte: 'sem lista — sair e bater porta' },
+    pergunta: 'onde você vai bater porta?', fonte: 'sem lista · clique = bloco na mão' },
   { id: 'cobrar', nome: 'Cobrar pagamento', etiqueta: 'COBRAR', cor: '#B0782A',
     selo: '#8A6516', seloBg: '#FBF3E6',
     pergunta: 'de quem você vai cobrar?', fonte: 'etapa Ag. Pagamento' },
@@ -21079,6 +21080,8 @@ let pl6UI = {
   sel: null, diaAtivo: null, hSel: '09', mSel: '00', dragHover: null,
 
   proposito: null, faixa: 'todos', lugar: null, ondeAberto: false, pagina: 1,
+
+  rua: { regiao: '', duracao: '2h' },
   pickerDia: null,
 
   q: '',
@@ -21105,6 +21108,47 @@ function pl6SlotId(v) {
 
   if (id === PL6_BLOQUEADO || id === PL6_RUA || id === PL6_REL) return null;
   return id;
+}
+
+function pl6AcimaDaRegua(l) {
+  const r = pl6ReguaDaEtapa(l && l.stageId);
+  if (r == null || !l || l.dias == null) return false;
+  return Number(l.dias) > r;
+}
+
+function pl6ReguaDaEtapa(stageId) {
+  const m = (DATA.stageMeta && DATA.stageMeta.slaDays) || {};
+  const v = Number(m[String(stageId || '')]);
+  return isFinite(v) && v > 0 ? v : null;
+}
+
+function pl6PassoFuturo(l) {
+  const q = l && l.proximaAtividade;
+  if (!q) return null;
+  const d = new Date(q);
+  if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
+  return d;
+}
+
+function pl6SelDeRua(s) {
+  const r = (s && s.rua) || { regiao: '', duracao: '2h' };
+  const onde = String(r.regiao || '').trim();
+  const dur = String(r.duracao || '2h');
+  return {
+    lead: { id: PL6_RUA, nome: 'Bloco de rua · ' + (onde || 'região livre') },
+    bloco: PL6_RUA, regiao: onde, duracao: dur,
+    sub: dur + ' · sem conta definida'
+  };
+}
+
+function pl6BlocosDeRuaNaSemana(grade) {
+  let n = 0;
+  (grade || []).forEach(function (col) {
+    (col || []).forEach(function (v) {
+      if (pl6SlotRua(v) || pl6SlotProposito(v) === 'rua') n += 1;
+    });
+  });
+  return n;
 }
 
 function pl6SlotProposito(v) {
@@ -21625,7 +21669,8 @@ function pl6DadosFinal(rep) {
   const porBairro = daOrigem;
 
   const alvoBusca = pl6ChaveBairro(String(s.q || '').trim());
-  const munFilt = !alvoBusca ? porBairro : daOrigem.filter(function (l) {
+
+  const munFilt = !alvoBusca ? porBairro : comProposito.filter(function (l) {
     return pl6ChaveBairro(l.nome || '').indexOf(alvoBusca) >= 0
       || pl6ChaveBairro((l._bruto && l._bruto.bairro) || '').indexOf(alvoBusca) >= 0;
   });
@@ -21653,8 +21698,9 @@ function pl6DadosFinal(rep) {
 
     if (prop === 'funil') return [
       { id: 'todos', rot: 'todos', n: lista.length },
-      { id: 'fora', rot: 'fora da régua', n: n(function (x) { return x.sla === true; }) },
-      { id: 'mudo', rot: 'sem toque marcado', n: n(function (x) { return x.atrasoDias == null; }) }];
+      { id: 'acima', rot: 'acima da régua', n: n(pl6AcimaDaRegua) },
+      { id: 'mudo', rot: 'sem próximo passo', n: n(function (x) { return !pl6PassoFuturo(x); }) },
+      { id: 'futuro', rot: 'com passo futuro', n: n(function (x) { return !!pl6PassoFuturo(x); }) }];
     return [];
   }
   const faixasDoProp = pl6FaixasDo(propAtivo, daOrigem);
@@ -21671,8 +21717,9 @@ function pl6DadosFinal(rep) {
     }
     if (propAtivo === 'nova' && faixaAtiva === 'estrela') return Number(l.nota) >= 4.5;
     if (propAtivo === 'funil') {
-      if (faixaAtiva === 'fora') return l.sla === true;
-      if (faixaAtiva === 'mudo') return l.atrasoDias == null;
+      if (faixaAtiva === 'acima') return pl6AcimaDaRegua(l);
+      if (faixaAtiva === 'mudo') return !pl6PassoFuturo(l);
+      if (faixaAtiva === 'futuro') return !!pl6PassoFuturo(l);
     }
     return true;
   }
@@ -21711,6 +21758,15 @@ function pl6DadosFinal(rep) {
 
     if (propAtivo === 'follow') return (b.atrasoDias || 0) - (a.atrasoDias || 0);
     if (propAtivo === 'cobrar' || propAtivo === 'relac') return (b.dias || 0) - (a.dias || 0);
+
+    if (propAtivo === 'funil') {
+      const excedeu = function (x) {
+        const r = pl6ReguaDaEtapa(x && x.stageId);
+        if (r == null || !x || x.dias == null) return -1e9;
+        return Number(x.dias) - r;
+      };
+      return excedeu(b) - excedeu(a);
+    }
     return pl6Prioridade(a) - pl6Prioridade(b);
   });
 
@@ -21859,28 +21915,32 @@ function pl6DadosFinal(rep) {
       };
     }),
 
-    blocos: [PL6_RUA].map(function (id) {
-      const bl = pl6BlocoDoSlot(id);
-      const sel = !!(pl6UI.sel && pl6UI.sel.bloco === id);
-      return {
-        on: 'bloco:' + id,
-        rot: esc((id === PL6_RUA ? '⌖ ' : '♥ ') + bl.nome.toLowerCase()
-          + (sel ? ' — escolha o horário ▸' : '')),
-        sub: esc(bl.sub + ' · sem negócio no HubSpot; o que prova a visita é o Expogo'),
-        cor: sel ? '#E51A31' : bl.cor,
-        borda: sel ? '#E51A31' : '#D8D2C4',
-        bg: sel ? '#FDF3F4' : '#FDFEFF',
-        sel: sel
-      };
+    ruaAtiva: propAtivo === 'rua',
+    ruaNaMao: !!(s.sel && s.sel.bloco === PL6_RUA),
+    ruaRegiao: esc(String(s.rua && s.rua.regiao || '')),
+    ruaDuracoes: ['1h', '2h', '3h', '4h'].map(function (d) {
+      const aqui = String((s.rua && s.rua.duracao) || '2h') === d;
+      return { rot: d, on: 'ruadur:' + d,
+        bg: aqui ? '#2B3440' : '#FDFEFF', cor: aqui ? '#FDFEFF' : '#2B3440',
+        borda: aqui ? '#2B3440' : '#DCE1EA' };
     }),
+    ruaPegar: 'bloco:' + PL6_RUA,
+    ruaPegarRot: (s.sel && s.sel.bloco === PL6_RUA)
+      ? 'na mão — clique num horário da semana' : 'pegar outro bloco ▸',
 
     propositos: PL6_PROPOSITOS.map(function (p) {
       const n = comProposito.filter(function (l) { return l.proposito === p.id; }).length;
       const on = propAtivo === p.id;
+      const ruaNaMao = p.id === 'rua' && !!(s.sel && s.sel.bloco === PL6_RUA);
+      const nRua = pl6BlocosDeRuaNaSemana(grade);
       return {
-        on: 'prop:' + p.id, nome: esc(p.nome), etiqueta: p.etiqueta, cor: p.cor,
-        num: p.id === 'rua' ? '—' : String(n),
-        sub: p.id === 'rua' ? 'não tem lista' : esc(p.fonte),
+        on: 'prop:' + p.id, nome: esc(p.nome), etiqueta: p.etiqueta,
+        cor: ruaNaMao ? '#E51A31' : p.cor,
+        num: p.id === 'rua' ? (ruaNaMao ? '▸' : String(nRua)) : String(n),
+        sub: p.id === 'rua'
+          ? (ruaNaMao ? 'na mão · escolha o horário'
+            : (nRua === 1 ? 'bloco na semana' : 'blocos na semana'))
+          : esc(p.fonte),
         sel: on,
         bg: on ? p.seloBg : '#FDFEFF',
         borda: on ? p.cor : '#DCE1EA'
@@ -21947,8 +22007,13 @@ function pl6DadosFinal(rep) {
     municao: municaoPag.map(function (l) {
       const sel = !!(selLead && selLead.id === l.id);
       const tg = pfTag(l);
+      const met = pl6MetricaDoCard(l, propAtivo);
       return {
-        nome: esc(l.nome), sub: esc(pl6SubDoCard(l)),
+        nome: esc(l.nome), sub: esc(met && met.l2 ? met.l2 : pl6SubDoCard(l)),
+        metrica: met ? esc(met.v) : '', metricaCor: met ? met.cor : '#2B3440',
+        metricaRot: met ? esc(met.rot) : '',
+        linha3: met && met.l3 ? esc(met.l3) : '',
+        linha3Cor: (met && met.l3 && met.l3.indexOf('sem ') === 0) ? '#B4AC9C' : '#7A8494',
         tag: esc(tg.tag), tagCor: tg.cor, tagBg: tg.bg,
         bg: sel ? '#FDF3F4' : '#FDFEFF', borda: sel ? '#E51A31' : '#E7E3DA',
         acao: sel ? 'escolha o dia ▸' : 'agendar ▸',
@@ -21961,6 +22026,11 @@ function pl6DadosFinal(rep) {
       };
     }),
     municaoVazia: municaoOrd.length === 0,
+    vazioTxt: esc(propAtivo === 'funil' ? 'Toda a carteira já tem outro propósito.'
+      : (propAtivo === 'cobrar' ? 'Ninguém esperando pagamento.'
+      : (propAtivo === 'relac' ? 'Nenhum cliente na base para visitar.'
+      : (propAtivo === 'follow' ? 'Nenhuma promessa vencida ou para hoje.'
+      : 'Nada nesta faixa.')))),
     temFicha: !!ficha,
     fichaNome: esc(ficha ? ficha.nome : ''),
     fichaSub: esc(ficha ? pl6SubDoCard(ficha) : ''),
@@ -22097,6 +22167,58 @@ function pl6FichaCamposFinal(l) {
     }
   }
   return linhas.filter(Boolean);
+}
+
+function pl6MetricaDoCard(l, prop) {
+  if (!l) return null;
+  if (prop === 'cobrar') {
+    const r = pl6ReguaDaEtapa(l.stageId);
+    const d = l.dias == null ? null : Number(l.dias);
+    if (d == null) return null;
+    return {
+      v: d + 'd', cor: (r != null && d > r) ? '#C3152A' : '#2B3440',
+      rot: (r != null && d > r) ? 'acima da régua' : 'esperando',
+      l2: 'parado há ' + d + 'd em Ag. Pagamento' + (r != null ? ' · régua ' + r + 'd' : ''),
+      l3: pl6LinhaDoPasso(l)
+    };
+  }
+  if (prop === 'funil') {
+    const r = pl6ReguaDaEtapa(l.stageId);
+    const d = l.dias == null ? null : Number(l.dias);
+    if (d == null) return null;
+    const acima = r != null && d > r;
+    return {
+      v: d + 'd', cor: acima ? '#C3152A' : '#2B3440',
+      rot: acima ? 'acima da régua' : 'na etapa',
+      l2: (l.etapa || 'etapa não reconhecida') + (r != null ? ' · régua ' + r + 'd' : ''),
+      l3: pl6LinhaDoPasso(l)
+    };
+  }
+  if (prop === 'follow') {
+    const a = l.atrasoDias;
+    if (a == null) return null;
+    return {
+      v: a === 0 ? 'hoje' : a + 'd', cor: a > 0 ? '#C3152A' : '#B0782A',
+      rot: a === 0 ? 'para hoje' : 'vencido há',
+      l2: (l.etapa || '') + (l.dias != null ? ' · há ' + l.dias + 'd na etapa' : ''),
+      l3: null
+    };
+  }
+  if (prop === 'relac') {
+    const d = l.dias == null ? null : Number(l.dias);
+    if (d == null) return null;
+    return { v: d + 'd', cor: '#16775D', rot: 'cliente há',
+      l2: l.etapa || '', l3: null };
+  }
+  return null;
+}
+
+function pl6LinhaDoPasso(l) {
+  const d = pl6PassoFuturo(l);
+  if (!d) return 'sem próximo passo datado';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  return 'próximo passo em ' + dd + '/' + mm;
 }
 
 function pl6SubDoCard(l) {
@@ -22287,7 +22409,17 @@ function pl6TelaFinalHTML(d) {
         <span style="margin-left:auto;flex:none;font:900 7.5px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${m.tagCor};background:${m.tagBg};border-radius:5px;padding:3px 7px;white-space:nowrap;">${m.tag}</span>
       </span>
       <span style="display:block;font:700 9.5px 'Manrope',sans-serif;color:#7A8494;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.sub}</span>
+      <!-- A TERCEIRA LINHA É DO PRÓXIMO PASSO, e só existe onde ela responde a alguma
+           coisa (cobrança e funil). "sem próximo passo datado" sai mais apagado que
+           uma data: é ausência, não alarme. -->
+      ${m.linha3 ? `<span style="display:block;font:700 9px 'Manrope',sans-serif;color:${m.linha3Cor};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${m.linha3}</span>` : ''}
       <span style="display:flex;align-items:center;gap:8px;margin-top:5px;">
+        <!-- A MÉTRICA DO PROPÓSITO, com o rótulo do que ela é. Número sem rótulo faz
+             "9d" parecer prazo, régua ou idade conforme quem olha. -->
+        ${m.metrica ? `<span style="flex:none;display:flex;align-items:baseline;gap:4px;">
+          <b style="font:900 13px 'Archivo',sans-serif;color:${m.metricaCor};font-variant-numeric:tabular-nums;">${m.metrica}</b>
+          <span style="font:700 8.5px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;">${m.metricaRot}</span>
+        </span>` : ''}
         <button type="button" data-pl6-acao="${m.on}" style="border:1px solid ${m.acaoBorda};border-radius:999px;background:${m.acaoBg};padding:4px 11px;font:800 9.5px 'Manrope',sans-serif;color:${m.acaoCor};cursor:pointer;white-space:nowrap;">${m.acao}</button>
         <span style="font:700 9px 'Manrope',sans-serif;color:#B4AC9C;">ficha no clique</span>
       </span>
@@ -22323,7 +22455,7 @@ function pl6TelaFinalHTML(d) {
 
     ${d.temAviso ? `
     <div style="display:flex;align-items:center;gap:10px;padding:12px 28px;background:${d.avisoBg};border-bottom:1px solid #E7E3DA;">
-      <b style="font:800 12.5px 'Manrope',sans-serif;color:${d.avisoCor};">${d.aviso}</b>
+      <b data-pl6-guia="1" style="font:800 12.5px 'Manrope',sans-serif;color:${d.avisoCor};">${d.aviso}</b>
       ${d.temSel ? `<button type="button" data-pl6-acao="${d.soltar}" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:4px 12px;font:800 10px 'Manrope',sans-serif;color:#7A8494;cursor:pointer;">cancelar</button>` : ''}
     </div>` : ''}
 
@@ -22365,20 +22497,22 @@ function pl6TelaFinalHTML(d) {
             <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:6px;">a conta entra na sua munição — você escolhe o dia depois, clicando nela e no horário livre</span>
           </div>
         ` : `<button type="button" data-pl6-novo-lead="1" style="display:block;width:100%;border:1.5px dashed #F0A9B2;border-radius:10px;background:#FDF3F4;padding:9px 12px;font:800 10.5px 'Manrope',sans-serif;color:#E51A31;cursor:pointer;text-align:center;margin-bottom:6px;">+ criar lead novo — Instagram, Maps, rua</button>`}
-        <!-- ══ OS DOIS BLOCOS, IGUAIS AOS DA DAILY (10/09/26) ══════════════════════════
-             A Daily criava os dois e o Planejamento só sabia LER um deles. O gesto aqui é
-             o mesmo da conta — escolher e clicar no horário do dia — e por isso eles usam
-             data-pl6-acao, a mesma fiação, com o verbo "bloco".
-             SELECIONADO ELE FICA VERMELHO, igual à conta escolhida: é o mesmo estado de
-             "estou com isto na mão", e dois códigos de cor para o mesmo estado seriam
-             duas linguagens na mesma tela. -->
-        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;">
-          ${(d.blocos || []).map(bl => `
-          <button type="button" data-pl6-acao="${bl.on}" style="display:block;width:100%;text-align:left;border:1.5px ${bl.sel ? 'solid' : 'dashed'} ${bl.borda};border-radius:10px;background:${bl.bg};padding:8px 12px;cursor:pointer;min-width:0;">
-            <b style="display:block;font:800 10.5px 'Manrope',sans-serif;color:${bl.cor};">${bl.rot}</b>
-            <span style="display:block;font:700 9px/1.4 'Manrope',sans-serif;color:#7A8494;margin-top:2px;">${bl.sub}</span>
-          </button>`).join('')}
+        <!-- ══ O COMPOSITOR DO BLOCO DE RUA (prancha final, 23/09/26) ═══════════════
+             Era um botão tracejado solto no meio da coluna, que disputava com o bloco da
+             faixa o MESMO gesto — e perdia, porque a faixa é onde ele está olhando. Agora
+             o bloco já vem na mão da faixa, e esta caixa só ajusta onde e quanto tempo.
+             Só aparece no propósito rua: nos outros, a coluna é a lista de contas. -->
+        ${d.ruaAtiva ? `
+        <div style="border:1.5px dashed #D8D2C4;border-radius:11px;background:#FDFEFF;padding:11px 13px;margin-bottom:10px;">
+          <b style="display:block;font:800 11px 'Manrope',sans-serif;color:#2B3440;">Bloco de rua — sair e bater porta</b>
+          <span style="display:block;font:700 9.5px/1.55 'Manrope',sans-serif;color:#7A8494;margin:5px 0 9px;">Clicar em "Prospecção de rua" já põe um bloco na sua mão. Ajuste onde e quanto tempo aqui, se quiser, e clique num horário. Não cria tarefa no HubSpot: fica no plano, e a prova é o check-in do app de campo.</span>
+          <input type="text" data-pl6-rua-onde="1" value="${d.ruaRegiao}" placeholder="onde? — ex.: Barra da Tijuca (opcional)" style="display:block;width:100%;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:8px;background:#FDFEFF;padding:8px 10px;font:700 11px 'Manrope',sans-serif;color:#2B3440;outline:none;margin-bottom:7px;">
+          <div style="display:flex;gap:5px;margin-bottom:9px;">
+            ${(d.ruaDuracoes || []).map(du => `<button type="button" data-pl6-acao="${du.on}" style="flex:1;min-width:0;border:1px solid ${du.borda};border-radius:8px;background:${du.bg};color:${du.cor};min-height:32px;font:800 10.5px 'Manrope',sans-serif;cursor:pointer;">${du.rot}</button>`).join('')}
+          </div>
+          <button type="button" data-pl6-acao="${d.ruaPegar}" style="display:block;width:100%;border:1.5px ${d.ruaNaMao ? 'solid' : 'dashed'} ${d.ruaNaMao ? '#E51A31' : '#D8D2C4'};border-radius:999px;background:${d.ruaNaMao ? '#FDF3F4' : '#FDFEFF'};padding:9px 12px;font:800 10.5px 'Manrope',sans-serif;color:${d.ruaNaMao ? '#E51A31' : '#2B3440'};cursor:pointer;">${d.ruaPegarRot}</button>
         </div>
+        <span style="display:block;font:700 9.5px/1.55 'Manrope',sans-serif;color:#7A8494;margin-bottom:10px;">Quer ir com endereço na mão? <b style="color:#8E3B5C;">Prospecção de conta nova</b> lista contas-alvo com nota e endereço.</span>` : ''}
         <input type="search" data-pl6-busca-nome="1" value="${esc(d.buscaQ || '')}" placeholder="achar conta pelo nome — ex.: Coliseu" style="display:block;width:100%;box-sizing:border-box;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:8px 14px;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;outline:none;margin-bottom:8px;">
         ${d.buscaQ ? `<span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-bottom:8px;">${d.buscaN} conta${d.buscaN === 1 ? '' : 's'} com "${esc(d.buscaQ)}" — arraste o card para o dia, ou clique nele e no horário</span>` : ''}
         <!-- O QUE A BUSCA ACHOU E JA ESTA NO PLANO (11/09/26). A municao e o que FALTA
@@ -22389,13 +22523,17 @@ function pl6TelaFinalHTML(d) {
           <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#1F7A4D;margin-bottom:5px;">já no seu plano</span>
           ${d.buscaNoPlano.map(p => `<button type="button" data-pl6-ir-no-plano="${p.ir}" style="display:block;width:100%;text-align:left;border:0;background:transparent;padding:3px 0;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;">${p.nome} <span style="font-weight:700;color:#1F7A4D;">· ${p.quando} ▸</span></button>`).join('')}
         </div>` : ''}
+        <!-- RUA NÃO TEM LISTA, ENTÃO NÃO TEM RECORTE DE LISTA: "onde · 0", faixa nenhuma
+             e "0 de 0" eram quatro controles mortos na coluna, todos anunciando zero. -->
+        ${d.ruaAtiva ? '' : `
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
           <button type="button" data-pl6-acao="onde" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;
             background:#FDFEFF;padding:0 13px;min-height:30px;font:800 10px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.ondeRot} ▾</button>
         </div>
         ${ondeHTML}
         ${semEndHTML}
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>`}
+        ${d.ruaAtiva ? '' : `
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
           ${d.municaoVazia ? (d.buscaQ
@@ -22405,9 +22543,10 @@ function pl6TelaFinalHTML(d) {
                  Conta criada depois disso entra na próxima leitura do HubSpot — se acabaram de cadastrar, busque o dado novo.
                  <button type="button" data-pl6-buscar-dado-novo="1" style="display:inline-flex;align-items:center;min-height:30px;margin-top:8px;padding:0 13px;border:1px solid #8A6516;border-radius:999px;background:#FDFEFF;font:800 10.5px 'Manrope',sans-serif;color:#8A6516;cursor:pointer;">buscar dado novo do HubSpot ↻</button>
                </span>`
-            : `<span style="font:700 10.5px 'Manrope',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;">nada neste filtro.</span>`) : ''}
+
+            : `<span style="display:block;font:700 10.5px/1.6 'Manrope',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;"><b style="color:#16775D;">zero de verdade</b><br>${d.vazioTxt}</span>`) : ''}
         </div>
-        ${pagHTML}
+        ${pagHTML}`}
       </div>
     </div>
 
@@ -22730,6 +22869,17 @@ function pl6Ligar(box, rep) {
       return;
     }
 
+    const ruaOnde = ev.target.closest && ev.target.closest('[data-pl6-rua-onde]');
+    if (ruaOnde) {
+      pl6UI.rua = { regiao: ruaOnde.value || '', duracao: (pl6UI.rua && pl6UI.rua.duracao) || '2h' };
+      if (pl6UI.sel && pl6UI.sel.bloco === PL6_RUA) {
+        pl6UI.sel = pl6SelDeRua(pl6UI);
+        const guia = box.querySelector('[data-pl6-guia]');
+        if (guia) guia.textContent = '▸ colocando ' + pl6UI.sel.lead.nome
+          + ' — clique em "+ colocar aqui" no dia que quiser';
+      }
+      return;
+    }
     const buscaNome = ev.target.closest && ev.target.closest('[data-pl6-busca-nome]');
     if (buscaNome) {
       pl6UI.q = buscaNome.value || '';
@@ -23036,6 +23186,8 @@ function pl6Ligar(box, rep) {
         s.proposito = alvoProp; s.faixa = 'todos'; s.lugar = null;
         s.pagina = 1; s.ondeAberto = false;
         s.sel = null; s.pickerDia = null; s.toast = null;
+
+        if (alvoProp === 'rua') s.sel = pl6SelDeRua(s);
         return redesenhar();
       }
 
@@ -23050,6 +23202,12 @@ function pl6Ligar(box, rep) {
         return redesenhar();
       }
       if (verbo === 'onde') { s.ondeAberto = !s.ondeAberto; return redesenhar(); }
+
+      if (verbo === 'ruadur') {
+        s.rua = { regiao: (s.rua && s.rua.regiao) || '', duracao: arg || '2h' };
+        if (s.sel && s.sel.bloco === PL6_RUA) s.sel = pl6SelDeRua(s);
+        return redesenhar();
+      }
 
       if (verbo === 'pag') {
         s.pagina = Math.max(1, (Number(s.pagina) || 1) + (Number(arg) || 0));
@@ -23112,7 +23270,9 @@ function pl6Ligar(box, rep) {
         const bl = pl6BlocoDoSlot(arg);
         if (!bl) return redesenhar();
         const mesma = s.sel && s.sel.bloco === bl.id;
-        s.sel = mesma ? null : { lead: { id: bl.id, nome: bl.nome }, bloco: bl.id };
+        s.sel = mesma ? null
+          : (bl.id === PL6_RUA ? pl6SelDeRua(s)
+            : { lead: { id: bl.id, nome: bl.nome }, bloco: bl.id });
         s.diaAtivo = null;
         pl6Ficha = null;
         s.toast = null;
@@ -23175,7 +23335,12 @@ function pl6Ligar(box, rep) {
         if (s.sel.bloco) {
           const bl = pl6BlocoDoSlot(s.sel.bloco);
           const g = pl6GradeDoPlano();
-          g[di][destino] = { id: bl.id, hora: hora, p: bl.id === PL6_RUA ? 'rua' : 'relac' };
+
+          const selRua = s.sel || {};
+          g[di][destino] = Object.assign(
+            { id: bl.id, hora: hora, p: bl.id === PL6_RUA ? 'rua' : 'relac' },
+            selRua.regiao ? { regiao: String(selRua.regiao) } : {},
+            selRua.duracao ? { duracao: String(selRua.duracao) } : {});
           s.sel = null; s.diaAtivo = null;
           return mutar({ grade: g }, dias0[di].rot + ' ' + hora + ' · '
             + (bl.id === PL6_RUA
