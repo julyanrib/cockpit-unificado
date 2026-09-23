@@ -2212,6 +2212,28 @@
   #agendaContent [data-pl6-so-icone]{width:24px;}
   #agendaContent [data-pl6-fi-fechar]{width:28px;}
 
+  /* ══ A SEMANA CABE NA TELA EM QUE ELA É ABERTA (23/09/26) ═══════════════════════
+     Cinco colunas travadas davam, a 375px, CARD AGENDADO DE 27px de largura — medido
+     com a semana montada, no preview da Kelly. As colunas moram aqui, e não no atributo
+     style, porque inline vence a folha: e a tela do Planejamento ja perdeu a regra de
+     44px exatamente assim, duas vezes.
+     E A LARGURA FOI MEDIDA, nao argumentada: com duas colunas a 375px o card fica em
+     112px e "O Relicario Cafe" vira "O Relicario ...". Com uma, 290px, e o nome cabe
+     inteiro ao lado da hora e do selo do proposito. Quem esta na rua precisa LER o nome
+     do restaurante; o formato da semana ele ve no escritorio. Por isso o corte de duas
+     colunas vale ate 760px (tablet estreito) e abaixo de 640 a semana
+     empilha. */
+  #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(5,minmax(0,1fr));}
+  @media (max-width:1050px){
+    #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(3,minmax(0,1fr));}
+  }
+  @media (max-width:760px){
+    #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(2,minmax(0,1fr));}
+  }
+  @media (max-width:640px){
+    #agendaContent [data-pl6-grade-semana]{grid-template-columns:minmax(0,1fr);}
+  }
+
   @media (max-width:760px){
     /* ══ DEDO NA RUA: 44px EM TUDO QUE SE TOCA ═════════════════════════════════════
        A lista cita ATRIBUTO e não classe, porque a tela do Planejamento passou a ser
@@ -2222,7 +2244,6 @@
        A prancha desenha os chips de hora em 24px e o agendar em 34px: no telefone, com
        uma mão, 24px é alvo que ele erra. */
     #agendaContent [data-pl6-acao],
-    #agendaContent [data-pl6-terr],
     #agendaContent [data-pl6-regiao],
     #agendaContent [data-pl6-remover],
     #agendaContent [data-pl6-novo-lead],
@@ -2232,7 +2253,6 @@
     #agendaContent [data-pl6-fi-etapa],
     #agendaContent [data-pl6-fi-fechar],
     #agendaContent [data-pl6-reg-in],
-    #agendaContent [data-pl6-busca-bairro],
     /* o endereço que falta é preenchido NA PORTA do restaurante, com uma mão: os três
        campos e o botão entram na mesma régua de 44px do resto da tela. */
     #agendaContent [data-pl6-end-rua],
@@ -29355,7 +29375,10 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
      quando DIFERIA da faixa da posição, porque a faixa seria reinferida na leitura. As
      telas pararam de inferir hoje — então escolher 10:30 na posição da faixa 10:30
      gravava string pura e a visita aparecia "sem hora" para ele e para o gestor. */
-  grade[di][si] = hora ? { id: idNaGrade, hora: String(hora) } : idNaGrade;
+  /* ESTE CAMINHO É SEMPRE FOLLOW-UP, e dizê-lo é o ponto: o compromisso nasceu de um
+     próximo passo combinado no CRM, não de uma escolha na faixa do Planejamento. */
+  grade[di][si] = Object.assign({ id: idNaGrade },
+    hora ? { hora: String(hora) } : {}, { p: 'follow' });
 
   const r = await pl6Gravar(rep, { grade: grade }, semanaDaTarefa);
   if (r.error) return { erro: r.error.message || 'o Supabase recusou' };
@@ -31416,12 +31439,9 @@ let pl6UI = {
      redesenhar a cada letra — e o handler devolve foco e cursor, porque redesenho que
      come o que se digita é o mesmo defeito do formulário de criar lead. */
   q: '',
-  /* o bairro escolhido na faixa de Territorio (chave normalizada) ou null. O texto do
-     campo de busca NAO fica aqui de proposito: ele filtra os chips no DOM, sem
-     redesenhar — se estivesse no estado, o cursor sairia do campo a cada letra. */
-  terr: null,
-  /* o "ver todos os N bairros" da faixa de Territorio */
-  verTodosTerr: false,
+  /* `terr` e `verTodosTerr` saíram em 23/09/26 com o bloco de Território. `terr` era o
+     bairro escolhido; `verTodosTerr` já estava morto havia semanas — uma declaração e
+     zero leituras, o tipo de resto que sobra quando se remove bloco sem varrer. */
   slotPicker: null, rotaPicker: null, verTodasRegioes: false,
   /* O FORMULÁRIO DE CONTA NOVA (11/09/26). `null` = fechado. Os campos ficam no estado
      porque o formulário vive dentro da coluna que é redesenhada a cada clique da tela —
@@ -31476,6 +31496,13 @@ function pl6SlotId(v) {
      sao legitimas; dois agendamentos do mesmo restaurante nao). */
   if (id === PL6_BLOQUEADO || id === PL6_RUA || id === PL6_REL) return null;
   return id;
+}
+/* ══ O PROPÓSITO GRAVADO NO SLOT (23/09/26, prancha v7) ═══════════════════════════
+   Mais um campo do objeto, do lado de `hora`. Slot em string — que é a maior parte do
+   que já está no banco — devolve null, e quem desenha DERIVA o propósito da conta. */
+function pl6SlotProposito(v) {
+  if (!v || typeof v !== 'object') return null;
+  return v.p ? String(v.p) : null;
 }
 function pl6SlotRua(v) {
   if (!v) return false;
@@ -31666,13 +31693,16 @@ function pl6ItensDoDia(coluna, porId) {
   for (let si = 0; si < col.length; si++) {
     const v = col[si];
     const hora = pl6SlotHora(v, si);
-    if (pl6SlotBloqueado(v)) { itens.push({ si: si, hora: hora, tipo: 'bloqueado' }); continue; }
-    if (pl6SlotRua(v)) { itens.push({ si: si, hora: hora, tipo: 'rua' }); continue; }
-    if (pl6SlotRel(v)) { itens.push({ si: si, hora: hora, tipo: 'rel' }); continue; }
+    /* `p` viaja em TODOS os tipos: quem desenha decide se usa. Item sem `p` é slot
+       gravado antes de 23/09 — o propósito dele se deriva da conta na hora de desenhar. */
+    const p = pl6SlotProposito(v);
+    if (pl6SlotBloqueado(v)) { itens.push({ si: si, hora: hora, tipo: 'bloqueado', p: p }); continue; }
+    if (pl6SlotRua(v)) { itens.push({ si: si, hora: hora, tipo: 'rua', p: 'rua' }); continue; }
+    if (pl6SlotRel(v)) { itens.push({ si: si, hora: hora, tipo: 'rel', p: 'relac' }); continue; }
     const id = pl6SlotId(v);
     if (!id) continue;
     const l = porId ? (porId.get(id) || null) : null;
-    itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l });
+    itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l, p: p });
   }
   /* HORA ASCENDENTE, SEM HORA NO FIM, e a posição só desempata. Ele planejou a visita e
      não marcou hora: ela existe e vai depois das marcadas. */
@@ -32308,16 +32338,12 @@ function pl6DadosFinal(rep) {
   const temFollow = comProposito.some(function (l) { return l.proposito === 'follow'; });
   const propAtivo = s.proposito || (temFollow ? 'follow' : 'funil');
   const daOrigem = comProposito.filter(function (l) { return l.proposito === propAtivo; });
-  /* ══ O BAIRRO FILTRA A PROSPECÇÃO, NUNCA A CARTEIRA (23/09/26) ═══════════════════
-     Julyan: "ele não pode ficar vinculado a bairro (só a carteira)". Medido: 235 dos
-     239 negócios abertos do time não têm bairro, e 125 não têm bairro, nem cidade, nem
-     CEP — a `regiao` deles é null. Com o filtro antigo, clicar num bairro escondia a
-     carteira inteira e sobrava só a base de prospecção, que é de onde os bairros vêm.
-     O chip continua servindo para montar rota de rua; ele só perdeu o poder de sumir
-     com o que o executivo já tem na mão. */
-  const porBairro = s.terr
-    ? daOrigem.filter(l => l.tipo === 'c' || String(l.regiao || '') === String(s.terr))
-    : daOrigem;
+  /* ══ O BAIRRO SAIU DE VEZ (23/09/26) ═════════════════════════════════════════════
+     Primeiro ele foi impedido de esconder a carteira ("ele não pode ficar vinculado a
+     bairro — só a carteira"); agora saiu inteiro, junto com o bloco de Território. O
+     recorte por lugar é o "onde ▾", que se monta da lista que está na tela e conhece
+     quem não tem endereço. */
+  const porBairro = daOrigem;
   /* ══ E O NOME, QUE É O TERCEIRO FILTRO (11/09/26) ═══════════════════════════════
      Bruno: "era só colocar o nome que ia aparecer o lead e eu levava o card até lá".
      Casa por PEDAÇO do nome, sem acento e sem caixa, pela mesma normalização que o
@@ -32516,22 +32542,6 @@ function pl6DadosFinal(rep) {
     avisoBg: s.sel ? '#FDF3F4' : '#EAF6F1',
     avisoCor: s.sel ? '#E51A31' : '#1E9E7B',
     soltar: 'soltar',
-    /* ══ TERRITÓRIO: a contagem é de contas LIVRES no bairro ═══════════════════════════
-       "nº exato de contas livres no bairro" — então conta `livres`, e não o total do
-       grupo: bairro com 24 contas das quais 20 já estão na semana tem 4 para oferecer, e
-       mostrar 24 mandaria ele procurar o que não existe. */
-    bairros: regioes.map(function (r) {
-      const n = livres.filter(l => String(l.regiao || '') === String(r.chave)).length;
-      const on = String(s.terr || '') === String(r.chave);
-      return {
-        nome: esc(r.nome), n: String(n),
-        bg: on ? '#8E3B5C' : '#FDFEFF', cor: on ? '#FDFEFF' : '#2B3440',
-        borda: on ? '#8E3B5C' : '#E2E6EE', nCor: on ? '#F2D9E4' : '#8E3B5C',
-        on: r.chave,
-        /* a busca filtra por este atributo, no DOM, sem redesenhar */
-        chave: pl6ChaveBairro(r.nome)
-      };
-    }).filter(b => Number(b.n) > 0 || String(s.terr || '') === '').sort((a, b) => Number(b.n) - Number(a.n)),
     dias: dias.map(function (d, di) {
       const col = grade[di] || [];
       /* ══ A AGENDA DO DIA, EM ORDEM DE HORA ═══════════════════════════════════════
@@ -32608,11 +32618,24 @@ function pl6DadosFinal(rep) {
             : (it.tipo === 'bloqueado' ? 'compromisso fora da rua'
               : [it.lead.etapa || (it.lead.tipo === 'n' ? 'sem negócio' : null),
                 it.lead.regiaoNome || null].filter(Boolean).join(' · '));
+          /* ══ O SELO DO PROPÓSITO (23/09/26, prancha v7) ═══════════════════════════
+             Vem do slot quando ele foi planejado depois de hoje; quando não, DERIVA da
+             conta — a semana montada ontem ganha as etiquetas sem tocar no banco.
+             Bloqueio não tem propósito: é compromisso fora da rua, e inventar um selo
+             para ele diria que o dentista faz parte do funil. */
+          const propId = it.p || (it.lead && typeof pl6PropositoDoLead === 'function'
+            ? pl6PropositoDoLead(it.lead) : null);
+          const prop = (propId && it.tipo !== 'bloqueado' && typeof pl6Proposito === 'function')
+            ? pl6Proposito(propId) : null;
           return {
             hora: esc(it.hora || 'sem hora'),
             nome: esc(nome), sub: esc(sub),
-            etCor: bl ? bl.cor
-              : (it.tipo === 'bloqueado' ? '#B4AC9C' : pfEtCor(it.lead ? it.lead.etapa : '')),
+            selo: prop ? esc(prop.etiqueta) : '',
+            seloCor: prop ? prop.selo : '', seloBg: prop ? prop.seloBg : '',
+            /* O TRILHO PASSA A SER A COR DO PROPÓSITO, que é a linguagem que a faixa
+               de cima ensina. A etapa não se perdeu: ela continua escrita no `sub`. */
+            etCor: prop ? prop.cor : (bl ? bl.cor
+              : (it.tipo === 'bloqueado' ? '#B4AC9C' : pfEtCor(it.lead ? it.lead.etapa : ''))),
             cardBorda: movendo ? '#E51A31' : '#E7E3DA',
             mover: 'mover:' + di + ':' + it.si,
             rm: di + '.' + it.si,
@@ -33086,7 +33109,10 @@ function pl6TelaFinalHTML(d) {
         <span style="flex:none;width:3px;background:${sl.etCor};"></span>
         <button type="button" data-pl6-acao="${sl.mover}" title="clique pra mover de dia/horário" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px 8px 9px;cursor:pointer;">
           <span style="display:flex;align-items:center;gap:6px;min-width:0;"><b style="flex:none;font:900 10.5px 'Archivo',sans-serif;color:#FFFDF8;background:#2B3440;border-radius:999px;padding:3px 8px;font-variant-numeric:tabular-nums;">${sl.hora}</b><b style="font:800 12px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.nome}</b></span>
-          <span style="display:block;font:700 9.5px 'Manrope',sans-serif;color:#7A8494;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.sub}</span>
+          <span style="display:flex;align-items:center;gap:5px;margin-top:3px;min-width:0;">
+            ${sl.selo ? `<b style="flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.07em;color:${sl.seloCor};background:${sl.seloBg};border-radius:4px;padding:2px 5px;">${sl.selo}</b>` : ''}
+            <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.sub}</span>
+          </span>
         </button>
         <button type="button" data-pl6-remover="${sl.rm}" data-pl6-so-icone="1" title="tirar da agenda — volta pra munição" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px 'Manrope',sans-serif;cursor:pointer;padding:0;">✕</button>
       </div>`).join('');
@@ -33136,8 +33162,6 @@ function pl6TelaFinalHTML(d) {
       </span>
     </button>`).join('');
 
-  const bairrosHTML = (d.bairros || []).map(b => `
-    <button type="button" data-pl6-terr="${b.on}" data-nome="${b.chave}" style="display:inline-flex;align-items:center;gap:6px;border:1px solid ${b.borda};border-radius:999px;background:${b.bg};padding:6px 13px;font:800 10.5px 'Manrope',sans-serif;color:${b.cor};cursor:pointer;white-space:nowrap;">${b.nome}<b style="font:900 10.5px 'Archivo',sans-serif;color:${b.nCor};font-variant-numeric:tabular-nums;">${b.n}</b></button>`).join('');
 
   /* AS FAIXAS DENTRO DO PROPÓSITO — cada uma com a contagem, para o clique nunca ser
      no escuro. */
@@ -33230,17 +33254,9 @@ function pl6TelaFinalHTML(d) {
 
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:stretch;">
       <div style="padding:18px 22px 24px;min-width:0;">
-        <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start;">${diasHTML}</div>
+        <div data-pl6-grade-semana="1" style="display:grid;gap:10px;align-items:start;">${diasHTML}</div>
         <span style="display:block;font:700 10px/1.6 'Manrope',sans-serif;color:#7A8494;margin-top:12px;">▸ agendou aqui = o lead entra <b style="color:#E51A31;">automaticamente na sua Daily</b> do dia, com hora — sem redigitar nada · ✕ devolve pra munição · clique num card agendado pra movê-lo de horário · os dois blocos da munição (prospecção de rua e visita de relacionamento) ocupam hora do mesmo jeito e aparecem na Daily junto das visitas</span>
 
-        <div style="margin-top:14px;background:#FBFAF6;border:1px solid #E7E3DA;border-radius:12px;padding:12px 16px;">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:9px;">
-            <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8E3B5C;">Território — bairros mapeados</span>
-            <input type="text" data-pl6-busca-bairro="1" placeholder="buscar bairro ou região…" style="flex:1;min-width:200px;max-width:320px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 13px;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;outline:none;">
-            <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">clique num bairro → filtra a munição · nº exato de contas livres no bairro</span>
-          </div>
-          <div data-pl6-bairros="1" style="display:flex;gap:6px;flex-wrap:wrap;">${bairrosHTML}</div>
-        </div>
       </div>
 
       <div data-pl6-municao="1" style="border-left:1px solid #E7E3DA;background:#FBFAF6;padding:18px 18px 20px;min-width:0;overflow:auto;max-height:min(1200px, calc(100vh - 120px));">
@@ -33437,7 +33453,16 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
        escrevem "sem hora". */
     const horaEscolhida = gk.hora && /^\d{1,2}:\d{2}$/.test(String(gk.hora)) ? String(gk.hora) : null;
     const hora = horaEscolhida || pl6HoraDaFaixa(si) || PL6_HORAS[0];
-    const valorDoSlot = horaEscolhida ? { id: l.id, hora: horaEscolhida } : l.id;
+    /* ══ O PROPÓSITO VAI JUNTO (23/09/26) ═════════════════════════════════════════
+       Vem da CONTA, e não da faixa que estava aberta: a conta pode ter chegado aqui
+       pela busca por nome, pelo arraste ou pela Minha Daily, onde não há faixa nenhuma.
+       O slot passa a ser objeto mesmo sem hora escolhida — as duas formas já convivem
+       no banco e todo leitor desta casa lê `typeof object ? v.id : v`. */
+    const propDoSlot = (typeof pl6PropositoDoLead === 'function') ? pl6PropositoDoLead(l) : null;
+    const valorDoSlot = (horaEscolhida || propDoSlot)
+      ? Object.assign({ id: l.id }, horaEscolhida ? { hora: horaEscolhida } : {},
+        propDoSlot ? { p: propDoSlot } : {})
+      : l.id;
 
     /* conta nova: cria o negocio ANTES de agendar. Tarefa apontando para lead que nao
        existe como negocio nao da para reabrir depois — mesma razao da Minha Daily. */
@@ -33819,15 +33844,6 @@ function pl6Ligar(box, rep) {
       setTimeout(devolverFoco, 0);
       return;
     }
-    const busca = ev.target.closest && ev.target.closest('[data-pl6-busca-bairro]');
-    if (busca) {
-      const q = pl6ChaveBairro(busca.value || '');
-      const caixa = box.querySelector('[data-pl6-bairros]');
-      if (!caixa) return;
-      caixa.querySelectorAll('[data-pl6-terr]').forEach(function (o) {
-        o.hidden = !!q && (o.getAttribute('data-nome') || '').indexOf(q) < 0;
-      });
-    }
   });
 
   /* O campo de região abre a lista ao focar e a fecha ao sair — com o atraso que deixa o
@@ -33873,7 +33889,6 @@ function pl6Ligar(box, rep) {
       || ev.target.closest('[data-pl6-end-gravar]')
       || ev.target.closest('[data-pl6-fi-fechar]')
       || ev.target.closest('[data-pl6-regiao]')
-      || ev.target.closest('[data-pl6-terr]')
       || ev.target.closest('[data-pl6-novo-lead]')
       || ev.target.closest('[data-pl6-novo-fechar]')
       || ev.target.closest('[data-pl6-novo-fonte]')
@@ -33915,12 +33930,6 @@ function pl6Ligar(box, rep) {
     }
 
 
-    /* ── pl6Terr ── */
-    if (d.pl6Terr) {
-      pl6UI.terr = (pl6UI.terr === d.pl6Terr) ? null : d.pl6Terr;
-      pl6UI.pickerDia = null;
-      return redesenhar();
-    }
 
     /* ── pl6EndGravar ── o endereço que ele achou na rua ────────────────────────────
        GRAVA NO HUBSPOT ANTES DE REDESENHAR, como todo o resto desta tela: tela que muda
@@ -34361,8 +34370,12 @@ function pl6Ligar(box, rep) {
             s.toast = dias0[di].rot + ' está com ' + PL6_SLOTS + ' contas — tire uma para pôr outra';
             return redesenhar();
           }
+          /* O PROPÓSITO SOBREVIVE À MUDANÇA DE HORÁRIO. Remontar o slot do zero aqui
+             apagava o `p` do que já estava planejado — mover um card de terça para
+             quarta tirava a etiqueta dele, e só dessa vez. */
+          const pEra = pl6SlotProposito(era);
           g[s.sel.deDi][s.sel.deSi] = null;
-          g[di][destino] = { id: id, hora: hora };
+          g[di][destino] = Object.assign({ id: id, hora: hora }, pEra ? { p: pEra } : {});
           const nome = (s.sel.lead && s.sel.lead.nome) || 'a visita';
           const deRot = (dias0[s.sel.deDi] || {}).rot || 'o dia';
           s.sel = null; s.diaAtivo = null;
@@ -34383,7 +34396,7 @@ function pl6Ligar(box, rep) {
         if (s.sel.bloco) {
           const bl = pl6BlocoDoSlot(s.sel.bloco);
           const g = pl6GradeDoPlano();
-          g[di][destino] = { id: bl.id, hora: hora };
+          g[di][destino] = { id: bl.id, hora: hora, p: bl.id === PL6_RUA ? 'rua' : 'relac' };
           s.sel = null; s.diaAtivo = null;
           return mutar({ grade: g }, dias0[di].rot + ' ' + hora + ' · '
             + (bl.id === PL6_RUA

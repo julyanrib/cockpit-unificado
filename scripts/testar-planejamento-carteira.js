@@ -112,18 +112,20 @@ const BASE = [
 (function () {
   const r = rodarFiltro(BASE, { proposito: 'funil', terr: 'b:barra da tijuca', q: '' });
   const nomes = r.munFilt.map(function (l) { return l.nome; });
-  checar('com um bairro escolhido, a carteira inteira continua na munição',
+  /* O BAIRRO NÃO TEM MAIS PODER NENHUM SOBRE A LISTA (23/09/26). Antes ele não podia
+     esconder a carteira; agora ele não esconde nada — o bloco de Território saiu e o
+     recorte por lugar é o "onde". `terr` continua sendo passado aqui de propósito: é
+     a prova de que um estado sobrevivente não volta a filtrar pelas costas. */
+  checar('com um bairro no estado, a carteira inteira continua na munição',
     ['Na Brasa', 'Salseiro brasa e lenha', 'Coliseu Taquara', 'Aloha']
       .every(function (n) { return nomes.indexOf(n) >= 0; }),
-    'medido na produção: 235 dos 239 negócios não têm bairro, então o filtro antigo '
-      + 'apagava a carteira inteira da tela · veio ' + JSON.stringify(nomes));
+    'medido na produção: 235 dos 239 negócios não têm bairro · veio ' + JSON.stringify(nomes));
   const rn = rodarFiltro(BASE, { proposito: 'nova', terr: 'b:barra da tijuca', q: '' });
-  const nomesN = rn.munFilt.map(function (l) { return l.nome; });
-  checar('e a prospecção de OUTRO bairro sai, que é para isso que o chip serve',
-    nomesN.indexOf('Sunomono') < 0,
-    'o chip continua servindo para montar rota de rua');
-  checar('a prospecção DAQUELE bairro fica',
-    nomesN.indexOf('Portenita Restaurante') >= 0 && nomesN.indexOf('Bololo Olegario') >= 0);
+  const nomesN = rn.munFilt.map(function (l) { return l.nome; }).sort();
+  checar('e a prospecção de outro bairro TAMBÉM continua, agora que o chip saiu',
+    JSON.stringify(nomesN) === JSON.stringify(['Bololo Olegario', 'Portenita Restaurante', 'Sunomono']),
+    'o Sunomono é da Tijuca e a Barra estava escolhida: com o filtro antigo ele sumia '
+      + '· veio ' + JSON.stringify(nomesN));
 }());
 
 /* ══ 2. A BUSCA POR NOME OLHA TUDO ══════════════════════════════════════════════════
@@ -175,9 +177,11 @@ const BASE = [
   igual('e a prospecção fica no propósito dela', soNova.munFilt.map(l => l.nome).sort(),
     ['Bololo Olegario', 'Portenita Restaurante', 'Sunomono']);
 
-  /* E OS DOIS SE SOMAM, como qualquer filtro desta tela. */
-  const novaNaTijuca = rodarFiltro(BASE, { proposito: 'nova', terr: 'b:tijuca', q: '' });
-  igual('propósito e bairro se somam', novaNaTijuca.munFilt.map(l => l.nome), ['Sunomono']);
+  /* E O PROPÓSITO É O ÚNICO RECORTE QUE SOBROU no estado: o bairro não soma mais nada. */
+  const novaComTerr = rodarFiltro(BASE, { proposito: 'nova', terr: 'b:tijuca', q: '' });
+  igual('o bairro no estado não recorta nada', novaComTerr.munFilt.map(l => l.nome).sort(),
+    ['Bololo Olegario', 'Portenita Restaurante', 'Sunomono'],
+    'estado sobrevivente que ainda filtra é a pior forma de remover bloco');
 }());
 
 /* ══ 4. CRIAR LEAD ENXERGA A CARTEIRA ═══════════════════════════════════════════════ */

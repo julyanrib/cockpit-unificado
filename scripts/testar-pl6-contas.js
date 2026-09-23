@@ -452,9 +452,21 @@ console.log('');
   /* ── 5 · MOVER LIMPA A ORIGEM ────────────────────────────────────────────────────
      Sem isto a visita apareceria duas vezes na semana e a Daily do dia antigo continuaria
      com ela. */
-  checar('mover limpa a origem antes de escrever o destino',
-    /g\[s\.sel\.deDi\]\[s\.sel\.deSi\] = null;\s*\n\s*g\[di\]\[destino\] = \{ id: id, hora: hora \};/.test(ligarCod),
-    'a mesma visita em dois dias, e a Daily do dia antigo ainda a mostrando');
+  /* A REGRA É A ORDEM, e não as duas linhas coladas: limpar a origem ANTES de escrever
+     o destino. Entre elas hoje há a leitura do propósito do slot antigo, e a versão
+     cravada nas duas linhas adjacentes reprovou isso. */
+  (function () {
+    const iLimpa = ligarCod.indexOf('g[s.sel.deDi][s.sel.deSi] = null;');
+    const iEscreve = ligarCod.indexOf('g[di][destino] =');
+    checar('mover limpa a origem antes de escrever o destino',
+      iLimpa > 0 && iEscreve > iLimpa,
+      'a mesma visita em dois dias, e a Daily do dia antigo ainda a mostrando');
+    checar('e o que ele já tinha planejado não se perde na mudança de horário',
+      /const pEra = pl6SlotProposito\(era\);/.test(ligarCod)
+        && /g\[di\]\[destino\] = Object\.assign\(\{ id: id, hora: hora \}, pEra/.test(ligarCod),
+      'remontar o slot do zero apagava o propósito: mover o card de terça para quarta'
+      + ' tirava a etiqueta dele, e só dessa vez');
+  }());
 
   checar('e o toast diz que a tarefa do CRM ficou na data antiga',
     /a tarefa no HubSpot ficou na data antiga/.test(ligar),
@@ -486,36 +498,33 @@ console.log('');
     /if \(String\(antes \|\| ''\) === String\(nova\)\) return;/.test(codigo),
     'sem esta comparação é um upsert por cada vez que ele clica em qualquer outra coisa');
 
-  /* ── 8 · O TERRITÓRIO CONTA O QUE DÁ PARA USAR ───────────────────────────────────
-     "nº exato de contas livres no bairro". Bairro com 24 contas das quais 20 já estão na
-     semana tem 4 para oferecer. */
-  checar('o chip de bairro conta contas LIVRES',
-    /const n = livres\.filter\(l => String\(l\.regiao \|\| ''\) === String\(r\.chave\)\)\.length;/.test(dadosCod),
-    'contar o grupo inteiro manda ele procurar o que já está agendado');
+  /* ── 8 · O BAIRRO SAIU DA MUNIÇÃO, E SAIU INTEIRO (23/09/26) ─────────────────────
+     O bloco "Território — bairros mapeados" era a pergunta ONDE feita duas vezes, ao
+     lado do "onde ▾" da v7 — e o que ele mostrava não eram bairros: na produção a
+     `regiao` do negócio vem escrita como rua ("Rua Fernandes Vieira e região") ou como
+     CEP. As quatro checagens que mediam aquele filtro viram estas três.
 
-  /* A REGRA É A COMPARAÇÃO, e não a linha inteira: o bairro do lead casa com o chip por
-     IGUALDADE de chave. `indexOf` acharia "Centro" dentro de "Centro-Sul". A linha em si
-     mudou em 23/09 para poupar a carteira (que não tem bairro nenhum em 235 dos 239
-     negócios), e a guarda antiga reprovou o desenho novo sem que a regra tivesse caído. */
-  const porBairroCod = (function () {
-    const i = dadosCod.indexOf('const porBairro = ');
-    if (i < 0) return '';
-    const j = dadosCod.indexOf(';', i);
-    return j < 0 ? '' : dadosCod.slice(i, j);
-  }());
-  checar('o filtro do bairro existe e é uma peneira sobre a origem',
-    porBairroCod.length > 0 && /daOrigem\.filter\(/.test(porBairroCod),
-    'sem esta âncora as duas checagens abaixo medem o vazio');
-  checar('e o filtro do bairro compara pela chave de lugar, não por texto',
-    /String\(l\.regiao \|\| ''\) === String\(s\.terr\)/.test(porBairroCod)
-      && !/indexOf\(/.test(porBairroCod),
-    'comparar texto acha "Centro" dentro de "Centro-Sul" e põe conta de outro bairro na lista');
-  /* E A CARTEIRA NÃO MORA EM BAIRRO NENHUM (23/09/26, Julyan: "ele não pode ficar
-     vinculado a bairro (só a carteira)"). Medido: 235 dos 239 negócios abertos sem
-     bairro — com o corte antigo, clicar num bairro apagava a carteira inteira. */
-  checar('e o chip de bairro não esconde a carteira',
-    /l\.tipo === 'c' \|\|/.test(porBairroCod),
-    'a carteira do executivo não tem bairro: filtrar por bairro a fazia desaparecer da munição');
+     A PRIMEIRA É A QUE IMPORTA: remover bloco deixando o estado, o closest ou a regra
+     de estilo para trás é como esta tela já foi derrubada três vezes — e resto de
+     estado que ainda filtra pelas costas é a pior das sobras, porque some com contas
+     sem nenhum botão na tela para desfazer. */
+  checar('nenhum resto do filtro de bairro ficou na tela',
+    tpl.indexOf('data-pl6-terr') < 0 && tpl.indexOf('data-pl6-bairros') < 0
+      && tpl.indexOf('data-pl6-busca-bairro') < 0
+      && !/pl6UI\.terr\b/.test(tpl) && !/\bs\.terr\b/.test(tpl)
+      && !/verTodosTerr:/.test(tpl),
+    'estado, ouvinte ou regra de estilo sobrevivendo ao bloco é código morto que ainda age');
+
+  checar('e a munição não é mais peneirada por região',
+    /const porBairro = daOrigem;/.test(dadosCod),
+    'a carteira do executivo não tem bairro em 235 dos 239 negócios: qualquer peneira '
+      + 'por região aqui volta a esconder o que ele já tem na mão');
+
+  checar('o recorte por lugar é o "onde", e ele conhece quem não tem endereço',
+    /const ondeHTML = d\.ondeAberto/.test(tpl) && /ondeOpts:/.test(tpl)
+      && /semEnderecoTxt:/.test(tpl) && /function pl6LugarDo\(l\)/.test(tpl),
+    'sem ele, tirar o bairro deixaria a munição sem pergunta de lugar nenhuma; e é o '
+      + 'recorte por lugar que sabe dizer quantas contas não têm endereço, em vez de sumir com elas');
 
   /* ── 9 · A ORDEM DA MUNIÇÃO É A MEDIDA ───────────────────────────────────────────── */
   /* A REGRA É "A LISTA TEM ORDEM DECLARADA", E NÃO UMA LINHA DE CÓDIGO (23/09/26).
@@ -562,8 +571,14 @@ console.log('');
     'duas cópias da ordem do dia é como uma tela mostra a tarde antes da manhã e a outra'
     + ' não — e nenhuma das duas parece errada sozinha');
 
+  /* A REGRA É QUE `si` VIAJE, e não a pontuação do objeto: o slot ganhou o campo `p`
+     em 23/09 e a versão cravada no objeto inteiro reprovou. Exige `si` em TODOS os
+     ramos do leitor — bloqueio, rua, relacionamento e visita —, porque é a posição que
+     a Daily do gestor e o g14 usam para achar o mesmo compromisso na grade gravada. */
   checar('e o si viaja com o item, porque a grade gravada não se reordena',
-    /itens\.push\(\{ si: si, hora: hora, id: id, tipo: l \? 'visita' : 'orfa', lead: l \}\);/.test(leitor),
+    (leitor.match(/itens\.push\(\{ si: si,/g) || []).length
+      === (leitor.match(/itens\.push\(\{/g) || []).length
+      && (leitor.match(/itens\.push\(\{/g) || []).length >= 4,
     'reordenar a grade mudaria o que a Daily do gestor e o g14 leem por posição');
 
   /* ── 11 · CONTA FORA DA CARGA É VAGA, NÃO CARTÃO ─────────────────────────────────

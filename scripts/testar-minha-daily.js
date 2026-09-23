@@ -281,7 +281,10 @@ conferir('o bloco de relacionamento é desenhado e escutado',
 conferir('e ele existe na grade, no leitor do dia e no leitor do gestor',
   /const PL6_REL = '__rel';/.test(codigo)
     && /function pl6SlotRel\(v\)/.test(codigo)
-    && /pl6SlotRel\(v\)\) \{ itens\.push\(\{ si: si, hora: hora, tipo: 'rel' \}\)/.test(codigo)
+    /* A REGRA É QUE pl6ItensDoDia RECONHEÇA O SENTINELA e o classifique como 'rel' —
+       não a pontuação do objeto que ela empurra. O slot ganhou o campo `p` em 23/09 e
+       a versão cravada em `{ si: si, hora: hora, tipo: 'rel' }` reprovou. */
+    && /pl6SlotRel\(v\)\) \{ itens\.push\(\{[^}]*tipo: 'rel'/.test(codigo)
     && /origem: 'rel'/.test(codigo),
   'hora reservada que uma das telas não reconhece é buraco na leitura do gestor');
 
@@ -486,7 +489,11 @@ conferir('o piso de 44px cita os atributos que a tela nova emite',
 
   /* ── 4 · BLOCO NÃO GERA TAREFA ÓRFÃ NO CRM ───────────────────────────────────────── */
   conferir('o bloco grava direto na grade, sem passar pelo criador de tarefa',
-    /if \(s\.sel\.bloco\) \{[^}]{0,400}?g\[di\]\[destino\] = \{ id: bl\.id, hora: hora \}/.test(pl6Fi),
+    /* A REGRA É O CAMINHO: dentro do ramo do bloco, a escrita é na grade e NÃO há
+       chamada ao criador de tarefa. Cravar o objeto inteiro fez esta checagem reprovar
+       quando o slot ganhou o propósito em 23/09. */
+    /if \(s\.sel\.bloco\) \{[\s\S]{0,400}?g\[di\]\[destino\] = \{ id: bl\.id,/.test(pl6Fi)
+      && !/if \(s\.sel\.bloco\) \{[\s\S]{0,400}?AgendarNoSlot/.test(pl6Fi),
     'pl6AgendarNoSlot cria a TAREFA pendurada no negócio, e bloco não tem negócio:'
     + ' tarefa sem deal é tarefa órfã no HubSpot');
 
