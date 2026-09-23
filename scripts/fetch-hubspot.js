@@ -242,6 +242,171 @@ const STAGE_LABELS = {
 };
 
 // SLA (dias máximos esperados) por etapa — confirmados com Julyan.
+/* ══ PLANEJAMENTO v7 · OS PROPÓSITOS DO EXECUTIVO (23/09/26) ═══════════════════════
+   A tela passou a perguntar "o que você vai fazer?" antes de "qual conta?". Estas são
+   as três listas que saem do HubSpot, por executivo, já com faixa, contagem, status e
+   o agrupamento de lugar. O front não recalcula: duas contas da mesma pergunta é como
+   as telas passam a discordar, e esta base já pagou por isso mais de uma vez.
+
+   O QUE NÃO ESTÁ AQUI, e é declarado no payload para ninguém procurar:
+     · `nova`  — contas-alvo vivem em leads_prospeccao (Supabase), lida pelo NAVEGADOR
+                 com a sessão do usuário. O robô não tem acesso;
+     · `rua`   — não tem lista por definição: é sair e bater porta.
+   ══════════════════════════════════════════════════════════════════════════════════ */
+const PLAN_ETAPAS_BASE = [STAGES.ganho1, STAGES.ganho2];
+
+/* A GRAFIA NORMALIZADA É A CHAVE; a grafia canônica é o rótulo. "São Paulo" e
+   "SÃO PAULO" são o mesmo lugar e viravam dois chips — medido na produção. */
+function planChaveLugar(txt) {
+  return String(txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/* ONDE: cidade primeiro, bairro dentro dela, CEP como último recurso — e quem não tem
+   NADA fica num balde próprio, que a tela é obrigada a mostrar. Medido hoje: 126 dos
+   243 negócios abertos não têm bairro, nem cidade, nem CEP. Some-los em silêncio
+   esconderia metade da carteira. */
+function planLugarDo(l) {
+  const cidade = String(l.cidade || '').trim();
+  const bairro = String(l.bairro || '').trim();
+  const cep = String(l.cep || '').replace(/\D/g, '').slice(0, 5);
+  if (cidade) {
+    return { chave: 'cidade:' + planChaveLugar(cidade), rotulo: cidade,
+      bairro: bairro ? { chave: 'bairro:' + planChaveLugar(cidade) + '|' + planChaveLugar(bairro), rotulo: bairro } : null };
+  }
+  if (bairro) return { chave: 'bairro:' + planChaveLugar(bairro), rotulo: bairro, bairro: null };
+  if (cep) return { chave: 'cep:' + cep, rotulo: 'CEP ' + cep, bairro: null };
+  return { chave: null, rotulo: null, bairro: null };
+}
+
+function planItem(l, proposito, agoraMs) {
+  const lugar = planLugarDo(l);
+  return {
+    id: String(l.id),
+    nome: l.name || l.dealname || 'Sem nome',
+    proposito: proposito,
+    stageId: String(l.stageId || ''),
+    etapa: l.stage || '',
+    dias: l.dias != null ? Number(l.dias) : null,
+    mrr: Number(l.mrr || l.valor_de_mrr || 0) || 0,
+    valor: Number(l.valor || 0) || 0,
+    slaBreach: !!l.slaBreach,
+    aguardando: !!l.aguardando,
+    proximaAtividade: l.proximaAtividade || null,
+    ultimaInteracao: l.ultimaInteracao || null,
+    lugarChave: lugar.chave,
+    lugarRotulo: lugar.rotulo,
+    bairroChave: lugar.bairro ? lugar.bairro.chave : null,
+    bairroRotulo: lugar.bairro ? lugar.bairro.rotulo : null,
+    semEndereco: !lugar.chave
+  };
+}
+
+/* QUANTOS DIAS DE ATRASO tem o próximo passo. Negativo = ainda vai vencer; 0 = hoje. */
+function planAtrasoDias(iso, agoraMs) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const diaAlvo = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const hoje = new Date(agoraMs - 3 * 3600e3);
+  const diaHoje = Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate());
+  return Math.round((diaHoje - diaAlvo) / 864e5);
+}
+
+function planejamentoPorProposito(funilLeads) {
+  const agoraMs = Date.now();
+  const porOwner = {};
+  const pega = function (ownerId) {
+    if (!porOwner[ownerId]) {
+      porOwner[ownerId] = { cobrar: [], relac: [], follow: [] };
+    }
+    return porOwner[ownerId];
+  };
+
+  Object.entries(funilLeads || {}).forEach(function (par) {
+    const stageId = String(par[0]);
+    (par[1] || []).forEach(function (l) {
+      const ownerId = String(l.ownerId || '');
+      if (!ownerId) return;
+      const balde = pega(ownerId);
+
+      /* COBRAR: quem está em Ag. Pagamento esperando o dinheiro entrar. */
+      if (stageId === String(STAGES.agPagamento)) {
+        balde.cobrar.push(planItem({ ...l, stageId: stageId }, 'cobrar', agoraMs));
+        return;
+      }
+
+      /* RELACIONAMENTO: cliente da base — quem já fechou. */
+      if (PLAN_ETAPAS_BASE.indexOf(stageId) >= 0) {
+        balde.relac.push(planItem({ ...l, stageId: stageId }, 'relac', agoraMs));
+        return;
+      }
+
+      /* FOLLOW-UP: negócio aberto com próximo passo datado VENCIDO ou para hoje.
+         Escolha do Julyan em 23/09. A data futura NÃO entra: aquilo é compromisso em
+         pé, e o dia dele não começa por quem já tem data combinada. */
+      if (OPEN_STAGES.indexOf(stageId) < 0) return;
+      const alvo = l.proximaAtividade
+        || (Array.isArray(l.tarefas) && l.tarefas.length ? l.tarefas.map(function (x) { return x && x.timestamp; }).filter(Boolean).sort().pop() : null);
+      const atraso = planAtrasoDias(alvo, agoraMs);
+      if (atraso == null || atraso < 0) return;
+      const it = planItem({ ...l, stageId: stageId }, 'follow', agoraMs);
+      it.atrasoDias = atraso;
+      it.passoEra = alvo;
+      balde.follow.push(it);
+    });
+  });
+
+  /* AS FAIXAS. A da cobrança sai de SLA_DAYS — a régua do Ag. Pagamento é 2 dias, e
+     não os 7 que a prancha supôs (7 é a da Negociação). */
+  const reguaPgto = SLA_DAYS[STAGES.agPagamento] || 2;
+  const saida = {};
+  Object.keys(porOwner).forEach(function (ownerId) {
+    const b = porOwner[ownerId];
+    b.cobrar.sort(function (x, y) { return (y.dias || 0) - (x.dias || 0); });
+    b.relac.sort(function (x, y) { return (y.dias || 0) - (x.dias || 0); });
+    b.follow.sort(function (x, y) { return (y.atrasoDias || 0) - (x.atrasoDias || 0); });
+    const conta = function (lista, f) { return lista.filter(f).length; };
+    saida[ownerId] = {
+      cobrar: {
+        status: 'ok', total: b.cobrar.length, itens: b.cobrar, regua: reguaPgto,
+        faixas: [
+          { id: 'todos', rot: 'todos', n: b.cobrar.length },
+          { id: 'acima', rot: 'acima da régua (>' + reguaPgto + 'd)', n: conta(b.cobrar, function (x) { return (x.dias || 0) > reguaPgto; }) },
+          { id: 'dentro', rot: 'dentro da régua', n: conta(b.cobrar, function (x) { return (x.dias || 0) <= reguaPgto; }) }
+        ]
+      },
+      relac: {
+        status: 'ok', total: b.relac.length, itens: b.relac,
+        faixas: [
+          { id: 'todos', rot: 'todos', n: b.relac.length },
+          { id: 'ganho', rot: 'Ganho', n: conta(b.relac, function (x) { return x.stageId === String(STAGES.ganho1); }) },
+          { id: 'onboarding', rot: 'Onboarding', n: conta(b.relac, function (x) { return x.stageId === String(STAGES.ganho2); }) }
+        ]
+      },
+      follow: {
+        status: 'ok', total: b.follow.length, itens: b.follow,
+        faixas: [
+          { id: 'todos', rot: 'todos', n: b.follow.length },
+          { id: '15+', rot: '15d+', n: conta(b.follow, function (x) { return x.atrasoDias >= 15; }) },
+          { id: '8-14', rot: '8–14d', n: conta(b.follow, function (x) { return x.atrasoDias >= 8 && x.atrasoDias <= 14; }) },
+          { id: '1-7', rot: '1–7d', n: conta(b.follow, function (x) { return x.atrasoDias >= 1 && x.atrasoDias <= 7; }) },
+          { id: 'hoje', rot: 'para hoje', n: conta(b.follow, function (x) { return x.atrasoDias === 0; }) }
+        ]
+      }
+    };
+  });
+
+  return {
+    lidoEm: new Date(agoraMs).toISOString(),
+    reguaCobranca: reguaPgto,
+    porOwner: saida,
+    /* DECLARADO, E NÃO IMPLÍCITO: quem procurar `nova` aqui tem de achar a explicação,
+       não o silêncio. */
+    naoCalculadoAqui: { nova: 'leads_prospeccao é do Supabase e só o navegador lê', rua: 'não tem lista: é sair e bater porta' }
+  };
+}
+
 const SLA_DAYS = {
   [STAGES.prospeccao]: 5,
   [STAGES.visita]: 5,
@@ -2694,6 +2859,10 @@ async function main() {
       labels: STAGE_LABELS
     },
     funilLeads,
+    /* ══ PLANEJAMENTO v7 — OS PROPÓSITOS (23/09/26) ═══════════════════════════════
+       Ver planejamentoPorProposito(), logo acima do payload. Três propósitos saem
+       daqui; `nova` fica no navegador porque leads_prospeccao é do Supabase. */
+    planejamento: planejamentoPorProposito(funilLeads),
     /* A JANELA DO GANHO, como as outras duas: a tela diz DESDE QUANDO a coluna mostra,
        em vez de fingir uma régua de SLA que não existe para venda fechada. */
     ganhoVisivel: {
