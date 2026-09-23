@@ -21168,16 +21168,46 @@ async function pl6CriarLead(rep, campos) {
 
   const chave = (typeof prospeccaoNormalizarTexto === 'function')
     ? prospeccaoNormalizarTexto(nome) : nome.toLowerCase().trim();
-  const jaTem = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
-    .filter(function (l) {
-      if (String(l.responsavel_owner_id || '') !== String(rep.ownerId)) return false;
-      const k = (typeof prospeccaoNormalizarTexto === 'function')
-        ? prospeccaoNormalizarTexto(l.nome) : String(l.nome || '').toLowerCase().trim();
-      return k === chave;
-    })[0];
+  const soDigitos = function (v) { return String(v || '').replace(/[^0-9]/g, ''); };
+  const telNovo = soDigitos(campos && campos.telefone);
+  const mesmoTel = function (v) {
+    const d = soDigitos(v);
+
+    return telNovo.length >= 8 && d.length >= 8 && d.slice(-8) === telNovo.slice(-8);
+  };
+  const mesmoNome = function (v) {
+    const k = (typeof prospeccaoNormalizarTexto === 'function')
+      ? prospeccaoNormalizarTexto(v) : String(v || '').toLowerCase().trim();
+    return !!k && k === chave;
+  };
+
+  const candidatos = [];
+  (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
+    .forEach(function (d) {
+      candidatos.push({ nome: d.name || d.dealname, tel: d.celular || d.telefone,
+        onde: 'na sua carteira' + (d.stage ? ', em ' + d.stage : '') });
+    });
+  (Array.isArray(DATA.leadsReciclagem60) ? DATA.leadsReciclagem60 : [])
+    .filter(function (l) { return String(l.ownerId) === String(rep.ownerId); })
+    .forEach(function (l) {
+      candidatos.push({ nome: l.name || l.dealname, tel: l.celular || l.telefone,
+        onde: 'na sua reciclagem' });
+    });
+  (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
+    .filter(function (l) { return String(l.responsavel_owner_id || '') === String(rep.ownerId); })
+    .forEach(function (l) {
+      candidatos.push({ nome: l.nome, tel: l.telefone,
+        onde: 'na sua munição' + (l.bairro ? ' (' + l.bairro + ')' : '') });
+    });
+
+  const jaTem = candidatos.filter(function (c) {
+    return mesmoTel(c.tel) || mesmoNome(c.nome);
+  })[0];
   if (jaTem) {
-    return { erro: '"' + nome + '" já está na sua munição'
-      + (jaTem.bairro ? ' (' + jaTem.bairro + ')' : '') + ' — procure na lista em vez de criar de novo' };
+
+    return { erro: '"' + String(jaTem.nome || nome) + '" já está ' + jaTem.onde
+      + ' — procure pelo nome na munição em vez de criar de novo'
+      + (mesmoTel(jaTem.tel) && !mesmoNome(jaTem.nome) ? ' (casou pelo telefone)' : '') };
   }
 
   const poi = {
@@ -21474,12 +21504,13 @@ function pl6DadosFinal(rep) {
     if (filtro === 'carteira') return l.tipo === 'c';
     return l.tipo === 'n' && l.grupo === filtro;
   });
+
   const porBairro = s.terr
-    ? daOrigem.filter(l => String(l.regiao || '') === String(s.terr))
+    ? daOrigem.filter(l => l.tipo === 'c' || String(l.regiao || '') === String(s.terr))
     : daOrigem;
 
   const alvoBusca = pl6ChaveBairro(String(s.q || '').trim());
-  const munFilt = !alvoBusca ? porBairro : porBairro.filter(function (l) {
+  const munFilt = !alvoBusca ? porBairro : daOrigem.filter(function (l) {
     return pl6ChaveBairro(l.nome || '').indexOf(alvoBusca) >= 0
       || pl6ChaveBairro((l._bruto && l._bruto.bairro) || '').indexOf(alvoBusca) >= 0;
   });

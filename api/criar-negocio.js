@@ -143,6 +143,62 @@ try {
 // ACHAR ANTES DE CRIAR, pelo telefone: o mesmo restaurante visitado duas vezes nao pode
 // virar dois contatos. Busca o telefone como foi digitado E so os digitos, porque o
 // portal tem os dois formatos gravados.
+/* ══ JÁ EXISTE ESTE NEGÓCIO ABERTO PARA ESTE DONO? (23/09/26) ═══════════════════════
+   Duas buscas, porque as duas chaves erram sozinhas: o telefone acha o mesmo lugar
+   cadastrado com outro nome, e o nome acha o lugar que ninguém cadastrou telefone.
+   AS ETAPAS FECHADAS NÃO CONTAM: negócio perdido em março não pode impedir o executivo
+   de trabalhar o mesmo restaurante hoje — é exatamente isso que a reciclagem existe
+   para fazer. */
+const ETAPAS_FECHADAS = ['1396006162', '1396006163', '1396006164'];
+async function negocioJaAberto(token, ownerId, nome, telefone) {
+  const cab = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+  const digitos = String(telefone || '').replace(/[^0-9]/g, '');
+  const buscas = [];
+  if (digitos.length >= 8) {
+    /* O MESMO NÚMERO EM TRÊS FORMATOS: busca as formas que o portal guarda. */
+    [String(telefone).trim(), digitos].forEach(function (forma) {
+      buscas.push({ campo: 'celular', valor: forma, por: 'telefone' });
+    });
+  }
+  buscas.push({ campo: 'dealname', valor: String(nome || '').trim(), por: 'nome' });
+
+  for (const b of buscas) {
+    if (!b.valor) continue;
+    try {
+      const r = await fetch('https://api.hubapi.com/crm/v3/objects/deals/search', {
+        method: 'POST', headers: cab,
+        body: JSON.stringify({
+          filterGroups: [{ filters: [
+            { propertyName: b.campo, operator: 'EQ', value: b.valor },
+            { propertyName: 'hubspot_owner_id', operator: 'EQ', value: String(ownerId) },
+            { propertyName: 'pipeline', operator: 'EQ', value: PIPELINE_FIELD_SALES }
+          ] }],
+          properties: ['dealname', 'dealstage', 'celular'], limit: 10
+        })
+      });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const achado = ((d && d.results) || []).filter(function (x) {
+        const et = String((x.properties || {}).dealstage || '');
+        return ETAPAS_FECHADAS.indexOf(et) < 0;
+      })[0];
+      if (achado) {
+        return { id: String(achado.id), nome: (achado.properties || {}).dealname || null,
+          etapa: (achado.properties || {}).dealstage || null, por: b.por };
+      }
+    } catch (e) {
+      /* ══ A FALHA NÃO É SILENCIOSA (23/09/26) ═══════════════════════════════════════
+         A busca de contato desta mesma rota engolia o erro e seguia criando — sem log,
+         sem rastro. Foi assim que o contato do Salseiro virou TRÊS registros com o
+         mesmo telefone e ninguém soube por quê. Aqui a falha aparece no log da Vercel,
+         e a criação segue: recusar por causa de uma busca que caiu deixaria o executivo
+         sem conseguir cadastrar na rua. */
+      console.error('[criar-negocio] busca de duplicado falhou (' + b.por + '):', e && e.message);
+    }
+  }
+  return null;
+}
+
 async function acharOuCriarContato(token, nome, telefone) {
   const cab = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
   const digitos = String(telefone || '').replace(/[^0-9]/g, '');
@@ -272,6 +328,28 @@ module.exports = async function handler(req, res) {
   // atribuir a qualquer executivo. (Antes qualquer sessão podia criar em nome de qualquer um.)
   if (usuario.role !== 'manager' && String(ownerId) !== String(usuario.ownerId)) {
     return res.status(403).json({ erro: 'Executivo só pode criar negócio atribuído a si mesmo — peça ao gestor para atribuir a outro dono.' });
+  }
+
+  /* ══ NÃO CRIA O QUE JÁ ESTÁ ABERTO NA CARTEIRA DELE (23/09/26) ════════════════════
+     Julyan: "se o lead já foi criado e está na carteira, NÃO PODE CRIAR DE NOVO E
+     DUPLICAR". Medido: 7 dos 19 pares duplicados do funil têm os DOIS lados criados
+     por esta rota.
+     A RECUSA DEVOLVE O NEGÓCIO QUE JÁ EXISTE — "já existe" sem dizer qual manda ele
+     procurar no escuro, e procurar no escuro foi o que produziu o duplicado.
+     `permitirDuplicado` é a saída para a loja de verdade que repete telefone: a tela
+     pergunta antes, ele confirma, e aí nasce. */
+  if (!req.body || req.body.permitirDuplicado !== true) {
+    const jaAberto = await negocioJaAberto(token, ownerId, nome,
+      telefone || (limpeza.propriedades && limpeza.propriedades.celular) || null);
+    if (jaAberto) {
+      return res.status(409).json({
+        erro: '"' + (jaAberto.nome || nome) + '" já está aberto na carteira deste executivo'
+          + (jaAberto.por === 'telefone' ? ' (mesmo telefone)' : '')
+          + ' — abra o negócio que existe em vez de criar outro.',
+        duplicado: true,
+        jaExiste: { id: jaAberto.id, nome: jaAberto.nome, etapa: jaAberto.etapa, por: jaAberto.por }
+      });
+    }
   }
 
   // Deal não tem campo próprio de telefone/endereço neste portal — vai tudo na descrição,
