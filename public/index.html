@@ -21082,6 +21082,8 @@ let pl6UI = {
   proposito: null, faixa: 'todos', lugar: null, ondeAberto: false, pagina: 1,
 
   rua: { regiao: '', duracao: '2h' },
+
+  motivoDe: null,
   pickerDia: null,
 
   q: '',
@@ -21108,6 +21110,215 @@ function pl6SlotId(v) {
 
   if (id === PL6_BLOQUEADO || id === PL6_RUA || id === PL6_REL) return null;
   return id;
+}
+
+async function pl6RegistrarResultado(rep, di, si, tipo, motivo, ganchos) {
+  const gk = ganchos || {};
+  const mutar = gk.mutar;
+  const redesenhar = gk.redesenhar || function () {};
+  if (typeof mutar !== 'function') {
+    console.error('pl6RegistrarResultado sem o gancho mutar — nada foi gravado.');
+    return;
+  }
+  const g = pl6GradeDoPlano();
+  const col = g[di];
+  if (!col || col[si] == null) { pl6UI.toast = 'esse compromisso saiu do plano'; return redesenhar(); }
+  const era = col[si];
+  const base = (typeof era === 'object') ? Object.assign({}, era) : { id: era };
+  if (!tipo) {
+    delete base.r;
+  } else {
+    base.r = { tipo: String(tipo) };
+    if (motivo) base.r.motivo = String(motivo);
+    base.r.em = new Date().toISOString();
+    if (rep && rep.ownerId) base.r.por = String(rep.ownerId);
+  }
+  g[di][si] = base;
+  pl6UI.motivoDe = null;
+
+  const prop = pl6SlotProposito(era) || 'funil';
+  const info = tipo ? pl6ResultadoInfo(prop, tipo) : null;
+  const nome = pl6NomeDoSlot(rep, era);
+  const frase = info ? ('✓ ' + info.diz + (motivo ? ' · ' + pl6MotivoRotulo(motivo) : '')
+    + ' · ' + nome + pl6FraseDoEfeito(info)) : 'registro apagado · ' + nome;
+  await mutar({ grade: g }, frase);
+
+  if (info) pl6AplicarEfeito(rep, info, era, gk);
+}
+
+function pl6AplicarEfeito(rep, info, slotEra, gk) {
+  const id = pl6SlotId(slotEra);
+  const redesenhar = (gk && gk.redesenhar) || function () {};
+  if (info.efeito === 'ficha' && id) {
+    if (typeof buscarLeadFunilPorId === 'function' && typeof abrirFichaLeadFunilDrawer === 'function') {
+      const l = buscarLeadFunilPorId(String(id));
+      if (l) { abrirFichaLeadFunilDrawer(l, null, null); return; }
+    }
+    pl6Ficha = pl6LeadDaRef(rep, id) || null;
+    return redesenhar();
+  }
+  if (info.efeito === 'lead') {
+
+    pl6UI.novoLead = { nome: '', bairro: '', telefone: '', fonte: 'indicacao', erro: '', salvando: false };
+    pl6UI.sel = null;
+    return redesenhar();
+  }
+  if (info.efeito === 'negocio' && id) {
+    const l = pl6LeadDaRef(rep, id);
+    if (l && l.tipo === 'n' && typeof abrirPassagemContaAlvoProFunil === 'function') {
+      abrirPassagemContaAlvoProFunil(l._bruto, function () { redesenhar(); });
+      return;
+    }
+  }
+
+}
+
+function pl6FraseDoEfeito(info) {
+  if (info.efeito === 'ficha') return ' — abri a ficha para você mover a etapa';
+  if (info.efeito === 'lead') return ' — cadastre a indicação aqui';
+  if (info.efeito === 'negocio') return ' — abrindo a criação do negócio';
+  if (info.efeito === 'nota') return ' — registrado no plano';
+  return '';
+}
+
+function pl6TipoRuimDoSlot(di, si) {
+  const g = pl6GradeDoPlano();
+  const prop = pl6SlotProposito((g[di] || [])[si]) || 'funil';
+  const ruim = pl6ResultadosDe(prop).filter(function (o) { return o.ruim; })[0];
+  return ruim ? ruim.id : 'nao_rolou';
+}
+
+function pl6NomeDoSlot(rep, v) {
+  if (pl6SlotRua(v)) return 'prospecção de rua';
+  if (pl6SlotRel(v)) return 'visita de relacionamento';
+  const id = pl6SlotId(v);
+  const l = id ? pl6LeadDaRef(rep, id) : null;
+  return (l && l.nome) || 'este compromisso';
+}
+
+function pl6ResultadoDoSlot(v) {
+  if (!v || typeof v !== 'object' || !v.r || typeof v.r !== 'object') return null;
+  const tipo = String(v.r.tipo || '').trim();
+  if (!tipo) return null;
+  return { tipo: tipo, motivo: v.r.motivo ? String(v.r.motivo) : null,
+    em: v.r.em || null, por: v.r.por || null };
+}
+
+function pl6HoraJaPassou(diaISO, hora) {
+  if (!diaISO) return false;
+  const agora = (typeof agendaAgora === 'function') ? agendaAgora() : null;
+  if (!agora) return false;
+  const hojeChave = agendaChave(agora);
+  const iso = String(diaISO);
+  if (iso < hojeChave) return true;
+  if (iso > hojeChave) return false;
+  if (!hora || !/^\d{1,2}:\d{2}$/.test(String(hora))) return false;
+  return String(hora).padStart(5, '0') <= agendaHhmm(agora);
+}
+
+const PL6_RESULTADOS = {
+  follow: [
+    { id: 'proposta', rot: 'proposta', bom: true, efeito: 'ficha', diz: 'proposta entregue' },
+    { id: 'avancou', rot: 'avançou', bom: true, efeito: 'ficha', diz: 'avançou de etapa' },
+    { id: 'remarcar', rot: 'remarcar', efeito: 'remarcar', diz: 'remarcado' },
+    { id: 'nao_rolou', rot: 'não rolou', ruim: true, efeito: 'motivo', diz: 'não rolou' }
+  ],
+  funil: [
+    { id: 'avancou', rot: 'avançou', bom: true, efeito: 'ficha', diz: 'avançou de etapa' },
+    { id: 'proposta', rot: 'proposta', bom: true, efeito: 'ficha', diz: 'proposta entregue' },
+    { id: 'remarcar', rot: 'remarcar', efeito: 'remarcar', diz: 'remarcado' },
+    { id: 'nao_rolou', rot: 'não rolou', ruim: true, efeito: 'motivo', diz: 'não rolou' }
+  ],
+  cobrar: [
+    { id: 'pagou', rot: 'pagou', bom: true, efeito: 'ficha', diz: 'pagou' },
+    { id: 'nova_data', rot: 'nova data', efeito: 'remarcar', diz: 'nova data combinada' },
+    { id: 'nao_rolou', rot: 'não rolou', ruim: true, efeito: 'motivo', diz: 'não rolou' }
+  ],
+  relac: [
+    { id: 'feita', rot: 'feita', bom: true, efeito: 'nota', diz: 'visita feita' },
+    { id: 'indicacao', rot: 'indicação', bom: true, efeito: 'lead', diz: 'indicação' },
+    { id: 'remarcar', rot: 'remarcar', efeito: 'remarcar', diz: 'remarcado' },
+    { id: 'nao_rolou', rot: 'não rolou', ruim: true, efeito: 'motivo', diz: 'não rolou' }
+  ],
+  nova: [
+    { id: 'virou_negocio', rot: 'virou negócio', bom: true, efeito: 'negocio', diz: 'virou negócio' },
+    { id: 'voltar_depois', rot: 'voltar depois', efeito: null, diz: 'voltar depois' },
+    { id: 'sem_interesse', rot: 'sem interesse', ruim: true, efeito: 'motivo', diz: 'sem interesse' }
+  ],
+  rua: [
+    { id: 'fui', rot: 'fui', bom: true, efeito: null, diz: 'fui' },
+    { id: 'nao_fui', rot: 'não fui', ruim: true, efeito: 'motivo', diz: 'não fui' }
+  ]
+};
+
+const PL6_MOTIVOS = [
+  { id: 'dono_ausente', rot: 'dono ausente' },
+  { id: 'fechado', rot: 'estava fechado' },
+  { id: 'sem_tempo', rot: 'sem tempo dele' },
+  { id: 'sem_interesse', rot: 'sem interesse' },
+  { id: 'outro', rot: 'outro' }
+];
+function pl6ResultadosDe(prop) {
+  return PL6_RESULTADOS[String(prop || '')] || PL6_RESULTADOS.funil;
+}
+function pl6ResultadoInfo(prop, tipo) {
+  return pl6ResultadosDe(prop).filter(function (o) { return o.id === String(tipo); })[0] || null;
+}
+function pl6MotivoRotulo(id) {
+  const m = PL6_MOTIVOS.filter(function (x) { return x.id === String(id); })[0];
+  return m ? m.rot : '';
+}
+
+function pl6CheckinsDoDia(diaISO, ownerId) {
+  if (!diaISO || typeof agendaNormalizar !== 'function' || !DATA.agenda) return [];
+  let evs = [];
+  try { evs = agendaNormalizar(DATA.agenda) || []; } catch (e) { return []; }
+  return evs.filter(function (e) {
+    if (!e || !e.registro || !e.inicio) return false;
+    if (ownerId && e.ownerId && String(e.ownerId) !== String(ownerId)) return false;
+    const d = agendaParaBRT(e.inicio);
+    return !!d && agendaChave(d) === String(diaISO);
+  });
+}
+
+function pl6EvidenciaDoSlot(it, diaISO, ownerId) {
+  const checks = pl6CheckinsDoDia(diaISO, ownerId);
+
+  if (it.tipo === 'rua') {
+    const n = pl6ChecksNaJanela(checks, it.hora, it.duracao);
+    if (n > 0) return { txt: n + (n === 1 ? ' check-in no bloco' : ' check-ins no bloco'),
+      cor: '#16775D', bg: '#EAF6F1' };
+    return pl6EvidenciaSemCheck(ownerId);
+  }
+
+  const id = String(it.id || '');
+  const meu = id ? checks.filter(function (e) { return String(e.dealId || '') === id; })[0] : null;
+  if (meu) {
+    const d = agendaParaBRT(meu.inicio);
+    return { txt: 'check-in ' + (d ? agendaHhmm(d) : '') + ' ✓', cor: '#16775D', bg: '#EAF6F1' };
+  }
+  return pl6EvidenciaSemCheck(ownerId);
+}
+
+function pl6ChecksNaJanela(checks, hora, duracao) {
+  if (!hora || !/^\d{1,2}:\d{2}$/.test(String(hora))) return checks.length;
+  const h0 = Number(String(hora).split(':')[0]);
+  const horas = Number(String(duracao || '2h').replace(/[^0-9]/g, '')) || 2;
+  return checks.filter(function (e) {
+    const d = agendaParaBRT(e.inicio);
+    if (!d) return false;
+    const hh = d.getUTCHours();
+    return hh >= h0 && hh < h0 + horas;
+  }).length;
+}
+
+function pl6EvidenciaSemCheck(ownerId) {
+  const fila = (typeof filaPwaResumo === 'function') ? filaPwaResumo() : null;
+  const meu = (fila && fila.porOwner) ? fila.porOwner[String(ownerId)] : null;
+  if (meu && Number(meu.pendentes) > 0) {
+    return { txt: 'check-in na fila do app — não subiu', cor: '#8A6516', bg: '#FBF3E6' };
+  }
+  return { txt: 'sem check-in', cor: '#B4AC9C', bg: 'transparent' };
 }
 
 function pl6AcimaDaRegua(l) {
@@ -21249,13 +21460,17 @@ function pl6ItensDoDia(coluna, porId) {
     const hora = pl6SlotHora(v, si);
 
     const p = pl6SlotProposito(v);
-    if (pl6SlotBloqueado(v)) { itens.push({ si: si, hora: hora, tipo: 'bloqueado', p: p }); continue; }
-    if (pl6SlotRua(v)) { itens.push({ si: si, hora: hora, tipo: 'rua', p: 'rua' }); continue; }
-    if (pl6SlotRel(v)) { itens.push({ si: si, hora: hora, tipo: 'rel', p: 'relac' }); continue; }
+
+    const r = pl6ResultadoDoSlot(v);
+    const dur = (v && typeof v === 'object' && v.duracao) ? String(v.duracao) : null;
+    if (pl6SlotBloqueado(v)) { itens.push({ si: si, hora: hora, tipo: 'bloqueado', p: p, r: r }); continue; }
+    if (pl6SlotRua(v)) { itens.push({ si: si, hora: hora, tipo: 'rua', p: 'rua', r: r, duracao: dur,
+      regiao: (v && typeof v === 'object' && v.regiao) ? String(v.regiao) : null }); continue; }
+    if (pl6SlotRel(v)) { itens.push({ si: si, hora: hora, tipo: 'rel', p: 'relac', r: r }); continue; }
     const id = pl6SlotId(v);
     if (!id) continue;
     const l = porId ? (porId.get(id) || null) : null;
-    itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l, p: p });
+    itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l, p: p, r: r });
   }
 
   itens.sort(pl6PorHora);
@@ -21640,6 +21855,39 @@ function pfTag(l) {
   return PF_TAGS[l.grupo] || PF_TAGS.casa;
 }
 
+function pl6RitmoDoDia(grade, dias, ownerId) {
+  const agora = (typeof agendaAgora === 'function') ? agendaAgora() : null;
+  const hojeChave = agora ? agendaChave(agora) : null;
+  let passados = 0, registrados = 0;
+  const pendentes = [];
+  (dias || []).forEach(function (d, di) {
+    const col = (grade || [])[di] || [];
+    const itens = (typeof pl6ItensDoDia === 'function') ? pl6ItensDoDia(col, null) : [];
+    itens.forEach(function (it) {
+      if (it.tipo === 'bloqueado') return;
+      if (!pl6HoraJaPassou(d.iso, it.hora)) return;
+      const temR = !!it.r;
+      if (d.iso === hojeChave) { passados += 1; if (temR) registrados += 1; }
+      else if (d.iso < hojeChave && !temR) pendentes.push({ dia: d.rot, si: it.si, di: di });
+    });
+  });
+  const checks = hojeChave ? pl6CheckinsDoDia(hojeChave, ownerId) : [];
+  let ultimo = null;
+  checks.forEach(function (e) {
+    const dd = agendaParaBRT(e.inicio);
+    if (!dd) return;
+    const h = agendaHhmm(dd);
+    if (!ultimo || h > ultimo) ultimo = h;
+  });
+  return {
+    passados: passados, registrados: registrados,
+    esperando: Math.max(0, passados - registrados),
+    checkins: checks.length, ultimoCheckin: ultimo,
+    pendentes: pendentes,
+    agoraTxt: agora ? agendaHhmm(agora) : ''
+  };
+}
+
 function pl6DadosFinal(rep) {
   const s = pl6UI;
   const dias = pl6Dias(pl6SegundaEmFoco());
@@ -21655,6 +21903,8 @@ function pl6DadosFinal(rep) {
   const naGrade = grade.flat().map(pl6SlotId).filter(Boolean);
   const livres = todos.filter(l => naGrade.indexOf(l.id) < 0);
   const agendadas = naGrade.length;
+
+  const ritmo = pl6RitmoDoDia(grade, dias, rep && rep.ownerId);
   const diasCobertos = grade.filter(col => col.some(v => pl6SlotId(v))).length;
 
   const comProposito = livres.map(function (l) {
@@ -21817,11 +22067,29 @@ function pl6DadosFinal(rep) {
       + '. A sua Daily de hoje continua lendo a semana atual.'),
     manchete: esc(livres.length + ' contas na munição — escolha a conta, escolha o dia e a'
       + ' HORA que você quiser: a semana é sua.'),
+
     kpis: [
       { rot: 'Visitas agendadas', v: String(agendadas), cor: agendadas ? '#1E9E7B' : '#B4AC9C' },
       { rot: 'Dias cobertos', v: diasCobertos + '/5', cor: '#2B3440' },
-      { rot: 'Munição', v: String(livres.length), cor: '#E51A31' }
+      { rot: 'Hoje', v: ritmo.passados ? (ritmo.registrados + '/' + ritmo.passados) : '—',
+        cor: !ritmo.passados ? '#B4AC9C' : (ritmo.esperando ? '#E51A31' : '#1E9E7B'),
+        sub: !ritmo.passados ? 'nada passou ainda'
+          : (ritmo.esperando ? 'registrados · ' + ritmo.esperando + ' esperando'
+            : 'registrados · tudo em dia') }
     ],
+
+    hojeTxt: esc(ritmo.passados
+      ? 'Hoje ' + ritmo.agoraTxt + ' — ' + ritmo.registrados + ' de ' + ritmo.passados + ' registrados'
+      : 'Hoje ' + ritmo.agoraTxt + ' — nenhum compromisso venceu ainda'),
+    hojeCheck: esc(ritmo.checkins
+      ? ritmo.checkins + (ritmo.checkins === 1 ? ' check-in' : ' check-ins') + ' do app de campo'
+        + (ritmo.ultimoCheckin ? ' (último ' + ritmo.ultimoCheckin + ')' : '')
+      : 'nenhum check-in do app de campo hoje'),
+    temPend: ritmo.pendentes.length > 0,
+    pendTxt: esc(ritmo.pendentes.length
+      ? ritmo.pendentes.length + ' de ' + [...new Set(ritmo.pendentes.map(function (p) { return p.dia; }))].join(' e ')
+        + ' sem registro'
+      : ''),
 
     promessa: pl6PromessaFinal(),
     promessaSelo: esc(pl6PromessaSelo()),
@@ -21898,15 +22166,50 @@ function pl6DadosFinal(rep) {
             ? pl6PropositoDoLead(it.lead) : null);
           const prop = (propId && it.tipo !== 'bloqueado' && typeof pl6Proposito === 'function')
             ? pl6Proposito(propId) : null;
+
+          const passou = it.tipo !== 'bloqueado' && pl6HoraJaPassou(d.iso, it.hora);
+          const reg = it.r || null;
+          const perg = passou && !reg;
+          const chave = di + ':' + it.si;
+          const propId2 = propId || 'funil';
+          const infoReg = reg ? pl6ResultadoInfo(propId2, reg.tipo) : null;
+          const motivosAqui = perg && pl6UI.motivoDe === chave;
+          const evid = passou ? pl6EvidenciaDoSlot(it, d.iso, rep && rep.ownerId) : null;
           return {
             hora: esc(it.hora || 'sem hora'),
             nome: esc(nome), sub: esc(sub),
             selo: prop ? esc(prop.etiqueta) : '',
             seloCor: prop ? prop.selo : '', seloBg: prop ? prop.seloBg : '',
 
+            passou: passou,
+            comoFoi: perg && !motivosAqui,
+            comoFoiRot: d.iso < hojeISOPl6 ? 'FICOU SEM REGISTRO — COMO FOI?' : 'COMO FOI?',
+            opcoes: perg ? pl6ResultadosDe(propId2).map(function (o) {
+              return { rot: esc(o.rot), on: 'res:' + chave + ':' + o.id,
+                bg: o.bom ? '#EAF6F1' : '#FDFEFF',
+                cor: o.bom ? '#16775D' : (o.ruim ? '#8A3B3B' : '#2B3440'),
+                borda: o.bom ? '#CBE8DD' : '#DCE1EA' };
+            }) : [],
+            motivosAbertos: motivosAqui,
+            motivos: motivosAqui ? PL6_MOTIVOS.map(function (m) {
+              return { rot: esc(m.rot), on: 'resmot:' + chave + ':' + m.id };
+            }) : [],
+            voltarOn: 'resvoltar:' + chave,
+            registrado: !!reg,
+            regTxt: reg ? esc((infoReg ? infoReg.diz : reg.tipo)
+              + (reg.motivo ? ' · ' + pl6MotivoRotulo(reg.motivo) : '')) : '',
+            regCor: reg ? ((infoReg && infoReg.bom) ? '#16775D' : '#8A3B3B') : '',
+            regBg: reg ? ((infoReg && infoReg.bom) ? '#EAF6F1' : '#FDF3F4') : '',
+            regBorda: reg ? ((infoReg && infoReg.bom) ? '#CBE8DD' : '#F0A9B2') : '',
+            alterarOn: 'resalterar:' + chave,
+
+            evid: evid ? esc(evid.txt) : '',
+            evidCor: evid ? evid.cor : '', evidBg: evid ? evid.bg : '',
+
             etCor: prop ? prop.cor : (bl ? bl.cor
               : (it.tipo === 'bloqueado' ? '#B4AC9C' : pfEtCor(it.lead ? it.lead.etapa : ''))),
-            cardBorda: movendo ? '#E51A31' : '#E7E3DA',
+
+            cardBorda: movendo ? '#E51A31' : (perg ? '#F0A9B2' : '#E7E3DA'),
             mover: 'mover:' + di + ':' + it.si,
             rm: di + '.' + it.si,
             arraste: di + ':' + it.si
@@ -22313,14 +22616,18 @@ function pl6FichaPainelHTML(d, campos, etapas, attrFechar, attrEtapa, attrAgenda
 }
 function pl6TelaFinalHTML(d) {
   const kpisHTML = (d.kpis || []).map(k => `
-    <span><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;">${k.rot}</span><b style="font:900 28px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};letter-spacing:-.02em;">${k.v}</b></span>`).join('');
+    <span><span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#7A8494;">${k.rot}</span><b style="font:900 28px 'Archivo',sans-serif;font-variant-numeric:tabular-nums;color:${k.cor};letter-spacing:-.02em;">${k.v}</b>${k.sub ? `<span style="display:block;font:700 9px 'Manrope',sans-serif;color:#7A8494;">${esc(k.sub)}</span>` : ''}</span>`).join('');
 
   const promessaHTML = (d.promessa || []).map(pr => `
     <span style="display:inline-flex;align-items:baseline;gap:7px;"><b style="font:900 19px 'Archivo',sans-serif;color:#2B3440;font-variant-numeric:tabular-nums;">${pr.v}</b><span style="font:800 10.5px 'Manrope',sans-serif;color:#7A8494;">${pr.rot}</span><span style="font:700 9.5px 'Manrope',sans-serif;color:#B4AC9C;">${pr.sub}</span></span>`).join('');
 
   const diasHTML = (d.dias || []).map(dia => {
     const agendaHTML = (dia.agenda || []).map(sl => `
-      <div draggable="true" data-pl6-arraste="${sl.arraste}" style="display:flex;min-width:0;background:#FDFEFF;border:1.5px solid ${sl.cardBorda};border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);cursor:grab;">
+      <!-- ARRASTA SÓ ENQUANTO NÃO PASSOU: depois da hora, o compromisso se move por
+           "remarcar", que atualiza a tarefa no CRM. Arrastar um compromisso que já
+           aconteceu mudaria a data de uma coisa que já foi. -->
+      <div ${sl.passou ? '' : 'draggable="true"'} data-pl6-arraste="${sl.arraste}" style="background:#FDFEFF;border:1.5px solid ${sl.cardBorda};border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);cursor:${sl.passou ? 'default' : 'grab'};min-width:0;">
+      <div style="display:flex;min-width:0;">
         <span style="flex:none;width:3px;background:${sl.etCor};"></span>
         <button type="button" data-pl6-acao="${sl.mover}" title="clique pra mover de dia/horário" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px 8px 9px;cursor:pointer;">
           <span style="display:flex;align-items:center;gap:6px;min-width:0;"><b style="flex:none;font:900 10.5px 'Archivo',sans-serif;color:#FFFDF8;background:#2B3440;border-radius:999px;padding:3px 8px;font-variant-numeric:tabular-nums;">${sl.hora}</b><b style="font:800 12px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.nome}</b></span>
@@ -22329,7 +22636,38 @@ function pl6TelaFinalHTML(d) {
             <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.sub}</span>
           </span>
         </button>
-        <button type="button" data-pl6-remover="${sl.rm}" data-pl6-so-icone="1" title="tirar da agenda — volta pra munição" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px 'Manrope',sans-serif;cursor:pointer;padding:0;">✕</button>
+        <!-- DEPOIS QUE A HORA PASSOU O ✕ SAI (prancha final). Um compromisso que já
+             aconteceu não se apaga: ele sai do dia por "remarcar" ou por "não rolou",
+             que deixam registro. Apagar seria a única forma de a semana ficar limpa sem
+             ninguém saber o que houve — e é exatamente o que o gestor lê como "não
+             medido". -->
+        ${sl.passou ? '' : `<button type="button" data-pl6-remover="${sl.rm}" data-pl6-so-icone="1" title="tirar da agenda — volta pra munição" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px 'Manrope',sans-serif;cursor:pointer;padding:0;">✕</button>`}
+      </div>
+      <!-- ══ 1.5 · A EVIDÊNCIA DO APP DE CAMPO ═══════════════════════════════════
+           Uma das quatro leituras, nunca duas. "sem check-in" sai em cinza e sem fundo:
+           é ausência de informação, não acusação. -->
+      ${sl.evid ? `<span style="display:block;font:700 9px 'Manrope',sans-serif;color:${sl.evidCor};background:${sl.evidBg};border-radius:0 0 8px 8px;padding:3px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.evid}</span>` : ''}
+      <!-- ══ 1.4 · A PERGUNTA, OS MOTIVOS E O REGISTRO ═══════════════════════════ -->
+      ${sl.comoFoi ? `
+      <div style="border-top:1px solid #F0A9B2;background:#FDF7F8;padding:6px 8px 7px;">
+        <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;color:#C3152A;margin-bottom:5px;">${sl.comoFoiRot}</span>
+        <span style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${sl.opcoes.map(o => `<button type="button" data-pl6-acao="${o.on}" data-pl6-pill="1" style="border:1px solid ${o.borda};border-radius:999px;background:${o.bg};color:${o.cor};min-height:28px;padding:0 10px;font:800 9.5px 'Manrope',sans-serif;cursor:pointer;white-space:nowrap;">${o.rot}</button>`).join('')}
+        </span>
+      </div>` : ''}
+      ${sl.motivosAbertos ? `
+      <div style="border-top:1px solid #F0A9B2;background:#FDF7F8;padding:6px 8px 7px;">
+        <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.09em;color:#C3152A;margin-bottom:5px;">POR QUÊ?</span>
+        <span style="display:flex;gap:4px;flex-wrap:wrap;">
+          ${sl.motivos.map(m => `<button type="button" data-pl6-acao="${m.on}" data-pl6-pill="1" style="border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#2B3440;min-height:28px;padding:0 10px;font:800 9.5px 'Manrope',sans-serif;cursor:pointer;white-space:nowrap;">${m.rot}</button>`).join('')}
+          <button type="button" data-pl6-acao="${sl.voltarOn}" data-pl6-pill="1" style="border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;color:#7A8494;min-height:28px;padding:0 10px;font:800 9.5px 'Manrope',sans-serif;cursor:pointer;white-space:nowrap;">‹ voltar</button>
+        </span>
+      </div>` : ''}
+      ${sl.registrado ? `
+      <span style="display:flex;align-items:center;gap:7px;border-top:1px solid ${sl.regBorda};background:${sl.regBg};padding:5px 9px;">
+        <b style="min-width:0;font:800 9.5px 'Manrope',sans-serif;color:${sl.regCor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sl.regTxt}</b>
+        <button type="button" data-pl6-acao="${sl.alterarOn}" data-pl6-pill="1" style="margin-left:auto;flex:none;border:0;background:transparent;color:#7A8494;font:700 9px 'Manrope',sans-serif;text-decoration:underline;cursor:pointer;padding:0;min-height:22px;">alterar</button>
+      </span>` : ''}
       </div>`).join('');
 
     const regOptsHTML = (dia.regOpts || []).map(ro => `
@@ -22470,7 +22808,16 @@ function pl6TelaFinalHTML(d) {
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:stretch;">
       <div style="padding:18px 22px 24px;min-width:0;">
         <div data-pl6-grade-semana="1" style="display:grid;gap:10px;align-items:start;">${diasHTML}</div>
-        <span style="display:block;font:700 10px/1.6 'Manrope',sans-serif;color:#7A8494;margin-top:12px;">▸ agendou aqui = o lead entra <b style="color:#E51A31;">automaticamente na sua Daily</b> do dia, com hora — sem redigitar nada · ✕ devolve pra munição · clique num card agendado pra movê-lo de horário · os dois blocos da munição (prospecção de rua e visita de relacionamento) ocupam hora do mesmo jeito e aparecem na Daily junto das visitas</span>
+        <!-- ══ 1.6 · A LINHA DE HOJE ══════════════════════════════════════════════
+             Plano, registro e check-in lado a lado, nunca somados — e a pendência de
+             dia anterior em vermelho, porque é a única das três que cobra alguma coisa. -->
+        <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px;padding:9px 12px;background:#FBFAF6;border:1px solid #E7E3DA;border-radius:10px;">
+          <b style="font:800 10.5px 'Manrope',sans-serif;color:#2B3440;">${d.hojeTxt}</b>
+          <span style="font:700 10px 'Manrope',sans-serif;color:#7A8494;">${d.hojeCheck}</span>
+          ${d.temPend ? `<b style="font:800 10px 'Manrope',sans-serif;color:#C3152A;">${d.pendTxt}</b>` : ''}
+          <span style="margin-left:auto;font:700 9.5px 'Manrope',sans-serif;color:#B4AC9C;">o gestor lê a mesma grade: plano × registro × check-in</span>
+        </div>
+        <span style="display:block;font:700 10px/1.6 'Manrope',sans-serif;color:#7A8494;margin-top:10px;">▸ agendou aqui = o lead entra <b style="color:#E51A31;">automaticamente na sua Daily</b> do dia, com hora — sem redigitar nada · ✕ devolve pra munição enquanto a hora não passou · depois da hora, o cartão pergunta <b style="color:#C3152A;">como foi</b> e sai do dia por "remarcar" ou "não rolou" · o bloco de prospecção de rua ocupa hora do mesmo jeito</span>
 
       </div>
 
@@ -23226,6 +23573,48 @@ function pl6Ligar(box, rep) {
         return redesenhar();
       }
 
+      if (verbo === 'res') {
+        const par = String(arg).split(':');
+        const di = Number(par[0]), si = Number(par[1]), tipo = String(par[2] || '');
+        const g0 = pl6GradeDoPlano();
+        const slot = (g0[di] || [])[si];
+        const prop = pl6SlotProposito(slot) || 'funil';
+        const info = pl6ResultadoInfo(prop, tipo);
+        if (!info) { s.toast = 'não reconheci esse resultado'; return redesenhar(); }
+
+        if (info.efeito === 'motivo') {
+          s.motivoDe = di + ':' + si;
+          return redesenhar();
+        }
+
+        if (info.efeito === 'remarcar') {
+          const id = pl6SlotId(slot);
+          const lead = id ? pl6LeadDaRef(rep, id) : null;
+          s.sel = { lead: lead || { id: id, nome: 'este compromisso' },
+            deDi: di, deSi: si, remarcando: true };
+          s.diaAtivo = null; s.motivoDe = null;
+          s.toast = 'escolha o novo horário';
+          return redesenhar();
+        }
+
+        return pl6RegistrarResultado(rep, di, si, tipo, null, { mutar: mutar,
+          redesenhar: redesenhar, box: box });
+      }
+
+      if (verbo === 'resmot') {
+        const par = String(arg).split(':');
+        return pl6RegistrarResultado(rep, Number(par[0]), Number(par[1]),
+          pl6TipoRuimDoSlot(Number(par[0]), Number(par[1])), String(par[2] || ''),
+          { mutar: mutar, redesenhar: redesenhar, box: box });
+      }
+      if (verbo === 'resvoltar') { s.motivoDe = null; return redesenhar(); }
+
+      if (verbo === 'resalterar') {
+        const par = String(arg).split(':');
+        return pl6RegistrarResultado(rep, Number(par[0]), Number(par[1]), null, null,
+          { mutar: mutar, redesenhar: redesenhar, box: box });
+      }
+
       if (verbo === 'mover') {
         const par = arg.split(':');
         const di = Number(par[0]), si = Number(par[1]);
@@ -23322,9 +23711,29 @@ function pl6Ligar(box, rep) {
           g[di][destino] = Object.assign({ id: id, hora: hora }, pEra ? { p: pEra } : {});
           const nome = (s.sel.lead && s.sel.lead.nome) || 'a visita';
           const deRot = (dias0[s.sel.deDi] || {}).rot || 'o dia';
+
+          const remarcando = !!s.sel.remarcando;
+          const leadRem = s.sel.lead;
+          const mesmoDia = s.sel.deDi === di;
           s.sel = null; s.diaAtivo = null;
+          if (remarcando && leadRem && leadRem._bruto
+            && typeof criarTarefaVisitaNoHubspot === 'function') {
+            try {
+              await criarTarefaVisitaNoHubspot(leadRem._bruto, rep.ownerId, hora,
+                { silencioso: true, origem: 'planejamento' }, dias0[di].iso);
+
+              if (typeof registrarAgendamentoLocal === 'function') {
+                registrarAgendamentoLocal(leadRem._bruto, dias0[di].iso, hora, rep.ownerId);
+              }
+            } catch (e) {
+              console.error('Planejamento, remarcar a tarefa:', e && e.message);
+            }
+          }
           return mutar({ grade: g }, nome + ' · ' + deRot + ' → ' + dias0[di].rot + ' ' + hora
-            + ' · Supabase — a tarefa no HubSpot ficou na data antiga; ajuste na Agenda se já tinha sido marcada');
+            + (remarcando
+              ? (mesmoDia ? ' · tarefa do HubSpot remarcada'
+                : ' · tarefa criada no dia novo; a do dia antigo continua lá — feche na Agenda')
+              : ' · Supabase — a tarefa no HubSpot ficou na data antiga; ajuste na Agenda se já tinha sido marcada'));
         }
         const destino = primeiraVaga(di);
         if (destino < 0) {
