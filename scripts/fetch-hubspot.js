@@ -251,6 +251,38 @@ const SLA_DAYS = {
   [STAGES.agPagamento]: 2
 };
 
+/* ══ A RÉGUA NÃO PUNE QUEM COMBINOU DATA (23/09/26) ═══════════════════════════════
+   Pergunta da Kelly: ela negociou, o cliente pediu retorno em 15 dias, ela marcou o
+   próximo passo — e a régua de 7 dias da Negociação a marcava como estourada no
+   oitavo. Ela era cobrada 8 dias antes da data que ela mesma combinou.
+
+   TRÊS ESTADOS: no ritmo · combinado · travado. Combinado é fora da régua COM data
+   futura. A data compra prazo, não anistia: quando ela passa, notes_next_activity_date
+   deixa de ser futura e o negócio volta a travado no mesmo sync.
+
+   UMA FUNÇÃO SÓ porque a régua é calculada em DOIS lugares deste arquivo (o mapa de
+   funilLeads e o laço por executivo) e telas diferentes leem cada um. Duas cópias da
+   mesma regra é como as telas passam a discordar sobre o mesmo negócio — esta base já
+   pagou por isso mais de uma vez. */
+function estadoDaRegua(dias, stageId, proximaAtividadeRaw) {
+  const regua = SLA_DAYS[stageId] || 999;
+  const foraDaRegua = dias > regua;
+  /* FUTURA DE VERDADE: o HubSpot mantém notes_next_activity_date mesmo depois do
+     prazo passar, então comparar com agora é o que separa "combinado" de "vencido". */
+  let combinadaEm = null;
+  if (proximaAtividadeRaw) {
+    const dt = new Date(proximaAtividadeRaw);
+    if (!isNaN(dt.getTime()) && dt.getTime() > Date.now()) combinadaEm = dt.toISOString();
+  }
+  const aguardando = foraDaRegua && !!combinadaEm;
+  return {
+    slaBreach: foraDaRegua && !aguardando,
+    aguardando: aguardando,
+    aguardandoAte: aguardando ? combinadaEm : null,
+    proximaAtividade: combinadaEm
+  };
+}
+
 // Rank de "quão avançado" cada etapa é — usado pra calcular a temperatura do lead
 // (quanto mais avançado + dentro do prazo, mais quente).
 const STAGE_RANK = {
@@ -1956,8 +1988,14 @@ async function main() {
         dealname: d.properties.dealname,
         id: d.id,
         dias,
-        slaBreach: dias > (SLA_DAYS[stageId] || 999),
-        proximaAtividade: d.properties.notes_next_activity_date || null,
+        /* OS TRÊS ESTADOS vêm de estadoDaRegua — ver a nota longa junto de SLA_DAYS.
+           Antes daqui saía `proximaAtividade` CRU: a propriedade do HubSpot sobrevive
+           ao prazo, então data vencida chegava na tela como se fosse compromisso em pé. */
+        ...(function () {
+          const e = estadoDaRegua(dias, stageId, d.properties.notes_next_activity_date);
+          return { slaBreach: e.slaBreach, aguardando: e.aguardando,
+            aguardandoAte: e.aguardandoAte, proximaAtividade: e.proximaAtividade };
+        }()),
         ultimaInteracao: d.properties.notes_last_updated || null,
         /* ══ QUANDO O NEGOCIO NASCEU (10/09/26) ══════════════════════════════════
            `createdate` JA era pedido na busca (stageDealsTeamWide) e este mapeador
@@ -2374,7 +2412,8 @@ async function main() {
     const withDays = deals.map(d => {
       const dias = daysInCurrentStage(d.properties);
       const stageId = d.properties.dealstage;
-      const slaBreach = dias > (SLA_DAYS[stageId] || 999);
+      const reguaEstado = estadoDaRegua(dias, stageId, d.properties.notes_next_activity_date);
+      const slaBreach = reguaEstado.slaBreach;
       const rank = STAGE_RANK[stageId] || 0;
 
       // Próxima reunião: prefere o campo automático do HubSpot, cai pro campo customizado
@@ -2422,6 +2461,11 @@ async function main() {
         stageId,
         dias,
         slaBreach,
+        /* COMBINADO NÃO É TRAVADO, MAS TAMBÉM NÃO SOME: a tela precisa poder dizer
+           "aguardando retorno · volta em 08/10". Negócio que some da cobrança é como
+           se estaciona carteira. */
+        aguardando: reguaEstado.aguardando,
+        aguardandoAte: reguaEstado.aguardandoAte,
         slaRatio: Math.round(slaRatio * 100),
         rank,
         /* `temperatura` não é mais escrita aqui: comTemperatura a define a partir da
