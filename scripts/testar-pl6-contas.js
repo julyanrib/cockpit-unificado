@@ -1191,9 +1191,18 @@ console.log('');
       && /await farolBuscarEAplicar\(\);/.test(cod),
     'botao no vazio sem ouvinte seria o clique morto que esta tela existe para nao ter');
 
-  checar('e o vazio SEM busca continua curto',
-    cod.indexOf('nada neste filtro.') > 0,
-    'quando ele so trocou de filtro, a frase longa seria ruido');
+  /* A REGRA É QUE OS DOIS VAZIOS SEJAM DIFERENTES, e não a frase de um deles. O vazio
+     da BUSCA tem de explicar a carga e oferecer o botão que resolve; o vazio de quem só
+     trocou de propósito tem de ser curto — a frase longa ali é ruído.
+     E desde a prancha final ele diz QUAL zero é: no funil, lista vazia quer dizer que a
+     carteira inteira já tem outro propósito, que é uma boa notícia e estava saindo como
+     "nada neste filtro". */
+  checar('e o vazio SEM busca continua curto, e diz qual zero é',
+    cod.indexOf('zero de verdade') > 0 && /vazioTxt: esc\(/.test(cod)
+      && cod.indexOf('Toda a carteira já tem outro propósito.') > 0
+      && !/zero de verdade[sS]{0,300}buscar dado novo do HubSpot/.test(cod),
+    'quando ele so trocou de filtro, a frase longa seria ruido — e um zero sem nome é o'
+      + ' zero que tranquiliza');
 }());
 
 

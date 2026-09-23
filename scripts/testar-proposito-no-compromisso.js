@@ -175,9 +175,16 @@ checar('mover de horário preserva o propósito do slot antigo',
   /const pEra = pl6SlotProposito\(era\);/.test(tpl)
     && /g\[di\]\[destino\] = Object\.assign\(\{ id: id, hora: hora \}, pEra/.test(tpl),
   'remontar o slot do zero tirava a etiqueta de quem mudasse de terça para quarta');
+/* O BLOCO GRAVA PROPÓSITO — e, desde a prancha final, onde e quanto tempo junto. Sem
+   a duração, cinco blocos de rua na semana são cinco pontos iguais numa hora, e o que
+   faz o bloco OCUPAR o dia é justamente ela. */
 checar('o bloco de rua grava o próprio propósito',
-  /g\[di\]\[destino\] = \{ id: bl\.id, hora: hora, p: bl\.id === PL6_RUA \? 'rua' : 'relac' \};/.test(tpl),
+  /\{ id: bl\.id, hora: hora, p: bl\.id === PL6_RUA \? 'rua' : 'relac' \}/.test(tpl),
   'a volta de rua ocupa hora como qualquer visita e tem de se anunciar igual');
+checar('e leva onde e quanto tempo do compositor',
+  /selRua\.regiao \? \{ regiao: String\(selRua\.regiao\) \} : \{\}/.test(tpl)
+    && /selRua\.duracao \? \{ duracao: String\(selRua\.duracao\) \} : \{\}/.test(tpl),
+  'bloco sem duração é um ponto solto numa hora, e nao um pedaço do dia ocupado');
 checar('o espelho do próximo passo grava follow-up',
   /grade\[di\]\[si\] = Object\.assign\(\{ id: idNaGrade \}[\s\S]{0,120}p: 'follow' \}\);/.test(tpl),
   'esse compromisso nasceu de uma data combinada no CRM — é follow-up por definição, e '

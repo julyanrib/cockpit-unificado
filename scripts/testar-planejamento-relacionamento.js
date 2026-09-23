@@ -177,7 +177,13 @@ checar('e o assunto continua sendo prefixo + nome',
 
 /* ══ 5. A RUA CONTINUA SENDO BLOCO, E O __rel GRAVADO CONTINUA SENDO LIDO ═══════════ */
 checar('só a rua é oferecida como bloco sem negócio',
-  /blocos: \[PL6_RUA\]\.map/.test(tpl),
+  /* A REGRA É QUE PL6_REL NÃO SEJA OFERECIDO COMO BLOCO — relacionamento virou
+     propósito, e a tarefa nasce amarrada ao negócio. A lista `blocos: [PL6_RUA]` que
+     esta checagem citava saiu em 23/09, quando a rua deixou de ser um botão solto e
+     passou a vir do próprio propósito. Medir a AUSÊNCIA de PL6_REL como coisa
+     escolhível é o que protege a regra, e sobrevive ao desenho. */
+  !/'bloco:' \+ PL6_REL/.test(tpl) && !/bloco:\$\{PL6_REL\}/.test(tpl)
+    && /ruaPegar: 'bloco:' \+ PL6_RUA/.test(tpl),
   'relacionamento virou filtro porque agora tem negócio; a rua não tem conta definida '
     + 'de verdade');
 checar('mas o bloco de relacionamento continua LEGÍVEL',

@@ -89,7 +89,11 @@ function rodarFiltro(livres, s) {
   vm.runInContext(recortarFuncao(tpl, 'pl6ChaveBairro'), ctx);
   vm.runInContext(tpl.match(/const PL6_ETAPA_AG_PGTO = '\d+';/)[0], ctx);
   vm.runInContext(tpl.match(/const PL6_PROPOSITOS = \[[\s\S]*?\n\];/)[0], ctx);
-  ['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead', 'pl6Prioridade']
+  /* pl6FaixasDo passou a chamar a régua da etapa e o passo futuro (prancha final):
+     sem eles no contexto, a suíte estoura em vez de reprovar, e suíte que estoura não
+     diz o que quebrou. */
+  ['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead', 'pl6Prioridade',
+    'pl6ReguaDaEtapa', 'pl6AcimaDaRegua', 'pl6PassoFuturo']
     .forEach(function (f) { vm.runInContext(recortarFuncao(tpl, f), ctx); });
   vm.runInContext(TRECHO + '\n resultado = { daOrigem: daOrigem, porBairro: porBairro, munFilt: munFilt, comProposito: comProposito };', ctx);
   return ctx.resultado;
