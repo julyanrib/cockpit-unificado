@@ -1322,7 +1322,6 @@
     #agendaContent [data-pl6-acao],
     #agendaContent [data-pl6-terr],
     #agendaContent [data-pl6-regiao],
-    #agendaContent [data-pl6-fonte],
     #agendaContent [data-pl6-remover],
     #agendaContent [data-pl6-novo-lead],
     #agendaContent [data-pl6-novo-fonte],
@@ -1339,6 +1338,7 @@
     #agendaContent [data-pl6-end-gravar],
 
     #agendaContent [data-pl6-arraste],
+    #agendaContent [data-pl6-so-icone]{min-height:44px;}
 
     #agendaContent [data-pl6-so-icone]{width:44px;}
   }
@@ -20835,6 +20835,58 @@ const PL6_ETAPAS_QUE_SAIRAM = (typeof FN2_ETAPAS !== 'undefined' ? FN2_ETAPAS : 
 const PL6_ETAPAS_BASE = ['1396006162', '1396006163'];
 
 const PL6_ETAPA_AG_PGTO = '1395880473';
+
+const PL6_PROPOSITOS = [
+  { id: 'rua', nome: 'Prospecção de rua', etiqueta: 'RUA', cor: '#2B3440',
+    selo: '#2B3440', seloBg: '#EEF0F3', tracejado: true,
+    pergunta: 'onde você vai bater porta?', fonte: 'sem lista — sair e bater porta' },
+  { id: 'cobrar', nome: 'Cobrar pagamento', etiqueta: 'COBRAR', cor: '#B0782A',
+    selo: '#8A6516', seloBg: '#FBF3E6',
+    pergunta: 'de quem você vai cobrar?', fonte: 'etapa Ag. Pagamento' },
+  { id: 'relac', nome: 'Visita de relacionamento', etiqueta: 'RELAC.', cor: '#1E9E7B',
+    selo: '#16775D', seloBg: '#EAF6F1',
+    pergunta: 'qual cliente você vai visitar?', fonte: 'Ganho + Enviado Onboarding' },
+  { id: 'follow', nome: 'Follow-up', etiqueta: 'FOLLOW', cor: '#E51A31',
+    selo: '#C3152A', seloBg: '#FDF0F1',
+    pergunta: 'qual promessa você vai cumprir?', fonte: 'próximo passo vencido ou para hoje' },
+  { id: 'nova', nome: 'Prospecção de conta nova', etiqueta: 'NOVA', cor: '#8E3B5C',
+    selo: '#8E3B5C', seloBg: '#F7EEF2',
+    pergunta: 'qual conta nova você vai abrir?', fonte: 'Casa dos Dados + Google Places' },
+
+  { id: 'funil', nome: 'Avançar o funil', etiqueta: 'FUNIL', cor: '#5B667A',
+    selo: '#5B667A', seloBg: '#F4F1EA',
+    pergunta: 'qual negócio você vai destravar?', fonte: 'seu funil aberto no HubSpot' }
+];
+function pl6Proposito(id) {
+  return PL6_PROPOSITOS.filter(function (p) { return p.id === String(id); })[0]
+    || PL6_PROPOSITOS[3];
+}
+
+function pl6AtrasoDoPasso(l) {
+  const b = (l && l._bruto) || l || {};
+  const tarefas = Array.isArray(b.tarefas) ? b.tarefas : [];
+  if (!tarefas.length) return null;
+  const quando = tarefas.map(function (x) { return x && x.timestamp; })
+    .filter(Boolean).sort().pop();
+  if (!quando) return null;
+  const d = new Date(quando);
+  if (isNaN(d.getTime())) return null;
+  const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const alvoISO = d.toISOString().slice(0, 10);
+  const dif = Math.round((Date.parse(hojeISO) - Date.parse(alvoISO)) / 864e5);
+  return isNaN(dif) ? null : dif;
+}
+
+function pl6PropositoDoLead(l) {
+  if (!l) return 'follow';
+  if (l.tipo === 'n') return 'nova';
+  if (l.base) return 'relac';
+  if (String(l.stageId || '') === PL6_ETAPA_AG_PGTO) return 'cobrar';
+  const atraso = pl6AtrasoDoPasso(l);
+  if (atraso != null && atraso >= 0) return 'follow';
+
+  return 'funil';
+}
 function pl6Base(rep, regioes) {
   const todos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
     .filter(function (d) { return PL6_ETAPAS_BASE.indexOf(String(d.stageId || '')) >= 0; });
@@ -21016,7 +21068,8 @@ function pl6Candidatos(regiaoChave, todos, jaNaGrade, comReciclagem) {
 let pl6UI = {
   sel: null, diaAtivo: null, hSel: '09', mSel: '00', dragHover: null,
 
-  fonte: 'todas', pickerDia: null,
+  proposito: null, faixa: 'todos', lugar: null, ondeAberto: false, pagina: 1,
+  pickerDia: null,
 
   q: '',
 
@@ -21546,16 +21599,14 @@ function pl6DadosFinal(rep) {
   const agendadas = naGrade.length;
   const diasCobertos = grade.filter(col => col.some(v => pl6SlotId(v))).length;
 
-  const filtro = s.fonte || 'todas';
+  const comProposito = livres.map(function (l) {
+    const p = pl6PropositoDoLead(l);
+    return p ? Object.assign({}, l, { proposito: p, atrasoDias: pl6AtrasoDoPasso(l) }) : null;
+  }).filter(Boolean);
 
-  const daOrigem = livres.filter(function (l) {
-    if (filtro === 'base') return l.base === true;
-    if (filtro === 'cobranca') return !l.base && String(l.stageId || '') === PL6_ETAPA_AG_PGTO;
-    if (l.base) return false;
-    if (filtro === 'todas') return true;
-    if (filtro === 'carteira') return l.tipo === 'c';
-    return l.tipo === 'n' && l.grupo === filtro;
-  });
+  const temFollow = comProposito.some(function (l) { return l.proposito === 'follow'; });
+  const propAtivo = s.proposito || (temFollow ? 'follow' : 'funil');
+  const daOrigem = comProposito.filter(function (l) { return l.proposito === propAtivo; });
 
   const porBairro = s.terr
     ? daOrigem.filter(l => l.tipo === 'c' || String(l.regiao || '') === String(s.terr))
@@ -21567,7 +21618,94 @@ function pl6DadosFinal(rep) {
       || pl6ChaveBairro((l._bruto && l._bruto.bairro) || '').indexOf(alvoBusca) >= 0;
   });
 
-  const municaoOrd = munFilt.slice().sort((a, b) => pl6Prioridade(a) - pl6Prioridade(b));
+  const reguaPgto = Number(((DATA.stageMeta || {}).slaDays || {})[PL6_ETAPA_AG_PGTO]) || 2;
+  function pl6FaixasDo(prop, lista) {
+    const n = function (f) { return lista.filter(f).length; };
+    if (prop === 'cobrar') return [
+      { id: 'todos', rot: 'todos', n: lista.length },
+      { id: 'acima', rot: 'acima da régua (>' + reguaPgto + 'd)', n: n(function (x) { return (x.dias || 0) > reguaPgto; }) },
+      { id: 'dentro', rot: 'dentro da régua', n: n(function (x) { return (x.dias || 0) <= reguaPgto; }) }];
+    if (prop === 'relac') return [
+      { id: 'todos', rot: 'todos', n: lista.length },
+      { id: 'ganho', rot: 'Ganho', n: n(function (x) { return String(x.stageId) === '1396006162'; }) },
+      { id: 'onboarding', rot: 'Onboarding', n: n(function (x) { return String(x.stageId) === '1396006163'; }) }];
+    if (prop === 'follow') return [
+      { id: 'todos', rot: 'todos', n: lista.length },
+      { id: '15+', rot: '15d+', n: n(function (x) { return x.atrasoDias >= 15; }) },
+      { id: '8-14', rot: '8–14d', n: n(function (x) { return x.atrasoDias >= 8 && x.atrasoDias <= 14; }) },
+      { id: '1-7', rot: '1–7d', n: n(function (x) { return x.atrasoDias >= 1 && x.atrasoDias <= 7; }) },
+      { id: 'hoje', rot: 'para hoje', n: n(function (x) { return x.atrasoDias === 0; }) }];
+    if (prop === 'nova') return [
+      { id: 'todos', rot: 'todos', n: lista.length },
+      { id: 'estrela', rot: '★ 4,5+', n: n(function (x) { return Number(x.nota) >= 4.5; }) }];
+
+    if (prop === 'funil') return [
+      { id: 'todos', rot: 'todos', n: lista.length },
+      { id: 'fora', rot: 'fora da régua', n: n(function (x) { return x.sla === true; }) },
+      { id: 'mudo', rot: 'sem toque marcado', n: n(function (x) { return x.atrasoDias == null; }) }];
+    return [];
+  }
+  const faixasDoProp = pl6FaixasDo(propAtivo, daOrigem);
+  const faixaAtiva = faixasDoProp.some(function (f) { return f.id === s.faixa; }) ? s.faixa : 'todos';
+  function pl6NaFaixa(l) {
+    if (faixaAtiva === 'todos') return true;
+    if (propAtivo === 'cobrar') return faixaAtiva === 'acima' ? (l.dias || 0) > reguaPgto : (l.dias || 0) <= reguaPgto;
+    if (propAtivo === 'relac') return String(l.stageId) === (faixaAtiva === 'ganho' ? '1396006162' : '1396006163');
+    if (propAtivo === 'follow') {
+      if (faixaAtiva === '15+') return l.atrasoDias >= 15;
+      if (faixaAtiva === '8-14') return l.atrasoDias >= 8 && l.atrasoDias <= 14;
+      if (faixaAtiva === '1-7') return l.atrasoDias >= 1 && l.atrasoDias <= 7;
+      if (faixaAtiva === 'hoje') return l.atrasoDias === 0;
+    }
+    if (propAtivo === 'nova' && faixaAtiva === 'estrela') return Number(l.nota) >= 4.5;
+    if (propAtivo === 'funil') {
+      if (faixaAtiva === 'fora') return l.sla === true;
+      if (faixaAtiva === 'mudo') return l.atrasoDias == null;
+    }
+    return true;
+  }
+
+  function pl6ChaveDoLugar(txt) {
+    return String(txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/\s+/g, ' ').trim();
+  }
+  function pl6LugarDo(l) {
+    const b = (l && l._bruto) || {};
+    const cidade = String(b.cidade || '').trim();
+    const bairro = String(b.bairro || '').trim();
+    if (cidade) return { chave: pl6ChaveDoLugar(cidade), rot: cidade };
+    if (bairro) return { chave: pl6ChaveDoLugar(bairro), rot: bairro };
+    return { chave: null, rot: null };
+  }
+  const semEnderecoN = daOrigem.filter(function (l) { return !pl6LugarDo(l).chave; }).length;
+  const lugares = (function () {
+    const m = new Map();
+    daOrigem.forEach(function (l) {
+      const g = pl6LugarDo(l);
+      if (!g.chave) return;
+      if (!m.has(g.chave)) m.set(g.chave, { chave: g.chave, rot: g.rot, n: 0 });
+      m.get(g.chave).n += 1;
+    });
+    return [...m.values()].filter(function (x) { return x.n >= 2; })
+      .sort(function (a, b) { return b.n - a.n; }).slice(0, 8);
+  }());
+  const lugarAtivo = lugares.some(function (x) { return x.chave === s.lugar; }) ? s.lugar : null;
+
+  const municaoOrd = munFilt.filter(function (l) {
+    if (!pl6NaFaixa(l)) return false;
+    if (lugarAtivo && pl6LugarDo(l).chave !== lugarAtivo) return false;
+    return true;
+  }).sort(function (a, b) {
+
+    if (propAtivo === 'follow') return (b.atrasoDias || 0) - (a.atrasoDias || 0);
+    if (propAtivo === 'cobrar' || propAtivo === 'relac') return (b.dias || 0) - (a.dias || 0);
+    return pl6Prioridade(a) - pl6Prioridade(b);
+  });
+
+  const POR_PAGINA = 6;
+  const totalPaginas = Math.max(1, Math.ceil(municaoOrd.length / POR_PAGINA));
+  const pagina = Math.min(Math.max(1, Number(s.pagina) || 1), totalPaginas);
+  const municaoPag = municaoOrd.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
 
   const horaRot = s.hSel + ':' + s.mSel;
   const selLead = s.sel ? s.sel.lead : null;
@@ -21729,21 +21867,49 @@ function pl6DadosFinal(rep) {
       };
     }),
 
-    filtros: [['todas', 'todas'], ['carteira', 'minha carteira'],
-      ['base', '♥ relacionamento'], ['cobranca', '$ cobrar pagamento'],
-      ['casa', 'casa dos dados'], ['aval', 'mais avaliados']].map(function (par) {
-      const on = filtro === par[0];
-      const quantos = par[0] === 'base'
-        ? livres.filter(function (l) { return l.base === true; }).length
-        : (par[0] === 'cobranca'
-          ? livres.filter(function (l) { return !l.base && String(l.stageId || '') === PL6_ETAPA_AG_PGTO; }).length
-          : null);
-      return { rot: esc(par[0] === 'todas' ? par[1] + ' · ' + livres.filter(function (l) { return !l.base; }).length
-        : (quantos == null ? par[1] : par[1] + ' · ' + quantos)),
-        on: par[0],
+    propositos: PL6_PROPOSITOS.map(function (p) {
+      const n = comProposito.filter(function (l) { return l.proposito === p.id; }).length;
+      const on = propAtivo === p.id;
+      return {
+        on: 'prop:' + p.id, nome: esc(p.nome), etiqueta: p.etiqueta, cor: p.cor,
+        num: p.id === 'rua' ? '—' : String(n),
+        sub: p.id === 'rua' ? 'não tem lista' : esc(p.fonte),
+        sel: on,
+        bg: on ? p.seloBg : '#FDFEFF',
+        borda: on ? p.cor : '#DCE1EA'
+      };
+    }),
+
+    propProcedencia: esc('contagens: HubSpot' + (DATA.hubspotUpdatedAtFmt
+      ? ' de ' + DATA.hubspotUpdatedAtFmt : ' (sem hora de carga)')
+      + ' · contas-alvo: base do Supabase'),
+
+    faixas: faixasDoProp.map(function (f) {
+      const on = f.id === faixaAtiva;
+      return { on: 'faixa:' + f.id, rot: esc(f.rot + ' · ' + f.n),
         bg: on ? '#2B3440' : '#FDFEFF', cor: on ? '#FDFEFF' : '#2B3440',
         borda: on ? '#2B3440' : '#DCE1EA' };
     }),
+
+    ondeAberto: !!s.ondeAberto,
+    ondeRot: esc(lugarAtivo ? (lugares.filter(function (x) { return x.chave === lugarAtivo; })[0] || {}).rot || 'onde' : 'onde'),
+    ondeOpts: [{ chave: null, rot: esc('qualquer lugar · ' + daOrigem.length), sel: !lugarAtivo }]
+      .concat(lugares.map(function (x) {
+        return { chave: x.chave, rot: esc(x.rot + ' · ' + x.n), sel: lugarAtivo === x.chave };
+      })),
+
+    semEndereco: semEnderecoN,
+    semEnderecoTxt: esc(semEnderecoN + ' de ' + daOrigem.length + ' sem endereço no CRM — estão na lista, marcados'),
+
+    pagRot: esc(municaoOrd.length ? ((pagina - 1) * POR_PAGINA + 1) + '–'
+      + Math.min(pagina * POR_PAGINA, municaoOrd.length) + ' de ' + municaoOrd.length : '0 de 0'),
+
+    pagOrdem: esc(propAtivo === 'follow' ? 'mais vencidos primeiro'
+      : (propAtivo === 'cobrar' ? 'mais parados primeiro'
+      : (propAtivo === 'relac' ? 'mais tempo sem visita primeiro'
+      : (propAtivo === 'funil' ? 'régua estourada primeiro' : 'melhor avaliados primeiro')))),
+    pagAnterior: pagina > 1,
+    pagProxima: pagina < totalPaginas,
 
     buscaQ: String(s.q || ''),
     buscaN: municaoOrd.length,
@@ -21770,7 +21936,8 @@ function pl6DadosFinal(rep) {
     }()),
 
     cargaDe: String((typeof DATA !== 'undefined' && DATA && DATA.hubspotUpdatedAtFmt) || ''),
-    municao: municaoOrd.slice(0, 60).map(function (l) {
+
+    municao: municaoPag.map(function (l) {
       const sel = !!(selLead && selLead.id === l.id);
       const tg = pfTag(l);
       return {
@@ -22063,11 +22230,47 @@ function pl6TelaFinalHTML(d) {
     </div>`;
   }).join('');
 
+  const propositosHTML = (d.propositos || []).map(p => `
+    <button type="button" data-pl6-acao="${p.on}" aria-pressed="${p.sel}"
+      style="position:relative;text-align:left;border:1.5px solid ${p.borda};border-radius:12px;
+      background:${p.bg};padding:11px 13px 10px 16px;cursor:pointer;min-width:0;overflow:hidden;">
+      <span style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${p.cor};"></span>
+      <span style="display:block;font:800 11.5px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${p.nome}</span>
+      <span style="display:flex;align-items:baseline;gap:6px;margin-top:3px;min-width:0;">
+        <b style="flex:none;font:900 20px 'Archivo',sans-serif;color:${p.cor};font-variant-numeric:tabular-nums;">${p.num}</b>
+        <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.sub}</span>
+      </span>
+    </button>`).join('');
+
   const bairrosHTML = (d.bairros || []).map(b => `
     <button type="button" data-pl6-terr="${b.on}" data-nome="${b.chave}" style="display:inline-flex;align-items:center;gap:6px;border:1px solid ${b.borda};border-radius:999px;background:${b.bg};padding:6px 13px;font:800 10.5px 'Manrope',sans-serif;color:${b.cor};cursor:pointer;white-space:nowrap;">${b.nome}<b style="font:900 10.5px 'Archivo',sans-serif;color:${b.nCor};font-variant-numeric:tabular-nums;">${b.n}</b></button>`).join('');
 
-  const filtrosHTML = (d.filtros || []).map(ft => `
-    <button type="button" data-pl6-fonte="${ft.on}" style="border:1px solid ${ft.borda};border-radius:999px;background:${ft.bg};padding:5px 11px;font:800 9.5px 'Manrope',sans-serif;color:${ft.cor};cursor:pointer;white-space:nowrap;">${ft.rot}</button>`).join('');
+  const filtrosHTML = (d.faixas || []).map(ft => `
+    <button type="button" data-pl6-acao="${ft.on}" style="border:1px solid ${ft.borda};border-radius:999px;background:${ft.bg};padding:5px 11px;font:800 9.5px 'Manrope',sans-serif;color:${ft.cor};cursor:pointer;white-space:nowrap;min-height:28px;">${ft.rot}</button>`).join('');
+
+  const ondeHTML = d.ondeAberto ? `
+    <div style="border:1px solid #DCE1EA;border-radius:10px;background:#FDFEFF;padding:6px;margin-bottom:8px;box-shadow:0 10px 26px rgba(43,52,64,.12);">
+      ${(d.ondeOpts || []).map(o => `<button type="button" data-pl6-acao="lugar:${o.chave == null ? '' : o.chave}"
+        style="display:block;width:100%;text-align:left;border:0;background:${o.sel ? '#F4F2EC' : 'transparent'};
+        border-radius:7px;padding:8px 10px;min-height:38px;font:700 11px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;">${o.rot}</button>`).join('')}
+    </div>` : '';
+
+  const semEndHTML = d.semEndereco ? `
+    <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#8A6516;background:#FBF3E6;
+      border:1px solid #F0DFB6;border-radius:8px;padding:7px 10px;margin-bottom:8px;">${d.semEnderecoTxt}</span>` : '';
+
+  const pagHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-top:9px;padding-top:9px;border-top:1px solid #E7E3DA;">
+      <span style="min-width:0;font:700 9.5px/1.4 'Manrope',sans-serif;color:#7A8494;overflow:hidden;text-overflow:ellipsis;">${d.pagRot} · ${d.pagOrdem}</span>
+      <span style="margin-left:auto;display:flex;gap:5px;flex:none;">
+        <button type="button" data-pl6-acao="pag:-1" ${d.pagAnterior ? '' : 'disabled'}
+          style="min-width:34px;padding:0 10px;border:1px solid #DCE1EA;border-radius:8px;background:#FDFEFF;
+          color:${d.pagAnterior ? '#2B3440' : '#C9C2B4'};font:800 13px 'Manrope',sans-serif;cursor:${d.pagAnterior ? 'pointer' : 'default'};">‹</button>
+        <button type="button" data-pl6-acao="pag:1" ${d.pagProxima ? '' : 'disabled'}
+          style="min-width:34px;padding:0 10px;border:1px solid #DCE1EA;border-radius:8px;background:#FDFEFF;
+          color:${d.pagProxima ? '#2B3440' : '#C9C2B4'};font:800 13px 'Manrope',sans-serif;cursor:${d.pagProxima ? 'pointer' : 'default'};">›</button>
+      </span>
+    </div>`;
 
   const municaoHTML = (d.municao || []).map(m => `
     <div draggable="true" data-pl6-arraste="${m.arraste}" data-pl6-acao="${m.abrirFicha}" title="arraste pro dia · clique abre a ficha do negócio" style="background:${m.bg};border:1.5px solid ${m.borda};border-radius:11px;padding:10px 12px;cursor:grab;min-width:0;">
@@ -22116,6 +22319,14 @@ function pl6TelaFinalHTML(d) {
       <b style="font:800 12.5px 'Manrope',sans-serif;color:${d.avisoCor};">${d.aviso}</b>
       ${d.temSel ? `<button type="button" data-pl6-acao="${d.soltar}" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:4px 12px;font:800 10px 'Manrope',sans-serif;color:#7A8494;cursor:pointer;">cancelar</button>` : ''}
     </div>` : ''}
+
+    <div style="padding:14px 28px 13px;background:#FBFAF6;border-bottom:1px solid #E7E3DA;">
+      <span style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:9px;">
+        <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#7A8494;">1 · o que você vai fazer?</span>
+        <span style="font:700 9px/1.4 'Manrope',sans-serif;color:#B4AC9C;min-width:0;">${d.propProcedencia}</span>
+      </span>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:8px;">${propositosHTML}</div>
+    </div>
 
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:stretch;">
       <div style="padding:18px 22px 24px;min-width:0;">
@@ -22179,6 +22390,12 @@ function pl6TelaFinalHTML(d) {
           <span style="display:block;font:900 8px 'Archivo',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#1F7A4D;margin-bottom:5px;">já no seu plano</span>
           ${d.buscaNoPlano.map(p => `<button type="button" data-pl6-ir-no-plano="${p.ir}" style="display:block;width:100%;text-align:left;border:0;background:transparent;padding:3px 0;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;">${p.nome} <span style="font-weight:700;color:#1F7A4D;">· ${p.quando} ▸</span></button>`).join('')}
         </div>` : ''}
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+          <button type="button" data-pl6-acao="onde" style="flex:none;border:1px solid #DCE1EA;border-radius:999px;
+            background:#FDFEFF;padding:0 13px;min-height:30px;font:800 10px 'Manrope',sans-serif;color:#2B3440;cursor:pointer;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.ondeRot} ▾</button>
+        </div>
+        ${ondeHTML}
+        ${semEndHTML}
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;">${filtrosHTML}</div>
         <div style="display:flex;flex-direction:column;gap:6px;">
           ${municaoHTML}
@@ -22191,6 +22408,7 @@ function pl6TelaFinalHTML(d) {
                </span>`
             : `<span style="font:700 10.5px 'Manrope',sans-serif;color:#B4AC9C;border:1px dashed #D8D2C4;border-radius:9px;padding:10px 12px;">nada neste filtro.</span>`) : ''}
         </div>
+        ${pagHTML}
       </div>
     </div>
 
@@ -22571,7 +22789,6 @@ function pl6Ligar(box, rep) {
       || ev.target.closest('[data-pl6-fi-fechar]')
       || ev.target.closest('[data-pl6-regiao]')
       || ev.target.closest('[data-pl6-terr]')
-      || ev.target.closest('[data-pl6-fonte]')
       || ev.target.closest('[data-pl6-novo-lead]')
       || ev.target.closest('[data-pl6-novo-fechar]')
       || ev.target.closest('[data-pl6-novo-fonte]')
@@ -22600,12 +22817,6 @@ function pl6Ligar(box, rep) {
       pl6UI.toast = nova === 0
         ? 'de volta para a semana atual'
         : 'montando a semana de ' + pl6RotuloSemana(1) + ' — a sua Daily de hoje continua na atual';
-      return redesenhar();
-    }
-
-    if (d.pl6Fonte) {
-      pl6UI.fonte = d.pl6Fonte;
-      pl6UI.pickerDia = null;
       return redesenhar();
     }
 
@@ -22830,6 +23041,33 @@ function pl6Ligar(box, rep) {
       const verbo = i < 0 ? bruto : bruto.slice(0, i);
       const arg = i < 0 ? '' : bruto.slice(i + 1);
       const s = pl6UI;
+
+      if (verbo === 'prop') {
+        const alvoProp = pl6Proposito(arg).id;
+        if (s.proposito === alvoProp) return;
+        s.proposito = alvoProp; s.faixa = 'todos'; s.lugar = null;
+        s.pagina = 1; s.ondeAberto = false;
+        s.sel = null; s.pickerDia = null; s.toast = null;
+        return redesenhar();
+      }
+
+      if (verbo === 'faixa') {
+        s.faixa = arg || 'todos'; s.pagina = 1; s.pickerDia = null;
+        return redesenhar();
+      }
+      if (verbo === 'lugar') {
+        const alvoLugar = arg || null;
+        s.lugar = (alvoLugar && s.lugar === alvoLugar) ? null : alvoLugar;
+        s.ondeAberto = false; s.pagina = 1; s.pickerDia = null;
+        return redesenhar();
+      }
+      if (verbo === 'onde') { s.ondeAberto = !s.ondeAberto; return redesenhar(); }
+
+      if (verbo === 'pag') {
+        s.pagina = Math.max(1, (Number(s.pagina) || 1) + (Number(arg) || 0));
+        s.pickerDia = null;
+        return redesenhar();
+      }
 
       if (verbo === 'pegar') {
         const lead = pl6LeadDaRef(rep, 'm:' + arg);

@@ -518,10 +518,19 @@ console.log('');
     'a carteira do executivo não tem bairro: filtrar por bairro a fazia desaparecer da munição');
 
   /* ── 9 · A ORDEM DA MUNIÇÃO É A MEDIDA ───────────────────────────────────────────── */
-  checar('a munição sai na ordem de pl6Prioridade',
-    /municaoOrd = munFilt\.slice\(\)\.sort\(\(a, b\) => pl6Prioridade\(a\) - pl6Prioridade\(b\)\)/.test(dadosCod),
-    'SLA estourado, parado, ★ e distância — inventar outra ordem aqui desfaria a única'
-    + ' que foi medida');
+  /* A REGRA É "A LISTA TEM ORDEM DECLARADA", E NÃO UMA LINHA DE CÓDIGO (23/09/26).
+     A v7 ordena por propósito — vencido, parado, régua — e a checagem cravada na
+     linha única reprovou isso. O que não pode faltar: municaoOrd ordena, pl6Prioridade
+     continua sendo o fundo do poço (é a única ordem que foi medida), e a tela ESCREVE
+     embaixo da lista qual ordem está rodando. */
+  checar('a munição sai ordenada, e pl6Prioridade continua sendo o padrão',
+    /const municaoOrd = [\s\S]{0,900}?\.sort\(/.test(dadosCod)
+      && /return pl6Prioridade\(a\) - pl6Prioridade\(b\);/.test(dadosCod),
+    'lista sem ordem é a ordem do HubSpot, que não quer dizer nada para quem planeja');
+  checar('e a tela escreve qual ordem está rodando',
+    /pagOrdem: esc\(/.test(dadosCod) && /\$\{d\.pagOrdem\}/.test(codigo),
+    'ordem que muda sozinha e não se anuncia vira a suspeita "por que esta conta está'
+    + ' no topo?" — e ninguém confia no topo da lista de novo');
 
   /* ── 10 · A AGENDA DO DIA SE LÊ POR HORA, E A GRADE NÃO SE REORDENA ─────────────── */
   /* A ORDEM E O si MUDARAM DE CASA (09/09/26): as duas telas do executivo passaram a ler
@@ -1037,16 +1046,67 @@ console.log('');
   const semCom3 = s => String(s).replace(/[/][*][\s\S]*?[*][/]/g, ' ');
   const cod = semCom3(tpl);
 
-  checar('a munição tem busca por nome, e ela filtra ANTES do corte de 60',
+  /* O CORTE MUDOU DE TAMANHO E DE NOME (23/09/26): eram 60 numa rolagem, hoje são 6
+     numa página. A regra é a mesma e é a que importa: a busca peneira ANTES do corte,
+     seja ele qual for. Por isso a checagem procura O CORTE, e não o número. */
+  const iCorte = cod.indexOf('const municaoPag =');
+  checar('a munição tem busca por nome, e ela filtra ANTES do corte da lista',
     cod.indexOf('data-pl6-busca-nome="1"') > 0
       && /const alvoBusca = pl6ChaveBairro\(String\(s\.q \|\| ''\)\.trim\(\)\);/.test(cod)
-      /* A REGRA É A ORDEM: peneirar por nome ANTES do corte de 60. De QUAL lista a busca
-         parte é outra decisão — em 23/09 ela passou a partir de `daOrigem` justamente
-         para achar a conta de outro bairro, e a guarda cravada em `porBairro.filter`
-         reprovou o conserto. */
+      /* De QUAL lista a busca parte é outra decisão — em 23/09 ela passou a partir de
+         `daOrigem` justamente para achar a conta de outro bairro, e a guarda cravada
+         em `porBairro.filter` reprovou o conserto. */
       && /const munFilt = !alvoBusca \? porBairro : \w+\.filter/.test(cod)
-      && cod.indexOf('const alvoBusca') < cod.indexOf('municaoOrd.slice(0, 60)'),
+      && iCorte > 0 && cod.indexOf('const alvoBusca') < iCorte,
     'filtrar depois do corte acharia só o que já estava desenhado — e o que ele procura é justamente o que não está');
+
+  /* ══ A PÁGINA 2 TEM DE TRAZER OUTRAS CONTAS ═══════════════════════════════════
+     Achado por sabotagem: trocar o recorte por `municaoOrd.slice(0, 6)` deixava as
+     duas setas desenhadas, o verbo `pag` no switch e o estado mudando — e a lista
+     parada na primeira página. Toda checagem de presença dava verde. Por isso esta
+     RODA o recorte do template, com 14 contas, em vez de lê-lo. */
+  (function () {
+    const vm = require('vm');
+    /* comparacao por valor: esta suite so tem checar() */
+    const igual = function (nome, veio, esp, porque) {
+      checar(nome, JSON.stringify(veio) === JSON.stringify(esp),
+        (porque ? porque + ' · ' : '') + 'esperava ' + JSON.stringify(esp) + ', veio ' + JSON.stringify(veio));
+    };
+    const ini = tpl.indexOf('  const POR_PAGINA = ');
+    const fim = tpl.indexOf('\n', tpl.indexOf('  const municaoPag = ', ini));
+    if (ini < 0 || fim < 0) {
+      checar('o recorte da paginação existe', false, 'âncora perdida — as checagens abaixo mediriam o vazio');
+      return;
+    }
+    const trechoPag = tpl.slice(ini, fim);
+    const rodar = function (pagina) {
+      const ctx = { Math: Math, Number: Number, s: { pagina: pagina }, resultado: null,
+        municaoOrd: Array.from({ length: 14 }, function (_, i) { return { nome: "c" + (i + 1) }; }) };
+      vm.createContext(ctx);
+      vm.runInContext(trechoPag + '\n resultado = { pag: municaoPag.map(function (x) { return x.nome; }), total: totalPaginas, atual: pagina };', ctx);
+      return ctx.resultado;
+    };
+    igual('a página 1 traz as seis primeiras', rodar(1).pag,
+      ['c1', 'c2', 'c3', 'c4', 'c5', 'c6']);
+    igual('a página 2 traz OUTRAS seis', rodar(2).pag,
+      ['c7', 'c8', 'c9', 'c10', 'c11', 'c12'],
+      'setas vivas com lista parada é o clique morto mais caro desta tela: ele acha que'
+      + ' viu a carteira inteira');
+    igual('a última página traz o resto, e não seis', rodar(3).pag, ['c13', 'c14']);
+    igual('14 contas dão 3 páginas', rodar(1).total, 3);
+    igual('página maior que a última cai na última', rodar(99).pag, ['c13', 'c14'],
+      'a lista encolhe entre um clique e outro — página fora do fim mostraria coluna vazia');
+    igual('e página 0 ou negativa cai na primeira', rodar(0).pag,
+      ['c1', 'c2', 'c3', 'c4', 'c5', 'c6']);
+  }());
+
+  /* E O CORTE TEM DE SER NAVEGÁVEL. Cortar em 6 sem setas esconderia 136 contas sem
+     dizer nada — pior do que a rolagem de 60 que ele substituiu. */
+  checar('e o corte tem página, contagem e setas',
+    /const POR_PAGINA = \d+;/.test(cod) && /\$\{d\.pagRot\}/.test(cod)
+      && /data-pl6-acao="pag:1"/.test(cod) && /data-pl6-acao="pag:-1"/.test(cod)
+      && /verbo === 'pag'/.test(cod),
+    'corte sem navegação é a metade da carteira sumindo em silêncio');
 
   checar('ela casa por pedaço do nome, sem acento e sem caixa',
     /pl6ChaveBairro\(l\.nome \|\| ''\)\.indexOf\(alvoBusca\) >= 0/.test(cod)

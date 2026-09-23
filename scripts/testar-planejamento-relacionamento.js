@@ -106,17 +106,12 @@ checar('cliente da base não estoura régua',
   'a régua é de avanço de etapa e ele já chegou ao fim — marcar sla poria a base inteira '
     + 'no topo da fila do dia');
 
-/* ══ 2. OS FILTROS, rodando o trecho do template ════════════════════════════════════ */
-function recortarFiltro() {
-  const ini = tpl.indexOf('  const filtro = s.fonte || ');
-  const fim = tpl.indexOf('  const porBairro = s.terr', ini);
-  if (ini < 0 || fim < 0) { console.error('FALHA: não achei o trecho do filtro.'); process.exit(1); }
-  return tpl.slice(ini, fim);
-}
-const TRECHO = recortarFiltro();
-checar('o trecho do filtro foi encontrado', TRECHO.length > 100,
-  'sem o recorte as checagens abaixo medem o vazio');
-
+/* ══ 2. O PROPÓSITO DE CADA CONTA, rodando a função do template ═════════════════════
+   Julyan pediu que relacionamento e cobrança "selecionem o lead que está na carteira".
+   Na v5 isso virou chip de origem; na v7 (23/09/26) virou propósito, e o gesto seguinte
+   continua sendo o mesmo — escolher o card e o horário — para a tarefa nascer amarrada
+   ao negócio, que é o que o bloco sentinela nunca conseguiu fazer.
+   A checagem roda pl6PropositoDoLead DE VERDADE, recortada do template. */
 const LIVRES = [
   { nome: 'Cliente Ganho', tipo: 'c', base: true, stageId: '1396006162' },
   { nome: 'Cliente Onboarding', tipo: 'c', base: true, stageId: '1396006163' },
@@ -124,23 +119,33 @@ const LIVRES = [
   { nome: 'Esperando pagar', tipo: 'c', stageId: AG_PGTO },
   { nome: 'Conta da casa', tipo: 'n', grupo: 'casa', stageId: '' }
 ];
-function filtrar(fonte) {
-  const ctx = { livres: LIVRES, s: { fonte: fonte }, String: String, Array: Array, resultado: null };
-  vm.createContext(ctx);
-  vm.runInContext(tpl.match(/const PL6_ETAPA_AG_PGTO = '\d+';/)[0], ctx);
-  vm.runInContext(TRECHO + '\n resultado = daOrigem;', ctx);
-  return ctx.resultado.map(function (l) { return l.nome; });
+const ctxProp = { String: String, Number: Number, Array: Array, Date: Date, Math: Math, isNaN: isNaN };
+vm.createContext(ctxProp);
+vm.runInContext(tpl.match(/const PL6_ETAPA_AG_PGTO = '\d+';/)[0], ctxProp);
+vm.runInContext(tpl.match(/const PL6_PROPOSITOS = \[[\s\S]*?\n\];/)[0], ctxProp);
+['pl6Proposito', 'pl6AtrasoDoPasso', 'pl6PropositoDoLead'].forEach(function (f) {
+  vm.runInContext(recortar(tpl, f), ctxProp);
+});
+const doProposito = vm.runInContext('pl6PropositoDoLead', ctxProp);
+function noProposito(p) {
+  return LIVRES.filter(function (l) { return doProposito(l) === p; })
+    .map(function (l) { return l.nome; });
 }
 
-igual('o filtro de relacionamento traz só a base', filtrar('base'),
+igual('o propósito de relacionamento traz só a base', noProposito('relac'),
   ['Cliente Ganho', 'Cliente Onboarding']);
-igual('o filtro de cobrança traz só Ag. Pagamento', filtrar('cobranca'), ['Esperando pagar']);
-igual('"todas" NÃO mostra a base', filtrar('todas'),
-  ['Em Negociação', 'Esperando pagar', 'Conta da casa'],
+igual('o propósito de cobrança traz só Ag. Pagamento', noProposito('cobrar'), ['Esperando pagar']);
+igual('a base NÃO aparece em nenhum outro propósito',
+  ['funil', 'follow', 'nova'].map(noProposito).reduce(function (a, b) { return a.concat(b); }, [])
+    .filter(function (n) { return n.indexOf('Cliente ') === 0; }), [],
   'cliente fechado no meio dos leads a converter é ruído na fila do dia');
-igual('"minha carteira" também não', filtrar('carteira'), ['Em Negociação', 'Esperando pagar'],
-  'a carteira é o que ele tem para converter');
-igual('e os chips da base nova continuam valendo', filtrar('casa'), ['Conta da casa']);
+igual('a conta de prospecção fica em "conta nova"', noProposito('nova'), ['Conta da casa']);
+igual('e o resto da carteira cai em "avançar o funil"', noProposito('funil'), ['Em Negociação'],
+  'sem o sexto propósito, 119 dos 140 negócios abertos do time sumiam da munição');
+checar('nenhuma conta fica sem propósito',
+  LIVRES.every(function (l) { return !!doProposito(l); }),
+  'propósito nulo é conta invisível — e o Julyan pediu o contrário: "ele pode movimentar'
+    + ' qualquer lead da carteira"');
 
 /* ══ 3. O MOTIVO SAI DO NEGÓCIO ═════════════════════════════════════════════════════ */
 const iAg = tpl.indexOf('const motivoDaVisita = ');
