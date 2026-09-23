@@ -2159,3 +2159,16 @@ try {
 } catch (e) {
   process.exit(1);
 }
+
+/* ══ GUARDA 29 — <span> QUE EMPILHA SEM DECLARAR display (22/09/26) ════════════════════
+   Julyan viu no print: "Cadências resolvidas6 contas acima da régua da etapa sem
+   decisão". <span> é inline, a margem vertical não aplica e a linha de baixo encosta na
+   de cima. Eram três lugares: a daily do executivo e dois blocos do Playbook.
+   No arquivo as regras PARECEM certas — o que está errado é o display do pai, que mora
+   em outro bloco. Nenhum grep liga as duas pontas, e 33 guardas passaram por cima. */
+try {
+  execFileSync(process.execPath, [require('path').join(__dirname, 'checar-span-empilhado.js')],
+    { stdio: 'inherit' });
+} catch (e) {
+  process.exit(1);
+}
