@@ -217,6 +217,70 @@ checar('gestor e executivo usam a mesma função',
   (tpl.match(/comissaoDe\(comissaoClientesDoRep\(/g) || []).length === 2,
   'duas contas para o mesmo pagamento é como as duas telas divergem');
 
+/* ══ 11. A IDENTIDADE: SEÇÃO DO CARD, E NÃO CARD DENTRO DE CARD ═══════════════════
+   Julyan, 22/09/26: "quero TUDO NA MSM IDENTIDADE VISUAL". As duas telas do variável
+   moram DENTRO de um card que já existe — o card da v10 no gestor, o .h9 no executivo —
+   e esses cards são feitos de seções de largura cheia separadas por um fio. A primeira
+   versão das duas tinha fundo, borda e raio próprios: virava caixa boiando, com a
+   margem esquerda fora do prumo das vizinhas. É a mesma emenda visível que o creme da
+   prancha v6 tinha feito entre abas, e o estilo computado de cada regra estava perfeito
+   nos dois casos — o defeito só aparece MEDINDO CONTRA A VIZINHA.
+
+   Estas checagens medem a REGRA (seção não tem raio nem borda de quatro lados), não a
+   grafia de um valor. Se alguém reescrever o bloco com outros números continua válido;
+   se transformar a seção em card de novo, reprova. */
+function regraCss(sel) {
+  const i = tpl.indexOf('\n  ' + sel + '{');
+  if (i < 0) return null;
+  const j = tpl.indexOf('}', i);
+  return j < 0 ? null : tpl.slice(i, j + 1);
+}
+const REGRAS = { '.cmt': regraCss('.cmt'), '.cm1': regraCss('.cm1') };
+
+/* A ÂNCORA VIVA PRIMEIRO: sem isto, um rename faria as três checagens abaixo medirem o
+   vazio e passarem em verde — o modo mais comum de uma guarda morrer calada. */
+Object.keys(REGRAS).forEach(function (sel) {
+  checar('a regra ' + sel + ' existe no template', !!REGRAS[sel],
+    'sem a âncora as checagens de identidade medem o vazio e passam sozinhas');
+});
+
+Object.keys(REGRAS).forEach(function (sel) {
+  const r = REGRAS[sel] || '';
+  checar(sel + ' não tem raio — seção de card não arredonda',
+    !!REGRAS[sel] && !/border-radius/.test(r),
+    'as vizinhas dentro do mesmo card têm raio 0; quem arredonda vira caixa boiando');
+  checar(sel + ' não se cerca de borda nos quatro lados',
+    !!REGRAS[sel] && !/(^|[;{\s])border\s*:/.test(r),
+    'o card já tem a borda; a seção separa-se da vizinha por UM fio (border-top ou border-bottom), como .h9-dia faz');
+});
+
+/* OS TONS DO BLOCO DO GESTOR são os do card que o abriga, e não os tokens frios do resto
+   do app: dentro daquele card quem manda é aquele card. O verde entra por token porque é
+   semântico (dinheiro que entra) e vale no app inteiro. */
+const PALETA_DO_CARD = ['#E7E3DA', '#FBFAF6', '#FDFEFF', '#2B3440', '#7A8494', '#8B93A3',
+  '#5B667A', '#E4E0D6'];
+const iCmt = tpl.indexOf('\n  .cmt{');
+const iFimCmt = tpl.indexOf('\n  .cm1{', iCmt);
+checar('o bloco de css do variável do time foi encontrado inteiro',
+  iCmt > -1 && iFimCmt > iCmt,
+  'sem o recorte a checagem de paleta abaixo não mede nada');
+const cssCmt = (iCmt > -1 && iFimCmt > iCmt) ? tpl.slice(iCmt, iFimCmt) : '';
+const forasteiros = [...new Set((cssCmt.match(/#[0-9A-Fa-f]{6}/g) || [])
+  .map(function (h) { return h.toUpperCase(); }))]
+  .filter(function (h) { return PALETA_DO_CARD.indexOf(h) < 0; });
+checar('a tabela do time usa só a paleta do card que a abriga',
+  cssCmt.length > 0 && forasteiros.length === 0,
+  'tom de fora: ' + (forasteiros.join(', ') || '(nenhum, mas o recorte veio vazio)'));
+
+/* O ESPAÇO NO CABEÇALHO. Enquanto ele era flex, o `gap` separava o nome do resumo; virou
+   seção, o gap foi embora e na tela lia "VARIÁVEL DO TIME2 CLIENTES NO MÊS". Nenhuma
+   medição de estilo computado diria uma palavra sobre isso — só olhar a foto. */
+const iCab = tpl.indexOf("'<div class=\"cmt-cab\">'");
+const cabMarkup = iCab > -1 ? tpl.slice(iCab, iCab + 400) : '';
+checar('o cabeçalho separa o nome do resumo',
+  iCab > -1 && /<\/b>(\s|&nbsp;|—)+'/.test(cabMarkup),
+  'sem gap e sem espaço no markup as duas partes encostam e viram uma palavra só');
+
 console.log('');
 console.log('variável: ' + ok + ' verificações');
 if (falhas.length) {
