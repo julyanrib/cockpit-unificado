@@ -20824,6 +20824,37 @@ const PL6_ETAPAS_QUE_SAIRAM = (typeof FN2_ETAPAS !== 'undefined' ? FN2_ETAPAS : 
   .filter(e => e.saiu).map(e => String(e.id))
   .concat(typeof FN2_POS_VENDA !== 'undefined' ? FN2_POS_VENDA.map(String) : []);
 
+const PL6_ETAPAS_BASE = ['1396006162', '1396006163'];
+
+const PL6_ETAPA_AG_PGTO = '1395880473';
+function pl6Base(rep, regioes) {
+  const todos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
+    .filter(function (d) { return PL6_ETAPAS_BASE.indexOf(String(d.stageId || '')) >= 0; });
+  const porChave = new Map((regioes || []).map(function (r) { return [r.chave, r]; }));
+  return todos.map(function (d) {
+    const reg = pl6RegiaoDoLead(d, regioes, porChave);
+    return {
+      id: 'c-' + d.id,
+      tipo: 'c',
+      base: true,
+      dealId: String(d.id),
+      nome: d.name || d.dealname || 'Sem nome',
+      stageId: String(d.stageId || ''),
+      etapa: d.stage || (typeof STAGE_LABELS !== 'undefined' ? STAGE_LABELS[d.stageId] : '') || 'Cliente',
+      dias: d.dias != null ? Number(d.dias) : null,
+
+      sla: false,
+      lat: d.lat != null ? Number(d.lat) : null,
+      lng: d.lng != null ? Number(d.lng) : null,
+      regiao: reg ? reg.chave : null,
+      regiaoNome: reg ? reg.nome : null,
+      km: reg ? reg.km : null,
+      semEndereco: d.lat == null || d.lng == null,
+      proximaAtividade: d.proximaAtividade || null
+    };
+  });
+}
+
 function pl6Carteira(rep, regioes) {
   const abertos = (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
     .filter(d => PL6_ETAPAS_QUE_SAIRAM.indexOf(String(d.stageId || '')) < 0);
@@ -20888,6 +20919,7 @@ function pl6Reciclagem(rep, regioes) {
 function pl6TodasAsContas(rep, regioes) {
   return pl6Carteira(rep, regioes)
     .concat(typeof pl6Reciclagem === 'function' ? pl6Reciclagem(rep, regioes) : [])
+    .concat(typeof pl6Base === 'function' ? pl6Base(rep, regioes) : [])
     .concat(pl6Novos(rep, regioes));
 }
 
@@ -21182,7 +21214,10 @@ async function pl6CriarLead(rep, campos) {
   };
 
   const candidatos = [];
+
+  const FECHADAS_AQUI = ['1396006162', '1396006163', '1396006164'];
   (typeof meusNegociosAbertos === 'function' ? meusNegociosAbertos(rep.ownerId) : [])
+    .filter(function (d) { return FECHADAS_AQUI.indexOf(String(d.stageId || '')) < 0; })
     .forEach(function (d) {
       candidatos.push({ nome: d.name || d.dealname, tel: d.celular || d.telefone,
         onde: 'na sua carteira' + (d.stage ? ', em ' + d.stage : '') });
@@ -21466,6 +21501,7 @@ function pfEtCor(etapa) { return PF_ET_COR[String(etapa || '')] || '#E51A31'; }
 
 const PF_TAGS = {
   carteira: { tag: 'carteira', cor: '#FDFEFF', bg: '#2B3440' },
+  base: { tag: 'cliente da base', cor: '#FDFEFF', bg: '#1E9E7B' },
   recic: { tag: 'reciclagem', cor: '#FDFEFF', bg: '#8E3B5C' },
   casa: { tag: 'casa dos dados', cor: '#8A6516', bg: '#FDF6E7' },
   aval: { tag: 'mais avaliados', cor: '#FDFEFF', bg: '#8E3B5C' },
@@ -21477,7 +21513,11 @@ const PF_TAGS = {
   rua: { tag: 'achei na rua', cor: '#FDFEFF', bg: '#8A6516' }
 };
 function pfTag(l) {
-  if (l.tipo === 'c') return l.reciclagem ? PF_TAGS.recic : PF_TAGS.carteira;
+
+  if (l.tipo === 'c') {
+    if (l.base) return PF_TAGS.base;
+    return l.reciclagem ? PF_TAGS.recic : PF_TAGS.carteira;
+  }
   return PF_TAGS[l.grupo] || PF_TAGS.casa;
 }
 
@@ -21499,7 +21539,11 @@ function pl6DadosFinal(rep) {
   const diasCobertos = grade.filter(col => col.some(v => pl6SlotId(v))).length;
 
   const filtro = s.fonte || 'todas';
+
   const daOrigem = livres.filter(function (l) {
+    if (filtro === 'base') return l.base === true;
+    if (filtro === 'cobranca') return !l.base && String(l.stageId || '') === PL6_ETAPA_AG_PGTO;
+    if (l.base) return false;
     if (filtro === 'todas') return true;
     if (filtro === 'carteira') return l.tipo === 'c';
     return l.tipo === 'n' && l.grupo === filtro;
@@ -21662,7 +21706,7 @@ function pl6DadosFinal(rep) {
       };
     }),
 
-    blocos: [PL6_RUA, PL6_REL].map(function (id) {
+    blocos: [PL6_RUA].map(function (id) {
       const bl = pl6BlocoDoSlot(id);
       const sel = !!(pl6UI.sel && pl6UI.sel.bloco === id);
       return {
@@ -21676,10 +21720,18 @@ function pl6DadosFinal(rep) {
         sel: sel
       };
     }),
-    filtros: [['todas', 'todas'], ['carteira', 'minha carteira'], ['casa', 'casa dos dados'],
-      ['aval', 'mais avaliados']].map(function (par) {
+
+    filtros: [['todas', 'todas'], ['carteira', 'minha carteira'],
+      ['base', '♥ relacionamento'], ['cobranca', '$ cobrar pagamento'],
+      ['casa', 'casa dos dados'], ['aval', 'mais avaliados']].map(function (par) {
       const on = filtro === par[0];
-      return { rot: esc(par[0] === 'todas' ? par[1] + ' · ' + livres.length : par[1]),
+      const quantos = par[0] === 'base'
+        ? livres.filter(function (l) { return l.base === true; }).length
+        : (par[0] === 'cobranca'
+          ? livres.filter(function (l) { return !l.base && String(l.stageId || '') === PL6_ETAPA_AG_PGTO; }).length
+          : null);
+      return { rot: esc(par[0] === 'todas' ? par[1] + ' · ' + livres.filter(function (l) { return !l.base; }).length
+        : (quantos == null ? par[1] : par[1] + ' · ' + quantos)),
         on: par[0],
         bg: on ? '#2B3440' : '#FDFEFF', cor: on ? '#FDFEFF' : '#2B3440',
         borda: on ? '#2B3440' : '#DCE1EA' };
@@ -22232,10 +22284,14 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
       return;
     }
 
+    const motivoDaVisita = l.base ? 'relacionamento'
+      : (String(l.stageId || '') === PL6_ETAPA_AG_PGTO ? 'cobranca' : null);
+
     try {
       if (typeof criarTarefaVisitaNoHubspot === 'function') {
         await criarTarefaVisitaNoHubspot({ id: l.dealId, name: l.nome, nome: l.nome },
-          rep.ownerId, hora, { silencioso: true, origem: 'planejamento', dealId: l.dealId }, diaISO);
+          rep.ownerId, hora, { silencioso: true, origem: 'planejamento', dealId: l.dealId,
+            ...(motivoDaVisita ? { motivo: motivoDaVisita } : {}) }, diaISO);
       }
       if (typeof registrarAgendamentoLocal === 'function') {
         registrarAgendamentoLocal({ id: l.dealId, nome: l.nome }, diaISO, hora, rep.ownerId);
@@ -37426,6 +37482,8 @@ async function criarTarefaVisitaNoHubspot(lead, ownerId, horaPrevista, opcoes, d
         ...(opcoes && opcoes.sugeridoPorGestor ? { sugeridoPorGestor: true } : {}),
         ...(opcoes && opcoes.origem ? { origem: opcoes.origem } : {}),
         ...(opcoes && opcoes.dealId ? { dealId: String(opcoes.dealId) } : {}),
+
+        ...(opcoes && opcoes.motivo ? { motivo: String(opcoes.motivo) } : {}),
         ...(dataISO ? { data: dataISO } : {}) })
     }), 8000, 'criar-tarefa-rota');
     const data = await resp.json().catch(() => ({}));
