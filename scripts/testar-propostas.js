@@ -141,8 +141,17 @@ checar('a forma de pagamento continua marcada com o ▭ da prancha',
    é a mesma: ele aparece em TODO período com desconto, e não só no de maior desconto —
    quem escolhe compara os três, e ver −10% e −15% é o que faz o de 12 meses parecer o
    que ele é. */
+/* A REGRA É A CONDIÇÃO, NÃO A COR. Esta checagem exigia `background:#1E9E7B` cravado e o
+   selo terminando exatamente em `−${per.desconto}%` — e reprovou a oferta de 30% (23/09),
+   que pinta o selo de vermelho e escreve "OFERTA" antes do número, sem mexer na regra.
+   O que ela existe para proteger está escrito duas vezes acima: o selo aparece em TODO
+   período com desconto, e não só no de maior. Isso é a condição `per.desconto ?` e o
+   número saindo de `per.desconto` — o resto é desenho.
+   A checagem logo abaixo já tinha aprendido esta lição em outro dia, presa ao NOME do
+   período; esta ficou presa à cor. */
 checar('o selo aparece em todo período com desconto',
-  /\$\{per\.desconto \? `<span style="[^"]*background:#1E9E7B[^"]*">−\$\{per\.desconto\}%<\/span>`/.test(template));
+  /\$\{per\.desconto \?[\s\S]{0,400}?\$\{per\.desconto\}%<\/span>`/.test(template)
+    && !/per\.desconto === |Math\.max\([^)]*desconto/.test(template));
 checar('e a nota diz quanto economiza no período',
   /economiza ' \+ prcMoeda\(c\.economia\) \+ '\/período'/.test(template));
 /* FRAÇÃO PEQUENA NÃO VIRA "MÊS GRÁTIS": o trimestral dá 0,3 mês, e chamar isso de
