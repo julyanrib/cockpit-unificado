@@ -531,8 +531,13 @@ conferir('a tela marca quando o número de estado veio da rede antiga',
   /estadoFresco: !!snapReps\[id\],/.test(corpoDados),
   'sem o campo, a tela não tem como distinguir o número de hoje do de domingo');
 
+/* A REGRA É QUE O CAMPO SEJA LIDO E VIRE AVISO NA LINHA — e não a cor do aviso.
+   Esta guarda exigia o hexadecimal #B0782A e reprovou a conversão da aba para os tokens
+   da casa (23/09), que não encostou no aviso. É a quarta guarda cravada na grafia a
+   reprovar desenho novo no mesmo dia. Agora ela mede o que existe para proteger: o
+   ternário que LÊ estadoFresco, e a palavra que aparece na tela quando o número é velho. */
 conferir('e esse aviso APARECE na linha da pessoa',
-  /r\.estadoFresco \? '' : ' · <b style="color:#B0782A;">travados e mês do'/.test(tpl),
+  /r\.estadoFresco \? '' :/.test(tpl) && /travados e mês do/.test(tpl),
   'campo emitido e nunca lido é a dívida que esta base já tem treze vezes');
 
 /* A PROSA CONTINUA SENDO DA SEMANA FECHADA, e isso NÃO é defeito: ela é a leitura
