@@ -1317,10 +1317,20 @@
   #agendaContent [data-pl6-so-icone]{width:24px;}
   #agendaContent [data-pl6-fi-fechar]{width:28px;}
 
+  #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(5,minmax(0,1fr));}
+  @media (max-width:1050px){
+    #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(3,minmax(0,1fr));}
+  }
+  @media (max-width:760px){
+    #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(2,minmax(0,1fr));}
+  }
+  @media (max-width:640px){
+    #agendaContent [data-pl6-grade-semana]{grid-template-columns:minmax(0,1fr);}
+  }
+
   @media (max-width:760px){
 
     #agendaContent [data-pl6-acao],
-    #agendaContent [data-pl6-terr],
     #agendaContent [data-pl6-regiao],
     #agendaContent [data-pl6-remover],
     #agendaContent [data-pl6-novo-lead],
@@ -1330,7 +1340,6 @@
     #agendaContent [data-pl6-fi-etapa],
     #agendaContent [data-pl6-fi-fechar],
     #agendaContent [data-pl6-reg-in],
-    #agendaContent [data-pl6-busca-bairro],
 
     #agendaContent [data-pl6-end-rua],
     #agendaContent [data-pl6-end-bairro],
@@ -19814,7 +19823,8 @@ async function espelharPassoNoPlanoSemanal(lead, dataISO, hora, ownerId) {
     return { cheio: true, dia: dias[di].rot };
   }
 
-  grade[di][si] = hora ? { id: idNaGrade, hora: String(hora) } : idNaGrade;
+  grade[di][si] = Object.assign({ id: idNaGrade },
+    hora ? { hora: String(hora) } : {}, { p: 'follow' });
 
   const r = await pl6Gravar(rep, { grade: grade }, semanaDaTarefa);
   if (r.error) return { erro: r.error.message || 'o Supabase recusou' };
@@ -21073,9 +21083,6 @@ let pl6UI = {
 
   q: '',
 
-  terr: null,
-
-  verTodosTerr: false,
   slotPicker: null, rotaPicker: null, verTodasRegioes: false,
 
   novoLead: null,
@@ -21098,6 +21105,11 @@ function pl6SlotId(v) {
 
   if (id === PL6_BLOQUEADO || id === PL6_RUA || id === PL6_REL) return null;
   return id;
+}
+
+function pl6SlotProposito(v) {
+  if (!v || typeof v !== 'object') return null;
+  return v.p ? String(v.p) : null;
 }
 function pl6SlotRua(v) {
   if (!v) return false;
@@ -21191,13 +21203,15 @@ function pl6ItensDoDia(coluna, porId) {
   for (let si = 0; si < col.length; si++) {
     const v = col[si];
     const hora = pl6SlotHora(v, si);
-    if (pl6SlotBloqueado(v)) { itens.push({ si: si, hora: hora, tipo: 'bloqueado' }); continue; }
-    if (pl6SlotRua(v)) { itens.push({ si: si, hora: hora, tipo: 'rua' }); continue; }
-    if (pl6SlotRel(v)) { itens.push({ si: si, hora: hora, tipo: 'rel' }); continue; }
+
+    const p = pl6SlotProposito(v);
+    if (pl6SlotBloqueado(v)) { itens.push({ si: si, hora: hora, tipo: 'bloqueado', p: p }); continue; }
+    if (pl6SlotRua(v)) { itens.push({ si: si, hora: hora, tipo: 'rua', p: 'rua' }); continue; }
+    if (pl6SlotRel(v)) { itens.push({ si: si, hora: hora, tipo: 'rel', p: 'relac' }); continue; }
     const id = pl6SlotId(v);
     if (!id) continue;
     const l = porId ? (porId.get(id) || null) : null;
-    itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l });
+    itens.push({ si: si, hora: hora, id: id, tipo: l ? 'visita' : 'orfa', lead: l, p: p });
   }
 
   itens.sort(pl6PorHora);
@@ -21608,9 +21622,7 @@ function pl6DadosFinal(rep) {
   const propAtivo = s.proposito || (temFollow ? 'follow' : 'funil');
   const daOrigem = comProposito.filter(function (l) { return l.proposito === propAtivo; });
 
-  const porBairro = s.terr
-    ? daOrigem.filter(l => l.tipo === 'c' || String(l.regiao || '') === String(s.terr))
-    : daOrigem;
+  const porBairro = daOrigem;
 
   const alvoBusca = pl6ChaveBairro(String(s.q || '').trim());
   const munFilt = !alvoBusca ? porBairro : daOrigem.filter(function (l) {
@@ -21768,19 +21780,6 @@ function pl6DadosFinal(rep) {
     avisoBg: s.sel ? '#FDF3F4' : '#EAF6F1',
     avisoCor: s.sel ? '#E51A31' : '#1E9E7B',
     soltar: 'soltar',
-
-    bairros: regioes.map(function (r) {
-      const n = livres.filter(l => String(l.regiao || '') === String(r.chave)).length;
-      const on = String(s.terr || '') === String(r.chave);
-      return {
-        nome: esc(r.nome), n: String(n),
-        bg: on ? '#8E3B5C' : '#FDFEFF', cor: on ? '#FDFEFF' : '#2B3440',
-        borda: on ? '#8E3B5C' : '#E2E6EE', nCor: on ? '#F2D9E4' : '#8E3B5C',
-        on: r.chave,
-
-        chave: pl6ChaveBairro(r.nome)
-      };
-    }).filter(b => Number(b.n) > 0 || String(s.terr || '') === '').sort((a, b) => Number(b.n) - Number(a.n)),
     dias: dias.map(function (d, di) {
       const col = grade[di] || [];
 
@@ -21838,11 +21837,19 @@ function pl6DadosFinal(rep) {
             : (it.tipo === 'bloqueado' ? 'compromisso fora da rua'
               : [it.lead.etapa || (it.lead.tipo === 'n' ? 'sem negócio' : null),
                 it.lead.regiaoNome || null].filter(Boolean).join(' · '));
+
+          const propId = it.p || (it.lead && typeof pl6PropositoDoLead === 'function'
+            ? pl6PropositoDoLead(it.lead) : null);
+          const prop = (propId && it.tipo !== 'bloqueado' && typeof pl6Proposito === 'function')
+            ? pl6Proposito(propId) : null;
           return {
             hora: esc(it.hora || 'sem hora'),
             nome: esc(nome), sub: esc(sub),
-            etCor: bl ? bl.cor
-              : (it.tipo === 'bloqueado' ? '#B4AC9C' : pfEtCor(it.lead ? it.lead.etapa : '')),
+            selo: prop ? esc(prop.etiqueta) : '',
+            seloCor: prop ? prop.selo : '', seloBg: prop ? prop.seloBg : '',
+
+            etCor: prop ? prop.cor : (bl ? bl.cor
+              : (it.tipo === 'bloqueado' ? '#B4AC9C' : pfEtCor(it.lead ? it.lead.etapa : ''))),
             cardBorda: movendo ? '#E51A31' : '#E7E3DA',
             mover: 'mover:' + di + ':' + it.si,
             rm: di + '.' + it.si,
@@ -22195,7 +22202,10 @@ function pl6TelaFinalHTML(d) {
         <span style="flex:none;width:3px;background:${sl.etCor};"></span>
         <button type="button" data-pl6-acao="${sl.mover}" title="clique pra mover de dia/horário" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px 8px 9px;cursor:pointer;">
           <span style="display:flex;align-items:center;gap:6px;min-width:0;"><b style="flex:none;font:900 10.5px 'Archivo',sans-serif;color:#FFFDF8;background:#2B3440;border-radius:999px;padding:3px 8px;font-variant-numeric:tabular-nums;">${sl.hora}</b><b style="font:800 12px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.nome}</b></span>
-          <span style="display:block;font:700 9.5px 'Manrope',sans-serif;color:#7A8494;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.sub}</span>
+          <span style="display:flex;align-items:center;gap:5px;margin-top:3px;min-width:0;">
+            ${sl.selo ? `<b style="flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.07em;color:${sl.seloCor};background:${sl.seloBg};border-radius:4px;padding:2px 5px;">${sl.selo}</b>` : ''}
+            <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.sub}</span>
+          </span>
         </button>
         <button type="button" data-pl6-remover="${sl.rm}" data-pl6-so-icone="1" title="tirar da agenda — volta pra munição" style="flex:none;border:0;background:transparent;color:#B4AC9C;font:800 12px 'Manrope',sans-serif;cursor:pointer;padding:0;">✕</button>
       </div>`).join('');
@@ -22241,9 +22251,6 @@ function pl6TelaFinalHTML(d) {
         <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${p.sub}</span>
       </span>
     </button>`).join('');
-
-  const bairrosHTML = (d.bairros || []).map(b => `
-    <button type="button" data-pl6-terr="${b.on}" data-nome="${b.chave}" style="display:inline-flex;align-items:center;gap:6px;border:1px solid ${b.borda};border-radius:999px;background:${b.bg};padding:6px 13px;font:800 10.5px 'Manrope',sans-serif;color:${b.cor};cursor:pointer;white-space:nowrap;">${b.nome}<b style="font:900 10.5px 'Archivo',sans-serif;color:${b.nCor};font-variant-numeric:tabular-nums;">${b.n}</b></button>`).join('');
 
   const filtrosHTML = (d.faixas || []).map(ft => `
     <button type="button" data-pl6-acao="${ft.on}" style="border:1px solid ${ft.borda};border-radius:999px;background:${ft.bg};padding:5px 11px;font:800 9.5px 'Manrope',sans-serif;color:${ft.cor};cursor:pointer;white-space:nowrap;min-height:28px;">${ft.rot}</button>`).join('');
@@ -22330,17 +22337,9 @@ function pl6TelaFinalHTML(d) {
 
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:stretch;">
       <div style="padding:18px 22px 24px;min-width:0;">
-        <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;align-items:start;">${diasHTML}</div>
+        <div data-pl6-grade-semana="1" style="display:grid;gap:10px;align-items:start;">${diasHTML}</div>
         <span style="display:block;font:700 10px/1.6 'Manrope',sans-serif;color:#7A8494;margin-top:12px;">▸ agendou aqui = o lead entra <b style="color:#E51A31;">automaticamente na sua Daily</b> do dia, com hora — sem redigitar nada · ✕ devolve pra munição · clique num card agendado pra movê-lo de horário · os dois blocos da munição (prospecção de rua e visita de relacionamento) ocupam hora do mesmo jeito e aparecem na Daily junto das visitas</span>
 
-        <div style="margin-top:14px;background:#FBFAF6;border:1px solid #E7E3DA;border-radius:12px;padding:12px 16px;">
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:9px;">
-            <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#8E3B5C;">Território — bairros mapeados</span>
-            <input type="text" data-pl6-busca-bairro="1" placeholder="buscar bairro ou região…" style="flex:1;min-width:200px;max-width:320px;border:1px solid #DCE1EA;border-radius:999px;background:#FDFEFF;padding:6px 13px;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;outline:none;">
-            <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;">clique num bairro → filtra a munição · nº exato de contas livres no bairro</span>
-          </div>
-          <div data-pl6-bairros="1" style="display:flex;gap:6px;flex-wrap:wrap;">${bairrosHTML}</div>
-        </div>
       </div>
 
       <div data-pl6-municao="1" style="border-left:1px solid #E7E3DA;background:#FBFAF6;padding:18px 18px 20px;min-width:0;overflow:auto;max-height:min(1200px, calc(100vh - 120px));">
@@ -22475,7 +22474,12 @@ async function pl6AgendarNoSlot(rep, id, di, si, ganchos) {
 
     const horaEscolhida = gk.hora && /^\d{1,2}:\d{2}$/.test(String(gk.hora)) ? String(gk.hora) : null;
     const hora = horaEscolhida || pl6HoraDaFaixa(si) || PL6_HORAS[0];
-    const valorDoSlot = horaEscolhida ? { id: l.id, hora: horaEscolhida } : l.id;
+
+    const propDoSlot = (typeof pl6PropositoDoLead === 'function') ? pl6PropositoDoLead(l) : null;
+    const valorDoSlot = (horaEscolhida || propDoSlot)
+      ? Object.assign({ id: l.id }, horaEscolhida ? { hora: horaEscolhida } : {},
+        propDoSlot ? { p: propDoSlot } : {})
+      : l.id;
 
     if (l.tipo === 'n') {
       if (typeof abrirPassagemContaAlvoProFunil !== 'function') {
@@ -22746,15 +22750,6 @@ function pl6Ligar(box, rep) {
       setTimeout(devolverFoco, 0);
       return;
     }
-    const busca = ev.target.closest && ev.target.closest('[data-pl6-busca-bairro]');
-    if (busca) {
-      const q = pl6ChaveBairro(busca.value || '');
-      const caixa = box.querySelector('[data-pl6-bairros]');
-      if (!caixa) return;
-      caixa.querySelectorAll('[data-pl6-terr]').forEach(function (o) {
-        o.hidden = !!q && (o.getAttribute('data-nome') || '').indexOf(q) < 0;
-      });
-    }
   });
 
   box.addEventListener('focusin', function (ev) {
@@ -22788,7 +22783,6 @@ function pl6Ligar(box, rep) {
       || ev.target.closest('[data-pl6-end-gravar]')
       || ev.target.closest('[data-pl6-fi-fechar]')
       || ev.target.closest('[data-pl6-regiao]')
-      || ev.target.closest('[data-pl6-terr]')
       || ev.target.closest('[data-pl6-novo-lead]')
       || ev.target.closest('[data-pl6-novo-fechar]')
       || ev.target.closest('[data-pl6-novo-fonte]')
@@ -22817,12 +22811,6 @@ function pl6Ligar(box, rep) {
       pl6UI.toast = nova === 0
         ? 'de volta para a semana atual'
         : 'montando a semana de ' + pl6RotuloSemana(1) + ' — a sua Daily de hoje continua na atual';
-      return redesenhar();
-    }
-
-    if (d.pl6Terr) {
-      pl6UI.terr = (pl6UI.terr === d.pl6Terr) ? null : d.pl6Terr;
-      pl6UI.pickerDia = null;
       return redesenhar();
     }
 
@@ -23168,8 +23156,10 @@ function pl6Ligar(box, rep) {
             s.toast = dias0[di].rot + ' está com ' + PL6_SLOTS + ' contas — tire uma para pôr outra';
             return redesenhar();
           }
+
+          const pEra = pl6SlotProposito(era);
           g[s.sel.deDi][s.sel.deSi] = null;
-          g[di][destino] = { id: id, hora: hora };
+          g[di][destino] = Object.assign({ id: id, hora: hora }, pEra ? { p: pEra } : {});
           const nome = (s.sel.lead && s.sel.lead.nome) || 'a visita';
           const deRot = (dias0[s.sel.deDi] || {}).rot || 'o dia';
           s.sel = null; s.diaAtivo = null;
@@ -23185,7 +23175,7 @@ function pl6Ligar(box, rep) {
         if (s.sel.bloco) {
           const bl = pl6BlocoDoSlot(s.sel.bloco);
           const g = pl6GradeDoPlano();
-          g[di][destino] = { id: bl.id, hora: hora };
+          g[di][destino] = { id: bl.id, hora: hora, p: bl.id === PL6_RUA ? 'rua' : 'relac' };
           s.sel = null; s.diaAtivo = null;
           return mutar({ grade: g }, dias0[di].rot + ' ' + hora + ' · '
             + (bl.id === PL6_RUA
