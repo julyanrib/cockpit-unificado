@@ -205,6 +205,27 @@ const CARTEIRA = [{ id: 1, name: 'NA BRASA', stage: 'Negociação', celular: '21
   checar('e nem o que já está na munição de prospecção',
     !!(r4 && r4.erro) && r4.erro.indexOf('munição') > -1, 'veio ' + JSON.stringify(r4));
 
+  /* ══ NEGÓCIO FECHADO NÃO BLOQUEIA (23/09/26, achado clicando no preview) ═══════════
+     Criar um lead com o nome de um cliente GANHO, em ONBOARDING ou PERDIDO era recusado
+     com "já está na sua carteira, em Enviado Onboarding". A função meusNegociosAbertos
+     tem esse nome mas devolve TODAS as etapas — é ela que alimenta o funil inteiro.
+     Cliente que churnou volta a ser lead, restaurante perdido em março é o que a
+     reciclagem resgata, e quem fechou pode abrir uma segunda loja. */
+  const FECHADOS = [
+    { id: 9, name: 'Cliente que Churnou', stage: 'Ganho', stageId: '1396006162' },
+    { id: 10, name: 'Em Onboarding', stage: 'Enviado Onboarding', stageId: '1396006163' },
+    { id: 11, name: 'Perdido em Março', stage: 'Perdido', stageId: '1396006164' }
+  ];
+  const rf1 = await criarCom(FECHADOS, [], [], { nome: 'Cliente que Churnou', telefone: '' });
+  checar('cliente ganho não impede de trabalhar o lugar de novo', !!(rf1 && rf1.lead) && !rf1.erro,
+    'veio ' + JSON.stringify(rf1));
+  const rf2 = await criarCom(FECHADOS, [], [], { nome: 'Perdido em Março', telefone: '' });
+  checar('nem negócio perdido', !!(rf2 && rf2.lead) && !rf2.erro,
+    'é exatamente para isso que a reciclagem existe · veio ' + JSON.stringify(rf2));
+  const rf3 = await criarCom(FECHADOS, [], [], { nome: 'Em Onboarding', telefone: '' });
+  checar('nem cliente em onboarding', !!(rf3 && rf3.lead) && !rf3.erro,
+    'veio ' + JSON.stringify(rf3));
+
   /* O NEGÓCIO DE OUTRO DONO NÃO BLOQUEIA: a carteira é dele, não do time. */
   const r5 = await criarCom([], [{ ownerId: '99999999', name: 'Padaria X' }], [],
     { nome: 'Padaria X', telefone: '' });
