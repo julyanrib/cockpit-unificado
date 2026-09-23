@@ -25402,6 +25402,15 @@ function tm10Provavel(m, etapas) {
   const pag = etapas.find(function (e) { return e.id === '1395880473'; }) || { n: 0, mrr: 0 };
   const quentes = ((DATA.temperatura && DATA.temperatura.quentes) || []).filter(Boolean);
   const mrrQuentes = quentes.reduce(function (s, q) { return s + tm10MrrDo(q); }, 0);
+  /* ══ O QUENTE DE AG. PAGAMENTO NÃO ENTRA DUAS VEZES (23/09/26) ═══════════════════
+     A temperatura dá o fator máximo de etapa para Ag. Pagamento, então é lá que o
+     quente se concentra: medido na produção, 9 dos 15 quentes estavam dentro dos 10
+     negócios de Ag. Pagamento. Cada um deles entrava inteiro por `pag.n` e mais 0,6
+     como quente — 1,6 negócio. O gap aparecia 5 clientes menor do que é.
+     A LISTA DOS QUENTES CONTINUA INTEIRA na tela: o que muda é só a SOMA. */
+  const idsPag = new Set((pag.leads || []).map(function (l) { return String(l.id); }));
+  const quentesNovos = quentes.filter(function (q) { return !idsPag.has(String(q.id)); });
+  const mrrQuentesNovos = quentesNovos.reduce(function (s, q) { return s + tm10MrrDo(q); }, 0);
   /* ══ vendasMes É OBJETO, NÃO LISTA — E ELA ME DEU DUAS VERDADES (10/09/26) ══════════
      Eu escrevi `(DATA.vendasMes || []).reduce(...)` de cabeça e a aba do gestor não
      desenhou: TypeError no primeiro render. A forma real é
@@ -25439,7 +25448,7 @@ function tm10Provavel(m, etapas) {
      passa a vir de vendasMes — a mesma lista que produz o MRR e a receita, entao os tres
      eixos falam da mesma venda. */
   const fechClientes = vm.totalClientes != null ? Number(vm.totalClientes) : m.time.fech;
-  const clientes = fechClientes + pag.n + quentes.length * TM10_PESO_QUENTE;
+  const clientes = fechClientes + pag.n + quentesNovos.length * TM10_PESO_QUENTE;
   return {
     fechN: fechClientes, fechMrr: fechMrr, fechComMrr: fechComMrr,
     fechReceita: fechReceita,
@@ -25452,11 +25461,13 @@ function tm10Provavel(m, etapas) {
     ajustadas: ajustadas,
     mesLabel: vm.mesLabel || '',
     pagN: pag.n, pagMrr: pag.mrr,
+    /* quentesN é a LISTA (o que ele olha); quentesNovosN é o que ENTRA NA SOMA. */
     quentesN: quentes.length, quentesMrr: mrrQuentes,
-    quentesPondN: quentes.length * TM10_PESO_QUENTE,
-    quentesPondMrr: mrrQuentes * TM10_PESO_QUENTE,
+    quentesNovosN: quentesNovos.length, quentesNovosMrr: mrrQuentesNovos,
+    quentesPondN: quentesNovos.length * TM10_PESO_QUENTE,
+    quentesPondMrr: mrrQuentesNovos * TM10_PESO_QUENTE,
     clientes: Math.round(clientes),
-    mrr: fechMrr + pag.mrr + mrrQuentes * TM10_PESO_QUENTE,
+    mrr: fechMrr + pag.mrr + mrrQuentesNovos * TM10_PESO_QUENTE,
     meta: m.time.meta,
     gap: Math.max(0, m.time.meta - Math.round(clientes)),
     quentes: quentes
@@ -25922,7 +25933,7 @@ function tm10Dados() {
     ? fmtDailyLabel(isoDate(new Date())) : '';
   const manchete = prov.gap > 0
     ? ('Provável do mês: ' + prov.clientes + ' de ' + prov.meta + ' clientes ('
-      + tm10Rs(prov.mrr) + ') — faltam ' + prov.gap + '. Eles saem dos ' + prov.quentesN
+      + tm10Rs(prov.mrr) + ') — faltam ' + prov.gap + '. Eles saem dos ' + prov.quentesNovosN
       + ' quentes e do resgate dos ' + m.time.acima + ' travados.')
     : ('Meta de ' + prov.meta + ' coberta. Agora é proteger os ' + prov.quentesN
       + ' quentes e limpar os ' + m.time.acima + ' travados.');
@@ -26091,8 +26102,9 @@ function tm10TelaHTML(d, cauda) {
     + '<div style="display:flex;align-items:baseline;gap:22px;flex-wrap:wrap;margin-top:10px;">'
     +   leg(pv.fechN + ' clientes', '#1E9E7B', 'fechados · ' + tm10Rs(pv.fechMrr))
     +   leg(String(pv.pagN), '#4CBF95', 'ag. pagamento · ' + tm10Rs(pv.pagMrr))
-    +   leg(String(Math.round(pv.quentesPondN)), '#8E3B5C', 'quentes × 60% (' + pv.quentesN
-        + ' na mesa · ' + tm10Rs(pv.quentesMrr) + ')')
+    +   leg(String(Math.round(pv.quentesPondN)), '#8E3B5C', 'quentes × 60% · '
+        + pv.quentesNovosN + ' de ' + pv.quentesN + ' (o resto já está no ag. pagamento) · '
+        + tm10Rs(pv.quentesNovosMrr))
     +   leg(String(pv.meta), '#2B3440', 'meta do mês (traço)')
     +   '<b style="margin-left:auto;font:900 17px \'Archivo\',sans-serif;color:'
     +     (pv.gap > 0 ? '#E51A31' : '#1E9E7B') + ';">'
@@ -26141,8 +26153,9 @@ function tm10TelaHTML(d, cauda) {
     +   '<span style="font:900 10px \'Archivo\',sans-serif;letter-spacing:.12em;text-transform:uppercase;'
     +     'color:#8E3B5C;">2 · De onde sai o gap — os quentes da semana</span>'
     +   '<span style="display:block;font:700 10.5px \'Manrope\',sans-serif;color:#7A8494;margin:3px 0 9px;">'
-    +     esc(d.prov.quentesN + ' clientes prováveis · ' + tm10Rs(d.prov.quentesMrr)
-          + ' na mesa — se ninguém vacilar, o gap fecha aqui') + '</span>'
+    +     esc(d.prov.quentesNovosN + ' de ' + d.prov.quentesN + ' ainda fora do ag. pagamento · '
+          + tm10Rs(d.prov.quentesMrr) + ' na mesa — o gap fecha aqui e no resgate dos travados')
+        + '</span>'
     +   '<div style="display:flex;flex-direction:column;gap:6px;">'
     +     (d.quentes.length
           ? d.quentes.map(function (x) { return linhaLead(x, '#7A8494',
