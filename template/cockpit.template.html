@@ -49415,10 +49415,18 @@ function dg4Plural(n, sing, plur) {
    ontem, depois o plano de hoje". Os dois lados do placar vêm de fontes diferentes de
    propósito, e é isso que o torna honesto:
 
-     PROMETIDO  `dailies.prometido_visitas` do dia útil anterior — o que ELE escreveu ao
-                travar. Escrito pela tela dele, lido aqui, nunca editado aqui.
-     FEITO      atividadesComprovadasNoDia(), que conta visita com desfecho no HubSpot —
-                a MESMA função que a Minha Daily dele usa para dizer o que ele fez.
+     PROMETIDO  os compromissos que ele pôs na GRADE para aquele dia, sem bloqueio.
+                Era `dailies.prometido_visitas` — o número que ele digitava ao travar a
+                promessa. Esse gesto saiu em 24/09/26 e o campo parou de receber
+                escrita: o placar ia secar sozinho, dizendo "sem promessa" para os nove
+                todo dia, para sempre. A grade é o plano, e é o que ele combinou.
+     FEITO      atividadesComprovadasNoDia(), que conta visita com desfecho no HubSpot.
+     REGISTRO   quantos daqueles compromissos ELE marcou como feitos no cartão. Terceira
+                coluna, e nunca substitui o medido: registro é recado, não prova.
+
+   AS DUAS PRIMEIRAS VÊM DE FONTES DIFERENTES DE PROPÓSITO, e é isso que torna o placar
+   honesto. Se prometido e feito saíssem os dois da grade, ele mediria o plano contra
+   ele mesmo e daria certo sempre.
 
    QUEM NÃO PROMETEU NÃO FUROU. Medido em 10/09/26 para ontem: 2 dos 10 tinham promessa
    registrada. Se `furou` fosse `f < p` com p=null virando 0, oito pessoas apareceriam
@@ -49428,15 +49436,52 @@ function dg4Plural(n, sing, plur) {
    E A MEDIÇÃO DO FEITO É DURA DE PROPÓSITO: das 63 atividades de ontem no time, 11
    tinham desfecho. Tarefa aberta não é visita feita; o chip de cadência mostra o volume
    (e é outro número, com outro nome), o placar mostra a palavra cumprida. */
-function dg4Ontem(ownerId, ontemISO) {
-  if (!ontemISO) return { p: null, f: null, medido: false, furou: false };
-  const d = (typeof getDaily === 'function') ? getDaily(ownerId, ontemISO) : null;
-  const p = (d && d.prometido_visitas != null) ? Number(d.prometido_visitas) : null;
+function dg4Ontem(ownerId, ontemISO, linhaGradeOntem, gradeOntemLida) {
+  if (!ontemISO) return { p: null, f: null, reg: null, medido: false, furou: false };
+
+  /* PROMETIDO: os compromissos da grade daquele dia. `null` quando a leitura da grade
+     falhou — que é diferente de zero, e é o que impede a acusação por falta de
+     medição. Sem linha na tabela o executivo realmente não montou o dia: isso é ZERO,
+     e é um zero que se pode cobrar. */
+  let p = null;
+  if (gradeOntemLida !== false) {
+    const itens = pl6ItensDoDiaDaLinha(linhaGradeOntem, ontemISO);
+    p = itens === null ? 0
+      : itens.filter(function (it) { return it.tipo !== 'bloqueado'; }).length;
+  }
+
   const real = (typeof atividadesComprovadasNoDia === 'function')
     ? atividadesComprovadasNoDia(ownerId, ontemISO) : null;
   const f = (real && Array.isArray(real.visitas)) ? real.visitas.length : null;
-  const medido = p != null && f != null;
-  return { p: p, f: f, medido: medido, furou: medido ? f < p : false };
+
+  /* REGISTRO: quantos daqueles compromissos ELE marcou. Terceira coluna, ao lado — e
+     nunca no lugar do medido. */
+  let reg = null;
+  if (gradeOntemLida !== false) {
+    const itens = pl6ItensDoDiaDaLinha(linhaGradeOntem, ontemISO);
+    reg = itens === null ? 0
+      : itens.filter(function (it) { return it.tipo !== 'bloqueado' && it.r; }).length;
+  }
+
+  /* QUEM NÃO PLANEJOU NÃO FUROU. Com p = 0 não há palavra para cobrar, e marcar furo
+     ali seria cobrar de quem não prometeu — o mesmo cuidado que a versão anterior desta
+     função tomava com o campo vazio. */
+  const medido = p != null && f != null && p > 0;
+  return { p: p, f: f, reg: reg, medido: medido, furou: medido ? f < p : false };
+}
+
+/* A COLUNA DE UM DIA DENTRO DE UMA LINHA DE planos_semanais. Devolve `null` quando não
+   há linha para aquela semana — que a Daily lê como "não montou", e não como falha.
+   Usa pl6ItensDoDia, a MESMA leitura do dia que as duas telas usam: uma segunda conta
+   aqui discordaria da grade desenhada logo abaixo, no mesmo cartão. */
+function pl6ItensDoDiaDaLinha(linha, diaISO) {
+  const g = linha && Array.isArray(linha.grade) ? linha.grade : null;
+  if (!g || !diaISO) return null;
+  const seg = linha.data_segunda || (typeof addDays === 'function' ? null : null);
+  if (!seg) return null;
+  const dif = Math.round((Date.parse(diaISO + 'T12:00:00') - Date.parse(seg + 'T12:00:00')) / 864e5);
+  if (!(dif >= 0 && dif < g.length)) return null;
+  return (typeof pl6ItensDoDia === 'function') ? pl6ItensDoDia(g[dif] || [], null) : null;
 }
 
 /* ══ A CADÊNCIA DE ONTEM: A MESMA SÉRIE DO MAPA DE CALOR DA ABA TIME ════════════════
@@ -49504,11 +49549,18 @@ function dg4SinaisDe(x, pessoa, ontem, combinado) {
      aparece quando está bom: a prancha quer o ✓ à vista porque a rodada começa nele. */
   if (!ontem.medido) {
     out.push({ tipo: 'ontem', ruim: false, neutro: true,
-      rot: ontem.p == null ? 'ontem: sem promessa registrada' : 'ontem: feito não medido' });
+      rot: ontem.p == null ? 'ontem: plano não medido'
+        : (ontem.p === 0 ? 'ontem: não montou o dia' : 'ontem: feito não medido') });
   } else {
+    /* O REGISTRO DELE ENTRA DEPOIS DO MEDIDO, com o nome de registro — e só quando
+       diverge. "3/4 ✓ · ele registrou 4" conta a história inteira em quatro palavras:
+       o CRM viu três, ele diz que fez quatro, e a conversa da rodada é sobre a quarta.
+       Igual, não vale a tinta. */
+    const divergiu = ontem.reg != null && ontem.reg !== ontem.f;
     out.push({ tipo: 'ontem', ruim: ontem.furou,
       rot: 'ontem: ' + ontem.f + '/' + ontem.p + ' ' + (ontem.p === 1 ? 'visita' : 'visitas')
-        + ' ' + (ontem.furou ? '✗' : '✓') });
+        + ' ' + (ontem.furou ? '✗' : '✓')
+        + (divergiu ? ' · ele registrou ' + ontem.reg : '') });
   }
 
   /* 2 · SLA DE 1º TOQUE. `slaEstourados` é quem NÃO foi tocado em 48h — inclui quem foi
@@ -49686,7 +49738,8 @@ function dg4Dados(ctx) {
        Nada disto é medido aqui: `pessoa` é a linha da aba Pessoas, `ontem` sai de
        dg4Ontem, a cadência da série da Time e as propostas de pe4Propostas. */
     const pessoa = pessoaPorOid[oid] || null;
-    const ontem = dg4Ontem(oid, ontemISO);
+    const ontem = dg4Ontem(oid, ontemISO,
+      (c.gradesOntem || {})[oid] || null, c.gradeOntemLida);
     const cadOntem = dg4CadenciaDe(oid, ontemISO);
     const propostas = (pessoa && typeof pe4Propostas === 'function')
       ? pe4Propostas(pessoa).filter(function (pr) { return !pr.temReuniao; }) : [];
@@ -49782,7 +49835,11 @@ function dg4Dados(ctx) {
   const antesDaTrava = ehHoje && minutos > 0;
 
   /* ══ os 5 KPIs ══════════════════════════════════════════════════════════════════════ */
-  const somaVisitas = medidos.reduce(function (t, x) { return t + (Number(x.daily.prometido_visitas) || 0); }, 0);
+  /* `somaVisitas` saiu em 24/09/26: ela somava `dailies.prometido_visitas`, o campo que
+     ninguem escreve mais. Ela aparecia NA MESMA LINHA que `somaPlanejadas`, que conta a
+     grade — dois numeros lado a lado para a mesma coisa, um deles zerado para sempre.
+     "0 visitas prometidas · 38 planejadas na grade" faria o gestor procurar o que
+     aconteceu com as 38. */
   /* A PROMESSA E O PLANEJADO SÃO DOIS NÚMEROS, e os dois vão para a tela. Medido em
      09/09: promessa 2 (uma pessoa preencheu prometido_visitas) e planejado 38 (sete
      pessoas na grade). Mostrar só a promessa faz o gestor abrir a reunião achando que o
@@ -49801,6 +49858,9 @@ function dg4Dados(ctx) {
      não registrou inventaria uma dívida. Os não medidos viram um número próprio, que a
      tela mostra ao lado — porque "3 sem promessa registrada" é cobrança de rotina, não
      quebra de palavra. */
+  /* `comPromessa` virou "quem tinha plano ontem". O nome ficou por ora — ele aparece em
+     seis lugares desta função, e renomear tudo num commit que já mexe no significado do
+     número é trocar duas coisas de uma vez. O que ele CONTA mudou, e está aqui escrito. */
   const comPromessa = medidos.filter(function (x) { return x.ontem.medido; });
   const promOntem = comPromessa.reduce(function (s, x) { return s + x.ontem.p; }, 0);
   const feitOntem = comPromessa.reduce(function (s, x) { return s + x.ontem.f; }, 0);
@@ -49824,7 +49884,7 @@ function dg4Dados(ctx) {
      uma consulta. Os dois que saem do HubSpot (cobranças e quentes) continuam valendo, e
      o rótulo deles diz de onde vêm. */
   const kpis = !planosLidos ? [
-    { rot: 'ontem: feito/prometido', v: 'não medido', de: 'a leitura de planos_diarios falhou', cor: '#A79C8A' },
+    { rot: 'ontem: feito/planejado', v: 'não medido', de: 'a leitura do plano falhou', cor: '#A79C8A' },
     { rot: 'planos montados', v: 'não medido', de: 'recarregue a aba', cor: '#A79C8A' },
     { rot: 'dia registrado', v: 'não medido', de: 'a leitura da grade falhou', cor: '#A79C8A' },
     { rot: 'cobranças do dia', v: String(somaCobrancas), de: 'do HubSpot, esse número vale', cor: somaCobrancas ? '#FF8D9A' : '#7FD9BE' },
@@ -49832,12 +49892,12 @@ function dg4Dados(ctx) {
   ] : [
     /* O PRIMEIRO KPI É A PALAVRA DE ONTEM — a prancha FINAL trocou "visitas prometidas"
        por isto de propósito: o número de hoje é promessa, o de ontem é fato. */
-    { rot: 'ontem: feito/prometido',
-      v: comPromessa.length ? (feitOntem + '/' + promOntem) : 'sem promessa',
+    { rot: 'ontem: feito/planejado',
+      v: comPromessa.length ? (feitOntem + '/' + promOntem) : 'sem plano',
       de: comPromessa.length
         ? (nFurou + (nFurou === 1 ? ' furou' : ' furaram')
-          + (semPromessaOntem ? ' · ' + semPromessaOntem + ' sem promessa' : ''))
-        : 'ninguém registrou promessa ontem',
+          + (semPromessaOntem ? ' · ' + semPromessaOntem + ' sem plano ontem' : ''))
+        : 'ninguém montou o dia de ontem',
       cor: !comPromessa.length ? '#A79C8A' : (feitOntem >= promOntem ? '#7FD9BE' : '#FF8D9A') },
     /* "(N pela grade)" saiu em 24/09/26: ele distinguia quem montou o dia na grade de
        quem tinha plano do dia, e a distinção acabou junto com a promessa. A grade É o
@@ -49868,10 +49928,19 @@ function dg4Dados(ctx) {
   const manchete = (function () {
     if (!planosLidos) return 'Não consegui ler os planos do dia — nenhum número desta faixa acusa ninguém até a leitura voltar.';
     const ontemFrase = !comPromessa.length
-      ? 'Ontem ninguém registrou promessa — o placar de hoje começa em branco.'
-      : ('Ontem ' + (comPromessa.length === medidos.length ? 'o time' : comPromessa.length + ' prometeram e')
-        + ' prometeu ' + dg4Plural(promOntem, 'visita', 'visitas') + ' e fez ' + feitOntem
-        + (nFurou ? ' — ' + nFurou + (nFurou === 1 ? ' furou' : ' furaram') + ' a palavra.' : ' — palavra cumprida ✓.'));
+      ? 'Ontem ninguém montou o dia — não há palavra de ontem para cobrar. '
+      /* ══ A MANCHETE SAIU QUEBRADA NA FOTO (24/09/26) ═══════════════════════════════
+         "Ontem 2 prometeram e prometeu 8 visitas e fez 0" — o sujeito plural colidia com
+         o verbo no singular logo depois. A frase só quebra quando NEM TODO o time tem
+         plano, que é o caso comum; a versão antiga quase nunca chegava neste ramo porque
+         quase ninguém registrava promessa, e por isso ela nunca apareceu assim.
+         Nenhuma medição pega concordância — foi a foto. */
+      : ('Ontem ' + (comPromessa.length === medidos.length
+        ? 'o time planejou ' + dg4Plural(promOntem, 'visita', 'visitas')
+        : comPromessa.length + (comPromessa.length === 1 ? ' pessoa planejou ' : ' pessoas planejaram ')
+          + dg4Plural(promOntem, 'visita', 'visitas'))
+        + ' e o CRM viu ' + feitOntem
+        + (nFurou ? ' — ' + nFurou + (nFurou === 1 ? ' furou' : ' furaram') + '.' : ' — tudo cumprido ✓.'));
     const hoje2 = [];
     if (semPlano.length) hoje2.push(semPlano.length + ' sem plano' + (antesDaTrava ? ' a ' + minutos + ' min da trava' : ''));
     if (somaCobrancas) hoje2.push(somaCobrancas + (somaCobrancas === 1 ? ' cobrança' : ' cobranças') + ' no dia');
@@ -49910,10 +49979,10 @@ function dg4Dados(ctx) {
     : (nFurou
       ? (nFurou + (nFurou === 1 ? ' furou' : ' furaram') + ' a palavra de ontem — falam logo depois dos sem plano')
       : (comPromessa.length
-        ? 'todo mundo que prometeu cumpriu ✓'
-        : 'ninguém registrou promessa ontem — nada a cobrar aqui, e nada a comemorar'))
+        ? 'todo mundo que planejou cumpriu ✓'
+        : 'ninguém montou o dia de ontem — nada a cobrar aqui, e nada a comemorar'))
     + (semPromessaOntem && planosLidos
-      ? ' · ' + semPromessaOntem + ' sem promessa registrada (não é furo)' : '');
+      ? ' · ' + semPromessaOntem + ' sem plano ontem (não é furo)' : '');
   const placarNotaCor = nFurou ? '#8A3B3B' : (comPromessa.length ? '#1E9E7B' : '#7A8494');
 
   /* ══ os chips da rodada ═════════════════════════════════════════════════════════════ */
@@ -50286,7 +50355,6 @@ function dg4Dados(ctx) {
        a prancha FINAL tem cinco KPIs e dois deles são novos, mas "visitas prometidas" e
        "prospecções novas" são informação que o gestor já usava — tirar da tela seria
        perder dado para caber num desenho. */
-    somaVisitas: String(somaVisitas),
     somaPlanejadas: String(somaPlanejadas),
     somaNovas: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
     execs: execs,
@@ -50316,7 +50384,7 @@ function dg4Dados(ctx) {
    {{x}} -> ${x}, sc-camel-on-click -> data-dg4-acao, style-hover -> classe). */
 function dg4TelaHTML(d) {
   const { acoes, agenda, contagem, execs, kpis, linhaTopo, manchete, origAlvo, origCart, origNova,
-    placar, placarNota, placarNotaCor, rodada, rodapeFonte, somaNovas, somaPlanejadas, somaVisitas,
+    placar, placarNota, placarNotaCor, rodada, rodapeFonte, somaNovas, somaPlanejadas,
     temToast, tituloTrava, toast } = d;
   return `
       <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
@@ -50342,7 +50410,7 @@ function dg4TelaHTML(d) {
         </div>
 
         <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
-          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;flex:none;">O placar de ontem <span style="font-weight:700;text-transform:none;letter-spacing:0;color:#7A8494;">· prometido → feito, medido no HubSpot, não auto-relato</span></span>
+          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;flex:none;">O placar de ontem <span style="font-weight:700;text-transform:none;letter-spacing:0;color:#7A8494;">· planejado → feito, medido no HubSpot · o registro dele aparece ao lado, e não no lugar</span></span>
           <div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">
             ${(placar||[]).map(pl => `
               <span style="display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:0 12px;border:1.5px solid ${pl.borda};border-radius:999px;background:${pl.bg};font:800 10.5px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;">${pl.nome}<b style="font:900 11px 'Archivo',sans-serif;color:${pl.cor};font-variant-numeric:tabular-nums;">${pl.rot}</b></span>
@@ -50358,7 +50426,7 @@ function dg4TelaHTML(d) {
               <button data-dg4-acao="${r.on}" style="display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border:1.5px solid ${r.borda};border-radius:999px;background:${r.bg};font:800 10.5px 'Manrope',sans-serif;color:${r.cor};cursor:pointer;white-space:nowrap;" data-dg4-hv="0"><b style="font:900 10px 'Archivo',sans-serif;color:${r.nCor};">${r.pos}</b>${r.nome}<span style="font:800 8.5px 'Archivo',sans-serif;color:${r.stCor};">${r.st}</span></button>
             `).join('')}
           </div>
-          <span style="margin-left:auto;flex:none;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;text-align:right;">ordem: sem plano → furou ontem → com compromisso sem registro → em dia ✓<br>hoje: <b style="color:#2B3440;">${somaVisitas} visitas prometidas</b> · ${somaPlanejadas} planejadas na grade · origem dos planos: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${somaNovas} prospecção nova</b></span>
+          <span style="margin-left:auto;flex:none;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;text-align:right;">ordem: sem plano → furou ontem → com compromisso sem registro → em dia ✓<br>hoje: <b style="color:#2B3440;">${somaPlanejadas} visitas na grade</b> · origem dos planos: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${somaNovas} prospecção nova</b></span>
         </div>
 
         <div style="padding:16px 24px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
@@ -50707,6 +50775,10 @@ async function renderDaily() {
      pessoas preencheram hoje e que a Daily do gestor não lia. Mesma bandeira de erro:
      falha de leitura não pode virar acusação de time parado. */
   let gradePorOwner = {}, gradeLida = true;
+  /* A GRADE DE ONTEM (24/09/26). Na maior parte dos dias é a MESMA linha — a consulta
+     traz a semana inteira —, e só na segunda-feira ela é de outra semana. `true` por
+     padrão: se nunca precisou ser lida, não houve falha. */
+  let gradeOntemPorOwner = {}, gradeOntemLida = true;
   /* nome e bairro das contas da prospeccao que estao na grade do dia, por id — ver
      "O NOME DA CONTA NOVA" logo abaixo. */
   const novasPorId = {};
@@ -50763,6 +50835,35 @@ async function renderDaily() {
       gradeLida = false;
     } else {
       (gradeData || []).forEach(function (l) { gradePorOwner[String(l.owner_id)] = l; });
+    }
+
+    /* ══ A SEMANA DE ONTEM, SÓ QUANDO ELA É OUTRA (24/09/26) ══════════════════════
+       O placar de ontem passou a ler a GRADE, e a consulta acima traz a semana do dia
+       em foco inteira — na terça, ontem já está em memória. Na SEGUNDA, ontem é sexta:
+       outra semana, outra linha. Sem esta consulta, a rodada mais importante do time
+       (a de segunda de manhã) abriria dizendo "sem plano" para todo mundo.
+       UMA CONSULTA A MAIS EM UM DIA DA SEMANA, e nenhuma nos outros quatro. */
+    const ontemDaily = addBusinessDays(dailyRefDate, -1);
+    const segundaDeOntem = addDays(ontemDaily,
+      -(((new Date(ontemDaily + 'T12:00:00').getDay()) === 0 ? 7
+        : (new Date(ontemDaily + 'T12:00:00').getDay())) - 1));
+    if (segundaDeOntem !== segundaDoFoco) {
+      const { data: gradeOntemData, error: gradeOntemErro } = await supa.from('planos_semanais')
+        .select('owner_id,data_segunda,grade')
+        .eq('data_segunda', segundaDeOntem);
+      if (gradeOntemErro) {
+        console.error('Daily — grade da semana de ontem:', gradeOntemErro.message);
+        /* NÃO derruba `gradeLida`: a grade de HOJE foi lida e a tela de hoje está de
+           pé. O que falha aqui é só o placar de ontem, e ele diz "não medido". */
+        gradeOntemLida = false;
+      } else {
+        (gradeOntemData || []).forEach(function (l) {
+          gradeOntemPorOwner[String(l.owner_id)] = l;
+        });
+      }
+    } else {
+      /* mesma semana: a linha de ontem é a mesma que já está em gradePorOwner */
+      gradeOntemPorOwner = gradePorOwner;
     }
 
     /* ══ O NOME DA CONTA NOVA (14/09/26) ═══════════════════════════════════════════
@@ -53068,6 +53169,7 @@ async function renderDaily() {
     DG4_CTX = {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
       grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
+      gradesOntem: gradeOntemPorOwner, gradeOntemLida: gradeOntemLida,
       novas: novasPorId,
       foraDoCampo: abertoDeQuemSaiu,
       /* ONTEM VEM DAQUI e não é recalculado na v4: `yesterdayISO` é o dia útil anterior
