@@ -29,8 +29,26 @@ const lista = Array.isArray(USUARIOS) ? USUARIOS : (USUARIOS.usuarios || []);
 const REP = lista.find(u => u.role === 'rep' && u.ownerId);
 const GESTOR = lista.find(u => u.role === 'manager');
 const REP_OUTRO = lista.find(u => u.role === 'rep' && u.ownerId && u.ownerId !== REP.ownerId);
+/* QUEM NÃO TEM ownerId — escolhido pela FALTA do ownerId, que é a condição que a rota
+   testa, e não pelo papel. Até 24/09/26 este era o Julyan por acidente: ele era o
+   primeiro manager da lista E o único sem owner. Quando ele ganhou o dele, o bloco 5
+   ficou vermelho medindo outra coisa. Âncora por acidente é âncora que some. */
+const SEM_OWNER = lista.find(u => !u.ownerId);
+/* E O GESTOR QUE TEM ownerId, para o caso novo logo abaixo. */
+const GESTOR_COM_OWNER = lista.find(u => u.role === 'manager' && u.ownerId);
 if (!REP || !GESTOR || !REP_OUTRO) {
   console.error('data/usuarios.json não tem os papéis que o teste precisa (rep com owner, manager, outro rep).');
+  process.exit(1);
+}
+if (!SEM_OWNER) {
+  /* FALHA ALTO em vez de pular: o dia em que todo mundo tiver ownerId, a regra do
+     "sem owner a rota explica em vez de zerar" fica sem ninguém para exercê-la, e um
+     bloco que não mede nada passando verde é pior que um teste vermelho. */
+  console.error('data/usuarios.json não tem ninguém sem ownerId: o bloco 5 (sem owner não vira zero) ficaria sem sujeito. Aponte-o para um cadastro de propósito, ou remova a regra da rota junto.');
+  process.exit(1);
+}
+if (!GESTOR_COM_OWNER) {
+  console.error('data/usuarios.json não tem gestor com ownerId: o bloco 5b (gestor que vende mede o próprio dia) ficaria sem sujeito.');
   process.exit(1);
 }
 
@@ -137,14 +155,32 @@ async function chamar(cfg, query) {
     eIgual('com motivo legível para a tela mostrar', typeof res.corpo.erro, 'string');
   }
 
-  /* ── 5. o gestor sem owner pedindo o próprio dia ──────────────────────────────────── */
+  /* ── 5. QUEM NÃO TEM ownerId PEDINDO O PRÓPRIO DIA ───────────────────────────────── */
   {
-    /* o gestor não tem ownerId no cadastro: pedir "meu dia" não tem resposta possível, e a
-       rota diz isso em vez de devolver quatro zeros como se fosse resultado. */
-    const res = await chamar({ email: GESTOR.email }, { recurso: 'realizado-hoje' });
+    /* Sem ownerId não há funil para ler: pedir "meu dia" não tem resposta possível, e a
+       rota diz isso em vez de devolver quatro zeros como se fosse resultado. Quem cai
+       aqui é o executivo em onboarding, ainda sem owner no HubSpot, e o gestor que não
+       vende. O zero seria lido como "você não fez nada hoje". */
+    const res = await chamar({ email: SEM_OWNER.email }, { recurso: 'realizado-hoje' });
     eIgual('sem owner, a rota explica em vez de zerar', res.statusCode, 200);
     eIgual('e marca o motivo', res.corpo.semOwner, true);
     eIgual('sem inventar números', res.corpo.realizado_visitas, undefined);
+    /* e o sujeito do teste é mesmo alguém sem owner, não um cadastro qualquer que por
+       acaso passou: sem esta linha, um dia em que SEM_OWNER apontasse para alguém COM
+       owner daria vermelho sem dizer por quê. */
+    eIgual('e quem foi medido não tem owner mesmo', SEM_OWNER.ownerId || null, null);
+  }
+
+  /* ── 5b. O GESTOR QUE VENDE MEDE O PRÓPRIO DIA (24/09/26) ────────────────────────── */
+  {
+    /* Julyan: "pode contar as vendas do Julyan, que sou eu, no placar geral". Ele ganhou
+       ownerId no cadastro, e com ele a rota passou a ter o que medir: existe funil com o
+       nome dele no HubSpot. Não é mais caso de "semOwner" — e este bloco existe para que
+       a mudança esteja escrita, e não pareça um teste que alguém afrouxou. */
+    const res = await chamar({ email: GESTOR_COM_OWNER.email }, { recurso: 'realizado-hoje' });
+    eIgual('gestor com owner é medido, não dispensado', res.statusCode, 200);
+    eIgual('e a rota não alega falta de owner', res.corpo.semOwner, undefined);
+    eIgual('e mede o funil dele, não o de outro', String(res.corpo.ownerId), String(GESTOR_COM_OWNER.ownerId));
   }
 
   /* ── 6. sem HUBSPOT_TOKEN: fail-closed com motivo ────────────────────────────────── */
