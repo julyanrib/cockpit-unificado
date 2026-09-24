@@ -161,6 +161,33 @@ checar('cada lista traz status', p.cobrar.status === 'ok' && p.relac.status === 
   'zero medido e zero por falta de medição são coisas diferentes');
 
 /* ══ 6. O CANO ══════════════════════════════════════════════════════════════════════ */
+/* ══ A JANELA DAS 21H ÀS 00H (24/09/26) ═════════════════════════════════════════════
+   Esta suíte reprovou sozinha às 00:38 UTC — 21:38 em Brasília — sem ninguém tocar no
+   robô, e foi assim que o defeito apareceu: o HOJE era deslocado para Brasília e o ALVO
+   não, então das 21h à meia-noite um passo combinado para hoje virava futuro e sumia do
+   follow-up. Três horas por dia, justo quando alguém fecha o dia.
+   Depender do relógio da máquina para pegar isso é depender de rodar a suíte à noite.
+   Aqui a janela é FIXADA: 21:38 de Brasília, com o alvo marcado para as 22h do mesmo
+   dia — que em UTC já é o dia seguinte. */
+(function () {
+  const atraso = vm.runInContext('planAtrasoDias', ctx);
+  const noiteBrt = Date.parse('2026-09-24T00:38:00.000Z');   /* 21:38 de 23/09 em BRT */
+  igual('às 21h38, um passo para as 22h de HOJE ainda é de hoje',
+    atraso('2026-09-24T01:00:00.000Z', noiteBrt), 0,
+    'o alvo lido em UTC vira 24/09 e o hoje em Brasília é 23/09: atraso −1, e o passo '
+      + 'sai do follow-up. A lista esvaziava das 21h à meia-noite, todo dia');
+  igual('e um passo de ontem continua vencido há um dia',
+    atraso('2026-09-23T13:00:00.000Z', noiteBrt), 0,
+    '10h de 23/09 em Brasília é o mesmo dia de 21h38 de 23/09');
+  igual('o de anteontem, dois dias', atraso('2026-09-21T13:00:00.000Z', noiteBrt), 2);
+  igual('e amanhã continua sendo futuro',
+    atraso('2026-09-25T13:00:00.000Z', noiteBrt), -2);
+  /* E DE DIA A CONTA NÃO MUDOU — o conserto não podia deslocar tudo em um dia. */
+  const tardeBrt = Date.parse('2026-09-23T17:10:00.000Z');   /* 14:10 de 23/09 em BRT */
+  igual('às 14h10, hoje é hoje', atraso('2026-09-23T15:00:00.000Z', tardeBrt), 0);
+  igual('e ontem é ontem', atraso('2026-09-22T15:00:00.000Z', tardeBrt), 1);
+}());
+
 checar('o robô publica o motor no snapshot',
   /planejamento: planejamentoPorProposito\(funilLeads\),/.test(src),
   'motor que ninguém chama é código morto com comentário bonito');

@@ -303,11 +303,19 @@ function planItem(l, proposito, agoraMs) {
 }
 
 /* QUANTOS DIAS DE ATRASO tem o próximo passo. Negativo = ainda vai vencer; 0 = hoje. */
+/* ══ OS DOIS LADOS DA CONTA SÃO DE BRASÍLIA (corrigido em 24/09/26) ═══════════════
+   O `hoje` já era deslocado em 3h; o ALVO não era, e saía em UTC. Das 21h à meia-noite
+   um passo combinado para HOJE tinha data UTC de AMANHÃ, dava atraso −1 e era
+   descartado como compromisso futuro — a lista de follow-up esvaziava justo na janela
+   em que alguém fecha o dia. A suíte reprovou sozinha às 00:38 UTC, sem ninguém tocar
+   no robô, e foi assim que isto apareceu.
+   Deslocar os DOIS é o que faz a conta ser sobre dias de Brasília dos dois lados. */
 function planAtrasoDias(iso, agoraMs) {
   if (!iso) return null;
   const d = new Date(iso);
   if (isNaN(d.getTime())) return null;
-  const diaAlvo = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const alvo = new Date(d.getTime() - 3 * 3600e3);
+  const diaAlvo = Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth(), alvo.getUTCDate());
   const hoje = new Date(agoraMs - 3 * 3600e3);
   const diaHoje = Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), hoje.getUTCDate());
   return Math.round((diaHoje - diaAlvo) / 864e5);
