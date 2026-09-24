@@ -2209,6 +2209,17 @@
      (width:24px no ✕ do dia, 28px no ✕ da ficha) e o inline vence a folha: a regra de
      44px do celular NUNCA aplicou nesta tela. Mesmo defeito que a Minha Daily tinha, e
      lá ele foi medido na tela em 24px de largura. */
+  /* ══ O DESENHO DO CELULAR MORA TODO NA FOLHA (24/09/26) ═══════════════════════
+     Estes quatro são do telefone e não existem no desktop. O `display:none` deles
+     começou no atributo style e NUNCA foi vencido pela regra de 640px — inline vence
+     folha, pela terceira vez nesta mesma tela (as outras duas estão nos comentários
+     logo abaixo: a largura de 44px e a grade de cinco colunas).
+     Quem decide entre dois desenhos é a folha, então o estado inicial mora aqui. */
+  #agendaContent [data-pl6-cab-movel],
+  #agendaContent [data-pl6-abas-dia],
+  #agendaContent [data-pl6-pend-movel],
+  #agendaContent [data-pl6-encaixar]{display:none;}
+
   #agendaContent [data-pl6-so-icone]{width:24px;}
   #agendaContent [data-pl6-fi-fechar]{width:28px;}
 
@@ -2231,7 +2242,22 @@
     #agendaContent [data-pl6-grade-semana]{grid-template-columns:repeat(2,minmax(0,1fr));}
   }
   @media (max-width:640px){
+    /* ══ 1.7 · UM DIA POR VEZ, E ELE ABRE EM HOJE (23/09/26) ═══════════════════════
+       Cinco dias empilhados fazem o executivo rolar meia tela até achar onde ele está.
+       A grade é a MESMA do desktop: o que muda é que só a coluna marcada aparece, e a
+       tira de abas em cima diz o que tem nos outros quatro. */
     #agendaContent [data-pl6-grade-semana]{grid-template-columns:minmax(0,1fr);}
+    #agendaContent [data-pl6-dia-drop]:not([data-pl6-dia-sel]){display:none;}
+    #agendaContent [data-pl6-cab-movel]{display:block;}
+    #agendaContent [data-pl6-abas-dia]{display:flex;}
+    #agendaContent [data-pl6-pend-movel]{display:block;}
+    #agendaContent [data-pl6-encaixar]{display:block;}
+    /* O "COMO FOI?" EM DUAS COLUNAS, com alvo de 44px: quatro pílulas de 28px numa
+       fileira dão 70px cada num telefone, e 70px com o dedo é o toque que erra. */
+    #agendaContent [data-pl6-pill]{min-height:44px;flex:1 1 calc(50% - 4px);}
+    /* O "alterar" não é opção: ele desfaz o registro e vive na linha do resultado. Com
+       a régua das pílulas ele saía com 29px de largura — medido a 375px. */
+    #agendaContent [data-pl6-alterar]{min-height:44px;}
   }
 
   @media (max-width:760px){
@@ -30758,10 +30784,15 @@ function pl6RotuloSemana(offset) {
 
 function pl6Dias(segunda) {
   const rot = ['seg', 'ter', 'qua', 'qui', 'sex'];
+  /* O NOME POR EXTENSO existe para o cabeçalho do celular ("Quarta, 23/09"), onde há
+     largura para ele e onde a tela está dizendo EM QUE DIA ele está — "qua" ali lê
+     como abreviação de coluna, e a coluna é justamente o que sumiu no telefone. */
+  const longo = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'];
   return [0, 1, 2, 3, 4].map(i => {
     const iso = addDays(segunda, i);
     const d = new Date(iso + 'T12:00:00');
-    return { rot: rot[i], data: agendaP2(d.getDate()) + '/' + agendaP2(d.getMonth() + 1), iso: iso };
+    return { rot: rot[i], rotLongo: longo[i],
+      data: agendaP2(d.getDate()) + '/' + agendaP2(d.getMonth() + 1), iso: iso };
   });
 }
 
@@ -31085,8 +31116,13 @@ function pl6AtrasoDoPasso(l) {
   if (!quando) return null;
   const d = new Date(quando);
   if (isNaN(d.getTime())) return null;
+  /* OS DOIS LADOS EM BRASÍLIA (corrigido em 24/09/26). O `hoje` saía de
+     toLocaleDateString com o fuso certo e o ALVO de toISOString, que é UTC. Das 21h à
+     meia-noite isso dava um dia de diferença, e o passo combinado para hoje virava
+     futuro — some do follow-up. Mesmo defeito que o robô tinha na planAtrasoDias, e o
+     mesmo conserto: deslocar o alvo antes de cortar a data. */
   const hojeISO = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-  const alvoISO = d.toISOString().slice(0, 10);
+  const alvoISO = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   const dif = Math.round((Date.parse(hojeISO) - Date.parse(alvoISO)) / 864e5);
   return isNaN(dif) ? null : dif;
 }
@@ -31440,6 +31476,10 @@ let pl6UI = {
   /* QUAL CARTÃO ESTÁ COM OS MOTIVOS ABERTOS ("di:si"), ou null. Fica no estado porque
      a faixa é desenhada dentro do cartão, que é redesenhado a cada clique da tela. */
   motivoDe: null,
+  /* A ABA DE DIA DO CELULAR. `null` quer dizer "ainda não escolheu", e aí a tela abre
+     em HOJE — não é o mesmo que escolher segunda. Guardar a escolha é o que permite
+     olhar quinta e voltar, sem a tela puxar de volta para hoje a cada clique. */
+  diaAba: null,
   pickerDia: null,
   /* O QUE ELE DIGITOU NA BUSCA DA MUNIÇÃO (11/09/26). Ao contrário da busca de bairro
      logo abaixo, ESTE texto precisa estar no estado: ele filtra a lista ANTES do corte de
@@ -32637,6 +32677,23 @@ function pfTag(l) {
    BLOQUEIO NÃO CONTA: é compromisso fora da rua, e não tem resultado de venda.
    `esperando` é o que a tela pede agora; `pendentes` é o que ficou para trás em dias
    anteriores da semana, e os dois nunca viram um número só. */
+/* ══ QUAL DIA O CELULAR ABRE (23/09/26, prancha final) ════════════════════════════
+   Hoje, quando hoje está na semana em foco. Fora disso — fim de semana, ou a semana
+   que vem — abre na segunda, que é o começo do que ele está montando.
+   A ESCOLHA DELE MANDA: depois que ele tocar numa aba, é aquela que fica. Reabrir em
+   hoje a cada redesenho faria olhar quinta-feira ser impossível. */
+/* O HOJE VEM POR ARGUMENTO, e não da variável de quem chama: `hojeISOPl6` é um `const`
+   DENTRO de pl6DadosFinal, e esta função lá fora não o enxerga. Na primeira versão eu
+   li a local mesmo assim — ReferenceError no render, aba branca no telefone, achado no
+   primeiro clique do navegador. É a quinta vez que este projeto paga por uma função
+   extraída que ficou lendo a local de quem a chamava. */
+function pl6DiaDaAba(dias, escolhido, hojeISO) {
+  const n = (dias || []).length;
+  if (escolhido != null && escolhido >= 0 && escolhido < n) return Number(escolhido);
+  for (let i = 0; i < n; i++) { if (dias[i].iso === hojeISO) return i; }
+  return 0;
+}
+
 function pl6RitmoDoDia(grade, dias, ownerId) {
   const agora = (typeof agendaAgora === 'function') ? agendaAgora() : null;
   const hojeChave = agora ? agendaChave(agora) : null;
@@ -32693,6 +32750,7 @@ function pl6DadosFinal(rep) {
   /* O RITMO SAI DA MESMA GRADE que a tela desenha — nenhuma segunda leitura, e por
      isso nenhuma chance de o KPI e os cartões discordarem. */
   const ritmo = pl6RitmoDoDia(grade, dias, rep && rep.ownerId);
+  const diaAba = pl6DiaDaAba(dias, s.diaAba, hojeISOPl6);
   const diasCobertos = grade.filter(col => col.some(v => pl6SlotId(v))).length;
 
   /* ══ A MUNIÇÃO FILTRADA ═══════════════════════════════════════════════════════════
@@ -32939,6 +32997,48 @@ function pl6DadosFinal(rep) {
           : (ritmo.esperando ? 'registrados · ' + ritmo.esperando + ' esperando'
             : 'registrados · tudo em dia') }
     ],
+    /* ══ 1.7 · A TIRA DE ABAS DO CELULAR ══════════════════════════════════════════
+       Cada aba diz o que tem naquele dia, e o que ela diz não é o mesmo em todos:
+       "1/4" no dia de hoje (registrados sobre vencidos), "1 ●" em vermelho num dia
+       passado com pendência, o número de compromissos num dia futuro, e "livre" quando
+       não há nada. Aba que só mostra o nome do dia obriga a tocar em cinco para
+       descobrir onde está o trabalho. */
+    abasDia: dias.map(function (dd, i) {
+      const col = grade[i] || [];
+      const its = pl6ItensDoDia(col, porId).filter(function (x) { return x.tipo !== 'orfa'; });
+      const vencidos = its.filter(function (x) { return x.tipo !== 'bloqueado' && pl6HoraJaPassou(dd.iso, x.hora); });
+      const semReg = vencidos.filter(function (x) { return !x.r; }).length;
+      const ehHoje = dd.iso === hojeISOPl6;
+      const passado = dd.iso < hojeISOPl6;
+      let marca, cor;
+      if (ehHoje && vencidos.length) {
+        marca = (vencidos.length - semReg) + '/' + vencidos.length;
+        cor = semReg ? '#C3152A' : '#16775D';
+      } else if (passado && semReg) {
+        marca = semReg + ' ●'; cor = '#C3152A';
+      } else if (its.length) {
+        marca = String(its.length); cor = '#2B3440';
+      } else {
+        marca = passado ? '—' : 'livre'; cor = '#B4AC9C';
+      }
+      return {
+        rot: esc(dd.rot + ' ' + String(dd.data).slice(0, 2)),
+        marca: esc(marca), marcaCor: cor, on: 'diaaba:' + i,
+        sel: i === diaAba,
+        bg: i === diaAba ? '#2B3440' : '#FDFEFF',
+        cor: i === diaAba ? '#FDFEFF' : '#5B667A',
+        borda: i === diaAba ? '#2B3440' : '#DCE1EA'
+      };
+    }),
+    diaAbaRot: esc(dias[diaAba] ? (dias[diaAba].rotLongo || dias[diaAba].rot) + ', ' + dias[diaAba].data : ''),
+    diaAbaHoje: !!(dias[diaAba] && dias[diaAba].iso === hojeISOPl6),
+    agoraTxt: esc(ritmo.agoraTxt),
+    resumoMovel: esc(ritmo.passados
+      ? ritmo.registrados + ' de ' + ritmo.passados + ' registrados · '
+        + ritmo.checkins + (ritmo.checkins === 1 ? ' check-in' : ' check-ins')
+        + (ritmo.esperando ? ' · ' + ritmo.esperando + ' esperando registro' : '')
+      : 'nada venceu ainda hoje · ' + ritmo.checkins
+        + (ritmo.checkins === 1 ? ' check-in' : ' check-ins')),
     /* ══ A LINHA DE HOJE, ABAIXO DA GRADE ═════════════════════════════════════════
        Três medidas lado a lado, nunca somadas: o que o dia pediu, o que ele registrou
        e o que o app viu. Somar plano com check-in transformaria intenção em execução. */
@@ -32997,6 +33097,9 @@ function pl6DadosFinal(rep) {
            quase escrevi um `hojeISOBrasilia()` que não existe neste arquivo, e um segundo
            calendário aqui deixaria as duas telas discordando do dia. */
         rot: esc(d.rot), data: esc(d.data), hoje: d.iso === hojeISOPl6,
+        /* O CSS DO CELULAR ESCONDE AS COLUNAS SEM ESTA MARCA. É o que permite um markup
+           só para os dois desenhos — no desktop o atributo não muda nada. */
+        sel: di === diaAba,
         bg: s.dragHover === di ? '#FDF3F4' : (d.iso === hojeISOPl6 ? '#FFFDF8' : '#F7F5F0'),
         headBg: d.iso === hojeISOPl6 ? '#FDF3F4' : '#F1EEE7',
         borda: s.dragHover === di ? '#E51A31' : (d.iso === hojeISOPl6 ? '#F0A9B2' : '#E4E0D6'),
@@ -33704,7 +33807,7 @@ function pl6TelaFinalHTML(d) {
       ${sl.registrado ? `
       <span style="display:flex;align-items:center;gap:7px;border-top:1px solid ${sl.regBorda};background:${sl.regBg};padding:5px 9px;">
         <b style="min-width:0;font:800 9.5px 'Manrope',sans-serif;color:${sl.regCor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${sl.regTxt}</b>
-        <button type="button" data-pl6-acao="${sl.alterarOn}" data-pl6-pill="1" style="margin-left:auto;flex:none;border:0;background:transparent;color:#7A8494;font:700 9px 'Manrope',sans-serif;text-decoration:underline;cursor:pointer;padding:0;min-height:22px;">alterar</button>
+        <button type="button" data-pl6-acao="${sl.alterarOn}" data-pl6-alterar="1" style="margin-left:auto;flex:none;border:0;background:transparent;color:#7A8494;font:700 9px 'Manrope',sans-serif;text-decoration:underline;cursor:pointer;padding:0 10px;min-height:22px;">alterar</button>
       </span>` : ''}
       </div>`).join('');
 
@@ -33712,7 +33815,7 @@ function pl6TelaFinalHTML(d) {
       <button type="button" data-pl6-regiao="${ro.on}" data-nome="${ro.chave}" style="display:flex;align-items:center;gap:5px;border:0;border-radius:7px;background:transparent;padding:6px 8px;cursor:pointer;font:800 10.5px 'Manrope',sans-serif;color:#2B3440;min-width:0;text-align:left;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ro.nome}</span><span style="margin-left:auto;flex:none;font:700 9px 'Manrope',sans-serif;color:#7A8494;font-variant-numeric:tabular-nums;">${ro.n} contas</span></button>`).join('');
 
     return `
-    <div data-pl6-dia-drop="${dia.di}" style="background:${dia.bg};border:1.5px solid ${dia.borda};border-radius:13px;min-width:0;overflow:hidden;">
+    <div data-pl6-dia-drop="${dia.di}" ${dia.sel ? 'data-pl6-dia-sel="1"' : ''} style="background:${dia.bg};border:1.5px solid ${dia.borda};border-radius:13px;min-width:0;overflow:hidden;">
       <div style="padding:11px 12px 10px;background:${dia.headBg};border-bottom:1px solid ${dia.borda};">
         <div style="display:flex;align-items:center;gap:6px;">
           <b style="font:900 15px 'Archivo',sans-serif;color:#2B3440;">${dia.rot}</b>
@@ -33855,6 +33958,33 @@ function pl6TelaFinalHTML(d) {
 
     <div style="display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:stretch;">
       <div style="padding:18px 22px 24px;min-width:0;">
+        <!-- ══ 1.7 · O CABEÇALHO E AS ABAS DO CELULAR ═══════════════════════════════
+             Só existem abaixo de 640px. No desktop as cinco colunas estão lado a lado e
+             um cabeçalho dizendo "Quarta, 23/09" seria repetir o que a coluna já diz.
+             É o MESMO markup dos dois lados: quem escolhe o desenho é o CSS, porque
+             escrever uma tela de celular à parte foi como esta casa acabou com o mesmo
+             dia montado em duas telas — a dívida que a Minha Daily vem pagar. -->
+        <div data-pl6-cab-movel="1" style="margin-bottom:11px;">
+          <span style="display:block;font:900 9px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#E51A31;">Planejamento · ${d.diaAbaHoje ? 'hoje' : 'a semana'}</span>
+          <span style="display:flex;align-items:baseline;gap:9px;margin-top:3px;">
+            <b style="font:900 18px 'Archivo',sans-serif;color:#2B3440;">${d.diaAbaRot}</b>
+            ${d.diaAbaHoje ? `<span style="font:800 13px 'Manrope',sans-serif;color:#7A8494;font-variant-numeric:tabular-nums;">${d.agoraTxt}</span>` : ''}
+          </span>
+          ${d.diaAbaHoje ? `<span style="display:block;font:700 10.5px/1.5 'Manrope',sans-serif;color:#5B667A;margin-top:3px;">${d.resumoMovel}</span>` : ''}
+        </div>
+        <div data-pl6-abas-dia="1" style="gap:5px;margin-bottom:11px;overflow-x:auto;">
+          ${(d.abasDia || []).map(ab => `<button type="button" data-pl6-acao="${ab.on}" style="flex:1;min-width:0;border:1.5px solid ${ab.borda};border-radius:10px;background:${ab.bg};color:${ab.cor};padding:6px 4px;cursor:pointer;">
+            <span style="display:block;font:800 9.5px 'Manrope',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${ab.rot}</span>
+            <b style="display:block;font:900 11px 'Archivo',sans-serif;color:${ab.sel ? '#FDFEFF' : ab.marcaCor};font-variant-numeric:tabular-nums;margin-top:2px;">${ab.marca}</b>
+          </button>`).join('')}
+        </div>
+        <!-- A PENDÊNCIA DE ONTEM, ACIMA DA LISTA. No desktop ela já está na linha de
+             hoje, embaixo da grade; no celular a grade é um dia só, e o dia de ontem
+             não está na tela — por isso ela sobe. -->
+        ${d.temPend ? `<div data-pl6-pend-movel="1" style="border:1.5px solid #F0A9B2;border-radius:11px;background:#FDF7F8;padding:10px 12px;margin-bottom:11px;">
+          <b style="display:block;font:800 11px 'Manrope',sans-serif;color:#C3152A;">${d.pendTxt}</b>
+          <span style="display:block;font:700 9.5px/1.5 'Manrope',sans-serif;color:#7A8494;margin-top:4px;">Sem check-in e sem registro, o gestor vê "não medido", não "não foi". Toque no dia para registrar, ou diga que não foi.</span>
+        </div>` : ''}
         <div data-pl6-grade-semana="1" style="display:grid;gap:10px;align-items:start;">${diasHTML}</div>
         <!-- ══ 1.6 · A LINHA DE HOJE ══════════════════════════════════════════════
              Plano, registro e check-in lado a lado, nunca somados — e a pendência de
@@ -33865,6 +33995,11 @@ function pl6TelaFinalHTML(d) {
           ${d.temPend ? `<b style="font:800 10px 'Manrope',sans-serif;color:#C3152A;">${d.pendTxt}</b>` : ''}
           <span style="margin-left:auto;font:700 9.5px 'Manrope',sans-serif;color:#B4AC9C;">o gestor lê a mesma grade: plano × registro × check-in</span>
         </div>
+        <!-- ══ + ENCAIXAR NO DIA (celular) ═══════════════════════════════════════
+             No telefone a munição fica DEPOIS da grade, fora da tela. Este botão leva
+             até ela com o dia escolhido já como destino — sem ele, o gesto de pôr uma
+             conta no dia exige rolar a tela inteira para baixo e voltar. -->
+        <button type="button" data-pl6-acao="encaixar" data-pl6-encaixar="1" style="width:100%;border:1.5px solid #E51A31;border-radius:999px;background:#E51A31;color:#FFFDF8;min-height:48px;font:800 12px 'Manrope',sans-serif;cursor:pointer;margin-top:12px;">+ encaixar no dia</button>
         <span style="display:block;font:700 10px/1.6 'Manrope',sans-serif;color:#7A8494;margin-top:10px;">▸ agendou aqui = o lead entra <b style="color:#E51A31;">automaticamente na sua Daily</b> do dia, com hora — sem redigitar nada · ✕ devolve pra munição enquanto a hora não passou · depois da hora, o cartão pergunta <b style="color:#C3152A;">como foi</b> e sai do dia por "remarcar" ou "não rolou" · o bloco de prospecção de rua ocupa hora do mesmo jeito</span>
 
       </div>
@@ -34862,6 +34997,24 @@ function pl6Ligar(box, rep) {
         return redesenhar();
       }
       if (verbo === 'onde') { s.ondeAberto = !s.ondeAberto; return redesenhar(); }
+
+      /* A ABA DE DIA DO CELULAR. Ela também vira o DESTINO do "+ encaixar no dia" —
+         são a mesma escolha, e duas variáveis para ela deixariam o botão pondo a conta
+         num dia diferente do que está na tela. */
+      if (verbo === 'diaaba') {
+        const i = Number(arg);
+        if (isFinite(i)) { s.diaAba = i; s.motivoDe = null; }
+        return redesenhar();
+      }
+
+      /* + ENCAIXAR NO DIA: leva até a munição com o dia já escolhido. Não abre nada
+         novo — é a mesma coluna do desktop, que no telefone está abaixo da grade. */
+      if (verbo === 'encaixar') {
+        const alvo = box.querySelector('[data-pl6-municao]');
+        if (typeof smoothScrollTo === 'function' && alvo) smoothScrollTo(alvo);
+        else if (alvo && alvo.scrollIntoView) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
 
       /* A DURAÇÃO MEXE NO BLOCO QUE JÁ ESTÁ NA MÃO. Sem esta segunda linha, trocar de
          2h para 3h com o bloco pego mudava só o PRÓXIMO bloco — e o que ele acabou de
