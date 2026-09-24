@@ -38,6 +38,24 @@ let hubspot = requireOpcional(() => require('../data/hubspot.json'));
 let narrativas = requireOpcional(() => require('../data/narrativas.json'));
 const usuariosRaw = require('../data/usuarios.json');
 
+/* ══ OS GESTORES QUE TAMBÉM VENDEM (24/09/26) ═══════════════════════════════════
+   Julyan vende em evento e pelo field sales, e as vendas dele contam no placar do
+   time. Ele não é rep — não tem plano de dia, não entra na rodada, não tem meta
+   individual — mas o que ele fecha é venda da casa.
+   A lista sai do MESMO usuarios.json que define os reps, pela role: quem é manager e
+   tem ownerId. Sem ownerId não dá para saber quais negócios são dele, e é por isso
+   que a linha do Julyan ganhou o dele hoje. */
+const GESTORES_QUE_VENDEM = (function () {
+  const lista = Array.isArray(usuariosRaw) ? usuariosRaw : (usuariosRaw.usuarios || []);
+  const out = {};
+  lista.forEach(function (u) {
+    if (!u || u.role !== 'manager') return;
+    if (!u.ownerId || String(u.ownerId).startsWith('pendente_')) return;
+    out[String(u.ownerId)] = { name: u.nome || 'gestor', ownerId: String(u.ownerId) };
+  });
+  return out;
+}());
+
 // (requireOpcional foi movida para o topo do arquivo em 02/09/26: ela passou a ser usada
 // pelos primeiros requires, e declaracao de function sobe por hoisting mas fica confusa
 // de ler — ver o bloco no inicio do arquivo.)
@@ -303,15 +321,43 @@ function montarDadosCompletos() {
     const mesCorrente = agoraBr.toISOString().slice(0, 7);
     const porOwnerMes = {};
     const ajustadas = [];
+    /* AS VENDAS DO GESTOR FICAM À PARTE, e não em porOwnerMes: aquela lista é o pódio
+       e a régua por pessoa, e é ela que alimenta a rodada, a Daily e a meta individual.
+       O gestor não tem plano de dia nem lugar na fila — o que ele tem é venda. */
+    const doGestor = { count: 0, mrrTotal: 0, receitaTotal: 0, clientes: [], name: null, ownerId: null };
+    /* E O QUE NÃO É DE NINGUÉM DO TIME CONTINUA FORA, mas agora CONTADO: antes ele
+       sumia sem deixar rastro, e foi assim que quatro vendas do gestor ficaram um mês
+       inteiro fora do placar sem ninguém ver. */
+    const foraDoTime = [];
     hubspot.vendasMes.forEach(d => {
-      if (!d.ownerId || !narrativas.reps[d.ownerId]) return; // dono fora do time ativo
+      const ehGestor = !!(d.ownerId && GESTORES_QUE_VENDEM[d.ownerId]);
+      if (!d.ownerId || (!narrativas.reps[d.ownerId] && !ehGestor)) {
+        foraDoTime.push({ id: d.id || null, nome: d.nome, ownerId: d.ownerId || null,
+          mrr: d.mrr || 0, receita: d.receita || 0, closedate: d.closedate || null });
+        return;
+      }
       // A venda cujo mês de competência não é o corrente sai da conta do mês, e fica
       // registrada para a tela mostrar.
       const mes = d.mesDeCompetencia || mesCorrente;
       if (mes !== mesCorrente) {
+        /* O NOME SAI DA FONTE CERTA para cada um: a do rep vem de narrativas, a do
+           gestor de usuarios.json. Ler narrativas.reps[ownerId].name para o gestor
+           estouraria aqui — ele não está lá, e é justamente por isso que este patch
+           existe. */
+        const quem = narrativas.reps[d.ownerId] || GESTORES_QUE_VENDEM[d.ownerId];
         ajustadas.push({ id: d.id || null, nome: d.nome, ownerId: d.ownerId,
-          name: narrativas.reps[d.ownerId].name, mrr: d.mrr || 0, receita: d.receita || 0,
+          name: (quem && quem.name) || 'sem nome', mrr: d.mrr || 0, receita: d.receita || 0,
           closedate: d.closedate || null, contaEm: mes, motivo: d.ajustado || null });
+        return;
+      }
+      if (ehGestor) {
+        doGestor.count += 1;
+        doGestor.mrrTotal += d.mrr || 0;
+        doGestor.receitaTotal += d.receita || 0;
+        doGestor.name = GESTORES_QUE_VENDEM[d.ownerId].name;
+        doGestor.ownerId = d.ownerId;
+        doGestor.clientes.push({ id: d.id || null, nome: d.nome, mrr: d.mrr || 0,
+          receita: d.receita || 0, closedate: d.closedate || null });
         return;
       }
       if (!porOwnerMes[d.ownerId]) porOwnerMes[d.ownerId] = { count: 0, mrrTotal: 0, receitaTotal: 0, clientes: [] };
@@ -334,10 +380,23 @@ function montarDadosCompletos() {
     vendasMes = {
       mesLabel: `${MESES_PT[agoraBr.getUTCMonth()]}/${agoraBr.getUTCFullYear()}`,
       mes: mesCorrente,
-      totalClientes: porRepMes.reduce((s, r) => s + r.count, 0),
-      totalMrr: porRepMes.reduce((s, r) => s + r.mrrTotal, 0),
-      totalReceita: porRepMes.reduce((s, r) => s + r.receitaTotal, 0),
+      /* ══ OS TOTAIS SOMAM O TIME MAIS O GESTOR (24/09/26) ═══════════════════════
+         Venda do gestor é venda da casa e conta no placar. O `porRep` abaixo NÃO a
+         inclui de propósito — ele é o pódio e a régua por pessoa. Quem quiser saber a
+         diferença entre os dois lê `gestor`, que viaja ao lado com nome e clientes. */
+      totalClientes: porRepMes.reduce((s, r) => s + r.count, 0) + doGestor.count,
+      totalMrr: porRepMes.reduce((s, r) => s + r.mrrTotal, 0) + doGestor.mrrTotal,
+      totalReceita: porRepMes.reduce((s, r) => s + r.receitaTotal, 0) + doGestor.receitaTotal,
       porRep: porRepMes,
+      /* A PARTE DO GESTOR, nomeada. `null` quando ele não vendeu no mês — e null é
+         diferente de zero: zero seria uma linha na tela dizendo que ele não vendeu. */
+      gestor: doGestor.count ? {
+        ownerId: doGestor.ownerId, name: doGestor.name, count: doGestor.count,
+        mrrTotal: doGestor.mrrTotal, receitaTotal: doGestor.receitaTotal,
+        clientes: doGestor.clientes.sort((a, b) => (b.mrr || 0) - (a.mrr || 0))
+      } : null,
+      /* E O QUE FICOU FORA DO TIME, CONTADO em vez de sumido em silêncio. */
+      foraDoTime: foraDoTime,
       // as vendas que saíram do mês por competência, com o motivo de cada uma
       ajustadas: ajustadas
     };
