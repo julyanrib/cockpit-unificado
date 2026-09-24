@@ -33596,15 +33596,39 @@ function dg4Plural(n, sing, plur) {
   return n + ' ' + (Number(n) === 1 ? sing : plur);
 }
 
-function dg4Ontem(ownerId, ontemISO) {
-  if (!ontemISO) return { p: null, f: null, medido: false, furou: false };
-  const d = (typeof getDaily === 'function') ? getDaily(ownerId, ontemISO) : null;
-  const p = (d && d.prometido_visitas != null) ? Number(d.prometido_visitas) : null;
+function dg4Ontem(ownerId, ontemISO, linhaGradeOntem, gradeOntemLida) {
+  if (!ontemISO) return { p: null, f: null, reg: null, medido: false, furou: false };
+
+  let p = null;
+  if (gradeOntemLida !== false) {
+    const itens = pl6ItensDoDiaDaLinha(linhaGradeOntem, ontemISO);
+    p = itens === null ? 0
+      : itens.filter(function (it) { return it.tipo !== 'bloqueado'; }).length;
+  }
+
   const real = (typeof atividadesComprovadasNoDia === 'function')
     ? atividadesComprovadasNoDia(ownerId, ontemISO) : null;
   const f = (real && Array.isArray(real.visitas)) ? real.visitas.length : null;
-  const medido = p != null && f != null;
-  return { p: p, f: f, medido: medido, furou: medido ? f < p : false };
+
+  let reg = null;
+  if (gradeOntemLida !== false) {
+    const itens = pl6ItensDoDiaDaLinha(linhaGradeOntem, ontemISO);
+    reg = itens === null ? 0
+      : itens.filter(function (it) { return it.tipo !== 'bloqueado' && it.r; }).length;
+  }
+
+  const medido = p != null && f != null && p > 0;
+  return { p: p, f: f, reg: reg, medido: medido, furou: medido ? f < p : false };
+}
+
+function pl6ItensDoDiaDaLinha(linha, diaISO) {
+  const g = linha && Array.isArray(linha.grade) ? linha.grade : null;
+  if (!g || !diaISO) return null;
+  const seg = linha.data_segunda || (typeof addDays === 'function' ? null : null);
+  if (!seg) return null;
+  const dif = Math.round((Date.parse(diaISO + 'T12:00:00') - Date.parse(seg + 'T12:00:00')) / 864e5);
+  if (!(dif >= 0 && dif < g.length)) return null;
+  return (typeof pl6ItensDoDia === 'function') ? pl6ItensDoDia(g[dif] || [], null) : null;
 }
 
 function dg4CadenciaDe(ownerId, diaISO) {
@@ -33636,11 +33660,15 @@ function dg4SinaisDe(x, pessoa, ontem, combinado) {
 
   if (!ontem.medido) {
     out.push({ tipo: 'ontem', ruim: false, neutro: true,
-      rot: ontem.p == null ? 'ontem: sem promessa registrada' : 'ontem: feito não medido' });
+      rot: ontem.p == null ? 'ontem: plano não medido'
+        : (ontem.p === 0 ? 'ontem: não montou o dia' : 'ontem: feito não medido') });
   } else {
+
+    const divergiu = ontem.reg != null && ontem.reg !== ontem.f;
     out.push({ tipo: 'ontem', ruim: ontem.furou,
       rot: 'ontem: ' + ontem.f + '/' + ontem.p + ' ' + (ontem.p === 1 ? 'visita' : 'visitas')
-        + ' ' + (ontem.furou ? '✗' : '✓') });
+        + ' ' + (ontem.furou ? '✗' : '✓')
+        + (divergiu ? ' · ele registrou ' + ontem.reg : '') });
   }
 
   if (pessoa && pessoa.slaEstourados > 0) {
@@ -33756,7 +33784,8 @@ function dg4Dados(ctx) {
       .concat(grade.semHora || []);
 
     const pessoa = pessoaPorOid[oid] || null;
-    const ontem = dg4Ontem(oid, ontemISO);
+    const ontem = dg4Ontem(oid, ontemISO,
+      (c.gradesOntem || {})[oid] || null, c.gradeOntemLida);
     const cadOntem = dg4CadenciaDe(oid, ontemISO);
     const propostas = (pessoa && typeof pe4Propostas === 'function')
       ? pe4Propostas(pessoa).filter(function (pr) { return !pr.temReuniao; }) : [];
@@ -33814,8 +33843,6 @@ function dg4Dados(ctx) {
   const minutos = dg4MinutosParaTrava();
   const antesDaTrava = ehHoje && minutos > 0;
 
-  const somaVisitas = medidos.reduce(function (t, x) { return t + (Number(x.daily.prometido_visitas) || 0); }, 0);
-
   const somaPlanejadas = medidos.reduce(function (t, x) { return t + x.visitas.length; }, 0);
   const somaNovas = medidos.reduce(function (t, x) { return t + x.novas; }, 0);
   const somaQuentes = medidos.reduce(function (t, x) { return t + x.quentes.length; }, 0);
@@ -33836,19 +33863,19 @@ function dg4Dados(ctx) {
   }, 0);
 
   const kpis = !planosLidos ? [
-    { rot: 'ontem: feito/prometido', v: 'não medido', de: 'a leitura de planos_diarios falhou', cor: '#A79C8A' },
+    { rot: 'ontem: feito/planejado', v: 'não medido', de: 'a leitura do plano falhou', cor: '#A79C8A' },
     { rot: 'planos montados', v: 'não medido', de: 'recarregue a aba', cor: '#A79C8A' },
     { rot: 'dia registrado', v: 'não medido', de: 'a leitura da grade falhou', cor: '#A79C8A' },
     { rot: 'cobranças do dia', v: String(somaCobrancas), de: 'do HubSpot, esse número vale', cor: somaCobrancas ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'quentes fora do plano', v: String(somaQuentes), de: 'do HubSpot, esse número vale', cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
   ] : [
 
-    { rot: 'ontem: feito/prometido',
-      v: comPromessa.length ? (feitOntem + '/' + promOntem) : 'sem promessa',
+    { rot: 'ontem: feito/planejado',
+      v: comPromessa.length ? (feitOntem + '/' + promOntem) : 'sem plano',
       de: comPromessa.length
         ? (nFurou + (nFurou === 1 ? ' furou' : ' furaram')
-          + (semPromessaOntem ? ' · ' + semPromessaOntem + ' sem promessa' : ''))
-        : 'ninguém registrou promessa ontem',
+          + (semPromessaOntem ? ' · ' + semPromessaOntem + ' sem plano ontem' : ''))
+        : 'ninguém montou o dia de ontem',
       cor: !comPromessa.length ? '#A79C8A' : (feitOntem >= promOntem ? '#7FD9BE' : '#FF8D9A') },
 
     { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length,
@@ -33870,10 +33897,14 @@ function dg4Dados(ctx) {
   const manchete = (function () {
     if (!planosLidos) return 'Não consegui ler os planos do dia — nenhum número desta faixa acusa ninguém até a leitura voltar.';
     const ontemFrase = !comPromessa.length
-      ? 'Ontem ninguém registrou promessa — o placar de hoje começa em branco.'
-      : ('Ontem ' + (comPromessa.length === medidos.length ? 'o time' : comPromessa.length + ' prometeram e')
-        + ' prometeu ' + dg4Plural(promOntem, 'visita', 'visitas') + ' e fez ' + feitOntem
-        + (nFurou ? ' — ' + nFurou + (nFurou === 1 ? ' furou' : ' furaram') + ' a palavra.' : ' — palavra cumprida ✓.'));
+      ? 'Ontem ninguém montou o dia — não há palavra de ontem para cobrar. '
+
+      : ('Ontem ' + (comPromessa.length === medidos.length
+        ? 'o time planejou ' + dg4Plural(promOntem, 'visita', 'visitas')
+        : comPromessa.length + (comPromessa.length === 1 ? ' pessoa planejou ' : ' pessoas planejaram ')
+          + dg4Plural(promOntem, 'visita', 'visitas'))
+        + ' e o CRM viu ' + feitOntem
+        + (nFurou ? ' — ' + nFurou + (nFurou === 1 ? ' furou' : ' furaram') + '.' : ' — tudo cumprido ✓.'));
     const hoje2 = [];
     if (semPlano.length) hoje2.push(semPlano.length + ' sem plano' + (antesDaTrava ? ' a ' + minutos + ' min da trava' : ''));
     if (somaCobrancas) hoje2.push(somaCobrancas + (somaCobrancas === 1 ? ' cobrança' : ' cobranças') + ' no dia');
@@ -33903,10 +33934,10 @@ function dg4Dados(ctx) {
     : (nFurou
       ? (nFurou + (nFurou === 1 ? ' furou' : ' furaram') + ' a palavra de ontem — falam logo depois dos sem plano')
       : (comPromessa.length
-        ? 'todo mundo que prometeu cumpriu ✓'
-        : 'ninguém registrou promessa ontem — nada a cobrar aqui, e nada a comemorar'))
+        ? 'todo mundo que planejou cumpriu ✓'
+        : 'ninguém montou o dia de ontem — nada a cobrar aqui, e nada a comemorar'))
     + (semPromessaOntem && planosLidos
-      ? ' · ' + semPromessaOntem + ' sem promessa registrada (não é furo)' : '');
+      ? ' · ' + semPromessaOntem + ' sem plano ontem (não é furo)' : '');
   const placarNotaCor = nFurou ? '#8A3B3B' : (comPromessa.length ? '#1E9E7B' : '#7A8494');
 
   const rodada = medidos.map(function (x, i) {
@@ -34157,7 +34188,6 @@ function dg4Dados(ctx) {
     rodada: rodada,
     origAlvo: String(origAlvo), origCart: String(origCart), origNova: String(origNova),
 
-    somaVisitas: String(somaVisitas),
     somaPlanejadas: String(somaPlanejadas),
     somaNovas: algumSemOrigem ? (somaNovas + '+') : String(somaNovas),
     execs: execs,
@@ -34183,7 +34213,7 @@ function dg4Dados(ctx) {
 
 function dg4TelaHTML(d) {
   const { acoes, agenda, contagem, execs, kpis, linhaTopo, manchete, origAlvo, origCart, origNova,
-    placar, placarNota, placarNotaCor, rodada, rodapeFonte, somaNovas, somaPlanejadas, somaVisitas,
+    placar, placarNota, placarNotaCor, rodada, rodapeFonte, somaNovas, somaPlanejadas,
     temToast, tituloTrava, toast } = d;
   return `
       <div style="background:#FDFEFF;border:1px solid #DCE1EA;border-radius:16px;box-shadow:0 12px 40px rgba(43,52,64,.12);overflow:hidden;">
@@ -34209,7 +34239,7 @@ function dg4TelaHTML(d) {
         </div>
 
         <div style="display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid #E2E6EE;flex-wrap:wrap;">
-          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;flex:none;">O placar de ontem <span style="font-weight:700;text-transform:none;letter-spacing:0;color:#7A8494;">· prometido → feito, medido no HubSpot, não auto-relato</span></span>
+          <span style="font:900 10px 'Archivo',sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#2B3440;flex:none;">O placar de ontem <span style="font-weight:700;text-transform:none;letter-spacing:0;color:#7A8494;">· planejado → feito, medido no HubSpot · o registro dele aparece ao lado, e não no lugar</span></span>
           <div style="display:flex;gap:6px;flex-wrap:wrap;min-width:0;">
             ${(placar||[]).map(pl => `
               <span style="display:inline-flex;align-items:center;gap:7px;min-height:30px;padding:0 12px;border:1.5px solid ${pl.borda};border-radius:999px;background:${pl.bg};font:800 10.5px 'Manrope',sans-serif;color:#2B3440;white-space:nowrap;">${pl.nome}<b style="font:900 11px 'Archivo',sans-serif;color:${pl.cor};font-variant-numeric:tabular-nums;">${pl.rot}</b></span>
@@ -34225,7 +34255,7 @@ function dg4TelaHTML(d) {
               <button data-dg4-acao="${r.on}" style="display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border:1.5px solid ${r.borda};border-radius:999px;background:${r.bg};font:800 10.5px 'Manrope',sans-serif;color:${r.cor};cursor:pointer;white-space:nowrap;" data-dg4-hv="0"><b style="font:900 10px 'Archivo',sans-serif;color:${r.nCor};">${r.pos}</b>${r.nome}<span style="font:800 8.5px 'Archivo',sans-serif;color:${r.stCor};">${r.st}</span></button>
             `).join('')}
           </div>
-          <span style="margin-left:auto;flex:none;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;text-align:right;">ordem: sem plano → furou ontem → com compromisso sem registro → em dia ✓<br>hoje: <b style="color:#2B3440;">${somaVisitas} visitas prometidas</b> · ${somaPlanejadas} planejadas na grade · origem dos planos: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${somaNovas} prospecção nova</b></span>
+          <span style="margin-left:auto;flex:none;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;text-align:right;">ordem: sem plano → furou ontem → com compromisso sem registro → em dia ✓<br>hoje: <b style="color:#2B3440;">${somaPlanejadas} visitas na grade</b> · origem dos planos: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${somaNovas} prospecção nova</b></span>
         </div>
 
         <div style="padding:16px 24px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
@@ -34467,6 +34497,8 @@ async function renderDaily() {
 
   let gradePorOwner = {}, gradeLida = true;
 
+  let gradeOntemPorOwner = {}, gradeOntemLida = true;
+
   const novasPorId = {};
 
   let rotaHojePorOwner = {}, rotaSemanaTotal = null, rotaHojeTotal = null;
@@ -34492,6 +34524,28 @@ async function renderDaily() {
       gradeLida = false;
     } else {
       (gradeData || []).forEach(function (l) { gradePorOwner[String(l.owner_id)] = l; });
+    }
+
+    const ontemDaily = addBusinessDays(dailyRefDate, -1);
+    const segundaDeOntem = addDays(ontemDaily,
+      -(((new Date(ontemDaily + 'T12:00:00').getDay()) === 0 ? 7
+        : (new Date(ontemDaily + 'T12:00:00').getDay())) - 1));
+    if (segundaDeOntem !== segundaDoFoco) {
+      const { data: gradeOntemData, error: gradeOntemErro } = await supa.from('planos_semanais')
+        .select('owner_id,data_segunda,grade')
+        .eq('data_segunda', segundaDeOntem);
+      if (gradeOntemErro) {
+        console.error('Daily — grade da semana de ontem:', gradeOntemErro.message);
+
+        gradeOntemLida = false;
+      } else {
+        (gradeOntemData || []).forEach(function (l) {
+          gradeOntemPorOwner[String(l.owner_id)] = l;
+        });
+      }
+    } else {
+
+      gradeOntemPorOwner = gradePorOwner;
     }
 
     const idsNovas = [];
@@ -35987,6 +36041,7 @@ async function renderDaily() {
     DG4_CTX = {
       reps: repsDaily, planos: planosPorOwner, planosLidos: planosLidos,
       grades: gradePorOwner, gradeLida: gradeLida, diaEmFoco: dailyRefDate,
+      gradesOntem: gradeOntemPorOwner, gradeOntemLida: gradeOntemLida,
       novas: novasPorId,
       foraDoCampo: abertoDeQuemSaiu,
 

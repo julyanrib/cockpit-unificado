@@ -30,10 +30,25 @@
    ══════════════════════════════════════════════════════════════════════════════════════ */
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const raiz = path.join(__dirname, '..');
 const tpl = fs.readFileSync(path.join(raiz, 'template', 'cockpit.template.html'), 'utf8');
 const codigo = tpl.replace(/\/\*[\s\S]*?\*\//g, ' ');
+/* O CRU, para RECORTAR funções e rodá-las: o `codigo` acima tem os comentários trocados
+   por espaço, e um comentário dentro de uma função vira buraco no meio do corpo dela. */
+const codigoCru = tpl;
+function recortarFn(nome) {
+  const i = codigoCru.indexOf('function ' + nome + '(');
+  if (i < 0) { console.error('FALHA: ' + nome + ' não existe no template.'); process.exit(1); }
+  let d = 0, j = i, viu = false;
+  while (j < codigoCru.length) {
+    const c = codigoCru[j];
+    if (c === '{') { d++; viu = true; } else if (c === '}') { d--; if (viu && d === 0) break; }
+    j++;
+  }
+  return codigoCru.slice(i, j + 1);
+}
 
 let ok = 0;
 const falhas = [];
@@ -191,10 +206,13 @@ conferir('o KPI diz quem está devendo registro, e não esconde no total',
    horário. Depois de "pode colocar 15 contas no dia uai" e de a hora passar a ser escolha
    do executivo, um dia com onze visitas e três horas marcadas somava três — o número do
    topo deixou de descrever o dia. `visitas` é a lista inteira, com hora e sem. */
-conferir('a promessa em número vem de dailies, e o planejado é uma conta separada',
-  /const somaVisitas = medidos\.reduce\(function \(t, x\) \{ return t \+ \(Number\(x\.daily\.prometido_visitas\) \|\| 0\); \}, 0\);/.test(codigo) &&
+/* A PRIMEIRA METADE DESTA CHECAGEM saiu em 24/09/26 com `somaVisitas` — ela exigia que a
+   promessa em número viesse de `dailies`, e esse número deixou de existir. A segunda
+   metade continua, e é a que importa agora: o planejado é uma CONTA DA GRADE, e não uma
+   soma de campo digitado. */
+conferir('o planejado de hoje é uma conta da grade',
   /const somaPlanejadas = medidos\.reduce\(function \(t, x\) \{ return t \+ x\.visitas\.length; \}, 0\);/.test(codigo),
-  'somar slot da grade dentro de "visitas prometidas" inventaria promessa que ninguém deu');
+  'somar campo digitado dentro de "visitas na grade" inventaria plano que ninguém montou');
 
 /* ══ A VISITA SEM HORA EXISTE, E APARECE ═════════════════════════════════════════════
    Julyan: "pode colocar 15 contas no dia uai, não so 7!" + "conserte a daily do gestor
@@ -321,12 +339,24 @@ conferir('a hora ausente é rótulo honesto, não relógio inventado',
    tela: desceram para a faixa da rodada, cada um com o nome do seu gesto. A guarda confere
    os DOIS lados — o provedor entrega e o markup escreve —, porque contrato com o número e
    markup sem ele é exatamente como um dado desaparece em silêncio. */
-conferir('e a tela mostra os dois, com o nome do gesto de cada um',
-  /somaVisitas: String\(somaVisitas\),/.test(codigo) &&
-  /somaPlanejadas: String\(somaPlanejadas\),/.test(codigo) &&
-  /\$\{somaVisitas\} visitas prometidas/.test(codigo) &&
-  /\$\{somaPlanejadas\} planejadas na grade/.test(codigo),
-  'promessa 2 com 38 planejadas, sem dizer as duas, é o número certo levando à conclusão errada');
+/* ══ OS DOIS NÚMEROS VIRARAM UM (24/09/26) ═══════════════════════════════════════════
+   A regra era: mostrar a promessa (2) e o planejado (38) lado a lado, com o nome do gesto
+   de cada um — "promessa 2 com 38 planejadas, sem dizer as duas, é o número certo levando
+   à conclusão errada". Ela estava certa enquanto os dois gestos existiam.
+
+   A PROMESSA MANUAL SAIU, e `somaVisitas` somava `dailies.prometido_visitas`: o campo que
+   ninguém escreve mais. Ele ficaria em 0 para sempre, AO LADO do número vivo — "0 visitas
+   prometidas · 38 planejadas na grade" faria o gestor procurar o que aconteceu com as 38.
+
+   O MESMO PUDOR, INVERTIDO: antes era não esconder o segundo número; agora é não mostrar
+   um número morto ao lado de um vivo. Sobra um, e ele é o da grade. */
+conferir('a tela mostra UM número de hoje, e ele é o da grade',
+  /const somaPlanejadas = medidos\.reduce\(function \(t, x\) \{ return t \+ x\.visitas\.length; \}, 0\);/.test(codigo)
+    && /\$\{somaPlanejadas\} visitas na grade/.test(codigo)
+    && !/somaVisitas/.test(codigo)
+    && !/visitas prometidas<\/b>/.test(codigo),
+  'um número morto ao lado de um vivo é pior que um número só: ele faz procurar o que '
+    + 'aconteceu com o outro');
 
 /* ── 5 · NADA É ESCRITO ─────────────────────────────────────────────────────────────── */
 conferir('esta leitura não grava em planos_semanais',
@@ -426,21 +456,132 @@ conferir('todo nome que o markup do gestor lê existe no escopo dele',
      Medido em 10/09/26 para ontem: 2 dos 10 tinham promessa registrada. Com `furou`
      calculado em cima de um null virando 0, oito pessoas apareceriam devendo a palavra na
      frente do time por causa de um campo vazio. */
-  conferir('a palavra de ontem só acusa quem prometeu',
-    /const medido = p != null && f != null;/.test(tela)
+  /* ══ A FONTE MUDOU EM 24/09/26, E A REGRA FICOU MAIS FORTE ═══════════════════════
+     O `prometido` saía de `dailies.prometido_visitas`, que ninguém mais escreve desde que
+     a promessa manual saiu — o placar ia secar sozinho. Hoje sai da GRADE daquele dia.
+
+     Agora há TRÊS estados onde antes havia dois, e o do meio é o que importa:
+
+       p === null   a leitura da grade falhou  ->  não medido, não acusa
+       p === 0      ele não montou o dia       ->  não acusa (não há palavra para cobrar)
+       p > 0        ele planejou N             ->  aí sim, f < p é furo
+
+     `p > 0` dentro de `medido` é o que separa "não montou" de "furou". Sem ele, todo dia
+     em que alguém não planeja nada apareceria como furo de zero visitas. */
+  conferir('a palavra de ontem só acusa quem planejou',
+    /const medido = p != null && f != null && p > 0;/.test(tela)
       && /furou: medido \? f < p : false/.test(tela)
-      && tela.indexOf('sem promessa registrada') > -1,
-    'furo calculado sobre promessa ausente é acusação produzida por campo vazio');
-  conferir('e a soma do placar só conta quem prometeu',
+      && tela.indexOf('não montou o dia') > -1,
+    'furo calculado sobre plano ausente é acusação produzida por dia não montado');
+  conferir('e o prometido de ontem vem da grade, não do campo que secou',
+    /const itens = pl6ItensDoDiaDaLinha\(linhaGradeOntem, ontemISO\);/.test(tela)
+      && !/d\.prometido_visitas/.test(tela),
+    '`dailies.prometido_visitas` parou de receber escrita quando a promessa manual saiu: '
+      + 'o placar ia secar sozinho e dizer "sem promessa" para os nove, todo dia');
+  /* ══ AQUI A FUNÇÃO RODA, E NÃO É LIDA ════════════════════════════════════════════
+     Duas sabotagens passaram verde contra as versões por regex desta checagem: trocar
+     `f` pelo registro (a chamada de atividadesComprovadasNoDia continuava escrita, só
+     não alimentava mais nada) e contar o BLOQUEIO como plano. As duas mudam o NÚMERO e
+     não mudam as palavras — e é por isso que este bloco executa dg4Ontem com uma grade
+     montada à mão, em vez de procurar trechos dela. */
+  (function () {
+    const ctx = {
+      Number: Number, String: String, Array: Array, Object: Object, Date: Date,
+      Math: Math, isNaN: isNaN,
+      /* o HubSpot diz TRÊS visitas com desfecho */
+      atividadesComprovadasNoDia: function () { return { visitas: [1, 2, 3] }; }
+    };
+    vm.createContext(ctx);
+    [/const PL6_BLOQUEADO = '[^']+';/, /const PL6_RUA = '[^']+';/, /const PL6_REL = '[^']+';/]
+      .forEach(function (re) { vm.runInContext(codigoCru.match(re)[0], ctx); });
+    ['pl6SlotId', 'pl6SlotRua', 'pl6SlotRel', 'pl6SlotBloqueado', 'pl6SlotHora',
+      'pl6SlotProposito', 'pl6ResultadoDoSlot', 'pl6PorHora', 'pl6ItensDoDia',
+      'pl6ItensDoDiaDaLinha', 'dg4Ontem']
+      .forEach(function (f) { vm.runInContext(recortarFn(f), ctx); });
+    const ontemDe = vm.runInContext('dg4Ontem', ctx);
+
+    /* SEGUNDA 21/09 é a data_segunda; ontem é QUARTA 23/09, a coluna 2. Quatro slots:
+       dois registrados, um sem registro e um BLOQUEIO. */
+    const linha = {
+      data_segunda: '2026-09-21',
+      grade: [[], [], [
+        { id: 'c-1', hora: '09:00', r: { tipo: 'avancou' } },
+        { id: 'c-2', hora: '10:00', r: { tipo: 'nao_rolou' } },
+        { id: 'c-3', hora: '11:00' },
+        '__b'
+      ], [], []]
+    };
+    const o = ontemDe('9', '2026-09-23', linha, true);
+
+    conferir('o prometido conta os compromissos da grade, e o bloqueio fica de fora',
+      o.p === 3,
+      'bloqueio é compromisso fora da rua: contá-lo como plano infla a palavra que o '
+        + 'gestor vai cobrar · veio p=' + o.p);
+    conferir('o feito continua vindo do HubSpot, e não da grade',
+      o.f === 3,
+      'se `f` passar a sair da grade ou do registro, o placar mede o plano contra ele '
+        + 'mesmo e dá certo sempre · veio f=' + o.f);
+    conferir('e o registro é uma TERCEIRA coluna, que não substitui o medido',
+      o.reg === 2 && o.f !== o.reg,
+      'registro é recado, não prova — quem prova é o CRM · veio reg=' + o.reg + ' f=' + o.f);
+    conferir('e o chip mostra os dois quando divergem',
+      /ele registrou ' \+ ontem\.reg/.test(tela),
+      '"3/3 ✓ · ele registrou 2" é a conversa da rodada em quatro palavras');
+
+    /* OS TRÊS ESTADOS DO PROMETIDO. */
+    const semLinha = ontemDe('9', '2026-09-23', null, true);
+    conferir('sem linha na tabela, ele não montou o dia — e isso é zero, não falha',
+      semLinha.p === 0 && semLinha.medido === false && semLinha.furou === false,
+      'zero se cobra; "não medido" não · veio ' + JSON.stringify(semLinha));
+    const semLeitura = ontemDe('9', '2026-09-23', null, false);
+    conferir('com a leitura falhada, o prometido é null e ninguém é acusado',
+      semLeitura.p === null && semLeitura.medido === false && semLeitura.furou === false,
+      'acusação produzida por consulta quebrada é o defeito que esta tela existe para '
+        + 'não cometer · veio ' + JSON.stringify(semLeitura));
+
+    /* E O FURO, QUANDO ELE EXISTE DE VERDADE. */
+    const ctx2 = Object.assign({}, ctx);
+    const cheio = { data_segunda: '2026-09-21', grade: [[], [], [
+      { id: 'c-1' }, { id: 'c-2' }, { id: 'c-3' }, { id: 'c-4' }, { id: 'c-5' }
+    ], [], []] };
+    void ctx2;
+    const furou = ontemDe('9', '2026-09-23', cheio, true);
+    conferir('planejou cinco e o CRM viu três: isso é furo',
+      furou.p === 5 && furou.f === 3 && furou.medido === true && furou.furou === true,
+      'veio ' + JSON.stringify(furou));
+  }());
+
+  /* ══ A SEGUNDA-FEIRA É O DIA QUE QUASE ESCAPOU ═══════════════════════════════════
+     A consulta da grade traz a semana do dia em foco INTEIRA, então de terça a sexta o
+     dia de ontem já está em memória. Na segunda, ontem é sexta — outra semana, outra
+     linha. Sem a segunda consulta, a rodada mais importante do time abriria dizendo
+     "ninguém montou o dia de ontem" para os nove, toda segunda de manhã.
+     Achado por sabotagem: trocar o `if` por `false` passava verde. */
+  conferir('na segunda, a grade da semana de ONTEM também é lida',
+    /const segundaDeOntem = addDays\(ontemDaily,/.test(codigo)
+      && /if \(segundaDeOntem !== segundaDoFoco\) \{/.test(codigo)
+      && /\.eq\('data_segunda', segundaDeOntem\)/.test(codigo)
+      && /gradeOntemPorOwner = gradePorOwner;/.test(codigo),
+    'de terça a sexta ontem está na mesma linha da semana; na segunda não — e é a rodada '
+      + 'que mais importa');
+  conferir('e a falha dela não derruba a tela de hoje',
+    /gradeOntemLida = false;/.test(codigo) && !/gradeOntemErro[\s\S]{0,120}gradeLida = false/.test(codigo),
+    'a grade de HOJE foi lida e a tela de hoje está de pé: o que falha ali é só o placar '
+      + 'de ontem, e ele sabe dizer "não medido"');
+  conferir('e a soma do placar só conta quem planejou',
     /const comPromessa = medidos\.filter\(function \(x\) \{ return x\.ontem\.medido; \}\);/.test(tela)
       && /const promOntem = comPromessa\.reduce/.test(tela)
       && /const feitOntem = comPromessa\.reduce/.test(tela)
-      && tela.indexOf('sem promessa registrada (não é furo)') > -1,
-    'somar o feito de quem não prometeu infla um lado do placar e inventa dívida no outro');
+      && tela.indexOf('sem plano ontem (não é furo)') > -1,
+    'somar o feito de quem não planejou infla um lado do placar e inventa dívida no outro');
 
   /* ── 2 · OS DOIS LADOS DO PLACAR VÊM DE FONTES DIFERENTES (regra 2) ──────────────── */
+/* A REGRA É "FONTES DIFERENTES", e ela sobreviveu à troca de fonte. O prometido saía de
+   `dailies` via getDaily; desde 24/09/26 sai de `planos_semanais.grade`. Continua sendo
+   Supabase, continua sendo escrito pelo executivo, e continua NÃO sendo a fonte do feito —
+   que é o que importa. A checagem passou a nomear a fonte nova. */
   conferir('o prometido sai do Supabase e o feito sai do HubSpot',
-    /function dg4Ontem\(ownerId, ontemISO\)[\s\S]{0,700}?getDaily\(ownerId, ontemISO\)/.test(tela)
+    /function dg4Ontem\(ownerId, ontemISO, linhaGradeOntem, gradeOntemLida\)[\s\S]{0,1400}?pl6ItensDoDiaDaLinha\(linhaGradeOntem, ontemISO\)/.test(tela)
       && /atividadesComprovadasNoDia\(ownerId, ontemISO\)/.test(tela),
     'os dois lados vindos da mesma fonte transformam o placar em auto-relato');
 
