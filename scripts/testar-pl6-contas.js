@@ -551,7 +551,10 @@ console.log('');
   checar('o dia se lê por uma função só, e as duas telas a chamam',
     /function pl6ItensDoDia\(coluna, porId\)/.test(codigo)
       && /const itens = pl6ItensDoDia\(col, porId\)/.test(dadosCod)
-      && /pl6ItensDoDia\(coluna, porId\)/.test(semCom(pegarFn('d7PlanoDeHoje'))),
+      /* A TERCEIRA CLÁUSULA COMPARAVA COM A MINHA DAILY, que saiu em 24/09/26. Ela
+         exigia que as DUAS telas chamassem a mesma função; hoje há uma, e o que protege
+         a regra é contar: um leitor declarado, e nenhum outro montando o dia. */
+      && (codigo.match(/function pl6ItensDoDia\(/g) || []).length === 1,
     'duas leituras do mesmo dia é duas rotas: ele monta o dia numa tela e trabalha na outra');
 
   /* O COMPARADOR TEM NOME E DOIS USUÁRIOS (10/09/26). Enquanto a ordem morava dentro do
@@ -564,9 +567,10 @@ console.log('');
       && /return a\.hora < b\.hora \? -1 :/.test(ordem),
     '14:20 na casa 0 e 09:00 na casa 3 mostrariam a tarde antes da manhã');
 
-  checar('e há UM comparador, usado pelo leitor e pela Daily',
+  checar('e há UM comparador, e uma cópia só da regra de ordem',
     /itens\.sort\(pl6PorHora\);/.test(leitor)
-      && /\.concat\(livres\)\.sort\(pl6PorHora\)/.test(semCom(pegarFn('d7PlanoDeHoje')))
+      /* citava o uso na Minha Daily; com uma tela só, o que vale é a CÓPIA ÚNICA */
+      && (codigo.match(/function pl6PorHora\(/g) || []).length === 1
       && (codigo.match(/if \(!a\.hora && !b\.hora\) return a\.si - b\.si;/g) || []).length === 1,
     'duas cópias da ordem do dia é como uma tela mostra a tarde antes da manhã e a outra'
     + ' não — e nenhuma das duas parece errada sozinha');
@@ -766,34 +770,39 @@ console.log('');
      só), medida no único lado que ainda tem cartão.
      Não reancorei na Daily nova de propósito: ela é ESPELHO e não desenha cartão de
      roteiro, então não existe markup equivalente para comparar. */
-  /* O CARTÃO É UM SÓ DESDE A PRANCHA v2 (10/09/26): antes eram dois (d7LinhaVisita para
-     a visita e d7CartaoSimples para o resto). Agora d7CartaoDoDiaHTML desenha tudo que
-     ocupa hora e d7CartaoDoItem traduz o item do plano para ele. */
-  const cartao = semCom(pegarFn('d7CartaoDoDiaHTML'));
-  const mapa = semCom(pegarFn('d7CartaoDoItem'));
-  const daily = semCom(pegarFn('d7TelaFinalHTML'));
+  /* ══ O CARTÃO DO DIA (reancorado em 24/09/26) ══════════════════════════════════
+     Aqui viviam três checagens comparando o cartão da Minha Daily com o do roteiro do
+     gestor: que o cartão era função de cima e não closure, que os dois caminhos
+     desenhavam pelo mesmo, e que o modo somente-leitura escondia o ✕.
 
-  checar('o cartao do dia e funcao de cima, nao closure de uma tela',
-    cartao.length > 800 && mapa.length > 800
-      && daily.indexOf('const cartaoSimples = function') < 0,
-    'closure dentro de uma tela e o que obrigou o gestor a ter markup proprio');
+     A MINHA DAILY SAIU, e com ela os dois caminhos. O cartão do dia agora é um só por
+     construção: o do Planejamento, dentro de pl6TelaFinalHTML. A regra que sobrevive é
+     a que sempre importou — QUEM VÊ A PROMESSA DE OUTRA PESSOA NÃO GANHA O ✕ DELA —, e
+     ela mudou de dono: quem mostra o dia de outro é a Daily do GESTOR, que é só
+     leitura, e é isso que esta checagem passa a exigir. */
+  checar('o cartão do dia é um só, e é o do Planejamento',
+    (semCom(tpl).match(/const agendaHTML = /g) || []).length === 1
+      && semCom(tpl).indexOf('function d7CartaoDoDiaHTML') < 0,
+    'dois montadores do mesmo cartão foi o que fez a mesma manhã ser descrita em dois'
+      + ' idiomas — e nenhum dos dois parecia errado sozinho');
 
-  /* UMA CHAMADA CADA, e não uma por tipo de item: os quatro ramos do roteiro (visita,
-     bloqueado, rua, órfã) viraram um, porque o cartão já sabe desenhar os quatro. */
-  checar('os dois caminhos do dia desenham pelo mesmo cartao',
-    /d7CartaoDoDiaHTML\(v, false\)/.test(daily)
-      && /d7CartaoDoItem\(l, false, null\)/.test(semCom(pegarFn('d7DadosFinal')))
-      && (semCom(tpl).match(/function d7CartaoDoDiaHTML\(/g) || []).length === 1,
-    'markup proprio em um dos dois volta a descrever a mesma manha em dois idiomas');
-
-  /* O ✕ E ATO DO EXECUTIVO, e o modo somente-leitura é o que garante isso. Antes esta
-     checagem media o roteiro do gestor passando soLeitura=true; com aquele markup fora, o
-     que resta a proteger é o PORTÃO no cartão: existindo `soLeitura`, nenhuma tela que
-     mostre a promessa de outra pessoa consegue oferecer o ✕ nem a régua de desfecho. */
-  checar('o cartao tem modo somente-leitura, e ele esconde o ✕ e a regua',
-    /if \(soLeitura \|\| !v\.pendente\) return/.test(cartao)
-      && /function d7CartaoDoItem\(l, soLeitura/.test(semCom(tpl)),
-    'sem o portao de leitura, a tela que mostra a promessa de outra pessoa oferece o ✕ dela');
+  checar('e a tela que mostra o dia de OUTRA pessoa não oferece o ✕ dele',
+    (function () {
+      /* a Daily do gestor desenha compromisso de terceiros; ela não pode emitir o
+         remover nem as opções de registro, que são atos do dono do dia */
+      const dg = semCom(tpl);
+      const i = dg.search(/function dg4TelaHTML\(/);
+      if (i < 0) return false;
+      let d = 0, j = i, viu = false;
+      while (j < dg.length) {
+        const c = dg[j];
+        if (c === '{') { d++; viu = true; } else if (c === '}') { d--; if (viu && d === 0) { j++; break; } }
+        j++;
+      }
+      const corpo = dg.slice(i, j);
+      return corpo.indexOf('data-pl6-remover') < 0 && corpo.indexOf('data-pl6-acao="res:') < 0;
+    }()),
+    'sem esse portão, a tela que mostra a promessa de outra pessoa oferece o ✕ dela');
 
   /* A VAGA LIVRE DO ROTEIRO DO GESTOR saiu com a 14a (11/09/26). A checagem irmã, logo
      abaixo, é a que continua valendo e ficou MAIS forte: as classes .d7-linha* e
@@ -828,8 +837,6 @@ console.log('');
    QUEM PODE ANDAR COM O BOTÃO: só o caminho da tela de Planejamento (ler, gravar, montar
    os 5 dias, os handlers).
    QUEM NÃO PODE, e por quê:
-     d7DadosFinal / d7Ligar ... a Minha Daily mostra o dia de HOJE
-     pl6ColunaDaData .......... responde 'em que coluna cai esta data' na semana corrente
      espelharPassoNoPlanoSemanal  escreve a tarefa na semana DELA
      pm8Segunda / sm9Segunda .. a promessa e a Semanal são da semana corrente
      renderDaily .............. a pré-carga do plano é para o dia de hoje */
@@ -848,7 +855,10 @@ console.log('');
     (function () {
       /* EXTRATOR PRÓPRIO: o pegarFn desta suíte só casa `function NOME(`, e metade destas
          é `async function` — ele sairia do processo dizendo que perdeu a âncora. */
-      const donos = ['d7DadosFinal', 'd7Ligar', 'pl6ColunaDaData', 'espelharPassoNoPlanoSemanal',
+      /* d7DadosFinal, d7Ligar e pl6ColunaDaData saíram em 24/09/26 com a Minha Daily.
+         Os outros cinco continuam falando do dia de HOJE e continuam proibidos de
+         enxergar o foco da tela de Planejamento. */
+      const donos = ['espelharPassoNoPlanoSemanal',
         'pm8Segunda', 'sm9Segunda', 'tl5Semana', 'renderDaily'];
       return donos.every(function (nome) {
         const i = cod.search(new RegExp('(?:async )?function ' + nome + '\\('));
@@ -863,7 +873,8 @@ console.log('');
         return cod.slice(i, j).indexOf('pl6SegundaEmFoco') < 0;
       });
     }()),
-    'o executivo abriria a Minha Daily e veria o dia da semana que vem — sem nada dizer');
+    'a promessa, a Semanal e o espelho passariam a falar da semana que vem quando ele'
+      + ' clicasse em "próxima" no Planejamento — sem nada dizer');
 
   /* REESCRITA EM 13/09/26, mesmo motivo da irma em testar-espelho-local: a semana da
      tarefa virou a que CONTEM a data (esta ou a proxima), entao a linha cravada saiu.
@@ -873,8 +884,10 @@ console.log('');
     /pl6Carregar\(rep, semanaDaTarefa\)/.test(cod)
       && /pl6Gravar\(rep, \{ grade: grade \}, semanaDaTarefa\)/.test(cod)
       && /const pl6SegundaAtual = pl6SegundaDaSemana\(\);/.test(cod)
-      && /pl6Gravar\(rep, campos, pl6SegundaDaSemana\(\)\)/.test(cod)
-      && /pl6Carregar\(repPreCarga, pl6SegundaDaSemana\(\)\)/.test(cod),
+      /* A QUARTA ERA A GRAVAÇÃO DA MINHA DAILY, e saiu com ela em 24/09/26. Ficaram as
+         duas pré-cargas, que são as outras leituras de fora da tela — e as duas pedem a
+         semana do RELÓGIO, que é o ponto. */
+      && (cod.match(/pl6Carregar\([a-zA-Z]+, pl6SegundaDaSemana\(\)\)/g) || []).length === 2,
     'sem o argumento, um passo de hoje entraria na linha da semana que vem, no dia errado');
 
   /* TROCAR DE SEMANA RECARREGA. pl6Plano é a linha de UMA semana; desenhar com a linha

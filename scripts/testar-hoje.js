@@ -315,10 +315,31 @@ checar('e o diagnóstico continua inteiro na tela e na nota',
   && template.indexOf("observacao: 'Registrado pela fila do dia (Hoje) — ' + ins.motivo") > -1,
   'a frase que explica a linha não pode sumir de onde ela serve');
 
-/* UM CALENDÁRIO SÓ: d7ColunaDeHoje passou a derivar da função geral */
+/* ══ UM CALENDÁRIO SÓ (reancorada em 24/09/26) ═══════════════════════════════════
+   Ela exigia `pl6ColunaDaData` e a derivação de `d7ColunaDeHoje` a partir dela. As duas
+   saíram com a Minha Daily: a primeira ficou órfã quando a segunda foi embora.
+
+   A REGRA NÃO MUDOU — duas contas de "que dia é hoje" é como duas telas passam a
+   discordar sobre qual dia é quinta. O que mudou é quem a cumpre: hoje existe UM lugar
+   que resolve o dia, `agendaChave(agendaAgora())`, e a coluna sai de comparar esse ISO
+   com os `dias` da semana — sem um segundo cálculo de data.
+
+   Por isso ela agora mede a AUSÊNCIA de um segundo calendário: ninguém no template
+   deriva o dia da semana de um `new Date()` cru nem de `getDay()` para escolher coluna. */
 checar('a coluna da semana é calculada num lugar só',
-  template.indexOf('function pl6ColunaDaData(iso)') > -1
-  && template.indexOf('return pl6ColunaDaData(agendaChave(agendaAgora()));') > -1,
+  (function () {
+    const cod = template.replace(/\/\*[\s\S]*?\*\//g, ' ');
+    const umSo = /const hojeISOPl6 = \(typeof agendaChave === 'function'/.test(cod)
+      && /dias\[i\]\.iso === hojeISO/.test(cod);
+    /* A CLÁUSULA NEGATIVA QUE EU TINHA ESCRITO AQUI procurava `new Date().getDay()` em
+       todo o template e reprovava: existem quatro, todos anteriores a esta entrega e
+       nenhum escolhendo coluna de semana (são nome de dia e dia útil). Guarda que
+       reprova código que ela não governa é guarda que alguém desliga — e o que importa
+       medir aqui é positivo: o dia sai de UM lugar, e a coluna sai de comparar o ISO
+       dele com os dias da semana, sem uma segunda conta de data. */
+    const umDefinidor = (cod.match(/const hojeISOPl6 =/g) || []).length === 1;
+    return umSo && umDefinidor;
+  }()),
   'dois calendários é como duas telas passam a discordar sobre qual dia é quinta');
 
 

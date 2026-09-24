@@ -817,379 +817,83 @@ function checarAlcanceDasVariaveis() {
 }
 if (!checarAlcanceDasVariaveis()) process.exit(1);
 
-/* == 12. O ATO DO PLANO ESTA NA MONTAGEM QUE RODA (03/09/26) =========================
-   Irma da guarda 10, e nascida do mesmo defeito visto de outro angulo.
+/* == 12. NADA VOLTA A GRAVAR A PROMESSA MANUAL (24/09/26) =========================
+   Aqui viviam DUAS guardas da Minha Daily, e as duas se aposentaram com ela:
 
-   A guarda 10 cuida do CARD do Planejamento. Esta cuida do ATO: #compromissoDoDia, o
-   unico lugar que grava planos_diarios (status plano_fechado, prioridades, contas_alvo)
-   E os quatro dailies.prometido_* como soma derivada dos clientes marcados.
+     12. "o ato do plano esta na montagem que roda" — nasceu de um defeito caro:
+         buildCompromissoDoDiaHTML so era chamado pelo TERCEIRO fallback da Daily, que
+         nunca renderizava. planos_diarios ficou sem uma linha desde 28/08, a Daily do
+         gestor disse "sem cliente nomeado" para os sete todos os dias, e a Kelly avisou
+         que tinha prometido e nao aparecia — ela estava certa e a tela a desmentia.
+     13. "a hora da trava e o texto nao podem divergir" — comparava a constante das 13h
+         com o texto na tela.
 
-   O QUE ACONTECEU: buildCompromissoDoDiaHTML so era chamado por
-   buildBriefingExecutivoHTML — o TERCEIRO fallback da Daily (v5 -> v4 -> briefing). A v5
-   funciona, entao o briefing nunca renderiza. Nenhum erro, nenhum log: a Minha Daily
-   simplesmente nao tinha o ato. planos_diarios ficou sem UMA LINHA desde 28/08, a Daily
-   do gestor passou a dizer sem cliente nomeado para os sete todos os dias, e a Kelly
-   avisou que prometeu e nao apareceu — ela estava certa e a tela a desmentia.
+   AS DUAS REGRAS MORRERAM COM O ATO, e nao com a tela: nao existe mais "fechar a
+   promessa do dia". O plano do executivo e a grade da semana, gravada a cada clique no
+   horario, e e ela que a Daily do gestor le. O que a 12 protegia continua protegido por
+   testar-pl6-contas e testar-proposito-no-compromisso (a grade e gravada) e por
+   testar-daily-le-a-grade (o gestor le a grade).
 
-   POR QUE ELA NAO CRAVA O NOME DA v5: ela LE a cadeia de fallback. Descobre em renderDaily
-   qual funcao e chamada primeiro (o `try { return X(r); }`) e exige o bloco NAQUELA. Numa
-   v6 amanha, a guarda passa a exigir na v6 sozinha — e reprova se o ato ficar so na v5,
-   que e exatamente o erro de hoje repetido um degrau acima.
-
-   Cravar o nome seria refazer o defeito: quem substitui a montagem principal leva embora,
-   calado, o que so a antiga emitia. Fallback que nunca roda e codigo morto, e aqui o
-   codigo morto era o unico caminho do ritual das 8h30. */
-function checarAtoDoPlanoNaDaily() {
+   A REGRA QUE FICA NO LUGAR e o inverso da antiga: ninguem volta a GRAVAR
+   `dailies.prometido_*`. As leituras continuam todas — Semana, Pessoas, Time e o placar
+   do gestor leem as linhas antigas, e e assim que o historico segue de pe. Mas escrever
+   ali de novo e ressuscitar a promessa manual que esta entrega desfez, e seria feito
+   sem ninguem notar: o campo existe, a tabela existe, e as telas que leem passariam a
+   mostrar dois numeros para a mesma coisa. */
+function checarPromessaManualNaoVolta() {
   const arquivo = 'template/cockpit.template.html';
   const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
+  const codigo = cru.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
 
-  const iRD = cru.indexOf('async function renderDaily()');
-  if (iRD < 0) {
-    console.error('ATO DO PLANO: renderDaily nao existe mais - a guarda perdeu o alvo.');
-    return false;
-  }
-
-  /* 1. A MONTAGEM PRIMARIA da Daily do executivo. Duas formas aceitas, porque as duas
-        ja existiram neste arquivo: a cadeia de fallback (`try { return X(r); }`, ate a
-        7a) e a montagem unica (`const nova = X(r);`). Aceitar as duas evita o que
-        aconteceu quando a cadeia saiu: o regex antigo casou o primeiro try/return de
-        QUALQUER funcao adiante, e a guarda passou a medir persistenciaHTML() em silencio. */
-  const fimRD = cru.slice(iRD + 30).search(/\n(?:async )?function /);
-  const trecho = fimRD > 0 ? cru.slice(iRD, iRD + 30 + fimRD) : cru.slice(iRD);
-  const mPrim = /try \{ return ([a-zA-Z0-9_$]+)\(r\); \}/.exec(trecho)
-    || /const nova = ([a-zA-Z0-9_$]+)\(r\);/.exec(trecho);
-  if (!mPrim) {
-    console.error('ATO DO PLANO: nao achei a montagem primaria da Daily em renderDaily.');
-    console.error('  A guarda le `try { return X(r); }` ou `const nova = X(r);`.');
-    console.error('  Se a montagem passou a ser chamada de outra forma, ensine a forma aqui —');
-    console.error('  guarda que nao acha o alvo tem de reprovar, nunca passar em branco.');
-    return false;
-  }
-  const primaria = mPrim[1];
-  const iF = cru.indexOf('function ' + primaria + '(');
-  if (iF < 0) {
-    console.error('ATO DO PLANO: ' + primaria + '() e chamada mas nao esta declarada.');
-    return false;
-  }
-  const depois = cru.slice(iF + 8);
-  const fimF = depois.search(/\n(?:async )?function /);
-  let corpo = fimF > 0 ? depois.slice(0, fimF) : depois;
-
-  /* SEGUE UM NIVEL DE DELEGACAO (10/09/26). A montagem da prancha v2 e
-     `return d7TelaFinalHTML(d7DadosFinal(rep));` — corpo que so delega nao emite gancho,
-     e sem isto a guarda reprovaria o desenho certo dizendo que a tela nao tem ato.
-     Por `return X(`, e nao por qualquer chamada: e a delegacao DA MONTAGEM. */
-  const mDeleg = /return ([a-zA-Z0-9_$]+)\(/.exec(corpo);
-  if (mDeleg) {
-    const iD = cru.indexOf('function ' + mDeleg[1] + '(');
-    if (iD > -1) {
-      const dep2 = cru.slice(iD + 8);
-      const fim2 = dep2.search(/\n(?:async )?function /);
-      corpo += (fim2 > 0 ? dep2.slice(0, fim2) : dep2);
-    }
-  }
-
-  /* 2. OS GANCHOS QUE A MONTAGEM EMITE. O caminho comeca na tela, nao na gravacao:
-        `status: 'plano_fechado'` aparece DUAS vezes no arquivo (o Planejamento e a
-        Daily), e partir da gravacao fazia a guarda derivar o gancho do lugar errado e
-        reprovar desenho correto. */
-  const ganchos = [...new Set((corpo.match(/data-[a-z0-9-]+/g) || []))];
-  if (!ganchos.length) {
-    console.error('ATO DO PLANO: ' + primaria + '() nao emite nenhum gancho data-*.');
-    console.error('  Sem gancho nao ha ato: a tela nao tem por onde fechar o plano.');
-    return false;
-  }
-
-  /* 3. E UM DELES TEM DE ALCANCAR AS DUAS TABELAS que o gestor le de manha:
-        planos_diarios com status 'plano_fechado' (os clientes NOMEADOS) e dailies com
-        os quatro prometido_* (a soma). Perder a soma e ruim; perder os nomes e o que fez
-        o gestor ler "sem cliente nomeado" para os sete, todos os dias, por onze dias. */
-  const QUATRO = ['prometido_visitas', 'prometido_avancos', 'prometido_propostas', 'prometido_fechamentos'];
-  let ok = null; const perto = [];
-  ganchos.forEach(function (attr) {
-    const chave = attr.replace(/^data-/, '').replace(/-([a-z])/g, function (m, c) { return c.toUpperCase(); });
-    const iIf = cru.indexOf('if (d.' + chave + ')');
-    if (iIf < 0) return;
-    /* O RAMO FECHA POR CHAVES, nao por contagem de caracteres. Com janela de 6000 o ramo
-       de um gancho vizinho engolia o ramo da trava e QUALQUER gancho parecia gravar —
-       testado: trocar o gancho da tela por outro nome deixava a guarda verde. */
-    let ramo = '';
-    {
-      const iAbre = cru.indexOf('{', iIf);
-      if (iAbre > 0) {
-        let d = 1;
-        let k = iAbre + 1;
-        while (k < cru.length && d > 0) {
-          if (cru[k] === '{') d++; else if (cru[k] === '}') d--;
-          k++;
-        }
-        ramo = cru.slice(iIf, k);
-      }
-    }
-    if (!ramo) return;
-    const temNomes = ramo.indexOf("status: 'plano_fechado'") >= 0;
-    const faltam = QUATRO.filter(function (k) { return ramo.indexOf(k) < 0; });
-    if (temNomes && !faltam.length) { ok = attr; return; }
-    if (temNomes || faltam.length < 4) perto.push(attr + (temNomes ? ' (grava os nomes, falta: ' + faltam.join(', ') + ')' : ' (grava a soma, nao grava os nomes)'));
-  });
-
-  if (!ok) {
-    console.error('ATO DO PLANO AUSENTE em ' + arquivo + ':');
-    console.error('  ' + primaria + '() e a montagem que a Daily usa de verdade, e nenhum');
-    console.error('  dos ' + ganchos.length + ' ganchos que ela emite fecha o plano do dia.');
-    if (perto.length) {
-      console.error('  Chegou perto (e por isso e pior — parece feito):');
-      perto.forEach(function (p) { console.error('    ' + p); });
-    }
-    console.error('  O ato precisa gravar AS DUAS: planos_diarios com status plano_fechado');
-    console.error('  (os clientes nomeados) e dailies com os quatro prometido_* (a soma).');
-    console.error('  Sem isso o executivo abre a Minha Daily e nao tem como fechar o plano.');
-    console.error('  Nao da erro nenhum - so seca as duas tabelas, e a Daily do gestor passa');
-    console.error('  a dizer "sem cliente nomeado" para o time todo, todos os dias.');
-    console.error('  Emitir apenas num fallback NAO conta: eles so rodam se esta falhar.');
-    return false;
-  }
-  console.log('OK ato do plano - ' + primaria + '() emite [' + ok + '], e esse ramo grava'
-    + ' planos_diarios (plano_fechado) e os quatro prometido_*.');
-  return true;
-}
-if (!checarAtoDoPlanoNaDaily()) process.exit(1);
-
-/* == 13. A HORA DA TRAVA E O TEXTO NAO PODEM DIVERGIR (03/09/26) =====================
-   O Julyan mudou a trava da promessa de 9h30 para 13h. A regra vive em UMA constante,
-   PROMESSA_TRAVA_MINUTOS, mas a hora aparece escrita em 32 textos de TELA — e esses
-   textos sao o contrato que o executivo le: "trave até as 13h", "a promessa fechou às 13h
-   e não se mexe mais hoje".
-
-   Mudar a constante e esquecer os textos nao quebra nada e nao aparece em teste: a trava
-   funciona no horario novo e a tela promete o antigo. O executivo perde a janela
-   confiando no que leu, e o gestor cobra dele um prazo que a tela nunca disse. Custo alto,
-   defeito invisivel — o par exato que pede guarda.
-
-   POR QUE LITERAL E NAO INTERPOLACAO: os 32 vivem em contextos de aspas diferentes
-   (template literal, aspas simples, atributo). Reescrever os 32 a mao num arquivo de 45
-   mil linhas era o risco maior. Mesmo arranjo do ESCALA_BREAKPOINTS, pelo mesmo motivo:
-   quando o valor nao pode ser um token, a checagem e o que o mantem verdadeiro.
-
-   COMENTARIO NAO CONTA. Os comentarios deste arquivo contam a HISTORIA da mudanca, e a
-   historia diz 9h30 com razao. Mascarar comentario aqui nao e conveniencia: e a licao que
-   a guarda 10 me ensinou hoje, quando validou uma citacao dentro de um comentario e
-   reportou verde em cima do defeito que existia para pegar. */
-function checarHoraDaTrava() {
-  const arquivo = 'template/cockpit.template.html';
-  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
-
-  const mDef = /const PROMESSA_TRAVA_MINUTOS = (\d+) \* 60(?:\s*\+\s*(\d+))?;/.exec(cru);
-  if (!mDef) {
-    console.error('HORA DA TRAVA: nao achei PROMESSA_TRAVA_MINUTOS - a guarda perdeu o alvo.');
-    return false;
-  }
-  const h = Number(mDef[1]);
-  const m = Number(mDef[2] || 0);
-  const esperado = m === 0 ? h + 'h' : h + 'h' + String(m).padStart(2, '0');
-  /* o segundo prazo do produto, lido da propria constante — ver o comentario abaixo */
-  const mSem = /const PROMESSA_SEMANA_MINUTOS = (\d+) \* 60 \+ (\d+);/.exec(cru);
-  const esperadoSemana = mSem
-    ? (Number(mSem[2]) ? mSem[1] + 'h' + String(mSem[2]).padStart(2, '0') : mSem[1] + 'h')
-    : null;
-
-  /* So texto de tela: comentario /* *\/ e <!-- --> saem. */
-  const semCom = cru
-    .replace(/\/\*[\s\S]*?\*\//g, x => x.replace(/[^\n]/g, ' '))
-    .replace(/<!--[\s\S]*?-->/g, x => x.replace(/[^\n]/g, ' '));
-
-  /* Uma hora "de trava" e uma hora que aparece a <=48 caracteres de uma palavra do ritual.
-     O raio evita acusar horario que nao e este — a cadencia (08:30, 10:30...), o fecho das
-     19h, um "13h" de agenda. Sem esse recorte a guarda viraria ruido e alguem a desligaria. */
-  /* "trava" SOZINHO nao entra, e isso me custou um falso positivo na primeira execucao:
-     `Math.min(9 * 60 + ordemHoje * 45, 17 * 60); // trava em 17h` e um teto de agendamento,
-     outra regra, legitimamente 17h. Guarda que acusa o que nao e defeito e guarda que alguem
-     desliga — e a partir do dia em que e desligada ela protege zero.
-
-     As formas que ficaram sao as que so o ritual usa: `promessa` (que cobre "promessa das
-     13h ainda aberta", sem verbo de trava) mais as conjugacoes aplicadas a ela. */
-  const GATILHOS = /(promessa|travad|travou|trave |fecha às|fechou às|fecha as|fechou as)/i;
-  const erradas = new Map();
-  const linhas = semCom.split('\n');
-  linhas.forEach((linha, i) => {
-    const reHora = /\b(\d{1,2})h(\d{2})?\b/g;
-    let mh;
-    while ((mh = reHora.exec(linha)) !== null) {
-      const texto = mh[0];
-      if (texto === esperado) continue;
-      const ini = Math.max(0, mh.index - 48);
-      const volta = linha.slice(ini, mh.index + texto.length + 48);
-      if (!GATILHOS.test(volta)) continue;
-      /* O fecho do dia (19h) e outra regra, e legitimamente diferente da trava. */
-      if (texto === '19h') continue;
-      /* E A PALAVRA DA SEMANA E UMA TERCEIRA (06/09/26): PROMESSA_SEMANA_MINUTOS, dada
-         na segunda no Meu Funil. Nao e excecao a mao — a guarda LE a constante, entao se
-         alguem mudar o prazo da semana e esquecer a tela, ela volta a acusar. */
-      if (esperadoSemana && texto === esperadoSemana) continue;
-      erradas.set((i + 1) + ': ' + texto, linha.trim().slice(0, 92));
+  /* ESCRITA e o campo aparecendo como CHAVE de um objeto que vai para o banco.
+     `d.prometido_visitas` e leitura; `prometido_visitas:` e escrita. */
+  const campos = ['prometido_visitas', 'prometido_avancos', 'prometido_propostas',
+    'prometido_fechamentos'];
+  const escritas = [];
+  campos.forEach(function (c) {
+    const re = new RegExp('(^|[^.\\w])' + c + '\\s*:', 'g');
+    let m;
+    while ((m = re.exec(codigo)) !== null) {
+      /* o snapshot da tela de Rotas COPIA os valores lidos para dentro de
+         planos_diarios.daily_snapshot — nao grava em dailies, e por isso nao conta */
+      const volta = codigo.slice(Math.max(0, m.index - 220), m.index);
+      if (/daily_snapshot\s*:\s*\{/.test(volta)) continue;
+      escritas.push(codigo.slice(m.index, m.index + 60).split('\n')[0].trim());
     }
   });
-
-  if (erradas.size) {
-    console.error('HORA DA TRAVA DIVERGENTE em ' + arquivo + ' (a constante diz ' + esperado + '):');
-    erradas.forEach((linha, onde) => console.error('  linha ' + onde + '  ' + linha));
-    console.error('  A trava funcionaria em ' + esperado + ' e a tela prometeria outra hora.');
-    console.error('  Isso nao quebra nada e nao aparece em teste: o executivo perde a janela');
-    console.error('  confiando no que leu, e o gestor cobra dele um prazo que a tela nao disse.');
+  if (escritas.length) {
+    console.error('PROMESSA MANUAL: alguem voltou a gravar dailies.prometido_*.');
+    escritas.slice(0, 4).forEach(function (e) { console.error('  ' + e); });
+    console.error('  A promessa do dia saiu em 24/09/26 — a grade da semana E o plano.');
+    console.error('  As leituras continuam valendo; a escrita, nao.');
     return false;
   }
-  console.log('OK hora da trava - a constante diz ' + esperado + ' e nenhum texto de tela discorda.');
-  return true;
-}
-if (!checarHoraDaTrava()) process.exit(1);
 
-/* == 14. A MINHA DAILY NAO TEM CLIQUE MORTO (03/09/26) ===============================
-   Quatro checagens de regressao, uma por defeito reproduzido na sessao do Marco Filho.
-   Os quatro tinham a mesma assinatura: nao quebravam nada, nao apareciam em teste, e a
-   tela mentia em silencio.
-
-   (a) VISITA SEM NEGOCIO MOSTRAVA "Ficha". dl2ArmaDoNegocio(null) devolvia
-       DL2_ARMA_PADRAO, que e a arma de 1ª VISITA. O clique nao abria nada e a tela
-       mandava "abrir pelo Meu funil" um negocio que, por definicao, nao esta no funil.
-
-   (b) A ACAO "criar" PRECISA REUSAR abrirNovaContaProspeccao. Uma segunda implementacao
-       de criacao seria um segundo lugar para a regra de etapa e de campos obrigatorios
-       morar — e as duas divergiriam no primeiro campo novo do HubSpot.
-
-   (c) O REGEX DA HORA nasceu sem as barras invertidas, exigindo a LETRA "d". `atrasada`
-       era sempre false e o aviso nunca apareceu para ninguem. Esta guarda EXECUTA o regex
-       do arquivo contra "09:00" — regex invalido daria erro, e regex valido e errado nao
-       da nada, por isso a unica prova e rodar.
-
-   (d) d4FaseDoDia TINHA A PROPRIA TRAVA (D4_TRAVA_MIN = 9h30), esquecida quando a regra
-       virou 13h, e num relogio diferente (getHours local vs Brasilia). Entre 9h30 e 13h a
-       mesma tela dizia "travada" no hero e "Confirmar" no bloco do compromisso.
-
-   A guarda 13 nao pegava (d): ela confere TEXTO de tela contra a constante, e aquela
-   divergencia era numerica, escondida atras de um segundo nome. Guarda de texto e guarda
-   de regra sao coisas diferentes, e este arquivo agora tem as duas. */
-function checarMinhaDailySemCliqueMorto() {
-  const arquivo = 'template/cockpit.template.html';
-  const cru = fs.readFileSync(path.join(root, arquivo), 'utf8');
-  const semCom = cru
-    .replace(/\/\*[\s\S]*?\*\//g, x => x.replace(/[^\n]/g, ' '))
-    .replace(/<!--[\s\S]*?-->/g, x => x.replace(/[^\n]/g, ' '));
-  const falhas = [];
-
-  /* (a)+(b) VISITA CUJA CONTA AINDA NAO E NEGOCIO TEM DE TER SAIDA.
-     O ramo do desfecho e achado pelo EFEITO, nao pelo nome: e o que leva para Ag.
-     Pagamento ('1395880473') via abrirPassagemDeEtapa — a etapa onde o executivo
-     preenche MRR e Valor, de onde o RPA/ASAAS gera o link. Cravar 'd7Proposta' faria
-     esta guarda morrer no proximo redesenho, do mesmo jeito que morreu no anterior. */
-  /* TODAS as ocorrencias, nao a primeira: '1395880473' aparece em varios lugares (a
-     tabela de campos por etapa, a acao de negocio, o ramo da Daily). indexOf pegava a
-     primeira e media codigo que nao tem nada com esta tela — o mesmo erro que fez a
-     guarda 11 medir persistenciaHTML() em silencio. O ramo da Daily e o unico que junta
-     a etapa de Ag. Pagamento com abrirPassagemDeEtapa dentro de um `if (d.<gancho>)`. */
-  let ramo = '';
-  {
-    let de = 0;
-    for (;;) {
-      const i = semCom.indexOf("'1395880473'", de);
-      if (i < 0) break;
-      de = i + 12;
-      const iRamo = semCom.slice(0, i).lastIndexOf('    if (d.');
-      if (iRamo < 0) continue;
-      /* O RAMO TEM DE ESTAR PERTO. Sem este limite, o `if (d.` mais proximo acima podia
-         estar 4.600 linhas atras (medido: a ocorrencia da linha 21950 ancorava num if da
-         17321) e a janela virava 266 mil caracteres — que contem abrirPassagemDeEtapa por
-         acidente e faz a varredura parar no lugar errado. Ramo de verdade e curto: o da
-         Daily tem 2.201 caracteres. */
-      if (i - iRamo > 4000) continue;
-      /* A janela vai ate o INICIO DO PROXIMO RAMO, nao ate o literal da etapa:
-         abrirPassagemDeEtapa vem DEPOIS de '1395880473' (a etapa e o argumento dela),
-         e cortar no literal fazia o ramo certo ser rejeitado. Terminar no proximo
-         `if (d.` tambem impede a janela de vazar para o vizinho, que foi o erro
-         original desta guarda: janela por contagem de caracteres le o codigo ao lado. */
-      const resto = semCom.slice(i);
-      const iFim = resto.indexOf('\n    if (');
-      const cand = semCom.slice(iRamo, iFim > 0 ? i + iFim : i + 3000);
-      if (cand.indexOf('abrirPassagemDeEtapa(') >= 0) { ramo = cand; break; }
-    }
-  }
-  if (!ramo) {
-    falhas.push('nao achei o ramo de desfecho da Daily (Ag. Pagamento via'
-      + ' abrirPassagemDeEtapa) - a guarda perdeu o alvo');
-  } else {
-    /* COM O PARENTESE: nome mencionado nao e funcao chamada. Ja me enganei assim uma
-       vez nesta mesma guarda, com um typeof guardando a chamada. */
-    if (ramo.indexOf('abrirNovaContaProspeccao(') < 0) {
-      falhas.push('o desfecho da Daily nao oferece criar o negocio para conta nova -'
-        + ' visita sem negocio volta a ser clique sem caminho');
-    }
-    /* O redesenhar tem de estar DENTRO da chamada de criacao, e por isso a extensao dela
-       e medida por parenteses balanceados em vez de eu olhar o ramo inteiro: o ramo tem
-       um segundo `redesenhar()` (o callback da passagem de etapa), e procurar no ramo
-       todo dava verde mesmo com o callback da criacao vazio. Testado vermelho. */
-    const iCria = ramo.indexOf('abrirNovaContaProspeccao(');
-    if (iCria >= 0) {
-      let d = 0, fim = -1;
-      for (let k = iCria + 'abrirNovaContaProspeccao'.length; k < ramo.length; k++) {
-        if (ramo[k] === '(') d++;
-        else if (ramo[k] === ')') { d--; if (d === 0) { fim = k; break; } }
-      }
-      const chamada = fim > 0 ? ramo.slice(iCria, fim + 1) : ramo.slice(iCria);
-      if (chamada.indexOf('redesenhar()') < 0) {
-        falhas.push('a criacao pela Daily nao redesenha - a linha ficaria SEM NEGOCIO'
-          + ' depois de o negocio ter sido salvo');
-      }
-    }
-    /* A saida tem de vir ANTES da exigencia de negocio, senao nunca roda: o
-       pre-requisito dela e justamente a ausencia do negocio. */
-    const iSaida = ramo.indexOf('abrirNovaContaProspeccao(');
-    const iExige = ramo.indexOf('brutoDoNegocio(');
-    if (iSaida >= 0 && iExige >= 0 && iSaida > iExige) {
-      falhas.push('a criacao vem DEPOIS da exigencia do negocio - nunca seria alcancada');
-    }
-  }
-
-  /* (b2) a orientacao impossivel nao volta */
-  if (semCom.indexOf('Abra pelo Meu funil') >= 0) {
-    falhas.push('voltou o "Abra pelo Meu funil" - orientacao impossivel para negocio fora do funil');
-  }
-
-  /* (c) SAIU EM 04/09/26, e o motivo importa mais que a remocao.
-     Ela executava o regex que lia a hora de um TEXTO de tela, porque na v2 a hora vinha
-     escrita na linha da visita. Na 7a a hora vem do INDICE do slot na grade (PL6_HORAS
-     pelo si), e nao existe texto para interpretar — o defeito que ela pegou (regex sem as
-     barras invertidas, `atrasada` sempre falso, aviso que nunca apareceu para ninguem)
-     ficou impossivel por desenho, nao por conserto.
-     SE ALGUEM VOLTAR A LER HORA DE TEXTO, esta checagem tem de voltar com ela: regex
-     invalido da erro, mas regex valido e errado nao da nada — a unica prova e executar. */
-
-  /* (d) a fase do dia deriva da regra oficial, e nao de uma segunda constante */
-  if (/const D4_TRAVA_MIN\s*=/.test(semCom)) {
-    falhas.push('D4_TRAVA_MIN voltou - segunda constante para a trava, que ja divergiu de 9h30 para 13h');
-  }
-  const iFase = semCom.indexOf('function d4FaseDoDia(');
-  if (iFase < 0) {
-    falhas.push('nao achei d4FaseDoDia - a guarda perdeu o alvo');
-  } else {
-    const corpo = semCom.slice(iFase, iFase + 900);
-    if (corpo.indexOf('promessaTravadaNoHorario') < 0) {
-      falhas.push('d4FaseDoDia nao usa promessaTravadaNoHorario - a fase e a trava podem discordar');
-    }
-    if (/\bag\.getHours\(/.test(corpo)) {
-      falhas.push('d4FaseDoDia usa getHours (relogio da maquina) - a trava le o de Brasilia');
-    }
-  }
-
-  if (falhas.length) {
-    console.error('MINHA DAILY COM CLIQUE MORTO em ' + arquivo + ':');
-    falhas.forEach(f => console.error('  ' + f));
-    console.error('  Cada um destes foi reproduzido em producao, na sessao de um executivo.');
+  /* E A TRAVA DAS 13h NAO VOLTA JUNTO. */
+  if (/promessaDoDiaTravada\s*\(/.test(codigo)) {
+    console.error('PROMESSA MANUAL: a trava das 13h voltou (promessaDoDiaTravada).');
+    console.error('  Nao existe mais promessa para travar: a grade e o plano.');
     return false;
   }
-  console.log('OK minha daily - visita sem negocio cria negocio, hora e trava tem uma regra so.');
+
+  console.log('OK promessa manual - ninguem grava dailies.prometido_*, e a trava das 13h nao voltou.');
   return true;
 }
-if (!checarMinhaDailySemCliqueMorto()) process.exit(1);
 
+/* == 14. APOSENTADA COM A MINHA DAILY (24/09/26) =================================
+   "A Minha Daily nao tem clique morto" — quatro checagens de regressao, uma por defeito
+   reproduzido na sessao do Marco Filho: a visita sem negocio que mostrava "Ficha", a
+   acao "criar" que precisava reusar abrirNovaContaProspeccao, o regex da hora que nasceu
+   sem as barras invertidas, e a segunda trava de 9h30 esquecida dentro de d4FaseDoDia.
+
+   OS QUATRO DEFEITOS ERAM DA TELA, e a tela saiu em 24/09/26 — o executivo nao tem mais
+   Minha Daily. Nenhuma das quatro tem onde acontecer.
+
+   O QUE ELAS ENSINARAM CONTINUA VALENDO, e vive noutras: que o clique precisa levar a
+   algum lugar esta na guarda de fiacao delegada e em testar-como-foi (que roda cada
+   opcao do cartao); que regex se prova RODANDO esta em testar-como-foi, que executa
+   pl6HoraJaPassou com o relogio congelado; e que duas travas do mesmo relogio divergem
+   deixou de ser risco porque nao existe mais trava nenhuma. */
 /* == 15. TODA CONSTANTE USADA E DECLARADA (03/09/26) ================================
    Esta guarda nasceu de um defeito MEU, que eu publiquei.
 
