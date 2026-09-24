@@ -858,7 +858,19 @@ function checarPromessaManualNaoVolta() {
          planos_diarios.daily_snapshot — nao grava em dailies, e por isso nao conta */
       const volta = codigo.slice(Math.max(0, m.index - 220), m.index);
       if (/daily_snapshot\s*:\s*\{/.test(volta)) continue;
-      escritas.push(codigo.slice(m.index, m.index + 60).split('\n')[0].trim());
+      const sentenca = codigo.slice(m.index, m.index + 90).split('\n')[0].trim();
+      /* ══ PRESERVAR NAO E GRAVAR (24/09/26) ═══════════════════════════════════════
+         `salvarDaily` faz UPSERT da linha inteira, e o gestor ainda a chama para gravar
+         os `realizado_*` medidos no HubSpot. As quatro linhas
+             prometido_x: existente.prometido_x ?? null
+         existem para o upsert NAO ZERAR a promessa historica — sem elas, salvar um
+         realizado apagaria o prometido de todas as linhas antigas, que e justamente o
+         historico que a Semana, a Pessoas e o Time leem.
+         A guarda nasceu acusando essas quatro. Ela estava certa em olhar, e errada em
+         nao distinguir: escrever um valor NOVO e o que nao pode voltar; ecoar o que ja
+         esta na linha e o que impede a destruicao do passado. */
+      if (new RegExp('^' + c + '\\s*:\\s*existente\\.' + c + '\\s*\\?\\?\\s*null,?$').test(sentenca)) continue;
+      escritas.push(sentenca.slice(0, 60));
     }
   });
   if (escritas.length) {
@@ -879,6 +891,15 @@ function checarPromessaManualNaoVolta() {
   console.log('OK promessa manual - ninguem grava dailies.prometido_*, e a trava das 13h nao voltou.');
   return true;
 }
+/* ESTA CHAMADA FALTOU NA ENTREGA 4/4a (corrigido em 24/09/26). A guarda nasceu declarada
+   e nunca chamada — a remoção que a criou tirou junto as DUAS chamadas antigas, que
+   ficavam entre as funções 12 e 13, e a nova não entrou no lugar delas. Resultado: uma
+   guarda que mede o arquivo inteiro e não reprova nada, com o `OK` dela nunca aparecendo
+   no build e ninguém notando a ausência de uma linha num rodapé de trinta.
+   É exatamente o defeito que ela existe para impedir, de outro ângulo: código escrito que
+   ninguém executa. Guarda sem chamada é pior que guarda ausente — ela dá a sensação de
+   cobertura. */
+if (!checarPromessaManualNaoVolta()) process.exit(1);
 
 /* == 14. APOSENTADA COM A MINHA DAILY (24/09/26) =================================
    "A Minha Daily nao tem clique morto" — quatro checagens de regressao, uma por defeito
