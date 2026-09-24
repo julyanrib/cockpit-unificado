@@ -237,6 +237,39 @@ function rodar(vendas, usuarios) {
   eIgual('e a venda dele não entra no total', r.totalMrr, 500);
 }
 
+/* ── 10. QUEM É REP E GESTOR AO MESMO TEMPO CONTA COMO REP ───────────────────────── */
+{
+  /* 24/09/26: o Julyan pediu um login de executivo com o ownerId dele para testar o
+     funil, e passou a existir o mesmo ownerId como manager numa linha de usuarios.json e
+     como rep em outra. Se `ehGestor` ganhasse, a venda dele iria para o balde do gestor e
+     a aba DELE como executivo mostraria 0 clientes fechados no mês com venda fechada no
+     CRM — o zero que tranquiliza, na tela de quem fez a venda.
+
+     A regra: quem tem tela de pessoa precisa ver a própria venda nela. O balde do gestor
+     é de quem é SÓ gestor. */
+  const cadastroDuplo = { usuarios: [
+    { email: 'julyan.takeat@gmail.com', role: 'manager', ownerId: '339921752', nome: 'Julyan Ribeiro' },
+    { email: 'julyan.exec@takeat.app', role: 'rep', ownerId: '339921752', nome: 'Julyan Ribeiro (teste)' },
+    { email: 'marco.takeat@gmail.com', role: 'rep', ownerId: '86100505', nome: 'Marco Filho' }
+  ] };
+  /* e ele precisa existir em narrativas tambem — e de la que sai DATA.reps */
+  NARRATIVAS.reps['339921752'] = { name: 'Julyan Ribeiro (teste)', praca: '—' };
+  const r = rodar([
+    vender('Marco A', '86100505', 500, 1500),
+    vender('TENNESSEE STEAK HOUSE', '339921752', 1056, 3168)
+  ], cadastroDuplo);
+  delete NARRATIVAS.reps['339921752'];
+
+  eIgual('sendo rep, ele entra no pódio', r.porRep.map(x => x.ownerId).sort(), ['339921752', '86100505']);
+  eIgual('e o balde do gestor fica vazio', r.gestor, null);
+  /* o total nao muda um centavo: a venda so troca de balde */
+  eIgual('o total continua o mesmo, a venda só trocou de balde', r.totalMrr, 500 + 1056);
+  eIgual('e ninguém foi parar fora do time', (r.foraDoTime || []).length, 0);
+  /* e o nome que aparece no podio e o do cadastro de rep, nao o do gestor */
+  eIgual('com o nome de executivo dele',
+    (r.porRep.find(x => x.ownerId === '339921752') || {}).name, 'Julyan Ribeiro (teste)');
+}
+
 /* ── resultado ──────────────────────────────────────────────────────────────────── */
 if (falhas.length) {
   console.error('venda do gestor: FALHAS (' + falhas.length + ')');

@@ -330,8 +330,15 @@ function montarDadosCompletos() {
        inteiro fora do placar sem ninguém ver. */
     const foraDoTime = [];
     hubspot.vendasMes.forEach(d => {
-      const ehGestor = !!(d.ownerId && GESTORES_QUE_VENDEM[d.ownerId]);
-      if (!d.ownerId || (!narrativas.reps[d.ownerId] && !ehGestor)) {
+      /* SER REP GANHA DE SER GESTOR (24/09/26). O mesmo ownerId pode estar nas duas
+         listas — é o caso do login de executivo que o Julyan usa para testar o funil.
+         Quando isso acontece, a venda conta como venda de rep: quem tem tela de pessoa
+         precisa ver a própria venda nela. O balde `doGestor` é de quem é SÓ gestor.
+         Sem esta ordem, a aba do executivo mostrava 0 clientes fechados no mês com
+         quatro vendas fechadas no CRM. */
+      const ehRep = !!(d.ownerId && narrativas.reps[d.ownerId]);
+      const ehGestor = !ehRep && !!(d.ownerId && GESTORES_QUE_VENDEM[d.ownerId]);
+      if (!d.ownerId || (!ehRep && !ehGestor)) {
         foraDoTime.push({ id: d.id || null, nome: d.nome, ownerId: d.ownerId || null,
           mrr: d.mrr || 0, receita: d.receita || 0, closedate: d.closedate || null });
         return;
