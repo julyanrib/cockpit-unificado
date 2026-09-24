@@ -160,7 +160,12 @@ checar('e na semana da TAREFA, não na que a tela mostra',
   /pl6Carregar\(rep, semanaDaTarefa\)/.test(codigo)
     && /pl6Gravar\(rep, \{ grade: grade \}, semanaDaTarefa\)/.test(codigo)
     && /const pl6SegundaAtual = pl6SegundaDaSemana\(\);/.test(codigo)
-    && /pl6Gravar\(rep, campos, pl6SegundaDaSemana\(\)\)/.test(codigo),
+    /* A QUARTA CITAÇÃO ERA DA MINHA DAILY (`pl6Gravar(rep, campos, pl6SegundaDaSemana())`),
+       e saiu com ela em 24/09/26. A regra não mudou e continua medida nas três de cima:
+       leitura e escrita recebem a semana POR ARGUMENTO, a mesma nas duas, e ela vem do
+       RELÓGIO. Quem grava sem o argumento hoje é o Planejamento, e ali é correto —
+       ele edita a semana que está na tela, que é justamente o foco. */
+    && !/pl6Gravar\([^)]*pl6SegundaEmFoco\(\)\)/.test(codigo),
   'herdar o foco da tela faria o passo de hoje cair na linha da semana que vem, no dia errado');
 
 /* ── 7. e "todas as contas" continua vindo de um lugar ──────────────────────────── */

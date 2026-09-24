@@ -39,7 +39,10 @@ const tpl = fs.readFileSync(T, 'utf8');
 // assim ou têm o mesmo tamanho e a mesma natureza.
 const VIGIADAS = [
   'renderPlanejamento6a',
-  'minhaDaily7aHTML',
+  /* minhaDaily7aHTML saiu em 24/09/26 com a Minha Daily do executivo. O lugar dela nesta
+     lista e pl6DadosFinal: e a funcao que monta o dia do executivo a partir de muitos
+     locais — o mesmo tamanho e a mesma natureza, e agora a unica que faz esse trabalho. */
+  'pl6DadosFinal',
   /* dailyGestor14aHTML saiu em 11/09/26 com a Daily 14a morta. O lugar dela na lista e
      dg4Dados: e a funcao que monta a Daily do gestor a partir de muitos locais, que e onde
      este defeito aparece. */
