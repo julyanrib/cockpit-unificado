@@ -121,23 +121,65 @@ conferir('a bandeira de procedência viaja na linha da pessoa',
   /veioDaGrade: veioDaGrade/.test(codigo) && /const veioDaGrade = !temDoPlano && preenchidos\.length > 0/.test(codigo),
   'sem ela a tela não consegue dizer qual dos dois gestos aconteceu');
 
-conferir('o cartão diz PLANEJOU NA GRADE, e não PROMESSA ABERTA',
-  /x\.veioDaGrade \? 'PLANEJOU NA GRADE' : 'PROMESSA ABERTA'/.test(codigo),
-  'dizer "promessa" sobre quem só encaixou contas na grade é a tela afirmando um gesto que ninguém fez');
+/* ══ A DISTINÇÃO ACABOU PORQUE UM DOS DOIS GESTOS ACABOU (24/09/26) ═════════════════
+   Esta checagem exigia que o cartão dissesse PLANEJOU NA GRADE a quem só encaixou contas,
+   e PROMESSA ABERTA a quem tinha o plano do dia — para a tela não afirmar um gesto que
+   ninguém fez. Ela estava certa, e o que mudou não foi a régua: foi o mundo. A promessa
+   travada às 13h saiu com a Minha Daily, e ninguém mais a faz.
+
+   O MESMO PUDOR, MEDIDO NO QUE RESTOU: a tela não pode dizer que alguém não fez uma coisa
+   sem prova. O selo agora conta compromissos VENCIDOS sem registro, e a linha marca
+   NÃO MEDIDO quando não há nem registro nem check-in — que é diferente de "não foi". */
+conferir('o cartão diz quantos venceram sem registro, e não inventa promessa',
+  /x\.semRegistro \? \(x\.semRegistro \+ ' SEM REGISTRO'\) : 'EM DIA ✓'/.test(codigo)
+    && !/PROMESSA ABERTA|PLANEJOU NA GRADE/.test(codigo.replace(/\/\*[\s\S]*?\*\//g, ' ')),
+  'dizer "promessa" sobre um gesto que não existe mais é a tela afirmando o que ninguém fez');
+
+/* MEDIDO NA LINHA DO COMPROMISSO, e não no arquivo inteiro: "NÃO MEDIDO" aparece em seis
+   outras telas, e a primeira versão desta checagem passou verde contra uma sabotagem que
+   trocava o rótulo desta linha por "NÃO FOI" — ela estava achando o texto das outras. */
+conferir('a linha mostra as três leituras, e "não medido" não vira "não foi"',
+  (function () {
+    const i = codigo.indexOf('${(e.slots||[]).map(sl => `');
+    if (i < 0) return false;
+    const linha = codigo.slice(i, i + 2200);
+    return /\$\{sl\.reg\}/.test(linha)        /* o registro do executivo */
+      && /\$\{sl\.evid\}/.test(linha)          /* o check-in do app */
+      && /NÃO MEDIDO/.test(linha)              /* e o estado sem prova, com este nome */
+      && !/NÃO FOI/.test(linha)
+      && /naoMedido: !sl\.r && !temCheck/.test(codigo);
+  }()),
+  'sem registro e sem check-in, ninguém sabe — e "não foi" seria uma acusação que o '
+    + 'executivo não tem como responder');
 
 /* O BOTÃO DE COBRAR SAIU EM 10/09/26 (prancha daily-gestor-final, regra 6: "a cobrança
    acontece NA rodada, olho no olho"). A EXIGÊNCIA NÃO SAIU: a tela continua tendo de
    pedir o gesto certo a cada um, e agora quem diz isso é a LEITURA do cartão. A guarda
    foi reancorada, não afrouxada — se alguém apagar a distinção, ela reprova de novo. */
 conferir('e a leitura pede a coisa certa',
-  /\? ', e isso é a grade da semana, não a promessa do dia — pedir para travar o dia é o gesto'/.test(codigo)
-    && /: ', e a promessa ainda está aberta — cobrar a trava é o gesto'/.test(codigo),
-  'pedir "a trava" a quem só encaixou contas na grade manda o gestor cobrar o passo errado');
+  /' sem registro — perguntar como foi é o gesto'/.test(codigo)
+    && /', e o que já venceu está todo registrado'/.test(codigo)
+    && !/cobrar a trava é o gesto|pedir para travar o dia é o gesto/.test(codigo),
+  'a prosa oferecia dois gestos — travar o dia, ou cobrar a trava — e nenhum dos dois '
+    + 'existe desde 24/09/26. O que se cobra agora é o registro do que já venceu');
 
-conferir('o KPI de planos montados diz quantos vieram pela grade',
-  /naGrade\.length \? ' \(' \+ naGrade\.length \+ ' pela grade\)' : ''/.test(codigo) &&
-  /const naGrade = medidos\.filter\(function \(x\) \{ return x\.veioDaGrade; \}\)/.test(codigo),
-  '"7/7 planos montados" esconderia que seis deles nunca travaram o dia');
+/* ══ "(N PELA GRADE)" SAIU PORQUE O OUTRO LADO DA DISTINÇÃO SAIU (24/09/26) ═════════
+   Esta checagem exigia que o KPI dissesse quantos planos vieram da grade da semana, para
+   que "7/7 planos montados" não escondesse que seis deles nunca travaram o dia. A trava
+   acabou: não há mais dois tipos de plano, e dizer "5 pela grade" sugeriria que os outros
+   vieram de outro lugar.
+
+   O QUE ELA PROTEGIA — o KPI não pode dizer que está tudo certo escondendo o que falta —
+   passou para o KPI vizinho, que é o que hoje tem essa responsabilidade: "dia registrado"
+   conta quem está com compromisso vencido sem registro. Essa é a contagem que, se sumir,
+   volta a produzir o "7/7" tranquilizador. */
+conferir('o KPI diz quem está devendo registro, e não esconde no total',
+  /const semRegistro = medidos\.filter\(function \(x\) \{ return x\.semRegistro > 0; \}\)/.test(codigo)
+    && /rot: 'dia registrado', v: \(medidos\.length - semRegistro\.length\)/.test(codigo)
+    && /' com compromissos vencidos sem registro'/.test(codigo)
+    && !/pela grade\)/.test(codigo),
+  '"9/9 planos montados" sozinho esconderia que seis pessoas não registraram nada do que '
+    + 'já venceu — é o mesmo defeito que a versão anterior desta checagem pegava');
 
 /* PRECISO, e não por proximidade: a primeira versão desta checagem procurava
    `prometido_visitas` a até 200 caracteres de `veioDaGrade` e reprovou porque as duas
@@ -416,9 +458,19 @@ conferir('todo nome que o markup do gestor lê existe no escopo dele',
     'a série pula fim de semana e feriado: a posição -2 seria o dia certo por acaso');
 
   /* ── 4 · A ORDEM DA RODADA É LEI, E OS GRUPOS SAEM DELA ─────────────────────────── */
-  conferir('a ordem é sem plano → furou ontem → aberta → travada ✓',
-    /if \(!x\.temPlano\) return 0;[\s\S]{0,200}?if \(x\.travada && x\.ontem\.furou\) return 1;[\s\S]{0,120}?if \(!x\.travada\) return 2;[\s\S]{0,60}?return 3;/.test(tela)
-      && tela.indexOf('sem plano → furou ontem → promessa aberta → travadas ✓') > -1,
+  /* ══ REANCORADA EM 24/09/26, NÃO AFROUXADA ═══════════════════════════════════════
+     O terceiro degrau era "promessa aberta": quem não tinha TRAVADO o dia até as 13h. A
+     trava saiu com a Minha Daily — a grade é o plano, e ninguém trava nada. O degrau
+     passou a medir o que sobrou para cobrar: compromisso que já venceu e não tem registro.
+
+     A EXIGÊNCIA CONTINUA INTEIRA: quatro degraus, exclusivos por construção, um peso por
+     pessoa — e o texto da tela dizendo a MESMA ordem que o código executa. Foi a
+     divergência entre os dois que esta checagem existe para pegar, e ela continua
+     pegando. A última cláusula é nova: a trava não volta pela porta dos fundos. */
+  conferir('a ordem é sem plano → furou ontem → sem registro → em dia ✓',
+    /if \(!x\.temPlano\) return 0;[\s\S]{0,200}?if \(x\.ontem\.furou\) return 1;[\s\S]{0,120}?if \(x\.semRegistro\) return 2;[\s\S]{0,60}?return 3;/.test(tela)
+      && tela.indexOf('sem plano → furou ontem → com compromisso sem registro → em dia ✓') > -1
+      && !/if \(x\.travada\) return \d|if \(!x\.travada\) return \d/.test(tela),
     'a ordem da rodada decide quem fala primeiro — é a regra 1 da prancha');
   conferir('e os quatro grupos saem do MESMO peso que ordenou a fila',
     /return peso\(x\) === 0;/.test(tela) && /return peso\(x\) === 1;/.test(tela)

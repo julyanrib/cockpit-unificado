@@ -49274,12 +49274,17 @@ function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil, novasPorId) {
        Uma regra, um lugar: quem tem `v.hora` tem hora; quem não tem, não tem — e a tela
        escreve "sem hora", que é a verdade e é diferente de não ter planejado. */
     const hora = (v && typeof v === 'object' && v.hora) ? String(v.hora) : '';
+    /* O REGISTRO E O PROPÓSITO VIAJAM ATÉ AQUI (24/09/26). O gestor lê a MESMA grade
+       que o executivo escreve; sem estes dois campos ele veria a hora e o nome e teria
+       de perguntar na rodada o que já está gravado. */
+    const rDoSlot = (typeof pl6ResultadoDoSlot === 'function') ? pl6ResultadoDoSlot(v) : null;
+    const pDoSlot = (typeof pl6SlotProposito === 'function') ? pl6SlotProposito(v) : null;
     const item = (cru === RUA)
       ? { id: null, dealId: null, nome: 'volta de rua', hora: hora, acao: '',
-          origem: 'rua', _daGrade: true }
+          origem: 'rua', _daGrade: true, r: rDoSlot, p: pDoSlot || 'rua' }
       : (cru === REL)
       ? { id: null, dealId: null, nome: 'visita de relacionamento', hora: hora, acao: '',
-          origem: 'rel', _daGrade: true }
+          origem: 'rel', _daGrade: true, r: rDoSlot, p: pDoSlot || 'relac' }
       : (function () {
           const dealId = String(cru).indexOf('c-') === 0 ? String(cru).slice(2) : null;
           const doFunil = dealId ? (mapaFunil || {})[dealId] : null;
@@ -49295,7 +49300,7 @@ function dg4SlotsDaGrade(linhaSemana, diaISO, mapaFunil, novasPorId) {
               : daProspeccao && daProspeccao.nome ? daProspeccao.nome
               : (ehNova ? 'conta nova da prospecção' : String(cru)),
             origem: String(cru).indexOf('n-') === 0 ? 'lote' : null,
-            _daGrade: true
+            _daGrade: true, r: rDoSlot, p: pDoSlot
           };
         }());
     /* HORA REPETIDA NÃO APAGA A ANTERIOR EM SILÊNCIO. `porHora[hora] = item` sobrescrevia:
@@ -49693,11 +49698,34 @@ function dg4Dados(ctx) {
       novas: novas, origemRegistrada: origemRegistrada,
       /* de onde vieram os slots desta pessoa: o plano do dia dela, ou a coluna de hoje
          na grade da semana. É o que separa "prometeu" de "planejou" na tela. */
+      /* ══ QUANTOS COMPROMISSOS VENCERAM SEM PROVA (24/09/26) ════════════════════
+         Substitui `travada` como o estado que a rodada cobra. Conta o que JÁ PASSOU:
+         um dia com visitas às 9h, 14h e 16h não tem três sem registro às dez da manhã.
+         `veioDaGrade` continua por ora — ele ainda alimenta a leitura em prosa da
+         rodada, e sai junto com ela quando a frase for reescrita. */
+      /* LE `visitas` E O DIA EM FOCO DO ESCOPO DESTE map, e nao `x.` — aqui o objeto ainda
+         esta sendo construido e nao existe. A primeira versao escreveu `x.visitas`,
+         copiando a forma do lugar onde o dado e CONSUMIDO: ReferenceError no render e a
+         Daily do gestor inteira em "Carregando...". Achado no navegador, no primeiro
+         clique — build, 30 guardas e 72 suites verdes. */
+      semRegistro: (function () {
+        const vs = Array.isArray(visitas) ? visitas : [];
+        return vs.filter(function (sl) {
+          if (!sl || typeof pl6HoraJaPassou !== 'function') return false;
+          if (!pl6HoraJaPassou(c.diaEmFoco || hoje, sl.hora)) return false;
+          return !sl.r;
+        }).length;
+      }()),
       veioDaGrade: veioDaGrade };
   });
 
   /* ══ A ORDEM DA RODADA É LEI (regra 1 da prancha FINAL) ══════════════════════════════
-       sem plano → furou ontem (travou e não cumpriu) → promessa aberta → travadas ✓
+       sem plano → furou ontem → com compromisso sem registro → em dia ✓
+
+     REESCRITA EM 24/09/26: o terceiro degrau era "promessa aberta", o estado de quem
+     não tinha travado o dia até as 13h. Não existe mais trava — a grade é o plano — e o
+     que sobra para cobrar é outra coisa: compromisso que já venceu e não tem registro.
+     O peso e o agrupamento são os mesmos; mudou o que o degrau MEDE.
 
      Elogio fecha a rodada; quem não montou fala primeiro porque é o único que ainda dá
      para resolver antes da trava; e quem travou mas furou a palavra de ontem fala antes
@@ -49709,8 +49737,8 @@ function dg4Dados(ctx) {
      na tela. Um peso por pessoa não tem esse buraco. */
   const peso = function (x) {
     if (!x.temPlano) return 0;
-    if (x.travada && x.ontem.furou) return 1;
-    if (!x.travada) return 2;
+    if (x.ontem.furou) return 1;
+    if (x.semRegistro) return 2;
     return 3;
   };
   medidos.sort(function (a, b) {
@@ -49724,6 +49752,10 @@ function dg4Dados(ctx) {
   const semPlano = medidos.filter(function (x) { return peso(x) === 0; });
   const furouOntem = medidos.filter(function (x) { return peso(x) === 1; });
   const abertas = medidos.filter(function (x) { return peso(x) === 2; });
+  /* QUEM ESTÁ COM COMPROMISSO VENCIDO SEM PROVA (24/09/26). Substitui `travadas`, que
+     contava quem tinha fechado a promessa do dia — gesto que saiu com a Minha Daily e
+     que ficaria em 0/9 para sempre. */
+  const semRegistro = medidos.filter(function (x) { return x.semRegistro > 0; });
   const travadas = medidos.filter(function (x) { return x.travada; });
   /* quem apareceu pela GRADE e não pelo plano do dia: o KPI diz isso, senão
      "7/7 planos montados" esconde que seis deles nunca travaram o dia. */
@@ -49792,7 +49824,7 @@ function dg4Dados(ctx) {
   const kpis = !planosLidos ? [
     { rot: 'ontem: feito/prometido', v: 'não medido', de: 'a leitura de planos_diarios falhou', cor: '#A79C8A' },
     { rot: 'planos montados', v: 'não medido', de: 'recarregue a aba', cor: '#A79C8A' },
-    { rot: 'promessas travadas', v: 'não medido', de: '', cor: '#A79C8A' },
+    { rot: 'dia registrado', v: 'não medido', de: 'a leitura da grade falhou', cor: '#A79C8A' },
     { rot: 'cobranças do dia', v: String(somaCobrancas), de: 'do HubSpot, esse número vale', cor: somaCobrancas ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'quentes fora do plano', v: String(somaQuentes), de: 'do HubSpot, esse número vale', cor: somaQuentes ? '#FF8D9A' : '#7FD9BE' }
   ] : [
@@ -49805,11 +49837,20 @@ function dg4Dados(ctx) {
           + (semPromessaOntem ? ' · ' + semPromessaOntem + ' sem promessa' : ''))
         : 'ninguém registrou promessa ontem',
       cor: !comPromessa.length ? '#A79C8A' : (feitOntem >= promOntem ? '#7FD9BE' : '#FF8D9A') },
-    { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length
-        + (naGrade.length ? ' (' + naGrade.length + ' pela grade)' : ''),
+    /* "(N pela grade)" saiu em 24/09/26: ele distinguia quem montou o dia na grade de
+       quem tinha plano do dia, e a distinção acabou junto com a promessa. A grade É o
+       plano — dizer "5 pela grade" sugeriria que os outros vieram de outro lugar. */
+    { rot: 'planos montados', v: (medidos.length - semPlano.length) + '/' + medidos.length,
       de: semPlano.length ? (semPlano.length + ' sem montar') : 'todo mundo montou', cor: semPlano.length ? '#FF8D9A' : '#7FD9BE' },
-    { rot: 'promessas travadas', v: travadas.length + '/' + medidos.length,
-      de: antesDaTrava ? (abertas.length + ' ainda editável(is)') : 'janela fechada', cor: travadas.length === medidos.length ? '#7FD9BE' : '#F0B45C' },
+    /* Era 'promessas travadas'. A trava saiu em 24/09/26, e o número ficaria 0/9 todo
+       dia — um zero com aparência de problema resolvido. O que a rodada cobra é outra
+       coisa: quem tem compromisso que já venceu e não tem registro nem check-in. */
+    { rot: 'dia registrado', v: (medidos.length - semRegistro.length) + '/' + medidos.length,
+      de: semRegistro.length
+        ? (semRegistro.length + (semRegistro.length === 1
+          ? ' com compromisso vencido sem registro' : ' com compromissos vencidos sem registro'))
+        : 'ninguém deve registro',
+      cor: semRegistro.length ? '#F0B45C' : '#7FD9BE' },
     { rot: 'cobranças do dia', v: String(somaCobrancas),
       de: 'SLA · cadência · proposta · combinado', cor: somaCobrancas ? '#FF8D9A' : '#7FD9BE' },
     { rot: 'quentes fora do plano', v: String(somaQuentes),
@@ -49881,7 +49922,7 @@ function dg4Dados(ctx) {
     const pz = peso(x);
     const st = pz === 0 ? 'sem plano'
       : pz === 1 ? 'furou ontem'
-      : pz === 2 ? (x.veioDaGrade ? 'na grade' : 'aberta')
+      : pz === 2 ? (x.semRegistro + ' sem registro')
       : '✓';
     return {
       pos: (i + 1) + 'º',
@@ -49889,7 +49930,7 @@ function dg4Dados(ctx) {
       st: st,
       stCor: pz === 0 ? '#6E1210'
         : pz === 1 ? '#E51A31'
-        : pz === 2 ? (x.veioDaGrade ? '#2B3440' : '#8A6516')
+        : pz === 2 ? '#C3152A'
         : '#1E9E7B',
       bg: sel ? '#2B3440' : '#FDFEFF',
       cor: sel ? '#FDFEFF' : '#2B3440',
@@ -49989,12 +50030,17 @@ function dg4Dados(ctx) {
       ].concat(aposta ? [{ n: String(aposta), rot: aposta === 1 ? 'palavra dada' : 'palavras dadas',
         bg: '#FDECEF', cor: '#B0184B', borda: '#F0C9D5', estilo: 'solid' }] : []);
 
-    const horaTrava = x.plano && x.plano.fechado_em
-      ? new Date(x.plano.fechado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : null;
+    /* `horaTrava` saiu com a linha que a usava: era a hora em que ele travou o dia. */
+    /* A LINHA DIZIA SE A PROMESSA ESTAVA TRAVADA (24/09/26). Nao existe mais trava, e
+       "trava as 13h — ainda editavel" era a tela pedindo um gesto que ninguem pode
+       fazer. O que ela diz agora e o que a rodada cobra: quantos ja venceram sem
+       prova, ou que o dia esta em dia. */
     const promSt = !x.temPlano
-      ? ('sem promessa — trava às ' + Math.floor(dg4MinutosDaTrava() / 60) + 'h')
-      : (x.travada ? ('travada ✓ · palavra dada' + (horaTrava ? ' às ' + horaTrava : ''))
-        : ('trava às ' + Math.floor(dg4MinutosDaTrava() / 60) + 'h — ainda editável'));
+      ? 'nada montado para hoje'
+      : (x.semRegistro
+        ? (x.semRegistro + (x.semRegistro === 1 ? ' compromisso' : ' compromissos')
+          + ' sem registro')
+        : 'o que já venceu está registrado ✓');
 
     /* ══ UMA LINHA POR VISITA, E NÃO UMA POR HORA (09/09/26) ═════════════════════════
        Era `x.grade.horas.map`: sete linhas fixas, as ocupadas e as "em branco". Com 15
@@ -50009,12 +50055,36 @@ function dg4Dados(ctx) {
       if (!sl) return null;
       const org = dg4OrigemDoSlot(sl, mapaFunil);
       const noFunil = sl.dealId ? mapaFunil[String(sl.dealId)] : null;
+      /* ══ AS TRÊS LEITURAS (24/09/26) ═══════════════════════════════════════════
+         Plano, registro e check-in — nunca somadas, e nunca uma só. Sem as duas
+         últimas, o gestor chegava na rodada sabendo só o que foi PLANEJADO, e
+         perguntava o que já estava gravado no cartão de quem fez.
+         "NÃO MEDIDO" É O ESTADO PADRÃO, e é diferente de "não foi": um acusa, o outro
+         diz que ninguém sabe — e só o segundo é verdade quando não há prova. */
+      const prop = (sl.p && typeof pl6Proposito === 'function') ? pl6Proposito(sl.p) : null;
+      const infoR = (sl.r && typeof pl6ResultadoInfo === 'function')
+        ? pl6ResultadoInfo(sl.p || 'funil', sl.r.tipo) : null;
+      const evid = (typeof pl6EvidenciaDoSlot === 'function')
+        ? pl6EvidenciaDoSlot({ tipo: sl.origem === 'rua' ? 'rua' : 'visita',
+          id: sl.dealId, hora: sl.hora, duracao: sl.duracao }, diaISO, oid) : null;
+      const temCheck = !!(evid && evid.txt && evid.txt.indexOf('sem check-in') < 0
+        && evid.txt.indexOf('fila do app') < 0);
       return {
         h: sl.hora || 'sem hora',
         conta: esc(sl.nome || 'conta sem nome'),
         cCor: '#2B3440',
         etapa: esc(sl.acao || (noFunil ? ('follow-up · ' + noFunil.etapa) : 'sem ação escrita')),
         origem: org.rot, oBg: org.bg, oCor: org.cor, oBorda: org.borda,
+        selo: prop ? esc(prop.etiqueta) : '',
+        seloCor: prop ? prop.selo : '', seloBg: prop ? prop.seloBg : '',
+        reg: sl.r ? esc((infoR ? infoR.diz : sl.r.tipo)
+          + (sl.r.motivo && typeof pl6MotivoRotulo === 'function'
+            ? ' · ' + pl6MotivoRotulo(sl.r.motivo) : '')) : 'sem registro',
+        regCor: sl.r ? ((infoR && infoR.bom) ? '#16775D' : '#8A3B3B') : '#B4AC9C',
+        evid: evid ? esc(evid.txt) : 'sem check-in',
+        evidCor: evid ? evid.cor : '#B4AC9C',
+        /* NÃO MEDIDO: nem ele registrou, nem o app viu. */
+        naoMedido: !sl.r && !temCheck,
         bg: '#FDFEFF', borda: '#E2E6EE', estilo: 'solid'
       };
     }).filter(Boolean);
@@ -50028,9 +50098,16 @@ function dg4Dados(ctx) {
     const capDia = (typeof PL6_SLOTS !== 'undefined') ? PL6_SLOTS : 15;
     const sobram = Math.max(0, capDia - x.visitas.length);
     if (sobram > 0) {
+      /* A LINHA DAS VAGAS NAO E UM COMPROMISSO, entao ela nao tem registro nem
+         check-in — mas o markup e o mesmo, e campo ausente imprime "undefined".
+         Visto na FOTO da tela do gestor: "15 vagas · em branco · undefined · undefined".
+         Nenhuma das medicoes pegou: o texto nao muda geometria, os erros de console
+         ficaram em zero e as 72 suites passaram. */
       slots.push({ h: sobram + (sobram === 1 ? ' vaga' : ' vagas'),
         conta: x.temPlano ? 'o dia dele ainda tem espaço' : 'em branco',
         cCor: '#9AA3B2', etapa: '', origem: '', oBg: 'none', oCor: '#9AA3B2', oBorda: 'transparent',
+        selo: '', seloCor: '', seloBg: '', reg: '', regCor: '', evid: '', evidCor: '',
+        naoMedido: false,
         bg: 'none', borda: '#D8D2C4', estilo: 'dashed' });
     }
 
@@ -50057,9 +50134,9 @@ function dg4Dados(ctx) {
       ? ('prometeu ' + x.ontem.p + ' ontem e fez ' + x.ontem.f + '; ') : '';
     const leitura = !planosLidos ? 'não consegui ler o plano dele nesta rodada'
       : abre + (!x.temPlano
-        ? (antesDaTrava
-          ? 'não montou o dia ainda — faltam ' + minutos + ' min para a trava, dá tempo se você cobrar agora'
-          : 'passou a trava sem montar o dia: a promessa de hoje não existe e o placar de amanhã vai medir zero prometido')
+        /* Era "faltam N min para a trava" / "passou a trava sem montar o dia". Não há
+           trava desde 24/09/26 — o que pesa é a hora do dia dele, não uma janela. */
+        ? 'não montou o dia — sem plano, não há o que registrar nem o que cobrar à tarde'
         /* ══ A FRASE CONTA VISITAS, E A HORA É DETALHE ═══════════════════════════════
            Era "3 de 7 horários nomeados", e com 15 vagas e a hora sendo escolha dele isso
            passou a descrever outra coisa: um dia com onze visitas e três horas marcadas
@@ -50075,11 +50152,13 @@ function dg4Dados(ctx) {
                semana não tem promessa aberta: tem roteiro. Pedir "a trava" a ele é
                cobrar um passo que ele nem começou — e este texto era o rótulo do botão
                de cobrar, que saiu com a prancha FINAL. A frase ficou; o botão não. */
-            + (antesDaTrava
-              ? (x.veioDaGrade
-                ? ', e isso é a grade da semana, não a promessa do dia — pedir para travar o dia é o gesto'
-                : ', e a promessa ainda está aberta — cobrar a trava é o gesto')
-              : ', e a janela fechou sem travar'))
+            /* A PROSA DEIXOU DE COBRAR A TRAVA (24/09/26). Ela oferecia dois gestos —
+               pedir para travar o dia, ou cobrar a trava aberta — e nenhum dos dois
+               existe: a grade É o plano. O que se cobra agora é o registro do que já
+               venceu, que é a única coisa que ainda falta no dia dele. */
+            + (x.semRegistro
+              ? ', e ' + x.semRegistro + (x.semRegistro === 1 ? ' compromisso já venceu' : ' compromissos já venceram') + ' sem registro — perguntar como foi é o gesto'
+              : ', e o que já venceu está todo registrado'))
           : (x.quentes.length
             ? 'travou ' + dg4Plural(x.visitas.length, 'visita', 'visitas') + ', e '
               + dg4Plural(x.quentes.length, 'quente dele ficou', 'quentes dele ficaram')
@@ -50108,13 +50187,16 @@ function dg4Dados(ctx) {
          guarda vê repetição de texto que o markup produz em dois pedaços certos. */
       praca: esc(r.praca || 'praça não declarada'),
       rota: esc((x.plano && x.plano.local_atuacao) || 'sem rota escolhida'),
-      /* PLANEJOU NA GRADE não é PROMESSA ABERTA: a promessa é um gesto de travar o dia,
-         e a grade da semana é o roteiro. Dizer "promessa aberta" sobre quem só encaixou
-         contas na grade seria a tela afirmando um gesto que ninguém fez. */
+      /* ══ NÃO HÁ MAIS PROMESSA SEPARADA DO PLANO (24/09/26) ═════════════════════
+         O selo distinguia PLANEJOU NA GRADE de PROMESSA ABERTA, e TRAVADA ✓ de ambos:
+         a grade era o roteiro, e a promessa era um segundo gesto — travar o dia às 13h
+         — feito à parte. Esse gesto saiu com a Minha Daily. A grade É o plano.
+         O QUE O SELO DIZ AGORA é o que a rodada precisa saber: quantos compromissos já
+         venceram sem registro, ou que está tudo em dia. */
       status: !x.temPlano ? 'SEM PLANO'
-        : (x.travada ? 'TRAVADA ✓' : (x.veioDaGrade ? 'PLANEJOU NA GRADE' : 'PROMESSA ABERTA')),
-      stBg: !x.temPlano ? '#6E1210' : (x.travada ? '#EAF6F1' : (x.veioDaGrade ? '#EDEFF4' : '#FDF6E7')),
-      stCor: !x.temPlano ? '#FDFEFF' : (x.travada ? '#1E9E7B' : (x.veioDaGrade ? '#2B3440' : '#8A6516')),
+        : (x.semRegistro ? (x.semRegistro + ' SEM REGISTRO') : 'EM DIA ✓'),
+      stBg: !x.temPlano ? '#6E1210' : (x.semRegistro ? '#FDF3F4' : '#EAF6F1'),
+      stCor: !x.temPlano ? '#FDFEFF' : (x.semRegistro ? '#C3152A' : '#1E9E7B'),
       avBg: !x.temPlano ? '#6E1210' : '#E51A31',
       bg: !x.temPlano ? '#FDF7F7' : '#FDFEFF',
       borda: focado ? '#2B3440' : (!x.temPlano ? '#E3C6C6' : '#E2E6EE'),
@@ -50144,8 +50226,11 @@ function dg4Dados(ctx) {
     return s + x.quentes.filter(function (d) { return dg4Feito('alinhar', x.oid, d.nome); }).length;
   }, 0);
   const agenda = [
-    { hora: Math.floor(dg4MinutosDaTrava() / 60) + 'h',
-      rot: 'as promessas travam; o que estiver escrito vira o placar de amanhã, medido no HubSpot — zero auto-relato' },
+    /* A HORA DA TRAVA SAIU (24/09/26): não há mais um instante em que a promessa fecha.
+       O que a agenda do dia tem a dizer agora é o gesto da tarde — registrar o que
+       aconteceu, que é o que alimenta o placar de amanhã. */
+    { hora: 'tarde',
+      rot: 'cada compromisso que vence pede o registro de como foi; o placar de amanhã mede isso contra o HubSpot — zero auto-relato' },
     { hora: 'rodada', rot: nSinais
       ? (nSinais + (nSinais === 1 ? ' sinal anotado' : ' sinais anotados')
         + ' — SLA, cadência, proposta e combinado, por nome, olho no olho')
@@ -50176,7 +50261,10 @@ function dg4Dados(ctx) {
        depois da hora é a tela mentindo sobre uma janela que já fechou. */
     tituloTrava: esc(ehHoje
       ? (minutos > 0 ? 'Promessas travam às ' + Math.floor(dg4MinutosDaTrava() / 60) + 'h'
-        : 'Promessas travadas às ' + Math.floor(dg4MinutosDaTrava() / 60) + 'h ✓')
+        /* Era "Promessas travadas às 13h ✓" — a trava saiu em 24/09/26 e a frase ficaria
+         anunciando um gesto que ninguém faz mais. O que a rodada quer saber no topo é
+         se sobrou compromisso sem prova. */
+      : 'Todos os compromissos vencidos têm registro ✓')
       : 'Promessas de ' + String(dRef.getDate()).padStart(2, '0') + '/' + String(dRef.getMonth() + 1).padStart(2, '0')),
     contagem: esc(ehHoje && minutos > 0 ? '— faltam ' + minutos + ' min' : ''),
     kpis: kpis.map(function (k) { return { rot: esc(k.rot), v: esc(k.v), de: esc(k.de), cor: k.cor }; }),
@@ -50204,16 +50292,20 @@ function dg4Dados(ctx) {
        o que a projeção existe para mostrar. */
     acoes: !tv,
     agenda: agenda,
-    rodapeFonte: esc('Daily do gestor: a palavra de ontem é cobrada primeiro — prometido de dailies.prometido_visitas (o que ele travou ontem)'
+    rodapeFonte: esc('Daily do gestor: a palavra de ontem é cobrada primeiro — prometido de dailies.prometido_visitas (linhas ANTIGAS: ninguém escreve mais nesse campo desde que a promessa manual saiu, e por isso ele vai secando)'
       + ' contra feito medido no HubSpot (visita com desfecho), nunca auto-relato'
-      + ' · plano, promessa e trava: Supabase planos_diarios, escritos pelo próprio executivo na Minha Daily'
+      + ' · plano do dia e registro de como foi: Supabase planos_semanais.grade, escritos'
+      + ' pelo próprio executivo no Planejamento (a Minha Daily saiu em 24/09/26, e com ela'
+      + ' a promessa travada às 13h)'
+      + ' · check-in: evento de agenda cujo início é igual à criação — o Expogo gravando'
+      + ' no instante da visita'
       + ' · SLA de 1º toque, cadência de ontem e toques: as MESMAS funções das abas Time e Pessoas'
       + ' · não existe propriedade de validade de proposta no HubSpot, então o sinal é o parente medível — proposta na mesa sem data marcada'
       + ' · combinado do 1:1: pdi_compromissos, a mesma linha que ele marca no Desenvolvimento e você carimba na Pessoas'
       + ' · etapa, dias e quentes: HubSpot (' + frescor + ')'
       + ' · sinal anotado e pergunta: Supabase registros_rodada, os mesmos que a Semana e o Time leem'
       + ' · sem botão de cobrar: a cobrança acontece na rodada, olho no olho'
-      + ' · o gestor não edita plano de ninguém, e depois da trava a promessa é somente leitura.')
+      + ' · o gestor não edita plano de ninguém: esta tela é só leitura.')
   };
 }
 /* ══ O RENDER DA DAILY v4: o markup da prancha, mecanicamente convertido ══════════
@@ -50264,7 +50356,7 @@ function dg4TelaHTML(d) {
               <button data-dg4-acao="${r.on}" style="display:inline-flex;align-items:center;gap:7px;min-height:32px;padding:0 12px;border:1.5px solid ${r.borda};border-radius:999px;background:${r.bg};font:800 10.5px 'Manrope',sans-serif;color:${r.cor};cursor:pointer;white-space:nowrap;" data-dg4-hv="0"><b style="font:900 10px 'Archivo',sans-serif;color:${r.nCor};">${r.pos}</b>${r.nome}<span style="font:800 8.5px 'Archivo',sans-serif;color:${r.stCor};">${r.st}</span></button>
             `).join('')}
           </div>
-          <span style="margin-left:auto;flex:none;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;text-align:right;">ordem: sem plano → furou ontem → promessa aberta → travadas ✓<br>hoje: <b style="color:#2B3440;">${somaVisitas} visitas prometidas</b> · ${somaPlanejadas} planejadas na grade · origem dos planos: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${somaNovas} prospecção nova</b></span>
+          <span style="margin-left:auto;flex:none;font:700 10px/1.5 'Manrope',sans-serif;color:#7A8494;text-align:right;">ordem: sem plano → furou ontem → com compromisso sem registro → em dia ✓<br>hoje: <b style="color:#2B3440;">${somaVisitas} visitas prometidas</b> · ${somaPlanejadas} planejadas na grade · origem dos planos: <b style="color:#E51A31;">${origAlvo} contas alvo</b> · <b style="color:#2B3440;">${origCart} carteira</b> · <b style="color:#1E9E7B;">${somaNovas} prospecção nova</b></span>
         </div>
 
         <div style="padding:16px 24px 8px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
@@ -50296,6 +50388,15 @@ function dg4TelaHTML(d) {
                       <span style="font:800 10px 'Manrope',sans-serif;color:#8E3B5C;flex:none;width:38px;font-variant-numeric:tabular-nums;">${sl.h}</span>
                       <b style="font:800 11px 'Manrope',sans-serif;color:${sl.cCor};min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.conta}</b>
                       <span style="font:700 9.5px 'Manrope',sans-serif;color:#7A8494;flex:none;white-space:nowrap;">${sl.etapa}</span>
+                      <!-- ══ PLANO · REGISTRO · CHECK-IN (24/09/26) ════════════════
+                           As três lado a lado, nunca somadas. Sem registro E sem
+                           check-in, a linha diz NÃO MEDIDO — que é diferente de "não
+                           foi": um acusa, o outro diz que ninguém sabe, e só o segundo
+                           é verdade quando não há prova. -->
+                      ${sl.selo ? `<span style="flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.06em;color:${sl.seloCor};background:${sl.seloBg};border-radius:4px;padding:2px 5px;">${sl.selo}</span>` : ''}
+                      <span style="flex:none;font:700 9px 'Manrope',sans-serif;color:${sl.regCor};white-space:nowrap;">${sl.reg}</span>
+                      <span style="flex:none;font:700 9px 'Manrope',sans-serif;color:${sl.evidCor};white-space:nowrap;">${sl.evid}</span>
+                      ${sl.naoMedido ? `<span style="flex:none;font:900 8px 'Archivo',sans-serif;letter-spacing:.06em;color:var(--nm-ink,#7A8494);background:var(--nm-bg,#F4F1EA);border-radius:4px;padding:2px 5px;">NÃO MEDIDO</span>` : ''}
                       <span style="margin-left:auto;flex:none;font:800 8px 'Archivo',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${sl.oCor};background:${sl.oBg};border:1px solid ${sl.oBorda};border-radius:4px;padding:2px 7px;white-space:nowrap;">${sl.origem}</span>
                     </div>
                   `).join('')}
