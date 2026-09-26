@@ -39919,6 +39919,74 @@ async function ps6Executar(acao) {
   renderPessoas();
 }
 
+const PS6_FOTOS = { porDono: {}, emVoo: {} };
+
+function ps6FotosAnexar(raiz, ownerId) {
+  if (!raiz || !ownerId || typeof supa === 'undefined' || !supa) return;
+  const caixa = document.createElement('section');
+  caixa.id = 'ps6Fotos';
+  caixa.setAttribute('aria-label', 'Fotos das visitas');
+  caixa.setAttribute('style', 'margin:24px 0 8px;padding:20px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);');
+  raiz.appendChild(caixa);
+  const pronto = PS6_FOTOS.porDono[ownerId];
+  caixa.innerHTML = ps6FotosHTML(pronto || { carregando: true });
+  if (pronto || PS6_FOTOS.emVoo[ownerId]) return;
+  PS6_FOTOS.emVoo[ownerId] = ps6FotosCarregar(ownerId).then(function (r) {
+    PS6_FOTOS.porDono[ownerId] = r;
+    delete PS6_FOTOS.emVoo[ownerId];
+    const aberta = document.getElementById('ps6Fotos');
+    if (aberta && String(pessoaSelecionadaId) === String(ownerId)) aberta.innerHTML = ps6FotosHTML(r);
+  });
+}
+
+async function ps6FotosCarregar(ownerId) {
+  try {
+    const { data, error } = await supa.from('fotos_visita')
+      .select('id, caminho, client_id, deal_id, criado_em')
+      .eq('owner_id', String(ownerId))
+      .order('criado_em', { ascending: false })
+      .limit(24);
+    if (error) throw error;
+    const linhas = data || [];
+    if (!linhas.length) return { fotos: [] };
+    const assinadas = await supa.storage.from('fotos-visita')
+      .createSignedUrls(linhas.map(function (l) { return l.caminho; }), 3600);
+    if (assinadas.error) throw assinadas.error;
+    const url = {};
+    (assinadas.data || []).forEach(function (a) { if (a && a.path && a.signedUrl) url[a.path] = a.signedUrl; });
+    const ids = linhas.map(function (l) { return l.client_id; }).filter(Boolean);
+    const nome = {};
+    if (ids.length) {
+      const { data: cs } = await supa.from('clients').select('id, empresa, nome').in('id', ids);
+      (cs || []).forEach(function (c) { nome[c.id] = (c.empresa && String(c.empresa).trim()) || c.nome || ''; });
+    }
+    return { fotos: linhas.filter(function (l) { return url[l.caminho]; }).map(function (l) {
+      return { url: url[l.caminho], nome: nome[l.client_id] || 'Lead sem nome',
+        quando: new Date(l.criado_em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) };
+    }) };
+  } catch (e) {
+    console.log('pessoas: fotos nao lidas - ' + (e && e.message));
+    return { erro: true };
+  }
+}
+
+function ps6FotosHTML(r) {
+  const topo = '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:14px;">'
+    + '<h3 style="margin:0;font-family:var(--font-display);font-size:16px;color:var(--ink);">Fotos das visitas</h3>'
+    + '<span style="font-size:12px;color:var(--muted2);">tiradas no registro da visita, no app de campo</span></div>';
+  if (r.carregando) return topo + '<p style="margin:0;font-size:13px;color:var(--muted2);">Carregando as fotos…</p>';
+  if (r.erro) return topo + '<p style="margin:0;font-size:13px;color:var(--amber);">Não consegui ler as fotos agora. Recarregue a aba para tentar de novo.</p>';
+  if (!r.fotos.length) return topo + '<p style="margin:0;font-size:13px;color:var(--muted2);">Nenhuma foto registrada por esta pessoa ainda. A foto entra pelo botão de foto do registro da visita.</p>';
+  const cards = r.fotos.map(function (f) {
+    return '<a href="' + esc(f.url) + '" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit;">'
+      + '<img src="' + esc(f.url) + '" alt="' + esc('Foto da visita em ' + f.nome) + '" loading="lazy" '
+      + 'style="display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r-md);border:1px solid var(--line);background:var(--panel2);">'
+      + '<div style="margin-top:6px;font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(f.nome) + '</div>'
+      + '<div style="font-size:12px;color:var(--muted2);">' + esc(f.quando) + '</div></a>';
+  }).join('');
+  return topo + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;">' + cards + '</div>';
+}
+
 function renderPessoas() {
   const raiz = document.getElementById('ps6Raiz');
   if (!raiz) return;
@@ -39928,6 +39996,7 @@ function renderPessoas() {
 
   const yAntes = window.scrollY;
   raiz.innerHTML = pv6TelaHTML(dados);
+  ps6FotosAnexar(raiz, dados.dossie && dados.dossie.ownerId);
   if (window.scrollY !== yAntes) window.scrollTo(0, yAntes);
 
   const alvo = dados.dossie && dados.dossie.ownerId;
