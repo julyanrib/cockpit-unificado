@@ -14221,6 +14221,46 @@ function playbookProgressoLocalSalvar(pendentes) {
   try { localStorage.setItem('cockpit_playbook_progresso_pendente_v1', JSON.stringify(pendentes)); } catch (e) {}
 }
 
+let visitasAppCache = { dia: null, porOwner: null, em: 0 };
+async function carregarVisitasApp() {
+  if (!supa) return null;
+  const dia = (typeof agendaChave === 'function' && typeof agendaAgora === 'function')
+    ? agendaChave(agendaAgora()) : isoDate(new Date());
+  if (visitasAppCache.dia === dia && Date.now() - visitasAppCache.em < 120000) return visitasAppCache.porOwner;
+  const ini = new Date(dia + 'T00:00:00-03:00');
+  const fim = new Date(ini.getTime() + 86400000);
+  const [v, p] = await Promise.all([
+    supa.from('client_visits').select('visited_by, declarada').gte('visited_at', ini.toISOString()).lt('visited_at', fim.toISOString()),
+    supa.from('profiles').select('id, id_hubspot')
+  ]);
+  if (v.error || p.error || !Array.isArray(v.data)) {
+    visitasAppCache = { dia, porOwner: null, em: Date.now() };
+    return null;
+  }
+  const donoDoPerfil = {};
+  (p.data || []).forEach(x => { if (x && x.id_hubspot) donoDoPerfil[x.id] = String(x.id_hubspot); });
+  const porOwner = {};
+  v.data.forEach(x => {
+    const dono = donoDoPerfil[x.visited_by];
+    if (!dono) return;
+    const c = porOwner[dono] || (porOwner[dono] = { total: 0, semGps: 0 });
+    c.total++;
+    if (x.declarada === true) c.semGps++;
+  });
+  visitasAppCache = { dia, porOwner, em: Date.now() };
+  return porOwner;
+}
+function visitasSemGpsHoje(ownerId) {
+  const p = visitasAppCache.porOwner;
+  const c = p && ownerId != null ? p[String(ownerId)] : null;
+  return c ? c.semGps : 0;
+}
+function linhaSemGpsHTML(n) {
+  if (!n) return '';
+  return '<span style="display:block;font-size:9px;font-weight:700;color:var(--amber);margin-top:2px;" title="Registradas fora do raio no app de campo: o executivo declarou que esteve la. Contam como visita.">'
+    + n + ' sem GPS · declarada' + (n === 1 ? '' : 's') + ' no app</span>';
+}
+
 async function carregarPlaybookProgresso() {
   if (playbookProgressoCache) return playbookProgressoCache;
   if (playbookProgressoPromise) return playbookProgressoPromise;
@@ -34446,6 +34486,8 @@ async function renderDaily() {
 
   try { if (typeof carregarPlaybookProgresso === 'function') await carregarPlaybookProgresso(); }
   catch (e) { console.error('[Daily] progresso do playbook não carregou, estudo fica em 0:', e); }
+  try { if (typeof carregarVisitasApp === 'function') await carregarVisitasApp(); }
+  catch (e) { console.error('[Daily] visitas do app (GPS x declarada) nao carregaram:', e); }
 
   if (!plPreCargaFeita && sessaoAtual && sessaoAtual.role === 'rep' && sessaoAtual.ownerId) {
     plPreCargaFeita = true;
@@ -35559,7 +35601,8 @@ async function renderDaily() {
       { label: 'Visitas', campo: 'prometido_visitas',
         prom: comprometidasHoje > 0 ? comprometidasHoje : (temPromessaNumerica ? promVisitasDoDia : null),
         fonte: comprometidasHoje > 0 ? 'clientes nomeados' : (temPromessaNumerica ? 'número prometido, sem cliente nomeado' : null),
-        real: Number(realVisitas) || 0, cls: 'green', chips: visitasNomesDoOwnerNoDia(r.ownerId, dailyRefDate) },
+        real: Number(realVisitas) || 0, cls: 'green', chips: visitasNomesDoOwnerNoDia(r.ownerId, dailyRefDate),
+        semGps: ehHojeView ? visitasSemGpsHoje(r.ownerId) : 0 },
       { label: 'Demo/Proposta', campo: 'prometido_propostas', prom: hoje.prometido_propostas, real: Number(realPropostas) || 0, cls: 'red', suspeito: escritaDaNoiteSuspeita },
       { label: 'Novos Clientes', campo: 'prometido_fechamentos', prom: hoje.prometido_fechamentos, real: Number(realFechamentos) || 0, cls: 'amber', suspeito: escritaDaNoiteSuspeita }
     ];
@@ -35635,6 +35678,7 @@ async function renderDaily() {
         <span class="daily-team-metric-top"><span>${m.label}${m.suspeito ? ' <span title="A sincronização da noite pode ter falhado — confira no HubSpot antes de cobrar este número." style="cursor:help;">⚠️</span>' : ''}</span><b>${m.prom ?? '—'} <em>${m.prom == null ? 'sem meta' : 'prometido'}</em></b></span>
         <span class="daily-progress"><span style="width:${pctMetrica(m)}%;"></span></span>
         <span style="display:block;font-size:9px;color:var(--muted);margin-top:4px;">${m.real} realizado${m.suspeito ? ' · sync a confirmar' : ''}</span>
+        ${linhaSemGpsHTML(m.semGps)}
         ${m.chips ? (m.chips.length
           ? `<div class="daily-visitas-chips">${m.chips.map(c => `<span class="daily-vchip">✓ ${esc(c)}</span>`).join('')}</div>`
           : Number(m.real) > 0
@@ -35646,6 +35690,7 @@ async function renderDaily() {
         <div class="daily-promise-metric-head"><span>${m.label}${m.suspeito ? ' ⚠️' : ''}</span><span>${m.suspeito ? 'sync da noite a confirmar' : 'promessa do dia'}</span></div>
         <div class="daily-promise-input-row"><b style="font:800 28px/1 var(--font-display);">${m.prom ?? '—'}</b><span class="daily-promise-actual"><b>${m.real}</b>realizado</span></div>
         <div class="daily-progress"><span style="width:${pctMetrica(m)}%;"></span></div>
+        ${linhaSemGpsHTML(m.semGps)}
       </div>`;
 
     const planoPessoa = planoDoRep;
