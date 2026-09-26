@@ -23,22 +23,15 @@ if (!TOKEN) {
 
 const PIPELINE_ID = '916011864';
 
-const STAGES = {
-  backlog: '1396007427',
-  prospeccao: '1395880469',
-  visita: '1396005401',
-  diagnostico: '1395880470',
-  demoProposta: '1395880471',
-  negociacao: '1395880472',
-  agPagamento: '1395880473',
-  ganho1: '1396006162',
-  ganho2: '1396006163',
-  perdido: '1396006164',
-  reciclagem: '1398311191',
-  contaAlvo: '1413529973'
-};
 
-const OPEN_STAGES = [STAGES.prospeccao, STAGES.visita, STAGES.diagnostico, STAGES.demoProposta, STAGES.negociacao, STAGES.agPagamento];
+/* STAGES, a régua, os dias parado, a temperatura e o card do funil moram em
+   lib/lead-do-funil.js (26/09/26): o APP de campo monta o espelho ao vivo pelo MESMO
+   código, para o Cockpit nunca mostrar duas contas para o mesmo negócio. */
+const LEAD_DO_FUNIL = require('../lib/lead-do-funil.js');
+const {
+  STAGES, OPEN_STAGES, SLA_DAYS, ENTERED_STAGE_PROPS, FIELD_SALES_STAGE_PROPS,
+  diasUteisEntre, daysInCurrentStage, estadoDaRegua, coordenadaValida, montarLeadDoFunil
+} = LEAD_DO_FUNIL;
 
 // O PERDIDO A PARTIR DE HOJE, E SÓ (01/09/26, Julyan: "eu nao quero que puxe nada, que
 // continue no hubspot, só vai pra perdido a partir de hoje").
@@ -415,14 +408,6 @@ function planejamentoPorProposito(funilLeads) {
   };
 }
 
-const SLA_DAYS = {
-  [STAGES.prospeccao]: 5,
-  [STAGES.visita]: 5,
-  [STAGES.diagnostico]: 4,
-  [STAGES.demoProposta]: 3,
-  [STAGES.negociacao]: 7,
-  [STAGES.agPagamento]: 2
-};
 
 /* ══ A RÉGUA NÃO PUNE QUEM COMBINOU DATA (23/09/26) ═══════════════════════════════
    Pergunta da Kelly: ela negociou, o cliente pediu retorno em 15 dias, ela marcou o
@@ -437,24 +422,6 @@ const SLA_DAYS = {
    funilLeads e o laço por executivo) e telas diferentes leem cada um. Duas cópias da
    mesma regra é como as telas passam a discordar sobre o mesmo negócio — esta base já
    pagou por isso mais de uma vez. */
-function estadoDaRegua(dias, stageId, proximaAtividadeRaw) {
-  const regua = SLA_DAYS[stageId] || 999;
-  const foraDaRegua = dias > regua;
-  /* FUTURA DE VERDADE: o HubSpot mantém notes_next_activity_date mesmo depois do
-     prazo passar, então comparar com agora é o que separa "combinado" de "vencido". */
-  let combinadaEm = null;
-  if (proximaAtividadeRaw) {
-    const dt = new Date(proximaAtividadeRaw);
-    if (!isNaN(dt.getTime()) && dt.getTime() > Date.now()) combinadaEm = dt.toISOString();
-  }
-  const aguardando = foraDaRegua && !!combinadaEm;
-  return {
-    slaBreach: foraDaRegua && !aguardando,
-    aguardando: aguardando,
-    aguardandoAte: aguardando ? combinadaEm : null,
-    proximaAtividade: combinadaEm
-  };
-}
 
 // Rank de "quão avançado" cada etapa é — usado pra calcular a temperatura do lead
 // (quanto mais avançado + dentro do prazo, mais quente).
@@ -477,6 +444,9 @@ const STAGE_RANK = {
    logo abaixo é o preço disso. */
 const { temperaturaDoNegocio } = require('../lib/temperatura.js');
 const CONFIG_TEMPERATURA = require('../data/temperatura.json');
+function comTemperatura(lead, stageIdExplicito) {
+  return LEAD_DO_FUNIL.comTemperatura(lead, stageIdExplicito, CONFIG_TEMPERATURA);
+}
 
 /* AS DUAS FONTES DE RANK TÊM DE CONCORDAR. STAGE_RANK (código) e a config da
    temperatura (JSON) descrevem a mesma ordem do funil. Editar uma e não a outra faria
@@ -495,24 +465,6 @@ Object.keys(STAGE_RANK).forEach(function (idEtapa) {
 /* Decora um negócio ABERTO com a temperatura. Etapa fora do funil de Field Sales
    (Backlog, Perdido, Reciclagem, Onboarding) volta INTACTA: negócio perdido não tem
    temperatura, e dar 12° a ele encheria o ranking do gestor de coisa morta. */
-function comTemperatura(lead, stageIdExplicito) {
-  const id = String(stageIdExplicito || (lead && lead.stageId) || '');
-  if (!(CONFIG_TEMPERATURA.etapa || {})[id]) return lead;
-  const medida = temperaturaDoNegocio({
-    stageId: id,
-    mrr: lead.mrr != null ? lead.mrr : lead.valor_de_mrr,
-    valor: lead.valor,
-    ultimaInteracao: lead.ultimaInteracao
-  }, { config: CONFIG_TEMPERATURA });
-  lead.temp = medida.nota;
-  lead.tempFaixa = medida.faixa;
-  lead.tempParcial = medida.parcial;
-  lead.tempDiasSemToque = medida.diasSemToque;
-  /* A PALAVRA DERIVA DA NOTA. Manter as duas independentes seria a mesma doença com
-     nome novo: a tela mostraria "82°" ao lado de um selo "morno". */
-  lead.temperatura = medida.faixa;
-  return lead;
-}
 
 // Descrições curtas de cada etapa, usadas nos tooltips do painel
 const STAGE_DESCRIPTIONS = {
@@ -1141,16 +1093,6 @@ async function visitasTarefasHojeByOwner(ownerId, diaISO) {
 
    Medido em 04/09/26: 0 dos 125 negocios com coordenada estavam em 0,0 — era defeito
    latente, e agora nao ha por onde ele voltar. */
-function coordenadaValida(valor) {
-  if (valor == null) return null;
-  const txt = String(valor).trim();
-  if (!txt) return null;
-  const n = Number(txt);
-  if (!isFinite(n)) return null;
-  /* 0,0 nunca e um restaurante nosso: e o valor que aparece quando o campo foi zerado. */
-  if (n === 0) return null;
-  return n;
-}
 async function hsSearchAll(body) {
   let todos = [];
   let after = undefined;
@@ -1686,15 +1628,9 @@ async function stageTotalThisMonth(stageIdOuLista) {
 // Propriedades automáticas do HubSpot que registram QUANDO o negócio entrou em cada etapa
 // (uma por etapa). Confirmado com a API: o nome certo nesta conta é hs_v2_date_entered_<etapa>
 // (não hs_date_entered_<etapa> — essa variante não existe aqui e vinha sempre vazia).
-const ENTERED_STAGE_PROPS = OPEN_STAGES.map(s => `hs_v2_date_entered_${s}`);
 // BLOCO 54 — propriedades condicionais obrigatórias do pipeline Field Sales,
 // conferidas no HubSpot em 14/08/26. Precisam viajar no shell para pré-preencher o
 // drawer; sem isso um valor já existente aparece vazio e o executivo sobrescreve à toa.
-const FIELD_SALES_STAGE_PROPS = ['origem_do_lead', 'gargalo_operacional', 'nome_do_sistema',
-  'plano_apresentado', 'valor_de_mrr', 'amount', 'email', 'cnpj_cpf', 'pacote_contratado',
-  'adicional', 'tipo_de_pagamento', 'periodo_contratado', 'mrr',
-  'deseja_criar_perfil_no_asaas_', 'qual_maior_desafio_',
-  'informacoes_sobre_o_maior_desafio', 'data_da_reuniao', 'reuniao_agendada', 'description'];
 
 async function repOpenDeals(ownerId) {
   const results = await hsSearchAll({
@@ -1865,20 +1801,6 @@ async function buscarNotasDoAppEmLote(iniMs, fimMs) {
 // trabalha rua/CRM nesses dias. Conta quantos dias de seg-sex existem entre startMs
 // (exclusive) e agora (inclusive), andando dia a dia em UTC pra não escorregar com
 // fuso/horário de verão. Ex.: sexta 18h → segunda 9h = 1 dia útil, não 3.
-function diasUteisEntre(startMs, endMs) {
-  if (!(startMs < endMs)) return 0;
-  const cursor = new Date(startMs);
-  cursor.setUTCHours(0, 0, 0, 0);
-  const fim = new Date(endMs);
-  fim.setUTCHours(0, 0, 0, 0);
-  let count = 0;
-  while (cursor < fim) {
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-    const dow = cursor.getUTCDay(); // 0=domingo, 6=sábado
-    if (dow !== 0 && dow !== 6) count++;
-  }
-  return count;
-}
 
 function daysSince(dateStr) {
   const created = new Date(dateStr).getTime();
@@ -1897,18 +1819,6 @@ function daysSince(dateStr) {
 // isso zerava o "dias parado" de todo mundo de uma vez e mascarava o SLA estourado real (achado:
 // negócio parado há 13 dias aparecia como "0 dias" no dashboard). `notes_last_updated` não tem esse
 // problema porque só muda quando uma pessoa de fato loga uma interação.
-function daysInCurrentStage(properties) {
-  const enteredKey = `hs_v2_date_entered_${properties.dealstage}`;
-  const enteredDate = properties[enteredKey] ? new Date(properties[enteredKey]).getTime() : null;
-  const lastActivity = properties.notes_last_updated ? new Date(properties.notes_last_updated).getTime() : null;
-  const createdFallback = new Date(properties.createdate).getTime();
-
-  const candidates = [enteredDate, lastActivity, createdFallback].filter(t => t !== null && !isNaN(t));
-  const maisRecente = Math.max(...candidates);
-  // 10/08 (Julyan): conta só dias úteis — sábado e domingo não empurram o lead pra
-  // "SLA estourado" nem inflam o "Xd parado", já que ninguém trabalha o funil nesses dias.
-  return diasUteisEntre(maisRecente, Date.now());
-}
 
 // Busca os negócios que UM executivo fechou (Negócio Fechado) nos últimos 7 dias,
 // usando closedate — mesmo critério validado pro Ganhos (7d) geral.
@@ -2149,54 +2059,10 @@ async function main() {
     // BLOCO 44 — tarefas em aberto associadas, uma chamada em lote por etapa (não por
     // negócio) — mesmo motivo de custo de qualquer outra chamada em lote deste arquivo.
     const tarefasPorDeal = await hsTarefasAbertasDosNegocios(deals.map(d => d.id));
-    funilLeads[stageId] = deals.map(d => {
-      const dias = daysInCurrentStage(d.properties);
-      // Coordenada real do check-in via Expogo (Julyan, 10/08: "eles marcam no Expogo
-      // e tem coordenadas que enviam para o HubSpot" — direto na propriedade do negócio,
-      // não precisa mais casar por nome com a base de prospecção pra achar isso).
-      const lat = coordenadaValida(d.properties.latitude);
-      const lng = coordenadaValida(d.properties.longitude);
-      return {
-        name: d.properties.dealname,
-        dealname: d.properties.dealname,
-        id: d.id,
-        dias,
-        /* OS TRÊS ESTADOS vêm de estadoDaRegua — ver a nota longa junto de SLA_DAYS.
-           Antes daqui saía `proximaAtividade` CRU: a propriedade do HubSpot sobrevive
-           ao prazo, então data vencida chegava na tela como se fosse compromisso em pé. */
-        ...(function () {
-          const e = estadoDaRegua(dias, stageId, d.properties.notes_next_activity_date);
-          return { slaBreach: e.slaBreach, aguardando: e.aguardando,
-            aguardandoAte: e.aguardandoAte, proximaAtividade: e.proximaAtividade };
-        }()),
-        ultimaInteracao: d.properties.notes_last_updated || null,
-        /* ══ QUANDO O NEGOCIO NASCEU (10/09/26) ══════════════════════════════════
-           `createdate` JA era pedido na busca (stageDealsTeamWide) e este mapeador
-           simplesmente nao o repassava — medido na producao: 8 de 249 negocios do
-           funil chegavam com data de criacao, e os 8 vinham por outro caminho.
-           Sem ele, o SLA de 1o toque da aba Time e incalculavel: ele e o delta entre
-           a criacao do negocio (a carga) e o primeiro engajamento. Pedir custava zero
-           porque a propriedade ja vinha na resposta; o que faltava era esta linha. */
-        criadoEm: d.properties.createdate || null,
-        valor: Math.round(parseFloat(d.properties.amount) || 0),
-        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
-        ownerId: d.properties.hubspot_owner_id || null,
-        lat: lat,   /* coordenadaValida ja garantiu: numero finito e nao-zero, ou null */
-        // Endereço textual segue junto: é o que permite ao front geocodificar quem não
-        // tem coordenada, em vez de sumir do mapa.
-        cep: d.properties.cep || null,
-        bairro: d.properties.bairro || null,
-        cidade: d.properties.cidade || null,
-        logradouro: d.properties.logradouro || null,
-        numero: d.properties.numero || null,
-        celular: d.properties.celular || null,
-        ...Object.fromEntries(FIELD_SALES_STAGE_PROPS.map(prop => [prop, d.properties[prop] || null])),
-        tarefas: tarefasPorDeal[d.id] || [],
-        lng: (lng != null && !isNaN(lng)) ? lng : null
-      };
-    /* TEMPERATURA AQUI TAMBÉM (08/09/26): este é o mapa que a tela do gestor desenha
-       negócio por negócio, e até hoje era o único sem nota. */
-    }).map(l => comTemperatura(l, stageId)).sort((a, b) => b.dias - a.dias);
+    /* O card sai de lib/lead-do-funil.js — ver a nota no require, lá em cima. */
+    funilLeads[stageId] = deals
+      .map(d => montarLeadDoFunil(d, stageId, { ownerNameById, tarefas: tarefasPorDeal[d.id] || [], configTemperatura: CONFIG_TEMPERATURA }))
+      .sort((a, b) => b.dias - a.dias);
   }
 
   // ---- A coluna PERDIDO do kanban: só as perdas dentro do corte + janela ----
