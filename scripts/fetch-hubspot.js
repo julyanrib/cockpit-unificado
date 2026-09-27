@@ -30,7 +30,8 @@ const PIPELINE_ID = '916011864';
 const LEAD_DO_FUNIL = require('../lib/lead-do-funil.js');
 const {
   STAGES, OPEN_STAGES, SLA_DAYS, ENTERED_STAGE_PROPS, FIELD_SALES_STAGE_PROPS,
-  diasUteisEntre, daysInCurrentStage, estadoDaRegua, coordenadaValida, montarLeadDoFunil, montarCardPerdido
+  diasUteisEntre, daysInCurrentStage, estadoDaRegua, coordenadaValida, montarLeadDoFunil, montarCardPerdido,
+  montarCardGanho, montarCardOnboarding
 } = LEAD_DO_FUNIL;
 
 // O PERDIDO A PARTIR DE HOJE, E SÓ (01/09/26, Julyan: "eu nao quero que puxe nada, que
@@ -2145,34 +2146,9 @@ async function main() {
      nenhuma desta etapa — ela tem automação de WhatsApp e cria card em outro pipe; aqui
      é espelho, não formulário. */
   {
-    const rotuloDoDono = id => ownerNameById[id] || '—';
-    funilLeads[ETAPA_ONBOARDING] = onboardingRecentes.map(d => {
-      const q = d.properties || {};
-      const entrou = Date.parse(q[PROP_ENTRADA_ONBOARDING] || '');
-      const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-      return {
-        name: q.dealname,
-        dealname: q.dealname,
-        id: d.id,
-        /* dias = há quantos dias foi enviado. Nesta coluna a pergunta não é "quanto tempo
-           parado" — é "isso saiu da minha mão quando". */
-        dias: Number.isFinite(entrou) ? Math.max(0, Math.floor((Date.now() - entrou) / 86400000)) : 0,
-        enviadoEm: Number.isFinite(entrou) ? new Date(entrou).toISOString().slice(0, 10) : null,
-        slaBreach: false,
-        valor: Math.round(num(q.amount)),
-        mrr: Math.round(num(q.valor_de_mrr) || num(q.mrr)),
-        vendedor: rotuloDoDono(q.hubspot_owner_id),
-        ownerId: q.hubspot_owner_id || null,
-        celular: q.celular || null,
-        cidade: q.cidade || null,
-        bairro: q.bairro || null,
-        proximaAtividade: q.notes_next_activity_date || null,
-        ultimaInteracao: q.notes_last_updated || null,
-        tarefas: [],
-        /* O CLONE. Tudo o que o negócio tem, com o nome que o HubSpot usa. */
-        props: q
-      };
-    }).sort((a, b) => a.dias - b.dias);
+    funilLeads[ETAPA_ONBOARDING] = onboardingRecentes
+      .map(d => montarCardOnboarding(d, { ownerNameById }))
+      .sort((a, b) => a.dias - b.dias);
   }
 
   // Os perdidos entram no MESMO mapa funilLeads, com a mesma forma de card: é isso que
@@ -2211,39 +2187,9 @@ async function main() {
 
   {
     const tarefasGanho = await hsTarefasAbertasDosNegocios(ganhosDaSemana.map(d => d.id));
-    funilLeads[STAGES.ganho1] = ganhosDaSemana.map(d => {
-      const lat = coordenadaValida(d.properties.latitude);
-      const lng = coordenadaValida(d.properties.longitude);
-      const fechou = Date.parse(d.properties.closedate || '');
-      return {
-        name: d.properties.dealname,
-        dealname: d.properties.dealname,
-        id: d.id,
-        /* dias = há quantos dias FECHOU. Na coluna Ganho a pergunta não é "quanto tempo
-           parado" — o negócio não está parado, está vendido: é "quando foi", que é o que
-           decide se ele já devia ter ido para o Onboarding. */
-        dias: Number.isFinite(fechou) ? Math.max(0, Math.floor((Date.now() - fechou) / 86400000)) : 0,
-        slaBreach: false,
-        ganhoEm: Number.isFinite(fechou) ? new Date(fechou).toISOString().slice(0, 10) : null,
-        proximaAtividade: d.properties.notes_next_activity_date || null,
-        ultimaInteracao: d.properties.notes_last_updated || null,
-        valor: Math.round(parseFloat(d.properties.amount) || 0),
-        mrr: Math.round(parseFloat(d.properties.mrr) || 0),
-        valor_de_mrr: d.properties.valor_de_mrr || null,
-        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
-        ownerId: d.properties.hubspot_owner_id || null,
-        lat: lat,
-        lng: lng,
-        cep: d.properties.cep || null,
-        bairro: d.properties.bairro || null,
-        cidade: d.properties.cidade || null,
-        logradouro: d.properties.logradouro || null,
-        numero: d.properties.numero || null,
-        celular: d.properties.celular || null,
-        ...Object.fromEntries(FIELD_SALES_STAGE_PROPS.map(prop => [prop, d.properties[prop] || null])),
-        tarefas: tarefasGanho[d.id] || []
-      };
-    }).sort((a, b) => a.dias - b.dias);
+    funilLeads[STAGES.ganho1] = ganhosDaSemana
+      .map(d => montarCardGanho(d, { ownerNameById, tarefas: tarefasGanho[d.id] || [] }))
+      .sort((a, b) => a.dias - b.dias);
   }
 
   // ---- Leads em Reciclagem parados há 60+ dias, pra resgate (Julyan, 17/08/26:
