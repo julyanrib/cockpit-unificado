@@ -85,18 +85,28 @@ const WORKFLOW_FILE = 'daily-refresh.yml';
 // frequência. 30 min = ~28 rodadas/dia = ~2.000 min/mês, que é a franquia inteira.
 // E O QUE JÁ ERA INSTANTÂNEO CONTINUA: ação feita DENTRO do cockpit espelha na memória e
 // redesenha na hora. Isto governa só o que é feito direto no HubSpot ou no PWA.
-const COOLDOWN_MINUTOS = 30;
-// O WEBHOOK PAROU DE ACORDAR O ROBÔ (27/09/26, Julyan: "tudo pra rodar direto do banco").
-// MEDIDO antes de desligar: 26 a 29 rodadas por dia útil vinham daqui, contra 6 a 7 da
-// grade — ~110 min de Actions por dia, ~2.300/mês, acima da franquia de 2.000.
-// O que ele entregava (mudança no meio do intervalo de 2 h) agora chega por outro caminho:
-//   * escrita do app/Cockpit: o espelho ao vivo relê o negócio na hora (APP Outbound,
-//     supabase/functions/_compartilhado/espelho.ts, tabelas espelho_negocios/agenda);
-//   * mudança direto no HubSpot: o cockpit-dados busca os negócios alterados a cada
-//     abertura (no máximo a cada 5 min) e aplica por cima do snapshot;
-//   * placar do dia: já era ao vivo (lib/realizado.js na rota).
-// A grade de 2 em 2 horas continua (daily-refresh.yml). Para religar, é esta constante.
-const WEBHOOK_DISPARA_ROBO = false;
+// O WEBHOOK VIROU A RESERVA DO ROBÔ (27/09/26).
+//
+// Primeiro passo, no mesmo dia: parou de acordar o robô ("tudo pra rodar direto do
+// banco"). MEDIDO antes: 26 a 29 rodadas por dia útil vinham daqui, contra 6 a 7 da
+// grade — ~110 min de Actions por dia, ~2.300/mês, acima da franquia de 2.000. O que ele
+// entregava no meio do intervalo agora chega sem o robô: a escrita do app relê o negócio
+// na hora (espelho ao vivo do APP Outbound), o que muda direto no HubSpot entra a cada
+// abertura do Cockpit, e o placar do dia já era ao vivo.
+//
+// Segundo passo, horas depois: A GRADE DO GITHUB NÃO É CONFIÁVEL. Medido no histórico de
+// rodadas `schedule`: a das 11:30 UTC não aparece em nenhum dia útil; as outras chegam 1
+// a 2 h atrasadas; a de sábado 12:00 rodou às 16:13; a de domingo 12:00 não tinha rodado
+// às 13:20. Antes ninguém via, porque o webhook disparava toda hora. Sem ele, o que só o
+// robô atualiza (ganhos do mês, ranking, placar gravado, agenda inteira) podia ficar 4 h
+// parado.
+//
+// Então o webhook garante o intervalo, sem virar rajada: a cada aviso do HubSpot (no
+// máximo uma consulta a cada COOLDOWN_MINUTOS), pergunta ao GitHub quando o robô rodou
+// pela última vez — por qualquer motivo, grade ou webhook — e só dispara se faz mais de
+// RESERVA_MINUTOS. Resultado: ~1 rodada a cada 2 h no expediente, venha de onde vier.
+const COOLDOWN_MINUTOS = 15;
+const RESERVA_MINUTOS = 110;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
@@ -195,11 +205,6 @@ module.exports = async function handler(req, res) {
     });
   }
 
-  // 200, não erro: erro faria o HubSpot reenviar e, repetido, desativar a subscrição.
-  if (!WEBHOOK_DISPARA_ROBO) {
-    return res.status(200).json({ ok: true, disparado: false, motivo: 'o espelho ao vivo cobre; o robô roda só na grade de 2 h' });
-  }
-
   // ---- 3. intervalo mínimo entre disparos (cooldown) — LOCK ATÔMICO, não checagem ----
   // CORREÇÃO (19/08/26, achado real: pares de execuções com segundos de diferença,
   // mesmo com cooldown de 60min) — a versão antiga fazia "consultar API do GitHub →
@@ -242,7 +247,7 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({ ok: true, disparado: false, motivo: 'exceção ao checar lock de cooldown: ' + e.message });
   }
   if (!ganhouLock) {
-    return res.status(200).json({ ok: true, disparado: false, motivo: `cooldown ativo ou lock perdido pra outra requisição concorrente (mínimo ${COOLDOWN_MINUTOS} min entre disparos)` });
+    return res.status(200).json({ ok: true, disparado: false, motivo: `cooldown ativo ou lock perdido pra outra requisição concorrente (mínimo ${COOLDOWN_MINUTOS} min entre consultas ao GitHub)` });
   }
 
   // ---- 4. evita disparar a Action de novo se já tem uma rodando/na fila ----
@@ -271,6 +276,23 @@ module.exports = async function handler(req, res) {
     const dadosFila = naFila.ok ? await naFila.json() : { total_count: 0 };
     if ((dadosAndamento.total_count || 0) > 0 || (dadosFila.total_count || 0) > 0) {
       return res.status(200).json({ ok: true, disparado: false, motivo: 'já havia uma rodada em andamento/na fila' });
+    }
+
+    // ---- 4.5. RESERVA: só dispara se o robô não roda há RESERVA_MINUTOS ----
+    // A última rodada de QUALQUER origem (grade ou webhook). Sem resposta do GitHub,
+    // não dispara: o próximo aviso tenta de novo.
+    const ultima = await fetch(
+      `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=1`,
+      { headers: headersGitHub }
+    );
+    if (!ultima.ok) {
+      return res.status(200).json({ ok: true, disparado: false, motivo: 'sem a última rodada do GitHub: ' + ultima.status });
+    }
+    const dadosUltima = await ultima.json();
+    const quando = Date.parse(((dadosUltima.workflow_runs || [])[0] || {}).created_at || '');
+    const minutos = Number.isFinite(quando) ? Math.round((Date.now() - quando) / 60000) : Infinity;
+    if (minutos < RESERVA_MINUTOS) {
+      return res.status(200).json({ ok: true, disparado: false, motivo: `o robô rodou há ${minutos} min (reserva só depois de ${RESERVA_MINUTOS})` });
     }
 
     // ---- 5. dispara a mesma Action que já roda 3x por dia, agora sob demanda ----
