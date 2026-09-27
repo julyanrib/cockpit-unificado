@@ -55,7 +55,15 @@ const codigo = [
   'function mapearPerdidoAntigo(perdidosRecentes, ownerNameById, tarefasPerdido) {\n  return perdidosRecentes.map(d => {\n' +
     trecho('      const lat = coordenadaValida(d.properties.latitude);\n      const lng = coordenadaValida(d.properties.longitude);\n      const fechou = Date.parse(d.properties.closedate', '    }).sort((a, b) => a.dias - b.dias);\n') +
   '}\n',
-  'this.mapearAntigo = mapearAntigo; this.mapearPerdidoAntigo = mapearPerdidoAntigo; this.SLA_DAYS_ANTIGO = SLA_DAYS; this.estadoDaRegua = estadoDaRegua;'
+  trecho("const ETAPA_ONBOARDING = '", ';\n'),
+  trecho('const PROP_ENTRADA_ONBOARDING = ', ';\n'),
+  'function mapearGanhoAntigo(ganhosDaSemana, ownerNameById, tarefasGanho) {\n  return ganhosDaSemana.map(d => {\n' +
+    trecho('      const lat = coordenadaValida(d.properties.latitude);\n      const lng = coordenadaValida(d.properties.longitude);\n      const fechou = Date.parse(d.properties.closedate || \'\');\n      return {\n        name: d.properties.dealname,\n        dealname: d.properties.dealname,\n        id: d.id,\n        /* dias = há quantos dias FECHOU', '    }).sort((a, b) => a.dias - b.dias);\n') +
+  '}\n',
+  'function mapearOnboardingAntigo(onboardingRecentes, ownerNameById) {\n  const rotuloDoDono = id => ownerNameById[id] || \'—\';\n  return onboardingRecentes.map(d => {\n' +
+    trecho('      const q = d.properties || {};\n      const entrou = Date.parse(q[PROP_ENTRADA_ONBOARDING]', '    }).sort((a, b) => a.dias - b.dias);\n') +
+  '}\n',
+  'this.mapearAntigo = mapearAntigo; this.mapearPerdidoAntigo = mapearPerdidoAntigo; this.mapearGanhoAntigo = mapearGanhoAntigo; this.mapearOnboardingAntigo = mapearOnboardingAntigo; this.SLA_DAYS_ANTIGO = SLA_DAYS; this.estadoDaRegua = estadoDaRegua;'
 ].join('\n');
 
 const caixa = { temperaturaDoNegocio, CONFIG_TEMPERATURA, Date, Math, Object, String, Number, isFinite, isNaN, parseFloat, console };
@@ -106,6 +114,31 @@ Object.entries(porEtapa).forEach(([stageId, deals]) => {
   const b = JSON.stringify(JSON.parse(JSON.stringify(perdidos)).map(d => LEAD.montarCardPerdido(d, { ownerNameById: nomes, tarefas: tp[d.id] || [] })).sort((x, y) => x.dias - y.dias));
   if (a !== b) { falhas++; console.log('FALHA perdido\n  antigo: ' + a + '\n  novo:   ' + b); }
   else console.log('OK    perdido — ' + perdidos.length + ' card(s) idênticos');
+}
+
+// as colunas Ganho e Enviado Onboarding
+{
+  const ganhos = [
+    { id: 'g1', properties: { dealname: 'Ganhou A', closedate: dia(2), hubspot_owner_id: '10', amount: '349.9', mrr: '299', valor_de_mrr: '299', latitude: '-20.1', longitude: '-40.2', plano_apresentado: 'Inovação', celular: '27' } },
+    { id: 'g2', properties: { dealname: 'Ganhou B', closedate: 'lixo', hubspot_owner_id: '77', latitude: '0' } },
+    { id: 'g3', properties: { dealname: 'Ganhou C', closedate: dia(0), notes_next_activity_date: futuro(1), notes_last_updated: dia(1) } },
+  ];
+  const tg = { g1: [{ subject: 'Onboarding', timestamp: futuro(2) }] };
+  const a = JSON.stringify(caixa.mapearGanhoAntigo(JSON.parse(JSON.stringify(ganhos)), nomes, tg));
+  const b = JSON.stringify(JSON.parse(JSON.stringify(ganhos)).map(d => LEAD.montarCardGanho(d, { ownerNameById: nomes, tarefas: tg[d.id] || [] })).sort((x, y) => x.dias - y.dias));
+  if (a !== b) { falhas++; console.log('FALHA ganho\n  antigo: ' + a + '\n  novo:   ' + b); }
+  else console.log('OK    ganho — ' + ganhos.length + ' card(s) idênticos');
+
+  const P = LEAD.PROP_ENTRADA_ONBOARDING;
+  const onb = [
+    { id: 'o1', properties: { dealname: 'Enviou A', [P]: dia(1), hubspot_owner_id: '11', amount: '100', valor_de_mrr: '349', cidade: 'Vitória', qualquer_outra: 'x' } },
+    { id: 'o2', properties: { dealname: 'Enviou B', [P]: 'lixo', hubspot_owner_id: '77', mrr: 'abc' } },
+    { id: 'o3', properties: { dealname: 'Enviou C', [P]: dia(5), mrr: '199', notes_last_updated: dia(4) } },
+  ];
+  const c = JSON.stringify(caixa.mapearOnboardingAntigo(JSON.parse(JSON.stringify(onb)), nomes));
+  const e = JSON.stringify(JSON.parse(JSON.stringify(onb)).map(d => LEAD.montarCardOnboarding(d, { ownerNameById: nomes })).sort((x, y) => x.dias - y.dias));
+  if (c !== e) { falhas++; console.log('FALHA onboarding\n  antigo: ' + c + '\n  novo:   ' + e); }
+  else console.log('OK    onboarding — ' + onb.length + ' card(s) idênticos');
 }
 
 // as funções soltas também, com os casos de borda
