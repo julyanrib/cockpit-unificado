@@ -52,7 +52,10 @@ const codigo = [
   'function mapearAntigo(deals, stageId, ownerNameById, tarefasPorDeal) {\n  return deals.map(d => {\n' +
     trecho('      const dias = daysInCurrentStage(d.properties);\n', '    }).map(l => comTemperatura(l, stageId)).sort((a, b) => b.dias - a.dias);\n') +
   '}\n',
-  'this.mapearAntigo = mapearAntigo; this.SLA_DAYS_ANTIGO = SLA_DAYS; this.estadoDaRegua = estadoDaRegua;'
+  'function mapearPerdidoAntigo(perdidosRecentes, ownerNameById, tarefasPerdido) {\n  return perdidosRecentes.map(d => {\n' +
+    trecho('      const lat = coordenadaValida(d.properties.latitude);\n      const lng = coordenadaValida(d.properties.longitude);\n      const fechou = Date.parse(d.properties.closedate', '    }).sort((a, b) => a.dias - b.dias);\n') +
+  '}\n',
+  'this.mapearAntigo = mapearAntigo; this.mapearPerdidoAntigo = mapearPerdidoAntigo; this.SLA_DAYS_ANTIGO = SLA_DAYS; this.estadoDaRegua = estadoDaRegua;'
 ].join('\n');
 
 const caixa = { temperaturaDoNegocio, CONFIG_TEMPERATURA, Date, Math, Object, String, Number, isFinite, isNaN, parseFloat, console };
@@ -90,6 +93,20 @@ Object.entries(porEtapa).forEach(([stageId, deals]) => {
     console.log('OK    etapa ' + stageId + ' — ' + deals.length + ' card(s) idênticos');
   }
 });
+
+// a coluna Perdido
+{
+  const perdidos = [
+    { id: 'p1', properties: { dealname: 'Perdeu A', closedate: dia(3), motivo_do_perdido: 'Preço', hubspot_owner_id: '10', amount: '120', latitude: '-20.1', longitude: '-40.2' } },
+    { id: 'p2', properties: { dealname: 'Perdeu B', closedate: 'lixo', hubspot_owner_id: '77', latitude: '0' } },
+    { id: 'p3', properties: { dealname: 'Perdeu C', closedate: dia(0), notes_next_activity_date: futuro(4), celular: '27' } },
+  ];
+  const tp = { p1: [{ subject: 'x', timestamp: null }] };
+  const a = JSON.stringify(caixa.mapearPerdidoAntigo(JSON.parse(JSON.stringify(perdidos)), nomes, tp));
+  const b = JSON.stringify(JSON.parse(JSON.stringify(perdidos)).map(d => LEAD.montarCardPerdido(d, { ownerNameById: nomes, tarefas: tp[d.id] || [] })).sort((x, y) => x.dias - y.dias));
+  if (a !== b) { falhas++; console.log('FALHA perdido\n  antigo: ' + a + '\n  novo:   ' + b); }
+  else console.log('OK    perdido — ' + perdidos.length + ' card(s) idênticos');
+}
 
 // as funções soltas também, com os casos de borda
 [['diasUteisEntre', [Date.now() - 9 * 86400000, Date.now()]], ['diasUteisEntre', [Date.now(), Date.now() - 1]],

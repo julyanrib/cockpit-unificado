@@ -30,7 +30,7 @@ const PIPELINE_ID = '916011864';
 const LEAD_DO_FUNIL = require('../lib/lead-do-funil.js');
 const {
   STAGES, OPEN_STAGES, SLA_DAYS, ENTERED_STAGE_PROPS, FIELD_SALES_STAGE_PROPS,
-  diasUteisEntre, daysInCurrentStage, estadoDaRegua, coordenadaValida, montarLeadDoFunil
+  diasUteisEntre, daysInCurrentStage, estadoDaRegua, coordenadaValida, montarLeadDoFunil, montarCardPerdido
 } = LEAD_DO_FUNIL;
 
 // O PERDIDO A PARTIR DE HOJE, E SÓ (01/09/26, Julyan: "eu nao quero que puxe nada, que
@@ -2182,37 +2182,9 @@ async function main() {
   // mais recente primeiro, porque é o que ainda dá para desfazer ou aprender.
   {
     const tarefasPerdido = await hsTarefasAbertasDosNegocios(perdidosRecentes.map(d => d.id));
-    funilLeads[STAGES.perdido] = perdidosRecentes.map(d => {
-      const lat = coordenadaValida(d.properties.latitude);
-      const lng = coordenadaValida(d.properties.longitude);
-      const fechou = Date.parse(d.properties.closedate || '');
-      return {
-        name: d.properties.dealname,
-        dealname: d.properties.dealname,
-        id: d.id,
-        /* dias = há quantos dias se perdeu. Na coluna Perdido a pergunta não é 'quanto
-           tempo parado' (o negócio não vai andar), é 'quando foi'. */
-        dias: Number.isFinite(fechou) ? Math.max(0, Math.floor((Date.now() - fechou) / 86400000)) : 0,
-        slaBreach: false,
-        perdidoEm: Number.isFinite(fechou) ? new Date(fechou).toISOString().slice(0, 10) : null,
-        motivo_do_perdido: d.properties.motivo_do_perdido || null,
-        proximaAtividade: d.properties.notes_next_activity_date || null,
-        ultimaInteracao: d.properties.notes_last_updated || null,
-        valor: Math.round(parseFloat(d.properties.amount) || 0),
-        vendedor: ownerNameById[d.properties.hubspot_owner_id] || '—',
-        ownerId: d.properties.hubspot_owner_id || null,
-        lat: lat,   /* coordenadaValida ja garantiu: numero finito e nao-zero, ou null */
-        lng: lng,
-        cep: d.properties.cep || null,
-        bairro: d.properties.bairro || null,
-        cidade: d.properties.cidade || null,
-        logradouro: d.properties.logradouro || null,
-        numero: d.properties.numero || null,
-        celular: d.properties.celular || null,
-        ...Object.fromEntries(FIELD_SALES_STAGE_PROPS.map(prop => [prop, d.properties[prop] || null])),
-        tarefas: tarefasPerdido[d.id] || []
-      };
-    }).sort((a, b) => a.dias - b.dias);
+    funilLeads[STAGES.perdido] = perdidosRecentes
+      .map(d => montarCardPerdido(d, { ownerNameById, tarefas: tarefasPerdido[d.id] || [] }))
+      .sort((a, b) => a.dias - b.dias);
   }
 
   /* ══ GANHO: A VENDA CONTINUA VISÍVEL DEPOIS DE PAGA ═══════════════════════════════
