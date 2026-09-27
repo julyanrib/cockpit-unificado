@@ -86,6 +86,17 @@ const WORKFLOW_FILE = 'daily-refresh.yml';
 // E O QUE JÁ ERA INSTANTÂNEO CONTINUA: ação feita DENTRO do cockpit espelha na memória e
 // redesenha na hora. Isto governa só o que é feito direto no HubSpot ou no PWA.
 const COOLDOWN_MINUTOS = 30;
+// O WEBHOOK PAROU DE ACORDAR O ROBÔ (27/09/26, Julyan: "tudo pra rodar direto do banco").
+// MEDIDO antes de desligar: 26 a 29 rodadas por dia útil vinham daqui, contra 6 a 7 da
+// grade — ~110 min de Actions por dia, ~2.300/mês, acima da franquia de 2.000.
+// O que ele entregava (mudança no meio do intervalo de 2 h) agora chega por outro caminho:
+//   * escrita do app/Cockpit: o espelho ao vivo relê o negócio na hora (APP Outbound,
+//     supabase/functions/_compartilhado/espelho.ts, tabelas espelho_negocios/agenda);
+//   * mudança direto no HubSpot: o cockpit-dados busca os negócios alterados a cada
+//     abertura (no máximo a cada 5 min) e aplica por cima do snapshot;
+//   * placar do dia: já era ao vivo (lib/realizado.js na rota).
+// A grade de 2 em 2 horas continua (daily-refresh.yml). Para religar, é esta constante.
+const WEBHOOK_DISPARA_ROBO = false;
 
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ erro: 'Método não permitido' });
@@ -182,6 +193,11 @@ module.exports = async function handler(req, res) {
       ok: true, disparado: false,
       motivo: 'fora da janela de expediente (07:00–22:00) — entra na próxima rodada agendada'
     });
+  }
+
+  // 200, não erro: erro faria o HubSpot reenviar e, repetido, desativar a subscrição.
+  if (!WEBHOOK_DISPARA_ROBO) {
+    return res.status(200).json({ ok: true, disparado: false, motivo: 'o espelho ao vivo cobre; o robô roda só na grade de 2 h' });
   }
 
   // ---- 3. intervalo mínimo entre disparos (cooldown) — LOCK ATÔMICO, não checagem ----
