@@ -11953,6 +11953,7 @@ async function aoVivoAplicar() {
     if (AOVIVO_FILA.negocios.size && !AOVIVO_TIMER) AOVIVO_TIMER = setTimeout(aoVivoAplicar, 800);
   }
   if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
+  if (['visita', 'parada', 'plano', 'ficha', 'foto'].some(function (t) { return tipos.has(t); }) && typeof V5_HTML_CACHE !== 'undefined') V5_HTML_CACHE = {};
   if (tipos.has('foto')) { PS6_FOTOS.porDono = {}; mudou = true; }
   if (tipos.has('plano') || tipos.has('ficha')) mudou = true;
   /* 0129: acordo do 1:1 marcado no app, validado ou devolvido pelo gestor — relê o
@@ -56146,6 +56147,7 @@ async function v5PreencherPlacarHoje(tentativa) {
     return;
   }
   if (!supa || !sessaoAtual || sessaoAtual.role !== 'manager') { alvo.innerHTML = ''; return; }
+  if (v5DoCache('placar', alvo)) return;
   if (V5_PLACAR_HOJE_VOO) return V5_PLACAR_HOJE_VOO;
   V5_PLACAR_HOJE_VOO = (async function () {
     const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
@@ -56199,6 +56201,7 @@ async function v5PreencherPlacarHoje(tentativa) {
     const agora = document.getElementById('v5PlacarHoje');
     if (!agora) return;
     agora.innerHTML = '<section class="v5-placar-hoje"><div class="v5-bloco-cab"><h2>Placar de hoje</h2>' + v5Selo('vivo') + '</div>' + v5Placar(itens) + '</section>';
+    if (!vis.error && !rotas.error && !planos.error && !fotos.error) V5_HTML_CACHE.placar = { em: Date.now(), html: agora.innerHTML };
   })();
   try { await V5_PLACAR_HOJE_VOO; } catch (e) { console.log('[placar de hoje]', e && e.message); } finally { V5_PLACAR_HOJE_VOO = null; }
 }
@@ -56391,6 +56394,18 @@ document.addEventListener('click', function (ev) {
    O canal ao vivo repinta o Hoje a cada check-in e ficha. */
 const V5_META_VISITAS = 6, V5_META_DEMOS = 2;
 let V5_PORTOES_VOO = null;
+/* ══ 60 s DE CACHE NOS BLOCOS DO HOJE (auditoria de velocidade, 28/09/26) ══════════
+   Portões do dia e Placar de hoje releem o banco a cada repintura, e o Hoje repinta a
+   cada sinal ao vivo: medido 291 leituras de client_visits de UMA pessoa num dia, e
+   401 em 3 minutos num pico que esgotou o pool do Supabase. O bloco reusa o HTML por
+   60 s; sinal de visita, parada, plano, ficha ou foto limpa o cache (aoVivoAplicar). */
+let V5_HTML_CACHE = {};
+function v5DoCache(chave, alvo) {
+  const c = V5_HTML_CACHE[chave];
+  if (!c || Date.now() - c.em > 60000) return false;
+  alvo.innerHTML = c.html;
+  return true;
+}
 let V5_PORTOES_DE_NOVO = false;
 async function v5PreencherPortoes(tentativa) {
   const alvo = document.getElementById('v5Portoes');
@@ -56399,6 +56414,7 @@ async function v5PreencherPortoes(tentativa) {
     return;
   }
   if (!supa || !sessaoAtual || sessaoAtual.role !== 'rep' || !sessaoAtual.ownerId) { alvo.innerHTML = ''; return; }
+  if (v5DoCache('portoes', alvo)) return;
   if (V5_PORTOES_VOO) { V5_PORTOES_DE_NOVO = true; return V5_PORTOES_VOO; }
   V5_PORTOES_VOO = (async function () {
     const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
@@ -56436,6 +56452,8 @@ async function v5PreencherPortoes(tentativa) {
       + (fichas.error ? v5NaoMedido('Demos com decisor', 'não consegui ler as fichas de rua agora')
         : cartao('Demos com decisor', nd, 'de ' + V5_META_DEMOS, (nd / V5_META_DEMOS) * 100, nd >= V5_META_DEMOS ? 'meta do dia batida' : 'faltam ' + (V5_META_DEMOS - nd), nd >= V5_META_DEMOS ? 'is-toque-hoje' : 'is-toque-dias', 'pela ficha de rua · medindo desde 25/09'))
       + '</div></section>';
+    /* só guarda leitura inteira: um bloco com "não consegui ler" tenta de novo na próxima */
+    if (!plano.error && !vis.error && !fichas.error) V5_HTML_CACHE.portoes = { em: Date.now(), html: agora.innerHTML };
   })();
   try { await V5_PORTOES_VOO; } catch (e) { console.log('[portões do dia]', e && e.message); } finally { V5_PORTOES_VOO = null; }
   if (V5_PORTOES_DE_NOVO) { V5_PORTOES_DE_NOVO = false; return v5PreencherPortoes(0); }
