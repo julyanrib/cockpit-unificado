@@ -39363,8 +39363,12 @@ async function carregarAgendaDoApp() {
       .select('id, client_id, scheduled_at, duration_minutes, observacoes, status, type, created_by, hs_engagement_id')
       .gte('scheduled_at', desde).lte('scheduled_at', ate).limit(1000);
     if (r.error) { console.log('[agenda do app]', r.error.message); return; }
+
+    const doRobo = new Set(((DATA.agenda && Array.isArray(DATA.agenda.itens)) ? DATA.agenda.itens : [])
+      .filter(function (it) { return it && !it.origem_app && it.hs_object_id; })
+      .map(function (it) { return String(it.hs_object_id); }));
     const lista = (r.data || []).filter(function (m) {
-      return m.status !== 'cancelada' && !(m.type === 'follow_up' && m.hs_engagement_id);
+      return m.status !== 'cancelada' && !(m.type === 'follow_up' && m.hs_engagement_id && doRobo.has(String(m.hs_engagement_id)));
     });
     const idsC = Array.from(new Set(lista.map(function (m) { return m.client_id; }).filter(Boolean)));
     const idsP = Array.from(new Set(lista.map(function (m) { return m.created_by; }).filter(Boolean)));
@@ -39393,7 +39397,8 @@ async function carregarAgendaDoApp() {
           hs_task_type: 'TODO', hs_timestamp: m.scheduled_at, hs_task_body: m.observacoes || null });
       }
       const fim = new Date(Date.parse(m.scheduled_at) + (Number(m.duration_minutes) || 30) * 60000).toISOString();
-      return Object.assign(base, { hs_meeting_title: 'Demo · ' + nome, hs_meeting_start_time: m.scheduled_at,
+
+      return Object.assign(base, { hs_meeting_title: 'Reunião · ' + nome, hs_meeting_start_time: m.scheduled_at,
         hs_meeting_end_time: fim, hs_meeting_body: m.observacoes || null });
     }).filter(Boolean);
     if (!DATA.agenda || typeof DATA.agenda !== 'object') DATA.agenda = { itens: [] };
