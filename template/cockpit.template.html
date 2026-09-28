@@ -44153,9 +44153,15 @@ let novidadesCache = { chave: null, itens: [] };
    Cache por praça (o novidadesCache antigo guarda uma só, que basta pro executivo mas
    não pro gestor, que olha as cinco de uma vez). */
 let novidadesPorPraca = {};
+/* SEM CONFIGURAÇÃO, NÃO INSISTE (28/09/26). A rota veio para as funções do APP sem a
+   CASADOSDADOS_TOKEN: 379 de 379 chamadas num dia voltaram 500 "etapa: config", uma
+   a cada repintura (falha não entra no cache, de propósito, por causa do token de
+   sessão). Falta de configuração não se cura tentando de novo: marca na sessão e para. */
+let NOVIDADES_SEM_CONFIG = false;
 async function buscarNovidadesPraca(municipio, uf) {
   const chave = municipio + '|' + uf;
   if (novidadesPorPraca[chave]) return novidadesPorPraca[chave];
+  if (NOVIDADES_SEM_CONFIG) return null;
   const token = await tokenDeSessaoGlobal();
   if (!token) return null;
   try {
@@ -44165,6 +44171,7 @@ async function buscarNovidadesPraca(municipio, uf) {
       body: JSON.stringify({ municipio: municipio, uf: uf, dias: 90 })  // BLOCO 22: 3 meses, igual à Rota — o gestor e o executivo têm que ver a mesma janela
     }), 25000, 'novidades-praca');
     const json = await resp.json().catch(() => ({}));
+    if (json && json.etapa === 'config') NOVIDADES_SEM_CONFIG = true;
     // CUIDADO (corrigido 12/08 antes de subir): a primeira versão gravava [] no cache
     // quando a chamada falhava. Um 401 de token expirado — que aconteceu comigo testando
     // — congelava "nenhuma novidade" pro resto da sessão, e a tela mentia dizendo que
@@ -44194,6 +44201,7 @@ async function buscarNovidadesMercado(ownerId) {
   if (!praca) return [];
   const chave = praca.municipio + '|' + praca.uf;
   if (novidadesCache.chave === chave) return novidadesCache.itens;
+  if (NOVIDADES_SEM_CONFIG) return [];
   const token = await tokenDeSessaoGlobal();
   if (!token) return [];
   try {
@@ -44207,6 +44215,7 @@ async function buscarNovidadesMercado(ownerId) {
       body: JSON.stringify({ municipio: praca.municipio, uf: praca.uf, dias: 90 })
     }), 25000, 'novidades-mercado');
     const json = await resp.json().catch(() => ({}));
+    if (json && json.etapa === 'config') NOVIDADES_SEM_CONFIG = true;
     if (!resp.ok || !json.ok) return [];
     const itens = (json.itens || []).filter(n => n.lat != null && n.lng != null);
     novidadesCache = { chave: chave, itens: itens };

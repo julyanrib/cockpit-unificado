@@ -30475,9 +30475,12 @@ let mapaPoisMeta = { origem: null, buscadoEm: null, total: 0, erro: null, aviso:
 let novidadesCache = { chave: null, itens: [] };
 
 let novidadesPorPraca = {};
+
+let NOVIDADES_SEM_CONFIG = false;
 async function buscarNovidadesPraca(municipio, uf) {
   const chave = municipio + '|' + uf;
   if (novidadesPorPraca[chave]) return novidadesPorPraca[chave];
+  if (NOVIDADES_SEM_CONFIG) return null;
   const token = await tokenDeSessaoGlobal();
   if (!token) return null;
   try {
@@ -30487,6 +30490,7 @@ async function buscarNovidadesPraca(municipio, uf) {
       body: JSON.stringify({ municipio: municipio, uf: uf, dias: 90 })
     }), 25000, 'novidades-praca');
     const json = await resp.json().catch(() => ({}));
+    if (json && json.etapa === 'config') NOVIDADES_SEM_CONFIG = true;
 
     if (!resp.ok || !json.ok) return null;
     const itens = (json.itens || []).filter(n => n.lat != null && n.lng != null);
@@ -30511,6 +30515,7 @@ async function buscarNovidadesMercado(ownerId) {
   if (!praca) return [];
   const chave = praca.municipio + '|' + praca.uf;
   if (novidadesCache.chave === chave) return novidadesCache.itens;
+  if (NOVIDADES_SEM_CONFIG) return [];
   const token = await tokenDeSessaoGlobal();
   if (!token) return [];
   try {
@@ -30521,6 +30526,7 @@ async function buscarNovidadesMercado(ownerId) {
       body: JSON.stringify({ municipio: praca.municipio, uf: praca.uf, dias: 90 })
     }), 25000, 'novidades-mercado');
     const json = await resp.json().catch(() => ({}));
+    if (json && json.etapa === 'config') NOVIDADES_SEM_CONFIG = true;
     if (!resp.ok || !json.ok) return [];
     const itens = (json.itens || []).filter(n => n.lat != null && n.lng != null);
     novidadesCache = { chave: chave, itens: itens };
