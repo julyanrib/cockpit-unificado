@@ -22640,7 +22640,11 @@ function pl6DadosFinal(rep) {
       { id: 'todos', rot: 'todos', n: lista.length },
       { id: 'acima', rot: 'acima da régua', n: n(pl6AcimaDaRegua) },
       { id: 'mudo', rot: 'sem próximo passo', n: n(function (x) { return !pl6PassoFuturo(x); }) },
-      { id: 'futuro', rot: 'com passo futuro', n: n(function (x) { return !!pl6PassoFuturo(x); }) }];
+      { id: 'futuro', rot: 'com passo futuro', n: n(function (x) { return !!pl6PassoFuturo(x); }) }]
+      .concat(['1395880469', '1396005401', '1395880470', '1395880471', '1395880472', '1395880473', '1398311191'].map(function (st) {
+        return { id: 'st:' + st, rot: (typeof STAGE_LABELS !== 'undefined' && STAGE_LABELS[st]) || st,
+          n: n(function (x) { return String(x.stageId || (x.etapa === 'Reciclagem' ? '1398311191' : '')) === st; }) };
+      }).filter(function (f) { return f.n > 0; }));
     return [];
   }
   const faixasDoProp = pl6FaixasDo(propAtivo, daOrigem);
@@ -22657,6 +22661,7 @@ function pl6DadosFinal(rep) {
     }
     if (propAtivo === 'nova' && faixaAtiva === 'estrela') return Number(l.nota) >= 4.5;
     if (propAtivo === 'funil') {
+      if (faixaAtiva.indexOf('st:') === 0) return String(l.stageId || (l.etapa === 'Reciclagem' ? '1398311191' : '')) === faixaAtiva.slice(3);
       if (faixaAtiva === 'acima') return pl6AcimaDaRegua(l);
       if (faixaAtiva === 'mudo') return !pl6PassoFuturo(l);
       if (faixaAtiva === 'futuro') return !!pl6PassoFuturo(l);
@@ -22940,6 +22945,8 @@ function pl6DadosFinal(rep) {
 
             cardBorda: movendo ? '#E51A31' : (perg ? '#F0A9B2' : 'var(--line)'),
             mover: 'mover:' + di + ':' + it.si,
+
+            ficha: (it.lead && it.lead.id) ? 'ficha:' + it.lead.id : '',
             rm: di + '.' + it.si,
             arraste: di + ':' + it.si
           };
@@ -23358,8 +23365,9 @@ function pl6TelaFinalHTML(d) {
       <div ${sl.passou ? '' : 'draggable="true"'} data-pl6-arraste="${sl.arraste}" style="background:var(--panel);border:1.5px solid ${sl.cardBorda};border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(43,52,64,.06);cursor:${sl.passou ? 'default' : 'grab'};min-width:0;">
       <div style="display:flex;min-width:0;">
         <span style="flex:none;width:3px;background:${sl.etCor};"></span>
-        <button type="button" data-pl6-acao="${sl.mover}" title="clique pra mover de dia/horário" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px 8px 9px;cursor:pointer;">
-          <span style="display:flex;align-items:center;gap:6px;min-width:0;"><b style="flex:none;font:900 10.5px 'Poppins',sans-serif;color:#FFFDF8;background:var(--dark);border-radius:999px;padding:3px 8px;font-variant-numeric:tabular-nums;">${sl.hora}</b><b style="font:800 12px 'Poppins',sans-serif;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.nome}</b></span>
+        <button type="button" data-pl6-acao="${sl.mover}" title="mover de dia/horário" aria-label="mover ${sl.nome} de dia ou horário" style="flex:none;align-self:flex-start;border:0;background:transparent;padding:8px 0 4px 9px;cursor:pointer;"><b style="display:block;font:900 10.5px 'Poppins',sans-serif;color:#FFFDF8;background:var(--dark);border-radius:999px;padding:3px 8px;font-variant-numeric:tabular-nums;">${sl.hora}</b></button>
+        <button type="button" data-pl6-acao="${sl.ficha || sl.mover}" title="${sl.ficha ? 'abrir a ficha do lead' : 'clique pra mover de dia/horário'}" style="flex:1;min-width:0;text-align:left;border:0;background:transparent;padding:8px 4px 8px 6px;cursor:pointer;">
+          <span style="display:flex;align-items:center;gap:6px;min-width:0;min-height:19px;"><b style="font:800 12px 'Poppins',sans-serif;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.nome}</b></span>
           <span style="display:flex;align-items:center;gap:5px;margin-top:3px;min-width:0;">
             ${sl.selo ? `<b style="flex:none;font:900 8px 'Poppins',sans-serif;letter-spacing:.07em;color:${sl.seloCor};background:${sl.seloBg};border-radius:4px;padding:2px 5px;">${sl.selo}</b>` : ''}
             <span style="font:700 9.5px 'Poppins',sans-serif;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${sl.sub}</span>
@@ -24405,7 +24413,7 @@ function pl6Ligar(box, rep) {
       }
 
       if (verbo === 'ficha') {
-        const dealId = arg.indexOf('c-') === 0 ? arg.slice(2) : null;
+        const dealId = (arg.indexOf('c-') === 0 || arg.indexOf('r-') === 0) ? arg.slice(2) : null;
         const doFunil = dealId && typeof buscarLeadFunilPorId === 'function'
           ? buscarLeadFunilPorId(dealId) : null;
         if (doFunil && typeof abrirFichaLeadFunilDrawer === 'function') {

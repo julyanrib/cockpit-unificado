@@ -1306,7 +1306,8 @@ console.log('');
      que a carga desta sessao nao conhece, o painel interno continua sendo a resposta — e
      isso e o oposto de abrir uma ficha vazia. */
   checar('o card de negócio do Planejamento abre a ficha de verdade',
-    cod.indexOf("const dealId = arg.indexOf('c-') === 0 ? arg.slice(2) : null;") > -1
+    /* 28/09/26: o cliente (r-<negócio>, relacionamento) também tem ficha de negócio */
+    cod.indexOf("const dealId = (arg.indexOf('c-') === 0 || arg.indexOf('r-') === 0) ? arg.slice(2) : null;") > -1
       && cod.indexOf("if (doFunil && typeof abrirFichaLeadFunilDrawer === 'function')") > -1,
     'o painel interno não data próximo passo nem move etapa — quem vem do Meu funil '
       + 'procura um botão que existe em outro lugar');
