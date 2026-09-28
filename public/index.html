@@ -6064,6 +6064,12 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .btn-sec{background:transparent;color:var(--fg);border:1px solid var(--line2);border-radius:var(--r-botao);min-height:40px;font:600 13px var(--font-body);}
   .btn-sec:hover{border-color:var(--acao);}
   @media (max-width:760px){ .btn-prim{min-height:48px;} .btn-sec{min-height:48px;} }
+
+  .v5-gestos{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:0 16px 14px;}
+  .v5-recado-frases{display:flex;flex-wrap:wrap;gap:8px;flex:1 0 100%;}
+  body.tv .v5-gestos{display:none;}
+  .v5-placar-hoje{display:flex;flex-direction:column;gap:12px;margin:0 0 18px;}
+  .v5-btn.is-sec.is-feito{background:var(--ok-bg);color:var(--ok-fg);border-color:transparent;}
   @media (max-width:760px){
     .v5-funil-linha{grid-template-columns:96px minmax(0,1fr) 36px 72px;gap:8px;}
     .v5-btn.is-prim{min-height:56px;}
@@ -20015,7 +20021,7 @@ function tm2SobreviventesHTML(d) {
                   ${(acoes) ? `
                     <div style="display:flex;flex-direction:column;gap:6px;margin-top:2px;">
                       <button data-tm2-acao="${dlCobrar}" style="display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 14px;border:1px solid ${dlCbBorda};border-radius:999px;background:${dlCbBg};font:800 10.5px 'Poppins',sans-serif;color:${dlCbCor};cursor:pointer;white-space:nowrap;" data-tm2-hv="9">${dlCbRot}</button>
-                      <a href="${dlHubspot}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 14px;border:1px solid #3A3F4A;border-radius:999px;background:transparent;font:800 10.5px 'Poppins',sans-serif;color:#C6CDDA;text-decoration:none;white-space:nowrap;">abrir no HubSpot ↗</a>
+                      <a href="${dlHubspot}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 14px;border:1px solid #3A3F4A;border-radius:999px;background:transparent;font:800 10.5px 'Poppins',sans-serif;color:#C6CDDA;text-decoration:none;white-space:nowrap;">abrir a ficha</a>
                     </div>
                   ` : ''}
                 </div>
@@ -21019,7 +21025,7 @@ function ctasDoItemDaFila(it) {
       acao: () => abrirPassagemDeEtapa(buscarLeadFunilPorId(lead.id) || lead, '1398311191', () => irParaFila(null)) });
   }
 
-  ctas.push({ id: 'hubspot', rotulo: 'Abrir no HubSpot ↗', href: hsUrl(lead.id), discreta: true });
+  ctas.push({ id: 'hubspot', rotulo: 'Abrir a ficha', href: hsUrl(lead.id), discreta: true });
   return ctas;
 }
 
@@ -34645,6 +34651,7 @@ function dg4Dados(ctx) {
     return {
       ini: esc(String(r.name || '').split(' ').map(function (p) { return p[0]; }).slice(0, 2).join('')),
       nome: esc(r.name || 'sem nome'),
+      oid: String(r.ownerId || ''),
 
       praca: esc(r.praca || 'praça não declarada'),
       rota: esc((x.plano && x.plano.local_atuacao) || 'sem rota escolhida'),
@@ -34857,6 +34864,7 @@ function dg4TelaHTML(d) {
               <div style="display:flex;align-items:center;gap:8px;padding:10px 16px 13px;flex-wrap:wrap;">
                 <span style="font:700 10px/1.5 'Poppins',sans-serif;color:${e.leiaCor};min-width:0;flex:1;">▸ ${e.leitura}</span>
               </div>
+              ${v5GestosDaRodada(e.oid, e.nome)}
             </div>
           `).join('')}
         </div>
@@ -36585,9 +36593,11 @@ async function renderDaily() {
       ontem: yesterdayISO,
       frescor: frescorDaily
     };
-    html = '<div id="dg4Raiz" data-dg4-raiz="1">'
+
+    html = '<div id="v5PlacarHoje"></div><div id="dg4Raiz" data-dg4-raiz="1">'
       + dg4TelaHTML(dg4Dados(DG4_CTX))
       + '</div>';
+    setTimeout(function () { v5PreencherPlacarHoje(0); }, 0);
   }
 
   const coberturaFunilHtml = souRepDaily ? '' : (() => {
@@ -38132,7 +38142,7 @@ function v5TopoDoPainel(l) {
     + '<span class="v5-painel-sub">' + v5Esc([onde, l.vendedor ? 'dono ' + l.vendedor : ''].filter(Boolean).join(' · ')) + '</span>'
     + '<div class="v5-linha-chips">' + v5DiscoTemperatura(l, 30) + '<span class="v5-tag">' + v5Esc(temp) + '</span>' + v5TagToque(l) + '</div>'
 
-    + mapa + '</section>';
+    + mapa + v5BotaoCobrar(l) + '</section>';
 }
 
 const V5_COMO_FOI = { falou_com_decisor: 'Falou com quem decide', decisor_ausente: 'Quem decide não estava', sem_interesse: 'Não quis conversar', estabelecimento_fechado: 'Estava fechado' };
@@ -38181,6 +38191,169 @@ async function v5CarregarRuaDoNegocio(l) {
         + '</div></div>';
     }).join('') + '</div></section>';
 }
+
+const V5_FRASES_DE_RECADO = [
+  'Me manda o plano de hoje até 10h',
+  'Priorize o quente da sua carteira hoje',
+  'Registre cada porta com foto',
+];
+function v5GestosDaRodada(ownerId, nome) {
+  if (!ownerId || !sessaoAtual || sessaoAtual.role !== 'manager') return '';
+  const mapa = v5NoPwa()
+    ? '<a class="v5-btn is-prim" href="/mapa?lente=meu-dia&pessoa=' + encodeURIComponent(String(ownerId)) + '"'
+      + (window.innerWidth >= 900 ? ' target="_blank" rel="noopener"' : '') + '>' + v5IconeLinha('pino', 16) + 'Abrir o dia no mapa</a>'
+    : '';
+  return '<div class="v5-gestos">'
+    + '<button type="button" class="v5-btn is-sec" data-v5-recado="' + v5Esc(ownerId) + '" aria-expanded="false">Recado</button>'
+    + mapa
+    + '<div class="v5-recado-frases" data-v5-frases="' + v5Esc(ownerId) + '" hidden>'
+    + V5_FRASES_DE_RECADO.map(function (f, i) {
+      return '<button type="button" class="v5-chip" data-v5-frase="' + i + '" data-v5-para="' + v5Esc(ownerId) + '" data-v5-nome="' + v5Esc(nome || '') + '">' + v5Esc(f) + '</button>';
+    }).join('')
+    + '</div></div>';
+}
+document.addEventListener('click', async function (ev) {
+  const abre = ev.target.closest && ev.target.closest('[data-v5-recado]');
+  if (abre) {
+    const oid = abre.getAttribute('data-v5-recado');
+    const caixa = document.querySelector('[data-v5-frases="' + CSS.escape(oid) + '"]');
+    if (caixa) { caixa.hidden = !caixa.hidden; abre.setAttribute('aria-expanded', String(!caixa.hidden)); }
+    return;
+  }
+  const frase = ev.target.closest && ev.target.closest('[data-v5-frase]');
+  if (!frase || frase.disabled) return;
+  const oid = frase.getAttribute('data-v5-para');
+  const texto = V5_FRASES_DE_RECADO[Number(frase.getAttribute('data-v5-frase'))];
+  const nome = String(frase.getAttribute('data-v5-nome') || '').split(' ')[0] || 'a pessoa';
+  if (!oid || !texto || !supa) return;
+  frase.disabled = true;
+  try {
+    const { error } = await supa.from('sugestoes_planos').insert({
+      owner_id: String(oid), texto: texto,
+      autor: (sessaoAtual && (sessaoAtual.nome || sessaoAtual.email)) || 'gestor',
+    });
+    if (error) throw error;
+    mostrarToast('Recado no sino do app de ' + v5Esc(nome) + ' · "' + v5Esc(texto) + '"', 'sucesso');
+    const caixa = frase.closest('.v5-recado-frases');
+    if (caixa) caixa.hidden = true;
+  } catch (e) {
+    mostrarToast('O recado não saiu: ' + v5Esc((e && e.message) || 'erro desconhecido') + '. Tente de novo.', 'erro');
+  } finally {
+    frase.disabled = false;
+  }
+});
+
+function v5BotaoCobrar(l) {
+  if (!l || !sessaoAtual || sessaoAtual.role !== 'manager') return '';
+  return '<button type="button" class="v5-btn is-sec" data-v5-cobrar="' + v5Esc(l.id) + '" data-v5-dono="' + v5Esc(l.vendedor || '') + '">'
+    + v5IconeLinha('bandeira', 16) + 'Cobrar · vira tarefa no app</button>';
+}
+document.addEventListener('click', async function (ev) {
+  const b = ev.target.closest && ev.target.closest('[data-v5-cobrar]');
+  if (!b || b.disabled) return;
+  const dealId = b.getAttribute('data-v5-cobrar');
+  const dono = String(b.getAttribute('data-v5-dono') || '').split(' ')[0] || 'o executivo';
+  b.disabled = true;
+  const antes = b.innerHTML;
+  b.textContent = 'Cobrando…';
+  try {
+    const { data } = await supa.auth.getSession();
+    const token = data && data.session ? data.session.access_token : null;
+    if (!token) throw new Error('sessão expirada — recarregue a página');
+    const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+    const resp = await fetch('/api/negocio-acao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ op: 'nota', tipoAcao: 'proximo-passo', dealId: dealId, tipo: 'follow-up', data: hoje,
+        texto: 'Cobrado pelo gestor: avançar este negócio hoje' }),
+    });
+    const corpo = await resp.json().catch(function () { return {}; });
+    if (!resp.ok) throw new Error(corpo.erro || ('HTTP ' + resp.status));
+
+    const lead = buscarLeadFunilPorId(dealId);
+    if (lead) espelharPassoNasTelas(lead, hoje, 'Follow-up', lead.ownerId, null, { silencioso: true });
+    b.innerHTML = v5IconeLinha('bandeira', 16) + 'Cobrado · virou tarefa';
+    b.classList.add('is-feito');
+    mostrarToast('Virou tarefa no app de ' + v5Esc(dono) + ' · aparece em Tarefas', 'sucesso');
+  } catch (e) {
+    b.disabled = false;
+    b.innerHTML = antes;
+    mostrarToast('A cobrança não saiu: ' + v5Esc((e && e.message) || 'erro desconhecido') + '. Tente de novo.', 'erro');
+  }
+});
+
+let V5_PLACAR_HOJE_VOO = null;
+async function v5PreencherPlacarHoje(tentativa) {
+  const alvo = document.getElementById('v5PlacarHoje');
+  if (!alvo) {
+    if ((tentativa || 0) < 10) setTimeout(function () { v5PreencherPlacarHoje((tentativa || 0) + 1); }, 300);
+    return;
+  }
+  if (!supa || !sessaoAtual || sessaoAtual.role !== 'manager') { alvo.innerHTML = ''; return; }
+  if (V5_PLACAR_HOJE_VOO) return V5_PLACAR_HOJE_VOO;
+  V5_PLACAR_HOJE_VOO = (async function () {
+    const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+    const ini = new Date(hoje + 'T00:00:00-03:00').toISOString();
+    const segunda = (function () {
+      const d = new Date(hoje + 'T12:00:00-03:00');
+      const dow = (d.getUTCDay() + 6) % 7;
+      d.setUTCDate(d.getUTCDate() - dow);
+      return d.toISOString().slice(0, 10);
+    })();
+    const time = (DATA.reps || []).filter(function (r) { return r && r.ownerId; }).length;
+    const [vis, rotas, planos, fotos] = await Promise.all([
+      supa.from('client_visits').select('declarada').gte('visited_at', ini),
+      supa.from('field_routes').select('id, field_route_stops(status, mandatory_reason)').eq('route_date', hoje),
+      supa.from('planos_semanais').select('owner_id, fechado_em').eq('data_segunda', segunda),
+      supa.from('fotos_visita').select('id', { count: 'exact', head: true }).gte('criado_em', ini),
+    ]);
+    const itens = [];
+    if (vis.error) itens.push({ rotulo: 'CHECK-INS HOJE', numero: null, legenda: 'não consegui ler as visitas' });
+    else {
+      const total = (vis.data || []).length;
+      const decl = (vis.data || []).filter(function (v) { return v.declarada; }).length;
+      itens.push({ rotulo: 'CHECK-INS HOJE', numero: total, cor: '#60A5FA', legenda: decl ? decl + ' declarada' + (decl === 1 ? '' : 's') + ' (sem GPS)' : 'todos com GPS' });
+    }
+    if (planos.error) itens.push({ rotulo: 'PLANOS VALIDADOS', numero: null, legenda: 'não consegui ler os planos' });
+    else {
+      const validados = (planos.data || []).filter(function (p) { return p.fechado_em; }).length;
+      itens.push({ rotulo: 'PLANOS VALIDADOS', numero: validados + '/' + time, cor: validados >= time ? '#22C55E' : '#FCD34D', legenda: 'semana de ' + segunda.split('-').reverse().slice(0, 2).join('/') });
+    }
+    if (rotas.error) itens.push({ rotulo: 'PARADAS FEITAS', numero: null, legenda: 'não consegui ler as rotas' });
+    else {
+      let plano = 0, feitas = 0;
+      (rotas.data || []).forEach(function (r) {
+        (r.field_route_stops || []).forEach(function (s) {
+          if (s.status === 'removed') return;
+          plano++;
+          if (s.status === 'done') feitas++;
+        });
+      });
+      itens.push(plano
+        ? { rotulo: 'PARADAS FEITAS', numero: feitas + '/' + plano, cor: '#F4F5F7', legenda: 'medindo desde 26/09 · marcadas no mapa' }
+        : { rotulo: 'PARADAS FEITAS', numero: null, legenda: 'nenhuma rota de hoje no mapa' });
+    }
+    itens.push({ rotulo: 'DEMOS COM DECISOR', numero: null, legenda: 'chega pela rodada do robô, não no mesmo dia' });
+    itens.push(fotos.error
+      ? { rotulo: 'FOTOS', numero: null, legenda: 'não consegui ler as fotos' }
+      : { rotulo: 'FOTOS', numero: fotos.count || 0, cor: '#F4F5F7', legenda: 'medindo desde 25/09' });
+    const agora = document.getElementById('v5PlacarHoje');
+    if (!agora) return;
+    agora.innerHTML = '<section class="v5-placar-hoje"><div class="v5-bloco-cab"><h2>Placar de hoje</h2>' + v5Selo('vivo') + '</div>' + v5Placar(itens) + '</section>';
+  })();
+  try { await V5_PLACAR_HOJE_VOO; } catch (e) { console.log('[placar de hoje]', e && e.message); } finally { V5_PLACAR_HOJE_VOO = null; }
+}
+
+const V5_LINK_DE_NEGOCIO = /^https:\/\/app\.hubspot\.com\/contacts\/\d+\/record\/0-3\/(\d+)/;
+document.addEventListener('click', function (ev) {
+  const a = ev.target.closest && ev.target.closest('a[href^="https://app.hubspot.com/"]');
+  if (!a || ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey) return;
+  const m = V5_LINK_DE_NEGOCIO.exec(a.getAttribute('href') || '');
+  if (!m) return;
+  const lead = buscarLeadFunilPorId(m[1]);
+  if (lead) { ev.preventDefault(); abrirFichaLeadFunilDrawer(lead, null, null); return; }
+  if (v5NoPwa()) { ev.preventDefault(); window.open('/mapa?pino=' + m[1] + '&cartao=aberto', window.innerWidth >= 900 ? '_blank' : '_self'); }
+}, true);
 
 function v5BotaoMapa(dealId, soIcone) {
   if (!v5NoPwa()) return '';
