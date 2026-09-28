@@ -6111,6 +6111,8 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .tm10-cob-tab tr.is-zero td b{color:var(--red-ink);}
   .tm10-cob-nm{font-size:12px;color:var(--muted);}
   .tm10-cob-leg{display:block;margin-top:6px;font:500 12px/1.45 'Poppins',sans-serif;color:var(--muted);}
+  .v5-app-obs{display:flex;flex-direction:column;gap:4px;padding:10px 12px;border-radius:10px;background:var(--panel2);margin-bottom:8px;}
+  .v5-app-obs p{margin:0;font:500 14px/1.45 var(--font-body);color:var(--ink);white-space:pre-wrap;}
   .v5-ico{width:1.05em;height:1.05em;vertical-align:-.16em;flex:none;display:inline-block;}
   .v5-ir-rua{margin-top:14px;align-self:flex-start;}
   .v5-link-mapa{display:inline-flex;align-items:center;gap:6px;margin-top:8px;min-height:32px;font:600 12px var(--font-body);color:var(--fg);text-decoration:underline;text-underline-offset:3px;}
@@ -28278,7 +28280,8 @@ function abrirFichaLeadFunilDrawer(l, voltarPara, foco) {
     ? `<button id="stageFichaVoltar" class="btn-txt">Voltar ao funil</button>`
     : '';
 
-  stageModalBody.innerHTML = v5TopoDoPainel(l) + fichaLeadFunilBodyHTML(l) + '<div id="v5FichaRua"></div>';
+  stageModalBody.innerHTML = v5TopoDoPainel(l) + fichaLeadFunilBodyHTML(l) + '<div id="v5FichaApp"></div><div id="v5FichaRua"></div>';
+  v5CarregarAnotacoesDoApp(l);
   v5CarregarRuaDoNegocio(l);
   stageOverlay.classList.add('show');
   const btnVoltar = document.getElementById('stageFichaVoltar');
@@ -38296,6 +38299,47 @@ function v5TopoDoPainel(l) {
     + '<div class="v5-linha-chips">' + v5DiscoTemperatura(l, 30) + '<span class="v5-tag">' + v5Esc(temp) + '</span>' + v5TagToque(l) + '</div>'
 
     + mapa + v5BotaoCobrar(l) + '</section>';
+}
+
+async function v5CarregarAnotacoesDoApp(l) {
+  const alvo = document.getElementById('v5FichaApp');
+  if (!alvo || !l || !l.id || !supa) return;
+  let pinos = [], notas = [];
+  try {
+    const rc = await supa.from('clients').select('id, observacoes').eq('id_hubspot', String(l.id)).limit(5);
+    if (rc.error) throw rc.error;
+    pinos = rc.data || [];
+    if (pinos.length) {
+      const rn = await supa.from('client_notes').select('body, created_by_name, created_at')
+        .in('client_id', pinos.map(function (p) { return p.id; })).order('created_at', { ascending: false }).limit(10);
+      if (rn.error) throw rn.error;
+      notas = rn.data || [];
+    }
+  } catch (e) {
+    alvo.innerHTML = '<section class="v5-bloco is-denso"><div class="v5-bloco-cab"><h2>Anotações do app</h2></div>'
+      + v5NaoMedido('Não consegui ler as anotações do app agora', 'reabra a ficha para tentar de novo') + '</section>';
+    return;
+  }
+  if (document.getElementById('v5FichaApp') !== alvo) return;
+  const obs = pinos.map(function (p) { return String(p.observacoes || '').trim(); }).filter(Boolean);
+  if (!obs.length && !notas.length) {
+    alvo.innerHTML = pinos.length ? '<section class="v5-bloco is-denso"><div class="v5-bloco-cab"><h2>Anotações do app</h2></div>'
+      + '<p class="v5-bloco-leg">Nenhuma observação nem nota escrita no app para este lead.</p></section>' : '';
+    return;
+  }
+  const quando = function (iso) {
+    const d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' })
+      + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+  };
+  alvo.innerHTML = '<section class="v5-bloco is-denso"><div class="v5-bloco-cab"><h2>Anotações do app</h2>' + v5Selo('vivo') + '</div>'
+    + (obs.length ? '<div class="v5-app-obs"><span class="v5-rotulo">Observações do lead</span>'
+      + obs.map(function (t) { return '<p>' + v5Esc(t) + '</p>'; }).join('') + '</div>' : '')
+    + (notas.length ? '<div class="v5-rua">' + notas.map(function (n) {
+      return '<div class="v5-rua-item"><i></i><div><b>' + v5Esc(n.body || '') + '</b>'
+        + '<span>' + v5Esc([quando(n.created_at), n.created_by_name || ''].filter(Boolean).join(' · ')) + '</span></div></div>';
+    }).join('') + '</div>' : '')
+    + '</section>';
 }
 
 const V5_COMO_FOI = { falou_com_decisor: 'Falou com quem decide', decisor_ausente: 'Quem decide não estava', sem_interesse: 'Não quis conversar', estabelecimento_fechado: 'Estava fechado' };
