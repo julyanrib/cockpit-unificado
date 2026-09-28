@@ -321,14 +321,16 @@ console.log('8 · OS QUATRO ESTADOS DA EVIDÊNCIA, NUNCA DOIS JUNTOS');
     e3({ tipo: 'visita', id: '77' }, '2026-09-23', '9').txt,
     'check-in na fila do app — não subiu');
   checar('e ela sai em âmbar, não em verde nem em cinza',
-    e3({ tipo: 'visita', id: '77' }, '2026-09-23', '9').cor === '#8A6516');
+    /* v5 (28/09/26): o mesmo âmbar escuro, agora token (--amber-ink), que clareia no escuro */
+    e3({ tipo: 'visita', id: '77' }, '2026-09-23', '9').cor === 'var(--amber-ink)');
 
   /* 4 · sem check-in */
   const e4 = monta([]);
   igual('sem nada, a tela diz "sem check-in"',
     e4({ tipo: 'visita', id: '77' }, '2026-09-23', '9').txt, 'sem check-in');
   checar('e em cinza, sem fundo: é ausência, não acusação',
-    e4({ tipo: 'visita', id: '77' }, '2026-09-23', '9').cor === '#B4AC9C'
+    /* v5: o cinza de ausência virou --ter (o texto terciário da casa, legível nos dois temas) */
+    e4({ tipo: 'visita', id: '77' }, '2026-09-23', '9').cor === 'var(--ter)'
       && e4({ tipo: 'visita', id: '77' }, '2026-09-23', '9').bg === 'transparent');
 
   /* OS DOIS ÚLTIMOS SÃO EXCLUDENTES — e é isso que o prompt pede em letras. */

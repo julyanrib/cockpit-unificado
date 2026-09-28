@@ -550,15 +550,18 @@ const REPS = [{ ownerId: '86100506', name: 'Bruno Martins' },
   /* O TOPO CONTINUA SENDO O LADO QUIETO. Corrigir contraste escurecendo tudo até virar
      seis barras iguais mataria a hierarquia, que é o ponto da tela. */
   checar('o topo do funil não usa cor de marca',
-    usados.indexOf('plum') < 0 || trecho.indexOf("'var(--muted)'") > -1,
+    /* v5: a ardósia do topo é --barra-neutra, escura nos dois temas (--muted clareia no escuro) */
+    usados.indexOf('plum') < 0 || trecho.indexOf("'var(--barra-neutra)'") > -1,
     'o topo é contexto: ardósia dessaturada, não vinho/âmbar/verde');
 }());
 
 /* AS DUAS DERIVAS DE BORDA, medidas no arquivo inteiro: #EEC9C9 existia UMA vez (só aqui)
    contra 27 de #E3C6C6, e #BFE3D6 duas contra 48 de #CBE8DD. Um tom por papel. */
 checar('os chips usam os tons de borda da casa',
-  html.indexOf('.rx-chip.ruim{background:var(--red-soft);color:var(--red-dk);border-color:#E3C6C6;}') > -1
-    && html.indexOf('.rx-chip.bom{background:var(--green-soft);color:var(--green-ink);border-color:#CBE8DD;}') > -1,
+  /* v5: o tom de borda da casa virou token (--red-line / --green-line): um tom por papel,
+     agora garantido pelo nome e não pela repetição do hex. */
+  html.indexOf('.rx-chip.ruim{background:var(--red-soft);color:var(--red-dk);border-color:var(--red-line);}') > -1
+    && html.indexOf('.rx-chip.bom{background:var(--green-soft);color:var(--green-ink);border-color:var(--green-line);}') > -1,
   'tom que existe uma vez no arquivo inteiro é deriva, não decisão');
 
 /* NENHUM LITERAL DE COR SOBRA NA ABA. O bloco já era quase todo var(); a revisão fechou

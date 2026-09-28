@@ -52,7 +52,9 @@ checar('a raiz da aba usa a fonte da casa',
   'esta regra punha DM Sans na aba inteira — trocar de tipografia ao mudar de aba faz a '
     + 'tela parecer outro produto');
 checar('nenhuma família da prancha sobrou no bloco',
-  !/Poppins/.test(bloco) && !/DM Sans/.test(bloco),
+  /* v5: Poppins passou a ser a família da casa (a do mapa). A regra de fundo continua:
+     nenhuma família que não seja a da casa dentro do bloco. */
+  !/Archivo|Manrope/.test(bloco) && !/DM Sans/.test(bloco),
   'Archivo e Manrope são as famílias da casa, e as duas já estão carregadas no <head>');
 
 /* ══ 2. A PALETA ════════════════════════════════════════════════════════════════════
