@@ -11957,6 +11957,7 @@ async function aoVivoAplicar() {
   if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
   if (['visita', 'parada', 'plano', 'ficha', 'foto'].some(function (t) { return tipos.has(t); }) && typeof V5_HTML_CACHE !== 'undefined') V5_HTML_CACHE = {};
   if (tipos.has('foto')) { PS6_FOTOS.porDono = {}; mudou = true; }
+  if ((tipos.has('visita') || tipos.has('foto')) && typeof PS6_VP !== 'undefined') { PS6_VP.porDono = {}; mudou = true; }
   /* Visitas com prova: visita ou foto nova relê na hora, sem esperar os 60 s */
   if ((tipos.has('visita') || tipos.has('foto')) && typeof V5_VP !== 'undefined') { V5_VP.em = 0; if (typeof v5PreencherVisitasProva === 'function') v5PreencherVisitasProva(true); }
   if (tipos.has('plano') || tipos.has('ficha')) mudou = true;
@@ -29266,11 +29267,11 @@ function pv6TelaHTML(d) {
     + '<div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:13px;">'
     +   pv6DrillHTML(o) + '</div></div>');
 
-  /* ── O MAPA DE CADÊNCIA ── */
+  /* ── O MAPA DE CADÊNCIA ── (acima dele, as Visitas com prova da pessoa: ps6VisitasProvaAnexar) */
   const cad = o.cadencia;
   const atrasados = cad.linhas.filter(function (x) { return x.atraso != null && x.atraso > 0; }).length;
   const deHoje = cad.linhas.filter(function (x) { return x.atraso === 0; }).length;
-  const mapa = pv6Cartao(
+  const mapa = '<div id="ps6VisitasProva" style="margin-bottom:14px;"></div>' + pv6Cartao(
     '<div style="padding:16px 20px;">'
     + pv6Titulo('Mapa de cadência de ' + o.nome.split(/\s+/)[0],
         'quem a régua manda tocar agora — atrasado primeiro')
@@ -60430,6 +60431,133 @@ function ps6FotosHTML(r) {
   return topo + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;">' + cards + '</div>';
 }
 
+/* ══ VISITAS COM PROVA DE CADA EXECUTIVO (28/09/26) ═════════════════════════════════
+   Julyan: "é nessa aba que preciso ver as fotos... na aba de cada executivo". O dossiê
+   da pessoa ganha, logo acima do Mapa de cadência, os check-ins dos últimos 14 dias com
+   a prova de cada um (GPS a N m da porta, ou a foto da fachada, grande) e o motivo de
+   quem ficou sem prova. A regra é a mesma do bloco do time (v5VpClassificar). A galeria
+   solta do fim do dossiê (ps6Fotos) só aparece se este lugar não existir.
+   Cache por pessoa, 60 s; sinal ao vivo de visita ou foto limpa. */
+const PS6_VP = { porDono: {}, emVoo: {} };
+
+function ps6VisitasProvaAnexar(raiz, ownerId) {
+  const caixa = raiz ? raiz.querySelector('#ps6VisitasProva') : null;
+  if (!caixa || !ownerId || typeof supa === 'undefined' || !supa) return false;
+  const pronto = PS6_VP.porDono[ownerId];
+  caixa.innerHTML = ps6VpHTML(pronto || { carregando: true });
+  if ((pronto && Date.now() - pronto.em < 60000) || PS6_VP.emVoo[ownerId]) return true;
+  PS6_VP.emVoo[ownerId] = ps6VpCarregar(ownerId).then(function (r) {
+    PS6_VP.porDono[ownerId] = r;
+    delete PS6_VP.emVoo[ownerId];
+    const aberta = document.getElementById('ps6VisitasProva');
+    if (aberta && String(pessoaSelecionadaId) === String(ownerId)) aberta.innerHTML = ps6VpHTML(r);
+  });
+  return true;
+}
+
+async function ps6VpCarregar(ownerId) {
+  try {
+    const desde = new Date(Date.now() - 14 * 86400000).toISOString();
+    const perf = await supa.from('profiles').select('id, full_name').eq('id_hubspot', String(ownerId)).limit(1);
+    if (perf.error) throw perf.error;
+    const p = perf.data && perf.data[0];
+    if (!p) return { em: Date.now(), semLogin: true };
+    const res = await Promise.all([
+      supa.from('client_visits').select('id, client_id, visited_at, distance_m, accuracy_m, declarada, pino_corrigido_de_m, visited_at_lat, visited_at_lon, visited_by')
+        .eq('visited_by', p.id).gte('visited_at', desde).order('visited_at', { ascending: true }).limit(500),
+      supa.from('fotos_visita').select('id, client_id, criado_por, criado_em, caminho')
+        .eq('criado_por', p.id).gte('criado_em', new Date(Date.parse(desde) - 3600000).toISOString())
+        .order('criado_em', { ascending: false }).limit(120),
+    ]);
+    const vis = res[0], fot = res[1];
+    if (vis.error || fot.error) throw (vis.error || fot.error);
+    const visitas = vis.data || [], fotos = fot.data || [];
+    const cls = v5VpClassificar(visitas, fotos);
+    const ids = Array.from(new Set(visitas.map(function (v) { return v.client_id; }).concat(fotos.map(function (f) { return f.client_id; })).filter(Boolean)));
+    const nomes = {};
+    for (let i = 0; i < ids.length; i += 150) {
+      const { data } = await supa.from('clients').select('id, nome, empresa, bairro, cidade').in('id', ids.slice(i, i + 150));
+      (data || []).forEach(function (c) { nomes[c.id] = c; });
+    }
+    const urls = {};
+    if (fotos.length) {
+      const { data: ass } = await supa.storage.from('fotos-visita').createSignedUrls(fotos.map(function (f) { return f.caminho; }), 3600);
+      (ass || []).forEach(function (a) { if (a && a.path && a.signedUrl) urls[a.path] = a.signedUrl; });
+    }
+    return { em: Date.now(), nome: p.full_name, cls: cls, fotos: fotos, nomes: nomes, urls: urls };
+  } catch (e) {
+    console.log('pessoas: visitas com prova nao lidas - ' + (e && e.message));
+    return { em: Date.now(), erro: true };
+  }
+}
+
+function ps6VpNomeDoLead(r, id) {
+  const c = r.nomes[id] || {};
+  return (c.empresa && String(c.empresa).trim()) || c.nome || 'lead';
+}
+
+function ps6VpHTML(r) {
+  const topo = '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;">'
+    + '<h3 style="margin:0;font-family:var(--font-display);font-size:20px;color:var(--ink);">Visitas com prova · últimos 14 dias</h3>'
+    + '<span style="font-size:12px;color:var(--muted2);">GPS na porta (até 200 m do pino) ou foto da fachada · atualiza a cada visita ou foto</span></div>';
+  const moldura = function (miolo) {
+    return '<section aria-label="Visitas com prova" style="padding:20px;border:1px solid var(--line);border-radius:var(--r-md);background:var(--panel);">' + topo + miolo + '</section>';
+  };
+  if (r.carregando) return moldura('<p style="margin:0;font-size:13px;color:var(--muted2);">Lendo os check-ins e as fotos…</p>');
+  if (r.erro) return moldura('<p style="margin:0;font-size:13px;color:var(--amber);">Não consegui ler as visitas agora. Recarregue a aba para tentar de novo.</p>');
+  if (r.semLogin) return moldura('<p style="margin:0;font-size:14px;font-weight:700;color:var(--red);">Esta pessoa não tem login no app de campo: nenhum check-in pode existir.</p>');
+  const comprovadas = r.cls.filter(function (x) { return x.prova; }).length;
+  const semProva = r.cls.length - comprovadas;
+  const dias = new Set(r.cls.map(function (x) { return new Date(x.v.visited_at).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); })).size;
+  const numero = function (rot, n, cor) {
+    return '<div style="display:flex;flex-direction:column;gap:2px;min-width:120px;"><span style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">' + rot + '</span>'
+      + '<b style="font-family:var(--font-display);font-size:30px;line-height:1.1;color:' + cor + ';">' + n + '</b></div>';
+  };
+  let h = '<div style="display:flex;flex-wrap:wrap;gap:24px;margin-bottom:16px;">'
+    + numero('Comprovadas', comprovadas, comprovadas ? 'var(--green)' : 'var(--red)')
+    + numero('Sem prova', semProva, semProva ? 'var(--amber)' : 'var(--muted2)')
+    + numero('Fotos', r.fotos.length, 'var(--ink)')
+    + numero('Dias com visita', dias + ' de 10', dias >= 8 ? 'var(--green)' : 'var(--red)')
+    + '</div>';
+
+  /* as fotos, grandes: é o que o gestor pediu para ver */
+  const comUrl = r.fotos.filter(function (f) { return r.urls[f.caminho]; });
+  if (comUrl.length) {
+    h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin-bottom:18px;">'
+      + comUrl.map(function (f) {
+        const u = r.urls[f.caminho];
+        const quando = new Date(f.criado_em).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+        return '<a href="' + esc(u) + '" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit;">'
+          + '<img src="' + esc(u) + '" alt="' + esc('Foto da visita em ' + ps6VpNomeDoLead(r, f.client_id)) + '" loading="lazy" style="display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--r-md);border:1px solid var(--line);background:var(--panel2);">'
+          + '<div style="margin-top:6px;font-size:13px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(ps6VpNomeDoLead(r, f.client_id)) + '</div>'
+          + '<div style="font-size:12px;color:var(--muted2);">' + esc(quando) + '</div></a>';
+      }).join('') + '</div>';
+  } else {
+    h += '<p style="margin:0 0 16px;font-size:13px;color:var(--muted2);">Nenhuma foto nos últimos 14 dias. O app pede a foto da fachada quando o GPS não confirma a porta ou quando o check-in é em série.</p>';
+  }
+
+  if (!r.cls.length) return moldura(h + '<p style="margin:0;font-size:14px;font-weight:700;color:var(--red);">Nenhum check-in nos últimos 14 dias.</p>');
+  h += '<div style="display:flex;flex-direction:column;gap:6px;">';
+  r.cls.slice().reverse().forEach(function (x) {
+    const c = r.nomes[x.v.client_id] || {};
+    const chip = x.prova === 'foto' ? ['Foto', 'var(--green-bg)', 'var(--green-ink)']
+      : x.prova === 'gps' ? ['GPS ' + Math.round(Number(x.v.distance_m)) + ' m', 'var(--green-bg)', 'var(--green-ink)']
+        : ['Sem prova', 'var(--red-bg)', 'var(--red)'];
+    const quando = new Date(x.v.visited_at).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+    const u = x.foto ? r.urls[x.foto.caminho] : null;
+    h += '<div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line-soft);border-radius:10px;">'
+      + '<span style="width:120px;flex:none;font-size:12px;font-weight:700;color:var(--muted);">' + esc(quando) + '</span>'
+      + '<span style="flex:1;min-width:0;"><b style="display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(ps6VpNomeDoLead(r, x.v.client_id)) + '</b>'
+      + '<small style="font-size:12px;color:var(--muted2);">' + esc([c.bairro, c.cidade].filter(Boolean).join(' · '))
+      + (x.motivo ? ' · <span style="color:var(--red);font-weight:700;">' + esc(x.motivo) + '</span>' : '')
+      + (x.longe ? ' · a ' + Math.round(Number(x.v.distance_m)) + ' m do pino' : '') + '</small></span>'
+      + '<span style="flex:none;height:24px;padding:0 10px;border-radius:12px;display:inline-flex;align-items:center;background:' + chip[1] + ';color:' + chip[2] + ';font-size:11px;font-weight:800;">' + chip[0] + '</span>'
+      + (u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener" style="flex:none;"><img src="' + esc(u) + '" alt="foto da fachada" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line);"></a>' : '')
+      + '</div>';
+  });
+  return moldura(h + '</div>');
+}
+
 function renderPessoas() {
   const raiz = document.getElementById('ps6Raiz');
   if (!raiz) return;
@@ -60443,7 +60571,9 @@ function renderPessoas() {
      trocar de lista e se perder na página. */
   const yAntes = window.scrollY;
   raiz.innerHTML = pv6TelaHTML(dados);
-  ps6FotosAnexar(raiz, dados.dossie && dados.dossie.ownerId);
+  /* as fotos moram nas Visitas com prova, acima do Mapa de cadência; a galeria solta do fim
+     do dossiê só entra se aquele lugar não existir */
+  if (!ps6VisitasProvaAnexar(raiz, dados.dossie && dados.dossie.ownerId)) ps6FotosAnexar(raiz, dados.dossie && dados.dossie.ownerId);
   if (typeof v5PreencherVisitasProva === 'function') v5PreencherVisitasProva();
   if (window.scrollY !== yAntes) window.scrollTo(0, yAntes);
 
