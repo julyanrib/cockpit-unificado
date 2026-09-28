@@ -6069,6 +6069,18 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .v5-recado-frases{display:flex;flex-wrap:wrap;gap:8px;flex:1 0 100%;}
   body.tv .v5-gestos{display:none;}
   .v5-placar-hoje{display:flex;flex-direction:column;gap:12px;margin:0 0 18px;}
+  .v5-bloco-leg{margin:0;font:500 12px var(--font-body);color:var(--dim);}
+  .v5-rua-grade{display:flex;flex-direction:column;gap:6px;overflow-x:auto;}
+  .v5-rua-linha{display:grid;grid-template-columns:minmax(120px,1.2fr) repeat(5,minmax(76px,1fr)) auto;gap:6px;align-items:center;min-width:560px;}
+  .v5-rua-linha.is-cab span{font:600 11px var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);text-align:center;}
+  .v5-rua-linha > b{font:600 13px var(--font-body);color:var(--fg);}
+  .v5-rua-cel{height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font:600 12px var(--font-body);font-variant-numeric:tabular-nums;}
+  .v5-rua-cel.is-ok{background:var(--ok-bg);color:var(--ok-fg);}
+  .v5-rua-cel.is-hoje{background:var(--chip);color:var(--fg);}
+  .v5-rua-cel.is-furou{background:var(--aviso-bg);color:var(--aviso-fg);}
+  .v5-rua-cel.is-sem{background:var(--erro-bg);color:var(--erro-fg);}
+  .v5-rua-cel.is-futuro{border:1.5px dashed var(--line2);color:var(--mute);}
+  .v5-rua-cel.is-vazio{color:var(--dim);}
   .v5-btn.is-sec.is-feito{background:var(--ok-bg);color:var(--ok-fg);border-color:transparent;}
   @media (max-width:760px){
     .v5-funil-linha{grid-template-columns:96px minmax(0,1fr) 36px 72px;gap:8px;}
@@ -6447,6 +6459,8 @@ foi escrita para jogar o "0 de 27 resolvidos"
          gestor por renderRotasDoTime, e o executivo nunca chega aqui (a aba Rotas
          já era só do gestor). -->
     <div id="rt7Raiz" style="width:min(1780px,100% - 64px);margin:0 auto;"></div>
+    <!-- v5 (28/09/26): a rua de cada executivo, pelas paradas do mapa (v5PreencherRuaDoTime) -->
+    <div id="v5RuaDoTime" style="width:min(1780px,100% - 64px);margin:16px auto 0;"></div>
     <div id="rotasAntigo">
     <section class="exec-support-hero" aria-labelledby="rotasTitulo">
       <div style="position:relative;z-index:1;">
@@ -7264,6 +7278,7 @@ function aoVivoRepintar() {
   const id = ativa ? ativa.id : '';
   try {
     if (id === 'viewRaioX' && typeof rx1Iniciar === 'function') rx1Iniciar();
+    if (id === 'viewRotas') v5PreencherRuaDoTime();
     if (id === 'viewPDIs') {
       if (sessaoAtual && sessaoAtual.role === 'manager' && typeof renderPessoas === 'function') renderPessoas();
       else if (typeof renderPDIs === 'function') renderPDIs();
@@ -19743,7 +19758,9 @@ function pv6TelaHTML(d) {
     +       (o.slaN ? 'sobre ' + o.slaN + ' com data de criação' : 'sem base para medir') + '</span></span>'
     +   '<span style="margin-left:auto;font-size:12.5px;line-height:1.55;color:var(--ink);'
     +     'max-width:420px;background:var(--amber-soft);border-radius:var(--r-md);padding:10px 14px;">'
-    +     '<b style="color:#E51A31;">Diagnóstico:</b> ' + esc(o.diagnostico) + '</span></div>'
+    +     '<b style="color:var(--red-ink);">Diagnóstico:</b> ' + esc(o.diagnostico) + '</span></div>'
+
+    + v5GestosDaRodada(o.ownerId, o.nome)
     + pv6CardsHTML(o)
     + '<div style="margin-top:14px;border-top:1px dashed var(--line);padding-top:13px;">'
     +   pv6DrillHTML(o) + '</div></div>');
@@ -25648,7 +25665,7 @@ document.getElementById('tabBtnRotas').addEventListener('click', () => {
   if (antigo) antigo.style.display = ehGestor ? 'none' : '';
   if (raizNova) raizNova.style.display = ehGestor ? '' : 'none';
 
-  if (ehGestor && typeof rt7Iniciar === 'function') { activateTab('viewRotas'); rt7Iniciar(); return; }
+  if (ehGestor && typeof rt7Iniciar === 'function') { activateTab('viewRotas'); rt7Iniciar(); v5PreencherRuaDoTime(); return; }
   activateTab('viewRotas');
   if (typeof renderRotas === 'function') renderRotas();
 });
@@ -38312,12 +38329,13 @@ async function v5PreencherPlacarHoje(tentativa) {
     else {
       const total = (vis.data || []).length;
       const decl = (vis.data || []).filter(function (v) { return v.declarada; }).length;
-      itens.push({ rotulo: 'CHECK-INS HOJE', numero: total, cor: '#60A5FA', legenda: decl ? decl + ' declarada' + (decl === 1 ? '' : 's') + ' (sem GPS)' : 'todos com GPS' });
+      itens.push({ rotulo: 'CHECK-INS HOJE', numero: total, cor: '#60A5FA', legenda: !total ? 'nenhum check-in ainda hoje' : decl ? decl + ' declarada' + (decl === 1 ? '' : 's') + ' (sem GPS)' : 'todos com GPS' });
     }
-    if (planos.error) itens.push({ rotulo: 'PLANOS VALIDADOS', numero: null, legenda: 'não consegui ler os planos' });
+    if (planos.error) itens.push({ rotulo: 'SEMANA VALIDADA', numero: null, legenda: 'não consegui ler os planos' });
     else {
       const validados = (planos.data || []).filter(function (p) { return p.fechado_em; }).length;
-      itens.push({ rotulo: 'PLANOS VALIDADOS', numero: validados + '/' + time, cor: validados >= time ? '#22C55E' : '#FCD34D', legenda: 'semana de ' + segunda.split('-').reverse().slice(0, 2).join('/') });
+
+      itens.push({ rotulo: 'SEMANA VALIDADA', numero: validados + '/' + time, cor: validados >= time ? '#22C55E' : '#FCD34D', legenda: 'planos da semana de ' + segunda.split('-').reverse().slice(0, 2).join('/') + ' fechados' });
     }
     if (rotas.error) itens.push({ rotulo: 'PARADAS FEITAS', numero: null, legenda: 'não consegui ler as rotas' });
     else {
@@ -38354,6 +38372,70 @@ document.addEventListener('click', function (ev) {
   if (lead) { ev.preventDefault(); abrirFichaLeadFunilDrawer(lead, null, null); return; }
   if (v5NoPwa()) { ev.preventDefault(); window.open('/mapa?pino=' + m[1] + '&cartao=aberto', window.innerWidth >= 900 ? '_blank' : '_self'); }
 }, true);
+
+let V5_RUA_VOO = null;
+async function v5PreencherRuaDoTime() {
+  const alvo = document.getElementById('v5RuaDoTime');
+  if (!alvo) return;
+  if (!supa || !sessaoAtual || sessaoAtual.role !== 'manager') { alvo.innerHTML = ''; return; }
+  if (V5_RUA_VOO) return V5_RUA_VOO;
+  V5_RUA_VOO = (async function () {
+    const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+    const base = new Date(hoje + 'T12:00:00-03:00');
+    const dow = (base.getUTCDay() + 6) % 7;
+    const dias = [0, 1, 2, 3, 4].map(function (k) {
+      const d = new Date(base.getTime() + (k - dow) * 86400000);
+      return d.toISOString().slice(0, 10);
+    });
+    const [rotas, perfis] = await Promise.all([
+      supa.from('field_routes').select('route_date, seller_id, field_route_stops(status)').gte('route_date', dias[0]).lte('route_date', dias[4]),
+      supa.from('profiles').select('id, id_hubspot'),
+    ]);
+    if (rotas.error) {
+      alvo.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>A rua de cada executivo</h2></div>'
+        + v5NaoMedido('Não consegui ler as rotas do mapa agora', rotas.error.message || 'tente de novo em instantes') + '</section>';
+      return;
+    }
+    const donoPorPerfil = {};
+    (perfis.data || []).forEach(function (p) { if (p.id_hubspot) donoPorPerfil[p.id] = String(p.id_hubspot); });
+    const grade = {};
+    (rotas.data || []).forEach(function (r) {
+      const oid = donoPorPerfil[r.seller_id];
+      if (!oid) return;
+      const c = ((grade[oid] = grade[oid] || {})[r.route_date] = grade[oid][r.route_date] || { plano: 0, feitas: 0 });
+      (r.field_route_stops || []).forEach(function (s) {
+        if (s.status === 'removed') return;
+        c.plano++;
+        if (s.status === 'done') c.feitas++;
+      });
+    });
+    const pessoas = (DATA.reps || []).filter(function (r) { return r && r.ownerId && !/DESATIVADO/i.test(r.name || ''); });
+    const rot = ['seg', 'ter', 'qua', 'qui', 'sex'];
+    const linhas = pessoas.map(function (r) {
+      const oid = String(r.ownerId);
+      const celulas = dias.map(function (dia) {
+        const c = grade[oid] && grade[oid][dia];
+        if (dia > hoje) return c && c.plano ? '<span class="v5-rua-cel is-futuro">' + c.plano + ' planejadas</span>' : '<span class="v5-rua-cel is-vazio">—</span>';
+        if (!c || !c.plano) return '<span class="v5-rua-cel is-sem">sem plano</span>';
+        const cls = c.feitas >= c.plano ? 'is-ok' : (dia < hoje ? 'is-furou' : 'is-hoje');
+        return '<span class="v5-rua-cel ' + cls + '">' + c.feitas + '/' + c.plano + '</span>';
+      }).join('');
+      const mapa = v5NoPwa()
+        ? '<a class="v5-btn is-icone" href="/mapa?lente=meu-dia&pessoa=' + encodeURIComponent(oid) + '"' + (window.innerWidth >= 900 ? ' target="_blank" rel="noopener"' : '')
+          + ' aria-label="Abrir o dia de ' + v5Esc(r.name) + ' no mapa">' + v5IconeLinha('pino', 18) + '</a>' : '';
+      return '<div class="v5-rua-linha"><b>' + v5Esc(String(r.name || '').split(' ').slice(0, 2).join(' ')) + '</b>' + celulas + mapa + '</div>';
+    }).join('');
+    const agora = document.getElementById('v5RuaDoTime');
+    if (!agora) return;
+    agora.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>A rua de cada executivo</h2>'
+      + v5Selo('vivo') + v5Selo('medindo', 'medindo desde 26/09') + '</div>'
+      + '<p class="v5-bloco-leg">Hoje e antes: paradas feitas sobre o plano, conferidas no mapa. Depois de hoje: o que está planejado.</p>'
+      + '<div class="v5-rua-grade"><div class="v5-rua-linha is-cab"><span></span>' + rot.map(function (d, k) {
+        return '<span>' + d + ' ' + dias[k].slice(8, 10) + '/' + dias[k].slice(5, 7) + '</span>';
+      }).join('') + (v5NoPwa() ? '<span></span>' : '') + '</div>' + linhas + '</div></section>';
+  })();
+  try { await V5_RUA_VOO; } catch (e) { console.log('[rua do time]', e && e.message); } finally { V5_RUA_VOO = null; }
+}
 
 function v5BotaoMapa(dealId, soIcone) {
   if (!v5NoPwa()) return '';

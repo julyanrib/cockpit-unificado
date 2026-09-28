@@ -113,3 +113,10 @@ quê, e o que desfaz a decisão se ela estiver errada.
 - **Nenhum "Abrir no HubSpot":** um ouvinte faz qualquer link de negócio do HubSpot abrir
   a ficha do Cockpit (ou o pino no mapa, se a sessão não carregou o negócio). Link de
   contato/empresa segue como estava.
+- **Rotas: "A rua de cada executivo"** entra abaixo da prancha do gestor, lendo as
+  rotas do mapa (`field_routes`/`field_route_stops`) da semana: feito/plano até hoje,
+  planejado tracejado depois, "sem plano" em dia útil sem rota. Contrato linha 9.
+- **Pessoas: o dossiê ganha Abrir o dia no mapa e Recado**, os mesmos gestos da rodada.
+- **Placar de hoje: "Semana validada"**, não "Planos validados": o herói da Daily logo
+  abaixo já conta os planos MONTADOS do dia; nomes parecidos para medidas diferentes
+  mostravam 1/10 e 0/10 lado a lado.
