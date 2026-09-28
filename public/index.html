@@ -22602,6 +22602,22 @@ function pl6DadosFinal(rep) {
     return p ? Object.assign({}, l, { proposito: p, atrasoDias: pl6AtrasoDoPasso(l) }) : null;
   }).filter(Boolean);
 
+  const pl6SugRegioes = (function () {
+    const m = new Map();
+    comProposito.forEach(function (l) {
+      if (!l.regiao) return;
+      if (!m.has(l.regiao)) m.set(l.regiao, { chave: l.regiao, nome: l.regiaoNome || l.regiao, contas: [] });
+      m.get(l.regiao).contas.push(l);
+    });
+    return Array.from(m.values()).map(function (g) {
+      g.contas.sort(function (a, b) { return pl6Prioridade(b) - pl6Prioridade(a); });
+      g.valor = g.contas.slice(0, 6).reduce(function (soma, l) { return soma + pl6Prioridade(l); }, 0);
+      return g;
+    }).filter(function (g) { return g.contas.length >= 2; })
+      .sort(function (a, b) { return b.valor - a.valor; });
+  }());
+  let pl6VazioK = 0;
+
   const temFollow = comProposito.some(function (l) { return l.proposito === 'follow'; });
   const propAtivo = s.proposito || (temFollow ? 'follow' : 'funil');
   const daOrigem = comProposito.filter(function (l) { return l.proposito === propAtivo; });
@@ -22884,6 +22900,22 @@ function pl6DadosFinal(rep) {
         agendar: cheio ? 'cheio:' + di : 'agendar:' + di,
         vazio: n === 0 && !s.sel,
         vazioRot: 'dia livre — escolha uma conta na munição e coloque na hora que quiser',
+        sug: (function () {
+          if (!(n === 0 && !s.sel && !passouDoDia) || !pl6SugRegioes.length) return null;
+
+          const chaveDigitada = regTxt ? pl6ChaveBairro(regTxt) : '';
+          let g = chaveDigitada ? pl6SugRegioes.find(function (x) { return pl6ChaveBairro(x.nome) === chaveDigitada; }) : null;
+          if (!g) { g = pl6SugRegioes[pl6VazioK % pl6SugRegioes.length]; pl6VazioK += 1; }
+          const alt = pl6SugRegioes.filter(function (x) { return x !== g; }).slice(0, 2);
+          return {
+            nome: esc(g.nome), n: String(g.contas.length), on: di + '.' + g.chave, chave: pl6ChaveBairro(g.nome),
+            contas: g.contas.slice(0, 3).map(function (l) {
+              return { nome: esc(l.nome || 'conta'), sub: esc([l.etapa || (l.tipo === 'n' ? 'conta nova' : ''), l.nota != null ? String(l.nota).replace('.', ',') + '★' : ''].filter(Boolean).join(' · ')),
+                on: 'pegar:' + l.id };
+            }),
+            alt: alt.map(function (x) { return { nome: esc(x.nome), n: String(x.contas.length), on: di + '.' + x.chave, chave: pl6ChaveBairro(x.nome) }; })
+          };
+        }()),
         agenda: itens.map(function (it) {
           const movendo = !!(s.sel && s.sel.deDi === di && s.sel.deSi === it.si);
 
@@ -23434,7 +23466,13 @@ function pl6TelaFinalHTML(d) {
         ${agendaHTML}
         ${dia.convite ? `<button type="button" data-pl6-acao="${dia.abrirDia}" style="display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;border:1.5px dashed #F0A9B2;border-radius:10px;background:var(--red-soft);cursor:pointer;font:800 10px 'Poppins',sans-serif;color:#E51A31;padding:6px 10px;">+ colocar aqui</button>` : ''}
         ${dia.colocando ? pfRelogioHTML(dia, 'data-pl6-acao', 'agendar') : ''}
-        ${dia.vazio ? `<span style="text-align:center;font:700 9.5px/1.5 'Poppins',sans-serif;color:var(--ter);border:1.5px dashed var(--line);border-radius:10px;padding:12px 10px;">${dia.vazioRot}</span>` : ''}
+        ${dia.vazio && dia.sug ? `<div style="display:flex;flex-direction:column;gap:6px;border:1.5px dashed var(--plum-linha);border-radius:10px;padding:9px;">
+          <span style="font:900 8.5px 'Poppins',sans-serif;letter-spacing:.08em;text-transform:uppercase;color:var(--plum-ink);">sugestão para este dia</span>
+          <button type="button" data-pl6-regiao="${dia.sug.on}" data-nome="${dia.sug.chave}" title="pôr esta região no dia" style="display:flex;align-items:center;gap:6px;border:1px solid var(--plum-linha);border-radius:999px;background:var(--panel);padding:6px 10px;cursor:pointer;font:800 11px 'Poppins',sans-serif;color:var(--plum-ink);min-width:0;text-align:left;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">⌖ ${dia.sug.nome}</span><span style="margin-left:auto;flex:none;font:700 9px 'Poppins',sans-serif;color:var(--muted2);">${dia.sug.n} contas</span></button>
+          ${dia.sug.contas.map(sc => `<button type="button" data-pl6-acao="${sc.on}" title="pegar esta conta e escolher a hora" style="display:flex;flex-direction:column;align-items:flex-start;gap:1px;border:1px solid var(--line);border-radius:9px;background:var(--panel);padding:6px 9px;cursor:pointer;min-width:0;text-align:left;"><b style="font:800 11px 'Poppins',sans-serif;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">+ ${sc.nome}</b>${sc.sub ? `<span style="font:700 9px 'Poppins',sans-serif;color:var(--muted2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;">${sc.sub}</span>` : ''}</button>`).join('')}
+          ${dia.sug.alt.length ? `<span style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;font:700 9px 'Poppins',sans-serif;color:var(--muted2);">ou ${dia.sug.alt.map(sa => `<button type="button" data-pl6-regiao="${sa.on}" data-nome="${sa.chave}" style="border:1px solid var(--line);border-radius:999px;background:transparent;padding:3px 8px;cursor:pointer;font:800 9.5px 'Poppins',sans-serif;color:var(--ink);">${sa.nome} · ${sa.n}</button>`).join('')}</span>` : ''}
+        </div>` : ''}
+        ${dia.vazio && !dia.sug ? `<span style="text-align:center;font:700 9.5px/1.5 'Poppins',sans-serif;color:var(--ter);border:1.5px dashed var(--line);border-radius:10px;padding:12px 10px;">${dia.vazioRot}</span>` : ''}
         ${dia.passou && d.temSel ? `<span style="text-align:center;font:800 9.5px/1.5 'Poppins',sans-serif;color:var(--ter);">este dia já passou</span>` : ''}
       </div>
     </div>`;
