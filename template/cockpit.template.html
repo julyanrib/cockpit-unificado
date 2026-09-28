@@ -10419,6 +10419,38 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .v5-placar-hoje{display:flex;flex-direction:column;gap:12px;margin:0 0 18px;}
   .v5-bloco-leg{margin:0;font:500 12px var(--font-body);color:var(--dim);}
   /* zero emoji (v5): o ícone de linha que substituiu cada um, do tamanho do texto */
+  .v5-portoes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:12px;}
+  .v5-portao{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:var(--r-cartao);background:var(--card);border:1px solid var(--line);}
+  .v5-portao-num{display:flex;align-items:baseline;gap:6px;}
+  .v5-portao-num b{font:800 34px/1 var(--font-display);color:var(--fg);font-variant-numeric:tabular-nums;}
+  .v5-portao-num span{font:600 13px var(--font-body);color:var(--mute);}
+  .v5-portao-barra{height:8px;border-radius:4px;background:var(--line);overflow:hidden;}
+  .v5-portao-barra i{display:block;height:100%;background:var(--regua-ok);}
+  .v5-portao small{font:500 12px var(--font-body);color:var(--dim);}
+  .v5-portao .v5-tag{align-self:flex-start;}
+  .rx-g-cobrar{margin-top:10px;align-self:flex-start;}
+  .pb-mz-rola{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .pb-mz-tab{border-collapse:collapse;min-width:720px;width:100%;font-size:13px;}
+  .pb-mz-tab th,.pb-mz-tab td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle;}
+  .pb-mz-tab thead th{font-weight:600;color:var(--muted);font-size:12px;}
+  .pb-mz-tab thead th small{display:block;font-weight:400;}
+  .pb-mz-tab tbody th{font-weight:600;color:var(--ink);white-space:nowrap;position:sticky;left:0;background:var(--panel);}
+  .pb-mz{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;}
+  .pb-mz.is-prova{background:var(--green-bg);color:var(--green-ink);}
+  .pb-mz.is-leu{background:var(--green-bg);color:var(--green-ink);opacity:.85;}
+  .pb-mz.is-meio{background:var(--amber-bg);color:var(--amber-ink);}
+  .pb-mz.is-nada{background:transparent;color:var(--muted);border:1px dashed var(--line);}
+  .tm10-cob{margin-top:14px;}
+  .tm10-cob-tit{display:block;font:900 10px 'Poppins',sans-serif;letter-spacing:.1em;text-transform:uppercase;color:var(--plum-ink);margin-bottom:6px;}
+  .tm10-cob-rola{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .tm10-cob-tab{border-collapse:collapse;width:100%;min-width:400px;font-size:13px;font-variant-numeric:tabular-nums;}
+  .tm10-cob-tab th,.tm10-cob-tab td{padding:6px 4px;border-bottom:1px solid var(--line-soft);text-align:right;}
+  .tm10-cob-tab thead th{line-height:1.2;vertical-align:bottom;}
+  .tm10-cob-tab th:first-child{text-align:left;white-space:nowrap;}
+  .tm10-cob-tab thead th{font-weight:600;color:var(--muted);font-size:12px;}
+  .tm10-cob-tab tbody th{font-weight:600;color:var(--ink);}
+  .tm10-cob-tab tr.is-zero td b{color:var(--red-ink);}
+  .tm10-cob-nm{font-size:12px;color:var(--muted);}
   .v5-ico{width:1.05em;height:1.05em;vertical-align:-.16em;flex:none;display:inline-block;}
   .v5-ir-rua{margin-top:14px;align-self:flex-start;}
   .v5-link-mapa{display:inline-flex;align-items:center;gap:6px;margin-top:8px;min-height:32px;font:600 12px var(--font-body);color:var(--fg);text-decoration:underline;text-underline-offset:3px;}
@@ -11919,6 +11951,17 @@ async function aoVivoAplicar() {
   if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
   if (tipos.has('foto')) { PS6_FOTOS.porDono = {}; mudou = true; }
   if (tipos.has('plano') || tipos.has('ficha')) mudou = true;
+  /* 0129: acordo do 1:1 marcado no app, validado ou devolvido pelo gestor — relê o
+     estado (o do executivo e o da aba Pessoas) antes de repintar */
+  if (tipos.has('pdi')) {
+    try {
+      if (typeof carregarPdiCompromissos === 'function') await carregarPdiCompromissos();
+      if (sessaoAtual && sessaoAtual.role === 'manager' && typeof ps6Carregar === 'function') await ps6Carregar();
+    } catch (e) { /* o estado fica o da carga */ }
+    mudou = true;
+  }
+  /* recado novo do gestor: o Hoje do executivo mostra "Recado do seu gestor" */
+  if (tipos.has('recado')) mudou = true;
   if (tipos.has('comunicado') && typeof carregarComunicados === 'function') {
     try { await carregarComunicados(); if (typeof atualizarSinoAvisos === 'function') atualizarSinoAvisos(); } catch (e) { /* o sino fica como estava */ }
   }
@@ -16386,6 +16429,8 @@ async function renderMeuPainel() {
         <button class="xv3-btn is-light" id="meuPainelCtaDia" title="${esc(ctaDia.motivo)}">${esc(ctaDia.label)} →</button>
       </div>
     </div>
+    <!-- v5: os portões do dia, ao vivo do banco (v5PreencherPortoes) -->
+    <div id="v5Portoes"></div>${(setTimeout(function () { v5PreencherPortoes(0); }, 0), "")}
 
     ${(() => {
       /* ══ O VARIÁVEL DO MÊS (22/09/26) ════════════════════════════════════════════
@@ -22321,6 +22366,7 @@ function prcBlocoPassoHTML() {
       style="flex:2;min-width:260px;display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;border:0;border-radius:12px;background:#1E9E7B;font:900 12.5px 'Poppins',sans-serif;letter-spacing:.02em;color:#FFFDF8;cursor:pointer;">✆ Enviar no WhatsApp — PNG + mensagem</button>
     <button type="button" id="prcBaixar" style="flex:1;min-width:110px;min-height:46px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font:800 10.5px 'Poppins',sans-serif;color:var(--ink);cursor:pointer;">⤓ Baixar PNG</button>
     <button type="button" id="prcCopiar" style="flex:1;min-width:110px;min-height:46px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font:800 10.5px 'Poppins',sans-serif;color:var(--ink);cursor:pointer;">⧉ Copiar texto</button>
+    ${v5MapaDaProposta()}
     <button type="button" id="prcRegistrar" style="flex:1;min-width:110px;min-height:46px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font:800 10.5px 'Poppins',sans-serif;color:var(--ink);cursor:pointer;">✓ ${esc(alvo.rotulo || 'Registrar no HubSpot')}</button>
   </div>
   <!-- O AVISO FICA NA TELA, e não só num toast que passa (defeito real de 15/08/26: "continua
@@ -25029,14 +25075,14 @@ function pbPlaybookDoTimeHTML(res) {
   const semEmail = [];
   res.equipe.forEach(u => {
     if (!u.email) { semEmail.push(String(u.nome || '').split(' ')[0]); return; }
-    porPessoa[u.email] = { nome: String(u.nome || u.email).split(' ')[0], leituras: 0, missoes: 0, ultima: null };
+    porPessoa[u.email] = { nome: String(u.nome || u.email).split(' ')[0], leituras: 0, missoes: 0, ultima: null, lidos: new Set(), provas: new Set() };
   });
   const lidos = new Set();
   (res.linhas || []).forEach(r => {
     const p = porPessoa[r.user_email];
     lidos.add(r.guia_slug);
     if (!p) return;
-    if (r.tipo === 'missao') p.missoes++; else p.leituras++;
+    if (r.tipo === 'missao') { p.missoes++; p.provas.add(r.guia_slug); } else { p.leituras++; p.lidos.add(r.guia_slug); }
     const d = r.concluido_em ? String(r.concluido_em).slice(0, 10) : null;
     if (d && (!p.ultima || d > p.ultima)) p.ultima = d;
   });
@@ -25084,7 +25130,38 @@ function pbPlaybookDoTimeHTML(res) {
       '<span>guias marcados como lidos, de ' + paginas.length + ' no repertório · quem lê, marca — o gestor não marca no lugar de ninguém</span></div>' +
     (nenhumaLinha ? '' : '<div class="gx-forma">' + linhas + '</div>') +
     '<div class="gx-secao-nota">' + corpo + '</div>' +
-  '</div>';
+  '</div>' + (nenhumaLinha ? '' : pbMatrizHTML(pessoas, paginas, cat.categorias));
+}
+
+/* A MATRIZ PESSOA × MÓDULO (docs/04, 28/09/26). Os módulos são as categorias do
+   repertório (Comece aqui, Venda na rua…), na ordem do catálogo. Cada célula diz o que o
+   banco registrou daquela pessoa naquele módulo: "prova" (fez a missão de algum guia
+   dele), "leu N/M" ou "não abriu". Não abrir é leitura registrada zero, não opinião —
+   e só aparece quando o banco devolveu linha do time (senão a tela acima já diz
+   "não medido"). */
+function pbMatrizHTML(pessoas, paginas, categorias) {
+  const ordem = (Array.isArray(categorias) && categorias.length)
+    ? categorias.map(function (c) { return typeof c === 'string' ? c : (c && (c.nome || c.titulo || c.id)); }).filter(Boolean)
+    : [];
+  paginas.forEach(function (p) { if (p.categoria && ordem.indexOf(p.categoria) < 0) ordem.push(p.categoria); });
+  const mods = ordem.map(function (nome) {
+    return { nome: nome, ids: paginas.filter(function (p) { return p.categoria === nome; }).map(function (p) { return p.id; }) };
+  }).filter(function (m) { return m.ids.length; });
+  if (!mods.length || !pessoas.length) return '';
+  const celula = function (p, m) {
+    const lidos = m.ids.filter(function (id) { return p.lidos.has(id); }).length;
+    const prova = m.ids.some(function (id) { return p.provas.has(id); });
+    if (prova) return '<td><span class="pb-mz is-prova">prova · ' + lidos + '/' + m.ids.length + '</span></td>';
+    if (lidos === m.ids.length) return '<td><span class="pb-mz is-leu">leu tudo</span></td>';
+    if (lidos) return '<td><span class="pb-mz is-meio">leu ' + lidos + '/' + m.ids.length + '</span></td>';
+    return '<td><span class="pb-mz is-nada">não abriu</span></td>';
+  };
+  return '<div class="gx-secao"><div class="gx-secao-cab"><b>Quem estudou o quê</b><span>pessoa × módulo do repertório · prova = fez a missão de um guia do módulo</span></div>'
+    + '<div class="pb-mz-rola"><table class="pb-mz-tab"><thead><tr><th>Pessoa</th>'
+    + mods.map(function (m) { return '<th>' + esc(m.nome) + '<small>' + m.ids.length + (m.ids.length === 1 ? ' guia' : ' guias') + '</small></th>'; }).join('')
+    + '</tr></thead><tbody>'
+    + pessoas.map(function (p) { return '<tr><th>' + esc(p.nome) + '</th>' + mods.map(function (m) { return celula(p, m); }).join('') + '</tr>'; }).join('')
+    + '</tbody></table></div></div>';
 }
 
 async function renderPlaybookDoTime() {
@@ -25937,11 +26014,15 @@ function tm10ToquesPorNegocio() {
        devolveria o mesmo `{n:0}` do lead que a agenda nunca tocou. Os dois leem 0
        toques, que é a verdade — mas o de cima tem promessa em aberto, e é dele que
        `abertos` fala. */
-    const at = m.get(id) || { n: 0, ultimo: null, abertos: 0 };
+    const at = m.get(id) || { n: 0, ultimo: null, primeiro: null, abertos: 0 };
     if (tm10ToqueRealizado(it, agoraMs)) {
       const ms = tm10QuandoDoItem(it);
       at.n += 1;
       if (ms != null && (at.ultimo == null || ms > at.ultimo)) at.ultimo = ms;
+      /* O PRIMEIRO TOQUE é o que o SLA mede (28/09/26). O SLA lia `ultimo`: o lead tocado
+         em 1 h e de novo no 5º dia contava como estourado, e o vendedor que mais insiste
+         era o que pior aparecia. */
+      if (ms != null && (at.primeiro == null || ms < at.primeiro)) at.primeiro = ms;
     } else {
       at.abertos += 1;
     }
@@ -25952,7 +26033,7 @@ function tm10ToquesPorNegocio() {
 }
 function tm10Tq(id) {
   const at = tm10ToquesPorNegocio().get(String(id));
-  return at || { n: 0, ultimo: null, abertos: 0 };
+  return at || { n: 0, ultimo: null, primeiro: null, abertos: 0 };
 }
 /* PLURALIZAÇÃO É REGRA 2 DA PRANCHA: "0 toques", "1 toque", "N toques". */
 function tm10TqRot(n) { return n === 1 ? '1 toque' : n + ' toques'; }
@@ -26321,8 +26402,8 @@ function tm10Sla(etapas) {
     const p = porOwner[o]; p.n += 1;
     const tq = tm10Tq(l.id);
     const nasceu = Date.parse(l.criadoEm);
-    const ok = tq.ultimo != null && Number.isFinite(nasceu)
-      && (tq.ultimo - nasceu) <= TM10_SLA_HORAS * 3600000;
+    const ok = tq.primeiro != null && Number.isFinite(nasceu)
+      && (tq.primeiro - nasceu) <= TM10_SLA_HORAS * 3600000;
     if (ok) p.emDia += 1; else p.estourados += 1;
   });
   const linhas = Object.keys(porOwner).map(function (o) {
@@ -27082,7 +27163,8 @@ function tm10CaudaHTML(d) {
       ? 'abaixo do mínimo de ' + cob.minimo + ' toques — ' + cob.fora + ' de ' + cob.ativos
           + ' · ' + tm10Rs(cob.foraMrr) + ' parados · os 5 maiores, cobre o dono'
       : 'piso de pontos de contato desligado na régua') + '</span>'
-    + '<div style="display:flex;flex-direction:column;gap:5px;">' + abandHTML + '</div></div>';
+    + '<div style="display:flex;flex-direction:column;gap:5px;">' + abandHTML + '</div>'
+    + '<div id="tm10CobPessoas" class="tm10-cob"></div>' + (setTimeout(function () { tm10PreencherCobPessoas(0); }, 0), '') + '</div>';
 
   /* ── 5 · SLA DE 1º TOQUE ───────────────────────────────────────────────────────────
      DOIS ESTADOS, e o honesto e o que estava valendo quando escrevi: o campo `criadoEm`
@@ -27947,8 +28029,8 @@ function pe4Sla(leads) {
   comData.forEach(function (l) {
     const tq = tm10Tq(l.id);
     const nasceu = Date.parse(l.criadoEm);
-    const ok = tq.ultimo != null && Number.isFinite(nasceu)
-      && (tq.ultimo - nasceu) <= 48 * 3600000;
+    const ok = tq.primeiro != null && Number.isFinite(nasceu)
+      && (tq.primeiro - nasceu) <= 48 * 3600000;
     if (ok) emDia += 1; else estourados += 1;
   });
   return { pct: Math.round(emDia / comData.length * 100), n: comData.length, estourados: estourados };
@@ -56107,6 +56189,181 @@ document.addEventListener('click', function (ev) {
   if (ev.target.closest && ev.target.closest('.tab-btn, [data-ps6-acao^="sel:"]')) setTimeout(v5PreencherCamadaDaRua, 120);
 });
 
+/* ══ OS PORTÕES DO DIA (Hoje do executivo, docs/05, 28/09/26) ═══════════════════════
+   Três cartões, do banco do APP com a sessão dele: o plano da semana validado (o gestor
+   já vê na Daily), as visitas de hoje contra a meta de 6 e as demos com decisor contra 2.
+   Visitas = check-ins dele hoje (client_visits.visited_by = o perfil dele).
+   Demos com decisor = fichas de rua de hoje em que ele falou com quem decide e marcou
+   reunião — medindo desde 25/09; fora disso, a demo só chega pela rodada do robô.
+   O canal ao vivo repinta o Hoje a cada check-in e ficha. */
+const V5_META_VISITAS = 6, V5_META_DEMOS = 2;
+let V5_PORTOES_VOO = null;
+async function v5PreencherPortoes(tentativa) {
+  const alvo = document.getElementById('v5Portoes');
+  if (!alvo) {
+    if ((tentativa || 0) < 10) setTimeout(function () { v5PreencherPortoes((tentativa || 0) + 1); }, 300);
+    return;
+  }
+  if (!supa || !sessaoAtual || sessaoAtual.role !== 'rep' || !sessaoAtual.ownerId) { alvo.innerHTML = ''; return; }
+  if (V5_PORTOES_VOO) return V5_PORTOES_VOO;
+  V5_PORTOES_VOO = (async function () {
+    const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+    const ini = new Date(hoje + 'T00:00:00-03:00').toISOString();
+    const base = new Date(hoje + 'T12:00:00-03:00');
+    base.setUTCDate(base.getUTCDate() - ((base.getUTCDay() + 6) % 7));
+    const segunda = base.toISOString().slice(0, 10);
+    const { data: u } = await supa.auth.getUser();
+    const meuId = u && u.user ? u.user.id : null;
+    const [plano, vis, fichas] = await Promise.all([
+      supa.from('planos_semanais').select('fechado_em').eq('owner_id', String(sessaoAtual.ownerId)).eq('data_segunda', segunda).maybeSingle(),
+      meuId ? supa.from('client_visits').select('declarada').eq('visited_by', meuId).gte('visited_at', ini) : Promise.resolve({ data: [] }),
+      supa.from('fichas_de_rua').select('como_foi, proximo').eq('owner_id', String(sessaoAtual.ownerId)).gte('ocorrido_em', ini),
+    ]);
+    const cartao = function (rot, numero, de, pct, tag, tagCls, leg) {
+      return '<div class="v5-portao"><span class="v5-rotulo">' + rot + '</span>'
+        + '<div class="v5-portao-num"><b>' + numero + '</b>' + (de ? '<span>' + de + '</span>' : '') + '</div>'
+        + (pct != null ? '<div class="v5-portao-barra"><i style="width:' + Math.min(100, Math.round(pct)) + '%;"></i></div>' : '')
+        + '<span class="v5-tag ' + tagCls + '">' + tag + '</span>'
+        + (leg ? '<small>' + leg + '</small>' : '') + '</div>';
+    };
+    const fechado = plano.data && plano.data.fechado_em;
+    const hh = fechado ? new Date(fechado).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
+    const nv = (vis.data || []).length;
+    const decl = (vis.data || []).filter(function (x) { return x.declarada; }).length;
+    const nd = (fichas.data || []).filter(function (f) { return f.como_foi === 'falou_com_decisor' && f.proximo === 'reuniao'; }).length;
+    const agora = document.getElementById('v5Portoes');
+    if (!agora) return;
+    agora.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>Portões do dia</h2>' + v5Selo('vivo') + '</div><div class="v5-portoes">'
+      + cartao('Plano da semana', fechado ? 'Validado' : 'Aberto', '', null, fechado ? 'o gestor já vê na Daily' : 'valide no Planejamento', fechado ? 'is-toque-hoje' : 'is-nm', fechado ? 'fechado ' + hh : '')
+      + (vis.error ? v5NaoMedido('Visitas de hoje', 'não consegui ler os check-ins agora')
+        : cartao('Visitas hoje', nv, 'de ' + V5_META_VISITAS, (nv / V5_META_VISITAS) * 100, nv >= V5_META_VISITAS ? 'meta do dia batida' : 'faltam ' + (V5_META_VISITAS - nv), nv >= V5_META_VISITAS ? 'is-toque-hoje' : 'is-toque-dias', decl ? decl + ' sem GPS (declarada)' : 'check-ins do mapa'))
+      + (fichas.error ? v5NaoMedido('Demos com decisor', 'não consegui ler as fichas de rua agora')
+        : cartao('Demos com decisor', nd, 'de ' + V5_META_DEMOS, (nd / V5_META_DEMOS) * 100, nd >= V5_META_DEMOS ? 'meta do dia batida' : 'faltam ' + (V5_META_DEMOS - nd), nd >= V5_META_DEMOS ? 'is-toque-hoje' : 'is-toque-dias', 'pela ficha de rua · medindo desde 25/09'))
+      + '</div></section>';
+  })();
+  try { await V5_PORTOES_VOO; } catch (e) { console.log('[portões do dia]', e && e.message); } finally { V5_PORTOES_VOO = null; }
+}
+
+/* ══ COBRAR EM LOTE (Raio X, docs/04, 28/09/26) ══════════════════════════════════════
+   "Gargalos a derrubar": o botão cria, negócio por negócio, o mesmo próximo passo de hoje
+   que o Cobrar do painel cria — pela porta única, no dono de cada negócio, e aparece em
+   Tarefas no app de cada um. Um de cada vez (a rota do HubSpot tem limite), com o
+   progresso no botão. A rota não duplica tarefa de mesmo assunto no mesmo negócio, então
+   repetir o lote não repete cobrança. Criar tarefa não é concluir: nada aqui conta como
+   toque. */
+document.addEventListener('click', async function (ev) {
+  const b = ev.target.closest && ev.target.closest('[data-v5-cobrar-lote]');
+  if (!b || b.disabled) return;
+  const ids = String(b.getAttribute('data-v5-cobrar-lote') || '').split(',').filter(Boolean).slice(0, 40);
+  if (!ids.length || !supa) return;
+  b.disabled = true;
+  const { data } = await supa.auth.getSession();
+  const token = data && data.session ? data.session.access_token : null;
+  if (!token) { b.disabled = false; mostrarToast('Sua sessão expirou. Recarregue a página e cobre de novo.', 'erro'); return; }
+  const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  let ok = 0, falhas = 0;
+  for (let i = 0; i < ids.length; i++) {
+    b.textContent = 'Cobrando ' + (i + 1) + ' de ' + ids.length + '…';
+    try {
+      const resp = await fetch('/api/negocio-acao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({ op: 'nota', tipoAcao: 'proximo-passo', dealId: ids[i], tipo: 'follow-up', data: hoje,
+          texto: 'Cobrado pelo gestor: avançar este negócio hoje' }),
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      ok++;
+      const lead = buscarLeadFunilPorId(ids[i]);
+      if (lead) espelharPassoNasTelas(lead, hoje, 'Follow-up', lead.ownerId, null, { silencioso: true });
+    } catch (e) { falhas++; }
+  }
+  b.innerHTML = v5IconeLinha('bandeira', 16) + 'Cobrado · ' + ok + ' ' + (ok === 1 ? 'tarefa' : 'tarefas');
+  b.classList.add('is-feito');
+  if (falhas) { b.disabled = false; mostrarToast(ok + ' cobranças viraram tarefa; ' + falhas + ' não saíram. Clique de novo para tentar só as que faltam.', 'atencao'); }
+  else mostrarToast('Virou tarefa no app de cada dono · ' + ok + ' ' + (ok === 1 ? 'cobrança' : 'cobranças'), 'sucesso');
+});
+
+/* PROPOSTAS · ABRIR NO MAPA PARA ENVIAR (docs/04, 28/09/26). O envio pelo mapa fica no
+   histórico do cartão do lead; o WhatsApp daqui continua existindo (regra zero). Só
+   aparece com negócio escolhido e dentro do PWA. */
+function v5MapaDaProposta() {
+  const c = (typeof precificacaoEstado !== 'undefined' && precificacaoEstado) ? precificacaoEstado.conta : null;
+  if (!c || !c.id || !v5NoPwa()) return '';
+  return '<a class="v5-btn is-sec" style="flex:1;min-width:160px;min-height:46px;" href="/mapa?pino=' + encodeURIComponent(String(c.id)) + '&cartao=aberto"'
+    + (window.innerWidth >= 900 ? ' target="_blank" rel="noopener"' : '') + '>' + v5IconeLinha('pino', 16) + 'Abrir no mapa para enviar</a>';
+}
+
+/* ══ TOQUES POR PESSOA · 7 DIAS (Time, docs/04, 28/09/26) ═══════════════════════════
+   O histograma acima diz QUANTO cada lead foi tocado em 60 dias; esta tabela diz COMO
+   cada pessoa tocou nos últimos 7: tarefa concluída, reunião, nota (do HubSpot, a mesma
+   régua de tm10ToqueRealizado) e visita do mapa, separando a com GPS da declarada. A
+   visita vem de client_visits pela sessão do gestor; se o banco recusar, a coluna diz
+   "não medido" em vez de zero. Nada aqui escreve. */
+async function tm10PreencherCobPessoas(tentativa) {
+  const alvo = document.getElementById('tm10CobPessoas');
+  if (!alvo) {
+    if ((tentativa || 0) < 10) setTimeout(function () { tm10PreencherCobPessoas((tentativa || 0) + 1); }, 300);
+    return;
+  }
+  const agoraMs = Date.now(), desdeMs = agoraMs - 7 * 86400000;
+  const porOwner = {};
+  const linhaDe = function (o) {
+    if (!porOwner[o]) porOwner[o] = { tarefa: 0, reuniao: 0, nota: 0, gps: 0, decl: 0 };
+    return porOwner[o];
+  };
+  (DATA.reps || []).forEach(function (r) { if (r && r.ownerId) linhaDe(String(r.ownerId)); });
+  const itens = (DATA.agenda && Array.isArray(DATA.agenda.itens)) ? DATA.agenda.itens : [];
+  itens.forEach(function (it) {
+    const o = it && (it.hubspot_owner_id || it.ownerId);
+    if (!o || !porOwner[String(o)]) return;
+    const ms = tm10QuandoDoItem(it);
+    if (ms == null || ms < desdeMs || !tm10ToqueRealizado(it, agoraMs)) return;
+    const p = porOwner[String(o)];
+    if (it.hs_task_status !== undefined || it.hs_task_subject !== undefined) p.tarefa += 1;
+    else if (it.hs_meeting_start_time) p.reuniao += 1;
+    else p.nota += 1;
+  });
+  let visitasOk = false;
+  if (supa) {
+    try {
+      const desde = new Date(desdeMs).toISOString();
+      const [v, pf] = await Promise.all([
+        supa.from('client_visits').select('declarada, visited_by').gte('visited_at', desde),
+        supa.from('profiles').select('id, id_hubspot'),
+      ]);
+      if (!v.error && !pf.error) {
+        const dono = {};
+        (pf.data || []).forEach(function (x) { if (x.id_hubspot) dono[x.id] = String(x.id_hubspot); });
+        (v.data || []).forEach(function (x) {
+          const o = dono[x.visited_by];
+          if (!o || !porOwner[o]) return;
+          if (x.declarada) porOwner[o].decl += 1; else porOwner[o].gps += 1;
+        });
+        visitasOk = true;
+      }
+    } catch (e) {}
+  }
+  const agora = document.getElementById('tm10CobPessoas');
+  if (!agora) return;
+  const nomeDe = function (o) {
+    const r = (DATA.reps || []).find(function (x) { return String(x.ownerId) === o; });
+    return r ? tm10NomeCurto(r.name) : o;
+  };
+  const linhas = Object.keys(porOwner).map(function (o) {
+    const p = porOwner[o];
+    return { o: o, p: p, total: p.tarefa + p.reuniao + p.nota + (visitasOk ? p.gps + p.decl : 0) };
+  }).sort(function (a, b) { return b.total - a.total; });
+  const nm = '<span class="tm10-cob-nm">não medido</span>';
+  agora.innerHTML = '<span class="tm10-cob-tit">por pessoa · últimos 7 dias</span>'
+    + '<div class="tm10-cob-rola"><table class="tm10-cob-tab"><thead><tr><th>Pessoa</th><th>Tarefa<br>feita</th><th>Reunião</th><th>Nota</th><th>Visita<br>GPS</th><th>Visita<br>declarada</th><th>Total</th></tr></thead><tbody>'
+    + linhas.map(function (x) {
+      const zero = x.total === 0;
+      return '<tr' + (zero ? ' class="is-zero"' : '') + '><th>' + esc(nomeDe(x.o)) + '</th><td>' + x.p.tarefa + '</td><td>' + x.p.reuniao + '</td><td>' + x.p.nota + '</td>'
+        + '<td>' + (visitasOk ? x.p.gps : nm) + '</td><td>' + (visitasOk ? x.p.decl : nm) + '</td><td><b>' + x.total + '</b></td></tr>';
+    }).join('')
+    + '</tbody></table></div>';
+}
+
 /* Abrir no mapa: 44×44 só ícone na linha; largura total no kanban. Fora do PWA não há mapa. */
 function v5BotaoMapa(dealId, soIcone) {
   if (!v5NoPwa()) return '';
@@ -64825,13 +65082,15 @@ function rx1Gargalos(d) {
   const soma = function (lista) { return lista.reduce(function (s, i) { return s + i.mrr; }, 0); };
 
   const pag = d.itens.filter(function (i) { return i.stage === '1395880473' && !i.passo; });
-  if (pag.length) g.push({ grave: true, n: pag.length, un: 'em Ag. Pagamento',
+  /* ids: o gargalo que tem gesto (Cobrar os N) leva os negócios; os de leitura, não */
+  const idsDe = function (lista) { return lista.map(function (i) { return i.id; }); };
+  if (pag.length) g.push({ grave: true, n: pag.length, un: 'em Ag. Pagamento', ids: idsDe(pag),
     t: 'Vendido e sem ninguém marcado',
     p: rs(soma(pag)) + ' de MRR a um passo do ganho, sem próximo passo datado. Aqui o que falta'
       + ' não é convencer, é confirmar o pagamento.' });
 
   const semPasso = d.itens.filter(function (i) { return !i.passo; });
-  if (semPasso.length) g.push({ grave: semPasso.length > d.itens.length / 2,
+  if (semPasso.length) g.push({ grave: semPasso.length > d.itens.length / 2, ids: idsDe(semPasso),
     n: semPasso.length, un: 'de ' + d.itens.length + ' no fundo',
     t: 'Fundo de funil sem data marcada',
     p: rs(soma(semPasso)) + ' parados atrás de um calendário vazio, não de uma objeção.' });
@@ -64845,7 +65104,7 @@ function rx1Gargalos(d) {
   /* MARCOU E NÃO FOI: o dado que só existe desde 19/09, quando o contador passou a
      separar compromisso marcado de toque dado. */
   const prometeu = d.itens.filter(function (i) { return i.toques === 0 && i.marcados > 0; });
-  if (prometeu.length) g.push({ grave: true, n: prometeu.length, un: 'negócios',
+  if (prometeu.length) g.push({ grave: true, n: prometeu.length, un: 'negócios', ids: idsDe(prometeu),
     t: 'Compromisso marcado e nenhum toque feito',
     p: 'Alguém agendou ' + prometeu.reduce(function (s, i) { return s + i.marcados; }, 0)
       + ' vezes nesses negócios e não há um toque registrado em nenhum. É a promessa que'
@@ -64872,7 +65131,7 @@ function rx1Gargalos(d) {
       + ' aparecem no 1:1 de ninguém até serem reatribuídos no HubSpot.' });
 
   const sla = d.itens.filter(function (i) { return i.sla; });
-  if (sla.length) g.push({ grave: false, n: sla.length, un: 'negócios',
+  if (sla.length) g.push({ grave: false, n: sla.length, un: 'negócios', ids: idsDe(sla),
     t: 'Régua da etapa estourada',
     p: 'Passaram do prazo que a própria etapa define no HubSpot — o problema é anterior ao'
       + ' próximo passo: eles estão parados no degrau errado.' });
@@ -65098,7 +65357,11 @@ function rx1TelaHTML(d) {
       ? '<div class="rx-garg">' + g.map(function (x) {
         return '<div class="rx-g' + (x.grave ? ' grave' : '') + '">'
           + '<span class="rx-g-n">' + esc(String(x.n)) + '<small>' + esc(x.un) + '</small></span>'
-          + '<span class="rx-g-t"><b>' + esc(x.t) + '</b><span>' + esc(x.p) + '</span></span>'
+          + '<span class="rx-g-t"><b>' + esc(x.t) + '</b><span>' + esc(x.p) + '</span>'
+          + ((x.ids && x.ids.length && sessaoAtual && sessaoAtual.role === 'manager')
+            ? '<button type="button" class="v5-btn is-sec rx-g-cobrar" data-v5-cobrar-lote="' + esc(x.ids.join(',')) + '">'
+              + v5IconeLinha('bandeira', 16) + 'Cobrar ' + (x.ids.length === 1 ? 'este' : 'os ' + x.ids.length) + '</button>' : '')
+          + '</span>'
           + '</div>';
       }).join('') + '</div>'
       : '<p class="rx-vazio">Nenhum gargalo medido no fundo do funil. ✓</p>')
