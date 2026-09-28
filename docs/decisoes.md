@@ -131,3 +131,13 @@ quê, e o que desfaz a decisão se ela estiver errada.
   pessoa escolhida) e Semana (o time). Tracejado "medindo desde 25/09" até 23/10.
 - **Bairro e horário que mais converteram continuam não medidos** até 23/10 — com menos
   de 4 semanas de ficha, o "melhor bairro" seria o bairro de quem mais registrou.
+
+## Fase 7 · celular e aceite (28/09/26)
+- **Zero emoji:** 75 emojis que eram prefixo de rótulo saíram ("📺 Modo TV" → "Modo TV");
+  os 51 que eram o próprio ícone (cadeado, pino, selo, alerta, lixeira…) viraram ícone de
+  linha SVG sem aspas (cabe em qualquer string do arquivo). A legenda do Playbook, onde
+  o símbolo É o significado, voltou com os ícones. Setas tipográficas (↗ ➡) ficam: não
+  são emoji de interface. O cartão da proposta não foi tocado.
+- **390 sem rolagem lateral:** em Pessoas as grades sem colunas definidas viram uma
+  coluna; na Semana a dupla usa minmax(0,1fr) e as linhas flex quebram. Medido nas 14
+  abas dos dois papéis a 390, 920, 1240 e 1440.

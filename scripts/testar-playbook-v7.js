@@ -80,7 +80,8 @@ checar('a tela distingue "provada" de "lida antes da prova"',
    texto que o capitulo completo mostra), nao a forma antiga em caixa alta. */
 checar('a capa do capítulo completo mostra selo e a contagem provada',
   template.indexOf('selo ✓ · ') > 0 && template.indexOf('provadas') > 0
-  && template.indexOf('pb8-capa-selo') > 0 && template.indexOf('🏅') > 0);
+  /* v5 (28/09/26): zero emoji — o selo é o ícone de linha (award), não mais 🏅 */
+  && template.indexOf('pb8-capa-selo') > 0 && template.indexOf('M8.5,14L7,21l5-3l5,3l-1.5-7') > 0);
 checar('a estante não tem mais fundo colorido por capítulo (cor é fio)',
   template.indexOf('.pb8-capa{') > 0
   && template.indexOf('border-top:3px solid var(--pb8-ac)') > 0
@@ -324,7 +325,8 @@ checar('e vai a 44px no toque, com a regra DEPOIS da base (ordem de origem)',
   checar('a legenda diz que o que espera a vez é o crédito, não o texto',
     /espera a sua vez é o check/.test(template));
   checar('a legenda explica o capítulo de consulta',
-    /📖 = capítulo de consulta/.test(template));
+    /* v5: o livro é o ícone de linha (book), não mais 📖 */
+    template.indexOf('M4,19V5a2,2,0,0,1,2-2h13v16H6a2,2,0,0,0-2,2a2,2,0,0,0,2,2h13></path></svg> = capítulo de consulta') > 0);
   checar('não existe capa desabilitada por patente',
     template.indexOf('class="pb9-capa') > -1
     && template.indexOf('pb9-capa" disabled') < 0 && template.indexOf("pb9-capa' disabled") < 0);
