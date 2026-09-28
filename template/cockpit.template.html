@@ -57039,8 +57039,9 @@ async function tm10PreencherCobPessoas(tentativa) {
    então Daily, Agenda, Planejamento e toques leem as duas fontes sem mudar nada.
    · Demo vira reunião (como a do HubSpot). Follow-up vira tarefa em aberto: agendar não
      é ter feito, e só a conclusão conta como toque.
-   · Follow-up que já virou nota no HubSpot (hs_engagement_id) fica de fora — o robô
-     já traz, e entraria duas vezes. Cancelado fica de fora.
+   · Follow-up que já virou nota no HubSpot (hs_engagement_id) só sai quando o item do
+     robô com o mesmo id já está na Agenda (v6, contrato 27) — antes saía na hora e
+     deixava um buraco de até 2 h. Cancelado fica de fora.
    · Idempotente: tira os itens do app da carga anterior antes de pôr os de agora. */
 let AGENDA_APP_VOO = null;
 let AGENDA_APP_DE_NOVO = false;
@@ -57055,8 +57056,15 @@ async function carregarAgendaDoApp() {
       .select('id, client_id, scheduled_at, duration_minutes, observacoes, status, type, created_by, hs_engagement_id')
       .gte('scheduled_at', desde).lte('scheduled_at', ate).limit(1000);
     if (r.error) { console.log('[agenda do app]', r.error.message); return; }
+    /* S6 / contrato 27 (handoff v6): o follow-up do app era tirado da Agenda assim que
+       ganhava o id da nota do HubSpot, e só voltava quando o robô lia "Agendado para"
+       (até ~2 h de buraco). Agora fica, e só sai se o item do robô com o MESMO id já
+       estiver na Agenda — casado pelo id, sem duplicar. */
+    const doRobo = new Set(((DATA.agenda && Array.isArray(DATA.agenda.itens)) ? DATA.agenda.itens : [])
+      .filter(function (it) { return it && !it.origem_app && it.hs_object_id; })
+      .map(function (it) { return String(it.hs_object_id); }));
     const lista = (r.data || []).filter(function (m) {
-      return m.status !== 'cancelada' && !(m.type === 'follow_up' && m.hs_engagement_id);
+      return m.status !== 'cancelada' && !(m.type === 'follow_up' && m.hs_engagement_id && doRobo.has(String(m.hs_engagement_id)));
     });
     const idsC = Array.from(new Set(lista.map(function (m) { return m.client_id; }).filter(Boolean)));
     const idsP = Array.from(new Set(lista.map(function (m) { return m.created_by; }).filter(Boolean)));
@@ -57085,7 +57093,8 @@ async function carregarAgendaDoApp() {
           hs_task_type: 'TODO', hs_timestamp: m.scheduled_at, hs_task_body: m.observacoes || null });
       }
       const fim = new Date(Date.parse(m.scheduled_at) + (Number(m.duration_minutes) || 30) * 60000).toISOString();
-      return Object.assign(base, { hs_meeting_title: 'Demo · ' + nome, hs_meeting_start_time: m.scheduled_at,
+      /* vocabulário do contrato (§0.1): reunião do app é Reunião; Demo só quando é demonstração */
+      return Object.assign(base, { hs_meeting_title: 'Reunião · ' + nome, hs_meeting_start_time: m.scheduled_at,
         hs_meeting_end_time: fim, hs_meeting_body: m.observacoes || null });
     }).filter(Boolean);
     if (!DATA.agenda || typeof DATA.agenda !== 'object') DATA.agenda = { itens: [] };
