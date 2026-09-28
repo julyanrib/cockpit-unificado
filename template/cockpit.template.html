@@ -10409,6 +10409,15 @@ foi escrita para jogar o "0 de 27 resolvidos"
   body.tv .v5-gestos{display:none;}
   .v5-placar-hoje{display:flex;flex-direction:column;gap:12px;margin:0 0 18px;}
   .v5-bloco-leg{margin:0;font:500 12px var(--font-body);color:var(--dim);}
+  .v5-ir-rua{margin-top:14px;align-self:flex-start;}
+  .v5-link-mapa{display:inline-flex;align-items:center;gap:6px;margin-top:8px;min-height:32px;font:600 12px var(--font-body);color:var(--fg);text-decoration:underline;text-underline-offset:3px;}
+  .v5-portas{display:flex;flex-wrap:wrap;gap:12px;}
+  .v5-porta{flex:1 1 150px;display:flex;flex-direction:column;gap:4px;padding:14px 16px;border-radius:var(--r-cartao);background:var(--card);border:1px solid var(--line);}
+  .v5-porta.is-medindo{border:1.5px dashed var(--line2);background:transparent;}
+  .v5-porta b{font:800 28px/1 var(--font-display);color:var(--fg);font-variant-numeric:tabular-nums;}
+  .v5-porta small{font:500 12px var(--font-body);color:var(--mute);}
+  .v5-qualidade{display:flex;flex-direction:column;gap:4px;font:500 13px var(--font-body);color:var(--mute);}
+  .v5-qualidade b{color:var(--fg);}
   .v5-rua-grade{display:flex;flex-direction:column;gap:6px;overflow-x:auto;}
   .v5-rua-linha{display:grid;grid-template-columns:minmax(120px,1.2fr) repeat(5,minmax(76px,1fr)) auto;gap:6px;align-items:center;min-width:560px;}
   .v5-rua-linha.is-cab span{font:600 11px var(--font-body);letter-spacing:.06em;text-transform:uppercase;color:var(--dim);text-align:center;}
@@ -10676,6 +10685,8 @@ foi escrita para jogar o "0 de 27 resolvidos"
        Dia sem linha de daily continua sendo "—" e nunca 0: é dia sem registro, não dia
        sem visita. -->
   <div id="sm9Raiz" style="width:min(1780px,100% - 64px);margin:0 auto;"></div>
+  <!-- v5 (28/09/26): o que a rua ensinou — funil de porta do time (v5PreencherCamadaDaRua) -->
+  <div id="v5RuaDaSemana" class="v5-camada-da-rua" style="width:min(1780px,100% - 64px);margin:16px auto 0;"></div>
 
   </div>
   <div class="view" id="viewDaily">
@@ -10771,6 +10782,8 @@ foi escrita para jogar o "0 de 27 resolvidos"
          #pdisContent continua sendo o do executivo, intocado. renderPDIs escolhe. -->
     <div id="ps6Raiz" style="width:min(1780px,100% - 64px);margin:0 auto;"></div>
     <div id="pdisContent"></div>
+    <!-- v5 (28/09/26): a rua da pessoa — funil de porta e qualidade do registro (v5PreencherCamadaDaRua) -->
+    <div id="v5MinhaRua" class="v5-camada-da-rua" style="width:min(1780px,100% - 64px);margin:16px auto 0;"></div>
     <div id="coachingEmbutido" style="display:none;">
       <div style="display:flex;align-items:center;gap:8px;margin:28px 0 12px;">
         <span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);white-space:nowrap;"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="display:inline;vertical-align:-3px;margin-right:5px;"><path d="M3 14v-2a9 9 0 0118 0v2"/><rect x="1" y="14" width="6" height="7" rx="2"/><rect x="17" y="14" width="6" height="7" rx="2"/></svg>Coaching — privado, só o gestor vê</span>
@@ -11349,6 +11362,8 @@ async function hidratarSessao(email) {
     mostrarApp();
     /* a página interna de componentes do v5 abre por /gestao#sistema */
     if (typeof v5AbrirSistemaSePedido === 'function') v5AbrirSistemaSePedido();
+    /* a camada da rua da aba que abriu sozinha (segunda: a Semana) */
+    setTimeout(v5PreencherCamadaDaRua, 400);
     return;
   }
 
@@ -11938,6 +11953,7 @@ function aoVivoRepintar() {
   try {
     if (id === 'viewRaioX' && typeof rx1Iniciar === 'function') rx1Iniciar();
     if (id === 'viewRotas') v5PreencherRuaDoTime();
+    if (id === 'viewPDIs' || id === 'viewResumo') { V5_RUA_CACHE.em = 0; v5PreencherCamadaDaRua(); }
     if (id === 'viewPDIs') {
       if (sessaoAtual && sessaoAtual.role === 'manager' && typeof renderPessoas === 'function') renderPessoas();
       else if (typeof renderPDIs === 'function') renderPDIs();
@@ -16284,6 +16300,7 @@ async function renderMeuPainel() {
         })()}</div>
         <h1>${saudacaoDoDia()}, ${esc(r.name.split(' ')[0])}</h1>
         <div class="xv3-hero-sub">${diagnosticoFrase}</div>
+        ${v5IrParaARua()}
       </div>
 
       <div class="xv3-herostats">
@@ -34443,6 +34460,7 @@ function pl6TelaFinalHTML(d) {
           ${dia.hoje ? `<span style="font:900 8.5px 'Poppins',sans-serif;letter-spacing:.08em;background:#E51A31;color:#FFFDF8;border-radius:999px;padding:3px 7px;">HOJE</span>` : ''}
           <b style="margin-left:auto;font:900 11px 'Poppins',sans-serif;color:${dia.cntCor};font-variant-numeric:tabular-nums;">${dia.cnt}</b>
         </div>
+        ${dia.hoje ? v5VerHojeNoMapa() : ''}
         <div style="position:relative;margin-top:8px;" data-pl6-reg-caixa="${dia.di}">
           <input type="text" value="${dia.regiao}" data-pl6-reg-in="${dia.di}" placeholder="⌖ região do dia — digite livre" style="width:100%;box-sizing:border-box;border:1px solid ${dia.regBorda};border-radius:999px;background:var(--panel);padding:7px 12px;font:800 10px 'Poppins',sans-serif;color:var(--plum-ink);outline:none;">
           <div data-pl6-reg-lista="${dia.di}" style="position:absolute;top:34px;left:0;right:0;z-index:5;background:var(--panel);border:1px solid #8E3B5C;border-radius:10px;padding:6px;display:none;flex-direction:column;gap:2px;box-shadow:0 10px 26px rgba(43,52,64,.18);max-height:238px;overflow:auto;">
@@ -55985,6 +56003,97 @@ async function v5PreencherRuaDoTime() {
   })();
   try { await V5_RUA_VOO; } catch (e) { console.log('[rua do time]', e && e.message); } finally { V5_RUA_VOO = null; }
 }
+
+/* ══ A CAMADA DA RUA (fases 5 e 6, 28/09/26) ═════════════════════════════════════════
+   O executivo passa o dia no mapa; o Cockpit é a mesa. Três pontes para a rua:
+   · Hoje: "Ir para a rua" — abre o mapa na lente Meu dia (a próxima porta está lá).
+   · Planejamento: "Ver no mapa" no dia de hoje (o mapa mostra a rota do dia corrente).
+   · Funil de porta e qualidade do registro (Desenvolvimento, Semana, Pessoas): Portas →
+     Decisor → Demo, das fichas de rua do app, e quanto das visitas tem GPS, foto e ficha.
+     Tudo "medindo desde 25/09" até juntar 4 semanas (docs/06): número pequeno de rua
+     nova não é comparável, e a tela diz isso em vez de parecer conclusão. */
+function v5IrParaARua() {
+  if (!v5NoPwa() || !sessaoAtual || sessaoAtual.role !== 'rep') return '';
+  return '<a class="v5-btn is-prim v5-ir-rua" href="/mapa?lente=meu-dia">' + v5IconeLinha('pino', 18) + 'Ir para a rua</a>';
+}
+function v5VerHojeNoMapa() {
+  if (!v5NoPwa()) return '';
+  return '<a class="v5-link-mapa" href="/mapa?lente=meu-dia"' + (window.innerWidth >= 900 ? ' target="_blank" rel="noopener"' : '') + '>'
+    + v5IconeLinha('pino', 14) + 'Ver no mapa</a>';
+}
+
+/* dono: ownerId do HubSpot (uma pessoa) ou null (o time inteiro, só gestor) */
+async function v5LerRua(dono) {
+  const desde = new Date(Date.now() - 30 * 86400000).toISOString();
+  let qf = supa.from('fichas_de_rua').select('como_foi, proximo, com_foto, declarada, owner_id').gte('ocorrido_em', desde);
+  if (dono) qf = qf.eq('owner_id', String(dono));
+  let perfis = null;
+  const [f, v, p] = await Promise.all([
+    qf,
+    supa.from('client_visits').select('declarada, visited_by').gte('visited_at', desde),
+    supa.from('profiles').select('id, id_hubspot'),
+  ]);
+  if (f.error) throw f.error;
+  perfis = {};
+  (p.data || []).forEach(function (x) { if (x.id_hubspot) perfis[x.id] = String(x.id_hubspot); });
+  const visitas = (v.data || []).filter(function (x) { return !dono || perfis[x.visited_by] === String(dono); });
+  const fichas = f.data || [];
+  return {
+    portas: fichas.length,
+    decisor: fichas.filter(function (x) { return x.como_foi === 'falou_com_decisor'; }).length,
+    demo: fichas.filter(function (x) { return x.proximo === 'reuniao'; }).length,
+    visitas: visitas.length,
+    comGps: visitas.filter(function (x) { return !x.declarada; }).length,
+    comFoto: fichas.filter(function (x) { return x.com_foto; }).length,
+  };
+}
+function v5FunilDePortaHTML(r, titulo) {
+  const pct = function (a, b) { return b ? Math.round((a / b) * 100) + '%' : '—'; };
+  const caixa = function (rot, n, leg) {
+    return '<div class="v5-porta is-medindo"><span class="v5-rotulo">' + rot + '</span><b>' + n + '</b><small>' + v5Esc(leg) + '</small></div>';
+  };
+  return '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>' + v5Esc(titulo) + '</h2>' + v5Selo('medindo', 'medindo desde 25/09') + '</div>'
+    + '<p class="v5-bloco-leg">Últimos 30 dias, das fichas de rua do app. A primeira leitura comparável sai com 4 semanas (23/10).</p>'
+    + '<div class="v5-portas">'
+    + caixa('Portas', r.portas, 'com ficha de rua')
+    + caixa('Decisor', r.decisor, pct(r.decisor, r.portas) + ' das portas')
+    + caixa('Demo', r.demo, pct(r.demo, r.decisor) + ' dos decisores')
+    + '</div>'
+    + '<div class="v5-qualidade"><span class="v5-rotulo">Qualidade do registro</span>'
+    + '<span>' + r.visitas + ' visitas · <b>' + pct(r.comGps, r.visitas) + '</b> com GPS · <b>' + pct(r.comFoto, r.portas) + '</b> das fichas com foto · <b>'
+    + pct(r.portas, r.visitas) + '</b> das visitas com ficha</span></div></section>';
+}
+let V5_RUA_CACHE = { chave: null, em: 0, dado: null };
+async function v5PreencherCamadaDaRua() {
+  if (!supa || !sessaoAtual) return;
+  const ativa = document.querySelector('.view.active');
+  const id = ativa ? ativa.id : '';
+  let alvo = null, dono = null, titulo = '';
+  if (id === 'viewPDIs' && sessaoAtual.role === 'rep') { alvo = document.getElementById('v5MinhaRua'); dono = sessaoAtual.ownerId; titulo = 'Minha rua · funil de porta'; }
+  else if (id === 'viewPDIs' && sessaoAtual.role === 'manager') {
+    alvo = document.getElementById('v5MinhaRua');
+    dono = (typeof PS6_ESTADO !== 'undefined' && PS6_ESTADO.sel) || (typeof pessoaSelecionadaId !== 'undefined' ? pessoaSelecionadaId : null);
+    const r = (DATA.reps || []).find(function (x) { return String(x.ownerId) === String(dono); });
+    titulo = 'A rua ' + (r ? 'de ' + String(r.name || '').split(' ')[0] : 'da pessoa') + ' · funil de porta';
+  } else if (id === 'viewResumo' && sessaoAtual.role === 'manager') { alvo = document.getElementById('v5RuaDaSemana'); dono = null; titulo = 'O que a rua ensinou · funil de porta do time'; }
+  document.querySelectorAll('.v5-camada-da-rua').forEach(function (el) { if (el !== alvo) el.innerHTML = ''; });
+  if (!alvo) return;
+  if (sessaoAtual.role === 'rep' && !dono) { alvo.innerHTML = ''; return; }
+  if (sessaoAtual.role === 'manager' && id === 'viewPDIs' && !dono) { alvo.innerHTML = ''; return; }
+  const chave = id + ':' + (dono || 'time');
+  try {
+    let r = V5_RUA_CACHE.chave === chave && Date.now() - V5_RUA_CACHE.em < 60000 ? V5_RUA_CACHE.dado : null;
+    if (!r) { r = await v5LerRua(dono); V5_RUA_CACHE = { chave: chave, em: Date.now(), dado: r }; }
+    alvo.innerHTML = v5FunilDePortaHTML(r, titulo);
+  } catch (e) {
+    alvo.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>' + v5Esc(titulo) + '</h2></div>'
+      + v5NaoMedido('Não consegui ler as fichas de rua agora', (e && e.message) || 'tente de novo') + '</section>';
+  }
+}
+/* troca de aba ou de pessoa: repinta depois dos ouvintes das abas */
+document.addEventListener('click', function (ev) {
+  if (ev.target.closest && ev.target.closest('.tab-btn, [data-ps6-acao^="sel:"]')) setTimeout(v5PreencherCamadaDaRua, 120);
+});
 
 /* Abrir no mapa: 44×44 só ícone na linha; largura total no kanban. Fora do PWA não há mapa. */
 function v5BotaoMapa(dealId, soIcone) {
