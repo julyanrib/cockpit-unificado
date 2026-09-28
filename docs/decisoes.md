@@ -67,3 +67,32 @@ quê, e o que desfaz a decisão se ela estiver errada.
 - **Tema "Aparelho" só existe no Cockpit.** O mapa conhece claro e escuro; ele lê a chave
   `v5-tema` quando ela diz `sol` ou `escuro`, e grava as duas chaves quando o executivo
   troca no mapa. Com `aparelho`, o mapa fica no que já estava.
+
+## Fase 2 · contrato Mapa ⇄ Cockpit (28/09/26)
+- **Um sinal por mudança, não as tabelas no Realtime.** `clients` recebe milhares de
+  updates por dia de sincronização; publicá-la faria cada aba pagar a RLS de cada linha.
+  A 0128 grava em `sinais_ao_vivo` (tipo + ids, sem conteúdo) e só ela é publicada; quem
+  recebe relê pela própria sessão.
+- **O Cockpit relê só os negócios que mudaram** (`cockpit-dados?recurso=negocios`), com o
+  mesmo `montarCardDoEspelho` da carga, e aplica pelas funções donas do DATA. Repinta só
+  na janela de segurança do farol (sem ficha aberta, sem campo em foco).
+- **O mapa relê o pino linha a linha**; só pino novo relê a base (no máximo 1x/min).
+- **O link antigo `?acao=…&dealId=…` abre o cartão do negócio** no mapa (ligar/WhatsApp/Ir
+  estão no cartão), em vez de ser ignorado.
+- **Fica para as fases de tela:** paradas feitas no Cockpit (linha 9, Daily), Cobrar
+  virar tarefa no app (linha 13: hoje vai para a pauta do gestor), sino único.
+
+## Fase 3 · componentes (28/09/26)
+- **Os componentes nascem em JS de string, como o resto do arquivo** (`v5Selo`,
+  `v5NaoMedido`, `v5Camada`, `v5TopoDaAba`, `v5Sanfona`, `v5BarraEtapa`, `v5Placar`,
+  `v5Funil`, `v5CartaoLinha`, `v5CartaoKanban`, `v5TopoDoPainel`). A página interna
+  `/gestao#sistema` mostra todos com o dado da sessão.
+- **O funil só mostra "Passa" com conversão medida.** Dividir o estoque de uma coluna
+  pelo da anterior não é conversão (dava 278% na Visita); sem a medida, a pílula some.
+- **O painel do cartão único é a ficha do negócio que já existia**, com o topo do v5
+  (temperatura, tempo sem toque, Abrir no mapa primário) e o bloco "Na rua" lendo
+  `fichas_de_rua` ao vivo (contrato linha 4). A barra de etapa NÃO entra no topo: a
+  ficha já tem a trilha que muda de etapa e os selos de SLA.
+- **Saiu o "registro no HubSpot ↗" da ficha.** Os outros links para o HubSpot (lista de
+  leads, Daily, Hoje, prospecção) saem tela por tela nas fases 4 e 5.
+- **`.btn-prim`/`.btn-sec` viraram os botões do v5** (vermelho só na ação, 44/48 px).
