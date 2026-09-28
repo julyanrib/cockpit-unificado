@@ -107,10 +107,11 @@ checar('a aba de hoje mostra registrados sobre vencidos',
   /marca = \(vencidos\.length - semReg\) \+ '\/' \+ vencidos\.length;/.test(codigo),
   'aba que só mostra o nome do dia obriga a tocar em cinco para achar o trabalho');
 checar('dia passado com pendência sai em vermelho, com bolinha',
-  /marca = semReg \+ ' ●'; cor = '#C3152A';/.test(codigo),
+  /* v5 (28/09/26): o mesmo vermelho, agora token (--red-ink), que clareia no escuro */
+  /marca = semReg \+ ' ●'; cor = 'var\(--red-ink\)';/.test(codigo),
   'é o único estado da tira que cobra alguma coisa');
 checar('dia futuro mostra quantos tem, e dia vazio diz que está livre',
-  /marca = String\(its\.length\); cor = '#2B3440';/.test(codigo)
+  /marca = String\(its\.length\); cor = 'var\(--ink\)';/.test(codigo)
     && /marca = passado \? '—' : 'livre';/.test(codigo),
   '"0" num dia que já passou lê como falha; "—" lê como o que é, nada planejado');
 checar('e o cabeçalho só mostra a hora quando o dia é hoje',

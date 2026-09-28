@@ -46,8 +46,13 @@ const semComentarios = tpl
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/<!--[\s\S]*?-->/g, ' ');
 
+/* A FAMÍLIA ENTRE ASPAS TAMBÉM É USO (28/09/26). O cartão da proposta (prcCartaoHTML)
+   escreve font:400 14px 'Manrope' — entre aspas, porque é HTML inline que o html2canvas
+   fotografa. A classe [^;"'}] parava na aspa, e no dia em que o resto do Cockpit foi para
+   Poppins a guarda disse que Manrope e Archivo não eram usadas: tirá-las do <link>
+   mudaria o PNG que vai para o cliente, o que o handoff v5 proíbe. */
 function usada(fonte) {
-  const re = new RegExp('font(-family)?\\s*:[^;"\'}]{0,160}' + fonte.replace(/ /g, '\\s*'), 'i');
+  const re = new RegExp('font(-family)?\\s*:[^;"\'}]{0,160}["\']?' + fonte.replace(/ /g, '\\s*'), 'i');
   return re.test(semComentarios);
 }
 

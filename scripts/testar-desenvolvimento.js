@@ -166,7 +166,7 @@ checar('acordo marcado fica aguardando o gestor',
 }());
 
 checar('o fundo da página só muda nesta aba',
-  template.indexOf('body.exec-v3:has(#viewPDIs.active){background:#E9E5DC;}') > -1,
+  template.indexOf('body.exec-v3:has(#viewPDIs.active){background:var(--bg);}') > -1,
   'sem o :has, o cockpit inteiro trocaria de fundo');
 
 /* ── 9. O QUE JÁ EXISTIA E NÃO PODE SUMIR ────────────────────────────────────────── */

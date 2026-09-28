@@ -164,7 +164,8 @@ console.log('3 · SEIS PROPÓSITOS, E O FUNIL RECEBE O RESTO');
   igual('a faixa tem os seis, nesta ordem', PROPS.map(function (p) { return p.id; }),
     ['rua', 'cobrar', 'relac', 'follow', 'nova', 'funil']);
   checar('e cada um tem etiqueta e cor',
-    PROPS.every(function (p) { return !!p.etiqueta && /^#[0-9A-F]{6}$/i.test(p.cor); }));
+    /* v5: a cor do propósito pode ser token (var(--ink) no de rua); só vai para style= */
+    PROPS.every(function (p) { return !!p.etiqueta && /^(#[0-9A-F]{6}|var\(--[\w-]+\))$/i.test(p.cor); }));
   checar('nenhuma conta da carteira fica sem propósito',
     doLead({ tipo: 'c', stageId: '1395880472' }) === 'funil'
       && doLead({ tipo: 'c', stageId: '1395880473' }) === 'cobrar'
@@ -207,7 +208,8 @@ console.log('4 · A RÉGUA VEM DO HUBSPOT, NUNCA DO CÓDIGO');
   igual('o cartão da cobrança escreve a régua REAL',
     cob.l2, 'parado há 9d em Ag. Pagamento · régua 2d',
     'a prancha pedia "régua 7d", que é a da Negociação');
-  igual('e marca acima da régua em vermelho', [cob.rot, cob.cor], ['acima da régua', '#C3152A']);
+  /* v5 (28/09/26): o mesmo vermelho, agora token (--red-ink) */
+  igual('e marca acima da régua em vermelho', [cob.rot, cob.cor], ['acima da régua', 'var(--red-ink)']);
 
   const fun = cartao({ stageId: '1395880472', dias: 3, etapa: 'Negociação' }, 'funil');
   igual('o cartão do funil traz etapa e régua', fun.l2, 'Negociação · régua 7d');

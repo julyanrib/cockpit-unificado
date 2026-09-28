@@ -47,7 +47,8 @@ checar('os fechamentos da semana também',
    especificidade, vencia: o hero ficava claro e só o título mudava de cor. */
 checar('o hero recebe a classe da repaginação', template.indexOf('class="xv3-hero h9-hero"') > -1);
 checar('e a regra vence a antiga por especificidade, não por ordem',
-  template.indexOf('.xv3-hero.h9-hero{background:var(--ink);') > -1,
+  /* v5: o herói é faixa escura nos dois temas (--dark); --ink vira quase branco no escuro */
+  template.indexOf('.xv3-hero.h9-hero{background:var(--dark);') > -1,
   'com um seletor de uma classe só, .xv3-hero vence e o hero volta a ficar claro');
 /* AS CORES DE ESTADO SOBREVIVEM AO ESCURO: vermelho sobre tinta some, e "visita
    pendente" precisa ser legível justamente no dia em que ela importa. */

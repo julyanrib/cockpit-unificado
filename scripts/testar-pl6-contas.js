@@ -626,7 +626,7 @@ console.log('');
     + ' "preencher na visita" sozinho descreve o problema e deixa ele sem saída');
 
   checar('o link só não é escapado quando quem chama declara',
-    /return \{ rot: esc\(rot\), v: html \? String\(valor\) : esc\(String\(valor\)\), cor: cor \|\| '#2B3440' \};/.test(codigo),
+    /return \{ rot: esc\(rot\), v: html \? String\(valor\) : esc\(String\(valor\)\), cor: cor \|\| 'var\(--ink\)' \};/.test(codigo),
     'escapar por padrão é o que impede o nome do lead de virar HTML; e não escapar o link'
     + ' é o que impede o markup de sair como texto cru, que já aconteceu hoje');
 

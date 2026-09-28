@@ -139,7 +139,7 @@ checar('sábado e domingo não mandam ninguém para a rua',
 /* ── 7. PISO DE TOQUE ─────────────────────────────────────────────────────────
    Quem entra nisto entra da rua, no celular, muitas vezes com uma mão. */
 checar('os campos têm 44px e o botão 48px',
-  (template.match(/height:44px;border:1\.5px solid #DCE1EA/g) || []).length >= 1 &&
+  (template.match(/height:44px;border:1\.5px solid var\(--line\)/g) || []).length >= 1 &&
   template.indexOf('min-height:48px;border:0;border-radius:12px;background:#E51A31') > 0,
   'alvo menor que 44px erra o dedo de quem está em pé na calçada');
 
