@@ -96,3 +96,20 @@ quê, e o que desfaz a decisão se ela estiver errada.
 - **Saiu o "registro no HubSpot ↗" da ficha.** Os outros links para o HubSpot (lista de
   leads, Daily, Hoje, prospecção) saem tela por tela nas fases 4 e 5.
 - **`.btn-prim`/`.btn-sec` viraram os botões do v5** (vermelho só na ação, 44/48 px).
+
+## Fase 4 · telas do gestor, parte 1 (28/09/26)
+- **As abas não foram reescritas.** Cada uma já tem meses de conteúdo e guardas; a regra
+  zero proíbe perder bloco. A fase 4 põe por cima o que o contrato cobra e não existia.
+- **Daily: placar de hoje ao vivo** (check-ins, planos validados, paradas feitas, fotos)
+  lido do banco do APP com a sessão do gestor. "Demos com decisor" fica não medido: a
+  demo é tarefa/reunião do HubSpot e só chega pela rodada do robô.
+- **Daily: Recado e Abrir o dia no mapa** em cada linha da rodada. O recado grava em
+  `sugestoes_planos` (a mesma tabela do recado de Pessoas) e acende o sino do app pelo
+  canal ao vivo; o mapa abre na lente Meu dia com a rota da pessoa (`?pessoa=`). Os dois
+  somem no Modo TV.
+- **Cobrar vira tarefa no app** pelo painel do cartão (2 cliques de qualquer tela): um
+  próximo passo de hoje, criado pela porta única no dono do negócio. O Cobrar antigo da
+  Time (pauta do gestor) continua existindo — ele é a pauta, este é a cobrança.
+- **Nenhum "Abrir no HubSpot":** um ouvinte faz qualquer link de negócio do HubSpot abrir
+  a ficha do Cockpit (ou o pino no mapa, se a sessão não carregou o negócio). Link de
+  contato/empresa segue como estava.
