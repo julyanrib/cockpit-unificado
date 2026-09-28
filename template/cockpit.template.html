@@ -9782,6 +9782,14 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .xv3-check:has(.xv3-check-txt){align-items:center;}
   .xv3-check-txt b{font-weight:800;}
   .xv3-check-txt span{color:var(--muted);}
+  /* T10 (handoff v6): a 1600 px a coluna do checklist é estreita, e selo + botão comiam
+     a largura — o texto quebrava uma palavra por linha. Linha em dois níveis em qualquer
+     largura: título e detalhe em cima, selo e botão embaixo, alinhados sob o texto. */
+  .xv3-check{flex-wrap:wrap;row-gap:6px;padding:8px 0;align-items:flex-start;}
+  .xv3-check-anel{margin-top:1px;}
+  .xv3-check-txt{flex:1 1 calc(100% - 30px);white-space:normal;overflow:visible;text-overflow:clip;}
+  .xv3-check-txt + span{margin-left:30px;}
+  .xv3-check .gate-cta{max-width:calc(100% - 30px);}
 
 
   .xv3-dots i.feito{background:var(--green);}
@@ -11921,12 +11929,16 @@ function aoVivoMeInteressa(s) {
   if (!s || !s.tipo || !sessaoAtual) return false;
   if (sessaoAtual.role === 'manager') return true;
   if (!s.owner_id) return true;
+  /* contrato 29 (handoff v6): quem AGIU também recebe — a Kelly no pino do Bruno se vê */
+  if (s.actor_id && String(s.actor_id) === String(sessaoAtual.ownerId)) return true;
   return String(s.owner_id) === String(sessaoAtual.ownerId);
 }
 
 function aoVivoRecebeu(s) {
   if (!aoVivoMeInteressa(s)) return;
-  if (s.tipo === 'negocio' && s.deal_id) AOVIVO_FILA.negocios.add(String(s.deal_id));
+  /* contrato 22–23 (handoff v6): pino (É meu, pino movido, descarte) e tarefa (espelho
+     da agenda do HubSpot) também releem o negócio — antes o Cockpit ignorava os dois */
+  if ((s.tipo === 'negocio' || s.tipo === 'pino' || s.tipo === 'pino-novo' || s.tipo === 'tarefa') && s.deal_id) AOVIVO_FILA.negocios.add(String(s.deal_id));
   AOVIVO_FILA.tipos.add(String(s.tipo));
   if (!AOVIVO_TIMER) AOVIVO_TIMER = setTimeout(aoVivoAplicar, 800);
 }
@@ -11955,7 +11967,14 @@ async function aoVivoAplicar() {
     if (AOVIVO_FILA.negocios.size && !AOVIVO_TIMER) AOVIVO_TIMER = setTimeout(aoVivoAplicar, 800);
   }
   if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
-  if (['visita', 'parada', 'plano', 'ficha', 'foto'].some(function (t) { return tipos.has(t); }) && typeof V5_HTML_CACHE !== 'undefined') V5_HTML_CACHE = {};
+  if (['visita', 'parada', 'plano', 'ficha', 'foto', 'daily', 'pino', 'pino-novo', 'tarefa', 'agenda'].some(function (t) { return tipos.has(t); }) && typeof V5_HTML_CACHE !== 'undefined') V5_HTML_CACHE = {};
+  /* contrato 24 (handoff v6): a promessa feita no app chega à Daily sem recarregar */
+  if (tipos.has('daily') && typeof carregarDailies === 'function') {
+    try { dailiesCarregado = false; await carregarDailies(); } catch (e) { /* fica a da carga */ }
+    mudou = true;
+  }
+  /* contrato 25 (handoff v6): nota do app — repinta (o painel do negócio relê ao abrir) */
+  if (tipos.has('nota') || tipos.has('tarefa') || tipos.has('pino') || tipos.has('pino-novo')) mudou = true;
   if (tipos.has('foto')) { PS6_FOTOS.porDono = {}; mudou = true; }
   if ((tipos.has('visita') || tipos.has('foto')) && typeof PS6_VP !== 'undefined') { PS6_VP.porDono = {}; mudou = true; }
   /* Visitas com prova: visita ou foto nova relê na hora, sem esperar os 60 s */
@@ -13140,11 +13159,20 @@ async function carregarFilaPwa() {
   filaPwaPromessa = (async () => {
     if (!supa) return (filaPwaCache = { estado: 'sem-banco', porOwner: {} });
     try {
-      const hoje = isoDate(new Date());
-      const { data, error } = await supa.from('fila_pwa').select('owner_id,dia,pendentes,falhas,ultima_tentativa,versao_app,origem').eq('dia', hoje);
-      if (error) return (filaPwaCache = { estado: 'sem-permissao', porOwner: {} });
+      /* S8 / contrato 30 (handoff v6): a tabela do APP tem seller_id (perfil), não owner_id
+         nem origem — a consulta antiga dava 400 e o painel dizia "não confirmado" para
+         sempre. Lê o que existe e traduz o perfil para o dono do HubSpot. O app grava o
+         resumo a cada mudança da fila. Dia de Brasília, com fuso explícito. */
+      const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+      const [fila, perf] = await Promise.all([
+        supa.from('fila_pwa').select('seller_id,dia,pendentes,falhas,ultima_tentativa,versao_app,atualizado_em').eq('dia', hoje),
+        supa.from('profiles').select('id,id_hubspot'),
+      ]);
+      if (fila.error) return (filaPwaCache = { estado: 'sem-permissao', porOwner: {} });
+      const ownerDoPerfil = {};
+      (perf.data || []).forEach(p => { if (p.id_hubspot) ownerDoPerfil[p.id] = String(p.id_hubspot); });
       const porOwner = {};
-      (data || []).forEach(l => { porOwner[String(l.owner_id)] = l; });
+      (fila.data || []).forEach(l => { const o = ownerDoPerfil[l.seller_id]; if (o) porOwner[o] = Object.assign({ owner_id: o, origem: 'app' }, l); });
       return (filaPwaCache = { estado: 'ok', porOwner, dia: hoje });
     } catch (e) {
       return (filaPwaCache = { estado: 'erro', porOwner: {} });
@@ -55509,7 +55537,9 @@ const prospeccaoSelecao = new Set(); // ids selecionados pro lote (persiste entr
 function mostrarToast(mensagem, tipo) {
   /* TOAST v5 (28/09/26): centro inferior, 24px da borda, --inv. O sucesso some em 3,4 s
      com o check; erro e atenção vestem --erro/--aviso e ficam 6 s, com o X para fechar. */
-  tipo = tipo || 'erro';
+  /* N12 (handoff v6): sem tipo, o toast saía vermelho — inclusive "registrado ✓". Sem tipo,
+     mensagem com ✓ é sucesso; o resto continua erro (é o que as chamadas sem tipo são). */
+  tipo = tipo || (String(mensagem || '').indexOf('✓') >= 0 ? 'sucesso' : 'erro');
   let host = document.getElementById('toastHost');
   if (!host) {
     host = document.createElement('div');
@@ -56140,7 +56170,7 @@ document.addEventListener('click', async function (ev) {
     const resp = await fetch('/api/negocio-acao', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-      body: JSON.stringify({ op: 'nota', tipoAcao: 'proximo-passo', dealId: dealId, tipo: 'follow-up', data: hoje,
+      body: JSON.stringify({ op: 'nota', tipoAcao: 'proximo-passo', dealId: dealId, tipo: 'follow-up', data: hoje, hora: v5HoraDeCobrar(),
         texto: 'Cobrado pelo gestor: avançar este negócio hoje' }),
     });
     const corpo = await resp.json().catch(function () { return {}; });
@@ -56501,6 +56531,23 @@ function v5VpDist(aLat, aLon, bLat, bLon) {
 }
 
 /* Classifica as visitas de UMA pessoa (em ordem de hora). */
+/* UMA VERDADE SÓ (handoff v6, S2/S3): a prova é classificada no BANCO
+   (visitas_com_prova, 0143) — a mesma função que a pílula do mapa lê. O classificador
+   daqui embaixo fica só de reserva, se a função não responder. A do banco aplica o
+   limite de 200 m (500 m com pino aproximado), que este não aplicava. */
+function v5VpDoServidor(linhas) {
+  return (linhas || []).map(function (r) {
+    return {
+      v: { id: r.visit_id, client_id: r.client_id, visited_at: r.visited_at, distance_m: r.distancia_m, visited_by: r.visited_by, declarada: r.declarada },
+      foto: r.foto_id ? { id: r.foto_id, caminho: r.foto_caminho, client_id: r.client_id } : null,
+      serie: !!r.serie, pino: r.pino_movido_m != null,
+      prova: r.provada ? (r.motivo === 'foto' ? 'foto' : 'gps') : null,
+      motivo: r.provada ? '' : (r.motivo || 'sem prova'),
+      longe: !!r.provada && r.motivo === 'gps' && Number(r.distancia_m) > 150,
+    };
+  });
+}
+function v5VpDiaBRT(iso) { return new Date(iso).toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' }); }
 function v5VpClassificar(visitas, fotos) {
   const out = [];
   let ant = null;
@@ -56536,14 +56583,21 @@ async function v5VpCarregar(periodo) {
   /* quem some há mais tempo: a última visita de cada um, nos 30 dias (1 linha por pessoa não
      sai do PostgREST; 30 dias do time cabem numa página) */
   const trinta = new Date(Date.now() - 30 * 86400000).toISOString();
-  const [vis, ult, fot, perf] = await Promise.all([
+  const [vis, ult, fot, perf, srv] = await Promise.all([
     supa.from('client_visits').select('id, client_id, visited_at, distance_m, accuracy_m, declarada, pino_corrigido_de_m, visited_at_lat, visited_at_lon, visited_by')
       .gte('visited_at', ini.iso).order('visited_at', { ascending: true }).limit(2000),
     supa.from('client_visits').select('visited_by, visited_at').gte('visited_at', trinta).order('visited_at', { ascending: false }).limit(3000),
     supa.from('fotos_visita').select('id, client_id, criado_por, criado_em, caminho, lat, lng').gte('criado_em', new Date(Date.parse(ini.iso) - 3600000).toISOString()).limit(2000),
     supa.from('profiles').select('id, id_hubspot, full_name'),
+    supa.rpc('visitas_com_prova', { p_de: v5VpDiaBRT(ini.iso), p_ate: v5VpDiaBRT(new Date().toISOString()), p_pessoa: null }),
   ]);
   if (vis.error || fot.error || perf.error) return { erro: (vis.error || fot.error || perf.error).message };
+  /* a prova do banco, por pessoa (a mesma da pílula do mapa); sem ela, o classificador de reserva */
+  let clsPorPerfil = null;
+  if (!srv.error && Array.isArray(srv.data)) {
+    clsPorPerfil = {};
+    v5VpDoServidor(srv.data).forEach(function (x) { (clsPorPerfil[x.v.visited_by] = clsPorPerfil[x.v.visited_by] || []).push(x); });
+  }
   const ids = Array.from(new Set((vis.data || []).map(function (v) { return v.client_id; })));
   const nomes = {};
   for (let i = 0; i < ids.length; i += 150) {
@@ -56551,7 +56605,7 @@ async function v5VpCarregar(periodo) {
     (data || []).forEach(function (c) { nomes[c.id] = c; });
   }
   const metas = await v5CarregarMetas().catch(function () { return null; });
-  return { vis: vis.data || [], ult: ult.data || [], fotos: fot.data || [], perfis: perf.data || [], nomes: nomes, metas: metas };
+  return { vis: vis.data || [], ult: ult.data || [], fotos: fot.data || [], perfis: perf.data || [], nomes: nomes, metas: metas, clsPorPerfil: clsPorPerfil };
 }
 
 function v5VpHora(iso) {
@@ -56574,7 +56628,7 @@ function v5VpHTML(d, periodo) {
     const meta = metaDe(perfil);
     const minhas = perfil ? d.vis.filter(function (v) { return v.visited_by === perfil.id; }) : [];
     const fotos = perfil ? d.fotos.filter(function (f) { return f.criado_por === perfil.id; }) : [];
-    const cls = v5VpClassificar(minhas, fotos);
+    const cls = d.clsPorPerfil ? (perfil ? (d.clsPorPerfil[perfil.id] || []) : []) : v5VpClassificar(minhas, fotos);
     const provadas = cls.filter(function (x) { return x.prova; }).length;
     const ultima = perfil ? ultimaPorPerfil[perfil.id] : null;
     const diasSem = ultima ? v5VpDiasUteisDesde(ultima) : null;
@@ -56767,10 +56821,17 @@ async function v5PreencherPortoes(tentativa) {
     /* a sessão local, sem ir ao servidor de login a cada repintura */
     const { data: ses } = await supa.auth.getSession();
     const meuId = ses && ses.session && ses.session.user ? ses.session.user.id : null;
-    const [plano, vis, fichas] = await Promise.all([
+    /* UMA VERDADE SÓ (handoff v6, S2/T11): visitas feitas e provadas, meta e demos saem
+       das MESMAS funções do banco que a pílula do mapa lê (0143) — o 4/6 daqui é o 4/6 de lá.
+       As leituras diretas ficam de reserva, se a função não responder. */
+    const nada = Promise.resolve({ data: null, error: null });
+    const [plano, vis, fichas, vdd, metaSrv, demosSrv] = await Promise.all([
       supa.from('planos_semanais').select('fechado_em').eq('owner_id', String(sessaoAtual.ownerId)).eq('data_segunda', segunda).maybeSingle(),
       meuId ? supa.from('client_visits').select('declarada').eq('visited_by', meuId).gte('visited_at', ini) : Promise.resolve({ data: [] }),
       supa.from('fichas_de_rua').select('como_foi, proximo').eq('owner_id', String(sessaoAtual.ownerId)).gte('ocorrido_em', ini),
+      meuId ? supa.rpc('visitas_do_dia', { p_pessoa: meuId, p_dia: hoje }) : nada,
+      meuId ? supa.rpc('meta_visitas', { p_pessoa: meuId, p_dia: hoje }) : nada,
+      meuId ? supa.rpc('demos_com_decisor', { p_pessoa: meuId, p_de: hoje, p_ate: hoje }) : nada,
     ]);
     const cartao = function (rot, numero, de, pct, tag, tagCls, leg) {
       return '<div class="v5-portao"><span class="v5-rotulo">' + rot + '</span>'
@@ -56781,21 +56842,28 @@ async function v5PreencherPortoes(tentativa) {
     };
     /* a meta dele (seller_visit_goals), senão a do time (route_config) — a mesma do app */
     const metas = await v5CarregarMetas().catch(function () { return null; });
-    const metaV = (metas && ((meuId && metas.porPerfil[meuId]) || metas.padrao)) || V5_META_VISITAS;
+    const metaV = (!metaSrv.error && Number(metaSrv.data) > 0 ? Number(metaSrv.data) : null)
+      || (metas && ((meuId && metas.porPerfil[meuId]) || metas.padrao)) || V5_META_VISITAS;
     const fechado = plano.data && plano.data.fechado_em;
     const hh = fechado ? new Date(fechado).toLocaleString('pt-BR', { weekday: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' }) : '';
-    const nv = (vis.data || []).length;
+    const vddOk = !vdd.error && vdd.data && typeof vdd.data === 'object';
+    const nv = vddOk ? Number(vdd.data.feitas) || 0 : (vis.data || []).length;
+    const nprov = vddOk ? Number(vdd.data.provadas) || 0 : null;
     const decl = (vis.data || []).filter(function (x) { return x.declarada; }).length;
-    const nd = (fichas.data || []).filter(function (f) { return f.como_foi === 'falou_com_decisor' && f.proximo === 'reuniao'; }).length;
+    const nd = !demosSrv.error && demosSrv.data != null ? Number(demosSrv.data) || 0
+      : (fichas.data || []).filter(function (f) { return f.como_foi === 'falou_com_decisor' && f.proximo === 'reuniao'; }).length;
+    /* D1: a meta conta a visita feita; a prova vem com o mesmo peso, igual à pílula do mapa */
+    const legVis = nprov != null && nv ? (nprov + (nprov === 1 ? ' provada' : ' provadas') + (nv - nprov ? ' · ' + (nv - nprov) + ' sem prova' : ''))
+      : (decl ? decl + ' sem GPS (declarada)' : 'check-ins do mapa');
     const agora = document.getElementById('v5Portoes');
     if (!agora) return;
     agora.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>Portões do dia</h2>' + v5Selo('vivo') + '</div><div class="v5-portoes">'
       + (plano.error ? v5NaoMedido('Plano da semana', 'não consegui ler o plano agora')
         : cartao('Plano da semana', fechado ? 'Validado' : 'Aberto', '', null, fechado ? 'o gestor já vê na Daily' : 'a semana ainda não foi fechada', fechado ? 'is-toque-hoje' : 'is-nm', fechado ? 'fechado ' + hh : ''))
       + (vis.error ? v5NaoMedido('Visitas de hoje', 'não consegui ler os check-ins agora')
-        : cartao('Visitas hoje', nv, 'de ' + metaV, (nv / metaV) * 100, nv >= metaV ? 'meta do dia batida' : 'faltam ' + (metaV - nv), nv >= metaV ? 'is-toque-hoje' : 'is-toque-dias', decl ? decl + ' sem GPS (declarada)' : 'check-ins do mapa'))
+        : cartao('Visitas hoje', nv, 'de ' + metaV, (nv / metaV) * 100, nv >= metaV ? 'meta do dia batida' : 'faltam ' + (metaV - nv), nv >= metaV ? 'is-toque-hoje' : 'is-toque-dias', legVis))
       + (fichas.error ? v5NaoMedido('Demos com decisor', 'não consegui ler as fichas de rua agora')
-        : cartao('Demos com decisor', nd, 'de ' + V5_META_DEMOS, (nd / V5_META_DEMOS) * 100, nd >= V5_META_DEMOS ? 'meta do dia batida' : 'faltam ' + (V5_META_DEMOS - nd), nd >= V5_META_DEMOS ? 'is-toque-hoje' : 'is-toque-dias', 'pela ficha de rua · medindo desde 25/09'))
+        : cartao('Demos com decisor', nd, 'de ' + V5_META_DEMOS, (nd / V5_META_DEMOS) * 100, nd >= V5_META_DEMOS ? 'meta do dia batida' : 'faltam ' + (V5_META_DEMOS - nd), nd >= V5_META_DEMOS ? 'is-toque-hoje' : 'is-toque-dias', 'ficha de rua ou reunião agendada no app · medindo desde 25/09'))
       + '</div></section>';
     /* só guarda leitura inteira: um bloco com "não consegui ler" tenta de novo na próxima */
     if (!plano.error && !vis.error && !fichas.error) V5_HTML_CACHE.portoes = { em: Date.now(), html: agora.innerHTML };
@@ -56816,6 +56884,13 @@ async function v5PreencherPortoes(tentativa) {
    para um botão que já tinha saído da tela, e o novo voltava "Cobrar os N", clicável de
    novo. Agora o estado mora aqui, por lote, e o botão desenhado o lê (v5CobrancaDoLote). */
 const V5_COBRANCA = {};
+/* S14 (handoff v6): o Cobrar mandava só a data e a tarefa caía às 09:00 — de tarde ela já
+   nascia atrasada. Agora vai com a próxima hora cheia de trabalho (entre 09:00 e 18:00). */
+function v5HoraDeCobrar() {
+  const h = Number(new Date().toLocaleString('en-GB', { timeZone: 'America/Sao_Paulo', hour: '2-digit', hour12: false }));
+  const prox = Math.min(18, Math.max(9, (isNaN(h) ? 9 : h) + 1));
+  return (prox < 10 ? '0' : '') + prox + ':00';
+}
 function v5CobrancaDoLote(chave) { return V5_COBRANCA[chave] || null; }
 function v5CobrancaPintar(chave) {
   const st = V5_COBRANCA[chave];
@@ -56846,7 +56921,7 @@ document.addEventListener('click', async function (ev) {
       const resp = await fetch('/api/negocio-acao', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ op: 'nota', tipoAcao: 'proximo-passo', dealId: ids[i], tipo: 'follow-up', data: hoje,
+        body: JSON.stringify({ op: 'nota', tipoAcao: 'proximo-passo', dealId: ids[i], tipo: 'follow-up', data: hoje, hora: v5HoraDeCobrar(),
           texto: 'Cobrado pelo gestor: avançar este negócio hoje' }),
       });
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -60589,7 +60664,9 @@ async function ps6VpCarregar(ownerId) {
     const vis = res[0], fot = res[1];
     if (vis.error || fot.error) throw (vis.error || fot.error);
     const visitas = vis.data || [], fotos = fot.data || [];
-    const cls = v5VpClassificar(visitas, fotos);
+    /* a prova do banco (0143), a mesma da pílula do mapa; o classificador daqui é a reserva */
+    const srv = await supa.rpc('visitas_com_prova', { p_de: v5VpDiaBRT(desde), p_ate: v5VpDiaBRT(new Date().toISOString()), p_pessoa: p.id });
+    const cls = !srv.error && Array.isArray(srv.data) ? v5VpDoServidor(srv.data) : v5VpClassificar(visitas, fotos);
     const ids = Array.from(new Set(visitas.map(function (v) { return v.client_id; }).concat(fotos.map(function (f) { return f.client_id; })).filter(Boolean)));
     const nomes = {};
     for (let i = 0; i < ids.length; i += 150) {
