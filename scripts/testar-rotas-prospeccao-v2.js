@@ -149,9 +149,11 @@ checar('score sem nota é "—", não um número inventado',
     && aba.indexOf('sem nota na base') > 0,
   'os 1.677 leads da Casa dos Dados chegam sem nota; um score ali seria opinião com cara de dado');
 
-checar('o check-in do Expogo aparece como não medido, nunca como zero',
-  /cump: .não medido.,/.test(aba.replace(/'/g, '.'))
-    && aba.indexOf('check-in do Expogo fora do snapshot') > 0,
+/* 28/09: o cumprido passou a ser medido pelo mapa (paradas feitas × planejadas) no bloco
+   "A rua de cada executivo · pelo mapa"; a linha do rt7 aponta para ele, e continua nunca sendo zero */
+checar('o cumprido da rua aponta para a medida do mapa, nunca como zero',
+  /cump: .no mapa ↓.,/.test(aba.replace(/'/g, '.'))
+    && aba.indexOf('paradas feitas × planejadas') > 0,
   'zero aqui acusaria o time de não ter ido à rua quando o que falta é a medida');
 
 checar('os chips do radar saem da ficha, e não de review que ninguém coleta',

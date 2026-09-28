@@ -907,7 +907,8 @@ console.log('');
   /* E A TELA AVISA. Montar a segunda que vem achando que é hoje é o erro caro aqui. */
   checar('e a tela diz em voz alta quando não é a semana atual',
     cod.indexOf('Você está montando a semana de ') > 0
-      && cod.indexOf('A sua Daily de hoje continua lendo a semana atual.') > 0
+      /* 28/09: o executivo não tem mais Daily; o aviso diz o que continua na semana atual */
+      && cod.indexOf('O Hoje e o mapa continuam na semana atual.') > 0
       && /semanaFora: \(Number\(PL6_SEMANA\) \|\| 0\) !== 0,/.test(cod),
     'sem o aviso, o dia montado no lugar errado só aparece na segunda-feira seguinte');
 
