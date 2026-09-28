@@ -120,3 +120,14 @@ quê, e o que desfaz a decisão se ela estiver errada.
 - **Placar de hoje: "Semana validada"**, não "Planos validados": o herói da Daily logo
   abaixo já conta os planos MONTADOS do dia; nomes parecidos para medidas diferentes
   mostravam 1/10 e 0/10 lado a lado.
+
+## Fases 5 e 6 · executivo e a camada da rua (28/09/26)
+- **Hoje: "Ir para a rua"** (primário) abre o mapa na lente Meu dia, onde a próxima porta
+  já está destacada. Só dentro do PWA e só para o executivo.
+- **Planejamento: "Ver no mapa" só no dia de hoje.** O mapa mostra a rota do dia corrente;
+  um link em quinta-feira abriria o mapa de hoje e mentiria sobre o que mostra.
+- **Funil de porta** (Portas → Decisor → Demo) e **qualidade do registro** (GPS, foto,
+  ficha) das fichas de rua dos últimos 30 dias: Desenvolvimento (a minha), Pessoas (a da
+  pessoa escolhida) e Semana (o time). Tracejado "medindo desde 25/09" até 23/10.
+- **Bairro e horário que mais converteram continuam não medidos** até 23/10 — com menos
+  de 4 semanas de ficha, o "melhor bairro" seria o bairro de quem mais registrou.
