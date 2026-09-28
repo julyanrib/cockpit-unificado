@@ -6485,6 +6485,8 @@ foi escrita para jogar o "0 de 27 resolvidos"
          Esta view é "Desenvolvimento" para o executivo e "Pessoas" para o gestor —
          sempre foi. #ps6Raiz é o lado do GESTOR, desenhado da prancha pessoas-final;
          #pdisContent continua sendo o do executivo, intocado. renderPDIs escolhe. -->
+    <!-- 28/09/26: Visitas com prova — GPS na porta ou foto, grande, no topo de Pessoas (só o gestor; v5PreencherVisitasProva) -->
+    <div id="v5VisitasProva" style="width:min(1780px,100% - 64px);margin:0 auto 16px;"></div>
     <div id="ps6Raiz" style="width:min(1780px,100% - 64px);margin:0 auto;"></div>
     <div id="pdisContent"></div>
     <!-- v5 (28/09/26): a rua da pessoa — funil de porta e qualidade do registro (v5PreencherCamadaDaRua) -->
@@ -7298,6 +7300,8 @@ async function aoVivoAplicar() {
   if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
   if (['visita', 'parada', 'plano', 'ficha', 'foto'].some(function (t) { return tipos.has(t); }) && typeof V5_HTML_CACHE !== 'undefined') V5_HTML_CACHE = {};
   if (tipos.has('foto')) { PS6_FOTOS.porDono = {}; mudou = true; }
+
+  if ((tipos.has('visita') || tipos.has('foto')) && typeof V5_VP !== 'undefined') { V5_VP.em = 0; if (typeof v5PreencherVisitasProva === 'function') v5PreencherVisitasProva(true); }
   if (tipos.has('plano') || tipos.has('ficha')) mudou = true;
 
   if (tipos.has('pdi')) {
@@ -38793,6 +38797,235 @@ document.addEventListener('click', function (ev) {
 });
 
 const V5_META_VISITAS = 6, V5_META_DEMOS = 2;
+
+let V5_VP = { em: 0, chave: '', dados: null, voo: null, periodo: 'hoje', aberto: null, fotos: {} };
+
+function v5VpInicioDoPeriodo(periodo) {
+  const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  const d = new Date(hoje + 'T00:00:00-03:00');
+  if (periodo === 'semana') {
+    const dow = (new Date(hoje + 'T12:00:00-03:00').getUTCDay() + 6) % 7;
+    d.setUTCDate(d.getUTCDate() - dow);
+  }
+  return { iso: d.toISOString(), hoje: hoje };
+}
+
+function v5VpDiasUteis(periodo) {
+  if (periodo !== 'semana') return 1;
+  const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  const dow = (new Date(hoje + 'T12:00:00-03:00').getUTCDay() + 6) % 7;
+  return Math.min(5, dow + 1);
+}
+
+function v5VpDist(aLat, aLon, bLat, bLon) {
+  const r = 6371000, rad = Math.PI / 180;
+  const dLat = (bLat - aLat) * rad, dLon = (bLon - aLon) * rad;
+  const s = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(aLat * rad) * Math.cos(bLat * rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 2 * r * Math.asin(Math.sqrt(s));
+}
+
+function v5VpClassificar(visitas, fotos) {
+  const out = [];
+  let ant = null;
+  visitas.forEach(function (v) {
+    const t = Date.parse(v.visited_at);
+    const foto = fotos.find(function (f) {
+      const tf = Date.parse(f.criado_em);
+      return f.client_id === v.client_id && f.criado_por === v.visited_by && tf >= t - 30 * 60000 && tf <= t + 2 * 3600000;
+    }) || null;
+    let serie = false;
+    if (ant && ant.client_id !== v.client_id && t - Date.parse(ant.visited_at) < 3 * 60000
+      && v.visited_at_lat != null && ant.visited_at_lat != null
+      && v5VpDist(Number(v.visited_at_lat), Number(v.visited_at_lon), Number(ant.visited_at_lat), Number(ant.visited_at_lon)) < 50) serie = true;
+    const pino = v.pino_corrigido_de_m != null;
+    const gps = !v.declarada && !pino && v.distance_m != null;
+    let prova = null, motivo = '';
+    if (foto) prova = 'foto';
+    else if (gps && !serie) prova = 'gps';
+    if (!prova) {
+      motivo = serie ? 'em série (outro lead no mesmo ponto, < 3 min)'
+        : pino ? 'pino movido na hora (' + Math.round(Number(v.pino_corrigido_de_m)) + ' m), sem foto'
+          : v.declarada ? 'declarada sem GPS, sem foto' : 'sem prova';
+    }
+    out.push({ v: v, foto: foto, serie: serie, pino: pino, prova: prova, motivo: motivo,
+      longe: gps && Number(v.distance_m) > 150 });
+    ant = v;
+  });
+  return out;
+}
+
+async function v5VpCarregar(periodo) {
+  const ini = v5VpInicioDoPeriodo(periodo);
+
+  const trinta = new Date(Date.now() - 30 * 86400000).toISOString();
+  const [vis, ult, fot, perf] = await Promise.all([
+    supa.from('client_visits').select('id, client_id, visited_at, distance_m, accuracy_m, declarada, pino_corrigido_de_m, visited_at_lat, visited_at_lon, visited_by')
+      .gte('visited_at', ini.iso).order('visited_at', { ascending: true }).limit(2000),
+    supa.from('client_visits').select('visited_by, visited_at').gte('visited_at', trinta).order('visited_at', { ascending: false }).limit(3000),
+    supa.from('fotos_visita').select('id, client_id, criado_por, criado_em, caminho, lat, lng').gte('criado_em', new Date(Date.parse(ini.iso) - 3600000).toISOString()).limit(2000),
+    supa.from('profiles').select('id, id_hubspot, full_name'),
+  ]);
+  if (vis.error || fot.error || perf.error) return { erro: (vis.error || fot.error || perf.error).message };
+  const ids = Array.from(new Set((vis.data || []).map(function (v) { return v.client_id; })));
+  const nomes = {};
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data } = await supa.from('clients').select('id, nome, empresa, bairro, cidade').in('id', ids.slice(i, i + 150));
+    (data || []).forEach(function (c) { nomes[c.id] = c; });
+  }
+  return { vis: vis.data || [], ult: ult.data || [], fotos: fot.data || [], perfis: perf.data || [], nomes: nomes };
+}
+
+function v5VpHora(iso) {
+  return new Date(iso).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function v5VpHTML(d, periodo) {
+  const reps = (DATA.reps || []).filter(function (r) { return r && r.ownerId && !/DESATIVADO/i.test(r.name || r.nome || ""); });
+  const perfilDoOwner = {}, ownerDoPerfil = {};
+  d.perfis.forEach(function (p) { if (p.id_hubspot) { perfilDoOwner[String(p.id_hubspot)] = p; ownerDoPerfil[p.id] = String(p.id_hubspot); } });
+  const ultimaPorPerfil = {};
+  d.ult.forEach(function (u) { if (!ultimaPorPerfil[u.visited_by]) ultimaPorPerfil[u.visited_by] = u.visited_at; });
+  const dias = v5VpDiasUteis(periodo);
+  const meta = V5_META_VISITAS * dias;
+  const linhas = reps.map(function (r) {
+    const perfil = perfilDoOwner[String(r.ownerId)] || null;
+    const minhas = perfil ? d.vis.filter(function (v) { return v.visited_by === perfil.id; }) : [];
+    const fotos = perfil ? d.fotos.filter(function (f) { return f.criado_por === perfil.id; }) : [];
+    const cls = v5VpClassificar(minhas, fotos);
+    const provadas = cls.filter(function (x) { return x.prova; }).length;
+    const ultima = perfil ? ultimaPorPerfil[perfil.id] : null;
+    const diasSem = ultima ? Math.floor((Date.now() - Date.parse(ultima)) / 86400000) : null;
+    return { r: r, perfil: perfil, cls: cls, total: cls.length, provadas: provadas, suspeitas: cls.length - provadas, ultima: ultima, diasSem: diasSem };
+  }).sort(function (a, b) { return (a.provadas / meta) - (b.provadas / meta) || a.total - b.total; });
+
+  const semNada = linhas.filter(function (l) { return l.diasSem == null || l.diasSem >= 3; });
+  const totProv = linhas.reduce(function (s, l) { return s + l.provadas; }, 0);
+  const totSus = linhas.reduce(function (s, l) { return s + l.suspeitas; }, 0);
+  const metaTime = meta * linhas.length;
+
+  const aba = function (id, rot) {
+    const on = periodo === id;
+    return '<button type="button" data-vp-periodo="' + id + '" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid ' + (on ? 'var(--ink)' : 'var(--line)') + ';background:' + (on ? 'var(--ink)' : 'transparent') + ';color:' + (on ? 'var(--panel)' : 'var(--muted)') + ';font:700 12px var(--font-body);cursor:pointer;">' + rot + '</button>';
+  };
+  const barra = function (n, de) {
+    const pct = de ? Math.min(100, Math.round((n / de) * 100)) : 0;
+    const cor = pct >= 100 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
+    return '<div style="height:8px;border-radius:4px;background:var(--line-soft);overflow:hidden;min-width:90px;"><i style="display:block;height:100%;width:' + pct + '%;background:' + cor + ';"></i></div>';
+  };
+
+  let h = '<section class="v5-bloco" style="gap:16px;">'
+    + '<div class="v5-bloco-cab"><h2 style="margin:0;font:800 22px var(--font-display);color:var(--ink);">Visitas com prova</h2>' + v5Selo('vivo')
+    + '<span style="margin-left:auto;display:flex;gap:8px;">' + aba('hoje', 'Hoje') + aba('semana', 'Semana') + '</span></div>'
+    + '<p style="margin:0;font:500 13px/1.5 var(--font-body);color:var(--muted);">Conta como visita só o check-in com <b>GPS na porta</b> (até 200 m do pino) ou com <b>foto da fachada</b>. Em série (outro lead do mesmo ponto em menos de 3 min), pino movido sem foto e declarada sem foto ficam como <b>sem prova</b>. Atualiza sozinho a cada visita ou foto.</p>'
+    + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;">'
+    + v5VpCartao('Comprovadas', String(totProv), 'de ' + metaTime + ' (meta ' + V5_META_VISITAS + '/dia × ' + linhas.length + ')', totProv >= metaTime ? 'var(--green)' : 'var(--red)')
+    + v5VpCartao('Sem prova', String(totSus), totSus ? 'em série, pino movido ou sem foto' : 'nenhuma', totSus ? 'var(--amber)' : 'var(--green)')
+    + v5VpCartao('Sem visita há 3+ dias', String(semNada.length), semNada.length ? semNada.map(function (l) { return (l.r.name || l.r.nome || l.r.ownerId); }).slice(0, 3).join(', ') + (semNada.length > 3 ? '…' : '') : 'todo mundo na rua', semNada.length ? 'var(--red)' : 'var(--green)')
+    + '</div>'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font:500 13px var(--font-body);color:var(--ink);min-width:720px;">'
+    + '<thead><tr style="text-align:left;color:var(--muted2);font:700 11px var(--font-body);letter-spacing:.06em;text-transform:uppercase;">'
+    + '<th style="padding:8px 6px;">Executivo</th><th style="padding:8px 6px;">Comprovadas / meta</th><th style="padding:8px 6px;"></th><th style="padding:8px 6px;">Sem prova</th><th style="padding:8px 6px;">Fotos</th><th style="padding:8px 6px;">Última visita</th></tr></thead><tbody>';
+  linhas.forEach(function (l) {
+    const aberto = V5_VP.aberto === String(l.r.ownerId);
+    const nFotos = l.cls.filter(function (x) { return x.foto; }).length;
+    const ultimaTxt = !l.perfil ? 'sem login no app' : l.ultima ? (l.diasSem >= 1 ? 'há ' + l.diasSem + (l.diasSem === 1 ? ' dia' : ' dias') : v5VpHora(l.ultima)) : 'nenhuma em 30 dias';
+    const alerta = !l.perfil || l.diasSem == null || l.diasSem >= 3;
+    h += '<tr data-vp-exec="' + v5Esc(l.r.ownerId) + '" style="border-top:1px solid var(--line-soft);cursor:pointer;' + (aberto ? 'background:var(--panel2);' : '') + '">'
+      + '<td style="padding:10px 6px;font-weight:700;">' + (aberto ? '▾ ' : '▸ ') + v5Esc((l.r.name || l.r.nome || l.r.ownerId)) + '</td>'
+      + '<td style="padding:10px 6px;font-weight:800;">' + l.provadas + ' <span style="color:var(--muted2);font-weight:600;">/ ' + meta + '</span></td>'
+      + '<td style="padding:10px 6px;width:30%;">' + barra(l.provadas, meta) + '</td>'
+      + '<td style="padding:10px 6px;color:' + (l.suspeitas ? 'var(--amber-ink)' : 'var(--muted2)') + ';font-weight:700;">' + (l.suspeitas || '—') + '</td>'
+      + '<td style="padding:10px 6px;">' + (nFotos || '—') + '</td>'
+      + '<td style="padding:10px 6px;color:' + (alerta ? 'var(--red)' : 'var(--muted)') + ';font-weight:' + (alerta ? '800' : '600') + ';">' + ultimaTxt + '</td></tr>';
+    if (aberto) h += '<tr><td colspan="6" style="padding:0 6px 14px;">' + v5VpDetalheHTML(l, d) + '</td></tr>';
+  });
+  h += '</tbody></table></div></section>';
+  return h;
+}
+
+function v5VpCartao(rot, num, leg, cor) {
+  return '<div style="border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:4px;">'
+    + '<span style="font:700 11px var(--font-body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted2);">' + rot + '</span>'
+    + '<b style="font:800 34px/1.1 var(--font-display);color:' + cor + ';">' + num + '</b>'
+    + '<small style="font:600 12px/1.4 var(--font-body);color:var(--muted);">' + v5Esc(leg) + '</small></div>';
+}
+
+function v5VpDetalheHTML(l, d) {
+  if (!l.cls.length) return '<p style="margin:8px 0 0;color:var(--muted);font:600 13px var(--font-body);">Nenhum check-in neste período.</p>';
+  let h = '<div style="display:flex;flex-direction:column;gap:6px;margin-top:6px;">';
+  l.cls.slice().reverse().forEach(function (x) {
+    const c = d.nomes[x.v.client_id] || {};
+    const nome = c.empresa || c.nome || 'lead';
+    const chip = x.prova === 'foto' ? ['Foto', 'var(--green-bg)', 'var(--green-ink)']
+      : x.prova === 'gps' ? ['GPS ' + Math.round(Number(x.v.distance_m)) + ' m', 'var(--green-bg)', 'var(--green-ink)']
+        : ['Sem prova', 'var(--red-bg)', 'var(--red)'];
+    const url = x.foto ? V5_VP.fotos[x.foto.caminho] : null;
+    h += '<div style="display:flex;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line-soft);border-radius:10px;">'
+      + '<span style="width:92px;flex:none;font:700 12px var(--font-body);color:var(--muted);">' + v5VpHora(x.v.visited_at) + '</span>'
+      + '<span style="flex:1;min-width:0;"><b style="display:block;font:700 13px var(--font-body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + v5Esc(nome) + '</b>'
+      + '<small style="font:600 12px var(--font-body);color:var(--muted2);">' + v5Esc([c.bairro, c.cidade].filter(Boolean).join(' · ')) + (x.motivo ? ' · <span style="color:var(--red);">' + v5Esc(x.motivo) + '</span>' : '') + (x.longe ? ' · a ' + Math.round(Number(x.v.distance_m)) + ' m do pino' : '') + '</small></span>'
+      + '<span style="flex:none;height:24px;padding:0 10px;border-radius:12px;display:inline-flex;align-items:center;background:' + chip[1] + ';color:' + chip[2] + ';font:800 11px var(--font-body);">' + chip[0] + '</span>'
+      + (x.foto ? (url ? '<a href="' + v5Esc(url) + '" target="_blank" rel="noopener" style="flex:none;"><img src="' + v5Esc(url) + '" alt="foto da fachada" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--line);"></a>'
+        : '<span style="flex:none;width:56px;height:56px;border-radius:8px;background:var(--line-soft);"></span>') : '')
+      + '</div>';
+  });
+  return h + '</div>';
+}
+
+async function v5PreencherVisitasProva(forcar) {
+  const alvo = document.getElementById('v5VisitasProva');
+  if (!alvo) return;
+  if (!supa || !sessaoAtual || sessaoAtual.role !== 'manager') { alvo.innerHTML = ''; return; }
+  const periodo = V5_VP.periodo;
+  const fresco = V5_VP.dados && V5_VP.chave === periodo && Date.now() - V5_VP.em < 60000;
+  if (fresco && !forcar) { alvo.innerHTML = v5VpHTML(V5_VP.dados, periodo); return; }
+  if (!V5_VP.dados) alvo.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2 style="margin:0;">Visitas com prova</h2></div><p style="margin:0;color:var(--muted);">Lendo os check-ins e as fotos…</p></section>';
+  else alvo.innerHTML = v5VpHTML(V5_VP.dados, V5_VP.chave || periodo);
+  if (V5_VP.voo) return V5_VP.voo;
+  V5_VP.voo = (async function () {
+    const d = await v5VpCarregar(periodo);
+    if (d.erro) {
+      alvo.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2 style="margin:0;">Visitas com prova</h2></div><p style="margin:0;color:var(--red);">Não consegui ler as visitas agora (' + v5Esc(d.erro) + '). Tento de novo na próxima atualização.</p></section>';
+      return;
+    }
+    V5_VP.dados = d; V5_VP.chave = periodo; V5_VP.em = Date.now();
+    const agora = document.getElementById('v5VisitasProva');
+    if (agora) agora.innerHTML = v5VpHTML(d, periodo);
+  })();
+  try { await V5_VP.voo; } catch (e) { console.log('[visitas com prova]', e && e.message); } finally { V5_VP.voo = null; }
+}
+
+async function v5VpAssinarFotos(ownerId) {
+  const d = V5_VP.dados;
+  if (!d) return;
+  const perfil = d.perfis.find(function (p) { return String(p.id_hubspot) === String(ownerId); });
+  if (!perfil) return;
+  const faltam = d.fotos.filter(function (f) { return f.criado_por === perfil.id && !V5_VP.fotos[f.caminho]; }).map(function (f) { return f.caminho; });
+  if (!faltam.length) return;
+  const { data } = await supa.storage.from('fotos-visita').createSignedUrls(faltam, 3600);
+  (data || []).forEach(function (s) { if (s && s.path && s.signedUrl) V5_VP.fotos[s.path] = s.signedUrl; });
+  const alvo = document.getElementById('v5VisitasProva');
+  if (alvo && V5_VP.aberto === String(ownerId)) alvo.innerHTML = v5VpHTML(d, V5_VP.chave);
+}
+
+document.addEventListener('click', function (ev) {
+  const per = ev.target.closest && ev.target.closest('[data-vp-periodo]');
+  if (per) {
+    ev.preventDefault();
+    V5_VP.periodo = per.getAttribute('data-vp-periodo');
+    v5PreencherVisitasProva(true);
+    return;
+  }
+  const ex = ev.target.closest && ev.target.closest('[data-vp-exec]');
+  if (!ex) return;
+  ev.preventDefault();
+  const id = ex.getAttribute('data-vp-exec');
+  V5_VP.aberto = V5_VP.aberto === id ? null : id;
+  const alvo = document.getElementById('v5VisitasProva');
+  if (alvo && V5_VP.dados) alvo.innerHTML = v5VpHTML(V5_VP.dados, V5_VP.chave);
+  if (V5_VP.aberto) v5VpAssinarFotos(id);
+});
+
 let V5_PORTOES_VOO = null;
 
 let V5_HTML_CACHE = {};
@@ -41863,6 +42096,7 @@ function renderPessoas() {
   const yAntes = window.scrollY;
   raiz.innerHTML = pv6TelaHTML(dados);
   ps6FotosAnexar(raiz, dados.dossie && dados.dossie.ownerId);
+  if (typeof v5PreencherVisitasProva === 'function') v5PreencherVisitasProva();
   if (window.scrollY !== yAntes) window.scrollTo(0, yAntes);
 
   const alvo = dados.dossie && dados.dossie.ownerId;
