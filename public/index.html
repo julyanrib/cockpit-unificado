@@ -22299,9 +22299,41 @@ async function pl6Carregar(rep, segundaPedida) {
   return { ok: true, tinhaLinha: !!pl6Plano };
 }
 
+function pl6MesclarGrade(base, nova, fresca) {
+  const J = function (x) { return JSON.stringify(x == null ? null : x); };
+  const out = [];
+  for (let d = 0; d < PL6_DIAS_UTEIS; d++) {
+    const b = Array.isArray(base[d]) ? base[d] : [];
+    const n = Array.isArray(nova[d]) ? nova[d] : [];
+    const f = fresca && Array.isArray(fresca[d]) ? fresca[d] : [];
+    const col = [];
+    for (let i = 0; i < PL6_SLOTS; i++) col.push(J(n[i]) !== J(b[i]) ? (n[i] == null ? null : n[i]) : (f[i] == null ? null : f[i]));
+    const naBase = new Set(b.map(pl6SlotId).filter(Boolean));
+    const naCol = new Set(col.map(pl6SlotId).filter(Boolean));
+    f.forEach(function (v) {
+      const id = pl6SlotId(v);
+      if (!id || naBase.has(id) || naCol.has(id)) return;
+      const livre = col.findIndex(function (x) { return x == null; });
+      if (livre >= 0) { col[livre] = v; naCol.add(id); }
+    });
+    out.push(col);
+  }
+  return out;
+}
+
 async function pl6Gravar(rep, campos, segundaPedida) {
   if (!DATA.supabase || !supa) return { error: new Error('Sem Supabase nesta sessão.') };
   const segunda = segundaPedida || pl6SegundaEmFoco();
+
+  const base = (pl6Plano && String(pl6Plano.data_segunda) === String(segunda)) ? pl6GradeDoPlano() : pl6GradeVazia();
+  let grade = (campos && Array.isArray(campos.grade)) ? campos.grade : pl6GradeDoPlano();
+  {
+    const agora = await supa.from('planos_semanais').select('grade')
+      .eq('owner_id', String(rep.ownerId)).eq('data_segunda', segunda).limit(1);
+    if (agora.error) { console.error('Plano semanal, releitura:', agora.error.message); return { error: agora.error }; }
+    const fresca = agora.data && agora.data[0] ? agora.data[0].grade : null;
+    if (Array.isArray(fresca)) grade = pl6MesclarGrade(base, grade, fresca);
+  }
   const linha = Object.assign({
     owner_id: String(rep.ownerId),
     data_segunda: segunda,
@@ -22310,7 +22342,7 @@ async function pl6Gravar(rep, campos, segundaPedida) {
     fechado_em: pl6Plano ? pl6Plano.fechado_em : null,
     fechado_por: pl6Plano ? pl6Plano.fechado_por : (sessaoAtual && sessaoAtual.email) || null,
     atualizado_em: new Date().toISOString()
-  }, campos);
+  }, campos, { grade: grade });
   const { data, error } = await supa.from('planos_semanais')
     .upsert(linha, { onConflict: 'owner_id,data_segunda' }).select();
   if (error) { console.error('Plano semanal, escrita:', error.message); return { error }; }
