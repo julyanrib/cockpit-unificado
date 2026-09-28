@@ -11435,6 +11435,7 @@ function reidratarPosLogin() {
     (async () => {
       await carregarDailies();
       if (typeof carregarPdiCompromissos === 'function') await carregarPdiCompromissos();
+      if (typeof carregarAgendaDoApp === 'function') await carregarAgendaDoApp();
       // BLOCO 2 (10/08/26): antes daqui saía um redesenho de Cockpit + Daily + Meu Painel
       // de uma vez, mesmo pra quem só ia olhar a aba "Hoje" — as abas invisíveis eram
       // remontadas por nada. Agora só a aba ABERTA é reaplicada com o cache já quente;
@@ -11963,6 +11964,10 @@ async function aoVivoAplicar() {
   }
   /* recado novo do gestor: o Hoje do executivo mostra "Recado do seu gestor" */
   if (tipos.has('recado')) mudou = true;
+  if (tipos.has('agenda')) {
+    try { if (typeof carregarAgendaDoApp === 'function') await carregarAgendaDoApp(); } catch (e) {}
+    mudou = true;
+  }
   if (tipos.has('comunicado') && typeof carregarComunicados === 'function') {
     try { await carregarComunicados(); if (typeof atualizarSinoAvisos === 'function') atualizarSinoAvisos(); } catch (e) { /* o sino fica como estava */ }
   }
@@ -56367,6 +56372,65 @@ async function tm10PreencherCobPessoas(tentativa) {
     }).join('')
     + '</tbody></table></div>'
     + '<span class="tm10-cob-leg">O check-in conclui a tarefa: tarefa feita e visita com GPS costumam ser o mesmo toque, não some. Nota não entra — chega do HubSpot sem dono.</span>';
+}
+
+/* ══ A AGENDA DO APP ENTRA NA AGENDA DO COCKPIT (28/09/26) ═════════════════════════════
+   "Cliquei em agendar no lead e ele não foi pro cockpit" (Julyan, na Daily). O Agendar
+   do app grava em client_meetings e, na demo, SÓ no Google Calendar: nunca chega ao
+   HubSpot, e a agenda do Cockpit vinha só do HubSpot. Medido: 55 demos em 30 dias que
+   o Cockpit nunca viu. Aqui a agenda do app entra na mesma lista (DATA.agenda.itens),
+   então Daily, Agenda, Planejamento e toques leem as duas fontes sem mudar nada.
+   · Demo vira reunião (como a do HubSpot). Follow-up vira tarefa em aberto: agendar não
+     é ter feito, e só a conclusão conta como toque.
+   · Follow-up que já virou nota no HubSpot (hs_engagement_id) fica de fora — o robô
+     já traz, e entraria duas vezes. Cancelado fica de fora.
+   · Idempotente: tira os itens do app da carga anterior antes de pôr os de agora. */
+let AGENDA_APP_VOO = null;
+async function carregarAgendaDoApp() {
+  if (!supa || typeof DATA === 'undefined' || !DATA) return;
+  if (AGENDA_APP_VOO) return AGENDA_APP_VOO;
+  AGENDA_APP_VOO = (async function () {
+    const desde = new Date(Date.now() - 60 * 86400000).toISOString();
+    const ate = new Date(Date.now() + 60 * 86400000).toISOString();
+    const r = await supa.from('client_meetings')
+      .select('id, client_id, scheduled_at, duration_minutes, observacoes, status, type, created_by, hs_engagement_id')
+      .gte('scheduled_at', desde).lte('scheduled_at', ate).limit(1000);
+    if (r.error) { console.log('[agenda do app]', r.error.message); return; }
+    const lista = (r.data || []).filter(function (m) {
+      return m.status !== 'cancelada' && !(m.type === 'follow_up' && m.hs_engagement_id);
+    });
+    const idsC = Array.from(new Set(lista.map(function (m) { return m.client_id; }).filter(Boolean)));
+    const idsP = Array.from(new Set(lista.map(function (m) { return m.created_by; }).filter(Boolean)));
+    const [c, p] = await Promise.all([
+      idsC.length ? supa.from('clients').select('id, nome, id_hubspot').in('id', idsC.slice(0, 900)) : Promise.resolve({ data: [] }),
+      idsP.length ? supa.from('profiles').select('id, id_hubspot').in('id', idsP) : Promise.resolve({ data: [] }),
+    ]);
+    const cli = {}, dono = {};
+    (c.data || []).forEach(function (x) { cli[x.id] = x; });
+    (p.data || []).forEach(function (x) { if (x.id_hubspot) dono[x.id] = String(x.id_hubspot); });
+    const itens = lista.map(function (m) {
+      const cl = cli[m.client_id];
+      if (!cl || !cl.id_hubspot) return null;
+      const deal = String(cl.id_hubspot);
+      const lead = typeof buscarLeadFunilPorId === 'function' ? buscarLeadFunilPorId(deal) : null;
+      const quem = dono[m.created_by] || (lead && lead.ownerId ? String(lead.ownerId) : null);
+      const nome = cl.nome || (lead && lead.name) || 'Lead';
+      const base = { hs_object_id: 'app-' + m.id, origem_app: true, hubspot_owner_id: quem, lead_deal_id: deal,
+        lead_nome: nome, lead_owner_id: lead && lead.ownerId ? String(lead.ownerId) : quem };
+      if (m.type === 'follow_up') {
+        return Object.assign(base, { hs_task_subject: 'Follow-up · ' + nome, hs_task_status: 'NOT_STARTED',
+          hs_task_type: 'TODO', hs_timestamp: m.scheduled_at, hs_task_body: m.observacoes || null });
+      }
+      const fim = new Date(Date.parse(m.scheduled_at) + (Number(m.duration_minutes) || 30) * 60000).toISOString();
+      return Object.assign(base, { hs_meeting_title: 'Demo · ' + nome, hs_meeting_start_time: m.scheduled_at,
+        hs_meeting_end_time: fim, hs_meeting_body: m.observacoes || null });
+    }).filter(Boolean);
+    if (!DATA.agenda || typeof DATA.agenda !== 'object') DATA.agenda = { itens: [] };
+    const atuais = Array.isArray(DATA.agenda.itens) ? DATA.agenda.itens : [];
+    DATA.agenda.itens = atuais.filter(function (it) { return !(it && it.origem_app); }).concat(itens);
+    if (typeof TM10_TQ !== 'undefined') TM10_TQ = null;
+  })();
+  try { await AGENDA_APP_VOO; } catch (e) { console.log('[agenda do app]', e && e.message); } finally { AGENDA_APP_VOO = null; }
 }
 
 /* Abrir no mapa: 44×44 só ícone na linha; largura total no kanban. Fora do PWA não há mapa. */
