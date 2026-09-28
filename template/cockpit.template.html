@@ -12103,6 +12103,11 @@ function farolAplicar(dados) {
      `DATA` é const e há referências a ele espalhadas pela tela — trocar o objeto deixaria
      metade do cockpit lendo o antigo. */
   Object.assign(DATA, dados);
+  /* A AGENDA DO APP VOLTA JUNTO (auditoria 28/09): o assign troca DATA.agenda pela do
+     HubSpot, e sem isto as demos agendadas no app sumiam na primeira atualização. */
+  if (typeof carregarAgendaDoApp === 'function') {
+    carregarAgendaDoApp().then(function () { if (typeof aoVivoRepintar === 'function') aoVivoRepintar(); });
+  }
   FAROL_DADO_ESPERANDO = null;
   FAROL_PENDENTE = false;
   farolAviso(false);
@@ -30571,7 +30576,7 @@ function agendaDoHubspot(it, i) {
     obs: gO ? gO[1].trim() : '', reag: 0,
     decisor: agendaDecisor(it),
     desfecho: it.hs_meeting_outcome || null,
-    url: it.hs_object_id ? ('https://app.hubspot.com/contacts/24373118/record/0-47/' + it.hs_object_id) : null
+    url: (it.hs_object_id && !it.origem_app) ? ('https://app.hubspot.com/contacts/24373118/record/0-47/' + it.hs_object_id) : null
   };
 }
 // Follow-up do app agora chega como OBSERVAÇÃO. Formato real observado no HubSpot
@@ -30645,11 +30650,11 @@ function agendaDoHubspotTask(it, i) {
     cidade: '', bairro: '', endereco: '', etapa: '—', temperatura: '—',
     obs: corpo, reag: 0, decisor: agendaDecisor(it),
     desfecho: it.hs_task_status === 'COMPLETED' ? 'COMPLETED' : null,
-    url: it.hs_object_id ? ('https://app.hubspot.com/tasks/24373118/view/all/task/' + it.hs_object_id) : null,
+    url: (it.hs_object_id && !it.origem_app) ? ('https://app.hubspot.com/tasks/24373118/view/all/task/' + it.hs_object_id) : null,
     // BLOCO 34 — id NUMÉRICO cru da tarefa, sem passar pela URL. Confirmar/recusar
     // sugestão do gestor chama a API por id; extrair de dentro de uma URL formatada
     // seria frágil à toa quando o próprio hs_object_id já está aqui.
-    hsTaskId: it.hs_object_id || null
+    hsTaskId: it.origem_app ? null : (it.hs_object_id || null)
   };
 }
 function agendaDoApp(it, i) {
@@ -33946,12 +33951,12 @@ function pl6DadosFinal(rep) {
           if (!g) { g = pl6SugRegioes[pl6VazioK % pl6SugRegioes.length]; pl6VazioK += 1; }
           const alt = pl6SugRegioes.filter(function (x) { return x !== g; }).slice(0, 2);
           return {
-            nome: esc(g.nome), n: String(g.contas.length), on: di + '.' + g.chave, chave: pl6ChaveBairro(g.nome),
+            nome: esc(g.nome), n: String(g.contas.length), on: esc(di + '.' + g.chave), chave: esc(pl6ChaveBairro(g.nome)),
             contas: g.contas.slice(0, 3).map(function (l) {
               return { nome: esc(l.nome || 'conta'), sub: esc([l.etapa || (l.tipo === 'n' ? 'conta nova' : ''), l.nota != null ? String(l.nota).replace('.', ',') + '★' : ''].filter(Boolean).join(' · ')),
                 on: 'pegar:' + l.id };
             }),
-            alt: alt.map(function (x) { return { nome: esc(x.nome), n: String(x.contas.length), on: di + '.' + x.chave, chave: pl6ChaveBairro(x.nome) }; })
+            alt: alt.map(function (x) { return { nome: esc(x.nome), n: String(x.contas.length), on: esc(di + '.' + x.chave), chave: esc(pl6ChaveBairro(x.nome)) }; })
           };
         }()),
         agenda: itens.map(function (it) {
@@ -56347,6 +56352,7 @@ document.addEventListener('click', function (ev) {
    O canal ao vivo repinta o Hoje a cada check-in e ficha. */
 const V5_META_VISITAS = 6, V5_META_DEMOS = 2;
 let V5_PORTOES_VOO = null;
+let V5_PORTOES_DE_NOVO = false;
 async function v5PreencherPortoes(tentativa) {
   const alvo = document.getElementById('v5Portoes');
   if (!alvo) {
@@ -56354,15 +56360,16 @@ async function v5PreencherPortoes(tentativa) {
     return;
   }
   if (!supa || !sessaoAtual || sessaoAtual.role !== 'rep' || !sessaoAtual.ownerId) { alvo.innerHTML = ''; return; }
-  if (V5_PORTOES_VOO) return V5_PORTOES_VOO;
+  if (V5_PORTOES_VOO) { V5_PORTOES_DE_NOVO = true; return V5_PORTOES_VOO; }
   V5_PORTOES_VOO = (async function () {
     const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
     const ini = new Date(hoje + 'T00:00:00-03:00').toISOString();
     const base = new Date(hoje + 'T12:00:00-03:00');
     base.setUTCDate(base.getUTCDate() - ((base.getUTCDay() + 6) % 7));
     const segunda = base.toISOString().slice(0, 10);
-    const { data: u } = await supa.auth.getUser();
-    const meuId = u && u.user ? u.user.id : null;
+    /* a sessão local, sem ir ao servidor de login a cada repintura */
+    const { data: ses } = await supa.auth.getSession();
+    const meuId = ses && ses.session && ses.session.user ? ses.session.user.id : null;
     const [plano, vis, fichas] = await Promise.all([
       supa.from('planos_semanais').select('fechado_em').eq('owner_id', String(sessaoAtual.ownerId)).eq('data_segunda', segunda).maybeSingle(),
       meuId ? supa.from('client_visits').select('declarada').eq('visited_by', meuId).gte('visited_at', ini) : Promise.resolve({ data: [] }),
@@ -56383,7 +56390,8 @@ async function v5PreencherPortoes(tentativa) {
     const agora = document.getElementById('v5Portoes');
     if (!agora) return;
     agora.innerHTML = '<section class="v5-bloco"><div class="v5-bloco-cab"><h2>Portões do dia</h2>' + v5Selo('vivo') + '</div><div class="v5-portoes">'
-      + cartao('Plano da semana', fechado ? 'Validado' : 'Aberto', '', null, fechado ? 'o gestor já vê na Daily' : 'valide no Planejamento', fechado ? 'is-toque-hoje' : 'is-nm', fechado ? 'fechado ' + hh : '')
+      + (plano.error ? v5NaoMedido('Plano da semana', 'não consegui ler o plano agora')
+        : cartao('Plano da semana', fechado ? 'Validado' : 'Aberto', '', null, fechado ? 'o gestor já vê na Daily' : 'valide no Planejamento', fechado ? 'is-toque-hoje' : 'is-nm', fechado ? 'fechado ' + hh : ''))
       + (vis.error ? v5NaoMedido('Visitas de hoje', 'não consegui ler os check-ins agora')
         : cartao('Visitas hoje', nv, 'de ' + V5_META_VISITAS, (nv / V5_META_VISITAS) * 100, nv >= V5_META_VISITAS ? 'meta do dia batida' : 'faltam ' + (V5_META_VISITAS - nv), nv >= V5_META_VISITAS ? 'is-toque-hoje' : 'is-toque-dias', decl ? decl + ' sem GPS (declarada)' : 'check-ins do mapa'))
       + (fichas.error ? v5NaoMedido('Demos com decisor', 'não consegui ler as fichas de rua agora')
@@ -56391,6 +56399,7 @@ async function v5PreencherPortoes(tentativa) {
       + '</div></section>';
   })();
   try { await V5_PORTOES_VOO; } catch (e) { console.log('[portões do dia]', e && e.message); } finally { V5_PORTOES_VOO = null; }
+  if (V5_PORTOES_DE_NOVO) { V5_PORTOES_DE_NOVO = false; return v5PreencherPortoes(0); }
 }
 
 /* ══ COBRAR EM LOTE (Raio X, docs/04, 28/09/26) ══════════════════════════════════════
@@ -56423,7 +56432,9 @@ document.addEventListener('click', async function (ev) {
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       ok++;
       const lead = buscarLeadFunilPorId(ids[i]);
-      if (lead) espelharPassoNasTelas(lead, hoje, 'Follow-up', lead.ownerId, null, { silencioso: true });
+      /* UM DE CADA VEZ (auditoria 28/09): o espelho carrega e grava o plano da semana
+         num objeto global; dois donos ao mesmo tempo gravariam a grade de um no outro. */
+      if (lead) await espelharPassoNasTelas(lead, hoje, 'Follow-up', lead.ownerId, null, { silencioso: true });
     } catch (e) { falhas++; }
   }
   b.innerHTML = v5IconeLinha('bandeira', 16) + 'Cobrado · ' + ok + ' ' + (ok === 1 ? 'tarefa' : 'tarefas');
@@ -56448,6 +56459,7 @@ function v5MapaDaProposta() {
    régua de tm10ToqueRealizado) e visita do mapa, separando a com GPS da declarada. A
    visita vem de client_visits pela sessão do gestor; se o banco recusar, a coluna diz
    "não medido" em vez de zero. Nada aqui escreve. */
+let TM10_COB_CACHE = null;
 async function tm10PreencherCobPessoas(tentativa) {
   const alvo = document.getElementById('tm10CobPessoas');
   if (!alvo) {
@@ -56476,10 +56488,15 @@ async function tm10PreencherCobPessoas(tentativa) {
   if (supa) {
     try {
       const desde = new Date(desdeMs).toISOString();
-      const [v, pf] = await Promise.all([
-        supa.from('client_visits').select('declarada, visited_by').gte('visited_at', desde),
-        supa.from('profiles').select('id, id_hubspot'),
-      ]);
+      /* 60 s de cache (auditoria 28/09): o Time repinta a cada sinal ao vivo */
+      if (!TM10_COB_CACHE || Date.now() - TM10_COB_CACHE.em > 60000) {
+        const lidos = await Promise.all([
+          supa.from('client_visits').select('declarada, visited_by').gte('visited_at', desde),
+          supa.from('profiles').select('id, id_hubspot'),
+        ]);
+        TM10_COB_CACHE = { em: Date.now(), lidos: lidos };
+      }
+      const [v, pf] = TM10_COB_CACHE.lidos;
       if (!v.error && !pf.error) {
         const dono = {};
         (pf.data || []).forEach(function (x) { if (x.id_hubspot) dono[x.id] = String(x.id_hubspot); });
@@ -56529,9 +56546,11 @@ async function tm10PreencherCobPessoas(tentativa) {
      já traz, e entraria duas vezes. Cancelado fica de fora.
    · Idempotente: tira os itens do app da carga anterior antes de pôr os de agora. */
 let AGENDA_APP_VOO = null;
+let AGENDA_APP_DE_NOVO = false;
 async function carregarAgendaDoApp() {
   if (!supa || typeof DATA === 'undefined' || !DATA) return;
-  if (AGENDA_APP_VOO) return AGENDA_APP_VOO;
+  /* pedido durante uma carga: roda de novo no fim, com o dado novo (auditoria 28/09) */
+  if (AGENDA_APP_VOO) { AGENDA_APP_DE_NOVO = true; return AGENDA_APP_VOO; }
   AGENDA_APP_VOO = (async function () {
     const desde = new Date(Date.now() - 60 * 86400000).toISOString();
     const ate = new Date(Date.now() + 60 * 86400000).toISOString();
@@ -56544,12 +56563,16 @@ async function carregarAgendaDoApp() {
     });
     const idsC = Array.from(new Set(lista.map(function (m) { return m.client_id; }).filter(Boolean)));
     const idsP = Array.from(new Set(lista.map(function (m) { return m.created_by; }).filter(Boolean)));
-    const [c, p] = await Promise.all([
-      idsC.length ? supa.from('clients').select('id, nome, id_hubspot').in('id', idsC.slice(0, 900)) : Promise.resolve({ data: [] }),
+    /* em lotes de 150 ids: a URL de 900 passa do limite e a leitura voltava vazia */
+    const lotes = [];
+    for (let i = 0; i < idsC.length; i += 150) lotes.push(idsC.slice(i, i + 150));
+    const [cs, p] = await Promise.all([
+      Promise.all(lotes.map(function (ids) { return supa.from('clients').select('id, nome, id_hubspot').in('id', ids); })),
       idsP.length ? supa.from('profiles').select('id, id_hubspot').in('id', idsP) : Promise.resolve({ data: [] }),
     ]);
+    if (cs.some(function (x) { return x.error; })) { console.log('[agenda do app] não li os leads; fica a agenda anterior'); return; }
     const cli = {}, dono = {};
-    (c.data || []).forEach(function (x) { cli[x.id] = x; });
+    cs.forEach(function (c) { (c.data || []).forEach(function (x) { cli[x.id] = x; }); });
     (p.data || []).forEach(function (x) { if (x.id_hubspot) dono[x.id] = String(x.id_hubspot); });
     const itens = lista.map(function (m) {
       const cl = cli[m.client_id];
@@ -56561,7 +56584,7 @@ async function carregarAgendaDoApp() {
       const base = { hs_object_id: 'app-' + m.id, origem_app: true, hubspot_owner_id: quem, lead_deal_id: deal,
         lead_nome: nome, lead_owner_id: lead && lead.ownerId ? String(lead.ownerId) : quem };
       if (m.type === 'follow_up') {
-        return Object.assign(base, { hs_task_subject: 'Follow-up · ' + nome, hs_task_status: 'NOT_STARTED',
+        return Object.assign(base, { hs_task_subject: 'Follow-up · ' + nome, hs_task_status: m.status === 'realizada' ? 'COMPLETED' : 'NOT_STARTED',
           hs_task_type: 'TODO', hs_timestamp: m.scheduled_at, hs_task_body: m.observacoes || null });
       }
       const fim = new Date(Date.parse(m.scheduled_at) + (Number(m.duration_minutes) || 30) * 60000).toISOString();
@@ -56572,8 +56595,10 @@ async function carregarAgendaDoApp() {
     const atuais = Array.isArray(DATA.agenda.itens) ? DATA.agenda.itens : [];
     DATA.agenda.itens = atuais.filter(function (it) { return !(it && it.origem_app); }).concat(itens);
     if (typeof TM10_TQ !== 'undefined') TM10_TQ = null;
+    if (typeof tpInvalidarCache === 'function') tpInvalidarCache();
   })();
   try { await AGENDA_APP_VOO; } catch (e) { console.log('[agenda do app]', e && e.message); } finally { AGENDA_APP_VOO = null; }
+  if (AGENDA_APP_DE_NOVO) { AGENDA_APP_DE_NOVO = false; return carregarAgendaDoApp(); }
 }
 
 /* Abrir no mapa: 44×44 só ícone na linha; largura total no kanban. Fora do PWA não há mapa. */
@@ -65572,7 +65597,7 @@ function rx1TelaHTML(d) {
           + '<span class="rx-g-t"><b>' + esc(x.t) + '</b><span>' + esc(x.p) + '</span>'
           + ((x.ids && x.ids.length && sessaoAtual && sessaoAtual.role === 'manager')
             ? '<button type="button" class="v5-btn is-sec rx-g-cobrar" data-v5-cobrar-lote="' + esc(x.ids.join(',')) + '">'
-              + v5IconeLinha('bandeira', 16) + 'Cobrar ' + (x.ids.length === 1 ? 'este' : 'os ' + x.ids.length) + '</button>' : '')
+              + v5IconeLinha('bandeira', 16) + 'Cobrar ' + (x.ids.length === 1 ? 'este' : (x.ids.length > 40 ? 'os 40 primeiros de ' + x.ids.length : 'os ' + x.ids.length)) + '</button>' : '')
           + '</span>'
           + '</div>';
       }).join('') + '</div>'
