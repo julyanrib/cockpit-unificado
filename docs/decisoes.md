@@ -141,3 +141,31 @@ quê, e o que desfaz a decisão se ela estiver errada.
 - **390 sem rolagem lateral:** em Pessoas as grades sem colunas definidas viram uma
   coluna; na Semana a dupla usa minmax(0,1fr) e as linhas flex quebram. Medido nas 14
   abas dos dois papéis a 390, 920, 1240 e 1440.
+
+## O que ficou de fora (28/09/26)
+- **Portões do dia** no Hoje do executivo: plano da semana validado, visitas de hoje
+  contra 6 (check-ins do mapa, com as declaradas contadas à parte) e demos com decisor
+  contra 2 (ficha de rua, medindo desde 25/09). Do banco do APP, com a sessão dele.
+- **Raio X: "Cobrar os N"** nos gargalos que têm negócio. Cria, um por um, o mesmo
+  próximo passo de hoje do Cobrar do painel, no dono de cada negócio. A rota não duplica
+  assunto no mesmo negócio, então repetir o lote não repete cobrança. Criar tarefa não é
+  concluir: nada disso conta como toque. Em Ag. Pagamento a cobrança é só a tarefa — nada
+  do valor nem do link muda.
+- **Propostas: "Abrir no mapa para enviar"**, só no PWA e com negócio escolhido. O
+  WhatsApp e o PNG daqui continuam; o cartão da proposta não mudou.
+- **SLA do 1º toque media o último toque.** O lead tocado em 1 h e de novo no 5º dia
+  contava como estourado — quem mais insistia aparecia pior. Agora é o primeiro toque, no
+  Time e em Pessoas.
+- **Time: toques por pessoa em 7 dias** (tarefa feita, reunião, nota, visita com GPS,
+  visita declarada) debaixo da cobertura de 60 dias. Se o banco recusar as visitas, a
+  coluna diz "não medido", não zero.
+- **Playbook: quem estudou o quê**, pessoa × os 8 módulos do repertório: prova (fez a
+  missão de um guia do módulo), leu N/M, não abriu. Só aparece quando o banco devolveu
+  leitura do time.
+- **Acordos do 1:1 na aba Tarefas do app**, com "feito" que o Cockpit lê em Pessoas, e o
+  sinal ao vivo do PDI (0129) nos dois sentidos.
+- **Não feito, e por quê:** aceitar sugestão de plano como parada (sugestoes_planos é
+  texto livre, sem lead nem hora — virar parada exigiria inventar os dois); status do
+  link do Asaas (nenhuma tabela do APP guarda, e o Asaas não se toca); mapa dentro de
+  Pessoas e da Daily (o mapa é o do PWA: os dois já abrem o mapa filtrado pela pessoa ou
+  pelo dia; um segundo mapa no Cockpit seria outra fonte de posição).
