@@ -11171,6 +11171,8 @@ async function hidratarSessao(email) {
     /* A PARTIR DAQUI A ABA ESCUTA O SNAPSHOT (08/09/26). Depois da sessao existir, e
        nao antes: a politica de leitura do farol e para `authenticated`. */
     if (typeof farolLigar === 'function') farolLigar();
+    /* e o canal ao vivo do mapa (v5, 28/09/26): mesma condição, sessão existindo */
+    if (typeof aoVivoLigar === 'function') aoVivoLigar();
     reidratarPosLogin();
     mostrarApp();
     return;
@@ -11634,6 +11636,139 @@ function farolLigar() {
   } catch (e) {
     console.log('[farol] não consegui escutar:', e && e.message);
   }
+}
+
+/* ══ AO VIVO: O QUE O MAPA FAZ APARECE AQUI (Cockpit v5, fase 2, 28/09/26) ═══════════
+   O contrato Mapa ⇄ Cockpit pede "o outro lado vê em até 5 s". O farol acima só acorda
+   quando o ROBÔ publica (a cada 2 h); o que o executivo fazia no mapa — check-in, foto,
+   etapa, parada — só chegava a uma aba aberta na próxima carga.
+
+   No banco do APP (migration 0128), cada tabela que importa grava um sinal pequeno em
+   `sinais_ao_vivo` (tipo + ids, sem conteúdo), e só essa tabela está no Realtime. Aqui:
+   · negócio → pede à cockpit-dados SÓ os cards que mudaram (?recurso=negocios&ids=),
+     montados pelo mesmo código da carga, e troca no DATA;
+   · visita, parada, foto → esquece o cache da tela que as mostra;
+   · comunicado → relê o sino.
+   Depois repinta a aba ativa pelo mesmo caminho da mudança de etapa otimista.
+
+   A MESMA JANELA DO FAROL: com ficha aberta, campo em foco ou gravação em curso, o sinal
+   espera (tenta de novo a cada 2 s) — dado novo nunca repinta sob a mão de ninguém.
+   O executivo só reage ao que é dele; o gestor, a tudo. */
+let AOVIVO_CANAL = null;
+const AOVIVO_FILA = { negocios: new Set(), tipos: new Set() };
+let AOVIVO_TIMER = null;
+
+function aoVivoLigar() {
+  if (AOVIVO_CANAL) return;
+  if (typeof supa === 'undefined' || !supa || !supa.channel) return;
+  if (!sessaoAtual) return;
+  try {
+    AOVIVO_CANAL = supa
+      .channel('ao-vivo-cockpit')
+      .on('postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sinais_ao_vivo' },
+        function (msg) { aoVivoRecebeu(msg && msg.new); })
+      .subscribe(function (estado) {
+        if (estado === 'SUBSCRIBED') console.log('[ao vivo] escutando o mapa');
+        else if (estado === 'CHANNEL_ERROR' || estado === 'TIMED_OUT') {
+          console.log('[ao vivo] sem realtime nesta rede (' + estado + ') — a tela segue com o dado da carga.');
+        }
+      });
+  } catch (e) {
+    console.log('[ao vivo] não consegui escutar:', e && e.message);
+  }
+}
+
+function aoVivoMeInteressa(s) {
+  if (!s || !s.tipo || !sessaoAtual) return false;
+  if (sessaoAtual.role === 'manager') return true;
+  if (!s.owner_id) return true;
+  return String(s.owner_id) === String(sessaoAtual.ownerId);
+}
+
+function aoVivoRecebeu(s) {
+  if (!aoVivoMeInteressa(s)) return;
+  if (s.tipo === 'negocio' && s.deal_id) AOVIVO_FILA.negocios.add(String(s.deal_id));
+  AOVIVO_FILA.tipos.add(String(s.tipo));
+  if (!AOVIVO_TIMER) AOVIVO_TIMER = setTimeout(aoVivoAplicar, 800);
+}
+
+async function aoVivoAplicar() {
+  AOVIVO_TIMER = null;
+  if (!farolPodeAplicar()) { AOVIVO_TIMER = setTimeout(aoVivoAplicar, 2000); return; }
+  const ids = Array.from(AOVIVO_FILA.negocios).slice(0, 50);
+  const tipos = new Set(AOVIVO_FILA.tipos);
+  ids.forEach(function (id) { AOVIVO_FILA.negocios.delete(id); });
+  AOVIVO_FILA.tipos.clear();
+  let mudou = false;
+  if (ids.length) {
+    try {
+      const { data } = await supa.auth.getSession();
+      const token = data && data.session ? data.session.access_token : null;
+      if (token) {
+        const resp = await fetch('/api/dados?recurso=negocios&ids=' + ids.join(','), { headers: { Authorization: 'Bearer ' + token } });
+        const corpo = resp.ok ? await resp.json().catch(function () { return null; }) : null;
+        ((corpo && corpo.negocios) || []).forEach(function (n) { if (aoVivoAplicarNegocio(n)) mudou = true; });
+      }
+    } catch (e) {
+      console.log('[ao vivo] não consegui reler os negócios:', e && e.message);
+    }
+    /* mais de 50 numa rajada: o resto vai na próxima volta */
+    if (AOVIVO_FILA.negocios.size && !AOVIVO_TIMER) AOVIVO_TIMER = setTimeout(aoVivoAplicar, 800);
+  }
+  if (tipos.has('visita') || tipos.has('parada')) { visitasAppCache.em = 0; mudou = true; }
+  if (tipos.has('foto')) { PS6_FOTOS.porDono = {}; mudou = true; }
+  if (tipos.has('plano') || tipos.has('ficha')) mudou = true;
+  if (tipos.has('comunicado') && typeof carregarComunicados === 'function') {
+    try { await carregarComunicados(); if (typeof atualizarSinoAvisos === 'function') atualizarSinoAvisos(); } catch (e) { /* o sino fica como estava */ }
+  }
+  if (mudou) aoVivoRepintar();
+}
+
+/* Troca UM negócio no DATA. `fora` (saiu do Field Sales, virou teste, não é mais meu)
+   tira da tela; coluna fechada só entra para quem já estava nela — a mesma regra da
+   carga, para uma venda antiga não reaparecer porque alguém a editou. */
+function aoVivoAplicarNegocio(n) {
+  if (!n || !n.id || !DATA.funilLeads) return false;
+  const id = String(n.id);
+  let antigo = null;
+  Object.keys(DATA.funilLeads).forEach(function (sid) {
+    (DATA.funilLeads[sid] || []).forEach(function (l) { if (String(l.id) === id) antigo = l; });
+  });
+  if (n.fora || !n.card) {
+    if (!antigo) return false;
+    Object.keys(DATA.funilLeads).forEach(function (sid) {
+      DATA.funilLeads[sid] = (DATA.funilLeads[sid] || []).filter(function (l) { return String(l.id) !== id; });
+    });
+    (DATA.reps || []).forEach(function (r) {
+      ['travados', 'quentes'].forEach(function (k) {
+        if (Array.isArray(r[k])) r[k] = r[k].filter(function (l) { return String(l.id) !== id; });
+      });
+    });
+    aplicarEtapaNoDataLocal('__recontar__', '', {}, 0);
+    return true;
+  }
+  if (n.fechada && !antigo) return false;
+  const card = Object.assign({}, n.card, (antigo && antigo.notas) ? { notas: antigo.notas } : {});
+  /* negócio novo entra pela função dona (ela também soma o contador do rep); o card
+     inteiro vai como props, para a linha nascer igual à da carga */
+  if (!antigo) inserirNegocioNoDataLocal({ id: id, stageId: n.stageId, nome: card.name, ownerId: card.ownerId, props: card });
+  aplicarEtapaNoDataLocal(id, n.stageId, card, card.dias);
+  return true;
+}
+
+function aoVivoRepintar() {
+  let ativa = null;
+  try { ativa = document.querySelector('.view.active'); } catch (e) { ativa = null; }
+  const id = ativa ? ativa.id : '';
+  try {
+    if (id === 'viewRaioX' && typeof rx1Iniciar === 'function') rx1Iniciar();
+    if (id === 'viewPDIs') {
+      if (sessaoAtual && sessaoAtual.role === 'manager' && typeof renderPessoas === 'function') renderPessoas();
+      else if (typeof renderPDIs === 'function') renderPDIs();
+    }
+  } catch (e) { console.log('[ao vivo] repintar ' + id + ':', e && e.message); }
+  repintarOndeONegocioAparece();
 }
 
 function farolRecebeu(linha) {
@@ -39523,6 +39658,7 @@ function fichaLeadFunilBodyHTML(l) {
            sistema atual vão prontos — o executivo digitava os dois primeiros à mão, com
            o dono olhando, de dados que o cockpit já tinha. -->
       <button type="button" class="ficha-gerar-proposta btn-sec" data-lead-id="${l.id}" style="padding:9px 18px;">Gerar proposta</button>
+      ${v5LinkDoMapa(l.id)}
       <!-- BLOCO 51 — "o crm agora é o cockpit... pode até ter, mas nao explicito assim"
            (Julyan). O acesso ao HubSpot continua existindo pra depuração, mas como
            link discreto de rodapé, não mais como botão do mesmo peso da ação principal. -->
@@ -54950,6 +55086,23 @@ function v5Icone(nome, tam) {
   const t = tam || 18;
   return '<svg width="' + t + '" height="' + t + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
     + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex:none;">' + V5_ICONE[nome] + '</svg>';
+}
+
+/* ABRIR NO MAPA (contrato Mapa ⇄ Cockpit, 28/09/26). Só existe dentro do PWA — o
+   importador tira o `hidden` do #v5Mapa, e é esse o sinal de que há mapa para abrir.
+   No celular troca de superfície na mesma janela; no computador abre o mapa ao lado,
+   numa aba nova, para o Cockpit continuar onde estava. O mapa abre o pino com o cartão. */
+function v5NoPwa() {
+  const m = document.getElementById('v5Mapa');
+  return !!(m && !m.hidden);
+}
+function v5LinkDoMapa(dealId) {
+  if (!dealId || !v5NoPwa()) return '';
+  const href = '/mapa?pino=' + encodeURIComponent(String(dealId)) + '&cartao=aberto';
+  const alvo = window.innerWidth >= 900 ? ' target="_blank" rel="noopener"' : '';
+  return '<a class="btn-sec" href="' + href + '"' + alvo + ' style="padding:9px 18px;text-decoration:none;gap:6px;">'
+    + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0112 2.5a7 7 0 017 7C19 14.8 12 21 12 21z"></path><circle cx="12" cy="9.5" r="2.5"></circle></svg>'
+    + 'Abrir no mapa</a>';
 }
 
 function v5Iniciais(nome) {
