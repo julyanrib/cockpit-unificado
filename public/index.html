@@ -21655,10 +21655,39 @@ function pl6GrupoDaFonte(fonte) {
   return 'aval';
 }
 
+function pl6ChaveNome(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/^oportunidade\s*-\s*/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function pl6ChaveFone(s) {
+  const d = String(s || '').replace(/\D+/g, '');
+  return d.length >= 8 ? d.slice(-9) : '';
+}
+function pl6JaNaCarteira(rep) {
+  const fones = new Set(), nomes = new Set();
+  const fl = (typeof DATA !== 'undefined' && DATA.funilLeads) || {};
+  Object.keys(fl).forEach(function (st) {
+    (fl[st] || []).forEach(function (l) {
+      if (!l || String(l.ownerId) !== String(rep.ownerId)) return;
+      const f = pl6ChaveFone(l.celular || l.telefone); if (f) fones.add(f);
+      const n = pl6ChaveNome(l.name || l.dealname); if (n.length >= 4) nomes.add(n);
+    });
+  });
+  return function (l) {
+    if (l.hubspot_deal_id) return true;
+    const f = pl6ChaveFone(l.telefone_normalizado || l.telefone);
+    if (f && fones.has(f)) return true;
+    const n = pl6ChaveNome(l.nome);
+    return n.length >= 4 && nomes.has(n);
+  };
+}
+
 function pl6Novos(rep, regioes) {
+  const jaTem = pl6JaNaCarteira(rep);
   const contas = (typeof prospeccaoCache !== 'undefined' && Array.isArray(prospeccaoCache) ? prospeccaoCache : [])
     .filter(l => String(l.responsavel_owner_id) === String(rep.ownerId))
-    .filter(prospeccaoNaCarteira);
+    .filter(prospeccaoNaCarteira)
+    .filter(l => !jaTem(l));
   const porChave = new Map((regioes || []).map(r => [r.chave, r]));
   return contas.map(l => {
 
