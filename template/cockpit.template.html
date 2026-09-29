@@ -10508,7 +10508,7 @@ foi escrita para jogar o "0 de 27 resolvidos"
 .pt6-vivo{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:var(--r-pill);padding:5px 10px;}
 .pt6-vivo i{width:7px;height:7px;border-radius:50%;background:var(--green);display:inline-block;}
 .pt6-seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-pill);padding:3px;gap:2px;background:var(--panel);}
-.pt6-seg button{min-height:40px;padding:0 16px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--muted);font:700 13px var(--font-display);cursor:pointer;}
+.pt6-seg button{min-height:44px;padding:0 16px;border:0;border-radius:var(--r-pill);background:transparent;color:var(--muted);font:700 13px var(--font-display);cursor:pointer;}
 .pt6-seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg);}
 .pt6-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;}
 .pt6-kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-cartao);padding:14px 16px;min-width:0;display:flex;flex-direction:column;gap:4px;}
@@ -10601,7 +10601,7 @@ foi escrita para jogar o "0 de 27 resolvidos"
 .pt6-pt.is-sem{background:var(--muted2);}
 .pt6-pt.is-foto::after{content:"";position:absolute;right:-6px;top:-6px;width:8px;height:8px;border-radius:50%;background:var(--panel);border:2px solid var(--ao-vivo);}
 .pt6-pt.is-fora{outline:3px solid var(--amber);outline-offset:1px;}
-.pt6-pt.is-plano{width:22px;height:22px;background:var(--panel);border:2px dashed var(--ink);color:var(--ink);font:800 11px/18px var(--font-display);text-align:center;}
+.pt6-pt.is-plano{width:28px;height:28px;background:var(--panel);border:3px dashed var(--ink);color:var(--ink);font:800 12px/22px var(--font-display);text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.45);}
 .pt6-pt.is-plano.is-feita{border-style:solid;border-color:var(--ao-vivo);color:var(--ao-vivo);}
 .pt6-pt.is-plano.is-pulada{border-color:var(--red);color:var(--red);}
 .pt6-pt.is-contato{width:14px;height:14px;border-radius:3px;transform:translate(-50%,-50%) rotate(45deg);background:var(--amber);}
@@ -10689,7 +10689,9 @@ foi escrita para jogar o "0 de 27 resolvidos"
   .pt6-cartoes{grid-template-columns:minmax(0,1fr);}
   .pt6-gaveta{padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));border-left:0;}
   .pt6-mapa{height:300px;} .pt6-mapa.is-dia{height:300px;}
+  .pt6-dias{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));} .pt6-dias button{min-width:0;padding:4px 2px;}
   .pt6-plano{grid-template-columns:repeat(5,minmax(120px,1fr));overflow-x:auto;}
+  .pt6-kpis.is-dia{grid-template-columns:repeat(2,minmax(0,1fr));}
   .pt6-g{grid-template-columns:36px minmax(0,1fr);} .pt6-g .pt6-btn{grid-column:1 / -1;}
   .pt6-it{grid-template-columns:44px 24px minmax(0,1fr);} .pt6-it .pt6-prova{grid-column:3;justify-self:start;}
 }
@@ -57488,9 +57490,17 @@ function pt6Hoje() {
   return (typeof agendaChave === 'function' && typeof agendaAgora === 'function') ? agendaChave(agendaAgora()) : null;
 }
 function pt6Segunda() {
-  const base = (typeof sm9Segunda === 'function' && sm9Segunda()) || null;
-  if (!base || typeof addDays !== 'function') return base;
-  return PT6.semanaAtras ? addDays(base, -7 * PT6.semanaAtras) : base;
+  /* a semana do CALENDÁRIO. sm9Segunda (pl6SegundaDaSemana) vira para a próxima na sexta
+     às 17h, porque o executivo planeja a semana que vem; o gestor, na sexta à noite, quer
+     rever a que está acabando — com ela, todos apareciam "abaixo da meta" numa semana vazia. */
+  const hoje = pt6Hoje();
+  let seg = null;
+  if (hoje && typeof addDays === 'function') {
+    const dow = new Date(hoje + 'T12:00:00Z').getUTCDay();
+    seg = addDays(hoje, dow === 0 ? -6 : 1 - dow);
+  } else seg = (typeof sm9Segunda === 'function' && sm9Segunda()) || null;
+  if (!seg || typeof addDays !== 'function') return seg;
+  return PT6.semanaAtras ? addDays(seg, -7 * PT6.semanaAtras) : seg;
 }
 function pt6DDMM(iso) { return iso ? String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7) : ''; }
 function pt6Hora(ts) {
@@ -57543,6 +57553,9 @@ async function pt6Carregar(forcar) {
   PT6.voo = { chave: chave, p: p };
   try {
     const d = await p;
+    /* clique em A, depois em B: se a resposta de A chegar por último, ela não vale mais */
+    const agora = pt6Segunda() + '|' + (PT6.dia || dia);
+    if (PT6.chave && agora !== chave) return PT6.dados;
     PT6.dados = d; PT6.chave = chave; PT6.em = Date.now(); PT6.erro = null;
     if (!PT6.dia) PT6.dia = d && d.dia;
     return d;
@@ -57572,7 +57585,7 @@ function pt6Retratos(d) {
     };
     const ate = idxHoje >= 5 ? 4 : idxHoje;
     const hojeD = idxHoje >= 0 && idxHoje <= 4 ? dias[idxHoje] : null;
-    const ontemD = idxHoje >= 1 && idxHoje <= 5 ? dias[Math.min(idxHoje, 5) - 1] : null;
+    const ontemD = semanaCorrente && idxHoje >= 1 && idxHoje <= 4 ? dias[idxHoje - 1] : null;
     const semPlanoHoje = !!(semanaCorrente && hojeD && Number(hojeD.planejadas) === 0);
     const brancosAdiante = semanaCorrente && idxHoje >= 0 && idxHoje < 4
       ? dias.slice(idxHoje + 1).map(function (x, i) { return { i: idxHoje + 1 + i, x: x }; }).filter(function (o) { return Number(o.x.planejadas) === 0; })
@@ -57652,7 +57665,9 @@ function pt6Pintar() {
 function pt6TopoHTML(d, rs) {
   const seg = d.segunda, sexta = addDays(seg, 4);
   const n = rs.length;
-  const fechados = rs.filter(function (r) { return r.p && r.p.plano && r.p.plano.fechadoEm; });
+  /* FECHAR A SEMANA = DAR A PALAVRA. planos_semanais.fechado_em não é gravado por nenhuma
+     tela (0 de 48 linhas em 29/09): contar por ele dava "0 de 8" para sempre. */
+  const fechados = rs.filter(function (r) { return r.p && r.p.plano && r.p.plano.promessaDadaEm; });
   const semPlano = rs.filter(function (r) { return r.semPlanoHoje; }).map(function (r) { return pt6PrimeiroNome(r.e.nome); });
   const brancos = rs.filter(function (r) { return r.brancosAdiante.length; }).length;
   let manchete = fechados.length + ' de ' + n + ' com a semana fechada.';
@@ -57666,7 +57681,7 @@ function pt6TopoHTML(d, rs) {
   const planejadas = rs.reduce(function (t, r) { return t + r.planejadas; }, 0);
   const demos = rs.reduce(function (t, r) { return t + (r.p ? Number(r.p.demos) || 0 : 0); }, 0);
   const contatos = rs.reduce(function (t, r) { return t + r.contatos; }, 0);
-  const faltam = rs.filter(function (r) { return !(r.p && r.p.plano && r.p.plano.fechadoEm); }).map(function (r) { return pt6PrimeiroNome(r.e.nome); });
+  const faltam = rs.filter(function (r) { return !(r.p && r.p.plano && r.p.plano.promessaDadaEm); }).map(function (r) { return pt6PrimeiroNome(r.e.nome); });
   const pct = feitas ? Math.round(provadas / feitas * 100) : null;
   const desde = d.contatosDesde ? pt6DiaDoTs(d.contatosDesde) : null;
   const contatoMedido = desde && desde <= sexta;
@@ -57684,7 +57699,7 @@ function pt6TopoHTML(d, rs) {
     + '<button type="button" data-pt6="semana:0" aria-pressed="' + (!PT6.semanaAtras) + '">Esta semana</button>'
     + '<button type="button" data-pt6="semana:1" aria-pressed="' + (PT6.semanaAtras === 1) + '">Semana passada</button></div></div></header>'
     + '<div class="pt6-kpis">'
-    + kpi('Planos fechados', fechados.length, ' de ' + n, faltam.length ? 'faltam ' + v5Esc(pt6Lista(faltam)) : 'todos fecharam a semana', fechados.length === n ? 'ok' : 'aviso')
+    + kpi('Planos fechados', fechados.length, ' de ' + n, faltam.length ? 'sem a palavra da semana: ' + v5Esc(pt6Lista(faltam)) : 'todos deram a palavra da semana', fechados.length === n ? 'ok' : 'aviso')
     + kpi('Paradas planejadas', planejadas, '', 'seg a sex, marcadas no Planejamento ou no mapa')
     + kpi('Visitas feitas', feitas, '', hoje >= seg && hoje <= sexta ? 'na semana, até agora' : 'na semana')
     + kpi('Com prova', pct == null ? '—' : pct + '%', '', pct == null ? 'nenhuma visita ainda' : provadas + ' com GPS no ponto ou foto', pct == null ? '' : pct >= 80 ? 'ok' : 'aviso')
@@ -57934,11 +57949,13 @@ function pt6Merc(lat, lng, z) {
   const sen = Math.sin(lat * Math.PI / 180);
   return { x: (lng + 180) / 360 * s, y: (0.5 - Math.log((1 + sen) / (1 - sen)) / (4 * Math.PI)) * s };
 }
-function pt6DesenharMapas() {
+function pt6DesenharMapas(so) {
   document.querySelectorAll('[data-pt6-mapa]').forEach(function (el) {
-    const m = PT6.mapas && PT6.mapas[el.getAttribute('data-pt6-mapa')];
+    const chave = el.getAttribute('data-pt6-mapa');
+    if (so && chave !== so) return;
+    const m = PT6.mapas && PT6.mapas[chave];
     if (!m) return;
-    pt6DesenharMapa(el, m);
+    pt6DesenharMapa(el, m, chave);
   });
 }
 /* O MESMO MAPA DO APP (28/09/26, Julyan: "pq não colocar o mesmo mapa nessa aba?"). Dentro
@@ -57994,9 +58011,18 @@ function pt6MarcaElemento(p) {
   return el;
 }
 
-function pt6DesenharGoogle(el, m, pts) {
+function pt6DesenharGoogle(el, m, pts, chave) {
   const maps = window.google.maps;
   const escuro = document.documentElement.getAttribute('data-tema') === 'escuro';
+  /* UM MAPA POR LUGAR (time, dia). O repinte troca o HTML da aba; recriar o mapa a cada
+     clique contava um carregamento novo na cota do Google e deixava o antigo vivo. O mapa
+     guardado muda de caixa: o div dele é movido para o nó novo. */
+  PT6_GM.inst = PT6_GM.inst || {};
+  const guardado = chave && PT6_GM.inst[chave];
+  if (guardado && guardado.escuro === escuro) {
+    if (!el.contains(guardado.div)) { el.innerHTML = ''; el.appendChild(guardado.div); }
+    el._pt6gm = guardado;
+  }
   if (!el._pt6gm || el._pt6gm.escuro !== escuro || !el.contains(el._pt6gm.div)) {
     el.innerHTML = '';
     const div = document.createElement('div');
@@ -58008,6 +58034,7 @@ function pt6DesenharGoogle(el, m, pts) {
       center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13
     });
     el._pt6gm = { mapa: mapa, div: div, escuro: escuro, marcas: [] };
+    if (chave) PT6_GM.inst[chave] = el._pt6gm;
   }
   const g = el._pt6gm;
   g.marcas.forEach(function (mk) { mk.map = null; });
@@ -58020,7 +58047,7 @@ function pt6DesenharGoogle(el, m, pts) {
   else g.mapa.fitBounds(b, 48);
 }
 
-function pt6DesenharMapa(el, m) {
+function pt6DesenharMapa(el, m, chave) {
   const W = el.clientWidth || 600, H = el.clientHeight || 360;
   const pts = (m.pts || []).filter(function (p) { return isFinite(p.lat) && isFinite(p.lng); });
   if (!pts.length) {
@@ -58029,7 +58056,7 @@ function pt6DesenharMapa(el, m) {
     return;
   }
   if (!PT6_GM.falhou) {
-    if (PT6_GM.ok) { pt6DesenharGoogle(el, m, pts); return; }
+    if (PT6_GM.ok) { pt6DesenharGoogle(el, m, pts, chave); return; }
     if (!el.firstChild) el.innerHTML = '<div class="pt6-mapa-vazio"><div><b>Abrindo o mapa…</b>o mesmo mapa do app</div></div>';
     pt6CarregarGoogle().then(pt6DesenharMapas, pt6DesenharMapas);
     return;
@@ -58116,10 +58143,11 @@ async function pt6CarregarDossie(forcar) {
     res.forEach(function (r, i) { porDia[dias[i]] = r.data; });
     PT6.dossies[chave] = { em: Date.now(), porDia: porDia };
     const fotos = (porDia[dias[0]] && porDia[dias[0]].fotos) || [];
-    const faltam = fotos.map(function (f) { return f.caminho; }).filter(function (c) { return c && !PT6.fotosUrl[c]; });
+    const velha = Date.now() - 50 * 60000;
+    const faltam = fotos.map(function (f) { return f.caminho; }).filter(function (c) { return c && !(PT6.fotosUrl[c] && PT6.fotosUrl[c].em > velha); });
     if (faltam.length) {
       const { data } = await supa.storage.from('fotos-visita').createSignedUrls(faltam, 3600);
-      (data || []).forEach(function (x) { if (x && x.path && x.signedUrl) PT6.fotosUrl[x.path] = x.signedUrl; });
+      (data || []).forEach(function (x) { if (x && x.path && x.signedUrl) PT6.fotosUrl[x.path] = { u: x.signedUrl, em: Date.now() }; });
     }
   } catch (e) {
     PT6.dossieErro = (e && e.message) || 'erro desconhecido';
@@ -58186,7 +58214,7 @@ function pt6PintarDossie() {
     + '<h2>' + v5Esc(r.e.nome) + '</h2>' + (sinal ? '<p>' + v5Esc(sinal) + '</p>' : '<p class="is-ok">Sem pendência de plano nesta semana</p>') + '</div>'
     + '<button type="button" class="pt6-fechar" data-pt6="fechar" aria-label="Fechar o dossiê">×</button></div>'
     + acoes + diasBtn + kpis + corpo;
-  pt6DesenharMapas();
+  pt6DesenharMapas('dia');
 }
 
 function pt6TextoCobranca(r) {
@@ -58308,7 +58336,7 @@ function pt6FotosHTML(dd, seg) {
   const fotos = dd.fotos || [];
   return '<div class="pt6-bloco"><h3>Fotos da semana · ' + fotos.length + '</h3>'
     + (fotos.length ? '<div class="pt6-fotos">' + fotos.map(function (f) {
-      const url = PT6.fotosUrl[f.caminho];
+      const url = PT6.fotosUrl[f.caminho] && PT6.fotosUrl[f.caminho].u;
       return '<figure>' + (url ? '<img loading="lazy" alt="' + v5Esc('Fachada de ' + (f.nome || 'cliente')) + '" src="' + v5Esc(url) + '">' : '<img alt="">')
         + '<figcaption><b>' + v5Esc(f.nome || 'cliente') + '</b>' + v5Esc(pt6DiaSemana(f.em)) + '</figcaption></figure>';
     }).join('') + '</div>' : '<div class="pt6-estado" style="padding:16px">Nenhuma foto nesta semana.</div>') + '</div>';
@@ -58373,7 +58401,9 @@ document.addEventListener('click', async function (ev) {
     return;
   }
   if (verbo === 'cobrar') {
-    if (PT6.armado !== 'cobrar:' + arg) { PT6.armado = 'cobrar:' + arg; pt6PintarDossie(); return; }
+    if (PT6.armado !== 'cobrar:' + arg) { PT6.armado = 'cobrar:' + arg; PT6.armadoEm = Date.now(); pt6PintarDossie(); return; }
+    /* o segundo toque de um toque duplo cairia no "Confirmar" que acabou de nascer */
+    if (Date.now() - (PT6.armadoEm || 0) < 600) return;
     const r = pt6Retratos(PT6.dados).find(function (x) { return x.e.ownerId === arg; });
     if (r && await pt6EnviarRecado(arg, pt6TextoCobranca(r), r.e.nome, b)) { PT6.armado = null; pt6PintarDossie(); }
     return;
@@ -58395,7 +58425,8 @@ const PT6_TIPOS_VIVOS = new Set(['visita', 'foto', 'plano', 'parada', 'contato',
 function pt6AoVivo(tipos) {
   const quais = Array.from(tipos || []);
   if (!quais.some(function (t) { return PT6_TIPOS_VIVOS.has(t); })) return;
-  if (!document.getElementById('pt6Raiz') && !PT6.dossie) return;
+  const raiz = document.getElementById('pt6Raiz');
+  if (!(raiz && raiz.offsetParent !== null) && !PT6.dossie) return;
   clearTimeout(PT6.vivoRelogio);
   PT6.vivoRelogio = setTimeout(async function () {
     await pt6Carregar(true);
@@ -58412,12 +58443,33 @@ function pt6LerPedidoDoEndereco() {
   return { dia: q.get('dia'), pessoa: q.get('pessoa'), semana: q.get('semana') };
 }
 function pt6AbrirPedidoDoEndereco() {
-  const p = PT6.pedido || pt6LerPedidoDoEndereco();
-  PT6.pedido = null;
+  /* o pedido vem só de v5AbrirAbaDoEndereco (hashchange ou primeira carga) ou do atalho de
+     Pessoas, e é consumido UMA vez: ler o hash a cada carga reabria o dossiê fechado a cada
+     clique de dia ou semana. */
+  const p = PT6.pedido;
   if (!p || !p.pessoa || !PT6.dados) return;
   const seg = PT6.dados.segunda;
+  if (p.dia && /^\d{4}-\d{2}-\d{2}$/.test(p.dia) && (p.dia < seg || p.dia > addDays(seg, 4)) && !p.semanaAjustada) {
+    /* dia de outra semana: leva a semana junto (até 8 para trás) e tenta de novo */
+    const atras = Math.ceil((Date.parse(pt6SegundaAtual() + 'T12:00:00Z') - Date.parse(p.dia + 'T12:00:00Z')) / (7 * 86400000));
+    if (atras >= 0 && atras <= 8) {
+      p.semanaAjustada = true;
+      PT6.semanaAtras = atras; PT6.dia = p.dia; PT6.dados = null;
+      pt6Montar();
+      return;
+    }
+  }
+  PT6.pedido = null;
+  if (/^#\/planejamento\?/i.test(location.hash || '') && history.replaceState) history.replaceState(null, '', location.pathname + location.search + '#/daily');
   const dia = p.dia && p.dia >= seg && p.dia <= addDays(seg, 4) ? p.dia : null;
   pt6AbrirDossie(p.pessoa, dia);
+}
+function pt6SegundaAtual() {
+  const antes = PT6.semanaAtras;
+  PT6.semanaAtras = 0;
+  const seg = pt6Segunda();
+  PT6.semanaAtras = antes;
+  return seg;
 }
 
 /* EM PESSOAS FICA O ATALHO (docs/08): o bloco grande de Visitas com prova agora é o dossiê
@@ -58478,7 +58530,8 @@ function v5AbrirAbaDoEndereco() {
   const doTime = base === '#/planejamento' && document.getElementById('tabBtnDaily');
   if (doTime && doTime.offsetParent !== null) { if (typeof PT6 !== 'undefined') PT6.pedido = pt6LerPedidoDoEndereco(); doTime.click(); }
 }
-window.addEventListener('hashchange', v5AbrirAbaDoEndereco);
+/* (sem ouvinte próprio: v5AbrirSistemaSePedido, abaixo, já chama v5AbrirAbaDoEndereco a cada
+   hashchange — com os dois, a aba abria duas vezes e o render pesado rodava em dobro) */
 function v5AbrirSistemaSePedido() {
   if (location.hash !== '#sistema') { v5AbrirAbaDoEndereco(); return; }
   activateTab('viewSistema');
@@ -60396,6 +60449,9 @@ async function renderProspeccaoNova(soReaplicarFiltro) {
             body: JSON.stringify({ municipio: cid, uf: uf, dias: 90 })  // BLOCO 22: mesma janela de 3 meses
           });
           const j = await resp.json().catch(() => ({}));
+          /* sem a chave da Casa dos Dados no servidor, as outras praças dariam o mesmo erro:
+             parar na primeira (auditoria 28/09/26: 10 pedidos com 500 a cada carga) */
+          if (j && j.etapa === 'config') break;
           if (!resp.ok || !j.ok || !j.total) continue;
           totaisCdd.push({ cid, total: j.total });
         } catch (e) { /* novidade é bônus: falhar não estraga o insight */ }
@@ -66250,6 +66306,11 @@ function sm9DiaUtil() {
    quantos dias TÊM linha e devolve `medido: false` quando não há nenhum — aí o placar
    mostra "—", que é a verdade, em vez de zero, que seria acusação. */
 function sm9VisitasDaSemana(ownerId) {
+  if (typeof SM9 !== 'undefined' && SM9.visitas) {
+    const o = SM9.visitas[String(ownerId)] || { feitas: 0, provadas: 0 };
+    return { v: o.feitas, provadas: o.provadas, medido: true, dias: 5,
+      fonte: 'check-ins no app (Cheguei), ' + o.provadas + ' com prova — a mesma conta da pílula do mapa e do Planejamento' };
+  }
   const seg = sm9Segunda();
   if (!seg || typeof getDaily !== 'function' || typeof addDays !== 'function') {
     return { v: null, medido: false, dias: 0, fonte: 'cache de dailies indisponível nesta sessão' };
@@ -66891,6 +66952,29 @@ async function sm9Carregar() {
       .eq('data_segunda', seg);
     if (error) throw error;
     (data || []).forEach(l => { if (l.promessa) SM9.promessas[String(l.owner_id)] = l; });
+
+    /* UMA VERDADE SÓ (29/09/26, handoff v6): as visitas da semana vêm dos check-ins do app,
+       pela mesma visitas_com_prova da pílula do mapa e do Planejamento do time. Antes eram
+       as tarefas de visita do HubSpot somadas na daily — outro número para a mesma pessoa. */
+    SM9.visitas = null;
+    try {
+      const hojeK = (typeof agendaChave === 'function' && typeof agendaAgora === 'function') ? agendaChave(agendaAgora()) : null;
+      const ate = hojeK && hojeK < addDays(seg, 4) ? hojeK : addDays(seg, 4);
+      if (hojeK && hojeK >= seg) {
+        const { data: vs, error: ev } = await supa.rpc('visitas_com_prova', { p_de: seg, p_ate: ate, p_pessoa: null });
+        if (ev) throw ev;
+        SM9.visitas = {};
+        (vs || []).forEach(v => {
+          const k = String(v.owner_id || '');
+          if (!k) return;
+          const o = SM9.visitas[k] || (SM9.visitas[k] = { feitas: 0, provadas: 0 });
+          o.feitas++; if (v.provada) o.provadas++;
+        });
+      }
+    } catch (e2) {
+      SM9.visitas = null;
+      console.log('semana: visitas do app não carregaram - ' + (e2 && e2.message));
+    }
 
     /* a pauta da Semanal e as cobranças vivem em pauta_do_lider, junto com as das outras
        abas do gestor — uma tabela de pauta, não uma por tela */
