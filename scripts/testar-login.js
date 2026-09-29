@@ -213,7 +213,8 @@ checar('o briefing de quatro abas decorativas não voltou',
   const corpoHid = iHid < 0 ? '' : semCom(template.slice(iHid, template.indexOf('\n}', iHid)));
   checar('as duas esperas do login têm prazo',
     /const \{ data \} = await prazoDoLogin\(supa\.auth\.getSession\(\), PRAZO_DA_CARGA/.test(corpoHid) &&
-    /const resp = await prazoDoLogin\(\s*\n?\s*fetch\('\/api\/dados'/.test(corpoHid),
+    // 28/09/26: o endereço vem de v5EnderecoDosDados() (visão de executivo); o prazo é o mesmo
+    /const resp = await prazoDoLogin\(\s*\n?\s*fetch\(('\/api\/dados'|v5EnderecoDosDados\(\))/.test(corpoHid),
     'sem prazo, lentidão do servidor vira tela parada para sempre — sem mensagem, sem '
     + 'botão, e a pessoa passa a duvidar da própria senha');
 

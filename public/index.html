@@ -6945,7 +6945,7 @@ async function hidratarSessao(email) {
       const token = data && data.session ? data.session.access_token : null;
       if (!token) { mostrarLogin('Sessão não encontrada. Tente entrar de novo.'); return; }
       const resp = await prazoDoLogin(
-        fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } }),
+        fetch(v5EnderecoDosDados(), { headers: { Authorization: 'Bearer ' + token } }),
         PRAZO_DA_CARGA, 'a carga dos seus dados');
       corpo = await resp.json().catch(() => ({}));
       if (!resp.ok) {
@@ -7428,7 +7428,7 @@ async function farolBuscarEAplicar() {
       }
       return;
     }
-    const resp = await fetch('/api/dados', { headers: { Authorization: 'Bearer ' + token } });
+    const resp = await fetch(v5EnderecoDosDados(), { headers: { Authorization: 'Bearer ' + token } });
     if (!resp.ok) { console.log('[farol] /api/dados respondeu ' + resp.status + ' — mantendo o dado atual.'); FAROL_BUSCANDO = false; return; }
     const corpo = await resp.json().catch(function () { return null; });
     if (!corpo || !corpo.dados) { FAROL_BUSCANDO = false; return; }
@@ -38098,10 +38098,17 @@ function v5PintarConta() {
   badge.innerHTML = '<button type="button" class="v5-avatar" id="perfilAvatarBadge" aria-haspopup="dialog" aria-expanded="false" '
     + 'aria-controls="v5Menu" title="Conta, tema e Modo TV">'
     + (foto ? '<img src="' + foto + '" alt="">' : esc(v5Iniciais(nome))) + '</button>';
-  if (papel) papel.textContent = sessaoAtual.role === 'manager' ? 'Gestor' : 'Executivo';
+  if (papel) papel.textContent = sessaoAtual.role === 'manager' ? 'Gestor' : (sessaoAtual.visaoDeGestor ? 'Visão de executivo' : 'Executivo');
   document.getElementById('perfilAvatarBadge').addEventListener('click', (ev) => { ev.stopPropagation(); v5AlternarMenu(); });
 }
 
+const V5_VISAO_CHAVE = 'v6-visao';
+function v5VisaoExecutivo() { try { return localStorage.getItem(V5_VISAO_CHAVE) === 'executivo'; } catch (e) { return false; } }
+function v5EnderecoDosDados() { return v5VisaoExecutivo() ? '/api/dados?visao=executivo' : '/api/dados'; }
+function v5TrocarVisao(executivo) {
+  try { if (executivo) localStorage.setItem(V5_VISAO_CHAVE, 'executivo'); else localStorage.removeItem(V5_VISAO_CHAVE); } catch (e) {}
+  location.reload();
+}
 function v5PintarMenu() {
   const menu = document.getElementById('v5Menu');
   if (!menu || !sessaoAtual) return;
@@ -38116,6 +38123,10 @@ function v5PintarMenu() {
     + opcoes.map(([v, r]) => '<button type="button" data-v5-tema="' + v + '" aria-pressed="' + (escolha === v) + '">' + r + '</button>').join('')
     + '</div>'
     + '<button type="button" class="v5-menu-bt" data-v5-menu="tv">' + v5Icone('tv', 17) + (tvLigada ? 'Sair do Modo TV' : 'Modo TV') + '</button>'
+    + (sessaoAtual.visaoDeGestor
+      ? '<button type="button" class="v5-menu-bt" data-v5-menu="visao-gestor">' + v5Icone('pessoa', 17) + 'Voltar para a visão de gestor</button>'
+      : sessaoAtual.role === 'manager' && sessaoAtual.ownerId
+        ? '<button type="button" class="v5-menu-bt" data-v5-menu="visao-executivo">' + v5Icone('pessoa', 17) + 'Ver como executivo (meu funil)</button>' : '')
     + '<button type="button" class="v5-menu-bt" data-v5-menu="perfil">' + v5Icone('pessoa', 17) + 'Meu perfil e foto</button>'
     + '<button type="button" class="v5-menu-bt is-sair" data-v5-menu="sair">' + v5Icone('sair', 17) + 'Sair</button>';
 }
@@ -38155,6 +38166,8 @@ document.addEventListener('click', (ev) => {
     v5AlternarMenu(false);
     if (acao === 'tv') v5AlternarTv();
     else if (acao === 'perfil') abrirPerfilDrawer();
+    else if (acao === 'visao-executivo') v5TrocarVisao(true);
+    else if (acao === 'visao-gestor') v5TrocarVisao(false);
     else if (acao === 'sair') document.getElementById('perfilSairBtn').click();
     return;
   }

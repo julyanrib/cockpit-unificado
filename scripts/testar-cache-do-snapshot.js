@@ -163,7 +163,9 @@ async function main() {
     'apareceu DATA montado dentro do cache — o recorte por papel ganharia um segundo lugar');
   checar('e a montagem continua rodando a cada chamada',
     /const completo = montarDadosCompletos\(\);/.test(fonte)
-      && /filtrarParaPapel\(completo, usuario\)/.test(fonte),
+      // 28/09/26: a visão de executivo do gestor passa `quem` (o usuário com papel de rep) — o
+      // recorte continua saindo de montarDadosCompletos a cada chamada.
+      && /filtrarParaPapel\(completo, (usuario|quem)\)/.test(fonte),
     'montarDadosCompletos saiu do caminho — o recorte por papel precisa dele');
 
   global.fetch = fetchOriginal;
