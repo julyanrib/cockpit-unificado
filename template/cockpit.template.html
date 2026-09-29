@@ -10606,6 +10606,9 @@ foi escrita para jogar o "0 de 27 resolvidos"
 .pt6-pt.is-plano.is-pulada{border-color:var(--red);color:var(--red);}
 .pt6-pt.is-contato{width:14px;height:14px;border-radius:3px;transform:translate(-50%,-50%) rotate(45deg);background:var(--amber);}
 .pt6-pt.is-av{width:30px;height:30px;background:var(--ink);color:var(--bg);font:800 10px/26px var(--font-display);text-align:center;border-color:var(--panel);z-index:2;}
+.pt6-gm.pt6-pt{position:relative;left:auto;top:auto;transform:translateY(50%);}
+.pt6-gm.pt6-pt.is-contato{transform:translateY(50%) rotate(45deg);}
+.pt6-gm.pt6-calor{position:relative;margin:0;transform:translateY(50%);}
 .pt6-pt:focus-visible{outline:3px solid var(--acao);outline-offset:2px;}
 .pt6-mapa-vazio{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;font-size:13px;color:var(--muted);}
 .pt6-mapa-vazio b{display:block;color:var(--ink);font:800 15px var(--font-display);margin-bottom:4px;}
@@ -57608,7 +57611,7 @@ function pt6Palavra(r, d) {
   const num = function (v) { return v == null || v === '' || isNaN(Number(v)) ? null : Number(v); };
   const mets = [
     { k: 'visitas', l: 'Visitas', f: r.feitas, p: dada ? num(pr.visitas) : null },
-    { k: 'demos', l: 'Demos c/ decisor', f: r.p ? Number(r.p.demos) || 0 : null, p: dada ? num(pr.demos) : null },
+    { k: 'demos', l: 'Demos marcadas', f: r.p ? Number(r.p.demos) || 0 : null, p: dada ? num(pr.demos) : null },
     { k: 'fechamentos', l: 'Fechamentos', f: cumprido ? cumprido.fechamentos.v : null, p: dada ? num(pr.fechamentos) : null },
     { k: 'prospeccao', l: 'Contas novas', f: cumprido && cumprido.prospeccao.medido ? cumprido.prospeccao.v : null, p: dada ? num(pr.prospeccao) : null }
   ];
@@ -57685,7 +57688,7 @@ function pt6TopoHTML(d, rs) {
     + kpi('Paradas planejadas', planejadas, '', 'seg a sex, marcadas no Planejamento ou no mapa')
     + kpi('Visitas feitas', feitas, '', hoje >= seg && hoje <= sexta ? 'na semana, até agora' : 'na semana')
     + kpi('Com prova', pct == null ? '—' : pct + '%', '', pct == null ? 'nenhuma visita ainda' : provadas + ' com GPS no ponto ou foto', pct == null ? '' : pct >= 80 ? 'ok' : 'aviso')
-    + kpi('Demos com decisor', demos, '', 'na semana, ficha ou reunião')
+    + kpi('Demos marcadas', demos, '', 'com decisor, na semana: ficha de rua ou reunião agendada')
     + (contatoMedido
       ? kpi('Pontos de contato', contatos, '', 'ligações e WhatsApp registrados' + (desde > seg ? ' · medindo desde ' + pt6DDMM(desde) : ''))
       : kpi('Pontos de contato', '—', '', desde ? 'medindo desde ' + pt6DDMM(desde) : 'medindo a partir do próximo registro no app'))
@@ -57769,7 +57772,7 @@ function pt6PalavraHTML(d, rs) {
   const semDemos = linhas.every(function (x) { return x.pw.mets[1].p == null; });
   return '<section class="pt6-bloco" style="background:transparent;border:0;padding:0">'
     + '<div class="pt6-camada"><b>2</b><span>Prometido × cumprido</span><em>a palavra que cada um deu na segunda · o traço é onde o ritmo pede estar hoje</em></div>'
-    + '<div class="pt6-tabela"><div class="pt6-linha is-cab"><span>Executivo</span><span>Visitas</span><span>Demos c/ decisor</span><span>Fechamentos</span><span>Contas novas</span><span style="text-align:right">Palavra</span></div>'
+    + '<div class="pt6-tabela"><div class="pt6-linha is-cab"><span>Executivo</span><span>Visitas</span><span>Demos marcadas</span><span>Fechamentos</span><span>Contas novas</span><span style="text-align:right">Palavra</span></div>'
     + linhas.map(function (x) {
       const r = x.r, pw = x.pw;
       const sub = pw.dada ? 'fechou ' + v5Esc(pt6DiaSemana(pw.quando)) : 'não fechou a semana';
@@ -57938,11 +57941,97 @@ function pt6DesenharMapas() {
     pt6DesenharMapa(el, m);
   });
 }
+/* O MESMO MAPA DO APP (28/09/26, Julyan: "pq não colocar o mesmo mapa nessa aba?"). Dentro
+   do PWA, o mapa do time e o do dossiê são o Google Maps do app: a mesma chave, o mesmo
+   Map ID e a mesma variante clara/escura que o executivo vê na rua. A chave chega por
+   /gestao/mapa-config.js, gerado no build do app a partir das variáveis da Vercel.
+   Fora do PWA, sem chave ou com a chave recusada, fica o OpenStreetMap abaixo. */
+const PT6_GM = { p: null, ok: false, falhou: false };
+function pt6CarregarGoogle() {
+  if (PT6_GM.p) return PT6_GM.p;
+  PT6_GM.p = new Promise(function (resolve, reject) {
+    if (typeof v5NoPwa === 'function' && !v5NoPwa()) { reject(new Error('fora do PWA')); return; }
+    const script = function (src) {
+      return new Promise(function (ok, erro) {
+        const s = document.createElement('script');
+        s.src = src; s.async = true;
+        s.onload = ok; s.onerror = function () { erro(new Error('não carregou ' + src.split('?')[0])); };
+        document.head.appendChild(s);
+      });
+    };
+    script('/gestao/mapa-config.js?v=' + Date.now()).then(function () {
+      const cfg = window.TAKEAT_MAPA || {};
+      if (!cfg.chave) throw new Error('sem chave do mapa');
+      PT6_GM.mapId = cfg.mapId || 'DEMO_MAP_ID';
+      const antes = window.gm_authFailure;
+      window.gm_authFailure = function () {
+        PT6_GM.falhou = true; PT6_GM.ok = false;
+        if (typeof antes === 'function') antes();
+        document.querySelectorAll('[data-pt6-mapa]').forEach(function (el) { el._pt6gm = null; });
+        pt6DesenharMapas();
+      };
+      return new Promise(function (ok, erro) {
+        window.pt6GmPronto = ok;
+        script('https://maps.googleapis.com/maps/api/js?key=' + encodeURIComponent(cfg.chave)
+          + '&v=weekly&libraries=marker&loading=async&language=pt-BR&region=BR&callback=pt6GmPronto').catch(erro);
+      });
+    }).then(function () { PT6_GM.ok = true; resolve(window.google.maps); }).catch(function (e) { PT6_GM.falhou = true; reject(e); });
+  });
+  return PT6_GM.p;
+}
+
+function pt6MarcaElemento(p) {
+  const el = document.createElement(p.tipo === 'calor' ? 'span' : 'button');
+  if (p.tipo === 'calor') { el.className = 'pt6-calor pt6-gm'; return el; }
+  el.type = 'button';
+  el.className = 'pt6-pt pt6-gm ' + (p.tipo === 'avatar' ? 'is-av'
+    : p.tipo === 'plano' ? 'is-plano' + (p.feita ? ' is-feita' : p.pulada ? ' is-pulada' : '')
+    : p.tipo === 'contato' ? 'is-contato'
+    : (p.provada ? '' : 'is-sem') + (p.foto ? ' is-foto' : '') + (p.fora ? ' is-fora' : ''));
+  if (p.dono) el.setAttribute('data-pt6', 'dossie:' + p.dono);
+  if (p.titulo) { el.title = p.titulo; el.setAttribute('aria-label', p.titulo); }
+  if (p.rotulo && (p.tipo === 'avatar' || p.tipo === 'plano')) el.textContent = p.rotulo;
+  return el;
+}
+
+function pt6DesenharGoogle(el, m, pts) {
+  const maps = window.google.maps;
+  const escuro = document.documentElement.getAttribute('data-tema') === 'escuro';
+  if (!el._pt6gm || el._pt6gm.escuro !== escuro || !el.contains(el._pt6gm.div)) {
+    el.innerHTML = '';
+    const div = document.createElement('div');
+    div.style.cssText = 'position:absolute;inset:0;';
+    el.appendChild(div);
+    const mapa = new maps.Map(div, {
+      mapId: PT6_GM.mapId, colorScheme: escuro ? 'DARK' : 'LIGHT',
+      disableDefaultUI: true, zoomControl: true, clickableIcons: false, gestureHandling: 'cooperative',
+      center: { lat: pts[0].lat, lng: pts[0].lng }, zoom: 13
+    });
+    el._pt6gm = { mapa: mapa, div: div, escuro: escuro, marcas: [] };
+  }
+  const g = el._pt6gm;
+  g.marcas.forEach(function (mk) { mk.map = null; });
+  g.marcas = pts.map(function (p) {
+    return new maps.marker.AdvancedMarkerElement({ map: g.mapa, position: { lat: p.lat, lng: p.lng }, content: pt6MarcaElemento(p), zIndex: p.tipo === 'avatar' ? 3 : p.tipo === 'calor' ? 0 : 1 });
+  });
+  const b = new maps.LatLngBounds();
+  pts.forEach(function (p) { b.extend({ lat: p.lat, lng: p.lng }); });
+  if (pts.length === 1) { g.mapa.setCenter(b.getCenter()); g.mapa.setZoom(16); }
+  else g.mapa.fitBounds(b, 48);
+}
+
 function pt6DesenharMapa(el, m) {
   const W = el.clientWidth || 600, H = el.clientHeight || 360;
   const pts = (m.pts || []).filter(function (p) { return isFinite(p.lat) && isFinite(p.lng); });
   if (!pts.length) {
+    el._pt6gm = null;
     el.innerHTML = '<div class="pt6-mapa-vazio"><div><b>' + v5Esc(m.vazio ? m.vazio.t : 'Nada para mostrar') + '</b>' + v5Esc(m.vazio ? m.vazio.s : '') + '</div></div>';
+    return;
+  }
+  if (!PT6_GM.falhou) {
+    if (PT6_GM.ok) { pt6DesenharGoogle(el, m, pts); return; }
+    if (!el.firstChild) el.innerHTML = '<div class="pt6-mapa-vazio"><div><b>Abrindo o mapa…</b>o mesmo mapa do app</div></div>';
+    pt6CarregarGoogle().then(pt6DesenharMapas, pt6DesenharMapas);
     return;
   }
   const lats = pts.map(function (p) { return p.lat; }), lngs = pts.map(function (p) { return p.lng; });
@@ -58079,7 +58168,7 @@ function pt6PintarDossie() {
     + kpi('Com prova', Number(x.provadas) || 0, ((Number(x.feitas) || 0) - (Number(x.provadas) || 0)) + ' sem prova', Number(x.provadas) ? 'ok' : '')
     + kpi('Fotos', fotosDia == null ? '…' : fotosDia, 'da fachada')
     + (desde && desde <= dia ? kpi('Contatos', nContatos, 'ligações e WhatsApp') : kpi('Contatos', '—', desde ? 'medindo desde ' + pt6DDMM(desde) : 'medindo a partir do próximo registro'))
-    + kpi('Demos', r.p ? Number(r.p.demos) || 0 : 0, 'na semana, com decisor')
+    + kpi('Demos marcadas', r.p ? Number(r.p.demos) || 0 : 0, 'na semana, com decisor')
     + '</div>';
   let corpo;
   if (!dd && PT6.dossieErro) {
