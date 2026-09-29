@@ -66253,6 +66253,11 @@ function sm9DiaUtil() {
    quantos dias TÊM linha e devolve `medido: false` quando não há nenhum — aí o placar
    mostra "—", que é a verdade, em vez de zero, que seria acusação. */
 function sm9VisitasDaSemana(ownerId) {
+  if (typeof SM9 !== 'undefined' && SM9.visitas) {
+    const o = SM9.visitas[String(ownerId)] || { feitas: 0, provadas: 0 };
+    return { v: o.feitas, provadas: o.provadas, medido: true, dias: 5,
+      fonte: 'check-ins no app (Cheguei), ' + o.provadas + ' com prova — a mesma conta da pílula do mapa e do Planejamento' };
+  }
   const seg = sm9Segunda();
   if (!seg || typeof getDaily !== 'function' || typeof addDays !== 'function') {
     return { v: null, medido: false, dias: 0, fonte: 'cache de dailies indisponível nesta sessão' };
@@ -66894,6 +66899,29 @@ async function sm9Carregar() {
       .eq('data_segunda', seg);
     if (error) throw error;
     (data || []).forEach(l => { if (l.promessa) SM9.promessas[String(l.owner_id)] = l; });
+
+    /* UMA VERDADE SÓ (29/09/26, handoff v6): as visitas da semana vêm dos check-ins do app,
+       pela mesma visitas_com_prova da pílula do mapa e do Planejamento do time. Antes eram
+       as tarefas de visita do HubSpot somadas na daily — outro número para a mesma pessoa. */
+    SM9.visitas = null;
+    try {
+      const hojeK = (typeof agendaChave === 'function' && typeof agendaAgora === 'function') ? agendaChave(agendaAgora()) : null;
+      const ate = hojeK && hojeK < addDays(seg, 4) ? hojeK : addDays(seg, 4);
+      if (hojeK && hojeK >= seg) {
+        const { data: vs, error: ev } = await supa.rpc('visitas_com_prova', { p_de: seg, p_ate: ate, p_pessoa: null });
+        if (ev) throw ev;
+        SM9.visitas = {};
+        (vs || []).forEach(v => {
+          const k = String(v.owner_id || '');
+          if (!k) return;
+          const o = SM9.visitas[k] || (SM9.visitas[k] = { feitas: 0, provadas: 0 });
+          o.feitas++; if (v.provada) o.provadas++;
+        });
+      }
+    } catch (e2) {
+      SM9.visitas = null;
+      console.log('semana: visitas do app não carregaram - ' + (e2 && e2.message));
+    }
 
     /* a pauta da Semanal e as cobranças vivem em pauta_do_lider, junto com as das outras
        abas do gestor — uma tabela de pauta, não uma por tela */
